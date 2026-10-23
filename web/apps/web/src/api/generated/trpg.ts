@@ -1987,6 +1987,22 @@ export interface components {
             reason: string;
         };
         /**
+         * BarSnapshot
+         * @description 길의 빗장(#281). 있는 쪽(길의 한 끝)과 시작할 때 걸려 있는가.
+         */
+        BarSnapshot: {
+            /**
+             * Barred
+             * @default false
+             */
+            barred: boolean;
+            /**
+             * Side
+             * Format: uuid
+             */
+            side: string;
+        };
+        /**
          * BestiaryCreate
          * @description 도감을 만들 때 받는 값. 공통 칸뿐이다. 몬스터는 만든 뒤에 하나씩 더한다.
          */
@@ -2593,7 +2609,9 @@ export interface components {
         };
         /**
          * CrossOut
-         * @description 길을 넘는 판정(#281). 판에 적힌 능력과 난이도로 엔진이 굴렸다. 굴림은 공개다.
+         * @description 판에 적힌 판정 하나(#281). 길을 넘을 때, 자물쇠를 딸 때, 문을 부술 때다.
+         *
+         *     판에 적힌 능력과 난이도로 엔진이 굴렸다. 굴림은 공개다.
          */
         CrossOut: {
             /** Ability */
@@ -2732,13 +2750,13 @@ export interface components {
          */
         DeclarationOut: {
             /** Action */
-            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"]) | null;
+            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"]) | null;
             /** Character Name */
             character_name: string;
             /** Content */
             content: string | null;
             /** Outcome */
-            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TradeOutcome"] | components["schemas"]["PayOutcome"] | components["schemas"]["CoverOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
+            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["DoorOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TradeOutcome"] | components["schemas"]["PayOutcome"] | components["schemas"]["CoverOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
             /**
              * User Id
              * Format: uuid
@@ -2754,7 +2772,7 @@ export interface components {
          */
         DeclarationUpdate: {
             /** Action */
-            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"]) | null;
+            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"]) | null;
             /** Content */
             content: string;
         };
@@ -2775,6 +2793,43 @@ export interface components {
             name: string;
             /** Target */
             target: number;
+        };
+        /**
+         * DoorDevice
+         * @description 문을 잠그는 장치(#281). 잠그기와 열기가 무엇으로 하는지다.
+         * @enum {string}
+         */
+        DoorDevice: "lock" | "bar";
+        /**
+         * DoorOut
+         * @description 길의 문을 다룬 결과(#281). 엔진이 정했다(app/rounds/door_actions.py).
+         */
+        DoorOut: {
+            /** Act */
+            act: string;
+            /** Character Name */
+            character_name: string;
+            check?: components["schemas"]["CrossOut"] | null;
+            /** Device */
+            device?: string | null;
+            /** Done */
+            done: boolean;
+            from: components["schemas"]["PlaceRefOut"] | null;
+            /** Reason */
+            reason: string | null;
+            to: components["schemas"]["PlaceRefOut"];
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * DoorOutcome
+         * @description 문을 다루는 행동의 결과(#281).
+         */
+        DoorOutcome: {
+            door: components["schemas"]["DoorOut"];
         };
         /**
          * DropOut
@@ -3115,7 +3170,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -3157,6 +3212,46 @@ export interface components {
          * @description 숨긴 길을 찾는 판정. 판 안의 룰북의 능력치와 난이도의 이름이다. 난이도가 없으면 규칙의 기본 난이도다.
          */
         FindSnapshot: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
+        };
+        /**
+         * ForceAction
+         * @description 지금 서 있는 장소에 닿은 길의 문을 부수는 행동(#281). 판에 적힌 부수는 판정(능력, 난이도)으로 굴린다.
+         *
+         *     성공하면 자물쇠와 빗장이 부서져 열린다. 부서진 문은 다시 잠그지 못한다. 지나가지는 않는다.
+         */
+        ForceAction: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "force";
+            /**
+             * Place
+             * Format: uuid
+             */
+            place: string;
+        };
+        /**
+         * ForceCheck
+         * @description 문을 부수는 판정(#281). 행동 '부수기'가 이 능력과 난이도로 굴린다. 적지 않으면 부수지 못한다.
+         *
+         *     성공하면 자물쇠와 빗장이 부서져 열린다. 부서진 것은 고치기 전까지 다시 잠그거나 걸지 못한다.
+         */
+        ForceCheck: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
+        };
+        /**
+         * ForceSnapshot
+         * @description 문을 부수는 판정(#281). 능력치와 난이도의 이름이다.
+         */
+        ForceSnapshot: {
             /** Ability */
             ability: string;
             /** Difficulty */
@@ -3854,8 +3949,28 @@ export interface components {
             password?: string | null;
         };
         /**
+         * LockAction
+         * @description 지금 서 있는 장소에 닿은 길(place 로 이어진 길)의 문을 잠그는 행동(#281, app/rounds/door_actions.py).
+         *
+         *     device 는 자물쇠(lock)인지 빗장(bar)인지다. 그 길에 하나만 있으면 비워도 된다. 둘 다 있으면 적어야 한다.
+         *     자물쇠는 그 열쇠를 지녀야 잠그고, 빗장은 빗장 쪽에 서 있어야 건다. 부서진 문은 잠그지 못한다.
+         */
+        LockAction: {
+            device?: components["schemas"]["DoorDevice"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "lock";
+            /**
+             * Place
+             * Format: uuid
+             */
+            place: string;
+        };
+        /**
          * LockSnapshot
-         * @description 길의 자물쇠(#281). 여는 열쇠(판 안의 물건 항목)와 시작할 때 잠겨 있는가.
+         * @description 길의 자물쇠(#281). 여는 열쇠(판 안의 물건 항목), 시작할 때 잠겨 있는가, 따는 판정(없으면 못 딴다).
          */
         LockSnapshot: {
             /**
@@ -3868,6 +3983,7 @@ export interface components {
              * @default true
              */
             locked: boolean;
+            pick?: components["schemas"]["PickSnapshot"] | null;
         };
         /**
          * LongRest
@@ -4613,6 +4729,11 @@ export interface components {
             /** Travel Minutes */
             travel_minutes?: number | null;
             /**
+             * Unbarred
+             * @default false
+             */
+            unbarred: boolean;
+            /**
              * Unlocked
              * @default false
              */
@@ -5336,6 +5457,66 @@ export interface components {
             description: string;
             /** Name */
             name: string;
+        };
+        /**
+         * PickAction
+         * @description 지금 서 있는 장소에 닿은 길의 잠긴 자물쇠를 따는 행동(#281). 판에 적힌 따는 판정(능력, 난이도)으로 굴린다.
+         *
+         *     판에 도구를 적었으면 그 물건을 지녀야 딴다. 성공하면 자물쇠가 열린다. 지나가지는 않는다.
+         */
+        PickAction: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "pick";
+            /**
+             * Place
+             * Format: uuid
+             */
+            place: string;
+        };
+        /**
+         * PickCheck
+         * @description 자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.
+         *
+         *     tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 락픽 같은 것)을 지닌 사람만 딸 수 있다. 도구는 없어지지 않는다.
+         *     능력치와 난이도가 룰북에 있는지는 게시할 때 본다.
+         */
+        "PickCheck-Input": {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
+            /** Tool */
+            tool?: string | null;
+        };
+        /**
+         * PickCheck
+         * @description 자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.
+         *
+         *     tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 락픽 같은 것)을 지닌 사람만 딸 수 있다. 도구는 없어지지 않는다.
+         *     능력치와 난이도가 룰북에 있는지는 게시할 때 본다.
+         */
+        "PickCheck-Output": {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
+            /** Tool */
+            tool?: string | null;
+        };
+        /**
+         * PickSnapshot
+         * @description 자물쇠를 따는 판정(#281). 능력치, 난이도의 이름과 있어야 하는 도구(판 안의 물건 항목, 없으면 None).
+         */
+        PickSnapshot: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
+            /** Tool */
+            tool?: string | null;
         };
         /**
          * PierceOut
@@ -6434,8 +6615,45 @@ export interface components {
             round_time_limit: number | null;
         };
         /**
+         * RouteBar
+         * @description 길의 빗장(#281). 길의 한쪽 끝(side)에만 있다. 그쪽에 선 사람만 열쇠 없이 걸고 푼다(행동 '잠그기', '열기').
+         *
+         *     걸려 있으면 빗장 쪽에서는 지나가며 풀고, 반대쪽에서는 지나가지 못한다. 반대쪽에서는 부수기로만 연다.
+         *     barred 는 테이블이 시작할 때 걸려 있는가다(기본은 안 걸림). side 는 길의 두 끝 중 하나여야 한다.
+         */
+        "RouteBar-Input": {
+            /**
+             * Barred
+             * @default false
+             */
+            barred: boolean;
+            /**
+             * Side
+             * Format: uuid
+             */
+            side: string;
+        };
+        /**
+         * RouteBar
+         * @description 길의 빗장(#281). 길의 한쪽 끝(side)에만 있다. 그쪽에 선 사람만 열쇠 없이 걸고 푼다(행동 '잠그기', '열기').
+         *
+         *     걸려 있으면 빗장 쪽에서는 지나가며 풀고, 반대쪽에서는 지나가지 못한다. 반대쪽에서는 부수기로만 연다.
+         *     barred 는 테이블이 시작할 때 걸려 있는가다(기본은 안 걸림). side 는 길의 두 끝 중 하나여야 한다.
+         */
+        "RouteBar-Output": {
+            /**
+             * Barred
+             * @default false
+             */
+            barred: boolean;
+            /** Side */
+            side: string;
+        };
+        /**
          * RouteCrossOut
-         * @description 길을 넘는 판정(#281). 지날 때마다 가는 사람이 굴린다. 룰북의 능력치와 난이도의 이름표다.
+         * @description 길에 적힌 판정 하나(#281). 넘기(지날 때마다 가는 사람이 굴린다), 따기, 부수기다.
+         *
+         *     룰북의 능력치와 난이도의 이름표다.
          */
         RouteCrossOut: {
             /** Ability */
@@ -6449,7 +6667,8 @@ export interface components {
          *
          *     열쇠는 붙인 로어북의 물건 항목 하나다. 열쇠 하나는 자물쇠 하나만 연다. 같은 열쇠를 두 길에 적으면 게시하지 못한다.
          *     locked 는 테이블이 시작할 때 잠겨 있는가다(기본은 잠김). 연 문은 누가 다시 잠그기 전까지 열린 채다.
-         *     열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다. 열쇠는 쓰여도 없어지지 않는다.
+         *     열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다(행동 '잠그기', '열기'). 열쇠는 쓰여도 없어지지 않는다.
+         *     pick 을 적었으면 열쇠 없이 따기로 열 수 있다. 적지 않으면 따지 못한다.
          */
         "RouteLock-Input": {
             /**
@@ -6462,6 +6681,7 @@ export interface components {
              * @default true
              */
             locked: boolean;
+            pick?: components["schemas"]["PickCheck-Input"] | null;
         };
         /**
          * RouteLock
@@ -6469,7 +6689,8 @@ export interface components {
          *
          *     열쇠는 붙인 로어북의 물건 항목 하나다. 열쇠 하나는 자물쇠 하나만 연다. 같은 열쇠를 두 길에 적으면 게시하지 못한다.
          *     locked 는 테이블이 시작할 때 잠겨 있는가다(기본은 잠김). 연 문은 누가 다시 잠그기 전까지 열린 채다.
-         *     열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다. 열쇠는 쓰여도 없어지지 않는다.
+         *     열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다(행동 '잠그기', '열기'). 열쇠는 쓰여도 없어지지 않는다.
+         *     pick 을 적었으면 열쇠 없이 따기로 열 수 있다. 적지 않으면 따지 못한다.
          */
         "RouteLock-Output": {
             /** Key */
@@ -6479,15 +6700,27 @@ export interface components {
              * @default true
              */
             locked: boolean;
+            pick?: components["schemas"]["PickCheck-Output"] | null;
         };
         /**
          * RouteOut
          * @description 아는 길 하나. two_way 가 아니면 from_place 에서 to_place 로만 간다.
          *
-         *     길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 무슨 열쇠로 여는지와 실패의 피해는 싣지 않는다.
+         *     길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 무슨 열쇠로 여는지, 따는 도구,
+         *     실패의 피해는 싣지 않는다.
          */
         RouteOut: {
+            /** Bar Side */
+            bar_side?: string | null;
+            /** Barred */
+            barred?: boolean | null;
+            /**
+             * Broken
+             * @default false
+             */
+            broken: boolean;
             cross?: components["schemas"]["RouteCrossOut"] | null;
+            force?: components["schemas"]["RouteCrossOut"] | null;
             /**
              * From Place
              * Format: uuid
@@ -6495,6 +6728,7 @@ export interface components {
             from_place: string;
             /** Locked */
             locked?: boolean | null;
+            pick?: components["schemas"]["RouteCrossOut"] | null;
             /**
              * To Place
              * Format: uuid
@@ -6514,13 +6748,16 @@ export interface components {
          *     숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.
          *     travel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다
          *     (옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).
-         *     길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠다. 둘 다 양쪽에서 같다.
-         *     둘 다 있으면 자물쇠를 먼저 보고 넘기 판정을 굴린다.
+         *     길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠, bar 는 한쪽의 빗장,
+         *     force 는 문(자물쇠와 빗장)을 부수는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.
+         *     빗장, 자물쇠, 넘기 판정의 차례로 본다. force 는 자물쇠나 빗장이 있는 길에만 적는다.
          *     가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.
          */
         "RouteRule-Input": {
+            bar?: components["schemas"]["RouteBar-Input"] | null;
             cross?: components["schemas"]["CrossCheck"] | null;
             find?: components["schemas"]["FindCheck"] | null;
+            force?: components["schemas"]["ForceCheck"] | null;
             /**
              * From Place
              * Format: uuid
@@ -6551,13 +6788,16 @@ export interface components {
          *     숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.
          *     travel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다
          *     (옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).
-         *     길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠다. 둘 다 양쪽에서 같다.
-         *     둘 다 있으면 자물쇠를 먼저 보고 넘기 판정을 굴린다.
+         *     길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠, bar 는 한쪽의 빗장,
+         *     force 는 문(자물쇠와 빗장)을 부수는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.
+         *     빗장, 자물쇠, 넘기 판정의 차례로 본다. force 는 자물쇠나 빗장이 있는 길에만 적는다.
          *     가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.
          */
         "RouteRule-Output": {
+            bar?: components["schemas"]["RouteBar-Output"] | null;
             cross?: components["schemas"]["CrossCheck"] | null;
             find?: components["schemas"]["FindCheck"] | null;
+            force?: components["schemas"]["ForceCheck"] | null;
             /** From Place */
             from_place: string;
             lock?: components["schemas"]["RouteLock-Output"] | null;
@@ -6581,10 +6821,13 @@ export interface components {
          *     숨긴 길은 찾는 판정(find)으로 드러난다. travel_minutes 는 한 칸 가는 데 걸리는 게임 안의 시간(분)이다.
          *     비어 있으면 라운드의 걸음 안에서 간다. 형식 26 보다 옛 판은 모두 비어 있다.
          *     cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠의 자물쇠다(#281). 형식 52 보다 옛 판은 둘 다 없다.
+         *     bar 는 한쪽의 빗장, force 는 문을 부수는 판정이다. 형식 53 보다 옛 판은 둘 다 없고 자물쇠를 따지 못한다.
          */
         RouteSnapshot: {
+            bar?: components["schemas"]["BarSnapshot"] | null;
             cross?: components["schemas"]["CrossSnapshot"] | null;
             find?: components["schemas"]["FindSnapshot"] | null;
+            force?: components["schemas"]["ForceSnapshot"] | null;
             /**
              * From Place
              * Format: uuid
@@ -7343,7 +7586,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 52
+             * @default 53
              */
             format: number;
             /**
@@ -8062,6 +8305,25 @@ export interface components {
         TurnLostOutcome: {
             /** Turn Lost */
             turn_lost: string;
+        };
+        /**
+         * UnlockAction
+         * @description 지금 서 있는 장소에 닿은 길의 문을 여는 행동(#281). 지나가지 않고 열기만 한다. device 는 잠그기와 같다.
+         *
+         *     자물쇠는 그 열쇠를 지녀야 열고, 빗장은 빗장 쪽에 서 있어야 푼다.
+         */
+        UnlockAction: {
+            device?: components["schemas"]["DoorDevice"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "unlock";
+            /**
+             * Place
+             * Format: uuid
+             */
+            place: string;
         };
         /**
          * UseAction

@@ -27,6 +27,7 @@ from app.rounds.models import Declaration, Round
 from app.rounds.place_item_actions import Source
 from app.rounds.rests import Cause, Recovered
 from app.rounds.state import (
+    door_of,
     find_declaration,
     has_outcome,
     item_give_of,
@@ -297,6 +298,8 @@ def record_move(session: AsyncSession, table: GameTable, declaration: Declaratio
     # 문을 열지 않았으면 싣지 않는다. 자물쇠가 생기기 전과 같은 모양이다
     if move.get('unlocked'):
         payload['unlocked'] = True
+    if move.get('unbarred'):
+        payload['unbarred'] = True
     moved = recorder.record(session, table, EventType.CHARACTER_MOVED, payload=payload, cause=cause)
     record_carried(session, table, move, moved)
 
@@ -310,20 +313,51 @@ def record_cross(session: AsyncSession, table: GameTable, character_name: str, m
     cross = move.get('cross')
     if cross is None:
         return
-    payload = {
-        'round': cause.payload['round'],
-        'character_name': character_name,
-        **{key: cross[key] for key in ('ability', 'difficulty', 'roll', 'modifier', 'total', 'target', 'success')},
-        'hindrance': cross['hindrance'],
-        'called_shot': None,
-        'blow': None,
-    }
-    rolled = recorder.record(session, table, EventType.CHECK_ROLLED, payload=payload, cause=cause)
+    rolled = record_terms(session, table, character_name, cross, cause)
     effect = move.get('effect')
     if effect is not None:
         changed = record_hp_change(session, table, effect, cause=rolled)
         holder = {'user_id': effect['user_id'], 'character_name': effect['character_name']}
         record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)
+
+
+def record_door(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    문을 다룬 것을 이벤트로 적는다(#281). 그 행동의 이벤트(cause)에 잇는다.
+
+    따기와 부수기는 굴린 판정을 먼저 적는다(check_rolled, 해내지 못했어도). 해냈으면 door_changed 를 잇는다.
+    행한 사람(actor_id)을 적지 않는다. 문을 바꾼 것은 엔진이다.
+    """
+    door = door_of(declaration)
+    after = record_terms(session, table, declaration.character_name, door['check'], cause)
+    if not door['done']:
+        return
+    payload = {
+        'round': cause.payload['round'],
+        **{key: door[key] for key in ('user_id', 'character_name', 'act', 'device', 'from', 'to')},
+    }
+    recorder.record(session, table, EventType.DOOR_CHANGED, payload=payload, cause=after)
+
+
+def record_terms(
+    session: AsyncSession, table: GameTable, character_name: str, check: dict | None, cause: TableEvent
+) -> TableEvent:
+    """
+    판에 적힌 판정(넘기, 따기, 부수기, #281)을 check_rolled 로 적는다. 적은 이벤트를, 굴리지 않았으면 cause 를 돌려준다.
+
+    판정하는 행동의 이벤트와 같은 모양이다. 노려 치기와 타격의 장비는 없다.
+    """
+    if check is None:
+        return cause
+    payload = {
+        'round': cause.payload['round'],
+        'character_name': character_name,
+        **{key: check[key] for key in ('ability', 'difficulty', 'roll', 'modifier', 'total', 'target', 'success')},
+        'hindrance': check['hindrance'],
+        'called_shot': None,
+        'blow': None,
+    }
+    return recorder.record(session, table, EventType.CHECK_ROLLED, payload=payload, cause=cause)
 
 
 def record_carried(session: AsyncSession, table: GameTable, move: dict, cause: TableEvent) -> None:
@@ -558,6 +592,8 @@ def record_declaration(
         record_move(session, table, declaration, cause=acted)
     elif search_of(declaration) is not None:
         record_search(session, table, declaration, cause=acted)
+    elif door_of(declaration) is not None:
+        record_door(session, table, declaration, cause=acted)
     elif take_of(declaration) is not None:
         record_take(session, table, declaration, cause=acted)
     elif put_down_of(declaration) is not None:

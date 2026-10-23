@@ -325,6 +325,19 @@ def place_searched(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'찾기: {who(payload)} · {place_name(payload.get("place"))} → {found}')]
 
 
+# 문을 다룬 것의 말(#281)
+DOOR_ACTS = {'lock': '잠금', 'unlock': '엶', 'pick': '땀', 'force': '부숨'}
+DOOR_DEVICES = {'lock': '자물쇠', 'bar': '빗장'}
+
+
+def door_changed(payload: dict, labels: Labels) -> list[Block]:
+    """문 다루기(#281). 누가, 어느 길의 문을, 무엇으로 어떻게."""
+    device = DOOR_DEVICES.get(payload.get('device'), '문')
+    act = DOOR_ACTS.get(payload.get('act'), '다룸')
+    road = f'{place_name(payload.get("from"))} ↔ {place_name(payload.get("to"))}'
+    return [Note(f'문: {who(payload)} · {road} {device} {act}')]
+
+
 def character_rested(payload: dict, labels: Labels) -> list[Block]:
     """쉬기. 쉬었으면 HP 의 앞뒤."""
     if not payload.get('rested'):
@@ -407,6 +420,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.CHARACTER_MOVED: character_moved,
     EventType.HAPPENING_OCCURRED: happening_occurred,
     EventType.PLACE_SEARCHED: place_searched,
+    EventType.DOOR_CHANGED: door_changed,
     EventType.CHARACTER_RESTED: character_rested,
     EventType.MEMBER_LEFT: member_left,
     EventType.MEMBER_KICKED: member_kicked,

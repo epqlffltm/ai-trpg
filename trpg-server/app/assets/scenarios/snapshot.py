@@ -115,7 +115,9 @@ from app.engine.sheet import Sheet
 #  51: 장소마다의 커버(covers: 장소, 커버의 값)가 있다(#276 의 커버 세이브)
 #  52: 길의 조건이 있다(#281). 지날 때마다 굴리는 넘기 판정(routes[].cross: 능력, 난이도, 실패의 피해)과
 #      열쇠의 자물쇠(routes[].lock: 열쇠, 처음에 잠겼는가)
-SNAPSHOT_FORMAT = 52
+#  53: 문을 여는 다른 길이 있다(#281). 자물쇠를 따는 판정(routes[].lock.pick: 능력, 난이도, 도구),
+#      한쪽의 빗장(routes[].bar: 있는 쪽, 처음에 걸렸는가), 문을 부수는 판정(routes[].force)
+SNAPSHOT_FORMAT = 53
 
 
 class EntrySnapshot(BaseModel):
@@ -307,11 +309,34 @@ class CrossSnapshot(BaseModel):
     harm: str | None = None
 
 
+class PickSnapshot(BaseModel):
+    """자물쇠를 따는 판정(#281). 능력치, 난이도의 이름과 있어야 하는 도구(판 안의 물건 항목, 없으면 None)."""
+
+    ability: str
+    difficulty: str | None = None
+    tool: uuid.UUID | None = None
+
+
 class LockSnapshot(BaseModel):
-    """길의 자물쇠(#281). 여는 열쇠(판 안의 물건 항목)와 시작할 때 잠겨 있는가."""
+    """길의 자물쇠(#281). 여는 열쇠(판 안의 물건 항목), 시작할 때 잠겨 있는가, 따는 판정(없으면 못 딴다)."""
 
     key: uuid.UUID
     locked: bool = True
+    pick: PickSnapshot | None = None
+
+
+class BarSnapshot(BaseModel):
+    """길의 빗장(#281). 있는 쪽(길의 한 끝)과 시작할 때 걸려 있는가."""
+
+    side: uuid.UUID
+    barred: bool = False
+
+
+class ForceSnapshot(BaseModel):
+    """문을 부수는 판정(#281). 능력치와 난이도의 이름이다."""
+
+    ability: str
+    difficulty: str | None = None
 
 
 class RouteSnapshot(BaseModel):
@@ -322,6 +347,7 @@ class RouteSnapshot(BaseModel):
     숨긴 길은 찾는 판정(find)으로 드러난다. travel_minutes 는 한 칸 가는 데 걸리는 게임 안의 시간(분)이다.
     비어 있으면 라운드의 걸음 안에서 간다. 형식 26 보다 옛 판은 모두 비어 있다.
     cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠의 자물쇠다(#281). 형식 52 보다 옛 판은 둘 다 없다.
+    bar 는 한쪽의 빗장, force 는 문을 부수는 판정이다. 형식 53 보다 옛 판은 둘 다 없고 자물쇠를 따지 못한다.
     """
 
     from_place: uuid.UUID
@@ -332,6 +358,8 @@ class RouteSnapshot(BaseModel):
     travel_minutes: int | None = None
     cross: CrossSnapshot | None = None
     lock: LockSnapshot | None = None
+    bar: BarSnapshot | None = None
+    force: ForceSnapshot | None = None
 
 
 class PregenSnapshot(BaseModel):
@@ -621,6 +649,7 @@ class Snapshot(BaseModel):
     def require_route_keys(self) -> 'Snapshot':
         """
         길의 자물쇠마다 열쇠가 판 안의 물건 항목이고, 열쇠 하나가 자물쇠 하나만 여는지 본다(#281). 아니면 거부한다.
+        따는 도구도 판 안의 물건 항목이어야 한다.
 
         게시할 때 이미 막는다(item_not_item, route_key_repeated). 테이블은 열쇠로 그 길 하나를 찾는다.
         """
@@ -628,6 +657,8 @@ class Snapshot(BaseModel):
         keys = route_keys(self)
         if any(key not in items for key in keys):
             raise ValueError('물건 항목이 아닌 것을 열쇠로 적은 자물쇠가 있습니다.')
+        if any(tool not in items for tool in pick_tools(self)):
+            raise ValueError('물건 항목이 아닌 것을 따는 도구로 적은 자물쇠가 있습니다.')
         if len(set(keys)) != len(keys):
             raise ValueError('열쇠 하나가 두 자물쇠를 엽니다.')
         return self
@@ -826,6 +857,15 @@ def cover_at(snapshot: Snapshot, place_id: uuid.UUID | None) -> int:
 def route_keys(snapshot: Snapshot) -> list[uuid.UUID]:
     """길의 자물쇠마다의 열쇠. 판의 길 순서다(#281)."""
     return [route.lock.key for route in snapshot.routes if route.lock is not None]
+
+
+def pick_tools(snapshot: Snapshot) -> list[uuid.UUID]:
+    """자물쇠를 따는 데 있어야 하는 도구들(#281). 판의 길 순서다."""
+    return [
+        route.lock.pick.tool
+        for route in snapshot.routes
+        if route.lock is not None and route.lock.pick is not None and route.lock.pick.tool is not None
+    ]
 
 
 def has_map(snapshot: Snapshot) -> bool:

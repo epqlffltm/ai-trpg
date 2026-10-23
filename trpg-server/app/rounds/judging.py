@@ -31,6 +31,7 @@ from app.engine.action import (
     AnyAction,
     BuyAction,
     CoverAction,
+    DoorAction,
     GiveAction,
     LootAction,
     MoveAction,
@@ -52,6 +53,7 @@ from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, Scene
 from app.rounds.checks import judge_check
 from app.rounds.covers import covers_of, judge_cover
+from app.rounds.door_actions import judge_door
 from app.rounds.effects import Judging
 from app.rounds.initiative import Turn
 from app.rounds.item_actions import judge_give, judge_use
@@ -78,7 +80,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     행동의 종류에 따라 판정(judge_check), 치료(judge_treatment), 지목(judge_naming),
     물건 쓰기(judge_use), 건네기(judge_give), 가기(judge_move), 찾기(search_place), 줍기(judge_take),
     내려놓기(judge_put_down), 훔치기(judge_steal), 빼앗기(judge_loot), 쉬기(judge_rest), 기다리기(judge_wait),
-    사기(judge_buy), 팔기(judge_sell), 돈 건네기(judge_pay), 엄폐하기(judge_cover)다.
+    사기(judge_buy), 팔기(judge_sell), 돈 건네기(judge_pay), 엄폐하기(judge_cover),
+    문 다루기(judge_door: 잠그기, 열기, 따기, 부수기, #281)다.
     """
     if isinstance(action, TreatAction):
         return judge_treatment(judging, member, action)
@@ -112,6 +115,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
         return judge_pay(judging, member, action)
     if isinstance(action, CoverAction):
         return judge_cover(judging, member)
+    if isinstance(action, DoorAction):
+        return judge_door(judging, member, action)
     return judge_check(judging, member, action)
 
 

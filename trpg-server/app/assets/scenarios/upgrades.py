@@ -871,6 +871,26 @@ def upgrade_from_51(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_52(document: dict) -> dict:
+    """
+    형식 52 의 문서를 형식 53 으로 올린다. 그때는 문을 여는 길이 열쇠뿐이었다(#281).
+
+    빗장도 부수는 판정도 없고, 자물쇠는 따지 못하는 것으로 읽는다.
+    """
+    upgraded = dict(document)
+    upgraded['routes'] = [
+        {**route, 'lock': with_no_pick(route.get('lock')), 'bar': None, 'force': None}
+        for route in document.get('routes', [])
+    ]
+    upgraded['format'] = 53
+    return upgraded
+
+
+def with_no_pick(lock: dict | None) -> dict | None:
+    """형식 52 의 자물쇠에 따는 판정이 없다고 적는다. 자물쇠가 없으면 None."""
+    return None if lock is None else {**lock, 'pick': None}
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -925,4 +945,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     49: upgrade_from_49,
     50: upgrade_from_50,
     51: upgrade_from_51,
+    52: upgrade_from_52,
 }

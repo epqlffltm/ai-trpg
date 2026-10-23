@@ -21,6 +21,7 @@ from app.rounds.narrator import (
     BlowNote,
     CoverNote,
     DeathSaveNote,
+    DoorNote,
     DownedStrikeNote,
     DropNote,
     HandOverNote,
@@ -349,7 +350,11 @@ def describe_items(items: list[ItemNote]) -> str:
 
 
 # 가지 못한 까닭을 서술자에게 주는 말. 넘기에 실패한 것(cross_failed)은 cross_failure 가 따로 말한다
-TRAVEL_FAILURES = {'not_adjacent': '그쪽으로 이어진 길이 없었다', 'locked': '문이 잠겨 있었고 맞는 열쇠가 없었다'}
+TRAVEL_FAILURES = {
+    'not_adjacent': '그쪽으로 이어진 길이 없었다',
+    'locked': '문이 잠겨 있었고 맞는 열쇠가 없었다',
+    'barred': '반대쪽에 빗장이 걸려 있었다',
+}
 # 업고 가지 못한 까닭을 서술자에게 주는 말. 업은 사람이 가지 못한 것(not_moved)은 가지 못한 줄이 말한다
 CARRY_FAILURES = {
     'standing': '이미 일어나 있어 업지 않았다',
@@ -382,9 +387,10 @@ def travel_failure(note: TravelNote) -> str:
 
 def passage_text(note: TravelNote) -> str:
     """길의 조건을 채우고 간 것을 간 곳의 줄에 붙일 말(#281). 열쇠로 연 문, 넘기 판정. 없었으면 빈 말이다."""
+    unbarred = ', 빗장을 풀고' if note.unbarred else ''
     unlocked = ', 열쇠로 문을 열고' if note.unlocked else ''
     crossed = f', {note.cross} 판정에 성공해 넘어' if note.cross else ''
-    return f'{unlocked}{crossed}'
+    return f'{unbarred}{unlocked}{crossed}'
 
 
 def describe_travel(note: TravelNote) -> str:
@@ -404,6 +410,48 @@ def describe_travel(note: TravelNote) -> str:
     start = f'{note.from_place} → ' if note.from_place else ''
     took = f', {duration_text(note.travel_minutes)} 걸림' if note.travel_minutes else ''
     return f'(간 곳: {start}{note.to_place}{took}{passage_text(note)}{carry_text(note)})'
+
+
+# 문을 다룬 것의 말. 해낸 것이다(#281). 잠그기와 열기는 장치마다 다르다
+DOOR_DONE = {
+    ('lock', 'lock'): '열쇠로 문을 잠갔다',
+    ('lock', 'bar'): '빗장을 걸었다',
+    ('unlock', 'lock'): '열쇠로 문을 열었다',
+    ('unlock', 'bar'): '빗장을 풀었다',
+    ('pick', None): '자물쇠를 땄다',
+    ('force', None): '문을 부숴 열었다',
+}
+# 문을 다루지 못한 까닭의 말. 따기와 부수기의 실패는 door_failure 가 따로 말한다
+DOOR_FAILURES = {
+    'no_key': '맞는 열쇠가 없었다',
+    'wrong_side': '빗장의 반대쪽이라 손이 닿지 않았다',
+    'broken': '부서진 문이라 잠기지 않았다',
+    'already': '이미 그렇게 되어 있었다',
+    'no_tool': '딸 도구가 없었다',
+}
+# 무엇을 하려 했는지의 말(못 했을 때)
+DOOR_TRIES = {'lock': '잠그려', 'unlock': '열려', 'pick': '따려', 'force': '부수려'}
+
+
+def door_failure(note: DoorNote) -> str:
+    """문을 다루지 못한 까닭의 말. 판정에 실패했으면 무슨 판정인지 말한다."""
+    if note.reason == 'failed':
+        return f'{note.check} 판정에 실패했다'
+    return DOOR_FAILURES.get(note.reason, '하지 못했다')
+
+
+def describe_door(note: DoorNote) -> str:
+    """
+    길의 문을 다룬 결과를 한 줄로 적는다(#281). 지나가지는 않았다.
+
+    예: (문: 광장 쪽 문. 빗장을 걸었다)
+        (문: 탑 쪽 문. 민첩 판정에 성공해 자물쇠를 땄다)
+        (문: 탑 쪽 문을 따려 했다. 민첩 판정에 실패했다)
+    """
+    if not note.done:
+        return f'(문: {note.other_end} 쪽 문을 {DOOR_TRIES.get(note.act, "다루려")} 했다. {door_failure(note)})'
+    rolled = f'{note.check} 판정에 성공해 ' if note.check else ''
+    return f'(문: {note.other_end} 쪽 문. {rolled}{DOOR_DONE.get((note.act, note.device), "문을 다뤘다")})'
 
 
 def describe_search(note: SearchNote) -> str:
@@ -619,6 +667,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_travel(move.travel))
     if move.search is not None:
         parts.append(describe_search(move.search))
+    if move.door is not None:
+        parts.append(describe_door(move.door))
     if move.take is not None:
         parts.append(describe_take(move.take))
     if move.put_down is not None:

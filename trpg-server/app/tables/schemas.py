@@ -453,7 +453,11 @@ class PlaceOut(BaseModel):
 
 
 class RouteCrossOut(BaseModel):
-    """길을 넘는 판정(#281). 지날 때마다 가는 사람이 굴린다. 룰북의 능력치와 난이도의 이름표다."""
+    """
+    길에 적힌 판정 하나(#281). 넘기(지날 때마다 가는 사람이 굴린다), 따기, 부수기다.
+
+    룰북의 능력치와 난이도의 이름표다.
+    """
 
     ability: str
     # 판에 비워 뒀으면 규칙의 기본 난이도다
@@ -464,7 +468,8 @@ class RouteOut(BaseModel):
     """
     아는 길 하나. two_way 가 아니면 from_place 에서 to_place 로만 간다.
 
-    길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 무슨 열쇠로 여는지와 실패의 피해는 싣지 않는다.
+    길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 무슨 열쇠로 여는지, 따는 도구,
+    실패의 피해는 싣지 않는다.
     """
 
     from_place: uuid.UUID
@@ -476,6 +481,14 @@ class RouteOut(BaseModel):
     locked: bool | None = None
     # 길을 넘는 판정. 없으면 None 이다
     cross: RouteCrossOut | None = None
+    # 빗장이 지금 걸려 있는가. 빗장이 없는 길이면 None 이다. 빗장 쪽(bar_side)에서만 걸고 푼다
+    barred: bool | None = None
+    bar_side: uuid.UUID | None = None
+    # 문이 부서졌는가. 부서진 문은 열린 채이고 다시 잠그지 못한다
+    broken: bool = False
+    # 자물쇠를 따는 판정과 문을 부수는 판정. 없으면 따거나 부수지 못한다
+    pick: RouteCrossOut | None = None
+    force: RouteCrossOut | None = None
 
 
 class MapOut(BaseModel):

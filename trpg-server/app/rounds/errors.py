@@ -54,6 +54,10 @@ class Conflict(enum.StrEnum):
     RECIPIENT_FULL = 'recipient_full'
     # 맵에서 가거나 찾으려는데 캐릭터가 맵에 서 있지 않다. 맵이 없는 판이거나, 맵이 생기기 전에 시작한 테이블이다
     NOT_ON_MAP = 'not_on_map'
+    # 따려는 자물쇠가 따지 못하는 것이다. 판에 따는 판정을 적지 않았다(#281)
+    NOT_PICKABLE = 'not_pickable'
+    # 부수려는 문이 부수지 못하는 것이다. 판에 부수는 판정을 적지 않았다(#281)
+    NOT_FORCEABLE = 'not_forceable'
     # 빼앗으려는 대상이 쓰러지지 않았다(살아 있다). 그때는 훔치기다
     TARGET_NOT_DOWN = 'target_not_down'
     # 사고팔려는 인물이 상인이 아니다(#278)
@@ -100,6 +104,7 @@ class ActionTargetError(Exception):
     field 는 행동의 어느 칸인지다. target 이면 이 테이블에 앉은 사람이 아니고, npc 면 이번 장면에 나온 인물이 아니다.
     place 면 지금 장소에서 아는 길로 이어진 장소가 아니다. item 이면 지금 장소에 보이게 놓인 물건이 아니다(줍기).
     carry 면 같은 장소에 쓰러져 있는(죽지 않은) 다른 사람이 아니다(업고 가기).
+    device 면 그 길의 문에 없는 장치이거나, 자물쇠와 빗장이 다 있는데 적지 않았다(잠그기, 열기, #281).
     """
 
     def __init__(self, field: str) -> None:

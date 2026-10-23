@@ -131,9 +131,10 @@ async def test_conditions_are_saved_and_published(client: AsyncClient, me: dict,
 
     assert response.status_code == status.HTTP_201_CREATED, response.text
     gate_square, gate_forest, square_tower = scenario['routes']
-    assert (gate_square['lock'], gate_square['cross']) == ({'key': keys['tower_key']['id'], 'locked': True}, None)
+    assert gate_square['lock'] == {'key': keys['tower_key']['id'], 'locked': True, 'pick': None}
+    assert gate_square['cross'] is None
     assert (gate_forest['lock'], gate_forest['cross']) == (None, {**CLIMB, 'difficulty': None})
-    assert square_tower['lock'] == {'key': keys['forge_key']['id'], 'locked': False}
+    assert square_tower['lock'] == {'key': keys['forge_key']['id'], 'locked': False, 'pick': None}
     routes = read_snapshot(response.json()['snapshot']).routes
     assert routes[0].lock.key == uuid.UUID(keys['tower_key']['id'])
     assert (routes[1].cross.ability, routes[1].cross.difficulty, routes[1].cross.harm) == ('str', None, 'light')
@@ -227,6 +228,11 @@ async def test_the_map_shows_locks_and_climbs_but_not_keys(client: AsyncClient, 
         'travel_minutes': None,
         'locked': True,
         'cross': None,
+        'barred': None,
+        'bar_side': None,
+        'broken': False,
+        'pick': None,
+        'force': None,
     }
     # 판에 난이도를 비워도 규칙의 기본 난이도로 보인다. 실패의 피해는 보이지 않는다
     assert route_out(table, keys['gate'], keys['forest'])['cross'] == {'ability': 'str', 'difficulty': 'medium'}
@@ -392,7 +398,7 @@ def test_the_cross_is_named_by_the_rules():
 
 def test_the_map_note_forbids_opening_by_words():
     assert '잠긴 문' in prompt.MAP_NOTE
-    assert prompt.PROMPT_VERSION == 'narration-56'
+    assert prompt.PROMPT_VERSION == 'narration-57'
 
 
 def test_the_climb_feels_the_injuries_on_its_ability(monkeypatch: pytest.MonkeyPatch):
@@ -407,6 +413,6 @@ def test_the_climb_feels_the_injuries_on_its_ability(monkeypatch: pytest.MonkeyP
     judging = SimpleNamespace(ruleset=SRD5, dice=ScriptedDice([20]))
     member = SimpleNamespace(sheet=SimpleNamespace(abilities={'str': 10, 'dex': 10}, injuries=[]))
 
-    rolled = map_actions.roll_cross(judging, member, CrossSnapshot(ability='str'))
+    rolled = map_actions.roll_terms(judging, member, CrossSnapshot(ability='str'))
 
     assert (asked, rolled.check.success) == (['str'], True)

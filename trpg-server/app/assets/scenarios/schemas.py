@@ -848,24 +848,78 @@ class CrossCheck(BaseModel):
     harm: Key | None = None
 
 
+class PickCheck(BaseModel):
+    """
+    자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.
+
+    tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 락픽 같은 것)을 지닌 사람만 딸 수 있다. 도구는 없어지지 않는다.
+    능력치와 난이도가 룰북에 있는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    ability: Key
+    difficulty: Key | None = None
+    tool: uuid.UUID | None = None
+
+    @field_serializer('tool')
+    def tool_as_text(self, tool: uuid.UUID | None) -> str | None:
+        """도구의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return None if tool is None else str(tool)
+
+
 class RouteLock(BaseModel):
     """
     길의 자물쇠(#281). 잠겨 있으면 그 열쇠(key)를 지닌 사람만 지나간다. 지나가면서 연다.
 
     열쇠는 붙인 로어북의 물건 항목 하나다. 열쇠 하나는 자물쇠 하나만 연다. 같은 열쇠를 두 길에 적으면 게시하지 못한다.
     locked 는 테이블이 시작할 때 잠겨 있는가다(기본은 잠김). 연 문은 누가 다시 잠그기 전까지 열린 채다.
-    열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다. 열쇠는 쓰여도 없어지지 않는다.
+    열쇠를 지닌 사람은 길의 어느 끝에서든 잠그고 연다(행동 '잠그기', '열기'). 열쇠는 쓰여도 없어지지 않는다.
+    pick 을 적었으면 열쇠 없이 따기로 열 수 있다. 적지 않으면 따지 못한다.
     """
 
     model_config = ConfigDict(extra='forbid')
 
     key: uuid.UUID
     locked: bool = True
+    pick: PickCheck | None = None
 
     @field_serializer('key')
     def key_as_text(self, key: uuid.UUID) -> str:
         """열쇠의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
         return str(key)
+
+
+class RouteBar(BaseModel):
+    """
+    길의 빗장(#281). 길의 한쪽 끝(side)에만 있다. 그쪽에 선 사람만 열쇠 없이 걸고 푼다(행동 '잠그기', '열기').
+
+    걸려 있으면 빗장 쪽에서는 지나가며 풀고, 반대쪽에서는 지나가지 못한다. 반대쪽에서는 부수기로만 연다.
+    barred 는 테이블이 시작할 때 걸려 있는가다(기본은 안 걸림). side 는 길의 두 끝 중 하나여야 한다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    side: uuid.UUID
+    barred: bool = False
+
+    @field_serializer('side')
+    def side_as_text(self, side: uuid.UUID) -> str:
+        """장소의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(side)
+
+
+class ForceCheck(BaseModel):
+    """
+    문을 부수는 판정(#281). 행동 '부수기'가 이 능력과 난이도로 굴린다. 적지 않으면 부수지 못한다.
+
+    성공하면 자물쇠와 빗장이 부서져 열린다. 부서진 것은 고치기 전까지 다시 잠그거나 걸지 못한다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    ability: Key
+    difficulty: Key | None = None
 
 
 class RouteRule(BaseModel):
@@ -877,8 +931,9 @@ class RouteRule(BaseModel):
     숨긴 길(hidden)은 플레이어도 방장도 모른다. 숨긴 길에는 찾는 판정(find)이 있어야 하고, 다른 길에는 없다.
     travel_minutes 는 이 길로 한 칸 가는 데 걸리는 게임 안의 시간(분)이다. 양쪽이 같다. 비우면 라운드의 걸음 안에서 간다
     (옆방). 누가 이 길로 가면 다음 라운드가 열릴 때 그만큼은 흐른다(app/calendar/state.py 의 stretch_next_step).
-    길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠다. 둘 다 양쪽에서 같다.
-    둘 다 있으면 자물쇠를 먼저 보고 넘기 판정을 굴린다.
+    길의 조건(#281): cross 는 지날 때마다 굴리는 넘기 판정, lock 은 열쇠로 여는 자물쇠, bar 는 한쪽의 빗장,
+    force 는 문(자물쇠와 빗장)을 부수는 판정이다. 자물쇠와 넘기는 양쪽에서 같다.
+    빗장, 자물쇠, 넘기 판정의 차례로 본다. force 는 자물쇠나 빗장이 있는 길에만 적는다.
     가리키는 장소가 붙인 로어북에 있는지, 장소인지는 게시할 때 본다.
     """
 
@@ -892,12 +947,28 @@ class RouteRule(BaseModel):
     travel_minutes: int | None = Field(default=None, ge=1, le=ROUND_MAX_MINUTES)
     cross: CrossCheck | None = None
     lock: RouteLock | None = None
+    bar: RouteBar | None = None
+    force: ForceCheck | None = None
 
     @model_validator(mode='after')
     def leads_somewhere_else(self) -> 'RouteRule':
         """제자리로 돌아오는 길은 받지 않는다."""
         if self.from_place == self.to_place:
             raise ValueError('길의 두 끝이 같은 장소입니다.')
+        return self
+
+    @model_validator(mode='after')
+    def bar_on_an_end(self) -> 'RouteRule':
+        """빗장은 길의 두 끝 중 한쪽에 있다."""
+        if self.bar is not None and self.bar.side not in (self.from_place, self.to_place):
+            raise ValueError('빗장은 길의 두 끝 중 한쪽(side)에 있어야 합니다.')
+        return self
+
+    @model_validator(mode='after')
+    def force_only_with_a_door(self) -> 'RouteRule':
+        """부술 것(자물쇠나 빗장)이 있는 길에만 부수는 판정을 적는다."""
+        if self.force is not None and self.lock is None and self.bar is None:
+            raise ValueError('부수는 판정(force)은 자물쇠나 빗장이 있는 길에만 적습니다.')
         return self
 
     @model_validator(mode='after')
