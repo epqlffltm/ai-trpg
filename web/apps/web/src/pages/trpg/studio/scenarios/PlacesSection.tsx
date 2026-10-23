@@ -1,26 +1,39 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/PlacesSection.tsx
 // 지도 탭의 장소(B9). 붙인 로어북의 장소 항목을 모두 늘어놓고 줄마다 "시작 · 길 3 · 커버 5 · 인물 2"를 보인다.
-// 줄을 고치면 창이 열리고 명소인지, 커버, 처음 있는 인물을 고친다. 창의 저장이 명소, 커버, 인물의 자리를 함께 바로 보낸다.
+// 줄을 고치면 창이 열리고 명소인지, 커버, 처음 있는 인물, 놓인 물건을 고친다. 창의 저장이 넷을 함께 바로 보낸다.
 // 지도가 가리키지만 붙인 로어북에 없는 장소도 줄로 남겨 비울 수 있게 한다.
 
 import { Button, Checkbox, Dialog, TextField } from '@ai-trpg/ui';
 import { useCallback, useState, type FormEvent } from 'react';
-import type { ScenarioDetail } from '../../../../api/types';
+import type { Ruleset, ScenarioDetail } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
+import { PlaceItemsEditor } from './PlaceItemsEditor';
 import { applyPlace, mapPlaces, personElsewhere, placeDraft, placeHints, placeLine, togglePerson, type PlaceDraft } from './placesForm';
 import type { EntryChoice } from './useLoreEntries';
 import { useScenarioSave } from './useScenarioSave';
 
-type Props = { scenario: ScenarioDetail; places: EntryChoice[]; people: EntryChoice[]; nameOf: (placeId: string) => string };
+type Props = {
+  scenario: ScenarioDetail;
+  rules: Ruleset | null;
+  places: EntryChoice[];
+  people: EntryChoice[];
+  items: EntryChoice[];
+  nameOf: (placeId: string) => string;
+};
 
 /** 장소 항목들과, 지도·커버·인물의 자리가 가리키지만 항목이 없는 장소들 */
 function placeIds(scenario: ScenarioDetail, places: EntryChoice[]): string[] {
   const listed = places.map((place) => place.id);
-  const referred = [...mapPlaces(scenario), ...scenario.covers.map((rule) => rule.place_id), ...scenario.npc_places.map((place) => place.place_id)];
+  const referred = [
+    ...mapPlaces(scenario),
+    ...scenario.covers.map((rule) => rule.place_id),
+    ...scenario.npc_places.map((place) => place.place_id),
+    ...scenario.place_items.map((item) => item.place_id),
+  ];
   return [...listed, ...new Set(referred.filter((id) => !listed.includes(id)))];
 }
 
-export function PlacesSection({ scenario, places, people, nameOf }: Props) {
+export function PlacesSection({ scenario, rules, places, people, items, nameOf }: Props) {
   const [editing, setEditing] = useState<string | null>(null);
   const close = useCallback(() => setEditing(null), []);
   const ids = placeIds(scenario, places);
@@ -45,15 +58,15 @@ export function PlacesSection({ scenario, places, people, nameOf }: Props) {
         ))}
       </ul>
       <Dialog title={editing ? `장소: ${nameOf(editing)}` : '장소'} open={editing !== null} onClose={close}>
-        {editing ? <PlaceForm scenario={scenario} placeId={editing} people={people} nameOf={nameOf} done={close} /> : null}
+        {editing ? <PlaceForm scenario={scenario} rules={rules} placeId={editing} people={people} items={items} nameOf={nameOf} done={close} /> : null}
       </Dialog>
     </section>
   );
 }
 
-type FormProps = { scenario: ScenarioDetail; placeId: string; people: EntryChoice[]; nameOf: (placeId: string) => string; done: () => void };
+type FormProps = Omit<Props, 'places'> & { placeId: string; done: () => void };
 
-function PlaceForm({ scenario, placeId, people, nameOf, done }: FormProps) {
+function PlaceForm({ scenario, rules, placeId, people, items, nameOf, done }: FormProps) {
   const [draft, setDraft] = useState<PlaceDraft>(() => placeDraft(scenario, placeId));
   const saving = useScenarioSave(scenario.id);
   const hints = placeHints(draft);
@@ -99,6 +112,18 @@ function PlaceForm({ scenario, placeId, people, nameOf, done }: FormProps) {
             />
           );
         })}
+      </fieldset>
+      <fieldset className="scenario-choices">
+        <legend>놓인 물건</legend>
+        <p className="ui-field__hint">보이는 물건은 이곳에 서 본 뒤 줍기로 가져갑니다. 숨긴 물건은 찾는 판정에 성공한 사람이 바로 갖습니다.</p>
+        <PlaceItemsEditor
+          drafts={draft.items}
+          onChange={(placeItems) => setDraft((current) => ({ ...current, items: placeItems }))}
+          entries={items}
+          rules={rules}
+          hints={hints}
+          others={scenario.place_items.filter((item) => item.place_id !== placeId).length}
+        />
       </fieldset>
       <div className="actions">
         <Button type="submit" busy={saving.busy} disabled={blocked}>

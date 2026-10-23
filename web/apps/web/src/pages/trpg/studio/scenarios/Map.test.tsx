@@ -119,6 +119,7 @@ describe('지도 탭', () => {
       landmarks: [CRYPT],
       covers: [{ place_id: CRYPT, cover: 5 }],
       npc_places: [{ entry_id: KEEPER, place_id: CRYPT }],
+      place_items: [],
     });
     expect(await list.findByText('명소 · 커버 5 · 인물 1')).toBeInTheDocument();
   });
@@ -129,7 +130,7 @@ describe('지도 탭', () => {
 
     const panel = await mapPanel();
     const routes = within(await panel.findByRole('list', { name: '길' }));
-    expect(routes.getByText('수도원 문 ↔ 종탑 · 처음부터 앎 · 30분 · 문 있음')).toBeInTheDocument();
+    expect(routes.getByText('수도원 문 ↔ 종탑 · 처음부터 앎 · 30분 · 자물쇠(잠김)')).toBeInTheDocument();
 
     await userEvent.click(panel.getByRole('button', { name: '길 더하기' }));
     const adding = within(await screen.findByRole('dialog'));
@@ -176,10 +177,11 @@ describe('지도 입력', () => {
     const detail = scenario({ landmarks: [CRYPT], covers: [{ place_id: CRYPT, cover: 3 }] }) as unknown as ScenarioDetail;
     expect([...mapPlaces(detail)].sort()).toEqual([GATE, TOWER, CRYPT].sort());
     expect(placeLine(detail, CRYPT)).toBe('명소 · 커버 3');
-    expect(applyPlace(detail, CRYPT, { landmark: false, cover: '', people: [] })).toEqual({
+    expect(applyPlace(detail, CRYPT, { landmark: false, cover: '', people: [], items: [] })).toEqual({
       landmarks: [],
       covers: [],
       npc_places: [{ entry_id: KEEPER, place_id: GATE }],
+      place_items: [],
     });
   });
 
