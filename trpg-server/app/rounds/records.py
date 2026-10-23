@@ -68,6 +68,7 @@ def record_check(session: AsyncSession, table: GameTable, declaration: Declarati
         'success': outcome['success'],
         'hindrance': outcome.get('hindrance'),
         'called_shot': outcome.get('called_shot'),
+        'blow': outcome.get('blow'),
     }
     rolled = recorder.record(session, table, EventType.CHECK_ROLLED, payload=payload, cause=cause)
     # 치료였으면 치료의 결과를 판정 바로 뒤에 적는다. HP 의 변화(덧남, 좀 아픔)는 치료의 결과에 잇는다

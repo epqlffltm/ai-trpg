@@ -26,6 +26,7 @@ from app.assets.models import (
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
     CLOCK_MAX_DAY,
+    COMBAT_NUMBER_MAX,
     COUNTED_CONDITIONS,
     CURRENCY_NAME_MAX_LENGTH,
     CURRENCY_UNIT_MAX_LENGTH,
@@ -185,6 +186,8 @@ def reject_duplicate_slots(slots: list[str]) -> list[str]:
 
 # 장비의 칸들(#276). 룰북의 equipment_slots 의 이름표다. 룰북에 있는지는 게시할 때 본다
 Slots = Annotated[list[Key], Field(max_length=RULESET_MAX_EQUIPMENT_SLOTS), AfterValidator(reject_duplicate_slots)]
+# 무기의 공격 보정, 방어구의 방어, 몬스터의 타고난 방어(#276). 어떻게 쓰는지는 룰북의 방어 규칙(armor)이 정한다
+CombatNumber = Annotated[int, Field(ge=1, le=COMBAT_NUMBER_MAX)]
 
 
 class ItemStack(BaseModel):
@@ -265,6 +268,8 @@ class CarriedItem(BaseModel):
 
     chance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).
     줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.
+    wear 는 그 물건 하나를 착용한 칸들이다(#276). 한 개라도 지니고 있는 동안 착용한 것이다.
+    떨어뜨리거나 빼앗겨 남은 것이 없으면 그 부위는 빈다. 칸이 맞는지는 게시할 때 본다(carried_wear_invalid).
     항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).
     """
 
@@ -273,6 +278,8 @@ class CarriedItem(BaseModel):
     entry_id: uuid.UUID
     count: int = Field(default=1, ge=1, le=ITEM_STACK_MAX)
     chance: int = Field(default=DROP_CHANCE_MAX, ge=1, le=DROP_CHANCE_MAX)
+    # 착용한 칸들(#276). 장비(equipment)의 줄에만 적는다. 앉은 사람의 시작 착용과 같은 규칙이다
+    wear: Slots = []
 
     @field_serializer('entry_id')
     def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
@@ -286,6 +293,19 @@ def reject_duplicate_items(lines: list[CarriedItem]) -> list[CarriedItem]:
     if len(set(entry_ids)) != len(entry_ids):
         raise ValueError('같은 물건이 두 줄 있습니다. 한 줄에 개수와 확률로 적습니다.')
     return lines
+
+
+def reject_wear_in_inventory(inventory: list[CarriedItem]) -> None:
+    """소지품(품에 넣은 것)에는 착용을 적지 않는다. 착용은 장비의 줄에만 있다."""
+    if any(line.wear for line in inventory):
+        raise ValueError('착용(wear)은 장비(equipment)의 줄에만 적습니다.')
+
+
+def reject_unknown_weapons(attacks: list['MonsterAttack'], equipment: list[CarriedItem]) -> None:
+    """공격의 무기는 그 시트의 장비 줄에 있는 물건이어야 한다."""
+    carried = {line.entry_id for line in equipment}
+    if any(attack.weapon is not None and attack.weapon not in carried for attack in attacks):
+        raise ValueError('공격의 무기(weapon)는 장비(equipment)에 적은 물건이어야 합니다.')
 
 
 def reject_items_in_both(equipment: list[CarriedItem], inventory: list[CarriedItem]) -> None:
@@ -318,6 +338,14 @@ class MonsterAttack(BaseModel):
     ability: Key
     difficulty: Key
     harm: Key
+    # 이 공격에 쓰는 무기(#276). 시트의 장비 줄의 물건이다. 착용하고 있고 공격 보정이 있으면 판정에 더한다.
+    # 빼앗기거나 떨어뜨려 지니지 않으면 보정도 없다. 비우면 맨몸의 공격이다(물어뜯기)
+    weapon: uuid.UUID | None = None
+
+    @field_serializer('weapon')
+    def weapon_as_text(self, weapon: uuid.UUID | None) -> str | None:
+        """무기의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return None if weapon is None else str(weapon)
 
 
 def reject_duplicate_attacks(attacks: list[MonsterAttack]) -> list[MonsterAttack]:
@@ -372,6 +400,13 @@ class NpcSheet(BaseModel):
         reject_items_in_both(self.equipment, self.inventory)
         return self
 
+    @model_validator(mode='after')
+    def wear_and_weapons_in_equipment(self) -> 'NpcSheet':
+        """착용은 장비의 줄에만 적고, 공격의 무기는 장비에 적은 물건이다(#276)."""
+        reject_wear_in_inventory(self.inventory)
+        reject_unknown_weapons(self.attacks, self.equipment)
+        return self
+
     @field_serializer('entry_id')
     def entry_id_as_text(self, entry_id: uuid.UUID) -> str:
         """항목의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
@@ -388,6 +423,30 @@ def reject_duplicate_entries(npc_sheets: list[NpcSheet]) -> list[NpcSheet]:
 
 NpcSheets = Annotated[
     list[NpcSheet], Field(max_length=SCENARIO_MAX_NPC_SHEETS), AfterValidator(reject_duplicate_entries)
+]
+
+
+class NaturalArmor(BaseModel):
+    """몬스터의 한 부위의 타고난 방어(#276). 칸(slot)은 룰북의 장비의 칸이다. 룰북에 있는지는 게시할 때 본다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    slot: Key
+    defense: CombatNumber
+
+
+def reject_duplicate_natural_armor(natural: list[NaturalArmor]) -> list[NaturalArmor]:
+    """한 부위를 두 번 적으면 거부한다. 한 줄에 그 부위의 방어를 적는다."""
+    slots = [one.slot for one in natural]
+    if len(set(slots)) != len(slots):
+        raise ValueError('같은 부위의 타고난 방어가 두 번 있습니다.')
+    return natural
+
+
+NaturalArmors = Annotated[
+    list[NaturalArmor],
+    Field(max_length=RULESET_MAX_EQUIPMENT_SLOTS),
+    AfterValidator(reject_duplicate_natural_armor),
 ]
 
 
@@ -411,11 +470,20 @@ class MonsterSheet(BaseModel):
     inventory: CarriedInventory = []
     # 둔한가. 둔하면 훔치기가 쉽다(룰북 규칙의 steal.dull 만큼). 눈치 능력치와 타입과는 따로 더한다
     dull: bool = False
+    # 부위마다 타고난 방어(#276). 가죽, 비늘, 껍데기. 착용한 방어구의 방어에 더한다. 칸은 룰북의 것이다
+    natural_armor: NaturalArmors = []
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'MonsterSheet':
         """같은 물건을 장비와 소지품에 함께 적지 않는다. 마리가 지닌 것을 셀 때 어느 줄인지 갈리지 않게."""
         reject_items_in_both(self.equipment, self.inventory)
+        return self
+
+    @model_validator(mode='after')
+    def wear_and_weapons_in_equipment(self) -> 'MonsterSheet':
+        """착용은 장비의 줄에만 적고, 공격의 무기는 장비에 적은 물건이다(#276)."""
+        reject_wear_in_inventory(self.inventory)
+        reject_unknown_weapons(self.attacks, self.equipment)
         return self
 
     @field_serializer('monster_id')
@@ -484,6 +552,9 @@ class ItemRule(BaseModel):
     slots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
     두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.
     장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).
+    attack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).
+    defense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.
+    어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -495,6 +566,17 @@ class ItemRule(BaseModel):
     price: Price | None = None
     slots: Slots = []
     slot_count: int = Field(default=1, ge=1, le=RULESET_MAX_EQUIPMENT_SLOTS)
+    attack: CombatNumber | None = None
+    defense: CombatNumber | None = None
+    guard: CombatNumber | None = None
+
+    @model_validator(mode='after')
+    def combat_only_when_worn(self) -> 'ItemRule':
+        """공격 보정과 방어는 착용하는 물건(칸이 있다)에만 적는다. 착용해야 쓰인다."""
+        numbers = (self.attack, self.defense, self.guard)
+        if not self.slots and any(number is not None for number in numbers):
+            raise ValueError('공격 보정(attack)과 방어(defense, guard)는 칸(slots)이 있는 물건에만 적습니다.')
+        return self
 
     @model_validator(mode='after')
     def slots_only_on_gear(self) -> 'ItemRule':

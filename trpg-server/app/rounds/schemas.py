@@ -66,6 +66,32 @@ class CalledShotOut(BaseModel):
     amount: int
 
 
+class BlowWeaponOut(BaseModel):
+    """타격에 쓴 무기(#276). 판의 물건과 그 이름과 판정의 보정에 더한 공격 보정이다."""
+
+    entry_id: uuid.UUID
+    name: str
+    bonus: int
+
+
+class BlowOut(BaseModel):
+    """
+    타격에 장비가 든 것(#276). 엔진이 정했다. 무기, 맞은 부위, 노렸는가, 그 부위의 방어다.
+
+    mode 는 룰북의 방어 방식이다. ac 면 방어가 목표값(target)에 이미 더해졌고, reduce 면 피해에서 빠졌다
+    (변화의 rolls 를 더한 값과 amount 의 차이). 방어 방식이 없는 규칙이면 None 이고 부위도 없다.
+    """
+
+    weapon: BlowWeaponOut | None
+    # 맞은 부위(룰북의 장비의 칸)와 그 이름. 굴리지 않았으면 None 이다
+    location: str | None
+    location_name: str | None
+    # 그 부위를 노렸는가. 노렸으면 노려 치기의 대가가 목표값이나 불리함에 들었다
+    aimed: bool
+    defense: int
+    mode: str | None
+
+
 class HindranceOut(BaseModel):
     """입은 부상이 판정에 준 것. 보정을 깎았거나 불리하게 했다. 엔진이 정했다."""
 
@@ -261,6 +287,8 @@ class CheckOutcome(BaseModel):
     hindrance: HindranceOut | None = None
     # 노려 쳤으면 그 내용. target 은 이미 오른 값이다. 노려 치지 않았으면 None 이다
     called_shot: CalledShotOut | None = None
+    # 타격에 장비가 든 것(#276). 무기의 공격 보정은 modifier 에 이미 들었다. 장비가 들지 않았으면 None 이다
+    blow: BlowOut | None = None
     # 이 판정으로 HP 가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다
     effect: EffectOut | None = None
     # 이 판정으로 NPC 의 상태가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다. effect 와 함께 있지 않다

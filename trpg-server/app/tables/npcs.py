@@ -69,14 +69,15 @@ def status_after(hp: int, lethal: bool) -> NpcStatus:
     return NpcStatus.DEAD if lethal else NpcStatus.DOWNED
 
 
-def change_npc(npc: TableNpc, kind: ChangeKind, magnitude: Magnitude, lethal: bool, dice: Dice) -> Change:
+def change_npc(npc: TableNpc, kind: ChangeKind, magnitude: Magnitude, lethal: bool, dice: Dice, cut: int = 0) -> Change:
     """
     NPC 의 HP 와 생사를 한 번 바꾼다. 양을 정하는 주사위를 여기서 굴린다. 바뀐 것을 돌려준다.
 
     NPC 의 상태를 고치는 길은 이 함수 하나다. 상태를 고친다. 저장하지는 않는다. 죽은 NPC 에는 부르지 않는다.
     lethal 은 피해가 죽이려는 것인지다. 회복에는 뜻이 없다. 회복 뒤에는 HP 가 있어서 늘 살아 있다(status_after).
+    cut 은 방어구가 피해에서 깎는 양이다(#276).
     """
-    change = health.change_hp(kind, magnitude, npc.hp, npc.max_hp, dice)
+    change = health.change_hp(kind, magnitude, npc.hp, npc.max_hp, dice, cut)
     npc.hp = change.after
     npc.status = status_after(change.after, lethal)
     return change

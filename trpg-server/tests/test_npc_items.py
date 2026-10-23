@@ -167,7 +167,7 @@ async def test_carried_items_are_saved_and_published(client: AsyncClient, me: di
 
     assert response.status_code == status.HTTP_201_CREATED, response.text
     (saved,) = scenario['npc_sheets']
-    assert saved['equipment'] == [{'entry_id': lore['fan']['id'], 'count': 1, 'chance': 100}]
+    assert saved['equipment'] == [{'entry_id': lore['fan']['id'], 'count': 1, 'chance': 100, 'wear': []}]
     assert saved['dull'] is True
     (lady,) = read_snapshot(response.json()['snapshot']).npc_sheets
     assert [(str(line.entry_id), line.count, line.chance) for line in lady.inventory] == [(lore['coins']['id'], 5, 50)]

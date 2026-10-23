@@ -46,8 +46,8 @@ NO_SUCH_ID = '00000000-0000-4000-8000-000000000000'
 
 RAT_SHEET = make_sheet(dex=14, max_hp=4)
 KING_SHEET = make_sheet(str=18, max_hp=30)
-BITE = {'name': '물어뜯기', 'ability': 'dex', 'difficulty': 'medium', 'harm': 'light'}
-SLAM = {'name': '내려치기', 'ability': 'str', 'difficulty': 'hard', 'harm': 'heavy'}
+BITE = {'name': '물어뜯기', 'ability': 'dex', 'difficulty': 'medium', 'harm': 'light', 'weapon': None}
+SLAM = {'name': '내려치기', 'ability': 'str', 'difficulty': 'hard', 'harm': 'heavy', 'weapon': None}
 
 
 @pytest.fixture

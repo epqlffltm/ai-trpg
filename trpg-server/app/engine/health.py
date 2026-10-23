@@ -40,6 +40,8 @@ class Change:
     amount: int
     before: int
     after: int
+    # 방어구가 깎은 양(#276). 눈을 더한 값에서 이만큼 빼서 amount 가 됐다. 깎지 않았으면 0 이다
+    blocked: int = 0
 
     @property
     def downed(self) -> bool:
@@ -72,13 +74,15 @@ def heal(hp: int, max_hp: int, amount: int) -> int:
     return min(max_hp, hp + amount)
 
 
-def change_hp(kind: ChangeKind, magnitude: Magnitude, hp: int, max_hp: int, dice: Dice) -> Change:
+def change_hp(kind: ChangeKind, magnitude: Magnitude, hp: int, max_hp: int, dice: Dice, cut: int = 0) -> Change:
     """
     HP 를 한 번 바꾼다. 주사위를 굴려 양을 정하고, 바뀐 결과를 돌려준다.
 
     hp 와 max_hp 는 바뀌는 캐릭터의 지금 HP 와 최대 HP 다. 받은 값을 고치지 않는다.
+    cut 은 피해에서 깎을 양이다(방어구, #276). 눈을 더한 값보다 많이 깎지 않는다. 회복에는 쓰지 않는다.
     """
     rolls = roll_amount(magnitude, dice)
-    amount = sum(rolls)
+    blocked = min(cut, sum(rolls)) if kind == ChangeKind.DAMAGE else 0
+    amount = sum(rolls) - blocked
     after = hurt(hp, amount) if kind == ChangeKind.DAMAGE else heal(hp, max_hp, amount)
-    return Change(kind=kind, rolls=rolls, amount=amount, before=hp, after=after)
+    return Change(kind=kind, rolls=rolls, amount=amount, before=hp, after=after, blocked=blocked)

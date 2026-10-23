@@ -66,6 +66,8 @@ class Conflict(enum.StrEnum):
     NOT_ENOUGH_MONEY = 'not_enough_money'
     # 돈을 받을 캐릭터가 더 가질 수 없다(돈의 상한, #278)
     TOO_MUCH_MONEY = 'too_much_money'
+    # 타격에 쓰겠다는 무기를 착용하고 있지 않다(#276)
+    WEAPON_NOT_WORN = 'weapon_not_worn'
 
 
 class RoundConflictError(Exception):
@@ -80,7 +82,8 @@ class ActionNotInRulesError(Exception):
     """
     선언에 붙은 행동이 이 테이블의 규칙에 없는 것을 가리킨다.
 
-    field 는 행동의 어느 칸이 틀렸는지다(ability, difficulty, risk, recover, harm, aim, injury, item, target).
+    field 는 행동의 어느 칸이 틀렸는지다(ability, difficulty, risk, recover, harm, aim, injury, item, target,
+    weapon, strike). weapon 이면 공격 보정이 없는 물건이고, strike 면 노릴 수 없는 부위다(#276).
     """
 
     def __init__(self, field: str) -> None:

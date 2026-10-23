@@ -152,7 +152,7 @@ def numbers(outcome: dict | None) -> dict | None:
     """
     if outcome is None:
         return None
-    hidden = ('effect', 'npc_effect', 'monster_effect', 'drop', 'wake', 'hindrance', 'called_shot', 'treatment')
+    hidden = ('effect', 'npc_effect', 'monster_effect', 'drop', 'wake', 'hindrance', 'called_shot', 'treatment', 'blow')
     return {key: value for key, value in outcome.items() if key not in hidden}
 
 
@@ -401,6 +401,8 @@ async def test_a_check_is_recorded_right_after_the_action_that_called_for_it(
         # 부상이 없어 판정에 준 영향이 없다. 노려 치지 않았다
         'hindrance': None,
         'called_shot': None,
+        # 타격이 아니라 장비가 들지 않았다(#276)
+        'blow': None,
     }
     # 판정은 그 행동에서 나왔고, 같은 묶음이다
     assert rolled['caused_by_sequence'] == acted['sequence']

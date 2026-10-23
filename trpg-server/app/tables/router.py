@@ -238,6 +238,9 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
             price=item.price,
             slots=list(item.slots),
             slot_count=item.slot_count,
+            attack=item.attack,
+            defense=item.defense,
+            guard=item.guard,
         )
         for item in catalog.values()
     ]

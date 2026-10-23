@@ -158,7 +158,10 @@ from app.rounds.time_words import duration_text, time_text
 #                 건넨 돈((건넨 돈: …))이 붙고, 돈을 다루는 법이 한 줄 붙는다(#278). 돈이 없는 판의 글은 그대로다
 #   narration-51: 착용한 것이 있으면 한 일의 줄에 착용([착용: 대검(주손·보조손), 사슬 갑옷(몸)])이 붙는다(#276).
 #                 착용이 없는 판의 글은 그대로다
-PROMPT_VERSION = 'narration-51'
+#   narration-52: 타격에 장비가 들었으면 판정의 줄과 몬스터·인물의 차례의 줄에 무기, 맞은 부위, 그 부위의
+#                 방어가 붙는다(무기: 장검 +2 · 맞은 곳: 몸 · 방어 3(목표값에 더함), #276).
+#                 장비가 들지 않은 타격의 글은 그대로다
+PROMPT_VERSION = 'narration-52'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

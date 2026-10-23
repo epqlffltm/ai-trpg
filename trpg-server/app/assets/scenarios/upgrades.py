@@ -777,6 +777,42 @@ def upgrade_from_46(document: dict) -> dict:
     return upgraded
 
 
+def unarmed_holder(holder: dict) -> dict:
+    """
+    NPC 시트나 몬스터 하나를 장비의 효과가 없던 때의 모양으로(#276). 지닌 물건은 착용하지 않았고 공격은 맨몸이다.
+
+    형식 48 로 올릴 때 쓴다.
+    """
+    return {
+        **holder,
+        'equipment': [{**line, 'wear': []} for line in holder.get('equipment', [])],
+        'inventory': [{**line, 'wear': []} for line in holder.get('inventory', [])],
+        'attacks': [{**attack, 'weapon': None} for attack in holder.get('attacks', [])],
+    }
+
+
+def upgrade_from_47(document: dict) -> dict:
+    """
+    형식 47 의 문서를 형식 48 로 올린다. 그때는 장비가 공격과 방어에 들지 않았다(#276).
+
+    방어 방식이 없는 규칙(armor: None)으로 읽는다. 방어구가 막지 않고 부위도 굴리지 않는다. 칸이 맞을 가중치는 1 이다.
+    물건에는 공격 보정과 방어가 없고, NPC 와 몬스터는 착용하지 않았고 맨몸으로 치며 타고난 방어가 없다.
+    DB 의 룰북에도 같은 값을 채웠다(마이그레이션).
+    """
+    upgraded = dict(document)
+    rulebook = document['rulebook']
+    rules = rulebook['rules']
+    slots = [{**slot, 'hit_weight': 1} for slot in rules['equipment_slots']]
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rules, 'equipment_slots': slots, 'armor': None}}
+    upgraded['items'] = [{**rule, 'attack': None, 'defense': None, 'guard': None} for rule in document.get('items', [])]
+    upgraded['npc_sheets'] = [unarmed_holder(npc_sheet) for npc_sheet in document.get('npc_sheets', [])]
+    upgraded['monsters'] = [
+        {**unarmed_holder(monster), 'natural_armor': []} for monster in document.get('monsters', [])
+    ]
+    upgraded['format'] = 48
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -826,4 +862,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     44: upgrade_from_44,
     45: upgrade_from_45,
     46: upgrade_from_46,
+    47: upgrade_from_47,
 }

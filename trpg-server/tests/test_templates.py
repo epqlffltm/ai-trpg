@@ -21,7 +21,7 @@ from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_44
 from app.engine import templates
 from app.engine.check import find_difficulty, modifier_of, resolve
 from app.engine.dice import ScriptedDice
-from app.engine.ruleset import Outcome, Ruleset
+from app.engine.ruleset import ArmorMode, Outcome, Ruleset
 from app.engine.templates import (
     FORMAT,
     SRD5,
@@ -37,6 +37,12 @@ from app.engine.templates import (
 # 이미 내놓은 템플릿의 값은 고치지 않는다. 고치고 싶으면 새 이름으로 하나 더 낸다.
 # 규칙의 모양에 칸이 새로 생겨 템플릿에 그 칸을 더한 것이면(있던 값은 그대로) 해시를 새로 적는다.
 RELEASED = {
+    Template.SRD5: '6b3781462685f0b6d2441ee9c696f8ac839dafa82fae65f1a98c72cd8f400152',
+    Template.HORROR: 'ff320c47eb4e0888b2ba329ad8a40c7fefff3b9b0a9fe281a2d0b537b26232e0',
+    Template.LIGHT: 'f514139c38ec21f266e4a93ddad6fd0d9c91426f206ee005907602d22c36ce2f',
+}
+# 방어 방식(armor)과 칸이 맞을 가중치(hit_weight, #276)를 더하기 전의 해시. 둘을 뺀 규칙은 그때와 같아야 한다
+BEFORE_ARMOR = {
     Template.SRD5: '903134da06976f9fc6a761880f04ffa9ba2d61a9c2216cf8b319a96a45e9ea25',
     Template.HORROR: '03303285f8d9a686ea8040d5162d7cb3f8c021c7daf5d0fd1b65b1aef057ee55',
     Template.LIGHT: '6adbbd4747389e1d386f75bb57d2d380f0b11012e3124cae90e7379ea69c6134',
@@ -61,6 +67,16 @@ COMMERCIAL_NAMES = ('d&d', 'dungeons', '던전 앤 드래곤', '던전즈', 'pat
 def fingerprint(rules: Ruleset, without: tuple[str, ...] = ()) -> str:
     """규칙의 값을 정해진 차례의 JSON 으로 적어 해시를 낸다. without 의 칸은 빼고 낸다."""
     values = {key: value for key, value in rules.model_dump(mode='json').items() if key not in without}
+    canonical = json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def fingerprint_before_armor(rules: Ruleset) -> str:
+    """방어 방식과 칸의 가중치(#276)를 뺀 규칙의 해시."""
+    values = {key: value for key, value in rules.model_dump(mode='json').items() if key != 'armor'}
+    values['equipment_slots'] = [
+        {key: value for key, value in slot.items() if key != 'hit_weight'} for slot in values['equipment_slots']
+    ]
     canonical = json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
     return hashlib.sha256(canonical.encode()).hexdigest()
 
@@ -97,12 +113,30 @@ def test_released_templates_keep_their_values():
 
 def test_adding_the_narration_guide_kept_the_other_values():
     for template, expected in BEFORE_NARRATION.items():
-        assert fingerprint(TEMPLATES[template].rules, without=('narration', 'equipment_slots')) == expected
+        assert fingerprint(TEMPLATES[template].rules, without=('narration', 'equipment_slots', 'armor')) == expected
 
 
 def test_adding_the_equipment_slots_kept_the_other_values():
     for template, expected in BEFORE_SLOTS.items():
-        assert fingerprint(TEMPLATES[template].rules, without=('equipment_slots',)) == expected
+        assert fingerprint(TEMPLATES[template].rules, without=('equipment_slots', 'armor')) == expected
+
+
+def test_adding_the_armor_kept_the_other_values():
+    for template, expected in BEFORE_ARMOR.items():
+        assert fingerprint_before_armor(TEMPLATES[template].rules) == expected
+
+
+@pytest.mark.parametrize(
+    ('template', 'mode'),
+    [(Template.SRD5, ArmorMode.AC), (Template.HORROR, ArmorMode.REDUCE), (Template.LIGHT, ArmorMode.REDUCE)],
+)
+def test_every_template_blocks_with_its_armor(template: Template, mode: ArmorMode):
+    """srd5 는 맞히기 어렵게(ac), horror 와 light 는 피해를 깎는다(reduce). 몸이 가장 잘 맞는다(#276)."""
+    rules = TEMPLATES[template].rules
+    weights = {slot.key: slot.hit_weight for slot in rules.equipment_slots}
+
+    assert rules.armor.mode == mode
+    assert weights['body'] == max(weights.values())
 
 
 @pytest.mark.parametrize('template', list(Template))
