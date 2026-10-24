@@ -11,9 +11,10 @@ FastAPI 서버들이 함께 쓰는 칸(DB, 인증 서버, 로그, 수집기)은 
 """
 
 from functools import lru_cache
-from typing import ClassVar
+from typing import ClassVar, Self
 
-from pydantic import Field
+from pydantic import Field, SecretStr, model_validator
+from server_core.service_auth.signing import MIN_SECRET_LENGTH
 from server_core.settings import SCHEMA_PATTERN, CoreSettings
 
 
@@ -34,6 +35,25 @@ class Settings(CoreSettings):
     # 이 서버의 이름. 토큰의 대상 목록(aud)에 이 이름이 있어야 받는다.
     # 다른 서버용으로 발급된 토큰을 이 서버에 쓰는 것을 막는다
     jwt_audience: str = 'ai-trpg-story'
+
+    # asset 서버의 주소. 세션을 시작할 때 세계관의 판을 여기서 가져온다
+    # (asset-server 의 /api/v1/asset/service/story/..., app/assets/client.py). 예: http://127.0.0.1:8006
+    # 비우면 부르지 않는다. 그때 세션을 만들려 하면 503 이다(진행 중인 세션은 사본으로 돈다)
+    asset_url: str = ''
+
+    # asset 서버에 보내는 요청에 서명하는 비밀(server_core/service_auth/signing.py).
+    # asset 서버의 STORY_SERVER_SECRET 과 같은 값이어야 한다. 32자 이상. 비밀값이다. 로그와 오류에 싣지 않는다
+    asset_secret: SecretStr = SecretStr('')
+
+    # asset 서버를 한 번 부르는 시간의 상한(초). 세션을 만드는 사람이 기다리므로 짧게 둔다
+    asset_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
+
+    @model_validator(mode='after')
+    def require_an_asset_secret(self) -> Self:
+        """asset 서버를 부르겠다면서 비밀이 없거나 짧으면 뜨지 않는다. asset 서버가 모든 요청을 401 로 거절한다."""
+        if self.asset_url.strip() and len(self.asset_secret.get_secret_value()) < MIN_SECRET_LENGTH:
+            raise ValueError(f'ASSET_URL 을 적었으면 ASSET_SECRET 을 {MIN_SECRET_LENGTH}자 이상 적어야 합니다')
+        return self
 
 
 @lru_cache

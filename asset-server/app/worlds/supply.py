@@ -8,8 +8,7 @@
     GET /api/v1/asset/service/{caller}/worlds/{id}/latest/number    마지막 판의 번호만
 
 캐릭터의 판을 내주는 길(app/characters/supply.py)과 같은 규칙이다.
-  - 서명이 틀리면 401 이다. 토큰보다 먼저 본다(라우터의 의존성).
-    story 서버의 서명 비밀(STORY_SERVER_SECRET)은 story 가 가져가기 시작할 때 더한다(app/core/config.py 의 약속)
+  - 서명이 틀리면 401 이다. 토큰보다 먼저 본다(라우터의 의존성). story 서버는 STORY_SERVER_SECRET 으로 서명한다
   - 쓸 수 있는 사람인지는 asset-server 가 판단한다(app/worlds/service.py 의 get_usable_latest).
     주인이거나, 공개이고 그 판의 등급을 볼 수 있는 사람이다. 아니면 404 다.
     주인인데 등급을 쓸 수 없으면 403 adult_content_required 다

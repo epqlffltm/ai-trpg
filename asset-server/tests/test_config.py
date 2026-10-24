@@ -26,14 +26,24 @@ def test_the_defaults_name_this_server():
 
 
 def test_an_empty_caller_secret_means_that_server_is_not_accepted():
-    settings = make_test_settings(chat_server_secret='')
+    settings = make_test_settings(chat_server_secret='', story_server_secret='')
 
-    assert settings.service_secrets() == {'chat': ''}
+    assert settings.service_secrets() == {'chat': '', 'story': ''}
 
 
 def test_does_not_start_with_a_short_caller_secret():
     with pytest.raises(ValidationError, match='32자 이상'):
         make_test_settings(chat_server_secret='short')
+
+
+def test_does_not_start_with_a_short_story_secret():
+    with pytest.raises(ValidationError, match='32자 이상'):
+        make_test_settings(story_server_secret='short')
+
+
+def test_does_not_start_when_chat_and_story_share_a_secret():
+    with pytest.raises(ValidationError, match='서버마다 달라야'):
+        make_test_settings(chat_server_secret='x' * MIN_SECRET_LENGTH, story_server_secret='x' * MIN_SECRET_LENGTH)
 
 
 def test_a_caller_secret_of_exactly_the_minimum_starts():
@@ -59,9 +69,9 @@ def test_does_not_start_when_two_servers_share_a_secret():
 
 
 def test_two_empty_secrets_are_not_shared_ones():
-    settings = make_test_settings(chat_server_secret='', auth_server_secret='')
+    settings = make_test_settings(chat_server_secret='', story_server_secret='', auth_server_secret='')
 
-    assert settings.all_secrets() == ['', '']
+    assert settings.all_secrets() == ['', '', '']
 
 
 def test_the_auth_secret_is_not_a_caller():

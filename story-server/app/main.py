@@ -6,7 +6,8 @@ story 서버의 시작점. 앱을 만들고 라우터를 붙인다.
 story 서버는 하나의 세계관 안에서 여러 인물과 나누는 이야기를 맡는다(docs/architecture/story.md).
 1:1 캐릭터 대화는 chat-server 가 맡는다.
 둘이 나눈 선은 docs/architecture/chat-server.md 의 "story-server 와 나눈 선"이다.
-지금은 뼈대다(#591). 상태 확인과 토큰의 주인을 돌려주는 주소만 있다. 세계관과 세션, 장면의 인물이 차례로 붙는다.
+지금은 상태 확인, 토큰의 주인, 세션(세계관의 판을 asset 서버에서 가져와 시작한다)이 있다(#591).
+장면의 인물, 시각, 조건과 효과, 고백과 엔딩이 차례로 붙는다(docs/architecture/story.md 의 "만드는 순서").
 
 띄우는 법: uv run uvicorn app.main:app --port 8007 --reload
 """
@@ -33,6 +34,9 @@ from server_core.observability.tracing import FASTAPI_TELEMETRY, build_resource,
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api import health, me, readiness
+from app.assets.client import AssetClient, AssetUnavailableError
+from app.conversations import router as conversations
+from app.conversations.service import AdultContentRequiredError, ConversationNotFoundError, WorldNotFoundError
 from app.core.config import Settings, get_settings
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
@@ -115,6 +119,13 @@ def create_app(
     app.state.http_client = http_client or traced_client()
     app.state.jwks = JwksCache(app.state.http_client, settings.auth_jwks_url)
     app.state.revocations = revocations.RevocationList(app.state.http_client, settings.session_revocations_url)
+    # asset 서버를 부르는 것(app/assets/client.py). 같은 연결의 풀을 쓴다. 요청 안에서 부르면 client span 이 걸린다
+    app.state.asset = AssetClient(
+        app.state.http_client,
+        settings.asset_url,
+        settings.asset_secret.get_secret_value(),
+        settings.asset_timeout_seconds,
+    )
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
@@ -122,6 +133,14 @@ def create_app(
 
     # 토큰의 주인을 돌려주는 주소. 인증 서버의 access 토큰(대상 ai-trpg-story)으로 확인한다
     app.include_router(me.router, prefix=API_PREFIX)
+    # 세션. 세계관의 판을 asset 서버에서 가져와 시작한다
+    app.include_router(conversations.router, prefix=API_PREFIX)
+
+    # 세션의 예외를 응답으로 바꾼다(app/conversations/router.py)
+    app.add_exception_handler(ConversationNotFoundError, conversations.handle_conversation_not_found)
+    app.add_exception_handler(WorldNotFoundError, conversations.handle_world_not_found)
+    app.add_exception_handler(AdultContentRequiredError, conversations.handle_adult_content_required)
+    app.add_exception_handler(AssetUnavailableError, conversations.handle_asset_unavailable)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다.
     # 원인은 로그에 남긴다(server_core/observability/responses.py)

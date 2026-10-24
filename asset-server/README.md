@@ -74,6 +74,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | `CHARACTERS_FOR_EVERYONE` | `false` | 캐릭터를 누구나 만들 수 있는가. 1~2단계에는 운영자만 만든다(거짓). 참이어도 공개로 두는 것은 `PUBLIC_FOR_EVERYONE` 이 따로 연다 |
 | `PUBLIC_FOR_EVERYONE` | `false` | 일반 사용자도 캐릭터를 공개로 두는가(#678). [신고](#신고와-숨김)가 생겨 열 수 있게 되었다. 운영 준비(관리자 화면 E4, 약관)가 되면 켠다 |
 | `CHAT_SERVER_SECRET` | 비어 있음(받지 않음) | chat 서버가 페르소나와 판을 가져갈 때 서명하는 비밀([다른 서버에 내주기](#다른-서버에-내주기)). `chat-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상. 비밀값이다 |
+| `STORY_SERVER_SECRET` | 비어 있음(받지 않음) | story 서버가 [세계관](#세계관)의 판을 가져갈 때 서명하는 비밀. `story-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상이고 다른 비밀과 달라야 한다. 비밀값이다 |
 | `AUTH_SERVER_SECRET` | 비어 있음(받지 않음) | 인증 서버가 [탈퇴](#탈퇴)를 알릴 때 서명하는 비밀. `auth-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상이고 다른 비밀과 달라야 한다. 비밀값이다 |
 | `NOTIFICATION_URL` | 비어 있음(보내지 않음) | [알림](#알림-보내기)을 넣는 알림 서버의 주소. compose 가 `http://notification-server:8004` 를 넘긴다. 비우면 발송함에 적기만 한다 |
 | `NOTIFICATION_SECRET` | 비어 있음 | 알림 서버에 넣을 때 서명하는 비밀. `notification-server/.env` 의 `ASSET_SERVER_SECRET` 과 같은 값. 주소를 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
@@ -88,7 +89,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | `IMAGE_DECODE_MEMORY_MB`, `IMAGE_DECODE_CPU_SECONDS`, `IMAGE_DECODE_WALL_SECONDS` | `768`, `10`, `15` | 그림을 여는 따로 된 프로세스의 상한(주소 공간, CPU 시간, 벽시계) |
 | `IMAGE_DECODE_CONCURRENCY` | `2` | 한꺼번에 여는 수. 메모리는 상한 × 이 수까지 쓴다 |
 
-부르는 서버마다 비밀을 따로 둔다. story 와 TRPG 는 그 서버가 가져가기 시작할 때 `STORY_SERVER_SECRET`, `TRPG_SERVER_SECRET` 으로 더한다.
+부르는 서버마다 비밀을 따로 둔다(chat 은 `CHAT_SERVER_SECRET`, story 는 `STORY_SERVER_SECRET`). TRPG 는 그 서버가 가져가기 시작할 때 `TRPG_SERVER_SECRET` 으로 더한다.
 
 ## 상태 확인
 
@@ -456,7 +457,7 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
   chat 에만 쓰는 칸(지도, 시작 상황, 물건, 호감도, 이벤트 씬)은 넣지 않는다. 보이기는 기본을 채운 정해진 값으로 굳힌다. 로어북은 캐릭터처럼 마지막 판을 복사한다.
   캐릭터나 로어북을 고쳐도 이미 게시한 세계관의 판은 그대로다. 판에 쓰인 그림(대표, 소개, 장소, 물건, 인물의 그림, 이벤트와 엔딩의 일러스트)을 적어 두고, 공개 세계관이면 남도 그 그림을 본다.
 - **story 에 내주기.** [다른 서버에 내주기](#다른-서버에-내주기)의 `/worlds/{id}/latest` 와 `/latest/number` 다. 캐릭터의 판과 같은 규칙이다
-  (주인이거나, 공개이고 판의 등급을 볼 수 있는 사람. 주인인데 등급을 쓸 수 없으면 403). story 서버의 서명 비밀(`STORY_SERVER_SECRET`)은 story 가 가져가기 시작하는 PR 에서 더한다.
+  (주인이거나, 공개이고 판의 등급을 볼 수 있는 사람. 주인인데 등급을 쓸 수 없으면 403). story 서버는 `STORY_SERVER_SECRET` 으로 서명한다.
 - 공개 목록, 신고와 숨김은 아직 없다.
 
 ### 신고와 숨김
@@ -555,7 +556,7 @@ chat(나중에 story 와 TRPG)이 세션을 시작할 때 페르소나의 사본
   서버의 비밀이 새도 그것만으로는 아무의 페르소나도 가져가지 못한다(그 사람의 토큰이 있어야 한다).
   토큰만으로는 이 주소를 부르지 못한다. 프록시가 `/api/v1/asset/service/` 를 바깥에 열지 않고(404), 서명이 없으면 401 이다.
 - **서명.** 알림 서버의 것과 같다(`app/core/service_auth.py`). `caller` 는 주소에 있고 주소까지 서명하므로 남의 이름으로 부를 수 없다.
-  비밀은 부르는 서버마다 따로다(`CHAT_SERVER_SECRET`). 서명이 없거나, 틀렸거나, 앞뒤 5분을 넘겼거나, 남의 주소의 것이거나,
+  비밀은 부르는 서버마다 따로다(`CHAT_SERVER_SECRET`, `STORY_SERVER_SECRET`). 서명이 없거나, 틀렸거나, 앞뒤 5분을 넘겼거나, 남의 주소의 것이거나,
   모르는 서버이거나, 그 서버의 비밀이 비었으면 모두 같은 401 이다. 토큰보다 서명을 먼저 본다. 본문은 16KB 까지(넘으면 413).
 - **페르소나.** 토큰의 주인의 것만 내준다. 남의 것과 없는 것은 404 다. 사본은 모델에 넣을 내용과 `revision` 이다(기본인지와 시각은 싣지 않는다).
 - **판.** 마지막 판을 내준다. 쓸 수 있는 사람인지는 asset 서버가 판단한다.

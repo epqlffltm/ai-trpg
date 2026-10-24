@@ -96,9 +96,11 @@ def at_run_time(wrong: dict) -> dict:
         {'drift': TOLERANCE_SECONDS + 60},
         {'signed_as': f'{API_PREFIX}/service/chat/personas/{uuid.UUID(int=1)}/revision'},
         # 모르는 서버. 비밀이 없으니 chat 의 비밀로 서명해도 받지 않는다
-        {'caller': 'story'},
+        {'caller': 'board'},
+        # 다른 서버의 비밀. story 의 이름으로 chat 의 비밀을 쓰면 받지 않는다
+        {'caller': 'story', 'secret': TEST_SECRETS['chat']},
     ],
-    ids=['wrong-secret', 'too-old', 'too-new', 'another-path', 'unknown-caller'],
+    ids=['wrong-secret', 'too-old', 'too-new', 'another-path', 'unknown-caller', 'another-servers-secret'],
 )
 async def test_refuses_signatures_it_cannot_accept(client: AsyncClient, mine: dict, revision: str, wrong: dict):
     response = await signed_get(client, revision, mine, **at_run_time(wrong))

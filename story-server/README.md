@@ -4,13 +4,14 @@
 규칙은 [story 서버 설계](../docs/architecture/story.md)에 있다. 캐릭터 하나와의 1:1 대화는 chat 서버가 맡는다.
 둘이 함께 쓰는 것과 나눈 선은 [chat 서버 설계의 story-server 와 나눈 선](../docs/architecture/chat-server.md#story-server-와-나눈-선)에 있다.
 
-**지금은 뼈대다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic, 테스트만 있다.
-세계관과 세션, 장면의 인물, 시각, 조건과 효과, 고백과 엔딩이 차례로 붙는다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
+**지금은 세션까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
+asset 서버에서 세계관의 판을 가져와 [세션](#세션)을 만들고 목록으로 보인다.
+장면의 인물, 시각, 조건과 효과, 고백과 엔딩이 차례로 붙는다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
 
 정해 둔 값: 포트 `8007`, 토큰의 대상 `ai-trpg-story`, DB 계정과 스키마 `story`(테스트는 `story_test`), 주소 `/api/v1/story/`.
 
 **대화의 핵심은 chat 과 함께 쓴다.** 대화 트리, 다시 생성과 분기, 요약, 기억, 스트리밍한 답을 저장하는 흐름은
-chat 서버에서 옮긴 공용 코드 `shared/conversation-core` 를 두 서버가 함께 쓴다(이 서버는 세션을 만들 때부터). 표는 서버마다 따로 둔다(이 서버는 `story` 스키마).
+chat 서버에서 옮긴 공용 코드 `shared/conversation-core` 를 두 서버가 함께 쓴다(이 서버는 말을 주고받는 조각부터). 표는 서버마다 따로 둔다(이 서버는 `story` 스키마).
 
 ## 실행
 
@@ -47,7 +48,8 @@ uv run uvicorn app.main:app --port 8007 --reload
 `http://127.0.0.1:8007/health` 가 `{"status":"ok"}` 를 돌려주면 서버가 뜬 것이고,
 `http://127.0.0.1:8007/health/ready` 가 `{"status":"ok"}` 를 돌려주면 DB 까지 연결된 것이다.
 
-compose(`docker compose --profile app`)로 띄우면 같은 `story-server/.env` 를 쓰고 주소(DB, 인증 서버의 공개키)만 compose 가 덮어쓴다.
+compose(`docker compose --profile app`)로 띄우면 같은 `story-server/.env` 를 쓰고 주소(DB, 인증 서버의 공개키, asset 서버)만 compose 가 덮어쓴다.
+asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 있어야 뜬다(`tools/fill_env.py` 가 채운다).
 바깥 주소는 프록시 하나(`http://127.0.0.1:8080/api/v1/story/...`)가 되고 story 서버의 포트는 열지 않는다.
 이미지(`Dockerfile`)는 chat, asset 서버의 것과 같은 모양이다(공용 코드를 `/shared` 에서 깐다). root 가 아닌 사용자(번호 10001)로 돌고, `.env` 와 테스트는 넣지 않는다.
 
@@ -69,9 +71,13 @@ compose(`docker compose --profile app`)로 띄우면 같은 `story-server/.env` 
 | `AUTH_SESSION_REVOCATIONS_URL` | `AUTH_JWKS_URL` 옆(`…/session-revocations`) | 인증 서버가 끊긴 세션의 목록을 내주는 주소(#274). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
 | `JWT_ISSUER` | `ai-trpg-auth` | 토큰의 발급자(`iss`). 인증 서버의 `JWT_ISSUER`와 같아야 한다 |
 | `JWT_AUDIENCE` | `ai-trpg-story` | 이 서버의 이름. 토큰의 대상(`aud`)에 이 이름이 있어야 받는다 |
+| `ASSET_URL` | 비어 있음(부르지 않음) | asset 서버의 주소(`http://127.0.0.1:8006`). 세션을 시작할 때 세계관의 판을 가져온다([세션](#세션)). 비우면 세션을 시작하지 못한다(503) |
+| `ASSET_SECRET` | 비어 있음 | asset 서버에 보내는 요청에 서명하는 비밀. `asset-server/.env` 의 `STORY_SERVER_SECRET` 과 같은 값. `ASSET_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
+| `ASSET_TIMEOUT_SECONDS` | `5` | asset 서버를 한 번 부르는 시간의 상한(초, 30까지). 세션을 만드는 사람이 기다린다 |
 
 DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 함께 쓰는 칸은 공용 코드의 설정(`server_core.settings.CoreSettings`)에 있다.
-결제 서버를 부를 때의 비밀(결제 쪽은 `STORY_SERVER_SECRET`, 가격 이름의 머리 `story`)과 asset 서버에서 세계관의 판을 가져올 때의 비밀은 그 길을 만들 때 더한다.
+`tools/fill_env.py` 가 `ASSET_SECRET` 을 짝(asset 서버의 `STORY_SERVER_SECRET`)과 같은 값으로 채운다.
+결제 서버를 부를 때의 비밀(결제 쪽은 `STORY_SERVER_SECRET`, 가격 이름의 머리 `story`)은 그 길을 만들 때 더한다.
 환경 변수는 다른 서버와 같은 이름을 쓰고 머리(`STORY_`)를 붙이지 않는다. 머리는 다른 서버의 설정에 들어가는 값(`STORY_SERVER_SECRET`)에만 붙인다.
 
 ## 상태 확인
@@ -89,6 +95,34 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | 방법 | 주소 | 하는 일 | 인증 |
 | --- | --- | --- | --- |
 | GET | `/api/v1/story/me` | 토큰의 주인(`{"user_id"}`, 인증 서버의 `public_id`). 토큰 검증이 이어졌는지 보는 가장 작은 주소다(게임 서버의 `GET /me` 와 같다) | access 토큰 |
+| POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id"}`). 세계관의 마지막 판을 가져와 고정한다. 201 | access 토큰 |
+| GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}` | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서까지). 남의 것은 404 | access 토큰 |
+
+### 세션
+
+세계관 하나를 새로 시작하면 새 세션이 생긴다(`story.conversations` 의 행). 지난 세션은 목록에 남는다.
+주소와 표의 이름은 chat 과 같은 `conversations` 이고, 화면과 문서는 "세션"이라 부른다.
+
+1. asset 서버에서 그 세계관의 **마지막 판**을 가져온다(`GET /api/v1/asset/service/story/worlds/{id}/latest`).
+   이 서버의 비밀(`ASSET_SECRET`)로 서명하고 사용자의 토큰을 그대로 넘긴다. 쓸 수 있는 사람인지는 asset 서버가 판단한다
+   (주인이거나, 공개이고 판의 등급을 볼 수 있는 사람). DB 의 트랜잭션을 열기 전에, 연결을 쥐지 않은 채로 부른다.
+2. 가져온 판의 등급을 이 서버의 규칙(`app/ratings.py`)으로 한 번 더 본다.
+3. 판의 사본(`story.worlds`)과 세션을 한 트랜잭션에서 저장한다. 사본은 사람마다, 판마다 하나다. 같은 판으로 여러 번 시작해도 하나다.
+
+- **사본은 바뀌지 않는다.** 제작자가 다시 게시해도 그 세션은 처음의 판으로 돈다. 새 판은 새로 시작한 세션이 쓴다.
+- **판의 문서는 받은 그대로 둔다.** 지금 검사하는 칸은 형식, 이름, 등급, 그림뿐이고(`app/assets/schemas.py`),
+  나머지(시간대, 지도, 물건, 인물, 이벤트, 엔딩)는 그 칸을 쓰는 조각이 읽는 모양을 더한다.
+- **모르는 형식의 판은 받지 않는다.** 이 서버가 읽을 줄 아는 형식은 3 까지다(`WORLD_FORMAT_MAX`). 모르는 조건이나 효과를 엔진이 판정할 수 없어서다.
+  asset 서버가 형식을 올리면 그것을 읽는 법과 함께 이 값을 올린다.
+- **목록과 읽기는 볼 수 있는 등급만이다.** 성인 확인을 잃으면 성인 등급의 세션은 목록에서 빠지고 읽으면 404 다.
+- 지우기, 말, 장면의 인물과 상태는 그것을 쓰는 조각에서 더한다.
+
+| asset 서버의 답 | 이 서버의 답 |
+| --- | --- |
+| 404(없다, 남의 비공개, 게시한 적이 없다, 볼 수 없는 등급) | 404 `world_not_found`. 가져온 판이 볼 수 없는 등급일 때도 같다 |
+| 403 `adult_content_required`(자기 세계관인데 등급을 쓸 수 없다) | 403 `adult_content_required`. 화면이 본인인증으로 안내한다 |
+| 닿지 못함, 시간 초과, 401, 5xx, 모양이 틀린 답, 모르는 형식, `ASSET_URL` 이 없음 | 503 `asset_unavailable`, `Retry-After: 5`. 다시 시도하지 않는다(사람이 다시 누른다) |
 
 **스트리밍(정한 것).** 말을 보내는 주소는 chat 과 같이 바로 SSE(`text/event-stream`)로 답한다. 응답에 `X-Accel-Buffering: no` 를 싣고
 15초마다 하트비트를 보낸다. 끊겨도 서버는 생성을 끝까지 저장하고, 앱은 다시 들어와 저장된 말을 읽는다.
@@ -161,7 +195,12 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. story 서버는 `story` 계정으로 `story`
 스키마(테스트는 `story_test`)만 쓴다. 다른 서버의 스키마에 닿지 못하는 것을 테스트(`tests/test_schema_isolation.py`)가 확인한다.
 
-아직 테이블이 없다. 세계관과 세션의 테이블이 생기면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
+| 테이블 | 무엇 |
+| --- | --- |
+| `worlds` | asset 서버에서 가져온 세계관의 판의 사본. 사람마다, 판마다 하나(`owner_id`, `source_id`, `version` 이 고유). 문서는 받은 그대로(JSONB) |
+| `conversations` | 세션 하나. 판의 사본을 가리킨다(지우지 못하게 `RESTRICT`). 목록은 `owner_id`, `updated_at` 의 색인으로 읽는다 |
+
+모델의 모듈을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 
 ### 마이그레이션
 

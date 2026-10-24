@@ -201,10 +201,10 @@ write_new() {
 
 # 아홉 개의 .env 를 만든다. 주소는 compose 가 덮어쓰므로 비밀만 적는다.
 # 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버,
-# 알림 서버와 게임·결제·게시판·asset·chat 서버, asset 서버와 chat 서버, 결제 서버와 chat 서버)
+# 알림 서버와 게임·결제·게시판·asset·chat 서버, asset 서버와 chat·story 서버, 결제 서버와 chat 서버)
 write_env_files() {
   local game_secret auth_secret notify_secret billing_notify_secret board_notify_secret chat_asset_secret
-  local chat_billing_secret asset_notify_secret chat_notify_secret
+  local chat_billing_secret asset_notify_secret chat_notify_secret story_asset_secret
   game_secret="$(throwaway)"
   auth_secret="$(throwaway)"
   notify_secret="$(throwaway)"
@@ -214,6 +214,7 @@ write_env_files() {
   chat_billing_secret="$(throwaway)"
   asset_notify_secret="$(throwaway)"
   chat_notify_secret="$(throwaway)"
+  story_asset_secret="$(throwaway)"
   write_new .env <<EOF
 POSTGRES_PASSWORD=$(throwaway)
 AUTH_DB_PASSWORD=$(throwaway)
@@ -268,6 +269,7 @@ EOF
   # asset 서버와 chat 서버는 운영자의 조치를 알림 서버에 넣는다(#678). compose 가 NOTIFICATION_URL 을 주므로 이 비밀이 없으면 뜨지 않는다
   write_new asset-server/.env <<EOF
 CHAT_SERVER_SECRET=$chat_asset_secret
+STORY_SERVER_SECRET=$story_asset_secret
 NOTIFICATION_SECRET=$asset_notify_secret
 EOF
   write_new chat-server/.env <<EOF
@@ -277,9 +279,12 @@ BILLING_URL=http://127.0.0.1:8003
 BILLING_SECRET=$chat_billing_secret
 NOTIFICATION_SECRET=$chat_notify_secret
 EOF
-  # story 서버의 비밀은 아직 DB 비밀번호뿐이고 compose 가 루트 .env 의 것으로 주소를 만든다. env_file 이 있어야 해서 빈 파일을 둔다
+  # story 서버의 DB 비밀번호는 compose 가 루트 .env 의 것으로 주소를 만든다.
+  # asset 서버와 함께 아는 비밀은 세션을 시작할 때 세계관의 판을 가져오는 서명이다. compose 가 ASSET_URL 을 주므로
+  # 이 비밀이 없으면 story 서버가 뜨지 않는다. ASSET_URL 은 .env.example 의 값을 둔다. 마이그레이션이 그 값을 비우는지 본다
   write_new story-server/.env <<EOF
-# CI 에서만 쓰는 빈 설정. 값은 docker-compose.yml 이 준다
+ASSET_URL=http://127.0.0.1:8006
+ASSET_SECRET=$story_asset_secret
 EOF
 }
 
