@@ -6,6 +6,7 @@ import type { components as Asset } from './generated/asset';
 import type { components as Auth } from './generated/auth';
 import type { components as Billing, operations as BillingOperations } from './generated/billing';
 import type { components as Chat } from './generated/chat';
+import type { components as NotificationApi } from './generated/notification';
 import type { components as Trpg } from './generated/trpg';
 
 export type LoginChallenge = Auth['schemas']['LoginChallenge'];
@@ -217,3 +218,9 @@ export type AssetLorebookVersionSummary = Asset['schemas']['LorebookVersionSumma
 export type AssetLorebookVersionDetail = Asset['schemas']['LorebookVersionDetail'];
 export type AssetLoreEntry = Asset['schemas']['LoreEntry'];
 export type AssetLoreKind = Asset['schemas']['LoreKind'];
+
+export type AppNotification = NotificationApi['schemas']['NotificationView'];
+export type NotificationPage = NotificationApi['schemas']['NotificationPage'];
+export type UnreadCount = NotificationApi['schemas']['UnreadCount'];
+export type ReadAllResult = NotificationApi['schemas']['ReadAllResult'];
+export type MuteSettings = NotificationApi['schemas']['MuteSettings'];
