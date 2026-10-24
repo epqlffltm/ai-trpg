@@ -577,6 +577,48 @@ NpcPlaces = Annotated[
 ]
 
 
+class PickCheck(BaseModel):
+    """
+    자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.
+
+    tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 락픽 같은 것)을 지닌 사람만 딸 수 있다. 도구는 없어지지 않는다.
+    능력치와 난이도가 룰북에 있는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    ability: Key
+    difficulty: Key | None = None
+    tool: uuid.UUID | None = None
+
+    @field_serializer('tool')
+    def tool_as_text(self, tool: uuid.UUID | None) -> str | None:
+        """도구의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return None if tool is None else str(tool)
+
+
+class ItemLock(BaseModel):
+    """
+    물건이 새 자물쇠일 때 그 자물쇠(#281). 행동 '바꾸기'로 판에 자물쇠가 있던 문에 단다.
+
+    단 자물쇠는 판의 자물쇠 대신 쓰인다. 여는 열쇠(key)는 새 것이다. 옛 열쇠로는 더 열지 못한다.
+    열쇠는 붙인 로어북의 물건 항목 하나다. 길의 자물쇠의 열쇠, 다른 자물쇠 물건의 열쇠와 겹치지 못한다
+    (게시의 route_key_repeated). 자물쇠 물건 자신을 열쇠로 적지 못한다.
+    pick 을 적었으면 단 자물쇠를 따기로 열 수 있다. 적지 않으면 따지 못한다. 단 자물쇠는 열린 채다.
+    한 테이블에서 자물쇠 물건 하나는 한 번만 단다. 달면 소지품에서 없어진다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    key: uuid.UUID
+    pick: PickCheck | None = None
+
+    @field_serializer('key')
+    def key_as_text(self, key: uuid.UUID) -> str:
+        """열쇠의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(key)
+
+
 class ItemRule(BaseModel):
     """
     아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.
@@ -594,6 +636,7 @@ class ItemRule(BaseModel):
     어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.
     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
+    lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -610,6 +653,7 @@ class ItemRule(BaseModel):
     guard: CombatNumber | None = None
     ap: CombatNumber | None = None
     ward: CombatNumber | None = None
+    lock: ItemLock | None = None
 
     @model_validator(mode='after')
     def combat_only_when_worn(self) -> 'ItemRule':
@@ -645,6 +689,20 @@ class ItemRule(BaseModel):
         """장비에는 회복의 양을 적지 않는다. 쓰지 않는 물건이다."""
         if self.heals is not None and self.kind != ItemKind.CONSUMABLE:
             raise ValueError('회복의 양(heals)은 소모품(consumable)에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def lock_only_on_gear(self) -> 'ItemRule':
+        """자물쇠는 장비에만 적는다. 다는 것은 쓰는 것이 아니다."""
+        if self.lock is not None and self.kind != ItemKind.GEAR:
+            raise ValueError('자물쇠(lock)는 장비(gear)에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def lock_key_not_itself(self) -> 'ItemRule':
+        """자물쇠 물건 자신은 그 자물쇠의 열쇠가 아니다. 달면 없어지니 열 열쇠가 남지 않는다."""
+        if self.lock is not None and self.lock.key == self.entry_id:
+            raise ValueError('자물쇠 물건 자신을 그 자물쇠의 열쇠(lock.key)로 적지 못합니다.')
         return self
 
     @field_serializer('entry_id')
@@ -847,26 +905,6 @@ class CrossCheck(BaseModel):
     ability: Key
     difficulty: Key | None = None
     harm: Key | None = None
-
-
-class PickCheck(BaseModel):
-    """
-    자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.
-
-    tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 락픽 같은 것)을 지닌 사람만 딸 수 있다. 도구는 없어지지 않는다.
-    능력치와 난이도가 룰북에 있는지는 게시할 때 본다.
-    """
-
-    model_config = ConfigDict(extra='forbid')
-
-    ability: Key
-    difficulty: Key | None = None
-    tool: uuid.UUID | None = None
-
-    @field_serializer('tool')
-    def tool_as_text(self, tool: uuid.UUID | None) -> str | None:
-        """도구의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
-        return None if tool is None else str(tool)
 
 
 class RouteLock(BaseModel):

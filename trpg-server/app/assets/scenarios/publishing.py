@@ -121,6 +121,8 @@ class Problem(enum.StrEnum):
     ITEM_NOT_ITEM = 'item_not_item'
     # 룰북의 규칙에 없는 등급을 회복의 양(heals)으로 적은 소모품이 있다
     ITEM_MAGNITUDE_MISSING = 'item_magnitude_missing'
+    # 자물쇠 물건의 따는 판정의 능력치나 난이도가 룰북의 규칙에 없다(#281)
+    ITEM_LOCK_INVALID = 'item_lock_invalid'
     # 붙인 로어북에 없는 항목을 가리키는 퀘스트 규칙이 있다
     QUEST_ENTRY_MISSING = 'quest_entry_missing'
     # 사건이 아닌 항목(인물, 물건 …)을 가리키는 퀘스트 규칙이 있다
@@ -144,7 +146,7 @@ class Problem(enum.StrEnum):
     ROUTE_FIND_INVALID = 'route_find_invalid'
     # 길을 넘는 판정의 능력치, 난이도, 실패의 피해(양의 등급)가 룰북의 규칙에 없다(#281)
     ROUTE_CROSS_INVALID = 'route_cross_invalid'
-    # 열쇠 하나를 두 길의 자물쇠에 적었다. 열쇠 하나는 자물쇠 하나만 연다(#281)
+    # 열쇠 하나를 두 자물쇠(길의 자물쇠, 자물쇠 물건)에 적었다. 열쇠 하나는 자물쇠 하나만 연다(#281)
     ROUTE_KEY_REPEATED = 'route_key_repeated'
     # 자물쇠를 따는 판정, 문을 부수는 판정, 고치는 판정의 능력치나 난이도가 룰북의 규칙에 없다(#281)
     ROUTE_OPEN_INVALID = 'route_open_invalid'
@@ -504,7 +506,8 @@ def read_quest_rules(scenario: Scenario) -> list[QuestRule]:
 def item_references(scenario: Scenario) -> list[uuid.UUID]:
     """
     물건 항목을 가리키는 것 전부. 아이템 규칙, 시작 소지품, 프리젠마다의 소지품, 퀘스트마다의 보상,
-    몬스터와 NPC 마다 지닌 물건(장비와 소지품), 장소에 놓인 물건, 길의 자물쇠의 열쇠와 따는 도구(#281).
+    몬스터와 NPC 마다 지닌 물건(장비와 소지품), 장소에 놓인 물건, 길의 자물쇠의 열쇠와 따는 도구, 고치는 도구,
+    자물쇠 물건의 열쇠와 따는 도구(#281).
     """
     stacks = [ItemStack.model_validate(document) for document in scenario.starting_items]
     for document in scenario.pregens:
@@ -514,10 +517,12 @@ def item_references(scenario: Scenario) -> list[uuid.UUID]:
     sheets = [*read_monster_sheets(scenario), *read_npc_sheets(scenario)]
     carried = [line.entry_id for sheet in sheets for line in [*sheet.equipment, *sheet.inventory]]
     placed = [rule.entry_id for rule in read_place_items(scenario)]
-    rules = [rule.entry_id for rule in read_item_rules(scenario)]
+    item_rules = read_item_rules(scenario)
+    rules = [rule.entry_id for rule in item_rules]
     routes = read_routes(scenario)
     keys = lock_keys(routes) + pick_tools(routes) + repair_tools(routes)
-    return rules + [stack.entry_id for stack in stacks] + carried + placed + keys
+    item_locks = item_lock_keys(item_rules) + item_lock_tools(item_rules)
+    return rules + [stack.entry_id for stack in stacks] + carried + placed + keys + item_locks
 
 
 def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:
@@ -525,7 +530,8 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
     아이템 규칙과 소지품에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
 
     가리키는 것은 붙인 로어북의 물건 항목이어야 한다. NPC 시트와 같은 까닭으로 굳히기 전에 여기서 막는다.
-    소모품의 회복의 양은 룰북의 등급이어야 한다. 룰북이 없으면 볼 수 없다(그때는 RULEBOOK_MISSING 이다).
+    소모품의 회복의 양은 룰북의 등급이어야 한다. 자물쇠 물건의 따는 판정은 룰북의 능력치와 난이도여야 한다(#281).
+    룰북이 없으면 볼 수 없다(그때는 RULEBOOK_MISSING 이다).
     """
     entries = lore_entries(parts)
     pointed = item_references(scenario)
@@ -534,9 +540,12 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
         problems.append(Problem.ITEM_ENTRY_MISSING)
     if any(entry_id in entries and entries[entry_id].kind != LoreKind.ITEM for entry_id in pointed):
         problems.append(Problem.ITEM_NOT_ITEM)
-    heals = [rule.heals for rule in read_item_rules(scenario) if rule.heals is not None]
+    rules = read_item_rules(scenario)
+    heals = [rule.heals for rule in rules if rule.heals is not None]
     if ruleset and any(find_magnitude(ruleset, key) is None for key in heals):
         problems.append(Problem.ITEM_MAGNITUDE_MISSING)
+    if ruleset and any(find_invalid(pick, ruleset) for pick in item_lock_picks(rules)):
+        problems.append(Problem.ITEM_LOCK_INVALID)
     return problems
 
 
@@ -891,6 +900,21 @@ def pick_tools(routes: list[RouteRule]) -> list[uuid.UUID]:
     ]
 
 
+def item_lock_keys(rules: list[ItemRule]) -> list[uuid.UUID]:
+    """자물쇠 물건마다의 열쇠(#281). 아이템 규칙의 순서다."""
+    return [rule.lock.key for rule in rules if rule.lock is not None]
+
+
+def item_lock_picks(rules: list[ItemRule]) -> list[PickCheck]:
+    """자물쇠 물건마다의 따는 판정(#281). 적지 않은 것은 빠진다. 아이템 규칙의 순서다."""
+    return [rule.lock.pick for rule in rules if rule.lock is not None and rule.lock.pick is not None]
+
+
+def item_lock_tools(rules: list[ItemRule]) -> list[uuid.UUID]:
+    """자물쇠 물건을 따는 데 있어야 하는 도구들(#281). 아이템 규칙의 순서다."""
+    return [pick.tool for pick in item_lock_picks(rules) if pick.tool is not None]
+
+
 def repair_tools(routes: list[RouteRule]) -> list[uuid.UUID]:
     """부서진 문을 고치는 데 있어야 하는 도구들(#281). 길의 순서다."""
     return [route.repair.tool for route in routes if route.repair is not None and route.repair.tool is not None]
@@ -1005,7 +1029,7 @@ def find_map_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None)
     가리키는 것은 붙인 로어북의 장소 항목이어야 한다. 아이템 규칙과 같은 까닭으로 굳히기 전에 여기서 막는다.
     길이나 명소가 있으면 시작 장소가 있어야 한다.
     숨긴 길을 찾는 판정은 룰북의 능력치와 난이도여야 한다(룰북이 없으면 못 본다). 길을 넘는 판정도 같고,
-    실패의 피해는 룰북의 양의 등급이어야 한다(#281). 열쇠 하나는 자물쇠 하나만 연다.
+    실패의 피해는 룰북의 양의 등급이어야 한다(#281). 열쇠 하나는 자물쇠 하나만 연다(자물쇠 물건의 열쇠까지).
     열쇠가 물건 항목인지는 아이템과 함께 본다(item_references).
     """
     entries = lore_entries(parts)
@@ -1022,7 +1046,7 @@ def find_map_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None)
         problems.append(Problem.ROUTE_FIND_INVALID)
     if ruleset and any(cross_invalid(route.cross, ruleset) for route in routes):
         problems.append(Problem.ROUTE_CROSS_INVALID)
-    keys = lock_keys(routes)
+    keys = lock_keys(routes) + item_lock_keys(read_item_rules(scenario))
     if len(set(keys)) != len(keys):
         problems.append(Problem.ROUTE_KEY_REPEATED)
     opening = [check for route in routes for check in opening_checks(route)]

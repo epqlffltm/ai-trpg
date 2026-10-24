@@ -377,6 +377,8 @@ class CatalogItemOut(BaseModel):
     # 무기의 관통력과 불굴 세이브의 값(#276). 없으면 None 이다
     ap: int | None = None
     ward: int | None = None
+    # 문에 다는 자물쇠 물건인가(#281). 행동 '바꾸기'로 단다. 무슨 열쇠로 여는지, 따는 판정은 싣지 않는다
+    lock: bool = False
 
 
 class WornOut(BaseModel):

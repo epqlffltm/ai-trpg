@@ -232,6 +232,7 @@ async def test_the_table_lists_the_things_of_its_version(client: AsyncClient, me
             'guard': None,
             'ap': None,
             'ward': None,
+            'lock': False,
         },
         {
             'entry_id': lore['rope']['id'],
@@ -247,6 +248,7 @@ async def test_the_table_lists_the_things_of_its_version(client: AsyncClient, me
             'guard': None,
             'ap': None,
             'ward': None,
+            'lock': False,
         },
         {
             'entry_id': lore['lamp']['id'],
@@ -262,6 +264,7 @@ async def test_the_table_lists_the_things_of_its_version(client: AsyncClient, me
             'guard': None,
             'ap': None,
             'ward': None,
+            'lock': False,
         },
     ]
 

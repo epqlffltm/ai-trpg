@@ -167,6 +167,14 @@ describe('toAction', () => {
     expect(actionHint(draft({ kind: 'buy', item: 'i1' }), ctx)).toBe('상인과 물건을 골라 주세요.');
     expect(actionHint(draft({ kind: 'pay', target: `member:${OTHER}`, amount: 0 }), ctx)).toContain('1에서');
   });
+
+  it('자물쇠 바꾸기는 문과 달 자물쇠를 보내고, 낸 것을 그대로 다시 보낸다(#281)', () => {
+    const replace = { kind: 'replace', place: 'p2', item: 'i1' } as const;
+    expect(toAction(draft({ kind: 'replace', place: 'p2', item: 'i1' }), ctx)).toEqual(replace);
+    expect(toAction(draftFromAction(RULES as unknown as TableDetail['rules'], replace), ctx)).toEqual(replace);
+    expect(actionHint(draft({ kind: 'replace', place: 'p2' }), ctx)).toBe('다룰 문과 달 자물쇠를 골라 주세요.');
+    expect(actionHint(draft({ kind: 'replace', place: 'p2', item: 'i1' }), ctx)).toBeNull();
+  });
 });
 
 describe('actionHint', () => {

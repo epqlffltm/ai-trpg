@@ -8,16 +8,18 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 문의 행을 만
   - 만들기: 테이블을 시작할 때 판에 자물쇠나 빗장을 적은 길마다 하나씩 만든다. 처음 상태는 판의 것이다.
   - 읽기: 길 하나의 자물쇠가 잠겼는가, 빗장이 걸렸는가, 문이 부서졌는가. 문이 없는 길과,
     문이 생기기 전에 시작한 테이블의 길은 잠기지도 걸리지도 부서지지도 않았다.
-  - 바꾸기: 잠그기와 열기, 걸기와 풀기, 부수기, 고치기.
+  - 바꾸기: 잠그기와 열기, 걸기와 풀기, 부수기, 고치기, 자물쇠 바꿔 달기.
     열쇠를 지녔는지, 어느 쪽에 섰는지, 이미 그런지는 부르는 쪽이 본다
     (app/rounds/map_actions.py, app/rounds/door_actions.py, app/rounds/happenings.py).
     부서진 문은 열린 채다(DB 의 CHECK 도 막는다). 고친 문도 열린 채로 둔다.
+  - 지금의 자물쇠: 자물쇠를 바꿔 달았으면 그 자물쇠 물건의 자물쇠(새 열쇠, 새 따는 판정), 아니면 판의 자물쇠다.
+    바꿔 단 자물쇠는 열린 채다. 자물쇠 물건 하나는 한 테이블에서 한 문에만 단다(DB 의 UNIQUE 도 막는다).
   - 장치로 고르기: 자물쇠와 빗장 중 하나를 장치(DoorDevice)로 골라 읽고 바꾼다. 판의 사건이 쓴다.
 """
 
 import uuid
 
-from app.assets.scenarios.snapshot import RouteSnapshot, Snapshot
+from app.assets.scenarios.snapshot import ItemLockSnapshot, LockSnapshot, RouteSnapshot, Snapshot, item_rule_of
 from app.engine.action import DoorDevice
 from app.tables.models import GameTable, TableRouteLock
 from app.tables.places import key_of
@@ -99,6 +101,38 @@ def break_open(table: GameTable, route: RouteSnapshot) -> None:
 def repair(table: GameTable, route: RouteSnapshot) -> None:
     """그 길의 부서진 문을 고친다. 열린 채로 둔다. 문이 있는 길에만 부른다."""
     find_lock(table, route).broken = False
+
+
+def fitted_item(table: GameTable, route: RouteSnapshot) -> uuid.UUID | None:
+    """그 길의 문에 바꿔 단 자물쇠 물건. 바꾸지 않았거나 문이 없는 길이면 None."""
+    row = find_lock(table, route)
+    return None if row is None else row.lock_item
+
+
+def is_fitted(table: GameTable, item: uuid.UUID) -> bool:
+    """그 자물쇠 물건을 이 테이블의 어느 문에 이미 달았는가. 한 테이블에서 한 번만 단다."""
+    return any(row.lock_item == item for row in table.route_locks)
+
+
+def current_lock(table: GameTable, snapshot: Snapshot, route: RouteSnapshot) -> LockSnapshot | ItemLockSnapshot | None:
+    """
+    그 길의 지금 자물쇠. 바꿔 달았으면 그 자물쇠 물건의 자물쇠, 아니면 판의 자물쇠다. 자물쇠가 없는 길이면 None.
+
+    자물쇠 물건에 자물쇠가 적혀 있는지는 달 때 봤다. 판은 고치지 않으니 그대로 있다.
+    """
+    item = fitted_item(table, route)
+    if item is None:
+        return route.lock
+    return item_rule_of(snapshot, item).lock
+
+
+def fit_lock(table: GameTable, route: RouteSnapshot, item: uuid.UUID) -> None:
+    """
+    그 길의 문에 자물쇠 물건을 바꿔 단다. 판에 자물쇠가 있던, 부서지지도 잠기지도 않은 문에만 부른다.
+
+    잠긴 자물쇠는 떼지 못하니 단 자물쇠는 열린 채다.
+    """
+    find_lock(table, route).lock_item = item
 
 
 def is_shut(table: GameTable, route: RouteSnapshot, device: DoorDevice) -> bool:

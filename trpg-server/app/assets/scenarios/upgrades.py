@@ -918,6 +918,18 @@ def upgrade_from_54(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_55(document: dict) -> dict:
+    """
+    형식 55 의 문서를 형식 56 으로 올린다. 그때는 문에 다는 새 자물쇠가 없었다(#281).
+
+    어느 물건도 자물쇠가 아닌 것으로 읽는다. 문의 자물쇠를 바꾸지 못한다.
+    """
+    upgraded = dict(document)
+    upgraded['items'] = [{**rule, 'lock': None} for rule in document.get('items', [])]
+    upgraded['format'] = 56
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -975,4 +987,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     52: upgrade_from_52,
     53: upgrade_from_53,
     54: upgrade_from_54,
+    55: upgrade_from_55,
 }
