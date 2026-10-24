@@ -22,10 +22,11 @@ from server_core.testing.tokens import SigningKey
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.worlds.documents import WorldDocument
+from app.worlds.documents import DOCUMENT_FORMAT, WorldDocument
 from app.worlds.models import WorldImageUse
 from tests.images import own_image
 from tests.worlds import (
+    ARI_ENDING,
     MEET,
     OTHER,
     OWNER,
@@ -80,7 +81,7 @@ async def test_events_are_frozen_in_order_with_their_choices(client: AsyncClient
     document = (await publish(client, owner, world)).json()['document']
 
     meet, hint = document['events']
-    assert (document['format'], [meet['id'], hint['id']]) == (2, ['meet', 'hint'])
+    assert (document['format'], [meet['id'], hint['id']]) == (DOCUMENT_FORMAT, ['meet', 'hint'])
     assert meet['scene'] == {
         'text': '도서관 구석에서 버가 책을 떨어뜨린다.',
         'cast': ['beo', 'ari'],
@@ -228,7 +229,8 @@ async def test_any_opens_when_one_condition_can_hold(client: AsyncClient, owner:
 
 async def test_a_chain_of_events_opens_in_turn(client: AsyncClient, owner: dict):
     events = [MEET, event('second', seen('meet')), event('third', seen('second'), day_at_least(30))]
-    world = await world_with(client, owner, events=events, deadline_days=None)
+    # 기한이 없으니 기한의 엔딩도 뺀다
+    world = await world_with(client, owner, events=events, deadline_days=None, endings=[ARI_ENDING])
 
     assert (await check(client, owner, world))['warnings'] == ['place_unreachable']
 

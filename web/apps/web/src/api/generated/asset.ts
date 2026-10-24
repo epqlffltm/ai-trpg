@@ -586,6 +586,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset/service/{caller}/worlds/{world_id}/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Copy Latest
+         * @description 토큰의 주인이 쓸 수 있는 세계관의 마지막 판.
+         */
+        get: operations["copy_latest_api_v1_asset_service__caller__worlds__world_id__latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/service/{caller}/worlds/{world_id}/latest/number": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Latest Number
+         * @description 토큰의 주인이 쓸 수 있는 세계관의 마지막 판의 번호.
+         */
+        get: operations["read_latest_number_api_v1_asset_service__caller__worlds__world_id__latest_number_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset/worlds": {
         parameters: {
             query?: never;
@@ -812,7 +852,7 @@ export interface components {
             change: number;
             /** Id */
             id: string;
-            on: components["schemas"]["Trigger"];
+            on: components["schemas"]["app__characters__schemas__Trigger"];
             /**
              * Once
              * @default false
@@ -828,7 +868,7 @@ export interface components {
             change: number;
             /** Id */
             id: string;
-            on: components["schemas"]["TriggerDocument"];
+            on: components["schemas"]["app__characters__documents__TriggerDocument"];
             /** Once */
             once: boolean;
         };
@@ -907,6 +947,7 @@ export interface components {
         CastDocument: {
             affection: components["schemas"]["CastAffectionDocument"];
             character: components["schemas"]["CastCharacterDocument"];
+            confession?: components["schemas"]["ConfessionDocument"] | null;
             /** Home */
             home: string | null;
             /** Id */
@@ -928,6 +969,7 @@ export interface components {
          *     home 은 기본 장소다. 비우면 어디에도 없다(이벤트로만 나온다). schedule 은 기본 장소를 덮어쓰는 일정이다.
          *     reveal, map, panel 은 보이기의 덮어쓰기다. 비우면 세계관의 기본을 쓴다.
          *     map_stage 는 지도에 보이는 호감도의 단계다. 이 인물의 지도가 stage 일 때 쓴다.
+         *     confession 은 고백이다(판의 형식 3). 비우면 고백할 수 없다.
          */
         CastMember: {
             affection: components["schemas"]["CastAffection"];
@@ -936,6 +978,7 @@ export interface components {
              * Format: uuid
              */
             character_id: string;
+            confession?: components["schemas"]["Confession"] | null;
             /** Home */
             home?: string | null;
             /** Id */
@@ -1381,6 +1424,55 @@ export interface components {
             match: components["schemas"]["Match"];
         };
         /**
+         * Confession
+         * @description 인물에게 하는 고백(story.md 의 "고백과 엔딩"). 호감도가 stage(단계의 이름) 이상이고 when 이 맞으면 성공이다.
+         *     실패하면 on_fail 대로 한다. 계속(continue)이면 호감도를 fail_drop 만큼 내리고 cooldown_days 동안 다시 못 한다.
+         *     끝(end)이면 그 인물에게 고백 실패로 시작되는 엔딩을 판정한다. 비어 있으면(null) 고백할 수 없는 인물이다.
+         */
+        Confession: {
+            /**
+             * Cooldown Days
+             * @default 1
+             */
+            cooldown_days: number;
+            /**
+             * Fail Drop
+             * @default 10
+             */
+            fail_drop: number;
+            /** @default continue */
+            on_fail: components["schemas"]["ConfessionFailure"];
+            /** Stage */
+            stage: string;
+            /**
+             * @default {
+             *       "items": [],
+             *       "match": "all"
+             *     }
+             */
+            when: components["schemas"]["Conditions"];
+        };
+        /**
+         * ConfessionDocument
+         * @description 인물에게 하는 고백. stage 이상이고 when 이 맞으면 성공이다.
+         */
+        ConfessionDocument: {
+            /** Cooldown Days */
+            cooldown_days: number;
+            /** Fail Drop */
+            fail_drop: number;
+            on_fail: components["schemas"]["ConfessionFailure"];
+            /** Stage */
+            stage: string;
+            when: components["schemas"]["ConditionsDocument"];
+        };
+        /**
+         * ConfessionFailure
+         * @description 고백에 실패하면 어떻게 되는가. 계속(호감도가 내려가고 정한 날 동안 다시 못 한다) 또는 실패 엔딩으로 끝.
+         * @enum {string}
+         */
+        ConfessionFailure: "continue" | "end";
+        /**
          * Effect
          * @description 효과 하나(story.md 의 "효과"). target 은 인물, 물건, 장소의 id 다(종류마다, EffectKind).
          *     amount 는 호감도를 바꾸는 크기(±, 0 이 아니다)나 주고 가져가는 물건의 수(1 이상)다. 쓰지 않는 종류는 적지 않는다.
@@ -1418,6 +1510,63 @@ export interface components {
          * @enum {string}
          */
         EffectKind: "affection" | "give_item" | "take_item" | "accompany_start" | "accompany_end" | "move_to";
+        /**
+         * Ending
+         * @description 엔딩 하나(story.md 의 "고백과 엔딩"). trigger 가 일어나면 그 시작의 엔딩을 적은 차례로 맞춰 보고 when 이 맞는
+         *     첫 엔딩을 고른다. scene 은 엔딩의 장면이다(모델이 쓴다). unlock 이면 계정의 엔딩 기록과 갤러리에 남는다.
+         *     hint 는 못 본 사람에게 보이는 한 줄이다. 못 본 엔딩의 이름은 story 가 내려보내지 않는다.
+         */
+        Ending: {
+            /**
+             * Hint
+             * @default
+             */
+            hint: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            scene: components["schemas"]["Scene"];
+            trigger: components["schemas"]["app__worlds__schemas__Trigger"];
+            /**
+             * Unlock
+             * @default true
+             */
+            unlock: boolean;
+            /**
+             * @default {
+             *       "items": [],
+             *       "match": "all"
+             *     }
+             */
+            when: components["schemas"]["Conditions"];
+        };
+        /**
+         * EndingDocument
+         * @description 엔딩 하나. 판의 차례가 맞춰 보는 차례다.
+         */
+        EndingDocument: {
+            /** Hint */
+            hint: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            scene: components["schemas"]["SceneDocument"];
+            trigger: components["schemas"]["app__worlds__documents__TriggerDocument"];
+            /** Unlock */
+            unlock: boolean;
+            when: components["schemas"]["ConditionsDocument"];
+        };
+        /**
+         * EndingTrigger
+         * @description 엔딩의 판정이 무엇으로 시작되는가(story.md 의 "고백과 엔딩").
+         *     그 인물에게 고백 성공(confess_success, target: 인물), 실패(confess_fail, target: 인물),
+         *     기한이 지났다(deadline, target 없음), 그 이벤트가 열렸다(event, target: 이벤트).
+         *     시작이 일어나면 그 시작의 엔딩을 적은 차례로 맞춰 보고 처음 맞는 것 하나를 고른다.
+         * @enum {string}
+         */
+        EndingTrigger: "confess_success" | "confess_fail" | "deadline" | "event";
         /**
          * Event
          * @description 이벤트 하나(story.md 의 "이벤트"). 행동 뒤에 엔진이 when 을 맞춰 보고, 맞는 것 가운데 적은 차례로 하나만 연다.
@@ -2638,24 +2787,6 @@ export interface components {
          */
         TimeOfDay: "dawn" | "morning" | "day" | "evening" | "night";
         /**
-         * Trigger
-         * @description 호감도를 바꾸는 사용자의 행동. target 은 그 물건이나 장소의 id 다.
-         */
-        Trigger: {
-            kind: components["schemas"]["TriggerKind"];
-            /** Target */
-            target: string;
-        };
-        /**
-         * TriggerDocument
-         * @description 호감도를 바꾸는 행동(종류, 대상).
-         */
-        TriggerDocument: {
-            kind: components["schemas"]["TriggerKind"];
-            /** Target */
-            target: string;
-        };
-        /**
          * TriggerKind
          * @description 호감도를 바꾸는 사용자의 행동. TRPG 의 퀘스트 조건과 같은 (종류, 대상) 모양이다.
          *     물건을 건넸다(give_item), 장소에 갔다(reach_place), 물건을 썼다(use_item).
@@ -2746,6 +2877,27 @@ export interface components {
             status: "processed";
         };
         /**
+         * WorldCopy
+         * @description story 서버에 내주는 판. 세션을 시작할 때 가져가 고정한다.
+         *     가져간 쪽은 번호를 적어 두고, 지금의 번호(WorldVersionNumber)가 크면 "새 판이 있다"를 알린다.
+         */
+        WorldCopy: {
+            document: components["schemas"]["WorldDocument"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
+            rating: components["schemas"]["Rating"];
+            /** Version */
+            version: number;
+        };
+        /**
          * WorldCreate
          * @description 세계관을 만들 때 받는 값. 이름만 필수다. 시간대는 아침, 낮, 저녁, 밤에서 시작한다. 처음에는 비공개다.
          */
@@ -2759,6 +2911,11 @@ export interface components {
             cast: components["schemas"]["CastMember"][];
             /** Deadline Days */
             deadline_days?: number | null;
+            /**
+             * Endings
+             * @default []
+             */
+            endings: components["schemas"]["Ending"][];
             /**
              * Events
              * @default []
@@ -2864,6 +3021,8 @@ export interface components {
             created_at: string;
             /** Deadline Days */
             deadline_days: number | null;
+            /** Endings */
+            endings: components["schemas"]["Ending"][];
             /** Events */
             events: components["schemas"]["Event"][];
             /**
@@ -2918,6 +3077,11 @@ export interface components {
             cast: components["schemas"]["CastDocument"][];
             /** Deadline Days */
             deadline_days: number | null;
+            /**
+             * Endings
+             * @default []
+             */
+            endings: components["schemas"]["EndingDocument"][];
             /**
              * Events
              * @default []
@@ -3123,6 +3287,8 @@ export interface components {
             cast?: components["schemas"]["CastMember"][] | null;
             /** Deadline Days */
             deadline_days?: number | null;
+            /** Endings */
+            endings?: components["schemas"]["Ending"][] | null;
             /** Events */
             events?: components["schemas"]["Event"][] | null;
             /** Image Id */
@@ -3186,6 +3352,19 @@ export interface components {
             number: number;
         };
         /**
+         * WorldVersionNumber
+         * @description 세계관의 지금 판 번호. 화면을 열 때 한 번 묻는다. 문서는 싣지 않는다.
+         */
+        WorldVersionNumber: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Version */
+            version: number;
+        };
+        /**
          * WorldVersionSummary
          * @description 판의 목록에 싣는 값. 굳힌 문서는 싣지 않는다.
          */
@@ -3216,6 +3395,24 @@ export interface components {
             item: string;
         };
         /**
+         * TriggerDocument
+         * @description 호감도를 바꾸는 행동(종류, 대상).
+         */
+        app__characters__documents__TriggerDocument: {
+            kind: components["schemas"]["TriggerKind"];
+            /** Target */
+            target: string;
+        };
+        /**
+         * Trigger
+         * @description 호감도를 바꾸는 사용자의 행동. target 은 그 물건이나 장소의 id 다.
+         */
+        app__characters__schemas__Trigger: {
+            kind: components["schemas"]["TriggerKind"];
+            /** Target */
+            target: string;
+        };
+        /**
          * StartItemDocument
          * @description 사용자가 처음에 가진 물건과 그 수.
          */
@@ -3224,6 +3421,24 @@ export interface components {
             count: number;
             /** Item */
             item: string;
+        };
+        /**
+         * TriggerDocument
+         * @description 엔딩의 시작. 기한은 target 이 없다.
+         */
+        app__worlds__documents__TriggerDocument: {
+            kind: components["schemas"]["EndingTrigger"];
+            /** Target */
+            target: string | null;
+        };
+        /**
+         * Trigger
+         * @description 엔딩의 시작. 고백 성공과 실패는 인물, 이벤트는 이벤트의 id 를 target 에 적는다. 기한은 target 이 없다.
+         */
+        app__worlds__schemas__Trigger: {
+            kind: components["schemas"]["EndingTrigger"];
+            /** Target */
+            target?: string | null;
         };
     };
     responses: never;
@@ -4413,6 +4628,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonaRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    copy_latest_api_v1_asset_service__caller__worlds__world_id__latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+                caller: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldCopy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_latest_number_api_v1_asset_service__caller__worlds__world_id__latest_number_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+                caller: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldVersionNumber"];
                 };
             };
             /** @description Validation Error */
