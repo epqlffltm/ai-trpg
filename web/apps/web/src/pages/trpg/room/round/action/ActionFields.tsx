@@ -92,6 +92,7 @@ function KindFields({ draft, ctx, onChange }: Omit<Props, 'error'>) {
     case 'pick':
     case 'force':
     case 'repair':
+    case 'replace':
       return <DoorActionFields kind={draft.kind} draft={draft} ctx={ctx} onChange={onChange} />;
     default:
       return null;

@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/room/round/action/doorOptions.ts
-// 문을 다루는 행동(#281)의 고를 거리. 순수한 함수다. 서버의 app/rounds/door_actions.py 를 따른다.
+// 문을 다루는 행동(#281)의 고를 거리(자물쇠 바꾸기를 포함한다). 순수한 함수다. 서버의 app/rounds/door_actions.py 를 따른다.
 //
 // - 문은 내가 선 장소에 닿은 아는 길의 것이다. 길의 방향은 보지 않는다(한쪽 길도 어느 끝에서든 다룬다). 길은 반대편 장소로 가리킨다
 // - 화면이 아는 문의 상태(locked, barred, bar_side, broken)로 지금 할 수 있는 것만 보인다. 안내일 뿐이다.
@@ -7,18 +7,19 @@
 //   - 잠그기: 부서지지 않은 문의 열린 자물쇠, 또는 빗장 쪽에 서 있을 때 풀린 빗장
 //   - 열기: 잠긴 자물쇠, 또는 빗장 쪽에 서 있을 때 걸린 빗장
 //   - 따기: 따는 판정이 있는 잠긴 자물쇠. 부수기: 부수는 판정이 있고 잠겼거나 걸린 문. 고치기: 고치는 판정이 있는 부서진 문
+//   - 자물쇠 바꾸기: 자물쇠가 있는 문이 열려 있고 부서지지 않았을 때, 자물쇠 물건(판의 물건 목록의 lock)을 지녔으면
 // - 무슨 열쇠로 여는지, 따거나 고치는 도구는 화면이 모른다(서버가 주지 않는다). 지녔는지는 서버가 본다
 
-import type { DoorDevice, TableMap } from '../../../../../api/types';
+import type { DoorDevice, HeldItem, TableDetail, TableMap, TableMember } from '../../../../../api/types';
 import { placeName } from '../../status/statusView';
 
-export type DoorKind = 'lock' | 'unlock' | 'pick' | 'force' | 'repair';
+export type DoorKind = 'lock' | 'unlock' | 'pick' | 'force' | 'repair' | 'replace';
 type MapRoute = TableMap['routes'][number];
 
 /** 내 장소에 닿은 문 하나. place 는 길의 반대편 장소(행동의 place) */
 export type Door = { place: string; name: string; route: MapRoute };
 
-export const DOOR_KINDS: DoorKind[] = ['unlock', 'lock', 'pick', 'force', 'repair'];
+export const DOOR_KINDS: DoorKind[] = ['unlock', 'lock', 'pick', 'force', 'repair', 'replace'];
 
 const DEVICE_LABELS: Record<DoorDevice, string> = { lock: '자물쇠', bar: '빗장' };
 
@@ -69,7 +70,15 @@ export function canHandleDoor(kind: DoorKind, route: MapRoute, here: string): bo
       return route.force != null && (route.locked === true || route.barred === true);
     case 'repair':
       return route.repair != null && route.broken;
+    case 'replace':
+      return route.locked === false && !route.broken;
   }
+}
+
+/** 지닌 자물쇠 물건(판의 물건 목록에서 lock 이 참인 것). 자물쇠 바꾸기에 단다 */
+export function lockItems(table: TableDetail, me: TableMember | undefined): HeldItem[] {
+  const locks = new Set(table.items.filter((item) => item.lock).map((item) => item.entry_id));
+  return (me?.sheet?.items ?? []).filter((item) => locks.has(item.entry_id));
 }
 
 /** 그 행동을 할 수 있는 문들 */
