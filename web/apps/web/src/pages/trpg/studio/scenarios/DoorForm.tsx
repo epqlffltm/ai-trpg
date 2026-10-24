@@ -8,6 +8,7 @@ import type { Ruleset, ScenarioDetail } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { CheckSelects } from './CheckSelects';
 import { doorDraft, doorHints, withDoor, type DoorDraft } from './doorForm';
+import { ItemSelect } from './ItemSelect';
 import type { EntryChoice } from './useLoreEntries';
 import { useScenarioSave } from './useScenarioSave';
 
@@ -26,7 +27,7 @@ export function DoorForm({ scenario, rules, items, at, nameOf, done }: Props) {
   const [draft, setDraft] = useState<DoorDraft | null>(() => (route ? doorDraft(route) : null));
   const saving = useScenarioSave(scenario.id);
   if (!route || !draft) return <p>이 길을 찾을 수 없습니다.</p>;
-  const hints = doorHints(draft, scenario.routes, at);
+  const hints = doorHints(draft, scenario.routes, at, scenario.items.flatMap((rule) => (rule.lock ? [rule.lock.key] : [])));
   const blocked = Object.keys(hints).length > 0;
 
   function update<K extends keyof DoorDraft>(part: K, changes: Partial<DoorDraft[K]>) {
@@ -165,21 +166,5 @@ export function DoorForm({ scenario, rules, items, at, nameOf, done }: Props) {
         </Button>
       </div>
     </form>
-  );
-}
-
-type ItemProps = { label: string; value: string; items: EntryChoice[]; empty: string; onChange: (id: string) => void; error?: string | undefined };
-
-function ItemSelect({ label, value, items, empty, onChange, error }: ItemProps) {
-  return (
-    <SelectField label={label} value={value} onChange={(event) => onChange(event.target.value)} error={error}>
-      <option value="">{empty}</option>
-      {value !== '' && !items.some((item) => item.id === value) ? <option value={value}>(붙인 로어북에 없는 물건)</option> : null}
-      {items.map((item) => (
-        <option key={item.id} value={item.id}>
-          {item.name}
-        </option>
-      ))}
-    </SelectField>
   );
 }

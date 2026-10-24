@@ -12,7 +12,7 @@ import { stepName } from '../../models/modelChoice';
 import { ModelPrice } from '../../models/ModelPicker';
 import { narrationModelsQuery } from '../../queries';
 import { ACTION_LABELS } from '../round/action/actionLabels';
-import { canHandleDoor, DOOR_KINDS, doorsHere, doorState } from '../round/action/doorOptions';
+import { canHandleDoor, DOOR_KINDS, doorsHere, doorState, lockItems } from '../round/action/doorOptions';
 import { ActionButton, type ActionShortcuts } from './ActionButton';
 import {
   clockLabel,
@@ -161,16 +161,16 @@ function Places({ table, map, mine, shortcuts }: PlacesProps) {
       ) : here ? (
         <p className="hint">아는 길이 없습니다.</p>
       ) : null}
-      {here ? <Doors map={map} here={here} shortcuts={shortcuts} /> : null}
+      {here ? <Doors map={map} here={here} hasLocks={lockItems(table, mine).length > 0} shortcuts={shortcuts} /> : null}
       <WhoIsWhere map={map} members={table.members} />
     </section>
   );
 }
 
-type DoorsProps = { map: NonNullable<TableDetail['map']>; here: string; shortcuts: ActionShortcuts };
+type DoorsProps = { map: NonNullable<TableDetail['map']>; here: string; hasLocks: boolean; shortcuts: ActionShortcuts };
 
-/** 지금 있는 곳에 닿은 길의 문. 문마다 상태와, 지금 할 수 있어 보이는 행동(열기, 잠그기, 따기, 부수기, 고치기)의 단추 */
-function Doors({ map, here, shortcuts }: DoorsProps) {
+/** 지금 있는 곳에 닿은 길의 문. 문마다 상태와, 지금 할 수 있어 보이는 행동(열기, 잠그기, 따기, 부수기, 고치기, 자물쇠 바꾸기)의 단추 */
+function Doors({ map, here, hasLocks, shortcuts }: DoorsProps) {
   const doors = doorsHere(map, here);
   if (doors.length === 0) return null;
   return (
@@ -180,7 +180,7 @@ function Doors({ map, here, shortcuts }: DoorsProps) {
         {doors.map((door) => (
           <li key={door.place}>
             {door.name} 쪽 문 <span className="hint">({doorState(door, map)})</span>{' '}
-            {DOOR_KINDS.filter((kind) => canHandleDoor(kind, door.route, here)).map((kind) => (
+            {DOOR_KINDS.filter((kind) => canHandleDoor(kind, door.route, here) && (kind !== 'replace' || hasLocks)).map((kind) => (
               <ActionButton
                 key={kind}
                 shortcuts={shortcuts}

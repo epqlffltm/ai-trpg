@@ -5,10 +5,12 @@
 // - 회복의 양(heals)은 소모품만, 룰북의 등급(magnitudes)에서 고른다
 // - 칸(slots)은 장비만. 차지하는 칸의 수는 칸의 수보다 많지 않다. 공격·방어(attack, defense, guard, ap, ward)는 칸이 있는 물건만
 // - 관통력(ap)은 공격 보정(attack)이 있는 무기만. 수치는 1~10, 값은 1~1,000,000(비우면 사고팔 수 없다)
+// - 자물쇠(lock, #281)는 장비만. 입력과 검사는 itemLockForm.ts. 소모품으로 바꾸면 보내지 않는다
 
 import type { ItemKind, ItemRarity, ItemRule, ItemRuleBody, Ruleset } from '../../../../api/types';
 import { itemKindLabel, rarityLabel } from '../../labels';
 import { wholeNumber } from '../rulebooks/rulebookForm';
+import { itemLockDraft, toItemLock, type ItemLockDraft } from './itemLockForm';
 
 export const COMBAT_NUMBER_MAX = 10;
 export const MONEY_MAX = 1_000_000;
@@ -34,6 +36,7 @@ export type ItemRuleDraft = {
   slots: string[];
   slotCount: string;
   combat: Record<CombatField, string>;
+  lock: ItemLockDraft;
 };
 
 function numberText(value: number | null | undefined): string {
@@ -55,6 +58,7 @@ export function itemRuleDraft(rule: ItemRule | undefined): ItemRuleDraft {
       guard: numberText(rule?.guard),
       ward: numberText(rule?.ward),
     },
+    lock: itemLockDraft(rule?.lock),
   };
 }
 
@@ -88,7 +92,7 @@ function optionalNumber(text: string): number | null {
   return text.trim() === '' ? null : Number(text.trim());
 }
 
-/** 보낼 규칙. 종류에 맞지 않는 칸(장비의 회복, 소모품의 칸, 착용하지 않는 물건의 공격·방어)은 비운다 */
+/** 보낼 규칙. 종류에 맞지 않는 칸(장비의 회복, 소모품의 칸과 자물쇠, 착용하지 않는 물건의 공격·방어)은 비운다 */
 export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody {
   const worn = isWorn(draft);
   const combat = (field: CombatField) => (worn ? optionalNumber(draft.combat[field]) : null);
@@ -105,6 +109,7 @@ export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody 
     defense: combat('defense'),
     guard: combat('guard'),
     ward: combat('ward'),
+    lock: draft.kind === 'gear' ? toItemLock(draft.lock) : null,
   };
 }
 
@@ -120,7 +125,7 @@ export function withoutItemRule(rules: ItemRule[], entryId: string): ItemRuleBod
   return rules.filter((one) => one.entry_id !== entryId);
 }
 
-/** 규칙의 한 줄. "장비 · 희귀 · 값 30 · 주손, 보조손 중 2칸 · 공격 +2 · 관통 1". 규칙이 없으면 null */
+/** 규칙의 한 줄. "장비 · 희귀 · 값 30 · 주손, 보조손 중 2칸 · 공격 +2 · 관통 1 · 새 자물쇠". 규칙이 없으면 null */
 export function itemRuleLine(rule: ItemRule | undefined, rules: Ruleset | null): string | null {
   if (!rule) return null;
   const slotName = (key: string) => rules?.equipment_slots.find((slot) => slot.key === key)?.name ?? key;
@@ -134,5 +139,6 @@ export function itemRuleLine(rule: ItemRule | undefined, rules: Ruleset | null):
   if (rule.defense) parts.push(`방어 ${rule.defense}`);
   if (rule.guard) parts.push(`모든 부위 방어 ${rule.guard}`);
   if (rule.ward) parts.push(`불굴 ${rule.ward}`);
+  if (rule.lock) parts.push(rule.lock.pick ? '새 자물쇠(딸 수 있음)' : '새 자물쇠');
   return parts.join(' · ');
 }
