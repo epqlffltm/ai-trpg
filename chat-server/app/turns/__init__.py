@@ -11,5 +11,6 @@
   - models.py, repository.py: 호출과 청구의 기록(generations)
   - router.py, schemas.py: 말을 보내는 주소. 바로 SSE 로 답한다
 
-대화의 트리와 프롬프트를 붙이는 일 가운데 chat 과 story 가 함께 쓸 것은 app/conversation/ 에 있다(창, SSE, 흘려보내기).
+대화의 트리와 프롬프트를 붙이는 일 가운데
+chat 과 story 가 함께 쓰는 것은 공용 코드 conversation_core(shared/conversation-core)에 있다(창, SSE, 흘려보내기).
 """

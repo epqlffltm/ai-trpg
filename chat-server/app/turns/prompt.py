@@ -5,7 +5,7 @@
 
     [system] 캐릭터의 카드(render_card): 지킬 것, 캐릭터, 사용자(페르소나), 시작 상황, 앞의 줄거리(요약),
              기억(메모), 지금(장소와 소지품), 다음 답 추천의 지시
-    [assistant / user ...] 최근 대화(app/conversation/window.py 의 select_window)
+    [assistant / user ...] 최근 대화(conversation_core/window.py 의 select_window)
 
 이 단계에는 요약, 기억 메모, 로어북, 장소와 소지품이 없다. 그 단계를 만들 때 카드와 창 사이에 끼운다.
 값은 모두 대화를 시작할 때 굳힌 사본에서 온다(캐릭터의 판, 페르소나의 사본, 고른 시작 상황).
@@ -20,10 +20,9 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 
 from ai_core.provider import ChatMessage, Role
-
-from app.conversation.expressions import instruction as expression_instruction
-from app.conversation.suggestions import instruction
-from app.conversation.window import Turn
+from conversation_core.expressions import instruction as expression_instruction
+from conversation_core.suggestions import instruction
+from conversation_core.window import Turn
 
 # 사람의 행동 말(이동, 쓰기, 건네기)을 모델에 보낼 때 앞에 붙인다. 사람의 말과 가른다
 ACTION_PREFIX = '[행동]'
@@ -139,9 +138,9 @@ def render_card(
     시스템 메시지(카드). 지킬 것, 캐릭터, 사용자, 시작 상황, 앞의 줄거리(story), 기억(memory), 지금(scene),
     다음 답 추천의 지시의 차례다. 빈 블록은 뺀다. story 는 창 밖으로 밀려난 앞부분의 요약,
     memory 는 기억 메모(app/memory), scene 은 지금의 장소와 소지품이다(app/world/scene.py).
-    지시는 suggest 일 때만 넣는다. expressions 가 있으면 표정을 고르는 지시를 넣는다(app/conversation/expressions.py).
+    지시는 suggest 일 때만 넣는다. expressions 가 있으면 표정을 고르는 지시를 넣는다(conversation_core/expressions.py).
     changes 는 모델이 제안할 수 있는 상태의 변화의 지시다(app/world/proposals.py 의 render_offer, #676).
-    lore 는 고른 로어북의 항목이다(app/conversation/lorebook.py, #672). 기억 메모 뒤, 지금 앞에 둔다.
+    lore 는 고른 로어북의 항목이다(conversation_core/lorebook.py, #672). 기억 메모 뒤, 지금 앞에 둔다.
     지시를 맨 끝에 두어 본문을 다 쓴 뒤의 일임을 분명히 한다.
     """
     sections = [

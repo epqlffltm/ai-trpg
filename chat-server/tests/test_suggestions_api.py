@@ -16,6 +16,7 @@ import uuid
 
 import pytest
 from ai_core.provider import Role
+from conversation_core.suggestions import MARKER
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey
@@ -23,7 +24,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.conversation.suggestions import MARKER
 from app.conversations.models import Message
 from app.main import API_PREFIX
 from app.turns.models import Generation

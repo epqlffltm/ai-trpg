@@ -3,7 +3,7 @@
 """
 굴리는 요약의 규칙. DB 도 모델도 모르는 순수 함수다.
 
-  - 창 밖(overflow): 최근 대화의 창(app/conversation/window.py)에 들지 못하고 밀려난 앞부분
+  - 창 밖(overflow): 최근 대화의 창(conversation_core/window.py)에 들지 못하고 밀려난 앞부분
   - 요약할 때: 밀려난 말 가운데 마지막 요약 뒤의 것이 SUMMARY_AFTER_MESSAGES 개를 넘으면 요약한다.
     앞의 요약과 그 뒤의 말을 합쳐 새 요약을 쓴다(굴린다). 새 요약은 밀려난 마지막 말에 붙는다
   - 모델에 보낼 때: 밀려난 말 가운데 가장 뒤의 요약을 "[앞의 줄거리]" 로 카드에 넣는다.
@@ -18,9 +18,9 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from ai_core.provider import ChatMessage, Role
+from conversation_core.suggestions import clean_line
+from conversation_core.window import Turn, select_window
 
-from app.conversation.suggestions import clean_line
-from app.conversation.window import Turn, select_window
 from app.memory.models import NOTE_MAX_CHARS
 
 # 모델이 요약에 쓸 글의 길이의 상한(토큰)과 지시의 글자 수. 메모의 제안이 뒤에 붙는 만큼 넉넉히 둔다

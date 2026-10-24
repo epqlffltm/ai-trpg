@@ -2,7 +2,8 @@
 
 """
 말 한 번의 따로 도는 작업(app/turns/service.py 의 run_generation)과,
-서버가 꺼질 때 멈추는 것(app/main.py 의 stop_turns), 조용한 통로의 하트비트(app/conversation/relay.py).
+서버가 꺼질 때 멈추는 것(app/main.py 의 stop_turns).
+조용한 통로의 하트비트는 공용 코드의 테스트(shared/conversation-core/tests/test_relay.py)가 본다.
 실제 DB(chat_test)에서 돈다. 모델은 가짜(tests/models.py), 결제 서버는 받지 않는 것(FreeBilling)이다.
 
 보는 것.
@@ -21,14 +22,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from ai_core.provider import GenerationParams
+from conversation_core.relay import Relay
 from fastapi import FastAPI
 from server_core.auth.tokens import AccessClaims
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.free_billing import FreeBilling
-from app.conversation.relay import Relay
-from app.conversation.sse import Comment
 from app.conversations.models import Conversation
 from app.core.dependencies import Viewer, utc_now
 from app.main import stop_turns
@@ -177,15 +177,6 @@ async def test_an_unexpected_model_error_is_a_server_error(
 
 async def test_stopping_with_nothing_running_is_quiet():
     await stop_turns(set())
-
-
-async def test_a_quiet_relay_sends_a_heartbeat():
-    relay = Relay(heartbeat=0.01)
-    frames = relay.frames()
-
-    item = await anext(frames)
-
-    assert item == Comment('heartbeat')
 
 
 async def test_a_charge_already_finished_is_not_sent_again(
