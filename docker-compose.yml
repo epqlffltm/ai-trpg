@@ -89,6 +89,14 @@ x-chat-image: &chat-image
       shared: ./shared
   image: ai-trpg/chat-server:local
 
+x-story-image: &story-image
+  build:
+    context: ./story-server
+    # 공용 코드(shared/). Dockerfile 이 COPY --from=shared 로 가져온다(docs/architecture/shared-code.md 의 "정한 것")
+    additional_contexts:
+      shared: ./shared
+  image: ai-trpg/story-server:local
+
 # 인증 서버의 JWT 개인키가 든 폴더. 읽기 전용으로 붙인다. 폴더가 없으면 만들지 않고 실패한다
 # (없는 경로를 붙이면 Docker 가 빈 폴더를 만들어 버려서, 키가 없다는 것이 늦게 드러난다)
 x-auth-keys: &auth-keys
@@ -183,6 +191,14 @@ x-chat-environment: &chat-environment
   DB_POOL_SIZE: "5"
   DB_MAX_OVERFLOW: "5"
 
+# story 서버의 프로세스가 함께 쓰는 설정(#591). 비밀은 DB 비밀번호뿐이고 루트 .env 에서 온다
+x-story-environment: &story-environment
+  DATABASE_URL: postgresql+asyncpg://story:${STORY_DB_PASSWORD}@db:5432/${POSTGRES_DB:-trpg}
+  AUTH_JWKS_URL: http://auth-server:8000/api/v1/auth/jwks
+  # 연결 풀의 크기. chat 과 같은 몫이다(docs/architecture/services.md 의 "DB 와 Redis 의 한도")
+  DB_POOL_SIZE: "5"
+  DB_MAX_OVERFLOW: "5"
+
 # asset-server 가 그림을 넣고 꺼내는 저장소(#566, docs/architecture/asset-server.md 의 "그림"). 마이그레이션에는 주지 않는다.
 # 로컬은 object-store(SeaweedFS)다. staging 은 docker-compose.staging.yml 이 주소를 S3 로 바꾸고, 키와 버킷은 루트 .env 의 것(그 버킷만 쓰는 IAM 사용자)이다.
 # 이 주소로 서명한 주소(60초)를 nginx 가 받아 간다. nginx 는 이 주소가 저장소의 것일 때만 받는다(docker/nginx/templates/http.inc.template)
@@ -235,6 +251,8 @@ services:
       ASSET_DB_PASSWORD: ${ASSET_DB_PASSWORD:?.env 에 ASSET_DB_PASSWORD 를 설정하세요(tools/fill_env.py)}
       # chat 서버 전용 계정의 비밀번호. 초기화 스크립트(09-chat-role.sql)가 읽는다
       CHAT_DB_PASSWORD: ${CHAT_DB_PASSWORD:?.env 에 CHAT_DB_PASSWORD 를 설정하세요(tools/fill_env.py)}
+      # story 서버 전용 계정의 비밀번호. 초기화 스크립트(10-story-role.sql)가 읽는다
+      STORY_DB_PASSWORD: ${STORY_DB_PASSWORD:?.env 에 STORY_DB_PASSWORD 를 설정하세요(tools/fill_env.py)}
       # 인증 서버 계정에 테스트용 DB 를 만들 권한(CREATEDB)을 줄지. 개발에서만 true 로 둔다.
       # 운영에서는 적지 않는다(false). 볼륨이 비어 있는 첫 기동 때만 반영된다(#20)
       AUTH_DB_ALLOW_TEST_DB: ${AUTH_DB_ALLOW_TEST_DB:-false}
@@ -828,6 +846,40 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+
+  story-migrate:
+    <<: *story-image
+    profiles: [app]
+    logging: *logging
+    command: ["alembic", "upgrade", "heads"]
+    env_file: ./story-server/.env
+    environment:
+      <<: *story-environment
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # story 서버(#591). 세계관 안에서 여러 인물과 이야기. 지금은 뼈대다(토큰 검증, 관측, 상태 확인).
+  # 끊긴 세션 목록 받기는 이 프로세스 안에서 돈다(워커가 따로 없다). 다른 서버를 부르게 되면 그 주소와 비밀을 여기에 더한다
+  story-server:
+    <<: *story-image
+    profiles: [app]
+    logging: *logging
+    restart: unless-stopped
+    env_file: ./story-server/.env
+    environment:
+      <<: [*story-environment, *telemetry-environment]
+    # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
+    networks: [default, telemetry]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8007/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    depends_on:
+      story-migrate:
+        condition: service_completed_successfully
 
   # 화면(web/)을 빌드해 담은 nginx 의 이미지다(web/Dockerfile, #290). /api/ 는 서버로, 그 밖은 화면이다
   proxy:

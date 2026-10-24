@@ -1080,3 +1080,44 @@ tests:
             exp_annotations:
               summary: chat 서버의 5xx 가 10% 다
               description: 대시보드 chat-server 의 "상태 코드"와 로그의 error_code 를 본다
+
+  # story 서버가 DB 에 닿지 못하면 1분 뒤에 울린다. 다른 서버의 것은 섞이지 않는다
+  - interval: 30s
+    input_series:
+      - series: 'db_up{service="story-server", instance="server-a"}'
+        values: '1 1 0 0 0 0 0'
+      - series: 'db_up{service="board-server", instance="server-b"}'
+        values: '0x6'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: StoryDatabaseUnreachable
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              service: story-server
+              instance: server-a
+            exp_annotations:
+              summary: story 서버가 DB 에 닿지 못한다
+              description: 이야기의 세션을 읽지도 쓰지도 못한다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
+
+  # story 서버의 5xx: 요청이 많고 5xx 가 10% 면 10분 뒤에 울린다. 다른 서버의 5xx 는 섞이지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="story-server", route="/x", method="GET", status_code="200", instance="server-a"}'
+        values: '0+54x30'
+      - series: 'http_server_requests_total{service="story-server", route="/x", method="GET", status_code="500", instance="server-a"}'
+        values: '0+6x30'
+      - series: 'http_server_requests_total{service="billing-server", route="/x", method="GET", status_code="500", instance="server-b"}'
+        values: '0+600x30'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: StoryServerErrors
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: StoryServerErrors
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: story 서버의 5xx 가 10% 다
+              description: 대시보드 story-server 의 "상태 코드"와 로그의 error_code 를 본다

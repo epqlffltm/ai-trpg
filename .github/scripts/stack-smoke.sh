@@ -4,7 +4,7 @@
 # compose 로 모든 서버를 컨테이너로 띄워 보고 확인한다. 관문 워크플로(.github/workflows/ci.yml 의 stack)가 부른다.
 #
 #   사용: stack-smoke.sh prepare | up | check | check-proxy | logs | down
-#     prepare      설정 파일(.env 여덟)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
+#     prepare      설정 파일(.env 아홉)과 JWT 키를 이 실행에서만 쓰고 버리는 값으로 만든다
 #     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, 그림 저장소, Prometheus, Alertmanager, Tempo, Grafana, 상태 확인이 있는 워커가 healthy 가 되고
 #                  Loki 가 준비될 때까지 기다린다.
 #                  이미지를 받고 만드는 것은 저장소가 잠깐 답하지 않으면 쉬었다가 다시 한다(with_retries, 3번까지).
@@ -55,9 +55,9 @@
 
 set -euo pipefail
 
-SERVERS=(auth trpg board billing notification asset chat)
+SERVERS=(auth trpg board billing notification asset chat story)
 # 서버마다 컨테이너 안에서 듣는 포트
-declare -A PORTS=([auth]=8000 [trpg]=8001 [board]=8002 [billing]=8003 [notification]=8004 [chat]=8005 [asset]=8006)
+declare -A PORTS=([auth]=8000 [trpg]=8001 [board]=8002 [billing]=8003 [notification]=8004 [chat]=8005 [asset]=8006 [story]=8007)
 # 계속 도는 워커와 주기 명령의 컨테이너
 WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-cron db-backup)
 # 그 가운데 상태 확인이 있는 워커. 심장박동(docker-compose.yml 의 x-worker-heartbeat)을 보거나, DB 의 백업은 최근 백업 파일을 본다
@@ -89,11 +89,11 @@ DASHBOARDS=docker/grafana/dashboards
 LOKI_LABELS=(container environment level service)
 # 메트릭을 OTLP 로 미는 서버(docs/observability.md 의 "2. 메트릭"). 서버에 메트릭을 붙이면 여기에 더한다.
 # 그 서버의 요청 수, DB 의 상태, 연결 풀이 Prometheus 에 있는지 본다. 연결 풀이 없는 서버는 아래에 적는다
-METRIC_SERVERS=(auth trpg board billing notification asset chat)
+METRIC_SERVERS=(auth trpg board billing notification asset chat story)
 # 연결 풀이 없는 서버. 인증 서버(Django)는 요청마다 연결을 맺고 닫는다. db_pool_* 를 내지 않는다
 POOLLESS_SERVERS=(auth)
 # span 을 내보내는 서버(docs/observability.md 의 "3. 추적"). 서버에 span 을 붙이면 여기와 아래 둘에 더한다
-TRACE_SERVERS=(auth trpg board billing notification asset chat)
+TRACE_SERVERS=(auth trpg board billing notification asset chat story)
 # 추적 번호를 실어 한 번 부를 주소(메서드와 경로). 401 이어도 된다. 요청의 span 은 걸린다. 상태 확인은 span 이 없다
 declare -A TRACE_PROBES=(
   [auth]="GET /api/v1/auth/jwks"
@@ -103,13 +103,14 @@ declare -A TRACE_PROBES=(
   [notification]="GET /api/v1/notification/me/notifications"
   [asset]="GET /api/v1/asset/me"
   [chat]="GET /api/v1/chat/me"
+  [story]="GET /api/v1/story/me"
 )
 # 그 아래에 쿼리의 span 이 있는지 볼 작업(operation). 서버가 뜨면 곧 한 바퀴 돈다.
 # 인증 서버의 것은 주기 명령(send_security_digest)이다. 워커와 주기 명령의 검사(check_workers)가 먼저 한 번 돌린다.
 # 인증 서버의 워커는 할 일이 없던 바퀴를 보내지 않아 쓸 수 없다. TRPG 서버의 5초 바퀴(시계, 청구 정리, 알림 보내기)도 같다.
 # TRPG 서버의 것은 서버가 뜨면 바로 한 바퀴 도는 AI 호출 기록의 정리(ai_log.prune)다. 맡은 수를 싣지 않아 늘 남는다.
 # 게시판 서버의 알림 보내기도 보낼 것이 없던 바퀴는 보내지 않는다. 추적을 보기 전에 발송함에 알림 하나를 적는다(queue_board_notification)
-# asset 서버와 chat 서버는 아직 DB 를 쓰는 작업이 없어 적지 않는다(끊긴 세션 목록 받기는 HTTP 만 쓴다). 적지 않은 서버는 작업의 검사를 건너뛴다
+# asset, chat, story 서버는 아직 DB 를 쓰는 작업이 없어 적지 않는다(끊긴 세션 목록 받기는 HTTP 만 쓴다). 적지 않은 서버는 작업의 검사를 건너뛴다
 declare -A TRACE_JOBS=(
   [auth]=security.send_digest
   [trpg]=ai_log.prune
@@ -198,7 +199,7 @@ write_new() {
   cat > "$path"
 }
 
-# 여덟 개의 .env 를 만든다. 주소는 compose 가 덮어쓰므로 비밀만 적는다.
+# 아홉 개의 .env 를 만든다. 주소는 compose 가 덮어쓰므로 비밀만 적는다.
 # 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버,
 # 알림 서버와 게임·결제·게시판·asset·chat 서버, asset 서버와 chat 서버, 결제 서버와 chat 서버)
 write_env_files() {
@@ -222,6 +223,7 @@ BOARD_DB_PASSWORD=$(throwaway)
 NOTIFICATION_DB_PASSWORD=$(throwaway)
 ASSET_DB_PASSWORD=$(throwaway)
 CHAT_DB_PASSWORD=$(throwaway)
+STORY_DB_PASSWORD=$(throwaway)
 GRAFANA_ADMIN_PASSWORD=$(throwaway)
 MONITOR_DB_PASSWORD=$(throwaway)
 IMAGE_STORE_SECRET_ACCESS_KEY=$(throwaway)
@@ -274,6 +276,10 @@ ASSET_SECRET=$chat_asset_secret
 BILLING_URL=http://127.0.0.1:8003
 BILLING_SECRET=$chat_billing_secret
 NOTIFICATION_SECRET=$chat_notify_secret
+EOF
+  # story 서버의 비밀은 아직 DB 비밀번호뿐이고 compose 가 루트 .env 의 것으로 주소를 만든다. env_file 이 있어야 해서 빈 파일을 둔다
+  write_new story-server/.env <<EOF
+# CI 에서만 쓰는 빈 설정. 값은 docker-compose.yml 이 준다
 EOF
 }
 
@@ -473,7 +479,7 @@ limited_after() {
 reachable_from() {
   local service="$1" url="$2"
   case "$service" in
-    auth-server | trpg-server | notification-server | asset-server | chat-server)
+    auth-server | trpg-server | notification-server | asset-server | chat-server | story-server)
       compose exec -T "$service" python -c "import urllib.request; urllib.request.urlopen('$url', timeout=5)" ;;
     board-server)
       compose exec -T "$service" node -e "fetch('$url').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" ;;
@@ -1434,6 +1440,9 @@ check() {
   report "chat 서버가 인증 서버의 공개키를 받는다" reachable_from chat-server "$jwks"
   report "chat 서버가 인증 서버의 끊긴 세션 목록을 받는다" reachable_from chat-server \
     http://auth-server:8000/api/v1/auth/session-revocations
+  report "story 서버가 인증 서버의 공개키를 받는다" reachable_from story-server "$jwks"
+  report "story 서버가 인증 서버의 끊긴 세션 목록을 받는다" reachable_from story-server \
+    http://auth-server:8000/api/v1/auth/session-revocations
   report "인증 서버가 결제 서버에 닿는다" reachable_from auth-server http://billing-server:8003/health
   report "게임 서버가 결제 서버에 닿는다" reachable_from trpg-server http://billing-server:8003/health
   report "chat 서버가 결제 서버에 닿는다" reachable_from chat-server http://billing-server:8003/health
@@ -1508,6 +1517,7 @@ check_proxy() {
   report "프록시로 알림 서버에 닿는다" status_is 401 "$PROXY/api/v1/notification/me/notifications"
   report "프록시로 asset 서버에 닿는다" status_is 401 "$PROXY/api/v1/asset/me"
   report "프록시로 chat 서버에 닿는다" status_is 401 "$PROXY/api/v1/chat/me"
+  report "프록시로 story 서버에 닿는다" status_is 401 "$PROXY/api/v1/story/me"
   report "프록시는 관리자 화면을 막는다" status_is 404 "$PROXY/admin/login/"
   report "프록시는 관리자 화면의 CSS 를 막는다" status_is 404 "$PROXY/static/admin/css/base.css"
   report "프록시는 점 두 개로 돌아가는 주소도 막는다" status_is 404 "$PROXY/api/v1/auth/%2e%2e/%2e%2e/admin/login/" --path-as-is
@@ -1525,6 +1535,8 @@ check_proxy() {
   report "프록시는 서버끼리만 부르는 게시판 주소를 막는다" status_is 404 "$PROXY/api/v1/board/service/users/00000000-0000-4000-8000-000000000000/withdrawal" -X POST
   # chat 서버에 닿으면 서명이 없어 401 이다(#670)
   report "프록시는 서버끼리만 부르는 chat 주소를 막는다" status_is 404 "$PROXY/api/v1/chat/service/users/00000000-0000-4000-8000-000000000000/withdrawal" -X POST
+  # story 서버에는 아직 이 주소가 없어 서버도 404 를 답한다. 주소가 생겨도 바깥에 열리지 않게 프록시가 먼저 막는다
+  report "프록시는 서버끼리만 부르는 story 주소를 막는다" status_is 404 "$PROXY/api/v1/story/service/users/00000000-0000-4000-8000-000000000000/withdrawal" -X POST
   report "프록시는 서버의 상태 확인 주소를 막는다" status_is 404 "$PROXY/health"
   report "프록시는 서버의 준비 확인 주소를 막는다" status_is 404 "$PROXY/health/ready"
   # asset-server 가 X-Accel-Redirect 로만 넘기는 내부 위치다(#566). 바깥에서 부르면 404 다
