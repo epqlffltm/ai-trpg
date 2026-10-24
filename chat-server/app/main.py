@@ -72,6 +72,7 @@ from app.operators import router as operators
 from app.operators.service import AlreadyHandledError, ReportNotFoundError
 from app.reports import router as reports
 from app.reports.service import AlreadyReportedError, NotReportableError
+from app.transcripts import router as transcripts
 from app.turns import router as messages
 from app.turns import settler
 from app.turns.providers import build_router
@@ -246,6 +247,8 @@ def create_app(
     app.include_router(messages.router, prefix=API_PREFIX)
     app.include_router(messages.message_router, prefix=API_PREFIX)
     app.include_router(messages.generation_router, prefix=API_PREFIX)
+    # 대화 기록 내려받기(#617). 지금 보고 있는 가지를 파일 하나로
+    app.include_router(transcripts.router, prefix=API_PREFIX)
     # 내가 연 이벤트 씬(#669). 소개의 이벤트 씬 칸과 갤러리가 읽는다
     app.include_router(gallery.router, prefix=API_PREFIX)
     # 대화 속 답의 신고와 운영자 API(#678)
