@@ -40,6 +40,7 @@ from app.assets.models import (
     ENCOUNTER_MAX_COUNT,
     FAIL_ONLY_CONDITIONS,
     HAPPENING_MAX_EFFECTS,
+    ITEM_MAX_CURES,
     ITEM_STACK_MAX,
     MONEY_MAX,
     MONSTER_MAX_ATTACKS,
@@ -623,6 +624,16 @@ class ItemLock(BaseModel):
         return str(key)
 
 
+def reject_duplicate_cures(keys: list[str]) -> list[str]:
+    """같은 부상을 두 번 적으면 거부한다."""
+    if len(set(keys)) != len(keys):
+        raise ValueError('같은 부상을 두 번 풉니다.')
+    return keys
+
+
+Cures = Annotated[list[Key], Field(max_length=ITEM_MAX_CURES), AfterValidator(reject_duplicate_cures)]
+
+
 class ItemRule(BaseModel):
     """
     아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.
@@ -641,6 +652,9 @@ class ItemRule(BaseModel):
     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
+    cures 는 쓰면 대상에게서 푸는 부상들이다(#277, 해독제). 룰북의 부상의 이름표이고 소모품에만 적는다.
+    짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.
+    룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -658,6 +672,7 @@ class ItemRule(BaseModel):
     ap: CombatNumber | None = None
     ward: CombatNumber | None = None
     lock: ItemLock | None = None
+    cures: Cures = []
 
     @model_validator(mode='after')
     def combat_only_when_worn(self) -> 'ItemRule':
@@ -693,6 +708,13 @@ class ItemRule(BaseModel):
         """장비에는 회복의 양을 적지 않는다. 쓰지 않는 물건이다."""
         if self.heals is not None and self.kind != ItemKind.CONSUMABLE:
             raise ValueError('회복의 양(heals)은 소모품(consumable)에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def cures_only_with_consumables(self) -> 'ItemRule':
+        """푸는 부상은 소모품에만 적는다. 쓰면 없어지는 약이다."""
+        if self.cures and self.kind != ItemKind.CONSUMABLE:
+            raise ValueError('푸는 부상(cures)은 소모품(consumable)에만 적습니다.')
         return self
 
     @model_validator(mode='after')

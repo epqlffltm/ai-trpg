@@ -52,7 +52,18 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     ),
     EventType.ITEMS_LOST: ('user_id', 'character_name', 'entry_id', 'name', 'count', 'total'),
     # 물건을 쓰고 건넨 것도 공개다. 못 했으면 까닭(reason)이 있다
-    EventType.ITEM_USED: ('round', 'character_name', 'entry_id', 'name', 'used', 'reason', 'target', 'remaining'),
+    # 푼 부상(cured)은 이름표와 이름만 있다. 후유증은 그 뒤의 부상의 이벤트에 있다(#277)
+    EventType.ITEM_USED: (
+        'round',
+        'character_name',
+        'entry_id',
+        'name',
+        'used',
+        'reason',
+        'target',
+        'remaining',
+        'cured',
+    ),
     EventType.ITEM_GIVEN: (
         'round',
         'character_name',

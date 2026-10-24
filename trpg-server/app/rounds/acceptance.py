@@ -275,15 +275,15 @@ def accept_use(table: GameTable, member: TableMember, action: UseAction) -> dict
 
       - 판의 물건이 아니거나 소모품이 아니면 ActionNotInRulesError(item). 장비는 쓰지 않는다.
       - 하나도 가지고 있지 않으면 RoundConflictError(item_not_held).
-      - 회복하는 소모품: 대상이 앉은 사람이 아니면 ActionTargetError, 죽었으면 RoundConflictError(patient_dead).
-        비워 둔 대상은 자기 자신으로 채운다.
-      - 회복하지 않는 소모품에 대상을 적었으면 ActionNotInRulesError(target). 무엇을 하려는지 알 수 없다.
+      - 회복하거나 부상을 푸는 소모품(#277): 대상이 앉은 사람이 아니면 ActionTargetError,
+        죽었으면 RoundConflictError(patient_dead). 비워 둔 대상은 자기 자신으로 채운다.
+      - 누구에게도 들지 않는 소모품에 대상을 적었으면 ActionNotInRulesError(target). 무엇을 하려는지 알 수 없다.
     """
     item = find_item(table, action.item)
     if item.kind != ItemKind.CONSUMABLE:
         raise ActionNotInRulesError('item')
     require_held(member, action.item, 1)
-    if item.heals is None:
+    if not items.takes_target(item):
         if action.target is not None:
             raise ActionNotInRulesError('target')
         return action.model_dump(mode='json')

@@ -379,6 +379,8 @@ class CatalogItemOut(BaseModel):
     ward: int | None = None
     # 문에 다는 자물쇠 물건인가(#281). 행동 '바꾸기'로 단다. 무슨 열쇠로 여는지, 따는 판정은 싣지 않는다
     lock: bool = False
+    # 쓰면 대상에게서 푸는 부상들(rules 의 injuries 의 key, #277). 없으면 빈 목록이다
+    cures: list[str] = []
 
 
 class WornOut(BaseModel):

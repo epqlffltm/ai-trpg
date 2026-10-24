@@ -257,6 +257,7 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
             ap=item.ap,
             ward=item.ward,
             lock=item.lock,
+            cures=list(item.cures),
         )
         for item in catalog.values()
     ]

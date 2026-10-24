@@ -341,9 +341,10 @@ ITEM_FAILURES = {
 
 def describe_item_action(note: ItemActionNote) -> str:
     """
-    물건을 쓰거나 건넨 결과를 한 줄로 적는다. 회복했으면 HP 의 변화를 붙인다.
+    물건을 쓰거나 건넨 결과를 한 줄로 적는다. 회복했으면 HP 의 변화를, 부상을 풀었으면 풀린 부상을 붙인다.
 
     예: (쓴 물건: 치유 물약) → 엘프 회복 3 (HP 8/10)
+        (쓴 물건: 해독제 → 영애) [풀린 부상: 중독]
         (건넨 물건: 밧줄 1개 → 영애)
         (쓰려던 물건: 치유 물약. 가지고 있지 않았다)
     """
@@ -353,8 +354,12 @@ def describe_item_action(note: ItemActionNote) -> str:
         verb = '쓰려던' if note.kind == 'use' else '건네려던'
         return f'({verb} 물건: {what}{to}. {ITEM_FAILURES.get(note.reason, "하지 못했다")})'
     verb = '쓴' if note.kind == 'use' else '건넨'
-    line = f'({verb} 물건: {what}{to})'
-    return f'{line} {describe_impact(note.impact)}' if note.impact else line
+    parts = [f'({verb} 물건: {what}{to})']
+    if note.impact:
+        parts.append(describe_impact(note.impact))
+    if note.cured:
+        parts.append(f'[풀린 부상: {", ".join(note.cured)}]')
+    return ' '.join(parts)
 
 
 def describe_worn(worn: list[WornNote]) -> str:

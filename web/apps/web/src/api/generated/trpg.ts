@@ -2257,6 +2257,11 @@ export interface components {
             ap?: number | null;
             /** Attack */
             attack?: number | null;
+            /**
+             * Cures
+             * @default []
+             */
+            cures: string[];
             /** Defense */
             defense?: number | null;
             /**
@@ -2646,6 +2651,16 @@ export interface components {
             difficulty?: string | null;
             /** Harm */
             harm?: string | null;
+        };
+        /**
+         * CuredOut
+         * @description 소모품이 푼 부상 하나(#277). 룰북의 부상의 이름표와 이름이다. 나으면서 생긴 후유증은 이벤트에 있다.
+         */
+        CuredOut: {
+            /** Injury */
+            injury: string;
+            /** Name */
+            name: string;
         };
         /**
          * Currency
@@ -3713,12 +3728,20 @@ export interface components {
          *     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
          *     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
          *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
+         *     cures 는 쓰면 대상에게서 푸는 부상들이다(#277, 해독제). 룰북의 부상의 이름표이고 소모품에만 적는다.
+         *     짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.
+         *     룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).
          */
         "ItemRule-Input": {
             /** Ap */
             ap?: number | null;
             /** Attack */
             attack?: number | null;
+            /**
+             * Cures
+             * @default []
+             */
+            cures: string[];
             /** Defense */
             defense?: number | null;
             /**
@@ -3768,12 +3791,20 @@ export interface components {
          *     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
          *     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
          *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
+         *     cures 는 쓰면 대상에게서 푸는 부상들이다(#277, 해독제). 룰북의 부상의 이름표이고 소모품에만 적는다.
+         *     짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.
+         *     룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).
          */
         "ItemRule-Output": {
             /** Ap */
             ap?: number | null;
             /** Attack */
             attack?: number | null;
+            /**
+             * Cures
+             * @default []
+             */
+            cures: string[];
             /** Defense */
             defense?: number | null;
             /** Entry Id */
@@ -3817,6 +3848,11 @@ export interface components {
             ap?: number | null;
             /** Attack */
             attack?: number | null;
+            /**
+             * Cures
+             * @default []
+             */
+            cures: string[];
             /** Defense */
             defense?: number | null;
             /**
@@ -3913,6 +3949,11 @@ export interface components {
          * @description 물건을 쓴 결과. 엔진이 정했다(app/rounds/item_actions.py). 판정이 없다.
          */
         ItemUseOut: {
+            /**
+             * Cured
+             * @default []
+             */
+            cured: components["schemas"]["CuredOut"][];
             /**
              * Entry Id
              * Format: uuid
@@ -7832,7 +7873,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 57
+             * @default 58
              */
             format: number;
             /**

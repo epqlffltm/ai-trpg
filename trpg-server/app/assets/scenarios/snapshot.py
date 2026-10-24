@@ -124,7 +124,8 @@ from app.engine.sheet import Sheet
 #  55: 부서진 문을 고치는 판정이 있다(#281). routes[].repair: 능력, 난이도, 도구
 #  56: 물건이 문에 다는 새 자물쇠일 수 있다(#281). items[].lock: 열쇠와 따는 판정
 #  57: 무작위 조우 표(wanders: 장소(비우면 기본 표), 하루의 때, 확률, 몬스터의 줄)가 있다(#283)
-SNAPSHOT_FORMAT = 57
+#  58: 소모품이 부상을 풀 수 있다(#277). items[].cures: 룰북의 부상의 이름표들
+SNAPSHOT_FORMAT = 58
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다
@@ -259,6 +260,8 @@ class ItemRuleSnapshot(BaseModel):
     ward: int | None = None
     # 문에 다는 새 자물쇠. 형식 56 보다 옛 판의 물건에는 없다
     lock: ItemLockSnapshot | None = None
+    # 쓰면 대상에게서 푸는 부상들(룰북의 부상의 이름표). 형식 58 보다 옛 판의 물건에는 없다
+    cures: list[str] = []
 
 
 class QuestConditionSnapshot(BaseModel):

@@ -220,6 +220,7 @@ async def test_a_potion_heals_its_user_and_is_used_up(
         'reason': None,
         'target': {'user_id': str(FRIEND), 'character_name': '약사'},
         'remaining': 1,
+        'cured': [],
     }
     assert (outcome['outcome']['effect']['before'], outcome['outcome']['effect']['after']) == (2, 5)
 
