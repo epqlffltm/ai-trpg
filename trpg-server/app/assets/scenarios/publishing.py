@@ -61,6 +61,7 @@ from app.assets.scenarios.schemas import (
     RouteDoorEffect,
     RouteRule,
     VersionCreate,
+    WanderTable,
 )
 from app.assets.scenarios.snapshot import (
     AttackSnapshot,
@@ -156,6 +157,10 @@ class Problem(enum.StrEnum):
     PLACE_ITEM_FIND_INVALID = 'place_item_find_invalid'
     # 커버의 장소가 맵의 장소가 아니다(시작 장소, 길의 끝, 명소). 맵에 없는 장소에는 아무도 서지 못한다(#276)
     COVER_OFF_MAP = 'cover_off_map'
+    # 무작위 조우 표의 장소가 맵의 장소가 아니거나, 맵(시작 장소)이 없는데 조우 표가 있다(#283)
+    WANDER_OFF_MAP = 'wander_off_map'
+    # 시트를 적지 않은 몬스터를 가리키는 무작위 조우 표가 있다. 판에 들어가지 않는 몬스터라 숫자가 없다(#283)
+    WANDER_MONSTER_MISSING = 'wander_monster_missing'
     # 붙인 로어북에 없는 항목을 가리키는 사건 규칙이 있다(#367)
     HAPPENING_ENTRY_MISSING = 'happening_entry_missing'
     # 사건이 아닌 항목(인물, 물건 …)을 가리키는 사건 규칙이 있다
@@ -1022,6 +1027,36 @@ def find_cover_problems(scenario: Scenario) -> list[Problem]:
     return []
 
 
+def read_wanders(scenario: Scenario) -> list[WanderTable]:
+    """무작위 조우 표들을 읽는다."""
+    return [WanderTable.model_validate(document) for document in scenario.wanders]
+
+
+def wanders_off_map(scenario: Scenario, tables: list[WanderTable]) -> bool:
+    """조우 표가 맵 밖을 가리키는가. 맵이 없는데 표가 있거나, 맵의 장소가 아닌 장소의 표가 있다."""
+    if tables and scenario.start_place is None:
+        return True
+    on_map = set(map_places(scenario, read_routes(scenario)))
+    return any(table.place_id is not None and table.place_id not in on_map for table in tables)
+
+
+def find_wander_problems(scenario: Scenario) -> list[Problem]:
+    """
+    무작위 조우 표에서 문제를 찾는다(#283). 여럿 틀려도 같은 문제는 한 번만 적는다.
+
+    장소는 맵의 장소여야 한다(시작 장소, 길의 끝, 명소). 기본 표도 맵이 있어야 몬스터를 둘 곳이 있다.
+    맵의 장소가 장소 항목인지는 맵과 함께 본다(find_map_problems). 몬스터는 시트를 적은 몬스터여야 한다(조우와 같다).
+    """
+    tables = read_wanders(scenario)
+    sheeted = {monster_sheet.monster_id for monster_sheet in read_monster_sheets(scenario)}
+    problems = []
+    if wanders_off_map(scenario, tables):
+        problems.append(Problem.WANDER_OFF_MAP)
+    if any(line.monster_id not in sheeted for table in tables for line in table.monsters):
+        problems.append(Problem.WANDER_MONSTER_MISSING)
+    return problems
+
+
 def find_map_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:
     """
     맵(시작 장소, 길, 명소)에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
@@ -1094,6 +1129,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_map_problems(scenario, parts, ruleset))
     problems.extend(find_place_item_problems(scenario, ruleset))
     problems.extend(find_cover_problems(scenario))
+    problems.extend(find_wander_problems(scenario))
     problems.extend(find_happening_problems(scenario, parts))
     problems.extend(find_npc_place_problems(scenario, parts))
     problems.extend(find_seating_problems(scenario))

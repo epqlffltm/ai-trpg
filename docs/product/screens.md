@@ -1681,7 +1681,7 @@ E4 에서 정한 것(2026-10-24, #678).
 | 공격과 방어(#276) | `items[].attack`, `items[].defense`, `items[].guard`, `items[].ap`, `items[].ward`, `monster_sheets[].ward`, `npc_sheets[]`·`monster_sheets[]` 의 `equipment[].wear` 와 `attacks[].weapon`, `monster_sheets[].natural_armor` | 수치는 1~10, 칸이 있는 물건에만. NPC·몬스터의 착용은 시작 착용과 같은 검사, 무기는 착용한 장비 중 공격 보정이 있는 것, 타고난 방어의 부위는 룰북의 칸. 틀리면 게시 문제 `carried_wear_invalid`, `attack_weapon_invalid`, `natural_armor_invalid` |
 | 지도 | `start_place`, `routes`, `landmarks`, `happenings`, `covers` | 길 200, 명소 100, 사건 규칙 50(조건 5, 효과 5). 효과는 캐릭터 옮기기(`move`)와 인물 옮기기(`move_npc`, #282), 길의 문 잠그기·열기·고치기(`lock_route`, `unlock_route`, `repair_route`: 길의 두 끝과 장치 `device`, 비우면 그 문의 장치 모두, #281), 커버 100(`{place_id, cover}`, 1~10, 장소마다 하나, #276. 세이브 방식의 룰북에서 엄폐할 때 쓴다). 길마다 넘기 판정 `cross`(능력, 난이도, 실패의 피해)와 자물쇠 `lock`(열쇠 물건, 처음에 잠겼는가, 따는 판정 `pick`(능력, 난이도, 도구 물건)), 빗장 `bar`(있는 쪽, 처음에 걸렸는가), 부수는 판정 `force`(능력, 난이도), 고치는 판정 `repair`(능력, 난이도, 도구 물건)를 적을 수 있다(#281). 열쇠 하나는 자물쇠 하나만 연다 |
 | 인물의 자리(#282) | `npc_places` | 100 개, 인물 하나에 자리 하나. 인물은 로어북의 인물 항목(시트가 없어도 된다), 자리는 맵의 장소. 맵이 있어야 한다. 틀리면 게시 문제 `npc_place_not_person`, `npc_place_off_map` |
-| 몬스터 배치 | `monster_sheets`, `encounters` | 몬스터 시트 100, 조우 50 |
+| 몬스터 배치 | `monster_sheets`, `encounters`, `wanders` | 몬스터 시트 100, 조우 50, 무작위 조우 표 50(`{place_id, times, chance, monsters}`, #283. 장소를 비우면 판의 기본 표, 때를 비우면 언제나, 확률 0 이면 안전한 곳. 몬스터 줄 10 개, 줄마다 `{monster_id, count, weight, surprise}`) |
 | 서술 | `narration_style`, `narration_model`, `clock` | 문체는 안 보내면 정통. 시계는 안 보내면 1일째 8시, 한 라운드에 10분 |
 | 등급 | `rating` | 안 보내면 `all`. 성인용은 직접 골라야 한다 |
 
@@ -1722,7 +1722,7 @@ E4 에서 정한 것(2026-10-24, #678).
 | 지도 | `map_place_missing`, `map_not_place`, `map_start_missing`, `route_find_invalid`, `cover_off_map`, `route_cross_invalid`, `route_key_repeated`, `route_open_invalid` |
 | 사건 규칙 | `happening_entry_missing`, `happening_not_event`, `happening_condition_missing`, `happening_condition_invalid`, `happening_condition_impossible`, `happening_place_off_map`, `happening_npc_not_person`, `happening_route_invalid` |
 | 인물의 자리 | `npc_place_not_person`, `npc_place_off_map` |
-| 몬스터, 조우 | `monster_sheet_missing`, `monster_sheet_invalid`, `monster_attack_invalid`, `unique_monster_repeated`, `encounter_place_missing`, `encounter_not_place`, `encounter_monster_missing`, `encounter_map_missing` |
+| 몬스터, 조우 | `monster_sheet_missing`, `monster_sheet_invalid`, `monster_attack_invalid`, `unique_monster_repeated`, `encounter_place_missing`, `encounter_not_place`, `encounter_monster_missing`, `encounter_map_missing`, `wander_off_map`, `wander_monster_missing` |
 
 **5. 상태**
 

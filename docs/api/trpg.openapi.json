@@ -11911,6 +11911,15 @@
             "title": "Title",
             "type": "string"
           },
+          "wanders": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WanderTable-Input"
+            },
+            "maxItems": 50,
+            "title": "Wanders",
+            "type": "array"
+          },
           "world_id": {
             "anyOf": [
               {
@@ -12183,6 +12192,13 @@
           "visibility": {
             "$ref": "#/components/schemas/Visibility"
           },
+          "wanders": {
+            "items": {
+              "$ref": "#/components/schemas/WanderTable-Output"
+            },
+            "title": "Wanders",
+            "type": "array"
+          },
           "world_id": {
             "anyOf": [
               {
@@ -12226,6 +12242,7 @@
           "landmarks",
           "place_items",
           "covers",
+          "wanders",
           "happenings",
           "npc_places",
           "player_made_hp",
@@ -12308,7 +12325,7 @@
       },
       "ScenarioUpdate": {
         "additionalProperties": false,
-        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는\nnull 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, covers, happenings, npc_places, character_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
+        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는\nnull 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, covers, wanders, happenings, npc_places, character_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
         "properties": {
           "bestiary_ids": {
             "anyOf": [
@@ -12722,6 +12739,21 @@
               }
             ],
             "title": "Title"
+          },
+          "wanders": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WanderTable-Input"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wanders"
           },
           "world_id": {
             "anyOf": [
@@ -13157,7 +13189,7 @@
             "type": "array"
           },
           "format": {
-            "default": 56,
+            "default": 57,
             "title": "Format",
             "type": "integer"
           },
@@ -13303,6 +13335,14 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "wanders": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WanderTableSnapshot"
+            },
+            "title": "Wanders",
+            "type": "array"
           },
           "world": {
             "anyOf": [
@@ -15178,6 +15218,237 @@
           "attitude_change"
         ],
         "title": "WakeOut",
+        "type": "object"
+      },
+      "WanderMonster-Input": {
+        "additionalProperties": false,
+        "description": "무작위 조우 표의 한 줄(#283). 붙인 도감의 몬스터 하나(monster_id)가 count 마리 나온다.\n\nweight 는 이 줄이 뽑힐 몫이다. 표의 몫을 모두 더한 것 가운데 이 줄의 몫만큼 뽑힌다.\nsurprise 는 조우와 같다. 쉬는 중에 나오면 적은 것과 상관없이 몬스터가 기습한다.\n몬스터가 시트를 적은 몬스터인지는 게시할 때 본다(조우와 같다).",
+        "properties": {
+          "count": {
+            "default": 1,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "monster_id": {
+            "format": "uuid",
+            "title": "Monster Id",
+            "type": "string"
+          },
+          "surprise": {
+            "$ref": "#/components/schemas/Surprise",
+            "default": "none"
+          },
+          "weight": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Weight",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "monster_id"
+        ],
+        "title": "WanderMonster",
+        "type": "object"
+      },
+      "WanderMonster-Output": {
+        "additionalProperties": false,
+        "description": "무작위 조우 표의 한 줄(#283). 붙인 도감의 몬스터 하나(monster_id)가 count 마리 나온다.\n\nweight 는 이 줄이 뽑힐 몫이다. 표의 몫을 모두 더한 것 가운데 이 줄의 몫만큼 뽑힌다.\nsurprise 는 조우와 같다. 쉬는 중에 나오면 적은 것과 상관없이 몬스터가 기습한다.\n몬스터가 시트를 적은 몬스터인지는 게시할 때 본다(조우와 같다).",
+        "properties": {
+          "count": {
+            "default": 1,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "monster_id": {
+            "title": "Monster Id",
+            "type": "string"
+          },
+          "surprise": {
+            "$ref": "#/components/schemas/Surprise",
+            "default": "none"
+          },
+          "weight": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Weight",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "monster_id"
+        ],
+        "title": "WanderMonster",
+        "type": "object"
+      },
+      "WanderMonsterSnapshot": {
+        "description": "무작위 조우 표의 한 줄(#283). 판의 몬스터 하나(monster_id)가 count 마리, 뽑힐 몫(weight), 누가 기습하는가.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "monster_id": {
+            "format": "uuid",
+            "title": "Monster Id",
+            "type": "string"
+          },
+          "surprise": {
+            "$ref": "#/components/schemas/Surprise",
+            "default": "none"
+          },
+          "weight": {
+            "title": "Weight",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "monster_id",
+          "count",
+          "weight"
+        ],
+        "title": "WanderMonsterSnapshot",
+        "type": "object"
+      },
+      "WanderTable-Input": {
+        "additionalProperties": false,
+        "description": "무작위 조우 표 하나(#283). 장소(place_id)에서 하루의 때(times)에 쓰는 표다.\n\n걸리는 시간이 있는 길을 한 칸 와서 그 장소에 닿거나, 그 장소에서 길게 쉬면 엔진이 한 번 굴린다.\nchance(0~100)% 로 조우가 나고, 나면 몬스터의 줄 하나를 몫(weight)대로 뽑아 그 장소에 놓는다.\nplace_id 를 비우면 판의 기본 표다. 표를 하나도 적지 않은 장소에서 쓴다. 기본 표도 없으면 조우가 없다.\ntimes 를 비우면 언제나 쓴다. 한 장소(또는 기본 표)의 표들은 때가 겹치지 않는다. 때가 맞는 표가 없으면 조우가 없다.\nchance 가 0 이면 조우가 나지 않는 표다(마을처럼 안전한 곳). 그때는 몬스터를 적지 않는다.\n장소가 맵의 장소인지, 몬스터가 시트를 적은 몬스터인지는 게시할 때 본다.",
+        "properties": {
+          "chance": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Chance",
+            "type": "integer"
+          },
+          "monsters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WanderMonster-Input"
+            },
+            "maxItems": 10,
+            "title": "Monsters",
+            "type": "array"
+          },
+          "place_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Id"
+          },
+          "times": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TimeOfDay"
+            },
+            "maxItems": 5,
+            "title": "Times",
+            "type": "array"
+          }
+        },
+        "required": [
+          "chance"
+        ],
+        "title": "WanderTable",
+        "type": "object"
+      },
+      "WanderTable-Output": {
+        "additionalProperties": false,
+        "description": "무작위 조우 표 하나(#283). 장소(place_id)에서 하루의 때(times)에 쓰는 표다.\n\n걸리는 시간이 있는 길을 한 칸 와서 그 장소에 닿거나, 그 장소에서 길게 쉬면 엔진이 한 번 굴린다.\nchance(0~100)% 로 조우가 나고, 나면 몬스터의 줄 하나를 몫(weight)대로 뽑아 그 장소에 놓는다.\nplace_id 를 비우면 판의 기본 표다. 표를 하나도 적지 않은 장소에서 쓴다. 기본 표도 없으면 조우가 없다.\ntimes 를 비우면 언제나 쓴다. 한 장소(또는 기본 표)의 표들은 때가 겹치지 않는다. 때가 맞는 표가 없으면 조우가 없다.\nchance 가 0 이면 조우가 나지 않는 표다(마을처럼 안전한 곳). 그때는 몬스터를 적지 않는다.\n장소가 맵의 장소인지, 몬스터가 시트를 적은 몬스터인지는 게시할 때 본다.",
+        "properties": {
+          "chance": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Chance",
+            "type": "integer"
+          },
+          "monsters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WanderMonster-Output"
+            },
+            "maxItems": 10,
+            "title": "Monsters",
+            "type": "array"
+          },
+          "place_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Id"
+          },
+          "times": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TimeOfDay"
+            },
+            "maxItems": 5,
+            "title": "Times",
+            "type": "array"
+          }
+        },
+        "required": [
+          "chance"
+        ],
+        "title": "WanderTable",
+        "type": "object"
+      },
+      "WanderTableSnapshot": {
+        "description": "무작위 조우 표 하나(#283). 판 안의 장소 항목 하나(place_id, 비우면 기본 표)에서 하루의 때(times, 비우면 언제나)에\n쓴다. 한 번 굴리면 chance% 로 조우가 나고, 나면 몬스터의 줄 하나를 몫대로 뽑는다.",
+        "properties": {
+          "chance": {
+            "title": "Chance",
+            "type": "integer"
+          },
+          "monsters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WanderMonsterSnapshot"
+            },
+            "title": "Monsters",
+            "type": "array"
+          },
+          "place_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Id"
+          },
+          "times": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TimeOfDay"
+            },
+            "title": "Times",
+            "type": "array"
+          }
+        },
+        "required": [
+          "chance"
+        ],
+        "title": "WanderTableSnapshot",
         "type": "object"
       },
       "WearRequest": {
