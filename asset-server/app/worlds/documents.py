@@ -6,7 +6,9 @@
 판의 형식(format)에 번호를 둔다. 칸이 늘면 번호를 올리고, 받는 쪽은 번호로 읽는 법을 고른다(캐릭터의 판과 같다).
   - 1: 이름, 소개, 태그, 등급, 대표 그림, 시간대, 시작 시간대, 기한, 엔딩 뒤, 지도(장소, 길, 시작 장소),
        물건과 시작 소지품, 인물(복사한 캐릭터, 기본 장소, 일정, 호감도, 보이기), 로어북(2026-10-24)
-이벤트(두 번째 조각), 고백과 엔딩(세 번째 조각)은 형식을 올려 더한다.
+  - 2: 이벤트(열리는 조건, 되풀이, 장면 지시, 열릴 때의 효과, 선택지)와 조건의 event_seen 을 더했다(2026-10-24).
+       1 의 판은 이벤트가 없는 것으로 읽는다
+고백과 엔딩(세 번째 조각)은 형식을 올려 더한다.
 
 인물의 보이기는 판에서는 정해진 값이다. 초안의 덮어쓰기가 비어 있으면 세계관의 기본을 채워 넣는다.
 받는 쪽(story)이 기본과 덮어쓰기를 다시 합치지 않아도 된다.
@@ -21,10 +23,19 @@ from pydantic import BaseModel, ConfigDict
 from app.characters.documents import LorebookCopyDocument, PathDocument, SpriteDocument, StageDocument
 from app.characters.models import AffectionDisplay
 from app.ratings import Rating
-from app.worlds.models import AfterEnding, ConditionKind, MapPresence, Match, PanelField, Reveal, World
+from app.worlds.models import (
+    AfterEnding,
+    ConditionKind,
+    EffectKind,
+    MapPresence,
+    Match,
+    PanelField,
+    Reveal,
+    World,
+)
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 1
+DOCUMENT_FORMAT = 2
 
 
 class SlotDocument(BaseModel):
@@ -157,6 +168,51 @@ class CastDocument(BaseModel):
     panel: list[PanelField]
 
 
+class EffectDocument(BaseModel):
+    """효과 하나. amount 는 호감도의 크기나 물건의 수다(쓰지 않는 종류는 null)."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    kind: EffectKind
+    target: str
+    amount: int | None
+
+
+class SceneDocument(BaseModel):
+    """이벤트의 장면 지시."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    text: str
+    cast: list[str]
+    image_id: uuid.UUID | None
+    collectible: bool
+
+
+class ChoiceDocument(BaseModel):
+    """선택지 하나."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    id: str
+    text: str
+    effects: list[EffectDocument]
+
+
+class EventDocument(BaseModel):
+    """이벤트 하나. 판의 차례가 여는 차례다."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    id: str
+    name: str
+    when: ConditionsDocument
+    repeat: bool
+    scene: SceneDocument
+    on_open: list[EffectDocument]
+    choices: list[ChoiceDocument]
+
+
 class WorldDocument(BaseModel):
     """판에 굳힌 세계관. intro_html 은 허용 목록으로 거른 소개다."""
 
@@ -179,6 +235,7 @@ class WorldDocument(BaseModel):
     start_items: list[StartItemDocument]
     cast: list[CastDocument]
     lorebooks: list[LorebookCopyDocument]
+    events: list[EventDocument] = []
 
 
 def character_copy(character_id: uuid.UUID, number: int, document: Mapping) -> CastCharacterDocument:
@@ -240,6 +297,7 @@ def build_document(
         start_items=world.start_items,
         cast=[cast_document(member, characters[uuid.UUID(member['character_id'])], show) for member in world.cast],
         lorebooks=list(lorebooks),
+        events=world.events,
     )
 
 
