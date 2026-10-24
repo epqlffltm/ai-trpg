@@ -25,15 +25,15 @@
 
 | | 상태 |
 | --- | --- |
-| 요청 식별자(`X-Request-ID`)와 추적 식별자(`traceparent`) | 일곱 서버에 구현(asset 과 chat 은 `shared/server-core`) |
-| 공통 모양의 JSON 로그 | 일곱 서버에 구현 |
-| 민감정보를 가리는 마지막 방어선 | 일곱 서버에 구현 |
-| 백그라운드 작업의 식별자(`job_id`) | 일곱 서버 모두 구현 |
-| 메트릭 | billing-server(HTTP 셋, DB 넷, 작업 넷, 업무 다섯. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)), notification-server(Python 의 본보기, [아래](#붙인-것-알림-서버의-메트릭-python-의-본보기)), trpg-server(실시간 스트림, AI 호출, 라운드와 서술, 서술 값, [아래](#붙인-것-trpg-서버의-메트릭)), auth-server(메일, 시도 횟수 제한, 워커와 예약 명령, [아래](#붙인-것-인증-서버의-메트릭)), board-server(쓰기와 신고, 검색, [아래](#붙인-것-게시판-서버의-메트릭))에 구현. asset-server 와 chat-server 는 HTTP 와 DB 만 낸다(`shared/server-core`). 일곱 서버가 모두 내보낸다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
+| 요청 식별자(`X-Request-ID`)와 추적 식별자(`traceparent`) | 여덟 서버에 구현(asset, chat, story 는 `shared/server-core`) |
+| 공통 모양의 JSON 로그 | 여덟 서버에 구현 |
+| 민감정보를 가리는 마지막 방어선 | 여덟 서버에 구현 |
+| 백그라운드 작업의 식별자(`job_id`) | 여덟 서버 모두 구현 |
+| 메트릭 | billing-server(HTTP 셋, DB 넷, 작업 넷, 업무 다섯. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)), notification-server(Python 의 본보기, [아래](#붙인-것-알림-서버의-메트릭-python-의-본보기)), trpg-server(실시간 스트림, AI 호출, 라운드와 서술, 서술 값, [아래](#붙인-것-trpg-서버의-메트릭)), auth-server(메일, 시도 횟수 제한, 워커와 예약 명령, [아래](#붙인-것-인증-서버의-메트릭)), board-server(쓰기와 신고, 검색, [아래](#붙인-것-게시판-서버의-메트릭))에 구현. asset-server, chat-server, story-server 는 HTTP 와 DB 만 낸다(`shared/server-core`). 여덟 서버가 모두 내보낸다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
 | DB 와 Redis 의 메트릭 | Alloy 안의 exporter 가 긁는다([아래](#붙인-것-db-와-redis)). DB 에는 통계만 읽는 계정(`monitor`)으로 붙는다 |
-| 대시보드 | 일곱 서버, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
-| 경보 | 수집 쪽, DB 와 Redis, 일곱 서버의 규칙(`docker/prometheus/rules/`)과 Alertmanager(Discord, Slack, Telegram, 메일, [아래](#경보)). 서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다 |
-| 추적(span) | 일곱 서버 모두 span 을 만든다(요청, 서버 사이의 호출, DB 의 쿼리, 작업. 본보기는 [Go](#붙인-것-결제-서버의-추적-본보기)와 [Python](#붙인-것-알림-서버의-추적-python-의-본보기), [TRPG 서버에서 다른 것](#붙인-것-trpg-서버의-추적), [인증 서버에서 다른 것](#붙인-것-인증-서버의-추적), [게시판 서버(Node)](#붙인-것-게시판-서버의-추적)). 받는 길과 저장소(Alloy → Tempo, Grafana 에서 로그와 오간다)는 [아래](#붙인-것-추적의-인프라) |
+| 대시보드 | 여덟 서버, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
+| 경보 | 수집 쪽, DB 와 Redis, 여덟 서버의 규칙(`docker/prometheus/rules/`)과 Alertmanager(Discord, Slack, Telegram, 메일, [아래](#경보)). 서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다 |
+| 추적(span) | 여덟 서버 모두 span 을 만든다(요청, 서버 사이의 호출, DB 의 쿼리, 작업. 본보기는 [Go](#붙인-것-결제-서버의-추적-본보기)와 [Python](#붙인-것-알림-서버의-추적-python-의-본보기), [TRPG 서버에서 다른 것](#붙인-것-trpg-서버의-추적), [인증 서버에서 다른 것](#붙인-것-인증-서버의-추적), [게시판 서버(Node)](#붙인-것-게시판-서버의-추적)). 받는 길과 저장소(Alloy → Tempo, Grafana 에서 로그와 오간다)는 [아래](#붙인-것-추적의-인프라) |
 | 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그와 메트릭 모으기](../README.md#로그와-메트릭-모으기) |
 | 메트릭의 저장소(Prometheus)와 OTLP 로 받는 길 | compose 의 프로필 `observability` 에 구현([아래](#붙인-것-메트릭의-인프라)) |
 | Tempo | compose 의 프로필 `observability` 에 구현(`grafana/tempo:3.1.0`, 한 프로세스, 14일, [아래](#붙인-것-추적의-인프라)) |
@@ -66,13 +66,13 @@
 | 알림 서버 | `notification-server` |
 | 자산 서버 | `asset-server` |
 | chat 서버 | `chat-server` |
+| story 서버 | `story-server`. 2026-10-21 에 chat 서버의 모드에서 서버로 나뉘었다. chat 과 story 는 `service` 로 가른다 |
 | 프록시(nginx) | `proxy` |
 
 만들 서버(계획, [서비스 구조 명세](architecture/services.md#계획인-것)). 같은 규칙이라 폴더 이름이 곧 `service` 다.
 
 | 서버 | `service` |
 | --- | --- |
-| story 서버 | `story-server`. 2026-10-21 에 chat 서버의 모드에서 서버로 나뉘었다. chat 과 story 는 `service` 로 가른다 |
 | 관리 서버 | 이름을 정할 때 같은 규칙으로(`ops-server` 후보) |
 
 - 게임 서버의 `service` 는 2026-10-19 에 `game-server` 에서 `trpg-server` 로 바뀌었다(폴더 이름을 바꿈, #480). 그 앞의 로그와 메트릭까지 찾을 때는 두 이름을 함께 찾는다(`{service=~"game-server|trpg-server"}`). 토큰의 대상, 스키마, 환경 변수, 주소는 그대로다([서비스 구조 명세](architecture/services.md#구현된-것)).
@@ -552,7 +552,7 @@ DB 에 닿으며 도는 것이 아니라 날짜로 상태를 보는 컨테이너
 
 ## 메트릭
 
-**일곱 서버가 내보낸다. 새 서버(story, 관리)는 붙일 때 이 표를 따른다.**
+**여덟 서버가 내보낸다. 새 서버(관리)는 붙일 때 이 표를 따른다.**
 보내는 길(OTLP → Alloy → Prometheus)과 계측기를 만드는 법은 [수집기의 2. 메트릭](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다)에 있다.
 
 ### 규칙
@@ -571,7 +571,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 | 써도 되는 것 | 값 |
 | --- | --- |
-| `service` | 서버의 수만큼(지금 일곱) |
+| `service` | 서버의 수만큼(지금 여덟) |
 | `method` | HTTP 메서드 |
 | `route` | 주소의 틀. 로그의 `route` 와 같은 값이다. 맞은 것이 없으면 `(unmatched)` |
 | `status_code` | 상태 코드 |
@@ -586,7 +586,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 
 모든 메트릭에 `service` label 이 붙는다. 아래 표에서는 뺐다.
 
-**HTTP (일곱 서버)**
+**HTTP (여덟 서버)**
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
@@ -594,7 +594,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | `http_server_request_duration_seconds` | histogram | `method`, `route` | 요청을 받아 응답을 끝낼 때까지. SSE 스트림은 뺀다(요청 수에는 끊길 때 든다) |
 | `http_server_active_requests` | gauge | 없음 | 지금 처리 중인 요청의 수. SSE 스트림은 뺀다(`sse_connections` 가 센다) |
 
-**DB (일곱 서버)** — 인증 서버에는 연결 풀이 없다(요청마다 연결을 맺고 닫는 Django 의 기본). 그래서 `db_up` 만 낸다
+**DB (여덟 서버)** — 인증 서버에는 연결 풀이 없다(요청마다 연결을 맺고 닫는 Django 의 기본). 그래서 `db_up` 만 낸다
 
 | 이름 | 종류 | label | 뜻 |
 | --- | --- | --- | --- |
@@ -706,7 +706,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 ## 수집기(Grafana Alloy)를 붙일 자리
 
 수집기를 붙일 때 정한 것과 바꿀 곳을 적어 둔다(#25). 순서는 로그, 메트릭, 추적이다. 뒤로 갈수록 서버 코드를 많이 고친다.
-셋 모두 일곱 서버에 붙였다. 로그([붙인 것](#붙인-것-로그)), 메트릭([2. 메트릭](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다)), 추적([3. 추적](#3-추적--식별자를-다루는-코드를-sdk-로-바꾼다))이다.
+셋 모두 여덟 서버에 붙였다. 로그([붙인 것](#붙인-것-로그)), 메트릭([2. 메트릭](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다)), 추적([3. 추적](#3-추적--식별자를-다루는-코드를-sdk-로-바꾼다))이다.
 
 ```
 서버(stderr 의 JSON) ─▶ Docker(json-file) ─▶ Alloy ─▶ Loki        ─┐
@@ -894,7 +894,7 @@ Grafana 가 뜰 때 `docker/grafana/dashboards/` 의 JSON 을 읽어 폴더 `ai-
 `board-server` 는 한눈에(DB, 5xx 비율, 횟수 제한에 걸린 쓰기, 멈춘 검색), 요청, DB 연결, 쓰기와 신고, 검색, 알림 보내기의 여섯 줄이다.
 `billing-server` 의 대시보드는 한눈에(DB, 5xx 비율, 결과를 모르는 결제 대행사 호출, 되돌린 원장의 일), 요청, DB 연결, 결제, 원장, 정리 작업과 대사의 여섯 줄이다.
 `postgres` 는 한눈에(DB, 연결 / 최대, DB 의 크기, 교착), 연결과 트랜잭션, 읽기와 쓰기(캐시 적중률, 행, 임시 파일, 스키마마다의 크기), 표(큰 표, 죽은 행이 많은 표)다.
-`asset-server` 와 `chat-server` 는 한눈에(DB, 5xx 비율), 요청, DB 연결의 세 줄이다. 업무의 메트릭이 붙으면 그 줄을 더한다.
+`asset-server`, `chat-server`, `story-server` 는 한눈에(DB, 5xx 비율), 요청, DB 연결의 세 줄이다. 업무의 메트릭이 붙으면 그 줄을 더한다.
 `redis` 는 한눈에(Redis, 메모리, 연결된 클라이언트, AOF 의 마지막 쓰기), 명령(명령마다, 키 적중률, 오류와 거절), 메모리와 키(사라진 키, 내쫓긴 키)다.
 대시보드의 규칙은 `.github/scripts/dashboard_scope.py` 가 보고, 그 규칙 자체는 `test_dashboard_scope.py` 가 본다.
 CI(`stack`)는 거기에 더해 Grafana 가 파일의 대시보드를 모두 읽었는지, 모든 Prometheus 쿼리가 Grafana 의 데이터 소스 프록시를 거쳐 오류 없이 도는지 본다.
@@ -978,6 +978,8 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | asset-server | `AssetServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 상태 확인(`/health`, `/health/ready`)은 세지 않는다(#645) |
 | chat-server | `ChatDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
 | chat-server | `ChatServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 상태 확인(`/health`, `/health/ready`)은 세지 않는다(#645) |
+| story-server | `StoryDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
+| story-server | `StoryServerErrors` | warning | 5xx 가 10분 동안 5% 를 넘는다. 요청이 분당 3번 미만이면 세지 않는다. 상태 확인(`/health`, `/health/ready`)은 세지 않는다(#645) |
 
 - **규칙마다 시험이 있다**(`docker/prometheus/rules/tests/ai-trpg.test.yml`). 지어낸 시계열을 넣고 정한 때에 울리는지, 울리지 않을 때(요청이 아주 적다, 다른 서버의 것이다) 조용한지 본다. 규칙을 고치면 시험도 고친다.
   `docker compose --profile observability exec prometheus promtool test rules /etc/prometheus/rules/tests/ai-trpg.test.yml`
@@ -991,7 +993,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 
 #### 계측기를 만드는 법
 
-위의 [목록](#목록)대로 계측한다. 새로 만드는 서버(story, 관리)는 처음부터 SDK 를 붙이고 시작한다(asset 과 chat 은 `shared/server-core` 로 붙였다). 나중에 고치는 것보다 싸다.
+위의 [목록](#목록)대로 계측한다. 새로 만드는 서버(관리)는 처음부터 SDK 를 붙이고 시작한다(asset, chat, story 는 `shared/server-core` 로 붙였다). 나중에 고치는 것보다 싸다.
 
 | 무엇 | 붙일 자리 |
 | --- | --- |
@@ -1178,7 +1180,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 | `docker/prometheus/rules/ai-trpg.yml` | `ObservabilityComponentDown` 이 tempo 도 본다 |
 
 - **CI 가 보는 것.** Tempo 가 healthy 이고 root 가 아니며 다시 뜨지 않는다. Grafana 가 Tempo 에 닿는다. telemetry 망에서 OTLP(JSON)로 민 시험 span(`stack_smoke.probe`)이 Alloy 를 거쳐 Tempo 에서 그 추적 번호로 찾아진다. `up{job="tempo"}` 이 1 이다. 결제 서버가 Tempo 에 닿지 않는다.
-- **일곱 서버가 모두 span 을 내보낸다.** 서버끼리 부른 추적은 끊기지 않고 한 그림이다(게시판 서버의 알림 보내기 → 알림 서버의 요청).
+- **여덟 서버가 모두 span 을 내보낸다.** 서버끼리 부른 추적은 끊기지 않고 한 그림이다(게시판 서버의 알림 보내기 → 알림 서버의 요청).
 
 #### 붙인 것 (결제 서버의 추적, 본보기)
 
@@ -1204,7 +1206,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 
 - **로그와 같은 번호.** span 이 있으면 로그의 `trace_id` 가 그 span 의 trace id 다(요청은 `requestLogging`, 작업은 `obs.WithJob`). span 이 없으면(PC, 상태 확인) 지금처럼 정한다. 그래서 주소를 비워도 로그는 그대로다.
 - **전역(otel.SetTracerProvider)에 둔다.** 메트릭과 다르다. span 은 요청, 호출, 쿼리, 작업에 두루 걸려 그 모든 곳에 Tracer 를 넘기면 함수마다 인자가 는다. 계측하는 곳은 `tracing.Tracer()` 로 가져다 쓴다.
-- **부른 쪽의 "기록하지 않음"을 따르지 않는다.** 보낼 곳을 비운 서버는 flags `00` 을 보낸다. 따르면 그 서버가 부른 요청의 span 이 다 버려진다. 일곱 서버가 모두 span 을 내보내게 되었으니, 표본을 줄일 때(꼬리 표본) 따를지 함께 정한다.
+- **부른 쪽의 "기록하지 않음"을 따르지 않는다.** 보낼 곳을 비운 서버는 flags `00` 을 보낸다. 따르면 그 서버가 부른 요청의 span 이 다 버려진다. 여덟 서버가 모두 span 을 내보내게 되었으니, 표본을 줄일 때(꼬리 표본) 따를지 함께 정한다.
 - **부모 없는 것은 남기지 않는다.** 요청이나 작업 밖의 쿼리(풀이 연결을 확인하는 것)와 호출(끊긴 세션의 목록을 30초마다 받는 것)은 저마다 새 추적이 되어 Tempo 를 메운다.
 - **작업은 새 추적이다.** 정리 작업은 30초마다 돈다. 프로세스의 한 추적 아래에 두면 끝없이 길어진다.
 - **싣지 않는 것.** 주소의 경로와 뒤의 값(결제 대행사의 주소에는 결제 번호가 있다), 머리말, 본문, SQL 의 문장과 값, 오류의 글. [민감정보](#민감정보)의 규칙과 같다. 테스트가 이것을 본다.
@@ -1230,7 +1232,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 
 - **OpenTelemetry 의 전역에 두지 않는다.** `trace.set_tracer_provider` 는 프로세스에 한 번만 바꿀 수 있어 테스트가 바꿔 끼우지 못한다. `spans.py` 에 하나 두고 서버가 뜰 때와 테스트가 바꾼다. 지금의 span 을 읽는 것(`trace.get_current_span`)은 contextvars 라 그대로 쓴다.
 - **SQLAlchemy 의 비동기에서도 지금의 span 이 보인다.** 안에서 greenlet 으로 갈아타도 contextvars 가 따라간다. 테스트가 실제 DB 로 부모를 본다.
-- **보내는 traceparent 의 flags 는 `03` 일 수 있다.** Python SDK 는 "기록함"(01)에 "무작위 번호"(02, W3C Trace Context 2)를 더한다. 일곱 서버가 받는 규칙(`[0-9a-f]{2}`)에 맞는다.
+- **보내는 traceparent 의 flags 는 `03` 일 수 있다.** Python SDK 는 "기록함"(01)에 "무작위 번호"(02, W3C Trace Context 2)를 더한다. 여덟 서버가 받는 규칙(`[0-9a-f]{2}`)에 맞는다.
 - **FastAPI 가 스스로 하는 관측은 끈다**(`FastAPI(telemetry=FASTAPI_TELEMETRY)`, `tracing.py`). FastAPI 는 `OTEL_EXPORTER_OTLP_ENDPOINT` 가 있고 SDK 가 깔려 있으면 OpenTelemetry 의 전역을 스스로 채워 span, 메트릭, 로그를 그 주소로 민다(0.142 는 기본으로 켜져 있고 0.143 부터는 `FASTAPI_OTEL_AUTO_CONFIGURE=true` 일 때). 그 span 은 정한 이름과 싣는 것을 따르지 않고, 메트릭은 정하지 않은 이름으로, 로그는 Loki 의 것과 겹쳐 나간다. 테스트가 가짜 수집기로 `/v1/traces` 말고는 오지 않는 것을 본다.
 - **보내기는 따로 도는 스레드다**(BatchSpanProcessor). 끌 때 남은 것을 보내는 일(`provider.shutdown`)은 막히므로 lifespan 에서 `asyncio.to_thread` 로 부른다.
 - **compose.** `notification-server` 가 `x-telemetry-environment` 와 망 `telemetry` 를 붙였다. 메트릭은 아직 없다.

@@ -166,7 +166,7 @@
 **1단계(첫 배포): VM 에서 빌드한다.** VM 에 저장소를 받고, `main` 의 커밋 하나를 꺼내 `docker compose up -d --build` 한다(루트 `.env` 의 `COMPOSE_FILE` 과 `COMPOSE_PROFILES` 가 운영 설정과 프로필을 고른다).
 
 - 단계가 가장 적다. 이미지 저장소도, 저장소 인증도 필요 없다.
-- 대가: 서버 일곱과 워커를 빌드하는 동안 VM 의 메모리와 CPU 를 쓴다(그동안 서버가 느려진다). 어느 이미지가 어느 커밋인지는 VM 에서 꺼낸 커밋으로만 안다.
+- 대가: 서버 여덟과 워커를 빌드하는 동안 VM 의 메모리와 CPU 를 쓴다(그동안 서버가 느려진다). 어느 이미지가 어느 커밋인지는 VM 에서 꺼낸 커밋으로만 안다.
 - 되돌리기는 앞 커밋을 꺼내 다시 빌드하는 것이다. 마이그레이션은 되돌리지 않는다(되돌려야 하면 백업에서 푼다).
 
 **2단계: CI 가 이미지를 만들어 GHCR 에 올린다.** `main` 에 머지되면 서버마다 이미지를 만들고 커밋 해시를 이름표로 붙여 올린다. VM 은 이름표를 골라 받기만 한다.
@@ -322,7 +322,7 @@ chat 과 story 의 그림(배경, 캐릭터, 일러스트)을 둔다(#540, 2026-
 4. Docker 와 compose 를 공식 저장소에서 설치한다. `/etc/docker/daemon.json` 에 로그 상한을 적는다(README "외부에 열기 전"). 데이터 디스크 둘을 포맷해 마운트하고, Docker 가 그 뒤에 뜨게 한다.
 5. Tailscale 을 VM 과 집 PC 에 설치하고 같은 사설망에 넣는다. 접근 규칙(ACL)으로 VM 이 집 PC 의 11434 에만 닿게 한다. 집 PC 의 Ollama 를 사설망 주소에만 듣게 한다. Grafana 를 사설망에 연다(`tailscale serve`).
 6. 도메인을 사서 A 레코드를 고정 IP 로 가리킨다.
-7. 저장소를 받고, 데이터 디스크에 컨테이너의 폴더를 만들고(`docker/disks/prepare-disks.sh`), 비밀과 `.env` 를 새로 만든다. `tools/staging_env.py` 가 여덟을 한 번에 만든다. 비밀과 짝은 `tools/fill_env.py` 가 채우고, 그 위에 staging 의 값을 적는다([비밀과 설정](#비밀과-설정)).
+7. 저장소를 받고, 데이터 디스크에 컨테이너의 폴더를 만들고(`docker/disks/prepare-disks.sh`), 비밀과 `.env` 를 새로 만든다. `tools/staging_env.py` 가 아홉을 한 번에 만든다. 비밀과 짝은 `tools/fill_env.py` 가 채우고, 그 위에 staging 의 값을 적는다([비밀과 설정](#비밀과-설정)).
 8. 허용 주소를 적는다: `cp docker/nginx/allowlist/allow.conf.example docker/nginx/allowlist/allow.conf` 그다음 내 공인 IP 를 `allow` 줄로.
 9. 바깥 백업을 준비한다([백업](#백업)).
    - S3 에 버킷을 만들고(서울, 공개 접근 차단, 버전 관리, 수명 주기), IAM 사용자에 `docker/backup-offsite/iam-policy.json` 의 권한을 주고 접근 키를 만든다.

@@ -19,7 +19,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 구성 요소 | 폴더 | 상태 |
 | --- | --- | --- |
 | 공용 인프라 (PostgreSQL + pgvector, Redis) | 루트 | 완료 |
-| 로그와 메트릭 모으기 (Grafana Alloy, Loki, Prometheus, Tempo, Grafana) | 루트 | 컨테이너의 로그를 모아 보는 것, 메트릭의 저장소(OTLP 로 받는 길), 결제 서버의 메트릭(HTTP, DB 풀, 작업, 주문, 결제 대행사, 알림, 원장, 중복 방지 키), 알림 서버의 메트릭(HTTP, DB 풀, 작업, 넣은 알림), TRPG 서버의 메트릭(HTTP, DB 풀, 작업, 실시간 스트림, AI 호출, 라운드와 서술, 서술 값), 인증 서버의 메트릭(HTTP, DB, 작업, 메일, 시도 횟수 제한), 게시판 서버의 메트릭(HTTP, DB 풀, 작업, 쓰기와 신고, 검색), asset 과 chat 서버의 메트릭(HTTP, DB 풀), PostgreSQL 과 Redis 의 메트릭, 대시보드, 경보, 추적의 저장소(Tempo), 일곱 서버의 span(요청, 서버 사이의 호출, 쿼리, 작업)까지 완료(compose 의 프로필 `observability`, [아래](#로그와-메트릭-모으기)) |
+| 로그와 메트릭 모으기 (Grafana Alloy, Loki, Prometheus, Tempo, Grafana) | 루트 | 컨테이너의 로그를 모아 보는 것, 메트릭의 저장소(OTLP 로 받는 길), 결제 서버의 메트릭(HTTP, DB 풀, 작업, 주문, 결제 대행사, 알림, 원장, 중복 방지 키), 알림 서버의 메트릭(HTTP, DB 풀, 작업, 넣은 알림), TRPG 서버의 메트릭(HTTP, DB 풀, 작업, 실시간 스트림, AI 호출, 라운드와 서술, 서술 값), 인증 서버의 메트릭(HTTP, DB, 작업, 메일, 시도 횟수 제한), 게시판 서버의 메트릭(HTTP, DB 풀, 작업, 쓰기와 신고, 검색), asset 과 chat 서버의 메트릭(HTTP, DB 풀), PostgreSQL 과 Redis 의 메트릭, 대시보드, 경보, 추적의 저장소(Tempo), 여덟 서버의 span(요청, 서버 사이의 호출, 쿼리, 작업)까지 완료(compose 의 프로필 `observability`, [아래](#로그와-메트릭-모으기)) |
 | 인증 서버 (Django) | [`auth-server/`](auth-server/README.md) | 회원가입(이메일 인증), 로그인(이메일 인증), 비밀번호 변경과 재설정, 메일 발송, 토큰 갱신, 로그아웃, JWKS, 시도 횟수 제한, 보안 이벤트 기록, 가입한 사용자의 환영 크레딧을 결제 서버에 맡기기, access 토큰에 닉네임 싣기까지 완료 |
 | 게임 서버 (FastAPI) | [`trpg-server/`](trpg-server/README.md) | 뼈대(서버 실행, DB, 인증 서버 토큰 검증, CI)와 자산 네 종류(세계관, 룰북, 시나리오, 로어북)의 만들기, 목록, 읽기, 고치기, 지우기와 시나리오 게시(판으로 굳히기, 스타팅 여러 개, 추천 인원과 프리젠), 공개와 소개 페이지, 공개 목록, 테이블 만들기와 참가(초대 코드, 로비와 비밀번호, 캐릭터, 방장), 라운드(선언 모으기, 가짜 서술자), 이벤트 기록, 채팅, 실시간 스트림(SSE, "입력 중" 표시), 룰북의 규칙 데이터(내장 템플릿 `srd5`), 시나리오의 캐릭터 시트와 캐릭터 방식, 테이블의 캐릭터 시트, 주사위와 판정(순수 함수), 선언에 붙이는 행동, 라운드를 닫을 때의 판정, 피해와 회복과 쓰러짐, 능력치를 직접 적는 캐릭터 방식, 점수제로 능력치를 사는 캐릭터 방식, 주사위로 능력치를 정하는 캐릭터 방식과 다시 굴리기, 죽음의 굴림과 캐릭터의 죽음, 죽은 뒤에 새 캐릭터 들이기, 캐릭터 보관함, 라운드의 서술 값 받기(결제 서버의 홀드), 시나리오의 추천 서술 모델과 테이블마다 고르는 서술 모델까지 완료 |
 | 게시판 서버 (NestJS) | [`board-server/`](board-server/README.md) | 뼈대(서버 실행, 설정, DB 연결과 마이그레이션, CI), 인증 서버 토큰 검증, 게시판 넷과 글(쓰기, 목록, 읽기, 고치기, 지우기, 운영자), 댓글과 답글, 글마다의 댓글 수, 글 고정(기한이 지나면 저절로 내려감), 글 검색, 쓰기 횟수 제한, 글과 댓글의 신고(운영자가 묶어 읽고 처리), 글쓴이의 닉네임 표시까지 완료 |
@@ -27,7 +27,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 알림 서버 (FastAPI) | [`notification-server/`](notification-server/README.md) | 뼈대(서버 실행, 설정, DB 연결과 마이그레이션, 상태 확인, CI), 알림 넣기(서버끼리의 서명), 알림함(목록, 읽지 않은 수, 읽음), 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, 보관 기간(30일) 정리, 컨테이너(compose 의 프로필 `app`)까지 완료. 게임 서버가 서술 모델의 은퇴를 방장에게, 운영자의 제재를 당사자에게 넣고, 결제 서버의 정리 작업이 결제·청약철회·환영 크레딧·곧 사라질 무료 크레딧을, 게시판 서버가 댓글과 답글을 넣는다 |
 | asset 서버 (FastAPI) | [`asset-server/`](asset-server/README.md) | 뼈대(공용 코드 `shared/server-core` 위의 서버 실행, 상태 확인, 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, CI), 계정 페르소나, 캐릭터(초안, 게시와 판, 공개 목록, 소개 글의 HTML 거르기), 다른 서버에 페르소나의 사본과 캐릭터의 판 내주기(서버끼리의 서명), 탈퇴 받기, 컨테이너(compose 의 프로필 `app`)까지 완료. 그림을 올리고 내주는 것은 예정(#566) |
 | chat 서버 (FastAPI) | [`chat-server/`](chat-server/README.md) | 뼈대(공용 코드 `shared/server-core` 위의 서버 실행, 상태 확인, 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, CI), 대화 시작(asset 서버에서 캐릭터의 판과 페르소나를 가져와 고정한다), 대화의 목록·읽기·지우기, 컨테이너(compose 의 프로필 `app`)까지 완료. 한 번의 말(스트리밍, 과금)은 다음이다(#590) |
-| story 서버 (FastAPI) | [`story-server/`](story-server/README.md) | 뼈대(공용 코드 `shared/server-core` 위의 서버 실행, 상태 확인, 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, CI)까지. 세계관과 세션, 장면의 인물이 다음이다(#591) |
+| story 서버 (FastAPI) | [`story-server/`](story-server/README.md) | 뼈대(공용 코드 `shared/server-core` 위의 서버 실행, 상태 확인, 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, CI), compose 와 프록시, 대시보드와 경보까지. 세계관과 세션, 장면의 인물이 다음이다(#591) |
 | 화면 (Vite, React, TypeScript) | [`web/`](web/README.md) | 뼈대(npm workspaces, 프록시의 이미지에 굽기, CI), 로그인(두 단계, 갱신은 한 번에 하나 #30), 가입(세 단계, 동의와 판마다의 문서), 비밀번호 찾기와 재설정, 첫 화면(서비스 고르기, 이어하기, 공개된 것)까지 완료. 본인인증, 서비스의 화면은 다음이다(#290) |
 
 ## 문서
@@ -65,7 +65,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 
 ### 1. 인프라 환경 변수
 
-여덟 개의 `.env`(루트와 서버 일곱)를 `.env.example` 에서 만들고, 비밀번호와 비밀을 난수로 채운다. 저장소 루트에서 실행한다.
+아홉 개의 `.env`(루트와 서버 여덟)를 `.env.example` 에서 만들고, 비밀번호와 비밀을 난수로 채운다. 저장소 루트에서 실행한다.
 이 파일들은 커밋하지 않는다.
 
 ```
@@ -200,7 +200,7 @@ docker compose run --rm --entrypoint pg_restore db-backup --clean --if-exists --
 ## 로그와 메트릭 모으기
 
 compose 의 컨테이너 로그와 메트릭, 추적을 모아(Grafana Alloy) 저장하고(Loki, Prometheus, Tempo) 본다(Grafana)(#25). 규칙에 걸리면 경보를 보낸다(Alertmanager). 프로필 `observability` 로 켠다. 기본으로 꺼져 있다.
-서버는 지금처럼 stderr 에 JSON 을 쓰고, 메트릭과 추적은 OTLP 로 Alloy 에 민다(메트릭과 추적 모두 일곱 서버). 이것들이 멈춰도 요청은 영향을 받지 않는다.
+서버는 지금처럼 stderr 에 JSON 을 쓰고, 메트릭과 추적은 OTLP 로 Alloy 에 민다(메트릭과 추적 모두 여덟 서버). 이것들이 멈춰도 요청은 영향을 받지 않는다.
 정한 것과 까닭은 [관측 규격의 수집기](docs/observability.md#수집기grafana-alloy를-붙일-자리)에 있다.
 
 루트 `.env` 에 Grafana 의 관리자 비밀번호를 적고 띄운다. 비밀번호가 비어 있으면 Grafana 가 뜨지 않는다.
@@ -481,7 +481,7 @@ docker/loki/              로그 저장소(Loki)의 설정
 docker/prometheus/        메트릭 저장소(Prometheus)의 설정
 docker/grafana/           Grafana 가 뜰 때 붙이는 데이터 소스(Loki, Prometheus)
 docs/                     서버들이 함께 지키는 규격 (관측), 설계와 화면 명세, 서버마다의 API 목록(docs/api/, OpenAPI)
-tools/                    패치 zip 을 적용하는 도구(apply_ai_update.py), .env 여덟을 만들고 비밀을 채우는 도구(fill_env.py), 그 위에 staging 의 값을 적는 도구(staging_env.py), 서버마다의 API 목록을 뽑는 도구(export_openapi.py)
+tools/                    패치 zip 을 적용하는 도구(apply_ai_update.py), .env 아홉을 만들고 비밀을 채우는 도구(fill_env.py), 그 위에 staging 의 값을 적는 도구(staging_env.py), 서버마다의 API 목록을 뽑는 도구(export_openapi.py)
 docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 그림 저장소(SeaweedFS), 모든 서버와 워커, cron, 프록시(프로필 app), 로그와 메트릭 모으기(프로필 observability)
 docker-compose.staging.yml  staging(VM)에서 위의 파일에 덮어쓰는 설정. TLS, 허용 주소, certbot, 임베딩의 Ollama, 환경 이름
 .env.example              인프라 환경 변수 목록
