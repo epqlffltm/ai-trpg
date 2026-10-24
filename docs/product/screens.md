@@ -1464,6 +1464,7 @@ E4 에서 정한 것(2026-10-24, #678).
 - 행동의 결과의 까닭(2026-10-24): 물건(쓰기, 건네기, 줍기, 내려놓기), 훔치기와 빼앗기, 쉬기와 기다리기의 결과 줄에 서버의 까닭을 괄호로 붙인다. 못 한 것은 "쉬지 못했습니다(쉬는 중에 몬스터가 덮쳤습니다)"(무작위 조우, #283), 덜 한 것은 "약초 ×1 주웠습니다(남은 것이 모자라 남은 만큼만)". 들켜서 훔치지 못한 것은 까닭이 없다. 모르는 까닭은 이름 그대로 적는다. 결과 줄은 끝에 마침표를 찍지 않는다.
 - 길 옆의 문과 넘기(2026-10-24): 상태 패널의 갈 수 있는 곳과 가기의 갈 곳에 길을 막거나 굴리게 하는 것을 적는다("종탑(30분 · 자물쇠 잠김 · 빗장 걸림(이쪽) · 넘기 판정: 근력, 보통)"). 빗장은 내가 선 쪽이면 "이쪽"(지나며 푼다), 아니면 "저쪽"(부수기로만 연다). 열린 문과 부서진 문은 막지 않으니 적지 않는다. 열쇠는 화면이 모르므로 적지 않는다.
 - 자물쇠 바꾸기(#281, 2026-10-24): 자물쇠 물건(판의 물건 목록의 `lock`)을 지녔고, 지금 있는 곳에 닿은 길에 자물쇠가 있는 문이 열려 있고 부서지지 않았으면 행동에 "자물쇠 바꾸기"가 생긴다. 칸은 "문"과 "달 자물쇠"(지닌 자물쇠 물건). 굴리지 않고, 단 물건은 없어지며 그 뒤로는 그 자물쇠의 열쇠만 통한다고 알린다. 문 목록에도 단추가 있다(달 자물쇠는 칸에서 고른다). 행동 한 줄은 "자물쇠 바꾸기 · 종탑 쪽 자물쇠 ← 새 자물쇠", 결과는 "종탑 쪽 자물쇠: 새 자물쇠로 바꿨습니다"이고 못 한 까닭(잠겨 있음, 부서짐, 물건 없음, 이미 단 자물쇠)을 적는다.
+- 던지기(#277, 2026-10-24): 던지는 판정(판의 물건 목록의 `throw`)이 있는 물건을 지녔고 칠 대상(장면의 인물, 내가 선 곳의 몬스터)이 있으면 행동에 "던지기"가 생긴다. 칸은 "던질 물건", "맞힐 대상", "죽이려 한다". 고른 물건의 판정을 "민첩 · 보통으로 던집니다. 맞으면 보통 피해. 맞든 빗나가든 하나 없어집니다."로 보인다. 행동 한 줄은 "던지기 · 화염병", 던졌으면 결과는 판정의 줄이고, 못 던졌으면 "던지지 못했습니다(까닭)"이다. 물건 규칙 창은 아직 `throw` 를 고치지 못하고 읽은 그대로 돌려 보낸다.
 
 **7. 첫 출시**
 
@@ -1696,7 +1697,7 @@ E4 에서 정한 것(2026-10-24, #678).
 | 재료 연결 | `rulebook_id`, `world_id`, `lorebook_ids`, `bestiary_ids` | 로어북 10, 몬스터 모음 10 |
 | 스타팅 | `openings` | 5 개, 하나에 2000 자 |
 | 인원과 캐릭터 | `recommended_players`, `character_modes`, `pregens`, `default_sheet`, `player_made_hp`, `reroll_allowed` | 추천 인원 1~4, 프리젠 8 |
-| 인물·물건·퀘스트 | `npc_sheets`, `items`, `starting_items`, `quests` | 인물 시트 100, 물건 규칙 100, 시작 물건 20, 퀘스트 50(조건은 퀘스트마다 5). 물건 규칙의 `lock`(`key` 새 열쇠 물건, `pick` 따는 판정)은 문에 다는 새 자물쇠다(#281, 장비만). 물건 규칙의 `cures`(룰북의 부상의 이름표 5개, 결손 빼고)는 쓰면 대상에게서 푸는 부상이다(#277, 소모품만). |
+| 인물·물건·퀘스트 | `npc_sheets`, `items`, `starting_items`, `quests` | 인물 시트 100, 물건 규칙 100, 시작 물건 20, 퀘스트 50(조건은 퀘스트마다 5). 물건 규칙의 `lock`(`key` 새 열쇠 물건, `pick` 따는 판정)은 문에 다는 새 자물쇠다(#281, 장비만). 물건 규칙의 `cures`(룰북의 부상의 이름표 5개, 결손 빼고)는 쓰면 대상에게서 푸는 부상이다(#277, 소모품만). `throw`(능력, 난이도, 맞았을 때의 피해)는 던지는 판정이다(#277, 소모품만). |
 | 돈(#278) | `currency`, `items[].price`, `pregens[].money`, `quests[].reward_money`, `npc_sheets[].merchant` | 화폐의 이름 20 자, 단위 10 자, 돈과 값은 1,000,000 까지, 되사는 값 0~100%. 화폐 없이 값·상인·돈을 적으면 게시할 때 `currency_missing` |
 | 장비(#276) | `items[].slots`, `items[].slot_count`, `starting_items[].wear`, `pregens[].items[].wear` | 칸은 룰북의 `equipment_slots`(8 개까지) 중에서. 차지하는 칸은 1~8, 들어갈 수 있는 칸보다 많지 않다. 소모품에는 칸이 없다. 시작할 때의 착용은 그 물건의 칸을 차지하는 칸의 수만큼, 시작 소지품과 한 프리젠의 소지품을 합쳐 겹치지 않게. 틀리면 게시 문제 `item_slot_invalid`, `starting_wear_invalid` |
 | 공격과 방어(#276) | `items[].attack`, `items[].defense`, `items[].guard`, `items[].ap`, `items[].ward`, `monster_sheets[].ward`, `npc_sheets[]`·`monster_sheets[]` 의 `equipment[].wear` 와 `attacks[].weapon`, `monster_sheets[].natural_armor` | 수치는 1~10, 칸이 있는 물건에만. NPC·몬스터의 착용은 시작 착용과 같은 검사, 무기는 착용한 장비 중 공격 보정이 있는 것, 타고난 방어의 부위는 룰북의 칸. 틀리면 게시 문제 `carried_wear_invalid`, `attack_weapon_invalid`, `natural_armor_invalid` |
@@ -1738,7 +1739,7 @@ E4 에서 정한 것(2026-10-24, #678).
 | 프리젠, 기본 시트 | `pregen_sheet_missing`, `pregen_sheet_invalid`, `pregens_too_few`, `default_sheet_missing`, `default_sheet_invalid` |
 | 직접 정하는 방식 | `player_made_hp_missing`, `point_buy_missing`, `score_roll_missing` |
 | 인물 시트 | `npc_sheet_entry_missing`, `npc_sheet_not_person`, `npc_sheet_invalid`, `npc_attack_invalid`, `default_npc_sheet_missing`, `default_npc_sheet_invalid` |
-| 물건 | `item_entry_missing`, `item_not_item`, `item_magnitude_missing`, `item_lock_invalid`, `item_cure_invalid` |
+| 물건 | `item_entry_missing`, `item_not_item`, `item_magnitude_missing`, `item_lock_invalid`, `item_cure_invalid`, `item_throw_invalid` |
 | 퀘스트 | `quest_entry_missing`, `quest_not_event`, `quest_condition_missing`, `quest_condition_invalid`, `quest_condition_impossible` |
 | 지도 | `map_place_missing`, `map_not_place`, `map_start_missing`, `route_find_invalid`, `cover_off_map`, `route_cross_invalid`, `route_key_repeated`, `route_open_invalid` |
 | 사건 규칙 | `happening_entry_missing`, `happening_not_event`, `happening_condition_missing`, `happening_condition_invalid`, `happening_condition_impossible`, `happening_place_off_map`, `happening_npc_not_person`, `happening_route_invalid` |

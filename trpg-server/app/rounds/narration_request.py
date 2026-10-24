@@ -61,6 +61,7 @@ from app.rounds.narrator import (
     StoryContext,
     TakeNote,
     TargetGoneNote,
+    ThrowNote,
     TradeNote,
     TravelNote,
     TreatmentNote,
@@ -75,6 +76,7 @@ from app.rounds.secret_names import secret_names
 from app.rounds.state import (
     cover_of,
     door_of,
+    item_throw_of,
     loot_of,
     move_of,
     pay_of,
@@ -166,6 +168,16 @@ def to_item_action(declaration: Declaration | None) -> ItemActionNote | None:
             target=given['target']['character_name'],
         )
     return None
+
+
+def to_throw(declaration: Declaration | None) -> ThrowNote | None:
+    """선언에 적힌 물건 던지기의 결과를 서술자에게 줄 모양으로 바꾼다(#277). 던지는 행동이 아니면 None."""
+    thrown = item_throw_of(declaration)
+    if thrown is None:
+        return None
+    return ThrowNote(
+        name=thrown['name'], target=thrown['target']['name'], done=thrown['thrown'], reason=thrown['reason']
+    )
 
 
 def place_name(place: dict | None) -> str | None:
@@ -440,12 +452,16 @@ def to_wake(wake: dict | None) -> WakeNote | None:
 def check_terms(declaration: Declaration) -> tuple[str, str]:
     """
     판정에 쓴 능력과 난이도의 key. 판정하는 행동은 행동에 적혀 있고, 치료는 규칙이 정해 결과에 적혀 있다.
+    던지기는 물건에 적혀 결과에 옮겨 적혀 있다(#277).
 
     결과가 적힌 선언에만 쓴다.
     """
     treatment = declaration.outcome.get('treatment')
     if treatment is not None:
         return treatment['ability'], treatment['difficulty']
+    thrown = declaration.outcome.get('item_throw')
+    if thrown is not None:
+        return thrown['ability'], thrown['difficulty']
     return declaration.action['ability'], declaration.action['difficulty']
 
 

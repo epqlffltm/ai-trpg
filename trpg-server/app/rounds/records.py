@@ -31,6 +31,7 @@ from app.rounds.state import (
     find_declaration,
     has_outcome,
     item_give_of,
+    item_throw_of,
     item_use_of,
     loot_of,
     move_of,
@@ -285,6 +286,29 @@ def record_cures(
         payload = {'round': round_number, **holder, 'injury': one['injury'], 'reason': reason}
         ended = recorder.record(session, table, EventType.INJURY_ENDED, payload=payload, cause=cause)
         record_injury(session, table, one['aftermath'], holder, cause=ended)
+
+
+def record_item_throw(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    물건을 던진 결과를 이벤트로 적는다(#277). 그 행동의 이벤트(cause)에 잇는다.
+
+    던졌으면 바로 뒤에 그 판정과 맞은 쪽의 변화를 적는다(record_check). 던지지 못했으면 굴린 것이 없다.
+    행한 사람을 적지 않는다. 소지품을 바꾸고 굴린 것은 엔진이다.
+    """
+    thrown = item_throw_of(declaration)
+    payload = {
+        'round': cause.payload['round'],
+        'character_name': declaration.character_name,
+        'entry_id': thrown['entry_id'],
+        'name': thrown['name'],
+        'thrown': thrown['thrown'],
+        'reason': thrown['reason'],
+        'target': thrown['target'],
+        'remaining': thrown['remaining'],
+    }
+    event = recorder.record(session, table, EventType.ITEM_THROWN, payload=payload, cause=cause)
+    if has_outcome(declaration):
+        record_check(session, table, declaration, cause=event)
 
 
 def record_item_give(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
@@ -583,8 +607,8 @@ def record_declaration(
 ) -> None:
     """
     한 사람의 선언을 이벤트로 적는다.
-    판정, 지목, 물건 쓰기와 건네기, 가기와 찾기, 줍기와 내려놓기, 훔치기, 빼앗기, 사고팔기, 돈 건네기, 쉬기가 있었으면
-    행동 바로 뒤에 그 결과를 적는다.
+    판정, 지목, 물건 쓰기와 건네기와 던지기, 가기와 찾기, 줍기와 내려놓기, 훔치기, 빼앗기, 사고팔기, 돈 건네기,
+    쉬기가 있었으면 행동 바로 뒤에 그 결과를 적는다.
 
     선언을 내지 않았으면 적지 않는다. 판정은 이미 끝나 있다(roll_checks). 여기서는 적기만 한다.
     차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면(turn_lost) 행동만 적는다. 굴린 것이 없다.
@@ -601,7 +625,9 @@ def record_declaration(
     acted = recorder.record(
         session, table, EventType.PLAYER_ACTION, actor_id=member.user_id, payload=payload, group=group
     )
-    if has_outcome(declaration):
+    if item_throw_of(declaration) is not None:
+        record_item_throw(session, table, declaration, cause=acted)
+    elif has_outcome(declaration):
         record_check(session, table, declaration, cause=acted)
     elif naming_of(declaration) is not None:
         record_naming(session, table, declaration, cause=acted)

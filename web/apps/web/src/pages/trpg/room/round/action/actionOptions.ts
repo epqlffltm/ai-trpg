@@ -6,7 +6,7 @@
 //   - 판정, 지목, 기다리기: 늘
 //   - 치료: 규칙에 치료(rules.treatment)가 있을 때
 //   - 쉬기: 규칙에 휴식(rules.rest)이 있을 때
-//   - 물건 쓰기: 소모품을 지녔을 때. 건네기: 물건을 지녔고 살아 있는 다른 사람이 있을 때. 내려놓기: 물건을 지녔고 맵에 서 있을 때
+//   - 물건 쓰기: 소모품을 지녔을 때. 던지기(#277): 던지는 판정이 있는 소모품을 지녔고 칠 대상이 있을 때. 건네기: 물건을 지녔고 살아 있는 다른 사람이 있을 때. 내려놓기: 물건을 지녔고 맵에 서 있을 때
 //   - 가기: 아는 길이 있을 때. 찾기: 맵에 서 있을 때. 줍기: 선 곳에 보이게 놓인 물건이 있을 때
 //   - 훔치기: 규칙에 훔치기(rules.steal)가 있고 물건을 지닌 산 대상이 있을 때. 빼앗기: 물건을 지닌 쓰러지거나 죽은 대상이 있을 때
 //   - 사기, 팔기, 돈 건네기(#278): 화폐가 있는 판에서만. 사기는 파는 것이 있는 상인이 장면에 있을 때, 팔기는 상인이 사 주는 판이고
@@ -42,6 +42,7 @@ const ACTION_ORDER: ActionKind[] = [
   'treat',
   'name',
   'use',
+  'throw',
   'give',
   'move',
   'unlock',
@@ -85,6 +86,8 @@ function kindAvailable(kind: ActionKind, ctx: ActionContext): boolean {
       return rules.rest !== null;
     case 'use':
       return consumables(ctx.me).length > 0;
+    case 'throw':
+      return throwables(ctx).length > 0 && harmTargets(ctx).length > 0;
     case 'give':
       return heldItems(ctx.me).length > 0 && recipients(ctx).length > 0;
     case 'put_down':
@@ -131,6 +134,11 @@ export function heldItems(me: TableMember): HeldItem[] {
 
 export function consumables(me: TableMember): HeldItem[] {
   return heldItems(me).filter((item) => item.kind === 'consumable');
+}
+
+/** 던질 수 있는 물건(#277). 지닌 것 가운데 판의 물건에 던지는 판정(throw)이 있는 것 */
+export function throwables(ctx: ActionContext): HeldItem[] {
+  return heldItems(ctx.me).filter((held) => ctx.table.items.some((item) => item.entry_id === held.entry_id && item.throw));
 }
 
 /** 이 물건이 회복하는 소모품인가(판의 물건에 heals 가 있다). 회복하지 않으면 대상이 없다 */

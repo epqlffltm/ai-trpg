@@ -210,6 +210,16 @@ SAMPLES = {
         'target': {'user_id': '22222222-2222-4333-8444-555555555555', 'character_name': '약사'},
         'remaining': 1,
     },
+    'item_thrown': {
+        'round': 1,
+        'character_name': '약사',
+        'entry_id': '5b0f3c2e-8a41-4d7e-9c16-2f7e1a9d3b40',
+        'name': '화염병',
+        'thrown': True,
+        'reason': None,
+        'target': {'monster_id': '7c2d9e41-3b5a-4f08-a6e1-9d4b2c7f8e15', 'name': '수로 쥐 1'},
+        'remaining': 0,
+    },
     'item_given': {
         'round': 1,
         'character_name': '약사',

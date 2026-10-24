@@ -44,6 +44,7 @@ from app.rounds.narrator import (
     StealNote,
     TakeNote,
     TargetGoneNote,
+    ThrowNote,
     TradeNote,
     TravelNote,
     TreatmentNote,
@@ -337,6 +338,22 @@ ITEM_FAILURES = {
     'target_gone': '받을 사람이 없었다',
     'too_many': '받는 쪽이 더 가질 수 없었다',
 }
+
+
+def describe_throw(note: ThrowNote) -> str:
+    """
+    물건을 던진 것을 한 줄로 적는다(#277). 판정 앞에 붙는다. 맞았는지는 뒤의 판정과 피해가 적는다.
+
+    예: (던진 물건: 화염병 → 수로 쥐 1)
+        (던지려던 물건: 화염병. 가지고 있지 않았다)
+        (던지려던 물건: 화염병 → 수로 쥐 1)   겨눈 몬스터가 없었다. 그 까닭은 뒤의 줄이 적는다
+    """
+    to = f' → {note.target}' if note.target else ''
+    if note.done:
+        return f'(던진 물건: {note.name}{to})'
+    if note.reason == 'not_held':
+        return f'(던지려던 물건: {note.name}{to}. {ITEM_FAILURES["not_held"]})'
+    return f'(던지려던 물건: {note.name}{to})'
 
 
 def describe_item_action(note: ItemActionNote) -> str:
@@ -687,6 +704,8 @@ def describe_move(move: Move) -> str:
     lost = lost_before_acting(move)
     if lost is not None:
         parts.append(lost)
+    if move.throw is not None:
+        parts.append(describe_throw(move.throw))
     if move.verdict is not None:
         parts.append(describe_verdict(move.verdict))
         if move.verdict.treatment is not None:

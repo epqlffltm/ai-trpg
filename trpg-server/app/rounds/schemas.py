@@ -300,6 +300,32 @@ class TreatmentOut(BaseModel):
     died: bool
 
 
+class ThrownAtOut(BaseModel):
+    """물건을 던진 쪽(#277). 몬스터면 monster_id, 인물이면 entry_id 가 있다. 이름은 장면에서 부르는 것이다."""
+
+    monster_id: uuid.UUID | None = None
+    entry_id: uuid.UUID | None = None
+    name: str | None
+
+
+class ItemThrowOut(BaseModel):
+    """물건을 던진 결과(#277). 엔진이 정했다(app/rounds/throws.py). 던졌으면 판정의 결과가 함께 있다."""
+
+    # 던진 물건(판의 로어북 물건 항목)과 그 이름
+    entry_id: uuid.UUID
+    name: str
+    # 던졌는가. 못 했으면 reason 이 있다: not_held(가지고 있지 않았다), target_gone(겨눈 몬스터가 없었다)
+    thrown: bool
+    reason: str | None
+    # 물건에 적힌 판정의 능력과 난이도(rules 의 key, 비웠으면 기본 난이도로 채웠다)와 맞았을 때의 피해의 등급
+    ability: str
+    difficulty: str
+    harm: str
+    target: ThrownAtOut
+    # 던진 뒤에 남은 개수
+    remaining: int
+
+
 class CheckOutcome(BaseModel):
     """판정의 결과. 엔진이 정한 것이다(app/engine/check.py 의 Check). 받는 값이 아니라 내보내는 값이다."""
 
@@ -330,6 +356,8 @@ class CheckOutcome(BaseModel):
     wake: WakeOut | None = None
     # 치료하는 행동이었으면 그 결과. 아니면 None 이다
     treatment: TreatmentOut | None = None
+    # 물건을 던진 행동이었으면 그 물건(#277). 판정은 물건에 적힌 것이다. 아니면 None 이다
+    item_throw: ItemThrowOut | None = None
 
 
 class NamingOut(BaseModel):
@@ -835,6 +863,13 @@ class TargetGoneOutcome(BaseModel):
     target_gone: TargetGoneOut
 
 
+class ItemThrowOutcome(BaseModel):
+    """물건을 던지지 못한 결과(#277). 굴림이 없다. 겨눈 몬스터가 없어 못 던졌으면 그 까닭(target_gone)도 있다."""
+
+    item_throw: ItemThrowOut
+    target_gone: TargetGoneOut | None = None
+
+
 class TurnLostOutcome(BaseModel):
     """차례가 오기 전에 캐릭터가 쓰러지거나 죽어 행동하지 못한 결과. 엔진은 굴리지 않았다."""
 
@@ -854,7 +889,8 @@ class DeclarationOut(BaseModel):
     action: Action | None
     # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
-    # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome,
+    # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 던지지 못했으면 ItemThrowOutcome(던졌으면 CheckOutcome),
+    # 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome,
     # 놓인 물건을 주웠으면 TakeOutcome, 내려놓았으면 PutDownOutcome, 훔쳤으면 StealOutcome, 빼앗았으면 LootOutcome,
     # 쉬었으면 RestOutcome, 기다렸으면 WaitOutcome, 사거나 팔았으면 TradeOutcome, 돈을 건넸으면 PayOutcome,
     # 엄폐했으면 CoverOutcome 이다.
@@ -864,6 +900,7 @@ class DeclarationOut(BaseModel):
         CheckOutcome
         | NamingOutcome
         | ItemUseOutcome
+        | ItemThrowOutcome
         | ItemGiveOutcome
         | MoveOutcome
         | SearchOutcome

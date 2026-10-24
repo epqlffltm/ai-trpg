@@ -20,6 +20,7 @@ from app.assets.scenarios.snapshot import (
     CrossSnapshot,
     CurrencySnapshot,
     ForceSnapshot,
+    ItemThrowSnapshot,
     PickSnapshot,
     RepairSnapshot,
     RouteSnapshot,
@@ -97,6 +98,7 @@ from app.tables.schemas import (
     HostTransfer,
     InjuryOut,
     ItemOut,
+    ItemThrowOut,
     JoinRequest,
     LobbyJoinRequest,
     MapOut,
@@ -239,6 +241,13 @@ def to_quest(quest: TableQuest, catalog: dict[uuid.UUID, quests.CatalogQuest]) -
     return QuestOut(entry_id=quest.entry_id, name=catalog[quest.entry_id].name, status=quest.status, due_at=due_at)
 
 
+def to_throw(throw: ItemThrowSnapshot | None) -> ItemThrowOut | None:
+    """판의 물건의 던지는 판정을 응답으로 바꾼다(#277). 던질 수 없으면 None."""
+    if throw is None:
+        return None
+    return ItemThrowOut(ability=throw.ability, difficulty=throw.difficulty, harm=throw.harm)
+
+
 def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
     """판의 물건들을 응답으로 바꾼다."""
     return [
@@ -258,6 +267,7 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
             ward=item.ward,
             lock=item.lock,
             cures=list(item.cures),
+            throw=to_throw(item.throw),
         )
         for item in catalog.values()
     ]

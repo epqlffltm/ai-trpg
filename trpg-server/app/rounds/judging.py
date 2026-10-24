@@ -9,6 +9,7 @@
      없으면 들어온 순서로 판정한다.
      판정이면 app/rounds/checks.py, 치료면 app/rounds/treatments.py,
      지목이면 app/rounds/naming.py(주사위를 굴리지 않는다), 물건을 쓰거나 건네면 app/rounds/item_actions.py,
+     던지면 app/rounds/throws.py(#277, 물건에 적힌 판정으로 치기),
      맵에서 가거나 찾으면 app/rounds/map_actions.py, 쉬면 app/rounds/rests.py(시간만 늘리고 회복은 4 에서),
      사고팔거나 돈을 건네면 app/rounds/trades.py, 엄폐하면 app/rounds/covers.py(굴림이 없다).
      엄폐한 사람의 커버는 판정을 시작하기 전에 정한다. 차례를 기다리지 않고 그 라운드 동안 든다.
@@ -43,6 +44,7 @@ from app.engine.action import (
     SellAction,
     StealAction,
     TakeAction,
+    ThrowAction,
     TreatAction,
     UseAction,
     WaitAction,
@@ -67,6 +69,7 @@ from app.rounds.place_item_actions import judge_put_down, judge_take, search_ite
 from app.rounds.rests import judge_rest
 from app.rounds.state import find_declaration, rules_of
 from app.rounds.steals import judge_steal
+from app.rounds.throws import judge_throw
 from app.rounds.trades import judge_buy, judge_pay, judge_sell
 from app.rounds.treatments import judge_treatment
 from app.rounds.waits import judge_wait
@@ -81,7 +84,7 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     물건 쓰기(judge_use), 건네기(judge_give), 가기(judge_move), 찾기(search_place), 줍기(judge_take),
     내려놓기(judge_put_down), 훔치기(judge_steal), 빼앗기(judge_loot), 쉬기(judge_rest), 기다리기(judge_wait),
     사기(judge_buy), 팔기(judge_sell), 돈 건네기(judge_pay), 엄폐하기(judge_cover),
-    문 다루기(judge_door: 잠그기, 열기, 따기, 부수기, #281)다.
+    문 다루기(judge_door: 잠그기, 열기, 따기, 부수기, #281), 던지기(judge_throw, #277)다.
     """
     if isinstance(action, TreatAction):
         return judge_treatment(judging, member, action)
@@ -91,6 +94,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
         return judge_use(judging, member, action)
     if isinstance(action, GiveAction):
         return judge_give(judging, member, action)
+    if isinstance(action, ThrowAction):
+        return judge_throw(judging, member, action)
     if isinstance(action, MoveAction):
         return judge_move(judging, member, action)
     if isinstance(action, SearchAction):

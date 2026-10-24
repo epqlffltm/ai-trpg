@@ -26,6 +26,8 @@
 (app/rounds/rests.py).
 기다리기도 판정이 없다. 앉은 사람이 모두 기다리면 가장 짧게 부른 시간만큼 흐른다(app/rounds/waits.py).
 사기, 팔기, 돈 건네기도 판정이 없다. 값은 판이 정하고, 돈과 소지품을 엔진이 옮긴다(app/rounds/trades.py, #278).
+던지기(throw, #277)는 능력과 난이도와 피해를 받지 않는다. 던지는 물건에 적힌 것으로 치기처럼 한 번 굴린다
+(app/rounds/throws.py). 맞든 빗나가든 물건은 하나 없어진다.
 
 행동을 실제로 하는 것도 여기 있다(attempt). 라운드가 선언을 마감할 때 부른다.
 
@@ -107,6 +109,8 @@ class ActionKind(enum.StrEnum):
     REPAIR = 'repair'
     # 지금 장소에 닿은 길의 문의 자물쇠를 가진 자물쇠 물건으로 바꿔 단다. 옛 열쇠로는 더 열지 못한다(#281)
     REPLACE = 'replace'
+    # 가진 소모품 하나를 같은 장소의 몬스터나 장면의 인물에게 던진다. 물건에 적힌 판정으로 한 번 굴린다(#277)
+    THROW = 'throw'
 
 
 class DoorDevice(enum.StrEnum):
@@ -297,6 +301,34 @@ class UseAction(BaseModel):
     item: uuid.UUID
     # 회복받는 사람. 테이블에 앉은 사람이다
     target: uuid.UUID | None = None
+
+
+class ThrowAction(BaseModel):
+    """
+    물건을 던지는 행동(#277). 가진 소모품 하나를 몬스터 한 마리(monster)나 이번 장면의 인물(npc)에게 던진다.
+
+    item 은 판의 로어북 물건 항목의 id 다. 던지는 판정(아이템 규칙의 throw)이 있는 소모품이어야 한다.
+    능력과 난이도와 맞았을 때의 피해는 받지 않는다. 물건에 적힌 것으로 판정한다(app/rounds/throws.py).
+    맞히면 방어와 세이브는 치기와 같다. 맞든 빗나가든 물건은 하나 없어진다.
+    lethal 은 치기와 같다. 죽이려는 것인가, 아니면 제압이다. 노려 치기와 무기는 없다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.THROW]
+    item: uuid.UUID
+    # 맞을 인물. 판의 로어북 인물 항목의 id 다. 엔진은 이 값을 읽지 않는다
+    npc: uuid.UUID | None = None
+    # 맞을 몬스터. 테이블의 몬스터 한 마리의 id 다. 자기가 선 장소의 마리만 고를 수 있다
+    monster: uuid.UUID | None = None
+    lethal: bool = False
+
+    @model_validator(mode='after')
+    def require_one_target(self) -> Self:
+        """맞을 쪽은 하나다. 인물과 몬스터 중 하나만 적는다. 아무것도 겨누지 않고 던지는 것은 쓰기다."""
+        if (self.npc is None) == (self.monster is None):
+            raise ValueError('npc 와 monster 중 하나만 적습니다.')
+        return self
 
 
 class GiveAction(BaseModel):
@@ -630,6 +662,7 @@ AnyAction = (
     | ForceAction
     | RepairAction
     | ReplaceAction
+    | ThrowAction
 )
 
 # 선언에 붙는 행동. kind 로 종류를 가른다

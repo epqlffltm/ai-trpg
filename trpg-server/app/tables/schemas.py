@@ -350,6 +350,14 @@ class ItemOut(BaseModel):
     count: int
 
 
+class ItemThrowOut(BaseModel):
+    """물건을 던지는 판정(#277). 능력치와 난이도(비면 rules 의 기본)와 맞았을 때의 피해의 등급(rules 의 magnitudes)."""
+
+    ability: str
+    difficulty: str | None
+    harm: str
+
+
 class CatalogItemOut(BaseModel):
     """
     판에 있는 물건 하나. 로어북의 물건 항목이다.
@@ -381,6 +389,8 @@ class CatalogItemOut(BaseModel):
     lock: bool = False
     # 쓰면 대상에게서 푸는 부상들(rules 의 injuries 의 key, #277). 없으면 빈 목록이다
     cures: list[str] = []
+    # 던지는 판정(#277). 행동 '던지기'로 같은 장소의 몬스터나 장면의 인물에게 던진다. 던질 수 없으면 None 이다
+    throw: ItemThrowOut | None = None
 
 
 class WornOut(BaseModel):

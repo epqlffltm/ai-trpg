@@ -7,6 +7,7 @@
 // - 관통력(ap)은 공격 보정(attack)이 있는 무기만. 수치는 1~10, 값은 1~1,000,000(비우면 사고팔 수 없다)
 // - 자물쇠(lock, #281)는 장비만. 입력과 검사는 itemLockForm.ts. 소모품으로 바꾸면 보내지 않는다
 // - 푸는 부상(cures, #277)은 소모품만. 아직 입력 칸이 없어 읽은 그대로 돌려 보낸다. 장비로 바꾸면 보내지 않는다
+// - 던지는 판정(throw, #277)도 소모품만. 아직 입력 칸이 없어 읽은 그대로 돌려 보낸다. 장비로 바꾸면 보내지 않는다
 
 import type { ItemKind, ItemRarity, ItemRule, ItemRuleBody, Ruleset } from '../../../../api/types';
 import { itemKindLabel, rarityLabel } from '../../labels';
@@ -39,6 +40,7 @@ export type ItemRuleDraft = {
   combat: Record<CombatField, string>;
   lock: ItemLockDraft;
   cures: string[];
+  throw: ItemRule['throw'];
 };
 
 function numberText(value: number | null | undefined): string {
@@ -62,6 +64,7 @@ export function itemRuleDraft(rule: ItemRule | undefined): ItemRuleDraft {
     },
     lock: itemLockDraft(rule?.lock),
     cures: rule?.cures ?? [],
+    throw: rule?.throw ?? null,
   };
 }
 
@@ -95,7 +98,7 @@ function optionalNumber(text: string): number | null {
   return text.trim() === '' ? null : Number(text.trim());
 }
 
-/** 보낼 규칙. 종류에 맞지 않는 칸(장비의 회복과 푸는 부상, 소모품의 칸과 자물쇠, 착용하지 않는 물건의 공격·방어)은 비운다 */
+/** 보낼 규칙. 종류에 맞지 않는 칸(장비의 회복과 푸는 부상과 던지는 판정, 소모품의 칸과 자물쇠, 착용하지 않는 물건의 공격·방어)은 비운다 */
 export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody {
   const worn = isWorn(draft);
   const combat = (field: CombatField) => (worn ? optionalNumber(draft.combat[field]) : null);
@@ -114,6 +117,7 @@ export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody 
     ward: combat('ward'),
     lock: draft.kind === 'gear' ? toItemLock(draft.lock) : null,
     cures: draft.kind === 'consumable' ? draft.cures : [],
+    throw: draft.kind === 'consumable' ? (draft.throw ?? null) : null,
   };
 }
 

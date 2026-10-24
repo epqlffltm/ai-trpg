@@ -249,6 +249,21 @@ class ItemNote:
 
 
 @dataclass(frozen=True)
+class ThrowNote:
+    """
+    물건을 던진 것(#277). 엔진이 정한 것이다. 맞았는지는 함께 있는 판정(verdict)에 있다.
+
+    target 은 겨눈 몬스터나 인물을 장면에서 부르는 이름이다. done 이 거짓이면 던지지 못했다. 까닭은 reason 이다
+    (not_held 가지고 있지 않았다, target_gone 겨눈 몬스터가 없었다. 그 까닭은 target_gone 의 줄이 적는다).
+    """
+
+    name: str
+    target: str | None
+    done: bool
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
 class ItemActionNote:
     """
     물건을 쓰거나 건넨 결과. 엔진이 정한 것이다. 판정이 없다.
@@ -597,6 +612,8 @@ class Move:
     naming: NamingNote | None = None
     # 물건을 쓰거나 건네는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
     item_action: ItemActionNote | None = None
+    # 물건을 던지는 행동이면 그 물건(#277). 던졌으면 판정의 결과가 verdict 에 있다
+    throw: ThrowNote | None = None
     # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 가진 물건들. 판의 물건 순서다.
     # 서술자는 없는 물건을 쓰는 장면을 쓰지 않는다. 소지품을 바꾸는 것은 서버뿐이다
     items: list[ItemNote] = field(default_factory=list)

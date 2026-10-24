@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/room/round/actionOutcome.ts
 // 물건, 훔치기와 빼앗기, 쉬기와 기다리기의 결과 한 줄. 순수한 함수다. 못 한 것과 덜 한 것은 서버의 까닭(reason)을 괄호로 붙인다.
-// 까닭의 이름은 서버의 것이다(trpg-server/app/rounds 의 item_actions.py, place_item_actions.py, steals.py, loots.py, rests.py, waits.py).
+// 까닭의 이름은 서버의 것이다(trpg-server/app/rounds 의 item_actions.py, throws.py, place_item_actions.py, steals.py, loots.py, rests.py, waits.py).
 // 못 한 것은 이벤트로 오지 않아 이 줄에만 보인다. 이름 뒤에는 조사를 붙이지 않는다.
 
 import type { Declaration } from '../../../../api/types';
@@ -47,6 +47,18 @@ const WAIT_REASONS: Record<string, string> = {
 
 export function itemUseLine(use: Part<'item_use'>): string {
   return use.used ? `${use.name} 사용(남은 ${use.remaining}개)` : `쓰지 못했습니다${because(ITEM_REASONS, use.reason)}`;
+}
+
+/** 던지지 못한 까닭(throws.py, #277) */
+const THROW_REASONS: Record<string, string> = {
+  not_held: '그 물건을 더 가지고 있지 않았습니다',
+  target_gone: '겨눈 대상이 이미 없었습니다',
+};
+
+/** 던지지 못한 것. 던졌으면 판정의 줄이 결과다(물건은 하나 없어졌다) */
+export function throwLine(thrown: Part<'item_throw'> | null | undefined): string {
+  if (!thrown) return '던지지 못했습니다.';
+  return thrown.thrown ? `${thrown.name} 던짐(남은 ${thrown.remaining}개)` : `던지지 못했습니다${because(THROW_REASONS, thrown.reason)}`;
 }
 
 export function giveLine(give: Part<'item_give'>): string {

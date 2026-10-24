@@ -179,6 +179,14 @@ describe('물건·돈 입력', () => {
     expect(toItemRule(SWORD, itemRuleDraft(undefined)).cures).toEqual([]);
   });
 
+  it('규칙: 던지는 판정은 읽은 그대로 소모품에만 돌려 보낸다', () => {
+    const thrown = { ability: 'dex', difficulty: null, harm: 'moderate' };
+    const firebomb = itemRuleDraft({ ...SWORD_RULE, entry_id: POTION, kind: 'consumable', slots: [], attack: null, cures: [], throw: thrown } as ItemRule);
+    expect(toItemRule(POTION, firebomb).throw).toEqual(thrown);
+    expect(toItemRule(POTION, { ...firebomb, kind: 'gear' }).throw).toBeNull();
+    expect(toItemRule(SWORD, itemRuleDraft(undefined)).throw).toBeNull();
+  });
+
   it('소지품: 같은 물건, 개수, 착용 칸의 수, 겹치는 칸을 알린다', () => {
     const rules = [SWORD_RULE as ItemRule, { ...SWORD_RULE, entry_id: POTION, slots: ['main_hand'], slot_count: 1 } as ItemRule];
     expect(stacksHints([{ entryId: SWORD, count: '1', wear: [] }, { entryId: SWORD, count: '2', wear: [] }], rules)[1]).toContain('같은 물건');

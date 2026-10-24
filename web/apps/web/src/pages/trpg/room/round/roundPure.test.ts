@@ -75,6 +75,13 @@ describe('roundView', () => {
     const hit = { ...outcome, npc_effect: { name: '문지기', kind: 'damage', amount: 4 } };
     expect(outcomeLine(hit as unknown as Declaration['outcome'], rules)).toBe('눈 13, 보정 +2, 합 15 / 목표 15 · 성공 · 문지기 피해 4');
     expect(outcomeLine({ turn_lost: 'downed' } as unknown as Declaration['outcome'], rules)).toBe('행동하지 못했습니다.');
+    // 던지지 못했으면 그 까닭(#277). 던졌으면 판정의 줄이다
+    const notHeld = { item_throw: { name: '화염병', thrown: false, reason: 'not_held', remaining: 0 } };
+    expect(outcomeLine(notHeld as unknown as Declaration['outcome'], rules)).toBe('던지지 못했습니다(그 물건을 더 가지고 있지 않았습니다)');
+    const gone = { item_throw: { name: '화염병', thrown: false, reason: 'target_gone', remaining: 2 }, target_gone: { name: '쥐', reason: 'dead' } };
+    expect(outcomeLine(gone as unknown as Declaration['outcome'], rules)).toBe('던지지 못했습니다(겨눈 대상이 이미 없었습니다)');
+    const thrown = { ...hit, item_throw: { name: '화염병', thrown: true, reason: null, remaining: 1 } };
+    expect(outcomeLine(thrown as unknown as Declaration['outcome'], rules)).toBe('눈 13, 보정 +2, 합 15 / 목표 15 · 성공 · 문지기 피해 4');
     expect(outcomeLine(null, rules)).toBeNull();
   });
 

@@ -624,6 +624,22 @@ class ItemLock(BaseModel):
         return str(key)
 
 
+class ItemThrow(BaseModel):
+    """
+    물건을 던지는 판정(#277). 화염병, 투척 단검처럼 몬스터나 인물에게 던져 맞히는 소모품에 적는다.
+
+    ability 와 difficulty 는 룰북의 능력치와 난이도의 이름이다. 난이도를 비우면 룰북의 기본 난이도다.
+    harm 은 맞았을 때 입히는 피해의 등급(룰북의 magnitudes 의 이름)이다. 방어와 세이브는 치기와 같다.
+    셋 다 룰북의 규칙에 있는지는 게시할 때 본다(item_throw_invalid). 던지면 맞든 빗나가든 하나 없어진다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    ability: Key
+    difficulty: Key | None = None
+    harm: Key
+
+
 def reject_duplicate_cures(keys: list[str]) -> list[str]:
     """같은 부상을 두 번 적으면 거부한다."""
     if len(set(keys)) != len(keys):
@@ -655,6 +671,7 @@ class ItemRule(BaseModel):
     cures 는 쓰면 대상에게서 푸는 부상들이다(#277, 해독제). 룰북의 부상의 이름표이고 소모품에만 적는다.
     짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.
     룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).
+    throw 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -673,6 +690,7 @@ class ItemRule(BaseModel):
     ward: CombatNumber | None = None
     lock: ItemLock | None = None
     cures: Cures = []
+    throw: ItemThrow | None = None
 
     @model_validator(mode='after')
     def combat_only_when_worn(self) -> 'ItemRule':
@@ -715,6 +733,13 @@ class ItemRule(BaseModel):
         """푸는 부상은 소모품에만 적는다. 쓰면 없어지는 약이다."""
         if self.cures and self.kind != ItemKind.CONSUMABLE:
             raise ValueError('푸는 부상(cures)은 소모품(consumable)에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def throw_only_with_consumables(self) -> 'ItemRule':
+        """던지는 판정은 소모품에만 적는다. 던지면 없어지는 물건이다."""
+        if self.throw is not None and self.kind != ItemKind.CONSUMABLE:
+            raise ValueError('던지는 판정(throw)은 소모품(consumable)에만 적습니다.')
         return self
 
     @model_validator(mode='after')

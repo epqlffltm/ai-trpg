@@ -8,6 +8,7 @@ export const ACTION_LABELS: Record<ActionKind, string> = {
   treat: '치료',
   name: '지목',
   use: '물건 쓰기',
+  throw: '던지기',
   give: '건네기',
   move: '가기',
   search: '찾기',

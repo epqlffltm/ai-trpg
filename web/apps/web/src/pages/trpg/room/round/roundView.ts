@@ -5,7 +5,7 @@
 import type { Declaration, DeclaredAction, Round, Ruleset, TableDetail } from '../../../../api/types';
 import { amountLabel, type Currency } from '../money';
 import { ACTION_LABELS } from './action/actionLabels';
-import { giveLine, itemUseLine, lootLine, putDownLine, restLine, stealLine, takeLine, waitLine } from './actionOutcome';
+import { giveLine, itemUseLine, lootLine, putDownLine, restLine, stealLine, takeLine, throwLine, waitLine } from './actionOutcome';
 import { doorLine, moveLine } from './mapOutcome';
 
 type Outcome = NonNullable<Declaration['outcome']>;
@@ -43,6 +43,8 @@ function actionDetail(action: DeclaredAction, table: TableDetail): string | null
       return `"${action.name}"`;
     case 'use':
       return itemName(table, action.item);
+    case 'throw':
+      return `${itemName(table, action.item)}${action.lethal ? ', 죽이려는 공격' : ''}`;
     case 'give':
       return `${itemName(table, action.item)} ×${action.count} → ${memberName(table, action.target)}`;
     case 'take':
@@ -115,6 +117,7 @@ function nameOfInjury(rules: Ruleset, key: string): string {
 export function outcomeLine(outcome: Outcome | null, rules: Ruleset, currency: Currency | null = null): string | null {
   if (!outcome) return null;
   if ('turn_lost' in outcome) return '행동하지 못했습니다.';
+  if ('item_throw' in outcome && !outcome.item_throw?.thrown) return throwLine(outcome.item_throw);
   if ('target_gone' in outcome) return '대상이 이미 없어 행동하지 못했습니다.';
   if ('roll' in outcome && 'total' in outcome && 'success' in outcome) return checkLine(outcome, rules);
   return otherLine(outcome) ?? moneyLine(outcome, currency) ?? '결과는 일어난 일에 적힙니다.';

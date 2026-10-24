@@ -5,12 +5,14 @@ import { describe, expect, it } from 'vitest';
 import type { SceneCast, TableDetail, TableMember } from '../../../../../api/types';
 import { ME, member, OTHER, RULES, sheet, tableDetail } from '../../../../../test/tableFixtures';
 import { actionHint, draftFromAction, emptyActionDraft, toAction, type ActionDraft } from './actionDraft';
+import { throwTerms } from './ItemActionFields';
 import {
   availableKinds,
   carriable,
   harmTargets,
   patients,
   recipients,
+  throwables,
   treatableInjuries,
   victims,
   type ActionContext,
@@ -174,6 +176,40 @@ describe('toAction', () => {
     expect(toAction(draftFromAction(RULES as unknown as TableDetail['rules'], replace), ctx)).toEqual(replace);
     expect(actionHint(draft({ kind: 'replace', place: 'p2' }), ctx)).toBe('다룰 문과 달 자물쇠를 골라 주세요.');
     expect(actionHint(draft({ kind: 'replace', place: 'p2', item: 'i1' }), ctx)).toBeNull();
+  });
+
+  it('던지기는 물건과 맞힐 대상과 죽이려는지만 보내고, 낸 것을 그대로 다시 보낸다(#277)', () => {
+    const rules = RULES as unknown as TableDetail['rules'];
+    const atMonster = { kind: 'throw', item: 'i7', lethal: true, monster: MONSTER } as const;
+    const atNpc = { kind: 'throw', item: 'i7', lethal: false, npc: NPC } as const;
+    expect(toAction(draft({ kind: 'throw', item: 'i7', target: `monster:${MONSTER}`, lethal: true, ability: 'str' }), ctx)).toEqual(atMonster);
+    expect(toAction(draftFromAction(rules, atMonster), ctx)).toEqual(atMonster);
+    expect(toAction(draftFromAction(rules, atNpc), ctx)).toEqual(atNpc);
+    expect(actionHint(draft({ kind: 'throw', item: 'i7' }), ctx)).toBe('던질 물건과 맞힐 대상을 골라 주세요.');
+    expect(actionHint(draft({ kind: 'throw', item: 'i7', target: `npc:${NPC}` }), ctx)).toBeNull();
+  });
+});
+
+describe('throwables', () => {
+  const FIREBOMB = { entry_id: 'i7', name: '화염병', kind: 'consumable', rarity: 'normal', count: 2 };
+
+  function withFirebomb(cast: SceneCast | null = CAST): ActionContext {
+    const base = context({ items: [HERB, FIREBOMB] }, {}, cast);
+    const thrown = { entry_id: 'i7', name: '화염병', kind: 'consumable', rarity: 'normal', heals: null, throw: { ability: 'dex', difficulty: null, harm: 'light' } };
+    return { ...base, table: { ...base.table, items: [...base.table.items, thrown] } as unknown as TableDetail };
+  }
+
+  it('던지는 판정이 있는 물건을 지녔고 칠 대상이 있으면 던지기를 고를 수 있다', () => {
+    expect(throwables(withFirebomb()).map((item) => item.entry_id)).toEqual(['i7']);
+    expect(availableKinds(withFirebomb())).toContain('throw');
+    expect(availableKinds(context())).not.toContain('throw');
+    expect(availableKinds(withFirebomb({ round: 2, people: [], monsters: [] } as unknown as SceneCast))).not.toContain('throw');
+  });
+
+  it('물건에 적힌 판정을 보인다. 난이도를 비웠으면 규칙의 기본이다', () => {
+    const terms = throwTerms(withFirebomb().table, 'i7');
+    expect(terms).toContain('맞든 빗나가든 하나 없어집니다');
+    expect(throwTerms(withFirebomb().table, 'i1')).toBeNull();
   });
 });
 
