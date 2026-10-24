@@ -5,10 +5,11 @@
 
   - 페르소나를 모두 지운다. 가져간 세션은 사본으로 돈다
   - 비공개 캐릭터를 판과 함께 지운다. 공개 캐릭터는 남긴다(남이 쓰는 것이다)
+  - 비공개 세계관을 판과 함께 지운다(#591). 공개 세계관은 남긴다. 남긴 세계관의 판에 복사된 인물과 그림은 남는다
   - 로어북을 판과 함께 모두 지운다(#672, 지금은 만든 사람만 쓴다). 남긴 공개 캐릭터의 판에 복사된 것은 남는다
   - 그 사람의 그림 가운데 어느 판에도 쓰이지 않은 것을 저장소와 표에서 지운다(#566). 남긴 공개 캐릭터의 그림은 남는다
   - 그 사람에게 아직 보내지 않은 알림을 발송함에서 지운다(#678). 알림 서버도 그 사람의 알림함을 지운다
-페르소나와 캐릭터와 로어북과 알림은 한 트랜잭션이다. 그림은 그다음이다(app/images/service.py 의 erase_images).
+페르소나와 캐릭터와 세계관과 로어북과 알림은 한 트랜잭션이다. 그림은 그다음이다(app/images/service.py 의 erase_images).
 저장소에서 지우다 실패하면 ImageStoreUnavailableError(503)다. 인증 서버가 다시 보내면 남은 그림을 다시 지운다.
 같은 알림이 다시 와도 결과가 같다. 지울 것이 없으면 아무것도 하지 않는다(멱등).
 """
@@ -24,12 +25,14 @@ from app.images.store import ImageStore
 from app.lorebooks import repository as lorebooks
 from app.notifications import outbox
 from app.personas import repository as personas
+from app.worlds import repository as worlds
 
 
 async def erase_belongings(session: AsyncSession, user_id: uuid.UUID) -> None:
-    """그 사람의 페르소나와 비공개 캐릭터와 로어북, 보내지 않은 알림을 지우고 저장한다."""
+    """그 사람의 페르소나와 비공개 캐릭터와 세계관, 로어북, 보내지 않은 알림을 지우고 저장한다."""
     await personas.delete_all_owned(session, user_id)
     await characters.delete_private_owned(session, user_id)
+    await worlds.delete_private_owned(session, user_id)
     await lorebooks.delete_owned(session, user_id)
     await outbox.drop_for_user(session, user_id)
     await session.commit()

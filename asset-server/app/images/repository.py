@@ -7,12 +7,13 @@
 import uuid
 from collections.abc import Collection, Sequence
 
-from sqlalchemy import delete, exists, select
+from sqlalchemy import delete, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.characters.models import Character, CharacterVersion, Visibility
 from app.images.models import Image, ImageUse
 from app.ratings import Rating
+from app.worlds.models import World, WorldImageUse, WorldVersion
 
 
 async def add_image(session: AsyncSession, image: Image) -> None:
@@ -35,13 +36,18 @@ async def owned_ids(session: AsyncSession, owner_id: uuid.UUID, image_ids: Colle
 
 
 def add_uses(session: AsyncSession, version_id: uuid.UUID, image_ids: Collection[uuid.UUID]) -> None:
-    """그 판에 쓰인 그림들을 적는다."""
+    """그 캐릭터의 판에 쓰인 그림들을 적는다."""
     session.add_all(ImageUse(version_id=version_id, image_id=image_id) for image_id in image_ids)
 
 
-async def used_publicly(session: AsyncSession, image_id: uuid.UUID, ratings: Sequence[Rating]) -> bool:
-    """그 그림이 공개 캐릭터(숨기지 않은 것)의 판에 쓰였고, 그 판의 등급이 ratings 안에 있나."""
-    query = select(
+def add_world_uses(session: AsyncSession, version_id: uuid.UUID, image_ids: Collection[uuid.UUID]) -> None:
+    """그 세계관의 판에 쓰인 그림들을 적는다(#591)."""
+    session.add_all(WorldImageUse(version_id=version_id, image_id=image_id) for image_id in image_ids)
+
+
+def used_by_public_character(image_id: uuid.UUID, ratings: Sequence[Rating]):
+    """그 그림이 공개 캐릭터(숨기지 않은 것)의 판에 쓰였고, 그 판의 등급이 ratings 안에 있다는 조건."""
+    return (
         exists()
         .where(ImageUse.image_id == image_id)
         .where(CharacterVersion.id == ImageUse.version_id)
@@ -49,12 +55,34 @@ async def used_publicly(session: AsyncSession, image_id: uuid.UUID, ratings: Seq
         .where(Character.visibility == Visibility.PUBLIC, Character.hidden_at.is_(None))
         .where(CharacterVersion.rating.in_(ratings))
     )
+
+
+def used_by_public_world(image_id: uuid.UUID, ratings: Sequence[Rating]):
+    """그 그림이 공개 세계관의 판에 쓰였고, 그 판의 등급이 ratings 안에 있다는 조건(#591)."""
+    return (
+        exists()
+        .where(WorldImageUse.image_id == image_id)
+        .where(WorldVersion.id == WorldImageUse.version_id)
+        .where(World.id == WorldVersion.world_id)
+        .where(World.visibility == Visibility.PUBLIC)
+        .where(WorldVersion.rating.in_(ratings))
+    )
+
+
+async def used_publicly(session: AsyncSession, image_id: uuid.UUID, ratings: Sequence[Rating]) -> bool:
+    """그 그림이 공개 캐릭터나 공개 세계관의 판에 쓰였고, 그 판의 등급이 ratings 안에 있나."""
+    query = select(or_(used_by_public_character(image_id, ratings), used_by_public_world(image_id, ratings)))
     return bool(await session.scalar(query))
+
+
+def unused():
+    """그림이 어느 판(캐릭터, 세계관)에도 쓰이지 않았다는 조건."""
+    return ~exists().where(ImageUse.image_id == Image.id) & ~exists().where(WorldImageUse.image_id == Image.id)
 
 
 async def unused_owned_ids(session: AsyncSession, owner_id: uuid.UUID) -> list[uuid.UUID]:
     """이 사람의 그림 가운데 어느 판에도 쓰이지 않은 것."""
-    query = select(Image.id).where(Image.owner_id == owner_id, ~exists().where(ImageUse.image_id == Image.id))
+    query = select(Image.id).where(Image.owner_id == owner_id, unused())
     return list(await session.scalars(query.order_by(Image.id)))
 
 
@@ -62,5 +90,5 @@ async def delete_unused(session: AsyncSession, image_ids: Collection[uuid.UUID])
     """그 id 들의 그림을 지운다. 그사이 판에 쓰인 것은 남긴다."""
     if not image_ids:
         return
-    query = delete(Image).where(Image.id.in_(image_ids), ~exists().where(ImageUse.image_id == Image.id))
+    query = delete(Image).where(Image.id.in_(image_ids), unused())
     await session.execute(query)
