@@ -20,12 +20,14 @@ from app.limits.redis_counter import RedisCounter, connect
 
 @dataclass(frozen=True)
 class Limits:
-    """chat 의 제한들. 둘 다 사람마다 센다."""
+    """chat 의 제한들. 모두 사람마다 센다."""
 
     # 모델을 부르는 요청(말 보내기, 행동, 다시 생성, 이어서). 크레딧과 별개로, 짧은 시간에 몰아 보내는 것을 늦춘다
     generations: AttemptLimit
     # 모델을 부르지 않는 쓰기(대화 시작과 지우기, 모델과 가지 바꾸기, 고치기, 기억 메모). 청구하지 않아 넉넉하게 둔다
     writes: AttemptLimit
+    # 대화 기록 내려받기. 대화를 통째로 읽어 파일을 만드므로 좁게 둔다(TRPG 의 기록과 같은 한도)
+    transcripts: AttemptLimit
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,9 @@ def limits_from(settings: Settings) -> Limits:
             'generations', settings.generation_limit, timedelta(seconds=settings.generation_window_seconds)
         ),
         writes=AttemptLimit('writes', settings.write_limit, timedelta(seconds=settings.write_window_seconds)),
+        transcripts=AttemptLimit(
+            'transcripts', settings.transcript_limit, timedelta(seconds=settings.transcript_window_seconds)
+        ),
     )
 
 

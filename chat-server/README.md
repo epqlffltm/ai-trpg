@@ -95,6 +95,7 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `LIMIT_KEY_PREFIX` | `chat:limit` | Redis 의 키의 앞부분 |
 | `GENERATION_LIMIT`, `GENERATION_WINDOW_SECONDS` | `20`, `60` | 모델을 부르는 요청을 한 사람이 이 시간(초) 안에 이만큼까지 |
 | `WRITE_LIMIT`, `WRITE_WINDOW_SECONDS` | `120`, `60` | 모델을 부르지 않는 쓰기를 한 사람이 이 시간(초) 안에 이만큼까지 |
+| `TRANSCRIPT_LIMIT`, `TRANSCRIPT_WINDOW_SECONDS` | `10`, `600` | [대화 기록 내려받기](#기록-내려받기)를 한 사람이 이 시간(초) 안에 이만큼까지 |
 | `CHAT_SUGGESTIONS` | `true` | [다음 답 추천](#다음-답-추천). 답 끝에 선택지 셋을 같은 호출에서 받는다. 출력이 조금 는다. 끄면 카드에 지시를 넣지 않는다 |
 
 `tools/fill_env.py` 가 `ASSET_SECRET` 과 `BILLING_SECRET` 을 짝(asset 서버, 결제 서버의 `CHAT_SERVER_SECRET`)과 같은 값으로 채운다.
@@ -137,6 +138,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | POST | `/api/v1/chat/generations/{id}/stop` | [멈추기](#다시-생성-멈추기-대안). 204. 받은 만큼 저장한다. 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
 | PUT | `/api/v1/chat/conversations/{id}/branch` | [다른 대안 보기](#다시-생성-멈추기-대안). `{message_id}`. 바뀐 대화를 돌려준다. 답을 쓰는 중이면 409 `generation_in_progress` | access 토큰 |
 | PUT | `/api/v1/chat/conversations/{id}/model` | 대화의 모델 바꾸기. `{model}`. 바꾼 모델을 돌려준다. 고를 수 없으면 422 `model_unavailable` | access 토큰 |
+| GET | `/api/v1/chat/conversations/{id}/transcript` | [기록 내려받기](#기록-내려받기). `?format=md`(기본), `html`, `txt`. 지금 가지의 말들을 파일 하나로. 없거나 볼 수 없는 대화면 404 | access 토큰 |
 | DELETE | `/api/v1/chat/conversations/{id}` | 지우기. 204. 지운 시각만 적는다 | access 토큰 |
 | GET | `/api/v1/chat/gallery` | 내가 연 [이벤트 씬](#이벤트-씬)(`{items: [{character_id, scene_id, unlocked_at}], total}`). 최근에 연 것부터. `character_id`(asset 서버의 캐릭터 id), `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/chat/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴) 알림 받기. `{withdrawn_at}`. 200 `{"status": "processed"}`. 프록시는 밖에서 받지 않는다(404) | 인증 서버의 서명 |
@@ -508,6 +510,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 | --- | --- | --- |
 | 생성 | 말 보내기, 행동, 다시 생성, 이어서(모델을 부른다) | 60초에 20번 |
 | 쓰기 | 대화 시작과 지우기, 모델과 가지 바꾸기, 상대의 말 고치기, 기억 메모 더하기·고치기·지우기·받아들이기 | 60초에 120번 |
+| 기록 | [대화 기록 내려받기](#기록-내려받기). 없는 대화의 요청도 센다 | 10분에 10번 |
 
 - 사람마다 센다(대상은 해시해서 키에 넣는다). 읽기와 멈추기는 세지 않는다. 넘으면 429 `too_many_attempts` 와 `Retry-After`(기다릴 초, 본문의 `retry_after`).
 - 고정 구간이다(첫 요청에서 시작해 구간이 끝나면 처음부터). 올리기와 만료를 Lua 한 덩어리로 보낸다. 인증 서버, 게임 서버와 같은 방식이다.
@@ -544,6 +547,23 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - **지금 가지의 끝만.** 끊긴 답 뒤에 말이 붙었거나 다른 가지를 보고 있으면 422 `not_continuable` 이다. 그 뒤의 말이 끊긴 답을 보고 쓴 것이라서다.
   가지의 끝은 차례를 잡은 뒤에 다시 읽는다(차례를 쥔 동안에는 가지를 바꾸지 못한다).
 
+### 기록 내려받기
+
+내 대화를 파일 하나로 받는다(#617 의 chat 몫, `app/transcripts/`). TRPG 의 기록 내려받기와 같은 세 형식이다.
+
+| 형식 | `format` | 모양 |
+| --- | --- | --- |
+| 마크다운 | `md`(기본) | 구분은 `##`, 시작 상황은 문단, 말은 인용(`> **이름**`), 한 줄의 일은 목록. 글 맨 앞의 `#` 은 글자로 남긴다 |
+| HTML | `html` | 파일 하나로 열린다. 밖의 자원과 스크립트가 없고, 글은 모두 바꿔 쓴다(escape). 머리의 CSP 가 한 번 더 막는다 |
+| 텍스트 | `txt` | 표시 문법이 없다. 말은 `이름:` 아래에 들여 쓴다 |
+
+- **넣는 것.** 시작 상황(제목과 글), 지금 보고 있는 가지의 말(첫 말부터), 행동(서버가 쓴 글 그대로), 받아들인 상태의 변화(호감도, 받은 물건, 함께 간 곳), 이벤트 씬의 제목, 끊긴 답과 고친 답의 표시. 모두 대화 화면에서 본 것이다.
+- **넣지 않는 것.** 다른 가지(대안), 다음 답 추천, 표정, 기억 메모와 요약, 모델에게만 가는 글(캐릭터의 설정, 로어북, 이벤트 씬의 설명). 다른 가지를 받으려면 그 가지를 보고(`PUT .../branch`) 다시 받는다.
+- 사람의 말은 페르소나의 이름(없으면 "나"), 캐릭터의 말은 대화에 가져온 판의 이름으로 적는다. 호감도의 숫자는 숫자로 보이는 캐릭터에서만 적는다(화면과 같다).
+- 대화 읽기와 같은 규칙으로 찾는다. 남의 대화, 지운 대화, 볼 수 없는 등급이면 404 다.
+- 파일의 이름은 대화의 제목이다(`Content-Disposition` 의 `filename*`). `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` 를 붙인다.
+- 한 사람이 10분에 10번까지다([요청 수 제한](#요청-수-제한)의 "기록").
+
 ### 탈퇴
 
 인증 서버가 유예(7일)가 지난 탈퇴를 알리면 그 사람의 것을 지운다(#670, [탈퇴 설계](../docs/architecture/withdrawal.md), `app/withdrawal/`).
@@ -556,7 +576,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - **멱등.** 지우고 200 `{"status": "processed"}` 다. 이미 지웠거나 이 서버에 그 사람의 것이 없어도 200 이다. 그 밖의 답이면 인증 서버가 다시 보낸다.
 - 유예 동안은 토큰이 이 서버에 통하지 않으므로 지우는 사이에 새 말이 생기지 않는다. 요청 수 제한은 걸지 않는다(사람이 부르는 주소가 아니다).
 - 보내는 쪽은 인증 서버의 워커(`auth-welcome-credits`)다. 인증 서버의 `CHAT_SECRET` 이 비어 있으면 보내지 않고 쌓아 둔다. 비밀을 적으면 그 전에 쌓인 것부터 나간다.
-- 기록을 내려받는 길은 아직 없다(#617 과 같은 질문).
+- 탈퇴하기 전에 대화를 남기려면 [기록 내려받기](#기록-내려받기)를 쓴다.
 
 ### 토큰 검증
 

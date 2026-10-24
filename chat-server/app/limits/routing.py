@@ -30,6 +30,13 @@ async def count_write(viewer: CurrentViewer, request: Request) -> None:
     await limiting.limiter.count_attempt(limiting.limits.writes, str(viewer.claims.user_id))
 
 
+async def count_transcript(viewer: CurrentViewer, request: Request) -> None:
+    """대화 기록 내려받기 한 번을 센다. 넘으면 TooManyAttempts(429)."""
+    limiting = get_limiting(request)
+    await limiting.limiter.count_attempt(limiting.limits.transcripts, str(viewer.claims.user_id))
+
+
 # 주소의 dependencies 에 넣는 것
 GENERATION_LIMIT = Depends(count_generation)
 WRITE_LIMIT = Depends(count_write)
+TRANSCRIPT_LIMIT = Depends(count_transcript)
