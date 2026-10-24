@@ -4,7 +4,7 @@
 # PR 에서는 관문(.github/workflows/ci.yml)이 바뀐 파일을 보고 이 워크플로를 부른다(changed-servers.sh 의 shared).
 # 공용 코드를 쓰는 서버의 CI 도 함께 불린다. 서버마다 pyproject.toml 의 경로 의존을 읽어 고른다.
 # 이 워크플로는 공용 코드 자체만 본다. DB 에 닿는 것(쿼리의 span, 연결 풀)은 쓰는 서버의 테스트가 실제 DB 로 본다.
-# 패키지마다 작업 하나다(server-core, ai-core). 패키지를 더하면(shared/conversation-core 등) 작업 하나를 더한다.
+# 패키지마다 작업 하나다(server-core, ai-core, conversation-core). 패키지를 더하면 작업 하나를 더한다.
 
 name: shared
 
@@ -132,6 +132,63 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       # 처음 잰 값은 98% 다. 여러 서버가 함께 쓰는 코드라 서버들과 같은 95 로 둔다.
+      # 내릴 때는 PR 에 까닭을 적는다
+      - name: 커버리지 기준
+        env:
+          COVERAGE_MIN: "95"
+        run: uv run coverage report --format=total --fail-under="$COVERAGE_MIN"
+
+  conversation-core:
+    runs-on: ubuntu-latest
+    # 테스트가 PC 에서 1 초 안쪽이다. 멈춘 테스트를 하염없이 기다리지 않게 하려는 상한이다
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: shared/conversation-core
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: uv 설치
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      # uv.lock 과 pyproject.toml 이 어긋나면 실패한다
+      - name: 의존성 설치
+        run: uv sync --locked
+
+      - name: 린트
+        run: uv run ruff check .
+
+      - name: 모양 검사
+        run: uv run ruff format --check .
+
+      # 쓰는 서버의 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다. 지금은 표준 라이브러리만 써서 빈 목록이다
+      - name: 의존성 취약점 검사
+        run: |
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt -q > "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit==2.10.1 -r "$RUNNER_TEMP/requirements.txt" --require-hashes --disable-pip --progress-spinner off
+
+      - name: 테스트
+        run: uv run pytest --cov --cov-report=
+
+      - name: 커버리지 요약
+        run: |
+          total="$(uv run coverage report --format=total)"
+          echo "conversation-core 커버리지 ${total}%"
+          {
+            echo "### conversation-core 커버리지 ${total}%"
+            echo
+            echo "<details><summary>덜 지나간 파일</summary>"
+            echo
+            uv run coverage report --format=markdown --skip-covered --sort=cover
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 처음 잰 값은 100% 다(chat 서버에서 옮긴 테스트). 여러 서버가 함께 쓰는 코드라 서버들과 같은 95 로 둔다.
       # 내릴 때는 PR 에 까닭을 적는다
       - name: 커버리지 기준
         env:

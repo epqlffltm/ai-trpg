@@ -3,13 +3,14 @@
 여러 서비스가 같은 코드나 형식을 쓸 때 지킬 것을 적는다. 서비스의 구조는 [서비스 구조 명세](services.md)에 있다.
 
 - 기준: `main` `4b383c2` (2026-10-18)
-- 패키지는 둘이다. `shared/server-core`(#588, [서버의 공통부](#서버의-공통부-sharedserver-core))는 알림 서버, asset 서버, chat 서버가 쓴다. `shared/ai-core`(#499, [AI 호출](#ai-호출-sharedai-core))는 게임 서버와 chat 서버가 쓴다(chat 은 지금 모델 목록의 파일만). `shared/conversation-core` 는 아직 없다.
+- 패키지는 셋이다. `shared/server-core`(#588, [서버의 공통부](#서버의-공통부-sharedserver-core))는 알림 서버, asset 서버, chat 서버가 쓴다. `shared/ai-core`(#499, [AI 호출](#ai-호출-sharedai-core))는 게임 서버와 chat 서버가 쓴다. `shared/conversation-core`(#591, [대화의 핵심](#대화의-핵심-sharedconversation-core))는 chat 서버가 쓰고 story 서버가 세션을 만들 때 쓴다.
 - 2026-10-19: 자산은 asset-server 가 원본을 갖는다는 결정을 반영했다(원칙 1·2, 공유 표, 템플릿, 열린 질문).
 - 2026-10-19: `app/ai` 를 뽑는 방식을 정했다(#380). 모델 목록, `shared/` 를 가져오는 법, CI, 뽑는 때다([정한 것](#정한-것)). "AI 호출"의 `app/ai` 표는 `main` `0930cf9` 기준이다.
 - 2026-10-20: 제작자가 쓰는 소개 글(HTML 과 인라인 CSS)을 거르는 규칙을 세 서비스에 하나로 정했다([소개 글의 HTML](#소개-글의-html)).
 - 2026-10-19: `app/ai` 의 경계 정리가 끝났다(#506, #508, #509). `app/ai` 는 이제 `app.ai` 밖의 `app.*` 를 가져오지 않는다. "AI 호출"의 표에 옮긴 곳을 적었다(기준 `main` `1cda0ba`).
 - 2026-10-21: TRPG, chat, story 를 서버 셋으로 나누기로 하면서(services.md) FastAPI 서버의 공통부(`shared/server-core`)를 먼저 뽑기로 했다. 재정의하는 법, 뽑는 순서와 주도권, 패키지 이름을 정했다([정한 것](#정한-것)).
 - 2026-10-21: `shared/server-core` 를 만들고 알림 서버와 asset 서버를 옮겼다(#588). 소개 글의 HTML 을 거르는 코드는 쓰는 곳이 둘이 될 때 옮기기로 했다([소개 글의 HTML](#소개-글의-html)).
+- 2026-10-24: chat 서버의 `app/conversation` 을 `shared/conversation-core` 로 옮겼다(#591). story 서버의 세션 앞에 옮긴 까닭은 [대화의 핵심](#대화의-핵심-sharedconversation-core)에 있다.
 - 2026-10-22: 게임 서버의 `app/ai` 를 `shared/ai-core` 로 옮겼다(#499 의 1단계). 모델 목록을 파일 원본으로 바꾸는 것은 2단계로 남았다.
 - 2026-10-22: 모델 목록의 원본을 `shared/ai-core` 의 TOML 파일 하나로 옮겼다(#499 의 2단계). 게임 서버는 관리 명령(`scripts.models sync`)으로 자기 표에 들여온다. 한 서비스만 쓰는 속성은 그 서비스의 표에 둔다([정한 것](#정한-것)).
 - 2026-10-23: 알림 서버로 보내는 발송함을 trpg-server 에서 `shared/server-core` 로 뽑았다(#678). asset 이 두 번째로, chat 이 세 번째로 쓴다. trpg 는 옮길 때(#589) 바꾼다.
@@ -60,7 +61,7 @@
 | --- | --- | --- | --- |
 | `shared/server-core` | 토큰 검증, 관측, 서버끼리의 서명, DB 연결, 뒤에서 도는 일의 틀, 알림 발송함 | FastAPI 서버 모두(trpg, notification, asset, chat, story, 나중에 관리) | 지금. 쓰는 서버가 이미 넷이다 |
 | `shared/ai-core` | 모델 호출 | trpg, chat, story | chat-server 의 "한 번의 말"을 만들 때(#499) |
-| `shared/conversation-core` | 대화 트리, 다시 생성과 분기, 요약, 기억, 로어북 검색을 붙이는 법 | chat, story | story-server 가 chat 의 그것을 쓰려 할 때 |
+| `shared/conversation-core` | 대화 트리, 다시 생성과 분기, 요약, 기억, 로어북 검색을 붙이는 법. 지금은 SSE, 흘려보내기, 최근 대화의 창, 로어북 고르기, 답의 블록 | chat, story | 만들었다(#591). story 서버가 세션을 만들기 바로 앞 |
 
 ### 서버의 공통부 (`shared/server-core`)
 
@@ -128,8 +129,12 @@ TRPG, chat, story 가 비슷한 모양으로 쓰는 것들이다. 같은 필드�
 
 chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. 대화 트리(다시 생성, 분기), 요약, 기억, 로어북 검색을 프롬프트에 붙이는 순서, 스트리밍한 답을 저장하는 흐름이 같다. 다른 것은 참가자 수, 로어북이 붙는 곳(캐릭터 대 세계관), 이벤트와 엔딩이다.
 
-- chat-server 를 먼저 만들면서 이 부분을 한 폴더(`app/conversation/`)에 모아 두고, `app/conversation` 이 chat 만의 폴더를 가져오지 않게 경계를 지킨다(AI 호출의 #498 과 같은 테스트).
-- story-server 를 만들 때 그 폴더를 `shared/conversation-core` 로 옮긴다. 쓰는 곳이 둘이 되는 때다(원칙 4).
+- chat-server 를 먼저 만들면서 이 부분을 한 폴더(`app/conversation/`)에 모아 두고, `app/conversation` 이 chat 만의 폴더를 가져오지 않게 경계를 지켰다(AI 호출의 #498 과 같은 테스트).
+- 그 폴더를 파일째 `shared/conversation-core` 로 옮겼다(2026-10-24, #591). 쓰는 법과 있는 것은 [shared/conversation-core/README.md](../../shared/conversation-core/README.md)에 있다.
+  - 옮긴 때: story 서버가 세션과 한 번의 말을 만들기 바로 앞이다. 원칙 4(두 번째 사용자가 생길 때)를 따르되, story 의 첫 PR 이 chat 의 코드를 옮기는 일과 story 의 기능을 함께 싣지 않게 먼저 옮겼다. 옮기는 PR 은 import 만 바꾸고 동작을 바꾸지 않는다
+  - 경계: 서버의 코드(`app.*`), 다른 공용 패키지(`server_core`, `ai_core`), 관측을 가져오지 않는다(`tests/test_boundary.py`). 지금은 표준 라이브러리만 쓴다
+  - 옮긴 것 가운데 상태 바꾸기의 제안(`changes`)과 표정(`expressions`)은 chat 이 먼저 쓴다. story 는 호감도의 제안을 chat 과 함께 나중에 쓰고(story 설계의 "호감도"), 표정은 인물마다의 그림에 쓴다. 블록의 모양만 여기 있고 무엇을 허락하는지는 서버가 정한다
+  - 대화 트리와 요약은 아직 chat 의 표(`app/conversations`, `app/memory`)에 붙어 있어 옮기지 않았다. story 가 같은 흐름을 쓸 때 표에 기대지 않는 부분을 뽑는다
 - 표(ORM 모델)는 서버마다 둔다. chat 은 `chat` 스키마에, story 는 `story` 스키마에 같은 모양의 대화 표를 갖는다(원칙 1).
 
 ## 재정의하는 법
@@ -199,7 +204,7 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
 
 - 템플릿마다 형식 번호를 둔다. 게임 서버의 판 형식이 이미 번호를 올리며 옛 형식을 읽을 때 지금 모양으로 바꿔 읽는다. 같은 방식을 쓴다.
 - 공용 코드가 바뀐 PR 은, 그것을 쓰는 모든 서비스의 CI 를 돌린다. 쓰는 서비스는 `changed-servers.sh` 가 서버마다 `pyproject.toml` 의 경로 의존(`path = "../shared/<이름>"`)을 읽어 고른다. 따로 표를 두지 않는다. 새 서버가 공용 코드를 쓰기 시작하면 저절로 잡힌다.
-- 공용 코드 자체는 `.github/workflows/shared.yml` 이 본다(린트, 모양, 의존성 취약점, 테스트, 커버리지 95). 패키지마다 작업이 하나다(`server-core`, `ai-core`). 패키지가 늘면 작업을 하나 더한다.
+- 공용 코드 자체는 `.github/workflows/shared.yml` 이 본다(린트, 모양, 의존성 취약점, 테스트, 커버리지 95). 패키지마다 작업이 하나다(`server-core`, `ai-core`, `conversation-core`). 패키지가 늘면 작업을 하나 더한다.
 - 서버는 경로 의존을 editable 로 받는다. 이미지에는 `uv sync --no-editable` 로 설치된 모양을 담아, 실행 단계에 `shared/` 가 없다.
 - 형식을 바꾸는 변경은 옛 형식을 읽을 수 있게 하고, 서비스마다 한 번에 따라가지 않아도 되게 한다.
 - 공용 코드에는 그것을 쓰는 서비스 중 어느 한 곳에만 있는 개념(전투 판정, 호감도 등)을 넣지 않는다.

@@ -1,17 +1,15 @@
 # chat-server/tests/test_turn_prompt.py
 
 """
-모델에 보낼 메시지(app/turns/prompt.py)와 최근 대화의 창(app/conversation/window.py),
-SSE 의 글자(app/conversation/sse.py).
-DB 도 모델도 쓰지 않는다.
+모델에 보낼 메시지(app/turns/prompt.py)와 결제의 이름표. DB 도 모델도 쓰지 않는다.
+최근 대화의 창과 SSE 의 글자는 공용 코드의 테스트(shared/conversation-core/tests)가 본다.
 """
 
 import uuid
 
 from ai_core.provider import Role
+from conversation_core.window import Turn
 
-from app.conversation.sse import Comment, Frame, encode
-from app.conversation.window import Turn, select_window
 from app.turns.charging import hold_reference
 from app.turns.prompt import CharacterCard, PersonaCard, build_messages, plain_text, render_card
 
@@ -71,39 +69,7 @@ def test_the_card_comes_first_and_turns_keep_their_roles():
     ]
 
 
-# --- 창 ---
-
-
-def test_the_window_keeps_the_latest_turns_within_the_budget():
-    turns = [Turn('assistant', 'a' * 5), Turn('user', 'b' * 5), Turn('assistant', 'c' * 5), Turn('user', 'd' * 5)]
-
-    assert select_window(turns, 15) == turns[1:]
-    assert select_window(turns, 14) == turns[2:]
-    assert select_window(turns, 100) == turns
-
-
-def test_the_last_turn_is_always_sent():
-    assert select_window([Turn('user', 'x' * 50)], 10) == [Turn('user', 'x' * 50)]
-
-
-def test_the_window_does_not_skip_a_long_turn():
-    turns = [Turn('user', 'a'), Turn('assistant', 'b' * 50), Turn('user', 'c')]
-
-    # 긴 말을 건너뛰고 더 앞의 말을 넣지 않는다. 대화의 앞뒤가 끊긴다
-    assert select_window(turns, 10) == [Turn('user', 'c')]
-
-
-def test_an_empty_branch_is_an_empty_window():
-    assert select_window([], 10) == []
-
-
-# --- SSE 와 이름표 ---
-
-
-def test_a_frame_and_a_comment_are_encoded():
-    assert encode(Frame(event='delta', data='{"text":"a"}')) == 'event: delta\ndata: {"text":"a"}\n\n'
-    assert encode(Frame(event='x', data='1\n2', id='7')) == 'id: 7\nevent: x\ndata: 1\ndata: 2\n\n'
-    assert encode(Comment('heartbeat')) == ': heartbeat\n\n'
+# --- 이름표 ---
 
 
 def test_the_hold_reference_is_the_generation():

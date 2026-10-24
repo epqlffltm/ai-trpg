@@ -18,13 +18,13 @@ from datetime import UTC, datetime
 
 import pytest
 from ai_core.provider import ProviderError, Role
+from conversation_core.continuation import instruction
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.conversation.continuation import instruction
 from app.conversations.models import Conversation
 from app.main import API_PREFIX, STREAMS
 from app.turns import repository

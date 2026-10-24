@@ -1,7 +1,7 @@
-# chat-server/tests/test_changes.py
+# shared/conversation-core/tests/test_changes.py
 
 """
-모델이 답 끝에 쓰는 상태 바꾸기의 제안을 읽는 규칙(app/conversation/changes.py, markers.py, #676).
+모델이 답 끝에 쓰는 상태 바꾸기의 제안을 읽는 규칙(conversation_core/changes.py, markers.py, #676).
 DB 도 모델도 쓰지 않는다.
 
 보는 것.
@@ -14,9 +14,9 @@ DB 도 모델도 쓰지 않는다.
 
 import pytest
 
-from app.conversation.changes import MAX_LINES, Choice, Proposed, instruction, parse_changes
-from app.conversation.markers import CHANGES_MARKER
-from app.conversation.suggestions import MarkerHold, held_length, parse_suggestions, split_answer
+from conversation_core.changes import MAX_LINES, Choice, Proposed, instruction, parse_changes
+from conversation_core.markers import CHANGES_MARKER
+from conversation_core.suggestions import MarkerHold, held_length, parse_suggestions, split_answer
 
 
 def test_the_three_kinds_are_read():

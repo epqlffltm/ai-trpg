@@ -1,7 +1,8 @@
-# chat-server/app/conversation/sse.py
+# shared/conversation-core/src/conversation_core/sse.py
 
 """
-SSE(Server-Sent Events)의 글자 형식. 스트림에 실을 것을 글자로 바꾼다. 게임 서버의 것(app/realtime/sse.py)과 같다.
+SSE(Server-Sent Events)의 글자 형식. 스트림에 실을 것을 글자로 바꾼다.
+게임 서버의 것(trpg-server 의 app/realtime/sse.py)과 같다.
 
 SSE 는 끝나지 않는 HTTP 응답 하나에 메시지를 줄글로 흘려보내는 방식이다. 메시지 하나는 이렇게 생겼다.
 

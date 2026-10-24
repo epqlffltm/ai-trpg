@@ -1,4 +1,4 @@
-# chat-server/app/conversation/changes.py
+# shared/conversation-core/src/conversation_core/changes.py
 
 """
 모델이 답 끝에 쓰는 상태 바꾸기의 제안(#676, docs/architecture/chat-server.md 의 "모델의 제안"). DB 도 모델도 모른다.
@@ -10,7 +10,8 @@
   give rose         사용자에게 물건을 준다(물건의 id)
   move library      함께 다른 장소로 간다(장소의 id)
 
-여기서는 모양만 읽는다(parse_changes). 해도 되는지와 크기의 상한은 서버의 엔진이 본다(app/world/proposals.py).
+여기서는 모양만 읽는다(parse_changes). 해도 되는지와 크기의 상한은 쓰는 서버의 엔진이 본다
+(chat 서버의 app/world/proposals.py).
 모양이 틀린 줄은 버린다. 같은 종류가 여럿이면 처음 것만 쓴다. 오류로 만들지 않는다. 대화는 그대로다.
 """
 
@@ -18,8 +19,8 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
-from app.conversation.markers import CHANGES_CLOSING, CHANGES_MARKER, block_after
-from app.conversation.suggestions import clean_line
+from conversation_core.markers import CHANGES_CLOSING, CHANGES_MARKER, block_after
+from conversation_core.suggestions import clean_line
 
 # 블록에서 읽는 줄의 수의 상한. 모델이 길게 써도 이만큼만 본다
 MAX_LINES = 10

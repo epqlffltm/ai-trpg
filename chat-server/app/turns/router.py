@@ -32,12 +32,12 @@ import logging
 import uuid
 
 from ai_core.provider import GenerationParams
+from conversation_core import sse
+from conversation_core.relay import Relay
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from server_core.observability.metrics import measured_stream
 
-from app.conversation import sse
-from app.conversation.relay import Relay
 from app.core.config import Settings
 from app.core.dependencies import CurrentViewer, Now, utc_now
 from app.limits.routing import GENERATION_LIMIT

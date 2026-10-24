@@ -1,4 +1,4 @@
-# chat-server/app/conversation/lorebook.py
+# shared/conversation-core/src/conversation_core/lorebook.py
 
 """
 로어북의 항목을 골라 카드에 넣는다(#672, docs/architecture/chat-server.md 의 "로어북"). DB 도 모델도 모른다.
@@ -9,7 +9,7 @@
   - 나머지는 최근 말(SCAN_MESSAGES 개, 이번에 보낸 말 포함)에 키워드 가운데 하나가 나오면 넣는다.
     대소문자는 가리지 않고, 글자가 이어져 있으면 맞는다(한국어는 조사가 붙으므로 낱말의 경계를 보지 않는다)
   - 차례: 상시가 먼저(판의 차례), 그다음 키워드가 가장 최근에 나온 것부터(같으면 판의 차례)
-  - 뜻으로 찾은 항목(app/lore/recall.py)은 키워드로 고른 것 뒤에 붙는다. 키워드가 더 정확하다
+  - 뜻으로 찾은 항목(chat 서버의 app/lore/recall.py)은 키워드로 고른 것 뒤에 붙는다. 키워드가 더 정확하다
   - 상한: 항목 MAX_ENTRIES 개, 글자 MAX_CHARS 까지. 들어가지 않는 항목은 건너뛰고 다음 것을 본다
 항목은 판의 차례의 자리(index)로 가리킨다. 같은 id 의 항목이 두 로어북에 있어도 따로다.
 """

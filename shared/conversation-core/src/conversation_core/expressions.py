@@ -1,4 +1,4 @@
-# chat-server/app/conversation/expressions.py
+# shared/conversation-core/src/conversation_core/expressions.py
 
 """
 표정 고르기(2026-10-23 유저 결정). DB 도 모델도 모른다.
