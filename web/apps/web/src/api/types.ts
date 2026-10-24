@@ -152,6 +152,9 @@ export type WalletEntry = Billing['schemas']['Entry'];
 export type WalletEntries = Billing['schemas']['Entries'];
 export type Product = Billing['schemas']['Product'];
 export type Order = Billing['schemas']['Order'];
+export type AttendanceStatus = Billing['schemas']['AttendanceStatus'];
+export type AttendanceClaim = Billing['schemas']['AttendanceClaim'];
+export type AttendanceRewards = Billing['schemas']['Rewards'];
 // 주문 목록과 상품 목록은 이름 붙은 스키마가 없어 응답의 모양을 그대로 쓴다
 export type OrderPage = BillingOperations['listOrders']['responses'][200]['content']['application/json'];
 
