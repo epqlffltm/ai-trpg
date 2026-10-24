@@ -214,12 +214,18 @@ const DOOR_ACTS: Record<string, string> = {
   pick: '땄습니다',
   force: '부쉈습니다',
   repair: '고쳤습니다',
+  replace: '새것으로 바꿨습니다',
 };
 
+/** 무엇을 다뤘는지. 자물쇠 바꾸기는 문이 아니라 문의 자물쇠다 */
+function doorObject(payload: Payload): string {
+  if (text(payload, 'act') === 'replace') return '문의 자물쇠를';
+  return text(payload, 'device') === 'bar' ? '빗장을' : '문을';
+}
+
 function doorText(payload: Payload, ctx: EventContext, event: TableEvent): string {
-  const device = text(payload, 'device') === 'bar' ? '빗장' : '문';
   const act = DOOR_ACTS[text(payload, 'act') ?? ''] ?? '다뤘습니다';
-  return `${who(payload, ctx, event)}: ${placeOf(payload, 'from') ?? '?'} ↔ ${placeOf(payload, 'to') ?? '?'} ${device}을 ${act}`;
+  return `${who(payload, ctx, event)}: ${placeOf(payload, 'from') ?? '?'} ↔ ${placeOf(payload, 'to') ?? '?'} ${doorObject(payload)} ${act}`;
 }
 
 function givenText(payload: Payload, ctx: EventContext, event: TableEvent): string {

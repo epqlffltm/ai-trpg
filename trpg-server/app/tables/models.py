@@ -929,11 +929,16 @@ class TableRouteLock(Base):
     길은 판의 길의 두 끝으로 가리킨다(찾은 숨긴 길과 같다). 바꾸는 것은 엔진뿐이다.
     열쇠를 지닌 사람이 지나가면 열린다. 연 자물쇠는 누가 다시 잠그기 전까지 열린 채다.
     부서진 문(broken)은 열린 채이고 다시 잠그거나 걸지 못한다.
+    자물쇠를 바꾸면(lock_item) 판의 자물쇠 대신 그 자물쇠 물건의 자물쇠를 쓴다. 옛 열쇠로는 열지 못한다.
     """
 
     __tablename__ = 'table_route_locks'
-    # 부서진 문은 열린 채다. 엔진의 실수를 DB 가 한 번 더 막는다
-    __table_args__ = (CheckConstraint('NOT broken OR (NOT locked AND NOT barred)', name='broken_is_open'),)
+    __table_args__ = (
+        # 부서진 문은 열린 채다. 엔진의 실수를 DB 가 한 번 더 막는다
+        CheckConstraint('NOT broken OR (NOT locked AND NOT barred)', name='broken_is_open'),
+        # 자물쇠 물건 하나는 한 테이블에서 한 문에만 단다. 바꾸지 않은 문(NULL)은 여럿이다
+        UniqueConstraint('table_id', 'lock_item'),
+    )
 
     # 세 칸을 합쳐 기본 키로 삼는다. 한 길의 자물쇠는 하나다. 테이블의 행이 지워지면 함께 지워진다
     table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
@@ -947,6 +952,8 @@ class TableRouteLock(Base):
     barred: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
     # 부서졌는가. 부서진 문은 열린 채이고 고치기 전까지 다시 잠그거나 걸지 못한다
     broken: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
+    # 바꿔 단 자물쇠 물건(판 안의 물건 항목). 바꾸지 않았으면 None 이고 판의 자물쇠를 쓴다
+    lock_item: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, default=None)
 
 
 class TablePlaceItem(Base):

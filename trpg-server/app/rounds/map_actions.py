@@ -8,7 +8,7 @@
     그때는 가지 않고 왜 못 갔는지(reason)를 적는다.
     길의 조건(#281)은 차례가 왔을 때 본다. 받을 때는 보지 않는다. 앞 차례에 누가 문을 열었을 수 있다.
       - 자물쇠: 잠겨 있으면 그 열쇠를 지닌 사람만 간다. 가면서 연다. 연 문은 열린 채라 뒤의 일행도 지나간다.
-        열쇠가 없으면 가지 못한다(locked). 열쇠는 없어지지 않는다.
+        열쇠가 없으면 가지 못한다(locked). 열쇠는 없어지지 않는다. 자물쇠를 바꿔 달았으면 새 열쇠만 연다.
       - 넘기 판정: 지날 때마다 가는 사람이 판에 적힌 능력과 난이도로 굴린다. 부상의 영향은 판정하는 행동과 같다.
         실패하면 그 자리에 남고(cross_failed), 판에 실패의 피해를 적었으면 그만큼 다친다(떨어짐, 휩쓸림).
       - 빗장(#281): 걸려 있으면 빗장 쪽에 선 사람은 풀고 지나간다. 반대쪽에서는 지나가지 못한다(barred).
@@ -31,7 +31,7 @@ import uuid
 from dataclasses import asdict
 from typing import Protocol
 
-from app.assets.scenarios.snapshot import CrossSnapshot, LockSnapshot, RouteSnapshot, read_snapshot
+from app.assets.scenarios.snapshot import CrossSnapshot, ItemLockSnapshot, LockSnapshot, RouteSnapshot, read_snapshot
 from app.calendar import state as calendar
 from app.engine.action import MoveAction, SearchAction
 from app.engine.check import HinderedCheck, find_difficulty, resolve_hindered
@@ -113,8 +113,8 @@ def accept_search(member: TableMember, action: SearchAction) -> dict:
     return action.model_dump(mode='json')
 
 
-def holds_key(member: TableMember, lock: LockSnapshot) -> bool:
-    """이 캐릭터가 그 자물쇠의 열쇠를 지녔는가."""
+def holds_key(member: TableMember, lock: LockSnapshot | ItemLockSnapshot) -> bool:
+    """이 캐릭터가 그 자물쇠(판의 것이거나 바꿔 단 것)의 열쇠를 지녔는가."""
     return items.count_of(member.sheet, lock.key) >= 1
 
 
@@ -123,10 +123,11 @@ def open_lock(judging: Judging, member: TableMember, route: RouteSnapshot) -> tu
     길의 자물쇠를 지나간다. (지나갈 수 있는가, 열었는가)를 돌려준다.
 
     잠겨 있지 않으면 그냥 지나간다. 잠겨 있으면 열쇠를 지닌 사람만 열고 지나간다. 연 문은 열린 채다.
+    열쇠는 지금의 자물쇠의 것이다. 자물쇠를 바꿔 달았으면 새 열쇠다(#281).
     """
     if not route_locks.is_locked(judging.table, route):
         return True, False
-    if not holds_key(member, route.lock):
+    if not holds_key(member, route_locks.current_lock(judging.table, judging.snapshot, route)):
         return False, False
     route_locks.unlock(judging.table, route)
     return True, True
