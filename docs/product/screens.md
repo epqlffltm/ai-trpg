@@ -1685,7 +1685,7 @@ E4 에서 정한 것(2026-10-24, #678).
 | 재료 연결 | `rulebook_id`, `world_id`, `lorebook_ids`, `bestiary_ids` | 로어북 10, 몬스터 모음 10 |
 | 스타팅 | `openings` | 5 개, 하나에 2000 자 |
 | 인원과 캐릭터 | `recommended_players`, `character_modes`, `pregens`, `default_sheet`, `player_made_hp`, `reroll_allowed` | 추천 인원 1~4, 프리젠 8 |
-| 인물·물건·퀘스트 | `npc_sheets`, `items`, `starting_items`, `quests` | 인물 시트 100, 물건 규칙 100, 시작 물건 20, 퀘스트 50(조건은 퀘스트마다 5). 물건 규칙의 `lock`(`key` 새 열쇠 물건, `pick` 따는 판정)은 문에 다는 새 자물쇠다(#281, 장비만). |
+| 인물·물건·퀘스트 | `npc_sheets`, `items`, `starting_items`, `quests` | 인물 시트 100, 물건 규칙 100, 시작 물건 20, 퀘스트 50(조건은 퀘스트마다 5). 물건 규칙의 `lock`(`key` 새 열쇠 물건, `pick` 따는 판정)은 문에 다는 새 자물쇠다(#281, 장비만). 물건 규칙의 `cures`(룰북의 부상의 이름표 5개, 결손 빼고)는 쓰면 대상에게서 푸는 부상이다(#277, 소모품만). |
 | 돈(#278) | `currency`, `items[].price`, `pregens[].money`, `quests[].reward_money`, `npc_sheets[].merchant` | 화폐의 이름 20 자, 단위 10 자, 돈과 값은 1,000,000 까지, 되사는 값 0~100%. 화폐 없이 값·상인·돈을 적으면 게시할 때 `currency_missing` |
 | 장비(#276) | `items[].slots`, `items[].slot_count`, `starting_items[].wear`, `pregens[].items[].wear` | 칸은 룰북의 `equipment_slots`(8 개까지) 중에서. 차지하는 칸은 1~8, 들어갈 수 있는 칸보다 많지 않다. 소모품에는 칸이 없다. 시작할 때의 착용은 그 물건의 칸을 차지하는 칸의 수만큼, 시작 소지품과 한 프리젠의 소지품을 합쳐 겹치지 않게. 틀리면 게시 문제 `item_slot_invalid`, `starting_wear_invalid` |
 | 공격과 방어(#276) | `items[].attack`, `items[].defense`, `items[].guard`, `items[].ap`, `items[].ward`, `monster_sheets[].ward`, `npc_sheets[]`·`monster_sheets[]` 의 `equipment[].wear` 와 `attacks[].weapon`, `monster_sheets[].natural_armor` | 수치는 1~10, 칸이 있는 물건에만. NPC·몬스터의 착용은 시작 착용과 같은 검사, 무기는 착용한 장비 중 공격 보정이 있는 것, 타고난 방어의 부위는 룰북의 칸. 틀리면 게시 문제 `carried_wear_invalid`, `attack_weapon_invalid`, `natural_armor_invalid` |
@@ -1727,7 +1727,7 @@ E4 에서 정한 것(2026-10-24, #678).
 | 프리젠, 기본 시트 | `pregen_sheet_missing`, `pregen_sheet_invalid`, `pregens_too_few`, `default_sheet_missing`, `default_sheet_invalid` |
 | 직접 정하는 방식 | `player_made_hp_missing`, `point_buy_missing`, `score_roll_missing` |
 | 인물 시트 | `npc_sheet_entry_missing`, `npc_sheet_not_person`, `npc_sheet_invalid`, `npc_attack_invalid`, `default_npc_sheet_missing`, `default_npc_sheet_invalid` |
-| 물건 | `item_entry_missing`, `item_not_item`, `item_magnitude_missing`, `item_lock_invalid` |
+| 물건 | `item_entry_missing`, `item_not_item`, `item_magnitude_missing`, `item_lock_invalid`, `item_cure_invalid` |
 | 퀘스트 | `quest_entry_missing`, `quest_not_event`, `quest_condition_missing`, `quest_condition_invalid`, `quest_condition_impossible` |
 | 지도 | `map_place_missing`, `map_not_place`, `map_start_missing`, `route_find_invalid`, `cover_off_map`, `route_cross_invalid`, `route_key_repeated`, `route_open_invalid` |
 | 사건 규칙 | `happening_entry_missing`, `happening_not_event`, `happening_condition_missing`, `happening_condition_invalid`, `happening_condition_impossible`, `happening_place_off_map`, `happening_npc_not_person`, `happening_route_invalid` |

@@ -153,6 +153,7 @@ def to_item_action(declaration: Declaration | None) -> ItemActionNote | None:
             reason=used['reason'],
             target=other_name(declaration, used['target']),
             impact=to_impact(declaration.outcome.get('effect')),
+            cured=[one['name'] for one in used.get('cured') or []],
         )
     given = declaration.outcome.get('item_give')
     if given is not None:

@@ -266,6 +266,8 @@ class ItemActionNote:
     target: str | None = None
     # 회복하는 소모품을 썼으면 HP 의 변화
     impact: Impact | None = None
+    # 부상을 푸는 소모품을 썼으면 풀린 부상의 이름들(#277). 이 칸이 생기기 전에 굳힌 것은 빈 목록이다
+    cured: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
