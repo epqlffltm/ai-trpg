@@ -6,7 +6,7 @@ story 는 `story-server` 가 맡는다(2026-10-21. 그 전에는 `chat-server` �
 - chat 과 같은 것(대화 트리, 스트리밍, 과금, 기억, 장소와 소지품, 그림, 성인 등급)은 [chat 서버 설계](chat-server.md)를 따른다. 여기에는 story 에서 다르거나 더해지는 것만 적는다.
 - chat-server 와 나눈 선(주소, 포트, 토큰의 대상, 스키마, 가격 이름의 머리)과 함께 쓰는 코드(`shared/server-core`, `shared/ai-core`, `shared/conversation-core`)는 [chat 서버 설계의 story-server 와 나눈 선](chat-server.md#story-server-와-나눈-선)에 있다.
 - 화면은 [화면 명세의 D1~D7](../product/screens.md#story-화면의-공통-원칙)에 있다.
-- 서버는 아직 없다. 모두 계획이다.
+- 서버는 뼈대만 있다(`story-server/`, #591). 아래의 규칙은 계획이다.
 
 ## 목차
 
@@ -247,7 +247,9 @@ TRPG 의 퀘스트 조건과 같은 모양이다. 조건 하나는 (종류, 대�
 
 ## 만드는 순서
 
-chat 의 [만드는 순서](chat-server.md#만드는-순서) 1~5(대화, 한 번의 말, 조작, 가져오기, 장소와 소지품)가 먼저다. 그 코드의 대화 핵심을 `shared/conversation-core` 로 옮기고, `shared/server-core` 위에 `story-server` 의 뼈대를 세운 뒤에 쌓는다. 조각마다 PR 하나 이상이다.
+chat 의 [만드는 순서](chat-server.md#만드는-순서) 1~5(대화, 한 번의 말, 조작, 가져오기, 장소와 소지품)가 먼저다(했다). 그 위에 다음 차례로 쌓는다. 조각마다 PR 하나 이상이다.
+
+0. **준비.** `shared/server-core` 위에 `story-server` 의 뼈대(했다, #591. 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic, CI), compose 와 프록시에 붙이기(DB 계정의 초기화 스크립트 `10-story-role.sql`, 대시보드와 경보를 함께), asset 의 세계관 자산(판의 모양과 게시 검사), chat 의 대화 핵심을 `shared/conversation-core` 로 옮기기.
 
 1. **세계관과 세션.** 판 가져오기(인물, 장소, 이벤트, 엔딩), 세션 만들기와 목록.
 2. **장면의 인물.** 기본 장소, 일정, 동행의 위치 계산. 여러 인물의 말(말 조각, 말하는 사람 검증).

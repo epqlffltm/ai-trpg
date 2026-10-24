@@ -7,6 +7,7 @@
 [![notification-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/notification-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/notification-server.yml)
 [![asset-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/asset-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/asset-server.yml)
 [![chat-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/chat-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/chat-server.yml)
+[![story-server](https://github.com/epqlffltm/ai-trpg/actions/workflows/story-server.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/story-server.yml)
 [![web](https://github.com/epqlffltm/ai-trpg/actions/workflows/web.yml/badge.svg)](https://github.com/epqlffltm/ai-trpg/actions/workflows/web.yml)
 
 AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 서술만 담당한다.
@@ -26,6 +27,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | 알림 서버 (FastAPI) | [`notification-server/`](notification-server/README.md) | 뼈대(서버 실행, 설정, DB 연결과 마이그레이션, 상태 확인, CI), 알림 넣기(서버끼리의 서명), 알림함(목록, 읽지 않은 수, 읽음), 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, 보관 기간(30일) 정리, 컨테이너(compose 의 프로필 `app`)까지 완료. 게임 서버가 서술 모델의 은퇴를 방장에게, 운영자의 제재를 당사자에게 넣고, 결제 서버의 정리 작업이 결제·청약철회·환영 크레딧·곧 사라질 무료 크레딧을, 게시판 서버가 댓글과 답글을 넣는다 |
 | asset 서버 (FastAPI) | [`asset-server/`](asset-server/README.md) | 뼈대(공용 코드 `shared/server-core` 위의 서버 실행, 상태 확인, 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, CI), 계정 페르소나, 캐릭터(초안, 게시와 판, 공개 목록, 소개 글의 HTML 거르기), 다른 서버에 페르소나의 사본과 캐릭터의 판 내주기(서버끼리의 서명), 탈퇴 받기, 컨테이너(compose 의 프로필 `app`)까지 완료. 그림을 올리고 내주는 것은 예정(#566) |
 | chat 서버 (FastAPI) | [`chat-server/`](chat-server/README.md) | 뼈대(공용 코드 `shared/server-core` 위의 서버 실행, 상태 확인, 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, CI), 대화 시작(asset 서버에서 캐릭터의 판과 페르소나를 가져와 고정한다), 대화의 목록·읽기·지우기, 컨테이너(compose 의 프로필 `app`)까지 완료. 한 번의 말(스트리밍, 과금)은 다음이다(#590) |
+| story 서버 (FastAPI) | [`story-server/`](story-server/README.md) | 뼈대(공용 코드 `shared/server-core` 위의 서버 실행, 상태 확인, 인증 서버 토큰 검증과 끊긴 세션, 공통 관측 규격, CI)까지. 세계관과 세션, 장면의 인물이 다음이다(#591) |
 | 화면 (Vite, React, TypeScript) | [`web/`](web/README.md) | 뼈대(npm workspaces, 프록시의 이미지에 굽기, CI), 로그인(두 단계, 갱신은 한 번에 하나 #30), 가입(세 단계, 동의와 판마다의 문서), 비밀번호 찾기와 재설정, 첫 화면(서비스 고르기, 이어하기, 공개된 것)까지 완료. 본인인증, 서비스의 화면은 다음이다(#290) |
 
 ## 문서
@@ -41,6 +43,7 @@ AI GM이 진행하는 TRPG 플랫폼. 판정은 게임 엔진이 하고 LLM은 �
 | [billing-server/README.md](billing-server/README.md) | 결제 서버의 실행, 설정, API, 주문과 결제, 홀드, 크레딧, 정리 작업과 대사, 마이그레이션, 토큰 검증, 테스트, CI, 구조, 설계 메모 |
 | [asset-server/README.md](asset-server/README.md) | asset 서버의 실행, 설정, 상태 확인, API(계정 페르소나, 캐릭터와 게시, 공개 목록, 다른 서버에 내주기, 탈퇴), 소개 글의 HTML, 토큰 검증, 로그와 추적과 메트릭, 마이그레이션, 테스트 |
 | [chat-server/README.md](chat-server/README.md) | chat 서버의 실행, 설정, 상태 확인, API(대화), 스트리밍의 약속, 토큰 검증, 로그와 추적과 메트릭, 마이그레이션, 테스트 |
+| [story-server/README.md](story-server/README.md) | story 서버의 실행, 설정, 상태 확인, 토큰 검증, 로그와 추적과 메트릭, 마이그레이션, 테스트 |
 | [web/README.md](web/README.md) | 화면의 실행(개발 서버, 프록시의 이미지), 구조, 서버를 부르는 법과 토큰 갱신, API 의 타입 만들기, 동의 문서, 시험 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 기여 지침. 서버의 경계, 기본 검사, 브랜치와 PR 의 모양 |
 | [SECURITY.md](SECURITY.md) | 보안 정책. 취약점을 비공개로 알리는 길 |
@@ -111,6 +114,7 @@ docker compose ps
 - 알림 서버: [notification-server/README.md](notification-server/README.md#실행)
 - asset 서버: [asset-server/README.md](asset-server/README.md#실행)
 - chat 서버: [chat-server/README.md](chat-server/README.md#실행)
+- story 서버: [story-server/README.md](story-server/README.md#실행)
 - 화면: [web/README.md](web/README.md#실행). 컨테이너로 띄우면(아래 4) 프록시가 `http://localhost:8080` 에서 내준다
 
 ### 4. 모든 서버를 컨테이너로 (선택)
@@ -460,6 +464,7 @@ billing-server/           Go 결제 서버 (독립된 Go 모듈). 연습용이�
 notification-server/      FastAPI 알림 서버 (독립된 uv 프로젝트)
 asset-server/             FastAPI asset 서버. 계정 페르소나, 캐릭터, 그림 (독립된 uv 프로젝트, 만드는 중 #564)
 chat-server/              FastAPI chat 서버. 캐릭터 하나와 1:1 대화 (독립된 uv 프로젝트, 만드는 중 #590)
+story-server/             FastAPI story 서버. 세계관 안에서 여러 인물과 이야기 (독립된 uv 프로젝트, 만드는 중 #591)
 shared/                   FastAPI 서버들이 함께 쓰는 코드(server-core, ai-core). 서버의 이미지에 빌드할 때 넣는다
 web/                      화면(Vite, React, TypeScript, npm workspaces). 빌드한 것을 프록시의 이미지에 담는다(web/Dockerfile)
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
