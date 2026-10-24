@@ -83,7 +83,7 @@ describe('roundView', () => {
     expect(outcomeLine(give as unknown as Declaration['outcome'], rules)).toBe('약초 ×2 → 미아');
     const search = { search: { place: null, found: [{ to_place: { entry_id: 'p2', name: '지하실' } }], items: [] } };
     expect(outcomeLine(search as unknown as Declaration['outcome'], rules)).toBe('찾았습니다: 지하실 쪽 길');
-    expect(outcomeLine({ wait: { waited: true, minutes: 30, reason: null } } as unknown as Declaration['outcome'], rules)).toBe('30분을 기다렸습니다.');
+    expect(outcomeLine({ wait: { waited: true, minutes: 30, reason: null } } as unknown as Declaration['outcome'], rules)).toBe('30분을 기다렸습니다');
   });
 
   it('행동은 종류와 무엇을, 누구에게를 적는다. 난이도를 비우면 규칙의 기본이다', () => {
