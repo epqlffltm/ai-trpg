@@ -51,10 +51,36 @@ def member(member_id: str, character_id: str, **fields) -> dict:
     return {'id': member_id, 'character_id': character_id, 'affection': {'stages': STAGES}, **fields}
 
 
+# 도서관에 가면 버를 만난다. 선택지 둘이고, 고르는 것마다 효과가 다르다
+MEET = {
+    'id': 'meet',
+    'name': '도서관의 만남',
+    'when': {'match': 'all', 'items': [{'kind': 'reach_place', 'target': 'library'}]},
+    'scene': {'text': '도서관 구석에서 버가 책을 떨어뜨린다.', 'cast': ['beo', 'ari']},
+    'on_open': [{'kind': 'affection', 'target': 'beo', 'amount': 3}],
+    'choices': [
+        {'id': 'help', 'text': '책을 주워 준다', 'effects': [{'kind': 'affection', 'target': 'beo', 'amount': 5}]},
+        {
+            'id': 'walk',
+            'text': '함께 나간다',
+            'effects': [{'kind': 'accompany_start', 'target': 'beo'}, {'kind': 'move_to', 'target': 'school'}],
+        },
+    ],
+}
+# 만남을 본 뒤 3일째부터 열린다. 장미를 하나 받는다
+CONFESSION_HINT = {
+    'id': 'hint',
+    'name': '쪽지',
+    'when': {'match': 'all', 'items': [{'kind': 'event_seen', 'target': 'meet'}, {'kind': 'day_at_least', 'count': 3}]},
+    'scene': {'text': '책 사이에 쪽지가 끼워져 있다.'},
+    'on_open': [{'kind': 'give_item', 'target': 'rose', 'amount': 1}],
+}
+
+
 def full_world(ari: str, beo: str) -> dict:
     """
     게시할 수 있는 세계관. 학교(시작), 도서관(길로 이어짐), 옥상(길이 없다)이 있다.
-    아리는 도서관에 있고 저녁에는 친하면 학교로 간다. 버는 기본 장소가 없다.
+    아리는 도서관에 있고 저녁에는 친하면 학교로 간다. 버는 기본 장소가 없고 이벤트(만남)로만 나온다.
     """
     return {
         'name': '여름 학원',
@@ -91,6 +117,7 @@ def full_world(ari: str, beo: str) -> dict:
             ),
             member('beo', beo, map='stage', map_stage='친함'),
         ],
+        'events': [MEET, CONFESSION_HINT],
     }
 
 

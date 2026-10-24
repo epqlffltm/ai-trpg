@@ -361,7 +361,7 @@ chat 의 대화는 1일째의 시작 시각에서 시작해 이동(길의 시간
 
 story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story.md), 화면 명세 D7 의 서버). `app/worlds/`.
 열린 세계에서 여러 인물이 장소를 오가고, 사용자가 장소를 옮기고 물건을 건네며 이야기를 이어 간다. 세 조각으로 만든다(2026-10-24 유저 결정).
-지금은 첫 조각이다. 이벤트(조건, 효과, 선택지)와 고백과 엔딩, story 에 내주기는 다음 조각이다.
+지금은 두 조각(초안과 게시, 이벤트)이 있다. 고백과 엔딩, story 에 내주기는 다음 조각이다.
 
 ```json
 {
@@ -376,6 +376,13 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
   "start_place": "school",
   "items": [{"id": "rose", "name": "장미", "consumable": false}],
   "start_items": [{"item": "rose", "count": 2}],
+  "events": [{
+    "id": "meet", "name": "도서관의 만남", "repeat": false,
+    "when": {"match": "all", "items": [{"kind": "reach_place", "target": "library"}]},
+    "scene": {"text": "도서관 구석에서 버가 책을 떨어뜨린다.", "cast": ["beo"], "image_id": null, "collectible": false},
+    "on_open": [{"kind": "affection", "target": "beo", "amount": 3}],
+    "choices": [{"id": "help", "text": "책을 주워 준다", "effects": [{"kind": "affection", "target": "beo", "amount": 5}]}]
+  }],
   "cast": [{
     "id": "ari", "character_id": "<내 캐릭터의 id>", "home": "library",
     "schedule": [{"slot": "evening", "place": "school",
@@ -405,15 +412,30 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
   | `day_at_least`, `day_at_most` | `count` | n일째 이상이다, 이하다 |
   | `slot_is` | `target`(시간대) | 지금의 시간대가 그것이다 |
   | `accompanied` | `target`(인물) | 그 인물과 동행 중이다 |
+  | `event_seen` | `target`(이벤트) | 그 이벤트가 열린 적이 있다 |
+
+- **이벤트**(50개까지, 판의 형식 2). 세계관 자체의 목록이다(로어북의 사건 항목이 아니다, 2026-10-24 유저 결정). story 의 엔진이 행동 뒤에 `when` 을 맞춰 보고, 맞는 것 가운데 적은 차례로 하나만 연다.
+  `repeat` 이 아니면 한 번만 열린다. `scene` 은 장면 지시(`text` 1,000자, 모델이 읽는다), 장면에 부르는 인물(4명까지), 일러스트다.
+  일러스트가 있고 `collectible` 이면 열릴 때 계정에 남는다(일러스트를 여는 것은 효과가 아니라 장면의 칸이다). 일러스트 없이 `collectible` 이면 422 다.
+  `on_open` 은 열리자마자, 선택지(3개까지)의 `effects` 는 고르면 반영한다.
+- **효과**(목록 하나에 10개). 종류마다 `amount` 를 맞게 적는다(아니면 422).
+
+  | 종류 | 칸 | 뜻 |
+  | --- | --- | --- |
+  | `affection` | `target`(인물), `amount`(±1~100) | 호감도를 바꾼다. 0~100 안으로 자른다 |
+  | `give_item`, `take_item` | `target`(물건), `amount`(1~99) | 사용자에게 준다, 가져간다(가진 만큼까지) |
+  | `accompany_start`, `accompany_end` | `target`(인물) | 동행을 시작한다, 끝낸다 |
+  | `move_to` | `target`(장소) | 사용자(와 동행)를 옮긴다. 시간은 흐르지 않는다 |
 
 - **게시.** 막는 것(409, 게시해 보기에도 같은 이름)과 알리는 것(`warnings`, 게시는 된다)을 나눈다(2026-10-24 유저 결정).
   - 막는 것: `start_place_missing`(장소가 없거나 시작 장소가 없다), `start_slot_missing`, `cast_empty`, `place_missing`, `slot_missing`, `item_missing`,
-    `cast_target_missing`, `stage_missing`(조건의 단계나 지도의 단계가 그 인물에 없다), `character_missing`(지웠거나 남의 것), `character_unpublished`,
+    `cast_target_missing`(조건, 효과, 장면), `event_missing`(없는 이벤트를 봤다), `stage_missing`(조건의 단계나 지도의 단계가 그 인물에 없다), `character_missing`(지웠거나 남의 것), `character_unpublished`,
     `character_rating_too_high`(전체이용가 세계관에 성인 캐릭터), `lorebook_missing`, `lorebook_unpublished`, `image_not_owned`
-  - 알리는 것: `place_unreachable`(시작 장소에서 길로 닿지 않는 장소)
-- **판**(형식 1). 인물마다 캐릭터의 마지막 판에서 story 에 쓰는 칸 `{id, version, name, intro_html, speech_examples, age, gender, image_id, sprites}` 만 복사한다.
+  - 알리는 것: `place_unreachable`(시작 장소에서 길로 닿지 않는 장소), `event_unreachable`(열릴 수 없는 이벤트: 자기를 봐야 열린다,
+    열릴 수 없는 이벤트를 봐야 열린다, 기한 뒤의 날을 기다린다, 날짜의 조건이 겹치지 않는다), `cast_never_present`(기본 장소도 일정도 없고 장면에도 동행에도 나오지 않는 인물)
+- **판**(형식 2, 1 의 판은 이벤트가 없는 것으로 읽는다). 인물마다 캐릭터의 마지막 판에서 story 에 쓰는 칸 `{id, version, name, intro_html, speech_examples, age, gender, image_id, sprites}` 만 복사한다.
   chat 에만 쓰는 칸(지도, 시작 상황, 물건, 호감도, 이벤트 씬)은 넣지 않는다. 보이기는 기본을 채운 정해진 값으로 굳힌다. 로어북은 캐릭터처럼 마지막 판을 복사한다.
-  캐릭터나 로어북을 고쳐도 이미 게시한 세계관의 판은 그대로다. 판에 쓰인 그림(대표, 소개, 장소, 물건, 인물의 그림)을 적어 두고, 공개 세계관이면 남도 그 그림을 본다.
+  캐릭터나 로어북을 고쳐도 이미 게시한 세계관의 판은 그대로다. 판에 쓰인 그림(대표, 소개, 장소, 물건, 인물의 그림, 이벤트의 일러스트)을 적어 두고, 공개 세계관이면 남도 그 그림을 본다.
 - 공개 목록, 신고와 숨김, story 에 내주는 길은 아직 없다. 공개로 두는 것(운영자만)은 지금 그림이 남에게 보이는 것만 바꾼다.
 
 ### 신고와 숨김

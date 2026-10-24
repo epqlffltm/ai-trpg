@@ -8,8 +8,8 @@ story 의 세계관과 그 판의 테이블 모델(#591, docs/architecture/story
   - story 서버는 세션을 시작할 때 판 하나를 가져가 복사해 고정한다(내주는 길은 세 번째 조각에서 만든다).
 
 세계관은 세 조각으로 만든다(2026-10-24 유저 결정).
-  1. 초안, 인물, 지도와 물건, 시간대, 보이기, 게시와 판(판의 형식 1, 이 조각)
-  2. 이벤트(조건, 효과, 선택지)
+  1. 초안, 인물, 지도와 물건, 시간대, 보이기, 게시와 판(판의 형식 1)
+  2. 이벤트(조건, 효과, 선택지, 판의 형식 2)
   3. 고백과 엔딩, 엔딩의 빠짐 검사, story 에 내주기
 인물은 만든 사람의 캐릭터를 가리키고 게시할 때 그 마지막 판을 세계관의 판에 복사한다
 (로어북과 같은 방식, 2026-10-24 유저 결정).
@@ -57,6 +57,20 @@ MAX_CONDITIONS = 10
 CONDITION_MAX_COUNT = DEADLINE_MAX_DAYS
 # 세계관이 가리키는 로어북의 수. 캐릭터와 같다
 WORLD_MAX_LOREBOOKS = 3
+# 이벤트(story.md 의 "이벤트"). 개수, 이름, 장면 지시(모델이 읽는다),
+# 장면에 불러들이는 인물의 수(장면의 인물 상한과 같다)
+WORLD_MAX_EVENTS = 50
+EVENT_NAME_MAX_LENGTH = 30
+SCENE_TEXT_MAX_LENGTH = 1000
+SCENE_MAX_CAST = 4
+# 선택지는 0~3개(story.md 의 "정한 것"). 선택지의 글, 효과 목록 하나의 효과 수
+EVENT_MAX_CHOICES = 3
+CHOICE_TEXT_MAX_LENGTH = 100
+MAX_EFFECTS = 10
+# 효과 하나가 호감도를 바꾸는 크기의 상한. 이벤트는 큰 장면이라 선물의 규칙(20)보다 넓게 둔다. 값은 0~100 안으로 자른다
+EFFECT_MAX_CHANGE = 100
+# 물건을 주고 가져가는 수의 상한. 시작 소지품과 같다
+EFFECT_MAX_COUNT = 99
 
 
 class AfterEnding(enum.StrEnum):
@@ -112,7 +126,7 @@ class ConditionKind(enum.StrEnum):
       day_at_most        count                 n일째 이하다
       slot_is            target: 시간대        지금의 시간대가 그것이다
       accompanied        target: 인물          그 인물과 동행 중이다
-    이벤트를 봤다(event_seen)는 이벤트를 만드는 두 번째 조각에서 더한다.
+      event_seen         target: 이벤트        그 이벤트가 열린 적이 있다(판의 형식 2)
     """
 
     REACH_PLACE = 'reach_place'
@@ -124,6 +138,29 @@ class ConditionKind(enum.StrEnum):
     DAY_AT_MOST = 'day_at_most'
     SLOT_IS = 'slot_is'
     ACCOMPANIED = 'accompanied'
+    EVENT_SEEN = 'event_seen'
+
+
+class EffectKind(enum.StrEnum):
+    """
+    효과 하나가 무엇을 바꾸는가(story.md 의 "효과"). 엔진(story 서버)만 반영한다. 모델의 글에는 효과가 없다.
+
+    종류마다 쓰는 칸이 정해져 있다(app/worlds/schemas.py 의 Effect).
+      affection        target: 인물, amount: ±n   그 인물의 호감도를 바꾼다(0~100 안으로 자른다)
+      give_item        target: 물건, amount: n    사용자에게 그 물건을 준다
+      take_item        target: 물건, amount: n    사용자에게서 그 물건을 가져간다(가진 만큼까지)
+      accompany_start  target: 인물               그 인물과 동행을 시작한다
+      accompany_end    target: 인물               그 인물과 동행을 끝낸다
+      move_to          target: 장소               사용자(와 동행)를 그 장소로 옮긴다. 시간은 흐르지 않는다
+    일러스트를 여는 것은 효과가 아니라 장면의 칸(collectible)이다. 이벤트가 열리면 그 장면의 일러스트를 연다.
+    """
+
+    AFFECTION = 'affection'
+    GIVE_ITEM = 'give_item'
+    TAKE_ITEM = 'take_item'
+    ACCOMPANY_START = 'accompany_start'
+    ACCOMPANY_END = 'accompany_end'
+    MOVE_TO = 'move_to'
 
 
 class World(Base):
@@ -177,6 +214,8 @@ class World(Base):
     # 인물들 [{"id", "character_id", "home", "schedule", "affection", "reveal", "map", "map_stage", "panel"}].
     # character_id 는 만든 사람의 캐릭터다. 게시할 때 그 마지막 판을 복사한다
     cast: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    # 이벤트들 [{"id", "name", "when", "repeat", "scene", "on_open", "choices"}](판의 형식 2). 적은 차례가 여는 차례다
+    events: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
     # 가리키는 로어북들의 id(자기 로어북만). 게시할 때 그 마지막 판이 판에 복사된다
     lorebooks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), default=list, server_default='{}')
 
