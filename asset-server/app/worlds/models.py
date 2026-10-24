@@ -10,7 +10,7 @@ story 의 세계관과 그 판의 테이블 모델(#591, docs/architecture/story
 세계관은 세 조각으로 만든다(2026-10-24 유저 결정).
   1. 초안, 인물, 지도와 물건, 시간대, 보이기, 게시와 판(판의 형식 1)
   2. 이벤트(조건, 효과, 선택지, 판의 형식 2)
-  3. 고백과 엔딩, 엔딩의 빠짐 검사, story 에 내주기
+  3. 고백과 엔딩, 엔딩의 빠짐 검사, story 에 내주기(판의 형식 3)
 인물은 만든 사람의 캐릭터를 가리키고 게시할 때 그 마지막 판을 세계관의 판에 복사한다
 (로어북과 같은 방식, 2026-10-24 유저 결정).
 캐릭터의 판 가운데 story 에 쓰는 칸(이름, 소개, 말투, 나이, 성별, 대표 그림, 캐릭터 그림)만 복사한다.
@@ -71,6 +71,14 @@ MAX_EFFECTS = 10
 EFFECT_MAX_CHANGE = 100
 # 물건을 주고 가져가는 수의 상한. 시작 소지품과 같다
 EFFECT_MAX_COUNT = 99
+# 고백(story.md 의 "고백과 엔딩"). 실패했을 때 내려가는 호감도와 다시 고백하지 못하는 날의 기본과 상한
+CONFESSION_FAIL_DROP_DEFAULT = 10
+CONFESSION_COOLDOWN_DEFAULT_DAYS = 1
+CONFESSION_MAX_COOLDOWN_DAYS = 30
+# 엔딩. 개수, 이름, 못 본 사람에게 보이는 힌트의 길이
+WORLD_MAX_ENDINGS = 30
+ENDING_NAME_MAX_LENGTH = 30
+ENDING_HINT_MAX_LENGTH = 100
 
 
 class AfterEnding(enum.StrEnum):
@@ -139,6 +147,27 @@ class ConditionKind(enum.StrEnum):
     SLOT_IS = 'slot_is'
     ACCOMPANIED = 'accompanied'
     EVENT_SEEN = 'event_seen'
+
+
+class ConfessionFailure(enum.StrEnum):
+    """고백에 실패하면 어떻게 되는가. 계속(호감도가 내려가고 정한 날 동안 다시 못 한다) 또는 실패 엔딩으로 끝."""
+
+    CONTINUE = 'continue'
+    END = 'end'
+
+
+class EndingTrigger(enum.StrEnum):
+    """
+    엔딩의 판정이 무엇으로 시작되는가(story.md 의 "고백과 엔딩").
+    그 인물에게 고백 성공(confess_success, target: 인물), 실패(confess_fail, target: 인물),
+    기한이 지났다(deadline, target 없음), 그 이벤트가 열렸다(event, target: 이벤트).
+    시작이 일어나면 그 시작의 엔딩을 적은 차례로 맞춰 보고 처음 맞는 것 하나를 고른다.
+    """
+
+    CONFESS_SUCCESS = 'confess_success'
+    CONFESS_FAIL = 'confess_fail'
+    DEADLINE = 'deadline'
+    EVENT = 'event'
 
 
 class EffectKind(enum.StrEnum):
@@ -216,6 +245,9 @@ class World(Base):
     cast: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
     # 이벤트들 [{"id", "name", "when", "repeat", "scene", "on_open", "choices"}](판의 형식 2). 적은 차례가 여는 차례다
     events: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    # 엔딩들 [{"id", "name", "trigger", "when", "scene", "unlock", "hint"}](판의 형식 3). 적은 차례가 맞춰 보는 차례다.
+    # 인물마다의 고백(confession)은 인물(cast)의 칸이다
+    endings: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
     # 가리키는 로어북들의 id(자기 로어북만). 게시할 때 그 마지막 판이 판에 복사된다
     lorebooks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), default=list, server_default='{}')
 

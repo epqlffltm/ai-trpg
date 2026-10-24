@@ -13,6 +13,8 @@ story 의 세계관을 만들고, 고치고, 지우고, 게시한다(#591, 화�
   - 붙이는 그림은 자기 그림이어야 한다(422). 게시할 때는 소개 글과 인물의 그림까지 다시 본다(막는 것).
   - 인물은 자기 캐릭터만 가리킨다(422 character_not_owned). 게시할 때 그 마지막 판을 복사한다.
     지웠거나 게시한 적이 없는 캐릭터면 게시를 막는다. 로어북도 같다(422 lorebook_not_owned).
+  - story 서버에 내주는 판은 마지막 판이다. 쓸 수 있는 사람은 주인이거나, 공개 세계관의 판의 등급을 볼 수 있는 사람이다.
+    등급은 주인에게도 본다. 주인에게는 403 adult_content_required, 남에게는 404 다(캐릭터와 같다).
 """
 
 import uuid
@@ -29,7 +31,7 @@ from app.characters.service import LorebookNotOwnedError, OperatorOnlyError, req
 from app.content.html import Removed
 from app.images import service as images
 from app.lorebooks import repository as lorebooks
-from app.ratings import allowed_ratings, require_rating
+from app.ratings import AdultContentRequiredError, allowed_ratings, require_rating
 from app.worlds import repository
 from app.worlds.documents import CastCharacterDocument, build_document
 from app.worlds.models import World, WorldVersion
@@ -260,3 +262,39 @@ async def get_version(session: AsyncSession, owner_id: uuid.UUID, world_id: uuid
     if version is None:
         raise WorldNotFoundError
     return version
+
+
+def is_owner(world: World, viewer: AccessClaims) -> bool:
+    """그 사람이 만든 세계관인가."""
+    return world.owner_id == viewer.user_id
+
+
+def require_reachable(world: World, viewer: AccessClaims) -> None:
+    """주인이 아니면 공개여야 한다. 아니면 WorldNotFoundError(있는지도 드러내지 않는다)."""
+    if not is_owner(world, viewer) and world.visibility != Visibility.PUBLIC:
+        raise WorldNotFoundError
+
+
+def require_usable_rating(world: World, version: WorldVersion, viewer: AccessClaims) -> None:
+    """판의 등급을 그 사람이 쓸 수 있어야 한다. 주인이면 AdultContentRequiredError, 남이면 WorldNotFoundError."""
+    if version.rating in allowed_ratings(viewer):
+        return
+    if is_owner(world, viewer):
+        raise AdultContentRequiredError
+    raise WorldNotFoundError
+
+
+async def get_usable_latest(
+    session: AsyncSession, viewer: AccessClaims, world_id: uuid.UUID
+) -> tuple[World, WorldVersion]:
+    """
+    그 사람이 쓸 수 있는 세계관과 그 마지막 판. story 서버가 세션을 시작하거나 새 판을 물을 때 쓴다.
+    없거나 게시한 적이 없거나 쓸 수 없으면 WorldNotFoundError, 주인인데 등급을 쓸 수 없으면 AdultContentRequiredError.
+    """
+    found = await repository.find_latest(session, world_id)
+    if found is None:
+        raise WorldNotFoundError
+    world, version = found
+    require_reachable(world, viewer)
+    require_usable_rating(world, version, viewer)
+    return world, version

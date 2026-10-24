@@ -47,9 +47,14 @@ from app.worlds.models import (
     CAST_MAX_SCHEDULE,
     CHOICE_TEXT_MAX_LENGTH,
     CONDITION_MAX_COUNT,
+    CONFESSION_COOLDOWN_DEFAULT_DAYS,
+    CONFESSION_FAIL_DROP_DEFAULT,
+    CONFESSION_MAX_COOLDOWN_DAYS,
     DEADLINE_MAX_DAYS,
     EFFECT_MAX_CHANGE,
     EFFECT_MAX_COUNT,
+    ENDING_HINT_MAX_LENGTH,
+    ENDING_NAME_MAX_LENGTH,
     EVENT_MAX_CHOICES,
     EVENT_NAME_MAX_LENGTH,
     HOURS_PER_DAY,
@@ -60,6 +65,7 @@ from app.worlds.models import (
     SLOT_NAME_MAX_LENGTH,
     VERSION_NOTE_MAX_LENGTH,
     WORLD_MAX_CAST,
+    WORLD_MAX_ENDINGS,
     WORLD_MAX_EVENTS,
     WORLD_MAX_ITEMS,
     WORLD_MAX_LOREBOOKS,
@@ -70,7 +76,9 @@ from app.worlds.models import (
     WORLD_MIN_SLOTS,
     AfterEnding,
     ConditionKind,
+    ConfessionFailure,
     EffectKind,
+    EndingTrigger,
     MapPresence,
     Match,
     PanelField,
@@ -378,6 +386,22 @@ class CastAffection(BaseModel):
     gifts: Annotated[list[Gift], Field(max_length=CAST_MAX_GIFTS), AfterValidator(unique_gifts)] = []
 
 
+class Confession(BaseModel):
+    """
+    인물에게 하는 고백(story.md 의 "고백과 엔딩"). 호감도가 stage(단계의 이름) 이상이고 when 이 맞으면 성공이다.
+    실패하면 on_fail 대로 한다. 계속(continue)이면 호감도를 fail_drop 만큼 내리고 cooldown_days 동안 다시 못 한다.
+    끝(end)이면 그 인물에게 고백 실패로 시작되는 엔딩을 판정한다. 비어 있으면(null) 고백할 수 없는 인물이다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    stage: ConditionValue
+    when: Conditions = Conditions()
+    on_fail: ConfessionFailure = ConfessionFailure.CONTINUE
+    fail_drop: Annotated[int, Field(ge=0, le=AFFECTION_MAX)] = CONFESSION_FAIL_DROP_DEFAULT
+    cooldown_days: Annotated[int, Field(ge=1, le=CONFESSION_MAX_COOLDOWN_DAYS)] = CONFESSION_COOLDOWN_DEFAULT_DAYS
+
+
 class CastMember(BaseModel):
     """
     인물 하나. character_id 는 만든 사람의 캐릭터다. 게시할 때 그 마지막 판의 story 에 쓰는 칸을 복사한다.
@@ -386,6 +410,7 @@ class CastMember(BaseModel):
     home 은 기본 장소다. 비우면 어디에도 없다(이벤트로만 나온다). schedule 은 기본 장소를 덮어쓰는 일정이다.
     reveal, map, panel 은 보이기의 덮어쓰기다. 비우면 세계관의 기본을 쓴다.
     map_stage 는 지도에 보이는 호감도의 단계다. 이 인물의 지도가 stage 일 때 쓴다.
+    confession 은 고백이다(판의 형식 3). 비우면 고백할 수 없다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -399,6 +424,7 @@ class CastMember(BaseModel):
     map: MapPresence | None = None
     map_stage: ConditionValue | None = None
     panel: list[PanelField] | None = None
+    confession: Confession | None = None
 
 
 def unique_cast(cast: list[CastMember]) -> list[CastMember]:
@@ -423,20 +449,70 @@ def reject_repeated_lorebooks(ids: list[uuid.UUID]) -> list[uuid.UUID]:
 Lorebooks = Annotated[list[uuid.UUID], Field(max_length=WORLD_MAX_LOREBOOKS), AfterValidator(reject_repeated_lorebooks)]
 DeadlineDays = Annotated[int, Field(ge=1, le=DEADLINE_MAX_DAYS)]
 
+# 엔딩의 시작마다 target 이 무엇인가. 인물(고백), 이벤트, 없음(기한)
+TRIGGER_TARGETS = frozenset({EndingTrigger.CONFESS_SUCCESS, EndingTrigger.CONFESS_FAIL, EndingTrigger.EVENT})
+
+
+class Trigger(BaseModel):
+    """엔딩의 시작. 고백 성공과 실패는 인물, 이벤트는 이벤트의 id 를 target 에 적는다. 기한은 target 이 없다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: EndingTrigger
+    target: Key | None = None
+
+    @model_validator(mode='after')
+    def target_for_the_kind(self) -> Self:
+        """기한 말고는 target 을 적고, 기한은 적지 않는다."""
+        if (self.kind in TRIGGER_TARGETS) != (self.target is not None):
+            raise ValueError(f'{self.kind} 의 target 이 맞지 않습니다.')
+        return self
+
+
+class Ending(BaseModel):
+    """
+    엔딩 하나(story.md 의 "고백과 엔딩"). trigger 가 일어나면 그 시작의 엔딩을 적은 차례로 맞춰 보고 when 이 맞는
+    첫 엔딩을 고른다. scene 은 엔딩의 장면이다(모델이 쓴다). unlock 이면 계정의 엔딩 기록과 갤러리에 남는다.
+    hint 는 못 본 사람에게 보이는 한 줄이다. 못 본 엔딩의 이름은 story 가 내려보내지 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: Key
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=ENDING_NAME_MAX_LENGTH)]
+    trigger: Trigger
+    when: Conditions = Conditions()
+    scene: Scene
+    unlock: bool = True
+    hint: Annotated[str, StringConstraints(strip_whitespace=True, max_length=ENDING_HINT_MAX_LENGTH)] = ''
+
+
+def unique_endings(endings: list[Ending]) -> list[Ending]:
+    reject_repeated_keys([ending.id for ending in endings])
+    return endings
+
+
+Endings = Annotated[list[Ending], Field(max_length=WORLD_MAX_ENDINGS), AfterValidator(unique_endings)]
+
 # DB 에 dict(의 목록)로 적는 칸
-DOCUMENT_LISTS = ('slots', 'places', 'paths', 'items', 'start_items', 'cast', 'events')
+DOCUMENT_LISTS = ('slots', 'places', 'paths', 'items', 'start_items', 'cast', 'events', 'endings')
 # 고칠 때 null 로 비울 수 있는 칸. 그림, 시작 장소와 시간대, 기한은 "없음"이 null 이다
 NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'start_slot', 'deadline_days'})
 
 
 def attached_images(
-    image_id: uuid.UUID | None, places: list[WorldPlace], items: list[WorldItem], events: list[Event]
+    image_id: uuid.UUID | None, places: list[WorldPlace], items: list[WorldItem], scenes: list[Scene]
 ) -> list[uuid.UUID]:
-    """붙인 그림들. 대표 그림, 장소의 배경(기본, 시간대마다), 물건의 그림, 이벤트의 일러스트. 없는 것은 뺀다."""
+    """붙인 그림들. 대표 그림, 장소의 배경(기본, 시간대마다), 물건의 그림, 이벤트와 엔딩의 일러스트. 없는 것은 뺀다."""
     found = [image_id] if image_id is not None else []
     found += [entry.image_id for entry in [*places, *items] if entry.image_id is not None]
-    found += [event.scene.image_id for event in events if event.scene.image_id is not None]
+    found += [scene.image_id for scene in scenes if scene.image_id is not None]
     return found + [background for place in places for background in place.backgrounds.values()]
+
+
+def scenes_of(events: list[Event], endings: list[Ending]) -> list[Scene]:
+    """이벤트와 엔딩의 장면들."""
+    return [event.scene for event in events] + [ending.scene for ending in endings]
 
 
 def cast_characters(cast: list[CastMember]) -> list[uuid.UUID]:
@@ -477,11 +553,12 @@ class WorldCreate(BaseModel):
     start_items: StartItems = []
     cast: Cast = []
     events: Events = []
+    endings: Endings = []
     lorebooks: Lorebooks = []
 
     def image_ids(self) -> list[uuid.UUID]:
         """붙인 그림들. 자기 그림인지 볼 것들이다."""
-        return attached_images(self.image_id, self.places, self.items, self.events)
+        return attached_images(self.image_id, self.places, self.items, scenes_of(self.events, self.endings))
 
     def character_ids(self) -> list[uuid.UUID]:
         """인물들이 가리키는 캐릭터들."""
@@ -521,6 +598,7 @@ class WorldUpdate(BaseModel):
     start_items: StartItems | None = None
     cast: Cast | None = None
     events: Events | None = None
+    endings: Endings | None = None
     lorebooks: Lorebooks | None = None
 
     @model_validator(mode='after')
@@ -537,7 +615,8 @@ class WorldUpdate(BaseModel):
 
     def image_ids(self) -> list[uuid.UUID]:
         """보낸 칸에 붙인 그림들. 자기 그림인지 볼 것들이다."""
-        return attached_images(self.image_id, self.places or [], self.items or [], self.events or [])
+        scenes = scenes_of(self.events or [], self.endings or [])
+        return attached_images(self.image_id, self.places or [], self.items or [], scenes)
 
     def character_ids(self) -> list[uuid.UUID]:
         """보낸 인물들이 가리키는 캐릭터들."""
@@ -567,6 +646,7 @@ class WorldDetail(BaseModel):
     # 인물들. 지운 캐릭터를 가리키는 인물이 남아 있을 수 있다(다시 게시할 때 막힌다)
     cast: list[CastMember]
     events: list[Event]
+    endings: list[Ending]
     lorebooks: list[uuid.UUID]
     latest_version: int | None
     published_at: datetime | None
@@ -638,3 +718,23 @@ class WorldPublishCheck(BaseModel):
     problems: list[str]
     warnings: list[str]
     removed: list[RemovedItem]
+
+
+class WorldCopy(BaseModel):
+    """
+    story 서버에 내주는 판. 세션을 시작할 때 가져가 고정한다.
+    가져간 쪽은 번호를 적어 두고, 지금의 번호(WorldVersionNumber)가 크면 "새 판이 있다"를 알린다.
+    """
+
+    id: uuid.UUID
+    version: int
+    rating: Rating
+    published_at: datetime
+    document: WorldDocument
+
+
+class WorldVersionNumber(BaseModel):
+    """세계관의 지금 판 번호. 화면을 열 때 한 번 묻는다. 문서는 싣지 않는다."""
+
+    id: uuid.UUID
+    version: int
