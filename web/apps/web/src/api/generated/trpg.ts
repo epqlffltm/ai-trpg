@@ -7404,6 +7404,11 @@ export interface components {
             starting_items: components["schemas"]["ItemStack-Input"][];
             /** Title */
             title: string;
+            /**
+             * Wanders
+             * @default []
+             */
+            wanders: components["schemas"]["WanderTable-Input"][];
             /** World Id */
             world_id?: string | null;
         };
@@ -7483,6 +7488,8 @@ export interface components {
              */
             updated_at: string;
             visibility: components["schemas"]["Visibility"];
+            /** Wanders */
+            wanders: components["schemas"]["WanderTable-Output"][];
             /** World Id */
             world_id: string | null;
         };
@@ -7531,7 +7538,7 @@ export interface components {
          *     null 을 보내면 비운다.
          *     보내지 않으면 그대로 둔다.
          *     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-         *     quests, routes, landmarks, place_items, covers, happenings, npc_places, character_modes 는
+         *     quests, routes, landmarks, place_items, covers, wanders, happenings, npc_places, character_modes 는
          *     보낸 목록으로 통째로 바꾼다.
          *     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
          *     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -7591,6 +7598,8 @@ export interface components {
             starting_items?: components["schemas"]["ItemStack-Input"][] | null;
             /** Title */
             title?: string | null;
+            /** Wanders */
+            wanders?: components["schemas"]["WanderTable-Input"][] | null;
             /** World Id */
             world_id?: string | null;
         };
@@ -7823,7 +7832,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 56
+             * @default 57
              */
             format: number;
             /**
@@ -7890,6 +7899,11 @@ export interface components {
             starting_items: components["schemas"]["ItemStackSnapshot"][];
             /** Title */
             title: string;
+            /**
+             * Wanders
+             * @default []
+             */
+            wanders: components["schemas"]["WanderTableSnapshot"][];
             world: components["schemas"]["WorldSnapshot"] | null;
         };
         /**
@@ -8713,6 +8727,149 @@ export interface components {
             reaction: components["schemas"]["NpcAttitude"] | null;
             /** Roll */
             roll: number;
+        };
+        /**
+         * WanderMonster
+         * @description 무작위 조우 표의 한 줄(#283). 붙인 도감의 몬스터 하나(monster_id)가 count 마리 나온다.
+         *
+         *     weight 는 이 줄이 뽑힐 몫이다. 표의 몫을 모두 더한 것 가운데 이 줄의 몫만큼 뽑힌다.
+         *     surprise 는 조우와 같다. 쉬는 중에 나오면 적은 것과 상관없이 몬스터가 기습한다.
+         *     몬스터가 시트를 적은 몬스터인지는 게시할 때 본다(조우와 같다).
+         */
+        "WanderMonster-Input": {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /**
+             * Monster Id
+             * Format: uuid
+             */
+            monster_id: string;
+            /** @default none */
+            surprise: components["schemas"]["Surprise"];
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+        };
+        /**
+         * WanderMonster
+         * @description 무작위 조우 표의 한 줄(#283). 붙인 도감의 몬스터 하나(monster_id)가 count 마리 나온다.
+         *
+         *     weight 는 이 줄이 뽑힐 몫이다. 표의 몫을 모두 더한 것 가운데 이 줄의 몫만큼 뽑힌다.
+         *     surprise 는 조우와 같다. 쉬는 중에 나오면 적은 것과 상관없이 몬스터가 기습한다.
+         *     몬스터가 시트를 적은 몬스터인지는 게시할 때 본다(조우와 같다).
+         */
+        "WanderMonster-Output": {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /** Monster Id */
+            monster_id: string;
+            /** @default none */
+            surprise: components["schemas"]["Surprise"];
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+        };
+        /**
+         * WanderMonsterSnapshot
+         * @description 무작위 조우 표의 한 줄(#283). 판의 몬스터 하나(monster_id)가 count 마리, 뽑힐 몫(weight), 누가 기습하는가.
+         */
+        WanderMonsterSnapshot: {
+            /** Count */
+            count: number;
+            /**
+             * Monster Id
+             * Format: uuid
+             */
+            monster_id: string;
+            /** @default none */
+            surprise: components["schemas"]["Surprise"];
+            /** Weight */
+            weight: number;
+        };
+        /**
+         * WanderTable
+         * @description 무작위 조우 표 하나(#283). 장소(place_id)에서 하루의 때(times)에 쓰는 표다.
+         *
+         *     걸리는 시간이 있는 길을 한 칸 와서 그 장소에 닿거나, 그 장소에서 길게 쉬면 엔진이 한 번 굴린다.
+         *     chance(0~100)% 로 조우가 나고, 나면 몬스터의 줄 하나를 몫(weight)대로 뽑아 그 장소에 놓는다.
+         *     place_id 를 비우면 판의 기본 표다. 표를 하나도 적지 않은 장소에서 쓴다. 기본 표도 없으면 조우가 없다.
+         *     times 를 비우면 언제나 쓴다. 한 장소(또는 기본 표)의 표들은 때가 겹치지 않는다. 때가 맞는 표가 없으면 조우가 없다.
+         *     chance 가 0 이면 조우가 나지 않는 표다(마을처럼 안전한 곳). 그때는 몬스터를 적지 않는다.
+         *     장소가 맵의 장소인지, 몬스터가 시트를 적은 몬스터인지는 게시할 때 본다.
+         */
+        "WanderTable-Input": {
+            /** Chance */
+            chance: number;
+            /**
+             * Monsters
+             * @default []
+             */
+            monsters: components["schemas"]["WanderMonster-Input"][];
+            /** Place Id */
+            place_id?: string | null;
+            /**
+             * Times
+             * @default []
+             */
+            times: components["schemas"]["TimeOfDay"][];
+        };
+        /**
+         * WanderTable
+         * @description 무작위 조우 표 하나(#283). 장소(place_id)에서 하루의 때(times)에 쓰는 표다.
+         *
+         *     걸리는 시간이 있는 길을 한 칸 와서 그 장소에 닿거나, 그 장소에서 길게 쉬면 엔진이 한 번 굴린다.
+         *     chance(0~100)% 로 조우가 나고, 나면 몬스터의 줄 하나를 몫(weight)대로 뽑아 그 장소에 놓는다.
+         *     place_id 를 비우면 판의 기본 표다. 표를 하나도 적지 않은 장소에서 쓴다. 기본 표도 없으면 조우가 없다.
+         *     times 를 비우면 언제나 쓴다. 한 장소(또는 기본 표)의 표들은 때가 겹치지 않는다. 때가 맞는 표가 없으면 조우가 없다.
+         *     chance 가 0 이면 조우가 나지 않는 표다(마을처럼 안전한 곳). 그때는 몬스터를 적지 않는다.
+         *     장소가 맵의 장소인지, 몬스터가 시트를 적은 몬스터인지는 게시할 때 본다.
+         */
+        "WanderTable-Output": {
+            /** Chance */
+            chance: number;
+            /**
+             * Monsters
+             * @default []
+             */
+            monsters: components["schemas"]["WanderMonster-Output"][];
+            /** Place Id */
+            place_id?: string | null;
+            /**
+             * Times
+             * @default []
+             */
+            times: components["schemas"]["TimeOfDay"][];
+        };
+        /**
+         * WanderTableSnapshot
+         * @description 무작위 조우 표 하나(#283). 판 안의 장소 항목 하나(place_id, 비우면 기본 표)에서 하루의 때(times, 비우면 언제나)에
+         *     쓴다. 한 번 굴리면 chance% 로 조우가 나고, 나면 몬스터의 줄 하나를 몫대로 뽑는다.
+         */
+        WanderTableSnapshot: {
+            /** Chance */
+            chance: number;
+            /**
+             * Monsters
+             * @default []
+             */
+            monsters: components["schemas"]["WanderMonsterSnapshot"][];
+            /** Place Id */
+            place_id?: string | null;
+            /**
+             * Times
+             * @default []
+             */
+            times: components["schemas"]["TimeOfDay"][];
         };
         /**
          * WearRequest

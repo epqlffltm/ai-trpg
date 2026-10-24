@@ -353,7 +353,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | `assets` | 모든 자산의 공통 부분. 소유자, 종류, 제목, 메모, 공개 범위, 등급(시나리오만 쓴다), 만든 시각과 고친 시각, 지운 시각 |
 | `worlds` | 세계관의 내용. `setting`, `gm_notes` |
 | `rulebooks` | 룰북의 내용. `gm_guide`, `rules`(규칙, JSON) |
-| `scenarios` | 시나리오의 내용. `rulebook_id`, `world_id`, `openings`, `min_players`, `max_players`, `pregens`, `character_modes`, `default_sheet`, `npc_sheets`, `default_npc_sheet`, `monster_sheets`, `encounters`, `items`, `starting_items`, `currency`, `quests`, `start_place`, `routes`, `landmarks`, `npc_places`, `hp_base`, `hp_cap` |
+| `scenarios` | 시나리오의 내용. `rulebook_id`, `world_id`, `openings`, `min_players`, `max_players`, `pregens`, `character_modes`, `default_sheet`, `npc_sheets`, `default_npc_sheet`, `monster_sheets`, `encounters`, `wanders`, `items`, `starting_items`, `currency`, `quests`, `start_place`, `routes`, `landmarks`, `npc_places`, `hp_base`, `hp_cap` |
 | `lorebooks` | 로어북. 자신의 칸은 없다 |
 | `lore_entries` | 로어북의 항목. `name`, `keywords`, `content`, `kind`, `true_names`(지목의 정답). 자산이 아니다 |
 | `scenario_lorebooks` | 시나리오와 로어북의 연결. 행 하나가 "이 시나리오에 이 로어북이 붙어 있다"는 뜻이다 |
@@ -512,6 +512,7 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 | `npc_sheets` (NPC 시트, 100개) | 붙인 로어북의 인물 항목에 주는 숫자와 처음 태도, 지닌 물건. 하나하나가 `{"entry_id", "sheet", "attitude", "equipment", "inventory", "dull", "on_caught", "attacks", "merchant"}` 이다. `attitude` 는 `friendly`(우호), `neutral`(중립, 기본), `wary`(경계, #494), `hostile`(적대)이다. 시트가 없는 인물은 중립이다(#474). `equipment`(장비, 5줄), `inventory`(소지품, 10줄), `dull`(둔한지)은 몬스터 시트와 같은 모양이다(#457). 처음 쓰러졌을 때의 드롭은 여기서만 나온다. 시트가 없는 인물은 아무것도 지니지 않는다. `on_caught` 는 훔치다 들켰을 때다. 늘 적대가 되고, `hostile`(기본)은 적대만, `fight` 는 싸움도 붙는다(#457). `attacks`(공격, 5개까지)는 몬스터 시트의 공격과 같은 모양이다(#487). 장비의 착용(`wear`)과 공격의 무기(`weapon`)도 몬스터 시트와 같다(#276). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다([NPC 의 공격](#라운드)). 비우면 공격하지 않는다. `merchant`(기본 `false`)는 상인인지다(#278). 상인은 `inventory` 중 값이 있는 물건을 팔고(그 개수가 재고), 값이 있는 물건을 사 준다([사고팔기와 돈](#라운드)). 시트는 비워 둘 수 없다. 같은 항목이 두 번 있으면 거부한다 |
 | `default_npc_sheet` (기본 NPC 시트) | 시트가 없는 인물이 받는 숫자. 초안일 때는 비워 둘 수 있다 |
 | `encounters` (조우, 50개) | 맵의 장소에 있는 몬스터. 하나하나가 `{"place_id", "monster_id", "count", "surprise"}` 이다(1~10마리). `surprise` 는 누가 기습하는가다: `none`(기본, 기습 없음), `monsters`(몬스터가 매복), `party`(일행이 기습, 잠든 무리). 장소는 붙인 로어북의 장소 항목, 몬스터는 시트를 적은 몬스터다. 같은 장소의 같은 몬스터는 한 줄에 마리 수로 적는다(두 줄이면 거부한다). 맵이 있어야 한다(`start_place`) |
+| `wanders` (무작위 조우 표, 50개) | 길을 오거나 길게 쉴 때 엔진이 굴리는 조우 표(#283). 하나하나가 `{"place_id", "times", "chance", "monsters"}` 다. `place_id` 는 맵의 장소이고, 비우면(`null`) 판의 기본 표로 표를 하나도 적지 않은 장소에서 쓴다. `times` 는 이 표를 쓰는 하루의 때(`dawn`, `morning`, `day`, `evening`, `night`)이고 비우면 언제나다. 한 장소(또는 기본 표)의 표들은 때가 겹치지 못한다. 때가 맞는 표가 없으면 조우가 없다. `chance`(0~100)는 한 번 굴릴 때 조우가 날 확률(%)이다. 0 이면 조우가 나지 않는 표(마을처럼 안전한 곳)이고 몬스터를 적지 않는다. 0 보다 크면 몬스터를 적어야 한다. `monsters`(10줄)는 하나하나가 `{"monster_id", "count", "weight", "surprise"}` 다(시트를 적은 몬스터, 1~10마리(기본 1), 뽑힐 몫 1~100(기본 1), 기습은 `encounters` 와 같다). 한 표에 같은 몬스터는 한 줄이다. 굴리는 것은 다음 단계다(이 형식으로는 저장과 게시만 한다) |
 | `monster_sheets` (몬스터 시트, 100개) | 붙인 도감의 몬스터에 주는 숫자와 공격, 지닌 물건. 하나하나가 `{"monster_id", "sheet", "attacks", "equipment", "inventory", "dull"}` 이다. `attacks`(5개)는 공격(스킬) 하나하나가 `{"name", "ability", "difficulty", "harm", "weapon"}` 이다(이름 30자, 나머지는 룰북의 이름표). `weapon` 은 그 공격에 쓰는 무기로, 장비 줄에 적어 착용한 물건 중 공격 보정이 있는 것이다(#276, 비우면 맨몸). 비우면 공격하지 않는 몬스터다. 같은 이름의 공격이 둘이면 거부한다. `equipment`(장비, 5개)와 `inventory`(소지품, 10개)는 마리마다 지닌 물건 하나하나가 `{"entry_id", "count", "chance", "wear"}` 이다(붙인 로어북의 물건 항목, 1~99개(기본 1), 쓰러졌을 때 떨어질 확률 1~100%(기본 100)). 장비는 몸에 걸치거나 쥔 것, 소지품은 품에 넣은 것이다. `wear` 는 장비 줄에만 적는 착용한 칸들이다(#276, 앉은 사람의 시작 착용과 같은 규칙). 비우면 아무것도 지니지 않는다. 드롭은 지닌 것에서만 나온다([몬스터의 드롭](#라운드)). 같은 물건이 두 줄이면(장비와 소지품에 걸쳐서도) 거부한다. 예전의 `drops` 는 없어졌다(`inventory` 로 옮겼다, 마이그레이션 `5d2c8e7a1f34`). `dull`(기본 `false`)은 둔한 몬스터다. 훔치기가 룰북의 `steal.dull` 만큼 쉽다. 시트를 적은 몬스터만 이 시나리오가 쓴다(판에 들어간다). 시트는 비워 둘 수 없다. `natural_armor`(8줄까지)는 부위마다 타고난 방어(가죽, 비늘)로 하나하나가 `{"slot", "defense"}`(룰북의 칸, 1~10)다(#276). 착용한 방어구에 더한다. `ward`(1~10)는 타고난 불굴 세이브다(#276). 같은 몬스터가 두 번 있으면 거부한다 |
 | `items` (아이템 규칙, 100개) | 붙인 로어북의 물건 항목이 엔진에서 무엇인지. 하나하나가 `{"entry_id", "kind", "heals", "rarity", "price"}` 이다. `kind` 는 `gear`(장비, 기본) 또는 `consumable`(소모품). `heals` 는 소모품을 쓸 때 되돌리는 HP 의 양으로, 룰북의 등급(`magnitudes`)의 이름이다(예: `light`). 장비에는 적지 않는다. `rarity` 는 물건의 등급으로 `normal`(노말, 기본), `rare`(레어), `unique`(유니크), `epic`(에픽), `legendary`(레전드)의 차례다. 높을수록 훔치기 어렵다. `price`(1~1,000,000)는 상인이 파는 값이다(#278). 비우면(기본) 사고팔 수 없는 물건이다. `slots` 는 그 물건을 착용할 수 있는 룰북의 칸들이고(#276, 8개, 비우면 착용하지 않는 물건), `slot_count`(1~8, 기본 1)는 착용할 때 차지하는 칸의 수다. 두 손 검은 `["main_hand", "off_hand"]` 에 `2` 다. 소모품에는 칸을 적지 않는다. `attack`(무기의 공격 보정), `defense`(차지한 칸의 방어), `guard`(모든 부위의 방어, 방패), `ap`(무기의 관통력, `attack` 이 있는 물건에만), `ward`(불굴 세이브의 값, 부적·역장)는 1~10 이고 칸이 있는 물건에만 적는다(#276, [공격과 방어](#장비)). `lock` 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠로 `{"key", "pick"}` 이다(#281, 장비에만). `key` 는 새 열쇠(붙인 로어북의 물건 항목, 자물쇠 물건 자신은 안 된다), `pick` 은 따는 판정(`{"ability", "difficulty", "tool"}`, 길의 자물쇠의 것과 같다, 비우면 따지 못한다)이다. 행동 '바꾸기'로 판에 자물쇠가 있던 문에 단다. 규칙을 적지 않은 물건은 값이 없는 노말 장비이고 착용하지 않는다. 같은 항목이 두 번 있으면 거부한다 |
 | `starting_items` (시작 소지품, 20가지) | 캐릭터 모두가 테이블이 시작할 때 받는 물건. 하나하나가 `{"entry_id", "count", "wear"}` 이다(1~99개). 같은 물건은 한 줄에 개수로 적는다. `wear` 는 시작할 때 그 물건 하나를 착용하는 칸들이다(#276, 비우면 착용하지 않는다). 그 물건의 칸이어야 하고 차지하는 칸의 수와 같아야 한다. 프리젠의 소지품도 같고, 시작 소지품과 고른 프리젠의 소지품의 착용이 같은 칸을 겹쳐 쓰면 게시하지 않는다. 퀘스트의 보상에는 적지 않는다 |
@@ -806,6 +807,8 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 | `encounter_not_place` | 장소가 아닌 항목(인물, 물건 …)을 가리키는 조우가 있다 |
 | `encounter_monster_missing` | 시트를 적지 않은 몬스터를 가리키는 조우가 있다. 판에 들어가지 않는 몬스터라 숫자가 없다 |
 | `encounter_map_missing` | 조우가 있는데 시작 장소가 없다. 맵이 없는 시나리오에는 몬스터를 둘 곳이 없다 |
+| `wander_off_map` | 무작위 조우 표의 장소가 맵의 장소(시작 장소, 길의 끝, 명소)가 아니거나, 맵(시작 장소)이 없는데 표가 있다(#283) |
+| `wander_monster_missing` | 시트를 적지 않은 몬스터를 적은 무작위 조우 표가 있다(#283) |
 | `monster_attack_invalid` | 몬스터의 공격의 능력치, 난이도, 양의 등급이 룰북의 규칙에 없다 |
 | `unique_monster_repeated` | 네임드 몹이 두 마리 이상 놓인다. 조우 한 줄에 둘 이상이거나, 두 줄 이상에 나온다 |
 
@@ -871,6 +874,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
   - 형식 51: 장소마다의 커버(`covers`: `place_id`, `cover`, #276 의 커버 세이브). 그 전 판은 커버가 없는 것으로 읽는다
   - 형식 52: 길의 조건(#281). 넘기 판정(`routes[].cross`)과 자물쇠(`routes[].lock`). 그 전 판은 둘 다 없는 것으로 읽는다
   - 형식 53: 문을 여는 다른 길(#281). 따는 판정(`routes[].lock.pick`), 빗장(`routes[].bar`), 부수는 판정(`routes[].force`). 그 전 판은 셋 다 없는 것으로 읽는다(자물쇠는 열쇠로만 연다)
+  - 형식 57: 무작위 조우 표(`wanders`, #283). 그 전 판은 표가 없는 것으로 읽는다(길을 와도 쉬어도 조우가 없다)
   - 형식 56: 문에 다는 새 자물쇠(`items[].lock`, #281). 그 전 판은 자물쇠 물건이 없는 것으로 읽는다(자물쇠를 바꾸지 못한다)
   - 형식 55: 부서진 문을 고치는 판정(`routes[].repair`, #281). 그 전 판은 없는 것으로 읽는다(사람이 고치지 못한다)
   - 형식 54: 문을 다루는 사건의 효과(#281). `happenings[].effects[]` 의 `lock_route`, `unlock_route`, `repair_route` 와 장치(`device`). 그 전 판의 효과는 장치가 없는 것으로 읽는다(옮기기뿐이었다)

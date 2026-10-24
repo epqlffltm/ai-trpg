@@ -46,6 +46,7 @@ from app.assets.models import (
     World,
 )
 from app.assets.scenarios.upgrades import UPGRADES
+from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
 from app.engine.ruleset import Ruleset
 from app.engine.sheet import Sheet
@@ -122,7 +123,8 @@ from app.engine.sheet import Sheet
 #      repair_route 와 그 길의 두 끝(from_place, to_place), 잠그고 여는 장치(device)
 #  55: 부서진 문을 고치는 판정이 있다(#281). routes[].repair: 능력, 난이도, 도구
 #  56: 물건이 문에 다는 새 자물쇠일 수 있다(#281). items[].lock: 열쇠와 따는 판정
-SNAPSHOT_FORMAT = 56
+#  57: 무작위 조우 표(wanders: 장소(비우면 기본 표), 하루의 때, 확률, 몬스터의 줄)가 있다(#283)
+SNAPSHOT_FORMAT = 57
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다
@@ -524,6 +526,27 @@ class CoverSnapshot(BaseModel):
     cover: int
 
 
+class WanderMonsterSnapshot(BaseModel):
+    """무작위 조우 표의 한 줄(#283). 판의 몬스터 하나(monster_id)가 count 마리, 뽑힐 몫(weight), 누가 기습하는가."""
+
+    monster_id: uuid.UUID
+    count: int
+    weight: int
+    surprise: Surprise = Surprise.NONE
+
+
+class WanderTableSnapshot(BaseModel):
+    """
+    무작위 조우 표 하나(#283). 판 안의 장소 항목 하나(place_id, 비우면 기본 표)에서 하루의 때(times, 비우면 언제나)에
+    쓴다. 한 번 굴리면 chance% 로 조우가 나고, 나면 몬스터의 줄 하나를 몫대로 뽑는다.
+    """
+
+    place_id: uuid.UUID | None = None
+    times: list[TimeOfDay] = []
+    chance: int
+    monsters: list[WanderMonsterSnapshot] = []
+
+
 class PlayerMadeHpSnapshot(BaseModel):
     """플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한이다."""
 
@@ -582,6 +605,9 @@ class Snapshot(BaseModel):
     place_items: list[PlaceItemSnapshot] = []
     # 장소마다의 커버(#276). 장소는 판 안의 장소 항목이다. 있으면 시작 장소도 있다. 형식 50 보다 옛 판에는 없다
     covers: list[CoverSnapshot] = []
+    # 무작위 조우 표들(#283). 장소는 판 안의 장소 항목이고 몬스터는 판의 몬스터다. 있으면 시작 장소도 있다.
+    # 형식 57 보다 옛 판에는 없다
+    wanders: list[WanderTableSnapshot] = []
     # 사건 규칙들. 판 안의 로어북 사건 항목마다 많아야 하나다. 효과의 장소는 판의 맵의 장소다(#367)
     happenings: list[HappeningSnapshot] = []
     # 인물의 자리들(#282). 인물 하나에 많아야 하나다. 인물은 판 안의 인물 항목, 장소는 판 안의 장소 항목이다.
@@ -775,6 +801,24 @@ class Snapshot(BaseModel):
             raise ValueError('장소 항목이 아닌 것을 가리키는 커버가 있습니다.')
         if self.covers and self.start_place is None:
             raise ValueError('커버가 있는데 시작 장소가 없습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_wander_targets(self) -> 'Snapshot':
+        """
+        무작위 조우 표가 모두 판 안의 장소 항목과 판의 몬스터를 가리키는지, 표가 있으면 시작 장소가 있는지 본다(#283).
+        아니면 거부한다.
+
+        게시할 때 이미 막는다(scenarios/publishing.py). 판을 읽는 쪽은 나온 몬스터에 숫자와 자리가 있다고 믿고 쓴다.
+        """
+        places = {entry.id for entry in place_entries(self)}
+        monsters = {monster.id for monster in self.monsters}
+        if any(table.place_id is not None and table.place_id not in places for table in self.wanders):
+            raise ValueError('장소 항목이 아닌 것을 가리키는 조우 표가 있습니다.')
+        if any(line.monster_id not in monsters for table in self.wanders for line in table.monsters):
+            raise ValueError('판에 없는 몬스터를 가리키는 조우 표가 있습니다.')
+        if self.wanders and self.start_place is None:
+            raise ValueError('조우 표가 있는데 시작 장소가 없습니다.')
         return self
 
     @model_validator(mode='after')
@@ -1096,6 +1140,7 @@ def build_snapshot(
         landmarks=list(scenario.landmarks),
         place_items=[PlaceItemSnapshot(**rule) for rule in scenario.place_items],
         covers=[CoverSnapshot(**rule) for rule in scenario.covers],
+        wanders=[WanderTableSnapshot(**table) for table in scenario.wanders],
         happenings=[HappeningSnapshot(**rule) for rule in scenario.happenings],
         npc_places=[NpcPlaceSnapshot(**place) for place in scenario.npc_places],
         player_made_hp=scenario.player_made_hp,
