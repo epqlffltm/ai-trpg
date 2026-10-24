@@ -207,6 +207,14 @@ function movedText(payload: Payload, ctx: EventContext, event: TableEvent): stri
   return `${who(payload, ctx, event)}: ${placeOf(payload, 'from') ?? '?'} → ${placeOf(payload, 'to') ?? '?'}${by}`;
 }
 
+/** 무작위 조우(#283). 길에서 만났는지 쉬는 중에 덮쳤는지 */
+function wanderText(payload: Payload): string {
+  const monster = part(payload, 'monster');
+  const name = monster ? text(monster, 'name') : null;
+  const how = text(payload, 'cause') === 'rest' ? '쉬는 중에 덮쳤습니다' : '나타났습니다';
+  return `조우: ${placeOf(payload, 'place') ?? '?'} · ${name ?? '?'} ${count(payload, 'count') ?? '?'}마리가 ${how}`;
+}
+
 /** 문을 다룬 것(#281). 해낸 것만 이벤트로 온다 */
 const DOOR_ACTS: Record<string, string> = {
   lock: '잠갔습니다',
@@ -325,6 +333,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   narration_model_replaced: (p, ctx) => `서술 모델을 바꿨습니다: ${model(p, ctx, 'from')} → ${model(p, ctx)}(앞의 모델이 끝남)`,
   narration_model_unavailable: (p, ctx) => `서술 모델 ${model(p, ctx)}: 쓸 수 없습니다. 방장이 모델을 고를 때까지 서술하지 못합니다.`,
   happening_occurred: (p) => `일어난 일: ${text(p, 'name') ?? '?'}`,
+  monsters_appeared: (p) => wanderText(p),
 
   // 몸
   hp_changed: (p, ctx, e) =>

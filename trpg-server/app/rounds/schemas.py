@@ -748,7 +748,7 @@ class RestOut(BaseModel):
     쉰 결과. 엔진이 정했다(app/rounds/rests.py). 판정이 없다.
 
     쉬는 라운드는 적어도 그 휴식의 시간만큼 이어진다. 그 라운드에 다쳤거나 쓰러졌거나 죽었으면 휴식이 깨져
-    회복하지 않는다(rested 가 false, reason 이 hurt, downed, dead).
+    회복하지 않는다(rested 가 false, reason 이 hurt, downed, dead, ambushed(무작위 조우의 몬스터가 덮쳤다, #283)).
     """
 
     # short 또는 long

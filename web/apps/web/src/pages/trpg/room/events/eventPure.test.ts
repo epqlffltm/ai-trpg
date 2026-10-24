@@ -35,7 +35,7 @@ const ALL: EventType[] = [
   'character_revived', 'round_closed', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
   'narration_model_not_for_sale', 'narration_model_retiring', 'narration_model_replaced', 'narration_model_unavailable',
   'member_dropped', 'narration_credits_released', 'table_ended', 'item_traded', 'money_paid',
-  'equipment_changed',
+  'equipment_changed', 'door_changed', 'monsters_appeared',
 ];
 
 const IN_ROUNDS: EventType[] = ['gm_narration', 'player_action', 'check_rolled'];
@@ -47,6 +47,13 @@ describe('eventLine', () => {
       if (IN_ROUNDS.includes(type)) expect(result, type).toBeNull();
       else expect(result?.text, type).toBeTruthy();
     }
+  });
+
+  it('무작위 조우는 어디에 무엇이 몇 마리 나왔는지, 쉬는 중이었는지 보인다(#283)', () => {
+    const place = { entry_id: 'p1', name: '깊은 수로' };
+    const monster = { id: 'm1', name: '수로 쥐' };
+    expect(line('monsters_appeared', { place, monster, count: 3, cause: 'arrive' })?.text).toBe('조우: 깊은 수로 · 수로 쥐 3마리가 나타났습니다');
+    expect(line('monsters_appeared', { place, monster, count: 1, cause: 'rest' })?.text).toBe('조우: 깊은 수로 · 수로 쥐 1마리가 쉬는 중에 덮쳤습니다');
   });
 
   it('사람은 캐릭터의 이름, 없으면 user_id, 없으면 행한 사람으로 부른다', () => {

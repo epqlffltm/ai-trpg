@@ -318,6 +318,21 @@ class TravelNote:
 
 
 @dataclass(frozen=True)
+class WanderNote:
+    """
+    무작위 조우로 나온 무리(app/rounds/wanders.py, #283). 엔진이 굴려 이 캐릭터가 서 있는 곳에 놓았다.
+
+    monster 는 몬스터의 이름, count 는 마리 수, cause 는 무엇이 불렀나(arrive: 길을 와서 닿았다, rest: 쉬는 중이다)다.
+    쉬는 중에 나왔으면 몬스터가 덮쳐 쉬기가 깨졌다. 그 마리들은 [몬스터]에도 있다. 서술자는 나타나는 장면을 그리되,
+    수는 이대로이고 다른 몬스터를 더하지 않는다.
+    """
+
+    monster: str
+    count: int
+    cause: str
+
+
+@dataclass(frozen=True)
 class CoverNote:
     """
     엄폐하는 행동의 결과(app/rounds/covers.py, #276). 엔진이 정한 것이다. 굴림이 없다.
@@ -621,6 +636,9 @@ class Move:
     # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 서 있는 맵의 장소. 맵이 없는 테이블이면 None 이다.
     # 위치를 바꾸는 것은 서버뿐이다. 서술자는 다른 곳으로 옮기지 않는다
     place: PlaceNote | None = None
+    # 이 라운드가 닫힐 때 이 캐릭터가 서 있는 곳에 무작위 조우로 나온 무리(#283). 없었으면 None 이다.
+    # 이 칸이 생기기 전에 굳힌 것은 None 이다
+    wander: WanderNote | None = None
 
 
 @dataclass(frozen=True)

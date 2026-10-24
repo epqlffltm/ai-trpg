@@ -9,6 +9,7 @@
 
 차례를 정하는 법은 셋이다. 앞의 것이 같을 때만 뒤의 것을 본다.
   1. 기습한 쪽이 먼저다. 만난 첫 라운드(engaged_round)에만 조우의 기습(surprise)을 쓴다.
+     무작위 조우(#283)로 나온 마리는 그 마리에 적힌 기습을 쓴다.
      monsters 면 그 조우의 마리가, party 면 그 장소에 서 있는 캐릭터가 먼저다. NPC 는 기습하지 않는다.
   2. 규칙의 차례 능력치(initiative_ability)의 점수가 높은 쪽이 먼저다. 규칙에 없으면(None) 모두 같다.
   3. 그래도 같으면 서버의 주사위다. 같은 무리만 굴린다.
@@ -81,9 +82,15 @@ def encounter_of(snapshot: Snapshot, monster: SceneMonster) -> EncounterSnapshot
 
 
 def surprise_of(snapshot: Snapshot, monster: SceneMonster, round_number: int) -> Surprise:
-    """이 마리의 조우가 이번 라운드에 쓰는 기습. 만난 첫 라운드가 아니면 기습이 없다."""
+    """
+    이 마리의 조우가 이번 라운드에 쓰는 기습. 만난 첫 라운드가 아니면 기습이 없다.
+
+    무작위 조우(#283)로 나온 마리는 기습을 스스로 갖는다. 같은 장소에 같은 몬스터의 판의 조우가 있어도 그것을 쓴다.
+    """
     if monster.state.engaged_round != round_number:
         return Surprise.NONE
+    if monster.state.surprise is not None:
+        return Surprise(monster.state.surprise)
     encounter = encounter_of(snapshot, monster)
     return encounter.surprise if encounter is not None else Surprise.NONE
 
