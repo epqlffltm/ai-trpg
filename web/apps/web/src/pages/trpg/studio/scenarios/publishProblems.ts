@@ -67,6 +67,8 @@ const PROBLEMS: Record<string, ProblemText> = {
   encounter_not_place: { text: '장소가 아닌 항목의 조우가 있습니다.', section: 'monsters' },
   encounter_monster_missing: { text: '시트가 없는 몬스터의 조우가 있습니다.', section: 'monsters' },
   encounter_map_missing: { text: '조우가 있는데 시작 장소가 없습니다.', section: 'monsters' },
+  wander_off_map: { text: '맵에 없는 장소의 무작위 조우 표가 있거나, 맵이 없는데 무작위 조우 표가 있습니다.', section: 'monsters' },
+  wander_monster_missing: { text: '시트가 없는 몬스터를 적은 무작위 조우 표가 있습니다.', section: 'monsters' },
 };
 
 /** 문제 하나의 글과 묶음. 모르는 이름이면 이름 그대로, 묶음은 없다 */

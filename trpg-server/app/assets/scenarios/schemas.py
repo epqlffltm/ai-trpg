@@ -65,9 +65,12 @@ from app.assets.models import (
     SCENARIO_MAX_QUEST_RULES,
     SCENARIO_MAX_ROUTES,
     SCENARIO_MAX_STARTING_ITEMS,
+    SCENARIO_MAX_WANDERS,
     SCENARIO_OPENING_MAX_LENGTH,
     TABLE_MAX_PLAYERS,
     VERSION_NOTE_MAX_LENGTH,
+    WANDER_MAX_MONSTERS,
+    WANDER_MAX_WEIGHT,
     CharacterMode,
     HappeningEffectKind,
     ItemKind,
@@ -86,6 +89,7 @@ from app.assets.models import (
 from app.assets.scenarios.recommended_model import ModelState
 from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
+from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
 from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, Key
 from app.engine.sheet import Sheet
@@ -1142,6 +1146,102 @@ def reject_duplicate_covers(rules: list[CoverRule]) -> list[CoverRule]:
 Covers = Annotated[list[CoverRule], Field(max_length=SCENARIO_MAX_COVERS), AfterValidator(reject_duplicate_covers)]
 
 
+class WanderMonster(BaseModel):
+    """
+    무작위 조우 표의 한 줄(#283). 붙인 도감의 몬스터 하나(monster_id)가 count 마리 나온다.
+
+    weight 는 이 줄이 뽑힐 몫이다. 표의 몫을 모두 더한 것 가운데 이 줄의 몫만큼 뽑힌다.
+    surprise 는 조우와 같다. 쉬는 중에 나오면 적은 것과 상관없이 몬스터가 기습한다.
+    몬스터가 시트를 적은 몬스터인지는 게시할 때 본다(조우와 같다).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    monster_id: uuid.UUID
+    count: int = Field(default=1, ge=1, le=ENCOUNTER_MAX_COUNT)
+    weight: int = Field(default=1, ge=1, le=WANDER_MAX_WEIGHT)
+    surprise: Surprise = Surprise.NONE
+
+    @field_serializer('monster_id')
+    def id_as_text(self, value: uuid.UUID) -> str:
+        """ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(value)
+
+
+def reject_duplicate_wander_monsters(monsters: list[WanderMonster]) -> list[WanderMonster]:
+    """한 표에 같은 몬스터가 두 줄이면 거부한다. 한 줄에 마리 수와 몫으로 적는다."""
+    ids = [monster.monster_id for monster in monsters]
+    if len(set(ids)) != len(ids):
+        raise ValueError('한 조우 표에 같은 몬스터가 두 번 있습니다.')
+    return monsters
+
+
+def reject_duplicate_times(times: list[TimeOfDay]) -> list[TimeOfDay]:
+    """같은 때를 두 번 적으면 거부한다."""
+    if len(set(times)) != len(times):
+        raise ValueError('같은 때가 두 번 있습니다.')
+    return times
+
+
+WanderMonsters = Annotated[
+    list[WanderMonster], Field(max_length=WANDER_MAX_MONSTERS), AfterValidator(reject_duplicate_wander_monsters)
+]
+TimesOfDay = Annotated[list[TimeOfDay], Field(max_length=len(TimeOfDay)), AfterValidator(reject_duplicate_times)]
+
+
+class WanderTable(BaseModel):
+    """
+    무작위 조우 표 하나(#283). 장소(place_id)에서 하루의 때(times)에 쓰는 표다.
+
+    걸리는 시간이 있는 길을 한 칸 와서 그 장소에 닿거나, 그 장소에서 길게 쉬면 엔진이 한 번 굴린다.
+    chance(0~100)% 로 조우가 나고, 나면 몬스터의 줄 하나를 몫(weight)대로 뽑아 그 장소에 놓는다.
+    place_id 를 비우면 판의 기본 표다. 표를 하나도 적지 않은 장소에서 쓴다. 기본 표도 없으면 조우가 없다.
+    times 를 비우면 언제나 쓴다. 한 장소(또는 기본 표)의 표들은 때가 겹치지 않는다. 때가 맞는 표가 없으면 조우가 없다.
+    chance 가 0 이면 조우가 나지 않는 표다(마을처럼 안전한 곳). 그때는 몬스터를 적지 않는다.
+    장소가 맵의 장소인지, 몬스터가 시트를 적은 몬스터인지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    place_id: uuid.UUID | None = None
+    times: TimesOfDay = []
+    chance: int = Field(ge=0, le=100)
+    monsters: WanderMonsters = []
+
+    @model_validator(mode='after')
+    def monsters_only_with_a_chance(self) -> 'WanderTable':
+        """조우가 날 수 있으면 나올 몬스터가 있어야 하고, 나지 않으면 몬스터를 적지 않는다."""
+        if self.chance > 0 and not self.monsters:
+            raise ValueError('조우가 날 확률(chance)이 있으면 나올 몬스터(monsters)를 적습니다.')
+        if self.chance == 0 and self.monsters:
+            raise ValueError('조우가 나지 않는 표(chance 0)에는 몬스터를 적지 않습니다.')
+        return self
+
+    @field_serializer('place_id')
+    def place_as_text(self, value: uuid.UUID | None) -> str | None:
+        """장소의 ID 를 글자로 꺼낸다. 기본 표면 None 이다."""
+        return None if value is None else str(value)
+
+
+def times_overlap(one: WanderTable, other: WanderTable) -> bool:
+    """두 표의 때가 겹치는가. 비운 때는 언제나라서 무엇과도 겹친다."""
+    return not one.times or not other.times or bool(set(one.times) & set(other.times))
+
+
+def reject_overlapping_wanders(tables: list[WanderTable]) -> list[WanderTable]:
+    """같은 장소(또는 기본 표)의 두 표가 같은 때를 가지면 거부한다. 어느 표로 굴릴지 가를 수 없다."""
+    for index, one in enumerate(tables):
+        rest = tables[index + 1 :]
+        if any(other.place_id == one.place_id and times_overlap(one, other) for other in rest):
+            raise ValueError('같은 장소의 조우 표 둘이 같은 때를 씁니다.')
+    return tables
+
+
+Wanders = Annotated[
+    list[WanderTable], Field(max_length=SCENARIO_MAX_WANDERS), AfterValidator(reject_overlapping_wanders)
+]
+
+
 QuestRules = Annotated[
     list[QuestRule], Field(max_length=SCENARIO_MAX_QUEST_RULES), AfterValidator(reject_duplicate_quests)
 ]
@@ -1367,6 +1467,8 @@ class ScenarioCreate(AssetCreate):
     place_items: PlaceItems = []
     # 장소마다의 커버(#276). 세이브 방식의 룰북에서 엄폐할 때 쓴다
     covers: Covers = []
+    # 무작위 조우 표(#283). 길을 오거나 길게 쉬면 엔진이 굴린다
+    wanders: Wanders = []
     happenings: Happenings = []
     npc_places: NpcPlaces = []
     player_made_hp: PlayerMadeHp | None = None
@@ -1388,7 +1490,7 @@ class ScenarioUpdate(AssetUpdate):
     null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-    quests, routes, landmarks, place_items, covers, happenings, npc_places, character_modes 는
+    quests, routes, landmarks, place_items, covers, wanders, happenings, npc_places, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -1421,6 +1523,7 @@ class ScenarioUpdate(AssetUpdate):
     landmarks: Landmarks | None = None
     place_items: PlaceItems | None = None
     covers: Covers | None = None
+    wanders: Wanders | None = None
     happenings: Happenings | None = None
     npc_places: NpcPlaces | None = None
     player_made_hp: PlayerMadeHp | None = None
@@ -1483,6 +1586,7 @@ class ScenarioDetail(ScenarioSummary):
     landmarks: list[uuid.UUID]
     place_items: list[PlaceItem]
     covers: list[CoverRule]
+    wanders: list[WanderTable]
     happenings: list[HappeningRule]
     npc_places: list[NpcPlace]
     player_made_hp: PlayerMadeHp | None
