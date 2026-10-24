@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/room/round/action/DoorActions.test.tsx
 // 문을 다루는 행동(#281)을 화면으로 본다. 지금 문의 상태로 고를 수 있는 행동을 거르고(방향은 보지 않음, 빗장은 빗장 쪽),
-// 장소 칸의 "문" 목록과 단추로 행동을 채우고, 장치가 둘이면 장치를 골라 보내고, 결과에 해낸 일과 못 한 까닭을 보인다.
+// 장소 칸의 "문" 목록과 단추로 행동을 채우고, 갈 수 있는 곳과 갈 곳 고르기에 막는 것을 적고, 장치가 둘이면 장치를 골라 보내고, 결과에 해낸 일과 못 한 까닭을 보인다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -117,6 +117,8 @@ describe('문을 다루는 선언', () => {
 
     const status = within(await screen.findByRole('region', { name: '상태' }));
     await userEvent.click(status.getByRole('tab', { name: /퀘스트·장소/ }));
+    const ways = within(await status.findByRole('list', { name: '갈 수 있는 곳' }));
+    expect(ways.getByText('(걸리는 시간 모름 · 자물쇠 잠김 · 빗장 걸림(이쪽))')).toBeInTheDocument();
     const doors = within(await status.findByRole('list', { name: '문' }));
     expect(doors.getByText('(자물쇠 잠김 · 빗장 걸림(수도원 문 쪽))')).toBeInTheDocument();
     expect(doors.queryByRole('button', { name: '종탑 쪽 문 잠그기' })).toBeNull();
@@ -138,7 +140,9 @@ describe('문을 다루는 선언', () => {
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
     const form = within(await screen.findByRole('form', { name: '선언' }));
-    await userEvent.selectOptions(await form.findByLabelText('행동'), 'unlock');
+    await userEvent.selectOptions(await form.findByLabelText('행동'), 'move');
+    expect(within(form.getByLabelText('갈 곳')).getByRole('option', { name: '종탑(자물쇠 잠김 · 빗장 걸림(이쪽))' })).toBeInTheDocument();
+    await userEvent.selectOptions(form.getByLabelText('행동'), 'unlock');
     expect(within(form.getByLabelText('문')).queryByRole('option', { name: /지하 묘지/ })).toBeNull();
     await userEvent.selectOptions(form.getByLabelText('문'), TOWER);
     await userEvent.selectOptions(form.getByLabelText('장치'), 'bar');
