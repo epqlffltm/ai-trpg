@@ -216,7 +216,39 @@ function otherLine(outcome: Outcome): string | null {
   if ('rest' in outcome) return outcome.rest.rested ? `HP ${outcome.rest.before} → ${outcome.rest.after}` : '쉬지 못했습니다.';
   if ('wait' in outcome) return outcome.wait.waited ? `${outcome.wait.minutes}분을 기다렸습니다.` : '기다리지 못했습니다.';
   if ('cover' in outcome) return coverLine(outcome.cover);
+  if ('door' in outcome) return doorLine(outcome.door);
   return null;
+}
+
+/** 문을 다룬 행동(#281)의 해낸 일과 못 한 일. 못 한 것은 이벤트로 오지 않아 여기에만 보인다 */
+const DOOR_DONE: Record<string, [string, string]> = {
+  lock: ['잠갔습니다', '잠그지 못했습니다'],
+  unlock: ['열었습니다', '열지 못했습니다'],
+  pick: ['땄습니다', '따지 못했습니다'],
+  force: ['부쉈습니다', '부수지 못했습니다'],
+  repair: ['고쳤습니다', '고치지 못했습니다'],
+};
+
+/** 문을 다루지 못한 까닭(trpg-server/app/rounds/door_actions.py 의 DoorReason) */
+const DOOR_REASONS: Record<string, string> = {
+  no_key: '열쇠가 없었습니다',
+  wrong_side: '빗장의 반대쪽에 서 있었습니다',
+  broken: '부서진 문이라 잠그지 못합니다',
+  already: '이미 그렇게 되어 있었습니다',
+  no_tool: '도구가 없었습니다',
+  failed: '판정에 실패했습니다',
+};
+
+/** "종탑 쪽 빗장: 열었습니다", "종탑 쪽 문: 따지 못했습니다(판정에 실패했습니다) · 눈 8, 보정 +1, 합 9 / 목표 15" */
+export function doorLine(door: Extract<Outcome, { door: unknown }>['door']): string {
+  const thing = door.device === 'bar' ? '빗장' : door.device === 'lock' ? '자물쇠' : '문';
+  const [done, failed] = DOOR_DONE[door.act] ?? ['다뤘습니다', '다루지 못했습니다'];
+  const reason = door.reason ? (DOOR_REASONS[door.reason] ?? door.reason) : null;
+  const result = door.done ? done : reason ? `${failed}(${reason})` : failed;
+  const line = `${door.to.name} 쪽 ${thing}: ${result}`;
+  if (!door.check) return line;
+  const modifier = door.check.modifier >= 0 ? `+${door.check.modifier}` : String(door.check.modifier);
+  return `${line} · 눈 ${door.check.roll}, 보정 ${modifier}, 합 ${door.check.total} / 목표 ${door.check.target}`;
 }
 
 /** 엄폐한 결과(#276). "엄폐: 무너진 담 · 커버 4". 막았는지는 맞은 공격의 타격 줄(커버 세이브)에 있다 */

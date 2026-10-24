@@ -12,12 +12,14 @@
 //   - 사기, 팔기, 돈 건네기(#278): 화폐가 있는 판에서만. 사기는 파는 것이 있는 상인이 장면에 있을 때, 팔기는 상인이 사 주는 판이고
 //     장면에 상인이 있고 값이 있는 물건을 지녔을 때, 돈 건네기는 돈이 있고 살아 있는 다른 사람이 있을 때.
 //     상인은 장면의 인물 가운데 merchant 이고 살아 있고 적대하지 않는 이다(서버의 is_open)
+//   - 열기, 잠그기, 따기, 부수기, 고치기(#281): 내 장소에 닿은 길에 지금 그것을 할 수 있어 보이는 문이 있을 때(doorOptions.ts)
 // 캐릭터가 쓰러졌거나 죽었으면 행동을 붙이지 못한다(글만 낸다).
 
 import type { DeclaredAction, HeldItem, SceneCast, ScenePerson, TableDetail, TableMember } from '../../../../../api/types';
 import { amountLabel, itemPrice, merchantsBuy, moneyOf } from '../../money';
 import { placeCover } from '../../status/statusView';
 import { waysFrom, type Way } from '../../status/statusView';
+import { doorsFor, isDoorKind } from './doorOptions';
 
 export type ActionKind = DeclaredAction['kind'];
 
@@ -41,6 +43,11 @@ const ACTION_ORDER: ActionKind[] = [
   'use',
   'give',
   'move',
+  'unlock',
+  'lock',
+  'pick',
+  'force',
+  'repair',
   'search',
   'take',
   'put_down',
@@ -67,6 +74,7 @@ export function availableKinds(ctx: ActionContext): ActionKind[] {
 
 function kindAvailable(kind: ActionKind, ctx: ActionContext): boolean {
   const rules = ctx.table.rules;
+  if (isDoorKind(kind)) return doorsFor(kind, ctx.table.map, hereId(ctx)).length > 0;
   switch (kind) {
     case 'treat':
       return rules.treatment !== null;
