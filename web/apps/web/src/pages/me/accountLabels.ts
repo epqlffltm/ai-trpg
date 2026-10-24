@@ -23,6 +23,11 @@ export function guardianLabel(consent: GuardianConsent): string {
   return GUARDIAN_LABELS[consent];
 }
 
+/** 보호자 동의 화면(A4)으로 가는 길의 글. 부탁할 수 있으면 부탁하기, 아니면 자세히 */
+export function guardianLinkLabel(consent: GuardianConsent): string {
+  return consent === 'consented' ? '자세히' : consent === 'requested' ? '다시 보내기' : '부탁하기';
+}
+
 /** 보호자 동의 줄을 보일까. 본인인증으로 미성년자임을 알았거나 이미 보호자 동의의 기록이 있을 때 */
 export function showsGuardian(me: Pick<Me, 'identity' | 'guardian_consent'>): boolean {
   const minor = me.identity.verified && !me.identity.legal_adult;

@@ -9,8 +9,8 @@ import { Link } from 'react-router';
 import type { Me } from '../../api/types';
 import { meQuery } from '../../auth/queries';
 import { identityLabel } from '../me/accountLabels';
-import { FakeIdentityForm } from './FakeIdentityForm';
-import { koreanToday, providerKind } from './identityProvider';
+import { FakeIdentityForm, MEMBER_PRESETS } from './FakeIdentityForm';
+import { defaultFakeDi, koreanToday, providerKind } from './identityProvider';
 import { useVerifyIdentity } from './useVerifyIdentity';
 
 export function IdentityPage() {
@@ -41,7 +41,11 @@ function Verified({ me }: { me: Me }) {
     <section className="page-section" aria-labelledby="identity-done-heading">
       <h2 id="identity-done-heading">본인인증을 마쳤습니다</h2>
       <p>상태: {identityLabel(identity)}</p>
-      {identity.legal_adult ? null : <p className="hint">미성년자는 보호자가 동의해야 충전할 수 있습니다. 보호자 동의 화면은 준비 중입니다.</p>}
+      {identity.legal_adult ? null : (
+        <p className="hint">
+          미성년자는 보호자가 동의해야 충전할 수 있습니다. <Link to="/me/guardian">보호자 동의</Link>
+        </p>
+      )}
       {identity.adult_content ? null : <p className="hint">성인용 내용은 만 19세가 되는 해의 1월 1일부터 열립니다. 그날이 지나면 다시 인증하지 않아도 저절로 열립니다.</p>}
       <p>
         환영 실버는 <Link to="/wallet">지갑</Link>에서 확인합니다(조금 늦게 들어올 수 있습니다). 이제 <Link to="/wallet/attendance">출석</Link>할 수 있습니다.
@@ -65,7 +69,15 @@ function Unverified({ me }: { me: Me }) {
       <p className="hint">한 사람은 한 계정만 인증합니다. 만 14세 미만은 이용할 수 없습니다. 이름이나 전화번호는 받지 않습니다. 나이를 가르는 데 생일을, 한 사람 한 계정을 지키는 데 업체가 주는 식별값을 씁니다.</p>
       {verifying.problem ? <Notice tone="error">{verifying.problem}</Notice> : null}
       {kind === 'fake' ? (
-        <FakeIdentityForm publicId={me.public_id} today={koreanToday()} busy={verifying.busy} onToken={(token) => void verifying.verify(token)} />
+        <FakeIdentityForm
+          initialDi={defaultFakeDi(me.public_id)}
+          presets={MEMBER_PRESETS}
+          note="실제 휴대폰 인증이 아닙니다. 생일과 사람 식별값을 골라 흐름을 봅니다. 같은 식별값으로 두 계정을 인증하면 막힙니다."
+          submitLabel="이 사람으로 인증하기"
+          today={koreanToday()}
+          busy={verifying.busy}
+          onToken={(token) => void verifying.verify(token)}
+        />
       ) : (
         <Notice>지금은 본인인증을 할 수 없습니다. 본인확인 업체를 준비하고 있습니다.</Notice>
       )}

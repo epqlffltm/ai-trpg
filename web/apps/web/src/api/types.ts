@@ -12,6 +12,8 @@ export type LoginChallenge = Auth['schemas']['LoginChallenge'];
 export type LoginResponse = Auth['schemas']['LoginResponse'];
 export type Me = Auth['schemas']['Me'];
 export type IdentityAnswer = Auth['schemas']['IdentityAnswer'];
+export type GuardianRequested = Auth['schemas']['GuardianRequested'];
+export type GuardianRevoked = Auth['schemas']['GuardianRevoked'];
 export type ConsentState = Auth['schemas']['ConsentState'];
 export type ConsentStates = Auth['schemas']['ConsentStates'];
 

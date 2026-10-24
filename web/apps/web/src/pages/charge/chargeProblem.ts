@@ -21,7 +21,7 @@ const RETRY_CONFIRM = '결제 서버가 답하지 못했습니다. 결제가 실
 
 const FORBIDDEN: Record<string, string> = {
   'payment.verification_required': '본인인증을 마친 계정만 충전할 수 있습니다. 내 정보 → 본인인증에서 먼저 해 주세요.',
-  'payment.guardian_consent_required': '만 19세 미만은 보호자가 동의해야 충전할 수 있습니다. 보호자 동의 화면은 준비 중입니다.',
+  'payment.guardian_consent_required': '만 19세 미만은 보호자가 동의해야 충전할 수 있습니다. 내 정보 → 보호자 동의에서 보호자에게 부탁해 주세요.',
 };
 
 function retryable(error: unknown): boolean {
