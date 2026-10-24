@@ -172,7 +172,7 @@ time docker compose up -d --build --scale backup-offsite=0
 docker compose ps -a --format 'table {{.Service}}\t{{.Status}}'
 ```
 
-`*-migrate` 일곱과 `ollama-pull` 이 `Exited (0)`, 서버 일곱과 `proxy`, 워커들, `certbot`, `ollama`, `prometheus`, `grafana` 가 `healthy` 면 된다. `certbot` 의 갱신은 받은 인증서가 없어 아무것도 하지 않는다.
+`*-migrate` 여덟과 `ollama-pull` 이 `Exited (0)`, 서버 여덟과 `proxy`, 워커들, `certbot`, `ollama`, `prometheus`, `grafana` 가 `healthy` 면 된다. `certbot` 의 갱신은 받은 인증서가 없어 아무것도 하지 않는다.
 마이그레이션 하나가 실패하면 `up` 이 거기서 멈추고, 아직 켜지 않은 서버는 상관이 없어도 `Created` 로 남는다. `docker compose logs <그 마이그레이션>` 으로 까닭을 보고 고친 뒤 `up` 을 다시 한다(빌드는 캐시로 건너뛴다).
 
 **[집 PC]** Grafana 와 관리자 화면은 SSH 터널로 연다. 집 PC 의 로컬 스택이 3000 과 8000 을 쓰므로 집 PC 쪽은 13000, 18000 으로 연다. 같은 포트로 열면 `bind … Permission denied` 가 나고, 브라우저는 로컬 스택의 Grafana 를 연다(버전까지 같아 헷갈린다).
@@ -225,7 +225,7 @@ docker compose exec prometheus wget -qO- http://127.0.0.1:9090/api/v1/alerts | g
 | DB 의 연결(바닥값) | [VM] `docker compose exec db psql -U trpg -d trpg -c "select usename, count(*) from pg_stat_activity where usename is not null group by 1 order by 2 desc"` | 계정마다의 수를 적는다. 몫(#592)의 합 80 과 견준다 |
 | 디스크 | [VM] `df -h / /mnt/db /mnt/observability` 와 `docker system df` | 16G, 32G 디스크가 보인다. 이미지와 빌드 캐시의 크기를 적는다 |
 | 다시 켜기 | [VM] `sudo reboot`, 다시 붙어 `uptime -s` 와 `docker ps -q \| xargs docker inspect --format '{{.State.StartedAt}} {{.RestartCount}} {{.Name}}' \| sort` | 디스크가 먼저 마운트되고 모두 다시 `healthy` 다. 걸린 시간은 켠 시각과 마지막 `StartedAt` 의 차로 잰다(다시 붙은 때가 아니다) |
-| 경보 | [VM] `docker compose stop db`, 2분 30초 뒤 위의 명령 | `PostgresDown` 과 서버마다의 `…DatabaseUnreachable` 일곱이 `firing`. `docker compose start db` 로 되돌리고 2분 뒤 그친다 |
+| 경보 | [VM] `docker compose stop db`, 2분 30초 뒤 위의 명령 | `PostgresDown` 과 서버마다의 `…DatabaseUnreachable` 여덟이 `firing`. `docker compose start db` 로 되돌리고 2분 뒤 그친다 |
 | 로컬 백업 | [VM] `ls -la backups/` | `trpg-*.dump` 가 있다(`db-backup`) |
 | 한 판 | 화면이 없으므로 순서서 9번의 운영자 계정으로 API 를 불러 본다(선택) | 서술이 집 PC 의 Ollama 로 나온다 |
 

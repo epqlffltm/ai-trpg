@@ -249,6 +249,24 @@ location ~ ^/api/v1/chat/messages/[^/]+/(regenerate|continue)$ {
     proxy_pass http://$chat_server;
 }
 
+# --- story 서버(#591) ---
+# 지금은 뼈대라 보통의 주소뿐이다. 말을 보내는 스트리밍 주소가 생기면 chat 서버의 것처럼 버퍼링을 끄는 위치를 더한다
+location /api/v1/story/ {
+    set $proxy_upstream story;
+    set $story_server story-server:8007;
+    limit_req zone=api burst=40 nodelay;
+    proxy_pass http://$story_server;
+}
+
+# 다른 서버만 부르는 주소. 아직 없지만 chat 서버와 같은 머리(/service/)를 쓰기로 해 두고 먼저 막는다.
+# 그 서버들은 프록시를 거치지 않고 컨테이너끼리 부른다
+location ^~ /api/v1/story/service/ {
+    types { }
+    add_header X-Request-ID $request_id always;
+    include /etc/nginx/conf.d/security-headers.inc;
+    return 404 '{"detail":"찾을 수 없습니다."}';
+}
+
 # --- 그림 내주기(#566, docs/architecture/asset-server.md 의 "그림") ---
 # GET /api/v1/asset/images/{id} 는 위의 location 으로 asset-server 에 간다. asset-server 는 볼 수 있는지 보고
 #   볼 수 없으면  404 를 답한다. 그대로 나간다.

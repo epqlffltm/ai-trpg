@@ -105,7 +105,7 @@ class StagingEnvTests(unittest.TestCase):
             self.assertGreaterEqual(len(root[name]), 32, name)
         for name in ('BILLING_DB_PASSWORD', 'NOTIFICATION_DB_PASSWORD', 'ASSET_DB_PASSWORD', 'CHAT_DB_PASSWORD'):
             self.assertGreaterEqual(len(root[name]), 32, name)
-        for name in ('MONITOR_DB_PASSWORD',):
+        for name in ('STORY_DB_PASSWORD', 'MONITOR_DB_PASSWORD'):
             self.assertGreaterEqual(len(root[name]), 32, name)
 
     def test_every_secret_is_different_from_the_others(self):

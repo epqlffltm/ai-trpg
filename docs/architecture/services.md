@@ -76,7 +76,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 자산 | `asset-server/` | FastAPI | 8006 | `ai-trpg-asset` | `asset`, `asset_test` | `08-asset-role.sql` | 제작자가 만드는 자산(세계관, 로어북과 항목, 캐릭터, 일러스트)과 계정 페르소나의 원본. 게시와 판, 공개 범위, 등급, 그림 올리기와 내주기. 쓰는 서비스가 시작할 때 판과 페르소나를 가져가게 내준다. [asset 서버 설계](asset-server.md) |
 | chat | `chat-server/` | FastAPI | 8005 | `ai-trpg-chat` | `chat`, `chat_test` | `09-chat-role.sql` | 캐릭터 하나와 1:1 대화. 대화 조작(다시 생성, 분기), 기억, 로어북 검색, 장소와 소지품, 호감도. 뼈대와 인프라(compose, `09-chat-role.sql`, 프록시의 `/api/v1/chat/` 와 말을 보내는 스트리밍 주소)가 있다(#590). [chat 서버 설계](chat-server.md) |
-| story | `story-server/` | FastAPI | 8007 | `ai-trpg-story` | `story`, `story_test` | `10-story-role.sql` | 세계관 안에서 여러 인물과 이야기. 시각, 인물의 위치, 이벤트와 선택지, 호감도, 고백과 엔딩. 대화의 핵심은 chat 과 같은 공용 코드를 쓴다. [story 서버 설계](story.md) |
+| story | `story-server/` | FastAPI | 8007 | `ai-trpg-story` | `story`, `story_test` | `10-story-role.sql` | 세계관 안에서 여러 인물과 이야기. 시각, 인물의 위치, 이벤트와 선택지, 호감도, 고백과 엔딩. 대화의 핵심은 chat 과 같은 공용 코드를 쓴다. 뼈대와 인프라(compose, `10-story-role.sql`, 프록시의 `/api/v1/story/`, 대시보드와 경보)가 있다(#591). [story 서버 설계](story.md) |
 | 관리 | 이름 미정(`ops-server` 후보) | FastAPI | 미정 | 미정 | `ops` | 미정 | 운영 조회와 집계, 관리자 작업 요청과 감사 기록. [관측 규격의 경계](../observability.md#관리-서버의-경계)를 따른다 |
 | 프런트엔드 | `web/` | React + TypeScript(Vite, SPA) | - | - | - | - | 사용자 화면과 관리자 화면. 같은 nginx 가 정적 파일로 내준다. [화면 명세](../product/screens.md#프런트-구조) |
 | 공용 코드 | `shared/` | Python 패키지 | - | - | - | - | FastAPI 서버의 공통부(`server-core`: 토큰 검증, 관측, 서버끼리의 서명. 있다, #588), AI 호출(`ai-core`), 공용 템플릿, 나중에 대화의 핵심(`conversation-core`). [공용 코드 규칙](shared-code.md) |
@@ -194,7 +194,7 @@ PostgreSQL 의 `max_connections` 는 기본값 100 이고, superuser 의 몫 3 �
 | --- | --- | --- |
 | trpg | 16 | 풀 5 + 10(설정 `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` 의 기본값, #589). 실시간 신호의 LISTEN 연결 1 은 풀 밖이다 |
 | chat | 10 | compose 의 `DB_POOL_SIZE` 5, `DB_MAX_OVERFLOW` 5 |
-| story(계획) | 10 | chat 과 같다(#591) |
+| story | 10 | compose 의 `DB_POOL_SIZE` 5, `DB_MAX_OVERFLOW` 5(chat 과 같다, #591) |
 | notification | 5 | compose 의 2 + 3 |
 | asset | 5 | compose 의 2 + 3. 그림은 S3 로 가고 DB 에는 줄만 쓴다 |
 | billing | 12 | 서버 8, sweeper 2, cron 2(`billing-server/README.md` 에 잰 값) |
@@ -264,7 +264,7 @@ PostgreSQL 의 `max_connections` 는 기본값 100 이고, superuser 의 몫 3 �
 
 1단계(운영자 혼자 TRPG, chat, story 를 끝까지)에 1~6 이 들어간다. VM 은 1단계가 끝난 뒤에 띄운다(2026-10-20, [화면 명세의 첫 출시의 범위](../product/screens.md#첫-출시의-범위)).
 
-1. **API 목록.** 일곱 서버가 모두 OpenAPI 를 내고 `docs/api/` 에 파일로 모은다. CI 가 서버의 것과 같은지 본다. 프런트의 타입과 Stitch 에 넘길 목록이 이것이다(2026-10-21).
+1. **API 목록.** 여덟 서버가 모두 OpenAPI 를 내고 `docs/api/` 에 파일로 모은다. CI 가 서버의 것과 같은지 본다. 프런트의 타입과 Stitch 에 넘길 목록이 이것이다(2026-10-21).
 2. `shared/` 를 만든다. 먼저 서버의 공통부(`server-core`: 토큰 검증, 관측)를 알림과 asset 에서 뽑아 두 서버를 옮겼다(#588). chat 과 story 는 처음부터 그것을 쓴다. trpg-server 는 그 뒤에 하나씩 옮긴다(#589). AI 호출 코드(`ai-core`)는 trpg-server 안에서 경계를 정리했고(#496, #497, #498), `shared/` 로 옮기는 일은 chat-server 의 "한 번의 말"을 만들 때 한다(#499). 방식은 [공용 코드 규칙의 정한 것](shared-code.md#정한-것)에 있다.
 3. `asset-server` 를 새로 만들고, 새 종류인 캐릭터를 처음부터 거기서 만든다. 같은 때에 trpg-server 가 세계관과 로어북의 게시된 판을, asset-server 가 나중에 줄 것과 같은 모양의 API 로 내준다.
 4. `chat-server` 의 첫 버전. 캐릭터를 쓴 대화(판 가져오기), 스트리밍 대화, 다시 생성, 자동 요약 기억, 모델 등급과 크레딧, 장소와 소지품. TRPG 의 지도, 물건, 인물을 공용 템플릿으로 올려 쓴다. 자세한 순서는 [chat 서버 설계](chat-server.md#만드는-순서).

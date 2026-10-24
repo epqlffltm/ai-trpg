@@ -16,14 +16,18 @@ chat 서버의 `app/conversation/` 를 `shared/conversation-core` 로 옮겨 두
 
 ### 준비
 
-루트의 [공용 인프라](../README.md)가 떠 있어야 한다. compose 에 붙이는 다음 PR 이 `story` 계정과 스키마를 만드는 초기화 스크립트
-(`docker/postgres/init/10-story-role.sql`), compose(`story-migrate`, `story-server`), 프록시의 `/api/v1/story/`, `.env` 도구(`tools/fill_env.py`)를 더한다.
-그 전에 PC 에서 띄우려면 계정과 스키마를 한 번 직접 만든다. 저장소 루트에서 실행하고, 비밀번호는 아무 긴 값으로 정해 `story-server/.env` 에도 적는다.
+루트의 [공용 인프라](../README.md)가 떠 있어야 한다. `story` 계정과 스키마는 초기화 스크립트
+(`docker/postgres/init/10-story-role.sql`)가 만든다. 이 스크립트는 데이터 볼륨이 비어 있는 첫 기동 때만 실행된다.
+스크립트가 생기기 전에 만든 볼륨이라면 한 번 직접 실행한다. 저장소 루트에서 `uv run --no-project python tools/fill_env.py` 로
+루트 `.env`의 `STORY_DB_PASSWORD`와 `story-server/.env`를 채우고, 컨테이너를 다시 만든 뒤(`docker compose up -d`) 실행한다.
 `trpg`는 루트 `.env`의 `POSTGRES_USER`와 `POSTGRES_DB` 값이다.
 
 ```
-docker compose exec db psql -v ON_ERROR_STOP=1 -U trpg -d trpg -c "CREATE ROLE story LOGIN PASSWORD '여기에비밀번호'" -c "CREATE SCHEMA story AUTHORIZATION story" -c "CREATE SCHEMA story_test AUTHORIZATION story"
+docker compose exec db psql -v ON_ERROR_STOP=1 -U trpg -d trpg -f /docker-entrypoint-initdb.d/10-story-role.sql
 ```
+
+뼈대 때 계정을 손으로 만들었다면(`CREATE ROLE story ...`) 위의 스크립트는 돌리지 않는다("이미 있다"로 멈춘다).
+`tools/fill_env.py` 가 `story-server/.env` 에 적어 둔 비밀번호를 루트 `.env` 의 `STORY_DB_PASSWORD` 로 옮겨 적으므로 계정과 그대로 맞는다.
 
 ### 설치와 실행
 
@@ -43,7 +47,7 @@ uv run uvicorn app.main:app --port 8007 --reload
 `http://127.0.0.1:8007/health` 가 `{"status":"ok"}` 를 돌려주면 서버가 뜬 것이고,
 `http://127.0.0.1:8007/health/ready` 가 `{"status":"ok"}` 를 돌려주면 DB 까지 연결된 것이다.
 
-compose 에 붙이면 같은 `story-server/.env` 를 쓰고 주소(DB, 인증 서버의 공개키)만 compose 가 덮어쓴다.
+compose(`docker compose --profile app`)로 띄우면 같은 `story-server/.env` 를 쓰고 주소(DB, 인증 서버의 공개키)만 compose 가 덮어쓴다.
 바깥 주소는 프록시 하나(`http://127.0.0.1:8080/api/v1/story/...`)가 되고 story 서버의 포트는 열지 않는다.
 이미지(`Dockerfile`)는 chat, asset 서버의 것과 같은 모양이다(공용 코드를 `/shared` 에서 깐다). root 가 아닌 사용자(번호 10001)로 돌고, `.env` 와 테스트는 넣지 않는다.
 
@@ -149,7 +153,8 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 - 계측기는 공용 코드(`server_core/observability/metrics.py`)에 한 묶음으로 있다. 이 서버만의 계측기가 생기면 `InstrumentSet` 으로 더한다(알림 서버의 `app/notifications/metrics.py`).
   테스트는 `server_core/testing/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
 - 보내는 길은 공용 코드의 테스트가 가짜 수집기로 본다. 이 서버가 꺼질 때 이 서버의 이름으로 보내는지는 `tests/test_tracing_setup.py` 가 본다
-- 대시보드와 경보, Prometheus 에 들어오는지 보는 CI(`stack`)는 compose 에 붙이는 PR 과 함께 붙는다
+- 대시보드는 `docker/grafana/dashboards/story-server.json`(한눈에, 요청, DB 연결), 경보는 `docker/prometheus/rules/ai-trpg.yml` 의 `story-server` 묶음(`StoryDatabaseUnreachable`, `StoryServerErrors`)이다.
+  요청 수와 DB, 연결 풀, 요청과 쿼리의 span 이 Prometheus 와 Tempo 에 들어오는지는 관문 CI 의 `stack` 이 본다
 
 ## DB
 

@@ -563,3 +563,30 @@ groups:
         annotations:
           summary: 'chat 서버의 5xx 가 {{ $value | humanizePercentage }} 다'
           description: 대시보드 chat-server 의 "상태 코드"와 로그의 error_code 를 본다
+
+  # story 서버. 업무의 메트릭이 붙으면 그 경보를 이 묶음에 더한다
+  - name: story-server
+    rules:
+      - alert: StoryDatabaseUnreachable
+        # 준비 상태 확인(/health/ready)이 마지막으로 본 DB. compose 의 healthcheck 가 10초마다 부른다
+        expr: db_up{service="story-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: story 서버가 DB 에 닿지 못한다
+          description: 이야기의 세션을 읽지도 쓰지도 못한다. PostgresDown 이 함께 울렸으면 DB 쪽부터 본다
+
+      - alert: StoryServerErrors
+        # 요청이 아주 적을 때(분당 3번 미만)의 한두 번은 세지 않는다. 상태 확인(/health, /health/ready)은 빼고 센다.
+        # healthcheck 만으로 분당 6번이라 문턱을 넘고, DB 가 멈추면 그 503 이 …DatabaseUnreachable 과 같은 원인으로 또 울린다(#645)
+        expr: |
+          sum(rate(http_server_requests_total{service="story-server", route!~"/health|/health/ready", status_code=~"5.."}[5m]))
+            / sum(rate(http_server_requests_total{service="story-server", route!~"/health|/health/ready"}[5m])) > 0.05
+          and sum(rate(http_server_requests_total{service="story-server", route!~"/health|/health/ready"}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'story 서버의 5xx 가 {{ $value | humanizePercentage }} 다'
+          description: 대시보드 story-server 의 "상태 코드"와 로그의 error_code 를 본다
