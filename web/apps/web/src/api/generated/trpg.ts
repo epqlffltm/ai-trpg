@@ -2269,6 +2269,11 @@ export interface components {
             /** Heals */
             heals: string | null;
             kind: components["schemas"]["ItemKind"];
+            /**
+             * Lock
+             * @default false
+             */
+            lock: boolean;
             /** Name */
             name: string;
             /** Price */
@@ -2750,7 +2755,7 @@ export interface components {
          */
         DeclarationOut: {
             /** Action */
-            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"]) | null;
+            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"]) | null;
             /** Character Name */
             character_name: string;
             /** Content */
@@ -2772,7 +2777,7 @@ export interface components {
          */
         DeclarationUpdate: {
             /** Action */
-            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"]) | null;
+            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"]) | null;
             /** Content */
             content: string;
         };
@@ -3606,6 +3611,51 @@ export interface components {
          */
         ItemKind: "gear" | "consumable";
         /**
+         * ItemLock
+         * @description 물건이 새 자물쇠일 때 그 자물쇠(#281). 행동 '바꾸기'로 판에 자물쇠가 있던 문에 단다.
+         *
+         *     단 자물쇠는 판의 자물쇠 대신 쓰인다. 여는 열쇠(key)는 새 것이다. 옛 열쇠로는 더 열지 못한다.
+         *     열쇠는 붙인 로어북의 물건 항목 하나다. 길의 자물쇠의 열쇠, 다른 자물쇠 물건의 열쇠와 겹치지 못한다
+         *     (게시의 route_key_repeated). 자물쇠 물건 자신을 열쇠로 적지 못한다.
+         *     pick 을 적었으면 단 자물쇠를 따기로 열 수 있다. 적지 않으면 따지 못한다. 단 자물쇠는 열린 채다.
+         *     한 테이블에서 자물쇠 물건 하나는 한 번만 단다. 달면 소지품에서 없어진다.
+         */
+        "ItemLock-Input": {
+            /**
+             * Key
+             * Format: uuid
+             */
+            key: string;
+            pick?: components["schemas"]["PickCheck-Input"] | null;
+        };
+        /**
+         * ItemLock
+         * @description 물건이 새 자물쇠일 때 그 자물쇠(#281). 행동 '바꾸기'로 판에 자물쇠가 있던 문에 단다.
+         *
+         *     단 자물쇠는 판의 자물쇠 대신 쓰인다. 여는 열쇠(key)는 새 것이다. 옛 열쇠로는 더 열지 못한다.
+         *     열쇠는 붙인 로어북의 물건 항목 하나다. 길의 자물쇠의 열쇠, 다른 자물쇠 물건의 열쇠와 겹치지 못한다
+         *     (게시의 route_key_repeated). 자물쇠 물건 자신을 열쇠로 적지 못한다.
+         *     pick 을 적었으면 단 자물쇠를 따기로 열 수 있다. 적지 않으면 따지 못한다. 단 자물쇠는 열린 채다.
+         *     한 테이블에서 자물쇠 물건 하나는 한 번만 단다. 달면 소지품에서 없어진다.
+         */
+        "ItemLock-Output": {
+            /** Key */
+            key: string;
+            pick?: components["schemas"]["PickCheck-Output"] | null;
+        };
+        /**
+         * ItemLockSnapshot
+         * @description 물건이 문에 다는 새 자물쇠(#281). 여는 열쇠(판 안의 물건 항목)와 따는 판정(없으면 못 딴다).
+         */
+        ItemLockSnapshot: {
+            /**
+             * Key
+             * Format: uuid
+             */
+            key: string;
+            pick?: components["schemas"]["PickSnapshot"] | null;
+        };
+        /**
          * ItemOut
          * @description 캐릭터가 가진 물건 한 가지. 이름은 판의 로어북 물건 항목의 이름이다.
          *
@@ -3662,6 +3712,7 @@ export interface components {
          *     어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.
          *     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
          *     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
+         *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
          */
         "ItemRule-Input": {
             /** Ap */
@@ -3681,6 +3732,7 @@ export interface components {
             heals?: string | null;
             /** @default gear */
             kind: components["schemas"]["ItemKind"];
+            lock?: components["schemas"]["ItemLock-Input"] | null;
             /** Price */
             price?: number | null;
             /** @default normal */
@@ -3715,6 +3767,7 @@ export interface components {
          *     어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.
          *     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
          *     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
+         *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
          */
         "ItemRule-Output": {
             /** Ap */
@@ -3731,6 +3784,7 @@ export interface components {
             heals?: string | null;
             /** @default gear */
             kind: components["schemas"]["ItemKind"];
+            lock?: components["schemas"]["ItemLock-Output"] | null;
             /** Price */
             price?: number | null;
             /** @default normal */
@@ -3756,6 +3810,7 @@ export interface components {
          *     price 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.
          *     slots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
          *     slots 가 비어 있으면 착용하지 않는 물건이다.
+         *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).
          */
         ItemRuleSnapshot: {
             /** Ap */
@@ -3774,6 +3829,7 @@ export interface components {
             /** Heals */
             heals?: string | null;
             kind: components["schemas"]["ItemKind"];
+            lock?: components["schemas"]["ItemLockSnapshot"] | null;
             /** Price */
             price?: number | null;
             /** @default normal */
@@ -6521,6 +6577,31 @@ export interface components {
             tool?: string | null;
         };
         /**
+         * ReplaceAction
+         * @description 지금 서 있는 장소에 닿은 길의 문의 자물쇠를 바꿔 다는 행동(#281). 굴리지 않는다.
+         *
+         *     item 은 지닌 자물쇠 물건(판에 자물쇠를 적은 물건 항목)이다. 판에 자물쇠가 있던 문에만 단다.
+         *     부서진 문은 고친 뒤에, 잠긴 자물쇠는 연 뒤에 바꾼다. 단 자물쇠는 열린 채이고, 그 자물쇠 물건의 열쇠로만 잠그고 연다.
+         *     자물쇠 물건은 소지품에서 하나 없어진다. 한 테이블에서 자물쇠 물건 하나는 한 번만 단다. 지나가지는 않는다.
+         */
+        ReplaceAction: {
+            /**
+             * Item
+             * Format: uuid
+             */
+            item: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "replace";
+            /**
+             * Place
+             * Format: uuid
+             */
+            place: string;
+        };
+        /**
          * Rest
          * @description 쉬기. 짧은 휴식과 긴 휴식, 되살아나기, 저절로 회복하기다.
          *
@@ -7742,7 +7823,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 55
+             * @default 56
              */
             format: number;
             /**

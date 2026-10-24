@@ -68,6 +68,8 @@ function actionDetail(action: DeclaredAction, table: TableDetail): string | null
     case 'force':
     case 'repair':
       return doorDetail(table, action.place, null);
+    case 'replace':
+      return `${doorDetail(table, action.place, 'lock') ?? '?'} ← ${itemName(table, action.item)}`;
     default:
       return null;
   }

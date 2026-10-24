@@ -132,6 +132,8 @@ export function draftFromAction(rules: Ruleset, action: DeclaredAction | null): 
     case 'force':
     case 'repair':
       return { ...base, kind: action.kind, place: action.place };
+    case 'replace':
+      return { ...base, kind: 'replace', place: action.place, item: action.item };
     default:
       return { ...base, kind: action.kind };
   }
@@ -206,6 +208,8 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
     case 'force':
     case 'repair':
       return draft.place ? null : '다룰 문을 골라 주세요.';
+    case 'replace':
+      return draft.place && draft.item ? null : '다룰 문과 달 자물쇠를 골라 주세요.';
   }
 }
 
@@ -298,6 +302,8 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
     case 'force':
     case 'repair':
       return { kind: draft.kind, place: draft.place };
+    case 'replace':
+      return { kind: 'replace', place: draft.place, item: draft.item };
   }
 }
 

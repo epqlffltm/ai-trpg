@@ -788,6 +788,11 @@
           "kind": {
             "$ref": "#/components/schemas/ItemKind"
           },
+          "lock": {
+            "default": false,
+            "title": "Lock",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -1876,6 +1881,7 @@
                     "pick": "#/components/schemas/PickAction",
                     "put_down": "#/components/schemas/PutDownAction",
                     "repair": "#/components/schemas/RepairAction",
+                    "replace": "#/components/schemas/ReplaceAction",
                     "rest": "#/components/schemas/RestAction",
                     "search": "#/components/schemas/SearchAction",
                     "sell": "#/components/schemas/SellAction",
@@ -1954,6 +1960,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/RepairAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ReplaceAction"
                   }
                 ]
               },
@@ -2078,6 +2087,7 @@
                     "pick": "#/components/schemas/PickAction",
                     "put_down": "#/components/schemas/PutDownAction",
                     "repair": "#/components/schemas/RepairAction",
+                    "replace": "#/components/schemas/ReplaceAction",
                     "rest": "#/components/schemas/RestAction",
                     "search": "#/components/schemas/SearchAction",
                     "sell": "#/components/schemas/SellAction",
@@ -2156,6 +2166,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/RepairAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ReplaceAction"
                   }
                 ]
               },
@@ -4086,6 +4099,82 @@
         "title": "ItemKind",
         "type": "string"
       },
+      "ItemLock-Input": {
+        "additionalProperties": false,
+        "description": "물건이 새 자물쇠일 때 그 자물쇠(#281). 행동 '바꾸기'로 판에 자물쇠가 있던 문에 단다.\n\n단 자물쇠는 판의 자물쇠 대신 쓰인다. 여는 열쇠(key)는 새 것이다. 옛 열쇠로는 더 열지 못한다.\n열쇠는 붙인 로어북의 물건 항목 하나다. 길의 자물쇠의 열쇠, 다른 자물쇠 물건의 열쇠와 겹치지 못한다\n(게시의 route_key_repeated). 자물쇠 물건 자신을 열쇠로 적지 못한다.\npick 을 적었으면 단 자물쇠를 따기로 열 수 있다. 적지 않으면 따지 못한다. 단 자물쇠는 열린 채다.\n한 테이블에서 자물쇠 물건 하나는 한 번만 단다. 달면 소지품에서 없어진다.",
+        "properties": {
+          "key": {
+            "format": "uuid",
+            "title": "Key",
+            "type": "string"
+          },
+          "pick": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PickCheck-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "ItemLock",
+        "type": "object"
+      },
+      "ItemLock-Output": {
+        "additionalProperties": false,
+        "description": "물건이 새 자물쇠일 때 그 자물쇠(#281). 행동 '바꾸기'로 판에 자물쇠가 있던 문에 단다.\n\n단 자물쇠는 판의 자물쇠 대신 쓰인다. 여는 열쇠(key)는 새 것이다. 옛 열쇠로는 더 열지 못한다.\n열쇠는 붙인 로어북의 물건 항목 하나다. 길의 자물쇠의 열쇠, 다른 자물쇠 물건의 열쇠와 겹치지 못한다\n(게시의 route_key_repeated). 자물쇠 물건 자신을 열쇠로 적지 못한다.\npick 을 적었으면 단 자물쇠를 따기로 열 수 있다. 적지 않으면 따지 못한다. 단 자물쇠는 열린 채다.\n한 테이블에서 자물쇠 물건 하나는 한 번만 단다. 달면 소지품에서 없어진다.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "pick": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PickCheck-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "ItemLock",
+        "type": "object"
+      },
+      "ItemLockSnapshot": {
+        "description": "물건이 문에 다는 새 자물쇠(#281). 여는 열쇠(판 안의 물건 항목)와 따는 판정(없으면 못 딴다).",
+        "properties": {
+          "key": {
+            "format": "uuid",
+            "title": "Key",
+            "type": "string"
+          },
+          "pick": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PickSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "ItemLockSnapshot",
+        "type": "object"
+      },
       "ItemOut": {
         "description": "캐릭터가 가진 물건 한 가지. 이름은 판의 로어북 물건 항목의 이름이다.\n\n설명(항목의 글)은 싣지 않는다. 로어북은 AI 가 읽는 설정이라 비밀이 들어 있을 수 있다.",
         "properties": {
@@ -4160,7 +4249,7 @@
       },
       "ItemRule-Input": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.",
         "properties": {
           "ap": {
             "anyOf": [
@@ -4236,6 +4325,16 @@
             "$ref": "#/components/schemas/ItemKind",
             "default": "gear"
           },
+          "lock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemLock-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "price": {
             "anyOf": [
               {
@@ -4293,7 +4392,7 @@
       },
       "ItemRule-Output": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.",
         "properties": {
           "ap": {
             "anyOf": [
@@ -4368,6 +4467,16 @@
             "$ref": "#/components/schemas/ItemKind",
             "default": "gear"
           },
+          "lock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemLock-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "price": {
             "anyOf": [
               {
@@ -4424,7 +4533,7 @@
         "type": "object"
       },
       "ItemRuleSnapshot": {
-        "description": "아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.\n\nheals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.\nprice 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.\nslots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\nslots 가 비어 있으면 착용하지 않는 물건이다.",
+        "description": "아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.\n\nheals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.\nprice 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.\nslots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\nslots 가 비어 있으면 착용하지 않는 물건이다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).",
         "properties": {
           "ap": {
             "anyOf": [
@@ -4488,6 +4597,16 @@
           },
           "kind": {
             "$ref": "#/components/schemas/ItemKind"
+          },
+          "lock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemLockSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "price": {
             "anyOf": [
@@ -9862,6 +9981,34 @@
         "title": "RepairSnapshot",
         "type": "object"
       },
+      "ReplaceAction": {
+        "additionalProperties": false,
+        "description": "지금 서 있는 장소에 닿은 길의 문의 자물쇠를 바꿔 다는 행동(#281). 굴리지 않는다.\n\nitem 은 지닌 자물쇠 물건(판에 자물쇠를 적은 물건 항목)이다. 판에 자물쇠가 있던 문에만 단다.\n부서진 문은 고친 뒤에, 잠긴 자물쇠는 연 뒤에 바꾼다. 단 자물쇠는 열린 채이고, 그 자물쇠 물건의 열쇠로만 잠그고 연다.\n자물쇠 물건은 소지품에서 하나 없어진다. 한 테이블에서 자물쇠 물건 하나는 한 번만 단다. 지나가지는 않는다.",
+        "properties": {
+          "item": {
+            "format": "uuid",
+            "title": "Item",
+            "type": "string"
+          },
+          "kind": {
+            "const": "replace",
+            "title": "Kind",
+            "type": "string"
+          },
+          "place": {
+            "format": "uuid",
+            "title": "Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "place",
+          "item"
+        ],
+        "title": "ReplaceAction",
+        "type": "object"
+      },
       "Rest": {
         "additionalProperties": false,
         "description": "쉬기. 짧은 휴식과 긴 휴식, 되살아나기, 저절로 회복하기다.\n\n쉬는 것은 캐릭터가 선언하는 행동이다(app/rounds/rests.py). 쉬는 라운드는 적어도 그 휴식의 시간만큼 이어진다.\nrevive 가 None 이면 쓰러진 캐릭터는 쉬어서 일어나지 못한다(치료나 회복으로만 일어난다).\nnatural 이 None 이면 쉬지 않고는 회복하지 않는다.",
@@ -13010,7 +13157,7 @@
             "type": "array"
           },
           "format": {
-            "default": 55,
+            "default": 56,
             "title": "Format",
             "type": "integer"
           },
