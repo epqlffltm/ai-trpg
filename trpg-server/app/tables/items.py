@@ -31,6 +31,7 @@ class CatalogItem:
     attack 은 무기의 공격 보정, defense 는 차지한 칸의 방어, guard 는 모든 부위의 방어다(#276). 없으면 None.
     ap 는 무기의 관통력, ward 는 불굴 세이브의 값이다(#276). 없으면 None.
     lock 은 문에 다는 자물쇠 물건인가다(#281). 열쇠와 따는 판정은 판에 있다.
+    cures 는 쓰면 대상에게서 푸는 부상들(룰북의 부상의 이름표)이다(#277). 없으면 빈 것이다.
     """
 
     entry_id: uuid.UUID
@@ -47,6 +48,7 @@ class CatalogItem:
     ap: int | None = None
     ward: int | None = None
     lock: bool = False
+    cures: tuple[str, ...] = ()
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
@@ -69,8 +71,14 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
             ap=rule.ap,
             ward=rule.ward,
             lock=rule.lock is not None,
+            cures=tuple(rule.cures),
         )
     return items
+
+
+def takes_target(item: CatalogItem) -> bool:
+    """쓰면 누군가에게 드는 소모품인가. 회복하거나 부상을 푼다(#277). 아니면 쓰고 없어질 뿐이다(연막탄)."""
+    return item.heals is not None or bool(item.cures)
 
 
 def require_in_catalog(items: dict[uuid.UUID, CatalogItem], entry_id: uuid.UUID) -> CatalogItem:

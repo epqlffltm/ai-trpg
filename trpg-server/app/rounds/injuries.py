@@ -225,6 +225,8 @@ class EndReason(enum.StrEnum):
     HEALED = 'healed'
     # 치료로 나을 시각이 앞당겨져 나았다
     TREATED = 'treated'
+    # 소모품으로 풀었다(#277, 해독제)
+    CURED = 'cured'
 
 
 @dataclass(frozen=True)

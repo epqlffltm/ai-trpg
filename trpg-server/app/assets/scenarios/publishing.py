@@ -76,7 +76,8 @@ from app.assets.service import AssetNotFoundError
 from app.engine.action import DoorDevice
 from app.engine.check import find_ability, find_difficulty
 from app.engine.health import find_magnitude
-from app.engine.ruleset import Ruleset
+from app.engine.injury import find_injury
+from app.engine.ruleset import Healing, Ruleset
 from app.engine.sheet import Sheet, fits
 
 
@@ -124,6 +125,8 @@ class Problem(enum.StrEnum):
     ITEM_MAGNITUDE_MISSING = 'item_magnitude_missing'
     # 자물쇠 물건의 따는 판정의 능력치나 난이도가 룰북의 규칙에 없다(#281)
     ITEM_LOCK_INVALID = 'item_lock_invalid'
+    # 소모품이 푸는 부상이 룰북의 규칙에 없거나, 풀 수 없는 결손이다(#277)
+    ITEM_CURE_INVALID = 'item_cure_invalid'
     # 붙인 로어북에 없는 항목을 가리키는 퀘스트 규칙이 있다
     QUEST_ENTRY_MISSING = 'quest_entry_missing'
     # 사건이 아닌 항목(인물, 물건 …)을 가리키는 퀘스트 규칙이 있다
@@ -536,6 +539,7 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
 
     가리키는 것은 붙인 로어북의 물건 항목이어야 한다. NPC 시트와 같은 까닭으로 굳히기 전에 여기서 막는다.
     소모품의 회복의 양은 룰북의 등급이어야 한다. 자물쇠 물건의 따는 판정은 룰북의 능력치와 난이도여야 한다(#281).
+    소모품이 푸는 부상은 룰북의 부상이고 결손이 아니어야 한다(#277).
     룰북이 없으면 볼 수 없다(그때는 RULEBOOK_MISSING 이다).
     """
     entries = lore_entries(parts)
@@ -551,7 +555,15 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
         problems.append(Problem.ITEM_MAGNITUDE_MISSING)
     if ruleset and any(find_invalid(pick, ruleset) for pick in item_lock_picks(rules)):
         problems.append(Problem.ITEM_LOCK_INVALID)
+    if ruleset and any(not curable(ruleset, key) for rule in rules for key in rule.cures):
+        problems.append(Problem.ITEM_CURE_INVALID)
     return problems
+
+
+def curable(ruleset: Ruleset, key: str) -> bool:
+    """소모품이 풀 수 있는 부상인가. 룰북에 있고 결손이 아니다(#277). 짧은 것과 오래 가는 것이다."""
+    injury = find_injury(ruleset, key)
+    return injury is not None and injury.healing != Healing.PERMANENT
 
 
 def starting_groups(scenario: Scenario) -> list[list[ItemStack]]:
