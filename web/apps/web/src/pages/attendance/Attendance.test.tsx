@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/attendance/Attendance.test.tsx
 // 출석·보물 상자(A9). 지갑에서 출석으로 가기, 주기의 칸(받음, 오늘, 앞으로)과 오늘의 양, 받으면 결과와 잔액 다시 읽기,
-// 마지막 날의 보물 상자, 본인인증 전이면 막기, 이미 받았으면(409) 다시 읽어 막기, 보물 상자의 확률표. 순수한 함수.
+// 마지막 날의 보물 상자, 본인인증 전이면 막기, 이미 받았으면(409) 다시 읽어 막기, 보물 상자의 확률표, 홈의 출석 알림. 순수한 함수.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -108,6 +108,23 @@ describe('출석', () => {
     await userEvent.click(await screen.findByRole('button', { name: '출석하기' }));
     expect(await screen.findByText(/오늘은 이미 받았습니다/)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '오늘은 받았습니다' })).toBeDisabled();
+  });
+});
+
+describe('홈의 출석 알림', () => {
+  it('본인인증을 마쳤고 오늘 아직 받지 않았으면 홈에 한 줄과 출석으로 가는 길을 보인다', async () => {
+    signedIn(today({ cycle_day: 7, silver: '260', chest: true }), () => json(201, {}));
+    renderApp('/');
+    expect(await screen.findByText(/오늘의 출석을 아직 받지 않았습니다. 오늘은 7일째 · 실버 260 · 보물 상자를 엽니다/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: '출석하러 가기' }));
+    expect(await screen.findByRole('button', { name: '출석하고 상자 열기' })).toBeInTheDocument();
+  });
+
+  it('이미 받았거나 본인인증 전이면 보이지 않는다', async () => {
+    signedIn(today({ claimed: true }), () => json(201, {}));
+    renderApp('/');
+    expect(await screen.findByRole('heading', { name: 'TRPG 이어하기' })).toBeInTheDocument();
+    expect(screen.queryByText(/오늘의 출석을 아직 받지 않았습니다/)).toBeNull();
   });
 });
 
