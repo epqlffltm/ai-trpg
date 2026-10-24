@@ -15,7 +15,7 @@ import uuid
 from dataclasses import dataclass
 
 from app.assets.models import ITEM_STACK_MAX, ItemKind, ItemRarity
-from app.assets.scenarios.snapshot import ItemStackSnapshot, Snapshot, item_entries, item_rule_of
+from app.assets.scenarios.snapshot import ItemStackSnapshot, ItemThrowSnapshot, Snapshot, item_entries, item_rule_of
 from app.tables import equipment
 from app.tables.errors import Conflict, TableConflictError, TableOptionError
 from app.tables.models import TableItem, TableSheet
@@ -32,6 +32,7 @@ class CatalogItem:
     ap 는 무기의 관통력, ward 는 불굴 세이브의 값이다(#276). 없으면 None.
     lock 은 문에 다는 자물쇠 물건인가다(#281). 열쇠와 따는 판정은 판에 있다.
     cures 는 쓰면 대상에게서 푸는 부상들(룰북의 부상의 이름표)이다(#277). 없으면 빈 것이다.
+    throw 는 던지는 판정이다(#277). 던질 수 없는 물건이면 None.
     """
 
     entry_id: uuid.UUID
@@ -49,6 +50,7 @@ class CatalogItem:
     ward: int | None = None
     lock: bool = False
     cures: tuple[str, ...] = ()
+    throw: ItemThrowSnapshot | None = None
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
@@ -72,6 +74,7 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
             ward=rule.ward,
             lock=rule.lock is not None,
             cures=tuple(rule.cures),
+            throw=rule.throw,
         )
     return items
 

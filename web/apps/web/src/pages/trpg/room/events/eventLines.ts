@@ -243,6 +243,14 @@ function givenText(payload: Payload, ctx: EventContext, event: TableEvent): stri
   return `${who(payload, ctx, event)}: ${thing(payload)} → ${to}`;
 }
 
+/** 물건을 던짐(#277). 맞았는지는 뒤의 판정과 변화의 줄이 적는다 */
+function thrownText(payload: Payload, ctx: EventContext, event: TableEvent): string {
+  const item = text(payload, 'name') ?? '물건';
+  if (!flag(payload, 'thrown')) return `${who(payload, ctx, event)}: ${item} 던지지 못함`;
+  const target = part(payload, 'target');
+  return `${who(payload, ctx, event)}: ${item} 던짐 → ${(target && text(target, 'name')) ?? '누군가'}`;
+}
+
 /** 돈. 판의 화폐 단위를 붙인다("12닢"). 화폐가 없는 판이면 숫자만 */
 function moneyOf(amount: number | null, ctx: EventContext): string {
   return amount === null ? '?' : amountLabel(ctx.table.currency, amount);
@@ -367,6 +375,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   items_lost: (p, ctx, e) => `${who(p, ctx, e)}: ${thing(p)} 잃음(남은 ${count(p, 'total') ?? '?'})`,
   item_used: (p, ctx, e) => `${who(p, ctx, e)}: ${text(p, 'name') ?? '물건'} ${flag(p, 'used') ? '씀' : '쓰지 못함'}`,
   item_given: (p, ctx, e) => givenText(p, ctx, e),
+  item_thrown: (p, ctx, e) => thrownText(p, ctx, e),
   item_put_down: (p, ctx, e) => {
     if (!flag(p, 'put')) return `${who(p, ctx, e)}: 내려놓지 못했습니다.`;
     const place = placeOf(p, 'place');

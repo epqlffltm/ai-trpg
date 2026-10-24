@@ -28,6 +28,7 @@ const PROBLEMS: Record<string, ProblemText> = {
   item_magnitude_missing: { text: '룰북에 없는 회복의 양을 적은 소모품이 있습니다.', section: 'items' },
   item_lock_invalid: { text: '자물쇠 물건을 따는 판정이 룰북에 없는 능력치나 난이도를 씁니다.', section: 'items' },
   item_cure_invalid: { text: '소모품이 룰북에 없는 부상이나 풀 수 없는 결손을 풉니다.', section: 'items' },
+  item_throw_invalid: { text: '던지는 물건의 판정이 룰북에 없는 능력치나 난이도나 피해를 씁니다.', section: 'items' },
   quest_entry_missing: { text: '붙인 로어북에 없는 항목의 퀘스트가 있습니다.', section: 'quests' },
   quest_not_event: { text: '사건이 아닌 항목의 퀘스트가 있습니다.', section: 'quests' },
   quest_condition_missing: { text: '퀘스트의 조건이 가리키는 것이 없습니다.', section: 'quests' },

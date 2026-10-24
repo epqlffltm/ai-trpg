@@ -125,7 +125,8 @@ from app.engine.sheet import Sheet
 #  56: 물건이 문에 다는 새 자물쇠일 수 있다(#281). items[].lock: 열쇠와 따는 판정
 #  57: 무작위 조우 표(wanders: 장소(비우면 기본 표), 하루의 때, 확률, 몬스터의 줄)가 있다(#283)
 #  58: 소모품이 부상을 풀 수 있다(#277). items[].cures: 룰북의 부상의 이름표들
-SNAPSHOT_FORMAT = 58
+#  59: 소모품을 던질 수 있다(#277). items[].throw: 던지는 판정 {ability, difficulty, harm}
+SNAPSHOT_FORMAT = 59
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다
@@ -226,6 +227,14 @@ class PickSnapshot(BaseModel):
     tool: uuid.UUID | None = None
 
 
+class ItemThrowSnapshot(BaseModel):
+    """물건을 던지는 판정(#277). 능력치, 난이도(없으면 룰북의 기본), 맞았을 때의 피해의 등급의 이름이다."""
+
+    ability: str
+    difficulty: str | None = None
+    harm: str
+
+
 class ItemLockSnapshot(BaseModel):
     """물건이 문에 다는 새 자물쇠(#281). 여는 열쇠(판 안의 물건 항목)와 따는 판정(없으면 못 딴다)."""
 
@@ -242,6 +251,7 @@ class ItemRuleSnapshot(BaseModel):
     slots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
     slots 가 비어 있으면 착용하지 않는 물건이다.
     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).
+    cures 는 쓰면 푸는 부상들, throw 는 던지는 판정이다(#277). 둘 다 소모품에만 있다.
     """
 
     entry_id: uuid.UUID
@@ -262,6 +272,8 @@ class ItemRuleSnapshot(BaseModel):
     lock: ItemLockSnapshot | None = None
     # 쓰면 대상에게서 푸는 부상들(룰북의 부상의 이름표). 형식 58 보다 옛 판의 물건에는 없다
     cures: list[str] = []
+    # 던지는 판정. 형식 59 보다 옛 판의 물건에는 없다
+    throw: ItemThrowSnapshot | None = None
 
 
 class QuestConditionSnapshot(BaseModel):

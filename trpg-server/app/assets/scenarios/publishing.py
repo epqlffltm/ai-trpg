@@ -46,6 +46,7 @@ from app.assets.scenarios.schemas import (
     HappeningRule,
     ItemRule,
     ItemStack,
+    ItemThrow,
     MonsterAttack,
     MonsterSheet,
     MoveEffect,
@@ -127,6 +128,8 @@ class Problem(enum.StrEnum):
     ITEM_LOCK_INVALID = 'item_lock_invalid'
     # 소모품이 푸는 부상이 룰북의 규칙에 없거나, 풀 수 없는 결손이다(#277)
     ITEM_CURE_INVALID = 'item_cure_invalid'
+    # 던지는 소모품의 판정의 능력치나 난이도나 피해의 등급이 룰북의 규칙에 없다(#277)
+    ITEM_THROW_INVALID = 'item_throw_invalid'
     # 붙인 로어북에 없는 항목을 가리키는 퀘스트 규칙이 있다
     QUEST_ENTRY_MISSING = 'quest_entry_missing'
     # 사건이 아닌 항목(인물, 물건 …)을 가리키는 퀘스트 규칙이 있다
@@ -540,6 +543,7 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
     가리키는 것은 붙인 로어북의 물건 항목이어야 한다. NPC 시트와 같은 까닭으로 굳히기 전에 여기서 막는다.
     소모품의 회복의 양은 룰북의 등급이어야 한다. 자물쇠 물건의 따는 판정은 룰북의 능력치와 난이도여야 한다(#281).
     소모품이 푸는 부상은 룰북의 부상이고 결손이 아니어야 한다(#277).
+    던지는 소모품의 판정은 룰북의 능력치와 난이도와 피해의 등급이어야 한다(#277).
     룰북이 없으면 볼 수 없다(그때는 RULEBOOK_MISSING 이다).
     """
     entries = lore_entries(parts)
@@ -557,6 +561,8 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
         problems.append(Problem.ITEM_LOCK_INVALID)
     if ruleset and any(not curable(ruleset, key) for rule in rules for key in rule.cures):
         problems.append(Problem.ITEM_CURE_INVALID)
+    if ruleset and any(cross_invalid(rule.throw, ruleset) for rule in rules):
+        problems.append(Problem.ITEM_THROW_INVALID)
     return problems
 
 
@@ -943,10 +949,12 @@ def opening_checks(route: RouteRule) -> list[PickCheck | ForceCheck]:
     return [check for check in (pick, route.force, route.repair) if check is not None]
 
 
-def cross_invalid(cross: CrossCheck | None, ruleset: Ruleset) -> bool:
+def cross_invalid(cross: CrossCheck | ItemThrow | None, ruleset: Ruleset) -> bool:
     """
     길을 넘는 판정이 룰북의 규칙에 맞지 않는가(#281). 능력치와 난이도는 찾는 판정과 같이 보고,
     실패의 피해를 적었으면 룰북의 양의 등급이어야 한다.
+
+    물건을 던지는 판정(#277)도 같은 모양이라 같이 본다. 그쪽의 피해는 맞았을 때의 것이다.
     """
     if cross is None:
         return False

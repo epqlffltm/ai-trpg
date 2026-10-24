@@ -108,6 +108,8 @@ export function draftFromAction(rules: Ruleset, action: DeclaredAction | null): 
       return { ...base, kind: 'use', item: action.item, target: refOf(action.target, null, null) };
     case 'give':
       return { ...base, kind: 'give', item: action.item, count: action.count, target: `member:${action.target}` };
+    case 'throw':
+      return { ...base, kind: 'throw', item: action.item, target: refOf(null, action.npc, action.monster), lethal: action.lethal };
     case 'move':
       return { ...base, kind: 'move', place: action.place, carry: action.carry ?? '' };
     case 'take':
@@ -178,6 +180,8 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
       return nameHint(draft.guess);
     case 'use':
       return draft.item ? null : '쓸 물건을 골라 주세요.';
+    case 'throw':
+      return draft.item && draft.target ? null : '던질 물건과 맞힐 대상을 골라 주세요.';
     case 'give':
       if (!draft.item || !draft.target) return '건넬 물건과 받을 사람을 골라 주세요.';
       return countHint(draft.count, heldCount(ctx.me, draft.item));
@@ -272,6 +276,9 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
       return { kind: 'use', item: draft.item, ...(member && itemHeals(ctx.table, draft.item) ? { target: member } : {}) };
     case 'give':
       return { kind: 'give', item: draft.item, count: draft.count, target: member ?? '' };
+    // 던지기(#277). 능력과 난이도와 피해는 물건에 적혀 있어 보내지 않는다
+    case 'throw':
+      return { kind: 'throw', item: draft.item, lethal: draft.lethal, ...(npc ? { npc } : {}), ...(monster ? { monster } : {}) };
     case 'move':
       return { kind: 'move', place: draft.place, ...(draft.carry ? { carry: draft.carry } : {}) };
     case 'search':

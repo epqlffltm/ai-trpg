@@ -30,7 +30,7 @@ const ALL: EventType[] = [
   'whisper_notice_changed', 'references_changed', 'ledger_drafts_changed', 'whisper_sent', 'table_started', 'gm_narration',
   'round_opened', 'player_action', 'check_rolled', 'hp_changed', 'npc_changed', 'npc_attitude_changed', 'monster_changed',
   'monster_attacked', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_treated', 'naming_resolved', 'death_save_rolled',
-  'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_put_down', 'steal_attempted',
+  'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'item_put_down', 'steal_attempted',
   'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'place_searched', 'character_rested',
   'character_revived', 'round_closed', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
   'narration_model_not_for_sale', 'narration_model_retiring', 'narration_model_replaced', 'narration_model_unavailable',
@@ -102,6 +102,10 @@ describe('eventLine', () => {
     expect(line('item_given', { character_name: '미아', name: '약초', count: 1, given: true, target: { user_id: ME, character_name: '렌' } })?.text).toBe(
       '미아: 약초 ×1 → 렌',
     );
+    expect(line('item_thrown', { character_name: '미아', name: '화염병', thrown: true, target: { monster_id: 'm1', name: '수로 쥐 1' } })?.text).toBe(
+      '미아: 화염병 던짐 → 수로 쥐 1',
+    );
+    expect(line('item_thrown', { character_name: '미아', name: '화염병', thrown: false, reason: 'not_held' })?.text).toBe('미아: 화염병 던지지 못함');
     expect(line('character_moved', { character_name: '미아', from: { name: '부엌' }, to: { name: '회랑' }, carried_by: ME })?.text).toBe(
       '미아: 부엌 → 회랑(업은 사람 렌)',
     );

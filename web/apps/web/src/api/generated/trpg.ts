@@ -2294,6 +2294,7 @@ export interface components {
              * @default []
              */
             slots: string[];
+            throw?: components["schemas"]["app__tables__schemas__ItemThrowOut"] | null;
             /** Ward */
             ward?: number | null;
         };
@@ -2417,6 +2418,7 @@ export interface components {
             drop?: components["schemas"]["DropOut"] | null;
             effect?: components["schemas"]["EffectOut"] | null;
             hindrance?: components["schemas"]["HindranceOut"] | null;
+            item_throw?: components["schemas"]["app__rounds__schemas__ItemThrowOut"] | null;
             /** Modifier */
             modifier: number;
             monster_effect?: components["schemas"]["MonsterEffectOut"] | null;
@@ -2770,13 +2772,13 @@ export interface components {
          */
         DeclarationOut: {
             /** Action */
-            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"]) | null;
+            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"] | components["schemas"]["ThrowAction"]) | null;
             /** Character Name */
             character_name: string;
             /** Content */
             content: string | null;
             /** Outcome */
-            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["DoorOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TradeOutcome"] | components["schemas"]["PayOutcome"] | components["schemas"]["CoverOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
+            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["ItemThrowOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["DoorOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TradeOutcome"] | components["schemas"]["PayOutcome"] | components["schemas"]["CoverOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
             /**
              * User Id
              * Format: uuid
@@ -2792,7 +2794,7 @@ export interface components {
          */
         DeclarationUpdate: {
             /** Action */
-            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"]) | null;
+            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"] | components["schemas"]["ThrowAction"]) | null;
             /** Content */
             content: string;
         };
@@ -3190,7 +3192,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_thrown" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -3731,6 +3733,7 @@ export interface components {
          *     cures 는 쓰면 대상에게서 푸는 부상들이다(#277, 해독제). 룰북의 부상의 이름표이고 소모품에만 적는다.
          *     짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.
          *     룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).
+         *     throw 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.
          */
         "ItemRule-Input": {
             /** Ap */
@@ -3770,6 +3773,7 @@ export interface components {
              * @default []
              */
             slots: string[];
+            throw?: components["schemas"]["ItemThrow"] | null;
             /** Ward */
             ward?: number | null;
         };
@@ -3794,6 +3798,7 @@ export interface components {
          *     cures 는 쓰면 대상에게서 푸는 부상들이다(#277, 해독제). 룰북의 부상의 이름표이고 소모품에만 적는다.
          *     짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.
          *     룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).
+         *     throw 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.
          */
         "ItemRule-Output": {
             /** Ap */
@@ -3830,6 +3835,7 @@ export interface components {
              * @default []
              */
             slots: string[];
+            throw?: components["schemas"]["ItemThrow"] | null;
             /** Ward */
             ward?: number | null;
         };
@@ -3842,6 +3848,7 @@ export interface components {
          *     slots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
          *     slots 가 비어 있으면 착용하지 않는 물건이다.
          *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).
+         *     cures 는 쓰면 푸는 부상들, throw 는 던지는 판정이다(#277). 둘 다 소모품에만 있다.
          */
         ItemRuleSnapshot: {
             /** Ap */
@@ -3880,6 +3887,7 @@ export interface components {
              * @default []
              */
             slots: string[];
+            throw?: components["schemas"]["ItemThrowSnapshot"] | null;
             /** Ward */
             ward?: number | null;
         };
@@ -3943,6 +3951,42 @@ export interface components {
              * @default []
              */
             wear: string[];
+        };
+        /**
+         * ItemThrow
+         * @description 물건을 던지는 판정(#277). 화염병, 투척 단검처럼 몬스터나 인물에게 던져 맞히는 소모품에 적는다.
+         *
+         *     ability 와 difficulty 는 룰북의 능력치와 난이도의 이름이다. 난이도를 비우면 룰북의 기본 난이도다.
+         *     harm 은 맞았을 때 입히는 피해의 등급(룰북의 magnitudes 의 이름)이다. 방어와 세이브는 치기와 같다.
+         *     셋 다 룰북의 규칙에 있는지는 게시할 때 본다(item_throw_invalid). 던지면 맞든 빗나가든 하나 없어진다.
+         */
+        ItemThrow: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
+            /** Harm */
+            harm: string;
+        };
+        /**
+         * ItemThrowOutcome
+         * @description 물건을 던지지 못한 결과(#277). 굴림이 없다. 겨눈 몬스터가 없어 못 던졌으면 그 까닭(target_gone)도 있다.
+         */
+        ItemThrowOutcome: {
+            item_throw: components["schemas"]["app__rounds__schemas__ItemThrowOut"];
+            target_gone?: components["schemas"]["TargetGoneOut"] | null;
+        };
+        /**
+         * ItemThrowSnapshot
+         * @description 물건을 던지는 판정(#277). 능력치, 난이도(없으면 룰북의 기본), 맞았을 때의 피해의 등급의 이름이다.
+         */
+        ItemThrowSnapshot: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
+            /** Harm */
+            harm: string;
         };
         /**
          * ItemUseOut
@@ -7873,7 +7917,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 58
+             * @default 59
              */
             format: number;
             /**
@@ -8455,6 +8499,48 @@ export interface components {
             rules: components["schemas"]["Ruleset"];
             /** Summary */
             summary: string;
+        };
+        /**
+         * ThrowAction
+         * @description 물건을 던지는 행동(#277). 가진 소모품 하나를 몬스터 한 마리(monster)나 이번 장면의 인물(npc)에게 던진다.
+         *
+         *     item 은 판의 로어북 물건 항목의 id 다. 던지는 판정(아이템 규칙의 throw)이 있는 소모품이어야 한다.
+         *     능력과 난이도와 맞았을 때의 피해는 받지 않는다. 물건에 적힌 것으로 판정한다(app/rounds/throws.py).
+         *     맞히면 방어와 세이브는 치기와 같다. 맞든 빗나가든 물건은 하나 없어진다.
+         *     lethal 은 치기와 같다. 죽이려는 것인가, 아니면 제압이다. 노려 치기와 무기는 없다.
+         */
+        ThrowAction: {
+            /**
+             * Item
+             * Format: uuid
+             */
+            item: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "throw";
+            /**
+             * Lethal
+             * @default false
+             */
+            lethal: boolean;
+            /** Monster */
+            monster?: string | null;
+            /** Npc */
+            npc?: string | null;
+        };
+        /**
+         * ThrownAtOut
+         * @description 물건을 던진 쪽(#277). 몬스터면 monster_id, 인물이면 entry_id 가 있다. 이름은 장면에서 부르는 것이다.
+         */
+        ThrownAtOut: {
+            /** Entry Id */
+            entry_id?: string | null;
+            /** Monster Id */
+            monster_id?: string | null;
+            /** Name */
+            name: string | null;
         };
         /**
          * Tier
@@ -9125,6 +9211,44 @@ export interface components {
             name: string;
             /** Slots */
             slots: string[];
+        };
+        /**
+         * ItemThrowOut
+         * @description 물건을 던진 결과(#277). 엔진이 정했다(app/rounds/throws.py). 던졌으면 판정의 결과가 함께 있다.
+         */
+        app__rounds__schemas__ItemThrowOut: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty: string;
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** Harm */
+            harm: string;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string | null;
+            /** Remaining */
+            remaining: number;
+            target: components["schemas"]["ThrownAtOut"];
+            /** Thrown */
+            thrown: boolean;
+        };
+        /**
+         * ItemThrowOut
+         * @description 물건을 던지는 판정(#277). 능력치와 난이도(비면 rules 의 기본)와 맞았을 때의 피해의 등급(rules 의 magnitudes).
+         */
+        app__tables__schemas__ItemThrowOut: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty: string | null;
+            /** Harm */
+            harm: string;
         };
     };
     responses: never;

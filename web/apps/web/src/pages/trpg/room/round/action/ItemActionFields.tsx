@@ -1,18 +1,22 @@
 // web/apps/web/src/pages/trpg/room/round/action/ItemActionFields.tsx
 // 물건을 다루는 행동의 칸. 쓰기(소모품, 회복하면 받을 사람), 건네기(받을 사람과 개수), 내려놓기(개수),
-// 줍기(내가 선 곳에 놓인 것과 개수), 훔치기와 빼앗기(대상과 그 대상이 지닌 물건).
+// 줍기(내가 선 곳에 놓인 것과 개수), 훔치기와 빼앗기(대상과 그 대상이 지닌 물건),
+// 던지기(#277, 던질 물건과 맞힐 대상. 판정은 물건에 적혀 있어 보이기만 한다).
 
-import { TextField } from '@ai-trpg/ui';
+import { Checkbox, TextField } from '@ai-trpg/ui';
+import type { TableDetail } from '../../../../../api/types';
 import type { ActionDraft } from './actionDraft';
 import { COUNT_MAX } from './actionDraft';
 import {
   consumables,
+  harmTargets,
   healTargets,
   heldCount,
   heldItems,
   itemHeals,
   placeItems,
   recipients,
+  throwables,
   victimItems,
   victims,
   type ActionContext,
@@ -31,6 +35,38 @@ export function UseFields({ draft, ctx, onChange }: Props) {
       ) : null}
     </div>
   );
+}
+
+export function ThrowFields({ draft, ctx, onChange }: Props) {
+  const items = throwables(ctx).map((item) => ({ value: item.entry_id, label: `${item.name} ×${item.count}` }));
+  const terms = draft.item ? throwTerms(ctx.table, draft.item) : null;
+  return (
+    <>
+      <div className="ability-grid">
+        <ChoiceSelect label="던질 물건" value={draft.item} choices={items} empty="고르기" onChange={(item) => onChange({ item })} />
+        <ChoiceSelect label="맞힐 대상" value={draft.target} choices={harmTargets(ctx)} empty="고르기" onChange={(target) => onChange({ target })} />
+      </div>
+      {terms ? <p className="hint">{terms}</p> : null}
+      <Checkbox
+        label="죽이려 한다"
+        description="켜지 않으면 HP 가 0 이 될 때 쓰러뜨리기만 합니다."
+        checked={draft.lethal}
+        onChange={(event) => onChange({ lethal: event.target.checked })}
+      />
+    </>
+  );
+}
+
+/** 물건에 적힌 던지는 판정의 글. "민첩 · 보통으로 던집니다. 맞으면 보통 피해. 맞든 빗나가든 하나 없어집니다." */
+export function throwTerms(table: TableDetail, entryId: string): string | null {
+  const thrown = table.items.find((item) => item.entry_id === entryId)?.throw;
+  if (!thrown) return null;
+  const rules = table.rules;
+  const ability = rules.abilities.find((entry) => entry.key === thrown.ability)?.name ?? thrown.ability;
+  const key = thrown.difficulty ?? rules.default_difficulty;
+  const difficulty = rules.difficulties.find((entry) => entry.key === key)?.name ?? key;
+  const harm = rules.magnitudes.find((entry) => entry.key === thrown.harm)?.name ?? thrown.harm;
+  return `${ability} · ${difficulty}으로 던집니다. 맞으면 ${harm} 피해. 맞든 빗나가든 하나 없어집니다.`;
 }
 
 export function GiveFields({ draft, ctx, onChange }: Props) {

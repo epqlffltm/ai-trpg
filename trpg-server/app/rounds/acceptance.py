@@ -26,6 +26,8 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
   - 사기(BuyAction), 팔기(SellAction), 돈 건네기(PayAction). 화폐가 있는 판이어야 한다. 사고팔기는 이번 장면의
     거래하는 상인과, 값이 있는 물건과, 그만큼의 돈(재고, 소지품)이 있어야 한다(app/rounds/trades.py).
   - 엄폐하기(CoverAction). 세이브 방식의 규칙이고, 맵에 서 있고, 그 장소에 커버가 있어야 한다(app/rounds/covers.py).
+  - 던지기(ThrowAction, #277). 던지는 판정이 있는 판의 소모품을 가지고 있고, 맞을 쪽이 치기와 같이 닿아야 한다
+    (app/rounds/throws.py).
 누구를 겨눌 수 있는지는 선언을 받을 때와 닫기 시작할 때 같다. 장면은 라운드가 열린 뒤로 바뀌지 않는다.
 비워 둔 칸(난이도, 회복과 치료의 대상)은 여기서 채워 저장한다. 읽는 쪽이 "비어 있으면"을 다시 따지지 않는다.
 """
@@ -52,6 +54,7 @@ from app.engine.action import (
     SellAction,
     StealAction,
     TakeAction,
+    ThrowAction,
     TreatAction,
     UseAction,
     WaitAction,
@@ -291,6 +294,27 @@ def accept_use(table: GameTable, member: TableMember, action: UseAction) -> dict
     return action.model_copy(update={'target': target.user_id}).model_dump(mode='json')
 
 
+def accept_throw(table: GameTable, member: TableMember, action: ThrowAction, scene: Scene) -> dict:
+    """
+    물건을 던지는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다(#277).
+
+      - 판의 물건이 아니거나 던지는 판정이 없는 물건이면 ActionNotInRulesError(item).
+      - 하나도 가지고 있지 않으면 RoundConflictError(item_not_held).
+      - 맞을 쪽은 치기와 같다. 인물이 이번 장면의 인물이 아니거나 다른 장소에 있으면 ActionTargetError(npc),
+        몬스터가 같은 장소의 마리가 아니면 ActionTargetError(monster), 이미 죽었으면 RoundConflictError.
+    능력과 난이도는 받지 않는다. 물건에 적혀 있어 저장할 것이 없다.
+    """
+    item = find_item(table, action.item)
+    if item.throw is None:
+        raise ActionNotInRulesError('item')
+    require_held(member, action.item, 1)
+    if action.npc is not None:
+        require_npc_target(scene.cast, member, action.npc, None)
+    if action.monster is not None:
+        require_monster_target(scene.monsters, member, action.monster)
+    return action.model_dump(mode='json')
+
+
 def accept_give(table: GameTable, member: TableMember, action: GiveAction) -> dict:
     """
     물건을 건네는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다.
@@ -398,7 +422,7 @@ def accept_action(
     쓰러져 있거나 행동을 막는 부상을 입었으면 RoundConflictError(require_able).
     나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming, accept_use, accept_give,
     accept_move, accept_search, accept_rest, accept_take, accept_put_down, accept_steal, accept_loot,
-    accept_buy, accept_sell, accept_pay, accept_cover, 문을 다루는 accept_door).
+    accept_buy, accept_sell, accept_pay, accept_cover, 문을 다루는 accept_door, 던지는 accept_throw).
     """
     if action is None:
         return None
@@ -411,6 +435,8 @@ def accept_action(
         return accept_use(table, member, action)
     if isinstance(action, GiveAction):
         return accept_give(table, member, action)
+    if isinstance(action, ThrowAction):
+        return accept_throw(table, member, action, scene)
     if isinstance(action, MoveAction):
         return accept_move(table, member, action)
     if isinstance(action, SearchAction):
