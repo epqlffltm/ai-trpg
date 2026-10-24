@@ -5,6 +5,7 @@
 import type { Declaration, DeclaredAction, Round, Ruleset, TableDetail } from '../../../../api/types';
 import { amountLabel, type Currency } from '../money';
 import { ACTION_LABELS } from './action/actionLabels';
+import { giveLine, itemUseLine, lootLine, putDownLine, restLine, stealLine, takeLine, waitLine } from './actionOutcome';
 import { doorLine, moveLine } from './mapOutcome';
 
 type Outcome = NonNullable<Declaration['outcome']>;
@@ -219,19 +220,16 @@ function savePart(save: Blow['save']): string | null {
 /** 판정이 아닌 행동의 결과 */
 function otherLine(outcome: Outcome): string | null {
   if ('naming' in outcome) return outcome.naming.correct ? `맞혔습니다: ${outcome.naming.name ?? outcome.naming.guess}` : '틀렸습니다.';
-  if ('item_use' in outcome) return outcome.item_use.used ? `${outcome.item_use.name} 사용(남은 ${outcome.item_use.remaining}개)` : '쓰지 못했습니다.';
-  if ('item_give' in outcome) {
-    const give = outcome.item_give;
-    return give.given ? `${give.name} ×${give.count} → ${give.target.character_name ?? '누군가'}` : '건네지 못했습니다.';
-  }
+  if ('item_use' in outcome) return itemUseLine(outcome.item_use);
+  if ('item_give' in outcome) return giveLine(outcome.item_give);
   if ('move' in outcome) return moveLine(outcome.move);
   if ('search' in outcome) return searchLine(outcome.search);
-  if ('take' in outcome) return outcome.take.taken > 0 ? `${outcome.take.name} ×${outcome.take.taken} 주웠습니다.` : '줍지 못했습니다.';
-  if ('put_down' in outcome) return outcome.put_down.put ? `${outcome.put_down.name} ×${outcome.put_down.count} 내려놓았습니다.` : '내려놓지 못했습니다.';
-  if ('steal' in outcome) return outcome.steal.stolen ? `${outcome.steal.name} 훔침` : outcome.steal.fight ? '훔치지 못했고 싸움이 붙었습니다.' : '훔치지 못했습니다.';
-  if ('loot' in outcome) return outcome.loot.looted ? `${outcome.loot.name} ×${outcome.loot.count} 가져왔습니다.` : '가져오지 못했습니다.';
-  if ('rest' in outcome) return outcome.rest.rested ? `HP ${outcome.rest.before} → ${outcome.rest.after}` : '쉬지 못했습니다.';
-  if ('wait' in outcome) return outcome.wait.waited ? `${outcome.wait.minutes}분을 기다렸습니다.` : '기다리지 못했습니다.';
+  if ('take' in outcome) return takeLine(outcome.take);
+  if ('put_down' in outcome) return putDownLine(outcome.put_down);
+  if ('steal' in outcome) return stealLine(outcome.steal);
+  if ('loot' in outcome) return lootLine(outcome.loot);
+  if ('rest' in outcome) return restLine(outcome.rest);
+  if ('wait' in outcome) return waitLine(outcome.wait);
   if ('cover' in outcome) return coverLine(outcome.cover);
   if ('door' in outcome) return doorLine(outcome.door);
   return null;
