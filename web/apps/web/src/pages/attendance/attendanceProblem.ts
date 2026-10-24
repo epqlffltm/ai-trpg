@@ -4,7 +4,7 @@
 
 import { ApiError, NetworkError } from '../../api/errors';
 
-export const VERIFY_FIRST = '본인인증을 마친 계정만 출석 보상을 받습니다. 본인인증 화면은 준비 중입니다.';
+export const VERIFY_FIRST = '본인인증을 마친 계정만 출석 보상을 받습니다.';
 const ALREADY = '오늘은 이미 받았습니다. 한국 시각 자정이 지나면 다시 받습니다.';
 
 /** 받기의 실패. alreadyClaimed 면 화면이 오늘의 출석을 다시 읽어 단추를 막는다 */
