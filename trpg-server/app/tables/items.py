@@ -30,6 +30,7 @@ class CatalogItem:
     slots 는 착용할 때 들어갈 수 있는 규칙의 칸, slot_count 는 차지하는 칸의 수다(#276). slots 가 비면 착용하지 않는다.
     attack 은 무기의 공격 보정, defense 는 차지한 칸의 방어, guard 는 모든 부위의 방어다(#276). 없으면 None.
     ap 는 무기의 관통력, ward 는 불굴 세이브의 값이다(#276). 없으면 None.
+    lock 은 문에 다는 자물쇠 물건인가다(#281). 열쇠와 따는 판정은 판에 있다.
     """
 
     entry_id: uuid.UUID
@@ -45,6 +46,7 @@ class CatalogItem:
     guard: int | None = None
     ap: int | None = None
     ward: int | None = None
+    lock: bool = False
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
@@ -66,6 +68,7 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
             guard=rule.guard,
             ap=rule.ap,
             ward=rule.ward,
+            lock=rule.lock is not None,
         )
     return items
 

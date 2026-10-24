@@ -256,6 +256,7 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
             guard=item.guard,
             ap=item.ap,
             ward=item.ward,
+            lock=item.lock,
         )
         for item in catalog.values()
     ]
@@ -343,10 +344,15 @@ def to_map(table: GameTable, snapshot: Snapshot, catalog: dict[uuid.UUID, Catalo
 
 
 def to_route(table: GameTable, snapshot: Snapshot, route: RouteSnapshot) -> RouteOut:
-    """아는 길 하나를 응답으로 바꾼다. 문(자물쇠, 빗장)은 이 테이블의 지금 상태, 판정들은 판의 것이다(#281)."""
+    """
+    아는 길 하나를 응답으로 바꾼다. 문(자물쇠, 빗장)은 이 테이블의 지금 상태, 판정들은 판의 것이다(#281).
+
+    따는 판정은 지금의 자물쇠의 것이다. 자물쇠를 바꿔 달았으면 그 자물쇠 물건의 것이다.
+    """
     locked = route_locks.is_locked(table, route) if route.lock is not None else None
     barred = route_locks.is_barred(table, route) if route.bar is not None else None
-    pick = route.lock.pick if route.lock is not None else None
+    lock = route_locks.current_lock(table, snapshot, route)
+    pick = lock.pick if lock is not None else None
     return RouteOut(
         from_place=route.from_place,
         to_place=route.to_place,

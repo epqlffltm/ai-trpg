@@ -521,13 +521,15 @@ class DoorOut(BaseModel):
     # 차례가 왔을 때 서 있던 곳과, 그 길의 다른 끝
     from_: PlaceRefOut | None = Field(alias='from')
     to: PlaceRefOut
-    # lock(잠그기), unlock(열기), pick(따기), force(부수기), repair(고치기)
+    # lock(잠그기), unlock(열기), pick(따기), force(부수기), repair(고치기), replace(자물쇠 바꾸기)
     act: str
-    # 잠그기와 열기가 다룬 장치. lock(자물쇠) 또는 bar(빗장). 따기, 부수기, 고치기는 None 이다
+    # 잠그기와 열기가 다룬 장치. lock(자물쇠) 또는 bar(빗장). 따기, 부수기, 고치기, 바꾸기는 None 이다
     device: str | None = None
     # 해냈는가. 못 했으면 reason 이 있다: no_key(열쇠가 없었다), wrong_side(빗장의 반대쪽이었다),
-    # broken(부서진 문은 잠그지 못한다), already(이미 그렇게 되어 있었다. 고치기는 부서지지 않았다),
-    # no_tool(따거나 고치는 도구가 없었다), failed(따기, 부수기, 고치기의 판정에 실패했다)
+    # broken(부서진 문은 잠그지도 바꾸지도 못한다), already(이미 그렇게 되어 있었다. 고치기는 부서지지 않았다),
+    # no_tool(따거나 고치는 도구가 없었다), failed(따기, 부수기, 고치기의 판정에 실패했다),
+    # no_pick(바꿔 단 자물쇠가 따지 못하는 것이었다), locked(잠긴 자물쇠는 바꾸지 못한다),
+    # no_item(달 자물쇠 물건이 없었다), used(그 자물쇠 물건은 이미 달았다)
     done: bool
     reason: str | None
     # 따기, 부수기, 고치기의 판정. 굴리지 않았으면 None 이다

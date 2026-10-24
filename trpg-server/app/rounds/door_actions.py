@@ -1,7 +1,8 @@
 # trpg-server/app/rounds/door_actions.py
 
 """
-길의 문을 다루는 행동(#281). 잠그기(lock), 열기(unlock), 따기(pick), 부수기(force), 고치기(repair).
+길의 문을 다루는 행동(#281). 잠그기(lock), 열기(unlock), 따기(pick), 부수기(force), 고치기(repair),
+바꾸기(replace).
 
 선언을 받을 때 보고(accept_door), 라운드가 닫힐 때 차례가 오면 정한다(judge_door).
 문은 지금 서 있는 장소에 닿은 아는 길의 것이다. 길의 방향은 보지 않는다(어느 끝에서든 다룬다). 지나가지는 않는다.
@@ -11,7 +12,12 @@
   - 따기: 판에 적힌 따는 판정으로 잠긴 자물쇠를 연다. 판에 도구를 적었으면 그것을 지녀야 한다. 빗장은 따지 못한다.
   - 부수기: 판에 적힌 부수는 판정으로 문을 부순다. 자물쇠와 빗장이 다 열리고, 고치기 전까지 다시 잠그지 못한다.
   - 고치기: 판에 적힌 고치는 판정으로 부서진 문을 고친다. 판에 도구를 적었으면 그것을 지녀야 한다. 고친 문은 열린 채다.
-  - 받을 때는 문이 있는지(그 장치, 따는 판정, 부수는 판정, 고치는 판정)만 본다.
+  - 바꾸기: 지닌 자물쇠 물건으로 판에 자물쇠가 있던 문의 자물쇠를 바꿔 단다. 굴리지 않는다.
+    부서진 문은 고친 뒤에, 잠긴 자물쇠는 연 뒤에 바꾼다. 단 자물쇠는 열린 채이고 자물쇠 물건은 하나 없어진다.
+    그 뒤로 그 문의 열쇠와 따는 판정은 자물쇠 물건의 것이다(지금의 자물쇠, app/tables/route_locks.py 의 current_lock).
+    자물쇠 물건 하나는 한 테이블에서 한 번만 단다.
+  - 받을 때는 문이 있는지(그 장치, 따는 판정, 부수는 판정, 고치는 판정, 판의 자물쇠)만 본다.
+    바꾸기는 자물쇠 물건인지와 지녔는지도 본다.
     열쇠, 서 있는 쪽, 문의 지금 상태는 차례가 오면 본다.
     앞 차례에 누가 열쇠를 건넸거나 문을 열었을 수 있다. 할 수 없으면 굴리지 않고 까닭(reason)을 적는다.
   - 판정은 부상의 영향을 받는다. 실패하면 아무 일도 없다. 굴림은 공개다(check_rolled).
@@ -21,10 +27,27 @@ DB 를 모른다. 테이블의 문의 상태를 고친다(app/tables/route_locks
 
 import uuid
 
-from app.assets.scenarios.snapshot import RouteSnapshot, door_devices, read_snapshot
-from app.engine.action import DoorAction, DoorDevice, ForceAction, LockAction, PickAction, RepairAction, UnlockAction
+from app.assets.scenarios.snapshot import (
+    ItemLockSnapshot,
+    LockSnapshot,
+    RouteSnapshot,
+    Snapshot,
+    door_devices,
+    item_rule_of,
+    read_snapshot,
+)
+from app.engine.action import (
+    DoorAction,
+    DoorDevice,
+    ForceAction,
+    LockAction,
+    PickAction,
+    RepairAction,
+    ReplaceAction,
+    UnlockAction,
+)
 from app.rounds.effects import Judging
-from app.rounds.errors import ActionTargetError, Conflict, RoundConflictError
+from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.rounds.map_actions import holds_key, roll_terms, standing_place, terms_document
 from app.tables import items, places, route_locks
 from app.tables.models import GameTable, TableMember
@@ -45,6 +68,14 @@ class DoorReason:
     NO_TOOL = 'no_tool'
     # 따기, 부수기, 고치기의 판정에 실패했다
     FAILED = 'failed'
+    # 앞 차례에 바꿔 단 자물쇠가 따지 못하는 것이었다
+    NO_PICK = 'no_pick'
+    # 자물쇠가 잠겨 있어 바꾸지 못했다. 연 뒤에 바꾼다
+    LOCKED = 'locked'
+    # 바꿔 달 자물쇠 물건을 더 지니지 않았다(앞 차례에 건넸거나 내려놓았다)
+    NO_ITEM = 'no_item'
+    # 그 자물쇠 물건을 이 테이블에서 이미 달았다
+    USED = 'used'
 
 
 def joining_route(table: GameTable, here: uuid.UUID, there: uuid.UUID) -> RouteSnapshot | None:
@@ -68,14 +99,33 @@ def resolve_device(route: RouteSnapshot, device: DoorDevice | None) -> DoorDevic
     raise ActionTargetError('device')
 
 
-def require_opening(route: RouteSnapshot, action: DoorAction) -> None:
-    """따기, 부수기, 고치기가 할 수 있는 문인지 본다. 판에 그 판정이 없으면 RoundConflictError."""
-    if isinstance(action, PickAction) and (route.lock is None or route.lock.pick is None):
+def require_opening(route: RouteSnapshot, lock: LockSnapshot | ItemLockSnapshot | None, action: DoorAction) -> None:
+    """
+    따기, 부수기, 고치기, 바꾸기가 할 수 있는 문인지 본다. 판에 그 판정이 없으면 RoundConflictError.
+
+    따기는 지금의 자물쇠(lock, 바꿔 달았으면 자물쇠 물건의 것)를 본다. 바꾸기는 판에 자물쇠가 있던 문이어야 한다.
+    """
+    if isinstance(action, PickAction) and (lock is None or lock.pick is None):
         raise RoundConflictError(Conflict.NOT_PICKABLE)
+    if isinstance(action, ReplaceAction) and route.lock is None:
+        raise RoundConflictError(Conflict.NOT_REPLACEABLE)
     if isinstance(action, ForceAction) and route.force is None:
         raise RoundConflictError(Conflict.NOT_FORCEABLE)
     if isinstance(action, RepairAction) and route.repair is None:
         raise RoundConflictError(Conflict.NOT_REPAIRABLE)
+
+
+def require_lock_item(snapshot: Snapshot, member: TableMember, action: ReplaceAction) -> None:
+    """
+    바꿔 달 물건이 자물쇠 물건이고 지녔는지 본다.
+
+    판에 자물쇠를 적은 물건이 아니면 ActionNotInRulesError(item),
+    하나도 지니지 않았으면 RoundConflictError(item_not_held).
+    """
+    if item_rule_of(snapshot, action.item).lock is None:
+        raise ActionNotInRulesError('item')
+    if items.count_of(member.sheet, action.item) < 1:
+        raise RoundConflictError(Conflict.ITEM_NOT_HELD)
 
 
 def accept_door(table: GameTable, member: TableMember, action: DoorAction) -> dict:
@@ -87,7 +137,9 @@ def accept_door(table: GameTable, member: TableMember, action: DoorAction) -> di
       - 잠그기, 열기: 장치가 그 길에 없거나, 둘 다 있는데 비웠으면 ActionTargetError(device).
         비운 장치는 그 길의 하나로 채운다.
       - 따기: 판에 따는 판정이 없으면 RoundConflictError(not_pickable). 부수기: 부수는 판정이 없으면 not_forceable.
-        고치기: 고치는 판정이 없으면 not_repairable.
+        고치기: 고치는 판정이 없으면 not_repairable. 따기는 바꿔 단 자물쇠면 그 자물쇠의 따는 판정을 본다.
+      - 바꾸기: 판에 자물쇠가 없던 문이면 RoundConflictError(not_replaceable). 자물쇠 물건이 아니면
+        ActionNotInRulesError(item), 지니지 않았으면 RoundConflictError(item_not_held).
     """
     here = standing_place(member)
     route = joining_route(table, here, action.place)
@@ -95,7 +147,10 @@ def accept_door(table: GameTable, member: TableMember, action: DoorAction) -> di
         raise ActionTargetError('place')
     if isinstance(action, LockAction | UnlockAction):
         action = action.model_copy(update={'device': resolve_device(route, action.device)})
-    require_opening(route, action)
+    snapshot = read_snapshot(table.content)
+    require_opening(route, route_locks.current_lock(table, snapshot, route), action)
+    if isinstance(action, ReplaceAction):
+        require_lock_item(snapshot, member, action)
     return action.model_dump(mode='json')
 
 
@@ -126,14 +181,15 @@ def set_lock(judging: Judging, member: TableMember, route: RouteSnapshot, locked
     """
     자물쇠를 잠그거나(locked 참) 연다. 못 했으면 그 까닭.
 
-    그 열쇠를 지녀야 한다. 이미 그렇게 되어 있으면 already, 부서진 문은 잠그지 못한다(broken).
+    지금의 자물쇠의 열쇠를 지녀야 한다(바꿔 달았으면 새 열쇠). 이미 그렇게 되어 있으면 already,
+    부서진 문은 잠그지 못한다(broken).
     """
     table = judging.table
     if locked and route_locks.is_broken(table, route):
         return DoorReason.BROKEN
     if route_locks.is_locked(table, route) == locked:
         return DoorReason.ALREADY
-    if not holds_key(member, route.lock):
+    if not holds_key(member, route_locks.current_lock(table, judging.snapshot, route)):
         return DoorReason.NO_KEY
     if locked:
         route_locks.lock(table, route)
@@ -153,11 +209,14 @@ def pick_lock(judging: Judging, member: TableMember, route: RouteSnapshot) -> tu
     """
     자물쇠를 딴다. (못 한 까닭, 판정의 문서)를 돌려준다. 잠겨 있지 않거나 도구가 없으면 굴리지 않는다.
 
+    지금의 자물쇠의 따는 판정으로 굴린다. 받은 뒤 앞 차례에 따지 못하는 자물쇠로 바뀌었으면 no_pick 이다.
     성공하면 자물쇠가 열린다.
     """
-    pick = route.lock.pick
+    pick = route_locks.current_lock(judging.table, judging.snapshot, route).pick
     if not route_locks.is_locked(judging.table, route):
         return DoorReason.ALREADY, None
+    if pick is None:
+        return DoorReason.NO_PICK, None
     if pick.tool is not None and items.count_of(member.sheet, pick.tool) < 1:
         return DoorReason.NO_TOOL, None
     rolled = roll_terms(judging, member, pick)
@@ -198,10 +257,33 @@ def repair_door(judging: Judging, member: TableMember, route: RouteSnapshot) -> 
     return (None if rolled.check.success else DoorReason.FAILED), terms_document(judging, repair, rolled)
 
 
+def replace_lock(judging: Judging, member: TableMember, route: RouteSnapshot, item: uuid.UUID) -> str | None:
+    """
+    문의 자물쇠를 자물쇠 물건으로 바꿔 단다. 못 했으면 그 까닭.
+
+    부서진 문(broken)은 고친 뒤에, 잠긴 자물쇠(locked)는 연 뒤에 바꾼다. 자물쇠 물건을 더 지니지 않았으면 no_item,
+    이 테이블에서 이미 단 자물쇠 물건이면 used 다. 바꾸면 열린 채이고 자물쇠 물건이 하나 없어진다.
+    """
+    table = judging.table
+    if route_locks.is_broken(table, route):
+        return DoorReason.BROKEN
+    if route_locks.is_locked(table, route):
+        return DoorReason.LOCKED
+    if items.count_of(member.sheet, item) < 1:
+        return DoorReason.NO_ITEM
+    if route_locks.is_fitted(table, item):
+        return DoorReason.USED
+    items.remove_items(member.sheet, item, 1)
+    route_locks.fit_lock(table, route, item)
+    return None
+
+
 def handle_door(judging: Judging, member: TableMember, route: RouteSnapshot, action: DoorAction) -> tuple:
-    """행동의 종류대로 문을 다룬다. (못 한 까닭, 판정의 문서)를 돌려준다. 잠그기와 열기는 굴리지 않는다."""
+    """행동의 종류대로 문을 다룬다. (못 한 까닭, 판정의 문서)를 돌려준다. 잠그기, 열기, 바꾸기는 굴리지 않는다."""
     if isinstance(action, LockAction | UnlockAction):
         return set_door(judging, member, route, action.device, isinstance(action, LockAction)), None
+    if isinstance(action, ReplaceAction):
+        return replace_lock(judging, member, route, action.item), None
     if isinstance(action, PickAction):
         return pick_lock(judging, member, route)
     if isinstance(action, RepairAction):

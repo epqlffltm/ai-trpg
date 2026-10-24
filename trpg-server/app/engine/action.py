@@ -105,6 +105,8 @@ class ActionKind(enum.StrEnum):
     FORCE = 'force'
     # 지금 장소에 닿은 길의 부서진 문을 판에 적힌 판정으로 고친다(#281)
     REPAIR = 'repair'
+    # 지금 장소에 닿은 길의 문의 자물쇠를 가진 자물쇠 물건으로 바꿔 단다. 옛 열쇠로는 더 열지 못한다(#281)
+    REPLACE = 'replace'
 
 
 class DoorDevice(enum.StrEnum):
@@ -569,8 +571,24 @@ class RepairAction(BaseModel):
     place: uuid.UUID
 
 
+class ReplaceAction(BaseModel):
+    """
+    지금 서 있는 장소에 닿은 길의 문의 자물쇠를 바꿔 다는 행동(#281). 굴리지 않는다.
+
+    item 은 지닌 자물쇠 물건(판에 자물쇠를 적은 물건 항목)이다. 판에 자물쇠가 있던 문에만 단다.
+    부서진 문은 고친 뒤에, 잠긴 자물쇠는 연 뒤에 바꾼다. 단 자물쇠는 열린 채이고, 그 자물쇠 물건의 열쇠로만 잠그고 연다.
+    자물쇠 물건은 소지품에서 하나 없어진다. 한 테이블에서 자물쇠 물건 하나는 한 번만 단다. 지나가지는 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.REPLACE]
+    place: uuid.UUID
+    item: uuid.UUID
+
+
 # 문을 다루는 행동들(#281). 같은 곳에서 받고 판정한다(app/rounds/door_actions.py)
-DoorAction = LockAction | UnlockAction | PickAction | ForceAction | RepairAction
+DoorAction = LockAction | UnlockAction | PickAction | ForceAction | RepairAction | ReplaceAction
 
 
 # 행동의 모양들. 받은 행동을 종류로 가르는 함수들이 이것을 받는다
@@ -611,6 +629,7 @@ AnyAction = (
     | PickAction
     | ForceAction
     | RepairAction
+    | ReplaceAction
 )
 
 # 선언에 붙는 행동. kind 로 종류를 가른다
