@@ -4,6 +4,7 @@
 // 못 한 것은 이벤트로 오지 않아 이 줄에만 보인다. 이름 뒤에는 조사를 붙이지 않는다("종탑 쪽 문: 열었습니다").
 
 import type { Declaration } from '../../../../api/types';
+import { because } from './outcomeReason';
 
 type Outcome = NonNullable<Declaration['outcome']>;
 type Move = Extract<Outcome, { move: unknown }>['move'];
@@ -49,11 +50,6 @@ const DOOR_REASONS: Record<string, string> = {
   no_item: '달 자물쇠를 더 지니지 않았습니다',
   used: '이 테이블에서 이미 단 자물쇠입니다',
 };
-
-/** 까닭을 괄호로. 모르는 이름이면 그대로, 없으면 빈 글 */
-function because(reasons: Record<string, string>, reason: string | null | undefined): string {
-  return reason ? `(${reasons[reason] ?? reason})` : '';
-}
 
 /** 판의 판정 하나. "눈 8, 보정 +1, 합 9 / 목표 15" */
 export function rollText(roll: Roll): string {
