@@ -52,10 +52,12 @@ class Settings(CoreSettings, NotificationSettings):
     public_for_everyone: bool = False
 
     # 페르소나와 판을 가져가는 서버마다의 서명 비밀(server_core/service_auth/signing.py, app/core/service_auth.py).
-    # 그 서버의 설정에 같은 값을 적는다(chat 은 ASSET_SECRET). 서버마다 따로 둔다.
+    # 그 서버의 설정에 같은 값을 적는다(chat 과 story 는 ASSET_SECRET). 서버마다 따로 둔다.
     # 하나가 새도 다른 서버인 척 부를 수 없다. 비워 두면 그 서버의 요청은 하나도 받지 않는다(401). 적으면 32자 이상이다.
-    # story 와 TRPG 는 그 서버가 가져가기 시작할 때 더한다
+    # TRPG 는 그 서버가 가져가기 시작할 때 더한다
     chat_server_secret: SecretStr = SecretStr('')
+    # story 서버가 세션을 시작할 때 세계관의 판을 가져간다(app/worlds/supply.py)
+    story_server_secret: SecretStr = SecretStr('')
 
     # 인증 서버가 탈퇴를 알리는 요청(app/withdrawal/)의 서명 비밀. 인증 서버의 ASSET_SECRET 과 같은 값이다.
     # 부르는 서버의 표(service_secrets)에 넣지 않는다. 인증 서버는 페르소나와 판을 가져가는 서버가 아니다.
@@ -119,6 +121,7 @@ class Settings(CoreSettings, NotificationSettings):
         """부르는 서버의 이름과 그 서버의 서명 비밀. 비어 있으면 그 서버의 요청을 받지 않는다."""
         return {
             'chat': self.chat_server_secret.get_secret_value(),
+            'story': self.story_server_secret.get_secret_value(),
         }
 
 

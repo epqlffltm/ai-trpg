@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.config import Settings
 from app.main import create_app
+from tests.assets import FakeAsset
 from tests.cleaning import clear_tables
 
 TEST_SCHEMA = 'story_test'
@@ -49,6 +50,9 @@ def make_test_settings(**overrides) -> Settings:
         # span 을 내보내지 않는다. 개발자의 .env 에 수집기의 주소가 있어도 테스트는 보내지 않는다.
         # span 을 보는 테스트는 메모리에 모으는 것을 끼운다(spans fixture)
         'otel_exporter_otlp_endpoint': '',
+        # asset 서버를 부르지 않는다. 개발자의 .env 에 주소가 있어도 테스트는 가짜(asset fixture)를 쓴다
+        'asset_url': '',
+        'asset_secret': '',
     }
     values.update(overrides)
     return Settings(**values)
@@ -108,6 +112,14 @@ async def app(settings: Settings, auth_server: FakeAuthServer, engine: AsyncEngi
     app = create_app(settings, http_client=auth_server.make_client(), engine=engine)
     yield app
     await app.state.http_client.aclose()
+
+
+@pytest.fixture
+def asset(app: FastAPI) -> FakeAsset:
+    """가짜 asset 서버. 앱의 asset 클라이언트 자리에 끼운다(tests/assets.py)."""
+    fake = FakeAsset()
+    app.state.asset = fake
+    return fake
 
 
 @pytest.fixture

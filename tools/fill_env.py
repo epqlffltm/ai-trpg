@@ -166,6 +166,9 @@ SECRETS = (
     ),
     shared('chat 서버 → asset 서버', ('chat-server/.env', 'ASSET_SECRET'), ('asset-server/.env', 'CHAT_SERVER_SECRET')),
     shared(
+        'story 서버 → asset 서버', ('story-server/.env', 'ASSET_SECRET'), ('asset-server/.env', 'STORY_SERVER_SECRET')
+    ),
+    shared(
         'chat 서버 → 결제 서버', ('chat-server/.env', 'BILLING_SECRET'), ('billing-server/.env', 'CHAT_SERVER_SECRET')
     ),
     shared('인증 서버 → asset 서버', ('auth-server/.env', 'ASSET_SECRET'), ('asset-server/.env', 'AUTH_SERVER_SECRET')),

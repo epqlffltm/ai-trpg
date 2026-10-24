@@ -756,6 +756,7 @@ services:
     environment:
       <<: *asset-environment
       CHAT_SERVER_SECRET: ""
+      STORY_SERVER_SECRET: ""
       AUTH_SERVER_SECRET: ""
       NOTIFICATION_SECRET: ""
     depends_on:
@@ -853,13 +854,17 @@ services:
     logging: *logging
     command: ["alembic", "upgrade", "heads"]
     env_file: ./story-server/.env
+    # 마이그레이션은 DB 만 쓴다. asset 서버의 주소와 서명 비밀을 함께 비운다.
+    # 주소만 남으면(.env.example 의 ASSET_URL) 설정의 검사가 "주소는 있고 비밀이 없다"로 막는다(chat-migrate 와 같다)
     environment:
       <<: *story-environment
+      ASSET_URL: ""
+      ASSET_SECRET: ""
     depends_on:
       db:
         condition: service_healthy
 
-  # story 서버(#591). 세계관 안에서 여러 인물과 이야기. 지금은 뼈대다(토큰 검증, 관측, 상태 확인).
+  # story 서버(#591). 세계관 안에서 여러 인물과 이야기. 지금은 세션까지다(세계관의 판을 asset 서버에서 가져와 시작한다).
   # 끊긴 세션 목록 받기는 이 프로세스 안에서 돈다(워커가 따로 없다). 다른 서버를 부르게 되면 그 주소와 비밀을 여기에 더한다
   story-server:
     <<: *story-image
@@ -869,6 +874,9 @@ services:
     env_file: ./story-server/.env
     environment:
       <<: [*story-environment, *telemetry-environment]
+      # 세션을 시작할 때 세계관의 판을 가져온다(story-server/README.md 의 "세션").
+      # story-server/.env 에 ASSET_SECRET 이 있어야 뜬다(asset 서버의 STORY_SERVER_SECRET 과 같은 값)
+      ASSET_URL: http://asset-server:8006
     # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
     networks: [default, telemetry]
     healthcheck:

@@ -9,6 +9,8 @@ conftest.py 에 두지 않고 따로 둔다. 테스트 파일이 conftest.py 를
 from sqlalchemy import Table
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+# 모델을 불러와야 Base.metadata 에 테이블이 등록된다
+import app.conversations.models  # noqa: F401
 from app.core.database import Base
 
 
@@ -18,7 +20,7 @@ def clearing_order() -> list[Table]:
 
     가리키는 테이블이 먼저, 가리켜지는 테이블이 나중이다. 반대로 지우면 외래 키가 막는다.
     sorted_tables 는 가리켜지는 쪽부터 늘어놓으므로 뒤집는다. 테이블이 새로 생겨도 모델에 있으면 저절로 들어간다.
-    아직 테이블이 없다(뼈대). 모델을 만들면 그 모듈을 여기서 불러와 Base.metadata 에 넣는다.
+    모델의 모듈을 새로 만들면 위에서 불러와 Base.metadata 에 넣는다.
     마이그레이션의 기록 테이블(alembic_version)은 모델이 아니라서 들어가지 않는다. 지우면 안 되는 테이블이다.
     """
     return list(reversed(Base.metadata.sorted_tables))
