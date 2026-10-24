@@ -10,6 +10,7 @@ import {
   canAttachAction,
   coverHere,
   carriable,
+  hereId,
   nameablePeople,
   patients,
   treatableInjuries,
@@ -23,7 +24,7 @@ import { DoorActionFields } from './DoorActionFields';
 import { ChoiceSelect } from './ChoiceSelect';
 import { GiveFields, PutDownFields, TakeFields, UseFields, VictimFields } from './ItemActionFields';
 import { BuyFields, PayFields, SellFields } from './TradeFields';
-import { minutesLabel } from '../../status/statusView';
+import { minutesLabel, wayNotes } from '../../status/statusView';
 
 type Props = {
   draft: ActionDraft;
@@ -133,10 +134,11 @@ function NameFields({ draft, ctx, onChange }: FieldProps) {
 }
 
 function MoveFields({ draft, ctx, onChange }: FieldProps) {
-  const choices = ways(ctx).map((way) => ({
-    value: way.placeId,
-    label: way.minutes === null ? way.name : `${way.name}(${minutesLabel(way.minutes)})`,
-  }));
+  const here = hereId(ctx) ?? '';
+  const choices = ways(ctx).map((way) => {
+    const notes = [...(way.minutes === null ? [] : [minutesLabel(way.minutes)]), ...wayNotes(way, here, ctx.table.rules)];
+    return { value: way.placeId, label: notes.length > 0 ? `${way.name}(${notes.join(' · ')})` : way.name };
+  });
   const downed = carriable(ctx);
   return (
     <div className="ability-grid">
