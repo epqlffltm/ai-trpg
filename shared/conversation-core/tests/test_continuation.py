@@ -1,7 +1,7 @@
-# chat-server/tests/test_continuation.py
+# shared/conversation-core/tests/test_continuation.py
 
 """
-이어서 출력의 글 다루기(app/conversation/continuation.py). DB 도 모델도 쓰지 않는다.
+이어서 출력의 글 다루기(conversation_core/continuation.py). DB 도 모델도 쓰지 않는다.
 
 보는 것.
   - 모델이 앞 글의 끝을 되풀이하면 겹친 만큼 뗀다. 짧게 겹친 것(우연)은 둔다
@@ -12,7 +12,7 @@
 
 import pytest
 
-from app.conversation.continuation import (
+from conversation_core.continuation import (
     MIN_OVERLAP,
     OverlapTrim,
     continued_text,

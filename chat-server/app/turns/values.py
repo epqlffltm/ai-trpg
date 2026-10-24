@@ -11,9 +11,9 @@ from datetime import datetime
 from decimal import Decimal
 
 from ai_core.provider import ChatMessage
+from conversation_core.changes import Proposed
 
 from app.assets.schemas import CharacterDocument, LoreEntryDocument
-from app.conversation.changes import Proposed
 from app.lore.texts import EntryKey
 from app.turns.models import Outcome
 from app.world.state import WorldState

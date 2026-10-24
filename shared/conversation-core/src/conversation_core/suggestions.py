@@ -1,4 +1,4 @@
-# chat-server/app/conversation/suggestions.py
+# shared/conversation-core/src/conversation_core/suggestions.py
 
 """
 다음 답 추천(docs/architecture/chat-server.md 의 "다음 답 추천"). DB 도 모델도 모른다.
@@ -10,8 +10,8 @@
   - 선택지: 표식 뒤. 다 받은 뒤에 거른다(parse_suggestions). 말의 suggestions 칸에만 둔다
     (본문에 섞으면 다음 호출에 다시 들어가 모델이 선택지를 흉내 낸다)
 
-본문 뒤에는 상태 바꾸기의 제안(app/conversation/changes.py)도 올 수 있다. 본문은 어느 표식이든 처음 나온 것 앞까지다
-(app/conversation/markers.py).
+본문 뒤에는 상태 바꾸기의 제안(conversation_core/changes.py)도 올 수 있다. 본문은 어느 표식이든 처음 나온 것 앞까지다
+(conversation_core/markers.py).
 
 흘릴 때는 표식이 조각의 경계에 걸릴 수 있다. 그래서 끝의 몇 글자(표식의 앞부분일 수 있는 것)는
 다음 조각이 올 때까지 붙잡는다(MarkerHold). 흘린 글 끝에 빈칸이 남을 수 있지만 저장하는 본문에서는 뺀다.
@@ -26,7 +26,7 @@
 import re
 from dataclasses import dataclass, field
 
-from app.conversation.markers import END_MARKERS, SUGGESTIONS_CLOSING, SUGGESTIONS_MARKER, block_after, first_marker
+from conversation_core.markers import END_MARKERS, SUGGESTIONS_CLOSING, SUGGESTIONS_MARKER, block_after, first_marker
 
 # 본문과 선택지를 가르는 표식. 영문 태그가 모델마다 가장 잘 지켜진다. 닫는 태그는 써도 되고 안 써도 된다
 MARKER = SUGGESTIONS_MARKER

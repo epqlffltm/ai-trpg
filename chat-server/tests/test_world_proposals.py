@@ -14,7 +14,8 @@
 
 from dataclasses import replace
 
-from app.conversation.changes import Proposed
+from conversation_core.changes import Proposed
+
 from app.world.proposals import apply_proposals, offer_of, render_offer
 from app.world.state import Holding, WorldState, initial_state
 from tests.assets import make_character

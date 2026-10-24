@@ -1,4 +1,4 @@
-# chat-server/app/conversation/continuation.py
+# shared/conversation-core/src/conversation_core/continuation.py
 
 """
 이어서 출력(docs/architecture/chat-server.md 의 "과금"과 "대화 조작"). 끊긴 답(partial)에 이어 쓴다.

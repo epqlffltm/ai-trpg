@@ -184,7 +184,7 @@ class SpriteDocument(BaseModel):
 class LoreEntryDocument(BaseModel):
     """
     로어북의 항목 하나. constant 면 늘 모델에 간다. 아니면 최근 말에 keywords 가운데 하나가 나올 때 간다
-    (app/conversation/lorebook.py). kind 는 종류(person, place …)다. 모르는 종류도 받아 둔다.
+    (conversation_core/lorebook.py). kind 는 종류(person, place …)다. 모르는 종류도 받아 둔다.
     """
 
     model_config = ConfigDict(extra='ignore')
