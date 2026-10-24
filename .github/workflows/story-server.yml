@@ -4,8 +4,7 @@
 # PR 에서는 관문(.github/workflows/ci.yml)이 바뀐 파일을 보고 이 워크플로를 부른다.
 # 고르는 규칙은 .github/scripts/changed-servers.sh 에 있다. 검사할 것을 바꾸면 이 파일만 고친다.
 # 단계는 chat 서버의 것(chat-server.yml)과 같다. 뼈대(#591)라 Redis 와 pgvector 확장을 아직 쓰지 않는다.
-# story 의 DB 계정은 지금 이 워크플로가 직접 만든다. compose 에 붙이는 PR 이 초기화 스크립트(docker/postgres/init/10-story-role.sql)를 더하면
-# 그 스크립트로 바꾼다. 스크립트가 compose 의 비밀(STORY_DB_PASSWORD)을 읽어서, 그 비밀과 함께 들어가야 새 DB 가 뜬다.
+# DB 계정은 로컬과 같은 초기화 스크립트(docker/postgres/init/10-story-role.sql)로 만든다.
 
 name: story-server
 
@@ -59,6 +58,7 @@ jobs:
       NOTIFICATION_DB_PASSWORD: ci-notification-password
       ASSET_DB_PASSWORD: ci-asset-password
       CHAT_DB_PASSWORD: ci-chat-password
+      STORY_DB_PASSWORD: ci-story-password
       DATABASE_URL: postgresql+asyncpg://story:ci-story-password@127.0.0.1:5432/trpg
       # 필수 설정이라 적는다. CI 에는 인증 서버가 없고, 테스트는 가짜 인증 서버를 쓴다.
       # 이 주소로는 요청이 가지 않는다
@@ -88,10 +88,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/06-notification-role.sql
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/08-asset-role.sql
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/09-chat-role.sql
-          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg \
-            -c "CREATE ROLE story LOGIN PASSWORD 'ci-story-password'" \
-            -c "CREATE SCHEMA story AUTHORIZATION story" \
-            -c "CREATE SCHEMA story_test AUTHORIZATION story"
+          psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/10-story-role.sql
 
       - name: uv 설치
         uses: astral-sh/setup-uv@v9.0.0

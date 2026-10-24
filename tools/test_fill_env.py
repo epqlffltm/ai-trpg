@@ -21,8 +21,8 @@ from fill_env import ENV_FILES, PLACEHOLDERS, main, run
 # 서버마다의 작은 .env.example. 저장소의 것과 같은 모양(빈 값, 자리표시자, 주석으로 막은 줄)이다
 EXAMPLES = {
     '.env': 'POSTGRES_USER=trpg\nPOSTGRES_PASSWORD=\nAUTH_DB_PASSWORD=\nGAME_DB_PASSWORD=\nBOARD_DB_PASSWORD=\n'
-    'BILLING_DB_PASSWORD=\nNOTIFICATION_DB_PASSWORD=\nASSET_DB_PASSWORD=\nCHAT_DB_PASSWORD=\nGRAFANA_ADMIN_PASSWORD=\n'
-    'MONITOR_DB_PASSWORD=\n'
+    'BILLING_DB_PASSWORD=\nNOTIFICATION_DB_PASSWORD=\nASSET_DB_PASSWORD=\nCHAT_DB_PASSWORD=\nSTORY_DB_PASSWORD=\n'
+    'GRAFANA_ADMIN_PASSWORD=\nMONITOR_DB_PASSWORD=\n'
     '# BACKUP_AWS_SECRET_ACCESS_KEY=\n# ALERT_SLACK_WEBHOOK_URL=\n'
     '# ALERT_TELEGRAM_BOT_TOKEN=\n# ALERT_TELEGRAM_CHAT_ID=\n',
     'auth-server/.env': 'SECRET_KEY=\nDATABASE_URL=postgres://auth:여기에_비밀번호@127.0.0.1:5432/trpg\n'
@@ -44,6 +44,7 @@ EXAMPLES = {
     'chat-server/.env': 'DATABASE_URL=postgresql+asyncpg://chat:여기에비밀번호@127.0.0.1:5432/trpg\n'
     '# ASSET_URL=http://127.0.0.1:8006\n# ASSET_SECRET=\n# BILLING_URL=http://127.0.0.1:8003\n# BILLING_SECRET=\n'
     '# AUTH_SERVER_SECRET=\n',
+    'story-server/.env': 'DATABASE_URL=postgresql+asyncpg://story:여기에비밀번호@127.0.0.1:5432/trpg\n',
 }
 
 
@@ -109,6 +110,7 @@ class FillEnvTests(unittest.TestCase):
             ('auth-server', 'AUTH_DB_PASSWORD'),
             ('trpg-server', 'GAME_DB_PASSWORD'),
             ('billing-server', 'BILLING_DB_PASSWORD'),
+            ('story-server', 'STORY_DB_PASSWORD'),
         ):
             url = self.env(f'{folder}/.env')['DATABASE_URL']
             self.assertEqual(password(url), root[key], folder)
