@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/ItemRulesSection.tsx
 // 물건 규칙(B9 물건·돈 탭). 붙인 로어북의 물건 항목을 모두 늘어놓고, 줄마다 규칙(없으면 "장비 · 보통")을 보인다.
 // 줄을 고치면 창이 열리고, 창의 저장이 물건 규칙의 목록을 통째로 바로 보낸다. 규칙 지우기는 장비·보통으로 돌린다.
-// 붙인 로어북에 없는 물건의 규칙(로어북을 뗐거나 항목을 지웠다)도 줄로 남겨 지울 수 있게 한다.
+// 붙인 로어북에 없는 물건의 규칙(로어북을 뗐거나 항목을 지웠다)도 줄로 남겨 지울 수 있게 한다. 장비는 새 자물쇠(#281)로 둘 수 있다.
 
 import { Button, Checkbox, Dialog, SelectField, TextField } from '@ai-trpg/ui';
 import { useCallback, useState, type FormEvent } from 'react';
@@ -21,6 +21,8 @@ import {
   withoutItemRule,
   type ItemRuleDraft,
 } from './itemRuleForm';
+import { ItemLockFields } from './ItemLockFields';
+import { itemLockHints, keysElsewhere } from './itemLockForm';
 import type { EntryChoice } from './useLoreEntries';
 import { useScenarioSave } from './useScenarioSave';
 
@@ -63,19 +65,20 @@ export function ItemRulesSection({ scenario, rules, entries }: Props) {
         })}
       </ul>
       <Dialog title={editing ? `물건 규칙: ${editing.name}` : '물건 규칙'} open={editing !== null} onClose={close}>
-        {editing ? <ItemRuleForm scenario={scenario} rules={rules} row={editing} done={close} /> : null}
+        {editing ? <ItemRuleForm scenario={scenario} rules={rules} entries={entries} row={editing} done={close} /> : null}
       </Dialog>
     </section>
   );
 }
 
-type FormProps = { scenario: ScenarioDetail; rules: Ruleset | null; row: Row; done: () => void };
+type FormProps = { scenario: ScenarioDetail; rules: Ruleset | null; entries: EntryChoice[]; row: Row; done: () => void };
 
-function ItemRuleForm({ scenario, rules, row, done }: FormProps) {
+function ItemRuleForm({ scenario, rules, entries, row, done }: FormProps) {
   const rule = scenario.items.find((one) => one.entry_id === row.id);
   const [draft, setDraft] = useState<ItemRuleDraft>(() => itemRuleDraft(rule));
   const saving = useScenarioSave(scenario.id);
-  const hints = itemRuleHints(draft);
+  const lockHints = draft.kind === 'gear' ? itemLockHints(draft.lock, row.id, keysElsewhere(scenario.routes, scenario.items, row.id)) : {};
+  const hints = { ...itemRuleHints(draft), ...lockHints };
   const blocked = Object.keys(hints).length > 0;
 
   function update(changes: Partial<ItemRuleDraft>) {
@@ -129,6 +132,9 @@ function ItemRuleForm({ scenario, rules, row, done }: FormProps) {
             상인이 파는 값입니다. 비우면 사고팔 수 없습니다.{scenario.currency ? '' : ' 화폐가 없으면 게시 점검이 알립니다.'}
           </p>
           {draft.kind === 'consumable' ? <HealsField draft={draft} rules={rules} update={update} /> : <WearFields draft={draft} rules={rules} hints={hints} update={update} />}
+          {draft.kind === 'gear' ? (
+            <ItemLockFields draft={draft.lock} entryId={row.id} items={entries} rules={rules} hints={lockHints} onChange={(lock) => update({ lock })} />
+          ) : null}
         </>
       ) : (
         <p>이 물건은 붙인 로어북에 없어 테이블에서 쓰이지 않습니다. 규칙을 지우거나, 그 물건이 있는 로어북을 다시 붙이세요.</p>
