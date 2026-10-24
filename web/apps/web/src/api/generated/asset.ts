@@ -1283,9 +1283,36 @@ export interface components {
             version: number;
         };
         /**
+         * Choice
+         * @description 선택지 하나. 제작자가 적은 글과, 고르면 엔진이 반영하는 효과들이다. id 는 이벤트 안에서 고유하다.
+         */
+        Choice: {
+            /**
+             * Effects
+             * @default []
+             */
+            effects: components["schemas"]["Effect"][];
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+        };
+        /**
+         * ChoiceDocument
+         * @description 선택지 하나.
+         */
+        ChoiceDocument: {
+            /** Effects */
+            effects: components["schemas"]["EffectDocument"][];
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+        };
+        /**
          * Condition
          * @description 조건 하나(story.md 의 "조건"). 종류(kind)마다 쓰는 칸이 다르다(CONDITION_FIELDS).
-         *     target 은 장소, 물건, 인물, 시간대의 id 다. value 는 물건의 id(건넸다)나 호감도 단계의 이름이다.
+         *     target 은 장소, 물건, 인물, 시간대, 이벤트의 id 다. value 는 물건의 id(건넸다)나 호감도 단계의 이름이다.
          *     count 는 물건의 수(가졌다)나 날짜(n일째)다. 쓰지 않는 칸은 적지 않는다.
          */
         Condition: {
@@ -1327,10 +1354,10 @@ export interface components {
          *       day_at_most        count                 n일째 이하다
          *       slot_is            target: 시간대        지금의 시간대가 그것이다
          *       accompanied        target: 인물          그 인물과 동행 중이다
-         *     이벤트를 봤다(event_seen)는 이벤트를 만드는 두 번째 조각에서 더한다.
+         *       event_seen         target: 이벤트        그 이벤트가 열린 적이 있다(판의 형식 2)
          * @enum {string}
          */
-        ConditionKind: "reach_place" | "hold_item" | "gave_item" | "affection_at_least" | "affection_below" | "day_at_least" | "day_at_most" | "slot_is" | "accompanied";
+        ConditionKind: "reach_place" | "hold_item" | "gave_item" | "affection_at_least" | "affection_below" | "day_at_least" | "day_at_most" | "slot_is" | "accompanied" | "event_seen";
         /**
          * Conditions
          * @description 조건 목록과 맞추는 법. 목록이 비면 늘 맞는다.
@@ -1352,6 +1379,98 @@ export interface components {
             /** Items */
             items: components["schemas"]["ConditionDocument"][];
             match: components["schemas"]["Match"];
+        };
+        /**
+         * Effect
+         * @description 효과 하나(story.md 의 "효과"). target 은 인물, 물건, 장소의 id 다(종류마다, EffectKind).
+         *     amount 는 호감도를 바꾸는 크기(±, 0 이 아니다)나 주고 가져가는 물건의 수(1 이상)다. 쓰지 않는 종류는 적지 않는다.
+         */
+        Effect: {
+            /** Amount */
+            amount?: number | null;
+            kind: components["schemas"]["EffectKind"];
+            /** Target */
+            target: string;
+        };
+        /**
+         * EffectDocument
+         * @description 효과 하나. amount 는 호감도의 크기나 물건의 수다(쓰지 않는 종류는 null).
+         */
+        EffectDocument: {
+            /** Amount */
+            amount: number | null;
+            kind: components["schemas"]["EffectKind"];
+            /** Target */
+            target: string;
+        };
+        /**
+         * EffectKind
+         * @description 효과 하나가 무엇을 바꾸는가(story.md 의 "효과"). 엔진(story 서버)만 반영한다. 모델의 글에는 효과가 없다.
+         *
+         *     종류마다 쓰는 칸이 정해져 있다(app/worlds/schemas.py 의 Effect).
+         *       affection        target: 인물, amount: ±n   그 인물의 호감도를 바꾼다(0~100 안으로 자른다)
+         *       give_item        target: 물건, amount: n    사용자에게 그 물건을 준다
+         *       take_item        target: 물건, amount: n    사용자에게서 그 물건을 가져간다(가진 만큼까지)
+         *       accompany_start  target: 인물               그 인물과 동행을 시작한다
+         *       accompany_end    target: 인물               그 인물과 동행을 끝낸다
+         *       move_to          target: 장소               사용자(와 동행)를 그 장소로 옮긴다. 시간은 흐르지 않는다
+         *     일러스트를 여는 것은 효과가 아니라 장면의 칸(collectible)이다. 이벤트가 열리면 그 장면의 일러스트를 연다.
+         * @enum {string}
+         */
+        EffectKind: "affection" | "give_item" | "take_item" | "accompany_start" | "accompany_end" | "move_to";
+        /**
+         * Event
+         * @description 이벤트 하나(story.md 의 "이벤트"). 행동 뒤에 엔진이 when 을 맞춰 보고, 맞는 것 가운데 적은 차례로 하나만 연다.
+         *     열리면 on_open 의 효과를 반영하고, 이어지는 응답이 scene 을 받아 그 장면을 쓴다.
+         *     choices 가 있으면 화면이 응답 밑에 보이고, 고르면 그 효과를 반영한 뒤 모델이 반응을 쓴다.
+         *     repeat 이 아니면 한 번만 열린다. id 는 세계관 안에서 고유하고, 조건(event_seen)과 story 의 "본 이벤트"가 적는다.
+         */
+        Event: {
+            /**
+             * Choices
+             * @default []
+             */
+            choices: components["schemas"]["Choice"][];
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * On Open
+             * @default []
+             */
+            on_open: components["schemas"]["Effect"][];
+            /**
+             * Repeat
+             * @default false
+             */
+            repeat: boolean;
+            scene: components["schemas"]["Scene"];
+            /**
+             * @default {
+             *       "items": [],
+             *       "match": "all"
+             *     }
+             */
+            when: components["schemas"]["Conditions"];
+        };
+        /**
+         * EventDocument
+         * @description 이벤트 하나. 판의 차례가 여는 차례다.
+         */
+        EventDocument: {
+            /** Choices */
+            choices: components["schemas"]["ChoiceDocument"][];
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** On Open */
+            on_open: components["schemas"]["EffectDocument"][];
+            /** Repeat */
+            repeat: boolean;
+            scene: components["schemas"]["SceneDocument"];
+            when: components["schemas"]["ConditionsDocument"];
         };
         /**
          * EventScene
@@ -2273,6 +2392,27 @@ export interface components {
          */
         Reveal: "shown" | "silhouette" | "hidden";
         /**
+         * Scene
+         * @description 이벤트의 장면 지시. text 는 모델에게 주는 상황 설명이다. cast 는 장면에 불러들이는 인물(4명까지)이다.
+         *     image_id 는 일러스트다. 있으면 그림 창의 배경과 캐릭터를 대신한다. collectible 이면 열릴 때 계정에 남는다(갤러리).
+         */
+        Scene: {
+            /**
+             * Cast
+             * @default []
+             */
+            cast: string[];
+            /**
+             * Collectible
+             * @default false
+             */
+            collectible: boolean;
+            /** Image Id */
+            image_id?: string | null;
+            /** Text */
+            text: string;
+        };
+        /**
          * SceneCondition
          * @description 이벤트 씬이 나오는 조건. target 은 장소나 물건의 id, 또는 호감도 단계의 이름이다.
          */
@@ -2289,6 +2429,20 @@ export interface components {
             kind: components["schemas"]["SceneWhen"];
             /** Target */
             target: string;
+        };
+        /**
+         * SceneDocument
+         * @description 이벤트의 장면 지시.
+         */
+        SceneDocument: {
+            /** Cast */
+            cast: string[];
+            /** Collectible */
+            collectible: boolean;
+            /** Image Id */
+            image_id: string | null;
+            /** Text */
+            text: string;
         };
         /**
          * SceneWhen
@@ -2605,6 +2759,11 @@ export interface components {
             cast: components["schemas"]["CastMember"][];
             /** Deadline Days */
             deadline_days?: number | null;
+            /**
+             * Events
+             * @default []
+             */
+            events: components["schemas"]["Event"][];
             /** Image Id */
             image_id?: string | null;
             /**
@@ -2705,6 +2864,8 @@ export interface components {
             created_at: string;
             /** Deadline Days */
             deadline_days: number | null;
+            /** Events */
+            events: components["schemas"]["Event"][];
             /**
              * Id
              * Format: uuid
@@ -2757,6 +2918,11 @@ export interface components {
             cast: components["schemas"]["CastDocument"][];
             /** Deadline Days */
             deadline_days: number | null;
+            /**
+             * Events
+             * @default []
+             */
+            events: components["schemas"]["EventDocument"][];
             /** Format */
             format: number;
             /** Image Id */
@@ -2957,6 +3123,8 @@ export interface components {
             cast?: components["schemas"]["CastMember"][] | null;
             /** Deadline Days */
             deadline_days?: number | null;
+            /** Events */
+            events?: components["schemas"]["Event"][] | null;
             /** Image Id */
             image_id?: string | null;
             /** Intro Html */
