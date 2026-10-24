@@ -306,6 +306,14 @@ SAMPLES = {
         'to': {'entry_id': 'dbc7f2df-b069-439b-8d01-b55cc1da02d6', 'name': '깊은 수로'},
         'travel_minutes': None,
     },
+    'monsters_appeared': {
+        'round': 2,
+        'place': {'entry_id': 'dbc7f2df-b069-439b-8d01-b55cc1da02d6', 'name': '깊은 수로'},
+        'monster': {'id': '3f1a2b4c-5d6e-4f70-8a9b-0c1d2e3f4a5b', 'name': '수로 쥐'},
+        'count': 3,
+        'cause': 'rest',
+        'surprise': 'monsters',
+    },
     'door_changed': {
         'round': 1,
         'user_id': '22222222-2222-4333-8444-555555555555',

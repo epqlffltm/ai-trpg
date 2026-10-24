@@ -56,6 +56,7 @@ from app.assets.models import (
     NarrationStyle,
     NpcAttitude,
     Rating,
+    Surprise,
     all_of,
     at_most,
     none_of,
@@ -736,6 +737,8 @@ class TableMonster(Base):
     테이블 하나에서 몬스터 한 마리의 숫자와 생사와 자리.
 
     게임을 시작할 때 판의 조우마다 마리 수만큼 만들어 그 장소에 둔다(app/tables/monsters.py).
+    무작위 조우(#283)로 나온 마리는 라운드가 닫힐 때 엔진이 더한다(app/rounds/wanders.py).
+    그 마리는 기습을 스스로 갖는다.
     숫자는 판의 몬스터(시나리오의 몬스터 시트)에서 온다. 가져온 뒤로는 이 테이블의 것이다.
     지금 HP 와 생사는 엔진만 고친다. 생사의 값과 규칙은 NPC 와 같다(NpcStatus).
 
@@ -757,6 +760,8 @@ class TableMonster(Base):
         CheckConstraint('number >= 1', name='number_positive'),
         CheckConstraint('engaged_round IS NULL OR engaged_round >= 1', name='engaged_round_positive'),
         CheckConstraint('fought_round IS NULL OR fought_round >= 1', name='fought_round_positive'),
+        # 무작위 조우의 기습은 정해진 값이다. 비어 있으면 판의 조우의 것을 쓴다(NULL 은 이 조건을 지난다)
+        CheckConstraint(one_of('surprise', Surprise), name='surprise_allowed'),
         # 한 테이블에서 같은 몬스터의 번호는 겹치지 않는다. "수로 쥐 2"가 둘일 수 없다
         UniqueConstraint('table_id', 'monster_id', 'number'),
     )
@@ -783,6 +788,9 @@ class TableMonster(Base):
     # 처음 싸운 라운드. 누구를 쳤거나, 누가 쳤거나, 훔치다 들킨 라운드다. 아직 싸우지 않았으면 비어 있다.
     # 싸우기 전인 마리에게서는 훔치기가 쉽다(app/rounds/steals.py). 적는 것은 라운드 닫기다
     fought_round: Mapped[int | None] = mapped_column(Integer)
+    # 무작위 조우(#283)로 나온 마리의 기습. 만난 첫 라운드에만 쓴다(app/rounds/initiative.py).
+    # 판의 조우로 놓인 마리는 비어 있고 그 조우의 기습을 쓴다
+    surprise: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

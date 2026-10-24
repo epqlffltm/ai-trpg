@@ -68,6 +68,7 @@ from app.rounds.narrator import (
     Verdict,
     WaitNote,
     WakeNote,
+    WanderNote,
     WhisperNote,
 )
 from app.rounds.secret_names import secret_names
@@ -253,6 +254,18 @@ def to_cover(declaration: Declaration | None) -> CoverNote | None:
         return None
     place = cover['place']
     return CoverNote(place=place['name'] if place else None, value=cover['value'])
+
+
+def find_wander(met: list[dict], place_id: uuid.UUID | None) -> WanderNote | None:
+    """
+    이 라운드가 닫힐 때 그 장소에 무작위 조우로 나온 무리(app/rounds/wanders.py, #283). 없으면 None.
+
+    한 장소에는 한 라운드에 무리가 하나다. 맵에 서 있지 않으면(place_id 가 None) 없다.
+    """
+    one = next((one for one in met if place_id is not None and one['place']['entry_id'] == str(place_id)), None)
+    if one is None:
+        return None
+    return WanderNote(monster=one['monster']['name'], count=one['count'], cause=one['cause'])
 
 
 def find_revival(revivals: list[dict], user_id: uuid.UUID) -> RevivalNote | None:

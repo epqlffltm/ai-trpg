@@ -338,6 +338,18 @@ def door_changed(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'문: {who(payload)} · {road} {device} {act}')]
 
 
+# 무작위 조우를 부른 것의 말(#283)
+WANDER_CAUSES = {'arrive': '길에서', 'rest': '쉬는 중에'}
+
+
+def monsters_appeared(payload: dict, labels: Labels) -> list[Block]:
+    """무작위 조우(#283). 어디에, 무엇이 몇 마리, 길에서인지 쉬는 중인지."""
+    monster = payload.get('monster')
+    name = text_of(monster.get('name')) if isinstance(monster, dict) else ''
+    cause = WANDER_CAUSES.get(payload.get('cause'), '')
+    return [Note(f'조우: {place_name(payload.get("place"))} · {cause} {name} {payload.get("count")}마리')]
+
+
 def character_rested(payload: dict, labels: Labels) -> list[Block]:
     """쉬기. 쉬었으면 HP 의 앞뒤."""
     if not payload.get('rested'):
@@ -421,6 +433,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.HAPPENING_OCCURRED: happening_occurred,
     EventType.PLACE_SEARCHED: place_searched,
     EventType.DOOR_CHANGED: door_changed,
+    EventType.MONSTERS_APPEARED: monsters_appeared,
     EventType.CHARACTER_RESTED: character_rested,
     EventType.MEMBER_LEFT: member_left,
     EventType.MEMBER_KICKED: member_kicked,

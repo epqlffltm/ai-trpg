@@ -160,6 +160,10 @@ class EventType(enum.StrEnum):
     # 해낸 것만 적는다. 누가, 무엇을(act: lock, unlock, pick, force, repair, replace), 무엇으로(device: lock, bar),
     # 어느 길의(from, to). 문은 맵에 보인다
     DOOR_CHANGED = 'door_changed'
+    # 무작위 조우(app/rounds/wanders.py, #283). 길을 오거나 길게 쉰 장소에서 엔진이 굴려 몬스터가 나왔다.
+    # 행한 사람이 없다. 어디에(place), 무엇이(monster: id, name), 몇 마리(count), 무엇이 불렀나(cause: arrive, rest),
+    # 누가 기습하나(surprise). 일행이 서 있는 곳에만 나오므로 드러나도 된다
+    MONSTERS_APPEARED = 'monsters_appeared'
     # 캐릭터가 쉬었다(app/rounds/rests.py). 쉬는 행동을 선언했거나(cause: rest), 시간이 흘러 저절로 회복했다
     # (cause: natural). 선언한 휴식이 다쳐서 깨졌으면 rested 가 false 이고 까닭(reason)이 있다
     CHARACTER_RESTED = 'character_rested'
