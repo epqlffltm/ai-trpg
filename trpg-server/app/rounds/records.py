@@ -252,18 +252,39 @@ def record_naming(session: AsyncSession, table: GameTable, declaration: Declarat
 def record_item_use(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
     """
     물건을 쓴 결과를 이벤트로 적는다. 그 행동의 이벤트(cause)에 잇는다. 회복했으면 바로 뒤에 HP 의 변화를 적는다.
+    부상을 풀었으면 그 뒤에 풀린 부상들을 적는다(#277).
 
     행한 사람(actor_id)을 적지 않는다. 소지품과 HP 를 바꾼 것은 엔진이다.
     """
+    use = item_use_of(declaration)
+    cured = use.get('cured') or []
     payload = {
         'round': cause.payload['round'],
         'character_name': declaration.character_name,
-        **item_use_of(declaration),
+        **use,
+        'cured': [{'injury': one['injury'], 'name': one['name']} for one in cured],
     }
     used = recorder.record(session, table, EventType.ITEM_USED, payload=payload, cause=cause)
     effect = declaration.outcome.get('effect')
     if effect is not None:
         record_hp_change(session, table, effect, cause=used)
+    record_cures(session, table, cured, use['target'], cause=used)
+
+
+def record_cures(
+    session: AsyncSession, table: GameTable, cured: list[dict], holder: dict | None, cause: TableEvent
+) -> None:
+    """
+    소모품이 푼 부상마다 부상이 끝난 것(cured)을 적는다(#277). 쓴 것의 이벤트(cause)에 잇는다.
+
+    풀린 것은 대상(holder)이 입고 있던 것이다. 나으면서 후유증이 생겼으면 바로 뒤에 그것도 적는다.
+    """
+    round_number = cause.payload['round']
+    for one in cured:
+        reason = round_injuries.EndReason.CURED.value
+        payload = {'round': round_number, **holder, 'injury': one['injury'], 'reason': reason}
+        ended = recorder.record(session, table, EventType.INJURY_ENDED, payload=payload, cause=cause)
+        record_injury(session, table, one['aftermath'], holder, cause=ended)
 
 
 def record_item_give(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:

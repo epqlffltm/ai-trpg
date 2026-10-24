@@ -169,7 +169,7 @@ def test_case_names_are_unique():
 def test_every_case_builds_a_prompt_with_its_moves(case: cases.StateCase):
     text = prompt_of(case)
 
-    assert prompt.PROMPT_VERSION == 'narration-61'
+    assert prompt.PROMPT_VERSION == 'narration-62'
     assert all(move.content in text for move in case.request.moves)
 
 

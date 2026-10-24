@@ -361,6 +361,13 @@ class ItemPersonOut(BaseModel):
     character_name: str | None
 
 
+class CuredOut(BaseModel):
+    """소모품이 푼 부상 하나(#277). 룰북의 부상의 이름표와 이름이다. 나으면서 생긴 후유증은 이벤트에 있다."""
+
+    injury: str
+    name: str
+
+
 class ItemUseOut(BaseModel):
     """물건을 쓴 결과. 엔진이 정했다(app/rounds/item_actions.py). 판정이 없다."""
 
@@ -370,10 +377,12 @@ class ItemUseOut(BaseModel):
     # 썼는가. 못 했으면 reason 이 있다: not_held(가지고 있지 않았다), target_gone(회복받을 사람이 떠났거나 죽었다)
     used: bool
     reason: str | None
-    # 회복받은 사람. 회복하지 않는 물건이면 None 이다
+    # 회복받거나 부상이 풀린 사람. 누구에게도 들지 않는 물건이면 None 이다
     target: ItemPersonOut | None
     # 쓴 뒤에 남은 개수
     remaining: int
+    # 대상에게서 푼 부상들(#277). 부상을 푸는 물건이 아니거나, 대상이 그 부상을 입고 있지 않았으면 빈 목록이다
+    cured: list[CuredOut] = []
 
 
 class ItemUseOutcome(BaseModel):

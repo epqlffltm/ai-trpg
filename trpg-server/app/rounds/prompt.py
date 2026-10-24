@@ -184,7 +184,9 @@ from app.rounds.time_words import duration_text, time_text
 #   narration-61: 무작위 조우(#283). 길을 오거나 쉰 사람의 한 일의 줄에 나온 무리가 붙고((조우: 수로 쥐 3마리가
 #                 나타났다), (조우: 쉬는 중에 해골 병사 1마리가 덮쳤다)), [몬스터]의 다루는 법에 '조우'의 무리는
 #                 이번 라운드가 끝날 때 나타난 것이라는 말이 더해진다. 쉬기가 깨진 까닭에 덮침이 있다
-PROMPT_VERSION = 'narration-61'
+#   narration-62: 부상을 푸는 소모품(#277). 쓴 물건의 줄에 풀린 부상이 붙는다
+#                 ((쓴 물건: 해독제 → 영애) [풀린 부상: 중독])
+PROMPT_VERSION = 'narration-62'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

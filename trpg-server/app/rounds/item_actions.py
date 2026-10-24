@@ -8,20 +8,25 @@
 선언을 받을 때 가지고 있어야 한다(app/rounds/acceptance.py). 이 라운드에 건네받을 물건을 미리 쓰겠다고 선언할 수 없다.
 
   - 쓰기: 소모품 하나를 줄인다. 회복하는 것이면 대상이 그 등급만큼 회복한다(app/rounds/checks.py 의 change_sheet).
+    부상을 푸는 것이면(#277, 해독제) 대상이 입은 그 부상들을 모두 푼다. 오래 가는 것이 나으면 후유증 표를 굴린다.
+    대상이 그 부상을 입고 있지 않아도 쓴다(쓰고 아무 일도 없다). 둘 다 하는 소모품은 회복 다음 풀기다.
     대상이 떠났거나 죽었으면 쓰지 않는다. 물건도 줄지 않는다.
   - 건네기: 준 사람에게서 빼고 받는 사람의 지금 캐릭터에게 더한다. 받는 쪽이 한 가지 99 개를 넘으면 건네지 않는다.
 
 DB 를 모른다. 시트의 소지품과 HP 를 고친다. 저장하지 않는다.
 """
 
+from app.engine import injury as injury_rules
 from app.engine.action import GiveAction, UseAction
 from app.engine.health import ChangeKind
+from app.rounds import injuries as round_injuries
 from app.rounds.checks import change_sheet
 from app.rounds.effects import Judging
-from app.tables import items, sheets
+from app.tables import injuries, items, sheets
 from app.tables import state as table_state
 from app.tables.errors import TableConflictError
-from app.tables.models import TableMember
+from app.tables.items import CatalogItem
+from app.tables.models import TableInjury, TableMember
 
 
 class Reason:
@@ -55,26 +60,52 @@ def use_target(judging: Judging, member: TableMember, action: UseAction) -> Tabl
     return living(table_state.find_member(judging.table, target_id))
 
 
+def cure_one(judging: Judging, row: TableInjury, rows: list[TableInjury]) -> dict:
+    """
+    부상 하나를 푼다. 푼 것을 결과에 적을 모양으로 돌려준다(이름표, 이름, 후유증).
+
+    오래 가는 것이면 나은 것이라 후유증 표를 굴린다(치료로 나을 때와 같다). 짧은 것이면 풀릴 뿐이다.
+    """
+    ruleset = judging.ruleset
+    aftermath = None
+    if round_injuries.is_lasting(ruleset, row):
+        aftermath = round_injuries.heal(ruleset, judging.dice, row, rows, judging.table.id, judging.moment)
+    else:
+        injuries.end(row)
+    definition = injury_rules.find_injury(ruleset, row.injury)
+    return {'injury': row.injury, 'name': definition.name if definition else row.injury, 'aftermath': aftermath}
+
+
+def cure(judging: Judging, target: TableMember, item: CatalogItem) -> list[dict]:
+    """대상이 입은 부상 중 그 물건이 푸는 것을 모두 푼다. 생긴 순서다. 푼 것들을 돌려준다(#277)."""
+    rows = target.sheet.injuries
+    return [cure_one(judging, row, rows) for row in injuries.active(rows) if row.injury in item.cures]
+
+
 def judge_use(judging: Judging, member: TableMember, action: UseAction) -> dict:
     """
     소모품 하나를 쓴다. 결과를 선언의 outcome 에 넣을 문서로 돌려준다.
 
     회복하는 것이면 대상의 HP 를 바꾸고 그 내용(effect)을 함께 적는다. 회복의 주사위를 여기서 굴린다.
+    부상을 푸는 것이면 푼 부상들(cured)을 적는다(#277).
     """
     item = judging.items[action.item]
-    heals = item.heals is not None
-    target = use_target(judging, member, action) if heals else None
+    aimed = items.takes_target(item)
+    target = use_target(judging, member, action) if aimed else None
     reason = None
     if items.count_of(member.sheet, action.item) < 1:
         reason = Reason.NOT_HELD
-    elif heals and target is None:
+    elif aimed and target is None:
         reason = Reason.TARGET_GONE
 
     effect = None
+    cured = []
     if reason is None:
         items.remove_items(member.sheet, action.item, 1)
-        if heals:
+        if item.heals is not None:
             effect = change_sheet(judging, target, ChangeKind.RECOVERY, item.heals)
+        if item.cures:
+            cured = cure(judging, target, item)
     used = {
         'entry_id': str(item.entry_id),
         'name': item.name,
@@ -82,6 +113,7 @@ def judge_use(judging: Judging, member: TableMember, action: UseAction) -> dict:
         'reason': reason,
         'target': person(target),
         'remaining': items.count_of(member.sheet, action.item),
+        'cured': cured,
     }
     return {'item_use': used, 'effect': effect}
 

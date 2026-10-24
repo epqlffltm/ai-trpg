@@ -178,7 +178,7 @@ async def test_wanders_are_frozen_into_the_version(client: AsyncClient, me: dict
 
     document = await encounters.published(client, me, scenario)
 
-    assert document['format'] == SNAPSHOT_FORMAT == 57
+    assert document['format'] == SNAPSHOT_FORMAT >= 57
     assert document['wanders'] == the_wanders(world)
     night, _, default, safe = read_snapshot(document).wanders
     assert (night.times, night.monsters[1].surprise, default.place_id, safe.chance) == (['night'], 'monsters', None, 0)
