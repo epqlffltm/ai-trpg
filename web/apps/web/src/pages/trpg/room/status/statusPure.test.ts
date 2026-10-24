@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/room/status/statusPure.test.ts
-// 상태 패널(B7)의 순수한 함수. 몸 상태, 죽음의 굴림, 부상이 풀리는 때, 시각, 회복량, 길, 단축키를 본다.
+// 상태 패널(B7)의 순수한 함수. 몸 상태, 죽음의 굴림, 부상이 풀리는 때, 시각, 회복량, 길과 길 옆의 문·넘기, 단축키를 본다.
 
 import { describe, expect, it } from 'vitest';
 import type { Sheet, SheetInjury, TableDetail, TableMap, TableMember } from '../../../../api/types';
@@ -15,6 +15,7 @@ import {
   meFirst,
   minutesLabel,
   waysFrom,
+  wayNotes,
   whoIsWhere,
 } from './statusView';
 
@@ -76,9 +77,19 @@ describe('statusView', () => {
   });
 
   it('갈 수 있는 곳은 나가는 길과 양쪽 길이다. 한쪽 길을 거꾸로 가지 않는다', () => {
-    expect(waysFrom(MAP, 'p1')).toEqual([{ placeId: 'p2', name: '부엌', minutes: 5 }]);
-    expect(waysFrom(MAP, 'p3')).toEqual([{ placeId: 'p1', name: '수도원 문', minutes: null }]);
+    expect(waysFrom(MAP, 'p1')).toMatchObject([{ placeId: 'p2', name: '부엌', minutes: 5 }]);
+    expect(waysFrom(MAP, 'p3')).toMatchObject([{ placeId: 'p1', name: '수도원 문', minutes: null }]);
+    expect(waysFrom(MAP, 'p3')[0]?.route).toBe(MAP.routes[1]);
     expect(waysFrom(MAP, null)).toEqual([]);
+  });
+
+  it('길 옆에 잠긴 자물쇠, 걸린 빗장(이쪽·저쪽), 넘기 판정을 적는다. 열린 문과 부서진 문은 적지 않는다', () => {
+    const route = { from_place: 'p1', to_place: 'p2', two_way: true, locked: true, barred: true, bar_side: 'p1', broken: false, cross: { ability: 'str', difficulty: 'normal' } };
+    const way = { placeId: 'p2', name: '부엌', minutes: 5, route } as never;
+    expect(wayNotes(way, 'p1', rules)).toEqual(['자물쇠 잠김', '빗장 걸림(이쪽)', '넘기 판정: 근력, 보통']);
+    expect(wayNotes(way, 'p2', rules)).toContain('빗장 걸림(저쪽)');
+    const open = { ...route, locked: false, barred: false, broken: true, cross: null };
+    expect(wayNotes({ placeId: 'p2', name: '부엌', minutes: 5, route: open } as never, 'p1', rules)).toEqual([]);
   });
 
   it('장소마다 누가 있는지, 나를 맨 앞에', () => {
