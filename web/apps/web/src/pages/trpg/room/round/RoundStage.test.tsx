@@ -58,8 +58,16 @@ describe('RoundStage', () => {
       content: '문을 밀어 연다',
       action: { kind: 'check', ability: 'str', difficulty: 'easy', lethal: false },
     });
+    // 낸 뒤의 라운드 읽기도 낸 선언을 돌려준다(진짜 서버처럼). 선언하면 화면이 라운드를 다시 읽는데,
+    // 처음 라운드를 계속 돌려주면 그 읽기가 "고치기"를 누르는 때와 겹쳐 빈 입력이 열린다(CI 에서 가끔 실패했다)
+    const declared = round(2, { declarations: [mine], waiting_for: [OTHER] });
+    let current = round(2);
     const { seen } = open({
-      [`PUT ${BASE}/rounds/current/declaration`]: () => json(200, round(2, { declarations: [mine], waiting_for: [OTHER] })),
+      [`GET ${BASE}/rounds/current`]: () => json(200, current),
+      [`PUT ${BASE}/rounds/current/declaration`]: () => {
+        current = declared;
+        return json(200, declared);
+      },
     });
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
