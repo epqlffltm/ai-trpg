@@ -13,6 +13,7 @@ export const MyPage = lazyPage(() => import('../pages/me/MyPage'), 'MyPage');
 
 export const WalletPage = lazyPage(() => import('../pages/wallet/WalletPage'), 'WalletPage');
 export const ChargePage = lazyPage(() => import('../pages/charge/ChargePage'), 'ChargePage');
+export const AttendancePage = lazyPage(() => import('../pages/attendance/AttendancePage'), 'AttendancePage');
 export const OrdersPage = lazyPage(() => import('../pages/orders/OrdersPage'), 'OrdersPage');
 export const OrderPage = lazyPage(() => import('../pages/orders/OrderPage'), 'OrderPage');
 

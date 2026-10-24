@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/wallet/WalletBalance.tsx
-// 지갑의 잔액. 골드와 실버 두 칸, 합, 곧 사라질 실버, 충전(A7)과 주문 내역(A8)으로 가는 길. 서버가 준 글자를 그대로 보인다.
+// 지갑의 잔액. 골드와 실버 두 칸, 합, 곧 사라질 실버, 충전(A7), 출석(A9), 주문 내역(A8)으로 가는 길. 서버가 준 글자를 그대로 보인다.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -49,8 +49,7 @@ export function WalletBalance() {
             </p>
           ) : null}
           <p>
-            <Link to="/wallet/charge">충전하기</Link> · <Link to="/wallet/orders">주문 내역</Link>{' '}
-            <span className="hint">· 출석은 준비 중입니다.</span>
+            <Link to="/wallet/charge">충전하기</Link> · <Link to="/wallet/attendance">출석</Link> · <Link to="/wallet/orders">주문 내역</Link>
           </p>
         </>
       ) : null}
