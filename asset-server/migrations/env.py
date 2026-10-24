@@ -26,6 +26,7 @@ import app.notifications.models  # noqa: E402, F401
 import app.operators.models  # noqa: E402, F401
 import app.personas.models  # noqa: E402, F401
 import app.reports.models  # noqa: E402, F401
+import app.worlds.models  # noqa: E402, F401
 from app.core.config import get_settings
 from app.core.database import Base
 

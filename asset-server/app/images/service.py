@@ -97,7 +97,7 @@ async def upload_image(
 
 
 async def can_view(session: AsyncSession, image: Image, viewer: AccessClaims | None) -> bool:
-    """이 사람이 그 그림을 볼 수 있나. 주인이거나, 그 그림이 쓰인 공개 캐릭터의 판의 등급을 볼 수 있다."""
+    """이 사람이 그 그림을 볼 수 있나. 주인이거나, 그 그림이 쓰인 공개 캐릭터나 공개 세계관의 판의 등급을 볼 수 있다."""
     if viewer is not None and image.owner_id == viewer.user_id:
         return True
     return await repository.used_publicly(session, image.id, allowed_ratings(viewer))
@@ -126,6 +126,11 @@ async def require_own_images(session: AsyncSession, owner_id: uuid.UUID, image_i
 def record_uses(session: AsyncSession, version_id: uuid.UUID, image_ids: Collection[uuid.UUID]) -> None:
     """그 판에 쓰인 그림들을 적는다. 커밋하지 않는다(게시와 한 트랜잭션이다)."""
     repository.add_uses(session, version_id, image_ids)
+
+
+def record_world_uses(session: AsyncSession, version_id: uuid.UUID, image_ids: Collection[uuid.UUID]) -> None:
+    """그 세계관의 판에 쓰인 그림들을 적는다(#591). 커밋하지 않는다(게시와 한 트랜잭션이다)."""
+    repository.add_world_uses(session, version_id, image_ids)
 
 
 async def erase_images(session: AsyncSession, store: ImageStore, owner_id: uuid.UUID, now: datetime) -> None:

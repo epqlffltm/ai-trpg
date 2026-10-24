@@ -125,6 +125,12 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET, PATCH, DELETE | `/api/v1/asset/lorebooks/{id}` | 자기 로어북의 초안 하나, 고치기(보낸 칸만, 항목은 목록을 통째로), 지우기(204, 판도 함께). 남의 것과 없는 것은 404 `lorebook_not_found` | access 토큰 |
 | POST | `/api/v1/asset/lorebooks/{id}/versions` | 로어북 게시 `{note?}`. 201. 막는 것은 없다 | access 토큰 |
 | GET | `/api/v1/asset/lorebooks/{id}/versions`, `/versions/{number}` | 로어북의 판의 목록(최근 것부터), 판 하나(굳힌 문서까지) | access 토큰 |
+| POST | `/api/v1/asset/worlds` | story 의 [세계관](#세계관) 만들기. 201. 처음에는 비공개. 1~2단계에는 운영자만(403 `operator_only`). 인물은 자기 캐릭터만(422 `character_not_owned`) | access 토큰 |
+| GET | `/api/v1/asset/worlds` | 자기 세계관의 목록(`{items, total}`). 최근에 고친 것부터. `limit`, `offset` | access 토큰 |
+| GET, PATCH, DELETE | `/api/v1/asset/worlds/{id}` | 자기 세계관의 초안 하나, 고치기(보낸 칸만), 지우기(204, 판도 함께). 남의 것과 없는 것은 404 | access 토큰 |
+| GET | `/api/v1/asset/worlds/{id}/publish-check` | 게시해 보기(`{ready, problems, warnings, removed}`). 판은 생기지 않는다 | access 토큰 |
+| POST | `/api/v1/asset/worlds/{id}/versions` | 세계관 게시 `{note?}`. 201. 새 판과 `removed`, `warnings`. 막는 것이 있으면 409 `{problems}` | access 토큰 |
+| GET | `/api/v1/asset/worlds/{id}/versions`, `/versions/{number}` | 세계관의 판의 목록(최근 것부터), 판 하나(굳힌 문서까지) | access 토큰 |
 | GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만 | 없어도 된다 |
 | GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서). 볼 수 없으면 404 | 없어도 된다 |
 | POST | `/api/v1/asset/listings/characters/{id}/reports` | [신고](#신고와-숨김) `{reason, description?}`. 201. 볼 수 없으면 404, 자기 것은 403 `own_character`, 두 번째는 409 `already_reported` | access 토큰 |
@@ -133,12 +139,12 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | PUT | `/api/v1/asset/admin/characters/{id}/reports/outcome` | 운영자: 열린 신고의 처리 `{outcome: actioned \| dismissed, reason}`. `actioned` 면 숨긴다 | access 토큰(운영자) |
 | PUT | `/api/v1/asset/admin/characters/{id}/hidden` | 운영자: 숨기기와 풀기 `{hidden, reason}` | access 토큰(운영자) |
 | POST | `/api/v1/asset/images` | [그림](#그림) 올리기. 201. 본문은 그림 파일의 바이트(PNG, JPEG, WebP). 형식이 아니면 415 `image_format`, 열 수 없으면 422 `image_unreadable`, 크면 413, 저장소를 쓸 수 없으면 503 `image_store_unavailable` | access 토큰 |
-| GET | `/api/v1/asset/images/{id}` | 그림 내주기. 볼 수 있으면 본문 없이 200 과 `X-Accel-Redirect`, `X-Image-Source`(프록시가 그림을 내준다). 없거나 볼 수 없으면 404. 주인과, 공개 캐릭터의 판에 쓰였으면 그 판을 볼 수 있는 사람이 본다 | 없어도 된다 |
+| GET | `/api/v1/asset/images/{id}` | 그림 내주기. 볼 수 있으면 본문 없이 200 과 `X-Accel-Redirect`, `X-Image-Source`(프록시가 그림을 내준다). 없거나 볼 수 없으면 404. 주인과, 공개 캐릭터나 공개 세계관의 판에 쓰였으면 그 판을 볼 수 있는 사람이 본다 | 없어도 된다 |
 | GET | `/api/v1/asset/service/{caller}/personas/{id}` | [다른 서버에](#다른-서버에-내주기) 페르소나의 사본과 `revision`. 토큰의 주인의 것만(아니면 404) | 서버의 서명 + access 토큰 |
 | GET | `/api/v1/asset/service/{caller}/personas/{id}/revision` | 페르소나의 지금 `revision`(`{id, revision}`) | 서버의 서명 + access 토큰 |
 | GET | `/api/v1/asset/service/{caller}/characters/{id}/latest` | 쓸 수 있는 캐릭터의 마지막 판(`{id, version, rating, published_at, document}`) | 서버의 서명 + access 토큰 |
 | GET | `/api/v1/asset/service/{caller}/characters/{id}/latest/number` | 마지막 판의 번호(`{id, version}`). 같은 규칙 | 서버의 서명 + access 토큰 |
-| POST | `/api/v1/asset/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴)한 사람의 페르소나와 비공개 캐릭터, 쓰이지 않는 그림을 지운다. 200 `{"status":"processed"}`. 그림 저장소에 닿지 못하면 503 | 인증 서버의 서명 |
+| POST | `/api/v1/asset/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴)한 사람의 페르소나와 비공개 캐릭터와 세계관, 쓰이지 않는 그림을 지운다. 200 `{"status":"processed"}`. 그림 저장소에 닿지 못하면 503 | 인증 서버의 서명 |
 
 ### 계정 페르소나
 
@@ -351,6 +357,65 @@ chat 의 대화는 1일째의 시작 시각에서 시작해 이동(길의 시간
   게시한 적이 없는 로어북(`lorebook_unpublished`)이나 지운 로어북(`lorebook_missing`)을 가리키면 캐릭터의 게시가 막힌다. 지운 로어북의 id 는 초안에 남는다.
 - **지금은 만든 사람만 쓴다.** 공개 범위와 등급이 없다. 캐릭터의 등급이 판 전체(복사한 로어북까지)의 등급이다. 남과 나누는 것은 story 와 TRPG 를 옮길 때 더한다.
 
+### 세계관
+
+story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story.md), 화면 명세 D7 의 서버). `app/worlds/`.
+열린 세계에서 여러 인물이 장소를 오가고, 사용자가 장소를 옮기고 물건을 건네며 이야기를 이어 간다. 세 조각으로 만든다(2026-10-24 유저 결정).
+지금은 첫 조각이다. 이벤트(조건, 효과, 선택지)와 고백과 엔딩, story 에 내주기는 다음 조각이다.
+
+```json
+{
+  "name": "여름 학원",
+  "slots": [{"id": "morning", "name": "아침", "start_hour": 7}, {"id": "evening", "name": "저녁", "start_hour": 17}],
+  "start_slot": "morning",
+  "deadline_days": 30,
+  "after_ending": "end",
+  "show": {"reveal": "shown", "map": "shown", "panel": ["intro", "age", "gender", "affection"]},
+  "places": [{"id": "school", "name": "학교", "backgrounds": {"evening": "<그림 id>"}}, {"id": "library", "name": "도서관"}],
+  "paths": [{"a": "school", "b": "library", "minutes": 10}],
+  "start_place": "school",
+  "items": [{"id": "rose", "name": "장미", "consumable": false}],
+  "start_items": [{"item": "rose", "count": 2}],
+  "cast": [{
+    "id": "ari", "character_id": "<내 캐릭터의 id>", "home": "library",
+    "schedule": [{"slot": "evening", "place": "school",
+                  "when": {"match": "all", "items": [{"kind": "affection_at_least", "target": "ari", "value": "친함"}]}}],
+    "affection": {"display": "number", "start": 10, "stages": [{"name": "낯섦", "at": 0}, {"name": "친함", "at": 40}],
+                  "gifts": [{"id": "rose-1", "item": "rose", "change": 5, "once": false}]},
+    "reveal": null, "map": null, "map_stage": null, "panel": null
+  }],
+  "lorebooks": []
+}
+```
+
+- **시간대**(1~8개). 이야기마다 정한다. 처음에는 아침(7시), 낮(11시), 저녁(17시), 밤(21시)이다. `start_hour` 는 차례로 커지고, 마지막 시간대는 자정을 넘어 첫 시간대까지다.
+  시작 시간대(`start_slot`)를 적지 않으면 첫 시간대다. 장소의 시간대 배경의 열쇠가 시간대의 id 다.
+- **인물**(20명까지). 자기 캐릭터를 가리킨다(로어북과 같은 방식, 2026-10-24 유저 결정). 같은 캐릭터를 두 번 넣지 못한다. `id` 는 세계관 안에서 고유하고 조건과 일정이 가리킨다.
+  `home` 은 기본 장소(비우면 어디에도 없다), `schedule` 은 시간대마다 덮어쓰는 일정이다(위의 줄부터, 조건이 맞는 첫 줄).
+  호감도는 인물마다 세계관이 갖는다(캐릭터의 호감도와 따로). 바뀌는 길은 선물의 규칙과 다음 조각의 이벤트다.
+  `reveal`, `map`, `panel` 은 보이기의 덮어쓰기다(비우면 `show` 의 기본). `map` 이 `stage` 면 `map_stage`(그 인물의 단계 이름) 이상일 때 지도에 보인다.
+- **조건**(목록 하나에 10개). `{match: all | any, items}` 이고 목록이 비면 늘 맞는다. 조건은 종류마다 쓰는 칸만 채운다(아니면 422).
+
+  | 종류 | 칸 | 뜻 |
+  | --- | --- | --- |
+  | `reach_place` | `target`(장소) | 사용자가 그 장소에 있다 |
+  | `hold_item` | `target`(물건), `count` | 그 물건을 count 개 이상 가졌다 |
+  | `gave_item` | `target`(인물), `value`(물건) | 그 인물에게 그 물건을 건넨 적이 있다 |
+  | `affection_at_least`, `affection_below` | `target`(인물), `value`(단계) | 그 인물의 호감도가 그 단계 이상이다, 아래다 |
+  | `day_at_least`, `day_at_most` | `count` | n일째 이상이다, 이하다 |
+  | `slot_is` | `target`(시간대) | 지금의 시간대가 그것이다 |
+  | `accompanied` | `target`(인물) | 그 인물과 동행 중이다 |
+
+- **게시.** 막는 것(409, 게시해 보기에도 같은 이름)과 알리는 것(`warnings`, 게시는 된다)을 나눈다(2026-10-24 유저 결정).
+  - 막는 것: `start_place_missing`(장소가 없거나 시작 장소가 없다), `start_slot_missing`, `cast_empty`, `place_missing`, `slot_missing`, `item_missing`,
+    `cast_target_missing`, `stage_missing`(조건의 단계나 지도의 단계가 그 인물에 없다), `character_missing`(지웠거나 남의 것), `character_unpublished`,
+    `character_rating_too_high`(전체이용가 세계관에 성인 캐릭터), `lorebook_missing`, `lorebook_unpublished`, `image_not_owned`
+  - 알리는 것: `place_unreachable`(시작 장소에서 길로 닿지 않는 장소)
+- **판**(형식 1). 인물마다 캐릭터의 마지막 판에서 story 에 쓰는 칸 `{id, version, name, intro_html, speech_examples, age, gender, image_id, sprites}` 만 복사한다.
+  chat 에만 쓰는 칸(지도, 시작 상황, 물건, 호감도, 이벤트 씬)은 넣지 않는다. 보이기는 기본을 채운 정해진 값으로 굳힌다. 로어북은 캐릭터처럼 마지막 판을 복사한다.
+  캐릭터나 로어북을 고쳐도 이미 게시한 세계관의 판은 그대로다. 판에 쓰인 그림(대표, 소개, 장소, 물건, 인물의 그림)을 적어 두고, 공개 세계관이면 남도 그 그림을 본다.
+- 공개 목록, 신고와 숨김, story 에 내주는 길은 아직 없다. 공개로 두는 것(운영자만)은 지금 그림이 남에게 보이는 것만 바꾼다.
+
 ### 신고와 숨김
 
 공개 캐릭터를 신고하고 운영자가 숨긴다(#678, 2026-10-23 유저 결정). `app/reports/`, `app/operators/`. 운영자의 화면(E4)은 아직 없고 API 만 있다.
@@ -467,11 +532,11 @@ chat(나중에 story 와 TRPG)이 세션을 시작할 때 페르소나의 사본
     본문: {"withdrawn_at": "2026-10-28T03:00:00Z"}
     서명: 인증 서버의 비밀(AUTH_SERVER_SECRET). 사용자의 토큰은 없다
 
-- **지우는 것.** 페르소나 모두, 비공개 캐릭터(판까지), [로어북](#로어북) 모두(판까지). 한 트랜잭션이다. 남긴 공개 캐릭터의 판에 복사된 로어북은 남는다.
-  그다음 그 사람의 [그림](#그림) 가운데 남은 판(남긴 공개 캐릭터의 판)에 쓰이지 않은 것을 저장소에서 지우고, 그 행을 지운다.
+- **지우는 것.** 페르소나 모두, 비공개 캐릭터(판까지), 비공개 [세계관](#세계관)(판까지), [로어북](#로어북) 모두(판까지). 한 트랜잭션이다. 남긴 공개 캐릭터의 판에 복사된 로어북은 남는다.
+  그다음 그 사람의 [그림](#그림) 가운데 남은 판(남긴 공개 캐릭터와 공개 세계관의 판)에 쓰이지 않은 것을 저장소에서 지우고, 그 행을 지운다.
   남긴 공개 캐릭터의 초안이 가리키던 그림이 지워지면 초안의 `image_id` 가 비워진다.
   저장소에서 지우다 실패하면 503 이다. 행이 남아 있어 인증 서버가 다시 보낸 알림이 마저 지운다.
-- **남기는 것.** 공개 캐릭터와 그 판. 남이 쓰는 것이다. 1~2단계에는 운영자만 공개로 둔다. 가져간 세션은 사본으로 돈다.
+- **남기는 것.** 공개 캐릭터와 공개 세계관, 그 판. 남이 쓰는 것이다. 1~2단계에는 운영자만 공개로 둔다. 가져간 세션은 사본으로 돈다.
 - **멱등.** 같은 알림이 다시 와도, 이 서버에 그 사람의 것이 없어도 200 `{"status":"processed"}` 다. 그 밖의 답이면 인증 서버가 다시 보낸다.
 - **서명.** 인증 서버의 비밀은 부르는 서버의 표(`CHAT_SERVER_SECRET` 등)와 따로다. 그 비밀로는 페르소나와 판을 가져가지 못하고,
   chat 의 비밀로는 탈퇴를 알리지 못한다. 서명이 맞지 않으면 401, 본문의 모양이 틀리면 422 이고 아무것도 지우지 않는다. 본문의 모르는 칸은 버린다.
@@ -544,7 +609,7 @@ chat(나중에 story 와 TRPG)이 세션을 시작할 때 페르소나의 사본
 DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. asset 서버는 `asset` 계정으로 `asset`
 스키마(테스트는 `asset_test`)만 쓴다. 다른 서버의 스키마에 닿지 못하는 것을 테스트(`tests/test_schema_isolation.py`)가 확인한다.
 
-테이블은 `personas`(#565), `characters`, `character_versions`(#567)다. 모델을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
+테이블은 `personas`(#565), `characters`, `character_versions`(#567), `worlds`, `world_versions`, `world_image_uses`(#591) 등이다. 모델을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 
 ### 마이그레이션
 
