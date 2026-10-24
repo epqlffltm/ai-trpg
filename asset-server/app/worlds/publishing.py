@@ -7,7 +7,8 @@
   - 막는 것: 이야기를 시작할 수 없거나(시작 장소, 시작 시간대, 인물이 없다), 칸끼리 가리키는 것이 없거나,
     남의 그림을 쓰거나, 인물의 캐릭터나 로어북을 판에 복사할 수 없다. 게시가 409 로 돌려준다.
     초안은 고치는 중이라 어긋날 수 있다(장소를 지웠는데 일정이 남았다). 판에는 맞는 것만 들어간다.
-  - 알리는 것: 시작 장소에서 길로 닿지 않는 장소. 만드는 중에 일부러 남겨 둔 장소일 수 있어 게시는 된다.
+  - 알리는 것: 시작 장소에서 길로 닿지 않는 장소, 열릴 수 없는 이벤트, 어디에도 나오지 않는 인물.
+    만드는 중에 일부러 남겨 둔 것일 수 있어 게시는 된다.
   - 걸러 낸 것: 소개에서 걸러 낸 태그, 속성, CSS, 링크, 그림(app/content/html.py).
 그림이 자기 것인지, 캐릭터와 로어북의 마지막 판은 DB 를 봐야 알아서 서비스가 찾아 넘긴다(app/worlds/service.py).
 """
@@ -20,7 +21,7 @@ from app.characters.documents import LorebookCopyDocument, lorebook_copy
 from app.content.html import Cleaned, clean_intro, image_ids
 from app.ratings import Rating
 from app.worlds.documents import CastCharacterDocument, character_copy, effective_show
-from app.worlds.models import ConditionKind, MapPresence, World
+from app.worlds.models import ConditionKind, EffectKind, MapPresence, Match, World
 
 # 조건의 종류마다 target 이 가리키는 것(장소, 물건, 인물, 시간대). 날짜는 target 이 없다
 PLACE_TARGETS = frozenset({ConditionKind.REACH_PLACE})
@@ -37,6 +38,11 @@ SLOT_TARGETS = frozenset({ConditionKind.SLOT_IS})
 # value 가 호감도 단계의 이름인 종류(그 인물의 단계여야 한다), value 가 물건의 id 인 종류
 STAGE_VALUES = frozenset({ConditionKind.AFFECTION_AT_LEAST, ConditionKind.AFFECTION_BELOW})
 ITEM_VALUES = frozenset({ConditionKind.GAVE_ITEM})
+EVENT_TARGETS = frozenset({ConditionKind.EVENT_SEEN})
+# 효과의 종류마다 target 이 가리키는 것(인물, 물건, 장소)
+CAST_EFFECTS = frozenset({EffectKind.AFFECTION, EffectKind.ACCOMPANY_START, EffectKind.ACCOMPANY_END})
+ITEM_EFFECTS = frozenset({EffectKind.GIVE_ITEM, EffectKind.TAKE_ITEM})
+PLACE_EFFECTS = frozenset({EffectKind.MOVE_TO})
 
 
 class Problem(enum.StrEnum):
@@ -54,8 +60,10 @@ class Problem(enum.StrEnum):
     SLOT_MISSING = 'slot_missing'
     # 시작 소지품, 선물의 규칙, 조건이 없는 물건을 가리킨다
     ITEM_MISSING = 'item_missing'
-    # 조건이 없는 인물을 가리킨다
+    # 조건, 효과, 장면이 없는 인물을 가리킨다
     CAST_TARGET_MISSING = 'cast_target_missing'
+    # 조건(event_seen)이 없는 이벤트를 가리킨다
+    EVENT_MISSING = 'event_missing'
     # 조건이나 지도에 보이는 단계(map_stage)가 그 인물에 없는 호감도의 단계를 가리키거나,
     # 지도가 stage 인 인물에 단계를 고르지 않았다
     STAGE_MISSING = 'stage_missing'
@@ -78,6 +86,10 @@ class WorldWarning(enum.StrEnum):
 
     # 시작 장소에서 길로 닿지 않는 장소가 있다
     PLACE_UNREACHABLE = 'place_unreachable'
+    # 열릴 수 없는 이벤트가 있다. 자기를 봐야 열리거나, 열릴 수 없는 이벤트를 봐야 열리거나, 기한 뒤의 날을 기다린다
+    EVENT_UNREACHABLE = 'event_unreachable'
+    # 기본 장소도 일정도 없고, 어느 이벤트의 장면에도 동행에도 나오지 않는 인물이 있다
+    CAST_NEVER_PRESENT = 'cast_never_present'
 
 
 class WorldNotReadyError(Exception):
@@ -105,11 +117,30 @@ def cast_stages(world: World) -> dict[str, set[str]]:
     return {member['id']: {stage['name'] for stage in member['affection']['stages']} for member in world.cast}
 
 
+def event_ids(world: World) -> set[str]:
+    return {event['id'] for event in world.events}
+
+
 def all_conditions(world: World) -> Iterator[dict]:
-    """초안의 조건 전부. 지금은 인물의 일정에만 있다(이벤트와 엔딩의 조건은 다음 조각에서 더한다)."""
+    """초안의 조건 전부. 인물의 일정과 이벤트가 열리는 조건이다(엔딩의 조건은 다음 조각에서 더한다)."""
     for member in world.cast:
         for line in member.get('schedule', []):
             yield from line['when']['items']
+    for event in world.events:
+        yield from event['when']['items']
+
+
+def all_effects(world: World) -> Iterator[dict]:
+    """초안의 효과 전부. 이벤트가 열릴 때의 것과 선택지의 것이다."""
+    for event in world.events:
+        yield from event.get('on_open', [])
+        for choice in event.get('choices', []):
+            yield from choice.get('effects', [])
+
+
+def effect_targets(world: World, kinds: frozenset[EffectKind]) -> list[str]:
+    """그 종류들의 효과가 가리키는 것들."""
+    return [effect['target'] for effect in all_effects(world) if effect['kind'] in kinds]
 
 
 def start_problems(world: World) -> list[Problem]:
@@ -123,13 +154,14 @@ def start_problems(world: World) -> list[Problem]:
 
 
 def pointed_places(world: World) -> list[str]:
-    """장소를 가리키는 것 전부. 길의 양쪽, 시작 장소, 인물의 기본 장소, 일정, 장소의 조건."""
+    """장소를 가리키는 것 전부. 길의 양쪽, 시작 장소, 인물의 기본 장소, 일정, 장소의 조건, 옮기는 효과."""
     pointed = [end for path in world.paths for end in (path['a'], path['b'])]
     pointed += [world.start_place] if world.start_place is not None else []
     for member in world.cast:
         pointed += [member['home']] if member.get('home') is not None else []
         pointed += [line['place'] for line in member.get('schedule', [])]
-    return pointed + [item['target'] for item in all_conditions(world) if item['kind'] in PLACE_TARGETS]
+    pointed += [item['target'] for item in all_conditions(world) if item['kind'] in PLACE_TARGETS]
+    return pointed + effect_targets(world, PLACE_EFFECTS)
 
 
 def pointed_slots(world: World) -> list[str]:
@@ -140,7 +172,7 @@ def pointed_slots(world: World) -> list[str]:
 
 
 def pointed_items(world: World) -> list[str]:
-    """물건을 가리키는 것 전부. 시작 소지품, 선물의 규칙, 물건의 조건(가졌다, 건넸다)."""
+    """물건을 가리키는 것 전부. 시작 소지품, 선물의 규칙, 물건의 조건(가졌다, 건넸다), 주고 가져가는 효과."""
     pointed = [start['item'] for start in world.start_items]
     pointed += [gift['item'] for member in world.cast for gift in member['affection'].get('gifts', [])]
     for item in all_conditions(world):
@@ -148,7 +180,14 @@ def pointed_items(world: World) -> list[str]:
             pointed.append(item['target'])
         elif item['kind'] in ITEM_VALUES:
             pointed.append(item['value'])
-    return pointed
+    return pointed + effect_targets(world, ITEM_EFFECTS)
+
+
+def pointed_cast(world: World) -> list[str]:
+    """인물을 가리키는 것 전부. 인물의 조건, 호감도와 동행의 효과, 이벤트의 장면에 부르는 인물."""
+    pointed = [item['target'] for item in all_conditions(world) if item['kind'] in CAST_TARGETS]
+    pointed += [member for event in world.events for member in event['scene'].get('cast', [])]
+    return pointed + effect_targets(world, CAST_EFFECTS)
 
 
 def stage_pointers(world: World) -> list[tuple[str, str]]:
@@ -167,16 +206,17 @@ def missing(pointed: Sequence[str], known: set[str], problem: Problem) -> list[P
 
 
 def reference_problems(world: World) -> list[Problem]:
-    """칸끼리 가리키는 것이 없는 것들. 장소, 시간대, 물건, 인물, 호감도의 단계."""
+    """칸끼리 가리키는 것이 없는 것들. 장소, 시간대, 물건, 인물, 이벤트, 호감도의 단계."""
     cast = {member['id'] for member in world.cast}
     stages = cast_stages(world)
-    cast_pointed = [item['target'] for item in all_conditions(world) if item['kind'] in CAST_TARGETS]
+    events_pointed = [item['target'] for item in all_conditions(world) if item['kind'] in EVENT_TARGETS]
     stage_missing = any(stage not in stages.get(member, set()) for member, stage in stage_pointers(world))
     return [
         *missing(pointed_places(world), place_ids(world), Problem.PLACE_MISSING),
         *missing(pointed_slots(world), slot_ids(world), Problem.SLOT_MISSING),
         *missing(pointed_items(world), item_ids(world), Problem.ITEM_MISSING),
-        *missing(cast_pointed, cast, Problem.CAST_TARGET_MISSING),
+        *missing(pointed_cast(world), cast, Problem.CAST_TARGET_MISSING),
+        *missing(events_pointed, event_ids(world), Problem.EVENT_MISSING),
         *([Problem.STAGE_MISSING] if stage_missing else []),
     ]
 
@@ -200,11 +240,65 @@ def reachable_places(world: World, start: str) -> set[str]:
     return reached
 
 
+def possible_item(item: dict, event_id: str, opened: set[str], deadline: int | None) -> bool:
+    """
+    조건 하나가 언젠가 맞을 수 있는가.
+    이벤트를 봤다는 열릴 수 있는 다른 이벤트여야 하고(처음 열릴 때 자기는 아직 안 봤다),
+    n일째 이상은 기한 안이어야 한다.
+    나머지는 사용자의 행동으로 맞출 수 있는 것으로 본다.
+    """
+    if item['kind'] == ConditionKind.EVENT_SEEN:
+        return item['target'] != event_id and item['target'] in opened
+    if item['kind'] == ConditionKind.DAY_AT_LEAST:
+        return deadline is None or item['count'] <= deadline
+    return True
+
+
+def days_overlap(items: list[dict]) -> bool:
+    """모두 맞아야 하는 날짜의 조건들이 겹치는 날이 있는가(n일째 이상의 가장 큰 것 ≤ 이하의 가장 작은 것)."""
+    least = [item['count'] for item in items if item['kind'] == ConditionKind.DAY_AT_LEAST]
+    most = [item['count'] for item in items if item['kind'] == ConditionKind.DAY_AT_MOST]
+    return not least or not most or max(least) <= min(most)
+
+
+def possible_event(event: dict, opened: set[str], deadline: int | None) -> bool:
+    """그 이벤트가 열릴 수 있는가. opened 는 지금까지 열릴 수 있다고 본 이벤트들이다. 조건이 비면 늘 열린다."""
+    items = event['when']['items']
+    checks = [possible_item(item, event['id'], opened, deadline) for item in items]
+    if not items:
+        return True
+    if event['when']['match'] == Match.ANY:
+        return any(checks)
+    return all(checks) and days_overlap(items)
+
+
+def openable_events(world: World) -> set[str]:
+    """열릴 수 있는 이벤트들. 더 늘지 않을 때까지 되풀이한다(이벤트가 다른 이벤트를 봐야 열리는 사슬을 따라간다)."""
+    opened: set[str] = set()
+    while True:
+        more = {event['id'] for event in world.events if possible_event(event, opened, world.deadline_days)} - opened
+        if not more:
+            return opened
+        opened |= more
+
+
+def present_cast(world: World) -> set[str]:
+    """어딘가에 나올 수 있는 인물들. 기본 장소나 일정이 있거나, 이벤트의 장면에 불리거나, 동행을 시작한다."""
+    placed = {member['id'] for member in world.cast if member.get('home') is not None or member.get('schedule')}
+    called = {member for event in world.events for member in event['scene'].get('cast', [])}
+    return placed | called | set(effect_targets(world, frozenset({EffectKind.ACCOMPANY_START})))
+
+
 def find_warnings(world: World) -> list[WorldWarning]:
-    """알리기만 하는 것들. 시작 장소가 정해졌을 때 닿지 않는 장소가 있는가."""
-    if world.start_place is None or not place_ids(world) - reachable_places(world, world.start_place):
-        return []
-    return [WorldWarning.PLACE_UNREACHABLE]
+    """알리기만 하는 것들. 닿지 않는 장소, 열릴 수 없는 이벤트, 어디에도 나오지 않는 인물."""
+    warnings = []
+    if world.start_place is not None and place_ids(world) - reachable_places(world, world.start_place):
+        warnings.append(WorldWarning.PLACE_UNREACHABLE)
+    if event_ids(world) - openable_events(world):
+        warnings.append(WorldWarning.EVENT_UNREACHABLE)
+    if {member['id'] for member in world.cast} - present_cast(world):
+        warnings.append(WorldWarning.CAST_NEVER_PRESENT)
+    return warnings
 
 
 def character_copies(
@@ -254,8 +348,9 @@ def cleaned_intro(world: World) -> Cleaned:
 
 
 def world_image_ids(world: World) -> list[uuid.UUID]:
-    """장소의 배경(기본과 시간대마다), 물건의 그림. 초안에는 글로 적혀 있다."""
-    found = [uuid.UUID(entry['image_id']) for entry in [*world.places, *world.items] if entry.get('image_id')]
+    """장소의 배경(기본과 시간대마다), 물건의 그림, 이벤트의 일러스트. 초안에는 글로 적혀 있다."""
+    scenes = [event['scene'] for event in world.events]
+    found = [uuid.UUID(entry['image_id']) for entry in [*world.places, *world.items, *scenes] if entry.get('image_id')]
     backgrounds = [image for place in world.places for image in place.get('backgrounds', {}).values()]
     return found + [uuid.UUID(image) for image in backgrounds]
 

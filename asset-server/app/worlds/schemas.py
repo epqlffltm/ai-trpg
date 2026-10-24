@@ -45,13 +45,22 @@ from app.worlds.documents import WorldDocument
 from app.worlds.models import (
     CAST_MAX_GIFTS,
     CAST_MAX_SCHEDULE,
+    CHOICE_TEXT_MAX_LENGTH,
     CONDITION_MAX_COUNT,
     DEADLINE_MAX_DAYS,
+    EFFECT_MAX_CHANGE,
+    EFFECT_MAX_COUNT,
+    EVENT_MAX_CHOICES,
+    EVENT_NAME_MAX_LENGTH,
     HOURS_PER_DAY,
     MAX_CONDITIONS,
+    MAX_EFFECTS,
+    SCENE_MAX_CAST,
+    SCENE_TEXT_MAX_LENGTH,
     SLOT_NAME_MAX_LENGTH,
     VERSION_NOTE_MAX_LENGTH,
     WORLD_MAX_CAST,
+    WORLD_MAX_EVENTS,
     WORLD_MAX_ITEMS,
     WORLD_MAX_LOREBOOKS,
     WORLD_MAX_PATHS,
@@ -61,6 +70,7 @@ from app.worlds.models import (
     WORLD_MIN_SLOTS,
     AfterEnding,
     ConditionKind,
+    EffectKind,
     MapPresence,
     Match,
     PanelField,
@@ -173,6 +183,7 @@ CONDITION_FIELDS: dict[ConditionKind, frozenset[str]] = {
     ConditionKind.DAY_AT_MOST: frozenset({'count'}),
     ConditionKind.SLOT_IS: frozenset({'target'}),
     ConditionKind.ACCOMPANIED: frozenset({'target'}),
+    ConditionKind.EVENT_SEEN: frozenset({'target'}),
 }
 # count 를 쓰지 않는 종류의 count. 세지 않는다
 UNCOUNTED = 1
@@ -183,7 +194,7 @@ ConditionValue = Annotated[str, StringConstraints(min_length=1, max_length=40)]
 class Condition(BaseModel):
     """
     조건 하나(story.md 의 "조건"). 종류(kind)마다 쓰는 칸이 다르다(CONDITION_FIELDS).
-    target 은 장소, 물건, 인물, 시간대의 id 다. value 는 물건의 id(건넸다)나 호감도 단계의 이름이다.
+    target 은 장소, 물건, 인물, 시간대, 이벤트의 id 다. value 는 물건의 id(건넸다)나 호감도 단계의 이름이다.
     count 는 물건의 수(가졌다)나 날짜(n일째)다. 쓰지 않는 칸은 적지 않는다.
     """
 
@@ -214,6 +225,102 @@ class Conditions(BaseModel):
 
     match: Match = Match.ALL
     items: Annotated[list[Condition], Field(max_length=MAX_CONDITIONS)] = []
+
+
+# 효과의 종류마다 amount 를 쓰는가(EffectKind 의 설명과 같다). target 은 모두 쓴다
+COUNTED_EFFECTS = frozenset({EffectKind.GIVE_ITEM, EffectKind.TAKE_ITEM})
+SIGNED_EFFECTS = frozenset({EffectKind.AFFECTION})
+
+
+class Effect(BaseModel):
+    """
+    효과 하나(story.md 의 "효과"). target 은 인물, 물건, 장소의 id 다(종류마다, EffectKind).
+    amount 는 호감도를 바꾸는 크기(±, 0 이 아니다)나 주고 가져가는 물건의 수(1 이상)다. 쓰지 않는 종류는 적지 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: EffectKind
+    target: Key
+    amount: Annotated[int, Field(ge=-EFFECT_MAX_CHANGE, le=EFFECT_MAX_CHANGE)] | None = None
+
+    @model_validator(mode='after')
+    def amount_for_the_kind(self) -> Self:
+        """호감도는 0 이 아닌 크기, 물건은 1~99 개, 나머지는 amount 를 적지 않는다."""
+        if self.kind in SIGNED_EFFECTS and not self.amount:
+            raise ValueError('호감도의 효과는 0 이 아닌 크기(amount)를 적습니다.')
+        if self.kind in COUNTED_EFFECTS and not (self.amount and 1 <= self.amount <= EFFECT_MAX_COUNT):
+            raise ValueError(f'물건의 효과는 1~{EFFECT_MAX_COUNT} 개(amount)를 적습니다.')
+        if self.kind not in SIGNED_EFFECTS | COUNTED_EFFECTS and self.amount is not None:
+            raise ValueError(f'{self.kind} 에는 amount 를 적지 않습니다.')
+        return self
+
+
+Effects = Annotated[list[Effect], Field(max_length=MAX_EFFECTS)]
+
+
+class Scene(BaseModel):
+    """
+    이벤트의 장면 지시. text 는 모델에게 주는 상황 설명이다. cast 는 장면에 불러들이는 인물(4명까지)이다.
+    image_id 는 일러스트다. 있으면 그림 창의 배경과 캐릭터를 대신한다. collectible 이면 열릴 때 계정에 남는다(갤러리).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=SCENE_TEXT_MAX_LENGTH)]
+    cast: Annotated[list[Key], Field(max_length=SCENE_MAX_CAST)] = []
+    image_id: uuid.UUID | None = None
+    collectible: bool = False
+
+    @model_validator(mode='after')
+    def cast_once_and_collect_a_picture(self) -> Self:
+        """같은 인물을 두 번 부르지 않는다. 일러스트가 없으면 열 것이 없다."""
+        reject_repeated_keys(self.cast)
+        if self.collectible and self.image_id is None:
+            raise ValueError('일러스트(image_id)가 있어야 해금 대상으로 둡니다.')
+        return self
+
+
+class Choice(BaseModel):
+    """선택지 하나. 제작자가 적은 글과, 고르면 엔진이 반영하는 효과들이다. id 는 이벤트 안에서 고유하다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: Key
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=CHOICE_TEXT_MAX_LENGTH)]
+    effects: Effects = []
+
+
+def unique_choices(choices: list[Choice]) -> list[Choice]:
+    reject_repeated_keys([choice.id for choice in choices])
+    return choices
+
+
+class Event(BaseModel):
+    """
+    이벤트 하나(story.md 의 "이벤트"). 행동 뒤에 엔진이 when 을 맞춰 보고, 맞는 것 가운데 적은 차례로 하나만 연다.
+    열리면 on_open 의 효과를 반영하고, 이어지는 응답이 scene 을 받아 그 장면을 쓴다.
+    choices 가 있으면 화면이 응답 밑에 보이고, 고르면 그 효과를 반영한 뒤 모델이 반응을 쓴다.
+    repeat 이 아니면 한 번만 열린다. id 는 세계관 안에서 고유하고, 조건(event_seen)과 story 의 "본 이벤트"가 적는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: Key
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=EVENT_NAME_MAX_LENGTH)]
+    when: Conditions = Conditions()
+    repeat: bool = False
+    scene: Scene
+    on_open: Effects = []
+    choices: Annotated[list[Choice], Field(max_length=EVENT_MAX_CHOICES), AfterValidator(unique_choices)] = []
+
+
+def unique_events(events: list[Event]) -> list[Event]:
+    reject_repeated_keys([event.id for event in events])
+    return events
+
+
+Events = Annotated[list[Event], Field(max_length=WORLD_MAX_EVENTS), AfterValidator(unique_events)]
 
 
 class ScheduleLine(BaseModel):
@@ -317,15 +424,18 @@ Lorebooks = Annotated[list[uuid.UUID], Field(max_length=WORLD_MAX_LOREBOOKS), Af
 DeadlineDays = Annotated[int, Field(ge=1, le=DEADLINE_MAX_DAYS)]
 
 # DB 에 dict(의 목록)로 적는 칸
-DOCUMENT_LISTS = ('slots', 'places', 'paths', 'items', 'start_items', 'cast')
+DOCUMENT_LISTS = ('slots', 'places', 'paths', 'items', 'start_items', 'cast', 'events')
 # 고칠 때 null 로 비울 수 있는 칸. 그림, 시작 장소와 시간대, 기한은 "없음"이 null 이다
 NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'start_slot', 'deadline_days'})
 
 
-def attached_images(image_id: uuid.UUID | None, places: list[WorldPlace], items: list[WorldItem]) -> list[uuid.UUID]:
-    """붙인 그림들. 대표 그림, 장소의 배경(기본, 시간대마다), 물건의 그림. 없는 것은 뺀다."""
+def attached_images(
+    image_id: uuid.UUID | None, places: list[WorldPlace], items: list[WorldItem], events: list[Event]
+) -> list[uuid.UUID]:
+    """붙인 그림들. 대표 그림, 장소의 배경(기본, 시간대마다), 물건의 그림, 이벤트의 일러스트. 없는 것은 뺀다."""
     found = [image_id] if image_id is not None else []
     found += [entry.image_id for entry in [*places, *items] if entry.image_id is not None]
+    found += [event.scene.image_id for event in events if event.scene.image_id is not None]
     return found + [background for place in places for background in place.backgrounds.values()]
 
 
@@ -366,11 +476,12 @@ class WorldCreate(BaseModel):
     items: Items = []
     start_items: StartItems = []
     cast: Cast = []
+    events: Events = []
     lorebooks: Lorebooks = []
 
     def image_ids(self) -> list[uuid.UUID]:
         """붙인 그림들. 자기 그림인지 볼 것들이다."""
-        return attached_images(self.image_id, self.places, self.items)
+        return attached_images(self.image_id, self.places, self.items, self.events)
 
     def character_ids(self) -> list[uuid.UUID]:
         """인물들이 가리키는 캐릭터들."""
@@ -409,6 +520,7 @@ class WorldUpdate(BaseModel):
     items: Items | None = None
     start_items: StartItems | None = None
     cast: Cast | None = None
+    events: Events | None = None
     lorebooks: Lorebooks | None = None
 
     @model_validator(mode='after')
@@ -425,7 +537,7 @@ class WorldUpdate(BaseModel):
 
     def image_ids(self) -> list[uuid.UUID]:
         """보낸 칸에 붙인 그림들. 자기 그림인지 볼 것들이다."""
-        return attached_images(self.image_id, self.places or [], self.items or [])
+        return attached_images(self.image_id, self.places or [], self.items or [], self.events or [])
 
     def character_ids(self) -> list[uuid.UUID]:
         """보낸 인물들이 가리키는 캐릭터들."""
@@ -454,6 +566,7 @@ class WorldDetail(BaseModel):
     start_items: list[StartItem]
     # 인물들. 지운 캐릭터를 가리키는 인물이 남아 있을 수 있다(다시 게시할 때 막힌다)
     cast: list[CastMember]
+    events: list[Event]
     lorebooks: list[uuid.UUID]
     latest_version: int | None
     published_at: datetime | None
