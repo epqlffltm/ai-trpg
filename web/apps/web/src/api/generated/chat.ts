@@ -283,6 +283,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/conversations/{conversation_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Transcript
+         * @description 내 대화의 기록. 지금 보고 있는 가지의 말들이다. 없거나 볼 수 없는 대화면 404.
+         */
+        get: operations["download_transcript_api_v1_chat_conversations__conversation_id__transcript_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/gallery": {
         parameters: {
             query?: never;
@@ -1585,6 +1605,12 @@ export interface components {
          */
         TimeOfDay: "dawn" | "morning" | "day" | "evening" | "night";
         /**
+         * TranscriptFormat
+         * @description 기록의 형식.
+         * @enum {string}
+         */
+        TranscriptFormat: "md" | "html" | "txt";
+        /**
          * TriggerDocument
          * @description 호감도를 바꾸는 행동. kind 는 give_item, reach_place, use_item 이다.
          *     모르는 종류도 받아 둔다(맞는 행동이 없을 뿐이다).
@@ -2228,6 +2254,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SummaryOut"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_transcript_api_v1_chat_conversations__conversation_id__transcript_get: {
+        parameters: {
+            query?: {
+                format?: components["schemas"]["TranscriptFormat"];
+            };
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": unknown;
+                    "text/markdown": unknown;
+                    "text/plain": unknown;
                 };
             };
             /** @description Validation Error */
