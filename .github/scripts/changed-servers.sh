@@ -5,19 +5,19 @@
 #
 #   사용: changed-servers.sh <기준 커밋> <PR 의 커밋>
 #   출력: GITHUB_OUTPUT 의 모양으로 서버마다 한 줄. auth=true, trpg=false, board=false, billing=true, notification=false, asset=false,
-#         chat=false.
+#         chat=false, story=false.
 #         공용 코드(shared/)의 검사는 shared=true, 화면(web/)의 검사는 web=true 다
 #
 # 고르는 규칙:
 #   - 서버의 폴더(auth-server/ 등)나 그 서버의 워크플로(.github/workflows/auth-server.yml)가 바뀌면 그 서버
 #     그 서버의 API 목록(docs/api/<서버>.openapi.json)도 그 서버다. 손으로 고친 목록을 api-docs 가 잡는다
-#   - API 목록을 뽑는 도구(tools/export_openapi.py)가 바뀌면 목록을 내는 서버(지금은 게임, 알림, 결제, asset, 인증, 게시판, chat)
+#   - API 목록을 뽑는 도구(tools/export_openapi.py)가 바뀌면 목록을 내는 서버(지금은 게임, 알림, 결제, asset, 인증, 게시판, chat, story)
 #   - docker/ 아래(DB 초기화 스크립트, 프록시의 설정, crontab)나 compose 파일(docker-compose.yml, docker-compose.staging.yml)이
 #     바뀌면 모두. 서버들의 DB 계정, 컨테이너로 띄우고 잇는 법, 주기 명령, staging 의 설정이 거기 있다.
 #     .env 를 만드는 도구(tools/fill_env.py, tools/staging_env.py)도 모두다. CI(stack)가 그 도구들의 테스트를 돌리고
 #     staging_env.py 로 만든 설정을 읽어 본다
 #   - 관문 자신(.github/workflows/ci.yml, .github/scripts/)이 바뀌면 모두. 관문이 맞는지 모두로 확인한다
-#   - 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 ruff.toml)이 바뀌면 인증, 게임, 알림, asset, chat 과 공용 코드
+#   - 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 ruff.toml)이 바뀌면 인증, 게임, 알림, asset, chat, story 와 공용 코드
 #   - 공용 코드(shared/<패키지>/)가 바뀌면 공용 코드의 검사(shared)와, 그 패키지를 쓰는 서버들.
 #     쓰는 서버는 서버마다 pyproject.toml 의 경로 의존(path = "../shared/<패키지>")을 읽어 고른다. 따로 표를 두지 않는다.
 #     새 서버가 공용 코드를 쓰기 시작하면 저절로 잡힌다(docs/architecture/shared-code.md 의 "버전과 CI")
@@ -31,7 +31,7 @@
 set -euo pipefail
 
 # 검사하는 서버들. 출력의 이름과 폴더의 이름
-SERVERS=(auth trpg board billing notification asset chat)
+SERVERS=(auth trpg board billing notification asset chat story)
 # 출력하는 것 모두. 서버들과 공용 코드의 검사(shared, .github/workflows/shared.yml), 화면의 검사(web, .github/workflows/web.yml)
 OUTPUTS=("${SERVERS[@]}" shared web)
 # 서버의 폴더들이 있는 곳. 테스트가 가짜 pyproject.toml 을 둔 곳으로 바꾼다
@@ -75,7 +75,7 @@ openapi_tool() {
   [[ "$1" == tools/export_openapi.py || "$1" == tools/test_export_openapi.py ]]
 }
 
-# 파이썬 서버들(인증, 게임, 알림, asset, chat)이 함께 쓰는 설정인가. 바뀌면 그 서버들의 린트와 모양 검사를 다시 돌려야 한다.
+# 파이썬 서버들(인증, 게임, 알림, asset, chat, story)이 함께 쓰는 설정인가. 바뀌면 그 서버들의 린트와 모양 검사를 다시 돌려야 한다.
 python_shared() {
   [[ "$1" == "ruff.toml" ]]
 }
@@ -107,6 +107,7 @@ select_servers() {
       picked[auth]=1
       picked[board]=1
       picked[chat]=1
+      picked[story]=1
     fi
     if python_shared "$path"; then
       picked[auth]=1
@@ -114,6 +115,7 @@ select_servers() {
       picked[notification]=1
       picked[asset]=1
       picked[chat]=1
+      picked[story]=1
       picked[shared]=1
     fi
     if web_path "$path"; then

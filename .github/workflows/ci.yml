@@ -37,6 +37,7 @@ jobs:
       notification: ${{ steps.pick.outputs.notification }}
       asset: ${{ steps.pick.outputs.asset }}
       chat: ${{ steps.pick.outputs.chat }}
+      story: ${{ steps.pick.outputs.story }}
       shared: ${{ steps.pick.outputs.shared }}
       web: ${{ steps.pick.outputs.web }}
     steps:
@@ -91,6 +92,11 @@ jobs:
     needs: changes
     if: needs.changes.outputs.chat == 'true'
     uses: ./.github/workflows/chat-server.yml
+
+  story-server:
+    needs: changes
+    if: needs.changes.outputs.story == 'true'
+    uses: ./.github/workflows/story-server.yml
 
   # 공용 코드(shared/). 쓰는 서버의 CI 는 위에서 따로 불린다(changed-servers.sh 가 경로 의존을 읽어 고른다)
   shared:
@@ -148,7 +154,7 @@ jobs:
       needs.changes.outputs.trpg == 'true' || needs.changes.outputs.notification == 'true' ||
       needs.changes.outputs.billing == 'true' || needs.changes.outputs.asset == 'true' ||
       needs.changes.outputs.auth == 'true' || needs.changes.outputs.board == 'true' ||
-      needs.changes.outputs.chat == 'true'
+      needs.changes.outputs.chat == 'true' || needs.changes.outputs.story == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -183,7 +189,8 @@ jobs:
   # "이미지가 만들어지고, 마이그레이션이 돌고, 서버가 뜨고, 서로 닿고, 프록시가 주소를 나누고 막는가"만 본다.
   # 한 서버만 바뀌어도 모두 띄운다. 한 서버만 띄워서는 서로 닿는지 볼 수 없다.
   # 화면만 바뀌어도 띄운다. 프록시의 이미지가 화면을 담고, 프록시가 화면과 API 를 나누는지 본다.
-  # 설정과 키는 이 실행에서만 쓰고 버리는 값으로 만든다(.github/scripts/stack-smoke.sh)
+  # 설정과 키는 이 실행에서만 쓰고 버리는 값으로 만든다(.github/scripts/stack-smoke.sh).
+  # story 서버는 아직 compose 에 없다(#591). compose 에 붙일 때 아래 조건과 stack-smoke.sh 에 더한다
   stack:
     needs: changes
     if: >-
@@ -236,6 +243,7 @@ jobs:
       - notification-server
       - asset-server
       - chat-server
+      - story-server
       - shared
       - web
       - stack
