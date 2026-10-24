@@ -495,6 +495,7 @@ def mob(name: str, dex: int, engaged: int | None = None, status_: str = NpcStatu
         abilities={'dex': dex},
         engaged_round=engaged,
         status=status_,
+        surprise=None,
     )
     return SimpleNamespace(state=state, name=name, definition=SimpleNamespace(attacks=[BITE]))
 

@@ -399,7 +399,7 @@ def test_the_cross_is_named_by_the_rules():
 
 def test_the_map_note_forbids_opening_by_words():
     assert '잠긴 문' in prompt.MAP_NOTE
-    assert prompt.PROMPT_VERSION == 'narration-60'
+    assert prompt.PROMPT_VERSION == 'narration-61'
 
 
 def test_the_climb_feels_the_injuries_on_its_ability(monkeypatch: pytest.MonkeyPatch):

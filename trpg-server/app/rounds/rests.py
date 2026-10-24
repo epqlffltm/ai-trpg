@@ -9,6 +9,7 @@
     시계는 하나라서 한 사람이 여덟 시간 쉬면 그 라운드는 모두에게 여덟 시간이다(길을 갈 때와 같다).
   - 회복은 판정과 죽음의 굴림과 부상을 다 끝낸 뒤에 정한다(settle). 그 라운드에 다쳤는지를 다 본 다음이다.
     다쳤으면 휴식이 깨져 회복하지 않는다(hurt). 쓰러졌거나 죽었으면 그것이 까닭이다(downed, dead).
+    쉬는 중에 무작위 조우의 몬스터가 덮쳤어도 깨진다(ambushed, #283).
     짧은 휴식은 규칙의 등급만큼, 긴 휴식은 최대 HP 까지 회복한다.
   - 쉴 수 없는 곳은 없다. 몬스터가 있어도 쉴 수 있다. 막으면 숨은 몬스터가 있는지 알아내는 길이 된다.
     전투 중에 쉬면 맞아서 깨질 뿐이다.
@@ -57,6 +58,8 @@ class Broken(enum.StrEnum):
     DOWNED = 'downed'
     # 라운드가 닫힐 때 죽어 있다
     DEAD = 'dead'
+    # 쉬는 중에 무작위 조우의 몬스터가 덮쳤다(#283, app/rounds/wanders.py)
+    AMBUSHED = 'ambushed'
 
 
 @dataclass(frozen=True)
@@ -99,14 +102,16 @@ def judge_rest(judging: Judging, action: RestAction) -> dict:
 # --- 선언한 휴식 ---
 
 
-def broken_by(member: TableMember, hurt: set[uuid.UUID]) -> Broken | None:
-    """휴식이 깨진 까닭. 깨지지 않았으면 None. 죽음, 쓰러짐, 다침의 순서로 본다."""
+def broken_by(member: TableMember, hurt: set[uuid.UUID], ambushed: set[uuid.UUID]) -> Broken | None:
+    """휴식이 깨진 까닭. 깨지지 않았으면 None. 죽음, 쓰러짐, 다침, 덮침의 순서로 본다."""
     if sheets.is_dead(member):
         return Broken.DEAD
     if sheets.is_downed_alive(member):
         return Broken.DOWNED
     if member.user_id in hurt:
         return Broken.HURT
+    if member.user_id in ambushed:
+        return Broken.AMBUSHED
     return None
 
 
@@ -120,12 +125,17 @@ def recover(ruleset: Ruleset, length: RestLength, sheet: TableSheet, dice: Dice)
 
 
 def finish_rest(
-    ruleset: Ruleset, member: TableMember, declaration: Declaration, hurt: set[uuid.UUID], dice: Dice
+    ruleset: Ruleset,
+    member: TableMember,
+    declaration: Declaration,
+    hurt: set[uuid.UUID],
+    ambushed: set[uuid.UUID],
+    dice: Dice,
 ) -> None:
     """선언한 휴식 하나를 끝낸다. 깨지지 않았으면 회복한다. 결과를 그 선언의 outcome 의 rest 에 적는다."""
     rest = rest_of(declaration)
     sheet = member.sheet
-    broken = broken_by(member, hurt)
+    broken = broken_by(member, hurt, ambushed)
     before = sheet.hp
     rolls, after = ([], before) if broken is not None else recover(ruleset, RestLength(rest['length']), sheet, dice)
     sheet.hp = after
@@ -153,11 +163,15 @@ def resting(table: GameTable, round_: Round) -> list[tuple[TableMember, Declarat
 
 
 def settle_rests(
-    ruleset: Ruleset, pairs: list[tuple[TableMember, Declaration]], hurt: set[uuid.UUID], dice: Dice
+    ruleset: Ruleset,
+    pairs: list[tuple[TableMember, Declaration]],
+    hurt: set[uuid.UUID],
+    ambushed: set[uuid.UUID],
+    dice: Dice,
 ) -> None:
     """쉰 사람마다 휴식을 끝낸다. 앉은 순서로 굴린다."""
     for member, declaration in pairs:
-        finish_rest(ruleset, member, declaration, hurt, dice)
+        finish_rest(ruleset, member, declaration, hurt, ambushed, dice)
 
 
 # --- 되살아나기 ---
@@ -297,11 +311,14 @@ def needs_rules(table: GameTable, pairs: list) -> bool:
     return any(member.sheet is not None and member.sheet.hp < member.sheet.max_hp for member in table.members)
 
 
-def settle(table: GameTable, round_: Round, hurt: set[uuid.UUID], dice: Dice) -> Recovered:
+def settle(
+    table: GameTable, round_: Round, hurt: set[uuid.UUID], dice: Dice, ambushed: frozenset[uuid.UUID] = frozenset()
+) -> Recovered:
     """
     라운드가 닫힐 때 쉬기로 일어날 일을 모두 정한다. 선언한 휴식 → 되살아나기 → 저절로 회복의 순서다.
 
     hurt 는 이번 라운드에 피해를 입은 사람들이다(app/rounds/judging.py 의 roll_checks).
+    ambushed 는 쉬는 중에 무작위 조우의 몬스터가 덮친 사람들이다(app/rounds/wanders.py, #283). 쉬기가 깨진다.
     선언한 휴식의 결과는 그 선언에 적고, 나머지는 이벤트에 적을 모양으로 돌려준다.
     쉰 사람과 일어난 사람은 저절로 회복하지 않는다.
     """
@@ -311,7 +328,7 @@ def settle(table: GameTable, round_: Round, hurt: set[uuid.UUID], dice: Dice) ->
     ruleset = rules_of(table)
     if ruleset.rest is None:
         return NOTHING
-    settle_rests(ruleset, pairs, hurt, dice)
+    settle_rests(ruleset, pairs, hurt, set(ambushed), dice)
     revivals = revive_all(ruleset, table, round_.number, hurt, dice)
     # 쉰 사람과 방금 일어난 사람은 저절로 회복하지 않는다. 이 장면의 회복을 이미 받았다
     rested = {member.user_id for member, _ in pairs}

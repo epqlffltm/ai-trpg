@@ -467,7 +467,7 @@ def member(hp: int = 5, died: bool = False) -> SimpleNamespace:
     ],
 )
 def test_what_breaks_a_rest(who: SimpleNamespace, hurt: set, reason):
-    assert rests.broken_by(who, hurt) == reason
+    assert rests.broken_by(who, hurt, set()) == reason
 
 
 @pytest.mark.parametrize(
