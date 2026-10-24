@@ -26,6 +26,7 @@ export function scenarioDetail(extra: Record<string, unknown> = {}) {
     default_npc_sheet: null,
     monster_sheets: [],
     encounters: [],
+    wanders: [],
     items: [],
     starting_items: [],
     currency: null,

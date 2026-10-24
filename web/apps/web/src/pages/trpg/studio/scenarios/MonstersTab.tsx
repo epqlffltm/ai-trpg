@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/MonstersTab.tsx
-// 시나리오의 몬스터 탭(B9). 탭의 저장은 없고 모두 창에서 바로 저장한다: 몬스터 시트(MonsterSheetsSection)와 조우(EncountersSection).
+// 시나리오의 몬스터 탭(B9). 탭의 저장은 없고 모두 창에서 바로 저장한다: 몬스터 시트(MonsterSheetsSection), 조우(EncountersSection),
+// 무작위 조우 표(WandersSection, #283).
 // 몬스터는 저장된 몬스터 모음들의 몬스터, 지닌 물건은 로어북의 물건 항목, 조우의 장소는 로어북의 장소 항목이다.
 
 import { Button, Notice } from '@ai-trpg/ui';
@@ -11,6 +12,7 @@ import type { ScenarioTab } from './scenarioTabs';
 import { monsterNameOf, useBestiaryMonsters } from './useBestiaryMonsters';
 import { useLoreEntries } from './useLoreEntries';
 import { useScenarioRules } from './useScenarioRules';
+import { WandersSection } from './WandersSection';
 
 type Props = { scenario: ScenarioDetail; goTo: (tab: ScenarioTab) => void };
 
@@ -39,6 +41,7 @@ export function MonstersTab({ scenario, goTo }: Props) {
         placeName={placeNameOf(places.entries)}
         monsterName={monsterNameOf(monsters.monsters)}
       />
+      <WandersSection scenario={scenario} places={places.entries} placeName={placeNameOf(places.entries)} monsterName={monsterNameOf(monsters.monsters)} />
     </>
   );
 }
