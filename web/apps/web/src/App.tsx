@@ -25,6 +25,7 @@ import {
   ChatLorebookEditPage,
   ChatLorebookNewPage,
   ChatLorebooksPage,
+  IdentityPage,
   LobbyPage,
   LorebookEditPage,
   LorebookNewPage,
@@ -33,10 +34,10 @@ import {
   MyPage,
   OrderPage,
   OrdersPage,
+  ReportsPage,
   RulebookEditPage,
   RulebookNewPage,
   RulebooksPage,
-  ReportsPage,
   ScenarioBrowsePage,
   ScenarioEditPage,
   ScenarioNewPage,
@@ -66,6 +67,14 @@ export function App() {
           element={
             <RequireSession>
               <MyPage />
+            </RequireSession>
+          }
+        />
+        <Route
+          path="me/identity"
+          element={
+            <RequireSession>
+              <IdentityPage />
             </RequireSession>
           }
         />

@@ -11,6 +11,7 @@ import type { components as Trpg } from './generated/trpg';
 export type LoginChallenge = Auth['schemas']['LoginChallenge'];
 export type LoginResponse = Auth['schemas']['LoginResponse'];
 export type Me = Auth['schemas']['Me'];
+export type IdentityAnswer = Auth['schemas']['IdentityAnswer'];
 export type ConsentState = Auth['schemas']['ConsentState'];
 export type ConsentStates = Auth['schemas']['ConsentStates'];
 

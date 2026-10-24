@@ -55,7 +55,11 @@ function Today({ status, rewards }: { status: AttendanceStatus; rewards: Attenda
       <h2 id="attendance-today-heading">오늘</h2>
       <AttendanceCycle cells={cycleCells(rewards.cycle, status)} />
       <p>{todayLine(status)}</p>
-      {!status.verified ? <Notice>{VERIFY_FIRST}</Notice> : null}
+      {!status.verified ? (
+        <Notice>
+          {VERIFY_FIRST} <Link to="/me/identity">본인인증하기</Link>
+        </Notice>
+      ) : null}
       {claiming.problem ? <Notice tone="error">{claiming.problem}</Notice> : null}
       {claiming.claimed ? <ClaimResult claim={claiming.claimed} /> : null}
       <div className="form-actions">
