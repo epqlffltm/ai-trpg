@@ -33,16 +33,21 @@ const DOOR_DONE: Record<string, [string, string]> = {
   pick: ['땄습니다', '따지 못했습니다'],
   force: ['부쉈습니다', '부수지 못했습니다'],
   repair: ['고쳤습니다', '고치지 못했습니다'],
+  replace: ['새 자물쇠로 바꿨습니다', '바꾸지 못했습니다'],
 };
 
 /** 문을 다루지 못한 까닭 */
 const DOOR_REASONS: Record<string, string> = {
   no_key: '열쇠가 없었습니다',
   wrong_side: '빗장의 반대쪽에 서 있었습니다',
-  broken: '부서진 문이라 잠그지 못합니다',
+  broken: '문이 부서져 있었습니다',
   already: '이미 그렇게 되어 있었습니다',
   no_tool: '도구가 없었습니다',
   failed: '판정에 실패했습니다',
+  no_pick: '앞 차례에 따지 못하는 자물쇠로 바뀌었습니다',
+  locked: '자물쇠가 잠겨 있었습니다. 연 뒤에 바꿉니다',
+  no_item: '달 자물쇠를 더 지니지 않았습니다',
+  used: '이 테이블에서 이미 단 자물쇠입니다',
 };
 
 /** 까닭을 괄호로. 모르는 이름이면 그대로, 없으면 빈 글 */
@@ -83,7 +88,7 @@ export function moveLine(move: Move): string {
 
 /** 문을 다룬 행동. "종탑 쪽 빗장: 열었습니다", "종탑 쪽 문: 따지 못했습니다(판정에 실패했습니다) · 눈 8, 보정 +1, 합 9 / 목표 15" */
 export function doorLine(door: Door): string {
-  const thing = door.device === 'bar' ? '빗장' : door.device === 'lock' ? '자물쇠' : '문';
+  const thing = door.act === 'replace' ? '자물쇠' : door.device === 'bar' ? '빗장' : door.device === 'lock' ? '자물쇠' : '문';
   const [done, failed] = DOOR_DONE[door.act] ?? ['다뤘습니다', '다루지 못했습니다'];
   const line = `${door.to.name} 쪽 ${thing}: ${door.done ? done : `${failed}${because(DOOR_REASONS, door.reason)}`}`;
   return door.check ? `${line} · ${rollText(door.check)}` : line;

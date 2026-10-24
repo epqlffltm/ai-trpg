@@ -3,7 +3,7 @@
 //
 // 서버의 검사(RouteRule, 게시의 route_* 문제)를 따른다:
 //   - 판정의 능력치는 꼭 고른다. 난이도를 비우면 룰북의 기본이다. 넘기의 피해(양의 등급)는 비워도 된다
-//   - 자물쇠는 열쇠(물건 항목)가 꼭 있다. 열쇠 하나는 자물쇠 하나만 연다(다른 길에 같은 열쇠면 route_key_repeated)
+//   - 자물쇠는 열쇠(물건 항목)가 꼭 있다. 열쇠 하나는 자물쇠 하나만 연다(다른 길이나 자물쇠 물건에 같은 열쇠면 route_key_repeated)
 //   - 빗장은 길의 두 끝 중 한쪽에 있다
 //   - 부수기와 고치기는 자물쇠나 빗장이 있는 길에만 적는다. 둘 다 끄면 함께 비운다
 //   - 고치기의 도구(물건 항목)는 비워도 된다. 적으면 그 물건을 지닌 사람만 고친다
@@ -42,14 +42,15 @@ export function doorDraft(route: RouteRule): DoorDraft {
   };
 }
 
-/** 보내기 전에 알릴 것. at 은 이 길의 차례(다른 길의 열쇠와 견준다) */
-export function doorHints(draft: DoorDraft, routes: RouteRule[], at: number): Record<string, string> {
+/** 보내기 전에 알릴 것. at 은 이 길의 차례(다른 길의 열쇠와 견준다). itemKeys 는 자물쇠 물건들의 열쇠 */
+export function doorHints(draft: DoorDraft, routes: RouteRule[], at: number, itemKeys: string[] = []): Record<string, string> {
   const hints: Record<string, string> = {};
   const route = routes[at];
   if (draft.cross.on && draft.cross.ability === '') hints.cross = '넘기 판정의 능력치를 골라 주세요.';
   if (draft.lock.on) {
     if (draft.lock.key === '') hints.lock = '자물쇠를 여는 열쇠(물건)를 골라 주세요.';
     else if (routes.some((other, index) => index !== at && other.lock?.key === draft.lock.key)) hints.lock = '이 열쇠는 다른 길의 자물쇠를 엽니다. 열쇠 하나는 자물쇠 하나만 엽니다.';
+    else if (itemKeys.includes(draft.lock.key)) hints.lock = '이 열쇠는 자물쇠 물건의 새 자물쇠를 엽니다. 열쇠 하나는 자물쇠 하나만 엽니다.';
     if (draft.pick.on && draft.pick.ability === '') hints.pick = '따기 판정의 능력치를 골라 주세요.';
   }
   if (draft.bar.on && route && ![route.from_place, route.to_place].includes(draft.bar.side)) hints.bar = '빗장은 길의 두 끝 중 한쪽에 있어야 합니다.';
