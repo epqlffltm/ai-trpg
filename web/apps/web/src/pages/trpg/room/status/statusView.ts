@@ -117,9 +117,9 @@ export function placeName(map: TableMap, placeId: string | null | undefined): st
   return map.places.find((place) => place.entry_id === placeId)?.name ?? null;
 }
 
-export type Way = { placeId: string; name: string; minutes: number | null };
+/** 갈 수 있는 곳 하나. route 는 그리로 가는 길(문의 상태와 넘기 판정, #281) */
+export type Way = { placeId: string; name: string; minutes: number | null; route: TableMap['routes'][number] };
 
-/** 이 장소에서 아는 길로 갈 수 있는 곳. 한쪽 길은 나가는 쪽만 센다. 이름 차례로 */
 /**
  * 그 장소의 커버(#276). 세이브 방식의 판에서만 센다(다른 방식이면 엄폐를 받지 않는다). 없으면 0.
  * 서버의 app/rounds/covers.py 와 같은 조건이다
@@ -129,15 +129,34 @@ export function placeCover(table: TableDetail, placeId: string | null | undefine
   return table.map?.places.find((place) => place.entry_id === placeId)?.cover ?? 0;
 }
 
+/** 이 장소에서 아는 길로 갈 수 있는 곳. 한쪽 길은 나가는 쪽만 센다. 이름 차례로 */
 export function waysFrom(map: TableMap, placeId: string | null | undefined): Way[] {
   if (!placeId) return [];
   const ways: Way[] = [];
   for (const route of map.routes) {
     const to = route.from_place === placeId ? route.to_place : route.two_way && route.to_place === placeId ? route.from_place : null;
     const name = to ? placeName(map, to) : null;
-    if (to && name) ways.push({ placeId: to, name, minutes: route.travel_minutes ?? null });
+    if (to && name) ways.push({ placeId: to, name, minutes: route.travel_minutes ?? null, route });
   }
   return ways.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+}
+
+/**
+ * 길을 막거나 굴리게 하는 것(#281). 가기 전에 알 것만 적는다. 없으면 빈 목록.
+ * "자물쇠 잠김"(열쇠가 있으면 지나며 연다), "빗장 걸림(이쪽)"(지나며 푼다) 또는 "빗장 걸림(저쪽)"(부수기로만 연다),
+ * "넘기 판정: 근력, 보통"(지날 때마다 굴린다). 열린 문, 부서진 문은 막지 않으니 적지 않는다
+ */
+export function wayNotes(way: Way, here: string, rules: Ruleset): string[] {
+  const { route } = way;
+  const notes: string[] = [];
+  if (route.locked === true) notes.push('자물쇠 잠김');
+  if (route.barred === true) notes.push(route.bar_side === here ? '빗장 걸림(이쪽)' : '빗장 걸림(저쪽)');
+  if (route.cross) {
+    const ability = rules.abilities.find((one) => one.key === route.cross?.ability)?.name ?? route.cross.ability;
+    const difficulty = rules.difficulties.find((one) => one.key === route.cross?.difficulty)?.name ?? route.cross.difficulty;
+    notes.push(`넘기 판정: ${ability}, ${difficulty}`);
+  }
+  return notes;
 }
 
 /** 장소마다 거기 선 캐릭터의 이름. 맵에 서 있지 않은 사람은 빠진다 */
