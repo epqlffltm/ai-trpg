@@ -1190,6 +1190,81 @@ a.ui-button {
   white-space: nowrap;
 }
 
+/* 출석(A9). 주기의 칸들은 한 줄에 놓고, 좁으면 줄을 바꾼다. 오늘 칸은 테두리로, 받은 칸은 흐리게 */
+.attendance-cycle {
+  list-style: none;
+  margin: 0 0 var(--ui-gap);
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: 8px;
+}
+
+.attendance-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  text-align: center;
+}
+
+.attendance-cell__icon {
+  font-weight: 600;
+}
+
+.attendance-cell__silver {
+  font-size: 0.85em;
+}
+
+.attendance-cell--done,
+.attendance-cell--claimed {
+  opacity: 0.6;
+}
+
+.attendance-cell--today,
+.attendance-cell--claimed {
+  border-width: 2px;
+  border-color: currentColor;
+  opacity: 1;
+}
+
+.attendance-result {
+  margin: var(--ui-gap) 0;
+  padding: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.attendance-result p {
+  margin: 4px 0;
+}
+
+.attendance-result__chest {
+  font-weight: 600;
+}
+
+/* 보물 상자의 확률표 */
+.odds-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.odds-table th,
+.odds-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--ui-border);
+  text-align: left;
+}
+
+.odds-table td,
+.odds-table thead th:not(:first-child) {
+  text-align: right;
+  white-space: nowrap;
+}
+
 .balance {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));

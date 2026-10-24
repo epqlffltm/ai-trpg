@@ -14,6 +14,7 @@ import { ResetPasswordPage } from './pages/password/ResetPasswordPage';
 import { PlaceholderPage } from './pages/PlaceholderPage';
 import { SignupPage } from './pages/signup/SignupPage';
 import {
+  AttendancePage,
   BestiariesPage,
   BestiaryEditPage,
   BestiaryNewPage,
@@ -81,6 +82,14 @@ export function App() {
           element={
             <RequireSession>
               <ChargePage />
+            </RequireSession>
+          }
+        />
+        <Route
+          path="wallet/attendance"
+          element={
+            <RequireSession>
+              <AttendancePage />
             </RequireSession>
           }
         />

@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/wallet/WalletPage.tsx
 // 지갑(A6). 위에 잔액(골드, 실버, 곧 사라질 실버), 아래에 원장(최근 것부터, 더 보기). 읽기만 한다.
-// 로그인해야 열린다(App.tsx 의 RequireSession). 충전(A7)으로 가는 길은 잔액 아래에 있다. 출석(A9)은 아직 화면이 없다.
+// 로그인해야 열린다(App.tsx 의 RequireSession). 충전(A7), 출석(A9), 주문 내역(A8)으로 가는 길은 잔액 아래에 있다.
 
 import { WalletBalance } from './WalletBalance';
 import { WalletLedger } from './WalletLedger';
