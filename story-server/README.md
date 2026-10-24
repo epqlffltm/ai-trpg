@@ -10,7 +10,7 @@
 정해 둔 값: 포트 `8007`, 토큰의 대상 `ai-trpg-story`, DB 계정과 스키마 `story`(테스트는 `story_test`), 주소 `/api/v1/story/`.
 
 **대화의 핵심은 chat 과 함께 쓴다.** 대화 트리, 다시 생성과 분기, 요약, 기억, 스트리밍한 답을 저장하는 흐름은
-chat 서버의 `app/conversation/` 를 `shared/conversation-core` 로 옮겨 두 서버가 함께 쓴다. 표는 서버마다 따로 둔다(이 서버는 `story` 스키마).
+chat 서버에서 옮긴 공용 코드 `shared/conversation-core` 를 두 서버가 함께 쓴다(이 서버는 세션을 만들 때부터). 표는 서버마다 따로 둔다(이 서버는 `story` 스키마).
 
 ## 실행
 

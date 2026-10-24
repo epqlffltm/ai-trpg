@@ -1,4 +1,4 @@
-# chat-server/app/conversation/window.py
+# shared/conversation-core/src/conversation_core/window.py
 
 """
 모델에 보낼 최근 대화를 고른다(docs/architecture/chat-server.md 의 "기억"의 첫 층). DB 도 모델도 모른다.

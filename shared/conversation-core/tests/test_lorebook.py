@@ -1,7 +1,7 @@
-# chat-server/tests/test_lorebook.py
+# shared/conversation-core/tests/test_lorebook.py
 
 """
-로어북의 항목을 고르는 규칙(app/conversation/lorebook.py, #672). DB 도 모델도 쓰지 않는다.
+로어북의 항목을 고르는 규칙(conversation_core/lorebook.py, #672). DB 도 모델도 쓰지 않는다.
 
 보는 것.
   - 상시 항목은 늘 들어간다. 나머지는 최근 말(SCAN_MESSAGES 개)에 키워드가 나와야 들어간다
@@ -12,8 +12,9 @@
   - 블록의 모양. 항목이 없으면 블록이 없다
 """
 
-from app.assets.schemas import LoreEntryDocument
-from app.conversation.lorebook import (
+from dataclasses import dataclass, field
+
+from conversation_core.lorebook import (
     MAX_CHARS,
     MAX_ENTRIES,
     QUERY_MESSAGES,
@@ -26,8 +27,18 @@ from app.conversation.lorebook import (
 )
 
 
+@dataclass(frozen=True)
+class Entry:
+    """항목의 모양(LoreEntry)을 따르는 시험용 항목. 쓰는 서버의 것(chat 의 LoreEntryDocument)과 같은 칸이다."""
+
+    name: str
+    content: str
+    keywords: list[str] = field(default_factory=list)
+    constant: bool = False
+
+
 def entry(entry_id: str, keywords: list[str] | None = None, constant: bool = False, content: str = '설정.'):
-    return LoreEntryDocument(id=entry_id, name=entry_id, keywords=keywords or [], content=content, constant=constant)
+    return Entry(name=entry_id, content=content, keywords=keywords or [], constant=constant)
 
 
 def names(entries) -> list[str]:

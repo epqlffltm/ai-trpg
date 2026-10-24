@@ -3,7 +3,7 @@
 """
 모델이 제안한 상태의 변화를 받아들이는 규칙(#676). DB 를 모르는 순수 함수다.
 
-모델은 제안만 한다(app/conversation/changes.py). 지금 할 수 있는 것(Offer)을 서버가 정하고, 모델에게도 그것만 알린다.
+모델은 제안만 한다(conversation_core/changes.py). 지금 할 수 있는 것(Offer)을 서버가 정하고, 모델에게도 그것만 알린다.
 받아들일 때도 같은 Offer 로 본다. 안 되는 것은 버린다(rejected 에 적고 부르는 쪽이 로그로 남긴다).
   - 호감도: 판에 호감도가 있고 model_step 이 0 보다 크면 된다. 크기는 ±model_step 으로 자르고 0~100 안으로 자른다
   - 선물: 판의 물건 가운데 상대가 줄 수 있는 것(giftable)이고 이 가지에서 아직 받지 않은 것이면 된다.
@@ -17,8 +17,9 @@
 
 from dataclasses import dataclass, replace
 
+from conversation_core.changes import Choice, Proposed, instruction
+
 from app.assets.schemas import CharacterDocument, ItemDocument, PlaceDocument
-from app.conversation.changes import Choice, Proposed, instruction
 from app.world.affection import REACH_PLACE, apply_affection, clamp
 from app.world.items import add_one
 from app.world.moves import apply_move, find_place

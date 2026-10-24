@@ -79,7 +79,7 @@
 | story | `story-server/` | FastAPI | 8007 | `ai-trpg-story` | `story`, `story_test` | `10-story-role.sql` | 세계관 안에서 여러 인물과 이야기. 시각, 인물의 위치, 이벤트와 선택지, 호감도, 고백과 엔딩. 대화의 핵심은 chat 과 같은 공용 코드를 쓴다. 뼈대와 인프라(compose, `10-story-role.sql`, 프록시의 `/api/v1/story/`, 대시보드와 경보)가 있다(#591). [story 서버 설계](story.md) |
 | 관리 | 이름 미정(`ops-server` 후보) | FastAPI | 미정 | 미정 | `ops` | 미정 | 운영 조회와 집계, 관리자 작업 요청과 감사 기록. [관측 규격의 경계](../observability.md#관리-서버의-경계)를 따른다 |
 | 프런트엔드 | `web/` | React + TypeScript(Vite, SPA) | - | - | - | - | 사용자 화면과 관리자 화면. 같은 nginx 가 정적 파일로 내준다. [화면 명세](../product/screens.md#프런트-구조) |
-| 공용 코드 | `shared/` | Python 패키지 | - | - | - | - | FastAPI 서버의 공통부(`server-core`: 토큰 검증, 관측, 서버끼리의 서명. 있다, #588), AI 호출(`ai-core`), 공용 템플릿, 나중에 대화의 핵심(`conversation-core`). [공용 코드 규칙](shared-code.md) |
+| 공용 코드 | `shared/` | Python 패키지 | - | - | - | - | FastAPI 서버의 공통부(`server-core`: 토큰 검증, 관측, 서버끼리의 서명. 있다, #588), AI 호출(`ai-core`. 있다, #499), 대화의 핵심(`conversation-core`. 있다, #591), 공용 템플릿. [공용 코드 규칙](shared-code.md) |
 
 - 포트와 스크립트 번호는 비어 있는 다음 번호를 예약한 것이다. 서버를 실제로 만드는 PR 에서 확정한다.
   알림 서버가 먼저 만들어져 8004 와 06 을 썼다. 07 은 메트릭을 읽는 계정(`07-monitor-role.sql`)이 먼저 썼다. story 가 예약했던 8006 과 08 은 asset 이 받았다.

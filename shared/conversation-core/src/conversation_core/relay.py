@@ -1,4 +1,4 @@
-# chat-server/app/conversation/relay.py
+# shared/conversation-core/src/conversation_core/relay.py
 
 """
 모델이 흘려 주는 글을 SSE 응답으로 넘기는 통로. 모델을 부르는 작업과 응답을 보내는 쪽을 떼어 놓는다.
@@ -15,7 +15,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
-from app.conversation.sse import Comment, Frame
+from conversation_core.sse import Comment, Frame
 
 # 조용할 때 주석을 끼우는 간격(초). README 의 "스트리밍(정한 것)"과 같다
 HEARTBEAT_SECONDS = 15.0

@@ -11,7 +11,7 @@
     3. hold_turn: 홀드를 건다. 걸리지 않으면(모자람, 팔지 않음, 결제 서버가 죽음) 거절한다
        거절되면 decline_turn 이 차례를 놓고 기록을 declined 로 둔다. 사람의 말은 남는다(말은 저장하되 생성하지 않는다)
   응답을 시작한 뒤(따로 도는 작업. 사람이 끊어도 끝까지 돈다)
-    4. call_model: 모델을 부르고 글을 흘려보낸다(app/conversation/relay.py)
+    4. call_model: 모델을 부르고 글을 흘려보낸다(conversation_core/relay.py)
     5. save_result: 받은 만큼 답을 저장하고 차례를 놓는다.
        다 받았으면 complete, 길이에서 잘렸거나 도중에 끊겼으면 partial. 글자 없이 실패했으면 답을 저장하지 않는다
     6. settle_turn: 답이 있으면 확정, 없으면 반환한다.
@@ -32,6 +32,14 @@ from ai_core.costs import charge_of
 from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError
 from ai_core.routing import MODEL_UNAVAILABLE as ROUTE_MODEL_UNAVAILABLE
 from ai_core.routing import Route
+from conversation_core import continuation
+from conversation_core.changes import parse_changes
+from conversation_core.continuation import OverlapTrim, continued_text
+from conversation_core.expressions import ExpressionHead, match_expression, split_expression
+from conversation_core.lorebook import chosen_entries, query_text, ranked, render_lore, with_recalled
+from conversation_core.relay import Relay
+from conversation_core.suggestions import MarkerHold, parse_suggestions, split_answer
+from conversation_core.window import Turn, select_window
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.assets.schemas import CharacterDocument
@@ -40,14 +48,6 @@ from app.billing.prices import chat_code
 from app.catalog import repository as catalog
 from app.catalog.choice import is_choosable
 from app.catalog.models import AiModel
-from app.conversation import continuation
-from app.conversation.changes import parse_changes
-from app.conversation.continuation import OverlapTrim, continued_text
-from app.conversation.expressions import ExpressionHead, match_expression, split_expression
-from app.conversation.lorebook import chosen_entries, query_text, ranked, render_lore, with_recalled
-from app.conversation.relay import Relay
-from app.conversation.suggestions import MarkerHold, parse_suggestions, split_answer
-from app.conversation.window import Turn, select_window
 from app.conversations import repository as conversations
 from app.conversations.models import (
     Conversation,
@@ -131,13 +131,13 @@ class Collector:
     """
     모델이 흘려 주는 글을 모으면서 응답으로 넘긴다. 도중에 끊겨도 받은 만큼을 안다.
 
-    본문만 흘린다. 다음 답 추천의 표식 뒤는 흘리지 않는다(app/conversation/suggestions.py 의 MarkerHold).
-    고를 수 있는 표정이 있으면 맨 앞의 표정의 표식을 떼고(app/conversation/expressions.py), 고른 표정을 먼저 알린다.
+    본문만 흘린다. 다음 답 추천의 표식 뒤는 흘리지 않는다(conversation_core/suggestions.py 의 MarkerHold).
+    고를 수 있는 표정이 있으면 맨 앞의 표정의 표식을 떼고(conversation_core/expressions.py), 고른 표정을 먼저 알린다.
     """
 
     relay: Relay
     hold: MarkerHold = field(default_factory=MarkerHold)
-    # 이어서 출력이면 되풀이한 앞부분을 떼는 것(app/conversation/continuation.py). 표식을 찾기 전에 거친다
+    # 이어서 출력이면 되풀이한 앞부분을 떼는 것(conversation_core/continuation.py). 표식을 찾기 전에 거친다
     trim: OverlapTrim | None = None
     # 고를 수 있는 표정과 그 캐릭터 그림. 비어 있으면 표정의 표식을 찾지 않는다
     expressions: Mapping[str, uuid.UUID] = field(default_factory=dict)

@@ -17,9 +17,9 @@ import uuid
 
 import pytest
 from ai_core.provider import Role
+from conversation_core.window import Turn
 
 from app.assets.schemas import CharacterDocument
-from app.conversation.window import Turn
 from app.turns.prompt import CharacterCard, build_messages, render_card
 from app.world.moves import apply_move, check_move, move_text, path_minutes
 from app.world.refusals import ActionRefusedError, Refusal

@@ -7,7 +7,8 @@
 import uuid
 from dataclasses import asdict
 
-from app.conversation.sse import Frame
+from conversation_core.sse import Frame
+
 from app.conversations.schemas import MessageOut
 from app.turns.schemas import DeltaEvent, DoneEvent, ExpressionEvent, FailedEvent, TurnEvent
 from app.turns.values import SavedMessage, TurnStart

@@ -89,12 +89,12 @@ class Settings(CoreSettings, NotificationSettings):
     llm_timeout_seconds: float = Field(default=120.0, gt=0, le=600)
     # 말 한 번의 답의 길이의 상한(토큰). 가격표의 출력 단계(o0)가 약속하는 길이다
     chat_output_limit: int = Field(default=1024, ge=64, le=8192)
-    # 모델에 보내는 지난 말의 양의 상한(글자). 최근 말부터 이만큼 채운다(app/conversation/window.py).
+    # 모델에 보내는 지난 말의 양의 상한(글자). 최근 말부터 이만큼 채운다(conversation_core/window.py).
     # 가격표의 입력 단계(i0)가 약속하는 양이다. 토큰이 아니라 글자로 어림한다(한국어는 대략 한 글자가 한 토큰 안팎)
     chat_context_chars: int = Field(default=12000, ge=1000, le=200000)
     # 글의 다양함. 0 에 가까울수록 같은 입력에 비슷한 답이다. 받지 않는 모델에는 보내지 않는다(모델 목록)
     chat_temperature: float = Field(default=0.9, ge=0, le=2)
-    # 다음 답 추천. 켜면 답 끝에 선택지 셋을 함께 받는다(app/conversation/suggestions.py).
+    # 다음 답 추천. 켜면 답 끝에 선택지 셋을 함께 받는다(conversation_core/suggestions.py).
     # 호출은 늘지 않고 출력이 조금 는다
     chat_suggestions: bool = True
     # 굴리는 요약의 모델(모델 목록의 이름표). 싼 모델을 쓴다. 비우면 요약하지 않는다(app/memory/summarizer.py)

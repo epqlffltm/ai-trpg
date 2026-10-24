@@ -1,10 +1,10 @@
-# chat-server/app/conversation/markers.py
+# shared/conversation-core/src/conversation_core/markers.py
 
 """
 답의 본문 뒤에 모델이 쓰는 블록의 표식들. DB 도 모델도 모른다.
 
 본문 뒤에는 블록이 둘 올 수 있다.
-다음 답 추천(app/conversation/suggestions.py)과 상태 바꾸기의 제안(app/conversation/changes.py)이다.
+다음 답 추천(conversation_core/suggestions.py)과 상태 바꾸기의 제안(conversation_core/changes.py)이다.
 어느 것이 먼저 와도 본문은 처음 나온 표식 앞까지다. 블록은 자기 표식부터 닫는 태그나 다음 블록의 표식까지다.
 """
 

@@ -9,8 +9,8 @@
 
 정해 둔 값: 포트 `8005`, 토큰의 대상 `ai-trpg-chat`, DB 계정과 스키마 `chat`(테스트는 `chat_test`), 주소 `/api/v1/chat/`.
 
-**대화의 핵심은 `app/conversation/` 에 모은다.** story-server 를 만들 때 파일째 `shared/conversation-core` 로 옮긴다.
-그래서 이 폴더는 앱의 다른 코드(`app.*`)를 가져오지 않는다(`tests/test_conversation_boundary.py`). chat 만의 것(캐릭터 하나, 호감도, 그림)은 이 폴더 밖에 둔다.
+**대화의 핵심은 공용 코드 `shared/conversation-core` 에 있다.** 이 서버의 `app/conversation/` 에 모아 두었다가 story 서버와 함께 쓰려고 옮겼다(#591).
+그 패키지는 이 서버의 코드(`app.*`)를 가져오지 않는다(그 패키지의 `tests/test_boundary.py`). chat 만의 것(카드의 모양, 호감도의 규칙, 그림)은 이 서버에 둔다.
 
 ## 실행
 
@@ -257,7 +257,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 
 ### 한 번의 말
 
-사람의 말을 받아 모델의 답을 흘려보낸다(설계의 "한 번의 말이 지나가는 길"). `app/turns/`, chat 과 story 가 함께 쓸 부분은 `app/conversation/`(창, SSE, 흘려보내기).
+사람의 말을 받아 모델의 답을 흘려보낸다(설계의 "한 번의 말이 지나가는 길"). `app/turns/`, chat 과 story 가 함께 쓰는 부분은 공용 코드 `shared/conversation-core`(창, SSE, 흘려보내기).
 
 | 차례 | 하는 일 | 실패하면 |
 | --- | --- | --- |
@@ -310,7 +310,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 
 ### 표정 고르기
 
-캐릭터 그림에 표정이 있으면 모델이 답마다 표정을 고른다(2026-10-23 유저 결정, `app/conversation/expressions.py`). 호출을 따로 하지 않는다.
+캐릭터 그림에 표정이 있으면 모델이 답마다 표정을 고른다(2026-10-23 유저 결정, `conversation_core/expressions.py`). 호출을 따로 하지 않는다.
 
 - **지시.** 카드 끝(다음 답 추천의 지시 앞)에 "[표정]" 으로 "답의 맨 앞에 `<expression>표정</expression>` 를 쓰고 그 뒤에 본문을 쓴다"와 고를 수 있는 표정(기본과 지금 차림의 그림에 있는 표정)을 넣는다.
   고를 수 있는 표정이 없는 캐릭터면 지시를 넣지 않고 표식도 찾지 않는다.
@@ -323,7 +323,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 
 ### 다음 답 추천
 
-캐릭터의 답 끝에 사람이 이어서 할 만한 말 셋을 함께 받는다(`app/conversation/suggestions.py`). 누르면 입력칸을 채우고, 보내는 것은 사람이다.
+캐릭터의 답 끝에 사람이 이어서 할 만한 말 셋을 함께 받는다(`conversation_core/suggestions.py`). 누르면 입력칸을 채우고, 보내는 것은 사람이다.
 
 - **같은 호출에서 받는다.** 카드의 맨 끝에 "본문을 다 쓴 뒤 새 줄에 `<suggestions>` 를 쓰고 그 아래에 한 줄에 하나씩 써라"를 넣는다.
   호출이 늘지 않아 원가가 거의 그대로다(출력이 조금 는다). 끄려면 `CHAT_SUGGESTIONS=false`.
@@ -359,7 +359,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 
 #### 모델의 제안
 
-모델이 답 끝에 호감도의 변화, 선물, 이동을 제안하고 서버가 검증해 반영한다(#676, 2026-10-23 유저 결정, `app/conversation/changes.py`, `app/world/proposals.py`).
+모델이 답 끝에 호감도의 변화, 선물, 이동을 제안하고 서버가 검증해 반영한다(#676, 2026-10-23 유저 결정, `conversation_core/changes.py`, `app/world/proposals.py`).
 다음 답 추천처럼 같은 응답에서 받는다. 따로 부르지 않는다(정액 과금이 깨진다).
 
 - **지시.** 지금 할 수 있는 것이 있으면 카드의 "[상태 바꾸기]" 에 그것만 적는다. 없으면(호감도도, 줄 물건도, 이어진 길도 없다) 지시가 없다.
@@ -460,7 +460,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 
 ### 로어북
 
-캐릭터의 판에 복사된 로어북(asset 의 판 형식 8)에서 항목을 골라 카드의 "[로어북]" 에 넣는다(#672, `app/conversation/lorebook.py`).
+캐릭터의 판에 복사된 로어북(asset 의 판 형식 8)에서 항목을 골라 카드의 "[로어북]" 에 넣는다(#672, `conversation_core/lorebook.py`).
 원본은 asset 의 로어북이다. 대화를 시작할 때 판과 함께 사본에 남는다. 턴마다 asset 을 부르지 않는다.
 
 - **고르는 법.** 상시(`constant`) 항목은 늘 넣는다. 나머지는 최근 말 넷(이번에 보낸 말과 건넬 때의 한마디를 포함한다)에 키워드가 나오면 넣는다.
@@ -535,7 +535,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 
 ### 이어서 출력
 
-끊긴 답(`partial`. 길이 상한에서 잘렸거나, 도중에 끊겼거나, 멈췄다)에 이어 쓴다(`app/conversation/continuation.py`). 사람이 "이어서"를 누를 때만 한다. 저절로 하지 않는다.
+끊긴 답(`partial`. 길이 상한에서 잘렸거나, 도중에 끊겼거나, 멈췄다)에 이어 쓴다(`conversation_core/continuation.py`). 사람이 "이어서"를 누를 때만 한다. 저절로 하지 않는다.
 
 - **지시로 시킨다.** 끊긴 답까지의 대화를 보내고, 맨 끝에 사람의 차례로 "끊긴 곳 바로 다음 글자부터 이어 써라(사용자의 말이 아니다)"를 붙인다.
   답을 미리 채워 이어 쓰게 하는 길이 공급자마다 있거나 없어서, 모든 공급자에서 똑같이 도는 쪽으로 했다. 대화가 사람의 말로 끝나야 받는 공급자도 있다.

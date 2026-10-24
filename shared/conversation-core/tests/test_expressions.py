@@ -1,7 +1,7 @@
-# chat-server/tests/test_expressions.py
+# shared/conversation-core/tests/test_expressions.py
 
 """
-표정의 표식을 떼고 고르는 것(app/conversation/expressions.py)을 검증한다. DB 도 모델도 쓰지 않는다.
+표정의 표식을 떼고 고르는 것(conversation_core/expressions.py)을 검증한다. DB 도 모델도 쓰지 않는다.
 
 보는 것.
   - 답의 맨 앞의 표식에서 표정을 떼고 나머지를 본문으로 둔다. 앞의 빈칸과 표식 뒤의 줄바꿈은 뗀다
@@ -13,7 +13,7 @@
 
 import pytest
 
-from app.conversation.expressions import HEAD_MAX, ExpressionHead, instruction, match_expression, split_expression
+from conversation_core.expressions import HEAD_MAX, ExpressionHead, instruction, match_expression, split_expression
 
 
 def stream(pieces: list[str]) -> tuple[str, str | None]:
