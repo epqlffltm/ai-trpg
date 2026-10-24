@@ -62,6 +62,7 @@ from app.reports import router as reports
 from app.reports.service import AlreadyReportedError, OwnCharacterReportError
 from app.withdrawal import router as withdrawal
 from app.worlds import router as worlds
+from app.worlds import supply as world_supply
 from app.worlds.publishing import WorldNotReadyError
 from app.worlds.service import CharacterNotOwnedError, WorldNotFoundError
 
@@ -207,6 +208,7 @@ def create_app(
     # 프록시가 바깥에 열지 않는다(docker/nginx/templates/api.inc.template)
     app.include_router(persona_supply.router, prefix=API_PREFIX)
     app.include_router(character_supply.router, prefix=API_PREFIX)
+    app.include_router(world_supply.router, prefix=API_PREFIX)
     # 인증 서버가 탈퇴를 알리는 주소(docs/architecture/withdrawal.md). 인증 서버의 서명만 본다
     app.include_router(withdrawal.router, prefix=API_PREFIX)
 

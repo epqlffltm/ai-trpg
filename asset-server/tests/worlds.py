@@ -77,10 +77,29 @@ CONFESSION_HINT = {
 }
 
 
+# 아리에게는 친하면 고백할 수 있다. 실패해도 이야기는 이어진다
+ARI_CONFESSION = {'stage': '친함'}
+# 아리에게 고백에 성공하면 끝나는 엔딩과, 기한(30일)까지 아무도 고르지 않으면 끝나는 엔딩
+ARI_ENDING = {
+    'id': 'ari-end',
+    'name': '아리와 함께',
+    'trigger': {'kind': 'confess_success', 'target': 'ari'},
+    'scene': {'text': '노을 진 옥상에서 아리가 웃는다.', 'cast': ['ari']},
+    'hint': '도서관의 단골에게 마음을 전해 보자.',
+}
+SOLO_ENDING = {
+    'id': 'solo',
+    'name': '혼자인 여름',
+    'trigger': {'kind': 'deadline'},
+    'scene': {'text': '방학이 끝났다.'},
+}
+
+
 def full_world(ari: str, beo: str) -> dict:
     """
     게시할 수 있는 세계관. 학교(시작), 도서관(길로 이어짐), 옥상(길이 없다)이 있다.
     아리는 도서관에 있고 저녁에는 친하면 학교로 간다. 버는 기본 장소가 없고 이벤트(만남)로만 나온다.
+    아리에게 고백할 수 있고, 고백 성공과 기한의 엔딩이 하나씩 있다.
     """
     return {
         'name': '여름 학원',
@@ -114,10 +133,12 @@ def full_world(ari: str, beo: str) -> dict:
                 ],
                 affection={'start': 10, 'stages': STAGES, 'gifts': [{'id': 'rose-1', 'item': 'rose', 'change': 5}]},
                 reveal='shown',
+                confession=ARI_CONFESSION,
             ),
             member('beo', beo, map='stage', map_stage='친함'),
         ],
         'events': [MEET, CONFESSION_HINT],
+        'endings': [ARI_ENDING, SOLO_ENDING],
     }
 
 

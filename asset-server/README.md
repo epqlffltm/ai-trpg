@@ -144,6 +144,8 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/service/{caller}/personas/{id}/revision` | 페르소나의 지금 `revision`(`{id, revision}`) | 서버의 서명 + access 토큰 |
 | GET | `/api/v1/asset/service/{caller}/characters/{id}/latest` | 쓸 수 있는 캐릭터의 마지막 판(`{id, version, rating, published_at, document}`) | 서버의 서명 + access 토큰 |
 | GET | `/api/v1/asset/service/{caller}/characters/{id}/latest/number` | 마지막 판의 번호(`{id, version}`). 같은 규칙 | 서버의 서명 + access 토큰 |
+| GET | `/api/v1/asset/service/{caller}/worlds/{id}/latest` | 쓸 수 있는 [세계관](#세계관)의 마지막 판(`{id, version, rating, published_at, document}`). 캐릭터와 같은 규칙 | 서버의 서명 + access 토큰 |
+| GET | `/api/v1/asset/service/{caller}/worlds/{id}/latest/number` | 세계관의 마지막 판의 번호(`{id, version}`) | 서버의 서명 + access 토큰 |
 | POST | `/api/v1/asset/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴)한 사람의 페르소나와 비공개 캐릭터와 세계관, 쓰이지 않는 그림을 지운다. 200 `{"status":"processed"}`. 그림 저장소에 닿지 못하면 503 | 인증 서버의 서명 |
 
 ### 계정 페르소나
@@ -361,7 +363,7 @@ chat 의 대화는 1일째의 시작 시각에서 시작해 이동(길의 시간
 
 story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story.md), 화면 명세 D7 의 서버). `app/worlds/`.
 열린 세계에서 여러 인물이 장소를 오가고, 사용자가 장소를 옮기고 물건을 건네며 이야기를 이어 간다. 세 조각으로 만든다(2026-10-24 유저 결정).
-지금은 두 조각(초안과 게시, 이벤트)이 있다. 고백과 엔딩, story 에 내주기는 다음 조각이다.
+세 조각(초안과 게시, 이벤트, 고백과 엔딩과 story 에 내주기)이 모두 있다.
 
 ```json
 {
@@ -389,8 +391,15 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
                   "when": {"match": "all", "items": [{"kind": "affection_at_least", "target": "ari", "value": "친함"}]}}],
     "affection": {"display": "number", "start": 10, "stages": [{"name": "낯섦", "at": 0}, {"name": "친함", "at": 40}],
                   "gifts": [{"id": "rose-1", "item": "rose", "change": 5, "once": false}]},
-    "reveal": null, "map": null, "map_stage": null, "panel": null
+    "reveal": null, "map": null, "map_stage": null, "panel": null,
+    "confession": {"stage": "친함", "when": {"match": "all", "items": []}, "on_fail": "continue", "fail_drop": 10, "cooldown_days": 1}
   }],
+  "endings": [
+    {"id": "ari-end", "name": "아리와 함께", "trigger": {"kind": "confess_success", "target": "ari"},
+     "when": {"match": "all", "items": []}, "scene": {"text": "노을 진 옥상에서 아리가 웃는다.", "cast": ["ari"]},
+     "unlock": true, "hint": "도서관의 단골에게 마음을 전해 보자."},
+    {"id": "solo", "name": "혼자인 여름", "trigger": {"kind": "deadline"}, "scene": {"text": "방학이 끝났다."}}
+  ],
   "lorebooks": []
 }
 ```
@@ -418,6 +427,12 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
   `repeat` 이 아니면 한 번만 열린다. `scene` 은 장면 지시(`text` 1,000자, 모델이 읽는다), 장면에 부르는 인물(4명까지), 일러스트다.
   일러스트가 있고 `collectible` 이면 열릴 때 계정에 남는다(일러스트를 여는 것은 효과가 아니라 장면의 칸이다). 일러스트 없이 `collectible` 이면 422 다.
   `on_open` 은 열리자마자, 선택지(3개까지)의 `effects` 는 고르면 반영한다.
+- **고백**(인물마다, 판의 형식 3). `confession` 이 비면 고백할 수 없는 인물이다. 호감도가 `stage` 이상이고 `when` 이 맞으면 성공이다.
+  실패하면 `on_fail` 대로 한다. 계속(`continue`, 기본)이면 호감도를 `fail_drop`(0~100, 기본 10)만큼 내리고 `cooldown_days`(1~30, 기본 1)일 동안 다시 못 한다.
+  끝(`end`)이면 그 인물에게 고백 실패로 시작되는 엔딩을 판정한다.
+- **엔딩**(30개까지). 시작(`trigger`)은 고백 성공·실패(`target`: 인물), 기한(`target` 없음), 이벤트(`target`: 이벤트)다.
+  시작이 일어나면 그 시작의 엔딩을 적은 차례로 맞춰 보고 `when` 이 맞는 첫 엔딩을 고른다. `scene` 은 엔딩의 장면(모델이 쓴다)이고,
+  `unlock` 이면 계정의 엔딩 기록과 갤러리에 남는다. `hint`(100자)는 못 본 사람에게 보이는 한 줄이다.
 - **효과**(목록 하나에 10개). 종류마다 `amount` 를 맞게 적는다(아니면 422).
 
   | 종류 | 칸 | 뜻 |
@@ -429,14 +444,20 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
 
 - **게시.** 막는 것(409, 게시해 보기에도 같은 이름)과 알리는 것(`warnings`, 게시는 된다)을 나눈다(2026-10-24 유저 결정).
   - 막는 것: `start_place_missing`(장소가 없거나 시작 장소가 없다), `start_slot_missing`, `cast_empty`, `place_missing`, `slot_missing`, `item_missing`,
-    `cast_target_missing`(조건, 효과, 장면), `event_missing`(없는 이벤트를 봤다), `stage_missing`(조건의 단계나 지도의 단계가 그 인물에 없다), `character_missing`(지웠거나 남의 것), `character_unpublished`,
-    `character_rating_too_high`(전체이용가 세계관에 성인 캐릭터), `lorebook_missing`, `lorebook_unpublished`, `image_not_owned`
+    `cast_target_missing`(조건, 효과, 장면, 엔딩의 시작), `event_missing`(없는 이벤트를 봤다, 없는 이벤트의 엔딩), `stage_missing`(조건의 단계나 지도의 단계가 그 인물에 없다), `character_missing`(지웠거나 남의 것), `character_unpublished`,
+    `character_rating_too_high`(전체이용가 세계관에 성인 캐릭터), `lorebook_missing`, `lorebook_unpublished`, `image_not_owned`,
+    `ending_missing`(엔딩의 빠짐: 고백할 수 있는 인물의 고백 성공, 실패하면 끝내는 인물의 고백 실패, 기한이 있으면 기한, 엔딩에 적은 시작마다
+    조건이 빈 엔딩이 하나는 있어야 한다. 고백에 성공했는데 고를 엔딩이 없는 일을 막는다)
   - 알리는 것: `place_unreachable`(시작 장소에서 길로 닿지 않는 장소), `event_unreachable`(열릴 수 없는 이벤트: 자기를 봐야 열린다,
-    열릴 수 없는 이벤트를 봐야 열린다, 기한 뒤의 날을 기다린다, 날짜의 조건이 겹치지 않는다), `cast_never_present`(기본 장소도 일정도 없고 장면에도 동행에도 나오지 않는 인물)
-- **판**(형식 2, 1 의 판은 이벤트가 없는 것으로 읽는다). 인물마다 캐릭터의 마지막 판에서 story 에 쓰는 칸 `{id, version, name, intro_html, speech_examples, age, gender, image_id, sprites}` 만 복사한다.
+    열릴 수 없는 이벤트를 봐야 열린다, 기한 뒤의 날을 기다린다, 날짜의 조건이 겹치지 않는다), `cast_never_present`(기본 장소도 일정도 없고 장면에도 동행에도 나오지 않는 인물),
+    `ending_unreachable`(고를 일이 없는 엔딩: 기한이 없는데 기한의 엔딩, 고백할 수 없는 인물의 고백 엔딩, 실패해도 계속하는 인물의 실패 엔딩,
+    열릴 수 없는 이벤트의 엔딩, 같은 시작의 조건이 빈 엔딩 뒤에 적은 엔딩)
+- **판**(형식 3. 1 의 판은 이벤트가, 2 까지의 판은 고백과 엔딩이 없는 것으로 읽는다). 인물마다 캐릭터의 마지막 판에서 story 에 쓰는 칸 `{id, version, name, intro_html, speech_examples, age, gender, image_id, sprites}` 만 복사한다.
   chat 에만 쓰는 칸(지도, 시작 상황, 물건, 호감도, 이벤트 씬)은 넣지 않는다. 보이기는 기본을 채운 정해진 값으로 굳힌다. 로어북은 캐릭터처럼 마지막 판을 복사한다.
-  캐릭터나 로어북을 고쳐도 이미 게시한 세계관의 판은 그대로다. 판에 쓰인 그림(대표, 소개, 장소, 물건, 인물의 그림, 이벤트의 일러스트)을 적어 두고, 공개 세계관이면 남도 그 그림을 본다.
-- 공개 목록, 신고와 숨김, story 에 내주는 길은 아직 없다. 공개로 두는 것(운영자만)은 지금 그림이 남에게 보이는 것만 바꾼다.
+  캐릭터나 로어북을 고쳐도 이미 게시한 세계관의 판은 그대로다. 판에 쓰인 그림(대표, 소개, 장소, 물건, 인물의 그림, 이벤트와 엔딩의 일러스트)을 적어 두고, 공개 세계관이면 남도 그 그림을 본다.
+- **story 에 내주기.** [다른 서버에 내주기](#다른-서버에-내주기)의 `/worlds/{id}/latest` 와 `/latest/number` 다. 캐릭터의 판과 같은 규칙이다
+  (주인이거나, 공개이고 판의 등급을 볼 수 있는 사람. 주인인데 등급을 쓸 수 없으면 403). story 서버의 서명 비밀(`STORY_SERVER_SECRET`)은 story 가 가져가기 시작하는 PR 에서 더한다.
+- 공개 목록, 신고와 숨김은 아직 없다.
 
 ### 신고와 숨김
 
@@ -523,8 +544,8 @@ AWS 문서의 예시 값으로 시험하고(`tests/test_image_store.py`), 스택
 
 ### 다른 서버에 내주기
 
-chat(나중에 story 와 TRPG)이 세션을 시작할 때 페르소나의 사본과 캐릭터의 판을 가져가는 주소다(#565, #567,
-[설계](../docs/architecture/asset-server.md#쓰는-서비스에-내주기)). `app/personas/supply.py`, `app/characters/supply.py`.
+chat(나중에 story 와 TRPG)이 세션을 시작할 때 페르소나의 사본과 캐릭터의 판, 세계관의 판을 가져가는 주소다(#565, #567, #591,
+[설계](../docs/architecture/asset-server.md#쓰는-서비스에-내주기)). `app/personas/supply.py`, `app/characters/supply.py`, `app/worlds/supply.py`.
 
     GET /api/v1/asset/service/{caller}/...
     X-Service-Signature: t=<보낸 시각>,v1=<HMAC-SHA256>      그 서버의 비밀로 서명(server_core/service_auth/signing.py)

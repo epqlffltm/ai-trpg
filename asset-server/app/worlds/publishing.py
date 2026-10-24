@@ -7,7 +7,7 @@
   - 막는 것: 이야기를 시작할 수 없거나(시작 장소, 시작 시간대, 인물이 없다), 칸끼리 가리키는 것이 없거나,
     남의 그림을 쓰거나, 인물의 캐릭터나 로어북을 판에 복사할 수 없다. 게시가 409 로 돌려준다.
     초안은 고치는 중이라 어긋날 수 있다(장소를 지웠는데 일정이 남았다). 판에는 맞는 것만 들어간다.
-  - 알리는 것: 시작 장소에서 길로 닿지 않는 장소, 열릴 수 없는 이벤트, 어디에도 나오지 않는 인물.
+  - 알리는 것: 시작 장소에서 길로 닿지 않는 장소, 열릴 수 없는 이벤트, 어디에도 나오지 않는 인물, 고를 일이 없는 엔딩.
     만드는 중에 일부러 남겨 둔 것일 수 있어 게시는 된다.
   - 걸러 낸 것: 소개에서 걸러 낸 태그, 속성, CSS, 링크, 그림(app/content/html.py).
 그림이 자기 것인지, 캐릭터와 로어북의 마지막 판은 DB 를 봐야 알아서 서비스가 찾아 넘긴다(app/worlds/service.py).
@@ -21,7 +21,7 @@ from app.characters.documents import LorebookCopyDocument, lorebook_copy
 from app.content.html import Cleaned, clean_intro, image_ids
 from app.ratings import Rating
 from app.worlds.documents import CastCharacterDocument, character_copy, effective_show
-from app.worlds.models import ConditionKind, EffectKind, MapPresence, Match, World
+from app.worlds.models import ConditionKind, ConfessionFailure, EffectKind, EndingTrigger, MapPresence, Match, World
 
 # 조건의 종류마다 target 이 가리키는 것(장소, 물건, 인물, 시간대). 날짜는 target 이 없다
 PLACE_TARGETS = frozenset({ConditionKind.REACH_PLACE})
@@ -43,6 +43,8 @@ EVENT_TARGETS = frozenset({ConditionKind.EVENT_SEEN})
 CAST_EFFECTS = frozenset({EffectKind.AFFECTION, EffectKind.ACCOMPANY_START, EffectKind.ACCOMPANY_END})
 ITEM_EFFECTS = frozenset({EffectKind.GIVE_ITEM, EffectKind.TAKE_ITEM})
 PLACE_EFFECTS = frozenset({EffectKind.MOVE_TO})
+# 엔딩의 시작 가운데 target 이 인물인 것
+CONFESS_TRIGGERS = frozenset({EndingTrigger.CONFESS_SUCCESS, EndingTrigger.CONFESS_FAIL})
 
 
 class Problem(enum.StrEnum):
@@ -77,6 +79,9 @@ class Problem(enum.StrEnum):
     LOREBOOK_MISSING = 'lorebook_missing'
     # 가리킨 로어북을 게시한 적이 없다
     LOREBOOK_UNPUBLISHED = 'lorebook_unpublished'
+    # 쓰일 수 있는 엔딩의 시작(고백 성공, 끝내는 고백 실패, 기한, 엔딩에 적은 시작)마다 조건이 빈 엔딩이 하나는 없다.
+    # 고백에 성공했는데 맞는 엔딩이 없는 일을 막는다(story.md 의 "빠짐이 없게")
+    ENDING_MISSING = 'ending_missing'
     # 대표 그림이나 소개 글, 장소, 물건, 인물의 그림 가운데 자기가 올린 것이 아닌(또는 없는) 그림이 있다
     IMAGE_NOT_OWNED = 'image_not_owned'
 
@@ -90,6 +95,9 @@ class WorldWarning(enum.StrEnum):
     EVENT_UNREACHABLE = 'event_unreachable'
     # 기본 장소도 일정도 없고, 어느 이벤트의 장면에도 동행에도 나오지 않는 인물이 있다
     CAST_NEVER_PRESENT = 'cast_never_present'
+    # 고를 일이 없는 엔딩이 있다. 기한이 없는데 기한의 엔딩, 고백할 수 없는 인물의 고백 엔딩,
+    # 실패해도 계속하는 인물의 실패 엔딩, 열릴 수 없는 이벤트의 엔딩, 같은 시작의 조건이 빈 엔딩 뒤에 적은 엔딩
+    ENDING_UNREACHABLE = 'ending_unreachable'
 
 
 class WorldNotReadyError(Exception):
@@ -128,6 +136,11 @@ def all_conditions(world: World) -> Iterator[dict]:
             yield from line['when']['items']
     for event in world.events:
         yield from event['when']['items']
+    for member in world.cast:
+        if member.get('confession'):
+            yield from member['confession']['when']['items']
+    for ending in world.endings:
+        yield from ending['when']['items']
 
 
 def all_effects(world: World) -> Iterator[dict]:
@@ -186,7 +199,11 @@ def pointed_items(world: World) -> list[str]:
 def pointed_cast(world: World) -> list[str]:
     """인물을 가리키는 것 전부. 인물의 조건, 호감도와 동행의 효과, 이벤트의 장면에 부르는 인물."""
     pointed = [item['target'] for item in all_conditions(world) if item['kind'] in CAST_TARGETS]
-    pointed += [member for event in world.events for member in event['scene'].get('cast', [])]
+    scenes = [event['scene'] for event in world.events] + [ending['scene'] for ending in world.endings]
+    pointed += [member for scene in scenes for member in scene.get('cast', [])]
+    pointed += [
+        ending['trigger']['target'] for ending in world.endings if ending['trigger']['kind'] in CONFESS_TRIGGERS
+    ]
     return pointed + effect_targets(world, CAST_EFFECTS)
 
 
@@ -197,6 +214,8 @@ def stage_pointers(world: World) -> list[tuple[str, str]]:
     for member in world.cast:
         if (member.get('map') or default_map) == MapPresence.STAGE or member.get('map_stage') is not None:
             pointers.append((member['id'], member.get('map_stage') or ''))
+        if member.get('confession'):
+            pointers.append((member['id'], member['confession']['stage']))
     return pointers
 
 
@@ -210,6 +229,9 @@ def reference_problems(world: World) -> list[Problem]:
     cast = {member['id'] for member in world.cast}
     stages = cast_stages(world)
     events_pointed = [item['target'] for item in all_conditions(world) if item['kind'] in EVENT_TARGETS]
+    events_pointed += [
+        ending['trigger']['target'] for ending in world.endings if ending['trigger']['kind'] == EndingTrigger.EVENT
+    ]
     stage_missing = any(stage not in stages.get(member, set()) for member, stage in stage_pointers(world))
     return [
         *missing(pointed_places(world), place_ids(world), Problem.PLACE_MISSING),
@@ -221,9 +243,41 @@ def reference_problems(world: World) -> list[Problem]:
     ]
 
 
+def trigger_key(trigger: dict) -> tuple[str, str | None]:
+    """같은 시작인지 가르는 열쇠(종류, 대상)."""
+    return (trigger['kind'], trigger.get('target'))
+
+
+def needed_triggers(world: World) -> set[tuple[str, str | None]]:
+    """
+    조건이 빈 엔딩이 있어야 하는 시작들. 고백할 수 있는 인물의 고백 성공, 실패하면 끝내는 인물의 고백 실패,
+    기한이 있으면 기한, 그리고 엔딩에 적힌 시작 전부다.
+    """
+    needed = {trigger_key(ending['trigger']) for ending in world.endings}
+    for member in world.cast:
+        confession = member.get('confession')
+        if confession:
+            needed.add((EndingTrigger.CONFESS_SUCCESS, member['id']))
+            if confession['on_fail'] == ConfessionFailure.END:
+                needed.add((EndingTrigger.CONFESS_FAIL, member['id']))
+    if world.deadline_days is not None:
+        needed.add((EndingTrigger.DEADLINE, None))
+    return needed
+
+
+def covered_triggers(world: World) -> set[tuple[str, str | None]]:
+    """조건이 빈 엔딩이 있는 시작들. 그 시작이 일어나면 반드시 고를 엔딩이 있다."""
+    return {trigger_key(ending['trigger']) for ending in world.endings if not ending['when']['items']}
+
+
+def ending_problems(world: World) -> list[Problem]:
+    """엔딩의 빠짐. 쓰일 수 있는 시작마다 조건이 빈 엔딩이 하나는 있어야 한다."""
+    return [Problem.ENDING_MISSING] if needed_triggers(world) - covered_triggers(world) else []
+
+
 def find_problems(world: World) -> list[Problem]:
     """초안만 보고 아는, 게시를 막는 것들. 없으면 빈 목록이다."""
-    return start_problems(world) + reference_problems(world)
+    return start_problems(world) + reference_problems(world) + ending_problems(world)
 
 
 def reachable_places(world: World, start: str) -> set[str]:
@@ -289,8 +343,42 @@ def present_cast(world: World) -> set[str]:
     return placed | called | set(effect_targets(world, frozenset({EffectKind.ACCOMPANY_START})))
 
 
+def can_start(trigger: dict, world: World, opened: set[str]) -> bool:
+    """그 시작이 일어날 수 있는가. 기한은 기한이 있어야, 고백은 고백할 수 있는 인물이어야(실패는 끝내는 인물이어야),
+    이벤트는 열릴 수 있어야 한다."""
+    confessions = {member['id']: member.get('confession') for member in world.cast}
+    if trigger['kind'] == EndingTrigger.DEADLINE:
+        return world.deadline_days is not None
+    if trigger['kind'] == EndingTrigger.EVENT:
+        return trigger['target'] in opened
+    confession = confessions.get(trigger['target'])
+    if trigger['kind'] == EndingTrigger.CONFESS_FAIL:
+        return bool(confession) and confession['on_fail'] == ConfessionFailure.END
+    return bool(confession)
+
+
+def shadowed_endings(world: World) -> list[str]:
+    """같은 시작의 조건이 빈 엔딩 뒤에 적어 고를 일이 없는 엔딩들. 판정은 적은 차례로 처음 맞는 것을 고른다."""
+    closed: set[tuple[str, str | None]] = set()
+    shadowed = []
+    for ending in world.endings:
+        key = trigger_key(ending['trigger'])
+        if key in closed:
+            shadowed.append(ending['id'])
+        elif not ending['when']['items']:
+            closed.add(key)
+    return shadowed
+
+
+def unreachable_endings(world: World) -> list[str]:
+    """고를 일이 없는 엔딩들. 시작이 일어날 수 없거나, 앞의 엔딩에 가려졌다."""
+    opened = openable_events(world)
+    never = [ending['id'] for ending in world.endings if not can_start(ending['trigger'], world, opened)]
+    return never + shadowed_endings(world)
+
+
 def find_warnings(world: World) -> list[WorldWarning]:
-    """알리기만 하는 것들. 닿지 않는 장소, 열릴 수 없는 이벤트, 어디에도 나오지 않는 인물."""
+    """알리기만 하는 것들. 닿지 않는 장소, 열릴 수 없는 이벤트, 어디에도 나오지 않는 인물, 고를 일이 없는 엔딩."""
     warnings = []
     if world.start_place is not None and place_ids(world) - reachable_places(world, world.start_place):
         warnings.append(WorldWarning.PLACE_UNREACHABLE)
@@ -298,6 +386,8 @@ def find_warnings(world: World) -> list[WorldWarning]:
         warnings.append(WorldWarning.EVENT_UNREACHABLE)
     if {member['id'] for member in world.cast} - present_cast(world):
         warnings.append(WorldWarning.CAST_NEVER_PRESENT)
+    if unreachable_endings(world):
+        warnings.append(WorldWarning.ENDING_UNREACHABLE)
     return warnings
 
 
@@ -349,7 +439,7 @@ def cleaned_intro(world: World) -> Cleaned:
 
 def world_image_ids(world: World) -> list[uuid.UUID]:
     """장소의 배경(기본과 시간대마다), 물건의 그림, 이벤트의 일러스트. 초안에는 글로 적혀 있다."""
-    scenes = [event['scene'] for event in world.events]
+    scenes = [event['scene'] for event in world.events] + [ending['scene'] for ending in world.endings]
     found = [uuid.UUID(entry['image_id']) for entry in [*world.places, *world.items, *scenes] if entry.get('image_id')]
     backgrounds = [image for place in world.places for image in place.get('backgrounds', {}).values()]
     return found + [uuid.UUID(image) for image in backgrounds]

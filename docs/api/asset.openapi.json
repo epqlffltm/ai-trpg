@@ -115,7 +115,7 @@
             "type": "string"
           },
           "on": {
-            "$ref": "#/components/schemas/Trigger"
+            "$ref": "#/components/schemas/app__characters__schemas__Trigger"
           },
           "once": {
             "default": false,
@@ -144,7 +144,7 @@
             "type": "string"
           },
           "on": {
-            "$ref": "#/components/schemas/TriggerDocument"
+            "$ref": "#/components/schemas/app__characters__documents__TriggerDocument"
           },
           "once": {
             "title": "Once",
@@ -321,6 +321,16 @@
           "character": {
             "$ref": "#/components/schemas/CastCharacterDocument"
           },
+          "confession": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConfessionDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "home": {
             "anyOf": [
               {
@@ -384,7 +394,7 @@
       },
       "CastMember": {
         "additionalProperties": false,
-        "description": "인물 하나. character_id 는 만든 사람의 캐릭터다. 게시할 때 그 마지막 판의 story 에 쓰는 칸을 복사한다.\nid 는 세계관 안에서 고유하고 조건과 일정이 가리킨다. 판이 바뀌어도 같은 인물은 같은 id 로 둔다.\n\nhome 은 기본 장소다. 비우면 어디에도 없다(이벤트로만 나온다). schedule 은 기본 장소를 덮어쓰는 일정이다.\nreveal, map, panel 은 보이기의 덮어쓰기다. 비우면 세계관의 기본을 쓴다.\nmap_stage 는 지도에 보이는 호감도의 단계다. 이 인물의 지도가 stage 일 때 쓴다.",
+        "description": "인물 하나. character_id 는 만든 사람의 캐릭터다. 게시할 때 그 마지막 판의 story 에 쓰는 칸을 복사한다.\nid 는 세계관 안에서 고유하고 조건과 일정이 가리킨다. 판이 바뀌어도 같은 인물은 같은 id 로 둔다.\n\nhome 은 기본 장소다. 비우면 어디에도 없다(이벤트로만 나온다). schedule 은 기본 장소를 덮어쓰는 일정이다.\nreveal, map, panel 은 보이기의 덮어쓰기다. 비우면 세계관의 기본을 쓴다.\nmap_stage 는 지도에 보이는 호감도의 단계다. 이 인물의 지도가 stage 일 때 쓴다.\nconfession 은 고백이다(판의 형식 3). 비우면 고백할 수 없다.",
         "properties": {
           "affection": {
             "$ref": "#/components/schemas/CastAffection"
@@ -393,6 +403,16 @@
             "format": "uuid",
             "title": "Character Id",
             "type": "string"
+          },
+          "confession": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Confession"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "home": {
             "anyOf": [
@@ -1639,6 +1659,90 @@
         "title": "ConditionsDocument",
         "type": "object"
       },
+      "Confession": {
+        "additionalProperties": false,
+        "description": "인물에게 하는 고백(story.md 의 \"고백과 엔딩\"). 호감도가 stage(단계의 이름) 이상이고 when 이 맞으면 성공이다.\n실패하면 on_fail 대로 한다. 계속(continue)이면 호감도를 fail_drop 만큼 내리고 cooldown_days 동안 다시 못 한다.\n끝(end)이면 그 인물에게 고백 실패로 시작되는 엔딩을 판정한다. 비어 있으면(null) 고백할 수 없는 인물이다.",
+        "properties": {
+          "cooldown_days": {
+            "default": 1,
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Cooldown Days",
+            "type": "integer"
+          },
+          "fail_drop": {
+            "default": 10,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Fail Drop",
+            "type": "integer"
+          },
+          "on_fail": {
+            "$ref": "#/components/schemas/ConfessionFailure",
+            "default": "continue"
+          },
+          "stage": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Stage",
+            "type": "string"
+          },
+          "when": {
+            "$ref": "#/components/schemas/Conditions",
+            "default": {
+              "items": [],
+              "match": "all"
+            }
+          }
+        },
+        "required": [
+          "stage"
+        ],
+        "title": "Confession",
+        "type": "object"
+      },
+      "ConfessionDocument": {
+        "additionalProperties": false,
+        "description": "인물에게 하는 고백. stage 이상이고 when 이 맞으면 성공이다.",
+        "properties": {
+          "cooldown_days": {
+            "title": "Cooldown Days",
+            "type": "integer"
+          },
+          "fail_drop": {
+            "title": "Fail Drop",
+            "type": "integer"
+          },
+          "on_fail": {
+            "$ref": "#/components/schemas/ConfessionFailure"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "when": {
+            "$ref": "#/components/schemas/ConditionsDocument"
+          }
+        },
+        "required": [
+          "stage",
+          "when",
+          "on_fail",
+          "fail_drop",
+          "cooldown_days"
+        ],
+        "title": "ConfessionDocument",
+        "type": "object"
+      },
+      "ConfessionFailure": {
+        "description": "고백에 실패하면 어떻게 되는가. 계속(호감도가 내려가고 정한 날 동안 다시 못 한다) 또는 실패 엔딩으로 끝.",
+        "enum": [
+          "continue",
+          "end"
+        ],
+        "title": "ConfessionFailure",
+        "type": "string"
+      },
       "Effect": {
         "additionalProperties": false,
         "description": "효과 하나(story.md 의 \"효과\"). target 은 인물, 물건, 장소의 id 다(종류마다, EffectKind).\namount 는 호감도를 바꾸는 크기(±, 0 이 아니다)나 주고 가져가는 물건의 수(1 이상)다. 쓰지 않는 종류는 적지 않는다.",
@@ -1716,6 +1820,110 @@
           "move_to"
         ],
         "title": "EffectKind",
+        "type": "string"
+      },
+      "Ending": {
+        "additionalProperties": false,
+        "description": "엔딩 하나(story.md 의 \"고백과 엔딩\"). trigger 가 일어나면 그 시작의 엔딩을 적은 차례로 맞춰 보고 when 이 맞는\n첫 엔딩을 고른다. scene 은 엔딩의 장면이다(모델이 쓴다). unlock 이면 계정의 엔딩 기록과 갤러리에 남는다.\nhint 는 못 본 사람에게 보이는 한 줄이다. 못 본 엔딩의 이름은 story 가 내려보내지 않는다.",
+        "properties": {
+          "hint": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Hint",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "scene": {
+            "$ref": "#/components/schemas/Scene"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/app__worlds__schemas__Trigger"
+          },
+          "unlock": {
+            "default": true,
+            "title": "Unlock",
+            "type": "boolean"
+          },
+          "when": {
+            "$ref": "#/components/schemas/Conditions",
+            "default": {
+              "items": [],
+              "match": "all"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "trigger",
+          "scene"
+        ],
+        "title": "Ending",
+        "type": "object"
+      },
+      "EndingDocument": {
+        "additionalProperties": false,
+        "description": "엔딩 하나. 판의 차례가 맞춰 보는 차례다.",
+        "properties": {
+          "hint": {
+            "title": "Hint",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "scene": {
+            "$ref": "#/components/schemas/SceneDocument"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/app__worlds__documents__TriggerDocument"
+          },
+          "unlock": {
+            "title": "Unlock",
+            "type": "boolean"
+          },
+          "when": {
+            "$ref": "#/components/schemas/ConditionsDocument"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "trigger",
+          "when",
+          "scene",
+          "unlock",
+          "hint"
+        ],
+        "title": "EndingDocument",
+        "type": "object"
+      },
+      "EndingTrigger": {
+        "description": "엔딩의 판정이 무엇으로 시작되는가(story.md 의 \"고백과 엔딩\").\n그 인물에게 고백 성공(confess_success, target: 인물), 실패(confess_fail, target: 인물),\n기한이 지났다(deadline, target 없음), 그 이벤트가 열렸다(event, target: 이벤트).\n시작이 일어나면 그 시작의 엔딩을 적은 차례로 맞춰 보고 처음 맞는 것 하나를 고른다.",
+        "enum": [
+          "confess_success",
+          "confess_fail",
+          "deadline",
+          "event"
+        ],
+        "title": "EndingTrigger",
         "type": "string"
       },
       "Event": {
@@ -4198,47 +4406,6 @@
         "title": "TimeOfDay",
         "type": "string"
       },
-      "Trigger": {
-        "additionalProperties": false,
-        "description": "호감도를 바꾸는 사용자의 행동. target 은 그 물건이나 장소의 id 다.",
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/TriggerKind"
-          },
-          "target": {
-            "maxLength": 40,
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Target",
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind",
-          "target"
-        ],
-        "title": "Trigger",
-        "type": "object"
-      },
-      "TriggerDocument": {
-        "additionalProperties": false,
-        "description": "호감도를 바꾸는 행동(종류, 대상).",
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/TriggerKind"
-          },
-          "target": {
-            "title": "Target",
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind",
-          "target"
-        ],
-        "title": "TriggerDocument",
-        "type": "object"
-      },
       "TriggerKind": {
         "description": "호감도를 바꾸는 사용자의 행동. TRPG 의 퀘스트 조건과 같은 (종류, 대상) 모양이다.\n물건을 건넸다(give_item), 장소에 갔다(reach_place), 물건을 썼다(use_item).",
         "enum": [
@@ -4391,6 +4558,40 @@
         "title": "WithdrawalResult",
         "type": "object"
       },
+      "WorldCopy": {
+        "description": "story 서버에 내주는 판. 세션을 시작할 때 가져가 고정한다.\n가져간 쪽은 번호를 적어 두고, 지금의 번호(WorldVersionNumber)가 크면 \"새 판이 있다\"를 알린다.",
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/WorldDocument"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "rating",
+          "published_at",
+          "document"
+        ],
+        "title": "WorldCopy",
+        "type": "object"
+      },
       "WorldCreate": {
         "additionalProperties": false,
         "description": "세계관을 만들 때 받는 값. 이름만 필수다. 시간대는 아침, 낮, 저녁, 밤에서 시작한다. 처음에는 비공개다.",
@@ -4420,6 +4621,15 @@
               }
             ],
             "title": "Deadline Days"
+          },
+          "endings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Ending"
+            },
+            "maxItems": 30,
+            "title": "Endings",
+            "type": "array"
           },
           "events": {
             "default": [],
@@ -4622,6 +4832,13 @@
             ],
             "title": "Deadline Days"
           },
+          "endings": {
+            "items": {
+              "$ref": "#/components/schemas/Ending"
+            },
+            "title": "Endings",
+            "type": "array"
+          },
           "events": {
             "items": {
               "$ref": "#/components/schemas/Event"
@@ -4784,6 +5001,7 @@
           "start_items",
           "cast",
           "events",
+          "endings",
           "lorebooks",
           "latest_version",
           "published_at",
@@ -4817,6 +5035,14 @@
               }
             ],
             "title": "Deadline Days"
+          },
+          "endings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EndingDocument"
+            },
+            "title": "Endings",
+            "type": "array"
           },
           "events": {
             "default": [],
@@ -5328,6 +5554,21 @@
             ],
             "title": "Deadline Days"
           },
+          "endings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Ending"
+                },
+                "maxItems": 30,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endings"
+          },
           "events": {
             "anyOf": [
               {
@@ -5599,6 +5840,26 @@
         "title": "WorldVersionDetail",
         "type": "object"
       },
+      "WorldVersionNumber": {
+        "description": "세계관의 지금 판 번호. 화면을 열 때 한 번 묻는다. 문서는 싣지 않는다.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version"
+        ],
+        "title": "WorldVersionNumber",
+        "type": "object"
+      },
       "WorldVersionSummary": {
         "description": "판의 목록에 싣는 값. 굳힌 문서는 싣지 않는다.",
         "properties": {
@@ -5650,6 +5911,47 @@
         "title": "StartItemDocument",
         "type": "object"
       },
+      "app__characters__documents__TriggerDocument": {
+        "additionalProperties": false,
+        "description": "호감도를 바꾸는 행동(종류, 대상).",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/TriggerKind"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "TriggerDocument",
+        "type": "object"
+      },
+      "app__characters__schemas__Trigger": {
+        "additionalProperties": false,
+        "description": "호감도를 바꾸는 사용자의 행동. target 은 그 물건이나 장소의 id 다.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/TriggerKind"
+          },
+          "target": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "Trigger",
+        "type": "object"
+      },
       "app__worlds__documents__StartItemDocument": {
         "additionalProperties": false,
         "description": "사용자가 처음에 가진 물건과 그 수.",
@@ -5668,6 +5970,60 @@
           "count"
         ],
         "title": "StartItemDocument",
+        "type": "object"
+      },
+      "app__worlds__documents__TriggerDocument": {
+        "additionalProperties": false,
+        "description": "엔딩의 시작. 기한은 target 이 없다.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/EndingTrigger"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "TriggerDocument",
+        "type": "object"
+      },
+      "app__worlds__schemas__Trigger": {
+        "additionalProperties": false,
+        "description": "엔딩의 시작. 고백 성공과 실패는 인물, 이벤트는 이벤트의 id 를 target 에 적는다. 기한은 target 이 없다.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/EndingTrigger"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "Trigger",
         "type": "object"
       }
     },
@@ -7660,6 +8016,126 @@
           }
         ],
         "summary": "Read Revision",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
+    "/api/v1/asset/service/{caller}/worlds/{world_id}/latest": {
+      "get": {
+        "description": "토큰의 주인이 쓸 수 있는 세계관의 마지막 판.",
+        "operationId": "copy_latest_api_v1_asset_service__caller__worlds__world_id__latest_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "caller",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Caller",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldCopy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Copy Latest",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
+    "/api/v1/asset/service/{caller}/worlds/{world_id}/latest/number": {
+      "get": {
+        "description": "토큰의 주인이 쓸 수 있는 세계관의 마지막 판의 번호.",
+        "operationId": "read_latest_number_api_v1_asset_service__caller__worlds__world_id__latest_number_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "caller",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Caller",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldVersionNumber"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Latest Number",
         "tags": [
           "service"
         ],

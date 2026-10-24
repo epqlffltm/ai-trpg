@@ -78,12 +78,22 @@ async def test_the_signature_is_checked_before_the_token(client: AsyncClient, re
     assert signed.json() != BAD_SIGNATURE
 
 
+def at_run_time(wrong: dict) -> dict:
+    """
+    drift(초)를 테스트가 도는 때의 sent_at 으로 바꾼다. 수집할 때 시각을 굳히면 스위트가 길어질수록
+    "너무 새" 서명이 허용 범위 안으로 들어온다.
+    """
+    if 'drift' not in wrong:
+        return wrong
+    return {'sent_at': int(time.time()) + wrong['drift']}
+
+
 @pytest.mark.parametrize(
     'wrong',
     [
         {'secret': 'a-different-secret-0123456789abcdef'},
-        {'sent_at': int(time.time()) - TOLERANCE_SECONDS - 60},
-        {'sent_at': int(time.time()) + TOLERANCE_SECONDS + 60},
+        {'drift': -TOLERANCE_SECONDS - 60},
+        {'drift': TOLERANCE_SECONDS + 60},
         {'signed_as': f'{API_PREFIX}/service/chat/personas/{uuid.UUID(int=1)}/revision'},
         # 모르는 서버. 비밀이 없으니 chat 의 비밀로 서명해도 받지 않는다
         {'caller': 'story'},
@@ -91,7 +101,7 @@ async def test_the_signature_is_checked_before_the_token(client: AsyncClient, re
     ids=['wrong-secret', 'too-old', 'too-new', 'another-path', 'unknown-caller'],
 )
 async def test_refuses_signatures_it_cannot_accept(client: AsyncClient, mine: dict, revision: str, wrong: dict):
-    response = await signed_get(client, revision, mine, **wrong)
+    response = await signed_get(client, revision, mine, **at_run_time(wrong))
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == BAD_SIGNATURE
@@ -179,9 +189,9 @@ async def test_every_service_route_needs_the_signature(app: FastAPI, client: Asy
     ]
     answers = {}
     for method, path in routes:
-        url = path.format(caller='chat', persona_id=some_id, character_id=some_id, public_id=some_id)
+        url = path.format(caller='chat', persona_id=some_id, character_id=some_id, world_id=some_id, public_id=some_id)
         answer = await client.request(method, url, headers=mine, json={'withdrawn_at': '2026-10-28T03:00:00Z'})
         answers[(method, path)] = (answer.status_code, answer.json())
 
-    assert len(routes) == 5
+    assert len(routes) == 7
     assert answers == {route: (status.HTTP_401_UNAUTHORIZED, BAD_SIGNATURE) for route in routes}

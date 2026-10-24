@@ -68,3 +68,18 @@ async def find_version(session: AsyncSession, world_id: uuid.UUID, number: int) 
     """세계관의 판 하나. 없으면 None."""
     query = select(WorldVersion).where(WorldVersion.world_id == world_id, WorldVersion.number == number)
     return await session.scalar(query)
+
+
+def latest_join():
+    """세계관과 그 마지막 판을 잇는 조건. 게시한 적이 없는 세계관은 이어지지 않는다."""
+    return (WorldVersion.world_id == World.id) & (WorldVersion.number == World.latest_version)
+
+
+async def find_latest(session: AsyncSession, world_id: uuid.UUID) -> tuple[World, WorldVersion] | None:
+    """
+    세계관 하나와 그 마지막 판. 주인과 공개 범위를 가리지 않는다. 없거나 게시한 적이 없으면 None.
+    story 서버에 판을 내줄 때 쓴다. 쓸 수 있는 사람인지는 서비스가 본다.
+    """
+    query = select(World, WorldVersion).join(WorldVersion, latest_join()).where(World.id == world_id)
+    row = (await session.execute(query)).first()
+    return None if row is None else (row[0], row[1])
