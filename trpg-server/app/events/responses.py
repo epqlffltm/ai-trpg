@@ -155,6 +155,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.PLACE_SEARCHED: ('round', 'character_name', 'place', 'found', 'items'),
     # 문은 맵에 보이는 것이다. 무슨 열쇠로 했는지는 적지 않는다(#281)
     EventType.DOOR_CHANGED: ('round', 'user_id', 'character_name', 'act', 'device', 'from', 'to'),
+    # 무작위 조우로 나온 무리는 일행이 서 있는 곳에 나오므로 공개다. 마리의 숫자(HP, 능력치)는 적지 않는다(#283)
+    EventType.MONSTERS_APPEARED: ('round', 'place', 'monster', 'count', 'cause', 'surprise'),
     # 쉰 것과 그 회복, 깨진 까닭은 공개다. HP 는 다른 회복과 같이 보인다
     EventType.CHARACTER_RESTED: (
         'round',

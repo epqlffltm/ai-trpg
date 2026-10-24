@@ -51,6 +51,7 @@ from app.rounds.narrator import (
     Verdict,
     WaitNote,
     WakeNote,
+    WanderNote,
     WornNote,
 )
 from app.rounds.time_words import duration_text
@@ -251,7 +252,12 @@ def describe_death_save(note: DeathSaveNote) -> str:
 
 # 휴식의 길이와, 휴식이 깨진 까닭을 서술자에게 주는 말
 REST_LENGTHS = {'short': '짧은 휴식', 'long': '긴 휴식'}
-REST_BREAKS = {'hurt': '맞아서 쉬지 못했다', 'downed': '쓰러져 쉬지 못했다', 'dead': '죽어 쉬지 못했다'}
+REST_BREAKS = {
+    'hurt': '맞아서 쉬지 못했다',
+    'downed': '쓰러져 쉬지 못했다',
+    'dead': '죽어 쉬지 못했다',
+    'ambushed': '몬스터가 덮쳐 쉬지 못했다',
+}
 
 
 def describe_rest(note: RestNote) -> str:
@@ -282,6 +288,18 @@ def describe_wait(note: WaitNote) -> str:
     if not note.waited:
         return f'(기다리기: {asked}. {WAIT_BREAKS.get(note.reason, "시간이 건너뛰지 않았다")})'
     return f'(기다리기: {asked})'
+
+
+def describe_wander(note: WanderNote) -> str:
+    """
+    무작위 조우로 나온 무리를 한 줄로 적는다(#283). 엔진이 굴려 놓았다. 쉬는 중이었으면 덮쳐 쉬기가 깨졌다.
+
+    예: (조우: 수로 쥐 3마리가 나타났다)
+        (조우: 쉬는 중에 해골 병사 1마리가 덮쳤다)
+    """
+    if note.cause == 'rest':
+        return f'(조우: 쉬는 중에 {note.monster} {note.count}마리가 덮쳤다)'
+    return f'(조우: {note.monster} {note.count}마리가 나타났다)'
 
 
 def describe_cover(note: CoverNote) -> str:
@@ -710,6 +728,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_wait(move.wait))
     if move.cover is not None:
         parts.append(describe_cover(move.cover))
+    if move.wander is not None:
+        parts.append(describe_wander(move.wander))
     if move.death_save is not None:
         parts.append(describe_death_save(move.death_save))
     if move.revival is not None:
