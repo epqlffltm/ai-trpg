@@ -147,3 +147,25 @@ async def find_public(
     )
     row = (await session.execute(query)).first()
     return None if row is None else (row[0], row[1])
+
+
+async def latest_owned(
+    session: AsyncSession, owner_id: uuid.UUID, character_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, tuple[Character, CharacterVersion | None]]:
+    """
+    그 가운데 이 사람의 캐릭터와 그 마지막 판(게시한 적이 없으면 None). 남의 것이나 없는 것은 빠진다.
+    세계관을 게시할 때 인물에 복사할 것을 찾는다(app/worlds/service.py). 한 번의 쿼리다.
+    """
+    query = (
+        select(Character, CharacterVersion)
+        .outerjoin(CharacterVersion, latest_join())
+        .where(Character.owner_id == owner_id, Character.id.in_(character_ids))
+    )
+    rows = await session.execute(query)
+    return {character.id: (character, version) for character, version in rows.all()}
+
+
+async def owned_ids(session: AsyncSession, owner_id: uuid.UUID, character_ids: Sequence[uuid.UUID]) -> set[uuid.UUID]:
+    """그 가운데 이 사람의 캐릭터인 것들의 id. 세계관의 인물이 가리킬 수 있는지 본다."""
+    query = select(Character.id).where(Character.owner_id == owner_id, Character.id.in_(character_ids))
+    return set(await session.scalars(query))

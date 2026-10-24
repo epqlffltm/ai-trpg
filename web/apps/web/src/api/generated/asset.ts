@@ -586,6 +586,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset/worlds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Worlds
+         * @description 자기 세계관의 목록. 최근에 고친 것부터다.
+         */
+        get: operations["list_worlds_api_v1_asset_worlds_get"];
+        put?: never;
+        /**
+         * Create World
+         * @description 세계관을 만든다. 처음에는 비공개다. 1~2단계에는 운영자만 만든다(403 operator_only).
+         */
+        post: operations["create_world_api_v1_asset_worlds_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/worlds/{world_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read World
+         * @description 자기 세계관의 초안 하나.
+         */
+        get: operations["read_world_api_v1_asset_worlds__world_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete World
+         * @description 자기 세계관을 지운다. 판도 함께 지워진다.
+         */
+        delete: operations["delete_world_api_v1_asset_worlds__world_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update World
+         * @description 자기 세계관의 초안을 고친다. 보낸 칸만 바뀐다. 공개로 두는 것은 운영자만이다(PUBLIC_FOR_EVERYONE 이면 누구나).
+         */
+        patch: operations["update_world_api_v1_asset_worlds__world_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/asset/worlds/{world_id}/publish-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Publish
+         * @description 게시해 보기. 막히는 이유, 알리는 것, 소개에서 걸러질 것을 본다. 판은 생기지 않는다.
+         */
+        get: operations["check_publish_api_v1_asset_worlds__world_id__publish_check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/worlds/{world_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Versions
+         * @description 자기 세계관의 판들. 최근 것부터다.
+         */
+        get: operations["list_versions_api_v1_asset_worlds__world_id__versions_get"];
+        put?: never;
+        /**
+         * Publish
+         * @description 게시한다. 새 판과 소개에서 걸러 낸 것들, 알리는 것들을 돌려준다. 막는 것이 있으면 409 다.
+         */
+        post: operations["publish_api_v1_asset_worlds__world_id__versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/worlds/{world_id}/versions/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Version
+         * @description 자기 세계관의 판 하나. 굳힌 문서까지다.
+         */
+        get: operations["read_version_api_v1_asset_worlds__world_id__versions__number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -715,6 +831,126 @@ export interface components {
             on: components["schemas"]["TriggerDocument"];
             /** Once */
             once: boolean;
+        };
+        /**
+         * AfterEnding
+         * @description 엔딩 뒤에 세션이 어떻게 되는가(story.md 의 "세션과 기록"). 끝(읽기만) 또는 후일담.
+         * @enum {string}
+         */
+        AfterEnding: "end" | "epilogue";
+        /**
+         * CastAffection
+         * @description 인물의 호감도. 값 하나(0~100)와 단계들이다. chat 의 호감도와 보이는 방식과 단계가 같다.
+         *     바뀌는 길은 선물의 규칙과 이벤트의 효과(두 번째 조각)다. 대화의 내용만으로는 움직이지 않는다(story.md 의 "호감도").
+         */
+        CastAffection: {
+            /** @default number */
+            display: components["schemas"]["AffectionDisplay"];
+            /**
+             * Gifts
+             * @default []
+             */
+            gifts: components["schemas"]["Gift"][];
+            /** Stages */
+            stages: components["schemas"]["Stage"][];
+            /**
+             * Start
+             * @default 0
+             */
+            start: number;
+        };
+        /**
+         * CastAffectionDocument
+         * @description 인물의 호감도.
+         */
+        CastAffectionDocument: {
+            display: components["schemas"]["AffectionDisplay"];
+            /** Gifts */
+            gifts: components["schemas"]["GiftDocument"][];
+            /** Stages */
+            stages: components["schemas"]["StageDocument"][];
+            /** Start */
+            start: number;
+        };
+        /**
+         * CastCharacterDocument
+         * @description 인물에 복사한 캐릭터. id 와 version 은 캐릭터와 그 판의 번호다(어디서 왔는지 적어 둔다).
+         *     캐릭터의 판 가운데 story 에 쓰는 칸만이다. intro_html 은 캐릭터를 게시할 때 거른 것이다.
+         */
+        CastCharacterDocument: {
+            /** Age */
+            age: string;
+            /** Gender */
+            gender: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Intro Html */
+            intro_html: string;
+            /** Name */
+            name: string;
+            /** Speech Examples */
+            speech_examples: string;
+            /** Sprites */
+            sprites: components["schemas"]["SpriteDocument"][];
+            /** Version */
+            version: number;
+        };
+        /**
+         * CastDocument
+         * @description 인물 하나. 보이기(reveal, map, panel)는 기본을 채운 정해진 값이다.
+         */
+        CastDocument: {
+            affection: components["schemas"]["CastAffectionDocument"];
+            character: components["schemas"]["CastCharacterDocument"];
+            /** Home */
+            home: string | null;
+            /** Id */
+            id: string;
+            map: components["schemas"]["MapPresence"];
+            /** Map Stage */
+            map_stage: string | null;
+            /** Panel */
+            panel: components["schemas"]["PanelField"][];
+            reveal: components["schemas"]["Reveal"];
+            /** Schedule */
+            schedule: components["schemas"]["ScheduleLineDocument"][];
+        };
+        /**
+         * CastMember
+         * @description 인물 하나. character_id 는 만든 사람의 캐릭터다. 게시할 때 그 마지막 판의 story 에 쓰는 칸을 복사한다.
+         *     id 는 세계관 안에서 고유하고 조건과 일정이 가리킨다. 판이 바뀌어도 같은 인물은 같은 id 로 둔다.
+         *
+         *     home 은 기본 장소다. 비우면 어디에도 없다(이벤트로만 나온다). schedule 은 기본 장소를 덮어쓰는 일정이다.
+         *     reveal, map, panel 은 보이기의 덮어쓰기다. 비우면 세계관의 기본을 쓴다.
+         *     map_stage 는 지도에 보이는 호감도의 단계다. 이 인물의 지도가 stage 일 때 쓴다.
+         */
+        CastMember: {
+            affection: components["schemas"]["CastAffection"];
+            /**
+             * Character Id
+             * Format: uuid
+             */
+            character_id: string;
+            /** Home */
+            home?: string | null;
+            /** Id */
+            id: string;
+            map?: components["schemas"]["MapPresence"] | null;
+            /** Map Stage */
+            map_stage?: string | null;
+            /** Panel */
+            panel?: components["schemas"]["PanelField"][] | null;
+            reveal?: components["schemas"]["Reveal"] | null;
+            /**
+             * Schedule
+             * @default []
+             */
+            schedule: components["schemas"]["ScheduleLine"][];
         };
         /**
          * CharacterCopy
@@ -946,7 +1182,7 @@ export interface components {
              * Start Items
              * @default []
              */
-            start_items: components["schemas"]["StartItemDocument"][];
+            start_items: components["schemas"]["app__characters__documents__StartItemDocument"][];
             /** Start Place */
             start_place?: string | null;
             /** Starts */
@@ -1047,6 +1283,77 @@ export interface components {
             version: number;
         };
         /**
+         * Condition
+         * @description 조건 하나(story.md 의 "조건"). 종류(kind)마다 쓰는 칸이 다르다(CONDITION_FIELDS).
+         *     target 은 장소, 물건, 인물, 시간대의 id 다. value 는 물건의 id(건넸다)나 호감도 단계의 이름이다.
+         *     count 는 물건의 수(가졌다)나 날짜(n일째)다. 쓰지 않는 칸은 적지 않는다.
+         */
+        Condition: {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            kind: components["schemas"]["ConditionKind"];
+            /** Target */
+            target?: string | null;
+            /** Value */
+            value?: string | null;
+        };
+        /**
+         * ConditionDocument
+         * @description 조건 하나. 종류마다 쓰는 칸이 다르다(app/worlds/models.py 의 ConditionKind).
+         */
+        ConditionDocument: {
+            /** Count */
+            count: number;
+            kind: components["schemas"]["ConditionKind"];
+            /** Target */
+            target: string | null;
+            /** Value */
+            value: string | null;
+        };
+        /**
+         * ConditionKind
+         * @description 조건 하나가 무엇을 보는가(story.md 의 "조건"). 엔진(story 서버)이 이미 아는 사실만 본다.
+         *
+         *     종류마다 쓰는 칸이 정해져 있다(app/worlds/schemas.py 의 Condition).
+         *       reach_place        target: 장소          사용자가 그 장소에 있다
+         *       hold_item          target: 물건, count   그 물건을 count 개 이상 가졌다
+         *       gave_item          target: 인물, value: 물건   그 인물에게 그 물건을 건넨 적이 있다
+         *       affection_at_least target: 인물, value: 단계   그 인물의 호감도가 그 단계 이상이다
+         *       affection_below    target: 인물, value: 단계   그 인물의 호감도가 그 단계보다 아래다
+         *       day_at_least       count                 n일째 이상이다
+         *       day_at_most        count                 n일째 이하다
+         *       slot_is            target: 시간대        지금의 시간대가 그것이다
+         *       accompanied        target: 인물          그 인물과 동행 중이다
+         *     이벤트를 봤다(event_seen)는 이벤트를 만드는 두 번째 조각에서 더한다.
+         * @enum {string}
+         */
+        ConditionKind: "reach_place" | "hold_item" | "gave_item" | "affection_at_least" | "affection_below" | "day_at_least" | "day_at_most" | "slot_is" | "accompanied";
+        /**
+         * Conditions
+         * @description 조건 목록과 맞추는 법. 목록이 비면 늘 맞는다.
+         */
+        Conditions: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["Condition"][];
+            /** @default all */
+            match: components["schemas"]["Match"];
+        };
+        /**
+         * ConditionsDocument
+         * @description 조건 목록과 맞추는 법. 목록이 비면 늘 맞는다.
+         */
+        ConditionsDocument: {
+            /** Items */
+            items: components["schemas"]["ConditionDocument"][];
+            match: components["schemas"]["Match"];
+        };
+        /**
          * EventScene
          * @description 이벤트 씬 하나(#669). 조건이 맞은 뒤의 첫 응답에 붙어 배경과 캐릭터를 대신한다(chat).
          *     collectible 이면 해금 대상이다. 한 번 열면 계정에 남고 갤러리와 소개의 칸에 보인다.
@@ -1093,6 +1400,38 @@ export interface components {
             /** Title */
             title: string;
             when: components["schemas"]["SceneConditionDocument"];
+        };
+        /**
+         * Gift
+         * @description 선물의 규칙 하나. 그 물건을 건네면 호감도를 change 만큼 바꾼다(0~100 안으로 자른다).
+         *     once 면 그 가지에서 처음 한 번만이다. id 는 인물 안에서 고유하고, story 가 "이미 했다"를 적는다.
+         */
+        Gift: {
+            /** Change */
+            change: number;
+            /** Id */
+            id: string;
+            /** Item */
+            item: string;
+            /**
+             * Once
+             * @default false
+             */
+            once: boolean;
+        };
+        /**
+         * GiftDocument
+         * @description 선물의 규칙 하나.
+         */
+        GiftDocument: {
+            /** Change */
+            change: number;
+            /** Id */
+            id: string;
+            /** Item */
+            item: string;
+            /** Once */
+            once: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1436,6 +1775,18 @@ export interface components {
             number: number;
         };
         /**
+         * MapPresence
+         * @description 지도에 인물이 있는 곳을 보이는가. 보임, 숨김, 호감도가 정한 단계 이상일 때만(stage).
+         * @enum {string}
+         */
+        MapPresence: "shown" | "hidden" | "stage";
+        /**
+         * Match
+         * @description 조건 목록을 맞추는 법. 모두, 또는 하나라도(TRPG 의 퀘스트와 같다).
+         * @enum {string}
+         */
+        Match: "all" | "any";
+        /**
          * MeResponse
          * @description 토큰의 주인.
          */
@@ -1506,6 +1857,12 @@ export interface components {
             /** Hidden */
             hidden: boolean;
         };
+        /**
+         * PanelField
+         * @description 인물 창에 보이는 항목. 소개, 나이, 성별, 호감도.
+         * @enum {string}
+         */
+        PanelField: "intro" | "age" | "gender" | "affection";
         /**
          * Path
          * @description 두 장소(a, b) 사이의 길. 양쪽으로 다닌다. minutes 는 걸리는 시간(분)이고 그만큼 시각이 흐른다.
@@ -1910,6 +2267,12 @@ export interface components {
          */
         ReportReason: "spam" | "abuse" | "sexual" | "minor" | "illegal" | "other";
         /**
+         * Reveal
+         * @description 인물을 사람에게 어떻게 보이는가. 보임, 실루엣(이름과 그림을 가린다), 숨김(목록에 없다).
+         * @enum {string}
+         */
+        Reveal: "shown" | "silhouette" | "hidden";
+        /**
          * SceneCondition
          * @description 이벤트 씬이 나오는 조건. target 은 장소나 물건의 id, 또는 호감도 단계의 이름이다.
          */
@@ -1935,6 +2298,80 @@ export interface components {
          * @enum {string}
          */
         SceneWhen: "reach_place" | "give_item" | "affection_stage";
+        /**
+         * ScheduleLine
+         * @description 일정의 줄 하나(story.md 의 "인물과 장면"). 그 시간대에 조건이 맞으면 그 장소에 있다.
+         *     위에 적은 줄부터 맞춰 본다. 맞는 줄이 없으면 기본 장소(home)다.
+         */
+        ScheduleLine: {
+            /** Place */
+            place: string;
+            /** Slot */
+            slot: string;
+            /**
+             * @default {
+             *       "items": [],
+             *       "match": "all"
+             *     }
+             */
+            when: components["schemas"]["Conditions"];
+        };
+        /**
+         * ScheduleLineDocument
+         * @description 일정의 줄 하나. 위의 줄부터 맞춰 본다.
+         */
+        ScheduleLineDocument: {
+            /** Place */
+            place: string;
+            /** Slot */
+            slot: string;
+            when: components["schemas"]["ConditionsDocument"];
+        };
+        /**
+         * Show
+         * @description 보이기의 기본. 인물의 공개, 지도에 인물을 보이는지, 인물 창의 항목이다. 인물마다 덮어쓴다.
+         */
+        Show: {
+            /** @default shown */
+            map: components["schemas"]["MapPresence"];
+            /**
+             * Panel
+             * @default [
+             *       "intro",
+             *       "age",
+             *       "gender",
+             *       "affection"
+             *     ]
+             */
+            panel: components["schemas"]["PanelField"][];
+            /** @default shown */
+            reveal: components["schemas"]["Reveal"];
+        };
+        /**
+         * Slot
+         * @description 시간대 하나. start_hour 는 이 시간대가 시작하는 시각(몇 시)이다. 다음 시간대가 시작할 때까지 이 시간대다.
+         *     마지막 시간대는 자정을 넘어 첫 시간대가 시작할 때까지다(story.md 의 "시각").
+         */
+        Slot: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Start Hour */
+            start_hour: number;
+        };
+        /**
+         * SlotDocument
+         * @description 시간대 하나. start_hour 부터 다음 시간대가 시작할 때까지다.
+         */
+        SlotDocument: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Start Hour */
+            start_hour: number;
+        };
         /**
          * Sprite
          * @description 캐릭터 그림 하나. 배경이 투명한 서 있는 그림이고, 대화의 그림 창에서 배경 위에 겹친다.
@@ -2035,16 +2472,6 @@ export interface components {
              * Count
              * @default 1
              */
-            count: number;
-            /** Item */
-            item: string;
-        };
-        /**
-         * StartItemDocument
-         * @description 사용자가 처음에 가진 물건(item 은 물건의 id)과 그 수.
-         */
-        StartItemDocument: {
-            /** Count */
             count: number;
             /** Item */
             item: string;
@@ -2163,6 +2590,472 @@ export interface components {
              * @constant
              */
             status: "processed";
+        };
+        /**
+         * WorldCreate
+         * @description 세계관을 만들 때 받는 값. 이름만 필수다. 시간대는 아침, 낮, 저녁, 밤에서 시작한다. 처음에는 비공개다.
+         */
+        WorldCreate: {
+            /** @default end */
+            after_ending: components["schemas"]["AfterEnding"];
+            /**
+             * Cast
+             * @default []
+             */
+            cast: components["schemas"]["CastMember"][];
+            /** Deadline Days */
+            deadline_days?: number | null;
+            /** Image Id */
+            image_id?: string | null;
+            /**
+             * Intro Html
+             * @default
+             */
+            intro_html: string;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["WorldItem"][];
+            /**
+             * Lorebooks
+             * @default []
+             */
+            lorebooks: string[];
+            /** Name */
+            name: string;
+            /**
+             * Paths
+             * @default []
+             */
+            paths: components["schemas"]["Path"][];
+            /**
+             * Places
+             * @default []
+             */
+            places: components["schemas"]["WorldPlace"][];
+            /** @default all */
+            rating: components["schemas"]["Rating"];
+            /**
+             * @default {
+             *       "map": "shown",
+             *       "panel": [
+             *         "intro",
+             *         "age",
+             *         "gender",
+             *         "affection"
+             *       ],
+             *       "reveal": "shown"
+             *     }
+             */
+            show: components["schemas"]["Show"];
+            /**
+             * Slots
+             * @default [
+             *       {
+             *         "id": "morning",
+             *         "name": "아침",
+             *         "start_hour": 7
+             *       },
+             *       {
+             *         "id": "day",
+             *         "name": "낮",
+             *         "start_hour": 11
+             *       },
+             *       {
+             *         "id": "evening",
+             *         "name": "저녁",
+             *         "start_hour": 17
+             *       },
+             *       {
+             *         "id": "night",
+             *         "name": "밤",
+             *         "start_hour": 21
+             *       }
+             *     ]
+             */
+            slots: components["schemas"]["Slot"][];
+            /**
+             * Start Items
+             * @default []
+             */
+            start_items: components["schemas"]["StartItem"][];
+            /** Start Place */
+            start_place?: string | null;
+            /** Start Slot */
+            start_slot?: string | null;
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+        };
+        /**
+         * WorldDetail
+         * @description 세계관의 초안 하나. 만든 사람만 본다. latest_version 은 마지막으로 게시한 판의 번호다(없으면 null).
+         */
+        WorldDetail: {
+            after_ending: components["schemas"]["AfterEnding"];
+            /** Cast */
+            cast: components["schemas"]["CastMember"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Deadline Days */
+            deadline_days: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Intro Html */
+            intro_html: string;
+            /** Items */
+            items: components["schemas"]["WorldItem"][];
+            /** Latest Version */
+            latest_version: number | null;
+            /** Lorebooks */
+            lorebooks: string[];
+            /** Name */
+            name: string;
+            /** Paths */
+            paths: components["schemas"]["Path"][];
+            /** Places */
+            places: components["schemas"]["WorldPlace"][];
+            /** Published At */
+            published_at: string | null;
+            rating: components["schemas"]["Rating"];
+            show: components["schemas"]["Show"];
+            /** Slots */
+            slots: components["schemas"]["Slot"][];
+            /** Start Items */
+            start_items: components["schemas"]["StartItem"][];
+            /** Start Place */
+            start_place: string | null;
+            /** Start Slot */
+            start_slot: string | null;
+            /** Tags */
+            tags: string[];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            visibility: components["schemas"]["Visibility"];
+        };
+        /**
+         * WorldDocument
+         * @description 판에 굳힌 세계관. intro_html 은 허용 목록으로 거른 소개다.
+         */
+        WorldDocument: {
+            after_ending: components["schemas"]["AfterEnding"];
+            /** Cast */
+            cast: components["schemas"]["CastDocument"][];
+            /** Deadline Days */
+            deadline_days: number | null;
+            /** Format */
+            format: number;
+            /** Image Id */
+            image_id: string | null;
+            /** Intro Html */
+            intro_html: string;
+            /** Items */
+            items: components["schemas"]["WorldItemDocument"][];
+            /** Lorebooks */
+            lorebooks: components["schemas"]["LorebookCopyDocument"][];
+            /** Name */
+            name: string;
+            /** Paths */
+            paths: components["schemas"]["PathDocument"][];
+            /** Places */
+            places: components["schemas"]["WorldPlaceDocument"][];
+            rating: components["schemas"]["Rating"];
+            /** Slots */
+            slots: components["schemas"]["SlotDocument"][];
+            /** Start Items */
+            start_items: components["schemas"]["app__worlds__documents__StartItemDocument"][];
+            /** Start Place */
+            start_place: string;
+            /** Start Slot */
+            start_slot: string;
+            /** Tags */
+            tags: string[];
+        };
+        /**
+         * WorldItem
+         * @description 물건 하나. consumable 이면 쓰면 하나 없어진다. 건네는 것과 호감도는 인물의 선물 규칙이 정한다.
+         */
+        WorldItem: {
+            /**
+             * Consumable
+             * @default false
+             */
+            consumable: boolean;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id?: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * WorldItemDocument
+         * @description 물건 하나.
+         */
+        WorldItemDocument: {
+            /** Consumable */
+            consumable: boolean;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * WorldPage
+         * @description 목록의 한 쪽과 전체 개수.
+         */
+        WorldPage: {
+            /** Items */
+            items: components["schemas"]["WorldSummary"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * WorldPlace
+         * @description 장소 하나. 캐릭터의 장소와 같고, 시간대마다의 배경(backgrounds)의 열쇠가 그 세계관의 시간대 id 다.
+         *     그 시간대의 배경이 없으면 기본 배경(image_id)을 쓴다.
+         */
+        WorldPlace: {
+            /**
+             * Backgrounds
+             * @default {}
+             */
+            backgrounds: {
+                [key: string]: string;
+            };
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id?: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * WorldPlaceDocument
+         * @description 장소 하나. backgrounds 의 열쇠는 시간대의 id 다.
+         */
+        WorldPlaceDocument: {
+            /**
+             * Backgrounds
+             * @default {}
+             */
+            backgrounds: {
+                [key: string]: string;
+            };
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * WorldPublishCheck
+         * @description 지금 게시하면 막히는 이유, 알리는 것, 걸러질 것. 판을 만들지 않는다.
+         *
+         *     problems 는 게시가 409 로 돌려주는 것과 같은 이름이다. 비어 있으면 게시할 수 있다(ready).
+         *     warnings 는 막지 않는다(닿지 않는 장소 등, 2026-10-24 유저 결정).
+         */
+        WorldPublishCheck: {
+            /** Problems */
+            problems: string[];
+            /** Ready */
+            ready: boolean;
+            /** Removed */
+            removed: components["schemas"]["RemovedItem"][];
+            /** Warnings */
+            warnings: string[];
+        };
+        /**
+         * WorldPublishResult
+         * @description 게시한 결과. 새 판과, 소개에서 걸러 낸 것들(removed), 알리는 것들(warnings)이다.
+         *
+         *     걸러 낸 것과 알리는 것이 있어도 게시는 된다. 화면이 제작자에게 보인다.
+         */
+        WorldPublishResult: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            document: components["schemas"]["WorldDocument"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string;
+            /** Number */
+            number: number;
+            /** Removed */
+            removed: components["schemas"]["RemovedItem"][];
+            /** Warnings */
+            warnings: string[];
+        };
+        /**
+         * WorldSummary
+         * @description 내 세계관 목록의 한 줄.
+         */
+        WorldSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Latest Version */
+            latest_version: number | null;
+            /** Name */
+            name: string;
+            rating: components["schemas"]["Rating"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            visibility: components["schemas"]["Visibility"];
+        };
+        /**
+         * WorldUpdate
+         * @description 세계관을 고칠 때 받는 값. 보낸 칸만 바꾼다. 초안만 바뀐다. 게시한 판은 그대로다.
+         *
+         *     null 은 그림, 시작 장소와 시간대, 기한만 받는다. 공개 범위(visibility)도 여기서 바꾼다(공개는 운영자만, 1~2단계).
+         */
+        WorldUpdate: {
+            after_ending?: components["schemas"]["AfterEnding"] | null;
+            /** Cast */
+            cast?: components["schemas"]["CastMember"][] | null;
+            /** Deadline Days */
+            deadline_days?: number | null;
+            /** Image Id */
+            image_id?: string | null;
+            /** Intro Html */
+            intro_html?: string | null;
+            /** Items */
+            items?: components["schemas"]["WorldItem"][] | null;
+            /** Lorebooks */
+            lorebooks?: string[] | null;
+            /** Name */
+            name?: string | null;
+            /** Paths */
+            paths?: components["schemas"]["Path"][] | null;
+            /** Places */
+            places?: components["schemas"]["WorldPlace"][] | null;
+            rating?: components["schemas"]["Rating"] | null;
+            show?: components["schemas"]["Show"] | null;
+            /** Slots */
+            slots?: components["schemas"]["Slot"][] | null;
+            /** Start Items */
+            start_items?: components["schemas"]["StartItem"][] | null;
+            /** Start Place */
+            start_place?: string | null;
+            /** Start Slot */
+            start_slot?: string | null;
+            /** Tags */
+            tags?: string[] | null;
+            visibility?: components["schemas"]["Visibility"] | null;
+        };
+        /**
+         * WorldVersionCreate
+         * @description 게시할 때 받는 값. 이번 판에서 무엇이 바뀌었는지 적는다(비워도 된다).
+         */
+        WorldVersionCreate: {
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /**
+         * WorldVersionDetail
+         * @description 판 하나. 굳힌 문서까지 싣는다.
+         */
+        WorldVersionDetail: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            document: components["schemas"]["WorldDocument"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string;
+            /** Number */
+            number: number;
+        };
+        /**
+         * WorldVersionSummary
+         * @description 판의 목록에 싣는 값. 굳힌 문서는 싣지 않는다.
+         */
+        WorldVersionSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string;
+            /** Number */
+            number: number;
+        };
+        /**
+         * StartItemDocument
+         * @description 사용자가 처음에 가진 물건(item 은 물건의 id)과 그 수.
+         */
+        app__characters__documents__StartItemDocument: {
+            /** Count */
+            count: number;
+            /** Item */
+            item: string;
+        };
+        /**
+         * StartItemDocument
+         * @description 사용자가 처음에 가진 물건과 그 수.
+         */
+        app__worlds__documents__StartItemDocument: {
+            /** Count */
+            count: number;
+            /** Item */
+            item: string;
         };
     };
     responses: never;
@@ -3352,6 +4245,295 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonaRevision"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_worlds_api_v1_asset_worlds_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_world_api_v1_asset_worlds_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorldCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_world_api_v1_asset_worlds__world_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_world_api_v1_asset_worlds__world_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_world_api_v1_asset_worlds__world_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorldUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_publish_api_v1_asset_worlds__world_id__publish_check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldPublishCheck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_versions_api_v1_asset_worlds__world_id__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldVersionSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_api_v1_asset_worlds__world_id__versions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorldVersionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldPublishResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_version_api_v1_asset_worlds__world_id__versions__number__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldVersionDetail"];
                 };
             };
             /** @description Validation Error */

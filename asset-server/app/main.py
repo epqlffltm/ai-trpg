@@ -61,6 +61,9 @@ from app.ratings import AdultContentRequiredError, handle_adult_content_required
 from app.reports import router as reports
 from app.reports.service import AlreadyReportedError, OwnCharacterReportError
 from app.withdrawal import router as withdrawal
+from app.worlds import router as worlds
+from app.worlds.publishing import WorldNotReadyError
+from app.worlds.service import CharacterNotOwnedError, WorldNotFoundError
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
 API_PREFIX = '/api/v1/asset'
@@ -186,6 +189,11 @@ def create_app(
 
     app.include_router(lorebooks.router, prefix=API_PREFIX)
     app.add_exception_handler(LorebookNotFoundError, lorebooks.handle_lorebook_not_found)
+    # story 의 세계관의 초안과 판(#591, 화면 명세 D7). 만든 사람만 다룬다
+    app.include_router(worlds.router, prefix=API_PREFIX)
+    app.add_exception_handler(WorldNotFoundError, worlds.handle_world_not_found)
+    app.add_exception_handler(WorldNotReadyError, worlds.handle_world_not_ready)
+    app.add_exception_handler(CharacterNotOwnedError, worlds.handle_character_not_owned)
 
     app.include_router(images.router, prefix=API_PREFIX)
 

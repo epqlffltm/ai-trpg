@@ -160,6 +160,326 @@
         "title": "AffectionRuleDocument",
         "type": "object"
       },
+      "AfterEnding": {
+        "description": "엔딩 뒤에 세션이 어떻게 되는가(story.md 의 \"세션과 기록\"). 끝(읽기만) 또는 후일담.",
+        "enum": [
+          "end",
+          "epilogue"
+        ],
+        "title": "AfterEnding",
+        "type": "string"
+      },
+      "CastAffection": {
+        "additionalProperties": false,
+        "description": "인물의 호감도. 값 하나(0~100)와 단계들이다. chat 의 호감도와 보이는 방식과 단계가 같다.\n바뀌는 길은 선물의 규칙과 이벤트의 효과(두 번째 조각)다. 대화의 내용만으로는 움직이지 않는다(story.md 의 \"호감도\").",
+        "properties": {
+          "display": {
+            "$ref": "#/components/schemas/AffectionDisplay",
+            "default": "number"
+          },
+          "gifts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Gift"
+            },
+            "maxItems": 50,
+            "title": "Gifts",
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/Stage"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Stages",
+            "type": "array"
+          },
+          "start": {
+            "default": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "stages"
+        ],
+        "title": "CastAffection",
+        "type": "object"
+      },
+      "CastAffectionDocument": {
+        "additionalProperties": false,
+        "description": "인물의 호감도.",
+        "properties": {
+          "display": {
+            "$ref": "#/components/schemas/AffectionDisplay"
+          },
+          "gifts": {
+            "items": {
+              "$ref": "#/components/schemas/GiftDocument"
+            },
+            "title": "Gifts",
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageDocument"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "start": {
+            "title": "Start",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "display",
+          "start",
+          "stages",
+          "gifts"
+        ],
+        "title": "CastAffectionDocument",
+        "type": "object"
+      },
+      "CastCharacterDocument": {
+        "additionalProperties": false,
+        "description": "인물에 복사한 캐릭터. id 와 version 은 캐릭터와 그 판의 번호다(어디서 왔는지 적어 둔다).\n캐릭터의 판 가운데 story 에 쓰는 칸만이다. intro_html 은 캐릭터를 게시할 때 거른 것이다.",
+        "properties": {
+          "age": {
+            "title": "Age",
+            "type": "string"
+          },
+          "gender": {
+            "title": "Gender",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "intro_html": {
+            "title": "Intro Html",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "speech_examples": {
+            "title": "Speech Examples",
+            "type": "string"
+          },
+          "sprites": {
+            "items": {
+              "$ref": "#/components/schemas/SpriteDocument"
+            },
+            "title": "Sprites",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "name",
+          "intro_html",
+          "speech_examples",
+          "age",
+          "gender",
+          "image_id",
+          "sprites"
+        ],
+        "title": "CastCharacterDocument",
+        "type": "object"
+      },
+      "CastDocument": {
+        "additionalProperties": false,
+        "description": "인물 하나. 보이기(reveal, map, panel)는 기본을 채운 정해진 값이다.",
+        "properties": {
+          "affection": {
+            "$ref": "#/components/schemas/CastAffectionDocument"
+          },
+          "character": {
+            "$ref": "#/components/schemas/CastCharacterDocument"
+          },
+          "home": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "map": {
+            "$ref": "#/components/schemas/MapPresence"
+          },
+          "map_stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map Stage"
+          },
+          "panel": {
+            "items": {
+              "$ref": "#/components/schemas/PanelField"
+            },
+            "title": "Panel",
+            "type": "array"
+          },
+          "reveal": {
+            "$ref": "#/components/schemas/Reveal"
+          },
+          "schedule": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleLineDocument"
+            },
+            "title": "Schedule",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "character",
+          "home",
+          "schedule",
+          "affection",
+          "reveal",
+          "map",
+          "map_stage",
+          "panel"
+        ],
+        "title": "CastDocument",
+        "type": "object"
+      },
+      "CastMember": {
+        "additionalProperties": false,
+        "description": "인물 하나. character_id 는 만든 사람의 캐릭터다. 게시할 때 그 마지막 판의 story 에 쓰는 칸을 복사한다.\nid 는 세계관 안에서 고유하고 조건과 일정이 가리킨다. 판이 바뀌어도 같은 인물은 같은 id 로 둔다.\n\nhome 은 기본 장소다. 비우면 어디에도 없다(이벤트로만 나온다). schedule 은 기본 장소를 덮어쓰는 일정이다.\nreveal, map, panel 은 보이기의 덮어쓰기다. 비우면 세계관의 기본을 쓴다.\nmap_stage 는 지도에 보이는 호감도의 단계다. 이 인물의 지도가 stage 일 때 쓴다.",
+        "properties": {
+          "affection": {
+            "$ref": "#/components/schemas/CastAffection"
+          },
+          "character_id": {
+            "format": "uuid",
+            "title": "Character Id",
+            "type": "string"
+          },
+          "home": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "map": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapPresence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "map_stage": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map Stage"
+          },
+          "panel": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PanelField"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Panel"
+          },
+          "reveal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reveal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedule": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ScheduleLine"
+            },
+            "maxItems": 20,
+            "title": "Schedule",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "character_id",
+          "affection"
+        ],
+        "title": "CastMember",
+        "type": "object"
+      },
       "CharacterCopy": {
         "description": "다른 서버(chat, story)에 내주는 판. 대화를 시작할 때 가져가 고정한다.\n\n마지막 판의 번호와 문서다. 가져간 쪽은 번호를 적어 두고,\n지금의 번호(CharacterVersionNumber)가 크면 \"새 판이 있다\"를 알린다.",
         "properties": {
@@ -684,7 +1004,7 @@
           "start_items": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/StartItemDocument"
+              "$ref": "#/components/schemas/app__characters__documents__StartItemDocument"
             },
             "title": "Start Items",
             "type": "array"
@@ -1106,6 +1426,156 @@
         "title": "CharacterVersionNumber",
         "type": "object"
       },
+      "Condition": {
+        "additionalProperties": false,
+        "description": "조건 하나(story.md 의 \"조건\"). 종류(kind)마다 쓰는 칸이 다르다(CONDITION_FIELDS).\ntarget 은 장소, 물건, 인물, 시간대의 id 다. value 는 물건의 id(건넸다)나 호감도 단계의 이름이다.\ncount 는 물건의 수(가졌다)나 날짜(n일째)다. 쓰지 않는 칸은 적지 않는다.",
+        "properties": {
+          "count": {
+            "default": 1,
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ConditionKind"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "Condition",
+        "type": "object"
+      },
+      "ConditionDocument": {
+        "additionalProperties": false,
+        "description": "조건 하나. 종류마다 쓰는 칸이 다르다(app/worlds/models.py 의 ConditionKind).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ConditionKind"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "kind",
+          "target",
+          "value",
+          "count"
+        ],
+        "title": "ConditionDocument",
+        "type": "object"
+      },
+      "ConditionKind": {
+        "description": "조건 하나가 무엇을 보는가(story.md 의 \"조건\"). 엔진(story 서버)이 이미 아는 사실만 본다.\n\n종류마다 쓰는 칸이 정해져 있다(app/worlds/schemas.py 의 Condition).\n  reach_place        target: 장소          사용자가 그 장소에 있다\n  hold_item          target: 물건, count   그 물건을 count 개 이상 가졌다\n  gave_item          target: 인물, value: 물건   그 인물에게 그 물건을 건넨 적이 있다\n  affection_at_least target: 인물, value: 단계   그 인물의 호감도가 그 단계 이상이다\n  affection_below    target: 인물, value: 단계   그 인물의 호감도가 그 단계보다 아래다\n  day_at_least       count                 n일째 이상이다\n  day_at_most        count                 n일째 이하다\n  slot_is            target: 시간대        지금의 시간대가 그것이다\n  accompanied        target: 인물          그 인물과 동행 중이다\n이벤트를 봤다(event_seen)는 이벤트를 만드는 두 번째 조각에서 더한다.",
+        "enum": [
+          "reach_place",
+          "hold_item",
+          "gave_item",
+          "affection_at_least",
+          "affection_below",
+          "day_at_least",
+          "day_at_most",
+          "slot_is",
+          "accompanied"
+        ],
+        "title": "ConditionKind",
+        "type": "string"
+      },
+      "Conditions": {
+        "additionalProperties": false,
+        "description": "조건 목록과 맞추는 법. 목록이 비면 늘 맞는다.",
+        "properties": {
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Condition"
+            },
+            "maxItems": 10,
+            "title": "Items",
+            "type": "array"
+          },
+          "match": {
+            "$ref": "#/components/schemas/Match",
+            "default": "all"
+          }
+        },
+        "title": "Conditions",
+        "type": "object"
+      },
+      "ConditionsDocument": {
+        "additionalProperties": false,
+        "description": "조건 목록과 맞추는 법. 목록이 비면 늘 맞는다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ConditionDocument"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "match": {
+            "$ref": "#/components/schemas/Match"
+          }
+        },
+        "required": [
+          "match",
+          "items"
+        ],
+        "title": "ConditionsDocument",
+        "type": "object"
+      },
       "EventScene": {
         "additionalProperties": false,
         "description": "이벤트 씬 하나(#669). 조건이 맞은 뒤의 첫 응답에 붙어 배경과 캐릭터를 대신한다(chat).\ncollectible 이면 해금 대상이다. 한 번 열면 계정에 남고 갤러리와 소개의 칸에 보인다.\n아니면 이야기 중에만 나온다(칸도 보이지 않는다). description 은 그 답을 쓸 때 모델이 읽는 장면의 설명이다.",
@@ -1190,6 +1660,74 @@
           "when"
         ],
         "title": "EventSceneDocument",
+        "type": "object"
+      },
+      "Gift": {
+        "additionalProperties": false,
+        "description": "선물의 규칙 하나. 그 물건을 건네면 호감도를 change 만큼 바꾼다(0~100 안으로 자른다).\nonce 면 그 가지에서 처음 한 번만이다. id 는 인물 안에서 고유하고, story 가 \"이미 했다\"를 적는다.",
+        "properties": {
+          "change": {
+            "maximum": 20.0,
+            "minimum": -20.0,
+            "title": "Change",
+            "type": "integer"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "item": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Item",
+            "type": "string"
+          },
+          "once": {
+            "default": false,
+            "title": "Once",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "item",
+          "change"
+        ],
+        "title": "Gift",
+        "type": "object"
+      },
+      "GiftDocument": {
+        "additionalProperties": false,
+        "description": "선물의 규칙 하나.",
+        "properties": {
+          "change": {
+            "title": "Change",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "item": {
+            "title": "Item",
+            "type": "string"
+          },
+          "once": {
+            "title": "Once",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "item",
+          "change",
+          "once"
+        ],
+        "title": "GiftDocument",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -1893,6 +2431,25 @@
         "title": "LorebookVersionSummary",
         "type": "object"
       },
+      "MapPresence": {
+        "description": "지도에 인물이 있는 곳을 보이는가. 보임, 숨김, 호감도가 정한 단계 이상일 때만(stage).",
+        "enum": [
+          "shown",
+          "hidden",
+          "stage"
+        ],
+        "title": "MapPresence",
+        "type": "string"
+      },
+      "Match": {
+        "description": "조건 목록을 맞추는 법. 모두, 또는 하나라도(TRPG 의 퀘스트와 같다).",
+        "enum": [
+          "all",
+          "any"
+        ],
+        "title": "Match",
+        "type": "string"
+      },
       "MeResponse": {
         "description": "토큰의 주인.",
         "properties": {
@@ -2022,6 +2579,17 @@
         ],
         "title": "OutcomeResult",
         "type": "object"
+      },
+      "PanelField": {
+        "description": "인물 창에 보이는 항목. 소개, 나이, 성별, 호감도.",
+        "enum": [
+          "intro",
+          "age",
+          "gender",
+          "affection"
+        ],
+        "title": "PanelField",
+        "type": "string"
       },
       "Path": {
         "additionalProperties": false,
@@ -2871,6 +3439,16 @@
         "title": "ReportReason",
         "type": "string"
       },
+      "Reveal": {
+        "description": "인물을 사람에게 어떻게 보이는가. 보임, 실루엣(이름과 그림을 가린다), 숨김(목록에 없다).",
+        "enum": [
+          "shown",
+          "silhouette",
+          "hidden"
+        ],
+        "title": "Reveal",
+        "type": "string"
+      },
       "SceneCondition": {
         "additionalProperties": false,
         "description": "이벤트 씬이 나오는 조건. target 은 장소나 물건의 id, 또는 호감도 단계의 이름이다.",
@@ -2920,6 +3498,149 @@
         ],
         "title": "SceneWhen",
         "type": "string"
+      },
+      "ScheduleLine": {
+        "additionalProperties": false,
+        "description": "일정의 줄 하나(story.md 의 \"인물과 장면\"). 그 시간대에 조건이 맞으면 그 장소에 있다.\n위에 적은 줄부터 맞춰 본다. 맞는 줄이 없으면 기본 장소(home)다.",
+        "properties": {
+          "place": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Place",
+            "type": "string"
+          },
+          "slot": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Slot",
+            "type": "string"
+          },
+          "when": {
+            "$ref": "#/components/schemas/Conditions",
+            "default": {
+              "items": [],
+              "match": "all"
+            }
+          }
+        },
+        "required": [
+          "slot",
+          "place"
+        ],
+        "title": "ScheduleLine",
+        "type": "object"
+      },
+      "ScheduleLineDocument": {
+        "additionalProperties": false,
+        "description": "일정의 줄 하나. 위의 줄부터 맞춰 본다.",
+        "properties": {
+          "place": {
+            "title": "Place",
+            "type": "string"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string"
+          },
+          "when": {
+            "$ref": "#/components/schemas/ConditionsDocument"
+          }
+        },
+        "required": [
+          "slot",
+          "place",
+          "when"
+        ],
+        "title": "ScheduleLineDocument",
+        "type": "object"
+      },
+      "Show": {
+        "additionalProperties": false,
+        "description": "보이기의 기본. 인물의 공개, 지도에 인물을 보이는지, 인물 창의 항목이다. 인물마다 덮어쓴다.",
+        "properties": {
+          "map": {
+            "$ref": "#/components/schemas/MapPresence",
+            "default": "shown"
+          },
+          "panel": {
+            "default": [
+              "intro",
+              "age",
+              "gender",
+              "affection"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PanelField"
+            },
+            "title": "Panel",
+            "type": "array"
+          },
+          "reveal": {
+            "$ref": "#/components/schemas/Reveal",
+            "default": "shown"
+          }
+        },
+        "title": "Show",
+        "type": "object"
+      },
+      "Slot": {
+        "additionalProperties": false,
+        "description": "시간대 하나. start_hour 는 이 시간대가 시작하는 시각(몇 시)이다. 다음 시간대가 시작할 때까지 이 시간대다.\n마지막 시간대는 자정을 넘어 첫 시간대가 시작할 때까지다(story.md 의 \"시각\").",
+        "properties": {
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "start_hour": {
+            "exclusiveMaximum": 24.0,
+            "minimum": 0.0,
+            "title": "Start Hour",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "start_hour"
+        ],
+        "title": "Slot",
+        "type": "object"
+      },
+      "SlotDocument": {
+        "additionalProperties": false,
+        "description": "시간대 하나. start_hour 부터 다음 시간대가 시작할 때까지다.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "start_hour": {
+            "title": "Start Hour",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "start_hour"
+        ],
+        "title": "SlotDocument",
+        "type": "object"
       },
       "Sprite": {
         "additionalProperties": false,
@@ -3128,26 +3849,6 @@
         "title": "StartItem",
         "type": "object"
       },
-      "StartItemDocument": {
-        "additionalProperties": false,
-        "description": "사용자가 처음에 가진 물건(item 은 물건의 id)과 그 수.",
-        "properties": {
-          "count": {
-            "title": "Count",
-            "type": "integer"
-          },
-          "item": {
-            "title": "Item",
-            "type": "string"
-          }
-        },
-        "required": [
-          "item",
-          "count"
-        ],
-        "title": "StartItemDocument",
-        "type": "object"
-      },
       "TimeOfDay": {
         "description": "하루의 어느 때. 장소의 시간대 배경을 고르는 열쇠다.\n경계는 TRPG 와 같다(trpg-server 의 app/calendar/clock.py, 2026-10-22 유저 결정). 계산은 chat 이 한다.",
         "enum": [
@@ -3351,6 +4052,1245 @@
           }
         },
         "title": "WithdrawalResult",
+        "type": "object"
+      },
+      "WorldCreate": {
+        "additionalProperties": false,
+        "description": "세계관을 만들 때 받는 값. 이름만 필수다. 시간대는 아침, 낮, 저녁, 밤에서 시작한다. 처음에는 비공개다.",
+        "properties": {
+          "after_ending": {
+            "$ref": "#/components/schemas/AfterEnding",
+            "default": "end"
+          },
+          "cast": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CastMember"
+            },
+            "maxItems": 20,
+            "title": "Cast",
+            "type": "array"
+          },
+          "deadline_days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline Days"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "intro_html": {
+            "default": "",
+            "title": "Intro Html",
+            "type": "string"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WorldItem"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "lorebooks": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 3,
+            "title": "Lorebooks",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "paths": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Path"
+            },
+            "maxItems": 150,
+            "title": "Paths",
+            "type": "array"
+          },
+          "places": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/WorldPlace"
+            },
+            "maxItems": 50,
+            "title": "Places",
+            "type": "array"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating",
+            "default": "all"
+          },
+          "show": {
+            "$ref": "#/components/schemas/Show",
+            "default": {
+              "map": "shown",
+              "panel": [
+                "intro",
+                "age",
+                "gender",
+                "affection"
+              ],
+              "reveal": "shown"
+            }
+          },
+          "slots": {
+            "default": [
+              {
+                "id": "morning",
+                "name": "아침",
+                "start_hour": 7
+              },
+              {
+                "id": "day",
+                "name": "낮",
+                "start_hour": 11
+              },
+              {
+                "id": "evening",
+                "name": "저녁",
+                "start_hour": 17
+              },
+              {
+                "id": "night",
+                "name": "밤",
+                "start_hour": 21
+              }
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Slot"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Slots",
+            "type": "array"
+          },
+          "start_items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/StartItem"
+            },
+            "maxItems": 20,
+            "title": "Start Items",
+            "type": "array"
+          },
+          "start_place": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Place"
+          },
+          "start_slot": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Slot"
+          },
+          "tags": {
+            "default": [],
+            "items": {
+              "maxLength": 20,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "WorldCreate",
+        "type": "object"
+      },
+      "WorldDetail": {
+        "description": "세계관의 초안 하나. 만든 사람만 본다. latest_version 은 마지막으로 게시한 판의 번호다(없으면 null).",
+        "properties": {
+          "after_ending": {
+            "$ref": "#/components/schemas/AfterEnding"
+          },
+          "cast": {
+            "items": {
+              "$ref": "#/components/schemas/CastMember"
+            },
+            "title": "Cast",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deadline_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline Days"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "intro_html": {
+            "title": "Intro Html",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorldItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "lorebooks": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Lorebooks",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "paths": {
+            "items": {
+              "$ref": "#/components/schemas/Path"
+            },
+            "title": "Paths",
+            "type": "array"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/WorldPlace"
+            },
+            "title": "Places",
+            "type": "array"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "show": {
+            "$ref": "#/components/schemas/Show"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/Slot"
+            },
+            "title": "Slots",
+            "type": "array"
+          },
+          "start_items": {
+            "items": {
+              "$ref": "#/components/schemas/StartItem"
+            },
+            "title": "Start Items",
+            "type": "array"
+          },
+          "start_place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Place"
+          },
+          "start_slot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Slot"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "intro_html",
+          "tags",
+          "image_id",
+          "rating",
+          "visibility",
+          "slots",
+          "start_slot",
+          "deadline_days",
+          "after_ending",
+          "show",
+          "places",
+          "paths",
+          "start_place",
+          "items",
+          "start_items",
+          "cast",
+          "lorebooks",
+          "latest_version",
+          "published_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorldDetail",
+        "type": "object"
+      },
+      "WorldDocument": {
+        "additionalProperties": false,
+        "description": "판에 굳힌 세계관. intro_html 은 허용 목록으로 거른 소개다.",
+        "properties": {
+          "after_ending": {
+            "$ref": "#/components/schemas/AfterEnding"
+          },
+          "cast": {
+            "items": {
+              "$ref": "#/components/schemas/CastDocument"
+            },
+            "title": "Cast",
+            "type": "array"
+          },
+          "deadline_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline Days"
+          },
+          "format": {
+            "title": "Format",
+            "type": "integer"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "intro_html": {
+            "title": "Intro Html",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorldItemDocument"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "lorebooks": {
+            "items": {
+              "$ref": "#/components/schemas/LorebookCopyDocument"
+            },
+            "title": "Lorebooks",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "paths": {
+            "items": {
+              "$ref": "#/components/schemas/PathDocument"
+            },
+            "title": "Paths",
+            "type": "array"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/WorldPlaceDocument"
+            },
+            "title": "Places",
+            "type": "array"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/SlotDocument"
+            },
+            "title": "Slots",
+            "type": "array"
+          },
+          "start_items": {
+            "items": {
+              "$ref": "#/components/schemas/app__worlds__documents__StartItemDocument"
+            },
+            "title": "Start Items",
+            "type": "array"
+          },
+          "start_place": {
+            "title": "Start Place",
+            "type": "string"
+          },
+          "start_slot": {
+            "title": "Start Slot",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "format",
+          "name",
+          "intro_html",
+          "tags",
+          "rating",
+          "image_id",
+          "slots",
+          "start_slot",
+          "deadline_days",
+          "after_ending",
+          "places",
+          "paths",
+          "start_place",
+          "items",
+          "start_items",
+          "cast",
+          "lorebooks"
+        ],
+        "title": "WorldDocument",
+        "type": "object"
+      },
+      "WorldItem": {
+        "additionalProperties": false,
+        "description": "물건 하나. consumable 이면 쓰면 하나 없어진다. 건네는 것과 호감도는 인물의 선물 규칙이 정한다.",
+        "properties": {
+          "consumable": {
+            "default": false,
+            "title": "Consumable",
+            "type": "boolean"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "WorldItem",
+        "type": "object"
+      },
+      "WorldItemDocument": {
+        "additionalProperties": false,
+        "description": "물건 하나.",
+        "properties": {
+          "consumable": {
+            "title": "Consumable",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "consumable",
+          "image_id"
+        ],
+        "title": "WorldItemDocument",
+        "type": "object"
+      },
+      "WorldPage": {
+        "description": "목록의 한 쪽과 전체 개수.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorldSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "WorldPage",
+        "type": "object"
+      },
+      "WorldPlace": {
+        "additionalProperties": false,
+        "description": "장소 하나. 캐릭터의 장소와 같고, 시간대마다의 배경(backgrounds)의 열쇠가 그 세계관의 시간대 id 다.\n그 시간대의 배경이 없으면 기본 배경(image_id)을 쓴다.",
+        "properties": {
+          "backgrounds": {
+            "default": {},
+            "patternProperties": {
+              "^[A-Za-z0-9_-]+$": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 40,
+              "minLength": 1
+            },
+            "title": "Backgrounds",
+            "type": "object"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "WorldPlace",
+        "type": "object"
+      },
+      "WorldPlaceDocument": {
+        "additionalProperties": false,
+        "description": "장소 하나. backgrounds 의 열쇠는 시간대의 id 다.",
+        "properties": {
+          "backgrounds": {
+            "additionalProperties": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "default": {},
+            "title": "Backgrounds",
+            "type": "object"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "image_id"
+        ],
+        "title": "WorldPlaceDocument",
+        "type": "object"
+      },
+      "WorldPublishCheck": {
+        "description": "지금 게시하면 막히는 이유, 알리는 것, 걸러질 것. 판을 만들지 않는다.\n\nproblems 는 게시가 409 로 돌려주는 것과 같은 이름이다. 비어 있으면 게시할 수 있다(ready).\nwarnings 는 막지 않는다(닿지 않는 장소 등, 2026-10-24 유저 결정).",
+        "properties": {
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/RemovedItem"
+            },
+            "title": "Removed",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ready",
+          "problems",
+          "warnings",
+          "removed"
+        ],
+        "title": "WorldPublishCheck",
+        "type": "object"
+      },
+      "WorldPublishResult": {
+        "description": "게시한 결과. 새 판과, 소개에서 걸러 낸 것들(removed), 알리는 것들(warnings)이다.\n\n걸러 낸 것과 알리는 것이 있어도 게시는 된다. 화면이 제작자에게 보인다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document": {
+            "$ref": "#/components/schemas/WorldDocument"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/RemovedItem"
+            },
+            "title": "Removed",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "note",
+          "created_at",
+          "document",
+          "removed",
+          "warnings"
+        ],
+        "title": "WorldPublishResult",
+        "type": "object"
+      },
+      "WorldSummary": {
+        "description": "내 세계관 목록의 한 줄.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "rating",
+          "visibility",
+          "latest_version",
+          "updated_at"
+        ],
+        "title": "WorldSummary",
+        "type": "object"
+      },
+      "WorldUpdate": {
+        "additionalProperties": false,
+        "description": "세계관을 고칠 때 받는 값. 보낸 칸만 바꾼다. 초안만 바뀐다. 게시한 판은 그대로다.\n\nnull 은 그림, 시작 장소와 시간대, 기한만 받는다. 공개 범위(visibility)도 여기서 바꾼다(공개는 운영자만, 1~2단계).",
+        "properties": {
+          "after_ending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AfterEnding"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cast": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CastMember"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cast"
+          },
+          "deadline_days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline Days"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "intro_html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intro Html"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WorldItem"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
+          "lorebooks": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "maxItems": 3,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lorebooks"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "paths": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Path"
+                },
+                "maxItems": 150,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paths"
+          },
+          "places": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WorldPlace"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Places"
+          },
+          "rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Rating"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "show": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Show"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "slots": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Slot"
+                },
+                "maxItems": 8,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slots"
+          },
+          "start_items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StartItem"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Items"
+          },
+          "start_place": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Place"
+          },
+          "start_slot": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Slot"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 20,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Visibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "WorldUpdate",
+        "type": "object"
+      },
+      "WorldVersionCreate": {
+        "additionalProperties": false,
+        "description": "게시할 때 받는 값. 이번 판에서 무엇이 바뀌었는지 적는다(비워도 된다).",
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "title": "WorldVersionCreate",
+        "type": "object"
+      },
+      "WorldVersionDetail": {
+        "description": "판 하나. 굳힌 문서까지 싣는다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document": {
+            "$ref": "#/components/schemas/WorldDocument"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "note",
+          "created_at",
+          "document"
+        ],
+        "title": "WorldVersionDetail",
+        "type": "object"
+      },
+      "WorldVersionSummary": {
+        "description": "판의 목록에 싣는 값. 굳힌 문서는 싣지 않는다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "note",
+          "created_at"
+        ],
+        "title": "WorldVersionSummary",
+        "type": "object"
+      },
+      "app__characters__documents__StartItemDocument": {
+        "additionalProperties": false,
+        "description": "사용자가 처음에 가진 물건(item 은 물건의 id)과 그 수.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "item": {
+            "title": "Item",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item",
+          "count"
+        ],
+        "title": "StartItemDocument",
+        "type": "object"
+      },
+      "app__worlds__documents__StartItemDocument": {
+        "additionalProperties": false,
+        "description": "사용자가 처음에 가진 물건과 그 수.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "item": {
+            "title": "Item",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item",
+          "count"
+        ],
+        "title": "StartItemDocument",
         "type": "object"
       }
     },
@@ -5347,6 +7287,485 @@
           "service"
         ],
         "x-audience": "service"
+      }
+    },
+    "/api/v1/asset/worlds": {
+      "get": {
+        "description": "자기 세계관의 목록. 최근에 고친 것부터다.",
+        "operationId": "list_worlds_api_v1_asset_worlds_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Worlds",
+        "tags": [
+          "worlds"
+        ],
+        "x-audience": "user"
+      },
+      "post": {
+        "description": "세계관을 만든다. 처음에는 비공개다. 1~2단계에는 운영자만 만든다(403 operator_only).",
+        "operationId": "create_world_api_v1_asset_worlds_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorldCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create World",
+        "tags": [
+          "worlds"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/worlds/{world_id}": {
+      "delete": {
+        "description": "자기 세계관을 지운다. 판도 함께 지워진다.",
+        "operationId": "delete_world_api_v1_asset_worlds__world_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete World",
+        "tags": [
+          "worlds"
+        ],
+        "x-audience": "user"
+      },
+      "get": {
+        "description": "자기 세계관의 초안 하나.",
+        "operationId": "read_world_api_v1_asset_worlds__world_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read World",
+        "tags": [
+          "worlds"
+        ],
+        "x-audience": "user"
+      },
+      "patch": {
+        "description": "자기 세계관의 초안을 고친다. 보낸 칸만 바뀐다. 공개로 두는 것은 운영자만이다(PUBLIC_FOR_EVERYONE 이면 누구나).",
+        "operationId": "update_world_api_v1_asset_worlds__world_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorldUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update World",
+        "tags": [
+          "worlds"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/worlds/{world_id}/publish-check": {
+      "get": {
+        "description": "게시해 보기. 막히는 이유, 알리는 것, 소개에서 걸러질 것을 본다. 판은 생기지 않는다.",
+        "operationId": "check_publish_api_v1_asset_worlds__world_id__publish_check_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldPublishCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Publish",
+        "tags": [
+          "worlds"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/worlds/{world_id}/versions": {
+      "get": {
+        "description": "자기 세계관의 판들. 최근 것부터다.",
+        "operationId": "list_versions_api_v1_asset_worlds__world_id__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorldVersionSummary"
+                  },
+                  "title": "Response List Versions Api V1 Asset Worlds  World Id  Versions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Versions",
+        "tags": [
+          "worlds"
+        ],
+        "x-audience": "user"
+      },
+      "post": {
+        "description": "게시한다. 새 판과 소개에서 걸러 낸 것들, 알리는 것들을 돌려준다. 막는 것이 있으면 409 다.",
+        "operationId": "publish_api_v1_asset_worlds__world_id__versions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorldVersionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldPublishResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Publish",
+        "tags": [
+          "worlds"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/worlds/{world_id}/versions/{number}": {
+      "get": {
+        "description": "자기 세계관의 판 하나. 굳힌 문서까지다.",
+        "operationId": "read_version_api_v1_asset_worlds__world_id__versions__number__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldVersionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Version",
+        "tags": [
+          "worlds"
+        ],
+        "x-audience": "user"
       }
     },
     "/health": {
