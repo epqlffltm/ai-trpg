@@ -20,7 +20,7 @@ export function RoomHeader({ table, stream }: { table: TableDetail; stream: Stre
       </div>
       <div className="room__head-actions">
         <StreamBadge stream={stream} />
-        {table.status === 'recruiting' ? null : <TranscriptButton table={table} />}
+        {table.status === 'recruiting' ? null : <TranscriptButton tableId={table.id} title={table.title} />}
         {table.status === 'ended' ? null : <LeaveButton tableId={table.id} />}
       </div>
     </header>
