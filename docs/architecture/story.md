@@ -258,8 +258,8 @@ chat 의 [만드는 순서](chat-server.md#만드는-순서) 1~5(대화, 한 번
 1. **세계관과 세션.** 판 가져오기(인물, 장소, 이벤트, 엔딩), 세션 만들기와 목록(했다. 판의 문서는 받은 그대로 사본에 두고, 칸을 읽는 모양은 그 칸을 쓰는 조각이 더한다).
 2. **장면의 인물.** 기본 장소, 일정, 동행의 위치 계산(했다. 엔진의 순수 함수, `story-server/app/engine/scene.py`). 여러 인물의 말(말 조각, 말하는 사람 검증).
 3. **시각.** 이동, 시간 보내기, 하루 마치기, 기한(했다. 엔진의 순수 함수, `story-server/app/engine/clock.py`, `actions.py`). 기한이 지났을 때의 엔딩은 5 다.
-4. **조건과 효과.** 조건 맞추기(했다, `story-server/app/engine/conditions.py`). 효과, 이벤트가 열리기, 선택지.
-5. **고백과 엔딩.** 고백 대기, 엔딩 판정, 계정의 기록, 게시 때의 빠짐 검사.
+4. **조건과 효과.** 조건 맞추기, 효과, 이벤트가 열리기, 선택지(했다. 엔진의 순수 함수, `story-server/app/engine/conditions.py`, `effects.py`, `events.py`).
+5. **고백과 엔딩.** 고백 대기, 엔딩 판정(했다. 엔진의 순수 함수, `story-server/app/engine/confession.py`, `endings.py`), 게시 때의 빠짐 검사(했다, asset). 계정의 기록은 말을 주고받는 조각에서 한다.
 6. **제작 도구(D7).** 운영자가 쓸 만큼(PC 폼).
 
 함수는 하나의 책임만 갖는다: `place_of_character`, `scene_cast`, `move_to`, `pass_time`, `end_day`, `match_conditions`, `open_events`, `apply_effects`, `check_confession`, `pick_ending`, `validate_speakers`.

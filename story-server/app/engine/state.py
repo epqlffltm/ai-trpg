@@ -25,6 +25,8 @@ class StoryState:
     seen 은 열린 적이 있는 이벤트, companions 는 동행 중인 인물(동행을 시작한 차례)이다.
     choosing 은 선택지를 고르기를 기다리는 이벤트다. 고르거나, 고르지 않고 다음으로 넘어가면 비운다
     (app/engine/events.py).
+    cooldowns 는 고백에 실패한 인물마다 다시 고백할 수 있는 시각이다. ending 은 이 가지에서 본 엔딩이다
+    (본 뒤에는 엔딩과 기한이 다시 일어나지 않고 고백을 받지 않는다, app/engine/endings.py).
     """
 
     minutes: int
@@ -35,6 +37,8 @@ class StoryState:
     seen: frozenset[str] = frozenset()
     companions: tuple[str, ...] = ()
     choosing: str | None = None
+    cooldowns: MappingProxyType[str, int] = field(default_factory=lambda: MappingProxyType({}))
+    ending: str | None = None
 
 
 def start_items(world: World) -> dict[str, int]:
