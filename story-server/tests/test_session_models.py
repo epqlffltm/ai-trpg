@@ -5,7 +5,7 @@
 asset 서버는 가짜다(tests/assets.py). 모델은 들여오기(tests/catalog_rows.py)로 넣고 켠다.
 
 "지금"은 테스트가 정한다(utc_now 를 바꿔 끼운다). 은퇴일을 오늘에 맞춰 시험한다.
-값과 판매는 아직 없다(결제를 붙이는 PR).
+결제 서버는 없다(가격 목록이 free). 값과 판매를 보는 것은 tests/test_model_prices.py 다.
 
 보는 것.
   - 모델 목록: 켜져 있고 은퇴하지 않은 모델만, 운영의 칸(창구, 원가) 없이. 로그인을 요구한다
@@ -13,7 +13,7 @@ asset 서버는 가짜다(tests/assets.py). 모델은 들여오기(tests/catalog
     아무것도 저장하지 않는다.
     null 이면 없이, 보내지 않으면 지난번 세션의 것. 지난번 것을 쓸 수 없으면 없이 시작한다
   - 읽기와 목록: 세션의 모델과 지금도 고를 수 있나(usable)를 싣는다. 끝난 모델을 몰래 바꾸지 않는다
-  - 바꾸기: 고를 수 있는 모델로만. 남의 세션는 404. 목록의 차례(최근의 것부터)는 그대로다
+  - 바꾸기: 고를 수 있는 모델로만. 남의 세션은 404. 목록의 차례(최근의 것부터)는 그대로다
 """
 
 import uuid
@@ -166,9 +166,10 @@ async def test_the_model_list_has_only_offered_models(client: AsyncClient, sessi
 
     response = await client.get(MODELS_URL, headers=mine)
 
-    # 꺼진 SOL 은 없다. 회사, 이름표 순서다. 창구, API 모델 이름, 원가는 싣지 않는다
+    # 꺼진 SOL 은 없다. 회사, 이름표 순서다. 창구, API 모델 이름, 원가는 싣지 않는다. 결제 서버가 없으니 값이 없다
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {
+        'free': True,
         'items': [
             {
                 'slug': 'luna',
@@ -177,6 +178,10 @@ async def test_the_model_list_has_only_offered_models(client: AsyncClient, sessi
                 'grade': 'standard',
                 'allows_adult': False,
                 'retires_on': '2026-12-01',
+                'credits': None,
+                'tier': None,
+                'promo': False,
+                'next': None,
             },
             {
                 'slug': 'nova',
@@ -185,6 +190,10 @@ async def test_the_model_list_has_only_offered_models(client: AsyncClient, sessi
                 'grade': 'standard',
                 'allows_adult': True,
                 'retires_on': None,
+                'credits': None,
+                'tier': None,
+                'promo': False,
+                'next': None,
             },
         ],
     }

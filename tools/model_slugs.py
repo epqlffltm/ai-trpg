@@ -7,7 +7,7 @@
     사용: python3 tools/model_slugs.py
 
 모델의 가격 코드는 <머리>.<이름표>.i<입력 단계>.o<출력 단계> 다. 머리는 부르는 서버마다 다르다
-(게임 서버 narration, chat 서버 chat 과 story. billing-server/README.md 의 "서버마다의 가격표").
+(게임 서버 narration, chat 서버 chat, story 서버 story. billing-server/README.md 의 "서버마다의 가격표").
 판매가는 결제 서버가, 모델과 원가는 모델 목록의 파일(shared/ai-core/src/ai_core/model_catalog.toml)이 원본이라
 둘을 따로 고친다. 이름표 하나가 어긋나면 그 값은 팔리지만 서버가 고를 수 있는 모델에 내주지 않는다(조용히 빠진다).
 

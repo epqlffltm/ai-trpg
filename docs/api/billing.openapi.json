@@ -853,7 +853,7 @@
         "type": "apiKey"
       },
       "serviceSignature": {
-        "description": "서버끼리의 서명(t=<초>,v1=<HMAC>). 게임 서버는 GAME_SERVER_SECRET, chat 서버는 CHAT_SERVER_SECRET, 인증 서버는 AUTH_SERVER_SECRET 으로 서명한다. 서버마다 열리는 주소가 다르다",
+        "description": "서버끼리의 서명(t=<초>,v1=<HMAC>). 게임 서버는 GAME_SERVER_SECRET, chat 서버는 CHAT_SERVER_SECRET, story 서버는 STORY_SERVER_SECRET, 인증 서버는 AUTH_SERVER_SECRET 으로 서명한다. 서버마다 열리는 주소가 다르다",
         "in": "header",
         "name": "X-Service-Signature",
         "type": "apiKey"

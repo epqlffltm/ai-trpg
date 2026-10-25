@@ -55,6 +55,8 @@ type Dependencies struct {
 	AuthServerSecret string
 	// ChatServerSecret 은 chat 서버가 보낸 요청의 서명을 확인하는 비밀이다. 비어 있으면 chat 서버의 요청을 받지 않는다.
 	ChatServerSecret string
+	// StoryServerSecret 은 story 서버가 보낸 요청의 서명을 확인하는 비밀이다. 비어 있으면 story 서버의 요청을 받지 않는다.
+	StoryServerSecret string
 	// CheckoutClientKey 는 개발용 결제 화면(CheckoutPath)에 실을 토스페이먼츠의 클라이언트 키다.
 	// 비어 있으면 그 화면을 열지 않는다.
 	CheckoutClientKey string
@@ -170,5 +172,6 @@ func spenderCallers(deps Dependencies) []serviceCaller {
 	return []serviceCaller{
 		{name: GameServer, secret: deps.GameServerSecret},
 		{name: ChatServer, secret: deps.ChatServerSecret},
+		{name: StoryServer, secret: deps.StoryServerSecret},
 	}
 }

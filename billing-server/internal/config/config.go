@@ -54,7 +54,7 @@ const (
 	// DefaultHoldTTL 은 홀드를 걸거나 연장한 뒤 만료될 때까지의 시간이다. 하루다.
 	// 부르는 쪽(게임 서버)이 그 안에 확정하거나 연장하지 않으면 정리 작업이 돌려준다.
 	DefaultHoldTTL = 24 * time.Hour
-	// DefaultChatHoldTTL 은 chat 서버가 건 홀드의 만료까지의 시간이다. 10분이다.
+	// DefaultChatHoldTTL 은 chat 서버와 story 서버가 건 홀드의 만료까지의 시간이다. 10분이다.
 	// 말 한 번(길게 쓰는 답이어도 몇 분)보다 넉넉하고, chat 서버가 죽었을 때 크레딧이 오래 묶이지 않는다
 	DefaultChatHoldTTL = 10 * time.Minute
 	// DefaultOrderTTL 은 주문을 만든 뒤 만료될 때까지의 시간이다. 하루다. Stripe 의 결제창(Checkout)과 같은 기본값이다.
@@ -136,7 +136,7 @@ type Settings struct {
 	FreeCreditTTL time.Duration
 	// HoldTTL 은 홀드를 걸거나 연장한 뒤 만료될 때까지의 시간이다. 바꾸면 그 뒤에 걸거나 연장한 홀드부터 적용된다.
 	HoldTTL time.Duration
-	// ChatHoldTTL 은 chat 서버가 건 홀드의 만료까지의 시간이다(CHAT_HOLD_TTL). 연장할 때도 이만큼 민다.
+	// ChatHoldTTL 은 chat 서버와 story 서버가 건 홀드의 만료까지의 시간이다(CHAT_HOLD_TTL). 연장할 때도 이만큼 민다.
 	ChatHoldTTL time.Duration
 	// OrderTTL 은 주문을 만든 뒤 만료될 때까지의 시간이다. 바꾸면 그 뒤에 만든 주문부터 적용된다.
 	OrderTTL time.Duration
@@ -156,6 +156,9 @@ type Settings struct {
 	// ChatServerSecret 은 chat 서버가 보낸 요청의 서명을 확인하는 비밀이다. chat 서버도 같은 값을 갖는다.
 	// 비어 있으면 chat 서버의 요청을 하나도 받지 않는다(chat 서버를 띄우지 않는 동안). 로그와 오류에 싣지 않는다.
 	ChatServerSecret string
+	// StoryServerSecret 은 story 서버가 보낸 요청의 서명을 확인하는 비밀이다. story 서버도 같은 값을 갖는다(BILLING_SECRET).
+	// 비어 있으면 story 서버의 요청을 하나도 받지 않는다(story 서버를 띄우지 않는 동안). 로그와 오류에 싣지 않는다.
+	StoryServerSecret string
 	// Payment 는 꽂을 결제 대행사와 그 키다.
 	Payment Payment
 }
@@ -204,7 +207,7 @@ type Rules struct {
 	SpendFreeFirst bool
 	FreeCreditTTL  time.Duration
 	HoldTTL        time.Duration
-	// ChatHoldTTL 은 chat 서버가 건 홀드의 만료까지의 시간이다. 0 이면 따로 정하지 않은 것이다(HoldTTL 그대로)
+	// ChatHoldTTL 은 chat 서버와 story 서버가 건 홀드의 만료까지의 시간이다. 0 이면 따로 정하지 않은 것이다(HoldTTL 그대로)
 	ChatHoldTTL time.Duration
 	OrderTTL    time.Duration
 }
@@ -281,13 +284,15 @@ func Load(lookup Lookup) (Settings, error) {
 	gameSecret, gameSecretErr := readSecret(lookup, "GAME_SERVER_SECRET", MinServiceSecretLength)
 	authSecret, authSecretErr := readSecret(lookup, "AUTH_SERVER_SECRET", MinServiceSecretLength)
 	chatSecret, chatSecretErr := readOptionalSecret(lookup, "CHAT_SERVER_SECRET", MinServiceSecretLength)
+	storySecret, storySecretErr := readOptionalSecret(lookup, "STORY_SERVER_SECRET", MinServiceSecretLength)
 	welcome, welcomeErr := readCredits(lookup, "WELCOME_CREDITS", DefaultWelcomeCredits, MaxWelcomeCredits)
 	attendanceSilver, attendanceErr := readSchedule(lookup, "ATTENDANCE_SILVER")
 	payment, paymentErr := loadPayment(lookup)
 
 	if err := errors.Join(
 		debugErr, portErr, dbErr, jwksErr, revocationsErr, rulesErr, loggingErr, webhookErr, welcomeErr, attendanceErr, paymentErr,
-		gameSecretErr, authSecretErr, chatSecretErr, distinctSecrets(webhookSecret, gameSecret, authSecret, chatSecret),
+		gameSecretErr, authSecretErr, chatSecretErr, storySecretErr,
+		distinctSecrets(webhookSecret, gameSecret, authSecret, chatSecret, storySecret),
 		providerAllowed(logging, payment),
 	); err != nil {
 		return Settings{}, err
@@ -316,6 +321,7 @@ func Load(lookup Lookup) (Settings, error) {
 		GameServerSecret:   gameSecret,
 		AuthServerSecret:   authSecret,
 		ChatServerSecret:   chatSecret,
+		StoryServerSecret:  storySecret,
 		Payment:            payment,
 	}, nil
 }
@@ -677,7 +683,7 @@ func distinctSecrets(secrets ...string) error {
 			continue
 		}
 		if seen[secret] {
-			return errors.New("PG_WEBHOOK_SECRET, GAME_SERVER_SECRET, AUTH_SERVER_SECRET, CHAT_SERVER_SECRET 은 서로 다른 값이어야 합니다")
+			return errors.New("PG_WEBHOOK_SECRET, GAME_SERVER_SECRET, AUTH_SERVER_SECRET, CHAT_SERVER_SECRET, STORY_SERVER_SECRET 은 서로 다른 값이어야 합니다")
 		}
 		seen[secret] = true
 	}

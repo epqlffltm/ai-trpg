@@ -40,7 +40,7 @@ func signedAs(t *testing.T, deps httpapi.Dependencies, secret string, method str
 	})
 }
 
-// mixedListing 은 게임 서버와 chat 서버의 가격표가 섞인 목록이다.
+// mixedListing 은 게임 서버, chat 서버, story 서버의 가격표가 섞인 목록이다.
 func mixedListing() []pricing.Listing {
 	listing := func(code string) pricing.Listing {
 		return pricing.Listing{Code: code, Current: &pricing.Price{Code: code, Credits: 10, Tier: pricing.TierStandard, Since: webhookNow}}
@@ -113,7 +113,7 @@ func TestEachServerListsOnlyItsOwnPrices(t *testing.T) {
 	}{
 		{"게임 서버", gameSecret, []string{"narration.a.i0.o0"}, []string{"chat.a", "story.a", "chatter.a"}},
 		// 머리는 첫 점까지 견준다. chatter 는 chat 이 아니다
-		{"chat 서버", chatSecret, []string{"chat.a.i0.o0", "story.a.i0.o0"}, []string{"narration.a", "chatter.a"}},
+		{"chat 서버", chatSecret, []string{"chat.a.i0.o0"}, []string{"narration.a", "story.a", "chatter.a"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

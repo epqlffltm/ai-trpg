@@ -24,6 +24,8 @@ const (
 	gameSecret = "do-not-print-this-trpg-server-secret"
 	// 인증 서버가 보낸 요청의 서명에 쓰는 비밀. 이것도 새면 안 된다
 	authSecret = "do-not-print-this-auth-server-secret"
+	// story 서버가 보낸 요청의 서명에 쓰는 비밀. 이것도 새면 안 된다
+	storySecret = "do-not-print-this-story-server-secret"
 	// 토스페이먼츠의 테스트 키 모양. 실제 키가 아니다. 시크릿 키는 오류에 새면 안 된다
 	tossSecretKey = "test_gsk_doNotPrintThisSecretKey01"
 	tossClientKey = "test_gck_publicClientKey01"
@@ -240,6 +242,9 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"chat 서버의 비밀이 짧다", required(map[string]string{"CHAT_SERVER_SECRET": "0123456789abcdef0123456789abcde"}), "CHAT_SERVER_SECRET"},
 		{"chat 서버의 비밀이 게임 서버의 것과 같다", required(map[string]string{"CHAT_SERVER_SECRET": gameSecret}), "서로 다른 값"},
 		{"chat 서버의 비밀이 인증 서버의 것과 같다", required(map[string]string{"CHAT_SERVER_SECRET": authSecret}), "서로 다른 값"},
+		{"story 서버의 비밀이 짧다", required(map[string]string{"STORY_SERVER_SECRET": "0123456789abcdef0123456789abcde"}), "STORY_SERVER_SECRET"},
+		{"story 서버의 비밀이 게임 서버의 것과 같다", required(map[string]string{"STORY_SERVER_SECRET": gameSecret}), "서로 다른 값"},
+		{"story 서버의 비밀이 chat 서버의 것과 같다", required(map[string]string{"CHAT_SERVER_SECRET": storySecret, "STORY_SERVER_SECRET": storySecret}), "서로 다른 값"},
 		{"알림의 비밀이 비었다", required(map[string]string{"PG_WEBHOOK_SECRET": ""}), "PG_WEBHOOK_SECRET"},
 		{"환영 크레딧이 숫자가 아니다", required(map[string]string{"WELCOME_CREDITS": "many"}), "WELCOME_CREDITS"},
 		{"환영 크레딧이 음수다", required(map[string]string{"WELCOME_CREDITS": "-1"}), "WELCOME_CREDITS"},
@@ -838,6 +843,25 @@ func TestTheChatSecretIsRead(t *testing.T) {
 	settings, err := config.Load(from(required(map[string]string{"CHAT_SERVER_SECRET": secret})))
 
 	if err != nil || settings.ChatServerSecret != secret {
+		t.Errorf("오류 = %v, 비밀이 읽히지 않았다", err)
+	}
+}
+
+func TestTheStorySecretIsOptional(t *testing.T) {
+	// story 서버를 띄우지 않는 동안은 적지 않는다. 비어 있으면 story 서버의 요청을 하나도 받지 않는다(httpapi)
+	for _, values := range []map[string]string{required(nil), required(map[string]string{"STORY_SERVER_SECRET": ""})} {
+		settings, err := config.Load(from(values))
+
+		if err != nil || settings.StoryServerSecret != "" {
+			t.Errorf("오류 = %v, 비밀 = %q", err, settings.StoryServerSecret)
+		}
+	}
+}
+
+func TestTheStorySecretIsRead(t *testing.T) {
+	settings, err := config.Load(from(required(map[string]string{"STORY_SERVER_SECRET": storySecret})))
+
+	if err != nil || settings.StoryServerSecret != storySecret || settings.ChatServerSecret != "" {
 		t.Errorf("오류 = %v, 비밀이 읽히지 않았다", err)
 	}
 }

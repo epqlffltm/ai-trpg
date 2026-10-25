@@ -6,7 +6,8 @@ story 서버의 시작점. 앱을 만들고 라우터를 붙인다.
 story 서버는 하나의 세계관 안에서 여러 인물과 나누는 이야기를 맡는다(docs/architecture/story.md).
 1:1 캐릭터 대화는 chat-server 가 맡는다.
 둘이 나눈 선은 docs/architecture/chat-server.md 의 "story-server 와 나눈 선"이다.
-지금은 상태 확인, 토큰의 주인, 모델 목록, 세션(세계관의 판을 asset 서버에서 가져와 시작한다)이 있다(#591).
+지금은 상태 확인, 토큰의 주인, 모델 목록과 값(결제 서버의 가격 목록),
+세션(세계관의 판을 asset 서버에서 가져와 시작한다)이 있다(#591).
 장면의 인물, 시각, 조건과 효과, 고백과 엔딩이 차례로 붙는다(docs/architecture/story.md 의 "만드는 순서").
 
 띄우는 법: uv run uvicorn app.main:app --port 8007 --reload
@@ -36,6 +37,9 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api import health, me, readiness
 from app.assets.client import AssetClient, AssetUnavailableError
+from app.billing import router as billing
+from app.billing.price_list import PriceListUnavailable
+from app.billing.setup import build_billing, build_price_list
 from app.catalog import router as catalog
 from app.conversations import router as conversations
 from app.conversations.service import (
@@ -133,6 +137,10 @@ def create_app(
         settings.asset_secret.get_secret_value(),
         settings.asset_timeout_seconds,
     )
+    # 결제 서버를 부르는 것과 가격 목록을 받아 두는 것(app/billing/). BILLING_URL 이 비었으면 받지 않는 것이다.
+    # 홀드는 말을 보내는 길이 쓴다. 가격 목록은 모델 목록과 모델 고르기가 쓴다
+    app.state.billing = build_billing(settings, app.state.http_client)
+    app.state.price_list = build_price_list(settings, app.state.http_client)
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
@@ -151,6 +159,7 @@ def create_app(
     app.add_exception_handler(AdultContentRequiredError, conversations.handle_adult_content_required)
     app.add_exception_handler(ModelUnavailableError, conversations.handle_model_unavailable)
     app.add_exception_handler(AssetUnavailableError, conversations.handle_asset_unavailable)
+    app.add_exception_handler(PriceListUnavailable, billing.handle_prices_unavailable)
 
     # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)
     use_input_errors(app)

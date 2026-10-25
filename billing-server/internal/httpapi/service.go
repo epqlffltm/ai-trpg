@@ -22,8 +22,10 @@ const (
 	GameServer = peers.Game
 	// AuthServer 는 인증 서버의 이름이다.
 	AuthServer = peers.Auth
-	// ChatServer 는 chat 서버의 이름이다. chat 과 story 의 말 한 번에 홀드를 건다(docs/architecture/chat-server.md).
+	// ChatServer 는 chat 서버의 이름이다. 캐릭터와 나누는 말 한 번에 홀드를 건다(docs/architecture/chat-server.md).
 	ChatServer = peers.Chat
+	// StoryServer 는 story 서버의 이름이다. 세계관 안의 세션에서 말 한 번에 홀드를 건다(docs/architecture/story.md).
+	StoryServer = peers.Story
 	// callerKey 는 서명을 확인한 서버의 이름을 요청에 실어 두는 이름이다.
 	callerKey = "service.caller"
 )

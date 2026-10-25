@@ -74,10 +74,12 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `ASSET_URL` | 비어 있음(부르지 않음) | asset 서버의 주소(`http://127.0.0.1:8006`). 세션을 시작할 때 세계관의 판을 가져온다([세션](#세션)). 비우면 세션을 시작하지 못한다(503) |
 | `ASSET_SECRET` | 비어 있음 | asset 서버에 보내는 요청에 서명하는 비밀. `asset-server/.env` 의 `STORY_SERVER_SECRET` 과 같은 값. `ASSET_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
 | `ASSET_TIMEOUT_SECONDS` | `5` | asset 서버를 한 번 부르는 시간의 상한(초, 30까지). 세션을 만드는 사람이 기다린다 |
+| `BILLING_URL` | 비어 있음(받지 않음) | 결제 서버의 주소(`http://127.0.0.1:8003`). 모델의 값을 가격 목록에서 읽는다([모델 목록](#모델-목록)). 비우면 모델은 값 없이 보인다 |
+| `BILLING_SECRET` | 비어 있음 | 결제 서버에 보내는 요청에 서명하는 비밀. `billing-server/.env` 의 `STORY_SERVER_SECRET` 과 같은 값. `BILLING_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
+| `BILLING_TIMEOUT_SECONDS` | `5` | 결제 서버를 한 번 부르는 시간의 상한(초, 10 까지). chat 서버와 같다 |
 
 DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 함께 쓰는 칸은 공용 코드의 설정(`server_core.settings.CoreSettings`)에 있다.
-`tools/fill_env.py` 가 `ASSET_SECRET` 을 짝(asset 서버의 `STORY_SERVER_SECRET`)과 같은 값으로 채운다.
-결제 서버를 부를 때의 비밀(결제 쪽은 `STORY_SERVER_SECRET`, 가격 이름의 머리 `story`)은 그 길을 만들 때 더한다.
+`tools/fill_env.py` 가 `ASSET_SECRET` 과 `BILLING_SECRET` 을 짝(asset 서버, 결제 서버의 `STORY_SERVER_SECRET`)과 같은 값으로 채운다.
 환경 변수는 다른 서버와 같은 이름을 쓰고 머리(`STORY_`)를 붙이지 않는다. 머리는 다른 서버의 설정에 들어가는 값(`STORY_SERVER_SECRET`)에만 붙인다.
 
 ## 상태 확인
@@ -95,8 +97,8 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | 방법 | 주소 | 하는 일 | 인증 |
 | --- | --- | --- | --- |
 | GET | `/api/v1/story/me` | 토큰의 주인(`{"user_id"}`, 인증 서버의 `public_id`). 토큰 검증이 이어졌는지 보는 가장 작은 주소다(게임 서버의 `GET /me` 와 같다) | access 토큰 |
-| GET | `/api/v1/story/models` | 세션에 고를 수 있는 [모델](#모델-목록)(켜져 있고 은퇴하지 않았다). 회사, 이름표 순서 | access 토큰 |
-| PUT | `/api/v1/story/conversations/{id}/model` | 세션의 모델 바꾸기(`{"model"}`). 고를 수 없으면 422 `model_unavailable` | access 토큰 |
+| GET | `/api/v1/story/models` | 세션에 고를 수 있는 [모델](#모델-목록)들과 말 한 번의 값(`{free, items}`). 켜져 있고 은퇴하지 않았고 결제 서버가 팔고 있는 것만. 회사, 이름표 순서. 가격 목록을 받지 못하면 503 `prices_unavailable` | access 토큰 |
+| PUT | `/api/v1/story/conversations/{id}/model` | 세션의 모델 바꾸기(`{"model"}`). 고를 수 없으면 422 `model_unavailable`, 가격 목록을 받지 못했으면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id"}`). 세계관의 마지막 판을 가져와 고정한다. 201 | access 토큰 |
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}` | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서까지). 남의 것은 404 | access 토큰 |
@@ -155,12 +157,21 @@ uv run python -m scripts.models enable gpt-6-luna # 켜기. 오늘의 원가가 
 uv run python -m scripts.models adult grok-5 --allow
 ```
 
-- **고를 수 있는 모델**은 켜져 있고 은퇴하지 않은 것이다. 성인 등급의 세션에는 그중 `allows_adult` 가 참인 것만이다.
+- **고를 수 있는 모델**은 켜져 있고 은퇴하지 않았고 결제 서버가 팔고 있는 것이다. 성인 등급의 세션에는 그중 `allows_adult` 가 참인 것만이다.
   약관이 성적인 콘텐츠를 막는 창구(anthropic, gemini)는 성인 스위치를 켜지 못한다.
 - **세션의 모델.** 시작할 때 `model` 을 보내지 않으면 지난번 세션의 모델을 쓴다(쓸 수 없으면 없이 시작한다).
   null 이면 없이, 이름표면 그 모델이고 고를 수 없으면 422 `model_unavailable` 이다. `PUT .../model` 로 바꾼다.
-- **몰래 바꾸지 않는다.** 고른 뒤 꺼지거나 은퇴해도 세션은 그 모델을 가리키고, 읽을 때 `usable: false` 를 싣는다. 화면이 다시 고르게 한다.
-- **값은 아직 없다.** 말 한 번의 값(결제 서버의 가격표 `story.<이름표>.i0.o0`)과 "결제 서버가 팔고 있다"는 결제를 붙이는 PR 이 더한다.
+  이름표를 골랐는데 가격 목록을 받지 못했으면 503 `prices_unavailable` 이다(값을 모르는 모델을 고르게 하지 않는다).
+  지난번 모델로 시작하는 것과 읽기는 그대로 된다. 값을 모르면 팔고 있다고 보고, 말을 보낼 때 결제 서버가 다시 본다.
+- **몰래 바꾸지 않는다.** 고른 뒤 꺼지거나 은퇴하거나 판매를 멈춰도 세션은 그 모델을 가리키고, 읽을 때 `usable: false` 를 싣는다. 화면이 다시 고르게 한다.
+- **값.** 판매가(말 한 번에 몇 크레딧)는 결제 서버의 가격표(`story.<이름표>.i0.o0`)가 정한다. 이 서버는 받은 값을 붙여 보여 줄 뿐이고,
+  실제로 빠지는 값은 홀드를 걸 때 결제 서버가 정한다. `app/billing/` 은 chat 서버의 것과 같은 코드다(가격표의 머리만 `story`).
+  - 가격 목록(`GET /api/v1/billing/service/prices`, 서명)을 받아 두고 1분쯤마다 버전(ETag)으로 다시 묻는다. 결제 서버는 이 서버의 머리(`story`)의 줄만 낸다.
+    받지 못하면 마지막 목록을 쓰고 경고를 남긴다. 한 번도 받지 못했으면 503 `prices_unavailable`(`Retry-After: 30`)이다.
+  - 모델 목록 API 의 값 칸은 chat 서버와 같다: `credits`(글자, 결제 서버 없이 돌면 null), `tier`(`premium` 이면 골드로만 낸다),
+    `promo`(행사가), `next`(예약된 바뀜. `credits` 가 null 이면 그때부터 팔지 않는다).
+  - 홀드, 확정, 반환, 연장(`app/billing/http_billing.py`)은 말을 보내는 PR 이 쓴다. 부를 때마다 `billing_calls_total` 을 센다.
+  - `BILLING_URL` 이 비면 받지 않는다(`free`). 모델은 값 없이 모두 보인다.
 - 들여오기(`app/catalog/sync.py`)는 chat 의 것과 같은 코드라 이것으로 세 벌이다(게임, chat, story). 표의 ORM 이 서버마다 달라 공용 코드로 올리려면 표의 모양까지 옮겨야 해서, 셋을 함께 고칠 일이 잦아지면 그때 올린다.
 
 ## 엔진
