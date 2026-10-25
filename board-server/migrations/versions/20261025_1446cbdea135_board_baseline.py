@@ -22,10 +22,42 @@ depends_on: str | Sequence[str] | None = None
 # 표와 칸, 제약의 이름이 그때와 같다. 발송함의 CHECK 이름만 공용 코드의 것으로 바뀌었다(뜻은 같다).
 #
 # 이미 TypeORM 이 표를 만든 DB(개발용 board 스키마)는 표를 다시 만들지 않고 넘겨받는다.
-# 그 DB 의 TypeORM 기록 표(migrations)는 더 쓰지 않으므로 지운다. 데이터는 그대로다
+# 그 DB 의 TypeORM 기록 표(migrations)는 더 쓰지 않으므로 지운다. 데이터는 그대로다.
+# 넘겨받기 전에 TypeORM 의 마지막 마이그레이션까지 적용됐는지 기록 표로 본다. 뒤의 둘(DropOperators,
+# AllowWithdrawnAuthors)이 빠졌으면 여기서 마저 한다. 그보다 앞의 것이 빠졌으면 넘겨받지 않고 멈춘다.
+# 빠진 채로 넘겨받으면 기록만 기준선이 되고 표는 옛 모양이라, 탈퇴한 글쓴이를 비우는 일 같은 것이 깨진다
 
 # TypeORM 이 남긴 적용 기록의 표
 TYPEORM_HISTORY = 'migrations'
+
+# TypeORM 의 마이그레이션들(board-server 를 NestJS 로 쓰던 때의 src/migrations). 적용한 차례다
+TYPEORM_MIGRATIONS = (
+    'CreateBoardsPostsOperators1791712910506',
+    'SeedBoards1791712910507',
+    'CreateComments1791714347521',
+    'AddPostPins1791723065926',
+    'AddAuthorIndexes1791730770080',
+    'AddReports1791777701944',
+    'AddAuthors1791779867393',
+    'AddOutgoingNotifications1792340930107',
+    'DropOperators1792430000000',
+    'AllowWithdrawnAuthors1792600000000',
+)
+
+# 빠졌으면 넘겨받을 때 마저 하는 TypeORM 마이그레이션과 그 SQL(TypeORM 의 up 과 같다)
+CATCH_UP = {
+    'DropOperators1792430000000': ('DROP TABLE IF EXISTS "operators"',),
+    'AllowWithdrawnAuthors1792600000000': (
+        'ALTER TABLE "posts" ALTER COLUMN "author_id" DROP NOT NULL',
+        'ALTER TABLE "comments" ALTER COLUMN "author_id" DROP NOT NULL',
+        'ALTER TABLE "reports" ALTER COLUMN "reporter_id" DROP NOT NULL',
+    ),
+}
+
+
+class IncompleteTypeormSchema(RuntimeError):
+    """TypeORM 의 마이그레이션이 마저 할 수 없는 만큼 빠진 스키마다. 넘겨받지 않는다."""
+
 
 # 처음 넣는 게시판. 차례(position)대로 목록에 보인다
 BOARDS = [
@@ -41,8 +73,33 @@ def made_by_typeorm() -> bool:
     return bool(op.get_bind().execute(sa.text("SELECT to_regclass('posts') IS NOT NULL")).scalar())
 
 
+def applied_typeorm() -> set[str]:
+    """TypeORM 이 적용했다고 적은 마이그레이션들. 기록 표가 없으면 빈 집합이다."""
+    bind = op.get_bind()
+    if not bind.execute(sa.text(f"SELECT to_regclass('{TYPEORM_HISTORY}') IS NOT NULL")).scalar():
+        return set()
+    return set(bind.execute(sa.text(f'SELECT name FROM "{TYPEORM_HISTORY}"')).scalars())
+
+
+def catch_up_statements(applied: set[str]) -> list[str]:
+    """
+    빠진 TypeORM 마이그레이션을 마저 하는 SQL(차례대로). 빠진 것이 없으면 빈 목록이다.
+    마저 할 수 없는 것(CATCH_UP 에 없는 것)이 빠졌으면 IncompleteTypeormSchema.
+    """
+    missing = [name for name in TYPEORM_MIGRATIONS if name not in applied]
+    unknown = [name for name in missing if name not in CATCH_UP]
+    if unknown:
+        raise IncompleteTypeormSchema(
+            f'TypeORM 의 마이그레이션이 빠진 스키마라 넘겨받지 않습니다: {", ".join(unknown)}. '
+            '개발용 데이터라면 이 스키마의 표를 모두 지운 뒤 다시 alembic upgrade heads 를 돌립니다'
+        )
+    return [statement for name in missing for statement in CATCH_UP[name]]
+
+
 def adopt_typeorm_schema() -> None:
-    """TypeORM 이 만든 표를 그대로 쓴다. 적용 기록만 지운다."""
+    """TypeORM 이 만든 표를 그대로 쓴다. 빠진 뒤쪽 마이그레이션을 마저 하고 적용 기록을 지운다."""
+    for statement in catch_up_statements(applied_typeorm()):
+        op.execute(sa.text(statement))
     op.execute(sa.text(f'DROP TABLE IF EXISTS "{TYPEORM_HISTORY}"'))
 
 
