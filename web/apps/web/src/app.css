@@ -1953,3 +1953,54 @@ a.ui-button {
     display: none;
   }
 }
+
+/* 갤러리(C7). 장면의 칸을 격자로. 열지 않은 장면은 흐리게 */
+.scene-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.scene-tile {
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.scene-tile .ui-button {
+  padding: 0;
+}
+
+.scene-tile__image {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--ui-radius);
+  background: var(--ui-border);
+}
+
+.scene-tile--locked {
+  overflow: hidden;
+}
+
+.scene-tile--locked .scene-tile__image {
+  filter: blur(12px) grayscale(0.6);
+  opacity: 0.6;
+}
+
+.scene-tile__title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.scene-tile .hint {
+  margin: 0;
+  font-size: 0.85em;
+}
+
+.scene-tile__large {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  margin: 0 auto;
+}
