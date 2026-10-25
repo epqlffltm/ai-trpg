@@ -33,6 +33,7 @@ class CatalogItem:
     lock 은 문에 다는 자물쇠 물건인가다(#281). 열쇠와 따는 판정은 판에 있다.
     cures 는 쓰면 대상에게서 푸는 부상들(룰북의 부상의 이름표)이다(#277). 없으면 빈 것이다.
     throw 는 던지는 판정이다(#277). 던질 수 없는 물건이면 None.
+    treat_bonus 는 치료에 붙여 쓸 때 치료 판정의 보정에 더하는 값이다(#277). 치료에 쓰지 못하면 None.
     """
 
     entry_id: uuid.UUID
@@ -51,6 +52,7 @@ class CatalogItem:
     lock: bool = False
     cures: tuple[str, ...] = ()
     throw: ItemThrowSnapshot | None = None
+    treat_bonus: int | None = None
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
@@ -75,6 +77,7 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
             lock=rule.lock is not None,
             cures=tuple(rule.cures),
             throw=rule.throw,
+            treat_bonus=rule.treat_bonus,
         )
     return items
 

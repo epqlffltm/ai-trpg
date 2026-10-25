@@ -136,6 +136,14 @@ export function consumables(me: TableMember): HeldItem[] {
   return heldItems(me).filter((item) => item.kind === 'consumable');
 }
 
+/** 치료에 붙여 쓸 수 있는 물건(#277). 지닌 것 가운데 판의 물건에 치료 보정(treat_bonus)이 있는 것 */
+export function aidItems(ctx: ActionContext): Choice[] {
+  return heldItems(ctx.me).flatMap((held) => {
+    const bonus = ctx.table.items.find((item) => item.entry_id === held.entry_id)?.treat_bonus;
+    return bonus ? [{ value: held.entry_id, label: `${held.name} +${bonus} ×${held.count}` }] : [];
+  });
+}
+
 /** 던질 수 있는 물건(#277). 지닌 것 가운데 판의 물건에 던지는 판정(throw)이 있는 것 */
 export function throwables(ctx: ActionContext): HeldItem[] {
   return heldItems(ctx.me).filter((held) => ctx.table.items.some((item) => item.entry_id === held.entry_id && item.throw));

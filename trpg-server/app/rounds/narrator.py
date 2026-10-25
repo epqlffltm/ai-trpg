@@ -139,6 +139,9 @@ class TreatmentNote:
     worsened_minutes: int | None = None
     # 치료받던 쪽이 죽었는가(즉사)
     died: bool = False
+    # 치료에 붙여 쓴 물건의 이름과 판정에 더한 보정(#277). 쓰지 않았거나 쓰지 못했으면 None 이다
+    aid: str | None = None
+    aid_bonus: int = 0
 
 
 @dataclass(frozen=True)

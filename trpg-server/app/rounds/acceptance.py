@@ -217,15 +217,29 @@ def accept_treatment(
       - 대상이 앉은 사람이나 이번 장면의 인물이 아니면(다른 장소의 인물이면) ActionTargetError,
         이미 죽었으면 RoundConflictError.
       - 대상이 그 부상을 입고 있지 않으면 RoundConflictError.
+      - 붙여 쓰는 물건(#277)이 판의 물건이 아니거나 치료 보정이 없으면 ActionNotInRulesError(item),
+        하나도 가지고 있지 않으면 RoundConflictError(item_not_held).
     비워 둔 대상은 자기 자신으로 채운다.
     """
     fault = actions.find_treat_fault(ruleset, action)
     if fault is not None:
         raise ActionNotInRulesError(fault)
+    if action.item is not None:
+        require_aid(table, member, action.item)
     aimed = aim_treatment(action, member.user_id)
     if not round_injuries.wears(patient_rows(table, member, aimed, cast), aimed.injury):
         raise RoundConflictError(Conflict.NOT_INJURED)
     return aimed.model_dump(mode='json')
+
+
+def require_aid(table: GameTable, member: TableMember, entry_id: uuid.UUID) -> None:
+    """
+    치료에 붙여 쓰는 물건을 본다(#277). 치료 보정이 있는 판의 물건이 아니면 ActionNotInRulesError(item),
+    하나도 가지고 있지 않으면 RoundConflictError(item_not_held).
+    """
+    if find_item(table, entry_id).treat_bonus is None:
+        raise ActionNotInRulesError('item')
+    require_held(member, entry_id, 1)
 
 
 def accept_naming(action: NameAction, cast: list[CastMember]) -> dict:

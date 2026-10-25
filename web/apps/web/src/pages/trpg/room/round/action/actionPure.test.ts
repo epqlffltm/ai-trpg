@@ -7,6 +7,7 @@ import { ME, member, OTHER, RULES, sheet, tableDetail } from '../../../../../tes
 import { actionHint, draftFromAction, emptyActionDraft, toAction, type ActionDraft } from './actionDraft';
 import { throwTerms } from './ItemActionFields';
 import {
+  aidItems,
   availableKinds,
   carriable,
   harmTargets,
@@ -187,6 +188,26 @@ describe('toAction', () => {
     expect(toAction(draftFromAction(rules, atNpc), ctx)).toEqual(atNpc);
     expect(actionHint(draft({ kind: 'throw', item: 'i7' }), ctx)).toBe('던질 물건과 맞힐 대상을 골라 주세요.');
     expect(actionHint(draft({ kind: 'throw', item: 'i7', target: `npc:${NPC}` }), ctx)).toBeNull();
+  });
+});
+
+describe('aidItems', () => {
+  const KIT = { entry_id: 'i8', name: '의료 키트', kind: 'consumable', rarity: 'normal', count: 2 };
+
+  function withKit(): ActionContext {
+    const base = context({ items: [HERB, KIT] });
+    const kit = { entry_id: 'i8', name: '의료 키트', kind: 'consumable', rarity: 'normal', heals: null, treat_bonus: 2 };
+    return { ...base, table: { ...base.table, items: [...base.table.items, kit] } as unknown as TableDetail };
+  }
+
+  it('치료 보정이 있는 물건만 붙여 쓸 수 있고, 치료에 붙여 보낸다(#277)', () => {
+    const ctx = withKit();
+    expect(aidItems(ctx)).toEqual([{ value: 'i8', label: '의료 키트 +2 ×2' }]);
+    const aided = { kind: 'treat', injury: 'broken_arm', target: OTHER, item: 'i8' } as const;
+    expect(toAction(draft({ kind: 'treat', injury: 'broken_arm', target: `member:${OTHER}`, item: 'i8' }), ctx)).toEqual(aided);
+    expect(toAction(draftFromAction(RULES as unknown as TableDetail['rules'], aided), ctx)).toEqual(aided);
+    // 다른 종류에서 고른 물건(약초)이 남아 있어도 치료에는 붙이지 않는다
+    expect(toAction(draft({ kind: 'treat', injury: 'broken_arm', item: 'i1' }), ctx)).toEqual({ kind: 'treat', injury: 'broken_arm' });
   });
 });
 

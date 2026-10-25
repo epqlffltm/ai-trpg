@@ -268,6 +268,7 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
             lock=item.lock,
             cures=list(item.cures),
             throw=to_throw(item.throw),
+            treat_bonus=item.treat_bonus,
         )
         for item in catalog.values()
     ]

@@ -51,17 +51,18 @@ def treatable(ruleset: Ruleset, key: str) -> Injury | None:
 
 
 def treat(
-    ruleset: Ruleset, injury: Injury, abilities: dict[str, int], dice: Dice, hindrance: Hindrance
+    ruleset: Ruleset, injury: Injury, abilities: dict[str, int], dice: Dice, hindrance: Hindrance, bonus: int = 0
 ) -> HinderedCheck:
     """
     치료 판정을 한 번 한다. 능력은 규칙의 치료 능력, 난이도는 그 부상의 치료 난이도다.
 
     abilities 는 치료하는 캐릭터의 시트에 적힌 점수, hindrance 는 그 캐릭터의 부상이 치료 능력에 주는 것이다.
+    bonus 는 치료에 붙여 쓴 물건의 보정이다(#277). 보정(modifier)에 더한다.
     treatable 이 돌려준 부상에만 쓴다. 그래서 규칙에 치료가 있는지 다시 따지지 않는다.
     """
     difficulty = find_difficulty(ruleset, injury.treat_difficulty)
     score = abilities[ruleset.treatment.ability]
-    return resolve_hindered(ruleset, score, difficulty, dice, hindrance)
+    return resolve_hindered(ruleset, score, difficulty, dice, hindrance, bonus=bonus)
 
 
 def row_mishap(table: MishapTable, roll: int) -> MishapRow:

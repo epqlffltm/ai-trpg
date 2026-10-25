@@ -38,7 +38,7 @@ function actionDetail(action: DeclaredAction, table: TableDetail): string | null
     case 'check':
       return checkDetail(action, table);
     case 'treat':
-      return nameOfInjury(table.rules, action.injury);
+      return `${nameOfInjury(table.rules, action.injury)}${action.item ? ` + ${itemName(table, action.item)}` : ''}`;
     case 'name':
       return `"${action.name}"`;
     case 'use':

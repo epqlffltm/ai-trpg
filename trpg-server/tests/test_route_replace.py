@@ -438,7 +438,7 @@ def test_the_replace_lines():
 
 def test_the_map_note_says_a_lock_is_replaced_only_by_the_action():
     assert '자물쇠를 바꾸지 말고' in prompt.MAP_NOTE
-    assert prompt.PROMPT_VERSION == 'narration-63'
+    assert prompt.PROMPT_VERSION == 'narration-64'
 
 
 def test_the_transcript_says_the_lock_was_replaced():
