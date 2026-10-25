@@ -1,7 +1,7 @@
 # board-server/contract/tests/test_errors.py
 
 """
-오류 응답의 모양(board-server/test/errors.e2e-spec.ts). 예외를 응답으로 바꾸는 규칙과 입력 검사가
+오류 응답의 모양. 예외를 응답으로 바꾸는 규칙과 입력 검사가
 실제 주소에 걸려 있는지 본다. 오류는 {"detail"}, 입력 오류는 {"detail", "errors"} 와 400 이다.
 """
 

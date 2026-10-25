@@ -1,32 +1,48 @@
 # board-server/Dockerfile
 # 게시판 서버의 이미지. 저장소 루트의 docker-compose.yml 이 app 프로필로 띄운다.
 #
-# 단계 둘로 나눈다.
-#   build   : 모든 패키지를 깔고 타입스크립트를 빌드한 뒤, 개발용 패키지를 걷어 낸다
-#   runtime : 빌드한 것과 실행에 필요한 패키지만 담는다. root 가 아닌 사용자(node)로 돈다
+# 게임 서버의 것(trpg-server/Dockerfile)과 같은 모양이다. 단계 둘로 나눈다.
+#   deps    : 의존성을 깔고 소스를 담는다. 의존성(uv.lock)이 그대로면 까는 일은 캐시를 쓴다
+#             공용 코드(shared/server-core)도 여기서 의존성으로 깐다
+#   runtime : 실행에 필요한 것만 담는다. root 가 아닌 사용자로 돈다
 #
 # 비밀(.env)은 넣지 않는다(.dockerignore). 컨테이너를 띄울 때 compose 가 넘긴다.
 # 마이그레이션은 이 이미지로 따로 한 번 돈다(compose 의 board-migrate). 서버가 뜰 때 돌리지 않는다.
 
-FROM node:24-trixie-slim AS build
+FROM python:3.13-slim-trixie AS deps
+COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /bin/uv
+# 바이트코드를 미리 만들어 첫 요청이 느리지 않게 한다. 캐시에서 링크하지 않고 복사한다(캐시는 이미지에 남지 않는다).
+# 파이썬은 기본 이미지의 것을 쓴다. uv 가 따로 내려받지 않는다
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
 WORKDIR /app
-COPY package.json package-lock.json ./
-# 잠금 파일 그대로 깐다. 어긋나면 실패한다
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci
+# 공용 코드(shared/server-core). compose 가 shared 라는 이름의 빌드 범위로 넘긴다(build.additional_contexts).
+# pyproject.toml 의 경로 의존(../shared/server-core)이 이미지 안에서도 맞게 /shared 에 둔다. 설정과 소스만 담는다
+COPY --from=shared server-core/pyproject.toml /shared/server-core/pyproject.toml
+COPY --from=shared server-core/src /shared/server-core/src
+COPY pyproject.toml uv.lock ./
+# 잠금 파일과 어긋나면 실패한다(--locked). 테스트 도구는 넣지 않는다(--no-dev).
+# 공용 코드는 .venv 안에 설치된 모양으로 넣는다(--no-editable). 실행 단계는 /shared 없이 /app 만 담는다
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev --no-install-project --no-editable
 COPY . .
-RUN npm run build \
-    && npm prune --omit=dev
 
-FROM node:24-trixie-slim AS runtime
-ENV NODE_ENV=production
+FROM python:3.13-slim-trixie AS runtime
+# 로그를 버퍼에 모으지 않고 바로 내보낸다. 컨테이너가 죽을 때 마지막 줄이 사라지지 않는다.
+# 읽기만 하는 폴더에 .pyc 를 쓰려 하지 않는다(바이트코드는 deps 에서 미리 만들었다)
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH=/app/.venv/bin:$PATH
+# root 가 아닌 사용자. 번호를 고정한다(다른 서버와 같다)
+RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin app
 WORKDIR /app
 # 파일의 주인은 root 로 둔다. 서버는 읽기만 한다. 서버가 뚫려도 제 코드를 고쳐 쓰지 못한다
-COPY --from=build /app/package.json ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-# 노드 이미지에 들어 있는 root 가 아닌 사용자(node)의 번호. 번호로 적는다.
-# 이름은 바깥(쿠버네티스 등)에서 root 가 아닌지 확인할 수 없다
-USER 1000
+COPY --from=deps /app /app
+# 번호로 적는다. 이름은 바깥(쿠버네티스 등)에서 root 가 아닌지 확인할 수 없다
+USER 10001
 EXPOSE 8002
-CMD ["node", "dist/main.js"]
+# 프로세스 하나로 돈다. 알림 보내기와 끊긴 세션 목록 받기가 서버 안에서 돈다.
+# 여럿으로 늘려도 된다(알림 보내기는 프로세스마다 같은 줄을 보낼 수 있지만, 알림 서버가 열쇠(source_key)로 한 줄로 받는다).
+# 주소와 포트는 설정(HOST, PORT)에서 읽는다(app/__main__.py). compose 가 0.0.0.0, 8002 를 넘긴다
+CMD ["python", "-m", "app"]

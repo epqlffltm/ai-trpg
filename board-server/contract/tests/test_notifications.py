@@ -1,7 +1,7 @@
 # board-server/contract/tests/test_notifications.py
 
 """
-댓글과 답글을 사용자의 알림함에 알리는 것(board-server/test/notifications.e2e-spec.ts).
+댓글과 답글을 사용자의 알림함에 알리는 것.
 
 알림 서버의 주소를 주지 않고 띄우므로 알림은 발송함(outgoing_notifications)에 적히기만 한다. 그 줄을 본다.
 
@@ -9,7 +9,7 @@
     댓글이 거절되면(없는 글, 답글에 단 답글) 알림도 없다.
 
 보내는 일(다시 보내기, 실패로 두기, 오래된 줄 지우기)은 서버 안의 주기 작업이라 HTTP 로 정할 수 없다.
-그것은 test/notifications.e2e-spec.ts 가 계속 본다.
+그것은 공용 코드(shared/server-core)의 알림 보내기 테스트가 본다.
 """
 
 from collections.abc import Callable

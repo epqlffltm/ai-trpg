@@ -43,7 +43,7 @@ x-logging: &logging
 x-staging: &staging
   APP_ENVIRONMENT: staging
 
-# DEBUG 를 읽는 서버(인증, 게임, 결제, 알림, asset, chat, story)의 프로세스. 게시판 서버는 DEBUG 를 읽지 않는다
+# DEBUG 를 읽는 서버(인증, 게임, 게시판, 결제, 알림, asset, chat, story)의 프로세스
 x-staging-debug-off: &staging-debug-off
   <<: *staging
   DEBUG: "false"
@@ -97,9 +97,9 @@ services:
         condition: service_completed_successfully
 
   board-migrate:
-    environment: *staging
+    environment: *staging-debug-off
   board-server:
-    environment: *staging
+    environment: *staging-debug-off
 
   billing-migrate:
     environment: *staging-debug-off

@@ -252,7 +252,7 @@ AI가 서술하거나 대답할 때 그 입력이 국외의 AI 모델 회사로 
 | 법정대리인 | `auth-server/accounts/models.py`(GuardianConsent, GuardianNotice), `auth-server/README.md` 의 보호자 동의 |
 | 결제, 장부 | `billing-server/README.md` 의 주문과 결제, 크레딧, `billing-server/migrations/` |
 | 게임의 기록, AI 호출 기록(입력 원문을 저장하지 않음) | `trpg-server/app/*/models.py`, `trpg-server/app/ai_log/models.py` |
-| 게시판, 신고 | `board-server/README.md`, `board-server/src/migrations/` |
+| 게시판, 신고 | `board-server/README.md`, `board-server/migrations/` |
 | 보안 기록 30일, IPv6 /64 | `auth-server/accounts/security_digest.py`, `auth-server/accounts/models.py`(SecurityEvent) |
 | IP 막기의 기간(기본 30일, 길어야 1년) | `auth-server/accounts/network_blocks.py`, `auth-server/accounts/models.py`(NetworkBlock) |
 | 로그에 남기지 않는 것 | `docs/observability.md` 의 민감정보 |

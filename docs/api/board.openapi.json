@@ -2,22 +2,26 @@
   "components": {
     "schemas": {
       "BoardResponse": {
+        "description": "게시판 하나.",
         "properties": {
           "description": {
+            "title": "Description",
             "type": "string"
           },
           "name": {
+            "title": "Name",
             "type": "string"
           },
           "slug": {
+            "title": "Slug",
             "type": "string"
           },
           "write_policy": {
-            "description": "누가 글을 쓸 수 있는가. member 는 로그인한 누구나, operator 는 운영자만",
             "enum": [
-              "operator",
-              "member"
+              "member",
+              "operator"
             ],
+            "title": "Write Policy",
             "type": "string"
           }
         },
@@ -27,68 +31,114 @@
           "description",
           "write_policy"
         ],
+        "title": "BoardResponse",
         "type": "object"
       },
       "CommentListResponse": {
+        "description": "댓글 목록의 한 토막.",
         "properties": {
           "items": {
             "items": {
               "$ref": "#/components/schemas/CommentThreadResponse"
             },
+            "title": "Items",
             "type": "array"
           },
           "next": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "다음 토막을 부를 때 after 에 넣을 값. 뒤에 더 없으면 null 이다",
-            "nullable": true,
-            "type": "string"
+            "title": "Next"
           }
         },
         "required": [
           "items",
           "next"
         ],
+        "title": "CommentListResponse",
         "type": "object"
       },
       "CommentResponse": {
+        "description": "댓글 하나.",
         "properties": {
           "author_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "글쓴이. 지운 댓글이거나 탈퇴한 사람이면 null",
-            "nullable": true,
-            "type": "string"
+            "title": "Author Id"
           },
           "author_nickname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "글쓴이의 닉네임. 지운 댓글이거나, 이 서버가 이름을 모르는 사람이거나, 탈퇴한 사람이면 null",
-            "nullable": true,
-            "type": "string"
+            "title": "Author Nickname"
           },
           "author_withdrawn": {
             "description": "글쓴이가 탈퇴했는가. 지운 댓글이면 false 다",
+            "title": "Author Withdrawn",
             "type": "boolean"
           },
           "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "내용. 지운 댓글이면 null",
-            "nullable": true,
-            "type": "string"
+            "title": "Content"
           },
           "created_at": {
+            "title": "Created At",
             "type": "string"
           },
           "deleted": {
             "description": "지운 댓글인가. 답글이 달려 있어 자리만 남은 것이다",
+            "title": "Deleted",
             "type": "boolean"
           },
           "id": {
+            "title": "Id",
             "type": "string"
           },
           "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "답글이면 어느 댓글에 단 것인가. 글에 단 댓글이면 null",
-            "nullable": true,
-            "type": "string"
+            "title": "Parent Id"
           },
           "post_id": {
+            "title": "Post Id",
             "type": "string"
           },
           "updated_at": {
+            "title": "Updated At",
             "type": "string"
           }
         },
@@ -104,59 +154,95 @@
           "created_at",
           "updated_at"
         ],
+        "title": "CommentResponse",
         "type": "object"
       },
       "CommentThreadResponse": {
+        "description": "목록의 한 줄. 글에 단 댓글 하나와 거기 달린 답글들이다.",
         "properties": {
           "author_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "글쓴이. 지운 댓글이거나 탈퇴한 사람이면 null",
-            "nullable": true,
-            "type": "string"
+            "title": "Author Id"
           },
           "author_nickname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "글쓴이의 닉네임. 지운 댓글이거나, 이 서버가 이름을 모르는 사람이거나, 탈퇴한 사람이면 null",
-            "nullable": true,
-            "type": "string"
+            "title": "Author Nickname"
           },
           "author_withdrawn": {
             "description": "글쓴이가 탈퇴했는가. 지운 댓글이면 false 다",
+            "title": "Author Withdrawn",
             "type": "boolean"
           },
           "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "내용. 지운 댓글이면 null",
-            "nullable": true,
-            "type": "string"
+            "title": "Content"
           },
           "created_at": {
+            "title": "Created At",
             "type": "string"
           },
           "deleted": {
             "description": "지운 댓글인가. 답글이 달려 있어 자리만 남은 것이다",
+            "title": "Deleted",
             "type": "boolean"
           },
           "id": {
+            "title": "Id",
             "type": "string"
           },
           "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "답글이면 어느 댓글에 단 것인가. 글에 단 댓글이면 null",
-            "nullable": true,
-            "type": "string"
+            "title": "Parent Id"
           },
           "post_id": {
+            "title": "Post Id",
             "type": "string"
           },
           "replies": {
             "items": {
               "$ref": "#/components/schemas/CommentResponse"
             },
+            "title": "Replies",
             "type": "array"
           },
           "updated_at": {
+            "title": "Updated At",
             "type": "string"
           }
         },
         "required": [
-          "replies",
           "id",
           "post_id",
           "parent_id",
@@ -166,38 +252,55 @@
           "content",
           "deleted",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "replies"
         ],
+        "title": "CommentThreadResponse",
         "type": "object"
       },
       "CreateCommentDto": {
+        "additionalProperties": false,
+        "description": "댓글을 쓸 때 받는 값. 어느 글인지는 주소에 있고, 글쓴이는 토큰에서 안다.",
         "properties": {
           "content": {
             "description": "내용. 받은 그대로 저장한다",
             "maxLength": 2000,
+            "title": "Content",
             "type": "string"
           },
           "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "답글이면 어느 댓글에 다는가. 적지 않거나 null 이면 글에 다는 댓글이다. 번호는 글자로 보낸다(\"57\").\nnull 을 받는 것은 화면이 \"답글이 아님\"을 null 로 보내기 쉬워서다",
-            "nullable": true,
-            "type": "string"
+            "title": "Parent Id"
           }
         },
         "required": [
           "content"
         ],
+        "title": "CreateCommentDto",
         "type": "object"
       },
       "CreatePostDto": {
+        "additionalProperties": false,
+        "description": "글을 쓸 때 받는 값. 어느 게시판인지는 주소에 있고, 글쓴이는 토큰에서 안다.",
         "properties": {
           "content": {
             "description": "본문. 받은 그대로 저장한다. 줄바꿈과 들여쓰기가 글의 일부다",
             "maxLength": 20000,
+            "title": "Content",
             "type": "string"
           },
           "title": {
             "description": "제목. 앞뒤 빈칸은 떼고 저장한다",
             "maxLength": 100,
+            "title": "Title",
             "type": "string"
           }
         },
@@ -205,14 +308,24 @@
           "title",
           "content"
         ],
+        "title": "CreatePostDto",
         "type": "object"
       },
       "CreateReportDto": {
+        "additionalProperties": false,
+        "description": "신고할 때 받는 값. 무엇을 신고하는지는 주소에 있고, 신고한 사람은 토큰에서 안다.",
         "properties": {
           "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "설명. 받은 그대로 저장한다. 적지 않거나 null 이면 설명이 없는 것이다",
-            "nullable": true,
-            "type": "string"
+            "title": "Description"
           },
           "reason": {
             "description": "사유",
@@ -223,15 +336,50 @@
               "illegal",
               "other"
             ],
+            "title": "Reason",
             "type": "string"
           }
         },
         "required": [
           "reason"
         ],
+        "title": "CreateReportDto",
         "type": "object"
       },
-      "ErrorBody": {
+      "HandleReportsDto": {
+        "additionalProperties": false,
+        "description": "운영자가 신고를 처리할 때 받는 값.",
+        "properties": {
+          "outcome": {
+            "description": "처리한 결과. 조치함(actioned), 문제없음(dismissed)",
+            "enum": [
+              "actioned",
+              "dismissed"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "HandleReportsDto",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "InputError": {
         "properties": {
           "detail": {
             "description": "무엇이 잘못됐는가. 화면에 그대로 보여 줄 수 있는 문장이다",
@@ -244,58 +392,27 @@
               },
               "type": "array"
             },
-            "description": "입력이 틀렸을 때만 있다. 칸의 이름마다 틀린 까닭들이다",
+            "description": "칸의 이름(점으로 이은 경로)마다 틀린 까닭들이다",
             "type": "object"
-          },
-          "retry_after": {
-            "description": "너무 자주 불러서 거절했을 때만 있다. 몇 초 뒤에 다시 부르면 되는가",
-            "minimum": 1,
-            "type": "integer"
           }
         },
         "required": [
-          "detail"
+          "detail",
+          "errors"
         ],
-        "type": "object"
-      },
-      "HandleReportsDto": {
-        "properties": {
-          "outcome": {
-            "description": "처리한 결과. 조치함(actioned), 문제없음(dismissed)",
-            "enum": [
-              "actioned",
-              "dismissed"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "outcome"
-        ],
-        "type": "object"
-      },
-      "HealthResponse": {
-        "properties": {
-          "status": {
-            "enum": [
-              "ok"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "status"
-        ],
+        "title": "InputError",
         "type": "object"
       },
       "MeResponse": {
+        "description": "토큰의 주인.",
         "properties": {
           "is_operator": {
-            "description": "운영자인가. 토큰의 roles 를 읽은 것이다",
+            "title": "Is Operator",
             "type": "boolean"
           },
           "user_id": {
-            "description": "인증 서버의 public_id",
+            "format": "uuid",
+            "title": "User Id",
             "type": "string"
           }
         },
@@ -303,27 +420,33 @@
           "user_id",
           "is_operator"
         ],
+        "title": "MeResponse",
         "type": "object"
       },
       "OpenReportGroupPageResponse": {
+        "description": "열린 신고 목록의 한 쪽.",
         "properties": {
           "items": {
             "items": {
               "$ref": "#/components/schemas/OpenReportGroupResponse"
             },
+            "title": "Items",
             "type": "array"
           },
           "page": {
             "description": "몇 번째 쪽인가. 1 부터 센다",
-            "type": "number"
+            "title": "Page",
+            "type": "integer"
           },
           "size": {
             "description": "한 쪽에 몇 개를 담는가",
-            "type": "number"
+            "title": "Size",
+            "type": "integer"
           },
           "total": {
             "description": "전체가 몇 개인가. 화면이 쪽의 수를 셈하는 데 쓴다",
-            "type": "number"
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
@@ -332,18 +455,23 @@
           "size",
           "total"
         ],
+        "title": "OpenReportGroupPageResponse",
         "type": "object"
       },
       "OpenReportGroupResponse": {
+        "description": "운영자의 목록 한 줄. 신고당한 것 하나에 걸린 열린 신고들이다.",
         "properties": {
           "first_reported_at": {
+            "title": "First Reported At",
             "type": "string"
           },
           "last_reported_at": {
+            "title": "Last Reported At",
             "type": "string"
           },
           "open_count": {
-            "type": "number"
+            "title": "Open Count",
+            "type": "integer"
           },
           "reasons": {
             "$ref": "#/components/schemas/ReasonCountsResponse"
@@ -359,103 +487,146 @@
           "first_reported_at",
           "last_reported_at"
         ],
+        "title": "OpenReportGroupResponse",
         "type": "object"
       },
       "PinPostDto": {
+        "additionalProperties": false,
+        "description": "글을 고정할 때 받는 값. 본문 없이 불러도 된다.",
         "properties": {
           "days": {
             "default": 7,
-            "description": "며칠 동안 고정하는가. 적지 않으면 DEFAULT_PIN_DAYS 다. 그날이 지나면 저절로 내려간다",
-            "maximum": 365,
-            "minimum": 1,
-            "type": "number"
+            "description": "며칠 동안 고정하는가. 적지 않으면 7일이다. 그날이 지나면 저절로 내려간다",
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
           }
         },
+        "title": "PinPostDto",
         "type": "object"
       },
       "PostListResponse": {
+        "description": "게시판의 글 목록의 한 쪽. 고정한 글을 따로 싣는다.",
         "properties": {
           "items": {
             "items": {
               "$ref": "#/components/schemas/PostSummaryResponse"
             },
+            "title": "Items",
             "type": "array"
           },
           "page": {
             "description": "몇 번째 쪽인가. 1 부터 센다",
-            "type": "number"
+            "title": "Page",
+            "type": "integer"
           },
           "pinned": {
             "description": "지금 고정되어 있는 글들. 나중에 고정한 것부터다. 첫 쪽에만 싣는다. items 와 total 에는 들지 않는다",
             "items": {
               "$ref": "#/components/schemas/PostSummaryResponse"
             },
+            "title": "Pinned",
             "type": "array"
           },
           "size": {
             "description": "한 쪽에 몇 개를 담는가",
-            "type": "number"
+            "title": "Size",
+            "type": "integer"
           },
           "total": {
             "description": "전체가 몇 개인가. 화면이 쪽의 수를 셈하는 데 쓴다",
-            "type": "number"
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
-          "pinned",
           "items",
           "page",
           "size",
-          "total"
+          "total",
+          "pinned"
         ],
+        "title": "PostListResponse",
         "type": "object"
       },
       "PostResponse": {
+        "description": "글 하나. 목록의 한 줄에 본문이 더해진다.",
         "properties": {
           "author_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "글쓴이. 탈퇴한 사람이면 null 이다",
-            "nullable": true,
-            "type": "string"
+            "title": "Author Id"
           },
           "author_nickname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "글쓴이의 닉네임. 이 서버가 이름을 모르는 사람이거나 탈퇴한 사람이면 null 이다",
-            "nullable": true,
-            "type": "string"
+            "title": "Author Nickname"
           },
           "author_withdrawn": {
             "description": "글쓴이가 탈퇴했는가",
+            "title": "Author Withdrawn",
             "type": "boolean"
           },
           "board": {
             "description": "글이 있는 게시판의 주소 이름(slug)",
+            "title": "Board",
             "type": "string"
           },
           "comment_count": {
             "description": "살아 있는 댓글과 답글의 수. 지운 것은 세지 않는다",
-            "type": "number"
+            "title": "Comment Count",
+            "type": "integer"
           },
           "content": {
+            "title": "Content",
             "type": "string"
           },
           "created_at": {
+            "title": "Created At",
             "type": "string"
           },
           "id": {
+            "title": "Id",
             "type": "string"
           },
           "pinned": {
             "description": "지금 고정되어 있는가",
+            "title": "Pinned",
             "type": "boolean"
           },
           "pinned_until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "고정이 끝나는 시각. 고정되어 있지 않으면 null 이다",
-            "nullable": true,
-            "type": "string"
+            "title": "Pinned Until"
           },
           "title": {
+            "title": "Title",
             "type": "string"
           },
           "updated_at": {
+            "title": "Updated At",
             "type": "string"
           }
         },
@@ -473,27 +644,33 @@
           "updated_at",
           "content"
         ],
+        "title": "PostResponse",
         "type": "object"
       },
       "PostSummaryPageResponse": {
+        "description": "글 목록의 한 쪽. 검색의 결과가 이 모양이다.",
         "properties": {
           "items": {
             "items": {
               "$ref": "#/components/schemas/PostSummaryResponse"
             },
+            "title": "Items",
             "type": "array"
           },
           "page": {
             "description": "몇 번째 쪽인가. 1 부터 센다",
-            "type": "number"
+            "title": "Page",
+            "type": "integer"
           },
           "size": {
             "description": "한 쪽에 몇 개를 담는가",
-            "type": "number"
+            "title": "Size",
+            "type": "integer"
           },
           "total": {
             "description": "전체가 몇 개인가. 화면이 쪽의 수를 셈하는 데 쓴다",
-            "type": "number"
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
@@ -502,51 +679,82 @@
           "size",
           "total"
         ],
+        "title": "PostSummaryPageResponse",
         "type": "object"
       },
       "PostSummaryResponse": {
+        "description": "글 목록의 한 줄.",
         "properties": {
           "author_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "글쓴이. 탈퇴한 사람이면 null 이다",
-            "nullable": true,
-            "type": "string"
+            "title": "Author Id"
           },
           "author_nickname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "글쓴이의 닉네임. 이 서버가 이름을 모르는 사람이거나 탈퇴한 사람이면 null 이다",
-            "nullable": true,
-            "type": "string"
+            "title": "Author Nickname"
           },
           "author_withdrawn": {
             "description": "글쓴이가 탈퇴했는가",
+            "title": "Author Withdrawn",
             "type": "boolean"
           },
           "board": {
             "description": "글이 있는 게시판의 주소 이름(slug)",
+            "title": "Board",
             "type": "string"
           },
           "comment_count": {
             "description": "살아 있는 댓글과 답글의 수. 지운 것은 세지 않는다",
-            "type": "number"
+            "title": "Comment Count",
+            "type": "integer"
           },
           "created_at": {
+            "title": "Created At",
             "type": "string"
           },
           "id": {
+            "title": "Id",
             "type": "string"
           },
           "pinned": {
             "description": "지금 고정되어 있는가",
+            "title": "Pinned",
             "type": "boolean"
           },
           "pinned_until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "고정이 끝나는 시각. 고정되어 있지 않으면 null 이다",
-            "nullable": true,
-            "type": "string"
+            "title": "Pinned Until"
           },
           "title": {
+            "title": "Title",
             "type": "string"
           },
           "updated_at": {
+            "title": "Updated At",
             "type": "string"
           }
         },
@@ -563,39 +771,31 @@
           "created_at",
           "updated_at"
         ],
-        "type": "object"
-      },
-      "ReadinessResponse": {
-        "properties": {
-          "status": {
-            "enum": [
-              "ok",
-              "unavailable"
-            ],
-            "type": "string"
-          }
-        },
-        "required": [
-          "status"
-        ],
+        "title": "PostSummaryResponse",
         "type": "object"
       },
       "ReasonCountsResponse": {
+        "description": "사유마다의 건수. 사유가 없었던 것도 0 으로 실린다.",
         "properties": {
           "abuse": {
-            "type": "number"
+            "title": "Abuse",
+            "type": "integer"
           },
           "illegal": {
-            "type": "number"
+            "title": "Illegal",
+            "type": "integer"
           },
           "other": {
-            "type": "number"
+            "title": "Other",
+            "type": "integer"
           },
           "sexual": {
-            "type": "number"
+            "title": "Sexual",
+            "type": "integer"
           },
           "spam": {
-            "type": "number"
+            "title": "Spam",
+            "type": "integer"
           }
         },
         "required": [
@@ -605,27 +805,33 @@
           "illegal",
           "other"
         ],
+        "title": "ReasonCountsResponse",
         "type": "object"
       },
       "ReportPageResponse": {
+        "description": "한 글이나 댓글에 걸린 신고 목록의 한 쪽.",
         "properties": {
           "items": {
             "items": {
               "$ref": "#/components/schemas/ReportResponse"
             },
+            "title": "Items",
             "type": "array"
           },
           "page": {
             "description": "몇 번째 쪽인가. 1 부터 센다",
-            "type": "number"
+            "title": "Page",
+            "type": "integer"
           },
           "size": {
             "description": "한 쪽에 몇 개를 담는가",
-            "type": "number"
+            "title": "Size",
+            "type": "integer"
           },
           "total": {
             "description": "전체가 몇 개인가. 화면이 쪽의 수를 셈하는 데 쓴다",
-            "type": "number"
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
@@ -634,14 +840,18 @@
           "size",
           "total"
         ],
+        "title": "ReportPageResponse",
         "type": "object"
       },
       "ReportReceiptResponse": {
+        "description": "신고한 사람에게 돌려주는 것. 접수했다는 표시다.",
         "properties": {
           "created_at": {
+            "title": "Created At",
             "type": "string"
           },
           "id": {
+            "title": "Id",
             "type": "string"
           },
           "reason": {
@@ -652,6 +862,7 @@
               "illegal",
               "other"
             ],
+            "title": "Reason",
             "type": "string"
           }
         },
@@ -660,39 +871,71 @@
           "reason",
           "created_at"
         ],
+        "title": "ReportReceiptResponse",
         "type": "object"
       },
       "ReportResponse": {
+        "description": "운영자가 읽는 신고 한 건.",
         "properties": {
           "created_at": {
+            "title": "Created At",
             "type": "string"
           },
           "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "신고한 사람이 붙인 설명. 적지 않았으면 null",
-            "nullable": true,
-            "type": "string"
+            "title": "Description"
           },
           "handled_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "처리한 시각. 열린 신고면 null",
-            "nullable": true,
-            "type": "string"
+            "title": "Handled At"
           },
           "handled_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "처리한 운영자. 열린 신고면 null",
-            "nullable": true,
-            "type": "string"
+            "title": "Handled By"
           },
           "id": {
+            "title": "Id",
             "type": "string"
           },
           "outcome": {
-            "description": "처리한 결과. 열린 신고면 null",
-            "enum": [
-              "actioned",
-              "dismissed"
+            "anyOf": [
+              {
+                "enum": [
+                  "actioned",
+                  "dismissed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "nullable": true,
-            "type": "string"
+            "description": "처리한 결과. 열린 신고면 null",
+            "title": "Outcome"
           },
           "reason": {
             "enum": [
@@ -702,12 +945,20 @@
               "illegal",
               "other"
             ],
+            "title": "Reason",
             "type": "string"
           },
           "reporter_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "description": "신고한 사람. 인증 서버의 public_id. 탈퇴한 사람이면 null 이다",
-            "nullable": true,
-            "type": "string"
+            "title": "Reporter Id"
           }
         },
         "required": [
@@ -720,19 +971,24 @@
           "handled_by",
           "outcome"
         ],
+        "title": "ReportResponse",
         "type": "object"
       },
       "ReportTargetResponse": {
+        "description": "신고당한 것. 운영자의 목록에서 무엇에 걸린 신고인지 보여 준다.",
         "properties": {
           "deleted": {
             "description": "지금 지워져 있는가. 지운 것에 걸린 신고도 처리해서 닫아야 목록에서 빠진다",
+            "title": "Deleted",
             "type": "boolean"
           },
           "id": {
+            "title": "Id",
             "type": "string"
           },
           "post_id": {
             "description": "글이면 그 글의 번호, 댓글이면 그 댓글이 달린 글의 번호",
+            "title": "Post Id",
             "type": "string"
           },
           "type": {
@@ -740,6 +996,7 @@
               "post",
               "comment"
             ],
+            "title": "Type",
             "type": "string"
           }
         },
@@ -749,82 +1006,107 @@
           "post_id",
           "deleted"
         ],
+        "title": "ReportTargetResponse",
         "type": "object"
       },
       "UpdateCommentDto": {
+        "additionalProperties": false,
+        "description": "댓글을 고칠 때 받는 값. 고칠 수 있는 것은 내용뿐이다. 어느 글, 어느 댓글에 달린 것인지는 옮길 수 없다.",
         "properties": {
           "content": {
             "maxLength": 2000,
+            "title": "Content",
             "type": "string"
           }
         },
         "required": [
           "content"
         ],
+        "title": "UpdateCommentDto",
         "type": "object"
       },
       "UpdatePostDto": {
+        "additionalProperties": false,
+        "description": "글을 고칠 때 받는 값. 고칠 칸만 보낸다. 보내지 않은 칸은 그대로 둔다. 칸마다의 규칙은 쓸 때와 같다.\n\nnull 을 보낸 칸은 보낸 칸으로 치지만 고치지 않는다(NestJS 로 쓰던 때와 같다).",
         "properties": {
           "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "maxLength": 20000,
-            "type": "string"
+            "title": "Content"
           },
           "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "maxLength": 100,
-            "type": "string"
+            "title": "Title"
           }
         },
+        "title": "UpdatePostDto",
         "type": "object"
       },
       "WithdrawalDto": {
+        "additionalProperties": false,
+        "description": "인증 서버가 보내는 탈퇴의 알림.",
         "properties": {
           "withdrawn_at": {
             "description": "인증 서버가 계정을 비운 시각(ISO 8601, 시간대 포함)",
+            "title": "Withdrawn At",
             "type": "string"
           }
         },
         "required": [
           "withdrawn_at"
         ],
+        "title": "WithdrawalDto",
         "type": "object"
       },
       "WithdrawalResponse": {
+        "description": "탈퇴를 받은 답. 인증 서버는 processed 를 받아야 보내기를 멈춘다.",
         "properties": {
           "status": {
+            "const": "processed",
             "description": "반영했다. 이미 했거나 할 것이 없었던 것도 같다",
-            "enum": [
-              "processed"
-            ],
+            "title": "Status",
             "type": "string"
           }
         },
         "required": [
           "status"
         ],
+        "title": "WithdrawalResponse",
         "type": "object"
       }
     },
     "securitySchemes": {
-      "bearer": {
-        "bearerFormat": "JWT",
-        "description": "인증 서버가 발급한 access 토큰. 대상(aud)에 ai-trpg-board 가 있어야 한다",
+      "HTTPBearer": {
         "scheme": "bearer",
         "type": "http"
       }
     }
   },
   "info": {
-    "contact": {},
-    "description": "게시판과 글, 댓글, 신고, 글 고정.",
     "title": "AI TRPG 게시판 서버",
     "version": "0.1.0"
   },
-  "openapi": "3.0.0",
+  "openapi": "3.1.0",
   "paths": {
     "/api/v1/board/boards": {
       "get": {
-        "operationId": "BoardsController_list",
-        "parameters": [],
+        "description": "게시판들을 정해 둔 차례대로 돌려준다.",
+        "operationId": "list_boards_api_v1_board_boards_get",
         "responses": {
           "200": {
             "content": {
@@ -833,42 +1115,32 @@
                   "items": {
                     "$ref": "#/components/schemas/BoardResponse"
                   },
+                  "title": "Response List Boards Api V1 Board Boards Get",
                   "type": "array"
                 }
               }
             },
-            "description": ""
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "Successful Response"
           }
         },
-        "security": [
-          {}
-        ],
-        "summary": "게시판을 정해 둔 차례대로 모두 돌려준다.",
+        "summary": "List Boards",
         "tags": [
-          "Boards"
+          "boards"
         ],
         "x-audience": "user"
       }
     },
     "/api/v1/board/boards/{slug}/posts": {
       "get": {
-        "operationId": "PostsController_list",
+        "description": "한 게시판의 글 목록을 한 쪽 돌려준다. 새 글부터다. 본문은 싣지 않는다. 첫 쪽에는 고정한 글을 따로 싣는다.",
+        "operationId": "list_posts_api_v1_board_boards__slug__posts_get",
         "parameters": [
           {
             "in": "path",
             "name": "slug",
             "required": true,
             "schema": {
+              "title": "Slug",
               "type": "string"
             }
           },
@@ -881,7 +1153,7 @@
               "default": 1,
               "maximum": 10000,
               "minimum": 1,
-              "type": "number"
+              "type": "integer"
             }
           },
           {
@@ -893,7 +1165,7 @@
               "default": 20,
               "maximum": 50,
               "minimum": 1,
-              "type": "number"
+              "type": "integer"
             }
           }
         ],
@@ -906,36 +1178,35 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "security": [
-          {}
-        ],
-        "summary": "한 게시판의 글 목록을 한 쪽 돌려준다. 새 글부터다. 본문은 싣지 않는다. 첫 쪽에는 고정한 글을 따로 싣는다.",
+        "summary": "List Posts",
         "tags": [
-          "Posts"
+          "posts"
         ],
         "x-audience": "user"
       },
       "post": {
-        "operationId": "PostsController_create",
+        "description": "게시판에 글을 쓴다. 쓴 글을 돌려준다.",
+        "operationId": "create_post_api_v1_board_boards__slug__posts_post",
         "parameters": [
           {
             "in": "path",
             "name": "slug",
             "required": true,
             "schema": {
+              "title": "Slug",
               "type": "string"
             }
           }
@@ -959,68 +1230,82 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "게시판에 글을 쓴다. 쓴 글을 돌려준다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Post",
         "tags": [
-          "Posts"
+          "posts"
         ],
         "x-audience": "user"
       }
     },
     "/api/v1/board/comments/{id}": {
       "delete": {
-        "operationId": "CommentsController_remove",
+        "description": "댓글을 지운다. 돌려줄 내용이 없다.",
+        "operationId": "delete_comment_api_v1_board_comments__id__delete",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "댓글을 지운다. 돌려줄 내용이 없다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Comment",
         "tags": [
-          "Comments"
+          "comments"
         ],
         "x-audience": "user"
       },
       "patch": {
-        "operationId": "CommentsController_update",
+        "description": "댓글의 내용을 고친다. 고친 댓글을 돌려준다.",
+        "operationId": "update_comment_api_v1_board_comments__id__patch",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           }
@@ -1044,35 +1329,42 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "댓글의 내용을 고친다. 고친 댓글을 돌려준다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Comment",
         "tags": [
-          "Comments"
+          "comments"
         ],
         "x-audience": "user"
       }
     },
     "/api/v1/board/comments/{id}/reports": {
       "get": {
-        "operationId": "ReportReviewsController_listForComment",
+        "description": "한 댓글에 걸린 신고들.",
+        "operationId": "list_comment_reports_api_v1_board_comments__id__reports_get",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           },
@@ -1085,7 +1377,7 @@
               "default": 1,
               "maximum": 10000,
               "minimum": 1,
-              "type": "number"
+              "type": "integer"
             }
           },
           {
@@ -1097,7 +1389,7 @@
               "default": 20,
               "maximum": 50,
               "minimum": 1,
-              "type": "number"
+              "type": "integer"
             }
           }
         ],
@@ -1110,33 +1402,40 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "한 댓글에 걸린 신고들.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Comment Reports",
         "tags": [
-          "ReportReviews"
+          "reports"
         ],
         "x-audience": "operator"
       },
       "post": {
-        "operationId": "ReportsController_reportComment",
+        "description": "댓글을 신고한다. 답글도 같다.",
+        "operationId": "report_comment_api_v1_board_comments__id__reports_post",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           }
@@ -1160,35 +1459,42 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "댓글을 신고한다. 답글도 같다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Report Comment",
         "tags": [
-          "Reports"
+          "reports"
         ],
         "x-audience": "user"
       }
     },
     "/api/v1/board/comments/{id}/reports/outcome": {
       "put": {
-        "operationId": "ReportReviewsController_handleComment",
+        "description": "한 댓글에 걸린 열린 신고를 모두 처리한다.",
+        "operationId": "handle_comment_reports_api_v1_board_comments__id__reports_outcome_put",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           }
@@ -1205,30 +1511,35 @@
         },
         "responses": {
           "204": {
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "한 댓글에 걸린 열린 신고를 모두 처리한다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Handle Comment Reports",
         "tags": [
-          "ReportReviews"
+          "reports"
         ],
         "x-audience": "operator"
       }
     },
     "/api/v1/board/me": {
       "get": {
-        "operationId": "MeController_readMe",
-        "parameters": [],
+        "description": "토큰의 주인의 ID 와 운영자인지를 돌려준다.",
+        "operationId": "read_me_api_v1_board_me_get",
         "responses": {
           "200": {
             "content": {
@@ -1238,29 +1549,25 @@
                 }
               }
             },
-            "description": ""
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "Successful Response"
           }
         },
-        "summary": "토큰이 유효하면 그 주인의 ID 와 운영자인지를 돌려준다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Me",
         "tags": [
-          "Me"
+          "me"
         ],
         "x-audience": "user"
       }
     },
     "/api/v1/board/posts": {
       "get": {
-        "operationId": "PostsSearchController_find",
+        "description": "낱말이 모두 들어 있는 글을 한 쪽 돌려준다. 새 글부터다. 본문은 싣지 않는다. 없는 게시판이면 404 다.",
+        "operationId": "search_posts_api_v1_board_posts_get",
         "parameters": [
           {
             "description": "몇 번째 쪽인가. 1 부터 센다",
@@ -1271,7 +1578,7 @@
               "default": 1,
               "maximum": 10000,
               "minimum": 1,
-              "type": "number"
+              "type": "integer"
             }
           },
           {
@@ -1283,7 +1590,7 @@
               "default": 20,
               "maximum": 50,
               "minimum": 1,
-              "type": "number"
+              "type": "integer"
             }
           },
           {
@@ -1302,7 +1609,14 @@
             "name": "board",
             "required": false,
             "schema": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           }
         ],
@@ -1315,71 +1629,77 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "security": [
-          {}
-        ],
-        "summary": "낱말이 모두 들어 있는 글을 한 쪽 돌려준다. 새 글부터다. 본문은 싣지 않는다. 없는 게시판이면 404 다.",
+        "summary": "Search Posts",
         "tags": [
-          "PostsSearch"
+          "posts"
         ],
         "x-audience": "user"
       }
     },
     "/api/v1/board/posts/{id}": {
       "delete": {
-        "operationId": "PostsController_remove",
+        "description": "글을 지운다. 돌려줄 내용이 없다.",
+        "operationId": "delete_post_api_v1_board_posts__id__delete",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "글을 지운다. 돌려줄 내용이 없다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Post",
         "tags": [
-          "Posts"
+          "posts"
         ],
         "x-audience": "user"
       },
       "get": {
-        "operationId": "PostsController_read",
+        "description": "글 하나를 본문까지 돌려준다.",
+        "operationId": "read_post_api_v1_board_posts__id__get",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           }
@@ -1393,36 +1713,35 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "security": [
-          {}
-        ],
-        "summary": "글 하나를 본문까지 돌려준다.",
+        "summary": "Read Post",
         "tags": [
-          "Posts"
+          "posts"
         ],
         "x-audience": "user"
       },
       "patch": {
-        "operationId": "PostsController_update",
+        "description": "글을 고친다. 보낸 칸만 고친다. 고친 글을 돌려준다.",
+        "operationId": "update_post_api_v1_board_posts__id__patch",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           }
@@ -1446,68 +1765,82 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "글을 고친다. 보낸 칸만 고친다. 고친 글을 돌려준다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Post",
         "tags": [
-          "Posts"
+          "posts"
         ],
         "x-audience": "user"
       }
     },
     "/api/v1/board/posts/{id}/pin": {
       "delete": {
-        "operationId": "PinsController_unpin",
+        "description": "글의 고정을 푼다.",
+        "operationId": "unpin_post_api_v1_board_posts__id__pin_delete",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "글의 고정을 푼다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unpin Post",
         "tags": [
-          "Pins"
+          "posts"
         ],
         "x-audience": "operator"
       },
       "put": {
-        "operationId": "PinsController_pin",
+        "description": "글을 고정한다. 본문 없이 부르면 7일이다.",
+        "operationId": "pin_post_api_v1_board_posts__id__pin_put",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           }
@@ -1516,43 +1849,57 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PinPostDto"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PinPostDto"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Data"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "204": {
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "글을 고정한다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Pin Post",
         "tags": [
-          "Pins"
+          "posts"
         ],
         "x-audience": "operator"
       }
     },
     "/api/v1/board/posts/{id}/reports": {
       "get": {
-        "operationId": "ReportReviewsController_listForPost",
+        "description": "한 글에 걸린 신고들.",
+        "operationId": "list_post_reports_api_v1_board_posts__id__reports_get",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           },
@@ -1565,7 +1912,7 @@
               "default": 1,
               "maximum": 10000,
               "minimum": 1,
-              "type": "number"
+              "type": "integer"
             }
           },
           {
@@ -1577,7 +1924,7 @@
               "default": 20,
               "maximum": 50,
               "minimum": 1,
-              "type": "number"
+              "type": "integer"
             }
           }
         ],
@@ -1590,33 +1937,40 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "한 글에 걸린 신고들.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Post Reports",
         "tags": [
-          "ReportReviews"
+          "reports"
         ],
         "x-audience": "operator"
       },
       "post": {
-        "operationId": "ReportsController_reportPost",
+        "description": "글을 신고한다. 접수했다는 것만 돌려준다.",
+        "operationId": "report_post_api_v1_board_posts__id__reports_post",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           }
@@ -1640,35 +1994,42 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "글을 신고한다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Report Post",
         "tags": [
-          "Reports"
+          "reports"
         ],
         "x-audience": "user"
       }
     },
     "/api/v1/board/posts/{id}/reports/outcome": {
       "put": {
-        "operationId": "ReportReviewsController_handlePost",
+        "description": "한 글에 걸린 열린 신고를 모두 처리한다.",
+        "operationId": "handle_post_reports_api_v1_board_posts__id__reports_outcome_put",
         "parameters": [
           {
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
+              "title": "Id",
               "type": "string"
             }
           }
@@ -1685,35 +2046,42 @@
         },
         "responses": {
           "204": {
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "한 글에 걸린 열린 신고를 모두 처리한다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Handle Post Reports",
         "tags": [
-          "ReportReviews"
+          "reports"
         ],
         "x-audience": "operator"
       }
     },
     "/api/v1/board/posts/{postId}/comments": {
       "get": {
-        "operationId": "CommentsController_list",
+        "description": "한 글의 댓글을 한 토막 돌려준다. 먼저 쓴 것부터고, 댓글마다 답글이 모두 붙어 있다.",
+        "operationId": "list_comments_api_v1_board_posts__postId__comments_get",
         "parameters": [
           {
             "in": "path",
             "name": "postId",
             "required": true,
             "schema": {
+              "title": "Postid",
               "type": "string"
             }
           },
@@ -1723,7 +2091,14 @@
             "name": "after",
             "required": false,
             "schema": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           {
@@ -1735,7 +2110,7 @@
               "default": 20,
               "maximum": 50,
               "minimum": 1,
-              "type": "number"
+              "type": "integer"
             }
           }
         ],
@@ -1748,36 +2123,35 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "security": [
-          {}
-        ],
-        "summary": "한 글의 댓글을 한 토막 돌려준다. 먼저 쓴 것부터고, 댓글마다 답글이 모두 붙어 있다.",
+        "summary": "List Comments",
         "tags": [
-          "Comments"
+          "comments"
         ],
         "x-audience": "user"
       },
       "post": {
-        "operationId": "CommentsController_create",
+        "description": "글에 댓글을 단다. parent_id 를 적으면 그 댓글에 답글을 단다. 쓴 댓글을 돌려준다.",
+        "operationId": "create_comment_api_v1_board_posts__postId__comments_post",
         "parameters": [
           {
             "in": "path",
             "name": "postId",
             "required": true,
             "schema": {
+              "title": "Postid",
               "type": "string"
             }
           }
@@ -1801,29 +2175,35 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "글에 댓글을 단다. parent_id 를 적으면 그 댓글에 답글을 단다. 쓴 댓글을 돌려준다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Comment",
         "tags": [
-          "Comments"
+          "comments"
         ],
         "x-audience": "user"
       }
     },
     "/api/v1/board/reports": {
       "get": {
-        "operationId": "ReportReviewsController_listOpen",
+        "description": "열린 신고의 목록. 신고당한 것마다 한 줄이다.",
+        "operationId": "list_open_reports_api_v1_board_reports_get",
         "parameters": [
           {
             "description": "몇 번째 쪽인가. 1 부터 센다",
@@ -1834,7 +2214,7 @@
               "default": 1,
               "maximum": 10000,
               "minimum": 1,
-              "type": "number"
+              "type": "integer"
             }
           },
           {
@@ -1846,7 +2226,7 @@
               "default": 20,
               "maximum": 50,
               "minimum": 1,
-              "type": "number"
+              "type": "integer"
             }
           }
         ],
@@ -1859,42 +2239,49 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "summary": "열린 신고의 목록. 신고당한 것마다 한 줄이다.",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Open Reports",
         "tags": [
-          "ReportReviews"
+          "reports"
         ],
         "x-audience": "operator"
       }
     },
     "/api/v1/board/service/users/{userId}/withdrawal": {
       "post": {
-        "operationId": "WithdrawalsController_receive",
+        "description": "그 사람의 글과 댓글의 글쓴이, 신고한 사람을 비우고 닉네임과 보낼 알림을 지운다.",
+        "operationId": "receive_api_v1_board_service_users__userId__withdrawal_post",
         "parameters": [
           {
-            "description": "인증 서버의 서명(t=<초>,v1=<HMAC>). 비밀은 AUTH_SERVER_SECRET 이다. 틀리면 401",
-            "in": "header",
-            "name": "X-Service-Signature",
+            "in": "path",
+            "name": "userId",
             "required": true,
             "schema": {
+              "title": "Userid",
               "type": "string"
             }
           },
           {
-            "in": "path",
-            "name": "userId",
+            "description": "인증 서버의 서명(t=<초>,v1=<HMAC>). 비밀은 AUTH_SERVER_SECRET 이다. 틀리면 401",
+            "in": "header",
+            "name": "X-Service-Signature",
             "required": true,
             "schema": {
               "type": "string"
@@ -1920,23 +2307,20 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           },
-          "default": {
+          "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "오류. 상태 코드가 무엇이든 본문은 이 모양이다"
+            "description": "입력이 틀렸다"
           }
         },
-        "security": [
-          {}
-        ],
-        "summary": "그 사람의 글과 댓글의 글쓴이, 신고한 사람을 비우고 닉네임과 보낼 알림을 지운다.",
+        "summary": "Receive",
         "tags": [
           "Withdrawals"
         ],
@@ -1945,8 +2329,8 @@
     },
     "/health": {
       "get": {
-        "operationId": "HealthController_check",
-        "parameters": [],
+        "description": "서버 프로세스가 요청을 받을 수 있으면 200 을 돌려준다.\n\nDB 나 다른 서버의 상태는 보지 않는다. 그것까지 보면, DB 가 잠깐 느려졌을 때\n관리 도구가 멀쩡한 서버를 죽은 것으로 보고 재시작한다.",
+        "operationId": "check_health_health_get",
         "responses": {
           "200": {
             "content": {
@@ -1956,51 +2340,48 @@
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
           }
         },
-        "security": [
-          {}
-        ],
-        "summary": "서버 프로세스가 요청을 받을 수 있으면 200 을 돌려준다.\n\nDB 나 다른 서버의 상태는 보지 않는다. 그것까지 보면, DB 가 잠깐 느려졌을 때\n관리 도구가 멀쩡한 서버를 죽은 것으로 보고 재시작한다.",
+        "summary": "Check Health",
         "tags": [
-          "Health"
+          "health"
         ],
         "x-audience": "infra"
       }
     },
     "/health/ready": {
       "get": {
-        "operationId": "ReadinessController_check",
-        "parameters": [],
+        "description": "DB 에 3초 안에 닿으면 200, 아니면 503 을 돌려준다.\n\n왜 닿지 않는지는 응답에 싣지 않는다. 오류 문구에는 DB 의 주소와 계정 이름이 들어 있다.\n원인은 서버의 로그에 남긴다. 오류의 종류만 적는다.",
+        "operationId": "check_readiness_health_ready_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReadinessResponse"
+                  "$ref": "#/components/schemas/HealthResponse"
                 }
               }
             },
-            "description": ""
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
-        "security": [
-          {}
-        ],
-        "summary": "DB 에 닿으면 200, 닿지 않으면 503 을 돌려준다.\n\n왜 닿지 않는지는 응답에 싣지 않는다. 오류의 글에는 DB 주소와 계정 이름이 들어 있다.\n로그에도 오류의 종류만 남긴다.\n\n준비되지 않았다는 것은 오류가 아니라 이 API 의 답이다. 그래서 예외를 던지지 않고 상태 코드만 바꾼다.\n예외로 던지면 오류 응답의 모양({ detail })으로 바뀐다. 이 주소는 관리 도구가 읽는 것이라 답의 모양을 지킨다.",
+        "summary": "Check Readiness",
         "tags": [
-          "Readiness"
+          "health"
         ],
         "x-audience": "infra"
       }
     }
-  },
-  "security": [
-    {
-      "bearer": []
-    }
-  ],
-  "servers": [],
-  "tags": []
+  }
 }

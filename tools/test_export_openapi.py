@@ -25,7 +25,6 @@ from export_openapi import (
     fastapi_source,
     go_source,
     mark_audience,
-    nest_source,
     parse_args,
     render,
     resolve_command,
@@ -112,16 +111,8 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(dict(SOURCES['auth'].env)['JWT_PRIVATE_KEY_PATH'], '')
         self.assertEqual(dict(SOURCES['auth'].env)['DEBUG'], 'false')
 
-    def test_the_board_server_builds_and_prints_its_spec(self):
-        self.assertEqual(SOURCES['board'], nest_source('board-server'))
-        self.assertEqual(SOURCES['board'].command, ('npm', 'run', '--silent', 'openapi'))
-
-    def test_the_board_server_gets_a_database_address_node_can_read(self):
-        # Node 의 pg 는 postgresql+asyncpg:// 를 읽지 못한다. FastAPI 의 값을 그대로 쓰면 설정을 읽다가 멈춘다
-        env = dict(SOURCES['board'].env)
-
-        self.assertTrue(env['DATABASE_URL'].startswith('postgresql://'))
-        self.assertTrue(env['AUTH_JWKS_URL'])
+    def test_the_board_server_is_a_fastapi_server(self):
+        self.assertEqual(SOURCES['board'], fastapi_source('board-server'))
 
     def test_required_settings_are_filled_only_when_missing(self):
         source = fastapi_source('x-server')
@@ -203,9 +194,9 @@ class FetchTests(unittest.TestCase):
 
 class ResolveCommandTests(unittest.TestCase):
     def test_the_program_becomes_its_path(self):
-        # Windows 의 npm 은 npm.cmd 라서 경로로 바꾸어 넘겨야 subprocess 가 찾는다
-        with mock.patch('shutil.which', return_value='C:/node/npm.CMD'):
-            self.assertEqual(resolve_command(('npm', 'run', 'x')), ('C:/node/npm.CMD', 'run', 'x'))
+        # Windows 의 실행 파일은 경로로 바꾸어 넘겨야 subprocess 가 늘 찾는다
+        with mock.patch('shutil.which', return_value='C:/tools/uv.EXE'):
+            self.assertEqual(resolve_command(('uv', 'run', 'x')), ('C:/tools/uv.EXE', 'run', 'x'))
 
     def test_an_unknown_program_is_left_as_it_is(self):
         with mock.patch('shutil.which', return_value=None):

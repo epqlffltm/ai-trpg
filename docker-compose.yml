@@ -56,7 +56,11 @@ x-game-image: &game-image
   image: ai-trpg/trpg-server:local
 
 x-board-image: &board-image
-  build: ./board-server
+  build:
+    context: ./board-server
+    # 공용 코드(shared/). Dockerfile 이 COPY --from=shared 로 가져온다(docs/architecture/shared-code.md 의 "정한 것")
+    additional_contexts:
+      shared: ./shared
   image: ai-trpg/board-server:local
 
 x-billing-image: &billing-image
@@ -589,11 +593,13 @@ services:
     <<: *board-image
     profiles: [app]
     logging: *logging
-    command: ["node_modules/.bin/typeorm", "-d", "dist/database/data-source.js", "migration:run"]
+    command: ["alembic", "upgrade", "heads"]
     env_file: ./board-server/.env
-    # 마이그레이션은 DB 만 읽는다(readDatabaseSettings). 알림 서버의 비밀과 탈퇴를 알리는 인증 서버의 비밀을 비운다
+    # 마이그레이션은 DB 만 쓴다. 알림 서버의 주소와 비밀, 탈퇴를 알리는 인증 서버의 비밀을 비운다.
+    # 마이그레이션도 앱의 설정을 읽어서, .env 에 주소만 있고 비밀이 비면 설정의 검사에 걸린다
     environment:
       <<: *board-environment
+      NOTIFICATION_URL: ""
       NOTIFICATION_SECRET: ""
       AUTH_SERVER_SECRET: ""
     depends_on:
@@ -614,7 +620,7 @@ services:
     # span 과 메트릭을 Alloy 에 민다(telemetry). 인증 서버와 알림 서버에는 default 로 닿는다
     networks: [default, telemetry]
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8002/health/ready').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health/ready', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 6

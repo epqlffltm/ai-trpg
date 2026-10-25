@@ -131,7 +131,7 @@ ALERT_PATHS=(/discord /slack '/telegram/bot[^/]+/sendMessage')
 # 흉내는 Alertmanager 보다 늦게 뜬다. 그동안 실패한 것은 다음 묶음(1분)에 다시 보낸다
 HEARTBEAT_PATH=/heartbeat
 HEARTBEAT_WAIT_SECONDS=150
-# 컨테이너의 사용자. Dockerfile 에서 정한 번호다. 노드 이미지는 제 사용자(node, 1000)를 쓴다
+# 컨테이너의 사용자. Dockerfile 에서 정한 번호다
 APP_UID=10001
 # staging 의 설정을 볼 때 루트 .env 대신 주는 값(진짜 도메인과 주소가 아니다). 두 파일을 겹친다
 STAGING_DOMAIN=staging.test
@@ -489,10 +489,8 @@ limited_after() {
 reachable_from() {
   local service="$1" url="$2"
   case "$service" in
-    auth-server | trpg-server | notification-server | asset-server | chat-server | story-server)
+    auth-server | trpg-server | board-server | notification-server | asset-server | chat-server | story-server)
       compose exec -T "$service" python -c "import urllib.request; urllib.request.urlopen('$url', timeout=5)" ;;
-    board-server)
-      compose exec -T "$service" node -e "fetch('$url').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))" ;;
     billing-server | billing-sweeper)
       compose exec -T "$service" wget -q -O /dev/null "$url" ;;
   esac
@@ -584,17 +582,35 @@ PY
 }
 
 # 게시판 서버가 제 설정(NOTIFICATION_URL, NOTIFICATION_SECRET)으로 서명한 알림을 알림 서버가 받는가(201).
-# 게임 서버의 것과 같다. 서버가 쓰는 코드(dist/notifications)를 그대로 불러 보낸다.
+# asset 의 것과 같다. 발송함과 보내는 것은 공용 코드(server_core/notifications/)다.
 # 게시판의 kind(post.commented)에 화면이 쓰는 칸을 채워 보낸다
 board_notification_accepted() {
-  compose exec -T board-server node --input-type=module -e "
-import { randomUUID } from 'node:crypto';
-import { HttpNotificationSender } from './dist/notifications/notification-client.js';
-const sender = new HttpNotificationSender(process.env.NOTIFICATION_URL, process.env.NOTIFICATION_SECRET);
-const payload = { board_slug: 'free', post_id: '1', post_title: 'stack-smoke', comment_id: '1' };
-const sent = await sender.send({ sourceKey: 'stack-smoke:' + randomUUID(), userId: randomUUID(), kind: 'post.commented', payload });
-process.exit(sent.delivery === 'delivered' ? 0 : 1);
-"
+  compose exec -T board-server python - <<'PY'
+import asyncio
+import uuid
+
+import httpx
+from server_core.notifications.client import Delivery
+from server_core.notifications.setup import build_notifications
+
+from app.core.config import get_settings
+from app.notifications.models import OutgoingNotification
+from app.notifications.outbox import POST_COMMENTED, SOURCE
+
+
+async def main() -> None:
+    async with httpx.AsyncClient() as client:
+        notifications = build_notifications(get_settings(), client, SOURCE)
+        payload = {'board_slug': 'free', 'post_id': '1', 'post_title': 'stack-smoke', 'comment_id': '1'}
+        notification = OutgoingNotification(
+            source_key=f'stack-smoke:{uuid.uuid4()}', user_id=uuid.uuid4(), kind=POST_COMMENTED, payload=payload
+        )
+        sent = await notifications.send(notification)
+    raise SystemExit(0 if sent.delivery == Delivery.DELIVERED else 1)
+
+
+asyncio.run(main())
+PY
 }
 
 # asset 서버가 제 설정(NOTIFICATION_URL, NOTIFICATION_SECRET)으로 서명한 알림을 알림 서버가 받는가(201).
@@ -1110,13 +1126,15 @@ tempo_searches() {
 }
 
 # 게시판 서버의 발송함에 알림 하나를 적는다. 게시판 서버가 5초 안에 알림 서버에 보낸다(notification.send 의 한 바퀴).
-# 댓글을 쓰려면 토큰이 들어서 DB 에 바로 적는다. 칸은 board-server/src/notifications/outgoing-notification.entity.ts 다.
+# 댓글을 쓰려면 토큰이 들어서 DB 에 바로 적는다. 칸은 공용 코드의 발송함(server_core/notifications/models.py)이다.
+# status 와 attempts 는 앱이 채우는 값이라 DB 의 기본값이 없다. 앱이 적는 것(pending, 0)과 같게 적는다
 # payload 는 화면이 쓰는 칸(post.commented)이다. 알림 서버가 받는다(board_notification_accepted 와 같다)
 queue_board_notification() {
   local sql
-  sql="INSERT INTO board.outgoing_notifications (source_key, user_id, kind, payload)
+  sql="INSERT INTO board.outgoing_notifications (source_key, user_id, kind, payload, status, attempts)
     VALUES ('stack-smoke:$(cat /proc/sys/kernel/random/uuid)', '$(cat /proc/sys/kernel/random/uuid)', 'post.commented',
-      '{\"board_slug\": \"free\", \"post_id\": \"1\", \"post_title\": \"stack-smoke\", \"comment_id\": \"1\"}')"
+      '{\"board_slug\": \"free\", \"post_id\": \"1\", \"post_title\": \"stack-smoke\", \"comment_id\": \"1\"}',
+      'pending', 0)"
   # 관리 계정과 DB 의 이름은 db 컨테이너 안의 환경 변수로 읽는다. 그래서 작은따옴표로 넘겨 그 안에서 펼친다
   # shellcheck disable=SC2016
   compose exec -T -e SQL="$sql" db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -qc "$SQL"'

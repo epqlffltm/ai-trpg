@@ -1,6 +1,6 @@
 # board-server/contract/tests/test_boards.py
 
-"""게시판 목록(GET /boards). 게시판은 마이그레이션이 넣은 것이다(board-server/test/boards.e2e-spec.ts)."""
+"""게시판 목록(GET /boards). 게시판은 마이그레이션이 넣은 것이다."""
 
 import httpx
 

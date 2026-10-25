@@ -1115,6 +1115,8 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 
 #### 붙인 것 (게시판 서버의 메트릭)
 
+2026-10 에 게시판 서버를 FastAPI 로 옮기며(#785) 아래의 Node 코드는 공용 코드(`shared/server-core`)로 바뀌었다. 메트릭의 이름과 label 은 그대로다. 아래는 Node 로 붙였던 때의 기록이다.
+
 알림 서버의 모양을 Node 로 옮겼다. 새 의존성은 `@opentelemetry/sdk-metrics`, `@opentelemetry/exporter-metrics-otlp-proto`(추적과 같은 판)다.
 
 | 파일 | 하는 일 |
@@ -1279,6 +1281,8 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 
 #### 붙인 것 (게시판 서버의 추적)
 
+2026-10 에 게시판 서버를 FastAPI 로 옮기며(#785) 아래의 Node 코드는 공용 코드(`shared/server-core`)로 바뀌었다. 아래는 Node 로 붙였던 때의 기록이다.
+
 Node(Nest)라 SDK 가 다르지만 span 의 이름, 싣는 것과 싣지 않는 것, 테스트하는 법은 [결제 서버](#붙인-것-결제-서버의-추적-본보기)와 같다.
 의존성은 `@opentelemetry/api`, `@opentelemetry/sdk-trace`, `@opentelemetry/exporter-trace-otlp-proto`, `@opentelemetry/resources`, `@opentelemetry/context-async-hooks` 다.
 자동 계측(`@opentelemetry/auto-instrumentations-node`, instrumentation-express, -pg, -undici)은 쓰지 않았다. 이름과 싣는 것을 우리가 정해야 하고, 자동 계측은 모듈을 불러올 때 고쳐 쓰는(monkey patch) 방식이라 ESM 에서 불러오는 순서를 맞춰야 한다.
@@ -1342,14 +1346,14 @@ Node(Nest)라 SDK 가 다르지만 span 의 이름, 싣는 것과 싣지 않는 
 
 | | auth-server | trpg-server | board-server | billing-server |
 | --- | --- | --- | --- | --- |
-| 로거 | 표준 `logging` + JSON formatter | 표준 `logging` + JSON formatter | Nest 의 `LoggerService` 를 구현한 `JsonLogger` | 표준 `log/slog` 의 `Handler` |
-| 식별자를 들고 있는 곳 | `contextvars` | `contextvars` | `AsyncLocalStorage` | `context.Context` |
-| 요청 미들웨어 | Django 미들웨어(맨 앞) | 순수 ASGI 미들웨어 | express 미들웨어 | gin 미들웨어(맨 앞) |
-| 처리하지 못한 예외 | 미들웨어의 `process_exception` | `Exception` 처리기 | 전역 예외 필터 | `recover` 미들웨어 |
-| 작업 | `run_as_job()` | `BackgroundJobs.spawn()` | `runAsJob()` | `jobs.Run()` |
-| 코드의 자리 | `observability/` | `app/observability/` | `src/observability/` | `internal/obs/`, `internal/httpapi/observability.go` |
-| 메트릭 | OpenTelemetry Python SDK(`observability/metrics.py`, [다른 것](#붙인-것-인증-서버의-메트릭)) | OpenTelemetry Python SDK(`app/observability/metrics.py`, [다른 것](#붙인-것-trpg-서버의-메트릭)) | OpenTelemetry JS SDK(`src/observability/metrics.ts`, [다른 것](#붙인-것-게시판-서버의-메트릭)) | OpenTelemetry Go SDK(`internal/metrics/`, [본보기](#붙인-것-결제-서버의-메트릭-본보기)) |
-| 추적(span) | OpenTelemetry Python SDK(`observability/`, [다른 것](#붙인-것-인증-서버의-추적)) | OpenTelemetry Python SDK(`app/observability/`, [다른 것](#붙인-것-trpg-서버의-추적)) | OpenTelemetry JS SDK(`src/observability/`, [다른 것](#붙인-것-게시판-서버의-추적)) | OpenTelemetry Go SDK(`internal/tracing/`, [본보기](#붙인-것-결제-서버의-추적-본보기)) |
+| 로거 | 표준 `logging` + JSON formatter | 표준 `logging` + JSON formatter | 공용 코드(`server_core.observability`) | 표준 `log/slog` 의 `Handler` |
+| 식별자를 들고 있는 곳 | `contextvars` | `contextvars` | `contextvars` | `context.Context` |
+| 요청 미들웨어 | Django 미들웨어(맨 앞) | 순수 ASGI 미들웨어 | 순수 ASGI 미들웨어(공용 코드) | gin 미들웨어(맨 앞) |
+| 처리하지 못한 예외 | 미들웨어의 `process_exception` | `Exception` 처리기 | `Exception` 처리기 | `recover` 미들웨어 |
+| 작업 | `run_as_job()` | `BackgroundJobs.spawn()` | 공용 코드의 `job_scope` | `jobs.Run()` |
+| 코드의 자리 | `observability/` | `app/observability/` | `shared/server-core`, `app/core/metrics.py` | `internal/obs/`, `internal/httpapi/observability.go` |
+| 메트릭 | OpenTelemetry Python SDK(`observability/metrics.py`, [다른 것](#붙인-것-인증-서버의-메트릭)) | OpenTelemetry Python SDK(`app/observability/metrics.py`, [다른 것](#붙인-것-trpg-서버의-메트릭)) | OpenTelemetry Python SDK(공용 코드, 서버만의 것은 `app/core/metrics.py`) | OpenTelemetry Go SDK(`internal/metrics/`, [본보기](#붙인-것-결제-서버의-메트릭-본보기)) |
+| 추적(span) | OpenTelemetry Python SDK(`observability/`, [다른 것](#붙인-것-인증-서버의-추적)) | OpenTelemetry Python SDK(`app/observability/`, [다른 것](#붙인-것-trpg-서버의-추적)) | OpenTelemetry Python SDK(공용 코드) | OpenTelemetry Go SDK(`internal/tracing/`, [본보기](#붙인-것-결제-서버의-추적-본보기)) |
 
 notification-server 는 trpg-server 의 것(`app/observability/`)을 그대로 가져왔다. 뒤에서 도는 작업이 정리 작업 하나라 `BackgroundJobs` 는 없고, 정리 작업이 바퀴마다 `job_scope` 를 건다.
 2026-10-21 에 알림 서버와 asset 서버의 것을 공용 코드 `shared/server-core` 로 옮겼다(#588). 공용 코드가 남긴 줄의 `logger` 는 `server_core.*` 다(예: `server_core.observability.middleware`, 전에는 `app.observability.middleware`). 칸의 모양과 `service` 는 그대로다. 게임 서버는 나중에 옮긴다(#589).
@@ -1364,7 +1368,7 @@ notification-server 는 trpg-server 의 것(`app/observability/`)을 그대로 �
 - **사람이 치는 명령은 JSON 이 아니다.** billing-server 의 `cmd/migrate`, `cmd/fakepg`, `cmd/prices`, `cmd/orders`, `cmd/grants`, auth-server 의 관리 명령이 화면에 찍는 안내(`self.stdout`)는 그대로 글이다.
   `cmd/orders decide` 가 남기는 결정의 기록(`order.decide`)과 `cmd/grants` 의 지급 기록(`grant.event`)은 로그라서 JSON 이다.
   auth-server 의 워커와 예약 명령이 남기는 **로그**는 JSON 이다.
-- **로거가 생기기 전의 줄.** board-server 는 설정이 틀려 뜨지 못할 때 Nest 의 기본 모양으로 찍는다. billing-server 는 `DEBUG=true` 면 gin 이 주소 목록을 글로 찍는다.
+- **로거가 생기기 전의 줄.** billing-server 는 `DEBUG=true` 면 gin 이 주소 목록을 글로 찍는다.
 - **주기 명령을 부르는 supercronic 의 줄.** 실패한 실행만 한 줄 남긴다(`-quiet`). JSON 이지만 칸이 공통 규격과 다르다(`level`, `msg`, `time`, `job.command`).
   명령 자신이 남기는 로그는 규격의 JSON 이다. 명령이 끝에 화면에 찍는 요약(`self.stdout`, 결제의 `cmd/reconcile`)은 위의 "사람이 치는 명령"처럼 글이다.
 - **nginx 가 뜨고 꺼지는 줄.** 프록시의 요청 줄은 JSON 이지만, nginx 가 뜰 때와 설정을 다시 읽을 때 남기는 줄은 nginx 의 글 모양이다.
