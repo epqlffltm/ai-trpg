@@ -4,7 +4,7 @@
 
 import { Button } from '@ai-trpg/ui';
 import { useEffect, useRef } from 'react';
-import type { ConversationDetail } from '../../../api/types';
+import type { ConversationDetail, ConversationMessage } from '../../../api/types';
 import { speakerName, tailActions } from './conversationView';
 import { MessageItem } from './MessageItem';
 import type { TurnState } from './turnState';
@@ -17,9 +17,10 @@ type Props = {
   onBranch: (messageId: string) => void;
   onRegenerate: (messageId: string) => void;
   onContinue: (messageId: string) => void;
+  onEdit: (message: ConversationMessage, content: string) => Promise<boolean>;
 };
 
-export function MessageList({ detail, turn, busy, onBranch, onRegenerate, onContinue }: Props) {
+export function MessageList({ detail, turn, busy, onBranch, onRegenerate, onContinue, onEdit }: Props) {
   const { items, pending } = visibleMessages(detail.messages, turn);
   const end = useRef<HTMLDivElement>(null);
   const growth = items.length + (pending?.length ?? 0) + (turn?.text.length ?? 0);
@@ -35,7 +36,7 @@ export function MessageList({ detail, turn, busy, onBranch, onRegenerate, onCont
       </div>
       <ol className="plain-list chat-messages" aria-label="말">
         {items.map((item) => (
-          <MessageItem key={item.message.id} message={item.message} detail={detail} streaming={item.streaming} busy={busy} onBranch={onBranch} />
+          <MessageItem key={item.message.id} message={item.message} detail={detail} streaming={item.streaming} busy={busy} onBranch={onBranch} onEdit={onEdit} />
         ))}
         {pending !== null ? (
           <li className="chat-message chat-message--assistant" aria-busy="true">
@@ -51,7 +52,7 @@ export function MessageList({ detail, turn, busy, onBranch, onRegenerate, onCont
   );
 }
 
-function TailActions({ detail, busy, onRegenerate, onContinue }: Omit<Props, 'turn' | 'onBranch'>) {
+function TailActions({ detail, busy, onRegenerate, onContinue }: Omit<Props, 'turn' | 'onBranch' | 'onEdit'>) {
   const actions = tailActions(detail.messages);
   if (!actions.answer && !actions.regenerate && !actions.continueFrom) return null;
   return (

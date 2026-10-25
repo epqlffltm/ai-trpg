@@ -2327,6 +2327,62 @@ a.ui-button {
   border-radius: var(--ui-radius);
 }
 
+.chat-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-message__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.chat-message__editor {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.chat-inventory {
+  display: grid;
+  gap: 12px;
+}
+
+.chat-inventory__name {
+  margin: 0;
+  font-weight: 600;
+}
+
+.chat-inventory .hint {
+  margin: 2px 0 0;
+}
+
+.chat-inventory__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chat-give {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chat-map {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-map__heading {
+  margin: 12px 0 6px;
+  font-size: 1rem;
+}
+
 @media (max-width: 640px) {
   .conversation__picture {
     height: 180px;
