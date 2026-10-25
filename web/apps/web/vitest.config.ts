@@ -12,5 +12,7 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     restoreMocks: true,
     unstubGlobals: true,
+    // 시험 하나의 상한(기본 5초). 기다림 하나가 5초까지 걸릴 수 있어(src/test/setup.ts) 그 위에 다른 단계가 들어갈 자리를 둔다
+    testTimeout: 15000,
   },
 });
