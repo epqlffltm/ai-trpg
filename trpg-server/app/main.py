@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
 from server_core.database import create_session_factory
+from server_core.input_errors import use_input_errors
 from server_core.notifications import dispatcher
 from server_core.notifications.setup import build_notifications
 from server_core.notifications.store import SqlOutboxStore
@@ -393,6 +394,9 @@ def create_app(
     app.add_exception_handler(ActionTargetError, rounds.handle_action_target)
     app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
     app.add_exception_handler(LimitsUnavailable, handle_limits_unavailable)
+
+    # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)
+    use_input_errors(app)
 
     # 위의 어느 것에도 걸리지 않은 예외. 내용은 응답에 싣지 않고 요청의 식별자만 돌려준다
     app.add_exception_handler(Exception, handle_unexpected_error)

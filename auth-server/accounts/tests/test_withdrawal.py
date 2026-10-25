@@ -127,7 +127,7 @@ class RequestTests(APITestCase):
         response = self.request_withdrawal('wrong-password-123')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('password', response.data)
+        self.assertIn('password', response.data['errors'])
         self.user.refresh_from_db()
         self.assertIsNone(self.user.withdrawal_requested_at)
         # 세션도 그대로다

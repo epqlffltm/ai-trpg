@@ -138,7 +138,7 @@ class SignupStartTests(SignupTestCase):
         response = self.start(email='not-an-email')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('email', response.data)
+        self.assertIn('email', response.data['errors'])
         self.assertEqual(len(mail.outbox), 0)
 
     def test_get_is_not_allowed(self):
@@ -289,7 +289,7 @@ class SignupVerifyTests(SignupTestCase):
                 response = self.verify(code)
 
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-                self.assertIn('code', response.data)
+                self.assertIn('code', response.data['errors'])
 
     def test_the_code_cannot_be_used_twice(self):
         self.verify(self.code)
@@ -386,7 +386,7 @@ class SignupCompleteTests(SignupTestCase):
         response = self.client.post(COMPLETE_URL, payload, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('signup_ticket', response.data)
+        self.assertIn('signup_ticket', response.data['errors'])
 
     def test_signing_up_queues_no_welcome_credit(self):
         # 환영 크레딧은 본인인증 때 적는다(#336). 이메일은 얼마든지 만들 수 있다
@@ -412,7 +412,7 @@ class SignupCompleteValidationTests(SignupTestCase):
         response = self.complete(self.ticket, **overrides)
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn(field, response.data)
+        self.assertIn(field, response.data['errors'])
         self.assertEqual(User.objects.count(), 0)
 
     def test_rejects_an_uppercase_username(self):
@@ -456,7 +456,7 @@ class SignupCompleteValidationTests(SignupTestCase):
         response = self.client.post(COMPLETE_URL, payload, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('nickname', response.data)
+        self.assertIn('nickname', response.data['errors'])
 
     def test_rejects_an_account_without_the_age_confirmation(self):
         # 만 14세 미만은 받지 않는다. 자기 신고라 실제 나이는 본인인증에서 다시 본다(#336)
@@ -467,7 +467,7 @@ class SignupCompleteValidationTests(SignupTestCase):
         response = self.client.post(COMPLETE_URL, payload, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('age_over_14', response.data)
+        self.assertIn('age_over_14', response.data['errors'])
         self.assertEqual(User.objects.count(), 0)
 
     def test_a_rejected_attempt_keeps_the_ticket_usable(self):
@@ -489,13 +489,13 @@ class SignupTakenTests(SignupTestCase):
         response = self.complete(self.ticket, nickname='다른사람')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('username', response.data)
+        self.assertIn('username', response.data['errors'])
 
     def test_rejects_a_taken_nickname(self):
         response = self.complete(self.ticket, username='player_02')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('nickname', response.data)
+        self.assertIn('nickname', response.data['errors'])
 
     def test_starting_a_signup_holds_no_username(self):
         # 1, 2단계만 지난 이메일은 아이디를 붙잡지 않는다. 옛 흐름의 "미인증 계정의 선점"이 없다

@@ -1,6 +1,8 @@
 // web/apps/web/src/api/errors.ts
 // 서버의 실패 응답을 화면이 다룰 하나의 모양(ApiError)으로 바꾼다.
-// 서버마다 오류의 본문이 조금씩 다르다: {"detail"}, {"detail","code"}, {"detail","reason"}(게임의 409), {"detail","code","retry_after"}, 칸마다의 글({"username": [...]}).
+// 오류의 본문은 서버마다 {"detail"} 에 code, reason(게임의 409), retry_after 가 붙는다(docs/api/README.md 의 "오류의 모양").
+// 칸이 틀린 입력 오류는 {"detail", "errors": {칸: [글]}} 이다(결제 서버는 칸을 가르지 않아 errors 가 없다).
+// 상태 코드는 서버마다 다르다(400 이나 422). 화면은 상태 코드가 아니라 errors 로 알아본다(isInputError).
 
 export type FieldErrors = Record<string, string[]>;
 
@@ -79,17 +81,29 @@ function retryAfterOf(body: Record<string, unknown>, headers: Headers): number |
   return Number.isFinite(header) && header > 0 ? header : undefined;
 }
 
+/** 입력 오류인가. 서버가 칸마다의 까닭(errors)을 실었는지로 본다. 상태 코드(400, 422)는 서버마다 달라서 보지 않는다 */
+export function isInputError(error: unknown): boolean {
+  return error instanceof ApiError && isPlainObject(error.body.errors);
+}
+
 /**
- * 칸마다의 오류 글. 글의 목록(["..."])이나, 그 안에 다시 칸이 있는 것({"terms": ["..."]})을 칸으로 본다.
- * detail, code 같은 글 하나는 칸이 아니다. 안쪽 칸의 글은 바깥 칸의 글로 모은다(동의의 항목마다의 오류 같은 것)
+ * 칸마다의 오류 글. 입력 오류의 errors 안에 칸이 있다.
+ * 글의 목록(["..."])이나, 그 안에 다시 칸이 있는 것({"terms": ["..."]})을 칸으로 본다.
+ * 안쪽 칸의 글은 바깥 칸의 글로 모은다(동의의 항목마다의 오류 같은 것).
+ * errors 가 없으면 본문의 칸을 본다. detail, code 같은 글 하나는 칸이 아니다(409 의 used_by 같은 목록이 칸으로 잡힐 수 있다)
  */
 function fieldErrorsOf(body: Record<string, unknown>): FieldErrors {
+  const source = isPlainObject(body.errors) ? body.errors : body;
   const fields: FieldErrors = {};
-  for (const [name, value] of Object.entries(body)) {
+  for (const [name, value] of Object.entries(source)) {
     const messages = messagesIn(value);
     if (messages.length > 0 && typeof value !== 'string') fields[name] = messages;
   }
   return fields;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function messagesIn(value: unknown): string[] {

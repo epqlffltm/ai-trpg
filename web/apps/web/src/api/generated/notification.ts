@@ -216,15 +216,19 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
-        };
         /** HealthResponse */
         HealthResponse: {
             /** Status */
             status: string;
+        };
+        /** InputError */
+        InputError: {
+            /** @description 무엇이 잘못됐는가. 화면에 그대로 보여 줄 수 있는 문장이다 */
+            detail: string;
+            /** @description 칸의 이름(점으로 이은 경로)마다 틀린 까닭들이다 */
+            errors: {
+                [key: string]: string[];
+            };
         };
         /**
          * KindMute
@@ -323,19 +327,6 @@ export interface components {
             /** Unread */
             unread: number;
         };
-        /** ValidationError */
-        ValidationError: {
-            /** Context */
-            ctx?: Record<string, never>;
-            /** Input */
-            input?: unknown;
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-        };
         /**
          * WithdrawalOut
          * @description 탈퇴를 받은 답. 지운 수는 싣지 않는다. 인증 서버는 결과만 본다.
@@ -379,13 +370,13 @@ export interface operations {
                     "application/json": components["schemas"]["NotificationPage"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -490,13 +481,13 @@ export interface operations {
                     "application/json": components["schemas"]["ReadAllResult"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -548,13 +539,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -593,13 +584,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -654,13 +645,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };

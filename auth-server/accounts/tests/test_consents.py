@@ -108,7 +108,7 @@ class SignupConsentTest(APITestCase):
                 response = self.complete(consents)
 
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-                self.assertIn('consents', response.data)
+                self.assertIn('consents', response.data['errors'])
         self.assertEqual(User.objects.count(), 0)
 
     def test_refuses_an_old_version_an_unknown_item_and_no_consents(self):
@@ -122,7 +122,7 @@ class SignupConsentTest(APITestCase):
                 response = self.complete(consents)
 
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-                self.assertIn('consents', response.data)
+                self.assertIn('consents', response.data['errors'])
         self.assertEqual(ConsentRecord.objects.count(), 0)
 
     def test_a_refused_signup_keeps_the_ticket_usable(self):

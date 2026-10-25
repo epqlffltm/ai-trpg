@@ -358,7 +358,8 @@ async def test_a_struck_part_is_aimed_at_a_cost(client: AsyncClient, app: FastAP
         ({'weapon': 'lamp'}, 422, 'weapon'),
         ({'weapon': 'plate'}, 422, 'weapon'),
         ({'weapon': 'blade'}, 409, 'weapon_not_worn'),
-        ({'strike': 'head', 'aim': 'lost_eye'}, 422, 'strike'),
+        # 몬스터에게는 노려 칠 곳(aim)을 적지 않는다. 까닭은 action.check 칸에 온다
+        ({'strike': 'head', 'aim': 'lost_eye'}, 422, 'aim'),
     ],
 )
 async def test_what_cannot_be_used_is_refused(

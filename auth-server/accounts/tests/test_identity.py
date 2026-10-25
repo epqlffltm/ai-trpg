@@ -217,7 +217,7 @@ class VerifyTests(VerifyTestCase):
         response = self.client.post(reverse('accounts:identity-verify'), {}, format='json')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('token', response.data)
+        self.assertIn('token', response.data['errors'])
 
     def test_an_unknown_token_is_refused(self):
         response = post_verify(self.client, 'fake:abc:2001-02-30')

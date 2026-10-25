@@ -63,6 +63,7 @@ from accounts.consents import (
 )
 from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refresh_cookie
 from accounts.email_codes import InvalidEmailCodeError
+from accounts.exception_handlers import input_error_body
 from accounts.guardian import (
     GuardianConsentActiveError,
     GuardianEmailIsOwnError,
@@ -294,6 +295,11 @@ def build_coded_error_response(detail: str, code: str, status_code: int) -> Resp
     return Response({'detail': detail, 'code': code}, status=status_code)
 
 
+def build_field_error_response(field: str, messages: list[str]) -> Response:
+    """칸 하나가 틀렸다는 400. DRF 의 검증 오류와 같은 본문이다(accounts/exception_handlers.py)."""
+    return Response(input_error_body({field: messages}), status=status.HTTP_400_BAD_REQUEST)
+
+
 def build_under_age_response() -> Response:
     """만 14세 미만이라 계정을 막은 뒤의 응답. 이 기기의 refresh 쿠키도 지운다. 세션은 이미 끊겼다."""
     response = build_coded_error_response(
@@ -434,7 +440,7 @@ class SignupCompleteView(APIView):
             )
         except InvalidSignupFieldError as exc:
             # DRF 의 검증 오류와 같은 모양으로 응답한다
-            return Response({exc.field: exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+            return build_field_error_response(exc.field, exc.messages)
         except EmailAlreadyRegisteredError:
             return Response(
                 {'detail': '이미 가입을 마친 이메일입니다. 로그인해 주세요.', 'code': 'email_registered'},
@@ -634,14 +640,11 @@ class PasswordChangeView(APIView):
             change_password(user=request.user, **serializer.validated_data)
         except WrongCurrentPasswordError:
             # 센 횟수를 그대로 둔다. 그것이 틀린 횟수가 된다
-            return Response(
-                {'current_password': ['현재 비밀번호가 올바르지 않습니다.']},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            return build_field_error_response('current_password', ['현재 비밀번호가 올바르지 않습니다.'])
         except UnacceptablePasswordError as exc:
             # 현재 비밀번호는 맞았다. 새 비밀번호가 규칙에 어긋났을 뿐이다
             clear_password_change_attempts(user=request.user)
-            return Response({'new_password': exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+            return build_field_error_response('new_password', exc.messages)
 
         clear_password_change_attempts(user=request.user)
 
@@ -706,7 +709,7 @@ class PasswordResetConfirmView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except UnacceptablePasswordError as exc:
-            return Response({'new_password': exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+            return build_field_error_response('new_password', exc.messages)
 
         # 토큰을 주지 않는다. 새 비밀번호로 로그인하게 한다
         return Response(
@@ -946,9 +949,8 @@ class GuardianRequestView(APIView):
                 status.HTTP_409_CONFLICT,
             )
         except GuardianEmailIsOwnError:
-            return Response(
-                {'guardian_email': ['보호자의 이메일을 적어 주세요. 내 이메일은 쓸 수 없습니다.']},
-                status=status.HTTP_400_BAD_REQUEST,
+            return build_field_error_response(
+                'guardian_email', ['보호자의 이메일을 적어 주세요. 내 이메일은 쓸 수 없습니다.']
             )
         except GuardianRequestUnavailableError as exc:
             return build_retry_later_response(
@@ -1139,7 +1141,7 @@ class MyWithdrawalView(APIView):
         try:
             check_withdrawal_password(request.user, serializer.validated_data['password'])
         except WrongWithdrawalPasswordError:
-            return Response({'password': ['비밀번호가 올바르지 않습니다.']}, status=status.HTTP_400_BAD_REQUEST)
+            return build_field_error_response('password', ['비밀번호가 올바르지 않습니다.'])
         clear_password_change_attempts(user=request.user)
 
         # 요청하면 이 기기를 포함한 모든 세션이 끊긴다. 화면은 로그인 화면으로 간다

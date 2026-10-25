@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
 from server_core.database import create_engine, create_session_factory
+from server_core.input_errors import use_input_errors
 from server_core.notifications import dispatcher
 from server_core.notifications.setup import build_notifications
 from server_core.notifications.store import SqlOutboxStore
@@ -280,6 +281,9 @@ def create_app(
     app.add_exception_handler(AlreadyReportedError, reports.handle_already_reported)
     app.add_exception_handler(ReportNotFoundError, operators.handle_report_not_found)
     app.add_exception_handler(AlreadyHandledError, operators.handle_already_handled)
+
+    # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)
+    use_input_errors(app)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다.
     # 원인은 로그에 남긴다(server_core/observability/responses.py)

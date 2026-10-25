@@ -5,11 +5,11 @@
 //   - 404: 그런 재료가 없다. 남의 것도 404 다
 //   - 409(지울 때): 이 재료를 쓰는 시나리오가 있다. 본문의 used_by[{id, title}]
 //   - 409(더할 때): 로어북, 몬스터 모음이 가득 찼다
-//   - 422: 받지 않는 값. 화면이 먼저 검사하므로 서버의 규칙이 바뀌었을 때만 온다
+//   - 422: 받지 않는 값. 화면이 먼저 검사하므로 서버의 규칙이 바뀌었을 때만 온다. 칸이 틀린 것(errors)이면 그 칸에 보인다
 
-import { ApiError } from '../../../api/errors';
+import { ApiError, isInputError } from '../../../api/errors';
 import type { StudioKind } from '../../../api/studio';
-import { commonProblem, unknownProblem, type FormProblem } from '../../../auth/problem';
+import { commonProblem, fieldProblem, unknownProblem, type FormProblem } from '../../../auth/problem';
 import { kindText } from './studioKinds';
 
 const FAILED = '처리하지 못했습니다. 잠시 뒤에 다시 시도하세요.';
@@ -20,6 +20,7 @@ export function describeSaveProblem(error: unknown, kind: StudioKind): FormProbl
   if (common || !(error instanceof ApiError)) return common ?? { message: FAILED };
   if (error.status === 404) return { message: kindText(kind).missing };
   if (error.status === 409) return { message: error.message };
+  if (isInputError(error)) return fieldProblem(error, '서버가 받지 않는 값이 있습니다. 칸을 다시 확인해 주세요.');
   if (error.status === 422) return { message: '서버가 받지 않는 값이 있습니다. 칸을 다시 확인해 주세요.' };
   return unknownProblem(error, FAILED);
 }

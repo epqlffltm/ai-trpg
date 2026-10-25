@@ -57,6 +57,7 @@ FastAPI 서버들이 함께 쓰는 공통부다. 토큰 검증, 관측(로그, �
 | 토큰의 주인 | `CurrentUser`(없거나 틀리면 401), `OptionalUser`(보내지 않았으면 None). `adult_content`, `is_operator` 가 실린다 |
 | 다른 서버를 부르기 | `traced_client()` 를 앱에 하나 두고, 우리 서버를 부를 때만 `outgoing_headers()` 를 붙인다. 바깥(AI 모델의 창구)에는 붙이지 않는다 |
 | 알림 보내기 | 아래 [알림 보내기](#알림-보내기) |
+| 입력 오류 | `use_input_errors(app)` 을 앱을 만들 때 부른다. 칸이 틀린 요청을 `{"detail", "errors"}` 의 422 로 답하고 API 목록의 422 도 그 모양(`InputError`)으로 적는다. 보낸 값(`input`)은 응답에 싣지 않는다([오류의 모양](../../docs/api/README.md#오류의-모양)) |
 
 ## 알림 보내기
 

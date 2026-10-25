@@ -46,6 +46,29 @@
 - **화면의 타입.** 프런트를 만들 때 `openapi-typescript` 로 이 파일에서 타입을 만든다. 손으로 쓴 타입은 두지 않는다.
 - **운영 서버는 열지 않는다.** 서버의 `/docs`, `/openapi.json` 은 개발(DEBUG)에서만 열린다. 바깥에 나가는 목록은 이 파일들뿐이다.
 
+## 오류의 모양
+
+실패의 본문은 모든 서버가 `{"detail": "문장"}` 이다. 필요할 때 `code`(갈래를 나누는 이름), `retry_after`(기다릴 초)가 붙는다.
+`detail` 에는 서버가 적은 문장만 싣는다. 라이브러리의 글과 사용자가 보낸 값은 싣지 않는다.
+
+**칸이 틀린 입력 오류**는 `errors` 에 칸의 이름(점으로 이은 경로)마다 까닭을 싣는다.
+
+```json
+{ "detail": "입력이 올바르지 않습니다.", "errors": { "action.kind": ["Field required"] } }
+```
+
+상태 코드는 서버의 계약이다. 서버마다 정한 코드를 그대로 지키고, 프레임워크를 바꿔도 바꾸지 않는다.
+
+| 서버 | 입력 오류의 코드 | 만드는 곳 |
+| --- | --- | --- |
+| trpg, chat, asset, notification, story (FastAPI) | 422 | `shared/server-core` 의 `use_input_errors` |
+| auth (Django REST framework) | 400 | `auth-server/accounts/exception_handlers.py` |
+| board (NestJS) | 400 | `board-server/src/errors/validation.ts` |
+| billing (Go) | 400 | 칸을 가르지 않는다. `errors` 없이 `detail`(서비스끼리는 `code`)이 고칠 것을 말한다 |
+
+화면은 상태 코드가 아니라 **`errors` 가 있는지로** 입력 오류를 알아본다(`web/apps/web/src/api/errors.ts` 의 `isInputError`).
+같은 코드(422)를 서버가 정한 거절(trpg 의 `{field, reason}` 같은 것)에도 쓰므로, 코드만으로는 "칸을 고치면 되는가"를 가를 수 없다.
+
 ## 서버를 더할 때
 
 1. 그 서버가 OpenAPI 를 표준 출력에 내는 명령을 만든다(서버를 띄우지 않고).

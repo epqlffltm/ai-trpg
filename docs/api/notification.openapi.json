@@ -1,19 +1,6 @@
 {
   "components": {
     "schemas": {
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "title": "Detail",
-            "type": "array"
-          }
-        },
-        "title": "HTTPValidationError",
-        "type": "object"
-      },
       "HealthResponse": {
         "properties": {
           "status": {
@@ -25,6 +12,30 @@
           "status"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "InputError": {
+        "properties": {
+          "detail": {
+            "description": "무엇이 잘못됐는가. 화면에 그대로 보여 줄 수 있는 문장이다",
+            "type": "string"
+          },
+          "errors": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": "칸의 이름(점으로 이은 경로)마다 틀린 까닭들이다",
+            "type": "object"
+          }
+        },
+        "required": [
+          "detail",
+          "errors"
+        ],
+        "title": "InputError",
         "type": "object"
       },
       "KindMute": {
@@ -220,46 +231,6 @@
         "title": "UnreadCount",
         "type": "object"
       },
-      "ValidationError": {
-        "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "title": "Location",
-            "type": "array"
-          },
-          "msg": {
-            "title": "Message",
-            "type": "string"
-          },
-          "type": {
-            "title": "Error Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError",
-        "type": "object"
-      },
       "WithdrawalOut": {
         "description": "탈퇴를 받은 답. 지운 수는 싣지 않는다. 인증 서버는 결과만 본다.",
         "properties": {
@@ -345,11 +316,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -507,11 +478,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -587,11 +558,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -643,11 +614,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "summary": "Receive Withdrawal",
@@ -707,11 +678,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "summary": "Put Notification",

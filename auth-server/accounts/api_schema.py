@@ -13,7 +13,8 @@ API 목록(OpenAPI, #558)에 적는 요청과 응답의 모양. 뷰(views.py)의
 오류의 모양은 셋이다.
   - {"detail": 글} 또는 {"detail": 글, "code": 이름}. 화면은 code 로 가른다
   - 시도 제한과 메일을 보낼 수 없는 때(429): {"detail", "code", "retry_after"} 와 Retry-After 머리말
-  - 칸마다의 검증 오류(400): {"칸 이름": ["글", ...]}. DRF 의 모양 그대로다
+  - 칸마다의 검증 오류(400): {"detail": 글, "errors": {"칸 이름": ["글", ...]}}.
+    서버들이 함께 쓰는 모양이다(docs/api/README.md)
 """
 
 from drf_spectacular.contrib.rest_framework_simplejwt import SimpleJWTScheme
@@ -162,10 +163,18 @@ FIELD_ERRORS = {
     },
 }
 
+# 입력 오류의 본문. 서버들이 함께 쓰는 모양이다(accounts/exception_handlers.py, docs/api/README.md)
+INPUT_ERROR_BODY = {
+    'type': 'object',
+    'required': ['detail', 'errors'],
+    'properties': {'detail': {'type': 'string'}, 'errors': FIELD_ERRORS},
+    'additionalProperties': False,
+}
+
 # 400 의 두 모양. 칸마다의 검증 오류이거나, 칸을 가르지 않는 거절({"detail"} 또는 {"detail", "code"})이다
 BAD_REQUEST_BODY = {
     'anyOf': [
-        FIELD_ERRORS,
+        INPUT_ERROR_BODY,
         {
             'type': 'object',
             'required': ['detail'],

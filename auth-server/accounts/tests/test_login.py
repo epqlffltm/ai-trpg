@@ -238,7 +238,7 @@ class LoginVerifyTests(LoginTestCase):
         response = self.verify(self.ticket, '12345')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('code', response.data)
+        self.assertIn('code', response.data['errors'])
 
     def test_signup_code_cannot_be_used_for_login(self):
         signup_code = issue_email_code(user=self.user, purpose=EmailCodePurpose.SIGNUP)

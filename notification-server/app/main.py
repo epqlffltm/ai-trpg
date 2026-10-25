@@ -15,6 +15,7 @@ from fastapi import FastAPI
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
 from server_core.database import create_engine, create_session_factory
+from server_core.input_errors import use_input_errors
 from server_core.observability.db_spans import instrument_engine
 from server_core.observability.http_spans import traced_client
 from server_core.observability.metrics import configure_metrics, shutdown_metrics, watch_pool
@@ -137,6 +138,9 @@ def create_app(
     app.include_router(mutes.router, prefix=API_PREFIX)
     # 인증 서버가 탈퇴를 알리는 주소(#603). 인증 서버의 서명으로 확인한다
     app.include_router(withdrawals.router, prefix=API_PREFIX)
+
+    # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)
+    use_input_errors(app)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다.
     # 원인은 로그에 남긴다(server_core/observability/responses.py)

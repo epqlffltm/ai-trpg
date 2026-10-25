@@ -905,7 +905,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -969,7 +973,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1042,7 +1050,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1079,7 +1091,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1171,7 +1187,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1236,7 +1256,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1301,7 +1325,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1468,7 +1496,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1581,7 +1613,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1664,7 +1700,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1720,7 +1760,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1767,7 +1811,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1872,7 +1920,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1938,7 +1990,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -1994,7 +2050,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -2017,7 +2077,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;
@@ -2054,7 +2118,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: string[] | Record<string, never>;
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
                     } | {
                         code?: string;
                         detail: string;

@@ -317,7 +317,7 @@ class PasswordChangeLimitTests(AttemptPolicyTestCase):
             )
 
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-            self.assertIn('new_password', response.data)
+            self.assertIn('new_password', response.data['errors'])
 
 
 class RedisDownTests(AttemptPolicyTestCase):
