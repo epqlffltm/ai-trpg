@@ -1824,3 +1824,105 @@ a.ui-button {
   display: grid;
   gap: 8px;
 }
+
+/* 공지·게시판(A11). 게시판 고르기, 검색, 글 목록, 쪽 넘기기, 글과 댓글. 본문과 댓글은 글자 그대로(줄바꿈만 살린다) */
+.board-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: var(--ui-gap);
+}
+
+.board-tabs [aria-current='page'] {
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--ui-text);
+}
+
+.board-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: var(--ui-gap);
+}
+
+.board-search .ui-field {
+  flex: 1;
+  min-width: 12em;
+  margin-bottom: 0;
+}
+
+/* 이름표 한 줄만큼 내려 입력 칸과 줄을 맞춘다 */
+.board-search > .ui-button {
+  margin-top: calc(1.5em + 6px);
+}
+
+.posts {
+  display: grid;
+  margin-bottom: var(--ui-gap);
+  border-top: 1px solid var(--ui-border);
+}
+
+.post-row {
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--ui-border);
+  overflow-wrap: anywhere;
+}
+
+.post-row__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.post-row__pin {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+  font-size: 0.75em;
+}
+
+.post-row__meta {
+  margin: 2px 0 0;
+  font-size: 0.85em;
+}
+
+.pager {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin: var(--ui-gap) 0;
+}
+
+.post__content,
+.comment__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.comments {
+  display: grid;
+  gap: 8px;
+}
+
+.comments--replies {
+  margin: 8px 0 0 16px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ui-border);
+}
+
+.comment__meta {
+  margin: 0;
+  font-size: 0.85em;
+}
+
+.comment__text {
+  margin: 2px 0 0;
+}
+
+.comment--deleted .comment__text {
+  color: var(--ui-text-muted);
+}

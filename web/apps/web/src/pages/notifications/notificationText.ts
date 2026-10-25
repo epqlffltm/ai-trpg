@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/notifications/notificationText.ts
 // 알림 하나를 화면의 한 줄과 누르면 갈 곳으로 바꾼다. 순수한 함수다. 서버는 문구를 주지 않는다(screens.md 의 A10).
 // source 와 kind 를 함께 보고 고른다. 표에 없는 짝은 일반 문구다. payload 의 칸이 빠져도 깨지지 않는다.
-// 제재와 신고 처리의 알림에는 사유가 없다(서버가 싣지 않는다). 게시판의 글로 가는 길은 게시판 화면(A11)을 만들 때 더한다.
+// 제재와 신고 처리의 알림에는 사유가 없다(서버가 싣지 않는다). 게시판의 댓글과 답글은 그 글(A11)로 간다.
 
 import type { AppNotification } from '../../api/types';
 import { formatDate } from '../../format/dateTime';
@@ -93,8 +93,8 @@ const LINES: Record<string, Describe> = {
     return { text: `실버가 곧 사라집니다: 실버 ${goldAmount(text(p, 'amount') ?? '?')}${from ? ` · ${formatDate(from)}부터` : ''}`, to: '/wallet' };
   },
   'billing credit.short': creditShort,
-  'board post.commented': (p) => ({ text: `내 글 ${quoted(p, 'post_title')}에 댓글이 달렸습니다`, to: null }),
-  'board comment.replied': (p) => ({ text: `내 댓글에 답글이 달렸습니다: ${quoted(p, 'post_title')}`, to: null }),
+  'board post.commented': (p) => ({ text: `내 글 ${quoted(p, 'post_title')}에 댓글이 달렸습니다`, to: path('/board/posts', p, 'post_id') }),
+  'board comment.replied': (p) => ({ text: `내 댓글에 답글이 달렸습니다: ${quoted(p, 'post_title')}`, to: path('/board/posts', p, 'post_id') }),
   'asset character.hidden': (p) => ({ text: `운영자가 캐릭터를 숨겼습니다: ${text(p, 'name') ?? '?'}. 공개 목록과 남의 새 대화에서 빠지고, 나는 계속 씁니다`, to: path('/chat/studio/characters', p, 'character_id') }),
   'asset character.unhidden': (p) => ({ text: `운영자가 캐릭터의 숨김을 풀었습니다: ${text(p, 'name') ?? '?'}`, to: path('/chat/studio/characters', p, 'character_id') }),
   'asset character_report.handled': (p) => ({ text: `신고한 캐릭터를 운영자가 처리했습니다: ${text(p, 'name') ?? '?'}`, to: null }),

@@ -2,7 +2,7 @@
 // 처음 갈 때 받는 화면들(코드 분할, 2026-10-23). 경로는 App.tsx 가 잇는다.
 //
 // 나눈 것: TRPG(둘러보기, 시나리오, 로비, 테이블 만들기, 테이블 방, 제작 도구), chat 의 캐릭터 만들기, 지갑·충전·주문, 마이페이지,
-// 본인인증과 보호자 동의(보호자의 링크가 여는 화면도), 알림,
+// 본인인증과 보호자 동의(보호자의 링크가 여는 화면도), 알림, 공지·게시판,
 // 운영자의 신고 처리.
 // 화면마다 조각 하나다.
 // 나누지 않은 것: 첫 화면, 로그인, 가입, 비밀번호, 없는 주소. 처음 들어오는 곳이라 한 번 더 받게 하지 않는다(App.tsx 가 바로 가져온다).
@@ -20,6 +20,10 @@ export const GuardianRequestPage = lazyPage(() => import('../pages/guardian/Guar
 export const GuardianConsentPage = lazyPage(() => import('../pages/guardian/GuardianConsentPage'), 'GuardianConsentPage');
 export const GuardianRevokePage = lazyPage(() => import('../pages/guardian/GuardianRevokePage'), 'GuardianRevokePage');
 export const NotificationsPage = lazyPage(() => import('../pages/notifications/NotificationsPage'), 'NotificationsPage');
+export const BoardIndexPage = lazyPage(() => import('../pages/board/BoardIndexPage'), 'BoardIndexPage');
+export const BoardListPage = lazyPage(() => import('../pages/board/BoardListPage'), 'BoardListPage');
+export const BoardSearchPage = lazyPage(() => import('../pages/board/BoardSearchPage'), 'BoardSearchPage');
+export const PostPage = lazyPage(() => import('../pages/board/PostPage'), 'PostPage');
 export const OrdersPage = lazyPage(() => import('../pages/orders/OrdersPage'), 'OrdersPage');
 export const OrderPage = lazyPage(() => import('../pages/orders/OrderPage'), 'OrderPage');
 

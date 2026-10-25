@@ -1,5 +1,5 @@
 // web/apps/web/src/layout/AppHeader.tsx
-// 모든 화면의 머리. 이름(첫 화면으로), 서비스, 내 정보 또는 로그인.
+// 모든 화면의 머리. 이름(첫 화면으로), 서비스와 게시판, 내 정보 또는 로그인.
 // 로그인했으면 알림(A10, 읽지 않은 수)과 잔액(A6, 지갑으로)도 둔다.
 
 import { Link, useLocation } from 'react-router';
@@ -20,6 +20,7 @@ export function AppHeader() {
         <Link to="/trpg">TRPG</Link>
         <Link to="/chat">chat</Link>
         <Link to="/story">story</Link>
+        <Link to="/board">게시판</Link>
       </nav>
       <div className="app-header__account">
         {session ? (
