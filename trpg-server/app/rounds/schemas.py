@@ -276,6 +276,20 @@ class PatientOut(BaseModel):
     name: str | None = None
 
 
+class TreatAidOut(BaseModel):
+    """치료에 붙여 쓴 물건(#277). 판정의 보정(modifier)에 bonus 가 이미 들었다."""
+
+    entry_id: uuid.UUID
+    name: str
+    # 판정에 더한 보정. 쓰지 못했으면 0 이다
+    bonus: int
+    # 썼는가. 못 했으면 reason 이 있다: not_held(차례가 왔을 때 더 가지고 있지 않았다)
+    used: bool
+    reason: str | None
+    # 쓴 뒤에 남은 개수
+    remaining: int
+
+
 class TreatmentOut(BaseModel):
     """치료의 결과. 엔진이 정한 것이다. 판정의 능력과 난이도는 규칙이 정한 치료의 것이다."""
 
@@ -298,6 +312,8 @@ class TreatmentOut(BaseModel):
     mishap: MishapOut | None
     # 치료받던 쪽이 즉사했는가
     died: bool
+    # 치료에 붙여 쓴 물건(#277). 적지 않았으면 None 이다
+    aid: TreatAidOut | None = None
 
 
 class ThrownAtOut(BaseModel):

@@ -241,6 +241,8 @@ class TreatAction(BaseModel):
     능력과 난이도는 받지 않는다. 규칙의 치료 능력과 그 부상의 치료 난이도로 판정한다.
     대상은 앉은 사람(target)이나 이번 장면의 NPC(npc) 중 하나다.
     둘 다 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다).
+    item 은 치료에 붙여 쓰는 소모품이다(#277, 의료 키트). 아이템 규칙에 치료 보정(treat_bonus)이 있어야 한다.
+    그만큼 치료 판정의 보정이 오르고, 치료가 성공하든 실패하든 하나 없어진다. 비우면 물건 없이 치료한다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -252,6 +254,8 @@ class TreatAction(BaseModel):
     target: uuid.UUID | None = None
     # 치료받는 NPC. 판의 로어북 인물 항목의 id 다. 엔진은 이 값을 읽지 않는다
     npc: uuid.UUID | None = None
+    # 치료에 붙여 쓰는 소모품. 판의 로어북 물건 항목의 id 다. 엔진은 이 값을 읽지 않는다. 보정은 부른 쪽이 넘긴다
+    item: uuid.UUID | None = None
 
     @model_validator(mode='after')
     def require_one_patient(self) -> Self:

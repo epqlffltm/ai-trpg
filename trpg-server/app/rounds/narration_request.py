@@ -476,6 +476,8 @@ def to_treatment(treatment: dict | None) -> TreatmentNote | None:
         return None
     mishap = treatment['mishap']
     aftermath = treatment['aftermath']
+    aid = treatment.get('aid')
+    used = aid is not None and aid['used']
     return TreatmentNote(
         injury=treatment['name'],
         patient=patient_name(treatment['patient']),
@@ -486,6 +488,8 @@ def to_treatment(treatment: dict | None) -> TreatmentNote | None:
         mishap=mishap['kind'] if mishap else None,
         worsened_minutes=mishap.get('delay_minutes') if mishap else None,
         died=treatment['died'],
+        aid=aid['name'] if used else None,
+        aid_bonus=aid['bonus'] if used else 0,
     )
 
 

@@ -2295,6 +2295,8 @@ export interface components {
              */
             slots: string[];
             throw?: components["schemas"]["app__tables__schemas__ItemThrowOut"] | null;
+            /** Treat Bonus */
+            treat_bonus?: number | null;
             /** Ward */
             ward?: number | null;
         };
@@ -3734,6 +3736,8 @@ export interface components {
          *     짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.
          *     룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).
          *     throw 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.
+         *     treat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.
+         *     쓰면 치료가 성공하든 실패하든 하나 없어진다.
          */
         "ItemRule-Input": {
             /** Ap */
@@ -3774,6 +3778,8 @@ export interface components {
              */
             slots: string[];
             throw?: components["schemas"]["ItemThrow"] | null;
+            /** Treat Bonus */
+            treat_bonus?: number | null;
             /** Ward */
             ward?: number | null;
         };
@@ -3799,6 +3805,8 @@ export interface components {
          *     짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.
          *     룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).
          *     throw 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.
+         *     treat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.
+         *     쓰면 치료가 성공하든 실패하든 하나 없어진다.
          */
         "ItemRule-Output": {
             /** Ap */
@@ -3836,6 +3844,8 @@ export interface components {
              */
             slots: string[];
             throw?: components["schemas"]["ItemThrow"] | null;
+            /** Treat Bonus */
+            treat_bonus?: number | null;
             /** Ward */
             ward?: number | null;
         };
@@ -3848,7 +3858,8 @@ export interface components {
          *     slots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
          *     slots 가 비어 있으면 착용하지 않는 물건이다.
          *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).
-         *     cures 는 쓰면 푸는 부상들, throw 는 던지는 판정이다(#277). 둘 다 소모품에만 있다.
+         *     cures 는 쓰면 푸는 부상들, throw 는 던지는 판정, treat_bonus 는 치료에 붙여 쓸 때의 보정이다(#277).
+         *     셋 다 소모품에만 있다.
          */
         ItemRuleSnapshot: {
             /** Ap */
@@ -3888,6 +3899,8 @@ export interface components {
              */
             slots: string[];
             throw?: components["schemas"]["ItemThrowSnapshot"] | null;
+            /** Treat Bonus */
+            treat_bonus?: number | null;
             /** Ward */
             ward?: number | null;
         };
@@ -7917,7 +7930,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 59
+             * @default 60
              */
             format: number;
             /**
@@ -8625,10 +8638,14 @@ export interface components {
          *     능력과 난이도는 받지 않는다. 규칙의 치료 능력과 그 부상의 치료 난이도로 판정한다.
          *     대상은 앉은 사람(target)이나 이번 장면의 NPC(npc) 중 하나다.
          *     둘 다 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다).
+         *     item 은 치료에 붙여 쓰는 소모품이다(#277, 의료 키트). 아이템 규칙에 치료 보정(treat_bonus)이 있어야 한다.
+         *     그만큼 치료 판정의 보정이 오르고, 치료가 성공하든 실패하든 하나 없어진다. 비우면 물건 없이 치료한다.
          */
         TreatAction: {
             /** Injury */
             injury: string;
+            /** Item */
+            item?: string | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -8638,6 +8655,27 @@ export interface components {
             npc?: string | null;
             /** Target */
             target?: string | null;
+        };
+        /**
+         * TreatAidOut
+         * @description 치료에 붙여 쓴 물건(#277). 판정의 보정(modifier)에 bonus 가 이미 들었다.
+         */
+        TreatAidOut: {
+            /** Bonus */
+            bonus: number;
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string | null;
+            /** Remaining */
+            remaining: number;
+            /** Used */
+            used: boolean;
         };
         /**
          * Treatment
@@ -8658,6 +8696,7 @@ export interface components {
             /** Ability */
             ability: string;
             aftermath: components["schemas"]["InjuryRollOut"] | null;
+            aid?: components["schemas"]["TreatAidOut"] | null;
             /** Died */
             died: boolean;
             /** Difficulty */

@@ -316,6 +316,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'healed',
         'mishap',
         'died',
+        # 치료에 붙여 쓴 물건(#277). 적지 않았으면 없다
+        'aid',
     ),
     # 지목의 결과도 공개다. 맞았으면 진짜 이름이 보인다. 틀렸으면 정답의 흔적이 없다(name 이 null)
     EventType.NAMING_RESOLVED: ('round', 'character_name', 'guess', 'correct', 'entry_id', 'name', 'label', 'newly'),

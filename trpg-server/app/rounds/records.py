@@ -124,6 +124,9 @@ def record_treatment(session: AsyncSession, table: GameTable, treated: dict, cau
         'mishap': treated['mishap'],
         'died': treated['died'],
     }
+    # 치료에 붙여 쓴 물건(#277). 적지 않은 치료의 이벤트는 이 칸이 생기기 전과 같다
+    if treated.get('aid') is not None:
+        payload['aid'] = treated['aid']
     event = recorder.record(session, table, EventType.INJURY_TREATED, payload=payload, cause=cause)
     if treated['healed']:
         ended_payload = {'round': round_number, **patient, 'injury': treated['injury'], 'reason': 'treated'}

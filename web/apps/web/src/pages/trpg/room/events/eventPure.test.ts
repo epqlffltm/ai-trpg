@@ -67,6 +67,9 @@ describe('eventLine', () => {
     expect(line('hp_changed', { character_name: '렌', before: 9, after: 0, downed: true })?.text).toBe('렌: HP 9 → 0 · 쓰러짐');
     expect(line('npc_changed', { name: '문지기', kind: 'damage', amount: 3, status: 'downed' })?.text).toBe('문지기: 피해 3 · 쓰러짐');
     expect(line('injury_gained', { name: '문지기', injury: 'broken_arm' })?.text).toBe('문지기: 부러진 팔 입음');
+    const aid = { entry_id: 'i8', name: '의료 키트', bonus: 2, used: true, reason: null, remaining: 1 };
+    expect(line('injury_treated', { character_name: '렌', injury: 'broken_arm', treated: true, aid })?.text).toBe('렌: 부러진 팔 치료함 (의료 키트 +2)');
+    expect(line('injury_treated', { character_name: '렌', injury: 'broken_arm', treated: true, aid: { ...aid, used: false } })?.text).toBe('렌: 부러진 팔 치료함');
     expect(line('monster_attacked', { name: '수로 쥐', attack: '물기', character_name: '렌', success: true })?.text).toBe('수로 쥐: 물기 → 렌 맞힘');
     const attack = { name: '할퀴기', ability: 'str', difficulty: 'normal', harm: 'light' };
     expect(line('monster_attacked', { name: '고블린', attack, character_name: '렌', success: false })?.text).toBe('고블린: 할퀴기 → 렌 빗나감');

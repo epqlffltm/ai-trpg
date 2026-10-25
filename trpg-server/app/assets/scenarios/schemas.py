@@ -672,6 +672,8 @@ class ItemRule(BaseModel):
     짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.
     룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).
     throw 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.
+    treat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.
+    쓰면 치료가 성공하든 실패하든 하나 없어진다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -691,6 +693,7 @@ class ItemRule(BaseModel):
     lock: ItemLock | None = None
     cures: Cures = []
     throw: ItemThrow | None = None
+    treat_bonus: CombatNumber | None = None
 
     @model_validator(mode='after')
     def combat_only_when_worn(self) -> 'ItemRule':
@@ -740,6 +743,13 @@ class ItemRule(BaseModel):
         """던지는 판정은 소모품에만 적는다. 던지면 없어지는 물건이다."""
         if self.throw is not None and self.kind != ItemKind.CONSUMABLE:
             raise ValueError('던지는 판정(throw)은 소모품(consumable)에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def treat_bonus_only_with_consumables(self) -> 'ItemRule':
+        """치료 보정은 소모품에만 적는다. 치료에 붙여 쓰면 없어지는 물건이다(붕대, 의료 키트)."""
+        if self.treat_bonus is not None and self.kind != ItemKind.CONSUMABLE:
+            raise ValueError('치료 보정(treat_bonus)은 소모품(consumable)에만 적습니다.')
         return self
 
     @model_validator(mode='after')

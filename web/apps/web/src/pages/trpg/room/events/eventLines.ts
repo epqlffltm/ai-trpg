@@ -243,6 +243,13 @@ function givenText(payload: Payload, ctx: EventContext, event: TableEvent): stri
   return `${who(payload, ctx, event)}: ${thing(payload)} → ${to}`;
 }
 
+/** 치료에 붙여 쓴 물건(#277). " (의료 키트 +2)". 쓰지 않았거나 쓰지 못했으면 빈 글 */
+function aidText(payload: Payload): string {
+  const aid = part(payload, 'aid');
+  if (!aid || !flag(aid, 'used')) return '';
+  return ` (${text(aid, 'name') ?? '물건'} +${count(aid, 'bonus') ?? 0})`;
+}
+
 /** 물건을 던짐(#277). 맞았는지는 뒤의 판정과 변화의 줄이 적는다 */
 function thrownText(payload: Payload, ctx: EventContext, event: TableEvent): string {
   const item = text(payload, 'name') ?? '물건';
@@ -355,7 +362,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   injury_ended: (p, ctx, e) => `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} 풀림`,
   injury_treated: (p, ctx, e) => {
     if (flag(p, 'died')) return `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} 치료에 실패해 죽었습니다.`;
-    return `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} ${flag(p, 'treated') ? '치료함' : '치료하지 못함'}`;
+    return `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} ${flag(p, 'treated') ? '치료함' : '치료하지 못함'}${aidText(p)}`;
   },
   death_save_rolled: (p, ctx, e) =>
     `${who(p, ctx, e)}: 죽음의 굴림 ${count(p, 'roll') ?? '?'}(목표 ${count(p, 'target') ?? '?'}) ${flag(p, 'success') ? '성공' : '실패'}`,

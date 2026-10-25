@@ -122,10 +122,14 @@ def describe_treatment(note: TreatmentNote) -> str:
     예: → 토르빈의 팔 골절 치료: 앞당겨짐, 낫기까지 2시간 30분
         → 토르빈의 팔 골절 치료: 다 나음. 후유증: 굽은 팔
         → 토르빈의 팔 골절 치료 실패: 상처가 덧남, 50분 늦어짐, 낫기까지 4시간 10분
+        → 토르빈의 팔 골절 치료(쓴 물건: 의료 키트 +2): 앞당겨짐, 낫기까지 2시간 30분
     남은 시간은 이 장면이 끝난 뒤부터다(게임 안의 시간, app/rounds/time_words.py).
+    붙여 쓴 물건(#277)의 보정은 판정의 보정에 이미 들었다. 무엇을 썼는지만 붙인다.
     """
     # 치료받던 사람이 떠났으면 이름을 모른다. 부상만 적는다
     head = f'→ {note.patient}의 {note.injury} 치료' if note.patient else f'→ {note.injury} 치료'
+    if note.aid:
+        head = f'{head}(쓴 물건: {note.aid} +{note.aid_bonus})'
     if not note.treated:
         return f'{head}: 치료할 부상이 이미 없었다'
     if note.mishap is None:

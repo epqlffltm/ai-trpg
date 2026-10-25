@@ -392,6 +392,7 @@ async def test_treating_myself_fills_me_in(client: AsyncClient, app: FastAPI, me
         'injury': 'broken_arm',
         'target': str(ME),
         'npc': None,
+        'item': None,
     }
 
 
@@ -489,6 +490,7 @@ async def test_a_successful_treatment_brings_healing_closer(
         'aftermath': None,
         'mishap': None,
         'died': False,
+        'aid': None,
     }
     assert (await sheet_of(client, me, world['table']))['injuries'] == [
         {'injury': 'broken_arm', 'round': 1, 'ends_after_round': None, 'heals_at': at(ARM_HEALS - TREATED)}

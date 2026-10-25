@@ -7,6 +7,7 @@ import type { DeclaredAction, Ruleset } from '../../../../../api/types';
 import { amountLabel, buyingCost, moneyOf } from '../../money';
 import { chosenDevice, doorDevices, doorsHere } from './doorOptions';
 import {
+  aidItems,
   heldCount,
   itemHeals,
   placeItems,
@@ -101,7 +102,7 @@ export function draftFromAction(rules: Ruleset, action: DeclaredAction | null): 
     case 'check':
       return { ...base, ...checkDraft(action), kind: 'check' };
     case 'treat':
-      return { ...base, kind: 'treat', injury: action.injury, target: refOf(action.target, action.npc, null) };
+      return { ...base, kind: 'treat', injury: action.injury, target: refOf(action.target, action.npc, null), item: action.item ?? '' };
     case 'name':
       return { ...base, kind: 'name', guess: action.name, npc: action.npc ?? '' };
     case 'use':
@@ -269,7 +270,7 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
     case 'check':
       return toCheck(draft, member, npc, monster);
     case 'treat':
-      return { kind: 'treat', injury: draft.injury, ...(member ? { target: member } : {}), ...(npc ? { npc } : {}) };
+      return { kind: 'treat', injury: draft.injury, ...(member ? { target: member } : {}), ...(npc ? { npc } : {}), ...treatAid(draft, ctx) };
     case 'name':
       return { kind: 'name', name: draft.guess.trim(), ...(draft.npc ? { npc: draft.npc } : {}) };
     case 'use':
@@ -312,6 +313,11 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
     case 'replace':
       return { kind: 'replace', place: draft.place, item: draft.item };
   }
+}
+
+/** 치료에 붙여 쓰는 물건(#277). 다른 종류에서 고른 물건이 남아 있을 수 있어 치료 보정이 있는 것만 보낸다 */
+function treatAid(draft: ActionDraft, ctx: ActionContext): { item?: string } {
+  return draft.item && aidItems(ctx).some((choice) => choice.value === draft.item) ? { item: draft.item } : {};
 }
 
 /** 잠그기, 열기. 고른 장치가 지금 그 문에서 할 수 없으면 할 수 있는 것으로 바꾼다 */

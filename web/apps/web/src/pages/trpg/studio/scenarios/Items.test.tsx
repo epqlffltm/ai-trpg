@@ -187,6 +187,13 @@ describe('물건·돈 입력', () => {
     expect(toItemRule(SWORD, itemRuleDraft(undefined)).throw).toBeNull();
   });
 
+  it('규칙: 치료 보정은 읽은 그대로 소모품에만 돌려 보낸다', () => {
+    const kit = itemRuleDraft({ ...SWORD_RULE, entry_id: POTION, kind: 'consumable', slots: [], attack: null, cures: [], treat_bonus: 2 } as ItemRule);
+    expect(toItemRule(POTION, kit).treat_bonus).toBe(2);
+    expect(toItemRule(POTION, { ...kit, kind: 'gear' }).treat_bonus).toBeNull();
+    expect(toItemRule(SWORD, itemRuleDraft(undefined)).treat_bonus).toBeNull();
+  });
+
   it('소지품: 같은 물건, 개수, 착용 칸의 수, 겹치는 칸을 알린다', () => {
     const rules = [SWORD_RULE as ItemRule, { ...SWORD_RULE, entry_id: POTION, slots: ['main_hand'], slot_count: 1 } as ItemRule];
     expect(stacksHints([{ entryId: SWORD, count: '1', wear: [] }, { entryId: SWORD, count: '2', wear: [] }], rules)[1]).toContain('같은 물건');

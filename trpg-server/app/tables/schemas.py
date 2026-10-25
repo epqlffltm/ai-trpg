@@ -391,6 +391,8 @@ class CatalogItemOut(BaseModel):
     cures: list[str] = []
     # 던지는 판정(#277). 행동 '던지기'로 같은 장소의 몬스터나 장면의 인물에게 던진다. 던질 수 없으면 None 이다
     throw: ItemThrowOut | None = None
+    # 치료에 붙여 쓸 때 치료 판정의 보정에 더하는 값(#277). 치료하는 행동의 item 으로 쓴다. 쓰지 못하면 None 이다
+    treat_bonus: int | None = None
 
 
 class WornOut(BaseModel):

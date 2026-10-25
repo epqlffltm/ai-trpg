@@ -188,7 +188,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 ((쓴 물건: 해독제 → 영애) [풀린 부상: 중독])
 #   narration-63: 물건을 던지는 행동(#277). 한 일의 줄에서 판정 앞에 던진 물건이 붙는다
 #                 ((던진 물건: 화염병 → 수로 쥐 1) (민첩 판정 성공: …))
-PROMPT_VERSION = 'narration-63'
+#   narration-64: 치료에 붙여 쓴 물건(#277). 치료의 줄에 쓴 물건과 보정이 붙는다
+#                 (→ 토르빈의 팔 골절 치료(쓴 물건: 의료 키트 +2): 앞당겨짐 …)
+PROMPT_VERSION = 'narration-64'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3
