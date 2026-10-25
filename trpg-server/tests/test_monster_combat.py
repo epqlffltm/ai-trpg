@@ -5,6 +5,7 @@
 
 맵은 수로 입구(시작)와 깊은 수로다. 입구에 수로 쥐 둘(야수, 최대 HP 4), 깊은 수로에 해골 병사 하나(언데드, 최대 HP 6).
 주사위는 정해진 눈을 내는 것으로 바꿔 꽂는다. 판정의 눈을 먼저, 양의 눈을 그다음에 쓴다.
+큰 타격(최대 HP 의 절반 이상)이나 쓰러짐이면 그다음 눈이 부상 표(이십면체)다(#799).
 
 보는 것은 다섯이다.
   - 이번 장면의 몬스터: 살아 있는 캐릭터가 서 있는 장소의 마리만, 번호가 붙은 이름과 몸 상태로 보인다.
@@ -12,7 +13,7 @@
     언데드와 구조물은 HP 가 0 이면 제압이어도 부서진다(타입의 성질).
   - 받을 때와 판정할 때의 검사: 다른 장소의 마리, 죽은 마리, 같은 라운드에 앞사람이 죽인 마리(굴리지 않는다).
   - 내보내는 것: 응답과 이벤트에 HP 의 숫자가 없다.
-  - 행동의 모양: 몬스터에게는 타격만 한다(회복, 노려 치기 없음).
+  - 행동의 모양: 몬스터에게는 타격만 한다(회복 없음).
 맨 아래에는 DB 를 쓰지 않는 작은 함수들의 테스트가 있다.
 """
 
@@ -53,6 +54,8 @@ SKELETON_SHEET = make_sheet(max_hp=6)
 # 판정의 눈. 보통(목표 15)에 도전한다. 시트의 보정은 0 이다
 FAIL = 1
 PASS = 20
+# 부상 표의 눈. SRD5 의 1~10 은 아무 부상도 없다
+NO_INJURY = 1
 
 BITE_BACK = '쥐를 걷어찬다.'
 LAUGH = '크게 웃는다.'
@@ -207,7 +210,7 @@ async def test_the_scene_lists_the_monsters_where_someone_stands(client: AsyncCl
     ]
     assert {(monster['status'], monster['condition']) for monster in listed['monsters']} == {('alive', '멀쩡함')}
     # 숫자도 도감의 글도 싣지 않는다
-    assert set(listed['monsters'][0]) == {'id', 'name', 'place_id', 'status', 'condition', 'items'}
+    assert set(listed['monsters'][0]) == {'id', 'name', 'place_id', 'status', 'condition', 'items', 'injuries'}
     assert '개만 한 쥐' not in str(listed)
 
 
@@ -229,7 +232,7 @@ async def test_a_single_monster_is_called_without_a_number(
 async def test_a_hit_wounds_the_monster(client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession):
     world = await start_table(client, me)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
-    load_dice(app, [PASS, 3])
+    load_dice(app, [PASS, 3, NO_INJURY])
 
     closing = await declare(client, me, world['table'], BITE_BACK, strike(rat['id']))
 
@@ -243,6 +246,15 @@ async def test_a_hit_wounds_the_monster(client: AsyncClient, app: FastAPI, me: d
         'amount': 3,
         'lethal': False,
         'status': 'alive',
+        # 4 중 3 은 큰 타격이다. 부상 표를 굴렸지만 아무것도 나오지 않았다
+        'injury_roll': {
+            'trigger': 'big_hit',
+            'roll': NO_INJURY,
+            'injury': None,
+            'ends_after_round': None,
+            'heals_at': None,
+            'immune': None,
+        },
     }
     assert await state_of(session, rat['id']) == (1, NpcStatus.ALIVE)
     # 다른 쥐는 그대로다
@@ -253,7 +265,7 @@ async def test_a_hit_wounds_the_monster(client: AsyncClient, app: FastAPI, me: d
 async def test_the_scene_shows_how_badly_the_monster_is_hurt(client: AsyncClient, app: FastAPI, me: dict[str, str]):
     world = await start_table(client, me)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
-    load_dice(app, [PASS, 3])
+    load_dice(app, [PASS, 3, NO_INJURY])
     await declare(client, me, world['table'], BITE_BACK, strike(rat['id']))
 
     after = await monster_named(client, me, world['table'], '수로 쥐 1')
@@ -281,7 +293,8 @@ async def test_a_beast_at_zero_is_downed_or_killed(
 ):
     world = await start_table(client, me)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
-    load_dice(app, [PASS, 8])
+    # 쓰러지면 부상 표를 굴린다. 죽으면 굴리지 않아 마지막 눈은 남는다
+    load_dice(app, [PASS, 8, NO_INJURY])
 
     closing = await declare(client, me, world['table'], BITE_BACK, strike(rat['id'], lethal=lethal))
 
@@ -361,7 +374,7 @@ async def test_a_monster_killed_earlier_in_the_round_is_not_rolled_for(
 async def test_the_change_is_recorded_without_hp_numbers(client: AsyncClient, app: FastAPI, me: dict[str, str]):
     world = await start_table(client, me)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
-    load_dice(app, [PASS, 3])
+    load_dice(app, [PASS, 3, NO_INJURY])
     await declare(client, me, world['table'], BITE_BACK, strike(rat['id']))
 
     changed = await events_of(client, me, world['table'], 'monster_changed')
@@ -405,7 +418,6 @@ async def test_a_table_without_encounters_shows_no_monsters(client: AsyncClient,
         # 몬스터에게는 타격만 한다
         {'harm': None},
         {'harm': None, 'recover': 'light'},
-        {'aim': 'lost_eye'},
         # 대상은 하나다
         {'npc': str(uuid.uuid4())},
         {'target': str(uuid.uuid4()), 'recover': 'light', 'harm': None},

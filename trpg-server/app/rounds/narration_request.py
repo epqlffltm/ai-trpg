@@ -114,9 +114,15 @@ def find_death_save(round_: Round, user_id: uuid.UUID) -> DeathSaveNote | None:
 
 
 def new_injury_name(effect: dict) -> str | None:
-    """HP 의 변화를 적은 문서에서 새로 입은 부상의 이름. 표를 굴리지 않았거나 부상이 없었으면 None."""
+    """HP 의 변화를 적은 문서에서 새로 입은 부상의 이름. 표를 굴리지 않았거나 부상이 없었거나 면역이었으면 None."""
     injury_roll = effect.get('injury_roll')
-    return injury_roll['name'] if injury_roll else None
+    return injury_roll['name'] if injury_roll and injury_roll['injury'] else None
+
+
+def resisted_injury_name(effect: dict) -> str | None:
+    """HP 의 변화를 적은 문서에서 면역이라 입지 않은 부상의 이름(#799, 몬스터). 없으면 None."""
+    injury_roll = effect.get('injury_roll')
+    return injury_roll['name'] if injury_roll and injury_roll.get('immune') else None
 
 
 def to_impact(effect: dict | None) -> Impact | None:
@@ -421,6 +427,7 @@ def to_npc_impact(effect: dict | None) -> NpcImpact | None:
         amount=effect['amount'],
         condition=effect['condition'],
         injury=new_injury_name(effect),
+        resisted=resisted_injury_name(effect),
     )
 
 

@@ -39,6 +39,8 @@ const GHOUL_SHEET = {
   dull: false,
   natural_armor: [],
   ward: null,
+  immune: [],
+  vulnerable: [],
 };
 const DOOR = { from_place: GATE, to_place: CRYPT, two_way: true, visibility: 'open', find: null, travel_minutes: null, cross: null, lock: null, bar: { side: GATE, barred: false }, force: null };
 

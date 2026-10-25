@@ -22,6 +22,7 @@
 """
 
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -38,10 +39,10 @@ from app.main import API_PREFIX
 from app.rounds import initiative
 from app.rounds.initiative import Turn, TurnKind
 from app.rounds.models import Round
-from app.rounds.monster_attacks import Skipped, choose, stopped_by, take_monster_turn
+from app.rounds.monster_attacks import Skipped, choose, roll_attack, stopped_by, take_monster_turn
 from app.rounds.move_lines import describe_move
 from app.rounds.narrator import Move
-from app.tables.models import NpcStatus, TableMonster, TableSheet
+from app.tables.models import NpcStatus, TableInjury, TableMonster, TableSheet
 from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
 
@@ -63,6 +64,8 @@ RAT_SHEET = make_sheet(max_hp=4)
 # 판정의 눈. 보통(목표 15)에 도전한다. 시트의 보정은 0 이다
 FAIL = 1
 PASS = 20
+# 부상 표의 눈. SRD5 의 1~10 은 아무 부상도 없다. 쥐를 쓰러뜨리면 부상 표를 굴린다(#799)
+NO_INJURY = 1
 
 REST = '숨을 고른다.'
 KICK = '쥐를 걷어찬다.'
@@ -438,7 +441,7 @@ async def test_a_downed_monster_gets_no_turn(
     client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession, narrated
 ):
     # 첫 라운드에 엘프가 쥐를 제압해 쓰러뜨린다
-    load_dice(app, [PASS, 8])
+    load_dice(app, [PASS, 8, NO_INJURY])
     table = await start_table(client, me, sheet=make_sheet(dex=14))
     rat = (await monsters_of(client, me, table))[0]
     await declare(client, me, table, KICK, kick(rat['id'], lethal=False))
@@ -487,7 +490,9 @@ def pc(name: str, dex: int, place: uuid.UUID | None = None) -> SimpleNamespace:
     return SimpleNamespace(user_id=uuid.uuid4(), character_name=name, sheet=sheet)
 
 
-def mob(name: str, dex: int, engaged: int | None = None, status_: str = NpcStatus.ALIVE) -> SimpleNamespace:
+def mob(
+    name: str, dex: int, engaged: int | None = None, status_: str = NpcStatus.ALIVE, injuries: list | None = None
+) -> SimpleNamespace:
     state = SimpleNamespace(
         id=uuid.uuid4(),
         monster_id=uuid.uuid4(),
@@ -496,6 +501,7 @@ def mob(name: str, dex: int, engaged: int | None = None, status_: str = NpcStatu
         engaged_round=engaged,
         status=status_,
         surprise=None,
+        injuries=injuries or [],
     )
     return SimpleNamespace(state=state, name=name, definition=SimpleNamespace(attacks=[BITE]))
 
@@ -581,7 +587,27 @@ def test_a_monster_with_nobody_standing_by_skips():
     assert take_monster_turn(judging, rat) == {'skipped': Skipped.NO_TARGET}
 
 
-def test_a_monster_down_or_dead_is_stopped():
-    assert stopped_by(mob('쥐', 10)) is None
-    assert stopped_by(mob('쥐', 10, status_=NpcStatus.DOWNED)) == Skipped.DOWNED
-    assert stopped_by(mob('쥐', 10, status_=NpcStatus.DEAD)) == Skipped.DEAD
+def test_a_monster_down_or_dead_or_stunned_is_stopped():
+    judging = SimpleNamespace(ruleset=SRD5)
+    stunned = [TableInjury(injury='stunned')]
+    healed = [TableInjury(injury='stunned', ended_at=datetime.now(UTC))]
+
+    assert stopped_by(judging, mob('쥐', 10)) is None
+    assert stopped_by(judging, mob('쥐', 10, status_=NpcStatus.DOWNED)) == Skipped.DOWNED
+    assert stopped_by(judging, mob('쥐', 10, status_=NpcStatus.DEAD)) == Skipped.DEAD
+    # 행동을 막는 부상(기절)을 입은 마리도 움직이지 못한다(#799). 풀렸으면 움직인다
+    assert stopped_by(judging, mob('쥐', 10, injuries=stunned)) == Skipped.INCAPACITATED
+    assert stopped_by(judging, mob('쥐', 10, injuries=healed)) is None
+
+
+def test_a_monster_with_a_broken_arm_bites_at_a_disadvantage():
+    # 팔 골절은 근력의 판정을 불리하게 한다(#799). 두 번 굴려 낮은 눈을 쓴다
+    rat = mob('쥐', 10, injuries=[TableInjury(injury='broken_arm')])
+    rat.state.abilities['str'] = 10
+    judging = SimpleNamespace(ruleset=SRD5, dice=ScriptedDice([20, 2]))
+
+    rolled = roll_attack(judging, rat, SimpleNamespace(**BITE))
+
+    assert (rolled.rolls, rolled.check.roll, rolled.check.success) == ((20, 2), 2, False)
+    assert rolled.hindrance.disadvantage
+    assert rolled.hindrance.injuries == ('broken_arm',)

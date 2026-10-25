@@ -118,18 +118,35 @@ def require_npc_target(cast: list[CastMember], member: TableMember, npc_id: uuid
         raise RoundConflictError(Conflict.ALREADY_INJURED)
 
 
-def require_monster_target(monsters: list[SceneMonster], member: TableMember, monster_id: uuid.UUID) -> None:
+def require_monster_target(
+    monsters: list[SceneMonster],
+    member: TableMember,
+    monster_id: uuid.UUID,
+    aim: str | None = None,
+    ruleset: Ruleset | None = None,
+) -> None:
     """
     겨눈 몬스터가 이번 장면에서 행동하는 캐릭터와 같은 장소에 있는 죽지 않은(쓰러졌어도 된다) 마리인지 본다.
 
     장면에 없거나 다른 장소에 있으면 ActionTargetError, 이미 죽었으면 RoundConflictError.
     장면에 없는 것과 다른 장소에 있는 것을 가르지 않는다. 가르면 아무도 없는 장소의 몬스터가 있다는 것이 드러난다.
+    노려 쳤으면(#799) 그 부상을 아직 입지 않았는지(already_injured), 그 성질에 면역이 아닌지(target_immune)도 본다.
     """
     monster = find_scene_monster(monsters, monster_id)
     if monster is None or not stands_with(member, monster):
         raise ActionTargetError('monster')
     if table_monsters.is_dead(monster.state):
         raise RoundConflictError(Conflict.MONSTER_DEAD)
+    if aim is not None:
+        require_aimable_monster(monster, aim, ruleset)
+
+
+def require_aimable_monster(monster: SceneMonster, aim: str, ruleset: Ruleset) -> None:
+    """노려 칠 부상을 그 마리가 이미 입었으면 already_injured, 그 성질에 면역이면 target_immune(#799)."""
+    if round_injuries.wears(monster.state.injuries, aim):
+        raise RoundConflictError(Conflict.ALREADY_INJURED)
+    if round_injuries.immune_to(ruleset, aim, table_monsters.immunities(monster.definition)):
+        raise RoundConflictError(Conflict.TARGET_IMMUNE)
 
 
 def require_able(table: GameTable, member: TableMember) -> Ruleset:
@@ -179,7 +196,7 @@ def accept_check(table: GameTable, member: TableMember, action: CheckAction, sce
     if action.npc is not None:
         require_npc_target(scene.cast, member, action.npc, action.aim)
     if action.monster is not None:
-        require_monster_target(scene.monsters, member, action.monster)
+        require_monster_target(scene.monsters, member, action.monster, action.aim, ruleset)
     if action.weapon is not None:
         require_weapon(table, member, action.weapon)
     return aim(actions.settle(ruleset, action), member.user_id).model_dump(mode='json')

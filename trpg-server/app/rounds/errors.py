@@ -40,6 +40,8 @@ class Conflict(enum.StrEnum):
     CHARACTER_INCAPACITATED = 'character_incapacitated'
     # 노려 친 부상을 대상이 이미 입고 있다(이미 잃은 눈)
     ALREADY_INJURED = 'already_injured'
+    # 노려 친 부상에 대상이 면역이다(#799, 언데드의 중독)
+    TARGET_IMMUNE = 'target_immune'
     # 치료하려는 부상을 대상이 입고 있지 않다
     NOT_INJURED = 'not_injured'
     # 치료하려는 캐릭터가 이미 죽었다

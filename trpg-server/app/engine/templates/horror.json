@@ -151,7 +151,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "mind"
+        ]
       },
       {
         "key": "stunned",
@@ -170,7 +173,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "stun"
+        ]
       },
       {
         "key": "shaken",
@@ -191,7 +197,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "mind"
+        ]
       },
       {
         "key": "bleeding",
@@ -212,7 +221,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "deep_cut",
@@ -247,7 +259,10 @@
         },
         "aimable": true,
         "treat_difficulty": "medium",
-        "treat_minutes": 4320
+        "treat_minutes": 4320,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "broken_leg",
@@ -282,7 +297,10 @@
         },
         "aimable": true,
         "treat_difficulty": "hard",
-        "treat_minutes": 7200
+        "treat_minutes": 7200,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "nightmares",
@@ -317,7 +335,10 @@
         },
         "aimable": false,
         "treat_difficulty": "medium",
-        "treat_minutes": 2880
+        "treat_minutes": 2880,
+        "natures": [
+          "mind"
+        ]
       },
       {
         "key": "lost_fingers",
@@ -338,7 +359,10 @@
         "aftermath": null,
         "aimable": true,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "lost_eye",
@@ -359,7 +383,10 @@
         "aftermath": null,
         "aimable": true,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "scar",
@@ -372,7 +399,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "limp",
@@ -393,7 +423,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "haunted",
@@ -414,7 +447,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "mind"
+        ]
       }
     ],
     "injury_table": {

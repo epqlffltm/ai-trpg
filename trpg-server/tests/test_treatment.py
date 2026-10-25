@@ -360,7 +360,8 @@ def test_an_old_version_is_read_with_the_template_treatment():
     old = read_snapshot(make_format_14())
 
     assert old.rulebook.rules.treatment == SRD5.treatment
-    assert old.rulebook.rules.injuries == SRD5.injuries
+    # 성질은 뒤의 형식이 비워 채운다(#799)
+    assert old.rulebook.rules.injuries == tuple(injury.model_copy(update={'natures': ()}) for injury in SRD5.injuries)
 
 
 def test_upgrading_keeps_treatment_fields_already_there():
@@ -534,6 +535,7 @@ async def test_a_treatment_that_reaches_today_heals_and_rolls_aftermath(
         'injury': 'crooked_arm',
         'ends_after_round': None,
         'heals_at': None,
+        'immune': None,
     }
     assert (await sheet_of(client, me, world['table']))['injuries'] == [
         {'injury': 'crooked_arm', 'round': 1, 'ends_after_round': None, 'heals_at': None}

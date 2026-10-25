@@ -62,6 +62,8 @@ events_of = combat.events_of
 
 FAIL = combat.FAIL
 PASS = combat.PASS
+# 큰 타격(HP 4 중 2 이상)이나 쓰러짐이면 그다음 눈이 부상 표다(#799). 이 눈이면 아무 부상도 없다
+NO_INJURY = combat.NO_INJURY
 
 THROW = '화염병을 던진다.'
 LOOK = '주위를 살핀다.'
@@ -346,7 +348,7 @@ async def test_a_hit_hurts_the_monster_and_uses_the_thing_up(
 ):
     world = await start_table(client, me)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
-    load_dice(app, [PASS, 3])
+    load_dice(app, [PASS, 3, NO_INJURY])
 
     closing = await declare(client, me, world['table'], THROW, throw(world['firebomb'], monster=rat['id']))
 
@@ -382,7 +384,7 @@ async def test_a_miss_still_uses_the_thing_up(client: AsyncClient, app: FastAPI,
 async def test_the_rulebook_s_difficulty_fills_an_empty_one(client: AsyncClient, app: FastAPI, me: dict):
     world = await start_table(client, me)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
-    load_dice(app, [PASS, 2])
+    load_dice(app, [PASS, 2, NO_INJURY])
 
     closing = await declare(client, me, world['table'], THROW, throw(world['dagger'], monster=rat['id']))
 
@@ -398,7 +400,7 @@ async def test_a_throw_may_be_lethal(
 ):
     world = await start_table(client, me)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
-    load_dice(app, [PASS, 8])
+    load_dice(app, [PASS, 8, NO_INJURY])
 
     await declare(client, me, world['table'], THROW, throw(world['firebomb'], monster=rat['id'], lethal=lethal))
 
@@ -465,7 +467,7 @@ async def test_what_was_taken_meanwhile_is_not_thrown(
 async def test_the_throw_is_recorded_before_its_check(client: AsyncClient, app: FastAPI, me: dict, narrated):
     world = await start_table(client, me)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
-    load_dice(app, [PASS, 3])
+    load_dice(app, [PASS, 3, NO_INJURY])
     await declare(client, me, world['table'], THROW, throw(world['firebomb'], monster=rat['id']))
     await narrated()
 
@@ -508,7 +510,7 @@ async def test_a_throw_that_did_not_happen_rolls_nothing(
 async def test_the_narrator_hears_what_was_thrown(client: AsyncClient, app: FastAPI, me: dict, narrated):
     world = await start_table(client, me)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
-    load_dice(app, [PASS, 3])
+    load_dice(app, [PASS, 3, NO_INJURY])
     await declare(client, me, world['table'], THROW, throw(world['firebomb'], monster=rat['id']))
     await narrated()
 

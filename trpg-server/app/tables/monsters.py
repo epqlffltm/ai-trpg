@@ -27,7 +27,7 @@ from app.assets.scenarios.snapshot import MonsterSnapshot, Snapshot, monster_of
 from app.engine import health
 from app.engine.dice import Dice
 from app.engine.health import Change, ChangeKind
-from app.engine.ruleset import Magnitude
+from app.engine.ruleset import InjuryNature, Magnitude
 from app.tables.models import NpcStatus, TableMonster
 
 
@@ -37,21 +37,33 @@ class Traits:
     몬스터의 타입이 엔진에서 갖는 성질. 엔진은 타입의 이름이 아니라 이 성질을 보고 다르게 다룬다.
 
     성질이 늘면 칸을 더하고 아래의 표(TRAITS)를 채운다. 판정의 코드는 고치지 않는다.
-    상태 이상이 생기면 예를 들어 무엇에 걸리지 않는지(immune_to)를 칸으로 더한다.
     """
 
     # HP 가 0 이 되면 제압이어도 부서진다(죽음). 의식이 없어 쓰러짐이 뜻이 없는 것들이다
     destroyed_at_zero: bool = False
+    # 걸리지 않는 부상의 성질(#799). 부상의 이름은 룰북마다 달라 성질로 적는다(app/engine/ruleset.py 의 InjuryNature)
+    immune_to: frozenset[InjuryNature] = frozenset()
 
 
 # 타입마다의 성질. 모든 타입이 있어야 한다(tests/test_monster_combat.py 가 본다)
 TRAITS: dict[MonsterKind, Traits] = {
     MonsterKind.HUMANOID: Traits(),
     MonsterKind.BEAST: Traits(),
-    MonsterKind.UNDEAD: Traits(destroyed_at_zero=True),
-    MonsterKind.CONSTRUCT: Traits(destroyed_at_zero=True),
+    # 죽은 몸이라 독이 돌지 않는다
+    MonsterKind.UNDEAD: Traits(destroyed_at_zero=True, immune_to=frozenset({InjuryNature.POISON})),
+    # 만들어진 것이라 독이 돌지 않고 마음이 없다
+    MonsterKind.CONSTRUCT: Traits(
+        destroyed_at_zero=True, immune_to=frozenset({InjuryNature.POISON, InjuryNature.MIND})
+    ),
     MonsterKind.OTHER: Traits(),
 }
+
+
+def immunities(monster: MonsterSnapshot) -> frozenset[InjuryNature]:
+    """
+    이 몬스터가 걸리지 않는 부상의 성질들(#799). 타입의 면역에 시트에서 더한 것을 넣고, 뺀 것을 뺀다.
+    """
+    return (traits_of(monster.kind).immune_to | frozenset(monster.immune)) - frozenset(monster.vulnerable)
 
 
 def new_monster(table_id: uuid.UUID, monster: MonsterSnapshot, place_id: uuid.UUID, number: int) -> TableMonster:

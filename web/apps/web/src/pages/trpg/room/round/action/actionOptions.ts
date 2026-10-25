@@ -18,7 +18,7 @@
 
 import type { DeclaredAction, HeldItem, SceneCast, ScenePerson, TableDetail, TableMember } from '../../../../../api/types';
 import { amountLabel, itemPrice, merchantsBuy, moneyOf } from '../../money';
-import { placeCover } from '../../status/statusView';
+import { injuryName, placeCover } from '../../status/statusView';
 import { waysFrom, type Way } from '../../status/statusView';
 import { doorsFor, isDoorKind, lockItems } from './doorOptions';
 
@@ -186,12 +186,15 @@ function monstersHere(ctx: ActionContext) {
   return (ctx.cast?.monsters ?? []).filter((monster) => monster.place_id === here);
 }
 
-/** 타격할 대상. 장면의 죽지 않은 인물과 내가 선 곳의 죽지 않은 몬스터 */
+/** 타격할 대상. 장면의 죽지 않은 인물과 내가 선 곳의 죽지 않은 몬스터. 몬스터는 몸 상태와 입은 부상을 붙인다(#799) */
 export function harmTargets(ctx: ActionContext): Choice[] {
   const people = livingPeople(ctx).map((person) => ({ value: `npc:${person.id}`, label: person.name }));
   const monsters = monstersHere(ctx)
     .filter((monster) => monster.status !== 'dead')
-    .map((monster) => ({ value: `monster:${monster.id}`, label: `${monster.name}(${monster.condition})` }));
+    .map((monster) => {
+      const state = [monster.condition, ...monster.injuries.map((key) => injuryName(ctx.table.rules, key))].join(' · ');
+      return { value: `monster:${monster.id}`, label: `${monster.name}(${state})` };
+    });
   return [...people, ...monsters];
 }
 
@@ -215,7 +218,7 @@ function injuryKeysOf(ctx: ActionContext, patient: TargetRef): string[] {
   return member?.sheet?.injuries.map((injury) => injury.injury) ?? [];
 }
 
-/** 노려 칠 수 있는 부상(규칙의 aimable). 노려 치기는 인물에게만 한다 */
+/** 노려 칠 수 있는 부상(규칙의 aimable). 노려 치기는 인물과 몬스터에게 한다(#799) */
 export function aimableInjuries(ctx: ActionContext): Choice[] {
   return ctx.table.rules.injuries.filter((injury) => injury.aimable).map((injury) => ({ value: injury.key, label: injury.name }));
 }

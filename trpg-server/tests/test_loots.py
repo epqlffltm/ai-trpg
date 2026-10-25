@@ -31,7 +31,7 @@ from app.rounds.move_lines import describe_loot
 from app.rounds.narrator import LootNote
 from app.tables.carried import Carried
 from app.tables.models import TableItem
-from tests.test_monster_combat import monster_named
+from tests.test_monster_combat import NO_INJURY, monster_named
 from tests.test_monster_drops import kill_first_rat, start_table
 from tests.test_npc_actions import PASS, PUNCH, TEND, bearer, events_of, load_dice, people, punch, table_url, tend
 from tests.test_npc_steals import FRIEND, ME, outcome, send, start
@@ -199,7 +199,7 @@ async def test_a_dead_npc_is_looted_too(client: AsyncClient, app: FastAPI, me: d
 async def test_a_downed_monster_is_looted(client: AsyncClient, app: FastAPI, me: dict, narrated):
     world = await start_table(client, me)
     # 쥐를 쓰러뜨린다. 늑대 가죽은 떨어지고 송곳니(51)는 쥐에게 남는다
-    _, rat, _ = await kill_first_rat(client, app, me, world, [PASS, 8, 51])
+    _, rat, _ = await kill_first_rat(client, app, me, world, [PASS, 8, NO_INJURY, 51])
     await narrated()
     load_dice(app, [])
 

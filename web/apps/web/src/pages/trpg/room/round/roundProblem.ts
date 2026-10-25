@@ -27,6 +27,7 @@ const CONFLICTS: Record<string, RoundProblem> = {
   npc_dead: { message: '그 인물은 이미 죽었습니다.', refresh: true },
   monster_dead: { message: '그 몬스터는 이미 쓰러졌습니다.', refresh: true },
   already_injured: { message: '대상이 이미 그 부상을 입고 있습니다.', refresh: true },
+  target_immune: { message: '그 몬스터는 그런 부상을 입지 않습니다. 다른 부상을 노려 주세요.' },
   not_injured: { message: '대상이 그 부상을 입고 있지 않습니다.', refresh: true },
   patient_dead: { message: '치료하려는 캐릭터가 이미 죽었습니다.', refresh: true },
   already_named: { message: '그 인물의 진짜 이름은 이미 드러났습니다.', refresh: true },

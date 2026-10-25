@@ -260,6 +260,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'amount',
         'lethal',
         'status',
+        'injury_roll',
     ),
     # 몬스터의 공격은 무엇으로 누구를 쳤고 맞혔는지만 보인다.
     # 굴림의 보정과 합은 몬스터의 능력치를 드러내서 싣지 않는다. 맞은 캐릭터의 HP 는 뒤따르는 hp_changed 에 있다.
@@ -291,18 +292,29 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     ),
     # 부상은 공개다. 누가 무엇을 입었고 언제 풀리는지(짧은 것은 라운드, 오래 가는 것은 게임 안의 시각).
     # 캐릭터면 user_id 와 이름, NPC 면 항목의 id 와 장면의 호칭이다
+    # 누구인지는 캐릭터(user_id, character_name), NPC(entry_id, name), 몬스터(monster_id, name, #799) 중 하나다
     EventType.INJURY_GAINED: (
         'round',
         'user_id',
         'character_name',
         'entry_id',
+        'monster_id',
         'name',
         'injury',
         'source',
         'ends_after_round',
         'heals_at',
     ),
-    EventType.INJURY_ENDED: ('round', 'user_id', 'character_name', 'entry_id', 'name', 'injury', 'reason'),
+    EventType.INJURY_ENDED: (
+        'round',
+        'user_id',
+        'character_name',
+        'entry_id',
+        'monster_id',
+        'name',
+        'injury',
+        'reason',
+    ),
     # 치료의 결과도 공개다. 나을 시각과 치료 실패 표의 눈까지 보인다. HP 의 변화는 따로 적힌다
     EventType.INJURY_TREATED: (
         'round',

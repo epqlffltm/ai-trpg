@@ -40,8 +40,8 @@ from app.rounds.effects import Judging, mark_npc_fight
 from app.rounds.monster_attacks import Skipped, hit_outcome, plan_attack_blow, raised_difficulty
 from app.tables.models import NpcStatus, TableMember
 
-# 입은 부상 때문에 움직이지 못했다(기절 같은 것). 몬스터는 부상을 입지 않아 이 까닭이 없다
-INCAPACITATED = 'incapacitated'
+# 입은 부상 때문에 움직이지 못했다(기절 같은 것). 몬스터의 차례와 같은 까닭이다
+INCAPACITATED = Skipped.INCAPACITATED
 
 
 def is_fighting(person: CastMember) -> bool:

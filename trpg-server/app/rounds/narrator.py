@@ -77,6 +77,8 @@ class NpcImpact:
     condition: str
     # 이 피해로 새로 입은 부상의 이름. 없으면 None 이다
     injury: str | None = None
+    # 나온 부상에 면역이라 입지 않았으면 그 부상의 이름이다(#799, 몬스터). 없으면 None 이다
+    resisted: str | None = None
 
 
 @dataclass(frozen=True)
@@ -852,7 +854,7 @@ class MonsterNote:
     # 있는 장소의 이름. 맵의 장소다
     place: str
     unique: bool
-    # 마리마다의 몸 상태. 번호 순서다. 네임드 몹은 하나다
+    # 마리마다의 몸 상태. 번호 순서다. 네임드 몹은 하나다. 입은 부상이 있으면 이름이 붙는다(다침(중독), #799)
     conditions: list[str] = field(default_factory=list)
 
 

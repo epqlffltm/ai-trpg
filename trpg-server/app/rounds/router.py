@@ -160,6 +160,7 @@ def to_cast(round_: Round, scene: Scene, things: dict[uuid.UUID, CatalogItem]) -
             place_id=monster.state.place_id,
             status=monster.state.status,
             condition=monster_condition(monster),
+            injuries=injuries.active_keys(monster.state.injuries),
             items=to_carried(monster_items.carried(monster.state, monster.definition), things),
         )
         for monster in scene.monsters

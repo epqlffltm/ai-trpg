@@ -197,7 +197,13 @@ def describe_injuries(injuries: list[InjuryNote]) -> str:
 def describe_npc_impact(impact: NpcImpact) -> str:
     """NPC 의 HP 가 바뀐 것을 한 줄로 적는다. 숫자는 양만 적는다. 예: → 악역영애 피해 5 (크게 다침)"""
     word = '피해' if impact.kind == 'damage' else '회복'
-    return f'→ {impact.name} {word} {impact.amount} ({impact.condition})' + new_injury(impact.injury)
+    line = f'→ {impact.name} {word} {impact.amount} ({impact.condition})' + new_injury(impact.injury)
+    return line + resisted_injury(impact.resisted)
+
+
+def resisted_injury(name: str | None) -> str:
+    """면역이라 입지 않은 부상을 결과 줄 뒤에 붙일 글(#799). 없으면 빈 글이다. 예: ". 중독에 면역이라 멀쩡하다"."""
+    return f'. {name}에 면역이라 멀쩡하다' if name else ''
 
 
 def describe_wake(wake: WakeNote) -> str:

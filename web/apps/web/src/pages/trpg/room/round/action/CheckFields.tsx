@@ -62,14 +62,14 @@ export function CheckFields({ draft, ctx, onChange }: Props) {
 
 function HarmFields({ draft, ctx, onChange }: Props) {
   const targets = harmTargets(ctx);
-  const onNpc = splitRef(draft.target)[0] === 'npc';
+  const aimable = ['npc', 'monster'].includes(splitRef(draft.target)[0]);
   if (targets.length === 0) return <p className="hint">칠 수 있는 대상이 장면에 없습니다.</p>;
   return (
     <>
       <div className="ability-grid">
         <ChoiceSelect label="대상" value={draft.target} choices={targets} empty="고르기" onChange={(target) => onChange({ target })} />
         <ChoiceSelect label="피해" value={draft.magnitude} choices={magnitudes(ctx)} onChange={(magnitude) => onChange({ magnitude })} />
-        {onNpc ? (
+        {aimable ? (
           <ChoiceSelect
             label="노려 치기(선택)"
             value={draft.aim}

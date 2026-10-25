@@ -319,7 +319,18 @@ MONSTER_KINDS = {
 }
 
 
-def monster_note(monsters: list[SceneMonster], place: str) -> MonsterNote:
+def described_condition(ruleset: Ruleset, monster: SceneMonster) -> str:
+    """
+    한 마리의 몸 상태. 입고 있는 부상이 있으면 그 이름을 붙인다(#799). 예: 다침(중독, 팔 골절)
+
+    부상의 이름은 규칙에 적힌 것이다. 숫자는 주지 않는다.
+    """
+    condition = monster_condition(monster)
+    names = [injury.name for injury in round_injuries.worn(ruleset, monster.state.injuries)]
+    return f'{condition}({", ".join(names)})' if names else condition
+
+
+def monster_note(ruleset: Ruleset, monsters: list[SceneMonster], place: str) -> MonsterNote:
     """
     같은 장소의 같은 몬스터 마리들(네임드면 한 마리)을 서술자에게 줄 모양으로. 마리마다의 몸 상태를 번호 순서로 준다.
     """
@@ -330,7 +341,7 @@ def monster_note(monsters: list[SceneMonster], place: str) -> MonsterNote:
         content=definition.content,
         place=place,
         unique=definition.unique,
-        conditions=[monster_condition(monster) for monster in monsters],
+        conditions=[described_condition(ruleset, monster) for monster in monsters],
     )
 
 
@@ -338,7 +349,7 @@ def to_monster_notes(snapshot: Snapshot, monsters: list[SceneMonster]) -> list[M
     """
     이번 장면의 몬스터들을 서술자에게 줄 모양으로. 같은 장소의 같은 몬스터를 하나로 모은다. 장면의 순서다.
 
-    네임드 몹은 판 전체에서 한 마리라 늘 혼자다. 일반 몹은 종류와 마리마다의 몸 상태만 준다.
+    네임드 몹은 판 전체에서 한 마리라 늘 혼자다. 일반 몹은 종류와 마리마다의 몸 상태(와 입은 부상)만 준다.
     숫자(HP, 능력치)는 주지 않는다.
     """
     if not monsters:
@@ -347,4 +358,5 @@ def to_monster_notes(snapshot: Snapshot, monsters: list[SceneMonster]) -> list[M
     groups: dict[tuple, list[SceneMonster]] = {}
     for monster in monsters:
         groups.setdefault((monster.state.place_id, monster.state.monster_id), []).append(monster)
-    return [monster_note(group, names.get(place_id, '')) for (place_id, _), group in groups.items()]
+    ruleset = snapshot.rulebook.rules
+    return [monster_note(ruleset, group, names.get(place_id, '')) for (place_id, _), group in groups.items()]

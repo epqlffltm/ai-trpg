@@ -319,8 +319,8 @@ def make_format_13() -> dict:
 def test_an_old_version_is_read_with_the_template_injuries():
     old = read_snapshot(make_format_13())
 
-    # 부상이 없던 판은 그때의 규칙(SRD5)의 부상으로 읽는다
-    assert old.rulebook.rules.injuries == SRD5.injuries
+    # 부상이 없던 판은 그때의 규칙(SRD5)의 부상으로 읽는다. 성질은 없던 때라 비어 있다(#799)
+    assert old.rulebook.rules.injuries == tuple(injury.model_copy(update={'natures': ()}) for injury in SRD5.injuries)
     assert old.rulebook.rules.injury_triggers == SRD5.injury_triggers
 
 
@@ -351,6 +351,7 @@ async def test_a_big_hit_can_break_an_arm(client: AsyncClient, app: FastAPI, me:
         'injury': 'broken_arm',
         'ends_after_round': None,
         'heals_at': ARM_HEALS_AT,
+        'immune': None,
     }
     assert (await my_sheet(client, me, world['table']))['injuries'] == [
         {'injury': 'broken_arm', 'round': 1, 'ends_after_round': None, 'heals_at': ARM_HEALS_AT}
@@ -388,6 +389,7 @@ async def test_a_lucky_roll_leaves_no_injury(client: AsyncClient, app: FastAPI, 
         'injury': None,
         'ends_after_round': None,
         'heals_at': None,
+        'immune': None,
     }
     assert (await my_sheet(client, me, world['table']))['injuries'] == []
     assert await events_of(client, me, world['table'], 'injury_gained') == []
@@ -531,6 +533,7 @@ async def test_an_npc_knocked_down_can_lose_an_eye(client: AsyncClient, app: Fas
         'injury': 'lost_eye',
         'ends_after_round': None,
         'heals_at': None,
+        'immune': None,
     }
     (request,) = narrator.requests
     (lady,) = request.people

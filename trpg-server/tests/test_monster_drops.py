@@ -6,7 +6,8 @@
 
 맵은 수로 입구(시작)와 깊은 수로다. 입구에 수로 쥐 둘(야수, 최대 HP 4), 깊은 수로에 해골 병사 하나(드롭 없음).
 쥐의 소지품은 늑대 가죽 2개(100%)와 송곳니 1개(50%)다. 주사위는 정해진 눈을 내는 것으로 바꿔 꽂는다.
-눈은 판정, 피해의 양, 확률이 100 이 아닌 드롭 줄(백면체), 받을 사람이 둘 이상이면 고르는 눈의 차례다.
+눈은 판정, 피해의 양, 큰 타격이나 쓰러짐이면 부상 표(이십면체, #799), 확률이 100 이 아닌 드롭 줄(백면체),
+받을 사람이 둘 이상이면 고르는 눈의 차례다.
 
 보는 것.
   - 시나리오: 드롭을 적고 읽는다. 개수와 확률의 범위, 같은 물건 두 줄, 줄 수의 상한. 게시할 때 물건 항목인지 본다.
@@ -46,6 +47,7 @@ from tests.test_monster_combat import (
     BITE_BACK,
     FAIL,
     LOREBOOKS_URL,
+    NO_INJURY,
     PASS,
     RULEBOOKS_URL,
     SCENARIOS_URL,
@@ -289,7 +291,7 @@ async def test_downing_a_monster_gives_its_drops(
 ):
     world = await start_table(client, me)
 
-    closing, rat, dice = await kill_first_rat(client, app, me, world, [PASS, DOWN, TOOTH])
+    closing, rat, dice = await kill_first_rat(client, app, me, world, [PASS, DOWN, NO_INJURY, TOOTH])
 
     dropped = closing['declarations'][0]['outcome']['drop']
     assert dropped == {
@@ -316,7 +318,7 @@ async def test_each_line_is_rolled_on_its_own(
 ):
     world = await start_table(client, me)
 
-    closing, _, _ = await kill_first_rat(client, app, me, world, [PASS, DOWN, NO_TOOTH])
+    closing, _, _ = await kill_first_rat(client, app, me, world, [PASS, DOWN, NO_INJURY, NO_TOOTH])
 
     names = [item['name'] for item in closing['declarations'][0]['outcome']['drop']['items']]
     assert names == ['늑대 가죽']
@@ -335,8 +337,8 @@ async def test_a_failed_check_drops_nothing(client: AsyncClient, app: FastAPI, m
 async def test_a_wound_that_does_not_down_drops_nothing(client: AsyncClient, app: FastAPI, me: dict[str, str]):
     world = await start_table(client, me)
 
-    # 피해 3 이면 HP 4 중 1 이 남는다. 쓰러지지 않았으니 굴리지 않는다
-    closing, _, dice = await kill_first_rat(client, app, me, world, [PASS, 3])
+    # 피해 3 이면 HP 4 중 1 이 남는다. 큰 타격이라 부상 표는 굴리지만, 쓰러지지 않았으니 드롭은 굴리지 않는다
+    closing, _, dice = await kill_first_rat(client, app, me, world, [PASS, 3, NO_INJURY])
 
     assert closing['declarations'][0]['outcome']['drop'] is None
     assert dice.remaining == 0
@@ -346,7 +348,7 @@ async def test_killing_a_downed_monster_does_not_drop_again(
     client: AsyncClient, app: FastAPI, me: dict[str, str], session: AsyncSession, narrated
 ):
     world = await start_table(client, me)
-    _, rat, _ = await kill_first_rat(client, app, me, world, [PASS, DOWN, TOOTH])
+    _, rat, _ = await kill_first_rat(client, app, me, world, [PASS, DOWN, NO_INJURY, TOOTH])
     await narrated()
 
     # 쓰러진 쥐를 죽인다. 판정과 피해의 눈만 있다. 드롭을 다시 굴리면 눈이 모자라 실패한다
@@ -366,7 +368,7 @@ async def test_retrying_the_narration_does_not_drop_again(
     world = await start_table(client, me)
     narrator = app.state.narrator
     app.state.narrator = FailingNarrator()
-    await kill_first_rat(client, app, me, world, [PASS, DOWN, TOOTH])
+    await kill_first_rat(client, app, me, world, [PASS, DOWN, NO_INJURY, TOOTH])
     await narrated()
 
     # 서술만 다시 맡긴다. 판정은 닫기 시작할 때 한 번이었다
@@ -385,7 +387,7 @@ async def test_the_receiver_is_one_of_those_standing_there(
     world = await start_table(client, me, friend)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
     # 친구는 선언하지 않는다. 둘 다 입구에 있다. 고르는 눈 2 는 앉은 순서로 둘째, 친구다
-    load_dice(app, [PASS, DOWN, NO_TOOTH, 2])
+    load_dice(app, [PASS, DOWN, NO_INJURY, NO_TOOTH, 2])
     await declare(client, friend, world['table'], '지켜본다.')
 
     closing = await declare(client, me, world['table'], BITE_BACK, strike(rat['id']))
@@ -408,7 +410,7 @@ async def test_someone_elsewhere_does_not_receive(
     await declare(client, friend, world['table'], '지켜본다.')
 
     # 받을 사람이 나 하나라 고르는 눈이 없다
-    closing, _, dice = await kill_first_rat(client, app, me, world, [PASS, DOWN, NO_TOOTH])
+    closing, _, dice = await kill_first_rat(client, app, me, world, [PASS, DOWN, NO_INJURY, NO_TOOTH])
 
     outcomes = {declaration['character_name']: declaration['outcome'] for declaration in closing['declarations']}
     assert outcomes['엘프']['drop']['character_name'] == '엘프'
@@ -422,7 +424,7 @@ async def test_a_full_stack_loses_the_overflow_and_the_round_closes(
     full = {'entry_id': made['pelt']['id'], 'count': ITEM_STACK_MAX - 1}
     world = await open_table(client, me, made, starting_items=[full])
 
-    closing, _, _ = await kill_first_rat(client, app, me, world, [PASS, DOWN, NO_TOOTH])
+    closing, _, _ = await kill_first_rat(client, app, me, world, [PASS, DOWN, NO_INJURY, NO_TOOTH])
     await narrated()
 
     pelt = closing['declarations'][0]['outcome']['drop']['items'][0]
@@ -437,7 +439,7 @@ async def test_a_full_stack_loses_the_overflow_and_the_round_closes(
 
 async def test_the_gain_is_recorded_after_the_monster_falls(client: AsyncClient, app: FastAPI, me: dict[str, str]):
     world = await start_table(client, me)
-    _, rat, _ = await kill_first_rat(client, app, me, world, [PASS, DOWN, NO_TOOTH])
+    _, rat, _ = await kill_first_rat(client, app, me, world, [PASS, DOWN, NO_INJURY, NO_TOOTH])
 
     (gained,) = await events_of(client, me, world['table'], 'items_gained')
     (changed,) = await events_of(client, me, world['table'], 'monster_changed')
@@ -461,7 +463,7 @@ async def test_the_gain_is_recorded_after_the_monster_falls(client: AsyncClient,
 
 async def test_the_narration_is_told_what_was_gained(client: AsyncClient, app: FastAPI, me: dict[str, str], narrated):
     world = await start_table(client, me)
-    await kill_first_rat(client, app, me, world, [PASS, DOWN, TOOTH])
+    await kill_first_rat(client, app, me, world, [PASS, DOWN, NO_INJURY, TOOTH])
     await narrated()
 
     narrations = await events_of(client, me, world['table'], 'gm_narration')

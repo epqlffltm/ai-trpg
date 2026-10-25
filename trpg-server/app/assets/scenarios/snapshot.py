@@ -48,7 +48,7 @@ from app.assets.models import (
 from app.assets.scenarios.upgrades import UPGRADES
 from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
-from app.engine.ruleset import Ruleset
+from app.engine.ruleset import InjuryNature, Ruleset
 from app.engine.sheet import Sheet
 
 # 문서의 모양이 바뀔 때 올리는 번호. 옛 판을 읽는 코드가 어느 모양인지 알 수 있다.
@@ -127,7 +127,9 @@ from app.engine.sheet import Sheet
 #  58: 소모품이 부상을 풀 수 있다(#277). items[].cures: 룰북의 부상의 이름표들
 #  59: 소모품을 던질 수 있다(#277). items[].throw: 던지는 판정 {ability, difficulty, harm}
 #  60: 소모품을 치료에 붙여 쓸 수 있다(#277). items[].treat_bonus: 치료 판정의 보정에 더하는 값
-SNAPSHOT_FORMAT = 60
+#  61: 몬스터가 부상을 입는다(#799). rulebook.rules.injuries[].natures: 부상의 성질,
+#      monsters[].immune, vulnerable: 타입의 면역에 더하고 빼는 성질
+SNAPSHOT_FORMAT = 61
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다
@@ -506,6 +508,9 @@ class MonsterSnapshot(BaseModel):
     natural_armor: list[NaturalArmorSnapshot] = []
     # 타고난 불굴 세이브. 형식 49 보다 옛 판의 몬스터는 없다
     ward: int | None = None
+    # 타입의 면역에 더하고 빼는 부상의 성질(#799). 형식 61 보다 옛 판의 몬스터는 타입의 면역 그대로다
+    immune: list[InjuryNature] = []
+    vulnerable: list[InjuryNature] = []
 
 
 class EncounterSnapshot(BaseModel):
@@ -1079,8 +1084,10 @@ def snapshot_monster(
     dull: bool = False,
     natural_armor: list[NaturalArmorSnapshot] | None = None,
     ward: int | None = None,
+    immune: list[InjuryNature] | None = None,
+    vulnerable: list[InjuryNature] | None = None,
 ) -> MonsterSnapshot:
-    """몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어와 불굴 세이브를 굳힌다."""
+    """몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어와 불굴 세이브, 면역에 더하고 빼는 성질을 굳힌다."""
     return MonsterSnapshot(
         id=monster.id,
         name=monster.name,
@@ -1094,6 +1101,8 @@ def snapshot_monster(
         dull=dull,
         natural_armor=natural_armor or [],
         ward=ward,
+        immune=immune or [],
+        vulnerable=vulnerable or [],
     )
 
 

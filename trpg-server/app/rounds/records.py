@@ -91,6 +91,8 @@ def record_check(session: AsyncSession, table: GameTable, declaration: Declarati
     monster_effect = outcome.get('monster_effect')
     if monster_effect is not None:
         changed = record_monster_change(session, table, monster_effect, cause=after)
+        holder = {'monster_id': monster_effect['monster_id'], 'name': monster_effect['name']}
+        record_injury(session, table, monster_effect.get('injury_roll'), holder, cause=changed)
         record_drop(session, table, outcome.get('drop'), cause=changed)
 
 
@@ -147,7 +149,8 @@ def record_injury(
     부상 표로 생겼거나(큰 타격, 쓰러짐), 노려 쳐서 생겼거나, 오래 가는 부상이 나을 때 후유증으로 생겼다.
     어느 쪽인지는 source 로 적는다.
     표를 굴리지 않았거나 부상이 없는 줄이 나왔으면 적지 않는다. 굴린 것은 HP 의 변화의 이벤트에 이미 있다.
-    holder 는 누가 입었는지다. 캐릭터면 user_id 와 캐릭터 이름, NPC 면 항목의 id 와 장면의 호칭이다.
+    holder 는 누가 입었는지다. 캐릭터면 user_id 와 캐릭터 이름, NPC 면 항목의 id 와 장면의 호칭, 몬스터면 마리의 id 와
+    장면의 이름이다(#799).
     """
     if injury_roll is None or injury_roll['injury'] is None:
         return

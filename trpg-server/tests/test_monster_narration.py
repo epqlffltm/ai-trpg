@@ -13,6 +13,7 @@
 """
 
 import uuid
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -23,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.bestiaries.models import MonsterKind
 from app.assets.scenarios.snapshot import read_snapshot
+from app.engine.templates import SRD5
 from app.rounds import prompt
 from app.rounds.move_lines import describe_monster_turn, describe_move, describe_target_gone, round_lines
 from app.rounds.moves import to_monster_notes
@@ -40,7 +42,7 @@ from app.rounds.narrator import (
 )
 from app.rounds.repository import find_round
 from app.rounds.service import load_scene
-from app.tables.models import NpcStatus
+from app.tables.models import NpcStatus, TableInjury
 from app.tables.repository import find_table
 from tests.sheets import make_sheet
 from tests.test_monster_turns import (
@@ -253,6 +255,10 @@ def test_the_version_is_bumped():
 # --- 몬스터를 서술자에게 줄 모양으로 ---
 
 
+# 판에서 몬스터의 글이 읽는 것은 룰북의 규칙(부상의 이름)뿐이다
+SNAPSHOT = SimpleNamespace(rulebook=SimpleNamespace(rules=SRD5))
+
+
 def scene_monster(name: str, place: uuid.UUID, kind: MonsterKind, status_: str = NpcStatus.ALIVE, **definition):
     monster_id = definition.pop('monster_id', uuid.uuid4())
     state = SimpleNamespace(
@@ -262,6 +268,7 @@ def scene_monster(name: str, place: uuid.UUID, kind: MonsterKind, status_: str =
         status=status_,
         hp=4 if status_ == 'alive' else 0,
         max_hp=4,
+        injuries=definition.pop('injuries', []),
     )
     fields = {'name': name, 'kind': kind, 'content': '', 'unique': False, **definition}
     return SimpleNamespace(state=state, definition=SimpleNamespace(**fields), name=name)
@@ -278,7 +285,7 @@ def test_monster_notes_group_the_same_kind_at_one_place(monkeypatch: pytest.Monk
     # 판의 장소 항목만 바꿔 끼운다. 판 전체를 만들지 않는다
     monkeypatch.setattr('app.rounds.moves.place_entries', lambda _: places)
 
-    notes = to_monster_notes(SimpleNamespace(), monsters)
+    notes = to_monster_notes(SNAPSHOT, monsters)
 
     assert [(note.place, note.conditions) for note in notes] == [
         ('수로 입구', ['멀쩡함', '죽음']),
@@ -287,8 +294,24 @@ def test_monster_notes_group_the_same_kind_at_one_place(monkeypatch: pytest.Monk
     assert notes[0].kind == '야수'
 
 
+def test_a_monster_note_names_the_injuries_it_wears(monkeypatch: pytest.MonkeyPatch):
+    gate, rat = uuid.uuid4(), uuid.uuid4()
+    worn = [TableInjury(injury='poisoned'), TableInjury(injury='broken_arm')]
+    healed = [TableInjury(injury='poisoned', ended_at=datetime.now(UTC))]
+    monsters = [
+        scene_monster('수로 쥐', gate, MonsterKind.BEAST, injuries=worn, monster_id=rat),
+        scene_monster('수로 쥐', gate, MonsterKind.BEAST, injuries=healed, monster_id=rat),
+    ]
+    monkeypatch.setattr('app.rounds.moves.place_entries', lambda _: [SimpleNamespace(id=gate, name='수로 입구')])
+
+    notes = to_monster_notes(SNAPSHOT, monsters)
+
+    # 입고 있는 부상만 규칙의 이름으로 붙는다(#799). 나은 부상은 없다
+    assert notes[0].conditions == ['멀쩡함(중독, 팔 골절)', '멀쩡함']
+
+
 def test_no_scene_monsters_no_notes():
-    assert to_monster_notes(SimpleNamespace(), []) == []
+    assert to_monster_notes(SNAPSHOT, []) == []
 
 
 async def test_the_scene_monsters_become_notes(client: AsyncClient, me: dict[str, str], session: AsyncSession):

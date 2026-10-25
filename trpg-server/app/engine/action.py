@@ -188,16 +188,12 @@ class CheckAction(BaseModel):
     @model_validator(mode='after')
     def require_harm_for_monster(self) -> Self:
         """
-        몬스터에게 하는 일은 타격뿐이다. 회복과 노려 치기는 몬스터에게 하지 않는다.
+        몬스터에게 하는 일은 타격뿐이다. 회복은 몬스터에게 하지 않는다.
 
-        몬스터는 부상을 입지 않는다(부상은 앉은 사람과 NPC 의 것이다). 노릴 부상이 없다.
+        몬스터도 부상을 입어(#799) 노려 칠 수 있다. 면역인지는 받을 때 본다(app/rounds/acceptance.py).
         """
-        if self.monster is None:
-            return self
-        if self.harm is None:
+        if self.monster is not None and self.harm is None:
             raise ValueError('monster 는 harm 과 함께 적습니다.')
-        if self.aim is not None:
-            raise ValueError('monster 에게는 aim 을 적지 않습니다.')
         return self
 
     @model_validator(mode='after')

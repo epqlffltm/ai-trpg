@@ -54,6 +54,8 @@ class InjuryRollOut(BaseModel):
     ends_after_round: int | None
     # 오래 가는 부상이면 이 게임 안의 시각이 지나면 낫는다. 아니면 None 이다(결손, 짧은 것, 이 단계 전의 기록)
     heals_at: ClockTimeOut | None = None
+    # 나온 부상에 면역이라 입지 않았으면 그 부상의 이름표다(#799, 몬스터). 그때 injury 는 None 이다
+    immune: str | None = None
 
 
 class CalledShotOut(BaseModel):
@@ -200,6 +202,8 @@ class MonsterEffectOut(BaseModel):
     lethal: bool
     # 바뀐 뒤의 생사. 언데드와 구조물은 HP 가 0 이면 제압이어도 죽음(부서짐)이다
     status: NpcStatus
+    # 이 피해로 부상 표를 굴렸거나 노려 친 것이 맞았으면 그 결과(#799). 없었으면 None 이다
+    injury_roll: InjuryRollOut | None = None
 
 
 class DroppedItemOut(BaseModel):
@@ -1080,6 +1084,8 @@ class SceneMonsterOut(BaseModel):
     status: NpcStatus
     # 멀쩡함, 다침, 크게 다침, 쓰러짐(의식 없음), 죽음
     condition: str
+    # 입고 있는 부상들(#799). 규칙의 Injury.key 다. 생긴 순서다. 이름과 효과는 테이블의 rules.injuries 에 있다
+    injuries: list[str] = []
     # 지금 지닌 물건들. 장비 다음 소지품의 차례다. 떨어뜨리거나 빼앗긴 것은 없다.
     # 쓰러뜨리면 판에 적은 확률로 떨어진다. 떨어지지 않은 것은 그 마리가 그대로 지닌다
     items: list[CarriedOut] = []

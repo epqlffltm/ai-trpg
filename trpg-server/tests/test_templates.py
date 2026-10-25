@@ -37,6 +37,12 @@ from app.engine.templates import (
 # 이미 내놓은 템플릿의 값은 고치지 않는다. 고치고 싶으면 새 이름으로 하나 더 낸다.
 # 규칙의 모양에 칸이 새로 생겨 템플릿에 그 칸을 더한 것이면(있던 값은 그대로) 해시를 새로 적는다.
 RELEASED = {
+    Template.SRD5: '1dc689ffc0916445367844b4c31e6d1471da4955de74fc1c36eda73ce2b858b6',
+    Template.HORROR: 'a6c09c04b3f6902fdde9de906a489c7a05906bf140fba05060d6d5c7a1f38ac2',
+    Template.LIGHT: '46c656de0ab15f6de1cb637693fd90bd4bb5df2deeb28ba7d894ab9a055ce1c5',
+}
+# 부상의 성질(injuries[].natures, #799)을 더하기 전의 해시. 성질을 뺀 규칙은 그때와 같아야 한다
+BEFORE_NATURES = {
     Template.SRD5: 'bb50911c27b1baab1fa2394345ef05fed4cf2a8b1d223d423cfbc75fcda9d4e5',
     Template.HORROR: '3ae1576364da792ef899989385b76670c5b884d58429e9fdebb2a867852169eb',
     Template.LIGHT: '46c656de0ab15f6de1cb637693fd90bd4bb5df2deeb28ba7d894ab9a055ce1c5',
@@ -70,16 +76,26 @@ BEFORE_NARRATION = {
 COMMERCIAL_NAMES = ('d&d', 'dungeons', '던전 앤 드래곤', '던전즈', 'pathfinder', '패스파인더', 'cthulhu', '크툴루')
 
 
-def fingerprint(rules: Ruleset, without: tuple[str, ...] = ()) -> str:
+def dumped(rules: Ruleset, natures: bool = True) -> dict:
+    """규칙의 값. natures 가 거짓이면 부상의 성질(#799)을 뺀다. 성질을 더하기 전의 해시와 견줄 때 쓴다."""
+    values = rules.model_dump(mode='json')
+    if not natures:
+        values['injuries'] = [
+            {key: value for key, value in injury.items() if key != 'natures'} for injury in values['injuries']
+        ]
+    return values
+
+
+def fingerprint(rules: Ruleset, without: tuple[str, ...] = (), natures: bool = True) -> str:
     """규칙의 값을 정해진 차례의 JSON 으로 적어 해시를 낸다. without 의 칸은 빼고 낸다."""
-    values = {key: value for key, value in rules.model_dump(mode='json').items() if key not in without}
+    values = {key: value for key, value in dumped(rules, natures).items() if key not in without}
     canonical = json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def fingerprint_before_armor(rules: Ruleset) -> str:
     """방어 방식과 칸의 가중치(#276)를 뺀 규칙의 해시."""
-    values = {key: value for key, value in rules.model_dump(mode='json').items() if key != 'armor'}
+    values = {key: value for key, value in dumped(rules, natures=False).items() if key != 'armor'}
     values['equipment_slots'] = [
         {key: value for key, value in slot.items() if key != 'hit_weight'} for slot in values['equipment_slots']
     ]
@@ -89,7 +105,7 @@ def fingerprint_before_armor(rules: Ruleset) -> str:
 
 def fingerprint_before_saves(rules: Ruleset) -> str:
     """방어 규칙에서 세이브의 목표값과 관통의 기준값(#276)을 뺀 규칙의 해시."""
-    values = rules.model_dump(mode='json')
+    values = dumped(rules, natures=False)
     values['armor'] = {'mode': values['armor']['mode']}
     canonical = json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
     return hashlib.sha256(canonical.encode()).hexdigest()
@@ -127,12 +143,18 @@ def test_released_templates_keep_their_values():
 
 def test_adding_the_narration_guide_kept_the_other_values():
     for template, expected in BEFORE_NARRATION.items():
-        assert fingerprint(TEMPLATES[template].rules, without=('narration', 'equipment_slots', 'armor')) == expected
+        rules = TEMPLATES[template].rules
+        assert fingerprint(rules, without=('narration', 'equipment_slots', 'armor'), natures=False) == expected
 
 
 def test_adding_the_equipment_slots_kept_the_other_values():
     for template, expected in BEFORE_SLOTS.items():
-        assert fingerprint(TEMPLATES[template].rules, without=('equipment_slots', 'armor')) == expected
+        assert fingerprint(TEMPLATES[template].rules, without=('equipment_slots', 'armor'), natures=False) == expected
+
+
+def test_adding_the_natures_kept_the_other_values():
+    for template, expected in BEFORE_NATURES.items():
+        assert fingerprint(TEMPLATES[template].rules, natures=False) == expected
 
 
 def test_adding_the_saves_kept_the_other_values():

@@ -170,7 +170,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "stun"
+        ]
       },
       {
         "key": "poisoned",
@@ -189,7 +192,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "poison"
+        ]
       },
       {
         "key": "blinded",
@@ -211,7 +217,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "sense"
+        ]
       },
       {
         "key": "deafened",
@@ -224,7 +233,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "sense"
+        ]
       },
       {
         "key": "broken_arm",
@@ -259,7 +271,10 @@
         },
         "aimable": true,
         "treat_difficulty": "hard",
-        "treat_minutes": 4320
+        "treat_minutes": 4320,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "leg_wound",
@@ -294,7 +309,10 @@
         },
         "aimable": true,
         "treat_difficulty": "medium",
-        "treat_minutes": 2880
+        "treat_minutes": 2880,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "lost_left_hand",
@@ -315,7 +333,10 @@
         "aftermath": null,
         "aimable": true,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "lost_right_hand",
@@ -336,7 +357,10 @@
         "aftermath": null,
         "aimable": true,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "lost_eye",
@@ -357,7 +381,10 @@
         "aftermath": null,
         "aimable": true,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "deep_scar",
@@ -370,7 +397,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "crooked_arm",
@@ -391,7 +421,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "body"
+        ]
       },
       {
         "key": "limp",
@@ -412,7 +445,10 @@
         "aftermath": null,
         "aimable": false,
         "treat_difficulty": null,
-        "treat_minutes": null
+        "treat_minutes": null,
+        "natures": [
+          "body"
+        ]
       }
     ],
     "injury_table": {
