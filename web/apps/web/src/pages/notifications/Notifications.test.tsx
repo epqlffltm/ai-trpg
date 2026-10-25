@@ -132,7 +132,7 @@ describe('알림의 순수한 함수', () => {
       to: '/trpg/studio/scenarios/s1',
     });
     expect(describeNotification(notice(1, 'game', 'narration_model.replaced', {}), CTX).text).toBe('내 테이블의 서술 모델을 바꿨습니다: 서버의 기본 모델 → 서버의 기본 모델(앞의 모델이 끝남)');
-    expect(describeNotification(notice(1, 'board', 'post.commented', { post_title: '첫 글' }), CTX)).toEqual({ text: '내 글 "첫 글"에 댓글이 달렸습니다', to: null });
+    expect(describeNotification(notice(1, 'board', 'post.commented', { post_title: '첫 글', post_id: '7' }), CTX)).toEqual({ text: '내 글 "첫 글"에 댓글이 달렸습니다', to: '/board/posts/7' });
     expect(describeNotification(notice(1, 'asset', 'character.hidden', { character_id: 'c1', name: '렌' }), CTX).to).toBe('/chat/studio/characters/c1');
     expect(describeNotification(notice(1, 'game', 'order.paid', {}), CTX).text).toBe('새 알림입니다');
   });

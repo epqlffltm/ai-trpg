@@ -5,6 +5,7 @@
 import type { components as Asset } from './generated/asset';
 import type { components as Auth } from './generated/auth';
 import type { components as Billing, operations as BillingOperations } from './generated/billing';
+import type { components as BoardApi } from './generated/board';
 import type { components as Chat } from './generated/chat';
 import type { components as NotificationApi } from './generated/notification';
 import type { components as Trpg } from './generated/trpg';
@@ -224,3 +225,12 @@ export type NotificationPage = NotificationApi['schemas']['NotificationPage'];
 export type UnreadCount = NotificationApi['schemas']['UnreadCount'];
 export type ReadAllResult = NotificationApi['schemas']['ReadAllResult'];
 export type MuteSettings = NotificationApi['schemas']['MuteSettings'];
+
+export type Board = BoardApi['schemas']['BoardResponse'];
+export type PostList = BoardApi['schemas']['PostListResponse'];
+export type PostSummary = BoardApi['schemas']['PostSummaryResponse'];
+export type PostSummaryPage = BoardApi['schemas']['PostSummaryPageResponse'];
+export type Post = BoardApi['schemas']['PostResponse'];
+export type CommentList = BoardApi['schemas']['CommentListResponse'];
+export type CommentThread = BoardApi['schemas']['CommentThreadResponse'];
+export type BoardComment = BoardApi['schemas']['CommentResponse'];

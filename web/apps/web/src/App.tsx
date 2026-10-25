@@ -18,6 +18,9 @@ import {
   BestiariesPage,
   BestiaryEditPage,
   BestiaryNewPage,
+  BoardIndexPage,
+  BoardListPage,
+  BoardSearchPage,
   CharacterEditPage,
   CharacterNewPage,
   CharactersPage,
@@ -38,6 +41,7 @@ import {
   NotificationsPage,
   OrderPage,
   OrdersPage,
+  PostPage,
   ReportsPage,
   RulebookEditPage,
   RulebookNewPage,
@@ -242,6 +246,13 @@ export function App() {
           <Route path="*" element={<PlaceholderPage service="chat" />} />
         </Route>
         <Route path="story/*" element={<PlaceholderPage service="story" />} />
+        {/* 공지·게시판(A11). 읽기는 로그인하지 않아도 열린다 */}
+        <Route path="board">
+          <Route index element={<BoardIndexPage />} />
+          <Route path="search" element={<BoardSearchPage />} />
+          <Route path="posts/:postId" element={<PostPage />} />
+          <Route path=":slug" element={<BoardListPage />} />
+        </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
