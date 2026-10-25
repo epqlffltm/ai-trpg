@@ -187,8 +187,15 @@ def to_throw(declaration: Declaration | None) -> ThrowNote | None:
     thrown = item_throw_of(declaration)
     if thrown is None:
         return None
+    injured = thrown.get('injured') or []
     return ThrowNote(
-        name=thrown['name'], target=thrown['target']['name'], done=thrown['thrown'], reason=thrown['reason']
+        name=thrown['name'],
+        target=thrown['target']['name'],
+        done=thrown['thrown'],
+        reason=thrown['reason'],
+        cured=[one['name'] for one in thrown.get('cured') or []],
+        injured=[one['name'] for one in injured if one['injury'] is not None],
+        resisted=[one['name'] for one in injured if one.get('immune')],
     )
 
 

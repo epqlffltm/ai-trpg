@@ -357,18 +357,21 @@ def accept_use_on(table: GameTable, member: TableMember, action: UseAction, item
 
 def accept_throw(table: GameTable, member: TableMember, action: ThrowAction, scene: Scene) -> dict:
     """
-    물건을 던지는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다(#277).
+    물건을 던지는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다(#277). 어떤 물건이든 던진다(#801).
 
-      - 판의 물건이 아니거나 던지는 판정이 없는 물건이면 ActionNotInRulesError(item).
+      - 판의 물건이 아니거나, 던지는 판정이 물건에도 룰북(rules.item_check)에도 없으면 ActionNotInRulesError(item).
       - 하나도 가지고 있지 않으면 RoundConflictError(item_not_held).
+      - 피해의 효과가 없는 물건에 죽이려 한다(lethal)를 적었으면 ActionNotInRulesError(lethal).
       - 맞을 쪽은 치기와 같다. 인물이 이번 장면의 인물이 아니거나 다른 장소에 있으면 ActionTargetError(npc),
         몬스터가 같은 장소의 마리가 아니면 ActionTargetError(monster), 이미 죽었으면 RoundConflictError.
     능력과 난이도는 받지 않는다. 물건에 적혀 있어 저장할 것이 없다.
     """
     item = find_item(table, action.item)
-    if item.throw is None:
+    if item.throw is None and rules_of(table).item_check is None:
         raise ActionNotInRulesError('item')
     require_held(member, action.item, 1)
+    if action.lethal and first_of(item.effects, EffectKind.DAMAGE) is None:
+        raise ActionNotInRulesError('lethal')
     if action.npc is not None:
         require_npc_target(scene.cast, member, action.npc, None)
     if action.monster is not None:

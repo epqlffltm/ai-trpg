@@ -134,9 +134,9 @@ describe('물건·돈 탭', () => {
     expect(dialog.getByText('양을 고르세요.')).toBeInTheDocument();
     expect(dialog.getByRole('button', { name: '저장' })).toBeDisabled();
     await userEvent.selectOptions(within(dialog.getByRole('group', { name: '효과 1' })).getByRole('combobox', { name: '양' }), 'light');
-    await userEvent.click(dialog.getByRole('checkbox', { name: '던질 수 있다' }));
-    expect(dialog.getByText('던지는 판정의 능력치와 맞으면 다치는 양을 고르세요.')).toBeInTheDocument();
-    await userEvent.click(dialog.getByRole('checkbox', { name: '던질 수 있다' }));
+    await userEvent.click(dialog.getByRole('checkbox', { name: '던지는 판정을 따로 적는다' }));
+    expect(dialog.getByText('던지는 판정의 능력치를 고르세요.')).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole('checkbox', { name: '던지는 판정을 따로 적는다' }));
     await userEvent.click(dialog.getByRole('button', { name: '저장' }));
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
     const sent = patches(seen)[0]?.items as ItemRule[];
@@ -188,29 +188,28 @@ describe('물건·돈 입력', () => {
   });
 
   it('효과: 회복과 피해는 함께 못 하고, 같은 종류는 한 번씩, 같은 부상을 두 번 입히지 않는다', () => {
-    const none = { on: false, ability: '', difficulty: '', harm: '' };
     const heal = { ...newEffectDraft('heal'), magnitude: 'light' };
     const damage = { ...newEffectDraft('damage'), magnitude: 'light' };
     const stun = { ...newEffectDraft('injure'), injury: 'stunned' };
-    expect(effectHints([heal, damage], none, '').effects).toBe('회복과 피해는 한 물건에 함께 적지 않습니다.');
-    expect(effectHints([heal, heal], none, '').effects).toBe('회복, 풀기, 피해는 한 번씩만 적습니다.');
-    expect(effectHints([stun, stun], none, '').effects).toBe('같은 부상을 두 번 입힙니다.');
-    expect(effectHints([newEffectDraft('cure')], none, '')['effect.0']).toBe('풀 부상을 하나 이상 고르세요.');
-    expect(effectHints([damage, stun], none, '11').treat_bonus).toBeDefined();
-    expect(effectHints([damage, stun], none, '2')).toEqual({});
+    expect(effectHints([heal, damage], '').effects).toBe('회복과 피해는 한 물건에 함께 적지 않습니다.');
+    expect(effectHints([heal, heal], '').effects).toBe('회복, 풀기, 피해는 한 번씩만 적습니다.');
+    expect(effectHints([stun, stun], '').effects).toBe('같은 부상을 두 번 입힙니다.');
+    expect(effectHints([newEffectDraft('cure')], '')['effect.0']).toBe('풀 부상을 하나 이상 고르세요.');
+    expect(effectHints([damage, stun], '11').treat_bonus).toBeDefined();
+    expect(effectHints([damage, stun], '2')).toEqual({});
     expect(toggleCure(['stunned'], 'poisoned', null)).toEqual(['stunned', 'poisoned']);
   });
 
   it('효과: 목록의 줄', () => {
-    const rule = { ...SWORD_RULE, kind: 'consumable', slots: [], attack: null, price: null, effects: [{ kind: 'damage', magnitude: 'light' }, { kind: 'injure', injury: 'poisoned' }], throw: { ability: 'dex', difficulty: null, harm: 'light' }, treat_bonus: 2 } as unknown as ItemRule;
+    const rule = { ...SWORD_RULE, kind: 'consumable', slots: [], attack: null, price: null, effects: [{ kind: 'damage', magnitude: 'light' }, { kind: 'injure', injury: 'poisoned' }], throw: { ability: 'dex', difficulty: null }, treat_bonus: 2 } as unknown as ItemRule;
     expect(itemRuleLine(rule, null)).toBe('소모품 · 희귀 · 피해 light · 부상: poisoned · 던짐 · 치료 +2');
   });
 
-  it('규칙: 던지는 판정은 소모품에만 보낸다. 끄면 보내지 않는다', () => {
-    const thrown = { ability: 'dex', difficulty: null, harm: 'moderate' };
+  it('규칙: 던지는 판정은 장비에도 보낸다. 끄면 보내지 않는다', () => {
+    const thrown = { ability: 'dex', difficulty: null };
     const firebomb = itemRuleDraft({ ...SWORD_RULE, entry_id: POTION, kind: 'consumable', slots: [], attack: null, throw: thrown } as ItemRule);
     expect(toItemRule(POTION, firebomb).throw).toEqual(thrown);
-    expect(toItemRule(POTION, { ...firebomb, kind: 'gear' }).throw).toBeNull();
+    expect(toItemRule(POTION, { ...firebomb, kind: 'gear' }).throw).toEqual(thrown);
     expect(toItemRule(POTION, { ...firebomb, throw: { ...firebomb.throw, on: false } }).throw).toBeNull();
     expect(toItemRule(SWORD, itemRuleDraft(undefined)).throw).toBeNull();
   });

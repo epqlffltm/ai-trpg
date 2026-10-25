@@ -976,13 +976,14 @@ def cross_invalid(cross: CrossCheck | ItemThrow | None, ruleset: Ruleset) -> boo
     길을 넘는 판정이 룰북의 규칙에 맞지 않는가(#281). 능력치와 난이도는 찾는 판정과 같이 보고,
     실패의 피해를 적었으면 룰북의 양의 등급이어야 한다.
 
-    물건을 던지는 판정(#277)도 같은 모양이라 같이 본다. 그쪽의 피해는 맞았을 때의 것이다.
+    물건을 던지는 판정(#277)도 같이 본다. 그쪽에는 피해가 없다(맞으면 물건의 효과가 든다, #801).
     """
     if cross is None:
         return False
     if find_ability(ruleset, cross.ability) is None or find_difficulty(ruleset, cross.difficulty) is None:
         return True
-    return cross.harm is not None and find_magnitude(ruleset, cross.harm) is None
+    harm = getattr(cross, 'harm', None)
+    return harm is not None and find_magnitude(ruleset, harm) is None
 
 
 def map_places(scenario: Scenario, routes: list[RouteRule]) -> list[uuid.UUID]:

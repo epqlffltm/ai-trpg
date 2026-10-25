@@ -144,8 +144,9 @@ export function aidItems(ctx: ActionContext): Choice[] {
   });
 }
 
-/** 던질 수 있는 물건(#277). 지닌 것 가운데 판의 물건에 던지는 판정(throw)이 있는 것 */
+/** 던질 수 있는 물건(#277, #801). 지닌 것 가운데 던지는 판정(throw)이 있는 것. 룰북에 맞히는 판정이 있으면 모두 */
 export function throwables(ctx: ActionContext): HeldItem[] {
+  if (ctx.table.rules.item_check) return heldItems(ctx.me);
   return heldItems(ctx.me).filter((held) => ctx.table.items.some((item) => item.entry_id === held.entry_id && item.throw));
 }
 

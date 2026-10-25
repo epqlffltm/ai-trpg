@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/ItemEffectsEditor.tsx
-// 소모품의 칸(B9 물건 규칙 창): 쓰면 나는 효과 목록(#800), 던지는 판정과 치료 보정(#277).
+// 물건 규칙 창의 칸(B9): 소모품이 쓰면 나는 효과 목록(#800)과 치료 보정(#277), 모든 물건의 던지는 판정(#801).
 // 효과는 적힌 차례대로 낸다. 회복·피해는 룰북의 양의 등급, 풀기·부상은 룰북의 부상에서 고른다. 검사는 itemEffectsForm.ts.
 
 import { Button, Checkbox, SelectField, TextField } from '@ai-trpg/ui';
@@ -25,12 +25,11 @@ type Props = {
   update: (changes: Partial<ItemRuleDraft>) => void;
 };
 
-/** 소모품만의 칸들. 효과 목록, 던지기, 치료 보정이다 */
+/** 소모품만의 칸들. 효과 목록과 치료 보정이다 */
 export function ConsumableFields({ draft, rules, hints, update }: Props) {
   return (
     <>
       <ItemEffectsEditor effects={draft.effects} rules={rules} hints={hints} onChange={(effects) => update({ effects })} />
-      <ThrowFields thrown={draft.throw} rules={rules} error={hints.throw} onChange={(thrown) => update({ throw: thrown })} />
       <TextField
         label="치료에 붙여 쓸 때의 보정(선택, 1~10)"
         inputMode="numeric"
@@ -146,33 +145,22 @@ function EffectTarget({ effect, rules, onChange }: TargetProps) {
 
 type ThrowProps = { thrown: ThrowDraft; rules: Ruleset | null; error: string | undefined; onChange: (thrown: ThrowDraft) => void };
 
-/** 던지는 판정(#277). 켜면 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다 */
-function ThrowFields({ thrown, rules, error, onChange }: ThrowProps) {
+/** 던지는 판정(#277, #801). 어떤 물건이든 던진다. 켜지 않으면 룰북의 맞히는 판정으로 던지고, 맞으면 효과가 든다 */
+export function ThrowFields({ thrown, rules, error, onChange }: ThrowProps) {
   return (
     <fieldset className="scenario-choices">
       <legend>던지기</legend>
-      <Checkbox label="던질 수 있다" checked={thrown.on} onChange={(event) => onChange({ ...thrown, on: event.target.checked })} />
+      <p className="ui-field__hint">어떤 물건이든 던질 수 있습니다. 판정을 따로 적지 않으면 룰북의 맞히는 판정으로 던지고, 맞으면 그 물건의 효과가 듭니다.</p>
+      <Checkbox label="던지는 판정을 따로 적는다" checked={thrown.on} onChange={(event) => onChange({ ...thrown, on: event.target.checked })} />
       {thrown.on ? (
-        <>
-          <CheckSelects
-            label="던지는 판정"
-            rules={rules}
-            ability={thrown.ability}
-            difficulty={thrown.difficulty}
-            error={error}
-            onChange={(changes) => onChange({ ...thrown, ...changes })}
-          />
-          {rules ? (
-            <SelectField label="맞으면 다치는 양" value={thrown.harm} onChange={(event) => onChange({ ...thrown, harm: event.target.value })}>
-              <option value="">고르기</option>
-              {rules.magnitudes.map((one) => (
-                <option key={one.key} value={one.key}>
-                  {one.name}({one.count}d{one.sides})
-                </option>
-              ))}
-            </SelectField>
-          ) : null}
-        </>
+        <CheckSelects
+          label="던지는 판정"
+          rules={rules}
+          ability={thrown.ability}
+          difficulty={thrown.difficulty}
+          error={error}
+          onChange={(changes) => onChange({ ...thrown, ...changes })}
+        />
       ) : null}
     </fieldset>
   );

@@ -4557,7 +4557,7 @@
       },
       "ItemRule-Input": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.\ntreat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.\n쓰면 치료가 성공하든 실패하든 하나 없어진다.",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\ntreat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.\n쓰면 치료가 성공하든 실패하든 하나 없어진다.",
         "properties": {
           "ap": {
             "anyOf": [
@@ -4741,7 +4741,7 @@
       },
       "ItemRule-Output": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.\ntreat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.\n쓰면 치료가 성공하든 실패하든 하나 없어진다.",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\ntreat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.\n쓰면 치료가 성공하든 실패하든 하나 없어진다.",
         "properties": {
           "ap": {
             "anyOf": [
@@ -5182,7 +5182,7 @@
       },
       "ItemThrow": {
         "additionalProperties": false,
-        "description": "물건을 던지는 판정(#277). 화염병, 투척 단검처럼 몬스터나 인물에게 던져 맞히는 소모품에 적는다.\n\nability 와 difficulty 는 룰북의 능력치와 난이도의 이름이다. 난이도를 비우면 룰북의 기본 난이도다.\nharm 은 맞았을 때 입히는 피해의 등급(룰북의 magnitudes 의 이름)이다. 방어와 세이브는 치기와 같다.\n셋 다 룰북의 규칙에 있는지는 게시할 때 본다(item_throw_invalid). 던지면 맞든 빗나가든 하나 없어진다.",
+        "description": "물건을 던지는 판정(#277). 투척 단검처럼 던지기에 맞춘 물건에 적는다. 적지 않은 물건도 던질 수 있다(#801).\n그때는 룰북의 맞히는 판정(rules.item_check)으로 던진다.\n\nability 와 difficulty 는 룰북의 능력치와 난이도의 이름이다. 난이도를 비우면 룰북의 기본 난이도다.\n룰북의 규칙에 있는지는 게시할 때 본다(item_throw_invalid). 맞으면 그 물건의 효과(effects)가 든다.\n예전의 맞았을 때의 피해(harm)는 효과의 damage 가 됐다. 던지면 맞든 빗나가든 하나 없어진다.",
         "properties": {
           "ability": {
             "maxLength": 20,
@@ -5202,17 +5202,10 @@
               }
             ],
             "title": "Difficulty"
-          },
-          "harm": {
-            "maxLength": 20,
-            "pattern": "^[a-z][a-z0-9_]*$",
-            "title": "Harm",
-            "type": "string"
           }
         },
         "required": [
-          "ability",
-          "harm"
+          "ability"
         ],
         "title": "ItemThrow",
         "type": "object"
@@ -5241,7 +5234,7 @@
         "type": "object"
       },
       "ItemThrowSnapshot": {
-        "description": "물건을 던지는 판정(#277). 능력치, 난이도(없으면 룰북의 기본), 맞았을 때의 피해의 등급의 이름이다.",
+        "description": "물건을 던지는 판정(#277). 능력치와 난이도(없으면 룰북의 기본)다. 맞으면 물건의 효과가 든다(#801).",
         "properties": {
           "ability": {
             "title": "Ability",
@@ -5257,15 +5250,10 @@
               }
             ],
             "title": "Difficulty"
-          },
-          "harm": {
-            "title": "Harm",
-            "type": "string"
           }
         },
         "required": [
-          "ability",
-          "harm"
+          "ability"
         ],
         "title": "ItemThrowSnapshot",
         "type": "object"
@@ -13842,7 +13830,7 @@
             "type": "array"
           },
           "format": {
-            "default": 62,
+            "default": 63,
             "title": "Format",
             "type": "integer"
           },
@@ -15265,7 +15253,7 @@
       },
       "ThrowAction": {
         "additionalProperties": false,
-        "description": "물건을 던지는 행동(#277). 가진 소모품 하나를 몬스터 한 마리(monster)나 이번 장면의 인물(npc)에게 던진다.\n\nitem 은 판의 로어북 물건 항목의 id 다. 던지는 판정(아이템 규칙의 throw)이 있는 소모품이어야 한다.\n능력과 난이도와 맞았을 때의 피해는 받지 않는다. 물건에 적힌 것으로 판정한다(app/rounds/throws.py).\n맞히면 방어와 세이브는 치기와 같다. 맞든 빗나가든 물건은 하나 없어진다.\nlethal 은 치기와 같다. 죽이려는 것인가, 아니면 제압이다. 노려 치기와 무기는 없다.",
+        "description": "물건을 던지는 행동(#277). 가진 물건 하나를 몬스터 한 마리(monster)나 이번 장면의 인물(npc)에게 던진다.\n\nitem 은 판의 로어북 물건 항목의 id 다. 어떤 물건이든 된다(#801). 능력과 난이도는 받지 않는다. 물건의 던지는\n판정(아이템 규칙의 throw)이나 룰북의 맞히는 판정(rules.item_check)으로 판정한다(app/rounds/throws.py).\n맞히면 그 물건의 효과가 든다. 피해가 있으면 방어와 세이브는 치기와 같다. 맞든 빗나가든 물건은 하나 없어진다.\nlethal 은 피해가 있는 물건에만, 치기와 같다. 죽이려는 것인가, 아니면 제압이다. 노려 치기와 무기는 없다.",
         "properties": {
           "item": {
             "format": "uuid",
@@ -16670,6 +16658,14 @@
             "title": "Ability",
             "type": "string"
           },
+          "cured": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CuredOut"
+            },
+            "title": "Cured",
+            "type": "array"
+          },
           "difficulty": {
             "title": "Difficulty",
             "type": "string"
@@ -16679,9 +16675,13 @@
             "title": "Entry Id",
             "type": "string"
           },
-          "harm": {
-            "title": "Harm",
-            "type": "string"
+          "injured": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InjuredOut"
+            },
+            "title": "Injured",
+            "type": "array"
           },
           "name": {
             "title": "Name",
@@ -16717,7 +16717,6 @@
           "reason",
           "ability",
           "difficulty",
-          "harm",
           "target",
           "remaining"
         ],
@@ -16725,7 +16724,7 @@
         "type": "object"
       },
       "app__tables__schemas__ItemThrowOut": {
-        "description": "물건을 던지는 판정(#277). 능력치와 난이도(비면 rules 의 기본)와 맞았을 때의 피해의 등급(rules 의 magnitudes).",
+        "description": "물건을 던지는 판정(#277). 능력치와 난이도(비면 rules 의 기본)다. 맞으면 그 물건의 효과(effects)가 든다(#801).\n\n없는 물건도 던질 수 있다. 그때는 rules.item_check 로 던진다(그것도 없으면 던지지 못한다).",
         "properties": {
           "ability": {
             "title": "Ability",
@@ -16741,16 +16740,11 @@
               }
             ],
             "title": "Difficulty"
-          },
-          "harm": {
-            "title": "Harm",
-            "type": "string"
           }
         },
         "required": [
           "ability",
-          "difficulty",
-          "harm"
+          "difficulty"
         ],
         "title": "ItemThrowOut",
         "type": "object"

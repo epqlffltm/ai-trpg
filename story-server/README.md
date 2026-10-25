@@ -4,9 +4,9 @@
 규칙은 [story 서버 설계](../docs/architecture/story.md)에 있다. 캐릭터 하나와의 1:1 대화는 chat 서버가 맡는다.
 둘이 함께 쓰는 것과 나눈 선은 [chat 서버 설계의 story-server 와 나눈 선](../docs/architecture/chat-server.md#story-server-와-나눈-선)에 있다.
 
-**지금은 세션까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
-asset 서버에서 세계관의 판을 가져와 [세션](#세션)을 만들고 목록으로 보인다.
-장면의 인물, 시각, 조건과 효과, 고백과 엔딩이 차례로 붙는다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
+**지금은 세션과 말 보내기까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
+asset 서버에서 세계관의 판을 가져와 [세션](#세션)을 만들고 목록으로 보인다. 말을 보내면 장면의 인물들과 서술의 답을 [말 조각](#말-보내기)으로 흘려보낸다.
+행동(이동, 시간, 선택지, 고백)과 엔딩이 차례로 붙는다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
 
 정해 둔 값: 포트 `8007`, 토큰의 대상 `ai-trpg-story`, DB 계정과 스키마 `story`(테스트는 `story_test`), 주소 `/api/v1/story/`.
 
@@ -77,6 +77,11 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `BILLING_URL` | 비어 있음(받지 않음) | 결제 서버의 주소(`http://127.0.0.1:8003`). 모델의 값을 가격 목록에서 읽는다([모델 목록](#모델-목록)). 비우면 모델은 값 없이 보인다 |
 | `BILLING_SECRET` | 비어 있음 | 결제 서버에 보내는 요청에 서명하는 비밀. `billing-server/.env` 의 `STORY_SERVER_SECRET` 과 같은 값. `BILLING_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
 | `BILLING_TIMEOUT_SECONDS` | `5` | 결제 서버를 한 번 부르는 시간의 상한(초, 10 까지). chat 서버와 같다 |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `ZAI_API_KEY`, `DEEPINFRA_API_KEY` | 비어 있음 | 모델 목록의 창구마다 키. 비우면 그 창구의 모델로 말을 보내면 503 `provider_unavailable` 이다. 공급자가 내주는 값이라 `tools/fill_env.py` 가 만들지 않는다. 비밀값이다 |
+| `LLM_TIMEOUT_SECONDS` | `120` | 모델을 한 번 부르는 시간의 상한(초, 600 까지) |
+| `STORY_OUTPUT_LIMIT` | `1024` | 말 한 번의 답의 길이의 상한(토큰). 가격표의 출력 단계(`o0`)가 약속하는 길이다 |
+| `STORY_CONTEXT_CHARS` | `12000` | 모델에 보내는 지난 말의 양의 상한(글자). 가격표의 입력 단계(`i0`)가 약속하는 양이다 |
+| `STORY_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
 
 DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 함께 쓰는 칸은 공용 코드의 설정(`server_core.settings.CoreSettings`)에 있다.
 `tools/fill_env.py` 가 `ASSET_SECRET` 과 `BILLING_SECRET` 을 짝(asset 서버, 결제 서버의 `STORY_SERVER_SECRET`)과 같은 값으로 채운다.
@@ -101,7 +106,8 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | PUT | `/api/v1/story/conversations/{id}/model` | 세션의 모델 바꾸기(`{"model"}`). 고를 수 없으면 422 `model_unavailable`, 가격 목록을 받지 못했으면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id"}`). 세계관의 마지막 판을 가져와 고정한다. 201 | access 토큰 |
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}` | access 토큰 |
-| GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서까지). 남의 것은 404 | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서와 지금 가지의 말까지). 남의 것은 404 | access 토큰 |
+| POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content"}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
 
 ### 세션
 
@@ -120,7 +126,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 - **모르는 형식의 판은 받지 않는다.** 이 서버가 읽을 줄 아는 형식은 3 까지다(`WORLD_FORMAT_MAX`). 모르는 조건이나 효과를 엔진이 판정할 수 없어서다.
   asset 서버가 형식을 올리면 그것을 읽는 법과 함께 이 값을 올린다.
 - **목록과 읽기는 볼 수 있는 등급만이다.** 성인 확인을 잃으면 성인 등급의 세션은 목록에서 빠지고 읽으면 404 다.
-- 지우기, 말, 장면의 인물과 상태는 그것을 쓰는 조각에서 더한다.
+- 지우기와 행동(상태를 바꾸는 것)은 그것을 쓰는 조각에서 더한다.
 
 | asset 서버의 답 | 이 서버의 답 |
 | --- | --- |
@@ -128,9 +134,34 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | 403 `adult_content_required`(자기 세계관인데 등급을 쓸 수 없다) | 403 `adult_content_required`. 화면이 본인인증으로 안내한다 |
 | 닿지 못함, 시간 초과, 401, 5xx, 모양이 틀린 답, 모르는 형식, `ASSET_URL` 이 없음 | 503 `asset_unavailable`, `Retry-After: 5`. 다시 시도하지 않는다(사람이 다시 누른다) |
 
-**스트리밍(정한 것).** 말을 보내는 주소는 chat 과 같이 바로 SSE(`text/event-stream`)로 답한다. 응답에 `X-Accel-Buffering: no` 를 싣고
-15초마다 하트비트를 보낸다. 끊겨도 서버는 생성을 끝까지 저장하고, 앱은 다시 들어와 저장된 말을 읽는다.
-여러 인물의 말은 한 번의 호출에서 말 조각으로 받는다([한 번의 말](../docs/architecture/story.md#한-번의-말)). 그 주소를 만들 때 공용 코드의 `StreamRoutes` 로 span 과 요청 메트릭에서 뺀다.
+### 말 보내기
+
+`POST /api/v1/story/conversations/{id}/messages` 가 바로 SSE(`text/event-stream`)로 답한다(`app/turns/`).
+chat 의 한 번의 말과 같은 차례다: 차례를 잡고(한 세션 한 생성), 사람의 말과 기록(`generations`)을 저장하고, 홀드를 걸고,
+모델을 부르며 흘려보내고, 답을 저장하고, 확정한다. 응답에 `X-Accel-Buffering: no` 를 싣고 15초마다 하트비트를 보낸다.
+끊겨도 서버는 생성을 끝까지 저장하고, 앱은 다시 들어와 저장된 말을 읽는다. 이 주소는 공용 코드의 `StreamRoutes` 로 span 과 요청 메트릭에서 뺀다.
+
+```
+event: turn     data: {"generation_id", "user_message", "cast": ["mina"]}   답할 사람의 말과 장면의 인물
+event: segment  data: {"speaker": "mina"}                                    새 말 조각(서술은 null)
+event: delta    data: {"text": "..."}                                        지금 조각에 붙는 글
+event: done     data: {"message": {... "segments": [{"speaker", "text"}], "cast"}}   저장한 답
+event: failed   data: {"code": "timeout"}                                    답 없이 끝났다
+```
+
+- **장면의 인물.** 가지의 끝의 상태로 엔진이 정한다(`app/engine/scene.py`). 선택지를 기다리는 이벤트가 있으면 그 장면 지시가
+  카드에 들어가고 그 장면이 부른 인물이 들어온다. 장면 밖의 인물은 프롬프트에 넣지 않는다.
+- **말 조각.** 모델은 줄마다 `@인물의 id:` 나 `@narration:` 을 적는다(`app/turns/segments.py`). 서버는 흘러오는 대로 잘라 말하는 사람을 본다.
+  장면에 없는 인물의 줄은 흘리지 않고 저장하지 않으며 기록에 센다(`generations.dropped_segments`). 표식을 어긴 줄은 서술이다.
+  남은 조각이 없으면 실패한 말이고 청구하지 않는다(`failed`, `empty`).
+- **저장.** 답의 `segments` 가 기준이고, `content` 는 그 조각을 표식이 붙은 줄로 쓴 것이다(다음 호출의 프롬프트에 그대로 간다).
+  답에는 그때의 장면의 인물(`cast`)을 함께 적는다. 말은 상태를 바꾸지 않는다. 상태는 행동한 말에 붙는다(`message_states`).
+- **끝난 세션.** 엔딩을 봤고 세계관이 끝(읽기만)을 골랐으면 409 `session_ended` 다. 후일담이면 말을 받는다.
+- **거절.** 모델이 없으면 409 `model_required`, 쓸 수 없으면 422 `model_unavailable`, 답을 쓰는 중이면 409 `generation_in_progress`.
+  크레딧이 모자라면 402 `credit_short`, 결제 서버나 공급자가 죽었으면 503 이다. 이때 사람의 말은 저장되고 `message_id` 로 알린다.
+- **청구.** 결제 서버의 가격표 `story.<이름표>.i0.o0` 로 홀드를 건다(`story:gen:<기록의 id>`). 답이 있으면 확정, 없으면 반환이다.
+  못 한 것은 청구 정리(`app/turns/settler.py`, 5초마다)가 마저 한다. 도중에 꺼진 서버가 남긴 홀드도 15분 뒤에 돌려준다.
+- 다시 생성, 멈추기, 이어서 출력, 요청 수 제한은 그것을 더하는 조각에서 붙인다.
 
 ### 토큰 검증
 
@@ -253,6 +284,9 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `worlds` | asset 서버에서 가져온 세계관의 판의 사본. 사람마다, 판마다 하나(`owner_id`, `source_id`, `version` 이 고유). 문서는 받은 그대로(JSONB) |
 | `conversations` | 세션 하나. 판의 사본을 가리킨다(지우지 못하게 `RESTRICT`). 목록은 `owner_id`, `updated_at` 의 색인으로 읽는다. 세션의 모델(`model_slug`)을 가리킨다 |
 | `ai_models`, `ai_model_costs`, `ai_model_snapshots` | [모델 목록](#모델-목록). chat 서버의 표와 같은 모양이다 |
+| `messages` | 말 하나. 트리다(`parent_id`). 답은 말 조각(`segments`)과 그때의 장면의 인물(`cast`)을 갖는다. 세션의 `active_leaf_id` 가 지금 가지의 끝이다 |
+| `message_states` | 말에 붙은 엔진의 상태(JSONB). 상태가 바뀐 말에만 있다. 가지의 끝의 상태는 끝에서 가장 가까운 것이고, 없으면 처음의 상태다 |
+| `generations` | 모델을 한 번 부른 것과 그 청구(chat 서버의 표와 같은 모양). 버린 줄의 수(`dropped_segments`)를 더했다 |
 
 모델의 모듈을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 

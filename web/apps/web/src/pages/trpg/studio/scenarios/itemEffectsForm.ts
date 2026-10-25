@@ -4,7 +4,7 @@
 // - 효과는 5개까지, 적힌 차례대로 낸다. 종류는 회복(heal)·풀기(cure)·피해(damage)·부상(injure)
 // - 회복과 피해는 함께 적지 않는다. 회복·풀기·피해는 한 번씩, 같은 부상을 두 번 입히지 않는다
 // - 회복과 피해는 룰북의 양의 등급, 풀기는 룰북의 부상 가운데 결손이 아닌 것(1~5개), 부상은 룰북의 부상 하나
-// - 던지는 판정은 능력치(필수)·난이도(비우면 룰북의 기본)·맞으면 다치는 양(필수). 치료 보정은 1~10
+// - 던지는 판정(#801, 장비에도)은 능력치(필수)·난이도(비우면 룰북의 기본). 비우면 룰북의 맞히는 판정으로 던진다. 치료 보정은 1~10
 
 import type { ItemRule, ItemRuleBody, Ruleset } from '../../../../api/types';
 import { wholeNumber } from '../rulebooks/rulebookForm';
@@ -22,7 +22,7 @@ export const EFFECT_LABELS: Record<EffectKind, string> = { heal: '회복', cure:
 export const HARMFUL_KINDS: EffectKind[] = ['damage', 'injure'];
 
 export type EffectDraft = { kind: EffectKind; magnitude: string; injuries: string[]; injury: string };
-export type ThrowDraft = { on: boolean; ability: string; difficulty: string; harm: string };
+export type ThrowDraft = { on: boolean; ability: string; difficulty: string };
 
 export function newEffectDraft(kind: EffectKind = 'heal'): EffectDraft {
   return { kind, magnitude: '', injuries: [], injury: '' };
@@ -36,7 +36,7 @@ export function effectDraft(effect: Effect): EffectDraft {
 
 export function throwDraft(rule: ItemRule | undefined): ThrowDraft {
   const thrown = rule?.throw;
-  return { on: Boolean(thrown), ability: thrown?.ability ?? '', difficulty: thrown?.difficulty ?? '', harm: thrown?.harm ?? '' };
+  return { on: Boolean(thrown), ability: thrown?.ability ?? '', difficulty: thrown?.difficulty ?? '' };
 }
 
 /** 효과 하나를 보낼 모양으로. 검사를 통과한 뒤에만 부른다 */
@@ -48,7 +48,7 @@ export function toEffect(draft: EffectDraft): Effect {
 
 export function toThrow(draft: ThrowDraft): ItemRuleBody['throw'] {
   if (!draft.on) return null;
-  return { ability: draft.ability, difficulty: draft.difficulty === '' ? null : draft.difficulty, harm: draft.harm };
+  return { ability: draft.ability, difficulty: draft.difficulty === '' ? null : draft.difficulty };
 }
 
 /** 풀 수 있는 부상(짧은 것과 오래 가는 것). 결손은 풀지 못한다 */
@@ -82,8 +82,13 @@ function listHint(effects: EffectDraft[]): string | null {
   return null;
 }
 
-/** 보내기 전에 알릴 것. "effect.<차례>", "effects", "throw", "treat_bonus" → 글 */
-export function effectHints(effects: EffectDraft[], thrown: ThrowDraft, treatBonus: string): Record<string, string> {
+/** 던지는 판정의 문제. 켰으면 능력치를 골라야 한다. 없으면 null */
+export function throwHint(thrown: ThrowDraft): string | null {
+  return thrown.on && thrown.ability === '' ? '던지는 판정의 능력치를 고르세요.' : null;
+}
+
+/** 소모품의 칸에서 보내기 전에 알릴 것. "effect.<차례>", "effects", "treat_bonus" → 글 */
+export function effectHints(effects: EffectDraft[], treatBonus: string): Record<string, string> {
   const hints: Record<string, string> = {};
   effects.forEach((one, index) => {
     const hint = effectHint(one);
@@ -91,7 +96,6 @@ export function effectHints(effects: EffectDraft[], thrown: ThrowDraft, treatBon
   });
   const list = listHint(effects);
   if (list) hints.effects = list;
-  if (thrown.on && (thrown.ability === '' || thrown.harm === '')) hints.throw = '던지는 판정의 능력치와 맞으면 다치는 양을 고르세요.';
   if (treatBonus.trim() !== '' && wholeNumber(treatBonus, 1, TREAT_BONUS_MAX) === null) hints.treat_bonus = `1~${TREAT_BONUS_MAX} 사이의 정수입니다.`;
   return hints;
 }

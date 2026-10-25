@@ -1014,6 +1014,31 @@ def upgrade_from_61(document: dict) -> dict:
     return upgraded
 
 
+def with_throw_damage(rule: dict) -> dict:
+    """
+    옛 아이템 규칙 하나(#801). 던지는 판정의 피해(throw.harm)를 효과의 피해로 옮긴다. 판정은 능력치와 난이도만 남는다.
+
+    이미 회복이나 피해의 효과가 있으면 옮기지 않는다(한 물건에 HP 의 변화는 하나다, #800). 그때 던진 피해는 버린다.
+    시나리오 초안을 옮기는 마이그레이션과 같은 모양이다.
+    """
+    thrown = rule.get('throw')
+    if not thrown or 'harm' not in thrown:
+        return rule
+    effects = list(rule.get('effects', []))
+    if not any(effect['kind'] in ('heal', 'damage') for effect in effects):
+        effects = [{'kind': 'damage', 'magnitude': thrown['harm']}, *effects]
+    kept = {key: value for key, value in thrown.items() if key != 'harm'}
+    return {**rule, 'throw': kept, 'effects': effects}
+
+
+def upgrade_from_62(document: dict) -> dict:
+    """형식 62 의 문서를 형식 63 으로 올린다(#801). 던지는 판정의 피해가 물건의 효과가 된다."""
+    upgraded = dict(document)
+    upgraded['items'] = [with_throw_damage(rule) for rule in document.get('items', [])]
+    upgraded['format'] = 63
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -1078,4 +1103,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     59: upgrade_from_59,
     60: upgrade_from_60,
     61: upgrade_from_61,
+    62: upgrade_from_62,
 }

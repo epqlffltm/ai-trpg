@@ -352,11 +352,14 @@ class ItemOut(BaseModel):
 
 
 class ItemThrowOut(BaseModel):
-    """물건을 던지는 판정(#277). 능력치와 난이도(비면 rules 의 기본)와 맞았을 때의 피해의 등급(rules 의 magnitudes)."""
+    """
+    물건을 던지는 판정(#277). 능력치와 난이도(비면 rules 의 기본)다. 맞으면 그 물건의 효과(effects)가 든다(#801).
+
+    없는 물건도 던질 수 있다. 그때는 rules.item_check 로 던진다(그것도 없으면 던지지 못한다).
+    """
 
     ability: str
     difficulty: str | None
-    harm: str
 
 
 class CatalogItemOut(BaseModel):
