@@ -1,7 +1,8 @@
 // web/apps/web/src/pages/chat/conversation/turnState.ts
 // 답을 받는 동안의 화면 상태. SSE 메시지를 하나씩 넣어 다음 상태를 만든다. 순수한 함수다.
 //
-//   turn        → 답할 사람의 말(user_message), 멈출 때 쓰는 generation_id, 이어 쓰면 그 말의 id(continues)
+//   turn        → 답할 사람의 말(user_message), 멈출 때 쓰는 generation_id, 이어 쓰면 그 말의 id(continues),
+//                 건네며 한마디를 덧붙였으면 그 위의 행동 말(action)
 //   expression  → 지금 띄울 캐릭터 그림(sprite). 첫 delta 보다 먼저 온다
 //   delta       → 흘러 들어온 글을 잇는다
 //   done        → 저장한 답. 끝
@@ -14,8 +15,10 @@ import type { SavedChatMessage } from '../../../api/types';
 export type TurnState = {
   /** 멈추기에 쓴다. turn 을 받기 전이면 null */
   generationId: string | null;
-  /** 답할 사람의 말. 말 보내기면 방금 보낸 말이다 */
+  /** 답할 사람의 말. 말 보내기면 방금 보낸 말, 행동이면 행동 말(한마디를 덧붙였으면 그 한마디)이다 */
   userMessage: SavedChatMessage | null;
+  /** 건네며 한마디를 덧붙였으면 그 위의 행동 말. 아니면 null */
+  action: SavedChatMessage | null;
   /** 이어 쓰는 끊긴 답의 id. 아니면 null */
   continues: string | null;
   /** 흘러 들어온 글. 이어 쓰면 끊긴 답 뒤에 붙일 글이다 */
@@ -25,7 +28,7 @@ export type TurnState = {
   end: { kind: 'done'; message: SavedChatMessage } | { kind: 'failed'; code: string } | null;
 };
 
-export const EMPTY_TURN: TurnState = { generationId: null, userMessage: null, continues: null, text: '', sprite: null, end: null };
+export const EMPTY_TURN: TurnState = { generationId: null, userMessage: null, action: null, continues: null, text: '', sprite: null, end: null };
 
 export function applyTurnMessage(state: TurnState, message: SseMessage): TurnState {
   const data = parseObject(message.data);
@@ -43,6 +46,7 @@ function applyTurnStart(state: TurnState, data: Record<string, unknown>): TurnSt
     ...state,
     generationId: typeof data.generation_id === 'string' ? data.generation_id : null,
     userMessage: isMessage(data.user_message) ? data.user_message : null,
+    action: isMessage(data.action) ? data.action : null,
     continues: typeof data.continues === 'string' ? data.continues : null,
   };
 }
