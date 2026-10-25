@@ -8,6 +8,7 @@
 //   - 성공이 아니면 ApiError 를 던진다. 읽기는 TanStack Query 가, 쓰기는 화면이 받는다.
 //   - 파일(그림)은 JSON 이 아니라 바이트 그대로 보낸다(file). 그림을 받을 때는 Blob 으로 읽는다(apiBlob).
 //     내려받을 파일(기록)은 Blob 과 서버가 붙인 파일 이름을 함께 읽는다(apiDownload).
+//   - 바로 SSE 로 답하는 POST 는 열린 응답을 돌려준다(apiStream). 본문을 읽는 것은 쓰는 쪽이다.
 
 import { filenameFromDisposition } from './disposition';
 import { ApiError, NetworkError, toApiError } from './errors';
@@ -51,6 +52,16 @@ export async function apiDownload(path: string, options: RequestOptions = {}): P
   const response = await sendWithRefresh(withQuery(path, options.query), { ...options, accept: '*/*' });
   if (!response.ok) throw await toApiError(response);
   return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get('Content-Disposition')) };
+}
+
+/**
+ * 바로 SSE 로 답하는 POST(chat 의 말 보내기 같은 것). 열린 응답을 돌려주고 본문은 쓰는 쪽이 읽는다.
+ * 답을 시작하기 전의 거절(402, 409, 422 …)은 apiRequest 와 같은 ApiError 다. 401 이면 한 번 갱신하고 다시 보낸다(본문을 읽기 전이다)
+ */
+export async function apiStream(path: string, options: RequestOptions = {}): Promise<Response> {
+  const response = await sendWithRefresh(withQuery(path, options.query), { ...options, accept: 'text/event-stream' });
+  if (!response.ok) throw await toApiError(response);
+  return response;
 }
 
 async function sendWithRefresh(url: string, options: RequestOptions): Promise<Response> {

@@ -30,6 +30,7 @@ import {
   ChatLorebookEditPage,
   ChatLorebookNewPage,
   ChatLorebooksPage,
+  ConversationPage,
   GalleryPage,
   GuardianConsentPage,
   GuardianRequestPage,
@@ -277,6 +278,15 @@ export function App() {
           {/* 캐릭터 탐색(C1)과 소개(C2). 로그인하지 않아도 열린다(전체이용가만) */}
           <Route index element={<CharacterBrowsePage />} />
           <Route path="characters/:characterId" element={<CharacterPage />} />
+          {/* 대화(C3). 내 대화라 로그인해야 열린다 */}
+          <Route
+            path="conversations/:conversationId"
+            element={
+              <RequireSession>
+                <ConversationPage />
+              </RequireSession>
+            }
+          />
           <Route path="*" element={<PlaceholderPage service="chat" />} />
         </Route>
         <Route path="story/*" element={<PlaceholderPage service="story" />} />

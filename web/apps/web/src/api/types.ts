@@ -162,6 +162,12 @@ export type ConversationPage = Chat['schemas']['ConversationPage'];
 export type ConversationSummary = Chat['schemas']['ConversationSummary'];
 export type ConversationDetail = Chat['schemas']['ConversationDetail'];
 export type ConversationCreate = Chat['schemas']['ConversationCreate'];
+export type ConversationMessage = Chat['schemas']['PathMessageOut'];
+export type SavedChatMessage = Chat['schemas']['MessageOut'];
+export type ConversationState = Chat['schemas']['StateOut'];
+export type ChatModelList = Chat['schemas']['ModelList'];
+export type ChatModel = Chat['schemas']['ModelOut'];
+export type ConversationModel = Chat['schemas']['ConversationModelOut'];
 
 // 결제 서버의 지갑(A6)과 충전(A7). 크레딧의 양은 글자다("80"). 화면이 셈하지 않는다. 상품과 주문의 값(price)은 원이고 숫자다
 export type Wallet = Billing['schemas']['Wallet'];
