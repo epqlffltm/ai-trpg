@@ -250,11 +250,20 @@ location ~ ^/api/v1/chat/messages/[^/]+/(regenerate|continue)$ {
 }
 
 # --- story 서버(#591) ---
-# 지금은 뼈대라 보통의 주소뿐이다. 말을 보내는 스트리밍 주소가 생기면 chat 서버의 것처럼 버퍼링을 끄는 위치를 더한다
 location /api/v1/story/ {
     set $proxy_upstream story;
     set $story_server story-server:8007;
     limit_req zone=api burst=40 nodelay;
+    proxy_pass http://$story_server;
+}
+
+# 말을 보내는 주소(docs/architecture/story.md 의 "한 번의 말"). POST 가 바로 SSE 로 답한다. chat 서버의 것과 같다
+location ~ ^/api/v1/story/conversations/[^/]+/messages$ {
+    set $proxy_upstream story;
+    set $story_server story-server:8007;
+    limit_req zone=api burst=40 nodelay;
+    limit_conn streams 10;
+    proxy_buffering off;
     proxy_pass http://$story_server;
 }
 

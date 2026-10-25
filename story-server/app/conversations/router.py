@@ -5,7 +5,7 @@
 
     POST /api/v1/story/conversations              세션 시작. 201
     GET  /api/v1/story/conversations              내 세션의 목록. ?limit=&offset=&world_id=
-    GET  /api/v1/story/conversations/{id}         세션 하나(가져온 판까지)
+    GET  /api/v1/story/conversations/{id}         세션 하나(가져온 판과 지금 가지의 말까지)
     PUT  /api/v1/story/conversations/{id}/model   세션의 모델 바꾸기
 
 모든 주소가 로그인을 요구한다. 남의 세션은 404 다(403 이면 그 ID 가 있다는 것이 드러난다).
@@ -23,7 +23,7 @@ from app.billing.prices import PriceBook
 from app.billing.routing import Prices
 from app.catalog.models import AiModel
 from app.conversations import service
-from app.conversations.models import Conversation, ImportedWorld
+from app.conversations.models import Conversation, ImportedWorld, Message
 from app.conversations.repository import ConversationRow
 from app.conversations.schemas import (
     ConversationCreate,
@@ -31,12 +31,14 @@ from app.conversations.schemas import (
     ConversationModelOut,
     ConversationPage,
     ConversationSummary,
+    MessageOut,
     ModelChoice,
     WorldOut,
     WorldSummary,
 )
 from app.conversations.service import (
     AdultContentRequiredError,
+    ConversationBusyError,
     ConversationNotFoundError,
     ModelUnavailableError,
     WorldNotFoundError,
@@ -108,16 +110,35 @@ def to_summary(
     )
 
 
+def to_message(message: Message) -> MessageOut:
+    """말 하나를 응답의 모양으로."""
+    return MessageOut(
+        id=message.id,
+        parent_id=message.parent_id,
+        role=message.role,
+        content=message.content,
+        status=message.status,
+        segments=message.segments or [],
+        cast=list(message.cast or ()),
+        created_at=message.created_at,
+    )
+
+
 def to_detail(
-    row: ConversationRow, models: dict[str, AiModel], book: PriceBook | None, now: datetime
+    row: ConversationRow,
+    models: dict[str, AiModel],
+    book: PriceBook | None,
+    now: datetime,
+    messages: list[Message],
 ) -> ConversationDetail:
-    """세션 하나를 응답의 모양으로."""
+    """세션 하나를 응답의 모양으로. messages 는 지금 가지의 말들이다."""
     conversation, world = row
     return ConversationDetail(
         id=conversation.id,
         title=conversation.title,
         world=WorldOut(**to_world_summary(world).model_dump(), document=world.document),
         model=conversation_model(conversation, world, models, book, now),
+        messages=[to_message(message) for message in messages],
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )
@@ -151,6 +172,14 @@ async def handle_model_unavailable(request: Request, error: ModelUnavailableErro
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={'detail': '이 세션에 쓸 수 없는 모델입니다.', 'code': 'model_unavailable'},
+    )
+
+
+async def handle_conversation_busy(request: Request, error: ConversationBusyError) -> JSONResponse:
+    """답을 쓰는 중이면 409 다. 그 답이 끝난 뒤에 한다(chat 과 같다)."""
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={'detail': '답을 쓰는 중입니다. 끝난 뒤에 해 주세요.', 'code': 'generation_in_progress'},
     )
 
 
@@ -200,11 +229,12 @@ async def list_conversations(
 async def read_conversation(
     conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session, prices: Prices, now: Now
 ) -> ConversationDetail:
-    """세션 하나. 가져온 판까지. 가격 목록은 DB 를 읽기 전에 받는다."""
+    """세션 하나. 가져온 판과 지금 가지의 말까지. 가격 목록은 DB 를 읽기 전에 받는다."""
     book = await service.known_book(prices)
     row = await service.get_conversation(session, viewer, conversation_id)
     models = await service.conversation_models(session, [row[0]])
-    return to_detail(row, models, book, now)
+    messages = await service.conversation_messages(session, row[0])
+    return to_detail(row, models, book, now, messages)
 
 
 @router.put('/{conversation_id}/model', response_model=ConversationModelOut, status_code=status.HTTP_200_OK)

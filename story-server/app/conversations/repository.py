@@ -9,11 +9,12 @@
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import Select, func, select, update
+from sqlalchemy import Select, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
-from app.conversations.models import Conversation, ImportedWorld
+from app.conversations.models import Conversation, ImportedWorld, Message
 from app.ratings import Rating
 
 # 세션 하나를 읽을 때 함께 오는 것: 세션과 판의 사본
@@ -114,3 +115,26 @@ async def find_visible(
     """이 사람의 세션 하나와 판의 사본. 없거나, 남의 것이거나, 볼 수 없는 등급이면 None."""
     row = (await session.execute(visible(owner_id, ratings).where(Conversation.id == conversation_id))).first()
     return None if row is None else (row[0], row[1])
+
+
+async def active_path(session: AsyncSession, leaf_id: uuid.UUID | None) -> list[Message]:
+    """
+    가지의 끝(leaf_id)에서 첫 말까지 거슬러 올라간 말들. 첫 말부터 차례로 돌려준다. 끝이 없으면 빈 목록이다.
+
+    세션의 말을 전부 읽지 않는다. 재귀 쿼리(WITH RECURSIVE)로 이 가지의 말만 읽는다(chat 과 같다).
+    """
+    if leaf_id is None:
+        return []
+    # 끝에서 몇 걸음 올라왔는가(depth). 첫 말이 가장 깊다. 시각으로 줄 세우지 않는다.
+    # 한 트랜잭션에 적힌 말들은 시각(now())이 같다
+    upward = (
+        select(Message.id, Message.parent_id, literal(0).label('depth'))
+        .where(Message.id == leaf_id)
+        .cte('path', recursive=True)
+    )
+    parent = aliased(Message)
+    upward = upward.union_all(
+        select(parent.id, parent.parent_id, upward.c.depth + 1).join(upward, parent.id == upward.c.parent_id)
+    )
+    query = select(Message).join(upward, Message.id == upward.c.id).order_by(upward.c.depth.desc())
+    return list(await session.scalars(query))

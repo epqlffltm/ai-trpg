@@ -121,6 +121,16 @@ SECRETS = [
     *secrets('chat-server', ['chat-server'], 'BILLING_SECRET'),
     # story 서버가 결제 서버를 부를 때 서명하는 비밀. 서버만 쓴다. 마이그레이션(story-migrate)에는 주지 않는다
     *secrets('story-server', ['story-server'], 'BILLING_SECRET'),
+    # story 서버가 모델을 부르는 키. 서버만 쓴다(말 한 번). 마이그레이션에는 주지 않는다
+    *secrets(
+        'story-server',
+        ['story-server'],
+        'OPENAI_API_KEY',
+        'ANTHROPIC_API_KEY',
+        'GEMINI_API_KEY',
+        'ZAI_API_KEY',
+        'DEEPINFRA_API_KEY',
+    ),
     # chat 서버가 모델을 부르는 키. 서버만 쓴다(말 한 번). 마이그레이션에는 주지 않는다
     *secrets(
         'chat-server',

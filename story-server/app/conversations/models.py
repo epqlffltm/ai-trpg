@@ -5,10 +5,12 @@
 
   - worlds: asset 서버에서 가져온 세계관의 판의 사본. 사람마다, 판마다 하나다. 그 사람의 세션들이 함께 쓴다
   - conversations: 세션 하나. 세계관을 새로 시작할 때마다 하나다. 지난 세션은 목록에 남는다
+  - messages: 말 하나. 트리다(parent_id). parent_id 가 같은 것이 서로의 대안(다시 생성)이다
+  - message_states: 말에 붙은 엔진의 상태. 상태가 바뀐 말에만 있다(app/turns/states.py)
 
 asset 서버의 행을 가리키는 칸(source_id)에는 외래 키를 걸지 않는다. 다른 서버의 DB 다.
 사본은 가져온 뒤 바뀌지 않는다. 원본이 다시 게시돼도 그 세션은 처음의 판으로 돈다. 새 판은 새 세션에서 쓴다.
-말(messages)과 말에 붙는 상태, 세션의 끝(엔딩, 후일담)은 그것을 쓰는 조각에서 더한다(만드는 순서 2~5).
+세션의 끝(엔딩, 후일담)은 그것을 쓰는 조각에서 더한다(만드는 순서 5).
 """
 
 import enum
@@ -16,11 +18,29 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 from app.ratings import Rating
+
+
+class Role(enum.StrEnum):
+    """
+    누가 한 말인가. action 은 사람이 한 행동(이동, 시간, 선택지, 고백)이다. 행동 말은 서버가 쓴 글이다.
+    assistant 는 모델의 답이다. 장면의 인물들과 서술의 말 조각(segments)으로 되어 있다.
+    """
+
+    USER = 'user'
+    ASSISTANT = 'assistant'
+    ACTION = 'action'
+
+
+class MessageStatus(enum.StrEnum):
+    """말이 어디까지 됐는가. partial 은 끊긴 답이다(chat 과 같다)."""
+
+    COMPLETE = 'complete'
+    PARTIAL = 'partial'
 
 
 def one_of(column: str, values: type[enum.StrEnum]) -> str:
@@ -83,7 +103,58 @@ class Conversation(Base):
     model_slug: Mapped[str | None] = mapped_column(
         ForeignKey('ai_models.slug', ondelete='RESTRICT'), index=True, default=None
     )
+    # 지금 보고 있는 가지의 끝. 첫 말을 보내기 전에는 비어 있다(세션을 시작할 때 말이 없다).
+    # 말과 세션이 서로 가리키므로 외래 키는 표를 다 만든 뒤에 건다(use_alter)
+    active_leaf_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('messages.id', ondelete='SET NULL', use_alter=True, name='fk_conversations_active_leaf_id_messages'),
+        default=None,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    # 모델이 답을 쓰는 중이면 그 시작 시각. 한 세션에 한 번에 하나의 생성만 받는다(app/turns/repository.py).
+    # 서버가 도중에 꺼져 남아도 오래되면(GENERATION_STALE) 다음 말이 다시 잡는다(chat 과 같다)
+    generating_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+
+
+class Message(Base):
+    """
+    말 하나. parent_id 가 같은 말들이 서로의 대안이다. 첫 말은 parent_id 가 없다.
+
+    모델의 답은 말 조각(segments)의 목록이다: [{"speaker": 인물의 id 또는 null(서술), "text"}].
+    본문(content)은 그 조각들을 표식이 붙은 줄로 쓴 것이다(app/turns/segments.py 의 render_segments).
+    다음 호출의 프롬프트에 그대로 들어가 모델이 같은 모양으로 이어 쓴다. 사람의 말은 조각 없이 본문만 있다.
+    cast 는 그 답을 쓸 때의 장면의 인물이다(app/engine/scene.py). 화면이 그 자리에 있던 인물을 보인다.
+    """
+
+    __tablename__ = 'messages'
+    __table_args__ = (
+        CheckConstraint(one_of('role', Role), name='role_allowed'),
+        CheckConstraint(one_of('status', MessageStatus), name='status_allowed'),
+        # 한 말의 대안들(같은 부모의 자식들)을 찾는다
+        Index('ix_messages_conversation_parent', 'conversation_id', 'parent_id'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('conversations.id', ondelete='CASCADE'))
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('messages.id', ondelete='CASCADE'), default=None)
+    role: Mapped[str] = mapped_column(String(20))
+    content: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default=MessageStatus.COMPLETE)
+    segments: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    cast: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default='{}')
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class MessageState(Base):
+    """
+    말에 붙은 엔진의 상태(app/engine/state.py 의 StoryState 를 JSON 으로, app/turns/states.py).
+    상태가 바뀐 말에만 있다. 가지의 끝의 상태는 끝에서 뿌리 쪽으로 처음 만나는 상태다. 말이 지워지면 함께 지워진다.
+    """
+
+    __tablename__ = 'message_states'
+
+    message_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('messages.id', ondelete='CASCADE'), primary_key=True)
+    state: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
