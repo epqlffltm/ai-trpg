@@ -12,6 +12,7 @@ import { lazyPage } from './lazyPage';
 
 export const MyPage = lazyPage(() => import('../pages/me/MyPage'), 'MyPage');
 
+export const SettingsPage = lazyPage(() => import('../pages/settings/SettingsPage'), 'SettingsPage');
 export const WalletPage = lazyPage(() => import('../pages/wallet/WalletPage'), 'WalletPage');
 export const ChargePage = lazyPage(() => import('../pages/charge/ChargePage'), 'ChargePage');
 export const AttendancePage = lazyPage(() => import('../pages/attendance/AttendancePage'), 'AttendancePage');

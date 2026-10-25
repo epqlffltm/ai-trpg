@@ -53,6 +53,7 @@ import {
   ScenarioNewPage,
   ScenarioPage,
   ScenariosPage,
+  SettingsPage,
   StudioPage,
   TableCreatePage,
   TableRoomPage,
@@ -80,6 +81,8 @@ export function App() {
             </RequireSession>
           }
         />
+        {/* 화면 쪽 설정(A12). 로그인하지 않아도 연다 */}
+        <Route path="settings" element={<SettingsPage />} />
         <Route
           path="me/identity"
           element={
