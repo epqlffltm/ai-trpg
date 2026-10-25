@@ -19,8 +19,9 @@
   color-scheme: light dark;
 }
 
+/* 어두운 밝기. 기기가 어두우면 따르고, 화면의 설정(A12)이 html 의 data-theme 로 밝게나 어둡게를 고정할 수 있다 */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --ui-bg: #17150f;
     --ui-surface: #211e18;
     --ui-text: #f1ede6;
@@ -31,6 +32,23 @@
     --ui-danger: #f08a80;
     --ui-focus: #8bb4ff;
   }
+}
+
+:root[data-theme='dark'] {
+  --ui-bg: #17150f;
+  --ui-surface: #211e18;
+  --ui-text: #f1ede6;
+  --ui-text-muted: #b3aca0;
+  --ui-border: #3a352c;
+  --ui-accent: #e0a46a;
+  --ui-accent-text: #1d1b18;
+  --ui-danger: #f08a80;
+  --ui-focus: #8bb4ff;
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
 }
 
 *,

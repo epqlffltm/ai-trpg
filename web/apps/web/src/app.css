@@ -1932,3 +1932,24 @@ a.ui-button {
   margin: 4px 0 4px 12px;
   overflow-wrap: anywhere;
 }
+
+/* 설정(A12). 글자 크기는 문서의 기본 크기를 바꾼다(rem, em 이 함께 커진다). 단축키는 손가락으로 쓰는 기기에서 숨긴다 */
+:root[data-text-size='large'] {
+  font-size: 112.5%;
+}
+
+:root[data-text-size='larger'] {
+  font-size: 125%;
+}
+
+.shortcut-table th,
+.shortcut-table td {
+  padding: 4px 12px 4px 0;
+  text-align: left;
+}
+
+@media (pointer: coarse) {
+  .settings-shortcuts {
+    display: none;
+  }
+}
