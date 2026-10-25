@@ -28,6 +28,7 @@ import {
   ChatLorebookEditPage,
   ChatLorebookNewPage,
   ChatLorebooksPage,
+  GalleryPage,
   GuardianConsentPage,
   GuardianRequestPage,
   GuardianRevokePage,
@@ -78,6 +79,14 @@ export function App() {
           element={
             <RequireSession>
               <MyPage />
+            </RequireSession>
+          }
+        />
+        <Route
+          path="gallery"
+          element={
+            <RequireSession>
+              <GalleryPage />
             </RequireSession>
           }
         />

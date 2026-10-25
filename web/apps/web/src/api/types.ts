@@ -153,6 +153,10 @@ export type WhisperPage = Trpg['schemas']['WhisperPage'];
 
 export type PublicCharacterPage = Asset['schemas']['PublicCharacterPage'];
 export type PublicCharacterSummary = Asset['schemas']['PublicCharacterSummary'];
+export type PublicCharacterDetail = Asset['schemas']['PublicCharacterDetail'];
+export type EventSceneDocument = Asset['schemas']['EventSceneDocument'];
+export type ChatUnlock = Chat['schemas']['UnlockOut'];
+export type ChatUnlockPage = Chat['schemas']['UnlockPage'];
 
 export type ConversationPage = Chat['schemas']['ConversationPage'];
 export type ConversationSummary = Chat['schemas']['ConversationSummary'];
