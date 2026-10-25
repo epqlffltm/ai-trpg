@@ -106,7 +106,11 @@ async def table(client: AsyncClient, me: dict, friend: dict, lore: dict) -> dict
         'default_npc_sheet': SHEET,
         'lorebook_ids': [lore['lorebook']['id']],
         'items': [
-            {'entry_id': lore['potion']['id'], 'kind': 'consumable', 'heals': 'light'},
+            {
+                'entry_id': lore['potion']['id'],
+                'kind': 'consumable',
+                'effects': [{'kind': 'heal', 'magnitude': 'light'}],
+            },
             {'entry_id': lore['smoke']['id'], 'kind': 'consumable'},
             {'entry_id': lore['rope']['id'], 'kind': 'gear'},
         ],
@@ -221,6 +225,9 @@ async def test_a_potion_heals_its_user_and_is_used_up(
         'target': {'user_id': str(FRIEND), 'character_name': '약사'},
         'remaining': 1,
         'cured': [],
+        'injured': [],
+        'ability': None,
+        'difficulty': None,
     }
     assert (outcome['outcome']['effect']['before'], outcome['outcome']['effect']['after']) == (2, 5)
 
@@ -330,7 +337,14 @@ async def test_a_healing_use_is_saved_with_its_target(client: AsyncClient, me: d
 
     mine = next(d for d in (await first_round(client, friend, table))['declarations'] if d['user_id'] == str(FRIEND))
     # 비워 둔 대상은 자기 자신으로 채워 저장한다
-    assert mine['action'] == {'kind': 'use', 'item': lore['potion']['id'], 'target': str(FRIEND)}
+    assert mine['action'] == {
+        'kind': 'use',
+        'item': lore['potion']['id'],
+        'target': str(FRIEND),
+        'npc': None,
+        'monster': None,
+        'lethal': False,
+    }
 
 
 async def test_what_was_taken_meanwhile_is_not_used(

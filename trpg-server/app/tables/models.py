@@ -115,6 +115,8 @@ class InjurySource(enum.StrEnum):
     CALLED_SHOT = 'called_shot'
     # 오래 가는 부상이 나을 때 후유증 표를 굴려서(#114 다)
     AFTERMATH = 'aftermath'
+    # 물건의 효과로(#800, 독 바른 단검, 기절 가루)
+    ITEM = 'item'
 
 
 class NpcStatus(enum.StrEnum):

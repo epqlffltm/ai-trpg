@@ -2,6 +2,7 @@
 // 물건 규칙(B9 물건·돈 탭). 붙인 로어북의 물건 항목을 모두 늘어놓고, 줄마다 규칙(없으면 "장비 · 보통")을 보인다.
 // 줄을 고치면 창이 열리고, 창의 저장이 물건 규칙의 목록을 통째로 바로 보낸다. 규칙 지우기는 장비·보통으로 돌린다.
 // 붙인 로어북에 없는 물건의 규칙(로어북을 뗐거나 항목을 지웠다)도 줄로 남겨 지울 수 있게 한다. 장비는 새 자물쇠(#281)로 둘 수 있다.
+// 소모품은 쓰면 나는 효과 목록(#800), 던지는 판정, 치료 보정을 적는다(ItemEffectsEditor).
 
 import { Button, Checkbox, Dialog, SelectField, TextField } from '@ai-trpg/ui';
 import { useCallback, useState, type FormEvent } from 'react';
@@ -21,6 +22,7 @@ import {
   withoutItemRule,
   type ItemRuleDraft,
 } from './itemRuleForm';
+import { ConsumableFields } from './ItemEffectsEditor';
 import { ItemLockFields } from './ItemLockFields';
 import { itemLockHints, keysElsewhere } from './itemLockForm';
 import type { EntryChoice } from './useLoreEntries';
@@ -131,7 +133,11 @@ function ItemRuleForm({ scenario, rules, entries, row, done }: FormProps) {
           <p className="ui-field__hint">
             상인이 파는 값입니다. 비우면 사고팔 수 없습니다.{scenario.currency ? '' : ' 화폐가 없으면 게시 점검이 알립니다.'}
           </p>
-          {draft.kind === 'consumable' ? <HealsField draft={draft} rules={rules} update={update} /> : <WearFields draft={draft} rules={rules} hints={hints} update={update} />}
+          {draft.kind === 'consumable' ? (
+            <ConsumableFields draft={draft} rules={rules} hints={hints} update={update} />
+          ) : (
+            <WearFields draft={draft} rules={rules} hints={hints} update={update} />
+          )}
           {draft.kind === 'gear' ? (
             <ItemLockFields draft={draft.lock} entryId={row.id} items={entries} rules={rules} hints={lockHints} onChange={(lock) => update({ lock })} />
           ) : null}
@@ -156,26 +162,6 @@ function ItemRuleForm({ scenario, rules, entries, row, done }: FormProps) {
 }
 
 type FieldsProps = { draft: ItemRuleDraft; rules: Ruleset | null; update: (changes: Partial<ItemRuleDraft>) => void };
-
-function HealsField({ draft, rules, update }: FieldsProps) {
-  const magnitudes = rules?.magnitudes ?? [];
-  return (
-    <SelectField
-      label="쓰면 회복하는 양"
-      value={draft.heals}
-      onChange={(event) => update({ heals: event.target.value })}
-      hint={rules ? '룰북의 양의 등급입니다. 비우면 써도 HP 가 바뀌지 않습니다.' : '룰북을 고르면 양의 등급을 고를 수 있습니다.'}
-    >
-      <option value="">회복하지 않음</option>
-      {draft.heals !== '' && !magnitudes.some((entry) => entry.key === draft.heals) ? <option value={draft.heals}>{draft.heals}(룰북에 없음)</option> : null}
-      {magnitudes.map((entry) => (
-        <option key={entry.key} value={entry.key}>
-          {entry.name}({entry.count}d{entry.sides})
-        </option>
-      ))}
-    </SelectField>
-  );
-}
 
 function WearFields({ draft, rules, hints, update }: FieldsProps & { hints: Record<string, string> }) {
   const slots = rules?.equipment_slots ?? [];

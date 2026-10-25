@@ -7,8 +7,8 @@ srd5 템플릿의 부상: 중독(poisoned), 기절(stunned), 실명(blinded)은 
 팔 골절이 나으면 후유증 표(d20)를 굴린다. 1~5 는 굽은 팔이다. 한쪽 눈 잃음(lost_eye)은 결손이라 풀지 못한다.
 
 넷을 본다.
-  - 시나리오: cures 는 소모품에만, 같은 부상 두 번 없이, 정한 수까지 적는다. 아니면 422 다.
-  - 게시: 푸는 부상은 룰북의 부상이고 결손이 아니어야 한다(item_cure_invalid). 판은 형식 58 이다.
+  - 시나리오: 풀기는 효과 목록(#800)의 cure 다. 소모품에만, 같은 부상 두 번 없이, 정한 수까지 적는다. 아니면 422 다.
+  - 게시: 푸는 부상은 룰북의 부상이고 결손이 아니어야 한다(item_cure_invalid). 형식 58 의 옛 판은 아무것도 풀지 않는다.
   - 닫힐 때: 쓰면 대상이 입은 그 부상들이 끝난다. 오래 가는 것이 나으면 후유증 표를 굴린다.
     그 부상이 없어도 물건은 쓴다. 다른 부상은 그대로다.
   - 기록과 서술: 쓴 것의 이벤트에 푼 것(cured)이 적히고, 푼 부상마다 부상이 끝난 이벤트(cured)가 잇는다.
@@ -26,10 +26,10 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import ITEM_MAX_CURES
 from app.assets.scenarios.schemas import ItemRule
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, read_snapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_57
+from app.engine.item_effects import EFFECT_MAX_CURES
 from app.rounds.move_lines import describe_item_action
 from app.rounds.narrator import ItemActionNote
 from app.tables.models import TableInjury, TableSheet
@@ -87,14 +87,31 @@ async def lore(client: AsyncClient, me: dict[str, str]) -> dict:
     }
 
 
+def cures(*keys: str) -> dict:
+    """그 부상들을 푸는 효과(#800)."""
+    return {'kind': 'cure', 'injuries': list(keys)}
+
+
+HEAL_LIGHT = {'kind': 'heal', 'magnitude': 'light'}
+
+
 def the_items(lore: dict) -> list[dict]:
     """해독제는 중독을, 부목은 팔 골절을 푼다. 만병통치약은 가볍게 회복하고 중독과 기절을 푼다."""
     return [
-        {'entry_id': lore['antidote']['id'], 'kind': 'consumable', 'cures': ['poisoned']},
-        {'entry_id': lore['splint']['id'], 'kind': 'consumable', 'cures': ['broken_arm']},
-        {'entry_id': lore['panacea']['id'], 'kind': 'consumable', 'heals': 'light', 'cures': ['poisoned', 'stunned']},
+        {'entry_id': lore['antidote']['id'], 'kind': 'consumable', 'effects': [cures('poisoned')]},
+        {'entry_id': lore['splint']['id'], 'kind': 'consumable', 'effects': [cures('broken_arm')]},
+        {
+            'entry_id': lore['panacea']['id'],
+            'kind': 'consumable',
+            'effects': [HEAL_LIGHT, cures('poisoned', 'stunned')],
+        },
         {'entry_id': lore['rope']['id'], 'kind': 'gear'},
     ]
+
+
+def cured_keys(effects: list) -> list[str]:
+    """효과 목록에서 푸는 부상들."""
+    return [key for effect in effects if effect['kind'] == 'cure' for key in effect['injuries']]
 
 
 async def scenario_with(client: AsyncClient, me: dict, lore: dict, items: list[dict]) -> dict:
@@ -184,18 +201,25 @@ async def test_cures_are_saved_and_read_back(client: AsyncClient, me: dict, lore
 
     read = (await client.get(f'{SCENARIOS_URL}/{scenario["id"]}', headers=me)).json()
 
-    assert [rule.get('cures') for rule in read['items']] == [['poisoned'], ['broken_arm'], ['poisoned', 'stunned'], []]
+    assert [cured_keys(rule['effects']) for rule in read['items']] == [
+        ['poisoned'],
+        ['broken_arm'],
+        ['poisoned', 'stunned'],
+        [],
+    ]
 
 
 @pytest.mark.parametrize(
     'fields',
     [
-        {'kind': 'gear', 'cures': ['poisoned']},
-        {'kind': 'consumable', 'cures': ['poisoned', 'poisoned']},
-        {'kind': 'consumable', 'cures': [f'injury_{n}' for n in range(ITEM_MAX_CURES + 1)]},
-        {'kind': 'consumable', 'cures': ['Not A Key']},
+        {'kind': 'gear', 'effects': [cures('poisoned')]},
+        {'kind': 'consumable', 'effects': [cures('poisoned', 'poisoned')]},
+        {'kind': 'consumable', 'effects': [cures(*[f'injury_{n}' for n in range(EFFECT_MAX_CURES + 1)])]},
+        {'kind': 'consumable', 'effects': [cures('Not A Key')]},
+        {'kind': 'consumable', 'effects': [cures()]},
+        {'kind': 'consumable', 'cures': ['poisoned']},
     ],
-    ids=['gear', 'twice', 'too-many', 'bad-key'],
+    ids=['gear', 'twice', 'too-many', 'bad-key', 'none', 'old-field'],
 )
 def test_rejects_misshaped_cures(fields: dict):
     with pytest.raises(ValidationError):
@@ -203,15 +227,15 @@ def test_rejects_misshaped_cures(fields: dict):
 
 
 def test_up_to_the_most_cures_fit():
-    keys = [f'injury_{n}' for n in range(ITEM_MAX_CURES)]
+    keys = [f'injury_{n}' for n in range(EFFECT_MAX_CURES)]
 
-    rule = ItemRule.model_validate({'entry_id': actions.NO_SUCH_ID, 'kind': 'consumable', 'cures': keys})
+    rule = ItemRule.model_validate({'entry_id': actions.NO_SUCH_ID, 'kind': 'consumable', 'effects': [cures(*keys)]})
 
-    assert rule.cures == keys
+    assert rule.effects[0].injuries == keys
 
 
 async def test_a_gear_with_cures_is_refused_by_the_api(client: AsyncClient, me: dict, lore: dict):
-    items = [{'entry_id': lore['rope']['id'], 'kind': 'gear', 'cures': ['poisoned']}]
+    items = [{'entry_id': lore['rope']['id'], 'kind': 'gear', 'effects': [cures('poisoned')]}]
     body = {'title': '약방의 모험', 'items': items}
 
     response = await client.post(SCENARIOS_URL, json=actions.asset_body(SCENARIOS_URL, body), headers=me)
@@ -227,14 +251,15 @@ async def test_cures_are_frozen_into_the_version(client: AsyncClient, me: dict, 
 
     document = await published(client, me, scenario)
 
-    assert document['format'] == SNAPSHOT_FORMAT >= 58
+    assert document['format'] == SNAPSHOT_FORMAT >= 62
     rules = read_snapshot(document).items
-    assert [rule.cures for rule in rules] == [['poisoned'], ['broken_arm'], ['poisoned', 'stunned'], []]
+    effects = [[effect.model_dump(mode='json') for effect in rule.effects] for rule in rules]
+    assert [cured_keys(one) for one in effects] == [['poisoned'], ['broken_arm'], ['poisoned', 'stunned'], []]
 
 
 @pytest.mark.parametrize('key', ['no_such_injury', 'lost_eye'], ids=['unknown', 'permanent'])
 async def test_a_cure_must_be_a_curable_injury_of_the_rulebook(client: AsyncClient, me: dict, lore: dict, key: str):
-    items = [{'entry_id': lore['antidote']['id'], 'kind': 'consumable', 'cures': ['poisoned', key]}]
+    items = [{'entry_id': lore['antidote']['id'], 'kind': 'consumable', 'effects': [cures('poisoned', key)]}]
     scenario = await scenario_with(client, me, lore, items)
 
     assert 'item_cure_invalid' in await refused(client, me, scenario)
@@ -253,7 +278,12 @@ def test_an_old_snapshot_reads_as_curing_nothing():
 async def test_the_table_lists_what_each_thing_cures(client: AsyncClient, me: dict, table: dict):
     read = await read_table(client, me, table)
 
-    assert [item['cures'] for item in read['items']] == [['poisoned'], ['broken_arm'], ['poisoned', 'stunned'], []]
+    assert [cured_keys(item['effects']) for item in read['items']] == [
+        ['poisoned'],
+        ['broken_arm'],
+        ['poisoned', 'stunned'],
+        [],
+    ]
 
 
 # --- 받기 ---
@@ -263,7 +293,14 @@ async def test_a_cure_is_aimed_at_oneself_by_default(client: AsyncClient, friend
     await declared(client, friend, table, use(lore['antidote']))
 
     mine = next(d for d in (await first_round(client, friend, table))['declarations'] if d['user_id'] == str(FRIEND))
-    assert mine['action'] == {'kind': 'use', 'item': lore['antidote']['id'], 'target': str(FRIEND)}
+    assert mine['action'] == {
+        'kind': 'use',
+        'item': lore['antidote']['id'],
+        'target': str(FRIEND),
+        'npc': None,
+        'monster': None,
+        'lethal': False,
+    }
 
 
 async def test_a_cure_needs_someone_seated(client: AsyncClient, friend: dict, lore: dict, table: dict):

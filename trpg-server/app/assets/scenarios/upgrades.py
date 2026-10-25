@@ -980,6 +980,40 @@ def upgrade_from_60(document: dict) -> dict:
     return upgraded
 
 
+def effects_of(rule: dict) -> list[dict]:
+    """
+    옛 아이템 규칙의 회복의 양(heals)과 푸는 부상(cures)을 효과 목록으로(#800). 회복 다음 풀기다(그때의 차례).
+
+    시나리오 초안을 옮기는 마이그레이션과 같은 모양이다.
+    """
+    effects = []
+    if rule.get('heals') is not None:
+        effects.append({'kind': 'heal', 'magnitude': rule['heals']})
+    if rule.get('cures'):
+        effects.append({'kind': 'cure', 'injuries': list(rule['cures'])})
+    return effects
+
+
+def with_effects(rule: dict) -> dict:
+    """옛 아이템 규칙 하나. heals 와 cures 를 빼고 효과 목록을 둔다."""
+    kept = {key: value for key, value in rule.items() if key not in ('heals', 'cures')}
+    return {**kept, 'effects': effects_of(rule)}
+
+
+def upgrade_from_61(document: dict) -> dict:
+    """
+    형식 61 의 문서를 형식 62 로 올린다(#800). 소모품의 회복과 풀기를 효과 목록으로 옮긴다.
+
+    그때는 물건을 인물이나 몬스터에게 쓰지 못했다. 맞히는 판정(item_check)이 없는 것으로 읽는다.
+    """
+    upgraded = dict(document)
+    upgraded['items'] = [with_effects(rule) for rule in document.get('items', [])]
+    rulebook = document['rulebook']
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'item_check': None}}
+    upgraded['format'] = 62
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -1043,4 +1077,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     58: upgrade_from_58,
     59: upgrade_from_59,
     60: upgrade_from_60,
+    61: upgrade_from_61,
 }

@@ -15,6 +15,7 @@ HP 도 그때 한 번만 바뀐다. 판정의 결과에 따라 피해를 입거�
 DB 를 모른다. 시트와 NPC 의 상태를 고친다. 저장하지는 않는다.
 """
 
+import uuid
 from dataclasses import asdict
 
 from app.engine import action as actions
@@ -178,9 +179,14 @@ def target_gone(judging: Judging, member: TableMember, action: CheckAction) -> d
     """
     if action.monster is None:
         return None
-    monster = find_scene_monster(judging.monsters, action.monster)
+    return monster_gone(judging, member, action.monster)
+
+
+def monster_gone(judging: Judging, member: TableMember, monster_id: uuid.UUID) -> dict | None:
+    """그 마리를 지금 겨눌 수 없으면 그 까닭을 문서로. 겨눌 수 있으면 None. 물건 쓰기(#800)도 같이 쓴다."""
+    monster = find_scene_monster(judging.monsters, monster_id)
     if monster is None:
-        return {'monster_id': str(action.monster), 'name': None, 'reason': Gone.ELSEWHERE}
+        return {'monster_id': str(monster_id), 'name': None, 'reason': Gone.ELSEWHERE}
     reason = gone_reason(member, monster)
     if reason is None:
         return None

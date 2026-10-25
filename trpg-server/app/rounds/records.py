@@ -171,6 +171,8 @@ def source_of(injury_roll: dict) -> InjurySource:
         return InjurySource.CALLED_SHOT
     if injury_roll['trigger'] == Trigger.AFTERMATH:
         return InjurySource.AFTERMATH
+    if injury_roll['trigger'] == Trigger.ITEM:
+        return InjurySource.ITEM
     return InjurySource.INJURY_TABLE
 
 
@@ -258,24 +260,33 @@ def record_naming(session: AsyncSession, table: GameTable, declaration: Declarat
 
 def record_item_use(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
     """
-    물건을 쓴 결과를 이벤트로 적는다. 그 행동의 이벤트(cause)에 잇는다. 회복했으면 바로 뒤에 HP 의 변화를 적는다.
-    부상을 풀었으면 그 뒤에 풀린 부상들을 적는다(#277).
+    물건을 쓴 결과를 이벤트로 적는다. 그 행동의 이벤트(cause)에 잇는다. HP 가 바뀌었으면 바로 뒤에 그 변화를 적는다.
+    인물이나 몬스터에게 써서 굴렸으면(#800) 그 판정과 맞은 쪽의 변화를 적는다(record_check).
+    부상을 풀었으면 그 뒤에 풀린 부상들을, 입혔으면 생긴 부상들을 적는다(#277, #800).
 
     행한 사람(actor_id)을 적지 않는다. 소지품과 HP 를 바꾼 것은 엔진이다.
     """
     use = item_use_of(declaration)
     cured = use.get('cured') or []
+    injured = [one for one in use.get('injured') or [] if one['injury'] is not None]
     payload = {
         'round': cause.payload['round'],
         'character_name': declaration.character_name,
         **use,
         'cured': [{'injury': one['injury'], 'name': one['name']} for one in cured],
+        'injured': [{'injury': one['injury'], 'name': one['name']} for one in injured],
     }
     used = recorder.record(session, table, EventType.ITEM_USED, payload=payload, cause=cause)
     effect = declaration.outcome.get('effect')
-    if effect is not None:
-        record_hp_change(session, table, effect, cause=used)
+    if has_outcome(declaration):
+        record_check(session, table, declaration, cause=used)
+    elif effect is not None:
+        changed = record_hp_change(session, table, effect, cause=used)
+        holder = {'user_id': effect['user_id'], 'character_name': effect['character_name']}
+        record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)
     record_cures(session, table, cured, use['target'], cause=used)
+    for one in injured:
+        record_injury(session, table, one, use['target'], cause=used)
 
 
 def record_cures(
@@ -633,12 +644,12 @@ def record_declaration(
     )
     if item_throw_of(declaration) is not None:
         record_item_throw(session, table, declaration, cause=acted)
+    elif item_use_of(declaration) is not None:
+        record_item_use(session, table, declaration, cause=acted)
     elif has_outcome(declaration):
         record_check(session, table, declaration, cause=acted)
     elif naming_of(declaration) is not None:
         record_naming(session, table, declaration, cause=acted)
-    elif item_use_of(declaration) is not None:
-        record_item_use(session, table, declaration, cause=acted)
     elif item_give_of(declaration) is not None:
         record_item_give(session, table, declaration, cause=acted)
     elif move_of(declaration) is not None:

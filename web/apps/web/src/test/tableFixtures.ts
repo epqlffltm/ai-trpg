@@ -37,6 +37,8 @@ export const RULES = {
   treatment: null,
   rest: null,
   steal: null,
+  // 물건을 인물이나 몬스터에게 쓸 때 맞히는 판정(#800)
+  item_check: { ability: 'dex', difficulty: 'normal' },
   equipment_slots: [
     { key: 'main_hand', name: '주손' },
     { key: 'off_hand', name: '보조손' },

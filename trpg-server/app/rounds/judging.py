@@ -59,6 +59,7 @@ from app.rounds.door_actions import judge_door
 from app.rounds.effects import Judging
 from app.rounds.initiative import Turn
 from app.rounds.item_actions import judge_give, judge_use
+from app.rounds.item_targets import judge_use_on
 from app.rounds.loots import judge_loot
 from app.rounds.map_actions import judge_move, judge_search
 from app.rounds.models import Declaration, Round
@@ -82,7 +83,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     """
     한 사람의 행동을 판정하고 그 결과를 정한다.
     행동의 종류에 따라 판정(judge_check), 치료(judge_treatment), 지목(judge_naming),
-    물건 쓰기(judge_use), 건네기(judge_give), 가기(judge_move), 찾기(search_place), 줍기(judge_take),
+    물건 쓰기(judge_use, 인물이나 몬스터에게는 judge_use_on, #800), 건네기(judge_give),
+    가기(judge_move), 찾기(search_place), 줍기(judge_take),
     내려놓기(judge_put_down), 훔치기(judge_steal), 빼앗기(judge_loot), 쉬기(judge_rest), 기다리기(judge_wait),
     사기(judge_buy), 팔기(judge_sell), 돈 건네기(judge_pay), 엄폐하기(judge_cover),
     문 다루기(judge_door: 잠그기, 열기, 따기, 부수기, #281), 던지기(judge_throw, #277)다.
@@ -91,6 +93,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
         return judge_treatment(judging, member, action)
     if isinstance(action, NameAction):
         return judge_naming(judging, action)
+    if isinstance(action, UseAction) and (action.npc is not None or action.monster is not None):
+        return judge_use_on(judging, member, action)
     if isinstance(action, UseAction):
         return judge_use(judging, member, action)
     if isinstance(action, GiveAction):

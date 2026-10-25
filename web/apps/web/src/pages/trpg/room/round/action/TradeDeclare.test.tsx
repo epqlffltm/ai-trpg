@@ -26,8 +26,8 @@ const PLAYING = tableDetail(TABLE_ID, {
     member(OTHER, { character: { name: '미아', description: '' }, sheet: sheet({ money: 4 }) }),
   ],
   items: [
-    { entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', heals: 'light', price: 8 },
-    { entry_id: 'i4', name: '횃불', kind: 'gear', rarity: 'normal', heals: null, price: 5 },
+    { entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', effects: [{ kind: 'heal', magnitude: 'light' }], price: 8 },
+    { entry_id: 'i4', name: '횃불', kind: 'gear', rarity: 'normal', effects: [], price: 5 },
   ],
 });
 

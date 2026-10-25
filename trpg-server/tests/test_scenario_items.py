@@ -75,7 +75,7 @@ async def scenario_with(client: AsyncClient, me: dict, lore: dict, **fields) -> 
 
 
 async def test_items_are_saved_and_read_back(client: AsyncClient, me: dict[str, str], lore: dict):
-    items = [rule(lore['potion'], heals='light'), rule(lore['rope'], 'gear')]
+    items = [rule(lore['potion'], effects=[{'kind': 'heal', 'magnitude': 'light'}]), rule(lore['rope'], 'gear')]
     scenario = await scenario_with(
         client,
         me,
@@ -91,7 +91,7 @@ async def test_items_are_saved_and_read_back(client: AsyncClient, me: dict[str, 
         {
             'entry_id': lore['potion']['id'],
             'kind': 'consumable',
-            'heals': 'light',
+            'effects': [{'kind': 'heal', 'magnitude': 'light'}],
             'rarity': 'normal',
             'price': None,
             'slots': [],
@@ -102,14 +102,13 @@ async def test_items_are_saved_and_read_back(client: AsyncClient, me: dict[str, 
             'ap': None,
             'ward': None,
             'lock': None,
-            'cures': [],
             'throw': None,
             'treat_bonus': None,
         },
         {
             'entry_id': lore['rope']['id'],
             'kind': 'gear',
-            'heals': None,
+            'effects': [],
             'rarity': 'normal',
             'price': None,
             'slots': [],
@@ -120,7 +119,6 @@ async def test_items_are_saved_and_read_back(client: AsyncClient, me: dict[str, 
             'ap': None,
             'ward': None,
             'lock': None,
-            'cures': [],
             'throw': None,
             'treat_bonus': None,
         },
@@ -151,9 +149,13 @@ async def test_items_are_replaced_as_a_whole(client: AsyncClient, me: dict[str, 
 @pytest.mark.parametrize(
     'fields',
     [
-        {'items': [{'entry_id': NO_SUCH_ID, 'kind': 'gear', 'heals': 'light'}]},
+        {'items': [{'entry_id': NO_SUCH_ID, 'kind': 'gear', 'effects': [{'kind': 'heal', 'magnitude': 'light'}]}]},
         {'items': [{'entry_id': NO_SUCH_ID, 'kind': 'weapon'}]},
-        {'items': [{'entry_id': NO_SUCH_ID, 'kind': 'consumable', 'heals': 'Light!'}]},
+        {
+            'items': [
+                {'entry_id': NO_SUCH_ID, 'kind': 'consumable', 'effects': [{'kind': 'heal', 'magnitude': 'Light!'}]}
+            ]
+        },
         {'items': [{'entry_id': NO_SUCH_ID, 'kind': 'gear'}, {'entry_id': NO_SUCH_ID, 'kind': 'consumable'}]},
         {'items': [{'entry_id': NO_SUCH_ID, 'kind': 'gear', 'extra': 1}]},
         {'starting_items': [{'entry_id': NO_SUCH_ID, 'count': 0}]},
@@ -193,7 +195,7 @@ async def test_items_are_frozen_into_the_version(client: AsyncClient, me: dict[s
         client,
         me,
         lore,
-        items=[rule(lore['potion'], heals='light')],
+        items=[rule(lore['potion'], effects=[{'kind': 'heal', 'magnitude': 'light'}])],
         starting_items=[stack(lore['rope'], 3)],
         pregens=[pregen('기사', stack(lore['potion'], 2))],
     )
@@ -205,7 +207,7 @@ async def test_items_are_frozen_into_the_version(client: AsyncClient, me: dict[s
         {
             'entry_id': lore['potion']['id'],
             'kind': 'consumable',
-            'heals': 'light',
+            'effects': [{'kind': 'heal', 'magnitude': 'light'}],
             'rarity': 'normal',
             'price': None,
             'slots': [],
@@ -216,7 +218,6 @@ async def test_items_are_frozen_into_the_version(client: AsyncClient, me: dict[s
             'ap': None,
             'ward': None,
             'lock': None,
-            'cures': [],
             'throw': None,
             'treat_bonus': None,
         }
@@ -263,7 +264,9 @@ async def test_an_item_in_a_detached_lorebook_is_missing(client: AsyncClient, me
 
 
 async def test_healing_must_be_a_magnitude_of_the_rulebook(client: AsyncClient, me: dict[str, str], lore: dict):
-    scenario = await scenario_with(client, me, lore, items=[rule(lore['potion'], heals='enormous')])
+    scenario = await scenario_with(
+        client, me, lore, items=[rule(lore['potion'], effects=[{'kind': 'heal', 'magnitude': 'enormous'}])]
+    )
 
     assert await refused(client, me, scenario) == ['item_magnitude_missing']
 
@@ -278,7 +281,7 @@ async def test_a_consumable_may_heal_nothing(client: AsyncClient, me: dict[str, 
         {
             'entry_id': lore['potion']['id'],
             'kind': 'consumable',
-            'heals': None,
+            'effects': [],
             'rarity': 'normal',
             'price': None,
             'slots': [],
@@ -289,7 +292,6 @@ async def test_a_consumable_may_heal_nothing(client: AsyncClient, me: dict[str, 
             'ap': None,
             'ward': None,
             'lock': None,
-            'cures': [],
             'throw': None,
             'treat_bonus': None,
         }
@@ -349,12 +351,18 @@ def read_snapshot_rulebook() -> dict:
 
 def test_a_thing_without_a_rule_is_gear():
     snapshot = Snapshot.model_validate(
-        snapshot_document(items=[{'entry_id': str(POTION), 'kind': 'consumable', 'heals': 'light'}])
+        snapshot_document(
+            items=[{'entry_id': str(POTION), 'kind': 'consumable', 'effects': [{'kind': 'heal', 'magnitude': 'light'}]}]
+        )
     )
 
     assert [entry.id for entry in item_entries(snapshot)] == [POTION, ROPE]
-    assert (item_rule_of(snapshot, POTION).kind, item_rule_of(snapshot, POTION).heals) == (ItemKind.CONSUMABLE, 'light')
-    assert (item_rule_of(snapshot, ROPE).kind, item_rule_of(snapshot, ROPE).heals) == (ItemKind.GEAR, None)
+    potion, rope = item_rule_of(snapshot, POTION), item_rule_of(snapshot, ROPE)
+    assert (potion.kind, [effect.model_dump(mode='json') for effect in potion.effects]) == (
+        ItemKind.CONSUMABLE,
+        [{'kind': 'heal', 'magnitude': 'light'}],
+    )
+    assert (rope.kind, rope.effects) == (ItemKind.GEAR, [])
 
 
 @pytest.mark.parametrize(

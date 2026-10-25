@@ -120,8 +120,6 @@ SCENARIO_MAX_COVERS = 100
 SCENARIO_MAX_WANDERS = 50
 WANDER_MAX_MONSTERS = 10
 WANDER_MAX_WEIGHT = 100
-# 소모품 하나가 푸는 부상의 수(#277). 해독제는 중독 하나, 만병통치약은 몇 가지다
-ITEM_MAX_CURES = 5
 # 시나리오 하나에 둘 수 있는 사건 규칙(조건이 채워지면 한 번 일어나는 일, #367)의 수와, 사건 하나의 효과의 수.
 # 조건의 수는 퀘스트와 같다(QUEST_MAX_CONDITIONS)
 SCENARIO_MAX_HAPPENINGS = 50

@@ -25,7 +25,7 @@ function playing(mySheet: Record<string, unknown> = {}) {
       }),
       member(OTHER, { character: { name: '미아', description: '' }, sheet: sheet({ place_id: 'p1' }) }),
     ],
-    items: [{ entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', heals: 'light' }],
+    items: [{ entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', effects: [{ kind: 'heal', magnitude: 'light' }] }],
     map: {
       places: [
         { entry_id: 'p1', name: '수도원 문', items: [] },

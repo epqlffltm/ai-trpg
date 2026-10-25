@@ -20,7 +20,7 @@ from app.engine.ruleset import EffectKind, Healing, Injury, InjuryTable, Ruleset
 
 
 class Trigger(enum.StrEnum):
-    """부상이 생긴 까닭. 앞의 둘은 부상 표를 굴린 까닭이고, 마지막은 후유증 표를 굴린 까닭이다."""
+    """부상이 생긴 까닭. 앞의 둘은 부상 표를 굴린 까닭이고, 후유증은 후유증 표를 굴린 까닭이다."""
 
     # 한 번의 피해가 최대 HP 의 정한 비율 이상이었다
     BIG_HIT = 'big_hit'
@@ -30,6 +30,8 @@ class Trigger(enum.StrEnum):
     CALLED_SHOT = 'called_shot'
     # 오래 가는 부상이 나을 때 후유증 표를 굴렸다
     AFTERMATH = 'aftermath'
+    # 물건의 효과(injure)로 그 부상이 확정으로 생겼다(#800). 표를 굴리지 않는다
+    ITEM = 'item'
 
 
 @dataclass(frozen=True)

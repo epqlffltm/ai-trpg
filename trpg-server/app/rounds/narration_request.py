@@ -141,10 +141,14 @@ def to_impact(effect: dict | None) -> Impact | None:
 
 
 def other_name(declaration: Declaration, target: dict | None) -> str | None:
-    """물건을 받거나 회복받은 사람의 캐릭터 이름. 없거나 선언한 사람 자신이면 None 이다."""
-    if target is None or target['user_id'] == str(declaration.user_id):
+    """
+    물건을 받거나 회복받은 쪽의 이름. 없거나 선언한 사람 자신이면 None 이다.
+
+    앉은 사람이면 캐릭터 이름, 인물이나 몬스터(#800)면 장면에서 부르는 이름이다.
+    """
+    if target is None or target.get('user_id') == str(declaration.user_id):
         return None
-    return target['character_name']
+    return target.get('character_name') or target.get('name')
 
 
 def to_item_action(declaration: Declaration | None) -> ItemActionNote | None:
@@ -162,6 +166,8 @@ def to_item_action(declaration: Declaration | None) -> ItemActionNote | None:
             target=other_name(declaration, used['target']),
             impact=to_impact(declaration.outcome.get('effect')),
             cured=[one['name'] for one in used.get('cured') or []],
+            injured=[one['name'] for one in used.get('injured') or [] if one['injury'] is not None],
+            resisted=[one['name'] for one in used.get('injured') or [] if one.get('immune')],
         )
     given = declaration.outcome.get('item_give')
     if given is not None:
@@ -459,7 +465,8 @@ def to_wake(wake: dict | None) -> WakeNote | None:
 def check_terms(declaration: Declaration) -> tuple[str, str]:
     """
     판정에 쓴 능력과 난이도의 key. 판정하는 행동은 행동에 적혀 있고, 치료는 규칙이 정해 결과에 적혀 있다.
-    던지기는 물건에 적혀 결과에 옮겨 적혀 있다(#277).
+    던지기는 물건에 적혀 결과에 옮겨 적혀 있다(#277). 인물이나 몬스터에게 물건을 쓴 것은 룰북이 정해 결과에
+    옮겨 적혀 있다(#800).
 
     결과가 적힌 선언에만 쓴다.
     """
@@ -469,6 +476,9 @@ def check_terms(declaration: Declaration) -> tuple[str, str]:
     thrown = declaration.outcome.get('item_throw')
     if thrown is not None:
         return thrown['ability'], thrown['difficulty']
+    used = declaration.outcome.get('item_use')
+    if used is not None:
+        return used['ability'], used['difficulty']
     return declaration.action['ability'], declaration.action['difficulty']
 
 

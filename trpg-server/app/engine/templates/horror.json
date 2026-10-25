@@ -632,6 +632,10 @@
       "mode": "reduce",
       "save_target": null,
       "pierce_base": 10
+    },
+    "item_check": {
+      "ability": "agility",
+      "difficulty": "medium"
     }
   }
 }

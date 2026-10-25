@@ -111,7 +111,12 @@ def scenario_body(lore: dict, **fields) -> dict:
         'default_sheet': SHEET,
         'default_npc_sheet': SHEET,
         'items': [
-            {'entry_id': lore['potion']['id'], 'kind': 'consumable', 'heals': 'light', 'price': 10},
+            {
+                'entry_id': lore['potion']['id'],
+                'kind': 'consumable',
+                'effects': [{'kind': 'heal', 'magnitude': 'light'}],
+                'price': 10,
+            },
             {'entry_id': lore['pelt']['id'], 'kind': 'gear', 'price': 9},
         ],
         'starting_items': [{'entry_id': lore['pelt']['id'], 'count': 2}, {'entry_id': lore['lamp']['id'], 'count': 1}],

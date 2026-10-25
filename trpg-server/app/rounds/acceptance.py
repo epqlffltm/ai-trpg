@@ -59,6 +59,7 @@ from app.engine.action import (
     UseAction,
     WaitAction,
 )
+from app.engine.item_effects import EffectKind, first_of
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, Scene, find_cast_member, find_reachable, is_named
@@ -303,26 +304,55 @@ def living_target(table: GameTable, target_id: uuid.UUID, dead_reason: Conflict)
     return target
 
 
-def accept_use(table: GameTable, member: TableMember, action: UseAction) -> dict:
+def accept_use(table: GameTable, member: TableMember, action: UseAction, scene: Scene) -> dict:
     """
     물건을 쓰는 행동을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다.
 
       - 판의 물건이 아니거나 소모품이 아니면 ActionNotInRulesError(item). 장비는 쓰지 않는다.
       - 하나도 가지고 있지 않으면 RoundConflictError(item_not_held).
-      - 회복하거나 부상을 푸는 소모품(#277): 대상이 앉은 사람이 아니면 ActionTargetError,
-        죽었으면 RoundConflictError(patient_dead). 비워 둔 대상은 자기 자신으로 채운다.
-      - 누구에게도 들지 않는 소모품에 대상을 적었으면 ActionNotInRulesError(target). 무엇을 하려는지 알 수 없다.
+      - 누구에게도 들지 않는(효과가 없는) 소모품에 대상을 적었으면 ActionNotInRulesError(target, npc, monster).
+        무엇을 하려는지 알 수 없다.
+      - 인물이나 몬스터에게 쓰기(#800): accept_use_on.
+      - 효과가 있는 소모품을 앉은 사람에게: 대상이 앉은 사람이 아니면 ActionTargetError, 죽었으면
+        RoundConflictError(patient_dead). 비워 둔 대상은 자기 자신으로 채운다. 해로운 효과(피해, 부상)가 있으면
+        자기 자신에게만 쓴다. 동료면 RoundConflictError(friendly_fire_off, #803 전).
     """
     item = find_item(table, action.item)
     if item.kind != ItemKind.CONSUMABLE:
         raise ActionNotInRulesError('item')
     require_held(member, action.item, 1)
     if not items.takes_target(item):
-        if action.target is not None:
-            raise ActionNotInRulesError('target')
+        named = next((field for field in ('target', 'npc', 'monster') if getattr(action, field) is not None), None)
+        if named is not None:
+            raise ActionNotInRulesError(named)
         return action.model_dump(mode='json')
+    if action.npc is not None or action.monster is not None:
+        return accept_use_on(table, member, action, item, scene)
     target = living_target(table, action.target or member.user_id, Conflict.PATIENT_DEAD)
+    if items.is_harmful(item) and target.user_id != member.user_id:
+        raise RoundConflictError(Conflict.FRIENDLY_FIRE_OFF)
     return action.model_copy(update={'target': target.user_id}).model_dump(mode='json')
+
+
+def accept_use_on(table: GameTable, member: TableMember, action: UseAction, item: CatalogItem, scene: Scene) -> dict:
+    """
+    물건을 인물이나 몬스터에게 쓰는 행동(#800). 겨누는 조건은 치기와 같다.
+
+      - 규칙에 맞히는 판정(rules.item_check)이 없으면 ActionNotInRulesError(npc 나 monster).
+      - 인물이 이번 장면의 인물이 아니거나 다른 장소에 있으면 ActionTargetError(npc), 몬스터가 같은 장소의 마리가
+        아니면 ActionTargetError(monster), 이미 죽었으면 RoundConflictError.
+      - 피해가 없는 물건에 죽이려 한다(lethal)를 적었으면 ActionNotInRulesError(lethal).
+    """
+    field = 'npc' if action.npc is not None else 'monster'
+    if rules_of(table).item_check is None:
+        raise ActionNotInRulesError(field)
+    if action.lethal and first_of(item.effects, EffectKind.DAMAGE) is None:
+        raise ActionNotInRulesError('lethal')
+    if action.npc is not None:
+        require_npc_target(scene.cast, member, action.npc, None)
+    else:
+        require_monster_target(scene.monsters, member, action.monster)
+    return action.model_dump(mode='json')
 
 
 def accept_throw(table: GameTable, member: TableMember, action: ThrowAction, scene: Scene) -> dict:
@@ -463,7 +493,7 @@ def accept_action(
     if isinstance(action, NameAction):
         return accept_naming(action, scene.cast)
     if isinstance(action, UseAction):
-        return accept_use(table, member, action)
+        return accept_use(table, member, action, scene)
     if isinstance(action, GiveAction):
         return accept_give(table, member, action)
     if isinstance(action, ThrowAction):

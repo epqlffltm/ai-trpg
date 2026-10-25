@@ -15,6 +15,7 @@ import {
   recipients,
   throwables,
   treatableInjuries,
+  useTargets,
   victims,
   type ActionContext,
 } from './actionOptions';
@@ -40,8 +41,18 @@ function context(mySheet: Record<string, unknown> = {}, rules: Record<string, un
       member(THIRD, { character: { name: '조', description: '' }, sheet: sheet({ place_id: 'p2', dead: true, hp: 0 }) }),
     ],
     items: [
-      { entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', heals: 'light' },
-      { entry_id: 'i3', name: '연막탄', kind: 'consumable', rarity: 'normal', heals: null },
+      { entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', effects: [{ kind: 'heal', magnitude: 'light' }] },
+      { entry_id: 'i3', name: '연막탄', kind: 'consumable', rarity: 'normal', effects: [] },
+      {
+        entry_id: 'i9',
+        name: '독 단검',
+        kind: 'consumable',
+        rarity: 'normal',
+        effects: [
+          { kind: 'damage', magnitude: 'light' },
+          { kind: 'injure', injury: 'sprain' },
+        ],
+      },
     ],
     map: {
       places: [
@@ -148,9 +159,21 @@ describe('toAction', () => {
     expect(toAction(draft({ kind: 'check', purpose: 'recover', target: `member:${OTHER}` }), ctx)).toMatchObject({ recover: 'light', target: OTHER });
   });
 
-  it('물건 쓰기는 회복하는 소모품일 때만 받을 사람을 보낸다', () => {
-    expect(toAction(draft({ kind: 'use', item: 'i1', target: `member:${OTHER}` }), ctx)).toEqual({ kind: 'use', item: 'i1', target: OTHER });
-    expect(toAction(draft({ kind: 'use', item: 'i3', target: `member:${OTHER}` }), ctx)).toEqual({ kind: 'use', item: 'i3' });
+  it('물건 쓰기는 효과가 있는 소모품일 때만 받을 쪽을 보낸다', () => {
+    expect(toAction(draft({ kind: 'use', item: 'i1', target: `member:${OTHER}` }), ctx)).toEqual({ kind: 'use', item: 'i1', target: OTHER, lethal: false });
+    expect(toAction(draft({ kind: 'use', item: 'i3', target: `member:${OTHER}` }), ctx)).toEqual({ kind: 'use', item: 'i3', lethal: false });
+  });
+
+  it('물건을 인물이나 몬스터에게 쓰면 그 대상을, 피해가 있으면 죽이려 한다를 보낸다(#800)', () => {
+    expect(toAction(draft({ kind: 'use', item: 'i9', target: `monster:${MONSTER}`, lethal: true }), ctx)).toEqual({ kind: 'use', item: 'i9', monster: MONSTER, lethal: true });
+    expect(toAction(draft({ kind: 'use', item: 'i1', target: `npc:${NPC}`, lethal: true }), ctx)).toEqual({ kind: 'use', item: 'i1', npc: NPC, lethal: false });
+  });
+
+  it('해로운 물건은 동료에게 쓰지 못하고, 인물과 몬스터에게는 쓴다', () => {
+    expect(useTargets(ctx, 'i9').map((choice) => choice.value)).toEqual([`npc:${NPC}`, `monster:${MONSTER}`]);
+    expect(useTargets(ctx, 'i1').map((choice) => choice.value)).toEqual([`member:${OTHER}`, `npc:${NPC}`, `monster:${MONSTER}`]);
+    const noCheck = context({}, { item_check: null });
+    expect(useTargets(noCheck, 'i1').map((choice) => choice.value)).toEqual([`member:${OTHER}`]);
   });
 
   it('건네기, 가기, 줍기, 빼앗기, 치료, 지목, 쉬기, 기다리기의 칸', () => {
@@ -209,7 +232,7 @@ describe('aidItems', () => {
 
   function withKit(): ActionContext {
     const base = context({ items: [HERB, KIT] });
-    const kit = { entry_id: 'i8', name: '의료 키트', kind: 'consumable', rarity: 'normal', heals: null, treat_bonus: 2 };
+    const kit = { entry_id: 'i8', name: '의료 키트', kind: 'consumable', rarity: 'normal', effects: [], treat_bonus: 2 };
     return { ...base, table: { ...base.table, items: [...base.table.items, kit] } as unknown as TableDetail };
   }
 
@@ -229,7 +252,7 @@ describe('throwables', () => {
 
   function withFirebomb(cast: SceneCast | null = CAST): ActionContext {
     const base = context({ items: [HERB, FIREBOMB] }, {}, cast);
-    const thrown = { entry_id: 'i7', name: '화염병', kind: 'consumable', rarity: 'normal', heals: null, throw: { ability: 'dex', difficulty: null, harm: 'light' } };
+    const thrown = { entry_id: 'i7', name: '화염병', kind: 'consumable', rarity: 'normal', effects: [], throw: { ability: 'dex', difficulty: null, harm: 'light' } };
     return { ...base, table: { ...base.table, items: [...base.table.items, thrown] } as unknown as TableDetail };
   }
 

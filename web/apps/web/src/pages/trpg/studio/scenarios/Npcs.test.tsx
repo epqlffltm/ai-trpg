@@ -26,7 +26,7 @@ const SWORD = '00000000-0000-4000-8000-00000000a001';
 const BREAD = '00000000-0000-4000-8000-00000000a002';
 const rules = RULES as unknown as Ruleset;
 
-const SWORD_RULE = { entry_id: SWORD, kind: 'gear', rarity: 'normal', heals: null, price: 10, slots: ['main_hand'], slot_count: 1, attack: 2, ap: null, defense: null, guard: null, ward: null };
+const SWORD_RULE = { entry_id: SWORD, kind: 'gear', rarity: 'normal', effects: [], price: 10, slots: ['main_hand'], slot_count: 1, attack: 2, ap: null, defense: null, guard: null, ward: null };
 
 const MONK_SHEET = {
   entry_id: MONK,

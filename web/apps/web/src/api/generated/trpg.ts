@@ -2250,20 +2250,22 @@ export interface components {
          * CatalogItemOut
          * @description 판에 있는 물건 하나. 로어북의 물건 항목이다.
          *
-         *     kind 가 consumable 이면 쓰면 하나 줄어든다. heals 가 있으면 쓸 때 HP 를 그 등급(rules 의 magnitudes)만큼 되돌린다.
+         *     kind 가 consumable 이면 쓰면 하나 줄어든다. effects 는 쓰면 대상에게 일어나는 일들이다(#800, 차례대로):
+         *     heal(HP 를 그 등급만큼 되돌림), cure(적은 부상을 풂), damage(그 등급만큼 피해), injure(부상 하나를 입힘).
+         *     등급은 rules 의 magnitudes, 부상은 rules 의 injuries 의 key 다. 피해나 부상이 있으면 동료에게는 쓰지 못한다.
          */
         CatalogItemOut: {
             /** Ap */
             ap?: number | null;
             /** Attack */
             attack?: number | null;
-            /**
-             * Cures
-             * @default []
-             */
-            cures: string[];
             /** Defense */
             defense?: number | null;
+            /**
+             * Effects
+             * @default []
+             */
+            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"])[];
             /**
              * Entry Id
              * Format: uuid
@@ -2271,8 +2273,6 @@ export interface components {
             entry_id: string;
             /** Guard */
             guard?: number | null;
-            /** Heals */
-            heals: string | null;
             kind: components["schemas"]["ItemKind"];
             /**
              * Lock
@@ -2421,6 +2421,7 @@ export interface components {
             effect?: components["schemas"]["EffectOut"] | null;
             hindrance?: components["schemas"]["HindranceOut"] | null;
             item_throw?: components["schemas"]["app__rounds__schemas__ItemThrowOut"] | null;
+            item_use?: components["schemas"]["ItemUseOut"] | null;
             /** Modifier */
             modifier: number;
             monster_effect?: components["schemas"]["MonsterEffectOut"] | null;
@@ -2657,6 +2658,19 @@ export interface components {
             harm?: string | null;
         };
         /**
+         * CureEffect
+         * @description 적은 부상들(injuries)을 푼다. 대상이 입고 있지 않으면 아무 일도 없다.
+         */
+        CureEffect: {
+            /** Injuries */
+            injuries: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "cure";
+        };
+        /**
          * CuredOut
          * @description 소모품이 푼 부상 하나(#277). 룰북의 부상의 이름표와 이름이다. 나으면서 생긴 후유증은 이벤트에 있다.
          */
@@ -2725,6 +2739,19 @@ export interface components {
              * @default
              */
             unit: string;
+        };
+        /**
+         * DamageEffect
+         * @description 등급(magnitude)만큼 피해를 준다.
+         */
+        DamageEffect: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "damage";
+            /** Magnitude */
+            magnitude: string;
         };
         /**
          * DeathSave
@@ -3449,6 +3476,19 @@ export interface components {
             when: components["schemas"]["QuestConditionSnapshot"][];
         };
         /**
+         * HealEffect
+         * @description HP 를 등급(magnitude)만큼 되돌린다.
+         */
+        HealEffect: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "heal";
+            /** Magnitude */
+            magnitude: string;
+        };
+        /**
          * Healing
          * @description 부상이 낫는 방식.
          * @enum {string}
@@ -3483,6 +3523,34 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /**
+         * InjureEffect
+         * @description 부상 하나(injury)를 입힌다. 이미 입고 있으면 또 입히지 않는다.
+         */
+        InjureEffect: {
+            /** Injury */
+            injury: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "injure";
+        };
+        /**
+         * InjuredOut
+         * @description 소모품이 입힌 부상 하나(#800). 룰북의 부상의 이름표다.
+         *
+         *     이미 입고 있었으면 injury 가 None 이다. 몬스터가 그 성질에 면역이면 injury 는 None, immune 이 그 부상이다.
+         */
+        InjuredOut: {
+            /** Ends After Round */
+            ends_after_round?: number | null;
+            heals_at?: components["schemas"]["ClockTimeOut"] | null;
+            /** Immune */
+            immune?: string | null;
+            /** Injury */
+            injury: string | null;
         };
         /**
          * Injury
@@ -3609,6 +3677,19 @@ export interface components {
             errors: {
                 [key: string]: string[];
             };
+        };
+        /**
+         * ItemCheck
+         * @description 물건을 인물이나 몬스터에게 쓸 때 맞히는 판정(#800). 어느 능력으로, 어느 난이도에 도전하는가.
+         *
+         *     물건을 자기와 동료에게 쓸 때는 굴리지 않는다. 인물(NPC)과 몬스터에게는 이로운 것이어도 늘 굴린다
+         *     (잘못 먹이거나 엉뚱한 곳에 바를 수 있다). 맞히면 효과가 든다. 빗나가도 물건은 하나 없어진다.
+         */
+        ItemCheck: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty: string;
         };
         /**
          * ItemGiveOut
@@ -3738,8 +3819,9 @@ export interface components {
          * ItemRule
          * @description 아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.
          *
-         *     규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.
-         *     heals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.
+         *     규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).
+         *     효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.
+         *     등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.
          *     rarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.
          *     price 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.
          *     비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).
@@ -3752,9 +3834,6 @@ export interface components {
          *     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
          *     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
          *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
-         *     cures 는 쓰면 대상에게서 푸는 부상들이다(#277, 해독제). 룰북의 부상의 이름표이고 소모품에만 적는다.
-         *     짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.
-         *     룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).
          *     throw 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.
          *     treat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.
          *     쓰면 치료가 성공하든 실패하든 하나 없어진다.
@@ -3764,13 +3843,13 @@ export interface components {
             ap?: number | null;
             /** Attack */
             attack?: number | null;
-            /**
-             * Cures
-             * @default []
-             */
-            cures: string[];
             /** Defense */
             defense?: number | null;
+            /**
+             * Effects
+             * @default []
+             */
+            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"])[];
             /**
              * Entry Id
              * Format: uuid
@@ -3778,8 +3857,6 @@ export interface components {
             entry_id: string;
             /** Guard */
             guard?: number | null;
-            /** Heals */
-            heals?: string | null;
             /** @default gear */
             kind: components["schemas"]["ItemKind"];
             lock?: components["schemas"]["ItemLock-Input"] | null;
@@ -3807,8 +3884,9 @@ export interface components {
          * ItemRule
          * @description 아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.
          *
-         *     규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.
-         *     heals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.
+         *     규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).
+         *     효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.
+         *     등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.
          *     rarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.
          *     price 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.
          *     비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).
@@ -3821,9 +3899,6 @@ export interface components {
          *     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
          *     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
          *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
-         *     cures 는 쓰면 대상에게서 푸는 부상들이다(#277, 해독제). 룰북의 부상의 이름표이고 소모품에만 적는다.
-         *     짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.
-         *     룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).
          *     throw 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.
          *     treat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.
          *     쓰면 치료가 성공하든 실패하든 하나 없어진다.
@@ -3833,19 +3908,17 @@ export interface components {
             ap?: number | null;
             /** Attack */
             attack?: number | null;
-            /**
-             * Cures
-             * @default []
-             */
-            cures: string[];
             /** Defense */
             defense?: number | null;
+            /**
+             * Effects
+             * @default []
+             */
+            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"])[];
             /** Entry Id */
             entry_id: string;
             /** Guard */
             guard?: number | null;
-            /** Heals */
-            heals?: string | null;
             /** @default gear */
             kind: components["schemas"]["ItemKind"];
             lock?: components["schemas"]["ItemLock-Output"] | null;
@@ -3873,26 +3946,26 @@ export interface components {
          * ItemRuleSnapshot
          * @description 아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.
          *
-         *     heals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.
+         *     effects 는 쓰면 대상에게 일어나는 일들이다(#800, app/engine/item_effects.py). 소모품에만 있다.
+         *     rarity 는 물건의 등급이다.
          *     price 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.
          *     slots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
          *     slots 가 비어 있으면 착용하지 않는 물건이다.
          *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).
-         *     cures 는 쓰면 푸는 부상들, throw 는 던지는 판정, treat_bonus 는 치료에 붙여 쓸 때의 보정이다(#277).
-         *     셋 다 소모품에만 있다.
+         *     throw 는 던지는 판정, treat_bonus 는 치료에 붙여 쓸 때의 보정이다(#277). 둘 다 소모품에만 있다.
          */
         ItemRuleSnapshot: {
             /** Ap */
             ap?: number | null;
             /** Attack */
             attack?: number | null;
-            /**
-             * Cures
-             * @default []
-             */
-            cures: string[];
             /** Defense */
             defense?: number | null;
+            /**
+             * Effects
+             * @default []
+             */
+            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"])[];
             /**
              * Entry Id
              * Format: uuid
@@ -3900,8 +3973,6 @@ export interface components {
             entry_id: string;
             /** Guard */
             guard?: number | null;
-            /** Heals */
-            heals?: string | null;
             kind: components["schemas"]["ItemKind"];
             lock?: components["schemas"]["ItemLockSnapshot"] | null;
             /** Price */
@@ -4023,26 +4094,39 @@ export interface components {
         };
         /**
          * ItemUseOut
-         * @description 물건을 쓴 결과. 엔진이 정했다(app/rounds/item_actions.py). 판정이 없다.
+         * @description 물건을 쓴 결과. 엔진이 정했다(app/rounds/item_actions.py, item_targets.py).
+         *
+         *     자기와 동료에게는 굴리지 않는다. 인물과 몬스터에게 썼으면(#800) 맞히는 판정의 능력과 난이도가 있고,
+         *     판정의 결과(CheckOutcome)에 이 문서가 붙는다.
          */
         ItemUseOut: {
+            /** Ability */
+            ability?: string | null;
             /**
              * Cured
              * @default []
              */
             cured: components["schemas"]["CuredOut"][];
+            /** Difficulty */
+            difficulty?: string | null;
             /**
              * Entry Id
              * Format: uuid
              */
             entry_id: string;
+            /**
+             * Injured
+             * @default []
+             */
+            injured: components["schemas"]["InjuredOut"][];
             /** Name */
             name: string;
             /** Reason */
             reason: string | null;
             /** Remaining */
             remaining: number;
-            target: components["schemas"]["ItemPersonOut"] | null;
+            /** Target */
+            target: components["schemas"]["ItemPersonOut"] | components["schemas"]["ThrownAtOut"] | null;
             /** Used */
             used: boolean;
         };
@@ -4053,6 +4137,7 @@ export interface components {
         ItemUseOutcome: {
             effect?: components["schemas"]["EffectOut"] | null;
             item_use: components["schemas"]["ItemUseOut"];
+            target_gone?: components["schemas"]["TargetGoneOut"] | null;
         };
         /**
          * JoinRequest
@@ -7362,6 +7447,7 @@ export interface components {
             injuries: components["schemas"]["Injury"][];
             injury_table: components["schemas"]["InjuryTable"] | null;
             injury_triggers: components["schemas"]["InjuryTriggers"];
+            item_check: components["schemas"]["ItemCheck"] | null;
             /** Magnitudes */
             magnitudes: components["schemas"]["Magnitude"][];
             modifier: components["schemas"]["Modifier"];
@@ -7986,7 +8072,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 61
+             * @default 62
              */
             format: number;
             /**
@@ -8803,8 +8889,10 @@ export interface components {
          * @description 물건을 쓰는 행동. 가진 소모품 하나를 쓴다(app/rounds/item_actions.py).
          *
          *     item 은 판의 로어북 물건 항목의 id 다. 소모품이어야 한다. 엔진은 이 값을 읽지 않는다. 어떤 물건인지는 판이 안다.
-         *     회복하는 소모품이면 대상(target)이 회복한다. 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다).
-         *     회복하지 않는 소모품(연막탄 같은 것)은 대상이 없다. 쓰고 없어진다. 무엇이 일어나는지는 서술이 맡는다.
+         *     효과가 있는 소모품(#800)이면 대상에게 그 효과들이 든다. 대상은 앉은 사람(target, 비우면 자기 자신.
+         *     app/rounds/acceptance.py 가 채운다), 이번 장면의 인물(npc), 같은 장소의 몬스터(monster) 중 하나다.
+         *     인물과 몬스터에게는 맞히는 판정을 거친다. lethal 은 피해가 있는 물건을 인물이나 몬스터에게 쓸 때 치기와 같다.
+         *     효과가 없는 소모품(연막탄 같은 것)은 대상이 없다. 쓰고 없어진다. 무엇이 일어나는지는 서술이 맡는다.
          */
         UseAction: {
             /**
@@ -8817,6 +8905,15 @@ export interface components {
              * @enum {string}
              */
             kind: "use";
+            /**
+             * Lethal
+             * @default false
+             */
+            lethal: boolean;
+            /** Monster */
+            monster?: string | null;
+            /** Npc */
+            npc?: string | null;
             /** Target */
             target?: string | null;
         };

@@ -275,7 +275,8 @@ class ItemActionNote:
 
     kind 는 use(쓰기)나 give(건네기)다. done 이 거짓이면 하지 못했다. 까닭은 reason 이다
     (not_held 가지고 있지 않았다, target_gone 받을 사람이 없었다, too_many 받는 쪽이 더 가질 수 없었다).
-    target 은 회복받거나 받은 사람의 캐릭터 이름이다. 자기 자신에게 썼거나 대상이 없는 물건이면 None 이다.
+    target 은 회복받거나 받은 사람의 캐릭터 이름, 인물이나 몬스터에게 썼으면(#800) 그 이름이다.
+    자기 자신에게 썼거나 대상이 없는 물건이면 None 이다. 인물이나 몬스터에게 썼으면 판정의 줄이 따로 있다.
     """
 
     kind: str
@@ -288,6 +289,9 @@ class ItemActionNote:
     impact: Impact | None = None
     # 부상을 푸는 소모품을 썼으면 풀린 부상의 이름들(#277). 이 칸이 생기기 전에 굳힌 것은 빈 목록이다
     cured: list[str] = field(default_factory=list)
+    # 부상을 입히는 소모품을 썼으면 생긴 부상의 이름들과, 면역이라 입지 않은 부상의 이름들(#800)
+    injured: list[str] = field(default_factory=list)
+    resisted: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

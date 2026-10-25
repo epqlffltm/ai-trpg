@@ -267,6 +267,18 @@ class DullKind(Part):
     amount: Number
 
 
+class ItemCheck(Part):
+    """
+    물건을 인물이나 몬스터에게 쓸 때 맞히는 판정(#800). 어느 능력으로, 어느 난이도에 도전하는가.
+
+    물건을 자기와 동료에게 쓸 때는 굴리지 않는다. 인물(NPC)과 몬스터에게는 이로운 것이어도 늘 굴린다
+    (잘못 먹이거나 엉뚱한 곳에 바를 수 있다). 맞히면 효과가 든다. 빗나가도 물건은 하나 없어진다.
+    """
+
+    ability: Key
+    difficulty: Key
+
+
 class Steal(Part):
     """
     훔치기(app/rounds/steals.py). 어느 능력으로 판정하고, 무엇이 목표값을 올리고 내리는가.
@@ -761,6 +773,9 @@ class Ruleset(Part):
     equipment_slots: Annotated[tuple[EquipmentSlot, ...], Field(max_length=RULESET_MAX_EQUIPMENT_SLOTS)]
     # 방어구의 규칙(#276). None 이면 방어구가 공격을 막지 않고, 부위도 굴리지 않는다. 칸 자체는 늘 있어야 한다
     armor: Armor | None
+    # 물건을 인물이나 몬스터에게 쓸 때 맞히는 판정(#800). None 이면 물건을 자기와 동료에게만 쓴다.
+    # 칸 자체는 늘 있어야 한다
+    item_check: ItemCheck | None
 
     @model_validator(mode='after')
     def reject_duplicate_slots(self) -> Self:
@@ -832,6 +847,17 @@ class Ruleset(Part):
         lowest, highest = self.score_roll.keep, self.score_roll.keep * self.score_roll.sides
         if lowest < self.score_min or highest > self.score_max:
             raise ValueError(f'주사위로 나올 수 있는 점수({lowest}~{highest})가 점수의 범위를 벗어납니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_item_check_setup(self) -> Self:
+        """물건을 쓰는 판정의 능력은 능력치에, 난이도는 난이도의 단계에 있어야 한다(#800)."""
+        if self.item_check is None:
+            return self
+        if self.item_check.ability not in {ability.key for ability in self.abilities}:
+            raise ValueError(f'물건을 쓰는 판정의 능력치가 능력치에 없습니다: {self.item_check.ability}')
+        if self.item_check.difficulty not in {difficulty.key for difficulty in self.difficulties}:
+            raise ValueError(f'물건을 쓰는 판정의 난이도가 난이도에 없습니다: {self.item_check.difficulty}')
         return self
 
     @model_validator(mode='after')

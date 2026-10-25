@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/room/round/action/ItemActionFields.tsx
-// 물건을 다루는 행동의 칸. 쓰기(소모품, 회복하면 받을 사람), 건네기(받을 사람과 개수), 내려놓기(개수),
+// 물건을 다루는 행동의 칸. 쓰기(소모품, 효과가 있으면 받을 쪽: 나, 동료, 인물, 몬스터. #800), 건네기(받을 사람과 개수), 내려놓기(개수),
 // 줍기(내가 선 곳에 놓인 것과 개수), 훔치기와 빼앗기(대상과 그 대상이 지닌 물건),
 // 던지기(#277, 던질 물건과 맞힐 대상. 판정은 물건에 적혀 있어 보이기만 한다).
 
@@ -10,10 +10,12 @@ import { COUNT_MAX } from './actionDraft';
 import {
   consumables,
   harmTargets,
-  healTargets,
   heldCount,
   heldItems,
-  itemHeals,
+  itemDamages,
+  itemTakesTarget,
+  splitRef,
+  useTargets,
   placeItems,
   recipients,
   throwables,
@@ -29,11 +31,28 @@ export function UseFields({ draft, ctx, onChange }: Props) {
   const items = consumables(ctx.me).map((item) => ({ value: item.entry_id, label: `${item.name} ×${item.count}` }));
   return (
     <div className="ability-grid">
-      <ChoiceSelect label="쓸 물건" value={draft.item} choices={items} empty="고르기" onChange={(item) => onChange({ item })} />
-      {draft.item && itemHeals(ctx.table, draft.item) ? (
-        <ChoiceSelect label="회복받을 사람" value={draft.target} choices={healTargets(ctx, false)} empty="나" onChange={(target) => onChange({ target })} />
-      ) : null}
+      <ChoiceSelect label="쓸 물건" value={draft.item} choices={items} empty="고르기" onChange={(item) => onChange({ item, target: '' })} />
+      {draft.item && itemTakesTarget(ctx.table, draft.item) ? <UseTargetFields draft={draft} ctx={ctx} onChange={onChange} /> : null}
     </div>
+  );
+}
+
+/** 물건을 쓸 쪽과, 인물이나 몬스터면 맞히는 판정의 말과 죽이려 한다(피해가 있는 물건) */
+function UseTargetFields({ draft, ctx, onChange }: Props) {
+  const aimed = ['npc', 'monster'].includes(splitRef(draft.target)[0]);
+  return (
+    <>
+      <ChoiceSelect label="쓸 쪽" value={draft.target} choices={useTargets(ctx, draft.item)} empty="나" onChange={(target) => onChange({ target })} />
+      {aimed ? <p className="hint">인물과 몬스터에게는 맞히는 판정을 굴립니다. 빗나가도 물건은 하나 없어집니다.</p> : null}
+      {aimed && itemDamages(ctx.table, draft.item) ? (
+        <Checkbox
+          label="죽이려 한다"
+          description="켜지 않으면 HP 가 0 이 될 때 쓰러뜨리기만 합니다."
+          checked={draft.lethal}
+          onChange={(event) => onChange({ lethal: event.target.checked })}
+        />
+      ) : null}
+    </>
   );
 }
 

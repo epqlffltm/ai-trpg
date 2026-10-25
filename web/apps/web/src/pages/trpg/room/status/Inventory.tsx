@@ -15,7 +15,7 @@ import { sceneCastQuery } from '../round/roundQueries';
 import { ActionButton, type ActionShortcuts } from './ActionButton';
 import { EquipmentList } from './EquipmentList';
 import { isWearable, isWorn, slotsLabel, wornOf } from './equipmentView';
-import { healsLabel, itemLabel, meFirst } from './statusView';
+import { effectsLabel, itemLabel, meFirst } from './statusView';
 import { useEquipment, type Equipment } from './useEquipment';
 import { WearButton } from './WearButton';
 
@@ -85,9 +85,9 @@ function useSellTo(table: TableDetail): SellTo {
   return open.length === 1 ? `npc:${open[0]?.id ?? ''}` : '';
 }
 
-/** "소모품 · 노말 · 회복 가벼움(1d4) · 값 5닢", 착용했으면 "· 착용(주손)" */
+/** "소모품 · 노말 · 회복 가벼움(1d4) · 풀기 중독 · 값 5닢", 착용했으면 "· 착용(주손)" */
 function itemNote(table: TableDetail, item: HeldItem, member: TableMember): string {
-  const heals = item.kind === 'consumable' ? healsLabel(table, item.entry_id) : null;
+  const heals = item.kind === 'consumable' ? effectsLabel(table, item.entry_id) : null;
   const price = itemPrice(table, item.entry_id);
   const worn = member.sheet ? wornOf(member.sheet).find((one) => one.entry_id === item.entry_id) : undefined;
   return [itemLabel(item), heals, price !== null ? `값 ${amountLabel(table.currency, price)}` : null, worn ? `착용(${slotsLabel(table, worn.slots)})` : null]
