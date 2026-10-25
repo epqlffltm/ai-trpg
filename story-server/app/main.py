@@ -7,8 +7,8 @@ story 서버는 하나의 세계관 안에서 여러 인물과 나누는 이야�
 1:1 캐릭터 대화는 chat-server 가 맡는다.
 둘이 나눈 선은 docs/architecture/chat-server.md 의 "story-server 와 나눈 선"이다.
 지금은 상태 확인, 토큰의 주인, 모델 목록과 값(결제 서버의 가격 목록),
-세션(세계관의 판을 asset 서버에서 가져와 시작한다)이 있다(#591).
-장면의 인물, 시각, 조건과 효과, 고백과 엔딩이 차례로 붙는다(docs/architecture/story.md 의 "만드는 순서").
+세션(세계관의 판을 asset 서버에서 가져와 시작한다), 말 보내기(장면의 인물들과 서술의 SSE)가 있다(#591).
+행동(이동, 시간, 선택지, 고백)과 엔딩이 차례로 붙는다(docs/architecture/story.md 의 "만드는 순서").
 
 띄우는 법: uv run uvicorn app.main:app --port 8007 --reload
 """
@@ -32,6 +32,7 @@ from server_core.observability.request_metrics import RequestMetricsMiddleware
 from server_core.observability.request_spans import RequestSpanMiddleware
 from server_core.observability.responses import handle_unexpected_error
 from server_core.observability.setup import configure_logging
+from server_core.observability.streams import StreamRoutes
 from server_core.observability.tracing import FASTAPI_TELEMETRY, build_resource, configure_tracing, shutdown_tracing
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -44,14 +45,23 @@ from app.catalog import router as catalog
 from app.conversations import router as conversations
 from app.conversations.service import (
     AdultContentRequiredError,
+    ConversationBusyError,
     ConversationNotFoundError,
     ModelUnavailableError,
     WorldNotFoundError,
 )
 from app.core.config import Settings, get_settings
+from app.turns import router as messages
+from app.turns import settler
+from app.turns.providers import build_router
+from app.turns.service import ModelRequiredError, SessionEndedError, TurnDeclinedError
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
 API_PREFIX = '/api/v1/story'
+
+# SSE 로 답하는 주소들. 요청의 span 과 시간 메트릭에서 빼고 sse_* 로 센다(server_core/observability/streams.py).
+# 프록시도 이 주소에서 버퍼링을 끈다(docker/nginx/templates/api.inc.template)
+STREAMS = StreamRoutes.of(r'/api/v1/story/conversations/[^/]+/messages')
 
 
 @asynccontextmanager
@@ -59,17 +69,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     서버가 뜰 때와 꺼질 때 할 일. yield 앞이 뜰 때, 뒤가 꺼질 때다.
 
-    뜰 때 끊긴 세션의 목록 받기(30초마다)를 시작한다. 꺼질 때 그것을 가장 먼저 멈추고,
-    DB 연결과 인증 서버로 가는 연결을 닫는다. 닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
+    뜰 때 끊긴 세션의 목록 받기(30초마다)와 청구 정리(5초마다)를 시작한다. 꺼질 때 그것들을 가장 먼저 멈춘다.
+    도는 말 한 번은 멈춘다. 받은 만큼 저장하고 맡길 것을 적어 둔다(다음에 뜬 서버의 청구 정리가 맡긴다).
+    그다음 DB 연결과 다른 서버로 가는 연결을 닫는다. 닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
     마지막으로 모아 둔 span 과 메트릭을 보낸다. 보내기를 기다리느라 막히므로 스레드에서 한다.
     """
     revoking = revocations.start(app.state.revocations)
+    settling = settler.start(app.state.settler)
     yield
     await revoking.halt()
+    await settling.halt()
+    await stop_turns(app.state.turns)
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
     await asyncio.to_thread(shutdown_tracing, app.state.tracing)
     await asyncio.to_thread(shutdown_metrics, app.state.metrics)
+
+
+async def stop_turns(running: set[asyncio.Task]) -> None:
+    """도는 말 한 번을 모두 멈추고 끝나기를 기다린다. 각 작업은 멈추기 전에 받은 만큼 저장한다."""
+    for task in list(running):
+        task.cancel()
+    await asyncio.gather(*running, return_exceptions=True)
 
 
 def create_app(
@@ -107,9 +128,11 @@ def create_app(
     # 요청마다 식별자(request_id, trace_id)를 걸고, 끝나면 한 줄을 남긴다. 응답에 X-Request-ID 를 돌려준다
     app.add_middleware(RequestLoggingMiddleware)
     # 요청마다 서버 span 을 건다. 나중에 붙인 것이 바깥이다. 로그(trace_id)와 쿼리의 span 이 이 span 을 따른다
-    app.add_middleware(RequestSpanMiddleware)
+    # 말을 보내는 SSE 는 걸지 않는다(STREAMS)
+    app.add_middleware(RequestSpanMiddleware, streams=STREAMS)
     # 요청마다 HTTP 메트릭 셋을 센다. 맨 바깥이라 요청 전체(span 과 로그를 거는 시간까지)를 잰다
-    app.add_middleware(RequestMetricsMiddleware)
+    # 말을 보내는 SSE 는 끝난 수에만 든다(STREAMS)
+    app.add_middleware(RequestMetricsMiddleware, streams=STREAMS)
 
     # 요청을 처리하는 코드가 설정을 꺼내 쓸 수 있게 앱에 붙여 둔다. 전역 변수로 두지 않는다
     app.state.settings = settings
@@ -141,6 +164,13 @@ def create_app(
     # 홀드는 말을 보내는 길이 쓴다. 가격 목록은 모델 목록과 모델 고르기가 쓴다
     app.state.billing = build_billing(settings, app.state.http_client)
     app.state.price_list = build_price_list(settings, app.state.http_client)
+    # 모델을 부를 것(app/turns/providers.py). 모델 목록은 부를 때마다 DB 에서 읽는다. 같은 연결의 풀을 쓴다
+    app.state.model_router = build_router(settings, app.state.http_client, app.state.session_factory)
+    # 도는 말 한 번들(app/turns/router.py 의 keep_running). 서버가 꺼질 때 멈춘다
+    app.state.turns = set()
+    # 끝나지 않은 청구를 마저 끝내는 작업(app/turns/settler.py). lifespan 이 돌리고 멈춘다.
+    # 결제 서버를 부르는 것은 부를 때마다 앱에서 꺼낸다. 테스트가 가짜를 꽂는다
+    app.state.settler = settler.ChargeSettler(app.state.session_factory, billing=lambda: app.state.billing)
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
@@ -152,6 +182,8 @@ def create_app(
     app.include_router(catalog.router, prefix=API_PREFIX)
     # 세션. 세계관의 판을 asset 서버에서 가져와 시작한다
     app.include_router(conversations.router, prefix=API_PREFIX)
+    # 말 보내기. 바로 SSE 로 답한다
+    app.include_router(messages.router, prefix=API_PREFIX)
 
     # 세션의 예외를 응답으로 바꾼다(app/conversations/router.py)
     app.add_exception_handler(ConversationNotFoundError, conversations.handle_conversation_not_found)
@@ -160,6 +192,11 @@ def create_app(
     app.add_exception_handler(ModelUnavailableError, conversations.handle_model_unavailable)
     app.add_exception_handler(AssetUnavailableError, conversations.handle_asset_unavailable)
     app.add_exception_handler(PriceListUnavailable, billing.handle_prices_unavailable)
+    app.add_exception_handler(ConversationBusyError, conversations.handle_conversation_busy)
+    # 말 보내기의 예외(app/turns/router.py)
+    app.add_exception_handler(ModelRequiredError, messages.handle_model_required)
+    app.add_exception_handler(SessionEndedError, messages.handle_session_ended)
+    app.add_exception_handler(TurnDeclinedError, messages.handle_turn_declined)
 
     # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)
     use_input_errors(app)

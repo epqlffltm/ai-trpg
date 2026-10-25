@@ -100,12 +100,37 @@ class ConversationPage(BaseModel):
     total: int
 
 
+class SegmentOut(BaseModel):
+    """말 조각 하나. speaker 는 장면의 인물의 id(판의 cast 의 id)이고, 서술이면 null 이다."""
+
+    speaker: str | None
+    text: str
+
+
+class MessageOut(BaseModel):
+    """
+    말 하나. role 은 user(사람의 말), assistant(모델의 답), action(사람의 행동)이다.
+    모델의 답은 segments(말 조각)를 그린다. content 는 그 조각을 표식이 붙은 줄로 쓴 것이다.
+    cast 는 그 답을 쓸 때의 장면의 인물이다. status 가 partial 이면 끊긴 답이다.
+    """
+
+    id: uuid.UUID
+    parent_id: uuid.UUID | None
+    role: str
+    content: str
+    status: str
+    segments: list[SegmentOut]
+    cast: list[str]
+    created_at: datetime
+
+
 class ConversationDetail(BaseModel):
-    """세션 하나. 말과 상태는 그것을 쓰는 조각에서 더한다(만드는 순서 2~5)."""
+    """세션 하나. messages 는 지금 보고 있는 가지의 말들이다(첫 말부터). 상태는 행동을 더하는 조각에서 싣는다."""
 
     id: uuid.UUID
     title: str
     world: WorldOut
     model: ConversationModelOut | None
+    messages: list[MessageOut]
     created_at: datetime
     updated_at: datetime

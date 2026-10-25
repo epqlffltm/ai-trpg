@@ -24,7 +24,7 @@
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,11 +37,15 @@ from app.catalog.choice import is_choosable
 from app.catalog.models import AiModel
 from app.catalog.offers import is_sold
 from app.conversations import repository
-from app.conversations.models import Conversation, ImportedWorld
+from app.conversations.models import Conversation, ImportedWorld, Message
 from app.conversations.repository import ConversationRow
 from app.conversations.schemas import ConversationCreate
 from app.core.dependencies import Viewer
 from app.ratings import Rating, allowed_ratings
+
+# 답을 쓰는 중이라는 표시(conversations.generating_since)가 이보다 오래되면 서버가 도중에 꺼진 것으로 본다.
+# 다음 말이 차례를 다시 잡고, 청구 정리가 그 홀드를 돌려준다(app/turns/settler.py). 모델을 부르는 시간의 상한보다 길다
+GENERATION_STALE = timedelta(minutes=15)
 
 
 class ConversationNotFoundError(Exception):
@@ -54,6 +58,10 @@ class WorldNotFoundError(Exception):
 
 class AdultContentRequiredError(Exception):
     """자기 세계관인데 등급을 쓸 수 없다. 화면이 본인인증으로 안내한다(403)."""
+
+
+class ConversationBusyError(Exception):
+    """세션이 답을 쓰는 중이다(409). 한 세션에 한 번에 하나의 생성만 받는다."""
 
 
 class ModelUnavailableError(Exception):
@@ -226,6 +234,11 @@ async def list_conversations(
     return await repository.list_visible(
         session, viewer.claims.user_id, allowed_ratings(viewer.claims), source_id, limit, offset
     )
+
+
+async def conversation_messages(session: AsyncSession, conversation: Conversation) -> list[Message]:
+    """세션의 지금 가지의 말들(첫 말부터). 말이 없으면 빈 목록이다."""
+    return await repository.active_path(session, conversation.active_leaf_id)
 
 
 async def conversation_models(session: AsyncSession, conversations: list[Conversation]) -> dict[str, AiModel]:

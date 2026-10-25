@@ -31,7 +31,7 @@
         "type": "object"
       },
       "ConversationDetail": {
-        "description": "세션 하나. 말과 상태는 그것을 쓰는 조각에서 더한다(만드는 순서 2~5).",
+        "description": "세션 하나. messages 는 지금 보고 있는 가지의 말들이다(첫 말부터). 상태는 행동을 더하는 조각에서 싣는다.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -42,6 +42,13 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/MessageOut"
+            },
+            "title": "Messages",
+            "type": "array"
           },
           "model": {
             "anyOf": [
@@ -71,6 +78,7 @@
           "title",
           "world",
           "model",
+          "messages",
           "created_at",
           "updated_at"
         ],
@@ -254,6 +262,89 @@
         "title": "MeResponse",
         "type": "object"
       },
+      "MessageCreate": {
+        "additionalProperties": false,
+        "description": "보내는 말.",
+        "properties": {
+          "content": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Content",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "MessageCreate",
+        "type": "object"
+      },
+      "MessageOut": {
+        "description": "말 하나. role 은 user(사람의 말), assistant(모델의 답), action(사람의 행동)이다.\n모델의 답은 segments(말 조각)를 그린다. content 는 그 조각을 표식이 붙은 줄로 쓴 것이다.\ncast 는 그 답을 쓸 때의 장면의 인물이다. status 가 partial 이면 끊긴 답이다.",
+        "properties": {
+          "cast": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cast",
+            "type": "array"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/SegmentOut"
+            },
+            "title": "Segments",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "parent_id",
+          "role",
+          "content",
+          "status",
+          "segments",
+          "cast",
+          "created_at"
+        ],
+        "title": "MessageOut",
+        "type": "object"
+      },
       "ModelChoice": {
         "additionalProperties": false,
         "description": "세션의 모델을 바꿀 때 받는 값.",
@@ -429,6 +520,32 @@
         ],
         "title": "Rating",
         "type": "string"
+      },
+      "SegmentOut": {
+        "description": "말 조각 하나. speaker 는 장면의 인물의 id(판의 cast 의 id)이고, 서술이면 null 이다.",
+        "properties": {
+          "speaker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "speaker",
+          "text"
+        ],
+        "title": "SegmentOut",
+        "type": "object"
       },
       "Tier": {
         "description": "결제 서버 가격표의 등급. 결제에 쓰는 등급은 이것이 기준이다(model-pricing-plan 9-1).\n\n결제 서버가 모르는 등급을 보내면 목록 전체를 읽지 못한다(503).\n그래서 결제 서버는 게임 서버와 chat, story 서버가 등급을 안 뒤에 그 줄을 넣는다.",
@@ -674,7 +791,7 @@
     },
     "/api/v1/story/conversations/{conversation_id}": {
       "get": {
-        "description": "세션 하나. 가져온 판까지. 가격 목록은 DB 를 읽기 전에 받는다.",
+        "description": "세션 하나. 가져온 판과 지금 가지의 말까지. 가격 목록은 DB 를 읽기 전에 받는다.",
         "operationId": "read_conversation_api_v1_story_conversations__conversation_id__get",
         "parameters": [
           {
@@ -718,6 +835,62 @@
         "summary": "Read Conversation",
         "tags": [
           "conversations"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/story/conversations/{conversation_id}/messages": {
+      "post": {
+        "description": "말을 보낸다. 사람의 말을 저장하고, 장면의 인물들과 서술의 답을 말 조각으로 흘려보낸다.\n끊겨도 서버는 끝까지 답을 저장한다. 말은 상태(시각, 장소, 호감도)를 바꾸지 않는다.",
+        "operationId": "send_message_api_v1_story_conversations__conversation_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "SSE. app/turns/schemas.py 의 메시지들"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send Message",
+        "tags": [
+          "messages"
         ],
         "x-audience": "user"
       }

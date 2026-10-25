@@ -45,15 +45,20 @@ def world_document(name: str = '여름 마을', rating: Rating = Rating.ALL, fmt
 
 
 def make_world(
-    world_id: uuid.UUID | None = None, *, version: int = 1, name: str = '여름 마을', rating: Rating = Rating.ALL
+    world_id: uuid.UUID | None = None,
+    *,
+    version: int = 1,
+    name: str = '여름 마을',
+    rating: Rating = Rating.ALL,
+    fields: dict | None = None,
 ) -> WorldCopy:
-    """asset 서버가 내주는 세계관의 마지막 판."""
+    """asset 서버가 내주는 세계관의 마지막 판. fields 로 문서의 칸을 덮어쓴다."""
     return WorldCopy(
         id=world_id or uuid.uuid4(),
         version=version,
         rating=rating,
         published_at=datetime(2026, 10, 24, tzinfo=UTC),
-        document=WorldDocument.model_validate(world_document(name, rating)),
+        document=WorldDocument.model_validate(world_document(name, rating, **(fields or {}))),
     )
 
 

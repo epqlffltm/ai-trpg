@@ -59,6 +59,33 @@ class Settings(CoreSettings):
     # 결제 서버를 한 번 부르는 시간의 상한(초). 말을 기다리는 사람이 있으므로 짧게 둔다(chat 과 같다)
     billing_timeout_seconds: float = Field(default=5.0, gt=0, le=10)
 
+    # --- 말 한 번(app/turns/) ---
+    # 모델의 창구마다 키와 주소. 이름은 chat 서버, 게임 서버와 같다.
+    # 키가 없는 창구의 모델은 부르지 않는다(provider_not_configured).
+    # 키는 비밀값이다. 로그와 오류에 싣지 않는다. 공급자가 내주는 값이라 tools/fill_env.py 가 만들지 않는다
+    openai_api_key: SecretStr = SecretStr('')
+    openai_base_url: str = 'https://api.openai.com/v1'
+    anthropic_api_key: SecretStr = SecretStr('')
+    anthropic_base_url: str = 'https://api.anthropic.com'
+    gemini_api_key: SecretStr = SecretStr('')
+    gemini_base_url: str = 'https://generativelanguage.googleapis.com'
+    zai_api_key: SecretStr = SecretStr('')
+    zai_base_url: str = 'https://api.z.ai/api/paas/v4'
+    deepinfra_api_key: SecretStr = SecretStr('')
+    deepinfra_base_url: str = 'https://api.deepinfra.com/v1/openai'
+    # 서버 곁의 모델(Ollama)의 주소. 모델 목록의 local 창구 모델에만 쓴다. 지금 목록에는 없다
+    llm_base_url: str = 'http://127.0.0.1:11434/v1'
+
+    # 모델을 한 번 부르는 시간의 상한(초). 흘려 받는 답이 다 올 때까지다
+    llm_timeout_seconds: float = Field(default=120.0, gt=0, le=600)
+    # 말 한 번의 답의 길이의 상한(토큰). 가격표의 출력 단계(o0)가 약속하는 길이다(chat 과 같다)
+    story_output_limit: int = Field(default=1024, ge=64, le=8192)
+    # 모델에 보내는 지난 말의 양의 상한(글자). 최근 말부터 이만큼 채운다(conversation_core/window.py).
+    # 가격표의 입력 단계(i0)가 약속하는 양이다. 토큰이 아니라 글자로 어림한다
+    story_context_chars: int = Field(default=12000, ge=1000, le=200000)
+    # 글의 다양함. 0 에 가까울수록 같은 입력에 비슷한 답이다. 받지 않는 모델에는 보내지 않는다(모델 목록)
+    story_temperature: float = Field(default=0.9, ge=0, le=2)
+
     @model_validator(mode='after')
     def require_an_asset_secret(self) -> Self:
         """asset 서버를 부르겠다면서 비밀이 없거나 짧으면 뜨지 않는다. asset 서버가 모든 요청을 401 로 거절한다."""
