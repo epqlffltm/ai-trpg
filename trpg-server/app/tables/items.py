@@ -16,6 +16,8 @@ from dataclasses import dataclass
 
 from app.assets.models import ITEM_STACK_MAX, ItemKind, ItemRarity
 from app.assets.scenarios.snapshot import ItemStackSnapshot, ItemThrowSnapshot, Snapshot, item_entries, item_rule_of
+from app.engine import item_effects
+from app.engine.item_effects import Effect
 from app.tables import equipment
 from app.tables.errors import Conflict, TableConflictError, TableOptionError
 from app.tables.models import TableItem, TableSheet
@@ -24,14 +26,15 @@ from app.tables.models import TableItem, TableSheet
 @dataclass(frozen=True)
 class CatalogItem:
     """
-    판에 있는 물건 하나. 이름은 로어북 항목의 이름, 종류와 회복의 양과 등급과 값은 아이템 규칙의 것이다.
+    판에 있는 물건 하나. 이름은 로어북 항목의 이름, 종류와 효과와 등급과 값은 아이템 규칙의 것이다.
+
+    effects 는 쓰면 대상에게 일어나는 일들이다(#800, app/engine/item_effects.py). 소모품에만 있다.
 
     price 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.
     slots 는 착용할 때 들어갈 수 있는 규칙의 칸, slot_count 는 차지하는 칸의 수다(#276). slots 가 비면 착용하지 않는다.
     attack 은 무기의 공격 보정, defense 는 차지한 칸의 방어, guard 는 모든 부위의 방어다(#276). 없으면 None.
     ap 는 무기의 관통력, ward 는 불굴 세이브의 값이다(#276). 없으면 None.
     lock 은 문에 다는 자물쇠 물건인가다(#281). 열쇠와 따는 판정은 판에 있다.
-    cures 는 쓰면 대상에게서 푸는 부상들(룰북의 부상의 이름표)이다(#277). 없으면 빈 것이다.
     throw 는 던지는 판정이다(#277). 던질 수 없는 물건이면 None.
     treat_bonus 는 치료에 붙여 쓸 때 치료 판정의 보정에 더하는 값이다(#277). 치료에 쓰지 못하면 None.
     """
@@ -39,7 +42,7 @@ class CatalogItem:
     entry_id: uuid.UUID
     name: str
     kind: ItemKind
-    heals: str | None
+    effects: tuple[Effect, ...] = ()
     rarity: ItemRarity = ItemRarity.NORMAL
     price: int | None = None
     slots: tuple[str, ...] = ()
@@ -50,7 +53,6 @@ class CatalogItem:
     ap: int | None = None
     ward: int | None = None
     lock: bool = False
-    cures: tuple[str, ...] = ()
     throw: ItemThrowSnapshot | None = None
     treat_bonus: int | None = None
 
@@ -64,7 +66,7 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
             entry_id=entry.id,
             name=entry.name,
             kind=rule.kind,
-            heals=rule.heals,
+            effects=tuple(rule.effects),
             rarity=rule.rarity,
             price=rule.price,
             slots=tuple(rule.slots),
@@ -75,7 +77,6 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
             ap=rule.ap,
             ward=rule.ward,
             lock=rule.lock is not None,
-            cures=tuple(rule.cures),
             throw=rule.throw,
             treat_bonus=rule.treat_bonus,
         )
@@ -83,8 +84,13 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
 
 
 def takes_target(item: CatalogItem) -> bool:
-    """쓰면 누군가에게 드는 소모품인가. 회복하거나 부상을 푼다(#277). 아니면 쓰고 없어질 뿐이다(연막탄)."""
-    return item.heals is not None or bool(item.cures)
+    """쓰면 누군가에게 드는 소모품인가. 효과가 있다(#800). 없으면 쓰고 없어질 뿐이다(연막탄)."""
+    return bool(item.effects)
+
+
+def is_harmful(item: CatalogItem) -> bool:
+    """쓰면 대상을 해치는 소모품인가. 피해나 부상의 효과가 있다(#800). 동료에게는 아직 쓰지 못한다."""
+    return item_effects.is_harmful(item.effects)
 
 
 def require_in_catalog(items: dict[uuid.UUID, CatalogItem], entry_id: uuid.UUID) -> CatalogItem:

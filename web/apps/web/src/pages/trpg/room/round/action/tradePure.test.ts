@@ -36,8 +36,8 @@ function context(money: number, extra: Record<string, unknown> = {}, scene: Scen
       member(OTHER, { character: { name: '미아', description: '' }, sheet: sheet() }),
     ],
     items: [
-      { entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', heals: 'light', price: 9 },
-      { entry_id: 'i4', name: '횃불', kind: 'gear', rarity: 'normal', heals: null, price: 5 },
+      { entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', effects: [{ kind: 'heal', magnitude: 'light' }], price: 9 },
+      { entry_id: 'i4', name: '횃불', kind: 'gear', rarity: 'normal', effects: [], price: 5 },
     ],
     ...extra,
   }) as unknown as TableDetail;

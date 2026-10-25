@@ -98,12 +98,24 @@ export function itemLabel(item: Pick<HeldItem, 'kind' | 'rarity'>): string {
   return `${itemKindLabel(item.kind)} · ${rarityLabel(item.rarity)}`;
 }
 
-/** 소모품의 회복량. "회복 가벼움(1d4)". 판의 물건(TableDetail.items)과 규칙의 등급(magnitudes)에서 찾는다 */
-export function healsLabel(table: TableDetail, entryId: string): string | null {
-  const key = table.items.find((item) => item.entry_id === entryId)?.heals;
-  if (!key) return null;
+function magnitudeText(table: TableDetail, key: string): string {
   const magnitude = table.rules.magnitudes.find((entry) => entry.key === key);
-  return magnitude ? `회복 ${magnitude.name}(${magnitude.count}d${magnitude.sides})` : `회복 ${key}`;
+  return magnitude ? `${magnitude.name}(${magnitude.count}d${magnitude.sides})` : key;
+}
+
+type ItemEffect = TableDetail['items'][number]['effects'][number];
+
+function effectText(table: TableDetail, effect: ItemEffect): string {
+  if (effect.kind === 'heal') return `회복 ${magnitudeText(table, effect.magnitude)}`;
+  if (effect.kind === 'damage') return `피해 ${magnitudeText(table, effect.magnitude)}`;
+  if (effect.kind === 'cure') return `풀기 ${effect.injuries.map((key) => injuryName(table.rules, key)).join(', ')}`;
+  return `부상 ${injuryName(table.rules, effect.injury)}`;
+}
+
+/** 소모품의 효과들(#800). "회복 가벼움(1d4) · 풀기 중독". 판의 물건(TableDetail.items)과 규칙에서 찾는다. 없으면 null */
+export function effectsLabel(table: TableDetail, entryId: string): string | null {
+  const effects = table.items.find((item) => item.entry_id === entryId)?.effects ?? [];
+  return effects.length > 0 ? effects.map((effect) => effectText(table, effect)).join(' · ') : null;
 }
 
 /** 나를 맨 앞에. 나머지는 들어온 차례 그대로 */

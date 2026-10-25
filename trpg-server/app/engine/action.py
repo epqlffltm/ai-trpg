@@ -291,16 +291,31 @@ class UseAction(BaseModel):
     물건을 쓰는 행동. 가진 소모품 하나를 쓴다(app/rounds/item_actions.py).
 
     item 은 판의 로어북 물건 항목의 id 다. 소모품이어야 한다. 엔진은 이 값을 읽지 않는다. 어떤 물건인지는 판이 안다.
-    회복하는 소모품이면 대상(target)이 회복한다. 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다).
-    회복하지 않는 소모품(연막탄 같은 것)은 대상이 없다. 쓰고 없어진다. 무엇이 일어나는지는 서술이 맡는다.
+    효과가 있는 소모품(#800)이면 대상에게 그 효과들이 든다. 대상은 앉은 사람(target, 비우면 자기 자신.
+    app/rounds/acceptance.py 가 채운다), 이번 장면의 인물(npc), 같은 장소의 몬스터(monster) 중 하나다.
+    인물과 몬스터에게는 맞히는 판정을 거친다. lethal 은 피해가 있는 물건을 인물이나 몬스터에게 쓸 때 치기와 같다.
+    효과가 없는 소모품(연막탄 같은 것)은 대상이 없다. 쓰고 없어진다. 무엇이 일어나는지는 서술이 맡는다.
     """
 
     model_config = ConfigDict(extra='forbid')
 
     kind: Literal[ActionKind.USE]
     item: uuid.UUID
-    # 회복받는 사람. 테이블에 앉은 사람이다
+    # 물건을 받는 사람. 테이블에 앉은 사람이다
     target: uuid.UUID | None = None
+    # 물건을 쓸 인물(이번 장면의 인물 목록의 id)과 몬스터(장면의 몬스터 목록의 id, #800)
+    npc: uuid.UUID | None = None
+    monster: uuid.UUID | None = None
+    lethal: bool = False
+
+    @model_validator(mode='after')
+    def require_one_target(self) -> Self:
+        """대상은 하나다. 죽이려는 것은 인물이나 몬스터에게 쓸 때만이다."""
+        if sum(one is not None for one in (self.target, self.npc, self.monster)) > 1:
+            raise ValueError('target, npc, monster 는 하나만 적습니다.')
+        if self.lethal and self.npc is None and self.monster is None:
+            raise ValueError('lethal 은 npc 나 monster 와 함께 적습니다.')
+        return self
 
 
 class ThrowAction(BaseModel):

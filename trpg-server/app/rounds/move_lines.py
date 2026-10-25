@@ -368,10 +368,12 @@ def describe_throw(note: ThrowNote) -> str:
 
 def describe_item_action(note: ItemActionNote) -> str:
     """
-    물건을 쓰거나 건넨 결과를 한 줄로 적는다. 회복했으면 HP 의 변화를, 부상을 풀었으면 풀린 부상을 붙인다.
+    물건을 쓰거나 건넨 결과를 한 줄로 적는다. HP 가 바뀌었으면 그 변화를, 부상을 풀었으면 풀린 부상을,
+    입혔으면 생긴 부상과 면역이라 입지 않은 부상을 붙인다(#800).
 
     예: (쓴 물건: 치유 물약) → 엘프 회복 3 (HP 8/10)
         (쓴 물건: 해독제 → 영애) [풀린 부상: 중독]
+        (쓴 물건: 독 바른 단검 → 해골 병사) [면역이라 입지 않은 부상: 중독]
         (건넨 물건: 밧줄 1개 → 영애)
         (쓰려던 물건: 치유 물약. 가지고 있지 않았다)
     """
@@ -386,6 +388,10 @@ def describe_item_action(note: ItemActionNote) -> str:
         parts.append(describe_impact(note.impact))
     if note.cured:
         parts.append(f'[풀린 부상: {", ".join(note.cured)}]')
+    if note.injured:
+        parts.append(f'[입힌 부상: {", ".join(note.injured)}]')
+    if note.resisted:
+        parts.append(f'[면역이라 입지 않은 부상: {", ".join(note.resisted)}]')
     return ' '.join(parts)
 
 
@@ -716,6 +722,10 @@ def describe_move(move: Move) -> str:
         parts.append(lost)
     if move.throw is not None:
         parts.append(describe_throw(move.throw))
+    # 인물이나 몬스터에게 쓴 물건(#800)은 판정 앞에 적는다. 던지기와 같다
+    used_on = move.item_action is not None and move.verdict is not None
+    if used_on:
+        parts.append(describe_item_action(move.item_action))
     if move.verdict is not None:
         parts.append(describe_verdict(move.verdict))
         if move.verdict.treatment is not None:
@@ -734,7 +744,7 @@ def describe_move(move: Move) -> str:
         parts.append(describe_target_gone(move.target_gone))
     if move.naming is not None:
         parts.append(describe_naming(move.naming))
-    if move.item_action is not None:
+    if move.item_action is not None and not used_on:
         parts.append(describe_item_action(move.item_action))
     if move.travel is not None:
         parts.append(describe_travel(move.travel))

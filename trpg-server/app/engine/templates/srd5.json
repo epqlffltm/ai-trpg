@@ -629,6 +629,10 @@
       "mode": "ac",
       "save_target": null,
       "pierce_base": 10
+    },
+    "item_check": {
+      "ability": "dex",
+      "difficulty": "medium"
     }
   }
 }

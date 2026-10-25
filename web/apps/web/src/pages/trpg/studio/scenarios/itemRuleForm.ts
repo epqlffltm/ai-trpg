@@ -2,17 +2,16 @@
 // 물건 규칙 하나의 입력과 물건 규칙 목록을 바꾸는 것. 순수한 함수다(서버의 ItemRule 검사를 따른다).
 //
 // - 규칙이 없는 물건은 장비(gear)이고 보통(normal)이다. 규칙을 지우면 그렇게 돌아간다
-// - 회복의 양(heals)은 소모품만, 룰북의 등급(magnitudes)에서 고른다
+// - 효과 목록(effects, #800)은 소모품만. 입력과 검사는 itemEffectsForm.ts. 장비로 바꾸면 보내지 않는다
 // - 칸(slots)은 장비만. 차지하는 칸의 수는 칸의 수보다 많지 않다. 공격·방어(attack, defense, guard, ap, ward)는 칸이 있는 물건만
 // - 관통력(ap)은 공격 보정(attack)이 있는 무기만. 수치는 1~10, 값은 1~1,000,000(비우면 사고팔 수 없다)
 // - 자물쇠(lock, #281)는 장비만. 입력과 검사는 itemLockForm.ts. 소모품으로 바꾸면 보내지 않는다
-// - 푸는 부상(cures, #277)은 소모품만. 아직 입력 칸이 없어 읽은 그대로 돌려 보낸다. 장비로 바꾸면 보내지 않는다
-// - 던지는 판정(throw, #277)도 소모품만. 아직 입력 칸이 없어 읽은 그대로 돌려 보낸다. 장비로 바꾸면 보내지 않는다
-// - 치료 보정(treat_bonus, #277)도 소모품만. 아직 입력 칸이 없어 읽은 그대로 돌려 보낸다. 장비로 바꾸면 보내지 않는다
+// - 던지는 판정(throw)과 치료 보정(treat_bonus, #277)도 소모품만. 장비로 바꾸면 보내지 않는다
 
 import type { ItemKind, ItemRarity, ItemRule, ItemRuleBody, Ruleset } from '../../../../api/types';
 import { itemKindLabel, rarityLabel } from '../../labels';
 import { wholeNumber } from '../rulebooks/rulebookForm';
+import { effectDraft, effectHints, effectLine, throwDraft, toEffect, toThrow, type EffectDraft, type ThrowDraft } from './itemEffectsForm';
 import { itemLockDraft, toItemLock, type ItemLockDraft } from './itemLockForm';
 
 export const COMBAT_NUMBER_MAX = 10;
@@ -34,15 +33,14 @@ export const COMBAT_LABELS: Record<CombatField, string> = {
 export type ItemRuleDraft = {
   kind: ItemKind;
   rarity: ItemRarity;
-  heals: string;
+  effects: EffectDraft[];
   price: string;
   slots: string[];
   slotCount: string;
   combat: Record<CombatField, string>;
   lock: ItemLockDraft;
-  cures: string[];
-  throw: ItemRule['throw'];
-  treatBonus: number | null;
+  throw: ThrowDraft;
+  treatBonus: string;
 };
 
 function numberText(value: number | null | undefined): string {
@@ -53,7 +51,7 @@ export function itemRuleDraft(rule: ItemRule | undefined): ItemRuleDraft {
   return {
     kind: rule?.kind ?? 'gear',
     rarity: rule?.rarity ?? 'normal',
-    heals: rule?.heals ?? '',
+    effects: (rule?.effects ?? []).map(effectDraft),
     price: numberText(rule?.price),
     slots: rule?.slots ?? [],
     slotCount: String(rule?.slot_count ?? 1),
@@ -65,9 +63,8 @@ export function itemRuleDraft(rule: ItemRule | undefined): ItemRuleDraft {
       ward: numberText(rule?.ward),
     },
     lock: itemLockDraft(rule?.lock),
-    cures: rule?.cures ?? [],
-    throw: rule?.throw ?? null,
-    treatBonus: rule?.treat_bonus ?? null,
+    throw: throwDraft(rule),
+    treatBonus: numberText(rule?.treat_bonus),
   };
 }
 
@@ -94,6 +91,7 @@ export function itemRuleHints(draft: ItemRuleDraft): Record<string, string> {
     }
     if (draft.combat.ap.trim() !== '' && draft.combat.attack.trim() === '') hints.ap = '관통력은 공격 보정이 있는 무기에만 적습니다.';
   }
+  if (draft.kind === 'consumable') Object.assign(hints, effectHints(draft.effects, draft.throw, draft.treatBonus));
   return hints;
 }
 
@@ -101,7 +99,7 @@ function optionalNumber(text: string): number | null {
   return text.trim() === '' ? null : Number(text.trim());
 }
 
-/** 보낼 규칙. 종류에 맞지 않는 칸(장비의 회복과 푸는 부상과 던지는 판정과 치료 보정, 소모품의 칸과 자물쇠, 착용하지 않는 물건의 공격·방어)은 비운다 */
+/** 보낼 규칙. 종류에 맞지 않는 칸(장비의 효과와 던지는 판정과 치료 보정, 소모품의 칸과 자물쇠, 착용하지 않는 물건의 공격·방어)은 비운다 */
 export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody {
   const worn = isWorn(draft);
   const combat = (field: CombatField) => (worn ? optionalNumber(draft.combat[field]) : null);
@@ -109,7 +107,7 @@ export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody 
     entry_id: entryId,
     kind: draft.kind,
     rarity: draft.rarity,
-    heals: draft.kind === 'consumable' && draft.heals !== '' ? draft.heals : null,
+    effects: draft.kind === 'consumable' ? draft.effects.map(toEffect) : [],
     price: optionalNumber(draft.price),
     slots: draft.kind === 'gear' ? draft.slots : [],
     slot_count: worn ? Number(draft.slotCount.trim()) : 1,
@@ -119,9 +117,8 @@ export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody 
     guard: combat('guard'),
     ward: combat('ward'),
     lock: draft.kind === 'gear' ? toItemLock(draft.lock) : null,
-    cures: draft.kind === 'consumable' ? draft.cures : [],
-    throw: draft.kind === 'consumable' ? (draft.throw ?? null) : null,
-    treat_bonus: draft.kind === 'consumable' ? draft.treatBonus : null,
+    throw: draft.kind === 'consumable' ? toThrow(draft.throw) : null,
+    treat_bonus: draft.kind === 'consumable' ? optionalNumber(draft.treatBonus) : null,
   };
 }
 
@@ -137,13 +134,11 @@ export function withoutItemRule(rules: ItemRule[], entryId: string): ItemRuleBod
   return rules.filter((one) => one.entry_id !== entryId);
 }
 
-/** 규칙의 한 줄. "장비 · 희귀 · 값 30 · 주손, 보조손 중 2칸 · 공격 +2 · 관통 1 · 새 자물쇠". 규칙이 없으면 null */
+/** 규칙의 한 줄. "장비 · 희귀 · 값 30 · 주손, 보조손 중 2칸 · 공격 +2 · 관통 1 · 새 자물쇠", "소모품 · 보통 · 회복 가벼움 · 던짐 · 치료 +2". 규칙이 없으면 null */
 export function itemRuleLine(rule: ItemRule | undefined, rules: Ruleset | null): string | null {
   if (!rule) return null;
   const slotName = (key: string) => rules?.equipment_slots.find((slot) => slot.key === key)?.name ?? key;
-  const magnitude = rules?.magnitudes.find((entry) => entry.key === rule.heals)?.name ?? rule.heals;
-  const parts = [itemKindLabel(rule.kind), rarityLabel(rule.rarity)];
-  if (rule.heals) parts.push(`회복 ${magnitude}`);
+  const parts = [itemKindLabel(rule.kind), rarityLabel(rule.rarity), ...rule.effects.map((effect) => effectLine(effect, rules))];
   if (rule.price !== null && rule.price !== undefined) parts.push(`값 ${rule.price}`);
   if (rule.slots.length > 0) parts.push(`${rule.slots.map(slotName).join(', ')} 중 ${rule.slot_count}칸`);
   if (rule.attack) parts.push(`공격 +${rule.attack}`);
@@ -152,5 +147,7 @@ export function itemRuleLine(rule: ItemRule | undefined, rules: Ruleset | null):
   if (rule.guard) parts.push(`모든 부위 방어 ${rule.guard}`);
   if (rule.ward) parts.push(`불굴 ${rule.ward}`);
   if (rule.lock) parts.push(rule.lock.pick ? '새 자물쇠(딸 수 있음)' : '새 자물쇠');
+  if (rule.throw) parts.push('던짐');
+  if (rule.treat_bonus) parts.push(`치료 +${rule.treat_bonus}`);
   return parts.join(' · ');
 }

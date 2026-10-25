@@ -40,7 +40,6 @@ from app.assets.models import (
     ENCOUNTER_MAX_COUNT,
     FAIL_ONLY_CONDITIONS,
     HAPPENING_MAX_EFFECTS,
-    ITEM_MAX_CURES,
     ITEM_STACK_MAX,
     MONEY_MAX,
     MONSTER_MAX_ATTACKS,
@@ -92,6 +91,7 @@ from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
 from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
+from app.engine.item_effects import Effects
 from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, InjuryNature, Key
 from app.engine.sheet import Sheet
 
@@ -661,22 +661,13 @@ class ItemThrow(BaseModel):
     harm: Key
 
 
-def reject_duplicate_cures(keys: list[str]) -> list[str]:
-    """같은 부상을 두 번 적으면 거부한다."""
-    if len(set(keys)) != len(keys):
-        raise ValueError('같은 부상을 두 번 풉니다.')
-    return keys
-
-
-Cures = Annotated[list[Key], Field(max_length=ITEM_MAX_CURES), AfterValidator(reject_duplicate_cures)]
-
-
 class ItemRule(BaseModel):
     """
     아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.
 
-    규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.
-    heals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.
+    규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).
+    효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.
+    등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.
     rarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.
     price 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.
     비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).
@@ -689,9 +680,6 @@ class ItemRule(BaseModel):
     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
-    cures 는 쓰면 대상에게서 푸는 부상들이다(#277, 해독제). 룰북의 부상의 이름표이고 소모품에만 적는다.
-    짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.
-    룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).
     throw 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.
     treat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.
     쓰면 치료가 성공하든 실패하든 하나 없어진다.
@@ -701,7 +689,7 @@ class ItemRule(BaseModel):
 
     entry_id: uuid.UUID
     kind: ItemKind = ItemKind.GEAR
-    heals: Key | None = None
+    effects: Effects = []
     rarity: ItemRarity = ItemRarity.NORMAL
     price: Price | None = None
     slots: Slots = []
@@ -712,7 +700,6 @@ class ItemRule(BaseModel):
     ap: CombatNumber | None = None
     ward: CombatNumber | None = None
     lock: ItemLock | None = None
-    cures: Cures = []
     throw: ItemThrow | None = None
     treat_bonus: CombatNumber | None = None
 
@@ -746,17 +733,10 @@ class ItemRule(BaseModel):
         return self
 
     @model_validator(mode='after')
-    def heal_only_with_consumables(self) -> 'ItemRule':
-        """장비에는 회복의 양을 적지 않는다. 쓰지 않는 물건이다."""
-        if self.heals is not None and self.kind != ItemKind.CONSUMABLE:
-            raise ValueError('회복의 양(heals)은 소모품(consumable)에만 적습니다.')
-        return self
-
-    @model_validator(mode='after')
-    def cures_only_with_consumables(self) -> 'ItemRule':
-        """푸는 부상은 소모품에만 적는다. 쓰면 없어지는 약이다."""
-        if self.cures and self.kind != ItemKind.CONSUMABLE:
-            raise ValueError('푸는 부상(cures)은 소모품(consumable)에만 적습니다.')
+    def effects_only_with_consumables(self) -> 'ItemRule':
+        """효과는 소모품에만 적는다. 장비는 쓰지 않는 물건이다."""
+        if self.effects and self.kind != ItemKind.CONSUMABLE:
+            raise ValueError('효과(effects)는 소모품(consumable)에만 적습니다.')
         return self
 
     @model_validator(mode='after')

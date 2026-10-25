@@ -179,8 +179,20 @@ function checkEffects(outcome: CheckResult, rules: Ruleset): string[] {
     parts.push(outcome.treatment.treated ? `${injury} 치료함` : `${injury} 치료하지 못함`);
   }
   if (outcome.drop && outcome.drop.items.length > 0) parts.push('떨어뜨린 물건이 있음');
+  parts.push(...usedOnParts(outcome.item_use, rules));
   const blow = blowLine(outcome.blow);
   return blow ? [blow, ...parts] : parts;
+}
+
+/** 인물이나 몬스터에게 쓴 물건(#800). "독 단검 씀", 입힌 부상과 면역이라 입지 않은 부상 */
+function usedOnParts(used: CheckResult['item_use'], rules: Ruleset): string[] {
+  if (!used) return [];
+  const parts = [`${used.name} 씀`];
+  const injured = used.injured.flatMap((one) => (one.injury ? [nameOfInjury(rules, one.injury)] : []));
+  const resisted = used.injured.flatMap((one) => (one.immune ? [nameOfInjury(rules, one.immune)] : []));
+  if (injured.length > 0) parts.push(`부상 ${injured.join(', ')}`);
+  if (resisted.length > 0) parts.push(`면역 ${resisted.join(', ')}`);
+  return parts;
 }
 
 /** 타격에 장비가 든 것(#276). 판정의 결과와 몬스터·인물의 공격 이벤트(eventLines.ts)가 같은 모양이다 */
@@ -223,7 +235,7 @@ function savePart(save: Blow['save']): string | null {
 /** 판정이 아닌 행동의 결과 */
 function otherLine(outcome: Outcome): string | null {
   if ('naming' in outcome) return outcome.naming.correct ? `맞혔습니다: ${outcome.naming.name ?? outcome.naming.guess}` : '틀렸습니다.';
-  if ('item_use' in outcome) return itemUseLine(outcome.item_use);
+  if ('item_use' in outcome && outcome.item_use) return itemUseLine(outcome.item_use);
   if ('item_give' in outcome) return giveLine(outcome.item_give);
   if ('move' in outcome) return moveLine(outcome.move);
   if ('search' in outcome) return searchLine(outcome.search);

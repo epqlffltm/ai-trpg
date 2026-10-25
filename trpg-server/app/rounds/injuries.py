@@ -197,6 +197,25 @@ def take_aimed(
     return wound(ruleset, key, InjurySource.CALLED_SHOT, document, rows, table_id, moment, immune)
 
 
+def take_from_item(
+    ruleset: Ruleset,
+    key: str,
+    rows: list[TableInjury],
+    table_id: uuid.UUID,
+    moment: Moment,
+    immune: frozenset[InjuryNature] = NO_IMMUNITY,
+) -> dict:
+    """
+    물건의 효과(injure)가 입히는 부상(#800). 문서로 돌려준다. 표를 굴리지 않는다.
+
+    이미 그 부상을 입고 있으면 또 입히지 않는다(문서의 부상이 비어 있다). 몬스터가 그 성질에 면역이면 입히지 않는다.
+    """
+    document = injury_document(Trigger.ITEM, None)
+    if wears(rows, key):
+        return document
+    return wound(ruleset, key, InjurySource.ITEM, document, rows, table_id, moment, immune)
+
+
 def take_aftermath(
     ruleset: Ruleset,
     rolled: TableRoll,

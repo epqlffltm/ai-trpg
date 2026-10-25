@@ -149,9 +149,32 @@ export function throwables(ctx: ActionContext): HeldItem[] {
   return heldItems(ctx.me).filter((held) => ctx.table.items.some((item) => item.entry_id === held.entry_id && item.throw));
 }
 
-/** 이 물건이 회복하는 소모품인가(판의 물건에 heals 가 있다). 회복하지 않으면 대상이 없다 */
-export function itemHeals(table: TableDetail, entryId: string): boolean {
-  return Boolean(table.items.find((item) => item.entry_id === entryId)?.heals);
+function effectsOf(table: TableDetail, entryId: string) {
+  return table.items.find((item) => item.entry_id === entryId)?.effects ?? [];
+}
+
+/** 이 물건이 누군가에게 드는 소모품인가(판의 물건에 효과가 있다, #800). 효과가 없으면 대상이 없다 */
+export function itemTakesTarget(table: TableDetail, entryId: string): boolean {
+  return effectsOf(table, entryId).length > 0;
+}
+
+/** 이 물건이 해로운가(피해나 부상의 효과). 해로우면 동료에게 쓰지 못한다(#803 전) */
+export function itemHarms(table: TableDetail, entryId: string): boolean {
+  return effectsOf(table, entryId).some((effect) => effect.kind === 'damage' || effect.kind === 'injure');
+}
+
+/** 이 물건이 피해를 주는가. 그때만 인물이나 몬스터를 죽이려 할 수 있다 */
+export function itemDamages(table: TableDetail, entryId: string): boolean {
+  return effectsOf(table, entryId).some((effect) => effect.kind === 'damage');
+}
+
+/**
+ * 물건을 쓸 쪽(#800). 나는 빈 값이다. 해롭지 않으면 다른 사람, 규칙에 맞히는 판정(item_check)이 있으면
+ * 장면의 산 인물과 내가 선 곳의 산 몬스터도 고른다. 인물과 몬스터에게는 맞히는 판정을 거친다.
+ */
+export function useTargets(ctx: ActionContext, entryId: string): Choice[] {
+  const members = itemHarms(ctx.table, entryId) ? [] : recipients(ctx);
+  return ctx.table.rules.item_check ? [...members, ...harmTargets(ctx)] : members;
 }
 
 /** 내가 지닌 이 물건의 개수 */

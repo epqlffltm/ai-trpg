@@ -16,7 +16,7 @@ const rules = RULES as unknown as Ruleset;
 const TABLE = tableDetail('t', {
   status: 'playing',
   members: [member(ME, { character: { name: '렌', description: '' }, sheet: sheet() }), member(OTHER, { character: { name: '미아', description: '' }, sheet: sheet() })],
-  items: [{ entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', heals: 'light' }],
+  items: [{ entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', effects: [{ kind: 'heal', magnitude: 'light' }] }],
 }) as unknown as TableDetail;
 const CTX: ActionContext = { table: TABLE, me: TABLE.members[0] as TableMember, cast: null };
 
@@ -75,6 +75,9 @@ describe('roundView', () => {
     const hit = { ...outcome, npc_effect: { name: '문지기', kind: 'damage', amount: 4 } };
     expect(outcomeLine(hit as unknown as Declaration['outcome'], rules)).toBe('눈 13, 보정 +2, 합 15 / 목표 15 · 성공 · 문지기 피해 4');
     expect(outcomeLine({ turn_lost: 'downed' } as unknown as Declaration['outcome'], rules)).toBe('행동하지 못했습니다.');
+    // 인물이나 몬스터에게 쓴 물건(#800). 판정의 줄에 쓴 물건과 입힌 부상, 면역이 붙는다
+    const usedOn = { ...hit, item_use: { name: '독 단검', injured: [{ injury: 'sprain', immune: null }, { injury: null, immune: 'broken_arm' }] } };
+    expect(outcomeLine(usedOn as unknown as Declaration['outcome'], rules)).toBe('눈 13, 보정 +2, 합 15 / 목표 15 · 성공 · 문지기 피해 4 · 독 단검 씀 · 부상 삔 발목 · 면역 부러진 팔');
     // 던지지 못했으면 그 까닭(#277). 던졌으면 판정의 줄이다
     const notHeld = { item_throw: { name: '화염병', thrown: false, reason: 'not_held', remaining: 0 } };
     expect(outcomeLine(notHeld as unknown as Declaration['outcome'], rules)).toBe('던지지 못했습니다(그 물건을 더 가지고 있지 않았습니다)');

@@ -34,6 +34,7 @@ from app.billing.prices import Tier
 from app.calendar.schemas import ClockOut, ClockTimeOut
 from app.catalog.models import Grade
 from app.catalog.steps import MAX_STEP
+from app.engine.item_effects import Effect
 from app.engine.ruleset import RULESET_MAX_ABILITIES, RULESET_MAX_EQUIPMENT_SLOTS, Key, Ruleset
 from app.engine.sheet import Score, Sheet
 from app.tables.models import (
@@ -362,13 +363,15 @@ class CatalogItemOut(BaseModel):
     """
     판에 있는 물건 하나. 로어북의 물건 항목이다.
 
-    kind 가 consumable 이면 쓰면 하나 줄어든다. heals 가 있으면 쓸 때 HP 를 그 등급(rules 의 magnitudes)만큼 되돌린다.
+    kind 가 consumable 이면 쓰면 하나 줄어든다. effects 는 쓰면 대상에게 일어나는 일들이다(#800, 차례대로):
+    heal(HP 를 그 등급만큼 되돌림), cure(적은 부상을 풂), damage(그 등급만큼 피해), injure(부상 하나를 입힘).
+    등급은 rules 의 magnitudes, 부상은 rules 의 injuries 의 key 다. 피해나 부상이 있으면 동료에게는 쓰지 못한다.
     """
 
     entry_id: uuid.UUID
     name: str
     kind: ItemKind
-    heals: str | None
+    effects: list[Effect] = []
     # 물건의 등급(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다
     rarity: ItemRarity
     # 상인이 파는 값(#278). 사 줄 때는 currency.sell_percent 를 곱해 내림한다. 비어 있으면 사고팔 수 없다
@@ -387,8 +390,6 @@ class CatalogItemOut(BaseModel):
     ward: int | None = None
     # 문에 다는 자물쇠 물건인가(#281). 행동 '바꾸기'로 단다. 무슨 열쇠로 여는지, 따는 판정은 싣지 않는다
     lock: bool = False
-    # 쓰면 대상에게서 푸는 부상들(rules 의 injuries 의 key, #277). 없으면 빈 목록이다
-    cures: list[str] = []
     # 던지는 판정(#277). 행동 '던지기'로 같은 장소의 몬스터나 장면의 인물에게 던진다. 던질 수 없으면 None 이다
     throw: ItemThrowOut | None = None
     # 치료에 붙여 쓸 때 치료 판정의 보정에 더하는 값(#277). 치료하는 행동의 item 으로 쓴다. 쓰지 못하면 None 이다

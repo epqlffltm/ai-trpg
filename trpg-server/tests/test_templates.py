@@ -37,6 +37,12 @@ from app.engine.templates import (
 # 이미 내놓은 템플릿의 값은 고치지 않는다. 고치고 싶으면 새 이름으로 하나 더 낸다.
 # 규칙의 모양에 칸이 새로 생겨 템플릿에 그 칸을 더한 것이면(있던 값은 그대로) 해시를 새로 적는다.
 RELEASED = {
+    Template.SRD5: 'fb3c80d973f39c9096a6fb06c38141173a09918dbe8ae498f5b907eb3e0e51e3',
+    Template.HORROR: 'd5d89b9a7d6b69758137ca7b08b503b313ddfde07846fade105fb9cd9d406d1f',
+    Template.LIGHT: '085c1d6bf07627a80f55ebd68f091d933b5da8f10189538da3b90febebf82a43',
+}
+# 물건을 쓰는 판정(item_check, #800)을 더하기 전의 해시. 그 칸을 뺀 규칙은 그때와 같아야 한다
+BEFORE_ITEM_CHECK = {
     Template.SRD5: '1dc689ffc0916445367844b4c31e6d1471da4955de74fc1c36eda73ce2b858b6',
     Template.HORROR: 'a6c09c04b3f6902fdde9de906a489c7a05906bf140fba05060d6d5c7a1f38ac2',
     Template.LIGHT: '46c656de0ab15f6de1cb637693fd90bd4bb5df2deeb28ba7d894ab9a055ce1c5',
@@ -77,9 +83,13 @@ COMMERCIAL_NAMES = ('d&d', 'dungeons', '던전 앤 드래곤', '던전즈', 'pat
 
 
 def dumped(rules: Ruleset, natures: bool = True) -> dict:
-    """규칙의 값. natures 가 거짓이면 부상의 성질(#799)을 뺀다. 성질을 더하기 전의 해시와 견줄 때 쓴다."""
+    """
+    규칙의 값. natures 가 거짓이면 부상의 성질(#799)과 그 뒤에 더한 물건을 쓰는 판정(item_check, #800)을 뺀다.
+    성질을 더하기 전의 해시와 견줄 때 쓴다.
+    """
     values = rules.model_dump(mode='json')
     if not natures:
+        values.pop('item_check')
         values['injuries'] = [
             {key: value for key, value in injury.items() if key != 'natures'} for injury in values['injuries']
         ]
@@ -150,6 +160,11 @@ def test_adding_the_narration_guide_kept_the_other_values():
 def test_adding_the_equipment_slots_kept_the_other_values():
     for template, expected in BEFORE_SLOTS.items():
         assert fingerprint(TEMPLATES[template].rules, without=('equipment_slots', 'armor'), natures=False) == expected
+
+
+def test_adding_the_item_check_kept_the_other_values():
+    for template, expected in BEFORE_ITEM_CHECK.items():
+        assert fingerprint(TEMPLATES[template].rules, without=('item_check',)) == expected
 
 
 def test_adding_the_natures_kept_the_other_values():

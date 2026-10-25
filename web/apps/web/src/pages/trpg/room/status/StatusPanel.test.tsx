@@ -22,7 +22,7 @@ function playing(mySheet: Record<string, unknown> = {}, extra: Record<string, un
       }),
       member(ME, { is_host: true, character: { name: '렌', description: '' }, sheet: sheet(mySheet) }),
     ],
-    items: [{ entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', heals: 'light' }],
+    items: [{ entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', effects: [{ kind: 'heal', magnitude: 'light' }] }],
     quests: [
       { entry_id: 'q1', name: '사라진 수도사', status: 'active', due_at: { day: 2, hour: 6, minute: 0, time_of_day: 'dawn' } },
       { entry_id: 'q2', name: '종을 울려라', status: 'succeeded', due_at: null },

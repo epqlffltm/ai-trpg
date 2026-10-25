@@ -19,9 +19,9 @@ const SLOTS = [
   { key: 'body', name: '몸', hit_weight: 3 },
 ];
 const ITEMS = [
-  { entry_id: 'sword', name: '장검', kind: 'gear', rarity: 'normal', heals: null, slots: ['main_hand', 'off_hand'], slot_count: 2, attack: 2 },
-  { entry_id: 'mail', name: '사슬 갑옷', kind: 'gear', rarity: 'normal', heals: null, slots: ['body'], slot_count: 1, defense: 4 },
-  { entry_id: 'dagger', name: '단검', kind: 'gear', rarity: 'normal', heals: null, slots: ['main_hand', 'off_hand'], slot_count: 1, attack: 1 },
+  { entry_id: 'sword', name: '장검', kind: 'gear', rarity: 'normal', effects: [], slots: ['main_hand', 'off_hand'], slot_count: 2, attack: 2 },
+  { entry_id: 'mail', name: '사슬 갑옷', kind: 'gear', rarity: 'normal', effects: [], slots: ['body'], slot_count: 1, defense: 4 },
+  { entry_id: 'dagger', name: '단검', kind: 'gear', rarity: 'normal', effects: [], slots: ['main_hand', 'off_hand'], slot_count: 1, attack: 1 },
 ];
 const HELD = ITEMS.map((item) => ({ entry_id: item.entry_id, name: item.name, kind: 'gear', rarity: 'normal', count: 1 }));
 const SWORD = { entry_id: 'sword', name: '장검', slots: ['main_hand', 'off_hand'] };

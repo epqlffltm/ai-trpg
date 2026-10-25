@@ -12,7 +12,8 @@ import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
 import { currencyDraft, currencyHints, moneyText, toCurrency } from './currencyForm';
-import { itemRuleDraft, itemRuleHints, toItemRule } from './itemRuleForm';
+import { effectHints, newEffectDraft, toggleCure } from './itemEffectsForm';
+import { itemRuleDraft, itemRuleHints, itemRuleLine, toItemRule } from './itemRuleForm';
 import { stacksHints } from './stacksForm';
 
 const GAME = '/api/v1/game';
@@ -28,7 +29,7 @@ const SWORD_RULE = {
   entry_id: SWORD,
   kind: 'gear',
   rarity: 'rare',
-  heals: null,
+  effects: [],
   price: 30,
   slots: ['main_hand', 'off_hand'],
   slot_count: 2,
@@ -129,12 +130,18 @@ describe('물건·돈 탭', () => {
     await userEvent.click(list.getByRole('button', { name: '약초 꾸러미 규칙 고치기' }));
     const dialog = within(await screen.findByRole('dialog'));
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '종류' }), 'consumable');
-    await userEvent.selectOptions(dialog.getByRole('combobox', { name: '쓰면 회복하는 양' }), 'light');
+    await userEvent.click(dialog.getByRole('button', { name: '효과 더하기' }));
+    expect(dialog.getByText('양을 고르세요.')).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.selectOptions(within(dialog.getByRole('group', { name: '효과 1' })).getByRole('combobox', { name: '양' }), 'light');
+    await userEvent.click(dialog.getByRole('checkbox', { name: '던질 수 있다' }));
+    expect(dialog.getByText('던지는 판정의 능력치와 맞으면 다치는 양을 고르세요.')).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole('checkbox', { name: '던질 수 있다' }));
     await userEvent.click(dialog.getByRole('button', { name: '저장' }));
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
     const sent = patches(seen)[0]?.items as ItemRule[];
     expect(sent).toHaveLength(3);
-    expect(sent[2]).toMatchObject({ entry_id: POTION, kind: 'consumable', heals: 'light', slots: [], attack: null });
+    expect(sent[2]).toMatchObject({ entry_id: POTION, kind: 'consumable', effects: [{ kind: 'heal', magnitude: 'light' }], slots: [], attack: null });
 
     await userEvent.click(list.getByRole('button', { name: '(붙인 로어북에 없는 물건) 규칙 고치기' }));
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '규칙 지우기' }));
@@ -168,27 +175,48 @@ describe('물건·돈 입력', () => {
     expect(itemRuleHints({ ...draft, combat: { ...draft.combat, attack: '', ap: '2' } }).ap).toBe('관통력은 공격 보정이 있는 무기에만 적습니다.');
     expect(itemRuleHints({ ...draft, slotCount: '3' }).slot_count).toBeDefined();
     expect(itemRuleHints({ ...draft, price: '0' }).price).toBeDefined();
-    expect(toItemRule(SWORD, { ...draft, kind: 'consumable' })).toMatchObject({ slots: [], slot_count: 1, attack: null, heals: null });
+    expect(toItemRule(SWORD, { ...draft, kind: 'consumable' })).toMatchObject({ slots: [], slot_count: 1, attack: null, effects: [] });
     expect(toItemRule(SWORD, { ...draft, slots: [] })).toMatchObject({ attack: null, slot_count: 1 });
   });
 
-  it('규칙: 푸는 부상은 읽은 그대로 소모품에만 돌려 보낸다', () => {
-    const antidote = itemRuleDraft({ ...SWORD_RULE, entry_id: POTION, kind: 'consumable', slots: [], attack: null, cures: ['poisoned'] } as ItemRule);
-    expect(toItemRule(POTION, antidote).cures).toEqual(['poisoned']);
-    expect(toItemRule(POTION, { ...antidote, kind: 'gear' }).cures).toEqual([]);
-    expect(toItemRule(SWORD, itemRuleDraft(undefined)).cures).toEqual([]);
+  it('규칙: 효과는 읽은 그대로 소모품에만 돌려 보낸다', () => {
+    const effects = [{ kind: 'cure', injuries: ['poisoned'] }, { kind: 'injure', injury: 'stunned' }];
+    const antidote = itemRuleDraft({ ...SWORD_RULE, entry_id: POTION, kind: 'consumable', slots: [], attack: null, effects } as ItemRule);
+    expect(toItemRule(POTION, antidote).effects).toEqual(effects);
+    expect(toItemRule(POTION, { ...antidote, kind: 'gear' }).effects).toEqual([]);
+    expect(toItemRule(SWORD, itemRuleDraft(undefined)).effects).toEqual([]);
   });
 
-  it('규칙: 던지는 판정은 읽은 그대로 소모품에만 돌려 보낸다', () => {
+  it('효과: 회복과 피해는 함께 못 하고, 같은 종류는 한 번씩, 같은 부상을 두 번 입히지 않는다', () => {
+    const none = { on: false, ability: '', difficulty: '', harm: '' };
+    const heal = { ...newEffectDraft('heal'), magnitude: 'light' };
+    const damage = { ...newEffectDraft('damage'), magnitude: 'light' };
+    const stun = { ...newEffectDraft('injure'), injury: 'stunned' };
+    expect(effectHints([heal, damage], none, '').effects).toBe('회복과 피해는 한 물건에 함께 적지 않습니다.');
+    expect(effectHints([heal, heal], none, '').effects).toBe('회복, 풀기, 피해는 한 번씩만 적습니다.');
+    expect(effectHints([stun, stun], none, '').effects).toBe('같은 부상을 두 번 입힙니다.');
+    expect(effectHints([newEffectDraft('cure')], none, '')['effect.0']).toBe('풀 부상을 하나 이상 고르세요.');
+    expect(effectHints([damage, stun], none, '11').treat_bonus).toBeDefined();
+    expect(effectHints([damage, stun], none, '2')).toEqual({});
+    expect(toggleCure(['stunned'], 'poisoned', null)).toEqual(['stunned', 'poisoned']);
+  });
+
+  it('효과: 목록의 줄', () => {
+    const rule = { ...SWORD_RULE, kind: 'consumable', slots: [], attack: null, price: null, effects: [{ kind: 'damage', magnitude: 'light' }, { kind: 'injure', injury: 'poisoned' }], throw: { ability: 'dex', difficulty: null, harm: 'light' }, treat_bonus: 2 } as unknown as ItemRule;
+    expect(itemRuleLine(rule, null)).toBe('소모품 · 희귀 · 피해 light · 부상: poisoned · 던짐 · 치료 +2');
+  });
+
+  it('규칙: 던지는 판정은 소모품에만 보낸다. 끄면 보내지 않는다', () => {
     const thrown = { ability: 'dex', difficulty: null, harm: 'moderate' };
-    const firebomb = itemRuleDraft({ ...SWORD_RULE, entry_id: POTION, kind: 'consumable', slots: [], attack: null, cures: [], throw: thrown } as ItemRule);
+    const firebomb = itemRuleDraft({ ...SWORD_RULE, entry_id: POTION, kind: 'consumable', slots: [], attack: null, throw: thrown } as ItemRule);
     expect(toItemRule(POTION, firebomb).throw).toEqual(thrown);
     expect(toItemRule(POTION, { ...firebomb, kind: 'gear' }).throw).toBeNull();
+    expect(toItemRule(POTION, { ...firebomb, throw: { ...firebomb.throw, on: false } }).throw).toBeNull();
     expect(toItemRule(SWORD, itemRuleDraft(undefined)).throw).toBeNull();
   });
 
-  it('규칙: 치료 보정은 읽은 그대로 소모품에만 돌려 보낸다', () => {
-    const kit = itemRuleDraft({ ...SWORD_RULE, entry_id: POTION, kind: 'consumable', slots: [], attack: null, cures: [], treat_bonus: 2 } as ItemRule);
+  it('규칙: 치료 보정은 소모품에만 보낸다', () => {
+    const kit = itemRuleDraft({ ...SWORD_RULE, entry_id: POTION, kind: 'consumable', slots: [], attack: null, treat_bonus: 2 } as ItemRule);
     expect(toItemRule(POTION, kit).treat_bonus).toBe(2);
     expect(toItemRule(POTION, { ...kit, kind: 'gear' }).treat_bonus).toBeNull();
     expect(toItemRule(SWORD, itemRuleDraft(undefined)).treat_bonus).toBeNull();

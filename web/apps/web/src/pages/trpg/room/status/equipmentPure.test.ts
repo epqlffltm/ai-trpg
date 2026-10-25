@@ -18,13 +18,13 @@ const SLOTS = [
   { key: 'head', name: '머리', hit_weight: 1 },
 ];
 const ITEMS = [
-  { entry_id: 'sword', name: '장검', kind: 'gear', rarity: 'normal', heals: null, slots: ['main_hand', 'off_hand'], slot_count: 2, attack: 2 },
-  { entry_id: 'mail', name: '사슬 갑옷', kind: 'gear', rarity: 'normal', heals: null, slots: ['body'], slot_count: 1, defense: 4 },
-  { entry_id: 'shield', name: '방패', kind: 'gear', rarity: 'normal', heals: null, slots: ['main_hand', 'off_hand'], slot_count: 1, guard: 1 },
-  { entry_id: 'herb', name: '약초', kind: 'consumable', rarity: 'normal', heals: 'light', slots: [], slot_count: 1 },
-  { entry_id: 'bolter', name: '볼터', kind: 'gear', rarity: 'normal', heals: null, slots: ['main_hand'], slot_count: 1, attack: 1, ap: 2 },
-  { entry_id: 'halo', name: '헤일로', kind: 'gear', rarity: 'rare', heals: null, slots: ['head'], slot_count: 1, ward: 4 },
-  { entry_id: 'charm', name: '부적', kind: 'gear', rarity: 'normal', heals: null, slots: ['off_hand'], slot_count: 1, ward: 2 },
+  { entry_id: 'sword', name: '장검', kind: 'gear', rarity: 'normal', effects: [], slots: ['main_hand', 'off_hand'], slot_count: 2, attack: 2 },
+  { entry_id: 'mail', name: '사슬 갑옷', kind: 'gear', rarity: 'normal', effects: [], slots: ['body'], slot_count: 1, defense: 4 },
+  { entry_id: 'shield', name: '방패', kind: 'gear', rarity: 'normal', effects: [], slots: ['main_hand', 'off_hand'], slot_count: 1, guard: 1 },
+  { entry_id: 'herb', name: '약초', kind: 'consumable', rarity: 'normal', effects: [{ kind: 'heal', magnitude: 'light' }], slots: [], slot_count: 1 },
+  { entry_id: 'bolter', name: '볼터', kind: 'gear', rarity: 'normal', effects: [], slots: ['main_hand'], slot_count: 1, attack: 1, ap: 2 },
+  { entry_id: 'halo', name: '헤일로', kind: 'gear', rarity: 'rare', effects: [], slots: ['head'], slot_count: 1, ward: 4 },
+  { entry_id: 'charm', name: '부적', kind: 'gear', rarity: 'normal', effects: [], slots: ['off_hand'], slot_count: 1, ward: 2 },
 ];
 const HELD = ITEMS.map((item) => ({ entry_id: item.entry_id, name: item.name, kind: item.kind, rarity: 'normal', count: 1 }));
 

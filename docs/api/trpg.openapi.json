@@ -723,7 +723,7 @@
         "type": "object"
       },
       "CatalogItemOut": {
-        "description": "판에 있는 물건 하나. 로어북의 물건 항목이다.\n\nkind 가 consumable 이면 쓰면 하나 줄어든다. heals 가 있으면 쓸 때 HP 를 그 등급(rules 의 magnitudes)만큼 되돌린다.",
+        "description": "판에 있는 물건 하나. 로어북의 물건 항목이다.\n\nkind 가 consumable 이면 쓰면 하나 줄어든다. effects 는 쓰면 대상에게 일어나는 일들이다(#800, 차례대로):\nheal(HP 를 그 등급만큼 되돌림), cure(적은 부상을 풂), damage(그 등급만큼 피해), injure(부상 하나를 입힘).\n등급은 rules 의 magnitudes, 부상은 rules 의 injuries 의 key 다. 피해나 부상이 있으면 동료에게는 쓰지 못한다.",
         "properties": {
           "ap": {
             "anyOf": [
@@ -747,14 +747,6 @@
             ],
             "title": "Attack"
           },
-          "cures": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Cures",
-            "type": "array"
-          },
           "defense": {
             "anyOf": [
               {
@@ -765,6 +757,36 @@
               }
             ],
             "title": "Defense"
+          },
+          "effects": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "cure": "#/components/schemas/CureEffect",
+                  "damage": "#/components/schemas/DamageEffect",
+                  "heal": "#/components/schemas/HealEffect",
+                  "injure": "#/components/schemas/InjureEffect"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/HealEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/CureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/DamageEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/InjureEffect"
+                }
+              ]
+            },
+            "title": "Effects",
+            "type": "array"
           },
           "entry_id": {
             "format": "uuid",
@@ -781,17 +803,6 @@
               }
             ],
             "title": "Guard"
-          },
-          "heals": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Heals"
           },
           "kind": {
             "$ref": "#/components/schemas/ItemKind"
@@ -869,7 +880,6 @@
           "entry_id",
           "name",
           "kind",
-          "heals",
           "rarity"
         ],
         "title": "CatalogItemOut",
@@ -1235,6 +1245,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/app__rounds__schemas__ItemThrowOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "item_use": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemUseOut"
               },
               {
                 "type": "null"
@@ -1729,6 +1749,34 @@
         "title": "CrossSnapshot",
         "type": "object"
       },
+      "CureEffect": {
+        "additionalProperties": false,
+        "description": "적은 부상들(injuries)을 푼다. 대상이 입고 있지 않으면 아무 일도 없다.",
+        "properties": {
+          "injuries": {
+            "items": {
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Injuries",
+            "type": "array"
+          },
+          "kind": {
+            "const": "cure",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "injuries"
+        ],
+        "title": "CureEffect",
+        "type": "object"
+      },
       "CuredOut": {
         "description": "소모품이 푼 부상 하나(#277). 룰북의 부상의 이름표와 이름이다. 나으면서 생긴 후유증은 이벤트에 있다.",
         "properties": {
@@ -1836,6 +1884,29 @@
           "sell_percent"
         ],
         "title": "CurrencySnapshot",
+        "type": "object"
+      },
+      "DamageEffect": {
+        "additionalProperties": false,
+        "description": "등급(magnitude)만큼 피해를 준다.",
+        "properties": {
+          "kind": {
+            "const": "damage",
+            "title": "Kind",
+            "type": "string"
+          },
+          "magnitude": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Magnitude",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "magnitude"
+        ],
+        "title": "DamageEffect",
         "type": "object"
       },
       "DeathSave": {
@@ -3725,6 +3796,29 @@
         "title": "HappeningSnapshot",
         "type": "object"
       },
+      "HealEffect": {
+        "additionalProperties": false,
+        "description": "HP 를 등급(magnitude)만큼 되돌린다.",
+        "properties": {
+          "kind": {
+            "const": "heal",
+            "title": "Kind",
+            "type": "string"
+          },
+          "magnitude": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Magnitude",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "magnitude"
+        ],
+        "title": "HealEffect",
+        "type": "object"
+      },
       "Healing": {
         "description": "부상이 낫는 방식.",
         "enum": [
@@ -3797,6 +3891,82 @@
           "user_id"
         ],
         "title": "HostTransfer",
+        "type": "object"
+      },
+      "InjureEffect": {
+        "additionalProperties": false,
+        "description": "부상 하나(injury)를 입힌다. 이미 입고 있으면 또 입히지 않는다.",
+        "properties": {
+          "injury": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Injury",
+            "type": "string"
+          },
+          "kind": {
+            "const": "injure",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "injury"
+        ],
+        "title": "InjureEffect",
+        "type": "object"
+      },
+      "InjuredOut": {
+        "description": "소모품이 입힌 부상 하나(#800). 룰북의 부상의 이름표다.\n\n이미 입고 있었으면 injury 가 None 이다. 몬스터가 그 성질에 면역이면 injury 는 None, immune 이 그 부상이다.",
+        "properties": {
+          "ends_after_round": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends After Round"
+          },
+          "heals_at": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClockTimeOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "immune": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Immune"
+          },
+          "injury": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Injury"
+          }
+        },
+        "required": [
+          "injury"
+        ],
+        "title": "InjuredOut",
         "type": "object"
       },
       "Injury": {
@@ -4128,6 +4298,30 @@
         "title": "InputError",
         "type": "object"
       },
+      "ItemCheck": {
+        "additionalProperties": false,
+        "description": "물건을 인물이나 몬스터에게 쓸 때 맞히는 판정(#800). 어느 능력으로, 어느 난이도에 도전하는가.\n\n물건을 자기와 동료에게 쓸 때는 굴리지 않는다. 인물(NPC)과 몬스터에게는 이로운 것이어도 늘 굴린다\n(잘못 먹이거나 엉뚱한 곳에 바를 수 있다). 맞히면 효과가 든다. 빗나가도 물건은 하나 없어진다.",
+        "properties": {
+          "ability": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Difficulty",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ability",
+          "difficulty"
+        ],
+        "title": "ItemCheck",
+        "type": "object"
+      },
       "ItemGiveOut": {
         "description": "물건을 건넨 결과. 엔진이 정했다(app/rounds/item_actions.py).",
         "properties": {
@@ -4363,7 +4557,7 @@
       },
       "ItemRule-Input": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\ncures 는 쓰면 대상에게서 푸는 부상들이다(#277, 해독제). 룰북의 부상의 이름표이고 소모품에만 적는다.\n짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.\n룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).\nthrow 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.\ntreat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.\n쓰면 치료가 성공하든 실패하든 하나 없어진다.",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.\ntreat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.\n쓰면 치료가 성공하든 실패하든 하나 없어진다.",
         "properties": {
           "ap": {
             "anyOf": [
@@ -4391,17 +4585,6 @@
             ],
             "title": "Attack"
           },
-          "cures": {
-            "default": [],
-            "items": {
-              "maxLength": 20,
-              "pattern": "^[a-z][a-z0-9_]*$",
-              "type": "string"
-            },
-            "maxItems": 5,
-            "title": "Cures",
-            "type": "array"
-          },
           "defense": {
             "anyOf": [
               {
@@ -4414,6 +4597,37 @@
               }
             ],
             "title": "Defense"
+          },
+          "effects": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "cure": "#/components/schemas/CureEffect",
+                  "damage": "#/components/schemas/DamageEffect",
+                  "heal": "#/components/schemas/HealEffect",
+                  "injure": "#/components/schemas/InjureEffect"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/HealEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/CureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/DamageEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/InjureEffect"
+                }
+              ]
+            },
+            "maxItems": 5,
+            "title": "Effects",
+            "type": "array"
           },
           "entry_id": {
             "format": "uuid",
@@ -4432,19 +4646,6 @@
               }
             ],
             "title": "Guard"
-          },
-          "heals": {
-            "anyOf": [
-              {
-                "maxLength": 20,
-                "pattern": "^[a-z][a-z0-9_]*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Heals"
           },
           "kind": {
             "$ref": "#/components/schemas/ItemKind",
@@ -4540,7 +4741,7 @@
       },
       "ItemRule-Output": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 회복의 양(heals)을 적을 수 있다.\nheals 는 룰북의 등급(magnitudes)의 이름이다(예: light). 그 등급이 룰북에 있는지는 게시할 때 본다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\ncures 는 쓰면 대상에게서 푸는 부상들이다(#277, 해독제). 룰북의 부상의 이름표이고 소모품에만 적는다.\n짧은 것과 오래 가는 것만 푼다. 결손은 풀지 못한다.\n룰북에 있는지와 결손이 아닌지는 게시할 때 본다(item_cure_invalid).\nthrow 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.\ntreat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.\n쓰면 치료가 성공하든 실패하든 하나 없어진다.",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.\ntreat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.\n쓰면 치료가 성공하든 실패하든 하나 없어진다.",
         "properties": {
           "ap": {
             "anyOf": [
@@ -4568,17 +4769,6 @@
             ],
             "title": "Attack"
           },
-          "cures": {
-            "default": [],
-            "items": {
-              "maxLength": 20,
-              "pattern": "^[a-z][a-z0-9_]*$",
-              "type": "string"
-            },
-            "maxItems": 5,
-            "title": "Cures",
-            "type": "array"
-          },
           "defense": {
             "anyOf": [
               {
@@ -4591,6 +4781,37 @@
               }
             ],
             "title": "Defense"
+          },
+          "effects": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "cure": "#/components/schemas/CureEffect",
+                  "damage": "#/components/schemas/DamageEffect",
+                  "heal": "#/components/schemas/HealEffect",
+                  "injure": "#/components/schemas/InjureEffect"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/HealEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/CureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/DamageEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/InjureEffect"
+                }
+              ]
+            },
+            "maxItems": 5,
+            "title": "Effects",
+            "type": "array"
           },
           "entry_id": {
             "title": "Entry Id",
@@ -4608,19 +4829,6 @@
               }
             ],
             "title": "Guard"
-          },
-          "heals": {
-            "anyOf": [
-              {
-                "maxLength": 20,
-                "pattern": "^[a-z][a-z0-9_]*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Heals"
           },
           "kind": {
             "$ref": "#/components/schemas/ItemKind",
@@ -4715,7 +4923,7 @@
         "type": "object"
       },
       "ItemRuleSnapshot": {
-        "description": "아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.\n\nheals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.\nprice 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.\nslots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\nslots 가 비어 있으면 착용하지 않는 물건이다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).\ncures 는 쓰면 푸는 부상들, throw 는 던지는 판정, treat_bonus 는 치료에 붙여 쓸 때의 보정이다(#277).\n셋 다 소모품에만 있다.",
+        "description": "아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.\n\neffects 는 쓰면 대상에게 일어나는 일들이다(#800, app/engine/item_effects.py). 소모품에만 있다.\nrarity 는 물건의 등급이다.\nprice 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.\nslots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\nslots 가 비어 있으면 착용하지 않는 물건이다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).\nthrow 는 던지는 판정, treat_bonus 는 치료에 붙여 쓸 때의 보정이다(#277). 둘 다 소모품에만 있다.",
         "properties": {
           "ap": {
             "anyOf": [
@@ -4739,14 +4947,6 @@
             ],
             "title": "Attack"
           },
-          "cures": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Cures",
-            "type": "array"
-          },
           "defense": {
             "anyOf": [
               {
@@ -4757,6 +4957,36 @@
               }
             ],
             "title": "Defense"
+          },
+          "effects": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "cure": "#/components/schemas/CureEffect",
+                  "damage": "#/components/schemas/DamageEffect",
+                  "heal": "#/components/schemas/HealEffect",
+                  "injure": "#/components/schemas/InjureEffect"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/HealEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/CureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/DamageEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/InjureEffect"
+                }
+              ]
+            },
+            "title": "Effects",
+            "type": "array"
           },
           "entry_id": {
             "format": "uuid",
@@ -4773,17 +5003,6 @@
               }
             ],
             "title": "Guard"
-          },
-          "heals": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Heals"
           },
           "kind": {
             "$ref": "#/components/schemas/ItemKind"
@@ -5052,8 +5271,19 @@
         "type": "object"
       },
       "ItemUseOut": {
-        "description": "물건을 쓴 결과. 엔진이 정했다(app/rounds/item_actions.py). 판정이 없다.",
+        "description": "물건을 쓴 결과. 엔진이 정했다(app/rounds/item_actions.py, item_targets.py).\n\n자기와 동료에게는 굴리지 않는다. 인물과 몬스터에게 썼으면(#800) 맞히는 판정의 능력과 난이도가 있고,\n판정의 결과(CheckOutcome)에 이 문서가 붙는다.",
         "properties": {
+          "ability": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ability"
+          },
           "cured": {
             "default": [],
             "items": {
@@ -5062,10 +5292,29 @@
             "title": "Cured",
             "type": "array"
           },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          },
           "entry_id": {
             "format": "uuid",
             "title": "Entry Id",
             "type": "string"
+          },
+          "injured": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InjuredOut"
+            },
+            "title": "Injured",
+            "type": "array"
           },
           "name": {
             "title": "Name",
@@ -5092,9 +5341,13 @@
                 "$ref": "#/components/schemas/ItemPersonOut"
               },
               {
+                "$ref": "#/components/schemas/ThrownAtOut"
+              },
+              {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Target"
           },
           "used": {
             "title": "Used",
@@ -5127,6 +5380,16 @@
           },
           "item_use": {
             "$ref": "#/components/schemas/ItemUseOut"
+          },
+          "target_gone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TargetGoneOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -11811,6 +12074,16 @@
           "injury_triggers": {
             "$ref": "#/components/schemas/InjuryTriggers"
           },
+          "item_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "magnitudes": {
             "items": {
               "$ref": "#/components/schemas/Magnitude"
@@ -11937,7 +12210,8 @@
           "robbed_wake",
           "narration",
           "equipment_slots",
-          "armor"
+          "armor",
+          "item_check"
         ],
         "title": "Ruleset",
         "type": "object"
@@ -13568,7 +13842,7 @@
             "type": "array"
           },
           "format": {
-            "default": 61,
+            "default": 62,
             "title": "Format",
             "type": "integer"
           },
@@ -15490,7 +15764,7 @@
       },
       "UseAction": {
         "additionalProperties": false,
-        "description": "물건을 쓰는 행동. 가진 소모품 하나를 쓴다(app/rounds/item_actions.py).\n\nitem 은 판의 로어북 물건 항목의 id 다. 소모품이어야 한다. 엔진은 이 값을 읽지 않는다. 어떤 물건인지는 판이 안다.\n회복하는 소모품이면 대상(target)이 회복한다. 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다).\n회복하지 않는 소모품(연막탄 같은 것)은 대상이 없다. 쓰고 없어진다. 무엇이 일어나는지는 서술이 맡는다.",
+        "description": "물건을 쓰는 행동. 가진 소모품 하나를 쓴다(app/rounds/item_actions.py).\n\nitem 은 판의 로어북 물건 항목의 id 다. 소모품이어야 한다. 엔진은 이 값을 읽지 않는다. 어떤 물건인지는 판이 안다.\n효과가 있는 소모품(#800)이면 대상에게 그 효과들이 든다. 대상은 앉은 사람(target, 비우면 자기 자신.\napp/rounds/acceptance.py 가 채운다), 이번 장면의 인물(npc), 같은 장소의 몬스터(monster) 중 하나다.\n인물과 몬스터에게는 맞히는 판정을 거친다. lethal 은 피해가 있는 물건을 인물이나 몬스터에게 쓸 때 치기와 같다.\n효과가 없는 소모품(연막탄 같은 것)은 대상이 없다. 쓰고 없어진다. 무엇이 일어나는지는 서술이 맡는다.",
         "properties": {
           "item": {
             "format": "uuid",
@@ -15501,6 +15775,35 @@
             "const": "use",
             "title": "Kind",
             "type": "string"
+          },
+          "lethal": {
+            "default": false,
+            "title": "Lethal",
+            "type": "boolean"
+          },
+          "monster": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monster"
+          },
+          "npc": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Npc"
           },
           "target": {
             "anyOf": [

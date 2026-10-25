@@ -47,7 +47,10 @@ async def lore(client: AsyncClient, me: dict[str, str]) -> dict:
 
 
 async def test_a_rarity_is_saved_and_published(client: AsyncClient, me: dict[str, str], lore: dict):
-    rules = [{'entry_id': lore['rope']['id'], 'rarity': 'epic'}, rule(lore['potion'], heals='light')]
+    rules = [
+        {'entry_id': lore['rope']['id'], 'rarity': 'epic'},
+        rule(lore['potion'], effects=[{'kind': 'heal', 'magnitude': 'light'}]),
+    ]
     scenario = await scenario_with(client, me, lore, items=rules)
 
     snapshot = await published(client, me, scenario)
@@ -57,7 +60,7 @@ async def test_a_rarity_is_saved_and_published(client: AsyncClient, me: dict[str
         {
             'entry_id': lore['rope']['id'],
             'kind': 'gear',
-            'heals': None,
+            'effects': [],
             'rarity': 'epic',
             'price': None,
             'slots': [],
@@ -68,14 +71,13 @@ async def test_a_rarity_is_saved_and_published(client: AsyncClient, me: dict[str
             'ap': None,
             'ward': None,
             'lock': None,
-            'cures': [],
             'throw': None,
             'treat_bonus': None,
         },
         {
             'entry_id': lore['potion']['id'],
             'kind': 'consumable',
-            'heals': 'light',
+            'effects': [{'kind': 'heal', 'magnitude': 'light'}],
             'rarity': 'normal',
             'price': None,
             'slots': [],
@@ -86,7 +88,6 @@ async def test_a_rarity_is_saved_and_published(client: AsyncClient, me: dict[str
             'ap': None,
             'ward': None,
             'lock': None,
-            'cures': [],
             'throw': None,
             'treat_bonus': None,
         },
@@ -119,7 +120,7 @@ def test_a_thing_without_a_rule_is_normal():
 
 
 def test_an_old_snapshot_reads_every_thing_as_normal():
-    rule_line = {'entry_id': str(uuid.uuid4()), 'kind': 'gear', 'heals': None}
+    rule_line = {'entry_id': str(uuid.uuid4()), 'kind': 'gear', 'effects': []}
     document = {'format': 34, 'items': [rule_line]}
 
     upgraded = upgrade_from_34(document)

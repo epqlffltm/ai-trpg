@@ -48,6 +48,7 @@ from app.assets.models import (
 from app.assets.scenarios.upgrades import UPGRADES
 from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
+from app.engine.item_effects import Effect
 from app.engine.ruleset import InjuryNature, Ruleset
 from app.engine.sheet import Sheet
 
@@ -129,7 +130,9 @@ from app.engine.sheet import Sheet
 #  60: 소모품을 치료에 붙여 쓸 수 있다(#277). items[].treat_bonus: 치료 판정의 보정에 더하는 값
 #  61: 몬스터가 부상을 입는다(#799). rulebook.rules.injuries[].natures: 부상의 성질,
 #      monsters[].immune, vulnerable: 타입의 면역에 더하고 빼는 성질
-SNAPSHOT_FORMAT = 61
+#  62: 소모품의 효과 목록(#800). items[].effects: 회복, 풀기, 피해, 부상. heals, cures 는 효과가 됐다.
+#      rulebook.rules.item_check: 물건을 인물이나 몬스터에게 쓸 때 맞히는 판정(능력치, 난이도)
+SNAPSHOT_FORMAT = 62
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다
@@ -249,18 +252,19 @@ class ItemRuleSnapshot(BaseModel):
     """
     아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.
 
-    heals 는 판 안의 룰북의 등급(magnitudes)의 이름이다. 소모품에만 있다. rarity 는 물건의 등급이다.
+    effects 는 쓰면 대상에게 일어나는 일들이다(#800, app/engine/item_effects.py). 소모품에만 있다.
+    rarity 는 물건의 등급이다.
     price 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.
     slots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
     slots 가 비어 있으면 착용하지 않는 물건이다.
     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).
-    cures 는 쓰면 푸는 부상들, throw 는 던지는 판정, treat_bonus 는 치료에 붙여 쓸 때의 보정이다(#277).
-    셋 다 소모품에만 있다.
+    throw 는 던지는 판정, treat_bonus 는 치료에 붙여 쓸 때의 보정이다(#277). 둘 다 소모품에만 있다.
     """
 
     entry_id: uuid.UUID
     kind: ItemKind
-    heals: str | None = None
+    # 쓰면 일어나는 일들. 형식 62 보다 옛 판의 heals 는 회복, cures 는 풀기가 된다
+    effects: list[Effect] = []
     rarity: ItemRarity = ItemRarity.NORMAL
     price: int | None = None
     slots: list[str] = []
@@ -274,8 +278,6 @@ class ItemRuleSnapshot(BaseModel):
     ward: int | None = None
     # 문에 다는 새 자물쇠. 형식 56 보다 옛 판의 물건에는 없다
     lock: ItemLockSnapshot | None = None
-    # 쓰면 대상에게서 푸는 부상들(룰북의 부상의 이름표). 형식 58 보다 옛 판의 물건에는 없다
-    cures: list[str] = []
     # 던지는 판정. 형식 59 보다 옛 판의 물건에는 없다
     throw: ItemThrowSnapshot | None = None
     # 치료에 붙여 쓸 때 치료 판정의 보정에 더하는 값. 형식 60 보다 옛 판의 물건에는 없다

@@ -9,7 +9,8 @@ import { chosenDevice, doorDevices, doorsHere } from './doorOptions';
 import {
   aidItems,
   heldCount,
-  itemHeals,
+  itemDamages,
+  itemTakesTarget,
   placeItems,
   splitRef,
   stockCount,
@@ -274,7 +275,7 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
     case 'name':
       return { kind: 'name', name: draft.guess.trim(), ...(draft.npc ? { npc: draft.npc } : {}) };
     case 'use':
-      return { kind: 'use', item: draft.item, ...(member && itemHeals(ctx.table, draft.item) ? { target: member } : {}) };
+      return toUse(draft, ctx, member, npc, monster);
     case 'give':
       return { kind: 'give', item: draft.item, count: draft.count, target: member ?? '' };
     // 던지기(#277). 능력과 난이도와 피해는 물건에 적혀 있어 보내지 않는다
@@ -326,6 +327,17 @@ function toLockAction(kind: 'lock' | 'unlock', draft: ActionDraft, ctx: ActionCo
   const door = doorsHere(ctx.table.map, here).find((one) => one.place === draft.place);
   const device = chosenDevice(door ? doorDevices(kind, door.route, here) : [], draft.device);
   return { kind, place: draft.place, ...(device ? { device } : {}) };
+}
+
+/** 물건 쓰기(#800). 효과가 있는 물건만 대상을 보낸다. 죽이려 한다는 피해가 있는 물건을 인물이나 몬스터에게 쓸 때만이다 */
+function toUse(draft: ActionDraft, ctx: ActionContext, member: string | null, npc: string | null, monster: string | null): DeclaredAction {
+  const base = { kind: 'use' as const, item: draft.item, lethal: false };
+  if (!itemTakesTarget(ctx.table, draft.item)) return base;
+  if (npc || monster) {
+    const lethal = draft.lethal && itemDamages(ctx.table, draft.item);
+    return { ...base, lethal, ...(npc ? { npc } : {}), ...(monster ? { monster } : {}) };
+  }
+  return { ...base, ...(member ? { target: member } : {}) };
 }
 
 /** 판정. 목적에 맞는 칸만 넣는다. 타격은 인물이나 몬스터, 회복은 사람이나 인물(비우면 자기 자신) */

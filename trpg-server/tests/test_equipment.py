@@ -116,7 +116,7 @@ def item_rules(lore: dict) -> list[dict]:
         {'entry_id': lore['greatsword']['id'], 'slots': HANDS, 'slot_count': 2},
         {'entry_id': lore['dagger']['id'], 'slots': HANDS},
         {'entry_id': lore['mail']['id'], 'slots': ['body']},
-        {'entry_id': lore['potion']['id'], 'kind': 'consumable', 'heals': 'light'},
+        {'entry_id': lore['potion']['id'], 'kind': 'consumable', 'effects': [{'kind': 'heal', 'magnitude': 'light'}]},
     ]
 
 

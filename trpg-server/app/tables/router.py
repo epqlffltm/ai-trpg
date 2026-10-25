@@ -255,7 +255,7 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
             entry_id=item.entry_id,
             name=item.name,
             kind=item.kind,
-            heals=item.heals,
+            effects=list(item.effects),
             rarity=item.rarity,
             price=item.price,
             slots=list(item.slots),
@@ -266,7 +266,6 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
             ap=item.ap,
             ward=item.ward,
             lock=item.lock,
-            cures=list(item.cures),
             throw=to_throw(item.throw),
             treat_bonus=item.treat_bonus,
         )

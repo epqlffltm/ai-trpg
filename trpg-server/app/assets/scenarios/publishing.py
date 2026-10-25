@@ -78,6 +78,7 @@ from app.engine.action import DoorDevice
 from app.engine.check import find_ability, find_difficulty
 from app.engine.health import find_magnitude
 from app.engine.injury import find_injury
+from app.engine.item_effects import EffectKind
 from app.engine.ruleset import Healing, Ruleset
 from app.engine.sheet import Sheet, fits
 
@@ -122,12 +123,14 @@ class Problem(enum.StrEnum):
     ITEM_ENTRY_MISSING = 'item_entry_missing'
     # 물건이 아닌 항목(인물, 장소 …)을 가리키는 아이템 규칙이나 소지품이 있다
     ITEM_NOT_ITEM = 'item_not_item'
-    # 룰북의 규칙에 없는 등급을 회복의 양(heals)으로 적은 소모품이 있다
+    # 룰북의 규칙에 없는 등급을 회복이나 피해의 효과(effects 의 heal, damage, #800)로 적은 소모품이 있다
     ITEM_MAGNITUDE_MISSING = 'item_magnitude_missing'
     # 자물쇠 물건의 따는 판정의 능력치나 난이도가 룰북의 규칙에 없다(#281)
     ITEM_LOCK_INVALID = 'item_lock_invalid'
-    # 소모품이 푸는 부상이 룰북의 규칙에 없거나, 풀 수 없는 결손이다(#277)
+    # 소모품이 푸는 부상(effects 의 cure)이 룰북의 규칙에 없거나, 풀 수 없는 결손이다(#277)
     ITEM_CURE_INVALID = 'item_cure_invalid'
+    # 소모품이 입히는 부상(effects 의 injure)이 룰북의 규칙에 없다(#800)
+    ITEM_INJURE_INVALID = 'item_injure_invalid'
     # 던지는 소모품의 판정의 능력치나 난이도나 피해의 등급이 룰북의 규칙에 없다(#277)
     ITEM_THROW_INVALID = 'item_throw_invalid'
     # 붙인 로어북에 없는 항목을 가리키는 퀘스트 규칙이 있다
@@ -543,8 +546,8 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
     아이템 규칙과 소지품에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
 
     가리키는 것은 붙인 로어북의 물건 항목이어야 한다. NPC 시트와 같은 까닭으로 굳히기 전에 여기서 막는다.
-    소모품의 회복의 양은 룰북의 등급이어야 한다. 자물쇠 물건의 따는 판정은 룰북의 능력치와 난이도여야 한다(#281).
-    소모품이 푸는 부상은 룰북의 부상이고 결손이 아니어야 한다(#277).
+    소모품의 효과(#800)의 회복과 피해의 등급은 룰북의 등급, 푸는 부상은 룰북의 부상이고 결손이 아니어야 하고(#277),
+    입히는 부상은 룰북의 부상이어야 한다. 자물쇠 물건의 따는 판정은 룰북의 능력치와 난이도여야 한다(#281).
     던지는 소모품의 판정은 룰북의 능력치와 난이도와 피해의 등급이어야 한다(#277).
     룰북이 없으면 볼 수 없다(그때는 RULEBOOK_MISSING 이다).
     """
@@ -556,16 +559,33 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
     if any(entry_id in entries and entries[entry_id].kind != LoreKind.ITEM for entry_id in pointed):
         problems.append(Problem.ITEM_NOT_ITEM)
     rules = read_item_rules(scenario)
-    heals = [rule.heals for rule in rules if rule.heals is not None]
-    if ruleset and any(find_magnitude(ruleset, key) is None for key in heals):
+    effects = [effect for rule in rules for effect in rule.effects]
+    if ruleset and any(find_magnitude(ruleset, key) is None for key in effect_magnitudes(effects)):
         problems.append(Problem.ITEM_MAGNITUDE_MISSING)
     if ruleset and any(find_invalid(pick, ruleset) for pick in item_lock_picks(rules)):
         problems.append(Problem.ITEM_LOCK_INVALID)
-    if ruleset and any(not curable(ruleset, key) for rule in rules for key in rule.cures):
+    if ruleset and any(not curable(ruleset, key) for key in effect_cures(effects)):
         problems.append(Problem.ITEM_CURE_INVALID)
+    if ruleset and any(find_injury(ruleset, key) is None for key in effect_injuries(effects)):
+        problems.append(Problem.ITEM_INJURE_INVALID)
     if ruleset and any(cross_invalid(rule.throw, ruleset) for rule in rules):
         problems.append(Problem.ITEM_THROW_INVALID)
     return problems
+
+
+def effect_magnitudes(effects: list) -> list[str]:
+    """효과들이 적은 회복과 피해의 등급(#800)."""
+    return [effect.magnitude for effect in effects if effect.kind in (EffectKind.HEAL, EffectKind.DAMAGE)]
+
+
+def effect_cures(effects: list) -> list[str]:
+    """효과들이 푸는 부상(#800)."""
+    return [key for effect in effects if effect.kind == EffectKind.CURE for key in effect.injuries]
+
+
+def effect_injuries(effects: list) -> list[str]:
+    """효과들이 입히는 부상(#800)."""
+    return [effect.injury for effect in effects if effect.kind == EffectKind.INJURE]
 
 
 def curable(ruleset: Ruleset, key: str) -> bool:

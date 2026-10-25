@@ -63,6 +63,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'target',
         'remaining',
         'cured',
+        'injured',
     ),
     # 던진 것도 공개다(#277). 판정의 숫자는 뒤의 check_rolled 에, 맞은 쪽의 변화는 그 뒤의 이벤트에 있다
     EventType.ITEM_THROWN: ('round', 'character_name', 'entry_id', 'name', 'thrown', 'reason', 'target', 'remaining'),

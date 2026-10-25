@@ -9,7 +9,7 @@ import {
   clockLabel,
   conditionOf,
   deathSaveProgress,
-  healsLabel,
+  effectsLabel,
   hpRatio,
   injuryTiming,
   meFirst,
@@ -68,12 +68,20 @@ describe('statusView', () => {
     expect(minutesLabel(90)).toBe('1시간 30분');
   });
 
-  it('소모품의 회복량은 판의 물건과 규칙의 등급에서 찾는다', () => {
+  it('소모품의 효과는 판의 물건과 규칙의 등급·부상에서 찾는다', () => {
+    const splint = [{ kind: 'heal', magnitude: 'light' }, { kind: 'cure', injuries: ['broken_arm'] }];
+    const poison = [{ kind: 'damage', magnitude: 'light' }, { kind: 'injure', injury: 'broken_arm' }];
     const table = tableDetail('t', {
-      items: [{ entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', heals: 'light' }],
+      items: [
+        { entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', effects: [{ kind: 'heal', magnitude: 'light' }] },
+        { entry_id: 'i2', name: '부목', kind: 'consumable', rarity: 'normal', effects: splint },
+        { entry_id: 'i3', name: '독', kind: 'consumable', rarity: 'normal', effects: poison },
+      ],
     }) as unknown as TableDetail;
-    expect(healsLabel(table, 'i1')).toBe('회복 가벼움(1d4)');
-    expect(healsLabel(table, 'none')).toBeNull();
+    expect(effectsLabel(table, 'i1')).toBe('회복 가벼움(1d4)');
+    expect(effectsLabel(table, 'i2')).toBe('회복 가벼움(1d4) · 풀기 부러진 팔');
+    expect(effectsLabel(table, 'i3')).toBe('피해 가벼움(1d4) · 부상 부러진 팔');
+    expect(effectsLabel(table, 'none')).toBeNull();
   });
 
   it('갈 수 있는 곳은 나가는 길과 양쪽 길이다. 한쪽 길을 거꾸로 가지 않는다', () => {

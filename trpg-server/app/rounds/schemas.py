@@ -378,6 +378,8 @@ class CheckOutcome(BaseModel):
     treatment: TreatmentOut | None = None
     # 물건을 던진 행동이었으면 그 물건(#277). 판정은 물건에 적힌 것이다. 아니면 None 이다
     item_throw: ItemThrowOut | None = None
+    # 물건을 인물이나 몬스터에게 쓴 행동이었으면 그 물건(#800). 판정은 룰북의 것이다. 아니면 None 이다
+    item_use: 'ItemUseOut | None' = None
 
 
 class NamingOut(BaseModel):
@@ -416,21 +418,46 @@ class CuredOut(BaseModel):
     name: str
 
 
+class InjuredOut(BaseModel):
+    """
+    소모품이 입힌 부상 하나(#800). 룰북의 부상의 이름표다.
+
+    이미 입고 있었으면 injury 가 None 이다. 몬스터가 그 성질에 면역이면 injury 는 None, immune 이 그 부상이다.
+    """
+
+    injury: str | None
+    immune: str | None = None
+    # 짧은 부상이면 이 라운드가 닫힐 때 풀린다. 오래 가는 것이면 나을 시각이 있다
+    ends_after_round: int | None = None
+    heals_at: ClockTimeOut | None = None
+
+
 class ItemUseOut(BaseModel):
-    """물건을 쓴 결과. 엔진이 정했다(app/rounds/item_actions.py). 판정이 없다."""
+    """
+    물건을 쓴 결과. 엔진이 정했다(app/rounds/item_actions.py, item_targets.py).
+
+    자기와 동료에게는 굴리지 않는다. 인물과 몬스터에게 썼으면(#800) 맞히는 판정의 능력과 난이도가 있고,
+    판정의 결과(CheckOutcome)에 이 문서가 붙는다.
+    """
 
     # 쓴 물건(판의 로어북 물건 항목)과 그 이름
     entry_id: uuid.UUID
     name: str
-    # 썼는가. 못 했으면 reason 이 있다: not_held(가지고 있지 않았다), target_gone(회복받을 사람이 떠났거나 죽었다)
+    # 썼는가. 못 했으면 reason 이 있다: not_held(가지고 있지 않았다), target_gone(받을 사람이 떠났거나 죽었다,
+    # 겨눈 몬스터가 죽었거나 다른 곳에 있다)
     used: bool
     reason: str | None
-    # 회복받거나 부상이 풀린 사람. 누구에게도 들지 않는 물건이면 None 이다
-    target: ItemPersonOut | None
+    # 받은 쪽. 앉은 사람이면 user_id, 인물이면 entry_id, 몬스터면 monster_id 가 있다. 누구에게도 들지 않으면 None
+    target: ItemPersonOut | ThrownAtOut | None
     # 쓴 뒤에 남은 개수
     remaining: int
     # 대상에게서 푼 부상들(#277). 부상을 푸는 물건이 아니거나, 대상이 그 부상을 입고 있지 않았으면 빈 목록이다
     cured: list[CuredOut] = []
+    # 대상에게 입힌 부상들(#800). 적힌 차례다. 빗나갔거나 부상을 입히는 물건이 아니면 빈 목록이다
+    injured: list[InjuredOut] = []
+    # 인물이나 몬스터에게 썼으면 맞히는 판정의 능력과 난이도(rules.item_check 의 key)다. 아니면 None 이다
+    ability: str | None = None
+    difficulty: str | None = None
 
 
 class ItemUseOutcome(BaseModel):
@@ -438,6 +465,8 @@ class ItemUseOutcome(BaseModel):
 
     item_use: ItemUseOut
     effect: EffectOut | None = None
+    # 겨눈 몬스터가 없어 쓰지 못했으면 그 까닭(#800)
+    target_gone: 'TargetGoneOut | None' = None
 
 
 class ItemGiveOut(BaseModel):

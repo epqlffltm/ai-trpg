@@ -551,7 +551,7 @@ CATALOG = {
     'body',
     [
         {'attack': 2},
-        {'defense': 1, 'kind': 'consumable', 'heals': 'light'},
+        {'defense': 1, 'kind': 'consumable', 'effects': [{'kind': 'heal', 'magnitude': 'light'}]},
         {'slots': ['body'], 'defense': 11},
         {'slots': ['body'], 'guard': 0},
     ],
