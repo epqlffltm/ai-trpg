@@ -13,7 +13,9 @@ def clock(day: int, hour: int, minute: int = 0) -> int:
     return (day - 1) * MINUTES_PER_DAY + hour * MINUTES_PER_HOUR + minute
 
 
-def member(cast_id: str, home: str | None = None, schedule: list | None = None, start: int = 0) -> dict:
+def member(
+    cast_id: str, home: str | None = None, schedule: list | None = None, start: int = 0, confession: dict | None = None
+) -> dict:
     """인물 하나. 단계는 낯섦(0), 친함(30), 연인(70)이다."""
     return {
         'id': cast_id,
@@ -30,7 +32,7 @@ def member(cast_id: str, home: str | None = None, schedule: list | None = None, 
         'map': 'shown',
         'map_stage': None,
         'panel': ['intro'],
-        'confession': None,
+        'confession': confession,
     }
 
 
@@ -67,6 +69,30 @@ def event(
         'scene': {'text': f'{event_id} 의 장면.', 'cast': cast or [], 'image_id': None, 'collectible': False},
         'on_open': on_open or [],
         'choices': choices or [],
+    }
+
+
+def confession(stage: str = '친함', *items: dict, on_fail: str = 'continue', drop: int = 10, days: int = 1) -> dict:
+    """고백 하나. 조건은 items 다."""
+    return {
+        'stage': stage,
+        'when': {'match': 'all', 'items': list(items)},
+        'on_fail': on_fail,
+        'fail_drop': drop,
+        'cooldown_days': days,
+    }
+
+
+def ending(ending_id: str, kind: str, target: str | None = None, *items: dict, unlock: bool = True) -> dict:
+    """엔딩 하나. 조건은 items 다."""
+    return {
+        'id': ending_id,
+        'name': ending_id,
+        'trigger': {'kind': kind, 'target': target},
+        'when': {'match': 'all', 'items': list(items)},
+        'scene': {'text': f'{ending_id} 의 장면.', 'cast': [], 'image_id': None, 'collectible': False},
+        'unlock': unlock,
+        'hint': '',
     }
 
 

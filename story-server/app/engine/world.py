@@ -113,13 +113,31 @@ class Affection(Part):
     stages: tuple[Stage, ...] = ()
 
 
+class ConfessionFailure(enum.StrEnum):
+    """고백에 실패하면 어떻게 되는가. 계속(호감도가 내려가고 정한 날 동안 다시 못 한다) 또는 실패 엔딩으로 끝."""
+
+    CONTINUE = 'continue'
+    END = 'end'
+
+
+class Confession(Part):
+    """인물에게 하는 고백. 호감도가 stage 이상이고 when 이 맞으면 성공이다. 실패하면 on_fail 대로 한다."""
+
+    stage: str
+    when: Conditions = Conditions()
+    on_fail: ConfessionFailure = ConfessionFailure.CONTINUE
+    fail_drop: int = 10
+    cooldown_days: int = 1
+
+
 class CastMember(Part):
-    """인물 하나. home 이 비면 일정이나 이벤트로만 나온다."""
+    """인물 하나. home 이 비면 일정이나 이벤트로만 나온다. confession 이 비면 고백할 수 없는 인물이다."""
 
     id: str
     home: str | None = None
     schedule: tuple[ScheduleLine, ...] = ()
     affection: Affection = Affection()
+    confession: Confession | None = None
 
 
 class Scene(Part):
@@ -157,6 +175,41 @@ class Event(Part):
     choices: tuple[Choice, ...] = ()
 
 
+class EndingTrigger(enum.StrEnum):
+    """엔딩의 판정이 무엇으로 시작되는가. 고백 성공·실패(target: 인물), 기한(target 없음), 이벤트(target: 이벤트)."""
+
+    CONFESS_SUCCESS = 'confess_success'
+    CONFESS_FAIL = 'confess_fail'
+    DEADLINE = 'deadline'
+    EVENT = 'event'
+
+
+class Trigger(Part):
+    """엔딩의 시작."""
+
+    kind: EndingTrigger
+    target: str | None = None
+
+
+class Ending(Part):
+    """엔딩 하나. 판의 차례가 맞춰 보는 차례다. unlock 이면 계정의 엔딩 기록에 남는다."""
+
+    id: str
+    name: str = ''
+    trigger: Trigger
+    when: Conditions = Conditions()
+    scene: Scene = Scene()
+    unlock: bool = True
+    hint: str = ''
+
+
+class AfterEnding(enum.StrEnum):
+    """엔딩 뒤에 세션이 어떻게 되는가. 끝(읽기만) 또는 후일담."""
+
+    END = 'end'
+    EPILOGUE = 'epilogue'
+
+
 class StartItem(Part):
     """사용자가 처음에 가진 물건과 그 수."""
 
@@ -176,6 +229,9 @@ class World(Part):
     start_items: tuple[StartItem, ...] = ()
     cast: tuple[CastMember, ...] = ()
     events: tuple[Event, ...] = ()
+    # 판의 형식 2 까지는 엔딩이 없다
+    endings: tuple[Ending, ...] = ()
+    after_ending: AfterEnding = AfterEnding.END
 
     def member(self, cast_id: str) -> CastMember | None:
         """그 id 의 인물. 없으면 None."""
