@@ -7,7 +7,7 @@
 | [trpg.openapi.json](trpg.openapi.json) | trpg-server (FastAPI) | 앱이 내는 것을 그대로 |
 | [notification.openapi.json](notification.openapi.json) | notification-server (FastAPI) | 앱이 내는 것을 그대로 |
 | [auth.openapi.json](auth.openapi.json) | auth-server (Django REST framework) | 뷰에 적은 모양에서(drf-spectacular). 테스트가 받은 응답을 견준다 |
-| [board.openapi.json](board.openapi.json) | board-server (NestJS) | 빌드한 앱이 내는 것을 그대로(`npm run openapi`). 응답의 칸은 `*.response.ts` 의 클래스에서 읽는다([게시판 서버의 API 목록](../../board-server/README.md#api-목록openapi)) |
+| [board.openapi.json](board.openapi.json) | board-server (FastAPI) | 앱이 내는 것을 그대로 |
 | [asset.openapi.json](asset.openapi.json) | asset-server (FastAPI) | 앱이 내는 것을 그대로 |
 | [chat.openapi.json](chat.openapi.json) | chat-server (FastAPI) | 앱이 내는 것을 그대로 |
 | [story.openapi.json](story.openapi.json) | story-server (FastAPI) | 앱이 내는 것을 그대로 |
@@ -25,7 +25,6 @@
 
   서버를 띄우지 않고 DB 에도 닿지 않는다. 서버마다 그 서버의 uv 환경에서 앱을 불러온다(처음에는 의존성을 받느라 조금 걸린다).
   결제 서버는 손으로 쓴 목록을 Go 로 읽어 검사한다(`go run ./cmd/openapi`). Go 가 깔려 있어야 한다.
-  게시판 서버는 빌드한 뒤 뽑는다(`npm run openapi`). `board-server` 에서 `npm ci` 를 먼저 해 두어야 한다.
   인증 서버는 `manage.py spectacular` 로 만든다. 서명 키와 DB 없이 뜬다. 모양을 적지 않은 뷰가 있으면 실패한다.
 - **인증 서버는 뷰의 모양을 함께 고친다.** 뷰의 `@extend_schema`(모양은 `auth-server/accounts/api_schema.py`)가 목록이 된다.
   응답을 바꾸고 모양을 고치지 않으면 인증 서버의 테스트가 실패한다([인증 서버의 API 목록](../../auth-server/README.md#api-목록)).
@@ -63,7 +62,7 @@
 | --- | --- | --- |
 | trpg, chat, asset, notification, story (FastAPI) | 422 | `shared/server-core` 의 `use_input_errors` |
 | auth (Django REST framework) | 400 | `auth-server/accounts/exception_handlers.py` |
-| board (NestJS) | 400 | `board-server/src/errors/validation.ts` |
+| board (FastAPI) | 400 | `board-server/app/core/errors.py` |
 | billing (Go) | 400 | 칸을 가르지 않는다. `errors` 없이 `detail`(서비스끼리는 `code`)이 고칠 것을 말한다 |
 
 화면은 상태 코드가 아니라 **`errors` 가 있는지로** 입력 오류를 알아본다(`web/apps/web/src/api/errors.ts` 의 `isInputError`).

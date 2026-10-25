@@ -1,7 +1,7 @@
 # board-server/contract/tests/test_posts.py
 
 """
-글 쓰기, 읽기, 목록, 고치기, 지우기(board-server/test/posts.e2e-spec.ts).
+글 쓰기, 읽기, 목록, 고치기, 지우기.
 
 notice 는 운영자만 쓰고, free 는 로그인한 누구나 쓴다. 운영자는 토큰의 역할(roles)로 정한다.
 토큰에 닉네임을 싣지 않는다. 그래서 글쓴이의 닉네임은 null 이다.

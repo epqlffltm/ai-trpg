@@ -1,7 +1,7 @@
 # board-server/contract/tests/test_authors.py
 
 """
-글쓴이의 닉네임(board-server/test/authors.e2e-spec.ts).
+글쓴이의 닉네임.
 
 닉네임은 access 토큰에 실려 온다(인증 서버의 nickname 클레임). 로그인한 요청마다 적어 두고(authors 표),
 글과 댓글의 응답에 author_nickname 으로 싣는다. 사람은 시험마다 새로 만든다.

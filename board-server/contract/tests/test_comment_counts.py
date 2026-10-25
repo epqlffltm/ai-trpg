@@ -1,7 +1,7 @@
 # board-server/contract/tests/test_comment_counts.py
 
 """
-글에 실리는 댓글 수(comment_count)(board-server/test/comment-counts.e2e-spec.ts).
+글에 실리는 댓글 수(comment_count).
 
 세는 것은 살아 있는 댓글과 답글이다. 지운 것은 세지 않는다.
 """

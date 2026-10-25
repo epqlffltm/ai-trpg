@@ -17,7 +17,7 @@
 #     .env 를 만드는 도구(tools/fill_env.py, tools/staging_env.py)도 모두다. CI(stack)가 그 도구들의 테스트를 돌리고
 #     staging_env.py 로 만든 설정을 읽어 본다
 #   - 관문 자신(.github/workflows/ci.yml, .github/scripts/)이 바뀌면 모두. 관문이 맞는지 모두로 확인한다
-#   - 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 ruff.toml)이 바뀌면 인증, 게임, 알림, asset, chat, story 와 공용 코드
+#   - 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 ruff.toml)이 바뀌면 인증, 게임, 게시판, 알림, asset, chat, story 와 공용 코드
 #   - 공용 코드(shared/<패키지>/)가 바뀌면 공용 코드의 검사(shared)와, 그 패키지를 쓰는 서버들.
 #     쓰는 서버는 서버마다 pyproject.toml 의 경로 의존(path = "../shared/<패키지>")을 읽어 고른다. 따로 표를 두지 않는다.
 #     새 서버가 공용 코드를 쓰기 시작하면 저절로 잡힌다(docs/architecture/shared-code.md 의 "버전과 CI")
@@ -75,7 +75,7 @@ openapi_tool() {
   [[ "$1" == tools/export_openapi.py || "$1" == tools/test_export_openapi.py ]]
 }
 
-# 파이썬 서버들(인증, 게임, 알림, asset, chat, story)이 함께 쓰는 설정인가. 바뀌면 그 서버들의 린트와 모양 검사를 다시 돌려야 한다.
+# 파이썬 서버들(인증, 게임, 게시판, 알림, asset, chat, story)이 함께 쓰는 설정인가. 바뀌면 그 서버들의 린트와 모양 검사를 다시 돌려야 한다.
 python_shared() {
   [[ "$1" == "ruff.toml" ]]
 }
@@ -112,6 +112,7 @@ select_servers() {
     if python_shared "$path"; then
       picked[auth]=1
       picked[trpg]=1
+      picked[board]=1
       picked[notification]=1
       picked[asset]=1
       picked[chat]=1

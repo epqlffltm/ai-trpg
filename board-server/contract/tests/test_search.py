@@ -1,7 +1,7 @@
 # board-server/contract/tests/test_search.py
 
 """
-글 검색(GET /posts?q=)(board-server/test/search.e2e-spec.ts).
+글 검색(GET /posts?q=).
 
 notice 의 글은 운영자가, 나머지는 글쓴이가 쓴다. 한 사람이 10분에 쓰는 글은 다섯 개까지라
 그보다 많이 쓰는 시험은 여러 사람이 나눠 쓴다.

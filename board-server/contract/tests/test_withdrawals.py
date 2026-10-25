@@ -1,7 +1,7 @@
 # board-server/contract/tests/test_withdrawals.py
 
 """
-인증 서버가 탈퇴를 알리는 API(POST /service/users/{id}/withdrawal)(board-server/test/withdrawals.e2e-spec.ts).
+인증 서버가 탈퇴를 알리는 API(POST /service/users/{id}/withdrawal).
 
   - 정리: 그 사람의 글과 댓글(지운 것도)의 글쓴이를 비운다. 글과 댓글은 남는다. 신고한 사람을 비운다.
     닉네임과 그 사람에게 보낼 알림을 지운다. 다른 사람의 것은 그대로다

@@ -1,7 +1,7 @@
 # board-server/contract/tests/test_write_limits.py
 
 """
-글, 댓글, 신고의 횟수 제한(board-server/test/write-limits.e2e-spec.ts).
+글, 댓글, 신고의 횟수 제한.
 
 서버가 쓰는 한도를 그대로 본다: 글 10분에 5개, 댓글 1분에 10개, 신고 1시간에 20건. 사람마다 세고 운영자는 걸리지 않는다.
 시간이 흘러 창이 지나가는 것은 기다리지 않는다. 쓴 시각을 DB 에서 과거로 옮겨 놓고 본다(age_writes).

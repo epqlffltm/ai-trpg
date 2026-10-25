@@ -1,11 +1,9 @@
 # .github/workflows/board-server.yml
-# 게시판 서버의 CI. PR 과 main 푸시마다 린트, 모양, 빌드, 마이그레이션, 테스트를 검사한다.
-#
-# 서버마다 워크플로 파일을 따로 둔다. 서버별로 의존성과 검사 항목이 다르고,
-# 한 서버만 고친 PR 에서 다른 서버의 검사까지 돌릴 이유가 없다.
+# 게시판 서버의 CI. PR 과 main 푸시마다 린트, 모양, 의존성 취약점, 마이그레이션, 테스트, 계약 시험을 검사한다.
 #
 # PR 에서는 관문(.github/workflows/ci.yml)이 바뀐 파일을 보고 이 워크플로를 부른다.
 # 고르는 규칙은 .github/scripts/changed-servers.sh 에 있다. 검사할 것을 바꾸면 이 파일만 고친다.
+# 단계는 알림 서버의 것(notification-server.yml)과 같다. 다른 점은 계약 시험(contract/)을 더 돌린다는 것이다.
 
 name: board-server
 
@@ -17,6 +15,8 @@ on:
     branches: [main]
     paths:
       - "board-server/**"
+      # 이 서버가 쓰는 공용 코드(pyproject.toml 의 경로 의존)
+      - "shared/server-core/**"
       - "docker/postgres/init/**"
       - ".github/workflows/board-server.yml"
 
@@ -27,6 +27,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # 테스트와 계약 시험이 PC 에서 1분 안쪽이다. 멈춘 테스트를 하염없이 기다리지 않게 하려는 상한이다
     timeout-minutes: 10
 
     services:
@@ -53,7 +54,11 @@ jobs:
       GAME_DB_PASSWORD: ci-game-password
       BILLING_DB_PASSWORD: ci-billing-password
       BOARD_DB_PASSWORD: ci-board-password
+      # compose 와 같은 모양(postgresql://)이다. 서버가 비동기 드라이버의 주소로 바꿔 쓴다. 계약 시험도 이 주소로 DB 를 본다
       DATABASE_URL: postgresql://board:ci-board-password@127.0.0.1:5432/trpg
+      # 필수 설정이라 적는다. CI 에는 인증 서버가 없고, 테스트는 가짜 인증 서버를 쓴다.
+      # 이 주소로는 요청이 가지 않는다
+      AUTH_JWKS_URL: http://127.0.0.1:8000/api/v1/auth/jwks
 
     defaults:
       run:
@@ -64,7 +69,7 @@ jobs:
 
       # 로컬과 같은 초기화 스크립트로 계정과 스키마를 만든다.
       # 슈퍼유저로 테스트하면 로컬에서 권한 때문에 실패할 코드가 CI 를 통과한다.
-      # 다른 서버들의 스키마(auth, game, billing)도 만든다. 게시판 계정이 거기에 들어가지 못하는지 테스트가 확인한다
+      # 다른 서버의 계정과 스키마(auth, game, billing)도 만든다. 게시판 계정이 거기에 들어가지 못하는지 테스트가 확인한다
       - name: DB 계정과 스키마 만들기
         working-directory: .
         env:
@@ -75,64 +80,62 @@ jobs:
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/04-billing-role.sql
           psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U trpg -d trpg -f docker/postgres/init/05-board-role.sql
 
-      # Node.js 의 버전은 board-server/.nvmrc 에 적힌 것을 쓴다. 로컬과 CI 가 같은 파일을 본다.
-      # 내려받은 패키지를 잠금 파일을 열쇠로 삼아 보관해 두었다가 다음 실행에서 다시 쓴다
-      - name: Node.js 설치
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: board-server/.nvmrc
-          cache: npm
-          cache-dependency-path: board-server/package-lock.json
-
-      # package-lock.json 에 적힌 버전 그대로 설치한다. package.json 과 어긋나면 실패한다
-      - name: 의존성 설치
-        run: npm ci
-
-      # 쓰지 않는 이름, 기다리지 않은 Promise 같은 문제를 실행하지 않고 찾는다
-      - name: 린트
-        run: npm run lint
-
-      # 모양을 고치지 않고 검사만 한다. 어긋나면 실패한다
-      - name: 모양 검사
-        run: npm run format:check
-
-      # 운영에 들어가는 의존성(devDependencies 제외)에 높음 이상의 알려진 취약점이 있으면 실패한다
-      - name: 의존성 취약점 검사
-        run: npm audit --omit=dev --audit-level=high
-
-      # TypeScript 를 JavaScript 로 바꾼다. 타입이 맞지 않으면 여기서 실패한다
-      - name: 빌드
-        run: npm run build
-
-      # 빈 DB 에 마이그레이션을 처음부터 끝까지 적용할 수 있는지 본다
-      - name: 마이그레이션 적용
-        run: npm run migration:run
-
-      # 엔티티를 바꾸고 마이그레이션을 만들지 않았으면 실패한다
-      - name: 마이그레이션 누락 검사
-        run: npm run migration:check
-
-      # 테스트는 board_test 스키마에서 돈다. 그 스키마에도 테이블을 만든다
-      - name: 테스트용 스키마에 마이그레이션 적용
-        env:
-          DB_SCHEMA: board_test
-        run: npm run migration:run
-
-      # 함수와 클래스를 하나씩 보는 테스트. DB 를 쓰지 않는다
-      - name: 테스트
-        run: npm run test:cov
-
-      # 앱을 통째로 만들어 주소로 불러 보는 테스트. 실제 DB 에서 돈다
-      - name: 앱 테스트
-        run: npm run test:e2e:cov
-
-      # 빌드한 서버를 프로세스로 띄워 HTTP 로만 부르는 계약 시험(contract/, #785).
-      # 서버를 다시 써도 같은 시험이 그대로 돌아야 한다. 테스트용 스키마(board_test)에서 돈다
       - name: uv 설치
         uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
 
+      # uv.lock 과 pyproject.toml 이 어긋나면 실패한다
+      - name: 의존성 설치
+        run: uv sync --locked
+
+      # 쓰지 않는 import, 정의되지 않은 이름 같은 문제를 실행하지 않고 찾는다
+      - name: 린트
+        run: uv run ruff check .
+
+      # 모양을 고치지 않고 검사만 한다. 어긋나면 실패한다
+      - name: 모양 검사
+        run: uv run ruff format --check .
+
+      # 운영 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다.
+      # uv.lock 에 잠긴 그대로를 해시와 함께 넘긴다. 받아들이기로 한 것은 --ignore-vuln 에 까닭과 함께 적는다
+      # 저장소 안의 공용 코드(shared/server-core)는 해시가 없어 뺀다(--no-emit-local). 그 의존성은 여기에 그대로 들고, 공용 코드 자체는 shared.yml 이 본다
+      - name: 의존성 취약점 검사
+        run: |
+          uv export --frozen --no-dev --no-emit-project --no-emit-local --format requirements-txt -q > "$RUNNER_TEMP/requirements.txt"
+          uvx pip-audit==2.10.1 -r "$RUNNER_TEMP/requirements.txt" --require-hashes --disable-pip --progress-spinner off
+
+      # 마이그레이션의 끝(head)을 찍기만 한다. 끝이 여럿이어도 실패하지 않는다. 적용은 upgrade heads 로 모두 한다
+      - name: 마이그레이션 끝
+        run: uv run alembic heads
+
+      # 빈 DB 에 마이그레이션을 처음부터 모든 끝까지 적용할 수 있는지 본다
+      - name: 마이그레이션 적용
+        run: uv run alembic upgrade heads
+
+      # 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
+      - name: 마이그레이션 누락 검사
+        run: uv run alembic check
+
+      # 마이그레이션을 끝까지 되돌릴 수 있는지 보고 다시 적용한다. 되돌리기는 개발용 DB 를 고칠 때 쓴다
+      - name: 마이그레이션 되돌리기
+        run: |
+          uv run alembic downgrade base
+          uv run alembic upgrade heads
+
+      # 테스트와 계약 시험은 board_test 스키마에서 돈다. 그 스키마에도 테이블을 만든다
+      - name: 테스트용 스키마에 마이그레이션 적용
+        env:
+          DB_SCHEMA: board_test
+        run: uv run alembic upgrade heads
+
+      # 테스트를 돌리며 지나간 줄을 센다. 재는 대상은 pyproject.toml 의 [tool.coverage.run] 이다.
+      # 표는 아래 요약 단계에서 적는다. 여기서는 찍지 않는다(--cov-report=)
+      - name: 테스트
+        run: uv run pytest --cov --cov-report=
+
+      # 서버를 프로세스로 띄워 HTTP 로만 부르는 계약 시험(contract/, #785). NestJS 로 쓰던 때의 시나리오다.
+      # 서버는 coverage 로 띄워 지나간 줄을 따로 남긴다(.coverage.*). 다음 단계에서 테스트의 것과 합친다
       - name: 계약 시험의 린트와 모양 검사
         working-directory: board-server/contract
         run: |
@@ -142,41 +145,33 @@ jobs:
 
       - name: 계약 시험
         working-directory: board-server/contract
+        env:
+          BOARD_SERVER_COMMAND: uv run coverage run -m app
         run: uv run pytest
 
-      # 두 테스트가 지나간 줄의 비율을 작업 요약(Summary)에 적는다. 기준은 다음 단계에서 본다.
-      # 대상은 src 전체다(vitest.config.ts, vitest.config.e2e.ts 의 coverage)
+      # 테스트와 계약 시험이 지나간 줄을 합친다
+      - name: 지나간 줄 합치기
+        run: uv run coverage combine --append
+
+      # 지나간 줄의 비율을 작업 요약(Summary)에 적는다. 기준은 다음 단계에서 본다.
+      # 표에는 다 지나간 파일을 빼고, 덜 지나간 파일부터 적는다
       - name: 커버리지 요약
         run: |
-          line() {
-            node -e "const t = require('./coverage/$1/coverage-summary.json').total;
-              console.log('| $2 | ' + t.statements.pct + '% | ' + t.branches.pct + '% | ' + t.functions.pct + '% | ' + t.lines.pct + '% |')"
-          }
+          total="$(uv run coverage report --format=total)"
+          echo "게시판 서버 커버리지 ${total}%"
           {
-            echo "### 게시판 서버 커버리지"
+            echo "### 게시판 서버 커버리지 ${total}%"
             echo
-            echo "| 테스트 | 문장 | 분기 | 함수 | 줄 |"
-            echo "| --- | --- | --- | --- | --- |"
-            line unit "단위 (npm run test:cov)"
-            line e2e "앱 (npm run test:e2e:cov)"
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "<details><summary>덜 지나간 파일</summary>"
+            echo
+            uv run coverage report --format=markdown --skip-covered --sort=cover
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      # 두 테스트의 줄 비율이 각자의 기준 아래로 떨어지면 실패한다. 둘을 따로 본다(단위는 DB 를 쓰는 코드를 지나지 않는다).
-      # 기준은 #27 에서 처음 잰 값(단위 62.3%, 앱 92.7%)보다 조금 낮다. 커버리지가 오르면 기준도 올린다. 내릴 때는 PR 에 까닭을 적는다
+      # 합계가 기준 아래로 떨어지면 실패한다. 요약을 먼저 적은 뒤에 보므로, 실패해도 어느 파일이 덜 지나갔는지 요약에 남는다.
+      # 기준은 처음 잰 값보다 조금 낮게 잡았다. 내릴 때는 PR 에 까닭을 적는다
       - name: 커버리지 기준
         env:
-          UNIT_COVERAGE_MIN: "60"
-          E2E_COVERAGE_MIN: "90"
-        run: |
-          node -e "
-            const checks = [['unit', '단위', +process.env.UNIT_COVERAGE_MIN], ['e2e', '앱', +process.env.E2E_COVERAGE_MIN]];
-            for (const [dir, name, min] of checks) {
-              const pct = require('./coverage/' + dir + '/coverage-summary.json').total.lines.pct;
-              if (pct < min) {
-                console.error(name + ' 테스트의 줄 커버리지 ' + pct + '% 가 기준 ' + min + '% 보다 낮다');
-                process.exitCode = 1;
-              } else {
-                console.log(name + ' 테스트의 줄 커버리지 ' + pct + '% (기준 ' + min + '%)');
-              }
-            }
-          "
+          COVERAGE_MIN: "90"
+        run: uv run coverage report --format=total --fail-under="$COVERAGE_MIN"

@@ -1,7 +1,7 @@
 # board-server/contract/tests/test_health.py
 
 """
-살아 있는지(/health), 준비됐는지(/health/ready) 확인하는 주소(board-server/test/health.e2e-spec.ts).
+살아 있는지(/health), 준비됐는지(/health/ready) 확인하는 주소.
 프록시와 관리 도구가 부르는 주소라 버전이 붙은 API 주소 밖에 있다.
 """
 

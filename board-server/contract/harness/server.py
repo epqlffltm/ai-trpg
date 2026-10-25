@@ -3,11 +3,12 @@
 """
 시험할 게시판 서버를 바깥 프로세스로 띄운다. 어떤 구현이든 같은 환경 변수로 띄운다.
 
-  BOARD_SERVER_COMMAND  서버를 띄우는 명령. 기본은 지금의 서버(빌드한 NestJS, "node dist/main.js")
+  BOARD_SERVER_COMMAND  서버를 띄우는 명령. 기본은 "uv run python -m app". CI 는 커버리지를 재며 띄운다
   BOARD_SERVER_DIR      명령을 돌리는 폴더. 기본은 이 폴더의 위(board-server)
 
 서버에는 서버가 원래 읽는 환경 변수만 준다(PORT, HOST, DATABASE_URL, DB_SCHEMA, AUTH_JWKS_URL, AUTH_SERVER_SECRET).
-다시 쓸 서버도 같은 이름을 읽어야 이 시험이 돈다. 알림 서버는 부르지 않는다(주소를 주지 않는다).
+NestJS 로 쓰던 서버와 지금의 FastAPI 서버가 같은 이름을 읽어 같은 시험이 둘 다에 돌았다(#785).
+알림 서버는 부르지 않는다(주소를 주지 않는다).
 """
 
 import os
@@ -21,9 +22,9 @@ from pathlib import Path
 
 import httpx
 
-DEFAULT_COMMAND = 'node dist/main.js'
+DEFAULT_COMMAND = 'uv run python -m app'
 DEFAULT_DIR = Path(__file__).resolve().parents[2]
-# 서버가 뜰 때까지 기다리는 상한(초). 빌드한 앱이 DB 에 붙고 마이그레이션을 확인하는 데 걸린다
+# 서버가 뜰 때까지 기다리는 상한(초). 처음에는 uv 가 의존성을 맞추는 데도 걸린다
 STARTUP_SECONDS = 60
 # 뜬 것을 확인하는 주소. 서버가 요청을 받기 시작하면 200 이다
 HEALTH_PATH = '/health'

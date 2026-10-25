@@ -1,7 +1,7 @@
 # board-server/contract/tests/test_comments.py
 
 """
-댓글과 답글의 쓰기, 목록, 고치기, 지우기(board-server/test/comments.e2e-spec.ts).
+댓글과 답글의 쓰기, 목록, 고치기, 지우기.
 
 시험마다 글쓴이가 자유 게시판(free)에 글 하나를 써 두고 시작한다. 토큰에 닉네임을 싣지 않는다.
 """

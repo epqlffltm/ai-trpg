@@ -24,7 +24,7 @@ expect() {
   fi
 }
 
-expect "한 서버만 바뀌면 그 서버" "board" "board-server/src/main.ts"
+expect "한 서버만 바뀌면 그 서버" "board" "board-server/app/main.py"
 expect "두 서버가 바뀌면 둘" "auth board" "auth-server/accounts/tokens.py" "board-server/README.md"
 expect "서버의 워크플로가 바뀌면 그 서버" "trpg" ".github/workflows/trpg-server.yml"
 expect "DB 초기화 스크립트는 모두" "auth trpg board billing notification asset chat story shared web" "docker/postgres/init/06-x.sql"
@@ -40,7 +40,7 @@ expect "알림 서버가 바뀌면 알림 서버" "notification" "notification-s
 expect "알림 서버의 워크플로가 바뀌면 알림 서버" "notification" ".github/workflows/notification-server.yml"
 expect "관문 워크플로는 모두" "auth trpg board billing notification asset chat story shared web" ".github/workflows/ci.yml"
 expect "관문의 스크립트는 모두" "auth trpg board billing notification asset chat story shared web" ".github/scripts/changed-servers.sh"
-expect "함께 쓰는 ruff 규칙은 파이썬 서버들과 공용 코드" "auth trpg notification asset chat story shared" "ruff.toml"
+expect "함께 쓰는 ruff 규칙은 파이썬 서버들과 공용 코드" "auth trpg board notification asset chat story shared" "ruff.toml"
 expect "서버 안의 ruff.toml 같은 이름은 그 서버만" "billing" "billing-server/ruff.toml"
 expect "문서만 바뀌면 아무것도" "" "README.md" "docs/observability.md"
 expect "아무것도 안 바뀌면 아무것도" ""

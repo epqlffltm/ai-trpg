@@ -1,7 +1,7 @@
 # board-server/contract/tests/test_reports.py
 
 """
-신고하기(로그인한 누구나)와 읽고 처리하기(운영자)(board-server/test/reports.e2e-spec.ts).
+신고하기(로그인한 누구나)와 읽고 처리하기(운영자).
 
 횟수 제한은 쓰기 한도의 시험이 본다. 사람은 시험마다 새로 만든다.
 """

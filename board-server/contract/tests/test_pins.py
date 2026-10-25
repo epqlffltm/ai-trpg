@@ -1,7 +1,7 @@
 # board-server/contract/tests/test_pins.py
 
 """
-글 고정(PUT, DELETE /posts/{id}/pin)과 글 목록의 고정한 글(board-server/test/pins.e2e-spec.ts).
+글 고정(PUT, DELETE /posts/{id}/pin)과 글 목록의 고정한 글.
 
 시간이 흘러 고정이 끝나는 것은 기다리지 않는다. 끝나는 시각을 DB 에서 지난 시각으로 바꿔 놓고 본다(expire_pin).
 글 쓰기의 한도(10분에 5개)가 실제 값이라, 글을 여섯 개 넘게 쓰는 시험은 글마다 새 사람을 쓴다.

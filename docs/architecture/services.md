@@ -34,7 +34,7 @@
                                  프록시 (nginx)          /api/v1/<서비스>/...
    ┌──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┐
  auth      trpg       board     billing   notification  asset      chat       story      관리
- (Django)  (FastAPI)  (NestJS)  (Go)      (FastAPI)     (FastAPI)  (FastAPI,  (FastAPI,  (FastAPI,
+ (Django)  (FastAPI)  (FastAPI) (Go)      (FastAPI)     (FastAPI)  (FastAPI,  (FastAPI,  (FastAPI,
                                                                     계획)      계획)      계획)
    │          │          │          │          │           │          │          │          │
  auth    game(+_test) board(+)  billing(+) notification(+) asset(+)  chat(+)    story(+)    ops
@@ -59,7 +59,7 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 인증 | `auth-server/` | Django | 8000 | `ai-trpg-auth` | `auth` | `01-auth-role.sql` | 가입, 로그인, 본인인증과 보호자 동의, 토큰 발급(RS256)과 JWKS, 메일 발송, 보안 이벤트 |
 | 게임 | `trpg-server/` | FastAPI | 8001 | `ai-trpg-game` | `game`, `game_test` | `02-game-role.sql` | 자산(세계관, 룰북, 시나리오, 로어북), 테이블과 라운드, 규칙 엔진, AI 서술, 서술 모델 목록(원가, 날짜판, 회사의 대체 모델), 서술 값의 청구(결제 서버에 홀드를 걸고 확정·반환), 실시간 스트림 |
-| 게시판 | `board-server/` | NestJS (TypeScript) | 8002 | `ai-trpg-board` | `board`, `board_test` | `05-board-role.sql` | 공지, 글, 댓글, 검색, 신고, 운영자 권한 |
+| 게시판 | `board-server/` | FastAPI (Python) | 8002 | `ai-trpg-board` | `board`, `board_test` | `05-board-role.sql` | 공지, 글, 댓글, 검색, 신고, 운영자 권한 |
 | 알림 | `notification-server/` | FastAPI | 8004 | `ai-trpg-notification` | `notification`, `notification_test` | `06-notification-role.sql` | 사람에게 보내는 알림함(#385). 다른 서버가 서명한 요청으로 넣고, 사용자가 자기 알림을 읽고 읽음으로 한다 |
 | 결제 | `billing-server/` | Go (gin) | 8003 | `ai-trpg-billing` | `billing`, `billing_test` | `04-billing-role.sql` | 크레딧 지갑과 원장, 주문과 충전, 홀드·확정·반환, 청약철회, 환영 크레딧과 출석 보상, 가격표(모델마다의 값, 등급, 행사가)와 가격 할 일. 연습용이며 실제 결제가 아니다 |
 
@@ -198,7 +198,7 @@ PostgreSQL 의 `max_connections` 는 기본값 100 이고, superuser 의 몫 3 �
 | notification | 5 | compose 의 2 + 3 |
 | asset | 5 | compose 의 2 + 3. 그림은 S3 로 가고 DB 에는 줄만 쓴다 |
 | billing | 12 | 서버 8, sweeper 2, cron 2(`billing-server/README.md` 에 잰 값) |
-| board | 10 | TypeORM 의 `poolSize`(`board-server/src/database/database.options.ts`) |
+| board | 10 | 풀 5 + 5(설정 `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` 의 기본값, `board-server/app/core/config.py`) |
 | auth | 4 | gunicorn 의 워커 1(`WEB_CONCURRENCY`), mail, welcome-credits, cron 이 1 씩. Django 는 요청마다 연결을 맺고 닫는다 |
 | 관리(계획) | 5 | 운영자만 쓴다 |
 | 감시(monitor), 백업, 배포 중의 마이그레이션 | 3 | |
