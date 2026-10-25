@@ -10,9 +10,12 @@
 """
 
 import enum
+import uuid
 from collections.abc import Mapping
 
 from pydantic import BaseModel, ConfigDict
+
+from app.engine.effects import Effect
 
 
 class ConditionKind(enum.StrEnum):
@@ -120,16 +123,38 @@ class CastMember(Part):
 
 
 class Scene(Part):
-    """이벤트의 장면 지시 가운데 엔진이 쓰는 칸. cast 는 장면에 불러들이는 인물이다."""
+    """
+    이벤트의 장면 지시. text 는 모델에게 주는 상황 설명, cast 는 장면에 불러들이는 인물이다.
+    image_id 는 일러스트이고, collectible 이면 열릴 때 계정에 남는다(갤러리).
+    """
 
+    text: str = ''
     cast: tuple[str, ...] = ()
+    image_id: uuid.UUID | None = None
+    collectible: bool = False
+
+
+class Choice(Part):
+    """선택지 하나. 제작자가 적은 글과, 고르면 엔진이 반영하는 효과들이다."""
+
+    id: str
+    text: str
+    effects: tuple[Effect, ...] = ()
 
 
 class Event(Part):
-    """이벤트 하나. 판의 차례가 여는 차례다."""
+    """
+    이벤트 하나. 판의 차례가 여는 차례다. when 이 맞으면 열린다. repeat 이 아니면 한 번만 열린다.
+    열리면 on_open 의 효과를 반영하고, choices 가 있으면 사용자가 하나를 고를 때까지 기다린다.
+    """
 
     id: str
+    name: str = ''
+    when: Conditions = Conditions()
+    repeat: bool = False
     scene: Scene = Scene()
+    on_open: tuple[Effect, ...] = ()
+    choices: tuple[Choice, ...] = ()
 
 
 class StartItem(Part):

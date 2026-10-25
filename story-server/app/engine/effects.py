@@ -25,9 +25,9 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
-from app.engine.state import StoryState
-
+# 판 읽기(world.py)가 이벤트와 선택지에 Effect 를 붙인다. 서로 부르지 않게 상태와 판은 타입으로만 가져온다
 if TYPE_CHECKING:
+    from app.engine.state import StoryState
     from app.engine.world import World
 
 # 호감도의 범위. asset 서버의 AFFECTION_MAX 와 같다
@@ -72,20 +72,20 @@ def start_affection(world: 'World', cast_id: str) -> int:
     return member.affection.start if member is not None else AFFECTION_MIN
 
 
-def change_affection(effect: Effect, state: StoryState, world: 'World') -> StoryState:
+def change_affection(effect: Effect, state: 'StoryState', world: 'World') -> 'StoryState':
     """그 인물의 호감도를 amount 만큼 바꾼다. 상태에 없으면 판의 시작 값에서 바꾼다."""
     now = state.affection.get(effect.target, start_affection(world, effect.target))
     changed = {**state.affection, effect.target: clamp_affection(now + (effect.amount or 0))}
     return replace(state, affection=frozen(changed))
 
 
-def give_item(effect: Effect, state: StoryState, world: 'World') -> StoryState:
+def give_item(effect: Effect, state: 'StoryState', world: 'World') -> 'StoryState':
     """사용자에게 그 물건을 amount 개 준다."""
     held = {**state.items, effect.target: state.items.get(effect.target, 0) + (effect.amount or 0)}
     return replace(state, items=frozen(held))
 
 
-def take_item(effect: Effect, state: StoryState, world: 'World') -> StoryState:
+def take_item(effect: Effect, state: 'StoryState', world: 'World') -> 'StoryState':
     """사용자에게서 그 물건을 amount 개 가져간다. 가진 만큼까지다. 다 가져가면 소지품에서 뺀다."""
     left = state.items.get(effect.target, 0) - (effect.amount or 0)
     held = {item: count for item, count in state.items.items() if item != effect.target}
@@ -94,25 +94,25 @@ def take_item(effect: Effect, state: StoryState, world: 'World') -> StoryState:
     return replace(state, items=frozen(held))
 
 
-def start_accompanying(effect: Effect, state: StoryState, world: 'World') -> StoryState:
+def start_accompanying(effect: Effect, state: 'StoryState', world: 'World') -> 'StoryState':
     """그 인물과 동행을 시작한다. 동행의 차례는 시작한 차례다."""
     if effect.target in state.companions:
         return state
     return replace(state, companions=(*state.companions, effect.target))
 
 
-def end_accompanying(effect: Effect, state: StoryState, world: 'World') -> StoryState:
+def end_accompanying(effect: Effect, state: 'StoryState', world: 'World') -> 'StoryState':
     """그 인물과 동행을 끝낸다."""
     return replace(state, companions=tuple(cast_id for cast_id in state.companions if cast_id != effect.target))
 
 
-def move_user(effect: Effect, state: StoryState, world: 'World') -> StoryState:
+def move_user(effect: Effect, state: 'StoryState', world: 'World') -> 'StoryState':
     """사용자(와 동행)를 그 장소로 옮긴다. 시간은 흐르지 않는다."""
     return replace(state, place=effect.target)
 
 
 # 효과의 종류마다 반영하는 법
-APPLIERS: dict[EffectKind, Callable[[Effect, StoryState, 'World'], StoryState]] = {
+APPLIERS: dict[EffectKind, Callable[[Effect, 'StoryState', 'World'], 'StoryState']] = {
     EffectKind.AFFECTION: change_affection,
     EffectKind.GIVE_ITEM: give_item,
     EffectKind.TAKE_ITEM: take_item,
@@ -122,12 +122,12 @@ APPLIERS: dict[EffectKind, Callable[[Effect, StoryState, 'World'], StoryState]] 
 }
 
 
-def apply_effect(effect: Effect, state: StoryState, world: 'World') -> StoryState:
+def apply_effect(effect: Effect, state: 'StoryState', world: 'World') -> 'StoryState':
     """효과 하나를 반영한 상태."""
     return APPLIERS[effect.kind](effect, state, world)
 
 
-def apply_effects(effects: Iterable[Effect], state: StoryState, world: 'World') -> StoryState:
+def apply_effects(effects: Iterable[Effect], state: 'StoryState', world: 'World') -> 'StoryState':
     """효과 목록을 적힌 차례대로 반영한 상태."""
     for effect in effects:
         state = apply_effect(effect, state, world)

@@ -23,6 +23,8 @@ class StoryState:
     place 는 사용자가 있는 장소다. items 는 소지품(물건 → 개수)이다.
     affection 은 인물마다의 호감도(인물 → 0~100), gifts 는 건넨 적이 있는 (인물, 물건)이다.
     seen 은 열린 적이 있는 이벤트, companions 는 동행 중인 인물(동행을 시작한 차례)이다.
+    choosing 은 선택지를 고르기를 기다리는 이벤트다. 고르거나, 고르지 않고 다음으로 넘어가면 비운다
+    (app/engine/events.py).
     """
 
     minutes: int
@@ -32,6 +34,7 @@ class StoryState:
     gifts: frozenset[tuple[str, str]] = frozenset()
     seen: frozenset[str] = frozenset()
     companions: tuple[str, ...] = ()
+    choosing: str | None = None
 
 
 def start_items(world: World) -> dict[str, int]:

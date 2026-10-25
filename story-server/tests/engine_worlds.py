@@ -44,6 +44,32 @@ def condition(kind: str, target: str | None = None, value: str | None = None, co
     return {'kind': kind, 'target': target, 'value': value, 'count': count}
 
 
+def effect(kind: str, target: str, amount: int | None = None) -> dict:
+    """효과 하나."""
+    return {'kind': kind, 'target': target, 'amount': amount}
+
+
+def event(
+    event_id: str,
+    *items: dict,
+    match: str = 'all',
+    repeat: bool = False,
+    cast: list[str] | None = None,
+    on_open: list[dict] | None = None,
+    choices: list[dict] | None = None,
+) -> dict:
+    """이벤트 하나. 조건은 items 다. choices 는 {'id', 'text', 'effects'} 의 목록이다."""
+    return {
+        'id': event_id,
+        'name': event_id,
+        'when': {'match': match, 'items': list(items)},
+        'repeat': repeat,
+        'scene': {'text': f'{event_id} 의 장면.', 'cast': cast or [], 'image_id': None, 'collectible': False},
+        'on_open': on_open or [],
+        'choices': choices or [],
+    }
+
+
 def document(cast: list[dict] | None = None, events: list[dict] | None = None, **fields) -> dict:
     """판의 문서. 시간대는 아침(7시), 낮(12시), 밤(19시)이고 집에서 아침에 시작한다."""
     body = {
