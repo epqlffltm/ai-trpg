@@ -39,9 +39,12 @@ from app.catalog.offers import is_sold
 from app.conversations import repository
 from app.conversations.models import Conversation, ImportedWorld, Message
 from app.conversations.repository import ConversationRow
-from app.conversations.schemas import ConversationCreate
+from app.conversations.schemas import ConversationCreate, StateOut
 from app.core.dependencies import Viewer
+from app.engine.world import read_world
 from app.ratings import Rating, allowed_ratings
+from app.turns.scenes import staging
+from app.turns.states import state_on_path, state_view
 
 # 답을 쓰는 중이라는 표시(conversations.generating_since)가 이보다 오래되면 서버가 도중에 꺼진 것으로 본다.
 # 다음 말이 차례를 다시 잡고, 청구 정리가 그 홀드를 돌려준다(app/turns/settler.py). 모델을 부르는 시간의 상한보다 길다
@@ -239,6 +242,17 @@ async def list_conversations(
 async def conversation_messages(session: AsyncSession, conversation: Conversation) -> list[Message]:
     """세션의 지금 가지의 말들(첫 말부터). 말이 없으면 빈 목록이다."""
     return await repository.active_path(session, conversation.active_leaf_id)
+
+
+async def conversation_state(session: AsyncSession, imported: ImportedWorld, messages: list[Message]) -> StateOut:
+    """
+    지금 가지의 끝의 상태와 그 장면의 인물. 선택지를 기다리는 이벤트가 있으면 그 장면이 부른 인물도 든다.
+    messages 는 지금 가지의 말들(첫 말부터)이다.
+    """
+    world = read_world(imported.document)
+    state = state_on_path(world, await repository.states_on(session, [message.id for message in messages]))
+    waiting = world.event(state.choosing) if state.choosing is not None else None
+    return state_view(world, state, staging(world, state, waiting).cast)
 
 
 async def conversation_models(session: AsyncSession, conversations: list[Conversation]) -> dict[str, AiModel]:

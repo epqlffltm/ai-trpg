@@ -1,14 +1,18 @@
 # story-server/app/turns/router.py
 
 """
-말을 보내는 API. 바로 SSE(text/event-stream)로 답한다(메시지의 모양은 app/turns/schemas.py).
+말을 보내고 행동하는 API. 바로 SSE(text/event-stream)로 답한다(메시지의 모양은 app/turns/schemas.py).
 
-    POST /api/v1/story/conversations/{id}/messages    {content}  말을 보낸다
+    POST /api/v1/story/conversations/{id}/messages    {content}   말을 보낸다
+    POST /api/v1/story/conversations/{id}/actions     {kind, …}   행동한다(이동, 시간, 하루 마치기, 선택지, 고백).
+                                                                  엔진이 판정하고 이어서 모델이 반응을 쓴다
 
 응답을 시작하기 전에 거절하는 것은 보통의 오류다(아래 handle_*). 시작한 뒤의 실패는 SSE 의 failed 메시지다.
   - 404: 세션이 없다(남의 것, 볼 수 없는 등급)
   - 409 model_required: 세션에 모델이 없다. 먼저 고른다(PUT /conversations/{id}/model)
   - 409 session_ended: 엔딩을 본 세션이다(세계관이 끝을 골랐다). 읽기만 된다
+  - 422 cannot_move, no_choice, over, not_in_scene, not_confessable, cooling_down: 그렇게 할 수 없다
+    (app/turns/actions.py). 아무것도 저장하지 않는다
   - 422 model_unavailable: 모델을 쓸 수 없다(꺼졌다, 은퇴했다, 팔지 않는다). 사람의 말은 저장했을 수 있다
   - 409 generation_in_progress: 이 세션이 다른 답을 쓰는 중이다(app/conversations/router.py 가 답한다)
   - 402 credit_short, gold_required: 크레딧이 모자란다. 사람의 말은 저장했다(message_id)
@@ -18,7 +22,7 @@
 모델을 부르는 것은 응답과 따로 도는 작업이다. 앱이 들고 있다가(app.state.turns) 서버가 꺼질 때 멈춘다(app/main.py).
 요청과 연결의 메트릭은 SSE 로 센다(sse_*). 요청의 span 과 시간 메트릭에서는 뺀다(app/main.py 의 STREAMS).
 chat 서버의 것(chat-server/app/turns/router.py)과 같은 모양이다.
-다시 생성, 멈추기, 행동은 그것을 더하는 조각에서 붙인다.
+다시 생성과 멈추기는 그것을 더하는 조각에서 붙인다.
 """
 
 import asyncio
@@ -26,20 +30,22 @@ import logging
 import uuid
 from collections.abc import AsyncIterator, Coroutine
 from datetime import datetime
+from typing import Annotated
 
 from ai_core.provider import GenerationParams
 from conversation_core import sse
 from conversation_core.relay import Relay
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Body, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from server_core.observability.metrics import measured_stream
 
 from app.core.config import Settings
 from app.core.dependencies import CurrentViewer, Now, utc_now
 from app.turns import service
+from app.turns.actions import ActionRefusedError, to_engine
 from app.turns.charging import CREDIT_SHORT, GOLD_REQUIRED, MODEL_UNAVAILABLE
 from app.turns.frames import turn_frame
-from app.turns.schemas import MessageCreate
+from app.turns.schemas import ActionCreate, MessageCreate
 from app.turns.service import ModelRequiredError, SessionEndedError, TurnDeclinedError
 from app.turns.values import PromptOptions, TurnStart
 
@@ -118,6 +124,14 @@ async def handle_session_ended(request: Request, error: SessionEndedError) -> JS
     )
 
 
+async def handle_action_refused(request: Request, error: ActionRefusedError) -> JSONResponse:
+    """할 수 없는 행동이면 422 다. code 가 까닭이다. 아무것도 저장하지 않았다."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': '그렇게 할 수 없습니다.', 'code': error.code},
+    )
+
+
 async def handle_turn_declined(request: Request, error: TurnDeclinedError) -> JSONResponse:
     """답을 쓰지 않았다. 사람의 말은 저장했다(message_id). 까닭마다 상태 코드가 다르다."""
     status_code = DECLINED_STATUS.get(error.code, status.HTTP_503_SERVICE_UNAVAILABLE)
@@ -162,4 +176,29 @@ async def send_message(
     state = request.app.state
     options = prompt_options(state.settings)
     start = await service.begin_turn(state.session_factory, viewer, conversation_id, data.content, options, now)
+    return await stream_turn(request, start, now)
+
+
+@router.post(
+    '/{conversation_id}/actions',
+    status_code=status.HTTP_200_OK,
+    response_class=StreamingResponse,
+    responses=SSE_RESPONSES,
+)
+async def act(
+    conversation_id: uuid.UUID,
+    data: Annotated[ActionCreate, Body()],
+    viewer: CurrentViewer,
+    request: Request,
+    now: Now,
+) -> StreamingResponse:
+    """
+    행동한다. 이동(move), 시간 보내기(pass_time), 하루 마치기(end_day), 선택지 고르기(choose), 고백(confess).
+    엔진이 할 수 있는지 보고 상태를 바꾼 뒤(이벤트가 열리고 엔딩을 볼 수 있다), 모델의 반응을 흘려보낸다.
+    반응을 받으니 한 번 청구한다. turn 의 user_message 가 행동 말(role action)이고 state 가 그 뒤의 상태다.
+    SSE 의 모양은 말 보내기와 같다.
+    """
+    state = request.app.state
+    options = prompt_options(state.settings)
+    start = await service.begin_action(state.session_factory, viewer, conversation_id, to_engine(data), options, now)
     return await stream_turn(request, start, now)

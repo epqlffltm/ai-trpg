@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from ai_core.provider import ChatMessage
 
+from app.conversations.schemas import StateOut
 from app.turns.models import Outcome
 from app.turns.segments import Segment
 
@@ -28,6 +29,8 @@ class SavedMessage:
     created_at: datetime
     segments: tuple[dict, ...] = ()
     cast: tuple[str, ...] = ()
+    event_id: str | None = None
+    ending_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +57,8 @@ class TurnStart:
     cast: tuple[str, ...] = ()
     # 표식의 이름 → 인물의 id(app/turns/segments.py 의 speaker_labels)
     labels: Mapping[str, str] = field(default_factory=dict)
+    # 사람의 말이나 행동 뒤의 상태(응답의 모양). turn 메시지에 싣는다
+    state: StateOut | None = None
 
 
 @dataclass(frozen=True)

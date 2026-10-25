@@ -257,8 +257,8 @@ location /api/v1/story/ {
     proxy_pass http://$story_server;
 }
 
-# 말을 보내는 주소(docs/architecture/story.md 의 "한 번의 말"). POST 가 바로 SSE 로 답한다. chat 서버의 것과 같다
-location ~ ^/api/v1/story/conversations/[^/]+/messages$ {
+# 말을 보내는 주소와 행동하는 주소(docs/architecture/story.md 의 "한 번의 말"). POST 가 바로 SSE 로 답한다. chat 서버의 것과 같다
+location ~ ^/api/v1/story/conversations/[^/]+/(messages|actions)$ {
     set $proxy_upstream story;
     set $story_server story-server:8007;
     limit_req zone=api burst=40 nodelay;

@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from app.conversations.models import Conversation, ImportedWorld, Message
+from app.conversations.models import Conversation, ImportedWorld, Message, MessageState
 from app.ratings import Rating
 
 # 세션 하나를 읽을 때 함께 오는 것: 세션과 판의 사본
@@ -138,3 +138,19 @@ async def active_path(session: AsyncSession, leaf_id: uuid.UUID | None) -> list[
     )
     query = select(Message).join(upward, Message.id == upward.c.id).order_by(upward.c.depth.desc())
     return list(await session.scalars(query))
+
+
+async def states_on(session: AsyncSession, message_ids: Sequence[uuid.UUID]) -> list[dict | None]:
+    """말들에 붙은 상태(JSON). 같은 차례이고, 상태가 없는 말은 None 이다(app/turns/states.py 의 state_on_path)."""
+    if not message_ids:
+        return []
+    rows = await session.execute(
+        select(MessageState.message_id, MessageState.state).where(MessageState.message_id.in_(message_ids))
+    )
+    found = {message_id: state for message_id, state in rows.all()}
+    return [found.get(message_id) for message_id in message_ids]
+
+
+def add_state(session: AsyncSession, message_id: uuid.UUID, state: dict) -> None:
+    """말에 상태(JSON)를 붙인다. 아직 저장하지 않는다(커밋은 서비스가 한다)."""
+    session.add(MessageState(message_id=message_id, state=state))

@@ -7,8 +7,8 @@ story 서버는 하나의 세계관 안에서 여러 인물과 나누는 이야�
 1:1 캐릭터 대화는 chat-server 가 맡는다.
 둘이 나눈 선은 docs/architecture/chat-server.md 의 "story-server 와 나눈 선"이다.
 지금은 상태 확인, 토큰의 주인, 모델 목록과 값(결제 서버의 가격 목록),
-세션(세계관의 판을 asset 서버에서 가져와 시작한다), 말 보내기(장면의 인물들과 서술의 SSE)가 있다(#591).
-행동(이동, 시간, 선택지, 고백)과 엔딩이 차례로 붙는다(docs/architecture/story.md 의 "만드는 순서").
+세션(세계관의 판을 asset 서버에서 가져와 시작한다), 말 보내기와 행동(장면의 인물들과 서술의 SSE),
+본 엔딩의 기록이 있다(#591). 다시 생성과 멈추기, 제작 도구가 차례로 붙는다(docs/architecture/story.md 의 "만드는 순서").
 
 띄우는 법: uv run uvicorn app.main:app --port 8007 --reload
 """
@@ -51,8 +51,10 @@ from app.conversations.service import (
     WorldNotFoundError,
 )
 from app.core.config import Settings, get_settings
+from app.records import router as records
 from app.turns import router as messages
 from app.turns import settler
+from app.turns.actions import ActionRefusedError
 from app.turns.providers import build_router
 from app.turns.service import ModelRequiredError, SessionEndedError, TurnDeclinedError
 
@@ -61,7 +63,7 @@ API_PREFIX = '/api/v1/story'
 
 # SSE 로 답하는 주소들. 요청의 span 과 시간 메트릭에서 빼고 sse_* 로 센다(server_core/observability/streams.py).
 # 프록시도 이 주소에서 버퍼링을 끈다(docker/nginx/templates/api.inc.template)
-STREAMS = StreamRoutes.of(r'/api/v1/story/conversations/[^/]+/messages')
+STREAMS = StreamRoutes.of(r'/api/v1/story/conversations/[^/]+/(messages|actions)')
 
 
 @asynccontextmanager
@@ -182,8 +184,10 @@ def create_app(
     app.include_router(catalog.router, prefix=API_PREFIX)
     # 세션. 세계관의 판을 asset 서버에서 가져와 시작한다
     app.include_router(conversations.router, prefix=API_PREFIX)
-    # 말 보내기. 바로 SSE 로 답한다
+    # 말 보내기와 행동. 바로 SSE 로 답한다
     app.include_router(messages.router, prefix=API_PREFIX)
+    # 계정의 기록. 본 엔딩
+    app.include_router(records.router, prefix=API_PREFIX)
 
     # 세션의 예외를 응답으로 바꾼다(app/conversations/router.py)
     app.add_exception_handler(ConversationNotFoundError, conversations.handle_conversation_not_found)
@@ -196,6 +200,7 @@ def create_app(
     # 말 보내기의 예외(app/turns/router.py)
     app.add_exception_handler(ModelRequiredError, messages.handle_model_required)
     app.add_exception_handler(SessionEndedError, messages.handle_session_ended)
+    app.add_exception_handler(ActionRefusedError, messages.handle_action_refused)
     app.add_exception_handler(TurnDeclinedError, messages.handle_turn_declined)
 
     # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)

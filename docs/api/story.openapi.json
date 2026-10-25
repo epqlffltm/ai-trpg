@@ -1,6 +1,52 @@
 {
   "components": {
     "schemas": {
+      "ChooseAction": {
+        "additionalProperties": false,
+        "description": "기다리는 이벤트의 선택지 하나를 고른다.",
+        "properties": {
+          "choice": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Choice",
+            "type": "string"
+          },
+          "kind": {
+            "const": "choose",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "choice"
+        ],
+        "title": "ChooseAction",
+        "type": "object"
+      },
+      "ConfessAction": {
+        "additionalProperties": false,
+        "description": "장면에 있는 인물 하나에게 고백한다. 성공과 실패는 엔진이 정한다.",
+        "properties": {
+          "cast": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Cast",
+            "type": "string"
+          },
+          "kind": {
+            "const": "confess",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "cast"
+        ],
+        "title": "ConfessAction",
+        "type": "object"
+      },
       "ConversationCreate": {
         "additionalProperties": false,
         "description": "세션을 시작할 때 받는 값. 세계관을 고른다. 그 세계관의 마지막 판을 가져와 고정한다.\n\nmodel 은 셋 중 하나다(chat 과 같다).\n  - 보내지 않으면: 지난번 세션의 모델을 쓴다. 지난번에 없었거나 이 세션에 고를 수 없으면 모델 없이 시작한다\n  - null 을 보내면: 모델 없이 시작한다. 말을 보내기 전에 고른다\n  - 이름표를 보내면: 그 모델이다. 이 세션에 고를 수 없으면 422 model_unavailable 이다",
@@ -31,7 +77,7 @@
         "type": "object"
       },
       "ConversationDetail": {
-        "description": "세션 하나. messages 는 지금 보고 있는 가지의 말들이다(첫 말부터). 상태는 행동을 더하는 조각에서 싣는다.",
+        "description": "세션 하나. messages 는 지금 보고 있는 가지의 말들이다(첫 말부터). state 는 그 끝의 상태다.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -60,6 +106,9 @@
               }
             ]
           },
+          "state": {
+            "$ref": "#/components/schemas/StateOut"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -79,6 +128,7 @@
           "world",
           "model",
           "messages",
+          "state",
           "created_at",
           "updated_at"
         ],
@@ -200,6 +250,72 @@
         "title": "ConversationSummary",
         "type": "object"
       },
+      "EndDayAction": {
+        "additionalProperties": false,
+        "description": "하루를 마치고 다음 날의 첫 시간대로.",
+        "properties": {
+          "kind": {
+            "const": "end_day",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "EndDayAction",
+        "type": "object"
+      },
+      "EndingRecordList": {
+        "description": "한 세계관에서 본 엔딩들. 처음 본 차례다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EndingRecordOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EndingRecordList",
+        "type": "object"
+      },
+      "EndingRecordOut": {
+        "description": "본 엔딩 하나. ending_id 는 판의 엔딩의 id 다. 이름과 힌트는 판의 문서에 있다.",
+        "properties": {
+          "conversation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "ending_id": {
+            "title": "Ending Id",
+            "type": "string"
+          },
+          "first_seen_at": {
+            "format": "date-time",
+            "title": "First Seen At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ending_id",
+          "first_seen_at",
+          "conversation_id"
+        ],
+        "title": "EndingRecordOut",
+        "type": "object"
+      },
       "Grade": {
         "description": "보이는 분류. 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 모델 목록의 파일에 적는다.",
         "enum": [
@@ -298,6 +414,28 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "ending_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ending Id"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
           },
           "id": {
             "format": "uuid",
@@ -469,6 +607,29 @@
         "title": "ModelOut",
         "type": "object"
       },
+      "MoveAction": {
+        "additionalProperties": false,
+        "description": "지금 장소와 길로 바로 이어진 장소로 옮긴다. 길의 시간만큼 시각이 흐른다.",
+        "properties": {
+          "kind": {
+            "const": "move",
+            "title": "Kind",
+            "type": "string"
+          },
+          "place": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Place",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "place"
+        ],
+        "title": "MoveAction",
+        "type": "object"
+      },
       "NextPriceOut": {
         "description": "예약된 값의 바뀜. credits 가 null 이면 effective_at 부터 팔지 않는다.",
         "properties": {
@@ -512,6 +673,22 @@
         "title": "NextPriceOut",
         "type": "object"
       },
+      "PassTimeAction": {
+        "additionalProperties": false,
+        "description": "다음 시간대로.",
+        "properties": {
+          "kind": {
+            "const": "pass_time",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "PassTimeAction",
+        "type": "object"
+      },
       "Rating": {
         "description": "이용 등급. asset 서버, chat 서버, 게임 서버와 같은 값이다.",
         "enum": [
@@ -545,6 +722,91 @@
           "text"
         ],
         "title": "SegmentOut",
+        "type": "object"
+      },
+      "StateOut": {
+        "description": "가지의 끝의 상태(엔진의 상태). 화면이 시계, 지도, 소지품, 인물 창, 선택지, 엔딩을 그린다.\n\nminutes 는 1일째 0시부터 흐른 분이고, day 와 slot(시간대의 id)은 그 수에서 계산한 것이다.\naffection 은 인물마다의 호감도(0~100)다. 무엇을 보일지(숫자, 단계, 숨김)는 판의 보이기 규칙을 따라 화면이 정한다.\nchoosing 은 선택지를 기다리는 이벤트, ending 은 이 가지에서 본 엔딩이다. cast 는 지금 장소의 장면의 인물이다.",
+        "properties": {
+          "affection": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Affection",
+            "type": "object"
+          },
+          "cast": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cast",
+            "type": "array"
+          },
+          "choosing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choosing"
+          },
+          "companions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Companions",
+            "type": "array"
+          },
+          "day": {
+            "title": "Day",
+            "type": "integer"
+          },
+          "ending": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ending"
+          },
+          "items": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Items",
+            "type": "object"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "integer"
+          },
+          "place": {
+            "title": "Place",
+            "type": "string"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string"
+          }
+        },
+        "required": [
+          "minutes",
+          "day",
+          "slot",
+          "place",
+          "items",
+          "affection",
+          "companions",
+          "choosing",
+          "ending",
+          "cast"
+        ],
+        "title": "StateOut",
         "type": "object"
       },
       "Tier": {
@@ -839,6 +1101,79 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/story/conversations/{conversation_id}/actions": {
+      "post": {
+        "description": "행동한다. 이동(move), 시간 보내기(pass_time), 하루 마치기(end_day), 선택지 고르기(choose), 고백(confess).\n엔진이 할 수 있는지 보고 상태를 바꾼 뒤(이벤트가 열리고 엔딩을 볼 수 있다), 모델의 반응을 흘려보낸다.\n반응을 받으니 한 번 청구한다. turn 의 user_message 가 행동 말(role action)이고 state 가 그 뒤의 상태다.\nSSE 의 모양은 말 보내기와 같다.",
+        "operationId": "act_api_v1_story_conversations__conversation_id__actions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/MoveAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/PassTimeAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EndDayAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ChooseAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ConfessAction"
+                  }
+                ],
+                "title": "Data"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "SSE. app/turns/schemas.py 의 메시지들"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Act",
+        "tags": [
+          "messages"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/story/conversations/{conversation_id}/messages": {
       "post": {
         "description": "말을 보낸다. 사람의 말을 저장하고, 장면의 인물들과 서술의 답을 말 조각으로 흘려보낸다.\n끊겨도 서버는 끝까지 답을 저장한다. 말은 상태(시각, 장소, 호감도)를 바꾸지 않는다.",
@@ -951,6 +1286,58 @@
         "summary": "Change Model",
         "tags": [
           "conversations"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/story/endings": {
+      "get": {
+        "description": "그 세계관에서 내가 본 엔딩들.",
+        "operationId": "list_endings_api_v1_story_endings_get",
+        "parameters": [
+          {
+            "description": "asset 서버의 세계관 id",
+            "in": "query",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "description": "asset 서버의 세계관 id",
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndingRecordList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Endings",
+        "tags": [
+          "records"
         ],
         "x-audience": "user"
       }

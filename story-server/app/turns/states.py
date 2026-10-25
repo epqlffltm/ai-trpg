@@ -2,7 +2,7 @@
 
 """
 엔진의 상태(app/engine/state.py 의 StoryState)를 말에 붙여 저장하는 모양(JSON)으로 바꾸고 되돌린다.
-DB 도 모델도 모른다. 표(message_states)는 app/conversations/models.py 에 있다.
+응답의 모양(StateOut)으로도 바꾼다. DB 도 모델도 모른다. 표(message_states)는 app/conversations/models.py 에 있다.
 
 상태는 상태가 바뀐 말에만 붙는다(행동 말, 이벤트가 열린 말). 가지의 어느 말의 상태는 그 말부터 뿌리 쪽으로
 처음 만나는 상태다. 하나도 없으면 판으로 만든 처음의 상태다(state_on_path). 다시 생성이나 앞 가지로 돌아가면
@@ -15,6 +15,8 @@ JSON 의 칸은 상태의 칸과 같은 이름이다. 모르는 칸은 버리고
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 
+from app.conversations.schemas import StateOut
+from app.engine.clock import day_of, slot_of
 from app.engine.state import StoryState, start_state
 from app.engine.world import World
 
@@ -67,3 +69,19 @@ def state_on_path(world: World, path_states: Sequence[Mapping | None]) -> StoryS
         if data is not None:
             return state_from_json(data)
     return start_state(world)
+
+
+def state_view(world: World, state: StoryState, cast: Sequence[str]) -> StateOut:
+    """상태를 응답의 모양으로. cast 는 지금 장면의 인물이다(app/turns/scenes.py)."""
+    return StateOut(
+        minutes=state.minutes,
+        day=day_of(state.minutes),
+        slot=slot_of(world, state.minutes),
+        place=state.place,
+        items={item: count for item, count in state.items.items() if count > 0},
+        affection=dict(state.affection),
+        companions=list(state.companions),
+        choosing=state.choosing,
+        ending=state.ending,
+        cast=list(cast),
+    )
