@@ -2,7 +2,7 @@
 
 """
 할 일이 없던 작업의 추적을 보내지 않는 것. span 을 보내는 것(BatchSpanProcessor) 앞에 끼운다(tracing.py).
-인증 서버(auth-server/observability/idle_rounds.py)와 게시판 서버(src/observability/idle-rounds.ts)와 같은 규칙이다.
+인증 서버(auth-server/observability/idle_rounds.py)와 같은 규칙이다. 게시판 서버는 이것을 그대로 쓴다.
 
 게임 서버에는 5초마다 도는 바퀴가 셋이다(시계, 청구 정리, 알림 보내기). 대개 할 일이 없다. 바퀴마다 추적을 남기면
 하루에 오만 개가 넘고, Tempo 의 검색이 빈 바퀴로 메워진다. 맡은 것이 있던 바퀴와 실패한 바퀴만 남긴다.

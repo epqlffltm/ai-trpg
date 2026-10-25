@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/board/boardView.ts
 // 공지·게시판(A11)이 보일 글과 주소의 값. 순수한 함수다.
-// 검색어의 규칙은 게시판 서버(board-server/src/posts/search.ts)와 같다: 낱말 2자 이상, 5개까지, 전체 50자.
+// 검색어의 규칙은 게시판 서버(board-server/app/posts/terms.py)와 같다: 낱말 2자 이상, 5개까지, 전체 50자.
 
 import type { BoardComment, PostSummary } from '../../api/types';
 

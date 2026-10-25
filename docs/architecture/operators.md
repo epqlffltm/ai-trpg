@@ -48,7 +48,7 @@
 로그인 서버가 토큰에 역할을 싣고 서비스는 읽기만 하는 것이 업계의 흔한 방식이다(Auth0 의 `permissions`, Keycloak 의 `realm_access.roles`, Cognito 의 `cognito:groups`, Firebase 의 custom claims).
 데이터마다의 세밀한 권한(이 사람이 이 테이블에 앉아 있나)은 지금처럼 각 서비스가 정한다.
 
-**게시판.** 토큰의 역할을 읽는다(`board-server/src/auth/roles.ts`, 게임 서버와 같은 규칙). 예전의 게시판 `operators` 표는 지웠다. `GET /api/v1/board/me` 가 `is_operator` 를 돌려주어 화면이 운영자만 쓰는 버튼을 미리 보이거나 숨길 수 있다.
+**게시판.** 토큰의 역할을 읽는다(공용 코드 `server_core/auth/tokens.py` 의 `read_is_operator`, 게임 서버와 같은 규칙). 예전의 게시판 `operators` 표는 지웠다. `GET /api/v1/board/me` 가 `is_operator` 를 돌려주어 화면이 운영자만 쓰는 버튼을 미리 보이거나 숨길 수 있다.
 
 ## 운영자가 더 할 수 있는 것
 
