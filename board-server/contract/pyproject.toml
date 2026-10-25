@@ -1,0 +1,31 @@
+[project]
+name = "board-contract"
+version = "0.1.0"
+description = "HTTP contract tests for board-server: run the same scenarios against any implementation"
+requires-python = ">=3.13"
+dependencies = []
+
+# 시험만 돌리는 묶음이라 앱의 의존성이 없다. 서버는 바깥 프로세스로 띄운다(harness/server.py)
+[dependency-groups]
+dev = [
+    "cryptography>=46.0.3",
+    "httpx>=0.28.1",
+    "psycopg[binary]>=3.2.12",
+    "pyjwt>=2.10.1",
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--tb=short"
+
+[tool.ruff]
+# 규칙과 모양은 저장소 루트의 ruff.toml 을 따른다. 서버들과 같다
+extend = "../../ruff.toml"
+
+[tool.ruff.lint.isort]
+known-first-party = ["harness", "tests"]
