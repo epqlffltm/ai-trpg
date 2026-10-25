@@ -16,6 +16,7 @@
 import enum
 from dataclasses import dataclass
 
+from app.engine.clock import slot_of
 from app.engine.conditions import match_conditions
 from app.engine.state import StoryState
 from app.engine.world import CastMember, World
@@ -46,8 +47,9 @@ NOWHERE = Whereabouts(None, None)
 
 def scheduled_place(member: CastMember, state: StoryState, world: World) -> str | None:
     """일정에서 지금의 시간대와 조건에 맞는 첫 줄의 장소. 맞는 줄이 없으면 None."""
+    slot = slot_of(world, state.minutes)
     for line in member.schedule:
-        if line.slot == state.slot and match_conditions(line.when, state, world):
+        if line.slot == slot and match_conditions(line.when, state, world):
             return line.place
     return None
 

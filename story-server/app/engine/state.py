@@ -10,10 +10,8 @@
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+from app.engine.clock import start_minutes
 from app.engine.world import World
-
-# 처음의 날짜. 1일째부터 센다
-FIRST_DAY = 1
 
 
 @dataclass(frozen=True)
@@ -21,13 +19,13 @@ class StoryState:
     """
     한 시점의 상태.
 
-    day 와 slot 은 날짜와 시간대, place 는 사용자가 있는 장소다. items 는 소지품(물건 → 개수)이다.
+    minutes 는 시각(1일째 0시부터 흐른 분)이다. 며칠째와 시간대는 그 수에서 계산한다(app/engine/clock.py).
+    place 는 사용자가 있는 장소다. items 는 소지품(물건 → 개수)이다.
     affection 은 인물마다의 호감도(인물 → 0~100), gifts 는 건넨 적이 있는 (인물, 물건)이다.
     seen 은 열린 적이 있는 이벤트, companions 는 동행 중인 인물(동행을 시작한 차례)이다.
     """
 
-    day: int
-    slot: str
+    minutes: int
     place: str
     items: MappingProxyType[str, int] = field(default_factory=lambda: MappingProxyType({}))
     affection: MappingProxyType[str, int] = field(default_factory=lambda: MappingProxyType({}))
@@ -45,10 +43,9 @@ def start_items(world: World) -> dict[str, int]:
 
 
 def start_state(world: World) -> StoryState:
-    """판으로 만든 처음의 상태. 1일째, 처음의 시간대와 장소, 처음의 소지품, 인물마다의 시작 호감도다."""
+    """판으로 만든 처음의 상태. 1일째 처음의 시간대가 시작하는 시각, 처음의 장소와 소지품, 인물마다의 시작 호감도다."""
     return StoryState(
-        day=FIRST_DAY,
-        slot=world.start_slot,
+        minutes=start_minutes(world),
         place=world.start_place,
         items=MappingProxyType(start_items(world)),
         affection=MappingProxyType({member.id: member.affection.start for member in world.cast}),

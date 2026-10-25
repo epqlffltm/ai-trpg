@@ -13,6 +13,7 @@ TRPG 의 퀘스트 조건(trpg-server 의 app/rounds/quest_goals.py)과 모양�
 
 from collections.abc import Callable
 
+from app.engine.clock import day_of, slot_of
 from app.engine.state import StoryState
 from app.engine.world import Condition, ConditionKind, Conditions, Match, World
 
@@ -53,9 +54,9 @@ CHECKS: dict[ConditionKind, Callable[[Condition, StoryState, World], bool]] = {
     ConditionKind.GAVE_ITEM: lambda condition, state, world: (condition.target, condition.value) in state.gifts,
     ConditionKind.AFFECTION_AT_LEAST: affection_at_least,
     ConditionKind.AFFECTION_BELOW: affection_below,
-    ConditionKind.DAY_AT_LEAST: lambda condition, state, world: state.day >= condition.count,
-    ConditionKind.DAY_AT_MOST: lambda condition, state, world: state.day <= condition.count,
-    ConditionKind.SLOT_IS: lambda condition, state, world: state.slot == condition.target,
+    ConditionKind.DAY_AT_LEAST: lambda condition, state, world: day_of(state.minutes) >= condition.count,
+    ConditionKind.DAY_AT_MOST: lambda condition, state, world: day_of(state.minutes) <= condition.count,
+    ConditionKind.SLOT_IS: lambda condition, state, world: slot_of(world, state.minutes) == condition.target,
     ConditionKind.ACCOMPANIED: lambda condition, state, world: condition.target in state.companions,
     ConditionKind.EVENT_SEEN: lambda condition, state, world: condition.target in state.seen,
 }

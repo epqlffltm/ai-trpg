@@ -14,7 +14,7 @@ from dataclasses import replace
 
 from app.engine.scene import NOWHERE, SCENE_MAX_CAST, Presence, Whereabouts, place_of_character, scene_cast
 from app.engine.state import StoryState, start_state
-from tests.engine_worlds import condition, line, member, world
+from tests.engine_worlds import clock, condition, line, member, world
 
 # 미나: 기본은 카페, 낮에는 공원, 3일째부터 밤에는 바닷가(조건이 맞지 않으면 밤에도 카페)
 MINA = member(
@@ -39,16 +39,16 @@ def test_the_home_is_the_default():
 
 
 def test_the_schedule_comes_before_the_home():
-    assert where('mina', at(slot='day')) == Whereabouts('park', Presence.SCHEDULE)
+    assert where('mina', at(minutes=clock(1, 13))) == Whereabouts('park', Presence.SCHEDULE)
 
 
 def test_a_line_whose_conditions_fail_is_skipped():
-    assert where('mina', at(slot='night', day=2)) == Whereabouts('bar', Presence.SCHEDULE)
-    assert where('mina', at(slot='night', day=3)) == Whereabouts('beach', Presence.SCHEDULE)
+    assert where('mina', at(minutes=clock(2, 20))) == Whereabouts('bar', Presence.SCHEDULE)
+    assert where('mina', at(minutes=clock(3, 20))) == Whereabouts('beach', Presence.SCHEDULE)
 
 
 def test_a_companion_is_where_the_user_is():
-    assert where('mina', at(slot='day', place='library', companions=('mina',))) == Whereabouts(
+    assert where('mina', at(minutes=clock(1, 13), place='library', companions=('mina',))) == Whereabouts(
         'library', Presence.COMPANION
     )
 
@@ -60,7 +60,7 @@ def test_without_home_or_schedule_one_is_nowhere():
 def test_the_scene_is_who_is_here():
     assert scene_cast(WORLD, at()) == ['yuna']
     assert scene_cast(WORLD, at(place='cafe')) == ['mina']
-    assert scene_cast(WORLD, at(place='park', slot='day')) == ['mina']
+    assert scene_cast(WORLD, at(place='park', minutes=clock(1, 13))) == ['mina']
     assert scene_cast(WORLD, at(place='beach')) == []
 
 

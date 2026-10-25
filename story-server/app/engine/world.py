@@ -6,6 +6,7 @@
 판은 asset 서버가 게시할 때 검사했다(없는 것을 가리키지 않는다, 칸의 모양이 맞다). 여기서는 엔진이 쓰는 칸만
 읽는 모양으로 바꾼다. 모르는 칸은 버린다(extra='ignore'). 쓰는 칸이 늘면 그 칸을 여기에 더한다.
 판의 형식 1 에는 이벤트가 없다. 그 판은 이벤트가 빈 것으로 읽는다.
+시간대는 시작 시각이 이른 것부터 적혀 있다(asset 서버가 게시할 때 검사한다).
 """
 
 import enum
@@ -79,6 +80,14 @@ class Slot(Part):
     start_hour: int
 
 
+class Path(Part):
+    """두 장소를 잇는 길. 양쪽으로 다니고 minutes 분이 걸린다."""
+
+    a: str
+    b: str
+    minutes: int
+
+
 class ScheduleLine(Part):
     """일정의 줄 하나. 그 시간대에 when 이 맞으면 인물이 그 장소에 있다. 위의 줄부터 맞춰 본다."""
 
@@ -135,6 +144,9 @@ class World(Part):
 
     slots: tuple[Slot, ...]
     start_slot: str
+    # 기한(며칠째까지). 비어 있으면 기한이 없다
+    deadline_days: int | None = None
+    paths: tuple[Path, ...] = ()
     start_place: str
     start_items: tuple[StartItem, ...] = ()
     cast: tuple[CastMember, ...] = ()
@@ -143,6 +155,10 @@ class World(Part):
     def member(self, cast_id: str) -> CastMember | None:
         """그 id 의 인물. 없으면 None."""
         return next((member for member in self.cast if member.id == cast_id), None)
+
+    def slot(self, slot_id: str) -> Slot | None:
+        """그 id 의 시간대. 없으면 None."""
+        return next((slot for slot in self.slots if slot.id == slot_id), None)
 
     def event(self, event_id: str) -> Event | None:
         """그 id 의 이벤트. 없으면 None."""
