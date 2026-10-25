@@ -250,9 +250,11 @@ uv run alembic downgrade -1                           # 마지막 하나 되돌�
 
 - **빈 스키마**에서는 표를 모두 만들고 게시판 넷을 넣는다.
 - **TypeORM 이 이미 표를 만든 스키마**(지금 스키마에 `posts` 가 있다)에서는 표를 만들지 않고 그대로 넘겨받는다. TypeORM 의 적용 기록 표(`migrations`)만 지운다. 글, 댓글, 신고, 닉네임, 발송함의 데이터는 그대로다.
+  넘겨받기 전에 기록 표로 TypeORM 의 마지막 마이그레이션(`AllowWithdrawnAuthors1792600000000`)까지 적용됐는지 본다.
+  뒤의 둘(`DropOperators`, `AllowWithdrawnAuthors`)이 빠졌으면 그 SQL 을 마저 한다. 그보다 앞의 것이 빠졌으면 넘겨받지 않고 멈춘다(`IncompleteTypeormSchema`, 아무것도 바꾸지 않는다).
+  그 스키마가 개발용 데이터라면 표를 모두 지운 뒤 다시 적용한다.
 
-**NestJS 때의 DB 를 쓰던 PC 에서 옮길 때.** 그 스키마는 TypeORM 의 마지막 마이그레이션까지 적용되어 있어야 한다. 기준선은 넘겨받을 때 표의 모양을 고치지 않는다.
-옮기기 전에 저장소 루트에서 확인한다. `AllowWithdrawnAuthors1792600000000` 이 나오면 된다. 다른 이름이면 그 전의 코드로 마이그레이션을 끝까지 적용한 뒤 옮긴다.
+**NestJS 때의 DB 를 쓰던 PC 에서 옮길 때.** 어디까지 적용됐는지는 저장소 루트에서 이렇게 본다. `AllowWithdrawnAuthors1792600000000`, `DropOperators1792430000000`, `AddOutgoingNotifications1792340930107` 가운데 하나면 기준선이 마저 해서 넘겨받는다.
 
 ```
 docker compose exec db psql -U trpg -d trpg -c "SELECT name FROM board.migrations ORDER BY timestamp DESC LIMIT 1"
