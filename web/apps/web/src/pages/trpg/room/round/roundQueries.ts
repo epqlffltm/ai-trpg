@@ -4,8 +4,8 @@
 // 선언을 받는 동안에는 OPEN_POLL_MS 마다도 지금 라운드를 읽는다. 남이 선언을 낸 것(기다리는 사람이 줄어든 것)은
 // 아직 이벤트가 없어서다(선언은 마감할 때 player_action 으로 적힌다). 게임 서버가 그 이벤트를 내면 이 읽기를 뺀다.
 
-import { queryOptions, type QueryClient } from '@tanstack/react-query';
-import { fetchCurrentRound, fetchRecentRounds, fetchSceneCast } from '../../../../api/rounds';
+import { infiniteQueryOptions, queryOptions, type QueryClient } from '@tanstack/react-query';
+import { fetchCurrentRound, fetchRecentRounds, fetchRoundsBefore, fetchRoundsFrom, fetchSceneCast } from '../../../../api/rounds';
 import type { Round } from '../../../../api/types';
 
 /** 선언을 받는 동안 지금 라운드를 다시 읽는 사이 */
@@ -35,10 +35,31 @@ export async function replaceCurrentRound(queryClient: QueryClient, tableId: str
   queryClient.setQueryData(queryKey, round);
 }
 
-export function recentRoundsQuery(tableId: string) {
+/**
+ * 최근의 라운드들. from 이 없으면 끝의 ROUND_TAIL 개(라운드가 늘면 창이 밀린다).
+ * 앞의 라운드를 펼쳤으면 from 번부터 끝까지 읽는다. 창이 밀리지 않아 앞의 라운드(earlierRoundsQuery)와 사이가 비지 않는다
+ */
+export function recentRoundsQuery(tableId: string, from: number | null = null) {
   return queryOptions({
-    queryKey: [...roundsKey(tableId), 'recent'],
-    queryFn: ({ signal }) => fetchRecentRounds(tableId, signal),
+    queryKey: [...roundsKey(tableId), 'recent', from ?? 'tail'],
+    queryFn: ({ signal }) => (from === null ? fetchRecentRounds(tableId, signal) : fetchRoundsFrom(tableId, from, signal)),
+  });
+}
+
+/**
+ * anchor 번 앞의 라운드들(B10). 한 쪽에 ROUND_PAGE 개, 다음 쪽은 앞 쪽의 첫 번호 앞이다. 1 번에 닿으면 끝.
+ * 닫힌 라운드는 바뀌지 않는다. 그래서 열쇠를 roundsKey 밖에 두어 이벤트가 와도 다시 읽지 않는다
+ */
+export function earlierRoundsQuery(tableId: string, anchor: number) {
+  return infiniteQueryOptions({
+    queryKey: ['trpg', 'tables', tableId, 'round-history', anchor],
+    queryFn: ({ pageParam, signal }) => fetchRoundsBefore(tableId, pageParam, signal),
+    initialPageParam: anchor,
+    getNextPageParam: (lastPage) => {
+      const first = lastPage.items[0]?.number;
+      return first !== undefined && first > 1 ? first : undefined;
+    },
+    staleTime: Infinity,
   });
 }
 
