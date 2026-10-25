@@ -357,10 +357,11 @@ def describe_throw(note: ThrowNote) -> str:
     예: (던진 물건: 화염병 → 수로 쥐 1)
         (던지려던 물건: 화염병. 가지고 있지 않았다)
         (던지려던 물건: 화염병 → 수로 쥐 1)   겨눈 몬스터가 없었다. 그 까닭은 뒤의 줄이 적는다
+        (던진 물건: 독 병 → 수로 쥐 1) [입힌 부상: 중독]   맞혀 물건의 효과가 들었다(#801)
     """
     to = f' → {note.target}' if note.target else ''
     if note.done:
-        return f'(던진 물건: {note.name}{to})'
+        return ' '.join([f'(던진 물건: {note.name}{to})', *effect_tags(note.cured, note.injured, note.resisted)])
     if note.reason == 'not_held':
         return f'(던지려던 물건: {note.name}{to}. {ITEM_FAILURES["not_held"]})'
     return f'(던지려던 물건: {note.name}{to})'
@@ -386,13 +387,24 @@ def describe_item_action(note: ItemActionNote) -> str:
     parts = [f'({verb} 물건: {what}{to})']
     if note.impact:
         parts.append(describe_impact(note.impact))
-    if note.cured:
-        parts.append(f'[풀린 부상: {", ".join(note.cured)}]')
-    if note.injured:
-        parts.append(f'[입힌 부상: {", ".join(note.injured)}]')
-    if note.resisted:
-        parts.append(f'[면역이라 입지 않은 부상: {", ".join(note.resisted)}]')
+    parts.extend(effect_tags(note.cured, note.injured, note.resisted))
     return ' '.join(parts)
+
+
+def effect_tags(cured: list[str], injured: list[str], resisted: list[str]) -> list[str]:
+    """
+    물건의 효과가 부상에 한 일을 줄 뒤에 붙일 조각들(#800, #801). 없으면 빈 목록이다.
+
+    예: [풀린 부상: 중독] [입힌 부상: 기절] [면역이라 입지 않은 부상: 중독]
+    """
+    tags = []
+    if cured:
+        tags.append(f'[풀린 부상: {", ".join(cured)}]')
+    if injured:
+        tags.append(f'[입힌 부상: {", ".join(injured)}]')
+    if resisted:
+        tags.append(f'[면역이라 입지 않은 부상: {", ".join(resisted)}]')
+    return tags
 
 
 def describe_worn(worn: list[WornNote]) -> str:

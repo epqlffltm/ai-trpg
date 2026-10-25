@@ -5,19 +5,22 @@
 
 맵은 수로 입구(시작)와 깊은 수로다. 입구에 수로 쥐 둘(야수, 최대 HP 4), 깊은 수로에 해골 병사 하나.
 악역영애(비올레타, 최대 HP 10)는 스타팅에 나오는 인물이다. 자리가 없어 어디서나 닿는다.
-물건은 넷이다. 화염병은 민첩·보통으로 던져 맞으면 보통(moderate) 피해, 투척 단검은 근력·난이도 비움(기본은 보통)·
-가벼운(light) 피해, 연막탄은 던지는 판정이 없는 소모품, 밧줄은 장비다. 모두 화염병 둘, 투척 단검 하나,
-연막탄 하나, 밧줄 하나로 시작한다.
+물건은 넷이다. 화염병은 민첩·보통으로 던지고 효과는 보통(moderate) 피해, 투척 단검은 근력·난이도 비움(기본은 보통)으로
+던지고 효과는 가벼운(light) 피해다. 연막탄(효과 없는 소모품)과 밧줄(장비)은 던지는 판정이 없어 룰북의 맞히는 판정
+(민첩·보통)으로 던진다(#801). 모두 화염병 둘, 투척 단검 하나, 연막탄 하나, 밧줄 하나로 시작한다.
 주사위는 정해진 눈을 내는 것으로 바꿔 꽂는다. 판정의 눈을 먼저, 피해의 눈을 그다음에 쓴다.
 
 넷을 본다.
-  - 시나리오: throw 는 소모품에만, 능력·피해를 적는다. 게시할 때 룰북에 맞아야 한다(item_throw_invalid). 판 형식 59.
-  - 받기: 던지는 판정이 있는 물건을 가지고 있고, 맞을 쪽이 치기처럼 닿아야 한다.
-  - 닫힐 때: 물건의 판정으로 치기처럼 굴린다. 맞든 빗나가든 하나 없어진다. 못 던졌으면 그대로다.
+  - 시나리오: throw 는 능력·난이도만 적는다(장비에도 된다). 게시할 때 룰북에 맞아야 한다(item_throw_invalid).
+    판 형식 63.
+  - 받기: 어떤 물건이든 가지고 있으면 던진다. 맞을 쪽이 치기처럼 닿아야 한다. 판정이 물건에도 룰북에도 없으면 422.
+  - 닫힐 때: 물건이나 룰북의 판정으로 굴리고, 맞으면 그 물건의 효과가 든다. 맞든 빗나가든 하나 없어진다.
+    못 던졌으면 그대로다. 던지기와 쓰기가 함께 쓰는 효과의 엔진은 test_item_effects.py 가 본다.
   - 기록과 서술: item_thrown 뒤에 판정(check_rolled)과 맞은 쪽의 변화가 잇는다. 한 일의 줄에 던진 물건이 붙는다.
 """
 
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI, status
@@ -28,14 +31,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.schemas import ItemRule
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, read_snapshot
-from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_58
+from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_58, upgrade_from_62
 from app.engine.action import ThrowAction
 from app.rounds.move_lines import describe_throw
+from app.rounds.narration_request import to_throw
 from app.rounds.narrator import ThrowNote
 from app.tables.models import NpcStatus
 from tests import test_monster_combat as combat
 from tests.sheets import SHEET, make_sheet
 from tests.test_npc_sheets import published, refused
+from tests.test_ruleset import load_migration
 from tests.test_table_items import take as take_away
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -68,6 +73,8 @@ NO_INJURY = combat.NO_INJURY
 THROW = '화염병을 던진다.'
 LOOK = '주위를 살핀다.'
 OPENING = '물 떨어지는 소리가 난다. 악역영애가 부채를 펼친다.'
+POISON = {'kind': 'injure', 'injury': 'poisoned'}
+HEAL = {'kind': 'heal', 'magnitude': 'light'}
 
 
 def throw(item: dict, **target) -> dict:
@@ -76,14 +83,20 @@ def throw(item: dict, **target) -> dict:
 
 
 def the_items(lore: dict) -> list[dict]:
-    """화염병(민첩·보통·보통 피해), 투척 단검(근력·기본 난이도·가벼운 피해), 연막탄(던지지 못함), 밧줄(장비)."""
+    """화염병(민첩·보통, 보통 피해), 투척 단검(근력·기본 난이도, 가벼운 피해), 연막탄(효과 없음), 밧줄(장비)."""
     return [
         {
             'entry_id': lore['firebomb']['id'],
             'kind': 'consumable',
-            'throw': {'ability': 'dex', 'difficulty': 'medium', 'harm': 'moderate'},
+            'throw': {'ability': 'dex', 'difficulty': 'medium'},
+            'effects': [{'kind': 'damage', 'magnitude': 'moderate'}],
         },
-        {'entry_id': lore['dagger']['id'], 'kind': 'consumable', 'throw': {'ability': 'str', 'harm': 'light'}},
+        {
+            'entry_id': lore['dagger']['id'],
+            'kind': 'consumable',
+            'throw': {'ability': 'str'},
+            'effects': [{'kind': 'damage', 'magnitude': 'light'}],
+        },
         {'entry_id': lore['smoke']['id'], 'kind': 'consumable'},
         {'entry_id': lore['rope']['id'], 'kind': 'gear'},
     ]
@@ -200,13 +213,12 @@ def rule(**fields) -> dict:
 @pytest.mark.parametrize(
     'fields',
     [
-        {'kind': 'gear', 'throw': {'ability': 'dex', 'harm': 'light'}},
-        {'throw': {'ability': 'dex'}},
-        {'throw': {'harm': 'light'}},
-        {'throw': {'ability': 'dex', 'harm': 'light', 'noise': 1}},
-        {'throw': {'ability': 'Not A Key', 'harm': 'light'}},
+        {'throw': {'ability': 'dex', 'harm': 'light'}},
+        {'throw': {'difficulty': 'medium'}},
+        {'throw': {'ability': 'dex', 'noise': 1}},
+        {'throw': {'ability': 'Not A Key'}},
     ],
-    ids=['gear', 'no-harm', 'no-ability', 'unknown-field', 'bad-key'],
+    ids=['old-harm', 'no-ability', 'unknown-field', 'bad-key'],
 )
 def test_rejects_misshaped_throws(fields: dict):
     with pytest.raises(ValidationError):
@@ -214,9 +226,12 @@ def test_rejects_misshaped_throws(fields: dict):
 
 
 def test_a_throw_may_leave_the_difficulty_to_the_rulebook():
-    parsed = ItemRule.model_validate(rule(throw={'ability': 'dex', 'harm': 'light'}))
+    parsed = ItemRule.model_validate(rule(throw={'ability': 'dex'}))
+    # 장비에도 적는다(#801, 투척 도끼)
+    axe = ItemRule.model_validate(rule(kind='gear', throw={'ability': 'str', 'difficulty': 'hard'}))
 
-    assert (parsed.throw.ability, parsed.throw.difficulty, parsed.throw.harm) == ('dex', None, 'light')
+    assert (parsed.throw.ability, parsed.throw.difficulty) == ('dex', None)
+    assert (axe.kind, axe.throw.ability) == ('gear', 'str')
 
 
 async def test_throws_are_saved_frozen_and_listed(client: AsyncClient, me: dict):
@@ -226,23 +241,23 @@ async def test_throws_are_saved_frozen_and_listed(client: AsyncClient, me: dict)
 
     thrown = {item['name']: item['throw'] for item in read['items']}
     assert thrown == {
-        '화염병': {'ability': 'dex', 'difficulty': 'medium', 'harm': 'moderate'},
-        '투척 단검': {'ability': 'str', 'difficulty': None, 'harm': 'light'},
+        '화염병': {'ability': 'dex', 'difficulty': 'medium'},
+        '투척 단검': {'ability': 'str', 'difficulty': None},
         '연막탄': None,
         '밧줄': None,
     }
 
 
-async def test_the_version_is_format_59(client: AsyncClient, me: dict):
+async def test_the_version_is_format_63(client: AsyncClient, me: dict):
     world = await make_world(client, me)
     scenario = await make_scenario(client, me, world, the_items(world))
 
     document = await published(client, me, scenario)
 
-    assert document['format'] == SNAPSHOT_FORMAT >= 59
-    assert [rule.throw.harm if rule.throw else None for rule in read_snapshot(document).items] == [
-        'moderate',
-        'light',
+    assert document['format'] == SNAPSHOT_FORMAT >= 63
+    assert [rule.throw.ability if rule.throw else None for rule in read_snapshot(document).items] == [
+        'dex',
+        'str',
         None,
         None,
     ]
@@ -251,11 +266,10 @@ async def test_the_version_is_format_59(client: AsyncClient, me: dict):
 @pytest.mark.parametrize(
     'throw_',
     [
-        {'ability': 'luck', 'harm': 'light'},
-        {'ability': 'dex', 'difficulty': 'impossible', 'harm': 'light'},
-        {'ability': 'dex', 'harm': 'deadly'},
+        {'ability': 'luck'},
+        {'ability': 'dex', 'difficulty': 'impossible'},
     ],
-    ids=['ability', 'difficulty', 'harm'],
+    ids=['ability', 'difficulty'],
 )
 async def test_a_throw_must_fit_the_rulebook(client: AsyncClient, me: dict, throw_: dict):
     world = await make_world(client, me)
@@ -288,14 +302,24 @@ def test_a_throw_aims_at_one_thing(target: dict):
         ThrowAction.model_validate({'kind': 'throw', 'item': NO_SUCH_ID, **target})
 
 
-async def test_only_what_has_a_throw_can_be_thrown(client: AsyncClient, me: dict):
+async def test_only_a_thing_can_be_thrown(client: AsyncClient, me: dict):
     world = await start_table(client, me)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
 
-    for name in ['smoke', 'rope', 'lady']:
-        response = await send(client, me, world['table'], THROW, throw(world[name], monster=rat['id']))
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT, name
-        assert 'item' in response.text
+    response = await send(client, me, world['table'], THROW, throw(world['lady'], monster=rat['id']))
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert 'item' in response.text
+
+
+async def test_lethal_needs_a_damaging_thing(client: AsyncClient, me: dict):
+    world = await start_table(client, me)
+    rat = await monster_named(client, me, world['table'], '수로 쥐 1')
+
+    response = await send(client, me, world['table'], THROW, throw(world['smoke'], monster=rat['id'], lethal=True))
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert 'action.lethal' in response.text
 
 
 async def test_only_what_is_held_can_be_thrown(client: AsyncClient, me: dict, session: AsyncSession):
@@ -360,9 +384,10 @@ async def test_a_hit_hurts_the_monster_and_uses_the_thing_up(
         'reason': None,
         'ability': 'dex',
         'difficulty': 'medium',
-        'harm': 'moderate',
         'target': {'monster_id': rat['id'], 'entry_id': None, 'name': '수로 쥐 1'},
         'remaining': 1,
+        'cured': [],
+        'injured': [],
     }
     assert (outcome['success'], outcome['target'], outcome['monster_effect']['amount']) == (True, 15, 3)
     assert await state_of(session, rat['id']) == (1, NpcStatus.ALIVE)
@@ -454,9 +479,10 @@ async def test_what_was_taken_meanwhile_is_not_thrown(
         'reason': 'not_held',
         'ability': 'dex',
         'difficulty': 'medium',
-        'harm': 'moderate',
         'target': {'monster_id': rat['id'], 'entry_id': None, 'name': '수로 쥐 1'},
         'remaining': 0,
+        'cured': [],
+        'injured': [],
     }
     assert await state_of(session, rat['id']) == (4, NpcStatus.ALIVE)
 
@@ -488,6 +514,8 @@ async def test_the_throw_is_recorded_before_its_check(client: AsyncClient, app: 
         'reason': None,
         'target': {'monster_id': rat['id'], 'name': '수로 쥐 1'},
         'remaining': 1,
+        'cured': [],
+        'injured': [],
     }
     assert (rolled['payload']['ability'], rolled['payload']['difficulty']) == ('dex', 'medium')
 
@@ -531,8 +559,152 @@ async def test_the_narrator_hears_what_was_thrown(client: AsyncClient, app: Fast
             '(던지려던 물건: 화염병 → 수로 쥐 1)',
         ),
         (ThrowNote(name='화염병', target=None, done=True), '(던진 물건: 화염병)'),
+        (
+            ThrowNote(name='독 병', target='해골 병사', done=True, injured=['기절'], resisted=['중독']),
+            '(던진 물건: 독 병 → 해골 병사) [입힌 부상: 기절] [면역이라 입지 않은 부상: 중독]',
+        ),
     ],
-    ids=['thrown', 'not-held', 'target-gone', 'no-name'],
+    ids=['thrown', 'not-held', 'target-gone', 'no-name', 'effects'],
 )
 def test_the_line_names_what_was_thrown(note: ThrowNote, line: str):
     assert describe_throw(note) == line
+
+
+# --- 모든 물건(#801) ---
+
+
+@pytest.mark.parametrize(('name', 'label'), [('smoke', '연막탄'), ('rope', '밧줄')])
+async def test_a_thing_without_a_throw_is_thrown_with_the_rulebook_s_check(
+    client: AsyncClient, app: FastAPI, me: dict, name: str, label: str
+):
+    world = await start_table(client, me)
+    rat = await monster_named(client, me, world['table'], '수로 쥐 1')
+    dice = load_dice(app, [PASS])
+
+    closing = await declare(client, me, world['table'], THROW, throw(world[name], monster=rat['id']))
+
+    outcome = outcome_of(closing, ME)
+    # 룰북의 맞히는 판정(민첩·보통)이다. 효과가 없어 맞아도 아무 일이 없다
+    assert (outcome['item_throw']['ability'], outcome['item_throw']['difficulty']) == ('dex', 'medium')
+    assert (outcome['success'], outcome['monster_effect']) == (True, None)
+    assert dice.remaining == 0
+    assert label not in held(await read_table(client, me, world['table']), ME)
+
+
+async def table_with_item_check(client: AsyncClient, me: dict, session: AsyncSession, check: str) -> dict:
+    """룰북의 맞히는 판정(item_check)을 check(JSON)로 바꾼 뒤 수로의 판으로 테이블을 시작한다."""
+    world = await make_world(client, me)
+    await session.execute(
+        text(
+            "UPDATE rulebooks SET rules = jsonb_set(rules, '{item_check}', CAST(:check AS jsonb)) WHERE asset_id = :id"
+        ),
+        {'check': check, 'id': uuid.UUID(world['rulebook']['id'])},
+    )
+    await session.commit()
+    scenario = await make_scenario(client, me, world, the_items(world))
+    await post(client, f'{SCENARIOS_URL}/{scenario["id"]}/versions', me)
+    table = await post(client, TABLES_URL, me, scenario_id=scenario['id'], version=1, capacity=1)
+    await client.put(table_url(table, '/character'), json={'name': '엘프'}, headers=me)
+    await client.post(table_url(table, '/start'), headers=me)
+    return {**world, 'table': table}
+
+
+async def test_the_rulebook_s_check_is_the_one_its_table_was_published_with(
+    client: AsyncClient, app: FastAPI, me: dict, session: AsyncSession
+):
+    world = await table_with_item_check(client, me, session, '{"ability": "str", "difficulty": "hard"}')
+    rat = await monster_named(client, me, world['table'], '수로 쥐 1')
+    load_dice(app, [PASS])
+
+    closing = await declare(client, me, world['table'], THROW, throw(world['smoke'], monster=rat['id']))
+
+    thrown = outcome_of(closing, ME)['item_throw']
+    assert (thrown['ability'], thrown['difficulty']) == ('str', 'hard')
+
+
+async def test_a_rulebook_without_the_check_throws_only_what_has_a_throw(
+    client: AsyncClient, me: dict, session: AsyncSession
+):
+    world = await table_with_item_check(client, me, session, 'null')
+    table = world['table']
+    rat = await monster_named(client, me, table, '수로 쥐 1')
+
+    smoke = await send(client, me, table, THROW, throw(world['smoke'], monster=rat['id']))
+    firebomb = await send(client, me, table, THROW, throw(world['firebomb'], monster=rat['id']))
+
+    assert smoke.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert 'action.item' in smoke.text
+    assert firebomb.status_code == status.HTTP_200_OK, firebomb.text
+
+
+def test_an_old_version_moves_the_throw_s_harm_into_the_effects():
+    old = {
+        'format': 62,
+        'items': [
+            {'entry_id': 'a', 'kind': 'consumable', 'throw': {'ability': 'dex', 'harm': 'light'}, 'effects': [POISON]},
+            {
+                'entry_id': 'b',
+                'kind': 'consumable',
+                'throw': {'ability': 'dex', 'difficulty': None, 'harm': 'light'},
+                'effects': [{'kind': 'heal', 'magnitude': 'light'}],
+            },
+            {'entry_id': 'c', 'kind': 'gear', 'throw': None, 'effects': []},
+        ],
+    }
+
+    upgraded = upgrade_from_62(old)
+
+    assert upgraded['format'] == 63
+    assert upgraded['items'][0] == {
+        'entry_id': 'a',
+        'kind': 'consumable',
+        'throw': {'ability': 'dex'},
+        'effects': [{'kind': 'damage', 'magnitude': 'light'}, POISON],
+    }
+    # 이미 HP 를 바꾸는 효과가 있으면 던진 피해는 버린다(HP 의 변화는 하나다)
+    assert upgraded['items'][1]['effects'] == [{'kind': 'heal', 'magnitude': 'light'}]
+    assert upgraded['items'][1]['throw'] == {'ability': 'dex', 'difficulty': None}
+    assert upgraded['items'][2] == old['items'][2]
+    assert 'harm' in old['items'][0]['throw']
+    assert UPGRADES[62] is upgrade_from_62
+
+
+def test_the_narrator_hears_what_a_throw_did():
+    thrown = {
+        'name': '독병',
+        'target': {'monster_id': 'm', 'name': '해골 병사'},
+        'thrown': True,
+        'reason': None,
+        'cured': [{'injury': 'stunned', 'name': '기절'}],
+        'injured': [
+            {'injury': 'bleeding', 'name': '출혈', 'immune': None},
+            {'injury': None, 'name': '중독', 'immune': 'poisoned'},
+        ],
+    }
+
+    note = to_throw(SimpleNamespace(outcome={'item_throw': thrown}))
+
+    assert (note.cured, note.injured, note.resisted) == (['기절'], ['출혈'], ['중독'])
+
+
+def test_the_migration_moves_the_harm_and_takes_it_back():
+    migration = load_migration('thrown_effects')
+    old = {'entry_id': 'a', 'kind': 'consumable', 'throw': {'ability': 'dex', 'harm': 'light'}, 'effects': [POISON]}
+
+    moved = migration.with_throw_damage(old)
+
+    assert moved == {
+        'entry_id': 'a',
+        'kind': 'consumable',
+        'throw': {'ability': 'dex'},
+        'effects': [{'kind': 'damage', 'magnitude': 'light'}, POISON],
+    }
+    assert migration.with_throw_damage(moved) == moved
+    assert migration.without_throw_damage(moved) == old
+    # 그때는 소모품만, 피해와 함께 던졌다. 아니면 던지는 판정을 버린다
+    axe = {'entry_id': 'b', 'kind': 'gear', 'throw': {'ability': 'str'}, 'effects': []}
+    assert migration.without_throw_damage(axe)['throw'] is None
+    # 이미 회복이 있으면 던진 피해는 버린다
+    tonic = {'entry_id': 'c', 'kind': 'consumable', 'throw': {'ability': 'dex', 'harm': 'light'}, 'effects': [HEAL]}
+    assert migration.with_throw_damage(tonic) == {**tonic, 'throw': {'ability': 'dex'}}
+    assert migration.without_throw_damage({**old, 'throw': None}) == {**old, 'throw': None}

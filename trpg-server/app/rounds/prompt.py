@@ -194,7 +194,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 생긴 부상이 붙는다. 기절한 몬스터는 차례를 잃는다
 #   narration-66: 물건의 효과(#800). 쓴 물건의 줄에 입힌 부상과 면역이라 입지 않은 부상이 붙고([입힌 부상: 중독]),
 #                 인물이나 몬스터에게 쓴 물건은 판정의 줄 앞에 온다((쓴 물건: 독 바른 단검 → 수로 쥐) 민첩 판정 …)
-PROMPT_VERSION = 'narration-66'
+#   narration-67: 모든 물건을 던진다(#801). 던진 물건의 줄에 맞힌 대상에게 든 효과가 붙는다
+#                 ((던진 물건: 치유 물약 → 영애) [풀린 부상: 중독])
+PROMPT_VERSION = 'narration-67'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

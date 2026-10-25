@@ -132,7 +132,9 @@ from app.engine.sheet import Sheet
 #      monsters[].immune, vulnerable: 타입의 면역에 더하고 빼는 성질
 #  62: 소모품의 효과 목록(#800). items[].effects: 회복, 풀기, 피해, 부상. heals, cures 는 효과가 됐다.
 #      rulebook.rules.item_check: 물건을 인물이나 몬스터에게 쓸 때 맞히는 판정(능력치, 난이도)
-SNAPSHOT_FORMAT = 62
+#  63: 모든 물건을 던진다(#801). items[].throw 는 판정(능력치, 난이도)만이고, 맞았을 때의 피해(harm)는
+#      효과의 damage 가 됐다. 던지는 판정이 없는 물건은 룰북의 맞히는 판정(item_check)으로 던진다
+SNAPSHOT_FORMAT = 63
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다
@@ -234,11 +236,10 @@ class PickSnapshot(BaseModel):
 
 
 class ItemThrowSnapshot(BaseModel):
-    """물건을 던지는 판정(#277). 능력치, 난이도(없으면 룰북의 기본), 맞았을 때의 피해의 등급의 이름이다."""
+    """물건을 던지는 판정(#277). 능력치와 난이도(없으면 룰북의 기본)다. 맞으면 물건의 효과가 든다(#801)."""
 
     ability: str
     difficulty: str | None = None
-    harm: str
 
 
 class ItemLockSnapshot(BaseModel):

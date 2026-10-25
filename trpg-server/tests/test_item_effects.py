@@ -400,6 +400,73 @@ async def test_a_monster_killed_meanwhile_is_not_used_on(
     assert held(await read_table(client, me, world['table']), ME)['독 단검'] == 1
 
 
+# --- 던지기(#801) ---
+
+
+def throw(item: dict, **target) -> dict:
+    """그 물건을 던지는 행동. 맞을 쪽은 monster 나 npc 다."""
+    return {'kind': 'throw', 'item': item['id'], **target}
+
+
+async def test_a_thrown_potion_heals_a_person(client: AsyncClient, app: FastAPI, me: dict):
+    world = await start_table(client, me)
+    lady = (await people(client, me, world['table']))['people'][0]
+    load_dice(app, [PASS, 2])
+
+    closing = await declare(client, me, world['table'], '물약을 던진다.', throw(world['potion'], npc=lady['id']))
+
+    outcome = outcome_of(closing)
+    assert (outcome['success'], outcome['npc_effect']['kind']) == (True, 'recovery')
+    assert (outcome['item_throw']['ability'], outcome['item_throw']['thrown']) == ('dex', True)
+
+
+async def test_thrown_powder_stuns_a_monster_and_is_recorded(client: AsyncClient, app: FastAPI, me: dict):
+    world = await start_table(client, me)
+    rat = await monster_named(client, me, world['table'], '수로 쥐')
+    load_dice(app, [PASS])
+
+    closing = await declare(client, me, world['table'], '가루를 던진다.', throw(world['powder'], monster=rat['id']))
+
+    assert injured_keys(outcome_of(closing)['item_throw']) == ['stunned']
+    assert (await monster_named(client, me, world['table'], '수로 쥐'))['injuries'] == ['stunned']
+    (thrown,) = await events_of(client, me, world['table'], 'item_thrown')
+    (gained,) = await events_of(client, me, world['table'], 'injury_gained')
+    assert thrown['payload']['injured'] == [{'injury': 'stunned', 'name': '기절'}]
+    assert (gained['payload']['monster_id'], gained['caused_by_sequence']) == (rat['id'], thrown['sequence'])
+
+
+async def test_a_thrown_poison_does_not_take_on_the_undead(client: AsyncClient, app: FastAPI, me: dict):
+    world = await start_table(client, me)
+    skeleton = await monster_named(client, me, world['table'], '해골 병사')
+    load_dice(app, [PASS, 1])
+
+    closing = await declare(
+        client, me, world['table'], '단검을 던진다.', throw(world['dagger'], monster=skeleton['id'])
+    )
+
+    (injured,) = outcome_of(closing)['item_throw']['injured']
+    assert (injured['injury'], injured['immune']) == (None, 'poisoned')
+    assert outcome_of(closing)['monster_effect']['amount'] == 1
+
+
+async def test_a_missed_throw_brings_no_effect_but_is_a_fight(
+    client: AsyncClient, app: FastAPI, me: dict, session: AsyncSession
+):
+    world = await start_table(client, me)
+    rat = await monster_named(client, me, world['table'], '수로 쥐')
+    load_dice(app, [FAIL])
+
+    closing = await declare(client, me, world['table'], '가루를 던진다.', throw(world['powder'], monster=rat['id']))
+
+    assert outcome_of(closing)['item_throw']['injured'] == []
+    assert (await monster_named(client, me, world['table'], '수로 쥐'))['injuries'] == []
+    # 해로운 물건을 던졌으니 맞든 빗나가든 그 마리와 싸운 것이다
+    fought = await session.execute(
+        text('SELECT fought_round FROM table_monsters WHERE id = :id'), {'id': uuid.UUID(rat['id'])}
+    )
+    assert fought.scalar_one() == 1
+
+
 # --- 받기 ---
 
 

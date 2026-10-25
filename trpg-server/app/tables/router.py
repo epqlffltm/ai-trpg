@@ -245,7 +245,7 @@ def to_throw(throw: ItemThrowSnapshot | None) -> ItemThrowOut | None:
     """판의 물건의 던지는 판정을 응답으로 바꾼다(#277). 던질 수 없으면 None."""
     if throw is None:
         return None
-    return ItemThrowOut(ability=throw.ability, difficulty=throw.difficulty, harm=throw.harm)
+    return ItemThrowOut(ability=throw.ability, difficulty=throw.difficulty)
 
 
 def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:

@@ -310,9 +310,12 @@ def record_item_throw(session: AsyncSession, table: GameTable, declaration: Decl
     물건을 던진 결과를 이벤트로 적는다(#277). 그 행동의 이벤트(cause)에 잇는다.
 
     던졌으면 바로 뒤에 그 판정과 맞은 쪽의 변화를 적는다(record_check). 던지지 못했으면 굴린 것이 없다.
+    맞힌 대상에게서 푼 부상과 입힌 부상(#801, 물건의 효과)은 그 뒤에 적는다. 쓰기와 같다(record_item_use).
     행한 사람을 적지 않는다. 소지품을 바꾸고 굴린 것은 엔진이다.
     """
     thrown = item_throw_of(declaration)
+    cured = thrown.get('cured') or []
+    injured = [one for one in thrown.get('injured') or [] if one['injury'] is not None]
     payload = {
         'round': cause.payload['round'],
         'character_name': declaration.character_name,
@@ -322,10 +325,15 @@ def record_item_throw(session: AsyncSession, table: GameTable, declaration: Decl
         'reason': thrown['reason'],
         'target': thrown['target'],
         'remaining': thrown['remaining'],
+        'cured': [{'injury': one['injury'], 'name': one['name']} for one in cured],
+        'injured': [{'injury': one['injury'], 'name': one['name']} for one in injured],
     }
     event = recorder.record(session, table, EventType.ITEM_THROWN, payload=payload, cause=cause)
     if has_outcome(declaration):
         record_check(session, table, declaration, cause=event)
+    record_cures(session, table, cured, thrown['target'], cause=event)
+    for one in injured:
+        record_injury(session, table, one, thrown['target'], cause=event)
 
 
 def record_item_give(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
