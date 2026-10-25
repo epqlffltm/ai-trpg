@@ -21,8 +21,10 @@ import {
   BoardIndexPage,
   BoardListPage,
   BoardSearchPage,
+  CharacterBrowsePage,
   CharacterEditPage,
   CharacterNewPage,
+  CharacterPage,
   CharactersPage,
   ChargePage,
   ChatLorebookEditPage,
@@ -272,7 +274,9 @@ export function App() {
             <Route path="new" element={<ChatLorebookNewPage />} />
             <Route path=":lorebookId" element={<ChatLorebookEditPage />} />
           </Route>
-          <Route index element={<PlaceholderPage service="chat" />} />
+          {/* 캐릭터 탐색(C1)과 소개(C2). 로그인하지 않아도 열린다(전체이용가만) */}
+          <Route index element={<CharacterBrowsePage />} />
+          <Route path="characters/:characterId" element={<CharacterPage />} />
           <Route path="*" element={<PlaceholderPage service="chat" />} />
         </Route>
         <Route path="story/*" element={<PlaceholderPage service="story" />} />

@@ -1,7 +1,9 @@
 // web/apps/web/src/pages/gallery/CharacterGallery.tsx
 // 캐릭터 하나의 갤러리. 공개 판을 읽어 해금 대상 씬의 칸을 늘어놓는다. 판을 읽지 못하면(공개를 내림, 숨김) 연 수만 적는다.
+// 캐릭터의 이름은 소개(C2)로 가는 길이다.
 
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { openedLabel, sceneCells } from './galleryView';
 import { publicCharacterQuery } from './galleryQueries';
 import { SceneTile } from './SceneTile';
@@ -22,7 +24,7 @@ export function CharacterGallery({ characterId, unlocked }: { characterId: strin
   return (
     <section className="page-section" aria-labelledby={heading}>
       <h2 id={heading}>
-        {character.data.document.name} <span className="hint">{openedLabel(cells)}</span>
+        <Link to={`/chat/characters/${characterId}`}>{character.data.document.name}</Link> <span className="hint">{openedLabel(cells)}</span>
       </h2>
       <ul className="plain-list scene-grid" aria-label={`${character.data.document.name}의 장면`}>
         {cells.map((cell) => (

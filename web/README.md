@@ -5,8 +5,8 @@
 
 지금 있는 것: 뼈대(npm workspaces, 프록시의 이미지에 굽기, CI), 로그인(A2 의 두 단계, 갱신은 한 번에 하나 #30), 가입(세 단계와 동의),
 비밀번호 찾기와 재설정, 다시 동의와 탈퇴 취소, 첫 화면(A1: 서비스 고르기, 이어하기, 공개된 것),
-마이페이지(A5: 계정, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의), 지갑(A6: 머리의 잔액, 골드·실버, 원장), 충전(A7: 상품, 주문, 시험용 결제창, 승인과 다시 확인), 주문 내역과 청약철회(A8), TRPG 의 시나리오 탐색(B1), 소개(B2), 로비(B3), 테이블 만들기(B4), 테이블 방(B6)의 대기실과 스트림, 채팅, 캐릭터 정하기(B5, 모집 중), 라운드(서술, 행동을 붙인 선언과 사고팔기·돈 건네기·무기와 노릴 부위, 결과, 서술의 미리 보기, 방장의 닫기), 상태 패널(B7, 선언으로 가는 단추, 장비의 착용과 벗기), 일어난 일(이벤트 기록과 서술을 막는 일의 알림), 방장의 운영(내보내기, 방장 넘기기, 한 번 더 굴리기, 설정, 끝내기), 서술 모델과 단계 고르기(B8, 만들기와 방장 패널), 운영자의 신고 처리(E4: 캐릭터의 신고와 대화 속 답의 신고, `/operator/reports`), chat 의 캐릭터 만들기(C6: 목록, 만들기, 기본·소개·말·시작 상황·지도·물건·호감도·그림·캐릭터 그림·이벤트 씬·로어북·게시 탭과 게시 점검, `/chat/studio/characters`), chat 의 로어북(목록, 만들기, 항목, 게시, `/chat/studio/lorebooks`).
-본인인증, 보호자 동의, 토스페이먼츠 결제창, 출석, 탈퇴 요청, TRPG 의 캐릭터 보관함과 진행 중의 새 캐릭터, chat 의 화면(C)은 다음이다. 그 경로는 "준비 중"을 보인다.
+마이페이지(A5: 계정, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의), 지갑(A6: 머리의 잔액, 골드·실버, 원장), 충전(A7: 상품, 주문, 시험용 결제창, 승인과 다시 확인), 주문 내역과 청약철회(A8), TRPG 의 시나리오 탐색(B1), 소개(B2), 로비(B3), 테이블 만들기(B4), 테이블 방(B6)의 대기실과 스트림, 채팅, 캐릭터 정하기(B5, 모집 중), 라운드(서술, 행동을 붙인 선언과 사고팔기·돈 건네기·무기와 노릴 부위, 결과, 서술의 미리 보기, 방장의 닫기), 상태 패널(B7, 선언으로 가는 단추, 장비의 착용과 벗기), 일어난 일(이벤트 기록과 서술을 막는 일의 알림), 방장의 운영(내보내기, 방장 넘기기, 한 번 더 굴리기, 설정, 끝내기), 서술 모델과 단계 고르기(B8, 만들기와 방장 패널), 운영자의 신고 처리(E4: 캐릭터의 신고와 대화 속 답의 신고, `/operator/reports`), chat 의 캐릭터 탐색(C1, `/chat`)과 소개(C2: 거른 HTML 의 소개, 시작 상황을 골라 대화 시작, 이 캐릭터와의 대화, 일러스트, `/chat/characters/:id`), chat 의 캐릭터 만들기(C6: 목록, 만들기, 기본·소개·말·시작 상황·지도·물건·호감도·그림·캐릭터 그림·이벤트 씬·로어북·게시 탭과 게시 점검, `/chat/studio/characters`), chat 의 로어북(목록, 만들기, 항목, 게시, `/chat/studio/lorebooks`).
+본인인증, 보호자 동의, 토스페이먼츠 결제창, 출석, 탈퇴 요청, TRPG 의 캐릭터 보관함과 진행 중의 새 캐릭터, chat 의 대화(C3)와 페르소나·기억(C4, C5)은 다음이다. 그 경로는 "준비 중"을 보인다.
 
 ## 실행
 
@@ -66,13 +66,13 @@ web/
   package.json            npm workspaces 의 뿌리. 린트(ESLint)와 TypeScript 를 여기서 함께 쓴다
   Dockerfile              프록시의 이미지(Node 에서 빌드 → nginx-unprivileged 에 dist)
   apps/web/               앱
-    src/api/              서버를 부르는 것. http.ts(래퍼), refresh.ts(갱신), session.ts(토큰), auth.ts, lists.ts(첫 화면), listings.ts(B1, B2), tables.ts(B3, B4), tableRoom.ts·rounds.ts·tableHost.ts·tableStream.ts·sse.ts·transcripts.ts·pastTables.ts(B6, B10), rulebooks.ts·worlds.ts·lorebooks.ts·bestiaries.ts·scenarios.ts·studio.ts(B9), wallet.ts(A6), orders.ts(A7), attendance.ts(A9), identity.ts(A3), guardian.ts(A4), notifications.ts(A10), board.ts(A11), gallery.ts(C7), publicNames.ts, errors.ts
+    src/api/              서버를 부르는 것. http.ts(래퍼), refresh.ts(갱신), session.ts(토큰), auth.ts, lists.ts(첫 화면), listings.ts(B1, B2), tables.ts(B3, B4), tableRoom.ts·rounds.ts·tableHost.ts·tableStream.ts·sse.ts·transcripts.ts·pastTables.ts(B6, B10), rulebooks.ts·worlds.ts·lorebooks.ts·bestiaries.ts·scenarios.ts·studio.ts(B9), wallet.ts(A6), orders.ts(A7), attendance.ts(A9), identity.ts(A3), guardian.ts(A4), notifications.ts(A10), board.ts(A11), gallery.ts(C7), chatCharacters.ts(C1, C2), publicNames.ts, errors.ts
     src/api/generated/    서버의 API 목록(docs/api/*.openapi.json)에서 만든 타입. 손으로 고치지 않는다
     src/api/account.ts    본인의 계정(동의, 비밀번호 바꾸기, 모든 기기 로그아웃, 탈퇴 취소)
     src/auth/             로그인 상태를 읽는 훅, 처음 열 때 되살리기, 로그인해야 열리는 화면(RequireSession), 실패의 글, 돌아갈 주소
     src/legal/            동의 항목의 이름과 요약, 판마다의 문서(documents/, docs/legal 의 사본), 문서를 보이는 창
     src/settings/         화면 쪽 설정(A12: 밝기, 글자 크기, 단축키)의 모양, 브라우저에 두기와 문서에 입히기
-    src/pages/            화면. home(A1), login·signup·password(A2), limited(다시 동의, 탈퇴 유예), me(A5), identity(A3 본인인증), guardian(A4 보호자 동의와 보호자의 링크 화면), notifications(A10 알림), settings(A12 설정), gallery(C7 갤러리), board(A11 공지·게시판 읽기), wallet(A6), charge(A7), orders(A8), attendance(A9 출석·보물 상자), trpg(B1 탐색, B2 소개, B3 로비, B4 테이블 만들기, room 의 B6 테이블 방, room/character 의 B5 캐릭터 정하기, room/round 의 라운드(앞의 라운드 B10)와 round/action 의 행동, room/transcript 의 기록 받기, past 의 떠난 테이블(B10), room/status 의 B7 상태 패널, room/money.ts 의 판 안의 돈, room/events 의 일어난 일, room/host 의 방장의 운영, models 의 B8 서술 모델 고르기, studio 의 B9 제작 도구: 허브, 룰북, 세계관, 로어북, 몬스터 모음, 시나리오 조립의 뼈대, 캐릭터, 물건·돈, 인물, 지도와 길의 문, 몬스터, 퀘스트·사건, 소개와 공개), operator(E4 신고 처리), chat/studio/characters(C6 캐릭터 만들기), 준비 중, 없는 경로
+    src/pages/            화면. home(A1), login·signup·password(A2), limited(다시 동의, 탈퇴 유예), me(A5), identity(A3 본인인증), guardian(A4 보호자 동의와 보호자의 링크 화면), notifications(A10 알림), settings(A12 설정), gallery(C7 갤러리), board(A11 공지·게시판 읽기), wallet(A6), charge(A7), orders(A8), attendance(A9 출석·보물 상자), trpg(B1 탐색, B2 소개, B3 로비, B4 테이블 만들기, room 의 B6 테이블 방, room/character 의 B5 캐릭터 정하기, room/round 의 라운드(앞의 라운드 B10)와 round/action 의 행동, room/transcript 의 기록 받기, past 의 떠난 테이블(B10), room/status 의 B7 상태 패널, room/money.ts 의 판 안의 돈, room/events 의 일어난 일, room/host 의 방장의 운영, models 의 B8 서술 모델 고르기, studio 의 B9 제작 도구: 허브, 룰북, 세계관, 로어북, 몬스터 모음, 시나리오 조립의 뼈대, 캐릭터, 물건·돈, 인물, 지도와 길의 문, 몬스터, 퀘스트·사건, 소개와 공개), operator(E4 신고 처리), chat/browse(C1 캐릭터 탐색), chat/character(C2 캐릭터 소개, 소개 글을 거르는 introHtml.ts), chat/studio/characters(C6 캐릭터 만들기), 준비 중, 없는 경로
     src/components/       여러 화면이 함께 쓰는 것(목록 한 칸, 실패 한 줄, 한 번 더 묻는 단추)
     src/hooks/            남은 초 세기, 다른 사람의 이름 찾기(public-names, #532)
     src/layout/           머리와 틀

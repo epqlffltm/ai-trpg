@@ -97,14 +97,14 @@ describe('탈퇴 유예', () => {
       'GET /api/v1/auth/me': () => json(200, { nickname: '모험가' }),
       'DELETE /api/v1/auth/me/withdrawal': () => json(200, { withdrawal_scheduled_at: null }),
     });
-    renderApp('/chat');
+    renderApp('/story');
 
     expect(await screen.findByRole('heading', { name: '탈퇴를 기다리는 중입니다' })).toBeInTheDocument();
     expect(screen.getByText(/2026년 10월/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '탈퇴 취소하기' }));
 
-    expect(await screen.findByRole('heading', { name: 'chat' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'story' })).toBeInTheDocument();
     expect(getSession()?.accessToken).toBe('full');
     expect(seen.filter((request) => request.url === REFRESH_PATH)).toHaveLength(2);
   });
