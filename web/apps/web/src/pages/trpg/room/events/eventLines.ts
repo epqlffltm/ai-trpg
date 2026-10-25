@@ -20,7 +20,8 @@ type Payload = Record<string, unknown>;
 export type EventLine = { text: string; important: boolean };
 
 export type EventContext = {
-  table: TableDetail;
+  /** 판의 규칙(부상과 칸의 이름)과 화폐. 떠난 테이블처럼 모르면 rules 가 null 이고 이름표를 그대로 적는다 */
+  table: Pick<TableDetail, 'currency'> & { rules: TableDetail['rules'] | null };
   /** 사람(user_id)의 보일 이름. 캐릭터의 이름이 먼저다 */
   nameOfMember: (userId: string) => string;
   /** 서술 모델의 이름표를 보일 이름으로. 모르면 이름표 그대로 */
@@ -175,7 +176,8 @@ function gainedFrom(payload: Payload): string {
 }
 
 function injuryOf(payload: Payload, ctx: EventContext): string {
-  return injuryName(ctx.table.rules, text(payload, 'injury') ?? '');
+  const key = text(payload, 'injury') ?? '';
+  return ctx.table.rules ? injuryName(ctx.table.rules, key) : key;
 }
 
 function roundOpenedText(payload: Payload): string {
@@ -285,7 +287,7 @@ function paidText(payload: Payload, ctx: EventContext, event: TableEvent): strin
 function slotsOf(payload: Payload, ctx: EventContext): string {
   const value = payload['slots'];
   const keys = Array.isArray(value) ? value.filter((key): key is string => typeof key === 'string') : [];
-  const names = new Map(ctx.table.rules.equipment_slots.map((slot) => [slot.key, slot.name]));
+  const names = new Map((ctx.table.rules?.equipment_slots ?? []).map((slot) => [slot.key, slot.name]));
   return keys.map((key) => names.get(key) ?? key).join('·');
 }
 

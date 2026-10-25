@@ -31,6 +31,8 @@ export const ScenarioBrowsePage = lazyPage(() => import('../pages/trpg/browse/Sc
 export const ScenarioPage = lazyPage(() => import('../pages/trpg/scenario/ScenarioPage'), 'ScenarioPage');
 export const LobbyPage = lazyPage(() => import('../pages/trpg/lobby/LobbyPage'), 'LobbyPage');
 export const TableCreatePage = lazyPage(() => import('../pages/trpg/tables/TableCreatePage'), 'TableCreatePage');
+export const PastTablesPage = lazyPage(() => import('../pages/trpg/past/PastTablesPage'), 'PastTablesPage');
+export const PastTablePage = lazyPage(() => import('../pages/trpg/past/PastTablePage'), 'PastTablePage');
 export const TableRoomPage = lazyPage(() => import('../pages/trpg/room/TableRoomPage'), 'TableRoomPage');
 
 // 제작 도구(B9). 만들기(허브)와 재료마다의 목록, 만들기, 고치기

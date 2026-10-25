@@ -1926,3 +1926,9 @@ a.ui-button {
 .comment--deleted .comment__text {
   color: var(--ui-text-muted);
 }
+
+/* 떠난 테이블(B10). 선언 한 줄 */
+.past-action {
+  margin: 4px 0 4px 12px;
+  overflow-wrap: anywhere;
+}

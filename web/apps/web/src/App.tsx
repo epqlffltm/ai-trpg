@@ -41,6 +41,8 @@ import {
   NotificationsPage,
   OrderPage,
   OrdersPage,
+  PastTablePage,
+  PastTablesPage,
   PostPage,
   ReportsPage,
   RulebookEditPage,
@@ -161,6 +163,22 @@ export function App() {
             element={
               <RequireSession>
                 <TableCreatePage />
+              </RequireSession>
+            }
+          />
+          <Route
+            path="tables/past"
+            element={
+              <RequireSession>
+                <PastTablesPage />
+              </RequireSession>
+            }
+          />
+          <Route
+            path="tables/past/:tableId"
+            element={
+              <RequireSession>
+                <PastTablePage />
               </RequireSession>
             }
           />
