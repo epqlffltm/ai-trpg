@@ -2132,3 +2132,211 @@ a.ui-button {
   content: ' ↗';
   font-size: 0.85em;
 }
+
+/* chat 의 대화(C3). 위에 머리와 그림 창, 아래에 대사창과 말 쓰기 */
+.conversation {
+  display: grid;
+  gap: 12px;
+}
+
+.conversation__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  align-items: flex-start;
+}
+
+.conversation__head h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.conversation__head .hint {
+  margin: 2px 0 0;
+}
+
+.conversation__affection {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.9em;
+}
+
+.conversation__affection progress {
+  width: 120px;
+}
+
+.conversation__model {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+}
+
+.conversation__picture {
+  position: relative;
+  height: 320px;
+  overflow: hidden;
+  border-radius: var(--ui-radius);
+  background: var(--ui-border);
+}
+
+.conversation__stage,
+.conversation__scene {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+}
+
+.conversation__background,
+.conversation__scene img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.conversation__sprite {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  height: 95%;
+  max-width: 80%;
+  object-fit: contain;
+  transform: translateX(-50%);
+}
+
+.conversation__scene figcaption {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 2px 8px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  font-size: 0.85em;
+}
+
+.conversation__log {
+  max-height: 55vh;
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.chat-start {
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px dashed var(--ui-border);
+  color: var(--ui-text-muted);
+}
+
+.chat-start__title {
+  margin: 0 0 4px;
+  font-weight: 600;
+}
+
+.chat-messages {
+  display: grid;
+  gap: 12px;
+}
+
+.chat-message__speaker {
+  margin: 0 0 2px;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.chat-message__content {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-message--user {
+  justify-self: end;
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-bg);
+}
+
+.chat-message--action .chat-message__content {
+  font-style: italic;
+  color: var(--ui-text-muted);
+}
+
+.chat-message__marks,
+.chat-message__changes {
+  margin: 4px 0 0;
+  font-size: 0.85em;
+}
+
+.chat-message__changes {
+  padding-left: 1.2em;
+  color: var(--ui-text-muted);
+}
+
+.chat-message__alternatives {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85em;
+}
+
+.chat-tail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.conversation__composer {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chat-suggestions .ui-button {
+  text-align: left;
+  white-space: normal;
+}
+
+.conversation__send {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.chat-models {
+  display: grid;
+  gap: 12px;
+}
+
+.chat-models__group {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+@media (max-width: 640px) {
+  .conversation__picture {
+    height: 180px;
+  }
+
+  .conversation__model {
+    justify-items: start;
+  }
+
+  .conversation__log {
+    max-height: none;
+  }
+}

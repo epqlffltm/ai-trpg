@@ -136,6 +136,7 @@ describe('캐릭터 소개', () => {
   it('시작 상황을 골라 대화를 시작하면 대화로 간다. 내 대화와 새 판, 연 일러스트를 보인다', async () => {
     const { seen } = signedIn({
       'POST /api/v1/chat/conversations': () => json(201, { id: CONVERSATION }),
+      [`GET /api/v1/chat/conversations/${CONVERSATION}`]: () => json(404, { detail: 'x' }),
     });
     renderApp(`/chat/characters/${LUNA}`);
 
@@ -150,7 +151,8 @@ describe('캐릭터 소개', () => {
 
     await userEvent.click(screen.getByRole('radio', { name: '문 닫을 무렵' }));
     await userEvent.click(screen.getByRole('button', { name: '대화 시작' }));
-    expect(await screen.findByRole('heading', { name: 'chat' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '대화' })).toBeInTheDocument();
+    expect(seen.some((request) => request.url === `/api/v1/chat/conversations/${CONVERSATION}`)).toBe(true);
     const posted = seen.filter((request) => request.method === 'POST' && request.url === '/api/v1/chat/conversations');
     expect(posted.map((request) => request.body)).toEqual([{ character_id: LUNA, start: 1 }]);
   });
