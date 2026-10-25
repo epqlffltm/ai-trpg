@@ -4,10 +4,10 @@
 // asset 서버의 답(asset-server/app/lorebooks/router.py):
 //   - 403 code operator_only: 지금(1~2단계)은 운영자만 만든다
 //   - 404 code lorebook_not_found: 그런 로어북이 없다. 남의 것도 404 다
-//   - 422: 받지 않는 값. 화면이 먼저 검사하므로 서버의 규칙이 바뀌었을 때만 온다
+//   - 422: 받지 않는 값. 화면이 먼저 검사하므로 서버의 규칙이 바뀌었을 때만 온다. 칸이 틀린 것(errors)이면 그 칸에 보인다
 
-import { ApiError } from '../../../../api/errors';
-import { commonProblem, unknownProblem, type FormProblem } from '../../../../auth/problem';
+import { ApiError, isInputError } from '../../../../api/errors';
+import { commonProblem, fieldProblem, unknownProblem, type FormProblem } from '../../../../auth/problem';
 
 const FAILED = '처리하지 못했습니다. 잠시 뒤에 다시 시도하세요.';
 const OPERATOR_ONLY = '지금은 운영자만 로어북을 만들 수 있습니다.';
@@ -18,6 +18,7 @@ export function describeLorebookProblem(error: unknown): FormProblem {
   if (common || !(error instanceof ApiError)) return common ?? { message: FAILED };
   if (error.status === 403 && error.code === 'operator_only') return { message: OPERATOR_ONLY };
   if (error.status === 404) return { message: MISSING };
+  if (isInputError(error)) return fieldProblem(error, '서버가 받지 않는 값이 있습니다. 칸을 다시 확인해 주세요.');
   if (error.status === 422) return { message: '서버가 받지 않는 값이 있습니다. 칸을 다시 확인해 주세요.' };
   return unknownProblem(error, FAILED);
 }

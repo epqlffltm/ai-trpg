@@ -242,6 +242,8 @@ async def test_bad_list_parameters_are_refused(client: AsyncClient, mine: dict, 
     response = await client.get(CONVERSATIONS_URL, params=params, headers=mine)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    # 칸이 틀린 요청은 서버들이 함께 쓰는 본문이다(server_core/input_errors.py)
+    assert list(response.json()['errors']) == list(params)
 
 
 # --- 읽기 ---

@@ -7,10 +7,10 @@
 //   - 404: 그런 캐릭터가 없다. 남의 것도 404 다
 //   - 422 code lorebook_not_owned: 붙이려는 로어북이 내 것이 아니거나 그사이 지워졌다
 //   - 409 {problems}(게시): 게시할 조건을 갖추지 못했다. 무엇인지는 점검 패널이 보인다
-//   - 422: 받지 않는 값. 화면이 먼저 검사하므로 서버의 규칙이 바뀌었을 때만 온다
+//   - 422: 받지 않는 값. 화면이 먼저 검사하므로 서버의 규칙이 바뀌었을 때만 온다. 칸이 틀린 것(errors)이면 그 칸에 보인다
 
-import { ApiError } from '../../../../api/errors';
-import { commonProblem, unknownProblem, type FormProblem } from '../../../../auth/problem';
+import { ApiError, isInputError } from '../../../../api/errors';
+import { commonProblem, fieldProblem, unknownProblem, type FormProblem } from '../../../../auth/problem';
 
 const FAILED = '처리하지 못했습니다. 잠시 뒤에 다시 시도하세요.';
 const OPERATOR_ONLY = '지금은 운영자만 캐릭터를 만들고 공개로 둘 수 있습니다.';
@@ -31,6 +31,7 @@ export function describeCharacterProblem(error: unknown): FormProblem {
   if (isCode(error, 403, 'adult_content_required')) return { message: ADULT_ONLY, fields: { rating: ADULT_ONLY } };
   if (error.status === 404) return { message: MISSING };
   if (isCode(error, 422, 'lorebook_not_owned')) return { message: NOT_OWNED };
+  if (isInputError(error)) return fieldProblem(error, '서버가 받지 않는 값이 있습니다. 칸을 다시 확인해 주세요.');
   if (error.status === 422) return { message: '서버가 받지 않는 값이 있습니다. 칸을 다시 확인해 주세요.' };
   return unknownProblem(error, FAILED);
 }

@@ -461,6 +461,8 @@ async def test_rejects_bad_reading_options(client: AsyncClient, me: dict[str, st
     response = await client.get(table_url(table, '/events'), params=params, headers=me)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    # 칸이 틀린 요청은 서버들이 함께 쓰는 본문이다(server_core/input_errors.py)
+    assert list(response.json()['errors']) == list(params)
 
 
 # --- 누가 읽나 ---

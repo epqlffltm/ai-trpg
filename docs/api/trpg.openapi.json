@@ -3500,19 +3500,6 @@
         "title": "Grade",
         "type": "string"
       },
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "title": "Detail",
-            "type": "array"
-          }
-        },
-        "title": "HTTPValidationError",
-        "type": "object"
-      },
       "HappeningEffectKind": {
         "description": "사건이 일어났을 때 하는 일의 종류(#367). 효과는 목록이라 종류가 늘어도 판의 모양은 그대로다.",
         "enum": [
@@ -4083,6 +4070,30 @@
           "called_shot"
         ],
         "title": "InjuryTriggers",
+        "type": "object"
+      },
+      "InputError": {
+        "properties": {
+          "detail": {
+            "description": "무엇이 잘못됐는가. 화면에 그대로 보여 줄 수 있는 문장이다",
+            "type": "string"
+          },
+          "errors": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": "칸의 이름(점으로 이은 경로)마다 틀린 까닭들이다",
+            "type": "object"
+          }
+        },
+        "required": [
+          "detail",
+          "errors"
+        ],
+        "title": "InputError",
         "type": "object"
       },
       "ItemGiveOut": {
@@ -15409,46 +15420,6 @@
         "title": "UseAction",
         "type": "object"
       },
-      "ValidationError": {
-        "properties": {
-          "ctx": {
-            "title": "Context",
-            "type": "object"
-          },
-          "input": {
-            "title": "Input"
-          },
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "title": "Location",
-            "type": "array"
-          },
-          "msg": {
-            "title": "Message",
-            "type": "string"
-          },
-          "type": {
-            "title": "Error Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError",
-        "type": "object"
-      },
       "VersionCreate": {
         "additionalProperties": false,
         "description": "게시할 때 받는 값. 변경 내용만 적는다. 비워도 된다.\n\n판의 내용은 받지 않는다. 서버가 초안에서 직접 읽어 굳힌다.",
@@ -16436,11 +16407,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -16496,11 +16467,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -16567,11 +16538,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -16629,11 +16600,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -16689,11 +16660,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -16774,11 +16745,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -16859,11 +16830,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -16944,11 +16915,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17004,11 +16975,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17064,11 +17035,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17127,11 +17098,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17173,11 +17144,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17216,11 +17187,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17264,11 +17235,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17322,11 +17293,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17376,11 +17347,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17434,11 +17405,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17494,11 +17465,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17547,11 +17518,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17615,11 +17586,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17730,11 +17701,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17780,11 +17751,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17843,11 +17814,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17889,11 +17860,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17932,11 +17903,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -17980,11 +17951,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18038,11 +18009,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18092,11 +18063,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18150,11 +18121,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18210,11 +18181,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18263,11 +18234,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18331,11 +18302,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18422,11 +18393,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18468,11 +18439,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18511,11 +18482,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18559,11 +18530,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18617,11 +18588,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18707,11 +18678,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18770,11 +18741,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18816,11 +18787,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18887,11 +18858,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18935,11 +18906,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -18993,11 +18964,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19056,11 +19027,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19102,11 +19073,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19145,11 +19116,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19193,11 +19164,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19251,11 +19222,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19301,11 +19272,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19359,11 +19330,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19419,11 +19390,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19479,11 +19450,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19529,11 +19500,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19583,11 +19554,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19641,11 +19612,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19700,11 +19671,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19750,11 +19721,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "summary": "Receive Withdrawal",
@@ -19808,11 +19779,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19854,11 +19825,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19902,11 +19873,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -19982,11 +19953,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20073,11 +20044,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20146,11 +20117,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20198,11 +20169,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20248,11 +20219,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20298,11 +20269,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20356,11 +20327,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20414,11 +20385,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20464,11 +20435,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20514,11 +20485,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20564,11 +20535,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20624,11 +20595,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20674,11 +20645,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20734,11 +20705,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20793,11 +20764,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20866,11 +20837,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20926,11 +20897,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -20986,11 +20957,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21029,11 +21000,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21089,11 +21060,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21149,11 +21120,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21222,11 +21193,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21280,11 +21251,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21323,11 +21294,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21383,11 +21354,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21443,11 +21414,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21503,11 +21474,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21563,11 +21534,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21636,11 +21607,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21686,11 +21657,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21736,11 +21707,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21796,11 +21767,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21846,11 +21817,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21906,11 +21877,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -21970,11 +21941,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -22020,11 +21991,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -22112,11 +22083,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -22164,11 +22135,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -22224,11 +22195,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -22297,11 +22268,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -22355,11 +22326,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -22418,11 +22389,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -22464,11 +22435,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -22507,11 +22478,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -22555,11 +22526,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [
@@ -22613,11 +22584,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/InputError"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "입력이 틀렸다"
           }
         },
         "security": [

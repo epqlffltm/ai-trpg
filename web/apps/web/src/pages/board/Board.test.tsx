@@ -153,7 +153,7 @@ describe('게시판의 순수한 함수', () => {
     expect(searchHint('가나 다라 마바 사아 자차 카타')).toBe('낱말은 5개까지입니다.');
     expect(searchHint('가'.repeat(51))).toBe('검색어는 50자까지입니다.');
     expect(searchPath('고정 버그', 'free')).toBe('/board/search?q=%EA%B3%A0%EC%A0%95+%EB%B2%84%EA%B7%B8&board=free');
-    expect(boardProblemText(new ApiError({ status: 400, detail: 'x', fields: { errors: ['검색어는 낱말마다 2자 이상이어야 합니다.'] } }), '검색')).toBe('검색어는 낱말마다 2자 이상이어야 합니다.');
+    expect(boardProblemText(new ApiError({ status: 400, detail: 'x', fields: { q: ['검색어는 낱말마다 2자 이상이어야 합니다.'] }, body: { errors: { q: ['검색어는 낱말마다 2자 이상이어야 합니다.'] } } }), '검색')).toBe('검색어는 낱말마다 2자 이상이어야 합니다.');
     expect(boardProblemText(new ApiError({ status: 503, detail: 'x', retryAfter: 5 }), '글')).toContain('5초 뒤에');
   });
 });

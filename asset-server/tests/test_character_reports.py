@@ -97,6 +97,8 @@ async def test_bad_reports_are_refused(client: AsyncClient, owner: dict, reader:
     response = await report(client, reader, made, body)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    # 칸이 틀린 요청은 서버들이 함께 쓰는 본문이다(server_core/input_errors.py)
+    assert set(response.json()) == {'detail', 'errors'}
 
 
 async def test_a_reason_without_a_description_is_fine(client: AsyncClient, owner: dict, reader: dict):

@@ -124,6 +124,8 @@ async def test_refuses_a_page_of_the_wrong_shape(client: AsyncClient, my_headers
     response = await client.get(INBOX_URL, params=params, headers=my_headers)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    # 칸이 틀린 요청은 서버들이 함께 쓰는 본문이다(server_core/input_errors.py)
+    assert list(response.json()['errors']) == list(params)
 
 
 async def test_cannot_pick_whose_inbox_to_read(client: AsyncClient, session: AsyncSession, my_headers: dict):

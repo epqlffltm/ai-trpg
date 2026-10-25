@@ -100,7 +100,7 @@ class PasswordChangeTests(APITestCase):
         response = self.change(current_password='not-my-password')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('current_password', response.data)
+        self.assertIn('current_password', response.data['errors'])
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(OLD_PASSWORD))
 
@@ -117,7 +117,7 @@ class PasswordChangeTests(APITestCase):
                 response = self.change(new_password=new_password)
 
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-                self.assertIn('new_password', response.data)
+                self.assertIn('new_password', response.data['errors'])
 
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(OLD_PASSWORD))
@@ -355,7 +355,7 @@ class PasswordResetConfirmTests(APITestCase):
         weak = self.confirm(new_password='player_01')
 
         self.assertEqual(weak.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('new_password', weak.data)
+        self.assertIn('new_password', weak.data['errors'])
         # 비밀번호를 고쳐 같은 링크로 다시 시도할 수 있어야 한다
         self.assertEqual(self.confirm().status_code, status.HTTP_200_OK)
 
@@ -365,7 +365,7 @@ class PasswordResetConfirmTests(APITestCase):
         response = self.confirm(token='not-the-real-token', new_password='player_01')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertNotIn('new_password', response.data)
+        self.assertNotIn('errors', response.data)
 
     def test_logs_out_every_device(self):
         device = BrowserClient()

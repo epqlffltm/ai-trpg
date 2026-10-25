@@ -141,7 +141,7 @@ class RequestTests(GuardianTestCase):
         response = self.request_consent('Player1@Example.com')
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('guardian_email', response.data)
+        self.assertIn('guardian_email', response.data['errors'])
         self.assertFalse(GuardianConsent.objects.exists())
 
     def test_asking_again_too_soon_waits(self):

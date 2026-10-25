@@ -929,11 +929,6 @@ export interface components {
          * @enum {string}
          */
         Grade: "basic" | "standard" | "premium";
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
-        };
         /** HealthResponse */
         HealthResponse: {
             /** Status */
@@ -948,6 +943,15 @@ export interface components {
             count: number;
             /** Item */
             item: string;
+        };
+        /** InputError */
+        InputError: {
+            /** @description 무엇이 잘못됐는가. 화면에 그대로 보여 줄 수 있는 문장이다 */
+            detail: string;
+            /** @description 칸의 이름(점으로 이은 경로)마다 틀린 까닭들이다 */
+            errors: {
+                [key: string]: string[];
+            };
         };
         /**
          * ItemDocument
@@ -1662,19 +1666,6 @@ export interface components {
              */
             kind: "use";
         };
-        /** ValidationError */
-        ValidationError: {
-            /** Context */
-            ctx?: Record<string, never>;
-            /** Input */
-            input?: unknown;
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-        };
         /**
          * WaitAction
          * @description 시간을 보낸다. 다음 시간대가 시작하는 시각까지 흐른다(밤이면 다음 날 새벽). 지도가 없어도 된다.
@@ -1728,13 +1719,13 @@ export interface operations {
                     "application/json": components["schemas"]["ReportPage"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -1761,13 +1752,13 @@ export interface operations {
                     "application/json": components["schemas"]["ReportDetailOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -1794,13 +1785,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -1828,13 +1819,13 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationPage"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -1861,13 +1852,13 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationDetail"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -1892,13 +1883,13 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationDetail"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -1921,13 +1912,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -1956,13 +1947,13 @@ export interface operations {
                     "text/event-stream": unknown;
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -1991,13 +1982,13 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationDetail"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2026,13 +2017,13 @@ export interface operations {
                     "text/event-stream": unknown;
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2061,13 +2052,13 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationModelOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2092,13 +2083,13 @@ export interface operations {
                     "application/json": components["schemas"]["NoteOut"][];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2127,13 +2118,13 @@ export interface operations {
                     "application/json": components["schemas"]["NoteOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2157,13 +2148,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2193,13 +2184,13 @@ export interface operations {
                     "application/json": components["schemas"]["NoteOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2225,13 +2216,13 @@ export interface operations {
                     "application/json": components["schemas"]["NoteOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2256,13 +2247,13 @@ export interface operations {
                     "application/json": components["schemas"]["SummaryOut"] | null;
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2291,13 +2282,13 @@ export interface operations {
                     "text/plain": unknown;
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2325,13 +2316,13 @@ export interface operations {
                     "application/json": components["schemas"]["UnlockPage"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2354,13 +2345,13 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2409,13 +2400,13 @@ export interface operations {
                     "application/json": components["schemas"]["MessageOut"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2440,13 +2431,13 @@ export interface operations {
                     "text/event-stream": unknown;
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2471,13 +2462,13 @@ export interface operations {
                     "text/event-stream": unknown;
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2506,13 +2497,13 @@ export interface operations {
                     "application/json": components["schemas"]["ReportCreated"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -2557,13 +2548,13 @@ export interface operations {
                     "application/json": components["schemas"]["WithdrawalResult"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 입력이 틀렸다 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
