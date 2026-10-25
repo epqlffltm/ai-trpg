@@ -4,7 +4,13 @@
 엔진의 테스트가 쓰는 판. asset 서버가 굳힌 판의 문서(형식 3)와 같은 모양의 dict 를 만든다.
 """
 
+from app.engine.clock import MINUTES_PER_DAY, MINUTES_PER_HOUR
 from app.engine.world import World, read_world
+
+
+def clock(day: int, hour: int, minute: int = 0) -> int:
+    """day 일째 hour 시 minute 분의 시각(1일째 0시부터 흐른 분)."""
+    return (day - 1) * MINUTES_PER_DAY + hour * MINUTES_PER_HOUR + minute
 
 
 def member(cast_id: str, home: str | None = None, schedule: list | None = None, start: int = 0) -> dict:

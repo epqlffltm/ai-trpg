@@ -18,7 +18,7 @@ import pytest
 from app.engine.conditions import is_met, match_conditions
 from app.engine.state import StoryState, start_state
 from app.engine.world import Condition, Conditions
-from tests.engine_worlds import member, world
+from tests.engine_worlds import clock, member, world
 
 WORLD = world([member('mina', start=10), member('yuna', start=50)])
 START = start_state(WORLD)
@@ -42,9 +42,9 @@ def met(kind: str, now: StoryState, target: str | None = None, value: str | None
         ('reach_place', 'home', None, 1, state(), state(place='cafe')),
         ('hold_item', 'ticket', None, 2, state(items={'ticket': 2}), state(items={'ticket': 1})),
         ('gave_item', 'mina', 'flower', 1, state(gifts=frozenset({('mina', 'flower')})), state()),
-        ('day_at_least', None, None, 3, state(day=3), state(day=2)),
-        ('day_at_most', None, None, 3, state(day=3), state(day=4)),
-        ('slot_is', 'night', None, 1, state(slot='night'), state()),
+        ('day_at_least', None, None, 3, state(minutes=clock(3, 8)), state(minutes=clock(2, 23))),
+        ('day_at_most', None, None, 3, state(minutes=clock(3, 23)), state(minutes=clock(4, 8))),
+        ('slot_is', 'night', None, 1, state(minutes=clock(1, 20)), state()),
         ('accompanied', 'mina', None, 1, state(companions=('yuna', 'mina')), state(companions=('yuna',))),
         ('event_seen', 'meet', None, 1, state(seen=frozenset({'meet'})), state()),
     ],
