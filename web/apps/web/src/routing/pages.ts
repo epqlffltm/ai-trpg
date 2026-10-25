@@ -1,7 +1,7 @@
 // web/apps/web/src/routing/pages.ts
 // 처음 갈 때 받는 화면들(코드 분할, 2026-10-23). 경로는 App.tsx 가 잇는다.
 //
-// 나눈 것: TRPG(둘러보기, 시나리오, 로비, 테이블 만들기, 테이블 방, 제작 도구), chat 의 캐릭터 만들기, 지갑·충전·주문, 마이페이지,
+// 나눈 것: TRPG(둘러보기, 시나리오, 로비, 테이블 만들기, 테이블 방, 제작 도구), chat 의 캐릭터 탐색과 소개, 캐릭터 만들기, 지갑·충전·주문, 마이페이지,
 // 본인인증과 보호자 동의(보호자의 링크가 여는 화면도), 알림, 공지·게시판,
 // 운영자의 신고 처리.
 // 화면마다 조각 하나다.
@@ -58,6 +58,10 @@ export const ScenarioEditPage = lazyPage(() => import('../pages/trpg/studio/scen
 // 운영자의 신고 처리(E4). 운영자만 가는 곳이라 사용자의 첫 묶음에 넣지 않는다
 export const ReportsPage = lazyPage(() => import('../pages/operator/ReportsPage'), 'ReportsPage');
 export const MessageReportPage = lazyPage(() => import('../pages/operator/MessageReportPage'), 'MessageReportPage');
+
+// chat 의 캐릭터 탐색(C1)과 소개(C2)
+export const CharacterBrowsePage = lazyPage(() => import('../pages/chat/browse/CharacterBrowsePage'), 'CharacterBrowsePage');
+export const CharacterPage = lazyPage(() => import('../pages/chat/character/CharacterPage'), 'CharacterPage');
 
 // chat 의 캐릭터 만들기(C6). 목록, 만들기, 고치기
 export const CharactersPage = lazyPage(() => import('../pages/chat/studio/characters/CharactersPage'), 'CharactersPage');

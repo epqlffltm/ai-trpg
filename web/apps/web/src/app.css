@@ -2004,3 +2004,131 @@ a.ui-button {
   max-height: 70vh;
   margin: 0 auto;
 }
+
+/* chat 의 캐릭터 탐색(C1). 카드 위에 대표 그림 */
+.character-card__image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--ui-radius);
+  background: var(--ui-border);
+}
+
+/* chat 의 캐릭터 소개(C2). 넓으면 소개와 시작 상황을 나란히, 좁으면 위아래로 */
+.character-page__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-gap);
+  align-items: flex-start;
+}
+
+.character-page__head h1 {
+  margin: 0 0 4px;
+}
+
+.character-page__image {
+  width: 160px;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--ui-radius);
+}
+
+.character-page__profile {
+  margin: 0;
+  color: var(--ui-text-muted);
+}
+
+.character-page__body {
+  display: grid;
+  gap: calc(var(--ui-gap) * 2);
+  margin: var(--ui-gap) 0;
+}
+
+@media (min-width: 800px) {
+  .character-page__body {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    align-items: start;
+  }
+}
+
+.character-page__main section + section {
+  margin-top: calc(var(--ui-gap) * 1.5);
+}
+
+.character-page__main h2,
+.character-page__side h2 {
+  font-size: 1.1rem;
+  margin: 0 0 8px;
+}
+
+.character-page__side {
+  display: grid;
+  gap: calc(var(--ui-gap) * 1.5);
+  padding: var(--ui-gap);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.character-page__stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.character-starts {
+  display: grid;
+  gap: 12px;
+}
+
+.character-starts__list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.character-starts__list .prose,
+.character-starts__list .hint {
+  margin: 4px 0 0;
+}
+
+.character-conversations {
+  display: grid;
+  gap: 8px;
+}
+
+.character-conversations__list li + li {
+  margin-top: 8px;
+}
+
+.character-conversations__list .hint {
+  margin: 2px 0 0;
+  font-size: 0.85em;
+}
+
+/* 제작자가 꾸민 소개 글. 넘치면 잘리는 상자 안에만 그린다(position 을 걸렀으므로 상자 밖에 닿지 못한다) */
+.intro-html {
+  overflow: hidden;
+  contain: content;
+  overflow-wrap: anywhere;
+}
+
+.intro-html img {
+  max-width: 100%;
+  height: auto;
+}
+
+.intro-html img.intro-html__missing {
+  outline: 1px dashed var(--ui-border);
+}
+
+.intro-link--external::after {
+  content: ' ↗';
+  font-size: 0.85em;
+}

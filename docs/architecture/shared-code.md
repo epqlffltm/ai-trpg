@@ -181,6 +181,7 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
 
 - 소개는 넘치면 잘리는 상자(`overflow: hidden`, `contain: content`) 안에만 그린다. `position` 을 막았으므로 상자 밖에 닿지 못한다.
 - 화면의 CSP 는 그림을 우리 그림 저장소에서만 받게 한다(`img-src`). 세 번째 겹이다. 화면을 내주는 곳의 CSP 는 [배포 설계의 열린 질문](deployment.md#열린-질문)에 있다.
+- 화면의 CSP(`default-src 'self'`)는 HTML 의 `style` 속성도 막는다. 화면은 거른 CSS 를 `data-intro-style` 에 옮겨 두었다가 그린 뒤 CSSOM(`element.style`)으로 입힌다(2026-10-25, `web/apps/web/src/pages/chat/character/introHtml.ts`). CSP 에 `style-src-attr 'unsafe-inline'` 을 더하는 길은 앱 전체의 CSP 가 넓어져 고르지 않았다.
 - 글의 크기에 상한을 둔다(기본 50KB, 그림 제외).
 - **고르지 않은 것:** 스크립트를 막은 별도 출처의 iframe 에 그리기. 가장 안전하지만 높이, 테마, 글꼴을 넘기는 일이 번거롭고 모바일에서 스크롤이 겹친다. 공개 베타에서 문제가 생기면 더한다. 서버에서만 거르기는 빈틈이 하나만 있어도 바로 뚫려 버렸다.
 - TRPG 의 시나리오 소개는 지금 글(최대 5000자)이다. 소개를 asset-server 로 옮길 때 이 규칙으로 바꾼다.

@@ -15,6 +15,7 @@
   "dependencies": {
     "@ai-trpg/ui": "*",
     "@tanstack/react-query": "^5.104.5",
+    "dompurify": "^3.4.17",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
