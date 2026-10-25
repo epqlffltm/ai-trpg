@@ -33,7 +33,7 @@
 | DB 와 Redis 의 메트릭 | Alloy 안의 exporter 가 긁는다([아래](#붙인-것-db-와-redis)). DB 에는 통계만 읽는 계정(`monitor`)으로 붙는다 |
 | 대시보드 | 여덟 서버, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
 | 경보 | 수집 쪽, DB 와 Redis, 여덟 서버의 규칙(`docker/prometheus/rules/`)과 Alertmanager(Discord, Slack, Telegram, 메일, [아래](#경보)). 서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다 |
-| 추적(span) | 여덟 서버 모두 span 을 만든다(요청, 서버 사이의 호출, DB 의 쿼리, 작업. 본보기는 [Go](#붙인-것-결제-서버의-추적-본보기)와 [Python](#붙인-것-알림-서버의-추적-python-의-본보기), [TRPG 서버에서 다른 것](#붙인-것-trpg-서버의-추적), [인증 서버에서 다른 것](#붙인-것-인증-서버의-추적), [게시판 서버(Node)](#붙인-것-게시판-서버의-추적)). 받는 길과 저장소(Alloy → Tempo, Grafana 에서 로그와 오간다)는 [아래](#붙인-것-추적의-인프라) |
+| 추적(span) | 여덟 서버 모두 span 을 만든다(요청, 서버 사이의 호출, DB 의 쿼리, 작업. 본보기는 [Go](#붙인-것-결제-서버의-추적-본보기)와 [Python](#붙인-것-알림-서버의-추적-python-의-본보기), [TRPG 서버에서 다른 것](#붙인-것-trpg-서버의-추적), [인증 서버에서 다른 것](#붙인-것-인증-서버의-추적), [게시판 서버(Node 때의 기록)](#붙인-것-게시판-서버의-추적)). 받는 길과 저장소(Alloy → Tempo, Grafana 에서 로그와 오간다)는 [아래](#붙인-것-추적의-인프라) |
 | 로그 모으기(Grafana Alloy, Loki, Grafana) | compose 의 프로필 `observability` 에 구현(#25, [아래](#붙인-것-로그)). 켜는 법은 [README 의 로그와 메트릭 모으기](../README.md#로그와-메트릭-모으기) |
 | 메트릭의 저장소(Prometheus)와 OTLP 로 받는 길 | compose 의 프로필 `observability` 에 구현([아래](#붙인-것-메트릭의-인프라)) |
 | Tempo | compose 의 프로필 `observability` 에 구현(`grafana/tempo:3.1.0`, 한 프로세스, 14일, [아래](#붙인-것-추적의-인프라)) |
@@ -224,7 +224,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 
 | 칸 | 자료형 | 뜻 |
 | --- | --- | --- |
-| `logger` | 글자 | 로그를 남긴 곳의 이름(Python 의 로거 이름, Nest 의 context). Go 에는 없다 |
+| `logger` | 글자 | 로그를 남긴 곳의 이름(Python 의 로거 이름). Go 에는 없다 |
 | `request_id` | 글자 | 요청 안에서 남긴 줄 |
 | `trace_id` | 글자 | 요청이나 작업 안에서 남긴 줄 |
 | `job_id` | 글자 | 작업 안에서 남긴 줄 |
@@ -256,8 +256,8 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 요청마다, 응답이 끝났을 때 한 줄이 남는다. 미들웨어가 남긴다. 핸들러마다 적지 않는다.
 
 - 꼭 있는 칸: 공통 칸 여섯, `request_id`, `trace_id`, `operation`(`http.request`), `method`, `route`, `status_code`, `duration_ms`, `result`.
-- `route` 에는 틀을 적는다. `/api/v1/board/posts/:id` 이지 `/api/v1/board/posts/1234` 가 아니다.
-  틀의 표기는 프레임워크의 것을 그대로 쓴다. FastAPI 는 `{table_id}`, Django 는 `<uuid:public_id>`, Nest 와 gin 은 `:id` 다.
+- `route` 에는 틀을 적는다. `/api/v1/board/posts/{id}` 이지 `/api/v1/board/posts/1234` 가 아니다.
+  틀의 표기는 프레임워크의 것을 그대로 쓴다. FastAPI 는 `{table_id}`, Django 는 `<uuid:public_id>`, gin 은 `:id` 다.
   서버가 다르면 `service` 가 다르므로 섞이지 않는다.
 - 맞은 틀이 없을 때(404)만 `route` 에 `(unmatched)` 를 적고 실제 경로를 `path` 에 따로 싣는다.
   `route` 는 메트릭의 label 로도 쓰일 값이다. 아무 주소나 찔러 보는 요청이 값의 종류를 끝없이 늘리게 두지 않는다.
@@ -282,7 +282,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | 그 밖의 5xx | `error` | 처리하지 못한 예외. 다른 주소와 같다 |
 | 그 밖 | `debug` | 성공. 운영의 수준(`info`)에서는 남지 않는다. 확인이 오는지 보려면 `LOG_LEVEL=debug` 로 띄운다 |
 
-네 서버의 코드: 인증·게임 `observability/middleware.py` 의 `probe_level_of`, 게시판 `request-logging.middleware.ts` 의 `probeLevelOf`, 결제 `internal/httpapi/observability.go` 의 `probeLevelOf`.
+네 서버의 코드: 인증·게임 `observability/middleware.py` 의 `probe_level_of`, 게시판 공용 코드(`shared/server-core`)의 `server_core/observability/middleware.py` 의 `probe_level_of`, 결제 `internal/httpapi/observability.go` 의 `probeLevelOf`.
 인증 서버는 Django 가 따로 남기는 줄(`django.request` 의 "Service Unavailable: /주소")도 버린다. 예외가 없는 5xx 는 미들웨어의 줄과 겹치고, Django 는 그것을 늘 `error` 로 적는다(`observability/setup.py` 의 `OnlyUnloggedServerErrors`).
 
 ### 프록시의 줄
@@ -408,7 +408,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `sweep.behind` | 결제 서버가 남긴다. 대사가 셀 때, 만료된 지 한참(기본 10분) 지났는데 정리되지 않은 것이 있다. 정리 작업이 멈췄거나 밀렸다. `warning` |
 
 `error` 이상의 줄에는 `error_code` 를 붙인다. 새 코드를 만들면 이 표에 더한다.
-Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로 주지 않으면 `internal.error` 를 붙인다. Nest 와 Go 는 남기는 쪽이 직접 붙인다.
+Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로 주지 않으면 `internal.error` 를 붙인다. Go 는 남기는 쪽이 직접 붙인다.
 이것은 **로그의** 코드다. API 응답의 `code`(`too_many_attempts` 같은 것)와 다른 것이다. 응답의 코드는 클라이언트와의 약속이고 서버마다 README 에 있다.
 
 ## 민감정보
@@ -1143,9 +1143,8 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 | --- | --- | --- | --- |
 | auth-server | `observability/middleware.py` | `observability/context.py` | `accounts/billing_client.py` 의 `outgoing_headers()` |
 | trpg-server | `app/observability/middleware.py` | `server_core/observability/context.py` | `server_core/auth/jwks.py`, `server_core/auth/revocations.py`, `app/billing/http_billing.py` 의 `outgoing_headers()` |
-| board-server | `src/observability/request-logging.middleware.ts` | `src/observability/request-context.ts` | `src/auth/jwks.ts` 의 `outgoingHeaders()` |
 | billing-server | `internal/httpapi/observability.go` | `internal/obs/context.go` | `internal/jwks/fetch.go` 의 `obs.SetOutgoingHeaders()` |
-| notification-server, asset-server | `server_core/observability/middleware.py` | `server_core/observability/context.py` | `server_core/auth/jwks.py`, `server_core/auth/revocations.py` 의 `outgoing_headers()` |
+| notification-server, asset-server, board-server | `server_core/observability/middleware.py` | `server_core/observability/context.py` | `server_core/auth/jwks.py`, `server_core/auth/revocations.py` 의 `outgoing_headers()` |
 
 "들고 있는 곳"이 로그에 `trace_id` 를 넘긴다. SDK 를 붙이면 여기서 지금의 span 에서 trace id 를 읽게만 바꾸면 로그의 모양은 그대로다.
 `request_id` 와 `job_id` 는 OpenTelemetry 에 없는 개념이라 지금의 코드가 그대로 남는다. span 의 속성으로도 싣는다.
