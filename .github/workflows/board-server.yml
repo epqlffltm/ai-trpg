@@ -126,6 +126,24 @@ jobs:
       - name: 앱 테스트
         run: npm run test:e2e:cov
 
+      # 빌드한 서버를 프로세스로 띄워 HTTP 로만 부르는 계약 시험(contract/, #785).
+      # 서버를 다시 써도 같은 시험이 그대로 돌아야 한다. 테스트용 스키마(board_test)에서 돈다
+      - name: uv 설치
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: 계약 시험의 린트와 모양 검사
+        working-directory: board-server/contract
+        run: |
+          uv sync --locked
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: 계약 시험
+        working-directory: board-server/contract
+        run: uv run pytest
+
       # 두 테스트가 지나간 줄의 비율을 작업 요약(Summary)에 적는다. 기준은 다음 단계에서 본다.
       # 대상은 src 전체다(vitest.config.ts, vitest.config.e2e.ts 의 coverage)
       - name: 커버리지 요약

@@ -9,3 +9,5 @@ coverage/
 *.tsbuildinfo
 Dockerfile
 .dockerignore
+# 계약 시험(contract/)은 파이썬 묶음이다. 서버의 이미지에 들지 않는다
+contract/
