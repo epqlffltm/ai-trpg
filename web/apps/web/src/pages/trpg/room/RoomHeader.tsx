@@ -1,10 +1,11 @@
 // web/apps/web/src/pages/trpg/room/RoomHeader.tsx
-// 테이블 방의 머리. 제목, 상태, 시나리오(소개로), 스트림의 상태, 나가기.
+// 테이블 방의 머리. 제목, 상태, 시나리오(소개로), 스트림의 상태, 기록 받기(시작한 뒤), 나가기.
 
 import { Link } from 'react-router';
 import type { TableDetail } from '../../../api/types';
 import { tableStatusLabel } from '../../home/labels';
 import { LeaveButton } from './LeaveButton';
+import { TranscriptButton } from './transcript/TranscriptButton';
 import type { StreamStatus } from './useTableStream';
 
 export function RoomHeader({ table, stream }: { table: TableDetail; stream: StreamStatus }) {
@@ -19,6 +20,7 @@ export function RoomHeader({ table, stream }: { table: TableDetail; stream: Stre
       </div>
       <div className="room__head-actions">
         <StreamBadge stream={stream} />
+        {table.status === 'recruiting' ? null : <TranscriptButton table={table} />}
         {table.status === 'ended' ? null : <LeaveButton tableId={table.id} />}
       </div>
     </header>

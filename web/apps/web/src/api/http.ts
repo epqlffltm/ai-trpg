@@ -7,7 +7,9 @@
 //     그사이 다른 요청이 이미 갱신했으면 다시 갱신하지 않고 새 토큰으로 부른다.
 //   - 성공이 아니면 ApiError 를 던진다. 읽기는 TanStack Query 가, 쓰기는 화면이 받는다.
 //   - 파일(그림)은 JSON 이 아니라 바이트 그대로 보낸다(file). 그림을 받을 때는 Blob 으로 읽는다(apiBlob).
+//     내려받을 파일(기록)은 Blob 과 서버가 붙인 파일 이름을 함께 읽는다(apiDownload).
 
+import { filenameFromDisposition } from './disposition';
 import { ApiError, NetworkError, toApiError } from './errors';
 import { refreshSession } from './refresh';
 import { getSession } from './session';
@@ -40,6 +42,15 @@ export async function apiBlob(path: string, options: RequestOptions = {}): Promi
   const response = await sendWithRefresh(withQuery(path, options.query), { ...options, accept: '*/*' });
   if (!response.ok) throw await toApiError(response);
   return response.blob();
+}
+
+export type Download = { blob: Blob; filename: string | null };
+
+/** 내려받을 파일. 본문과 Content-Disposition 의 파일 이름(없으면 null) */
+export async function apiDownload(path: string, options: RequestOptions = {}): Promise<Download> {
+  const response = await sendWithRefresh(withQuery(path, options.query), { ...options, accept: '*/*' });
+  if (!response.ok) throw await toApiError(response);
+  return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get('Content-Disposition')) };
 }
 
 async function sendWithRefresh(url: string, options: RequestOptions): Promise<Response> {

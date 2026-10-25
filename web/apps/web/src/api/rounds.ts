@@ -1,5 +1,5 @@
 // web/apps/web/src/api/rounds.ts
-// 테이블 방(B6)의 라운드가 부르는 것. 지금 라운드, 최근의 라운드들, 장면의 인물과 몬스터, 선언 내기, 라운드 닫기(방장).
+// 테이블 방(B6)의 라운드가 부르는 것. 지금 라운드, 최근의 라운드들, 앞의 라운드(B10), 장면의 인물과 몬스터, 선언 내기, 라운드 닫기(방장).
 // 앉아 있는 사람만 부른다. 시작하지 않은 테이블에는 라운드가 없다(409 not_started).
 // 선언을 받는 동안에는 남의 선언의 글과 행동이 null 이다(누가 냈는지만 보인다). 마감하면 모두의 것이 보인다.
 
@@ -8,6 +8,12 @@ import type { DeclarationUpdate, Round, RoundPage, SceneCast } from './types';
 
 /** 한 번에 보일 지난 라운드의 수(지금 라운드를 함께 센다) */
 export const ROUND_TAIL = 10;
+
+/** "앞의 라운드 더 보기" 한 번에 더 읽는 수 */
+export const ROUND_PAGE = 20;
+
+/** 서버가 한 번에 주는 라운드의 최대 수 */
+const ROUND_LIMIT_MAX = 100;
 
 function roundsPath(tableId: string, rest = ''): string {
   return `/api/v1/game/tables/${encodeURIComponent(tableId)}/rounds${rest}`;
@@ -26,6 +32,20 @@ export async function fetchRecentRounds(tableId: string, signal?: AbortSignal): 
   const probe = await fetchRounds(tableId, 0, 1, signal);
   if (probe.total <= 1) return probe;
   return fetchRounds(tableId, Math.max(0, probe.total - ROUND_TAIL), ROUND_TAIL, signal);
+}
+
+/**
+ * from 번 라운드부터 끝까지(최대 ROUND_LIMIT_MAX 개). 앞의 라운드를 펼친 뒤에 최근의 라운드를 이 번호에 고정해 읽는다.
+ * 라운드의 번호는 1 부터 이어진다. 그래서 from 번은 offset from-1 이다
+ */
+export function fetchRoundsFrom(tableId: string, from: number, signal?: AbortSignal): Promise<RoundPage> {
+  return fetchRounds(tableId, Math.max(0, from - 1), ROUND_LIMIT_MAX, signal);
+}
+
+/** before 번 바로 앞의 라운드들(ROUND_PAGE 개, 오래된 것부터). 닫힌 라운드라 바뀌지 않는다 */
+export function fetchRoundsBefore(tableId: string, before: number, signal?: AbortSignal): Promise<RoundPage> {
+  const from = Math.max(1, before - ROUND_PAGE);
+  return fetchRounds(tableId, from - 1, Math.max(0, before - from), signal);
 }
 
 function fetchRounds(tableId: string, offset: number, limit: number, signal?: AbortSignal): Promise<RoundPage> {

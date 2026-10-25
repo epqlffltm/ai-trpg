@@ -256,6 +256,18 @@ export function deathSaveLine(save: Round['death_saves'][number]): string {
 }
 
 /** 지금 라운드를 뺀 최근의 라운드들. 오래된 것부터 */
+/** 여러 읽기의 라운드를 번호 차례로 하나씩. 같은 번호는 뒤의 것(새로 읽은 것)을 둔다 */
+export function mergeRounds(...lists: Round[][]): Round[] {
+  const byNumber = new Map<number, Round>();
+  for (const list of lists) for (const round of list) byNumber.set(round.number, round);
+  return [...byNumber.values()].sort((a, b) => a.number - b.number);
+}
+
+/** 아직 보이지 않는 앞의 라운드 수. 번호가 1 부터 이어지므로 보이는 첫 번호 앞의 수다 */
+export function hiddenBefore(firstShown: number | undefined): number {
+  return firstShown === undefined ? 0 : Math.max(0, firstShown - 1);
+}
+
 export function pastRounds(recent: Round[], current: Round | undefined): Round[] {
   if (!current) return recent;
   return recent.filter((round) => round.number < current.number);

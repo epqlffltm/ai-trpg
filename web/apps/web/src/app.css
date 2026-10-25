@@ -1805,3 +1805,22 @@ a.ui-button {
 .notification__time {
   font-size: 0.85em;
 }
+
+/* 라운드 기록(B10). 최근의 라운드 위에 앞의 라운드 수와 더 보기 */
+.earlier-rounds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: var(--ui-gap);
+}
+
+.earlier-rounds .hint {
+  margin: 0;
+}
+
+/* 기록 받기의 창. 형식마다 한 줄 */
+.transcript-formats {
+  display: grid;
+  gap: 8px;
+}
