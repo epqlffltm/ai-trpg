@@ -1,8 +1,8 @@
 # story-server/app/turns/repository.py
 
 """
-말 한 번에 쓰는 SQL. 세션의 차례 잡기와 놓기, 말 붙이기, 말에 붙은 상태, 호출과 청구의 기록. 커밋하지 않는다.
-chat 서버의 것(chat-server/app/turns/repository.py)과 같다. 말에 붙은 상태(message_states)를 더했다.
+말 한 번에 쓰는 SQL. 세션의 차례 잡기와 놓기, 말 붙이기, 호출과 청구의 기록. 커밋하지 않는다.
+chat 서버의 것(chat-server/app/turns/repository.py)과 같다. 말에 붙은 상태는 app/conversations/repository.py 에 있다.
 
 차례(generating_since)는 조건을 붙인 UPDATE 하나로 잡는다. 비어 있거나 오래된 것만 잡는다.
 두 요청이 함께 와도 하나만 한 줄을 바꾼다(Postgres 가 그 줄을 잠그고 차례로 본다).
@@ -12,7 +12,6 @@ chat 서버의 것(chat-server/app/turns/repository.py)과 같다. 말에 붙은
 """
 
 import uuid
-from collections.abc import Sequence
 from datetime import datetime, timedelta
 
 from sqlalchemy import or_, select, update
@@ -112,14 +111,3 @@ async def find_due(session: AsyncSession, now: datetime, stale: timedelta, limit
     )
     query = select(Generation).where(or_(due, abandoned)).order_by(Generation.created_at).limit(limit)
     return list(await session.scalars(query))
-
-
-async def states_on(session: AsyncSession, message_ids: Sequence[uuid.UUID]) -> list[dict | None]:
-    """말들에 붙은 상태(JSON). 같은 차례이고, 상태가 없는 말은 None 이다(app/turns/states.py 의 state_on_path)."""
-    if not message_ids:
-        return []
-    rows = await session.execute(
-        select(MessageState.message_id, MessageState.state).where(MessageState.message_id.in_(message_ids))
-    )
-    found = {message_id: state for message_id, state in rows.all()}
-    return [found.get(message_id) for message_id in message_ids]

@@ -144,6 +144,10 @@ class Message(Base):
     status: Mapped[str] = mapped_column(String(20), default=MessageStatus.COMPLETE)
     segments: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
     cast: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default='{}')
+    # 행동 말에서 그 행동 뒤에 열린 이벤트와 본 엔딩(판의 id). 화면이 선택지와 엔딩을 보이고,
+    # 그 행동에 다시 답할 때 같은 장면을 쓴다. 열린 것이 없으면 비어 있다
+    event_id: Mapped[str | None] = mapped_column(String(40), default=None)
+    ending_id: Mapped[str | None] = mapped_column(String(40), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

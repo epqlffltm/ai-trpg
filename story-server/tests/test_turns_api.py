@@ -230,7 +230,7 @@ async def test_a_speaker_outside_the_scene_is_dropped(
     await finished(app)
 
     events = parse_sse(response.text)
-    assert 'jun' not in response.text.split('event: done')[0]
+    assert '나도 왔어' not in response.text
     done = events[-1][1]['message']
     assert done['segments'] == [
         {'speaker': 'mina', 'text': '준은 해변에 있잖아.'},
@@ -264,7 +264,7 @@ async def test_an_answer_only_from_outside_the_scene_is_a_failure(
     assert billing.balance(ME) == 100
 
 
-async def test_a_waiting_event_directs_the_scene_and_calls_its_cast(
+async def test_talking_while_a_choice_waits_drops_the_choice(
     client: AsyncClient,
     app: FastAPI,
     session: AsyncSession,
@@ -277,17 +277,22 @@ async def test_a_waiting_event_directs_the_scene_and_calls_its_cast(
     storm['scene']['text'] = '갑자기 소나기가 쏟아진다.'
     conversation = await start_with_luna(client, asset, mine, {'events': [storm]})
     await put_state(session, conversation, StoryState(minutes=clock(1, 8), place='home', choosing='storm'))
+    # 기다리는 동안 세션을 읽으면 그 이벤트가 부른 인물도 장면에 있다(이벤트가 집에 사는 인물보다 앞선다)
+    waiting = await detail(client, mine, conversation)
+    assert (waiting['state']['choosing'], waiting['state']['cast']) == ('storm', ['jun', 'mina'])
 
     response = await send(client, mine, conversation)
     await finished(app)
 
-    # 이벤트가 부른 인물이 집에 사는 인물보다 앞선다(app/engine/scene.py 의 Presence)
-    assert parse_sse(response.text)[0][1]['cast'] == ['jun', 'mina']
+    # 고르지 않고 말을 이으면 선택지는 사라진다(효과 없이). 답에는 장면 지시가 없고 그 장소의 인물만 있다
+    turn = parse_sse(response.text)[0][1]
+    assert (turn['cast'], turn['state']['choosing']) == (['mina'], None)
     card = router.provider.calls[0][0][0].content
-    assert '[장면 지시]\n갑자기 소나기가 쏟아진다.' in card
-    assert '@jun (준)' in card
+    assert '[장면 지시]' not in card
+    assert 'jun' not in card
     # 행동 말은 [행동] 을 붙여 보낸다
     assert router.provider.calls[0][0][1].content == '[행동] 행동'
+    assert (await detail(client, mine, conversation))['state']['choosing'] is None
 
 
 # --- 응답 전의 거절 ---
@@ -557,4 +562,5 @@ async def test_a_capture_that_could_not_be_sent_waits_for_the_settler(
 
 def test_the_stream_address_is_left_out_of_the_request_spans():
     assert STREAMS.matches(f'{CONVERSATIONS_URL}/{uuid.uuid4()}/messages')
+    assert STREAMS.matches(f'{CONVERSATIONS_URL}/{uuid.uuid4()}/actions')
     assert not STREAMS.matches(f'{CONVERSATIONS_URL}/{uuid.uuid4()}')

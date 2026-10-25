@@ -4,9 +4,9 @@
 규칙은 [story 서버 설계](../docs/architecture/story.md)에 있다. 캐릭터 하나와의 1:1 대화는 chat 서버가 맡는다.
 둘이 함께 쓰는 것과 나눈 선은 [chat 서버 설계의 story-server 와 나눈 선](../docs/architecture/chat-server.md#story-server-와-나눈-선)에 있다.
 
-**지금은 세션과 말 보내기까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
+**지금은 세션, 말 보내기, 행동까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
 asset 서버에서 세계관의 판을 가져와 [세션](#세션)을 만들고 목록으로 보인다. 말을 보내면 장면의 인물들과 서술의 답을 [말 조각](#말-보내기)으로 흘려보낸다.
-행동(이동, 시간, 선택지, 고백)과 엔딩이 차례로 붙는다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
+[행동](#행동)(이동, 시간, 선택지, 고백)은 엔진이 판정하고 이벤트와 엔딩이 열린다. 다시 생성과 멈추기가 다음이다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
 
 정해 둔 값: 포트 `8007`, 토큰의 대상 `ai-trpg-story`, DB 계정과 스키마 `story`(테스트는 `story_test`), 주소 `/api/v1/story/`.
 
@@ -106,8 +106,10 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | PUT | `/api/v1/story/conversations/{id}/model` | 세션의 모델 바꾸기(`{"model"}`). 고를 수 없으면 422 `model_unavailable`, 가격 목록을 받지 못했으면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id"}`). 세계관의 마지막 판을 가져와 고정한다. 201 | access 토큰 |
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}` | access 토큰 |
-| GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서와 지금 가지의 말까지). 남의 것은 404 | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서, 지금 가지의 말, 그 끝의 상태 `state`). 남의 것은 404 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content"}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
+| POST | `/api/v1/story/conversations/{id}/actions` | [행동](#행동)(`{"kind", …}`). 엔진이 판정하고 바로 SSE 로 반응을 흘려보낸다 | access 토큰 |
+| GET | `/api/v1/story/endings` | 그 세계관에서 내가 본 엔딩들(`?world_id=`, 처음 본 차례). [본 엔딩의 기록](#행동) | access 토큰 |
 
 ### 세션
 
@@ -149,19 +151,43 @@ event: done     data: {"message": {... "segments": [{"speaker", "text"}], "cast"
 event: failed   data: {"code": "timeout"}                                    답 없이 끝났다
 ```
 
-- **장면의 인물.** 가지의 끝의 상태로 엔진이 정한다(`app/engine/scene.py`). 선택지를 기다리는 이벤트가 있으면 그 장면 지시가
-  카드에 들어가고 그 장면이 부른 인물이 들어온다. 장면 밖의 인물은 프롬프트에 넣지 않는다.
+- **장면의 인물.** 가지의 끝의 상태로 엔진이 정한다(`app/engine/scene.py`). 장면 밖의 인물은 프롬프트에 넣지 않는다.
+  선택지를 기다리는 동안 말을 하면 선택지는 사라진다(효과 없이). 그 상태를 사람의 말에 붙인다.
 - **말 조각.** 모델은 줄마다 `@인물의 id:` 나 `@narration:` 을 적는다(`app/turns/segments.py`). 서버는 흘러오는 대로 잘라 말하는 사람을 본다.
   장면에 없는 인물의 줄은 흘리지 않고 저장하지 않으며 기록에 센다(`generations.dropped_segments`). 표식을 어긴 줄은 서술이다.
   남은 조각이 없으면 실패한 말이고 청구하지 않는다(`failed`, `empty`).
 - **저장.** 답의 `segments` 가 기준이고, `content` 는 그 조각을 표식이 붙은 줄로 쓴 것이다(다음 호출의 프롬프트에 그대로 간다).
-  답에는 그때의 장면의 인물(`cast`)을 함께 적는다. 말은 상태를 바꾸지 않는다. 상태는 행동한 말에 붙는다(`message_states`).
+  답에는 그때의 장면의 인물(`cast`)을 함께 적는다. 상태는 행동 말(과 선택지를 지운 말)에 붙는다(`message_states`).
 - **끝난 세션.** 엔딩을 봤고 세계관이 끝(읽기만)을 골랐으면 409 `session_ended` 다. 후일담이면 말을 받는다.
 - **거절.** 모델이 없으면 409 `model_required`, 쓸 수 없으면 422 `model_unavailable`, 답을 쓰는 중이면 409 `generation_in_progress`.
   크레딧이 모자라면 402 `credit_short`, 결제 서버나 공급자가 죽었으면 503 이다. 이때 사람의 말은 저장되고 `message_id` 로 알린다.
 - **청구.** 결제 서버의 가격표 `story.<이름표>.i0.o0` 로 홀드를 건다(`story:gen:<기록의 id>`). 답이 있으면 확정, 없으면 반환이다.
   못 한 것은 청구 정리(`app/turns/settler.py`, 5초마다)가 마저 한다. 도중에 꺼진 서버가 남긴 홀드도 15분 뒤에 돌려준다.
 - 다시 생성, 멈추기, 이어서 출력, 요청 수 제한은 그것을 더하는 조각에서 붙인다.
+
+### 행동
+
+`POST /api/v1/story/conversations/{id}/actions` 가 바로 SSE 로 답한다(말 보내기와 같은 모양). 행동은 다섯이다.
+
+| `kind` | 칸 | 하는 일 |
+| --- | --- | --- |
+| `move` | `place` | 지금 장소와 길로 바로 이어진 장소로 옮긴다. 길의 시간만큼 시각이 흐른다 |
+| `pass_time` | | 다음 시간대로 |
+| `end_day` | | 다음 날의 첫 시간대로 |
+| `choose` | `choice` | 기다리는 이벤트의 선택지 하나를 고른다. 그 효과가 든다 |
+| `confess` | `cast` | 장면에 있는 인물 하나에게 고백한다. 성공과 실패는 엔진이 정한다 |
+
+- **판정은 엔진이 한다**(`app/engine/play.py`). 기다리던 선택지를 지우고(고르는 것이 아니면), 행동을 반영하고,
+  시각이 흐른 행동이면 기한을 보고, 열 수 있는 이벤트를 하나 연다. 고백이나 기한이나 이벤트로 엔딩을 볼 수 있다.
+  모델은 결과를 바꾸지 못한다. 행동 말의 글(`[행동]` 을 붙여 모델에 간다)에 엔진이 정한 결과(고백을 받아들였는가)가 적힌다.
+- **답의 장면.** 엔딩을 봤으면 그 엔딩의 장면, 이벤트가 열렸으면 그 이벤트의 장면 지시를 카드에 넣고 그 장면이 부른 인물이 들어온다(`app/turns/scenes.py`).
+- **저장.** 행동 말에 그 뒤의 상태와, 열린 이벤트(`event_id`)와 본 엔딩(`ending_id`)을 적는다. turn 메시지의 `state` 가 그 뒤의 상태다.
+  행동에도 모델이 답하므로 한 번 청구한다.
+- **본 엔딩의 기록.** 엔딩을 봤고 그 엔딩이 기록에 남는 것이면(`unlock`) `ending_records` 에 적는다. 사람마다, 세계관마다, 엔딩마다 처음 본 것 하나다.
+  세션을 지우거나 가지를 바꿔도 남는다. 끝을 고른 세계관이면 그 뒤로 말과 행동을 받지 않는다(409 `session_ended`). 후일담이면 받는다.
+- **거절.** 할 수 없는 행동이면 422 이고 아무것도 저장하지 않는다. `code` 는 `cannot_move`(이어지지 않은 장소, 지금 장소),
+  `no_choice`(기다리는 선택지가 없다, 그런 선택지가 없다), `over`, `not_in_scene`, `not_confessable`, `cooling_down`(고백을 받지 않는다)이다.
+- 건네기(물건을 인물에게 주기)는 엔진에 규칙이 생긴 뒤에 더한다. 연 일러스트의 기록도 그 키를 정한 뒤에 더한다.
 
 ### 토큰 검증
 
@@ -287,6 +313,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `messages` | 말 하나. 트리다(`parent_id`). 답은 말 조각(`segments`)과 그때의 장면의 인물(`cast`)을 갖는다. 세션의 `active_leaf_id` 가 지금 가지의 끝이다 |
 | `message_states` | 말에 붙은 엔진의 상태(JSONB). 상태가 바뀐 말에만 있다. 가지의 끝의 상태는 끝에서 가장 가까운 것이고, 없으면 처음의 상태다 |
 | `generations` | 모델을 한 번 부른 것과 그 청구(chat 서버의 표와 같은 모양). 버린 줄의 수(`dropped_segments`)를 더했다 |
+| `ending_records` | 계정의 본 엔딩. (`owner_id`, `world_source`, `ending_id`)마다 처음 본 시각과 세션. 세션이 지워지면 세션만 비운다 |
 
 모델의 모듈을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 

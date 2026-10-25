@@ -121,16 +121,42 @@ class MessageOut(BaseModel):
     status: str
     segments: list[SegmentOut]
     cast: list[str]
+    # 행동 말에서 그 행동 뒤에 열린 이벤트와 본 엔딩(판의 id). 없으면 null 이다
+    event_id: str | None = None
+    ending_id: str | None = None
     created_at: datetime
 
 
+class StateOut(BaseModel):
+    """
+    가지의 끝의 상태(엔진의 상태). 화면이 시계, 지도, 소지품, 인물 창, 선택지, 엔딩을 그린다.
+
+    minutes 는 1일째 0시부터 흐른 분이고, day 와 slot(시간대의 id)은 그 수에서 계산한 것이다.
+    affection 은 인물마다의 호감도(0~100)다. 무엇을 보일지(숫자, 단계, 숨김)는 판의 보이기 규칙을 따라 화면이 정한다.
+    choosing 은 선택지를 기다리는 이벤트, ending 은 이 가지에서 본 엔딩이다. cast 는 지금 장소의 장면의 인물이다.
+    """
+
+    minutes: int
+    day: int
+    slot: str
+    place: str
+    items: dict[str, int]
+    affection: dict[str, int]
+    companions: list[str]
+    choosing: str | None
+    ending: str | None
+    cast: list[str]
+
+
 class ConversationDetail(BaseModel):
-    """세션 하나. messages 는 지금 보고 있는 가지의 말들이다(첫 말부터). 상태는 행동을 더하는 조각에서 싣는다."""
+    """세션 하나. messages 는 지금 보고 있는 가지의 말들이다(첫 말부터). state 는 그 끝의 상태다."""
 
     id: uuid.UUID
     title: str
     world: WorldOut
     model: ConversationModelOut | None
     messages: list[MessageOut]
+    # 지금 가지의 끝의 상태. 말이 없으면 판으로 만든 처음의 상태다
+    state: StateOut
     created_at: datetime
     updated_at: datetime

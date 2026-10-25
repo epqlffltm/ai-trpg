@@ -33,6 +33,7 @@ from app.conversations.schemas import (
     ConversationSummary,
     MessageOut,
     ModelChoice,
+    StateOut,
     WorldOut,
     WorldSummary,
 )
@@ -120,6 +121,8 @@ def to_message(message: Message) -> MessageOut:
         status=message.status,
         segments=message.segments or [],
         cast=list(message.cast or ()),
+        event_id=message.event_id,
+        ending_id=message.ending_id,
         created_at=message.created_at,
     )
 
@@ -130,8 +133,9 @@ def to_detail(
     book: PriceBook | None,
     now: datetime,
     messages: list[Message],
+    state: StateOut,
 ) -> ConversationDetail:
-    """세션 하나를 응답의 모양으로. messages 는 지금 가지의 말들이다."""
+    """세션 하나를 응답의 모양으로. messages 는 지금 가지의 말들, state 는 그 끝의 상태다."""
     conversation, world = row
     return ConversationDetail(
         id=conversation.id,
@@ -139,6 +143,7 @@ def to_detail(
         world=WorldOut(**to_world_summary(world).model_dump(), document=world.document),
         model=conversation_model(conversation, world, models, book, now),
         messages=[to_message(message) for message in messages],
+        state=state,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )
@@ -234,7 +239,8 @@ async def read_conversation(
     row = await service.get_conversation(session, viewer, conversation_id)
     models = await service.conversation_models(session, [row[0]])
     messages = await service.conversation_messages(session, row[0])
-    return to_detail(row, models, book, now, messages)
+    state = await service.conversation_state(session, row[1], messages)
+    return to_detail(row, models, book, now, messages, state)
 
 
 @router.put('/{conversation_id}/model', response_model=ConversationModelOut, status_code=status.HTTP_200_OK)

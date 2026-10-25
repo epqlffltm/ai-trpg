@@ -6,8 +6,10 @@ chat 의 말 한 번(chat-server/app/turns/service.py)과 같은 차례이고,
 다른 것은 답이 장면의 인물들과 서술의 말 조각이라는 것이다. 아래 차례의 각 줄이 함수 하나다.
 
   응답을 시작하기 전(실패하면 HTTP 의 오류로 답한다)
-    1. begin_turn: 세션과 모델을 보고, 차례를 잡고(한 세션 한 생성), 사람의 말과 기록(pending)을 한 트랜잭션에 저장한다.
-       가지의 끝의 상태로 장면의 인물을 정하고(app/engine/scene.py) 모델에 보낼 메시지를 만든다(app/turns/prompt.py)
+    1. begin_turn, begin_action: 세션과 모델을 보고, 차례를 잡고(한 세션 한 생성),
+       사람의 말(또는 행동 말과 그 뒤의 상태)과 기록(pending)을 한 트랜잭션에 저장한다.
+       행동은 엔진이 판정한다(app/turns/actions.py). 본 엔딩은 계정의 기록에 남긴다(app/records/).
+       답을 쓰는 장면을 정하고(app/turns/scenes.py) 모델에 보낼 메시지를 만든다(app/turns/prompt.py)
     2. route_turn: 모델을 부를 provider 를 고른다. 키가 없거나 쓸 수 없는 모델이면 거절한다
     3. hold_turn: 홀드를 건다. 걸리지 않으면(모자람, 팔지 않음, 결제 서버가 죽음) 거절한다
        거절되면 decline_turn 이 차례를 놓고 기록을 declined 로 둔다. 사람의 말은 남는다
@@ -18,7 +20,8 @@ chat 의 말 한 번(chat-server/app/turns/service.py)과 같은 차례이고,
     6. settle_turn: 답이 있으면 확정, 없으면 반환한다.
        결제 서버가 받지 못하면 정리 작업이 마저 한다(app/turns/settler.py)
 
-모델은 상태를 바꾸지 않는다. 말은 상태를 바꾸지 않으므로 답에는 상태를 붙이지 않는다(가지의 끝의 상태가 그대로다).
+모델은 상태를 바꾸지 않는다. 상태는 행동 말에 붙는다. 말은 기다리던 선택지를 지우는 것 말고는 상태를 바꾸지 않는다.
+답에는 상태를 붙이지 않는다(그 앞의 말의 상태가 그대로다).
 DB 접근, 바깥 호출(공급자, 결제 서버), 응답 만들기를 한 함수에 섞지 않는다. 바깥을 부르는 동안 DB 의 연결을 쥐지 않는다.
 같은 실패를 저절로 되풀이하지 않는다(사람이 다시 보낸다). 다른 모델로 넘어가지 않는다.
 """
@@ -26,7 +29,7 @@ DB 접근, 바깥 호출(공급자, 결제 서버), 응답 만들기를 한 함�
 import asyncio
 import logging
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -52,18 +55,23 @@ from app.conversations.service import (
     get_conversation,
 )
 from app.core.dependencies import Viewer
+from app.engine import play
 from app.engine.endings import is_over
-from app.engine.scene import scene_cast
+from app.engine.events import drop_choice
+from app.engine.play import Played
 from app.engine.state import StoryState
-from app.engine.world import AfterEnding, Scene, World, read_world
+from app.engine.world import AfterEnding, World, read_world
 from app.ratings import Rating
+from app.records import repository as records
 from app.turns import charging, repository
+from app.turns.actions import action_text, perform
 from app.turns.briefing import Briefing, read_briefing
 from app.turns.charging import HoldDeclined, Settled, Settlement
 from app.turns.frames import delta_frame, done_frame, failed_frame, segment_frame
 from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
 from app.turns.prompt import build_messages, render_card, scene_card
 from app.turns.providers import Router
+from app.turns.scenes import Staging, staging
 from app.turns.segments import (
     Segment,
     SegmentStart,
@@ -74,7 +82,7 @@ from app.turns.segments import (
     segment_dicts,
     speaker_labels,
 )
-from app.turns.states import state_on_path
+from app.turns.states import state_on_path, state_to_json, state_view
 from app.turns.values import PromptOptions, SavedMessage, TurnResult, TurnStart
 
 logger = logging.getLogger(__name__)
@@ -156,6 +164,8 @@ def saved(message: Message) -> SavedMessage:
         created_at=message.created_at,
         segments=tuple(message.segments or ()),
         cast=tuple(message.cast or ()),
+        event_id=message.event_id,
+        ending_id=message.ending_id,
     )
 
 
@@ -174,29 +184,31 @@ def require_open(world: World, state: StoryState) -> None:
         raise SessionEndedError
 
 
-def waiting_scene(world: World, state: StoryState) -> Scene | None:
-    """선택지를 고르기를 기다리는 이벤트의 장면 지시. 없으면 None. 그 장면이 부른 인물이 장면에 들어온다."""
-    event = world.event(state.choosing) if state.choosing is not None else None
-    return event.scene if event is not None else None
+def talked_state(state: StoryState) -> StoryState | None:
+    """말을 한 뒤의 상태. 기다리던 선택지가 있으면 사라진 상태이고, 바뀌는 것이 없으면 None 이다."""
+    return drop_choice(state) if state.choosing is not None else None
 
 
-def scene_now(world: World, state: StoryState) -> tuple[list[str], str]:
-    """지금의 장면의 인물과 장면 지시의 글. 기다리는 이벤트가 없으면 장면 지시는 빈 글이다."""
-    scene = waiting_scene(world, state)
-    called = scene.cast if scene is not None else ()
-    return scene_cast(world, state, called), scene.text if scene is not None else ''
+@dataclass(frozen=True)
+class Branch:
+    """지금 가지. 판(규칙과 글), 첫 말부터의 말들, 끝의 상태다."""
+
+    world: World
+    briefing: Briefing
+    path: list[Message]
+    state: StoryState
 
 
-def prompt_for(
-    briefing: Briefing, world: World, state: StoryState, cast: list[str], event: str, path: list[Message], chars: int
-) -> list[ChatMessage]:
-    """모델에 보낼 메시지. 카드와, 지금 가지의 말들 가운데 chars 글자 안에 드는 최근 것들이다."""
-    card = render_card(briefing, scene_card(briefing, world, state, cast, event))
-    turns = [Turn(message.role, message.content) for message in path]
+def prompt_for(branch: Branch, state: StoryState, stage: Staging, added: Message, chars: int) -> list[ChatMessage]:
+    """
+    모델에 보낼 메시지. 카드(state 와 장면)와, 가지의 말들에 added 를 더한 것 가운데 chars 글자 안에 드는 최근 것들이다.
+    """
+    card = render_card(branch.briefing, scene_card(branch.briefing, branch.world, state, stage.cast, stage.direction))
+    turns = [Turn(message.role, message.content) for message in [*branch.path, added]]
     return build_messages(card, select_window(turns, chars))
 
 
-def labels_for(briefing: Briefing, cast: list[str]) -> dict[str, str]:
+def labels_for(briefing: Briefing, cast: tuple[str, ...]) -> dict[str, str]:
     """장면의 인물들의 표식의 이름(id 와 이름) → 인물의 id."""
     return speaker_labels((cast_id, briefing.cast_name(cast_id)) for cast_id in cast)
 
@@ -214,6 +226,8 @@ def user_message(
         status=MessageStatus.COMPLETE,
         segments=[],
         cast=[],
+        event_id=None,
+        ending_id=None,
         created_at=now,
     )
 
@@ -303,7 +317,39 @@ def settled_values(generation: Generation, capture: bool, settlement: Settlement
 
 async def state_at(session: AsyncSession, world: World, path: list[Message]) -> StoryState:
     """가지의 끝의 상태. 말에 붙은 상태 가운데 끝에서 가장 가까운 것이고, 없으면 처음의 상태다."""
-    return state_on_path(world, await repository.states_on(session, [message.id for message in path]))
+    return state_on_path(world, await conversations.states_on(session, [message.id for message in path]))
+
+
+# 차례를 쥔 채로 말 한 번을 세션에 올리는 것(record_turn, record_action 에 인자를 채운 것)
+Recorder = Callable[[AsyncSession, Conversation, ImportedWorld, str], Awaitable[TurnStart]]
+
+
+async def begin(
+    session_factory: async_sessionmaker[AsyncSession],
+    viewer: Viewer,
+    conversation_id: uuid.UUID,
+    now: datetime,
+    record: Recorder,
+) -> TurnStart:
+    """
+    세션과 모델을 보고 차례를 잡은 뒤 record 로 말 한 번을 올려 저장한다.
+
+    세션이 없으면 ConversationNotFoundError, 모델이 없으면 ModelRequiredError, 쓸 수 없으면 ModelUnavailableError,
+    다른 답을 쓰는 중이면 ConversationBusyError.
+    record 가 올리는 예외(SessionEndedError, ActionRefusedError)도 그대로다.
+    어느 것이든 아무것도 저장하지 않는다(차례도 함께 되돌린다).
+    판매(결제 서버의 가격표)는 여기서 보지 않는다. 홀드를 걸 때 결제 서버가 본다.
+    """
+    async with session_factory() as session:
+        conversation, imported = await get_conversation(session, viewer, conversation_id)
+        model = await catalog.get_model(session, conversation.model_slug) if conversation.model_slug else None
+        slug = require_model(conversation, model, Rating(imported.rating), now)
+        if not await repository.lock_turn(session, conversation.id, now, GENERATION_STALE):
+            raise ConversationBusyError
+        await session.refresh(conversation)
+        start = await record(session, conversation, imported, slug)
+        await session.commit()
+    return start
 
 
 async def begin_turn(
@@ -316,22 +362,82 @@ async def begin_turn(
 ) -> TurnStart:
     """
     차례를 잡고 사람의 말과 기록(pending)을 저장한다. 장면의 인물을 정하고 모델에 보낼 메시지를 함께 만든다.
-
-    새 말은 지금 가지의 끝에 붙는다. 가지의 끝은 차례를 잡은 뒤에 다시 읽는다.
-    세션이 없으면 ConversationNotFoundError, 모델이 없으면 ModelRequiredError, 쓸 수 없으면 ModelUnavailableError,
-    다른 답을 쓰는 중이면 ConversationBusyError, 끝난 세션이면 SessionEndedError. 어느 것이든 아무것도 저장하지 않는다.
-    판매(결제 서버의 가격표)는 여기서 보지 않는다. 홀드를 걸 때 결제 서버가 본다.
+    새 말은 지금 가지의 끝에 붙는다. 가지의 끝은 차례를 잡은 뒤에 다시 읽는다. 실패는 begin 과 같다.
     """
-    async with session_factory() as session:
-        conversation, imported = await get_conversation(session, viewer, conversation_id)
-        model = await catalog.get_model(session, conversation.model_slug) if conversation.model_slug else None
-        slug = require_model(conversation, model, Rating(imported.rating), now)
-        if not await repository.lock_turn(session, conversation.id, now, GENERATION_STALE):
-            raise ConversationBusyError
-        await session.refresh(conversation)
-        start = await record_turn(session, viewer, conversation, imported, slug, content, options, now)
-        await session.commit()
-    return start
+
+    async def record(session: AsyncSession, conversation: Conversation, imported: ImportedWorld, slug: str):
+        return await record_turn(session, viewer, conversation, imported, slug, content, options, now)
+
+    return await begin(session_factory, viewer, conversation_id, now, record)
+
+
+async def begin_action(
+    session_factory: async_sessionmaker[AsyncSession],
+    viewer: Viewer,
+    conversation_id: uuid.UUID,
+    action: play.Action,
+    options: PromptOptions,
+    now: datetime,
+) -> TurnStart:
+    """
+    차례를 잡고 행동을 판정해 행동 말과 그 뒤의 상태, 기록(pending)을 저장한다. 이어서 모델이 반응을 쓴다.
+    할 수 없는 행동이면 ActionRefusedError 다. 나머지 실패는 begin 과 같다.
+    """
+
+    async def record(session: AsyncSession, conversation: Conversation, imported: ImportedWorld, slug: str):
+        return await record_action(session, viewer, conversation, imported, slug, action, options, now)
+
+    return await begin(session_factory, viewer, conversation_id, now, record)
+
+
+async def branch_of(session: AsyncSession, conversation: Conversation, imported: ImportedWorld) -> Branch:
+    """세션의 지금 가지. 판을 읽고, 가지의 말들과 끝의 상태를 읽는다."""
+    world = read_world(imported.document)
+    path = await conversations.active_path(session, conversation.active_leaf_id)
+    return Branch(world, read_briefing(imported.document), path, await state_at(session, world, path))
+
+
+async def attach(session: AsyncSession, conversation: Conversation, message: Message, state: StoryState | None) -> None:
+    """말을 가지의 끝에 붙인다. state 가 있으면 그 말에 상태를 붙인다. 커밋하지 않는다."""
+    repository.add(session, message)
+    await session.flush()
+    if state is not None:
+        conversations.add_state(session, message.id, state_to_json(state))
+    await repository.move_leaf(session, conversation.id, message.id)
+
+
+def add_generation(
+    session: AsyncSession, conversation: Conversation, owner_id: uuid.UUID, message: Message, slug: str
+) -> Generation:
+    """그 말에 답하는 기록(pending)을 세션에 올린다."""
+    generation = new_generation(conversation, owner_id, message.id, slug)
+    repository.add(session, generation)
+    return generation
+
+
+def turn_start(
+    owner_id: uuid.UUID,
+    generation: Generation,
+    message: Message,
+    branch: Branch,
+    state: StoryState,
+    stage: Staging,
+    options: PromptOptions,
+) -> TurnStart:
+    """말 한 번의 시작. 그 뒤의 일은 이것만 들고 간다."""
+    return TurnStart(
+        conversation_id=generation.conversation_id,
+        generation_id=generation.id,
+        owner_id=owner_id,
+        model_slug=generation.model_slug,
+        reference=generation.reference,
+        price_code=generation.price_code,
+        user_message=saved(message),
+        messages=prompt_for(branch, state, stage, message, options.context_chars),
+        cast=stage.cast,
+        labels=labels_for(branch.briefing, stage.cast),
+        state=state_view(branch.world, state, stage.cast),
+    )
 
 
 async def record_turn(
@@ -346,31 +452,66 @@ async def record_turn(
 ) -> TurnStart:
     """
     차례를 쥔 채로 사람의 말과 기록을 세션에 올린다(커밋하지 않는다). 끝난 세션이면 SessionEndedError.
-    판, 가지의 끝의 상태, 장면의 인물로 모델에 보낼 메시지를 만든다.
+    기다리던 선택지가 있으면 사라진다(그 상태를 사람의 말에 붙인다). 그 장소의 인물들이 답한다.
     """
-    world, briefing = read_world(imported.document), read_briefing(imported.document)
-    path = await conversations.active_path(session, conversation.active_leaf_id)
-    state = await state_at(session, world, path)
-    require_open(world, state)
-    cast, event = scene_now(world, state)
+    branch = await branch_of(session, conversation, imported)
+    require_open(branch.world, branch.state)
+    changed = talked_state(branch.state)
+    state = changed or branch.state
     message = user_message(conversation, conversation.active_leaf_id, content, now)
-    repository.add(session, message)
-    await session.flush()
-    await repository.move_leaf(session, conversation.id, message.id)
-    generation = new_generation(conversation, viewer.claims.user_id, message.id, slug)
-    repository.add(session, generation)
-    return TurnStart(
-        conversation_id=conversation.id,
-        generation_id=generation.id,
-        owner_id=viewer.claims.user_id,
-        model_slug=slug,
-        reference=generation.reference,
-        price_code=generation.price_code,
-        user_message=saved(message),
-        messages=prompt_for(briefing, world, state, cast, event, [*path, message], options.context_chars),
-        cast=tuple(cast),
-        labels=labels_for(briefing, cast),
-    )
+    await attach(session, conversation, message, changed)
+    generation = add_generation(session, conversation, viewer.claims.user_id, message, slug)
+    return turn_start(viewer.claims.user_id, generation, message, branch, state, staging(branch.world, state), options)
+
+
+def action_message(
+    conversation: Conversation, branch: Branch, action: play.Action, played: Played, now: datetime
+) -> Message:
+    """행동 말. 행동의 글과, 그 행동 뒤에 열린 이벤트와 본 엔딩을 적는다. 아직 저장하지 않는다."""
+    text = action_text(branch.briefing, branch.world, action, played)
+    message = user_message(conversation, conversation.active_leaf_id, text, now, Role.ACTION)
+    message.event_id = played.event.id if played.event is not None else None
+    message.ending_id = played.ending.id if played.ending is not None else None
+    return message
+
+
+async def record_ending(
+    session: AsyncSession,
+    owner_id: uuid.UUID,
+    imported: ImportedWorld,
+    conversation: Conversation,
+    played: Played,
+    now: datetime,
+) -> None:
+    """행동으로 엔딩을 봤고 그 엔딩이 기록에 남는 것이면(unlock) 계정의 기록에 적는다."""
+    if played.ending is not None and played.ending.unlock:
+        await records.add_ending(session, owner_id, imported.source_id, played.ending.id, conversation.id, now)
+
+
+async def record_action(
+    session: AsyncSession,
+    viewer: Viewer,
+    conversation: Conversation,
+    imported: ImportedWorld,
+    slug: str,
+    action: play.Action,
+    options: PromptOptions,
+    now: datetime,
+) -> TurnStart:
+    """
+    차례를 쥔 채로 행동을 판정하고 행동 말, 그 뒤의 상태, 기록을 세션에 올린다(커밋하지 않는다).
+    끝난 세션이면 SessionEndedError, 할 수 없는 행동이면 ActionRefusedError.
+    답은 열린 이벤트나 본 엔딩의 장면을 쓴다(app/turns/scenes.py).
+    """
+    branch = await branch_of(session, conversation, imported)
+    require_open(branch.world, branch.state)
+    played = perform(branch.world, branch.state, action)
+    message = action_message(conversation, branch, action, played, now)
+    await attach(session, conversation, message, played.state)
+    await record_ending(session, viewer.claims.user_id, imported, conversation, played, now)
+    generation = add_generation(session, conversation, viewer.claims.user_id, message, slug)
+    stage = staging(branch.world, played.state, played.event, played.ending)
+    return turn_start(viewer.claims.user_id, generation, message, branch, played.state, stage, options)
 
 
 async def route_turn(router: Router, start: TurnStart) -> Route:
