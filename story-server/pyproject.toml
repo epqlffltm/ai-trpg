@@ -5,6 +5,7 @@ description = "Story service (several characters in one world, events and ending
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "ai-core",
     "alembic>=1.20.0",
     "asyncpg>=0.32.0",
     "fastapi>=0.143.5",
@@ -15,11 +16,14 @@ dependencies = [
     "uvicorn[standard]>=0.54.0",
 ]
 
-# FastAPI 서버들의 공통부(토큰 검증, 관측, DB 연결). 저장소 안의 경로에서 받는다(docs/architecture/shared-code.md 의 "정한 것").
+# 공용 코드. 저장소 안의 경로에서 받는다(docs/architecture/shared-code.md 의 "정한 것").
+#   server-core: FastAPI 서버들의 공통부(토큰 검증, 관측, DB 연결)
+#   ai-core: 언어 모델을 부르는 코드와 모델 목록의 원본(ai_core/model_catalog.toml)
 # 고친 것이 바로 보이게 editable 로 깐다. 이미지에는 설치된 모양으로 담는다(Dockerfile 의 uv sync --no-editable).
-# CI 는 이 줄을 읽어 shared/server-core 가 바뀐 PR 에서 이 서버를 검사한다(.github/scripts/changed-servers.sh)
+# CI 는 이 줄들을 읽어 그 공용 코드가 바뀐 PR 에서 이 서버를 검사한다(.github/scripts/changed-servers.sh)
 [tool.uv.sources]
 server-core = { path = "../shared/server-core", editable = true }
+ai-core = { path = "../shared/ai-core", editable = true }
 
 [dependency-groups]
 dev = [

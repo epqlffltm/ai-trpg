@@ -77,6 +77,12 @@ class Conversation(Base):
     # 세션이 쓰는 판의 사본. 세션이 남아 있는 동안 사본을 지우지 못한다
     world_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('worlds.id', ondelete='RESTRICT'), index=True)
     title: Mapped[str] = mapped_column(Text)
+    # 세션의 모델(app/catalog/models.py 의 이름표). 고르지 않았으면 비어 있다
+    # (처음 시작한 세션, 지난번 모델을 쓸 수 없을 때). 모델은 지우지 않으므로 RESTRICT 다.
+    # 은퇴하거나 꺼져도 가리킨 채로 두고, 화면이 다시 고르게 한다(몰래 바꾸지 않는다, chat 과 같다)
+    model_slug: Mapped[str | None] = mapped_column(
+        ForeignKey('ai_models.slug', ondelete='RESTRICT'), index=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

@@ -10,6 +10,7 @@ from sqlalchemy import Table
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 # 모델을 불러와야 Base.metadata 에 테이블이 등록된다
+import app.catalog.models  # noqa: F401
 import app.conversations.models  # noqa: F401
 from app.core.database import Base
 

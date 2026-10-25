@@ -3,6 +3,29 @@ revision = 3
 requires-python = ">=3.13"
 
 [[package]]
+name = "ai-core"
+version = "0.1.0"
+source = { editable = "../shared/ai-core" }
+dependencies = [
+    { name = "httpx" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pydantic", specifier = ">=2.13.5" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "ruff", specifier = ">=0.17.1" },
+]
+
+[[package]]
 name = "alembic"
 version = "1.20.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1326,6 +1349,7 @@ name = "story-server"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "ai-core" },
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "fastapi" },
@@ -1346,6 +1370,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "ai-core", editable = "../shared/ai-core" },
     { name = "alembic", specifier = ">=1.20.0" },
     { name = "asyncpg", specifier = ">=0.32.0" },
     { name = "fastapi", specifier = ">=0.143.5" },

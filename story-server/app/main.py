@@ -6,7 +6,7 @@ story 서버의 시작점. 앱을 만들고 라우터를 붙인다.
 story 서버는 하나의 세계관 안에서 여러 인물과 나누는 이야기를 맡는다(docs/architecture/story.md).
 1:1 캐릭터 대화는 chat-server 가 맡는다.
 둘이 나눈 선은 docs/architecture/chat-server.md 의 "story-server 와 나눈 선"이다.
-지금은 상태 확인, 토큰의 주인, 세션(세계관의 판을 asset 서버에서 가져와 시작한다)이 있다(#591).
+지금은 상태 확인, 토큰의 주인, 모델 목록, 세션(세계관의 판을 asset 서버에서 가져와 시작한다)이 있다(#591).
 장면의 인물, 시각, 조건과 효과, 고백과 엔딩이 차례로 붙는다(docs/architecture/story.md 의 "만드는 순서").
 
 띄우는 법: uv run uvicorn app.main:app --port 8007 --reload
@@ -36,8 +36,14 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api import health, me, readiness
 from app.assets.client import AssetClient, AssetUnavailableError
+from app.catalog import router as catalog
 from app.conversations import router as conversations
-from app.conversations.service import AdultContentRequiredError, ConversationNotFoundError, WorldNotFoundError
+from app.conversations.service import (
+    AdultContentRequiredError,
+    ConversationNotFoundError,
+    ModelUnavailableError,
+    WorldNotFoundError,
+)
 from app.core.config import Settings, get_settings
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
@@ -134,6 +140,8 @@ def create_app(
 
     # 토큰의 주인을 돌려주는 주소. 인증 서버의 access 토큰(대상 ai-trpg-story)으로 확인한다
     app.include_router(me.router, prefix=API_PREFIX)
+    # 모델 목록. 세션에 고를 수 있는 모델들
+    app.include_router(catalog.router, prefix=API_PREFIX)
     # 세션. 세계관의 판을 asset 서버에서 가져와 시작한다
     app.include_router(conversations.router, prefix=API_PREFIX)
 
@@ -141,6 +149,7 @@ def create_app(
     app.add_exception_handler(ConversationNotFoundError, conversations.handle_conversation_not_found)
     app.add_exception_handler(WorldNotFoundError, conversations.handle_world_not_found)
     app.add_exception_handler(AdultContentRequiredError, conversations.handle_adult_content_required)
+    app.add_exception_handler(ModelUnavailableError, conversations.handle_model_unavailable)
     app.add_exception_handler(AssetUnavailableError, conversations.handle_asset_unavailable)
 
     # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)
