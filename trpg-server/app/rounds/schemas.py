@@ -337,13 +337,16 @@ class ItemThrowOut(BaseModel):
     # 던졌는가. 못 했으면 reason 이 있다: not_held(가지고 있지 않았다), target_gone(겨눈 몬스터가 없었다)
     thrown: bool
     reason: str | None
-    # 물건에 적힌 판정의 능력과 난이도(rules 의 key, 비웠으면 기본 난이도로 채웠다)와 맞았을 때의 피해의 등급
+    # 던지는 판정의 능력과 난이도(rules 의 key). 물건에 적힌 것이나 rules.item_check 다(#801).
+    # 비웠으면 기본 난이도로 채웠다
     ability: str
     difficulty: str
-    harm: str
     target: ThrownAtOut
     # 던진 뒤에 남은 개수
     remaining: int
+    # 맞힌 대상에게서 푼 부상들과 입힌 부상들(#801, 물건의 효과). 빗나갔거나 그런 효과가 없으면 빈 목록이다
+    cured: list['CuredOut'] = []
+    injured: list['InjuredOut'] = []
 
 
 class CheckOutcome(BaseModel):

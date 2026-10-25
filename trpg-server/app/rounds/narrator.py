@@ -266,6 +266,10 @@ class ThrowNote:
     target: str | None
     done: bool
     reason: str | None = None
+    # 맞힌 대상에게서 푼 부상, 입힌 부상, 면역이라 입지 않은 부상의 이름들(#801, 물건의 효과)
+    cured: list[str] = field(default_factory=list)
+    injured: list[str] = field(default_factory=list)
+    resisted: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

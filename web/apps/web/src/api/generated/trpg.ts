@@ -3834,7 +3834,8 @@ export interface components {
          *     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
          *     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
          *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
-         *     throw 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.
+         *     throw 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.
+         *     행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.
          *     treat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.
          *     쓰면 치료가 성공하든 실패하든 하나 없어진다.
          */
@@ -3899,7 +3900,8 @@ export interface components {
          *     ap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).
          *     세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.
          *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
-         *     throw 는 던지는 판정이다(#277, 화염병). 소모품에만 적는다. 행동 '던지기'로 같은 장소의 몬스터나 인물에게 던진다.
+         *     throw 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.
+         *     행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.
          *     treat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.
          *     쓰면 치료가 성공하든 실패하든 하나 없어진다.
          */
@@ -4058,19 +4060,18 @@ export interface components {
         };
         /**
          * ItemThrow
-         * @description 물건을 던지는 판정(#277). 화염병, 투척 단검처럼 몬스터나 인물에게 던져 맞히는 소모품에 적는다.
+         * @description 물건을 던지는 판정(#277). 투척 단검처럼 던지기에 맞춘 물건에 적는다. 적지 않은 물건도 던질 수 있다(#801).
+         *     그때는 룰북의 맞히는 판정(rules.item_check)으로 던진다.
          *
          *     ability 와 difficulty 는 룰북의 능력치와 난이도의 이름이다. 난이도를 비우면 룰북의 기본 난이도다.
-         *     harm 은 맞았을 때 입히는 피해의 등급(룰북의 magnitudes 의 이름)이다. 방어와 세이브는 치기와 같다.
-         *     셋 다 룰북의 규칙에 있는지는 게시할 때 본다(item_throw_invalid). 던지면 맞든 빗나가든 하나 없어진다.
+         *     룰북의 규칙에 있는지는 게시할 때 본다(item_throw_invalid). 맞으면 그 물건의 효과(effects)가 든다.
+         *     예전의 맞았을 때의 피해(harm)는 효과의 damage 가 됐다. 던지면 맞든 빗나가든 하나 없어진다.
          */
         ItemThrow: {
             /** Ability */
             ability: string;
             /** Difficulty */
             difficulty?: string | null;
-            /** Harm */
-            harm: string;
         };
         /**
          * ItemThrowOutcome
@@ -4082,15 +4083,13 @@ export interface components {
         };
         /**
          * ItemThrowSnapshot
-         * @description 물건을 던지는 판정(#277). 능력치, 난이도(없으면 룰북의 기본), 맞았을 때의 피해의 등급의 이름이다.
+         * @description 물건을 던지는 판정(#277). 능력치와 난이도(없으면 룰북의 기본)다. 맞으면 물건의 효과가 든다(#801).
          */
         ItemThrowSnapshot: {
             /** Ability */
             ability: string;
             /** Difficulty */
             difficulty?: string | null;
-            /** Harm */
-            harm: string;
         };
         /**
          * ItemUseOut
@@ -8072,7 +8071,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 62
+             * @default 63
              */
             format: number;
             /**
@@ -8657,12 +8656,12 @@ export interface components {
         };
         /**
          * ThrowAction
-         * @description 물건을 던지는 행동(#277). 가진 소모품 하나를 몬스터 한 마리(monster)나 이번 장면의 인물(npc)에게 던진다.
+         * @description 물건을 던지는 행동(#277). 가진 물건 하나를 몬스터 한 마리(monster)나 이번 장면의 인물(npc)에게 던진다.
          *
-         *     item 은 판의 로어북 물건 항목의 id 다. 던지는 판정(아이템 규칙의 throw)이 있는 소모품이어야 한다.
-         *     능력과 난이도와 맞았을 때의 피해는 받지 않는다. 물건에 적힌 것으로 판정한다(app/rounds/throws.py).
-         *     맞히면 방어와 세이브는 치기와 같다. 맞든 빗나가든 물건은 하나 없어진다.
-         *     lethal 은 치기와 같다. 죽이려는 것인가, 아니면 제압이다. 노려 치기와 무기는 없다.
+         *     item 은 판의 로어북 물건 항목의 id 다. 어떤 물건이든 된다(#801). 능력과 난이도는 받지 않는다. 물건의 던지는
+         *     판정(아이템 규칙의 throw)이나 룰북의 맞히는 판정(rules.item_check)으로 판정한다(app/rounds/throws.py).
+         *     맞히면 그 물건의 효과가 든다. 피해가 있으면 방어와 세이브는 치기와 같다. 맞든 빗나가든 물건은 하나 없어진다.
+         *     lethal 은 피해가 있는 물건에만, 치기와 같다. 죽이려는 것인가, 아니면 제압이다. 노려 치기와 무기는 없다.
          */
         ThrowAction: {
             /**
@@ -9398,6 +9397,11 @@ export interface components {
         app__rounds__schemas__ItemThrowOut: {
             /** Ability */
             ability: string;
+            /**
+             * Cured
+             * @default []
+             */
+            cured: components["schemas"]["CuredOut"][];
             /** Difficulty */
             difficulty: string;
             /**
@@ -9405,8 +9409,11 @@ export interface components {
              * Format: uuid
              */
             entry_id: string;
-            /** Harm */
-            harm: string;
+            /**
+             * Injured
+             * @default []
+             */
+            injured: components["schemas"]["InjuredOut"][];
             /** Name */
             name: string;
             /** Reason */
@@ -9419,15 +9426,15 @@ export interface components {
         };
         /**
          * ItemThrowOut
-         * @description 물건을 던지는 판정(#277). 능력치와 난이도(비면 rules 의 기본)와 맞았을 때의 피해의 등급(rules 의 magnitudes).
+         * @description 물건을 던지는 판정(#277). 능력치와 난이도(비면 rules 의 기본)다. 맞으면 그 물건의 효과(effects)가 든다(#801).
+         *
+         *     없는 물건도 던질 수 있다. 그때는 rules.item_check 로 던진다(그것도 없으면 던지지 못한다).
          */
         app__tables__schemas__ItemThrowOut: {
             /** Ability */
             ability: string;
             /** Difficulty */
             difficulty: string | null;
-            /** Harm */
-            harm: string;
         };
     };
     responses: never;

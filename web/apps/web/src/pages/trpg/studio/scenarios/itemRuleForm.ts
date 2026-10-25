@@ -6,12 +6,12 @@
 // - 칸(slots)은 장비만. 차지하는 칸의 수는 칸의 수보다 많지 않다. 공격·방어(attack, defense, guard, ap, ward)는 칸이 있는 물건만
 // - 관통력(ap)은 공격 보정(attack)이 있는 무기만. 수치는 1~10, 값은 1~1,000,000(비우면 사고팔 수 없다)
 // - 자물쇠(lock, #281)는 장비만. 입력과 검사는 itemLockForm.ts. 소모품으로 바꾸면 보내지 않는다
-// - 던지는 판정(throw)과 치료 보정(treat_bonus, #277)도 소모품만. 장비로 바꾸면 보내지 않는다
+// - 치료 보정(treat_bonus, #277)도 소모품만. 장비로 바꾸면 보내지 않는다. 던지는 판정(throw, #801)은 모든 물건에 적는다
 
 import type { ItemKind, ItemRarity, ItemRule, ItemRuleBody, Ruleset } from '../../../../api/types';
 import { itemKindLabel, rarityLabel } from '../../labels';
 import { wholeNumber } from '../rulebooks/rulebookForm';
-import { effectDraft, effectHints, effectLine, throwDraft, toEffect, toThrow, type EffectDraft, type ThrowDraft } from './itemEffectsForm';
+import { effectDraft, effectHints, effectLine, throwDraft, throwHint, toEffect, toThrow, type EffectDraft, type ThrowDraft } from './itemEffectsForm';
 import { itemLockDraft, toItemLock, type ItemLockDraft } from './itemLockForm';
 
 export const COMBAT_NUMBER_MAX = 10;
@@ -91,7 +91,9 @@ export function itemRuleHints(draft: ItemRuleDraft): Record<string, string> {
     }
     if (draft.combat.ap.trim() !== '' && draft.combat.attack.trim() === '') hints.ap = '관통력은 공격 보정이 있는 무기에만 적습니다.';
   }
-  if (draft.kind === 'consumable') Object.assign(hints, effectHints(draft.effects, draft.throw, draft.treatBonus));
+  if (draft.kind === 'consumable') Object.assign(hints, effectHints(draft.effects, draft.treatBonus));
+  const thrown = throwHint(draft.throw);
+  if (thrown) hints.throw = thrown;
   return hints;
 }
 
@@ -99,7 +101,7 @@ function optionalNumber(text: string): number | null {
   return text.trim() === '' ? null : Number(text.trim());
 }
 
-/** 보낼 규칙. 종류에 맞지 않는 칸(장비의 효과와 던지는 판정과 치료 보정, 소모품의 칸과 자물쇠, 착용하지 않는 물건의 공격·방어)은 비운다 */
+/** 보낼 규칙. 종류에 맞지 않는 칸(장비의 효과와 치료 보정, 소모품의 칸과 자물쇠, 착용하지 않는 물건의 공격·방어)은 비운다 */
 export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody {
   const worn = isWorn(draft);
   const combat = (field: CombatField) => (worn ? optionalNumber(draft.combat[field]) : null);
@@ -117,7 +119,7 @@ export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody 
     guard: combat('guard'),
     ward: combat('ward'),
     lock: draft.kind === 'gear' ? toItemLock(draft.lock) : null,
-    throw: draft.kind === 'consumable' ? toThrow(draft.throw) : null,
+    throw: toThrow(draft.throw),
     treat_bonus: draft.kind === 'consumable' ? optionalNumber(draft.treatBonus) : null,
   };
 }

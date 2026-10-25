@@ -7,6 +7,7 @@
 잘못 먹이거나 엉뚱한 곳에 바를 수 있다. 맞히면 효과가 들고, 빗나가면 아무 일도 없다. 굴렸으면 물건은 하나 없어진다.
   - 피해(damage)가 있는 물건은 그 등급의 타격으로 판정한다(app/rounds/checks.py 의 judge_check 를 그대로 부른다).
     방어, 세이브, 부상 표, 드롭이 치기와 같다. 세이브로 막으면 다른 효과도 들지 않는다.
+  던지기(#801, app/rounds/throws.py)도 같은 함수로 판정하고 효과를 낸다. 판정만 물건의 던지는 판정일 수 있다.
   - 회복(heal)이 있는 물건을 인물에게 쓰면 그 등급의 회복으로 판정한다. 몬스터에게는 회복이 없다(효과가 없다).
   - 그 밖(풀기, 부상만)은 대상 없이 굴린다. 맞히면 그 대상에게 효과를 낸다.
   피해나 부상이 있으면 싸움이다. 맞든 빗나가든 그 대상과 싸운 것으로 적는다.
@@ -17,7 +18,7 @@
 DB 를 모른다. 시트의 소지품과 맞은 쪽의 상태를 고친다. 저장하지 않는다.
 """
 
-from app.engine.action import ActionKind, CheckAction, UseAction
+from app.engine.action import ActionKind, CheckAction, ThrowAction, UseAction, settle
 from app.engine.item_effects import EffectKind, first_of, is_harmful
 from app.rounds.cast import CastMember, find_cast_member
 from app.rounds.checks import judge_check, monster_gone
@@ -29,25 +30,30 @@ from app.tables import monsters as table_monsters
 from app.tables.items import CatalogItem
 from app.tables.models import TableInjury, TableMember
 
+# 물건을 겨누는 행동. 쓰기와 던지기(#801)가 같은 칸(item, npc, monster, lethal)을 가진다
+Aimed = UseAction | ThrowAction
 
-def to_check(judging: Judging, item: CatalogItem, action: UseAction) -> CheckAction:
-    """
-    맞히는 판정. 룰북의 능력과 난이도에, 물건이 HP 를 바꾸면 그 등급의 타격이나 회복을 겨눈다.
 
-    받을 때 룰북에 맞히는 판정이 있는지 봤다(app/rounds/acceptance.py). 판에 굳은 룰북이라 바뀌지 않는다.
+def to_check(judging: Judging, item: CatalogItem, action: Aimed, ability: str, difficulty: str | None) -> CheckAction:
     """
-    rule = judging.ruleset.item_check
+    맞히는 판정. 그 능력과 난이도(비우면 룰북의 기본)에, 물건이 HP 를 바꾸면 그 등급의 타격이나 회복을 겨눈다.
+
+    쓰기는 룰북의 맞히는 판정(rules.item_check), 던지기는 물건의 던지는 판정이나 룰북의 것이다(#801).
+    받을 때 있는지 봤다(app/rounds/acceptance.py). 판에 굳은 룰북이라 바뀌지 않는다.
+    """
     damage = first_of(item.effects, EffectKind.DAMAGE)
     heal = first_of(item.effects, EffectKind.HEAL)
-    base = {'kind': ActionKind.CHECK, 'ability': rule.ability, 'difficulty': rule.difficulty}
+    base = {'kind': ActionKind.CHECK, 'ability': ability, 'difficulty': difficulty}
     if damage is not None:
-        return CheckAction(**base, harm=damage.magnitude, npc=action.npc, monster=action.monster, lethal=action.lethal)
-    if heal is not None and action.npc is not None:
-        return CheckAction(**base, recover=heal.magnitude, npc=action.npc)
-    return CheckAction(**base)
+        check = CheckAction(**base, harm=damage.magnitude, npc=action.npc, monster=action.monster, lethal=action.lethal)
+    elif heal is not None and action.npc is not None:
+        check = CheckAction(**base, recover=heal.magnitude, npc=action.npc)
+    else:
+        check = CheckAction(**base)
+    return settle(judging.ruleset, check)
 
 
-def target_of(judging: Judging, action: UseAction) -> dict:
+def target_of(judging: Judging, action: Aimed) -> dict:
     """쓴 쪽을 결과에 적을 모양. 몬스터면 그 마리의 id 와 이름, 인물이면 항목의 id 와 장면의 호칭이다."""
     if action.monster is not None:
         monster = find_scene_monster(judging.monsters, action.monster)
@@ -56,7 +62,7 @@ def target_of(judging: Judging, action: UseAction) -> dict:
     return {'entry_id': str(action.npc), 'name': person.name if person else None}
 
 
-def mark_harm(judging: Judging, member: TableMember, item: CatalogItem, action: UseAction, check: CheckAction) -> None:
+def mark_harm(judging: Judging, member: TableMember, item: CatalogItem, action: Aimed, check: CheckAction) -> None:
     """
     해로운 물건이면 그 대상과 싸운 것으로 적는다. 타격으로 판정하면 judge_check 가 적으므로 여기서는 적지 않는다.
     """
@@ -79,7 +85,7 @@ def landed(outcome: dict, check: CheckAction) -> bool:
     return outcome.get('npc_effect') is not None or outcome.get('monster_effect') is not None
 
 
-def struck_rows(judging: Judging, action: UseAction) -> tuple[list[TableInjury], frozenset] | None:
+def struck_rows(judging: Judging, action: Aimed) -> tuple[list[TableInjury], frozenset] | None:
     """
     풀기와 부상을 낼 대상의 부상 목록과 그 면역. 대상이 죽었거나 없으면 None.
 
@@ -96,7 +102,7 @@ def struck_rows(judging: Judging, action: UseAction) -> tuple[list[TableInjury],
     return person.npc.injuries, frozenset()
 
 
-def apply_after_hit(judging: Judging, item: CatalogItem, action: UseAction) -> dict:
+def apply_after_hit(judging: Judging, item: CatalogItem, action: Aimed) -> dict:
     """맞힌 대상에게 풀기와 부상을 적힌 차례대로 낸다. 푼 것(cured)과 입힌 것(injured)이다."""
     found = struck_rows(judging, action)
     if found is None:
@@ -120,7 +126,8 @@ def judge_use_on(judging: Judging, member: TableMember, action: UseAction) -> di
     푼 부상(cured)과 입힌 부상(injured)이 있다. 못 썼으면 item_use 만 있다. 겨눈 몬스터가 없으면 target_gone 도 있다.
     """
     item = judging.items[action.item]
-    check = to_check(judging, item, action)
+    rule = judging.ruleset.item_check
+    check = to_check(judging, item, action, rule.ability, rule.difficulty)
     target = target_of(judging, action)
     terms = {'ability': check.ability, 'difficulty': check.difficulty}
     if items.count_of(member.sheet, action.item) < 1:

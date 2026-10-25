@@ -280,7 +280,7 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
       return { kind: 'give', item: draft.item, count: draft.count, target: member ?? '' };
     // 던지기(#277). 능력과 난이도와 피해는 물건에 적혀 있어 보내지 않는다
     case 'throw':
-      return { kind: 'throw', item: draft.item, lethal: draft.lethal, ...(npc ? { npc } : {}), ...(monster ? { monster } : {}) };
+      return { kind: 'throw', item: draft.item, lethal: draft.lethal && itemDamages(ctx.table, draft.item), ...(npc ? { npc } : {}), ...(monster ? { monster } : {}) };
     case 'move':
       return { kind: 'move', place: draft.place, ...(draft.carry ? { carry: draft.carry } : {}) };
     case 'search':

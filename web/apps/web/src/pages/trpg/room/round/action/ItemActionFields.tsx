@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/trpg/room/round/action/ItemActionFields.tsx
 // 물건을 다루는 행동의 칸. 쓰기(소모품, 효과가 있으면 받을 쪽: 나, 동료, 인물, 몬스터. #800), 건네기(받을 사람과 개수), 내려놓기(개수),
 // 줍기(내가 선 곳에 놓인 것과 개수), 훔치기와 빼앗기(대상과 그 대상이 지닌 물건),
-// 던지기(#277, 던질 물건과 맞힐 대상. 판정은 물건에 적혀 있어 보이기만 한다).
+// 던지기(#277, #801. 지닌 물건 아무것이나와 맞힐 대상. 판정은 물건이나 룰북에 적혀 있어 보이기만 한다).
 
 import { Checkbox, TextField } from '@ai-trpg/ui';
 import type { TableDetail } from '../../../../../api/types';
@@ -23,6 +23,7 @@ import {
   victims,
   type ActionContext,
 } from './actionOptions';
+import { effectsLabel } from '../../status/statusView';
 import { ChoiceSelect } from './ChoiceSelect';
 
 type Props = { draft: ActionDraft; ctx: ActionContext; onChange: (changes: Partial<ActionDraft>) => void };
@@ -66,26 +67,32 @@ export function ThrowFields({ draft, ctx, onChange }: Props) {
         <ChoiceSelect label="맞힐 대상" value={draft.target} choices={harmTargets(ctx)} empty="고르기" onChange={(target) => onChange({ target })} />
       </div>
       {terms ? <p className="hint">{terms}</p> : null}
-      <Checkbox
-        label="죽이려 한다"
-        description="켜지 않으면 HP 가 0 이 될 때 쓰러뜨리기만 합니다."
-        checked={draft.lethal}
-        onChange={(event) => onChange({ lethal: event.target.checked })}
-      />
+      {draft.item && itemDamages(ctx.table, draft.item) ? (
+        <Checkbox
+          label="죽이려 한다"
+          description="켜지 않으면 HP 가 0 이 될 때 쓰러뜨리기만 합니다."
+          checked={draft.lethal}
+          onChange={(event) => onChange({ lethal: event.target.checked })}
+        />
+      ) : null}
     </>
   );
 }
 
-/** 물건에 적힌 던지는 판정의 글. "민첩 · 보통으로 던집니다. 맞으면 보통 피해. 맞든 빗나가든 하나 없어집니다." */
+/**
+ * 던지는 판정의 글(#801). 물건에 적힌 것이나 룰북의 맞히는 판정이다. 맞으면 그 물건의 효과가 든다.
+ * "민첩 · 보통으로 던집니다. 맞으면 피해 보통(1d8). 맞든 빗나가든 하나 없어집니다."
+ */
 export function throwTerms(table: TableDetail, entryId: string): string | null {
-  const thrown = table.items.find((item) => item.entry_id === entryId)?.throw;
+  const thrown = table.items.find((item) => item.entry_id === entryId)?.throw ?? table.rules.item_check;
   if (!thrown) return null;
   const rules = table.rules;
   const ability = rules.abilities.find((entry) => entry.key === thrown.ability)?.name ?? thrown.ability;
   const key = thrown.difficulty ?? rules.default_difficulty;
   const difficulty = rules.difficulties.find((entry) => entry.key === key)?.name ?? key;
-  const harm = rules.magnitudes.find((entry) => entry.key === thrown.harm)?.name ?? thrown.harm;
-  return `${ability} · ${difficulty}으로 던집니다. 맞으면 ${harm} 피해. 맞든 빗나가든 하나 없어집니다.`;
+  const effects = effectsLabel(table, entryId);
+  const hit = effects ? `맞으면 ${effects}.` : '맞아도 아무 효과가 없습니다.';
+  return `${ability} · ${difficulty}으로 던집니다. ${hit} 맞든 빗나가든 하나 없어집니다.`;
 }
 
 export function GiveFields({ draft, ctx, onChange }: Props) {
