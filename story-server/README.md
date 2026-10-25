@@ -95,6 +95,8 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | 방법 | 주소 | 하는 일 | 인증 |
 | --- | --- | --- | --- |
 | GET | `/api/v1/story/me` | 토큰의 주인(`{"user_id"}`, 인증 서버의 `public_id`). 토큰 검증이 이어졌는지 보는 가장 작은 주소다(게임 서버의 `GET /me` 와 같다) | access 토큰 |
+| GET | `/api/v1/story/models` | 세션에 고를 수 있는 [모델](#모델-목록)(켜져 있고 은퇴하지 않았다). 회사, 이름표 순서 | access 토큰 |
+| PUT | `/api/v1/story/conversations/{id}/model` | 세션의 모델 바꾸기(`{"model"}`). 고를 수 없으면 422 `model_unavailable` | access 토큰 |
 | POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id"}`). 세계관의 마지막 판을 가져와 고정한다. 201 | access 토큰 |
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}` | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서까지). 남의 것은 404 | access 토큰 |
@@ -138,6 +140,28 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 - 끊긴 세션: 서버가 뜨자마자, 그 뒤 30초마다 인증 서버의 목록을 받는다. `ver` 가 그 사람의 `min_ver` 보다 낮은 토큰은 401.
 - 토큰의 대상(`aud`)에 `ai-trpg-story` 가 있어야 한다. 인증 서버의 `JWT_AUDIENCE` 기본값에 이미 있다(#597).
   인증 서버의 `.env` 에 `JWT_AUDIENCE` 를 적어 둔 PC 는 그 줄에도 이 이름을 더한다.
+
+## 모델 목록
+
+세션에 쓸 언어 모델들이다. chat 서버의 것(`chat-server/README.md` 의 "모델 목록")과 같은 코드와 같은 운영이다(2026-10-25 유저 결정).
+원본은 모델 목록의 파일 하나(`shared/ai-core` 의 `ai_core/model_catalog.toml`)이고, 이 서버의 표에 들여온다.
+
+```powershell
+cd story-server
+uv run python -m scripts.models sync --dry-run    # 무엇이 바뀔지 보기
+uv run python -m scripts.models sync              # 들여오기. 새 모델은 꺼진 채로 들어온다
+uv run python -m scripts.models list
+uv run python -m scripts.models enable gpt-6-luna # 켜기. 오늘의 원가가 있고 은퇴하지 않아야 한다
+uv run python -m scripts.models adult grok-5 --allow
+```
+
+- **고를 수 있는 모델**은 켜져 있고 은퇴하지 않은 것이다. 성인 등급의 세션에는 그중 `allows_adult` 가 참인 것만이다.
+  약관이 성적인 콘텐츠를 막는 창구(anthropic, gemini)는 성인 스위치를 켜지 못한다.
+- **세션의 모델.** 시작할 때 `model` 을 보내지 않으면 지난번 세션의 모델을 쓴다(쓸 수 없으면 없이 시작한다).
+  null 이면 없이, 이름표면 그 모델이고 고를 수 없으면 422 `model_unavailable` 이다. `PUT .../model` 로 바꾼다.
+- **몰래 바꾸지 않는다.** 고른 뒤 꺼지거나 은퇴해도 세션은 그 모델을 가리키고, 읽을 때 `usable: false` 를 싣는다. 화면이 다시 고르게 한다.
+- **값은 아직 없다.** 말 한 번의 값(결제 서버의 가격표 `story.<이름표>.i0.o0`)과 "결제 서버가 팔고 있다"는 결제를 붙이는 PR 이 더한다.
+- 들여오기(`app/catalog/sync.py`)는 chat 의 것과 같은 코드라 이것으로 세 벌이다(게임, chat, story). 표의 ORM 이 서버마다 달라 공용 코드로 올리려면 표의 모양까지 옮겨야 해서, 셋을 함께 고칠 일이 잦아지면 그때 올린다.
 
 ## 엔진
 
@@ -216,7 +240,8 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | 테이블 | 무엇 |
 | --- | --- |
 | `worlds` | asset 서버에서 가져온 세계관의 판의 사본. 사람마다, 판마다 하나(`owner_id`, `source_id`, `version` 이 고유). 문서는 받은 그대로(JSONB) |
-| `conversations` | 세션 하나. 판의 사본을 가리킨다(지우지 못하게 `RESTRICT`). 목록은 `owner_id`, `updated_at` 의 색인으로 읽는다 |
+| `conversations` | 세션 하나. 판의 사본을 가리킨다(지우지 못하게 `RESTRICT`). 목록은 `owner_id`, `updated_at` 의 색인으로 읽는다. 세션의 모델(`model_slug`)을 가리킨다 |
+| `ai_models`, `ai_model_costs`, `ai_model_snapshots` | [모델 목록](#모델-목록). chat 서버의 표와 같은 모양이다 |
 
 모델의 모듈을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 

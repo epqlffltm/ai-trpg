@@ -18,6 +18,7 @@ on:
       - "story-server/**"
       # 이 서버가 쓰는 공용 코드(pyproject.toml 의 경로 의존)
       - "shared/server-core/**"
+      - "shared/ai-core/**"
       - "docker/postgres/init/**"
       - ".github/workflows/story-server.yml"
 
@@ -109,7 +110,7 @@ jobs:
 
       # 운영 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다.
       # uv.lock 에 잠긴 그대로를 해시와 함께 넘긴다. 받아들이기로 한 것은 --ignore-vuln 에 까닭과 함께 적는다
-      # 저장소 안의 공용 코드(shared/server-core)는 해시가 없어 뺀다(--no-emit-local). 그 의존성은 여기에 그대로 들고, 공용 코드 자체는 shared.yml 이 본다
+      # 저장소 안의 공용 코드(shared/server-core, shared/ai-core)는 해시가 없어 뺀다(--no-emit-local). 그 의존성은 여기에 그대로 들고, 공용 코드 자체는 shared.yml 이 본다
       - name: 의존성 취약점 검사
         run: |
           uv export --frozen --no-dev --no-emit-project --no-emit-local --format requirements-txt -q > "$RUNNER_TEMP/requirements.txt"

@@ -9,7 +9,7 @@
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,6 +50,32 @@ async def keep_world(session: AsyncSession, world: ImportedWorld) -> ImportedWor
         ImportedWorld.version == world.version,
     )
     return (await session.scalars(query)).one()
+
+
+async def last_model(session: AsyncSession, owner_id: uuid.UUID) -> str | None:
+    """이 사람이 가장 최근에 시작한 세션의 모델(이름표). 세션이 없거나 그 세션에 모델이 없었으면 None."""
+    query = (
+        select(Conversation.model_slug)
+        .where(Conversation.owner_id == owner_id)
+        .order_by(Conversation.created_at.desc(), Conversation.id.desc())
+        .limit(1)
+    )
+    return await session.scalar(query)
+
+
+async def set_model(session: AsyncSession, conversation_id: uuid.UUID, slug: str) -> None:
+    """
+    세션의 모델을 적는다. 수정 시각(updated_at)은 그대로 둔다. 목록의 차례(최근의 것부터)가 바뀌지 않는다.
+
+    ORM 의 객체를 고치면 onupdate 가 수정 시각을 바꾸므로 UPDATE 를 바로 쓴다. 칸에 제 값을 적어 onupdate 를 막는다.
+    """
+    statement = (
+        update(Conversation)
+        .where(Conversation.id == conversation_id)
+        .values(model_slug=slug, updated_at=Conversation.updated_at)
+        .execution_options(synchronize_session=False)
+    )
+    await session.execute(statement)
 
 
 def visible(owner_id: uuid.UUID, ratings: Sequence[Rating]) -> Select:
