@@ -53,6 +53,9 @@ def make_test_settings(**overrides) -> Settings:
         # asset 서버를 부르지 않는다. 개발자의 .env 에 주소가 있어도 테스트는 가짜(asset fixture)를 쓴다
         'asset_url': '',
         'asset_secret': '',
+        # 결제 서버를 부르지 않는다(받지 않는 것). 값을 보는 테스트는 가격 목록을 바꿔 끼운다(tests/prices.py)
+        'billing_url': '',
+        'billing_secret': '',
     }
     values.update(overrides)
     return Settings(**values)

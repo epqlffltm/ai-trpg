@@ -12,13 +12,15 @@
 """
 
 import uuid
-from datetime import date
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.assets.client import AssetUnavailableError
+from app.billing.prices import PriceBook
+from app.billing.routing import Prices
 from app.catalog.models import AiModel
 from app.conversations import service
 from app.conversations.models import Conversation, ImportedWorld
@@ -75,37 +77,47 @@ def to_model(model: AiModel, usable: bool) -> ConversationModelOut:
 
 
 def conversation_model(
-    conversation: Conversation, world: ImportedWorld, models: dict[str, AiModel], today: date
+    conversation: Conversation,
+    world: ImportedWorld,
+    models: dict[str, AiModel],
+    book: PriceBook | None,
+    now: datetime,
 ) -> ConversationModelOut | None:
-    """세션이 가리키는 모델. 고르지 않았으면 None 이다."""
+    """세션이 가리키는 모델. 고르지 않았으면 None 이다. book 이 None 이면 값을 모르는 것이다(팔고 있다고 본다)."""
     model = models.get(conversation.model_slug or '')
     if model is None:
         return None
-    return to_model(model, service.model_usable(model, Rating(world.rating), today))
+    return to_model(model, service.model_usable(model, Rating(world.rating), book, now))
 
 
 def to_summary(
-    conversation: Conversation, world: ImportedWorld, models: dict[str, AiModel], today: date
+    conversation: Conversation,
+    world: ImportedWorld,
+    models: dict[str, AiModel],
+    book: PriceBook | None,
+    now: datetime,
 ) -> ConversationSummary:
     """세션을 목록의 한 줄로."""
     return ConversationSummary(
         id=conversation.id,
         title=conversation.title,
         world=to_world_summary(world),
-        model=conversation_model(conversation, world, models, today),
+        model=conversation_model(conversation, world, models, book, now),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )
 
 
-def to_detail(row: ConversationRow, models: dict[str, AiModel], today: date) -> ConversationDetail:
+def to_detail(
+    row: ConversationRow, models: dict[str, AiModel], book: PriceBook | None, now: datetime
+) -> ConversationDetail:
     """세션 하나를 응답의 모양으로."""
     conversation, world = row
     return ConversationDetail(
         id=conversation.id,
         title=conversation.title,
         world=WorldOut(**to_world_summary(world).model_dump(), document=world.document),
-        model=conversation_model(conversation, world, models, today),
+        model=conversation_model(conversation, world, models, book, now),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )
@@ -159,11 +171,11 @@ async def handle_asset_unavailable(request: Request, error: AssetUnavailableErro
 
 @router.post('', response_model=ConversationDetail, status_code=status.HTTP_201_CREATED)
 async def start_conversation(
-    data: ConversationCreate, viewer: CurrentViewer, session: Session, request: Request, now: Now
+    data: ConversationCreate, viewer: CurrentViewer, session: Session, request: Request, prices: Prices, now: Now
 ) -> ConversationDetail:
     """세션을 시작한다. 세계관의 마지막 판을 가져와 고정한다. 모델은 지난번 것이거나 고른 것이다."""
-    conversation_id = await service.start_conversation(session, request.app.state.asset, viewer, data, now.date())
-    return await read_conversation(conversation_id, viewer, session, now)
+    conversation_id = await service.start_conversation(session, request.app.state.asset, prices, viewer, data, now)
+    return await read_conversation(conversation_id, viewer, session, prices, now)
 
 
 @router.get('', response_model=ConversationPage, status_code=status.HTTP_200_OK)
@@ -171,32 +183,34 @@ async def list_conversations(
     viewer: CurrentViewer,
     session: Session,
     paging: Paging,
+    prices: Prices,
     now: Now,
     world_id: Annotated[uuid.UUID | None, Query(description='asset 서버의 세계관 id. 주면 그 세계관의 세션만')] = None,
 ) -> ConversationPage:
-    """내 세션의 목록. 최근의 것부터다."""
+    """내 세션의 목록. 최근의 것부터다. 가격 목록은 DB 를 읽기 전에 받는다(바깥을 기다리며 연결을 쥐지 않는다)."""
+    book = await service.known_book(prices)
     rows, total = await service.list_conversations(session, viewer, world_id, paging.limit, paging.offset)
     models = await service.conversation_models(session, [conversation for conversation, _ in rows])
-    today = now.date()
     return ConversationPage(
-        items=[to_summary(conversation, world, models, today) for conversation, world in rows], total=total
+        items=[to_summary(conversation, world, models, book, now) for conversation, world in rows], total=total
     )
 
 
 @router.get('/{conversation_id}', response_model=ConversationDetail, status_code=status.HTTP_200_OK)
 async def read_conversation(
-    conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session, now: Now
+    conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session, prices: Prices, now: Now
 ) -> ConversationDetail:
-    """세션 하나. 가져온 판까지."""
+    """세션 하나. 가져온 판까지. 가격 목록은 DB 를 읽기 전에 받는다."""
+    book = await service.known_book(prices)
     row = await service.get_conversation(session, viewer, conversation_id)
     models = await service.conversation_models(session, [row[0]])
-    return to_detail(row, models, now.date())
+    return to_detail(row, models, book, now)
 
 
 @router.put('/{conversation_id}/model', response_model=ConversationModelOut, status_code=status.HTTP_200_OK)
 async def change_model(
-    conversation_id: uuid.UUID, data: ModelChoice, viewer: CurrentViewer, session: Session, now: Now
+    conversation_id: uuid.UUID, data: ModelChoice, viewer: CurrentViewer, session: Session, prices: Prices, now: Now
 ) -> ConversationModelOut:
-    """세션의 모델을 바꾼다. 다음 말부터 그 모델로 쓴다. 바꾼 모델을 돌려준다."""
-    model = await service.change_model(session, viewer, conversation_id, data.model, now.date())
+    """세션의 모델을 바꾼다. 다음 말부터 그 모델로 쓰고 그 모델의 값으로 청구한다. 바꾼 모델을 돌려준다."""
+    model = await service.change_model(session, prices, viewer, conversation_id, data.model, now)
     return to_model(model, usable=True)

@@ -286,7 +286,7 @@ func TestNewProviderPicksTheConfiguredOne(t *testing.T) {
 }
 
 func TestNewServicesShortensTheChatHolds(t *testing.T) {
-	// chat 서버의 홀드는 CHAT_HOLD_TTL 뒤에, 게임 서버의 홀드는 HOLD_TTL 뒤에 만료된다
+	// chat 서버와 story 서버의 홀드는 CHAT_HOLD_TTL 뒤에, 게임 서버의 홀드는 HOLD_TTL 뒤에 만료된다
 	pool := testenv.Pool(t)
 	clock := func() time.Time { return now }
 	rules := config.Rules{FreeCreditTTL: time.Hour, HoldTTL: 2 * time.Hour, ChatHoldTTL: 5 * time.Minute, OrderTTL: time.Hour}
@@ -300,13 +300,17 @@ func TestNewServicesShortensTheChatHolds(t *testing.T) {
 	}
 
 	chat, _, chatErr := services.Holds.Place(context.Background(), peers.Chat, user, "conversation:"+uuid.NewString()+":turn:1", pricing.NarrationStandard)
+	story, _, storyErr := services.Holds.Place(context.Background(), peers.Story, user, "session:"+uuid.NewString()+":turn:1", pricing.NarrationStandard)
 	game, _, gameErr := services.Holds.Place(context.Background(), peers.Game, user, "table:"+uuid.NewString()+":round:1", pricing.NarrationStandard)
 
-	if chatErr != nil || gameErr != nil {
-		t.Fatalf("홀드를 걸지 못했다: %v, %v", chatErr, gameErr)
+	if chatErr != nil || storyErr != nil || gameErr != nil {
+		t.Fatalf("홀드를 걸지 못했다: %v, %v, %v", chatErr, storyErr, gameErr)
 	}
 	if got := chat.ExpiresAt.Sub(chat.CreatedAt); got != 5*time.Minute {
 		t.Errorf("chat 홀드의 기한 = %v", got)
+	}
+	if got := story.ExpiresAt.Sub(story.CreatedAt); got != 5*time.Minute {
+		t.Errorf("story 홀드의 기한 = %v", got)
 	}
 	if got := game.ExpiresAt.Sub(game.CreatedAt); got != 2*time.Hour {
 		t.Errorf("게임 홀드의 기한 = %v", got)

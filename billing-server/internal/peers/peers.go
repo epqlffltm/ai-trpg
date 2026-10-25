@@ -12,6 +12,8 @@ const (
 	Game = "trpg-server"
 	// Auth 는 인증 서버다. 환영 크레딧과 결제 자격을 보낸다.
 	Auth = "auth-server"
-	// Chat 은 chat 서버다. chat 과 story 의 말 한 번에 홀드를 건다.
+	// Chat 은 chat 서버다. 캐릭터와 나누는 말 한 번에 홀드를 건다.
 	Chat = "chat-server"
+	// Story 는 story 서버다. 세계관 안의 세션에서 말 한 번에 홀드를 건다.
+	Story = "story-server"
 )

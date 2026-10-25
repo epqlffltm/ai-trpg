@@ -195,13 +195,14 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `SPEND_FREE_FIRST` | `true` | 크레딧을 쓸 때 무료 크레딧부터 쓴다. `false` 면 산 크레딧부터 쓴다 |
 | `FREE_CREDIT_TTL` | `720h` | 무료 크레딧(실버)이 지급된 뒤 사라질 때까지의 시간(30일). `720h`, `30m`, `90s` 처럼 단위를 붙인다. 1초보다 짧을 수 없다 |
 | `HOLD_TTL` | `24h` | 홀드를 걸거나 연장한 뒤 만료될 때까지의 시간. 1분보다 짧을 수 없다([홀드](#홀드)의 "만료와 연장") |
-| `CHAT_HOLD_TTL` | `10m` | chat 서버가 건 홀드만의 만료 시간. 말 한 번은 몇십 초면 끝나서 하루를 기다리지 않는다. 1분보다 짧을 수 없다 |
+| `CHAT_HOLD_TTL` | `10m` | chat 서버와 story 서버가 건 홀드만의 만료 시간. 말 한 번은 몇십 초면 끝나서 하루를 기다리지 않는다. 1분보다 짧을 수 없다 |
 | `ORDER_TTL` | `24h` | 주문을 만든 뒤 만료될 때까지의 시간. 1분보다 짧을 수 없다([주문과 결제](#주문과-결제)의 "만료") |
 | `WELCOME_CREDITS` | `1000` | 본인인증을 마친 사용자가 한 번 받는 환영 크레딧(무료)의 양. 0 이면 주지 않는다. 100만까지 |
 | `ATTENDANCE_SILVER` | `140,160,180,200,220,240,260` | 출석의 하루 양(실버). 쉼표로 나눈 목록이고 첫째가 1일째다. 길이가 주기의 날 수이고(1~14일), 마지막 날에 보물 상자를 연다. 하루에 1~10만 실버([크레딧](#크레딧)의 "출석과 보물 상자") |
 | `PG_WEBHOOK_SECRET` | 없음(필수) | 결제 대행사의 알림에 붙은 서명을 확인하는 비밀. 32자 이상. 로그와 오류에 싣지 않는다 |
 | `GAME_SERVER_SECRET` | 없음(필수) | 게임 서버가 보낸 요청의 서명을 확인하는 비밀. 32자 이상. `PG_WEBHOOK_SECRET` 과 달라야 한다. 로그와 오류에 싣지 않는다 |
 | `CHAT_SERVER_SECRET` | 비어 있음 | chat 서버가 보낸 요청의 서명을 확인하는 비밀. 비어 있으면 chat 서버의 요청을 하나도 받지 않는다(chat 서버를 띄우지 않는 동안). 적으면 32자 이상이고 다른 비밀과 달라야 한다. 로그와 오류에 싣지 않는다. `chat-server/.env` 의 `BILLING_SECRET` 과 같은 값이고 `tools/fill_env.py` 가 두 파일에 채운다. 서버만 읽는다(compose 가 마이그레이션, 정리 작업, cron 에서는 비운다) |
+| `STORY_SERVER_SECRET` | 비어 있음 | story 서버가 보낸 요청의 서명을 확인하는 비밀. 비어 있으면 story 서버의 요청을 하나도 받지 않는다(story 서버를 띄우지 않는 동안). 적으면 32자 이상이고 다른 비밀과 달라야 한다. 로그와 오류에 싣지 않는다. `story-server/.env` 의 `BILLING_SECRET` 과 같은 값이고 `tools/fill_env.py` 가 두 파일에 채운다. 서버만 읽는다(compose 가 마이그레이션, 정리 작업, cron 에서는 비운다) |
 | `AUTH_SERVER_SECRET` | 없음(필수) | 인증 서버가 보낸 요청의 서명을 확인하는 비밀. 32자 이상. 위의 두 비밀과 달라야 한다. 인증 서버의 `BILLING_SECRET` 과 같은 값이다. 정리 작업은 이것으로 보호자 결제 알림에 서명한다(정리 작업에는 없어도 된다. 그러면 알릴 일을 적기만 한다). 로그와 오류에 싣지 않는다 |
 | `PAYMENT_PROVIDER` | `fake` | 꽂을 결제 대행사. `fake`(정해 둔 대로 답하는 가짜) 나 `toss`(토스페이먼츠의 테스트 모드). `APP_ENVIRONMENT=production` 이면 `fake` 로 뜨지 않는다 |
 | `TOSS_SECRET_KEY` | 없음(`toss` 면 필수) | 토스페이먼츠의 시크릿 키. 승인과 조회에 쓴다. `test_gsk_` 나 `test_sk_` 로 시작하는 테스트 키만 받는다. 로그와 오류에 싣지 않는다 |
@@ -265,6 +266,7 @@ uv run --no-project python tools/export_openapi.py billing
 | 토스페이먼츠 | `/webhooks/toss` | 없다(서명이 없는 알림이다). 결과는 토스페이먼츠에 다시 묻는다 |
 | 게임 서버 | `/service/holds...`, `/service/prices` | 요청(메서드, 주소, 본문)의 서명(`GAME_SERVER_SECRET`) |
 | chat 서버 | `/service/holds...`, `/service/prices` | 요청의 서명(`CHAT_SERVER_SECRET`). 게임 서버와 같은 주소다. 쓸 수 있는 가격표는 다르다([홀드](#홀드)의 "서버마다의 가격표") |
+| story 서버 | `/service/holds...`, `/service/prices` | 요청의 서명(`STORY_SERVER_SECRET`). chat 서버와 같다. 가격표는 `story` 머리의 것만 쓴다 |
 | 인증 서버 | `/service/grants/welcome`, `/service/eligibility`, `/service/users/{id}/withdrawal` | 요청(메서드, 주소, 본문)의 서명(`AUTH_SERVER_SECRET`) |
 
 사용자가 부르는 주소는 모두 로그인이 필요하다. `Authorization: Bearer <access 토큰>` 머리말을 싣는다.
@@ -303,7 +305,7 @@ uv run --no-project python tools/export_openapi.py billing
 | `POST /api/v1/billing/service/holds` | 201 또는 200, 홀드 | 사용자의 크레딧을 먼저 빼 둔다. 모자라면 402 |
 | `POST /api/v1/billing/service/holds/capture` | 200, 홀드 | 홀드를 확정한다. 크레딧은 돌아오지 않는다 |
 | `POST /api/v1/billing/service/holds/release` | 200, 홀드 | 홀드를 돌려준다. 크레딧이 뺐던 자리로 돌아간다 |
-| `POST /api/v1/billing/service/holds/extend` | 200, 홀드 | 홀드의 만료 시각을 지금부터 그 서버의 만료 시간(`HOLD_TTL`, chat 서버는 `CHAT_HOLD_TTL`) 뒤로 민다 |
+| `POST /api/v1/billing/service/holds/extend` | 200, 홀드 | 홀드의 만료 시각을 지금부터 그 서버의 만료 시간(`HOLD_TTL`, chat 서버와 story 서버는 `CHAT_HOLD_TTL`) 뒤로 민다 |
 | `GET /api/v1/billing/service/prices` | 200 가격 목록 또는 304 | 가격표의 지금 값과 다음에 바뀔 값. `If-None-Match` 가 지금의 `ETag` 와 같으면 304(아래 "가격 목록") |
 
 인증 서버가 부르는 주소가 셋 있다. 이것도 사용자의 토큰으로는 부를 수 없다. 게임 서버의 서명으로도 부를 수 없다.
@@ -755,7 +757,7 @@ go run ./cmd/fakepg toss-notify <주문 번호> <결제 번호>
 ## 홀드
 
 크레딧을 쓰는 길이다. 값을 치르기 **전에** 크레딧을 먼저 빼 두고(홀드), 일이 끝나면 확정하거나 돌려준다.
-게임 서버가 라운드의 AI 서술에 쓰고, chat 서버가 말 한 번에 쓴다. 사용자는 이 주소들을 부를 수 없다.
+게임 서버가 라운드의 AI 서술에 쓰고, chat 서버와 story 서버가 말 한 번에 쓴다. 사용자는 이 주소들을 부를 수 없다.
 
 ```
 게임 서버                              결제 서버
@@ -790,7 +792,8 @@ go run ./cmd/fakepg toss-notify <주문 번호> <결제 번호>
 | 서버 | 머리 | 예 |
 | --- | --- | --- |
 | 게임 서버 | `narration` | `narration.claude-sonnet-5-5.i0.o0` |
-| chat 서버 | `chat`, `story` | `chat.<모델>.i0.o0`(docs/architecture/chat-server.md 의 "가격 이름") |
+| chat 서버 | `chat` | `chat.<모델>.i0.o0`(docs/architecture/chat-server.md 의 "가격 이름") |
+| story 서버 | `story` | `story.<모델>.i0.o0`(docs/architecture/story.md 의 "정한 것"의 청구) |
 
 - 다른 머리의 이름으로 홀드를 걸면 **없는 가격표와 같은 답**이다(400 `price.unknown`). 그런 가격표가 있다는 것도 알리지 않는다. 홀드를 걸어 보지도 않는다
 - 가격 목록(`/service/prices`)도 그 서버의 머리의 줄만 낸다. ETag 도 그 목록의 것이다
@@ -948,17 +951,17 @@ narration.old-model.i0.o0,stop,,,
 **만료와 연장.** 홀드는 걸거나 연장한 때부터 `HOLD_TTL`(기본 24시간) 뒤에 만료된다.
 카드 결제의 승인(authorization)이 며칠 안에 확정되지 않으면 저절로 풀리는 것과 같은 생각이다(Stripe 는 기본 7일). 끝이 열린 홀드를 남기지 않는다.
 
-**chat 서버가 건 홀드는 `CHAT_HOLD_TTL`(기본 10분) 뒤에 만료된다.** 게임 서버는 라운드를 몇 시간 열어 두지만 chat 서버의 홀드는 말 한 번이고 몇십 초면 끝난다.
-그 사이 chat 서버가 죽으면 확정도 반환도 오지 않는다. 24시간을 기다리면 사용자의 크레딧이 하루 동안 묶인다.
+**chat 서버와 story 서버가 건 홀드는 `CHAT_HOLD_TTL`(기본 10분) 뒤에 만료된다.** 게임 서버는 라운드를 몇 시간 열어 두지만 두 서버의 홀드는 말 한 번이고 몇십 초면 끝난다.
+그 사이 그 서버가 죽으면 확정도 반환도 오지 않는다. 24시간을 기다리면 사용자의 크레딧이 하루 동안 묶인다.
 
 - 누가 걸었는지는 서명에서 온다(`holds.source`). 부르는 쪽이 만료 시간을 고르지 못한다
-- 연장도 그 서버의 시간이다. chat 서버가 연장하면 지금부터 `CHAT_HOLD_TTL` 뒤다
+- 연장도 그 서버의 시간이다. chat 서버나 story 서버가 연장하면 지금부터 `CHAT_HOLD_TTL` 뒤다
 - 이미 건 홀드의 만료 시각은 값을 바꿔도 그대로다. 새로 걸거나 연장할 때부터 새 값이다
 - 서버(만료 시각을 적는다)와 정리 작업(돌려준다)이 같은 `.env` 를 쓴다. 정리 작업은 적힌 시각만 보므로 이 값이 달라도 틀리게 돌려주지는 않는다
 - 서버마다의 시간은 `internal/hold` 의 `WithSourceTTL` 로 정한다. 적지 않은 서버는 `HOLD_TTL` 이다
 
 - **연장한다.** `POST /api/v1/billing/service/holds/extend`, 본문은 `{ "reference": "table:7f3c:round:3" }` 이다.
-  만료 시각을 **지금부터** 그 서버의 만료 시간(`HOLD_TTL`, chat 서버는 `CHAT_HOLD_TTL`) 뒤로 민다. 앞으로 당기지는 않는다(설정을 줄인 뒤에 연장해도 이미 받은 시간은 남는다). 크레딧은 건드리지 않는다
+  만료 시각을 **지금부터** 그 서버의 만료 시간(`HOLD_TTL`, chat 서버와 story 서버는 `CHAT_HOLD_TTL`) 뒤로 민다. 앞으로 당기지는 않는다(설정을 줄인 뒤에 연장해도 이미 받은 시간은 남는다). 크레딧은 건드리지 않는다
 - 라운드를 오래 열어 두는 쪽(게임 서버)은 만료 전에 연장한다. 하루에 한 번이면 충분하다. 몇 번을 불러도 된다
 - 같은 이름표로 홀드를 다시 걸어도(다시 보낸 요청) 연장되지 않는다. 연장은 이 주소로만 한다
 - **만료 시각이 지나도 정리 작업이 돌려주기 전까지는 확정하거나 연장할 수 있다.** 시각 하나를 두고 두 쪽이 다투지 않는다.
@@ -1025,7 +1028,7 @@ narration.old-model.i0.o0,stop,,,
 - 확정은 원장에 줄을 더하지 않는다. 크레딧은 홀드를 걸 때 이미 빠졌다(`hold` 줄). 확정은 "그것을 돌려주지 않는다"를 정할 뿐이다
 
 **서명.** 게임 서버는 사용자의 토큰을 싣지 않는다. 두 서버만 아는 비밀(`GAME_SERVER_SECRET`)로 요청에 서명해 머리말에 싣는다.
-chat 서버는 자기 비밀(`CHAT_SERVER_SECRET`)로 같은 방식으로 서명한다. 결제 서버는 두 비밀로 차례로 확인해 맞는 쪽을 부른 서버로 본다.
+chat 서버와 story 서버는 자기 비밀(`CHAT_SERVER_SECRET`, `STORY_SERVER_SECRET`)로 같은 방식으로 서명한다. 결제 서버는 비밀들로 차례로 확인해 맞는 쪽을 부른 서버로 본다.
 
 ```
 X-Service-Signature: t=<보낸 시각(초)>,v1=<서명>
@@ -1834,7 +1837,7 @@ Windows 에서는 C 컴파일러(gcc)를 따로 깔아야 `-race` 가 돈다. �
   - 만료와 연장: 만료 시각이 걸 때부터 `HOLD_TTL` 뒤인 것, 다시 걸어도 연장되지 않는 것, 연장이 지금부터 밀고 앞당기지 않는 것,
     끝난 홀드의 연장 거절, 만료 시각이 지나도 정리 작업 전에는 확정·연장이 되는 것, 정리 뒤에는 확정·연장이 409 이고 반환은 200 인 것,
     정리 작업 둘과 늦은 확정이 한꺼번에 와도 하나만 되고 크레딧이 한 번만 돌아오는 것
-  - 서버마다의 만료: chat 서버가 건 홀드는 `CHAT_HOLD_TTL` 뒤에 만료되고 연장도 그 시간만큼인 것, 0 이하의 시간을 받지 않는 것
+  - 서버마다의 만료: chat 서버와 story 서버가 건 홀드는 `CHAT_HOLD_TTL` 뒤에 만료되고 연장도 그 시간만큼인 것, 0 이하의 시간을 받지 않는 것
 - 정리 작업(`internal/sweep`, `internal/batch`, `cmd/sweeper`): 셋을 차례로 하고 하나가 실패해도 나머지를 하는 것, 줄 하나가 실패해도 뒤의 줄을 하는 것,
   끄라는 신호에 멈추는 것, 실패한 바퀴 뒤에도 다음 바퀴를 도는 것. 지갑의 정리가 변경 없는 사용자의 `expire` 줄을 한 번만 적는 것
 - 대사(`internal/reconcile`, `cmd/reconcile`): 서비스가 남긴 장부는 깨끗한 것(환불됨, 거절되어 되돌림, 환불 중도), DB 를 직접 어긋나게 만든 줄(잔액, 산 크레딧의 묶음, 지급 묶음, 주문, 원장, 청약철회, 홀드)을 검사마다 찾는 것,

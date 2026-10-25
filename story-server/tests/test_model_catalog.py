@@ -25,6 +25,7 @@ from ai_core.catalog_file import CostEntry, ModelEntry
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.billing.price_list import FREE_PRICES
 from app.catalog import offers, repository, service
 from app.catalog.choice import is_choosable, may_allow_adult, suits_rating
 from app.catalog.errors import CatalogConflictError, Conflict, ModelNotFoundError
@@ -247,12 +248,13 @@ async def test_only_enabled_unretired_models_are_offered(session: AsyncSession):
     await retire(session, 'glm-5-3', TODAY)
 
     noon = datetime.combine(TODAY, time(12), UTC)
-    offered = await offers.list_offered(session, noon)
-    before_retiring = await offers.list_offered(session, noon - timedelta(days=1))
+    offered = await offers.list_offered(session, FREE_PRICES, noon)
+    before_retiring = await offers.list_offered(session, FREE_PRICES, noon - timedelta(days=1))
 
-    # 회사, 이름표 순서다. 꺼진 것(Flash)과 은퇴한 것(GLM, 은퇴일 당일부터)은 없다
-    assert [model.slug for model in offered] == ['claude-opus-5-5', 'gpt-6-luna']
-    assert [model.slug for model in before_retiring] == ['claude-opus-5-5', 'gpt-6-luna', 'glm-5-3']
+    # 회사, 이름표 순서다. 꺼진 것(Flash)과 은퇴한 것(GLM, 은퇴일 당일부터)은 없다. 결제 서버가 없으니 값이 없다
+    assert [found.model.slug for found in offered.offers] == ['claude-opus-5-5', 'gpt-6-luna']
+    assert [found.model.slug for found in before_retiring.offers] == ['claude-opus-5-5', 'gpt-6-luna', 'glm-5-3']
+    assert offered.free and offered.offers[0].sale is None
 
 
 async def test_models_are_found_by_their_slugs(session: AsyncSession):

@@ -201,10 +201,10 @@ write_new() {
 
 # 아홉 개의 .env 를 만든다. 주소는 compose 가 덮어쓰므로 비밀만 적는다.
 # 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버,
-# 알림 서버와 게임·결제·게시판·asset·chat 서버, asset 서버와 chat·story 서버, 결제 서버와 chat 서버)
+# 알림 서버와 게임·결제·게시판·asset·chat 서버, asset 서버와 chat·story 서버, 결제 서버와 chat·story 서버)
 write_env_files() {
   local game_secret auth_secret notify_secret billing_notify_secret board_notify_secret chat_asset_secret
-  local chat_billing_secret asset_notify_secret chat_notify_secret story_asset_secret
+  local chat_billing_secret asset_notify_secret chat_notify_secret story_asset_secret story_billing_secret
   game_secret="$(throwaway)"
   auth_secret="$(throwaway)"
   notify_secret="$(throwaway)"
@@ -215,6 +215,7 @@ write_env_files() {
   asset_notify_secret="$(throwaway)"
   chat_notify_secret="$(throwaway)"
   story_asset_secret="$(throwaway)"
+  story_billing_secret="$(throwaway)"
   write_new .env <<EOF
 POSTGRES_PASSWORD=$(throwaway)
 AUTH_DB_PASSWORD=$(throwaway)
@@ -253,6 +254,7 @@ GAME_SERVER_SECRET=$game_secret
 AUTH_SERVER_SECRET=$auth_secret
 NOTIFICATION_SECRET=$billing_notify_secret
 CHAT_SERVER_SECRET=$chat_billing_secret
+STORY_SERVER_SECRET=$story_billing_secret
 EOF
   write_new notification-server/.env <<EOF
 GAME_SERVER_SECRET=$notify_secret
@@ -281,10 +283,13 @@ NOTIFICATION_SECRET=$chat_notify_secret
 EOF
   # story 서버의 DB 비밀번호는 compose 가 루트 .env 의 것으로 주소를 만든다.
   # asset 서버와 함께 아는 비밀은 세션을 시작할 때 세계관의 판을 가져오는 서명이다. compose 가 ASSET_URL 을 주므로
-  # 이 비밀이 없으면 story 서버가 뜨지 않는다. ASSET_URL 은 .env.example 의 값을 둔다. 마이그레이션이 그 값을 비우는지 본다
+  # 이 비밀이 없으면 story 서버가 뜨지 않는다. ASSET_URL 은 .env.example 의 값을 둔다. 마이그레이션이 그 값을 비우는지 본다.
+  # 결제 서버의 비밀도 함께 안다. compose 가 story 서버에 BILLING_URL 을 준다. 마이그레이션은 BILLING_URL 도 비우는지 본다
   write_new story-server/.env <<EOF
 ASSET_URL=http://127.0.0.1:8006
 ASSET_SECRET=$story_asset_secret
+BILLING_URL=http://127.0.0.1:8003
+BILLING_SECRET=$story_billing_secret
 EOF
 }
 
@@ -513,6 +518,32 @@ async def main() -> None:
         book = await prices.book()
         assert not book.free
         assert all(code.startswith('chat.') for code in book.prices), sorted(book.prices)
+
+
+asyncio.run(main())
+PY
+}
+
+# story 서버가 제 설정(BILLING_URL, BILLING_SECRET)으로 서명해 결제 서버의 가격 목록을 받는가.
+# 받은 목록에는 story 머리의 가격표만 있다(결제 서버의 internal/httpapi/price_scope.go)
+story_price_list() {
+  compose exec -T story-server python - <<'PY'
+import asyncio
+
+import httpx
+
+from app.billing.price_list import HttpPriceList
+from app.billing.setup import build_price_list
+from app.core.config import Settings
+
+
+async def main() -> None:
+    async with httpx.AsyncClient() as client:
+        prices = build_price_list(Settings(), client)
+        assert isinstance(prices, HttpPriceList), type(prices)
+        book = await prices.book()
+        assert not book.free
+        assert all(code.startswith('story.') for code in book.prices), sorted(book.prices)
 
 
 asyncio.run(main())
@@ -1452,6 +1483,8 @@ check() {
   report "게임 서버가 결제 서버에 닿는다" reachable_from trpg-server http://billing-server:8003/health
   report "chat 서버가 결제 서버에 닿는다" reachable_from chat-server http://billing-server:8003/health
   report "chat 서버가 제 서명으로 결제 서버의 가격 목록을 받는다(CHAT_SERVER_SECRET 의 짝)" chat_price_list
+  report "story 서버가 결제 서버에 닿는다" reachable_from story-server http://billing-server:8003/health
+  report "story 서버가 제 서명으로 결제 서버의 가격 목록을 받는다(STORY_SERVER_SECRET 의 짝)" story_price_list
   report "게임 서버가 알림 서버에 닿는다" reachable_from trpg-server http://notification-server:8004/health
   report "게임 서버가 서명한 알림을 알림 서버가 받는다" game_notification_accepted
   report "결제 서버의 정리 작업이 알림 서버에 닿는다" reachable_from billing-sweeper http://notification-server:8004/health

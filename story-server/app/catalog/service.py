@@ -2,7 +2,7 @@
 
 """
 이 서버의 표에서 하는 모델 목록의 일. 켜기, 끄기, 성인 등급의 세션에 쓰기, 목록 보기.
-고를 수 있는 모델은 app/catalog/offers.py 다.
+고를 수 있는 모델과 그 값은 app/catalog/offers.py 다.
 chat 서버의 것(chat-server/app/catalog/service.py)과 같다. 회사의 대체 모델이 없고 성인 스위치가 있다.
 
 모델을 넣고 고치고 원가를 적는 일은 여기 없다. 원본 파일(ai_core/model_catalog.toml)을 고치고 들여온다

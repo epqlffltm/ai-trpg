@@ -59,11 +59,13 @@ func NewServices(pool *pgxpool.Pool, rules config.Rules, providers order.Provide
 	if err != nil {
 		return Services{}, err
 	}
-	// chat 서버의 말 한 번은 몇 초면 끝난다. 그 서버의 홀드는 짧게 둬서 서버가 죽어도 크레딧이 오래 묶이지 않는다.
+	// chat 서버와 story 서버의 말 한 번은 몇 초면 끝난다. 그 서버들의 홀드는 짧게 둬서 서버가 죽어도 크레딧이 오래 묶이지 않는다.
 	// 0 이면 따로 정하지 않은 것이다(HOLD_TTL 그대로). 설정(CHAT_HOLD_TTL)은 늘 값을 채우므로 0 은 코드가 만든 규칙에서만 온다
 	if rules.ChatHoldTTL > 0 {
-		if err := holds.WithSourceTTL(peers.Chat, rules.ChatHoldTTL); err != nil {
-			return Services{}, err
+		for _, source := range []string{peers.Chat, peers.Story} {
+			if err := holds.WithSourceTTL(source, rules.ChatHoldTTL); err != nil {
+				return Services{}, err
+			}
 		}
 	}
 	// 크레딧이 모자라 걸지 못한 일을 사용자의 알림함에 보낼 것으로 적는다. 보내기는 정리 작업이 한다(보내는 것을 붙이지 않는다)
