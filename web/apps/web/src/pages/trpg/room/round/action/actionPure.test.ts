@@ -60,8 +60,16 @@ const CAST = {
     { id: NPC, name: '문지기', named: false, status: 'alive', injuries: ['broken_arm'], attitude: 'wary', items: [{ entry_id: 'i5', name: '열쇠', rarity: 'rare', count: 1, equipped: false }] },
   ],
   monsters: [
-    { id: MONSTER, name: '수로 쥐', place_id: 'p1', status: 'downed', condition: '쓰러짐', items: [{ entry_id: 'i6', name: '반지', rarity: 'normal', count: 1, equipped: true }] },
-    { id: FAR_MONSTER, name: '박쥐', place_id: 'p2', status: 'alive', condition: '멀쩡함', items: [] },
+    {
+      id: MONSTER,
+      name: '수로 쥐',
+      place_id: 'p1',
+      status: 'downed',
+      condition: '쓰러짐',
+      items: [{ entry_id: 'i6', name: '반지', rarity: 'normal', count: 1, equipped: true }],
+      injuries: ['broken_arm'],
+    },
+    { id: FAR_MONSTER, name: '박쥐', place_id: 'p2', status: 'alive', condition: '멀쩡함', items: [], injuries: [] },
   ],
 } as unknown as SceneCast;
 
@@ -97,6 +105,10 @@ describe('actionOptions', () => {
     expect(harmTargets(context()).map((choice) => choice.value)).toEqual([`npc:${NPC}`, `monster:${MONSTER}`]);
   });
 
+  it('몬스터는 몸 상태와 입은 부상의 이름으로 보인다', () => {
+    expect(harmTargets(context()).find((choice) => choice.value === `monster:${MONSTER}`)?.label).toBe('수로 쥐(쓰러짐 · 부러진 팔)');
+  });
+
   it('훔치기는 쓰러지지 않은, 빼앗기는 쓰러지거나 죽은, 물건을 지닌 대상이다', () => {
     expect(victims(context(), 'steal').map((choice) => choice.value)).toEqual([`npc:${NPC}`]);
     expect(victims(context(), 'loot').map((choice) => choice.value)).toEqual([`monster:${MONSTER}`]);
@@ -113,7 +125,7 @@ describe('actionOptions', () => {
 describe('toAction', () => {
   const ctx = context();
 
-  it('판정은 목적에 맞는 칸만 보낸다. 노려 치기는 인물에게만', () => {
+  it('판정은 목적에 맞는 칸만 보낸다. 노려 치기는 인물과 몬스터에게', () => {
     expect(toAction(draft({ kind: 'check', risk: 'light' }), ctx)).toEqual({ kind: 'check', ability: 'str', difficulty: 'normal', risk: 'light', lethal: false });
     expect(toAction(draft({ kind: 'check', purpose: 'harm', target: `npc:${NPC}`, magnitude: 'heavy', lethal: true, aim: 'broken_arm' }), ctx)).toEqual({
       kind: 'check',
@@ -131,6 +143,7 @@ describe('toAction', () => {
       harm: 'light',
       lethal: false,
       monster: MONSTER,
+      aim: 'broken_arm',
     });
     expect(toAction(draft({ kind: 'check', purpose: 'recover', target: `member:${OTHER}` }), ctx)).toMatchObject({ recover: 'light', target: OTHER });
   });

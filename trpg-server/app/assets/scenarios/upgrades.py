@@ -962,6 +962,24 @@ def upgrade_from_59(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_60(document: dict) -> dict:
+    """
+    형식 60 의 문서를 형식 61 로 올린다. 그때는 몬스터가 부상을 입지 않았다(#799).
+
+    룰북의 부상에는 성질이 없는 것(누구나 입는다)으로, 몬스터는 타입의 면역 그대로로 읽는다.
+    앞의 올려 읽기가 템플릿의 부상을 채웠어도(그때의 규칙) 성질은 비운다. 게시한 판은 그때의 규칙으로 굳어 있다.
+    DB 의 룰북은 다르다. 마이그레이션이 템플릿의 성질을 채운다. 다음에 게시하는 판부터 면역이 든다.
+    """
+    upgraded = dict(document)
+    rulebook = document['rulebook']
+    rules = rulebook['rules']
+    injuries = [{**injury, 'natures': []} for injury in rules.get('injuries', [])]
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rules, 'injuries': injuries}}
+    upgraded['monsters'] = [{**monster, 'immune': [], 'vulnerable': []} for monster in document.get('monsters', [])]
+    upgraded['format'] = 61
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -1024,4 +1042,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     57: upgrade_from_57,
     58: upgrade_from_58,
     59: upgrade_from_59,
+    60: upgrade_from_60,
 }

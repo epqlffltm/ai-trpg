@@ -20,10 +20,10 @@ from app.engine.check import HinderedCheck
 from app.engine.dice import Dice
 from app.engine.health import Change
 from app.engine.injury import Hindrance, TableRoll, Trigger
-from app.engine.ruleset import Healing, Injury, Ruleset
+from app.engine.ruleset import Healing, Injury, InjuryNature, Ruleset
 from app.rounds.cast import Scene, find_cast_member
 from app.rounds.narrator import InjuryNote
-from app.tables import injuries, npcs, sheets
+from app.tables import injuries, monsters, npcs, sheets
 from app.tables.injuries import Moment
 from app.tables.models import GameTable, InjurySource, TableInjury, TableMember
 
@@ -86,6 +86,21 @@ def roll_after(ruleset: Ruleset, dice: Dice, change: Change, max_hp: int, dead: 
     return injury_rules.roll_table(ruleset.injury_table, trigger, dice)
 
 
+# 아무 성질에도 면역이 아니다. 캐릭터와 NPC 는 면역이 없다(#799)
+NO_IMMUNITY: frozenset[InjuryNature] = frozenset()
+
+
+def is_immune(definition: Injury, immune: frozenset[InjuryNature]) -> bool:
+    """이 부상의 성질 가운데 하나라도 면역이면 입지 않는다(#799). 성질이 없는 부상은 누구나 입는다."""
+    return any(nature in immune for nature in definition.natures)
+
+
+def immune_to(ruleset: Ruleset, key: str, immune: frozenset[InjuryNature]) -> bool:
+    """이 이름표의 부상에 면역인가. 규칙에 없는 부상이면 아니다."""
+    definition = injury_rules.find_injury(ruleset, key)
+    return definition is not None and is_immune(definition, immune)
+
+
 def wears(rows: list[TableInjury], key: str) -> bool:
     """이 부상을 지금 입고 있는가."""
     return key in injuries.active_keys(rows)
@@ -115,15 +130,20 @@ def wound(
     rows: list[TableInjury],
     table_id: uuid.UUID,
     moment: Moment,
+    immune: frozenset[InjuryNature] = NO_IMMUNITY,
 ) -> dict:
     """
     부상 하나를 입히고, 문서에 무엇이 생겼는지 채워 돌려준다. 규칙에 없는 부상이면 문서를 그대로 돌려준다.
 
     짧은 것은 풀릴 라운드, 오래 가는 것은 나을 시각이 적힌다. 결손은 둘 다 없다.
+    입는 쪽이 그 성질에 면역이면(#799, 몬스터) 입히지 않는다. 문서의 injury 는 비워 두고,
+    면역이라 입지 않은 부상의 이름표(immune)와 이름(name)을 적는다.
     """
     definition = injury_rules.find_injury(ruleset, key)
     if definition is None:
         return document
+    if is_immune(definition, immune):
+        return {**document, 'immune': definition.key, 'name': definition.name}
     ends = injury_rules.ends_after(definition, moment.round_number)
     heals = injury_rules.heals_at(definition, moment.now)
     injuries.inflict(rows, table_id, definition.key, source, moment.round_number, ends, heals)
@@ -136,43 +156,70 @@ def wound(
     }
 
 
-def take(ruleset: Ruleset, rolled: TableRoll, rows: list[TableInjury], table_id: uuid.UUID, moment: Moment) -> dict:
+def take(
+    ruleset: Ruleset,
+    rolled: TableRoll,
+    rows: list[TableInjury],
+    table_id: uuid.UUID,
+    moment: Moment,
+    immune: frozenset[InjuryNature] = NO_IMMUNITY,
+) -> dict:
     """
     부상 표의 결과를 받아들인다. 부상이 나왔으면 입히고, 굴린 것을 문서로 돌려준다.
 
-    rows 는 입는 쪽(시트나 NPC 상태)의 부상 목록이다. 문서는 HP 의 변화를 적은 문서 안에 들어간다.
+    rows 는 입는 쪽(시트나 NPC 상태나 몬스터)의 부상 목록이다. 문서는 HP 의 변화를 적은 문서 안에 들어간다.
     부상이 없는 줄이 나왔어도 굴린 것은 적는다. 큰 타격을 받고도 운 좋게 멀쩡했다는 기록이다.
+    immune 은 입는 쪽이 면역인 성질이다(#799). 나온 부상이 그 성질이면 입지 않는다.
     """
     document = injury_document(rolled.trigger, rolled.roll)
     if rolled.injury is None:
         return document
-    return wound(ruleset, rolled.injury, InjurySource.INJURY_TABLE, document, rows, table_id, moment)
+    return wound(ruleset, rolled.injury, InjurySource.INJURY_TABLE, document, rows, table_id, moment, immune)
 
 
-def take_aimed(ruleset: Ruleset, key: str, rows: list[TableInjury], table_id: uuid.UUID, moment: Moment) -> dict:
+def take_aimed(
+    ruleset: Ruleset,
+    key: str,
+    rows: list[TableInjury],
+    table_id: uuid.UUID,
+    moment: Moment,
+    immune: frozenset[InjuryNature] = NO_IMMUNITY,
+) -> dict:
     """
     노려 친 부상을 입힌다. 문서로 돌려준다. 표를 굴리지 않는다.
 
     이미 그 부상을 입고 있으면 또 입히지 않는다(같은 라운드에 둘이 같은 눈을 노렸다). 문서의 부상이 비어 있다.
+    면역이면(#799) 선언을 받을 때 막았다. 여기서도 입히지 않는다.
     """
     document = injury_document(Trigger.CALLED_SHOT, None)
     if wears(rows, key):
         return document
-    return wound(ruleset, key, InjurySource.CALLED_SHOT, document, rows, table_id, moment)
+    return wound(ruleset, key, InjurySource.CALLED_SHOT, document, rows, table_id, moment, immune)
 
 
 def take_aftermath(
-    ruleset: Ruleset, rolled: TableRoll, rows: list[TableInjury], table_id: uuid.UUID, moment: Moment
+    ruleset: Ruleset,
+    rolled: TableRoll,
+    rows: list[TableInjury],
+    table_id: uuid.UUID,
+    moment: Moment,
+    immune: frozenset[InjuryNature] = NO_IMMUNITY,
 ) -> dict:
     """후유증 표의 결과를 받아들인다. 후유증이 나왔으면 입히고(결손이다), 굴린 것을 문서로 돌려준다."""
     document = injury_document(rolled.trigger, rolled.roll)
     if rolled.injury is None:
         return document
-    return wound(ruleset, rolled.injury, InjurySource.AFTERMATH, document, rows, table_id, moment)
+    return wound(ruleset, rolled.injury, InjurySource.AFTERMATH, document, rows, table_id, moment, immune)
 
 
 def aftermath_of(
-    ruleset: Ruleset, dice: Dice, row: TableInjury, rows: list[TableInjury], table_id: uuid.UUID, moment: Moment
+    ruleset: Ruleset,
+    dice: Dice,
+    row: TableInjury,
+    rows: list[TableInjury],
+    table_id: uuid.UUID,
+    moment: Moment,
+    immune: frozenset[InjuryNature] = NO_IMMUNITY,
 ) -> dict | None:
     """
     나은 부상의 후유증 표를 굴리고, 나온 후유증을 입힌다. 굴린 것을 문서로 돌려준다. 굴리지 않았으면 None.
@@ -185,7 +232,7 @@ def aftermath_of(
     rolled = injury_rules.roll_aftermath(definition, dice)
     if rolled is None:
         return None
-    return take_aftermath(ruleset, rolled, rows, table_id, moment)
+    return take_aftermath(ruleset, rolled, rows, table_id, moment, immune)
 
 
 def heal(
@@ -257,15 +304,16 @@ def close_out(
     rows: list[TableInjury],
     table_id: uuid.UUID,
     moment: Moment,
+    immune: frozenset[InjuryNature] = NO_IMMUNITY,
 ) -> Ended:
     """
     끝난 부상 하나를 정리한다. 오래 가는 것이면 나은 것이고 후유증 표를 굴린다. 짧은 것이면 풀린 것이다.
 
-    후유증은 같은 사람의 부상 목록(rows)에 입힌다.
+    후유증은 같은 쪽의 부상 목록(rows)에 입힌다. 몬스터면 그 면역(immune)을 따른다(#799).
     """
     if not is_lasting(ruleset, row):
         return Ended(holder, row)
-    aftermath = aftermath_of(ruleset, dice, row, rows, table_id, moment)
+    aftermath = aftermath_of(ruleset, dice, row, rows, table_id, moment, immune)
     return Ended(holder, row, EndReason.HEALED, aftermath)
 
 
@@ -278,16 +326,25 @@ def any_due(members: list[TableMember], scene: Scene, moment: Moment) -> bool:
     living = [member for member in members if member.sheet is not None and not sheets.is_dead(member)]
     rows = [row for member in living for row in member.sheet.injuries]
     rows.extend(row for npc in scene.npcs if not npcs.is_dead(npc) for row in npc.injuries)
+    rows.extend(row for monster in scene.all_monsters if not monsters.is_dead(monster) for row in monster.injuries)
     return any(injuries.is_due(row, moment) for row in rows)
 
 
 def expire_all(
-    members: list[TableMember], scene: Scene, ruleset: Ruleset, dice: Dice, table_id: uuid.UUID, moment: Moment
+    members: list[TableMember],
+    scene: Scene,
+    ruleset: Ruleset,
+    dice: Dice,
+    table_id: uuid.UUID,
+    moment: Moment,
+    immunities: dict[uuid.UUID, frozenset[InjuryNature]] | None = None,
 ) -> list[Ended]:
     """
-    이 라운드가 닫힐 때 풀리거나 나을 부상을 모두 끝낸다. 앉은 사람의 지금 캐릭터와 테이블의 NPC 전부다.
+    이 라운드가 닫힐 때 풀리거나 나을 부상을 모두 끝낸다. 앉은 사람의 지금 캐릭터와 테이블의 NPC 와 몬스터 전부다.
 
-    오래 가는 것이 나으면 후유증 표를 굴린다. 사람마다 생긴 순서로, 앉은 사람 먼저, 그다음 NPC 의 순서로 굴린다.
+    오래 가는 것이 나으면 후유증 표를 굴린다. 사람마다 생긴 순서로, 앉은 사람 먼저, 그다음 NPC, 그다음 몬스터의
+    순서로 굴린다. 몬스터의 후유증은 그 몬스터의 면역(immunities, 판의 몬스터 ID 로 찾는다)을 따른다(#799).
+    장면에 나오지 않은 마리도 NPC 처럼 끝내지만 돌려주지 않는다.
     끝난 것과 누가 입고 있었는지를 돌려준다. 이벤트에 적을 것이다.
     장면에 나오지 않은 NPC 의 부상도 끝내고 후유증도 굴리지만 돌려주지 않는다. 이벤트는 앉은 사람 모두가 읽는데,
     그 인물을 부를 이름(장면의 호칭)이 없다. 끝낸 것은 부상의 기록(ended_at)에 남는다.
@@ -311,5 +368,36 @@ def expire_all(
             for row in injuries.expire(npc.injuries, moment)
         ]
         if seen is not None:
+            ended.extend(closed)
+    ended.extend(expire_monsters(scene, ruleset, dice, table_id, moment, immunities or {}))
+    return ended
+
+
+def expire_monsters(
+    scene: Scene,
+    ruleset: Ruleset,
+    dice: Dice,
+    table_id: uuid.UUID,
+    moment: Moment,
+    immunities: dict[uuid.UUID, frozenset[InjuryNature]],
+) -> list[Ended]:
+    """
+    테이블의 몬스터들의 부상 중 때가 된 것을 끝낸다(#799). 장면의 마리의 것만 돌려준다(장면의 이름으로 부른다).
+
+    죽은 마리의 부상은 그대로 둔다. 테이블의 마리는 순서 없이 읽히므로 판의 몬스터 ID, 그 안의 번호 순서로 굴린다.
+    같은 판정이면 늘 같은 순서로 주사위를 굴린다.
+    """
+    names = {monster.state.id: monster.name for monster in scene.monsters}
+    ended: list[Ended] = []
+    for state in sorted(scene.all_monsters, key=lambda one: (str(one.monster_id), one.number)):
+        if monsters.is_dead(state):
+            continue
+        holder = {'monster_id': str(state.id), 'name': names.get(state.id, '')}
+        immune = immunities.get(state.monster_id, NO_IMMUNITY)
+        closed = [
+            close_out(ruleset, dice, holder, row, state.injuries, table_id, moment, immune)
+            for row in injuries.expire(state.injuries, moment)
+        ]
+        if state.id in names:
             ended.extend(closed)
     return ended

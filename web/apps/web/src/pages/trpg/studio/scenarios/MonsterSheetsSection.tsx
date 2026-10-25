@@ -2,6 +2,7 @@
 // 몬스터 시트(B9 몬스터 탭). 붙인 모음의 몬스터를 모두 늘어놓고, 줄마다 시트(없으면 "시트 없음")를 한 줄로 보인다.
 // 시트를 적은 몬스터만 판에 들어가고 조우에 놓을 수 있다. 줄을 고치면 창이 열리고 창의 저장이 몬스터 시트 목록을 통째로 바로 보낸다.
 // 시트 지우기는 그 몬스터를 판에서 뺀다. 붙인 모음에 없는 몬스터의 시트도 줄로 남겨 지울 수 있게 한다.
+// 부상의 성질마다 면역과 약함을 고른다(#799). 언데드는 독, 만들어진 것은 독과 정신에 이미 면역이다(타입의 성질표).
 
 import { Button, Checkbox, Dialog, Notice, TextField } from '@ai-trpg/ui';
 import { useCallback, useState, type FormEvent, type ReactNode } from 'react';
@@ -10,12 +11,15 @@ import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { AttacksEditor } from './AttacksEditor';
 import {
   hasMonsterHints,
+  INJURY_NATURES,
   monsterDraft,
   monsterHints,
   monsterLine,
+  toggledNature,
   toMonsterSheet,
   withMonsterSheet,
   withoutMonsterSheet,
+  type InjuryNature,
   type MonsterDraft,
 } from './monsterForm';
 import { SheetFields } from './SheetFields';
@@ -172,6 +176,7 @@ function MonsterFields({ scenario, rules, items, monsterId, sheet, used, saving,
           <TextField label="불굴 세이브" inputMode="numeric" value={draft.ward} onChange={(event) => update({ ward: event.target.value })} error={hints.armor.ward} />
         </div>
       </fieldset>
+      <NatureFields draft={draft} error={hints.natures} onChange={update} />
       <fieldset className="scenario-choices">
         <legend>장비(착용한 물건)</legend>
         <StacksEditor
@@ -223,5 +228,35 @@ function MonsterFields({ scenario, rules, items, monsterId, sheet, used, saving,
         {clearButton}
       </div>
     </form>
+  );
+}
+
+type NatureProps = { draft: MonsterDraft; error: string | null; onChange: (changes: Partial<MonsterDraft>) => void };
+
+/** 부상의 성질마다 면역과 약함(#799). 룰북의 부상마다 성질이 적혀 있다 */
+function NatureFields({ draft, error, onChange }: NatureProps) {
+  const natures = Object.entries(INJURY_NATURES) as [InjuryNature, string][];
+  return (
+    <fieldset className="scenario-choices">
+      <legend>부상의 면역과 약함(선택)</legend>
+      <p className="ui-field__hint">
+        면역인 성질의 부상은 입지 않고 노려 칠 수도 없습니다. 언데드는 독, 만들어진 것은 독과 정신에 이미 면역이고, 약함을 고르면 그 면역을 뺍니다.
+      </p>
+      {natures.map(([nature, label]) => (
+        <div key={nature} className="ability-grid">
+          <Checkbox
+            label={`${label}에 면역`}
+            checked={draft.immune.includes(nature)}
+            onChange={(event) => onChange({ immune: toggledNature(draft.immune, nature, event.target.checked) })}
+          />
+          <Checkbox
+            label={`${label}에 약함`}
+            checked={draft.vulnerable.includes(nature)}
+            onChange={(event) => onChange({ vulnerable: toggledNature(draft.vulnerable, nature, event.target.checked) })}
+          />
+        </div>
+      ))}
+      {error ? <p className="ui-field__error">{error}</p> : null}
+    </fieldset>
   );
 }

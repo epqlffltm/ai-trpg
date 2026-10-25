@@ -35,6 +35,7 @@ from tests.narration_model import asset_body
 from tests.sheets import SHEET
 from tests.test_monster_combat import (
     BITE_BACK,
+    NO_INJURY,
     PASS,
     SCENARIOS_URL,
     TABLES_URL,
@@ -220,7 +221,7 @@ async def test_what_does_not_fall_stays_with_the_monster(
 ):
     world = await start_table(client, me)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
-    load_dice(app, [PASS, DOWN, NO_PELT])
+    load_dice(app, [PASS, DOWN, NO_INJURY, NO_PELT])
 
     closing = await declare(client, me, world['table'], BITE_BACK, strike(rat['id']))
 
@@ -239,7 +240,7 @@ async def test_all_that_falls_leaves_the_monster(
 ):
     world = await start_table(client, me)
     rat = await monster_named(client, me, world['table'], '수로 쥐 1')
-    load_dice(app, [PASS, DOWN, PELT])
+    load_dice(app, [PASS, DOWN, NO_INJURY, PELT])
 
     await declare(client, me, world['table'], BITE_BACK, strike(rat['id']))
 

@@ -217,6 +217,7 @@ async def test_a_hit_that_lands_takes_the_eye_without_rolling_the_table(
         'injury': 'lost_eye',
         'ends_after_round': None,
         'heals_at': None,
+        'immune': None,
     }
     assert dice.remaining == 0
     assert (await people(client, me, world['table']))['people'][0]['injuries'] == ['lost_eye']

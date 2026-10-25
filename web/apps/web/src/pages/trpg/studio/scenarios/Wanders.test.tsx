@@ -24,7 +24,7 @@ const VILLAGE = '00000000-0000-4000-8000-00000000c005';
 const GHOUL = '00000000-0000-4000-8000-00000000e001';
 const RAT = '00000000-0000-4000-8000-00000000e003';
 
-const SHEET = { sheet: { abilities: { str: 14, dex: 10, con: 12 }, max_hp: 9 }, attacks: [], equipment: [], inventory: [], dull: false, natural_armor: [], ward: null };
+const SHEET = { sheet: { abilities: { str: 14, dex: 10, con: 12 }, max_hp: 9 }, attacks: [], equipment: [], inventory: [], dull: false, natural_armor: [], ward: null, immune: [], vulnerable: [] };
 const NIGHT_CRYPT = { place_id: CRYPT, times: ['night'], chance: 30, monsters: [{ monster_id: GHOUL, count: 2, weight: 1, surprise: 'none' }] };
 
 function entry(id: string, name: string, kind: string) {

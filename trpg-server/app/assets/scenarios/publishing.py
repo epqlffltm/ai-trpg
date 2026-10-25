@@ -470,6 +470,8 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             monster_sheet.dull,
             [NaturalArmorSnapshot(**one.model_dump()) for one in monster_sheet.natural_armor],
             monster_sheet.ward,
+            monster_sheet.immune,
+            monster_sheet.vulnerable,
         )
         for monster_sheet in read_monster_sheets(scenario)
     ]

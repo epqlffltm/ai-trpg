@@ -12,7 +12,7 @@ import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
 import { encounterDraft, encounterHints, encounterLine } from './encountersForm';
-import { hasMonsterHints, monsterDraft, monsterHints, toMonsterSheet } from './monsterForm';
+import { hasMonsterHints, monsterDraft, monsterHints, monsterLine, toggledNature, toMonsterSheet } from './monsterForm';
 
 const GAME = '/api/v1/game';
 const ID = '00000000-0000-4000-8000-0000000000d1';
@@ -37,6 +37,8 @@ const GHOUL_SHEET = {
   dull: false,
   natural_armor: [],
   ward: null,
+  immune: ['poison'],
+  vulnerable: [],
 };
 const LICH_SHEET = { ...GHOUL_SHEET, monster_id: LICH, attacks: [] };
 
@@ -106,6 +108,12 @@ describe('몬스터 탭', () => {
     await userEvent.clear(dialog.getByRole('textbox', { name: '주손' }));
     await userEvent.type(dialog.getByRole('textbox', { name: '주손' }), '1');
     await userEvent.type(dialog.getByRole('textbox', { name: '불굴 세이브' }), '4');
+    await userEvent.click(dialog.getByRole('checkbox', { name: '정신에 면역' }));
+    await userEvent.click(dialog.getByRole('checkbox', { name: '정신에 약함' }));
+    expect(dialog.getByText('정신은(는) 면역과 약함에 함께 둘 수 없습니다.')).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.click(dialog.getByRole('checkbox', { name: '정신에 약함' }));
+    await userEvent.click(dialog.getByRole('checkbox', { name: '독에 약함' }));
     await userEvent.click(dialog.getByRole('button', { name: '장비 더하기' }));
     await userEvent.click(dialog.getByRole('button', { name: '공격 더하기' }));
     const attack = within(dialog.getByRole('group', { name: '공격 1' }));
@@ -125,7 +133,11 @@ describe('몬스터 탭', () => {
       equipment: [{ entry_id: CLAW, count: 1, chance: 100, wear: [] }],
       inventory: [],
       attacks: [{ name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: CLAW }],
+      immune: ['mind'],
+      vulnerable: ['poison'],
     });
+    // 고치지 않은 시트의 면역은 그대로 간다
+    expect(sent[0]?.immune).toEqual(['poison']);
   });
 
   it('조우는 시트 있는 몬스터만, 네임드는 한 마리. 더하고 지운다', async () => {
@@ -178,6 +190,15 @@ describe('몬스터 입력', () => {
     const draft = monsterDraft(GHOUL_SHEET as unknown as MonsterSheet, rules);
     expect(hasMonsterHints(monsterHints(draft, rules, []))).toBe(false);
     expect(toMonsterSheet(GHOUL, { ...draft, natural: { main_hand: '', off_hand: '2' } }, rules).natural_armor).toEqual([{ slot: 'off_hand', defense: 2 }]);
+  });
+
+  it('면역과 약함은 고친 시트에도 남고, 성질표의 차례로 보낸다', () => {
+    const draft = monsterDraft(GHOUL_SHEET as unknown as MonsterSheet, rules);
+    expect(toMonsterSheet(GHOUL, draft, rules).immune).toEqual(['poison']);
+    expect(toggledNature(['mind'], 'poison', true)).toEqual(['poison', 'mind']);
+    expect(toggledNature(['poison', 'mind'], 'poison', false)).toEqual(['mind']);
+    expect(monsterHints({ ...draft, vulnerable: ['poison'] }, rules, []).natures).toBe('독은(는) 면역과 약함에 함께 둘 수 없습니다.');
+    expect(monsterLine({ ...GHOUL_SHEET, vulnerable: ['mind'] } as unknown as MonsterSheet, rules)).toContain('면역 독 · 약함 정신');
   });
 
   it('조우: 같은 장소의 같은 몬스터, 네임드 두 마리, 마리 수', () => {

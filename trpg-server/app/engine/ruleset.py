@@ -372,6 +372,25 @@ class Healing(enum.StrEnum):
     PERMANENT = 'permanent'
 
 
+class InjuryNature(enum.StrEnum):
+    """
+    부상의 성질(#799). 몬스터의 타입이 무엇에 걸리지 않는지(면역)를 부상의 이름이 아니라 성질로 정한다.
+
+    부상의 이름은 룰북마다 다르다. 타입의 성질표(app/tables/monsters.py 의 Traits)는 이 성질로 면역을 적는다.
+    """
+
+    # 독. 중독
+    POISON = 'poison'
+    # 정신을 잃거나 몸이 굳는 것. 기절, 마비
+    STUN = 'stun'
+    # 감각을 잃는 것. 실명, 귀먹음
+    SENSE = 'sense'
+    # 몸이 상하는 것. 골절, 상처, 절단
+    BODY = 'body'
+    # 마음이 흔들리는 것. 공포, 매료, 광기
+    MIND = 'mind'
+
+
 def require_every_face(rows: tuple, sides: int, label: str) -> None:
     """
     표의 줄(low, high)이 1 부터 sides 까지를 빈틈도 겹침도 없이 차례로 덮는지 본다. 아니면 ValueError.
@@ -427,6 +446,7 @@ class Injury(Part):
     aftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.
     aimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.
     treat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).
+    natures 는 부상의 성질이다(#799). 몬스터의 타입이 그 성질에 면역이면 이 부상을 입지 않는다.
     """
 
     key: Key
@@ -442,6 +462,15 @@ class Injury(Part):
     treat_difficulty: Key | None = None
     # 치료에 한 번 성공할 때마다 나을 시각을 앞당기는 게임 안의 시간(분)
     treat_minutes: Annotated[int, Field(ge=1, le=RULESET_MAX_HEAL_MINUTES)] | None = None
+    # 부상의 성질(#799). 비우면 어느 면역에도 걸리지 않는다(누구나 입는다)
+    natures: Annotated[tuple[InjuryNature, ...], Field(max_length=len(InjuryNature))] = ()
+
+    @model_validator(mode='after')
+    def reject_repeated_natures(self) -> Self:
+        """같은 성질을 두 번 적지 않는다."""
+        if len(set(self.natures)) != len(self.natures):
+            raise ValueError('같은 성질(natures)을 두 번 적었습니다.')
+        return self
 
     @model_validator(mode='after')
     def require_treatment_pair_on_healing(self) -> Self:

@@ -62,6 +62,13 @@ def make_format_24(rules: dict, round_minutes: int = 10) -> dict:
     return {**document, 'clock': clock, 'rulebook': {**document['rulebook'], 'rules': rules}}
 
 
+def srd5_without_natures() -> dict:
+    """지금의 SRD5 규칙에서 부상의 성질(natures, #799)만 뺀 것. 그 성질은 이 형식보다 뒤에 생겼다."""
+    rules = SRD5.model_dump(mode='json')
+    injuries = [{key: value for key, value in injury.items() if key != 'natures'} for injury in rules['injuries']]
+    return {**rules, 'injuries': injuries}
+
+
 def srd5_injuries_with(key: str, **fields) -> list[dict]:
     """지금의 SRD5 부상 목록에서 하나의 칸만 바꾼 것."""
     return [
@@ -112,7 +119,10 @@ def test_an_old_srd5_version_is_read_with_the_template_days():
 
     current = read_snapshot(old)
 
-    assert current.rulebook.rules.injuries == SRD5.injuries
+    # 성질은 뒤의 형식이 비워 채운다(#799). 그 밖의 값은 지금의 템플릿과 같다
+    assert current.rulebook.rules.injuries == tuple(
+        injury.model_copy(update={'natures': ()}) for injury in SRD5.injuries
+    )
     assert current.rulebook.rules.treatment == SRD5.treatment
     assert UPGRADES[24] is upgrade_from_24
 
@@ -167,5 +177,5 @@ async def test_the_migration_moves_old_rulebooks_to_minutes_and_back(
     await rewrite(session, migration, migration.injury_to_rounds, migration.row_to_rounds)
     downgraded = await session.scalar(text('SELECT rules FROM rulebooks'))
 
-    assert upgraded == SRD5.model_dump(mode='json')
+    assert upgraded == srd5_without_natures()
     assert downgraded == old

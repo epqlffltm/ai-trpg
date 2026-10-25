@@ -799,6 +799,10 @@ class TableMonster(Base):
     items: Mapped[list['TableMonsterItem']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='TableMonsterItem.slot'
     )
+    # 이 마리가 입은 부상들(#799). 생긴 순서다. 나은 것도 들어 있다. 마리를 읽을 때 함께 읽는다
+    injuries: Mapped[list['TableInjury']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='TableInjury.created_at, TableInjury.id'
+    )
 
 
 class TableMonsterItem(Base):
@@ -997,7 +1001,7 @@ class TablePlaceItem(Base):
 
 class TableInjury(Base):
     """
-    부상 하나. 캐릭터의 시트 하나나 NPC 하나가 입었다.
+    부상 하나. 캐릭터의 시트 하나나 NPC 하나나 몬스터 한 마리(#799)가 입었다.
 
     어떤 부상인지는 이름(injury)으로만 적는다. 효과와 사실은 테이블의 판에 굳은 규칙에 있다(app/engine/ruleset.py).
     짧은 것은 풀릴 라운드(ends_after_round)가 적힌다. 그 라운드가 닫힐 때 풀린다.
@@ -1014,8 +1018,10 @@ class TableInjury(Base):
         ForeignKeyConstraint(
             ['table_id', 'npc_entry_id'], ['table_npcs.table_id', 'table_npcs.entry_id'], ondelete='CASCADE'
         ),
-        # 입은 것은 캐릭터나 NPC 중 정확히 하나다
-        CheckConstraint('(sheet_id IS NULL) <> (npc_entry_id IS NULL)', name='one_holder'),
+        # 마리가 지워지면 함께 지워진다(#799)
+        ForeignKeyConstraint(['monster_id'], ['table_monsters.id'], ondelete='CASCADE'),
+        # 입은 것은 캐릭터, NPC, 몬스터 중 정확히 하나다
+        CheckConstraint('num_nonnulls(sheet_id, npc_entry_id, monster_id) = 1', name='one_holder'),
         CheckConstraint(one_of('source', InjurySource), name='source_allowed'),
         CheckConstraint('round_number >= 1', name='round_number_positive'),
         # 풀리는 라운드는 생긴 라운드의 뒤다
@@ -1032,8 +1038,10 @@ class TableInjury(Base):
     table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'))
     # 입은 캐릭터의 시트. NPC 의 부상이면 비어 있다
     sheet_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
-    # 입은 NPC(판의 로어북 인물 항목의 id). 캐릭터의 부상이면 비어 있다
+    # 입은 NPC(판의 로어북 인물 항목의 id). 캐릭터나 몬스터의 부상이면 비어 있다
     npc_entry_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # 입은 몬스터 한 마리(table_monsters.id, #799). 캐릭터나 NPC 의 부상이면 비어 있다
+    monster_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
     # 규칙의 Injury.key
     injury: Mapped[str] = mapped_column(String(20))

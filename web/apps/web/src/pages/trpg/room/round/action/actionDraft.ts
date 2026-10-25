@@ -337,8 +337,8 @@ function toCheck(draft: ActionDraft, member: string | null, npc: string | null, 
     ...(draft.risk ? { risk: draft.risk } : {}),
   };
   if (draft.purpose === 'harm') {
-    // 노려 치기는 하나다. 부위를 노리면 부상은 노리지 않는다(서버도 둘을 함께 받지 않는다)
-    const aim = npc && draft.aim && !draft.strike ? { aim: draft.aim } : {};
+    // 노려 치기는 하나다. 부위를 노리면 부상은 노리지 않는다(서버도 둘을 함께 받지 않는다). 몬스터도 노린다(#799)
+    const aim = (npc || monster) && draft.aim && !draft.strike ? { aim: draft.aim } : {};
     const gear = { ...(draft.weapon ? { weapon: draft.weapon } : {}), ...(draft.strike ? { strike: draft.strike } : {}) };
     return { ...base, harm: draft.magnitude, lethal: draft.lethal, ...(npc ? { npc } : {}), ...(monster ? { monster } : {}), ...aim, ...gear };
   }

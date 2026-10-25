@@ -3495,6 +3495,7 @@ export interface components {
          *     aftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.
          *     aimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.
          *     treat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).
+         *     natures 는 부상의 성질이다(#799). 몬스터의 타입이 그 성질에 면역이면 이 부상을 입지 않는다.
          */
         Injury: {
             aftermath?: components["schemas"]["InjuryTable"] | null;
@@ -3517,6 +3518,11 @@ export interface components {
             key: string;
             /** Name */
             name: string;
+            /**
+             * Natures
+             * @default []
+             */
+            natures: components["schemas"]["InjuryNature"][];
             /** Rounds */
             rounds?: number | null;
             /** Treat Difficulty */
@@ -3524,6 +3530,14 @@ export interface components {
             /** Treat Minutes */
             treat_minutes?: number | null;
         };
+        /**
+         * InjuryNature
+         * @description 부상의 성질(#799). 몬스터의 타입이 무엇에 걸리지 않는지(면역)를 부상의 이름이 아니라 성질로 정한다.
+         *
+         *     부상의 이름은 룰북마다 다르다. 타입의 성질표(app/tables/monsters.py 의 Traits)는 이 성질로 면역을 적는다.
+         * @enum {string}
+         */
+        InjuryNature: "poison" | "stun" | "sense" | "body" | "mind";
         /**
          * InjuryOut
          * @description 캐릭터가 입고 있는 부상 하나. 이름과 사실, 효과는 테이블의 rules.injuries 에서 이름표(injury)로 찾는다.
@@ -3549,6 +3563,8 @@ export interface components {
             /** Ends After Round */
             ends_after_round: number | null;
             heals_at?: components["schemas"]["ClockTimeOut"] | null;
+            /** Immune */
+            immune?: string | null;
             /** Injury */
             injury: string | null;
             /** Roll */
@@ -4582,6 +4598,7 @@ export interface components {
         MonsterEffectOut: {
             /** Amount */
             amount: number;
+            injury_roll?: components["schemas"]["InjuryRollOut"] | null;
             kind: components["schemas"]["ChangeKind"];
             /** Lethal */
             lethal: boolean;
@@ -4631,6 +4648,11 @@ export interface components {
              */
             equipment: components["schemas"]["CarriedItem-Input"][];
             /**
+             * Immune
+             * @default []
+             */
+            immune: components["schemas"]["InjuryNature"][];
+            /**
              * Inventory
              * @default []
              */
@@ -4646,6 +4668,11 @@ export interface components {
              */
             natural_armor: components["schemas"]["NaturalArmor"][];
             sheet: components["schemas"]["Sheet"];
+            /**
+             * Vulnerable
+             * @default []
+             */
+            vulnerable: components["schemas"]["InjuryNature"][];
             /** Ward */
             ward?: number | null;
         };
@@ -4673,6 +4700,11 @@ export interface components {
              */
             equipment: components["schemas"]["CarriedItem-Output"][];
             /**
+             * Immune
+             * @default []
+             */
+            immune: components["schemas"]["InjuryNature"][];
+            /**
              * Inventory
              * @default []
              */
@@ -4685,6 +4717,11 @@ export interface components {
              */
             natural_armor: components["schemas"]["NaturalArmor"][];
             sheet: components["schemas"]["Sheet"];
+            /**
+             * Vulnerable
+             * @default []
+             */
+            vulnerable: components["schemas"]["InjuryNature"][];
             /** Ward */
             ward?: number | null;
         };
@@ -4731,6 +4768,11 @@ export interface components {
              */
             id: string;
             /**
+             * Immune
+             * @default []
+             */
+            immune: components["schemas"]["InjuryNature"][];
+            /**
              * Inventory
              * @default []
              */
@@ -4749,6 +4791,11 @@ export interface components {
              * @default false
              */
             unique: boolean;
+            /**
+             * Vulnerable
+             * @default []
+             */
+            vulnerable: components["schemas"]["InjuryNature"][];
             /** Ward */
             ward?: number | null;
         };
@@ -7738,6 +7785,11 @@ export interface components {
              */
             id: string;
             /**
+             * Injuries
+             * @default []
+             */
+            injuries: string[];
+            /**
              * Items
              * @default []
              */
@@ -7934,7 +7986,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 60
+             * @default 61
              */
             format: number;
             /**

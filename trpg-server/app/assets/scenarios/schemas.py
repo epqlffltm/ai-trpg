@@ -92,7 +92,7 @@ from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
 from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
-from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, Key
+from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, InjuryNature, Key
 from app.engine.sheet import Sheet
 
 # 스타팅 하나. 공백이 아닌 글자가 하나는 있어야 한다. 빈 스타팅은 고를 수 없으니 받지 않는다.
@@ -458,6 +458,16 @@ NaturalArmors = Annotated[
 ]
 
 
+def reject_repeated_natures(natures: list[InjuryNature]) -> list[InjuryNature]:
+    """같은 성질을 두 번 적으면 거부한다."""
+    if len(set(natures)) != len(natures):
+        raise ValueError('같은 성질을 두 번 적었습니다.')
+    return natures
+
+
+Natures = Annotated[list[InjuryNature], Field(max_length=len(InjuryNature)), AfterValidator(reject_repeated_natures)]
+
+
 class MonsterSheet(BaseModel):
     """
     몬스터 시트 하나. 붙인 도감의 몬스터 하나(monster_id)에 숫자를 준다.
@@ -482,11 +492,22 @@ class MonsterSheet(BaseModel):
     natural_armor: NaturalArmors = []
     # 타고난 불굴 세이브(#276). 세이브 방식에서 관통을 무시하고 막는다. 비우면 없다
     ward: CombatNumber | None = None
+    # 타입의 면역(app/tables/monsters.py 의 Traits)에 더하는 부상의 성질과, 타입의 면역에서 빼는 성질(#799).
+    # 독을 먹는 골렘(빼기), 정신이 없는 짐승(더하기)처럼 그 몬스터만 다를 때 적는다
+    immune: Natures = []
+    vulnerable: Natures = []
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'MonsterSheet':
         """같은 물건을 장비와 소지품에 함께 적지 않는다. 마리가 지닌 것을 셀 때 어느 줄인지 갈리지 않게."""
         reject_items_in_both(self.equipment, self.inventory)
+        return self
+
+    @model_validator(mode='after')
+    def immune_or_vulnerable(self) -> 'MonsterSheet':
+        """한 성질을 더하면서 빼지 않는다."""
+        if set(self.immune) & set(self.vulnerable):
+            raise ValueError('같은 성질을 면역(immune)과 약함(vulnerable)에 함께 적었습니다.')
         return self
 
     @model_validator(mode='after')

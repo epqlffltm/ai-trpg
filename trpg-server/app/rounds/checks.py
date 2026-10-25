@@ -38,7 +38,7 @@ from app.rounds.effects import (
     monster_effect,
     npc_effect,
 )
-from app.rounds.monster_scene import Gone, find_scene_monster, gone_reason
+from app.rounds.monster_scene import Gone, SceneMonster, find_scene_monster, gone_reason
 from app.tables import monsters as table_monsters
 from app.tables import npcs, sheets
 from app.tables import state as table_state
@@ -147,7 +147,26 @@ def change_scene_monster(judging: Judging, action: CheckAction, found: Consequen
     magnitude = health.find_magnitude(judging.ruleset, found.magnitude)
     traits = table_monsters.traits_of(monster.definition.kind)
     change = table_monsters.change_monster(monster.state, traits, magnitude, action.lethal, judging.dice, cut)
-    return monster_effect(monster, found.magnitude, change, action.lethal, status_before)
+    injury_roll = monster_injury(judging, action, change, monster)
+    return monster_effect(monster, found.magnitude, change, action.lethal, status_before, injury_roll)
+
+
+def monster_injury(judging: Judging, action: CheckAction, change: Change, monster: SceneMonster) -> dict | None:
+    """
+    HP 가 바뀐 몬스터가 입는 부상(#799). NPC 와 같다(npc_injury). 노려 친 타격이면 그 부상이 확정으로 생기고,
+    아니면 큰 타격이나 쓰러짐에 표를 굴린다. 죽었으면(부서졌으면) 어느 쪽도 없다.
+
+    그 몬스터의 면역(타입과 시트, app/tables/monsters.py 의 immunities)인 성질의 부상은 입지 않는다.
+    """
+    state = monster.state
+    if table_monsters.is_dead(state):
+        return None
+    immune = table_monsters.immunities(monster.definition)
+    if action.aim is not None and change.kind == ChangeKind.DAMAGE:
+        return round_injuries.take_aimed(
+            judging.ruleset, action.aim, state.injuries, judging.table.id, judging.moment, immune
+        )
+    return injury_after(judging, change, state.max_hp, False, state.injuries, immune)
 
 
 def target_gone(judging: Judging, member: TableMember, action: CheckAction) -> dict | None:

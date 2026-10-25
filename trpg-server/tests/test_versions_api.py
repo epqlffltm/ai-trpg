@@ -72,7 +72,9 @@ PREGENS = [{'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧�
 
 # 옛 판을 끝까지 올려 읽은 규칙. SRD5 에서 서술 지침(판 형식 45, #616)과 장비의 칸(판 형식 47, #276)과
 # 방어 방식(판 형식 48, #276)이 없다
-OLD_SRD5 = SRD5.model_copy(update={'narration': None, 'equipment_slots': (), 'armor': None})
+# 부상의 성질도 없다(#799). 게시한 판은 그때의 규칙으로 굳어 있다
+OLD_INJURIES = tuple(injury.model_copy(update={'natures': ()}) for injury in SRD5.injuries)
+OLD_SRD5 = SRD5.model_copy(update={'narration': None, 'equipment_slots': (), 'armor': None, 'injuries': OLD_INJURIES})
 
 
 @pytest.fixture

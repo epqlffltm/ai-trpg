@@ -3,8 +3,9 @@
 """
 몬스터의 차례. 한 마리가 자기 장소의 캐릭터 하나를 공격 하나로 친다.
 
-차례가 오면 먼저 칠 수 있는지 본다. 앞 차례에 쓰러지거나 죽었으면, 또는 같은 장소에 칠 캐릭터가 없으면
-굴리지 않고 그 까닭을 적는다(skipped).
+차례가 오면 먼저 칠 수 있는지 본다. 앞 차례에 쓰러지거나 죽었으면, 입은 부상 때문에 움직이지 못하면(기절, #799),
+또는 같은 장소에 칠 캐릭터가 없으면 굴리지 않고 그 까닭을 적는다(skipped).
+마리가 입은 부상은 판정에 든다(보정 깎기, 불리함). 결과에 그 영향(hindrance)을 적는다. NPC 의 차례와 같다.
 칠 수 있으면 대상과 공격을 서버의 주사위로 고른다. 고를 것이 하나뿐이면 굴리지 않는다.
 제작자가 공격의 순서를 신경 쓸 필요가 없고, 대상을 고르는 데 AI 가 끼지 않는다.
 판정은 앉은 사람의 판정과 같은 계산이다(app/engine/check.py). 몬스터의 점수와 공격의 난이도로 굴린다.
@@ -25,12 +26,12 @@ from dataclasses import asdict
 from app.assets.scenarios.snapshot import AttackSnapshot
 from app.engine import check as checks
 from app.engine.armor import Save
-from app.engine.check import Check
+from app.engine.check import Check, HinderedCheck
 from app.engine.dice import choose
 from app.engine.health import ChangeKind
-from app.engine.injury import NO_HINDRANCE
 from app.engine.ruleset import Difficulty
 from app.rounds import blows
+from app.rounds import injuries as round_injuries
 from app.rounds.blows import NO_BLOW, Blow, Weapon
 from app.rounds.checks import change_sheet
 from app.rounds.downed_strikes import can_be_struck, strike_downed
@@ -49,6 +50,8 @@ class Skipped:
     DEAD = 'dead'
     # 같은 장소에 칠 캐릭터가 없다(모두 떠났거나 죽었거나, 이번 라운드에 쓰러졌다)
     NO_TARGET = 'no_target'
+    # 입은 부상 때문에 움직이지 못했다(기절 같은 것, #799). NPC 의 차례도 같은 까닭을 쓴다
+    INCAPACITATED = 'incapacitated'
 
 
 def can_act(monster: SceneMonster) -> bool:
@@ -56,12 +59,14 @@ def can_act(monster: SceneMonster) -> bool:
     return monster.state.status == NpcStatus.ALIVE and bool(monster.definition.attacks)
 
 
-def stopped_by(monster: SceneMonster) -> str | None:
-    """차례가 왔을 때 이 마리가 움직이지 못하는 까닭. 움직일 수 있으면 None."""
+def stopped_by(judging: Judging, monster: SceneMonster) -> str | None:
+    """차례가 왔을 때 이 마리가 움직이지 못하는 까닭. 움직일 수 있으면 None. 행동을 막는 부상도 본다(#799)."""
     if monster.state.status == NpcStatus.DEAD:
         return Skipped.DEAD
     if monster.state.status == NpcStatus.DOWNED:
         return Skipped.DOWNED
+    if round_injuries.is_incapacitated(judging.ruleset, monster.state.injuries):
+        return Skipped.INCAPACITATED
     return None
 
 
@@ -86,18 +91,18 @@ def raised_difficulty(judging: Judging, attack: AttackSnapshot, blow: Blow) -> D
     return difficulty.model_copy(update={'target': difficulty.target + blow.raise_by})
 
 
-def roll_attack(judging: Judging, monster: SceneMonster, attack: AttackSnapshot, blow: Blow = NO_BLOW) -> Check:
+def roll_attack(judging: Judging, monster: SceneMonster, attack: AttackSnapshot, blow: Blow = NO_BLOW) -> HinderedCheck:
     """
-    공격 하나의 판정. 몬스터의 그 능력치 점수와 공격의 난이도로 굴린다. 몬스터는 부상을 입지 않아 불리함이 없다.
+    공격 하나의 판정. 몬스터의 그 능력치 점수와 공격의 난이도로 굴린다. 마리가 입은 부상의 영향을 받는다(#799).
 
     무기의 공격 보정을 보정에 더하고, 맞은 부위의 방어만큼 목표값이 오른다(blow, #276).
     능력치와 난이도는 게시할 때 판의 규칙에 있는 것인지 확인했다(app/assets/scenarios/publishing.py).
     """
+    ruleset = judging.ruleset
     difficulty = raised_difficulty(judging, attack, blow)
+    hindrance = round_injuries.hindrance_for(ruleset, monster.state.injuries, attack.ability)
     score = monster.state.abilities[attack.ability]
-    return checks.resolve_hindered(
-        judging.ruleset, score, difficulty, judging.dice, NO_HINDRANCE, bonus=blow.bonus
-    ).check
+    return checks.resolve_hindered(ruleset, score, difficulty, judging.dice, hindrance, bonus=blow.bonus)
 
 
 def hit_outcome(judging: Judging, attack: AttackSnapshot, victim: TableMember, rolled: Check, blow: Blow) -> dict:
@@ -160,7 +165,7 @@ def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
     움직이지 못하면 {'skipped': 까닭} 이다. 대상, 공격, 판정, 피해의 차례로 주사위를 굴린다.
     쓰러진 대상을 쳤으면 피해의 주사위가 없고 downed_strike 가 있다(hit_outcome).
     """
-    stopped = stopped_by(monster)
+    stopped = stopped_by(judging, monster)
     if stopped is not None:
         return {'skipped': stopped}
     victims = victims_of(judging, monster)
@@ -171,4 +176,5 @@ def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
     attack = choose(monster.definition.attacks, judging.dice)
     blow = plan_attack_blow(judging, blows.monster_weapon(judging, monster, attack), victim)
     rolled = roll_attack(judging, monster, attack, blow)
-    return hit_outcome(judging, attack, victim, rolled, blow)
+    outcome = hit_outcome(judging, attack, victim, rolled.check, blow)
+    return {**outcome, 'hindrance': round_injuries.hindrance_document(rolled)}

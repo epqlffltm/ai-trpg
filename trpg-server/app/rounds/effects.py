@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from app.assets.scenarios.snapshot import EntrySnapshot, Snapshot
 from app.engine.dice import Dice
 from app.engine.health import Change
-from app.engine.ruleset import Ruleset
+from app.engine.ruleset import InjuryNature, Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, condition_of
 from app.rounds.monster_scene import SceneMonster
@@ -85,16 +85,23 @@ def mark_hurt(judging: Judging, member: TableMember) -> None:
     judging.hurt.add(member.user_id)
 
 
-def injury_after(judging: Judging, change: Change, max_hp: int, dead: bool, rows: list) -> dict | None:
+def injury_after(
+    judging: Judging,
+    change: Change,
+    max_hp: int,
+    dead: bool,
+    rows: list,
+    immune: frozenset[InjuryNature] = round_injuries.NO_IMMUNITY,
+) -> dict | None:
     """
     피해 뒤에 부상 표를 굴릴 일이면 굴리고, 나온 부상을 입힌다. 굴린 것을 문서로 돌려준다. 굴리지 않았으면 None.
 
-    rows 는 입는 쪽(시트나 NPC 상태)의 부상 목록이다.
+    rows 는 입는 쪽(시트나 NPC 상태나 몬스터)의 부상 목록이다. immune 은 그쪽이 면역인 성질이다(#799, 몬스터).
     """
     rolled = round_injuries.roll_after(judging.ruleset, judging.dice, change, max_hp, dead)
     if rolled is None:
         return None
-    return round_injuries.take(judging.ruleset, rolled, rows, judging.table.id, judging.moment)
+    return round_injuries.take(judging.ruleset, rolled, rows, judging.table.id, judging.moment, immune)
 
 
 def member_effect(affected: TableMember, magnitude: str, change: Change, injury_roll: dict | None) -> dict:
@@ -146,12 +153,19 @@ def npc_effect(
     }
 
 
-def monster_effect(monster: SceneMonster, magnitude: str, change: Change, lethal: bool, status_before: str) -> dict:
+def monster_effect(
+    monster: SceneMonster,
+    magnitude: str,
+    change: Change,
+    lethal: bool,
+    status_before: str,
+    injury_roll: dict | None = None,
+) -> dict:
     """
     몬스터 한 마리의 상태가 바뀐 것을 선언의 outcome 에 넣을 문서로. NPC 와 같은 모양이다(npc_effect).
 
     HP 의 숫자까지 다 적는다. 앉은 사람에게 내보낼 때 숫자를 뺀다(app/rounds/schemas.py, 이벤트의 VISIBLE).
-    몬스터는 부상을 입지 않는다. 부상 표를 굴리지 않는다.
+    injury_roll 은 그 피해로 입은(또는 면역으로 입지 않은) 부상이다(#799). 없었으면 None.
     """
     state = monster.state
     return {
@@ -168,4 +182,5 @@ def monster_effect(monster: SceneMonster, magnitude: str, change: Change, lethal
         'status_before': status_before,
         'status': state.status,
         'condition': condition_of(state),
+        'injury_roll': injury_roll,
     }
