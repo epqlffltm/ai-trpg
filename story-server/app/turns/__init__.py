@@ -10,7 +10,8 @@
   - charging.py, settler.py: 홀드를 걸고 확정하거나 돌려주는 것과, 못 한 것을 마저 끝내는 정리 작업
   - providers.py: 모델의 이름표로 그 모델을 부를 provider 를 고르는 것(ai_core 의 ModelRouter)
   - models.py, repository.py: 호출과 청구의 기록(generations), 차례 잡기, 말에 붙은 상태
-  - router.py, schemas.py, frames.py: 말을 보내는 주소. 바로 SSE 로 답한다
+  - stops.py: 사람이 답을 멈추는 스위치
+  - router.py, schemas.py, frames.py: 말을 보내는 주소, 다시 생성, 멈추기. 바로 SSE 로 답한다
 
 chat 의 말 한 번(chat-server/app/turns/)과 같은 차례다.
 함께 쓰는 것은 공용 코드 conversation_core 에 있다(창, SSE, 흘려보내기).

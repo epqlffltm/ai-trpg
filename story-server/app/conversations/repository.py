@@ -117,6 +117,15 @@ async def find_visible(
     return None if row is None else (row[0], row[1])
 
 
+async def find_visible_message(
+    session: AsyncSession, owner_id: uuid.UUID, ratings: Sequence[Rating], message_id: uuid.UUID
+) -> Message | None:
+    """이 사람의 볼 수 있는 세션의 말 하나. 없거나, 남의 것이거나, 볼 수 없는 등급의 세션이면 None."""
+    sessions = visible(owner_id, ratings).with_only_columns(Conversation.id)
+    query = select(Message).where(Message.id == message_id, Message.conversation_id.in_(sessions))
+    return await session.scalar(query)
+
+
 async def active_path(session: AsyncSession, leaf_id: uuid.UUID | None) -> list[Message]:
     """
     가지의 끝(leaf_id)에서 첫 말까지 거슬러 올라간 말들. 첫 말부터 차례로 돌려준다. 끝이 없으면 빈 목록이다.

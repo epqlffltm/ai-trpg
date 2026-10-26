@@ -1342,6 +1342,49 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/story/generations/{generation_id}/stop": {
+      "post": {
+        "description": "모델을 부르는 것을 멈춘다(공급자의 호출도 끊는다).\n받은 만큼 partial 로 저장하고 청구한다. 받은 조각이 없으면 반환한다.\n\n멈출 생성이 없으면(끝났다, 남의 것이다, 이 서버에서 도는 것이 아니다) 404 generation_not_running 이다.",
+        "operationId": "stop_generation_api_v1_story_generations__generation_id__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "generation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Generation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stop Generation",
+        "tags": [
+          "messages"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/story/me": {
       "get": {
         "description": "토큰이 유효하면 그 주인의 ID 를 돌려준다.",
@@ -1366,6 +1409,52 @@
         "summary": "Read Me",
         "tags": [
           "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/story/messages/{message_id}/regenerate": {
+      "post": {
+        "description": "그 말에 다시 답한다. 답이면 같은 말(사람의 말이나 행동 말)에 새 대안을, 사람의 말이나 행동 말이면(답을 못 받았다)\n그 말에 답을 쓴다. 엔진은 다시 판정하지 않는다. 그 말의 상태와, 그 말에 적힌 이벤트와 엔딩의 장면으로 쓴다.\n\n새 호출이라 새로 청구한다. 앞의 답은 남고, 세션의 가지는 새 답으로 옮겨 간다. SSE 의 모양은 말 보내기와 같다.",
+        "operationId": "regenerate_api_v1_story_messages__message_id__regenerate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "SSE. app/turns/schemas.py 의 메시지들"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Regenerate",
+        "tags": [
+          "messages"
         ],
         "x-audience": "user"
       }
