@@ -48,6 +48,7 @@ from app.conversations.service import (
     ConversationBusyError,
     ConversationNotFoundError,
     ModelUnavailableError,
+    NotEditableError,
     WorldNotFoundError,
 )
 from app.core.config import Settings, get_settings
@@ -193,8 +194,9 @@ def create_app(
     app.include_router(me.router, prefix=API_PREFIX)
     # 모델 목록. 세션에 고를 수 있는 모델들
     app.include_router(catalog.router, prefix=API_PREFIX)
-    # 세션. 세계관의 판을 asset 서버에서 가져와 시작한다
+    # 세션. 세계관의 판을 asset 서버에서 가져와 시작한다. 답 고치기
     app.include_router(conversations.router, prefix=API_PREFIX)
+    app.include_router(conversations.message_router, prefix=API_PREFIX)
     # 말 보내기와 행동, 다시 생성. 바로 SSE 로 답한다. 멈추기
     app.include_router(messages.router, prefix=API_PREFIX)
     app.include_router(messages.message_router, prefix=API_PREFIX)
@@ -210,6 +212,7 @@ def create_app(
     app.add_exception_handler(AssetUnavailableError, conversations.handle_asset_unavailable)
     app.add_exception_handler(PriceListUnavailable, billing.handle_prices_unavailable)
     app.add_exception_handler(ConversationBusyError, conversations.handle_conversation_busy)
+    app.add_exception_handler(NotEditableError, conversations.handle_not_editable)
     # 말 보내기의 예외(app/turns/router.py)
     app.add_exception_handler(ModelRequiredError, messages.handle_model_required)
     app.add_exception_handler(SessionEndedError, messages.handle_session_ended)

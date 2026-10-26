@@ -8,6 +8,7 @@
     GET  /api/v1/story/conversations/{id}         세션 하나(가져온 판과 지금 가지의 말까지)
     PUT  /api/v1/story/conversations/{id}/model   세션의 모델 바꾸기
     PUT  /api/v1/story/conversations/{id}/branch  다른 대안의 가지를 보기. 바뀐 세션을 돌려준다
+    PATCH /api/v1/story/messages/{id}             답 고치기(조각마다 글만). 고친 말을 돌려준다
 
 모든 주소가 로그인을 요구한다. 남의 세션은 404 다(403 이면 그 ID 가 있다는 것이 드러난다).
 """
@@ -33,6 +34,7 @@ from app.conversations.schemas import (
     ConversationModelOut,
     ConversationPage,
     ConversationSummary,
+    MessageEdit,
     MessageOut,
     ModelChoice,
     PathMessageOut,
@@ -45,12 +47,14 @@ from app.conversations.service import (
     ConversationBusyError,
     ConversationNotFoundError,
     ModelUnavailableError,
+    NotEditableError,
     WorldNotFoundError,
 )
 from app.core.dependencies import CurrentViewer, Now, Paging, Session
 from app.ratings import Rating
 
 router = APIRouter(prefix='/conversations', tags=['conversations'])
+message_router = APIRouter(prefix='/messages', tags=['conversations'])
 
 # asset 서버를 쓸 수 없을 때 다시 해 볼 때까지의 시간(초). 화면이 이만큼 뒤에 다시 누르게 한다
 ASSET_RETRY_AFTER_SECONDS = 5
@@ -126,6 +130,7 @@ def to_message(message: Message) -> MessageOut:
         cast=list(message.cast or ()),
         event_id=message.event_id,
         ending_id=message.ending_id,
+        edited=message.edited,
         created_at=message.created_at,
     )
 
@@ -169,6 +174,14 @@ def to_detail(
 async def handle_conversation_not_found(request: Request, error: ConversationNotFoundError) -> JSONResponse:
     """그런 세션이 없으면 404 다."""
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={'detail': '찾을 수 없습니다.'})
+
+
+async def handle_not_editable(request: Request, error: NotEditableError) -> JSONResponse:
+    """고칠 수 없는 말이면 422 다. code 가 까닭이다(not_editable, segments_mismatch)."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': '그렇게 고칠 수 없는 말입니다.', 'code': error.code},
+    )
 
 
 async def handle_world_not_found(request: Request, error: WorldNotFoundError) -> JSONResponse:
@@ -277,3 +290,15 @@ async def choose_branch(
     """
     await service.choose_branch(session, viewer, conversation_id, data.message_id, now)
     return await read_conversation(conversation_id, viewer, session, prices, now)
+
+
+@message_router.patch('/{message_id}', response_model=MessageOut, status_code=status.HTTP_200_OK)
+async def edit_message(
+    message_id: uuid.UUID, data: MessageEdit, viewer: CurrentViewer, session: Session, now: Now
+) -> MessageOut:
+    """
+    답을 그 자리에서 고친다. 조각마다 고친 글을 차례대로 보낸다. 말하는 사람은 그대로이고 고친 표시(edited)가 붙는다.
+    청구하지 않는다. 답이 아니면 422 not_editable, 조각의 수가 다르면 422 segments_mismatch,
+    말이 없거나 남의 것이면 404 message_not_found, 답을 쓰는 중이면 409 generation_in_progress 다.
+    """
+    return to_message(await service.edit_message(session, viewer, message_id, data.segments, now))

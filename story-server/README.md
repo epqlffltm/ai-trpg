@@ -4,11 +4,11 @@
 규칙은 [story 서버 설계](../docs/architecture/story.md)에 있다. 캐릭터 하나와의 1:1 대화는 chat 서버가 맡는다.
 둘이 함께 쓰는 것과 나눈 선은 [chat 서버 설계의 story-server 와 나눈 선](../docs/architecture/chat-server.md#story-server-와-나눈-선)에 있다.
 
-**지금은 세션, 말 보내기, 행동, 다시 생성과 멈추기, 가지 고르기, 계정의 기록까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
+**지금은 세션, 말 보내기, 행동, 다시 생성과 멈추기, 가지 고르기, 답 고치기, 계정의 기록까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
 asset 서버에서 세계관의 판을 가져와 [세션](#세션)을 만들고 목록으로 보인다. 말을 보내면 장면의 인물들과 서술의 답을 [말 조각](#말-보내기)으로 흘려보낸다.
 [행동](#행동)(이동, 시간, 선택지, 고백, 건네기)은 엔진이 판정하고 이벤트와 엔딩이 열린다. 답은 [다시 쓰고 멈출 수 있고](#다시-생성과-멈추기),
-[대안의 가지를 고를 수 있다](#가지-고르기). 본 엔딩과 연 일러스트는 [계정의 기록](#계정의-기록)에 남는다.
-답 고치기가 다음이다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
+[대안의 가지를 고르고](#가지-고르기) [답을 고칠 수 있다](#답-고치기). 본 엔딩과 연 일러스트는 [계정의 기록](#계정의-기록)에 남는다.
+이어서 출력과 요청 수 제한이 남았다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
 
 정해 둔 값: 포트 `8007`, 토큰의 대상 `ai-trpg-story`, DB 계정과 스키마 `story`(테스트는 `story_test`), 주소 `/api/v1/story/`.
 
@@ -110,6 +110,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}` | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서, 지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`). 남의 것은 404 | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/branch` | [가지 고르기](#가지-고르기)(`{"message_id"}`). 바뀐 세션을 돌려준다 | access 토큰 |
+| PATCH | `/api/v1/story/messages/{id}` | [답 고치기](#답-고치기)(`{"segments": ["…"]}`). 고친 말을 돌려준다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content"}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/actions` | [행동](#행동)(`{"kind", …}`). 엔진이 판정하고 바로 SSE 로 반응을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/messages/{id}/regenerate` | [다시 생성](#다시-생성과-멈추기). 그 말에 다시 답한다. 바로 SSE 로 흘려보낸다 | access 토큰 |
@@ -217,7 +218,7 @@ chat 의 것과 같은 모양이다(`app/turns/service.py` 의 `begin_regenerate
 - **멈추기.** `POST /api/v1/story/generations/{id}/stop`. `id` 는 SSE 의 turn 의 `generation_id` 다. 모델을 부르는 일만 끊는다.
   받은 조각이 있으면 partial 로 저장하고 확정한다(`error_code` `stopped`). 없으면 반환하고 SSE 는 `failed`(`stopped`)로 끝난다.
   스위치는 그 생성을 돌리는 서버의 메모리에 있다(`app.state.stops`). 끝난 것, 남의 것, 다른 서버에서 도는 것은 404 `generation_not_running` 이다.
-- 답 고치기는 다음 조각이다. 말하는 사람과 조각 수는 그대로 두고 조각마다 글만 고친다(2026-10-26).
+- 이어서 출력과 요청 수 제한은 그것을 더하는 조각에서 붙인다.
 
 ### 가지 고르기
 
@@ -230,6 +231,18 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
   상태는 말에 붙어 있으므로 그 가지의 상태(시각, 호감도, 본 엔딩)가 된다. 계정의 기록은 그대로다.
 - 보는 곳만 바꾸므로 세션의 수정 시각(목록의 차례)은 그대로다.
 - **거절.** 그 세션의 말이 아니거나 없는 말이면 404 `message_not_found`, 답을 쓰는 중이면 409 `generation_in_progress`, 남의 세션이면 404 다.
+
+### 답 고치기
+
+`PATCH /api/v1/story/messages/{id}` 가 모델의 답을 그 자리에서 고친다(`app/conversations/service.py` 의 `edit_message`). 청구하지 않는다.
+
+- **조각마다 글만 고친다**(2026-10-26). `{"segments": ["노을이 졌다.", "기다렸어."]}` 처럼 조각의 글을 차례대로 보낸다.
+  말하는 사람과 조각의 수는 저장된 그대로라서 장면 밖의 인물이 끼어들 길이 없다. 표식을 다시 읽지 않는다.
+- 조각의 글은 한 줄이다(조각은 줄 하나다). 줄바꿈이나 빈 글은 입력 오류다. 앞뒤 빈칸은 걷는다.
+- 본문(`content`)은 고친 조각으로 서버가 다시 쓴다. 다음 호출부터 고친 글이 모델에 간다. 고친 말에는 `edited` 가 붙는다.
+- 상태와 세션의 수정 시각(목록의 차례)은 그대로다. 사람의 말과 행동 말은 고치지 않는다(행동은 엔진의 결과다).
+- **거절.** 답이 아니면 422 `not_editable`, 조각의 수가 다르면 422 `segments_mismatch`, 없거나 남의 말이면 404 `message_not_found`,
+  답을 쓰는 중이면 409 `generation_in_progress` 다.
 
 ### 계정의 기록
 
@@ -366,7 +379,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `worlds` | asset 서버에서 가져온 세계관의 판의 사본. 사람마다, 판마다 하나(`owner_id`, `source_id`, `version` 이 고유). 문서는 받은 그대로(JSONB) |
 | `conversations` | 세션 하나. 판의 사본을 가리킨다(지우지 못하게 `RESTRICT`). 목록은 `owner_id`, `updated_at` 의 색인으로 읽는다. 세션의 모델(`model_slug`)을 가리킨다 |
 | `ai_models`, `ai_model_costs`, `ai_model_snapshots` | [모델 목록](#모델-목록). chat 서버의 표와 같은 모양이다 |
-| `messages` | 말 하나. 트리다(`parent_id`). 답은 말 조각(`segments`)과 그때의 장면의 인물(`cast`)을 갖는다. 세션의 `active_leaf_id` 가 지금 가지의 끝이다 |
+| `messages` | 말 하나. 트리다(`parent_id`). 답은 말 조각(`segments`)과 그때의 장면의 인물(`cast`)을 갖는다. 사람이 고친 답은 `edited` 다. 세션의 `active_leaf_id` 가 지금 가지의 끝이다 |
 | `message_states` | 말에 붙은 엔진의 상태(JSONB). 상태가 바뀐 말에만 있다. 가지의 끝의 상태는 끝에서 가장 가까운 것이고, 없으면 처음의 상태다 |
 | `generations` | 모델을 한 번 부른 것과 그 청구(chat 서버의 표와 같은 모양). 버린 줄의 수(`dropped_segments`)를 더했다 |
 | `ending_records` | 계정의 본 엔딩. (`owner_id`, `world_source`, `ending_id`)마다 처음 본 시각과 세션. 세션이 지워지면 세션만 비운다 |

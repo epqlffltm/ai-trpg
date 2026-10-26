@@ -124,7 +124,26 @@ class MessageOut(BaseModel):
     # 행동 말에서 그 행동 뒤에 열린 이벤트와 본 엔딩(판의 id). 없으면 null 이다
     event_id: str | None = None
     ending_id: str | None = None
+    # 사람이 답의 글을 고쳤는가
+    edited: bool = False
     created_at: datetime
+
+
+# 고치는 조각 하나의 글. 한 줄이다(조각은 줄 하나다, app/turns/segments.py). 비어 있지 않다
+EditedText = Annotated[str, Field(min_length=1, max_length=4000, pattern=r'^[^\r\n]*\S[^\r\n]*$')]
+# 한 번에 고치는 조각의 수의 상한. 답 하나의 길이(STORY_OUTPUT_LIMIT)로는 이보다 많은 줄이 나오지 않는다
+SEGMENTS_MAX = 200
+
+
+class MessageEdit(BaseModel):
+    """
+    답을 고친 글. 조각마다 고친 글을 차례대로 적는다. 조각의 수는 그 답의 것과 같아야 한다.
+    말하는 사람은 보내지 않는다. 저장된 그대로다(장면 밖의 인물이 끼어들 길이 없다).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    segments: Annotated[list[EditedText], Field(min_length=1, max_length=SEGMENTS_MAX)]
 
 
 class PathMessageOut(MessageOut):

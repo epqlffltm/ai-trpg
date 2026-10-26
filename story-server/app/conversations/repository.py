@@ -10,7 +10,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import Select, func, literal, or_, select, update
+from sqlalchemy import Select, exists, func, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -217,6 +217,26 @@ async def set_leaf(session: AsyncSession, conversation_id: uuid.UUID, leaf_id: u
         )
         .values(active_leaf_id=leaf_id, updated_at=Conversation.updated_at)
         .returning(Conversation.id)
+        .execution_options(synchronize_session=False)
+    )
+    return (await session.execute(statement)).first() is not None
+
+
+async def edit_message(
+    session: AsyncSession, message_id: uuid.UUID, segments: list[dict], content: str, busy_since: datetime
+) -> bool:
+    """
+    답의 조각과 본문을 고치고 고친 표시를 단다.
+    그 세션이 답을 쓰는 중이면(busy_since 뒤에 차례를 잡았다) 고치지 않고 False.
+
+    확인과 고치기를 한 문장으로 한다(chat 과 같다). 따로 하면 그사이 시작한 생성이 고친 것을 가리고 지나간다.
+    """
+    generating = exists().where(Conversation.id == Message.conversation_id, Conversation.generating_since >= busy_since)
+    statement = (
+        update(Message)
+        .where(Message.id == message_id, ~generating)
+        .values(segments=segments, content=content, edited=True)
+        .returning(Message.id)
         .execution_options(synchronize_session=False)
     )
     return (await session.execute(statement)).first() is not None

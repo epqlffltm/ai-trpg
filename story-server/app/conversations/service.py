@@ -37,13 +37,14 @@ from app.catalog.choice import is_choosable
 from app.catalog.models import AiModel
 from app.catalog.offers import is_sold
 from app.conversations import repository
-from app.conversations.models import Conversation, ImportedWorld, Message
+from app.conversations.models import Conversation, ImportedWorld, Message, Role
 from app.conversations.repository import ConversationRow
 from app.conversations.schemas import ConversationCreate, StateOut
 from app.core.dependencies import Viewer
 from app.engine.world import read_world
 from app.ratings import Rating, allowed_ratings
 from app.turns.scenes import staging
+from app.turns.segments import Segment, render_segments, segment_dicts
 from app.turns.states import state_on_path, state_view
 
 # 답을 쓰는 중이라는 표시(conversations.generating_since)가 이보다 오래되면 서버가 도중에 꺼진 것으로 본다.
@@ -69,6 +70,21 @@ class ConversationBusyError(Exception):
 
 class MessageNotFoundError(Exception):
     """그 말이 없다(남의 것, 볼 수 없는 등급의 세션의 것, 다른 세션의 것)(404). 다시 생성과 가지 고르기가 쓴다."""
+
+
+class NotEditableError(Exception):
+    """
+    그렇게 고칠 수 없는 말이다(422). code 가 까닭이다.
+    not_editable 은 답이 아니다(사람의 말과 행동 말은 고치지 않는다), segments_mismatch 는 조각의 수가 다르다.
+    """
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+NOT_EDITABLE = 'not_editable'
+SEGMENTS_MISMATCH = 'segments_mismatch'
 
 
 class ModelUnavailableError(Exception):
@@ -286,6 +302,43 @@ async def choose_branch(
     if not await repository.set_leaf(session, conversation.id, leaf_id, now - GENERATION_STALE):
         raise ConversationBusyError
     await session.commit()
+
+
+def edited_segments(message: Message, texts: list[str]) -> tuple[Segment, ...]:
+    """
+    답의 조각마다 글만 바꾼 조각들. 말하는 사람과 차례는 그대로다. 글의 앞뒤 빈칸은 걷는다(모델의 조각과 같은 모양).
+    답이 아니면 NotEditableError(not_editable), 조각의 수가 다르면 NotEditableError(segments_mismatch).
+    """
+    if message.role != Role.ASSISTANT:
+        raise NotEditableError(NOT_EDITABLE)
+    stored = message.segments or []
+    if len(stored) != len(texts):
+        raise NotEditableError(SEGMENTS_MISMATCH)
+    return tuple(Segment(segment.get('speaker'), text.strip()) for segment, text in zip(stored, texts, strict=True))
+
+
+async def edit_message(
+    session: AsyncSession, viewer: Viewer, message_id: uuid.UUID, texts: list[str], now: datetime
+) -> Message:
+    """
+    답을 그 자리에서 고친다. 조각마다 글만 바꾸고 본문(content)은 그 조각들로 다시 쓴다. 고친 말을 돌려준다.
+    호출이 아니라 청구하지 않는다. 다음 호출부터 고친 글이 모델에 간다. 상태와 세션의 수정 시각은 그대로다.
+
+    말이 없으면 MessageNotFoundError, 고칠 수 없으면 NotEditableError, 답을 쓰는 중이면 ConversationBusyError.
+    """
+    message = await repository.find_visible_message(
+        session, viewer.claims.user_id, allowed_ratings(viewer.claims), message_id
+    )
+    if message is None:
+        raise MessageNotFoundError
+    segments = edited_segments(message, texts)
+    if not await repository.edit_message(
+        session, message.id, segment_dicts(segments), render_segments(segments), now - GENERATION_STALE
+    ):
+        raise ConversationBusyError
+    await session.commit()
+    await session.refresh(message)
+    return message
 
 
 async def conversation_models(session: AsyncSession, conversations: list[Conversation]) -> dict[str, AiModel]:

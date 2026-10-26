@@ -17,7 +17,20 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    false,
+    func,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -126,6 +139,7 @@ class Message(Base):
     본문(content)은 그 조각들을 표식이 붙은 줄로 쓴 것이다(app/turns/segments.py 의 render_segments).
     다음 호출의 프롬프트에 그대로 들어가 모델이 같은 모양으로 이어 쓴다. 사람의 말은 조각 없이 본문만 있다.
     cast 는 그 답을 쓸 때의 장면의 인물이다(app/engine/scene.py). 화면이 그 자리에 있던 인물을 보인다.
+    edited 는 사람이 답의 글을 고쳤는가다(조각마다 글만 고친다. app/conversations/service.py 의 edit_message).
     """
 
     __tablename__ = 'messages'
@@ -148,6 +162,7 @@ class Message(Base):
     # 그 행동에 다시 답할 때 같은 장면을 쓴다. 열린 것이 없으면 비어 있다
     event_id: Mapped[str | None] = mapped_column(String(40), default=None)
     ending_id: Mapped[str | None] = mapped_column(String(40), default=None)
+    edited: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
