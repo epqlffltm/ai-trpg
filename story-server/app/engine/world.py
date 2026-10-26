@@ -106,11 +106,24 @@ class Stage(Part):
     at: int
 
 
+class Gift(Part):
+    """
+    선물의 규칙 하나. 그 물건을 건네면 호감도를 change 만큼 바꾼다(app/engine/gifts.py).
+    once 면 그 가지에서 그 인물에게 그 물건을 처음 건넬 때만이다. id 는 인물 안에서 고유하다(asset 서버가 검사한다).
+    """
+
+    id: str
+    item: str
+    change: int
+    once: bool = False
+
+
 class Affection(Part):
-    """인물의 호감도. 시작 값과 단계들."""
+    """인물의 호감도. 시작 값과 단계들, 선물의 규칙들."""
 
     start: int = 0
     stages: tuple[Stage, ...] = ()
+    gifts: tuple[Gift, ...] = ()
 
 
 class ConfessionFailure(enum.StrEnum):

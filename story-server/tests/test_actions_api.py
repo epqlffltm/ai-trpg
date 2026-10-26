@@ -8,6 +8,7 @@ asset 서버, 결제 서버, 모델은 가짜다(tests/assets.py, tests/billing.
   - 이동: 행동 말(글과 그 뒤의 상태)이 붙고, 모델은 [행동] 을 붙인 글과 새 장소의 장면으로 답한다. 한 번 청구한다
   - 이벤트가 열리면 행동 말에 그 id 가 남고, 답은 그 장면 지시를 쓰고 그 장면이 부른 인물이 든다
   - 선택지를 고르면 그 효과가 상태에 든다
+  - 건네면 물건이 줄고 호감도가 바뀐다. 행동 말에 엔진이 정한 반응(반가워했다)이 적힌다
   - 고백이 엔딩을 보면 행동 말에 엔딩이 남고 계정의 기록에 적힌다. 끝을 고른 세계관이면 그 뒤로 말과 행동을 받지 않는다.
     기록에 남지 않는 엔딩(unlock 이 거짓)은 적지 않는다
   - 할 수 없는 행동은 422 code 이고 아무것도 저장하지 않으며 차례를 놓는다. 모양이 틀린 행동은 입력 오류다
@@ -28,7 +29,7 @@ from app.conversations.models import Conversation, Message, MessageState
 from app.turns.models import Generation
 from tests.assets import FakeAsset
 from tests.billing import FakeBillingServer
-from tests.engine_worlds import condition, confession, effect, ending, event, member
+from tests.engine_worlds import condition, confession, effect, ending, event, gift, member
 from tests.models import FakeRouter
 from tests.turns import CONVERSATIONS_URL, ME, PRICE_CODE, bearer, parse_sse, start_with_luna, turn_on_luna
 
@@ -171,6 +172,33 @@ async def test_an_opened_event_directs_the_answer_and_its_choice_applies(
     assert '[장면 지시]' not in router.provider.calls[1][0][0].content
 
 
+async def test_a_gift_hands_over_the_item_and_moves_affection(
+    client: AsyncClient,
+    app: FastAPI,
+    model_on: None,
+    asset: FakeAsset,
+    router: FakeRouter,
+    billing: FakeBillingServer,
+    mine: dict,
+):
+    mina = {**member('mina', home='home', start=20, gifts=[gift('likes', 'flower', 10)]), 'character': {'name': '미나'}}
+    fields = {
+        'cast': [mina],
+        'items': [{'id': 'flower', 'name': '꽃'}],
+        'start_items': [{'item': 'flower', 'count': 2}],
+    }
+    conversation = await start(client, asset, mine, **fields)
+
+    events = await acted(app, client, mine, conversation, {'kind': 'give', 'cast': 'mina', 'item': 'flower'})
+
+    turn = events[0][1]
+    assert turn['user_message']['content'] == '미나에게 꽃을(를) 건넸다. 미나은(는) 반가워했다.'
+    assert (turn['state']['items'], turn['state']['affection']['mina']) == ({'flower': 1}, 30)
+    assert router.provider.calls[0][0][-1].content == '[행동] 미나에게 꽃을(를) 건넸다. 미나은(는) 반가워했다.'
+    # 반응을 받으니 한 번 청구했다
+    assert billing.balance(ME) == 70
+
+
 async def test_a_confession_that_ends_is_recorded_and_ends_the_session(
     client: AsyncClient,
     app: FastAPI,
@@ -241,6 +269,8 @@ async def test_an_ending_that_is_not_unlocked_is_not_recorded(
         ({'kind': 'choose', 'choice': 'keep'}, 'no_choice'),
         ({'kind': 'confess', 'cast': 'jun'}, 'not_in_scene'),
         ({'kind': 'confess', 'cast': 'mina'}, 'not_confessable'),
+        ({'kind': 'give', 'cast': 'jun', 'item': 'flower'}, 'not_in_scene'),
+        ({'kind': 'give', 'cast': 'mina', 'item': 'flower'}, 'not_held'),
     ],
 )
 async def test_an_impossible_action_is_refused_and_saves_nothing(
@@ -267,7 +297,13 @@ async def test_an_impossible_action_is_refused_and_saves_nothing(
 
 @pytest.mark.parametrize(
     'body',
-    [{'kind': 'fly'}, {'kind': 'move'}, {'kind': 'move', 'place': ''}, {'kind': 'pass_time', 'extra': 1}],
+    [
+        {'kind': 'fly'},
+        {'kind': 'move'},
+        {'kind': 'move', 'place': ''},
+        {'kind': 'pass_time', 'extra': 1},
+        {'kind': 'give', 'cast': 'mina'},
+    ],
 )
 async def test_a_malformed_action_is_an_input_error(
     client: AsyncClient, model_on: None, asset: FakeAsset, mine: dict, body: dict
