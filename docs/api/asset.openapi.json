@@ -3566,6 +3566,49 @@
         "title": "PlaceDocument",
         "type": "object"
       },
+      "PublicCastMember": {
+        "description": "소개에 보이는 인물 하나. reveal 이 silhouette 이면 이름과 그림을 싣지 않는다(null).\n숨김(hidden)인 인물은 목록에 없다.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "reveal": {
+            "$ref": "#/components/schemas/Reveal"
+          }
+        },
+        "required": [
+          "id",
+          "reveal",
+          "name",
+          "image_id"
+        ],
+        "title": "PublicCastMember",
+        "type": "object"
+      },
       "PublicCharacterDetail": {
         "description": "공개 캐릭터 하나. 마지막 판의 문서다.",
         "properties": {
@@ -3672,6 +3715,186 @@
           "published_at"
         ],
         "title": "PublicCharacterSummary",
+        "type": "object"
+      },
+      "PublicWorldDetail": {
+        "description": "공개 세계관의 소개(D1). 마지막 판에서 보여도 되는 것만 골라 싣는다.\n이벤트, 조건, 엔딩의 이름과 조건, 인물의 일정과 호감도 규칙은 싣지 않는다(플레이의 내용이다).\nintro_html 은 게시할 때 거른 소개다. ending_count 는 계정에 남는 엔딩(unlock)의 수다.",
+        "properties": {
+          "after_ending": {
+            "$ref": "#/components/schemas/AfterEnding"
+          },
+          "cast": {
+            "items": {
+              "$ref": "#/components/schemas/PublicCastMember"
+            },
+            "title": "Cast",
+            "type": "array"
+          },
+          "deadline_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline Days"
+          },
+          "ending_count": {
+            "title": "Ending Count",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "intro_html": {
+            "title": "Intro Html",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "published_at",
+          "name",
+          "intro_html",
+          "tags",
+          "rating",
+          "image_id",
+          "deadline_days",
+          "after_ending",
+          "cast",
+          "ending_count"
+        ],
+        "title": "PublicWorldDetail",
+        "type": "object"
+      },
+      "PublicWorldPage": {
+        "description": "공개 목록의 한 쪽과 전체 개수.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicWorldSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "PublicWorldPage",
+        "type": "object"
+      },
+      "PublicWorldSummary": {
+        "description": "공개 목록의 한 줄. 마지막 판의 값이다. deadline_days 는 기한(날 수)이고 없으면 null 이다.",
+        "properties": {
+          "deadline_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline Days"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date-time",
+            "title": "Published At",
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "name",
+          "tags",
+          "rating",
+          "image_id",
+          "deadline_days",
+          "published_at"
+        ],
+        "title": "PublicWorldSummary",
         "type": "object"
       },
       "PublishCheck": {
@@ -6968,6 +7191,119 @@
           }
         ],
         "summary": "Report Character",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/listings/worlds": {
+      "get": {
+        "description": "공개 세계관의 목록. 최근에 게시한 것부터다.",
+        "operationId": "list_public_api_v1_asset_listings_worlds_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicWorldPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Public",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/listings/worlds/{world_id}": {
+      "get": {
+        "description": "공개 세계관의 소개. 볼 수 없으면 404 다.",
+        "operationId": "read_public_api_v1_asset_listings_worlds__world_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicWorldDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Public",
         "tags": [
           "listings"
         ],

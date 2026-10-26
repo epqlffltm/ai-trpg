@@ -182,7 +182,7 @@ E4 에서 정한 것(2026-10-24, #678).
 | --- | --- | --- |
 | 서비스 고르기 | TRPG, chat, story | 1단계부터 셋 다 들어간다([첫 출시의 범위](#첫-출시의-범위)) |
 | 이어하기 | 서비스마다 한 줄. TRPG 는 내가 앉아 있는 테이블, chat 은 최근 대화, story 는 최근 세션. 줄마다 몇 개와 "더 보기" | TRPG: `GET /api/v1/game/tables?limit=5`(B3). chat, story: 그 서버의 대화 목록(계획, [chat 서버 설계](../architecture/chat-server.md#데이터의-모양)) |
-| 공개된 시나리오(chat 과 story 는 캐릭터·세계관) | 최근 공개한 것 몇 개. 로그인 전에는 전체이용가만 | TRPG: `GET /api/v1/game/listings?limit=` (B1). chat 과 story: `GET /api/v1/asset/listings/characters?limit=`(세계관은 계획). 로그인 전에는 토큰 없이 부른다(#530) |
+| 공개된 시나리오(chat 과 story 는 캐릭터·세계관) | 최근 공개한 것 몇 개. 로그인 전에는 전체이용가만 | TRPG: `GET /api/v1/game/listings?limit=` (B1). chat: `GET /api/v1/asset/listings/characters?limit=`. story: `GET /api/v1/asset/listings/worlds?limit=`. 로그인 전에는 토큰 없이 부른다(#530) |
 | 헤더 | 잔액, 알림 배지, 내 정보 | A6, A10, A5 |
 
 **3. 할 수 있는 행동 / 4. 비활성**
@@ -2441,13 +2441,13 @@ D 의 화면은 2026-10-20 에 정했다. 서버(`story-server`)는 아직 없�
 
 **2. 보여 주는 정보와 출처**
 
-| 영역 | 보이는 것 | 출처(계획) |
+| 영역 | 보이는 것 | 출처 |
 | --- | --- | --- |
-| 머리 | 대표 그림, 이름, 태그, 등급. 기한이 있으면 날 수("100일") | 세계관(`story.worlds`) |
-| 소개 | 제작자가 꾸민 HTML. 넘치면 잘리는 상자 안에만 그린다 | 세계관의 소개 글(거른 것) |
-| 인물 | 보임: 그림, 이름, 한 줄 소개. 실루엣: 검은 그림과 "???". 숨김: 칸이 없다 | 인물(`story.cast`)의 공개. 실루엣과 숨김은 서버가 이름과 그림을 내려보내지 않는다 |
-| 내 세션 | 시작한 날, 지금 날짜(기한이 있으면 "D-12"), 진행 / 끝(본 엔딩의 이름) / 후일담, 마지막 말의 시각 | `conversations`(`mode` = `story`, 이 세계관, 내 것)와 story 쪽의 세션 상태 |
-| 엔딩 | "엔딩 3/7" | 엔딩의 수와 내가 본 것(`story.ending_records`) |
+| 머리 | 대표 그림, 이름, 태그, 등급. 기한이 있으면 날 수("100일") | asset 의 공개 세계관 소개(`GET /api/v1/asset/listings/worlds/{id}`, 마지막 판에서 보여도 되는 것만) |
+| 소개 | 제작자가 꾸민 HTML. 넘치면 잘리는 상자 안에만 그린다 | 같은 소개의 `intro_html`(게시할 때 거른 것) |
+| 인물 | 보임: 그림, 이름, 한 줄 소개. 실루엣: 검은 그림과 "???". 숨김: 칸이 없다 | 같은 소개의 `cast`. 실루엣은 서버가 이름과 그림을 내려보내지 않고(null), 숨김은 목록에 없다. 한 줄 소개는 아직 칸이 없다 |
+| 내 세션 | 시작한 날, 지금 날짜(기한이 있으면 "D-12"), 진행 / 끝(본 엔딩의 이름) / 후일담, 마지막 말의 시각 | story 의 세션 목록(`GET /api/v1/story/conversations?world_id=`)과 세션 읽기의 `state` |
+| 엔딩 | "엔딩 3/7" | 같은 소개의 `ending_count`(계정에 남는 엔딩의 수)와 내가 본 것(`GET /api/v1/story/endings?world_id=`) |
 
 **3. 할 수 있는 행동**
 

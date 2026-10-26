@@ -62,6 +62,7 @@ from app.ratings import AdultContentRequiredError, handle_adult_content_required
 from app.reports import router as reports
 from app.reports.service import AlreadyReportedError, OwnCharacterReportError
 from app.withdrawal import router as withdrawal
+from app.worlds import listings as world_listings
 from app.worlds import router as worlds
 from app.worlds import supply as world_supply
 from app.worlds.publishing import WorldNotReadyError
@@ -193,6 +194,8 @@ def create_app(
     app.add_exception_handler(LorebookNotFoundError, lorebooks.handle_lorebook_not_found)
     # story 의 세계관의 초안과 판(#591, 화면 명세 D7). 만든 사람만 다룬다
     app.include_router(worlds.router, prefix=API_PREFIX)
+    # 공개 세계관의 목록과 소개(화면 명세 D1). 로그인하지 않아도 읽는다
+    app.include_router(world_listings.router, prefix=API_PREFIX)
     app.add_exception_handler(WorldNotFoundError, worlds.handle_world_not_found)
     app.add_exception_handler(WorldNotReadyError, worlds.handle_world_not_ready)
     app.add_exception_handler(CharacterNotOwnedError, worlds.handle_character_not_owned)
