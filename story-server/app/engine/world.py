@@ -245,6 +245,10 @@ class World(Part):
         """그 id 의 이벤트. 없으면 None."""
         return next((event for event in self.events if event.id == event_id), None)
 
+    def ending(self, ending_id: str) -> Ending | None:
+        """그 id 의 엔딩. 없으면 None."""
+        return next((ending for ending in self.endings if ending.id == ending_id), None)
+
 
 def read_world(document: Mapping) -> World:
     """판의 문서(사본의 document)를 엔진이 읽는 모양으로 바꾼다."""

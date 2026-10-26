@@ -6,15 +6,17 @@ chat 의 말 한 번(chat-server/app/turns/service.py)과 같은 차례이고,
 다른 것은 답이 장면의 인물들과 서술의 말 조각이라는 것이다. 아래 차례의 각 줄이 함수 하나다.
 
   응답을 시작하기 전(실패하면 HTTP 의 오류로 답한다)
-    1. begin_turn, begin_action: 세션과 모델을 보고, 차례를 잡고(한 세션 한 생성),
+    1. begin_turn, begin_action, begin_regenerate: 세션과 모델을 보고, 차례를 잡고(한 세션 한 생성),
        사람의 말(또는 행동 말과 그 뒤의 상태)과 기록(pending)을 한 트랜잭션에 저장한다.
+       다시 생성은 기록만 저장한다. 답한 말에 적힌 장면을 다시 세운다
        행동은 엔진이 판정한다(app/turns/actions.py). 본 엔딩은 계정의 기록에 남긴다(app/records/).
        답을 쓰는 장면을 정하고(app/turns/scenes.py) 모델에 보낼 메시지를 만든다(app/turns/prompt.py)
     2. route_turn: 모델을 부를 provider 를 고른다. 키가 없거나 쓸 수 없는 모델이면 거절한다
     3. hold_turn: 홀드를 건다. 걸리지 않으면(모자람, 팔지 않음, 결제 서버가 죽음) 거절한다
        거절되면 decline_turn 이 차례를 놓고 기록을 declined 로 둔다. 사람의 말은 남는다
   응답을 시작한 뒤(따로 도는 작업. 사람이 끊어도 끝까지 돈다)
-    4. call_model: 모델을 부르고, 받는 대로 말 조각으로 잘라 흘려보낸다(app/turns/segments.py)
+    4. call_model: 모델을 부르고, 받는 대로 말 조각으로 잘라 흘려보낸다(app/turns/segments.py).
+       사람이 멈추면(app/turns/stops.py) 받은 만큼으로 끝낸다(stopped)
     5. save_result: 받은 만큼 답을 저장하고 차례를 놓는다.
        다 받았으면 complete, 길이에서 잘렸거나 도중에 끊겼으면 partial. 남은 조각이 없으면 답을 저장하지 않는다
     6. settle_turn: 답이 있으면 확정, 없으면 반환한다.
@@ -30,7 +32,7 @@ import asyncio
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 from ai_core.costs import charge_of
@@ -61,7 +63,7 @@ from app.engine.events import drop_choice
 from app.engine.play import Played
 from app.engine.state import StoryState
 from app.engine.world import AfterEnding, World, read_world
-from app.ratings import Rating
+from app.ratings import Rating, allowed_ratings
 from app.records import repository as records
 from app.turns import charging, repository
 from app.turns.actions import action_text, perform
@@ -71,7 +73,7 @@ from app.turns.frames import delta_frame, done_frame, failed_frame, segment_fram
 from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
 from app.turns.prompt import build_messages, render_card, scene_card
 from app.turns.providers import Router
-from app.turns.scenes import Staging, staging
+from app.turns.scenes import Staging, replayed, staging
 from app.turns.segments import (
     Segment,
     SegmentStart,
@@ -83,6 +85,7 @@ from app.turns.segments import (
     speaker_labels,
 )
 from app.turns.states import state_on_path, state_to_json, state_view
+from app.turns.stops import StopSwitch
 from app.turns.values import PromptOptions, SavedMessage, TurnResult, TurnStart
 
 logger = logging.getLogger(__name__)
@@ -93,6 +96,8 @@ PROVIDER_UNAVAILABLE = 'provider_unavailable'
 CANCELLED = 'cancelled'
 SERVER_ERROR = 'server_error'
 EMPTY = 'empty'
+# 사람이 멈춘 생성의 까닭
+STOPPED = 'stopped'
 
 
 class ModelRequiredError(Exception):
@@ -101,6 +106,14 @@ class ModelRequiredError(Exception):
 
 class SessionEndedError(Exception):
     """엔딩을 본 세션이고 세계관이 끝(읽기만)을 골랐다. 말을 받지 않는다(409)."""
+
+
+class MessageNotFoundError(Exception):
+    """다시 답할 말이 없다(남의 것, 볼 수 없는 등급의 세션의 것)(404)."""
+
+
+class NotRegenerableError(Exception):
+    """다시 쓸 수 없는 말이다. 부모가 없는 답은 모델이 답한 것이 아니다(422)."""
 
 
 class TurnDeclinedError(Exception):
@@ -187,6 +200,18 @@ def require_open(world: World, state: StoryState) -> None:
 def talked_state(state: StoryState) -> StoryState | None:
     """말을 한 뒤의 상태. 기다리던 선택지가 있으면 사라진 상태이고, 바뀌는 것이 없으면 None 이다."""
     return drop_choice(state) if state.choosing is not None else None
+
+
+def answered_message(target: Message) -> uuid.UUID:
+    """
+    다시 답할 말(사람의 말이나 행동 말)의 id. 답이면 그 부모, 사람의 말이나 행동 말이면 그 말 자신이다
+    (답을 못 받은 말에 답한다). 부모가 없는 답은 다시 쓰지 않는다(NotRegenerableError).
+    """
+    if target.role in (Role.USER, Role.ACTION):
+        return target.id
+    if target.parent_id is None:
+        raise NotRegenerableError
+    return target.parent_id
 
 
 @dataclass(frozen=True)
@@ -390,11 +415,55 @@ async def begin_action(
     return await begin(session_factory, viewer, conversation_id, now, record)
 
 
-async def branch_of(session: AsyncSession, conversation: Conversation, imported: ImportedWorld) -> Branch:
-    """세션의 지금 가지. 판을 읽고, 가지의 말들과 끝의 상태를 읽는다."""
+async def answered_in(
+    session_factory: async_sessionmaker[AsyncSession], viewer: Viewer, message_id: uuid.UUID
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """
+    다시 답할 말의 세션과 그 말(answered_message)의 id. 말이 없으면 MessageNotFoundError,
+    다시 쓸 수 없는 말이면 NotRegenerableError. 말은 바뀌지 않으므로 차례를 잡기 전에 읽는다.
+    """
+    async with session_factory() as session:
+        target = await conversations.find_visible_message(
+            session, viewer.claims.user_id, allowed_ratings(viewer.claims), message_id
+        )
+    if target is None:
+        raise MessageNotFoundError
+    return target.conversation_id, answered_message(target)
+
+
+async def begin_regenerate(
+    session_factory: async_sessionmaker[AsyncSession],
+    viewer: Viewer,
+    message_id: uuid.UUID,
+    options: PromptOptions,
+    now: datetime,
+) -> TurnStart:
+    """
+    그 말에 다시 답할 차례를 잡는다. 새 답은 같은 부모 아래의 대안이다. 앞의 답은 그대로 남는다.
+
+    기록(pending)만 저장한다. 사람의 말도 상태도 새로 저장하지 않는다(엔진은 다시 판정하지 않는다).
+    가지의 끝은 옮기지 않는다. 새 답을 저장할 때 옮긴다(save_result).
+    그래서 거절되거나 조각 없이 실패하면 앞의 답이 그대로 보인다.
+    말이 없으면 MessageNotFoundError, 다시 쓸 수 없는 말이면 NotRegenerableError. 나머지는 begin 과 같다.
+    """
+    conversation_id, answered_id = await answered_in(session_factory, viewer, message_id)
+
+    async def record(session: AsyncSession, conversation: Conversation, imported: ImportedWorld, slug: str):
+        return await record_regenerate(session, viewer, conversation, imported, slug, answered_id, options)
+
+    return await begin(session_factory, viewer, conversation_id, now, record)
+
+
+async def branch_at(session: AsyncSession, imported: ImportedWorld, leaf_id: uuid.UUID | None) -> Branch:
+    """leaf_id 에서 끝나는 가지. 판을 읽고, 가지의 말들과 끝의 상태를 읽는다."""
     world = read_world(imported.document)
-    path = await conversations.active_path(session, conversation.active_leaf_id)
+    path = await conversations.active_path(session, leaf_id)
     return Branch(world, read_briefing(imported.document), path, await state_at(session, world, path))
+
+
+async def branch_of(session: AsyncSession, conversation: Conversation, imported: ImportedWorld) -> Branch:
+    """세션의 지금 가지."""
+    return await branch_at(session, imported, conversation.active_leaf_id)
 
 
 async def attach(session: AsyncSession, conversation: Conversation, message: Message, state: StoryState | None) -> None:
@@ -512,6 +581,29 @@ async def record_action(
     generation = add_generation(session, conversation, viewer.claims.user_id, message, slug)
     stage = staging(branch.world, played.state, played.event, played.ending)
     return turn_start(viewer.claims.user_id, generation, message, branch, played.state, stage, options)
+
+
+async def record_regenerate(
+    session: AsyncSession,
+    viewer: Viewer,
+    conversation: Conversation,
+    imported: ImportedWorld,
+    slug: str,
+    answered_id: uuid.UUID,
+    options: PromptOptions,
+) -> TurnStart:
+    """
+    차례를 쥔 채로 그 말에 다시 답하는 기록을 세션에 올린다(커밋하지 않는다).
+    상태는 그 말까지의 가지의 것이고,
+    장면은 그 말에 적힌 이벤트와 엔딩으로 다시 세운다(app/turns/scenes.py 의 replayed).
+    끝난 세션이어도 된다. 사람의 말이 늘지 않고 상태도 바뀌지 않는다(엔딩의 장면을 다시 쓸 수 있다).
+    """
+    branch = await branch_at(session, imported, answered_id)
+    answered = branch.path[-1]
+    before = replace(branch, path=branch.path[:-1])
+    stage = replayed(branch.world, branch.state, answered.event_id, answered.ending_id)
+    generation = add_generation(session, conversation, viewer.claims.user_id, answered, slug)
+    return turn_start(viewer.claims.user_id, generation, answered, before, branch.state, stage, options)
 
 
 async def route_turn(router: Router, start: TurnStart) -> Route:
@@ -646,21 +738,31 @@ async def settle_turn(
         await settle_generation(session_factory, billing, generation, now)
 
 
-async def guarded_call(
+async def stoppable_call(
     session_factory: async_sessionmaker[AsyncSession],
     route: Route,
     start: TurnStart,
     params: GenerationParams,
     collector: Collector,
     clock: Callable[[], datetime],
+    stop: StopSwitch,
 ) -> TurnResult:
     """
-    모델을 부른다. 서버가 꺼지며 멈추면(이 작업의 취소) 받은 만큼 저장한 뒤 그대로 올린다.
-    맡기는 것은 다음에 뜬 서버의 정리 작업이 한다.
+    모델을 부르는 일을 따로 띄우고 기다린다. 사람이 멈추면 받은 만큼의 결과(stopped)를 돌려준다.
+    부르기 전에 멈췄으면 부르지 않는다.
+
+    서버가 꺼지며 멈추면(이 작업의 취소) 부르는 일도 끊고, 받은 만큼 저장한 뒤 그대로 올린다.
+    맡기는 것은 다음에 뜬 서버의 정리 작업이 한다. 사람이 멈춘 뒤에 서버가 꺼져도 꺼지는 쪽을 따른다.
     """
+    if stop.requested:
+        return failure_of((), 0, STOPPED)
+    stop.call = asyncio.create_task(call_model(route, start, params, collector))
     try:
-        return await call_model(route, start, params, collector)
+        return await stop.call
     except asyncio.CancelledError:
+        if stop.requested and not asyncio.current_task().cancelling():
+            return failure_of(*collector.finish(), STOPPED)
+        stop.call.cancel()
         await save_result(session_factory, start, failure_of(*collector.finish(), CANCELLED), clock())
         raise
 
@@ -673,15 +775,18 @@ async def run_generation(
     params: GenerationParams,
     relay: Relay,
     clock: Callable[[], datetime],
+    stop: StopSwitch,
 ) -> None:
     """
     모델을 부르고, 흘려보내고, 저장하고, 맡긴다. 응답과 따로 도는 작업이다. 사람이 끊어도 끝까지 돈다.
 
+    사람이 멈추면(stop) 받은 만큼 저장하고 맡긴다(받은 조각이 있으면 partial 로 확정, 없으면 반환).
+    서버가 꺼지며 멈추면 받은 만큼 저장하고 멈춘다. 맡기는 것은 다음에 뜬 서버의 정리 작업이 한다.
     저장하다 실패하면(DB 가 없다) 응답에 실패를 알리고 끝낸다.
     차례와 홀드는 오래되면 풀린다(GENERATION_STALE, 정리 작업).
     """
     collector = collector_for(start, relay)
-    result = await guarded_call(session_factory, route, start, params, collector, clock)
+    result = await stoppable_call(session_factory, route, start, params, collector, clock, stop)
     try:
         answer = await save_result(session_factory, start, result, clock())
     except Exception:

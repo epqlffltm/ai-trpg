@@ -7,6 +7,8 @@
   - 이벤트가 열린 행동의 답: 그 이벤트의 장면 지시. 그 장면이 부르는 인물이 들어온다
   - 그 밖(말, 아무것도 열리지 않은 행동): 장면 지시가 없다. 그 장소의 인물만이다
 선택지를 기다리는 동안 말을 하면 선택지가 사라지므로(app/engine/events.py 의 drop_choice) 그 답에는 장면 지시가 없다.
+다시 생성은 답한 말에 적힌 이벤트와 엔딩(event_id, ending_id)으로 같은 장면을 다시 세운다(replayed).
+이벤트를 다시 열지 않는다.
 """
 
 from dataclasses import dataclass
@@ -45,3 +47,13 @@ def staging(world: World, state: StoryState, event: Event | None = None, ending:
     scene, direction = chosen_scene(event, ending)
     called = scene.cast if scene is not None else ()
     return Staging(cast=tuple(scene_cast(world, state, called)), direction=direction)
+
+
+def replayed(world: World, state: StoryState, event_id: str | None, ending_id: str | None) -> Staging:
+    """
+    답한 말에 적힌 이벤트와 엔딩의 장면을 다시 세운다(다시 생성). state 는 그 말의 상태다.
+    판의 사본은 바뀌지 않아 id 는 늘 찾는다. 찾지 못하면 장면 지시 없이 그 장소의 인물만이다.
+    """
+    event = world.event(event_id) if event_id is not None else None
+    ending = world.ending(ending_id) if ending_id is not None else None
+    return staging(world, state, event, ending)

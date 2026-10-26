@@ -56,14 +56,23 @@ from app.turns import router as messages
 from app.turns import settler
 from app.turns.actions import ActionRefusedError
 from app.turns.providers import build_router
-from app.turns.service import ModelRequiredError, SessionEndedError, TurnDeclinedError
+from app.turns.service import (
+    MessageNotFoundError,
+    ModelRequiredError,
+    NotRegenerableError,
+    SessionEndedError,
+    TurnDeclinedError,
+)
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
 API_PREFIX = '/api/v1/story'
 
 # SSE 로 답하는 주소들. 요청의 span 과 시간 메트릭에서 빼고 sse_* 로 센다(server_core/observability/streams.py).
 # 프록시도 이 주소에서 버퍼링을 끈다(docker/nginx/templates/api.inc.template)
-STREAMS = StreamRoutes.of(r'/api/v1/story/conversations/[^/]+/(messages|actions)')
+STREAMS = StreamRoutes.of(
+    r'/api/v1/story/conversations/[^/]+/(messages|actions)',
+    r'/api/v1/story/messages/[^/]+/regenerate',
+)
 
 
 @asynccontextmanager
@@ -170,6 +179,8 @@ def create_app(
     app.state.model_router = build_router(settings, app.state.http_client, app.state.session_factory)
     # 도는 말 한 번들(app/turns/router.py 의 keep_running). 서버가 꺼질 때 멈춘다
     app.state.turns = set()
+    # 도는 말 한 번의 멈추는 스위치(기록의 id → (주인, 스위치)). 멈추기가 찾는다. 이 서버에서 도는 것만 있다
+    app.state.stops = {}
     # 끝나지 않은 청구를 마저 끝내는 작업(app/turns/settler.py). lifespan 이 돌리고 멈춘다.
     # 결제 서버를 부르는 것은 부를 때마다 앱에서 꺼낸다. 테스트가 가짜를 꽂는다
     app.state.settler = settler.ChargeSettler(app.state.session_factory, billing=lambda: app.state.billing)
@@ -184,8 +195,10 @@ def create_app(
     app.include_router(catalog.router, prefix=API_PREFIX)
     # 세션. 세계관의 판을 asset 서버에서 가져와 시작한다
     app.include_router(conversations.router, prefix=API_PREFIX)
-    # 말 보내기와 행동. 바로 SSE 로 답한다
+    # 말 보내기와 행동, 다시 생성. 바로 SSE 로 답한다. 멈추기
     app.include_router(messages.router, prefix=API_PREFIX)
+    app.include_router(messages.message_router, prefix=API_PREFIX)
+    app.include_router(messages.generation_router, prefix=API_PREFIX)
     # 계정의 기록. 본 엔딩
     app.include_router(records.router, prefix=API_PREFIX)
 
@@ -201,6 +214,8 @@ def create_app(
     app.add_exception_handler(ModelRequiredError, messages.handle_model_required)
     app.add_exception_handler(SessionEndedError, messages.handle_session_ended)
     app.add_exception_handler(ActionRefusedError, messages.handle_action_refused)
+    app.add_exception_handler(MessageNotFoundError, messages.handle_message_not_found)
+    app.add_exception_handler(NotRegenerableError, messages.handle_not_regenerable)
     app.add_exception_handler(TurnDeclinedError, messages.handle_turn_declined)
 
     # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)

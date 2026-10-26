@@ -6,9 +6,12 @@
     POST /api/v1/story/conversations/{id}/messages    {content}   말을 보낸다
     POST /api/v1/story/conversations/{id}/actions     {kind, …}   행동한다(이동, 시간, 하루 마치기, 선택지, 고백).
                                                                   엔진이 판정하고 이어서 모델이 반응을 쓴다
+    POST /api/v1/story/messages/{id}/regenerate                   그 말에 다시 답한다. 새 답은 같은 부모 아래의 대안이다
+    POST /api/v1/story/generations/{id}/stop                      모델을 부르는 것을 멈춘다. 받은 만큼 저장한다. 204
 
 응답을 시작하기 전에 거절하는 것은 보통의 오류다(아래 handle_*). 시작한 뒤의 실패는 SSE 의 failed 메시지다.
-  - 404: 세션이 없다(남의 것, 볼 수 없는 등급)
+  - 404: 세션이 없다(남의 것, 볼 수 없는 등급). 다시 답할 말이 없다(message_not_found)
+  - 422 not_regenerable: 다시 쓸 수 없는 말이다(부모가 없는 답)
   - 409 model_required: 세션에 모델이 없다. 먼저 고른다(PUT /conversations/{id}/model)
   - 409 session_ended: 엔딩을 본 세션이다(세계관이 끝을 골랐다). 읽기만 된다
   - 422 cannot_move, no_choice, over, not_in_scene, not_confessable, cooling_down: 그렇게 할 수 없다
@@ -22,7 +25,7 @@
 모델을 부르는 것은 응답과 따로 도는 작업이다. 앱이 들고 있다가(app.state.turns) 서버가 꺼질 때 멈춘다(app/main.py).
 요청과 연결의 메트릭은 SSE 로 센다(sse_*). 요청의 span 과 시간 메트릭에서는 뺀다(app/main.py 의 STREAMS).
 chat 서버의 것(chat-server/app/turns/router.py)과 같은 모양이다.
-다시 생성과 멈추기는 그것을 더하는 조각에서 붙인다.
+이어서 출력과 요청 수 제한은 그것을 더하는 조각에서 붙인다.
 """
 
 import asyncio
@@ -36,7 +39,7 @@ from ai_core.provider import GenerationParams
 from conversation_core import sse
 from conversation_core.relay import Relay
 from fastapi import APIRouter, Body, Request, status
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from server_core.observability.metrics import measured_stream
 
 from app.core.config import Settings
@@ -46,12 +49,21 @@ from app.turns.actions import ActionRefusedError, to_engine
 from app.turns.charging import CREDIT_SHORT, GOLD_REQUIRED, MODEL_UNAVAILABLE
 from app.turns.frames import turn_frame
 from app.turns.schemas import ActionCreate, MessageCreate
-from app.turns.service import ModelRequiredError, SessionEndedError, TurnDeclinedError
+from app.turns.service import (
+    MessageNotFoundError,
+    ModelRequiredError,
+    NotRegenerableError,
+    SessionEndedError,
+    TurnDeclinedError,
+)
+from app.turns.stops import StopSwitch
 from app.turns.values import PromptOptions, TurnStart
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/conversations', tags=['messages'])
+message_router = APIRouter(prefix='/messages', tags=['messages'])
+generation_router = APIRouter(prefix='/generations', tags=['messages'])
 # SSE 로 답하는 주소의 설명(API 목록)
 SSE_RESPONSES = {200: {'content': {'text/event-stream': {}}, 'description': 'SSE. app/turns/schemas.py 의 메시지들'}}
 
@@ -83,12 +95,18 @@ def prompt_options(settings: Settings) -> PromptOptions:
     return PromptOptions(context_chars=settings.story_context_chars)
 
 
-def keep_running(request: Request, coroutine: Coroutine) -> None:
-    """따로 도는 작업을 띄우고 앱이 들고 있게 한다. 끝나면 놓는다. 잡히지 않은 오류는 로그에 남긴다."""
+def keep_running(request: Request, start: TurnStart, stop: StopSwitch, coroutine: Coroutine) -> None:
+    """
+    따로 도는 작업을 띄우고 앱이 들고 있게 한다. 멈추는 스위치는 기록의 id 로 찾게 둔다(app.state.stops).
+    끝나면 둘 다 놓는다. 잡히지 않은 오류는 로그에 남긴다.
+    """
     task = asyncio.create_task(coroutine)
     running: set[asyncio.Task] = request.app.state.turns
+    stops: dict[uuid.UUID, tuple[uuid.UUID, StopSwitch]] = request.app.state.stops
     running.add(task)
+    stops[start.generation_id] = (start.owner_id, stop)
     task.add_done_callback(running.discard)
+    task.add_done_callback(lambda _: stops.pop(start.generation_id, None))
     task.add_done_callback(log_failure)
 
 
@@ -113,6 +131,22 @@ async def handle_model_required(request: Request, error: ModelRequiredError) -> 
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT,
         content={'detail': '먼저 모델을 골라 주세요.', 'code': 'model_required'},
+    )
+
+
+async def handle_message_not_found(request: Request, error: MessageNotFoundError) -> JSONResponse:
+    """다시 답할 말이 없으면 404 다(남의 것도 없는 것과 같다)."""
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={'detail': '말을 찾을 수 없습니다.', 'code': 'message_not_found'},
+    )
+
+
+async def handle_not_regenerable(request: Request, error: NotRegenerableError) -> JSONResponse:
+    """다시 쓸 수 없는 말이면 422 다."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': '다시 쓸 수 없는 말입니다.', 'code': 'not_regenerable'},
     )
 
 
@@ -151,9 +185,9 @@ async def stream_turn(request: Request, start: TurnStart, now: datetime) -> Stre
     relay = Relay()
     relay.push(turn_frame(start))
     params = generation_params(state.settings)
-    keep_running(
-        request, service.run_generation(state.session_factory, state.billing, route, start, params, relay, utc_now)
-    )
+    stop = StopSwitch()
+    run = service.run_generation(state.session_factory, state.billing, route, start, params, relay, utc_now, stop)
+    keep_running(request, start, stop, run)
     return StreamingResponse(encode_all(relay), media_type='text/event-stream', headers=STREAM_HEADERS)
 
 
@@ -202,3 +236,40 @@ async def act(
     options = prompt_options(state.settings)
     start = await service.begin_action(state.session_factory, viewer, conversation_id, to_engine(data), options, now)
     return await stream_turn(request, start, now)
+
+
+@message_router.post(
+    '/{message_id}/regenerate',
+    status_code=status.HTTP_200_OK,
+    response_class=StreamingResponse,
+    responses=SSE_RESPONSES,
+)
+async def regenerate(message_id: uuid.UUID, viewer: CurrentViewer, request: Request, now: Now) -> StreamingResponse:
+    """
+    그 말에 다시 답한다. 답이면 같은 말(사람의 말이나 행동 말)에 새 대안을, 사람의 말이나 행동 말이면(답을 못 받았다)
+    그 말에 답을 쓴다. 엔진은 다시 판정하지 않는다. 그 말의 상태와, 그 말에 적힌 이벤트와 엔딩의 장면으로 쓴다.
+
+    새 호출이라 새로 청구한다. 앞의 답은 남고, 세션의 가지는 새 답으로 옮겨 간다. SSE 의 모양은 말 보내기와 같다.
+    """
+    state = request.app.state
+    start = await service.begin_regenerate(
+        state.session_factory, viewer, message_id, prompt_options(state.settings), now
+    )
+    return await stream_turn(request, start, now)
+
+
+@generation_router.post('/{generation_id}/stop', status_code=status.HTTP_204_NO_CONTENT)
+async def stop_generation(generation_id: uuid.UUID, viewer: CurrentViewer, request: Request) -> Response:
+    """
+    모델을 부르는 것을 멈춘다(공급자의 호출도 끊는다).
+    받은 만큼 partial 로 저장하고 청구한다. 받은 조각이 없으면 반환한다.
+
+    멈출 생성이 없으면(끝났다, 남의 것이다, 이 서버에서 도는 것이 아니다) 404 generation_not_running 이다.
+    """
+    found = request.app.state.stops.get(generation_id)
+    if found is None or found[0] != viewer.claims.user_id or not found[1].request():
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={'detail': '멈출 답이 없습니다.', 'code': 'generation_not_running'},
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

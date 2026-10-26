@@ -4,9 +4,10 @@
 규칙은 [story 서버 설계](../docs/architecture/story.md)에 있다. 캐릭터 하나와의 1:1 대화는 chat 서버가 맡는다.
 둘이 함께 쓰는 것과 나눈 선은 [chat 서버 설계의 story-server 와 나눈 선](../docs/architecture/chat-server.md#story-server-와-나눈-선)에 있다.
 
-**지금은 세션, 말 보내기, 행동까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
+**지금은 세션, 말 보내기, 행동, 다시 생성과 멈추기까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
 asset 서버에서 세계관의 판을 가져와 [세션](#세션)을 만들고 목록으로 보인다. 말을 보내면 장면의 인물들과 서술의 답을 [말 조각](#말-보내기)으로 흘려보낸다.
-[행동](#행동)(이동, 시간, 선택지, 고백)은 엔진이 판정하고 이벤트와 엔딩이 열린다. 다시 생성과 멈추기가 다음이다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
+[행동](#행동)(이동, 시간, 선택지, 고백)은 엔진이 판정하고 이벤트와 엔딩이 열린다. 답은 [다시 쓰고 멈출 수 있다](#다시-생성과-멈추기).
+대안의 가지를 고르는 것과 고치기가 다음이다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
 
 정해 둔 값: 포트 `8007`, 토큰의 대상 `ai-trpg-story`, DB 계정과 스키마 `story`(테스트는 `story_test`), 주소 `/api/v1/story/`.
 
@@ -109,6 +110,8 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서, 지금 가지의 말, 그 끝의 상태 `state`). 남의 것은 404 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content"}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/actions` | [행동](#행동)(`{"kind", …}`). 엔진이 판정하고 바로 SSE 로 반응을 흘려보낸다 | access 토큰 |
+| POST | `/api/v1/story/messages/{id}/regenerate` | [다시 생성](#다시-생성과-멈추기). 그 말에 다시 답한다. 바로 SSE 로 흘려보낸다 | access 토큰 |
+| POST | `/api/v1/story/generations/{id}/stop` | [멈추기](#다시-생성과-멈추기). 도는 답을 멈추고 받은 만큼 저장한다. 204, 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
 | GET | `/api/v1/story/endings` | 그 세계관에서 내가 본 엔딩들(`?world_id=`, 처음 본 차례). [본 엔딩의 기록](#행동) | access 토큰 |
 
 ### 세션
@@ -163,7 +166,7 @@ event: failed   data: {"code": "timeout"}                                    답
   크레딧이 모자라면 402 `credit_short`, 결제 서버나 공급자가 죽었으면 503 이다. 이때 사람의 말은 저장되고 `message_id` 로 알린다.
 - **청구.** 결제 서버의 가격표 `story.<이름표>.i0.o0` 로 홀드를 건다(`story:gen:<기록의 id>`). 답이 있으면 확정, 없으면 반환이다.
   못 한 것은 청구 정리(`app/turns/settler.py`, 5초마다)가 마저 한다. 도중에 꺼진 서버가 남긴 홀드도 15분 뒤에 돌려준다.
-- 다시 생성, 멈추기, 이어서 출력, 요청 수 제한은 그것을 더하는 조각에서 붙인다.
+- 이어서 출력과 요청 수 제한은 그것을 더하는 조각에서 붙인다.
 
 ### 행동
 
@@ -188,6 +191,25 @@ event: failed   data: {"code": "timeout"}                                    답
 - **거절.** 할 수 없는 행동이면 422 이고 아무것도 저장하지 않는다. `code` 는 `cannot_move`(이어지지 않은 장소, 지금 장소),
   `no_choice`(기다리는 선택지가 없다, 그런 선택지가 없다), `over`, `not_in_scene`, `not_confessable`, `cooling_down`(고백을 받지 않는다)이다.
 - 건네기(물건을 인물에게 주기)는 엔진에 규칙이 생긴 뒤에 더한다. 연 일러스트의 기록도 그 키를 정한 뒤에 더한다.
+
+### 다시 생성과 멈추기
+
+chat 의 것과 같은 모양이다(`app/turns/service.py` 의 `begin_regenerate`, `app/turns/stops.py`).
+
+- **다시 생성.** `POST /api/v1/story/messages/{id}/regenerate` 가 바로 SSE 로 답한다(말 보내기와 같은 모양).
+  답이면 그 부모(사람의 말이나 행동 말)에 새 대안을 쓰고, 답을 못 받은 사람의 말이나 행동 말이면 그 말에 답한다.
+  새 호출이라 새로 청구한다. 앞의 답은 남고, 새 답을 저장할 때 가지의 끝이 새 답으로 옮겨 간다. 거절되거나 조각 없이 실패하면 앞의 답이 그대로다.
+- **엔진은 다시 판정하지 않는다.** 사람의 말도 상태도 새로 저장하지 않는다. 상태는 그 말까지의 가지의 것이고,
+  답의 장면은 그 말에 적힌 이벤트와 엔딩(`event_id`, `ending_id`)으로 다시 세운다(`app/turns/scenes.py` 의 `replayed`).
+  그래서 이벤트가 다시 열리지 않고, 엔딩을 다시 보지 않는다(기록도 그대로다).
+- **끝난 세션에서도 된다.** 사람의 말이 늘지 않아서다. 엔딩의 장면을 다시 쓸 수 있다.
+  앞의 말을 다시 쓰면 가지가 그 자리로 옮겨 가서 그 가지의 상태(엔딩 전)로 이어 갈 수 있다. 세션 안의 트리는 가지마다 상태를 갖는다는 설계 그대로다.
+- **거절.** 말이 없거나 남의 것이면 404 `message_not_found`, 부모가 없는 답이면 422 `not_regenerable`, 답을 쓰는 중이면 409 `generation_in_progress`.
+  모델과 청구의 거절은 말 보내기와 같다.
+- **멈추기.** `POST /api/v1/story/generations/{id}/stop`. `id` 는 SSE 의 turn 의 `generation_id` 다. 모델을 부르는 일만 끊는다.
+  받은 조각이 있으면 partial 로 저장하고 확정한다(`error_code` `stopped`). 없으면 반환하고 SSE 는 `failed`(`stopped`)로 끝난다.
+  스위치는 그 생성을 돌리는 서버의 메모리에 있다(`app.state.stops`). 끝난 것, 남의 것, 다른 서버에서 도는 것은 404 `generation_not_running` 이다.
+- 대안을 고르는 것(`alternatives`, 가지 고르기)과 고치기는 다음 조각이다. 그전까지 앞의 답은 DB 에 남지만 읽기에는 지금 가지만 보인다.
 
 ### 토큰 검증
 
