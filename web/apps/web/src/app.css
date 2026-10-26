@@ -2485,3 +2485,34 @@ a.ui-button {
   justify-content: space-between;
   gap: 8px;
 }
+
+.story-actions,
+.story-choices__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.story-cast__member {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.story-places__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.story-choices,
+.story-ending {
+  margin: 8px 0;
+  padding: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}

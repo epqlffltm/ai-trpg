@@ -1,5 +1,5 @@
 // web/apps/web/src/api/story.ts
-// story 서버(D, #591). 세션(세계관 하나를 걷는 한 번), 모델, 말 보내기와 다시 생성(바로 SSE), 멈추기, 가지 고르기.
+// story 서버(D, #591). 세션(세계관 하나를 걷는 한 번), 모델, 말 보내기·행동·다시 생성(바로 SSE), 멈추기, 가지 고르기.
 //
 // 세션을 시작하면 세계관의 마지막 판을 가져와 고정한다. 모델을 보내지 않으면 지난번 세션의 모델이다(쓸 수 없으면 없이).
 // 세션 읽기에는 판의 문서(document), 지금 가지의 말(말마다 대안 alternatives), 그 끝의 상태(state)가 실린다.
@@ -7,6 +7,8 @@
 // 답을 시작하기 전의 거절(story-server/app/turns/router.py):
 //   - 409 model_required, generation_in_progress, session_ended(끝을 고른 세계관의 엔딩 뒤). 422 model_unavailable, not_regenerable
 //   - 402 credit_short, gold_required, 503: 사람의 말은 저장했다(message_id). 404 message_not_found
+// 행동(이동, 시간 보내기, 하루 마치기, 선택지, 고백, 건네기)은 엔진이 판정하고 같은 SSE 로 반응을 받는다. 할 수 없으면 422 이고
+// 아무것도 저장하지 않는다(cannot_move, no_choice, over, not_in_scene, not_confessable, cooling_down, not_held).
 // 세션 시작의 거절: 404 world_not_found, 403 adult_content_required, 503 asset_unavailable(Retry-After). 422 model_unavailable, 503 prices_unavailable.
 // 타입은 생성 타입(generated/story)에서 바로 가져온다.
 
@@ -24,6 +26,14 @@ export type StoryMessage = Schemas['PathMessageOut'];
 export type StorySavedMessage = Schemas['MessageOut'];
 export type StorySegment = Schemas['SegmentOut'];
 export type StoryState = Schemas['StateOut'];
+export type StoryEndingRecords = Schemas['EndingRecordList'];
+export type StoryAction =
+  | Schemas['MoveAction']
+  | Schemas['PassTimeAction']
+  | Schemas['EndDayAction']
+  | Schemas['ChooseAction']
+  | Schemas['ConfessAction']
+  | Schemas['GiveAction'];
 
 const STORY = '/api/v1/story';
 
@@ -72,4 +82,14 @@ export function openStoryMessageTurn(id: string, content: string, signal: AbortS
 /** 답이면 그 부모에 새 대안을, 답을 못 받은 사람의 말이면 그 말에 답한다 */
 export function openStoryRegenerateTurn(messageId: string, signal: AbortSignal): Promise<Response> {
   return apiStream(`${STORY}/messages/${encodeURIComponent(messageId)}/regenerate`, { method: 'POST', signal });
+}
+
+/** 행동 하나. 엔진이 판정하고 반응을 흘려보낸다 */
+export function openStoryActionTurn(id: string, action: StoryAction, signal: AbortSignal): Promise<Response> {
+  return apiStream(`${STORY}/conversations/${encodeURIComponent(id)}/actions`, { method: 'POST', body: action, signal });
+}
+
+/** 그 세계관에서 내가 본 엔딩들(처음 본 차례). 세션을 지워도 남는다 */
+export function fetchStoryEndings(worldId: string, signal?: AbortSignal): Promise<StoryEndingRecords> {
+  return apiRequest<StoryEndingRecords>(`${STORY}/endings`, { query: { world_id: worldId }, ...withSignal(signal) });
 }

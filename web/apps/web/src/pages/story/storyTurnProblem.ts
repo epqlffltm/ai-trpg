@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/story/storyTurnProblem.ts
 // story 의 답을 시작하기 전에 거절된 까닭을 화면의 한 줄과 할 일로. 순수한 함수다. 까닭은 api/story.ts 의 머리말을 본다.
 // chat 과 같은 거절(크레딧, 모델, 다른 답을 쓰는 중, 503)은 chat 의 것을 그대로 쓴다. story 에만 있는 것을 먼저 본다.
+// 행동을 할 수 없는 까닭(422)은 아무것도 저장하지 않았다. 상태가 화면과 어긋났을 수 있어(다른 가지, 다른 탭) 세션을 다시 읽는다.
 
 import { ApiError } from '../../api/errors';
 import { describeTurnProblem, type TurnProblem } from '../chat/conversation/turnProblem';
@@ -9,6 +10,13 @@ const STORY_REFUSALS: Record<string, string> = {
   session_ended: '끝난 이야기입니다. 엔딩을 봤고 이 세계관은 후일담이 없습니다.',
   message_not_found: '그 말을 찾지 못했습니다. 화면을 새로 읽습니다.',
   not_regenerable: '다시 쓸 수 없는 말입니다.',
+  cannot_move: '지금 있는 곳에서 바로 갈 수 없는 곳입니다.',
+  no_choice: '고를 선택지가 없습니다. 화면을 새로 읽습니다.',
+  over: '이야기가 끝나 더 할 수 없습니다.',
+  not_in_scene: '그 인물은 지금 장면에 없습니다.',
+  not_confessable: '그 인물에게는 고백할 수 없습니다.',
+  cooling_down: '아직 다시 고백할 수 없습니다. 며칠 지난 뒤에 해 보세요.',
+  not_held: '가지고 있지 않은 물건입니다.',
 };
 
 export function describeStoryTurnProblem(error: unknown): TurnProblem {
