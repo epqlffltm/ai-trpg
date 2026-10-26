@@ -1,7 +1,7 @@
 # trpg-server/app/rounds/recovery.py
 
 """
-서술을 맡은 작업이 사라진 라운드를 찾아 다시 맡긴다(#275). 서버의 시계가 몇 초마다 부른다(app/rounds/clock.py).
+서술을 맡은 작업이 사라진 라운드를 찾아 다시 맡긴다(#275, #809). 서버의 시계가 몇 초마다 부른다(app/rounds/clock.py).
 
 서술은 서버 프로세스 안의 작업이다(app/core/jobs.py). 서버가 서술 도중에 죽거나 꺼지면 작업이 사라지고,
 라운드는 실패도 적히지 않은 채 닫는 중에 남는다. 작업의 자리가 다 차서 맡지 않았을 때도 같다.
@@ -16,7 +16,11 @@
   - 다시 맡기는 것은 방장이 다시 맡길 때와 같다. 닫기 시작한 시각을 지금으로 고치고 서술을 맡긴다.
     이벤트를 다시 적지도, 주사위를 다시 굴리지도 않는다.
   - 스스로 다시 맡기는 것은 라운드마다 AUTO_RETRY_LIMIT 번까지다. 어떤 서술이 할 때마다 서버를 죽인다면
-    끝없이 같은 사고를 되풀이하게 된다. 넘으면 실패(stalled)로 적어 앉은 사람 모두에게 알리고 방장에게 넘긴다.
+    끝없이 같은 사고를 되풀이하게 된다. 넘으면 서술을 그만둔다(stalled, service.abandon_narration).
+    잡아 둔 서술 값은 돌려주고, 엔진이 정한 결과로 다음 라운드를 연다. 서술이 끝내 실패한 것과 같은 끝이다.
+  - 사라진 것은 서술의 실패로 세지 않는다(narration_failures).
+    서버가 죽은 일이 방장이 다시 맡길 수 있는 횟수를 쓰지 않게 한다.
+    방장에게 넘기지도 않는다. 같은 서술이 또 서버를 죽일 수 있고, 방장이 자리를 비웠으면 테이블이 거기서 멈춘다.
 
 찾을 때는 잠그지 않고, 하기 전에 테이블을 잠그고 다시 본다. 서버가 여럿이어도 한 서버만 다시 맡긴다.
 먼저 잠근 서버가 닫기 시작한 시각을 고치면, 뒤의 서버는 고친 시각을 보고 그냥 지나간다.
@@ -41,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 # 서버가 스스로 다시 맡기는 횟수의 상한. 라운드마다 센다. 방장이 다시 맡기면 다시 센다
 AUTO_RETRY_LIMIT = 2
-# 스스로 다시 맡기기를 그만둘 때 이벤트에 적는 이유
+# 스스로 다시 맡기기를 그만둘 때 이벤트(narration_abandoned)에 적는 이유
 STALLED = 'stalled'
 # 그만둔 줄의 오류 코드(docs/observability.md)
 STALLED_ERROR_CODE = 'round.stalled'
@@ -56,7 +60,7 @@ class Recovery(enum.StrEnum):
     NOTHING = 'nothing'
     # 서술을 다시 맡겼다
     RETRIED = 'retried'
-    # 다시 맡기기를 그만두고 실패로 적었다
+    # 다시 맡기기를 그만두고 서술을 그만뒀다. 엔진의 결과로 다음 라운드를 열었다
     GAVE_UP = 'gave_up'
 
 
@@ -121,15 +125,16 @@ async def retry(
 
 async def give_up(session: AsyncSession, table: GameTable, round_: Round, prices: PriceList = FREE_PRICES) -> None:
     """
-    다시 맡기기를 그만두고 실패(stalled)로 적는다. 앉은 사람 모두에게 알린다. 저장한다.
+    다시 맡기기를 그만두고 서술을 그만둔다(stalled). 앉은 사람 모두에게 알린다. 저장한다.
 
-    실패를 적으면 방장은 기다리지 않고 바로 다시 맡길 수 있다(service.force_close).
+    잠근 테이블의 라운드를 받는다(lock_vanished_round). 서술의 실패로 세지 않는다.
+    값을 받지 않고(홀드를 돌려줄 것으로 적는다), 엔진의 결과로 다음 라운드를 연다(service.abandon_narration).
     사람이 봐야 하는 일이라 warning 으로 남긴다. 같은 서술이 되풀이해 사라졌다.
     """
-    number, started, retries = round_.number, round_.closing_at, round_.auto_retries
-    await service.fail_closing(session, table.id, number, started, STALLED, prices=prices)
+    number, retries = round_.number, round_.auto_retries
+    await service.abandon_narration(session, table, round_, STALLED, prices)
     logger.warning(
-        '서술을 맡은 작업이 되풀이해 사라져 다시 맡기기를 그만뒀습니다',
+        '서술을 맡은 작업이 되풀이해 사라져 서술을 그만뒀습니다',
         extra={
             'operation': RECOVER_OPERATION,
             'table_id': str(table.id),

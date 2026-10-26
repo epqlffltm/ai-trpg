@@ -2408,8 +2408,11 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **실패를 적은 라운드는 다시 맡기지 않는다.** 크레딧이 모자랐거나 모델이 끝내 실패한 것이다. 그대로 다시 하면 같은 실패를 되풀이하며 값만 든다.
   방장과 크레딧 기다리기의 몫이다.
 - **스스로 다시 맡기는 것은 라운드마다 2번까지다**(`AUTO_RETRY_LIMIT`, 라운드의 `auto_retries`). 어떤 서술이 할 때마다 서버를 죽인다면 끝없이 같은 사고를 되풀이한다.
-  넘으면 실패(`stalled`)로 적어 앉은 사람 모두에게 알리고(`narration_failed`) 방장에게 넘긴다. 로그는 `warning`(`error_code: round.stalled`)이다.
-  방장이 다시 맡기면 횟수를 0 부터 다시 센다.
+  넘으면 **서술을 그만둔다**(`stalled`, `service.abandon_narration`). 잡아 둔 값은 돌려주고, 엔진이 정한 결과의 줄로 다음 라운드를 연다.
+  앉은 사람 모두에게 알린다(`narration_abandoned`, `reason: stalled`). 로그는 `warning`(`error_code: round.stalled`)이다.
+  방장에게 넘기지 않는다. 같은 서술이 또 서버를 죽일 수 있고, 방장이 자리를 비웠으면 테이블이 거기서 멈춘다.
+- **사라진 것은 서술의 실패로 세지 않는다**(`narration_failures`). 서버가 죽은 일이 방장이 다시 맡길 수 있는 횟수를 쓰지 않는다.
+  방장이 (모델의 실패 뒤에) 다시 맡기면 스스로 맡긴 횟수를 0 부터 다시 센다.
 - 서버가 여럿이어도 한 번만 다시 맡긴다. 찾을 때는 잠그지 않고, 하기 전에 테이블을 잠그고 다시 본다. 먼저 한 서버가 시각을 고치면 뒤의 서버는 지나간다.
 - 끝난 테이블의 `closing` 라운드는 고르지 않는다. 테이블이 끝나도 그 라운드는 남아 있어서, 고르면 바퀴마다 다시 고른다.
 - 따로 큐(Celery, Redis 의 목록)를 두지 않았다. 라운드가 DB 에 `closing` 으로 남아 있는 것이 사라지지 않는 대기 줄이다. 시계가 그 줄을 다시 읽는다.
@@ -2834,7 +2837,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `character_revived` | 고비를 넘기고 쓰러져 있던 캐릭터가 오래 쉬어 되살아나기를 굴렸다. 끝난 부상들 뒤, 닫힘 앞에 적힌다 | `round`, `user_id`, `character_name`, `roll`, `target`, `success`, `hp`(성공이면 1) |
 | `character_joined` | 캐릭터가 죽은 플레이어가 새 캐릭터를 들였다 | `round`, `user_id`, `character_name`, `replaces`: 죽은 캐릭터의 이름, `mode`, `pregen_index`, `number`: 그 사람의 몇 번째 캐릭터인지, `sheet`: 받은 시트, `place`: 들어온 장소(`entry_id`, `name`, 맵이 없으면 `null`) |
 | `round_closed` | 라운드가 닫기 시작했다. 선언을 마감했다 | `number`, `reason`(`all_declared`, `host`, `timeout`), `idle`: 선언을 내지 않은 사람. 쓰러진 사람과 그 라운드에 새 캐릭터를 들인 사람은 들어가지 않는다 |
-| `narration_abandoned` | GM 의 서술이 세 번 실패해 서술을 그만뒀다. 서술 값은 받지 않는다. 엔진이 정한 결과의 줄로 다음 라운드가 열린다 | `round`, `reason`: 마지막 실패의 이유, `failures`: 실패한 횟수 |
+| `narration_abandoned` | GM 의 서술이 세 번 실패했거나, 서술을 맡은 작업이 되풀이해 사라져(`reason: stalled`) 서술을 그만뒀다. 서술 값은 받지 않는다. 엔진이 정한 결과의 줄로 다음 라운드가 열린다 | `round`, `reason`: 마지막 실패의 이유(`stalled` 면 작업이 사라졌다), `failures`: 실패한 횟수(사라진 것은 세지 않는다) |
 | `narration_failed` | GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고 방장이 바로 다시 맡길 수 있다 | `round`, `reason`: 마지막 실패의 이유. 서술 값을 잡지 못했으면 `model_not_for_sale`, `gold_required`, `insufficient_credits`, `billing_unavailable` 중 하나([서술 값](#서술-값), [모델 고르기](#모델-고르기)). |
 | `narration_credits_short` | 이 라운드의 서술 값을 내는 사람 하나의 크레딧이 모자란다. 서버가 값을 걸어 보고 알았다. 한 라운드에 사람마다 한 번 | `round`, `user_id`: 모자란 사람, `reason`: 무엇이 모자란가(`insufficient` 크레딧, `gold_required` 프리미엄의 골드). 그 사람이 충전하지 않거나 방장이 내보내지 않으면 라운드를 닫을 때 서술이 실패한다(`insufficient_credits`, `gold_required`) |
 | `member_dropped` | 크레딧이 모자란 사람을 기다리는 시간이 지나 서버가 그 사람을 자리에서 뺐다. 나머지로 다시 서술한다. 방장이었으면 바로 뒤에 `host_changed` | `round`, `user_id`, `character_name` |
