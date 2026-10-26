@@ -397,7 +397,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `notification.rejected` | 알림 서버가 게임·결제·게시판 서버의 알림을 받지 않았다(409 같은 열쇠로 다른 알림, 413, 422 등). 다시 보내도 같다. 발송함에 `failed` 로 남는다. `reason` 에 답의 코드. 버그다. `error` |
 | `notification.kind_refused` | 알림 서버가 서명은 맞지만 알림의 종류 표(`notification-server/app/notifications/catalog.py`)에 맞지 않는 알림을 받지 않았다(422). `refusal` 에 까닭(`kind_unknown`, `kind_not_allowed`, `payload_missing_fields`), `missing_fields` 에 빠진 칸의 이름을 싣는다. 넣는 서버의 버그이거나 남의 알림을 넣으려 한 것이다. 넣는 서버 쪽에는 `notification.rejected` 가 남는다. `warning` |
 | `signals.bad_signature` | 게임 서버가 서명이 맞지 않는 실시간 신호(NOTIFY)를 받아 버렸다. 같은 DB 의 다른 계정이 꾸며 보냈거나, 게임 서버들의 `SIGNAL_SECRET` 이 서로 다르다. `sender_pid` 에 보낸 연결의 프로세스 번호를 싣는다(`pg_stat_activity` 에서 계정을 찾는다). 받은 글자는 싣지 않는다. `warning` |
-| `limits.unavailable` | 게임 서버가 시도 횟수를 세는 곳(Redis)에 닿지 못했다. `limit` 에 어느 제한인지, `blocked` 에 막았는지(로비의 비밀번호) 통과시켰는지(채팅) 싣는다. `warning` |
+| `limits.unavailable` | 게임 서버, chat 서버, story 서버가 시도 횟수를 세는 곳(Redis)에 닿지 못했다. `limit` 에 어느 제한인지, `blocked` 에 막았는지(게임의 로비 비밀번호) 통과시켰는지(게임의 채팅, chat 과 story 의 모든 제한) 싣는다. `warning` |
 | `server.start_failed` | 서버가 뜨지 못했다 |
 | `security.event` | 인증 서버가 보안 이벤트(시도 제한에 막히기 시작함, 계정 정지와 풀기, 버린 메일, 본인인증의 막힘)를 DB 에 적었다. 저장한 뒤에 한 줄. `security_event` 에 종류, `security_event_id` 에 그 줄의 번호, 계정이 있으면 `user_id`(공개 ID). IP 와 운영자의 사유는 싣지 않는다(DB 가 원본이다). `warning` |
 | `ledger.mismatch` | 결제 서버가 남긴다. 대사에서 지금의 값(지갑, 지급 묶음, 주문, 홀드)이 원장과 맞지 않는 줄을 찾았다. 줄마다 `error` 한 줄. `check` 에 검사의 이름, `record_id` 에 그 줄의 번호. 사람이 봐야 한다 |
