@@ -50,6 +50,8 @@ import {
   PersonaNewPage,
   PersonasPage,
   PastTablesPage,
+  PostEditPage,
+  PostNewPage,
   PostPage,
   ReportsPage,
   RulebookEditPage,
@@ -306,12 +308,28 @@ export function App() {
           <Route path="*" element={<PlaceholderPage service="chat" />} />
         </Route>
         <Route path="story/*" element={<PlaceholderPage service="story" />} />
-        {/* 공지·게시판(A11). 읽기는 로그인하지 않아도 열린다 */}
+        {/* 공지·게시판(A11). 읽기는 로그인하지 않아도 열린다. 쓰기와 고치기는 로그인해야 한다 */}
         <Route path="board">
           <Route index element={<BoardIndexPage />} />
           <Route path="search" element={<BoardSearchPage />} />
           <Route path="posts/:postId" element={<PostPage />} />
+          <Route
+            path="posts/:postId/edit"
+            element={
+              <RequireSession>
+                <PostEditPage />
+              </RequireSession>
+            }
+          />
           <Route path=":slug" element={<BoardListPage />} />
+          <Route
+            path=":slug/new"
+            element={
+              <RequireSession>
+                <PostNewPage />
+              </RequireSession>
+            }
+          />
         </Route>
         <Route path="*" element={<NotFoundPage />} />
       </Route>

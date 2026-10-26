@@ -1927,6 +1927,27 @@ a.ui-button {
   color: var(--ui-text-muted);
 }
 
+/* 게시판 쓰기(A11). 글과 댓글 아래의 단추 줄 */
+.post-actions,
+.comment__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.post-actions {
+  margin: var(--ui-gap) 0;
+}
+
+.comment__actions {
+  font-size: 0.9em;
+}
+
+.comment-form {
+  margin: 8px 0;
+}
+
 /* 떠난 테이블(B10). 선언 한 줄 */
 .past-action {
   margin: 4px 0 4px 12px;
