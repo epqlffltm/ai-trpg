@@ -4,10 +4,11 @@
 규칙은 [story 서버 설계](../docs/architecture/story.md)에 있다. 캐릭터 하나와의 1:1 대화는 chat 서버가 맡는다.
 둘이 함께 쓰는 것과 나눈 선은 [chat 서버 설계의 story-server 와 나눈 선](../docs/architecture/chat-server.md#story-server-와-나눈-선)에 있다.
 
-**지금은 세션, 말 보내기, 행동, 다시 생성과 멈추기까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
+**지금은 세션, 말 보내기, 행동, 다시 생성과 멈추기, 가지 고르기, 계정의 기록까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
 asset 서버에서 세계관의 판을 가져와 [세션](#세션)을 만들고 목록으로 보인다. 말을 보내면 장면의 인물들과 서술의 답을 [말 조각](#말-보내기)으로 흘려보낸다.
-[행동](#행동)(이동, 시간, 선택지, 고백)은 엔진이 판정하고 이벤트와 엔딩이 열린다. 답은 [다시 쓰고 멈출 수 있다](#다시-생성과-멈추기).
-대안의 가지를 고르는 것과 고치기가 다음이다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
+[행동](#행동)(이동, 시간, 선택지, 고백, 건네기)은 엔진이 판정하고 이벤트와 엔딩이 열린다. 답은 [다시 쓰고 멈출 수 있고](#다시-생성과-멈추기),
+[대안의 가지를 고를 수 있다](#가지-고르기). 본 엔딩과 연 일러스트는 [계정의 기록](#계정의-기록)에 남는다.
+답 고치기가 다음이다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
 
 정해 둔 값: 포트 `8007`, 토큰의 대상 `ai-trpg-story`, DB 계정과 스키마 `story`(테스트는 `story_test`), 주소 `/api/v1/story/`.
 
@@ -107,12 +108,14 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | PUT | `/api/v1/story/conversations/{id}/model` | 세션의 모델 바꾸기(`{"model"}`). 고를 수 없으면 422 `model_unavailable`, 가격 목록을 받지 못했으면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id"}`). 세계관의 마지막 판을 가져와 고정한다. 201 | access 토큰 |
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}` | access 토큰 |
-| GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서, 지금 가지의 말, 그 끝의 상태 `state`). 남의 것은 404 | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서, 지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`). 남의 것은 404 | access 토큰 |
+| PUT | `/api/v1/story/conversations/{id}/branch` | [가지 고르기](#가지-고르기)(`{"message_id"}`). 바뀐 세션을 돌려준다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content"}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/actions` | [행동](#행동)(`{"kind", …}`). 엔진이 판정하고 바로 SSE 로 반응을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/messages/{id}/regenerate` | [다시 생성](#다시-생성과-멈추기). 그 말에 다시 답한다. 바로 SSE 로 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/generations/{id}/stop` | [멈추기](#다시-생성과-멈추기). 도는 답을 멈추고 받은 만큼 저장한다. 204, 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
-| GET | `/api/v1/story/endings` | 그 세계관에서 내가 본 엔딩들(`?world_id=`, 처음 본 차례). [본 엔딩의 기록](#행동) | access 토큰 |
+| GET | `/api/v1/story/endings` | 그 세계관에서 내가 본 엔딩들(`?world_id=`, 처음 본 차례). [계정의 기록](#계정의-기록) | access 토큰 |
+| GET | `/api/v1/story/gallery` | 그 세계관에서 내가 연 일러스트들(`?world_id=`, 처음 연 차례). [계정의 기록](#계정의-기록) | access 토큰 |
 
 ### 세션
 
@@ -187,8 +190,8 @@ event: failed   data: {"code": "timeout"}                                    답
 - **답의 장면.** 엔딩을 봤으면 그 엔딩의 장면, 이벤트가 열렸으면 그 이벤트의 장면 지시를 카드에 넣고 그 장면이 부른 인물이 들어온다(`app/turns/scenes.py`).
 - **저장.** 행동 말에 그 뒤의 상태와, 열린 이벤트(`event_id`)와 본 엔딩(`ending_id`)을 적는다. turn 메시지의 `state` 가 그 뒤의 상태다.
   행동에도 모델이 답하므로 한 번 청구한다.
-- **본 엔딩의 기록.** 엔딩을 봤고 그 엔딩이 기록에 남는 것이면(`unlock`) `ending_records` 에 적는다. 사람마다, 세계관마다, 엔딩마다 처음 본 것 하나다.
-  세션을 지우거나 가지를 바꿔도 남는다. 끝을 고른 세계관이면 그 뒤로 말과 행동을 받지 않는다(409 `session_ended`). 후일담이면 받는다.
+- **계정의 기록.** 엔딩을 보거나 해금 대상인 장면이 열리면 [계정의 기록](#계정의-기록)에 적는다.
+  끝을 고른 세계관이면 엔딩 뒤로 말과 행동을 받지 않는다(409 `session_ended`). 후일담이면 받는다.
 - **거절.** 할 수 없는 행동이면 422 이고 아무것도 저장하지 않는다. `code` 는 `cannot_move`(이어지지 않은 장소, 지금 장소),
   `no_choice`(기다리는 선택지가 없다, 그런 선택지가 없다), `over`, `not_in_scene`, `not_confessable`, `cooling_down`(고백을 받지 않는다),
   `not_held`(건넬 물건이 없다)다. 장면에 없는 인물에게 건네면 `not_in_scene` 이다.
@@ -196,7 +199,6 @@ event: failed   data: {"code": "timeout"}                                    답
   그 인물의 선물 규칙(판의 `affection.gifts`) 가운데 그 물건의 것들을 판의 차례대로 더한다. 더할 때마다 0~100 으로 자른다(chat 과 같다).
   `once` 인 규칙은 그 인물에게 그 물건을 처음 건넬 때만 든다. 맞는 규칙이 없으면 물건만 건네진다.
   행동 말에는 호감도가 오르면 "반가워했다", 내리면 "달가워하지 않았다"가 적힌다(얼마나는 적지 않는다). 시각은 흐르지 않고, 후일담에도 된다.
-- 연 일러스트의 기록은 그것을 잇는 조각에서 더한다.
 
 ### 다시 생성과 멈추기
 
@@ -215,7 +217,32 @@ chat 의 것과 같은 모양이다(`app/turns/service.py` 의 `begin_regenerate
 - **멈추기.** `POST /api/v1/story/generations/{id}/stop`. `id` 는 SSE 의 turn 의 `generation_id` 다. 모델을 부르는 일만 끊는다.
   받은 조각이 있으면 partial 로 저장하고 확정한다(`error_code` `stopped`). 없으면 반환하고 SSE 는 `failed`(`stopped`)로 끝난다.
   스위치는 그 생성을 돌리는 서버의 메모리에 있다(`app.state.stops`). 끝난 것, 남의 것, 다른 서버에서 도는 것은 404 `generation_not_running` 이다.
-- 대안을 고르는 것(`alternatives`, 가지 고르기)과 고치기는 다음 조각이다. 그전까지 앞의 답은 DB 에 남지만 읽기에는 지금 가지만 보인다.
+- 답 고치기는 다음 조각이다. 말하는 사람과 조각 수는 그대로 두고 조각마다 글만 고친다(2026-10-26).
+
+### 가지 고르기
+
+chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternatives`, `choose_branch`).
+
+- **대안.** 세션 읽기의 말마다 `alternatives` 가 실린다. 같은 부모 아래의 말들의 id 이고, 먼저 생긴 것부터이며 그 말도 든다.
+  대안이 없는 말은 그 말 하나다. 화면이 "< 2/3 >" 를 그린다.
+- **고르기.** `PUT /api/v1/story/conversations/{id}/branch` 에 대안 하나의 `message_id` 를 보낸다.
+  그 말 아래에서 가장 나중에 생긴 말이 가지의 끝이 되고, 바뀐 세션을 돌려준다.
+  상태는 말에 붙어 있으므로 그 가지의 상태(시각, 호감도, 본 엔딩)가 된다. 계정의 기록은 그대로다.
+- 보는 곳만 바꾸므로 세션의 수정 시각(목록의 차례)은 그대로다.
+- **거절.** 그 세션의 말이 아니거나 없는 말이면 404 `message_not_found`, 답을 쓰는 중이면 409 `generation_in_progress`, 남의 세션이면 404 다.
+
+### 계정의 기록
+
+세션을 지우거나 가지를 바꿔도 남는다(`app/records/`). 처음 본 세션(`conversation_id`)은 그 세션이 지워지면 비운다.
+
+- **본 엔딩**(`ending_records`). 행동으로 엔딩을 봤고 그 엔딩이 기록에 남는 것이면(`unlock`) 적는다.
+  사람마다, 세계관마다, 엔딩마다 처음 본 것 하나다. 엔딩 목록 화면(D6)이 `GET /endings` 로 읽는다.
+- **연 일러스트**(`illustration_unlocks`). 행동 뒤에 열린 이벤트와 본 엔딩의 장면 가운데, 해금 대상(`collectible`)이고 그림(`image_id`)이 있는 것을 적는다
+  (`app/records/illustrations.py`). 후일담에서 열린 장면도 적는다. 다시 생성은 장면을 다시 열지 않으므로 적지 않는다.
+  사람마다, 세계관마다, 장면(`kind` 는 `event` 나 `ending`, `scene_id`)마다 처음 연 것 하나다. 연 때의 그림과 그 장면이 부르는 인물들(`cast`)을 함께 적는다.
+  갤러리의 story 탭(C7)이 `GET /gallery` 로 읽어 인물마다 묶고, 인물이 없는 장면은 세계관 칸에 둔다.
+- **키를 장면으로 둔 까닭**(2026-10-26). 일러스트는 인물이 아니라 이벤트와 엔딩의 장면에 붙어 있다. 한 장면에 인물이 0~4 명이라 인물 하나로 가리킬 수 없다.
+  연 때의 그림을 적는 것은 제작자가 새 판에서 그림을 바꿔도 연 그림을 보이기 위해서다.
 
 ### 토큰 검증
 
@@ -343,6 +370,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `message_states` | 말에 붙은 엔진의 상태(JSONB). 상태가 바뀐 말에만 있다. 가지의 끝의 상태는 끝에서 가장 가까운 것이고, 없으면 처음의 상태다 |
 | `generations` | 모델을 한 번 부른 것과 그 청구(chat 서버의 표와 같은 모양). 버린 줄의 수(`dropped_segments`)를 더했다 |
 | `ending_records` | 계정의 본 엔딩. (`owner_id`, `world_source`, `ending_id`)마다 처음 본 시각과 세션. 세션이 지워지면 세션만 비운다 |
+| `illustration_unlocks` | 계정의 연 일러스트. (`owner_id`, `world_source`, `scene_kind`, `scene_id`)마다 연 때의 그림(`image_id`), 장면의 인물(`cast`), 처음 연 시각과 세션 |
 
 모델의 모듈을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 

@@ -9,6 +9,7 @@ asset 서버, 결제 서버, 모델은 가짜다(tests/assets.py, tests/billing.
   - 이벤트가 열리면 행동 말에 그 id 가 남고, 답은 그 장면 지시를 쓰고 그 장면이 부른 인물이 든다
   - 선택지를 고르면 그 효과가 상태에 든다
   - 건네면 물건이 줄고 호감도가 바뀐다. 행동 말에 엔진이 정한 반응(반가워했다)이 적힌다
+  - 해금 대상인 장면(이벤트, 엔딩)이 열리면 갤러리에 그림과 장면의 인물이 남는다. 다시 열어도 하나다
   - 고백이 엔딩을 보면 행동 말에 엔딩이 남고 계정의 기록에 적힌다. 끝을 고른 세계관이면 그 뒤로 말과 행동을 받지 않는다.
     기록에 남지 않는 엔딩(unlock 이 거짓)은 적지 않는다
   - 할 수 없는 행동은 422 code 이고 아무것도 저장하지 않으며 차례를 놓는다. 모양이 틀린 행동은 입력 오류다
@@ -36,6 +37,8 @@ from tests.turns import CONVERSATIONS_URL, ME, PRICE_CODE, bearer, parse_sse, st
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
 ENDINGS_URL = CONVERSATIONS_URL.replace('/conversations', '/endings')
+GALLERY_URL = CONVERSATIONS_URL.replace('/conversations', '/gallery')
+PICTURE = uuid.UUID('aaaaaaaa-1111-4222-8333-444444444444')
 PATHS = [{'a': 'home', 'b': 'beach', 'minutes': 30}]
 # 해변에 가면 열리는 이벤트. 집에 사는 미나를 부르고 선택지 둘을 기다린다
 SHELL = event(
@@ -197,6 +200,35 @@ async def test_a_gift_hands_over_the_item_and_moves_affection(
     assert router.provider.calls[0][0][-1].content == '[행동] 미나에게 꽃을(를) 건넸다. 미나은(는) 반가워했다.'
     # 반응을 받으니 한 번 청구했다
     assert billing.balance(ME) == 70
+
+
+async def test_a_collectible_scene_that_opens_is_kept_in_the_gallery(
+    client: AsyncClient,
+    app: FastAPI,
+    model_on: None,
+    asset: FakeAsset,
+    router: FakeRouter,
+    mine: dict,
+):
+    sunset = event('sunset', condition('reach_place', 'beach'), cast=['mina'], repeat=True)
+    sunset['scene'] |= {'image_id': str(PICTURE), 'collectible': True}
+    # 지나가는 길의 이벤트는 그림이 있어도 해금 대상이 아니다
+    plain = event('plain', condition('reach_place', 'home'), repeat=True)
+    plain['scene'] |= {'image_id': str(uuid.uuid4())}
+    conversation = await start(client, asset, mine, events=[sunset, plain])
+
+    await acted(app, client, mine, conversation, {'kind': 'move', 'place': 'beach'})
+    await acted(app, client, mine, conversation, {'kind': 'move', 'place': 'home'})
+    # 다시 열려도 기록은 하나다
+    again = await acted(app, client, mine, conversation, {'kind': 'move', 'place': 'beach'})
+    assert again[0][1]['user_message']['event_id'] == 'sunset'
+
+    world_id = (await detail(client, mine, conversation))['world']['id']
+    items = (await client.get(GALLERY_URL, params={'world_id': world_id}, headers=mine)).json()['items']
+    assert [(item['kind'], item['scene_id'], item['image_id'], item['cast']) for item in items] == [
+        ('event', 'sunset', str(PICTURE), ['mina'])
+    ]
+    assert items[0]['conversation_id'] == conversation['id']
 
 
 async def test_a_confession_that_ends_is_recorded_and_ends_the_session(
