@@ -30,7 +30,7 @@ describe('다시 동의', () => {
       'GET /api/v1/auth/me/consents': () => json(200, { items: [termsState()] }),
       'PUT /api/v1/auth/me/consents/terms': () => json(200, { items: [termsState({ pending: false, agreed_version: 1 })] }),
     });
-    renderApp('/story');
+    renderApp('/chat/later');
 
     expect(await screen.findByRole('heading', { name: '바뀐 약관에 동의해 주세요' })).toBeInTheDocument();
     const submit = await screen.findByRole('button', { name: '동의하고 계속하기' });
@@ -39,7 +39,7 @@ describe('다시 동의', () => {
     await userEvent.click(await screen.findByLabelText('[필수] 이용약관'));
     await userEvent.click(submit);
 
-    expect(await screen.findByRole('heading', { name: 'story' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'chat' })).toBeInTheDocument();
     expect(getSession()?.accessToken).toBe('full');
     expect(seen.find((request) => request.method === 'PUT')?.body).toEqual({ version: 1 });
     expect(seen.some((request) => request.url.startsWith('/api/v1/game/'))).toBe(false);
@@ -97,14 +97,14 @@ describe('탈퇴 유예', () => {
       'GET /api/v1/auth/me': () => json(200, { nickname: '모험가' }),
       'DELETE /api/v1/auth/me/withdrawal': () => json(200, { withdrawal_scheduled_at: null }),
     });
-    renderApp('/story');
+    renderApp('/chat/later');
 
     expect(await screen.findByRole('heading', { name: '탈퇴를 기다리는 중입니다' })).toBeInTheDocument();
     expect(screen.getByText(/2026년 10월/)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '탈퇴 취소하기' }));
 
-    expect(await screen.findByRole('heading', { name: 'story' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'chat' })).toBeInTheDocument();
     expect(getSession()?.accessToken).toBe('full');
     expect(seen.filter((request) => request.url === REFRESH_PATH)).toHaveLength(2);
   });
