@@ -84,9 +84,15 @@ describe('CharacterPanel', () => {
   });
 
   it('주사위를 굴리고, 굴린 점수를 하나씩 놓는다. 다시 굴리려면 방장의 허락이 필요하다', async () => {
+    // 서버처럼 굴린 뒤의 읽기도 굴린 테이블을 준다. 스트림이 붙으며 다시 읽는 때가 굴린 뒤로 밀려도 굴린 점수가 사라지지 않는다
     const rolled = withMe({ roll: roll([15, 12, 9]) });
+    let current = tableDetail(TABLE_ID);
     const { seen } = open({
-      [`POST ${BASE}/character/roll`]: () => json(200, rolled),
+      [`GET ${BASE}`]: () => json(200, current),
+      [`POST ${BASE}/character/roll`]: () => {
+        current = rolled;
+        return json(200, rolled);
+      },
       [`PUT ${BASE}/character`]: () => json(200, withMe({ character: { name: '렌', description: '' }, character_mode: 'rolled' })),
     });
     renderApp(`/trpg/tables/${TABLE_ID}`);
