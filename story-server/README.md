@@ -111,7 +111,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서, 지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`). 남의 것은 404 | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/branch` | [가지 고르기](#가지-고르기)(`{"message_id"}`). 바뀐 세션을 돌려준다 | access 토큰 |
 | PATCH | `/api/v1/story/messages/{id}` | [답 고치기](#답-고치기)(`{"segments": ["…"]}`). 고친 말을 돌려준다 | access 토큰 |
-| POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content"}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
+| POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content", "edit_of"?}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/actions` | [행동](#행동)(`{"kind", …}`). 엔진이 판정하고 바로 SSE 로 반응을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/messages/{id}/regenerate` | [다시 생성](#다시-생성과-멈추기). 그 말에 다시 답한다. 바로 SSE 로 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/generations/{id}/stop` | [멈추기](#다시-생성과-멈추기). 도는 답을 멈추고 받은 만큼 저장한다. 204, 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
@@ -166,6 +166,9 @@ event: failed   data: {"code": "timeout"}                                    답
 - **저장.** 답의 `segments` 가 기준이고, `content` 는 그 조각을 표식이 붙은 줄로 쓴 것이다(다음 호출의 프롬프트에 그대로 간다).
   답에는 그때의 장면의 인물(`cast`)을 함께 적는다. 상태는 행동 말(과 선택지를 지운 말)에 붙는다(`message_states`).
 - **끝난 세션.** 엔딩을 봤고 세계관이 끝(읽기만)을 골랐으면 409 `session_ended` 다. 후일담이면 말을 받는다.
+- **내 말 고치기.** `edit_of` 에 고칠 사람의 말의 id 를 실으면 새 말이 그 말의 대안(같은 부모 아래, 새 가지)이 되고 원본은 남는다(chat 과 같다).
+  상태, 끝난 세션인지, 모델에 보낼 말들은 그 말의 앞까지의 가지의 것이다. 그래서 끝난 세션이어도 엔딩 앞의 말은 고칠 수 있다.
+  답과 행동 말은 422 `not_editable`(답은 [답 고치기](#답-고치기)로, 행동은 엔진의 결과라 고치지 않는다), 그 세션의 말이 아니면 404 `message_not_found` 다.
 - **거절.** 모델이 없으면 409 `model_required`, 쓸 수 없으면 422 `model_unavailable`, 답을 쓰는 중이면 409 `generation_in_progress`.
   크레딧이 모자라면 402 `credit_short`, 결제 서버나 공급자가 죽었으면 503 이다. 이때 사람의 말은 저장되고 `message_id` 로 알린다.
 - **청구.** 결제 서버의 가격표 `story.<이름표>.i0.o0` 로 홀드를 건다(`story:gen:<기록의 id>`). 답이 있으면 확정, 없으면 반환이다.
@@ -240,7 +243,7 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
   말하는 사람과 조각의 수는 저장된 그대로라서 장면 밖의 인물이 끼어들 길이 없다. 표식을 다시 읽지 않는다.
 - 조각의 글은 한 줄이다(조각은 줄 하나다). 줄바꿈이나 빈 글은 입력 오류다. 앞뒤 빈칸은 걷는다.
 - 본문(`content`)은 고친 조각으로 서버가 다시 쓴다. 다음 호출부터 고친 글이 모델에 간다. 고친 말에는 `edited` 가 붙는다.
-- 상태와 세션의 수정 시각(목록의 차례)은 그대로다. 사람의 말과 행동 말은 고치지 않는다(행동은 엔진의 결과다).
+- 상태와 세션의 수정 시각(목록의 차례)은 그대로다. 사람의 말은 말 보내기의 `edit_of` 로 새 가지를 만들어 고치고, 행동 말은 고치지 않는다(엔진의 결과다).
 - **거절.** 답이 아니면 422 `not_editable`, 조각의 수가 다르면 422 `segments_mismatch`, 없거나 남의 말이면 404 `message_not_found`,
   답을 쓰는 중이면 409 `generation_in_progress` 다.
 

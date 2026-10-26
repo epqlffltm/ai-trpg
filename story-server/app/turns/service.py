@@ -52,9 +52,11 @@ from app.conversations import repository as conversations
 from app.conversations.models import Conversation, ImportedWorld, Message, MessageStatus, Role
 from app.conversations.service import (
     GENERATION_STALE,
+    NOT_EDITABLE,
     ConversationBusyError,
     MessageNotFoundError,
     ModelUnavailableError,
+    NotEditableError,
     get_conversation,
 )
 from app.core.dependencies import Viewer
@@ -382,14 +384,17 @@ async def begin_turn(
     content: str,
     options: PromptOptions,
     now: datetime,
+    edit_of: uuid.UUID | None = None,
 ) -> TurnStart:
     """
     차례를 잡고 사람의 말과 기록(pending)을 저장한다. 장면의 인물을 정하고 모델에 보낼 메시지를 함께 만든다.
-    새 말은 지금 가지의 끝에 붙는다. 가지의 끝은 차례를 잡은 뒤에 다시 읽는다. 실패는 begin 과 같다.
+    새 말은 지금 가지의 끝에 붙는다. edit_of(고칠 사람의 말)가 있으면 그 말의 부모 아래에 붙는다(새 가지).
+    가지의 끝은 차례를 잡은 뒤에 다시 읽는다. 고칠 말이 틀리면 MessageNotFoundError, NotEditableError.
+    나머지 실패는 begin 과 같다.
     """
 
     async def record(session: AsyncSession, conversation: Conversation, imported: ImportedWorld, slug: str):
-        return await record_turn(session, viewer, conversation, imported, slug, content, options, now)
+        return await record_turn(session, viewer, conversation, imported, slug, content, options, now, edit_of)
 
     return await begin(session_factory, viewer, conversation_id, now, record)
 
@@ -507,6 +512,20 @@ def turn_start(
     )
 
 
+async def edited_parent(session: AsyncSession, conversation: Conversation, edit_of: uuid.UUID) -> uuid.UUID | None:
+    """
+    고친 말(내 말 고치기)이 붙을 자리. 고칠 사람의 말의 부모다(첫 말이면 None). 새 말은 그 말의 대안(새 가지)이 되고
+    원본은 남는다. 그 세션의 말이 아니면 MessageNotFoundError, 사람의 말이 아니면 NotEditableError(not_editable).
+    행동 말은 엔진이 판정한 결과라 고치지 않는다(다른 행동은 그 앞의 가지에서 새로 한다).
+    """
+    original = await session.get(Message, edit_of)
+    if original is None or original.conversation_id != conversation.id:
+        raise MessageNotFoundError
+    if original.role != Role.USER:
+        raise NotEditableError(NOT_EDITABLE)
+    return original.parent_id
+
+
 async def record_turn(
     session: AsyncSession,
     viewer: Viewer,
@@ -516,16 +535,21 @@ async def record_turn(
     content: str,
     options: PromptOptions,
     now: datetime,
+    edit_of: uuid.UUID | None = None,
 ) -> TurnStart:
     """
     차례를 쥔 채로 사람의 말과 기록을 세션에 올린다(커밋하지 않는다). 끝난 세션이면 SessionEndedError.
     기다리던 선택지가 있으면 사라진다(그 상태를 사람의 말에 붙인다). 그 장소의 인물들이 답한다.
+    edit_of 가 있으면 고칠 말의 부모에서 끝나는 가지에 붙는다. 상태, 끝난 세션인지, 모델에 보낼 말들도 그 가지의 것이다.
     """
-    branch = await branch_of(session, conversation, imported)
+    parent_id = conversation.active_leaf_id
+    if edit_of is not None:
+        parent_id = await edited_parent(session, conversation, edit_of)
+    branch = await branch_at(session, imported, parent_id)
     require_open(branch.world, branch.state)
     changed = talked_state(branch.state)
     state = changed or branch.state
-    message = user_message(conversation, conversation.active_leaf_id, content, now)
+    message = user_message(conversation, parent_id, content, now)
     await attach(session, conversation, message, changed)
     generation = add_generation(session, conversation, viewer.claims.user_id, message, slug)
     return turn_start(viewer.claims.user_id, generation, message, branch, state, staging(branch.world, state), options)
