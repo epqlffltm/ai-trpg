@@ -1852,6 +1852,52 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/story/messages/{message_id}/continue": {
+      "post": {
+        "description": "끊긴 답(partial)에 이어 쓴다. 지금 가지의 끝인 답만 된다. 엔진은 다시 판정하지 않는다.\n\n새 호출이라 새로 청구한다. SSE 의 turn 에 continues(그 답의 id)가 실린다.\n첫 segment 앞의 delta 는 그 답의 마지막 조각에 붙는 글이고, segment 가 오면 새 조각이다.\ndone 의 말은 이어 붙인 그 답 전체다. 다 쓰면 complete, 또 끊기면 partial 이라 다시 이어 쓸 수 있다.",
+        "operationId": "continue_message_api_v1_story_messages__message_id__continue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "SSE. app/turns/schemas.py 의 메시지들"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Continue Message",
+        "tags": [
+          "messages"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/story/messages/{message_id}/regenerate": {
       "post": {
         "description": "그 말에 다시 답한다. 답이면 같은 말(사람의 말이나 행동 말)에 새 대안을, 사람의 말이나 행동 말이면(답을 못 받았다)\n그 말에 답을 쓴다. 엔진은 다시 판정하지 않는다. 그 말의 상태와, 그 말에 적힌 이벤트와 엔딩의 장면으로 쓴다.\n\n새 호출이라 새로 청구한다. 앞의 답은 남고, 세션의 가지는 새 답으로 옮겨 간다. SSE 의 모양은 말 보내기와 같다.",

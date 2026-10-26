@@ -267,8 +267,8 @@ location ~ ^/api/v1/story/conversations/[^/]+/(messages|actions)$ {
     proxy_pass http://$story_server;
 }
 
-# 다시 생성. 말 보내기처럼 POST 가 바로 SSE 로 답한다
-location ~ ^/api/v1/story/messages/[^/]+/regenerate$ {
+# 다시 생성과 이어서 출력. 말 보내기처럼 POST 가 바로 SSE 로 답한다
+location ~ ^/api/v1/story/messages/[^/]+/(regenerate|continue)$ {
     set $proxy_upstream story;
     set $story_server story-server:8007;
     limit_req zone=api burst=40 nodelay;

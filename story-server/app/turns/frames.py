@@ -20,12 +20,13 @@ def message_out(message: SavedMessage) -> MessageOut:
 
 
 def turn_frame(start: TurnStart) -> Frame:
-    """맨 처음. 답할 말(행동 말), 기록의 id, 장면의 인물, 그 뒤의 상태."""
+    """맨 처음. 답할 말(행동 말), 기록의 id, 장면의 인물, 그 뒤의 상태. 이어서 출력이면 이어 쓰는 답의 id."""
     body = TurnEvent(
         generation_id=start.generation_id,
         user_message=message_out(start.user_message),
         cast=list(start.cast),
         state=start.state,
+        continues=start.continued.id if start.continued is not None else None,
     )
     return Frame(event='turn', data=body.model_dump_json())
 

@@ -8,6 +8,8 @@
   - 장면에 없는 인물의 줄은 버리고 센다. 표식을 어긴 줄은 서술이다. 빈 줄은 버린다
   - 흘러오는 대로 자른다: 머리를 다 받기 전에는 내보내지 않고, 정해지면 받는 대로 내보낸다. 어디서 잘려 와도 같다
   - 끝나면 남은 줄을 마저 자른다. 표식을 붙인 줄로 다시 쓰면 같은 조각이 된다
+  - 이어서 출력: 첫 줄에 표식이 없으면 끊긴 마지막 조각을 앞의 빈칸째 이어 쓰고 새 조각을 알리지 않는다.
+    첫 줄이 표식이면 새 조각이다. 줄을 바꾼 뒤의 표식 없는 줄은 서술이다. 이어 쓴 것이 없으면 조각이 없다
 """
 
 import pytest
@@ -17,6 +19,7 @@ from app.turns.segments import (
     SegmentStart,
     SegmentText,
     SpeakerSplitter,
+    continuing_splitter,
     merge_events,
     render_segments,
     segment_dicts,
@@ -139,3 +142,50 @@ def test_rendering_round_trips():
     assert rendered == '@narration: 해가 진다.\n@mina: 늦었네.'
     assert split_segments(rendered, LABELS) == (segments, 0)
     assert segment_dicts(segments) == [{'speaker': None, 'text': '해가 진다.'}, {'speaker': 'mina', 'text': '늦었네.'}]
+
+
+# --- 이어서 출력 ---
+
+CUT = (Segment(None, '바람이 분다.'), Segment('mina', '늦었'))
+
+
+def continued(pieces: list[str]) -> tuple[list, tuple[Segment, ...]]:
+    splitter = continuing_splitter(LABELS, CUT)
+    events = []
+    for piece in pieces:
+        events.extend(splitter.feed(piece))
+    events.extend(splitter.finish())
+    return merge_events(events), splitter.segments()
+
+
+def test_an_unmarked_first_line_carries_on_the_cut_segment():
+    events, segments = continued(['네. 기다', '렸어.\n@jun: 나도.'])
+
+    # 첫 줄은 새 조각을 알리지 않고 미나의 조각에 붙는다
+    assert events[0] == SegmentText('네. 기다렸어.')
+    assert segments == (Segment(None, '바람이 분다.'), Segment('mina', '늦었네. 기다렸어.'), Segment('jun', '나도.'))
+
+
+def test_the_space_at_the_cut_is_kept():
+    _, segments = continued([' 정말로.'])
+
+    assert segments[-1] == Segment('mina', '늦었 정말로.')
+
+
+def test_a_marked_first_line_is_a_new_segment():
+    events, segments = continued(['@jun: 왔어?'])
+
+    assert events[0] == SegmentStart('jun')
+    assert segments[-2:] == (Segment('mina', '늦었'), Segment('jun', '왔어?'))
+
+
+def test_after_a_new_line_an_unmarked_line_is_narration():
+    _, segments = continued(['\n해가 졌다.'])
+
+    assert segments[-1] == Segment(None, '해가 졌다.')
+
+
+def test_nothing_carried_on_is_no_segments():
+    assert continued(['\n   \n'])[1] == ()
+    # 장면에 없는 인물의 줄뿐이어도 이어 쓴 것이 없다
+    assert continued(['@nobody: 안녕'])[1] == ()

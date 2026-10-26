@@ -101,6 +101,8 @@ class TurnEvent(BaseModel):
     user_message: MessageOut
     cast: list[str]
     state: StateOut
+    # 이어서 출력이면 이어 쓰는 끊긴 답의 id. 첫 segment 앞의 delta 는 그 답의 마지막 조각에 붙는다. 아니면 null
+    continues: uuid.UUID | None = None
 
 
 class SegmentEvent(BaseModel):

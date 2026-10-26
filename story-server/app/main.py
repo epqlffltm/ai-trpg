@@ -60,6 +60,7 @@ from app.turns.providers import build_router
 from app.turns.service import (
     MessageNotFoundError,
     ModelRequiredError,
+    NotContinuableError,
     NotRegenerableError,
     SessionEndedError,
     TurnDeclinedError,
@@ -72,7 +73,7 @@ API_PREFIX = '/api/v1/story'
 # 프록시도 이 주소에서 버퍼링을 끈다(docker/nginx/templates/api.inc.template)
 STREAMS = StreamRoutes.of(
     r'/api/v1/story/conversations/[^/]+/(messages|actions)',
-    r'/api/v1/story/messages/[^/]+/regenerate',
+    r'/api/v1/story/messages/[^/]+/(regenerate|continue)',
 )
 
 
@@ -219,6 +220,7 @@ def create_app(
     app.add_exception_handler(ActionRefusedError, messages.handle_action_refused)
     app.add_exception_handler(MessageNotFoundError, messages.handle_message_not_found)
     app.add_exception_handler(NotRegenerableError, messages.handle_not_regenerable)
+    app.add_exception_handler(NotContinuableError, messages.handle_not_continuable)
     app.add_exception_handler(TurnDeclinedError, messages.handle_turn_declined)
 
     # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)

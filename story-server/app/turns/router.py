@@ -7,6 +7,7 @@
     POST /api/v1/story/conversations/{id}/actions     {kind, …}   행동한다(이동, 시간, 하루 마치기, 선택지, 고백,
                                                                   건네기). 엔진이 판정하고 이어서 모델이 반응을 쓴다
     POST /api/v1/story/messages/{id}/regenerate                   그 말에 다시 답한다. 새 답은 같은 부모 아래의 대안이다
+    POST /api/v1/story/messages/{id}/continue                     끊긴 답에 이어 쓴다. 새로 청구한다
     POST /api/v1/story/generations/{id}/stop                      모델을 부르는 것을 멈춘다. 받은 만큼 저장한다. 204
 
 응답을 시작하기 전에 거절하는 것은 보통의 오류다(아래 handle_*). 시작한 뒤의 실패는 SSE 의 failed 메시지다.
@@ -15,6 +16,7 @@
   - 404 message_not_found, 422 not_editable: 고칠 말(edit_of)이 그 세션에 없다, 사람의 말이 아니다
   - 409 model_required: 세션에 모델이 없다. 먼저 고른다(PUT /conversations/{id}/model)
   - 409 session_ended: 엔딩을 본 세션이다(세계관이 끝을 골랐다). 읽기만 된다
+  - 422 not_continuable: 이어 쓸 수 없는 말이다(끊긴 답이 아니다, 지금 가지의 끝이 아니다)
   - 422 cannot_move, no_choice, over, not_in_scene, not_confessable, cooling_down, not_held: 그렇게 할 수 없다
     (app/turns/actions.py). 아무것도 저장하지 않는다
   - 422 model_unavailable: 모델을 쓸 수 없다(꺼졌다, 은퇴했다, 팔지 않는다). 사람의 말은 저장했을 수 있다
@@ -53,6 +55,7 @@ from app.turns.schemas import ActionCreate, MessageCreate
 from app.turns.service import (
     MessageNotFoundError,
     ModelRequiredError,
+    NotContinuableError,
     NotRegenerableError,
     SessionEndedError,
     TurnDeclinedError,
@@ -140,6 +143,14 @@ async def handle_message_not_found(request: Request, error: MessageNotFoundError
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content={'detail': '말을 찾을 수 없습니다.', 'code': 'message_not_found'},
+    )
+
+
+async def handle_not_continuable(request: Request, error: NotContinuableError) -> JSONResponse:
+    """이어 쓸 수 없는 말이면 422 다."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': '이어 쓸 수 없는 말입니다.', 'code': 'not_continuable'},
     )
 
 
@@ -261,6 +272,27 @@ async def regenerate(message_id: uuid.UUID, viewer: CurrentViewer, request: Requ
     start = await service.begin_regenerate(
         state.session_factory, viewer, message_id, prompt_options(state.settings), now
     )
+    return await stream_turn(request, start, now)
+
+
+@message_router.post(
+    '/{message_id}/continue',
+    status_code=status.HTTP_200_OK,
+    response_class=StreamingResponse,
+    responses=SSE_RESPONSES,
+)
+async def continue_message(
+    message_id: uuid.UUID, viewer: CurrentViewer, request: Request, now: Now
+) -> StreamingResponse:
+    """
+    끊긴 답(partial)에 이어 쓴다. 지금 가지의 끝인 답만 된다. 엔진은 다시 판정하지 않는다.
+
+    새 호출이라 새로 청구한다. SSE 의 turn 에 continues(그 답의 id)가 실린다.
+    첫 segment 앞의 delta 는 그 답의 마지막 조각에 붙는 글이고, segment 가 오면 새 조각이다.
+    done 의 말은 이어 붙인 그 답 전체다. 다 쓰면 complete, 또 끊기면 partial 이라 다시 이어 쓸 수 있다.
+    """
+    state = request.app.state
+    start = await service.begin_continue(state.session_factory, viewer, message_id, prompt_options(state.settings), now)
     return await stream_turn(request, start, now)
 
 
