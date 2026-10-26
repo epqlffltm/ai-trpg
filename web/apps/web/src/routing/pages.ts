@@ -79,3 +79,5 @@ export const CharacterEditPage = lazyPage(() => import('../pages/chat/studio/cha
 export const ChatLorebooksPage = lazyPage(() => import('../pages/chat/studio/lorebooks/ChatLorebooksPage'), 'ChatLorebooksPage');
 export const ChatLorebookNewPage = lazyPage(() => import('../pages/chat/studio/lorebooks/ChatLorebookNewPage'), 'ChatLorebookNewPage');
 export const ChatLorebookEditPage = lazyPage(() => import('../pages/chat/studio/lorebooks/ChatLorebookEditPage'), 'ChatLorebookEditPage');
+export const StoryHomePage = lazyPage(() => import('../pages/story/StoryHomePage'), 'StoryHomePage');
+export const StorySessionPage = lazyPage(() => import('../pages/story/StorySessionPage'), 'StorySessionPage');

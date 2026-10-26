@@ -2450,3 +2450,38 @@ a.ui-button {
   display: grid;
   gap: 12px;
 }
+
+/* story(D). 장면의 인물, 말 조각, 내 세션과 시작할 세계관의 줄 */
+.story-cast__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.story-cast__member {
+  padding: 2px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+}
+
+.story-segment + .story-segment {
+  margin-top: 6px;
+}
+
+.story-segment--narration .chat-message__content {
+  font-style: italic;
+}
+
+.story-sessions__row,
+.story-worlds__row {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.story-worlds__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
