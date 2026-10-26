@@ -339,6 +339,74 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "IllustrationList": {
+        "description": "한 세계관에서 연 일러스트들. 처음 연 차례다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IllustrationOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "IllustrationList",
+        "type": "object"
+      },
+      "IllustrationOut": {
+        "description": "연 일러스트 하나. 장면은 종류(event, ending)와 판의 id 다. image_id 는 연 때의 그림이다.\ncast 는 그 장면이 부르는 인물들이다. 갤러리는 인물마다 묶고, 비었으면 세계관 칸에 둔다.",
+        "properties": {
+          "cast": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cast",
+            "type": "array"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "first_seen_at": {
+            "format": "date-time",
+            "title": "First Seen At",
+            "type": "string"
+          },
+          "image_id": {
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SceneKind"
+          },
+          "scene_id": {
+            "title": "Scene Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "scene_id",
+          "image_id",
+          "cast",
+          "first_seen_at",
+          "conversation_id"
+        ],
+        "title": "IllustrationOut",
+        "type": "object"
+      },
       "InputError": {
         "properties": {
           "detail": {
@@ -696,6 +764,15 @@
           "adult"
         ],
         "title": "Rating",
+        "type": "string"
+      },
+      "SceneKind": {
+        "description": "일러스트가 붙은 장면의 종류. 이벤트와 엔딩의 id 는 서로 겹칠 수 있어 종류로 가른다.",
+        "enum": [
+          "event",
+          "ending"
+        ],
+        "title": "SceneKind",
         "type": "string"
       },
       "SegmentOut": {
@@ -1336,6 +1413,58 @@
           }
         ],
         "summary": "List Endings",
+        "tags": [
+          "records"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/story/gallery": {
+      "get": {
+        "description": "그 세계관에서 내가 연 일러스트들.",
+        "operationId": "list_illustrations_api_v1_story_gallery_get",
+        "parameters": [
+          {
+            "description": "asset 서버의 세계관 id",
+            "in": "query",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "description": "asset 서버의 세계관 id",
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IllustrationList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Illustrations",
         "tags": [
           "records"
         ],
