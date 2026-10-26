@@ -28,7 +28,8 @@
 모델을 부르는 것은 응답과 따로 도는 작업이다. 앱이 들고 있다가(app.state.turns) 서버가 꺼질 때 멈춘다(app/main.py).
 요청과 연결의 메트릭은 SSE 로 센다(sse_*). 요청의 span 과 시간 메트릭에서는 뺀다(app/main.py 의 STREAMS).
 chat 서버의 것(chat-server/app/turns/router.py)과 같은 모양이다.
-이어서 출력과 요청 수 제한은 그것을 더하는 조각에서 붙인다.
+router 와 message_router 의 주소는 모두 모델을 부르므로 사람마다 요청 수를 센다(app/limits/).
+넘으면 429 too_many_attempts 다.
 """
 
 import asyncio
