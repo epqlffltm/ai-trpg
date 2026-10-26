@@ -1,10 +1,14 @@
 // web/apps/web/src/pages/trpg/scenario/ScenarioDetail.tsx
 // 시나리오 소개(B2)를 그린다. 왼쪽(모바일은 위)에 소개글과 고를 거리, 오른쪽(모바일은 아래)에 요약과 할 일.
 // 소개글은 글 그대로 보인다(줄바꿈만 살린다). HTML 로 꾸미는 소개는 asset-server 로 옮길 때 바꾼다(화면 명세 B2).
+// 운영자에게는 맨 아래에 제재 칸(E4)이 있다.
 
 import { Link } from 'react-router';
 import type { PublicListingDetail } from '../../../api/types';
+import { isOperator } from '../../../auth/roles';
+import { useSession } from '../../../auth/useSession';
 import { usePublicNames } from '../../../hooks/usePublicNames';
+import { ScenarioOperatorPanel } from '../../operator/ScenarioOperatorPanel';
 import { tagSearchPath } from '../browse/filters';
 import { characterModeLabel } from '../labels';
 import { PregenList } from './PregenList';
@@ -13,6 +17,7 @@ import { ScenarioSidePanel } from './ScenarioSidePanel';
 export function ScenarioDetail({ listing }: { listing: PublicListingDetail }) {
   const nameOf = usePublicNames([[listing.creator_id]]);
   const creator = nameOf(listing.creator_id);
+  const operator = isOperator(useSession());
   return (
     <main className="page scenario">
       <header className="scenario__head">
@@ -38,6 +43,7 @@ export function ScenarioDetail({ listing }: { listing: PublicListingDetail }) {
         </div>
         <ScenarioSidePanel listing={listing} />
       </div>
+      {operator ? <ScenarioOperatorPanel listing={listing} creatorName={creator} /> : null}
     </main>
   );
 }

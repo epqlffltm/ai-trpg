@@ -1649,6 +1649,13 @@ a.ui-button {
   font-size: 0.85em;
 }
 
+/* 시나리오 소개(B2) 아래의 운영자 칸 */
+.operator-panel {
+  margin-top: var(--ui-gap);
+  padding-top: var(--ui-gap);
+  border-top: 1px solid var(--ui-border);
+}
+
 .moderation-detail,
 .moderation-form {
   margin-top: var(--ui-gap);
