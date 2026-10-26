@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../../../api/errors';
 import type { RulebookDetail, RulebookTemplates } from '../../../../api/types';
 import { newRulebookDraft, rulebookDraft, rulebookHints, toRulebookCreate, toRulebookUpdate, wholeNumber, withTemplate } from './rulebookForm';
-import { describeDeleteProblem, usedByTitles } from '../studioProblem';
+import { describeDeleteProblem, describeSaveProblem, usedByTitles } from '../studioProblem';
 import { armorSummary, templateDie, templateName } from './rulebookView';
 
 function rules(template: string, armor: unknown, die = 20) {
@@ -71,5 +71,11 @@ describe('룰북의 글', () => {
     expect(usedByTitles({ used_by: 'x' })).toEqual([]);
     const problem = describeDeleteProblem(new ApiError({ status: 409, detail: 'x', body }), 'rulebooks');
     expect(problem.message).toContain('쓰는 시나리오: 안개 마을, 등대.');
+  });
+
+  it('규칙 한 벌로 맞지 않는 룰북(422 의 field)은 서버의 문장을 보인다', () => {
+    const error = new ApiError({ status: 422, detail: '수치의 최대에 쓰는 능력치가 규칙에 없습니다.', body: { detail: '수치의 최대에 쓰는 능력치가 규칙에 없습니다.', field: 'resources' } });
+    expect(describeSaveProblem(error, 'rulebooks')).toEqual({ message: '수치의 최대에 쓰는 능력치가 규칙에 없습니다.' });
+    expect(describeSaveProblem(new ApiError({ status: 422, detail: 'x' }), 'rulebooks').message).toBe('서버가 받지 않는 값이 있습니다. 칸을 다시 확인해 주세요.');
   });
 });
