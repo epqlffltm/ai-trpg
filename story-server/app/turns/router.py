@@ -12,6 +12,7 @@
 응답을 시작하기 전에 거절하는 것은 보통의 오류다(아래 handle_*). 시작한 뒤의 실패는 SSE 의 failed 메시지다.
   - 404: 세션이 없다(남의 것, 볼 수 없는 등급). 다시 답할 말이 없다(message_not_found)
   - 422 not_regenerable: 다시 쓸 수 없는 말이다(부모가 없는 답)
+  - 404 message_not_found, 422 not_editable: 고칠 말(edit_of)이 그 세션에 없다, 사람의 말이 아니다
   - 409 model_required: 세션에 모델이 없다. 먼저 고른다(PUT /conversations/{id}/model)
   - 409 session_ended: 엔딩을 본 세션이다(세계관이 끝을 골랐다). 읽기만 된다
   - 422 cannot_move, no_choice, over, not_in_scene, not_confessable, cooling_down, not_held: 그렇게 할 수 없다
@@ -206,10 +207,14 @@ async def send_message(
     """
     말을 보낸다. 사람의 말을 저장하고, 장면의 인물들과 서술의 답을 말 조각으로 흘려보낸다.
     끊겨도 서버는 끝까지 답을 저장한다. 말은 상태(시각, 장소, 호감도)를 바꾸지 않는다.
+    edit_of 가 있으면 그 사람의 말을 고친 새 가지다(원본은 남는다). 사람의 말이 아니면 422 not_editable,
+    그 세션의 말이 아니면 404 message_not_found 다.
     """
     state = request.app.state
     options = prompt_options(state.settings)
-    start = await service.begin_turn(state.session_factory, viewer, conversation_id, data.content, options, now)
+    start = await service.begin_turn(
+        state.session_factory, viewer, conversation_id, data.content, options, now, data.edit_of
+    )
     return await stream_turn(request, start, now)
 
 

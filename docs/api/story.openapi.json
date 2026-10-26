@@ -502,6 +502,18 @@
             "pattern": "\\S",
             "title": "Content",
             "type": "string"
+          },
+          "edit_of": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edit Of"
           }
         },
         "required": [
@@ -1491,7 +1503,7 @@
     },
     "/api/v1/story/conversations/{conversation_id}/messages": {
       "post": {
-        "description": "말을 보낸다. 사람의 말을 저장하고, 장면의 인물들과 서술의 답을 말 조각으로 흘려보낸다.\n끊겨도 서버는 끝까지 답을 저장한다. 말은 상태(시각, 장소, 호감도)를 바꾸지 않는다.",
+        "description": "말을 보낸다. 사람의 말을 저장하고, 장면의 인물들과 서술의 답을 말 조각으로 흘려보낸다.\n끊겨도 서버는 끝까지 답을 저장한다. 말은 상태(시각, 장소, 호감도)를 바꾸지 않는다.\nedit_of 가 있으면 그 사람의 말을 고친 새 가지다(원본은 남는다). 사람의 말이 아니면 422 not_editable,\n그 세션의 말이 아니면 404 message_not_found 다.",
         "operationId": "send_message_api_v1_story_conversations__conversation_id__messages_post",
         "parameters": [
           {
