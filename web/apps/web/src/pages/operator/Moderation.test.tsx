@@ -72,6 +72,7 @@ function signedInAs(roles: string[], routes: Routes = {}) {
     [`GET ${ASSET}/characters/${CHARACTER}/reports`]: () => json(200, CHARACTER_REPORTS),
     [`GET ${CHAT}/message-reports`]: () => json(200, { items: [SUMMARY], total: 1 }),
     [`GET ${CHAT}/message-reports/${REPORT}`]: () => json(200, DETAIL),
+    'GET /api/v1/board/reports': () => json(200, { items: [], page: 1, size: 20, total: 0 }),
     ...routes,
   });
 }

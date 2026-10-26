@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/operator/moderationPure.ts
-// 신고 처리(E4)의 순수한 함수. 사유와 처리의 이름, 사유마다의 수를 한 줄로, 운영자가 쓰는 사유의 검사, 쪽.
+// 신고 처리(E4)의 순수한 함수. 사유와 처리의 이름, 사유마다의 수를 한 줄로, 운영자가 쓰는 사유의 검사, 쪽(offset 과 쪽 번호).
 
 import type { ReportOutcome, ReportReason } from '../../api/types';
 
@@ -53,6 +53,11 @@ export function reasonProblem(reason: string): string | null {
 export function nextOffset(total: number, pagesRead: number): number | undefined {
   const read = pagesRead * PAGE_SIZE;
   return read < total ? read : undefined;
+}
+
+/** 쪽 번호로 읽는 목록(게시판)의 다음 쪽. 다 읽었으면 undefined */
+export function nextPage(total: number, pagesRead: number, size: number): number | undefined {
+  return pagesRead * size < total ? pagesRead + 1 : undefined;
 }
 
 /** 굳힌 대화의 말을 누가 했는가. 사람과 캐릭터, 그 밖은 그대로 */
