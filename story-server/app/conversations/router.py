@@ -7,6 +7,7 @@
     GET  /api/v1/story/conversations              내 세션의 목록. ?limit=&offset=&world_id=
     GET  /api/v1/story/conversations/{id}         세션 하나(가져온 판과 지금 가지의 말까지)
     PUT  /api/v1/story/conversations/{id}/model   세션의 모델 바꾸기
+    PUT  /api/v1/story/conversations/{id}/branch  다른 대안의 가지를 보기. 바뀐 세션을 돌려준다
 
 모든 주소가 로그인을 요구한다. 남의 세션은 404 다(403 이면 그 ID 가 있다는 것이 드러난다).
 """
@@ -26,6 +27,7 @@ from app.conversations import service
 from app.conversations.models import Conversation, ImportedWorld, Message
 from app.conversations.repository import ConversationRow
 from app.conversations.schemas import (
+    BranchChoice,
     ConversationCreate,
     ConversationDetail,
     ConversationModelOut,
@@ -33,6 +35,7 @@ from app.conversations.schemas import (
     ConversationSummary,
     MessageOut,
     ModelChoice,
+    PathMessageOut,
     StateOut,
     WorldOut,
     WorldSummary,
@@ -127,22 +130,33 @@ def to_message(message: Message) -> MessageOut:
     )
 
 
+def to_path_message(message: Message, alternatives: dict[uuid.UUID | None, list[uuid.UUID]]) -> PathMessageOut:
+    """지금 가지의 말 하나와 그 대안들. 대안을 못 찾으면(있을 수 없다) 그 말 하나다."""
+    return PathMessageOut(
+        **to_message(message).model_dump(), alternatives=alternatives.get(message.parent_id, [message.id])
+    )
+
+
 def to_detail(
     row: ConversationRow,
     models: dict[str, AiModel],
     book: PriceBook | None,
     now: datetime,
     messages: list[Message],
+    alternatives: dict[uuid.UUID | None, list[uuid.UUID]],
     state: StateOut,
 ) -> ConversationDetail:
-    """세션 하나를 응답의 모양으로. messages 는 지금 가지의 말들, state 는 그 끝의 상태다."""
+    """
+    세션 하나를 응답의 모양으로. messages 는 지금 가지의 말들, alternatives 는 부모마다의 대안들,
+    state 는 그 끝의 상태다.
+    """
     conversation, world = row
     return ConversationDetail(
         id=conversation.id,
         title=conversation.title,
         world=WorldOut(**to_world_summary(world).model_dump(), document=world.document),
         model=conversation_model(conversation, world, models, book, now),
-        messages=[to_message(message) for message in messages],
+        messages=[to_path_message(message, alternatives) for message in messages],
         state=state,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
@@ -239,8 +253,9 @@ async def read_conversation(
     row = await service.get_conversation(session, viewer, conversation_id)
     models = await service.conversation_models(session, [row[0]])
     messages = await service.conversation_messages(session, row[0])
+    alternatives = await service.message_alternatives(session, row[0], messages)
     state = await service.conversation_state(session, row[1], messages)
-    return to_detail(row, models, book, now, messages, state)
+    return to_detail(row, models, book, now, messages, alternatives, state)
 
 
 @router.put('/{conversation_id}/model', response_model=ConversationModelOut, status_code=status.HTTP_200_OK)
@@ -250,3 +265,15 @@ async def change_model(
     """세션의 모델을 바꾼다. 다음 말부터 그 모델로 쓰고 그 모델의 값으로 청구한다. 바꾼 모델을 돌려준다."""
     model = await service.change_model(session, prices, viewer, conversation_id, data.model, now)
     return to_model(model, usable=True)
+
+
+@router.put('/{conversation_id}/branch', response_model=ConversationDetail, status_code=status.HTTP_200_OK)
+async def choose_branch(
+    conversation_id: uuid.UUID, data: BranchChoice, viewer: CurrentViewer, session: Session, prices: Prices, now: Now
+) -> ConversationDetail:
+    """
+    다른 대안의 가지를 본다. 그 말 아래에서 가장 나중에 생긴 말이 끝이 된다. 바뀐 세션(그 가지의 말과 상태)을 돌려준다.
+    그 세션의 말이 아니면 404 message_not_found, 답을 쓰는 중이면 409 generation_in_progress 다.
+    """
+    await service.choose_branch(session, viewer, conversation_id, data.message_id, now)
+    return await read_conversation(conversation_id, viewer, session, prices, now)

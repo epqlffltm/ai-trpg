@@ -53,6 +53,7 @@ from app.conversations.models import Conversation, ImportedWorld, Message, Messa
 from app.conversations.service import (
     GENERATION_STALE,
     ConversationBusyError,
+    MessageNotFoundError,
     ModelUnavailableError,
     get_conversation,
 )
@@ -106,10 +107,6 @@ class ModelRequiredError(Exception):
 
 class SessionEndedError(Exception):
     """엔딩을 본 세션이고 세계관이 끝(읽기만)을 골랐다. 말을 받지 않는다(409)."""
-
-
-class MessageNotFoundError(Exception):
-    """다시 답할 말이 없다(남의 것, 볼 수 없는 등급의 세션의 것)(404)."""
 
 
 class NotRegenerableError(Exception):

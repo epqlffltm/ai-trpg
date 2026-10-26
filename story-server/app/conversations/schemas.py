@@ -127,6 +127,24 @@ class MessageOut(BaseModel):
     created_at: datetime
 
 
+class PathMessageOut(MessageOut):
+    """
+    지금 가지의 말 하나와 그 대안들. alternatives 는 같은 부모 아래의 말들의 id 다(먼저 생긴 것부터, 이 말도 든다).
+
+    화면이 "< 2/3 >" 를 그리고, 다른 대안을 고르면 PUT /conversations/{id}/branch 로 그 가지를 본다(chat 과 같다).
+    """
+
+    alternatives: list[uuid.UUID]
+
+
+class BranchChoice(BaseModel):
+    """볼 가지. 대안 가운데 하나의 id 다. 그 말 아래에서 가장 나중에 생긴 말이 가지의 끝이 된다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    message_id: uuid.UUID
+
+
 class StateOut(BaseModel):
     """
     가지의 끝의 상태(엔진의 상태). 화면이 시계, 지도, 소지품, 인물 창, 선택지, 엔딩을 그린다.
@@ -149,13 +167,15 @@ class StateOut(BaseModel):
 
 
 class ConversationDetail(BaseModel):
-    """세션 하나. messages 는 지금 보고 있는 가지의 말들이다(첫 말부터). state 는 그 끝의 상태다."""
+    """
+    세션 하나. messages 는 지금 보고 있는 가지의 말들이다(첫 말부터, 말마다 대안들). state 는 그 끝의 상태다.
+    """
 
     id: uuid.UUID
     title: str
     world: WorldOut
     model: ConversationModelOut | None
-    messages: list[MessageOut]
+    messages: list[PathMessageOut]
     # 지금 가지의 끝의 상태. 말이 없으면 판으로 만든 처음의 상태다
     state: StateOut
     created_at: datetime
