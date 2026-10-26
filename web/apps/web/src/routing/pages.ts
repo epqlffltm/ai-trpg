@@ -30,6 +30,8 @@ export const BoardIndexPage = lazyPage(() => import('../pages/board/BoardIndexPa
 export const BoardListPage = lazyPage(() => import('../pages/board/BoardListPage'), 'BoardListPage');
 export const BoardSearchPage = lazyPage(() => import('../pages/board/BoardSearchPage'), 'BoardSearchPage');
 export const PostPage = lazyPage(() => import('../pages/board/PostPage'), 'PostPage');
+export const PostNewPage = lazyPage(() => import('../pages/board/PostNewPage'), 'PostNewPage');
+export const PostEditPage = lazyPage(() => import('../pages/board/PostEditPage'), 'PostEditPage');
 export const OrdersPage = lazyPage(() => import('../pages/orders/OrdersPage'), 'OrdersPage');
 export const OrderPage = lazyPage(() => import('../pages/orders/OrderPage'), 'OrderPage');
 

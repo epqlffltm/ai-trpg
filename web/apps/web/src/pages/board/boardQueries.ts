@@ -1,9 +1,9 @@
 // web/apps/web/src/pages/board/boardQueries.ts
 // 공지·게시판(A11)이 읽는 것의 열쇠와 부르는 함수. 게시판의 목록은 거의 바뀌지 않아 5분 동안 다시 읽지 않는다.
-// 글과 목록은 화면에 올 때 읽는다(앱의 기본). 실시간으로 밀어 주지 않는다.
+// 글과 목록은 화면에 올 때 읽는다(앱의 기본). 실시간으로 밀어 주지 않는다. 나(/board/me)는 로그인했을 때만 읽는다(로그아웃은 저장소를 비운다).
 
 import { infiniteQueryOptions, keepPreviousData, queryOptions } from '@tanstack/react-query';
-import { fetchBoardPosts, fetchBoards, fetchComments, fetchPost, searchPosts } from '../../api/board';
+import { fetchBoardMe, fetchBoardPosts, fetchBoards, fetchComments, fetchPost, searchPosts } from '../../api/board';
 
 export const BOARD_KEY = ['board'] as const;
 
@@ -47,5 +47,14 @@ export function searchQuery(q: string, board: string | undefined, page: number) 
     queryKey: [...BOARD_KEY, 'search', q, board ?? '', page],
     queryFn: ({ signal }) => searchPosts(q, board, page, signal),
     placeholderData: keepPreviousData,
+  });
+}
+
+/** 이 서버가 아는 나. 운영자인지는 운영 중에 바뀔 수 있어 오래 두지 않는다(앱의 기본) */
+export function boardMeQuery(signedIn: boolean) {
+  return queryOptions({
+    queryKey: [...BOARD_KEY, 'me'],
+    queryFn: ({ signal }) => fetchBoardMe(signal),
+    enabled: signedIn,
   });
 }

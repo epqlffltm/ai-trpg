@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/board/PostPage.tsx
 // 글 읽기(A11, /board/posts/:postId). 로그인하지 않아도 열린다. 제목, 글쓴이, 쓴 때(고쳤으면 고친 때), 본문, 그리고 댓글.
 // 본문은 글자 그대로 보인다(서식을 해석하지 않는다. 줄바꿈만 살린다). 없거나 지운 글은 404 로 알리고 게시판으로 가는 길.
-// 알림(A10)의 댓글·답글 알림이 이곳으로 온다.
+// 알림(A10)의 댓글·답글 알림이 이곳으로 온다. 본문 아래에 고치기·지우기·고정·신고(누구에게 보일지는 boardPermissions.ts).
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -12,12 +12,15 @@ import { boardsQuery, postQuery } from './boardQueries';
 import { boardProblemText } from './boardProblem';
 import { authorName, isEdited } from './boardView';
 import { CommentList } from './CommentList';
+import { PostActions } from './PostActions';
+import { useBoardMe } from './useBoardMe';
 
 export function PostPage() {
   const { postId = '' } = useParams();
   const post = useQuery(postQuery(postId));
   const boards = useQuery(boardsQuery());
   const board = boards.data?.find((item) => item.slug === post.data?.board);
+  const { me } = useBoardMe();
 
   return (
     <main className="page page--medium">
@@ -45,6 +48,7 @@ export function PostPage() {
             </p>
             <div className="post__content">{post.data.content}</div>
           </article>
+          <PostActions post={post.data} board={board} me={me} />
           <CommentList postId={post.data.id} count={post.data.comment_count} />
         </>
       ) : null}
