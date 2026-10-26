@@ -6,8 +6,8 @@ import { Radio, TextField } from '@ai-trpg/ui';
 import type { ActionDraft } from './actionDraft';
 import { NAME_GUESS_MAX, WAIT_MAX_MINUTES } from './actionDraft';
 import {
-  aidItems,
   availableKinds,
+  climbs,
   canAttachAction,
   coverHere,
   carriable,
@@ -20,6 +20,7 @@ import {
   type ActionKind,
 } from './actionOptions';
 import { ACTION_LABELS } from './actionLabels';
+import { AidSelect } from './AidSelect';
 import { CheckFields } from './CheckFields';
 import { DoorActionFields } from './DoorActionFields';
 import { ChoiceSelect } from './ChoiceSelect';
@@ -116,7 +117,6 @@ function CoverHint({ ctx }: { ctx: ActionContext }) {
 
 function TreatFields({ draft, ctx, onChange }: FieldProps) {
   const injuries = treatableInjuries(ctx, draft.target);
-  const aids = aidItems(ctx);
   return (
     <div className="ability-grid">
       <ChoiceSelect label="치료받을 쪽" value={draft.target} choices={patients(ctx)} onChange={(target) => onChange({ target, injury: '' })} />
@@ -125,16 +125,7 @@ function TreatFields({ draft, ctx, onChange }: FieldProps) {
       ) : (
         <p className="hint">치료할 수 있는(오래 가는) 부상이 없습니다.</p>
       )}
-      {aids.length > 0 ? (
-        <ChoiceSelect
-          label="붙여 쓸 물건(선택)"
-          value={aids.some((choice) => choice.value === draft.item) ? draft.item : ''}
-          choices={aids}
-          empty="쓰지 않음"
-          hint="치료 판정에 보정이 더해집니다. 성공하든 실패하든 하나 없어집니다."
-          onChange={(item) => onChange({ item })}
-        />
-      ) : null}
+      <AidSelect act="treat" value={draft.item} ctx={ctx} onChange={(item) => onChange({ item })} />
     </div>
   );
 }
@@ -161,6 +152,7 @@ function MoveFields({ draft, ctx, onChange }: FieldProps) {
       {downed.length > 0 ? (
         <ChoiceSelect label="업고 갈 동료(선택)" value={draft.carry} choices={downed} empty="혼자 간다" onChange={(carry) => onChange({ carry })} />
       ) : null}
+      {draft.place && climbs(ctx, draft.place) ? <AidSelect act="cross" value={draft.item} ctx={ctx} onChange={(item) => onChange({ item })} /> : null}
     </div>
   );
 }

@@ -78,6 +78,18 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'cured',
         'injured',
     ),
+    # 붙여 쓴 물건도 공개다(#802). 판정과 같이 보인다
+    EventType.AID_USED: (
+        'round',
+        'character_name',
+        'act',
+        'entry_id',
+        'name',
+        'bonus',
+        'lost',
+        'broken',
+        'remaining',
+    ),
     EventType.ITEM_GIVEN: (
         'round',
         'character_name',

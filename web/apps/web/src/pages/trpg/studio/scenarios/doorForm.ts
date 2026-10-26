@@ -6,7 +6,7 @@
 //   - 자물쇠는 열쇠(물건 항목)가 꼭 있다. 열쇠 하나는 자물쇠 하나만 연다(다른 길이나 자물쇠 물건에 같은 열쇠면 route_key_repeated)
 //   - 빗장은 길의 두 끝 중 한쪽에 있다
 //   - 부수기와 고치기는 자물쇠나 빗장이 있는 길에만 적는다. 둘 다 끄면 함께 비운다
-//   - 고치기의 도구(물건 항목)는 비워도 된다. 적으면 그 물건을 지닌 사람만 고친다
+//   - 따기와 고치기는 도구가 있어야 하는지(needs_tool, #802)를 고른다. 어느 물건이 거드는지는 물건 규칙의 거들기가 정한다
 
 import type { RouteRule, RouteRuleBody } from '../../../../api/types';
 
@@ -15,10 +15,10 @@ type Check = { ability: string; difficulty: string };
 export type DoorDraft = {
   cross: Check & { on: boolean; harm: string };
   lock: { on: boolean; key: string; locked: boolean };
-  pick: Check & { on: boolean; tool: string };
+  pick: Check & { on: boolean; needsTool: boolean };
   bar: { on: boolean; side: string; barred: boolean };
   force: Check & { on: boolean };
-  repair: Check & { on: boolean; tool: string };
+  repair: Check & { on: boolean; needsTool: boolean };
 };
 
 export function doorDraft(route: RouteRule): DoorDraft {
@@ -29,7 +29,7 @@ export function doorDraft(route: RouteRule): DoorDraft {
       on: route.lock?.pick != null,
       ability: route.lock?.pick?.ability ?? '',
       difficulty: route.lock?.pick?.difficulty ?? '',
-      tool: route.lock?.pick?.tool ?? '',
+      needsTool: route.lock?.pick?.needs_tool ?? false,
     },
     bar: { on: route.bar != null, side: route.bar?.side ?? route.from_place, barred: route.bar?.barred ?? false },
     force: { on: route.force != null, ability: route.force?.ability ?? '', difficulty: route.force?.difficulty ?? '' },
@@ -37,7 +37,7 @@ export function doorDraft(route: RouteRule): DoorDraft {
       on: route.repair != null,
       ability: route.repair?.ability ?? '',
       difficulty: route.repair?.difficulty ?? '',
-      tool: route.repair?.tool ?? '',
+      needsTool: route.repair?.needs_tool ?? false,
     },
   };
 }
@@ -74,12 +74,12 @@ export function withDoor(routes: RouteRule[], at: number, draft: DoorDraft): Rou
       ? {
           key: draft.lock.key,
           locked: draft.lock.locked,
-          pick: draft.pick.on ? { ability: draft.pick.ability, difficulty: draft.pick.difficulty || null, tool: draft.pick.tool || null } : null,
+          pick: draft.pick.on ? { ability: draft.pick.ability, difficulty: draft.pick.difficulty || null, needs_tool: draft.pick.needsTool } : null,
         }
       : null,
     bar: draft.bar.on ? { side: draft.bar.side, barred: draft.bar.barred } : null,
     force: draft.force.on && hasDoor ? { ability: draft.force.ability, difficulty: draft.force.difficulty || null } : null,
-    repair: draft.repair.on && hasDoor ? { ability: draft.repair.ability, difficulty: draft.repair.difficulty || null, tool: draft.repair.tool || null } : null,
+    repair: draft.repair.on && hasDoor ? { ability: draft.repair.ability, difficulty: draft.repair.difficulty || null, needs_tool: draft.repair.needsTool } : null,
   };
   return routes.map((route, index) => (index === at ? { ...route, ...door } : route));
 }

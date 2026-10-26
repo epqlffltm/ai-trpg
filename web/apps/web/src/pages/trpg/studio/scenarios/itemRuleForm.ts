@@ -6,11 +6,12 @@
 // - 칸(slots)은 장비만. 차지하는 칸의 수는 칸의 수보다 많지 않다. 공격·방어(attack, defense, guard, ap, ward)는 칸이 있는 물건만
 // - 관통력(ap)은 공격 보정(attack)이 있는 무기만. 수치는 1~10, 값은 1~1,000,000(비우면 사고팔 수 없다)
 // - 자물쇠(lock, #281)는 장비만. 입력과 검사는 itemLockForm.ts. 소모품으로 바꾸면 보내지 않는다
-// - 치료 보정(treat_bonus, #277)도 소모품만. 장비로 바꾸면 보내지 않는다. 던지는 판정(throw, #801)은 모든 물건에 적는다
+// - 던지는 판정(throw, #801)과 거드는 행동(aids, #802, 입력과 검사는 itemAidsForm.ts)은 모든 물건에 적는다
 
 import type { ItemKind, ItemRarity, ItemRule, ItemRuleBody, Ruleset } from '../../../../api/types';
 import { itemKindLabel, rarityLabel } from '../../labels';
 import { wholeNumber } from '../rulebooks/rulebookForm';
+import { aidDraft, aidHints, aidLine, toAid, type AidDraft } from './itemAidsForm';
 import { effectDraft, effectHints, effectLine, throwDraft, throwHint, toEffect, toThrow, type EffectDraft, type ThrowDraft } from './itemEffectsForm';
 import { itemLockDraft, toItemLock, type ItemLockDraft } from './itemLockForm';
 
@@ -40,7 +41,7 @@ export type ItemRuleDraft = {
   combat: Record<CombatField, string>;
   lock: ItemLockDraft;
   throw: ThrowDraft;
-  treatBonus: string;
+  aids: AidDraft[];
 };
 
 function numberText(value: number | null | undefined): string {
@@ -64,7 +65,7 @@ export function itemRuleDraft(rule: ItemRule | undefined): ItemRuleDraft {
     },
     lock: itemLockDraft(rule?.lock),
     throw: throwDraft(rule),
-    treatBonus: numberText(rule?.treat_bonus),
+    aids: (rule?.aids ?? []).map(aidDraft),
   };
 }
 
@@ -91,7 +92,8 @@ export function itemRuleHints(draft: ItemRuleDraft): Record<string, string> {
     }
     if (draft.combat.ap.trim() !== '' && draft.combat.attack.trim() === '') hints.ap = '관통력은 공격 보정이 있는 무기에만 적습니다.';
   }
-  if (draft.kind === 'consumable') Object.assign(hints, effectHints(draft.effects, draft.treatBonus));
+  if (draft.kind === 'consumable') Object.assign(hints, effectHints(draft.effects));
+  Object.assign(hints, aidHints(draft.aids));
   const thrown = throwHint(draft.throw);
   if (thrown) hints.throw = thrown;
   return hints;
@@ -101,7 +103,7 @@ function optionalNumber(text: string): number | null {
   return text.trim() === '' ? null : Number(text.trim());
 }
 
-/** 보낼 규칙. 종류에 맞지 않는 칸(장비의 효과와 치료 보정, 소모품의 칸과 자물쇠, 착용하지 않는 물건의 공격·방어)은 비운다 */
+/** 보낼 규칙. 종류에 맞지 않는 칸(장비의 효과, 소모품의 칸과 자물쇠, 착용하지 않는 물건의 공격·방어)은 비운다 */
 export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody {
   const worn = isWorn(draft);
   const combat = (field: CombatField) => (worn ? optionalNumber(draft.combat[field]) : null);
@@ -120,7 +122,7 @@ export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody 
     ward: combat('ward'),
     lock: draft.kind === 'gear' ? toItemLock(draft.lock) : null,
     throw: toThrow(draft.throw),
-    treat_bonus: draft.kind === 'consumable' ? optionalNumber(draft.treatBonus) : null,
+    aids: draft.aids.map(toAid),
   };
 }
 
@@ -136,7 +138,7 @@ export function withoutItemRule(rules: ItemRule[], entryId: string): ItemRuleBod
   return rules.filter((one) => one.entry_id !== entryId);
 }
 
-/** 규칙의 한 줄. "장비 · 희귀 · 값 30 · 주손, 보조손 중 2칸 · 공격 +2 · 관통 1 · 새 자물쇠", "소모품 · 보통 · 회복 가벼움 · 던짐 · 치료 +2". 규칙이 없으면 null */
+/** 규칙의 한 줄. "장비 · 희귀 · 값 30 · 주손, 보조손 중 2칸 · 공격 +2 · 관통 1 · 새 자물쇠", "소모품 · 보통 · 회복 가벼움 · 던짐 · 치료 +2(쓰면 늘 없어짐)". 규칙이 없으면 null */
 export function itemRuleLine(rule: ItemRule | undefined, rules: Ruleset | null): string | null {
   if (!rule) return null;
   const slotName = (key: string) => rules?.equipment_slots.find((slot) => slot.key === key)?.name ?? key;
@@ -150,6 +152,6 @@ export function itemRuleLine(rule: ItemRule | undefined, rules: Ruleset | null):
   if (rule.ward) parts.push(`불굴 ${rule.ward}`);
   if (rule.lock) parts.push(rule.lock.pick ? '새 자물쇠(딸 수 있음)' : '새 자물쇠');
   if (rule.throw) parts.push('던짐');
-  if (rule.treat_bonus) parts.push(`치료 +${rule.treat_bonus}`);
+  parts.push(...rule.aids.map(aidLine));
   return parts.join(' · ');
 }

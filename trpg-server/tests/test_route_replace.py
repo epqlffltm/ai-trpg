@@ -76,19 +76,23 @@ async def locks(client: AsyncClient, me: dict, gear: dict) -> dict:
 
 
 def the_items(locks: dict) -> list[dict]:
-    """자물쇠 물건 둘. 새 자물쇠는 딸 수 있고, 맹꽁이 자물쇠는 따지 못한다."""
+    """
+    자물쇠 물건 둘. 새 자물쇠는 딸 수 있고, 맹꽁이 자물쇠는 따지 못한다.
+    맨 뒤는 route_doors 의 락픽(따기를 거든다, #802). 판의 성문-광장은 도구가 있어야 딴다.
+    """
     return [
         {
             'entry_id': locks['new_lock']['id'],
             'lock': {'key': locks['new_key']['id'], 'pick': {'ability': 'dex', 'difficulty': 'hard'}},
         },
         {'entry_id': locks['padlock']['id'], 'lock': {'key': locks['padlock_key']['id']}},
+        *route_doors.the_items(locks),
     ]
 
 
 async def start(client: AsyncClient, me: dict, friend: dict, locks: dict) -> dict:
     """자물쇠 물건을 적은 판으로 둘이 앉아 시작한 테이블."""
-    table = await open_duo(client, me, friend, locks, **route_doors.the_map(locks), items=the_items(locks))
+    table = await open_duo(client, me, friend, locks, **{**route_doors.the_map(locks), 'items': the_items(locks)})
     started = await client.post(table_url(table, '/start'), headers=me)
     assert started.status_code == status.HTTP_200_OK, started.text
     return started.json()
@@ -116,10 +120,10 @@ async def test_lock_items_are_saved_and_published(client: AsyncClient, me: dict,
     response = await route_doors.publish(client, me, scenario)
 
     assert response.status_code == status.HTTP_201_CREATED, response.text
-    new_lock, padlock = scenario['items']
+    new_lock, padlock, _ = scenario['items']
     assert new_lock['lock'] == {
         'key': locks['new_key']['id'],
-        'pick': {'ability': 'dex', 'difficulty': 'hard', 'tool': None},
+        'pick': {'ability': 'dex', 'difficulty': 'hard', 'needs_tool': False},
     }
     assert padlock['lock'] == {'key': locks['padlock_key']['id'], 'pick': None}
     rules = read_snapshot(response.json()['snapshot']).items
@@ -148,7 +152,6 @@ async def test_a_misshaped_lock_item_is_refused(client: AsyncClient, me: dict, l
         ('pick-ability', 'item_lock_invalid'),
         ('pick-difficulty', 'item_lock_invalid'),
         ('key-not-item', 'item_not_item'),
-        ('tool-not-item', 'item_not_item'),
         ('key-of-a-route', 'route_key_repeated'),
         ('key-of-another-item', 'route_key_repeated'),
     ],
@@ -159,11 +162,10 @@ async def test_a_lock_item_must_fit_the_rules(client: AsyncClient, me: dict, loc
         'pick-ability': {'key': key, 'pick': {'ability': 'luck'}},
         'pick-difficulty': {'key': key, 'pick': {'ability': 'dex', 'difficulty': 'impossible'}},
         'key-not-item': {'key': locks['hut']['id']},
-        'tool-not-item': {'key': key, 'pick': {'ability': 'dex', 'tool': locks['hut']['id']}},
         'key-of-a-route': {'key': locks['tower_key']['id']},
         'key-of-another-item': {'key': locks['padlock_key']['id']},
     }
-    items = [{'entry_id': locks['new_lock']['id'], 'lock': lock_of[case]}, the_items(locks)[1]]
+    items = [{'entry_id': locks['new_lock']['id'], 'lock': lock_of[case]}, *the_items(locks)[1:]]
     scenario = await route_doors.draft(client, me, locks, items=items)
 
     response = await route_doors.publish(client, me, scenario)
@@ -172,22 +174,21 @@ async def test_a_lock_item_must_fit_the_rules(client: AsyncClient, me: dict, loc
     assert response.json()['problems'] == [problem]
 
 
-@pytest.mark.parametrize('case', ['repeated-key', 'key-not-item', 'tool-not-item'])
+@pytest.mark.parametrize('case', ['repeated-key', 'key-not-item'])
 async def test_the_snapshot_refuses_a_lock_item_that_does_not_fit(
     client: AsyncClient, me: dict, locks: dict, case: str
 ):
     scenario = await route_doors.draft(client, me, locks, items=the_items(locks))
     document = (await route_doors.publish(client, me, scenario)).json()['snapshot']
-    new_lock, padlock = document['items']
+    new_lock, *rest = document['items']
     locks_of = {
         'repeated-key': {**new_lock['lock'], 'key': locks['tower_key']['id']},
         'key-not-item': {**new_lock['lock'], 'key': locks['hut']['id']},
-        'tool-not-item': {**new_lock['lock'], 'pick': {'ability': 'dex', 'tool': locks['hut']['id']}},
     }
     wrong = {**new_lock, 'lock': locks_of[case]}
 
     with pytest.raises(ValidationError):
-        Snapshot.model_validate({**document, 'items': [wrong, padlock]})
+        Snapshot.model_validate({**document, 'items': [wrong, *rest]})
     Snapshot.model_validate(document)
 
 
@@ -225,7 +226,7 @@ async def test_a_new_lock_is_fitted_open_and_the_lock_item_is_spent(
     assert 'key' not in catalog['새 자물쇠']
     hut = route_out(seen, locks['gate'], locks['hut'])
     # 열린 채다. 따기는 새 자물쇠의 판정이다(어려움)
-    assert (hut['locked'], hut['pick']) == (False, {'ability': 'dex', 'difficulty': 'hard'})
+    assert (hut['locked'], hut['pick']) == (False, {'ability': 'dex', 'difficulty': 'hard', 'needs_tool': False})
     assert await fitted(session, table) == [uuid.UUID(locks['new_lock']['id'])]
     (changed,) = await events_of(client, me, table, 'door_changed')
     assert (changed['payload']['act'], changed['payload']['device']) == ('replace', None)
@@ -310,7 +311,7 @@ async def test_a_pick_finds_no_pick_when_the_lock_was_replaced_before_its_turn(
 ):
     table = await start(client, me, friend, locks)
     await give(session, table, FRIEND, locks['lockpick'])
-    await declare(client, friend, table, route_doors.door('pick', locks['square']))
+    await declare(client, friend, table, route_doors.door('pick', locks['square'], item=locks['lockpick']))
     # 받은 뒤 앞 차례에 따지 못하는 자물쇠로 바꿔 달고 잠근 것과 같다
     await session.execute(
         text('UPDATE table_route_locks SET lock_item = :item WHERE table_id = :table_id AND to_place = :square'),
@@ -438,7 +439,7 @@ def test_the_replace_lines():
 
 def test_the_map_note_says_a_lock_is_replaced_only_by_the_action():
     assert '자물쇠를 바꾸지 말고' in prompt.MAP_NOTE
-    assert prompt.PROMPT_VERSION == 'narration-67'
+    assert prompt.PROMPT_VERSION == 'narration-68'
 
 
 def test_the_transcript_says_the_lock_was_replaced():

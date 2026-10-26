@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/ItemLockFields.tsx
-// 물건 규칙 창의 자물쇠 물건 칸(B9 물건·돈, #281). 장비일 때만 보인다. 켜면 새 열쇠와 따기(판정, 도구)가 열린다.
+// 물건 규칙 창의 자물쇠 물건 칸(B9 물건·돈, #281). 장비일 때만 보인다. 켜면 새 열쇠와 따기(판정, 도구가 있어야 하는가)가 열린다.
 // 검사는 itemLockForm.ts. 자물쇠 물건 자신은 열쇠로 고를 수 없게 목록에서 뺀다.
 
 import { Checkbox } from '@ai-trpg/ui';
@@ -45,7 +45,12 @@ export function ItemLockFields({ draft, entryId, items, rules, hints, onChange }
                 onChange={(changes) => pick(changes)}
                 error={hints.lock_pick}
               />
-              <ItemSelect label="따는 도구(선택)" value={draft.pick.tool} items={others} empty="도구 없이" onChange={(tool) => pick({ tool })} />
+              <Checkbox
+                label="도구가 있어야 딴다"
+                description="따기를 거드는 물건(물건 규칙의 거들기)을 붙여야 딸 수 있습니다."
+                checked={draft.pick.needsTool}
+                onChange={(event) => pick({ needsTool: event.target.checked })}
+              />
             </>
           ) : null}
         </>

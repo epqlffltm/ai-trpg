@@ -116,6 +116,7 @@ from app.tables.schemas import (
     RollOut,
     RoundTimeLimitUpdate,
     RouteCrossOut,
+    RouteOpenOut,
     RouteOut,
     SheetOut,
     StepPriceOut,
@@ -267,7 +268,7 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
             ward=item.ward,
             lock=item.lock,
             throw=to_throw(item.throw),
-            treat_bonus=item.treat_bonus,
+            aids=list(item.aids),
         )
         for item in catalog.values()
     ]
@@ -374,9 +375,9 @@ def to_route(table: GameTable, snapshot: Snapshot, route: RouteSnapshot) -> Rout
         barred=barred,
         bar_side=route.bar.side if route.bar is not None else None,
         broken=route_locks.is_broken(table, route),
-        pick=to_cross(snapshot, pick),
+        pick=to_opening(snapshot, pick),
         force=to_cross(snapshot, route.force),
-        repair=to_cross(snapshot, route.repair),
+        repair=to_opening(snapshot, route.repair),
     )
 
 
@@ -388,6 +389,14 @@ def to_cross(
         return None
     difficulty = find_difficulty(snapshot.rulebook.rules, terms.difficulty)
     return RouteCrossOut(ability=terms.ability, difficulty=difficulty.key)
+
+
+def to_opening(snapshot: Snapshot, terms: PickSnapshot | RepairSnapshot | None) -> RouteOpenOut | None:
+    """길의 문을 따거나 고치는 판정을 응답으로 바꾼다. 도구가 있어야 하는가(#802)가 붙는다. 없으면 None."""
+    if terms is None:
+        return None
+    crossing = to_cross(snapshot, terms)
+    return RouteOpenOut(**crossing.model_dump(), needs_tool=terms.needs_tool)
 
 
 def to_roll(roll: TableRoll | None) -> RollOut | None:

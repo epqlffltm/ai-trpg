@@ -31,6 +31,7 @@ from app.engine.ruleset import Ruleset
 from app.rounds.drops import NPC_SOURCE
 from app.rounds.models import Declaration, Round
 from app.rounds.narrator import (
+    AidNote,
     BlowNote,
     ClockNote,
     CoverNote,
@@ -234,6 +235,7 @@ def to_travel(declaration: Declaration | None, ruleset: Ruleset | None = None) -
         cross=cross_ability_name(ruleset, move.get('cross')),
         hurt=move.get('effect') is not None,
         unbarred=move.get('unbarred', False),
+        aid=to_aid(move.get('aid')),
     )
 
 
@@ -253,7 +255,15 @@ def to_door(declaration: Declaration | None, ruleset: Ruleset | None = None) -> 
         device=door['device'],
         reason=door['reason'],
         check=cross_ability_name(ruleset, door['check']),
+        aid=to_aid(door.get('aid')),
     )
+
+
+def to_aid(aid: dict | None) -> AidNote | None:
+    """행동에 붙여 쓴 물건을 서술자에게 줄 모양으로(#802). 붙이지 않았거나 쓰지 못했으면(굴리지 않음, 더 없음) None."""
+    if aid is None or not aid['used']:
+        return None
+    return AidNote(name=aid['name'], bonus=aid['bonus'], broken=aid.get('broken', False))
 
 
 def to_rest(declaration: Declaration | None) -> RestNote | None:
@@ -500,8 +510,6 @@ def to_treatment(treatment: dict | None) -> TreatmentNote | None:
         return None
     mishap = treatment['mishap']
     aftermath = treatment['aftermath']
-    aid = treatment.get('aid')
-    used = aid is not None and aid['used']
     return TreatmentNote(
         injury=treatment['name'],
         patient=patient_name(treatment['patient']),
@@ -512,8 +520,7 @@ def to_treatment(treatment: dict | None) -> TreatmentNote | None:
         mishap=mishap['kind'] if mishap else None,
         worsened_minutes=mishap.get('delay_minutes') if mishap else None,
         died=treatment['died'],
-        aid=aid['name'] if used else None,
-        aid_bonus=aid['bonus'] if used else 0,
+        aid=to_aid(treatment.get('aid')),
     )
 
 

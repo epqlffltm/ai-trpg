@@ -11,8 +11,8 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../..
 import { renderApp } from '../../../../../test/renderApp';
 import { declaration, ME, member, round, roomRoutes, sheet, tableDetail } from '../../../../../test/tableFixtures';
 import { outcomeLine } from '../roundView';
-import { emptyActionDraft, toAction } from './actionDraft';
-import { availableKinds } from './actionOptions';
+import { actionHint, draftFromAction, emptyActionDraft, toAction } from './actionDraft';
+import { aidItems, availableKinds } from './actionOptions';
 import { doorDevices, doorsFor, doorsHere, doorState } from './doorOptions';
 
 const TABLE_ID = '00000000-0000-4000-8000-0000000000ed';
@@ -107,6 +107,59 @@ describe('문을 다루는 행동의 고를 거리', () => {
       '종탑 쪽 문: 따지 못했습니다(판정에 실패했습니다) · 눈 8, 보정 +1, 합 9 / 목표 15',
     );
     expect(outcomeLine({ door: { ...base, act: 'unlock', device: 'lock', done: false, reason: 'no_key' } }, rules)).toBe('종탑 쪽 자물쇠: 열지 못했습니다(열쇠가 없었습니다)');
+  });
+});
+
+describe('문에 붙여 쓰는 도구(#802)', () => {
+  const LOCKPICK = { entry_id: 'i5', name: '락픽', kind: 'gear', rarity: 'normal', count: 1 };
+  const CROWBAR = { entry_id: 'i6', name: '쇠지렛대', kind: 'gear', rarity: 'normal', count: 1 };
+
+  /** 종탑의 자물쇠는 도구가 있어야 딴다. 락픽은 따기를, 쇠지렛대는 부수기를 거든다 */
+  function tooled(held: unknown[] = [LOCKPICK, CROWBAR]) {
+    const map = { ...MAP, routes: [{ ...MAP.routes[0], pick: { ...CHECK, needs_tool: true } }, ...MAP.routes.slice(1)] };
+    const table = tableDetail(TABLE_ID, {
+      status: 'playing',
+      map,
+      members: [member(ME, { is_host: true, character: { name: '렌', description: '' }, sheet: sheet({ place_id: GATE, items: held }) })],
+      items: [
+        { entry_id: 'i5', name: '락픽', kind: 'gear', rarity: 'normal', effects: [], aids: [{ act: 'pick', bonus: 2, wear: 'on_fail' }] },
+        { entry_id: 'i6', name: '쇠지렛대', kind: 'gear', rarity: 'normal', effects: [], aids: [{ act: 'force', bonus: 3, wear: 'never' }] },
+      ],
+    }) as unknown as TableDetail;
+    return ctx(table);
+  }
+
+  it('그 행동을 거드는 물건만 붙여 보낸다. 다른 행동의 물건이 남아 있으면 빼고 보낸다', () => {
+    const context = tooled();
+    const draft = { ...emptyActionDraft(context.table.rules), kind: 'pick' as const, place: TOWER, item: 'i5' };
+    expect(toAction(draft, context)).toEqual({ kind: 'pick', place: TOWER, item: 'i5' });
+    expect(toAction({ ...draft, kind: 'force', item: 'i5' }, context)).toEqual({ kind: 'force', place: TOWER });
+    expect(toAction({ ...draft, kind: 'force', item: 'i6' }, context)).toEqual({ kind: 'force', place: TOWER, item: 'i6' });
+    expect(draftFromAction(context.table.rules, { kind: 'pick', place: TOWER, item: 'i5' }).item).toBe('i5');
+  });
+
+  it('도구가 있어야 하는 자물쇠는 도구를 골라야 보낸다', () => {
+    const context = tooled();
+    const draft = { ...emptyActionDraft(context.table.rules), kind: 'pick' as const, place: TOWER };
+    expect(actionHint(draft, context)).toBe('이 문은 도구가 있어야 합니다. 쓸 도구를 골라 주세요.');
+    expect(actionHint({ ...draft, item: 'i5' }, context)).toBeNull();
+    // 부수기는 도구를 요구하지 않는다
+    expect(actionHint({ ...draft, kind: 'force' }, context)).toBeNull();
+    expect(aidItems(context, 'pick')).toEqual([{ value: 'i5', label: '락픽 +2 ×1, 실패하면 부러짐' }]);
+    expect(aidItems(tooled([CROWBAR]), 'pick')).toEqual([]);
+  });
+
+  it('결과에 쓴 도구와 부러진 것을 보인다', () => {
+    const rules = playing().rules;
+    const to = { entry_id: TOWER, name: '종탑' };
+    const check = { ability: 'dex', difficulty: 'normal', modifier: 2, roll: 8, total: 10, target: 15, success: false };
+    const aid = { entry_id: 'i5', name: '락픽', act: 'pick', bonus: 2, used: true, lost: true, broken: true, reason: null, remaining: 0 };
+    const door = { user_id: ME, character_name: '렌', from: { entry_id: GATE, name: '수도원 문' }, to, act: 'pick', device: null, done: false, reason: 'failed', check, aid };
+    expect(outcomeLine({ door }, rules)).toBe('종탑 쪽 문: 따지 못했습니다(판정에 실패했습니다) · 눈 8, 보정 +2, 합 10 / 목표 15 · 락픽 +2 씀, 부러짐');
+    const gone = { ...aid, bonus: 0, used: false, lost: false, broken: false, reason: 'not_held' };
+    expect(outcomeLine({ door: { ...door, reason: 'no_tool', check: null, aid: gone } }, rules)).toBe(
+      '종탑 쪽 문: 따지 못했습니다(도구를 붙이지 않았거나 더 지니지 않았습니다) · 락픽을(를) 더 지니지 않아 쓰지 못함',
+    );
   });
 });
 

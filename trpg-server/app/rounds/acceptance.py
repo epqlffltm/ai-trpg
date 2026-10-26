@@ -59,9 +59,11 @@ from app.engine.action import (
     UseAction,
     WaitAction,
 )
+from app.engine.item_aids import AidAct
 from app.engine.item_effects import EffectKind, first_of
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
+from app.rounds.aids import require_aid
 from app.rounds.cast import CastMember, Scene, find_cast_member, find_reachable, is_named
 from app.rounds.covers import accept_cover
 from app.rounds.door_actions import accept_door
@@ -235,7 +237,7 @@ def accept_treatment(
       - 대상이 앉은 사람이나 이번 장면의 인물이 아니면(다른 장소의 인물이면) ActionTargetError,
         이미 죽었으면 RoundConflictError.
       - 대상이 그 부상을 입고 있지 않으면 RoundConflictError.
-      - 붙여 쓰는 물건(#277)이 판의 물건이 아니거나 치료 보정이 없으면 ActionNotInRulesError(item),
+      - 붙여 쓰는 물건(#277, #802)이 판의 물건이 아니거나 치료를 거들지 않으면 ActionNotInRulesError(item),
         하나도 가지고 있지 않으면 RoundConflictError(item_not_held).
     비워 둔 대상은 자기 자신으로 채운다.
     """
@@ -243,21 +245,11 @@ def accept_treatment(
     if fault is not None:
         raise ActionNotInRulesError(fault)
     if action.item is not None:
-        require_aid(table, member, action.item)
+        require_aid(table, member, action.item, AidAct.TREAT)
     aimed = aim_treatment(action, member.user_id)
     if not round_injuries.wears(patient_rows(table, member, aimed, cast), aimed.injury):
         raise RoundConflictError(Conflict.NOT_INJURED)
     return aimed.model_dump(mode='json')
-
-
-def require_aid(table: GameTable, member: TableMember, entry_id: uuid.UUID) -> None:
-    """
-    치료에 붙여 쓰는 물건을 본다(#277). 치료 보정이 있는 판의 물건이 아니면 ActionNotInRulesError(item),
-    하나도 가지고 있지 않으면 RoundConflictError(item_not_held).
-    """
-    if find_item(table, entry_id).treat_bonus is None:
-        raise ActionNotInRulesError('item')
-    require_held(member, entry_id, 1)
 
 
 def accept_naming(action: NameAction, cast: list[CastMember]) -> dict:

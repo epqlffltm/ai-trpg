@@ -48,6 +48,7 @@ from app.assets.models import (
 from app.assets.scenarios.upgrades import UPGRADES
 from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
+from app.engine.item_aids import ItemAid
 from app.engine.item_effects import Effect
 from app.engine.ruleset import InjuryNature, Ruleset
 from app.engine.sheet import Sheet
@@ -134,7 +135,9 @@ from app.engine.sheet import Sheet
 #      rulebook.rules.item_check: 물건을 인물이나 몬스터에게 쓸 때 맞히는 판정(능력치, 난이도)
 #  63: 모든 물건을 던진다(#801). items[].throw 는 판정(능력치, 난이도)만이고, 맞았을 때의 피해(harm)는
 #      효과의 damage 가 됐다. 던지는 판정이 없는 물건은 룰북의 맞히는 판정(item_check)으로 던진다
-SNAPSHOT_FORMAT = 63
+#  64: 물건이 다른 행동을 거든다(#802). items[].aids: 행동(치료, 따기, 고치기, 부수기, 넘기), 보정, 없어지는 방식.
+#      treat_bonus 는 치료의 거들기가 됐다. 따기와 고치기의 도구(tool)는 도구가 있어야 하는가(needs_tool)가 됐다
+SNAPSHOT_FORMAT = 64
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다
@@ -228,11 +231,15 @@ class ItemStackSnapshot(BaseModel):
 
 
 class PickSnapshot(BaseModel):
-    """자물쇠를 따는 판정(#281). 능력치, 난이도의 이름과 있어야 하는 도구(판 안의 물건 항목, 없으면 None)."""
+    """
+    자물쇠를 따는 판정(#281). 능력치, 난이도의 이름과 도구가 있어야 하는가(#802).
+
+    도구는 그 행동을 거드는 물건이면 어느 것이든 된다. 형식 64 보다 옛 판의 특정 도구는 이것과 그 물건의 거들기가 된다.
+    """
 
     ability: str
     difficulty: str | None = None
-    tool: uuid.UUID | None = None
+    needs_tool: bool = False
 
 
 class ItemThrowSnapshot(BaseModel):
@@ -259,7 +266,7 @@ class ItemRuleSnapshot(BaseModel):
     slots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
     slots 가 비어 있으면 착용하지 않는 물건이다.
     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).
-    throw 는 던지는 판정, treat_bonus 는 치료에 붙여 쓸 때의 보정이다(#277). 둘 다 소모품에만 있다.
+    throw 는 던지는 판정이다(#277). aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py).
     """
 
     entry_id: uuid.UUID
@@ -281,8 +288,8 @@ class ItemRuleSnapshot(BaseModel):
     lock: ItemLockSnapshot | None = None
     # 던지는 판정. 형식 59 보다 옛 판의 물건에는 없다
     throw: ItemThrowSnapshot | None = None
-    # 치료에 붙여 쓸 때 치료 판정의 보정에 더하는 값. 형식 60 보다 옛 판의 물건에는 없다
-    treat_bonus: int | None = None
+    # 거드는 행동들. 형식 64 보다 옛 판의 treat_bonus 는 치료의 거들기, 따기·고치기의 도구는 그 행동의 거들기가 된다
+    aids: list[ItemAid] = []
 
 
 class QuestConditionSnapshot(BaseModel):
@@ -733,7 +740,7 @@ class Snapshot(BaseModel):
     def require_route_keys(self) -> 'Snapshot':
         """
         길의 자물쇠와 자물쇠 물건마다 열쇠가 판 안의 물건 항목이고, 열쇠 하나가 자물쇠 하나만 여는지 본다(#281).
-        아니면 거부한다. 따는 도구와 고치는 도구도 판 안의 물건 항목이어야 한다.
+        아니면 거부한다.
 
         게시할 때 이미 막는다(item_not_item, route_key_repeated). 테이블은 열쇠로 그 길 하나를 찾는다.
         """
@@ -741,10 +748,6 @@ class Snapshot(BaseModel):
         keys = route_keys(self) + item_lock_keys(self)
         if any(key not in items for key in keys):
             raise ValueError('물건 항목이 아닌 것을 열쇠로 적은 자물쇠가 있습니다.')
-        if any(tool not in items for tool in pick_tools(self)):
-            raise ValueError('물건 항목이 아닌 것을 따는 도구로 적은 자물쇠가 있습니다.')
-        if any(tool not in items for tool in repair_tools(self)):
-            raise ValueError('물건 항목이 아닌 것을 고치는 도구로 적은 문이 있습니다.')
         if len(set(keys)) != len(keys):
             raise ValueError('열쇠 하나가 두 자물쇠를 엽니다.')
         return self
@@ -975,20 +978,6 @@ def item_locks(snapshot: Snapshot) -> list[ItemLockSnapshot]:
 def item_lock_keys(snapshot: Snapshot) -> list[uuid.UUID]:
     """자물쇠 물건마다의 열쇠(#281). 판의 아이템 규칙 순서다."""
     return [lock.key for lock in item_locks(snapshot)]
-
-
-def pick_tools(snapshot: Snapshot) -> list[uuid.UUID]:
-    """자물쇠를 따는 데 있어야 하는 도구들(#281). 판의 길 순서, 그다음 자물쇠 물건의 순서다."""
-    route_picks = [route.lock.pick for route in snapshot.routes if route.lock is not None]
-    item_picks = [lock.pick for lock in item_locks(snapshot)]
-    return [pick.tool for pick in [*route_picks, *item_picks] if pick is not None and pick.tool is not None]
-
-
-def repair_tools(snapshot: Snapshot) -> list[uuid.UUID]:
-    """부서진 문을 고치는 데 있어야 하는 도구들(#281). 판의 길 순서다."""
-    return [
-        route.repair.tool for route in snapshot.routes if route.repair is not None and route.repair.tool is not None
-    ]
 
 
 def door_devices(route: RouteSnapshot) -> list[DoorDevice]:

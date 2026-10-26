@@ -12,6 +12,7 @@ import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
 import { currencyDraft, currencyHints, moneyText, toCurrency } from './currencyForm';
+import { aidHints, aidLine, newAidDraft } from './itemAidsForm';
 import { effectHints, newEffectDraft, toggleCure } from './itemEffectsForm';
 import { itemRuleDraft, itemRuleHints, itemRuleLine, toItemRule } from './itemRuleForm';
 import { stacksHints } from './stacksForm';
@@ -38,6 +39,7 @@ const SWORD_RULE = {
   defense: null,
   guard: null,
   ward: null,
+  aids: [],
 };
 
 const KNIGHT = { name: '기사', description: '', sheet: { abilities: { str: 16, dex: 10, con: 14 }, max_hp: 14 }, items: [], money: 0 };
@@ -191,18 +193,17 @@ describe('물건·돈 입력', () => {
     const heal = { ...newEffectDraft('heal'), magnitude: 'light' };
     const damage = { ...newEffectDraft('damage'), magnitude: 'light' };
     const stun = { ...newEffectDraft('injure'), injury: 'stunned' };
-    expect(effectHints([heal, damage], '').effects).toBe('회복과 피해는 한 물건에 함께 적지 않습니다.');
-    expect(effectHints([heal, heal], '').effects).toBe('회복, 풀기, 피해는 한 번씩만 적습니다.');
-    expect(effectHints([stun, stun], '').effects).toBe('같은 부상을 두 번 입힙니다.');
-    expect(effectHints([newEffectDraft('cure')], '')['effect.0']).toBe('풀 부상을 하나 이상 고르세요.');
-    expect(effectHints([damage, stun], '11').treat_bonus).toBeDefined();
-    expect(effectHints([damage, stun], '2')).toEqual({});
+    expect(effectHints([heal, damage]).effects).toBe('회복과 피해는 한 물건에 함께 적지 않습니다.');
+    expect(effectHints([heal, heal]).effects).toBe('회복, 풀기, 피해는 한 번씩만 적습니다.');
+    expect(effectHints([stun, stun]).effects).toBe('같은 부상을 두 번 입힙니다.');
+    expect(effectHints([newEffectDraft('cure')])['effect.0']).toBe('풀 부상을 하나 이상 고르세요.');
+    expect(effectHints([damage, stun])).toEqual({});
     expect(toggleCure(['stunned'], 'poisoned', null)).toEqual(['stunned', 'poisoned']);
   });
 
   it('효과: 목록의 줄', () => {
-    const rule = { ...SWORD_RULE, kind: 'consumable', slots: [], attack: null, price: null, effects: [{ kind: 'damage', magnitude: 'light' }, { kind: 'injure', injury: 'poisoned' }], throw: { ability: 'dex', difficulty: null }, treat_bonus: 2 } as unknown as ItemRule;
-    expect(itemRuleLine(rule, null)).toBe('소모품 · 희귀 · 피해 light · 부상: poisoned · 던짐 · 치료 +2');
+    const rule = { ...SWORD_RULE, kind: 'consumable', slots: [], attack: null, price: null, effects: [{ kind: 'damage', magnitude: 'light' }, { kind: 'injure', injury: 'poisoned' }], throw: { ability: 'dex', difficulty: null }, aids: [{ act: 'treat', bonus: 2, wear: 'always' }] } as unknown as ItemRule;
+    expect(itemRuleLine(rule, null)).toBe('소모품 · 희귀 · 피해 light · 부상: poisoned · 던짐 · 치료 +2(쓰면 늘 없어짐)');
   });
 
   it('규칙: 던지는 판정은 장비에도 보낸다. 끄면 보내지 않는다', () => {
@@ -214,11 +215,23 @@ describe('물건·돈 입력', () => {
     expect(toItemRule(SWORD, itemRuleDraft(undefined)).throw).toBeNull();
   });
 
-  it('규칙: 치료 보정은 소모품에만 보낸다', () => {
-    const kit = itemRuleDraft({ ...SWORD_RULE, entry_id: POTION, kind: 'consumable', slots: [], attack: null, treat_bonus: 2 } as ItemRule);
-    expect(toItemRule(POTION, kit).treat_bonus).toBe(2);
-    expect(toItemRule(POTION, { ...kit, kind: 'gear' }).treat_bonus).toBeNull();
-    expect(toItemRule(SWORD, itemRuleDraft(undefined)).treat_bonus).toBeNull();
+  it('규칙: 거드는 행동은 모든 물건에 읽은 그대로 보내고, 비운 보정은 0 이다(#802)', () => {
+    const aids = [{ act: 'pick', bonus: 2, wear: 'on_fail' }, { act: 'cross', bonus: 0, wear: 'never' }] as ItemRule['aids'];
+    const lockpick = itemRuleDraft({ ...SWORD_RULE, aids } as ItemRule);
+    expect(lockpick.aids).toEqual([{ act: 'pick', bonus: '2', wear: 'on_fail' }, { act: 'cross', bonus: '', wear: 'never' }]);
+    expect(toItemRule(SWORD, lockpick).aids).toEqual(aids);
+    expect(toItemRule(SWORD, { ...lockpick, kind: 'consumable' }).aids).toEqual(aids);
+    expect(toItemRule(SWORD, itemRuleDraft(undefined)).aids).toEqual([]);
+  });
+
+  it('거들기: 보정은 0~10, 같은 행동은 한 번. 새 줄은 아직 적지 않은 행동이다', () => {
+    const pick = { act: 'pick', bonus: '2', wear: 'on_fail' } as const;
+    expect(aidHints([pick])).toEqual({});
+    expect(aidHints([{ ...pick, bonus: '11' }])['aid.0']).toBe('보정은 0~10 사이의 정수입니다.');
+    expect(aidHints([pick, { ...pick, bonus: '1' }]).aids).toBe('한 물건에 같은 행동의 거들기를 두 번 적었습니다.');
+    expect(newAidDraft([])).toEqual({ act: 'treat', bonus: '', wear: 'always' });
+    expect(newAidDraft([{ act: 'treat', bonus: '', wear: 'always' }])).toEqual({ act: 'pick', bonus: '', wear: 'never' });
+    expect(aidLine({ act: 'cross', bonus: 0, wear: 'never' })).toBe('넘기(없어지지 않음)');
   });
 
   it('소지품: 같은 물건, 개수, 착용 칸의 수, 겹치는 칸을 알린다', () => {

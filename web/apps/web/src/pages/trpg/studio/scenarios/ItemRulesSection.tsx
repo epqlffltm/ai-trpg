@@ -2,7 +2,7 @@
 // 물건 규칙(B9 물건·돈 탭). 붙인 로어북의 물건 항목을 모두 늘어놓고, 줄마다 규칙(없으면 "장비 · 보통")을 보인다.
 // 줄을 고치면 창이 열리고, 창의 저장이 물건 규칙의 목록을 통째로 바로 보낸다. 규칙 지우기는 장비·보통으로 돌린다.
 // 붙인 로어북에 없는 물건의 규칙(로어북을 뗐거나 항목을 지웠다)도 줄로 남겨 지울 수 있게 한다. 장비는 새 자물쇠(#281)로 둘 수 있다.
-// 소모품은 쓰면 나는 효과 목록(#800)과 치료 보정을, 모든 물건은 던지는 판정(#801)을 적는다(ItemEffectsEditor).
+// 소모품은 쓰면 나는 효과 목록(#800)을, 모든 물건은 던지는 판정(#801, ItemEffectsEditor)과 거드는 행동(#802, ItemAidsEditor)을 적는다.
 
 import { Button, Checkbox, Dialog, SelectField, TextField } from '@ai-trpg/ui';
 import { useCallback, useState, type FormEvent } from 'react';
@@ -22,6 +22,7 @@ import {
   withoutItemRule,
   type ItemRuleDraft,
 } from './itemRuleForm';
+import { ItemAidsEditor } from './ItemAidsEditor';
 import { ConsumableFields, ThrowFields } from './ItemEffectsEditor';
 import { ItemLockFields } from './ItemLockFields';
 import { itemLockHints, keysElsewhere } from './itemLockForm';
@@ -139,6 +140,7 @@ function ItemRuleForm({ scenario, rules, entries, row, done }: FormProps) {
             <WearFields draft={draft} rules={rules} hints={hints} update={update} />
           )}
           <ThrowFields thrown={draft.throw} rules={rules} error={hints.throw} onChange={(thrown) => update({ throw: thrown })} />
+          <ItemAidsEditor aids={draft.aids} hints={hints} onChange={(aids) => update({ aids })} />
           {draft.kind === 'gear' ? (
             <ItemLockFields draft={draft.lock} entryId={row.id} items={entries} rules={rules} hints={lockHints} onChange={(lock) => update({ lock })} />
           ) : null}

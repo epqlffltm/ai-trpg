@@ -1887,6 +1887,56 @@ export interface components {
             reason: string;
         };
         /**
+         * AidAct
+         * @description 거드는 행동.
+         * @enum {string}
+         */
+        AidAct: "treat" | "pick" | "repair" | "force" | "cross";
+        /**
+         * AidOut
+         * @description 행동의 판정에 붙여 쓴 물건(#277, #802, 거들기). 판정의 보정(modifier)에 bonus 가 이미 들었다.
+         *
+         *     치료, 따기, 부수기, 고치기, 넘기에 붙는다.
+         */
+        AidOut: {
+            /**
+             * Act
+             * @default treat
+             */
+            act: string;
+            /** Bonus */
+            bonus: number;
+            /**
+             * Broken
+             * @default false
+             */
+            broken: boolean;
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /**
+             * Lost
+             * @default false
+             */
+            lost: boolean;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string | null;
+            /** Remaining */
+            remaining: number;
+            /** Used */
+            used: boolean;
+        };
+        /**
+         * AidWear
+         * @description 거든 물건이 굴린 뒤에 어떻게 되나.
+         * @enum {string}
+         */
+        AidWear: "always" | "on_fail" | "never";
+        /**
          * Armor
          * @description 방어구의 규칙(#276). 어떤 방식으로 막는지다. 방어의 크기는 판의 아이템 규칙과 몬스터 시트가 정한다.
          *
@@ -2255,6 +2305,11 @@ export interface components {
          *     등급은 rules 의 magnitudes, 부상은 rules 의 injuries 의 key 다. 피해나 부상이 있으면 동료에게는 쓰지 못한다.
          */
         CatalogItemOut: {
+            /**
+             * Aids
+             * @default []
+             */
+            aids: components["schemas"]["ItemAid"][];
             /** Ap */
             ap?: number | null;
             /** Attack */
@@ -2295,8 +2350,6 @@ export interface components {
              */
             slots: string[];
             throw?: components["schemas"]["app__tables__schemas__ItemThrowOut"] | null;
-            /** Treat Bonus */
-            treat_bonus?: number | null;
             /** Ward */
             ward?: number | null;
         };
@@ -2858,6 +2911,7 @@ export interface components {
         DoorOut: {
             /** Act */
             act: string;
+            aid?: components["schemas"]["AidOut"] | null;
             /** Character Name */
             character_name: string;
             check?: components["schemas"]["CrossOut"] | null;
@@ -3221,7 +3275,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_thrown" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -3273,8 +3327,11 @@ export interface components {
          * @description 지금 서 있는 장소에 닿은 길의 문을 부수는 행동(#281). 판에 적힌 부수는 판정(능력, 난이도)으로 굴린다.
          *
          *     성공하면 자물쇠와 빗장이 부서져 열린다. 부서진 문은 다시 잠그지 못한다. 지나가지는 않는다.
+         *     부수기를 거드는 물건(item, 쇠지렛대)을 붙일 수 있다(#802).
          */
         ForceAction: {
+            /** Item */
+            item?: string | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -3679,6 +3736,20 @@ export interface components {
             };
         };
         /**
+         * ItemAid
+         * @description 물건이 행동 하나(act)를 거드는 방식. 판정에 bonus 를 더하고, 굴린 뒤 wear 대로 된다.
+         */
+        ItemAid: {
+            act: components["schemas"]["AidAct"];
+            /**
+             * Bonus
+             * @default 0
+             */
+            bonus: number;
+            /** @default never */
+            wear: components["schemas"]["AidWear"];
+        };
+        /**
          * ItemCheck
          * @description 물건을 인물이나 몬스터에게 쓸 때 맞히는 판정(#800). 어느 능력으로, 어느 난이도에 도전하는가.
          *
@@ -3746,7 +3817,7 @@ export interface components {
              * Format: uuid
              */
             key: string;
-            pick?: components["schemas"]["PickCheck-Input"] | null;
+            pick?: components["schemas"]["PickCheck"] | null;
         };
         /**
          * ItemLock
@@ -3761,7 +3832,7 @@ export interface components {
         "ItemLock-Output": {
             /** Key */
             key: string;
-            pick?: components["schemas"]["PickCheck-Output"] | null;
+            pick?: components["schemas"]["PickCheck"] | null;
         };
         /**
          * ItemLockSnapshot
@@ -3836,10 +3907,16 @@ export interface components {
          *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
          *     throw 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.
          *     행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.
-         *     treat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.
-         *     쓰면 치료가 성공하든 실패하든 하나 없어진다.
+         *     aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면
+         *     판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.
+         *     예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.
          */
         "ItemRule-Input": {
+            /**
+             * Aids
+             * @default []
+             */
+            aids: components["schemas"]["ItemAid"][];
             /** Ap */
             ap?: number | null;
             /** Attack */
@@ -3876,8 +3953,6 @@ export interface components {
              */
             slots: string[];
             throw?: components["schemas"]["ItemThrow"] | null;
-            /** Treat Bonus */
-            treat_bonus?: number | null;
             /** Ward */
             ward?: number | null;
         };
@@ -3902,10 +3977,16 @@ export interface components {
          *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
          *     throw 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.
          *     행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.
-         *     treat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.
-         *     쓰면 치료가 성공하든 실패하든 하나 없어진다.
+         *     aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면
+         *     판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.
+         *     예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.
          */
         "ItemRule-Output": {
+            /**
+             * Aids
+             * @default []
+             */
+            aids: components["schemas"]["ItemAid"][];
             /** Ap */
             ap?: number | null;
             /** Attack */
@@ -3939,8 +4020,6 @@ export interface components {
              */
             slots: string[];
             throw?: components["schemas"]["ItemThrow"] | null;
-            /** Treat Bonus */
-            treat_bonus?: number | null;
             /** Ward */
             ward?: number | null;
         };
@@ -3954,9 +4033,14 @@ export interface components {
          *     slots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).
          *     slots 가 비어 있으면 착용하지 않는 물건이다.
          *     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).
-         *     throw 는 던지는 판정, treat_bonus 는 치료에 붙여 쓸 때의 보정이다(#277). 둘 다 소모품에만 있다.
+         *     throw 는 던지는 판정이다(#277). aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py).
          */
         ItemRuleSnapshot: {
+            /**
+             * Aids
+             * @default []
+             */
+            aids: components["schemas"]["ItemAid"][];
             /** Ap */
             ap?: number | null;
             /** Attack */
@@ -3992,8 +4076,6 @@ export interface components {
              */
             slots: string[];
             throw?: components["schemas"]["ItemThrowSnapshot"] | null;
-            /** Treat Bonus */
-            treat_bonus?: number | null;
             /** Ward */
             ward?: number | null;
         };
@@ -4905,10 +4987,13 @@ export interface components {
          *     place 는 판의 로어북 장소 항목의 id 다. 엔진은 이 값을 읽지 않는다. 어디와 이어져 있는지는 판이 안다.
          *     한 라운드에 한 칸이다. 한 사람의 선언에는 행동이 하나다.
          *     carry 는 함께 업고 갈 쓰러진 동료(앉은 사람의 user_id)다. 한 사람이 한 명을 업는다(#367).
+         *     item 은 길을 넘는 판정을 거드는 물건이다(#802, 밧줄). 넘는 판정이 있는 길에만 적는다.
          */
         MoveAction: {
             /** Carry */
             carry?: string | null;
+            /** Item */
+            item?: string | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -5008,6 +5093,7 @@ export interface components {
          * @description 한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 넘기 판정(#281)이 있는 길이 아니면 판정이 없다.
          */
         MoveOut: {
+            aid?: components["schemas"]["AidOut"] | null;
             carry?: components["schemas"]["CarryOut"] | null;
             /** Character Name */
             character_name: string;
@@ -5755,9 +5841,11 @@ export interface components {
          * PickAction
          * @description 지금 서 있는 장소에 닿은 길의 잠긴 자물쇠를 따는 행동(#281). 판에 적힌 따는 판정(능력, 난이도)으로 굴린다.
          *
-         *     판에 도구를 적었으면 그 물건을 지녀야 딴다. 성공하면 자물쇠가 열린다. 지나가지는 않는다.
+         *     판이 도구를 요구하면 따기를 거드는 물건(item)을 붙여야 딴다(#802). 성공하면 자물쇠가 열린다. 지나가지는 않는다.
          */
         PickAction: {
+            /** Item */
+            item?: string | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -5773,43 +5861,38 @@ export interface components {
          * PickCheck
          * @description 자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.
          *
-         *     tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 락픽 같은 것)을 지닌 사람만 딸 수 있다. 도구는 없어지지 않는다.
+         *     needs_tool 이면 도구가 있어야 딴다(#802). 도구는 그 행동을 거드는 물건(아이템 규칙의 aids)이면 어느 것이든 된다.
+         *     플레이어가 행동에 붙인다. 보정과 없어지는 방식은 물건이 정한다.
+         *     예전의 특정 도구(tool)는 이것과 그 물건의 거들기가 됐다.
          *     능력치와 난이도가 룰북에 있는지는 게시할 때 본다.
          */
-        "PickCheck-Input": {
+        PickCheck: {
             /** Ability */
             ability: string;
             /** Difficulty */
             difficulty?: string | null;
-            /** Tool */
-            tool?: string | null;
-        };
-        /**
-         * PickCheck
-         * @description 자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.
-         *
-         *     tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 락픽 같은 것)을 지닌 사람만 딸 수 있다. 도구는 없어지지 않는다.
-         *     능력치와 난이도가 룰북에 있는지는 게시할 때 본다.
-         */
-        "PickCheck-Output": {
-            /** Ability */
-            ability: string;
-            /** Difficulty */
-            difficulty?: string | null;
-            /** Tool */
-            tool?: string | null;
+            /**
+             * Needs Tool
+             * @default false
+             */
+            needs_tool: boolean;
         };
         /**
          * PickSnapshot
-         * @description 자물쇠를 따는 판정(#281). 능력치, 난이도의 이름과 있어야 하는 도구(판 안의 물건 항목, 없으면 None).
+         * @description 자물쇠를 따는 판정(#281). 능력치, 난이도의 이름과 도구가 있어야 하는가(#802).
+         *
+         *     도구는 그 행동을 거드는 물건이면 어느 것이든 된다. 형식 64 보다 옛 판의 특정 도구는 이것과 그 물건의 거들기가 된다.
          */
         PickSnapshot: {
             /** Ability */
             ability: string;
             /** Difficulty */
             difficulty?: string | null;
-            /** Tool */
-            tool?: string | null;
+            /**
+             * Needs Tool
+             * @default false
+             */
+            needs_tool: boolean;
         };
         /**
          * PierceOut
@@ -6712,10 +6795,12 @@ export interface components {
          * RepairAction
          * @description 지금 서 있는 장소에 닿은 길의 부서진 문을 고치는 행동(#281). 판에 적힌 고치는 판정(능력, 난이도)으로 굴린다.
          *
-         *     판에 도구를 적었으면 그 물건을 지녀야 고친다. 성공하면 문이 고쳐져 다시 잠글 수 있다. 고친 문은 열린 채다.
-         *     지나가지는 않는다.
+         *     판이 도구를 요구하면 고치기를 거드는 물건(item)을 붙여야 고친다(#802). 성공하면 문이 고쳐져 다시 잠글 수 있다.
+         *     고친 문은 열린 채다. 지나가지는 않는다.
          */
         RepairAction: {
+            /** Item */
+            item?: string | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -6732,30 +6817,18 @@ export interface components {
          * @description 부서진 문을 고치는 판정(#281). 행동 '고치기'가 이 능력과 난이도로 굴린다. 적지 않으면 고치지 못한다.
          *
          *     성공하면 문이 고쳐진다. 고친 문은 열린 채다. 다시 잠그려면 잠그기를 한다.
-         *     tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 공구 같은 것)을 지닌 사람만 고칠 수 있다. 도구는 없어지지 않는다.
+         *     needs_tool 이면 고치기를 거드는 물건(공구 같은 것)이 있어야 고친다(#802). 따기와 같다.
          */
-        "RepairCheck-Input": {
+        RepairCheck: {
             /** Ability */
             ability: string;
             /** Difficulty */
             difficulty?: string | null;
-            /** Tool */
-            tool?: string | null;
-        };
-        /**
-         * RepairCheck
-         * @description 부서진 문을 고치는 판정(#281). 행동 '고치기'가 이 능력과 난이도로 굴린다. 적지 않으면 고치지 못한다.
-         *
-         *     성공하면 문이 고쳐진다. 고친 문은 열린 채다. 다시 잠그려면 잠그기를 한다.
-         *     tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 공구 같은 것)을 지닌 사람만 고칠 수 있다. 도구는 없어지지 않는다.
-         */
-        "RepairCheck-Output": {
-            /** Ability */
-            ability: string;
-            /** Difficulty */
-            difficulty?: string | null;
-            /** Tool */
-            tool?: string | null;
+            /**
+             * Needs Tool
+             * @default false
+             */
+            needs_tool: boolean;
         };
         /**
          * RepairRouteEffect
@@ -6806,8 +6879,11 @@ export interface components {
             ability: string;
             /** Difficulty */
             difficulty?: string | null;
-            /** Tool */
-            tool?: string | null;
+            /**
+             * Needs Tool
+             * @default false
+             */
+            needs_tool: boolean;
         };
         /**
          * ReplaceAction
@@ -7146,7 +7222,7 @@ export interface components {
              * @default true
              */
             locked: boolean;
-            pick?: components["schemas"]["PickCheck-Input"] | null;
+            pick?: components["schemas"]["PickCheck"] | null;
         };
         /**
          * RouteLock
@@ -7165,14 +7241,29 @@ export interface components {
              * @default true
              */
             locked: boolean;
-            pick?: components["schemas"]["PickCheck-Output"] | null;
+            pick?: components["schemas"]["PickCheck"] | null;
+        };
+        /**
+         * RouteOpenOut
+         * @description 길의 문을 따거나 고치는 판정(#281). 넘기와 부수기의 것에 도구가 있어야 하는가(#802)가 더 있다.
+         */
+        RouteOpenOut: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty: string;
+            /**
+             * Needs Tool
+             * @default false
+             */
+            needs_tool: boolean;
         };
         /**
          * RouteOut
          * @description 아는 길 하나. two_way 가 아니면 from_place 에서 to_place 로만 간다.
          *
-         *     길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 무슨 열쇠로 여는지, 따는 도구,
-         *     실패의 피해는 싣지 않는다.
+         *     길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 도구가 있어야 하는지(#802)도 보인다.
+         *     무슨 열쇠로 여는지, 실패의 피해는 싣지 않는다.
          */
         RouteOut: {
             /** Bar Side */
@@ -7193,8 +7284,8 @@ export interface components {
             from_place: string;
             /** Locked */
             locked?: boolean | null;
-            pick?: components["schemas"]["RouteCrossOut"] | null;
-            repair?: components["schemas"]["RouteCrossOut"] | null;
+            pick?: components["schemas"]["RouteOpenOut"] | null;
+            repair?: components["schemas"]["RouteOpenOut"] | null;
             /**
              * To Place
              * Format: uuid
@@ -7230,7 +7321,7 @@ export interface components {
              */
             from_place: string;
             lock?: components["schemas"]["RouteLock-Input"] | null;
-            repair?: components["schemas"]["RepairCheck-Input"] | null;
+            repair?: components["schemas"]["RepairCheck"] | null;
             /**
              * To Place
              * Format: uuid
@@ -7268,7 +7359,7 @@ export interface components {
             /** From Place */
             from_place: string;
             lock?: components["schemas"]["RouteLock-Output"] | null;
-            repair?: components["schemas"]["RepairCheck-Output"] | null;
+            repair?: components["schemas"]["RepairCheck"] | null;
             /** To Place */
             to_place: string;
             /** Travel Minutes */
@@ -8071,7 +8162,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 63
+             * @default 64
              */
             format: number;
             /**
@@ -8779,8 +8870,8 @@ export interface components {
          *     능력과 난이도는 받지 않는다. 규칙의 치료 능력과 그 부상의 치료 난이도로 판정한다.
          *     대상은 앉은 사람(target)이나 이번 장면의 NPC(npc) 중 하나다.
          *     둘 다 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다).
-         *     item 은 치료에 붙여 쓰는 소모품이다(#277, 의료 키트). 아이템 규칙에 치료 보정(treat_bonus)이 있어야 한다.
-         *     그만큼 치료 판정의 보정이 오르고, 치료가 성공하든 실패하든 하나 없어진다. 비우면 물건 없이 치료한다.
+         *     item 은 치료에 붙여 쓰는 물건이다(#277, #802, 의료 키트). 치료를 거드는 물건(아이템 규칙의 aids)이어야 한다.
+         *     그 보정만큼 치료 판정의 보정이 오르고, 굴린 뒤 그 물건의 방식대로 없어진다. 비우면 물건 없이 치료한다.
          */
         TreatAction: {
             /** Injury */
@@ -8796,27 +8887,6 @@ export interface components {
             npc?: string | null;
             /** Target */
             target?: string | null;
-        };
-        /**
-         * TreatAidOut
-         * @description 치료에 붙여 쓴 물건(#277). 판정의 보정(modifier)에 bonus 가 이미 들었다.
-         */
-        TreatAidOut: {
-            /** Bonus */
-            bonus: number;
-            /**
-             * Entry Id
-             * Format: uuid
-             */
-            entry_id: string;
-            /** Name */
-            name: string;
-            /** Reason */
-            reason: string | null;
-            /** Remaining */
-            remaining: number;
-            /** Used */
-            used: boolean;
         };
         /**
          * Treatment
@@ -8837,7 +8907,7 @@ export interface components {
             /** Ability */
             ability: string;
             aftermath: components["schemas"]["InjuryRollOut"] | null;
-            aid?: components["schemas"]["TreatAidOut"] | null;
+            aid?: components["schemas"]["AidOut"] | null;
             /** Died */
             died: boolean;
             /** Difficulty */

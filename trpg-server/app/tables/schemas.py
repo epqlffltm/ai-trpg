@@ -34,6 +34,7 @@ from app.billing.prices import Tier
 from app.calendar.schemas import ClockOut, ClockTimeOut
 from app.catalog.models import Grade
 from app.catalog.steps import MAX_STEP
+from app.engine.item_aids import ItemAid
 from app.engine.item_effects import Effect
 from app.engine.ruleset import RULESET_MAX_ABILITIES, RULESET_MAX_EQUIPMENT_SLOTS, Key, Ruleset
 from app.engine.sheet import Score, Sheet
@@ -395,8 +396,10 @@ class CatalogItemOut(BaseModel):
     lock: bool = False
     # 던지는 판정(#277). 행동 '던지기'로 같은 장소의 몬스터나 장면의 인물에게 던진다. 던질 수 없으면 None 이다
     throw: ItemThrowOut | None = None
-    # 치료에 붙여 쓸 때 치료 판정의 보정에 더하는 값(#277). 치료하는 행동의 item 으로 쓴다. 쓰지 못하면 None 이다
-    treat_bonus: int | None = None
+    # 거드는 행동들(#802). 치료(treat), 따기(pick), 고치기(repair), 부수기(force), 넘기(cross)의 item 으로 붙여 쓴다.
+    # 줄마다 그 판정에 더하는 보정(bonus)과 굴린 뒤 어떻게 되나(wear: always 늘 하나 없어짐, on_fail 실패하면 부러짐,
+    # never 안 없어짐)다. 도구가 있어야 하는 문은 그 행동을 거드는 물건이 있어야 따거나 고친다
+    aids: list[ItemAid] = []
 
 
 class WornOut(BaseModel):
@@ -484,12 +487,19 @@ class RouteCrossOut(BaseModel):
     difficulty: str
 
 
+class RouteOpenOut(RouteCrossOut):
+    """길의 문을 따거나 고치는 판정(#281). 넘기와 부수기의 것에 도구가 있어야 하는가(#802)가 더 있다."""
+
+    # 그 행동을 거드는 물건(판의 물건 목록의 aids)을 행동에 붙여야 따거나 고친다
+    needs_tool: bool = False
+
+
 class RouteOut(BaseModel):
     """
     아는 길 하나. two_way 가 아니면 from_place 에서 to_place 로만 간다.
 
-    길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 무슨 열쇠로 여는지, 따는 도구,
-    실패의 피해는 싣지 않는다.
+    길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 도구가 있어야 하는지(#802)도 보인다.
+    무슨 열쇠로 여는지, 실패의 피해는 싣지 않는다.
     """
 
     from_place: uuid.UUID
@@ -507,9 +517,9 @@ class RouteOut(BaseModel):
     # 문이 부서졌는가. 부서진 문은 열린 채이고 고치기 전까지 다시 잠그지 못한다
     broken: bool = False
     # 자물쇠를 따는 판정, 문을 부수는 판정, 부서진 문을 고치는 판정. 없으면 따거나 부수거나 고치지 못한다
-    pick: RouteCrossOut | None = None
+    pick: RouteOpenOut | None = None
     force: RouteCrossOut | None = None
-    repair: RouteCrossOut | None = None
+    repair: RouteOpenOut | None = None
 
 
 class MapOut(BaseModel):

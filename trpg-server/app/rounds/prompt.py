@@ -196,7 +196,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 인물이나 몬스터에게 쓴 물건은 판정의 줄 앞에 온다((쓴 물건: 독 바른 단검 → 수로 쥐) 민첩 판정 …)
 #   narration-67: 모든 물건을 던진다(#801). 던진 물건의 줄에 맞힌 대상에게 든 효과가 붙는다
 #                 ((던진 물건: 치유 물약 → 영애) [풀린 부상: 중독])
-PROMPT_VERSION = 'narration-67'
+#   narration-68: 물건이 다른 행동을 거든다(#802). 따기, 부수기, 고치기, 넘기의 줄에도 붙여 쓴 물건이 붙고,
+#                 실패해서 부러졌으면 그것도 적는다((문: 탑 쪽 문을 따려 했다. …)(쓴 물건: 락픽 +1, 부러짐))
+PROMPT_VERSION = 'narration-68'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

@@ -136,11 +136,16 @@ export function consumables(me: TableMember): HeldItem[] {
   return heldItems(me).filter((item) => item.kind === 'consumable');
 }
 
-/** 치료에 붙여 쓸 수 있는 물건(#277). 지닌 것 가운데 판의 물건에 치료 보정(treat_bonus)이 있는 것 */
-export function aidItems(ctx: ActionContext): Choice[] {
+type AidAct = TableDetail['items'][number]['aids'][number]['act'];
+
+/** 그 행동(치료, 따기, 고치기, 부수기, 넘기)에 붙여 쓸 수 있는 물건(#277, #802). 지닌 것 가운데 그 행동을 거드는 것 */
+export function aidItems(ctx: ActionContext, act: AidAct): Choice[] {
   return heldItems(ctx.me).flatMap((held) => {
-    const bonus = ctx.table.items.find((item) => item.entry_id === held.entry_id)?.treat_bonus;
-    return bonus ? [{ value: held.entry_id, label: `${held.name} +${bonus} ×${held.count}` }] : [];
+    const aid = ctx.table.items.find((item) => item.entry_id === held.entry_id)?.aids.find((one) => one.act === act);
+    if (!aid) return [];
+    const bonus = aid.bonus ? ` +${aid.bonus}` : '';
+    const wear = aid.wear === 'always' ? ', 쓰면 없어짐' : aid.wear === 'on_fail' ? ', 실패하면 부러짐' : '';
+    return [{ value: held.entry_id, label: `${held.name}${bonus} ×${held.count}${wear}` }];
   });
 }
 
@@ -278,6 +283,11 @@ export function nameablePeople(ctx: ActionContext): Choice[] {
 
 export function ways(ctx: ActionContext): Way[] {
   return ctx.table.map ? waysFrom(ctx.table.map, hereId(ctx)) : [];
+}
+
+/** 그곳으로 가는 길에 넘기 판정이 있는가(#281). 있으면 넘기를 거드는 물건(#802)을 붙일 수 있다 */
+export function climbs(ctx: ActionContext, place: string): boolean {
+  return ways(ctx).some((way) => way.placeId === place && way.route.cross != null);
 }
 
 /** 함께 업고 갈 수 있는 사람. 나와 같은 곳에 쓰러져 있는(죽지 않은) 다른 사람 */

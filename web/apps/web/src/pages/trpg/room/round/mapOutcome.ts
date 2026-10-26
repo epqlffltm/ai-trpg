@@ -43,7 +43,7 @@ const DOOR_REASONS: Record<string, string> = {
   wrong_side: '빗장의 반대쪽에 서 있었습니다',
   broken: '문이 부서져 있었습니다',
   already: '이미 그렇게 되어 있었습니다',
-  no_tool: '도구가 없었습니다',
+  no_tool: '도구를 붙이지 않았거나 더 지니지 않았습니다',
   failed: '판정에 실패했습니다',
   no_pick: '앞 차례에 따지 못하는 자물쇠로 바뀌었습니다',
   locked: '자물쇠가 잠겨 있었습니다. 연 뒤에 바꿉니다',
@@ -78,6 +78,7 @@ export function moveLine(move: Move): string {
     move.effect ? `${move.effect.character_name} HP ${move.effect.before} → ${move.effect.after}` : null,
     move.moved && move.travel_minutes ? `${move.travel_minutes}분 걸림` : null,
     carryPart(move.carry),
+    aidPart(move.aid),
   ];
   return parts.filter((part): part is string => part !== null).join(' · ');
 }
@@ -87,5 +88,16 @@ export function doorLine(door: Door): string {
   const thing = door.act === 'replace' ? '자물쇠' : door.device === 'bar' ? '빗장' : door.device === 'lock' ? '자물쇠' : '문';
   const [done, failed] = DOOR_DONE[door.act] ?? ['다뤘습니다', '다루지 못했습니다'];
   const line = `${door.to.name} 쪽 ${thing}: ${door.done ? done : `${failed}${because(DOOR_REASONS, door.reason)}`}`;
-  return door.check ? `${line} · ${rollText(door.check)}` : line;
+  const parts = [line, door.check ? rollText(door.check) : null, aidPart(door.aid)];
+  return parts.filter((part): part is string => part !== null).join(' · ');
+}
+
+type Aid = NonNullable<Door['aid']>;
+
+/** 판정에 붙여 쓴 물건(#802). "락픽 +2 씀, 부러짐", "밧줄 씀", "락픽을 더 지니지 않아 쓰지 못함". 굴리지 않았으면 null */
+export function aidPart(aid: Aid | null | undefined): string | null {
+  if (!aid) return null;
+  if (aid.reason === 'not_held') return `${aid.name}을(를) 더 지니지 않아 쓰지 못함`;
+  if (!aid.used) return null;
+  return `${aid.name}${aid.bonus ? ` +${aid.bonus}` : ''} 씀${aid.broken ? ', 부러짐' : aid.lost ? ', 다 씀' : ''}`;
 }

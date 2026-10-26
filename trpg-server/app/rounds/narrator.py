@@ -117,6 +117,19 @@ class DropNote:
 
 
 @dataclass(frozen=True)
+class AidNote:
+    """
+    행동에 붙여 쓴 물건(#802, 거들기). 엔진이 정한 것이다. 치료, 따기, 부수기, 고치기, 넘기의 줄에 붙는다.
+
+    bonus 는 판정의 보정에 더한 값이다(이미 판정에 들었다). broken 은 실패해서 부러져 없어졌는가다.
+    """
+
+    name: str
+    bonus: int = 0
+    broken: bool = False
+
+
+@dataclass(frozen=True)
 class TreatmentNote:
     """
     치료의 결과. 엔진이 정한 것이다. 서술자는 이것을 바꾸지 못하고 글로 옮기기만 한다.
@@ -141,9 +154,8 @@ class TreatmentNote:
     worsened_minutes: int | None = None
     # 치료받던 쪽이 죽었는가(즉사)
     died: bool = False
-    # 치료에 붙여 쓴 물건의 이름과 판정에 더한 보정(#277). 쓰지 않았거나 쓰지 못했으면 None 이다
-    aid: str | None = None
-    aid_bonus: int = 0
+    # 치료에 붙여 쓴 물건(#277, #802). 쓰지 않았거나 쓰지 못했으면 None 이다
+    aid: AidNote | None = None
 
 
 @dataclass(frozen=True)
@@ -332,6 +344,7 @@ class TravelNote:
     travel_minutes 는 지나간 길에 걸린 게임 안의 시간(분)이다. 안 걸렸으면 None 이다.
     carried 는 업고 가려던 쓰러진 동료의 이름이다(#367). 업지 않았으면 None 이다.
     carry_reason 은 업고 가지 못한 까닭이다(standing, dead, elsewhere, not_moved). 업고 갔으면 None 이다.
+    aid 는 넘기에 붙여 쓴 물건이다(#802, 밧줄). 쓰지 않았거나 굴리지 않았으면 None.
     """
 
     from_place: str | None
@@ -345,6 +358,7 @@ class TravelNote:
     cross: str | None = None
     hurt: bool = False
     unbarred: bool = False
+    aid: AidNote | None = None
 
 
 @dataclass(frozen=True)
@@ -438,6 +452,7 @@ class DoorNote:
     device 는 lock(자물쇠), bar(빗장)다(따기, 부수기, 고치기, 바꾸기는 None).
     other_end 는 그 길의 다른 끝의 이름이다. done 이 거짓이면 reason 이 까닭이다.
     check 는 따기, 부수기, 고치기에 굴린 판정의 능력치의 이름이다(굴리지 않았으면 None).
+    aid 는 그 판정에 붙여 쓴 물건이다(#802). 쓰지 않았거나 굴리지 않았으면 None.
     """
 
     act: str
@@ -446,6 +461,7 @@ class DoorNote:
     device: str | None = None
     reason: str | None = None
     check: str | None = None
+    aid: AidNote | None = None
 
 
 @dataclass(frozen=True)
