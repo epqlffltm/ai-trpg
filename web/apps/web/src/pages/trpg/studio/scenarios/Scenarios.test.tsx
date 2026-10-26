@@ -245,6 +245,7 @@ describe('입력', () => {
       '추천 서술 모델을 지금 쓸 수 없습니다. 다른 모델을 골라 주세요. 지금 테이블을 열면 대신 쓰는 모델: Gemini Flash.',
     );
     expect(problemLine('cover_off_map')).toEqual({ text: '맵에 없는 장소에 커버가 있습니다.', section: 'map' });
+    expect(problemLine('item_resource_invalid')).toEqual({ text: '물건이 맞추는 수치가 룰북에 없습니다.', section: 'items' });
     expect(problemLine('something_new')).toEqual({ text: 'something_new', section: null });
     expect(tabOf('openings')).toBe('openings');
     expect(tabOf('nope')).toBe('basics');

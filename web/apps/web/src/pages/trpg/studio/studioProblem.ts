@@ -6,6 +6,7 @@
 //   - 409(지울 때): 이 재료를 쓰는 시나리오가 있다. 본문의 used_by[{id, title}]
 //   - 409(더할 때): 로어북, 몬스터 모음이 가득 찼다
 //   - 422: 받지 않는 값. 화면이 먼저 검사하므로 서버의 규칙이 바뀌었을 때만 온다. 칸이 틀린 것(errors)이면 그 칸에 보인다
+//     규칙 한 벌로 맞지 않는 룰북(#804, 수치)은 {detail, field} 다. code 없이 field 로 칸을 알리고, detail 이 보일 문장이다
 
 import { ApiError, isInputError } from '../../../api/errors';
 import type { StudioKind } from '../../../api/studio';
@@ -21,6 +22,7 @@ export function describeSaveProblem(error: unknown, kind: StudioKind): FormProbl
   if (error.status === 404) return { message: kindText(kind).missing };
   if (error.status === 409) return { message: error.message };
   if (isInputError(error)) return fieldProblem(error, '서버가 받지 않는 값이 있습니다. 칸을 다시 확인해 주세요.');
+  if (error.status === 422 && typeof error.body.field === 'string') return { message: error.message };
   if (error.status === 422) return { message: '서버가 받지 않는 값이 있습니다. 칸을 다시 확인해 주세요.' };
   return unknownProblem(error, FAILED);
 }
