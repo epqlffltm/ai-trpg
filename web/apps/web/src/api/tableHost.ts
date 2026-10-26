@@ -4,7 +4,7 @@
 // 서술 모델과 단계(B8)도 여기서 바꾼다. 모집 중에만, 시작한 뒤에는 지금 모델이나 단계를 쓸 수 없을 때만 된다.
 
 import { apiRequest } from './http';
-import type { NarrationStyle, TableDetail } from './types';
+import type { FriendlyFire, NarrationStyle, TableDetail } from './types';
 
 function tablePath(tableId: string, rest: string): string {
   return `/api/v1/game/tables/${encodeURIComponent(tableId)}${rest}`;
@@ -51,6 +51,11 @@ export function changeCreditWait(tableId: string, seconds: number, removeShortPa
 /** 쪽지를 보낸 사실을 모두에게 알리는가 */
 export function changeWhisperNotice(tableId: string, enabled: boolean): Promise<TableDetail> {
   return apiRequest<TableDetail>(tablePath(tableId, '/whisper-notice'), { method: 'PUT', body: { whisper_notice: enabled } });
+}
+
+/** 앉은 사람끼리 해칠 수 있는 정도(#803). 진행 중에도 바꾼다. 이미 받은 선언도 라운드를 닫을 때 다시 본다 */
+export function changeFriendlyFire(tableId: string, level: FriendlyFire): Promise<TableDetail> {
+  return apiRequest<TableDetail>(tablePath(tableId, '/friendly-fire'), { method: 'PUT', body: { friendly_fire: level } });
 }
 
 /** 참고 자료를 서술에 넣는가. 모집 중에만, 판의 세계관이 허용할 때만(아니면 422) */

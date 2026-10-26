@@ -118,9 +118,22 @@ export function outcomeLine(outcome: Outcome | null, rules: Ruleset, currency: C
   if (!outcome) return null;
   if ('turn_lost' in outcome) return '행동하지 못했습니다.';
   if ('item_throw' in outcome && !outcome.item_throw?.thrown) return throwLine(outcome.item_throw);
-  if ('target_gone' in outcome) return '대상이 이미 없어 행동하지 못했습니다.';
+  if ('target_gone' in outcome) return goneLine(outcome.target_gone);
   if ('roll' in outcome && 'total' in outcome && 'success' in outcome) return checkLine(outcome, rules);
   return otherLine(outcome) ?? moneyLine(outcome, currency) ?? '결과는 일어난 일에 적힙니다.';
+}
+
+/** 해치려던 동료(#803)를 칠 수 없었던 까닭(trpg-server/app/rounds/friendly_fire.py 의 AllyGone) */
+const ALLY_GONE: Record<string, string> = {
+  friendly_fire_off: '그 동료를 해칠 수 없게 바뀌어',
+  downed: '그 동료가 쓰러져 있어',
+  left: '그 동료가 떠나',
+};
+
+/** 겨눈 대상이 없어 굴리지 않은 결과. 동료면 그 까닭을 적는다 */
+function goneLine(gone: { user_id?: string | null; reason: string } | null | undefined): string {
+  const ally = gone?.user_id ? ALLY_GONE[gone.reason] : undefined;
+  return `${ally ?? '대상이 이미 없어'} 행동하지 못했습니다.`;
 }
 
 /** 사고팔지 못하거나 돈을 건네지 못한 까닭(trpg-server/app/rounds/trades.py 의 Reason) */
@@ -171,7 +184,7 @@ function checkLine(outcome: CheckResult, rules: Ruleset): string {
 /** 판정이 바꾼 것. 사람의 HP, 인물과 몬스터의 피해나 회복, 치료, 떨어진 물건 */
 function checkEffects(outcome: CheckResult, rules: Ruleset): string[] {
   const parts: string[] = [];
-  if (outcome.effect) parts.push(`${outcome.effect.character_name} HP ${outcome.effect.before} → ${outcome.effect.after}`);
+  if (outcome.effect) parts.push(...effectParts(outcome.effect, rules));
   const other = outcome.npc_effect ?? outcome.monster_effect;
   if (other) parts.push(`${other.name} ${other.kind === 'damage' ? '피해' : '회복'} ${other.amount}`);
   if (outcome.treatment) {
@@ -184,14 +197,24 @@ function checkEffects(outcome: CheckResult, rules: Ruleset): string[] {
   return blow ? [blow, ...parts] : parts;
 }
 
+/** 사람의 HP 가 바뀐 것. 동료의 장난(#803)이면 "(장난)"과 장난이라 입지 않은 부상을 붙인다 */
+function effectParts(effect: NonNullable<CheckResult['effect']>, rules: Ruleset): string[] {
+  const parts = [`${effect.character_name} HP ${effect.before} → ${effect.after}${effect.prank ? '(장난)' : ''}`];
+  const spared = effect.injury_roll?.spared;
+  if (spared) parts.push(`장난이라 입지 않음 ${nameOfInjury(rules, spared)}`);
+  return parts;
+}
+
 /** 인물이나 몬스터에게 쓴 물건(#800). "독 단검 씀", 입힌 부상과 면역이라 입지 않은 부상 */
 function usedOnParts(used: CheckResult['item_use'], rules: Ruleset): string[] {
   if (!used) return [];
   const parts = [`${used.name} 씀`];
   const injured = used.injured.flatMap((one) => (one.injury ? [nameOfInjury(rules, one.injury)] : []));
   const resisted = used.injured.flatMap((one) => (one.immune ? [nameOfInjury(rules, one.immune)] : []));
+  const spared = used.injured.flatMap((one) => (one.spared ? [nameOfInjury(rules, one.spared)] : []));
   if (injured.length > 0) parts.push(`부상 ${injured.join(', ')}`);
   if (resisted.length > 0) parts.push(`면역 ${resisted.join(', ')}`);
+  if (spared.length > 0) parts.push(`장난이라 입지 않음 ${spared.join(', ')}`);
   return parts;
 }
 

@@ -14,9 +14,13 @@
   HP 를 바꾼 다음에 풀기와 부상을 적힌 차례대로 낸다. 대상이 그 타격으로 죽었으면 내지 않는다.
   몬스터는 그 성질에 면역인 부상을 입지 않는다(#799).
 가지고 있지 않으면(not_held), 겨눈 몬스터가 죽었거나 다른 곳에 있으면(target_gone) 굴리지 않고 물건도 그대로다.
+던지기는 앉은 사람도 맞힌다(#803). 해로운 물건이면 치기와 같이 해칠 수 있어야 하고, 장난이면 상한을 지킨다
+(app/rounds/friendly_fire.py). 앉은 사람과는 싸운 것으로 적지 않는다.
 
 DB 를 모른다. 시트의 소지품과 맞은 쪽의 상태를 고친다. 저장하지 않는다.
 """
+
+import uuid
 
 from app.engine.action import ActionKind, CheckAction, ThrowAction, UseAction, settle
 from app.engine.item_effects import EffectKind, first_of, is_harmful
@@ -25,8 +29,9 @@ from app.rounds.checks import judge_check, monster_gone
 from app.rounds.effects import Judging, mark_fight, mark_npc_fight
 from app.rounds.item_actions import Reason, cure, injure, use_document
 from app.rounds.monster_scene import SceneMonster, find_scene_monster
-from app.tables import items, npcs
+from app.tables import items, npcs, sheets
 from app.tables import monsters as table_monsters
+from app.tables import state as table_state
 from app.tables.items import CatalogItem
 from app.tables.models import TableInjury, TableMember
 
@@ -44,17 +49,29 @@ def to_check(judging: Judging, item: CatalogItem, action: Aimed, ability: str, d
     damage = first_of(item.effects, EffectKind.DAMAGE)
     heal = first_of(item.effects, EffectKind.HEAL)
     base = {'kind': ActionKind.CHECK, 'ability': ability, 'difficulty': difficulty}
+    # 앉은 사람에게 던지면(#803) 그 사람이 대상이다. 쓰기(UseAction)는 인물과 몬스터에게만 이 길로 온다
+    ally = ally_of(action)
     if damage is not None:
-        check = CheckAction(**base, harm=damage.magnitude, npc=action.npc, monster=action.monster, lethal=action.lethal)
+        aimed = {'npc': action.npc, 'monster': action.monster, 'target': ally, 'lethal': action.lethal}
+        check = CheckAction(**base, harm=damage.magnitude, **aimed)
     elif heal is not None and action.npc is not None:
         check = CheckAction(**base, recover=heal.magnitude, npc=action.npc)
+    elif heal is not None and ally is not None:
+        check = CheckAction(**base, recover=heal.magnitude, target=ally)
     else:
         check = CheckAction(**base)
     return settle(judging.ruleset, check)
 
 
 def target_of(judging: Judging, action: Aimed) -> dict:
-    """쓴 쪽을 결과에 적을 모양. 몬스터면 그 마리의 id 와 이름, 인물이면 항목의 id 와 장면의 호칭이다."""
+    """
+    쓴 쪽을 결과에 적을 모양. 몬스터면 그 마리의 id 와 이름, 인물이면 항목의 id 와 장면의 호칭,
+    앉은 사람(#803, 던지기)이면 user_id 와 캐릭터의 이름이다.
+    """
+    ally = ally_of(action)
+    if ally is not None:
+        member = table_state.find_member(judging.table, ally)
+        return {'user_id': str(ally), 'name': member.character_name if member else None}
     if action.monster is not None:
         monster = find_scene_monster(judging.monsters, action.monster)
         return {'monster_id': str(action.monster), 'name': monster.name if monster else None}
@@ -62,11 +79,18 @@ def target_of(judging: Judging, action: Aimed) -> dict:
     return {'entry_id': str(action.npc), 'name': person.name if person else None}
 
 
+def ally_of(action: Aimed) -> uuid.UUID | None:
+    """맞을 앉은 사람(#803). 던지기에만 있다. 없으면 None."""
+    return action.target if isinstance(action, ThrowAction) else None
+
+
 def mark_harm(judging: Judging, member: TableMember, item: CatalogItem, action: Aimed, check: CheckAction) -> None:
     """
     해로운 물건이면 그 대상과 싸운 것으로 적는다. 타격으로 판정하면 judge_check 가 적으므로 여기서는 적지 않는다.
+
+    앉은 사람(#803)과는 싸운 것으로 적지 않는다. 싸움의 기록은 몬스터와 NPC 의 차례가 읽는다.
     """
-    if not is_harmful(item.effects) or check.harm is not None:
+    if not is_harmful(item.effects) or check.harm is not None or ally_of(action) is not None:
         return
     if action.monster is not None:
         mark_fight(judging, find_scene_monster(judging.monsters, action.monster).state, member)
@@ -82,15 +106,22 @@ def landed(outcome: dict, check: CheckAction) -> bool:
         return False
     if check.harm is None:
         return True
-    return outcome.get('npc_effect') is not None or outcome.get('monster_effect') is not None
+    hit = ('npc_effect', 'monster_effect', 'effect') if check.target is not None else ('npc_effect', 'monster_effect')
+    return any(outcome.get(field) is not None for field in hit)
 
 
 def struck_rows(judging: Judging, action: Aimed) -> tuple[list[TableInjury], frozenset] | None:
     """
     풀기와 부상을 낼 대상의 부상 목록과 그 면역. 대상이 죽었거나 없으면 None.
 
-    몬스터면 그 마리의 면역(타입과 시트, #799)을, 인물이면 면역이 없다.
+    몬스터면 그 마리의 면역(타입과 시트, #799)을, 인물과 앉은 사람(#803)이면 면역이 없다.
     """
+    ally = ally_of(action)
+    if ally is not None:
+        member = table_state.find_member(judging.table, ally)
+        if member is None or member.sheet is None or sheets.is_dead(member):
+            return None
+        return member.sheet.injuries, frozenset()
     if action.monster is not None:
         monster: SceneMonster | None = find_scene_monster(judging.monsters, action.monster)
         if monster is None or table_monsters.is_dead(monster.state):
@@ -102,8 +133,12 @@ def struck_rows(judging: Judging, action: Aimed) -> tuple[list[TableInjury], fro
     return person.npc.injuries, frozenset()
 
 
-def apply_after_hit(judging: Judging, item: CatalogItem, action: Aimed) -> dict:
-    """맞힌 대상에게 풀기와 부상을 적힌 차례대로 낸다. 푼 것(cured)과 입힌 것(injured)이다."""
+def apply_after_hit(judging: Judging, item: CatalogItem, action: Aimed, prank: bool = False) -> dict:
+    """
+    맞힌 대상에게 풀기와 부상을 적힌 차례대로 낸다. 푼 것(cured)과 입힌 것(injured)이다.
+
+    prank 면 동료의 장난이다(#803). 짧은 부상만 입힌다.
+    """
     found = struck_rows(judging, action)
     if found is None:
         return {'cured': [], 'injured': []}
@@ -114,7 +149,7 @@ def apply_after_hit(judging: Judging, item: CatalogItem, action: Aimed) -> dict:
         if one.kind == EffectKind.CURE:
             cured.extend(cure(judging, rows, one.injuries))
         elif one.kind == EffectKind.INJURE:
-            injured.append(injure(judging, rows, one.injury, immune))
+            injured.append(injure(judging, rows, one.injury, immune, prank))
     return {'cured': cured, 'injured': injured}
 
 

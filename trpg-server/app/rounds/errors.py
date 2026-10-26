@@ -42,8 +42,14 @@ class Conflict(enum.StrEnum):
     ALREADY_INJURED = 'already_injured'
     # 노려 친 부상에 대상이 면역이다(#799, 언데드의 중독)
     TARGET_IMMUNE = 'target_immune'
-    # 해로운 물건(피해, 부상)을 동료에게 쓰려 했다(#800). 팀킬의 설정(#803)이 생기기 전에는 받지 않는다
+    # 동료를 해치려 했는데(치기, 해로운 물건을 쓰거나 던지기) 테이블이나 맞는 쪽이 받아들이지 않는다(#803)
     FRIENDLY_FIRE_OFF = 'friendly_fire_off'
+    # 장난만 되는데 오래 가는 부상이나 결손을 노렸다(#803). 장난은 짧은 부상만 입힌다
+    FRIENDLY_FIRE_PRANK = 'friendly_fire_prank'
+    # 해치려는 동료가 쓰러져 있다(#803). 쓰러진 동료는 해치지 않는다
+    ALLY_DOWN = 'ally_down'
+    # 해치려는 동료가 이미 죽었다(#803)
+    ALLY_DEAD = 'ally_dead'
     # 치료하려는 부상을 대상이 입고 있지 않다
     NOT_INJURED = 'not_injured'
     # 치료하려는 캐릭터가 이미 죽었다

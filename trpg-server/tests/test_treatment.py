@@ -536,6 +536,7 @@ async def test_a_treatment_that_reaches_today_heals_and_rolls_aftermath(
         'ends_after_round': None,
         'heals_at': None,
         'immune': None,
+        'spared': None,
     }
     assert (await sheet_of(client, me, world['table']))['injuries'] == [
         {'injury': 'crooked_arm', 'round': 1, 'ends_after_round': None, 'heals_at': None}

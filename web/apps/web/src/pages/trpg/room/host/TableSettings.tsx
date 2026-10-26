@@ -4,20 +4,28 @@
 //   - 라운드 시간 제한: 다음 라운드부터(지금 열린 라운드의 마감은 그대로)
 //   - 크레딧이 모자란 사람을 기다리는 시간과 빼기: 지금 기다리는 라운드에도 바로
 //   - 쪽지 알림: 바꾼 뒤에 보내는 쪽지부터
+//   - 동료 피해(#803): 진행 중에도. 맞는 사람이 받아들이는 정도와 견주어 낮은 쪽이 든다
 //   - 참고 자료: 모집 중에만. 판의 세계관이 허용하지 않으면 서버가 거절한다
 // 서술 모델(B8)은 ModelSettings.tsx 다. 고를 거리는 테이블 만들기(B4)와 같다.
 
 import { Checkbox, SelectField } from '@ai-trpg/ui';
 import {
   changeCreditWait,
+  changeFriendlyFire,
   changeNarrationStyle,
   changeReferences,
   changeRoundTimeLimit,
   changeWhisperNotice,
 } from '../../../../api/tableHost';
-import type { NarrationStyle, TableDetail } from '../../../../api/types';
+import type { FriendlyFire, NarrationStyle, TableDetail } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
-import { durationLabel, NARRATION_STYLE_VALUES, narrationStyleLabel } from '../../labels';
+import {
+  durationLabel,
+  FRIENDLY_FIRE_VALUES,
+  friendlyFireLabel,
+  NARRATION_STYLE_VALUES,
+  narrationStyleLabel,
+} from '../../labels';
 import { CREDIT_WAITS, ROUND_LIMITS } from '../../tables/createForm';
 import { useHostAction } from './useHostAction';
 
@@ -81,6 +89,19 @@ export function TableSettings({ table }: { table: TableDetail }) {
         disabled={action.busy}
         onChange={(event) => run(() => changeWhisperNotice(table.id, event.target.checked))}
       />
+      <SelectField
+        label="동료 피해"
+        hint="동료를 치거나 해로운 물건을 쓰는 것. 각자 받아들인 정도와 견주어 낮은 쪽이 듭니다. 장난은 HP 1 아래로 내리지 않고 짧은 부상만 입힙니다."
+        value={table.friendly_fire}
+        disabled={action.busy}
+        onChange={(event) => run(() => changeFriendlyFire(table.id, event.target.value as FriendlyFire))}
+      >
+        {FRIENDLY_FIRE_VALUES.map((level) => (
+          <option key={level} value={level}>
+            {friendlyFireLabel(level)}
+          </option>
+        ))}
+      </SelectField>
       {table.status === 'recruiting' ? (
         <Checkbox
           label="참고 자료 켜기"

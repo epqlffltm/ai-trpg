@@ -131,6 +131,7 @@ def wound(
     table_id: uuid.UUID,
     moment: Moment,
     immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    prank: bool = False,
 ) -> dict:
     """
     부상 하나를 입히고, 문서에 무엇이 생겼는지 채워 돌려준다. 규칙에 없는 부상이면 문서를 그대로 돌려준다.
@@ -138,12 +139,15 @@ def wound(
     짧은 것은 풀릴 라운드, 오래 가는 것은 나을 시각이 적힌다. 결손은 둘 다 없다.
     입는 쪽이 그 성질에 면역이면(#799, 몬스터) 입히지 않는다. 문서의 injury 는 비워 두고,
     면역이라 입지 않은 부상의 이름표(immune)와 이름(name)을 적는다.
+    장난(#803)이면 짧은 것만 입힌다. 오래 가는 것과 결손은 입히지 않고 그 이름표(spared)와 이름(name)을 적는다.
     """
     definition = injury_rules.find_injury(ruleset, key)
     if definition is None:
         return document
     if is_immune(definition, immune):
         return {**document, 'immune': definition.key, 'name': definition.name}
+    if prank and definition.healing != Healing.ROUNDS:
+        return {**document, 'spared': definition.key, 'name': definition.name}
     ends = injury_rules.ends_after(definition, moment.round_number)
     heals = injury_rules.heals_at(definition, moment.now)
     injuries.inflict(rows, table_id, definition.key, source, moment.round_number, ends, heals)
@@ -163,6 +167,7 @@ def take(
     table_id: uuid.UUID,
     moment: Moment,
     immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    prank: bool = False,
 ) -> dict:
     """
     부상 표의 결과를 받아들인다. 부상이 나왔으면 입히고, 굴린 것을 문서로 돌려준다.
@@ -174,7 +179,7 @@ def take(
     document = injury_document(rolled.trigger, rolled.roll)
     if rolled.injury is None:
         return document
-    return wound(ruleset, rolled.injury, InjurySource.INJURY_TABLE, document, rows, table_id, moment, immune)
+    return wound(ruleset, rolled.injury, InjurySource.INJURY_TABLE, document, rows, table_id, moment, immune, prank)
 
 
 def take_aimed(
@@ -184,6 +189,7 @@ def take_aimed(
     table_id: uuid.UUID,
     moment: Moment,
     immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    prank: bool = False,
 ) -> dict:
     """
     노려 친 부상을 입힌다. 문서로 돌려준다. 표를 굴리지 않는다.
@@ -194,7 +200,7 @@ def take_aimed(
     document = injury_document(Trigger.CALLED_SHOT, None)
     if wears(rows, key):
         return document
-    return wound(ruleset, key, InjurySource.CALLED_SHOT, document, rows, table_id, moment, immune)
+    return wound(ruleset, key, InjurySource.CALLED_SHOT, document, rows, table_id, moment, immune, prank)
 
 
 def take_from_item(
@@ -204,6 +210,7 @@ def take_from_item(
     table_id: uuid.UUID,
     moment: Moment,
     immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    prank: bool = False,
 ) -> dict:
     """
     물건의 효과(injure)가 입히는 부상(#800). 문서로 돌려준다. 표를 굴리지 않는다.
@@ -213,7 +220,7 @@ def take_from_item(
     document = injury_document(Trigger.ITEM, None)
     if wears(rows, key):
         return document
-    return wound(ruleset, key, InjurySource.ITEM, document, rows, table_id, moment, immune)
+    return wound(ruleset, key, InjurySource.ITEM, document, rows, table_id, moment, immune, prank)
 
 
 def take_aftermath(

@@ -297,7 +297,13 @@ async def test_an_npc_killed_earlier_in_the_round_is_not_rolled_for(
     theirs = await outcome(client, me, world, 1, FRIEND)
 
     assert theirs == {
-        'target_gone': {'monster_id': None, 'npc_id': world['lady']['id'], 'name': '악역영애', 'reason': 'dead'}
+        'target_gone': {
+            'monster_id': None,
+            'npc_id': world['lady']['id'],
+            'user_id': None,
+            'name': '악역영애',
+            'reason': 'dead',
+        }
     }
 
 

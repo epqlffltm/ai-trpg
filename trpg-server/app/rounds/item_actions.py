@@ -14,7 +14,9 @@
         대상이 그 부상을 입고 있지 않아도 쓴다(쓰고 아무 일도 없다).
       - injure: 그 부상을 입힌다. 이미 입고 있으면 또 입히지 않는다.
     대상이 떠났거나 죽었으면 쓰지 않는다. 물건도 줄지 않는다.
-    해로운 효과(피해, 부상)가 있는 물건을 동료에게 쓰는 것은 받을 때 막았다(#803 전).
+    해로운 효과(피해, 부상)가 있는 물건을 동료에게 쓰는 것은 치기와 같다(#803, app/rounds/friendly_fire.py).
+    차례가 오면 해칠 수 있는지 다시 본다. 받아들이지 않게 바뀌었으면 friendly_fire_off, 쓰러졌거나 다른 곳에 있으면
+    target_gone 이다. 장난이면 HP 를 1 아래로 내리지 않고 짧은 부상만 입힌다.
   - 건네기: 준 사람에게서 빼고 받는 사람의 지금 캐릭터에게 더한다. 받는 쪽이 한 가지 99 개를 넘으면 건네지 않는다.
 
 DB 를 모른다. 시트의 소지품과 HP 와 부상을 고친다. 저장하지 않는다.
@@ -24,6 +26,7 @@ from app.engine import injury as injury_rules
 from app.engine.action import GiveAction, UseAction
 from app.engine.health import ChangeKind
 from app.engine.item_effects import EffectKind
+from app.rounds import friendly_fire
 from app.rounds import injuries as round_injuries
 from app.rounds.checks import change_sheet
 from app.rounds.effects import Judging
@@ -43,6 +46,8 @@ class Reason:
     TARGET_GONE = 'target_gone'
     # 받는 쪽이 그 물건을 더 가질 수 없었다
     TOO_MANY = 'too_many'
+    # 해로운 물건을 쓸 동료가 받아들이지 않게 바뀌었다(#803)
+    FRIENDLY_FIRE_OFF = 'friendly_fire_off'
 
 
 def person(member: TableMember | None) -> dict | None:
@@ -86,16 +91,23 @@ def cure(judging: Judging, rows: list[TableInjury], keys: list[str]) -> list[dic
     return [cure_one(judging, row, rows) for row in injuries.active(rows) if row.injury in keys]
 
 
-def injure(judging: Judging, rows: list[TableInjury], key: str, immune=round_injuries.NO_IMMUNITY) -> dict:
-    """부상 하나를 입힌다(#800). 생긴 일의 문서를 돌려준다. 이미 입고 있었거나 면역이면 부상이 비어 있다."""
-    return round_injuries.take_from_item(judging.ruleset, key, rows, judging.table.id, judging.moment, immune)
+def injure(
+    judging: Judging, rows: list[TableInjury], key: str, immune=round_injuries.NO_IMMUNITY, prank: bool = False
+) -> dict:
+    """
+    부상 하나를 입힌다(#800). 생긴 일의 문서를 돌려준다. 이미 입고 있었거나 면역이면 부상이 비어 있다.
+
+    prank 면 동료의 장난이다(#803). 오래 가는 것과 결손은 입히지 않는다(문서의 spared).
+    """
+    return round_injuries.take_from_item(judging.ruleset, key, rows, judging.table.id, judging.moment, immune, prank)
 
 
-def apply_to_member(judging: Judging, target: TableMember, item: CatalogItem) -> dict:
+def apply_to_member(judging: Judging, target: TableMember, item: CatalogItem, prank: bool = False) -> dict:
     """
     물건의 효과들을 앉은 사람 하나에게 차례대로 낸다(#800). 굴리지 않는다.
 
     돌려주는 것은 HP 의 변화(effect, 회복이나 피해 하나), 푼 부상들(cured), 입힌 부상들(injured)이다.
+    prank 면 동료의 장난이다(#803). 피해와 부상이 상한을 지킨다.
     """
     effect = None
     cured: list[dict] = []
@@ -105,12 +117,35 @@ def apply_to_member(judging: Judging, target: TableMember, item: CatalogItem) ->
         if one.kind == EffectKind.HEAL:
             effect = change_sheet(judging, target, ChangeKind.RECOVERY, one.magnitude)
         elif one.kind == EffectKind.DAMAGE:
-            effect = change_sheet(judging, target, ChangeKind.DAMAGE, one.magnitude)
+            effect = change_sheet(judging, target, ChangeKind.DAMAGE, one.magnitude, prank=prank)
         elif one.kind == EffectKind.CURE:
             cured.extend(cure(judging, rows, one.injuries))
         elif one.kind == EffectKind.INJURE:
-            injured.append(injure(judging, rows, one.injury))
+            injured.append(injure(judging, rows, one.injury, prank=prank))
     return {'effect': effect, 'cured': cured, 'injured': injured}
+
+
+def harm_refused(judging: Judging, member: TableMember, item: CatalogItem, target: TableMember) -> str | None:
+    """
+    해로운 물건을 동료에게 쓰려는데 지금 해칠 수 없으면 쓰지 못한 까닭(#803). 쓸 수 있거나 해롭지 않으면 None.
+
+    받아들이지 않게 바뀌었으면 friendly_fire_off, 쓰러졌거나 다른 곳에 있으면 target_gone 이다.
+    """
+    if target.user_id == member.user_id or not items.is_harmful(item):
+        return None
+    gone = friendly_fire.ally_gone(judging, member, target.user_id)
+    if gone is None:
+        return None
+    return (
+        Reason.FRIENDLY_FIRE_OFF if gone['reason'] == friendly_fire.AllyGone.FRIENDLY_FIRE_OFF else Reason.TARGET_GONE
+    )
+
+
+def is_prank_use(judging: Judging, member: TableMember, item: CatalogItem, target: TableMember) -> bool:
+    """해로운 물건을 동료에게 쓰는 장난인가(#803). 자기 자신이나 이로운 물건이면 아니다."""
+    if target.user_id == member.user_id or not items.is_harmful(item):
+        return False
+    return friendly_fire.is_prank_toward(judging, member, target)
 
 
 def use_document(item: CatalogItem, member: TableMember, reason: str | None, target: dict | None) -> dict:
@@ -142,10 +177,16 @@ def judge_use(judging: Judging, member: TableMember, action: UseAction) -> dict:
         reason = Reason.NOT_HELD
     elif aimed and target is None:
         reason = Reason.TARGET_GONE
+    elif aimed:
+        reason = harm_refused(judging, member, item, target)
     if reason is not None:
         return {'item_use': use_document(item, member, reason, person(target)), 'effect': None}
     items.remove_items(member.sheet, action.item, 1)
-    applied = apply_to_member(judging, target, item) if aimed else {'effect': None, 'cured': [], 'injured': []}
+    applied = (
+        apply_to_member(judging, target, item, is_prank_use(judging, member, item, target))
+        if aimed
+        else {'effect': None, 'cured': [], 'injured': []}
+    )
     used = {
         **use_document(item, member, None, person(target)),
         'cured': applied['cured'],

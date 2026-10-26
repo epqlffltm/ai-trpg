@@ -108,6 +108,7 @@ export function member(userId: string, extra: Record<string, unknown> = {}) {
     abilities: null,
     sheet: null,
     fallen: [],
+    friendly_fire: 'off',
     joined_at: '2026-10-22T00:00:00Z',
     ...extra,
   };
@@ -132,6 +133,7 @@ export function tableDetail(id: string, extra: Record<string, unknown> = {}) {
     remove_short_payers: true,
     whisper_notice: false,
     references_enabled: false,
+    friendly_fire: 'off',
     created_at: '2026-10-22T00:00:00Z',
     opening: '문 앞에서 시작한다.',
     rules: RULES,

@@ -48,6 +48,7 @@ from app.tables.models import (
     TABLE_PASSWORD_MAX_LENGTH,
     TABLE_PASSWORD_MIN_LENGTH,
     DepartureKind,
+    FriendlyFire,
     QuestStatus,
     TableStatus,
 )
@@ -225,6 +226,18 @@ class WhisperNoticeUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     whisper_notice: bool
+
+
+class FriendlyFireUpdate(BaseModel):
+    """
+    앉은 사람끼리 해칠 수 있는 정도를 바꿀 때 받는 값(#803). 칸을 빼먹으면 거부한다.
+
+    방장이 테이블의 것을 바꿀 때와, 앉은 사람이 자기를 겨누는 것을 받아들이는 정도를 바꿀 때 같은 모양이다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    friendly_fire: FriendlyFire
 
 
 class ReferencesUpdate(BaseModel):
@@ -611,6 +624,8 @@ class MemberOut(BaseModel):
     sheet: SheetOut | None
     # 떠난 캐릭터들. 죽은 순서다. 새 캐릭터를 들인 적이 없으면 비어 있다
     fallen: list[FallenOut]
+    # 이 사람이 자기를 겨누는 것을 받아들이는 정도(#803). 모두에게 보인다. 테이블의 것과 견주어 낮은 쪽이 든다
+    friendly_fire: FriendlyFire
     joined_at: datetime
 
 
@@ -660,6 +675,8 @@ class TableSummary(BaseModel):
     whisper_notice: bool
     # 서술에 참고 자료(SRD 같은 바깥 자료)를 넣는가. 들어가기 전에 안다. 시작하면 바뀌지 않는다
     references_enabled: bool
+    # 앉은 사람끼리 해칠 수 있는 정도(#803). 들어가기 전에 안다. 앉은 사람마다 받아들이는 정도는 members 에 있다
+    friendly_fire: FriendlyFire
     created_at: datetime
 
 

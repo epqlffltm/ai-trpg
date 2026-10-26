@@ -126,6 +126,12 @@ def resisted_injury_name(effect: dict) -> str | None:
     return injury_roll['name'] if injury_roll and injury_roll.get('immune') else None
 
 
+def spared_injury_name(effect: dict) -> str | None:
+    """HP 의 변화를 적은 문서에서 동료의 장난이라 입지 않은 부상의 이름(#803). 없으면 None."""
+    injury_roll = effect.get('injury_roll')
+    return injury_roll['name'] if injury_roll and injury_roll.get('spared') else None
+
+
 def to_impact(effect: dict | None) -> Impact | None:
     """선언에 적힌 HP 의 변화를 서술자에게 줄 모양으로 바꾼다. 변화가 없었으면 None."""
     if effect is None:
@@ -138,7 +144,14 @@ def to_impact(effect: dict | None) -> Impact | None:
         max_hp=effect['max_hp'],
         downed=effect['downed'],
         injury=new_injury_name(effect),
+        prank=effect.get('prank', False),
+        spared=spared_injury_name(effect),
     )
+
+
+def spared_names(injured: list[dict]) -> list[str]:
+    """물건이 입히려던 부상 중 동료의 장난이라 입지 않은 것의 이름들(#803)."""
+    return [one['name'] for one in injured if one.get('spared')]
 
 
 def other_name(declaration: Declaration, target: dict | None) -> str | None:
@@ -169,6 +182,7 @@ def to_item_action(declaration: Declaration | None) -> ItemActionNote | None:
             cured=[one['name'] for one in used.get('cured') or []],
             injured=[one['name'] for one in used.get('injured') or [] if one['injury'] is not None],
             resisted=[one['name'] for one in used.get('injured') or [] if one.get('immune')],
+            spared=spared_names(used.get('injured') or []),
         )
     given = declaration.outcome.get('item_give')
     if given is not None:
@@ -197,6 +211,7 @@ def to_throw(declaration: Declaration | None) -> ThrowNote | None:
         cured=[one['name'] for one in thrown.get('cured') or []],
         injured=[one['name'] for one in injured if one['injury'] is not None],
         resisted=[one['name'] for one in injured if one.get('immune')],
+        spared=spared_names(injured),
     )
 
 

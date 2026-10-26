@@ -384,7 +384,7 @@ async def test_a_hit_hurts_the_monster_and_uses_the_thing_up(
         'reason': None,
         'ability': 'dex',
         'difficulty': 'medium',
-        'target': {'monster_id': rat['id'], 'entry_id': None, 'name': '수로 쥐 1'},
+        'target': {'monster_id': rat['id'], 'entry_id': None, 'user_id': None, 'name': '수로 쥐 1'},
         'remaining': 1,
         'cured': [],
         'injured': [],
@@ -440,7 +440,12 @@ async def test_a_person_can_be_hit(client: AsyncClient, app: FastAPI, me: dict):
 
     outcome = outcome_of(closing, ME)
     assert (outcome['npc_effect']['name'], outcome['npc_effect']['amount']) == ('악역영애', 4)
-    assert outcome['item_throw']['target'] == {'monster_id': None, 'entry_id': world['lady']['id'], 'name': '악역영애'}
+    assert outcome['item_throw']['target'] == {
+        'monster_id': None,
+        'entry_id': world['lady']['id'],
+        'user_id': None,
+        'name': '악역영애',
+    }
 
 
 async def test_a_monster_killed_meanwhile_is_not_thrown_at(
@@ -479,7 +484,7 @@ async def test_what_was_taken_meanwhile_is_not_thrown(
         'reason': 'not_held',
         'ability': 'dex',
         'difficulty': 'medium',
-        'target': {'monster_id': rat['id'], 'entry_id': None, 'name': '수로 쥐 1'},
+        'target': {'monster_id': rat['id'], 'entry_id': None, 'user_id': None, 'name': '수로 쥐 1'},
         'remaining': 0,
         'cured': [],
         'injured': [],

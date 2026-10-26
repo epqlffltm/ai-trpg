@@ -1,11 +1,23 @@
 // web/apps/web/src/pages/trpg/room/round/action/CheckFields.tsx
 // 판정의 칸. 능력과 난이도, 목적(그냥, 타격, 회복), 대상과 크기, 죽이려는가, 노려 치기, 실패의 대가.
-// 타격은 장면의 인물이나 내가 선 곳의 몬스터에게, 회복은 다른 사람이나 인물에게(비우면 나) 한다. 부상을 노리는 것은 인물에게만.
+// 타격은 장면의 인물이나 내가 선 곳의 몬스터나 해칠 수 있는 동료(#803)에게, 회복은 다른 사람이나 인물에게(비우면 나) 한다.
+// 부상을 노리는 것은 인물, 몬스터, 동료에게(동료의 장난이면 짧은 것만). 동료는 죽이려 하지 않는다.
 // 타격에는 착용한 무기와 노릴 부위(#276)도 고를 수 있다. 부위와 부상은 함께 노리지 않는다(고르면 다른 쪽을 비운다).
 
 import { Checkbox, Radio } from '@ai-trpg/ui';
 import type { ActionDraft, CheckPurpose } from './actionDraft';
-import { aimableInjuries, harmTargets, healTargets, magnitudes, myWeapons, splitRef, strikeSlots, type ActionContext } from './actionOptions';
+import {
+  aimableInjuries,
+  allyTargets,
+  harmTargets,
+  healTargets,
+  isPrankToward,
+  magnitudes,
+  myWeapons,
+  splitRef,
+  strikeSlots,
+  type ActionContext,
+} from './actionOptions';
 import { ChoiceSelect } from './ChoiceSelect';
 
 type Props = { draft: ActionDraft; ctx: ActionContext; onChange: (changes: Partial<ActionDraft>) => void };
@@ -61,8 +73,11 @@ export function CheckFields({ draft, ctx, onChange }: Props) {
 }
 
 function HarmFields({ draft, ctx, onChange }: Props) {
-  const targets = harmTargets(ctx);
-  const aimable = ['npc', 'monster'].includes(splitRef(draft.target)[0]);
+  const targets = [...harmTargets(ctx), ...allyTargets(ctx)];
+  const ally = splitRef(draft.target)[0] === 'member';
+  const prank = isPrankToward(ctx, draft.target);
+  const aims = aimableInjuries(ctx, prank);
+  const aimable = (['npc', 'monster'].includes(splitRef(draft.target)[0]) || ally) && aims.length > 0;
   if (targets.length === 0) return <p className="hint">칠 수 있는 대상이 장면에 없습니다.</p>;
   return (
     <>
@@ -73,19 +88,22 @@ function HarmFields({ draft, ctx, onChange }: Props) {
           <ChoiceSelect
             label="노려 치기(선택)"
             value={draft.aim}
-            choices={aimableInjuries(ctx)}
+            choices={aims}
             empty="노리지 않음"
             onChange={(aim) => onChange({ aim, strike: aim ? '' : draft.strike })}
           />
         ) : null}
         <GearFields draft={draft} ctx={ctx} onChange={onChange} />
       </div>
-      <Checkbox
-        label="죽이려 한다"
-        description="켜지 않으면 HP 가 0 이 될 때 쓰러뜨리기만 합니다."
-        checked={draft.lethal}
-        onChange={(event) => onChange({ lethal: event.target.checked })}
-      />
+      {prank ? <p className="hint">장난입니다. HP 1 아래로 내리지 않고 짧은 부상만 입힙니다.</p> : null}
+      {ally ? null : (
+        <Checkbox
+          label="죽이려 한다"
+          description="켜지 않으면 HP 가 0 이 될 때 쓰러뜨리기만 합니다."
+          checked={draft.lethal}
+          onChange={(event) => onChange({ lethal: event.target.checked })}
+        />
+      )}
     </>
   );
 }

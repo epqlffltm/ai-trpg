@@ -1,11 +1,12 @@
 // web/apps/web/src/api/tableRoom.ts
 // 테이블 방(B6)이 부르는 것. 테이블 하나, 캐릭터 정하기와 굴리기(B5), 시작(방장), 나가기, 채팅(읽기, 쓰기, 입력 중),
-// 일어난 일(이벤트)의 끝부분, 스트림을 열 번호, 내 캐릭터의 장비 착용과 벗기(#276, 선언이 아니라 바로 바꾼다).
+// 일어난 일(이벤트)의 끝부분, 스트림을 열 번호, 내 캐릭터의 장비 착용과 벗기(#276, 선언이 아니라 바로 바꾼다),
+// 나를 겨누는 것을 받아들이는 정도(#803).
 // 앉아 있는 사람만 부른다. 앉지 않았거나 없는 테이블은 404 다(있다는 것을 드러내지 않는다).
 
 import { apiRequest } from './http';
 import type { StreamCursor } from './tableStream';
-import type { CharacterUpdate, ChatMessage, EventPage, MessagePage, TableDetail, WhisperPage } from './types';
+import type { CharacterUpdate, ChatMessage, EventPage, FriendlyFire, MessagePage, TableDetail, WhisperPage } from './types';
 
 const TABLES = '/api/v1/game/tables';
 
@@ -21,6 +22,14 @@ function tablePath(tableId: string, rest = ''): string {
 
 export function fetchTable(tableId: string, signal?: AbortSignal): Promise<TableDetail> {
   return apiRequest<TableDetail>(tablePath(tableId), signal ? { signal } : {});
+}
+
+/** 나를 겨누는 것(동료의 피해)을 받아들이는 정도(#803). 언제든 바꾼다. 답은 바뀐 테이블이다 */
+export function changeFriendlyFireConsent(tableId: string, level: FriendlyFire): Promise<TableDetail> {
+  return apiRequest<TableDetail>(tablePath(tableId, '/members/me/friendly-fire'), {
+    method: 'PUT',
+    body: { friendly_fire: level },
+  });
 }
 
 /** 가진 물건 하나를 장비의 칸들에 끼운다. 찬 칸의 것은 서버가 벗긴다. 답은 바뀐 테이블이다 */

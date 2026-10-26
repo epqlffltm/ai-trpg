@@ -1251,6 +1251,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/tables/{table_id}/friendly-fire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change Friendly Fire
+         * @description 앉은 사람끼리 해칠 수 있는 정도(#803)를 바꾼다. 방장만 한다. 진행 중에도 된다.
+         *
+         *     끔(off), 장난만(prank), 다 됨(full)이다. 맞는 쪽이 받아들이는 정도와 견주어 낮은 쪽이 든다.
+         *     이미 받은 선언도 라운드를 닫을 때 다시 본다.
+         */
+        put: operations["change_friendly_fire_api_v1_game_tables__table_id__friendly_fire_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/tables/{table_id}/host": {
         parameters: {
             query?: never;
@@ -1310,6 +1333,28 @@ export interface paths {
          *     진행 중이면, 나간 사람만 내지 않았던 라운드를 닫기 시작한다. 남은 사람이 기다리지 않게 한다.
          */
         delete: operations["leave_table_api_v1_game_tables__table_id__members_me_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/tables/{table_id}/members/me/friendly-fire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change Friendly Fire Consent
+         * @description 자기를 겨누는 것(동료의 피해)을 받아들이는 정도(#803)를 바꾼다. 앉은 사람이 자기 것만 바꾼다. 언제든 된다.
+         *
+         *     끔이 기본이다. 테이블이 다 됨이어도 받아들이기 전에는 아무도 해치지 못한다.
+         */
+        put: operations["change_friendly_fire_consent_api_v1_game_tables__table_id__members_me_friendly_fire_put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3041,6 +3086,11 @@ export interface components {
             magnitude: string;
             /** Max Hp */
             max_hp: number;
+            /**
+             * Prank
+             * @default false
+             */
+            prank: boolean;
             /** Rolls */
             rolls: number[];
             /**
@@ -3275,7 +3325,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -3393,6 +3443,24 @@ export interface components {
             to_place: components["schemas"]["PlaceRefOut"];
             /** Two Way */
             two_way: boolean;
+        };
+        /**
+         * FriendlyFire
+         * @description 앉은 사람끼리 해칠 수 있는 정도(#803). 낮은 것부터 끔, 장난만, 다 됨이다.
+         *
+         *     테이블에 하나(방장이 정한다), 앉은 사람마다 하나(자기를 겨누는 것을 받아들이는 정도, 본인이 정한다) 있다.
+         *     드는 것은 둘 중 낮은 것이다(app/tables/friendly_fire.py). 자기 자신에게 하는 것은 늘 된다.
+         * @enum {string}
+         */
+        FriendlyFire: "off" | "prank" | "full";
+        /**
+         * FriendlyFireUpdate
+         * @description 앉은 사람끼리 해칠 수 있는 정도를 바꿀 때 받는 값(#803). 칸을 빼먹으면 거부한다.
+         *
+         *     방장이 테이블의 것을 바꿀 때와, 앉은 사람이 자기를 겨누는 것을 받아들이는 정도를 바꿀 때 같은 모양이다.
+         */
+        FriendlyFireUpdate: {
+            friendly_fire: components["schemas"]["FriendlyFire"];
         };
         /**
          * Genre
@@ -3599,6 +3667,7 @@ export interface components {
          * @description 소모품이 입힌 부상 하나(#800). 룰북의 부상의 이름표다.
          *
          *     이미 입고 있었으면 injury 가 None 이다. 몬스터가 그 성질에 면역이면 injury 는 None, immune 이 그 부상이다.
+         *     동료의 장난(#803)이라 입히지 않은 오래 가는 부상이나 결손이면 injury 는 None, spared 가 그 부상이다.
          */
         InjuredOut: {
             /** Ends After Round */
@@ -3608,6 +3677,8 @@ export interface components {
             immune?: string | null;
             /** Injury */
             injury: string | null;
+            /** Spared */
+            spared?: string | null;
         };
         /**
          * Injury
@@ -3694,6 +3765,8 @@ export interface components {
             injury: string | null;
             /** Roll */
             roll: number | null;
+            /** Spared */
+            spared?: string | null;
             /** Trigger */
             trigger: string;
         };
@@ -4522,6 +4595,7 @@ export interface components {
             character_mode: components["schemas"]["CharacterMode"] | null;
             /** Fallen */
             fallen: components["schemas"]["FallenOut"][];
+            friendly_fire: components["schemas"]["FriendlyFire"];
             /** Is Host */
             is_host: boolean;
             /**
@@ -8482,6 +8556,7 @@ export interface components {
             default_sheet: components["schemas"]["Sheet"] | null;
             /** Ended At */
             ended_at: string | null;
+            friendly_fire: components["schemas"]["FriendlyFire"];
             /** Has Password */
             has_password: boolean;
             /**
@@ -8586,6 +8661,7 @@ export interface components {
             created_at: string;
             /** Credit Wait Seconds */
             credit_wait_seconds: number;
+            friendly_fire: components["schemas"]["FriendlyFire"];
             /** Has Password */
             has_password: boolean;
             /**
@@ -8691,7 +8767,7 @@ export interface components {
         };
         /**
          * TargetGoneOut
-         * @description 판정할 때 겨눈 몬스터(나 훔치려던 NPC)를 겨눌 수 없었던 것. 엔진은 굴리지 않았다.
+         * @description 판정할 때 겨눈 몬스터(나 훔치려던 NPC, 해치려던 동료)를 겨눌 수 없었던 것. 엔진은 굴리지 않았다.
          */
         TargetGoneOut: {
             /** Monster Id */
@@ -8702,6 +8778,8 @@ export interface components {
             npc_id?: string | null;
             /** Reason */
             reason: string;
+            /** User Id */
+            user_id?: string | null;
         };
         /**
          * TargetGoneOutcome
@@ -8747,7 +8825,8 @@ export interface components {
         };
         /**
          * ThrowAction
-         * @description 물건을 던지는 행동(#277). 가진 물건 하나를 몬스터 한 마리(monster)나 이번 장면의 인물(npc)에게 던진다.
+         * @description 물건을 던지는 행동(#277). 가진 물건 하나를 몬스터 한 마리(monster)나 이번 장면의 인물(npc)이나
+         *     앉은 사람(target, #803)에게 던진다. 앉은 사람에게 해로운 물건을 던지는 것은 테이블과 맞는 쪽의 설정이 정한다.
          *
          *     item 은 판의 로어북 물건 항목의 id 다. 어떤 물건이든 된다(#801). 능력과 난이도는 받지 않는다. 물건의 던지는
          *     판정(아이템 규칙의 throw)이나 룰북의 맞히는 판정(rules.item_check)으로 판정한다(app/rounds/throws.py).
@@ -8774,10 +8853,13 @@ export interface components {
             monster?: string | null;
             /** Npc */
             npc?: string | null;
+            /** Target */
+            target?: string | null;
         };
         /**
          * ThrownAtOut
-         * @description 물건을 던진 쪽(#277). 몬스터면 monster_id, 인물이면 entry_id 가 있다. 이름은 장면에서 부르는 것이다.
+         * @description 물건을 던진 쪽(#277). 몬스터면 monster_id, 인물이면 entry_id, 앉은 사람(#803)이면 user_id 가 있다.
+         *     이름은 장면에서 부르는 것이다. 앉은 사람이면 캐릭터의 이름이다.
          */
         ThrownAtOut: {
             /** Entry Id */
@@ -8786,6 +8868,8 @@ export interface components {
             monster_id?: string | null;
             /** Name */
             name: string | null;
+            /** User Id */
+            user_id?: string | null;
         };
         /**
          * Tier
@@ -12067,6 +12151,41 @@ export interface operations {
             };
         };
     };
+    change_friendly_fire_api_v1_game_tables__table_id__friendly_fire_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FriendlyFireUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     transfer_host_api_v1_game_tables__table_id__host_put: {
         parameters: {
             query?: never;
@@ -12154,6 +12273,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    change_friendly_fire_consent_api_v1_game_tables__table_id__members_me_friendly_fire_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FriendlyFireUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableDetail"];
+                };
             };
             /** @description 입력이 틀렸다 */
             422: {

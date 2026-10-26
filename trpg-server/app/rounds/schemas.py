@@ -56,6 +56,8 @@ class InjuryRollOut(BaseModel):
     heals_at: ClockTimeOut | None = None
     # 나온 부상에 면역이라 입지 않았으면 그 부상의 이름표다(#799, 몬스터). 그때 injury 는 None 이다
     immune: str | None = None
+    # 동료의 장난(#803)이라 입지 않은 오래 가는 부상이나 결손의 이름표다. 그때 injury 는 None 이다
+    spared: str | None = None
 
 
 class CalledShotOut(BaseModel):
@@ -143,7 +145,7 @@ class EffectOut(BaseModel):
     kind: ChangeKind
     # 양의 등급. 규칙의 Magnitude.key 다
     magnitude: str
-    # HP 가 바뀐 사람과 그 캐릭터. 피해는 행동한 사람, 회복은 행동의 대상이다
+    # HP 가 바뀐 사람과 그 캐릭터. 대가는 행동한 사람, 회복과 동료의 타격(#803)은 행동의 대상이다
     user_id: uuid.UUID
     character_name: str
     # 주사위의 눈들과 그 합
@@ -157,6 +159,8 @@ class EffectOut(BaseModel):
     downed: bool
     # 이 피해로 부상 표를 굴렸으면 그 결과. 굴리지 않았으면 None 이다
     injury_roll: InjuryRollOut | None = None
+    # 동료의 장난(#803)이었으면 참이다. HP 가 1 아래로 내려가지 않았고, 짧은 부상만 입었다
+    prank: bool = False
 
 
 class NpcEffectOut(BaseModel):
@@ -332,10 +336,14 @@ class TreatmentOut(BaseModel):
 
 
 class ThrownAtOut(BaseModel):
-    """물건을 던진 쪽(#277). 몬스터면 monster_id, 인물이면 entry_id 가 있다. 이름은 장면에서 부르는 것이다."""
+    """
+    물건을 던진 쪽(#277). 몬스터면 monster_id, 인물이면 entry_id, 앉은 사람(#803)이면 user_id 가 있다.
+    이름은 장면에서 부르는 것이다. 앉은 사람이면 캐릭터의 이름이다.
+    """
 
     monster_id: uuid.UUID | None = None
     entry_id: uuid.UUID | None = None
+    user_id: uuid.UUID | None = None
     name: str | None
 
 
@@ -437,10 +445,12 @@ class InjuredOut(BaseModel):
     소모품이 입힌 부상 하나(#800). 룰북의 부상의 이름표다.
 
     이미 입고 있었으면 injury 가 None 이다. 몬스터가 그 성질에 면역이면 injury 는 None, immune 이 그 부상이다.
+    동료의 장난(#803)이라 입히지 않은 오래 가는 부상이나 결손이면 injury 는 None, spared 가 그 부상이다.
     """
 
     injury: str | None
     immune: str | None = None
+    spared: str | None = None
     # 짧은 부상이면 이 라운드가 닫힐 때 풀린다. 오래 가는 것이면 나을 시각이 있다
     ends_after_round: int | None = None
     heals_at: ClockTimeOut | None = None
@@ -458,7 +468,8 @@ class ItemUseOut(BaseModel):
     entry_id: uuid.UUID
     name: str
     # 썼는가. 못 했으면 reason 이 있다: not_held(가지고 있지 않았다), target_gone(받을 사람이 떠났거나 죽었다,
-    # 겨눈 몬스터가 죽었거나 다른 곳에 있다)
+    # 겨눈 몬스터가 죽었거나 다른 곳에 있다. 해로운 물건을 쓸 동료가 쓰러졌거나 다른 곳에 있다),
+    # friendly_fire_off(해로운 물건을 쓸 동료가 받아들이지 않게 바뀌었다, #803)
     used: bool
     reason: str | None
     # 받은 쪽. 앉은 사람이면 user_id, 인물이면 entry_id, 몬스터면 monster_id 가 있다. 누구에게도 들지 않으면 None
@@ -913,14 +924,16 @@ class CoverOutcome(BaseModel):
 
 
 class TargetGoneOut(BaseModel):
-    """판정할 때 겨눈 몬스터(나 훔치려던 NPC)를 겨눌 수 없었던 것. 엔진은 굴리지 않았다."""
+    """판정할 때 겨눈 몬스터(나 훔치려던 NPC, 해치려던 동료)를 겨눌 수 없었던 것. 엔진은 굴리지 않았다."""
 
-    # 몬스터면 monster_id, NPC 면 npc_id 가 있다
+    # 몬스터면 monster_id, NPC 면 npc_id, 앉은 사람(#803)이면 user_id 가 있다
     monster_id: uuid.UUID | None = None
     npc_id: uuid.UUID | None = None
-    # 부르는 이름. 장면에 없는 마리였으면 None 이다
+    user_id: uuid.UUID | None = None
+    # 부르는 이름. 장면에 없는 마리였거나 떠난 사람이면 None 이다
     name: str | None
-    # dead(차례가 오기 전에 죽었다) 또는 elsewhere(다른 장소에 있다)
+    # dead(차례가 오기 전에 죽었다) 또는 elsewhere(다른 장소에 있다).
+    # 동료(#803)면 left(떠났다), downed(쓰러져 있다), friendly_fire_off(받아들이지 않게 바뀌었다)도 있다
     reason: str
 
 
