@@ -648,6 +648,8 @@ class ResourceSource:
 
     REST = 'rest'
     ITEM = 'item'
+    # 라운드가 닫힐 때 저절로(resources[].each_round)
+    ROUND = 'round'
 
 
 def record_resource_shifts(
