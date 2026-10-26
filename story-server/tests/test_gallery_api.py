@@ -2,7 +2,7 @@
 
 """
 연 일러스트의 기록(app/records/repository.py 의 add_illustrations)과 그 목록(GET /gallery)을 검증한다.
-실제 DB(story_test)에서 돈다. 기록은 저장소의 함수로 적는다. 행동이 열 때 적는 것은 그것을 잇는 조각에서 본다.
+실제 DB(story_test)에서 돈다. 기록은 저장소의 함수로 적는다. 행동이 열 때 적는 것은 tests/test_actions_api.py 가 본다.
 
 보는 것.
   - 연 차례로, 장면의 종류와 id, 그림, 인물, 처음 연 세션이 나온다

@@ -9,7 +9,7 @@ chat 의 말 한 번(chat-server/app/turns/service.py)과 같은 차례이고,
     1. begin_turn, begin_action, begin_regenerate: 세션과 모델을 보고, 차례를 잡고(한 세션 한 생성),
        사람의 말(또는 행동 말과 그 뒤의 상태)과 기록(pending)을 한 트랜잭션에 저장한다.
        다시 생성은 기록만 저장한다. 답한 말에 적힌 장면을 다시 세운다
-       행동은 엔진이 판정한다(app/turns/actions.py). 본 엔딩은 계정의 기록에 남긴다(app/records/).
+       행동은 엔진이 판정한다(app/turns/actions.py). 본 엔딩과 연 일러스트는 계정의 기록에 남긴다(app/records/).
        답을 쓰는 장면을 정하고(app/turns/scenes.py) 모델에 보낼 메시지를 만든다(app/turns/prompt.py)
     2. route_turn: 모델을 부를 provider 를 고른다. 키가 없거나 쓸 수 없는 모델이면 거절한다
     3. hold_turn: 홀드를 건다. 걸리지 않으면(모자람, 팔지 않음, 결제 서버가 죽음) 거절한다
@@ -66,6 +66,7 @@ from app.engine.state import StoryState
 from app.engine.world import AfterEnding, World, read_world
 from app.ratings import Rating, allowed_ratings
 from app.records import repository as records
+from app.records.illustrations import unlocked_scenes
 from app.turns import charging, repository
 from app.turns.actions import action_text, perform
 from app.turns.briefing import Briefing, read_briefing
@@ -554,6 +555,22 @@ async def record_ending(
         await records.add_ending(session, owner_id, imported.source_id, played.ending.id, conversation.id, now)
 
 
+async def record_illustrations(
+    session: AsyncSession,
+    owner_id: uuid.UUID,
+    imported: ImportedWorld,
+    conversation: Conversation,
+    played: Played,
+    now: datetime,
+) -> None:
+    """
+    행동 뒤에 열린 이벤트와 본 엔딩의 장면 가운데 해금 대상이고 그림이 있는 것을 계정의 기록에 적는다.
+    후일담에서 열린 이벤트도 적는다. 이미 연 장면은 그대로 둔다.
+    """
+    unlocks = unlocked_scenes(played.event, played.ending)
+    await records.add_illustrations(session, owner_id, imported.source_id, unlocks, conversation.id, now)
+
+
 async def record_action(
     session: AsyncSession,
     viewer: Viewer,
@@ -575,6 +592,7 @@ async def record_action(
     message = action_message(conversation, branch, action, played, now)
     await attach(session, conversation, message, played.state)
     await record_ending(session, viewer.claims.user_id, imported, conversation, played, now)
+    await record_illustrations(session, viewer.claims.user_id, imported, conversation, played, now)
     generation = add_generation(session, conversation, viewer.claims.user_id, message, slug)
     stage = staging(branch.world, played.state, played.event, played.ending)
     return turn_start(viewer.claims.user_id, generation, message, branch, played.state, stage, options)
