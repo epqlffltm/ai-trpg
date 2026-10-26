@@ -69,6 +69,19 @@ async def move_leaf(session: AsyncSession, conversation_id: uuid.UUID, leaf_id: 
     await session.execute(statement)
 
 
+async def extend_message(
+    session: AsyncSession, message_id: uuid.UUID, segments: list[dict], content: str, status: str
+) -> None:
+    """끊긴 답에 이어 쓴 것을 적는다(이어서 출력). 조각과 본문과 상태(complete, partial)를 바꾼다."""
+    statement = (
+        update(Message)
+        .where(Message.id == message_id)
+        .values(segments=segments, content=content, status=status)
+        .execution_options(synchronize_session=False)
+    )
+    await session.execute(statement)
+
+
 def add(session: AsyncSession, row: Message | MessageState | Generation) -> None:
     """새 행을 세션에 올린다."""
     session.add(row)

@@ -59,6 +59,8 @@ class TurnStart:
     labels: Mapping[str, str] = field(default_factory=dict)
     # 사람의 말이나 행동 뒤의 상태(응답의 모양). turn 메시지에 싣는다
     state: StateOut | None = None
+    # 이어서 출력이면 이어 쓰는 끊긴 답. 새 조각은 그 답에 붙는다(app/turns/service.py 의 extension_of)
+    continued: SavedMessage | None = None
 
 
 @dataclass(frozen=True)

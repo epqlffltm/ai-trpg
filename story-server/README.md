@@ -7,8 +7,8 @@
 **지금은 세션, 말 보내기, 행동, 다시 생성과 멈추기, 가지 고르기, 답 고치기, 계정의 기록까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
 asset 서버에서 세계관의 판을 가져와 [세션](#세션)을 만들고 목록으로 보인다. 말을 보내면 장면의 인물들과 서술의 답을 [말 조각](#말-보내기)으로 흘려보낸다.
 [행동](#행동)(이동, 시간, 선택지, 고백, 건네기)은 엔진이 판정하고 이벤트와 엔딩이 열린다. 답은 [다시 쓰고 멈출 수 있고](#다시-생성과-멈추기),
-[대안의 가지를 고르고](#가지-고르기) [답을 고칠 수 있다](#답-고치기). 본 엔딩과 연 일러스트는 [계정의 기록](#계정의-기록)에 남는다.
-이어서 출력과 요청 수 제한이 남았다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
+[대안의 가지를 고르고](#가지-고르기) [답을 고칠 수 있다](#답-고치기). 끊긴 답은 [이어 쓸 수 있다](#이어서-출력).
+본 엔딩과 연 일러스트는 [계정의 기록](#계정의-기록)에 남는다. 요청 수 제한이 남았다([만드는 순서](../docs/architecture/story.md#만드는-순서)).
 
 정해 둔 값: 포트 `8007`, 토큰의 대상 `ai-trpg-story`, DB 계정과 스키마 `story`(테스트는 `story_test`), 주소 `/api/v1/story/`.
 
@@ -114,6 +114,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content", "edit_of"?}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/actions` | [행동](#행동)(`{"kind", …}`). 엔진이 판정하고 바로 SSE 로 반응을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/messages/{id}/regenerate` | [다시 생성](#다시-생성과-멈추기). 그 말에 다시 답한다. 바로 SSE 로 흘려보낸다 | access 토큰 |
+| POST | `/api/v1/story/messages/{id}/continue` | [이어서 출력](#이어서-출력). 끊긴 답에 이어 쓴다. 바로 SSE 로 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/generations/{id}/stop` | [멈추기](#다시-생성과-멈추기). 도는 답을 멈추고 받은 만큼 저장한다. 204, 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
 | GET | `/api/v1/story/endings` | 그 세계관에서 내가 본 엔딩들(`?world_id=`, 처음 본 차례). [계정의 기록](#계정의-기록) | access 토큰 |
 | GET | `/api/v1/story/gallery` | 그 세계관에서 내가 연 일러스트들(`?world_id=`, 처음 연 차례). [계정의 기록](#계정의-기록) | access 토큰 |
@@ -173,7 +174,7 @@ event: failed   data: {"code": "timeout"}                                    답
   크레딧이 모자라면 402 `credit_short`, 결제 서버나 공급자가 죽었으면 503 이다. 이때 사람의 말은 저장되고 `message_id` 로 알린다.
 - **청구.** 결제 서버의 가격표 `story.<이름표>.i0.o0` 로 홀드를 건다(`story:gen:<기록의 id>`). 답이 있으면 확정, 없으면 반환이다.
   못 한 것은 청구 정리(`app/turns/settler.py`, 5초마다)가 마저 한다. 도중에 꺼진 서버가 남긴 홀드도 15분 뒤에 돌려준다.
-- 이어서 출력과 요청 수 제한은 그것을 더하는 조각에서 붙인다.
+- 끊긴 답은 [이어서 출력](#이어서-출력)으로 이어 쓴다. 요청 수 제한은 그것을 더하는 조각에서 붙인다.
 
 ### 행동
 
@@ -221,7 +222,24 @@ chat 의 것과 같은 모양이다(`app/turns/service.py` 의 `begin_regenerate
 - **멈추기.** `POST /api/v1/story/generations/{id}/stop`. `id` 는 SSE 의 turn 의 `generation_id` 다. 모델을 부르는 일만 끊는다.
   받은 조각이 있으면 partial 로 저장하고 확정한다(`error_code` `stopped`). 없으면 반환하고 SSE 는 `failed`(`stopped`)로 끝난다.
   스위치는 그 생성을 돌리는 서버의 메모리에 있다(`app.state.stops`). 끝난 것, 남의 것, 다른 서버에서 도는 것은 404 `generation_not_running` 이다.
-- 이어서 출력과 요청 수 제한은 그것을 더하는 조각에서 붙인다.
+- 요청 수 제한은 그것을 더하는 조각에서 붙인다.
+
+### 이어서 출력
+
+`POST /api/v1/story/messages/{id}/continue` 가 길이 상한이나 멈추기로 끊긴 답(`partial`)에 이어 쓴다(`app/turns/service.py` 의 `begin_continue`).
+chat 의 이어서 출력과 같은 차례이고, 새 호출이라 새로 청구한다. 지금 가지의 끝인 끊긴 답만 된다.
+
+- **모델에 가는 것.** 끊긴 답까지의 말(끊긴 답은 표식이 붙은 줄 그대로)과, 맨 끝에 사람의 차례로 이어 쓰라는 지시
+  (`conversation_core.continuation`)다. 장면의 인물은 끊긴 답에 적힌 것(`cast`) 그대로이고, 장면 지시는 답한 말에 적힌 이벤트와 엔딩으로 다시 세운다.
+  엔진은 다시 판정하지 않는다. 끝난 세션이어도 된다(사람의 말이 늘지 않는다).
+- **조각 잇기**(`app/turns/segments.py` 의 `continuing_splitter`). 첫 줄에 표식이 없으면 끊긴 마지막 조각을 이어 쓴 것이라 그 조각의 글 끝에 붙인다.
+  첫 줄이 표식으로 시작하면 새 조각이다. 그 뒤의 줄은 말 보내기와 같다(장면 밖의 인물의 줄은 버린다).
+  모델이 끊긴 답의 끝을 되풀이하면 겹친 만큼 뗀다(`OverlapTrim`, 8 글자 이상 겹칠 때).
+- **SSE.** turn 에 `continues`(그 답의 id)가 실린다. 첫 `segment` 앞의 `delta` 는 그 답의 마지막 조각에 붙는 글이고, `segment` 가 오면 새 조각이다.
+  `done` 의 말은 이어 붙인 그 답 전체다(같은 id).
+- **저장.** 새 말을 만들지 않고 끊긴 답의 조각과 본문을 바꾼다. 다 쓰면 `complete`, 또 끊기면 `partial` 이라 다시 이어 쓸 수 있다.
+  이어 쓴 것이 없으면 끊긴 답은 그대로이고 청구를 돌려준다.
+- **거절.** 끊긴 답이 아니거나 가지의 끝이 아니면 422 `not_continuable`, 없거나 남의 말이면 404 `message_not_found`, 답을 쓰는 중이면 409 다.
 
 ### 가지 고르기
 
