@@ -316,6 +316,36 @@
         "title": "EndingRecordOut",
         "type": "object"
       },
+      "GiveAction": {
+        "additionalProperties": false,
+        "description": "장면에 있는 인물 하나에게 가진 물건 하나를 건넨다. 호감도가 얼마나 바뀌는지는 엔진이 정한다.",
+        "properties": {
+          "cast": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Cast",
+            "type": "string"
+          },
+          "item": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Item",
+            "type": "string"
+          },
+          "kind": {
+            "const": "give",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "cast",
+          "item"
+        ],
+        "title": "GiveAction",
+        "type": "object"
+      },
       "Grade": {
         "description": "보이는 분류. 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 모델 목록의 파일에 적는다.",
         "enum": [
@@ -1180,7 +1210,7 @@
     },
     "/api/v1/story/conversations/{conversation_id}/actions": {
       "post": {
-        "description": "행동한다. 이동(move), 시간 보내기(pass_time), 하루 마치기(end_day), 선택지 고르기(choose), 고백(confess).\n엔진이 할 수 있는지 보고 상태를 바꾼 뒤(이벤트가 열리고 엔딩을 볼 수 있다), 모델의 반응을 흘려보낸다.\n반응을 받으니 한 번 청구한다. turn 의 user_message 가 행동 말(role action)이고 state 가 그 뒤의 상태다.\nSSE 의 모양은 말 보내기와 같다.",
+        "description": "행동한다. 이동(move), 시간 보내기(pass_time), 하루 마치기(end_day), 선택지 고르기(choose), 고백(confess),\n건네기(give).\n엔진이 할 수 있는지 보고 상태를 바꾼 뒤(이벤트가 열리고 엔딩을 볼 수 있다), 모델의 반응을 흘려보낸다.\n반응을 받으니 한 번 청구한다. turn 의 user_message 가 행동 말(role action)이고 state 가 그 뒤의 상태다.\nSSE 의 모양은 말 보내기와 같다.",
         "operationId": "act_api_v1_story_conversations__conversation_id__actions_post",
         "parameters": [
           {
@@ -1213,6 +1243,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ConfessAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/GiveAction"
                   }
                 ],
                 "title": "Data"

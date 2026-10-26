@@ -5,7 +5,8 @@
 
   - 판정은 엔진이 한다(app/engine/play.py). 할 수 없는 행동이면 ActionRefusedError 이고 code 가 까닭이다.
     아무것도 저장하지 않는다(app/turns/service.py 의 begin_action)
-  - 행동 말의 글은 사람이 한 행동과 엔진이 정한 결과(고백을 받아들였는가)를 적는다. 모델에 [행동] 을 붙여 간다.
+  - 행동 말의 글은 사람이 한 행동과 엔진이 정한 결과(고백을 받아들였는가, 선물을 반가워했는가)를 적는다.
+    모델에 [행동] 을 붙여 간다.
     모델은 그 결과를 바꾸지 못하고 그에 맞는 반응만 쓴다. 열린 이벤트와 본 엔딩은 장면 지시로 간다(app/turns/scenes.py)
 
     거절의 code
@@ -13,6 +14,7 @@
       no_choice                           고르기를 기다리는 이벤트가 없거나 그런 선택지가 없다
       over, not_in_scene,                 고백을 받지 않는다(이미 엔딩을 봤다, 장면에 없는 인물이다,
       not_confessable, cooling_down       고백할 수 없는 인물이다, 다시 고백할 시각이 아직이다)
+      not_in_scene, not_held              건네기를 받지 않는다(장면에 없는 인물이다, 그 물건이 없다)
 """
 
 from app.engine import play
@@ -20,11 +22,20 @@ from app.engine.actions import CannotMove
 from app.engine.clock import day_of, slot_of
 from app.engine.confession import ConfessionRefused
 from app.engine.events import ChoiceRefused
+from app.engine.gifts import GiftRefused
 from app.engine.play import Played
 from app.engine.state import StoryState
 from app.engine.world import World
 from app.turns.briefing import Briefing
-from app.turns.schemas import ActionCreate, ChooseAction, ConfessAction, EndDayAction, MoveAction, PassTimeAction
+from app.turns.schemas import (
+    ActionCreate,
+    ChooseAction,
+    ConfessAction,
+    EndDayAction,
+    GiveAction,
+    MoveAction,
+    PassTimeAction,
+)
 
 CANNOT_MOVE = 'cannot_move'
 NO_CHOICE = 'no_choice'
@@ -51,6 +62,8 @@ def to_engine(data: ActionCreate) -> play.Action:
             return play.Choose(choice)
         case ConfessAction(cast=cast):
             return play.Confess(cast)
+        case GiveAction(cast=cast, item=item):
+            return play.Give(cast, item)
     raise TypeError(f'모르는 행동: {data!r}')
 
 
@@ -64,6 +77,8 @@ def perform(world: World, state: StoryState, action: play.Action) -> Played:
         raise ActionRefusedError(NO_CHOICE) from error
     except ConfessionRefused as error:
         raise ActionRefusedError(error.reason.value) from error
+    except GiftRefused as error:
+        raise ActionRefusedError(error.reason.value) from error
 
 
 def place_name(briefing: Briefing, place_id: str) -> str:
@@ -75,6 +90,17 @@ def place_name(briefing: Briefing, place_id: str) -> str:
 def clock_words(briefing: Briefing, world: World, state: StoryState) -> str:
     """지금의 날과 시간대('2일째 아침')."""
     return f'{day_of(state.minutes)}일째 {briefing.slot_name(slot_of(world, state.minutes))}'
+
+
+def gift_text(briefing: Briefing, cast: str, item: str, change: int | None) -> str:
+    """건네기의 글. 호감도가 오르면 반가워했고, 내리면 달가워하지 않았다. 그대로면 건넨 것만 적는다."""
+    name = briefing.cast_name(cast)
+    text = f'{name}에게 {briefing.item_name(item)}을(를) 건넸다.'
+    if change is not None and change > 0:
+        return f'{text} {name}은(는) 반가워했다.'
+    if change is not None and change < 0:
+        return f'{text} {name}은(는) 달가워하지 않았다.'
+    return text
 
 
 def action_text(briefing: Briefing, world: World, action: play.Action, played: Played) -> str:
@@ -91,4 +117,6 @@ def action_text(briefing: Briefing, world: World, action: play.Action, played: P
         case play.Confess(cast=cast):
             answer = '받아들였다' if played.accepted else '받아들이지 않았다'
             return f'{briefing.cast_name(cast)}에게 고백했다. {briefing.cast_name(cast)}은(는) 고백을 {answer}.'
+        case play.Give(cast=cast, item=item):
+            return gift_text(briefing, cast, item, played.affection_change)
     raise TypeError(f'모르는 행동: {action!r}')

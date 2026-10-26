@@ -5,12 +5,12 @@
 
 행동 하나의 차례.
   1. 기다리던 선택지가 있고 이 행동이 그 선택지를 고르는 것이 아니면, 선택지는 사라진다(효과 없이)
-  2. 행동을 반영한다: 이동, 시간 보내기, 하루 마치기, 선택지 고르기, 고백
+  2. 행동을 반영한다: 이동, 시간 보내기, 하루 마치기, 선택지 고르기, 고백, 건네기
   3. 고백이 엔딩을 봤으면 거기서 끝이다
   4. 시각이 흐른 행동이면 기한을 본다. 지났으면 기한의 엔딩을 보고 끝이다
   5. 열 수 있는 이벤트를 하나 연다. 그 이벤트로 시작되는 엔딩이 있으면 본다
 
-할 수 없는 행동은 각 모듈의 예외로 올라간다(CannotMove, ChoiceRefused, ConfessionRefused).
+할 수 없는 행동은 각 모듈의 예외로 올라간다(CannotMove, ChoiceRefused, ConfessionRefused, GiftRefused).
 엔딩을 본 뒤(후일담)에도 이벤트는 열리지만 엔딩과 기한은 다시 일어나지 않는다(app/engine/endings.py 의 pick_ending).
 행동의 글(모델에 보내는 문장)과 계정의 기록은 이 모듈 밖의 일이다(app/turns/).
 """
@@ -20,6 +20,7 @@ from dataclasses import dataclass, replace
 from app.engine import actions, events
 from app.engine.confession import confess
 from app.engine.endings import deadline_ending, event_ending, reach_ending
+from app.engine.gifts import give
 from app.engine.scene import scene_cast
 from app.engine.state import StoryState
 from app.engine.world import Choice, Ending, Event, World
@@ -56,7 +57,15 @@ class Confess:
     cast: str
 
 
-Action = Move | PassTime | EndDay | Choose | Confess
+@dataclass(frozen=True)
+class Give:
+    """장면에 있는 인물 하나에게 가진 물건 하나를 건넨다."""
+
+    cast: str
+    item: str
+
+
+Action = Move | PassTime | EndDay | Choose | Confess | Give
 
 # 시각이 흐르는 행동. 이것들 뒤에만 기한을 본다
 TIME_FLOWS = (Move, PassTime, EndDay)
@@ -67,12 +76,14 @@ class Played:
     """
     행동 하나를 판정한 결과. state 는 행동 뒤의 상태다.
     choice 는 고른 선택지, accepted 는 고백이 받아들여졌는가(고백이 아니면 None)다.
+    affection_change 는 건네기로 호감도가 바뀐 양이다(건네기가 아니면 None, 맞는 규칙이 없으면 0).
     event 는 이 행동 뒤에 열린 이벤트, ending 은 이 행동으로 본 엔딩이다(없으면 None).
     """
 
     state: StoryState
     choice: Choice | None = None
     accepted: bool | None = None
+    affection_change: int | None = None
     event: Event | None = None
     ending: Ending | None = None
 
@@ -93,6 +104,10 @@ def act(world: World, state: StoryState, action: Action) -> Played:
             before = events.drop_choice(state)
             outcome = confess(world, before, cast_id, scene_cast(world, before))
             return Played(outcome.state, accepted=outcome.succeeded, ending=outcome.ending)
+        case Give(cast=cast_id, item=item):
+            before = events.drop_choice(state)
+            given = give(world, before, cast_id, item, scene_cast(world, before))
+            return Played(given.state, affection_change=given.change)
     raise TypeError(f'모르는 행동: {action!r}')
 
 

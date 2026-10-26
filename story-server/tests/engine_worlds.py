@@ -14,9 +14,14 @@ def clock(day: int, hour: int, minute: int = 0) -> int:
 
 
 def member(
-    cast_id: str, home: str | None = None, schedule: list | None = None, start: int = 0, confession: dict | None = None
+    cast_id: str,
+    home: str | None = None,
+    schedule: list | None = None,
+    start: int = 0,
+    confession: dict | None = None,
+    gifts: list[dict] | None = None,
 ) -> dict:
-    """인물 하나. 단계는 낯섦(0), 친함(30), 연인(70)이다."""
+    """인물 하나. 단계는 낯섦(0), 친함(30), 연인(70)이다. gifts 는 선물의 규칙들이다(gift)."""
     return {
         'id': cast_id,
         'character': {'name': cast_id},
@@ -26,7 +31,7 @@ def member(
             'display': 'stage',
             'start': start,
             'stages': [{'name': '낯섦', 'at': 0}, {'name': '친함', 'at': 30}, {'name': '연인', 'at': 70}],
-            'gifts': [],
+            'gifts': gifts or [],
         },
         'reveal': 'shown',
         'map': 'shown',
@@ -70,6 +75,11 @@ def event(
         'on_open': on_open or [],
         'choices': choices or [],
     }
+
+
+def gift(gift_id: str, item: str, change: int, once: bool = False) -> dict:
+    """선물의 규칙 하나."""
+    return {'id': gift_id, 'item': item, 'change': change, 'once': once}
 
 
 def confession(stage: str = '친함', *items: dict, on_fail: str = 'continue', drop: int = 10, days: int = 1) -> dict:

@@ -4,8 +4,8 @@
 말을 보내고 행동하는 API. 바로 SSE(text/event-stream)로 답한다(메시지의 모양은 app/turns/schemas.py).
 
     POST /api/v1/story/conversations/{id}/messages    {content}   말을 보낸다
-    POST /api/v1/story/conversations/{id}/actions     {kind, …}   행동한다(이동, 시간, 하루 마치기, 선택지, 고백).
-                                                                  엔진이 판정하고 이어서 모델이 반응을 쓴다
+    POST /api/v1/story/conversations/{id}/actions     {kind, …}   행동한다(이동, 시간, 하루 마치기, 선택지, 고백,
+                                                                  건네기). 엔진이 판정하고 이어서 모델이 반응을 쓴다
     POST /api/v1/story/messages/{id}/regenerate                   그 말에 다시 답한다. 새 답은 같은 부모 아래의 대안이다
     POST /api/v1/story/generations/{id}/stop                      모델을 부르는 것을 멈춘다. 받은 만큼 저장한다. 204
 
@@ -14,7 +14,7 @@
   - 422 not_regenerable: 다시 쓸 수 없는 말이다(부모가 없는 답)
   - 409 model_required: 세션에 모델이 없다. 먼저 고른다(PUT /conversations/{id}/model)
   - 409 session_ended: 엔딩을 본 세션이다(세계관이 끝을 골랐다). 읽기만 된다
-  - 422 cannot_move, no_choice, over, not_in_scene, not_confessable, cooling_down: 그렇게 할 수 없다
+  - 422 cannot_move, no_choice, over, not_in_scene, not_confessable, cooling_down, not_held: 그렇게 할 수 없다
     (app/turns/actions.py). 아무것도 저장하지 않는다
   - 422 model_unavailable: 모델을 쓸 수 없다(꺼졌다, 은퇴했다, 팔지 않는다). 사람의 말은 저장했을 수 있다
   - 409 generation_in_progress: 이 세션이 다른 답을 쓰는 중이다(app/conversations/router.py 가 답한다)
@@ -227,7 +227,8 @@ async def act(
     now: Now,
 ) -> StreamingResponse:
     """
-    행동한다. 이동(move), 시간 보내기(pass_time), 하루 마치기(end_day), 선택지 고르기(choose), 고백(confess).
+    행동한다. 이동(move), 시간 보내기(pass_time), 하루 마치기(end_day), 선택지 고르기(choose), 고백(confess),
+    건네기(give).
     엔진이 할 수 있는지 보고 상태를 바꾼 뒤(이벤트가 열리고 엔딩을 볼 수 있다), 모델의 반응을 흘려보낸다.
     반응을 받으니 한 번 청구한다. turn 의 user_message 가 행동 말(role action)이고 state 가 그 뒤의 상태다.
     SSE 의 모양은 말 보내기와 같다.

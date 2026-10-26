@@ -77,9 +77,18 @@ class ConfessAction(ActionBase):
     cast: Annotated[str, Field(min_length=1, max_length=ID_MAX_CHARS)]
 
 
+class GiveAction(ActionBase):
+    """장면에 있는 인물 하나에게 가진 물건 하나를 건넨다. 호감도가 얼마나 바뀌는지는 엔진이 정한다."""
+
+    kind: Literal['give']
+    cast: Annotated[str, Field(min_length=1, max_length=ID_MAX_CHARS)]
+    item: Annotated[str, Field(min_length=1, max_length=ID_MAX_CHARS)]
+
+
 # 행동 하나. kind 로 가른다
 ActionCreate = Annotated[
-    MoveAction | PassTimeAction | EndDayAction | ChooseAction | ConfessAction, Field(discriminator='kind')
+    MoveAction | PassTimeAction | EndDayAction | ChooseAction | ConfessAction | GiveAction,
+    Field(discriminator='kind'),
 ]
 
 
