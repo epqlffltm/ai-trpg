@@ -56,6 +56,10 @@ def make_test_settings(**overrides) -> Settings:
         # 결제 서버를 부르지 않는다(받지 않는 것). 값을 보는 테스트는 가격 목록을 바꿔 끼운다(tests/prices.py)
         'billing_url': '',
         'billing_secret': '',
+        # 요청 수를 세지 않는다. 개발자의 .env 에 Redis 가 있어도 쓰지 않는다.
+        # 제한을 보는 테스트만 켠다(tests/test_limits.py)
+        'limits_enabled': False,
+        'redis_url': '',
     }
     values.update(overrides)
     return Settings(**values)

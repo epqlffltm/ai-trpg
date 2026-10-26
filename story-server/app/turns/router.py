@@ -47,6 +47,7 @@ from server_core.observability.metrics import measured_stream
 
 from app.core.config import Settings
 from app.core.dependencies import CurrentViewer, Now, utc_now
+from app.limits.routing import GENERATION_LIMIT
 from app.turns import service
 from app.turns.actions import ActionRefusedError, to_engine
 from app.turns.charging import CREDIT_SHORT, GOLD_REQUIRED, MODEL_UNAVAILABLE
@@ -65,8 +66,9 @@ from app.turns.values import PromptOptions, TurnStart
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix='/conversations', tags=['messages'])
-message_router = APIRouter(prefix='/messages', tags=['messages'])
+# 이 두 라우터의 주소는 모두 모델을 부른다. 사람마다 요청 수를 센다(app/limits/). 멈추기는 세지 않는다
+router = APIRouter(prefix='/conversations', tags=['messages'], dependencies=[GENERATION_LIMIT])
+message_router = APIRouter(prefix='/messages', tags=['messages'], dependencies=[GENERATION_LIMIT])
 generation_router = APIRouter(prefix='/generations', tags=['messages'])
 # SSE 로 답하는 주소의 설명(API 목록)
 SSE_RESPONSES = {200: {'content': {'text/event-stream': {}}, 'description': 'SSE. app/turns/schemas.py 의 메시지들'}}

@@ -11,6 +11,7 @@
     PATCH /api/v1/story/messages/{id}             답 고치기(조각마다 글만). 고친 말을 돌려준다
 
 모든 주소가 로그인을 요구한다. 남의 세션은 404 다(403 이면 그 ID 가 있다는 것이 드러난다).
+쓰기(시작, 모델과 가지 바꾸기, 답 고치기)는 사람마다 요청 수를 센다(app/limits/). 넘으면 429 too_many_attempts 다.
 """
 
 import uuid
@@ -51,10 +52,12 @@ from app.conversations.service import (
     WorldNotFoundError,
 )
 from app.core.dependencies import CurrentViewer, Now, Paging, Session
+from app.limits.routing import WRITE_LIMIT
 from app.ratings import Rating
 
 router = APIRouter(prefix='/conversations', tags=['conversations'])
-message_router = APIRouter(prefix='/messages', tags=['conversations'])
+# 답 고치기는 모델을 부르지 않는 쓰기다. 사람마다 요청 수를 센다(app/limits/)
+message_router = APIRouter(prefix='/messages', tags=['conversations'], dependencies=[WRITE_LIMIT])
 
 # asset 서버를 쓸 수 없을 때 다시 해 볼 때까지의 시간(초). 화면이 이만큼 뒤에 다시 누르게 한다
 ASSET_RETRY_AFTER_SECONDS = 5
@@ -230,7 +233,7 @@ async def handle_asset_unavailable(request: Request, error: AssetUnavailableErro
 # --- 주소 ---
 
 
-@router.post('', response_model=ConversationDetail, status_code=status.HTTP_201_CREATED)
+@router.post('', response_model=ConversationDetail, status_code=status.HTTP_201_CREATED, dependencies=[WRITE_LIMIT])
 async def start_conversation(
     data: ConversationCreate, viewer: CurrentViewer, session: Session, request: Request, prices: Prices, now: Now
 ) -> ConversationDetail:
@@ -271,7 +274,12 @@ async def read_conversation(
     return to_detail(row, models, book, now, messages, alternatives, state)
 
 
-@router.put('/{conversation_id}/model', response_model=ConversationModelOut, status_code=status.HTTP_200_OK)
+@router.put(
+    '/{conversation_id}/model',
+    response_model=ConversationModelOut,
+    status_code=status.HTTP_200_OK,
+    dependencies=[WRITE_LIMIT],
+)
 async def change_model(
     conversation_id: uuid.UUID, data: ModelChoice, viewer: CurrentViewer, session: Session, prices: Prices, now: Now
 ) -> ConversationModelOut:
@@ -280,7 +288,12 @@ async def change_model(
     return to_model(model, usable=True)
 
 
-@router.put('/{conversation_id}/branch', response_model=ConversationDetail, status_code=status.HTTP_200_OK)
+@router.put(
+    '/{conversation_id}/branch',
+    response_model=ConversationDetail,
+    status_code=status.HTTP_200_OK,
+    dependencies=[WRITE_LIMIT],
+)
 async def choose_branch(
     conversation_id: uuid.UUID, data: BranchChoice, viewer: CurrentViewer, session: Session, prices: Prices, now: Now
 ) -> ConversationDetail:

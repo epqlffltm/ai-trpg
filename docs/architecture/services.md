@@ -219,7 +219,7 @@ PostgreSQL 의 `max_connections` 는 기본값 100 이고, superuser 의 몫 3 �
 | auth | 0 | `auth:attempts` | 시도 횟수, IP 차단(기한이 있다) |
 | trpg | 0 | `game:limit` | 로비 비밀번호와 채팅의 시도 횟수(기한이 있다) |
 | chat | 2 | `chat:limit` | 요청 제한(기한이 있다, #671) |
-| story(계획) | 3 | 서버가 정한다 | 요청 제한(기한이 있다) |
+| story | 3 | `story:limit` | 요청 제한(기한이 있다) |
 
 - **메모리는 64MB 까지, 차면 `volatile-lru`.** 기한이 걸린 키 가운데 오래 안 쓴 것부터 내쫓는다. 지금 넣는 것은 모두 기한이 있는 시도 횟수라, 내쫓기면 제한이 조금 느슨해질 뿐이다. 내쫓으면 경보 `RedisEvictingKeys` 가 울린다
   - `noeviction` 을 고르지 않은 까닭: 차면 쓰기가 실패한다. trpg 는 Redis 가 막히면 닫힌 쪽으로 실패해(로비 비밀번호와 채팅이 503) 메모리가 찬 것이 서비스가 멈춘 것이 된다

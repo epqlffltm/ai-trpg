@@ -52,6 +52,9 @@ from app.conversations.service import (
     WorldNotFoundError,
 )
 from app.core.config import Settings, get_settings
+from app.limits.attempts import TooManyAttempts
+from app.limits.responses import handle_too_many_attempts
+from app.limits.setup import build_limiting, build_redis
 from app.records import router as records
 from app.turns import router as messages
 from app.turns import settler
@@ -84,7 +87,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     뜰 때 끊긴 세션의 목록 받기(30초마다)와 청구 정리(5초마다)를 시작한다. 꺼질 때 그것들을 가장 먼저 멈춘다.
     도는 말 한 번은 멈춘다. 받은 만큼 저장하고 맡길 것을 적어 둔다(다음에 뜬 서버의 청구 정리가 맡긴다).
-    그다음 DB 연결과 다른 서버로 가는 연결을 닫는다. 닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
+    그다음 DB 연결과 다른 서버로 가는 연결(Redis 도)을 닫는다. 닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
     마지막으로 모아 둔 span 과 메트릭을 보낸다. 보내기를 기다리느라 막히므로 스레드에서 한다.
     """
     revoking = revocations.start(app.state.revocations)
@@ -95,6 +98,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await stop_turns(app.state.turns)
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
+    if app.state.redis is not None:
+        await app.state.redis.aclose()
     await asyncio.to_thread(shutdown_tracing, app.state.tracing)
     await asyncio.to_thread(shutdown_metrics, app.state.metrics)
 
@@ -186,6 +191,9 @@ def create_app(
     # 끝나지 않은 청구를 마저 끝내는 작업(app/turns/settler.py). lifespan 이 돌리고 멈춘다.
     # 결제 서버를 부르는 것은 부를 때마다 앱에서 꺼낸다. 테스트가 가짜를 꽂는다
     app.state.settler = settler.ChargeSettler(app.state.session_factory, billing=lambda: app.state.billing)
+    # 요청 수 제한. REDIS_URL 이 있으면 Redis 로, 없으면 메모리로 센다(app/limits/)
+    app.state.redis = build_redis(settings)
+    app.state.limiting = build_limiting(settings, app.state.redis)
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
@@ -214,6 +222,8 @@ def create_app(
     app.add_exception_handler(PriceListUnavailable, billing.handle_prices_unavailable)
     app.add_exception_handler(ConversationBusyError, conversations.handle_conversation_busy)
     app.add_exception_handler(NotEditableError, conversations.handle_not_editable)
+    # 요청 수를 넘었다(app/limits/responses.py)
+    app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
     # 말 보내기의 예외(app/turns/router.py)
     app.add_exception_handler(ModelRequiredError, messages.handle_model_required)
     app.add_exception_handler(SessionEndedError, messages.handle_session_ended)
