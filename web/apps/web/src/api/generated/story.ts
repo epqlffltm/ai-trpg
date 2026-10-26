@@ -104,6 +104,8 @@ export interface paths {
          * Send Message
          * @description 말을 보낸다. 사람의 말을 저장하고, 장면의 인물들과 서술의 답을 말 조각으로 흘려보낸다.
          *     끊겨도 서버는 끝까지 답을 저장한다. 말은 상태(시각, 장소, 호감도)를 바꾸지 않는다.
+         *     edit_of 가 있으면 그 사람의 말을 고친 새 가지다(원본은 남는다). 사람의 말이 아니면 422 not_editable,
+         *     그 세션의 말이 아니면 404 message_not_found 다.
          */
         post: operations["send_message_api_v1_story_conversations__conversation_id__messages_post"];
         delete?: never;
@@ -235,6 +237,30 @@ export interface paths {
          *     말이 없거나 남의 것이면 404 message_not_found, 답을 쓰는 중이면 409 generation_in_progress 다.
          */
         patch: operations["edit_message_api_v1_story_messages__message_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/story/messages/{message_id}/continue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Continue Message
+         * @description 끊긴 답(partial)에 이어 쓴다. 지금 가지의 끝인 답만 된다. 엔진은 다시 판정하지 않는다.
+         *
+         *     새 호출이라 새로 청구한다. SSE 의 turn 에 continues(그 답의 id)가 실린다.
+         *     첫 segment 앞의 delta 는 그 답의 마지막 조각에 붙는 글이고, segment 가 오면 새 조각이다.
+         *     done 의 말은 이어 붙인 그 답 전체다. 다 쓰면 complete, 또 끊기면 partial 이라 다시 이어 쓸 수 있다.
+         */
+        post: operations["continue_message_api_v1_story_messages__message_id__continue_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/story/messages/{message_id}/regenerate": {
@@ -585,6 +611,8 @@ export interface components {
         MessageCreate: {
             /** Content */
             content: string;
+            /** Edit Of */
+            edit_of?: string | null;
         };
         /**
          * MessageEdit
@@ -1248,6 +1276,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    continue_message_api_v1_story_messages__message_id__continue_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSE. app/turns/schemas.py 의 메시지들 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
                 };
             };
             /** @description 입력이 틀렸다 */
