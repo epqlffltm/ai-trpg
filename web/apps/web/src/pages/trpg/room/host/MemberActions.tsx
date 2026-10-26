@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/trpg/room/host/MemberActions.tsx
 // 방장이 다른 사람에게 하는 일. 사람마다 내보내기, 방장 넘기기, "한 번 더 굴리기"(그럴 수 있을 때만).
 // 내보내면 초대 코드가 새로 만들어진다. 새 코드를 알린다(내보낸 사람이 옛 코드로 다시 들어오지 못한다).
+// 알림은 마지막 사람을 내보내 다른 사람이 없어져도 남는다(전에는 바뀐 테이블이 그려지는 순간 사라졌다).
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useState } from 'react';
@@ -16,7 +17,7 @@ type Props = { table: TableDetail; myId: string | undefined; nameOfMember: (user
 export function MemberActions({ table, myId, nameOfMember }: Props) {
   const [kicked, setKicked] = useState<{ name: string; code: string | null } | null>(null);
   const others = otherMembers(table, myId);
-  if (others.length === 0) return <p className="hint">다른 사람이 아직 없습니다.</p>;
+  // 내보낸 알림은 남은 사람이 없어도 보인다. 마지막 사람을 내보내면 바뀐 테이블에 다른 사람이 없다
   return (
     <>
       {kicked ? (
@@ -24,6 +25,7 @@ export function MemberActions({ table, myId, nameOfMember }: Props) {
           {kicked.name}을(를) 내보냈습니다.{kicked.code ? ` 새 초대 코드는 ${kicked.code}입니다.` : ''}
         </Notice>
       ) : null}
+      {others.length === 0 ? <p className="hint">다른 사람이 아직 없습니다.</p> : null}
       <ul className="plain-list host-members">
         {others.map((member) => (
           <MemberRow

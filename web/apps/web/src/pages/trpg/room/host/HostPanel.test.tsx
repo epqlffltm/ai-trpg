@@ -102,6 +102,9 @@ describe('HostPanel', () => {
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '내보내기' }));
 
     expect(await screen.findByText(/새 초대 코드는 NEW999입니다/)).toBeInTheDocument();
+    // 마지막 사람을 내보내 바뀐 테이블이 그려진 뒤에도 알림이 남는다
+    expect(await screen.findByText('다른 사람이 아직 없습니다.')).toBeInTheDocument();
+    expect(screen.getByText(/새 초대 코드는 NEW999입니다/)).toBeInTheDocument();
     expect(sent(seen, 'DELETE', `/members/${OTHER}`)).toHaveLength(1);
   });
 
