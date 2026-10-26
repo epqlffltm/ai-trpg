@@ -28,7 +28,7 @@ const ALL: EventType[] = [
   'table_created', 'member_joined', 'member_left', 'member_kicked', 'host_changed', 'abilities_rolled', 'reroll_granted',
   'narration_style_changed', 'round_time_limit_changed', 'narration_tier_changed', 'narration_model_changed', 'credit_wait_changed',
   'whisper_notice_changed', 'friendly_fire_changed', 'friendly_fire_consent_changed', 'references_changed', 'ledger_drafts_changed', 'whisper_sent', 'table_started', 'gm_narration',
-  'round_opened', 'player_action', 'check_rolled', 'hp_changed', 'npc_changed', 'npc_attitude_changed', 'monster_changed',
+  'round_opened', 'player_action', 'check_rolled', 'hp_changed', 'resource_changed', 'npc_changed', 'npc_attitude_changed', 'monster_changed',
   'monster_attacked', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_treated', 'naming_resolved', 'death_save_rolled',
   'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'steal_attempted',
   'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'place_searched', 'character_rested',
@@ -153,6 +153,7 @@ describe('eventLine', () => {
     expect(line('friendly_fire_changed', { friendly_fire: 'prank' })?.text).toBe('동료 피해: 장난만');
     expect(line('friendly_fire_consent_changed', { user_id: OTHER, friendly_fire: 'full' })?.text).toBe('미아: 나를 겨누는 것 다 됨');
     expect(line('hp_changed', { character_name: '렌', before: 9, after: 1, prank: true })?.text).toBe('렌: HP 9 → 1 · 장난');
+    expect(line('resource_changed', { character_name: '렌', name: '마나', before: 2, after: 5, max: 7 })?.text).toBe('렌: 마나 2 → 5/7');
     expect(line('character_died', { character_name: '조' })?.important).toBe(true);
     expect(line('hp_changed', { character_name: '렌', before: 9, after: 5 })?.important).toBe(false);
   });

@@ -546,6 +546,20 @@ class MapOut(BaseModel):
     routes: list[RouteOut]
 
 
+class ResourceOut(BaseModel):
+    """
+    시트의 수치 하나(#804). 마나, 스태미나 같은 것이다. 규칙의 수치(rules.resources)의 차례로 나온다.
+
+    최대는 그 캐릭터의 능력치로 정해진 값이다. 값은 늘 min 과 max 사이다.
+    """
+
+    key: str
+    name: str
+    value: int
+    min: int
+    max: int
+
+
 class SheetOut(BaseModel):
     """앉은 사람의 캐릭터 시트. 앉은 사람은 서로의 시트를 본다."""
 
@@ -572,6 +586,8 @@ class SheetOut(BaseModel):
     worn: list[WornOut] = []
     # 서 있는 맵의 장소. 이름은 TableDetail.map.places 에서 찾는다. 맵이 없는 테이블이면 None 이다
     place_id: uuid.UUID | None = None
+    # HP 말고 다른 수치들(#804). 규칙에 수치가 없으면 비어 있다
+    resources: list[ResourceOut] = []
 
 
 class FallenOut(BaseModel):

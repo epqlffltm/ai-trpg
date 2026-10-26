@@ -46,6 +46,7 @@ from app.assets.routing import (
     handle_asset_reference,
 )
 from app.assets.rulebooks import router as rulebooks
+from app.assets.rulebooks.service import RulesInvalidError
 from app.assets.scenarios import router as scenarios
 from app.assets.scenarios.publishing import ScenarioNotReadyError
 from app.assets.scenarios.recommended_model import RecommendedModelError
@@ -366,6 +367,7 @@ def create_app(
     app.add_exception_handler(AssetNotFoundError, handle_asset_not_found)
     app.add_exception_handler(AssetInUseError, handle_asset_in_use)
     app.add_exception_handler(AssetReferenceError, handle_asset_reference)
+    app.add_exception_handler(RulesInvalidError, rulebooks.handle_rules_invalid)
     app.add_exception_handler(RecommendedModelError, scenarios.handle_recommended_model)
     app.add_exception_handler(LorebookFullError, lorebooks.handle_lorebook_full)
     app.add_exception_handler(BestiaryFullError, bestiaries.handle_bestiary_full)

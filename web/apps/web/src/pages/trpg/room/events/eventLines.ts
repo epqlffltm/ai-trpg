@@ -376,6 +376,8 @@ const DESCRIBE: Record<EventType, Describe> = {
   // 몸
   hp_changed: (p, ctx, e) =>
     `${who(p, ctx, e)}: HP ${count(p, 'before') ?? '?'} → ${count(p, 'after') ?? '?'}${flag(p, 'downed') ? ' · 쓰러짐' : ''}${flag(p, 'prank') ? ' · 장난' : ''}`,
+  resource_changed: (p, ctx, e) =>
+    `${who(p, ctx, e)}: ${text(p, 'name') ?? '수치'} ${count(p, 'before') ?? '?'} → ${count(p, 'after') ?? '?'}/${count(p, 'max') ?? '?'}`,
   npc_changed: (p) => changeText(p, '인물'),
   monster_changed: (p) => changeText(p, '몬스터'),
   npc_attitude_changed: (p) => `${text(p, 'name') ?? '인물'}: 태도 ${attitudeLabel(text(p, 'attitude') ?? '') ?? '?'}`,

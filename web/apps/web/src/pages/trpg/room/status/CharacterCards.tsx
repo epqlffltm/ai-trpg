@@ -6,6 +6,7 @@ import type { Ruleset, TableMember } from '../../../../api/types';
 import type { NameLookup } from '../../../../hooks/usePublicNames';
 import { SheetStats } from '../character/SheetStats';
 import { HpBar } from './HpBar';
+import { ResourceBars } from './ResourceBars';
 import { injuryName, injuryTiming, meFirst } from './statusView';
 
 type Props = { members: TableMember[]; rules: Ruleset; myId: string | undefined; nameOf: NameLookup };
@@ -37,6 +38,7 @@ function SheetDetails({ member, rules }: { member: TableMember; rules: Ruleset }
   return (
     <>
       <HpBar sheet={sheet} rules={rules} />
+      <ResourceBars sheet={sheet} />
       {sheet.injuries.length > 0 ? (
         <ul className="injuries" aria-label="부상">
           {sheet.injuries.map((injury) => (

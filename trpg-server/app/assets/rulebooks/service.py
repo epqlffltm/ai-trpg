@@ -10,13 +10,26 @@
 
 import uuid
 
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
 from app.assets.models import AssetType, Rulebook
 from app.assets.rulebooks.schemas import RulebookCreate, RulebookUpdate
-from app.engine.ruleset import Armor
+from app.engine.ruleset import Armor, Resource, Ruleset
 from app.engine.templates import TemplateFile, all_templates, from_template
+
+
+class RulesInvalidError(Exception):
+    """
+    고친 규칙이 규칙 한 벌로 맞지 않는다(#804). 수치의 최대에 쓰는 능력치가 규칙에 없거나, 같은 수치가 두 번 있다.
+
+    칸 하나의 모양은 받을 때 봤다. 이것은 칸끼리 맞는지다. message 는 왜 맞지 않는지다.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
 
 
 def build_rulebook(owner_id: uuid.UUID, data: RulebookCreate) -> Rulebook:
@@ -30,6 +43,8 @@ def build_rulebook(owner_id: uuid.UUID, data: RulebookCreate) -> Rulebook:
     rules = from_template(data.template).model_dump(mode='json')
     if 'armor' in data.model_fields_set:
         rules = with_armor(rules, data.armor)
+    if data.resources is not None:
+        rules = with_resources(rules, data.resources)
     return Rulebook(asset=asset, gm_guide=data.gm_guide, rules=rules)
 
 
@@ -38,9 +53,24 @@ def with_armor(rules: dict, armor: Armor | None) -> dict:
     return {**rules, 'armor': armor.model_dump(mode='json') if armor is not None else None}
 
 
+def with_resources(rules: dict, resources: list[Resource]) -> dict:
+    """
+    규칙의 수치만 바꾼 문서(#804). 받은 문서는 고치지 않는다.
+
+    수치의 최대에 쓰는 능력치는 규칙의 능력치와 견주어야 알 수 있다. 규칙 한 벌로 다시 읽어 보고,
+    맞지 않으면 RulesInvalidError 다.
+    """
+    changed = {**rules, 'resources': [resource.model_dump(mode='json') for resource in resources]}
+    try:
+        Ruleset.model_validate(changed)
+    except ValidationError as error:
+        raise RulesInvalidError(error.errors()[0]['msg']) from error
+    return changed
+
+
 def other_changes(data: RulebookUpdate) -> RulebookUpdate:
-    """방어 규칙을 뺀 고칠 것. 공통의 고치기(app/assets/service.py)는 내용의 칸만 안다. 규칙은 여기서 고친다."""
-    return RulebookUpdate.model_validate(data.model_dump(exclude_unset=True, exclude={'armor'}))
+    """규칙(방어, 수치)을 뺀 고칠 것. 공통의 고치기(app/assets/service.py)는 내용의 칸만 안다. 규칙은 여기서 고친다."""
+    return RulebookUpdate.model_validate(data.model_dump(exclude_unset=True, exclude={'armor', 'resources'}))
 
 
 def list_templates() -> list[TemplateFile]:
@@ -71,11 +101,14 @@ async def update_rulebook(
     """
     자기 룰북을 고친다. 없으면 AssetNotFoundError.
 
-    방어 규칙을 보냈으면 규칙에서 그것만 바꾼다(#276). 이미 게시한 판은 그때의 규칙으로 굳어 있다.
+    방어 규칙이나 수치(#804)를 보냈으면 규칙에서 그것만 바꾼다(#276). 이미 게시한 판은 그때의 규칙으로 굳어 있다.
+    수치가 규칙과 맞지 않으면 RulesInvalidError 다.
     """
     content = await assets.get_owned(session, Rulebook, owner_id, rulebook_id)
     if 'armor' in data.model_fields_set:
         content.rules = with_armor(content.rules, data.armor)
+    if data.resources is not None:
+        content.rules = with_resources(content.rules, data.resources)
     return await assets.save_changes(session, content, other_changes(data))
 
 

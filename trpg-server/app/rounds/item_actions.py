@@ -13,6 +13,7 @@
       - cure: 대상이 입은 그 부상들을 모두 푼다. 오래 가는 것이 나으면 후유증 표를 굴린다(#277).
         대상이 그 부상을 입고 있지 않아도 쓴다(쓰고 아무 일도 없다).
       - injure: 그 부상을 입힌다. 이미 입고 있으면 또 입히지 않는다.
+      - adjust: 그 수치(#804)를 양만큼 올리거나 내린다. 범위 밖으로 가지 않는다.
     대상이 떠났거나 죽었으면 쓰지 않는다. 물건도 줄지 않는다.
     해로운 효과(피해, 부상)가 있는 물건을 동료에게 쓰는 것은 치기와 같다(#803, app/rounds/friendly_fire.py).
     차례가 오면 해칠 수 있는지 다시 본다. 받아들이지 않게 바뀌었으면 friendly_fire_off, 쓰러졌거나 다른 곳에 있으면
@@ -30,7 +31,7 @@ from app.rounds import friendly_fire
 from app.rounds import injuries as round_injuries
 from app.rounds.checks import change_sheet
 from app.rounds.effects import Judging
-from app.tables import injuries, items, sheets
+from app.tables import injuries, items, resources, sheets
 from app.tables import state as table_state
 from app.tables.errors import TableConflictError
 from app.tables.items import CatalogItem
@@ -106,12 +107,13 @@ def apply_to_member(judging: Judging, target: TableMember, item: CatalogItem, pr
     """
     물건의 효과들을 앉은 사람 하나에게 차례대로 낸다(#800). 굴리지 않는다.
 
-    돌려주는 것은 HP 의 변화(effect, 회복이나 피해 하나), 푼 부상들(cured), 입힌 부상들(injured)이다.
-    prank 면 동료의 장난이다(#803). 피해와 부상이 상한을 지킨다.
+    돌려주는 것은 HP 의 변화(effect, 회복이나 피해 하나), 푼 부상들(cured), 입힌 부상들(injured),
+    맞춘 수치들(resources, #804)이다. prank 면 동료의 장난이다(#803). 피해와 부상이 상한을 지킨다.
     """
     effect = None
     cured: list[dict] = []
     injured: list[dict] = []
+    shifts: list[dict] = []
     rows = target.sheet.injuries
     for one in item.effects:
         if one.kind == EffectKind.HEAL:
@@ -122,7 +124,17 @@ def apply_to_member(judging: Judging, target: TableMember, item: CatalogItem, pr
             cured.extend(cure(judging, rows, one.injuries))
         elif one.kind == EffectKind.INJURE:
             injured.append(injure(judging, rows, one.injury, prank=prank))
-    return {'effect': effect, 'cured': cured, 'injured': injured}
+        elif one.kind == EffectKind.ADJUST:
+            shifts.extend(adjust(judging, target, one.resource, one.amount))
+    return {'effect': effect, 'cured': cured, 'injured': injured, 'resources': shifts}
+
+
+def adjust(judging: Judging, target: TableMember, key: str, amount: int) -> list[dict]:
+    """앉은 사람 하나의 수치를 맞춘다(#804). 바뀐 것의 문서를 돌려준다. 값이 같으면(이미 끝) 바뀐 것이 없다."""
+    shift = resources.adjust(judging.ruleset, target.sheet, key, amount)
+    if shift is None or shift.before == shift.after:
+        return []
+    return [resources.shift_document(shift)]
 
 
 def harm_refused(judging: Judging, member: TableMember, item: CatalogItem, target: TableMember) -> str | None:
@@ -159,6 +171,7 @@ def use_document(item: CatalogItem, member: TableMember, reason: str | None, tar
         'remaining': items.count_of(member.sheet, item.entry_id),
         'cured': [],
         'injured': [],
+        'resources': [],
     }
 
 
@@ -185,12 +198,13 @@ def judge_use(judging: Judging, member: TableMember, action: UseAction) -> dict:
     applied = (
         apply_to_member(judging, target, item, is_prank_use(judging, member, item, target))
         if aimed
-        else {'effect': None, 'cured': [], 'injured': []}
+        else {'effect': None, 'cured': [], 'injured': [], 'resources': []}
     )
     used = {
         **use_document(item, member, None, person(target)),
         'cured': applied['cured'],
         'injured': applied['injured'],
+        'resources': applied['resources'],
     }
     return {'item_use': used, 'effect': applied['effect']}
 

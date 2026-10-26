@@ -39,6 +39,7 @@ from app.rounds.narrator import (
     PayNote,
     PutDownNote,
     RecoveryNote,
+    ResourceNote,
     RestNote,
     RevivalNote,
     SearchNote,
@@ -290,7 +291,20 @@ def describe_rest(note: RestNote) -> str:
     length = REST_LENGTHS.get(note.length, '휴식')
     if not note.rested:
         return f'(쉬기: {length}. {REST_BREAKS.get(note.reason, "쉬지 못했다")})'
-    return f'(쉬기: {length}, HP {note.before} → {note.after}/{note.max_hp})'
+    shifts = ''.join(f', {describe_resource(one)}' for one in note.resources)
+    return f'(쉬기: {length}, HP {note.before} → {note.after}/{note.max_hp}{shifts})'
+
+
+def describe_resource(note: ResourceNote) -> str:
+    """
+    수치 하나(#804). 바뀐 것이면 전과 뒤를, 아니면 지금 값을 적는다.
+
+    예: 마나 1 → 6/6
+        마나 3/6
+    """
+    if note.before is None:
+        return f'{note.name} {note.value}/{note.max}'
+    return f'{note.name} {note.before} → {note.value}/{note.max}'
 
 
 # 기다림이 깨진 까닭을 서술자에게 주는 말
@@ -371,7 +385,7 @@ def describe_throw(note: ThrowNote) -> str:
     """
     to = f' → {note.target}' if note.target else ''
     if note.done:
-        tags = effect_tags(note.cured, note.injured, note.resisted, note.spared)
+        tags = [*effect_tags(note.cured, note.injured, note.resisted, note.spared), *resource_tags(note.resources)]
         return ' '.join([f'(던진 물건: {note.name}{to})', *tags])
     if note.reason == 'not_held':
         return f'(던지려던 물건: {note.name}{to}. {ITEM_FAILURES["not_held"]})'
@@ -399,7 +413,15 @@ def describe_item_action(note: ItemActionNote) -> str:
     if note.impact:
         parts.append(describe_impact(note.impact))
     parts.extend(effect_tags(note.cured, note.injured, note.resisted, note.spared))
+    parts.extend(resource_tags(note.resources))
     return ' '.join(parts)
+
+
+def resource_tags(shifts: list[ResourceNote]) -> list[str]:
+    """물건의 맞추기(#804)가 바꾼 수치를 줄 뒤에 붙일 조각. 없으면 빈 목록이다. 예: [수치: 마나 2 → 5/6]"""
+    if not shifts:
+        return []
+    return [f'[수치: {", ".join(describe_resource(one) for one in shifts)}]']
 
 
 def effect_tags(cured: list[str], injured: list[str], resisted: list[str], spared: list[str] = ()) -> list[str]:
@@ -828,6 +850,8 @@ def describe_move(move: Move) -> str:
         parts.append(f'[소지품: {describe_items(move.items)}]')
     if move.money is not None:
         parts.append(f'[소지금: {move.money}]')
+    if move.resources:
+        parts.append(f'[수치: {", ".join(describe_resource(one) for one in move.resources)}]')
     if move.worn:
         parts.append(f'[착용: {describe_worn(move.worn)}]')
     if move.place is not None:

@@ -7,7 +7,8 @@
   "notes": [
     "모든 값은 이 프로젝트가 정했다. 점수가 곧 보정이다(1~5).",
     "쓰러진 캐릭터는 죽지 않는다(죽음의 굴림이 없다). 한 시간 쉬면 d10 을 굴려 4 이상이면 일어난다.",
-    "네 시간마다 저절로 조금(1d4) 회복한다."
+    "네 시간마다 저절로 조금(1d4) 회복한다.",
+    "마나(3 + 마음, 10 까지)와 스태미나(4 + 몸, 10 까지)는 예시다(#804). 짧은 휴식에 마나 2 를 되찾고 스태미나를 채운다. 긴 휴식은 둘 다 채운다."
   ],
   "rules": {
     "template": "light",
@@ -191,6 +192,47 @@
     "item_check": {
       "ability": "body",
       "difficulty": "medium"
-    }
+    },
+    "resources": [
+      {
+        "key": "mana",
+        "name": "마나",
+        "min": 0,
+        "max": {
+          "base": 3,
+          "ability": "heart",
+          "cap": 10
+        },
+        "start": "max",
+        "rest": {
+          "short": {
+            "kind": "raise",
+            "amount": 2
+          },
+          "long": {
+            "kind": "fill"
+          }
+        }
+      },
+      {
+        "key": "stamina",
+        "name": "스태미나",
+        "min": 0,
+        "max": {
+          "base": 4,
+          "ability": "body",
+          "cap": 10
+        },
+        "start": "max",
+        "rest": {
+          "short": {
+            "kind": "fill"
+          },
+          "long": {
+            "kind": "fill"
+          }
+        }
+      }
+    ]
   }
 }

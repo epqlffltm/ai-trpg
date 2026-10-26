@@ -633,6 +633,7 @@
     "item_check": {
       "ability": "dex",
       "difficulty": "medium"
-    }
+    },
+    "resources": []
   }
 }

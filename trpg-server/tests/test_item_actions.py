@@ -228,6 +228,7 @@ async def test_a_potion_heals_its_user_and_is_used_up(
         'injured': [],
         'ability': None,
         'difficulty': None,
+        'resources': [],
     }
     assert (outcome['outcome']['effect']['before'], outcome['outcome']['effect']['after']) == (2, 5)
 

@@ -11,6 +11,7 @@
     다쳤으면 휴식이 깨져 회복하지 않는다(hurt). 쓰러졌거나 죽었으면 그것이 까닭이다(downed, dead).
     쉬는 중에 무작위 조우의 몬스터가 덮쳤어도 깨진다(ambushed, #283).
     짧은 휴식은 규칙의 등급만큼, 긴 휴식은 최대 HP 까지 회복한다.
+    HP 말고 다른 수치(#804)도 그 휴식에 정한 대로 바뀐다(채우기, 비우기, 올리기, 내리기). 깨졌으면 바뀌지 않는다.
   - 쉴 수 없는 곳은 없다. 몬스터가 있어도 쉴 수 있다. 막으면 숨은 몬스터가 있는지 알아내는 길이 된다.
     전투 중에 쉬면 맞아서 깨질 뿐이다.
   - 되살아나기: 고비를 넘기고(죽음의 굴림의 성공이 다 모여) 쓰러져 있는 캐릭터는 의식이 없어 선언하지 못한다.
@@ -36,7 +37,7 @@ from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError
 from app.rounds.models import Declaration, Round
 from app.rounds.state import find_declaration, rest_of, rules_of
-from app.tables import sheets
+from app.tables import resources, sheets
 from app.tables.models import GameTable, TableMember, TableSheet
 
 
@@ -132,13 +133,20 @@ def finish_rest(
     ambushed: set[uuid.UUID],
     dice: Dice,
 ) -> None:
-    """선언한 휴식 하나를 끝낸다. 깨지지 않았으면 회복한다. 결과를 그 선언의 outcome 의 rest 에 적는다."""
+    """
+    선언한 휴식 하나를 끝낸다. 깨지지 않았으면 회복하고 수치들(#804)을 바꾼다.
+    결과를 그 선언의 outcome 의 rest 에 적는다.
+
+    바뀐 수치는 resources 에 적는다(이름표, 이름, 전과 뒤, 최대). 바뀐 것이 없으면 빈 목록이다.
+    """
     rest = rest_of(declaration)
     sheet = member.sheet
     broken = broken_by(member, hurt, ambushed)
     before = sheet.hp
-    rolls, after = ([], before) if broken is not None else recover(ruleset, RestLength(rest['length']), sheet, dice)
+    length = RestLength(rest['length'])
+    rolls, after = ([], before) if broken is not None else recover(ruleset, length, sheet, dice)
     sheet.hp = after
+    shifts = [] if broken is not None else resources.rest(ruleset, sheet, length == RestLength.LONG)
     result = {
         **rest,
         'rested': broken is None,
@@ -147,6 +155,7 @@ def finish_rest(
         'before': before,
         'after': after,
         'max_hp': sheet.max_hp,
+        'resources': [resources.shift_document(shift) for shift in shifts],
     }
     # 새 문서로 바꿔 끼운다. 안을 고치면 DB 의 JSON 칸이 바뀐 줄 모른다
     declaration.outcome = {**declaration.outcome, 'rest': result}

@@ -210,6 +210,18 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'after',
         'max_hp',
     ),
+    # 수치(#804)는 HP 처럼 공개다. 숨긴 수치는 아직 없다
+    EventType.RESOURCE_CHANGED: (
+        'round',
+        'user_id',
+        'character_name',
+        'resource',
+        'name',
+        'before',
+        'after',
+        'max',
+        'source',
+    ),
     # 되살아나기의 굴림은 죽음의 굴림처럼 공개다
     EventType.CHARACTER_REVIVED: ('round', 'user_id', 'character_name', 'roll', 'target', 'success', 'hp'),
     # 누가 누구에게 보냈는지만 보인다. 쪽지의 글은 처음부터 적지 않는다

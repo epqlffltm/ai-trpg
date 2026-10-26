@@ -270,6 +270,20 @@ class ItemNote:
 
 
 @dataclass(frozen=True)
+class ResourceNote:
+    """
+    캐릭터의 수치 하나(#804). 마나, 스태미나 같은 것이다. 엔진이 정한 것이다.
+
+    value 는 지금 값(바뀐 것이면 바뀐 뒤), before 는 바뀐 것일 때 바뀌기 전의 값이다. 지금 값만이면 None 이다.
+    """
+
+    name: str
+    value: int
+    max: int
+    before: int | None = None
+
+
+@dataclass(frozen=True)
 class ThrowNote:
     """
     물건을 던진 것(#277). 엔진이 정한 것이다. 맞았는지는 함께 있는 판정(verdict)에 있다.
@@ -288,6 +302,8 @@ class ThrowNote:
     resisted: list[str] = field(default_factory=list)
     # 동료의 장난이라 입지 않은 부상의 이름들(#803)
     spared: list[str] = field(default_factory=list)
+    # 맞힌 동료의 수치를 맞춘 것들(#804)
+    resources: list[ResourceNote] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -316,6 +332,8 @@ class ItemActionNote:
     resisted: list[str] = field(default_factory=list)
     # 동료의 장난이라 입지 않은 부상의 이름들(#803)
     spared: list[str] = field(default_factory=list)
+    # 수치를 맞추는 소모품(#804)을 썼으면 바뀐 수치들
+    resources: list[ResourceNote] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -428,6 +446,8 @@ class RestNote:
     before: int = 0
     after: int = 0
     max_hp: int = 0
+    # 그 휴식이 바꾼 수치들(#804). 이 칸이 생기기 전에 굳힌 것은 빈 목록이다
+    resources: list[ResourceNote] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -673,6 +693,9 @@ class Move:
     # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 가진 돈의 글(금화 30닢). 돈이 없는 판이면 None 이다(#278).
     # 서술자는 돈을 주거나 받는 장면을 지어내지 않는다. 돈을 바꾸는 것은 서버뿐이다
     money: str | None = None
+    # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터의 수치들(#804, 마나 3/6). 규칙에 수치가 없으면 비어 있다.
+    # 서술자는 수치를 쓰는 장면을 지어내지 않는다. 수치를 바꾸는 것은 서버뿐이다
+    resources: list[ResourceNote] = field(default_factory=list)
     # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 착용한 물건들(#276). 규칙의 칸의 차례다.
     # 착용은 서버가 관리한다. 서술자는 착용하지 않은 갑옷이나 쥐지 않은 무기를 그리지 않는다
     worn: list[WornNote] = field(default_factory=list)

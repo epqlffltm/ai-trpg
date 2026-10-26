@@ -3,7 +3,7 @@
 // 치료 보정(#277)은 거드는 행동(ItemAidsEditor.tsx, #802)이 됐다.
 // 효과는 적힌 차례대로 낸다. 회복·피해는 룰북의 양의 등급, 풀기·부상은 룰북의 부상에서 고른다. 검사는 itemEffectsForm.ts.
 
-import { Button, Checkbox, SelectField } from '@ai-trpg/ui';
+import { Button, Checkbox, SelectField, TextField } from '@ai-trpg/ui';
 import type { Ruleset } from '../../../../api/types';
 import { CheckSelects } from './CheckSelects';
 import {
@@ -39,7 +39,7 @@ function ItemEffectsEditor({ effects, rules, hints, onChange }: EffectsProps) {
     <fieldset className="scenario-choices">
       <legend>쓰면 나는 효과(적힌 차례대로)</legend>
       <p className="ui-field__hint">
-        비우면 써도 아무 일이 없습니다(연막탄처럼 서술만). 피해나 부상이 있는 물건은 동료에게 쓰지 못하고, 인물과 몬스터에게는 맞히는 판정을 거칩니다.
+        비우면 써도 아무 일이 없습니다(연막탄처럼 서술만). 피해나 부상, 수치를 내리는 맞추기가 있는 물건은 동료에게 동료 피해의 설정을 따르고, 인물과 몬스터에게는 맞히는 판정을 거칩니다. 수치는 앉은 사람에게만 듭니다.
       </p>
       {effects.map((effect, index) => (
         <EffectRow
@@ -106,6 +106,7 @@ function EffectTarget({ effect, rules, onChange }: TargetProps) {
       </SelectField>
     );
   }
+  if (effect.kind === 'adjust') return <AdjustFields effect={effect} rules={rules} onChange={onChange} />;
   if (effect.kind === 'cure') {
     return (
       <div>
@@ -129,6 +130,29 @@ function EffectTarget({ effect, rules, onChange }: TargetProps) {
         </option>
       ))}
     </SelectField>
+  );
+}
+
+/** 맞추기(#804). 룰북의 수치 하나와 양(내리려면 음수) */
+function AdjustFields({ effect, rules, onChange }: { effect: EffectDraft; rules: Ruleset; onChange: (effect: EffectDraft) => void }) {
+  if (rules.resources.length === 0) return <p className="hint">이 룰북에는 수치가 없습니다. 룰북에서 수치를 더하세요.</p>;
+  return (
+    <>
+      <SelectField label="맞출 수치" value={effect.resource} onChange={(event) => onChange({ ...effect, resource: event.target.value })}>
+        <option value="">고르기</option>
+        {rules.resources.map((one) => (
+          <option key={one.key} value={one.key}>
+            {one.name}
+          </option>
+        ))}
+      </SelectField>
+      <TextField
+        label="양(내리려면 -)"
+        inputMode="numeric"
+        value={effect.amount}
+        onChange={(event) => onChange({ ...effect, amount: event.target.value })}
+      />
+    </>
   );
 }
 

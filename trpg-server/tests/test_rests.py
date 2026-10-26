@@ -192,6 +192,7 @@ async def test_a_short_rest_heals_by_the_rule_and_takes_an_hour(
         'before': 3,
         'after': 8,
         'max_hp': 10,
+        'resources': [],
     }
     assert (await saves_of(client, me, table, '엘프'))[0] == 8
     assert await passed(client, me, table) == HOUR

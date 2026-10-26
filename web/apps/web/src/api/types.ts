@@ -40,6 +40,7 @@ export type NarrationStyle = Trpg['schemas']['NarrationStyle'];
 export type TableMember = Trpg['schemas']['MemberOut'];
 export type CharacterUpdate = Trpg['schemas']['CharacterUpdate'];
 export type Ruleset = Trpg['schemas']['Ruleset'];
+export type Ability = Ruleset['abilities'][number];
 // 제작 도구(B9). 재료의 목록은 종류를 가리지 않고 같은 모양이다
 export type AssetPage = Trpg['schemas']['AssetPage'];
 export type AssetSummary = Trpg['schemas']['AssetSummary'];
@@ -51,6 +52,11 @@ export type RulebookTemplate = Trpg['schemas']['TemplateSummary'];
 export type TemplateKey = Trpg['schemas']['Template'];
 export type Armor = Trpg['schemas']['Armor'];
 export type ArmorMode = Trpg['schemas']['ArmorMode'];
+// HP 말고 다른 수치(#804). 룰북의 규칙(rules.resources)과 시트의 지금 값(sheet.resources), 바뀐 것(쉬기, 물건의 맞추기)
+export type Resource = Trpg['schemas']['Resource'];
+export type ResourceShift = Trpg['schemas']['ResourceShift'];
+export type SheetResource = Trpg['schemas']['ResourceOut'];
+export type ResourceChange = Trpg['schemas']['ResourceShiftOut'];
 export type WorldDetail = Trpg['schemas']['WorldDetail'];
 export type WorldCreate = Trpg['schemas']['WorldCreate'];
 export type WorldUpdate = Trpg['schemas']['WorldUpdate'];

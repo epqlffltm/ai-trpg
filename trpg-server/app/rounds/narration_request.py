@@ -55,6 +55,7 @@ from app.rounds.narrator import (
     PutDownNote,
     QuestNote,
     RecoveryNote,
+    ResourceNote,
     RestNote,
     RevivalNote,
     SearchNote,
@@ -149,6 +150,13 @@ def to_impact(effect: dict | None) -> Impact | None:
     )
 
 
+def to_shift_notes(shifts: list[dict] | None) -> list[ResourceNote]:
+    """바뀐 수치들(#804)을 서술자에게 줄 모양으로. 쉬기와 물건의 맞추기가 적은 것이다."""
+    return [
+        ResourceNote(name=one['name'], value=one['after'], max=one['max'], before=one['before']) for one in shifts or []
+    ]
+
+
 def spared_names(injured: list[dict]) -> list[str]:
     """물건이 입히려던 부상 중 동료의 장난이라 입지 않은 것의 이름들(#803)."""
     return [one['name'] for one in injured if one.get('spared')]
@@ -183,6 +191,7 @@ def to_item_action(declaration: Declaration | None) -> ItemActionNote | None:
             injured=[one['name'] for one in used.get('injured') or [] if one['injury'] is not None],
             resisted=[one['name'] for one in used.get('injured') or [] if one.get('immune')],
             spared=spared_names(used.get('injured') or []),
+            resources=to_shift_notes(used.get('resources')),
         )
     given = declaration.outcome.get('item_give')
     if given is not None:
@@ -212,6 +221,7 @@ def to_throw(declaration: Declaration | None) -> ThrowNote | None:
         injured=[one['name'] for one in injured if one['injury'] is not None],
         resisted=[one['name'] for one in injured if one.get('immune')],
         spared=spared_names(injured),
+        resources=to_shift_notes(thrown.get('resources')),
     )
 
 
@@ -293,6 +303,7 @@ def to_rest(declaration: Declaration | None) -> RestNote | None:
         before=rest['before'],
         after=rest['after'],
         max_hp=rest['max_hp'],
+        resources=to_shift_notes(rest.get('resources')),
     )
 
 

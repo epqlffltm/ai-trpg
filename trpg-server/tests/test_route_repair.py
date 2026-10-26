@@ -327,7 +327,7 @@ def test_the_repair_lines():
 
 def test_the_map_note_says_a_broken_door_is_mended_only_by_the_roll():
     assert "'부서진 문'은 고치는 판정에 성공해야 고쳐진다" in prompt.MAP_NOTE
-    assert prompt.PROMPT_VERSION == 'narration-69'
+    assert prompt.PROMPT_VERSION == 'narration-70'
 
 
 def test_the_transcript_says_the_door_was_mended():

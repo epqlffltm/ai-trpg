@@ -6,14 +6,16 @@
 
 from typing import Annotated
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints
 
 from app.assets.models import RULEBOOK_GM_GUIDE_MAX_LENGTH
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
-from app.engine.ruleset import Armor, Ruleset
+from app.engine.ruleset import RULESET_MAX_RESOURCES, Armor, Resource, Ruleset
 from app.engine.templates import DEFAULT_TEMPLATE, Template
 
 GmGuide = Annotated[str, StringConstraints(max_length=RULEBOOK_GM_GUIDE_MAX_LENGTH)]
+# 룰북의 수치들(#804). 보내면 통째로 바뀐다. 최대에 쓰는 능력치가 규칙에 있는지는 규칙 전체로 본다(422 rules)
+Resources = Annotated[list[Resource], Field(max_length=RULESET_MAX_RESOURCES)]
 
 
 class RulebookCreate(AssetCreate):
@@ -22,24 +24,27 @@ class RulebookCreate(AssetCreate):
 
     규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.
     방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.
-    보내지 않으면 템플릿의 것이다.
+    보내지 않으면 템플릿의 것이다. 수치(resources, #804)도 같다. 보내면 템플릿의 예시 대신 쓴다.
     """
 
     gm_guide: GmGuide = ''
     template: Template = DEFAULT_TEMPLATE
     armor: Armor | None = None
+    resources: Resources | None = None
 
 
 class RulebookUpdate(AssetUpdate):
     """
     룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.
 
-    규칙은 방어 규칙(armor)만 고칠 수 있다(#276). null 을 보내면 방어구가 막지 않는 규칙이 된다.
+    규칙은 방어 규칙(armor)과 수치(resources, #804)만 고칠 수 있다.
+    방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.
     이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
     """
 
     gm_guide: GmGuide | None = None
     armor: Armor | None = None
+    resources: Resources | None = None
 
 
 class RulebookDetail(AssetSummary):

@@ -27,7 +27,7 @@ from app.engine.item_effects import EffectKind, first_of, is_harmful
 from app.rounds.cast import CastMember, find_cast_member
 from app.rounds.checks import judge_check, monster_gone
 from app.rounds.effects import Judging, mark_fight, mark_npc_fight
-from app.rounds.item_actions import Reason, cure, injure, use_document
+from app.rounds.item_actions import Reason, adjust, cure, injure, use_document
 from app.rounds.monster_scene import SceneMonster, find_scene_monster
 from app.tables import items, npcs, sheets
 from app.tables import monsters as table_monsters
@@ -135,22 +135,28 @@ def struck_rows(judging: Judging, action: Aimed) -> tuple[list[TableInjury], fro
 
 def apply_after_hit(judging: Judging, item: CatalogItem, action: Aimed, prank: bool = False) -> dict:
     """
-    맞힌 대상에게 풀기와 부상을 적힌 차례대로 낸다. 푼 것(cured)과 입힌 것(injured)이다.
+    맞힌 대상에게 풀기와 부상과 맞추기를 적힌 차례대로 낸다. 푼 것(cured), 입힌 것(injured), 맞춘 수치(resources)다.
+    맞추기(#804)는 앉은 사람(던지기의 동료)에게만 든다. 인물과 몬스터에게는 수치가 없다.
 
     prank 면 동료의 장난이다(#803). 짧은 부상만 입힌다.
     """
     found = struck_rows(judging, action)
     if found is None:
-        return {'cured': [], 'injured': []}
+        return {'cured': [], 'injured': [], 'resources': []}
     rows, immune = found
     cured: list[dict] = []
     injured: list[dict] = []
+    shifts: list[dict] = []
+    ally = ally_of(action)
+    member = table_state.find_member(judging.table, ally) if ally is not None else None
     for one in item.effects:
         if one.kind == EffectKind.CURE:
             cured.extend(cure(judging, rows, one.injuries))
         elif one.kind == EffectKind.INJURE:
             injured.append(injure(judging, rows, one.injury, immune, prank))
-    return {'cured': cured, 'injured': injured}
+        elif one.kind == EffectKind.ADJUST and member is not None:
+            shifts.extend(adjust(judging, member, one.resource, one.amount))
+    return {'cured': cured, 'injured': injured, 'resources': shifts}
 
 
 def judge_use_on(judging: Judging, member: TableMember, action: UseAction) -> dict:
@@ -173,6 +179,10 @@ def judge_use_on(judging: Judging, member: TableMember, action: UseAction) -> di
     mark_harm(judging, member, item, action, check)
     items.remove_items(member.sheet, action.item, 1)
     outcome = judge_check(judging, member, check)
-    applied = apply_after_hit(judging, item, action) if landed(outcome, check) else {'cured': [], 'injured': []}
+    applied = (
+        apply_after_hit(judging, item, action)
+        if landed(outcome, check)
+        else {'cured': [], 'injured': [], 'resources': []}
+    )
     used = {**use_document(item, member, None, target), **terms, **applied}
     return {**outcome, 'item_use': used}

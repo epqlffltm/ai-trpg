@@ -318,6 +318,7 @@ async def test_a_player_whose_character_died_brings_in_a_new_one(
         'worn': [],
         'money': 0,
         'place_id': None,
+        'resources': [],
     }
     assert seat['sheet'] == {**PLAIN, **fresh}
     # 죽은 캐릭터는 지워지지 않고 떠난 캐릭터로 남는다
