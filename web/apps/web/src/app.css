@@ -2396,3 +2396,29 @@ a.ui-button {
     max-height: none;
   }
 }
+
+/* 내 페르소나(C4) */
+.persona-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.persona-item__image {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.persona-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.persona-form {
+  display: grid;
+  gap: 12px;
+}

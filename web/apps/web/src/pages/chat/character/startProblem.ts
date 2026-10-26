@@ -18,6 +18,7 @@ export function describeStartProblem(error: unknown): StartProblem {
   if (error.status === 403 && error.code === 'adult_content_required') {
     return problem('성인 등급의 캐릭터는 본인인증으로 성인 확인을 하면 대화할 수 있습니다.', { needsAdult: true });
   }
+  if (error.status === 404 && error.code === 'persona_not_found') return problem('고른 페르소나를 찾지 못했습니다. 지웠을 수 있습니다. 다시 골라 주세요.');
   if (error.status === 404) return problem('지금은 대화할 수 없는 캐릭터입니다. 공개가 내려갔을 수 있습니다.', { reread: true });
   if (error.status === 422 && error.code === 'start_not_found') {
     return problem('고른 시작 상황이 새 판에 없습니다. 시작 상황을 다시 골라 주세요.', { reread: true });

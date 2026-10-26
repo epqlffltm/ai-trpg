@@ -44,6 +44,9 @@ const DOCUMENT = {
   event_scenes: [{ id: 'rain', title: '비 오는 창가', image_id: SCENE, description: '', collectible: true, when: { kind: 'reach_place', target: 'cafe' } }],
 };
 
+const PERSONA = (id: string, name: string, isDefault: boolean) => ({ id, name, is_default: isDefault, description: '', image_id: null, age: '', gender: '', form_of_address: '', speech_examples: '', personality: '', revision: 1, created_at: '', updated_at: '' });
+const PERSONAS = [PERSONA('00000000-0000-4000-8000-000000000001', '하루', true), PERSONA('00000000-0000-4000-8000-000000000002', '밤', false)];
+
 type Routes = Record<string, (request: SeenRequest) => Response>;
 
 function routes(extra: Routes = {}): Routes {
@@ -79,6 +82,7 @@ function signedIn(extra: Routes = {}) {
         total: 1,
       }),
     'GET /api/v1/chat/gallery': () => json(200, { items: [{ character_id: LUNA, scene_id: 'rain', unlocked_at: '2026-10-23T00:00:00Z' }], total: 1 }),
+    'GET /api/v1/asset/personas': () => json(200, PERSONAS),
     ...routes(extra),
   });
 }
@@ -150,11 +154,13 @@ describe('캐릭터 소개', () => {
     expect(seen.some((request) => request.url.includes(`/chat/conversations?character_id=${LUNA}&limit=20&offset=0`))).toBe(true);
 
     await userEvent.click(screen.getByRole('radio', { name: '문 닫을 무렵' }));
+    expect(screen.getByRole('combobox', { name: '나(페르소나)' })).toHaveValue(PERSONAS[0]?.id);
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: '나(페르소나)' }), '페르소나 없이');
     await userEvent.click(screen.getByRole('button', { name: '대화 시작' }));
     expect(await screen.findByRole('heading', { name: '대화' })).toBeInTheDocument();
     expect(seen.some((request) => request.url === `/api/v1/chat/conversations/${CONVERSATION}`)).toBe(true);
     const posted = seen.filter((request) => request.method === 'POST' && request.url === '/api/v1/chat/conversations');
-    expect(posted.map((request) => request.body)).toEqual([{ character_id: LUNA, start: 1 }]);
+    expect(posted.map((request) => request.body)).toEqual([{ character_id: LUNA, start: 1, persona_id: null }]);
   });
 
   it('성인 확인이 필요하면 본인인증으로 가는 길을, 새 판에 시작 상황이 없으면 다시 고르게 하고 판을 다시 읽는다', async () => {
