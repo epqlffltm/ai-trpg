@@ -895,6 +895,8 @@ services:
       # 모델의 값을 결제 서버의 가격 목록에서 읽는다(story-server/README.md 의 "모델 목록").
       # story-server/.env 에 BILLING_SECRET 이 있어야 뜬다(결제 서버의 STORY_SERVER_SECRET 과 같은 값)
       BILLING_URL: http://billing-server:8003
+      # 요청 수 제한을 센다. DB 번호 3 은 story 의 몫이다(docs/architecture/services.md 의 "DB 와 Redis 의 한도")
+      REDIS_URL: redis://redis:6379/3
     # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
     networks: [default, telemetry]
     healthcheck:

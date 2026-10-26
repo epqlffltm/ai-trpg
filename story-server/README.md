@@ -84,6 +84,9 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `STORY_OUTPUT_LIMIT` | `1024` | 말 한 번의 답의 길이의 상한(토큰). 가격표의 출력 단계(`o0`)가 약속하는 길이다 |
 | `STORY_CONTEXT_CHARS` | `12000` | 모델에 보내는 지난 말의 양의 상한(글자). 가격표의 입력 단계(`i0`)가 약속하는 양이다 |
 | `STORY_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
+| `REDIS_URL` | 비어 있음(메모리) | [요청 수 제한](#요청-수-제한)을 세는 Redis(`redis://localhost:6379/3`). 비우면 서버 안의 메모리로 센다(서버가 하나일 때만 맞다). compose 는 DB 3 을 준다 |
+| `GENERATION_LIMIT`, `GENERATION_WINDOW_SECONDS` | `20`, `60` | 모델을 부르는 요청(말, 행동, 다시 생성, 이어서)을 한 사람이 이 시간(초) 안에 이만큼까지 |
+| `WRITE_LIMIT`, `WRITE_WINDOW_SECONDS` | `120`, `60` | 모델을 부르지 않는 쓰기(세션 시작, 모델과 가지 바꾸기, 답 고치기)를 한 사람이 이 시간(초) 안에 이만큼까지 |
 
 DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 함께 쓰는 칸은 공용 코드의 설정(`server_core.settings.CoreSettings`)에 있다.
 `tools/fill_env.py` 가 `ASSET_SECRET` 과 `BILLING_SECRET` 을 짝(asset 서버, 결제 서버의 `STORY_SERVER_SECRET`)과 같은 값으로 채운다.
@@ -277,6 +280,18 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
   갤러리의 story 탭(C7)이 `GET /gallery` 로 읽어 인물마다 묶고, 인물이 없는 장면은 세계관 칸에 둔다.
 - **키를 장면으로 둔 까닭**(2026-10-26). 일러스트는 인물이 아니라 이벤트와 엔딩의 장면에 붙어 있다. 한 장면에 인물이 0~4 명이라 인물 하나로 가리킬 수 없다.
   연 때의 그림을 적는 것은 제작자가 새 판에서 그림을 바꿔도 연 그림을 보이기 위해서다.
+
+### 요청 수 제한
+
+chat 의 것과 같다(`app/limits/`). 한 사람이 정해진 시간 안에 몇 번 했는가를 세고, 넘으면 429 로 막는다. 크레딧과 별개로 짧은 시간에 몰아 보내는 것을 늦춘다.
+
+- **무엇을 세나.** 모델을 부르는 요청(말 보내기, 행동, 다시 생성, 이어서 출력)과 모델을 부르지 않는 쓰기(세션 시작, 모델과 가지 바꾸기, 답 고치기)를 따로 센다.
+  읽기와 멈추기는 세지 않는다. 모델을 부르는 주소는 라우터에 걸어(`app/turns/router.py`) 그 라우터에 더하는 주소도 저절로 센다.
+- **어떻게 세나.** 고정 구간이다(첫 시도에서 시작해 정한 초 뒤에 끝난다). Redis(DB 3, 키의 머리 `story:limit`)에 Lua 한 덩어리로 올리고 만료를 건다.
+  사람의 번호는 해시해서 키에 넣는다. `REDIS_URL` 이 비면 서버 안의 메모리로 센다.
+- **막히면.** 429 `too_many_attempts`, 본문의 `retry_after` 와 `Retry-After` 에 기다릴 초를 싣는다. 몇 번까지인지는 알리지 않는다.
+- **Redis 에 닿지 못하면** 막지 않고 경고(`limits.unavailable`)만 남긴다. 이야기를 막아서 잃는 것이 더 크다.
+- 같은 코드가 trpg, chat, story 세 곳에 있다. server-core 로 뽑는 것은 따로 한다(server-core 에 Redis 의존이 붙어 모든 서버의 잠금 파일이 바뀐다).
 
 ### 토큰 검증
 
