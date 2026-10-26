@@ -4,13 +4,14 @@
 // 시작하면 세계관의 마지막 판을 고정한 새 세션이 생기고 장면(D2)으로 간다. 모델은 지난번 세션의 것이다.
 
 import { Button, Notice } from '@ai-trpg/ui';
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router';
-import { startStorySession, type StorySessionSummary } from '../../api/story';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
+import type { StorySessionSummary } from '../../api/story';
 import type { StoryWorldSummary } from '../../api/storyWorlds';
 import { formatDateTime } from '../../format/dateTime';
-import { myStoryWorldsQuery, STORY_SESSIONS_KEY, storySessionKey, storySessionsQuery } from './storyQueries';
+import { myStoryWorldsQuery, storySessionsQuery } from './storyQueries';
 import { describeStartProblem } from './storyTurnProblem';
+import { useStartStorySession } from './useStartStorySession';
 
 export function StoryHomePage() {
   return (
@@ -68,7 +69,7 @@ function SessionRow({ session }: { session: StorySessionSummary }) {
 
 function StartFromMyWorlds() {
   const worlds = useQuery(myStoryWorldsQuery());
-  const starting = useStart();
+  const starting = useStartStorySession();
   const startable = (worlds.data?.items ?? []).filter((world) => world.latest_version !== null);
   return (
     <section className="page-section" aria-labelledby="story-start">
@@ -100,16 +101,3 @@ function WorldRow({ world, busy, disabled, onStart }: { world: StoryWorldSummary
   );
 }
 
-/** 새 세션을 만들고 장면으로 간다. 받은 세션을 넣어 두어 다시 읽지 않는다 */
-function useStart() {
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  return useMutation({
-    mutationFn: (worldId: string) => startStorySession(worldId),
-    onSuccess: async (session) => {
-      queryClient.setQueryData(storySessionKey(session.id), session);
-      await queryClient.invalidateQueries({ queryKey: STORY_SESSIONS_KEY });
-      void navigate(`/story/sessions/${encodeURIComponent(session.id)}`);
-    },
-  });
-}
