@@ -32,7 +32,7 @@ function route(from: string, to: string, extra: Record<string, unknown> = {}) {
   return { from_place: from, to_place: to, two_way: true, visibility: 'open', find: null, travel_minutes: null, cross: null, lock: null, bar: null, force: null, ...extra };
 }
 
-const LOCKED = route(GATE, TOWER, { lock: { key: KEY, locked: true, pick: null }, repair: { ability: 'dex', difficulty: null, tool: null } });
+const LOCKED = route(GATE, TOWER, { lock: { key: KEY, locked: true, pick: null }, repair: { ability: 'dex', difficulty: null, needs_tool: false } });
 const PLAIN = route(TOWER, CRYPT);
 
 function entry(id: string, name: string, kind: string) {
@@ -98,7 +98,7 @@ describe('길의 문', () => {
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '열쇠' }), COIN);
     await userEvent.click(dialog.getByRole('checkbox', { name: '열쇠 없이 딸 수 있다' }));
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '따기 판정의 능력치' }), 'dex');
-    await userEvent.selectOptions(dialog.getByRole('combobox', { name: '따는 도구(선택)' }), PICK);
+    await userEvent.click(dialog.getByRole('checkbox', { name: '도구가 있어야 딴다' }));
 
     await userEvent.click(dialog.getByRole('checkbox', { name: '빗장이 있다' }));
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '빗장이 있는 쪽' }), CRYPT);
@@ -109,7 +109,7 @@ describe('길의 문', () => {
     await userEvent.click(dialog.getByRole('checkbox', { name: '부서진 문을 고칠 수 있다' }));
     expect(dialog.getByText('고치기 판정의 능력치를 골라 주세요.')).toBeInTheDocument();
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '고치기 판정의 능력치' }), 'dex');
-    await userEvent.selectOptions(dialog.getByRole('combobox', { name: '고치는 도구(선택)' }), HAMMER);
+    await userEvent.click(dialog.getByRole('checkbox', { name: '도구가 있어야 고친다' }));
     await userEvent.click(dialog.getByRole('button', { name: '저장' }));
 
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
@@ -118,10 +118,10 @@ describe('길의 문', () => {
     expect(sent[1]).toEqual({
       ...PLAIN,
       cross: { ability: 'str', difficulty: null, harm: 'light' },
-      lock: { key: COIN, locked: true, pick: { ability: 'dex', difficulty: null, tool: PICK } },
+      lock: { key: COIN, locked: true, pick: { ability: 'dex', difficulty: null, needs_tool: true } },
       bar: { side: CRYPT, barred: false },
       force: { ability: 'str', difficulty: 'normal' },
-      repair: { ability: 'dex', difficulty: null, tool: HAMMER },
+      repair: { ability: 'dex', difficulty: null, needs_tool: true },
     });
     expect(
       await routes.findByText('종탑 ↔ 지하 묘지 · 처음부터 앎 · 넘기 판정 · 자물쇠(잠김, 딸 수 있음) · 빗장(지하 묘지 쪽) · 부술 수 있음 · 고칠 수 있음'),
@@ -155,10 +155,10 @@ describe('길의 문 입력', () => {
   it('끈 것은 null, 부수기와 고치기는 자물쇠나 빗장과 함께, 빗장은 두 끝 중 하나', () => {
     const routes = [LOCKED, PLAIN] as unknown as RouteRule[];
     const draft = doorDraft(routes[0] as RouteRule);
-    expect(draft.repair).toEqual({ on: true, ability: 'dex', difficulty: '', tool: '' });
+    expect(draft.repair).toEqual({ on: true, ability: 'dex', difficulty: '', needsTool: false });
     expect(withDoor(routes, 0, { ...draft, lock: { ...draft.lock, on: false } })[0]).toMatchObject({ lock: null, force: null, repair: null });
     expect(doorHints({ ...draft, lock: { ...draft.lock, on: false } }, routes, 0).repair).toContain('자물쇠나 빗장');
-    expect(toRoute({ ...routeDraft(routes[0] as RouteRule), minutes: '5' }, routes[0] as RouteRule).repair).toEqual({ ability: 'dex', difficulty: null, tool: null });
+    expect(toRoute({ ...routeDraft(routes[0] as RouteRule), minutes: '5' }, routes[0] as RouteRule).repair).toEqual({ ability: 'dex', difficulty: null, needs_tool: false });
     expect(doorHints({ ...draft, lock: { ...draft.lock, on: false }, force: { on: true, ability: 'str', difficulty: '' } }, routes, 0).force).toContain('자물쇠나 빗장');
     expect(doorHints({ ...draft, bar: { on: true, side: CRYPT, barred: false } }, routes, 0).bar).toBeDefined();
     expect(routeLine({ ...LOCKED, bar: { side: GATE, barred: true } } as unknown as RouteRule, (id) => (id === GATE ? '문' : '탑'), null)).toBe(

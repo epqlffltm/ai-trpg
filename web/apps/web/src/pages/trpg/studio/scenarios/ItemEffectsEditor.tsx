@@ -1,8 +1,9 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/ItemEffectsEditor.tsx
-// 물건 규칙 창의 칸(B9): 소모품이 쓰면 나는 효과 목록(#800)과 치료 보정(#277), 모든 물건의 던지는 판정(#801).
+// 물건 규칙 창의 칸(B9): 소모품이 쓰면 나는 효과 목록(#800), 모든 물건의 던지는 판정(#801).
+// 치료 보정(#277)은 거드는 행동(ItemAidsEditor.tsx, #802)이 됐다.
 // 효과는 적힌 차례대로 낸다. 회복·피해는 룰북의 양의 등급, 풀기·부상은 룰북의 부상에서 고른다. 검사는 itemEffectsForm.ts.
 
-import { Button, Checkbox, SelectField, TextField } from '@ai-trpg/ui';
+import { Button, Checkbox, SelectField } from '@ai-trpg/ui';
 import type { Ruleset } from '../../../../api/types';
 import { CheckSelects } from './CheckSelects';
 import {
@@ -25,21 +26,9 @@ type Props = {
   update: (changes: Partial<ItemRuleDraft>) => void;
 };
 
-/** 소모품만의 칸들. 효과 목록과 치료 보정이다 */
+/** 소모품만의 칸. 효과 목록이다 */
 export function ConsumableFields({ draft, rules, hints, update }: Props) {
-  return (
-    <>
-      <ItemEffectsEditor effects={draft.effects} rules={rules} hints={hints} onChange={(effects) => update({ effects })} />
-      <TextField
-        label="치료에 붙여 쓸 때의 보정(선택, 1~10)"
-        inputMode="numeric"
-        value={draft.treatBonus}
-        onChange={(event) => update({ treatBonus: event.target.value })}
-        error={hints.treat_bonus}
-      />
-      <p className="ui-field__hint">붕대, 의료 키트. 치료 판정에 더하고, 쓰면 성공하든 실패하든 하나 없어집니다.</p>
-    </>
-  );
+  return <ItemEffectsEditor effects={draft.effects} rules={rules} hints={hints} onChange={(effects) => update({ effects })} />;
 }
 
 type EffectsProps = { effects: EffectDraft[]; rules: Ruleset | null; hints: Record<string, string>; onChange: (effects: EffectDraft[]) => void };

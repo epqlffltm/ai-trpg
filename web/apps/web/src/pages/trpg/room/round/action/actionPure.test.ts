@@ -41,7 +41,7 @@ function context(mySheet: Record<string, unknown> = {}, rules: Record<string, un
       member(THIRD, { character: { name: '조', description: '' }, sheet: sheet({ place_id: 'p2', dead: true, hp: 0 }) }),
     ],
     items: [
-      { entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', effects: [{ kind: 'heal', magnitude: 'light' }] },
+      { entry_id: 'i1', name: '약초', kind: 'consumable', rarity: 'normal', effects: [{ kind: 'heal', magnitude: 'light' }], aids: [] },
       { entry_id: 'i3', name: '연막탄', kind: 'consumable', rarity: 'normal', effects: [] },
       {
         entry_id: 'i9',
@@ -232,13 +232,14 @@ describe('aidItems', () => {
 
   function withKit(): ActionContext {
     const base = context({ items: [HERB, KIT] });
-    const kit = { entry_id: 'i8', name: '의료 키트', kind: 'consumable', rarity: 'normal', effects: [], treat_bonus: 2 };
+    const kit = { entry_id: 'i8', name: '의료 키트', kind: 'consumable', rarity: 'normal', effects: [], aids: [{ act: 'treat', bonus: 2, wear: 'always' }] };
     return { ...base, table: { ...base.table, items: [...base.table.items, kit] } as unknown as TableDetail };
   }
 
-  it('치료 보정이 있는 물건만 붙여 쓸 수 있고, 치료에 붙여 보낸다(#277)', () => {
+  it('치료를 거드는 물건만 붙여 쓸 수 있고, 치료에 붙여 보낸다(#277, #802)', () => {
     const ctx = withKit();
-    expect(aidItems(ctx)).toEqual([{ value: 'i8', label: '의료 키트 +2 ×2' }]);
+    expect(aidItems(ctx, 'treat')).toEqual([{ value: 'i8', label: '의료 키트 +2 ×2, 쓰면 없어짐' }]);
+    expect(aidItems(ctx, 'pick')).toEqual([]);
     const aided = { kind: 'treat', injury: 'broken_arm', target: OTHER, item: 'i8' } as const;
     expect(toAction(draft({ kind: 'treat', injury: 'broken_arm', target: `member:${OTHER}`, item: 'i8' }), ctx)).toEqual(aided);
     expect(toAction(draftFromAction(RULES as unknown as TableDetail['rules'], aided), ctx)).toEqual(aided);

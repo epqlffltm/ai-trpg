@@ -378,12 +378,13 @@ def record_cross(session: AsyncSession, table: GameTable, character_name: str, m
     """
     길을 넘는 판정을 이벤트로 적는다(#281). 판정하는 행동과 같은 종류(check_rolled)다. 굴리지 않았으면 적지 않는다.
 
-    실패해서 다쳤으면 바로 뒤에 HP 의 변화(와 부상)를 판정에 잇는다.
+    실패해서 다쳤으면 바로 뒤에 HP 의 변화(와 부상)를 판정에 잇는다. 넘기에 물건을 붙여 썼으면 aid_used 도 잇는다(#802).
     """
     cross = move.get('cross')
     if cross is None:
         return
     rolled = record_terms(session, table, character_name, cross, cause)
+    record_aid(session, table, character_name, move.get('aid'), rolled)
     effect = move.get('effect')
     if effect is not None:
         changed = record_hp_change(session, table, effect, cause=rolled)
@@ -396,10 +397,12 @@ def record_door(session: AsyncSession, table: GameTable, declaration: Declaratio
     문을 다룬 것을 이벤트로 적는다(#281). 그 행동의 이벤트(cause)에 잇는다.
 
     따기, 부수기, 고치기는 굴린 판정을 먼저 적는다(check_rolled, 해내지 못했어도). 해냈으면 door_changed 를 잇는다.
+    판정에 물건을 붙여 썼으면 그 판정에 aid_used 를 잇는다(#802).
     행한 사람(actor_id)을 적지 않는다. 문을 바꾼 것은 엔진이다.
     """
     door = door_of(declaration)
     after = record_terms(session, table, declaration.character_name, door['check'], cause)
+    record_aid(session, table, declaration.character_name, door.get('aid'), after)
     if not door['done']:
         return
     payload = {
@@ -407,6 +410,24 @@ def record_door(session: AsyncSession, table: GameTable, declaration: Declaratio
         **{key: door[key] for key in ('user_id', 'character_name', 'act', 'device', 'from', 'to')},
     }
     recorder.record(session, table, EventType.DOOR_CHANGED, payload=payload, cause=after)
+
+
+def record_aid(
+    session: AsyncSession, table: GameTable, character_name: str, aid: dict | None, cause: TableEvent
+) -> None:
+    """
+    판정에 붙여 쓴 물건을 aid_used 로 적는다(#802). 그 판정(check_rolled)에 잇는다.
+
+    붙이지 않았거나 쓰지 못했으면(굴리지 않았다, 더 지니지 않았다) 적지 않는다.
+    """
+    if aid is None or not aid['used']:
+        return
+    payload = {
+        'round': cause.payload['round'],
+        'character_name': character_name,
+        **{key: aid[key] for key in ('act', 'entry_id', 'name', 'bonus', 'lost', 'broken', 'remaining')},
+    }
+    recorder.record(session, table, EventType.AID_USED, payload=payload, cause=cause)
 
 
 def record_terms(

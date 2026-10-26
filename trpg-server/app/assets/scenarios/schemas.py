@@ -91,6 +91,7 @@ from app.assets.scenarios.snapshot import Snapshot
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
 from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
+from app.engine.item_aids import Aids
 from app.engine.item_effects import Effects
 from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, InjuryNature, Key
 from app.engine.sheet import Sheet
@@ -607,7 +608,9 @@ class PickCheck(BaseModel):
     """
     자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.
 
-    tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 락픽 같은 것)을 지닌 사람만 딸 수 있다. 도구는 없어지지 않는다.
+    needs_tool 이면 도구가 있어야 딴다(#802). 도구는 그 행동을 거드는 물건(아이템 규칙의 aids)이면 어느 것이든 된다.
+    플레이어가 행동에 붙인다. 보정과 없어지는 방식은 물건이 정한다.
+    예전의 특정 도구(tool)는 이것과 그 물건의 거들기가 됐다.
     능력치와 난이도가 룰북에 있는지는 게시할 때 본다.
     """
 
@@ -615,12 +618,7 @@ class PickCheck(BaseModel):
 
     ability: Key
     difficulty: Key | None = None
-    tool: uuid.UUID | None = None
-
-    @field_serializer('tool')
-    def tool_as_text(self, tool: uuid.UUID | None) -> str | None:
-        """도구의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
-        return None if tool is None else str(tool)
+    needs_tool: bool = False
 
 
 class ItemLock(BaseModel):
@@ -682,8 +680,9 @@ class ItemRule(BaseModel):
     lock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.
     throw 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.
     행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.
-    treat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.
-    쓰면 치료가 성공하든 실패하든 하나 없어진다.
+    aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면
+    판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.
+    예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -702,7 +701,7 @@ class ItemRule(BaseModel):
     ward: CombatNumber | None = None
     lock: ItemLock | None = None
     throw: ItemThrow | None = None
-    treat_bonus: CombatNumber | None = None
+    aids: Aids = []
 
     @model_validator(mode='after')
     def combat_only_when_worn(self) -> 'ItemRule':
@@ -738,13 +737,6 @@ class ItemRule(BaseModel):
         """효과는 소모품에만 적는다. 장비는 쓰지 않는 물건이다."""
         if self.effects and self.kind != ItemKind.CONSUMABLE:
             raise ValueError('효과(effects)는 소모품(consumable)에만 적습니다.')
-        return self
-
-    @model_validator(mode='after')
-    def treat_bonus_only_with_consumables(self) -> 'ItemRule':
-        """치료 보정은 소모품에만 적는다. 치료에 붙여 쓰면 없어지는 물건이다(붕대, 의료 키트)."""
-        if self.treat_bonus is not None and self.kind != ItemKind.CONSUMABLE:
-            raise ValueError('치료 보정(treat_bonus)은 소모품(consumable)에만 적습니다.')
         return self
 
     @model_validator(mode='after')
@@ -1022,7 +1014,7 @@ class RepairCheck(PickCheck):
     부서진 문을 고치는 판정(#281). 행동 '고치기'가 이 능력과 난이도로 굴린다. 적지 않으면 고치지 못한다.
 
     성공하면 문이 고쳐진다. 고친 문은 열린 채다. 다시 잠그려면 잠그기를 한다.
-    tool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 공구 같은 것)을 지닌 사람만 고칠 수 있다. 도구는 없어지지 않는다.
+    needs_tool 이면 고치기를 거드는 물건(공구 같은 것)이 있어야 고친다(#802). 따기와 같다.
     """
 
 

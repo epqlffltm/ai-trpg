@@ -280,16 +280,27 @@ class PatientOut(BaseModel):
     name: str | None = None
 
 
-class TreatAidOut(BaseModel):
-    """치료에 붙여 쓴 물건(#277). 판정의 보정(modifier)에 bonus 가 이미 들었다."""
+class AidOut(BaseModel):
+    """
+    행동의 판정에 붙여 쓴 물건(#277, #802, 거들기). 판정의 보정(modifier)에 bonus 가 이미 들었다.
+
+    치료, 따기, 부수기, 고치기, 넘기에 붙는다.
+    """
 
     entry_id: uuid.UUID
     name: str
+    # 거든 행동. treat, pick, repair, force, cross. 치료에 붙여 쓴 것은 예전 결과에 없다(treat)
+    act: str = 'treat'
     # 판정에 더한 보정. 쓰지 못했으면 0 이다
     bonus: int
-    # 썼는가. 못 했으면 reason 이 있다: not_held(차례가 왔을 때 더 가지고 있지 않았다)
+    # 썼는가(판정에 보정을 더했다). 못 했으면 거짓이다. reason 이 not_held 면 차례가 왔을 때 더 가지고 있지 않았고,
+    # None 이면 판정을 굴리지 않았다(문이 이미 열렸다, 도구가 있어야 하는데 없었다)
     used: bool
     reason: str | None
+    # 굴린 뒤 하나 없어졌는가. 늘 없어지는 물건(붕대)이거나, 실패해서 부러졌다. 예전 치료 결과는 썼으면 없어졌다
+    lost: bool = False
+    # 실패해서 부러졌는가(실패하면 부러지는 물건, 락픽)
+    broken: bool = False
     # 쓴 뒤에 남은 개수
     remaining: int
 
@@ -317,7 +328,7 @@ class TreatmentOut(BaseModel):
     # 치료받던 쪽이 즉사했는가
     died: bool
     # 치료에 붙여 쓴 물건(#277). 적지 않았으면 None 이다
-    aid: TreatAidOut | None = None
+    aid: AidOut | None = None
 
 
 class ThrownAtOut(BaseModel):
@@ -557,6 +568,8 @@ class MoveOut(BaseModel):
     effect: EffectOut | None = None
     # 쓰러진 동료를 업고 가려 했으면 그 결과. 아니면 None 이다
     carry: CarryOut | None = None
+    # 넘기에 붙여 쓴 물건(#802, 밧줄). 붙이지 않았으면 None 이다
+    aid: AidOut | None = None
 
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 
@@ -616,13 +629,15 @@ class DoorOut(BaseModel):
     device: str | None = None
     # 해냈는가. 못 했으면 reason 이 있다: no_key(열쇠가 없었다), wrong_side(빗장의 반대쪽이었다),
     # broken(부서진 문은 잠그지도 바꾸지도 못한다), already(이미 그렇게 되어 있었다. 고치기는 부서지지 않았다),
-    # no_tool(따거나 고치는 도구가 없었다), failed(따기, 부수기, 고치기의 판정에 실패했다),
+    # no_tool(도구가 있어야 하는데 붙인 물건이 없었다, #802), failed(따기, 부수기, 고치기의 판정에 실패했다),
     # no_pick(바꿔 단 자물쇠가 따지 못하는 것이었다), locked(잠긴 자물쇠는 바꾸지 못한다),
     # no_item(달 자물쇠 물건이 없었다), used(그 자물쇠 물건은 이미 달았다)
     done: bool
     reason: str | None
     # 따기, 부수기, 고치기의 판정. 굴리지 않았으면 None 이다
     check: CrossOut | None = None
+    # 따기, 부수기, 고치기에 붙여 쓴 물건(#802). 붙이지 않았으면 None 이다
+    aid: AidOut | None = None
 
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 

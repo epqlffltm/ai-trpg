@@ -1039,6 +1039,87 @@ def upgrade_from_62(document: dict) -> dict:
     return upgraded
 
 
+def with_treat_aid(rule: dict) -> dict:
+    """
+    옛 아이템 규칙 하나(#802). 치료 보정(treat_bonus)을 치료의 거들기로 옮긴다. 그때는 쓰면 늘 하나 없어졌다.
+
+    시나리오 초안을 옮기는 마이그레이션과 같은 모양이다.
+    """
+    moved = {key: value for key, value in rule.items() if key != 'treat_bonus'}
+    aids = list(rule.get('aids', []))
+    if rule.get('treat_bonus') is not None:
+        aids.append({'act': 'treat', 'bonus': rule['treat_bonus'], 'wear': 'always'})
+    return {**moved, 'aids': aids}
+
+
+def with_needs_tool(check: dict | None) -> dict | None:
+    """따거나 고치는 판정 하나(#802). 특정 도구(tool)를 도구가 있어야 하는가(needs_tool)로 바꾼다."""
+    if check is None:
+        return None
+    kept = {key: value for key, value in check.items() if key != 'tool'}
+    return {**kept, 'needs_tool': check.get('tool') is not None}
+
+
+def route_with_needs_tool(route: dict) -> dict:
+    """길 하나(#802). 자물쇠를 따는 판정과 고치는 판정의 도구를 바꾼다."""
+    lock = route.get('lock')
+    moved_lock = None if lock is None else {**lock, 'pick': with_needs_tool(lock.get('pick'))}
+    return {**route, 'lock': moved_lock, 'repair': with_needs_tool(route.get('repair'))}
+
+
+def item_with_needs_tool(rule: dict) -> dict:
+    """아이템 규칙 하나(#802). 자물쇠 물건을 따는 판정의 도구를 바꾼다."""
+    lock = rule.get('lock')
+    if lock is None:
+        return rule
+    return {**rule, 'lock': {**lock, 'pick': with_needs_tool(lock.get('pick'))}}
+
+
+def old_tools(routes: list[dict], rules: list[dict]) -> list[tuple[str, str]]:
+    """
+    옛 문서의 도구들(#802). (행동, 물건 항목)이다. 길의 따기, 길의 고치기, 자물쇠 물건의 따기의 차례다.
+
+    tool 이 있는 판정만 든다.
+    """
+    picks = [(route.get('lock') or {}).get('pick') for route in routes]
+    picks += [(rule.get('lock') or {}).get('pick') for rule in rules]
+    repairs = [route.get('repair') for route in routes]
+    found = [('pick', check) for check in picks] + [('repair', check) for check in repairs]
+    return [(act, check['tool']) for act, check in found if check and check.get('tool') is not None]
+
+
+def with_tool_aid(rules: list[dict], act: str, tool: str) -> list[dict]:
+    """
+    그 도구의 아이템 규칙에 그 행동의 거들기를 더한다(#802). 그때 도구는 보정이 없고 없어지지 않았다.
+
+    규칙이 없던 물건이면 장비의 규칙을 새로 더한다. 이미 그 행동의 거들기가 있으면 그대로다.
+    """
+    aid = {'act': act, 'bonus': 0, 'wear': 'never'}
+    rule = next((one for one in rules if one['entry_id'] == tool), None)
+    if rule is None:
+        return [*rules, {'entry_id': tool, 'kind': 'gear', 'aids': [aid]}]
+    if any(one['act'] == act for one in rule.get('aids', [])):
+        return rules
+    return [{**one, 'aids': [*one.get('aids', []), aid]} if one is rule else one for one in rules]
+
+
+def upgrade_from_63(document: dict) -> dict:
+    """
+    형식 63 의 문서를 형식 64 로 올린다(#802). 치료 보정과 문의 도구가 물건의 거들기가 된다.
+
+    따기와 고치기의 판정은 도구가 있어야 하는가만 남고, 그때의 도구는 그 행동을 거드는 물건이 된다.
+    """
+    upgraded = dict(document)
+    routes = document.get('routes', [])
+    rules = [with_treat_aid(rule) for rule in document.get('items', [])]
+    for act, tool in old_tools(routes, rules):
+        rules = with_tool_aid(rules, act, tool)
+    upgraded['items'] = [item_with_needs_tool(rule) for rule in rules]
+    upgraded['routes'] = [route_with_needs_tool(route) for route in routes]
+    upgraded['format'] = 64
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -1104,4 +1185,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     60: upgrade_from_60,
     61: upgrade_from_61,
     62: upgrade_from_62,
+    63: upgrade_from_63,
 }

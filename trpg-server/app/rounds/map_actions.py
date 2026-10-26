@@ -14,6 +14,8 @@
       - 빗장(#281): 걸려 있으면 빗장 쪽에 선 사람은 풀고 지나간다. 반대쪽에서는 지나가지 못한다(barred).
       - 빗장, 자물쇠, 넘기의 차례로 본다. 열고 나서 넘기에 실패하면 문은 열린 채 그 자리에 남는다.
       - 업힌 사람은 따로 굴리지 않는다. 업은 사람이 지나가면 함께 간다.
+      - 넘기를 거드는 물건(#802, 밧줄)을 붙일 수 있다. 넘기를 굴리면 그 보정을 더하고, 굴린 뒤 그 물건의 방식대로
+        없어진다(app/rounds/aids.py). 넘기 판정이 있는 길에만 붙인다. 앞의 조건에 막혀 굴리지 않았으면 그대로다.
   - 업고 가기(carry, #367): 같은 장소에 쓰러져 있는(죽지 않은) 동료 한 명을 함께 데려간다. 쓰러진 사람은 선언을 못 하니
     일행이 가면 혼자 남는다. 받을 때 보고, 차례가 오면 다시 본다. 그사이 일어났거나 죽었거나 다른 사람이 먼저 업고
     갔으면 혼자 간다. 업을 사람이 가지 못했으면 업힌 사람도 그대로다. 죽은 캐릭터는 쓰러진 곳에 남는다.
@@ -36,10 +38,12 @@ from app.calendar import state as calendar
 from app.engine.action import MoveAction, SearchAction
 from app.engine.check import HinderedCheck, find_difficulty, resolve_hindered
 from app.engine.health import ChangeKind
+from app.engine.item_aids import AidAct
 from app.rounds import injuries as round_injuries
+from app.rounds.aids import AidUse, TakenAid, aid_bonus, aid_document, require_aid, take_aid, wear_aid
 from app.rounds.checks import change_sheet
 from app.rounds.effects import Judging
-from app.rounds.errors import ActionTargetError, Conflict, RoundConflictError
+from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.tables import items, places, route_locks, sheets
 from app.tables.models import GameTable, TableMember
 from app.tables.state import find_member
@@ -85,6 +89,8 @@ def accept_move(table: GameTable, member: TableMember, action: MoveAction) -> di
       - 맵에 서 있지 않으면 RoundConflictError(not_on_map).
       - 지금 장소에서 아는 길로 이어진 장소가 아니면 ActionTargetError(place).
         모르는 곳, 숨긴 곳, 장소가 아닌 것, 이어지지 않은 곳을 가르지 않는다. 가르면 숨긴 장소가 드러난다.
+      - 붙인 물건(#802)이 넘기를 거들지 않으면 ActionNotInRulesError(item), 지니지 않았으면 RoundConflictError
+        (item_not_held). 넘기 판정이 없는 길이면 ActionNotInRulesError(item).
     """
     here = standing_place(member)
     snapshot = read_snapshot(table.content)
@@ -93,8 +99,17 @@ def accept_move(table: GameTable, member: TableMember, action: MoveAction) -> di
         raise ActionTargetError('place')
     if action.carry is not None and not can_carry(find_member(table, action.carry), here):
         raise ActionTargetError('carry')
-    # 업지 않으면 carry 를 적지 않는다. 업고 가기가 생기기 전과 같은 모양이다
+    if action.item is not None:
+        require_cross_aid(table, member, places.route_between(known, here, action.place), action.item)
+    # 업지 않으면 carry 를, 붙이지 않으면 item 을 적지 않는다. 그것들이 생기기 전과 같은 모양이다
     return action.model_dump(mode='json', exclude_none=True)
+
+
+def require_cross_aid(table: GameTable, member: TableMember, route: RouteSnapshot, entry_id: uuid.UUID) -> None:
+    """넘기에 붙인 물건을 본다(#802). 넘기 판정이 있는 길이고, 넘기를 거드는 물건을 지녔어야 한다."""
+    if route.cross is None:
+        raise ActionNotInRulesError('item')
+    require_aid(table, member, entry_id, AidAct.CROSS)
 
 
 def can_carry(carried: TableMember | None, here: uuid.UUID) -> bool:
@@ -140,9 +155,10 @@ class Terms(Protocol):
     difficulty: str | None
 
 
-def roll_terms(judging: Judging, member: TableMember, terms: Terms) -> HinderedCheck:
+def roll_terms(judging: Judging, member: TableMember, terms: Terms, bonus: int = 0) -> HinderedCheck:
     """
     판에 적힌 판정을 굴린다. 그 능력과 난이도(비웠으면 규칙의 기본)로, 입은 부상의 영향을 받는다.
+    bonus 는 붙여 쓴 물건의 보정이다(#802, 거들기). 보정에 더한다.
 
     길을 넘을 때, 자물쇠를 딸 때, 문을 부술 때, 문을 고칠 때 쓴다. 판에 굳을 때 규칙에 있는 능력과 난이도인지 봤다
     (게시의 route_cross_invalid, route_open_invalid).
@@ -151,7 +167,7 @@ def roll_terms(judging: Judging, member: TableMember, terms: Terms) -> HinderedC
     sheet = member.sheet
     difficulty = find_difficulty(ruleset, terms.difficulty)
     hindrance = round_injuries.hindrance_for(ruleset, sheet.injuries, terms.ability)
-    return resolve_hindered(ruleset, sheet.abilities[terms.ability], difficulty, judging.dice, hindrance)
+    return resolve_hindered(ruleset, sheet.abilities[terms.ability], difficulty, judging.dice, hindrance, bonus=bonus)
 
 
 def terms_document(judging: Judging, terms: Terms, rolled: HinderedCheck) -> dict:
@@ -175,18 +191,22 @@ def fall(judging: Judging, member: TableMember, cross: CrossSnapshot) -> dict | 
     return change_sheet(judging, member, ChangeKind.DAMAGE, cross.harm)
 
 
-def cross_route(judging: Judging, member: TableMember, cross: CrossSnapshot | None) -> tuple[bool, dict]:
+def cross_route(
+    judging: Judging, member: TableMember, cross: CrossSnapshot | None, taken: TakenAid | None
+) -> tuple[bool, dict, AidUse | None]:
     """
-    길을 넘는다. (넘었는가, 결과에 더할 칸들)을 돌려준다. 넘기 판정이 없는 길이면 굴리지 않고 넘는다.
+    길을 넘는다. (넘었는가, 결과에 더할 칸들, 붙여 쓴 물건을 어떻게 했나)를 돌려준다.
 
-    칸은 넘기 판정(cross)과 실패해서 다친 것(effect)이다.
+    넘기 판정이 없는 길이면 굴리지 않고 넘는다. 칸은 넘기 판정(cross)과 실패해서 다친 것(effect)이다.
+    붙여 쓴 물건(#802)이 있으면 그 보정을 더하고, 굴린 뒤 그 물건의 방식대로 한다.
     """
     if cross is None:
-        return True, {'cross': None, 'effect': None}
-    rolled = roll_terms(judging, member, cross)
+        return True, {'cross': None, 'effect': None}, None
+    rolled = roll_terms(judging, member, cross, bonus=aid_bonus(taken))
     passed = rolled.check.success
+    use = wear_aid(member, taken, passed)
     effect = None if passed else fall(judging, member, cross)
-    return passed, {'cross': terms_document(judging, cross, rolled), 'effect': effect}
+    return passed, {'cross': terms_document(judging, cross, rolled), 'effect': effect}, use
 
 
 def lift_bar(judging: Judging, member: TableMember, route: RouteSnapshot) -> tuple[bool, bool]:
@@ -207,24 +227,28 @@ def lift_bar(judging: Judging, member: TableMember, route: RouteSnapshot) -> tup
 UNTOUCHED = {'unbarred': False, 'unlocked': False, 'cross': None, 'effect': None}
 
 
-def pass_route(judging: Judging, member: TableMember, route: RouteSnapshot | None) -> tuple[str | None, dict]:
+def pass_route(
+    judging: Judging, member: TableMember, route: RouteSnapshot | None, taken: TakenAid | None
+) -> tuple[str | None, dict, AidUse | None]:
     """
-    길을 지나간다. (못 간 까닭, 결과에 더할 칸들)을 돌려준다. 갔으면 까닭이 None 이다.
+    길을 지나간다. (못 간 까닭, 결과에 더할 칸들, 넘기에 붙여 쓴 물건을 어떻게 했나)를 돌려준다.
+    갔으면 까닭이 None 이다. 넘기를 굴리지 않았으면 물건은 그대로다(None).
 
     빗장, 자물쇠, 넘기 판정의 차례로 본다. 아는 길이 없으면 not_adjacent, 빗장이 반대쪽에 걸렸으면 barred,
     잠겼는데 열쇠가 없으면 locked, 넘기에 실패하면 cross_failed 다.
     칸은 빗장을 풀었는지(unbarred), 자물쇠를 열었는지(unlocked)와 넘기의 것(cross_route)이다.
     """
     if route is None:
-        return Reason.NOT_ADJACENT, UNTOUCHED
+        return Reason.NOT_ADJACENT, UNTOUCHED, None
     lifted, unbarred = lift_bar(judging, member, route)
     if not lifted:
-        return Reason.BARRED, UNTOUCHED
+        return Reason.BARRED, UNTOUCHED, None
     open_, unlocked = open_lock(judging, member, route)
     if not open_:
-        return Reason.LOCKED, {**UNTOUCHED, 'unbarred': unbarred}
-    crossed, fields = cross_route(judging, member, route.cross)
-    return (None if crossed else Reason.CROSS_FAILED), {'unbarred': unbarred, 'unlocked': unlocked, **fields}
+        return Reason.LOCKED, {**UNTOUCHED, 'unbarred': unbarred}, None
+    crossed, fields, use = cross_route(judging, member, route.cross, taken)
+    reason = None if crossed else Reason.CROSS_FAILED
+    return reason, {'unbarred': unbarred, 'unlocked': unlocked, **fields}, use
 
 
 def judge_move(judging: Judging, member: TableMember, action: MoveAction) -> dict:
@@ -238,7 +262,8 @@ def judge_move(judging: Judging, member: TableMember, action: MoveAction) -> dic
     here = member.sheet.place_id
     known = places.known_map(snapshot, places.knowledge(judging.table))
     route = places.route_between(known, here, action.place)
-    reason, fields = pass_route(judging, member, route)
+    taken = take_aid(judging, member, action.item, AidAct.CROSS)
+    reason, fields, use = pass_route(judging, member, route, taken)
     moved = reason is None
     travel = travel_time(judging, route) if moved else None
     if moved:
@@ -248,6 +273,9 @@ def judge_move(judging: Judging, member: TableMember, action: MoveAction) -> dic
     if action.carry is not None:
         carried = find_member(judging.table, action.carry)
         outcome['carry'] = carry_along(judging, carried, action.carry, here, action.place if moved else None)
+    # 넘기에 붙여 쓴 물건(#802)은 붙였을 때만 적는다
+    if taken is not None:
+        outcome['aid'] = aid_document(member, taken, use)
     return {'move': outcome}
 
 

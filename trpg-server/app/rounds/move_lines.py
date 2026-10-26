@@ -18,6 +18,7 @@
 
 from app.engine.ruleset import Outcome
 from app.rounds.narrator import (
+    AidNote,
     BlowNote,
     CoverNote,
     DeathSaveNote,
@@ -124,12 +125,12 @@ def describe_treatment(note: TreatmentNote) -> str:
         → 토르빈의 팔 골절 치료 실패: 상처가 덧남, 50분 늦어짐, 낫기까지 4시간 10분
         → 토르빈의 팔 골절 치료(쓴 물건: 의료 키트 +2): 앞당겨짐, 낫기까지 2시간 30분
     남은 시간은 이 장면이 끝난 뒤부터다(게임 안의 시간, app/rounds/time_words.py).
-    붙여 쓴 물건(#277)의 보정은 판정의 보정에 이미 들었다. 무엇을 썼는지만 붙인다.
+    붙여 쓴 물건(#277)의 보정은 판정의 보정에 이미 들었다. 무엇을 썼는지만 붙인다(aid_text).
     """
     # 치료받던 사람이 떠났으면 이름을 모른다. 부상만 적는다
     head = f'→ {note.patient}의 {note.injury} 치료' if note.patient else f'→ {note.injury} 치료'
     if note.aid:
-        head = f'{head}(쓴 물건: {note.aid} +{note.aid_bonus})'
+        head = f'{head}{aid_text(note.aid)}'
     if not note.treated:
         return f'{head}: 치료할 부상이 이미 없었다'
     if note.mishap is None:
@@ -472,12 +473,15 @@ def describe_travel(note: TravelNote) -> str:
         (간 곳: 광장 → 탑, 열쇠로 문을 열고, 근력 판정에 성공해 넘어)
         (가려던 곳: 광장. 그쪽으로 이어진 길이 없었다)
         (가려던 곳: 탑. 근력 판정에 실패해 넘지 못했다. 실패해 다쳤다)
+        (간 곳: 광장 → 절벽 위, 근력 판정에 성공해 넘어)(쓴 물건: 밧줄 +2)
+    넘기에 붙여 쓴 물건(#802)이 있으면 뒤에 붙는다.
     """
+    tool = aid_text(note.aid) if note.aid else ''
     if not note.moved:
-        return f'(가려던 곳: {note.to_place}. {travel_failure(note)})'
+        return f'(가려던 곳: {note.to_place}. {travel_failure(note)}){tool}'
     start = f'{note.from_place} → ' if note.from_place else ''
     took = f', {duration_text(note.travel_minutes)} 걸림' if note.travel_minutes else ''
-    return f'(간 곳: {start}{note.to_place}{took}{passage_text(note)}{carry_text(note)})'
+    return f'(간 곳: {start}{note.to_place}{took}{passage_text(note)}{carry_text(note)}){tool}'
 
 
 # 문을 다룬 것의 말. 해낸 것이다(#281). 잠그기와 열기는 장치마다 다르다
@@ -531,16 +535,28 @@ def door_failure(note: DoorNote) -> str:
 
 def describe_door(note: DoorNote) -> str:
     """
-    길의 문을 다룬 결과를 한 줄로 적는다(#281). 지나가지는 않았다.
+    길의 문을 다룬 결과를 한 줄로 적는다(#281). 지나가지는 않았다. 붙여 쓴 물건(#802)이 있으면 뒤에 붙는다.
 
     예: (문: 광장 쪽 문. 빗장을 걸었다)
         (문: 탑 쪽 문. 민첩 판정에 성공해 자물쇠를 땄다)
-        (문: 탑 쪽 문을 따려 했다. 민첩 판정에 실패했다)
+        (문: 탑 쪽 문을 따려 했다. 민첩 판정에 실패했다)(쓴 물건: 락픽 +1, 부러짐)
     """
+    tool = aid_text(note.aid) if note.aid else ''
     if not note.done:
-        return f'(문: {note.other_end} 쪽 문을 {DOOR_TRIES.get(note.act, "다루려")} 했다. {door_failure(note)})'
+        return f'(문: {note.other_end} 쪽 문을 {DOOR_TRIES.get(note.act, "다루려")} 했다. {door_failure(note)}){tool}'
     rolled = f'{note.check} 판정에 성공해 ' if note.check else ''
-    return f'(문: {note.other_end} 쪽 문. {rolled}{DOOR_DONE.get((note.act, note.device), "문을 다뤘다")})'
+    return f'(문: {note.other_end} 쪽 문. {rolled}{DOOR_DONE.get((note.act, note.device), "문을 다뤘다")}){tool}'
+
+
+def aid_text(aid: AidNote) -> str:
+    """
+    붙여 쓴 물건(#802)의 꼬리. 보정이 0 이면 숫자를 적지 않는다. 실패해서 부러졌으면 그것도 적는다.
+
+    예: (쓴 물건: 의료 키트 +2), (쓴 물건: 공구), (쓴 물건: 락픽 +1, 부러짐)
+    """
+    bonus = f' +{aid.bonus}' if aid.bonus else ''
+    broken = ', 부러짐' if aid.broken else ''
+    return f'(쓴 물건: {aid.name}{bonus}{broken})'
 
 
 def describe_search(note: SearchNote) -> str:

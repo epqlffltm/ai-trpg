@@ -42,6 +42,90 @@
         "title": "ActionRequest",
         "type": "object"
       },
+      "AidAct": {
+        "description": "거드는 행동.",
+        "enum": [
+          "treat",
+          "pick",
+          "repair",
+          "force",
+          "cross"
+        ],
+        "title": "AidAct",
+        "type": "string"
+      },
+      "AidOut": {
+        "description": "행동의 판정에 붙여 쓴 물건(#277, #802, 거들기). 판정의 보정(modifier)에 bonus 가 이미 들었다.\n\n치료, 따기, 부수기, 고치기, 넘기에 붙는다.",
+        "properties": {
+          "act": {
+            "default": "treat",
+            "title": "Act",
+            "type": "string"
+          },
+          "bonus": {
+            "title": "Bonus",
+            "type": "integer"
+          },
+          "broken": {
+            "default": false,
+            "title": "Broken",
+            "type": "boolean"
+          },
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "lost": {
+            "default": false,
+            "title": "Lost",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "remaining": {
+            "title": "Remaining",
+            "type": "integer"
+          },
+          "used": {
+            "title": "Used",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "entry_id",
+          "name",
+          "bonus",
+          "used",
+          "reason",
+          "remaining"
+        ],
+        "title": "AidOut",
+        "type": "object"
+      },
+      "AidWear": {
+        "description": "거든 물건이 굴린 뒤에 어떻게 되나.",
+        "enum": [
+          "always",
+          "on_fail",
+          "never"
+        ],
+        "title": "AidWear",
+        "type": "string"
+      },
       "Armor": {
         "additionalProperties": false,
         "description": "방어구의 규칙(#276). 어떤 방식으로 막는지다. 방어의 크기는 판의 아이템 규칙과 몬스터 시트가 정한다.\n\nsave_target 은 세이브의 목표값이다. save 방식에만 적는다.\npierce_base 는 관통의 기준값이다. 관통력(ap)이 있는 무기로 칠 때 쓴다. 방식을 가리지 않는다.",
@@ -725,6 +809,14 @@
       "CatalogItemOut": {
         "description": "판에 있는 물건 하나. 로어북의 물건 항목이다.\n\nkind 가 consumable 이면 쓰면 하나 줄어든다. effects 는 쓰면 대상에게 일어나는 일들이다(#800, 차례대로):\nheal(HP 를 그 등급만큼 되돌림), cure(적은 부상을 풂), damage(그 등급만큼 피해), injure(부상 하나를 입힘).\n등급은 rules 의 magnitudes, 부상은 rules 의 injuries 의 key 다. 피해나 부상이 있으면 동료에게는 쓰지 못한다.",
         "properties": {
+          "aids": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ItemAid"
+            },
+            "title": "Aids",
+            "type": "array"
+          },
           "ap": {
             "anyOf": [
               {
@@ -852,17 +944,6 @@
                 "type": "null"
               }
             ]
-          },
-          "treat_bonus": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Treat Bonus"
           },
           "ward": {
             "anyOf": [
@@ -2388,6 +2469,16 @@
             "title": "Act",
             "type": "string"
           },
+          "aid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AidOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "character_name": {
             "title": "Character Name",
             "type": "string"
@@ -3234,6 +3325,7 @@
           "item_used",
           "item_given",
           "item_thrown",
+          "aid_used",
           "item_put_down",
           "equipment_changed",
           "item_traded",
@@ -3374,8 +3466,20 @@
       },
       "ForceAction": {
         "additionalProperties": false,
-        "description": "지금 서 있는 장소에 닿은 길의 문을 부수는 행동(#281). 판에 적힌 부수는 판정(능력, 난이도)으로 굴린다.\n\n성공하면 자물쇠와 빗장이 부서져 열린다. 부서진 문은 다시 잠그지 못한다. 지나가지는 않는다.",
+        "description": "지금 서 있는 장소에 닿은 길의 문을 부수는 행동(#281). 판에 적힌 부수는 판정(능력, 난이도)으로 굴린다.\n\n성공하면 자물쇠와 빗장이 부서져 열린다. 부서진 문은 다시 잠그지 못한다. 지나가지는 않는다.\n부수기를 거드는 물건(item, 쇠지렛대)을 붙일 수 있다(#802).",
         "properties": {
+          "item": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          },
           "kind": {
             "const": "force",
             "title": "Kind",
@@ -4298,6 +4402,31 @@
         "title": "InputError",
         "type": "object"
       },
+      "ItemAid": {
+        "additionalProperties": false,
+        "description": "물건이 행동 하나(act)를 거드는 방식. 판정에 bonus 를 더하고, 굴린 뒤 wear 대로 된다.",
+        "properties": {
+          "act": {
+            "$ref": "#/components/schemas/AidAct"
+          },
+          "bonus": {
+            "default": 0,
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Bonus",
+            "type": "integer"
+          },
+          "wear": {
+            "$ref": "#/components/schemas/AidWear",
+            "default": "never"
+          }
+        },
+        "required": [
+          "act"
+        ],
+        "title": "ItemAid",
+        "type": "object"
+      },
       "ItemCheck": {
         "additionalProperties": false,
         "description": "물건을 인물이나 몬스터에게 쓸 때 맞히는 판정(#800). 어느 능력으로, 어느 난이도에 도전하는가.\n\n물건을 자기와 동료에게 쓸 때는 굴리지 않는다. 인물(NPC)과 몬스터에게는 이로운 것이어도 늘 굴린다\n(잘못 먹이거나 엉뚱한 곳에 바를 수 있다). 맞히면 효과가 든다. 빗나가도 물건은 하나 없어진다.",
@@ -4419,7 +4548,7 @@
           "pick": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PickCheck-Input"
+                "$ref": "#/components/schemas/PickCheck"
               },
               {
                 "type": "null"
@@ -4444,7 +4573,7 @@
           "pick": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PickCheck-Output"
+                "$ref": "#/components/schemas/PickCheck"
               },
               {
                 "type": "null"
@@ -4557,8 +4686,17 @@
       },
       "ItemRule-Input": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\ntreat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.\n쓰면 치료가 성공하든 실패하든 하나 없어진다.",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\naids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면\n판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.\n예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.",
         "properties": {
+          "aids": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ItemAid"
+            },
+            "maxItems": 5,
+            "title": "Aids",
+            "type": "array"
+          },
           "ap": {
             "anyOf": [
               {
@@ -4706,19 +4844,6 @@
               }
             ]
           },
-          "treat_bonus": {
-            "anyOf": [
-              {
-                "maximum": 10.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Treat Bonus"
-          },
           "ward": {
             "anyOf": [
               {
@@ -4741,8 +4866,17 @@
       },
       "ItemRule-Output": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\ntreat_bonus 는 치료에 붙여 쓰면 치료 판정의 보정에 더하는 값이다(#277, 의료 키트). 소모품에만 적는다.\n쓰면 치료가 성공하든 실패하든 하나 없어진다.",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\naids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면\n판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.\n예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.",
         "properties": {
+          "aids": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ItemAid"
+            },
+            "maxItems": 5,
+            "title": "Aids",
+            "type": "array"
+          },
           "ap": {
             "anyOf": [
               {
@@ -4889,19 +5023,6 @@
               }
             ]
           },
-          "treat_bonus": {
-            "anyOf": [
-              {
-                "maximum": 10.0,
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Treat Bonus"
-          },
           "ward": {
             "anyOf": [
               {
@@ -4923,8 +5044,16 @@
         "type": "object"
       },
       "ItemRuleSnapshot": {
-        "description": "아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.\n\neffects 는 쓰면 대상에게 일어나는 일들이다(#800, app/engine/item_effects.py). 소모품에만 있다.\nrarity 는 물건의 등급이다.\nprice 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.\nslots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\nslots 가 비어 있으면 착용하지 않는 물건이다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).\nthrow 는 던지는 판정, treat_bonus 는 치료에 붙여 쓸 때의 보정이다(#277). 둘 다 소모품에만 있다.",
+        "description": "아이템 규칙 하나. 판 안의 로어북 물건 항목 하나(entry_id)가 엔진에서 무엇인지다.\n\neffects 는 쓰면 대상에게 일어나는 일들이다(#800, app/engine/item_effects.py). 소모품에만 있다.\nrarity 는 물건의 등급이다.\nprice 는 상인이 파는 값이다(#278). 비어 있으면 사고팔 수 없다.\nslots 는 착용할 때 들어갈 수 있는 규칙의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\nslots 가 비어 있으면 착용하지 않는 물건이다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281).\nthrow 는 던지는 판정이다(#277). aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py).",
         "properties": {
+          "aids": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ItemAid"
+            },
+            "title": "Aids",
+            "type": "array"
+          },
           "ap": {
             "anyOf": [
               {
@@ -5054,17 +5183,6 @@
                 "type": "null"
               }
             ]
-          },
-          "treat_bonus": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Treat Bonus"
           },
           "ward": {
             "anyOf": [
@@ -7095,7 +7213,7 @@
       },
       "MoveAction": {
         "additionalProperties": false,
-        "description": "맵에서 한 칸 가는 행동. 지금 서 있는 장소에서 아는 길로 이어진 장소(place)로 간다(app/rounds/map_actions.py).\n\nplace 는 판의 로어북 장소 항목의 id 다. 엔진은 이 값을 읽지 않는다. 어디와 이어져 있는지는 판이 안다.\n한 라운드에 한 칸이다. 한 사람의 선언에는 행동이 하나다.\ncarry 는 함께 업고 갈 쓰러진 동료(앉은 사람의 user_id)다. 한 사람이 한 명을 업는다(#367).",
+        "description": "맵에서 한 칸 가는 행동. 지금 서 있는 장소에서 아는 길로 이어진 장소(place)로 간다(app/rounds/map_actions.py).\n\nplace 는 판의 로어북 장소 항목의 id 다. 엔진은 이 값을 읽지 않는다. 어디와 이어져 있는지는 판이 안다.\n한 라운드에 한 칸이다. 한 사람의 선언에는 행동이 하나다.\ncarry 는 함께 업고 갈 쓰러진 동료(앉은 사람의 user_id)다. 한 사람이 한 명을 업는다(#367).\nitem 은 길을 넘는 판정을 거드는 물건이다(#802, 밧줄). 넘는 판정이 있는 길에만 적는다.",
         "properties": {
           "carry": {
             "anyOf": [
@@ -7108,6 +7226,18 @@
               }
             ],
             "title": "Carry"
+          },
+          "item": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
           },
           "kind": {
             "const": "move",
@@ -7257,6 +7387,16 @@
       "MoveOut": {
         "description": "한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 넘기 판정(#281)이 있는 길이 아니면 판정이 없다.",
         "properties": {
+          "aid": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AidOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "carry": {
             "anyOf": [
               {
@@ -8731,8 +8871,20 @@
       },
       "PickAction": {
         "additionalProperties": false,
-        "description": "지금 서 있는 장소에 닿은 길의 잠긴 자물쇠를 따는 행동(#281). 판에 적힌 따는 판정(능력, 난이도)으로 굴린다.\n\n판에 도구를 적었으면 그 물건을 지녀야 딴다. 성공하면 자물쇠가 열린다. 지나가지는 않는다.",
+        "description": "지금 서 있는 장소에 닿은 길의 잠긴 자물쇠를 따는 행동(#281). 판에 적힌 따는 판정(능력, 난이도)으로 굴린다.\n\n판이 도구를 요구하면 따기를 거드는 물건(item)을 붙여야 딴다(#802). 성공하면 자물쇠가 열린다. 지나가지는 않는다.",
         "properties": {
+          "item": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          },
           "kind": {
             "const": "pick",
             "title": "Kind",
@@ -8751,9 +8903,9 @@
         "title": "PickAction",
         "type": "object"
       },
-      "PickCheck-Input": {
+      "PickCheck": {
         "additionalProperties": false,
-        "description": "자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.\n\ntool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 락픽 같은 것)을 지닌 사람만 딸 수 있다. 도구는 없어지지 않는다.\n능력치와 난이도가 룰북에 있는지는 게시할 때 본다.",
+        "description": "자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.\n\nneeds_tool 이면 도구가 있어야 딴다(#802). 도구는 그 행동을 거드는 물건(아이템 규칙의 aids)이면 어느 것이든 된다.\n플레이어가 행동에 붙인다. 보정과 없어지는 방식은 물건이 정한다.\n예전의 특정 도구(tool)는 이것과 그 물건의 거들기가 됐다.\n능력치와 난이도가 룰북에 있는지는 게시할 때 본다.",
         "properties": {
           "ability": {
             "maxLength": 20,
@@ -8774,58 +8926,10 @@
             ],
             "title": "Difficulty"
           },
-          "tool": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tool"
-          }
-        },
-        "required": [
-          "ability"
-        ],
-        "title": "PickCheck",
-        "type": "object"
-      },
-      "PickCheck-Output": {
-        "additionalProperties": false,
-        "description": "자물쇠를 따는 판정(#281). 행동 '따기'가 이 능력과 난이도로 굴린다. 성공하면 자물쇠가 열린다.\n\ntool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 락픽 같은 것)을 지닌 사람만 딸 수 있다. 도구는 없어지지 않는다.\n능력치와 난이도가 룰북에 있는지는 게시할 때 본다.",
-        "properties": {
-          "ability": {
-            "maxLength": 20,
-            "pattern": "^[a-z][a-z0-9_]*$",
-            "title": "Ability",
-            "type": "string"
-          },
-          "difficulty": {
-            "anyOf": [
-              {
-                "maxLength": 20,
-                "pattern": "^[a-z][a-z0-9_]*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Difficulty"
-          },
-          "tool": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tool"
+          "needs_tool": {
+            "default": false,
+            "title": "Needs Tool",
+            "type": "boolean"
           }
         },
         "required": [
@@ -8835,7 +8939,7 @@
         "type": "object"
       },
       "PickSnapshot": {
-        "description": "자물쇠를 따는 판정(#281). 능력치, 난이도의 이름과 있어야 하는 도구(판 안의 물건 항목, 없으면 None).",
+        "description": "자물쇠를 따는 판정(#281). 능력치, 난이도의 이름과 도구가 있어야 하는가(#802).\n\n도구는 그 행동을 거드는 물건이면 어느 것이든 된다. 형식 64 보다 옛 판의 특정 도구는 이것과 그 물건의 거들기가 된다.",
         "properties": {
           "ability": {
             "title": "Ability",
@@ -8852,17 +8956,10 @@
             ],
             "title": "Difficulty"
           },
-          "tool": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tool"
+          "needs_tool": {
+            "default": false,
+            "title": "Needs Tool",
+            "type": "boolean"
           }
         },
         "required": [
@@ -10409,8 +10506,20 @@
       },
       "RepairAction": {
         "additionalProperties": false,
-        "description": "지금 서 있는 장소에 닿은 길의 부서진 문을 고치는 행동(#281). 판에 적힌 고치는 판정(능력, 난이도)으로 굴린다.\n\n판에 도구를 적었으면 그 물건을 지녀야 고친다. 성공하면 문이 고쳐져 다시 잠글 수 있다. 고친 문은 열린 채다.\n지나가지는 않는다.",
+        "description": "지금 서 있는 장소에 닿은 길의 부서진 문을 고치는 행동(#281). 판에 적힌 고치는 판정(능력, 난이도)으로 굴린다.\n\n판이 도구를 요구하면 고치기를 거드는 물건(item)을 붙여야 고친다(#802). 성공하면 문이 고쳐져 다시 잠글 수 있다.\n고친 문은 열린 채다. 지나가지는 않는다.",
         "properties": {
+          "item": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item"
+          },
           "kind": {
             "const": "repair",
             "title": "Kind",
@@ -10429,9 +10538,9 @@
         "title": "RepairAction",
         "type": "object"
       },
-      "RepairCheck-Input": {
+      "RepairCheck": {
         "additionalProperties": false,
-        "description": "부서진 문을 고치는 판정(#281). 행동 '고치기'가 이 능력과 난이도로 굴린다. 적지 않으면 고치지 못한다.\n\n성공하면 문이 고쳐진다. 고친 문은 열린 채다. 다시 잠그려면 잠그기를 한다.\ntool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 공구 같은 것)을 지닌 사람만 고칠 수 있다. 도구는 없어지지 않는다.",
+        "description": "부서진 문을 고치는 판정(#281). 행동 '고치기'가 이 능력과 난이도로 굴린다. 적지 않으면 고치지 못한다.\n\n성공하면 문이 고쳐진다. 고친 문은 열린 채다. 다시 잠그려면 잠그기를 한다.\nneeds_tool 이면 고치기를 거드는 물건(공구 같은 것)이 있어야 고친다(#802). 따기와 같다.",
         "properties": {
           "ability": {
             "maxLength": 20,
@@ -10452,58 +10561,10 @@
             ],
             "title": "Difficulty"
           },
-          "tool": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tool"
-          }
-        },
-        "required": [
-          "ability"
-        ],
-        "title": "RepairCheck",
-        "type": "object"
-      },
-      "RepairCheck-Output": {
-        "additionalProperties": false,
-        "description": "부서진 문을 고치는 판정(#281). 행동 '고치기'가 이 능력과 난이도로 굴린다. 적지 않으면 고치지 못한다.\n\n성공하면 문이 고쳐진다. 고친 문은 열린 채다. 다시 잠그려면 잠그기를 한다.\ntool 을 적었으면 그 물건(붙인 로어북의 물건 항목, 공구 같은 것)을 지닌 사람만 고칠 수 있다. 도구는 없어지지 않는다.",
-        "properties": {
-          "ability": {
-            "maxLength": 20,
-            "pattern": "^[a-z][a-z0-9_]*$",
-            "title": "Ability",
-            "type": "string"
-          },
-          "difficulty": {
-            "anyOf": [
-              {
-                "maxLength": 20,
-                "pattern": "^[a-z][a-z0-9_]*$",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Difficulty"
-          },
-          "tool": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tool"
+          "needs_tool": {
+            "default": false,
+            "title": "Needs Tool",
+            "type": "boolean"
           }
         },
         "required": [
@@ -10584,17 +10645,10 @@
             ],
             "title": "Difficulty"
           },
-          "tool": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tool"
+          "needs_tool": {
+            "default": false,
+            "title": "Needs Tool",
+            "type": "boolean"
           }
         },
         "required": [
@@ -11289,7 +11343,7 @@
           "pick": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PickCheck-Input"
+                "$ref": "#/components/schemas/PickCheck"
               },
               {
                 "type": "null"
@@ -11319,7 +11373,7 @@
           "pick": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PickCheck-Output"
+                "$ref": "#/components/schemas/PickCheck"
               },
               {
                 "type": "null"
@@ -11333,8 +11387,32 @@
         "title": "RouteLock",
         "type": "object"
       },
+      "RouteOpenOut": {
+        "description": "길의 문을 따거나 고치는 판정(#281). 넘기와 부수기의 것에 도구가 있어야 하는가(#802)가 더 있다.",
+        "properties": {
+          "ability": {
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "title": "Difficulty",
+            "type": "string"
+          },
+          "needs_tool": {
+            "default": false,
+            "title": "Needs Tool",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ability",
+          "difficulty"
+        ],
+        "title": "RouteOpenOut",
+        "type": "object"
+      },
       "RouteOut": {
-        "description": "아는 길 하나. two_way 가 아니면 from_place 에서 to_place 로만 간다.\n\n길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 무슨 열쇠로 여는지, 따는 도구,\n실패의 피해는 싣지 않는다.",
+        "description": "아는 길 하나. two_way 가 아니면 from_place 에서 to_place 로만 간다.\n\n길의 조건(#281)도 싣는다. 잠긴 문과 오를 절벽은 보이는 것이다. 도구가 있어야 하는지(#802)도 보인다.\n무슨 열쇠로 여는지, 실패의 피해는 싣지 않는다.",
         "properties": {
           "bar_side": {
             "anyOf": [
@@ -11403,7 +11481,7 @@
           "pick": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/RouteCrossOut"
+                "$ref": "#/components/schemas/RouteOpenOut"
               },
               {
                 "type": "null"
@@ -11413,7 +11491,7 @@
           "repair": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/RouteCrossOut"
+                "$ref": "#/components/schemas/RouteOpenOut"
               },
               {
                 "type": "null"
@@ -11511,7 +11589,7 @@
           "repair": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/RepairCheck-Input"
+                "$ref": "#/components/schemas/RepairCheck"
               },
               {
                 "type": "null"
@@ -11614,7 +11692,7 @@
           "repair": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/RepairCheck-Output"
+                "$ref": "#/components/schemas/RepairCheck"
               },
               {
                 "type": "null"
@@ -13830,7 +13908,7 @@
             "type": "array"
           },
           "format": {
-            "default": 63,
+            "default": 64,
             "title": "Format",
             "type": "integer"
           },
@@ -15478,7 +15556,7 @@
       },
       "TreatAction": {
         "additionalProperties": false,
-        "description": "치료하는 행동. 대상이 입은 오래 가는 부상 하나를 치료한다.\n\n능력과 난이도는 받지 않는다. 규칙의 치료 능력과 그 부상의 치료 난이도로 판정한다.\n대상은 앉은 사람(target)이나 이번 장면의 NPC(npc) 중 하나다.\n둘 다 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다).\nitem 은 치료에 붙여 쓰는 소모품이다(#277, 의료 키트). 아이템 규칙에 치료 보정(treat_bonus)이 있어야 한다.\n그만큼 치료 판정의 보정이 오르고, 치료가 성공하든 실패하든 하나 없어진다. 비우면 물건 없이 치료한다.",
+        "description": "치료하는 행동. 대상이 입은 오래 가는 부상 하나를 치료한다.\n\n능력과 난이도는 받지 않는다. 규칙의 치료 능력과 그 부상의 치료 난이도로 판정한다.\n대상은 앉은 사람(target)이나 이번 장면의 NPC(npc) 중 하나다.\n둘 다 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다).\nitem 은 치료에 붙여 쓰는 물건이다(#277, #802, 의료 키트). 치료를 거드는 물건(아이템 규칙의 aids)이어야 한다.\n그 보정만큼 치료 판정의 보정이 오르고, 굴린 뒤 그 물건의 방식대로 없어진다. 비우면 물건 없이 치료한다.",
         "properties": {
           "injury": {
             "maxLength": 20,
@@ -15535,53 +15613,6 @@
         "title": "TreatAction",
         "type": "object"
       },
-      "TreatAidOut": {
-        "description": "치료에 붙여 쓴 물건(#277). 판정의 보정(modifier)에 bonus 가 이미 들었다.",
-        "properties": {
-          "bonus": {
-            "title": "Bonus",
-            "type": "integer"
-          },
-          "entry_id": {
-            "format": "uuid",
-            "title": "Entry Id",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          },
-          "remaining": {
-            "title": "Remaining",
-            "type": "integer"
-          },
-          "used": {
-            "title": "Used",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "entry_id",
-          "name",
-          "bonus",
-          "used",
-          "reason",
-          "remaining"
-        ],
-        "title": "TreatAidOut",
-        "type": "object"
-      },
       "Treatment": {
         "additionalProperties": false,
         "description": "치료의 규칙. 어느 능력으로 판정하고, 실패하면 무엇이 일어나는지.\n\n난이도와 앞당기는 시간은 부상마다 다르다(Injury.treat_difficulty, treat_minutes).",
@@ -15623,7 +15654,7 @@
           "aid": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/TreatAidOut"
+                "$ref": "#/components/schemas/AidOut"
               },
               {
                 "type": "null"

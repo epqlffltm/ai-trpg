@@ -8,8 +8,9 @@
   - 실패하면 치료 실패 표를 굴린다. 덧남(나을 시각이 늦춰짐), 피해, 즉사가 나올 수 있다.
   - 시각은 게임 안의 분이다. 닫히는 라운드의 때(Judging.moment)로 정한다.
   - 치료받는 쪽이 떠났거나 죽었거나, 그 부상이 이미 없으면 아무 일도 없다.
-  - 치료에 붙여 쓴 물건(#277, 의료 키트)이 있으면 그 치료 보정만큼 판정의 보정이 오른다. 굴리면 성공하든 실패하든
-    하나 없어진다. 차례가 왔을 때 더 가지고 있지 않으면 물건 없이 치료한다(aid 의 used 가 거짓).
+  - 치료에 붙여 쓴 물건(#277, #802, 의료 키트)이 있으면 그 거들기의 보정만큼 판정의 보정이 오른다. 굴린 뒤 그 물건의
+    방식대로 없어진다(늘, 실패하면, 안 없어짐). 차례가 왔을 때 더 가지고 있지 않으면 물건 없이 치료한다
+    (aid 의 used 가 거짓, app/rounds/aids.py).
 DB 를 모른다. 부상과 시트와 NPC 의 상태를 고친다. 저장하지는 않는다.
 """
 
@@ -19,11 +20,13 @@ from app.engine import health, treatment
 from app.engine import injury as injury_rules
 from app.engine.action import TreatAction
 from app.engine.health import ChangeKind
+from app.engine.item_aids import AidAct
 from app.engine.ruleset import Injury, Mishap, Ruleset
 from app.rounds import injuries as round_injuries
+from app.rounds.aids import aid_bonus, aid_document, take_aid, wear_aid
 from app.rounds.cast import CastMember, find_cast_member
 from app.rounds.effects import Judging, mark_hurt, member_effect, npc_effect
-from app.tables import injuries, items, npcs, sheets
+from app.tables import injuries, npcs, sheets
 from app.tables import state as table_state
 from app.tables.injuries import Moment
 from app.tables.models import TableMember
@@ -214,49 +217,23 @@ def apply_treatment(judging: Judging, action: TreatAction, injury: Injury, succe
     return {**effects, 'treatment': {**document, **fields}}
 
 
-# 치료에 붙여 쓰려던 물건을 쓰지 못한 까닭
-NOT_HELD = 'not_held'
-
-
-def use_aid(judging: Judging, member: TableMember, action: TreatAction) -> tuple[int, dict | None]:
-    """
-    치료에 붙여 쓰는 물건을 쓴다(#277). (판정에 더할 보정, 결과에 적을 문서)를 돌려준다. 물건을 적지 않았으면 (0, None).
-
-    가지고 있으면 하나 줄이고 그 치료 보정을 돌려준다. 더 없으면 보정 없이 치료한다. 문서에 그 까닭을 적는다.
-    """
-    if action.item is None:
-        return 0, None
-    item = judging.items[action.item]
-    held = items.count_of(member.sheet, action.item) >= 1
-    if held:
-        items.remove_items(member.sheet, action.item, 1)
-    bonus = item.treat_bonus if held else 0
-    document = {
-        'entry_id': str(item.entry_id),
-        'name': item.name,
-        'bonus': bonus,
-        'used': held,
-        'reason': None if held else NOT_HELD,
-        'remaining': items.count_of(member.sheet, action.item),
-    }
-    return bonus, document
-
-
 def judge_treatment(judging: Judging, member: TableMember, action: TreatAction) -> dict:
     """
     한 사람의 치료하는 행동을 판정하고 그 결과를 정한다. 선언의 outcome 에 적을 문서를 돌려준다.
 
     능력은 규칙의 치료 능력, 난이도는 그 부상의 치료 난이도다. 치료하는 캐릭터의 부상이 그 능력에 주는 것을 적용한다.
     선언을 받을 때 치료할 수 있는 부상인지 봤다. 규칙은 판에 굳어 있어 그 뒤로 바뀌지 않는다.
-    붙여 쓴 물건이 있으면 그 보정을 판정에 더하고, 쓴 것을 치료의 결과(treatment 의 aid)에 적는다(#277).
+    붙여 쓴 물건이 있으면 그 보정을 판정에 더하고, 쓴 것을 치료의 결과(treatment 의 aid)에 적는다(#277, #802).
     """
     ruleset = judging.ruleset
     injury = treatment.treatable(ruleset, action.injury)
     sheet = member.sheet
     hindrance = round_injuries.hindrance_for(ruleset, sheet.injuries, ruleset.treatment.ability)
-    bonus, aid = use_aid(judging, member, action)
-    hindered = treatment.treat(ruleset, injury, sheet.abilities, judging.dice, hindrance, bonus=bonus)
+    taken = take_aid(judging, member, action.item, AidAct.TREAT)
+    hindered = treatment.treat(ruleset, injury, sheet.abilities, judging.dice, hindrance, bonus=aid_bonus(taken))
+    use = wear_aid(member, taken, hindered.check.success)
     applied = apply_treatment(judging, action, injury, hindered.check.success)
+    aid = aid_document(member, taken, use)
     return {
         **asdict(hindered.check),
         'hindrance': round_injuries.hindrance_document(hindered),

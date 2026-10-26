@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from app.assets.models import ITEM_STACK_MAX, ItemKind, ItemRarity
 from app.assets.scenarios.snapshot import ItemStackSnapshot, ItemThrowSnapshot, Snapshot, item_entries, item_rule_of
 from app.engine import item_effects
+from app.engine.item_aids import ItemAid
 from app.engine.item_effects import Effect
 from app.tables import equipment
 from app.tables.errors import Conflict, TableConflictError, TableOptionError
@@ -36,7 +37,7 @@ class CatalogItem:
     ap 는 무기의 관통력, ward 는 불굴 세이브의 값이다(#276). 없으면 None.
     lock 은 문에 다는 자물쇠 물건인가다(#281). 열쇠와 따는 판정은 판에 있다.
     throw 는 던지는 판정이다(#277). 던질 수 없는 물건이면 None.
-    treat_bonus 는 치료에 붙여 쓸 때 치료 판정의 보정에 더하는 값이다(#277). 치료에 쓰지 못하면 None.
+    aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 행동에 붙여 쓰면 판정에 보정을 더한다.
     """
 
     entry_id: uuid.UUID
@@ -54,7 +55,7 @@ class CatalogItem:
     ward: int | None = None
     lock: bool = False
     throw: ItemThrowSnapshot | None = None
-    treat_bonus: int | None = None
+    aids: tuple[ItemAid, ...] = ()
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
@@ -78,7 +79,7 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
             ward=rule.ward,
             lock=rule.lock is not None,
             throw=rule.throw,
-            treat_bonus=rule.treat_bonus,
+            aids=tuple(rule.aids),
         )
     return items
 

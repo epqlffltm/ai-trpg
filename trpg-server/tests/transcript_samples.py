@@ -220,6 +220,17 @@ SAMPLES = {
         'target': {'monster_id': '7c2d9e41-3b5a-4f08-a6e1-9d4b2c7f8e15', 'name': '수로 쥐 1'},
         'remaining': 0,
     },
+    'aid_used': {
+        'round': 1,
+        'character_name': '약사',
+        'act': 'pick',
+        'entry_id': '3e9a1c74-6b2d-4f85-8a07-1d5c9e2b4f63',
+        'name': '락픽',
+        'bonus': 1,
+        'lost': True,
+        'broken': True,
+        'remaining': 0,
+    },
     'item_given': {
         'round': 1,
         'character_name': '약사',

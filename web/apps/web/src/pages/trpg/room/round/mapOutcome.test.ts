@@ -33,6 +33,18 @@ describe('가기의 결과', () => {
   });
 });
 
+describe('넘기에 붙여 쓴 물건(#802)', () => {
+  it('쓴 밧줄을 보이고, 굴리지 않았으면 적지 않는다', () => {
+    const aid = { entry_id: 'r', name: '밧줄', act: 'cross', bonus: 5, used: true, lost: false, broken: false, reason: null, remaining: 1 };
+    const climbed = { ...ROLL, modifier: 5, total: 13, success: false };
+    expect(moveLine({ ...MOVE, moved: false, reason: 'cross_failed', cross: climbed, aid })).toBe(
+      '가지 못했습니다(넘지 못했습니다) · 넘기 판정 눈 8, 보정 +5, 합 13 / 목표 15 · 실패 · 밧줄 +5 씀',
+    );
+    expect(moveLine({ ...MOVE, moved: false, reason: 'not_adjacent', aid: { ...aid, used: false, bonus: 0 } })).toBe('가지 못했습니다(그사이 옮겨져 이어진 길이 없었습니다)');
+    expect(moveLine({ ...MOVE, aid: { ...aid, bonus: 0, lost: true, broken: false } })).toBe('종탑에 닿았습니다 · 밧줄 씀, 다 씀');
+  });
+});
+
 describe('문을 다룬 결과', () => {
   it('해낸 일, 못 한 까닭, 판정', () => {
     const door = { user_id: ME, character_name: '렌', from: GATE, to: TOWER, act: 'force', device: null, done: false, reason: 'failed', check: ROLL };

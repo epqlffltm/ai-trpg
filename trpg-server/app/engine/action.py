@@ -237,8 +237,8 @@ class TreatAction(BaseModel):
     능력과 난이도는 받지 않는다. 규칙의 치료 능력과 그 부상의 치료 난이도로 판정한다.
     대상은 앉은 사람(target)이나 이번 장면의 NPC(npc) 중 하나다.
     둘 다 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다).
-    item 은 치료에 붙여 쓰는 소모품이다(#277, 의료 키트). 아이템 규칙에 치료 보정(treat_bonus)이 있어야 한다.
-    그만큼 치료 판정의 보정이 오르고, 치료가 성공하든 실패하든 하나 없어진다. 비우면 물건 없이 치료한다.
+    item 은 치료에 붙여 쓰는 물건이다(#277, #802, 의료 키트). 치료를 거드는 물건(아이템 규칙의 aids)이어야 한다.
+    그 보정만큼 치료 판정의 보정이 오르고, 굴린 뒤 그 물건의 방식대로 없어진다. 비우면 물건 없이 치료한다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -250,7 +250,7 @@ class TreatAction(BaseModel):
     target: uuid.UUID | None = None
     # 치료받는 NPC. 판의 로어북 인물 항목의 id 다. 엔진은 이 값을 읽지 않는다
     npc: uuid.UUID | None = None
-    # 치료에 붙여 쓰는 소모품. 판의 로어북 물건 항목의 id 다. 엔진은 이 값을 읽지 않는다. 보정은 부른 쪽이 넘긴다
+    # 치료에 붙여 쓰는 물건. 판의 로어북 물건 항목의 id 다. 엔진은 이 값을 읽지 않는다. 보정은 부른 쪽이 넘긴다
     item: uuid.UUID | None = None
 
     @model_validator(mode='after')
@@ -365,6 +365,7 @@ class MoveAction(BaseModel):
     place 는 판의 로어북 장소 항목의 id 다. 엔진은 이 값을 읽지 않는다. 어디와 이어져 있는지는 판이 안다.
     한 라운드에 한 칸이다. 한 사람의 선언에는 행동이 하나다.
     carry 는 함께 업고 갈 쓰러진 동료(앉은 사람의 user_id)다. 한 사람이 한 명을 업는다(#367).
+    item 은 길을 넘는 판정을 거드는 물건이다(#802, 밧줄). 넘는 판정이 있는 길에만 적는다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -372,6 +373,9 @@ class MoveAction(BaseModel):
     kind: Literal[ActionKind.MOVE]
     place: uuid.UUID
     carry: uuid.UUID | None = None
+    # 거드는 물건(#802). 판의 로어북 물건 항목의 id 다. 이 행동을 거드는 물건(아이템 규칙의 aids)이어야 한다.
+    # 비우면 맨손이다
+    item: uuid.UUID | None = None
 
 
 class SearchAction(BaseModel):
@@ -582,13 +586,16 @@ class PickAction(BaseModel):
     """
     지금 서 있는 장소에 닿은 길의 잠긴 자물쇠를 따는 행동(#281). 판에 적힌 따는 판정(능력, 난이도)으로 굴린다.
 
-    판에 도구를 적었으면 그 물건을 지녀야 딴다. 성공하면 자물쇠가 열린다. 지나가지는 않는다.
+    판이 도구를 요구하면 따기를 거드는 물건(item)을 붙여야 딴다(#802). 성공하면 자물쇠가 열린다. 지나가지는 않는다.
     """
 
     model_config = ConfigDict(extra='forbid')
 
     kind: Literal[ActionKind.PICK]
     place: uuid.UUID
+    # 거드는 물건(#802). 판의 로어북 물건 항목의 id 다. 이 행동을 거드는 물건(아이템 규칙의 aids)이어야 한다.
+    # 비우면 맨손이다
+    item: uuid.UUID | None = None
 
 
 class ForceAction(BaseModel):
@@ -596,26 +603,33 @@ class ForceAction(BaseModel):
     지금 서 있는 장소에 닿은 길의 문을 부수는 행동(#281). 판에 적힌 부수는 판정(능력, 난이도)으로 굴린다.
 
     성공하면 자물쇠와 빗장이 부서져 열린다. 부서진 문은 다시 잠그지 못한다. 지나가지는 않는다.
+    부수기를 거드는 물건(item, 쇠지렛대)을 붙일 수 있다(#802).
     """
 
     model_config = ConfigDict(extra='forbid')
 
     kind: Literal[ActionKind.FORCE]
     place: uuid.UUID
+    # 거드는 물건(#802). 판의 로어북 물건 항목의 id 다. 이 행동을 거드는 물건(아이템 규칙의 aids)이어야 한다.
+    # 비우면 맨손이다
+    item: uuid.UUID | None = None
 
 
 class RepairAction(BaseModel):
     """
     지금 서 있는 장소에 닿은 길의 부서진 문을 고치는 행동(#281). 판에 적힌 고치는 판정(능력, 난이도)으로 굴린다.
 
-    판에 도구를 적었으면 그 물건을 지녀야 고친다. 성공하면 문이 고쳐져 다시 잠글 수 있다. 고친 문은 열린 채다.
-    지나가지는 않는다.
+    판이 도구를 요구하면 고치기를 거드는 물건(item)을 붙여야 고친다(#802). 성공하면 문이 고쳐져 다시 잠글 수 있다.
+    고친 문은 열린 채다. 지나가지는 않는다.
     """
 
     model_config = ConfigDict(extra='forbid')
 
     kind: Literal[ActionKind.REPAIR]
     place: uuid.UUID
+    # 거드는 물건(#802). 판의 로어북 물건 항목의 id 다. 이 행동을 거드는 물건(아이템 규칙의 aids)이어야 한다.
+    # 비우면 맨손이다
+    item: uuid.UUID | None = None
 
 
 class ReplaceAction(BaseModel):

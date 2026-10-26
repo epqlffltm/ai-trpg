@@ -4,14 +4,12 @@
 // - 효과는 5개까지, 적힌 차례대로 낸다. 종류는 회복(heal)·풀기(cure)·피해(damage)·부상(injure)
 // - 회복과 피해는 함께 적지 않는다. 회복·풀기·피해는 한 번씩, 같은 부상을 두 번 입히지 않는다
 // - 회복과 피해는 룰북의 양의 등급, 풀기는 룰북의 부상 가운데 결손이 아닌 것(1~5개), 부상은 룰북의 부상 하나
-// - 던지는 판정(#801, 장비에도)은 능력치(필수)·난이도(비우면 룰북의 기본). 비우면 룰북의 맞히는 판정으로 던진다. 치료 보정은 1~10
+// - 던지는 판정(#801, 장비에도)은 능력치(필수)·난이도(비우면 룰북의 기본). 비우면 룰북의 맞히는 판정으로 던진다
 
 import type { ItemRule, ItemRuleBody, Ruleset } from '../../../../api/types';
-import { wholeNumber } from '../rulebooks/rulebookForm';
 
 export const MAX_EFFECTS = 5;
 export const MAX_CURES = 5;
-export const TREAT_BONUS_MAX = 10;
 
 type Effect = ItemRule['effects'][number];
 export type EffectKind = Effect['kind'];
@@ -87,8 +85,8 @@ export function throwHint(thrown: ThrowDraft): string | null {
   return thrown.on && thrown.ability === '' ? '던지는 판정의 능력치를 고르세요.' : null;
 }
 
-/** 소모품의 칸에서 보내기 전에 알릴 것. "effect.<차례>", "effects", "treat_bonus" → 글 */
-export function effectHints(effects: EffectDraft[], treatBonus: string): Record<string, string> {
+/** 소모품의 칸에서 보내기 전에 알릴 것. "effect.<차례>", "effects" → 글 */
+export function effectHints(effects: EffectDraft[]): Record<string, string> {
   const hints: Record<string, string> = {};
   effects.forEach((one, index) => {
     const hint = effectHint(one);
@@ -96,7 +94,6 @@ export function effectHints(effects: EffectDraft[], treatBonus: string): Record<
   });
   const list = listHint(effects);
   if (list) hints.effects = list;
-  if (treatBonus.trim() !== '' && wholeNumber(treatBonus, 1, TREAT_BONUS_MAX) === null) hints.treat_bonus = `1~${TREAT_BONUS_MAX} 사이의 정수입니다.`;
   return hints;
 }
 

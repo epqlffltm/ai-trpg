@@ -249,7 +249,19 @@ function givenText(payload: Payload, ctx: EventContext, event: TableEvent): stri
 function aidText(payload: Payload): string {
   const aid = part(payload, 'aid');
   if (!aid || !flag(aid, 'used')) return '';
-  return ` (${text(aid, 'name') ?? '물건'} +${count(aid, 'bonus') ?? 0})`;
+  return ` (${aidUse(aid)})`;
+}
+
+/** 판정에 붙여 쓴 물건(#802, aid_used). "락픽 +2 씀, 부러짐", "밧줄 씀" */
+function aidUsed(payload: Payload): string {
+  const bonus = count(payload, 'bonus');
+  return `${text(payload, 'name') ?? '물건'}${bonus ? ` +${bonus}` : ''} 씀${flag(payload, 'broken') ? ', 부러짐' : ''}`;
+}
+
+/** 붙여 쓴 물건(#802) 하나. "락픽 +2, 부러짐", "밧줄". 보정이 0 이면 숫자를 적지 않는다 */
+function aidUse(aid: Payload): string {
+  const bonus = count(aid, 'bonus');
+  return `${text(aid, 'name') ?? '물건'}${bonus ? ` +${bonus}` : ''}${flag(aid, 'broken') ? ', 부러짐' : ''}`;
 }
 
 /** 물건을 던짐(#277). 맞았는지는 뒤의 판정과 변화의 줄이 적는다 */
@@ -385,6 +397,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   item_used: (p, ctx, e) => `${who(p, ctx, e)}: ${text(p, 'name') ?? '물건'} ${flag(p, 'used') ? '씀' : '쓰지 못함'}`,
   item_given: (p, ctx, e) => givenText(p, ctx, e),
   item_thrown: (p, ctx, e) => thrownText(p, ctx, e),
+  aid_used: (p, ctx, e) => `${who(p, ctx, e)}: ${aidUsed(p)}`,
   item_put_down: (p, ctx, e) => {
     if (!flag(p, 'put')) return `${who(p, ctx, e)}: 내려놓지 못했습니다.`;
     const place = placeOf(p, 'place');

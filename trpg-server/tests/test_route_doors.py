@@ -5,7 +5,8 @@
 
 맵과 픽스처는 tests/test_table_map.py 의 것이다. 방장(기사)과 함께 앉는 사람(약사), 시작은 성문.
 여기에 물건 넷(탑 열쇠, 대장간 열쇠, 오두막 열쇠, 락픽)을 더하고 길을 이렇게 놓는다.
-  - 성문-광장: 탑 열쇠의 자물쇠(잠김). 민첩으로 딴다(락픽이 있어야). 근력·어려움(20)으로 부순다.
+  - 성문-광장: 탑 열쇠의 자물쇠(잠김). 민첩으로 딴다(도구가 있어야 한다, 락픽이 따기를 거든다, #802).
+    근력·어려움(20)으로 부순다.
   - 성문-숲: 숲 쪽의 빗장(걸림). 근력으로 부순다(난이도는 비워 보통 15).
   - 광장-탑: 대장간 열쇠의 자물쇠(열림). 따지도 부수지도 못한다.
   - 성문-오두막: 오두막 열쇠의 자물쇠(열림)와 성문 쪽의 빗장(안 걸림)이 다 있다.
@@ -14,10 +15,10 @@
 보는 것.
   - 시나리오: 따기, 빗장, 부수기를 저장하고 판에 굳힌다. 잘못 둔 것은 422, 게시할 수 없는 것은 409 의 문제다.
     옛 판은 셋 다 없는 것으로 읽는다.
-  - 맵: 빗장과 그 쪽, 부서졌는지, 따기와 부수기의 판정이 보인다. 따는 도구는 보이지 않는다.
+  - 맵: 빗장과 그 쪽, 부서졌는지, 따기와 부수기의 판정과 도구가 있어야 하는지가 보인다.
   - 가기: 빗장 쪽에서는 풀고 지나가고, 반대쪽에서는 막힌다.
   - 잠그기와 열기: 자물쇠는 열쇠로, 빗장은 빗장 쪽에서. 장치를 비우면 그 길의 하나로, 둘 다 있으면 적어야 한다.
-  - 따기: 도구가 있어야 굴리고, 성공하면 열린다. 부수기: 성공하면 문이 부서져 열리고 다시 잠그지 못한다.
+  - 따기: 도구를 붙여야 굴리고, 성공하면 열린다. 부수기: 성공하면 문이 부서져 열리고 다시 잠그지 못한다.
   - 이벤트: 해낸 것만 door_changed, 굴린 것은 check_rolled. 서술: 한 일의 줄과 나가는 길의 표시.
 """
 
@@ -27,10 +28,9 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
-from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import Snapshot, read_snapshot
+from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_52
 from app.engine.templates import SRD5
 from app.rounds.move_lines import describe_door, describe_travel
@@ -69,7 +69,7 @@ async def gear(client: AsyncClient, me: dict, lore: dict) -> dict:
 
 
 def the_routes(gear: dict) -> list[dict]:
-    pick = {'ability': 'dex', 'tool': gear['lockpick']['id']}
+    pick = {'ability': 'dex', 'needs_tool': True}
     return [
         route(
             gear['gate'],
@@ -90,8 +90,13 @@ def the_routes(gear: dict) -> list[dict]:
     ]
 
 
+def the_items(gear: dict) -> list[dict]:
+    """락픽은 따기를 거든다(#802). 보정이 없고 없어지지 않는다(예전의 따는 도구와 같다)."""
+    return [{'entry_id': gear['lockpick']['id'], 'aids': [{'act': 'pick'}]}]
+
+
 def the_map(gear: dict) -> dict:
-    return {'start_place': gear['gate']['id'], 'routes': the_routes(gear)}
+    return {'start_place': gear['gate']['id'], 'routes': the_routes(gear), 'items': the_items(gear)}
 
 
 async def draft(client: AsyncClient, me: dict, gear: dict, **fields) -> dict:
@@ -128,8 +133,10 @@ def route_out(table: dict, start: dict, end: dict) -> dict:
     )
 
 
-def door(act: str, place: dict, device: str | None = None) -> dict:
+def door(act: str, place: dict, device: str | None = None, item: dict | None = None) -> dict:
     action = {'kind': act, 'place': place['id']}
+    if item is not None:
+        action['item'] = item['id']
     return action if device is None else {**action, 'device': device}
 
 
@@ -152,12 +159,12 @@ async def test_doors_are_saved_and_published(client: AsyncClient, me: dict, gear
 
     assert response.status_code == status.HTTP_201_CREATED, response.text
     square, forest, _, hut = scenario['routes']
-    assert square['lock']['pick'] == {'ability': 'dex', 'difficulty': None, 'tool': gear['lockpick']['id']}
+    assert square['lock']['pick'] == {'ability': 'dex', 'difficulty': None, 'needs_tool': True}
     assert (square['force'], square['bar']) == ({'ability': 'str', 'difficulty': 'hard'}, None)
     assert forest['bar'] == {'side': gear['forest']['id'], 'barred': True}
     assert hut['bar'] == {'side': gear['gate']['id'], 'barred': False}
     routes = read_snapshot(response.json()['snapshot']).routes
-    assert routes[0].lock.pick.tool == uuid.UUID(gear['lockpick']['id'])
+    assert routes[0].lock.pick.needs_tool is True
     assert (routes[1].bar.side, routes[1].bar.barred, routes[1].force.ability) == (
         uuid.UUID(gear['forest']['id']),
         True,
@@ -184,7 +191,7 @@ async def test_a_misshaped_door_is_refused(client: AsyncClient, me: dict, gear: 
     [
         ('pick-ability', 'route_open_invalid'),
         ('force-difficulty', 'route_open_invalid'),
-        ('tool-not-item', 'item_not_item'),
+        ('tool-without-aid', 'route_tool_missing'),
     ],
 )
 async def test_a_door_must_fit_the_rules(client: AsyncClient, me: dict, gear: dict, case: str, problem: str):
@@ -192,9 +199,11 @@ async def test_a_door_must_fit_the_rules(client: AsyncClient, me: dict, gear: di
     fields = {
         'pick-ability': {'lock': {**lock, 'pick': {'ability': 'luck'}}},
         'force-difficulty': {'lock': lock, 'force': {'ability': 'str', 'difficulty': 'impossible'}},
-        'tool-not-item': {'lock': {**lock, 'pick': {'ability': 'dex', 'tool': gear['hut']['id']}}},
+        'tool-without-aid': {'lock': {**lock, 'pick': {'ability': 'dex', 'needs_tool': True}}},
     }
-    scenario = await draft(client, me, gear, routes=[route(gear['gate'], gear['square'], **fields[case])])
+    routes = [route(gear['gate'], gear['square'], **fields[case])]
+    # 도구가 있어야 하는 문을 거들 물건이 없다(#802)
+    scenario = await draft(client, me, gear, routes=routes, items=[])
 
     response = await publish(client, me, scenario)
 
@@ -202,14 +211,14 @@ async def test_a_door_must_fit_the_rules(client: AsyncClient, me: dict, gear: di
     assert response.json()['problems'] == [problem]
 
 
-async def test_the_snapshot_refuses_a_tool_that_is_no_item(client: AsyncClient, me: dict, gear: dict):
-    document = (await publish(client, me, await draft(client, me, gear))).json()['snapshot']
-    first, *rest = document['routes']
-    lock = {**first['lock'], 'pick': {**first['lock']['pick'], 'tool': gear['hut']['id']}}
+async def test_a_door_s_old_tool_is_refused(client: AsyncClient, me: dict, gear: dict):
+    # 특정 도구(tool)는 도구가 있어야 하는가(needs_tool)와 물건의 거들기가 됐다(#802)
+    lock = {'key': gear['tower_key']['id'], 'pick': {'ability': 'dex', 'tool': gear['lockpick']['id']}}
+    body = {'title': '성의 모험', 'routes': [route(gear['gate'], gear['square'], lock=lock)]}
 
-    with pytest.raises(ValidationError):
-        Snapshot.model_validate({**document, 'routes': [{**first, 'lock': lock}, *rest]})
-    Snapshot.model_validate(document)
+    response = await client.post(SCENARIOS_URL, json=asset_body(SCENARIOS_URL, body), headers=me)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 def test_an_old_snapshot_reads_as_no_other_ways_to_open():
@@ -237,8 +246,8 @@ async def test_the_map_shows_bars_breaks_and_ways_to_open(client: AsyncClient, m
 
     square = route_out(table, gear['gate'], gear['square'])
     assert (square['locked'], square['barred'], square['bar_side'], square['broken']) == (True, None, None, False)
-    # 따는 판정은 보이지만 도구는 보이지 않는다
-    assert square['pick'] == {'ability': 'dex', 'difficulty': 'medium'}
+    # 따는 판정과 도구가 있어야 하는지가 보인다(#802). 어느 물건이 거드는지는 판의 물건 목록에 있다
+    assert square['pick'] == {'ability': 'dex', 'difficulty': 'medium', 'needs_tool': True}
     assert square['force'] == {'ability': 'str', 'difficulty': 'hard'}
     forest = route_out(table, gear['gate'], gear['forest'])
     assert (forest['locked'], forest['barred'], forest['bar_side']) == (None, True, gear['forest']['id'])
@@ -378,19 +387,24 @@ async def test_picking_needs_the_tool_and_a_good_roll(
     client: AsyncClient, app: FastAPI, me: dict, friend: dict, gear: dict, session: AsyncSession, narrated
 ):
     table = await start(client, me, friend, gear)
+    pick = door('pick', gear['square'], item=gear['lockpick'])
 
-    await play(client, me, friend, table, narrated, mine=door('pick', gear['square']))
+    toolless = await declare(client, me, table, door('pick', gear['square']))
+    unheld = await declare(client, me, table, pick)
     await give(session, table, ME, gear['lockpick'])
     load_dice(app, [5, 15])
-    await play(client, me, friend, table, narrated, mine=door('pick', gear['square']))
-    await play(client, me, friend, table, narrated, mine=door('pick', gear['square']))
-    await play(client, me, friend, table, narrated, mine=door('pick', gear['square']))
+    await play(client, me, friend, table, narrated, mine=pick)
+    await play(client, me, friend, table, narrated, mine=pick)
+    await play(client, me, friend, table, narrated, mine=pick)
 
-    toolless, slipped, picked, again = [await door_outcome(client, me, table, number) for number in (1, 2, 3, 4)]
-    # 열린 자물쇠는 굴리지 않는다
+    slipped, picked, again = [await door_outcome(client, me, table, number) for number in (1, 2, 3)]
+    # 도구가 있어야 하는데 붙이지 않았거나 지니지 않았으면 받지 않는다(#802)
+    assert (toolless.status_code, unheld.status_code) == (422, 409)
+    # 열린 자물쇠는 굴리지 않는다. 락픽은 없어지지 않는다
     assert (again['done'], again['reason'], again['check']) == (False, 'already', None)
-    assert (toolless['done'], toolless['reason'], toolless['check']) == (False, 'no_tool', None)
+    assert again['aid']['used'] is False
     assert (slipped['done'], slipped['reason'], slipped['check']['roll']) == (False, 'failed', 5)
+    assert (slipped['aid']['used'], slipped['aid']['lost'], slipped['aid']['remaining']) == (True, False, 1)
     assert (picked['done'], picked['check']['ability'], picked['check']['difficulty']) == (True, 'dex', 'medium')
     assert route_out(await read_table(client, me, table), gear['gate'], gear['square'])['locked'] is False
     assert len(await events_of(client, me, table, 'check_rolled')) == 2

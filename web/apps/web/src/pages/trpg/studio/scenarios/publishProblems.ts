@@ -48,6 +48,7 @@ const PROBLEMS: Record<string, ProblemText> = {
   route_cross_invalid: { text: '길을 넘는 판정이 룰북에 없는 능력치나 난이도, 양을 씁니다.', section: 'map' },
   route_key_repeated: { text: '열쇠 하나를 두 자물쇠(길의 자물쇠나 자물쇠 물건)에 적었습니다. 열쇠 하나는 자물쇠 하나만 엽니다.', section: 'map' },
   route_open_invalid: { text: '자물쇠를 따거나 문을 부수거나 고치는 판정이 룰북에 없는 능력치나 난이도를 씁니다.', section: 'map' },
+  route_tool_missing: { text: '도구가 있어야 따거나 고치는 문이 있는데, 그 행동을 거드는 물건이 없습니다. 물건 규칙에 거드는 행동을 적어 주세요.', section: 'items' },
   place_item_off_map: { text: '맵에 없는 장소에 놓인 물건이 있습니다.', section: 'map' },
   place_item_find_invalid: { text: '숨긴 물건을 찾는 판정이 룰북에 없는 능력치나 난이도를 씁니다.', section: 'map' },
   cover_off_map: { text: '맵에 없는 장소에 커버가 있습니다.', section: 'map' },

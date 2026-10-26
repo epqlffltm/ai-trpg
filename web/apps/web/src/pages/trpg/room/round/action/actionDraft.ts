@@ -8,6 +8,7 @@ import { amountLabel, buyingCost, moneyOf } from '../../money';
 import { chosenDevice, doorDevices, doorsHere } from './doorOptions';
 import {
   aidItems,
+  climbs,
   heldCount,
   itemDamages,
   itemTakesTarget,
@@ -113,7 +114,7 @@ export function draftFromAction(rules: Ruleset, action: DeclaredAction | null): 
     case 'throw':
       return { ...base, kind: 'throw', item: action.item, target: refOf(null, action.npc, action.monster), lethal: action.lethal };
     case 'move':
-      return { ...base, kind: 'move', place: action.place, carry: action.carry ?? '' };
+      return { ...base, kind: 'move', place: action.place, carry: action.carry ?? '', item: action.item ?? '' };
     case 'take':
     case 'put_down':
       return { ...base, kind: action.kind, item: action.item, count: action.count };
@@ -135,7 +136,7 @@ export function draftFromAction(rules: Ruleset, action: DeclaredAction | null): 
     case 'pick':
     case 'force':
     case 'repair':
-      return { ...base, kind: action.kind, place: action.place };
+      return { ...base, kind: action.kind, place: action.place, item: action.item ?? '' };
     case 'replace':
       return { ...base, kind: 'replace', place: action.place, item: action.item };
     default:
@@ -210,10 +211,12 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
       return draft.target ? payHint(draft.amount, ctx) : '돈을 받을 사람을 골라 주세요.';
     case 'lock':
     case 'unlock':
-    case 'pick':
     case 'force':
-    case 'repair':
       return draft.place ? null : '다룰 문을 골라 주세요.';
+    case 'pick':
+    case 'repair':
+      if (!draft.place) return '다룰 문을 골라 주세요.';
+      return needsTool(draft.kind, draft.place, ctx) && !aidOf(draft, ctx, draft.kind).item ? '이 문은 도구가 있어야 합니다. 쓸 도구를 골라 주세요.' : null;
     case 'replace':
       return draft.place && draft.item ? null : '다룰 문과 달 자물쇠를 골라 주세요.';
   }
@@ -271,7 +274,7 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
     case 'check':
       return toCheck(draft, member, npc, monster);
     case 'treat':
-      return { kind: 'treat', injury: draft.injury, ...(member ? { target: member } : {}), ...(npc ? { npc } : {}), ...treatAid(draft, ctx) };
+      return { kind: 'treat', injury: draft.injury, ...(member ? { target: member } : {}), ...(npc ? { npc } : {}), ...aidOf(draft, ctx, 'treat') };
     case 'name':
       return { kind: 'name', name: draft.guess.trim(), ...(draft.npc ? { npc: draft.npc } : {}) };
     case 'use':
@@ -282,7 +285,7 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
     case 'throw':
       return { kind: 'throw', item: draft.item, lethal: draft.lethal && itemDamages(ctx.table, draft.item), ...(npc ? { npc } : {}), ...(monster ? { monster } : {}) };
     case 'move':
-      return { kind: 'move', place: draft.place, ...(draft.carry ? { carry: draft.carry } : {}) };
+      return { kind: 'move', place: draft.place, ...(draft.carry ? { carry: draft.carry } : {}), ...(climbs(ctx, draft.place) ? aidOf(draft, ctx, 'cross') : {}) };
     case 'search':
       return { kind: 'search' };
     case 'cover':
@@ -310,15 +313,25 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
     case 'pick':
     case 'force':
     case 'repair':
-      return { kind: draft.kind, place: draft.place };
+      return { kind: draft.kind, place: draft.place, ...aidOf(draft, ctx, draft.kind) };
     case 'replace':
       return { kind: 'replace', place: draft.place, item: draft.item };
   }
 }
 
-/** 치료에 붙여 쓰는 물건(#277). 다른 종류에서 고른 물건이 남아 있을 수 있어 치료 보정이 있는 것만 보낸다 */
-function treatAid(draft: ActionDraft, ctx: ActionContext): { item?: string } {
-  return draft.item && aidItems(ctx).some((choice) => choice.value === draft.item) ? { item: draft.item } : {};
+/**
+ * 행동에 붙여 쓰는 물건(#277, #802). 다른 종류에서 고른 물건이 남아 있을 수 있어 그 행동을 거들고 지닌 것만 보낸다.
+ * 비우면 맨손이다
+ */
+function aidOf(draft: ActionDraft, ctx: ActionContext, act: 'treat' | 'pick' | 'repair' | 'force' | 'cross'): { item?: string } {
+  return draft.item && aidItems(ctx, act).some((choice) => choice.value === draft.item) ? { item: draft.item } : {};
+}
+
+/** 그 문의 따기나 고치기가 도구를 요구하는가(#802). 화면이 아는 맵의 것이다 */
+function needsTool(kind: 'pick' | 'repair', place: string, ctx: ActionContext): boolean {
+  const door = doorsHere(ctx.table.map, ctx.me.sheet?.place_id).find((one) => one.place === place);
+  const check = kind === 'pick' ? door?.route.pick : door?.route.repair;
+  return check?.needs_tool ?? false;
 }
 
 /** 잠그기, 열기. 고른 장치가 지금 그 문에서 할 수 없으면 할 수 있는 것으로 바꾼다 */

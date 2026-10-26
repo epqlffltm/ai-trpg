@@ -1,17 +1,17 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/itemLockForm.ts
-// 자물쇠 물건(#281)의 입력. 물건 규칙의 lock(새 열쇠, 따는 판정과 도구). 순수한 함수다(서버의 ItemLock, 게시의 route_key_repeated 를 따른다).
+// 자물쇠 물건(#281)의 입력. 물건 규칙의 lock(새 열쇠, 따는 판정과 도구가 있어야 하는가). 순수한 함수다(서버의 ItemLock, 게시의 route_key_repeated 를 따른다).
 //
 // - 장비에만 적는다. 행동 '자물쇠 바꾸기'로 판에 자물쇠가 있던 문에 달고, 달면 소지품에서 없어진다
 // - 새 열쇠(물건 항목)는 꼭 있다. 자물쇠 물건 자신은 열쇠가 될 수 없다
 // - 열쇠 하나는 자물쇠 하나만 연다. 길의 자물쇠의 열쇠, 다른 자물쇠 물건의 열쇠와 겹치지 못한다
-// - 따는 판정은 능력치를 꼭 고른다. 난이도를 비우면 룰북의 기본이다. 도구는 비워도 된다
+// - 따는 판정은 능력치를 꼭 고른다. 난이도를 비우면 룰북의 기본이다. 도구가 있어야 하는지(#802)를 고른다
 
 import type { ItemRule, ItemRuleBody, RouteRule } from '../../../../api/types';
 
 export type ItemLockDraft = {
   on: boolean;
   key: string;
-  pick: { on: boolean; ability: string; difficulty: string; tool: string };
+  pick: { on: boolean; ability: string; difficulty: string; needsTool: boolean };
 };
 
 type ItemLockBody = NonNullable<ItemRuleBody['lock']>;
@@ -20,7 +20,7 @@ export function itemLockDraft(lock: ItemRule['lock']): ItemLockDraft {
   return {
     on: lock != null,
     key: lock?.key ?? '',
-    pick: { on: lock?.pick != null, ability: lock?.pick?.ability ?? '', difficulty: lock?.pick?.difficulty ?? '', tool: lock?.pick?.tool ?? '' },
+    pick: { on: lock?.pick != null, ability: lock?.pick?.ability ?? '', difficulty: lock?.pick?.difficulty ?? '', needsTool: lock?.pick?.needs_tool ?? false },
   };
 }
 
@@ -45,6 +45,6 @@ export function itemLockHints(draft: ItemLockDraft, entryId: string, otherKeys: 
 /** 보낼 자물쇠. 끈 것은 null */
 export function toItemLock(draft: ItemLockDraft): ItemLockBody | null {
   if (!draft.on) return null;
-  const pick = draft.pick.on ? { ability: draft.pick.ability, difficulty: draft.pick.difficulty || null, tool: draft.pick.tool || null } : null;
+  const pick = draft.pick.on ? { ability: draft.pick.ability, difficulty: draft.pick.difficulty || null, needs_tool: draft.pick.needsTool } : null;
   return { key: draft.key, pick };
 }

@@ -1,16 +1,18 @@
 # trpg-server/tests/test_treat_aids.py
 
 """
-치료에 붙여 쓰는 소모품(#277, 의료 키트)을 검증한다.
+치료에 붙여 쓰는 물건(#277, 의료 키트)을 검증한다. 치료 보정은 치료의 거들기가 됐다(#802, aids).
 
 srd5 템플릿: 치료는 지혜로 한다. 팔 골절의 치료 난이도는 어려움(목표 20)이고, 성공하면 3일 앞당겨진다.
 실패하면 치료 실패 표(d100)를 굴린다. 77 은 아무 일 없음이다. 시트의 지혜는 10(보정 0)이다.
-프리젠 약사가 의료 키트(치료 보정 +2) 둘, 붕대(치료 보정 없는 소모품) 하나, 밧줄 하나를 가진다.
+프리젠 약사가 의료 키트(치료를 +2 로 거들고 쓰면 늘 없어짐) 둘, 붕대(치료를 +1 로 거들고 실패하면 못 쓰게 됨) 하나,
+밧줄(거들지 않는 장비) 하나를 가진다.
 
 넷을 본다.
-  - 시나리오: treat_bonus 는 소모품에만, 1~10 이다. 판 형식 60. 테이블의 물건 목록에 실린다.
-  - 받기: 치료 보정이 있는 판의 물건이고 가지고 있어야 한다.
-  - 닫힐 때: 그 보정이 판정의 보정에 더해진다. 성공하든 실패하든 하나 없어진다. 차례에 없으면 보정 없이 치료한다.
+  - 시나리오: 거들기는 테이블의 물건 목록에 실린다. 판 형식 60 의 치료 보정은 형식 64 에서 거들기가 된다.
+  - 받기: 치료를 거드는 판의 물건이고 가지고 있어야 한다.
+  - 닫힐 때: 그 보정이 판정의 보정에 더해진다. 의료 키트는 성공하든 실패하든 하나 없어진다.
+    차례에 없으면 보정 없이 치료한다.
   - 기록과 서술: 치료의 결과와 이벤트(injury_treated)에 쓴 물건(aid)이 적히고, 치료의 줄에 붙는다.
 """
 
@@ -26,7 +28,7 @@ from app.assets.scenarios.schemas import ItemRule
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, read_snapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_59
 from app.rounds.move_lines import describe_treatment
-from app.rounds.narrator import TreatmentNote
+from app.rounds.narrator import AidNote, TreatmentNote
 from tests import test_item_actions as actions
 from tests.sheets import SHEET
 from tests.test_item_cures import worn, wound
@@ -61,6 +63,7 @@ FAIL = 1
 # 치료 실패 표(d100)의 눈. 아무 일 없음
 NOTHING = 77
 KIT_BONUS = 2
+BANDAGE_BONUS = 1
 
 
 @pytest.fixture
@@ -81,10 +84,18 @@ async def lore(client: AsyncClient, me: dict[str, str]) -> dict:
 
 
 def the_items(lore: dict) -> list[dict]:
-    """의료 키트는 치료 보정 +2 의 소모품, 붕대는 보정이 없는 소모품, 밧줄은 장비다."""
+    """의료 키트는 치료를 +2 로 거드는 소모품(쓰면 늘 없어짐), 붕대는 +1(실패하면 없어짐), 밧줄은 거들지 않는 장비다."""
     return [
-        {'entry_id': lore['kit']['id'], 'kind': 'consumable', 'treat_bonus': KIT_BONUS},
-        {'entry_id': lore['bandage']['id'], 'kind': 'consumable'},
+        {
+            'entry_id': lore['kit']['id'],
+            'kind': 'consumable',
+            'aids': [{'act': 'treat', 'bonus': KIT_BONUS, 'wear': 'always'}],
+        },
+        {
+            'entry_id': lore['bandage']['id'],
+            'kind': 'consumable',
+            'aids': [{'act': 'treat', 'bonus': BANDAGE_BONUS, 'wear': 'on_fail'}],
+        },
         {'entry_id': lore['rope']['id'], 'kind': 'gear'},
     ]
 
@@ -152,11 +163,11 @@ async def play(client: AsyncClient, me: dict, friend: dict, table: dict, action:
 @pytest.mark.parametrize(
     'fields',
     [
-        {'kind': 'gear', 'treat_bonus': 2},
-        {'kind': 'consumable', 'treat_bonus': 0},
-        {'kind': 'consumable', 'treat_bonus': 11},
+        {'kind': 'consumable', 'treat_bonus': 2},
+        {'aids': [{'act': 'treat', 'bonus': 11}]},
+        {'aids': [{'act': 'treat', 'bonus': -1}]},
     ],
-    ids=['gear', 'zero', 'over-max'],
+    ids=['old-field', 'over-max', 'negative'],
 )
 def test_rejects_misshaped_treat_bonuses(fields: dict):
     with pytest.raises(ValidationError):
@@ -166,7 +177,12 @@ def test_rejects_misshaped_treat_bonuses(fields: dict):
 async def test_the_bonus_is_frozen_and_listed(client: AsyncClient, me: dict, lore: dict, table: dict):
     read = await read_table(client, me, table)
 
-    assert {item['name']: item['treat_bonus'] for item in read['items']} == {'의료 키트': 2, '붕대': None, '밧줄': None}
+    listed = {item['name']: item['aids'] for item in read['items']}
+    assert listed == {
+        '의료 키트': [{'act': 'treat', 'bonus': 2, 'wear': 'always'}],
+        '붕대': [{'act': 'treat', 'bonus': 1, 'wear': 'on_fail'}],
+        '밧줄': [],
+    }
 
 
 async def test_the_version_is_format_60(client: AsyncClient, me: dict, lore: dict):
@@ -175,7 +191,7 @@ async def test_the_version_is_format_60(client: AsyncClient, me: dict, lore: dic
     document = await published(client, me, scenario)
 
     assert document['format'] == SNAPSHOT_FORMAT >= 60
-    assert [rule.treat_bonus for rule in read_snapshot(document).items] == [2, None, None]
+    assert [[aid.bonus for aid in rule.aids] for rule in read_snapshot(document).items] == [[2], [1], []]
 
 
 def test_an_old_snapshot_reads_as_aiding_nothing():
@@ -208,7 +224,7 @@ async def test_the_aid_is_saved_with_the_treatment(
     }
 
 
-@pytest.mark.parametrize('name', ['bandage', 'rope'])
+@pytest.mark.parametrize('name', ['rope'])
 async def test_only_what_has_a_bonus_can_aid(
     client: AsyncClient, friend: dict, lore: dict, table: dict, session: AsyncSession, name: str
 ):
@@ -253,8 +269,11 @@ async def test_the_bonus_turns_a_near_miss_into_a_success(
     assert outcome['treatment']['aid'] == {
         'entry_id': lore['kit']['id'],
         'name': '의료 키트',
+        'act': 'treat',
         'bonus': KIT_BONUS,
         'used': True,
+        'lost': True,
+        'broken': False,
         'reason': None,
         'remaining': 1,
     }
@@ -289,6 +308,22 @@ async def test_a_failed_treatment_still_uses_the_aid_up(
     assert worn(await read_table(client, me, table), FRIEND) == ['broken_arm']
 
 
+@pytest.mark.parametrize(('roll', 'kept'), [(19, True), (FAIL, False)], ids=['success-keeps', 'failure-wastes'])
+async def test_a_bandage_is_lost_only_when_the_treatment_fails(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, table: dict, session, narrated, roll, kept
+):
+    await wound(session, table, FRIEND, 'broken_arm')
+    load_dice(app, [roll, NOTHING])
+
+    await play(client, me, friend, table, treat(lore['bandage']), narrated)
+
+    outcome = await outcome_of(client, me, table, FRIEND)
+    # 19 + 1 = 20 은 어려움(20)에 닿는다
+    assert (outcome['success'], outcome['treatment']['aid']['lost']) == (kept, not kept)
+    assert outcome['treatment']['aid']['broken'] is (not kept)
+    assert (('붕대', 1) in held(await read_table(client, me, table), FRIEND)) is kept
+
+
 async def test_an_aid_can_help_treat_someone_else(
     client: AsyncClient, app: FastAPI, me: dict, friend: dict, lore: dict, table: dict, session, narrated
 ):
@@ -318,8 +353,11 @@ async def test_what_was_taken_meanwhile_does_not_aid(
     assert outcome['treatment']['aid'] == {
         'entry_id': lore['kit']['id'],
         'name': '의료 키트',
+        'act': 'treat',
         'bonus': 0,
         'used': False,
+        'lost': False,
+        'broken': False,
         'reason': 'not_held',
         'remaining': 0,
     }
@@ -344,8 +382,11 @@ async def test_the_aid_is_in_the_treatment_event(
     assert treated['payload']['aid'] == {
         'entry_id': lore['kit']['id'],
         'name': '의료 키트',
+        'act': 'treat',
         'bonus': KIT_BONUS,
         'used': True,
+        'lost': True,
+        'broken': False,
         'reason': None,
         'remaining': 1,
     }
@@ -379,11 +420,11 @@ async def test_the_narrator_hears_what_aided(
     ('note', 'line'),
     [
         (
-            TreatmentNote(injury='팔 골절', patient='토르빈', aid='의료 키트', aid_bonus=2, minutes_left=150),
+            TreatmentNote(injury='팔 골절', patient='토르빈', aid=AidNote('의료 키트', 2), minutes_left=150),
             '→ 토르빈의 팔 골절 치료(쓴 물건: 의료 키트 +2): 앞당겨짐, 낫기까지 2시간 30분',
         ),
         (
-            TreatmentNote(injury='팔 골절', patient='토르빈', aid='붕대', aid_bonus=1, mishap='nothing'),
+            TreatmentNote(injury='팔 골절', patient='토르빈', aid=AidNote('붕대', 1), mishap='nothing'),
             '→ 토르빈의 팔 골절 치료(쓴 물건: 붕대 +1) 실패: 별일 없음',
         ),
         (TreatmentNote(injury='팔 골절', patient='토르빈', healed=True), '→ 토르빈의 팔 골절 치료: 다 나음'),

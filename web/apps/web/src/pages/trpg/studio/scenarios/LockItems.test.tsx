@@ -77,11 +77,11 @@ describe('자물쇠 물건', () => {
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '새 열쇠' }), NEW_KEY);
     await userEvent.click(dialog.getByRole('checkbox', { name: '열쇠 없이 딸 수 있다' }));
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '따기 판정의 능력치' }), 'dex');
-    await userEvent.selectOptions(dialog.getByRole('combobox', { name: '따는 도구(선택)' }), PICK);
+    await userEvent.click(dialog.getByRole('checkbox', { name: '도구가 있어야 딴다' }));
     await userEvent.click(dialog.getByRole('button', { name: '저장' }));
 
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
-    const lock = { key: NEW_KEY, pick: { ability: 'dex', difficulty: null, tool: PICK } };
+    const lock = { key: NEW_KEY, pick: { ability: 'dex', difficulty: null, needs_tool: true } };
     expect((patches(seen)[0]?.items as ItemRule[])[0]).toMatchObject({ entry_id: PADLOCK, kind: 'gear', lock });
     expect(await list.findByText(/새 자물쇠\(딸 수 있음\)/)).toBeInTheDocument();
 
@@ -103,7 +103,7 @@ describe('자물쇠 물건의 입력', () => {
     expect(itemLockHints({ ...lock, key: PADLOCK }, PADLOCK, []).lock).toContain('자물쇠 물건 자신은');
     expect(keysElsewhere(routes, others, PADLOCK)).toEqual([OLD_KEY, NEW_KEY]);
     expect(keysElsewhere(routes, others, 'x')).toEqual([OLD_KEY]);
-    expect(itemLockHints({ ...lock, key: PICK, pick: { on: true, ability: '', difficulty: '', tool: '' } }, PADLOCK, []).lock_pick).toBeDefined();
+    expect(itemLockHints({ ...lock, key: PICK, pick: { on: true, ability: '', difficulty: '', needsTool: false } }, PADLOCK, []).lock_pick).toBeDefined();
     const withLock = { ...draft, lock: { ...lock, key: NEW_KEY } };
     expect(toItemRule(PADLOCK, withLock).lock).toEqual({ key: NEW_KEY, pick: null });
     expect(toItemRule(PADLOCK, { ...withLock, kind: 'consumable' }).lock).toBeNull();
