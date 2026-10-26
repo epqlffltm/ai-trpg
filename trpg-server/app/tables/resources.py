@@ -4,10 +4,12 @@
 시트의 수치(#804, table_sheets.resources)를 읽고 바꾼다. 계산은 app/engine/resources.py 에 있다.
 
 시트를 받을 때 값을 채우지 않는다. 적히지 않은 이름표는 시작 값으로 읽는다(능력치가 바뀌지 않아 늘 같은 값이다).
-바뀔 때만 적는다. 바꾸는 것은 엔진뿐이다(쉬기, 물건의 맞추기).
+바뀔 때만 적는다. 바꾸는 것은 엔진뿐이다(쉬기, 물건의 맞추기, 라운드마다의 변화).
 
 DB 를 모른다. 시트를 고친다. 저장하지 않는다.
 """
+
+from collections.abc import Callable
 
 from app.engine import resources as engine
 from app.engine.resources import Level, Shift
@@ -44,21 +46,36 @@ def adjust(ruleset: Ruleset, sheet: TableSheet, key: str, amount: int) -> Shift 
     return write(sheet, level, engine.adjusted(level, amount))
 
 
-def rest(ruleset: Ruleset, sheet: TableSheet, long: bool) -> list[Shift]:
+def apply_shifts(ruleset: Ruleset, sheet: TableSheet, pick: Callable[[Resource], ResourceShift | None]) -> list[Shift]:
     """
-    휴식 하나가 수치들에 하는 일(규칙의 resources[].rest). 바뀐 것만 돌려준다. 규칙의 차례다.
+    수치마다 pick 이 고른 변화를 한다. 바뀐 것만 돌려준다. 규칙의 차례다.
 
-    그 휴식에 하는 일이 없거나, 해도 값이 같으면(이미 가득) 적지 않는다.
+    고른 변화가 없거나, 해도 값이 같으면(이미 가득) 적지 않는다.
     """
     shifts = []
     for level in levels_of(ruleset, sheet):
-        shift: ResourceShift | None = level.resource.rest.long if long else level.resource.rest.short
+        shift = pick(level.resource)
         if shift is None:
             continue
         after = engine.shifted(level, shift)
         if after != level.value:
             shifts.append(write(sheet, level, after))
     return shifts
+
+
+def rest(ruleset: Ruleset, sheet: TableSheet, long: bool) -> list[Shift]:
+    """휴식 하나가 수치들에 하는 일(규칙의 resources[].rest). 바뀐 것만 돌려준다."""
+    return apply_shifts(ruleset, sheet, lambda resource: resource.rest.long if long else resource.rest.short)
+
+
+def each_round(ruleset: Ruleset, sheet: TableSheet) -> list[Shift]:
+    """라운드가 닫힐 때 수치들이 저절로 하는 일(규칙의 resources[].each_round, #804). 바뀐 것만 돌려준다."""
+    return apply_shifts(ruleset, sheet, lambda resource: resource.each_round)
+
+
+def wanted_injuries(ruleset: Ruleset, sheet: TableSheet) -> list[str]:
+    """이 시트의 수치들이 지금 닿아 있는 문턱의 부상들(#804). 규칙의 차례다."""
+    return engine.wanted_injuries(levels_of(ruleset, sheet))
 
 
 def shift_document(shift: Shift) -> dict:

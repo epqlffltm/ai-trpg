@@ -3,11 +3,12 @@
 """
 HP 말고 캐릭터가 가지는 수치(#804)의 계산. 마나, 스태미나, 광기 같은 것이다.
 
-수치가 무엇인지는 규칙의 데이터다(app/engine/ruleset.py 의 Resource). 엔진이 하는 일은 넷이다.
+수치가 무엇인지는 규칙의 데이터다(app/engine/ruleset.py 의 Resource). 엔진이 하는 일은 다섯이다.
   - 최대: 기준값(base)에 능력치의 보정을 더하고 상한(cap)을 넘지 않는다. 최소보다 작아지지 않는다.
   - 시작: 시트를 받을 때 최대나 최소로 둔다.
-  - 쉬기: 짧은 휴식과 긴 휴식이 올리거나 내리거나 채우거나 비운다.
+  - 쉬기: 짧은 휴식과 긴 휴식이 올리거나 내리거나 채우거나 비운다. 라운드가 닫힐 때마다도 같은 모양으로 바뀔 수 있다.
   - 맞추기(adjust): 물건의 효과가 그만큼 올리거나 내린다.
+  - 문턱: 값이 최소나 최대에 닿아 있으면 규칙이 정한 부상을 입는다(그 부상의 이름표를 낸다).
 값은 늘 최소와 최대 사이다. 지금 값은 시트에 이름표에서 값으로 적힌다(table_sheets.resources).
 시트에 없는 이름표(이 칸이 생기기 전의 시트)는 시작 값으로 읽는다.
 
@@ -106,3 +107,25 @@ def adjusted(level: Level, amount: int) -> int:
 def shift_of(level: Level, after: int) -> Shift:
     """바뀐 것의 모양."""
     return Shift(resource=level.resource, before=level.value, after=after, maximum=level.maximum)
+
+
+def thresholds_of(level: Level) -> list[str]:
+    """
+    이 수치가 지금 닿아 있는 문턱의 부상들(#804). 최소에 닿았으면 at_min, 최대에 닿았으면 at_max 다.
+
+    능력치의 보정이 낮아 최대가 최소와 같으면 둘 다 닿아 있다. 문턱에 부상이 없으면 빈 목록이다.
+    """
+    touched = []
+    if level.resource.at_min is not None and level.value <= level.resource.min:
+        touched.append(level.resource.at_min)
+    if level.resource.at_max is not None and level.value >= level.maximum:
+        touched.append(level.resource.at_max)
+    return touched
+
+
+def wanted_injuries(levels_now: list[Level]) -> list[str]:
+    """수치들이 지금 입혀야 할 부상들. 규칙의 차례이고 같은 부상은 한 번이다."""
+    wanted: list[str] = []
+    for level in levels_now:
+        wanted.extend(key for key in thresholds_of(level) if key not in wanted)
+    return wanted

@@ -300,6 +300,8 @@ class EndReason(enum.StrEnum):
     TREATED = 'treated'
     # 소모품으로 풀었다(#277, 해독제)
     CURED = 'cured'
+    # 수치가 문턱을 벗어나 풀렸다(#804)
+    RESOURCE = 'resource'
 
 
 @dataclass(frozen=True)

@@ -742,7 +742,7 @@ class ResourceShiftKind(enum.StrEnum):
 
 
 class ResourceShift(Part):
-    """쉬기 하나가 수치에 하는 일. 올리기와 내리기에만 양(amount)이 있다. 범위 밖으로는 가지 않는다."""
+    """쉬기 하나나 라운드 하나가 수치에 하는 일. 올리기와 내리기에만 양(amount)이 있다. 범위 밖으로는 가지 않는다."""
 
     kind: ResourceShiftKind
     amount: Annotated[int, Field(ge=1, le=RESOURCE_MAX_VALUE)] | None = None
@@ -783,6 +783,9 @@ class Resource(Part):
     key 는 효과(adjust)와 시트가 가리키는 이름표, name 은 보이는 이름이다.
     min 이 바닥이고, 최대는 max 가 정한다(능력치에서 올 수 있다). start 가 시트를 받을 때의 값이다.
     rest 는 짧은 휴식과 긴 휴식이 이 수치에 하는 일이다. 값은 엔진만 바꾼다(쉬기, 물건의 adjust).
+    each_round 는 라운드가 닫힐 때마다 저절로 하는 일이다(#804, 광기 +1, 마나 +1). 없으면 저절로 바뀌지 않는다.
+    at_min 과 at_max 는 문턱이다(#804). 값이 최소(최대)에 닿아 있는 동안 그 부상(규칙의 injuries 의 key)을 입는다.
+    문턱을 벗어나면 바로 풀린다. 부상은 수치의 그림자다(app/rounds/resource_rounds.py).
     """
 
     key: Key
@@ -791,6 +794,9 @@ class Resource(Part):
     max: ResourceMax
     start: ResourceStart = ResourceStart.MAX
     rest: ResourceRest = ResourceRest()
+    each_round: ResourceShift | None = None
+    at_min: Key | None = None
+    at_max: Key | None = None
 
     @model_validator(mode='after')
     def require_room_above_min(self) -> Self:
@@ -867,7 +873,7 @@ class Ruleset(Part):
 
     @model_validator(mode='after')
     def reject_unknown_resources(self) -> Self:
-        """수치의 이름표가 겹치지 않고, 최대에 쓰는 능력치가 이 규칙에 있어야 한다."""
+        """수치의 이름표가 겹치지 않고, 최대에 쓰는 능력치와 문턱에 입히는 부상이 이 규칙에 있어야 한다."""
         duplicates = find_duplicates([resource.key for resource in self.resources])
         if duplicates:
             raise ValueError(f'같은 수치가 두 번 있습니다: {", ".join(duplicates)}')
@@ -875,6 +881,14 @@ class Ruleset(Part):
         unknown = [r.key for r in self.resources if r.max.ability is not None and r.max.ability not in known]
         if unknown:
             raise ValueError(f'수치의 최대에 쓰는 능력치가 규칙에 없습니다: {", ".join(unknown)}')
+        injuries = {injury.key for injury in self.injuries}
+        strangers = [
+            r.key
+            for r in self.resources
+            if any(key is not None and key not in injuries for key in (r.at_min, r.at_max))
+        ]
+        if strangers:
+            raise ValueError(f'수치의 문턱에 입히는 부상이 규칙에 없습니다: {", ".join(strangers)}')
         return self
 
     @model_validator(mode='after')

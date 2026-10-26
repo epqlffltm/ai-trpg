@@ -58,7 +58,18 @@ from app.events import recorder
 from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
 from app.observability.metrics import record_round_closed
-from app.rounds import deadlines, happenings, narration_request, opener, quest_goals, repository, rests, waits, wanders
+from app.rounds import (
+    deadlines,
+    happenings,
+    narration_request,
+    opener,
+    quest_goals,
+    repository,
+    resource_rounds,
+    rests,
+    waits,
+    wanders,
+)
 from app.rounds.acceptance import accept_action, put_declaration
 from app.rounds.cast import Scene, cast_of, labels_of
 from app.rounds.errors import Conflict, RoundConflictError, RoundNotFoundError
@@ -249,13 +260,14 @@ def begin_closing(
     그다음 길을 오거나 길게 쉰 장소에서 무작위 조우를 굴려 몬스터를 놓는다(app/rounds/wanders.py, #283).
     쉬는 중에 덮쳤으면 그 쉬기가 깨진다. 일행이 만나는 것은 다음 라운드다.
     그다음 쉰 사람이 회복하고, 고비를 넘긴 사람이 되살아나기를 굴리고, 저절로 회복한다(app/rounds/rests.py).
-    그 라운드에 다친 사람의 휴식은 깨진다. 그다음 조건을 채운 숨긴 퀘스트를 드러내고 이룬 퀘스트를 성공으로 바꾸고
+    그 라운드에 다친 사람의 휴식은 깨진다. 그다음 수치가 라운드마다 저절로 바뀌고, 문턱의 부상을 맞춘다
+    (app/rounds/resource_rounds.py, #804). 그다음 조건을 채운 숨긴 퀘스트를 드러내고 이룬 퀘스트를 성공으로 바꾸고
     (app/rounds/quest_goals.py), 조건이 채워진 판의 사건을 일으키고(app/rounds/happenings.py),
     기한을 넘긴 퀘스트를 실패로 바꾼다(app/rounds/deadlines.py). 이룬 것을 먼저 본다.
     기한 전 마지막 라운드에 이루었으면 성공이다. 기한의 실패로 드러날 퀘스트(잇기)가 있으면 실패 뒤에 한 번 더 본다.
     이벤트는 행동(과 그 판정, 치료, 변화, 부상, 휴식)들 → 죽음의 굴림들 → 끝난 부상들 → 나온 무리들 →
-    되살아나기와 저절로 회복 → 드러나고 이룬 퀘스트들 → 일어난 사건들(과 옮긴 사람들) → 기한을 넘긴 퀘스트들 →
-    그 뒤에 드러나고 이룬 퀘스트들 → 닫힘 순서로 적는다. 한 묶음이다.
+    되살아나기와 저절로 회복 → 수치의 변화와 문턱의 부상 → 드러나고 이룬 퀘스트들 → 일어난 사건들(과 옮긴 사람들) →
+    기한을 넘긴 퀘스트들 → 그 뒤에 드러나고 이룬 퀘스트들 → 닫힘 순서로 적는다. 한 묶음이다.
     맞붙은 몬스터가 있던 라운드는 행동과 몬스터의 공격을 차례 순서로 적는다(round_.turns, app/rounds/initiative.py).
     나중에 적히는 서술과 열림도 이 묶음에 들어간다.
 
@@ -274,6 +286,7 @@ def begin_closing(
     met, appeared = wanders.settle_wanders(table, round_, scene.all_monsters, dice)
     session.add_all(appeared)
     recovered = rests.settle(table, round_, hurt, dice, frozenset(wanders.ambushed(table, round_, met)))
+    drifts = resource_rounds.settle(table, round_)
     settled = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs)
     occurred = happenings.settle_happenings(table, round_.number, scene.all_monsters, scene.npcs)
     overdue = deadlines.expire_quests(table)
@@ -287,6 +300,7 @@ def begin_closing(
     record_injury_endings(session, table, ended, round_.number, group)
     wanders.record_wanders(session, table, met, group)
     record_recoveries(session, table, recovered, group)
+    resource_rounds.record(session, table, drifts, round_.number, group)
     quest_goals.record_changes(session, table, settled, group)
     happenings.record_happenings(session, table, occurred, group)
     deadlines.record_failures(session, table, overdue, group)

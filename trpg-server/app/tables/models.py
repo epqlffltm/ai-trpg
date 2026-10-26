@@ -133,6 +133,8 @@ class InjurySource(enum.StrEnum):
     AFTERMATH = 'aftermath'
     # 물건의 효과로(#800, 독 바른 단검, 기절 가루)
     ITEM = 'item'
+    # 수치가 문턱에 닿아서(#804, 스태미나 0 의 탈진). 문턱을 벗어나면 풀린다. 라운드나 시간으로는 풀리지 않는다
+    RESOURCE = 'resource'
 
 
 class NpcStatus(enum.StrEnum):
