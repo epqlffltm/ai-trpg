@@ -11,7 +11,7 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 """
 
 import enum
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from app.engine.dice import Dice
 from app.engine.ruleset import Magnitude, Ruleset
@@ -86,3 +86,19 @@ def change_hp(kind: ChangeKind, magnitude: Magnitude, hp: int, max_hp: int, dice
     amount = sum(rolls) - blocked
     after = hurt(hp, amount) if kind == ChangeKind.DAMAGE else heal(hp, max_hp, amount)
     return Change(kind=kind, rolls=rolls, amount=amount, before=hp, after=after, blocked=blocked)
+
+
+# 장난(#803)의 피해가 남기는 HP 의 바닥. 이 아래로 내리지 못한다
+PRANK_FLOOR = 1
+
+
+def spare(change: Change) -> Change:
+    """
+    장난의 피해(#803). HP 를 PRANK_FLOOR 아래로 내리지 못한 변화를 돌려준다. 받은 변화는 고치지 않는다.
+
+    주사위의 눈과 양(amount)은 그대로다. 실제로 바뀐 HP(after)만 바닥에서 멈춘다. 이미 그 아래였으면(쓰러져 있었으면)
+    더 내리지 않는다. 회복은 그대로다.
+    """
+    if change.kind != ChangeKind.DAMAGE:
+        return change
+    return replace(change, after=max(change.after, min(change.before, PRANK_FLOOR)))

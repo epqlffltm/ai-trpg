@@ -29,6 +29,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.CREDIT_WAIT_CHANGED: ('credit_wait_seconds', 'remove_short_payers'),
     EventType.WHISPER_NOTICE_CHANGED: ('whisper_notice',),
     EventType.REFERENCES_CHANGED: ('references_enabled',),
+    EventType.FRIENDLY_FIRE_CHANGED: ('friendly_fire',),
+    EventType.FRIENDLY_FIRE_CONSENT_CHANGED: ('user_id', 'friendly_fire'),
     EventType.LEDGER_DRAFTS_CHANGED: ('ledger_drafts',),
     # 소지품은 공개다. 누가 무엇을 몇 개 받거나 잃었고, 그 뒤에 몇 개인가.
     # 몬스터를 쓰러뜨려 얻었으면 라운드, 출처(source: monster, 그 마리와 장면의 호칭), 상한을 넘어 잃은 개수가 더 있다.
@@ -256,6 +258,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'max_hp',
         'downed',
         'injury_roll',
+        # 동료의 장난(#803)이었으면 참이다. 장난이 아니면 칸이 없다
+        'prank',
     ),
     # NPC 의 변화는 주사위의 눈, 양, 바뀐 생사만 보인다. HP 의 숫자(before, after, max_hp)는 GM 만 안다.
     # 몸 상태(condition)도 서술자에게 주는 말이라 내보내지 않는다. 이름은 장면에서 부르는 이름이다

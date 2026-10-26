@@ -92,16 +92,18 @@ def injury_after(
     dead: bool,
     rows: list,
     immune: frozenset[InjuryNature] = round_injuries.NO_IMMUNITY,
+    prank: bool = False,
 ) -> dict | None:
     """
     피해 뒤에 부상 표를 굴릴 일이면 굴리고, 나온 부상을 입힌다. 굴린 것을 문서로 돌려준다. 굴리지 않았으면 None.
 
     rows 는 입는 쪽(시트나 NPC 상태나 몬스터)의 부상 목록이다. immune 은 그쪽이 면역인 성질이다(#799, 몬스터).
+    prank 면 동료의 장난(#803)이다. 짧은 부상만 입힌다.
     """
     rolled = round_injuries.roll_after(judging.ruleset, judging.dice, change, max_hp, dead)
     if rolled is None:
         return None
-    return round_injuries.take(judging.ruleset, rolled, rows, judging.table.id, judging.moment, immune)
+    return round_injuries.take(judging.ruleset, rolled, rows, judging.table.id, judging.moment, immune, prank)
 
 
 def member_effect(affected: TableMember, magnitude: str, change: Change, injury_roll: dict | None) -> dict:

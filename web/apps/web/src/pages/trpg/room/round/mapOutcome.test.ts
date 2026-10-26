@@ -23,7 +23,7 @@ describe('가기의 결과', () => {
   });
 
   it('못 간 까닭, 넘기 판정과 다친 것, 업지 못한 까닭', () => {
-    const effect = { kind: 'damage' as const, magnitude: 'light', user_id: ME, character_name: '렌', rolls: [3], amount: 3, before: 7, after: 4, max_hp: 12, downed: false };
+    const effect = { kind: 'damage' as const, magnitude: 'light', user_id: ME, character_name: '렌', rolls: [3], amount: 3, before: 7, after: 4, max_hp: 12, downed: false, prank: false };
     const carry = { user_id: ME, character_name: null, carried: false, reason: 'not_moved' };
     expect(moveLine({ ...MOVE, moved: false, reason: 'cross_failed', cross: ROLL, effect, carry, travel_minutes: 30 })).toBe(
       '가지 못했습니다(넘지 못했습니다) · 넘기 판정 눈 8, 보정 -1, 합 7 / 목표 15 · 실패 · 렌 HP 7 → 4 · 떠난 사람 업지 못함(가지 못했습니다)',

@@ -179,10 +179,18 @@ def describe_healed(healed: list[HealNote]) -> str:
 
 
 def describe_impact(impact: Impact) -> str:
-    """HP 가 바뀐 것을 한 줄로 적는다. 예: → 엘프 피해 3 (HP 7/10)"""
+    """
+    HP 가 바뀐 것을 한 줄로 적는다. 동료의 장난(#803)이면 그것과, 장난이라 입지 않은 부상을 붙인다.
+
+    예: → 엘프 피해 3 (HP 7/10)
+        → 영애 피해 6 (HP 1/10, 장난). 장난이라 입지 않은 부상: 팔 골절
+    """
     word = '피해' if impact.kind == 'damage' else '회복'
-    state = f'HP {impact.hp}/{impact.max_hp}' + (', 쓰러짐' if impact.downed else '')
-    return f'→ {impact.character_name} {word} {impact.amount} ({state})' + new_injury(impact.injury)
+    state = (
+        f'HP {impact.hp}/{impact.max_hp}' + (', 쓰러짐' if impact.downed else '') + (', 장난' if impact.prank else '')
+    )
+    line = f'→ {impact.character_name} {word} {impact.amount} ({state})' + new_injury(impact.injury)
+    return line + (f'. 장난이라 입지 않은 부상: {impact.spared}' if impact.spared else '')
 
 
 def new_injury(name: str | None) -> str:
@@ -348,6 +356,7 @@ ITEM_FAILURES = {
     'not_held': '가지고 있지 않았다',
     'target_gone': '받을 사람이 없었다',
     'too_many': '받는 쪽이 더 가질 수 없었다',
+    'friendly_fire_off': '동료를 해칠 수 없게 바뀌었다',
 }
 
 
@@ -362,7 +371,8 @@ def describe_throw(note: ThrowNote) -> str:
     """
     to = f' → {note.target}' if note.target else ''
     if note.done:
-        return ' '.join([f'(던진 물건: {note.name}{to})', *effect_tags(note.cured, note.injured, note.resisted)])
+        tags = effect_tags(note.cured, note.injured, note.resisted, note.spared)
+        return ' '.join([f'(던진 물건: {note.name}{to})', *tags])
     if note.reason == 'not_held':
         return f'(던지려던 물건: {note.name}{to}. {ITEM_FAILURES["not_held"]})'
     return f'(던지려던 물건: {note.name}{to})'
@@ -388,15 +398,15 @@ def describe_item_action(note: ItemActionNote) -> str:
     parts = [f'({verb} 물건: {what}{to})']
     if note.impact:
         parts.append(describe_impact(note.impact))
-    parts.extend(effect_tags(note.cured, note.injured, note.resisted))
+    parts.extend(effect_tags(note.cured, note.injured, note.resisted, note.spared))
     return ' '.join(parts)
 
 
-def effect_tags(cured: list[str], injured: list[str], resisted: list[str]) -> list[str]:
+def effect_tags(cured: list[str], injured: list[str], resisted: list[str], spared: list[str] = ()) -> list[str]:
     """
-    물건의 효과가 부상에 한 일을 줄 뒤에 붙일 조각들(#800, #801). 없으면 빈 목록이다.
+    물건의 효과가 부상에 한 일을 줄 뒤에 붙일 조각들(#800, #801, #803). 없으면 빈 목록이다.
 
-    예: [풀린 부상: 중독] [입힌 부상: 기절] [면역이라 입지 않은 부상: 중독]
+    예: [풀린 부상: 중독] [입힌 부상: 기절] [면역이라 입지 않은 부상: 중독] [장난이라 입지 않은 부상: 팔 골절]
     """
     tags = []
     if cured:
@@ -405,6 +415,8 @@ def effect_tags(cured: list[str], injured: list[str], resisted: list[str]) -> li
         tags.append(f'[입힌 부상: {", ".join(injured)}]')
     if resisted:
         tags.append(f'[면역이라 입지 않은 부상: {", ".join(resisted)}]')
+    if spared:
+        tags.append(f'[장난이라 입지 않은 부상: {", ".join(spared)}]')
     return tags
 
 
@@ -824,7 +836,14 @@ def describe_move(move: Move) -> str:
 
 
 # 겨눈 몬스터를 칠 수 없었던 까닭의 말
-GONE_REASONS = {'dead': '이미 죽어 있었다', 'elsewhere': '그 자리에 없었다'}
+GONE_REASONS = {
+    'dead': '이미 죽어 있었다',
+    'elsewhere': '그 자리에 없었다',
+    # 해치려던 동료(#803)
+    'left': '자리를 떠났다',
+    'downed': '이미 쓰러져 있었다',
+    'friendly_fire_off': '동료를 해칠 수 없게 바뀌었다',
+}
 
 
 def describe_target_gone(note: TargetGoneNote) -> str:

@@ -352,6 +352,7 @@ async def test_a_big_hit_can_break_an_arm(client: AsyncClient, app: FastAPI, me:
         'ends_after_round': None,
         'heals_at': ARM_HEALS_AT,
         'immune': None,
+        'spared': None,
     }
     assert (await my_sheet(client, me, world['table']))['injuries'] == [
         {'injury': 'broken_arm', 'round': 1, 'ends_after_round': None, 'heals_at': ARM_HEALS_AT}
@@ -390,6 +391,7 @@ async def test_a_lucky_roll_leaves_no_injury(client: AsyncClient, app: FastAPI, 
         'ends_after_round': None,
         'heals_at': None,
         'immune': None,
+        'spared': None,
     }
     assert (await my_sheet(client, me, world['table']))['injuries'] == []
     assert await events_of(client, me, world['table'], 'injury_gained') == []
@@ -534,6 +536,7 @@ async def test_an_npc_knocked_down_can_lose_an_eye(client: AsyncClient, app: Fas
         'ends_after_round': None,
         'heals_at': None,
         'immune': None,
+        'spared': None,
     }
     (request,) = narrator.requests
     (lady,) = request.people

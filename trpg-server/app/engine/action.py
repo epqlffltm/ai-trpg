@@ -34,7 +34,8 @@
 행동에는 판정의 결과에 따라 일어날 일을 붙일 수 있다.
   - 실패의 대가(risk): 실패하면 행동한 캐릭터가 피해를 입는다.
   - 성공의 보상(recover): 성공하면 대상이 회복한다. 대상은 앉은 사람(target)이나 NPC(npc)다.
-  - 성공의 타격(harm): 성공하면 대상 NPC(npc)나 몬스터 한 마리(monster)가 피해를 입는다. 앉은 사람끼리는 해치지 않는다.
+  - 성공의 타격(harm): 성공하면 대상 NPC(npc)나 몬스터 한 마리(monster)나 앉은 사람(target, #803)이 피해를 입는다.
+    앉은 사람끼리 해치는 것은 테이블과 맞는 쪽의 설정이 정한다(app/tables/friendly_fire.py). 자기 자신은 늘 된다.
 양은 모두 숫자로 받지 않고 규칙의 등급으로 받는다. 어느 것이 일어나는지는 consequence 가 정한다.
 타격에는 죽이려는지(lethal)를 적는다. HP 가 0 이 됐을 때 쓰러질지 죽을지를 가른다(app/tables/npcs.py).
 타격에는 노릴 부상(aim)도 적을 수 있다(노려 치기). 판정이 어려워지고, 성공하면 그 부상이 확정으로 생긴다.
@@ -146,11 +147,11 @@ class CheckAction(BaseModel):
     risk: Key | None = None
     # 성공의 보상. 성공하면 대상이 이 등급만큼 회복한다. 규칙의 Magnitude.key 다
     recover: Key | None = None
-    # 회복하는 대상. 테이블에 앉은 사람이다. 엔진은 이 값을 읽지 않는다. 누구인지는 부른 쪽이 안다.
+    # 회복하거나 타격(#803)을 받는 대상. 테이블에 앉은 사람이다. 엔진은 이 값을 읽지 않는다. 누구인지는 부른 쪽이 안다.
     # recover 가 있는데 target 도 npc 도 비우면 자기 자신이다(app/rounds/acceptance.py 가 채운다)
     target: uuid.UUID | None = None
 
-    # 성공의 타격. 성공하면 대상 NPC 가 이 등급만큼 피해를 입는다. 규칙의 Magnitude.key 다
+    # 성공의 타격. 성공하면 대상(NPC, 몬스터, 앉은 사람)이 이 등급만큼 피해를 입는다. 규칙의 Magnitude.key 다
     harm: Key | None = None
     # 대상 NPC. 판의 로어북 인물 항목의 id 다. 이번 장면에 나온 인물만 고를 수 있다(app/rounds/cast.py).
     # 엔진은 이 값을 읽지 않는다
@@ -171,9 +172,15 @@ class CheckAction(BaseModel):
 
     @model_validator(mode='after')
     def require_recover_for_target(self) -> Self:
-        """대상(앉은 사람)은 회복에만 쓴다. 회복이 없는데 대상만 있으면 무엇을 하려는지 알 수 없다."""
-        if self.target is not None and self.recover is None:
-            raise ValueError('target 은 recover 와 함께 적습니다.')
+        """
+        대상(앉은 사람)은 회복이나 타격(#803)에 쓴다. 둘 다 없는데 대상만 있으면 무엇을 하려는지 알 수 없다.
+
+        앉은 사람을 죽이려 하지(lethal) 않는다. 캐릭터는 피해로 바로 죽지 않는다(죽음의 굴림으로 죽는다).
+        """
+        if self.target is not None and self.recover is None and self.harm is None:
+            raise ValueError('target 은 recover 나 harm 과 함께 적습니다.')
+        if self.target is not None and self.lethal:
+            raise ValueError('lethal 은 npc 나 monster 와 함께 적습니다.')
         return self
 
     @model_validator(mode='after')
@@ -204,8 +211,8 @@ class CheckAction(BaseModel):
         NPC 에게 하는 일은 타격이나 회복이다. 둘을 함께 붙이지 않는다. 성공하면 둘 중 하나만 일어날 수 있다.
         죽이려는지는 타격에만 뜻이 있다.
         """
-        if self.harm is not None and self.npc is None and self.monster is None:
-            raise ValueError('harm 은 npc 나 monster 와 함께 적습니다.')
+        if self.harm is not None and self.npc is None and self.monster is None and self.target is None:
+            raise ValueError('harm 은 npc, monster, target 중 하나와 함께 적습니다.')
         if self.npc is not None and self.harm is None and self.recover is None:
             raise ValueError('npc 는 harm 이나 recover 와 함께 적습니다.')
         if self.harm is not None and self.recover is not None:
@@ -320,7 +327,8 @@ class UseAction(BaseModel):
 
 class ThrowAction(BaseModel):
     """
-    물건을 던지는 행동(#277). 가진 물건 하나를 몬스터 한 마리(monster)나 이번 장면의 인물(npc)에게 던진다.
+    물건을 던지는 행동(#277). 가진 물건 하나를 몬스터 한 마리(monster)나 이번 장면의 인물(npc)이나
+    앉은 사람(target, #803)에게 던진다. 앉은 사람에게 해로운 물건을 던지는 것은 테이블과 맞는 쪽의 설정이 정한다.
 
     item 은 판의 로어북 물건 항목의 id 다. 어떤 물건이든 된다(#801). 능력과 난이도는 받지 않는다. 물건의 던지는
     판정(아이템 규칙의 throw)이나 룰북의 맞히는 판정(rules.item_check)으로 판정한다(app/rounds/throws.py).
@@ -336,13 +344,21 @@ class ThrowAction(BaseModel):
     npc: uuid.UUID | None = None
     # 맞을 몬스터. 테이블의 몬스터 한 마리의 id 다. 자기가 선 장소의 마리만 고를 수 있다
     monster: uuid.UUID | None = None
+    # 맞을 앉은 사람(#803). 같은 장소의 사람만 고를 수 있다. 자기 자신은 고르지 않는다(그것은 쓰기다)
+    target: uuid.UUID | None = None
     lethal: bool = False
 
     @model_validator(mode='after')
     def require_one_target(self) -> Self:
-        """맞을 쪽은 하나다. 인물과 몬스터 중 하나만 적는다. 아무것도 겨누지 않고 던지는 것은 쓰기다."""
-        if (self.npc is None) == (self.monster is None):
-            raise ValueError('npc 와 monster 중 하나만 적습니다.')
+        """
+        맞을 쪽은 하나다. 인물, 몬스터, 앉은 사람 중 하나만 적는다. 아무것도 겨누지 않고 던지는 것은 쓰기다.
+
+        죽이려 하는 것(lethal)은 인물이나 몬스터에게만이다.
+        """
+        if sum(one is not None for one in (self.npc, self.monster, self.target)) != 1:
+            raise ValueError('npc, monster, target 중 하나만 적습니다.')
+        if self.lethal and self.target is not None:
+            raise ValueError('lethal 은 npc 나 monster 와 함께 적습니다.')
         return self
 
 

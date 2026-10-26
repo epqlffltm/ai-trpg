@@ -2808,6 +2808,11 @@
             "title": "Max Hp",
             "type": "integer"
           },
+          "prank": {
+            "default": false,
+            "title": "Prank",
+            "type": "boolean"
+          },
           "rolls": {
             "items": {
               "type": "integer"
@@ -3300,6 +3305,8 @@
           "credit_wait_changed",
           "whisper_notice_changed",
           "references_changed",
+          "friendly_fire_changed",
+          "friendly_fire_consent_changed",
           "ledger_drafts_changed",
           "whisper_sent",
           "table_started",
@@ -3608,6 +3615,30 @@
           "two_way"
         ],
         "title": "FoundRouteOut",
+        "type": "object"
+      },
+      "FriendlyFire": {
+        "description": "앉은 사람끼리 해칠 수 있는 정도(#803). 낮은 것부터 끔, 장난만, 다 됨이다.\n\n테이블에 하나(방장이 정한다), 앉은 사람마다 하나(자기를 겨누는 것을 받아들이는 정도, 본인이 정한다) 있다.\n드는 것은 둘 중 낮은 것이다(app/tables/friendly_fire.py). 자기 자신에게 하는 것은 늘 된다.",
+        "enum": [
+          "off",
+          "prank",
+          "full"
+        ],
+        "title": "FriendlyFire",
+        "type": "string"
+      },
+      "FriendlyFireUpdate": {
+        "additionalProperties": false,
+        "description": "앉은 사람끼리 해칠 수 있는 정도를 바꿀 때 받는 값(#803). 칸을 빼먹으면 거부한다.\n\n방장이 테이블의 것을 바꿀 때와, 앉은 사람이 자기를 겨누는 것을 받아들이는 정도를 바꿀 때 같은 모양이다.",
+        "properties": {
+          "friendly_fire": {
+            "$ref": "#/components/schemas/FriendlyFire"
+          }
+        },
+        "required": [
+          "friendly_fire"
+        ],
+        "title": "FriendlyFireUpdate",
         "type": "object"
       },
       "Genre": {
@@ -4021,7 +4052,7 @@
         "type": "object"
       },
       "InjuredOut": {
-        "description": "소모품이 입힌 부상 하나(#800). 룰북의 부상의 이름표다.\n\n이미 입고 있었으면 injury 가 None 이다. 몬스터가 그 성질에 면역이면 injury 는 None, immune 이 그 부상이다.",
+        "description": "소모품이 입힌 부상 하나(#800). 룰북의 부상의 이름표다.\n\n이미 입고 있었으면 injury 가 None 이다. 몬스터가 그 성질에 면역이면 injury 는 None, immune 이 그 부상이다.\n동료의 장난(#803)이라 입히지 않은 오래 가는 부상이나 결손이면 injury 는 None, spared 가 그 부상이다.",
         "properties": {
           "ends_after_round": {
             "anyOf": [
@@ -4065,6 +4096,17 @@
               }
             ],
             "title": "Injury"
+          },
+          "spared": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spared"
           }
         },
         "required": [
@@ -4302,6 +4344,17 @@
               }
             ],
             "title": "Roll"
+          },
+          "spared": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spared"
           },
           "trigger": {
             "title": "Trigger",
@@ -6211,6 +6264,9 @@
             "title": "Fallen",
             "type": "array"
           },
+          "friendly_fire": {
+            "$ref": "#/components/schemas/FriendlyFire"
+          },
           "is_host": {
             "title": "Is Host",
             "type": "boolean"
@@ -6267,6 +6323,7 @@
           "abilities",
           "sheet",
           "fallen",
+          "friendly_fire",
           "joined_at"
         ],
         "title": "MemberOut",
@@ -14673,6 +14730,9 @@
             ],
             "title": "Ended At"
           },
+          "friendly_fire": {
+            "$ref": "#/components/schemas/FriendlyFire"
+          },
           "has_password": {
             "title": "Has Password",
             "type": "boolean"
@@ -14864,6 +14924,7 @@
           "remove_short_payers",
           "whisper_notice",
           "references_enabled",
+          "friendly_fire",
           "created_at",
           "opening",
           "recommended_players",
@@ -14973,6 +15034,9 @@
             "title": "Credit Wait Seconds",
             "type": "integer"
           },
+          "friendly_fire": {
+            "$ref": "#/components/schemas/FriendlyFire"
+          },
           "has_password": {
             "title": "Has Password",
             "type": "boolean"
@@ -15076,6 +15140,7 @@
           "remove_short_payers",
           "whisper_notice",
           "references_enabled",
+          "friendly_fire",
           "created_at"
         ],
         "title": "TableSummary",
@@ -15193,7 +15258,7 @@
         "type": "object"
       },
       "TargetGoneOut": {
-        "description": "판정할 때 겨눈 몬스터(나 훔치려던 NPC)를 겨눌 수 없었던 것. 엔진은 굴리지 않았다.",
+        "description": "판정할 때 겨눈 몬스터(나 훔치려던 NPC, 해치려던 동료)를 겨눌 수 없었던 것. 엔진은 굴리지 않았다.",
         "properties": {
           "monster_id": {
             "anyOf": [
@@ -15233,6 +15298,18 @@
           "reason": {
             "title": "Reason",
             "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
           }
         },
         "required": [
@@ -15331,7 +15408,7 @@
       },
       "ThrowAction": {
         "additionalProperties": false,
-        "description": "물건을 던지는 행동(#277). 가진 물건 하나를 몬스터 한 마리(monster)나 이번 장면의 인물(npc)에게 던진다.\n\nitem 은 판의 로어북 물건 항목의 id 다. 어떤 물건이든 된다(#801). 능력과 난이도는 받지 않는다. 물건의 던지는\n판정(아이템 규칙의 throw)이나 룰북의 맞히는 판정(rules.item_check)으로 판정한다(app/rounds/throws.py).\n맞히면 그 물건의 효과가 든다. 피해가 있으면 방어와 세이브는 치기와 같다. 맞든 빗나가든 물건은 하나 없어진다.\nlethal 은 피해가 있는 물건에만, 치기와 같다. 죽이려는 것인가, 아니면 제압이다. 노려 치기와 무기는 없다.",
+        "description": "물건을 던지는 행동(#277). 가진 물건 하나를 몬스터 한 마리(monster)나 이번 장면의 인물(npc)이나\n앉은 사람(target, #803)에게 던진다. 앉은 사람에게 해로운 물건을 던지는 것은 테이블과 맞는 쪽의 설정이 정한다.\n\nitem 은 판의 로어북 물건 항목의 id 다. 어떤 물건이든 된다(#801). 능력과 난이도는 받지 않는다. 물건의 던지는\n판정(아이템 규칙의 throw)이나 룰북의 맞히는 판정(rules.item_check)으로 판정한다(app/rounds/throws.py).\n맞히면 그 물건의 효과가 든다. 피해가 있으면 방어와 세이브는 치기와 같다. 맞든 빗나가든 물건은 하나 없어진다.\nlethal 은 피해가 있는 물건에만, 치기와 같다. 죽이려는 것인가, 아니면 제압이다. 노려 치기와 무기는 없다.",
         "properties": {
           "item": {
             "format": "uuid",
@@ -15371,6 +15448,18 @@
               }
             ],
             "title": "Npc"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
           }
         },
         "required": [
@@ -15381,7 +15470,7 @@
         "type": "object"
       },
       "ThrownAtOut": {
-        "description": "물건을 던진 쪽(#277). 몬스터면 monster_id, 인물이면 entry_id 가 있다. 이름은 장면에서 부르는 것이다.",
+        "description": "물건을 던진 쪽(#277). 몬스터면 monster_id, 인물이면 entry_id, 앉은 사람(#803)이면 user_id 가 있다.\n이름은 장면에서 부르는 것이다. 앉은 사람이면 캐릭터의 이름이다.",
         "properties": {
           "entry_id": {
             "anyOf": [
@@ -15417,6 +15506,18 @@
               }
             ],
             "title": "Name"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
           }
         },
         "required": [
@@ -21286,6 +21387,66 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/game/tables/{table_id}/friendly-fire": {
+      "put": {
+        "description": "앉은 사람끼리 해칠 수 있는 정도(#803)를 바꾼다. 방장만 한다. 진행 중에도 된다.\n\n끔(off), 장난만(prank), 다 됨(full)이다. 맞는 쪽이 받아들이는 정도와 견주어 낮은 쪽이 든다.\n이미 받은 선언도 라운드를 닫을 때 다시 본다.",
+        "operationId": "change_friendly_fire_api_v1_game_tables__table_id__friendly_fire_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FriendlyFireUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change Friendly Fire",
+        "tags": [
+          "tables"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/game/tables/{table_id}/host": {
       "put": {
         "description": "방장을 다른 참가자에게 넘긴다.",
@@ -21443,6 +21604,66 @@
           }
         ],
         "summary": "Leave Table",
+        "tags": [
+          "tables"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/tables/{table_id}/members/me/friendly-fire": {
+      "put": {
+        "description": "자기를 겨누는 것(동료의 피해)을 받아들이는 정도(#803)를 바꾼다. 앉은 사람이 자기 것만 바꾼다. 언제든 된다.\n\n끔이 기본이다. 테이블이 다 됨이어도 받아들이기 전에는 아무도 해치지 못한다.",
+        "operationId": "change_friendly_fire_consent_api_v1_game_tables__table_id__members_me_friendly_fire_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FriendlyFireUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change Friendly Fire Consent",
         "tags": [
           "tables"
         ],

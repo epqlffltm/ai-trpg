@@ -8,7 +8,7 @@
 // 글은 "누가: 무엇" 꼴이다. 이름 뒤의 조사를 고르지 않아도 되게.
 
 import type { TableDetail, TableEvent } from '../../../../api/types';
-import { NARRATION_STYLE_VALUES, attitudeLabel, durationLabel, narrationStyleLabel } from '../../labels';
+import { NARRATION_STYLE_VALUES, attitudeLabel, durationLabel, friendlyFireLabel, narrationStyleLabel } from '../../labels';
 import { dayLabel, stepName } from '../../models/modelChoice';
 import { amountLabel } from '../money';
 import { blowLine, type Blow } from '../round/roundView';
@@ -349,6 +349,9 @@ const DESCRIBE: Record<EventType, Describe> = {
   credit_wait_changed: (p) =>
     `크레딧 기다림: ${durationLabel(count(p, 'credit_wait_seconds'))}${flag(p, 'remove_short_payers') ? ' 뒤 빼기' : ' · 빼지 않음'}`,
   whisper_notice_changed: (p) => `쪽지 알림: ${onOff(flag(p, 'whisper_notice'))}`,
+  friendly_fire_changed: (p) => `동료 피해: ${friendlyFireLabel(text(p, 'friendly_fire') ?? '?')}`,
+  friendly_fire_consent_changed: (p, ctx) =>
+    `${member(p, ctx)}: 나를 겨누는 것 ${friendlyFireLabel(text(p, 'friendly_fire') ?? '?')}`,
   references_changed: (p) => `참고 자료: ${onOff(flag(p, 'references_enabled'))}`,
   ledger_drafts_changed: (p) => `장부 초안: ${onOff(flag(p, 'ledger_drafts'))}`,
   clock_step_changed: (p) => `라운드마다 흐르는 시간: ${count(p, 'next_step_minutes') ?? '?'}분`,
@@ -372,7 +375,7 @@ const DESCRIBE: Record<EventType, Describe> = {
 
   // 몸
   hp_changed: (p, ctx, e) =>
-    `${who(p, ctx, e)}: HP ${count(p, 'before') ?? '?'} → ${count(p, 'after') ?? '?'}${flag(p, 'downed') ? ' · 쓰러짐' : ''}`,
+    `${who(p, ctx, e)}: HP ${count(p, 'before') ?? '?'} → ${count(p, 'after') ?? '?'}${flag(p, 'downed') ? ' · 쓰러짐' : ''}${flag(p, 'prank') ? ' · 장난' : ''}`,
   npc_changed: (p) => changeText(p, '인물'),
   monster_changed: (p) => changeText(p, '몬스터'),
   npc_attitude_changed: (p) => `${text(p, 'name') ?? '인물'}: 태도 ${attitudeLabel(text(p, 'attitude') ?? '') ?? '?'}`,

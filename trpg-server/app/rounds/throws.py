@@ -1,7 +1,8 @@
 # trpg-server/app/rounds/throws.py
 
 """
-물건을 던지는 행동(#277, #801). 가진 물건 하나를 몬스터 한 마리나 장면의 인물에게 던진다. 어떤 물건이든 된다.
+물건을 던지는 행동(#277, #801). 가진 물건 하나를 몬스터 한 마리나 장면의 인물이나 같은 장소의 동료(#803)에게 던진다.
+어떤 물건이든 된다.
 
 던지기는 맞히는 판정이다. 능력과 난이도를 플레이어가 고르지 않는다. 물건에 던지는 판정(throw)이 있으면 그것,
 없으면 룰북의 맞히는 판정(rules.item_check)이다. 맞으면 그 물건의 효과 목록(#800)이 대상에게 든다.
@@ -11,6 +12,8 @@
   - 던지면 맞든 빗나가든 물건이 하나 없어진다. 던지지 않았으면 없어지지 않는다. 착용한 물건이면 그만큼 벗는다.
   - 차례가 왔을 때 더 가지고 있지 않으면(not_held) 던지지 않는다. 굴리지 않는다.
   - 겨눈 몬스터가 그사이에 죽었거나 다른 곳에 있으면(target_gone) 던지지 않는다. 치기와 같이 그 까닭도 적는다.
+  - 동료에게 던지면(#803) 그 사람이 떠났거나 죽었거나 다른 곳에 있으면 던지지 않는다. 해로운 물건이면 치기와 같이
+    해칠 수 있는지 다시 보고(쓰러졌거나 받아들이지 않게 바뀌었으면 던지지 않는다), 장난이면 상한을 지킨다.
 결과는 선언의 outcome 에 판정의 결과와 함께 item_throw 로 적는다. 판정의 능력과 난이도는 그 안에 있다
 (판정의 기록과 서술이 읽는다, app/rounds/narration_request.py 의 check_terms).
 
@@ -18,10 +21,12 @@ DB 를 모른다. 시트의 소지품과 맞은 쪽의 상태를 고친다. 저�
 """
 
 from app.engine.action import CheckAction, ThrowAction
+from app.rounds import friendly_fire
 from app.rounds.checks import judge_check, monster_gone
 from app.rounds.effects import Judging
 from app.rounds.item_targets import apply_after_hit, landed, mark_harm, target_of, to_check
-from app.tables import items
+from app.tables import items, sheets
+from app.tables import state as table_state
 from app.tables.items import CatalogItem
 from app.tables.models import TableMember
 
@@ -72,6 +77,45 @@ def throw_document(
     }
 
 
+def ally_gone(judging: Judging, member: TableMember, action: ThrowAction, item: CatalogItem) -> dict | None:
+    """
+    동료에게 던질 수 없으면 그 까닭(#803). 던질 수 있으면 None.
+
+    해로운 물건이면 치기와 같다(friendly_fire.ally_gone). 이로운 물건이면 떠났거나 죽었거나 다른 곳에 있을 때만이다.
+    """
+    if items.is_harmful(item):
+        return friendly_fire.ally_gone(judging, member, action.target)
+    target = table_state.find_member(judging.table, action.target)
+    if target is None or target.sheet is None:
+        return friendly_fire.gone_document(None, action.target, friendly_fire.AllyGone.LEFT)
+    if sheets.is_dead(target):
+        return friendly_fire.gone_document(target, action.target, friendly_fire.AllyGone.DEAD)
+    if not friendly_fire.stands_together(member, target):
+        return friendly_fire.gone_document(target, action.target, friendly_fire.AllyGone.ELSEWHERE)
+    return None
+
+
+def thrown_gone(judging: Judging, member: TableMember, action: ThrowAction, item: CatalogItem) -> dict | None:
+    """
+    맞을 쪽이 지금 없으면 그 까닭. 몬스터면 치기와 같고, 동료면 ally_gone 이다.
+
+    인물은 장면이 바뀌지 않아 보지 않는다.
+    """
+    if action.monster is not None:
+        return monster_gone(judging, member, action.monster)
+    if action.target is not None:
+        return ally_gone(judging, member, action, item)
+    return None
+
+
+def is_prank_throw(judging: Judging, member: TableMember, action: ThrowAction, item: CatalogItem) -> bool:
+    """해로운 물건을 동료에게 던지는 장난인가(#803). 맞힌 뒤의 부상이 상한을 지킨다."""
+    if action.target is None or not items.is_harmful(item):
+        return False
+    target = table_state.find_member(judging.table, action.target)
+    return target is not None and friendly_fire.is_prank_toward(judging, member, target)
+
+
 def judge_throw(judging: Judging, member: TableMember, action: ThrowAction) -> dict:
     """
     물건 하나를 던진다. 결과를 선언의 outcome 에 넣을 문서로 돌려준다.
@@ -84,13 +128,14 @@ def judge_throw(judging: Judging, member: TableMember, action: ThrowAction) -> d
     check = to_check(judging, item, action, *throw_terms(judging, item))
     if items.count_of(member.sheet, action.item) < 1:
         return {'item_throw': throw_document(judging, member, item, action, check, Reason.NOT_HELD)}
-    gone = monster_gone(judging, member, action.monster) if action.monster is not None else None
+    gone = thrown_gone(judging, member, action, item)
     if gone is not None:
         document = throw_document(judging, member, item, action, check, Reason.TARGET_GONE)
         return {'item_throw': document, 'target_gone': gone}
     mark_harm(judging, member, item, action, check)
+    prank = is_prank_throw(judging, member, action, item)
     items.remove_items(member.sheet, action.item, 1)
     outcome = judge_check(judging, member, check)
-    applied = apply_after_hit(judging, item, action) if landed(outcome, check) else NOTHING_APPLIED
+    applied = apply_after_hit(judging, item, action, prank) if landed(outcome, check) else NOTHING_APPLIED
     thrown = {**throw_document(judging, member, item, action, check, None), **applied}
     return {**outcome, 'item_throw': thrown}

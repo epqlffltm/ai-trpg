@@ -12,7 +12,7 @@
 보는 것.
   - 시나리오: 효과는 소모품에만. 회복과 피해를 함께, 같은 종류를 두 번, 모르는 종류는 받지 않는다(422).
     게시할 때 등급과 부상이 룰북에 있어야 한다(item_magnitude_missing, item_injure_invalid). 판 형식 62.
-  - 자기와 동료: 굴리지 않는다. 피해와 부상은 자기에게만 쓴다(동료면 409 friendly_fire_off).
+  - 자기와 동료: 굴리지 않는다. 피해와 부상은 동료에게 설정이 끔이면 쓰지 못한다(409 friendly_fire_off, #803).
   - 인물과 몬스터: 늘 맞히는 판정을 굴린다. 맞히면 피해(방어는 치기와 같다)와 부상이 들고, 빗나가면 아무 일도 없다.
     굴렸으면 물건이 없어진다. 몬스터는 그 성질에 면역인 부상을 입지 않는다.
   - 받기: 규칙에 맞히는 판정이 없으면 422, 효과가 없는 물건에 대상을 적으면 422, 피해가 없는데 죽이려 하면 422.
@@ -317,7 +317,7 @@ async def test_a_poisoned_blade_hurts_and_poisons_a_monster(
     assert (outcome['success'], outcome['target'], outcome['monster_effect']['amount']) == (True, 15, 1)
     used = outcome['item_use']
     assert (used['used'], used['ability'], used['difficulty']) == (True, 'dex', 'medium')
-    assert used['target'] == {'monster_id': rat['id'], 'entry_id': None, 'name': '수로 쥐'}
+    assert used['target'] == {'monster_id': rat['id'], 'entry_id': None, 'user_id': None, 'name': '수로 쥐'}
     assert injured_keys(used) == ['poisoned']
     assert dice.remaining == 0
     assert (await monster_named(client, me, world['table'], '수로 쥐'))['injuries'] == ['poisoned']
@@ -364,7 +364,12 @@ async def test_a_kind_thing_on_a_person_is_rolled_too(client: AsyncClient, app: 
         'recovery',
         '악역영애',
     )
-    assert outcome['item_use']['target'] == {'monster_id': None, 'entry_id': lady['id'], 'name': '악역영애'}
+    assert outcome['item_use']['target'] == {
+        'monster_id': None,
+        'entry_id': lady['id'],
+        'user_id': None,
+        'name': '악역영애',
+    }
 
 
 async def test_a_person_can_be_stunned(client: AsyncClient, app: FastAPI, me: dict):

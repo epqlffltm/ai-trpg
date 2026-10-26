@@ -232,6 +232,8 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PUT | `/api/v1/game/tables/{id}/narration-model` | 서술 모델과 단계 바꾸기(`{"narration_model": "gpt-6-luna", "input_step": 1, "output_step": 0}`, 단계를 비우면 0). 방장만. 고를 수 있는 모델과 그 모델이 파는 단계만. 비울 수 없다. 시작하면 고정이다. 진행 중에는 지금 모델을 쓸 수 없을 때(꺼짐, 팔지 않음)만 되고 아니면 409(`narration_model_locked`). 바꾼 값은 다음 라운드부터 쓴다(아직 서술하지 않은 지금 라운드는 함께 바뀐다) ([모델 고르기](#모델-고르기)) | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/credit-wait` | 크레딧이 모자란 사람을 기다리는 시간(`credit_wait_seconds`, 30~3600초)과 지나면 빼는지(`remove_short_payers`) 바꾸기. 방장만. 둘 다 적는다. 진행 중에도 되고 지금 기다리는 라운드에도 바로 쓴다 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/whisper-notice` | 쪽지를 보낸 사실을 모두에게 알릴지(`whisper_notice`) 바꾸기. 방장만. 바꾼 뒤에 보내는 쪽지부터 따른다 | access 토큰 |
+| PUT | `/api/v1/game/tables/{id}/friendly-fire` | 앉은 사람끼리 해칠 수 있는 정도(`friendly_fire`: `off`, `prank`, `full`) 바꾸기(#803). 방장만. 진행 중에도 된다 | access 토큰 |
+| PUT | `/api/v1/game/tables/{id}/members/me/friendly-fire` | 자기를 겨누는 것을 받아들이는 정도(`friendly_fire`) 바꾸기(#803). 앉은 사람이 자기 것만. 언제든 된다 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/references` | 서술에 [참고 자료](#참고-자료)를 넣을지(`references_enabled`) 바꾸기. 방장만. 모집 중에만(시작하면 409 `not_recruiting`). 켜려면 판의 세계관이 허용해야 한다(아니면 422) | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/start` | 테이블 시작하기. 방장만. 모두 캐릭터가 있어야 한다. 모두가 시트를 받는다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/end` | 테이블 끝내기. 방장만 | access 토큰 |
@@ -1471,11 +1473,11 @@ records.py      일어난 일을 이벤트로 적기
 | `difficulty` | 난이도의 단계. 규칙에 있는 단계의 `key`. 숫자를 직접 받지 않는다. 비우면 규칙의 기본 난이도로 채워 저장한다 |
 | `risk` | 실패의 대가. 실패하면 행동한 캐릭터가 이 등급만큼 피해를 입는다. 규칙에 있는 양의 등급의 `key`. 없어도 된다 |
 | `recover` | 성공의 보상. 성공하면 대상이 이 등급만큼 회복한다. 규칙에 있는 양의 등급의 `key`. 없어도 된다 |
-| `target` | 회복하는 대상. 이 테이블에 앉은 사람의 ID. `recover` 와 함께만 적는다. `target` 도 `npc` 도 비우면 자기 자신으로 채워 저장한다 |
-| `harm` | 성공의 타격. 성공하면 대상 NPC 나 몬스터가 이 등급만큼 피해를 입는다. 규칙에 있는 양의 등급의 `key`. `npc` 나 `monster` 와 함께만 적는다 |
+| `target` | 회복하거나 타격을 받는 대상. 이 테이블에 앉은 사람의 ID. `recover` 나 `harm` 과 함께만 적는다. 회복에 `target` 도 `npc` 도 비우면 자기 자신으로 채워 저장한다. 타격은 아래 "동료를 해치기"(#803) |
+| `harm` | 성공의 타격. 성공하면 대상 NPC 나 몬스터나 앉은 사람이 이 등급만큼 피해를 입는다. 규칙에 있는 양의 등급의 `key`. `npc`, `monster`, `target` 중 하나와 함께만 적는다 |
 | `npc` | 겨누는 NPC. 이번 장면의 인물 목록(아래)의 `id`. `harm` 이나 `recover` 와 함께 적는다. `target` 과 함께 적지 않는다 |
 | `monster` | 겨누는 몬스터 한 마리. 이번 장면의 몬스터 목록(아래)의 `id`. `harm` 과만 적는다(회복은 없다). 노려 치기(`aim`)도 된다(#799). `target`, `npc` 와 함께 적지 않는다 |
-| `lethal` | 타격이 죽이려는 것인가. 적지 않으면 `false`(제압)다. `harm` 과 함께만 적는다 |
+| `lethal` | 타격이 죽이려는 것인가. 적지 않으면 `false`(제압)다. `harm` 과 함께, `npc` 나 `monster` 에게만 적는다(앉은 사람에게는 422) |
 | `aim` | 노려 치기. 노릴 부상의 이름표(규칙의 `injuries[].key`). `harm` 과 함께만 적는다. 판정이 어려워지고, 성공하면 그 부상이 생긴다(아래 "부상") |
 | `weapon` | 타격에 쓰는 무기(#276). 착용한 물건 중 공격 보정이 있는 것의 `entry_id`. `harm` 과 함께만 적는다. 공격 보정이 판정의 보정에 더해진다([공격과 방어](#장비)) |
 | `strike` | 노릴 부위(#276). 룰북의 장비의 칸. `harm` 과 함께만, `aim` 과는 함께 적지 않는다. 노려 치기의 대가를 치르고 부위를 굴리지 않는다 |
@@ -1485,10 +1487,28 @@ records.py      일어난 일을 이벤트로 적기
 - 다시 선언하면 통째로 바뀐다. 행동을 빼고 다시 내면 행동도 없어진다.
 - 모양은 받을 때 검사한다. 규칙에 없는 능력, 난이도, 양의 등급도 422 다. 테이블의 규칙은 판에 굳어 있어서 받을 때 바로 견줄 수 있다.
 - 대상이 이 테이블에 앉은 사람이 아니어도 422 다. 낸 뒤에 대상이 떠나면 판정은 하지만 회복은 일어나지 않는다.
-- 남에게 피해를 주는 행동은 NPC 나 몬스터를 겨눌 때뿐이다(`harm`). 앉은 사람끼리는 해치지 않는다.
+- 남에게 피해를 주는 행동(`harm`)은 NPC, 몬스터, 앉은 사람을 겨눈다. 앉은 사람끼리는 설정이 받아들일 때만이다(아래 "동료를 해치기").
 - 타격과 회복을 한 행동에 함께 붙이지 않는다. 성공하면 둘 중 하나만 일어날 수 있다.
 - 대가와 보상을 한 행동에 함께 붙일 수 있다. 실패하면 대가만, 성공하면 보상만 일어난다.
 - 지금은 선언하는 사람이 난이도와 대가를 고른다. AI 가 붙으면 AI 의 제안이 이 자리를 채우고, 같은 검사를 거친다.
+
+**동료를 해치기(#803).** 앉은 사람을 치기(`check` 의 `harm` 과 `target`), 해로운 물건(피해, 부상)을 쓰기(`use` 의 `target`), 던지기(`throw` 의 `target`)다.
+얼마나 해칠 수 있는지는 테이블의 설정(`friendly_fire`, 방장)과 맞는 사람의 설정(`members[].friendly_fire`, 본인이 받아들이는 정도) 중 낮은 것이다. 둘 다 `off`(끔)가 기본이다. 방장이 `full` 로 해도 본인이 받아들이기 전에는 아무도 해치지 못한다.
+
+| 정도 | 뜻 |
+| --- | --- |
+| `off` | 끔. 동료를 해치지 못한다 |
+| `prank` | 장난만. 동료의 HP 를 1 아래로 내리지 못한다(주사위의 양은 그대로, 바뀐 HP 만 1 에서 멈춘다). 짧은 부상만 입힌다. 오래 가는 부상과 결손은 입히지 않고 결과에 적는다(`spared`). 그래서 쓰러지거나 죽지 않는다 |
+| `full` | 다 된다. 몬스터에게 맞은 것과 같다(방어, 세이브, 큰 타격과 쓰러짐의 부상 표, 노려 치기) |
+
+- 자기 자신에게 하는 것(자폭 포함)은 설정과 상관없이 늘 된다.
+- 받을 때: 맞는 사람이 앉아 있고 같은 장소에 있어야 한다(맵이 있는 판, 아니면 422 `action.target`). 죽었으면 409 `ally_dead`. 동료면 끔이면 409 `friendly_fire_off`, 쓰러져 있으면 409 `ally_down`(쓰러진 동료는 해치지 않는다), 장난만인데 오래 가는 부상이나 결손을 노렸으면(`aim`) 409 `friendly_fire_prank` 다. 앉은 사람을 죽이려 하는 것(`lethal`)은 422 다(캐릭터는 죽음의 굴림으로 죽는다). 던지기는 자기 자신을 겨누지 않는다(422, 그것은 쓰기다).
+- 설정은 판 중에도 바뀐다. 닫을 때 굴리기 전에 다시 본다. 그사이에 받아들이지 않게 바뀌었거나, 맞는 사람이 떠났거나 죽었거나 쓰러졌거나 다른 곳으로 갔으면 굴리지 않고 그 까닭을 적는다(`outcome.target_gone`: `user_id`, `name`, `reason` 이 `friendly_fire_off`, `left`, `dead`, `downed`, `elsewhere`). 물건은 줄지 않는다(쓰기는 `item_use.reason` 이 `friendly_fire_off` 나 `target_gone`). 다 됨이 장난으로 낮아졌으면 장난의 상한을 지킨다.
+- 동료에게 해로운 물건을 쓰는 것은 굴리지 않는다(이로운 물건과 같다). 던지는 것은 맞히는 판정을 굴린다. 이로운 물건(물약)은 설정을 보지 않는다.
+- 결과: HP 의 변화(`outcome.effect`)의 `user_id` 가 맞은 사람이다. 장난이면 `prank: true` 다(이벤트 `hp_changed` 에도 `prank` 가 붙는다). 장난이라 입지 않은 부상은 부상 표의 결과(`injury_roll.spared`)와 물건이 입힌 부상(`injured[].spared`)에 적힌다.
+- 앉은 사람과는 싸운 것으로 적지 않는다(몬스터와 NPC 의 차례가 읽는 기록이다).
+- 서술자는 HP 의 줄에서 장난과 장난이라 입지 않은 부상을 받는다(`→ 영애 피해 6 (HP 1/10, 장난). 장난이라 입지 않은 부상: 팔 골절`, `narration-69`).
+- 설정을 바꾸면 이벤트로 남는다(`friendly_fire_changed`, `friendly_fire_consent_changed`). 앉은 사람 모두가 누가 무엇을 받아들였는지 안다. 테이블의 정도는 로비에도 보인다.
 
 **이번 장면의 인물.** 행동으로 겨눌 수 있는 NPC 는 가장 최근 라운드의 장면에 나온 인물이다(`GET /tables/{id}/rounds/current/people`).
 판에 자리를 적은 인물(`npc_places`, #282)은 글이 아니라 자리로 고른다. 살아 있는 캐릭터가 서 있는 장소들에 있는 인물이다(몬스터와 같다).
@@ -1556,7 +1576,7 @@ records.py      일어난 일을 이벤트로 적기
 - **쓰기**는 소모품만 된다(장비는 422 `action.item`). 하나도 없으면 409 `item_not_held`. 마감할 때 하나가 준다.
   효과(`items[].effects`, #800)가 있는 소모품이면 대상에게 그 효과들을 적힌 차례대로 낸다. 대상은 앉은 사람(`target`, 비우면 자기 자신으로 채워 저장한다), 이번 장면의 인물(`npc`), 내가 선 곳의 몬스터(`monster`) 중 하나다.
   - 자기와 동료에게는 굴리지 않는다. 회복은 그 등급만큼(회복의 주사위만 굴린다), 피해는 그 등급만큼(방어구는 들지 않는다, 큰 타격이면 부상 표), 풀기는 대상이 입은 그 부상들을 모두 끝낸다(생긴 순서, 오래 가는 것은 나아서 후유증 표를 굴린다), 부상은 그 부상을 입힌다(이미 입고 있으면 또 입히지 않는다). 대상이 그 부상을 입고 있지 않아도 쓴다. 대상이 앉은 사람이 아니면 422, 죽었으면 409 `patient_dead`. 쓰러진 사람은 일으킬 수 있다.
-  - 해로운 효과(피해, 부상)가 있는 소모품은 자기에게만 쓴다. 동료에게 쓰면 409 `friendly_fire_off` 다(팀킬의 설정 #803 전).
+  - 해로운 효과(피해, 부상)가 있는 소모품을 동료에게 쓰는 것은 위의 "동료를 해치기"(#803)를 따른다. 자기 자신에게는 늘 된다.
   - 인물과 몬스터에게는 늘 맞히는 판정을 굴린다(이로운 물건이어도 그렇다). 능력과 난이도는 룰북의 `item_check` 다. 없으면 422(`action.npc` 나 `action.monster`). 겨누는 조건은 치기와 같다(다른 곳의 마리는 422, 죽었으면 409). 피해가 있으면 그 등급의 타격으로 판정한다(방어, 세이브, 부상 표, 드롭이 치기와 같다, `lethal` 은 피해가 있을 때만, 아니면 422 `action.lethal`). 회복이 있으면 인물은 그 등급만큼 회복한다(몬스터에게는 회복이 없다). 맞히면 그다음 풀기와 부상을 낸다(그 타격으로 죽었으면 내지 않는다). 몬스터는 그 성질에 면역인 부상을 입지 않는다(#799). 빗나가거나 세이브로 막으면 아무 일도 없다. 굴렸으면 물건은 하나 없어진다. 해로운 물건이면 맞든 빗나가든 그 대상과 싸운 것이다. 판정의 결과(`roll`, `success`, `npc_effect`, `monster_effect` …)에 `item_use` 가 붙는다(판정의 `ability`, `difficulty` 가 있다).
   효과가 없는 소모품(연막탄 같은 것)은 대상이 없다(적으면 422 `action.target`, `action.npc`, `action.monster`). 쓰고 없어지기만 한다. 무엇이 일어나는지는 서술이 맡는다.
 - **건네기**는 장비도 된다. `count`(1~99, 기본 1)만큼 가져야 한다(409 `item_not_held`). 받는 사람은 앉은 다른 사람이다(자기 자신이나 앉지 않은 사람은 422, 죽었으면 409 `recipient_dead`). 받는 쪽이 한 가지 99 개를 넘으면 409 `recipient_full`.
@@ -1565,17 +1585,17 @@ records.py      일어난 일을 이벤트로 적기
 - 결과는 선언의 `outcome.item_use`(`entry_id`, `name`, `used`, `reason`, `target`, `remaining`, `cured`(푼 부상들 `{"injury", "name"}`), `injured`(입힌 부상들 `{"injury", "immune", "ends_after_round", "heals_at"}`, 이미 입고 있었거나 면역이면 `injury` 가 `null`, #800))와 HP 의 변화 `outcome.effect`, 또는 `outcome.item_give`(`entry_id`, `name`, `count`, `given`, `reason`, `target`, `remaining`, `target_total`)에 적힌다. 이벤트(`item_used` 뒤에 HP 의 변화 `hp_changed` 나 판정 `check_rolled` 과 맞은 쪽의 변화, 푼 부상마다 `injury_ended`(`reason`: `cured`), 입힌 부상마다 `injury_gained`(`source`: `item`), `item_given`)로도 남는다.
 - 서술자는 결과를 한 줄로 받는다(`(쓴 물건: 치유 물약 → 기사) → 기사 회복 2 (HP 6/10)`, `(건넨 물건: 밧줄 1개 → 영애)`, `narration-18`).
 
-**물건 던지기.** 가진 물건 하나를 몬스터 한 마리나 장면의 인물에게 던진다(#277, #801). 어떤 물건이든 된다. 판정은 물건에 적힌 던지는 판정(`items[].throw`), 없으면 룰북의 `item_check` 다. 맞으면 그 물건의 효과가 대상에게 든다(물약이면 회복, 독이면 중독). 인물이나 몬스터에게 물건을 쓰는 것과 같다.
+**물건 던지기.** 가진 물건 하나를 몬스터 한 마리나 장면의 인물이나 같은 장소의 동료(#803)에게 던진다(#277, #801). 어떤 물건이든 된다. 판정은 물건에 적힌 던지는 판정(`items[].throw`), 없으면 룰북의 `item_check` 다. 맞으면 그 물건의 효과가 대상에게 든다(물약이면 회복, 독이면 중독). 인물이나 몬스터에게 물건을 쓰는 것과 같다.
 
 ```json
 {"content": "쥐 떼에 화염병을 던진다.", "action": {"kind": "throw", "item": "…", "monster": "…", "lethal": false}}
 ```
 
-- 맞을 쪽은 `monster`(내가 선 곳의 마리)나 `npc`(장면의 인물) 하나다. 둘 다 적거나 둘 다 비우면 422. 겨누는 조건은 치기와 같다(다른 곳의 마리는 422 `action.monster`, 죽었으면 409 `monster_dead`).
+- 맞을 쪽은 `monster`(내가 선 곳의 마리), `npc`(장면의 인물), `target`(같은 장소의 동료, #803) 중 하나다. 둘 이상 적거나 다 비우면 422. 동료에게 해로운 물건을 던지는 것은 "동료를 해치기"를 따른다. 겨누는 조건은 치기와 같다(다른 곳의 마리는 422 `action.monster`, 죽었으면 409 `monster_dead`).
 - 판의 물건이 아니거나, 물건에 던지는 판정이 없고 룰북에 `item_check` 도 없으면 422(`action.item`), 하나도 없으면 409 `item_not_held`. 능력과 난이도는 받지 않는다. `lethal` 은 피해의 효과가 있는 물건에만 된다(아니면 422 `action.lethal`). 무기와 노려 치기는 없다.
 - 마감할 때 굴린다. 피해가 있으면 그 등급의 타격으로 판정해 방어, 세이브, 부상 표, 드롭이 치기와 같다. 회복이 있으면 인물은 회복한다(몬스터에게는 회복이 없다). 맞히면 그다음 풀기와 부상을 낸다. 몬스터는 그 성질에 면역인 부상을 입지 않는다. 효과가 없는 물건은 맞아도 아무 일이 없다. 던지면 맞든 빗나가든 하나 없어진다.
 - 차례가 왔을 때 더 가지고 있지 않으면(`not_held`), 겨눈 몬스터가 죽었거나 다른 곳에 있으면(`target_gone`, 치기와 같은 `target_gone` 도 적힌다) 던지지 않는다. 굴리지 않고 물건도 그대로다.
-- 결과는 판정의 결과(`roll`, `success`, `monster_effect`, `npc_effect`, `blow`, `drop` …)에 `outcome.item_throw`(`entry_id`, `name`, `thrown`, `reason`, `ability`, `difficulty`(기본으로 채웠다), `target`(`monster_id` 나 `entry_id`, `name`), `remaining`, `cured`, `injured`(맞혀서 푼 부상과 입힌 부상, `item_use` 의 것과 같다, #801))가 더해진 것이다. 못 던졌으면 `item_throw` 만 있다(`target_gone` 이면 그것도).
+- 결과는 판정의 결과(`roll`, `success`, `monster_effect`, `npc_effect`, `blow`, `drop` …)에 `outcome.item_throw`(`entry_id`, `name`, `thrown`, `reason`, `ability`, `difficulty`(기본으로 채웠다), `target`(`monster_id` 나 `entry_id` 나 `user_id`, `name`), `remaining`, `cured`, `injured`(맞혀서 푼 부상과 입힌 부상, `item_use` 의 것과 같다, #801))가 더해진 것이다. 못 던졌으면 `item_throw` 만 있다(`target_gone` 이면 그것도).
 - 이벤트는 행동 뒤에 `item_thrown`, 던졌으면 그 뒤에 `check_rolled`(물건의 능력과 난이도)와 맞은 쪽의 변화, 푼 부상마다 `injury_ended`(`reason`: `cured`), 입힌 부상마다 `injury_gained`(`source`: `item`)가 잇는다.
 - 서술자는 한 일의 줄에서 판정 앞에 던진 물건을 받는다(`(던진 물건: 화염병 → 수로 쥐 1) (민첩 판정 성공: …)`, `narration-63`). 푼 부상, 입힌 부상, 면역이라 입지 않은 부상이 그 줄에 붙는다(`narration-67`).
 
@@ -2049,6 +2069,7 @@ app/rounds/
   - `narration-63`: 한 일의 줄에서 판정 앞에 던진 물건(`(던진 물건: 화염병 → 수로 쥐 1)`, 못 던졌으면 `(던지려던 물건: …)`, #277)
   - `narration-64`: 치료의 줄에 붙여 쓴 물건과 보정(`→ 토르빈의 팔 골절 치료(쓴 물건: 의료 키트 +2): 앞당겨짐`, #277)
   - `narration-68`: 따기, 부수기, 고치기, 넘기의 줄에 붙여 쓴 물건과 부러진 것(`(문: 탑 쪽 문을 따려 했다. 민첩 판정에 실패했다)(쓴 물건: 락픽 +2, 부러짐)`, #802)
+  - `narration-69`: 동료의 장난과 장난이라 입지 않은 부상(`→ 영애 피해 6 (HP 1/10, 장난). 장난이라 입지 않은 부상: 팔 골절`), 해치려던 동료가 없었던 까닭(`(겨눈 상대 영애: 이미 쓰러져 있었다. 판정하지 않았다)`, #803)
   - `narration-67`: 던진 물건의 줄에 푼 부상, 입힌 부상, 면역이라 입지 않은 부상(`(던진 물건: 독병 → 수로 쥐) [입힌 부상: 중독]`, #801)
   - `narration-66`: 쓴 물건의 줄에 입힌 부상과 면역이라 입지 않은 부상(`[입힌 부상: 중독]`, `[면역이라 입지 않은 부상: 중독]`), 인물이나 몬스터에게 쓴 물건은 판정 줄 앞에(`(쓴 물건: 독 단검 → 수로 쥐) 민첩 판정 …`, #800)
   - `narration-65`: 몬스터의 몸 상태에 입은 부상(`다침(중독, 팔 골절)`), 몬스터의 결과 줄에 새 부상과 면역이라 입지 않은 부상(`. 기절에 면역이라 멀쩡하다`, #799)
@@ -2795,6 +2816,8 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `narration_model_unavailable` | 서술 모델이 은퇴했는데 같은 회사에 대신할 모델이 없다. 방장이 모델을 골라야 서술한다 | `narration_model`, `reason`: `retired` |
 | `credit_wait_changed` | 방장이 크레딧이 모자란 사람을 기다리는 규칙을 바꿨다 | `credit_wait_seconds`, `remove_short_payers` |
 | `whisper_notice_changed` | 방장이 쪽지를 보낸 사실을 알릴지 바꿨다 | `whisper_notice` |
+| `friendly_fire_changed` | 방장이 앉은 사람끼리 해칠 수 있는 정도를 바꿨다(#803) | `friendly_fire` |
+| `friendly_fire_consent_changed` | 앉은 사람이 자기를 겨누는 것을 받아들이는 정도를 바꿨다(#803). 행한 사람이 그 사람이다 | `user_id`, `friendly_fire` |
 | `references_changed` | 방장이 참고 자료를 서술에 넣을지 바꿨다(모집 중에만, #482) | `references_enabled` |
 | `ledger_drafts_changed` | 방장이 장부 초안을 쓸지 바꿨다. 장부 초안을 걷어내 이제 생기지 않는다(#371). 그 전의 이벤트에만 있다 | `ledger_drafts` |
 | `whisper_sent` | 누가 누구에게 쪽지를 보냈다. 알리기로 한 테이블에만 적힌다. 쪽지의 글은 적지 않는다 | `user_id`, `character_name`, `recipient_id`, `recipient_character_name` |
@@ -2803,7 +2826,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`), `narration_model`(이 라운드의 서술 모델. 모델을 고르는 규칙 전의 테이블이면 `null`), `price`(1인 1라운드의 값 `{"credits", "tier"}`. 알릴 수 없으면 `null`), `clock`(게임 안의 시각: `day`, `hour`, `minute`, `time_of_day`), `passed_minutes`(앞 라운드부터 흐른 분. 첫 라운드는 0) |
 | `player_action` | 플레이어가 선언한 행동 | `round`, `character_name`, `content`, `action`(행동. 없으면 `null`) |
 | `check_rolled` | 엔진이 행동을 판정했다. 그 행동 바로 뒤에 적힌다. 가기가 길을 넘는 판정을, 따기, 부수기, 고치기가 그 판정을 굴렸으면 그것도 이 종류다(#281) | `round`, `character_name`, `ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`(부상의 영향. 없으면 `null`), `called_shot`(노려 쳤으면), `blow`(타격에 장비가 들었으면, #276) |
-| `hp_changed` | 엔진이 HP 를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `kind`(`damage`, `recovery`), `magnitude`, `rolls`, `amount`, `before`, `after`, `max_hp`, `downed`, `injury_roll`(부상 표를 굴렸으면) |
+| `hp_changed` | 엔진이 HP 를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `kind`(`damage`, `recovery`), `magnitude`, `rolls`, `amount`, `before`, `after`, `max_hp`, `downed`, `injury_roll`(부상 표를 굴렸으면), `prank`(동료의 장난이었으면 `true`, #803) |
 | `npc_attitude_changed` | 엔진이 NPC 의 태도를 바꿨다. 그렇게 만든 일 바로 뒤에 적힌다 | `round`, `entry_id`, `name`(장면의 호칭), `previous`, `attitude`(`friendly`, `neutral`, `wary`, `hostile`), `reason`(`caught_stealing` 훔치다 들킴, `robbed_while_down` 쓰러진 동안 빼앗기고 깨어남) |
 | `npc_changed` | 엔진이 NPC 의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `entry_id`, `name`(장면의 호칭), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`, `injury_roll`. HP 의 숫자는 내보내지 않는다 |
 | `monster_changed` | 엔진이 몬스터 한 마리의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `monster_id`, `name`(부르는 이름), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`, `injury_roll`(#799). HP 의 숫자는 내보내지 않는다 |
@@ -2819,7 +2842,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `items_lost` | 방장이 캐릭터에게서 물건을 빼앗았다. 그 길을 지운 뒤로는 적지 않는다(#367). 그 전에 적힌 것을 읽으려고 남긴다 | `items_gained` 와 같다. `total` 이 0 이면 다 잃었다 |
 | `item_used` | 캐릭터가 소모품을 썼다(또는 못 했다). 그 행동 바로 뒤에 적힌다. 회복했으면 바로 뒤에 `hp_changed` | `round`, `character_name`, `entry_id`, `name`, `used`, `reason`, `target`(회복받거나 부상이 풀린 사람), `remaining`, `cured`(푼 부상들 `{"injury", "name"}`, #277), `injured`(입힌 부상들 `{"injury", "name"}`, #800). 인물이나 몬스터에게 썼으면 바로 뒤에 `check_rolled` 과 맞은 쪽의 변화, 풀었으면 부상마다 `injury_ended`, 입혔으면 부상마다 `injury_gained`(`source`: `item`) |
 | `aid_used` | 캐릭터가 따기, 부수기, 고치기, 넘기의 판정에 물건을 붙여 썼다(#802). 그 판정(`check_rolled`) 바로 뒤에 적힌다. 치료에 붙여 쓴 것은 `injury_treated` 의 `aid` 다 | `round`, `character_name`, `act`, `entry_id`, `name`, `bonus`, `lost`, `broken`, `remaining` |
-| `item_thrown` | 캐릭터가 물건을 몬스터나 인물에게 던졌다(또는 못 했다, #277). 그 행동 바로 뒤에 적힌다. 던졌으면 바로 뒤에 `check_rolled` 와 맞은 쪽의 변화 | `round`, `character_name`, `entry_id`, `name`, `thrown`, `reason`(`not_held`, `target_gone`), `target`(`monster_id` 나 `entry_id`, `name`), `remaining`, `cured`, `injured`(#801) |
+| `item_thrown` | 캐릭터가 물건을 몬스터나 인물에게 던졌다(또는 못 했다, #277). 그 행동 바로 뒤에 적힌다. 던졌으면 바로 뒤에 `check_rolled` 와 맞은 쪽의 변화 | `round`, `character_name`, `entry_id`, `name`, `thrown`, `reason`(`not_held`, `target_gone`), `target`(`monster_id` 나 `entry_id` 나 `user_id`, `name`), `remaining`, `cured`, `injured`(#801) |
 | `item_given` | 캐릭터가 물건을 건넸다(또는 못 했다). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `entry_id`, `name`, `count`, `given`, `reason`, `target`(받은 사람), `remaining`, `target_total` |
 | `steal_attempted` | 캐릭터가 몬스터나 NPC 가 지닌 물건을 훔치려 했다(들켰어도). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `monster_id`, `monster_name`(몬스터일 때), `npc_id`, `npc_name`(NPC 일 때), `entry_id`, `name`, `check`(`roll`, `modifier`, `total`, `target`, `success`, 굴리지 않았으면 `null`), `hindrance`, `factors`, `stolen`, `count`, `left`, `total`(도둑이 가진 개수), `reason`(`gone`, `full`), `fight`(들켜 싸움이 붙었는가) |
 | `item_traded` | 캐릭터가 장면의 상인에게서 샀거나 상인에게 팔았다(또는 못 했다, #278). 그 행동 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `side`(`buy`, `sell`), `npc_id`, `npc_name`(장면의 호칭), `entry_id`, `name`, `count`, `price`(오간 돈), `traded`, `reason`, `total`(그 물건을 가진 개수), `money`(가진 돈) |

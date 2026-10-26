@@ -198,7 +198,10 @@ from app.rounds.time_words import duration_text, time_text
 #                 ((던진 물건: 치유 물약 → 영애) [풀린 부상: 중독])
 #   narration-68: 물건이 다른 행동을 거든다(#802). 따기, 부수기, 고치기, 넘기의 줄에도 붙여 쓴 물건이 붙고,
 #                 실패해서 부러졌으면 그것도 적는다((문: 탑 쪽 문을 따려 했다. …)(쓴 물건: 락픽 +1, 부러짐))
-PROMPT_VERSION = 'narration-68'
+#   narration-69: 동료를 해친다(#803). 동료의 장난이면 HP 의 줄에 장난이 붙고, 장난이라 입지 않은 부상을 적는다
+#                 (→ 영애 피해 6 (HP 1/10, 장난). 장난이라 입지 않은 부상: 팔 골절).
+#                 해치려던 동료가 없었으면 그 까닭을 적는다(겨눈 상대 영애: 이미 쓰러져 있었다)
+PROMPT_VERSION = 'narration-69'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

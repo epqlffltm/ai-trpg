@@ -267,7 +267,8 @@ describe('throwables', () => {
   it('룰북에 맞히는 판정이 있으면 지닌 물건 아무것이나 던질 수 있다(#801)', () => {
     expect(throwables(withFirebomb()).map((item) => item.entry_id)).toEqual(['i1', 'i7']);
     expect(availableKinds(withFirebomb())).toContain('throw');
-    expect(availableKinds(withFirebomb({ round: 2, people: [], monsters: [] } as unknown as SceneCast))).not.toContain('throw');
+    // 장면에 인물도 몬스터도 없어도 같은 곳의 동료(쓰러진 미아)에게는 던진다(#803)
+    expect(availableKinds(withFirebomb({ round: 2, people: [], monsters: [] } as unknown as SceneCast))).toContain('throw');
   });
 
   it('룰북에 맞히는 판정이 없으면 던지는 판정이 적힌 물건만 던진다', () => {

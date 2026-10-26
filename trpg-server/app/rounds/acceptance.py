@@ -9,6 +9,7 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
 행동은 열일곱이다(app/engine/action.py).
   - 판정(CheckAction). 이번 장면에 나온 NPC 를 겨눌 수 있다(app/rounds/cast.py). 노려 칠 수도 있다.
     자기가 선 장소의 몬스터 한 마리를 칠 수도 있다(app/rounds/monster_scene.py).
+    같은 장소의 앉은 사람을 칠 수도 있다(#803). 테이블과 맞는 쪽이 받아들여야 한다(app/rounds/friendly_fire.py).
   - 치료(TreatAction). 능력과 난이도는 규칙이 정한다. 대상이 그 부상을 입고 있어야 한다.
   - 지목(NameAction). 인물의 진짜 이름을 짚는다. 맞는지는 여기서 보지 않는다(app/rounds/judging.py).
   - 쓰기(UseAction), 건네기(GiveAction). 판의 물건을 지금 가지고 있어야 한다.
@@ -62,6 +63,7 @@ from app.engine.action import (
 from app.engine.item_aids import AidAct
 from app.engine.item_effects import EffectKind, first_of
 from app.engine.ruleset import Ruleset
+from app.rounds import friendly_fire
 from app.rounds import injuries as round_injuries
 from app.rounds.aids import require_aid
 from app.rounds.cast import CastMember, Scene, find_cast_member, find_reachable, is_named
@@ -189,12 +191,15 @@ def accept_check(table: GameTable, member: TableMember, action: CheckAction, sce
       - 노린 부상이 규칙에서 노릴 수 없는 것이면 ActionNotInRulesError, 대상이 이미 입었으면 RoundConflictError.
       - 노린 부위가 규칙에서 노릴 수 없는 것이면 ActionNotInRulesError(strike, #276).
       - 무기가 공격 보정이 없는 물건이면 ActionNotInRulesError, 착용하고 있지 않으면 RoundConflictError(#276).
+      - 앉은 사람을 치면(#803) require_ally_target.
     비워 둔 난이도는 규칙의 기본 난이도로, 비워 둔 회복의 대상은 자기 자신으로 채운다.
     """
     fault = actions.find_fault(ruleset, action)
     if fault is not None:
         raise ActionNotInRulesError(fault)
-    if action.target is not None and table_state.find_member(table, action.target) is None:
+    if action.target is not None and action.harm is not None:
+        require_ally_target(table, member, action, ruleset)
+    elif action.target is not None and table_state.find_member(table, action.target) is None:
         raise ActionTargetError('target')
     if action.npc is not None:
         require_npc_target(scene.cast, member, action.npc, action.aim)
@@ -203,6 +208,18 @@ def accept_check(table: GameTable, member: TableMember, action: CheckAction, sce
     if action.weapon is not None:
         require_weapon(table, member, action.weapon)
     return aim(actions.settle(ruleset, action), member.user_id).model_dump(mode='json')
+
+
+def require_ally_target(table: GameTable, member: TableMember, action: CheckAction, ruleset: Ruleset) -> None:
+    """
+    앉은 사람을 치는 판정(#803). 해칠 수 있는지(friendly_fire.require_harmable), 노린 부상을 아직 입지 않았는지 본다.
+
+    장난만이면 짧은 부상만 노린다(friendly_fire_prank). 이미 입었으면 RoundConflictError(already_injured).
+    """
+    target, level = friendly_fire.require_harmable(table, member, action.target)
+    friendly_fire.require_prank_aim(ruleset, level, action.aim)
+    if action.aim is not None and round_injuries.wears(target.sheet.injuries, action.aim):
+        raise RoundConflictError(Conflict.ALREADY_INJURED)
 
 
 def patient_rows(table: GameTable, member: TableMember, action: TreatAction, cast: list[CastMember]) -> list:
@@ -307,7 +324,7 @@ def accept_use(table: GameTable, member: TableMember, action: UseAction, scene: 
       - 인물이나 몬스터에게 쓰기(#800): accept_use_on.
       - 효과가 있는 소모품을 앉은 사람에게: 대상이 앉은 사람이 아니면 ActionTargetError, 죽었으면
         RoundConflictError(patient_dead). 비워 둔 대상은 자기 자신으로 채운다. 해로운 효과(피해, 부상)가 있으면
-        자기 자신에게만 쓴다. 동료면 RoundConflictError(friendly_fire_off, #803 전).
+        치기와 같이 해칠 수 있어야 한다(#803, friendly_fire.require_harmable). 자기 자신에게는 늘 된다.
     """
     item = find_item(table, action.item)
     if item.kind != ItemKind.CONSUMABLE:
@@ -322,7 +339,7 @@ def accept_use(table: GameTable, member: TableMember, action: UseAction, scene: 
         return accept_use_on(table, member, action, item, scene)
     target = living_target(table, action.target or member.user_id, Conflict.PATIENT_DEAD)
     if items.is_harmful(item) and target.user_id != member.user_id:
-        raise RoundConflictError(Conflict.FRIENDLY_FIRE_OFF)
+        friendly_fire.require_harmable(table, member, target.user_id)
     return action.model_copy(update={'target': target.user_id}).model_dump(mode='json')
 
 
@@ -356,6 +373,8 @@ def accept_throw(table: GameTable, member: TableMember, action: ThrowAction, sce
       - 피해의 효과가 없는 물건에 죽이려 한다(lethal)를 적었으면 ActionNotInRulesError(lethal).
       - 맞을 쪽은 치기와 같다. 인물이 이번 장면의 인물이 아니거나 다른 장소에 있으면 ActionTargetError(npc),
         몬스터가 같은 장소의 마리가 아니면 ActionTargetError(monster), 이미 죽었으면 RoundConflictError.
+      - 앉은 사람에게 던지면(#803): 자기 자신이거나 같은 장소의 사람이 아니면 ActionTargetError(target),
+        죽었으면 RoundConflictError(ally_dead). 해로운 물건이면 치기와 같이 해칠 수 있어야 한다.
     능력과 난이도는 받지 않는다. 물건에 적혀 있어 저장할 것이 없다.
     """
     item = find_item(table, action.item)
@@ -368,7 +387,25 @@ def accept_throw(table: GameTable, member: TableMember, action: ThrowAction, sce
         require_npc_target(scene.cast, member, action.npc, None)
     if action.monster is not None:
         require_monster_target(scene.monsters, member, action.monster)
+    if action.target is not None:
+        require_throw_target(table, member, action.target, item)
     return action.model_dump(mode='json')
+
+
+def require_throw_target(table: GameTable, member: TableMember, target_id: uuid.UUID, item: CatalogItem) -> None:
+    """
+    앉은 사람에게 던지기(#803). 자기 자신은 아니다(그것은 쓰기다). 같은 장소의 살아 있는 사람이어야 한다.
+
+    해로운 물건이면 해칠 수 있어야 한다(friendly_fire.require_harmable). 이로운 물건(물약)은 쓰러진 동료에게도 던진다.
+    """
+    if target_id == member.user_id:
+        raise ActionTargetError('target')
+    if items.is_harmful(item):
+        friendly_fire.require_harmable(table, member, target_id)
+        return
+    target = living_target(table, target_id, Conflict.ALLY_DEAD)
+    if not friendly_fire.stands_together(member, target):
+        raise ActionTargetError('target')
 
 
 def accept_give(table: GameTable, member: TableMember, action: GiveAction) -> dict:

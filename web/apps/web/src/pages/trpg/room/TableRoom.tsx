@@ -18,6 +18,7 @@ import { meQuery } from '../../../auth/queries';
 import { usePublicNames } from '../../../hooks/usePublicNames';
 import { ChatPanel } from './ChatPanel';
 import { displayName, MemberList } from './MemberList';
+import { FriendlyFirePanel } from './FriendlyFirePanel';
 import { HostPanel } from './host/HostPanel';
 import { RoomHeader } from './RoomHeader';
 import { ActionRequestProvider } from './round/action/actionRequest';
@@ -97,6 +98,11 @@ export function TableRoom({ table }: { table: TableDetail }) {
           </div>
           <div className="room__side">
             <HostPanel table={table} myId={myId} nameOfMember={(userId) => displayName(userId, table.members, nameOf)} />
+            <FriendlyFirePanel
+              table={table}
+              myId={myId}
+              nameOfMember={(userId) => displayName(userId, table.members, nameOf)}
+            />
             {table.status === 'recruiting' ? (
               <MemberList members={table.members} myId={myId} nameOf={nameOf} />
             ) : (

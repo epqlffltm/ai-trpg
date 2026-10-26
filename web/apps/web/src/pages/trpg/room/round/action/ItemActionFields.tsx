@@ -2,6 +2,7 @@
 // 물건을 다루는 행동의 칸. 쓰기(소모품, 효과가 있으면 받을 쪽: 나, 동료, 인물, 몬스터. #800), 건네기(받을 사람과 개수), 내려놓기(개수),
 // 줍기(내가 선 곳에 놓인 것과 개수), 훔치기와 빼앗기(대상과 그 대상이 지닌 물건),
 // 던지기(#277, #801. 지닌 물건 아무것이나와 맞힐 대상. 판정은 물건이나 룰북에 적혀 있어 보이기만 한다).
+// 해로운 물건을 동료에게 쓰고 던지는 것(#803)은 해칠 수 있는 동료만 고르고, 장난이면 그렇게 알린다.
 
 import { Checkbox, TextField } from '@ai-trpg/ui';
 import type { TableDetail } from '../../../../../api/types';
@@ -9,16 +10,18 @@ import type { ActionDraft } from './actionDraft';
 import { COUNT_MAX } from './actionDraft';
 import {
   consumables,
-  harmTargets,
   heldCount,
   heldItems,
+  isPrankToward,
   itemDamages,
+  itemHarms,
   itemTakesTarget,
   splitRef,
   useTargets,
   placeItems,
   recipients,
   throwables,
+  throwTargets,
   victimItems,
   victims,
   type ActionContext,
@@ -45,6 +48,9 @@ function UseTargetFields({ draft, ctx, onChange }: Props) {
     <>
       <ChoiceSelect label="쓸 쪽" value={draft.target} choices={useTargets(ctx, draft.item)} empty="나" onChange={(target) => onChange({ target })} />
       {aimed ? <p className="hint">인물과 몬스터에게는 맞히는 판정을 굴립니다. 빗나가도 물건은 하나 없어집니다.</p> : null}
+      {isPrankToward(ctx, draft.target) && itemHarms(ctx.table, draft.item) ? (
+        <p className="hint">장난입니다. HP 1 아래로 내리지 않고 짧은 부상만 입힙니다.</p>
+      ) : null}
       {aimed && itemDamages(ctx.table, draft.item) ? (
         <Checkbox
           label="죽이려 한다"
@@ -64,10 +70,19 @@ export function ThrowFields({ draft, ctx, onChange }: Props) {
     <>
       <div className="ability-grid">
         <ChoiceSelect label="던질 물건" value={draft.item} choices={items} empty="고르기" onChange={(item) => onChange({ item })} />
-        <ChoiceSelect label="맞힐 대상" value={draft.target} choices={harmTargets(ctx)} empty="고르기" onChange={(target) => onChange({ target })} />
+        <ChoiceSelect
+          label="맞힐 대상"
+          value={draft.target}
+          choices={throwTargets(ctx, draft.item)}
+          empty="고르기"
+          onChange={(target) => onChange({ target })}
+        />
       </div>
       {terms ? <p className="hint">{terms}</p> : null}
-      {draft.item && itemDamages(ctx.table, draft.item) ? (
+      {isPrankToward(ctx, draft.target) && itemHarms(ctx.table, draft.item) ? (
+        <p className="hint">장난입니다. HP 1 아래로 내리지 않고 짧은 부상만 입힙니다.</p>
+      ) : null}
+      {draft.item && itemDamages(ctx.table, draft.item) && splitRef(draft.target)[0] !== 'member' ? (
         <Checkbox
           label="죽이려 한다"
           description="켜지 않으면 HP 가 0 이 될 때 쓰러뜨리기만 합니다."

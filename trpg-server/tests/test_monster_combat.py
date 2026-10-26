@@ -254,6 +254,7 @@ async def test_a_hit_wounds_the_monster(client: AsyncClient, app: FastAPI, me: d
             'ends_after_round': None,
             'heals_at': None,
             'immune': None,
+            'spared': None,
         },
     }
     assert await state_of(session, rat['id']) == (1, NpcStatus.ALIVE)
@@ -364,7 +365,7 @@ async def test_a_monster_killed_earlier_in_the_round_is_not_rolled_for(
     outcomes = {declaration['character_name']: declaration['outcome'] for declaration in closing['declarations']}
     assert outcomes['엘프']['monster_effect']['status'] == 'dead'
     # 앞사람이 죽였다. 굴리지 않았으니 실패의 대가도 없다
-    gone = {'monster_id': rat['id'], 'npc_id': None, 'name': '수로 쥐 1', 'reason': 'dead'}
+    gone = {'monster_id': rat['id'], 'npc_id': None, 'user_id': None, 'name': '수로 쥐 1', 'reason': 'dead'}
     assert outcomes['드워프 기사'] == {'target_gone': gone}
 
 

@@ -49,6 +49,7 @@ from app.tables import (
     credit_waits,
     deaths,
     equipment,
+    friendly_fire_changes,
     injuries,
     items,
     narration_models,
@@ -95,6 +96,7 @@ from app.tables.schemas import (
     CreditWaitUpdate,
     CurrencyOut,
     FallenOut,
+    FriendlyFireUpdate,
     HostTransfer,
     InjuryOut,
     ItemOut,
@@ -222,6 +224,7 @@ def to_summary(table: GameTable) -> TableSummary:
         remove_short_payers=table.remove_short_payers,
         whisper_notice=table.whisper_notice,
         references_enabled=table.references_enabled,
+        friendly_fire=table.friendly_fire,
         created_at=table.created_at,
     )
 
@@ -440,6 +443,7 @@ def to_member(
         abilities=member.abilities,
         sheet=to_sheet(member.sheet, catalog, ruleset),
         fallen=[to_fallen(sheet) for sheet in member.fallen],
+        friendly_fire=member.friendly_fire,
         joined_at=member.joined_at,
     )
 
@@ -832,6 +836,33 @@ async def change_whisper_notice(
     진행 중에도 된다. 바꾼 뒤에 보내는 쪽지부터 따른다.
     """
     table = await whisper_notices.change_whisper_notice(session, user.user_id, table_id, data)
+    return to_detail(table, user.user_id)
+
+
+@router.put('/{table_id}/friendly-fire', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def change_friendly_fire(
+    table_id: uuid.UUID, data: FriendlyFireUpdate, user: CurrentUser, session: Session
+) -> TableDetail:
+    """
+    앉은 사람끼리 해칠 수 있는 정도(#803)를 바꾼다. 방장만 한다. 진행 중에도 된다.
+
+    끔(off), 장난만(prank), 다 됨(full)이다. 맞는 쪽이 받아들이는 정도와 견주어 낮은 쪽이 든다.
+    이미 받은 선언도 라운드를 닫을 때 다시 본다.
+    """
+    table = await friendly_fire_changes.change_table_friendly_fire(session, user.user_id, table_id, data)
+    return to_detail(table, user.user_id)
+
+
+@router.put('/{table_id}/members/me/friendly-fire', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def change_friendly_fire_consent(
+    table_id: uuid.UUID, data: FriendlyFireUpdate, user: CurrentUser, session: Session
+) -> TableDetail:
+    """
+    자기를 겨누는 것(동료의 피해)을 받아들이는 정도(#803)를 바꾼다. 앉은 사람이 자기 것만 바꾼다. 언제든 된다.
+
+    끔이 기본이다. 테이블이 다 됨이어도 받아들이기 전에는 아무도 해치지 못한다.
+    """
+    table = await friendly_fire_changes.change_consent(session, user.user_id, table_id, data)
     return to_detail(table, user.user_id)
 
 

@@ -6,7 +6,7 @@
 //   - 판정, 지목, 기다리기: 늘
 //   - 치료: 규칙에 치료(rules.treatment)가 있을 때
 //   - 쉬기: 규칙에 휴식(rules.rest)이 있을 때
-//   - 물건 쓰기: 소모품을 지녔을 때. 던지기(#277): 던지는 판정이 있는 소모품을 지녔고 칠 대상이 있을 때. 건네기: 물건을 지녔고 살아 있는 다른 사람이 있을 때. 내려놓기: 물건을 지녔고 맵에 서 있을 때
+//   - 물건 쓰기: 소모품을 지녔을 때. 던지기(#277): 던지는 판정이 있는 소모품을 지녔고 맞힐 대상(인물, 몬스터, 같은 곳의 동료)이 있을 때. 건네기: 물건을 지녔고 살아 있는 다른 사람이 있을 때. 내려놓기: 물건을 지녔고 맵에 서 있을 때
 //   - 가기: 아는 길이 있을 때. 찾기: 맵에 서 있을 때. 줍기: 선 곳에 보이게 놓인 물건이 있을 때
 //   - 훔치기: 규칙에 훔치기(rules.steal)가 있고 물건을 지닌 산 대상이 있을 때. 빼앗기: 물건을 지닌 쓰러지거나 죽은 대상이 있을 때
 //   - 사기, 팔기, 돈 건네기(#278): 화폐가 있는 판에서만. 사기는 파는 것이 있는 상인이 장면에 있을 때, 팔기는 상인이 사 주는 판이고
@@ -15,8 +15,10 @@
 //   - 열기, 잠그기, 따기, 부수기, 고치기, 자물쇠 바꾸기(#281): 내 장소에 닿은 길에 지금 그것을 할 수 있어 보이는 문이 있을 때(doorOptions.ts).
 //     자물쇠 바꾸기는 자물쇠 물건도 지녀야 한다
 // 캐릭터가 쓰러졌거나 죽었으면 행동을 붙이지 못한다(글만 낸다).
+// 동료를 해치는 것(#803)은 테이블의 정도와 그 동료가 받아들인 정도 중 낮은 것이 끔이 아닐 때만 고를 거리에 넣는다(allyTargets).
 
 import type { DeclaredAction, HeldItem, SceneCast, ScenePerson, TableDetail, TableMember } from '../../../../../api/types';
+import { friendlyFireLabel, lowerFriendlyFire } from '../../../labels';
 import { amountLabel, itemPrice, merchantsBuy, moneyOf } from '../../money';
 import { injuryName, placeCover } from '../../status/statusView';
 import { waysFrom, type Way } from '../../status/statusView';
@@ -87,7 +89,7 @@ function kindAvailable(kind: ActionKind, ctx: ActionContext): boolean {
     case 'use':
       return consumables(ctx.me).length > 0;
     case 'throw':
-      return throwables(ctx).length > 0 && harmTargets(ctx).length > 0;
+      return throwables(ctx).length > 0 && (harmTargets(ctx).length > 0 || membersHere(ctx).length > 0);
     case 'give':
       return heldItems(ctx.me).length > 0 && recipients(ctx).length > 0;
     case 'put_down':
@@ -164,7 +166,7 @@ export function itemTakesTarget(table: TableDetail, entryId: string): boolean {
   return effectsOf(table, entryId).length > 0;
 }
 
-/** 이 물건이 해로운가(피해나 부상의 효과). 해로우면 동료에게 쓰지 못한다(#803 전) */
+/** 이 물건이 해로운가(피해나 부상의 효과). 해로우면 동료에게는 동료 피해의 설정을 따른다(#803, allyTargets) */
 export function itemHarms(table: TableDetail, entryId: string): boolean {
   return effectsOf(table, entryId).some((effect) => effect.kind === 'damage' || effect.kind === 'injure');
 }
@@ -175,12 +177,51 @@ export function itemDamages(table: TableDetail, entryId: string): boolean {
 }
 
 /**
- * 물건을 쓸 쪽(#800). 나는 빈 값이다. 해롭지 않으면 다른 사람, 규칙에 맞히는 판정(item_check)이 있으면
- * 장면의 산 인물과 내가 선 곳의 산 몬스터도 고른다. 인물과 몬스터에게는 맞히는 판정을 거친다.
+ * 물건을 쓸 쪽(#800). 나는 빈 값이다. 해롭지 않으면 다른 사람, 해로우면 해칠 수 있는 동료(#803),
+ * 규칙에 맞히는 판정(item_check)이 있으면 장면의 산 인물과 내가 선 곳의 산 몬스터도 고른다.
+ * 인물과 몬스터에게는 맞히는 판정을 거친다.
  */
 export function useTargets(ctx: ActionContext, entryId: string): Choice[] {
-  const members = itemHarms(ctx.table, entryId) ? [] : recipients(ctx);
+  const members = itemHarms(ctx.table, entryId) ? allyTargets(ctx) : recipients(ctx);
   return ctx.table.rules.item_check ? [...members, ...harmTargets(ctx)] : members;
+}
+
+/**
+ * 물건을 던질 쪽(#801, #803). 장면의 인물, 내가 선 곳의 몬스터, 같은 곳의 동료다.
+ * 해로운 물건이면 동료는 해칠 수 있는 이만(allyTargets), 이로운 물건(물약)이면 같은 곳의 산 동료 모두다.
+ */
+export function throwTargets(ctx: ActionContext, entryId: string): Choice[] {
+  const members = entryId && itemHarms(ctx.table, entryId) ? allyTargets(ctx) : membersHere(ctx);
+  return [...harmTargets(ctx), ...members];
+}
+
+/** 나와 같은 곳에 선 산 다른 사람(쓰러졌어도 된다). 맵이 없는 판이면 모두 같은 곳이다 */
+function membersHere(ctx: ActionContext): Choice[] {
+  const here = ctx.me.sheet?.place_id ?? null;
+  return aliveMembers(ctx.table)
+    .filter((member) => member.user_id !== ctx.me.user_id && (member.sheet?.place_id ?? null) === here)
+    .map((member) => ({ value: `member:${member.user_id}`, label: member.character?.name ?? '' }));
+}
+
+/**
+ * 해칠 수 있는 동료(#803). 같은 곳에 선, 쓰러지지 않은 산 다른 사람 가운데 테이블의 정도와 그 사람이 받아들인 정도 중
+ * 낮은 것이 끔이 아닌 이다. "영애(동료, 장난만)". 맞는지는 서버가 받을 때와 라운드를 닫을 때 다시 본다
+ */
+export function allyTargets(ctx: ActionContext): Choice[] {
+  const here = ctx.me.sheet?.place_id ?? null;
+  return aliveMembers(ctx.table).flatMap((member) => {
+    const level = lowerFriendlyFire(ctx.table.friendly_fire, member.friendly_fire);
+    const reachable = member.user_id !== ctx.me.user_id && (member.sheet?.place_id ?? null) === here;
+    if (!reachable || level === 'off' || (member.sheet?.hp ?? 0) <= 0) return [];
+    return [{ value: `member:${member.user_id}`, label: `${member.character?.name ?? ''}(동료, ${friendlyFireLabel(level)})` }];
+  });
+}
+
+/** 그 쪽에게 하는 것이 동료의 장난인가(#803). 동료가 아니거나 다 됨이면 아니다 */
+export function isPrankToward(ctx: ActionContext, target: TargetRef): boolean {
+  const [kind, id] = splitRef(target);
+  const member = kind === 'member' ? ctx.table.members.find((entry) => entry.user_id === id) : undefined;
+  return member !== undefined && lowerFriendlyFire(ctx.table.friendly_fire, member.friendly_fire) === 'prank';
 }
 
 /** 내가 지닌 이 물건의 개수 */
@@ -247,9 +288,14 @@ function injuryKeysOf(ctx: ActionContext, patient: TargetRef): string[] {
   return member?.sheet?.injuries.map((injury) => injury.injury) ?? [];
 }
 
-/** 노려 칠 수 있는 부상(규칙의 aimable). 노려 치기는 인물과 몬스터에게 한다(#799) */
-export function aimableInjuries(ctx: ActionContext): Choice[] {
-  return ctx.table.rules.injuries.filter((injury) => injury.aimable).map((injury) => ({ value: injury.key, label: injury.name }));
+/**
+ * 노려 칠 수 있는 부상(규칙의 aimable). 노려 치기는 인물과 몬스터와 동료(#803)에게 한다(#799).
+ * 동료의 장난이면 짧은 것(rounds)만이다. 장난은 오래 가는 부상과 결손을 입히지 않는다
+ */
+export function aimableInjuries(ctx: ActionContext, prank = false): Choice[] {
+  return ctx.table.rules.injuries
+    .filter((injury) => injury.aimable && (!prank || injury.healing === 'rounds'))
+    .map((injury) => ({ value: injury.key, label: injury.name }));
 }
 
 /** 타격에 쓸 무기. 내가 착용한 것 가운데 공격 보정이 있는 것. "장검(+2)", 관통력이 있으면 "볼터(+1, 관통 2)" (#276) */

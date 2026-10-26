@@ -112,7 +112,7 @@ export function draftFromAction(rules: Ruleset, action: DeclaredAction | null): 
     case 'give':
       return { ...base, kind: 'give', item: action.item, count: action.count, target: `member:${action.target}` };
     case 'throw':
-      return { ...base, kind: 'throw', item: action.item, target: refOf(null, action.npc, action.monster), lethal: action.lethal };
+      return { ...base, kind: 'throw', item: action.item, target: refOf(action.target ?? null, action.npc, action.monster), lethal: action.lethal };
     case 'move':
       return { ...base, kind: 'move', place: action.place, carry: action.carry ?? '', item: action.item ?? '' };
     case 'take':
@@ -281,9 +281,16 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
       return toUse(draft, ctx, member, npc, monster);
     case 'give':
       return { kind: 'give', item: draft.item, count: draft.count, target: member ?? '' };
-    // 던지기(#277). 능력과 난이도와 피해는 물건에 적혀 있어 보내지 않는다
+    // 던지기(#277). 능력과 난이도와 피해는 물건에 적혀 있어 보내지 않는다. 동료(#803)에게는 죽이려 하지 않는다
     case 'throw':
-      return { kind: 'throw', item: draft.item, lethal: draft.lethal && itemDamages(ctx.table, draft.item), ...(npc ? { npc } : {}), ...(monster ? { monster } : {}) };
+      return {
+        kind: 'throw',
+        item: draft.item,
+        lethal: !member && draft.lethal && itemDamages(ctx.table, draft.item),
+        ...(npc ? { npc } : {}),
+        ...(monster ? { monster } : {}),
+        ...(member ? { target: member } : {}),
+      };
     case 'move':
       return { kind: 'move', place: draft.place, ...(draft.carry ? { carry: draft.carry } : {}), ...(climbs(ctx, draft.place) ? aidOf(draft, ctx, 'cross') : {}) };
     case 'search':
@@ -353,7 +360,7 @@ function toUse(draft: ActionDraft, ctx: ActionContext, member: string | null, np
   return { ...base, ...(member ? { target: member } : {}) };
 }
 
-/** 판정. 목적에 맞는 칸만 넣는다. 타격은 인물이나 몬스터, 회복은 사람이나 인물(비우면 자기 자신) */
+/** 판정. 목적에 맞는 칸만 넣는다. 타격은 인물이나 몬스터나 동료(#803), 회복은 사람이나 인물(비우면 자기 자신) */
 function toCheck(draft: ActionDraft, member: string | null, npc: string | null, monster: string | null): DeclaredAction {
   const base = {
     kind: 'check' as const,
@@ -363,9 +370,11 @@ function toCheck(draft: ActionDraft, member: string | null, npc: string | null, 
   };
   if (draft.purpose === 'harm') {
     // 노려 치기는 하나다. 부위를 노리면 부상은 노리지 않는다(서버도 둘을 함께 받지 않는다). 몬스터도 노린다(#799)
-    const aim = (npc || monster) && draft.aim && !draft.strike ? { aim: draft.aim } : {};
+    // 동료(#803)는 죽이려 하지 않는다(캐릭터는 죽음의 굴림으로 죽는다)
+    const aim = (npc || monster || member) && draft.aim && !draft.strike ? { aim: draft.aim } : {};
     const gear = { ...(draft.weapon ? { weapon: draft.weapon } : {}), ...(draft.strike ? { strike: draft.strike } : {}) };
-    return { ...base, harm: draft.magnitude, lethal: draft.lethal, ...(npc ? { npc } : {}), ...(monster ? { monster } : {}), ...aim, ...gear };
+    const target = { ...(npc ? { npc } : {}), ...(monster ? { monster } : {}), ...(member ? { target: member } : {}) };
+    return { ...base, harm: draft.magnitude, lethal: !member && draft.lethal, ...target, ...aim, ...gear };
   }
   if (draft.purpose === 'recover') {
     return { ...base, recover: draft.magnitude, lethal: false, ...(member ? { target: member } : {}), ...(npc ? { npc } : {}) };

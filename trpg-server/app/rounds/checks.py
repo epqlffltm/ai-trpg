@@ -8,6 +8,9 @@ HP 도 그때 한 번만 바뀐다. 판정의 결과에 따라 피해를 입거�
 행동이 NPC 를 겨눴으면 그 NPC 가 피해를 입거나 회복한다(app/tables/npcs.py 의 change_npc).
 행동이 몬스터를 겨눴으면 그 마리가 피해를 입는다(app/tables/monsters.py 의 change_monster). 몬스터는 부상을 입지 않는다.
 겨눈 마리가 판정할 때 이미 죽었거나 다른 곳에 있으면 굴리지 않고 그 까닭을 적는다(target_gone).
+행동이 앉은 사람을 쳤으면(#803) 그 사람이 피해를 입는다.
+굴리기 전에 해칠 수 있는지 다시 보고(app/rounds/friendly_fire.py), 장난이면 HP 를 1 아래로 내리지 않고
+짧은 부상만 입힌다. 맞은 부위의 방어는 몬스터에게 맞을 때와 같다.
 살아 있던 마리를 처음 쓰러뜨리면 엔진이 드롭을 굴려 그 장소의 한 명에게 준다(app/rounds/drops.py).
 큰 타격이나 쓰러짐이면 부상 표를 굴린다. 노려 친 타격은 그 부상이 확정으로 생긴다.
 타격에는 장비가 든다(#276, app/rounds/blows.py). 무기의 공격 보정이 판정에 더해지고, 맞은 부위의 방어가
@@ -25,7 +28,7 @@ from app.engine.action import CheckAction, Consequence, Recipient
 from app.engine.armor import Protection, Save
 from app.engine.check import Check
 from app.engine.health import Change, ChangeKind
-from app.rounds import blows, drops, wakes
+from app.rounds import blows, drops, friendly_fire, wakes
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import Blow
 from app.rounds.cast import find_cast_member
@@ -70,13 +73,21 @@ def change_member(judging: Judging, actor: TableMember, action: CheckAction, fou
 
 
 def change_sheet(
-    judging: Judging, affected: TableMember | None, kind: ChangeKind, magnitude_key: str, cut: int = 0
+    judging: Judging,
+    affected: TableMember | None,
+    kind: ChangeKind,
+    magnitude_key: str,
+    cut: int = 0,
+    prank: bool = False,
+    aim: str | None = None,
 ) -> dict | None:
     """
     앉은 사람 하나의 HP 를 그 등급만큼 바꾸고, 바뀐 내용을 문서로 돌려준다. 바뀔 HP 가 없으면 None.
 
     판정의 결과와 소모품의 회복(app/rounds/item_actions.py)이 함께 쓴다.
-    cut 은 방어구가 피해에서 깎는 양이다(#276). 몬스터와 NPC 의 공격이 넘긴다.
+    cut 은 방어구가 피해에서 깎는 양이다(#276). 몬스터와 NPC 의 공격과 동료의 타격이 넘긴다.
+    prank 면 동료의 장난이다(#803). HP 를 1 아래로 내리지 않고(health.spare) 짧은 부상만 입힌다. 문서에 prank 가 붙는다.
+    aim 은 동료가 노려 친 부상이다(#803). 피해면 그 부상이 확정으로 생기고 표를 굴리지 않는다.
     """
     # 대상이 떠났거나 시트가 없으면 바뀔 HP 가 없다. 양을 정하는 주사위도 굴리지 않는다.
     # 죽은 캐릭터도 그렇다. 회복으로 되살리지 못한다
@@ -86,6 +97,8 @@ def change_sheet(
     sheet = affected.sheet
     magnitude = health.find_magnitude(judging.ruleset, magnitude_key)
     change = health.change_hp(kind, magnitude, sheet.hp, sheet.max_hp, judging.dice, cut)
+    if prank:
+        change = health.spare(change)
     sheet.hp = change.after
     if kind == ChangeKind.DAMAGE:
         mark_hurt(judging, affected)
@@ -95,9 +108,22 @@ def change_sheet(
     # 이 피해로 쓰러졌으면 어떻게 쓰러졌는지 적는다. 쓰러진 채 맞으면 큰 타격 뒤가 더 위험하다(#369)
     if change.before > 0 and change.downed:
         sheet.downed_by_big_hit = injury_rules.is_big_hit(judging.ruleset, change, sheet.max_hp)
-    # 캐릭터는 피해로 바로 죽지 않는다(죽음의 굴림으로 죽는다)
-    injury_roll = injury_after(judging, change, sheet.max_hp, False, sheet.injuries)
-    return member_effect(affected, magnitude_key, change, injury_roll)
+    injury_roll = member_injury(judging, change, affected, aim, prank)
+    effect = member_effect(affected, magnitude_key, change, injury_roll)
+    return {**effect, 'prank': True} if prank else effect
+
+
+def member_injury(judging: Judging, change: Change, member: TableMember, aim: str | None, prank: bool) -> dict | None:
+    """
+    HP 가 바뀐 앉은 사람이 입는 부상. 노려 친 피해면(#803) 그 부상이 확정으로 생기고 표를 굴리지 않는다.
+    아니면 큰 타격이나 쓰러짐에 표를 굴린다. 캐릭터는 피해로 바로 죽지 않는다(죽음의 굴림으로 죽는다).
+    """
+    sheet = member.sheet
+    if aim is not None and change.kind == ChangeKind.DAMAGE:
+        return round_injuries.take_aimed(
+            judging.ruleset, aim, sheet.injuries, judging.table.id, judging.moment, prank=prank
+        )
+    return injury_after(judging, change, sheet.max_hp, False, sheet.injuries, prank=prank)
 
 
 def npc_injury(judging: Judging, action: CheckAction, change: Change, npc: TableNpc) -> dict | None:
@@ -172,14 +198,17 @@ def monster_injury(judging: Judging, action: CheckAction, change: Change, monste
 
 def target_gone(judging: Judging, member: TableMember, action: CheckAction) -> dict | None:
     """
-    겨눈 몬스터를 지금 칠 수 없으면 그 까닭을 문서로. 칠 수 있거나 몬스터를 겨누지 않았으면 None.
+    겨눈 몬스터나 앉은 사람을 지금 칠 수 없으면 그 까닭을 문서로. 칠 수 있거나 그런 대상이 없으면 None.
 
     받을 때는 칠 수 있었어도 차례가 오기 전에 앞사람이 죽였을 수 있다. 그때는 판정을 굴리지 않는다.
     굴리면 실패의 대가를 치를 수 있는데, 칠 상대가 없는 행동이었다.
+    앉은 사람(#803)이면 그사이에 떠났거나 쓰러졌거나, 해칠 수 없게 설정이 바뀌었을 수 있다(friendly_fire.ally_gone).
     """
-    if action.monster is None:
-        return None
-    return monster_gone(judging, member, action.monster)
+    if action.monster is not None:
+        return monster_gone(judging, member, action.monster)
+    if action.target is not None and action.harm is not None:
+        return friendly_fire.ally_gone(judging, member, action.target)
+    return None
 
 
 def monster_gone(judging: Judging, member: TableMember, monster_id: uuid.UUID) -> dict | None:
@@ -225,6 +254,21 @@ def npc_outcome(judging: Judging, actor: TableMember, action: CheckAction, found
     return outcome
 
 
+def ally_effect(
+    judging: Judging, actor: TableMember, action: CheckAction, found: Consequence, cut: int = 0
+) -> dict | None:
+    """
+    앉은 사람을 친 타격(#803)의 HP 와 부상의 변화. 굴리기 전에 해칠 수 있는지 봤다(target_gone).
+
+    장난만이면 상한을 지킨다(change_sheet 의 prank). 노려 쳤으면 그 부상이 생긴다(장난이면 짧은 것만).
+    """
+    target = table_state.find_member(judging.table, action.target)
+    if target is None:
+        return None
+    prank = friendly_fire.is_prank_toward(judging, actor, target)
+    return change_sheet(judging, target, found.kind, found.magnitude, cut, prank=prank, aim=action.aim)
+
+
 def apply_consequence(judging: Judging, actor: TableMember, action: CheckAction, check: Check, cut: int = 0) -> dict:
     """
     판정의 결과에 따라 HP 를 바꾸고, 바뀐 내용을 선언의 outcome 에 넣을 칸들로 돌려준다.
@@ -243,6 +287,8 @@ def apply_consequence(judging: Judging, actor: TableMember, action: CheckAction,
         return monster_outcome(judging, action, found, cut)
     if found.recipient == Recipient.TARGET and action.npc is not None:
         return npc_outcome(judging, actor, action, found, cut)
+    if found.recipient == Recipient.TARGET and action.harm is not None:
+        return {'effect': ally_effect(judging, actor, action, found, cut), 'npc_effect': None}
     return {'effect': change_member(judging, actor, action, found), 'npc_effect': None}
 
 
@@ -260,7 +306,10 @@ def mark_npc_attack(judging: Judging, member: TableMember, action: CheckAction) 
 
 
 def target_protection(judging: Judging, action: CheckAction) -> Protection:
-    """타격의 대상(NPC 나 몬스터)의 지금 방어. 대상이 없으면 방어가 없다."""
+    """타격의 대상(NPC, 몬스터, 앉은 사람)의 지금 방어. 대상이 없으면 방어가 없다."""
+    if action.target is not None:
+        ally = table_state.find_member(judging.table, action.target)
+        return blows.member_protection(judging, ally) if ally is not None else armor.NO_PROTECTION
     if action.monster is not None:
         monster = find_scene_monster(judging.monsters, action.monster)
         return blows.monster_protection(judging, monster) if monster is not None else armor.NO_PROTECTION

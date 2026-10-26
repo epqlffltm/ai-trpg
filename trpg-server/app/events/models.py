@@ -64,6 +64,10 @@ class EventType(enum.StrEnum):
     WHISPER_NOTICE_CHANGED = 'whisper_notice_changed'
     # 방장이 참고 자료를 서술에 넣을지(references_enabled)를 바꿨다. 모집 중에만 바뀐다(#482)
     REFERENCES_CHANGED = 'references_changed'
+    # 방장이 앉은 사람끼리 해칠 수 있는 정도(friendly_fire)를 바꿨다(#803). 다음에 받는 선언과 닫히는 라운드부터 든다
+    FRIENDLY_FIRE_CHANGED = 'friendly_fire_changed'
+    # 앉은 사람이 자기를 겨누는 것을 받아들이는 정도(friendly_fire)를 바꿨다(#803). 행한 사람이 그 사람이다
+    FRIENDLY_FIRE_CONSENT_CHANGED = 'friendly_fire_consent_changed'
     # 방장이 장부 초안을 쓸지(ledger_drafts)를 바꿨다. 장부 초안은 없어졌다(#371). 이제 생기지 않는다.
     # 그 전에 적힌 이벤트를 읽을 수 있게 종류만 남긴다
     LEDGER_DRAFTS_CHANGED = 'ledger_drafts_changed'

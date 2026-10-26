@@ -56,6 +56,10 @@ class Impact:
     downed: bool
     # 이 피해로 새로 입은 부상의 이름. 없으면 None 이다
     injury: str | None = None
+    # 동료의 장난(#803)이었는가. HP 가 1 아래로 내려가지 않았다
+    prank: bool = False
+    # 장난이라 입지 않은 오래 가는 부상이나 결손의 이름(#803). 없으면 None 이다
+    spared: str | None = None
 
 
 @dataclass(frozen=True)
@@ -282,6 +286,8 @@ class ThrowNote:
     cured: list[str] = field(default_factory=list)
     injured: list[str] = field(default_factory=list)
     resisted: list[str] = field(default_factory=list)
+    # 동료의 장난이라 입지 않은 부상의 이름들(#803)
+    spared: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -308,6 +314,8 @@ class ItemActionNote:
     # 부상을 입히는 소모품을 썼으면 생긴 부상의 이름들과, 면역이라 입지 않은 부상의 이름들(#800)
     injured: list[str] = field(default_factory=list)
     resisted: list[str] = field(default_factory=list)
+    # 동료의 장난이라 입지 않은 부상의 이름들(#803)
+    spared: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

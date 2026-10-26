@@ -14,6 +14,7 @@ const ITEM_REASONS: Record<string, string> = {
   not_held: '그만큼 가지고 있지 않았습니다',
   target_gone: '받을 사람이 떠났거나 죽었습니다',
   too_many: '받는 쪽이 더 가질 수 없었습니다',
+  friendly_fire_off: '그 동료를 해칠 수 없게 바뀌었습니다',
 };
 
 /** 줍거나 내려놓지 못한 까닭(place_item_actions.py) */

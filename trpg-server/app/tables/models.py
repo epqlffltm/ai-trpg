@@ -94,6 +94,22 @@ class DeathCause(enum.StrEnum):
     STRUCK_DOWN = 'struck_down'
 
 
+class FriendlyFire(enum.StrEnum):
+    """
+    앉은 사람끼리 해칠 수 있는 정도(#803). 낮은 것부터 끔, 장난만, 다 됨이다.
+
+    테이블에 하나(방장이 정한다), 앉은 사람마다 하나(자기를 겨누는 것을 받아들이는 정도, 본인이 정한다) 있다.
+    드는 것은 둘 중 낮은 것이다(app/tables/friendly_fire.py). 자기 자신에게 하는 것은 늘 된다.
+    """
+
+    # 동료를 해치지 못한다. 기본이다
+    OFF = 'off'
+    # 장난만. 동료의 HP 를 1 아래로 내리지 못하고 짧은 부상만 입힌다. 오래 가는 부상, 결손, 죽음은 없다
+    PRANK = 'prank'
+    # 다 된다. 몬스터에게 맞은 것과 같다
+    FULL = 'full'
+
+
 class TableStatus(enum.StrEnum):
     """테이블의 상태. 한 방향으로만 나아간다."""
 
@@ -178,6 +194,7 @@ class GameTable(Base):
         # 서술의 입력·출력 단계(#387). 0 부터 MAX_STEP 까지다
         CheckConstraint(f'input_step BETWEEN 0 AND {MAX_STEP}', name='input_step_range'),
         CheckConstraint(f'output_step BETWEEN 0 AND {MAX_STEP}', name='output_step_range'),
+        CheckConstraint(one_of('friendly_fire', FriendlyFire), name='friendly_fire_allowed'),
     )
 
     # API 주소에 드러나는 값이다. 순서대로 늘어나는 정수면 테이블이 몇 개인지 추측할 수 있다
@@ -283,6 +300,10 @@ class GameTable(Base):
     # 만들 때 방장이 고르고, 모집 중에만 바꾼다. 시작하면 고정이다. 앉는 것이 그 서술에 대한 동의다
     references_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
 
+    # 앉은 사람끼리 해칠 수 있는 정도(#803). 방장이 진행 중에도 바꾼다. 끔이 기본이다.
+    # 앉은 사람마다 받아들이는 정도(TableMember.friendly_fire)와 견주어 낮은 쪽이 든다
+    friendly_fire: Mapped[str] = mapped_column(String(20), default=FriendlyFire.OFF, server_default=text("'off'"))
+
     # 이 테이블에 적힌 마지막 이벤트의 번호(app/events/models.py). 아직 없으면 0 이다.
     # 이벤트를 적을 때마다 하나씩 올린다. 테이블을 잠근 채로 올리므로 번호가 겹치지 않는다.
     # server_default: DB 에도 기본값을 둔다. 이 칸이 생기기 전에 만든 테이블은 0 에서 시작한다
@@ -373,6 +394,7 @@ class TableMember(Base):
         ),
         # 능력치는 이름표에서 점수로 가는 묶음이다. JSON 의 null 이나 숫자 하나가 "있는 능력치"로 적히지 못한다
         CheckConstraint("abilities IS NULL OR jsonb_typeof(abilities) = 'object'", name='abilities_is_object'),
+        CheckConstraint(one_of('friendly_fire', FriendlyFire), name='friendly_fire_allowed'),
     )
 
     # 두 칸을 합쳐 기본 키로 삼는다. 한 사람이 같은 테이블에 두 번 앉을 수 없다.
@@ -399,6 +421,10 @@ class TableMember(Base):
     abilities: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
 
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # 이 사람이 자기를 겨누는 것(동료의 피해)을 받아들이는 정도(#803). 본인만 바꾼다. 끔이 기본이다.
+    # 방장이 테이블을 다 됨으로 해도 본인이 받아들이기 전에는 아무도 이 사람을 해치지 못한다
+    friendly_fire: Mapped[str] = mapped_column(String(20), default=FriendlyFire.OFF, server_default=text("'off'"))
 
     # 이 사람이 이 테이블에서 받은 캐릭터 시트들. 받은 순서다. 게임을 시작하기 전에는 비어 있다.
     # 보통은 하나다. 캐릭터가 죽어 새 캐릭터를 들일 때마다 하나씩 는다.
