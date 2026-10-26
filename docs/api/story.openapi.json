@@ -510,6 +510,121 @@
         "title": "MessageCreate",
         "type": "object"
       },
+      "MessageEdit": {
+        "additionalProperties": false,
+        "description": "답을 고친 글. 조각마다 고친 글을 차례대로 적는다. 조각의 수는 그 답의 것과 같아야 한다.\n말하는 사람은 보내지 않는다. 저장된 그대로다(장면 밖의 인물이 끼어들 길이 없다).",
+        "properties": {
+          "segments": {
+            "items": {
+              "maxLength": 4000,
+              "minLength": 1,
+              "pattern": "^[^\\r\\n]*\\S[^\\r\\n]*$",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Segments",
+            "type": "array"
+          }
+        },
+        "required": [
+          "segments"
+        ],
+        "title": "MessageEdit",
+        "type": "object"
+      },
+      "MessageOut": {
+        "description": "말 하나. role 은 user(사람의 말), assistant(모델의 답), action(사람의 행동)이다.\n모델의 답은 segments(말 조각)를 그린다. content 는 그 조각을 표식이 붙은 줄로 쓴 것이다.\ncast 는 그 답을 쓸 때의 장면의 인물이다. status 가 partial 이면 끊긴 답이다.",
+        "properties": {
+          "cast": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cast",
+            "type": "array"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "edited": {
+            "default": false,
+            "title": "Edited",
+            "type": "boolean"
+          },
+          "ending_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ending Id"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/SegmentOut"
+            },
+            "title": "Segments",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "parent_id",
+          "role",
+          "content",
+          "status",
+          "segments",
+          "cast",
+          "created_at"
+        ],
+        "title": "MessageOut",
+        "type": "object"
+      },
       "ModelChoice": {
         "additionalProperties": false,
         "description": "세션의 모델을 바꿀 때 받는 값.",
@@ -742,6 +857,11 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "edited": {
+            "default": false,
+            "title": "Edited",
+            "type": "boolean"
           },
           "ending_id": {
             "anyOf": [
@@ -1656,6 +1776,66 @@
         "summary": "Read Me",
         "tags": [
           "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/story/messages/{message_id}": {
+      "patch": {
+        "description": "답을 그 자리에서 고친다. 조각마다 고친 글을 차례대로 보낸다. 말하는 사람은 그대로이고 고친 표시(edited)가 붙는다.\n청구하지 않는다. 답이 아니면 422 not_editable, 조각의 수가 다르면 422 segments_mismatch,\n말이 없거나 남의 것이면 404 message_not_found, 답을 쓰는 중이면 409 generation_in_progress 다.",
+        "operationId": "edit_message_api_v1_story_messages__message_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Edit Message",
+        "tags": [
+          "conversations"
         ],
         "x-audience": "user"
       }
