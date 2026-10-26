@@ -134,6 +134,8 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/worlds/{id}/versions`, `/versions/{number}` | 세계관의 판의 목록(최근 것부터), 판 하나(굳힌 문서까지) | access 토큰 |
 | GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만 | 없어도 된다 |
 | GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서). 볼 수 없으면 404 | 없어도 된다 |
+| GET | `/api/v1/asset/listings/worlds` | 공개 세계관의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만 | 없어도 된다 |
+| GET | `/api/v1/asset/listings/worlds/{id}` | 공개 세계관의 소개(마지막 판에서 보여도 되는 것만: 이름, 거른 소개, 태그, 등급, 대표 그림, 기한, 엔딩 뒤, 공개한 인물, 계정에 남는 엔딩의 수). 볼 수 없으면 404 | 없어도 된다 |
 | POST | `/api/v1/asset/listings/characters/{id}/reports` | [신고](#신고와-숨김) `{reason, description?}`. 201. 볼 수 없으면 404, 자기 것은 403 `own_character`, 두 번째는 409 `already_reported` | access 토큰 |
 | GET | `/api/v1/asset/admin/character-reports` | [운영자](#신고와-숨김): 열린 신고를 캐릭터마다 묶은 목록(`minor` 가 먼저). 운영자가 아니면 404 | access 토큰(운영자) |
 | GET | `/api/v1/asset/admin/characters/{id}/reports` | 운영자: 그 캐릭터의 신고 전부(처리한 것까지) | access 토큰(운영자) |
@@ -458,7 +460,11 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
   캐릭터나 로어북을 고쳐도 이미 게시한 세계관의 판은 그대로다. 판에 쓰인 그림(대표, 소개, 장소, 물건, 인물의 그림, 이벤트와 엔딩의 일러스트)을 적어 두고, 공개 세계관이면 남도 그 그림을 본다.
 - **story 에 내주기.** [다른 서버에 내주기](#다른-서버에-내주기)의 `/worlds/{id}/latest` 와 `/latest/number` 다. 캐릭터의 판과 같은 규칙이다
   (주인이거나, 공개이고 판의 등급을 볼 수 있는 사람. 주인인데 등급을 쓸 수 없으면 403). story 서버는 `STORY_SERVER_SECRET` 으로 서명한다.
-- 공개 목록, 신고와 숨김은 아직 없다.
+- **공개 목록과 소개**(`/listings/worlds`, story 의 D1 과 첫 화면의 story 카드). 캐릭터의 공개 목록과 같은 규칙이다
+  (공개이고 게시한 판이 있는 것의 마지막 판, 판의 등급으로 거른다, 로그인하지 않으면 전체 이용가만, 볼 수 없으면 404).
+  다만 판의 문서를 통째로 내주지 않는다. 판에는 이벤트와 엔딩의 조건, 숨긴 인물이 들어 있어서 소개에 보여도 되는 것만 고른다
+  (`app/worlds/listings.py`): 인물은 보임이면 이름과 그림, 실루엣이면 둘 다 null, 숨김이면 빠진다. 엔딩은 계정에 남는 것(`unlock`)의 수만 싣는다.
+- 신고와 숨김은 세계관에 아직 없다(1~2단계에는 운영자만 세계관을 만든다).
 
 ### 신고와 숨김
 

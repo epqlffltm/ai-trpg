@@ -298,3 +298,20 @@ async def get_usable_latest(
     require_reachable(world, viewer)
     require_usable_rating(world, version, viewer)
     return world, version
+
+
+async def list_public(
+    session: AsyncSession, viewer: AccessClaims | None, limit: int, offset: int
+) -> tuple[list[tuple[World, WorldVersion]], int]:
+    """공개 목록의 한 쪽과 전체 개수. 보는 사람(로그인하지 않았으면 None)이 볼 수 있는 등급만이다."""
+    return await repository.list_public(session, allowed_ratings(viewer), limit, offset)
+
+
+async def get_public(
+    session: AsyncSession, viewer: AccessClaims | None, world_id: uuid.UUID
+) -> tuple[World, WorldVersion]:
+    """공개 세계관 하나와 그 마지막 판. 볼 수 없으면 WorldNotFoundError(있는지도 드러내지 않는다)."""
+    found = await repository.find_public(session, world_id, allowed_ratings(viewer))
+    if found is None:
+        raise WorldNotFoundError
+    return found

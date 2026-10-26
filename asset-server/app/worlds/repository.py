@@ -7,12 +7,14 @@
 """
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import delete as delete_rows
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.characters.models import Visibility
+from app.ratings import Rating
 from app.worlds.models import World, WorldVersion
 
 
@@ -81,5 +83,40 @@ async def find_latest(session: AsyncSession, world_id: uuid.UUID) -> tuple[World
     story 서버에 판을 내줄 때 쓴다. 쓸 수 있는 사람인지는 서비스가 본다.
     """
     query = select(World, WorldVersion).join(WorldVersion, latest_join()).where(World.id == world_id)
+    row = (await session.execute(query)).first()
+    return None if row is None else (row[0], row[1])
+
+
+def listed(ratings: Sequence[Rating]):
+    """
+    공개 목록에 나오는 조건. 공개이고 마지막 판이 볼 수 있는 등급이다(캐릭터의 공개 목록과 같다).
+    등급은 판의 것으로 거른다. 초안의 등급을 바꿔도 다음 판까지는 게시한 판이 나간다.
+    """
+    return (World.visibility == Visibility.PUBLIC) & WorldVersion.rating.in_([rating.value for rating in ratings])
+
+
+async def list_public(
+    session: AsyncSession, ratings: Sequence[Rating], limit: int, offset: int
+) -> tuple[list[tuple[World, WorldVersion]], int]:
+    """공개 목록의 한 쪽(최근에 게시한 것부터)과 전체 개수. 세계관마다 마지막 판과 함께다."""
+    condition = listed(ratings)
+    query = (
+        select(World, WorldVersion)
+        .join(WorldVersion, latest_join())
+        .where(condition)
+        .order_by(World.published_at.desc(), World.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    count = select(func.count()).select_from(World).join(WorldVersion, latest_join()).where(condition)
+    rows = await session.execute(query)
+    return [(world, version) for world, version in rows.all()], await session.scalar(count) or 0
+
+
+async def find_public(
+    session: AsyncSession, world_id: uuid.UUID, ratings: Sequence[Rating]
+) -> tuple[World, WorldVersion] | None:
+    """공개 세계관 하나와 그 마지막 판. 공개가 아니거나, 판이 없거나, 볼 수 없는 등급이면 None."""
+    query = select(World, WorldVersion).join(WorldVersion, latest_join()).where(World.id == world_id, listed(ratings))
     row = (await session.execute(query)).first()
     return None if row is None else (row[0], row[1])

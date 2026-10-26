@@ -738,3 +738,56 @@ class WorldVersionNumber(BaseModel):
 
     id: uuid.UUID
     version: int
+
+
+class PublicWorldSummary(BaseModel):
+    """공개 목록의 한 줄. 마지막 판의 값이다. deadline_days 는 기한(날 수)이고 없으면 null 이다."""
+
+    id: uuid.UUID
+    version: int
+    name: str
+    tags: list[str]
+    rating: Rating
+    image_id: uuid.UUID | None
+    deadline_days: int | None
+    published_at: datetime
+
+
+class PublicWorldPage(BaseModel):
+    """공개 목록의 한 쪽과 전체 개수."""
+
+    items: list[PublicWorldSummary]
+    total: int
+
+
+class PublicCastMember(BaseModel):
+    """
+    소개에 보이는 인물 하나. reveal 이 silhouette 이면 이름과 그림을 싣지 않는다(null).
+    숨김(hidden)인 인물은 목록에 없다.
+    """
+
+    id: str
+    reveal: Reveal
+    name: str | None
+    image_id: uuid.UUID | None
+
+
+class PublicWorldDetail(BaseModel):
+    """
+    공개 세계관의 소개(D1). 마지막 판에서 보여도 되는 것만 골라 싣는다.
+    이벤트, 조건, 엔딩의 이름과 조건, 인물의 일정과 호감도 규칙은 싣지 않는다(플레이의 내용이다).
+    intro_html 은 게시할 때 거른 소개다. ending_count 는 계정에 남는 엔딩(unlock)의 수다.
+    """
+
+    id: uuid.UUID
+    version: int
+    published_at: datetime
+    name: str
+    intro_html: str
+    tags: list[str]
+    rating: Rating
+    image_id: uuid.UUID | None
+    deadline_days: int | None
+    after_ending: AfterEnding
+    cast: list[PublicCastMember]
+    ending_count: int

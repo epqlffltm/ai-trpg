@@ -298,6 +298,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset/listings/worlds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Public
+         * @description 공개 세계관의 목록. 최근에 게시한 것부터다.
+         */
+        get: operations["list_public_api_v1_asset_listings_worlds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/listings/worlds/{world_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Public
+         * @description 공개 세계관의 소개. 볼 수 없으면 404 다.
+         */
+        get: operations["read_public_api_v1_asset_listings_worlds__world_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset/lorebooks": {
         parameters: {
             query?: never;
@@ -2360,6 +2400,20 @@ export interface components {
             name: string;
         };
         /**
+         * PublicCastMember
+         * @description 소개에 보이는 인물 하나. reveal 이 silhouette 이면 이름과 그림을 싣지 않는다(null).
+         *     숨김(hidden)인 인물은 목록에 없다.
+         */
+        PublicCastMember: {
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string | null;
+            reveal: components["schemas"]["Reveal"];
+        };
+        /**
          * PublicCharacterDetail
          * @description 공개 캐릭터 하나. 마지막 판의 문서다.
          */
@@ -2393,6 +2447,79 @@ export interface components {
          * @description 공개 목록의 한 줄. 마지막 판의 값이다.
          */
         PublicCharacterSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
+            rating: components["schemas"]["Rating"];
+            /** Tags */
+            tags: string[];
+            /** Version */
+            version: number;
+        };
+        /**
+         * PublicWorldDetail
+         * @description 공개 세계관의 소개(D1). 마지막 판에서 보여도 되는 것만 골라 싣는다.
+         *     이벤트, 조건, 엔딩의 이름과 조건, 인물의 일정과 호감도 규칙은 싣지 않는다(플레이의 내용이다).
+         *     intro_html 은 게시할 때 거른 소개다. ending_count 는 계정에 남는 엔딩(unlock)의 수다.
+         */
+        PublicWorldDetail: {
+            after_ending: components["schemas"]["AfterEnding"];
+            /** Cast */
+            cast: components["schemas"]["PublicCastMember"][];
+            /** Deadline Days */
+            deadline_days: number | null;
+            /** Ending Count */
+            ending_count: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Intro Html */
+            intro_html: string;
+            /** Name */
+            name: string;
+            /**
+             * Published At
+             * Format: date-time
+             */
+            published_at: string;
+            rating: components["schemas"]["Rating"];
+            /** Tags */
+            tags: string[];
+            /** Version */
+            version: number;
+        };
+        /**
+         * PublicWorldPage
+         * @description 공개 목록의 한 쪽과 전체 개수.
+         */
+        PublicWorldPage: {
+            /** Items */
+            items: components["schemas"]["PublicWorldSummary"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * PublicWorldSummary
+         * @description 공개 목록의 한 줄. 마지막 판의 값이다. deadline_days 는 기한(날 수)이고 없으면 null 이다.
+         */
+        PublicWorldSummary: {
+            /** Deadline Days */
+            deadline_days: number | null;
             /**
              * Id
              * Format: uuid
@@ -4003,6 +4130,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReportCreated"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_public_api_v1_asset_listings_worlds_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicWorldPage"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_public_api_v1_asset_listings_worlds__world_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicWorldDetail"];
                 };
             };
             /** @description 입력이 틀렸다 */
