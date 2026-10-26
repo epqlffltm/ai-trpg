@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/story/StoryHomePage.tsx
 // 내 이야기(D, /story). 로그인해야 열린다. 위에 내 세션(최근 것부터, 20 개씩 "더 보기"), 아래에 새로 시작할 세계관.
-// 새로 시작은 지금은 내 세계관(게시한 판이 있는 것)만이다. 남에게 공개된 세계관의 목록은 asset 서버에 아직 없다(D1 은 그때 만든다).
+// 새로 시작은 지금은 내 세계관(게시한 판이 있는 것)만이다. 운영자에게는 "JSON 으로 세계관 넣기"로 가는 길이 있다. 남에게 공개된 세계관의 목록은 asset 서버에 아직 없다(D1 은 그때 만든다).
 // 시작하면 세계관의 마지막 판을 고정한 새 세션이 생기고 장면(D2)으로 간다. 모델은 지난번 세션의 것이다.
 
 import { Button, Notice } from '@ai-trpg/ui';
@@ -8,6 +8,8 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import type { StorySessionSummary } from '../../api/story';
 import type { StoryWorldSummary } from '../../api/storyWorlds';
+import { isOperator } from '../../auth/roles';
+import { useSession } from '../../auth/useSession';
 import { formatDateTime } from '../../format/dateTime';
 import { myStoryWorldsQuery, storySessionsQuery } from './storyQueries';
 import { describeStartProblem } from './storyTurnProblem';
@@ -71,10 +73,19 @@ function StartFromMyWorlds() {
   const worlds = useQuery(myStoryWorldsQuery());
   const starting = useStartStorySession();
   const startable = (worlds.data?.items ?? []).filter((world) => world.latest_version !== null);
+  const operator = isOperator(useSession());
   return (
     <section className="page-section" aria-labelledby="story-start">
       <h2 id="story-start">새로 시작</h2>
-      <p className="hint">내가 만들어 게시한 세계관으로 시작합니다.</p>
+      <p className="hint">
+        내가 만들어 게시한 세계관으로 시작합니다.
+        {operator ? (
+          <>
+            {' '}
+            <Link to="/story/worlds/import">JSON 으로 세계관 넣기</Link>
+          </>
+        ) : null}
+      </p>
       {worlds.isPending ? <p aria-busy="true">불러오는 중</p> : null}
       {worlds.isError ? <Notice tone="error">세계관을 불러오지 못했습니다. 잠시 뒤에 다시 열어 주세요.</Notice> : null}
       {worlds.isSuccess && startable.length === 0 ? <p className="empty-state">게시한 세계관이 없습니다.</p> : null}

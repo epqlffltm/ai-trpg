@@ -70,6 +70,7 @@ import {
   TableRoomPage,
   WalletPage,
   WorldEditPage,
+  WorldImportPage,
   WorldNewPage,
   WorldsPage,
 } from './routing/pages';
@@ -320,6 +321,14 @@ export function App() {
         >
           <Route index element={<StoryHomePage />} />
           <Route path="sessions/:sessionId" element={<StorySessionPage />} />
+          <Route
+            path="worlds/import"
+            element={
+              <RequireOperator>
+                <WorldImportPage />
+              </RequireOperator>
+            }
+          />
           <Route path="*" element={<PlaceholderPage service="story" />} />
         </Route>
         {/* 공지·게시판(A11). 읽기는 로그인하지 않아도 열린다. 쓰기와 고치기는 로그인해야 한다 */}
