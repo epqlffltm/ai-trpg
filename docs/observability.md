@@ -386,7 +386,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `internal.error` | 그 밖의 서버 쪽 오류. 핸들러가 스스로 5xx 로 답한 것, 코드를 따로 주지 않고 예외를 남긴 것 |
 | `job.failed` | 작업이 예외로 끝났다 |
 | `job.refused` | 게임 서버가 작업을 맡지 않았다. 그 종류(`operation`)의 돌거나 기다리는 작업이 상한(`capacity`)에 닿았다. 서술은 서버의 시계가, 색인은 다음 검색이 다시 맡긴다. `warning` |
-| `round.stalled` | 게임 서버가 서술이 되풀이해 사라진 라운드를 더 다시 맡기지 않고 실패(`stalled`)로 적었다. 같은 서술이 할 때마다 서버를 죽이고 있을 수 있다. `table_id`, `round`, `auto_retries`. 방장이 다시 맡길 수 있다. `warning` |
+| `round.stalled` | 게임 서버가 서술이 되풀이해 사라진 라운드를 더 다시 맡기지 않고 서술을 그만뒀다(`stalled`). 값은 돌려주고 엔진의 결과로 다음 라운드를 열었다. 같은 서술이 할 때마다 서버를 죽이고 있을 수 있다. `table_id`, `round`, `auto_retries`. `warning` |
 | `auth.jwks_unavailable` | 인증 서버에서 공개키를 받지 못했다. 게임 서버, 결제 서버, 알림 서버는 마지막으로 받은 지 30분이 지나 기억한 키를 버릴 때 `error` 로 남긴다(그 뒤 인증이 필요한 요청은 503). 사람이 인증 서버를 봐야 한다 |
 | `auth.revocations_unavailable` | 게임 서버, 결제 서버, 게시판 서버, 알림 서버가 남긴다. 인증 서버에서 끊긴 세션의 목록(`/api/v1/auth/session-revocations`)을 받지 못했다. 마지막으로 받은 목록을 그대로 쓴다. 30초마다 다시 받으므로 인증 서버가 죽어 있으면 그만큼 줄이 쌓인다. `reason` 에 종류를 싣는다. `warning` |
 | `payment.provider_unavailable` | 결제 대행사의 답을 받지 못했거나, 결과를 알 수 없는 답이 왔다(토스페이먼츠의 5xx, 401, "처리 중" 같은 것). 주문은 `confirming` 에 남고 다시 부르거나 대사가 조회해 끝낸다. 청약철회(`order.refund`)면 `refunding` 에 남고 다시 부르거나 대사가 같은 취소를 다시 보낸다. 가상계좌(입금 대기)를 취소하지 못했을 때도 이 코드다(`order.confirm`, `cancel_status`). `warning` |

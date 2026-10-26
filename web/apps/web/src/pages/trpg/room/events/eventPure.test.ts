@@ -144,6 +144,12 @@ describe('eventLine', () => {
     expect(line('narration_model_retiring', { narration_model: 'gemini-flash', retires_on: '2026-11-30', days_left: 7 })?.text).toBe(
       '서술 모델 Gemini Flash: 11월 30일에 끝납니다(7일 남음).',
     );
+    expect(line('narration_abandoned', { round: 3, reason: 'cut_off', failures: 3 })?.text).toBe(
+      '라운드 3: 3번 실패해 서술을 그만두었습니다. 엔진의 결과로 이어 갑니다.',
+    );
+    expect(line('narration_abandoned', { round: 3, reason: 'stalled', failures: 0 })?.text).toBe(
+      '라운드 3: 서술하던 작업이 되풀이해 끊겨 서술을 그만두었습니다. 엔진의 결과로 이어 갑니다.',
+    );
     expect(line('character_died', { character_name: '조' })?.important).toBe(true);
     expect(line('hp_changed', { character_name: '렌', before: 9, after: 5 })?.important).toBe(false);
   });

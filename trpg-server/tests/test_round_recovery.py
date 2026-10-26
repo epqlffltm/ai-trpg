@@ -1,7 +1,7 @@
 # trpg-server/tests/test_round_recovery.py
 
 """
-서술을 맡은 작업이 사라진 라운드를 서버의 시계가 다시 맡기는 것(app/rounds/recovery.py, #275)을 검증한다.
+서술을 맡은 작업이 사라진 라운드를 서버의 시계가 다시 맡기는 것(app/rounds/recovery.py, #275, #809)을 검증한다.
 
 작업이 사라지는 것은 HeldJobs 로 흉내 낸다. 맡은 작업을 돌리지 않고 버린다. 서버가 서술 도중에 죽은 것과 같다.
 시계의 "지금"은 테스트가 정한다. 닫기 시작한 시각에서 service.CLOSING_RETRY_SECONDS 를 더한 때가 사라졌다고 보는 때다.
@@ -9,7 +9,8 @@
 다섯을 본다.
   - 다시 맡기기: 사라진 서술을 다시 맡겨 다음 라운드가 열린다.
     아직 기다릴 때, 실패를 적은 때, 끝난 테이블은 그대로 둔다.
-  - 그만두기: 정해 둔 횟수를 넘으면 실패(stalled)로 적어 알린다. 방장이 다시 맡기면 횟수를 다시 센다.
+  - 그만두기: 정해 둔 횟수를 넘으면 서술을 그만두고(stalled) 엔진의 결과로 다음 라운드를 연다.
+    서술의 실패로 세지 않고, 잡아 둔 값은 돌려준다. 방장이 다시 맡기면 횟수를 다시 센다.
   - 서버가 여럿: 같은 라운드를 동시에 보아도 한 번만 다시 맡긴다.
   - 자리가 다 찬 서술: 맡지 않은 서술도 같은 길로 다시 맡긴다.
   - 기록: 시계의 한 바퀴에 다시 맡긴 수가 남는다.
@@ -34,6 +35,9 @@ from app.rounds.clock import RoundClock
 from app.rounds.closing import closer_of
 from app.rounds.models import Round
 from app.rounds.recovery import AUTO_RETRY_LIMIT, STALLED, Recovery
+from tests.billing import PRICES, FakeBillingServer
+from tests.test_narration_billing import charges_of, tick
+from tests.test_npc_actions import events_of
 from tests.test_round_closing import (
     FRIEND,
     FRIENDS_ACTION,
@@ -44,7 +48,6 @@ from tests.test_round_closing import (
     current,
     declare,
     event_types,
-    last_event,
     start_duo,
     started_at,
     table_url,
@@ -198,30 +201,83 @@ async def test_the_server_gives_up_after_retrying_enough(
     # 정해 둔 횟수만큼 다시 맡기고, 그 뒤에는 그만둔다
     assert rounds == [Counter({Recovery.RETRIED: 1})] * AUTO_RETRY_LIMIT + [Counter({Recovery.GAVE_UP: 1})]
     assert len(held.names) == 1 + AUTO_RETRY_LIMIT
-    # 실패로 적어 앉은 사람 모두에게 알린다. 라운드는 닫는 중에 머문다
-    failed = await last_event(client, me, table)
-    assert (failed['type'], failed['payload']['reason']) == ('narration_failed', STALLED)
-    row = await round_row(app, table)
-    assert row.narration_failed_at is not None
-    assert row.closed_at is None
+    # 방장에게 넘기지 않는다. 서술을 그만두고 엔진이 정한 결과의 줄로 다음 라운드를 연다
+    assert (await event_types(client, me, table))[2:] == [
+        'round_closed',
+        'narration_abandoned',
+        'gm_narration',
+        'round_opened',
+    ]
+    (abandoned,) = await events_of(client, me, table, 'narration_abandoned')
+    assert abandoned['payload'] == {'round': 1, 'reason': STALLED, 'failures': 0}
+    assert await events_of(client, me, table, 'narration_failed') == []
+    second = await current(client, me, table)
+    assert second['number'] == 2
+    assert second['scene'].startswith('[1 라운드의 결과]')
+    assert MY_ACTION in second['scene']
+    assert (await round_row(app, table)).closed_at is not None
     # 그만둔 뒤에는 더 보지 않는다
     assert await sweep_later(app, table) == Counter()
 
 
-async def test_the_host_hands_a_given_up_round_again_and_the_count_restarts(
-    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs
+async def test_giving_up_does_not_count_as_a_failure_of_the_narration(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs, session
 ):
     table = await start_duo(client, me, friend)
     await close_round(client, me, friend, table)
+    # 모델이 한 번 실패해 방장이 다시 맡긴 라운드다. 방장에게는 한 번 남아 있었다
+    started = await started_at(app, table)
+    await session.execute(update(Round).where(Round.closing_at == started).values(narration_failures=1))
+    await session.commit()
+
     await vanish_until_given_up(app, table)
+
+    # 서버가 죽은 일은 서술의 실패 횟수를 쓰지 않는다
+    (abandoned,) = await events_of(client, me, table, 'narration_abandoned')
+    assert abandoned['payload']['failures'] == 1
+    assert (await round_row(app, table)).narration_failures == 1
+
+
+async def test_a_given_up_round_is_not_charged(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs, session
+):
+    billing = FakeBillingServer(balances={ME: 1000, FRIEND: 1000})
+    app.state.billing = billing.billing(billing.make_client())
+    table = await start_duo(client, me, friend)
+    await tick(app)
+    await close_round(client, me, friend, table)
+
+    await vanish_until_given_up(app, table)
+    await tick(app)
+
+    # 그만둔 1 라운드의 값은 돌려줬다. 엔진의 결과로 연 2 라운드의 값은 새로 걸었다
+    for payer in (ME, FRIEND):
+        first, second = await charges_of(session, table, payer)
+        assert (first.status, second.status) == ('released', 'held')
+        assert billing.statuses()[first.reference] == 'released'
+        assert billing.balance(payer) == 1000 - PRICES[second.price_code]
+
+
+async def test_the_host_hands_a_failed_round_again_and_the_count_restarts(
+    client: AsyncClient, app: FastAPI, me: dict, friend: dict, held: HeldJobs, session
+):
+    table = await start_duo(client, me, friend)
+    await close_round(client, me, friend, table)
+    assert await sweep_later(app, table) == Counter({Recovery.RETRIED: 1})
+    # 다시 맡긴 서술이 이번에는 모델의 실패로 끝났다
+    started = await started_at(app, table)
+    await session.execute(update(Round).where(Round.closing_at == started).values(narration_failed_at=started))
+    await session.commit()
 
     # 실패로 적혔으니 방장은 기다리지 않고 다시 맡긴다
     again = await client.post(table_url(table, '/rounds/current/close'), headers=me)
 
     assert again.status_code == status.HTTP_202_ACCEPTED
     assert (await round_row(app, table)).auto_retries == 0
-    # 방장이 맡긴 것이 또 사라지면 서버가 다시 스스로 맡긴다
-    assert await sweep_later(app, table) == Counter({Recovery.RETRIED: 1})
+    # 방장이 맡긴 것이 사라지면 서버가 다시 처음부터 센다
+    assert await vanish_until_given_up(app, table) == [Counter({Recovery.RETRIED: 1})] * AUTO_RETRY_LIMIT + [
+        Counter({Recovery.GAVE_UP: 1})
+    ]
 
 
 def test_the_limit_is_small_but_not_zero():

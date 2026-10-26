@@ -308,6 +308,12 @@ function equipmentText(payload: Payload, ctx: EventContext, event: TableEvent): 
   return `${who(payload, ctx, event)}: ${text(payload, 'name') ?? '물건'} ${verb} (${slotsOf(payload, ctx)})`;
 }
 
+/** 서술을 그만둔 까닭. 서술을 맡은 작업이 되풀이해 사라졌으면(stalled, #809) 실패한 횟수가 아니다 */
+function abandonedText(payload: Payload): string {
+  const why = text(payload, 'reason') === 'stalled' ? '서술하던 작업이 되풀이해 끊겨' : `${count(payload, 'failures') ?? '?'}번 실패해`;
+  return `${roundOf(payload)}: ${why} 서술을 그만두었습니다. 엔진의 결과로 이어 갑니다.`;
+}
+
 function creditsShortText(payload: Payload, ctx: EventContext): string {
   const what = text(payload, 'reason') === 'gold_required' ? '골드가' : '크레딧이';
   return `${member(payload, ctx)}: ${what} 모자라 서술하지 못합니다. 충전하거나, 방장이 그 사람을 내보내거나 모델을 바꾸면 서술합니다.`;
@@ -354,7 +360,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   round_opened: (p) => roundOpenedText(p),
   round_closed: (p) => `라운드 ${count(p, 'number') ?? '?'}: 마감`,
   narration_failed: (p) => `${roundOf(p)}: 서술에 실패했습니다(${text(p, 'reason') ?? '까닭 모름'}).`,
-  narration_abandoned: (p) => `${roundOf(p)}: ${count(p, 'failures') ?? '?'}번 실패해 서술을 그만두었습니다. 엔진의 결과로 이어 갑니다.`,
+  narration_abandoned: (p) => abandonedText(p),
   narration_credits_short: (p, ctx) => creditsShortText(p, ctx),
   narration_credits_released: (p) => `${roundOf(p)}: 서술 값을 돌려주었습니다.`,
   narration_model_not_for_sale: (p, ctx) => `서술 모델 ${model(p, ctx)}: 지금 팔지 않아 서술하지 못합니다. 방장이 모델을 바꾸면 서술합니다.`,

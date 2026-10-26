@@ -147,7 +147,7 @@ class Round(Base):
     # 실패한 것을 아니까 방장은 기다리지 않고 바로 다시 맡길 수 있다. 다시 맡기면 비운다(app/rounds/service.py)
     narration_failed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 서술을 맡은 작업이 사라져 서버가 스스로 다시 맡긴 횟수(app/rounds/recovery.py, #275).
-    # 정해 둔 횟수를 넘으면 더 맡기지 않고 실패(stalled)로 적어 방장에게 넘긴다. 방장이 다시 맡기면 0 으로 돌린다.
+    # 정해 둔 횟수를 넘으면 더 맡기지 않고 서술을 그만둔다(stalled, #809). 방장이 다시 맡기면 0 으로 돌린다.
     # 이 칸이 생기기 전의 라운드는 0 이다
     auto_retries: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
     # 서술이 실패로 끝난 횟수(app/rounds/service.py 의 fail_closing). 서술 값을 잡지 못한 실패는 세지 않는다.
