@@ -54,6 +54,7 @@ function EditRulebook({ rulebook }: { rulebook: RulebookDetail }) {
         initial={rulebookDraft(rulebook)}
         templates={null}
         die={rulebook.rules.die}
+        abilities={rulebook.rules.abilities}
         submitLabel="저장"
         busy={updating.busy}
         problem={updating.problem}

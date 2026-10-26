@@ -61,6 +61,10 @@ NARRATION_MAX_AVOIDS = 5
 RULESET_MAX_EQUIPMENT_SLOTS = 8
 # 칸 하나가 맞을 가중치의 상한(#276). 칸마다의 비율만 뜻이 있다
 RULESET_MAX_HIT_WEIGHT = 100
+# 규칙 하나에 둘 수 있는 수치(#804)의 수. 마나, 스태미나, 광기 같은 것이다. 시트와 화면과 서술에 하나씩 늘어난다
+RULESET_MAX_RESOURCES = 6
+# 수치 하나가 가질 수 있는 가장 큰 값과, 쉬기로 한 번에 올리고 내리는 양의 상한
+RESOURCE_MAX_VALUE = 999
 
 # 코드와 데이터가 서로를 가리킬 때 쓰는 이름. 영어 소문자로 시작하고, 소문자와 숫자와 밑줄만 쓴다
 Key = Annotated[str, StringConstraints(pattern=r'^[a-z][a-z0-9_]*$', max_length=20)]
@@ -715,6 +719,88 @@ class Armor(Part):
         return self
 
 
+class ResourceStart(enum.StrEnum):
+    """수치의 시작 값(#804). 시트를 받을 때 이 값으로 둔다."""
+
+    # 가득(최대)에서 시작한다. 마나, 스태미나
+    MAX = 'max'
+    # 비운 채(최소)로 시작한다. 광기, 피로
+    MIN = 'min'
+
+
+class ResourceShiftKind(enum.StrEnum):
+    """쉬기가 수치에 하는 일(#804)."""
+
+    # amount 만큼 올린다
+    RAISE = 'raise'
+    # amount 만큼 내린다
+    LOWER = 'lower'
+    # 최대로 채운다
+    FILL = 'fill'
+    # 최소로 비운다
+    EMPTY = 'empty'
+
+
+class ResourceShift(Part):
+    """쉬기 하나가 수치에 하는 일. 올리기와 내리기에만 양(amount)이 있다. 범위 밖으로는 가지 않는다."""
+
+    kind: ResourceShiftKind
+    amount: Annotated[int, Field(ge=1, le=RESOURCE_MAX_VALUE)] | None = None
+
+    @model_validator(mode='after')
+    def require_amount_for_steps(self) -> Self:
+        """올리기와 내리기에는 양이 있어야 하고, 채우기와 비우기에는 없다."""
+        stepping = self.kind in (ResourceShiftKind.RAISE, ResourceShiftKind.LOWER)
+        if stepping != (self.amount is not None):
+            raise ValueError('amount 는 kind 가 raise 나 lower 일 때만, 반드시 적습니다.')
+        return self
+
+
+class ResourceRest(Part):
+    """수치가 쉬기에 따라 바뀌는 것. 비우면 그 휴식은 이 수치를 바꾸지 않는다."""
+
+    short: ResourceShift | None = None
+    long: ResourceShift | None = None
+
+
+class ResourceMax(Part):
+    """
+    수치의 최대. base 에 능력치(ability)의 보정을 더하고, cap 이 있으면 그것을 넘지 않는다.
+
+    능력치를 비우면 base 그대로다(고정값). 플레이어가 능력치를 정한 캐릭터의 최대 HP 와 같은 식이다.
+    보정이 음수라 최소보다 작아지면 최소다.
+    """
+
+    base: Annotated[int, Field(ge=0, le=RESOURCE_MAX_VALUE)]
+    ability: Key | None = None
+    cap: Annotated[int, Field(ge=1, le=RESOURCE_MAX_VALUE)] | None = None
+
+
+class Resource(Part):
+    """
+    HP 말고 캐릭터가 가지는 수치 하나(#804). 마나, 스태미나, 광기, 피로 같은 것이다.
+
+    key 는 효과(adjust)와 시트가 가리키는 이름표, name 은 보이는 이름이다.
+    min 이 바닥이고, 최대는 max 가 정한다(능력치에서 올 수 있다). start 가 시트를 받을 때의 값이다.
+    rest 는 짧은 휴식과 긴 휴식이 이 수치에 하는 일이다. 값은 엔진만 바꾼다(쉬기, 물건의 adjust).
+    """
+
+    key: Key
+    name: Name
+    min: Annotated[int, Field(ge=0, le=RESOURCE_MAX_VALUE)] = 0
+    max: ResourceMax
+    start: ResourceStart = ResourceStart.MAX
+    rest: ResourceRest = ResourceRest()
+
+    @model_validator(mode='after')
+    def require_room_above_min(self) -> Self:
+        """최대의 상한(cap)이나 고정값은 최소보다 커야 한다. 아니면 늘 같은 값이라 수치가 아니다."""
+        ceiling = self.max.cap if self.max.cap is not None else (self.max.base if self.max.ability is None else None)
+        if ceiling is not None and ceiling <= self.min:
+            raise ValueError('수치의 최대가 최소보다 커야 합니다.')
+        return self
+
+
 class Ruleset(Part):
     """
     규칙 한 벌.
@@ -776,6 +862,20 @@ class Ruleset(Part):
     # 물건을 인물이나 몬스터에게 쓸 때 맞히는 판정(#800). None 이면 물건을 자기와 동료에게만 쓴다.
     # 칸 자체는 늘 있어야 한다
     item_check: ItemCheck | None
+    # HP 말고 캐릭터가 가지는 수치들(#804). 비어 있으면 HP 뿐이다. 칸 자체는 늘 있어야 한다
+    resources: Annotated[tuple[Resource, ...], Field(max_length=RULESET_MAX_RESOURCES)]
+
+    @model_validator(mode='after')
+    def reject_unknown_resources(self) -> Self:
+        """수치의 이름표가 겹치지 않고, 최대에 쓰는 능력치가 이 규칙에 있어야 한다."""
+        duplicates = find_duplicates([resource.key for resource in self.resources])
+        if duplicates:
+            raise ValueError(f'같은 수치가 두 번 있습니다: {", ".join(duplicates)}')
+        known = {ability.key for ability in self.abilities}
+        unknown = [r.key for r in self.resources if r.max.ability is not None and r.max.ability not in known]
+        if unknown:
+            raise ValueError(f'수치의 최대에 쓰는 능력치가 규칙에 없습니다: {", ".join(unknown)}')
+        return self
 
     @model_validator(mode='after')
     def reject_duplicate_slots(self) -> Self:

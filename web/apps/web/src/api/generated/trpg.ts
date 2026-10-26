@@ -1932,6 +1932,21 @@ export interface components {
             reason: string;
         };
         /**
+         * AdjustEffect
+         * @description 수치 하나(resource, 룰북의 resources 의 이름표)를 양(amount)만큼 올리거나(양수) 내린다(음수, #804).
+         */
+        AdjustEffect: {
+            /** Amount */
+            amount: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "adjust";
+            /** Resource */
+            resource: string;
+        };
+        /**
          * AidAct
          * @description 거드는 행동.
          * @enum {string}
@@ -2365,7 +2380,7 @@ export interface components {
              * Effects
              * @default []
              */
-            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"])[];
+            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"] | components["schemas"]["AdjustEffect"])[];
             /**
              * Entry Id
              * Format: uuid
@@ -3325,7 +3340,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -4000,7 +4015,7 @@ export interface components {
              * Effects
              * @default []
              */
-            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"])[];
+            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"] | components["schemas"]["AdjustEffect"])[];
             /**
              * Entry Id
              * Format: uuid
@@ -4070,7 +4085,7 @@ export interface components {
              * Effects
              * @default []
              */
-            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"])[];
+            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"] | components["schemas"]["AdjustEffect"])[];
             /** Entry Id */
             entry_id: string;
             /** Guard */
@@ -4124,7 +4139,7 @@ export interface components {
              * Effects
              * @default []
              */
-            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"])[];
+            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"] | components["schemas"]["AdjustEffect"])[];
             /**
              * Entry Id
              * Format: uuid
@@ -4279,6 +4294,11 @@ export interface components {
             reason: string | null;
             /** Remaining */
             remaining: number;
+            /**
+             * Resources
+             * @default []
+             */
+            resources: components["schemas"]["ResourceShiftOut"][];
             /** Target */
             target: components["schemas"]["ItemPersonOut"] | components["schemas"]["ThrownAtOut"] | null;
             /** Used */
@@ -6985,6 +7005,108 @@ export interface components {
             place: string;
         };
         /**
+         * Resource
+         * @description HP 말고 캐릭터가 가지는 수치 하나(#804). 마나, 스태미나, 광기, 피로 같은 것이다.
+         *
+         *     key 는 효과(adjust)와 시트가 가리키는 이름표, name 은 보이는 이름이다.
+         *     min 이 바닥이고, 최대는 max 가 정한다(능력치에서 올 수 있다). start 가 시트를 받을 때의 값이다.
+         *     rest 는 짧은 휴식과 긴 휴식이 이 수치에 하는 일이다. 값은 엔진만 바꾼다(쉬기, 물건의 adjust).
+         */
+        Resource: {
+            /** Key */
+            key: string;
+            max: components["schemas"]["ResourceMax"];
+            /**
+             * Min
+             * @default 0
+             */
+            min: number;
+            /** Name */
+            name: string;
+            /** @default {} */
+            rest: components["schemas"]["ResourceRest"];
+            /** @default max */
+            start: components["schemas"]["ResourceStart"];
+        };
+        /**
+         * ResourceMax
+         * @description 수치의 최대. base 에 능력치(ability)의 보정을 더하고, cap 이 있으면 그것을 넘지 않는다.
+         *
+         *     능력치를 비우면 base 그대로다(고정값). 플레이어가 능력치를 정한 캐릭터의 최대 HP 와 같은 식이다.
+         *     보정이 음수라 최소보다 작아지면 최소다.
+         */
+        ResourceMax: {
+            /** Ability */
+            ability?: string | null;
+            /** Base */
+            base: number;
+            /** Cap */
+            cap?: number | null;
+        };
+        /**
+         * ResourceOut
+         * @description 시트의 수치 하나(#804). 마나, 스태미나 같은 것이다. 규칙의 수치(rules.resources)의 차례로 나온다.
+         *
+         *     최대는 그 캐릭터의 능력치로 정해진 값이다. 값은 늘 min 과 max 사이다.
+         */
+        ResourceOut: {
+            /** Key */
+            key: string;
+            /** Max */
+            max: number;
+            /** Min */
+            min: number;
+            /** Name */
+            name: string;
+            /** Value */
+            value: number;
+        };
+        /**
+         * ResourceRest
+         * @description 수치가 쉬기에 따라 바뀌는 것. 비우면 그 휴식은 이 수치를 바꾸지 않는다.
+         */
+        ResourceRest: {
+            long?: components["schemas"]["ResourceShift"] | null;
+            short?: components["schemas"]["ResourceShift"] | null;
+        };
+        /**
+         * ResourceShift
+         * @description 쉬기 하나가 수치에 하는 일. 올리기와 내리기에만 양(amount)이 있다. 범위 밖으로는 가지 않는다.
+         */
+        ResourceShift: {
+            /** Amount */
+            amount?: number | null;
+            kind: components["schemas"]["ResourceShiftKind"];
+        };
+        /**
+         * ResourceShiftKind
+         * @description 쉬기가 수치에 하는 일(#804).
+         * @enum {string}
+         */
+        ResourceShiftKind: "raise" | "lower" | "fill" | "empty";
+        /**
+         * ResourceShiftOut
+         * @description 수치 하나가 바뀐 것(#804). 쉬기나 물건의 맞추기가 바꿨다. 이름표와 이름, 바뀌기 전과 뒤의 값, 그 캐릭터의 최대다.
+         */
+        ResourceShiftOut: {
+            /** After */
+            after: number;
+            /** Before */
+            before: number;
+            /** Max */
+            max: number;
+            /** Name */
+            name: string;
+            /** Resource */
+            resource: string;
+        };
+        /**
+         * ResourceStart
+         * @description 수치의 시작 값(#804). 시트를 받을 때 이 값으로 둔다.
+         * @enum {string}
+         */
+        ResourceStart: "max" | "min";
+        /**
          * Rest
          * @description 쉬기. 짧은 휴식과 긴 휴식, 되살아나기, 저절로 회복하기다.
          *
@@ -7038,6 +7160,11 @@ export interface components {
             minutes: number;
             /** Reason */
             reason: string | null;
+            /**
+             * Resources
+             * @default []
+             */
+            resources: components["schemas"]["ResourceShiftOut"][];
             /** Rested */
             rested: boolean;
             /** Rolls */
@@ -7499,7 +7626,7 @@ export interface components {
          *
          *     규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.
          *     방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.
-         *     보내지 않으면 템플릿의 것이다.
+         *     보내지 않으면 템플릿의 것이다. 수치(resources, #804)도 같다. 보내면 템플릿의 예시 대신 쓴다.
          */
         RulebookCreate: {
             armor?: components["schemas"]["Armor"] | null;
@@ -7513,6 +7640,8 @@ export interface components {
              * @default
              */
             gm_guide: string;
+            /** Resources */
+            resources?: components["schemas"]["Resource"][] | null;
             /** @default srd5 */
             template: components["schemas"]["Template"];
             /** Title */
@@ -7570,7 +7699,8 @@ export interface components {
          * RulebookUpdate
          * @description 룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.
          *
-         *     규칙은 방어 규칙(armor)만 고칠 수 있다(#276). null 을 보내면 방어구가 막지 않는 규칙이 된다.
+         *     규칙은 방어 규칙(armor)과 수치(resources, #804)만 고칠 수 있다.
+         *     방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.
          *     이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
          */
         RulebookUpdate: {
@@ -7579,6 +7709,8 @@ export interface components {
             description?: string | null;
             /** Gm Guide */
             gm_guide?: string | null;
+            /** Resources */
+            resources?: components["schemas"]["Resource"][] | null;
             /** Title */
             title?: string | null;
         };
@@ -7617,6 +7749,8 @@ export interface components {
             modifier: components["schemas"]["Modifier"];
             narration: components["schemas"]["NarrationGuide"] | null;
             point_buy: components["schemas"]["PointBuy"] | null;
+            /** Resources */
+            resources: components["schemas"]["Resource"][];
             rest: components["schemas"]["Rest"] | null;
             robbed_wake: components["schemas"]["RobbedWake"] | null;
             /** Score Max */
@@ -8186,6 +8320,11 @@ export interface components {
             /** Place Id */
             place_id?: string | null;
             /**
+             * Resources
+             * @default []
+             */
+            resources: components["schemas"]["ResourceOut"][];
+            /**
              * Worn
              * @default []
              */
@@ -8236,7 +8375,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 64
+             * @default 65
              */
             format: number;
             /**
@@ -9574,6 +9713,11 @@ export interface components {
             reason: string | null;
             /** Remaining */
             remaining: number;
+            /**
+             * Resources
+             * @default []
+             */
+            resources: components["schemas"]["ResourceShiftOut"][];
             target: components["schemas"]["ThrownAtOut"];
             /** Thrown */
             thrown: boolean;

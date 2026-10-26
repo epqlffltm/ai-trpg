@@ -42,6 +42,36 @@
         "title": "ActionRequest",
         "type": "object"
       },
+      "AdjustEffect": {
+        "additionalProperties": false,
+        "description": "수치 하나(resource, 룰북의 resources 의 이름표)를 양(amount)만큼 올리거나(양수) 내린다(음수, #804).",
+        "properties": {
+          "amount": {
+            "maximum": 99.0,
+            "minimum": -99.0,
+            "title": "Amount",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "adjust",
+            "title": "Kind",
+            "type": "string"
+          },
+          "resource": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Resource",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "resource",
+          "amount"
+        ],
+        "title": "AdjustEffect",
+        "type": "object"
+      },
       "AidAct": {
         "description": "거드는 행동.",
         "enum": [
@@ -855,6 +885,7 @@
             "items": {
               "discriminator": {
                 "mapping": {
+                  "adjust": "#/components/schemas/AdjustEffect",
                   "cure": "#/components/schemas/CureEffect",
                   "damage": "#/components/schemas/DamageEffect",
                   "heal": "#/components/schemas/HealEffect",
@@ -874,6 +905,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/InjureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/AdjustEffect"
                 }
               ]
             },
@@ -3346,6 +3380,7 @@
           "door_changed",
           "monsters_appeared",
           "character_rested",
+          "resource_changed",
           "character_revived",
           "round_closed",
           "narration_failed",
@@ -4794,6 +4829,7 @@
             "items": {
               "discriminator": {
                 "mapping": {
+                  "adjust": "#/components/schemas/AdjustEffect",
                   "cure": "#/components/schemas/CureEffect",
                   "damage": "#/components/schemas/DamageEffect",
                   "heal": "#/components/schemas/HealEffect",
@@ -4813,6 +4849,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/InjureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/AdjustEffect"
                 }
               ]
             },
@@ -4974,6 +5013,7 @@
             "items": {
               "discriminator": {
                 "mapping": {
+                  "adjust": "#/components/schemas/AdjustEffect",
                   "cure": "#/components/schemas/CureEffect",
                   "damage": "#/components/schemas/DamageEffect",
                   "heal": "#/components/schemas/HealEffect",
@@ -4993,6 +5033,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/InjureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/AdjustEffect"
                 }
               ]
             },
@@ -5145,6 +5188,7 @@
             "items": {
               "discriminator": {
                 "mapping": {
+                  "adjust": "#/components/schemas/AdjustEffect",
                   "cure": "#/components/schemas/CureEffect",
                   "damage": "#/components/schemas/DamageEffect",
                   "heal": "#/components/schemas/HealEffect",
@@ -5164,6 +5208,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/InjureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/AdjustEffect"
                 }
               ]
             },
@@ -5493,6 +5540,14 @@
           "remaining": {
             "title": "Remaining",
             "type": "integer"
+          },
+          "resources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceShiftOut"
+            },
+            "title": "Resources",
+            "type": "array"
           },
           "target": {
             "anyOf": [
@@ -10742,6 +10797,235 @@
         "title": "ReplaceAction",
         "type": "object"
       },
+      "Resource": {
+        "additionalProperties": false,
+        "description": "HP 말고 캐릭터가 가지는 수치 하나(#804). 마나, 스태미나, 광기, 피로 같은 것이다.\n\nkey 는 효과(adjust)와 시트가 가리키는 이름표, name 은 보이는 이름이다.\nmin 이 바닥이고, 최대는 max 가 정한다(능력치에서 올 수 있다). start 가 시트를 받을 때의 값이다.\nrest 는 짧은 휴식과 긴 휴식이 이 수치에 하는 일이다. 값은 엔진만 바꾼다(쉬기, 물건의 adjust).",
+        "properties": {
+          "key": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Key",
+            "type": "string"
+          },
+          "max": {
+            "$ref": "#/components/schemas/ResourceMax"
+          },
+          "min": {
+            "default": 0,
+            "maximum": 999.0,
+            "minimum": 0.0,
+            "title": "Min",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "rest": {
+            "$ref": "#/components/schemas/ResourceRest",
+            "default": {}
+          },
+          "start": {
+            "$ref": "#/components/schemas/ResourceStart",
+            "default": "max"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "max"
+        ],
+        "title": "Resource",
+        "type": "object"
+      },
+      "ResourceMax": {
+        "additionalProperties": false,
+        "description": "수치의 최대. base 에 능력치(ability)의 보정을 더하고, cap 이 있으면 그것을 넘지 않는다.\n\n능력치를 비우면 base 그대로다(고정값). 플레이어가 능력치를 정한 캐릭터의 최대 HP 와 같은 식이다.\n보정이 음수라 최소보다 작아지면 최소다.",
+        "properties": {
+          "ability": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ability"
+          },
+          "base": {
+            "maximum": 999.0,
+            "minimum": 0.0,
+            "title": "Base",
+            "type": "integer"
+          },
+          "cap": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cap"
+          }
+        },
+        "required": [
+          "base"
+        ],
+        "title": "ResourceMax",
+        "type": "object"
+      },
+      "ResourceOut": {
+        "description": "시트의 수치 하나(#804). 마나, 스태미나 같은 것이다. 규칙의 수치(rules.resources)의 차례로 나온다.\n\n최대는 그 캐릭터의 능력치로 정해진 값이다. 값은 늘 min 과 max 사이다.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "max": {
+            "title": "Max",
+            "type": "integer"
+          },
+          "min": {
+            "title": "Min",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "value",
+          "min",
+          "max"
+        ],
+        "title": "ResourceOut",
+        "type": "object"
+      },
+      "ResourceRest": {
+        "additionalProperties": false,
+        "description": "수치가 쉬기에 따라 바뀌는 것. 비우면 그 휴식은 이 수치를 바꾸지 않는다.",
+        "properties": {
+          "long": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceShift"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "short": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceShift"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ResourceRest",
+        "type": "object"
+      },
+      "ResourceShift": {
+        "additionalProperties": false,
+        "description": "쉬기 하나가 수치에 하는 일. 올리기와 내리기에만 양(amount)이 있다. 범위 밖으로는 가지 않는다.",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ResourceShiftKind"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ResourceShift",
+        "type": "object"
+      },
+      "ResourceShiftKind": {
+        "description": "쉬기가 수치에 하는 일(#804).",
+        "enum": [
+          "raise",
+          "lower",
+          "fill",
+          "empty"
+        ],
+        "title": "ResourceShiftKind",
+        "type": "string"
+      },
+      "ResourceShiftOut": {
+        "description": "수치 하나가 바뀐 것(#804). 쉬기나 물건의 맞추기가 바꿨다. 이름표와 이름, 바뀌기 전과 뒤의 값, 그 캐릭터의 최대다.",
+        "properties": {
+          "after": {
+            "title": "After",
+            "type": "integer"
+          },
+          "before": {
+            "title": "Before",
+            "type": "integer"
+          },
+          "max": {
+            "title": "Max",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "resource": {
+            "title": "Resource",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "name",
+          "before",
+          "after",
+          "max"
+        ],
+        "title": "ResourceShiftOut",
+        "type": "object"
+      },
+      "ResourceStart": {
+        "description": "수치의 시작 값(#804). 시트를 받을 때 이 값으로 둔다.",
+        "enum": [
+          "max",
+          "min"
+        ],
+        "title": "ResourceStart",
+        "type": "string"
+      },
       "Rest": {
         "additionalProperties": false,
         "description": "쉬기. 짧은 휴식과 긴 휴식, 되살아나기, 저절로 회복하기다.\n\n쉬는 것은 캐릭터가 선언하는 행동이다(app/rounds/rests.py). 쉬는 라운드는 적어도 그 휴식의 시간만큼 이어진다.\nrevive 가 None 이면 쓰러진 캐릭터는 쉬어서 일어나지 못한다(치료나 회복으로만 일어난다).\nnatural 이 None 이면 쉬지 않고는 회복하지 않는다.",
@@ -10844,6 +11128,14 @@
               }
             ],
             "title": "Reason"
+          },
+          "resources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceShiftOut"
+            },
+            "title": "Resources",
+            "type": "array"
           },
           "rested": {
             "title": "Rested",
@@ -11903,7 +12195,7 @@
       },
       "RulebookCreate": {
         "additionalProperties": false,
-        "description": "룰북을 만들 때 받는 값. 제목만 필수다.\n\n규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.\n방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.\n보내지 않으면 템플릿의 것이다.",
+        "description": "룰북을 만들 때 받는 값. 제목만 필수다.\n\n규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.\n방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.\n보내지 않으면 템플릿의 것이다. 수치(resources, #804)도 같다. 보내면 템플릿의 예시 대신 쓴다.",
         "properties": {
           "armor": {
             "anyOf": [
@@ -11926,6 +12218,21 @@
             "maxLength": 4000,
             "title": "Gm Guide",
             "type": "string"
+          },
+          "resources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Resource"
+                },
+                "maxItems": 6,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resources"
           },
           "template": {
             "$ref": "#/components/schemas/Template",
@@ -12025,7 +12332,7 @@
       },
       "RulebookUpdate": {
         "additionalProperties": false,
-        "description": "룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\n규칙은 방어 규칙(armor)만 고칠 수 있다(#276). null 을 보내면 방어구가 막지 않는 규칙이 된다.\n이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.",
+        "description": "룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\n규칙은 방어 규칙(armor)과 수치(resources, #804)만 고칠 수 있다.\n방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.\n이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.",
         "properties": {
           "armor": {
             "anyOf": [
@@ -12060,6 +12367,21 @@
               }
             ],
             "title": "Gm Guide"
+          },
+          "resources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Resource"
+                },
+                "maxItems": 6,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resources"
           },
           "title": {
             "anyOf": [
@@ -12239,6 +12561,14 @@
               }
             ]
           },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/Resource"
+            },
+            "maxItems": 6,
+            "title": "Resources",
+            "type": "array"
+          },
           "rest": {
             "anyOf": [
               {
@@ -12334,7 +12664,8 @@
           "narration",
           "equipment_slots",
           "armor",
-          "item_check"
+          "item_check",
+          "resources"
         ],
         "title": "Ruleset",
         "type": "object"
@@ -13851,6 +14182,14 @@
             ],
             "title": "Place Id"
           },
+          "resources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceOut"
+            },
+            "title": "Resources",
+            "type": "array"
+          },
           "worn": {
             "default": [],
             "items": {
@@ -13965,7 +14304,7 @@
             "type": "array"
           },
           "format": {
-            "default": 64,
+            "default": 65,
             "title": "Format",
             "type": "integer"
           },
@@ -16833,6 +17172,14 @@
           "remaining": {
             "title": "Remaining",
             "type": "integer"
+          },
+          "resources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceShiftOut"
+            },
+            "title": "Resources",
+            "type": "array"
           },
           "target": {
             "$ref": "#/components/schemas/ThrownAtOut"

@@ -3,7 +3,7 @@
 // 까닭의 이름은 서버의 것이다(trpg-server/app/rounds 의 item_actions.py, throws.py, place_item_actions.py, steals.py, loots.py, rests.py, waits.py).
 // 못 한 것은 이벤트로 오지 않아 이 줄에만 보인다. 이름 뒤에는 조사를 붙이지 않는다.
 
-import type { Declaration } from '../../../../api/types';
+import type { Declaration, ResourceChange } from '../../../../api/types';
 import { because } from './outcomeReason';
 
 type Outcome = NonNullable<Declaration['outcome']>;
@@ -47,7 +47,13 @@ const WAIT_REASONS: Record<string, string> = {
 };
 
 export function itemUseLine(use: Part<'item_use'>): string {
-  return use.used ? `${use.name} 사용(남은 ${use.remaining}개)` : `쓰지 못했습니다${because(ITEM_REASONS, use.reason)}`;
+  if (!use.used) return `쓰지 못했습니다${because(ITEM_REASONS, use.reason)}`;
+  return [`${use.name} 사용(남은 ${use.remaining}개)`, ...shiftParts(use.resources)].join(' · ');
+}
+
+/** 바뀐 수치들(#804). "마나 2 → 5/7" */
+function shiftParts(shifts: ResourceChange[] | undefined): string[] {
+  return (shifts ?? []).map((shift) => `${shift.name} ${shift.before} → ${shift.after}/${shift.max}`);
 }
 
 /** 던지지 못한 까닭(throws.py, #277) */
@@ -90,7 +96,8 @@ export function lootLine(loot: Part<'loot'>): string {
 }
 
 export function restLine(rest: Part<'rest'>): string {
-  return rest.rested ? `HP ${rest.before} → ${rest.after}` : `쉬지 못했습니다${because(REST_REASONS, rest.reason)}`;
+  if (!rest.rested) return `쉬지 못했습니다${because(REST_REASONS, rest.reason)}`;
+  return [`HP ${rest.before} → ${rest.after}`, ...shiftParts(rest.resources)].join(' · ');
 }
 
 export function waitLine(wait: Part<'wait'>): string {

@@ -388,6 +388,7 @@ async def test_a_hit_hurts_the_monster_and_uses_the_thing_up(
         'remaining': 1,
         'cured': [],
         'injured': [],
+        'resources': [],
     }
     assert (outcome['success'], outcome['target'], outcome['monster_effect']['amount']) == (True, 15, 3)
     assert await state_of(session, rat['id']) == (1, NpcStatus.ALIVE)
@@ -488,6 +489,7 @@ async def test_what_was_taken_meanwhile_is_not_thrown(
         'remaining': 0,
         'cured': [],
         'injured': [],
+        'resources': [],
     }
     assert await state_of(session, rat['id']) == (4, NpcStatus.ALIVE)
 

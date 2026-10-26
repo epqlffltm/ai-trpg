@@ -166,9 +166,13 @@ export function itemTakesTarget(table: TableDetail, entryId: string): boolean {
   return effectsOf(table, entryId).length > 0;
 }
 
-/** 이 물건이 해로운가(피해나 부상의 효과). 해로우면 동료에게는 동료 피해의 설정을 따른다(#803, allyTargets) */
+/**
+ * 이 물건이 해로운가(피해나 부상, 수치를 내리는 맞추기, #804). 해로우면 동료에게는 동료 피해의 설정을 따른다(#803, allyTargets)
+ */
 export function itemHarms(table: TableDetail, entryId: string): boolean {
-  return effectsOf(table, entryId).some((effect) => effect.kind === 'damage' || effect.kind === 'injure');
+  return effectsOf(table, entryId).some(
+    (effect) => effect.kind === 'damage' || effect.kind === 'injure' || (effect.kind === 'adjust' && effect.amount < 0),
+  );
 }
 
 /** 이 물건이 피해를 주는가. 그때만 인물이나 몬스터를 죽이려 할 수 있다 */

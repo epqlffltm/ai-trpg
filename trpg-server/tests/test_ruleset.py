@@ -159,9 +159,10 @@ def test_the_migration_filled_old_rulebooks_with_the_same_rules():
     # 서술 지침만은 다르다. 옛 룰북은 지침이 없는 것으로 둔다(#616). SRD5 의 판타지 분위기를 옛 판에 얹지 않는다.
     # 장비의 칸과 방어 방식도 같다. 옛 룰북은 칸도 방어 방식도 없는 것으로 둔다(#276).
     # 부상의 성질은 템플릿의 것을 채운다(#799). 룰북의 부상은 고칠 수 없어 템플릿의 부상 그대로다.
-    # 물건을 쓰는 판정(#800)도 그 템플릿의 것을 채운다
+    # 물건을 쓰는 판정(#800)도 그 템플릿의 것을 채운다. 수치(#804)는 그 뒤의 마이그레이션이 빈 목록으로 채운다
     template = SRD5.model_dump(mode='json')
-    old = {**template, 'narration': None, 'equipment_slots': [], 'armor': None}
+    old = {key: value for key, value in template.items() if key != 'resources'}
+    old = {**old, 'narration': None, 'equipment_slots': [], 'armor': None}
     assert load_backfill_rules() == old
 
 

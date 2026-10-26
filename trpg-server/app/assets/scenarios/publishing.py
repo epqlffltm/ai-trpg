@@ -80,6 +80,7 @@ from app.engine.health import find_magnitude
 from app.engine.injury import find_injury
 from app.engine.item_aids import AidAct
 from app.engine.item_effects import EffectKind
+from app.engine.resources import find_resource
 from app.engine.ruleset import Healing, Ruleset
 from app.engine.sheet import Sheet, fits
 
@@ -132,6 +133,8 @@ class Problem(enum.StrEnum):
     ITEM_CURE_INVALID = 'item_cure_invalid'
     # 소모품이 입히는 부상(effects 의 injure)이 룰북의 규칙에 없다(#800)
     ITEM_INJURE_INVALID = 'item_injure_invalid'
+    # 소모품이 맞추는 수치(effects 의 adjust)가 룰북의 수치(resources)에 없다(#804)
+    ITEM_RESOURCE_INVALID = 'item_resource_invalid'
     # 던지는 소모품의 판정의 능력치나 난이도나 피해의 등급이 룰북의 규칙에 없다(#277)
     ITEM_THROW_INVALID = 'item_throw_invalid'
     # 붙인 로어북에 없는 항목을 가리키는 퀘스트 규칙이 있다
@@ -548,7 +551,8 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
 
     가리키는 것은 붙인 로어북의 물건 항목이어야 한다. NPC 시트와 같은 까닭으로 굳히기 전에 여기서 막는다.
     소모품의 효과(#800)의 회복과 피해의 등급은 룰북의 등급, 푸는 부상은 룰북의 부상이고 결손이 아니어야 하고(#277),
-    입히는 부상은 룰북의 부상이어야 한다. 자물쇠 물건의 따는 판정은 룰북의 능력치와 난이도여야 한다(#281).
+    입히는 부상은 룰북의 부상, 맞추는 수치는 룰북의 수치여야 한다(#804).
+    자물쇠 물건의 따는 판정은 룰북의 능력치와 난이도여야 한다(#281).
     던지는 소모품의 판정은 룰북의 능력치와 난이도와 피해의 등급이어야 한다(#277).
     룰북이 없으면 볼 수 없다(그때는 RULEBOOK_MISSING 이다).
     """
@@ -569,6 +573,8 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
         problems.append(Problem.ITEM_CURE_INVALID)
     if ruleset and any(find_injury(ruleset, key) is None for key in effect_injuries(effects)):
         problems.append(Problem.ITEM_INJURE_INVALID)
+    if ruleset and any(find_resource(ruleset, key) is None for key in effect_resources(effects)):
+        problems.append(Problem.ITEM_RESOURCE_INVALID)
     if ruleset and any(cross_invalid(rule.throw, ruleset) for rule in rules):
         problems.append(Problem.ITEM_THROW_INVALID)
     return problems
@@ -577,6 +583,11 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
 def effect_magnitudes(effects: list) -> list[str]:
     """효과들이 적은 회복과 피해의 등급(#800)."""
     return [effect.magnitude for effect in effects if effect.kind in (EffectKind.HEAL, EffectKind.DAMAGE)]
+
+
+def effect_resources(effects: list) -> list[str]:
+    """효과들이 맞추는 수치(#804)."""
+    return [effect.resource for effect in effects if effect.kind == EffectKind.ADJUST]
 
 
 def effect_cures(effects: list) -> list[str]:

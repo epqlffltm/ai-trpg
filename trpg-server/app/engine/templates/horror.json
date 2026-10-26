@@ -636,6 +636,7 @@
     "item_check": {
       "ability": "agility",
       "difficulty": "medium"
-    }
+    },
+    "resources": []
   }
 }

@@ -287,6 +287,8 @@ def record_item_use(session: AsyncSession, table: GameTable, declaration: Declar
     record_cures(session, table, cured, use['target'], cause=used)
     for one in injured:
         record_injury(session, table, one, use['target'], cause=used)
+    shifts = use.get('resources') or []
+    record_resource_shifts(session, table, shifts, use['target'], ResourceSource.ITEM, cause=used)
 
 
 def record_cures(
@@ -334,6 +336,9 @@ def record_item_throw(session: AsyncSession, table: GameTable, declaration: Decl
     record_cures(session, table, cured, thrown['target'], cause=event)
     for one in injured:
         record_injury(session, table, one, thrown['target'], cause=event)
+    holder = {'user_id': thrown['target'].get('user_id'), 'character_name': thrown['target'].get('name')}
+    shifts = thrown.get('resources') or []
+    record_resource_shifts(session, table, shifts, holder, ResourceSource.ITEM, cause=event)
 
 
 def record_item_give(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
@@ -633,7 +638,37 @@ def record_rest(
         'cause': Cause.REST,
         **{key: rest.get(key) for key in ('length', 'rested', 'reason', 'rolls', 'before', 'after', 'max_hp')},
     }
-    recorder.record(session, table, EventType.CHARACTER_RESTED, payload=payload, cause=cause)
+    rested = recorder.record(session, table, EventType.CHARACTER_RESTED, payload=payload, cause=cause)
+    holder = {'user_id': str(member.user_id), 'character_name': member.character_name}
+    record_resource_shifts(session, table, rest.get('resources') or [], holder, ResourceSource.REST, cause=rested)
+
+
+class ResourceSource:
+    """수치를 바꾼 것(#804). 이벤트 resource_changed 의 source 에 적는다."""
+
+    REST = 'rest'
+    ITEM = 'item'
+
+
+def record_resource_shifts(
+    session: AsyncSession, table: GameTable, shifts: list[dict], holder: dict | None, source: str, cause: TableEvent
+) -> None:
+    """
+    바뀐 수치마다 이벤트(resource_changed)를 적는다(#804). 그것을 바꾼 일의 이벤트(cause)에 잇는다.
+
+    holder 는 그 캐릭터다(user_id, character_name). 없으면(인물이나 몬스터에게 썼다) 적지 않는다. 그쪽에는 수치가 없다.
+    """
+    if holder is None or holder.get('user_id') is None:
+        return
+    for shift in shifts:
+        payload = {
+            'round': cause.payload['round'],
+            'user_id': holder['user_id'],
+            'character_name': holder.get('character_name'),
+            **shift,
+            'source': source,
+        }
+        recorder.record(session, table, EventType.RESOURCE_CHANGED, payload=payload, cause=cause)
 
 
 def record_recoveries(session: AsyncSession, table: GameTable, recovered: Recovered, group: uuid.UUID) -> None:

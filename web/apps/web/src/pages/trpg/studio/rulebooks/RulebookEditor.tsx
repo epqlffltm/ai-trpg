@@ -4,13 +4,14 @@
 
 import { Button, TextField } from '@ai-trpg/ui';
 import { useState, type FormEvent, type ReactNode } from 'react';
-import type { RulebookTemplates, TemplateKey } from '../../../../api/types';
+import type { Ability, RulebookTemplates, TemplateKey } from '../../../../api/types';
 import type { FormProblem } from '../../../../auth/problem';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { TextAreaField } from '../../../../components/TextAreaField';
 import { ArmorFields } from './ArmorFields';
+import { ResourceFields } from './ResourceFields';
 import { DESCRIPTION_MAX, GM_GUIDE_MAX, rulebookHints, TITLE_MAX, withTemplate, type RulebookDraft } from './rulebookForm';
-import { templateDie } from './rulebookView';
+import { templateAbilities, templateDie } from './rulebookView';
 import { TemplateChoice } from './TemplateChoice';
 
 type Props = {
@@ -19,6 +20,8 @@ type Props = {
   templates: RulebookTemplates | null;
   /** 판정의 주사위의 면 수(세이브의 설명에 쓴다). 만들 때는 고른 템플릿의 것을 쓴다 */
   die: number | null;
+  /** 수치의 최대에 쓸 능력치(#804). 만들 때는 고른 템플릿의 것을 쓴다 */
+  abilities: Ability[];
   submitLabel: string;
   busy: boolean;
   problem: FormProblem | undefined;
@@ -27,7 +30,7 @@ type Props = {
   actions?: ReactNode;
 };
 
-export function RulebookEditor({ initial, templates, die, submitLabel, busy, problem, onSubmit, actions }: Props) {
+export function RulebookEditor({ initial, templates, die, abilities, submitLabel, busy, problem, onSubmit, actions }: Props) {
   const [draft, setDraft] = useState<RulebookDraft>(initial);
   const hints = rulebookHints(draft);
 
@@ -76,6 +79,12 @@ export function RulebookEditor({ initial, templates, die, submitLabel, busy, pro
       />
       {templates ? <TemplateChoice templates={templates} selected={draft.template} onChange={chooseTemplate} /> : null}
       <ArmorFields draft={draft} die={templates ? templateDie(templates, draft.template) : die} hints={hints} onChange={update} />
+      <ResourceFields
+        resources={draft.resources}
+        abilities={templates ? templateAbilities(templates, draft.template) : abilities}
+        hints={hints}
+        onChange={(resources) => update({ resources })}
+      />
       <div className="form-actions">
         <Button type="submit" busy={busy} disabled={Object.keys(hints).length > 0}>
           {submitLabel}

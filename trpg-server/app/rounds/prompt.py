@@ -201,7 +201,9 @@ from app.rounds.time_words import duration_text, time_text
 #   narration-69: 동료를 해친다(#803). 동료의 장난이면 HP 의 줄에 장난이 붙고, 장난이라 입지 않은 부상을 적는다
 #                 (→ 영애 피해 6 (HP 1/10, 장난). 장난이라 입지 않은 부상: 팔 골절).
 #                 해치려던 동료가 없었으면 그 까닭을 적는다(겨눈 상대 영애: 이미 쓰러져 있었다)
-PROMPT_VERSION = 'narration-69'
+#   narration-70: HP 말고 다른 수치(#804). 각자의 줄에 지금 수치가 붙고([수치: 마나 3/6]), 쉬기와 물건의 맞추기가
+#                 바꾼 수치를 적는다((쉬기: 긴 휴식, HP 2 → 10/10, 마나 1 → 6/6), [수치: 마나 2 → 5/6])
+PROMPT_VERSION = 'narration-70'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

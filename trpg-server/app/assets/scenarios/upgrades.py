@@ -1120,6 +1120,19 @@ def upgrade_from_63(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_64(document: dict) -> dict:
+    """
+    형식 64 의 문서를 형식 65 로 올린다(#804). 룰북에 HP 말고 다른 수치(resources)가 있다.
+
+    그때는 수치가 없었다. 빈 목록으로 읽는다. 물건의 맞추기(adjust)도 없었다.
+    """
+    upgraded = dict(document)
+    rulebook = document['rulebook']
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'resources': []}}
+    upgraded['format'] = 65
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -1186,4 +1199,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     61: upgrade_from_61,
     62: upgrade_from_62,
     63: upgrade_from_63,
+    64: upgrade_from_64,
 }

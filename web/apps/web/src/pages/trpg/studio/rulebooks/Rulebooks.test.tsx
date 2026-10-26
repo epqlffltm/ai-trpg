@@ -14,7 +14,7 @@ const BASE = '/api/v1/game/rulebooks';
 const ID = '00000000-0000-4000-8000-0000000000c1';
 
 function rules(template: string, armor: unknown) {
-  return { template, die: 20, armor, narration: { tone: '영웅담', outcomes: [], avoid: [] } };
+  return { template, die: 20, armor, abilities: [{ key: 'heart', name: '마음' }], resources: [], narration: { tone: '영웅담', outcomes: [], avoid: [] } };
 }
 
 const TEMPLATES = {
@@ -102,6 +102,7 @@ describe('룰북', () => {
       gm_guide: '',
       template: 'srd5',
       armor: { mode: 'save', pierce_base: 10, save_target: 7 },
+      resources: [],
     });
   });
 
@@ -129,8 +130,31 @@ describe('룰북', () => {
     await userEvent.click(form.getByRole('button', { name: '저장' }));
 
     expect(await screen.findByText('저장했습니다.')).toBeInTheDocument();
-    expect(sent(seen, 'PATCH', `/${ID}`)[0]?.body).toEqual({ title: '내 규칙', description: '', gm_guide: '', armor: null });
+    expect(sent(seen, 'PATCH', `/${ID}`)[0]?.body).toEqual({ title: '내 규칙', description: '', gm_guide: '', armor: null, resources: [] });
     expect(within(screen.getByRole('form', { name: '룰북' })).getByRole('radio', { name: '방어구가 막지 않음' })).toBeChecked();
+  });
+
+  it('고치기에서 수치를 더하고 채우면 PATCH 로 보낸다. 틀린 칸은 보내기 전에 알린다', async () => {
+    const { seen } = signedIn({
+      [`PATCH ${BASE}/${ID}`]: (request) => json(200, detail({ rules: { ...rules('srd5', null), resources: (request.body as { resources: unknown }).resources } })),
+    });
+    renderApp(`/trpg/studio/rulebooks/${ID}`);
+
+    const form = within(await screen.findByRole('form', { name: '룰북' }));
+    await userEvent.click(form.getByRole('button', { name: '수치 더하기' }));
+    const row = within(form.getByRole('group', { name: '수치 resource' }));
+    await userEvent.click(form.getByRole('button', { name: '저장' }));
+    expect(await row.findByText(/이름을 30자까지/)).toBeInTheDocument();
+    expect(sent(seen, 'PATCH', `/${ID}`)).toHaveLength(0);
+
+    await userEvent.type(row.getByLabelText('이름'), '마나');
+    await userEvent.selectOptions(row.getByLabelText('최대에 더할 능력치의 보정'), 'heart');
+    await userEvent.click(form.getByRole('button', { name: '저장' }));
+
+    expect(await screen.findByText('저장했습니다.')).toBeInTheDocument();
+    expect((sent(seen, 'PATCH', `/${ID}`)[0]?.body as { resources: unknown }).resources).toEqual([
+      { key: 'resource', name: '마나', min: 0, max: { base: 5, ability: 'heart', cap: null }, start: 'max', rest: { short: null, long: { kind: 'fill', amount: null } } },
+    ]);
   });
 
   it('쓰는 시나리오가 있으면 지우지 못하고 그 제목을 알린다. 없으면 지우고 목록으로 간다', async () => {

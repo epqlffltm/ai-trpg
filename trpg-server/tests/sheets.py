@@ -22,7 +22,7 @@ def handed_out(sheet: dict) -> dict:
 
     그 사람의 첫 캐릭터이고, HP 는 가득 차 있고, 죽음의 굴림은 센 것이 없고, 살아 있고, 입은 부상이 없다.
     판에 시작 소지품이 없으면 가진 것도 없다. 판에 화폐가 없으면 돈도 없다. 판에 맵이 없으면 서 있는 곳도 없다.
-    판에 시작할 때의 착용이 없으면 착용한 것도 없다.
+    판에 시작할 때의 착용이 없으면 착용한 것도 없다. 규칙에 수치(#804)가 없으면 수치도 없다.
     """
     fresh = {'number': 1, 'hp': sheet['max_hp'], 'death_successes': 0, 'death_failures': 0, 'dead': False}
-    return {**sheet, **fresh, 'injuries': [], 'items': [], 'worn': [], 'money': 0, 'place_id': None}
+    return {**sheet, **fresh, 'injuries': [], 'items': [], 'worn': [], 'money': 0, 'place_id': None, 'resources': []}

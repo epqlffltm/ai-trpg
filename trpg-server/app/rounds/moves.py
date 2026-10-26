@@ -24,7 +24,17 @@ from app.rounds.cast import CastMember, condition_of
 from app.rounds.models import Round
 from app.rounds.monster_scene import SceneMonster
 from app.rounds.monster_scene import condition as monster_condition
-from app.rounds.narrator import HealNote, InjuryNote, ItemNote, MonsterNote, Move, PersonState, PlaceNote, WornNote
+from app.rounds.narrator import (
+    HealNote,
+    InjuryNote,
+    ItemNote,
+    MonsterNote,
+    Move,
+    PersonState,
+    PlaceNote,
+    ResourceNote,
+    WornNote,
+)
 from app.rounds.rests import NOTHING, Recovered
 from app.rounds.state import (
     find_arrival,
@@ -36,7 +46,7 @@ from app.rounds.state import (
     rules_of,
     trade_of,
 )
-from app.tables import equipment, injuries, items, money, place_items, places, route_locks, sheets
+from app.tables import equipment, injuries, items, money, place_items, places, resources, route_locks, sheets
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember
 from app.tables.npc_attitudes import attitude_word
@@ -98,6 +108,8 @@ def build_moves(
     catalog = items.catalog(snapshot) if snapshot is not None else {}
     mapping = map_view(table, snapshot, catalog) if on_map else None
     currency = snapshot.currency if snapshot is not None else None
+    # 수치(#804)는 규칙에 있다. 이미 읽은 규칙이 없으면 한 번 읽는다
+    resource_rules = ruleset or (snapshot.rulebook.rules if snapshot is not None else rules_of(table))
 
     moves = []
     for member, declaration in zip(table.members, declarations, strict=True):
@@ -131,6 +143,7 @@ def build_moves(
                 trade=narration_request.to_trade(declaration, currency),
                 pay=narration_request.to_pay(declaration, currency),
                 money=money_note(currency, member),
+                resources=resource_notes(resource_rules, member),
                 handed_over=narration_request.find_handed_over(quest_changes, member.user_id),
                 target_gone=narration_request.to_target_gone(declaration),
                 rest=narration_request.to_rest(declaration),
@@ -255,6 +268,16 @@ def money_note(currency: CurrencySnapshot | None, member: TableMember) -> str | 
     if currency is None or member.sheet is None:
         return None
     return money.money_text(currency, member.sheet.money)
+
+
+def resource_notes(ruleset: Ruleset, member: TableMember) -> list[ResourceNote]:
+    """이 사람의 지금 캐릭터의 수치들(#804, 마나 3/6). 규칙의 차례다. 시트가 없으면 비어 있다."""
+    if member.sheet is None:
+        return []
+    return [
+        ResourceNote(name=level.resource.name, value=level.value, max=level.maximum)
+        for level in resources.levels_of(ruleset, member.sheet)
+    ]
 
 
 def worn_notes(ruleset: Ruleset | None, member: TableMember) -> list[InjuryNote]:

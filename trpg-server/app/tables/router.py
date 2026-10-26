@@ -38,6 +38,7 @@ from app.catalog.offers import OfferedModel, StepPrice
 from app.catalog.steps import input_tokens, output_tokens
 from app.core.dice import Rolling
 from app.engine.check import find_difficulty
+from app.engine.resources import Level
 from app.engine.ruleset import Ruleset
 from app.limits.routing import Limited
 from app.personas import saving
@@ -59,6 +60,7 @@ from app.tables import (
     references,
     replacements,
     repository,
+    resources,
     rolls,
     route_locks,
     service,
@@ -115,6 +117,7 @@ from app.tables.schemas import (
     PregenChoice,
     QuestOut,
     ReferencesUpdate,
+    ResourceOut,
     RollOut,
     RoundTimeLimitUpdate,
     RouteCrossOut,
@@ -318,6 +321,14 @@ def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem], ru
         money=sheet.money,
         worn=[to_worn(row, catalog) for row in equipment.in_slot_order(sheet.worn, ruleset)],
         place_id=sheet.place_id,
+        resources=[to_resource(level) for level in resources.levels_of(ruleset, sheet)],
+    )
+
+
+def to_resource(level: Level) -> ResourceOut:
+    """시트의 수치 하나를 응답으로 바꾼다(#804)."""
+    return ResourceOut(
+        key=level.resource.key, name=level.resource.name, value=level.value, min=level.resource.min, max=level.maximum
     )
 
 

@@ -31,7 +31,7 @@ from app.tables.items import CatalogItem
 from app.tables.models import TableMember
 
 # 맞지 않았거나 효과가 없는 던지기의 효과 결과
-NOTHING_APPLIED = {'cured': [], 'injured': []}
+NOTHING_APPLIED = {'cured': [], 'injured': [], 'resources': []}
 
 
 class Reason:

@@ -178,6 +178,9 @@ class EventType(enum.StrEnum):
     # 캐릭터가 쉬었다(app/rounds/rests.py). 쉬는 행동을 선언했거나(cause: rest), 시간이 흘러 저절로 회복했다
     # (cause: natural). 선언한 휴식이 다쳐서 깨졌으면 rested 가 false 이고 까닭(reason)이 있다
     CHARACTER_RESTED = 'character_rested'
+    # 엔진이 캐릭터의 수치(#804, 마나 같은 것) 하나를 바꿨다. 쉬어서(source: rest, 원인은 그 쉼의 이벤트다)
+    # 또는 물건의 맞추기로(source: item, 원인은 그 물건을 쓰거나 던진 이벤트다)
+    RESOURCE_CHANGED = 'resource_changed'
     # 고비를 넘기고 쓰러져 있던 캐릭터가 오래 쉬어 되살아나기를 굴렸다(app/rounds/rests.py). 성공이면 HP 1 로 일어났다
     CHARACTER_REVIVED = 'character_revived'
     # 라운드가 닫혔다

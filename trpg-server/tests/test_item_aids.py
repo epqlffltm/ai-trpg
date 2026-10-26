@@ -186,7 +186,8 @@ def test_an_old_version_moves_its_bonuses_and_tools_into_aids():
 
     upgraded = upgrade_from_63(old)
 
-    assert (upgraded['format'], SNAPSHOT_FORMAT, UPGRADES[63]) == (64, 64, upgrade_from_63)
+    assert (upgraded['format'], UPGRADES[63]) == (64, upgrade_from_63)
+    assert SNAPSHOT_FORMAT >= 64
     kit, pick, hammer = upgraded['items']
     assert kit == {'entry_id': 'kit', 'kind': 'consumable', 'aids': [{'act': 'treat', 'bonus': 2, 'wear': 'always'}]}
     # 그때의 도구는 보정이 없고 없어지지 않았다. 규칙이 없던 망치는 장비의 규칙이 새로 생긴다

@@ -366,6 +366,8 @@ class ItemThrowOut(BaseModel):
     # 맞힌 대상에게서 푼 부상들과 입힌 부상들(#801, 물건의 효과). 빗나갔거나 그런 효과가 없으면 빈 목록이다
     cured: list['CuredOut'] = []
     injured: list['InjuredOut'] = []
+    # 맞힌 동료의 수치를 맞춘 것들(#804, adjust)
+    resources: list['ResourceShiftOut'] = []
 
 
 class CheckOutcome(BaseModel):
@@ -478,6 +480,8 @@ class ItemUseOut(BaseModel):
     remaining: int
     # 대상에게서 푼 부상들(#277). 부상을 푸는 물건이 아니거나, 대상이 그 부상을 입고 있지 않았으면 빈 목록이다
     cured: list[CuredOut] = []
+    # 대상의 수치를 맞춘 것들(#804, adjust). 적힌 차례다. 앉은 사람에게 썼을 때만 있다(인물과 몬스터에게는 수치가 없다)
+    resources: list['ResourceShiftOut'] = []
     # 대상에게 입힌 부상들(#800). 적힌 차례다. 빗나갔거나 부상을 입히는 물건이 아니면 빈 목록이다
     injured: list[InjuredOut] = []
     # 인물이나 몬스터에게 썼으면 맞히는 판정의 능력과 난이도(rules.item_check 의 key)다. 아니면 None 이다
@@ -858,6 +862,18 @@ class PayOutcome(BaseModel):
     pay: PayOut
 
 
+class ResourceShiftOut(BaseModel):
+    """
+    수치 하나가 바뀐 것(#804). 쉬기나 물건의 맞추기가 바꿨다. 이름표와 이름, 바뀌기 전과 뒤의 값, 그 캐릭터의 최대다.
+    """
+
+    resource: str
+    name: str
+    before: int
+    after: int
+    max: int
+
+
 class RestOut(BaseModel):
     """
     쉰 결과. 엔진이 정했다(app/rounds/rests.py). 판정이 없다.
@@ -877,6 +893,8 @@ class RestOut(BaseModel):
     before: int
     after: int
     max_hp: int
+    # 그 휴식이 바꾼 수치들(#804). 바뀐 것만, 규칙의 차례다. 깨졌거나 이 칸이 생기기 전의 휴식은 빈 목록이다
+    resources: list[ResourceShiftOut] = []
 
 
 class RestOutcome(BaseModel):

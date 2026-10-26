@@ -8,9 +8,12 @@
   - cure: 적은 부상들(룰북의 부상의 이름표)을 푼다. 짧은 것과 오래 가는 것만 푼다(결손은 못 푼다).
   - damage: 등급만큼 피해를 준다. 인물과 몬스터에게는 방어와 세이브가 치기와 같다.
   - injure: 부상 하나를 입힌다. 짧은 것, 오래 가는 것, 결손 모두 된다. 몬스터는 그 성질에 면역이면 입지 않는다.
-한 물건에 회복과 피해를 함께 적지 않는다. 회복, 풀기, 피해는 한 번씩이다. 입히기는 여럿이 된다.
+  - adjust: 수치 하나(룰북의 resources, #804)를 양만큼 올리거나(양수) 내린다(음수). 마나 물약, 저주받은 책.
+    앉은 사람에게만 든다. 인물과 몬스터에게는 수치가 없다(아무 일도 없다). 내리는 것은 해롭다.
+한 물건에 회복과 피해를 함께 적지 않는다. 회복, 풀기, 피해는 한 번씩이다. 입히기와 맞추기는 여럿이 된다
+(같은 부상, 같은 수치는 한 번).
 
-모르는 종류는 저장할 때(이 모양) 막는다. 등급과 부상이 룰북에 있는지는 게시할 때 본다(시나리오의 게시).
+모르는 종류는 저장할 때(이 모양) 막는다. 등급과 부상과 수치가 룰북에 있는지는 게시할 때 본다(시나리오의 게시).
 엔진만 실행한다. 서술이 무엇을 쓰든 상태는 이 효과로만 바뀐다.
 """
 
@@ -25,6 +28,8 @@ from app.engine.ruleset import Key
 ITEM_MAX_EFFECTS = 5
 # 풀기 하나가 푸는 부상의 수
 EFFECT_MAX_CURES = 5
+# 맞추기(adjust) 한 번에 올리고 내리는 양의 상한(#804)
+EFFECT_MAX_ADJUST = 99
 
 
 class EffectKind(enum.StrEnum):
@@ -34,9 +39,10 @@ class EffectKind(enum.StrEnum):
     CURE = 'cure'
     DAMAGE = 'damage'
     INJURE = 'injure'
+    ADJUST = 'adjust'
 
 
-# 대상에게 해로운 효과. 동료에게 쓰려면 동의가 있어야 한다(#803 전에는 막는다)
+# 대상에게 해로운 효과. 동료에게 쓰려면 동의가 있어야 한다(#803). 수치를 내리는 맞추기도 해롭다(is_drain)
 HARMFUL = frozenset({EffectKind.DAMAGE, EffectKind.INJURE})
 # 한 물건에 한 번만 적는 효과
 ONCE = frozenset({EffectKind.HEAL, EffectKind.CURE, EffectKind.DAMAGE})
@@ -87,7 +93,24 @@ class InjureEffect(BaseModel):
     injury: Key
 
 
-Effect = Annotated[HealEffect | CureEffect | DamageEffect | InjureEffect, Field(discriminator='kind')]
+def reject_zero(amount: int) -> int:
+    """0 만큼 맞추는 것은 아무 일도 하지 않는다. 적지 않는다."""
+    if amount == 0:
+        raise ValueError('맞추는 양(amount)은 0 이 아닙니다.')
+    return amount
+
+
+class AdjustEffect(BaseModel):
+    """수치 하나(resource, 룰북의 resources 의 이름표)를 양(amount)만큼 올리거나(양수) 내린다(음수, #804)."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[EffectKind.ADJUST]
+    resource: Key
+    amount: Annotated[int, Field(ge=-EFFECT_MAX_ADJUST, le=EFFECT_MAX_ADJUST), AfterValidator(reject_zero)]
+
+
+Effect = Annotated[HealEffect | CureEffect | DamageEffect | InjureEffect | AdjustEffect, Field(discriminator='kind')]
 
 
 def reject_conflicting_effects(effects: list) -> list:
@@ -100,6 +123,9 @@ def reject_conflicting_effects(effects: list) -> list:
     injured = [effect.injury for effect in effects if effect.kind == EffectKind.INJURE]
     if len(set(injured)) != len(injured):
         raise ValueError('같은 부상을 두 번 입힙니다.')
+    adjusted = [effect.resource for effect in effects if effect.kind == EffectKind.ADJUST]
+    if len(set(adjusted)) != len(adjusted):
+        raise ValueError('같은 수치를 두 번 맞춥니다.')
     return effects
 
 
@@ -107,8 +133,13 @@ Effects = Annotated[list[Effect], Field(max_length=ITEM_MAX_EFFECTS), AfterValid
 
 
 def is_harmful(effects: list) -> bool:
-    """대상에게 해로운 효과(피해, 부상)가 있는가."""
-    return any(effect.kind in HARMFUL for effect in effects)
+    """대상에게 해로운 효과(피해, 부상, 수치를 내리는 맞추기)가 있는가."""
+    return any(effect.kind in HARMFUL or is_drain(effect) for effect in effects)
+
+
+def is_drain(effect) -> bool:
+    """수치를 내리는 맞추기(#804)인가."""
+    return effect.kind == EffectKind.ADJUST and effect.amount < 0
 
 
 def first_of(effects: list, kind: EffectKind):

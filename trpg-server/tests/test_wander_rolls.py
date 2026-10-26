@@ -452,7 +452,7 @@ def test_the_wander_lines():
 
 def test_the_monster_note_says_how_the_wanderers_came():
     assert "'조우'가 있으면 그 무리는 이번 라운드가 끝날 무렵 그 자리에 나타난 것이다" in prompt.MONSTER_NOTE
-    assert prompt.PROMPT_VERSION == 'narration-69'
+    assert prompt.PROMPT_VERSION == 'narration-70'
 
 
 def test_the_transcript_says_the_monsters_appeared():

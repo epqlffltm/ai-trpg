@@ -109,6 +109,10 @@ function effectText(table: TableDetail, effect: ItemEffect): string {
   if (effect.kind === 'heal') return `회복 ${magnitudeText(table, effect.magnitude)}`;
   if (effect.kind === 'damage') return `피해 ${magnitudeText(table, effect.magnitude)}`;
   if (effect.kind === 'cure') return `풀기 ${effect.injuries.map((key) => injuryName(table.rules, key)).join(', ')}`;
+  if (effect.kind === 'adjust') {
+    const name = table.rules.resources.find((one) => one.key === effect.resource)?.name ?? effect.resource;
+    return `${name} ${effect.amount > 0 ? '+' : ''}${effect.amount}`;
+  }
   return `부상 ${injuryName(table.rules, effect.injury)}`;
 }
 

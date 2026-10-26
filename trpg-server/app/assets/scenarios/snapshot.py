@@ -137,7 +137,9 @@ from app.engine.sheet import Sheet
 #      효과의 damage 가 됐다. 던지는 판정이 없는 물건은 룰북의 맞히는 판정(item_check)으로 던진다
 #  64: 물건이 다른 행동을 거든다(#802). items[].aids: 행동(치료, 따기, 고치기, 부수기, 넘기), 보정, 없어지는 방식.
 #      treat_bonus 는 치료의 거들기가 됐다. 따기와 고치기의 도구(tool)는 도구가 있어야 하는가(needs_tool)가 됐다
-SNAPSHOT_FORMAT = 64
+#  65: HP 말고 다른 수치가 있다(#804). rulebook.rules.resources: 이름표, 이름, 최소, 최대(기준, 능력치, 상한), 시작,
+#      쉬기의 변화. 물건의 효과에 맞추기(adjust: 수치, 양)가 있다
+SNAPSHOT_FORMAT = 65
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다

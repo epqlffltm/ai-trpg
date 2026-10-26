@@ -14,6 +14,7 @@ import { EventLog } from '../events/EventLog';
 import { displayName } from '../MemberList';
 import { CharacterCards } from './CharacterCards';
 import { HpBar } from './HpBar';
+import { ResourceBars } from './ResourceBars';
 import { Inventory } from './Inventory';
 import { STATUS_TABS, type StatusTab } from './statusTabs';
 import { useActionShortcuts } from './useActionShortcuts';
@@ -34,6 +35,7 @@ export function StatusPanel({ table, myId, nameOf }: Props) {
         <div className="status__mine">
           <span className="status-card__name">{mine.character?.name}</span>
           <HpBar sheet={mine.sheet} rules={table.rules} />
+          <ResourceBars sheet={mine.sheet} />
         </div>
       ) : null}
       <div className="status__tabs" role="tablist" aria-label="상태 패널">

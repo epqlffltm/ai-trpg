@@ -490,6 +490,8 @@ class TableSheet(Base):
         ),
         # 돈은 0 아래로 내려가지 않고 상한을 넘지 않는다(#278). 엔진의 실수를 DB 가 한 번 더 막는다
         CheckConstraint(f'money BETWEEN 0 AND {MONEY_MAX}', name='money_range'),
+        # 수치(#804)는 이름표에서 값으로 가는 묶음이다. 범위는 규칙에 있어 엔진이 지킨다
+        CheckConstraint("jsonb_typeof(resources) = 'object'", name='resources_is_object'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -533,6 +535,9 @@ class TableSheet(Base):
     # 소지품과 같이 캐릭터의 것이다. 새 캐릭터는 물려받지 않는다. 바꾸는 것은 엔진뿐이다(거래, 건네기, 보상).
     # 결제의 크레딧과 상관없다
     money: Mapped[int] = mapped_column(Integer, default=0, server_default=text('0'))
+    # HP 말고 다른 수치의 지금 값(#804). 규칙의 수치의 이름표에서 값으로. 시트를 받을 때 시작 값으로 채운다.
+    # 적히지 않은 이름표(이 칸이 생기기 전의 시트)는 시작 값으로 읽는다(app/engine/resources.py). 바꾸는 것은 엔진뿐이다
+    resources: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

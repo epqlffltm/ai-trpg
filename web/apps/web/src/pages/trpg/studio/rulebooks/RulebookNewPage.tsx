@@ -48,6 +48,7 @@ function CreateForm({ templates }: { templates: RulebookTemplates }) {
       initial={newRulebookDraft(templates)}
       templates={templates}
       die={null}
+      abilities={[]}
       submitLabel="만들기"
       busy={creating.busy}
       problem={creating.problem}

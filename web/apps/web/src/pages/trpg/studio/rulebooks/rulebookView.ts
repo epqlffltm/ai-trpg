@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/trpg/studio/rulebooks/rulebookView.ts
 // 룰북 화면(B9)이 보일 글. 순수한 함수다. 방어 규칙의 이름과 하는 일은 서버의 app/engine/armor.py 와 같은 말로 적는다.
 
-import type { Armor, RulebookTemplate, RulebookTemplates } from '../../../../api/types';
+import type { Ability, Armor, RulebookTemplate, RulebookTemplates } from '../../../../api/types';
 import type { ArmorChoice } from './rulebookForm';
 
 type ArmorText = { label: string; description: string };
@@ -37,6 +37,11 @@ export function templateTone(template: RulebookTemplate): string | null {
 }
 
 /** 그 템플릿의 판정의 주사위의 면 수. 없으면 null */
+/** 그 템플릿의 능력치들(#804, 수치의 최대에 쓴다). 모르는 템플릿이면 빈 목록 */
+export function templateAbilities(templates: RulebookTemplates, key: string): Ability[] {
+  return templates.items.find((template) => template.key === key)?.rules.abilities ?? [];
+}
+
 export function templateDie(templates: RulebookTemplates, key: string): number | null {
   return templates.items.find((template) => template.key === key)?.rules.die ?? null;
 }
