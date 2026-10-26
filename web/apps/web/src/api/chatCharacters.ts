@@ -36,8 +36,11 @@ export function fetchUnlocksOf(characterId: string, signal?: AbortSignal): Promi
   return apiRequest<ChatUnlockPage>('/api/v1/chat/gallery', { query: { character_id: characterId, limit: UNLOCK_LIMIT }, ...withSignal(signal) });
 }
 
-/** 대화를 시작한다. 페르소나와 모델은 보내지 않는다(서버가 지난번 것을 쓴다) */
-export function startConversation(body: Pick<ConversationCreate, 'character_id' | 'start'>): Promise<ConversationDetail> {
+/**
+ * 대화를 시작한다. 모델은 보내지 않는다(서버가 지난번 것을 쓴다).
+ * 페르소나는 고른 것(id), 없이(null), 보내지 않음(서버가 지난번 대화의 것을 쓴다) 가운데 하나다. 남의 것이면 404 persona_not_found
+ */
+export function startConversation(body: Pick<ConversationCreate, 'character_id' | 'start' | 'persona_id'>): Promise<ConversationDetail> {
   return apiRequest<ConversationDetail>('/api/v1/chat/conversations', { method: 'POST', body });
 }
 

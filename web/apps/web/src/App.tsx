@@ -46,6 +46,9 @@ import {
   OrderPage,
   OrdersPage,
   PastTablePage,
+  PersonaEditPage,
+  PersonaNewPage,
+  PersonasPage,
   PastTablesPage,
   PostPage,
   ReportsPage,
@@ -85,6 +88,19 @@ export function App() {
             </RequireSession>
           }
         />
+        {/* 내 페르소나(C4). 주인만 보고 고친다 */}
+        <Route
+          path="me/personas"
+          element={
+            <RequireSession>
+              <Outlet />
+            </RequireSession>
+          }
+        >
+          <Route index element={<PersonasPage />} />
+          <Route path="new" element={<PersonaNewPage />} />
+          <Route path=":personaId" element={<PersonaEditPage />} />
+        </Route>
         <Route
           path="gallery"
           element={

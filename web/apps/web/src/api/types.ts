@@ -151,6 +151,11 @@ export type ChatMessage = Trpg['schemas']['MessageOut'];
 export type MessagePage = Trpg['schemas']['MessagePage'];
 export type WhisperPage = Trpg['schemas']['WhisperPage'];
 
+// 계정 페르소나(C4, asset 서버). TRPG, chat, story 가 함께 쓰는 "나"의 설정
+export type Persona = Asset['schemas']['PersonaDetail'];
+export type PersonaCreate = Asset['schemas']['PersonaCreate'];
+export type PersonaUpdate = Asset['schemas']['PersonaUpdate'];
+
 export type PublicCharacterPage = Asset['schemas']['PublicCharacterPage'];
 export type PublicCharacterSummary = Asset['schemas']['PublicCharacterSummary'];
 export type PublicCharacterDetail = Asset['schemas']['PublicCharacterDetail'];
