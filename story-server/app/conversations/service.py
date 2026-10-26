@@ -67,6 +67,10 @@ class ConversationBusyError(Exception):
     """세션이 답을 쓰는 중이다(409). 한 세션에 한 번에 하나의 생성만 받는다."""
 
 
+class MessageNotFoundError(Exception):
+    """그 말이 없다(남의 것, 볼 수 없는 등급의 세션의 것, 다른 세션의 것)(404). 다시 생성과 가지 고르기가 쓴다."""
+
+
 class ModelUnavailableError(Exception):
     """고른 모델을 이 세션에 쓸 수 없다(없다, 꺼졌다, 은퇴했다, 성인 등급의 세션에 쓸 수 없다). 422 다."""
 
@@ -253,6 +257,35 @@ async def conversation_state(session: AsyncSession, imported: ImportedWorld, mes
     state = state_on_path(world, await repository.states_on(session, [message.id for message in messages]))
     waiting = world.event(state.choosing) if state.choosing is not None else None
     return state_view(world, state, staging(world, state, waiting).cast)
+
+
+async def message_alternatives(
+    session: AsyncSession, conversation: Conversation, messages: list[Message]
+) -> dict[uuid.UUID | None, list[uuid.UUID]]:
+    """지금 가지의 말마다 그 대안들(같은 부모 아래의 말들). 부모로 찾는다."""
+    if not messages:
+        return {}
+    return await repository.alternatives(session, conversation.id, [message.parent_id for message in messages])
+
+
+async def choose_branch(
+    session: AsyncSession, viewer: Viewer, conversation_id: uuid.UUID, message_id: uuid.UUID, now: datetime
+) -> None:
+    """
+    그 말의 가지를 본다(다른 대안을 고른다). 가지의 끝은 그 말 아래에서 가장 나중에 생긴 말이다.
+    상태는 말에 붙어 있으므로 가지를 바꾸면 그 가지의 상태(시각, 호감도, 본 엔딩)가 된다. 계정의 기록은 그대로다.
+
+    세션이 없으면 ConversationNotFoundError, 그 세션의 말이 아니면 MessageNotFoundError,
+    답을 쓰는 중이면 ConversationBusyError. 수정 시각은 바꾸지 않는다.
+    """
+    conversation, _ = await get_conversation(session, viewer, conversation_id)
+    message = await session.get(Message, message_id)
+    if message is None or message.conversation_id != conversation.id:
+        raise MessageNotFoundError
+    leaf_id = await repository.latest_descendant(session, message.id)
+    if not await repository.set_leaf(session, conversation.id, leaf_id, now - GENERATION_STALE):
+        raise ConversationBusyError
+    await session.commit()
 
 
 async def conversation_models(session: AsyncSession, conversations: list[Conversation]) -> dict[str, AiModel]:
