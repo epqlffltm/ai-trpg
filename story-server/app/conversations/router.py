@@ -42,6 +42,7 @@ from app.conversations.schemas import (
     StateOut,
     WorldOut,
     WorldSummary,
+    WorldView,
 )
 from app.conversations.service import (
     AdultContentRequiredError,
@@ -153,10 +154,11 @@ def to_detail(
     messages: list[Message],
     alternatives: dict[uuid.UUID | None, list[uuid.UUID]],
     state: StateOut,
+    view: WorldView,
 ) -> ConversationDetail:
     """
     세션 하나를 응답의 모양으로. messages 는 지금 가지의 말들, alternatives 는 부모마다의 대안들,
-    state 는 그 끝의 상태다.
+    state 는 그 끝의 상태, view 는 그 상태에 맞춘 세계관의 칸이다.
     """
     conversation, world = row
     return ConversationDetail(
@@ -166,6 +168,7 @@ def to_detail(
         model=conversation_model(conversation, world, models, book, now),
         messages=[to_path_message(message, alternatives) for message in messages],
         state=state,
+        view=view,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )
@@ -270,8 +273,8 @@ async def read_conversation(
     models = await service.conversation_models(session, [row[0]])
     messages = await service.conversation_messages(session, row[0])
     alternatives = await service.message_alternatives(session, row[0], messages)
-    state = await service.conversation_state(session, row[1], messages)
-    return to_detail(row, models, book, now, messages, alternatives, state)
+    state, view = await service.conversation_state(session, viewer, row[1], messages)
+    return to_detail(row, models, book, now, messages, alternatives, state, view)
 
 
 @router.put(

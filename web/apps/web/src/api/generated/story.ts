@@ -368,6 +368,64 @@ export interface components {
             message_id: string;
         };
         /**
+         * CastAffectionOut
+         * @description 인물 창의 호감도. display 는 보이는 법(숫자, 단계 …), stages 는 단계들이다.
+         *     cooling_until 은 다시 고백할 수 있는 시각(1일째 0시부터의 분)이고, 대기가 아니면 null 이다.
+         *     gifts 는 이 가지에서 이 인물에게 건넨 물건(물건의 id)이다.
+         */
+        CastAffectionOut: {
+            /** Cooling Until */
+            cooling_until: number | null;
+            /** Display */
+            display: string;
+            /** Gifts */
+            gifts: string[];
+            /** Stages */
+            stages: components["schemas"]["StageOut"][];
+        };
+        /**
+         * CastOut
+         * @description 보이는 인물 하나. reveal 은 지금 보이는 법이다(만나면 shown).
+         *     silhouette 이면 이름, 그림, 인물 창의 칸이 모두 null 이거나 비어 있다. 숨김인 인물은 만나기 전에는 목록에 없다.
+         *     intro_html, age, gender, affection 은 제작자가 인물 창에 고른 항목만 실린다(아니면 null).
+         *     events 는 이 가지에서 이 인물이 나온 이벤트(이벤트의 id)다. 호감도를 보이는 인물만 실린다.
+         */
+        CastOut: {
+            affection: components["schemas"]["CastAffectionOut"] | null;
+            /** Age */
+            age: string | null;
+            /** Confessable */
+            confessable: boolean;
+            /** Events */
+            events: string[];
+            /** Gender */
+            gender: string | null;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Intro Html */
+            intro_html: string | null;
+            /** Met */
+            met: boolean;
+            /** Name */
+            name: string | null;
+            /** Reveal */
+            reveal: string;
+            /** Sprites */
+            sprites: components["schemas"]["SpriteOut"][];
+        };
+        /**
+         * ChoiceOut
+         * @description 선택지 하나.
+         */
+        ChoiceOut: {
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+        };
+        /**
          * ChooseAction
          * @description 기다리는 이벤트의 선택지 하나를 고른다.
          */
@@ -437,6 +495,7 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            view: components["schemas"]["WorldView"];
             world: components["schemas"]["WorldOut"];
         };
         /**
@@ -504,6 +563,25 @@ export interface components {
             kind: "end_day";
         };
         /**
+         * EndingOut
+         * @description 엔딩의 칸 하나. 본 엔딩(계정의 기록이나 이 가지에서 본 것)만 이름과 일러스트가 실린다(아니면 null).
+         *     hint 는 제작자가 적은 힌트다. unlock 이 거짓이면 계정에 남지 않는 엔딩이다(엔딩 수에 넣지 않는다).
+         */
+        EndingOut: {
+            /** Hint */
+            hint: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string | null;
+            /** Seen */
+            seen: boolean;
+            /** Unlock */
+            unlock: boolean;
+        };
+        /**
          * EndingRecordList
          * @description 한 세계관에서 본 엔딩들. 처음 본 차례다.
          */
@@ -525,6 +603,23 @@ export interface components {
              * Format: date-time
              */
             first_seen_at: string;
+        };
+        /**
+         * EventOut
+         * @description 이 가지에서 열린 이벤트 하나. cast 는 장면이 부른 인물, image_id 는 장면의 일러스트다.
+         *     choices 는 고르기를 기다리는 이벤트에만 실린다(아니면 빈 목록). 열리는 조건과 효과는 싣지 않는다.
+         */
+        EventOut: {
+            /** Cast */
+            cast: string[];
+            /** Choices */
+            choices: components["schemas"]["ChoiceOut"][];
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
         };
         /**
          * GiveAction
@@ -592,6 +687,22 @@ export interface components {
             errors: {
                 [key: string]: string[];
             };
+        };
+        /**
+         * ItemOut
+         * @description 물건 하나.
+         */
+        ItemOut: {
+            /** Consumable */
+            consumable: boolean;
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
         };
         /**
          * MeResponse
@@ -788,6 +899,36 @@ export interface components {
             status: string;
         };
         /**
+         * PathOut
+         * @description 두 장소를 잇는 길과 걸리는 분.
+         */
+        PathOut: {
+            /** A */
+            a: string;
+            /** B */
+            b: string;
+            /** Minutes */
+            minutes: number;
+        };
+        /**
+         * PlaceOut
+         * @description 장소 하나. backgrounds 는 시간대의 id 마다의 배경 그림이다.
+         */
+        PlaceOut: {
+            /** Backgrounds */
+            backgrounds: {
+                [key: string]: string;
+            };
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
          * Rating
          * @description 이용 등급. asset 서버, chat 서버, 게임 서버와 같은 값이다.
          * @enum {string}
@@ -808,6 +949,43 @@ export interface components {
             speaker: string | null;
             /** Text */
             text: string;
+        };
+        /**
+         * SlotOut
+         * @description 시간대 하나. start_hour 부터 다음 시간대가 시작할 때까지다.
+         */
+        SlotOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Start Hour */
+            start_hour: number;
+        };
+        /**
+         * SpriteOut
+         * @description 인물의 그림 하나. expression 은 표정(빈 글이면 기본)이다.
+         */
+        SpriteOut: {
+            /** Expression */
+            expression: string;
+            /** Id */
+            id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+        };
+        /**
+         * StageOut
+         * @description 호감도의 단계 하나. at 이상이면 이 단계다.
+         */
+        StageOut: {
+            /** At */
+            at: number;
+            /** Name */
+            name: string;
         };
         /**
          * StateOut
@@ -857,6 +1035,7 @@ export interface components {
          * @description 세션 하나에 싣는 세계관. 가져온 판의 문서까지다(받은 칸 전부).
          *
          *     문서의 칸은 asset 서버의 판의 형식을 따른다(asset-server/README.md 의 "세계관").
+         *     document 는 곧 뺀다. 이벤트와 엔딩의 조건, 만나지 않은 인물까지 들어 있다. 화면은 세션의 view 를 쓴다.
          */
         WorldOut: {
             /** Document */
@@ -893,6 +1072,39 @@ export interface components {
             rating: components["schemas"]["Rating"];
             /** Version */
             version: number;
+        };
+        /**
+         * WorldView
+         * @description 세션에서 화면이 쓰는 세계관의 칸. 판의 문서에서 지금 보여도 되는 것만 골라 이 가지의 상태에 맞춘다.
+         *     이벤트와 엔딩의 조건, 일정, 호감도의 규칙, 만나지 않은 인물은 싣지 않는다.
+         */
+        WorldView: {
+            /** After Ending */
+            after_ending: string;
+            /** Cast */
+            cast: components["schemas"]["CastOut"][];
+            /** Deadline Days */
+            deadline_days: number | null;
+            /** Endings */
+            endings: components["schemas"]["EndingOut"][];
+            /** Events */
+            events: components["schemas"]["EventOut"][];
+            /** Image Id */
+            image_id: string | null;
+            /** Intro Html */
+            intro_html: string;
+            /** Items */
+            items: components["schemas"]["ItemOut"][];
+            /** Name */
+            name: string;
+            /** Paths */
+            paths: components["schemas"]["PathOut"][];
+            /** Places */
+            places: components["schemas"]["PlaceOut"][];
+            /** Slots */
+            slots: components["schemas"]["SlotOut"][];
+            /** Tags */
+            tags: string[];
         };
     };
     responses: never;
