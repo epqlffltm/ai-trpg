@@ -476,6 +476,28 @@ async def change_model(
     return model
 
 
+async def change_persona(
+    session: AsyncSession, asset: AssetClient, viewer: Viewer, conversation_id: uuid.UUID, persona_id: uuid.UUID | None
+) -> ConversationPersona | None:
+    """
+    세션의 페르소나를 바꾸고 바꾼 사본을 돌려준다(없이 이어 가면 None). 다음 말부터 카드의 [사용자]가 바뀐다.
+    세션이 없으면 ConversationNotFoundError, 고른 페르소나가 없으면 PersonaNotFoundError(그대로 둔다),
+    asset 서버를 쓸 수 없으면 AssetUnavailableError 다. 목록의 차례(최근의 것부터)는 바꾸지 않는다.
+
+    세션을 먼저 확인하고 트랜잭션을 닫은 뒤 asset 서버를 부른다(기다리는 동안 연결을 쥐지 않는다).
+    """
+    conversation, _ = await get_conversation(session, viewer, conversation_id)
+    conversation_id = conversation.id
+    await session.rollback()
+    copy = await fetch_chosen_persona(asset, viewer, persona_id)
+    if copy is None:
+        await repository.drop_persona(session, conversation_id)
+    else:
+        await repository.put_persona(session, build_persona(conversation_id, copy))
+    await session.commit()
+    return await repository.persona_of(session, conversation_id)
+
+
 def progress_of(world: World, state: StoryState) -> ProgressOut:
     """가지의 끝의 상태를 목록의 진행으로. 엔딩의 이름은 판에서 찾는다(없으면 id 그대로)."""
     ending = world.ending(state.ending) if state.ending is not None else None

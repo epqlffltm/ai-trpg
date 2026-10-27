@@ -10,7 +10,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import Select, exists, func, literal, or_, select, update
+from sqlalchemy import Select, delete, exists, func, literal, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -70,9 +70,30 @@ async def last_persona_source(session: AsyncSession, owner_id: uuid.UUID) -> uui
     return await session.scalar(query)
 
 
+async def put_persona(session: AsyncSession, persona: ConversationPersona) -> None:
+    """
+    세션의 페르소나의 사본을 넣거나 바꾼다(세션마다 하나). 동시에 바꿔도 한 문장이라 둘 다 같은 행을 쓴다.
+    커밋하지 않는다.
+    """
+    values = {column.key: getattr(persona, column.key) for column in ConversationPersona.__table__.columns}
+    values.pop('imported_at')
+    changed = {key: value for key, value in values.items() if key != 'conversation_id'}
+    statement = (
+        insert(ConversationPersona)
+        .values(values)
+        .on_conflict_do_update(index_elements=['conversation_id'], set_={**changed, 'imported_at': func.now()})
+    )
+    await session.execute(statement)
+
+
+async def drop_persona(session: AsyncSession, conversation_id: uuid.UUID) -> None:
+    """세션의 페르소나의 사본을 지운다(없으면 아무것도 하지 않는다). 커밋하지 않는다."""
+    await session.execute(delete(ConversationPersona).where(ConversationPersona.conversation_id == conversation_id))
+
+
 async def persona_of(session: AsyncSession, conversation_id: uuid.UUID) -> ConversationPersona | None:
-    """세션에 가져온 페르소나의 사본. 페르소나 없이 시작했으면 None."""
-    return await session.get(ConversationPersona, conversation_id)
+    """세션에 가져온 페르소나의 사본. 페르소나 없이 시작했으면 None. 방금 바꾼 행도 DB 에서 다시 읽는다."""
+    return await session.get(ConversationPersona, conversation_id, populate_existing=True)
 
 
 async def last_model(session: AsyncSession, owner_id: uuid.UUID) -> str | None:

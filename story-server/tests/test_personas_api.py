@@ -10,6 +10,8 @@ asset 서버, 모델은 가짜다(tests/assets.py, tests/models.py).
   - null 을 보내면 페르소나 없이 시작한다(카드에 [사용자]가 없다)
   - 고른 페르소나가 없으면(남의 것도) 404 persona_not_found 이고 세션을 만들지 않는다
   - 시작한 뒤에 asset 서버에서 고쳐도 세션의 사본은 그대로다
+  - 세션 중에 바꾸면 다음 말부터 그 페르소나다. 같은 것을 고르면 새 설정을 가져오고, null 이면 없이 이어 간다.
+    고른 것이 없으면 404 이고 그대로 둔다. 남의 세션은 404, asset 서버가 죽었으면 503 이다
 """
 
 import asyncio
@@ -182,3 +184,99 @@ async def test_the_copy_stays_when_the_persona_changes_later(
     read = (await client.get(f'{CONVERSATIONS_URL}/{conversation["id"]}', headers=mine)).json()
 
     assert (read['persona']['revision'], read['persona']['name']) == (1, '하루')
+
+
+# --- 세션 중에 바꾸기 ---
+
+
+async def change(client: AsyncClient, headers: dict, conversation: dict, persona_id: str | None):
+    url = f'{CONVERSATIONS_URL}/{conversation["id"]}/persona'
+    return await client.put(url, json={'persona_id': persona_id}, headers=headers)
+
+
+async def test_the_persona_can_be_changed_for_the_next_message(
+    client: AsyncClient,
+    app: FastAPI,
+    model_on: None,
+    asset: FakeAsset,
+    router: FakeRouter,
+    mine: dict,
+    world_id: str,
+):
+    first, second = asset.add_persona(make_persona()), asset.add_persona(make_persona(name='소라'))
+    conversation = await started(client, mine, world_id, persona_id=str(first.id))
+
+    response = await change(client, mine, conversation, str(second.id))
+
+    assert response.status_code == status.HTTP_200_OK, response.text
+    assert response.json()['persona']['name'] == '소라'
+    read = (await client.get(f'{CONVERSATIONS_URL}/{conversation["id"]}', headers=mine)).json()
+    assert read['persona']['id'] == str(second.id)
+    assert '[사용자]\n이름: 소라' in await card_after_a_message(app, client, router, mine, conversation)
+
+
+async def test_choosing_the_same_persona_takes_its_new_settings(
+    client: AsyncClient, model_on: None, asset: FakeAsset, router: FakeRouter, mine: dict, world_id: str
+):
+    persona = asset.add_persona(make_persona())
+    conversation = await started(client, mine, world_id, persona_id=str(persona.id))
+    asset.add_persona(make_persona(persona.id, revision=2, name='하루카'))
+
+    response = await change(client, mine, conversation, str(persona.id))
+
+    assert (response.json()['persona']['revision'], response.json()['persona']['name']) == (2, '하루카')
+
+
+async def test_null_carries_on_without_a_persona(
+    client: AsyncClient,
+    app: FastAPI,
+    model_on: None,
+    asset: FakeAsset,
+    router: FakeRouter,
+    mine: dict,
+    world_id: str,
+):
+    persona = asset.add_persona(make_persona())
+    conversation = await started(client, mine, world_id, persona_id=str(persona.id))
+
+    response = await change(client, mine, conversation, None)
+
+    assert response.json() == {'persona': None}
+    assert '[사용자]' not in await card_after_a_message(app, client, router, mine, conversation)
+    # 페르소나 없는 세션에 처음으로 고를 수도 있다
+    assert (await change(client, mine, conversation, str(persona.id))).json()['persona']['name'] == '하루'
+
+
+async def test_a_missing_persona_leaves_the_session_as_it_was(
+    client: AsyncClient, model_on: None, asset: FakeAsset, router: FakeRouter, mine: dict, world_id: str
+):
+    persona = asset.add_persona(make_persona())
+    conversation = await started(client, mine, world_id, persona_id=str(persona.id))
+
+    response = await change(client, mine, conversation, str(NO_SUCH_PERSONA))
+
+    assert (response.status_code, response.json()['code']) == (status.HTTP_404_NOT_FOUND, 'persona_not_found')
+    read = (await client.get(f'{CONVERSATIONS_URL}/{conversation["id"]}', headers=mine)).json()
+    assert read['persona']['id'] == str(persona.id)
+
+
+async def test_changing_needs_my_session_and_a_working_asset_server(
+    client: AsyncClient,
+    signing_key: SigningKey,
+    model_on: None,
+    asset: FakeAsset,
+    router: FakeRouter,
+    mine: dict,
+    world_id: str,
+):
+    persona = asset.add_persona(make_persona())
+    conversation = await started(client, mine, world_id)
+    theirs = bearer(signing_key, uuid.UUID('99999999-2222-4333-8444-555555555555'))
+
+    assert (await change(client, theirs, conversation, str(persona.id))).status_code == status.HTTP_404_NOT_FOUND
+    asset.down = True
+    response = await change(client, mine, conversation, str(persona.id))
+    assert (response.status_code, response.json()['code']) == (status.HTTP_503_SERVICE_UNAVAILABLE, 'asset_unavailable')
+    # 고치지 않는 칸은 받지 않는다
+    url = f'{CONVERSATIONS_URL}/{conversation["id"]}/persona'
+    assert (await client.put(url, json={}, headers=mine)).status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
