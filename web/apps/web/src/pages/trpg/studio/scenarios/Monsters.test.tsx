@@ -132,7 +132,7 @@ describe('몬스터 탭', () => {
       ward: 4,
       equipment: [{ entry_id: CLAW, count: 1, chance: 100, wear: [] }],
       inventory: [],
-      attacks: [{ name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: CLAW, cost: null }],
+      attacks: [{ name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: CLAW, cost: null, effects: [] }],
       immune: ['mind'],
       vulnerable: ['poison'],
     });

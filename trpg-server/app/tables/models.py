@@ -137,6 +137,8 @@ class InjurySource(enum.StrEnum):
     RESOURCE = 'resource'
     # 기술의 효과로(#805, 독의 주문)
     SKILL = 'skill'
+    # 몬스터나 인물의 공격의 효과로(#805 ③-b, 독니, 부패한 손톱)
+    ATTACK = 'attack'
 
 
 class NpcStatus(enum.StrEnum):

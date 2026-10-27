@@ -203,8 +203,12 @@ def take_aimed(
     return wound(ruleset, key, InjurySource.CALLED_SHOT, document, rows, table_id, moment, immune, prank)
 
 
-# 효과(injure)가 어디서 왔나에서 부상의 출처로. 물건(#800)과 기술(#805)이다
-EFFECT_SOURCES = {Trigger.ITEM: InjurySource.ITEM, Trigger.SKILL: InjurySource.SKILL}
+# 효과(injure)가 어디서 왔나에서 부상의 출처로. 물건(#800)과 기술(#805)과 몬스터나 인물의 공격(#805 ③-b)이다
+EFFECT_SOURCES = {
+    Trigger.ITEM: InjurySource.ITEM,
+    Trigger.SKILL: InjurySource.SKILL,
+    Trigger.ATTACK: InjurySource.ATTACK,
+}
 
 
 def take_from_item(
