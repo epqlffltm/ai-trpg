@@ -19,7 +19,8 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 # NPC 와 몬스터도 수치를 가진다(#804). 수치에 가진 쪽(holders)을 더한다. 비우면 캐릭터만이라 이미 있는 룰북과
-# 굳힌 판은 그대로 읽힌다(고치지 않는다). NPC 와 몬스터의 상태에 지금 값(resources)을 둔다. 적힌 것이 없으면 시작 값이다.
+# 굳힌 판은 그대로 읽힌다(고치지 않는다). NPC 와 몬스터의 상태에 지금 값(resources)을 둔다.
+# 적힌 것이 없으면 시작 값이다.
 # 되돌리면 그 칸들을 지우고 룰북의 수치에서 holders 를 뺀다. NPC 나 몬스터만 가지던 수치는 캐릭터의 수치로 남는다.
 # 앱의 코드를 가져오지 않는다
 
