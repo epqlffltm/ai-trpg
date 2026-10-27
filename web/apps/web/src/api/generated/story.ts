@@ -134,6 +134,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/conversations/{conversation_id}/persona": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change Persona
+         * @description 세션의 페르소나를 바꾼다. 다음 말부터 그 페르소나로 쓴다. 같은 id 면 asset 서버의 새 설정으로 바꾼다.
+         *     고른 페르소나가 없으면 404 persona_not_found 이고 그대로 둔다. 바꾼 페르소나를 돌려준다.
+         */
+        put: operations["change_persona_api_v1_story_conversations__conversation_id__persona_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/endings": {
         parameters: {
             query?: never;
@@ -938,6 +959,23 @@ export interface components {
             minutes: number;
         };
         /**
+         * PersonaChoice
+         * @description 세션의 페르소나를 바꿀 때 받는 값. persona_id 는 꼭 보낸다.
+         *       - id 를 보내면: 그 계정 페르소나의 지금 것을 가져와 바꾼다. 같은 id 면 새 설정으로 바꾸는 것이다
+         *       - null 을 보내면: 페르소나 없이 이어 간다
+         */
+        PersonaChoice: {
+            /** Persona Id */
+            persona_id: string | null;
+        };
+        /**
+         * PersonaChoiceOut
+         * @description 바꾼 뒤의 세션의 페르소나. 없이 이어 가면 null 이다.
+         */
+        PersonaChoiceOut: {
+            persona: components["schemas"]["PersonaOut"] | null;
+        };
+        /**
          * PersonaOut
          * @description 세션에 가져온 페르소나의 사본(chat 과 같은 모양). id 는 asset 서버의 페르소나 id 다.
          */
@@ -1399,6 +1437,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationModelOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    change_persona_api_v1_story_conversations__conversation_id__persona_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonaChoice"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonaChoiceOut"];
                 };
             };
             /** @description 입력이 틀렸다 */

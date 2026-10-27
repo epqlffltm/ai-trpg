@@ -7,6 +7,7 @@
     GET  /api/v1/story/conversations              내 세션의 목록. ?limit=&offset=&world_id=
     GET  /api/v1/story/conversations/{id}         세션 하나(가져온 판과 지금 가지의 말까지)
     PUT  /api/v1/story/conversations/{id}/model   세션의 모델 바꾸기
+    PUT  /api/v1/story/conversations/{id}/persona 세션의 페르소나 바꾸기(같은 것이면 새 설정으로)
     PUT  /api/v1/story/conversations/{id}/branch  다른 대안의 가지를 보기. 바뀐 세션을 돌려준다
     PATCH /api/v1/story/messages/{id}             답 고치기(조각마다 글만). 고친 말을 돌려준다
 
@@ -39,6 +40,8 @@ from app.conversations.schemas import (
     MessageOut,
     ModelChoice,
     PathMessageOut,
+    PersonaChoice,
+    PersonaChoiceOut,
     PersonaOut,
     ProgressOut,
     StateOut,
@@ -324,6 +327,23 @@ async def change_model(
     """세션의 모델을 바꾼다. 다음 말부터 그 모델로 쓰고 그 모델의 값으로 청구한다. 바꾼 모델을 돌려준다."""
     model = await service.change_model(session, prices, viewer, conversation_id, data.model, now)
     return to_model(model, usable=True)
+
+
+@router.put(
+    '/{conversation_id}/persona',
+    response_model=PersonaChoiceOut,
+    status_code=status.HTTP_200_OK,
+    dependencies=[WRITE_LIMIT],
+)
+async def change_persona(
+    conversation_id: uuid.UUID, data: PersonaChoice, viewer: CurrentViewer, session: Session, request: Request
+) -> PersonaChoiceOut:
+    """
+    세션의 페르소나를 바꾼다. 다음 말부터 그 페르소나로 쓴다. 같은 id 면 asset 서버의 새 설정으로 바꾼다.
+    고른 페르소나가 없으면 404 persona_not_found 이고 그대로 둔다. 바꾼 페르소나를 돌려준다.
+    """
+    persona = await service.change_persona(session, request.app.state.asset, viewer, conversation_id, data.persona_id)
+    return PersonaChoiceOut(persona=to_persona(persona))
 
 
 @router.put(

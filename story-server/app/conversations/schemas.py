@@ -59,6 +59,18 @@ class ModelChoice(BaseModel):
     model: ModelSlug
 
 
+class PersonaChoice(BaseModel):
+    """
+    세션의 페르소나를 바꿀 때 받는 값. persona_id 는 꼭 보낸다.
+      - id 를 보내면: 그 계정 페르소나의 지금 것을 가져와 바꾼다. 같은 id 면 새 설정으로 바꾸는 것이다
+      - null 을 보내면: 페르소나 없이 이어 간다
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    persona_id: uuid.UUID | None
+
+
 class ConversationModelOut(BaseModel):
     """
     세션에 싣는 모델. usable 이 거짓이면 이 세션에 더는 고를 수 없는 모델이다
@@ -380,6 +392,12 @@ class PersonaOut(BaseModel):
     form_of_address: str
     speech_examples: str
     personality: str
+
+
+class PersonaChoiceOut(BaseModel):
+    """바꾼 뒤의 세션의 페르소나. 없이 이어 가면 null 이다."""
+
+    persona: PersonaOut | None
 
 
 class ConversationDetail(BaseModel):

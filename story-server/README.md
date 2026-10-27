@@ -110,6 +110,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | --- | --- | --- | --- |
 | GET | `/api/v1/story/me` | 토큰의 주인(`{"user_id"}`, 인증 서버의 `public_id`). 토큰 검증이 이어졌는지 보는 가장 작은 주소다(게임 서버의 `GET /me` 와 같다) | access 토큰 |
 | GET | `/api/v1/story/models` | 세션에 고를 수 있는 [모델](#모델-목록)들과 말 한 번의 값(`{free, items}`). 켜져 있고 은퇴하지 않았고 결제 서버가 팔고 있는 것만. 회사, 이름표 순서. 가격 목록을 받지 못하면 503 `prices_unavailable` | access 토큰 |
+| PUT | `/api/v1/story/conversations/{id}/persona` | 세션의 [페르소나](#세션) 바꾸기(`{"persona_id"}`, null 이면 없이). 같은 id 면 새 설정으로 바꾼다. `{persona}` 를 돌려준다. 없는 페르소나면 404 `persona_not_found`, asset 서버가 죽었으면 503 `asset_unavailable` | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/model` | 세션의 모델 바꾸기(`{"model"}`). 고를 수 없으면 422 `model_unavailable`, 가격 목록을 받지 못했으면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id", "persona_id"?, "model"?}`). 세계관의 마지막 판과 페르소나를 가져와 고정한다. 201 | access 토큰 |
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}`. 항목마다 지금 가지의 끝까지 온 곳(`progress`) | access 토큰 |
@@ -138,7 +139,10 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 - **페르소나**(chat 과 같다, 2026-10-27). `persona_id` 를 보내면 그 계정 페르소나를 asset 서버에서 가져와(`GET /api/v1/asset/service/story/personas/{id}`)
   세션에 복사한다(`story.conversation_personas`). 보내지 않으면 지난번 세션의 것이고(지워졌으면 없이), `null` 이면 없이 시작한다.
   고른 것이 없거나 남의 것이면 404 `persona_not_found` 다. 세션 읽기의 `persona` 에 실리고, 카드의 `[사용자]`(이름, 인물들이 부르는 호칭, 나이, 성별, 설명, 성격, 말투의 예)로 모델에 간다.
-  복사해 두므로 asset 서버에서 고쳐도 그 세션은 그대로다. 세션 중에 바꾸는 것과 "새 설정으로 바꾸기"는 아직 없다(chat 도 없다).
+  복사해 두므로 asset 서버에서 고쳐도 그 세션은 그대로다.
+- **페르소나 바꾸기**(2026-10-27). `PUT /conversations/{id}/persona` 가 다음 말부터 쓸 페르소나를 바꾼다(지금 도는 답은 그대로).
+  같은 id 를 보내면 asset 서버의 지금 것을 다시 가져온다("새 설정으로 바꾸기"). 화면은 내 페르소나 목록의 `revision` 과 세션의 `persona.revision` 을 견줘 바뀐 것을 안다.
+  `null` 이면 없이 이어 간다. 세션을 먼저 확인하고 asset 서버를 부른 뒤 사본을 한 문장(upsert)으로 바꾼다. 가지와 상관없이 세션에 하나다.
 
 - **사본은 바뀌지 않는다.** 제작자가 다시 게시해도 그 세션은 처음의 판으로 돈다. 새 판은 새로 시작한 세션이 쓴다.
 - **판의 문서는 받은 그대로 둔다.** 지금 검사하는 칸은 형식, 이름, 등급, 그림뿐이고(`app/assets/schemas.py`),
