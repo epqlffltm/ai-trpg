@@ -184,7 +184,11 @@ async def test_a_gift_hands_over_the_item_and_moves_affection(
     billing: FakeBillingServer,
     mine: dict,
 ):
-    mina = {**member('mina', home='home', start=20, gifts=[gift('likes', 'flower', 10)]), 'character': {'name': '미나'}}
+    mina = {
+        **member('mina', home='home', start=20, gifts=[gift('likes', 'flower', 10)]),
+        'character': {'name': '미나'},
+        'panel': ['affection'],
+    }
     fields = {
         'cast': [mina],
         'items': [{'id': 'flower', 'name': '꽃'}],

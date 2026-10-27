@@ -40,7 +40,7 @@ from app.conversations import repository
 from app.conversations.models import Conversation, ImportedWorld, Message, Role
 from app.conversations.repository import ConversationRow
 from app.conversations.schemas import ConversationCreate, ProgressOut, StateOut, WorldView
-from app.conversations.views import met_on, visited_on, world_view
+from app.conversations.views import affection_shown, met_on, visited_on, world_view
 from app.core.dependencies import Viewer
 from app.engine.clock import day_of, slot_of
 from app.engine.state import StoryState
@@ -283,10 +283,13 @@ def places_on(states: list[dict | None]) -> list[str | None]:
     return [str(data['place']) if data is not None else None for data in states]
 
 
-def state_out(world: World, state: StoryState) -> StateOut:
-    """상태를 응답의 모양으로. 선택지를 기다리는 이벤트가 있으면 그 장면이 부른 인물도 장면에 든다."""
+def state_out(world: World, state: StoryState, shown: frozenset[str]) -> StateOut:
+    """
+    상태를 응답의 모양으로. 선택지를 기다리는 이벤트가 있으면 그 장면이 부른 인물도 장면에 든다.
+    호감도는 shown 의 인물 것만 싣는다.
+    """
     waiting = world.event(state.choosing) if state.choosing is not None else None
-    return state_view(world, state, staging(world, state, waiting).cast)
+    return state_view(world, state, staging(world, state, waiting).cast, shown)
 
 
 async def conversation_state(
@@ -305,7 +308,8 @@ async def conversation_state(
     recorded = frozenset(
         record.ending_id for record in await records.endings_of(session, viewer.claims.user_id, imported.source_id)
     )
-    return state_out(world, state), world_view(world, imported.document, state, met, recorded, visited)
+    shown = affection_shown(imported.document, met)
+    return state_out(world, state, shown), world_view(world, imported.document, state, met, recorded, visited)
 
 
 async def message_alternatives(

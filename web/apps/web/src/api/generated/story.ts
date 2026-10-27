@@ -496,7 +496,7 @@ export interface components {
              */
             updated_at: string;
             view: components["schemas"]["WorldView"];
-            world: components["schemas"]["WorldOut"];
+            world: components["schemas"]["WorldSummary"];
         };
         /**
          * ConversationModelOut
@@ -1028,7 +1028,9 @@ export interface components {
          * @description 가지의 끝의 상태(엔진의 상태). 화면이 시계, 지도, 소지품, 인물 창, 선택지, 엔딩을 그린다.
          *
          *     minutes 는 1일째 0시부터 흐른 분이고, day 와 slot(시간대의 id)은 그 수에서 계산한 것이다.
-         *     affection 은 인물마다의 호감도(0~100)다. 무엇을 보일지(숫자, 단계, 숨김)는 판의 보이기 규칙을 따라 화면이 정한다.
+         *     affection 은 인물마다의 호감도(0~100)다. 인물 창에 호감도를 보이는 인물만 실린다
+         *     (view 의 cast 에 affection 이 있는 인물).
+         *     숫자로 보일지 단계로 보일지는 view 의 affection.display 를 따라 화면이 정한다.
          *     choosing 은 선택지를 기다리는 이벤트, ending 은 이 가지에서 본 엔딩이다. cast 는 지금 장소의 장면의 인물이다.
          */
         StateOut: {
@@ -1066,31 +1068,6 @@ export interface components {
          * @enum {string}
          */
         Tier: "basic" | "standard" | "premium";
-        /**
-         * WorldOut
-         * @description 세션 하나에 싣는 세계관. 가져온 판의 문서까지다(받은 칸 전부).
-         *
-         *     문서의 칸은 asset 서버의 판의 형식을 따른다(asset-server/README.md 의 "세계관").
-         *     document 는 곧 뺀다. 이벤트와 엔딩의 조건, 만나지 않은 인물까지 들어 있다. 화면은 세션의 view 를 쓴다.
-         */
-        WorldOut: {
-            /** Document */
-            document: {
-                [key: string]: unknown;
-            };
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Image Id */
-            image_id: string | null;
-            /** Name */
-            name: string;
-            rating: components["schemas"]["Rating"];
-            /** Version */
-            version: number;
-        };
         /**
          * WorldSummary
          * @description 목록에 싣는 세계관. id 는 asset 서버의 세계관 id 이고 version 은 이 세션이 쓰는 판의 번호다.

@@ -112,7 +112,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | PUT | `/api/v1/story/conversations/{id}/model` | 세션의 모델 바꾸기(`{"model"}`). 고를 수 없으면 422 `model_unavailable`, 가격 목록을 받지 못했으면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id"}`). 세계관의 마지막 판을 가져와 고정한다. 201 | access 토큰 |
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}`. 항목마다 지금 가지의 끝까지 온 곳(`progress`) | access 토큰 |
-| GET | `/api/v1/story/conversations/{id}` | 세션 하나(지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`, 화면이 쓰는 세계관의 칸 [`view`](#세션의-view)). 가져온 판의 문서(`world.document`)는 곧 뺀다. 남의 것은 404 | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}` | 세션 하나(지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`, 화면이 쓰는 세계관의 칸 [`view`](#세션의-view)). 가져온 판의 문서는 싣지 않는다. 남의 것은 404 | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/branch` | [가지 고르기](#가지-고르기)(`{"message_id"}`). 바뀐 세션을 돌려준다 | access 토큰 |
 | PATCH | `/api/v1/story/messages/{id}` | [답 고치기](#답-고치기)(`{"segments": ["…"]}`). 고친 말을 돌려준다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content", "edit_of"?}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
@@ -170,8 +170,8 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
   인물의 자리는 엔진이 정한다(동행, 일정, 기본 장소). 가 본 곳에 있고, 만났고, 제작자의 지도 보이기(보임, 숨김, 호감도 단계 이상)를 통과한 인물만 보인다.
   함께 다니는 인물은 장소에 넣지 않는다(`state.companions` 로 내 자리 옆에 보인다).
 - 그 밖에 이름, 소개, 태그, 대표 그림, 기한, 엔딩 뒤, 시간대, 장소(배경 그림), 길, 물건이다.
-- **바꾸는 차례**(2026-10-27). ① `view` 를 더한다. ② 화면이 `world.document` 대신 `view` 를 쓴다(웹). ③ `world.document` 를 뺀다.
-  `state.affection` 은 인물 창과 상관없이 모든 인물의 값이 실린다. ③ 에서 `view` 의 호감도만 남긴다.
+- **판의 문서는 싣지 않는다**(2026-10-27). 세션의 `world` 는 목록과 같은 요약(id, 판, 이름, 그림, 등급)이다.
+  상태의 호감도(`state.affection`)도 인물 창에 호감도가 실리는 인물만 싣는다. 말의 `turn` 프레임의 상태도 같다(이번 답의 장면의 인물은 만난 것으로 친다).
 
 ### 말 보내기
 

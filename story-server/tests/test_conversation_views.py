@@ -7,6 +7,7 @@
   - 만남은 답들의 장면의 인물을 모은 것이다
   - 인물: 만나기 전에는 제작자가 고른 공개(보임, 실루엣은 가림, 숨김은 없음), 만나면 보임이다
   - 인물 창: 고른 항목만 싣는다. 호감도를 보이는 인물에만 고백 대기, 건넨 선물, 함께 본 이벤트가 실린다
+  - 상태의 호감도 값: 호감도를 고른 인물 가운데 보이는 인물만(실루엣과 숨김은 만나기 전에는 없다)
   - 이벤트: 이 가지에서 열린 것만, 선택지의 글은 기다리는 이벤트에만 싣는다. 조건과 효과는 없다
   - 엔딩: 칸은 모두, 이름과 일러스트는 본 것(계정의 기록, 이 가지의 엔딩)만, 힌트는 늘 싣는다
   - 지도: 가 본 곳은 시작 장소와 상태들의 장소, 지금 장소다. 인물은 가 본 곳에 있고 만났고 지도 보이기를
@@ -16,7 +17,7 @@
 import uuid
 from types import MappingProxyType
 
-from app.conversations.views import met_on, shown_reveal, visited_on, world_view
+from app.conversations.views import affection_shown, met_on, shown_reveal, visited_on, world_view
 from app.engine.state import StoryState
 from app.engine.world import read_world
 from tests.engine_worlds import condition, confession, document, ending, event, member
@@ -122,6 +123,20 @@ def test_the_affection_panel_carries_waiting_gifts_and_events():
     # 대기 시각이 지났으면 대기가 아니다
     later = view(doc, StoryState(minutes=8 * 60, place='home', cooldowns=state.cooldowns)).cast[0]
     assert later.affection.cooling_until is None
+
+
+def test_affection_values_are_shown_only_for_visible_members_with_the_affection_panel():
+    doc = document(
+        [
+            person('mina', panel=['affection']),
+            person('jun', panel=['intro']),
+            person('yu', 'silhouette', panel=['affection']),
+            person('sora', 'hidden', panel=['affection']),
+        ]
+    )
+
+    assert affection_shown(doc, frozenset()) == frozenset({'mina'})
+    assert affection_shown(doc, frozenset({'yu', 'sora'})) == frozenset({'mina', 'yu', 'sora'})
 
 
 def test_only_opened_events_and_the_waiting_choices_are_carried():

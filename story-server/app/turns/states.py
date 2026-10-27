@@ -71,15 +71,18 @@ def state_on_path(world: World, path_states: Sequence[Mapping | None]) -> StoryS
     return start_state(world)
 
 
-def state_view(world: World, state: StoryState, cast: Sequence[str]) -> StateOut:
-    """상태를 응답의 모양으로. cast 는 지금 장면의 인물이다(app/turns/scenes.py)."""
+def state_view(world: World, state: StoryState, cast: Sequence[str], shown: frozenset[str]) -> StateOut:
+    """
+    상태를 응답의 모양으로. cast 는 지금 장면의 인물이다(app/turns/scenes.py).
+    호감도는 shown 의 인물 것만 싣는다(인물 창에 호감도를 보이는 인물, app/conversations/views.py 의 affection_shown).
+    """
     return StateOut(
         minutes=state.minutes,
         day=day_of(state.minutes),
         slot=slot_of(world, state.minutes),
         place=state.place,
         items={item: count for item, count in state.items.items() if count > 0},
-        affection=dict(state.affection),
+        affection={cast_id: value for cast_id, value in state.affection.items() if cast_id in shown},
         companions=list(state.companions),
         choosing=state.choosing,
         ending=state.ending,

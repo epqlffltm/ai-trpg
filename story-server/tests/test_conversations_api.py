@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.conversations.models import Conversation, ImportedWorld
 from app.main import API_PREFIX
 from app.ratings import Rating
-from tests.assets import IMAGE_ID, FakeAsset, make_world, world_document
+from tests.assets import IMAGE_ID, FakeAsset, make_world
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -99,7 +99,6 @@ async def test_starting_fixes_the_latest_version(client: AsyncClient, asset: Fak
         'name': '여름 마을',
         'image_id': str(IMAGE_ID),
         'rating': 'all',
-        'document': world_document(),
     }
     assert started['created_at'] == started['updated_at']
 

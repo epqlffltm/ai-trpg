@@ -41,7 +41,6 @@ from app.conversations.schemas import (
     PathMessageOut,
     ProgressOut,
     StateOut,
-    WorldOut,
     WorldSummary,
     WorldView,
 )
@@ -167,7 +166,7 @@ def to_detail(
     return ConversationDetail(
         id=conversation.id,
         title=conversation.title,
-        world=WorldOut(**to_world_summary(world).model_dump(), document=world.document),
+        world=to_world_summary(world),
         model=conversation_model(conversation, world, models, book, now),
         messages=[to_path_message(message, alternatives) for message in messages],
         state=state,
