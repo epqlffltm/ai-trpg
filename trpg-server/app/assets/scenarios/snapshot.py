@@ -140,7 +140,8 @@ from app.engine.sheet import CharacterSheet, Sheet
 #  65: HP 말고 다른 수치가 있다(#804). rulebook.rules.resources: 이름표, 이름, 최소, 최대(기준, 능력치, 상한), 시작,
 #      쉬기의 변화. 물건의 효과에 맞추기(adjust: 수치, 양)가 있다
 #  66: 기술과 주문이 있다(#805). rulebook.rules.skills: 이름표, 이름, 비용(수치, 양), 대상(self, ally), 효과들.
-#      시트(default_sheet, pregens[].sheet)에 아는 기술(skills)이 있다
+#      시트(default_sheet, pregens[].sheet)에 아는 기술(skills)이 있다.
+#      상대에게 쓰는 기술(대상 foe)과 맞히는 판정(check, #805 ②)은 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 66
 
 

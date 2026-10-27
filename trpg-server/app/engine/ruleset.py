@@ -869,6 +869,8 @@ class SkillTarget(enum.StrEnum):
     SELF = 'self'
     # 자신이나 같은 테이블의 동료에게. 비우면 자신이다
     ALLY = 'ally'
+    # 상대에게. 이번 장면의 인물(NPC)이나 같은 장소의 몬스터 하나다. 늘 맞히는 판정을 거친다(#805 ②)
+    FOE = 'foe'
 
 
 class SkillCost(Part):
@@ -878,14 +880,31 @@ class SkillCost(Part):
     amount: Annotated[int, Field(ge=1, le=SKILL_MAX_COST)]
 
 
+class SkillCheck(Part):
+    """
+    기술의 맞히는 판정(#805 ②). 어느 능력으로, 어느 난이도에 도전하는가. 난이도를 비우면 룰북의 기본 난이도다.
+
+    물건의 던지는 판정(items[].throw)과 같다. 능력치와 난이도가 규칙에 있는지는 규칙(Ruleset)이 본다.
+    """
+
+    ability: Key
+    difficulty: Key | None = None
+
+
 class Skill(Part):
     """
-    기술이나 주문 하나(#805). 예: 치유의 손길(마나 2, 동료, 가볍게 회복), 기합(스태미나 1, 자신, 마나 +1).
+    기술이나 주문 하나(#805). 예: 치유의 손길(마나 2, 동료, 가볍게 회복), 기합(스태미나 1, 자신, 마나 +1),
+    마력 화살(마나 1, 상대, 맞히면 가벼운 피해).
 
     key 는 시트(아는 기술)와 행동이 가리키는 이름표, name 은 보이는 이름이다.
     cost 는 쓸 때 내는 비용이다. 비우면 공짜다. 빗나가도 낸다. 모자라면 쓰지 못한다.
     target 은 누구에게 쓰나다. effects 는 대상에게 적힌 차례대로 드는 일들이다. 소모품의 효과와 같다
     (app/engine/item_effects.py, 화염구와 화염병이 같은 damage). 효과가 없으면 쓰고 아무 일도 없다(서술이 맡는다).
+    check 는 맞히는 판정이다(#805 ②). 자기 자신에게는 굴리지 않는다. 그래서 자신에게만 쓰는 기술에는 적지 않는다.
+      - 동료에게 쓰는 기술: 적으면 자기 아닌 동료에게 쓸 때 굴린다(동료에게 물건을 던지는 것과 같다).
+        비우면 굴리지 않는다.
+      - 상대에게 쓰는 기술: 늘 굴린다. 비우면 룰북의 맞히는 판정(rules.item_check)이다.
+    맞히면 효과가 든다. 피해가 있으면 그 등급의 타격으로 판정해 방어, 세이브, 부상 표, 드롭이 치기와 같다.
     """
 
     key: Key
@@ -893,6 +912,14 @@ class Skill(Part):
     cost: SkillCost | None = None
     target: SkillTarget = SkillTarget.SELF
     effects: Effects = []
+    check: SkillCheck | None = None
+
+    @model_validator(mode='after')
+    def reject_check_on_self(self) -> Self:
+        """자신에게만 쓰는 기술은 굴리지 않는다. 판정을 적지 않는다."""
+        if self.target == SkillTarget.SELF and self.check is not None:
+            raise ValueError('자신에게만 쓰는 기술에는 맞히는 판정이 없습니다.')
+        return self
 
 
 class Ruleset(Part):
@@ -978,6 +1005,31 @@ class Ruleset(Part):
         strangers = [skill.key for skill in self.skills if not effects_fit(self, skill.effects)]
         if strangers:
             raise ValueError(f'기술의 효과가 이 규칙에 없는 것을 가리킵니다: {", ".join(strangers)}')
+        return self
+
+    @model_validator(mode='after')
+    def require_skill_checks(self) -> Self:
+        """
+        기술의 맞히는 판정(#805 ②)의 능력은 능력치에, 난이도는 난이도의 단계에 있어야 한다.
+
+        상대에게 쓰는 기술이 판정을 비웠으면 룰북의 맞히는 판정(item_check)으로 굴린다. 그것도 없으면 굴릴 수 없다.
+        """
+        abilities = {ability.key for ability in self.abilities}
+        difficulties = {difficulty.key for difficulty in self.difficulties}
+        checks = [skill for skill in self.skills if skill.check is not None]
+        strangers = [
+            skill.key
+            for skill in checks
+            if skill.check.ability not in abilities
+            or (skill.check.difficulty is not None and skill.check.difficulty not in difficulties)
+        ]
+        if strangers:
+            raise ValueError(
+                f'기술의 맞히는 판정이 이 규칙에 없는 능력치나 난이도를 가리킵니다: {", ".join(strangers)}'
+            )
+        unrolled = [s.key for s in self.skills if s.target == SkillTarget.FOE and s.check is None]
+        if unrolled and self.item_check is None:
+            raise ValueError(f'상대에게 쓰는 기술에 맞히는 판정이 없습니다: {", ".join(unrolled)}')
         return self
 
     @model_validator(mode='after')

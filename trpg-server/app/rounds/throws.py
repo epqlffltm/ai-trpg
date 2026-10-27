@@ -125,17 +125,17 @@ def judge_throw(judging: Judging, member: TableMember, action: ThrowAction) -> d
     겨눈 몬스터가 없어 못 던졌으면 치기와 같은 target_gone 도 있다.
     """
     item = judging.items[action.item]
-    check = to_check(judging, item, action, *throw_terms(judging, item))
+    check = to_check(judging, item.effects, action, *throw_terms(judging, item))
     if items.count_of(member.sheet, action.item) < 1:
         return {'item_throw': throw_document(judging, member, item, action, check, Reason.NOT_HELD)}
     gone = thrown_gone(judging, member, action, item)
     if gone is not None:
         document = throw_document(judging, member, item, action, check, Reason.TARGET_GONE)
         return {'item_throw': document, 'target_gone': gone}
-    mark_harm(judging, member, item, action, check)
+    mark_harm(judging, member, item.effects, action, check)
     prank = is_prank_throw(judging, member, action, item)
     items.remove_items(member.sheet, action.item, 1)
     outcome = judge_check(judging, member, check)
-    applied = apply_after_hit(judging, item, action, prank) if landed(outcome, check) else NOTHING_APPLIED
+    applied = apply_after_hit(judging, item.effects, action, prank) if landed(outcome, check) else NOTHING_APPLIED
     thrown = {**throw_document(judging, member, item, action, check, None), **applied}
     return {**outcome, 'item_throw': thrown}

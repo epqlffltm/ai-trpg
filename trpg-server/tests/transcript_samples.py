@@ -220,6 +220,17 @@ SAMPLES = {
         'target': {'monster_id': '7c2d9e41-3b5a-4f08-a6e1-9d4b2c7f8e15', 'name': '수로 쥐 1'},
         'remaining': 0,
     },
+    'skill_used': {
+        'round': 1,
+        'character_name': '약사',
+        'skill': 'arcane_bolt',
+        'name': '마력 화살',
+        'used': True,
+        'reason': None,
+        'target': {'monster_id': '7c2d9e41-3b5a-4f08-a6e1-9d4b2c7f8e15', 'name': '수로 쥐 1'},
+        'cured': [],
+        'injured': [],
+    },
     'aid_used': {
         'round': 1,
         'character_name': '약사',

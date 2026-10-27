@@ -244,6 +244,16 @@ def item_thrown(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'{who(payload)}: {item} 던짐 → {aimed}')]
 
 
+def skill_used(payload: dict, labels: Labels) -> list[Block]:
+    """기술을 씀(#805). 받거나 맞을 쪽의 이름. 맞았는지는 뒤의 판정과 변화의 이벤트가 적는다."""
+    skill = text_of(payload.get('name'))
+    if not payload.get('used'):
+        return [Note(f'{who(payload)}: {skill} 쓰지 못함')]
+    target = payload.get('target') if isinstance(payload.get('target'), dict) else {}
+    aimed = text_of(target.get('character_name')) or text_of(target.get('name'))
+    return [Note(f'{who(payload)}: {skill} 씀' + (f' → {aimed}' if aimed else ''))]
+
+
 def aid_used(payload: dict, labels: Labels) -> list[Block]:
     """판정에 물건을 붙여 씀(#802). 보정, 부러졌는가. 예: 렌: 락픽 씀 +1, 부러짐"""
     item = text_of(payload.get('name'))
@@ -442,6 +452,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.ITEM_USED: item_used,
     EventType.ITEM_GIVEN: item_given,
     EventType.ITEM_THROWN: item_thrown,
+    EventType.SKILL_USED: skill_used,
     EventType.AID_USED: aid_used,
     EventType.ITEM_PUT_DOWN: item_put_down,
     EventType.ITEM_TRADED: item_traded,

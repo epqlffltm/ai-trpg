@@ -394,6 +394,20 @@ def accept_throw(table: GameTable, member: TableMember, action: ThrowAction, sce
     return action.model_dump(mode='json')
 
 
+def accept_skill_on(table: GameTable, member: TableMember, ruleset: Ruleset, action: SkillAction, scene: Scene) -> dict:
+    """
+    기술을 쓰는 행동(#805, app/rounds/skill_actions.py 의 accept_skill). 상대에게 쓰는 기술이면(#805 ②) 겨눈 쪽을
+    치기와 같이 본다. 인물이 이번 장면의 인물이 아니거나 다른 장소에 있으면 ActionTargetError(npc), 몬스터가 같은
+    장소의 마리가 아니면 ActionTargetError(monster), 이미 죽었으면 RoundConflictError.
+    """
+    accepted = accept_skill(table, member, ruleset, action)
+    if action.npc is not None:
+        require_npc_target(scene.cast, member, action.npc, None)
+    if action.monster is not None:
+        require_monster_target(scene.monsters, member, action.monster)
+    return accepted
+
+
 def require_throw_target(table: GameTable, member: TableMember, target_id: uuid.UUID, item: CatalogItem) -> None:
     """
     앉은 사람에게 던지기(#803). 자기 자신은 아니다(그것은 쓰기다). 같은 장소의 살아 있는 사람이어야 한다.
@@ -530,7 +544,7 @@ def accept_action(
     if isinstance(action, UseAction):
         return accept_use(table, member, action, scene)
     if isinstance(action, SkillAction):
-        return accept_skill(table, member, ruleset, action)
+        return accept_skill_on(table, member, ruleset, action, scene)
     if isinstance(action, GiveAction):
         return accept_give(table, member, action)
     if isinstance(action, ThrowAction):

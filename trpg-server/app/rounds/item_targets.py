@@ -16,6 +16,8 @@
 가지고 있지 않으면(not_held), 겨눈 몬스터가 죽었거나 다른 곳에 있으면(target_gone) 굴리지 않고 물건도 그대로다.
 던지기는 앉은 사람도 맞힌다(#803). 해로운 물건이면 치기와 같이 해칠 수 있어야 하고, 장난이면 상한을 지킨다
 (app/rounds/friendly_fire.py). 앉은 사람과는 싸운 것으로 적지 않는다.
+맞히는 판정이 있는 기술(#805 ②, app/rounds/skill_actions.py)도 같은 함수로 판정하고 효과를 낸다. 판정과 효과는
+물건이 아니라 기술에 적혀 있어 함수들은 물건 대신 효과 목록을 받는다.
 
 DB 를 모른다. 시트의 소지품과 맞은 쪽의 상태를 고친다. 저장하지 않는다.
 """
@@ -23,7 +25,8 @@ DB 를 모른다. 시트의 소지품과 맞은 쪽의 상태를 고친다. 저�
 import uuid
 from dataclasses import dataclass
 
-from app.engine.action import ActionKind, CheckAction, ThrowAction, UseAction, settle
+from app.engine.action import ActionKind, CheckAction, SkillAction, ThrowAction, UseAction, settle
+from app.engine.injury import Trigger
 from app.engine.item_effects import EffectKind, first_of, is_harmful
 from app.engine.ruleset import ResourceHolder
 from app.rounds.cast import CastMember, find_cast_member
@@ -34,25 +37,25 @@ from app.rounds.monster_scene import SceneMonster, find_scene_monster
 from app.tables import items, npcs, resources, sheets
 from app.tables import monsters as table_monsters
 from app.tables import state as table_state
-from app.tables.items import CatalogItem
 from app.tables.models import TableMember
 from app.tables.resources import Bearer
 
-# 물건을 겨누는 행동. 쓰기와 던지기(#801)가 같은 칸(item, npc, monster, lethal)을 가진다
-Aimed = UseAction | ThrowAction
+# 겨누는 행동. 물건의 쓰기와 던지기(#801)와 기술(#805 ②)이 같은 칸(npc, monster, lethal)을 가진다
+Aimed = UseAction | ThrowAction | SkillAction
 
 
-def to_check(judging: Judging, item: CatalogItem, action: Aimed, ability: str, difficulty: str | None) -> CheckAction:
+def to_check(judging: Judging, effects: list, action: Aimed, ability: str, difficulty: str | None) -> CheckAction:
     """
-    맞히는 판정. 그 능력과 난이도(비우면 룰북의 기본)에, 물건이 HP 를 바꾸면 그 등급의 타격이나 회복을 겨눈다.
+    맞히는 판정. 그 능력과 난이도(비우면 룰북의 기본)에, 효과가 HP 를 바꾸면 그 등급의 타격이나 회복을 겨눈다.
 
     쓰기는 룰북의 맞히는 판정(rules.item_check), 던지기는 물건의 던지는 판정이나 룰북의 것이다(#801).
+    기술은 기술의 판정이나 룰북의 것이다(#805 ②).
     받을 때 있는지 봤다(app/rounds/acceptance.py). 판에 굳은 룰북이라 바뀌지 않는다.
     """
-    damage = first_of(item.effects, EffectKind.DAMAGE)
-    heal = first_of(item.effects, EffectKind.HEAL)
+    damage = first_of(effects, EffectKind.DAMAGE)
+    heal = first_of(effects, EffectKind.HEAL)
     base = {'kind': ActionKind.CHECK, 'ability': ability, 'difficulty': difficulty}
-    # 앉은 사람에게 던지면(#803) 그 사람이 대상이다. 쓰기(UseAction)는 인물과 몬스터에게만 이 길로 온다
+    # 앉은 사람에게 던지거나 기술을 쓰면(#803, #805 ②) 그 사람이 대상이다. 쓰기(UseAction)는 인물과 몬스터에게만 온다
     ally = ally_of(action)
     if damage is not None:
         aimed = {'npc': action.npc, 'monster': action.monster, 'target': ally, 'lethal': action.lethal}
@@ -83,17 +86,21 @@ def target_of(judging: Judging, action: Aimed) -> dict:
 
 
 def ally_of(action: Aimed) -> uuid.UUID | None:
-    """맞을 앉은 사람(#803). 던지기에만 있다. 없으면 None."""
-    return action.target if isinstance(action, ThrowAction) else None
-
-
-def mark_harm(judging: Judging, member: TableMember, item: CatalogItem, action: Aimed, check: CheckAction) -> None:
     """
-    해로운 물건이면 그 대상과 싸운 것으로 적는다. 타격으로 판정하면 judge_check 가 적으므로 여기서는 적지 않는다.
+    맞을 앉은 사람(#803). 던지기와 기술(#805 ②)에만 있다. 없으면 None.
+
+    기술은 자기 아닌 동료에게 쓸 때만 이 길로 온다(자기 자신에게는 굴리지 않는다).
+    """
+    return action.target if isinstance(action, ThrowAction | SkillAction) else None
+
+
+def mark_harm(judging: Judging, member: TableMember, effects: list, action: Aimed, check: CheckAction) -> None:
+    """
+    해로운 효과면 그 대상과 싸운 것으로 적는다. 타격으로 판정하면 judge_check 가 적으므로 여기서는 적지 않는다.
 
     앉은 사람(#803)과는 싸운 것으로 적지 않는다. 싸움의 기록은 몬스터와 NPC 의 차례가 읽는다.
     """
-    if not is_harmful(item.effects) or check.harm is not None or ally_of(action) is not None:
+    if not is_harmful(effects) or check.harm is not None or ally_of(action) is not None:
         return
     if action.monster is not None:
         mark_fight(judging, find_scene_monster(judging.monsters, action.monster).state, member)
@@ -157,12 +164,14 @@ def adjust_struck(judging: Judging, struck: Struck, key: str, amount: int) -> li
     return [resources.shift_document(shift, struck.owner_id)]
 
 
-def apply_after_hit(judging: Judging, item: CatalogItem, action: Aimed, prank: bool = False) -> dict:
+def apply_after_hit(
+    judging: Judging, effects: list, action: Aimed, prank: bool = False, trigger: Trigger = Trigger.ITEM
+) -> dict:
     """
     맞힌 대상에게 풀기와 부상과 맞추기를 적힌 차례대로 낸다. 푼 것(cured), 입힌 것(injured), 맞춘 수치(resources)다.
     맞추기(#804)는 그 쪽(앉은 사람, 인물, 몬스터)이 가지는 수치에만 든다(규칙의 resources[].holders).
 
-    prank 면 동료의 장난이다(#803). 짧은 부상만 입힌다.
+    prank 면 동료의 장난이다(#803). 짧은 부상만 입힌다. trigger 는 부상이 어디서 왔나다(물건, 기술).
     """
     struck = struck_of(judging, action)
     if struck is None:
@@ -171,11 +180,11 @@ def apply_after_hit(judging: Judging, item: CatalogItem, action: Aimed, prank: b
     cured: list[dict] = []
     injured: list[dict] = []
     shifts: list[dict] = []
-    for one in item.effects:
+    for one in effects:
         if one.kind == EffectKind.CURE:
             cured.extend(cure(judging, rows, one.injuries))
         elif one.kind == EffectKind.INJURE:
-            injured.append(injure(judging, rows, one.injury, struck.immune, prank))
+            injured.append(injure(judging, rows, one.injury, struck.immune, prank, trigger))
         elif one.kind == EffectKind.ADJUST:
             shifts.extend(adjust_struck(judging, struck, one.resource, one.amount))
     return {'cured': cured, 'injured': injured, 'resources': shifts}
@@ -190,7 +199,7 @@ def judge_use_on(judging: Judging, member: TableMember, action: UseAction) -> di
     """
     item = judging.items[action.item]
     rule = judging.ruleset.item_check
-    check = to_check(judging, item, action, rule.ability, rule.difficulty)
+    check = to_check(judging, item.effects, action, rule.ability, rule.difficulty)
     target = target_of(judging, action)
     terms = {'ability': check.ability, 'difficulty': check.difficulty}
     if items.count_of(member.sheet, action.item) < 1:
@@ -198,11 +207,11 @@ def judge_use_on(judging: Judging, member: TableMember, action: UseAction) -> di
     gone = monster_gone(judging, member, action.monster) if action.monster is not None else None
     if gone is not None:
         return {'item_use': {**use_document(item, member, Reason.TARGET_GONE, target), **terms}, 'target_gone': gone}
-    mark_harm(judging, member, item, action, check)
+    mark_harm(judging, member, item.effects, action, check)
     items.remove_items(member.sheet, action.item, 1)
     outcome = judge_check(judging, member, check)
     applied = (
-        apply_after_hit(judging, item, action)
+        apply_after_hit(judging, item.effects, action)
         if landed(outcome, check)
         else {'cured': [], 'injured': [], 'resources': []}
     )

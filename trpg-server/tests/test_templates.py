@@ -39,6 +39,13 @@ from app.engine.templates import (
 RELEASED = {
     Template.SRD5: '4cf23d19eb4a1d4d52250d3102a5cd8d2286cefa856ae3f624893cc9075177a4',
     Template.HORROR: '7b6ff2351cb5b0544bcad8d8a7d5936ecf42e0d7ffa6cca7c4047f3238abd700',
+    Template.LIGHT: '963d1cbabd573f357755d30b9efdf4468d475c31fa7fbfde15060f75f717d43a',
+}
+# 상대에게 쓰는 기술과 맞히는 판정(target foe, check, #805 ②)을 더하기 전의 해시.
+# 상대에게 쓰는 기술과 기술마다의 판정 칸을 뺀 규칙은 그때와 같아야 한다
+BEFORE_SKILL_TARGETS = {
+    Template.SRD5: '4cf23d19eb4a1d4d52250d3102a5cd8d2286cefa856ae3f624893cc9075177a4',
+    Template.HORROR: '7b6ff2351cb5b0544bcad8d8a7d5936ecf42e0d7ffa6cca7c4047f3238abd700',
     Template.LIGHT: '6ce8383bda6808e916e20803e374f056a99df7bd858c11ba3b38b7bfdf4c32bd',
 }
 # 기술(skills, #805)을 더하기 전의 해시. 그 칸을 뺀 규칙은 그때와 같아야 한다
@@ -141,6 +148,18 @@ def fingerprint(
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
+def fingerprint_before_skill_targets(rules: Ruleset) -> str:
+    """상대에게 쓰는 기술을 빼고 기술마다 맞히는 판정(check, #805 ②)의 칸을 뺀 규칙의 해시."""
+    values = dumped(rules, resources=True, skills=True)
+    values['skills'] = [
+        {key: value for key, value in skill.items() if key != 'check'}
+        for skill in values['skills']
+        if skill['target'] != 'foe'
+    ]
+    canonical = json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
 def fingerprint_without_resource_fields(rules: Ruleset, new_fields: tuple[str, ...]) -> str:
     """수치마다 new_fields 의 칸을 뺀 규칙의 해시. 수치에 칸을 더하기 전의 해시와 견줄 때 쓴다."""
     values = dumped(rules, resources=True)
@@ -197,6 +216,11 @@ def test_released_templates_keep_their_values():
         assert fingerprint(TEMPLATES[template].rules, resources=True, skills=True) == expected, (
             f'{template.value} 의 값이 바뀌었다. 이미 내놓은 템플릿의 값은 고치지 않는다. 새 이름으로 하나 더 낸다'
         )
+
+
+def test_adding_the_skill_targets_kept_the_other_values():
+    for template, expected in BEFORE_SKILL_TARGETS.items():
+        assert fingerprint_before_skill_targets(TEMPLATES[template].rules) == expected
 
 
 def test_adding_the_skills_kept_the_other_values():

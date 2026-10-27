@@ -341,7 +341,8 @@ class ItemActionNote:
 @dataclass(frozen=True)
 class SkillNote:
     """
-    기술이나 주문을 쓴 결과(#805). 엔진이 정한 것이다. 판정이 없다.
+    기술이나 주문을 쓴 결과(#805). 엔진이 정한 것이다.
+    rolled 면 맞히는 판정을 했다(#805 ②). 맞았는지와 HP 의 변화는 판정의 줄이 적고, 이 줄은 판정 앞에 붙는다.
 
     done 이 거짓이면 쓰지 못했다. 까닭은 reason 이다(not_known 모른다, cost_short 비용이 모자랐다, target_gone 받을
     사람이 없었다, friendly_fire_off 동료를 해칠 수 없게 바뀌었다). target 은 받은 사람의 캐릭터 이름이고, 자기
@@ -354,6 +355,7 @@ class SkillNote:
     target: str | None = None
     cost: list[ResourceNote] = field(default_factory=list)
     impact: Impact | None = None
+    rolled: bool = False
     cured: list[str] = field(default_factory=list)
     injured: list[str] = field(default_factory=list)
     resisted: list[str] = field(default_factory=list)
