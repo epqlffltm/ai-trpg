@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/home/PublicRows.tsx
-// 공개된 것. TRPG 의 시나리오와 chat 의 캐릭터를 서비스마다 한 줄씩. 로그인하지 않아도 보인다(#530).
+// 공개된 것. TRPG 의 시나리오, chat 의 캐릭터, story 의 세계관을 서비스마다 한 줄씩. 로그인하지 않아도 보인다(#530).
 
 import { ListSection } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -8,13 +8,15 @@ import { ItemCard } from '../../components/ItemCard';
 import { genreLabel } from '../trpg/labels';
 import { ratingBadge } from './labels';
 import { listStatus } from './listStatus';
-import { publicCharactersQuery, publicScenariosQuery } from './queries';
+import { StoryWorldCard } from '../story/StoryWorldCard';
+import { publicCharactersQuery, publicScenariosQuery, publicWorldsQuery } from './queries';
 
 export function PublicRows({ signedIn }: { signedIn: boolean }) {
   return (
     <>
       <PublicScenariosRow signedIn={signedIn} />
       <PublicCharactersRow signedIn={signedIn} />
+      <PublicWorldsRow signedIn={signedIn} />
     </>
   );
 }
@@ -64,6 +66,26 @@ function PublicCharactersRow({ signedIn }: { signedIn: boolean }) {
             title={character.name}
             meta={[ratingBadge(character.rating), ...character.tags]}
           />
+        ))}
+      </ul>
+    </ListSection>
+  );
+}
+
+function PublicWorldsRow({ signedIn }: { signedIn: boolean }) {
+  const query = useQuery(publicWorldsQuery(signedIn));
+  const items = query.data?.items ?? [];
+  return (
+    <ListSection
+      title="새로 공개된 세계관"
+      status={listStatus(query, items.length)}
+      action={<Link to="/story">더 보기</Link>}
+      emptyText="아직 공개된 세계관이 없습니다."
+      onRetry={() => void query.refetch()}
+    >
+      <ul className="item-grid">
+        {items.map((world) => (
+          <StoryWorldCard key={world.id} world={world} />
         ))}
       </ul>
     </ListSection>

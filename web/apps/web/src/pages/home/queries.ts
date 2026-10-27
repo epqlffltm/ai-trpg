@@ -4,6 +4,7 @@
 
 import { queryOptions } from '@tanstack/react-query';
 import { fetchMyConversations, fetchMyTables, fetchPublicCharacters, fetchPublicScenarios } from '../../api/lists';
+import { fetchPublicWorlds } from '../../api/storyWorlds';
 
 /** 줄마다 보이는 수 */
 export const ROW_LIMIT = 6;
@@ -19,6 +20,13 @@ export function publicCharactersQuery(signedIn: boolean) {
   return queryOptions({
     queryKey: ['chat', 'characters', { signedIn, limit: ROW_LIMIT }],
     queryFn: ({ signal }) => fetchPublicCharacters(ROW_LIMIT, signal),
+  });
+}
+
+export function publicWorldsQuery(signedIn: boolean) {
+  return queryOptions({
+    queryKey: ['story', 'public-worlds', 'home', { signedIn, limit: ROW_LIMIT }],
+    queryFn: ({ signal }) => fetchPublicWorlds({ limit: ROW_LIMIT, offset: 0 }, signal),
   });
 }
 
