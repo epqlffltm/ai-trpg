@@ -8,18 +8,18 @@
 // - 시작: 가득(max) 또는 비운 채(min)
 // - 짧은 휴식과 긴 휴식마다: 바꾸지 않음, 올리기·내리기(양 1~999), 채우기, 비우기
 // 숫자 칸은 고치는 동안 글로 둔다. 보낼 때 정수로 바꾼다.
-// 라운드마다의 변화와 문턱(each_round, at_min, at_max)과 보이기(visibility)는 아직 고치는 칸이 없다.
-// 받은 값을 그대로 지녔다가 보낸다(저장할 때 지워지지 않게). 새 수치는 없음과 모두다.
+// 라운드마다의 변화와 문턱(each_round, at_min, at_max), 보이기(visibility), 가진 쪽(holders)은 아직 고치는 칸이 없다.
+// 받은 값을 그대로 지녔다가 보낸다(저장할 때 지워지지 않게). 새 수치는 없음, 모두, 캐릭터만이다.
 
 import type { Resource, ResourceShift } from '../../../../api/types';
 
 type ShiftKind = ResourceShift['kind'];
 /** 고치는 칸이 아직 없어 받은 대로 지녔다가 보내는 것 */
-type KeptFields = Pick<Resource, 'each_round' | 'at_min' | 'at_max' | 'visibility'>;
+type KeptFields = Pick<Resource, 'each_round' | 'at_min' | 'at_max' | 'visibility' | 'holders'>;
 type StartKind = Resource['start'];
 
 export const RESOURCES_MAX = 6;
-const NEW_KEPT: KeptFields = { each_round: null, at_min: null, at_max: null, visibility: 'everyone' };
+const NEW_KEPT: KeptFields = { each_round: null, at_min: null, at_max: null, visibility: 'everyone', holders: ['characters'] };
 const VALUE_MAX = 999;
 const KEY_PATTERN = /^[a-z][a-z0-9_]{0,19}$/;
 const NAME_MAX = 30;
@@ -67,7 +67,7 @@ export function resourceDraft(resource: Resource): ResourceDraft {
     start: resource.start,
     short: shiftDraft(resource.rest.short),
     long: shiftDraft(resource.rest.long),
-    kept: { each_round: resource.each_round ?? null, at_min: resource.at_min ?? null, at_max: resource.at_max ?? null, visibility: resource.visibility },
+    kept: { each_round: resource.each_round ?? null, at_min: resource.at_min ?? null, at_max: resource.at_max ?? null, visibility: resource.visibility, holders: resource.holders },
   };
 }
 

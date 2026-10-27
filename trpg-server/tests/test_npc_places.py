@@ -589,6 +589,6 @@ def test_the_people_lines_tell_the_place():
 def test_to_people_names_the_place_of_a_placed_person():
     placed, unplaced = person(GATE), person(None)
 
-    states = to_people([placed, unplaced], SimpleNamespace(injuries=[]), {GATE: '성문'})
+    states = to_people([placed, unplaced], SimpleNamespace(injuries=[], resources=()), {GATE: '성문'})
 
     assert [state.place for state in states] == ['성문', None]

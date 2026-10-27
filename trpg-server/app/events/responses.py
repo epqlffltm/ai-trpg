@@ -211,9 +211,12 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'max_hp',
     ),
     # 수치(#804)는 HP 처럼 공개다. 숨긴 수치는 아직 없다
+    # 누구의 수치인지는 캐릭터(user_id), NPC(entry_id), 몬스터(monster_id) 중 하나와 그 이름(character_name)이다(#804)
     EventType.RESOURCE_CHANGED: (
         'round',
         'user_id',
+        'entry_id',
+        'monster_id',
         'character_name',
         'resource',
         'name',

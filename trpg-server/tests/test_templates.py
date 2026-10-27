@@ -39,6 +39,12 @@ from app.engine.templates import (
 RELEASED = {
     Template.SRD5: 'f6774238641d3de8e62317632af007adfbf62042bbf6a2df165d7a79fdb30e82',
     Template.HORROR: '7a0782646dbededdc2b9e8d642f2d7ae8023e9aaac0a21ba9109648bc37b3fa5',
+    Template.LIGHT: '7fbcfa9ecb20c4722f288fce8f42b769920f663ac19a7fe4b00c6abcb9fc3e19',
+}
+# 수치의 가진 쪽(holders, #804 ③)을 더하기 전의 해시. 그 칸을 뺀 규칙은 그때와 같아야 한다
+BEFORE_HOLDERS = {
+    Template.SRD5: 'f6774238641d3de8e62317632af007adfbf62042bbf6a2df165d7a79fdb30e82',
+    Template.HORROR: '7a0782646dbededdc2b9e8d642f2d7ae8023e9aaac0a21ba9109648bc37b3fa5',
     Template.LIGHT: '361759bf24ba807cd9441e5d390d86c2695b47f18fcfa0ea0362fad5916e5053',
 }
 # 수치의 보이기(visibility, #804 ③)를 더하기 전의 해시. 그 칸을 뺀 규칙은 그때와 같아야 한다
@@ -183,13 +189,18 @@ def test_released_templates_keep_their_values():
         )
 
 
+def test_adding_the_holders_kept_the_other_values():
+    for template, expected in BEFORE_HOLDERS.items():
+        assert fingerprint_without_resource_fields(TEMPLATES[template].rules, ('holders',)) == expected
+
+
 def test_adding_the_visibility_kept_the_other_values():
     for template, expected in BEFORE_VISIBILITY.items():
-        assert fingerprint_without_resource_fields(TEMPLATES[template].rules, ('visibility',)) == expected
+        assert fingerprint_without_resource_fields(TEMPLATES[template].rules, ('visibility', 'holders')) == expected
 
 
 def test_adding_the_thresholds_kept_the_other_values():
-    fields = ('each_round', 'at_min', 'at_max', 'visibility')
+    fields = ('each_round', 'at_min', 'at_max', 'visibility', 'holders')
     for template, expected in BEFORE_THRESHOLDS.items():
         assert fingerprint_without_resource_fields(TEMPLATES[template].rules, fields) == expected
 

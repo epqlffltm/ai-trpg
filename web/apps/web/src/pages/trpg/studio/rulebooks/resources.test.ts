@@ -21,6 +21,7 @@ const MANA: Resource = {
   at_min: 'stunned',
   at_max: null,
   visibility: 'owner',
+  holders: ['characters', 'npcs'],
 };
 
 type Outcome = NonNullable<Declaration['outcome']>;

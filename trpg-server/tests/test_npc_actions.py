@@ -214,6 +214,8 @@ async def test_only_the_people_in_the_scene_are_listed(client: AsyncClient, me: 
     lady = {'id': world['lady']['id'], 'name': '악역영애', 'status': 'alive', 'injuries': [], 'named': False}
     # 판에 자리를 적지 않았다. 장면의 글로 나온 인물이다(#282)
     lady.update(attitude='neutral', items=[], merchant=False, place_id=None)
+    # 판의 규칙에 수치가 없다(#804)
+    lady.update(resources=[])
     # 몬스터가 없는 판이다
     assert cast == {'round': 1, 'people': [lady], 'monsters': []}
 

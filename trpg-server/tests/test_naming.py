@@ -312,7 +312,15 @@ async def test_the_named_person_is_listed_by_the_true_name(
 
     assert cast['round'] == 2
     assert cast['people'] == [
-        {'id': world['lady']['id'], 'name': '비올레타', 'status': 'alive', 'injuries': [], 'named': True, **NEUTRAL}
+        {
+            'id': world['lady']['id'],
+            'name': '비올레타',
+            'status': 'alive',
+            'injuries': [],
+            'named': True,
+            'resources': [],
+            **NEUTRAL,
+        }
     ]
 
 

@@ -16,6 +16,8 @@ from server_core.auth.dependencies import CurrentUser
 from app.assets.routing import Paging, Session
 from app.billing.models import NarrationCharge
 from app.core.dice import Rolling
+from app.engine.resources import is_open
+from app.engine.ruleset import ResourceHolder, Ruleset
 from app.rounds import service, state, trades
 from app.rounds.cast import Scene, is_named
 from app.rounds.closing import RoundCloser, closer_of
@@ -38,6 +40,8 @@ from app.tables import injuries, monster_items, npc_items, resources
 from app.tables.carried import Carried
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableStatus
+from app.tables.resources import Bearer
+from app.tables.schemas import ResourceOut
 
 router = APIRouter(prefix='/tables/{table_id}/rounds', tags=['rounds'])
 
@@ -150,11 +154,35 @@ def to_carried(held: list[Carried], things: dict[uuid.UUID, CatalogItem]) -> lis
     ]
 
 
-def to_cast(round_: Round, scene: Scene, things: dict[uuid.UUID, CatalogItem]) -> SceneCastOut:
+def open_resources(ruleset: Ruleset | None, bearer: Bearer, holder: ResourceHolder) -> list[ResourceOut]:
+    """
+    인물이나 몬스터의 수치 중 모두가 보는 것(#804). 규칙이 없으면(수치가 없는 판) 빈 목록이다.
+
+    인물과 몬스터에는 주인이 없어, 가진 사람만 보는 수치도 아무도 숫자로 보지 않는다.
+    """
+    if ruleset is None:
+        return []
+    return [
+        ResourceOut(
+            key=level.resource.key,
+            name=level.resource.name,
+            value=level.value,
+            min=level.resource.min,
+            max=level.maximum,
+        )
+        for level in resources.levels_of(ruleset, bearer, holder)
+        if is_open(level.resource)
+    ]
+
+
+def to_cast(
+    round_: Round, scene: Scene, things: dict[uuid.UUID, CatalogItem], ruleset: Ruleset | None = None
+) -> SceneCastOut:
     """
     이번 장면의 인물과 몬스터들을 앉은 사람에게 보여 주는 응답으로 바꾼다. 이름과 생사(와 몸 상태)를 싣는다.
 
     인물과 몬스터 모두 지닌 물건도 싣는다. things 는 판의 물건들이다(이름).
+    판의 규칙(ruleset)이 있으면 모두가 보는 수치(#804)도 싣는다.
     """
     people = [
         PersonOut(
@@ -167,6 +195,7 @@ def to_cast(round_: Round, scene: Scene, things: dict[uuid.UUID, CatalogItem]) -
             items=to_carried(npc_items.carried(member.npc, member.definition), things),
             merchant=trades.is_merchant(member),
             place_id=member.npc.place_id,
+            resources=open_resources(ruleset, member.npc, ResourceHolder.NPCS),
         )
         for member in scene.cast
     ]
@@ -179,6 +208,7 @@ def to_cast(round_: Round, scene: Scene, things: dict[uuid.UUID, CatalogItem]) -
             condition=monster_condition(monster),
             injuries=injuries.active_keys(monster.state.injuries),
             items=to_carried(monster_items.carried(monster.state, monster.definition), things),
+            resources=open_resources(ruleset, monster.state, ResourceHolder.MONSTERS),
         )
         for monster in scene.monsters
     ]
@@ -255,8 +285,8 @@ async def read_scene_cast(table_id: uuid.UUID, user: CurrentUser, session: Sessi
     자리가 있는 인물은 살아 있는 캐릭터가 서 있는 장소들의 인물, 없는 인물은 장면에 이름이나 호칭이 나온 인물만
     들어간다(#282). 테이블의 인물 전부가 아니다.
     """
-    round_, scene, things = await service.get_scene_cast(session, user.user_id, table_id)
-    return to_cast(round_, scene, things)
+    round_, scene, things, ruleset = await service.get_scene_cast(session, user.user_id, table_id)
+    return to_cast(round_, scene, things, ruleset)
 
 
 @router.get('/{number}/charges', response_model=list[ChargeOut], status_code=status.HTTP_200_OK)

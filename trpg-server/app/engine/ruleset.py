@@ -719,6 +719,17 @@ class Armor(Part):
         return self
 
 
+class ResourceHolder(enum.StrEnum):
+    """수치를 누가 가지나(#804). 수치마다 하나 이상이다."""
+
+    # 앉은 사람의 캐릭터(시트)
+    CHARACTERS = 'characters'
+    # 테이블의 NPC(인물)
+    NPCS = 'npcs'
+    # 테이블의 몬스터
+    MONSTERS = 'monsters'
+
+
 class ResourceVisibility(enum.StrEnum):
     """수치를 누가 보나(#804). 방장도 이 규칙대로만 본다. 숨긴 수치도 서술자에게는 말(네 단계)로 간다."""
 
@@ -798,6 +809,7 @@ class Resource(Part):
     at_min 과 at_max 는 문턱이다(#804). 값이 최소(최대)에 닿아 있는 동안 그 부상(규칙의 injuries 의 key)을 입는다.
     문턱을 벗어나면 바로 풀린다. 부상은 수치의 그림자다(app/rounds/resource_rounds.py).
     visibility 는 누가 숫자를 보나다(#804). 비우면 모두다.
+    holders 는 누가 이 수치를 가지나다(#804, 캐릭터·NPC·몬스터). 비우면 캐릭터만이다. 최대는 각자의 능력치로 정한다.
     """
 
     key: Key
@@ -810,6 +822,16 @@ class Resource(Part):
     at_min: Key | None = None
     at_max: Key | None = None
     visibility: ResourceVisibility = ResourceVisibility.EVERYONE
+    holders: Annotated[tuple[ResourceHolder, ...], Field(min_length=1, max_length=len(ResourceHolder))] = (
+        ResourceHolder.CHARACTERS,
+    )
+
+    @model_validator(mode='after')
+    def reject_repeated_holders(self) -> Self:
+        """같은 쪽을 두 번 적지 않는다."""
+        if len(set(self.holders)) != len(self.holders):
+            raise ValueError('같은 가진 쪽(holders)을 두 번 적었습니다.')
+        return self
 
     @model_validator(mode='after')
     def require_room_above_min(self) -> Self:
