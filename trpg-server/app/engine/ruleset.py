@@ -20,6 +20,10 @@ from typing import Annotated, Self
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from app.engine.item_effects import EffectKind as ItemEffectKind
+from app.engine.item_effects import Effects
+from app.engine.keys import Key, Name
+
 # 규칙 하나에 둘 수 있는 능력치, 난이도, 양의 등급의 수. 시트와 화면이 감당할 수 있는 만큼이다
 RULESET_MAX_ABILITIES = 12
 RULESET_MAX_DIFFICULTIES = 10
@@ -65,11 +69,10 @@ RULESET_MAX_HIT_WEIGHT = 100
 RULESET_MAX_RESOURCES = 6
 # 수치 하나가 가질 수 있는 가장 큰 값과, 쉬기로 한 번에 올리고 내리는 양의 상한
 RESOURCE_MAX_VALUE = 999
+# 규칙 하나에 둘 수 있는 기술·주문(#805)의 수와, 한 번 쓸 때 내는 비용의 상한
+RULESET_MAX_SKILLS = 20
+SKILL_MAX_COST = 99
 
-# 코드와 데이터가 서로를 가리킬 때 쓰는 이름. 영어 소문자로 시작하고, 소문자와 숫자와 밑줄만 쓴다
-Key = Annotated[str, StringConstraints(pattern=r'^[a-z][a-z0-9_]*$', max_length=20)]
-# 사람에게 보여 주는 이름
-Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=30)]
 Number = Annotated[int, Field(ge=0, le=RULESET_MAX_NUMBER)]
 
 
@@ -124,6 +127,23 @@ class Magnitude(Part):
     name: Name
     count: Annotated[int, Field(ge=1, le=RULESET_MAX_DICE)]
     sides: Annotated[int, Field(ge=RULESET_MIN_DIE, le=RULESET_MAX_DIE)]
+
+
+def effects_fit(ruleset: 'Ruleset', effects: list) -> bool:
+    """효과들이 가리키는 양의 등급, 부상, 수치가 모두 이 규칙에 있는가(#805 의 기술. 물건은 게시할 때 본다)."""
+    magnitudes = {magnitude.key for magnitude in ruleset.magnitudes}
+    injuries = {injury.key for injury in ruleset.injuries}
+    resources = {resource.key for resource in ruleset.resources}
+    for effect in effects:
+        if effect.kind in (ItemEffectKind.HEAL, ItemEffectKind.DAMAGE) and effect.magnitude not in magnitudes:
+            return False
+        if effect.kind == ItemEffectKind.CURE and not set(effect.injuries) <= injuries:
+            return False
+        if effect.kind == ItemEffectKind.INJURE and effect.injury not in injuries:
+            return False
+        if effect.kind == ItemEffectKind.ADJUST and effect.resource not in resources:
+            return False
+    return True
 
 
 def find_duplicates(keys: list[str]) -> list[str]:
@@ -842,6 +862,39 @@ class Resource(Part):
         return self
 
 
+class SkillTarget(enum.StrEnum):
+    """기술을 누구에게 쓰나(#805)."""
+
+    # 쓰는 사람 자신에게만
+    SELF = 'self'
+    # 자신이나 같은 테이블의 동료에게. 비우면 자신이다
+    ALLY = 'ally'
+
+
+class SkillCost(Part):
+    """기술 한 번의 비용(#805). 쓰는 사람의 수치(resources 의 key) 하나를 그만큼 낸다."""
+
+    resource: Key
+    amount: Annotated[int, Field(ge=1, le=SKILL_MAX_COST)]
+
+
+class Skill(Part):
+    """
+    기술이나 주문 하나(#805). 예: 치유의 손길(마나 2, 동료, 가볍게 회복), 기합(스태미나 1, 자신, 마나 +1).
+
+    key 는 시트(아는 기술)와 행동이 가리키는 이름표, name 은 보이는 이름이다.
+    cost 는 쓸 때 내는 비용이다. 비우면 공짜다. 빗나가도 낸다. 모자라면 쓰지 못한다.
+    target 은 누구에게 쓰나다. effects 는 대상에게 적힌 차례대로 드는 일들이다. 소모품의 효과와 같다
+    (app/engine/item_effects.py, 화염구와 화염병이 같은 damage). 효과가 없으면 쓰고 아무 일도 없다(서술이 맡는다).
+    """
+
+    key: Key
+    name: Name
+    cost: SkillCost | None = None
+    target: SkillTarget = SkillTarget.SELF
+    effects: Effects = []
+
+
 class Ruleset(Part):
     """
     규칙 한 벌.
@@ -905,6 +958,27 @@ class Ruleset(Part):
     item_check: ItemCheck | None
     # HP 말고 캐릭터가 가지는 수치들(#804). 비어 있으면 HP 뿐이다. 칸 자체는 늘 있어야 한다
     resources: Annotated[tuple[Resource, ...], Field(max_length=RULESET_MAX_RESOURCES)]
+    # 기술과 주문들(#805). 비어 있으면 기술이 없다. 누가 아는지는 시나리오의 시트에 적는다. 칸 자체는 늘 있어야 한다
+    skills: Annotated[tuple[Skill, ...], Field(max_length=RULESET_MAX_SKILLS)]
+
+    @model_validator(mode='after')
+    def reject_unknown_skills(self) -> Self:
+        """
+        기술의 이름표가 겹치지 않고, 비용의 수치와 효과가 가리키는 것(등급, 부상, 수치)이 이 규칙에 있어야 한다(#805).
+
+        비용은 쓰는 사람(캐릭터)이 내므로 그 수치를 캐릭터가 가져야 한다.
+        """
+        duplicates = find_duplicates([skill.key for skill in self.skills])
+        if duplicates:
+            raise ValueError(f'같은 기술이 두 번 있습니다: {", ".join(duplicates)}')
+        payable = {r.key for r in self.resources if ResourceHolder.CHARACTERS in r.holders}
+        unpaid = [skill.key for skill in self.skills if skill.cost is not None and skill.cost.resource not in payable]
+        if unpaid:
+            raise ValueError(f'기술의 비용이 캐릭터의 수치가 아닙니다: {", ".join(unpaid)}')
+        strangers = [skill.key for skill in self.skills if not effects_fit(self, skill.effects)]
+        if strangers:
+            raise ValueError(f'기술의 효과가 이 규칙에 없는 것을 가리킵니다: {", ".join(strangers)}')
+        return self
 
     @model_validator(mode='after')
     def reject_unknown_resources(self) -> Self:

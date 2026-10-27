@@ -329,6 +329,7 @@ def to_sheet(
             for level in resources.levels_of(ruleset, sheet)
             if shown_to(level.resource.visibility, is_owner)
         ],
+        skills=list(sheet.skills or []),
     )
 
 

@@ -634,6 +634,7 @@
       "ability": "dex",
       "difficulty": "medium"
     },
-    "resources": []
+    "resources": [],
+    "skills": []
   }
 }

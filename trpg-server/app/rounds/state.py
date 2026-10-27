@@ -112,6 +112,13 @@ def item_use_of(declaration: Declaration | None) -> dict | None:
     return declaration.outcome.get('item_use')
 
 
+def skill_use_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 기술 쓰기의 결과(app/rounds/skill_actions.py, #805). 아니었거나 결과가 없으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('skill_use')
+
+
 def item_throw_of(declaration: Declaration | None) -> dict | None:
     """이 선언에 적힌 물건 던지기의 결과(app/rounds/throws.py, #277). 아니었거나 결과가 없으면 None."""
     if declaration is None or declaration.outcome is None:

@@ -48,7 +48,7 @@ from app.engine.sheet import fits
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from tests.narration_model import asset_body
-from tests.sheets import SHEET, make_sheet
+from tests.sheets import SHEET, as_character, make_sheet
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -435,9 +435,9 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'rating': 'all',
         'openings': [OPENING],
         'recommended_players': {'min': 2, 'max': 3},
-        'pregens': [{**pregen, 'items': [], 'money': 0} for pregen in PREGENS],
+        'pregens': [{**pregen, 'sheet': as_character(pregen['sheet']), 'items': [], 'money': 0} for pregen in PREGENS],
         'character_modes': ['pregen', 'custom'],
-        'default_sheet': SHEET,
+        'default_sheet': as_character(SHEET),
         # 인물 항목이 모두 시트를 가졌다. 기본 NPC 시트는 없어도 된다
         'npc_sheets': [
             {

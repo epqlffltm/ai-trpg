@@ -37,6 +37,12 @@ from app.engine.templates import (
 # 이미 내놓은 템플릿의 값은 고치지 않는다. 고치고 싶으면 새 이름으로 하나 더 낸다.
 # 규칙의 모양에 칸이 새로 생겨 템플릿에 그 칸을 더한 것이면(있던 값은 그대로) 해시를 새로 적는다.
 RELEASED = {
+    Template.SRD5: '4cf23d19eb4a1d4d52250d3102a5cd8d2286cefa856ae3f624893cc9075177a4',
+    Template.HORROR: '7b6ff2351cb5b0544bcad8d8a7d5936ecf42e0d7ffa6cca7c4047f3238abd700',
+    Template.LIGHT: '6ce8383bda6808e916e20803e374f056a99df7bd858c11ba3b38b7bfdf4c32bd',
+}
+# 기술(skills, #805)을 더하기 전의 해시. 그 칸을 뺀 규칙은 그때와 같아야 한다
+BEFORE_SKILLS = {
     Template.SRD5: 'f6774238641d3de8e62317632af007adfbf62042bbf6a2df165d7a79fdb30e82',
     Template.HORROR: '7a0782646dbededdc2b9e8d642f2d7ae8023e9aaac0a21ba9109648bc37b3fa5',
     Template.LIGHT: '7fbcfa9ecb20c4722f288fce8f42b769920f663ac19a7fe4b00c6abcb9fc3e19',
@@ -107,13 +113,15 @@ BEFORE_NARRATION = {
 COMMERCIAL_NAMES = ('d&d', 'dungeons', '던전 앤 드래곤', '던전즈', 'pathfinder', '패스파인더', 'cthulhu', '크툴루')
 
 
-def dumped(rules: Ruleset, natures: bool = True, resources: bool = False) -> dict:
+def dumped(rules: Ruleset, natures: bool = True, resources: bool = False, skills: bool = False) -> dict:
     """
     규칙의 값. natures 가 거짓이면 부상의 성질(#799)과 그 뒤에 더한 물건을 쓰는 판정(item_check, #800)을 뺀다.
-    성질을 더하기 전의 해시와 견줄 때 쓴다. resources 가 거짓이면 가장 나중에 더한 수치(#804)를 뺀다.
-    지금의 값(RELEASED)과 견줄 때만 참으로 준다.
+    성질을 더하기 전의 해시와 견줄 때 쓴다. resources 가 거짓이면 수치(#804)를 뺀다.
+    skills 가 거짓이면 가장 나중에 더한 기술(#805)을 뺀다. 지금의 값(RELEASED)과 견줄 때만 둘 다 참으로 준다.
     """
     values = rules.model_dump(mode='json')
+    if not skills:
+        values.pop('skills')
     if not resources:
         values.pop('resources')
     if not natures:
@@ -124,9 +132,11 @@ def dumped(rules: Ruleset, natures: bool = True, resources: bool = False) -> dic
     return values
 
 
-def fingerprint(rules: Ruleset, without: tuple[str, ...] = (), natures: bool = True, resources: bool = False) -> str:
+def fingerprint(
+    rules: Ruleset, without: tuple[str, ...] = (), natures: bool = True, resources: bool = False, skills: bool = False
+) -> str:
     """규칙의 값을 정해진 차례의 JSON 으로 적어 해시를 낸다. without 의 칸은 빼고 낸다."""
-    values = {key: value for key, value in dumped(rules, natures, resources).items() if key not in without}
+    values = {key: value for key, value in dumped(rules, natures, resources, skills).items() if key not in without}
     canonical = json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
     return hashlib.sha256(canonical.encode()).hexdigest()
 
@@ -184,9 +194,14 @@ def test_every_file_in_the_folder_is_a_template():
 def test_released_templates_keep_their_values():
     assert set(RELEASED) == set(Template), '새 템플릿을 내면 RELEASED 에 그 해시를 적는다'
     for template, expected in RELEASED.items():
-        assert fingerprint(TEMPLATES[template].rules, resources=True) == expected, (
+        assert fingerprint(TEMPLATES[template].rules, resources=True, skills=True) == expected, (
             f'{template.value} 의 값이 바뀌었다. 이미 내놓은 템플릿의 값은 고치지 않는다. 새 이름으로 하나 더 낸다'
         )
+
+
+def test_adding_the_skills_kept_the_other_values():
+    for template, expected in BEFORE_SKILLS.items():
+        assert fingerprint(TEMPLATES[template].rules, resources=True) == expected
 
 
 def test_adding_the_holders_kept_the_other_values():

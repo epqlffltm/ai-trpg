@@ -222,7 +222,8 @@ def test_rejects_misshaped_resources(fields: dict):
 
 
 def test_a_ruleset_rejects_unknown_abilities_and_repeated_resources():
-    base = LIGHT.model_dump(mode='json')
+    # 기술(#805)은 수치를 비용으로 쓴다. 수치만 보려고 기술을 뺀다
+    base = {**LIGHT.model_dump(mode='json'), 'skills': []}
 
     with pytest.raises(ValidationError, match='능력치'):
         Ruleset.model_validate({**base, 'resources': [resource(max={'base': 1, 'ability': 'str'})]})
@@ -272,7 +273,8 @@ async def test_the_resources_of_a_rulebook_can_be_changed(client: AsyncClient, m
     rulebook = await post(client, combat.RULEBOOKS_URL, me, title='가벼운', template='light')
     url = f'{combat.RULEBOOKS_URL}/{rulebook["id"]}'
 
-    emptied = await client.patch(url, json={'resources': []}, headers=me)
+    # 템플릿의 기술(#805)이 수치를 비용으로 쓴다. 수치를 비우려면 기술도 함께 비운다
+    emptied = await client.patch(url, json={'resources': [], 'skills': []}, headers=me)
     wrong = await client.patch(url, json={'resources': [resource(max={'base': 1, 'ability': 'str'})]}, headers=me)
     kept = await client.patch(url, json={'title': '새 이름'}, headers=me)
 

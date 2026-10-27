@@ -26,6 +26,7 @@ DB 를 모른다. 시트의 소지품과 HP 와 부상을 고친다. 저장하�
 from app.engine import injury as injury_rules
 from app.engine.action import GiveAction, UseAction
 from app.engine.health import ChangeKind
+from app.engine.injury import Trigger
 from app.engine.item_effects import EffectKind
 from app.rounds import friendly_fire
 from app.rounds import injuries as round_injuries
@@ -93,29 +94,40 @@ def cure(judging: Judging, rows: list[TableInjury], keys: list[str]) -> list[dic
 
 
 def injure(
-    judging: Judging, rows: list[TableInjury], key: str, immune=round_injuries.NO_IMMUNITY, prank: bool = False
+    judging: Judging,
+    rows: list[TableInjury],
+    key: str,
+    immune=round_injuries.NO_IMMUNITY,
+    prank: bool = False,
+    trigger: Trigger = Trigger.ITEM,
 ) -> dict:
     """
     부상 하나를 입힌다(#800). 생긴 일의 문서를 돌려준다. 이미 입고 있었거나 면역이면 부상이 비어 있다.
 
     prank 면 동료의 장난이다(#803). 오래 가는 것과 결손은 입히지 않는다(문서의 spared).
+    trigger 는 물건(item)이나 기술(skill, #805)이다. 부상의 출처가 된다.
     """
-    return round_injuries.take_from_item(judging.ruleset, key, rows, judging.table.id, judging.moment, immune, prank)
+    return round_injuries.take_from_item(
+        judging.ruleset, key, rows, judging.table.id, judging.moment, immune, prank, trigger
+    )
 
 
-def apply_to_member(judging: Judging, target: TableMember, item: CatalogItem, prank: bool = False) -> dict:
+def apply_to_member(
+    judging: Judging, target: TableMember, effects: list, prank: bool = False, trigger: Trigger = Trigger.ITEM
+) -> dict:
     """
-    물건의 효과들을 앉은 사람 하나에게 차례대로 낸다(#800). 굴리지 않는다.
+    효과들을 앉은 사람 하나에게 차례대로 낸다(#800). 굴리지 않는다. 물건과 기술(#805)이 함께 쓴다.
 
     돌려주는 것은 HP 의 변화(effect, 회복이나 피해 하나), 푼 부상들(cured), 입힌 부상들(injured),
     맞춘 수치들(resources, #804)이다. prank 면 동료의 장난이다(#803). 피해와 부상이 상한을 지킨다.
+    trigger 는 효과가 어디서 왔나다(물건 item, 기술 skill). 입힌 부상의 출처가 된다.
     """
     effect = None
     cured: list[dict] = []
     injured: list[dict] = []
     shifts: list[dict] = []
     rows = target.sheet.injuries
-    for one in item.effects:
+    for one in effects:
         if one.kind == EffectKind.HEAL:
             effect = change_sheet(judging, target, ChangeKind.RECOVERY, one.magnitude)
         elif one.kind == EffectKind.DAMAGE:
@@ -123,7 +135,7 @@ def apply_to_member(judging: Judging, target: TableMember, item: CatalogItem, pr
         elif one.kind == EffectKind.CURE:
             cured.extend(cure(judging, rows, one.injuries))
         elif one.kind == EffectKind.INJURE:
-            injured.append(injure(judging, rows, one.injury, prank=prank))
+            injured.append(injure(judging, rows, one.injury, prank=prank, trigger=trigger))
         elif one.kind == EffectKind.ADJUST:
             shifts.extend(adjust(judging, target, one.resource, one.amount))
     return {'effect': effect, 'cured': cured, 'injured': injured, 'resources': shifts}
@@ -196,7 +208,7 @@ def judge_use(judging: Judging, member: TableMember, action: UseAction) -> dict:
         return {'item_use': use_document(item, member, reason, person(target)), 'effect': None}
     items.remove_items(member.sheet, action.item, 1)
     applied = (
-        apply_to_member(judging, target, item, is_prank_use(judging, member, item, target))
+        apply_to_member(judging, target, item.effects, is_prank_use(judging, member, item, target))
         if aimed
         else {'effect': None, 'cured': [], 'injured': [], 'resources': []}
     )

@@ -94,7 +94,7 @@ from app.engine.action import DoorDevice
 from app.engine.item_aids import Aids
 from app.engine.item_effects import Effects
 from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, InjuryNature, Key
-from app.engine.sheet import Sheet
+from app.engine.sheet import CharacterSheet, Sheet
 
 # 스타팅 하나. 공백이 아닌 글자가 하나는 있어야 한다. 빈 스타팅은 고를 수 없으니 받지 않는다.
 # 앞뒤 공백은 떼지 않는다. 줄바꿈으로 장면을 여는 것도 제작자의 글이다
@@ -253,7 +253,7 @@ class Pregen(BaseModel):
 
     name: CharacterName
     description: CharacterDescription = ''
-    sheet: Sheet | None = None
+    sheet: CharacterSheet | None = None
     # 이 프리젠을 고른 사람이 시작할 때 더 받는 소지품. 시나리오의 시작 소지품은 따로 받는다
     items: StartingItems = []
     # 이 프리젠을 고른 사람이 시작할 때 더 받는 돈(#278). 시나리오의 시작 돈(currency.starting)은 따로 받는다
@@ -1495,7 +1495,7 @@ class ScenarioCreate(AssetCreate):
     pregens: Pregens = []
     # 안 보내면 프리젠과 기본 시트를 허용한다. 플레이어가 숫자를 정하는 방식은 직접 적어야 켜진다
     character_modes: CharacterModes = list(DEFAULT_CHARACTER_MODES)
-    default_sheet: Sheet | None = None
+    default_sheet: CharacterSheet | None = None
     npc_sheets: NpcSheets = []
     default_npc_sheet: Sheet | None = None
     monster_sheets: MonsterSheets = []
@@ -1553,7 +1553,7 @@ class ScenarioUpdate(AssetUpdate):
     recommended_players: RecommendedPlayers | None = None
     pregens: Pregens | None = None
     character_modes: CharacterModes | None = None
-    default_sheet: Sheet | None = None
+    default_sheet: CharacterSheet | None = None
     npc_sheets: NpcSheets | None = None
     default_npc_sheet: Sheet | None = None
     monster_sheets: MonsterSheets | None = None
@@ -1616,7 +1616,7 @@ class ScenarioDetail(ScenarioSummary):
     recommended_players: RecommendedPlayers
     pregens: list[Pregen]
     character_modes: list[CharacterMode]
-    default_sheet: Sheet | None
+    default_sheet: CharacterSheet | None
     npc_sheets: list[NpcSheet]
     default_npc_sheet: Sheet | None
     monster_sheets: list[MonsterSheet]

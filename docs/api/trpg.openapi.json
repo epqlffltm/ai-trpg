@@ -1040,6 +1040,50 @@
         "title": "CharacterOut",
         "type": "object"
       },
+      "CharacterSheet": {
+        "additionalProperties": false,
+        "description": "캐릭터(앉은 사람)의 시트. 기본 시트와 프리젠의 시트다. 아는 기술(#805)이 더 있다. NPC 와 몬스터의 시트에는 없다.\n\nskills 는 룰북의 기술(rules.skills)의 이름표다. 비우면 아는 기술이 없다. 맞는지는 게시할 때 본다(knows_only).",
+        "properties": {
+          "abilities": {
+            "maxProperties": 12,
+            "patternProperties": {
+              "^[a-z][a-z0-9_]*$": {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 20
+            },
+            "title": "Abilities",
+            "type": "object"
+          },
+          "max_hp": {
+            "maximum": 999.0,
+            "minimum": 1.0,
+            "title": "Max Hp",
+            "type": "integer"
+          },
+          "skills": {
+            "default": [],
+            "items": {
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Skills",
+            "type": "array"
+          }
+        },
+        "required": [
+          "abilities",
+          "max_hp"
+        ],
+        "title": "CharacterSheet",
+        "type": "object"
+      },
       "CharacterUpdate": {
         "additionalProperties": false,
         "description": "캐릭터를 정할 때 받는 값. 보낸 것으로 캐릭터를 통째로 바꾼다.\n\n방식(mode)에 따라 적는 칸이 다르다.\n  - pregen: pregen_index 를 적는다. 이름이나 설명을 함께 보내면 그 칸은 보낸 것으로 고쳐 쓴다.\n  - custom: 이름을 적는다. 숫자는 시나리오의 기본 시트를 받는다.\n  - manual: 이름과 능력치의 점수(abilities)를 적는다. 최대 HP 는 적지 않는다. 규칙으로 구한다.\n  - point_buy: manual 과 같은 칸을 적는다. 점수는 규칙의 총점 안에서 살 수 있는 것이어야 한다.\n  - rolled: manual 과 같은 칸을 적는다. 점수는 먼저 굴려 둔 것을 남김없이 한 번씩 쓴 것이어야 한다.\n    굴리는 것은 다른 주소다(POST .../character/roll). 굴린 점수를 여기에 적어 보내는 것이 아니다.\n\n진행 중에 새 캐릭터를 들일 때도 같은 값을 받는다(POST .../character). 방식마다 적는 칸은 같다.\n\nmode 를 비우면 pregen_index 가 있으면 pregen, 없으면 custom 으로 본다.\n능력치를 적는 방식은 여럿이라, 능력치를 보낼 때는 mode 를 반드시 적는다.",
@@ -2129,6 +2173,7 @@
                     "rest": "#/components/schemas/RestAction",
                     "search": "#/components/schemas/SearchAction",
                     "sell": "#/components/schemas/SellAction",
+                    "skill": "#/components/schemas/SkillAction",
                     "steal": "#/components/schemas/StealAction",
                     "take": "#/components/schemas/TakeAction",
                     "throw": "#/components/schemas/ThrowAction",
@@ -2211,6 +2256,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ThrowAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SkillAction"
                   }
                 ]
               },
@@ -2245,6 +2293,9 @@
               },
               {
                 "$ref": "#/components/schemas/ItemUseOutcome"
+              },
+              {
+                "$ref": "#/components/schemas/SkillUseOutcome"
               },
               {
                 "$ref": "#/components/schemas/ItemThrowOutcome"
@@ -2342,6 +2393,7 @@
                     "rest": "#/components/schemas/RestAction",
                     "search": "#/components/schemas/SearchAction",
                     "sell": "#/components/schemas/SellAction",
+                    "skill": "#/components/schemas/SkillAction",
                     "steal": "#/components/schemas/StealAction",
                     "take": "#/components/schemas/TakeAction",
                     "throw": "#/components/schemas/ThrowAction",
@@ -2424,6 +2476,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ThrowAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SkillAction"
                   }
                 ]
               },
@@ -3364,6 +3419,7 @@
           "items_gained",
           "items_lost",
           "item_used",
+          "skill_used",
           "item_given",
           "item_thrown",
           "aid_used",
@@ -5731,7 +5787,7 @@
             "type": "string"
           },
           "sheet": {
-            "$ref": "#/components/schemas/Sheet"
+            "$ref": "#/components/schemas/CharacterSheet"
           }
         },
         "required": [
@@ -9476,7 +9532,7 @@
           "sheet": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Sheet"
+                "$ref": "#/components/schemas/CharacterSheet"
               },
               {
                 "type": "null"
@@ -9525,7 +9581,7 @@
           "sheet": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Sheet"
+                "$ref": "#/components/schemas/CharacterSheet"
               },
               {
                 "type": "null"
@@ -9555,7 +9611,7 @@
             "type": "string"
           },
           "sheet": {
-            "$ref": "#/components/schemas/Sheet"
+            "$ref": "#/components/schemas/CharacterSheet"
           },
           "taken_by": {
             "anyOf": [
@@ -9605,7 +9661,7 @@
             "type": "string"
           },
           "sheet": {
-            "$ref": "#/components/schemas/Sheet"
+            "$ref": "#/components/schemas/CharacterSheet"
           }
         },
         "required": [
@@ -12275,7 +12331,7 @@
       },
       "RulebookCreate": {
         "additionalProperties": false,
-        "description": "룰북을 만들 때 받는 값. 제목만 필수다.\n\n규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.\n방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.\n보내지 않으면 템플릿의 것이다. 수치(resources, #804)도 같다. 보내면 템플릿의 예시 대신 쓴다.",
+        "description": "룰북을 만들 때 받는 값. 제목만 필수다.\n\n규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.\n방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.\n보내지 않으면 템플릿의 것이다. 수치(resources, #804)와 기술(skills, #805)도 같다. 보내면 템플릿의 예시 대신 쓴다.",
         "properties": {
           "armor": {
             "anyOf": [
@@ -12313,6 +12369,21 @@
               }
             ],
             "title": "Resources"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Skill"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills"
           },
           "template": {
             "$ref": "#/components/schemas/Template",
@@ -12412,7 +12483,7 @@
       },
       "RulebookUpdate": {
         "additionalProperties": false,
-        "description": "룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\n규칙은 방어 규칙(armor)과 수치(resources, #804)만 고칠 수 있다.\n방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.\n이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.",
+        "description": "룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\n규칙은 방어 규칙(armor), 수치(resources, #804), 기술(skills, #805)만 고칠 수 있다.\n방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.\n이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.",
         "properties": {
           "armor": {
             "anyOf": [
@@ -12462,6 +12533,21 @@
               }
             ],
             "title": "Resources"
+          },
+          "skills": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Skill"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skills"
           },
           "title": {
             "anyOf": [
@@ -12691,6 +12777,14 @@
               }
             ]
           },
+          "skills": {
+            "items": {
+              "$ref": "#/components/schemas/Skill"
+            },
+            "maxItems": 20,
+            "title": "Skills",
+            "type": "array"
+          },
           "steal": {
             "anyOf": [
               {
@@ -12745,7 +12839,8 @@
           "equipment_slots",
           "armor",
           "item_check",
-          "resources"
+          "resources",
+          "skills"
         ],
         "title": "Ruleset",
         "type": "object"
@@ -12881,7 +12976,7 @@
           "default_sheet": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Sheet"
+                "$ref": "#/components/schemas/CharacterSheet"
               },
               {
                 "type": "null"
@@ -13175,7 +13270,7 @@
           "default_sheet": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Sheet"
+                "$ref": "#/components/schemas/CharacterSheet"
               },
               {
                 "type": "null"
@@ -13585,7 +13680,7 @@
           "default_sheet": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Sheet"
+                "$ref": "#/components/schemas/CharacterSheet"
               },
               {
                 "type": "null"
@@ -14278,6 +14373,14 @@
             "title": "Resources",
             "type": "array"
           },
+          "skills": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
           "worn": {
             "default": [],
             "items": {
@@ -14321,6 +14424,249 @@
           "heal"
         ],
         "title": "ShortRest",
+        "type": "object"
+      },
+      "Skill": {
+        "additionalProperties": false,
+        "description": "기술이나 주문 하나(#805). 예: 치유의 손길(마나 2, 동료, 가볍게 회복), 기합(스태미나 1, 자신, 마나 +1).\n\nkey 는 시트(아는 기술)와 행동이 가리키는 이름표, name 은 보이는 이름이다.\ncost 는 쓸 때 내는 비용이다. 비우면 공짜다. 빗나가도 낸다. 모자라면 쓰지 못한다.\ntarget 은 누구에게 쓰나다. effects 는 대상에게 적힌 차례대로 드는 일들이다. 소모품의 효과와 같다\n(app/engine/item_effects.py, 화염구와 화염병이 같은 damage). 효과가 없으면 쓰고 아무 일도 없다(서술이 맡는다).",
+        "properties": {
+          "cost": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillCost"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effects": {
+            "default": [],
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "adjust": "#/components/schemas/AdjustEffect",
+                  "cure": "#/components/schemas/CureEffect",
+                  "damage": "#/components/schemas/DamageEffect",
+                  "heal": "#/components/schemas/HealEffect",
+                  "injure": "#/components/schemas/InjureEffect"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/HealEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/CureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/DamageEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/InjureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/AdjustEffect"
+                }
+              ]
+            },
+            "maxItems": 5,
+            "title": "Effects",
+            "type": "array"
+          },
+          "key": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/SkillTarget",
+            "default": "self"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "Skill",
+        "type": "object"
+      },
+      "SkillAction": {
+        "additionalProperties": false,
+        "description": "기술이나 주문을 쓰는 행동(#805, app/rounds/skill_actions.py).\n\nskill 은 룰북의 기술(rules.skills)의 이름표다. 시트가 그 기술을 알아야 한다(시나리오의 시트에 적는다).\ntarget 은 받는 사람이다. 테이블에 앉은 사람이고, 비우면 자기 자신이다(받을 때 채운다).\n자신에게만 쓰는 기술(target self)에는 남을 적지 않는다. 굴리지 않는다. 비용은 쓸 때 낸다.",
+        "properties": {
+          "kind": {
+            "const": "skill",
+            "title": "Kind",
+            "type": "string"
+          },
+          "skill": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Skill",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "kind",
+          "skill"
+        ],
+        "title": "SkillAction",
+        "type": "object"
+      },
+      "SkillCost": {
+        "additionalProperties": false,
+        "description": "기술 한 번의 비용(#805). 쓰는 사람의 수치(resources 의 key) 하나를 그만큼 낸다.",
+        "properties": {
+          "amount": {
+            "maximum": 99.0,
+            "minimum": 1.0,
+            "title": "Amount",
+            "type": "integer"
+          },
+          "resource": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Resource",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "amount"
+        ],
+        "title": "SkillCost",
+        "type": "object"
+      },
+      "SkillTarget": {
+        "description": "기술을 누구에게 쓰나(#805).",
+        "enum": [
+          "self",
+          "ally"
+        ],
+        "title": "SkillTarget",
+        "type": "string"
+      },
+      "SkillUseOut": {
+        "description": "기술을 쓴 결과(#805). 엔진이 정했다(app/rounds/skill_actions.py). 자기와 동료에게는 굴리지 않는다.\n\n비용은 빗나가도 낸다. 쓰지 못했으면 내지 않는다.",
+        "properties": {
+          "cost": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceShiftOut"
+            },
+            "title": "Cost",
+            "type": "array"
+          },
+          "cured": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CuredOut"
+            },
+            "title": "Cured",
+            "type": "array"
+          },
+          "injured": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InjuredOut"
+            },
+            "title": "Injured",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "resources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceShiftOut"
+            },
+            "title": "Resources",
+            "type": "array"
+          },
+          "skill": {
+            "title": "Skill",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemPersonOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "used": {
+            "title": "Used",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "skill",
+          "name",
+          "used",
+          "reason",
+          "target"
+        ],
+        "title": "SkillUseOut",
+        "type": "object"
+      },
+      "SkillUseOutcome": {
+        "description": "기술을 쓰는 행동의 결과(#805). 회복하거나 다쳤으면 HP 의 변화(effect)가 함께 있다.",
+        "properties": {
+          "effect": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EffectOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skill_use": {
+            "$ref": "#/components/schemas/SkillUseOut"
+          }
+        },
+        "required": [
+          "skill_use"
+        ],
+        "title": "SkillUseOutcome",
         "type": "object"
       },
       "Snapshot": {
@@ -14372,7 +14718,7 @@
           "default_sheet": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Sheet"
+                "$ref": "#/components/schemas/CharacterSheet"
               },
               {
                 "type": "null"
@@ -14392,7 +14738,7 @@
             "type": "array"
           },
           "format": {
-            "default": 65,
+            "default": 66,
             "title": "Format",
             "type": "integer"
           },
@@ -15138,7 +15484,7 @@
           "default_sheet": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Sheet"
+                "$ref": "#/components/schemas/CharacterSheet"
               },
               {
                 "type": "null"

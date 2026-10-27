@@ -3,7 +3,7 @@
 // 시트는 룰북의 능력치마다 점수 하나와 최대 HP 다. 칸은 룰북의 능력치에서 만든다. 룰북을 바꿔 없어진 능력치는 저장할 때 빠진다.
 // 모두 비우면 시트 없음(null)이다. 게시 점검이 시트가 없다고 알린다. 일부만 채우면 보내지 않는다.
 
-import type { Ruleset, ScenarioSheet } from '../../../../api/types';
+import type { CharacterSheet, Ruleset, ScenarioSheet } from '../../../../api/types';
 import { wholeNumber } from '../rulebooks/rulebookForm';
 
 export const SHEET_MAX_HP = 999;
@@ -48,6 +48,11 @@ export function toSheet(draft: SheetDraft, rules: Ruleset): ScenarioSheet | null
   const abilities: Record<string, number> = {};
   for (const ability of rules.abilities) abilities[ability.key] = Number((draft.abilities[ability.key] ?? '').trim());
   return { abilities, max_hp: Number(draft.maxHp.trim()) };
+}
+
+/** 캐릭터의 시트(기본 시트, 프리젠의 시트)로. 아는 기술(#805)은 고치는 칸이 아직 없어 받은 대로 붙인다 */
+export function withSkills(sheet: ScenarioSheet | null, skills: string[]): CharacterSheet | null {
+  return sheet ? { ...sheet, skills } : null;
 }
 
 /** 목록의 한 줄. "근력 14 · 민첩 12 · HP 12", 시트가 없으면 null */

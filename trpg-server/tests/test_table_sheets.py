@@ -28,7 +28,7 @@ from app.main import API_PREFIX
 from app.tables import sheets
 from app.tables.models import GameTable, TableMember, TableSheet
 from tests.narration_model import with_model
-from tests.sheets import SHEET, handed_out, make_sheet
+from tests.sheets import SHEET, as_character, handed_out, make_sheet
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -147,8 +147,8 @@ async def test_a_table_allows_what_the_version_allows_unless_the_host_narrows_it
     table = await open_table(client, me)
 
     assert table['character_modes'] == ['pregen', 'custom']
-    assert table['default_sheet'] == DEFAULT_SHEET
-    assert [pregen['sheet'] for pregen in table['pregens']] == [ELF_SHEET, LADY_SHEET]
+    assert table['default_sheet'] == as_character(DEFAULT_SHEET)
+    assert [pregen['sheet'] for pregen in table['pregens']] == [as_character(ELF_SHEET), as_character(LADY_SHEET)]
 
 
 async def test_the_table_shows_the_rules_but_not_the_gm_guide(client: AsyncClient, me: dict[str, str]):
@@ -170,7 +170,7 @@ async def test_the_host_narrows_the_modes(
 
     assert table['character_modes'] == [mode for mode in ('pregen', 'custom') if mode in chosen]
     # 직접 만들기를 막은 테이블은 기본 시트를 보여 주지 않는다. 받을 사람이 없다
-    assert table['default_sheet'] == default_sheet
+    assert table['default_sheet'] == (default_sheet and as_character(default_sheet))
 
 
 @pytest.mark.parametrize(('allowed', 'chosen'), [(['pregen'], ['custom']), (['pregen'], ['pregen', 'custom'])])
@@ -259,7 +259,7 @@ async def test_no_one_has_a_sheet_before_the_table_starts(
 
     # 캐릭터를 정해도 시트는 아직 없다. 모집 중에는 바뀔 숫자가 없다. 받을 숫자는 프리젠의 목록에서 본다
     assert sheets_of(changed) == [None]
-    assert changed['pregens'][0]['sheet'] == ELF_SHEET
+    assert changed['pregens'][0]['sheet'] == as_character(ELF_SHEET)
     assert await count_sheets(session) == 0
 
 

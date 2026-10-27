@@ -133,6 +133,7 @@ def build_moves(
                 healed=healed_notes(ruleset, ended, member.user_id),
                 naming=narration_request.to_naming(naming_of(declaration)),
                 item_action=narration_request.to_item_action(declaration),
+                skill=narration_request.to_skill(declaration),
                 throw=narration_request.to_throw(declaration),
                 items=held_notes(catalog, member),
                 worn=worn_notes_of(snapshot, catalog, member),

@@ -110,6 +110,8 @@ class ActionKind(enum.StrEnum):
     REPAIR = 'repair'
     # 지금 장소에 닿은 길의 문의 자물쇠를 가진 자물쇠 물건으로 바꿔 단다. 옛 열쇠로는 더 열지 못한다(#281)
     REPLACE = 'replace'
+    # 아는 기술이나 주문 하나를 쓴다. 비용을 내고 대상에게 그 효과들이 든다(#805)
+    SKILL = 'skill'
     # 가진 소모품 하나를 같은 장소의 몬스터나 장면의 인물에게 던진다. 물건에 적힌 판정으로 한 번 굴린다(#277)
     THROW = 'throw'
 
@@ -669,6 +671,22 @@ DoorAction = LockAction | UnlockAction | PickAction | ForceAction | RepairAction
 
 
 # 행동의 모양들. 받은 행동을 종류로 가르는 함수들이 이것을 받는다
+class SkillAction(BaseModel):
+    """
+    기술이나 주문을 쓰는 행동(#805, app/rounds/skill_actions.py).
+
+    skill 은 룰북의 기술(rules.skills)의 이름표다. 시트가 그 기술을 알아야 한다(시나리오의 시트에 적는다).
+    target 은 받는 사람이다. 테이블에 앉은 사람이고, 비우면 자기 자신이다(받을 때 채운다).
+    자신에게만 쓰는 기술(target self)에는 남을 적지 않는다. 굴리지 않는다. 비용은 쓸 때 낸다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.SKILL]
+    skill: Key
+    target: uuid.UUID | None = None
+
+
 class CoverAction(BaseModel):
     """
     지금 서 있는 장소의 숨을 곳에 엄폐하는 행동(app/rounds/covers.py, #276 의 커버 세이브). 받는 값이 없다.
@@ -708,6 +726,7 @@ AnyAction = (
     | RepairAction
     | ReplaceAction
     | ThrowAction
+    | SkillAction
 )
 
 # 선언에 붙는 행동. kind 로 종류를 가른다

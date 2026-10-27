@@ -4,7 +4,7 @@
 // 이름은 앞뒤 공백을 떼고 1~50자, 대소문자만 달라도 같은 이름이다(서버의 reject_duplicate_names).
 
 import type { PregenBody, Ruleset, ScenarioPregen, ScenarioUpdate } from '../../../../api/types';
-import { sheetDraft, sheetHints, toSheet, type SheetDraft } from './sheetForm';
+import { sheetDraft, sheetHints, toSheet, withSkills, type SheetDraft } from './sheetForm';
 
 export const MAX_PREGENS = 8;
 export const PREGEN_NAME_MAX = 50;
@@ -37,7 +37,8 @@ export function pregenHints(draft: PregenDraft, rules: Ruleset | null, others: s
 
 /** 보낼 프리젠. 원래 프리젠의 소지품과 돈은 그대로 둔다. 룰북이 없어 시트의 칸이 없으면 원래 시트를 둔다 */
 export function toPregen(draft: PregenDraft, rules: Ruleset | null, original: ScenarioPregen | null): PregenBody {
-  const sheet = rules && draft.sheet ? toSheet(draft.sheet, rules) : (original?.sheet ?? null);
+  // 아는 기술(#805)은 고치는 칸이 아직 없어 원래 시트의 것을 붙인다
+  const sheet = rules && draft.sheet ? withSkills(toSheet(draft.sheet, rules), original?.sheet?.skills ?? []) : (original?.sheet ?? null);
   return {
     name: draft.name.trim(),
     description: draft.description,

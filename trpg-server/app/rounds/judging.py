@@ -42,6 +42,7 @@ from app.engine.action import (
     RestAction,
     SearchAction,
     SellAction,
+    SkillAction,
     StealAction,
     TakeAction,
     ThrowAction,
@@ -68,6 +69,7 @@ from app.rounds.monster_scene import SceneMonster
 from app.rounds.naming import judge_naming
 from app.rounds.place_item_actions import judge_put_down, judge_take, search_items
 from app.rounds.rests import judge_rest
+from app.rounds.skill_actions import judge_skill
 from app.rounds.state import find_declaration, rules_of
 from app.rounds.steals import judge_steal
 from app.rounds.throws import judge_throw
@@ -87,7 +89,7 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     가기(judge_move), 찾기(search_place), 줍기(judge_take),
     내려놓기(judge_put_down), 훔치기(judge_steal), 빼앗기(judge_loot), 쉬기(judge_rest), 기다리기(judge_wait),
     사기(judge_buy), 팔기(judge_sell), 돈 건네기(judge_pay), 엄폐하기(judge_cover),
-    문 다루기(judge_door: 잠그기, 열기, 따기, 부수기, #281), 던지기(judge_throw, #277)다.
+    문 다루기(judge_door: 잠그기, 열기, 따기, 부수기, #281), 던지기(judge_throw, #277), 기술 쓰기(judge_skill, #805)다.
     """
     if isinstance(action, TreatAction):
         return judge_treatment(judging, member, action)
@@ -97,6 +99,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
         return judge_use_on(judging, member, action)
     if isinstance(action, UseAction):
         return judge_use(judging, member, action)
+    if isinstance(action, SkillAction):
+        return judge_skill(judging, member, action)
     if isinstance(action, GiveAction):
         return judge_give(judging, member, action)
     if isinstance(action, ThrowAction):

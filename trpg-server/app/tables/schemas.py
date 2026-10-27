@@ -37,7 +37,7 @@ from app.catalog.steps import MAX_STEP
 from app.engine.item_aids import ItemAid
 from app.engine.item_effects import Effect
 from app.engine.ruleset import RULESET_MAX_ABILITIES, RULESET_MAX_EQUIPMENT_SLOTS, Key, Ruleset
-from app.engine.sheet import Score, Sheet
+from app.engine.sheet import CharacterSheet, Score
 from app.tables.models import (
     CREDIT_WAIT_MAX,
     CREDIT_WAIT_MIN,
@@ -588,6 +588,8 @@ class SheetOut(BaseModel):
     place_id: uuid.UUID | None = None
     # HP 말고 다른 수치들(#804). 규칙에 수치가 없으면 비어 있다
     resources: list[ResourceOut] = []
+    # 아는 기술들(#805). 룰북의 기술(rules.skills)의 이름표다. 이름과 비용과 효과는 rules.skills 에 있다
+    skills: list[str] = []
 
 
 class FallenOut(BaseModel):
@@ -651,7 +653,7 @@ class PregenChoice(BaseModel):
     name: str
     description: str
     # 이 프리젠을 고르면 받는 숫자
-    sheet: Sheet
+    sheet: CharacterSheet
     # 가져간 사람. 아무도 가져가지 않았으면 None 이다. 가져간 사람이 테이블을 떠나면 다시 None 이 된다
     taken_by: uuid.UUID | None
     # 이 프리젠의 캐릭터가 이 테이블에서 죽었는가. 죽은 캐릭터의 프리젠은 아무도 다시 고를 수 없다
@@ -719,7 +721,7 @@ class TableDetail(TableSummary):
     # 이 테이블에서 허용하는 캐릭터 방식
     character_modes: list[CharacterMode]
     # 캐릭터를 직접 만들면 받는 숫자. 직접 만들기를 허용하지 않는 테이블이면 None 이다
-    default_sheet: Sheet | None
+    default_sheet: CharacterSheet | None
     # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 그런 방식을 허용하지 않는 테이블이면 None 이다.
     # 최대 HP = 기준값 + 능력치의 보정, 상한을 넘지 않는다. 어느 능력치인지는 rules 의 hp_ability 다
     player_made_hp: PlayerMadeHp | None

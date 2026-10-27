@@ -22,7 +22,7 @@ from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-from app.engine.ruleset import Key
+from app.engine.keys import Key
 
 # 물건 하나의 효과 수
 ITEM_MAX_EFFECTS = 5

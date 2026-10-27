@@ -27,7 +27,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.engine.dice import ScriptedDice
-from app.engine.sheet import Sheet
+from app.engine.sheet import CharacterSheet
 from app.main import API_PREFIX
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.tables import sheets
@@ -36,7 +36,7 @@ from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableMember, TableRoll, TableStatus
 from app.tables.router import find_pregen_holders
 from tests.narration_model import with_model
-from tests.sheets import make_sheet
+from tests.sheets import as_character, make_sheet
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -320,7 +320,7 @@ async def test_a_player_whose_character_died_brings_in_a_new_one(
         'place_id': None,
         'resources': [],
     }
-    assert seat['sheet'] == {**PLAIN, **fresh}
+    assert seat['sheet'] == {**as_character(PLAIN), **fresh}
     # 죽은 캐릭터는 지워지지 않고 떠난 캐릭터로 남는다
     assert seat['fallen'] == [{'number': 1, 'character_name': '엘프', 'pregen_index': None, **PLAIN}]
 
@@ -1093,7 +1093,7 @@ async def test_going_back_keeps_only_the_latest_sheet_of_each_player(session: As
 
 
 # 판의 시트 하나. 숫자는 중요하지 않다
-SOURCE = Sheet.model_validate(PLAIN)
+SOURCE = CharacterSheet.model_validate(PLAIN)
 
 
 def make_seat(*dead: bool) -> TableMember:

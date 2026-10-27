@@ -51,7 +51,7 @@ from app.engine.action import DoorDevice
 from app.engine.item_aids import ItemAid
 from app.engine.item_effects import Effect
 from app.engine.ruleset import InjuryNature, Ruleset
-from app.engine.sheet import Sheet
+from app.engine.sheet import CharacterSheet, Sheet
 
 # 문서의 모양이 바뀔 때 올리는 번호. 옛 판을 읽는 코드가 어느 모양인지 알 수 있다.
 #   1: 도입부가 하나다(opening)
@@ -139,7 +139,9 @@ from app.engine.sheet import Sheet
 #      treat_bonus 는 치료의 거들기가 됐다. 따기와 고치기의 도구(tool)는 도구가 있어야 하는가(needs_tool)가 됐다
 #  65: HP 말고 다른 수치가 있다(#804). rulebook.rules.resources: 이름표, 이름, 최소, 최대(기준, 능력치, 상한), 시작,
 #      쉬기의 변화. 물건의 효과에 맞추기(adjust: 수치, 양)가 있다
-SNAPSHOT_FORMAT = 65
+#  66: 기술과 주문이 있다(#805). rulebook.rules.skills: 이름표, 이름, 비용(수치, 양), 대상(self, ally), 효과들.
+#      시트(default_sheet, pregens[].sheet)에 아는 기술(skills)이 있다
+SNAPSHOT_FORMAT = 66
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다
@@ -437,7 +439,7 @@ class PregenSnapshot(BaseModel):
 
     name: str
     description: str
-    sheet: Sheet
+    sheet: CharacterSheet
     items: list[ItemStackSnapshot] = []
     money: int = 0
 
@@ -614,7 +616,7 @@ class Snapshot(BaseModel):
     # 허용하는 캐릭터 방식들. 하나 이상이다. 테이블은 이 안에서만 고를 수 있다
     character_modes: list[CharacterMode]
     # 기본 시트. 캐릭터를 직접 만든 사람이 받는 숫자다. 직접 만들기를 허용했으면 반드시 있다
-    default_sheet: Sheet | None
+    default_sheet: CharacterSheet | None
     # NPC 시트들. 판 안의 로어북 인물 항목마다 많아야 하나다
     npc_sheets: list[NpcSheetSnapshot]
     # 기본 NPC 시트. 시트가 없는 인물이 쓴다. 그런 인물이 있으면 반드시 있다

@@ -40,6 +40,7 @@ from app.rounds.state import (
     put_down_of,
     rest_of,
     search_of,
+    skill_use_of,
     steal_of,
     take_of,
     trade_of,
@@ -173,6 +174,8 @@ def source_of(injury_roll: dict) -> InjurySource:
         return InjurySource.AFTERMATH
     if injury_roll['trigger'] == Trigger.ITEM:
         return InjurySource.ITEM
+    if injury_roll['trigger'] == Trigger.SKILL:
+        return InjurySource.SKILL
     return InjurySource.INJURY_TABLE
 
 
@@ -289,6 +292,38 @@ def record_item_use(session: AsyncSession, table: GameTable, declaration: Declar
         record_injury(session, table, one, use['target'], cause=used)
     shifts = use.get('resources') or []
     record_resource_shifts(session, table, shifts, use['target'], ResourceSource.ITEM, cause=used)
+
+
+def record_skill_use(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    기술을 쓴 결과를 이벤트로 적는다(#805). 그 행동의 이벤트(cause)에 잇는다.
+    낸 비용(쓴 사람의 수치), HP 의 변화, 푼 부상, 입힌 부상, 맞춘 수치(대상의 수치)의 차례로 그 뒤에 적는다.
+
+    행한 사람(actor_id)을 적지 않는다. 수치와 HP 를 바꾼 것은 엔진이다.
+    """
+    use = skill_use_of(declaration)
+    cured = use.get('cured') or []
+    injured = [one for one in use.get('injured') or [] if one['injury'] is not None]
+    payload = {
+        'round': cause.payload['round'],
+        'character_name': declaration.character_name,
+        **{key: use[key] for key in ('skill', 'name', 'used', 'reason', 'target')},
+        'cured': [{'injury': one['injury'], 'name': one['name']} for one in cured],
+        'injured': [{'injury': one['injury'], 'name': one['name']} for one in injured],
+    }
+    used = recorder.record(session, table, EventType.SKILL_USED, payload=payload, cause=cause)
+    user = {'user_id': str(declaration.user_id), 'character_name': declaration.character_name}
+    record_resource_shifts(session, table, use.get('cost') or [], user, ResourceSource.SKILL, cause=used)
+    effect = declaration.outcome.get('effect')
+    if effect is not None:
+        changed = record_hp_change(session, table, effect, cause=used)
+        holder = {'user_id': effect['user_id'], 'character_name': effect['character_name']}
+        record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)
+    record_cures(session, table, cured, use['target'], cause=used)
+    for one in injured:
+        record_injury(session, table, one, use['target'], cause=used)
+    shifts = use.get('resources') or []
+    record_resource_shifts(session, table, shifts, use['target'], ResourceSource.SKILL, cause=used)
 
 
 def record_cures(
@@ -647,6 +682,8 @@ class ResourceSource:
 
     REST = 'rest'
     ITEM = 'item'
+    # 기술(#805). 쓴 사람이 낸 비용과 대상의 수치를 맞춘 것
+    SKILL = 'skill'
     # 라운드가 닫힐 때 저절로(resources[].each_round)
     ROUND = 'round'
 
@@ -708,8 +745,8 @@ def record_declaration(
 ) -> None:
     """
     한 사람의 선언을 이벤트로 적는다.
-    판정, 지목, 물건 쓰기와 건네기와 던지기, 가기와 찾기, 줍기와 내려놓기, 훔치기, 빼앗기, 사고팔기, 돈 건네기,
-    쉬기가 있었으면 행동 바로 뒤에 그 결과를 적는다.
+    판정, 지목, 물건 쓰기와 건네기와 던지기, 기술 쓰기(#805), 가기와 찾기, 줍기와 내려놓기, 훔치기, 빼앗기, 사고팔기,
+    돈 건네기, 쉬기가 있었으면 행동 바로 뒤에 그 결과를 적는다.
 
     선언을 내지 않았으면 적지 않는다. 판정은 이미 끝나 있다(roll_checks). 여기서는 적기만 한다.
     차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면(turn_lost) 행동만 적는다. 굴린 것이 없다.
@@ -730,6 +767,8 @@ def record_declaration(
         record_item_throw(session, table, declaration, cause=acted)
     elif item_use_of(declaration) is not None:
         record_item_use(session, table, declaration, cause=acted)
+    elif skill_use_of(declaration) is not None:
+        record_skill_use(session, table, declaration, cause=acted)
     elif has_outcome(declaration):
         record_check(session, table, declaration, cause=acted)
     elif naming_of(declaration) is not None:

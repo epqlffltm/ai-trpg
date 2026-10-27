@@ -174,6 +174,7 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
     case 'none':
     case 'search':
     case 'cover':
+    case 'skill': // 기술 쓰기(#805)는 아직 고르는 칸이 없다(availableKinds 에 없다)
       return null;
     case 'check':
       return checkHint(draft, ctx.table.rules);
@@ -270,6 +271,7 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
   const monster = targetKind === 'monster' ? targetId : null;
   switch (draft.kind) {
     case 'none':
+    case 'skill': // 기술 쓰기(#805)는 아직 고르는 칸이 없어 보낼 것이 없다
       return null;
     case 'check':
       return toCheck(draft, member, npc, monster);

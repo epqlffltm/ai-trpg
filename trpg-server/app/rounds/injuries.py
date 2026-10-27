@@ -203,6 +203,10 @@ def take_aimed(
     return wound(ruleset, key, InjurySource.CALLED_SHOT, document, rows, table_id, moment, immune, prank)
 
 
+# 효과(injure)가 어디서 왔나에서 부상의 출처로. 물건(#800)과 기술(#805)이다
+EFFECT_SOURCES = {Trigger.ITEM: InjurySource.ITEM, Trigger.SKILL: InjurySource.SKILL}
+
+
 def take_from_item(
     ruleset: Ruleset,
     key: str,
@@ -211,16 +215,18 @@ def take_from_item(
     moment: Moment,
     immune: frozenset[InjuryNature] = NO_IMMUNITY,
     prank: bool = False,
+    trigger: Trigger = Trigger.ITEM,
 ) -> dict:
     """
     물건의 효과(injure)가 입히는 부상(#800). 문서로 돌려준다. 표를 굴리지 않는다.
+    기술의 효과(#805)도 이 길을 쓴다. 그때 trigger 는 skill 이고 부상의 출처도 skill 이다.
 
     이미 그 부상을 입고 있으면 또 입히지 않는다(문서의 부상이 비어 있다). 몬스터가 그 성질에 면역이면 입히지 않는다.
     """
-    document = injury_document(Trigger.ITEM, None)
+    document = injury_document(trigger, None)
     if wears(rows, key):
         return document
-    return wound(ruleset, key, InjurySource.ITEM, document, rows, table_id, moment, immune, prank)
+    return wound(ruleset, key, EFFECT_SOURCES[trigger], document, rows, table_id, moment, immune, prank)
 
 
 def take_aftermath(

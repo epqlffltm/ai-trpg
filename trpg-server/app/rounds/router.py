@@ -74,8 +74,16 @@ def to_charge(charge: NarrationCharge) -> ChargeOut:
     return ChargeOut(user_id=charge.payer_id, status=charge.status, credits=charge.held_credits)
 
 
-# 결과 중 바뀐 수치(resources)를 싣는 것들(#804). 쉬기, 물건을 쓰기, 던지기다
-SHIFTING_OUTCOMES = ('rest', 'item_use', 'item_throw')
+# 결과 중 바뀐 수치를 싣는 것들(#804). 쉬기, 물건을 쓰기, 던지기, 기술을 쓰기(#805)다
+SHIFTING_OUTCOMES = ('rest', 'item_use', 'item_throw', 'skill_use')
+# 그 안에서 바뀐 수치의 목록인 칸들. 맞춘 수치(resources)와 기술의 비용(cost, #805)이다
+SHIFT_LISTS = ('resources', 'cost')
+
+
+def visible_part(part: dict, viewer_id: uuid.UUID) -> dict:
+    """결과 하나(쉬기, 물건, 기술)에서 그 사람이 숫자로 보지 못하는 수치의 바뀐 것을 뺀다."""
+    lists = {key: resources.visible_shifts(part[key], viewer_id) for key in SHIFT_LISTS if part.get(key)}
+    return {**part, **lists}
 
 
 def visible_outcome(outcome: dict | None, viewer_id: uuid.UUID) -> dict | None:
@@ -83,9 +91,9 @@ def visible_outcome(outcome: dict | None, viewer_id: uuid.UUID) -> dict | None:
     if outcome is None:
         return None
     changed = {
-        key: {**outcome[key], 'resources': resources.visible_shifts(outcome[key].get('resources'), viewer_id)}
+        key: visible_part(outcome[key], viewer_id)
         for key in SHIFTING_OUTCOMES
-        if isinstance(outcome.get(key), dict) and outcome[key].get('resources')
+        if isinstance(outcome.get(key), dict) and any(outcome[key].get(one) for one in SHIFT_LISTS)
     }
     return {**outcome, **changed} if changed else outcome
 

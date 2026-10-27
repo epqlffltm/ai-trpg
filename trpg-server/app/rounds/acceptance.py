@@ -53,6 +53,7 @@ from app.engine.action import (
     RestAction,
     SearchAction,
     SellAction,
+    SkillAction,
     StealAction,
     TakeAction,
     ThrowAction,
@@ -75,6 +76,7 @@ from app.rounds.models import Declaration, Round
 from app.rounds.monster_scene import SceneMonster, find_scene_monster, stands_with
 from app.rounds.place_item_actions import accept_take
 from app.rounds.rests import accept_rest
+from app.rounds.skill_actions import accept_skill
 from app.rounds.state import find_declaration, is_down, rules_of
 from app.rounds.steals import require_steal
 from app.rounds.trades import accept_buy, accept_pay, accept_sell
@@ -515,7 +517,8 @@ def accept_action(
     쓰러져 있거나 행동을 막는 부상을 입었으면 RoundConflictError(require_able).
     나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming, accept_use, accept_give,
     accept_move, accept_search, accept_rest, accept_take, accept_put_down, accept_steal, accept_loot,
-    accept_buy, accept_sell, accept_pay, accept_cover, 문을 다루는 accept_door, 던지는 accept_throw).
+    accept_buy, accept_sell, accept_pay, accept_cover, 문을 다루는 accept_door, 던지는 accept_throw,
+    기술을 쓰는 accept_skill, #805).
     """
     if action is None:
         return None
@@ -526,6 +529,8 @@ def accept_action(
         return accept_naming(action, scene.cast)
     if isinstance(action, UseAction):
         return accept_use(table, member, action, scene)
+    if isinstance(action, SkillAction):
+        return accept_skill(table, member, ruleset, action)
     if isinstance(action, GiveAction):
         return accept_give(table, member, action)
     if isinstance(action, ThrowAction):

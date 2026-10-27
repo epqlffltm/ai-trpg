@@ -24,7 +24,8 @@ const rules = RULES as unknown as Ruleset;
 const KNIGHT = {
   name: '기사',
   description: '',
-  sheet: { abilities: { str: 16, dex: 10, con: 14 }, max_hp: 14 },
+  // 아는 기술(#805)은 고치는 칸이 없어도 저장할 때 그대로 간다
+  sheet: { abilities: { str: 16, dex: 10, con: 14 }, max_hp: 14, skills: ['healing_touch'] },
   items: [{ entry_id: 'sword', count: 1, wear: ['main_hand'] }],
   money: 30,
 };
@@ -102,7 +103,7 @@ describe('캐릭터 탭', () => {
       recommended_players: { min: 2, max: 4 },
       character_modes: ['pregen', 'custom', 'manual', 'rolled'],
       reroll_allowed: true,
-      default_sheet: { abilities: { str: 12, dex: 12, con: 12 }, max_hp: 10 },
+      default_sheet: { abilities: { str: 12, dex: 12, con: 12 }, max_hp: 10, skills: [] },
       player_made_hp: { base: 8, cap: 20 },
     });
   });
@@ -133,7 +134,7 @@ describe('캐릭터 탭', () => {
     await userEvent.type(editing.getByRole('textbox', { name: '근력' }), '17');
     await userEvent.click(editing.getByRole('button', { name: '저장' }));
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(2));
-    expect((patches(seen)[1] as { pregens: unknown[] }).pregens[0]).toEqual({ ...KNIGHT, sheet: { abilities: { str: 17, dex: 10, con: 14 }, max_hp: 14 } });
+    expect((patches(seen)[1] as { pregens: unknown[] }).pregens[0]).toEqual({ ...KNIGHT, sheet: { abilities: { str: 17, dex: 10, con: 14 }, max_hp: 14, skills: ['healing_touch'] } });
 
     await userEvent.click(list.getByRole('button', { name: '사제 지우기' }));
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '지우기' }));

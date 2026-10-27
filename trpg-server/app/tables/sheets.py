@@ -30,7 +30,7 @@ from app.engine.health import is_downed
 from app.engine.point_buy import affordable
 from app.engine.ruleset import Ruleset
 from app.engine.score_roll import uses_exactly
-from app.engine.sheet import Sheet
+from app.engine.sheet import CharacterSheet
 from app.tables import equipment, items, money
 from app.tables.models import GameTable, TableMember, TableRoll, TableSheet
 
@@ -122,7 +122,7 @@ def clear_character(member: TableMember) -> None:
     member.abilities = None
 
 
-def build_player_made(snapshot: Snapshot, abilities: dict[str, int]) -> Sheet | None:
+def build_player_made(snapshot: Snapshot, abilities: dict[str, int]) -> CharacterSheet | None:
     """
     플레이어가 정한 능력치로 시트를 만든다. 판에 최대 HP 를 구하는 값이 없으면 None.
 
@@ -131,10 +131,13 @@ def build_player_made(snapshot: Snapshot, abilities: dict[str, int]) -> Sheet | 
     hp = snapshot.player_made_hp
     if hp is None:
         return None
-    return build_sheet(snapshot.rulebook.rules, abilities, hp.base, hp.cap)
+    built = build_sheet(snapshot.rulebook.rules, abilities, hp.base, hp.cap)
+    # 직접 만든 캐릭터는 기본 시트의 기술을 안다(#805). 기본 시트가 없으면 아는 기술이 없다
+    skills = snapshot.default_sheet.skills if snapshot.default_sheet is not None else []
+    return CharacterSheet(**built.model_dump(), skills=list(skills))
 
 
-def find_source(snapshot: Snapshot, member: TableMember) -> Sheet | None:
+def find_source(snapshot: Snapshot, member: TableMember) -> CharacterSheet | None:
     """
     이 사람이 받을 시트를 찾는다. 받을 시트가 없으면 None.
 
@@ -146,7 +149,7 @@ def find_source(snapshot: Snapshot, member: TableMember) -> Sheet | None:
     return source_of(snapshot, member.pregen_index, member.abilities)
 
 
-def source_of(snapshot: Snapshot, pregen_index: int | None, abilities: dict[str, int] | None) -> Sheet | None:
+def source_of(snapshot: Snapshot, pregen_index: int | None, abilities: dict[str, int] | None) -> CharacterSheet | None:
     """
     그렇게 정한 캐릭터가 받을 시트를 찾는다. 받을 시트가 없으면 None.
 
@@ -159,11 +162,12 @@ def source_of(snapshot: Snapshot, pregen_index: int | None, abilities: dict[str,
     return snapshot.default_sheet
 
 
-def give_sheet(member: TableMember, source: Sheet) -> TableSheet:
+def give_sheet(member: TableMember, source: CharacterSheet) -> TableSheet:
     """
     이 사람의 지금 캐릭터에게 시트를 준다. 준 시트를 돌려준다. HP 는 가득 찬 채로 시작한다.
 
     이 사람이 받은 시트들의 맨 뒤에 놓인다. 누구의 시트인지(이름, 프리젠)를 자리에서 복사해 둔다.
+    아는 기술(#805)도 그 시트에서 복사한다.
     앞의 캐릭터가 죽었는지는 보지 않는다. 부르는 쪽이 확인한다.
     """
     sheet = TableSheet(
@@ -173,6 +177,7 @@ def give_sheet(member: TableMember, source: Sheet) -> TableSheet:
         abilities=dict(source.abilities),
         max_hp=source.max_hp,
         hp=source.max_hp,
+        skills=list(source.skills),
     )
     member.sheets.append(sheet)
     return sheet

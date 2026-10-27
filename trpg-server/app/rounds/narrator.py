@@ -339,6 +339,29 @@ class ItemActionNote:
 
 
 @dataclass(frozen=True)
+class SkillNote:
+    """
+    기술이나 주문을 쓴 결과(#805). 엔진이 정한 것이다. 판정이 없다.
+
+    done 이 거짓이면 쓰지 못했다. 까닭은 reason 이다(not_known 모른다, cost_short 비용이 모자랐다, target_gone 받을
+    사람이 없었다, friendly_fire_off 동료를 해칠 수 없게 바뀌었다). target 은 받은 사람의 캐릭터 이름이고, 자기
+    자신에게 썼으면 None 이다. cost 는 낸 비용이다(쓴 사람의 수치가 준 것).
+    """
+
+    name: str
+    done: bool
+    reason: str | None = None
+    target: str | None = None
+    cost: list[ResourceNote] = field(default_factory=list)
+    impact: Impact | None = None
+    cured: list[str] = field(default_factory=list)
+    injured: list[str] = field(default_factory=list)
+    resisted: list[str] = field(default_factory=list)
+    spared: list[str] = field(default_factory=list)
+    resources: list[ResourceNote] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class PlaceNote:
     """
     캐릭터가 서 있는 맵의 장소. 이 라운드의 행동까지 반영한 뒤의 것이다(app/tables/places.py).
@@ -671,6 +694,8 @@ class Move:
     naming: NamingNote | None = None
     # 물건을 쓰거나 건네는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
     item_action: ItemActionNote | None = None
+    # 기술을 쓰는 행동이면 그 결과(#805). 판정이 아니라 verdict 와 함께 있지 않다
+    skill: SkillNote | None = None
     # 물건을 던지는 행동이면 그 물건(#277). 던졌으면 판정의 결과가 verdict 에 있다
     throw: ThrowNote | None = None
     # 이 라운드의 행동까지 반영한 뒤에 이 캐릭터가 가진 물건들. 판의 물건 순서다.
