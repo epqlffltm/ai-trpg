@@ -15,6 +15,10 @@
     호감도를 보이는 인물에만 싣는다(판에 그 셋을 따로 고르는 칸이 아직 없다)
   - 이벤트: 이 가지에서 열린 것의 이름, 장면의 인물, 일러스트. 선택지의 글은 고르기를 기다리는 이벤트에만 싣는다
   - 엔딩: 칸은 모두 보인다. 이름과 일러스트는 본 것(계정의 기록이나 이 가지에서 본 것)만이고, 힌트는 늘 보인다
+  - 지도: 장소마다 가 본 곳인가와 지금 거기 보이는 인물.
+    가 본 곳은 가지의 말에 붙은 상태의 장소와 시작 장소다(visited_on). 인물의 자리는 엔진이 정한다(동행, 일정, 기본).
+    가 본 곳에 있고, 만났고, 제작자의 지도 보이기(보임, 숨김, 호감도 단계 이상)를 통과한 인물만 보인다.
+    함께 다니는 인물은 넣지 않는다
 판의 모양은 asset 서버의 WorldDocument 다. 모르는 칸은 버리고 빈 칸은 기본값으로 읽는다.
 """
 
@@ -30,6 +34,7 @@ from app.conversations.schemas import (
     EndingOut,
     EventOut,
     ItemOut,
+    MapPlaceOut,
     PathOut,
     PlaceOut,
     SlotOut,
@@ -37,7 +42,10 @@ from app.conversations.schemas import (
     StageOut,
     WorldView,
 )
+from app.engine.conditions import affection_of, stage_floor
+from app.engine.scene import place_of_character
 from app.engine.state import StoryState
+from app.engine.world import World
 
 # 인물의 공개(asset 서버의 Reveal)와 인물 창의 항목(PanelField)
 SHOWN = 'shown'
@@ -47,6 +55,9 @@ PANEL_INTRO = 'intro'
 PANEL_AGE = 'age'
 PANEL_GENDER = 'gender'
 PANEL_AFFECTION = 'affection'
+# 지도에 인물을 보이는가(asset 서버의 MapPresence)
+MAP_SHOWN = 'shown'
+MAP_STAGE = 'stage'
 
 
 class Part(BaseModel):
@@ -113,6 +124,8 @@ class ViewCast(Part):
     character: ViewCharacter = ViewCharacter()
     reveal: str = SHOWN
     panel: tuple[str, ...] = ()
+    map: str = MAP_SHOWN
+    map_stage: str | None = None
     affection: ViewAffection = ViewAffection()
     confession: dict | None = None
 
@@ -316,10 +329,56 @@ def seen_endings(state: StoryState, recorded: frozenset[str]) -> frozenset[str]:
     return recorded | ({state.ending} if state.ending is not None else frozenset())
 
 
-def world_view(document: Mapping, state: StoryState, met: frozenset[str], recorded: frozenset[str]) -> WorldView:
+def visited_on(start_place: str, places: Iterable[str | None]) -> frozenset[str]:
+    """가 본 장소들. 시작 장소와, 가지의 말에 붙은 상태들의 장소(places, 상태가 없는 말은 None)다."""
+    return frozenset({start_place, *(place for place in places if place is not None)})
+
+
+def shown_on_map(world: World, member: ViewCast, state: StoryState) -> bool:
+    """제작자의 지도 보이기. 보임은 보이고, 단계는 호감도가 그 단계 이상일 때 보이고, 숨김은 보이지 않는다."""
+    if member.map == MAP_SHOWN:
+        return True
+    if member.map != MAP_STAGE:
+        return False
+    floor = stage_floor(world, member.id, member.map_stage)
+    return floor is not None and affection_of(state, world, member.id) >= floor
+
+
+def where_on_map(world: World, member: ViewCast, state: StoryState) -> str | None:
+    """인물이 지금 있는 장소(엔진이 정한다). 함께 다니거나 어디에도 없거나 판에 없는 인물이면 None."""
+    engine_member = world.member(member.id)
+    if engine_member is None or member.id in state.companions:
+        return None
+    return place_of_character(engine_member, state, world).place
+
+
+def map_out(
+    world: World, document: ViewDocument, state: StoryState, met: frozenset[str], visited: frozenset[str]
+) -> list[MapPlaceOut]:
+    """지도의 장소마다 가 본 곳인가와 지금 거기 보이는 인물. 장소는 판의 차례, 인물도 판의 차례다."""
+    seen_here: dict[str, list[str]] = {}
+    for member in document.cast:
+        place = where_on_map(world, member, state)
+        if place in visited and member.id in met and shown_on_map(world, member, state):
+            seen_here.setdefault(place, []).append(member.id)
+    return [
+        MapPlaceOut(id=place.id, visited=place.id in visited, cast=seen_here.get(place.id, []))
+        for place in document.places
+    ]
+
+
+def world_view(
+    world: World,
+    document: Mapping,
+    state: StoryState,
+    met: frozenset[str],
+    recorded: frozenset[str],
+    visited: frozenset[str],
+) -> WorldView:
     """
-    이 가지의 상태(state)와 만난 인물(met), 계정에 남은 엔딩(recorded)에 맞춘 세계관의 칸.
-    이 가지에서 본 엔딩(state.ending)은 계정에 남지 않는 엔딩이어도 본 것이다.
+    이 가지의 상태(state)와 만난 인물(met), 계정에 남은 엔딩(recorded), 가 본 장소(visited)에 맞춘 세계관의 칸.
+    world 는 엔진이 읽은 판이다(인물의 자리를 정한다). 이 가지에서 본 엔딩(state.ending)은 계정에 남지 않아도 본 것이다.
+    지금 있는 장소는 가 본 곳이다.
     """
     read = read_view_document(document)
     seen = seen_endings(state, recorded)
@@ -337,4 +396,5 @@ def world_view(document: Mapping, state: StoryState, met: frozenset[str], record
         cast=visible_cast(read, state, met),
         events=[event_out(event, state) for event in read.events if event.id in state.seen],
         endings=[ending_out(ending, ending.id in seen) for ending in read.endings],
+        map=map_out(world, read, state, met, visited | {state.place}),
     )
