@@ -33,7 +33,7 @@ DB 접근, 바깥 호출(공급자, 결제 서버), 응답 만들기를 한 함�
 import asyncio
 import logging
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 
@@ -63,6 +63,7 @@ from app.conversations.service import (
     NotEditableError,
     get_conversation,
 )
+from app.conversations.views import affection_shown, met_on
 from app.core.dependencies import Viewer
 from app.engine import play
 from app.engine.endings import is_over
@@ -242,6 +243,8 @@ class Branch:
     briefing: Briefing
     path: list[Message]
     state: StoryState
+    # 가져온 판의 문서(받은 칸 전부). 상태의 호감도를 보여도 되는 인물을 고를 때 쓴다
+    document: Mapping
 
 
 def prompt_for(branch: Branch, state: StoryState, stage: Staging, added: Message, chars: int) -> list[ChatMessage]:
@@ -251,6 +254,14 @@ def prompt_for(branch: Branch, state: StoryState, stage: Staging, added: Message
     card = render_card(branch.briefing, scene_card(branch.briefing, branch.world, state, stage.cast, stage.direction))
     turns = [Turn(message.role, message.content) for message in [*branch.path, added]]
     return build_messages(card, select_window(turns, chars))
+
+
+def shown_in_turn(branch: Branch, stage: Staging) -> frozenset[str]:
+    """
+    이 말의 상태에 호감도를 보여도 되는 인물. 만난 인물은 가지의 답들의 장면의 인물과, 이번 답의 장면의 인물이다.
+    """
+    met = met_on(message.cast or () for message in branch.path if message.role == Role.ASSISTANT)
+    return affection_shown(branch.document, met | frozenset(stage.cast))
 
 
 def labels_for(briefing: Briefing, cast: tuple[str, ...]) -> dict[str, str]:
@@ -497,7 +508,8 @@ async def branch_at(session: AsyncSession, imported: ImportedWorld, leaf_id: uui
     """leaf_id 에서 끝나는 가지. 판을 읽고, 가지의 말들과 끝의 상태를 읽는다."""
     world = read_world(imported.document)
     path = await conversations.active_path(session, leaf_id)
-    return Branch(world, read_briefing(imported.document), path, await state_at(session, world, path))
+    state = await state_at(session, world, path)
+    return Branch(world, read_briefing(imported.document), path, state, imported.document)
 
 
 async def branch_of(session: AsyncSession, conversation: Conversation, imported: ImportedWorld) -> Branch:
@@ -544,7 +556,7 @@ def turn_start(
         messages=prompt_for(branch, state, stage, message, options.context_chars),
         cast=stage.cast,
         labels=labels_for(branch.briefing, stage.cast),
-        state=state_view(branch.world, state, stage.cast),
+        state=state_view(branch.world, state, stage.cast, shown_in_turn(branch, stage)),
     )
 
 

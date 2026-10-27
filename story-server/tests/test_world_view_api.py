@@ -9,7 +9,8 @@ asset 서버, 결제 서버, 모델은 가짜다(tests/assets.py, tests/billing.
   - 열린 이벤트와 기다리는 선택지가 실린다
   - 계정에 남은 엔딩은 다른 세션에서도 이름이 보인다. 못 본 엔딩은 힌트만이다
   - 지도: 가 본 곳은 떠난 뒤에도 가 본 곳이고, 거기 있는 만난 인물이 보인다
-  - 판의 문서(document)는 아직 그대로 실린다(화면이 view 로 옮긴 뒤 뺀다)
+  - 판의 문서(document)는 싣지 않는다
+  - 상태의 호감도는 인물 창에 호감도를 보이는 인물만이다(세션 읽기와 말의 turn 프레임)
 """
 
 import asyncio
@@ -138,12 +139,26 @@ async def test_the_map_keeps_visited_places_and_shows_met_members_there(
     ]
 
 
-async def test_the_document_is_still_carried_for_now(
+async def test_the_document_is_not_carried(
     client: AsyncClient, app: FastAPI, model_on: None, asset: FakeAsset, mine: dict
 ):
     conversation = await start(client, asset, mine)
 
     read = (await client.get(f'{CONVERSATIONS_URL}/{conversation["id"]}', headers=mine)).json()
 
-    assert read['world']['document']['endings'][0]['id'] == 'with_mina'
+    assert 'document' not in read['world']
     assert read['view']['name'] == read['world']['name']
+
+
+async def test_affection_values_are_carried_only_for_the_affection_panel(
+    client: AsyncClient, app: FastAPI, model_on: None, asset: FakeAsset, mine: dict
+):
+    # 미나는 인물 창에 호감도를 보이고, 준은 보이지 않는다
+    cast = [{**CAST[0], 'panel': ['affection']}, {**CAST[1], 'reveal': 'shown'}]
+    conversation = await start_with_luna(client, asset, mine, {'paths': PATHS, 'cast': cast})
+
+    before = (await client.get(f'{CONVERSATIONS_URL}/{conversation["id"]}', headers=mine)).json()['state']
+    frames = await act(app, client, mine, conversation, {'kind': 'move', 'place': 'beach'})
+
+    assert before['affection'] == {'mina': 80}
+    assert frames[0][1]['state']['affection'] == {'mina': 80}

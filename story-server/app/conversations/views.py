@@ -11,7 +11,8 @@
     상태에 따로 적지 않는다. 답마다 그때의 장면의 인물(messages.cast)이 이미 저장되어 있다
   - 인물: 만났으면 보임이다. 만나기 전에는 제작자가 고른 공개를 따른다.
     실루엣은 이름과 그림을 가리고, 숨김은 목록에 없다
-  - 인물 창: 제작자가 고른 항목(소개, 나이, 성별, 호감도)만 싣는다. 고백 대기, 건넨 선물, 함께 본 이벤트는
+  - 인물 창: 제작자가 고른 항목(소개, 나이, 성별, 호감도)만 싣는다.
+    상태의 호감도 값도 인물 창에 호감도가 실리는 인물만 싣는다(affection_shown). 고백 대기, 건넨 선물, 함께 본 이벤트는
     호감도를 보이는 인물에만 싣는다(판에 그 셋을 따로 고르는 칸이 아직 없다)
   - 이벤트: 이 가지에서 열린 것의 이름, 장면의 인물, 일러스트. 선택지의 글은 고르기를 기다리는 이벤트에만 싣는다
   - 엔딩: 칸은 모두 보인다. 이름과 일러스트는 본 것(계정의 기록이나 이 가지에서 본 것)만이고, 힌트는 늘 보인다
@@ -190,6 +191,19 @@ def shown_reveal(reveal: str, met: bool) -> str | None:
     if reveal in (SHOWN, SILHOUETTE):
         return reveal
     return None
+
+
+def affection_shown(document: Mapping, met: frozenset[str]) -> frozenset[str]:
+    """
+    상태의 호감도 값을 보여도 되는 인물들. view 의 인물 창에 호감도가 실리는 인물과 같다:
+    인물 창에 호감도를 고른 인물 가운데 보이는 인물이다(만났거나 공개가 보임). 실루엣과 숨김은 값도 없다.
+    """
+    read = read_view_document(document)
+    return frozenset(
+        member.id
+        for member in read.cast
+        if PANEL_AFFECTION in member.panel and shown_reveal(member.reveal, member.id in met) == SHOWN
+    )
 
 
 def cast_events(document: ViewDocument, state: StoryState, cast_id: str) -> list[str]:
