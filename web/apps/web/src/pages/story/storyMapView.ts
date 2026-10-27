@@ -26,6 +26,12 @@ export function arrivalText(view: Pick<StoryView, 'slots'>, state: Pick<StorySta
   return then.slot === now.slot ? `${name(now.slot)} 그대로` : `${name(now.slot)} → ${name(then.slot)}`;
 }
 
+/** 그 길로 가면 기한의 마지막 날을 넘기는가(엔진은 넘기면 기한의 엔딩을 고른다). 기한이 없거나 엔딩 뒤면 false */
+export function crossesDeadline(view: Pick<StoryView, 'slots' | 'deadline_days'>, state: Pick<StoryState, 'minutes' | 'ending'>, minutes: number): boolean {
+  const deadline = view.deadline_days;
+  return typeof deadline === 'number' && state.ending === null && clockAt(view, state.minutes + minutes).day > deadline;
+}
+
 export type KnownPlace = { id: string; name: string; here: boolean; visited: boolean; cast: string[] };
 
 /** 지도의 아는 장소들(서버가 보낸 차례). 지금 있는 곳 표시, 가 본 곳, 거기 보이는 인물의 이름 */

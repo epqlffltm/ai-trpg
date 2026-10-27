@@ -2519,6 +2519,13 @@ a.ui-button {
   font-size: 1rem;
 }
 
+.story-places__confirm {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid var(--ui-danger);
+  border-radius: var(--ui-radius);
+}
+
 .story-records__row {
   display: flex;
   align-items: center;
