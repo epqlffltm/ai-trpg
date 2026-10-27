@@ -296,6 +296,16 @@
             "title": "Ability",
             "type": "string"
           },
+          "cost": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillCost"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "difficulty": {
             "title": "Difficulty",
             "type": "string"
@@ -6741,13 +6751,23 @@
       },
       "MonsterAttack-Input": {
         "additionalProperties": false,
-        "description": "몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.\n\n이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).\nNPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.",
+        "description": "몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.\n\n이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).\nNPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.\ncost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.\n비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.",
         "properties": {
           "ability": {
             "maxLength": 20,
             "pattern": "^[a-z][a-z0-9_]*$",
             "title": "Ability",
             "type": "string"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillCost"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "difficulty": {
             "maxLength": 20,
@@ -6791,13 +6811,23 @@
       },
       "MonsterAttack-Output": {
         "additionalProperties": false,
-        "description": "몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.\n\n이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).\nNPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.",
+        "description": "몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.\n\n이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).\nNPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.\ncost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.\n비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.",
         "properties": {
           "ability": {
             "maxLength": 20,
             "pattern": "^[a-z][a-z0-9_]*$",
             "title": "Ability",
             "type": "string"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SkillCost"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "difficulty": {
             "maxLength": 20,

@@ -687,6 +687,8 @@ class ResourceSource:
     ITEM = 'item'
     # 기술(#805). 쓴 사람이 낸 비용과 대상의 수치를 맞춘 것
     SKILL = 'skill'
+    # 몬스터와 인물의 공격(#805 ③-a). 친 쪽이 낸 비용
+    ATTACK = 'attack'
     # 라운드가 닫힐 때 저절로(resources[].each_round)
     ROUND = 'round'
 
@@ -810,7 +812,8 @@ def record_attack_turn(
     """
     몬스터 한 마리나 싸우는 인물 하나의 차례를 이벤트로 적는다.
 
-    공격했으면 monster_attacked(인물이면 npc_attacked), 맞혔으면 그 뒤에 HP 의 변화와 부상이다.
+    공격했으면 monster_attacked(인물이면 npc_attacked), 비용을 냈으면(#805 ③-a) 그 뒤에 친 쪽의 수치가 바뀐 것,
+    맞혔으면 그 뒤에 HP 의 변화와 부상이다. 비용이 모자라 하지 못한 차례도 skipped 라 적지 않는다.
     쓰러진 캐릭터를 맞혀 죽었으면 그 뒤에 character_died(cause struck_down)다(#369).
     움직이지 못한 차례(skipped)는 적지 않는다. 굴린 것도 바뀐 것도 없다. 까닭은 라운드의 turns 에 있다.
     행한 사람(actor_id)을 적지 않는다. 몬스터와 인물을 움직인 것은 엔진이다.
@@ -823,9 +826,11 @@ def record_attack_turn(
         'round': round_number,
         attacker: turn[attacker],
         'name': turn['name'],
-        **{key: value for key, value in outcome.items() if key != 'effect'},
+        **{key: value for key, value in outcome.items() if key not in ('effect', 'cost')},
     }
     attacked = recorder.record(session, table, event_type, payload=payload, group=group)
+    attacker_of = {attacker: turn[attacker], 'name': turn['name']}
+    record_resource_shifts(session, table, outcome.get('cost') or [], attacker_of, ResourceSource.ATTACK, attacked)
     struck = outcome.get('downed_strike')
     if struck is not None and struck['fate'] == death.Fate.DEAD:
         record_death(session, table, outcome, round_number, cause=attacked, reason=DeathCause.STRUCK_DOWN)

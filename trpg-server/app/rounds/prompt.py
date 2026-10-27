@@ -218,7 +218,10 @@ from app.rounds.time_words import duration_text, time_text
 #                 쓰지 못했으면 그 까닭을 적는다((쓰려던 기술: 정신 집중. 비용이 모자랐다))
 #   narration-74: 상대에게 쓰는 기술(#805 ②). 굴린 기술의 줄은 판정 앞에 붙는다
 #                 ((쓴 기술: 마력 화살 → 수로 쥐 1, 마나 4 → 3/7) (판정: ...)). 못 쓴 까닭은 "받을 쪽이 없었다"다
-PROMPT_VERSION = 'narration-74'
+#   narration-75: 몬스터와 인물의 공격의 비용(#805 ③-a). 낸 비용을 말로 붙이고
+#                 (흑마법사: 엘프에게 화염구 (맞음) [마나 모자람]),
+#                 모자라 못 한 차례도 적는다((비용이 모자라 하지 못함))
+PROMPT_VERSION = 'narration-75'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

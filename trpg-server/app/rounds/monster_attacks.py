@@ -18,6 +18,8 @@
 쓰러진 캐릭터를 맞히면 피해 대신 죽음의 굴림 실패가 쌓인다(strike_downed). 이 함수는 어느 쪽인지 가르기만 한다.
 이번 라운드에 이 마리에게서 훔치다 들킨 도둑이 있으면 대상을 고르지 않고 도둑을 친다(app/rounds/steals.py).
 도둑이 칠 수 있는 대상이 아니면(쓰러졌거나 떠났다) 평소처럼 고른다. 친 대상과는 싸운 것으로 적는다(mark_fight).
+공격에 비용이 있으면(#805 ③-a) 고른 뒤에 낸다. 모자라면 그 차례에 아무것도 하지 못한다(skipped cost_short).
+아무것도 내지 않고 굴리지 않는다. 비용을 낼 수 있는 공격만 골라 주지 않는다. 빗나가도 낸다. NPC 의 차례와 같다.
 DB 를 모른다. 시트를 고친다. 저장하지는 않는다.
 """
 
@@ -25,11 +27,12 @@ from dataclasses import asdict
 
 from app.assets.scenarios.snapshot import AttackSnapshot
 from app.engine import check as checks
+from app.engine import resources as resource_rules
 from app.engine.armor import Save
 from app.engine.check import Check, HinderedCheck
 from app.engine.dice import choose
 from app.engine.health import ChangeKind
-from app.engine.ruleset import Difficulty
+from app.engine.ruleset import Difficulty, ResourceHolder
 from app.rounds import blows
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import NO_BLOW, Blow, Weapon
@@ -37,8 +40,9 @@ from app.rounds.checks import change_sheet
 from app.rounds.downed_strikes import can_be_struck, strike_downed
 from app.rounds.effects import Judging, mark_fight
 from app.rounds.monster_scene import SceneMonster
-from app.tables import sheets
+from app.tables import resources, sheets
 from app.tables.models import NpcStatus, TableMember
+from app.tables.resources import Bearer
 
 
 class Skipped:
@@ -52,6 +56,8 @@ class Skipped:
     NO_TARGET = 'no_target'
     # 입은 부상 때문에 움직이지 못했다(기절 같은 것, #799). NPC 의 차례도 같은 까닭을 쓴다
     INCAPACITATED = 'incapacitated'
+    # 고른 공격의 비용이 모자랐다(#805 ③-a). 무엇으로 누구를 치려 했는지도 적는다
+    COST_SHORT = 'cost_short'
 
 
 def can_act(monster: SceneMonster) -> bool:
@@ -135,6 +141,47 @@ def plan_attack_blow(judging: Judging, weapon: Weapon | None, victim: TableMembe
     return blows.plan_blow(judging, weapon, blows.member_protection(judging, victim), None)
 
 
+def affordable(judging: Judging, bearer: Bearer, attack: AttackSnapshot, holder: ResourceHolder) -> bool:
+    """
+    공격의 비용을 낼 수 있는가(#805 ③-a). 비용이 없으면 늘 된다. 그 수치의 지금 값이 비용 이상이어야 한다.
+
+    그 쪽이 가지지 않는 수치는 낼 수 없다(게시할 때 막았다. 판에 굳은 규칙이라 바뀌지 않는다).
+    """
+    if attack.cost is None:
+        return True
+    resource = resource_rules.find_resource(judging.ruleset, attack.cost.resource)
+    if resource is None or not resource_rules.holds(resource, holder):
+        return False
+    return resources.level_of(judging.ruleset, bearer, resource).value >= attack.cost.amount
+
+
+def pay(judging: Judging, bearer: Bearer, attack: AttackSnapshot, holder: ResourceHolder) -> dict:
+    """
+    공격의 비용을 낸다. 차례의 outcome 에 더할 것을 돌려준다. 그 쪽의 수치가 준 것의 문서들(cost)이다.
+
+    비용이 없는 공격이면 아무것도 더하지 않는다(빈 문서). 비용이 생기기 전의 차례와 같은 모양으로 남는다.
+    """
+    if attack.cost is None:
+        return {}
+    shift = resources.adjust(judging.ruleset, bearer, attack.cost.resource, -attack.cost.amount, holder)
+    return {'cost': [resources.shift_document(shift, None)] if shift is not None else []}
+
+
+def short_outcome(attack: AttackSnapshot, victim: TableMember) -> dict:
+    """비용이 모자라 하지 못한 차례(#805 ③-a). 무엇으로 누구를 치려 했는지를 적는다. 굴린 것도 바뀐 것도 없다."""
+    return {
+        'skipped': Skipped.COST_SHORT,
+        'attack': attack_document(attack),
+        'user_id': str(victim.user_id),
+        'character_name': victim.character_name,
+    }
+
+
+def attack_document(attack: AttackSnapshot) -> dict:
+    """결과에 적을 공격. 무기는 장비가 든 것(blow)에, 비용은 낸 것(cost)에 적는다. 공격은 그 전의 모양 그대로다."""
+    return attack.model_dump(exclude={'weapon', 'cost'})
+
+
 def attack_outcome(attack: AttackSnapshot, victim: TableMember, rolled: Check, effect: dict | None) -> dict:
     """
     몬스터가 공격한 것을 차례의 outcome 에 적을 문서로. 무엇으로 누구를 쳤고, 어떻게 굴렸고, 무엇이 바뀌었는지.
@@ -142,8 +189,7 @@ def attack_outcome(attack: AttackSnapshot, victim: TableMember, rolled: Check, e
     effect 는 맞혔을 때 대상의 HP 가 바뀐 것이다(app/rounds/effects.py 의 member_effect). 빗나갔으면 None.
     """
     return {
-        # 무기는 장비가 든 것(blow)에 적는다. 공격은 그 전의 모양 그대로다
-        'attack': attack.model_dump(exclude={'weapon'}),
+        'attack': attack_document(attack),
         'user_id': str(victim.user_id),
         'character_name': victim.character_name,
         **asdict(rolled),
@@ -164,6 +210,7 @@ def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
 
     움직이지 못하면 {'skipped': 까닭} 이다. 대상, 공격, 판정, 피해의 차례로 주사위를 굴린다.
     쓰러진 대상을 쳤으면 피해의 주사위가 없고 downed_strike 가 있다(hit_outcome).
+    고른 공격의 비용이 모자라면 굴리지 않는다(short_outcome). 비용이 있는 공격이면 낸 비용(cost)을 적는다(#805 ③-a).
     """
     stopped = stopped_by(judging, monster)
     if stopped is not None:
@@ -174,7 +221,10 @@ def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
     victim = pick_victim(judging, monster, victims)
     mark_fight(judging, monster.state, victim)
     attack = choose(monster.definition.attacks, judging.dice)
+    if not affordable(judging, monster.state, attack, ResourceHolder.MONSTERS):
+        return short_outcome(attack, victim)
+    cost = pay(judging, monster.state, attack, ResourceHolder.MONSTERS)
     blow = plan_attack_blow(judging, blows.monster_weapon(judging, monster, attack), victim)
     rolled = roll_attack(judging, monster, attack, blow)
     outcome = hit_outcome(judging, attack, victim, rolled.check, blow)
-    return {**outcome, 'hindrance': round_injuries.hindrance_document(rolled)}
+    return {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}

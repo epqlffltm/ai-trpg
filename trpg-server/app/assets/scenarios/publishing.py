@@ -80,8 +80,8 @@ from app.engine.health import find_magnitude
 from app.engine.injury import find_injury
 from app.engine.item_aids import AidAct
 from app.engine.item_effects import EffectKind
-from app.engine.resources import find_resource
-from app.engine.ruleset import Healing, Ruleset
+from app.engine.resources import find_resource, holds
+from app.engine.ruleset import Healing, ResourceHolder, Ruleset
 from app.engine.sheet import CharacterSheet, Sheet, fits, knows_only
 
 
@@ -405,7 +405,9 @@ def find_npc_sheet_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset |
         problems.append(Problem.NPC_SHEET_NOT_PERSON)
     if ruleset and any(not fits(ruleset, npc_sheet.sheet) for npc_sheet in npc_sheets):
         problems.append(Problem.NPC_SHEET_INVALID)
-    if ruleset and any(attack_fault(ruleset, attack) for npc_sheet in npc_sheets for attack in npc_sheet.attacks):
+    if ruleset and any(
+        attack_fault(ruleset, attack, ResourceHolder.NPCS) for npc_sheet in npc_sheets for attack in npc_sheet.attacks
+    ):
         problems.append(Problem.NPC_ATTACK_INVALID)
     return problems
 
@@ -450,18 +452,32 @@ def find_monster_sheet_problems(scenario: Scenario, parts: Parts, ruleset: Rules
         problems.append(Problem.MONSTER_SHEET_MISSING)
     if ruleset and any(not fits(ruleset, monster_sheet.sheet) for monster_sheet in monster_sheets):
         problems.append(Problem.MONSTER_SHEET_INVALID)
-    if ruleset and any(attack_fault(ruleset, attack) for sheet in monster_sheets for attack in sheet.attacks):
+    if ruleset and any(
+        attack_fault(ruleset, attack, ResourceHolder.MONSTERS) for sheet in monster_sheets for attack in sheet.attacks
+    ):
         problems.append(Problem.MONSTER_ATTACK_INVALID)
     return problems
 
 
-def attack_fault(ruleset: Ruleset, attack: MonsterAttack) -> bool:
-    """이 공격의 능력치, 난이도, 양의 등급 중 룰북의 규칙에 없는 것이 있는가."""
+def attack_fault(ruleset: Ruleset, attack: MonsterAttack, holder: ResourceHolder) -> bool:
+    """
+    이 공격의 능력치, 난이도, 양의 등급 중 룰북의 규칙에 없는 것이 있는가.
+    비용(#805 ③-a)의 수치는 그 쪽(인물이나 몬스터, holder)이 가지는 규칙의 수치여야 한다.
+    """
     return (
         find_ability(ruleset, attack.ability) is None
         or find_difficulty(ruleset, attack.difficulty) is None
         or find_magnitude(ruleset, attack.harm) is None
+        or cost_fault(ruleset, attack, holder)
     )
+
+
+def cost_fault(ruleset: Ruleset, attack: MonsterAttack, holder: ResourceHolder) -> bool:
+    """공격의 비용이 규칙에 없는 수치거나 그 쪽이 가지지 않는 수치인가. 비용이 없으면 아니다."""
+    if attack.cost is None:
+        return False
+    resource = find_resource(ruleset, attack.cost.resource)
+    return resource is None or not holds(resource, holder)
 
 
 def find_unique_problems(scenario: Scenario, parts: Parts) -> list[Problem]:

@@ -966,6 +966,8 @@ class MonsterTurnNote:
 
     굴림의 숫자는 주지 않는다. 몬스터의 능력치를 드러낸다. 맞았으면 그 캐릭터의 HP 변화(impact)를 준다.
     움직이지 못한 차례(쓰러짐, 죽음, 부상으로 못 움직임, 칠 캐릭터가 없음)는 넣지 않는다. 한 일이 없다.
+    공격의 비용(#805 ③-a)을 냈으면 cost 에 그 수치를 말로만 준다(NPC 와 몬스터의 수치는 숫자를 주지 않는다, #804).
+    고른 공격의 비용이 모자라 하지 못했으면 short 가 참이다. 그때는 굴리지 않았다(hit 는 거짓).
     """
 
     # 부르는 이름(수로 쥐 2)
@@ -979,6 +981,8 @@ class MonsterTurnNote:
     downed: DownedStrikeNote | None = None
     # 공격에 장비가 든 것(#276). 무기도 방어 방식도 없었거나 이 칸이 생기기 전에 굳힌 것은 None 이다
     blow: BlowNote | None = None
+    cost: list[ResourceNote] = field(default_factory=list)
+    short: bool = False
 
 
 @dataclass(frozen=True)

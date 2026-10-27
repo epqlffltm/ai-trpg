@@ -243,7 +243,7 @@ async def test_a_sheet_is_proposed_for_a_copied_monster_and_not_saved(
     body = response.json()
     assert body['sheet']['monster_id'] == wolf['id']
     assert body['sheet']['sheet'] == {'abilities': propose(SRD5, WOLF_DATA).sheet.abilities, 'max_hp': 11}
-    attack = {'name': '물기', 'ability': 'dex', 'difficulty': 'easy', 'harm': 'heavy', 'weapon': None}
+    attack = {'name': '물기', 'ability': 'dex', 'difficulty': 'easy', 'harm': 'heavy', 'weapon': None, 'cost': None}
     assert body['sheet']['attacks'] == [attack]
     assert body['notes'] == [] and body['copied_from'] == {'source': 'srd51', 'key': 'monsters/wolf'}
     assert saved.json()['monster_sheets'] == []
