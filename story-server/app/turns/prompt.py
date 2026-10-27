@@ -4,7 +4,8 @@
 모델에 보낼 메시지를 만든다(docs/architecture/story.md 의 "한 번의 말"). DB 도 모델도 모른다.
 
     [system] 세션의 카드(render_card): 지킬 것, 세계관, 지금(날, 시간대, 장소, 소지품), 장면의 인물,
-             기다리는 이벤트의 장면 지시, 쓰는 법(말하는 사람의 표식), 켜져 있으면 다음 답 추천의 지시
+             기다리는 이벤트의 장면 지시, 쓰는 법(말하는 사람의 표식, 고를 수 있는 표정),
+             켜져 있으면 다음 답 추천의 지시
     [assistant / user ...] 최근의 말(conversation_core/window.py 의 select_window)
 
 장면 밖의 인물은 카드에 들어가지 않는다. 모델이 쓸 수 있는 사람은 카드에 적은 인물과 서술뿐이다.
@@ -17,6 +18,8 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 
 from ai_core.provider import ChatMessage, Role
+from conversation_core.expressions import CLOSE as EXPRESSION_CLOSE
+from conversation_core.expressions import OPEN as EXPRESSION_OPEN
 from conversation_core.suggestions import instruction as suggestions_instruction
 from conversation_core.window import Turn
 
@@ -75,6 +78,8 @@ class CastCard:
     speech_examples: str
     # 지금의 호감도 단계의 이름. 단계를 적지 않은 인물이면 빈 글이다
     stage: str
+    # 고를 수 있는 표정의 이름들(그 인물의 그림의 표정). 없으면 빈 것이다
+    expressions: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -112,6 +117,7 @@ def cast_card(briefing: Briefing, world: World, state: StoryState, cast_id: str)
         intro=plain_text(character.intro_html) if character is not None else '',
         speech_examples=character.speech_examples if character is not None else '',
         stage=stage_name(member, state.affection.get(cast_id, start)),
+        expressions=briefing.expressions(cast_id),
     )
 
 
@@ -174,14 +180,36 @@ def cast_section(scene: SceneCard) -> str:
     return '\n\n'.join(['[장면의 인물]', *blocks])
 
 
+def expression_lines(scene: SceneCard) -> list[str]:
+    """
+    표정을 고르는 법. 고를 수 있는 표정이 있는 인물이 장면에 없으면 빈 것이다.
+    표식은 conversation_core/expressions.py 의 것을 줄마다 쓴다(app/turns/segments.py).
+    """
+    faces = [card for card in scene.cast if card.expressions]
+    if not faces:
+        return []
+    choices = ' / '.join(f'@{card.id}: 기본, {", ".join(card.expressions)}' for card in faces)
+    first = faces[0]
+    return [
+        f'인물의 줄은 표식 뒤에 {EXPRESSION_OPEN}표정{EXPRESSION_CLOSE} 를 먼저 써서 그 줄의 표정을 고를 수 있다. '
+        '쓰지 않으면 기본 표정이다.',
+        f'고를 수 있는 표정: {choices}',
+        f'예: @{first.id}: {EXPRESSION_OPEN}{first.expressions[0]}{EXPRESSION_CLOSE}정말?',
+    ]
+
+
 def format_section(scene: SceneCard) -> str:
-    """[쓰는 법] 블록. 줄마다 말하는 사람의 표식을 적게 한다(app/turns/segments.py)."""
+    """
+    [쓰는 법] 블록. 줄마다 말하는 사람의 표식을 적게 한다(app/turns/segments.py).
+    고를 수 있는 표정이 있으면 그 법도 적는다.
+    """
     speakers = ', '.join(f'@{card.id}' for card in scene.cast)
     lines = [
         '줄마다 맨 앞에 말하는 사람의 표식을 적는다. 서술은 @narration: 이다.',
         f'인물의 말과 행동은 그 인물의 표식으로 적는다. 쓸 수 있는 인물: {speakers}' if speakers else None,
         '위에 없는 인물은 말하지 않는다. 사용자의 말은 쓰지 않는다. 한 줄에 한 사람만 쓴다.',
         '예:\n@narration: 바람이 분다.' + (f'\n@{scene.cast[0].id}: 왔구나.' if scene.cast else ''),
+        *expression_lines(scene),
     ]
     return '\n'.join(['[쓰는 법]', *(line for line in lines if line)])
 

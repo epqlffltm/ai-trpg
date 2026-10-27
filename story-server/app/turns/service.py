@@ -162,7 +162,7 @@ class Collector:
         """잘린 것들을 응답으로. 잇닿은 글은 하나로 묶어 보낸다."""
         for event in merge_events(events):
             if isinstance(event, SegmentStart):
-                self.relay.push(segment_frame(event.speaker))
+                self.relay.push(segment_frame(event.speaker, event.expression))
             else:
                 self.relay.push(delta_frame(event.text))
 
@@ -183,8 +183,8 @@ def collector_for(start: TurnStart, relay: Relay) -> Collector:
     이어서 출력이면 끊긴 답의 조각에서 시작하고(첫 줄에 표식이 없으면 마지막 조각을 이어 쓴다) 겹친 앞부분을 뗀다.
     """
     if start.continued is None:
-        return Collector(relay, SpeakerSplitter(start.labels))
-    splitter = continuing_splitter(start.labels, segments_of(start.continued.segments))
+        return Collector(relay, SpeakerSplitter(start.labels, start.expressions))
+    splitter = continuing_splitter(start.labels, segments_of(start.continued.segments), start.expressions)
     return Collector(relay, splitter, trim=OverlapTrim(start.continued.content))
 
 
@@ -276,6 +276,12 @@ def shown_in_turn(branch: Branch, stage: Staging) -> frozenset[str]:
     """
     met = met_on(message.cast or () for message in branch.path if message.role == Role.ASSISTANT)
     return affection_shown(branch.document, met | frozenset(stage.cast))
+
+
+def expressions_for(briefing: Briefing, cast: tuple[str, ...]) -> dict[str, tuple[str, ...]]:
+    """장면의 인물마다 고를 수 있는 표정의 이름들. 표정이 없는 인물은 뺀다."""
+    found = {cast_id: briefing.expressions(cast_id) for cast_id in cast}
+    return {cast_id: names for cast_id, names in found.items() if names}
 
 
 def labels_for(briefing: Briefing, cast: tuple[str, ...]) -> dict[str, str]:
@@ -576,6 +582,7 @@ def turn_start(
         messages=prompt_for(branch, state, stage, message, options),
         cast=stage.cast,
         labels=labels_for(branch.briefing, stage.cast),
+        expressions=expressions_for(branch.briefing, stage.cast),
         state=state_view(branch.world, state, stage.cast, shown_in_turn(branch, stage)),
     )
 

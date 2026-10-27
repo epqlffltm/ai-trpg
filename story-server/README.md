@@ -183,9 +183,9 @@ chat 의 한 번의 말과 같은 차례다: 차례를 잡고(한 세션 한 생
 
 ```
 event: turn     data: {"generation_id", "user_message", "cast": ["mina"]}   답할 사람의 말과 장면의 인물
-event: segment  data: {"speaker": "mina"}                                    새 말 조각(서술은 null)
+event: segment  data: {"speaker": "mina", "expression": "웃음"}             새 말 조각(서술은 null). 그 줄의 표정(기본이면 null)
 event: delta    data: {"text": "..."}                                        지금 조각에 붙는 글
-event: done     data: {"message": {... "segments": [{"speaker", "text"}], "cast", "suggestions"}}   저장한 답
+event: done     data: {"message": {... "segments": [{"speaker", "text", "expression"}], "cast", "suggestions"}}   저장한 답
 event: failed   data: {"code": "timeout"}                                    답 없이 끝났다
 ```
 
@@ -194,6 +194,10 @@ event: failed   data: {"code": "timeout"}                                    답
 - **말 조각.** 모델은 줄마다 `@인물의 id:` 나 `@narration:` 을 적는다(`app/turns/segments.py`). 서버는 흘러오는 대로 잘라 말하는 사람을 본다.
   장면에 없는 인물의 줄은 흘리지 않고 저장하지 않으며 기록에 센다(`generations.dropped_segments`). 표식을 어긴 줄은 서술이다.
   남은 조각이 없으면 실패한 말이고 청구하지 않는다(`failed`, `empty`).
+- **표정**(2026-10-27). 그림에 표정이 있는 인물이 장면에 있으면 카드의 쓰는 법에 고를 수 있는 표정을 적는다.
+  모델은 그 인물의 줄에서 표식 뒤에 `<expression>웃음</expression>` 을 먼저 쓸 수 있다(chat 의 표정 표식을 줄마다 쓴다, `conversation_core/expressions.py`).
+  서버는 표식을 떼어 흘리지 않고, 그 조각의 `expression` 으로 `segment` 메시지와 저장한 조각에 싣는다. 화면은 `view.cast[].sprites` 에서 그 표정의 그림을 고른다.
+  그 인물의 그림에 없는 이름이나 "기본", 서술, 표정이 없는 인물은 `null` 이다. 표정은 본문(`content`)에 넣지 않는다. 답을 고쳐도 그대로다.
 - **저장.** 답의 `segments` 가 기준이고, `content` 는 그 조각을 표식이 붙은 줄로 쓴 것이다(다음 호출의 프롬프트에 그대로 간다).
   답에는 그때의 장면의 인물(`cast`)을 함께 적는다. 상태는 행동 말(과 선택지를 지운 말)에 붙는다(`message_states`).
 - **다음 답 추천**(chat 과 같다, `conversation_core/suggestions.py`). 카드 끝에 지시를 붙이면 모델이 본문 뒤에 `<suggestions>` 와 선택지를 쓴다.

@@ -149,14 +149,17 @@ async def test_a_message_streams_segments_and_saves_both(
         ['mina'],
     )
     assert [data for event, data in events[1:-1]] == [
-        {'speaker': None},
+        {'speaker': None, 'expression': None},
         {'text': '바람이 '},
         {'text': '분다.'},
-        {'speaker': 'mina'},
+        {'speaker': 'mina', 'expression': None},
         {'text': '왔구나.'},
     ]
     answer = done['message']
-    assert answer['segments'] == [{'speaker': None, 'text': '바람이 분다.'}, {'speaker': 'mina', 'text': '왔구나.'}]
+    assert answer['segments'] == [
+        {'speaker': None, 'text': '바람이 분다.', 'expression': None},
+        {'speaker': 'mina', 'text': '왔구나.', 'expression': None},
+    ]
     assert (answer['content'], answer['cast'], answer['status'], answer['role']) == (
         '@narration: 바람이 분다.\n@mina: 왔구나.',
         ['mina'],
@@ -233,8 +236,8 @@ async def test_a_speaker_outside_the_scene_is_dropped(
     assert '나도 왔어' not in response.text
     done = events[-1][1]['message']
     assert done['segments'] == [
-        {'speaker': 'mina', 'text': '준은 해변에 있잖아.'},
-        {'speaker': None, 'text': '엉뚱한 줄'},
+        {'speaker': 'mina', 'text': '준은 해변에 있잖아.', 'expression': None},
+        {'speaker': None, 'text': '엉뚱한 줄', 'expression': None},
     ]
     assert (await generation_of(session)).dropped_segments == 1
 
@@ -507,7 +510,7 @@ async def test_a_failure_midway_keeps_what_came_and_charges(
     assert done[0] == 'done'
     assert (done[1]['message']['status'], done[1]['message']['segments']) == (
         'partial',
-        [{'speaker': 'mina', 'text': '그래서 말인데'}],
+        [{'speaker': 'mina', 'text': '그래서 말인데', 'expression': None}],
     )
     generation = await generation_of(session)
     assert (generation.billing_status, generation.outcome, generation.error_code) == (

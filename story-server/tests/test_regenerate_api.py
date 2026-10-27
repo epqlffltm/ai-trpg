@@ -131,7 +131,7 @@ async def test_regenerating_an_answer_adds_a_sibling_and_charges_again(
     turn = parse_sse(response.text)[0][1]
     # 같은 사람의 말에 답한다. 사람의 말은 새로 저장하지 않는다
     assert turn['user_message']['id'] == first['parent_id'] == second['parent_id']
-    assert second['segments'] == [{'speaker': 'mina', 'text': '다시 왔구나.'}]
+    assert second['segments'] == [{'speaker': 'mina', 'text': '다시 왔구나.', 'expression': None}]
     assert (await session.scalar(select(func.count()).select_from(Message).where(Message.role == Role.USER))) == 1
     # 모델에는 그 말까지만 간다(앞의 답은 가지 밖이다)
     messages, _ = router.provider.calls[1]
@@ -318,7 +318,10 @@ async def test_stopping_a_running_answer_saves_what_it_got(
 
     assert stopped.status_code == status.HTTP_204_NO_CONTENT
     answer = await answered(app, await sending)
-    assert (answer['status'], answer['segments']) == ('partial', [{'speaker': 'mina', 'text': '어서 와'}])
+    assert (answer['status'], answer['segments']) == (
+        'partial',
+        [{'speaker': 'mina', 'text': '어서 와', 'expression': None}],
+    )
     # 받은 만큼 청구했다. 끝난 생성은 스위치를 놓는다
     assert billing.balance(ME) == 70
     assert app.state.stops == {}
