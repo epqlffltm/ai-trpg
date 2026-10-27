@@ -17,6 +17,184 @@
         "title": "BranchChoice",
         "type": "object"
       },
+      "CastAffectionOut": {
+        "description": "인물 창의 호감도. display 는 보이는 법(숫자, 단계 …), stages 는 단계들이다.\ncooling_until 은 다시 고백할 수 있는 시각(1일째 0시부터의 분)이고, 대기가 아니면 null 이다.\ngifts 는 이 가지에서 이 인물에게 건넨 물건(물건의 id)이다.",
+        "properties": {
+          "cooling_until": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cooling Until"
+          },
+          "display": {
+            "title": "Display",
+            "type": "string"
+          },
+          "gifts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gifts",
+            "type": "array"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/StageOut"
+            },
+            "title": "Stages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "display",
+          "stages",
+          "cooling_until",
+          "gifts"
+        ],
+        "title": "CastAffectionOut",
+        "type": "object"
+      },
+      "CastOut": {
+        "description": "보이는 인물 하나. reveal 은 지금 보이는 법이다(만나면 shown).\nsilhouette 이면 이름, 그림, 인물 창의 칸이 모두 null 이거나 비어 있다. 숨김인 인물은 만나기 전에는 목록에 없다.\nintro_html, age, gender, affection 은 제작자가 인물 창에 고른 항목만 실린다(아니면 null).\nevents 는 이 가지에서 이 인물이 나온 이벤트(이벤트의 id)다. 호감도를 보이는 인물만 실린다.",
+        "properties": {
+          "affection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CastAffectionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "age": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age"
+          },
+          "confessable": {
+            "title": "Confessable",
+            "type": "boolean"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "gender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gender"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "intro_html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intro Html"
+          },
+          "met": {
+            "title": "Met",
+            "type": "boolean"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "reveal": {
+            "title": "Reveal",
+            "type": "string"
+          },
+          "sprites": {
+            "items": {
+              "$ref": "#/components/schemas/SpriteOut"
+            },
+            "title": "Sprites",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "reveal",
+          "met",
+          "name",
+          "image_id",
+          "sprites",
+          "confessable",
+          "intro_html",
+          "age",
+          "gender",
+          "affection",
+          "events"
+        ],
+        "title": "CastOut",
+        "type": "object"
+      },
+      "ChoiceOut": {
+        "description": "선택지 하나.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "ChoiceOut",
+        "type": "object"
+      },
       "ChooseAction": {
         "additionalProperties": false,
         "description": "기다리는 이벤트의 선택지 하나를 고른다.",
@@ -134,6 +312,9 @@
             "title": "Updated At",
             "type": "string"
           },
+          "view": {
+            "$ref": "#/components/schemas/WorldView"
+          },
           "world": {
             "$ref": "#/components/schemas/WorldOut"
           }
@@ -145,6 +326,7 @@
           "model",
           "messages",
           "state",
+          "view",
           "created_at",
           "updated_at"
         ],
@@ -282,6 +464,60 @@
         "title": "EndDayAction",
         "type": "object"
       },
+      "EndingOut": {
+        "description": "엔딩의 칸 하나. 본 엔딩(계정의 기록이나 이 가지에서 본 것)만 이름과 일러스트가 실린다(아니면 null).\nhint 는 제작자가 적은 힌트다. unlock 이 거짓이면 계정에 남지 않는 엔딩이다(엔딩 수에 넣지 않는다).",
+        "properties": {
+          "hint": {
+            "title": "Hint",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "seen": {
+            "title": "Seen",
+            "type": "boolean"
+          },
+          "unlock": {
+            "title": "Unlock",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "seen",
+          "name",
+          "image_id",
+          "hint",
+          "unlock"
+        ],
+        "title": "EndingOut",
+        "type": "object"
+      },
       "EndingRecordList": {
         "description": "한 세계관에서 본 엔딩들. 처음 본 차례다.",
         "properties": {
@@ -330,6 +566,54 @@
           "conversation_id"
         ],
         "title": "EndingRecordOut",
+        "type": "object"
+      },
+      "EventOut": {
+        "description": "이 가지에서 열린 이벤트 하나. cast 는 장면이 부른 인물, image_id 는 장면의 일러스트다.\nchoices 는 고르기를 기다리는 이벤트에만 실린다(아니면 빈 목록). 열리는 조건과 효과는 싣지 않는다.",
+        "properties": {
+          "cast": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cast",
+            "type": "array"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/ChoiceOut"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "cast",
+          "image_id",
+          "choices"
+        ],
+        "title": "EventOut",
         "type": "object"
       },
       "GiveAction": {
@@ -475,6 +759,48 @@
           "errors"
         ],
         "title": "InputError",
+        "type": "object"
+      },
+      "ItemOut": {
+        "description": "물건 하나.",
+        "properties": {
+          "consumable": {
+            "title": "Consumable",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "consumable",
+          "image_id"
+        ],
+        "title": "ItemOut",
         "type": "object"
       },
       "MeResponse": {
@@ -944,6 +1270,76 @@
         "title": "PathMessageOut",
         "type": "object"
       },
+      "PathOut": {
+        "description": "두 장소를 잇는 길과 걸리는 분.",
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "string"
+          },
+          "b": {
+            "title": "B",
+            "type": "string"
+          },
+          "minutes": {
+            "title": "Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "minutes"
+        ],
+        "title": "PathOut",
+        "type": "object"
+      },
+      "PlaceOut": {
+        "description": "장소 하나. backgrounds 는 시간대의 id 마다의 배경 그림이다.",
+        "properties": {
+          "backgrounds": {
+            "additionalProperties": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Backgrounds",
+            "type": "object"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "image_id",
+          "backgrounds"
+        ],
+        "title": "PlaceOut",
+        "type": "object"
+      },
       "Rating": {
         "description": "이용 등급. asset 서버, chat 서버, 게임 서버와 같은 값이다.",
         "enum": [
@@ -986,6 +1382,74 @@
           "text"
         ],
         "title": "SegmentOut",
+        "type": "object"
+      },
+      "SlotOut": {
+        "description": "시간대 하나. start_hour 부터 다음 시간대가 시작할 때까지다.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "start_hour": {
+            "title": "Start Hour",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "start_hour"
+        ],
+        "title": "SlotOut",
+        "type": "object"
+      },
+      "SpriteOut": {
+        "description": "인물의 그림 하나. expression 은 표정(빈 글이면 기본)이다.",
+        "properties": {
+          "expression": {
+            "title": "Expression",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "image_id",
+          "expression"
+        ],
+        "title": "SpriteOut",
+        "type": "object"
+      },
+      "StageOut": {
+        "description": "호감도의 단계 하나. at 이상이면 이 단계다.",
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "at"
+        ],
+        "title": "StageOut",
         "type": "object"
       },
       "StateOut": {
@@ -1084,7 +1548,7 @@
         "type": "string"
       },
       "WorldOut": {
-        "description": "세션 하나에 싣는 세계관. 가져온 판의 문서까지다(받은 칸 전부).\n\n문서의 칸은 asset 서버의 판의 형식을 따른다(asset-server/README.md 의 \"세계관\").",
+        "description": "세션 하나에 싣는 세계관. 가져온 판의 문서까지다(받은 칸 전부).\n\n문서의 칸은 asset 서버의 판의 형식을 따른다(asset-server/README.md 의 \"세계관\").\ndocument 는 곧 뺀다. 이벤트와 엔딩의 조건, 만나지 않은 인물까지 들어 있다. 화면은 세션의 view 를 쓴다.",
         "properties": {
           "document": {
             "additionalProperties": true,
@@ -1171,6 +1635,119 @@
           "rating"
         ],
         "title": "WorldSummary",
+        "type": "object"
+      },
+      "WorldView": {
+        "description": "세션에서 화면이 쓰는 세계관의 칸. 판의 문서에서 지금 보여도 되는 것만 골라 이 가지의 상태에 맞춘다.\n이벤트와 엔딩의 조건, 일정, 호감도의 규칙, 만나지 않은 인물은 싣지 않는다.",
+        "properties": {
+          "after_ending": {
+            "title": "After Ending",
+            "type": "string"
+          },
+          "cast": {
+            "items": {
+              "$ref": "#/components/schemas/CastOut"
+            },
+            "title": "Cast",
+            "type": "array"
+          },
+          "deadline_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline Days"
+          },
+          "endings": {
+            "items": {
+              "$ref": "#/components/schemas/EndingOut"
+            },
+            "title": "Endings",
+            "type": "array"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/EventOut"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "intro_html": {
+            "title": "Intro Html",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "paths": {
+            "items": {
+              "$ref": "#/components/schemas/PathOut"
+            },
+            "title": "Paths",
+            "type": "array"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceOut"
+            },
+            "title": "Places",
+            "type": "array"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/SlotOut"
+            },
+            "title": "Slots",
+            "type": "array"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "intro_html",
+          "tags",
+          "image_id",
+          "deadline_days",
+          "after_ending",
+          "slots",
+          "places",
+          "paths",
+          "items",
+          "cast",
+          "events",
+          "endings"
+        ],
+        "title": "WorldView",
         "type": "object"
       }
     },

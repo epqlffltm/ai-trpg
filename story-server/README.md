@@ -112,7 +112,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | PUT | `/api/v1/story/conversations/{id}/model` | 세션의 모델 바꾸기(`{"model"}`). 고를 수 없으면 422 `model_unavailable`, 가격 목록을 받지 못했으면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id"}`). 세계관의 마지막 판을 가져와 고정한다. 201 | access 토큰 |
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}` | access 토큰 |
-| GET | `/api/v1/story/conversations/{id}` | 세션 하나(가져온 판의 문서, 지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`). 남의 것은 404 | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}` | 세션 하나(지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`, 화면이 쓰는 세계관의 칸 [`view`](#세션의-view)). 가져온 판의 문서(`world.document`)는 곧 뺀다. 남의 것은 404 | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/branch` | [가지 고르기](#가지-고르기)(`{"message_id"}`). 바뀐 세션을 돌려준다 | access 토큰 |
 | PATCH | `/api/v1/story/messages/{id}` | [답 고치기](#답-고치기)(`{"segments": ["…"]}`). 고친 말을 돌려준다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content", "edit_of"?}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
@@ -147,6 +147,23 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | 404(없다, 남의 비공개, 게시한 적이 없다, 볼 수 없는 등급) | 404 `world_not_found`. 가져온 판이 볼 수 없는 등급일 때도 같다 |
 | 403 `adult_content_required`(자기 세계관인데 등급을 쓸 수 없다) | 403 `adult_content_required`. 화면이 본인인증으로 안내한다 |
 | 닿지 못함, 시간 초과, 401, 5xx, 모양이 틀린 답, 모르는 형식, `ASSET_URL` 이 없음 | 503 `asset_unavailable`, `Retry-After: 5`. 다시 시도하지 않는다(사람이 다시 누른다) |
+
+### 세션의 view
+
+세션 읽기의 `view` 는 판의 문서에서 지금 보여도 되는 것만 골라 이 가지의 상태에 맞춘 것이다(`app/conversations/views.py`).
+판의 문서에는 이벤트와 엔딩의 조건, 인물의 일정과 호감도 규칙, 만나지 않은 인물, 못 본 엔딩의 이름이 들어 있다.
+화면이 장면(D2), 지도(D3), 소지품(D4), 인물 창(D5), 엔딩(D6)을 그릴 때 이것을 쓴다.
+
+- **만남.** 이 가지의 답의 장면에 한 번이라도 들어온 인물이다. 엔진이 정한 장면의 인물이라 모델이 바꾸지 못한다.
+  상태에 따로 적지 않고 답마다 저장된 장면의 인물(`messages.cast`)을 모은다. 그래서 지난 세션에도 맞다(2026-10-27).
+- **인물**(`cast`). 만났으면 보임이다. 만나기 전에는 제작자가 고른 공개를 따른다. 실루엣은 이름, 그림, 인물 창이 비고(null), 숨김은 목록에 없다.
+  인물 창의 소개, 나이, 성별, 호감도는 제작자가 고른 항목만 실린다. 호감도에는 단계와 보이는 법, 고백 대기가 끝나는 시각(`cooling_until`), 건넨 물건(`gifts`)이 있다.
+  고백 대기, 건넨 선물, 함께 본 이벤트(`events`)는 호감도를 보이는 인물에만 싣는다(판에 그 셋을 따로 고르는 칸이 아직 없다).
+- **이벤트**(`events`). 이 가지에서 열린 것의 이름, 장면의 인물, 일러스트다. 선택지의 글은 고르기를 기다리는 이벤트에만 싣는다. 조건과 효과는 없다.
+- **엔딩**(`endings`). 칸은 모두 보인다. 이름과 일러스트는 본 것(계정의 기록이나 이 가지에서 본 것)만이고, 힌트는 늘 싣는다. `unlock` 이 거짓이면 계정에 남지 않는 엔딩이다.
+- 그 밖에 이름, 소개, 태그, 대표 그림, 기한, 엔딩 뒤, 시간대, 장소(배경 그림), 길, 물건이다.
+- **바꾸는 차례**(2026-10-27). ① `view` 를 더한다(이번). ② 화면이 `world.document` 대신 `view` 를 쓴다(웹). ③ `world.document` 를 뺀다.
+  `state.affection` 은 인물 창과 상관없이 모든 인물의 값이 실린다. ③ 에서 `view` 의 호감도만 남긴다.
 
 ### 말 보내기
 

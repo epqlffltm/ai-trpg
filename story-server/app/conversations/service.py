@@ -39,10 +39,13 @@ from app.catalog.offers import is_sold
 from app.conversations import repository
 from app.conversations.models import Conversation, ImportedWorld, Message, Role
 from app.conversations.repository import ConversationRow
-from app.conversations.schemas import ConversationCreate, StateOut
+from app.conversations.schemas import ConversationCreate, StateOut, WorldView
+from app.conversations.views import met_on, world_view
 from app.core.dependencies import Viewer
-from app.engine.world import read_world
+from app.engine.state import StoryState
+from app.engine.world import World, read_world
 from app.ratings import Rating, allowed_ratings
+from app.records import repository as records
 from app.turns.scenes import staging
 from app.turns.segments import Segment, render_segments, segment_dicts
 from app.turns.states import state_on_path, state_view
@@ -264,15 +267,31 @@ async def conversation_messages(session: AsyncSession, conversation: Conversatio
     return await repository.active_path(session, conversation.active_leaf_id)
 
 
-async def conversation_state(session: AsyncSession, imported: ImportedWorld, messages: list[Message]) -> StateOut:
-    """
-    지금 가지의 끝의 상태와 그 장면의 인물. 선택지를 기다리는 이벤트가 있으면 그 장면이 부른 인물도 든다.
-    messages 는 지금 가지의 말들(첫 말부터)이다.
-    """
-    world = read_world(imported.document)
-    state = state_on_path(world, await repository.states_on(session, [message.id for message in messages]))
+async def branch_state(session: AsyncSession, world: World, messages: list[Message]) -> StoryState:
+    """지금 가지의 끝의 엔진의 상태. messages 는 지금 가지의 말들(첫 말부터)이다."""
+    return state_on_path(world, await repository.states_on(session, [message.id for message in messages]))
+
+
+def state_out(world: World, state: StoryState) -> StateOut:
+    """상태를 응답의 모양으로. 선택지를 기다리는 이벤트가 있으면 그 장면이 부른 인물도 장면에 든다."""
     waiting = world.event(state.choosing) if state.choosing is not None else None
     return state_view(world, state, staging(world, state, waiting).cast)
+
+
+async def conversation_state(
+    session: AsyncSession, viewer: Viewer, imported: ImportedWorld, messages: list[Message]
+) -> tuple[StateOut, WorldView]:
+    """
+    지금 가지의 끝의 상태와, 그 상태에 맞춘 세계관의 칸(app/conversations/views.py).
+    만난 인물은 가지의 답들의 장면의 인물이고, 본 엔딩은 이 사람의 계정의 기록과 이 가지의 엔딩이다.
+    """
+    world = read_world(imported.document)
+    state = await branch_state(session, world, messages)
+    met = met_on(message.cast or () for message in messages if message.role == Role.ASSISTANT)
+    recorded = frozenset(
+        record.ending_id for record in await records.endings_of(session, viewer.claims.user_id, imported.source_id)
+    )
+    return state_out(world, state), world_view(imported.document, state, met, recorded)
 
 
 async def message_alternatives(

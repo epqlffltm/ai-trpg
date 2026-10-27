@@ -77,9 +77,150 @@ class WorldOut(WorldSummary):
     세션 하나에 싣는 세계관. 가져온 판의 문서까지다(받은 칸 전부).
 
     문서의 칸은 asset 서버의 판의 형식을 따른다(asset-server/README.md 의 "세계관").
+    document 는 곧 뺀다. 이벤트와 엔딩의 조건, 만나지 않은 인물까지 들어 있다. 화면은 세션의 view 를 쓴다.
     """
 
     document: dict
+
+
+class NamedOut(BaseModel):
+    """id 와 이름이 있는 것(시간대)."""
+
+    id: str
+    name: str
+
+
+class SlotOut(NamedOut):
+    """시간대 하나. start_hour 부터 다음 시간대가 시작할 때까지다."""
+
+    start_hour: int
+
+
+class PlaceOut(NamedOut):
+    """장소 하나. backgrounds 는 시간대의 id 마다의 배경 그림이다."""
+
+    description: str
+    image_id: uuid.UUID | None
+    backgrounds: dict[str, uuid.UUID]
+
+
+class PathOut(BaseModel):
+    """두 장소를 잇는 길과 걸리는 분."""
+
+    a: str
+    b: str
+    minutes: int
+
+
+class ItemOut(NamedOut):
+    """물건 하나."""
+
+    description: str
+    consumable: bool
+    image_id: uuid.UUID | None
+
+
+class SpriteOut(BaseModel):
+    """인물의 그림 하나. expression 은 표정(빈 글이면 기본)이다."""
+
+    id: str
+    image_id: uuid.UUID
+    expression: str
+
+
+class StageOut(BaseModel):
+    """호감도의 단계 하나. at 이상이면 이 단계다."""
+
+    name: str
+    at: int
+
+
+class CastAffectionOut(BaseModel):
+    """
+    인물 창의 호감도. display 는 보이는 법(숫자, 단계 …), stages 는 단계들이다.
+    cooling_until 은 다시 고백할 수 있는 시각(1일째 0시부터의 분)이고, 대기가 아니면 null 이다.
+    gifts 는 이 가지에서 이 인물에게 건넨 물건(물건의 id)이다.
+    """
+
+    display: str
+    stages: list[StageOut]
+    cooling_until: int | None
+    gifts: list[str]
+
+
+class CastOut(BaseModel):
+    """
+    보이는 인물 하나. reveal 은 지금 보이는 법이다(만나면 shown).
+    silhouette 이면 이름, 그림, 인물 창의 칸이 모두 null 이거나 비어 있다. 숨김인 인물은 만나기 전에는 목록에 없다.
+    intro_html, age, gender, affection 은 제작자가 인물 창에 고른 항목만 실린다(아니면 null).
+    events 는 이 가지에서 이 인물이 나온 이벤트(이벤트의 id)다. 호감도를 보이는 인물만 실린다.
+    """
+
+    id: str
+    reveal: str
+    met: bool
+    name: str | None
+    image_id: uuid.UUID | None
+    sprites: list[SpriteOut]
+    confessable: bool
+    intro_html: str | None
+    age: str | None
+    gender: str | None
+    affection: CastAffectionOut | None
+    events: list[str]
+
+
+class ChoiceOut(BaseModel):
+    """선택지 하나."""
+
+    id: str
+    text: str
+
+
+class EventOut(NamedOut):
+    """
+    이 가지에서 열린 이벤트 하나. cast 는 장면이 부른 인물, image_id 는 장면의 일러스트다.
+    choices 는 고르기를 기다리는 이벤트에만 실린다(아니면 빈 목록). 열리는 조건과 효과는 싣지 않는다.
+    """
+
+    cast: list[str]
+    image_id: uuid.UUID | None
+    choices: list[ChoiceOut]
+
+
+class EndingOut(BaseModel):
+    """
+    엔딩의 칸 하나. 본 엔딩(계정의 기록이나 이 가지에서 본 것)만 이름과 일러스트가 실린다(아니면 null).
+    hint 는 제작자가 적은 힌트다. unlock 이 거짓이면 계정에 남지 않는 엔딩이다(엔딩 수에 넣지 않는다).
+    """
+
+    id: str
+    seen: bool
+    name: str | None
+    image_id: uuid.UUID | None
+    hint: str
+    unlock: bool
+
+
+class WorldView(BaseModel):
+    """
+    세션에서 화면이 쓰는 세계관의 칸. 판의 문서에서 지금 보여도 되는 것만 골라 이 가지의 상태에 맞춘다.
+    이벤트와 엔딩의 조건, 일정, 호감도의 규칙, 만나지 않은 인물은 싣지 않는다.
+    """
+
+    name: str
+    intro_html: str
+    tags: list[str]
+    image_id: uuid.UUID | None
+    deadline_days: int | None
+    after_ending: str
+    slots: list[SlotOut]
+    places: list[PlaceOut]
+    paths: list[PathOut]
+    items: list[ItemOut]
+    cast: list[CastOut]
+    events: list[EventOut]
+    endings: list[EndingOut]
 
 
 class ConversationSummary(BaseModel):
@@ -197,5 +338,7 @@ class ConversationDetail(BaseModel):
     messages: list[PathMessageOut]
     # 지금 가지의 끝의 상태. 말이 없으면 판으로 만든 처음의 상태다
     state: StateOut
+    # 화면이 쓰는 세계관의 칸. 이 가지의 상태에 맞춰 보여도 되는 것만이다(app/conversations/views.py)
+    view: WorldView
     created_at: datetime
     updated_at: datetime
