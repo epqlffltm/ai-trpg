@@ -272,7 +272,7 @@ describe('순수한 함수', () => {
     expect(turn.generationId).toBe(GEN);
     expect(turn.segments).toEqual([
       { speaker: null, text: '바람이 분다.' },
-      { speaker: 'mina', text: '추워.' },
+      { speaker: 'mina', expression: null, text: '추워.' },
     ]);
     const ended = applyStoryTurnMessage(turn, { event: 'failed', data: JSON.stringify({ code: 'stopped' }) });
     expect(ended.end).toEqual({ kind: 'failed', code: 'stopped' });

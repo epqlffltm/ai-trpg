@@ -3,7 +3,7 @@
 //
 //   turn     → 답할 말(사람의 말이나 행동 말), 멈출 때 쓰는 generation_id, 장면의 인물(cast), 그 뒤의 상태(state),
 //              이어 쓰면 그 답의 id(continues). 이어 쓸 때 첫 segment 앞의 글은 그 답의 마지막 조각에 붙는다(lead)
-//   segment  → 새 말 조각. 뒤의 delta 는 이 사람의 것이다(서술은 speaker 가 null)
+//   segment  → 새 말 조각. 뒤의 delta 는 이 사람의 것이다(서술은 speaker 가 null). 그 줄의 표정(expression, 기본이면 null)
 //   delta    → 지금 조각에 글을 잇는다
 //   done     → 저장한 답. 끝
 //   failed   → 글자 없이 실패. 끝
@@ -31,7 +31,7 @@ export function applyStoryTurnMessage(turn: StoryTurnState, message: SseMessage)
   const data = parseObject(message.data);
   if (!data || turn.end) return turn;
   if (message.event === 'turn') return applyStart(turn, data);
-  if (message.event === 'segment') return { ...turn, segments: [...turn.segments, { speaker: typeof data.speaker === 'string' ? data.speaker : null, text: '' }] };
+  if (message.event === 'segment') return { ...turn, segments: [...turn.segments, segmentOf(data)] };
   if (message.event === 'delta' && typeof data.text === 'string') return applyDelta(turn, data.text);
   if (message.event === 'done' && isMessage(data.message)) return { ...turn, end: { kind: 'done', message: data.message } };
   if (message.event === 'failed') return { ...turn, end: { kind: 'failed', code: typeof data.code === 'string' ? data.code : 'unknown' } };
@@ -47,6 +47,11 @@ function applyStart(turn: StoryTurnState, data: Record<string, unknown>): StoryT
     state: isState(data.state) ? data.state : null,
     continues: typeof data.continues === 'string' ? data.continues : null,
   };
+}
+
+/** 새 조각. 말하는 사람과 표정이 글자가 아니면 서술, 기본 표정으로 둔다 */
+function segmentOf(data: Record<string, unknown>): StorySegment {
+  return { speaker: typeof data.speaker === 'string' ? data.speaker : null, expression: typeof data.expression === 'string' ? data.expression : null, text: '' };
 }
 
 /** 지금 조각에 잇는다. segment 보다 먼저 온 글은 이어 쓰면 끊긴 답의 마지막 조각에, 아니면 서술의 조각으로 연다 */

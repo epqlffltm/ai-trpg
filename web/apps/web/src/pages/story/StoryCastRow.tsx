@@ -2,7 +2,7 @@
 // 장면의 인물 줄(그림과 이름)과 인물 창(D2 의 인물 메뉴, D5). 인물을 누르면 창이 열린다.
 // 창의 위는 인물 창(D5): 소개, 나이·성별, 호감도(숫자나 단계), 고백 대기, 건넨 선물, 함께 본 이벤트. 제작자가 고른 항목만 서버가 보낸다.
 // 아래는 행동: 건네기(가진 물건 하나), 고백(고백할 수 있는 인물에게만, 엔딩 전에만, 한 번 더 묻는다. 대기 중이면 막고 그때를 알린다).
-// 실루엣 인물은 "???" 와 검은 칸이다. 받는 중이거나 끝난 세션이면 행동을 막는다.
+// 인물의 그림은 끝의 답에서 그 인물이 마지막으로 지은 표정의 스프라이트다(없으면 기본 표정). 실루엣 인물은 "???" 와 검은 칸이다. 받는 중이거나 끝난 세션이면 행동을 막는다.
 
 import { Button, Dialog, Radio } from '@ai-trpg/ui';
 import { useCallback, useState } from 'react';
@@ -13,9 +13,9 @@ import { canConfess, heldItems } from './storyActions';
 import { affectionText, coolingText, eventNames, giftNames, portraitOf, profileLine } from './storyCastView';
 import { castName, castOf } from './storyWorld';
 
-type Props = { view: StoryView; state: StoryState; cast: string[]; disabled: boolean; onAct: (action: StoryAction) => Promise<boolean> };
+type Props = { view: StoryView; state: StoryState; cast: string[]; expressions: Record<string, string | null>; disabled: boolean; onAct: (action: StoryAction) => Promise<boolean> };
 
-export function StoryCastRow({ view, state, cast, disabled, onAct }: Props) {
+export function StoryCastRow({ view, state, cast, expressions, disabled, onAct }: Props) {
   const [chosen, setChosen] = useState<string | null>(null);
   const close = useCallback(() => setChosen(null), []);
   return (
@@ -25,7 +25,7 @@ export function StoryCastRow({ view, state, cast, disabled, onAct }: Props) {
         {cast.map((id) => (
           <li key={id}>
             <button type="button" className="story-cast__member" onClick={() => setChosen(id)}>
-              <Portrait cast={castOf(view, id)} />
+              <Portrait cast={castOf(view, id)} expression={expressions[id] ?? null} />
               <span>{castName(view, id)}</span>
             </button>
           </li>
@@ -49,8 +49,8 @@ export function StoryCastRow({ view, state, cast, disabled, onAct }: Props) {
   );
 }
 
-function Portrait({ cast }: { cast: StoryViewCast | undefined }) {
-  const image = useImageUrl(portraitOf(cast));
+function Portrait({ cast, expression }: { cast: StoryViewCast | undefined; expression: string | null }) {
+  const image = useImageUrl(portraitOf(cast, expression));
   const silhouette = !cast || cast.reveal === 'silhouette';
   if (image.url) return <img src={image.url} alt="" className="story-cast__portrait" />;
   return <span className={silhouette ? 'story-cast__portrait story-cast__portrait--silhouette' : 'story-cast__portrait'} aria-hidden="true" />;

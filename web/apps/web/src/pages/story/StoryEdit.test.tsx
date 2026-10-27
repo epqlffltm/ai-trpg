@@ -203,7 +203,7 @@ describe('순수한 함수', () => {
     expect(visible.streamingId).toBe(M(2));
     expect(visible.items[1]?.segments).toEqual([
       { speaker: null, text: '앞더' },
-      { speaker: 'mina', text: '응' },
+      { speaker: 'mina', expression: null, text: '응' },
     ]);
 
     const edit = { ...EMPTY_STORY_TURN, userMessage: saved(5, 'user', { parent_id: null }) };

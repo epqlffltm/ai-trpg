@@ -25,7 +25,7 @@ import { TurnNotice } from '../chat/conversation/TurnNotice';
 import { freshEnding, pendingChoices } from './storyActions';
 import { StoryActionBar } from './StoryActionBar';
 import { StoryRecordsButton } from './StoryRecordsButton';
-import { backgroundOf, sceneOf as pictureSceneOf } from './storyCastView';
+import { backgroundOf, expressionsOf, sceneOf as pictureSceneOf } from './storyCastView';
 import { StoryCastRow } from './StoryCastRow';
 import { StoryChoices } from './StoryChoices';
 import { StoryEnding } from './StoryEnding';
@@ -35,7 +35,7 @@ import { StoryModelDialog } from './StoryModelDialog';
 import { StoryPicture } from './StoryPicture';
 import { storySessionKey } from './storyQueries';
 import { describeStartProblem, describeStoryEditProblem } from './storyTurnProblem';
-import { sceneOf, storySuggestions } from './storyView';
+import { sceneOf, sceneSegments, storySuggestions, visibleStoryMessages } from './storyView';
 import { isEnded, placeName } from './storyWorld';
 import { useStartStorySession } from './useStartStorySession';
 import type { StoryTurnOpener, useStoryTurn } from './useStoryTurn';
@@ -51,6 +51,7 @@ export function StoryRoom({ session, turns }: Props) {
   const streaming = turns.turn !== null;
   const busy = streaming || branching.isPending || editing.isPending;
   const scene = sceneOf(session.state, turns.turn);
+  const expressions = expressionsOf(sceneSegments(visibleStoryMessages(session.messages, turns.turn)));
   const view = session.view;
   const ended = isEnded(view, scene.state);
   const restarting = useStartStorySession();
@@ -102,7 +103,7 @@ export function StoryRoom({ session, turns }: Props) {
         background={backgroundOf(view, scene.state)}
         placeName={placeName(view, scene.state.place)}
       />
-      <StoryCastRow view={view} state={scene.state} cast={scene.cast} disabled={busy || ended} onAct={act} />
+      <StoryCastRow view={view} state={scene.state} cast={scene.cast} expressions={expressions} disabled={busy || ended} onAct={act} />
       <StoryMessageList
         session={session}
         turn={turns.turn}
