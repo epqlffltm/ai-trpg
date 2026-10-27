@@ -40,7 +40,7 @@ from app.conversations import repository
 from app.conversations.models import Conversation, ImportedWorld, Message, Role
 from app.conversations.repository import ConversationRow
 from app.conversations.schemas import ConversationCreate, ProgressOut, StateOut, WorldView
-from app.conversations.views import met_on, world_view
+from app.conversations.views import met_on, visited_on, world_view
 from app.core.dependencies import Viewer
 from app.engine.clock import day_of, slot_of
 from app.engine.state import StoryState
@@ -268,9 +268,19 @@ async def conversation_messages(session: AsyncSession, conversation: Conversatio
     return await repository.active_path(session, conversation.active_leaf_id)
 
 
+async def branch_states(session: AsyncSession, messages: list[Message]) -> list[dict | None]:
+    """지금 가지의 말마다 붙은 상태(JSON, 없는 말은 None). messages 는 지금 가지의 말들(첫 말부터)이다."""
+    return await repository.states_on(session, [message.id for message in messages])
+
+
 async def branch_state(session: AsyncSession, world: World, messages: list[Message]) -> StoryState:
-    """지금 가지의 끝의 엔진의 상태. messages 는 지금 가지의 말들(첫 말부터)이다."""
-    return state_on_path(world, await repository.states_on(session, [message.id for message in messages]))
+    """지금 가지의 끝의 엔진의 상태."""
+    return state_on_path(world, await branch_states(session, messages))
+
+
+def places_on(states: list[dict | None]) -> list[str | None]:
+    """가지의 말마다 붙은 상태의 장소(상태가 없는 말은 None)."""
+    return [str(data['place']) if data is not None else None for data in states]
 
 
 def state_out(world: World, state: StoryState) -> StateOut:
@@ -284,15 +294,18 @@ async def conversation_state(
 ) -> tuple[StateOut, WorldView]:
     """
     지금 가지의 끝의 상태와, 그 상태에 맞춘 세계관의 칸(app/conversations/views.py).
-    만난 인물은 가지의 답들의 장면의 인물이고, 본 엔딩은 이 사람의 계정의 기록과 이 가지의 엔딩이다.
+    만난 인물은 가지의 답들의 장면의 인물이고, 가 본 장소는 가지의 말에 붙은 상태들의 장소와 시작 장소다.
+    본 엔딩은 이 사람의 계정의 기록과 이 가지의 엔딩이다.
     """
     world = read_world(imported.document)
-    state = await branch_state(session, world, messages)
+    states = await branch_states(session, messages)
+    state = state_on_path(world, states)
     met = met_on(message.cast or () for message in messages if message.role == Role.ASSISTANT)
+    visited = visited_on(world.start_place, places_on(states))
     recorded = frozenset(
         record.ending_id for record in await records.endings_of(session, viewer.claims.user_id, imported.source_id)
     )
-    return state_out(world, state), world_view(imported.document, state, met, recorded)
+    return state_out(world, state), world_view(world, imported.document, state, met, recorded, visited)
 
 
 async def message_alternatives(

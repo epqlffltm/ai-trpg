@@ -202,6 +202,18 @@ class EndingOut(BaseModel):
     unlock: bool
 
 
+class MapPlaceOut(BaseModel):
+    """
+    지도의 장소 하나(D3). visited 는 이 가지에서 가 본 곳인가다.
+    cast 는 지금 거기 있는 것이 보이는 인물들이다: 가 본 곳이고, 만난 적이 있고, 제작자의 지도 보이기를 통과한 인물.
+    함께 다니는 인물은 넣지 않는다(상태의 companions 로 내 자리 옆에 보인다).
+    """
+
+    id: str
+    visited: bool
+    cast: list[str]
+
+
 class WorldView(BaseModel):
     """
     세션에서 화면이 쓰는 세계관의 칸. 판의 문서에서 지금 보여도 되는 것만 골라 이 가지의 상태에 맞춘다.
@@ -221,6 +233,8 @@ class WorldView(BaseModel):
     cast: list[CastOut]
     events: list[EventOut]
     endings: list[EndingOut]
+    # 지도의 장소마다 가 본 곳인가와 지금 거기 보이는 인물(판의 장소 차례)
+    map: list[MapPlaceOut]
 
 
 class ProgressOut(BaseModel):

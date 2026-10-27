@@ -8,6 +8,7 @@ asset 서버, 결제 서버, 모델은 가짜다(tests/assets.py, tests/billing.
   - 실루엣 인물은 장면에 들어오기 전에는 가려지고, 답의 장면에 들어오면 보인다(만남)
   - 열린 이벤트와 기다리는 선택지가 실린다
   - 계정에 남은 엔딩은 다른 세션에서도 이름이 보인다. 못 본 엔딩은 힌트만이다
+  - 지도: 가 본 곳은 떠난 뒤에도 가 본 곳이고, 거기 있는 만난 인물이 보인다
   - 판의 문서(document)는 아직 그대로 실린다(화면이 view 로 옮긴 뒤 뺀다)
 """
 
@@ -116,6 +117,24 @@ async def test_an_ending_kept_on_the_account_is_named_in_another_session(
     assert [(item['id'], item['seen'], item['name'], item['hint']) for item in endings] == [
         ('with_mina', True, 'with_mina', '오래 알던 사람에게.'),
         ('with_jun', False, None, '바다에서 만난 사람에게.'),
+    ]
+
+
+async def test_the_map_keeps_visited_places_and_shows_met_members_there(
+    client: AsyncClient, app: FastAPI, model_on: None, asset: FakeAsset, mine: dict
+):
+    conversation = await start(client, asset, mine)
+
+    before = (await view_of(client, mine, conversation))['map']
+    await act(app, client, mine, conversation, {'kind': 'move', 'place': 'beach'})
+    await act(app, client, mine, conversation, {'kind': 'move', 'place': 'home'})
+    after = (await view_of(client, mine, conversation))['map']
+
+    assert before == [{'id': 'home', 'visited': True, 'cast': []}, {'id': 'beach', 'visited': False, 'cast': []}]
+    # 해변은 떠난 뒤에도 가 본 곳이고 거기서 만난 준이 보인다. 집에 돌아와 미나도 장면에 들어왔다
+    assert after == [
+        {'id': 'home', 'visited': True, 'cast': ['mina']},
+        {'id': 'beach', 'visited': True, 'cast': ['jun']},
     ]
 
 

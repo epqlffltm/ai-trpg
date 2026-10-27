@@ -9,13 +9,16 @@
   - 인물 창: 고른 항목만 싣는다. 호감도를 보이는 인물에만 고백 대기, 건넨 선물, 함께 본 이벤트가 실린다
   - 이벤트: 이 가지에서 열린 것만, 선택지의 글은 기다리는 이벤트에만 싣는다. 조건과 효과는 없다
   - 엔딩: 칸은 모두, 이름과 일러스트는 본 것(계정의 기록, 이 가지의 엔딩)만, 힌트는 늘 싣는다
+  - 지도: 가 본 곳은 시작 장소와 상태들의 장소, 지금 장소다. 인물은 가 본 곳에 있고 만났고 지도 보이기를
+    통과해야 보인다(보임, 숨김, 호감도 단계). 함께 다니는 인물은 장소에 없다
 """
 
 import uuid
 from types import MappingProxyType
 
-from app.conversations.views import met_on, shown_reveal, world_view
+from app.conversations.views import met_on, shown_reveal, visited_on, world_view
 from app.engine.state import StoryState
+from app.engine.world import read_world
 from tests.engine_worlds import condition, confession, document, ending, event, member
 
 PICTURE = uuid.UUID('aaaaaaaa-1111-4222-8333-444444444444')
@@ -40,8 +43,14 @@ def at_home(**fields) -> StoryState:
     return StoryState(minutes=7 * 60, place='home', **fields)
 
 
-def view(doc: dict, state: StoryState, met: frozenset[str] = frozenset(), recorded: frozenset[str] = frozenset()):
-    return world_view(doc, state, met, recorded)
+def view(
+    doc: dict,
+    state: StoryState,
+    met: frozenset[str] = frozenset(),
+    recorded: frozenset[str] = frozenset(),
+    visited: frozenset[str] = frozenset(),
+):
+    return world_view(read_world(doc), doc, state, met, recorded, visited)
 
 
 def test_met_is_every_cast_member_of_the_answers():
@@ -159,3 +168,60 @@ def test_places_items_and_slots_are_carried_without_rules():
         True,
     )
     assert [slot.id for slot in world.slots] == ['morning', 'day', 'night']
+
+
+PLACES = [
+    {'id': place_id, 'name': place_id, 'description': '', 'image_id': None, 'backgrounds': {}}
+    for place_id in ('home', 'beach', 'school')
+]
+
+
+def on_map(cast_id: str, home: str, shows: str = 'shown', stage: str | None = None, start: int = 0) -> dict:
+    """지도 보이기를 고른 인물 하나."""
+    return {**member(cast_id, home=home, start=start), 'map': shows, 'map_stage': stage}
+
+
+def test_visited_places_are_the_start_and_the_places_of_the_states():
+    assert visited_on('home', [None, 'beach', 'beach', None]) == frozenset({'home', 'beach'})
+
+
+def test_the_map_marks_visited_places_and_the_current_place():
+    doc = document(places=PLACES)
+
+    places = view(doc, StoryState(minutes=7 * 60, place='school'), visited=frozenset({'home'})).map
+
+    assert [(place.id, place.visited) for place in places] == [('home', True), ('beach', False), ('school', True)]
+
+
+def test_the_map_shows_met_members_at_visited_places_only():
+    cast = [on_map('mina', 'home'), on_map('jun', 'beach'), on_map('yu', 'home')]
+    doc = document(cast, places=PLACES)
+
+    places = view(doc, at_home(), met=frozenset({'mina', 'jun'}), visited=frozenset({'home'})).map
+
+    # 준은 만났지만 해변에 가 본 적이 없다. 유는 집에 있지만 만난 적이 없다
+    assert [(place.id, place.cast) for place in places] == [('home', ['mina']), ('beach', []), ('school', [])]
+
+
+def test_the_map_follows_the_makers_choice():
+    cast = [
+        on_map('mina', 'home', 'hidden'),
+        on_map('jun', 'home', 'stage', '친함'),
+        on_map('yu', 'home', 'stage', '친함', start=30),
+    ]
+    doc = document(cast, places=PLACES)
+    met = frozenset({'mina', 'jun', 'yu'})
+
+    before = view(doc, at_home(), met=met).map[0].cast
+    after = view(doc, at_home(affection=MappingProxyType({'jun': 40})), met=met).map[0].cast
+
+    # 숨김은 늘 보이지 않는다. 단계는 호감도가 친함(30) 이상일 때 보인다
+    assert (before, after) == (['yu'], ['jun', 'yu'])
+
+
+def test_companions_are_not_on_the_map():
+    doc = document([on_map('mina', 'home')], places=PLACES)
+
+    places = view(doc, at_home(companions=('mina',)), met=frozenset({'mina'})).map
+
+    assert places[0].cast == []

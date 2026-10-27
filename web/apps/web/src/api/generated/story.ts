@@ -706,6 +706,20 @@ export interface components {
             name: string;
         };
         /**
+         * MapPlaceOut
+         * @description 지도의 장소 하나(D3). visited 는 이 가지에서 가 본 곳인가다.
+         *     cast 는 지금 거기 있는 것이 보이는 인물들이다: 가 본 곳이고, 만난 적이 있고, 제작자의 지도 보이기를 통과한 인물.
+         *     함께 다니는 인물은 넣지 않는다(상태의 companions 로 내 자리 옆에 보인다).
+         */
+        MapPlaceOut: {
+            /** Cast */
+            cast: string[];
+            /** Id */
+            id: string;
+            /** Visited */
+            visited: boolean;
+        };
+        /**
          * MeResponse
          * @description 토큰의 주인.
          */
@@ -1117,6 +1131,8 @@ export interface components {
             intro_html: string;
             /** Items */
             items: components["schemas"]["ItemOut"][];
+            /** Map */
+            map: components["schemas"]["MapPlaceOut"][];
             /** Name */
             name: string;
             /** Paths */

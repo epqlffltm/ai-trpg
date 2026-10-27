@@ -807,6 +807,33 @@
         "title": "ItemOut",
         "type": "object"
       },
+      "MapPlaceOut": {
+        "description": "지도의 장소 하나(D3). visited 는 이 가지에서 가 본 곳인가다.\ncast 는 지금 거기 있는 것이 보이는 인물들이다: 가 본 곳이고, 만난 적이 있고, 제작자의 지도 보이기를 통과한 인물.\n함께 다니는 인물은 넣지 않는다(상태의 companions 로 내 자리 옆에 보인다).",
+        "properties": {
+          "cast": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cast",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "visited": {
+            "title": "Visited",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "visited",
+          "cast"
+        ],
+        "title": "MapPlaceOut",
+        "type": "object"
+      },
       "MeResponse": {
         "description": "토큰의 주인.",
         "properties": {
@@ -1763,6 +1790,13 @@
             "title": "Items",
             "type": "array"
           },
+          "map": {
+            "items": {
+              "$ref": "#/components/schemas/MapPlaceOut"
+            },
+            "title": "Map",
+            "type": "array"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -1809,7 +1843,8 @@
           "items",
           "cast",
           "events",
-          "endings"
+          "endings",
+          "map"
         ],
         "title": "WorldView",
         "type": "object"
