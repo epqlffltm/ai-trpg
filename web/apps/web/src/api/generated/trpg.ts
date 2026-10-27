@@ -2560,6 +2560,7 @@ export interface components {
             npc_effect?: components["schemas"]["NpcEffectOut"] | null;
             /** Roll */
             roll: number;
+            skill_use?: components["schemas"]["SkillUseOut"] | null;
             /** Success */
             success: boolean;
             /** Target */
@@ -8413,14 +8414,21 @@ export interface components {
         };
         /**
          * Skill
-         * @description 기술이나 주문 하나(#805). 예: 치유의 손길(마나 2, 동료, 가볍게 회복), 기합(스태미나 1, 자신, 마나 +1).
+         * @description 기술이나 주문 하나(#805). 예: 치유의 손길(마나 2, 동료, 가볍게 회복), 기합(스태미나 1, 자신, 마나 +1),
+         *     마력 화살(마나 1, 상대, 맞히면 가벼운 피해).
          *
          *     key 는 시트(아는 기술)와 행동이 가리키는 이름표, name 은 보이는 이름이다.
          *     cost 는 쓸 때 내는 비용이다. 비우면 공짜다. 빗나가도 낸다. 모자라면 쓰지 못한다.
          *     target 은 누구에게 쓰나다. effects 는 대상에게 적힌 차례대로 드는 일들이다. 소모품의 효과와 같다
          *     (app/engine/item_effects.py, 화염구와 화염병이 같은 damage). 효과가 없으면 쓰고 아무 일도 없다(서술이 맡는다).
+         *     check 는 맞히는 판정이다(#805 ②). 자기 자신에게는 굴리지 않는다. 그래서 자신에게만 쓰는 기술에는 적지 않는다.
+         *       - 동료에게 쓰는 기술: 적으면 자기 아닌 동료에게 쓸 때 굴린다(동료에게 물건을 던지는 것과 같다).
+         *         비우면 굴리지 않는다.
+         *       - 상대에게 쓰는 기술: 늘 굴린다. 비우면 룰북의 맞히는 판정(rules.item_check)이다.
+         *     맞히면 효과가 든다. 피해가 있으면 그 등급의 타격으로 판정해 방어, 세이브, 부상 표, 드롭이 치기와 같다.
          */
         Skill: {
+            check?: components["schemas"]["SkillCheck"] | null;
             cost?: components["schemas"]["SkillCost"] | null;
             /**
              * Effects
@@ -8439,8 +8447,10 @@ export interface components {
          * @description 기술이나 주문을 쓰는 행동(#805, app/rounds/skill_actions.py).
          *
          *     skill 은 룰북의 기술(rules.skills)의 이름표다. 시트가 그 기술을 알아야 한다(시나리오의 시트에 적는다).
-         *     target 은 받는 사람이다. 테이블에 앉은 사람이고, 비우면 자기 자신이다(받을 때 채운다).
-         *     자신에게만 쓰는 기술(target self)에는 남을 적지 않는다. 굴리지 않는다. 비용은 쓸 때 낸다.
+         *     받는 쪽은 하나다. 자신과 동료에게 쓰는 기술은 앉은 사람(target)이고, 비우면 자기 자신이다(받을 때 채운다).
+         *     자신에게만 쓰는 기술(target self)에는 남을 적지 않는다. 상대에게 쓰는 기술(target foe, #805 ②)은 이번 장면의
+         *     인물(npc)이나 같은 장소의 몬스터(monster)다. 비용은 쓸 때 낸다. 맞히는 판정이 있는 기술은 자기 아닌 쪽에게 굴린다.
+         *     lethal 은 피해가 있는 기술을 인물이나 몬스터에게 쓸 때, 치기와 같다. 죽이려는 것인가, 아니면 제압이다.
          */
         SkillAction: {
             /**
@@ -8448,10 +8458,31 @@ export interface components {
              * @enum {string}
              */
             kind: "skill";
+            /**
+             * Lethal
+             * @default false
+             */
+            lethal: boolean;
+            /** Monster */
+            monster?: string | null;
+            /** Npc */
+            npc?: string | null;
             /** Skill */
             skill: string;
             /** Target */
             target?: string | null;
+        };
+        /**
+         * SkillCheck
+         * @description 기술의 맞히는 판정(#805 ②). 어느 능력으로, 어느 난이도에 도전하는가. 난이도를 비우면 룰북의 기본 난이도다.
+         *
+         *     물건의 던지는 판정(items[].throw)과 같다. 능력치와 난이도가 규칙에 있는지는 규칙(Ruleset)이 본다.
+         */
+        SkillCheck: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
         };
         /**
          * SkillCost
@@ -8468,14 +8499,18 @@ export interface components {
          * @description 기술을 누구에게 쓰나(#805).
          * @enum {string}
          */
-        SkillTarget: "self" | "ally";
+        SkillTarget: "self" | "ally" | "foe";
         /**
          * SkillUseOut
-         * @description 기술을 쓴 결과(#805). 엔진이 정했다(app/rounds/skill_actions.py). 자기와 동료에게는 굴리지 않는다.
+         * @description 기술을 쓴 결과(#805). 엔진이 정했다(app/rounds/skill_actions.py).
          *
+         *     상대(인물, 몬스터)에게 쓰거나 판정이 있는 기술을 자기 아닌 동료에게 쓰면 맞히는 판정을 한다(#805 ②). 그때는 판정의
+         *     결과(CheckOutcome)의 skill_use 로 오고, 맞혔을 때만 효과(cured, injured, resources)가 있다.
          *     비용은 빗나가도 낸다. 쓰지 못했으면 내지 않는다.
          */
         SkillUseOut: {
+            /** Ability */
+            ability?: string | null;
             /**
              * Cost
              * @default []
@@ -8486,6 +8521,8 @@ export interface components {
              * @default []
              */
             cured: components["schemas"]["CuredOut"][];
+            /** Difficulty */
+            difficulty?: string | null;
             /**
              * Injured
              * @default []
@@ -8502,17 +8539,21 @@ export interface components {
             resources: components["schemas"]["ResourceShiftOut"][];
             /** Skill */
             skill: string;
-            target: components["schemas"]["ItemPersonOut"] | null;
+            /** Target */
+            target: components["schemas"]["ItemPersonOut"] | components["schemas"]["ThrownAtOut"] | null;
             /** Used */
             used: boolean;
         };
         /**
          * SkillUseOutcome
-         * @description 기술을 쓰는 행동의 결과(#805). 회복하거나 다쳤으면 HP 의 변화(effect)가 함께 있다.
+         * @description 기술을 쓰는 행동의 결과(#805). 회복하거나 다쳤으면 HP 의 변화(effect)가 함께 있다. 굴림이 없다.
+         *
+         *     굴리는 기술을 쓰지 못했으면 여기로 온다. 겨눈 몬스터가 없어 못 썼으면 그 까닭(target_gone)도 있다(#805 ②).
          */
         SkillUseOutcome: {
             effect?: components["schemas"]["EffectOut"] | null;
             skill_use: components["schemas"]["SkillUseOut"];
+            target_gone?: components["schemas"]["TargetGoneOut"] | null;
         };
         /**
          * Snapshot

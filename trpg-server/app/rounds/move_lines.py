@@ -400,7 +400,7 @@ def describe_throw(note: ThrowNote) -> str:
 SKILL_FAILURES = {
     'not_known': '그 기술을 모른다',
     'cost_short': '비용이 모자랐다',
-    'target_gone': '받을 사람이 없었다',
+    'target_gone': '받을 쪽이 없었다',
     'friendly_fire_off': '동료를 해칠 수 없게 바뀌었다',
 }
 
@@ -412,6 +412,7 @@ def describe_skill(note: SkillNote) -> str:
 
     예: (쓴 기술: 치유의 손길 → 영애, 마나 5 → 3/7) → 영애 회복 3 (HP 8/10)
         (쓰려던 기술: 화염 방패. 비용이 모자랐다)
+        (쓴 기술: 마력 화살 → 수로 쥐 1, 마나 4 → 3/7)   굴린 기술(#805 ②)은 판정 앞에 붙는다. 맞았는지는 판정이 적는다
     """
     to = f' → {note.target}' if note.target else ''
     if not note.done:
@@ -817,6 +818,10 @@ def describe_move(move: Move) -> str:
         parts.append(lost)
     if move.throw is not None:
         parts.append(describe_throw(move.throw))
+    # 굴린 기술(#805 ②)도 판정 앞에 적는다. 던지기와 같다
+    rolled_skill = move.skill is not None and move.skill.rolled
+    if rolled_skill:
+        parts.append(describe_skill(move.skill))
     # 인물이나 몬스터에게 쓴 물건(#800)은 판정 앞에 적는다. 던지기와 같다
     used_on = move.item_action is not None and move.verdict is not None
     if used_on:
@@ -841,7 +846,7 @@ def describe_move(move: Move) -> str:
         parts.append(describe_naming(move.naming))
     if move.item_action is not None and not used_on:
         parts.append(describe_item_action(move.item_action))
-    if move.skill is not None:
+    if move.skill is not None and not rolled_skill:
         parts.append(describe_skill(move.skill))
     if move.travel is not None:
         parts.append(describe_travel(move.travel))

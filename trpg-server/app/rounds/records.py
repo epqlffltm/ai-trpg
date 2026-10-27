@@ -298,6 +298,7 @@ def record_skill_use(session: AsyncSession, table: GameTable, declaration: Decla
     """
     기술을 쓴 결과를 이벤트로 적는다(#805). 그 행동의 이벤트(cause)에 잇는다.
     낸 비용(쓴 사람의 수치), HP 의 변화, 푼 부상, 입힌 부상, 맞춘 수치(대상의 수치)의 차례로 그 뒤에 적는다.
+    맞히는 판정을 했으면(#805 ②) HP 의 변화 대신 그 판정과 맞은 쪽의 변화를 적는다(record_check). 물건과 같다.
 
     행한 사람(actor_id)을 적지 않는다. 수치와 HP 를 바꾼 것은 엔진이다.
     """
@@ -315,7 +316,9 @@ def record_skill_use(session: AsyncSession, table: GameTable, declaration: Decla
     user = {'user_id': str(declaration.user_id), 'character_name': declaration.character_name}
     record_resource_shifts(session, table, use.get('cost') or [], user, ResourceSource.SKILL, cause=used)
     effect = declaration.outcome.get('effect')
-    if effect is not None:
+    if has_outcome(declaration):
+        record_check(session, table, declaration, cause=used)
+    elif effect is not None:
         changed = record_hp_change(session, table, effect, cause=used)
         holder = {'user_id': effect['user_id'], 'character_name': effect['character_name']}
         record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)

@@ -133,8 +133,8 @@ def mana_of(table: dict, user_id: uuid.UUID) -> int:
 # --- 규칙 ---
 
 
-def test_the_light_template_has_two_example_skills():
-    assert [one.key for one in LIGHT.skills] == ['healing_touch', 'focus']
+def test_the_light_template_has_three_example_skills():
+    assert [one.key for one in LIGHT.skills] == ['healing_touch', 'focus', 'arcane_bolt']
     assert from_template('srd5').skills == ()
 
 
@@ -173,7 +173,7 @@ async def test_the_skills_of_a_rulebook_can_be_changed(client: AsyncClient, me: 
     orphaned = await client.patch(url, json={'resources': []}, headers=me)
     both = await client.patch(url, json={'resources': [], 'skills': []}, headers=me)
 
-    assert [one['key'] for one in rulebook['rules']['skills']] == ['healing_touch', 'focus']
+    assert [one['key'] for one in rulebook['rules']['skills']] == ['healing_touch', 'focus', 'arcane_bolt']
     assert [one['key'] for one in replaced.json()['rules']['skills']] == ['hex']
     assert (wrong.status_code, wrong.json()['field']) == (status.HTTP_422_UNPROCESSABLE_CONTENT, 'skills')
     assert (orphaned.status_code, orphaned.json()['field']) == (status.HTTP_422_UNPROCESSABLE_CONTENT, 'resources')

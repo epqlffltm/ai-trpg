@@ -80,6 +80,7 @@ from app.rounds.secret_names import secret_names
 from app.rounds.state import (
     cover_of,
     door_of,
+    has_outcome,
     item_throw_of,
     loot_of,
     move_of,
@@ -185,7 +186,11 @@ def other_name(declaration: Declaration, target: dict | None) -> str | None:
 
 
 def to_skill(declaration: Declaration | None) -> SkillNote | None:
-    """선언에 적힌 기술 쓰기의 결과(#805)를 서술자에게 줄 모양으로 바꾼다. 그런 행동이 아니면 None."""
+    """
+    선언에 적힌 기술 쓰기의 결과(#805)를 서술자에게 줄 모양으로 바꾼다. 그런 행동이 아니면 None.
+
+    굴린 기술(#805 ②)이면 HP 의 변화는 판정의 줄이 적는다. 여기서는 싣지 않는다.
+    """
     if declaration is None or declaration.outcome is None:
         return None
     used = declaration.outcome.get('skill_use')
@@ -198,7 +203,8 @@ def to_skill(declaration: Declaration | None) -> SkillNote | None:
         reason=used['reason'],
         target=other_name(declaration, used['target']),
         cost=to_shift_notes(used.get('cost')),
-        impact=to_impact(declaration.outcome.get('effect')),
+        impact=None if has_outcome(declaration) else to_impact(declaration.outcome.get('effect')),
+        rolled=has_outcome(declaration),
         cured=[one['name'] for one in used.get('cured') or []],
         injured=[one['name'] for one in injured if one['injury'] is not None],
         resisted=[one['name'] for one in injured if one.get('immune')],
@@ -543,7 +549,7 @@ def check_terms(declaration: Declaration) -> tuple[str, str]:
     """
     판정에 쓴 능력과 난이도의 key. 판정하는 행동은 행동에 적혀 있고, 치료는 규칙이 정해 결과에 적혀 있다.
     던지기는 물건에 적혀 결과에 옮겨 적혀 있다(#277). 인물이나 몬스터에게 물건을 쓴 것은 룰북이 정해 결과에
-    옮겨 적혀 있다(#800).
+    옮겨 적혀 있다(#800). 굴린 기술도 기술이나 룰북이 정해 결과에 옮겨 적혀 있다(#805 ②).
 
     결과가 적힌 선언에만 쓴다.
     """
@@ -556,6 +562,9 @@ def check_terms(declaration: Declaration) -> tuple[str, str]:
     used = declaration.outcome.get('item_use')
     if used is not None:
         return used['ability'], used['difficulty']
+    skill = declaration.outcome.get('skill_use')
+    if skill is not None:
+        return skill['ability'], skill['difficulty']
     return declaration.action['ability'], declaration.action['difficulty']
 
 

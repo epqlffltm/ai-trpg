@@ -676,8 +676,10 @@ class SkillAction(BaseModel):
     기술이나 주문을 쓰는 행동(#805, app/rounds/skill_actions.py).
 
     skill 은 룰북의 기술(rules.skills)의 이름표다. 시트가 그 기술을 알아야 한다(시나리오의 시트에 적는다).
-    target 은 받는 사람이다. 테이블에 앉은 사람이고, 비우면 자기 자신이다(받을 때 채운다).
-    자신에게만 쓰는 기술(target self)에는 남을 적지 않는다. 굴리지 않는다. 비용은 쓸 때 낸다.
+    받는 쪽은 하나다. 자신과 동료에게 쓰는 기술은 앉은 사람(target)이고, 비우면 자기 자신이다(받을 때 채운다).
+    자신에게만 쓰는 기술(target self)에는 남을 적지 않는다. 상대에게 쓰는 기술(target foe, #805 ②)은 이번 장면의
+    인물(npc)이나 같은 장소의 몬스터(monster)다. 비용은 쓸 때 낸다. 맞히는 판정이 있는 기술은 자기 아닌 쪽에게 굴린다.
+    lethal 은 피해가 있는 기술을 인물이나 몬스터에게 쓸 때, 치기와 같다. 죽이려는 것인가, 아니면 제압이다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -685,6 +687,19 @@ class SkillAction(BaseModel):
     kind: Literal[ActionKind.SKILL]
     skill: Key
     target: uuid.UUID | None = None
+    # 상대(#805 ②). 이번 장면의 인물 목록의 id 와 장면의 몬스터 목록의 id 다
+    npc: uuid.UUID | None = None
+    monster: uuid.UUID | None = None
+    lethal: bool = False
+
+    @model_validator(mode='after')
+    def require_one_target(self) -> Self:
+        """받는 쪽은 하나다. 죽이려는 것은 인물이나 몬스터에게 쓸 때만이다."""
+        if sum(one is not None for one in (self.target, self.npc, self.monster)) > 1:
+            raise ValueError('target, npc, monster 는 하나만 적습니다.')
+        if self.lethal and self.npc is None and self.monster is None:
+            raise ValueError('lethal 은 npc 나 monster 와 함께 적습니다.')
+        return self
 
 
 class CoverAction(BaseModel):

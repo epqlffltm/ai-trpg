@@ -216,7 +216,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 몬스터의 마리마다의 몸 상태에도 붙인다(다침(중독) [마나 바닥]). 숫자는 주지 않는다
 #   narration-73: 기술과 주문(#805). 쓴 기술의 줄을 적는다((쓴 기술: 치유의 손길 → 영애, 마나 5 → 3/7) → 영애 회복 3).
 #                 쓰지 못했으면 그 까닭을 적는다((쓰려던 기술: 정신 집중. 비용이 모자랐다))
-PROMPT_VERSION = 'narration-73'
+#   narration-74: 상대에게 쓰는 기술(#805 ②). 굴린 기술의 줄은 판정 앞에 붙는다
+#                 ((쓴 기술: 마력 화살 → 수로 쥐 1, 마나 4 → 3/7) (판정: ...)). 못 쓴 까닭은 "받을 쪽이 없었다"다
+PROMPT_VERSION = 'narration-74'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

@@ -150,6 +150,7 @@ def numbers(outcome: dict | None) -> dict | None:
     치료(treatment)도(test_treatment.py). 몬스터의 변화(monster_effect)도(test_monster_combat.py).
     몬스터의 드롭(drop)도(test_monster_drops.py). 깨어날 때의 반응(wake)도(test_robbed_wake.py).
     던진 물건(item_throw)도(test_item_throws.py). 인물이나 몬스터에게 쓴 물건(item_use)도(test_item_effects.py).
+    굴린 기술(skill_use)도(test_skill_targets.py).
     """
     if outcome is None:
         return None
@@ -165,6 +166,7 @@ def numbers(outcome: dict | None) -> dict | None:
         'blow',
         'item_throw',
         'item_use',
+        'skill_use',
     )
     return {key: value for key, value in outcome.items() if key not in hidden}
 
