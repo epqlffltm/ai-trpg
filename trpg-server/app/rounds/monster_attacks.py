@@ -18,6 +18,8 @@
 쓰러진 캐릭터를 맞히면 피해 대신 죽음의 굴림 실패가 쌓인다(strike_downed). 이 함수는 어느 쪽인지 가르기만 한다.
 이번 라운드에 이 마리에게서 훔치다 들킨 도둑이 있으면 대상을 고르지 않고 도둑을 친다(app/rounds/steals.py).
 도둑이 칠 수 있는 대상이 아니면(쓰러졌거나 떠났다) 평소처럼 고른다. 친 대상과는 싸운 것으로 적는다(mark_fight).
+공격에 효과가 있으면(#805 ③-b) 맞혔을 때 맞은 캐릭터에게 그 효과(부상, 수치의 맞추기)를 낸다. 방어와 세이브는
+피해만 막는다. 효과는 판정에 맞혔으면 든다. 피해 등급이 없는 공격(효과만)은 피해도, 세이브도, 죽음의 굴림 실패도 없다.
 공격에 비용이 있으면(#805 ③-a) 고른 뒤에 낸다. 모자라면 그 차례에 아무것도 하지 못한다(skipped cost_short).
 아무것도 내지 않고 굴리지 않는다. 비용을 낼 수 있는 공격만 골라 주지 않는다. 빗나가도 낸다. NPC 의 차례와 같다.
 DB 를 모른다. 시트를 고친다. 저장하지는 않는다.
@@ -32,6 +34,7 @@ from app.engine.armor import Save
 from app.engine.check import Check, HinderedCheck
 from app.engine.dice import choose
 from app.engine.health import ChangeKind
+from app.engine.injury import Trigger
 from app.engine.ruleset import Difficulty, ResourceHolder
 from app.rounds import blows
 from app.rounds import injuries as round_injuries
@@ -39,6 +42,7 @@ from app.rounds.blows import NO_BLOW, Blow, Weapon
 from app.rounds.checks import change_sheet
 from app.rounds.downed_strikes import can_be_struck, strike_downed
 from app.rounds.effects import Judging, mark_fight
+from app.rounds.item_actions import apply_to_member
 from app.rounds.monster_scene import SceneMonster
 from app.tables import resources, sheets
 from app.tables.models import NpcStatus, TableMember
@@ -118,16 +122,35 @@ def hit_outcome(judging: Judging, attack: AttackSnapshot, victim: TableMember, r
     차례의 outcome 에 적을 문서다. 몬스터와 싸우는 NPC 의 차례가 함께 쓴다.
     맞은 부위의 방어가 피해를 깎는다(reduce). 맞혔고 세이브 방식이면 대상이 세이브를 굴리고, 막으면 맞지 않은 것과 같다
     (쓰러진 대상에게도 죽음의 굴림 실패가 쌓이지 않는다). 장비가 든 것(blow)이 있으면 붙인다(#276).
+    피해 등급이 없는 공격(#805 ③-b)은 세이브를 굴리지 않고 HP 도 죽음의 굴림도 건드리지 않는다.
+    공격의 효과는 그 뒤에 낸다(with_effects). 세이브와 상관없이 판정에 맞혔으면 든다.
     """
-    save = blows.roll_blow_save(judging, blow) if rolled.success else None
+    save = blows.roll_blow_save(judging, blow) if rolled.success and attack.harm is not None else None
     landed = rolled.success and not blows.is_saved(save)
-    if sheets.is_downed_alive(victim):
+    if attack.harm is None:
+        outcome = attack_outcome(attack, victim, rolled, None)
+    elif sheets.is_downed_alive(victim):
         struck = strike_downed(judging, victim, landed)
         outcome = {**attack_outcome(attack, victim, rolled, None), 'downed_strike': struck}
     else:
         effect = change_sheet(judging, victim, ChangeKind.DAMAGE, attack.harm, blow.cut) if landed else None
         outcome = attack_outcome(attack, victim, rolled, effect)
-    return with_blow(judging, outcome, blow, save)
+    return with_blow(judging, with_effects(judging, attack, victim, rolled.success, outcome), blow, save)
+
+
+def with_effects(judging: Judging, attack: AttackSnapshot, victim: TableMember, hit: bool, outcome: dict) -> dict:
+    """
+    공격의 효과(#805 ③-b)를 맞은 캐릭터에게 내고, 입힌 부상(injured)과 맞춘 수치(resources)를 차례의 outcome 에 더한다.
+
+    효과가 없는 공격이면 그대로다(효과가 생기기 전의 차례와 같은 모양).
+    빗나갔거나 대상이 그 타격으로 죽었으면 내지 않는다.
+    """
+    if not attack.effects:
+        return outcome
+    if not hit or sheets.is_dead(victim):
+        return {**outcome, 'injured': [], 'resources': []}
+    applied = apply_to_member(judging, victim, attack.effects, trigger=Trigger.ATTACK)
+    return {**outcome, 'injured': applied['injured'], 'resources': applied['resources']}
 
 
 def with_blow(judging: Judging, outcome: dict, blow: Blow, save: Save | None = None) -> dict:
@@ -178,8 +201,11 @@ def short_outcome(attack: AttackSnapshot, victim: TableMember) -> dict:
 
 
 def attack_document(attack: AttackSnapshot) -> dict:
-    """결과에 적을 공격. 무기는 장비가 든 것(blow)에, 비용은 낸 것(cost)에 적는다. 공격은 그 전의 모양 그대로다."""
-    return attack.model_dump(exclude={'weapon', 'cost'})
+    """
+    결과에 적을 공격. 무기는 장비가 든 것(blow)에, 비용은 낸 것(cost)에, 효과는 든 것(injured, resources)에 적는다.
+    공격은 그 전의 모양 그대로다.
+    """
+    return attack.model_dump(exclude={'weapon', 'cost', 'effects'})
 
 
 def attack_outcome(attack: AttackSnapshot, victim: TableMember, rolled: Check, effect: dict | None) -> dict:

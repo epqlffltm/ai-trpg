@@ -945,6 +945,8 @@ def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
         downed=to_downed_strike(outcome.get('downed_strike')),
         blow=to_blow(outcome.get('blow')),
         cost=to_cost_words(outcome.get('cost')),
+        injured=[one['name'] for one in outcome.get('injured') or [] if one['injury'] is not None],
+        resources=to_shift_notes(outcome.get('resources')),
     )
 
 

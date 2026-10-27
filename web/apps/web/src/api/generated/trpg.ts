@@ -2080,8 +2080,13 @@ export interface components {
             cost?: components["schemas"]["SkillCost"] | null;
             /** Difficulty */
             difficulty: string;
+            /**
+             * Effects
+             * @default []
+             */
+            effects: (components["schemas"]["InjureEffect"] | components["schemas"]["AdjustEffect"])[];
             /** Harm */
-            harm: string;
+            harm?: string | null;
             /** Name */
             name: string;
             /** Weapon */
@@ -4776,6 +4781,9 @@ export interface components {
         /**
          * MonsterAttack
          * @description 몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.
+         *     effects 가 있으면(#805 ③-b) 맞혔을 때 대상에게 그 효과들(부상, 수치의 맞추기)이 더 든다.
+         *     방어와 세이브는 피해만 막는다.
+         *     피해 등급(harm)은 비울 수 있다. 그때는 효과만 있는 공격이다(독 뿜기). 피해도 효과도 없는 공격은 받지 않는다.
          *
          *     이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).
          *     NPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.
@@ -4788,8 +4796,13 @@ export interface components {
             cost?: components["schemas"]["SkillCost"] | null;
             /** Difficulty */
             difficulty: string;
+            /**
+             * Effects
+             * @default []
+             */
+            effects: (components["schemas"]["InjureEffect"] | components["schemas"]["AdjustEffect"])[];
             /** Harm */
-            harm: string;
+            harm?: string | null;
             /** Name */
             name: string;
             /** Weapon */
@@ -4798,6 +4811,9 @@ export interface components {
         /**
          * MonsterAttack
          * @description 몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.
+         *     effects 가 있으면(#805 ③-b) 맞혔을 때 대상에게 그 효과들(부상, 수치의 맞추기)이 더 든다.
+         *     방어와 세이브는 피해만 막는다.
+         *     피해 등급(harm)은 비울 수 있다. 그때는 효과만 있는 공격이다(독 뿜기). 피해도 효과도 없는 공격은 받지 않는다.
          *
          *     이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).
          *     NPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.
@@ -4810,8 +4826,13 @@ export interface components {
             cost?: components["schemas"]["SkillCost"] | null;
             /** Difficulty */
             difficulty: string;
+            /**
+             * Effects
+             * @default []
+             */
+            effects: (components["schemas"]["InjureEffect"] | components["schemas"]["AdjustEffect"])[];
             /** Harm */
-            harm: string;
+            harm?: string | null;
             /** Name */
             name: string;
             /** Weapon */

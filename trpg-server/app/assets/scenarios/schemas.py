@@ -92,7 +92,7 @@ from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
 from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
 from app.engine.item_aids import Aids
-from app.engine.item_effects import Effects
+from app.engine.item_effects import AttackEffects, Effects
 from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, InjuryNature, Key, SkillCost
 from app.engine.sheet import CharacterSheet, Sheet
 
@@ -335,6 +335,9 @@ CarriedInventory = Annotated[
 class MonsterAttack(BaseModel):
     """
     몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.
+    effects 가 있으면(#805 ③-b) 맞혔을 때 대상에게 그 효과들(부상, 수치의 맞추기)이 더 든다.
+    방어와 세이브는 피해만 막는다.
+    피해 등급(harm)은 비울 수 있다. 그때는 효과만 있는 공격이다(독 뿜기). 피해도 효과도 없는 공격은 받지 않는다.
 
     이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).
     NPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.
@@ -348,12 +351,22 @@ class MonsterAttack(BaseModel):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=ATTACK_NAME_MAX_LENGTH)]
     ability: Key
     difficulty: Key
-    harm: Key
+    # 맞혔을 때의 피해의 양의 등급. 비우면 피해가 없다(#805 ③-b)
+    harm: Key | None = None
     # 이 공격에 쓰는 무기(#276). 시트의 장비 줄의 물건이다. 착용하고 있고 공격 보정이 있으면 판정에 더한다.
     # 빼앗기거나 떨어뜨려 지니지 않으면 보정도 없다. 비우면 맨몸의 공격이다(물어뜯기)
     weapon: uuid.UUID | None = None
     # 쓸 때 내는 비용(#805 ③-a). 비우면 공짜다
     cost: SkillCost | None = None
+    # 맞혔을 때 더 드는 효과들(#805 ③-b). 부상(injure)과 수치의 맞추기(adjust)다. 대상은 맞은 캐릭터다
+    effects: AttackEffects = []
+
+    @model_validator(mode='after')
+    def require_something(self) -> 'MonsterAttack':
+        """피해도 효과도 없는 공격은 아무 일도 하지 않는다. 받지 않는다."""
+        if self.harm is None and not self.effects:
+            raise ValueError('공격에는 피해 등급(harm)이나 효과(effects)가 있어야 합니다.')
+        return self
 
     @field_serializer('weapon')
     def weapon_as_text(self, weapon: uuid.UUID | None) -> str | None:

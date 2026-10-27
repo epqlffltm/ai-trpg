@@ -461,15 +461,25 @@ def find_monster_sheet_problems(scenario: Scenario, parts: Parts, ruleset: Rules
 
 def attack_fault(ruleset: Ruleset, attack: MonsterAttack, holder: ResourceHolder) -> bool:
     """
-    이 공격의 능력치, 난이도, 양의 등급 중 룰북의 규칙에 없는 것이 있는가.
+    이 공격의 능력치, 난이도, 양의 등급 중 룰북의 규칙에 없는 것이 있는가. 양의 등급은 비울 수 있다(#805 ③-b).
     비용(#805 ③-a)의 수치는 그 쪽(인물이나 몬스터, holder)이 가지는 규칙의 수치여야 한다.
+    효과(#805 ③-b)의 부상은 규칙의 부상이고, 맞추는 수치는 맞을 쪽(캐릭터)이 가지는 규칙의 수치여야 한다.
     """
     return (
         find_ability(ruleset, attack.ability) is None
         or find_difficulty(ruleset, attack.difficulty) is None
-        or find_magnitude(ruleset, attack.harm) is None
+        or (attack.harm is not None and find_magnitude(ruleset, attack.harm) is None)
         or cost_fault(ruleset, attack, holder)
+        or any(attack_effect_fault(ruleset, effect) for effect in attack.effects)
     )
+
+
+def attack_effect_fault(ruleset: Ruleset, effect) -> bool:
+    """공격의 효과 하나가 규칙에 없는 부상이거나, 캐릭터가 가지지 않는 수치를 맞추는가."""
+    if effect.kind == EffectKind.INJURE:
+        return find_injury(ruleset, effect.injury) is None
+    resource = find_resource(ruleset, effect.resource)
+    return resource is None or not holds(resource, ResourceHolder.CHARACTERS)
 
 
 def cost_fault(ruleset: Ruleset, attack: MonsterAttack, holder: ResourceHolder) -> bool:

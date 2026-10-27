@@ -34,6 +34,8 @@ class Trigger(enum.StrEnum):
     ITEM = 'item'
     # 기술의 효과(injure)로 그 부상이 확정으로 생겼다(#805). 표를 굴리지 않는다
     SKILL = 'skill'
+    # 몬스터나 인물의 공격의 효과(injure)로 그 부상이 확정으로 생겼다(#805 ③-b). 표를 굴리지 않는다
+    ATTACK = 'attack'
 
 
 @dataclass(frozen=True)

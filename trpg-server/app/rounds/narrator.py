@@ -968,6 +968,8 @@ class MonsterTurnNote:
     움직이지 못한 차례(쓰러짐, 죽음, 부상으로 못 움직임, 칠 캐릭터가 없음)는 넣지 않는다. 한 일이 없다.
     공격의 비용(#805 ③-a)을 냈으면 cost 에 그 수치를 말로만 준다(NPC 와 몬스터의 수치는 숫자를 주지 않는다, #804).
     고른 공격의 비용이 모자라 하지 못했으면 short 가 참이다. 그때는 굴리지 않았다(hit 는 거짓).
+    공격의 효과(#805 ③-b)로 맞은 캐릭터가 입은 부상의 이름들(injured)과 바뀐 수치(resources)도 준다.
+    캐릭터의 수치라 보이기를 따른다(숨긴 것은 말로만).
     """
 
     # 부르는 이름(수로 쥐 2)
@@ -983,6 +985,8 @@ class MonsterTurnNote:
     blow: BlowNote | None = None
     cost: list[ResourceNote] = field(default_factory=list)
     short: bool = False
+    injured: list[str] = field(default_factory=list)
+    resources: list[ResourceNote] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

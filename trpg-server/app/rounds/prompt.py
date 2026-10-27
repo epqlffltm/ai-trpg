@@ -221,7 +221,9 @@ from app.rounds.time_words import duration_text, time_text
 #   narration-75: 몬스터와 인물의 공격의 비용(#805 ③-a). 낸 비용을 말로 붙이고
 #                 (흑마법사: 엘프에게 화염구 (맞음) [마나 모자람]),
 #                 모자라 못 한 차례도 적는다((비용이 모자라 하지 못함))
-PROMPT_VERSION = 'narration-75'
+#   narration-76: 몬스터와 인물의 공격의 효과(#805 ③-b). 차례의 줄에 입힌 부상과 바뀐 수치를 붙인다
+#                 (독거미: 엘프에게 독니 (맞음) → 엘프 피해 2 (HP 8/10) [입힌 부상: 중독] [수치: 마나 5 → 3/7])
+PROMPT_VERSION = 'narration-76'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3
