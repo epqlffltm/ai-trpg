@@ -35,7 +35,7 @@ import { StoryModelDialog } from './StoryModelDialog';
 import { StoryPicture } from './StoryPicture';
 import { storySessionKey } from './storyQueries';
 import { describeStartProblem, describeStoryEditProblem } from './storyTurnProblem';
-import { sceneOf } from './storyView';
+import { sceneOf, storySuggestions } from './storyView';
 import { isEnded, placeName } from './storyWorld';
 import { useStartStorySession } from './useStartStorySession';
 import type { StoryTurnOpener, useStoryTurn } from './useStoryTurn';
@@ -140,7 +140,7 @@ export function StoryRoom({ session, turns }: Props) {
         <Composer
           draft={draft}
           onDraft={setDraft}
-          suggestions={[]}
+          suggestions={storySuggestions(session.messages, choices !== null)}
           streaming={streaming}
           disabled={busy}
           canStop={Boolean(turns.turn?.generationId)}
