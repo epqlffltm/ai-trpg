@@ -21,7 +21,12 @@ class ConversationCreate(BaseModel):
     """
     세션을 시작할 때 받는 값. 세계관을 고른다. 그 세계관의 마지막 판을 가져와 고정한다.
 
-    model 은 셋 중 하나다(chat 과 같다).
+    persona_id 는 셋 중 하나다(chat 과 같다).
+      - 보내지 않으면: 지난번 세션의 페르소나를 쓴다. 지난번에 없었거나 그 페르소나가 지워졌으면 페르소나 없이 시작한다
+      - null 을 보내면: 페르소나 없이 시작한다
+      - id 를 보내면: 그 계정 페르소나다. 없거나 남의 것이면 404 persona_not_found 다
+
+    model 도 셋 중 하나다(chat 과 같다).
       - 보내지 않으면: 지난번 세션의 모델을 쓴다. 지난번에 없었거나 이 세션에 고를 수 없으면 모델 없이 시작한다
       - null 을 보내면: 모델 없이 시작한다. 말을 보내기 전에 고른다
       - 이름표를 보내면: 그 모델이다. 이 세션에 고를 수 없으면 422 model_unavailable 이다
@@ -32,8 +37,14 @@ class ConversationCreate(BaseModel):
 
     # asset 서버의 세계관 id
     world_id: uuid.UUID
+    # asset 서버의 계정 페르소나 id
+    persona_id: uuid.UUID | None = None
     # 모델 목록의 이름표(GET /api/v1/story/models)
     model: ModelSlug | None = None
+
+    def persona_chosen(self) -> bool:
+        """persona_id 를 보냈는가(null 을 보낸 것도 고른 것이다)."""
+        return 'persona_id' in self.model_fields_set
 
     def model_chosen(self) -> bool:
         """model 을 보냈는가(null 을 보낸 것도 고른 것이다)."""
@@ -356,6 +367,21 @@ class StateOut(BaseModel):
     cast: list[str]
 
 
+class PersonaOut(BaseModel):
+    """세션에 가져온 페르소나의 사본(chat 과 같은 모양). id 는 asset 서버의 페르소나 id 다."""
+
+    id: uuid.UUID
+    revision: int
+    name: str
+    description: str
+    image_id: uuid.UUID | None
+    age: str
+    gender: str
+    form_of_address: str
+    speech_examples: str
+    personality: str
+
+
 class ConversationDetail(BaseModel):
     """
     세션 하나. messages 는 지금 보고 있는 가지의 말들이다(첫 말부터, 말마다 대안들). state 는 그 끝의 상태다.
@@ -370,5 +396,7 @@ class ConversationDetail(BaseModel):
     state: StateOut
     # 화면이 쓰는 세계관의 칸. 이 가지의 상태에 맞춰 보여도 되는 것만이다(app/conversations/views.py)
     view: WorldView
+    # 시작할 때 가져온 페르소나의 사본. 페르소나 없이 시작했으면 null 이다
+    persona: PersonaOut | None = None
     created_at: datetime
     updated_at: datetime

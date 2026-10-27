@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.client import AssetAdultRequiredError, AssetClient, AssetNotFoundError
-from app.assets.schemas import WorldCopy
+from app.assets.schemas import PersonaCopy, WorldCopy
 from app.billing.price_list import PriceList, PriceListUnavailable
 from app.billing.prices import PriceBook
 from app.catalog import repository as catalog
@@ -37,7 +37,7 @@ from app.catalog.choice import is_choosable
 from app.catalog.models import AiModel
 from app.catalog.offers import is_sold
 from app.conversations import repository
-from app.conversations.models import Conversation, ImportedWorld, Message, Role
+from app.conversations.models import Conversation, ConversationPersona, ImportedWorld, Message, Role
 from app.conversations.repository import ConversationRow
 from app.conversations.schemas import ConversationCreate, ProgressOut, StateOut, WorldView
 from app.conversations.views import affection_shown, met_on, visited_on, world_view
@@ -62,6 +62,10 @@ class ConversationNotFoundError(Exception):
 
 class WorldNotFoundError(Exception):
     """asset 서버가 그 세계관을 쓸 수 없다고 했다(없다, 남의 비공개다, 게시한 적이 없다, 볼 수 없는 등급이다)."""
+
+
+class PersonaNotFoundError(Exception):
+    """고른 페르소나가 없다(남의 것도). 404 persona_not_found 다."""
 
 
 class AdultContentRequiredError(Exception):
@@ -117,6 +121,23 @@ def build_world(owner_id: uuid.UUID, copy: WorldCopy) -> ImportedWorld:
     )
 
 
+def build_persona(conversation_id: uuid.UUID, copy: PersonaCopy) -> ConversationPersona:
+    """페르소나의 사본을 만든다. 아직 저장하지 않는다."""
+    return ConversationPersona(
+        conversation_id=conversation_id,
+        source_id=copy.id,
+        revision=copy.revision,
+        name=copy.name,
+        description=copy.description,
+        image_id=copy.image_id,
+        age=copy.age,
+        gender=copy.gender,
+        form_of_address=copy.form_of_address,
+        speech_examples=copy.speech_examples,
+        personality=copy.personality,
+    )
+
+
 def build_conversation(owner_id: uuid.UUID, world: ImportedWorld, model_slug: str | None) -> Conversation:
     """세션을 만든다. 제목은 세계관의 이름이다. 아직 저장하지 않는다."""
     return Conversation(id=uuid.uuid4(), owner_id=owner_id, world_id=world.id, title=world.name, model_slug=model_slug)
@@ -153,6 +174,33 @@ async def fetch_world(asset: AssetClient, viewer: Viewer, world_id: uuid.UUID) -
         raise AdultContentRequiredError from error
 
 
+async def fetch_chosen_persona(asset: AssetClient, viewer: Viewer, persona_id: uuid.UUID | None) -> PersonaCopy | None:
+    """사람이 고른 페르소나의 사본. 고르지 않았으면(None) None, 없으면 PersonaNotFoundError."""
+    if persona_id is None:
+        return None
+    try:
+        return await asset.fetch_persona(viewer.token, persona_id)
+    except AssetNotFoundError as error:
+        raise PersonaNotFoundError from error
+
+
+async def fetch_last_persona(asset: AssetClient, viewer: Viewer, persona_id: uuid.UUID | None) -> PersonaCopy | None:
+    """지난번 세션의 페르소나의 사본. 지난번에 없었거나 그사이에 지워졌으면 None 이다(페르소나 없이 시작한다)."""
+    try:
+        return await fetch_chosen_persona(asset, viewer, persona_id)
+    except PersonaNotFoundError:
+        return None
+
+
+async def fetch_persona(
+    asset: AssetClient, viewer: Viewer, data: ConversationCreate, last: uuid.UUID | None
+) -> PersonaCopy | None:
+    """세션에 쓸 페르소나의 사본. 고른 것이면 꼭 있어야 하고, 지난번 것이면 없어도 된다."""
+    if data.persona_chosen():
+        return await fetch_chosen_persona(asset, viewer, data.persona_id)
+    return await fetch_last_persona(asset, viewer, last)
+
+
 # --- 저장과 읽기 ---
 
 
@@ -167,6 +215,19 @@ async def remember_model(session: AsyncSession, viewer: Viewer, data: Conversati
     slug = await repository.last_model(session, viewer.claims.user_id)
     await session.rollback()
     return slug
+
+
+async def remember_persona(session: AsyncSession, viewer: Viewer, data: ConversationCreate) -> uuid.UUID | None:
+    """
+    지난번 세션의 페르소나(asset 서버의 id). 고른 것이 있으면 읽지 않는다(None).
+
+    읽은 뒤 트랜잭션을 닫는다. asset 서버를 부르는 동안 DB 연결을 쥐고 있지 않게 한다.
+    """
+    if data.persona_chosen():
+        return None
+    source_id = await repository.last_persona_source(session, viewer.claims.user_id)
+    await session.rollback()
+    return source_id
 
 
 async def known_book(prices: PriceList) -> PriceBook | None:
@@ -212,12 +273,16 @@ async def pick_model(
 
 
 async def save_conversation(
-    session: AsyncSession, owner_id: uuid.UUID, copy: WorldCopy, model_slug: str | None
+    session: AsyncSession, owner_id: uuid.UUID, copy: WorldCopy, persona: PersonaCopy | None, model_slug: str | None
 ) -> uuid.UUID:
-    """판의 사본과 세션을 한 번에 저장하고 세션의 id 를 돌려준다."""
+    """판의 사본, 세션, 페르소나의 사본을 한 번에 저장하고 세션의 id 를 돌려준다."""
     world = await repository.keep_world(session, build_world(owner_id, copy))
     conversation = build_conversation(owner_id, world, model_slug)
     repository.add(session, conversation)
+    if persona is not None:
+        # 세션이 먼저 저장되어야 사본이 그것을 가리킬 수 있다
+        await session.flush()
+        repository.add(session, build_persona(conversation.id, persona))
     await session.commit()
     return conversation.id
 
@@ -231,17 +296,24 @@ async def start_conversation(
     now: datetime,
 ) -> uuid.UUID:
     """
-    세션을 시작하고 그 id 를 돌려준다. 실패하면 WorldNotFoundError, AdultContentRequiredError, AssetUnavailableError,
-    ModelUnavailableError, PriceListUnavailable.
+    세션을 시작하고 그 id 를 돌려준다. 실패하면 WorldNotFoundError, AdultContentRequiredError, PersonaNotFoundError,
+    AssetUnavailableError, ModelUnavailableError, PriceListUnavailable.
 
     바깥(asset 서버, 결제 서버의 가격 목록)은 DB 의 트랜잭션을 열기 전에 부른다(기다리는 동안 연결을 쥐지 않는다).
     """
     remembered = await remember_model(session, viewer, data)
+    last_persona = await remember_persona(session, viewer, data)
     copy = await fetch_world(asset, viewer, data.world_id)
     require_usable_rating(copy, viewer)
+    persona = await fetch_persona(asset, viewer, data, last_persona)
     book = await book_for_choice(prices, data, remembered)
     model_slug = await pick_model(session, data, remembered, Rating(copy.rating), book, now)
-    return await save_conversation(session, viewer.claims.user_id, copy, model_slug)
+    return await save_conversation(session, viewer.claims.user_id, copy, persona, model_slug)
+
+
+async def conversation_persona(session: AsyncSession, conversation: Conversation) -> ConversationPersona | None:
+    """세션에 가져온 페르소나의 사본. 페르소나 없이 시작했으면 None."""
+    return await repository.persona_of(session, conversation.id)
 
 
 async def get_conversation(session: AsyncSession, viewer: Viewer, conversation_id: uuid.UUID) -> ConversationRow:

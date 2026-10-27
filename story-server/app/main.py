@@ -49,6 +49,7 @@ from app.conversations.service import (
     ConversationNotFoundError,
     ModelUnavailableError,
     NotEditableError,
+    PersonaNotFoundError,
     WorldNotFoundError,
 )
 from app.core.config import Settings, get_settings
@@ -216,6 +217,7 @@ def create_app(
     # 세션의 예외를 응답으로 바꾼다(app/conversations/router.py)
     app.add_exception_handler(ConversationNotFoundError, conversations.handle_conversation_not_found)
     app.add_exception_handler(WorldNotFoundError, conversations.handle_world_not_found)
+    app.add_exception_handler(PersonaNotFoundError, conversations.handle_persona_not_found)
     app.add_exception_handler(AdultContentRequiredError, conversations.handle_adult_content_required)
     app.add_exception_handler(ModelUnavailableError, conversations.handle_model_unavailable)
     app.add_exception_handler(AssetUnavailableError, conversations.handle_asset_unavailable)

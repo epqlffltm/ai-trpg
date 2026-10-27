@@ -17,7 +17,7 @@ export interface paths {
         put?: never;
         /**
          * Start Conversation
-         * @description 세션을 시작한다. 세계관의 마지막 판을 가져와 고정한다. 모델은 지난번 것이거나 고른 것이다.
+         * @description 세션을 시작한다. 세계관의 마지막 판을 가져와 고정한다. 페르소나와 모델은 지난번 것이거나 고른 것이다.
          */
         post: operations["start_conversation_api_v1_story_conversations_post"];
         delete?: never;
@@ -455,7 +455,12 @@ export interface components {
          * ConversationCreate
          * @description 세션을 시작할 때 받는 값. 세계관을 고른다. 그 세계관의 마지막 판을 가져와 고정한다.
          *
-         *     model 은 셋 중 하나다(chat 과 같다).
+         *     persona_id 는 셋 중 하나다(chat 과 같다).
+         *       - 보내지 않으면: 지난번 세션의 페르소나를 쓴다. 지난번에 없었거나 그 페르소나가 지워졌으면 페르소나 없이 시작한다
+         *       - null 을 보내면: 페르소나 없이 시작한다
+         *       - id 를 보내면: 그 계정 페르소나다. 없거나 남의 것이면 404 persona_not_found 다
+         *
+         *     model 도 셋 중 하나다(chat 과 같다).
          *       - 보내지 않으면: 지난번 세션의 모델을 쓴다. 지난번에 없었거나 이 세션에 고를 수 없으면 모델 없이 시작한다
          *       - null 을 보내면: 모델 없이 시작한다. 말을 보내기 전에 고른다
          *       - 이름표를 보내면: 그 모델이다. 이 세션에 고를 수 없으면 422 model_unavailable 이다
@@ -463,6 +468,8 @@ export interface components {
         ConversationCreate: {
             /** Model */
             model?: string | null;
+            /** Persona Id */
+            persona_id?: string | null;
             /**
              * World Id
              * Format: uuid
@@ -487,6 +494,7 @@ export interface components {
             /** Messages */
             messages: components["schemas"]["PathMessageOut"][];
             model: components["schemas"]["ConversationModelOut"] | null;
+            persona?: components["schemas"]["PersonaOut"] | null;
             state: components["schemas"]["StateOut"];
             /** Title */
             title: string;
@@ -928,6 +936,35 @@ export interface components {
             b: string;
             /** Minutes */
             minutes: number;
+        };
+        /**
+         * PersonaOut
+         * @description 세션에 가져온 페르소나의 사본(chat 과 같은 모양). id 는 asset 서버의 페르소나 id 다.
+         */
+        PersonaOut: {
+            /** Age */
+            age: string;
+            /** Description */
+            description: string;
+            /** Form Of Address */
+            form_of_address: string;
+            /** Gender */
+            gender: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+            /** Personality */
+            personality: string;
+            /** Revision */
+            revision: number;
+            /** Speech Examples */
+            speech_examples: string;
         };
         /**
          * PlaceOut

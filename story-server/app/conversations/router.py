@@ -26,7 +26,7 @@ from app.billing.prices import PriceBook
 from app.billing.routing import Prices
 from app.catalog.models import AiModel
 from app.conversations import service
-from app.conversations.models import Conversation, ImportedWorld, Message
+from app.conversations.models import Conversation, ConversationPersona, ImportedWorld, Message
 from app.conversations.repository import ConversationRow
 from app.conversations.schemas import (
     BranchChoice,
@@ -39,6 +39,7 @@ from app.conversations.schemas import (
     MessageOut,
     ModelChoice,
     PathMessageOut,
+    PersonaOut,
     ProgressOut,
     StateOut,
     WorldSummary,
@@ -50,6 +51,7 @@ from app.conversations.service import (
     ConversationNotFoundError,
     ModelUnavailableError,
     NotEditableError,
+    PersonaNotFoundError,
     WorldNotFoundError,
 )
 from app.core.dependencies import CurrentViewer, Now, Paging, Session
@@ -149,6 +151,24 @@ def to_path_message(message: Message, alternatives: dict[uuid.UUID | None, list[
     )
 
 
+def to_persona(persona: ConversationPersona | None) -> PersonaOut | None:
+    """페르소나의 사본을 응답의 모양으로. 없으면 None."""
+    if persona is None:
+        return None
+    return PersonaOut(
+        id=persona.source_id,
+        revision=persona.revision,
+        name=persona.name,
+        description=persona.description,
+        image_id=persona.image_id,
+        age=persona.age,
+        gender=persona.gender,
+        form_of_address=persona.form_of_address,
+        speech_examples=persona.speech_examples,
+        personality=persona.personality,
+    )
+
+
 def to_detail(
     row: ConversationRow,
     models: dict[str, AiModel],
@@ -158,10 +178,11 @@ def to_detail(
     alternatives: dict[uuid.UUID | None, list[uuid.UUID]],
     state: StateOut,
     view: WorldView,
+    persona: ConversationPersona | None,
 ) -> ConversationDetail:
     """
     세션 하나를 응답의 모양으로. messages 는 지금 가지의 말들, alternatives 는 부모마다의 대안들,
-    state 는 그 끝의 상태, view 는 그 상태에 맞춘 세계관의 칸이다.
+    state 는 그 끝의 상태, view 는 그 상태에 맞춘 세계관의 칸, persona 는 가져온 페르소나의 사본이다.
     """
     conversation, world = row
     return ConversationDetail(
@@ -172,6 +193,7 @@ def to_detail(
         messages=[to_path_message(message, alternatives) for message in messages],
         state=state,
         view=view,
+        persona=to_persona(persona),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )
@@ -190,6 +212,13 @@ async def handle_not_editable(request: Request, error: NotEditableError) -> JSON
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={'detail': '그렇게 고칠 수 없는 말입니다.', 'code': error.code},
+    )
+
+
+async def handle_persona_not_found(request: Request, error: PersonaNotFoundError) -> JSONResponse:
+    """고른 페르소나가 없으면(남의 것도) 404 다(code persona_not_found, chat 과 같다)."""
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={'detail': '찾을 수 없습니다.', 'code': 'persona_not_found'}
     )
 
 
@@ -243,7 +272,7 @@ async def handle_asset_unavailable(request: Request, error: AssetUnavailableErro
 async def start_conversation(
     data: ConversationCreate, viewer: CurrentViewer, session: Session, request: Request, prices: Prices, now: Now
 ) -> ConversationDetail:
-    """세션을 시작한다. 세계관의 마지막 판을 가져와 고정한다. 모델은 지난번 것이거나 고른 것이다."""
+    """세션을 시작한다. 세계관의 마지막 판을 가져와 고정한다. 페르소나와 모델은 지난번 것이거나 고른 것이다."""
     conversation_id = await service.start_conversation(session, request.app.state.asset, prices, viewer, data, now)
     return await read_conversation(conversation_id, viewer, session, prices, now)
 
@@ -279,7 +308,8 @@ async def read_conversation(
     messages = await service.conversation_messages(session, row[0])
     alternatives = await service.message_alternatives(session, row[0], messages)
     state, view = await service.conversation_state(session, viewer, row[1], messages)
-    return to_detail(row, models, book, now, messages, alternatives, state, view)
+    persona = await service.conversation_persona(session, row[0])
+    return to_detail(row, models, book, now, messages, alternatives, state, view, persona)
 
 
 @router.put(
