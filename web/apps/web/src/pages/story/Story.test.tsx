@@ -282,8 +282,8 @@ describe('순수한 함수', () => {
     const turn = { ...EMPTY_STORY_TURN, userMessage: saved(1, 'user'), cast: ['jun'], state: state({ cast: ['jun'] }) };
     expect(visibleStoryMessages(MESSAGES, turn).items).toHaveLength(1);
     expect(visibleStoryMessages(MESSAGES, { ...turn, userMessage: saved(3, 'user') }).items).toHaveLength(3);
-    expect(storyTail(MESSAGES)).toEqual({ answer: null, regenerate: M(2) });
-    expect(storyTail([MESSAGES[0] as StoryMessage])).toEqual({ answer: M(1), regenerate: null });
+    expect(storyTail(MESSAGES)).toEqual({ answer: null, regenerate: M(2), continueFrom: null });
+    expect(storyTail([MESSAGES[0] as StoryMessage])).toEqual({ answer: M(1), regenerate: null, continueFrom: null });
     expect(sceneOf(state(), turn).cast).toEqual(['jun']);
     expect(sceneOf(state(), null).cast).toEqual(['mina']);
   });
