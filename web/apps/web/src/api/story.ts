@@ -6,7 +6,9 @@
 // 판의 문서(world.document)는 서버가 곧 뺀다. 화면은 view 만 쓴다. 목록의 줄에는 진행(progress: 날짜, 엔딩, 후일담)이 실린다.
 // 답의 SSE: turn{generation_id, user_message, cast, state}, segment{speaker}, delta{text}, done{message}, failed{code}. 읽기는 chatTurns.ts.
 // 답을 시작하기 전의 거절(story-server/app/turns/router.py):
-//   - 409 model_required, generation_in_progress, session_ended(끝을 고른 세계관의 엔딩 뒤). 422 model_unavailable, not_regenerable
+//   - 409 model_required, generation_in_progress, session_ended(끝을 고른 세계관의 엔딩 뒤). 422 model_unavailable, not_regenerable,
+//     not_continuable(이어 쓸 수 없는 답), not_editable(사람의 말이 아닌 것을 edit_of 로 고침, 답이 아닌 것을 PATCH)
+// 답 고치기(PATCH)의 거절: 422 segments_mismatch(조각의 수가 다르다), 409 generation_in_progress
 //   - 402 credit_short, gold_required, 503: 사람의 말은 저장했다(message_id). 404 message_not_found
 // 행동(이동, 시간 보내기, 하루 마치기, 선택지, 고백, 건네기)은 엔진이 판정하고 같은 SSE 로 반응을 받는다. 할 수 없으면 422 이고
 // 아무것도 저장하지 않는다(cannot_move, no_choice, over, not_in_scene, not_confessable, cooling_down, not_held).
@@ -80,8 +82,20 @@ export function stopStoryGeneration(generationId: string): Promise<void> {
   return apiRequest<void>(`${STORY}/generations/${encodeURIComponent(generationId)}/stop`, { method: 'POST' });
 }
 
-export function openStoryMessageTurn(id: string, content: string, signal: AbortSignal): Promise<Response> {
-  return apiStream(`${STORY}/conversations/${encodeURIComponent(id)}/messages`, { method: 'POST', body: { content }, signal });
+/** 말 보내기. editOf 가 있으면 그 내 말을 고친 새 가지다(원본은 대안으로 남는다) */
+export function openStoryMessageTurn(id: string, content: string, signal: AbortSignal, editOf?: string): Promise<Response> {
+  const body = editOf ? { content, edit_of: editOf } : { content };
+  return apiStream(`${STORY}/conversations/${encodeURIComponent(id)}/messages`, { method: 'POST', body, signal });
+}
+
+/** 끊긴 답(partial)에 이어 쓴다. turn 에 continues 가 실리고, 첫 segment 앞의 글은 그 답의 마지막 조각에 붙는다 */
+export function openStoryContinueTurn(messageId: string, signal: AbortSignal): Promise<Response> {
+  return apiStream(`${STORY}/messages/${encodeURIComponent(messageId)}/continue`, { method: 'POST', signal });
+}
+
+/** 답을 조각마다 글만 고친다(말하는 사람과 조각의 수는 그대로, 한 줄씩). 청구하지 않는다 */
+export function editStoryAnswer(messageId: string, segments: string[]): Promise<StorySavedMessage> {
+  return apiRequest<StorySavedMessage>(`${STORY}/messages/${encodeURIComponent(messageId)}`, { method: 'PATCH', body: { segments } });
 }
 
 /** 답이면 그 부모에 새 대안을, 답을 못 받은 사람의 말이면 그 말에 답한다 */

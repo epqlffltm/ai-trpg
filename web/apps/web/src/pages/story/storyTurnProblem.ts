@@ -4,7 +4,7 @@
 // 행동을 할 수 없는 까닭(422)은 아무것도 저장하지 않았다. 상태가 화면과 어긋났을 수 있어(다른 가지, 다른 탭) 세션을 다시 읽는다.
 
 import { ApiError } from '../../api/errors';
-import { describeTurnProblem, type TurnProblem } from '../chat/conversation/turnProblem';
+import { describeChangeProblem, describeTurnProblem, type TurnProblem } from '../chat/conversation/turnProblem';
 
 const STORY_REFUSALS: Record<string, string> = {
   session_ended: '끝난 이야기입니다. 엔딩을 봤고 이 세계관은 후일담이 없습니다.',
@@ -17,6 +17,7 @@ const STORY_REFUSALS: Record<string, string> = {
   not_confessable: '그 인물에게는 고백할 수 없습니다.',
   cooling_down: '아직 다시 고백할 수 없습니다. 며칠 지난 뒤에 해 보세요.',
   not_held: '가지고 있지 않은 물건입니다.',
+  not_editable: '고칠 수 없는 말입니다. 행동 말은 엔진의 결과라 고치지 않습니다.',
 };
 
 export function describeStoryTurnProblem(error: unknown): TurnProblem {
@@ -33,4 +34,11 @@ export function describeStartProblem(error: unknown): string {
   if (error.code === 'asset_unavailable') return `세계관을 가져오지 못했습니다.${error.retryAfter ? ` ${error.retryAfter}초 뒤에` : ' 잠시 뒤에'} 다시 눌러 주세요.`;
   if (error.status === 503) return '지금은 시작할 수 없습니다. 잠시 뒤에 다시 시도하세요.';
   return '시작하지 못했습니다. 잠시 뒤에 다시 시도하세요.';
+}
+
+/** 답 고치기(PATCH)와 대안 고르기의 실패. 조각의 수가 다르면 다시 읽어 맞춘다 */
+export function describeStoryEditProblem(error: unknown): string {
+  if (error instanceof ApiError && error.code === 'segments_mismatch') return '조각의 수가 바뀌었습니다. 화면을 새로 읽은 뒤 다시 고쳐 주세요.';
+  if (error instanceof ApiError && error.code === 'not_editable') return '고칠 수 없는 말입니다. 답만 그 자리에서 고칩니다.';
+  return describeChangeProblem(error);
 }
