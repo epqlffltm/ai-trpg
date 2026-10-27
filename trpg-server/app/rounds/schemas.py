@@ -17,6 +17,7 @@ from app.engine.death import Fate
 from app.engine.health import ChangeKind
 from app.rounds.models import DECLARATION_MAX_LENGTH, RoundStatus
 from app.tables.models import NpcStatus
+from app.tables.schemas import ResourceOut
 
 # 선언의 글. 공백이 아닌 글자가 하나는 있어야 한다. 앞뒤 공백은 떼지 않는다
 DeclarationContent = Annotated[str, StringConstraints(pattern=r'\S', max_length=DECLARATION_MAX_LENGTH)]
@@ -1143,6 +1144,8 @@ class PersonOut(BaseModel):
     # 있는 장소(#282). 판의 로어북 장소 항목의 id 다. 자기가 선 장소와 같아야 겨눈다.
     # null 이면 자리가 없는 인물이다. 장면의 글에 나와 장면에 들었고, 누구나 겨눈다
     place_id: uuid.UUID | None = None
+    # 인물의 수치(#804). 규칙이 NPC 에게 준 것 중 모두가 보는 것만이다. 규칙의 차례다
+    resources: list[ResourceOut] = []
 
 
 class SceneMonsterOut(BaseModel):
@@ -1167,6 +1170,8 @@ class SceneMonsterOut(BaseModel):
     # 지금 지닌 물건들. 장비 다음 소지품의 차례다. 떨어뜨리거나 빼앗긴 것은 없다.
     # 쓰러뜨리면 판에 적은 확률로 떨어진다. 떨어지지 않은 것은 그 마리가 그대로 지닌다
     items: list[CarriedOut] = []
+    # 그 마리의 수치(#804). 규칙이 몬스터에게 준 것 중 모두가 보는 것만이다. 규칙의 차례다
+    resources: list[ResourceOut] = []
 
 
 class SceneCastOut(BaseModel):

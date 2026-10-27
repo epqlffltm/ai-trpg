@@ -40,7 +40,14 @@ from ai_core.provider import ChatMessage, Role
 from app.assets.models import LoreKind, NarrationStyle
 from app.catalog.steps import BASE_STEPS, NarrationSteps, scaled_chars, scaled_count
 from app.engine.ruleset import NarrationGuide
-from app.rounds.move_lines import OUTCOME_WORDS, describe_injuries, describe_items, lost_before_acting, round_lines
+from app.rounds.move_lines import (
+    OUTCOME_WORDS,
+    describe_injuries,
+    describe_items,
+    describe_resource,
+    lost_before_acting,
+    round_lines,
+)
 from app.rounds.narrator import (
     ClockNote,
     HappeningNote,
@@ -205,7 +212,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 바꾼 수치를 적는다((쉬기: 긴 휴식, HP 2 → 10/10, 마나 1 → 6/6), [수치: 마나 2 → 5/6])
 #   narration-71: 숨긴 수치(#804). 모두가 보지 않는 수치는 숫자 없이 네 단계의 말로 적는다([수치: 광기 모자람]).
 #                 바뀐 것도 바뀐 뒤의 말만 적는다(쉬기의 줄, 마나 넉넉함)
-PROMPT_VERSION = 'narration-71'
+#   narration-72: NPC 와 몬스터의 수치(#804). 인물의 줄에 수치를 말로 붙이고(. 수치: 마나 바닥),
+#                 몬스터의 마리마다의 몸 상태에도 붙인다(다침(중독) [마나 바닥]). 숫자는 주지 않는다
+PROMPT_VERSION = 'narration-72'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3
@@ -820,11 +829,13 @@ def person_line(person: PersonState) -> str:
 
     예: - 악역영애: 크게 다침. 태도: 적대. 부상: 오른손 잃음(…)
         - 경비대장 [성문]: 멀쩡함
+        - 마법사: 멀쩡함. 수치: 마나 바닥
     """
     place = f' [{person.place}]' if person.place else ''
     attitude = f'. 태도: {person.attitude}' if person.attitude else ''
     injured = f'. 부상: {describe_injuries(person.injuries)}' if person.injuries else ''
-    return f'- {person.name}{place}: {person.condition}{attitude}{injured}'
+    measured = f'. 수치: {", ".join(describe_resource(note) for note in person.resources)}' if person.resources else ''
+    return f'- {person.name}{place}: {person.condition}{attitude}{injured}{measured}'
 
 
 def whisper_line(whisper: WhisperNote) -> str:

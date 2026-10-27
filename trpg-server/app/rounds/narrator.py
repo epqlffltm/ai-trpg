@@ -843,6 +843,8 @@ class PersonState:
     attitude: str | None = None
     # 있는 장소의 이름(#282). 자리가 없는 인물이면 None 이다(장면의 글로 나온 인물)
     place: str | None = None
+    # 인물의 수치(#804). HP 처럼 숫자 없이 네 단계의 말로만 준다(마나 바닥). 규칙의 차례다
+    resources: list['ResourceNote'] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

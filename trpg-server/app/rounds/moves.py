@@ -17,14 +17,15 @@ from app.assets.models import NarrationStyle
 from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, place_entries, read_snapshot
 from app.engine.check import find_ability
 from app.engine.injury import find_injury
-from app.engine.resources import Level, band_of, is_open
-from app.engine.ruleset import Ruleset
+from app.engine.resources import Level, band_of, holds, is_open
+from app.engine.ruleset import ResourceHolder, Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds import narration_request
 from app.rounds.cast import CastMember, condition_of
 from app.rounds.models import Round
 from app.rounds.monster_scene import SceneMonster
 from app.rounds.monster_scene import condition as monster_condition
+from app.rounds.move_lines import describe_resource
 from app.rounds.narrator import (
     HealNote,
     InjuryNote,
@@ -51,6 +52,7 @@ from app.tables import equipment, injuries, items, money, place_items, places, r
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember
 from app.tables.npc_attitudes import attitude_word
+from app.tables.resources import Bearer
 
 
 def healed_notes(ruleset: Ruleset | None, ended: list[round_injuries.Ended], user_id: uuid.UUID) -> list[HealNote]:
@@ -328,8 +330,24 @@ def to_people(
             injuries=round_injuries.notes(ruleset, member.npc.injuries),
             attitude=attitude_word(member.npc),
             place=names.get(member.npc.place_id),
+            resources=word_notes(ruleset, member.npc, ResourceHolder.NPCS),
         )
         for member in cast
+    ]
+
+
+def word_notes(ruleset: Ruleset, bearer: Bearer, holder: ResourceHolder) -> list[ResourceNote]:
+    """
+    인물이나 몬스터의 수치들(#804)을 말로. HP 처럼 숫자는 주지 않는다. 보이기와 상관없이 늘 말이다.
+
+    예: 마나 바닥, 광기 넉넉함
+    그 쪽이 가지는 수치가 규칙에 없으면(대부분의 판) 가진 쪽을 들여다보지 않고 빈 목록이다.
+    """
+    if not any(holds(resource, holder) for resource in ruleset.resources):
+        return []
+    return [
+        ResourceNote(name=level.resource.name, word=band_of(level.value, level.resource.min, level.maximum))
+        for level in resources.levels_of(ruleset, bearer, holder)
     ]
 
 
@@ -349,13 +367,17 @@ MONSTER_KINDS = {
 
 def described_condition(ruleset: Ruleset, monster: SceneMonster) -> str:
     """
-    한 마리의 몸 상태. 입고 있는 부상이 있으면 그 이름을 붙인다(#799). 예: 다침(중독, 팔 골절)
+    한 마리의 몸 상태. 입고 있는 부상이 있으면 그 이름을 붙인다(#799). 수치(#804)가 있으면 말로 붙인다.
+    예: 다침(중독, 팔 골절)
+        다침(중독) [마나 바닥]
 
     부상의 이름은 규칙에 적힌 것이다. 숫자는 주지 않는다.
     """
     condition = monster_condition(monster)
     names = [injury.name for injury in round_injuries.worn(ruleset, monster.state.injuries)]
-    return f'{condition}({", ".join(names)})' if names else condition
+    described = f'{condition}({", ".join(names)})' if names else condition
+    words = word_notes(ruleset, monster.state, ResourceHolder.MONSTERS)
+    return f'{described} [{", ".join(describe_resource(note) for note in words)}]' if words else described
 
 
 def monster_note(ruleset: Ruleset, monsters: list[SceneMonster], place: str) -> MonsterNote:

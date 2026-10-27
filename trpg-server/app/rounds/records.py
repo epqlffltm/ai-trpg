@@ -336,9 +336,8 @@ def record_item_throw(session: AsyncSession, table: GameTable, declaration: Decl
     record_cures(session, table, cured, thrown['target'], cause=event)
     for one in injured:
         record_injury(session, table, one, thrown['target'], cause=event)
-    holder = {'user_id': thrown['target'].get('user_id'), 'character_name': thrown['target'].get('name')}
     shifts = thrown.get('resources') or []
-    record_resource_shifts(session, table, shifts, holder, ResourceSource.ITEM, cause=event)
+    record_resource_shifts(session, table, shifts, thrown['target'], ResourceSource.ITEM, cause=event)
 
 
 def record_item_give(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
@@ -657,24 +656,38 @@ def recorded_shifts(shifts: list[dict]) -> list[dict]:
     return [shift for shift in shifts if shift.get('visibility', 'everyone') != 'engine']
 
 
+# 수치를 가진 쪽을 가리키는 칸들(#804). 캐릭터, NPC, 몬스터 중 하나다
+HOLDER_IDS = ('user_id', 'entry_id', 'monster_id')
+
+
+def resource_holder(holder: dict) -> dict:
+    """
+    resource_changed 에 적을 누구인지. 가리키는 칸(user_id, entry_id, monster_id 중 하나)과 이름(character_name)이다.
+
+    그 이벤트의 name 은 수치의 이름이라, 가진 쪽의 이름(인물의 호칭, 몬스터의 이름)은 character_name 에 적는다.
+    """
+    key = next(key for key in HOLDER_IDS if holder.get(key) is not None)
+    return {key: holder[key], 'character_name': holder.get('character_name') or holder.get('name')}
+
+
+def resource_payload(round_number: int, holder: dict, shift: dict, source: str) -> dict:
+    """바뀐 수치 하나의 이벤트의 payload. 누구의 것인지는 holder 에서 온다. 결과 문서의 user_id 는 싣지 않는다."""
+    fields = {key: value for key, value in shift.items() if key != 'user_id'}
+    return {'round': round_number, **resource_holder(holder), **fields, 'source': source}
+
+
 def record_resource_shifts(
     session: AsyncSession, table: GameTable, shifts: list[dict], holder: dict | None, source: str, cause: TableEvent
 ) -> None:
     """
     바뀐 수치마다 이벤트(resource_changed)를 적는다(#804). 그것을 바꾼 일의 이벤트(cause)에 잇는다.
 
-    holder 는 그 캐릭터다(user_id, character_name). 없으면(인물이나 몬스터에게 썼다) 적지 않는다. 그쪽에는 수치가 없다.
+    holder 는 그 캐릭터나 NPC 나 몬스터다(결과의 target 과 같은 모양). 누구인지 모르면 적지 않는다.
     """
-    if holder is None or holder.get('user_id') is None:
+    if holder is None or not any(holder.get(key) is not None for key in HOLDER_IDS):
         return
     for shift in recorded_shifts(shifts):
-        payload = {
-            'round': cause.payload['round'],
-            'user_id': holder['user_id'],
-            'character_name': holder.get('character_name'),
-            **shift,
-            'source': source,
-        }
+        payload = resource_payload(cause.payload['round'], holder, shift, source)
         recorder.record(session, table, EventType.RESOURCE_CHANGED, payload=payload, cause=cause)
 
 

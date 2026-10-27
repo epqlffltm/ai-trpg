@@ -5868,6 +5868,11 @@ export interface components {
             named: boolean;
             /** Place Id */
             place_id?: string | null;
+            /**
+             * Resources
+             * @default []
+             */
+            resources: components["schemas"]["ResourceOut"][];
             status: components["schemas"]["NpcStatus"];
         };
         /**
@@ -7015,6 +7020,7 @@ export interface components {
          *     at_min 과 at_max 는 문턱이다(#804). 값이 최소(최대)에 닿아 있는 동안 그 부상(규칙의 injuries 의 key)을 입는다.
          *     문턱을 벗어나면 바로 풀린다. 부상은 수치의 그림자다(app/rounds/resource_rounds.py).
          *     visibility 는 누가 숫자를 보나다(#804). 비우면 모두다.
+         *     holders 는 누가 이 수치를 가지나다(#804, 캐릭터·NPC·몬스터). 비우면 캐릭터만이다. 최대는 각자의 능력치로 정한다.
          */
         Resource: {
             /** At Max */
@@ -7022,6 +7028,13 @@ export interface components {
             /** At Min */
             at_min?: string | null;
             each_round?: components["schemas"]["ResourceShift"] | null;
+            /**
+             * Holders
+             * @default [
+             *       "characters"
+             *     ]
+             */
+            holders: components["schemas"]["ResourceHolder"][];
             /** Key */
             key: string;
             max: components["schemas"]["ResourceMax"];
@@ -7039,6 +7052,12 @@ export interface components {
             /** @default everyone */
             visibility: components["schemas"]["ResourceVisibility"];
         };
+        /**
+         * ResourceHolder
+         * @description 수치를 누가 가지나(#804). 수치마다 하나 이상이다.
+         * @enum {string}
+         */
+        ResourceHolder: "characters" | "npcs" | "monsters";
         /**
          * ResourceMax
          * @description 수치의 최대. base 에 능력치(ability)의 보정을 더하고, cap 이 있으면 그것을 넘지 않는다.
@@ -8202,6 +8221,11 @@ export interface components {
              * Format: uuid
              */
             place_id: string;
+            /**
+             * Resources
+             * @default []
+             */
+            resources: components["schemas"]["ResourceOut"][];
             status: components["schemas"]["NpcStatus"];
         };
         /**

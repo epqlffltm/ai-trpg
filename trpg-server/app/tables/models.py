@@ -692,6 +692,7 @@ class TableNpc(Base):
         CheckConstraint('fell_round IS NULL OR fell_round >= 1', name='fell_round_positive'),
         CheckConstraint('fought_round IS NULL OR fought_round >= 1', name='fought_round_positive'),
         CheckConstraint('robbed_round IS NULL OR robbed_round >= 1', name='robbed_round_positive'),
+        CheckConstraint("jsonb_typeof(resources) = 'object'", name='resources_is_object'),
     )
 
     # 두 칸을 합쳐 기본 키로 삼는다. 한 테이블에서 인물 하나의 상태는 하나다.
@@ -722,6 +723,9 @@ class TableNpc(Base):
     # 쓰러져 있는 동안 처음 빼앗긴 라운드(app/rounds/loots.py).
     # 깨어날 때 반응을 한 번 굴리고 비운다(app/rounds/wakes.py). 비어 있으면 빼앗긴 것이 없다(또는 이미 굴렸다)
     robbed_round: Mapped[int | None] = mapped_column(Integer)
+    # 수치의 지금 값(#804). 이름표에서 값으로. 규칙이 NPC 에게 준 수치만 있다(resources[].holders).
+    # 적히지 않은 이름표는 시작 값으로 읽는다(app/engine/resources.py). 바꾸는 것은 엔진뿐이다
+    resources: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
     # 이 인물이 있는 맵의 장소(#282). 판의 로어북 장소 항목의 ID 다. 판에 자리를 적은 인물만 있다(시작할 때 그 장소).
     # 비어 있으면 자리가 없는 인물이다. 장면의 글에 나왔는지로 장면에 든다(app/rounds/cast.py).
     # 바꾸는 것은 판의 사건(move_npc)뿐이다(app/rounds/happenings.py). 죽어도 그 자리에 남는다
@@ -794,6 +798,7 @@ class TableMonster(Base):
         CheckConstraint("jsonb_typeof(abilities) = 'object'", name='abilities_is_object'),
         CheckConstraint('number >= 1', name='number_positive'),
         CheckConstraint('engaged_round IS NULL OR engaged_round >= 1', name='engaged_round_positive'),
+        CheckConstraint("jsonb_typeof(resources) = 'object'", name='resources_is_object'),
         CheckConstraint('fought_round IS NULL OR fought_round >= 1', name='fought_round_positive'),
         # 무작위 조우의 기습은 정해진 값이다. 비어 있으면 판의 조우의 것을 쓴다(NULL 은 이 조건을 지난다)
         CheckConstraint(one_of('surprise', Surprise), name='surprise_allowed'),
@@ -826,6 +831,8 @@ class TableMonster(Base):
     # 무작위 조우(#283)로 나온 마리의 기습. 만난 첫 라운드에만 쓴다(app/rounds/initiative.py).
     # 판의 조우로 놓인 마리는 비어 있고 그 조우의 기습을 쓴다
     surprise: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)
+    # 수치의 지금 값(#804). 규칙이 몬스터에게 준 수치만 있다(resources[].holders). 모양은 NPC 와 같다
+    resources: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

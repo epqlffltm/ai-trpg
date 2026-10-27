@@ -263,6 +263,7 @@ async def test_a_rulebook_takes_its_resources_from_the_template_or_the_request(c
             'at_min': None,
             'at_max': None,
             'visibility': 'everyone',
+            'holders': ['characters'],
         }
     ]
 

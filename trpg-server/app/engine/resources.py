@@ -19,7 +19,15 @@ HP 말고 캐릭터가 가지는 수치(#804)의 계산. 마나, 스태미나, �
 from dataclasses import dataclass
 
 from app.engine.check import modifier_of
-from app.engine.ruleset import Resource, ResourceShift, ResourceShiftKind, ResourceStart, ResourceVisibility, Ruleset
+from app.engine.ruleset import (
+    Resource,
+    ResourceHolder,
+    ResourceShift,
+    ResourceShiftKind,
+    ResourceStart,
+    ResourceVisibility,
+    Ruleset,
+)
 
 
 @dataclass(frozen=True)
@@ -85,9 +93,16 @@ def level_of(ruleset: Ruleset, resource: Resource, abilities: dict[str, int], va
     return Level(resource=resource, value=value, maximum=maximum)
 
 
-def levels(ruleset: Ruleset, abilities: dict[str, int], values: dict) -> list[Level]:
-    """이 캐릭터의 수치들의 지금. 규칙의 차례다."""
-    return [level_of(ruleset, resource, abilities, values) for resource in ruleset.resources]
+def holds(resource: Resource, holder: ResourceHolder) -> bool:
+    """이 쪽(캐릭터, NPC, 몬스터)이 이 수치를 가지는가."""
+    return holder in resource.holders
+
+
+def levels(
+    ruleset: Ruleset, abilities: dict[str, int], values: dict, holder: ResourceHolder = ResourceHolder.CHARACTERS
+) -> list[Level]:
+    """가진 쪽(holder)의 하나의 수치들의 지금. 그 쪽이 가지는 것만, 규칙의 차례다."""
+    return [level_of(ruleset, resource, abilities, values) for resource in ruleset.resources if holds(resource, holder)]
 
 
 def shifted(level: Level, shift: ResourceShift) -> int:
