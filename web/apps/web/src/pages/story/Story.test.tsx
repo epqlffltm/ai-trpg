@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import type { StoryMessage, StorySavedMessage, StorySession, StoryState } from '../../api/story';
 import { sse } from '../../test/chatFixtures';
+import { castOut, storyView } from '../../test/storyFixtures';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
 import { describeStartProblem, describeStoryTurnProblem } from './storyTurnProblem';
@@ -24,24 +25,19 @@ const GEN = '00000000-0000-4000-8000-00000000e501';
 const M = (n: number) => `00000000-0000-4000-8000-0000000f50${n}`;
 const AT = '2026-10-26T03:00:00Z';
 
-const DOCUMENT = {
-  name: '여름 학교',
+const VIEW = storyView({
   deadline_days: 100,
-  after_ending: 'end',
   slots: [
     { id: 'morning', name: '아침', start_hour: 7 },
     { id: 'evening', name: '저녁', start_hour: 18 },
   ],
   places: [
-    { id: 'school', name: '학교' },
-    { id: 'park', name: '공원' },
+    { id: 'school', name: '학교', description: '', image_id: null, backgrounds: {} },
+    { id: 'park', name: '공원', description: '', image_id: null, backgrounds: {} },
   ],
-  cast: [
-    { id: 'mina', character: { name: '미나' } },
-    { id: 'jun', character: { name: '준' } },
-  ],
-  endings: [{ id: 'spring', name: '봄의 약속' }],
-};
+  cast: [castOut('mina', '미나'), castOut('jun', '준')],
+  endings: [{ id: 'spring', name: '봄의 약속', hint: '', image_id: null, seen: true, unlock: true }],
+});
 
 function state(extra: Partial<StoryState> = {}): StoryState {
   return { minutes: 0, day: 3, slot: 'evening', place: 'school', items: {}, affection: {}, companions: [], choosing: null, ending: null, cast: ['mina'], ...extra };
@@ -69,7 +65,8 @@ function session(extra: Partial<StorySession> = {}): StorySession {
   return {
     id: SESSION,
     title: '여름 학교',
-    world: { id: WORLD, version: 2, name: '여름 학교', image_id: null, rating: 'all', document: DOCUMENT },
+    world: { id: WORLD, version: 2, name: '여름 학교', image_id: null, rating: 'all', document: {} },
+    view: VIEW,
     model: { slug: 'luna', display_name: 'Luna', vendor: 'openai', grade: 'standard', retires_on: null, usable: true },
     messages: MESSAGES,
     state: state(),
@@ -253,15 +250,16 @@ describe('장면', () => {
 });
 
 describe('순수한 함수', () => {
-  it('판의 문서에서 이름과 머리의 줄', () => {
-    expect(castName(DOCUMENT, 'mina')).toBe('미나');
-    expect(castName(DOCUMENT, 'ghost')).toBe('ghost');
-    expect(speakerName(DOCUMENT, null)).toBeNull();
-    expect(daysLeft(DOCUMENT, 100)).toBe(0);
-    expect(daysLeft({}, 3)).toBeNull();
-    expect(stateLine({ ...DOCUMENT, deadline_days: null }, state({ slot: 'morning', place: 'park' }))).toBe('3일째 · 아침 · 공원');
-    expect(isEnded({ ...DOCUMENT, after_ending: 'epilogue' }, state({ ending: 'spring' }))).toBe(false);
-    expect(isEnded(DOCUMENT, state({ ending: 'spring' }))).toBe(true);
+  it('세계관 칸에서 이름과 머리의 줄', () => {
+    expect(castName(VIEW, 'mina')).toBe('미나');
+    expect(castName(VIEW, 'ghost')).toBe('???');
+    expect(castName(storyView({ cast: [castOut('veil', null)] }), 'veil')).toBe('???');
+    expect(speakerName(VIEW, null)).toBeNull();
+    expect(daysLeft(100, 100)).toBe(0);
+    expect(daysLeft(null, 3)).toBeNull();
+    expect(stateLine({ ...VIEW, deadline_days: null }, state({ slot: 'morning', place: 'park' }))).toBe('3일째 · 아침 · 공원');
+    expect(isEnded({ after_ending: 'epilogue' }, state({ ending: 'spring' }))).toBe(false);
+    expect(isEnded(VIEW, state({ ending: 'spring' }))).toBe(true);
   });
 
   it('흘러 들어오는 조각을 쌓는다', () => {

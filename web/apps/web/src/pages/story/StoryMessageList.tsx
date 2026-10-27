@@ -5,7 +5,7 @@
 
 import { Button } from '@ai-trpg/ui';
 import { useEffect, useRef } from 'react';
-import type { StoryMessage, StorySegment, StorySession } from '../../api/story';
+import type { StoryMessage, StorySegment, StorySession, StoryView } from '../../api/story';
 import { storyAlternatives, storyTail, visibleStoryMessages } from './storyView';
 import { speakerName } from './storyWorld';
 import type { StoryTurnState } from './storyTurnState';
@@ -25,18 +25,18 @@ export function StoryMessageList({ session, turn, busy, onBranch, onRegenerate }
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: 'end' });
   }, [growth]);
-  const document = session.world.document;
+  const view = session.view;
 
   return (
     <section className="conversation__log" aria-label="이야기">
       {items.length === 0 && pending === null ? <p className="hint">첫 말을 걸어 이야기를 시작하세요.</p> : null}
       <ol className="plain-list chat-messages" aria-label="말">
         {items.map((message) => (
-          <StoryMessageItem key={message.id} message={message} document={document} busy={busy} onBranch={onBranch} />
+          <StoryMessageItem key={message.id} message={message} view={view} busy={busy} onBranch={onBranch} />
         ))}
         {pending !== null ? (
           <li className="chat-message chat-message--assistant" aria-busy="true">
-            <Segments segments={pending} document={document} />
+            <Segments segments={pending} view={view} />
             {pending.length === 0 ? <p className="chat-message__content">…</p> : null}
             <p className="hint chat-message__marks">쓰는 중</p>
           </li>
@@ -48,14 +48,14 @@ export function StoryMessageList({ session, turn, busy, onBranch, onRegenerate }
   );
 }
 
-type ItemProps = { message: StoryMessage; document: Record<string, unknown>; busy: boolean; onBranch: (messageId: string) => void };
+type ItemProps = { message: StoryMessage; view: StoryView; busy: boolean; onBranch: (messageId: string) => void };
 
-function StoryMessageItem({ message, document, busy, onBranch }: ItemProps) {
+function StoryMessageItem({ message, view, busy, onBranch }: ItemProps) {
   const marks = [message.status === 'partial' ? '끊긴 답' : null, message.edited ? '고침' : null].filter(Boolean);
   return (
     <li className={`chat-message chat-message--${message.role}`}>
       {message.role === 'assistant' ? (
-        <Segments segments={message.segments} document={document} />
+        <Segments segments={message.segments} view={view} />
       ) : (
         <>
           {message.role === 'user' ? <p className="chat-message__speaker">나</p> : null}
@@ -68,11 +68,11 @@ function StoryMessageItem({ message, document, busy, onBranch }: ItemProps) {
   );
 }
 
-function Segments({ segments, document }: { segments: StorySegment[]; document: Record<string, unknown> }) {
+function Segments({ segments, view }: { segments: StorySegment[]; view: StoryView }) {
   return (
     <>
       {segments.map((segment, index) => {
-        const name = speakerName(document, segment.speaker);
+        const name = speakerName(view, segment.speaker);
         return (
           <div key={index} className={name ? 'story-segment' : 'story-segment story-segment--narration'}>
             {name ? <p className="chat-message__speaker">{name}</p> : null}
