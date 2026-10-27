@@ -9,6 +9,7 @@
 // 답을 시작하기 전의 거절(story-server/app/turns/router.py):
 //   - 409 model_required, generation_in_progress, session_ended(끝을 고른 세계관의 엔딩 뒤). 422 model_unavailable, not_regenerable,
 //     not_continuable(이어 쓸 수 없는 답), not_editable(사람의 말이 아닌 것을 edit_of 로 고침, 답이 아닌 것을 PATCH)
+// 페르소나: 시작(persona_id)과 바꾸기(PUT /persona)의 404 persona_not_found(세션은 그대로), 503 asset_unavailable.
 // 답 고치기(PATCH)의 거절: 422 segments_mismatch(조각의 수가 다르다), 409 generation_in_progress
 //   - 402 credit_short, gold_required, 503: 사람의 말은 저장했다(message_id). 404 message_not_found
 // 행동(이동, 시간 보내기, 하루 마치기, 선택지, 고백, 건네기)은 엔진이 판정하고 같은 SSE 로 반응을 받는다. 할 수 없으면 422 이고
@@ -37,6 +38,9 @@ export type StoryIllustration = Schemas['IllustrationOut'];
 export type StoryView = Schemas['WorldView'];
 export type StoryViewCast = Schemas['CastOut'];
 export type StoryProgress = Schemas['ProgressOut'];
+/** 세션에 가져온 페르소나의 사본. revision 은 가져올 때의 판이다 */
+export type StoryPersona = Schemas['PersonaOut'];
+export type StoryPersonaChoice = Schemas['PersonaChoiceOut'];
 export type StoryAction =
   | Schemas['MoveAction']
   | Schemas['PassTimeAction']
@@ -63,9 +67,10 @@ export function fetchStorySessions(offset: number, signal?: AbortSignal, worldId
   return apiRequest<StorySessionPage>(`${STORY}/conversations`, { query: { limit: SESSION_PAGE_SIZE, offset, world_id: worldId }, ...withSignal(signal) });
 }
 
-/** 세계관의 마지막 판으로 새 세션. 모델을 비우면 지난번 세션의 모델이다 */
-export function startStorySession(worldId: string): Promise<StorySession> {
-  return apiRequest<StorySession>(`${STORY}/conversations`, { method: 'POST', body: { world_id: worldId } });
+/** 세계관의 마지막 판으로 새 세션. 모델과 페르소나를 보내지 않으면 지난번 세션의 것이다(페르소나 null 은 없이 시작) */
+export function startStorySession(worldId: string, persona?: string | null): Promise<StorySession> {
+  const body = persona === undefined ? { world_id: worldId } : { world_id: worldId, persona_id: persona };
+  return apiRequest<StorySession>(`${STORY}/conversations`, { method: 'POST', body });
 }
 
 export function fetchStorySession(id: string, signal?: AbortSignal): Promise<StorySession> {
@@ -109,6 +114,11 @@ export function openStoryRegenerateTurn(messageId: string, signal: AbortSignal):
 /** 행동 하나. 엔진이 판정하고 반응을 흘려보낸다 */
 export function openStoryActionTurn(id: string, action: StoryAction, signal: AbortSignal): Promise<Response> {
   return apiStream(`${STORY}/conversations/${encodeURIComponent(id)}/actions`, { method: 'POST', body: action, signal });
+}
+
+/** 세션의 페르소나를 바꾼다(다음 말부터). 같은 id 면 새 설정으로, null 이면 페르소나 없이. 404 persona_not_found 면 그대로다 */
+export function changeStoryPersona(id: string, personaId: string | null): Promise<StoryPersonaChoice> {
+  return apiRequest<StoryPersonaChoice>(`${STORY}/conversations/${encodeURIComponent(id)}/persona`, { method: 'PUT', body: { persona_id: personaId } });
 }
 
 /** 그 세계관에서 내가 본 엔딩들(처음 본 차례). 세션을 지워도 남는다 */

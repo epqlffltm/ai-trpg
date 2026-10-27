@@ -2,9 +2,11 @@
 // 세계관 소개(D1, /story/worlds/:worldId). 로그인하지 않아도 전체이용가면 보인다. 볼 수 없으면(내렸다, 등급, 없다) 서버는 모두 404 다.
 // 머리(대표 그림, 이름, 등급·기한·태그), 제작자가 꾸민 소개(거른 HTML), 인물(보임: 이름과 그림, 실루엣: "???", 숨김은 오지 않는다),
 // 엔딩("엔딩 2/5", 본 수는 로그인했을 때), 내 세션(이 세계관의 것), 새로 시작(로그인하지 않았으면 로그인으로).
+// 새로 시작할 때 페르소나가 있으면 "나"를 고른다(기본이 골라져 있고 "페르소나 없이"도 있다).
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router';
 import { ApiError } from '../../api/errors';
 import type { PublicCastMember, PublicWorldDetail } from '../../api/storyWorlds';
@@ -12,6 +14,7 @@ import { useSession } from '../../auth/useSession';
 import { formatDateTime } from '../../format/dateTime';
 import { useImageUrl } from '../../hooks/useImageUrl';
 import { IntroHtml } from '../chat/character/IntroHtml';
+import { defaultPersonaId, PersonaSelect, usePersonaList } from '../personas/PersonaSelect';
 import { publicWorldQuery, storyEndingsQuery, worldSessionsQuery } from './storyQueries';
 import { describeStartProblem } from './storyTurnProblem';
 import { castLabel, endingLine, worldTags } from './storyWorldView';
@@ -78,6 +81,9 @@ function StartSection({ worldId, signedIn }: { worldId: string; signedIn: boolea
   const location = useLocation();
   const sessions = useQuery(worldSessionsQuery(worldId, signedIn));
   const starting = useStartStorySession();
+  const personas = usePersonaList(signedIn);
+  const [persona, setPersona] = useState<string | null | undefined>(undefined);
+  const chosenPersona = persona === undefined ? defaultPersonaId(personas) : persona;
   if (!signedIn) {
     return (
       <section className="page-section" aria-labelledby="world-start">
@@ -106,7 +112,8 @@ function StartSection({ worldId, signedIn }: { worldId: string; signedIn: boolea
         ))}
       </ul>
       {starting.error ? <Notice tone="error">{describeStartProblem(starting.error)}</Notice> : null}
-      <Button busy={starting.isPending} onClick={() => starting.mutate(worldId)}>
+      {personas.length > 0 ? <PersonaSelect personas={personas} value={chosenPersona} onChange={setPersona} hint="이야기 속 나의 설정입니다. 시작할 때의 설정을 복사해 둡니다. 장면에서 바꿀 수 있습니다." /> : null}
+      <Button busy={starting.isPending} onClick={() => starting.mutate({ worldId, persona: chosenPersona })}>
         새로 시작
       </Button>
     </section>

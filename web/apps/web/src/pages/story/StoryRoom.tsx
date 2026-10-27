@@ -122,7 +122,7 @@ export function StoryRoom({ session, turns }: Props) {
           view={view}
           endingId={ending.endingId}
           starting={restarting.isPending}
-          onRestart={() => restarting.mutate(session.world.id)}
+          onRestart={() => restarting.mutate({ worldId: session.world.id })}
           onClose={() => setClosedEnding(ending.messageId)}
         />
       ) : null}

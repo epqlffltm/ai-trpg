@@ -146,7 +146,7 @@ function StartFromMyWorlds() {
       {starting.error ? <Notice tone="error">{describeStartProblem(starting.error)}</Notice> : null}
       <ul className="plain-list story-worlds" aria-label="시작할 세계관">
         {startable.map((world) => (
-          <WorldRow key={world.id} world={world} busy={starting.isPending && starting.variables === world.id} disabled={starting.isPending} onStart={() => starting.mutate(world.id)} />
+          <WorldRow key={world.id} world={world} busy={starting.isPending && starting.variables?.worldId === world.id} disabled={starting.isPending} onStart={() => starting.mutate({ worldId: world.id })} />
         ))}
       </ul>
     </section>
