@@ -1,11 +1,12 @@
 // web/apps/web/src/pages/story/StoryHeader.tsx
 // 장면(D2)의 머리. 세계관 이름, "3일째 · 저녁 · 학교 · D-97"(엔딩을 봤으면 엔딩의 이름, 후일담이면 "후일담"), 모델과 "바꾸기".
-// 상태는 서버의 값이다. 모델이 없거나 쓸 수 없게 됐으면 몰래 바꾸지 않고 알린다.
+// 그 아래에 "나"(페르소나)와 바꾸기(StoryPersonaButton). 상태는 서버의 값이다. 모델이 없거나 쓸 수 없게 됐으면 몰래 바꾸지 않고 알린다.
 
 import { Button } from '@ai-trpg/ui';
 import { Link } from 'react-router';
 import type { StorySession, StoryState } from '../../api/story';
 import { retireText } from '../trpg/models/modelChoice';
+import { StoryPersonaButton } from './StoryPersonaButton';
 import { hasEpilogue, stateLine } from './storyWorld';
 
 type Props = { session: StorySession; state: StoryState; busy: boolean; onChooseModel: () => void };
@@ -33,6 +34,7 @@ export function StoryHeader({ session, state, busy, onChooseModel }: Props) {
         <Button variant="secondary" disabled={busy} onClick={onChooseModel}>
           {session.model ? '모델 바꾸기' : '모델 고르기'}
         </Button>
+        <StoryPersonaButton session={session} disabled={busy} />
       </div>
     </header>
   );

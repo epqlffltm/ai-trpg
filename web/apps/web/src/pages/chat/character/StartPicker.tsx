@@ -4,13 +4,12 @@
 // 로그인했고 페르소나가 있으면 "나"로 쓸 페르소나를 고른다. 기본 페르소나가 골라져 있고 "페르소나 없이"도 고를 수 있다.
 // 페르소나가 없으면 보내지 않는다(서버가 지난번 대화의 것을 쓰고, 없으면 없이 시작한다). 모델은 고르지 않는다(대화에서 고른다).
 
-import { Button, Notice, Radio, SelectField } from '@ai-trpg/ui';
-import { useQuery } from '@tanstack/react-query';
+import { Button, Notice, Radio } from '@ai-trpg/ui';
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation } from 'react-router';
 import type { PublicCharacterDetail } from '../../../api/types';
 import { useSession } from '../../../auth/useSession';
-import { personasQuery } from '../../personas/personaQueries';
+import { defaultPersonaId, PersonaSelect, usePersonaList } from '../../personas/PersonaSelect';
 import { startTimeLabel } from './characterView';
 import { useStartConversation } from './useStartConversation';
 
@@ -23,7 +22,7 @@ export function StartPicker({ characterId, starts }: { characterId: string; star
   const starting = useStartConversation(characterId);
   const index = chosen < starts.length ? chosen : 0;
   const personas = usePersonaList(signedIn);
-  const defaultPersona = personas.find((entry) => entry.is_default)?.id ?? personas[0]?.id;
+  const defaultPersona = defaultPersonaId(personas);
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -64,34 +63,6 @@ export function StartPicker({ characterId, starts }: { characterId: string; star
 
 /** 고른 페르소나. undefined 는 아직 고르지 않음(기본을 쓴다), null 은 "페르소나 없이" */
 type PersonaPick = string | null | undefined;
-
-const WITHOUT_PERSONA = '';
-
-/** 내 페르소나. 로그인했을 때만 읽고, 읽지 못하면 빈 목록(보내지 않는다) */
-function usePersonaList(signedIn: boolean) {
-  const query = useQuery({ ...personasQuery(), enabled: signedIn });
-  return query.data ?? [];
-}
-
-type SelectProps = { personas: { id: string; name: string; is_default: boolean }[]; value: string | null | undefined; onChange: (value: string | null) => void };
-
-function PersonaSelect({ personas, value, onChange }: SelectProps) {
-  return (
-    <SelectField
-      label="나(페르소나)"
-      value={value ?? WITHOUT_PERSONA}
-      onChange={(event) => onChange(event.target.value === WITHOUT_PERSONA ? null : event.target.value)}
-      hint="상대가 읽는 나의 설정입니다. 시작할 때의 설정을 복사해 둡니다."
-    >
-      {personas.map((entry) => (
-        <option key={entry.id} value={entry.id}>
-          {entry.is_default ? `${entry.name}(기본)` : entry.name}
-        </option>
-      ))}
-      <option value={WITHOUT_PERSONA}>페르소나 없이</option>
-    </SelectField>
-  );
-}
 
 function StartButton({ busy }: { busy: boolean }) {
   const signedIn = useSession() !== null;

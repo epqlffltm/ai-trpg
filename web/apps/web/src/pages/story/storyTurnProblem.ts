@@ -30,6 +30,7 @@ export function describeStoryTurnProblem(error: unknown): TurnProblem {
 export function describeStartProblem(error: unknown): string {
   if (!(error instanceof ApiError)) return '서버에 닿지 못했습니다. 연결을 확인하고 다시 시도하세요.';
   if (error.code === 'adult_content_required') return '성인 등급의 세계관입니다. 본인인증으로 성인임을 확인한 뒤에 시작합니다.';
+  if (error.code === 'persona_not_found') return '고른 페르소나를 찾지 못했습니다. 지웠을 수 있습니다. 다시 골라 주세요.';
   if (error.code === 'world_not_found' || error.status === 404) return '시작할 수 없는 세계관입니다. 게시한 판이 없거나 볼 수 없습니다.';
   if (error.code === 'asset_unavailable') return `세계관을 가져오지 못했습니다.${error.retryAfter ? ` ${error.retryAfter}초 뒤에` : ' 잠시 뒤에'} 다시 눌러 주세요.`;
   if (error.status === 503) return '지금은 시작할 수 없습니다. 잠시 뒤에 다시 시도하세요.';
@@ -40,5 +41,12 @@ export function describeStartProblem(error: unknown): string {
 export function describeStoryEditProblem(error: unknown): string {
   if (error instanceof ApiError && error.code === 'segments_mismatch') return '조각의 수가 바뀌었습니다. 화면을 새로 읽은 뒤 다시 고쳐 주세요.';
   if (error instanceof ApiError && error.code === 'not_editable') return '고칠 수 없는 말입니다. 답만 그 자리에서 고칩니다.';
+  return describeChangeProblem(error);
+}
+
+/** 페르소나 바꾸기의 실패. 404 면 세션은 그대로다 */
+export function describePersonaProblem(error: unknown): string {
+  if (error instanceof ApiError && error.code === 'persona_not_found') return '고른 페르소나를 찾지 못했습니다. 지웠을 수 있습니다. 세션의 페르소나는 그대로입니다.';
+  if (error instanceof ApiError && error.code === 'asset_unavailable') return `페르소나를 가져오지 못했습니다.${error.retryAfter ? ` ${error.retryAfter}초 뒤에` : ' 잠시 뒤에'} 다시 눌러 주세요.`;
   return describeChangeProblem(error);
 }
