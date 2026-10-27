@@ -3,7 +3,7 @@
 
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import { isClientError } from '../../api/http';
-import { fetchStoryEndings, fetchStoryModels, fetchStorySession, fetchStorySessions, SESSION_PAGE_SIZE } from '../../api/story';
+import { fetchStoryEndings, fetchStoryGallery, fetchStoryModels, fetchStorySession, fetchStorySessions, SESSION_PAGE_SIZE } from '../../api/story';
 import { fetchMyStoryWorlds, fetchPublicWorld, fetchPublicWorlds } from '../../api/storyWorlds';
 
 export const STORY_KEY = ['story'] as const;
@@ -87,5 +87,13 @@ export function storyEndingsQuery(worldId: string, signedIn = true) {
     queryKey: [...STORY_KEY, 'endings', worldId],
     queryFn: ({ signal }) => fetchStoryEndings(worldId, signal),
     enabled: signedIn,
+  });
+}
+
+/** 그 세계관에서 내가 연 일러스트(갤러리의 story 탭) */
+export function storyGalleryQuery(worldId: string) {
+  return queryOptions({
+    queryKey: [...STORY_KEY, 'gallery', worldId],
+    queryFn: ({ signal }) => fetchStoryGallery(worldId, signal),
   });
 }

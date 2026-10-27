@@ -31,6 +31,8 @@ export type StorySavedMessage = Schemas['MessageOut'];
 export type StorySegment = Schemas['SegmentOut'];
 export type StoryState = Schemas['StateOut'];
 export type StoryEndingRecords = Schemas['EndingRecordList'];
+export type StoryIllustrations = Schemas['IllustrationList'];
+export type StoryIllustration = Schemas['IllustrationOut'];
 /** 세션에서 화면이 쓰는 세계관의 칸(보여도 되는 것만, 이 가지에 맞춘 것) */
 export type StoryView = Schemas['WorldView'];
 export type StoryViewCast = Schemas['CastOut'];
@@ -112,4 +114,9 @@ export function openStoryActionTurn(id: string, action: StoryAction, signal: Abo
 /** 그 세계관에서 내가 본 엔딩들(처음 본 차례). 세션을 지워도 남는다 */
 export function fetchStoryEndings(worldId: string, signal?: AbortSignal): Promise<StoryEndingRecords> {
   return apiRequest<StoryEndingRecords>(`${STORY}/endings`, { query: { world_id: worldId }, ...withSignal(signal) });
+}
+
+/** 그 세계관에서 내가 연 일러스트들(처음 연 차례). 갤러리(C7)의 story 탭이 읽는다 */
+export function fetchStoryGallery(worldId: string, signal?: AbortSignal): Promise<StoryIllustrations> {
+  return apiRequest<StoryIllustrations>(`${STORY}/gallery`, { query: { world_id: worldId }, ...withSignal(signal) });
 }
