@@ -43,10 +43,15 @@ describe('HomePage', () => {
       [`POST ${REFRESH_PATH}`]: () => json(401, { detail: 'no cookie' }),
       'GET /api/v1/game/listings': () => json(200, { items: [SCENARIO], total: 1 }),
       'GET /api/v1/asset/listings/characters': () => json(200, { items: [], total: 0 }),
+      'GET /api/v1/asset/listings/worlds': () =>
+        json(200, { items: [{ id: '00000000-0000-4000-8000-00000000b801', version: 1, name: '여름 학교', image_id: null, rating: 'all', tags: ['학원'], deadline_days: 30, published_at: '2026-10-26T00:00:00Z' }], total: 1 }),
     });
     renderApp('/');
 
     expect(await screen.findByText('잿빛 수도원')).toBeInTheDocument();
+    const world = (await within(section('새로 공개된 세계관')).findByText('여름 학교')).closest('a') as HTMLElement;
+    expect(world).toHaveAttribute('href', '/story/worlds/00000000-0000-4000-8000-00000000b801');
+    expect(within(world).getByText('30일')).toBeInTheDocument();
     expect(screen.queryByText('TRPG 이어하기')).not.toBeInTheDocument();
     expect(seen.every((request) => !request.headers.has('Authorization'))).toBe(true);
   });

@@ -48,9 +48,9 @@ export function fetchStoryModels(signal?: AbortSignal): Promise<StoryModelList> 
   return apiRequest<StoryModelList>(`${STORY}/models`, withSignal(signal));
 }
 
-/** 내 세션. 최근의 것부터 */
-export function fetchStorySessions(offset: number, signal?: AbortSignal): Promise<StorySessionPage> {
-  return apiRequest<StorySessionPage>(`${STORY}/conversations`, { query: { limit: SESSION_PAGE_SIZE, offset }, ...withSignal(signal) });
+/** 내 세션. 최근의 것부터. worldId 를 주면 그 세계관의 것만 */
+export function fetchStorySessions(offset: number, signal?: AbortSignal, worldId?: string): Promise<StorySessionPage> {
+  return apiRequest<StorySessionPage>(`${STORY}/conversations`, { query: { limit: SESSION_PAGE_SIZE, offset, world_id: worldId }, ...withSignal(signal) });
 }
 
 /** 세계관의 마지막 판으로 새 세션. 모델을 비우면 지난번 세션의 모델이다 */

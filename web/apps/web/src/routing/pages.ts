@@ -82,3 +82,4 @@ export const ChatLorebookEditPage = lazyPage(() => import('../pages/chat/studio/
 export const StoryHomePage = lazyPage(() => import('../pages/story/StoryHomePage'), 'StoryHomePage');
 export const StorySessionPage = lazyPage(() => import('../pages/story/StorySessionPage'), 'StorySessionPage');
 export const WorldImportPage = lazyPage(() => import('../pages/story/import/WorldImportPage'), 'WorldImportPage');
+export const StoryWorldPage = lazyPage(() => import('../pages/story/StoryWorldPage'), 'StoryWorldPage');

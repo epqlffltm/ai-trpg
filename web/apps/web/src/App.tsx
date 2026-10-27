@@ -65,6 +65,7 @@ import {
   SettingsPage,
   StoryHomePage,
   StorySessionPage,
+  StoryWorldPage,
   StudioPage,
   TableCreatePage,
   TableRoomPage,
@@ -310,23 +311,26 @@ export function App() {
           />
           <Route path="*" element={<PlaceholderPage service="chat" />} />
         </Route>
-        {/* story(D). 세션은 모두 내 것이라 묶음째 로그인해야 열린다 */}
-        <Route
-          path="story"
-          element={
-            <RequireSession>
-              <Outlet />
-            </RequireSession>
-          }
-        >
+        {/* story(D). 공개 세계관과 소개(D1)는 로그인하지 않아도 열린다. 세션은 모두 내 것이라 로그인해야 열린다 */}
+        <Route path="story">
           <Route index element={<StoryHomePage />} />
-          <Route path="sessions/:sessionId" element={<StorySessionPage />} />
           <Route
             path="worlds/import"
             element={
-              <RequireOperator>
-                <WorldImportPage />
-              </RequireOperator>
+              <RequireSession>
+                <RequireOperator>
+                  <WorldImportPage />
+                </RequireOperator>
+              </RequireSession>
+            }
+          />
+          <Route path="worlds/:worldId" element={<StoryWorldPage />} />
+          <Route
+            path="sessions/:sessionId"
+            element={
+              <RequireSession>
+                <StorySessionPage />
+              </RequireSession>
             }
           />
           <Route path="*" element={<PlaceholderPage service="story" />} />

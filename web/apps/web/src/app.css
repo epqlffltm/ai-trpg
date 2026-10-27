@@ -2516,3 +2516,37 @@ a.ui-button {
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
 }
+
+/* 세계관 소개(D1) */
+.story-world__image {
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  border-radius: var(--ui-radius);
+}
+
+.story-world__cast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.story-world__member {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: 96px;
+  text-align: center;
+}
+
+.story-world__portrait {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--ui-border);
+}
+
+.story-world__member--silhouette .story-world__portrait {
+  background: var(--ui-text);
+}

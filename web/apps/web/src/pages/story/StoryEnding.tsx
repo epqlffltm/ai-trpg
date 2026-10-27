@@ -6,10 +6,9 @@
 import { Button } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import { fetchStoryEndings } from '../../api/story';
 import type { StoryWorldDocument } from '../../api/storyWorlds';
 import { endingName, hasEpilogue } from './storyWorld';
-import { STORY_KEY } from './storyQueries';
+import { storyEndingsQuery } from './storyQueries';
 
 type Props = {
   worldId: string;
@@ -21,7 +20,7 @@ type Props = {
 };
 
 export function StoryEnding({ worldId, document, endingId, starting, onRestart, onClose }: Props) {
-  const seen = useQuery({ queryKey: [...STORY_KEY, 'endings', worldId], queryFn: ({ signal }) => fetchStoryEndings(worldId, signal) });
+  const seen = useQuery(storyEndingsQuery(worldId));
   const total = ((document as Partial<StoryWorldDocument>).endings ?? []).filter((ending) => ending.unlock !== false).length;
   return (
     <section className="story-ending" aria-label="엔딩">
