@@ -39,6 +39,7 @@ from app.conversations.schemas import (
     MessageOut,
     ModelChoice,
     PathMessageOut,
+    ProgressOut,
     StateOut,
     WorldOut,
     WorldSummary,
@@ -110,13 +111,15 @@ def to_summary(
     models: dict[str, AiModel],
     book: PriceBook | None,
     now: datetime,
+    progress: ProgressOut,
 ) -> ConversationSummary:
-    """세션을 목록의 한 줄로."""
+    """세션을 목록의 한 줄로. progress 는 지금 가지의 끝까지 온 곳이다."""
     return ConversationSummary(
         id=conversation.id,
         title=conversation.title,
         world=to_world_summary(world),
         model=conversation_model(conversation, world, models, book, now),
+        progress=progress,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
     )
@@ -258,9 +261,11 @@ async def list_conversations(
     book = await service.known_book(prices)
     rows, total = await service.list_conversations(session, viewer, world_id, paging.limit, paging.offset)
     models = await service.conversation_models(session, [conversation for conversation, _ in rows])
-    return ConversationPage(
-        items=[to_summary(conversation, world, models, book, now) for conversation, world in rows], total=total
-    )
+    progresses = await service.conversation_progresses(session, rows)
+    items = [
+        to_summary(conversation, world, models, book, now, progresses[conversation.id]) for conversation, world in rows
+    ]
+    return ConversationPage(items=items, total=total)
 
 
 @router.get('/{conversation_id}', response_model=ConversationDetail, status_code=status.HTTP_200_OK)

@@ -111,7 +111,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | GET | `/api/v1/story/models` | 세션에 고를 수 있는 [모델](#모델-목록)들과 말 한 번의 값(`{free, items}`). 켜져 있고 은퇴하지 않았고 결제 서버가 팔고 있는 것만. 회사, 이름표 순서. 가격 목록을 받지 못하면 503 `prices_unavailable` | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/model` | 세션의 모델 바꾸기(`{"model"}`). 고를 수 없으면 422 `model_unavailable`, 가격 목록을 받지 못했으면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id"}`). 세계관의 마지막 판을 가져와 고정한다. 201 | access 토큰 |
-| GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}` | access 토큰 |
+| GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}`. 항목마다 지금 가지의 끝까지 온 곳(`progress`) | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}` | 세션 하나(지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`, 화면이 쓰는 세계관의 칸 [`view`](#세션의-view)). 가져온 판의 문서(`world.document`)는 곧 뺀다. 남의 것은 404 | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/branch` | [가지 고르기](#가지-고르기)(`{"message_id"}`). 바뀐 세션을 돌려준다 | access 토큰 |
 | PATCH | `/api/v1/story/messages/{id}` | [답 고치기](#답-고치기)(`{"segments": ["…"]}`). 고친 말을 돌려준다 | access 토큰 |
@@ -140,6 +140,10 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 - **모르는 형식의 판은 받지 않는다.** 이 서버가 읽을 줄 아는 형식은 3 까지다(`WORLD_FORMAT_MAX`). 모르는 조건이나 효과를 엔진이 판정할 수 없어서다.
   asset 서버가 형식을 올리면 그것을 읽는 법과 함께 이 값을 올린다.
 - **목록과 읽기는 볼 수 있는 등급만이다.** 성인 확인을 잃으면 성인 등급의 세션은 목록에서 빠지고 읽으면 404 다.
+- **목록의 진행**(`progress`). 지금 가지의 끝의 며칠째(`day`), 시간대(`slot`), 판의 기한(`deadline_days`), 본 엔딩의 id 와 이름(`ending`, `ending_name`),
+  후일담인가(`epilogue`, 엔딩을 봤고 세계관이 후일담을 골랐다)다. 화면이 D1 의 "D-12 / 진행 / 끝(엔딩 이름) / 후일담"을 그린다.
+  상태는 말에 붙어 있어 가지를 바꾸거나 다시 생성하면 저장 없이 바뀐다. 그래서 세션 표에 적어 두지 않고 목록을 읽을 때 세션마다 센다
+  (세션마다 쿼리 둘, 한 쪽은 `limit` 개까지). 느려지면 세션 표에 요약을 두는 방식으로 바꾼다(2026-10-27).
 - 지우기와 행동(상태를 바꾸는 것)은 그것을 쓰는 조각에서 더한다.
 
 | asset 서버의 답 | 이 서버의 답 |
