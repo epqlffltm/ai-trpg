@@ -111,9 +111,9 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | GET | `/api/v1/story/me` | 토큰의 주인(`{"user_id"}`, 인증 서버의 `public_id`). 토큰 검증이 이어졌는지 보는 가장 작은 주소다(게임 서버의 `GET /me` 와 같다) | access 토큰 |
 | GET | `/api/v1/story/models` | 세션에 고를 수 있는 [모델](#모델-목록)들과 말 한 번의 값(`{free, items}`). 켜져 있고 은퇴하지 않았고 결제 서버가 팔고 있는 것만. 회사, 이름표 순서. 가격 목록을 받지 못하면 503 `prices_unavailable` | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/model` | 세션의 모델 바꾸기(`{"model"}`). 고를 수 없으면 422 `model_unavailable`, 가격 목록을 받지 못했으면 503 `prices_unavailable` | access 토큰 |
-| POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id"}`). 세계관의 마지막 판을 가져와 고정한다. 201 | access 토큰 |
+| POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id", "persona_id"?, "model"?}`). 세계관의 마지막 판과 페르소나를 가져와 고정한다. 201 | access 토큰 |
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}`. 항목마다 지금 가지의 끝까지 온 곳(`progress`) | access 토큰 |
-| GET | `/api/v1/story/conversations/{id}` | 세션 하나(지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`, 화면이 쓰는 세계관의 칸 [`view`](#세션의-view)). 가져온 판의 문서는 싣지 않는다. 남의 것은 404 | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}` | 세션 하나(지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`, 화면이 쓰는 세계관의 칸 [`view`](#세션의-view), 가져온 페르소나 `persona`). 가져온 판의 문서는 싣지 않는다. 남의 것은 404 | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/branch` | [가지 고르기](#가지-고르기)(`{"message_id"}`). 바뀐 세션을 돌려준다 | access 토큰 |
 | PATCH | `/api/v1/story/messages/{id}` | [답 고치기](#답-고치기)(`{"segments": ["…"]}`). 고친 말을 돌려준다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content", "edit_of"?}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
@@ -134,6 +134,11 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
    (주인이거나, 공개이고 판의 등급을 볼 수 있는 사람). DB 의 트랜잭션을 열기 전에, 연결을 쥐지 않은 채로 부른다.
 2. 가져온 판의 등급을 이 서버의 규칙(`app/ratings.py`)으로 한 번 더 본다.
 3. 판의 사본(`story.worlds`)과 세션을 한 트랜잭션에서 저장한다. 사본은 사람마다, 판마다 하나다. 같은 판으로 여러 번 시작해도 하나다.
+
+- **페르소나**(chat 과 같다, 2026-10-27). `persona_id` 를 보내면 그 계정 페르소나를 asset 서버에서 가져와(`GET /api/v1/asset/service/story/personas/{id}`)
+  세션에 복사한다(`story.conversation_personas`). 보내지 않으면 지난번 세션의 것이고(지워졌으면 없이), `null` 이면 없이 시작한다.
+  고른 것이 없거나 남의 것이면 404 `persona_not_found` 다. 세션 읽기의 `persona` 에 실리고, 카드의 `[사용자]`(이름, 인물들이 부르는 호칭, 나이, 성별, 설명, 성격, 말투의 예)로 모델에 간다.
+  복사해 두므로 asset 서버에서 고쳐도 그 세션은 그대로다. 세션 중에 바꾸는 것과 "새 설정으로 바꾸기"는 아직 없다(chat 도 없다).
 
 - **사본은 바뀌지 않는다.** 제작자가 다시 게시해도 그 세션은 처음의 판으로 돈다. 새 판은 새로 시작한 세션이 쓴다.
 - **판의 문서는 받은 그대로 둔다.** 지금 검사하는 칸은 형식, 이름, 등급, 그림뿐이고(`app/assets/schemas.py`),
@@ -450,6 +455,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `worlds` | asset 서버에서 가져온 세계관의 판의 사본. 사람마다, 판마다 하나(`owner_id`, `source_id`, `version` 이 고유). 문서는 받은 그대로(JSONB) |
 | `conversations` | 세션 하나. 판의 사본을 가리킨다(지우지 못하게 `RESTRICT`). 목록은 `owner_id`, `updated_at` 의 색인으로 읽는다. 세션의 모델(`model_slug`)을 가리킨다 |
 | `ai_models`, `ai_model_costs`, `ai_model_snapshots` | [모델 목록](#모델-목록). chat 서버의 표와 같은 모양이다 |
+| `conversation_personas` | 세션에 가져온 계정 페르소나의 사본(chat 의 표와 같은 모양). 세션마다 하나, 페르소나 없이 시작했으면 없다 |
 | `messages` | 말 하나. 트리다(`parent_id`). 답은 말 조각(`segments`)과 그때의 장면의 인물(`cast`)을 갖는다. 사람이 고친 답은 `edited` 다. 다음 답 추천은 `suggestions`(셋까지)다. 세션의 `active_leaf_id` 가 지금 가지의 끝이다 |
 | `message_states` | 말에 붙은 엔진의 상태(JSONB). 상태가 바뀐 말에만 있다. 가지의 끝의 상태는 끝에서 가장 가까운 것이고, 없으면 처음의 상태다 |
 | `generations` | 모델을 한 번 부른 것과 그 청구(chat 서버의 표와 같은 모양). 버린 줄의 수(`dropped_segments`)를 더했다 |

@@ -24,10 +24,11 @@ from app.assets.client import (
     AssetClient,
     AssetNotFoundError,
     AssetUnavailableError,
+    persona_path,
     world_path,
 )
 from app.assets.schemas import WORLD_FORMAT_MAX
-from tests.assets import make_world, world_document
+from tests.assets import make_persona, make_world, world_document
 
 SECRET = 'test-asset-secret-0123456789abcdef'
 TOKEN = 'user-access-token'
@@ -75,6 +76,29 @@ async def test_a_world_is_fetched_with_a_signature_and_the_token():
 
 def test_the_path_carries_this_servers_name():
     assert world_path(WORLD_ID) == f'/api/v1/asset/service/story/worlds/{WORLD_ID}/latest'
+    assert persona_path(WORLD_ID) == f'/api/v1/asset/service/story/personas/{WORLD_ID}'
+
+
+async def test_a_persona_is_fetched_with_a_signature_and_the_token():
+    copy = make_persona(WORLD_ID)
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return answer(200, {**copy.model_dump(mode='json'), 'owner_note': '여기서 읽지 않는 칸'})
+
+    fetched = await client_answering(handler).fetch_persona(TOKEN, WORLD_ID)
+
+    (request,) = seen
+    path = f'/api/v1/asset/service/story/personas/{WORLD_ID}'
+    assert (request.method, str(request.url)) == ('GET', BASE_URL + path)
+    assert is_valid(SECRET, request.headers[SIGNATURE_HEADER], 'GET', path, b'', time.time())
+    assert fetched == copy
+
+
+async def test_a_missing_persona_is_not_found():
+    with pytest.raises(AssetNotFoundError):
+        await client_answering(lambda request: answer(404, {'detail': '없음'})).fetch_persona(TOKEN, WORLD_ID)
 
 
 async def test_fields_not_checked_here_are_kept():

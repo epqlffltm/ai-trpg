@@ -52,3 +52,20 @@ class WorldCopy(BaseModel):
     rating: Rating
     published_at: datetime
     document: WorldDocument
+
+
+class PersonaCopy(BaseModel):
+    """asset 서버의 계정 페르소나의 사본. id 는 asset 서버의 페르소나 id 다(chat 이 받는 것과 같다)."""
+
+    model_config = ConfigDict(extra='ignore')
+
+    id: uuid.UUID
+    revision: int
+    name: str
+    description: str
+    image_id: uuid.UUID | None
+    age: str
+    gender: str
+    form_of_address: str
+    speech_examples: str
+    personality: str

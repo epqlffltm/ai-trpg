@@ -131,6 +131,33 @@ class Conversation(Base):
     generating_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
 
+class ConversationPersona(Base):
+    """
+    세션에 가져온 계정 페르소나의 사본(chat 과 같은 모양). 모델에게 사용자가 누구인지 알린다(카드의 [사용자]).
+
+    세션마다 하나이고, 페르소나 없이 시작한 세션에는 없다. 시작할 때 복사해 두므로 asset 서버에서 고치거나 지워도
+    이 세션은 그대로다. 세션의 행이 지워질 때 함께 지워진다.
+    """
+
+    __tablename__ = 'conversation_personas'
+
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('conversations.id', ondelete='CASCADE'), primary_key=True
+    )
+    # asset 서버의 페르소나 id 와 가져올 때의 revision
+    source_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    revision: Mapped[int] = mapped_column(Integer)
+    name: Mapped[str] = mapped_column(Text)
+    description: Mapped[str] = mapped_column(Text)
+    image_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    age: Mapped[str] = mapped_column(Text)
+    gender: Mapped[str] = mapped_column(Text)
+    form_of_address: Mapped[str] = mapped_column(Text)
+    speech_examples: Mapped[str] = mapped_column(Text)
+    personality: Mapped[str] = mapped_column(Text)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Message(Base):
     """
     말 하나. parent_id 가 같은 말들이 서로의 대안이다. 첫 말은 parent_id 가 없다.

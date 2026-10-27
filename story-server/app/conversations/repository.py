@@ -15,14 +15,14 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from app.conversations.models import Conversation, ImportedWorld, Message, MessageState
+from app.conversations.models import Conversation, ConversationPersona, ImportedWorld, Message, MessageState
 from app.ratings import Rating
 
 # 세션 하나를 읽을 때 함께 오는 것: 세션과 판의 사본
 ConversationRow = tuple[Conversation, ImportedWorld]
 
 
-def add(session: AsyncSession, row: Conversation) -> None:
+def add(session: AsyncSession, row: Conversation | ConversationPersona) -> None:
     """새 행을 세션에 올린다."""
     session.add(row)
 
@@ -52,6 +52,27 @@ async def keep_world(session: AsyncSession, world: ImportedWorld) -> ImportedWor
         ImportedWorld.version == world.version,
     )
     return (await session.scalars(query)).one()
+
+
+async def last_persona_source(session: AsyncSession, owner_id: uuid.UUID) -> uuid.UUID | None:
+    """
+    이 사람이 가장 최근에 시작한 세션의 페르소나(asset 서버의 id).
+    세션이 없거나 그 세션을 페르소나 없이 시작했으면 None(chat 과 같다).
+    """
+    query = (
+        select(ConversationPersona.source_id)
+        .select_from(Conversation)
+        .outerjoin(ConversationPersona, ConversationPersona.conversation_id == Conversation.id)
+        .where(Conversation.owner_id == owner_id)
+        .order_by(Conversation.created_at.desc(), Conversation.id.desc())
+        .limit(1)
+    )
+    return await session.scalar(query)
+
+
+async def persona_of(session: AsyncSession, conversation_id: uuid.UUID) -> ConversationPersona | None:
+    """세션에 가져온 페르소나의 사본. 페르소나 없이 시작했으면 None."""
+    return await session.get(ConversationPersona, conversation_id)
 
 
 async def last_model(session: AsyncSession, owner_id: uuid.UUID) -> str | None:

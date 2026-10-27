@@ -8,7 +8,8 @@
   - 카드: 지킬 것, 세계관, 지금(날, 시간대, 장소, 소지품), 장면의 인물(표식, 이름, 칸, 호감도 단계), 쓰는 법.
     빈 칸은 빼고, 소개의 HTML 은 글자만 보낸다. 장면에 아무도 없으면 서술만 쓰라고 한다. 장면 지시는 있을 때만.
     다음 답 추천의 지시는 켰을 때만 맨 끝에 붙는다.
-    그림에 표정이 있는 장면의 인물이 있으면 쓰는 법에 표정을 고르는 법이 붙는다
+    그림에 표정이 있는 장면의 인물이 있으면 쓰는 법에 표정을 고르는 법이 붙는다.
+    페르소나가 있으면 세계관 뒤에 [사용자]가 온다
   - 메시지: 카드가 먼저, 그 뒤에 최근의 말. 행동 말은 [행동] 을 붙인 사람의 차례다
   - 상태: 저장한 모양에서 그대로 되돌아온다. 가지의 끝에서 가장 가까운 상태를 쓰고, 없으면 처음의 상태다
 """
@@ -22,7 +23,15 @@ from app.engine.clock import MINUTES_PER_DAY
 from app.engine.state import StoryState, start_state
 from app.engine.world import read_world
 from app.turns.briefing import read_briefing
-from app.turns.prompt import ACTION_PREFIX, build_messages, plain_text, render_card, scene_card, stage_name
+from app.turns.prompt import (
+    ACTION_PREFIX,
+    PersonaCard,
+    build_messages,
+    plain_text,
+    render_card,
+    scene_card,
+    stage_name,
+)
 from app.turns.states import state_from_json, state_on_path, state_to_json
 from tests.engine_worlds import clock, document, member
 
@@ -113,6 +122,18 @@ def test_the_card_lists_the_expressions_of_the_scene():
     assert briefing.expressions('nobody') == ()
     assert '고를 수 있는 표정: @mina: 기본, 웃음, 화남' in card
     assert '예: @mina: <expression>웃음</expression>정말?' in card
+
+
+def test_a_persona_comes_after_the_world():
+    scene = scene_card(BRIEFING, WORLD, start_state(WORLD), ['mina'])
+    persona = PersonaCard('하루', '', '17', '', '하루야', '', '조용하다.')
+
+    card = render_card(BRIEFING, scene, persona=persona)
+
+    assert '[사용자]' not in render_card(BRIEFING, scene)
+    assert (
+        card.index('[세계관]') < card.index('[사용자]\n이름: 하루\n인물들이 부르는 호칭: 하루야') < card.index('[지금]')
+    )
 
 
 def test_messages_start_with_the_card():

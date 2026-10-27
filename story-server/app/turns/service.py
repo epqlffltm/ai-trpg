@@ -54,7 +54,7 @@ from app.catalog import repository as catalog
 from app.catalog.choice import is_choosable
 from app.catalog.models import AiModel
 from app.conversations import repository as conversations
-from app.conversations.models import Conversation, ImportedWorld, Message, MessageStatus, Role
+from app.conversations.models import Conversation, ConversationPersona, ImportedWorld, Message, MessageStatus, Role
 from app.conversations.service import (
     GENERATION_STALE,
     NOT_EDITABLE,
@@ -81,7 +81,7 @@ from app.turns.briefing import Briefing, read_briefing
 from app.turns.charging import HoldDeclined, Settled, Settlement
 from app.turns.frames import delta_frame, done_frame, failed_frame, segment_frame
 from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
-from app.turns.prompt import build_messages, render_card, scene_card
+from app.turns.prompt import PersonaCard, build_messages, render_card, scene_card
 from app.turns.providers import Router
 from app.turns.scenes import Staging, replayed, staging
 from app.turns.segments import (
@@ -250,12 +250,14 @@ class Branch:
     state: StoryState
     # 가져온 판의 문서(받은 칸 전부). 상태의 호감도를 보여도 되는 인물을 고를 때 쓴다
     document: Mapping
+    # 세션에 가져온 페르소나(카드의 [사용자]). 페르소나 없이 시작했으면 None
+    persona: PersonaCard | None = None
 
 
 def card_for(branch: Branch, state: StoryState, stage: Staging, options: PromptOptions) -> str:
     """카드. state 와 장면으로 만들고, 켜져 있으면 다음 답 추천의 지시를 붙인다."""
     scene = scene_card(branch.briefing, branch.world, state, stage.cast, stage.direction)
-    return render_card(branch.briefing, scene, options.suggestions)
+    return render_card(branch.briefing, scene, options.suggestions, branch.persona)
 
 
 def prompt_for(
@@ -530,17 +532,35 @@ async def begin_regenerate(
     return await begin(session_factory, viewer, conversation_id, now, record)
 
 
-async def branch_at(session: AsyncSession, imported: ImportedWorld, leaf_id: uuid.UUID | None) -> Branch:
-    """leaf_id 에서 끝나는 가지. 판을 읽고, 가지의 말들과 끝의 상태를 읽는다."""
+def persona_card(persona: ConversationPersona | None) -> PersonaCard | None:
+    """페르소나의 사본에서 카드의 사용자 칸. 페르소나 없이 시작한 세션이면 None."""
+    if persona is None:
+        return None
+    return PersonaCard(
+        name=persona.name,
+        description=persona.description,
+        age=persona.age,
+        gender=persona.gender,
+        form_of_address=persona.form_of_address,
+        speech_examples=persona.speech_examples,
+        personality=persona.personality,
+    )
+
+
+async def branch_at(
+    session: AsyncSession, conversation: Conversation, imported: ImportedWorld, leaf_id: uuid.UUID | None
+) -> Branch:
+    """leaf_id 에서 끝나는 가지. 판을 읽고, 가지의 말들과 끝의 상태, 세션의 페르소나를 읽는다."""
     world = read_world(imported.document)
     path = await conversations.active_path(session, leaf_id)
     state = await state_at(session, world, path)
-    return Branch(world, read_briefing(imported.document), path, state, imported.document)
+    persona = persona_card(await conversations.persona_of(session, conversation.id))
+    return Branch(world, read_briefing(imported.document), path, state, imported.document, persona)
 
 
 async def branch_of(session: AsyncSession, conversation: Conversation, imported: ImportedWorld) -> Branch:
     """세션의 지금 가지."""
-    return await branch_at(session, imported, conversation.active_leaf_id)
+    return await branch_at(session, conversation, imported, conversation.active_leaf_id)
 
 
 async def attach(session: AsyncSession, conversation: Conversation, message: Message, state: StoryState | None) -> None:
@@ -620,7 +640,7 @@ async def record_turn(
     parent_id = conversation.active_leaf_id
     if edit_of is not None:
         parent_id = await edited_parent(session, conversation, edit_of)
-    branch = await branch_at(session, imported, parent_id)
+    branch = await branch_at(session, conversation, imported, parent_id)
     require_open(branch.world, branch.state)
     changed = talked_state(branch.state)
     state = changed or branch.state
@@ -712,7 +732,7 @@ async def record_regenerate(
     장면은 그 말에 적힌 이벤트와 엔딩으로 다시 세운다(app/turns/scenes.py 의 replayed).
     끝난 세션이어도 된다. 사람의 말이 늘지 않고 상태도 바뀌지 않는다(엔딩의 장면을 다시 쓸 수 있다).
     """
-    branch = await branch_at(session, imported, answered_id)
+    branch = await branch_at(session, conversation, imported, answered_id)
     answered = branch.path[-1]
     before = replace(branch, path=branch.path[:-1])
     stage = replayed(branch.world, branch.state, answered.event_id, answered.ending_id)
@@ -792,7 +812,7 @@ async def record_continue(
     """
     if conversation.active_leaf_id != target_id:
         raise NotContinuableError
-    branch = await branch_at(session, imported, target_id)
+    branch = await branch_at(session, conversation, imported, target_id)
     target, answered = branch.path[-1], branch.path[-2]
     require_continuable(target)
     direction = replayed(branch.world, branch.state, answered.event_id, answered.ending_id).direction

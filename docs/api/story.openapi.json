@@ -243,7 +243,7 @@
       },
       "ConversationCreate": {
         "additionalProperties": false,
-        "description": "세션을 시작할 때 받는 값. 세계관을 고른다. 그 세계관의 마지막 판을 가져와 고정한다.\n\nmodel 은 셋 중 하나다(chat 과 같다).\n  - 보내지 않으면: 지난번 세션의 모델을 쓴다. 지난번에 없었거나 이 세션에 고를 수 없으면 모델 없이 시작한다\n  - null 을 보내면: 모델 없이 시작한다. 말을 보내기 전에 고른다\n  - 이름표를 보내면: 그 모델이다. 이 세션에 고를 수 없으면 422 model_unavailable 이다",
+        "description": "세션을 시작할 때 받는 값. 세계관을 고른다. 그 세계관의 마지막 판을 가져와 고정한다.\n\npersona_id 는 셋 중 하나다(chat 과 같다).\n  - 보내지 않으면: 지난번 세션의 페르소나를 쓴다. 지난번에 없었거나 그 페르소나가 지워졌으면 페르소나 없이 시작한다\n  - null 을 보내면: 페르소나 없이 시작한다\n  - id 를 보내면: 그 계정 페르소나다. 없거나 남의 것이면 404 persona_not_found 다\n\nmodel 도 셋 중 하나다(chat 과 같다).\n  - 보내지 않으면: 지난번 세션의 모델을 쓴다. 지난번에 없었거나 이 세션에 고를 수 없으면 모델 없이 시작한다\n  - null 을 보내면: 모델 없이 시작한다. 말을 보내기 전에 고른다\n  - 이름표를 보내면: 그 모델이다. 이 세션에 고를 수 없으면 422 model_unavailable 이다",
         "properties": {
           "model": {
             "anyOf": [
@@ -257,6 +257,18 @@
               }
             ],
             "title": "Model"
+          },
+          "persona_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Persona Id"
           },
           "world_id": {
             "format": "uuid",
@@ -294,6 +306,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ConversationModelOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "persona": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonaOut"
               },
               {
                 "type": "null"
@@ -1339,6 +1361,74 @@
         "title": "PathOut",
         "type": "object"
       },
+      "PersonaOut": {
+        "description": "세션에 가져온 페르소나의 사본(chat 과 같은 모양). id 는 asset 서버의 페르소나 id 다.",
+        "properties": {
+          "age": {
+            "title": "Age",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "form_of_address": {
+            "title": "Form Of Address",
+            "type": "string"
+          },
+          "gender": {
+            "title": "Gender",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "personality": {
+            "title": "Personality",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "speech_examples": {
+            "title": "Speech Examples",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "name",
+          "description",
+          "image_id",
+          "age",
+          "gender",
+          "form_of_address",
+          "speech_examples",
+          "personality"
+        ],
+        "title": "PersonaOut",
+        "type": "object"
+      },
       "PlaceOut": {
         "description": "장소 하나. backgrounds 는 시간대의 id 마다의 배경 그림이다.",
         "properties": {
@@ -1922,7 +2012,7 @@
         "x-audience": "user"
       },
       "post": {
-        "description": "세션을 시작한다. 세계관의 마지막 판을 가져와 고정한다. 모델은 지난번 것이거나 고른 것이다.",
+        "description": "세션을 시작한다. 세계관의 마지막 판을 가져와 고정한다. 페르소나와 모델은 지난번 것이거나 고른 것이다.",
         "operationId": "start_conversation_api_v1_story_conversations_post",
         "requestBody": {
           "content": {

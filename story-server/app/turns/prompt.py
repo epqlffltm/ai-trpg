@@ -3,7 +3,8 @@
 """
 모델에 보낼 메시지를 만든다(docs/architecture/story.md 의 "한 번의 말"). DB 도 모델도 모른다.
 
-    [system] 세션의 카드(render_card): 지킬 것, 세계관, 지금(날, 시간대, 장소, 소지품), 장면의 인물,
+    [system] 세션의 카드(render_card): 지킬 것, 세계관, 사용자(페르소나가 있으면), 지금(날, 시간대, 장소, 소지품),
+             장면의 인물,
              기다리는 이벤트의 장면 지시, 쓰는 법(말하는 사람의 표식, 고를 수 있는 표정),
              켜져 있으면 다음 답 추천의 지시
     [assistant / user ...] 최근의 말(conversation_core/window.py 의 select_window)
@@ -83,6 +84,19 @@ class CastCard:
 
 
 @dataclass(frozen=True)
+class PersonaCard:
+    """카드에 적는 사용자의 칸. 세션에 가져온 페르소나의 사본에서 꺼낸다(chat 의 것과 같다)."""
+
+    name: str
+    description: str
+    age: str
+    gender: str
+    form_of_address: str
+    speech_examples: str
+    personality: str
+
+
+@dataclass(frozen=True)
 class SceneCard:
     """카드에 적는 지금. 날(며칠째), 시간대, 장소, 소지품, 장면의 인물, 기다리는 이벤트의 장면 지시."""
 
@@ -144,6 +158,24 @@ def world_section(briefing: Briefing) -> str:
     """[세계관] 블록."""
     lines = field_lines([('이름', briefing.name), ('소개', plain_text(briefing.intro_html))])
     return '\n'.join(['[세계관]', *lines])
+
+
+def persona_section(persona: PersonaCard | None) -> str | None:
+    """[사용자] 블록. 페르소나 없이 시작한 세션이면 None 이다. 사용자의 말과 행동을 대신 쓰지 않는 것은 그대로다."""
+    if persona is None:
+        return None
+    lines = field_lines(
+        [
+            ('이름', persona.name),
+            ('인물들이 부르는 호칭', persona.form_of_address),
+            ('나이', persona.age),
+            ('성별', persona.gender),
+            ('설명', persona.description),
+            ('성격', persona.personality),
+            ('말투의 예', persona.speech_examples),
+        ]
+    )
+    return '\n'.join(['[사용자]', *lines])
 
 
 def now_section(scene: SceneCard) -> str:
@@ -221,14 +253,16 @@ def suggestions_section() -> str:
     )
 
 
-def render_card(briefing: Briefing, scene: SceneCard, suggest: bool = False) -> str:
+def render_card(briefing: Briefing, scene: SceneCard, suggest: bool = False, persona: PersonaCard | None = None) -> str:
     """
-    시스템 메시지(카드). 지킬 것, 세계관, 지금, 장면의 인물, 장면 지시, 쓰는 법의 차례다. 빈 블록은 뺀다.
+    시스템 메시지(카드). 지킬 것, 세계관, 사용자, 지금, 장면의 인물, 장면 지시, 쓰는 법의 차례다. 빈 블록은 뺀다.
     suggest 면 맨 끝에 다음 답 추천의 지시를 붙인다(conversation_core/suggestions.py).
+    persona 가 있으면 사용자가 누구인지 적는다(세션에 가져온 페르소나).
     """
     sections = [
         '\n'.join(RULES),
         world_section(briefing),
+        persona_section(persona),
         now_section(scene),
         cast_section(scene),
         f'[장면 지시]\n{scene.event.strip()}' if scene.event.strip() else None,
