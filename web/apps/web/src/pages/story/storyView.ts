@@ -4,6 +4,7 @@
 //   - 답할 말이 저장된 말에 없으면(방금 보낸 말, 고쳐 보낸 말) 그 부모까지 보이고 끝에 붙인다
 //   - 이어 쓰면 끊긴 답에 흘러 온 글을 붙인다(첫 조각 앞의 글은 마지막 조각에, 그 뒤는 새 조각으로)
 //   - 장면의 인물과 상태는 받는 중이면 turn 의 것, 아니면 세션의 것이다
+//   - 다음 답 추천은 가지의 끝이 답일 때 그 답의 것이다. 이벤트의 선택지를 기다리는 동안은 숨긴다
 
 import type { StoryMessage, StorySavedMessage, StorySegment, StoryState } from '../../api/story';
 import type { StoryTurnState } from './storyTurnState';
@@ -57,4 +58,10 @@ export function storyAlternatives(message: Pick<StoryMessage, 'id' | 'alternativ
   const index = ids.indexOf(message.id);
   if (ids.length < 2 || index < 0) return null;
   return { position: index + 1, count: ids.length, previous: ids[index - 1] ?? null, next: ids[index + 1] ?? null };
+}
+
+/** 다음 답 추천. 가지의 끝이 답이면 그 답의 추천(서버가 다 쓴 답에만 싣는다), 선택지를 기다리는 중이면 없다 */
+export function storySuggestions(messages: Pick<StoryMessage, 'role' | 'suggestions'>[], choosing: boolean): string[] {
+  const last = messages.at(-1);
+  return !choosing && last?.role === 'assistant' ? (last.suggestions ?? []) : [];
 }
