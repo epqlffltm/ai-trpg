@@ -31,13 +31,22 @@ from app.assets.scenarios.snapshot import AttackSnapshot
 from app.engine import check as checks
 from app.engine.check import HinderedCheck
 from app.engine.dice import choose
+from app.engine.ruleset import ResourceHolder
 from app.rounds import blows
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import NO_BLOW, Blow
 from app.rounds.cast import CastMember, reaches
 from app.rounds.downed_strikes import can_be_struck
 from app.rounds.effects import Judging, mark_npc_fight
-from app.rounds.monster_attacks import Skipped, hit_outcome, plan_attack_blow, raised_difficulty
+from app.rounds.monster_attacks import (
+    Skipped,
+    affordable,
+    hit_outcome,
+    pay,
+    plan_attack_blow,
+    raised_difficulty,
+    short_outcome,
+)
 from app.tables.models import NpcStatus, TableMember
 
 # 입은 부상 때문에 움직이지 못했다(기절 같은 것). 몬스터의 차례와 같은 까닭이다
@@ -108,6 +117,7 @@ def take_npc_turn(judging: Judging, person: CastMember) -> dict:
 
     움직이지 못하면 {'skipped': 까닭} 이다. 대상, 공격, 판정, 피해의 차례로 주사위를 굴린다.
     문서는 몬스터의 것(hit_outcome)에 부상의 영향(hindrance)을 더한 것이다.
+    공격의 비용(#805 ③-a)은 몬스터와 같다. 모자라면 굴리지 않고, 비용이 있는 공격이면 낸 비용(cost)을 적는다.
     """
     stopped = stopped_by(judging, person)
     if stopped is not None:
@@ -118,7 +128,10 @@ def take_npc_turn(judging: Judging, person: CastMember) -> dict:
     victim = pick_victim(judging, person, victims)
     mark_npc_fight(judging, person.npc, victim)
     attack = choose(person.definition.attacks, judging.dice)
+    if not affordable(judging, person.npc, attack, ResourceHolder.NPCS):
+        return short_outcome(attack, victim)
+    cost = pay(judging, person.npc, attack, ResourceHolder.NPCS)
     blow = plan_attack_blow(judging, blows.npc_weapon(judging, person, attack), victim)
     rolled = roll_attack(judging, person, attack, blow)
     outcome = hit_outcome(judging, attack, victim, rolled.check, blow)
-    return {**outcome, 'hindrance': round_injuries.hindrance_document(rolled)}
+    return {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}

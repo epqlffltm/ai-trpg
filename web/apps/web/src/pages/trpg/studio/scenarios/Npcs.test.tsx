@@ -11,7 +11,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
-import { attacksHints } from './attacksForm';
+import { attackDrafts, attacksHints, toAttacks } from './attacksForm';
 import { hasNpcHints, npcDraft, npcHints, npcLine } from './npcForm';
 
 const GAME = '/api/v1/game';
@@ -148,7 +148,7 @@ describe('인물 탭', () => {
       merchant: false,
       equipment: [{ entry_id: SWORD, count: 1, chance: 50, wear: ['main_hand'] }],
       inventory: [{ entry_id: BREAD, count: 1, chance: 100, wear: [] }],
-      attacks: [{ name: '검 휘두르기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: SWORD }],
+      attacks: [{ name: '검 휘두르기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: SWORD, cost: null }],
     });
   });
 
@@ -168,11 +168,17 @@ describe('인물 탭', () => {
 
 describe('인물 입력', () => {
   it('공격: 이름은 꼭, 겹치지 않게, 무기는 장비에 있는 물건', () => {
-    const attack = { name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: '' };
+    const attack = { name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: '', cost: null };
     expect(attacksHints([{ ...attack, name: ' ' }], [])[0]).toContain('이름');
     expect(attacksHints([attack, attack], [])[1]).toBe('같은 이름의 공격이 위에 있습니다.');
     expect(attacksHints([{ ...attack, weapon: SWORD }], [])[0]).toBe('무기는 장비에 적은 물건이어야 합니다.');
     expect(attacksHints([{ ...attack, weapon: SWORD }], [SWORD])).toEqual({});
+  });
+
+  it('공격의 비용(#805)은 고르는 칸이 없어도 저장할 때 그대로 간다', () => {
+    const cost = { resource: 'mana', amount: 2 };
+    const attack = { name: '화염구', ability: 'int', difficulty: 'normal', harm: 'light', weapon: null, cost };
+    expect(toAttacks(attackDrafts([attack]))[0]?.cost).toEqual(cost);
   });
 
   it('빈 시트는 막고, 떨어질 확률은 1~100. 한 줄의 글', () => {

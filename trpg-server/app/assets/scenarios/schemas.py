@@ -93,7 +93,7 @@ from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
 from app.engine.item_aids import Aids
 from app.engine.item_effects import Effects
-from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, InjuryNature, Key
+from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, InjuryNature, Key, SkillCost
 from app.engine.sheet import CharacterSheet, Sheet
 
 # 스타팅 하나. 공백이 아닌 글자가 하나는 있어야 한다. 빈 스타팅은 고를 수 없으니 받지 않는다.
@@ -338,6 +338,8 @@ class MonsterAttack(BaseModel):
 
     이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).
     NPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.
+    cost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.
+    비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -350,6 +352,8 @@ class MonsterAttack(BaseModel):
     # 이 공격에 쓰는 무기(#276). 시트의 장비 줄의 물건이다. 착용하고 있고 공격 보정이 있으면 판정에 더한다.
     # 빼앗기거나 떨어뜨려 지니지 않으면 보정도 없다. 비우면 맨몸의 공격이다(물어뜯기)
     weapon: uuid.UUID | None = None
+    # 쓸 때 내는 비용(#805 ③-a). 비우면 공짜다
+    cost: SkillCost | None = None
 
     @field_serializer('weapon')
     def weapon_as_text(self, weapon: uuid.UUID | None) -> str | None:

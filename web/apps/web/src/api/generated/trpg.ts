@@ -2077,6 +2077,7 @@ export interface components {
         AttackSnapshot: {
             /** Ability */
             ability: string;
+            cost?: components["schemas"]["SkillCost"] | null;
             /** Difficulty */
             difficulty: string;
             /** Harm */
@@ -4778,10 +4779,13 @@ export interface components {
          *
          *     이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).
          *     NPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.
+         *     cost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.
+         *     비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.
          */
         "MonsterAttack-Input": {
             /** Ability */
             ability: string;
+            cost?: components["schemas"]["SkillCost"] | null;
             /** Difficulty */
             difficulty: string;
             /** Harm */
@@ -4797,10 +4801,13 @@ export interface components {
          *
          *     이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).
          *     NPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.
+         *     cost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.
+         *     비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.
          */
         "MonsterAttack-Output": {
             /** Ability */
             ability: string;
+            cost?: components["schemas"]["SkillCost"] | null;
             /** Difficulty */
             difficulty: string;
             /** Harm */

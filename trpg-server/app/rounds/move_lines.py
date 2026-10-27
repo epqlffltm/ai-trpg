@@ -931,11 +931,17 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
         수로 쥐 2: 엘프에게 물기 (빗나감)
         악역영애: 엘프에게 부채 후리기 (맞음) → 엘프 피해 2 (HP 8/10)
         수로 쥐 2: 쓰러진 엘프에게 물기 (맞음) → 엘프 죽음의 굴림 실패 +1 (실패 2/3, 죽어 가는 중)
+        흑마법사: 엘프에게 화염구 (맞음) [마나 모자람] → 엘프 피해 5 (HP 5/10)   비용을 냈다(#805 ③-a)
+        흑마법사: 엘프에게 화염구 (비용이 모자라 하지 못함)
     도감의 글(생김새, 약점)은 싣지 않는다. 가짜 서술자는 이 줄을 장면으로 그대로 내보낸다.
     """
+    if note.short:
+        return f'{note.name}: {note.target}에게 {note.attack} (비용이 모자라 하지 못함)'
     result = '맞음' if note.hit else '빗나감'
     target = note.target if note.downed is None else f'쓰러진 {note.target}'
     line = f'{note.name}: {target}에게 {note.attack} ({result})'
+    if note.cost:
+        line += f' [{", ".join(describe_resource(one) for one in note.cost)}]'
     if note.blow is not None:
         line += f' [{describe_blow(note.blow)}]'
     if note.impact is not None:

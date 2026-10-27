@@ -2,13 +2,21 @@
 // 인물(과 몬스터) 시트의 공격들의 입력. 순수한 함수다. 5 개까지, 이름(30자)이 겹치지 않는다(서버의 reject_duplicate_attacks).
 // 능력치, 난이도, 피해의 양은 룰북의 이름표에서 고른다. 무기는 장비 줄의 물건이고 비우면 맨몸의 공격이다.
 // 장비에서 그 물건을 빼면 무기가 맞지 않게 된다. 저장 전에 알린다(서버의 reject_unknown_weapons).
+// 비용(cost, #805 ③-a)은 아직 고르는 칸이 없다. 받은 그대로 지녔다가 보낸다(저장할 때 지워지지 않게).
 
 import type { SheetAttack, SheetAttackBody } from '../../../../api/types';
 
 export const MAX_ATTACKS = 5;
 export const ATTACK_NAME_MAX = 30;
 
-export type AttackDraft = { name: string; ability: string; difficulty: string; harm: string; weapon: string };
+export type AttackDraft = {
+  name: string;
+  ability: string;
+  difficulty: string;
+  harm: string;
+  weapon: string;
+  cost: SheetAttack['cost'];
+};
 
 export function attackDrafts(attacks: SheetAttack[]): AttackDraft[] {
   return attacks.map((attack) => ({
@@ -17,12 +25,13 @@ export function attackDrafts(attacks: SheetAttack[]): AttackDraft[] {
     difficulty: attack.difficulty,
     harm: attack.harm,
     weapon: attack.weapon ?? '',
+    cost: attack.cost ?? null,
   }));
 }
 
 /** 새 공격. 룰북의 첫 능력치, 기본 난이도, 첫 양으로 채운다(룰북이 없으면 빈 칸) */
 export function newAttack(first: { ability: string; difficulty: string; harm: string }): AttackDraft {
-  return { name: '', ...first, weapon: '' };
+  return { name: '', ...first, weapon: '', cost: null };
 }
 
 /** 공격마다의 문제. 차례 → 글. equipment 는 장비 줄의 물건들 */
@@ -46,5 +55,6 @@ export function toAttacks(drafts: AttackDraft[]): SheetAttackBody[] {
     difficulty: draft.difficulty,
     harm: draft.harm,
     weapon: draft.weapon || null,
+    cost: draft.cost,
   }));
 }

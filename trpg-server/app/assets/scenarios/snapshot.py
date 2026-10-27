@@ -50,7 +50,7 @@ from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
 from app.engine.item_aids import ItemAid
 from app.engine.item_effects import Effect
-from app.engine.ruleset import InjuryNature, Ruleset
+from app.engine.ruleset import InjuryNature, Ruleset, SkillCost
 from app.engine.sheet import CharacterSheet, Sheet
 
 # 문서의 모양이 바뀔 때 올리는 번호. 옛 판을 읽는 코드가 어느 모양인지 알 수 있다.
@@ -141,7 +141,8 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      쉬기의 변화. 물건의 효과에 맞추기(adjust: 수치, 양)가 있다
 #  66: 기술과 주문이 있다(#805). rulebook.rules.skills: 이름표, 이름, 비용(수치, 양), 대상(self, ally), 효과들.
 #      시트(default_sheet, pregens[].sheet)에 아는 기술(skills)이 있다.
-#      상대에게 쓰는 기술(대상 foe)과 맞히는 판정(check, #805 ②)은 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
+#      상대에게 쓰는 기술(대상 foe)과 맞히는 판정(check, #805 ②)은 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다.
+#      몬스터와 인물의 공격의 비용(monsters[].attacks[].cost, npc_sheets[].attacks[].cost, #805 ③-a)도 같다
 SNAPSHOT_FORMAT = 66
 
 
@@ -468,6 +469,8 @@ class AttackSnapshot(BaseModel):
     harm: str
     # 이 공격에 쓰는 무기(#276). 시트의 장비 줄의 물건이다. 형식 48 보다 옛 판의 공격은 맨몸이다
     weapon: uuid.UUID | None = None
+    # 쓸 때 내는 비용(#805 ③-a). 그 몬스터나 인물의 수치다. 비우면 공짜다
+    cost: SkillCost | None = None
 
 
 class NpcSheetSnapshot(BaseModel):
