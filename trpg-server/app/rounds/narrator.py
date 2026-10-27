@@ -275,12 +275,14 @@ class ResourceNote:
     캐릭터의 수치 하나(#804). 마나, 스태미나 같은 것이다. 엔진이 정한 것이다.
 
     value 는 지금 값(바뀐 것이면 바뀐 뒤), before 는 바뀐 것일 때 바뀌기 전의 값이다. 지금 값만이면 None 이다.
+    숨긴 수치(모두가 보지 않는 것)는 숫자 없이 word(가득, 넉넉함, 모자람, 바닥)만 있다. 서술에 숫자가 새지 않게 한다.
     """
 
     name: str
-    value: int
-    max: int
+    value: int | None = None
+    max: int | None = None
     before: int | None = None
+    word: str | None = None
 
 
 @dataclass(frozen=True)

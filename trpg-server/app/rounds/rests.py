@@ -155,7 +155,7 @@ def finish_rest(
         'before': before,
         'after': after,
         'max_hp': sheet.max_hp,
-        'resources': [resources.shift_document(shift) for shift in shifts],
+        'resources': [resources.shift_document(shift, member.user_id) for shift in shifts],
     }
     # 새 문서로 바꿔 끼운다. 안을 고치면 DB 의 JSON 칸이 바뀐 줄 모른다
     declaration.outcome = {**declaration.outcome, 'rest': result}

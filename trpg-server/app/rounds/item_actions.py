@@ -134,7 +134,7 @@ def adjust(judging: Judging, target: TableMember, key: str, amount: int) -> list
     shift = resources.adjust(judging.ruleset, target.sheet, key, amount)
     if shift is None or shift.before == shift.after:
         return []
-    return [resources.shift_document(shift)]
+    return [resources.shift_document(shift, target.user_id)]
 
 
 def harm_refused(judging: Judging, member: TableMember, item: CatalogItem, target: TableMember) -> str | None:

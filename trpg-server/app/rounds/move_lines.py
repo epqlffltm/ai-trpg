@@ -297,11 +297,14 @@ def describe_rest(note: RestNote) -> str:
 
 def describe_resource(note: ResourceNote) -> str:
     """
-    수치 하나(#804). 바뀐 것이면 전과 뒤를, 아니면 지금 값을 적는다.
+    수치 하나(#804). 바뀐 것이면 전과 뒤를, 아니면 지금 값을 적는다. 숨긴 수치는 말로만 적는다.
 
     예: 마나 1 → 6/6
         마나 3/6
+        광기 모자람
     """
+    if note.word is not None:
+        return f'{note.name} {note.word}'
     if note.before is None:
         return f'{note.name} {note.value}/{note.max}'
     return f'{note.name} {note.before} → {note.value}/{note.max}'

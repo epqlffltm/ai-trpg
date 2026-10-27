@@ -9,6 +9,7 @@
 DB 를 모른다. 시트를 고친다. 저장하지 않는다.
 """
 
+import uuid
 from collections.abc import Callable
 
 from app.engine import resources as engine
@@ -78,12 +79,34 @@ def wanted_injuries(ruleset: Ruleset, sheet: TableSheet) -> list[str]:
     return engine.wanted_injuries(levels_of(ruleset, sheet))
 
 
-def shift_document(shift: Shift) -> dict:
-    """바뀐 것을 결과와 이벤트에 적을 모양. 이름표, 이름, 전과 뒤의 값, 최대다."""
+def shift_document(shift: Shift, owner_id: uuid.UUID) -> dict:
+    """
+    바뀐 것을 결과와 이벤트에 적을 모양. 이름표, 이름, 전과 뒤의 값, 최대, 그리고 최소다.
+
+    누구의 수치인지(user_id)와 누가 보는지(visibility, #804)도 적는다. 응답이 보는 사람에 따라 거른다(visible_shifts).
+    서술은 거르지 않고 읽어, 숨긴 것은 말로 바꾼다.
+    """
     return {
         'resource': shift.resource.key,
         'name': shift.resource.name,
         'before': shift.before,
         'after': shift.after,
         'max': shift.maximum,
+        'min': shift.resource.min,
+        'user_id': str(owner_id),
+        'visibility': shift.resource.visibility.value,
     }
+
+
+def visible_shifts(shifts: list[dict] | None, viewer_id: uuid.UUID) -> list[dict]:
+    """
+    결과에 적힌 바뀐 수치들 중 그 사람이 숫자로 보는 것만. 보이기가 없는 옛 문서는 모두에게 보인다.
+
+    결과는 테이블의 앉은 사람 모두가 읽는다. 가진 사람만 보는 수치는 그 사람에게만 싣고,
+    엔진만 보는 것은 아무에게도 싣지 않는다.
+    """
+    return [
+        shift
+        for shift in shifts or []
+        if engine.shown_to(shift.get('visibility', 'everyone'), shift.get('user_id') == str(viewer_id))
+    ]

@@ -153,7 +153,7 @@ describe('룰북', () => {
 
     expect(await screen.findByText('저장했습니다.')).toBeInTheDocument();
     expect((sent(seen, 'PATCH', `/${ID}`)[0]?.body as { resources: unknown }).resources).toEqual([
-      { key: 'resource', name: '마나', min: 0, max: { base: 5, ability: 'heart', cap: null }, start: 'max', rest: { short: null, long: { kind: 'fill', amount: null } } },
+      { key: 'resource', name: '마나', min: 0, max: { base: 5, ability: 'heart', cap: null }, start: 'max', rest: { short: null, long: { kind: 'fill', amount: null } }, each_round: null, at_min: null, at_max: null, visibility: 'everyone' },
     ]);
   });
 

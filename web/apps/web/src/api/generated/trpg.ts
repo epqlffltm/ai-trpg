@@ -7014,6 +7014,7 @@ export interface components {
          *     each_round 는 라운드가 닫힐 때마다 저절로 하는 일이다(#804, 광기 +1, 마나 +1). 없으면 저절로 바뀌지 않는다.
          *     at_min 과 at_max 는 문턱이다(#804). 값이 최소(최대)에 닿아 있는 동안 그 부상(규칙의 injuries 의 key)을 입는다.
          *     문턱을 벗어나면 바로 풀린다. 부상은 수치의 그림자다(app/rounds/resource_rounds.py).
+         *     visibility 는 누가 숫자를 보나다(#804). 비우면 모두다.
          */
         Resource: {
             /** At Max */
@@ -7035,6 +7036,8 @@ export interface components {
             rest: components["schemas"]["ResourceRest"];
             /** @default max */
             start: components["schemas"]["ResourceStart"];
+            /** @default everyone */
+            visibility: components["schemas"]["ResourceVisibility"];
         };
         /**
          * ResourceMax
@@ -7114,6 +7117,12 @@ export interface components {
          * @enum {string}
          */
         ResourceStart: "max" | "min";
+        /**
+         * ResourceVisibility
+         * @description 수치를 누가 보나(#804). 방장도 이 규칙대로만 본다. 숨긴 수치도 서술자에게는 말(네 단계)로 간다.
+         * @enum {string}
+         */
+        ResourceVisibility: "everyone" | "owner" | "engine";
         /**
          * Rest
          * @description 쉬기. 짧은 휴식과 긴 휴식, 되살아나기, 저절로 회복하기다.
