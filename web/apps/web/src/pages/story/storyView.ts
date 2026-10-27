@@ -4,6 +4,7 @@
 //   - 답할 말이 저장된 말에 없으면(방금 보낸 말, 고쳐 보낸 말) 그 부모까지 보이고 끝에 붙인다
 //   - 이어 쓰면 끊긴 답에 흘러 온 글을 붙인다(첫 조각 앞의 글은 마지막 조각에, 그 뒤는 새 조각으로)
 //   - 장면의 인물과 상태는 받는 중이면 turn 의 것, 아니면 세션의 것이다
+//   - 장면의 표정은 끝의 답(받는 중이면 흘러오는 조각)에서 인물마다 마지막 조각의 것이다
 //   - 다음 답 추천은 가지의 끝이 답일 때 그 답의 것이다. 이벤트의 선택지를 기다리는 동안은 숨긴다
 
 import type { StoryMessage, StorySavedMessage, StorySegment, StoryState } from '../../api/story';
@@ -64,4 +65,11 @@ export function storyAlternatives(message: Pick<StoryMessage, 'id' | 'alternativ
 export function storySuggestions(messages: Pick<StoryMessage, 'role' | 'suggestions'>[], choosing: boolean): string[] {
   const last = messages.at(-1);
   return !choosing && last?.role === 'assistant' ? (last.suggestions ?? []) : [];
+}
+
+/** 표정을 읽을 조각들. 받는 중이면 흘러오는 조각, 아니면 보이는 가지의 끝이 답일 때 그 답의 조각 */
+export function sceneSegments(visible: Pick<StoryVisible, 'items' | 'pending'>): StorySegment[] {
+  if (visible.pending) return visible.pending;
+  const last = visible.items.at(-1);
+  return last?.role === 'assistant' ? last.segments : [];
 }

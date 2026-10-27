@@ -2,7 +2,7 @@
 // 그림 창과 인물 창(D5)에 보일 것. 세션의 세계관 칸(view)과 상태만 받는 순수한 함수다.
 // 무엇을 보일지(호감도의 숫자나 단계, 인물 창의 항목)는 제작자가 정했고 서버가 그대로 걸러 보낸다. 화면은 받은 것만 그린다.
 
-import type { StoryMessage, StoryProgress, StorySavedMessage, StoryState, StoryView, StoryViewCast } from '../../api/story';
+import type { StoryMessage, StoryProgress, StorySavedMessage, StorySegment, StoryState, StoryView, StoryViewCast } from '../../api/story';
 import { itemName, eventName } from './storyWorld';
 
 const MINUTES_PER_DAY = 1440;
@@ -39,10 +39,20 @@ function answeredMessage(messages: StoryMessage[]): StoryMessage | null {
   return messages.find((message) => message.id === last.parent_id) ?? null;
 }
 
-/** 인물의 그림. 기본 표정(빈 글)의 스프라이트, 없으면 대표 그림. 실루엣이면 서버가 비워 보낸다 */
-export function portraitOf(cast: Pick<StoryViewCast, 'sprites' | 'image_id'> | undefined): string | null {
+/** 인물의 그림. 그 표정의 스프라이트, 표정이 없거나 그림에 없으면 기본 표정(빈 글)의 스프라이트, 없으면 대표 그림. 실루엣이면 서버가 비워 보낸다 */
+export function portraitOf(cast: Pick<StoryViewCast, 'sprites' | 'image_id'> | undefined, expression: string | null = null): string | null {
   if (!cast) return null;
-  return cast.sprites.find((sprite) => sprite.expression === '')?.image_id ?? cast.image_id ?? null;
+  const chosen = expression ? cast.sprites.find((sprite) => sprite.expression === expression) : undefined;
+  return chosen?.image_id ?? cast.sprites.find((sprite) => sprite.expression === '')?.image_id ?? cast.image_id ?? null;
+}
+
+/** 인물마다 지금 표정. 조각들 가운데 그 인물의 마지막 조각의 표정이다(기본이면 null). 말하지 않은 인물은 없다 */
+export function expressionsOf(segments: Pick<StorySegment, 'speaker' | 'expression'>[]): Record<string, string | null> {
+  const faces: Record<string, string | null> = {};
+  for (const segment of segments) {
+    if (segment.speaker !== null) faces[segment.speaker] = segment.expression ?? null;
+  }
+  return faces;
 }
 
 /** 호감도의 단계. 그 값 이하에서 가장 높은 단계 */
