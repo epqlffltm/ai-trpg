@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/home/HomePage.test.tsx
-// 첫 화면(A1): 줄마다 따로 실패하고, 로그인 전에는 이어하기를 부르지 않으며 토큰을 싣지 않는다.
+// 첫 화면(A1): 줄마다 따로 실패하고, 로그인 전에는 이어하기를 부르지 않으며 토큰을 싣지 않는다. story 이어하기는 진행 한 줄을 보인다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -64,6 +64,21 @@ describe('HomePage', () => {
       'GET /api/v1/game/listings': () => json(200, { items: [SCENARIO], total: 1 }),
       'GET /api/v1/game/tables': () => json(200, { items: [TABLE], total: 1 }),
       'GET /api/v1/chat/conversations': () => json(200, { items: [], total: 0 }),
+      'GET /api/v1/story/conversations': () =>
+        json(200, {
+          items: [
+            {
+              id: '00000000-0000-4000-8000-00000000aa71',
+              title: '여름 학교의 봄',
+              world: { id: '00000000-0000-4000-8000-00000000b801', version: 1, name: '여름 학교', image_id: null, rating: 'all' },
+              model: null,
+              created_at: '2026-10-26T00:00:00Z',
+              updated_at: '2026-10-26T00:00:00Z',
+              progress: { day: 18, slot: 'evening', deadline_days: 30, ending: null, ending_name: null, epilogue: false },
+            },
+          ],
+          total: 1,
+        }),
       'GET /api/v1/asset/listings/characters': () =>
         charactersFail ? json(503, { detail: '잠시' }) : json(200, { items: [], total: 0 }),
     });
@@ -73,6 +88,9 @@ describe('HomePage', () => {
     const retry = await within(characters.closest('section') as HTMLElement).findByRole('button', { name: '다시 시도' });
     expect(await within(section('TRPG 이어하기')).findByText('목요일 모임')).toBeInTheDocument();
     expect(within(section('TRPG 이어하기')).getByText('3/4명')).toBeInTheDocument();
+    const story = (await within(section('story 이어하기')).findByText('여름 학교의 봄')).closest('a') as HTMLElement;
+    expect(story).toHaveAttribute('href', '/story/sessions/00000000-0000-4000-8000-00000000aa71');
+    expect(within(story).getByText('18일째 · D-12')).toBeInTheDocument();
     expect(within(section('새로 공개된 시나리오')).getByText('잿빛 수도원')).toBeInTheDocument();
 
     charactersFail = false;

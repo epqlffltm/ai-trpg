@@ -4,6 +4,7 @@
 
 import { queryOptions } from '@tanstack/react-query';
 import { fetchMyConversations, fetchMyTables, fetchPublicCharacters, fetchPublicScenarios } from '../../api/lists';
+import { fetchStorySessions } from '../../api/story';
 import { fetchPublicWorlds } from '../../api/storyWorlds';
 
 /** 줄마다 보이는 수 */
@@ -41,5 +42,13 @@ export function myConversationsQuery() {
   return queryOptions({
     queryKey: ['chat', 'conversations', 'mine', { limit: ROW_LIMIT }],
     queryFn: ({ signal }) => fetchMyConversations(ROW_LIMIT, signal),
+  });
+}
+
+/** 내 story 세션(최근 것부터). 서버의 한 쪽을 읽고 줄에는 앞의 몇 개만 보인다. 열쇠는 내 세션의 목록 아래라 함께 다시 읽힌다 */
+export function myStorySessionsQuery() {
+  return queryOptions({
+    queryKey: ['story', 'sessions', 'home'],
+    queryFn: ({ signal }) => fetchStorySessions(0, signal),
   });
 }

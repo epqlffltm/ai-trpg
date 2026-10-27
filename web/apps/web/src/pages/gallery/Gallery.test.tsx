@@ -65,12 +65,10 @@ describe('갤러리', () => {
     expect(await screen.findByRole('dialog', { name: '비 오는 공원' })).toBeInTheDocument();
   });
 
-  it('연 것이 없으면 안내하고, story 탭은 준비 중이라 적는다', async () => {
+  it('연 것이 없으면 안내한다', async () => {
     signedIn([]);
     renderApp('/gallery');
     expect(await screen.findByText(/아직 연 일러스트가 없습니다/)).toBeInTheDocument();
-    await userEvent.click(within(screen.getByRole('navigation', { name: '서비스' })).getByRole('link', { name: 'story' }));
-    expect(await screen.findByText(/story 의 갤러리는 준비 중입니다/)).toBeInTheDocument();
   });
 });
 
