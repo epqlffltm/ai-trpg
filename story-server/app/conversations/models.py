@@ -140,12 +140,15 @@ class Message(Base):
     다음 호출의 프롬프트에 그대로 들어가 모델이 같은 모양으로 이어 쓴다. 사람의 말은 조각 없이 본문만 있다.
     cast 는 그 답을 쓸 때의 장면의 인물이다(app/engine/scene.py). 화면이 그 자리에 있던 인물을 보인다.
     edited 는 사람이 답의 글을 고쳤는가다(조각마다 글만 고친다. app/conversations/service.py 의 edit_message).
+    suggestions 는 다음 답 추천의 선택지다(셋까지). 본문에 섞지 않아 다음 호출의 프롬프트에 들어가지 않는다.
     """
 
     __tablename__ = 'messages'
     __table_args__ = (
         CheckConstraint(one_of('role', Role), name='role_allowed'),
         CheckConstraint(one_of('status', MessageStatus), name='status_allowed'),
+        # 선택지는 셋까지다(conversation_core/suggestions.py 의 MAX_SUGGESTIONS)
+        CheckConstraint('cardinality(suggestions) <= 3', name='suggestions_at_most_three'),
         # 한 말의 대안들(같은 부모의 자식들)을 찾는다
         Index('ix_messages_conversation_parent', 'conversation_id', 'parent_id'),
     )
@@ -163,6 +166,7 @@ class Message(Base):
     event_id: Mapped[str | None] = mapped_column(String(40), default=None)
     ending_id: Mapped[str | None] = mapped_column(String(40), default=None)
     edited: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    suggestions: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default='{}')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

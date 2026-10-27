@@ -287,6 +287,10 @@ class MessageOut(BaseModel):
     ending_id: str | None = None
     # 사람이 답의 글을 고쳤는가
     edited: bool = False
+    # 다음 답 추천(셋까지). 다 쓴 답에만 있고, 끊긴 답, 사람의 말, 행동 말, 고친 답은 빈 목록이다.
+    # 늘 싣는다. default_factory 라 스키마에 기본값이 적히지 않아 웹의 생성 타입에서는 고르는 칸이다
+    # (지금의 화면과 그 테스트를 깨지 않는다)
+    suggestions: list[str] = Field(default_factory=list)
     created_at: datetime
 
 

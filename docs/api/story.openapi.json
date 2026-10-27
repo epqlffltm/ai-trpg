@@ -979,6 +979,13 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggestions",
+            "type": "array"
           }
         },
         "required": [
@@ -1285,6 +1292,13 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggestions",
+            "type": "array"
           }
         },
         "required": [

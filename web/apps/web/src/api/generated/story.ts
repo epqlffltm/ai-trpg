@@ -787,6 +787,8 @@ export interface components {
             segments: components["schemas"]["SegmentOut"][];
             /** Status */
             status: string;
+            /** Suggestions */
+            suggestions?: string[];
         };
         /**
          * ModelChoice
@@ -912,6 +914,8 @@ export interface components {
             segments: components["schemas"]["SegmentOut"][];
             /** Status */
             status: string;
+            /** Suggestions */
+            suggestions?: string[];
         };
         /**
          * PathOut

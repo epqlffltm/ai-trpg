@@ -70,13 +70,18 @@ async def move_leaf(session: AsyncSession, conversation_id: uuid.UUID, leaf_id: 
 
 
 async def extend_message(
-    session: AsyncSession, message_id: uuid.UUID, segments: list[dict], content: str, status: str
+    session: AsyncSession,
+    message_id: uuid.UUID,
+    segments: list[dict],
+    content: str,
+    status: str,
+    suggestions: list[str],
 ) -> None:
-    """끊긴 답에 이어 쓴 것을 적는다(이어서 출력). 조각과 본문과 상태(complete, partial)를 바꾼다."""
+    """끊긴 답에 이어 쓴 것을 적는다(이어서 출력). 조각과 본문과 상태(complete, partial)와 다음 답 추천을 바꾼다."""
     statement = (
         update(Message)
         .where(Message.id == message_id)
-        .values(segments=segments, content=content, status=status)
+        .values(segments=segments, content=content, status=status, suggestions=suggestions)
         .execution_options(synchronize_session=False)
     )
     await session.execute(statement)

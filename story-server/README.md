@@ -84,6 +84,7 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `LLM_TIMEOUT_SECONDS` | `120` | 모델을 한 번 부르는 시간의 상한(초, 600 까지) |
 | `STORY_OUTPUT_LIMIT` | `1024` | 말 한 번의 답의 길이의 상한(토큰). 가격표의 출력 단계(`o0`)가 약속하는 길이다 |
 | `STORY_CONTEXT_CHARS` | `12000` | 모델에 보내는 지난 말의 양의 상한(글자). 가격표의 입력 단계(`i0`)가 약속하는 양이다 |
+| `STORY_SUGGESTIONS` | `true` | [다음 답 추천](#말-보내기). 켜면 답 끝에 선택지 셋을 함께 받는다. 호출은 늘지 않는다 |
 | `STORY_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
 | `REDIS_URL` | 비어 있음(메모리) | [요청 수 제한](#요청-수-제한)을 세는 Redis(`redis://localhost:6379/3`). 비우면 서버 안의 메모리로 센다(서버가 하나일 때만 맞다). compose 는 DB 3 을 준다 |
 | `GENERATION_LIMIT`, `GENERATION_WINDOW_SECONDS` | `20`, `60` | 모델을 부르는 요청(말, 행동, 다시 생성, 이어서)을 한 사람이 이 시간(초) 안에 이만큼까지 |
@@ -184,7 +185,7 @@ chat 의 한 번의 말과 같은 차례다: 차례를 잡고(한 세션 한 생
 event: turn     data: {"generation_id", "user_message", "cast": ["mina"]}   답할 사람의 말과 장면의 인물
 event: segment  data: {"speaker": "mina"}                                    새 말 조각(서술은 null)
 event: delta    data: {"text": "..."}                                        지금 조각에 붙는 글
-event: done     data: {"message": {... "segments": [{"speaker", "text"}], "cast"}}   저장한 답
+event: done     data: {"message": {... "segments": [{"speaker", "text"}], "cast", "suggestions"}}   저장한 답
 event: failed   data: {"code": "timeout"}                                    답 없이 끝났다
 ```
 
@@ -195,6 +196,9 @@ event: failed   data: {"code": "timeout"}                                    답
   남은 조각이 없으면 실패한 말이고 청구하지 않는다(`failed`, `empty`).
 - **저장.** 답의 `segments` 가 기준이고, `content` 는 그 조각을 표식이 붙은 줄로 쓴 것이다(다음 호출의 프롬프트에 그대로 간다).
   답에는 그때의 장면의 인물(`cast`)을 함께 적는다. 상태는 행동 말(과 선택지를 지운 말)에 붙는다(`message_states`).
+- **다음 답 추천**(chat 과 같다, `conversation_core/suggestions.py`). 카드 끝에 지시를 붙이면 모델이 본문 뒤에 `<suggestions>` 와 선택지를 쓴다.
+  표식 뒤는 흘리지 않고 말 조각에도 넣지 않는다(`MarkerHold`, 표식이 조각의 경계에 걸려도). 다 쓴 답에서만 걸러(셋까지, 번호와 따옴표를 떼고, 같은 것은 하나)
+  답의 `suggestions` 에 둔다. 다음 호출에는 본문만 간다. 끊긴 답에는 없고, 이어서 출력으로 다 쓰면 붙는다. 답을 고치면 지운다.
 - **끝난 세션.** 엔딩을 봤고 세계관이 끝(읽기만)을 골랐으면 409 `session_ended` 다. 후일담이면 말을 받는다.
 - **내 말 고치기.** `edit_of` 에 고칠 사람의 말의 id 를 실으면 새 말이 그 말의 대안(같은 부모 아래, 새 가지)이 되고 원본은 남는다(chat 과 같다).
   상태, 끝난 세션인지, 모델에 보낼 말들은 그 말의 앞까지의 가지의 것이다. 그래서 끝난 세션이어도 엔딩 앞의 말은 고칠 수 있다.
@@ -266,7 +270,7 @@ chat 의 이어서 출력과 같은 차례이고, 새 호출이라 새로 청구
   모델이 끊긴 답의 끝을 되풀이하면 겹친 만큼 뗀다(`OverlapTrim`, 8 글자 이상 겹칠 때).
 - **SSE.** turn 에 `continues`(그 답의 id)가 실린다. 첫 `segment` 앞의 `delta` 는 그 답의 마지막 조각에 붙는 글이고, `segment` 가 오면 새 조각이다.
   `done` 의 말은 이어 붙인 그 답 전체다(같은 id).
-- **저장.** 새 말을 만들지 않고 끊긴 답의 조각과 본문을 바꾼다. 다 쓰면 `complete`, 또 끊기면 `partial` 이라 다시 이어 쓸 수 있다.
+- **저장.** 새 말을 만들지 않고 끊긴 답의 조각과 본문을 바꾼다. 다 쓰면 `complete`(다음 답 추천이 붙는다), 또 끊기면 `partial` 이라 다시 이어 쓸 수 있다.
   이어 쓴 것이 없으면 끊긴 답은 그대로이고 청구를 돌려준다.
 - **거절.** 끊긴 답이 아니거나 가지의 끝이 아니면 422 `not_continuable`, 없거나 남의 말이면 404 `message_not_found`, 답을 쓰는 중이면 409 다.
 
@@ -290,6 +294,7 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
   말하는 사람과 조각의 수는 저장된 그대로라서 장면 밖의 인물이 끼어들 길이 없다. 표식을 다시 읽지 않는다.
 - 조각의 글은 한 줄이다(조각은 줄 하나다). 줄바꿈이나 빈 글은 입력 오류다. 앞뒤 빈칸은 걷는다.
 - 본문(`content`)은 고친 조각으로 서버가 다시 쓴다. 다음 호출부터 고친 글이 모델에 간다. 고친 말에는 `edited` 가 붙는다.
+  다음 답 추천은 고치기 전의 글에 맞춘 것이라 지운다.
 - 상태와 세션의 수정 시각(목록의 차례)은 그대로다. 사람의 말은 말 보내기의 `edit_of` 로 새 가지를 만들어 고치고, 행동 말은 고치지 않는다(엔진의 결과다).
 - **거절.** 답이 아니면 422 `not_editable`, 조각의 수가 다르면 422 `segments_mismatch`, 없거나 남의 말이면 404 `message_not_found`,
   답을 쓰는 중이면 409 `generation_in_progress` 다.
@@ -441,7 +446,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `worlds` | asset 서버에서 가져온 세계관의 판의 사본. 사람마다, 판마다 하나(`owner_id`, `source_id`, `version` 이 고유). 문서는 받은 그대로(JSONB) |
 | `conversations` | 세션 하나. 판의 사본을 가리킨다(지우지 못하게 `RESTRICT`). 목록은 `owner_id`, `updated_at` 의 색인으로 읽는다. 세션의 모델(`model_slug`)을 가리킨다 |
 | `ai_models`, `ai_model_costs`, `ai_model_snapshots` | [모델 목록](#모델-목록). chat 서버의 표와 같은 모양이다 |
-| `messages` | 말 하나. 트리다(`parent_id`). 답은 말 조각(`segments`)과 그때의 장면의 인물(`cast`)을 갖는다. 사람이 고친 답은 `edited` 다. 세션의 `active_leaf_id` 가 지금 가지의 끝이다 |
+| `messages` | 말 하나. 트리다(`parent_id`). 답은 말 조각(`segments`)과 그때의 장면의 인물(`cast`)을 갖는다. 사람이 고친 답은 `edited` 다. 다음 답 추천은 `suggestions`(셋까지)다. 세션의 `active_leaf_id` 가 지금 가지의 끝이다 |
 | `message_states` | 말에 붙은 엔진의 상태(JSONB). 상태가 바뀐 말에만 있다. 가지의 끝의 상태는 끝에서 가장 가까운 것이고, 없으면 처음의 상태다 |
 | `generations` | 모델을 한 번 부른 것과 그 청구(chat 서버의 표와 같은 모양). 버린 줄의 수(`dropped_segments`)를 더했다 |
 | `ending_records` | 계정의 본 엔딩. (`owner_id`, `world_source`, `ending_id`)마다 처음 본 시각과 세션. 세션이 지워지면 세션만 비운다 |
