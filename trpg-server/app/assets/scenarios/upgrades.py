@@ -1133,6 +1133,19 @@ def upgrade_from_64(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_65(document: dict) -> dict:
+    """
+    형식 65 의 문서를 형식 66 으로 올린다(#805). 룰북에 기술과 주문(skills)이 있다.
+
+    그때는 기술이 없었다. 빈 목록으로 읽는다. 시트의 아는 기술(skills)은 비어 있는 것이 기본이라 고치지 않는다.
+    """
+    upgraded = dict(document)
+    rulebook = document['rulebook']
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'skills': []}}
+    upgraded['format'] = 66
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -1200,4 +1213,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     62: upgrade_from_62,
     63: upgrade_from_63,
     64: upgrade_from_64,
+    65: upgrade_from_65,
 }

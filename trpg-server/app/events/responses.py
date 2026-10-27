@@ -67,6 +67,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'cured',
         'injured',
     ),
+    # 기술을 쓴 것도 공개다(#805). 낸 비용과 맞춘 수치는 뒤의 resource_changed 에 있다(숨긴 수치는 숫자가 없다)
+    EventType.SKILL_USED: ('round', 'character_name', 'skill', 'name', 'used', 'reason', 'target', 'cured', 'injured'),
     # 던진 것도 공개다(#277). 판정의 숫자는 뒤의 check_rolled 에, 맞은 쪽의 변화는 그 뒤의 이벤트에 있다
     EventType.ITEM_THROWN: (
         'round',

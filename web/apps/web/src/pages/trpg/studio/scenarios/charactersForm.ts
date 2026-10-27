@@ -7,7 +7,7 @@
 
 import type { CharacterMode, PlayerMadeHp, Ruleset, ScenarioDetail, ScenarioUpdate } from '../../../../api/types';
 import { wholeNumber } from '../rulebooks/rulebookForm';
-import { sheetDraft, sheetHints, toSheet, type SheetDraft } from './sheetForm';
+import { sheetDraft, sheetHints, toSheet, withSkills, type SheetDraft } from './sheetForm';
 
 export const MAX_PLAYERS = 4;
 export const PLAYER_MADE_HP_MAX = 999;
@@ -24,6 +24,8 @@ export type CharactersDraft = {
   reroll: boolean;
   /** 룰북이 없으면 null(시트의 칸을 만들 수 없다) */
   defaultSheet: SheetDraft | null;
+  /** 기본 시트가 아는 기술(#805). 고치는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
+  defaultSkills: string[];
   hpBase: string;
   hpCap: string;
 };
@@ -35,6 +37,7 @@ export function charactersDraft(scenario: ScenarioDetail, rules: Ruleset | null)
     modes: scenario.character_modes,
     reroll: scenario.reroll_allowed,
     defaultSheet: rules ? sheetDraft(scenario.default_sheet, rules) : null,
+    defaultSkills: scenario.default_sheet?.skills ?? [],
     hpBase: scenario.player_made_hp ? String(scenario.player_made_hp.base) : '',
     hpCap: scenario.player_made_hp ? String(scenario.player_made_hp.cap) : '',
   };
@@ -98,7 +101,7 @@ export function toCharactersBody(draft: CharactersDraft, rules: Ruleset | null):
     character_modes: draft.modes,
     reroll_allowed: draft.modes.includes('rolled') && draft.reroll,
   };
-  if (rules && draft.defaultSheet && usesDefaultSheet(draft.modes)) body.default_sheet = toSheet(draft.defaultSheet, rules);
+  if (rules && draft.defaultSheet && usesDefaultSheet(draft.modes)) body.default_sheet = withSkills(toSheet(draft.defaultSheet, rules), draft.defaultSkills);
   if (usesPlayerMadeHp(draft.modes)) body.player_made_hp = toPlayerMadeHp(draft);
   return body;
 }

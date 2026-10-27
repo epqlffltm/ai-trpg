@@ -28,4 +28,5 @@ export const ACTION_LABELS: Record<ActionKind, string> = {
   force: '부수기',
   repair: '고치기',
   replace: '자물쇠 바꾸기',
+  skill: '기술 쓰기',
 };

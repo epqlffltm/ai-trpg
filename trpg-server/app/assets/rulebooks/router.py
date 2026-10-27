@@ -34,11 +34,11 @@ async def handle_rules_invalid(request: Request, error: service.RulesInvalidErro
     """
     고친 규칙이 규칙 한 벌로 맞지 않으면 422 로 답한다(#804). 앱에 한 번 등록한다(app/main.py).
 
-    수치의 최대에 쓰는 능력치가 규칙에 없거나 같은 수치가 두 번 있다. field 는 resources 다.
+    수치(#804)나 기술(#805)이 규칙의 다른 칸과 맞지 않는다. field 는 resources 나 skills 다.
     """
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-        content={'detail': error.message, 'field': 'resources'},
+        content={'detail': error.message, 'field': error.field},
     )
 
 

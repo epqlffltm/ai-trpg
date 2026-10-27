@@ -406,6 +406,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   items_gained: (p, ctx, e) => `${who(p, ctx, e)}: ${thing(p)} 얻음(지금 ${count(p, 'total') ?? '?'})${gainedFrom(p)}`,
   items_lost: (p, ctx, e) => `${who(p, ctx, e)}: ${thing(p)} 잃음(남은 ${count(p, 'total') ?? '?'})`,
   item_used: (p, ctx, e) => `${who(p, ctx, e)}: ${text(p, 'name') ?? '물건'} ${flag(p, 'used') ? '씀' : '쓰지 못함'}`,
+  skill_used: (p, ctx, e) => `${who(p, ctx, e)}: ${text(p, 'name') ?? '기술'} ${flag(p, 'used') ? '씀' : '쓰지 못함'}`,
   item_given: (p, ctx, e) => givenText(p, ctx, e),
   item_thrown: (p, ctx, e) => thrownText(p, ctx, e),
   aid_used: (p, ctx, e) => `${who(p, ctx, e)}: ${aidUsed(p)}`,

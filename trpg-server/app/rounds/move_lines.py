@@ -43,6 +43,7 @@ from app.rounds.narrator import (
     RestNote,
     RevivalNote,
     SearchNote,
+    SkillNote,
     StealNote,
     TakeNote,
     TargetGoneNote,
@@ -393,6 +394,35 @@ def describe_throw(note: ThrowNote) -> str:
     if note.reason == 'not_held':
         return f'(던지려던 물건: {note.name}{to}. {ITEM_FAILURES["not_held"]})'
     return f'(던지려던 물건: {note.name}{to})'
+
+
+# 기술을 쓰지 못한 까닭(#805)을 서술자에게 줄 말
+SKILL_FAILURES = {
+    'not_known': '그 기술을 모른다',
+    'cost_short': '비용이 모자랐다',
+    'target_gone': '받을 사람이 없었다',
+    'friendly_fire_off': '동료를 해칠 수 없게 바뀌었다',
+}
+
+
+def describe_skill(note: SkillNote) -> str:
+    """
+    기술을 쓴 결과(#805)를 한 줄로 적는다. 낸 비용, HP 의 변화, 부상과 수치에 한 일을 붙인다.
+    물건을 쓴 줄과 같은 모양이다.
+
+    예: (쓴 기술: 치유의 손길 → 영애, 마나 5 → 3/7) → 영애 회복 3 (HP 8/10)
+        (쓰려던 기술: 화염 방패. 비용이 모자랐다)
+    """
+    to = f' → {note.target}' if note.target else ''
+    if not note.done:
+        return f'(쓰려던 기술: {note.name}{to}. {SKILL_FAILURES.get(note.reason, "하지 못했다")})'
+    paid = ''.join(f', {describe_resource(one)}' for one in note.cost)
+    parts = [f'(쓴 기술: {note.name}{to}{paid})']
+    if note.impact:
+        parts.append(describe_impact(note.impact))
+    parts.extend(effect_tags(note.cured, note.injured, note.resisted, note.spared))
+    parts.extend(resource_tags(note.resources))
+    return ' '.join(parts)
 
 
 def describe_item_action(note: ItemActionNote) -> str:
@@ -811,6 +841,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_naming(move.naming))
     if move.item_action is not None and not used_on:
         parts.append(describe_item_action(move.item_action))
+    if move.skill is not None:
+        parts.append(describe_skill(move.skill))
     if move.travel is not None:
         parts.append(describe_travel(move.travel))
     if move.search is not None:

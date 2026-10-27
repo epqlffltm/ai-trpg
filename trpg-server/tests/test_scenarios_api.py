@@ -36,7 +36,7 @@ from app.assets.models import (
 )
 from app.main import API_PREFIX
 from tests.narration_model import asset_body, with_model
-from tests.sheets import SHEET, make_sheet
+from tests.sheets import SHEET, as_character, make_sheet
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -592,6 +592,11 @@ PREGENS = [
 ]
 
 
+def read_back(pregens: list[dict]) -> list[dict]:
+    """보낸 프리젠을 읽어 돌려받을 때의 모양. 시트가 있으면 아는 기술(#805)의 빈 목록이 붙는다."""
+    return [{**pregen, 'sheet': pregen['sheet'] and as_character(pregen['sheet'])} for pregen in pregens]
+
+
 async def test_saves_the_recommended_players_and_the_pregens(client: AsyncClient, my_headers: dict[str, str]):
     scenario = await create(
         client, SCENARIOS_URL, my_headers, recommended_players={'min': 2, 'max': 3}, pregens=PREGENS
@@ -601,7 +606,7 @@ async def test_saves_the_recommended_players_and_the_pregens(client: AsyncClient
 
     assert read['recommended_players'] == {'min': 2, 'max': 3}
     # 프리젠은 보낸 순서 그대로다
-    assert read['pregens'] == PREGENS
+    assert read['pregens'] == read_back(PREGENS)
 
 
 async def test_a_pregen_needs_only_a_name(client: AsyncClient, my_headers: dict[str, str]):
@@ -619,7 +624,7 @@ async def test_accepts_the_most_pregens_allowed(client: AsyncClient, my_headers:
 
     scenario = await create(client, SCENARIOS_URL, my_headers, pregens=pregens)
 
-    assert scenario['pregens'] == pregens
+    assert scenario['pregens'] == read_back(pregens)
 
 
 @pytest.mark.parametrize(
@@ -660,7 +665,7 @@ async def test_rejects_bad_players_and_pregens(client: AsyncClient, my_headers: 
     # 거부된 요청은 아무것도 바꾸지 않는다
     read = (await client.get(url, headers=my_headers)).json()
     assert read['recommended_players'] == {'min': 2, 'max': 3}
-    assert read['pregens'] == PREGENS
+    assert read['pregens'] == read_back(PREGENS)
 
 
 async def test_replaces_the_pregens_as_a_whole(client: AsyncClient, my_headers: dict[str, str]):
@@ -1006,10 +1011,10 @@ async def test_saves_the_sheets_and_the_modes(client: AsyncClient, my_headers: d
 
     read = (await client.get(f'{SCENARIOS_URL}/{scenario["id"]}', headers=my_headers)).json()
 
-    assert read['pregens'][0]['sheet'] == make_sheet(dex=16, max_hp=8)
+    assert read['pregens'][0]['sheet'] == as_character(make_sheet(dex=16, max_hp=8))
     assert read['pregens'][1]['sheet'] is None
     assert read['character_modes'] == ['pregen']
-    assert read['default_sheet'] == default_sheet
+    assert read['default_sheet'] == as_character(default_sheet)
 
 
 async def test_the_modes_come_back_in_a_fixed_order(client: AsyncClient, my_headers: dict[str, str]):
@@ -1025,7 +1030,7 @@ async def test_a_sheet_is_checked_for_its_shape_only(client: AsyncClient, my_hea
 
     scenario = await create(client, SCENARIOS_URL, my_headers, default_sheet=odd)
 
-    assert scenario['default_sheet'] == odd
+    assert scenario['default_sheet'] == as_character(odd)
 
 
 @pytest.mark.parametrize(
@@ -1063,7 +1068,7 @@ async def test_rejects_bad_sheets_and_modes(client: AsyncClient, my_headers: dic
     assert updated.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     # 거절된 요청은 아무것도 바꾸지 않는다
     read = (await client.get(url, headers=my_headers)).json()
-    assert (read['character_modes'], read['default_sheet']) == (['pregen', 'custom'], SHEET)
+    assert (read['character_modes'], read['default_sheet']) == (['pregen', 'custom'], as_character(SHEET))
 
 
 async def test_the_default_sheet_is_cleared_with_null(client: AsyncClient, my_headers: dict[str, str]):
@@ -1074,8 +1079,8 @@ async def test_the_default_sheet_is_cleared_with_null(client: AsyncClient, my_he
     replaced = await client.patch(url, json={'default_sheet': make_sheet(str=18)}, headers=my_headers)
     cleared = await client.patch(url, json={'default_sheet': None, 'character_modes': None}, headers=my_headers)
 
-    assert not_sent.json()['default_sheet'] == SHEET
-    assert replaced.json()['default_sheet'] == make_sheet(str=18)
+    assert not_sent.json()['default_sheet'] == as_character(SHEET)
+    assert replaced.json()['default_sheet'] == as_character(make_sheet(str=18))
     # 기본 시트는 null 로 비운다. 방식은 비울 수 없는 칸이라 null 은 "보내지 않았다"다
     assert cleared.json()['default_sheet'] is None
     assert cleared.json()['character_modes'] == ['custom']

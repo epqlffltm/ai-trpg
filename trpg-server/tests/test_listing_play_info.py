@@ -18,7 +18,7 @@ from fastapi import status
 from httpx import AsyncClient
 
 from tests import test_listings_api as listing_tests
-from tests.sheets import SHEET, make_sheet
+from tests.sheets import SHEET, as_character, make_sheet
 from tests.test_listings_api import (
     LISTINGS_URL,
     SCENARIOS_URL,
@@ -49,7 +49,7 @@ async def test_the_choices_for_a_new_table_are_shown(client: AsyncClient, my_hea
     public = await public_detail(client, their_headers, scenario)
 
     assert public['character_modes'] == ['pregen']
-    assert public['pregens'] == [KNIGHT]
+    assert public['pregens'] == [{**KNIGHT, 'sheet': as_character(KNIGHT['sheet'])}]
     assert [ability['key'] for ability in public['abilities']] == ['str', 'dex', 'con', 'int', 'wis', 'cha']
 
 

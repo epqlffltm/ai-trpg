@@ -60,6 +60,7 @@ from app.rounds.narrator import (
     RestNote,
     RevivalNote,
     SearchNote,
+    SkillNote,
     StealNote,
     StoryContext,
     TakeNote,
@@ -181,6 +182,29 @@ def other_name(declaration: Declaration, target: dict | None) -> str | None:
     if target is None or target.get('user_id') == str(declaration.user_id):
         return None
     return target.get('character_name') or target.get('name')
+
+
+def to_skill(declaration: Declaration | None) -> SkillNote | None:
+    """선언에 적힌 기술 쓰기의 결과(#805)를 서술자에게 줄 모양으로 바꾼다. 그런 행동이 아니면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    used = declaration.outcome.get('skill_use')
+    if used is None:
+        return None
+    injured = used.get('injured') or []
+    return SkillNote(
+        name=used['name'],
+        done=used['used'],
+        reason=used['reason'],
+        target=other_name(declaration, used['target']),
+        cost=to_shift_notes(used.get('cost')),
+        impact=to_impact(declaration.outcome.get('effect')),
+        cured=[one['name'] for one in used.get('cured') or []],
+        injured=[one['name'] for one in injured if one['injury'] is not None],
+        resisted=[one['name'] for one in injured if one.get('immune')],
+        spared=spared_names(injured),
+        resources=to_shift_notes(used.get('resources')),
+    )
 
 
 def to_item_action(declaration: Declaration | None) -> ItemActionNote | None:

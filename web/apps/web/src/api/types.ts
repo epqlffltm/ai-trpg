@@ -82,6 +82,8 @@ export type PublishCheck = Trpg['schemas']['PublishCheck'];
 export type VersionSummary = Trpg['schemas']['VersionSummary'];
 export type VersionDetail = Trpg['schemas']['VersionDetail'];
 export type ScenarioSheet = Trpg['schemas']['Sheet'];
+// 캐릭터의 시트(기본 시트, 프리젠의 시트). 아는 기술(skills, #805)이 더 있다
+export type CharacterSheet = Trpg['schemas']['CharacterSheet'];
 export type ScenarioPregen = Trpg['schemas']['Pregen-Output'];
 export type PregenBody = Trpg['schemas']['Pregen-Input'];
 export type PlayerMadeHp = Trpg['schemas']['PlayerMadeHp'];

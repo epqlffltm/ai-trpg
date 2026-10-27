@@ -58,6 +58,10 @@ class Conflict(enum.StrEnum):
     ALREADY_NAMED = 'already_named'
     # 쓰거나 건네려는 물건을 그만큼 가지고 있지 않다
     ITEM_NOT_HELD = 'item_not_held'
+    # 쓰려는 기술을 이 캐릭터가 모른다(#805). 아는 기술은 시나리오의 시트에 적는다
+    SKILL_NOT_KNOWN = 'skill_not_known'
+    # 기술의 비용이 모자란다(#805). 그 수치가 비용보다 적다
+    SKILL_COST_SHORT = 'skill_cost_short'
     # 물건을 받을 캐릭터가 이미 죽었다
     RECIPIENT_DEAD = 'recipient_dead'
     # 물건을 받을 캐릭터가 그 물건을 더 가질 수 없다(한 가지 99 개)

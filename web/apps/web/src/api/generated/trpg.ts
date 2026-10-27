@@ -2438,6 +2438,25 @@ export interface components {
             name: string;
         };
         /**
+         * CharacterSheet
+         * @description 캐릭터(앉은 사람)의 시트. 기본 시트와 프리젠의 시트다. 아는 기술(#805)이 더 있다. NPC 와 몬스터의 시트에는 없다.
+         *
+         *     skills 는 룰북의 기술(rules.skills)의 이름표다. 비우면 아는 기술이 없다. 맞는지는 게시할 때 본다(knows_only).
+         */
+        CharacterSheet: {
+            /** Abilities */
+            abilities: {
+                [key: string]: number;
+            };
+            /** Max Hp */
+            max_hp: number;
+            /**
+             * Skills
+             * @default []
+             */
+            skills: string[];
+        };
+        /**
          * CharacterUpdate
          * @description 캐릭터를 정할 때 받는 값. 보낸 것으로 캐릭터를 통째로 바꾼다.
          *
@@ -2914,13 +2933,13 @@ export interface components {
          */
         DeclarationOut: {
             /** Action */
-            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"] | components["schemas"]["ThrowAction"]) | null;
+            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"] | components["schemas"]["ThrowAction"] | components["schemas"]["SkillAction"]) | null;
             /** Character Name */
             character_name: string;
             /** Content */
             content: string | null;
             /** Outcome */
-            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["ItemThrowOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["DoorOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TradeOutcome"] | components["schemas"]["PayOutcome"] | components["schemas"]["CoverOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
+            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["SkillUseOutcome"] | components["schemas"]["ItemThrowOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["DoorOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TradeOutcome"] | components["schemas"]["PayOutcome"] | components["schemas"]["CoverOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
             /**
              * User Id
              * Format: uuid
@@ -2936,7 +2955,7 @@ export interface components {
          */
         DeclarationUpdate: {
             /** Action */
-            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"] | components["schemas"]["ThrowAction"]) | null;
+            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"] | components["schemas"]["ThrowAction"] | components["schemas"]["SkillAction"]) | null;
             /** Content */
             content: string;
         };
@@ -3340,7 +3359,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -4356,7 +4375,7 @@ export interface components {
             description: string;
             /** Name */
             name: string;
-            sheet: components["schemas"]["Sheet"];
+            sheet: components["schemas"]["CharacterSheet"];
         };
         /**
          * ListingUpdate
@@ -6227,7 +6246,7 @@ export interface components {
             money: number;
             /** Name */
             name: string;
-            sheet?: components["schemas"]["Sheet"] | null;
+            sheet?: components["schemas"]["CharacterSheet"] | null;
         };
         /**
          * Pregen
@@ -6255,7 +6274,7 @@ export interface components {
             money: number;
             /** Name */
             name: string;
-            sheet?: components["schemas"]["Sheet"] | null;
+            sheet?: components["schemas"]["CharacterSheet"] | null;
         };
         /**
          * PregenChoice
@@ -6268,7 +6287,7 @@ export interface components {
             description: string;
             /** Name */
             name: string;
-            sheet: components["schemas"]["Sheet"];
+            sheet: components["schemas"]["CharacterSheet"];
             /** Taken By */
             taken_by: string | null;
         };
@@ -6293,7 +6312,7 @@ export interface components {
             money: number;
             /** Name */
             name: string;
-            sheet: components["schemas"]["Sheet"];
+            sheet: components["schemas"]["CharacterSheet"];
         };
         /**
          * PublicListing
@@ -7662,7 +7681,7 @@ export interface components {
          *
          *     규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.
          *     방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.
-         *     보내지 않으면 템플릿의 것이다. 수치(resources, #804)도 같다. 보내면 템플릿의 예시 대신 쓴다.
+         *     보내지 않으면 템플릿의 것이다. 수치(resources, #804)와 기술(skills, #805)도 같다. 보내면 템플릿의 예시 대신 쓴다.
          */
         RulebookCreate: {
             armor?: components["schemas"]["Armor"] | null;
@@ -7678,6 +7697,8 @@ export interface components {
             gm_guide: string;
             /** Resources */
             resources?: components["schemas"]["Resource"][] | null;
+            /** Skills */
+            skills?: components["schemas"]["Skill"][] | null;
             /** @default srd5 */
             template: components["schemas"]["Template"];
             /** Title */
@@ -7735,7 +7756,7 @@ export interface components {
          * RulebookUpdate
          * @description 룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.
          *
-         *     규칙은 방어 규칙(armor)과 수치(resources, #804)만 고칠 수 있다.
+         *     규칙은 방어 규칙(armor), 수치(resources, #804), 기술(skills, #805)만 고칠 수 있다.
          *     방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.
          *     이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
          */
@@ -7747,6 +7768,8 @@ export interface components {
             gm_guide?: string | null;
             /** Resources */
             resources?: components["schemas"]["Resource"][] | null;
+            /** Skills */
+            skills?: components["schemas"]["Skill"][] | null;
             /** Title */
             title?: string | null;
         };
@@ -7794,6 +7817,8 @@ export interface components {
             /** Score Min */
             score_min: number;
             score_roll: components["schemas"]["ScoreRoll"] | null;
+            /** Skills */
+            skills: components["schemas"]["Skill"][];
             steal: components["schemas"]["Steal"] | null;
             /** Template */
             template: string;
@@ -7872,7 +7897,7 @@ export interface components {
             covers: components["schemas"]["CoverRule-Input"][];
             currency?: components["schemas"]["Currency"] | null;
             default_npc_sheet?: components["schemas"]["Sheet"] | null;
-            default_sheet?: components["schemas"]["Sheet"] | null;
+            default_sheet?: components["schemas"]["CharacterSheet"] | null;
             /**
              * Description
              * @default
@@ -8000,7 +8025,7 @@ export interface components {
             created_at: string;
             currency: components["schemas"]["Currency"] | null;
             default_npc_sheet: components["schemas"]["Sheet"] | null;
-            default_sheet: components["schemas"]["Sheet"] | null;
+            default_sheet: components["schemas"]["CharacterSheet"] | null;
             /** Description */
             description: string;
             /** Encounters */
@@ -8122,7 +8147,7 @@ export interface components {
             covers?: components["schemas"]["CoverRule-Input"][] | null;
             currency?: components["schemas"]["Currency"] | null;
             default_npc_sheet?: components["schemas"]["Sheet"] | null;
-            default_sheet?: components["schemas"]["Sheet"] | null;
+            default_sheet?: components["schemas"]["CharacterSheet"] | null;
             /** Description */
             description?: string | null;
             /** Encounters */
@@ -8366,6 +8391,11 @@ export interface components {
              */
             resources: components["schemas"]["ResourceOut"][];
             /**
+             * Skills
+             * @default []
+             */
+            skills: string[];
+            /**
              * Worn
              * @default []
              */
@@ -8380,6 +8410,109 @@ export interface components {
             heal: string;
             /** Minutes */
             minutes: number;
+        };
+        /**
+         * Skill
+         * @description 기술이나 주문 하나(#805). 예: 치유의 손길(마나 2, 동료, 가볍게 회복), 기합(스태미나 1, 자신, 마나 +1).
+         *
+         *     key 는 시트(아는 기술)와 행동이 가리키는 이름표, name 은 보이는 이름이다.
+         *     cost 는 쓸 때 내는 비용이다. 비우면 공짜다. 빗나가도 낸다. 모자라면 쓰지 못한다.
+         *     target 은 누구에게 쓰나다. effects 는 대상에게 적힌 차례대로 드는 일들이다. 소모품의 효과와 같다
+         *     (app/engine/item_effects.py, 화염구와 화염병이 같은 damage). 효과가 없으면 쓰고 아무 일도 없다(서술이 맡는다).
+         */
+        Skill: {
+            cost?: components["schemas"]["SkillCost"] | null;
+            /**
+             * Effects
+             * @default []
+             */
+            effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"] | components["schemas"]["AdjustEffect"])[];
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** @default self */
+            target: components["schemas"]["SkillTarget"];
+        };
+        /**
+         * SkillAction
+         * @description 기술이나 주문을 쓰는 행동(#805, app/rounds/skill_actions.py).
+         *
+         *     skill 은 룰북의 기술(rules.skills)의 이름표다. 시트가 그 기술을 알아야 한다(시나리오의 시트에 적는다).
+         *     target 은 받는 사람이다. 테이블에 앉은 사람이고, 비우면 자기 자신이다(받을 때 채운다).
+         *     자신에게만 쓰는 기술(target self)에는 남을 적지 않는다. 굴리지 않는다. 비용은 쓸 때 낸다.
+         */
+        SkillAction: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "skill";
+            /** Skill */
+            skill: string;
+            /** Target */
+            target?: string | null;
+        };
+        /**
+         * SkillCost
+         * @description 기술 한 번의 비용(#805). 쓰는 사람의 수치(resources 의 key) 하나를 그만큼 낸다.
+         */
+        SkillCost: {
+            /** Amount */
+            amount: number;
+            /** Resource */
+            resource: string;
+        };
+        /**
+         * SkillTarget
+         * @description 기술을 누구에게 쓰나(#805).
+         * @enum {string}
+         */
+        SkillTarget: "self" | "ally";
+        /**
+         * SkillUseOut
+         * @description 기술을 쓴 결과(#805). 엔진이 정했다(app/rounds/skill_actions.py). 자기와 동료에게는 굴리지 않는다.
+         *
+         *     비용은 빗나가도 낸다. 쓰지 못했으면 내지 않는다.
+         */
+        SkillUseOut: {
+            /**
+             * Cost
+             * @default []
+             */
+            cost: components["schemas"]["ResourceShiftOut"][];
+            /**
+             * Cured
+             * @default []
+             */
+            cured: components["schemas"]["CuredOut"][];
+            /**
+             * Injured
+             * @default []
+             */
+            injured: components["schemas"]["InjuredOut"][];
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string | null;
+            /**
+             * Resources
+             * @default []
+             */
+            resources: components["schemas"]["ResourceShiftOut"][];
+            /** Skill */
+            skill: string;
+            target: components["schemas"]["ItemPersonOut"] | null;
+            /** Used */
+            used: boolean;
+        };
+        /**
+         * SkillUseOutcome
+         * @description 기술을 쓰는 행동의 결과(#805). 회복하거나 다쳤으면 HP 의 변화(effect)가 함께 있다.
+         */
+        SkillUseOutcome: {
+            effect?: components["schemas"]["EffectOut"] | null;
+            skill_use: components["schemas"]["SkillUseOut"];
         };
         /**
          * Snapshot
@@ -8406,7 +8539,7 @@ export interface components {
             covers: components["schemas"]["CoverSnapshot"][];
             currency?: components["schemas"]["CurrencySnapshot"] | null;
             default_npc_sheet: components["schemas"]["Sheet"] | null;
-            default_sheet: components["schemas"]["Sheet"] | null;
+            default_sheet: components["schemas"]["CharacterSheet"] | null;
             /** Description */
             description: string;
             /**
@@ -8416,7 +8549,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 65
+             * @default 66
              */
             format: number;
             /**
@@ -8733,7 +8866,7 @@ export interface components {
             /** Credit Wait Seconds */
             credit_wait_seconds: number;
             currency?: components["schemas"]["CurrencyOut"] | null;
-            default_sheet: components["schemas"]["Sheet"] | null;
+            default_sheet: components["schemas"]["CharacterSheet"] | null;
             /** Ended At */
             ended_at: string | null;
             friendly_fire: components["schemas"]["FriendlyFire"];

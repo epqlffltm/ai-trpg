@@ -26,7 +26,7 @@ from app.assets.rulebooks.schemas import RulebookCreate
 from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
-from app.engine.sheet import Sheet
+from app.engine.sheet import CharacterSheet
 from app.tables import replacements, repository, service, sheets
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable
@@ -86,7 +86,7 @@ async def test_bringing_in_a_character_waits_for_another(session: AsyncSession, 
     locked = await repository.lock_table(session, table.id)
     seat = locked.members[0]
     seat.character_name = '드워프'
-    sheets.give_sheet(seat, Sheet.model_validate(SHEET))
+    sheets.give_sheet(seat, CharacterSheet.model_validate(SHEET))
     await session.flush()
 
     # B: 같은 사람이 또 들이려 한다. A 가 끝날 때까지 기다려야 한다

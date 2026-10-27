@@ -82,7 +82,7 @@ from app.engine.item_aids import AidAct
 from app.engine.item_effects import EffectKind
 from app.engine.resources import find_resource
 from app.engine.ruleset import Healing, Ruleset
-from app.engine.sheet import Sheet, fits
+from app.engine.sheet import CharacterSheet, Sheet, fits, knows_only
 
 
 class Problem(enum.StrEnum):
@@ -100,6 +100,8 @@ class Problem(enum.StrEnum):
     DEFAULT_SHEET_MISSING = 'default_sheet_missing'
     # 기본 시트가 룰북의 규칙에 맞지 않는다
     DEFAULT_SHEET_INVALID = 'default_sheet_invalid'
+    # 기본 시트나 프리젠의 시트가 아는 기술(skills)이 룰북의 기술(rules.skills)에 없다(#805)
+    SHEET_SKILL_INVALID = 'sheet_skill_invalid'
     # 프리젠만 허용했는데 프리젠이 추천 인원의 최소보다 적다. 그 인원이 앉을 수 없다
     PREGENS_TOO_FEW = 'pregens_too_few'
     # 플레이어가 능력치를 정하는 방식을 허용했는데 최대 HP 를 구하는 값(기준값과 상한)이 없다
@@ -280,10 +282,24 @@ def read_ruleset(rulebook: Rulebook | None) -> Ruleset | None:
     return Ruleset.model_validate(rulebook.rules)
 
 
-def read_pregen_sheets(scenario: Scenario) -> list[Sheet | None]:
+def read_pregen_sheets(scenario: Scenario) -> list[CharacterSheet | None]:
     """프리젠들의 시트를 읽는다. 시트가 없는 프리젠의 자리는 None 이다."""
     documents = [pregen.get('sheet') for pregen in scenario.pregens]
-    return [Sheet.model_validate(document) if document else None for document in documents]
+    return [CharacterSheet.model_validate(document) if document else None for document in documents]
+
+
+def find_sheet_skill_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    기본 시트와 프리젠의 시트가 아는 기술이 룰북의 기술인지 본다(#805). 여럿 틀려도 한 번만 적는다.
+
+    룰북이 없으면 볼 수 없다.
+    """
+    if ruleset is None:
+        return []
+    sheets = [sheet for sheet in read_pregen_sheets(scenario) if sheet is not None]
+    if scenario.default_sheet is not None:
+        sheets.append(CharacterSheet.model_validate(scenario.default_sheet))
+    return [Problem.SHEET_SKILL_INVALID] if any(not knows_only(ruleset, sheet) for sheet in sheets) else []
 
 
 def find_pregen_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Problem]:
@@ -312,7 +328,7 @@ def find_default_sheet_problems(scenario: Scenario, ruleset: Ruleset | None) -> 
     if scenario.default_sheet is None:
         needed = CharacterMode.CUSTOM in scenario.character_modes
         return [Problem.DEFAULT_SHEET_MISSING] if needed else []
-    if ruleset and not fits(ruleset, Sheet.model_validate(scenario.default_sheet)):
+    if ruleset and not fits(ruleset, CharacterSheet.model_validate(scenario.default_sheet)):
         return [Problem.DEFAULT_SHEET_INVALID]
     return []
 
@@ -1167,6 +1183,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
         problems.append(Problem.OPENING_MISSING)
     problems.extend(find_pregen_problems(scenario, ruleset))
     problems.extend(find_default_sheet_problems(scenario, ruleset))
+    problems.extend(find_sheet_skill_problems(scenario, ruleset))
     problems.extend(find_player_made_problems(scenario))
     problems.extend(find_point_buy_problems(scenario, ruleset))
     problems.extend(find_score_roll_problems(scenario, ruleset))

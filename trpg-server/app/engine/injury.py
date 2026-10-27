@@ -32,6 +32,8 @@ class Trigger(enum.StrEnum):
     AFTERMATH = 'aftermath'
     # 물건의 효과(injure)로 그 부상이 확정으로 생겼다(#800). 표를 굴리지 않는다
     ITEM = 'item'
+    # 기술의 효과(injure)로 그 부상이 확정으로 생겼다(#805). 표를 굴리지 않는다
+    SKILL = 'skill'
 
 
 @dataclass(frozen=True)

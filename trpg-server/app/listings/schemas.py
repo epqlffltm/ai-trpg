@@ -16,7 +16,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 from app.assets.models import CharacterMode, Rating
 from app.assets.scenarios.schemas import RecommendedPlayers
 from app.engine.ruleset import Ability
-from app.engine.sheet import Sheet
+from app.engine.sheet import CharacterSheet
 from app.listings.models import (
     LISTING_DESCRIPTION_MAX_LENGTH,
     LISTING_MAX_GENRES,
@@ -125,7 +125,7 @@ class ListingPregen(BaseModel):
     name: str
     description: str
     # 이 프리젠을 고르면 받는 숫자. 능력치의 이름은 PublicListingDetail.abilities 에서 찾는다
-    sheet: Sheet
+    sheet: CharacterSheet
 
 
 class PublicListingDetail(PublicListing):

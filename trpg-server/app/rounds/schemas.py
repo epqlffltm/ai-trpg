@@ -499,6 +499,38 @@ class ItemUseOutcome(BaseModel):
     target_gone: 'TargetGoneOut | None' = None
 
 
+class SkillUseOut(BaseModel):
+    """
+    기술을 쓴 결과(#805). 엔진이 정했다(app/rounds/skill_actions.py). 자기와 동료에게는 굴리지 않는다.
+
+    비용은 빗나가도 낸다. 쓰지 못했으면 내지 않는다.
+    """
+
+    # 쓴 기술(룰북의 rules.skills 의 key)과 그 이름
+    skill: str
+    name: str
+    # 썼는가. 못 했으면 reason 이 있다: not_known(그 기술을 모른다), cost_short(비용이 모자랐다),
+    # target_gone(받을 사람이 떠났거나 죽었다. 해로운 기술을 쓸 동료가 쓰러졌거나 다른 곳에 있다),
+    # friendly_fire_off(해로운 기술을 쓸 동료가 받아들이지 않게 바뀌었다, #803)
+    used: bool
+    reason: str | None
+    # 받은 쪽. 앉은 사람이다(자기 자신도)
+    target: ItemPersonOut | None
+    # 낸 비용. 쓴 사람의 수치가 바뀐 것이다. 비용이 없는 기술이거나 쓰지 못했으면 빈 목록이다
+    cost: list['ResourceShiftOut'] = []
+    # 대상에게서 푼 부상들, 입힌 부상들, 맞춘 수치들. 물건과 같다
+    cured: list[CuredOut] = []
+    injured: list[InjuredOut] = []
+    resources: list['ResourceShiftOut'] = []
+
+
+class SkillUseOutcome(BaseModel):
+    """기술을 쓰는 행동의 결과(#805). 회복하거나 다쳤으면 HP 의 변화(effect)가 함께 있다."""
+
+    skill_use: SkillUseOut
+    effect: EffectOut | None = None
+
+
 class ItemGiveOut(BaseModel):
     """물건을 건넨 결과. 엔진이 정했다(app/rounds/item_actions.py)."""
 
@@ -988,6 +1020,7 @@ class DeclarationOut(BaseModel):
     action: Action | None
     # 행동의 결과. 선언을 마감할 때(닫는 중부터) 생긴다. 굴림은 공개라 모두에게 보인다.
     # 행동이 없는 선언과 아직 열려 있는 라운드의 선언은 None 이다. 지목이면 NamingOutcome,
+    # 기술을 썼으면 SkillUseOutcome(#805),
     # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 던지지 못했으면 ItemThrowOutcome(던졌으면 CheckOutcome),
     # 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome,
     # 놓인 물건을 주웠으면 TakeOutcome, 내려놓았으면 PutDownOutcome, 훔쳤으면 StealOutcome, 빼앗았으면 LootOutcome,
@@ -999,6 +1032,7 @@ class DeclarationOut(BaseModel):
         CheckOutcome
         | NamingOutcome
         | ItemUseOutcome
+        | SkillUseOutcome
         | ItemThrowOutcome
         | ItemGiveOutcome
         | MoveOutcome

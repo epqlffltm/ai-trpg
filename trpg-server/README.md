@@ -183,7 +183,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/rulebooks` | 내 룰북 목록. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/game/rulebooks/templates` | 고를 수 있는 템플릿들(`key`, `name`, `summary`, `attribution`, `notes`, `rules`)과 기본(`default`)(#615) | access 토큰 |
 | GET | `/api/v1/game/rulebooks/{id}` | 내 룰북 하나 | access 토큰 |
-| PATCH | `/api/v1/game/rulebooks/{id}` | 내 룰북 고치기. 보낸 칸만 바뀐다. 규칙은 방어 규칙(`armor`, #276)과 수치(`resources`, #804, 통째로 바뀐다. 능력치나 문턱의 부상이 규칙에 없거나 같은 수치가 두 번이면 422 `field: resources`)만 고칠 수 있다. 이미 게시한 판은 그때의 규칙으로 굳어 있다 | access 토큰 |
+| PATCH | `/api/v1/game/rulebooks/{id}` | 내 룰북 고치기. 보낸 칸만 바뀐다. 규칙은 방어 규칙(`armor`, #276), 수치(`resources`, #804, 통째로 바뀐다. 능력치나 문턱의 부상이 규칙에 없거나 같은 수치가 두 번이면 422 `field: resources`), 기술(`skills`, #805, 통째로 바뀐다. 비용의 수치나 효과가 가리키는 것이 규칙에 없거나 같은 기술이 두 번이면 422 `field: skills`. 수치를 지우며 그것을 쓰던 기술을 함께 고치려면 둘을 함께 보낸다)만 고칠 수 있다. 이미 게시한 판은 그때의 규칙으로 굳어 있다 | access 토큰 |
 | DELETE | `/api/v1/game/rulebooks/{id}` | 내 룰북 지우기. 204 | access 토큰 |
 | POST | `/api/v1/game/scenarios` | 시나리오 만들기. 201. 제목만 있어도 된다(임시 저장) | access 토큰 |
 | GET | `/api/v1/game/scenarios` | 내 시나리오 목록. `limit`, `offset` | access 토큰 |
@@ -437,6 +437,7 @@ app/engine/
 | `rest` | 쉬기. 짧은 휴식(`short`: `minutes` 1분~일주일, 회복 등급 `heal`), 긴 휴식(`long`: `minutes`, 최대 HP 까지), 되살아나기(`revive`: `minutes`, `target`. 고비를 넘기고 쓰러진 캐릭터가 한 장면에 그만큼 쉬면 규칙의 주사위를 굴려 `target` 이상이면 HP 1 로 일어난다. `null` 이면 쉬어서는 일어나지 못한다), 저절로 회복하기(`natural`: `every_minutes` 10분~일주일, `heal`. 시계가 그 간격의 눈금을 지날 때마다 회복한다. `null` 이면 끔). 짧은 휴식은 긴 휴식보다 짧아야 하고, 등급은 규칙에 있어야 하며, `revive.target` 은 주사위의 가장 큰 눈을 넘을 수 없다. `srd5` 는 짧은 휴식 1시간(`moderate` 1d8), 긴 휴식 8시간, 되살아나기 8시간 d20 10 이상, 저절로 회복 없음. `null` 이면 쉬는 행동이 없다 |
 | `item_check` | 물건을 인물이나 몬스터에게 쓸 때 맞히는 판정(#800). `{"ability", "difficulty"}`(룰북의 능력치와 난이도). 자기와 동료에게는 굴리지 않는다. 던지는 판정이 적히지 않은 물건을 던질 때도 이것이다(#801). `srd5` 는 민첩·보통, `horror` 는 민첩함(agility)·보통, `light` 는 몸(body)·보통. `null` 이면 물건을 자기와 동료에게만 쓰고, 던지는 판정이 적힌 물건만 던진다. 이 단계 전에 만든 룰북에는 마이그레이션이 그 템플릿의 값을 채웠다 |
 | `resources` | HP 말고 캐릭터가 가지는 수치들(#804, 6개). 마나, 스태미나, 광기 같은 것이다. 하나하나가 `{"key", "name", "min", "max", "start", "rest", "each_round", "at_min", "at_max", "visibility", "holders"}` 이다. `min`(0~999, 기본 0)이 바닥, `max` 는 `{"base", "ability", "cap"}` 로 기준값(0~999)에 능력치(`ability`, 비우면 고정값)의 보정을 더하고 `cap` 을 넘지 않는다(최소보다 작아지지 않는다). `start` 는 `max`(가득, 기본) 또는 `min`(비운 채)이다. `rest` 는 `{"short", "long"}` 로 휴식마다 `{"kind": "raise"|"lower", "amount"}`(그만큼 올리고 내림), `{"kind": "fill"}`(채움), `{"kind": "empty"}`(비움) 중 하나이고 비우면 바꾸지 않는다. `each_round` 는 라운드가 닫힐 때마다 저절로 하는 일로 `rest` 의 한 휴식과 같은 모양이다(비우면 없음, #804). `at_min` 과 `at_max` 는 문턱으로, 값이 최소(최대)에 닿아 있는 동안 입는 규칙의 부상(`injuries` 의 `key`)이다(비우면 없음). 문턱은 라운드가 닫힐 때 맞춘다. 닿아 있으면 입히고(`source: resource`, 라운드나 시간으로는 풀리지 않는다), 벗어나면 바로 푼다(`reason: resource`). 다른 길로 풀렸어도 아직 문턱이면 다음 닫힘에 다시 입는다. 같은 부상을 다른 까닭으로 이미 입고 있으면 또 입히지 않고 그것을 풀지도 않는다. `visibility` 는 누가 숫자를 보나로 `everyone`(모두, 기본), `owner`(가진 사람만. 자기 시트에서만 숫자를 보고, 결과와 이벤트에는 숫자가 없다), `engine`(엔진만. 아무도 숫자를 보지 않고 바뀐 것을 이벤트에 적지 않는다) 중 하나다(#804). 방장도 이 규칙대로만 본다. 숨긴 수치도 서술자에게는 네 단계의 말로 간다. `holders` 는 누가 가지나로 `characters`(캐릭터), `npcs`(NPC), `monsters`(몬스터) 중 하나 이상이다(비우면 캐릭터만, #804). 최대는 각자의 능력치로 정하고, NPC 와 몬스터의 지금 값은 그 상태에 둔다(마이그레이션 `d0f2b4c6e8a1`). NPC 와 몬스터는 쉬지 않으니 라운드마다의 변화, 문턱, 물건의 맞추기로만 바뀐다. 문턱의 부상은 몬스터의 면역(#799)을 따른다. 이름표는 겹치지 않고, 능력치와 문턱의 부상은 규칙에 있어야 한다. 룰북을 만들 때 보내지 않으면 템플릿의 것이다. `light` 는 마나(3 + 마음, 10 까지, 짧은 휴식에 2, 긴 휴식에 가득)와 스태미나(4 + 몸, 10 까지, 쉬면 가득)를 예시로 둔다. `srd5`, `horror` 는 없다. 이 단계 전에 만든 룰북은 빈 목록이다(마이그레이션 `b8d0f2a4c6e9`). 칸 자체는 늘 있어야 한다. 라운드마다의 변화와 문턱은 비워도 되는 칸이라 이전 룰북과 판이 그대로 읽힌다(마이그레이션 `c9e1a3b5d7f0` 은 부상의 `source` 에 `resource` 를 더한다) |
+| `skills` | 기술과 주문들(#805, 20개). 하나하나가 `{"key", "name", "cost", "target", "effects"}` 이다. `cost` 는 쓸 때 내는 비용 `{"resource", "amount"}`(캐릭터가 가지는 수치 하나를 1~99 만큼, 비우면 공짜)다. `target` 은 `self`(자기 자신, 기본) 또는 `ally`(자신이나 동료)다. `effects` 는 소모품의 효과와 같은 모양이다(`heal`, `cure`, `damage`, `injure`, `adjust`, 5개, 비우면 쓰고 아무 일도 없다). 이름표는 겹치지 않고, 비용의 수치와 효과가 가리키는 등급·부상·수치는 이 규칙에 있어야 한다. 누가 아는지는 시나리오의 시트(`default_sheet`, `pregens[].sheet` 의 `skills`)에 적는다. `light` 는 치유의 손길(마나 2, 동료, 가볍게 회복)과 정신 집중(스태미나 2, 자신, 마나 +1)을 예시로 둔다. `srd5`, `horror` 는 없다. 이 단계 전에 만든 룰북은 빈 목록이다(마이그레이션 `e1a3c5d7f9b2`). 칸 자체는 늘 있어야 한다 |
 | `steal` | 훔치기(#456). 판정하는 능력(`ability`), 시작하는 난이도(`difficulty`), 대상의 눈치 능력(`awareness`, 대상의 그 보정만큼 목표값에 더한다. `null` 이면 보지 않는다), 목표값을 올리는 것(`equipped` 장비, `rarity_step` 등급 한 단계마다), 내리는 것(`dull_kinds` 둔한 타입마다 `kind`, `amount`, `dull` 둔하다고 적은 대상, `unwary` 싸움 전, `distracted` 다른 사람과 싸우는 중). 걸리는 것은 모두 더하고 목표값은 1 보다 낮아지지 않는다. `srd5` 는 민첩, 보통, 지혜, 5, 2, 언데드·구조물 3, 3, 3, 2. `null` 이면 훔치기가 없다 |
 | `robbed_wake` | 쓰러진 동안 빼앗긴 NPC 가 깨어날 때의 반응(#494). 백면체의 눈이 `hostile`(%) 이하면 적대, 그다음 `wary`(%) 만큼이면 경계, 나머지는 눈치채지 못한다. 둘의 합은 100 을 넘지 않는다. `null` 이면 반응이 없다. 칸 자체는 늘 있어야 한다 |
 | `narration` | 서술 지침(#616). 엔진은 보지 않는다. 분위기(`tone`, 300자), 판정 결과 단계마다 그리는 법(`outcomes`: `outcome` 은 `success` 또는 `failure`, `guide` 200자, 단계마다 하나), 하지 말 것(`avoid`, 100자씩 다섯까지). 적지 않은 단계는 공통의 지시대로 그린다. 판정을 고치는 칸은 없다. `null` 이면 지침 없이 공통의 지시만으로 서술한다(옛 룰북과 판). 칸 자체는 늘 있어야 한다 |
@@ -513,6 +514,7 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 | `pregens` (프리젠, 8개) | 제작자가 미리 만들어 둔 캐릭터. 하나하나가 `{"name", "description", "sheet", "items", "money"}` 이다(이름 50자, 설명 1,000자). 플레이어가 테이블에 앉을 때 골라서 자기 캐릭터로 가져갈 수 있다. 같은 이름은 거부한다. `items` 는 그 프리젠을 고른 사람이 더 받는 소지품이다(시작 소지품과 모양이 같다). `money`(0~1,000,000, 기본 0)는 더 받는 돈이다(#278) |
 | `character_modes` (캐릭터 방식) | 테이블에 앉는 사람이 캐릭터를 얻는 방식 중 허용하는 것. 아래 표의 값들이다. 하나는 있어야 한다. 적지 않으면 `pregen` 과 `custom` 이다. 응답에는 늘 같은 순서로 싣는다 |
 | `default_sheet` (기본 시트) | `custom` 으로 만든 캐릭터가 받는 시트. 초안일 때는 비워 둘 수 있다 |
+| (시트의 `skills`) | 기본 시트와 프리젠의 시트에는 아는 기술(`skills`, 룰북의 `rules.skills` 의 이름표들, 20개, 겹치지 않음)을 적을 수 있다(#805). 비우면 아는 기술이 없다. 직접 만든 캐릭터(`custom`, `point_buy`, `rolled`)는 기본 시트의 기술을 안다. NPC 와 몬스터의 시트에는 없다 |
 | `npc_sheets` (NPC 시트, 100개) | 붙인 로어북의 인물 항목에 주는 숫자와 처음 태도, 지닌 물건. 하나하나가 `{"entry_id", "sheet", "attitude", "equipment", "inventory", "dull", "on_caught", "attacks", "merchant"}` 이다. `attitude` 는 `friendly`(우호), `neutral`(중립, 기본), `wary`(경계, #494), `hostile`(적대)이다. 시트가 없는 인물은 중립이다(#474). `equipment`(장비, 5줄), `inventory`(소지품, 10줄), `dull`(둔한지)은 몬스터 시트와 같은 모양이다(#457). 처음 쓰러졌을 때의 드롭은 여기서만 나온다. 시트가 없는 인물은 아무것도 지니지 않는다. `on_caught` 는 훔치다 들켰을 때다. 늘 적대가 되고, `hostile`(기본)은 적대만, `fight` 는 싸움도 붙는다(#457). `attacks`(공격, 5개까지)는 몬스터 시트의 공격과 같은 모양이다(#487). 장비의 착용(`wear`)과 공격의 무기(`weapon`)도 몬스터 시트와 같다(#276). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다([NPC 의 공격](#라운드)). 비우면 공격하지 않는다. `merchant`(기본 `false`)는 상인인지다(#278). 상인은 `inventory` 중 값이 있는 물건을 팔고(그 개수가 재고), 값이 있는 물건을 사 준다([사고팔기와 돈](#라운드)). 시트는 비워 둘 수 없다. 같은 항목이 두 번 있으면 거부한다 |
 | `default_npc_sheet` (기본 NPC 시트) | 시트가 없는 인물이 받는 숫자. 초안일 때는 비워 둘 수 있다 |
 | `encounters` (조우, 50개) | 맵의 장소에 있는 몬스터. 하나하나가 `{"place_id", "monster_id", "count", "surprise"}` 이다(1~10마리). `surprise` 는 누가 기습하는가다: `none`(기본, 기습 없음), `monsters`(몬스터가 매복), `party`(일행이 기습, 잠든 무리). 장소는 붙인 로어북의 장소 항목, 몬스터는 시트를 적은 몬스터다. 같은 장소의 같은 몬스터는 한 줄에 마리 수로 적는다(두 줄이면 거부한다). 맵이 있어야 한다(`start_place`) |
@@ -787,6 +789,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 | `item_cure_invalid` | 소모품이 푸는 부상(`items[].effects` 의 `cure`)이 룰북의 부상에 없거나 결손(`permanent`)이다(#277) |
 | `item_injure_invalid` | 소모품이 입히는 부상(`items[].effects` 의 `injure`)이 룰북의 부상에 없다(#800) |
 | `item_resource_invalid` | 소모품이 맞추는 수치(`items[].effects` 의 `adjust`)가 룰북의 수치(`resources`)에 없다(#804) |
+| `sheet_skill_invalid` | 기본 시트나 프리젠의 시트가 아는 기술(`skills`)이 룰북의 기술(`rules.skills`)에 없다(#805) |
 | `item_throw_invalid` | 물건의 던지는 판정(`items[].throw`)의 능력치나 난이도가 룰북의 규칙에 없다(#277, #801) |
 | `currency_missing` | 돈을 쓰는 칸(물건의 값, 상인, 프리젠의 돈, 퀘스트의 돈의 보상)이 있는데 화폐(`currency`)가 없다(#278). 초안에서는 따로 고칠 수 있어 저장할 때는 막지 않는다 |
 | `item_slot_invalid` | 룰북의 규칙에 없는 칸을 착용할 수 있는 칸(`items[].slots`)으로 적은 물건이 있다(#276) |
@@ -902,6 +905,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
   - 형식 63: 던지는 판정에서 피해를 뺐다(#801). 그 전 판의 `throw.harm` 은 앞에 넣은 피해의 효과로 읽는다(회복이나 피해가 이미 있으면 버린다)
   - 형식 64: 물건이 다른 행동을 거든다(`items[].aids`, #802). 그 전 판의 `treat_bonus` 는 치료의 거들기(`always`)로, 따기와 고치기의 `tool` 은 도구가 있어야 하는가(`needs_tool`)와 그 물건의 그 행동의 거들기(보정 0, `never`, 규칙이 없던 물건이면 장비의 규칙)로 읽는다
   - 형식 65: HP 말고 다른 수치(`rulebook.rules.resources`, #804)와 물건의 맞추기(`adjust`). 그 전 판은 수치가 없는 것으로 읽는다
+  - 형식 66: 기술과 주문(`rulebook.rules.skills`, #805)과 시트의 아는 기술(`skills`). 그 전 판은 기술이 없는 것으로 읽는다
 - 규칙을 템플릿의 값으로 채워 읽는 형식(4, 6~10, 14, 15, 23, 25, 28, 36)은 DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 형식 12 의 항목의 종류와 형식 16 의 지목의 정답도 DB 의 항목에 채웠다.
 - 옛 판의 규칙에 점수제가 채워져도 그 판에서 점수제를 쓸 수 있게 되는 것은 아니다. 옛 판이 허용한 방식은 그때 있던 것 그대로다. 방식이 나중에 늘어도 옛 판에 저절로 켜지지 않는다.
 - 게시는 "굳히기"다. 남에게 보이게 하는 것은 따로다([공개와 소개 페이지](#공개와-소개-페이지)). 굳힌 내용(`snapshot`)은 공개해도 만든 사람만 본다.
@@ -1589,6 +1593,19 @@ records.py      일어난 일을 이벤트로 적기
 - 결과는 선언의 `outcome.item_use`(`entry_id`, `name`, `used`, `reason`, `target`, `remaining`, `cured`(푼 부상들 `{"injury", "name"}`), `injured`(입힌 부상들 `{"injury", "immune", "ends_after_round", "heals_at"}`, 이미 입고 있었거나 면역이면 `injury` 가 `null`, #800), `resources`(맞춘 수치들 `{"resource", "name", "before", "after", "max"}`, 값이 같았으면 적지 않는다, 보는 사람이 숫자로 볼 수 있는 것만, #804))와 HP 의 변화 `outcome.effect`, 또는 `outcome.item_give`(`entry_id`, `name`, `count`, `given`, `reason`, `target`, `remaining`, `target_total`)에 적힌다. 이벤트(`item_used` 뒤에 HP 의 변화 `hp_changed` 나 판정 `check_rolled` 과 맞은 쪽의 변화, 푼 부상마다 `injury_ended`(`reason`: `cured`), 입힌 부상마다 `injury_gained`(`source`: `item`), `item_given`)로도 남는다.
 - 서술자는 결과를 한 줄로 받는다(`(쓴 물건: 치유 물약 → 기사) → 기사 회복 2 (HP 6/10)`, `(건넨 물건: 밧줄 1개 → 영애)`, `narration-18`).
 
+**기술 쓰기.** 아는 기술이나 주문 하나를 쓴다(#805). 비용을 내고 대상에게 그 효과들이 든다. 판정(주사위)이 없다.
+
+```json
+{"content": "영애의 상처를 어루만진다.", "action": {"kind": "skill", "skill": "healing_touch", "target": "…"}}
+```
+
+- `skill` 은 룰북의 기술(`rules.skills`)의 이름표다. 룰북에 없으면 422(`action.skill`), 이 캐릭터가 모르면(시트의 `skills` 에 없으면) 409 `skill_not_known`.
+- 비용(`cost`)이 모자라면(그 수치의 지금 값이 비용보다 적으면) 409 `skill_cost_short`.
+- `target` 은 받는 사람이다. 앉은 사람이고, 비우면 자기 자신으로 채운다. 자신에게만 쓰는 기술(`target: self`)에 남을 적으면 422(`action.target`), 받을 사람이 죽었으면 409 `patient_dead`. 해로운 효과(피해, 부상, 수치를 내림)가 있는 기술을 동료에게 쓰는 것은 위의 "동료를 해치기"(#803)를 따른다.
+- 마감할 때 들어온 순서로 다시 본다. 모르게 됐거나, 받을 사람이 없거나, 해칠 수 없게 바뀌었거나, 비용이 모자라면 쓰지 못한다(`reason`: `not_known`, `target_gone`, `friendly_fire_off`, `cost_short`). 그때는 비용도 내지 않는다. 쓰면 비용을 먼저 내고 효과를 적힌 차례대로 낸다. 효과는 소모품과 같다(회복과 피해의 주사위만 굴린다).
+- 결과는 선언의 `outcome.skill_use`(`skill`, `name`, `used`, `reason`, `target`, `cost`(낸 비용, 바뀐 수치 `{"resource", "name", "before", "after", "max"}`), `cured`, `injured`, `resources`)와 HP 의 변화 `outcome.effect` 다. 숨긴 수치(#804)의 비용과 맞춘 것은 보는 사람에 따라 빠진다. 이벤트는 `skill_used` 다.
+- 서술자는 결과를 한 줄로 받는다(`(쓴 기술: 치유의 손길 → 영애, 마나 5 → 3/7) → 영애 회복 2 (HP 5/10)`).
+
 **물건 던지기.** 가진 물건 하나를 몬스터 한 마리나 장면의 인물이나 같은 장소의 동료(#803)에게 던진다(#277, #801). 어떤 물건이든 된다. 판정은 물건에 적힌 던지는 판정(`items[].throw`), 없으면 룰북의 `item_check` 다. 맞으면 그 물건의 효과가 대상에게 든다(물약이면 회복, 독이면 중독). 인물이나 몬스터에게 물건을 쓰는 것과 같다.
 
 ```json
@@ -1789,6 +1806,7 @@ records.py      일어난 일을 이벤트로 적기
 - 판정과 같이 한 번만 일어난다. 서술을 다시 맡겨도 HP 가 다시 바뀌지 않는다.
 - 지금의 HP 는 테이블의 응답(`members[].sheet.hp`)에서 읽는다. 바뀐 것은 이벤트(`hp_changed`)로 온다.
 - HP 말고 다른 수치(#804)는 `members[].sheet.resources`(`key`, `name`, `value`, `min`, `max`, 규칙의 차례)다. 보는 사람이 숫자로 볼 수 있는 수치만 실린다(`visibility`). 최대는 그 캐릭터의 능력치로 정해진 값이다. 시트를 받을 때 규칙의 시작 값이고(적히지 않은 것은 시작 값으로 읽는다), 바뀌는 것은 쉬기, 물건의 맞추기, 라운드마다의 변화(`each_round`)뿐이다. 문턱의 부상은 `sheet.injuries` 에 다른 부상과 같이 온다. 바뀐 것은 이벤트(`resource_changed`)로 온다.
+- 아는 기술(#805)은 `members[].sheet.skills`(룰북의 기술의 이름표들)다. 시트를 받을 때 시나리오의 시트(프리젠의 시트나 기본 시트)에서 복사한다. 이름과 비용과 효과는 `rules.skills` 에 있다.
 
 **NPC 의 변화.** 행동이 NPC 를 겨눴고 판정에 성공하면 `outcome` 의 `npc_effect` 에 적힌다. 바뀌지 않았으면 `null` 이다. `effect` 와 함께 있지 않다(실패하면 대가만, 성공하면 대상의 일만 일어난다).
 
@@ -1928,7 +1946,7 @@ records.py      일어난 일을 이벤트로 적기
   - 성공하면 타격의 피해와 함께 노린 부상이 확정으로 생긴다. 그 타격에서는 부상 표를 굴리지 않는다(`injury_roll` 의 `trigger` 가 `called_shot`, `roll` 은 `null`). 한 방에 부상 둘이 쌓이지 않는다. 실패하면 빗나간다. 피해도 부상도 없다(대가를 붙였으면 그것만).
   - 그 타격으로 죽으면 부상이 없다. 쓰러뜨리면 부상이 생긴다.
   - 노린 부상을 대상이 이미 입었으면 받지 않는다(409 `already_injured`). 같은 라운드에 둘이 같은 것을 노려 둘 다 맞히면 뒷사람의 타격은 피해만 준다.
-  - 판정의 결과에 `called_shot`(`aim`, `mode`, `amount`)이 적힌다. 생긴 부상은 `injury_gained` 의 `source` 가 `called_shot` 이다(물건의 효과로 생긴 것은 `item`, #800).
+  - 판정의 결과에 `called_shot`(`aim`, `mode`, `amount`)이 적힌다. 생긴 부상은 `injury_gained` 의 `source` 가 `called_shot` 이다(물건의 효과로 생긴 것은 `item`, #800. 기술의 효과로 생긴 것은 `skill`, #805).
   - 노려 치기는 PC 가 NPC 나 몬스터를 칠 때만이다. NPC 와 몬스터의 공격은 노리지 않는다.
 - **몬스터의 부상(#799).** 몬스터도 큰 타격이나 쓰러짐에 부상 표를 굴리고, 노려 친 타격이 맞으면 그 부상을 입는다. 죽거나 부서지면 입지 않는다. 입은 부상은 장면의 몬스터 목록(`injuries`)과 서술자의 몸 상태("다침(중독)")에 보이고, 공격의 판정에 영향을 주고, 기절하면 차례를 거른다. 짧은 것은 풀리고 오래 가는 것은 낫는다(치료는 없다).
   - **면역.** 부상마다 성질이 있다(룰북의 `injuries[].natures`). 몬스터는 타입이 정한 성질과(언데드는 독, 만들어진 것은 독과 정신) 시트의 `immune` 을 더하고 `vulnerable` 을 뺀 성질에 면역이다. 성질 가운데 하나라도 면역이면 입지 않는다. 표에서 나왔으면 `injury_roll.immune` 에 적히고, 노리면 받지 않는다(409 `target_immune`). 성질이 없는 부상은 누구나 입는다.
@@ -2079,6 +2097,7 @@ app/rounds/
   - `narration-70`: 각자의 줄에 지금 수치(`[수치: 마나 3/6]`), 쉬기와 물건의 맞추기가 바꾼 수치(`(쉬기: 긴 휴식, HP 2 → 10/10, 마나 1 → 6/6)`, `[수치: 마나 2 → 5/6]`, #804)
   - `narration-71`: 숨긴 수치(모두가 보지 않는 것, #804)는 숫자 없이 네 단계의 말(`가득`, `넉넉함`, `모자람`, `바닥`)로 적는다(`[수치: 광기 모자람]`). 바뀐 것도 바뀐 뒤의 말만 적는다
   - `narration-72`: NPC 와 몬스터의 수치(#804). 인물의 줄에 수치를 말로 붙이고(`. 수치: 마나 바닥`), 몬스터의 마리마다의 몸 상태에도 붙인다(`다침(중독) [마나 바닥]`). HP 처럼 숫자는 주지 않는다
+  - `narration-73`: 쓴 기술의 줄(`(쓴 기술: 치유의 손길 → 영애, 마나 5 → 3/7) → 영애 회복 3 (HP 8/10)`)과 쓰지 못한 까닭(`(쓰려던 기술: 정신 집중. 비용이 모자랐다)`, #805)
   - `narration-67`: 던진 물건의 줄에 푼 부상, 입힌 부상, 면역이라 입지 않은 부상(`(던진 물건: 독병 → 수로 쥐) [입힌 부상: 중독]`, #801)
   - `narration-66`: 쓴 물건의 줄에 입힌 부상과 면역이라 입지 않은 부상(`[입힌 부상: 중독]`, `[면역이라 입지 않은 부상: 중독]`), 인물이나 몬스터에게 쓴 물건은 판정 줄 앞에(`(쓴 물건: 독 단검 → 수로 쥐) 민첩 판정 …`, #800)
   - `narration-65`: 몬스터의 몸 상태에 입은 부상(`다침(중독, 팔 골절)`), 몬스터의 결과 줄에 새 부상과 면역이라 입지 않은 부상(`. 기절에 면역이라 멀쩡하다`, #799)
@@ -2850,6 +2869,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `items_gained` | 캐릭터가 물건을 얻었다. 몬스터를 쓰러뜨려 엔진이 줬거나(행한 사람이 없고 `monster_changed` 에 잇는다), 장소에서 줍거나 찾았다(행한 사람이 없고 그 행동이나 `place_searched` 에 잇는다) | `user_id`, `character_name`, `entry_id`, `name`(물건의 이름), `count`(받은 개수), `total`(그 뒤의 개수). 몬스터의 드롭이면 `round`, `source`(`monster`), `monster_id`, `monster_name`(장면의 호칭), `lost`(상한을 넘어 잃은 개수)가 더 있다. NPC 의 드롭이면 `source` 가 `npc` 이고 `monster_id`, `monster_name` 대신 `npc_id`, `npc_name` 이 있다(`npc_changed` 에 잇는다). 장소에서 얻었으면 `round`, `source`(`place` 주움, `search` 찾음), `place`(`entry_id`, `name`)가 더 있다. 훔쳤으면 `round`, `source`(`steal`), 몬스터면 `monster_id`, `monster_name`, NPC 면 `npc_id`, `npc_name` 이 더 있다(`steal_attempted` 에 잇는다). 빼앗았으면 `source` 가 `loot` 이고 대상의 칸은 훔친 것과 같다(그 행동의 이벤트에 잇는다). 방장이 주던 길을 지우기 전(#367)에 적힌 것은 행한 사람이 방장이고 `source` 가 없다 |
 | `items_lost` | 방장이 캐릭터에게서 물건을 빼앗았다. 그 길을 지운 뒤로는 적지 않는다(#367). 그 전에 적힌 것을 읽으려고 남긴다 | `items_gained` 와 같다. `total` 이 0 이면 다 잃었다 |
 | `item_used` | 캐릭터가 소모품을 썼다(또는 못 했다). 그 행동 바로 뒤에 적힌다. 회복했으면 바로 뒤에 `hp_changed` | `round`, `character_name`, `entry_id`, `name`, `used`, `reason`, `target`(회복받거나 부상이 풀린 사람), `remaining`, `cured`(푼 부상들 `{"injury", "name"}`, #277), `injured`(입힌 부상들 `{"injury", "name"}`, #800). 인물이나 몬스터에게 썼으면 바로 뒤에 `check_rolled` 과 맞은 쪽의 변화, 풀었으면 부상마다 `injury_ended`, 입혔으면 부상마다 `injury_gained`(`source`: `item`) |
+| `skill_used` | 캐릭터가 기술을 썼다(또는 못 했다, #805). 그 행동 바로 뒤에 적힌다. 그 뒤에 낸 비용(`resource_changed`, `source: skill`), HP 의 변화, 푼 부상(`injury_ended`), 입힌 부상(`injury_gained`, `source: skill`), 맞춘 수치(`resource_changed`, `source: skill`)가 잇는다 | `round`, `character_name`, `skill`, `name`, `used`, `reason`, `target`, `cured`, `injured` |
 | `aid_used` | 캐릭터가 따기, 부수기, 고치기, 넘기의 판정에 물건을 붙여 썼다(#802). 그 판정(`check_rolled`) 바로 뒤에 적힌다. 치료에 붙여 쓴 것은 `injury_treated` 의 `aid` 다 | `round`, `character_name`, `act`, `entry_id`, `name`, `bonus`, `lost`, `broken`, `remaining` |
 | `item_thrown` | 캐릭터가 물건을 몬스터나 인물에게 던졌다(또는 못 했다, #277). 그 행동 바로 뒤에 적힌다. 던졌으면 바로 뒤에 `check_rolled` 와 맞은 쪽의 변화 | `round`, `character_name`, `entry_id`, `name`, `thrown`, `reason`(`not_held`, `target_gone`), `target`(`monster_id` 나 `entry_id` 나 `user_id`, `name`), `remaining`, `cured`, `injured`(#801) |
 | `item_given` | 캐릭터가 물건을 건넸다(또는 못 했다). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `entry_id`, `name`, `count`, `given`, `reason`, `target`(받은 사람), `remaining`, `target_total` |

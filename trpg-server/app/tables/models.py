@@ -135,6 +135,8 @@ class InjurySource(enum.StrEnum):
     ITEM = 'item'
     # 수치가 문턱에 닿아서(#804, 스태미나 0 의 탈진). 문턱을 벗어나면 풀린다. 라운드나 시간으로는 풀리지 않는다
     RESOURCE = 'resource'
+    # 기술의 효과로(#805, 독의 주문)
+    SKILL = 'skill'
 
 
 class NpcStatus(enum.StrEnum):
@@ -494,6 +496,7 @@ class TableSheet(Base):
         CheckConstraint(f'money BETWEEN 0 AND {MONEY_MAX}', name='money_range'),
         # 수치(#804)는 이름표에서 값으로 가는 묶음이다. 범위는 규칙에 있어 엔진이 지킨다
         CheckConstraint("jsonb_typeof(resources) = 'object'", name='resources_is_object'),
+        CheckConstraint("jsonb_typeof(skills) = 'array'", name='skills_is_array'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -540,6 +543,9 @@ class TableSheet(Base):
     # HP 말고 다른 수치의 지금 값(#804). 규칙의 수치의 이름표에서 값으로. 시트를 받을 때 시작 값으로 채운다.
     # 적히지 않은 이름표(이 칸이 생기기 전의 시트)는 시작 값으로 읽는다(app/engine/resources.py). 바꾸는 것은 엔진뿐이다
     resources: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
+    # 아는 기술(#805). 룰북의 기술의 이름표들이다. 시트를 받을 때 시나리오의 시트(기본 시트나 프리젠)에서 복사한다.
+    # 이 칸이 생기기 전의 시트는 비어 있다(아는 기술이 없다). 바꾸는 길은 아직 없다
+    skills: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

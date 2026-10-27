@@ -13,9 +13,9 @@
 
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-from app.engine.ruleset import RULESET_MAX_ABILITIES, RULESET_MAX_NUMBER, Key, Ruleset
+from app.engine.ruleset import RULESET_MAX_ABILITIES, RULESET_MAX_NUMBER, RULESET_MAX_SKILLS, Key, Ruleset
 
 # 최대 HP 가 가질 수 있는 가장 큰 값
 SHEET_MAX_HP = 999
@@ -32,6 +32,23 @@ class Sheet(BaseModel):
     abilities: Annotated[dict[Key, Score], Field(max_length=RULESET_MAX_ABILITIES)]
     # 최대 HP. 규칙에서 계산하지 않고 만든 사람이 직접 적는다
     max_hp: Annotated[int, Field(ge=1, le=SHEET_MAX_HP)]
+
+
+def reject_repeated_skills(keys: list[str]) -> list[str]:
+    """같은 기술을 두 번 적지 않는다."""
+    if len(set(keys)) != len(keys):
+        raise ValueError('같은 기술을 두 번 적었습니다.')
+    return keys
+
+
+class CharacterSheet(Sheet):
+    """
+    캐릭터(앉은 사람)의 시트. 기본 시트와 프리젠의 시트다. 아는 기술(#805)이 더 있다. NPC 와 몬스터의 시트에는 없다.
+
+    skills 는 룰북의 기술(rules.skills)의 이름표다. 비우면 아는 기술이 없다. 맞는지는 게시할 때 본다(knows_only).
+    """
+
+    skills: Annotated[list[Key], Field(max_length=RULESET_MAX_SKILLS), AfterValidator(reject_repeated_skills)] = []
 
 
 def covers_abilities(ruleset: Ruleset, abilities: dict[str, int]) -> bool:
@@ -66,3 +83,8 @@ def has_scores_in_range(ruleset: Ruleset, sheet: Sheet) -> bool:
 def fits(ruleset: Ruleset, sheet: Sheet) -> bool:
     """시트가 이 규칙에 맞는가."""
     return abilities_fit(ruleset, sheet.abilities)
+
+
+def knows_only(ruleset: Ruleset, sheet: CharacterSheet) -> bool:
+    """시트의 아는 기술이 모두 이 규칙의 기술인가(#805)."""
+    return set(sheet.skills) <= {skill.key for skill in ruleset.skills}
