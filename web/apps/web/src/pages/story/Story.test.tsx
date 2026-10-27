@@ -246,6 +246,7 @@ describe('장면', () => {
     expect(await screen.findByText('3일째 · 저녁 · 학교 · 엔딩: 봄의 약속')).toBeInTheDocument();
     expect(screen.getByText(/이야기가 끝났습니다/)).toBeInTheDocument();
     expect(screen.queryByLabelText('보낼 말')).toBeNull();
+    expect(screen.getByRole('button', { name: '기록' })).toBeInTheDocument();
   });
 });
 

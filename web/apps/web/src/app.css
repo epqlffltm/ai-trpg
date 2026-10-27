@@ -2509,6 +2509,32 @@ a.ui-button {
   padding: 6px 0;
 }
 
+.story-places__detail {
+  display: block;
+}
+
+.story-places__title,
+.story-records__title {
+  margin: 12px 0 4px;
+  font-size: 1rem;
+}
+
+.story-records__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.story-records__image {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  object-fit: cover;
+}
+
 .story-choices,
 .story-ending {
   margin: 8px 0;

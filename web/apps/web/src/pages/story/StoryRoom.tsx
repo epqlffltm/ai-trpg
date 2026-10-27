@@ -24,6 +24,7 @@ import { describeChangeProblem } from '../chat/conversation/turnProblem';
 import { TurnNotice } from '../chat/conversation/TurnNotice';
 import { freshEnding, pendingChoices } from './storyActions';
 import { StoryActionBar } from './StoryActionBar';
+import { StoryRecordsButton } from './StoryRecordsButton';
 import { backgroundOf, sceneOf as pictureSceneOf } from './storyCastView';
 import { StoryCastRow } from './StoryCastRow';
 import { StoryChoices } from './StoryChoices';
@@ -128,9 +129,12 @@ export function StoryRoom({ session, turns }: Props) {
       {choices ? <StoryChoices pending={choices} disabled={busy} onAct={act} /> : null}
       <TurnNotice problem={turns.problem} failure={turns.failure} onChooseModel={() => setChoosingModel(true)} onClose={turns.clearNotice} />
       {ended ? (
-        <p className="hint story-ended">이야기가 끝났습니다. 대안을 넘겨 보거나 끝의 장면을 다시 쓸 수 있습니다.</p>
+        <div className="story-actions">
+          <p className="hint story-ended">이야기가 끝났습니다. 대안을 넘겨 보거나 끝의 장면을 다시 쓸 수 있습니다.</p>
+          <StoryRecordsButton worldId={session.world.id} view={view} />
+        </div>
       ) : (
-        <StoryActionBar view={view} state={scene.state} disabled={busy} onAct={act} />
+        <StoryActionBar worldId={session.world.id} view={view} state={scene.state} disabled={busy} onAct={act} />
       )}
       {ended ? null : (
         <Composer

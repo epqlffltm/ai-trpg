@@ -36,6 +36,7 @@ export function storyView(extra: Partial<StoryView> = {}): StoryView {
     cast: [],
     events: [],
     endings: [],
+    map: [],
     ...extra,
   } as StoryView;
 }
