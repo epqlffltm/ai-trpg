@@ -10799,7 +10799,7 @@
       },
       "Resource": {
         "additionalProperties": false,
-        "description": "HP 말고 캐릭터가 가지는 수치 하나(#804). 마나, 스태미나, 광기, 피로 같은 것이다.\n\nkey 는 효과(adjust)와 시트가 가리키는 이름표, name 은 보이는 이름이다.\nmin 이 바닥이고, 최대는 max 가 정한다(능력치에서 올 수 있다). start 가 시트를 받을 때의 값이다.\nrest 는 짧은 휴식과 긴 휴식이 이 수치에 하는 일이다. 값은 엔진만 바꾼다(쉬기, 물건의 adjust).\neach_round 는 라운드가 닫힐 때마다 저절로 하는 일이다(#804, 광기 +1, 마나 +1). 없으면 저절로 바뀌지 않는다.\nat_min 과 at_max 는 문턱이다(#804). 값이 최소(최대)에 닿아 있는 동안 그 부상(규칙의 injuries 의 key)을 입는다.\n문턱을 벗어나면 바로 풀린다. 부상은 수치의 그림자다(app/rounds/resource_rounds.py).",
+        "description": "HP 말고 캐릭터가 가지는 수치 하나(#804). 마나, 스태미나, 광기, 피로 같은 것이다.\n\nkey 는 효과(adjust)와 시트가 가리키는 이름표, name 은 보이는 이름이다.\nmin 이 바닥이고, 최대는 max 가 정한다(능력치에서 올 수 있다). start 가 시트를 받을 때의 값이다.\nrest 는 짧은 휴식과 긴 휴식이 이 수치에 하는 일이다. 값은 엔진만 바꾼다(쉬기, 물건의 adjust).\neach_round 는 라운드가 닫힐 때마다 저절로 하는 일이다(#804, 광기 +1, 마나 +1). 없으면 저절로 바뀌지 않는다.\nat_min 과 at_max 는 문턱이다(#804). 값이 최소(최대)에 닿아 있는 동안 그 부상(규칙의 injuries 의 key)을 입는다.\n문턱을 벗어나면 바로 풀린다. 부상은 수치의 그림자다(app/rounds/resource_rounds.py).\nvisibility 는 누가 숫자를 보나다(#804). 비우면 모두다.",
         "properties": {
           "at_max": {
             "anyOf": [
@@ -10866,6 +10866,10 @@
           "start": {
             "$ref": "#/components/schemas/ResourceStart",
             "default": "max"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/ResourceVisibility",
+            "default": "everyone"
           }
         },
         "required": [
@@ -11060,6 +11064,16 @@
           "min"
         ],
         "title": "ResourceStart",
+        "type": "string"
+      },
+      "ResourceVisibility": {
+        "description": "수치를 누가 보나(#804). 방장도 이 규칙대로만 본다. 숨긴 수치도 서술자에게는 말(네 단계)로 간다.",
+        "enum": [
+          "everyone",
+          "owner",
+          "engine"
+        ],
+        "title": "ResourceVisibility",
         "type": "string"
       },
       "Rest": {

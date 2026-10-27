@@ -17,6 +17,7 @@ from app.assets.models import NarrationStyle
 from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, place_entries, read_snapshot
 from app.engine.check import find_ability
 from app.engine.injury import find_injury
+from app.engine.resources import Level, band_of, is_open
 from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds import narration_request
@@ -274,10 +275,14 @@ def resource_notes(ruleset: Ruleset, member: TableMember) -> list[ResourceNote]:
     """이 사람의 지금 캐릭터의 수치들(#804, 마나 3/6). 규칙의 차례다. 시트가 없으면 비어 있다."""
     if member.sheet is None:
         return []
-    return [
-        ResourceNote(name=level.resource.name, value=level.value, max=level.maximum)
-        for level in resources.levels_of(ruleset, member.sheet)
-    ]
+    return [level_note(level) for level in resources.levels_of(ruleset, member.sheet)]
+
+
+def level_note(level: Level) -> ResourceNote:
+    """수치 하나의 지금(#804). 숨긴 수치는 숫자 없이 네 단계의 말로 준다."""
+    if is_open(level.resource):
+        return ResourceNote(name=level.resource.name, value=level.value, max=level.maximum)
+    return ResourceNote(name=level.resource.name, word=band_of(level.value, level.resource.min, level.maximum))
 
 
 def worn_notes(ruleset: Ruleset | None, member: TableMember) -> list[InjuryNote]:

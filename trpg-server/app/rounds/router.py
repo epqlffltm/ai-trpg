@@ -34,7 +34,7 @@ from app.rounds.schemas import (
     SceneCastOut,
     SceneMonsterOut,
 )
-from app.tables import injuries, monster_items, npc_items
+from app.tables import injuries, monster_items, npc_items, resources
 from app.tables.carried import Carried
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableStatus
@@ -70,6 +70,22 @@ def to_charge(charge: NarrationCharge) -> ChargeOut:
     return ChargeOut(user_id=charge.payer_id, status=charge.status, credits=charge.held_credits)
 
 
+# 결과 중 바뀐 수치(resources)를 싣는 것들(#804). 쉬기, 물건을 쓰기, 던지기다
+SHIFTING_OUTCOMES = ('rest', 'item_use', 'item_throw')
+
+
+def visible_outcome(outcome: dict | None, viewer_id: uuid.UUID) -> dict | None:
+    """선언의 결과에서 그 사람이 숫자로 보지 못하는 수치의 바뀐 것을 뺀다(#804). 저장된 결과는 고치지 않는다."""
+    if outcome is None:
+        return None
+    changed = {
+        key: {**outcome[key], 'resources': resources.visible_shifts(outcome[key].get('resources'), viewer_id)}
+        for key in SHIFTING_OUTCOMES
+        if isinstance(outcome.get(key), dict) and outcome[key].get('resources')
+    }
+    return {**outcome, **changed} if changed else outcome
+
+
 def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
     """
     라운드를 앉은 사람에게 보여 주는 응답으로 바꾼다.
@@ -89,8 +105,9 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
             character_name=declaration.character_name,
             content=declaration.content if can_see(declaration) else None,
             action=declaration.action if can_see(declaration) else None,
-            # 결과는 가리지 않는다. 열려 있는 동안에는 어차피 없고, 마감한 뒤에는 모두에게 보인다
-            outcome=declaration.outcome,
+            # 결과는 가리지 않는다. 열려 있는 동안에는 어차피 없고, 마감한 뒤에는 모두에게 보인다.
+            # 숨긴 수치(#804)의 바뀐 것만 보는 사람에 따라 뺀다
+            outcome=visible_outcome(declaration.outcome, viewer_id),
         )
         for declaration in round_.declarations
     ]

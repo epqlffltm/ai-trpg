@@ -38,7 +38,7 @@ from app.catalog.offers import OfferedModel, StepPrice
 from app.catalog.steps import input_tokens, output_tokens
 from app.core.dice import Rolling
 from app.engine.check import find_difficulty
-from app.engine.resources import Level
+from app.engine.resources import Level, shown_to
 from app.engine.ruleset import Ruleset
 from app.limits.routing import Limited
 from app.personas import saving
@@ -300,11 +300,14 @@ def to_worn(row: TableWorn, catalog: dict[uuid.UUID, CatalogItem]) -> WornOut:
     return WornOut(entry_id=row.entry_id, name=catalog[row.entry_id].name, slots=list(row.slots))
 
 
-def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem], ruleset: Ruleset) -> SheetOut | None:
+def to_sheet(
+    sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem], ruleset: Ruleset, is_owner: bool
+) -> SheetOut | None:
     """
     시트를 응답으로 바꾼다. 아직 받지 않았으면 None. 소지품의 이름은 판의 물건(catalog)에서 찾는다.
 
-    착용은 규칙(ruleset)의 칸의 차례로 놓는다.
+    착용은 규칙(ruleset)의 칸의 차례로 놓는다. 수치(#804)는 보는 사람이 숫자로 볼 수 있는 것만 싣는다.
+    is_owner 는 보는 사람이 이 시트의 주인인가다.
     """
     if sheet is None:
         return None
@@ -321,7 +324,11 @@ def to_sheet(sheet: TableSheet | None, catalog: dict[uuid.UUID, CatalogItem], ru
         money=sheet.money,
         worn=[to_worn(row, catalog) for row in equipment.in_slot_order(sheet.worn, ruleset)],
         place_id=sheet.place_id,
-        resources=[to_resource(level) for level in resources.levels_of(ruleset, sheet)],
+        resources=[
+            to_resource(level)
+            for level in resources.levels_of(ruleset, sheet)
+            if shown_to(level.resource.visibility, is_owner)
+        ],
     )
 
 
@@ -438,9 +445,13 @@ def to_fallen(sheet: TableSheet) -> FallenOut:
 
 
 def to_member(
-    table: GameTable, member: TableMember, catalog: dict[uuid.UUID, CatalogItem], ruleset: Ruleset
+    table: GameTable,
+    member: TableMember,
+    catalog: dict[uuid.UUID, CatalogItem],
+    ruleset: Ruleset,
+    viewer_id: uuid.UUID,
 ) -> MemberOut:
-    """앉은 사람 하나를 응답으로 바꾼다."""
+    """앉은 사람 하나를 응답으로 바꾼다. viewer_id 는 보는 사람이다(숨긴 수치, #804)."""
     character = None
     if member.character_name is not None:
         character = CharacterOut(name=member.character_name, description=member.character_description)
@@ -452,7 +463,7 @@ def to_member(
         pregen_index=member.pregen_index,
         roll=to_roll(sheets.find_roll(table, member.user_id)),
         abilities=member.abilities,
-        sheet=to_sheet(member.sheet, catalog, ruleset),
+        sheet=to_sheet(member.sheet, catalog, ruleset, member.user_id == viewer_id),
         fallen=[to_fallen(sheet) for sheet in member.fallen],
         friendly_fire=member.friendly_fire,
         joined_at=member.joined_at,
@@ -527,7 +538,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         quests=[to_quest(quest, quest_catalog) for quest in quests.visible_quests(table, quest_catalog)],
         map=to_map(table, snapshot, catalog),
         clock=to_clock(table),
-        members=[to_member(table, member, catalog, snapshot.rulebook.rules) for member in table.members],
+        members=[to_member(table, member, catalog, snapshot.rulebook.rules, viewer_id) for member in table.members],
         invite_code=table.invite_code if viewer_id == table.host_id else None,
         started_at=table.started_at,
         ended_at=table.ended_at,

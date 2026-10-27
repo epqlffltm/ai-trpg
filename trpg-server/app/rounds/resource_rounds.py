@@ -25,7 +25,7 @@ from app.events import recorder
 from app.events.models import EventType
 from app.rounds.injuries import EndReason
 from app.rounds.models import Round
-from app.rounds.records import ResourceSource
+from app.rounds.records import ResourceSource, recorded_shifts
 from app.rounds.state import rules_of
 from app.tables import injuries, resources, sheets
 from app.tables.models import GameTable, InjurySource, TableInjury, TableMember, TableSheet
@@ -107,7 +107,8 @@ def follow_thresholds(
 
 def drift_member(ruleset: Ruleset, member: TableMember, table_id: uuid.UUID, round_number: int) -> Drift | None:
     """앉은 사람 하나의 라운드마다의 변화와 문턱. 아무 일도 없었으면 None."""
-    shifts = [resources.shift_document(shift) for shift in resources.each_round(ruleset, member.sheet)]
+    changed = resources.each_round(ruleset, member.sheet)
+    shifts = [resources.shift_document(shift, member.user_id) for shift in changed]
     gained, ended = follow_thresholds(ruleset, member.sheet, table_id, round_number)
     if not shifts and not gained and not ended:
         return None
@@ -139,7 +140,7 @@ def record(session: AsyncSession, table: GameTable, drifts: list[Drift], round_n
     벗어나 풀린 부상(injury_ended, reason resource)을 이벤트로 적는다. 닫힘의 묶음에 넣는다. 행한 사람은 없다.
     """
     for drift in drifts:
-        for shift in drift.shifts:
+        for shift in recorded_shifts(drift.shifts):
             payload = {'round': round_number, **drift.holder, **shift, 'source': ResourceSource.ROUND}
             recorder.record(session, table, EventType.RESOURCE_CHANGED, payload=payload, group=group)
         for row in drift.ended:

@@ -221,6 +221,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'after',
         'max',
         'source',
+        'visibility',
     ),
     # 되살아나기의 굴림은 죽음의 굴림처럼 공개다
     EventType.CHARACTER_REVIVED: ('round', 'user_id', 'character_name', 'roll', 'target', 'success', 'hp'),
@@ -414,9 +415,17 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
 }
 
 
+# 가진 사람만 보는 수치(#804)의 바뀐 것은 숫자를 빼고 내보낸다. 이벤트는 앉은 사람 모두가 읽는다.
+# 엔진만 보는 수치는 처음부터 적지 않는다(app/rounds/records.py)
+HIDDEN_NUMBERS = ('before', 'after', 'max')
+
+
 def visible_payload(event: TableEvent) -> dict:
     """이벤트의 payload 에서 앉은 사람에게 내보내는 칸만 고른다."""
-    fields = VISIBLE.get(EventType(event.type), ())
+    type_ = EventType(event.type)
+    fields = VISIBLE.get(type_, ())
+    if type_ == EventType.RESOURCE_CHANGED and event.payload.get('visibility', 'everyone') != 'everyone':
+        fields = tuple(field for field in fields if field not in HIDDEN_NUMBERS)
     return {field: event.payload[field] for field in fields if field in event.payload}
 
 

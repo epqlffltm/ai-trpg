@@ -203,7 +203,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 해치려던 동료가 없었으면 그 까닭을 적는다(겨눈 상대 영애: 이미 쓰러져 있었다)
 #   narration-70: HP 말고 다른 수치(#804). 각자의 줄에 지금 수치가 붙고([수치: 마나 3/6]), 쉬기와 물건의 맞추기가
 #                 바꾼 수치를 적는다((쉬기: 긴 휴식, HP 2 → 10/10, 마나 1 → 6/6), [수치: 마나 2 → 5/6])
-PROMPT_VERSION = 'narration-70'
+#   narration-71: 숨긴 수치(#804). 모두가 보지 않는 수치는 숫자 없이 네 단계의 말로 적는다([수치: 광기 모자람]).
+#                 바뀐 것도 바뀐 뒤의 말만 적는다(쉬기의 줄, 마나 넉넉함)
+PROMPT_VERSION = 'narration-71'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

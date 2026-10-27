@@ -8,13 +8,18 @@
 // - 시작: 가득(max) 또는 비운 채(min)
 // - 짧은 휴식과 긴 휴식마다: 바꾸지 않음, 올리기·내리기(양 1~999), 채우기, 비우기
 // 숫자 칸은 고치는 동안 글로 둔다. 보낼 때 정수로 바꾼다.
+// 라운드마다의 변화와 문턱(each_round, at_min, at_max)과 보이기(visibility)는 아직 고치는 칸이 없다.
+// 받은 값을 그대로 지녔다가 보낸다(저장할 때 지워지지 않게). 새 수치는 없음과 모두다.
 
 import type { Resource, ResourceShift } from '../../../../api/types';
 
 type ShiftKind = ResourceShift['kind'];
+/** 고치는 칸이 아직 없어 받은 대로 지녔다가 보내는 것 */
+type KeptFields = Pick<Resource, 'each_round' | 'at_min' | 'at_max' | 'visibility'>;
 type StartKind = Resource['start'];
 
 export const RESOURCES_MAX = 6;
+const NEW_KEPT: KeptFields = { each_round: null, at_min: null, at_max: null, visibility: 'everyone' };
 const VALUE_MAX = 999;
 const KEY_PATTERN = /^[a-z][a-z0-9_]{0,19}$/;
 const NAME_MAX = 30;
@@ -36,6 +41,7 @@ export type ResourceDraft = {
   start: StartKind;
   short: ShiftDraft;
   long: ShiftDraft;
+  kept: KeptFields;
 };
 
 /** 칸의 글을 정수로. 정수가 아니거나 범위 밖이면 null(rulebookForm.ts 의 것과 같다. 서로 가져오지 않게 둔다) */
@@ -61,6 +67,7 @@ export function resourceDraft(resource: Resource): ResourceDraft {
     start: resource.start,
     short: shiftDraft(resource.rest.short),
     long: shiftDraft(resource.rest.long),
+    kept: { each_round: resource.each_round ?? null, at_min: resource.at_min ?? null, at_max: resource.at_max ?? null, visibility: resource.visibility },
   };
 }
 
@@ -69,7 +76,7 @@ export function newResourceDraft(drafts: ResourceDraft[]): ResourceDraft {
   const taken = new Set(drafts.map((draft) => draft.key));
   let key = 'resource';
   for (let number = 2; taken.has(key); number += 1) key = `resource_${number}`;
-  return { key, name: '', min: '', base: '5', ability: '', cap: '', start: 'max', short: { kind: '', amount: '' }, long: { kind: 'fill', amount: '' } };
+  return { key, name: '', min: '', base: '5', ability: '', cap: '', start: 'max', short: { kind: '', amount: '' }, long: { kind: 'fill', amount: '' }, kept: NEW_KEPT };
 }
 
 function stepping(kind: ShiftKind | ''): boolean {
@@ -92,6 +99,7 @@ export function toResource(draft: ResourceDraft): Resource {
     max: { base: wholeNumber(draft.base, 0, VALUE_MAX) ?? 0, ability: draft.ability || null, cap },
     start: draft.start,
     rest: { short: toShift(draft.short), long: toShift(draft.long) },
+    ...draft.kept,
   };
 }
 

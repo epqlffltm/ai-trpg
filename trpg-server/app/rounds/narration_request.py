@@ -27,6 +27,7 @@ from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, person_ent
 from app.calendar import clock, state
 from app.engine.check import find_ability, find_difficulty
 from app.engine.injury import known_injuries
+from app.engine.resources import band_of
 from app.engine.ruleset import Ruleset
 from app.rounds.drops import NPC_SOURCE
 from app.rounds.models import Declaration, Round
@@ -150,11 +151,20 @@ def to_impact(effect: dict | None) -> Impact | None:
     )
 
 
+def to_shift_note(shift: dict) -> ResourceNote:
+    """
+    바뀐 수치 하나(#804)를 서술자에게 줄 모양으로. 숨긴 수치는 바뀐 뒤를 네 단계의 말로만 준다.
+
+    보이기와 최소가 없는 옛 문서는 모두가 보는 것, 최소 0 으로 읽는다.
+    """
+    if shift.get('visibility', 'everyone') != 'everyone':
+        return ResourceNote(name=shift['name'], word=band_of(shift['after'], shift.get('min', 0), shift['max']))
+    return ResourceNote(name=shift['name'], value=shift['after'], max=shift['max'], before=shift['before'])
+
+
 def to_shift_notes(shifts: list[dict] | None) -> list[ResourceNote]:
     """바뀐 수치들(#804)을 서술자에게 줄 모양으로. 쉬기와 물건의 맞추기가 적은 것이다."""
-    return [
-        ResourceNote(name=one['name'], value=one['after'], max=one['max'], before=one['before']) for one in shifts or []
-    ]
+    return [to_shift_note(one) for one in shifts or []]
 
 
 def spared_names(injured: list[dict]) -> list[str]:

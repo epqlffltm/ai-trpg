@@ -39,6 +39,12 @@ from app.engine.templates import (
 RELEASED = {
     Template.SRD5: 'f6774238641d3de8e62317632af007adfbf62042bbf6a2df165d7a79fdb30e82',
     Template.HORROR: '7a0782646dbededdc2b9e8d642f2d7ae8023e9aaac0a21ba9109648bc37b3fa5',
+    Template.LIGHT: '361759bf24ba807cd9441e5d390d86c2695b47f18fcfa0ea0362fad5916e5053',
+}
+# 수치의 보이기(visibility, #804 ③)를 더하기 전의 해시. 그 칸을 뺀 규칙은 그때와 같아야 한다
+BEFORE_VISIBILITY = {
+    Template.SRD5: 'f6774238641d3de8e62317632af007adfbf62042bbf6a2df165d7a79fdb30e82',
+    Template.HORROR: '7a0782646dbededdc2b9e8d642f2d7ae8023e9aaac0a21ba9109648bc37b3fa5',
     Template.LIGHT: '6a956aa64a675be7d42cc913f2f2305ebc1885dc0a899c2abac00df156b01335',
 }
 # 수치의 라운드마다의 변화와 문턱(each_round, at_min, at_max, #804 ②)을 더하기 전의 해시.
@@ -119,10 +125,9 @@ def fingerprint(rules: Ruleset, without: tuple[str, ...] = (), natures: bool = T
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def fingerprint_before_thresholds(rules: Ruleset) -> str:
-    """수치마다 라운드마다의 변화와 문턱(#804 ②)을 뺀 규칙의 해시."""
+def fingerprint_without_resource_fields(rules: Ruleset, new_fields: tuple[str, ...]) -> str:
+    """수치마다 new_fields 의 칸을 뺀 규칙의 해시. 수치에 칸을 더하기 전의 해시와 견줄 때 쓴다."""
     values = dumped(rules, resources=True)
-    new_fields = ('each_round', 'at_min', 'at_max')
     values['resources'] = [
         {key: value for key, value in resource.items() if key not in new_fields} for resource in values['resources']
     ]
@@ -178,9 +183,15 @@ def test_released_templates_keep_their_values():
         )
 
 
+def test_adding_the_visibility_kept_the_other_values():
+    for template, expected in BEFORE_VISIBILITY.items():
+        assert fingerprint_without_resource_fields(TEMPLATES[template].rules, ('visibility',)) == expected
+
+
 def test_adding_the_thresholds_kept_the_other_values():
+    fields = ('each_round', 'at_min', 'at_max', 'visibility')
     for template, expected in BEFORE_THRESHOLDS.items():
-        assert fingerprint_before_thresholds(TEMPLATES[template].rules) == expected
+        assert fingerprint_without_resource_fields(TEMPLATES[template].rules, fields) == expected
 
 
 def test_adding_the_resources_kept_the_other_values():

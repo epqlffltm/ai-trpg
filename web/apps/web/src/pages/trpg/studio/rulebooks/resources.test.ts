@@ -17,6 +17,10 @@ const MANA: Resource = {
   max: { base: 3, ability: 'heart', cap: 10 },
   start: 'max',
   rest: { short: { kind: 'raise', amount: 2 }, long: { kind: 'fill', amount: null } },
+  each_round: { kind: 'lower', amount: 1 },
+  at_min: 'stunned',
+  at_max: null,
+  visibility: 'owner',
 };
 
 type Outcome = NonNullable<Declaration['outcome']>;

@@ -719,6 +719,17 @@ class Armor(Part):
         return self
 
 
+class ResourceVisibility(enum.StrEnum):
+    """수치를 누가 보나(#804). 방장도 이 규칙대로만 본다. 숨긴 수치도 서술자에게는 말(네 단계)로 간다."""
+
+    # 앉은 사람 모두. 시트, 라운드의 결과, 이벤트에 숫자가 실린다
+    EVERYONE = 'everyone'
+    # 가진 사람만. 자기 시트에서만 숫자를 본다. 결과와 이벤트에는 숫자가 없다
+    OWNER = 'owner'
+    # 엔진만. 아무도 숫자를 보지 않는다. 바뀐 것도 이벤트에 적지 않는다
+    ENGINE = 'engine'
+
+
 class ResourceStart(enum.StrEnum):
     """수치의 시작 값(#804). 시트를 받을 때 이 값으로 둔다."""
 
@@ -786,6 +797,7 @@ class Resource(Part):
     each_round 는 라운드가 닫힐 때마다 저절로 하는 일이다(#804, 광기 +1, 마나 +1). 없으면 저절로 바뀌지 않는다.
     at_min 과 at_max 는 문턱이다(#804). 값이 최소(최대)에 닿아 있는 동안 그 부상(규칙의 injuries 의 key)을 입는다.
     문턱을 벗어나면 바로 풀린다. 부상은 수치의 그림자다(app/rounds/resource_rounds.py).
+    visibility 는 누가 숫자를 보나다(#804). 비우면 모두다.
     """
 
     key: Key
@@ -797,6 +809,7 @@ class Resource(Part):
     each_round: ResourceShift | None = None
     at_min: Key | None = None
     at_max: Key | None = None
+    visibility: ResourceVisibility = ResourceVisibility.EVERYONE
 
     @model_validator(mode='after')
     def require_room_above_min(self) -> Self:

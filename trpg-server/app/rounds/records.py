@@ -652,6 +652,11 @@ class ResourceSource:
     ROUND = 'round'
 
 
+def recorded_shifts(shifts: list[dict]) -> list[dict]:
+    """이벤트에 적을 바뀐 수치들. 엔진만 보는 수치(#804)는 적지 않는다. 보이기가 없는 옛 문서는 적는다."""
+    return [shift for shift in shifts if shift.get('visibility', 'everyone') != 'engine']
+
+
 def record_resource_shifts(
     session: AsyncSession, table: GameTable, shifts: list[dict], holder: dict | None, source: str, cause: TableEvent
 ) -> None:
@@ -662,7 +667,7 @@ def record_resource_shifts(
     """
     if holder is None or holder.get('user_id') is None:
         return
-    for shift in shifts:
+    for shift in recorded_shifts(shifts):
         payload = {
             'round': cause.payload['round'],
             'user_id': holder['user_id'],
