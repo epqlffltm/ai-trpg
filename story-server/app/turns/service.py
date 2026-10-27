@@ -44,6 +44,7 @@ from ai_core.routing import Route
 from conversation_core import continuation
 from conversation_core.continuation import OverlapTrim
 from conversation_core.relay import Relay
+from conversation_core.suggestions import MarkerHold, parse_suggestions, split_answer
 from conversation_core.window import Turn, select_window
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -145,15 +146,17 @@ class Collector:
     모델이 흘려 주는 글을 말 조각으로 자르면서 응답으로 넘긴다. 도중에 끊겨도 받은 만큼을 안다.
     장면에 없는 인물의 줄은 넘기지 않는다(app/turns/segments.py).
     trim 이 있으면(이어서 출력) 끊긴 답의 끝을 되풀이한 앞부분을 떼고 자른다(conversation_core 의 OverlapTrim).
+    본문만 자른다. 다음 답 추천의 표식 뒤는 흘리지 않는다(conversation_core/suggestions.py 의 MarkerHold).
     """
 
     relay: Relay
     splitter: SpeakerSplitter
     trim: OverlapTrim | None = None
+    hold: MarkerHold = field(default_factory=MarkerHold)
     finished: bool = field(default=False)
 
     def __call__(self, piece: str) -> None:
-        self.push(self.splitter.feed(self.trim.feed(piece) if self.trim is not None else piece))
+        self.push(self.splitter.feed(self.hold.feed(self.trim.feed(piece) if self.trim is not None else piece)))
 
     def push(self, events: list[SegmentStart | SegmentText]) -> None:
         """잘린 것들을 응답으로. 잇닿은 글은 하나로 묶어 보낸다."""
@@ -168,7 +171,8 @@ class Collector:
         if not self.finished:
             self.finished = True
             if self.trim is not None:
-                self.push(self.splitter.feed(self.trim.release()))
+                self.push(self.splitter.feed(self.hold.feed(self.trim.release())))
+            self.push(self.splitter.feed(self.hold.release()))
             self.push(self.splitter.finish())
         return self.splitter.segments(), self.splitter.dropped
 
@@ -200,6 +204,7 @@ def saved(message: Message) -> SavedMessage:
         cast=tuple(message.cast or ()),
         event_id=message.event_id,
         ending_id=message.ending_id,
+        suggestions=tuple(message.suggestions or ()),
     )
 
 
@@ -247,13 +252,22 @@ class Branch:
     document: Mapping
 
 
-def prompt_for(branch: Branch, state: StoryState, stage: Staging, added: Message, chars: int) -> list[ChatMessage]:
+def card_for(branch: Branch, state: StoryState, stage: Staging, options: PromptOptions) -> str:
+    """카드. state 와 장면으로 만들고, 켜져 있으면 다음 답 추천의 지시를 붙인다."""
+    scene = scene_card(branch.briefing, branch.world, state, stage.cast, stage.direction)
+    return render_card(branch.briefing, scene, options.suggestions)
+
+
+def prompt_for(
+    branch: Branch, state: StoryState, stage: Staging, added: Message, options: PromptOptions
+) -> list[ChatMessage]:
     """
-    모델에 보낼 메시지. 카드(state 와 장면)와, 가지의 말들에 added 를 더한 것 가운데 chars 글자 안에 드는 최근 것들이다.
+    모델에 보낼 메시지. 카드(state 와 장면)와, 가지의 말들에 added 를 더한 것 가운데
+    지난 말의 양 안에 드는 최근 것들이다.
+    지난 답은 본문(content)만 간다. 다음 답 추천은 가지 않는다(모델이 흉내 내지 않게).
     """
-    card = render_card(branch.briefing, scene_card(branch.briefing, branch.world, state, stage.cast, stage.direction))
     turns = [Turn(message.role, message.content) for message in [*branch.path, added]]
-    return build_messages(card, select_window(turns, chars))
+    return build_messages(card_for(branch, state, stage, options), select_window(turns, options.context_chars))
 
 
 def shown_in_turn(branch: Branch, stage: Staging) -> frozenset[str]:
@@ -308,14 +322,17 @@ def new_generation(conversation: Conversation, owner_id: uuid.UUID, parent_id: u
 def result_of(completion: Completion, route: Route, segments: tuple[Segment, ...], dropped: int) -> TurnResult:
     """
     다 받은 답. segments 는 흘려보내며 자른 조각이다. 남은 조각이 없으면(모두 장면 밖의 인물이었어도) failed 다.
-    길이 상한에서 잘렸으면 partial 이다. 원가는 그날의 단가로 센다.
+    길이 상한에서 잘렸으면 partial 이고 다음 답 추천이 없다. 다 썼으면 표식 뒤의 선택지를 거른다.
+    원가는 그날의 단가로 센다.
     """
     cost, _ = charge_of(completion, route.price)
     usage = {'input_tokens': completion.input_tokens, 'output_tokens': completion.output_tokens, 'cost_usd': cost}
     if not segments:
         return TurnResult(segments=(), outcome=Outcome.FAILED, error_code=EMPTY, dropped=dropped, **usage)
-    outcome = Outcome.PARTIAL if completion.truncated else Outcome.COMPLETE
-    return TurnResult(segments=segments, outcome=outcome, dropped=dropped, **usage)
+    if completion.truncated:
+        return TurnResult(segments=segments, outcome=Outcome.PARTIAL, dropped=dropped, **usage)
+    suggestions = tuple(parse_suggestions(split_answer(completion.text)[1]))
+    return TurnResult(segments=segments, outcome=Outcome.COMPLETE, suggestions=suggestions, dropped=dropped, **usage)
 
 
 def failure_of(segments: tuple[Segment, ...], dropped: int, code: str) -> TurnResult:
@@ -337,6 +354,7 @@ def answer_of(start: TurnStart, result: TurnResult, now: datetime) -> Message | 
         status=MessageStatus.PARTIAL if result.outcome == Outcome.PARTIAL else MessageStatus.COMPLETE,
         segments=segment_dicts(result.segments),
         cast=list(start.cast),
+        suggestions=list(result.suggestions),
         created_at=now,
     )
 
@@ -345,7 +363,8 @@ def extension_of(start: TurnStart, result: TurnResult) -> SavedMessage | None:
     """
     이어서 출력으로 바뀔 끊긴 답. 이어 쓴 것이 없으면 None(끊긴 답은 그대로다).
     result 의 조각은 끊긴 답의 조각까지 모두다(app/turns/segments.py 의 continuing_splitter).
-    다 썼으면 complete, 또 끊겼으면 partial 로 남아 다시 이어 쓸 수 있다. 장면의 인물은 그대로다.
+    다 썼으면 complete 이고 다음 답 추천이 붙는다. 또 끊겼으면 partial 로 남아 다시 이어 쓸 수 있다.
+    장면의 인물은 그대로다.
     """
     if start.continued is None or not result.segments:
         return None
@@ -354,6 +373,7 @@ def extension_of(start: TurnStart, result: TurnResult) -> SavedMessage | None:
         content=render_segments(result.segments),
         status=MessageStatus.PARTIAL if result.outcome == Outcome.PARTIAL else MessageStatus.COMPLETE,
         segments=tuple(segment_dicts(result.segments)),
+        suggestions=result.suggestions,
     )
 
 
@@ -553,7 +573,7 @@ def turn_start(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(message),
-        messages=prompt_for(branch, state, stage, message, options.context_chars),
+        messages=prompt_for(branch, state, stage, message, options),
         cast=stage.cast,
         labels=labels_for(branch.briefing, stage.cast),
         state=state_view(branch.world, state, stage.cast, shown_in_turn(branch, stage)),
@@ -738,15 +758,15 @@ async def begin_continue(
     return await begin(session_factory, viewer, conversation_id, now, record)
 
 
-def continue_prompt(branch: Branch, state: StoryState, stage: Staging, chars: int) -> list[ChatMessage]:
+def continue_prompt(branch: Branch, state: StoryState, stage: Staging, options: PromptOptions) -> list[ChatMessage]:
     """
     이어 쓰는 메시지. 카드와, 끊긴 답까지의 가지의 말들에 이어 쓰라는 지시(사람의 차례)를 더한 것 가운데
-    chars 글자 안에 드는 최근 것들이다. 끊긴 답은 표식이 붙은 줄 그대로 가서 모델이 같은 모양으로 잇는다.
+    지난 말의 양 안에 드는 최근 것들이다. 끊긴 답은 표식이 붙은 줄 그대로 가서 모델이 같은 모양으로 잇는다.
+    다 이어 쓰면 다음 답 추천도 받는다(카드의 지시).
     """
-    card = render_card(branch.briefing, scene_card(branch.briefing, branch.world, state, stage.cast, stage.direction))
     turns = [Turn(message.role, message.content) for message in branch.path]
     turns.append(Turn(Role.USER, continuation.instruction()))
-    return build_messages(card, select_window(turns, chars))
+    return build_messages(card_for(branch, state, stage, options), select_window(turns, options.context_chars))
 
 
 async def record_continue(
@@ -774,7 +794,7 @@ async def record_continue(
     # 메시지는 이어 쓰는 것으로 바꾼다. turn_start 가 만드는 보통의 메시지는 쓰지 않으므로 빈 가지로 만든다
     empty = replace(branch, path=[])
     start = turn_start(viewer.claims.user_id, generation, answered, empty, branch.state, stage, options)
-    messages = continue_prompt(branch, branch.state, stage, options.context_chars)
+    messages = continue_prompt(branch, branch.state, stage, options)
     return replace(start, messages=messages, continued=saved(target))
 
 
@@ -889,7 +909,9 @@ async def store_answer(
         extended = extension_of(start, result)
         if extended is not None:
             segments = list(extended.segments)
-            await repository.extend_message(session, extended.id, segments, extended.content, extended.status)
+            await repository.extend_message(
+                session, extended.id, segments, extended.content, extended.status, list(extended.suggestions)
+            )
         return extended
     answer = answer_of(start, result, now)
     if answer is None:

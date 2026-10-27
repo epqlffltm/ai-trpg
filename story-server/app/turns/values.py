@@ -31,6 +31,7 @@ class SavedMessage:
     cast: tuple[str, ...] = ()
     event_id: str | None = None
     ending_id: str | None = None
+    suggestions: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,8 @@ class PromptOptions:
 
     # 지난 말의 양의 상한(글자). 최근 말부터 채운다
     context_chars: int
+    # 다음 답 추천. 켜면 답 끝에 선택지 셋을 함께 받는다(conversation_core/suggestions.py)
+    suggestions: bool = False
 
 
 @dataclass(frozen=True)
@@ -67,11 +70,12 @@ class TurnStart:
 class TurnResult:
     """
     모델을 부른 결과. segments 가 비어 있으면 저장할 답이 없다.
-    dropped 는 장면에 없는 인물의 줄을 버린 수다.
+    dropped 는 장면에 없는 인물의 줄을 버린 수다. suggestions 는 다 쓴 답의 다음 답 추천이다.
     """
 
     segments: tuple[Segment, ...]
     outcome: Outcome
+    suggestions: tuple[str, ...] = ()
     error_code: str | None = None
     dropped: int = 0
     input_tokens: int | None = None

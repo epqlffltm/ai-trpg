@@ -99,7 +99,7 @@ def generation_params(settings: Settings) -> GenerationParams:
 
 def prompt_options(settings: Settings) -> PromptOptions:
     """모델에 보낼 메시지의 설정. 지난 말의 양은 설정에서 온다."""
-    return PromptOptions(context_chars=settings.story_context_chars)
+    return PromptOptions(context_chars=settings.story_context_chars, suggestions=settings.story_suggestions)
 
 
 def keep_running(request: Request, start: TurnStart, stop: StopSwitch, coroutine: Coroutine) -> None:

@@ -4,7 +4,7 @@
 모델에 보낼 메시지를 만든다(docs/architecture/story.md 의 "한 번의 말"). DB 도 모델도 모른다.
 
     [system] 세션의 카드(render_card): 지킬 것, 세계관, 지금(날, 시간대, 장소, 소지품), 장면의 인물,
-             기다리는 이벤트의 장면 지시, 쓰는 법(말하는 사람의 표식)
+             기다리는 이벤트의 장면 지시, 쓰는 법(말하는 사람의 표식), 켜져 있으면 다음 답 추천의 지시
     [assistant / user ...] 최근의 말(conversation_core/window.py 의 select_window)
 
 장면 밖의 인물은 카드에 들어가지 않는다. 모델이 쓸 수 있는 사람은 카드에 적은 인물과 서술뿐이다.
@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 
 from ai_core.provider import ChatMessage, Role
+from conversation_core.suggestions import instruction as suggestions_instruction
 from conversation_core.window import Turn
 
 from app.engine.clock import day_of, slot_of
@@ -185,8 +186,18 @@ def format_section(scene: SceneCard) -> str:
     return '\n'.join(['[쓰는 법]', *(line for line in lines if line)])
 
 
-def render_card(briefing: Briefing, scene: SceneCard) -> str:
-    """시스템 메시지(카드). 지킬 것, 세계관, 지금, 장면의 인물, 장면 지시, 쓰는 법의 차례다. 빈 블록은 뺀다."""
+def suggestions_section() -> str:
+    """[다음 답 추천] 블록. 선택지는 말 조각이 아니라서 표식을 붙이지 않게 한다(app/turns/segments.py)."""
+    return '\n'.join(
+        ['[다음 답 추천]', suggestions_instruction(), '선택지의 줄에는 말하는 사람의 표식을 붙이지 않는다.']
+    )
+
+
+def render_card(briefing: Briefing, scene: SceneCard, suggest: bool = False) -> str:
+    """
+    시스템 메시지(카드). 지킬 것, 세계관, 지금, 장면의 인물, 장면 지시, 쓰는 법의 차례다. 빈 블록은 뺀다.
+    suggest 면 맨 끝에 다음 답 추천의 지시를 붙인다(conversation_core/suggestions.py).
+    """
     sections = [
         '\n'.join(RULES),
         world_section(briefing),
@@ -194,6 +205,7 @@ def render_card(briefing: Briefing, scene: SceneCard) -> str:
         cast_section(scene),
         f'[장면 지시]\n{scene.event.strip()}' if scene.event.strip() else None,
         format_section(scene),
+        suggestions_section() if suggest else None,
     ]
     return '\n\n'.join(section for section in sections if section)
 

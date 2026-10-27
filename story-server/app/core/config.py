@@ -83,6 +83,8 @@ class Settings(CoreSettings):
     # 모델에 보내는 지난 말의 양의 상한(글자). 최근 말부터 이만큼 채운다(conversation_core/window.py).
     # 가격표의 입력 단계(i0)가 약속하는 양이다. 토큰이 아니라 글자로 어림한다
     story_context_chars: int = Field(default=12000, ge=1000, le=200000)
+    # 다음 답 추천. 켜면 답 끝에 선택지 셋을 함께 받는다(conversation_core/suggestions.py). 호출은 늘지 않는다
+    story_suggestions: bool = True
     # 글의 다양함. 0 에 가까울수록 같은 입력에 비슷한 답이다. 받지 않는 모델에는 보내지 않는다(모델 목록)
     story_temperature: float = Field(default=0.9, ge=0, le=2)
 

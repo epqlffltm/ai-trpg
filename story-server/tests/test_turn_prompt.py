@@ -6,7 +6,8 @@
 
 보는 것.
   - 카드: 지킬 것, 세계관, 지금(날, 시간대, 장소, 소지품), 장면의 인물(표식, 이름, 칸, 호감도 단계), 쓰는 법.
-    빈 칸은 빼고, 소개의 HTML 은 글자만 보낸다. 장면에 아무도 없으면 서술만 쓰라고 한다. 장면 지시는 있을 때만
+    빈 칸은 빼고, 소개의 HTML 은 글자만 보낸다. 장면에 아무도 없으면 서술만 쓰라고 한다. 장면 지시는 있을 때만.
+    다음 답 추천의 지시는 켰을 때만 맨 끝에 붙는다
   - 메시지: 카드가 먼저, 그 뒤에 최근의 말. 행동 말은 [행동] 을 붙인 사람의 차례다
   - 상태: 저장한 모양에서 그대로 되돌아온다. 가지의 끝에서 가장 가까운 상태를 쓰고, 없으면 처음의 상태다
 """
@@ -87,6 +88,16 @@ def test_an_empty_scene_asks_for_narration_and_an_event_adds_its_direction():
     assert '지금 이 장소에는 아무도 없다. 서술만 쓴다.' in card
     assert '쓸 수 있는 인물' not in card
     assert '[장면 지시]\n비가 쏟아진다.' in card
+
+
+def test_the_suggestions_instruction_comes_last_only_when_asked():
+    scene = scene_card(BRIEFING, WORLD, start_state(WORLD), ['mina'])
+
+    asked = render_card(BRIEFING, scene, suggest=True)
+
+    assert '[다음 답 추천]' not in render_card(BRIEFING, scene)
+    assert asked.rsplit('\n\n', 1)[1].startswith('[다음 답 추천]\n')
+    assert asked.endswith('선택지의 줄에는 말하는 사람의 표식을 붙이지 않는다.')
 
 
 def test_messages_start_with_the_card():

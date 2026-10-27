@@ -226,7 +226,7 @@ async def edit_message(
     session: AsyncSession, message_id: uuid.UUID, segments: list[dict], content: str, busy_since: datetime
 ) -> bool:
     """
-    답의 조각과 본문을 고치고 고친 표시를 단다.
+    답의 조각과 본문을 고치고 고친 표시를 단다. 다음 답 추천은 고치기 전의 글에 맞춘 것이라 지운다(chat 과 같다).
     그 세션이 답을 쓰는 중이면(busy_since 뒤에 차례를 잡았다) 고치지 않고 False.
 
     확인과 고치기를 한 문장으로 한다(chat 과 같다). 따로 하면 그사이 시작한 생성이 고친 것을 가리고 지나간다.
@@ -235,7 +235,7 @@ async def edit_message(
     statement = (
         update(Message)
         .where(Message.id == message_id, ~generating)
-        .values(segments=segments, content=content, edited=True)
+        .values(segments=segments, content=content, edited=True, suggestions=[])
         .returning(Message.id)
         .execution_options(synchronize_session=False)
     )
