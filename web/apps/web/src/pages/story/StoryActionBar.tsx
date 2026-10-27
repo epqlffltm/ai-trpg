@@ -5,15 +5,15 @@
 
 import { Button, Dialog } from '@ai-trpg/ui';
 import { useCallback, useState } from 'react';
-import type { StoryAction, StoryState } from '../../api/story';
+import type { StoryAction, StoryState, StoryView } from '../../api/story';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { canPassTime, destinations, heldItems, isLastDay } from './storyActions';
 import { placeName } from './storyWorld';
 
-type Props = { document: Record<string, unknown>; state: StoryState; disabled: boolean; onAct: (action: StoryAction) => Promise<boolean> };
+type Props = { view: StoryView; state: StoryState; disabled: boolean; onAct: (action: StoryAction) => Promise<boolean> };
 
-export function StoryActionBar({ document, state, disabled, onAct }: Props) {
-  const timeFlows = canPassTime(document, state);
+export function StoryActionBar({ view, state, disabled, onAct }: Props) {
+  const timeFlows = canPassTime(view, state);
   return (
     <div className="story-actions" role="toolbar" aria-label="행동">
       {timeFlows ? (
@@ -21,11 +21,11 @@ export function StoryActionBar({ document, state, disabled, onAct }: Props) {
           <Button variant="secondary" disabled={disabled} onClick={() => void onAct({ kind: 'pass_time' })}>
             시간 보내기
           </Button>
-          <EndDayButton lastDay={isLastDay(document, state)} disabled={disabled} onAct={onAct} />
-          <MapButton document={document} state={state} disabled={disabled} onAct={onAct} />
+          <EndDayButton lastDay={isLastDay(view, state)} disabled={disabled} onAct={onAct} />
+          <MapButton view={view} state={state} disabled={disabled} onAct={onAct} />
         </>
       ) : null}
-      <ItemsButton document={document} state={state} />
+      <ItemsButton view={view} state={state} />
     </div>
   );
 }
@@ -56,17 +56,17 @@ function EndDayButton({ lastDay, disabled, onAct }: { lastDay: boolean; disabled
   );
 }
 
-function MapButton({ document, state, disabled, onAct }: Omit<Props, 'onAct'> & { onAct: (action: StoryAction) => Promise<boolean> }) {
+function MapButton({ view, state, disabled, onAct }: Omit<Props, 'onAct'> & { onAct: (action: StoryAction) => Promise<boolean> }) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
-  const places = destinations(document, state.place);
+  const places = destinations(view, state.place);
   return (
     <>
       <Button variant="secondary" disabled={disabled} onClick={() => setOpen(true)}>
         지도
       </Button>
       <Dialog title="지도" open={open} onClose={close}>
-        <p>지금 있는 곳: {placeName(document, state.place)}</p>
+        <p>지금 있는 곳: {placeName(view, state.place)}</p>
         {places.length === 0 ? <p className="empty-state">여기서 바로 갈 수 있는 곳이 없습니다.</p> : null}
         <ul className="plain-list story-places" aria-label="갈 수 있는 곳">
           {places.map((place) => (
@@ -93,10 +93,10 @@ function MapButton({ document, state, disabled, onAct }: Omit<Props, 'onAct'> & 
   );
 }
 
-function ItemsButton({ document, state }: { document: Record<string, unknown>; state: StoryState }) {
+function ItemsButton({ view, state }: { view: StoryView; state: StoryState }) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
-  const items = heldItems(document, state.items);
+  const items = heldItems(view, state.items);
   return (
     <>
       <Button variant="secondary" onClick={() => setOpen(true)}>

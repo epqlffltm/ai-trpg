@@ -15,6 +15,7 @@ import { IntroHtml } from '../chat/character/IntroHtml';
 import { publicWorldQuery, storyEndingsQuery, worldSessionsQuery } from './storyQueries';
 import { describeStartProblem } from './storyTurnProblem';
 import { castLabel, endingLine, worldTags } from './storyWorldView';
+import { progressLine } from './storyCastView';
 import { useStartStorySession } from './useStartStorySession';
 
 export function StoryWorldPage() {
@@ -99,7 +100,7 @@ function StartSection({ worldId, signedIn }: { worldId: string; signedIn: boolea
         {items.map((session) => (
           <li key={session.id} className="story-sessions__row">
             <Link to={`/story/sessions/${encodeURIComponent(session.id)}`}>
-              {session.world.version}판 · <time dateTime={session.updated_at}>{formatDateTime(session.updated_at)}</time>
+              {[`${session.world.version}판`, progressLine(session.progress)].filter(Boolean).join(' · ')} · <time dateTime={session.updated_at}>{formatDateTime(session.updated_at)}</time>
             </Link>
           </li>
         ))}

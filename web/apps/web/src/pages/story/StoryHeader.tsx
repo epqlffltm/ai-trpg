@@ -11,7 +11,7 @@ import { hasEpilogue, stateLine } from './storyWorld';
 type Props = { session: StorySession; state: StoryState; busy: boolean; onChooseModel: () => void };
 
 export function StoryHeader({ session, state, busy, onChooseModel }: Props) {
-  const epilogue = state.ending !== null && hasEpilogue(session.world.document);
+  const epilogue = state.ending !== null && hasEpilogue(session.view);
   return (
     <header className="conversation__head">
       <div className="conversation__who">
@@ -20,7 +20,7 @@ export function StoryHeader({ session, state, busy, onChooseModel }: Props) {
         </p>
         <h1>{session.world.name}</h1>
         <p className="hint">
-          {stateLine(session.world.document, state)}
+          {stateLine(session.view, state)}
           {epilogue ? ' · 후일담' : ''}
         </p>
       </div>

@@ -1,17 +1,21 @@
 // web/apps/web/src/pages/story/StoryCastRow.tsx
-// 장면의 인물 줄과 인물 메뉴(D2, D5 의 일부). 인물을 누르면 메뉴가 열리고 건네기(가진 물건 하나)와 고백(한 번 더 묻는다)을 한다.
-// 고백은 고백이 있는 인물에게만, 엔딩 전에만 보인다. 성공과 실패, 고백을 받지 않는 기간은 엔진이 정한다(422 cooling_down).
-// 받는 중이거나 끝난 세션이면 메뉴의 행동을 막는다.
+// 장면의 인물 줄(그림과 이름)과 인물 창(D2 의 인물 메뉴, D5). 인물을 누르면 창이 열린다.
+// 창의 위는 인물 창(D5): 소개, 나이·성별, 호감도(숫자나 단계), 고백 대기, 건넨 선물, 함께 본 이벤트. 제작자가 고른 항목만 서버가 보낸다.
+// 아래는 행동: 건네기(가진 물건 하나), 고백(고백할 수 있는 인물에게만, 엔딩 전에만, 한 번 더 묻는다. 대기 중이면 막고 그때를 알린다).
+// 실루엣 인물은 "???" 와 검은 칸이다. 받는 중이거나 끝난 세션이면 행동을 막는다.
 
 import { Button, Dialog, Radio } from '@ai-trpg/ui';
 import { useCallback, useState } from 'react';
-import type { StoryAction, StoryState } from '../../api/story';
+import type { StoryAction, StoryState, StoryView, StoryViewCast } from '../../api/story';
+import { useImageUrl } from '../../hooks/useImageUrl';
+import { IntroHtml } from '../chat/character/IntroHtml';
 import { canConfess, heldItems } from './storyActions';
-import { castName } from './storyWorld';
+import { affectionText, coolingText, eventNames, giftNames, portraitOf, profileLine } from './storyCastView';
+import { castName, castOf } from './storyWorld';
 
-type Props = { document: Record<string, unknown>; state: StoryState; cast: string[]; disabled: boolean; onAct: (action: StoryAction) => Promise<boolean> };
+type Props = { view: StoryView; state: StoryState; cast: string[]; disabled: boolean; onAct: (action: StoryAction) => Promise<boolean> };
 
-export function StoryCastRow({ document, state, cast, disabled, onAct }: Props) {
+export function StoryCastRow({ view, state, cast, disabled, onAct }: Props) {
   const [chosen, setChosen] = useState<string | null>(null);
   const close = useCallback(() => setChosen(null), []);
   return (
@@ -21,15 +25,16 @@ export function StoryCastRow({ document, state, cast, disabled, onAct }: Props) 
         {cast.map((id) => (
           <li key={id}>
             <button type="button" className="story-cast__member" onClick={() => setChosen(id)}>
-              {castName(document, id)}
+              <Portrait cast={castOf(view, id)} />
+              <span>{castName(view, id)}</span>
             </button>
           </li>
         ))}
       </ul>
-      <Dialog title={chosen ? castName(document, chosen) : '인물'} open={chosen !== null} onClose={close}>
+      <Dialog title={chosen ? castName(view, chosen) : '인물'} open={chosen !== null} onClose={close}>
         {chosen ? (
           <CastMenu
-            document={document}
+            view={view}
             state={state}
             castId={chosen}
             disabled={disabled}
@@ -44,13 +49,41 @@ export function StoryCastRow({ document, state, cast, disabled, onAct }: Props) 
   );
 }
 
-type MenuProps = { document: Record<string, unknown>; state: StoryState; castId: string; disabled: boolean; onAct: (action: StoryAction) => Promise<boolean> };
+function Portrait({ cast }: { cast: StoryViewCast | undefined }) {
+  const image = useImageUrl(portraitOf(cast));
+  const silhouette = !cast || cast.reveal === 'silhouette';
+  if (image.url) return <img src={image.url} alt="" className="story-cast__portrait" />;
+  return <span className={silhouette ? 'story-cast__portrait story-cast__portrait--silhouette' : 'story-cast__portrait'} aria-hidden="true" />;
+}
 
-function CastMenu({ document, state, castId, disabled, onAct }: MenuProps) {
-  const items = heldItems(document, state.items);
+/** 인물 창(D5). 서버가 보낸 항목만 그린다 */
+function CastProfile({ view, state, cast }: { view: StoryView; state: StoryState; cast: StoryViewCast }) {
+  const profile = profileLine(cast);
+  const affection = affectionText(cast, state.affection[cast.id]);
+  const cooling = coolingText(cast, state.minutes);
+  const gifts = giftNames(view, cast);
+  const events = eventNames(view, cast);
+  return (
+    <div className="story-profile">
+      {profile ? <p className="hint">{profile}</p> : null}
+      {affection ? <p>{affection}</p> : null}
+      {cooling ? <p className="hint">{cooling}</p> : null}
+      {cast.intro_html ? <IntroHtml html={cast.intro_html} /> : null}
+      {gifts.length > 0 ? <p className="hint">건넨 선물: {gifts.join(', ')}</p> : null}
+      {events.length > 0 ? <p className="hint">함께 본 이벤트: {events.join(', ')}</p> : null}
+    </div>
+  );
+}
+
+type MenuProps = { view: StoryView; state: StoryState; castId: string; disabled: boolean; onAct: (action: StoryAction) => Promise<boolean> };
+
+function CastMenu({ view, state, castId, disabled, onAct }: MenuProps) {
+  const items = heldItems(view, state.items);
   const [item, setItem] = useState('');
   const [confirming, setConfirming] = useState(false);
-  const name = castName(document, castId);
+  const name = castName(view, castId);
+  const cast = castOf(view, castId);
+  const cooling = cast ? coolingText(cast, state.minutes) : null;
 
   if (confirming) {
     return (
@@ -69,6 +102,7 @@ function CastMenu({ document, state, castId, disabled, onAct }: MenuProps) {
   }
   return (
     <div className="story-cast-menu">
+      {cast ? <CastProfile view={view} state={state} cast={cast} /> : null}
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -86,8 +120,8 @@ function CastMenu({ document, state, castId, disabled, onAct }: MenuProps) {
           건네기
         </Button>
       </form>
-      {canConfess(document, state, castId) ? (
-        <Button variant="quiet" disabled={disabled} onClick={() => setConfirming(true)}>
+      {canConfess(view, state, castId) ? (
+        <Button variant="quiet" disabled={disabled || cooling !== null} onClick={() => setConfirming(true)}>
           고백
         </Button>
       ) : null}

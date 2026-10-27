@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import type { StoryMessage, StorySession, StoryState } from '../../api/story';
 import { sse } from '../../test/chatFixtures';
+import { castOut, storyView } from '../../test/storyFixtures';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
 import { canConfess, canPassTime, destinations, freshEnding, heldItems, isLastDay, pendingChoices } from './storyActions';
@@ -20,15 +21,13 @@ const GEN = '00000000-0000-4000-8000-00000000e601';
 const M = (n: number) => `00000000-0000-4000-8000-0000000f60${n}`;
 const AT = '2026-10-26T03:00:00Z';
 
-const DOCUMENT = {
-  name: '여름 학교',
+const VIEW = storyView({
   deadline_days: 30,
-  after_ending: 'end',
   slots: [{ id: 'evening', name: '저녁', start_hour: 18 }],
   places: [
-    { id: 'school', name: '학교' },
-    { id: 'park', name: '공원' },
-    { id: 'shop', name: '가게' },
+    { id: 'school', name: '학교', description: '', image_id: null, backgrounds: {} },
+    { id: 'park', name: '공원', description: '', image_id: null, backgrounds: {} },
+    { id: 'shop', name: '가게', description: '', image_id: null, backgrounds: {} },
   ],
   paths: [
     { a: 'school', b: 'park', minutes: 20 },
@@ -36,16 +35,13 @@ const DOCUMENT = {
     { a: 'park', b: 'shop', minutes: 15 },
   ],
   items: [
-    { id: 'flower', name: '꽃', description: '노란 꽃' },
-    { id: 'letter', name: '편지', description: '' },
+    { id: 'flower', name: '꽃', description: '노란 꽃', image_id: null, consumable: false },
+    { id: 'letter', name: '편지', description: '', image_id: null, consumable: false },
   ],
-  cast: [
-    { id: 'mina', character: { name: '미나' }, confession: { stage: 'love' } },
-    { id: 'jun', character: { name: '준' }, confession: null },
-  ],
-  events: [{ id: 'rain', name: '소나기', choices: [{ id: 'share', text: '우산을 함께 쓴다' }, { id: 'run', text: '뛰어간다' }] }],
-  endings: [{ id: 'spring', name: '봄의 약속', unlock: true }],
-};
+  cast: [castOut('mina', '미나', { confessable: true }), castOut('jun', '준')],
+  events: [{ id: 'rain', name: '소나기', image_id: null, cast: [], choices: [{ id: 'share', text: '우산을 함께 쓴다' }, { id: 'run', text: '뛰어간다' }] }],
+  endings: [{ id: 'spring', name: '봄의 약속', hint: '', image_id: null, seen: true, unlock: true }],
+});
 
 function state(extra: Partial<StoryState> = {}): StoryState {
   return { minutes: 0, day: 3, slot: 'evening', place: 'school', items: { flower: 2 }, affection: {}, companions: [], choosing: null, ending: null, cast: ['mina', 'jun'], ...extra };
@@ -61,7 +57,8 @@ function session(extra: Partial<StorySession> = {}): StorySession {
   return {
     id: SESSION,
     title: '여름 학교',
-    world: { id: WORLD, version: 1, name: '여름 학교', image_id: null, rating: 'all', document: DOCUMENT },
+    world: { id: WORLD, version: 1, name: '여름 학교', image_id: null, rating: 'all', document: {} },
+    view: VIEW,
     model: { slug: 'luna', display_name: 'Luna', vendor: 'openai', grade: 'standard', retires_on: null, usable: true },
     messages: MESSAGES,
     state: state(),
@@ -224,25 +221,25 @@ describe('장면의 행동', () => {
 
 describe('순수한 함수', () => {
   it('지도, 소지품, 선택지, 고백, 마지막 날, 엔딩', () => {
-    expect(destinations(DOCUMENT, 'school')).toEqual([
+    expect(destinations(VIEW, 'school')).toEqual([
       { id: 'park', name: '공원', minutes: 20 },
       { id: 'shop', name: '가게', minutes: 10 },
     ]);
-    expect(destinations({}, 'school')).toEqual([]);
-    expect(heldItems(DOCUMENT, { flower: 1, letter: 0, ghost: 2 })).toEqual([
+    expect(destinations(storyView(), 'school')).toEqual([]);
+    expect(heldItems(VIEW, { flower: 1, letter: 0, ghost: 2 })).toEqual([
       { id: 'flower', name: '꽃', count: 1, description: '노란 꽃' },
       { id: 'ghost', name: 'ghost', count: 2, description: '' },
     ]);
-    expect(pendingChoices(DOCUMENT, 'rain')?.choices.map((choice) => choice.id)).toEqual(['share', 'run']);
-    expect(pendingChoices(DOCUMENT, null)).toBeNull();
-    expect(pendingChoices(DOCUMENT, 'ghost')).toBeNull();
-    expect(canConfess(DOCUMENT, state(), 'mina')).toBe(true);
-    expect(canConfess(DOCUMENT, state(), 'jun')).toBe(false);
-    expect(canConfess(DOCUMENT, state({ ending: 'spring' }), 'mina')).toBe(false);
-    expect(isLastDay(DOCUMENT, state({ day: 30 }))).toBe(true);
-    expect(isLastDay(DOCUMENT, state({ day: 29 }))).toBe(false);
-    expect(canPassTime(DOCUMENT, state({ ending: 'spring' }))).toBe(false);
-    expect(canPassTime({ ...DOCUMENT, after_ending: 'epilogue' }, state({ ending: 'spring' }))).toBe(true);
+    expect(pendingChoices(VIEW, 'rain')?.choices.map((choice) => choice.id)).toEqual(['share', 'run']);
+    expect(pendingChoices(VIEW, null)).toBeNull();
+    expect(pendingChoices(VIEW, 'ghost')).toBeNull();
+    expect(canConfess(VIEW, state(), 'mina')).toBe(true);
+    expect(canConfess(VIEW, state(), 'jun')).toBe(false);
+    expect(canConfess(VIEW, state({ ending: 'spring' }), 'mina')).toBe(false);
+    expect(isLastDay(VIEW, state({ day: 30 }))).toBe(true);
+    expect(isLastDay(VIEW, state({ day: 29 }))).toBe(false);
+    expect(canPassTime(VIEW, state({ ending: 'spring' }))).toBe(false);
+    expect(canPassTime({ after_ending: 'epilogue' }, state({ ending: 'spring' }))).toBe(true);
     expect(freshEnding([message(1, 'action', { ending_id: 'spring' }), message(2, 'assistant')])).toEqual({ messageId: M(1), endingId: 'spring' });
     expect(freshEnding(MESSAGES)).toBeNull();
   });

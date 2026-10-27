@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
+import { storyView } from '../../test/storyFixtures';
 import { castLabel, endingLine, worldTags } from './storyWorldView';
 
 const WORLD = '00000000-0000-4000-8000-00000000b901';
@@ -76,7 +77,7 @@ describe('공개 세계관', () => {
 
   it('로그인했으면 이 세계관의 내 세션과 본 엔딩 수를 보이고 새로 시작한다', async () => {
     const { seen } = signedIn({
-      'POST /api/v1/story/conversations': () => json(201, { id: SESSION, title: '여름 학교', world: { ...SUMMARY, document: {} }, model: null, messages: [], state: { minutes: 0, day: 1, slot: 'morning', place: 'school', items: {}, affection: {}, companions: [], choosing: null, ending: null, cast: [] }, created_at: AT, updated_at: AT }),
+      'POST /api/v1/story/conversations': () => json(201, { id: SESSION, title: '여름 학교', world: { ...SUMMARY, document: {} }, view: storyView(), model: null, messages: [], state: { minutes: 0, day: 1, slot: 'morning', place: 'school', items: {}, affection: {}, companions: [], choosing: null, ending: null, cast: [] }, created_at: AT, updated_at: AT }),
     });
     renderApp(`/story/worlds/${WORLD}`);
 

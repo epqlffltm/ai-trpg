@@ -2,7 +2,8 @@
 // story 서버(D, #591). 세션(세계관 하나를 걷는 한 번), 모델, 말 보내기·행동·다시 생성(바로 SSE), 멈추기, 가지 고르기.
 //
 // 세션을 시작하면 세계관의 마지막 판을 가져와 고정한다. 모델을 보내지 않으면 지난번 세션의 모델이다(쓸 수 없으면 없이).
-// 세션 읽기에는 판의 문서(document), 지금 가지의 말(말마다 대안 alternatives), 그 끝의 상태(state)가 실린다.
+// 세션 읽기에는 보여도 되는 세계관의 칸(view), 지금 가지의 말(말마다 대안 alternatives), 그 끝의 상태(state)가 실린다.
+// 판의 문서(world.document)는 서버가 곧 뺀다. 화면은 view 만 쓴다. 목록의 줄에는 진행(progress: 날짜, 엔딩, 후일담)이 실린다.
 // 답의 SSE: turn{generation_id, user_message, cast, state}, segment{speaker}, delta{text}, done{message}, failed{code}. 읽기는 chatTurns.ts.
 // 답을 시작하기 전의 거절(story-server/app/turns/router.py):
 //   - 409 model_required, generation_in_progress, session_ended(끝을 고른 세계관의 엔딩 뒤). 422 model_unavailable, not_regenerable
@@ -27,6 +28,10 @@ export type StorySavedMessage = Schemas['MessageOut'];
 export type StorySegment = Schemas['SegmentOut'];
 export type StoryState = Schemas['StateOut'];
 export type StoryEndingRecords = Schemas['EndingRecordList'];
+/** 세션에서 화면이 쓰는 세계관의 칸(보여도 되는 것만, 이 가지에 맞춘 것). 판의 문서(world.document) 대신 이것을 쓴다 */
+export type StoryView = Schemas['WorldView'];
+export type StoryViewCast = Schemas['CastOut'];
+export type StoryProgress = Schemas['ProgressOut'];
 export type StoryAction =
   | Schemas['MoveAction']
   | Schemas['PassTimeAction']

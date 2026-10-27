@@ -14,6 +14,7 @@ import { formatDateTime } from '../../format/dateTime';
 import { myStoryWorldsQuery, publicWorldsQuery, storySessionsQuery } from './storyQueries';
 import { describeStartProblem } from './storyTurnProblem';
 import { StoryWorldCard } from './StoryWorldCard';
+import { progressLine } from './storyCastView';
 import { useStartStorySession } from './useStartStorySession';
 
 export function StoryHomePage() {
@@ -116,7 +117,7 @@ function SessionRow({ session }: { session: StorySessionSummary }) {
     <li className="story-sessions__row">
       <Link to={`/story/sessions/${encodeURIComponent(session.id)}`}>{session.title || session.world.name}</Link>
       <p className="hint">
-        {session.world.name} {session.world.version}판 · {session.model?.display_name ?? '모델 없음'} · <time dateTime={session.updated_at}>{formatDateTime(session.updated_at)}</time>
+        {[session.world.name, `${session.world.version}판`, progressLine(session.progress), session.model?.display_name ?? '모델 없음'].filter(Boolean).join(' · ')} · <time dateTime={session.updated_at}>{formatDateTime(session.updated_at)}</time>
       </p>
     </li>
   );

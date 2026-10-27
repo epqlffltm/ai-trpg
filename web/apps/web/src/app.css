@@ -2550,3 +2550,47 @@ a.ui-button {
 .story-world__member--silhouette .story-world__portrait {
   background: var(--ui-text);
 }
+
+/* story 그림 창과 인물의 그림(D2, D5) */
+.story-picture {
+  margin: 0 0 8px;
+  position: relative;
+}
+
+.story-picture__image {
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: var(--ui-radius);
+}
+
+.story-picture__caption {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 2px 8px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.story-cast__member {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.story-cast__portrait {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--ui-border);
+}
+
+.story-cast__portrait--silhouette {
+  background: var(--ui-text);
+}
+
+.story-profile {
+  margin-bottom: var(--ui-gap);
+}
