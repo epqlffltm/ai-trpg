@@ -528,7 +528,7 @@ export interface components {
         };
         /**
          * ConversationSummary
-         * @description 목록의 한 줄.
+         * @description 목록의 한 줄. progress 는 지금 가지의 끝까지 온 곳이다.
          */
         ConversationSummary: {
             /**
@@ -542,6 +542,7 @@ export interface components {
              */
             id: string;
             model: components["schemas"]["ConversationModelOut"] | null;
+            progress: components["schemas"]["ProgressOut"];
             /** Title */
             title: string;
             /**
@@ -927,6 +928,27 @@ export interface components {
             image_id: string | null;
             /** Name */
             name: string;
+        };
+        /**
+         * ProgressOut
+         * @description 세션의 지금 가지의 끝까지 온 곳. 목록(D1 의 내 세션)이 날짜와 진행, 끝, 후일담을 그린다.
+         *     day 는 며칠째, slot 은 시간대의 id, deadline_days 는 판의 기한(없으면 null)이다. 남은 날은 deadline_days - day 다.
+         *     ending 은 이 가지에서 본 엔딩의 id 와 이름(못 봤으면 null)이다.
+         *     epilogue 는 엔딩을 봤고 세계관이 후일담을 골라 이야기가 이어지는 것이다(엔딩을 봤는데 거짓이면 끝난 세션이다).
+         */
+        ProgressOut: {
+            /** Day */
+            day: number;
+            /** Deadline Days */
+            deadline_days: number | null;
+            /** Ending */
+            ending: string | null;
+            /** Ending Name */
+            ending_name: string | null;
+            /** Epilogue */
+            epilogue: boolean;
+            /** Slot */
+            slot: string;
         };
         /**
          * Rating

@@ -39,11 +39,12 @@ from app.catalog.offers import is_sold
 from app.conversations import repository
 from app.conversations.models import Conversation, ImportedWorld, Message, Role
 from app.conversations.repository import ConversationRow
-from app.conversations.schemas import ConversationCreate, StateOut, WorldView
+from app.conversations.schemas import ConversationCreate, ProgressOut, StateOut, WorldView
 from app.conversations.views import met_on, world_view
 from app.core.dependencies import Viewer
+from app.engine.clock import day_of, slot_of
 from app.engine.state import StoryState
-from app.engine.world import World, read_world
+from app.engine.world import AfterEnding, World, read_world
 from app.ratings import Rating, allowed_ratings
 from app.records import repository as records
 from app.turns.scenes import staging
@@ -380,3 +381,36 @@ async def change_model(
     await repository.set_model(session, conversation.id, model.slug)
     await session.commit()
     return model
+
+
+def progress_of(world: World, state: StoryState) -> ProgressOut:
+    """가지의 끝의 상태를 목록의 진행으로. 엔딩의 이름은 판에서 찾는다(없으면 id 그대로)."""
+    ending = world.ending(state.ending) if state.ending is not None else None
+    return ProgressOut(
+        day=day_of(state.minutes),
+        slot=slot_of(world, state.minutes),
+        deadline_days=world.deadline_days,
+        ending=state.ending,
+        ending_name=(ending.name or ending.id) if ending is not None else state.ending,
+        epilogue=state.ending is not None and world.after_ending == AfterEnding.EPILOGUE,
+    )
+
+
+async def conversation_progress(
+    session: AsyncSession, conversation: Conversation, imported: ImportedWorld
+) -> ProgressOut:
+    """
+    세션 하나의 진행. 지금 가지의 말을 읽고 그 끝의 상태를 계산한다.
+    상태는 말에 붙어 있어 가지를 바꾸거나 다시 생성하면 저장 없이 바뀐다.
+    그래서 세션 표에 따로 적어 두지 않고 읽을 때 센다.
+    """
+    world = read_world(imported.document)
+    messages = await repository.active_path(session, conversation.active_leaf_id)
+    return progress_of(world, await branch_state(session, world, messages))
+
+
+async def conversation_progresses(session: AsyncSession, rows: list[ConversationRow]) -> dict[uuid.UUID, ProgressOut]:
+    """목록의 한 쪽의 세션마다의 진행. 세션마다 쿼리 둘이다(한 쪽은 limit 개까지라 상한이 있다)."""
+    return {
+        conversation.id: await conversation_progress(session, conversation, imported) for conversation, imported in rows
+    }
