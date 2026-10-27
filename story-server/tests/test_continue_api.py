@@ -113,9 +113,9 @@ async def test_continuing_carries_on_the_cut_answer(
     assert events[1] == ('delta', {'text': '네. 기다렸어.'})
     assert (done['id'], done['status']) == (cut['id'], 'complete')
     assert done['segments'] == [
-        {'speaker': None, 'text': '바람이 분다.'},
-        {'speaker': 'mina', 'text': '늦었네. 기다렸어.'},
-        {'speaker': None, 'text': '해가 진다.'},
+        {'speaker': None, 'text': '바람이 분다.', 'expression': None},
+        {'speaker': 'mina', 'text': '늦었네. 기다렸어.', 'expression': None},
+        {'speaker': None, 'text': '해가 진다.', 'expression': None},
     ]
     assert done['content'] == '@narration: 바람이 분다.\n@mina: 늦었네. 기다렸어.\n@narration: 해가 진다.'
     # 모델에는 끊긴 답까지의 말과 이어 쓰라는 지시가 갔다
@@ -136,7 +136,7 @@ async def test_a_repeated_tail_is_trimmed_and_another_cut_stays_partial(
     done = (await streamed(app, await carry_on(client, mine, cut['id'])))[-1][1]['message']
 
     # 끊긴 답의 끝(@mina: 늦었)을 되풀이한 만큼 떼고 미나의 조각을 잇는다. 또 잘려 partial 이다
-    assert done['segments'][-1] == {'speaker': 'mina', 'text': '늦었네. 기다렸'}
+    assert done['segments'][-1] == {'speaker': 'mina', 'text': '늦었네. 기다렸', 'expression': None}
     assert done['status'] == 'partial'
 
 

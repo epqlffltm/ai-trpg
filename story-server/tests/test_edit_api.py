@@ -103,7 +103,10 @@ async def test_editing_changes_only_the_text_of_each_segment(
 
     assert response.status_code == status.HTTP_200_OK, response.text
     edited = response.json()
-    assert edited['segments'] == [{'speaker': None, 'text': '노을이 졌다.'}, {'speaker': 'mina', 'text': '기다렸어.'}]
+    assert edited['segments'] == [
+        {'speaker': None, 'text': '노을이 졌다.', 'expression': None},
+        {'speaker': 'mina', 'text': '기다렸어.', 'expression': None},
+    ]
     assert (edited['content'], edited['edited']) == ('@narration: 노을이 졌다.\n@mina: 기다렸어.', True)
     read = (await client.get(f'{CONVERSATIONS_URL}/{conversation["id"]}', headers=mine)).json()
     assert read['messages'][-1]['edited'] is True

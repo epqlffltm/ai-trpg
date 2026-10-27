@@ -13,6 +13,12 @@
   - 장면에 없는 인물의 줄은 버리고 센다(dropped). 화면에 보이지 않고 저장하지 않는다.
   - 표식을 어긴 줄(@ 로 시작하지 않는다, 이름이 비었다, : 가 없다)은 서술로 돌린다.
   - 한 줄이 조각 하나다. 빈 줄은 버린다. 같은 사람이 이어 말해도 줄마다 조각이다(화면이 묶는다).
+  - 표정(2026-10-27). 고를 수 있는 표정이 있는 인물의 줄은 표식 뒤에 <expression>표정</expression> 을
+    먼저 쓸 수 있다(conversation_core/expressions.py 의 표식을 줄마다 쓴다). 떼어 그 조각의 표정으로 둔다.
+    그 인물의 그림에 없는 이름이나 "기본"이면 기본 표정(None)이다. 표식이 틀려도 오류로 만들지 않고 글로 둔다.
+    서술과 표정이 없는 인물의 줄은 찾지 않는다.
+
+        @mina: <expression>웃음</expression>늦었네.
 
 흘러오는 대로 자른다(SpeakerSplitter). 줄의 머리를 다 받기 전에는 그 줄의 글을 내보내지 않는다.
 표식이 정해지면 그 뒤의 글은 받는 대로 내보낸다. 이름표가 스트리밍 중에 바로 바뀐다.
@@ -24,10 +30,13 @@
     앞의 빈칸을 버리지 않는다(끊긴 자리의 빈칸이다)
   - 첫 줄이 표식으로 시작하면 새 조각이다. 그 뒤의 줄은 보통과 같다
   - 이어 쓴 것이 없으면 조각이 없는 것으로 돌려준다(저장할 것이 없다). 있으면 끊긴 답의 조각까지 모두 돌려준다
+  - 끊긴 마지막 조각을 이어 쓰는 줄은 표정을 찾지 않는다(그 조각의 표정을 그대로 둔다)
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass, field
+
+from conversation_core.expressions import ExpressionHead, match_expression
 
 # 서술의 표식 이름들. 대소문자를 가리지 않는다
 NARRATION_LABELS = frozenset({'narration', '서술'})
@@ -39,17 +48,19 @@ MARKER_END = ':'
 
 @dataclass(frozen=True)
 class Segment:
-    """말 조각 하나. speaker 는 장면의 인물의 id 이고, 서술이면 None 이다."""
+    """말 조각 하나. speaker 는 장면의 인물의 id 이고, 서술이면 None 이다. expression 은 그 줄의 표정(기본이면 None)."""
 
     speaker: str | None
     text: str
+    expression: str | None = None
 
 
 @dataclass(frozen=True)
 class SegmentStart:
-    """새 조각이 시작됐다. 이 뒤의 글은 이 사람의 것이다."""
+    """새 조각이 시작됐다. 이 뒤의 글은 이 사람의 것이다. expression 은 그 줄의 표정(기본이면 None)."""
 
     speaker: str | None
+    expression: str | None = None
 
 
 @dataclass(frozen=True)
@@ -100,9 +111,11 @@ class SpeakerSplitter:
     흘러오는 글을 줄마다 말 조각으로 자른다. feed 가 내보낼 것(SegmentEvent)을 돌려준다.
 
     labels 는 speaker_labels 가 만든 것이다. 끝나면 finish 를 부르고 segments 와 dropped 를 읽는다.
+    expressions 는 인물의 id → 고를 수 있는 표정의 이름들이다. 있는 인물의 줄만 표정의 표식을 찾는다.
     """
 
     labels: Mapping[str, str]
+    expressions: Mapping[str, Collection[str]] = field(default_factory=dict)
     # 지금 줄의 머리. 표식인지 정해지기 전까지 모은다
     head: str = ''
     # 지금 줄의 말하는 사람이 정해졌나
@@ -121,6 +134,10 @@ class SpeakerSplitter:
     extending: bool = False
     # base 뒤에 이어 쓴 것이 있다
     added: bool = False
+    # 지금 줄의 맨 앞에서 표정의 표식을 떼는 것. 표정을 찾지 않는 줄이면 None
+    face: ExpressionHead | None = None
+    # 지금 줄의 표정. 기본이면 None
+    expression: str | None = None
 
     def feed(self, piece: str) -> list[SegmentEvent]:
         """글의 조각을 받아 내보낼 것들을 돌려준다."""
@@ -129,7 +146,7 @@ class SpeakerSplitter:
             if char == '\n':
                 self.end_line(events)
             elif self.decided:
-                self.add(char, events)
+                self.take(char, events)
             else:
                 self.head += char
                 self.classify(events, line_ended=False)
@@ -186,8 +203,25 @@ class SpeakerSplitter:
         self.speaker = speaker
         if speaker is DROPPED:
             self.dropped += 1
-        for char in rest:
+        self.face = ExpressionHead() if self.reads_face(speaker) else None
+        self.take(rest, events)
+
+    def reads_face(self, speaker: str | None | Dropped) -> bool:
+        """이 줄에서 표정의 표식을 찾는가. 고를 수 있는 표정이 있는 인물의 줄이고, 끊긴 조각을 이어 쓰는 줄이 아니다."""
+        return isinstance(speaker, str) and not self.extending and bool(self.expressions.get(speaker))
+
+    def take(self, text: str, events: list[SegmentEvent]) -> None:
+        """지금 줄에 글을 붙인다. 표정을 찾는 줄이면 맨 앞의 표식을 떼고, 정해지면 그 표정을 적어 둔다."""
+        if self.face is not None:
+            text = self.face.feed(text)
+            self.note_face()
+        for char in text:
             self.add(char, events)
+
+    def note_face(self) -> None:
+        """표정의 표식을 다 읽었으면 그 줄의 표정을 정한다. 그 인물의 그림에 없는 이름이나 기본이면 None."""
+        if self.face is not None and self.face.decided and isinstance(self.speaker, str):
+            self.expression = match_expression(self.face.raw, self.expressions.get(self.speaker, ()))
 
     def add(self, char: str, events: list[SegmentEvent]) -> None:
         """지금 줄에 글자 하나를 붙인다. 버리는 줄이면 버린다. 첫 글자 앞의 빈칸은 버린다."""
@@ -198,7 +232,7 @@ class SpeakerSplitter:
                 return
             self.started = True
             if not self.extending:
-                events.append(SegmentStart(self.speaker))
+                events.append(SegmentStart(self.speaker, self.expression))
         self.text += char
         events.append(SegmentText(char))
 
@@ -206,16 +240,20 @@ class SpeakerSplitter:
         """줄이 끝났다. 조각을 남기고 다음 줄을 받을 준비를 한다."""
         if not self.decided:
             self.classify(events, line_ended=True)
+        if self.face is not None:
+            for char in self.face.release():
+                self.add(char, events)
         if self.started and self.text.strip():
-            self.keep(Segment(self.speaker, self.text.rstrip()))
+            self.keep(Segment(self.speaker, self.text.rstrip(), self.expression))
         self.head, self.decided, self.speaker, self.started, self.text = '', False, None, False, ''
         self.carrying = self.extending = False
+        self.face, self.expression = None, None
 
     def keep(self, segment: Segment) -> None:
         """다 받은 줄을 남긴다. 끊긴 마지막 조각을 이어 쓴 줄이면 그 조각의 글 끝에 붙인다."""
         if self.extending:
             last = self.found[-1]
-            self.found[-1] = Segment(last.speaker, last.text + segment.text)
+            self.found[-1] = Segment(last.speaker, last.text + segment.text, last.expression)
         else:
             self.found.append(segment)
         self.added = True
@@ -232,31 +270,46 @@ def merge_events(events: Iterable[SegmentEvent]) -> list[SegmentEvent]:
     return merged
 
 
-def split_segments(text: str, labels: Mapping[str, str]) -> tuple[tuple[Segment, ...], int]:
+def split_segments(
+    text: str, labels: Mapping[str, str], expressions: Mapping[str, Collection[str]] | None = None
+) -> tuple[tuple[Segment, ...], int]:
     """다 받은 답을 조각들로. 버린 줄의 수를 함께 돌려준다."""
-    splitter = SpeakerSplitter(labels)
+    splitter = SpeakerSplitter(labels, expressions or {})
     splitter.feed(text)
     splitter.finish()
     return splitter.segments(), splitter.dropped
 
 
 def render_segments(segments: Iterable[Segment]) -> str:
-    """조각들을 표식이 붙은 줄들로. 저장하는 본문이고, 다음 호출의 프롬프트에 그대로 다시 들어간다."""
+    """
+    조각들을 표식이 붙은 줄들로. 저장하는 본문이고, 다음 호출의 프롬프트에 그대로 다시 들어간다.
+    표정은 넣지 않는다(조각에 따로 둔다. chat 의 답도 본문에 표정을 두지 않는다).
+    """
     return '\n'.join(
         f'{MARKER_START}{segment.speaker or "narration"}{MARKER_END} {segment.text}' for segment in segments
     )
 
 
 def segment_dicts(segments: Iterable[Segment]) -> list[dict]:
-    """조각들을 저장하는 모양(JSON)으로."""
-    return [{'speaker': segment.speaker, 'text': segment.text} for segment in segments]
+    """조각들을 저장하는 모양(JSON)으로. 표정은 고른 것이 있을 때만 적는다(기본 표정인 조각은 전과 같은 모양이다)."""
+    return [segment_dict(segment) for segment in segments]
 
 
-def continuing_splitter(labels: Mapping[str, str], base: tuple[Segment, ...]) -> SpeakerSplitter:
+def segment_dict(segment: Segment) -> dict:
+    """조각 하나의 저장하는 모양."""
+    stored: dict = {'speaker': segment.speaker, 'text': segment.text}
+    if segment.expression is not None:
+        stored['expression'] = segment.expression
+    return stored
+
+
+def continuing_splitter(
+    labels: Mapping[str, str], base: tuple[Segment, ...], expressions: Mapping[str, Collection[str]] | None = None
+) -> SpeakerSplitter:
     """끊긴 답(base)에 이어 쓰는 글을 자르는 것. 첫 줄에 표식이 없으면 끊긴 마지막 조각을 이어 쓴다."""
-    return SpeakerSplitter(labels, found=list(base), base=base, carrying=bool(base))
+    return SpeakerSplitter(labels, expressions or {}, found=list(base), base=base, carrying=bool(base))
 
 
 def segments_of(dicts: Iterable[dict]) -> tuple[Segment, ...]:
-    """저장한 조각들(JSON)을 조각으로."""
-    return tuple(Segment(item.get('speaker'), str(item.get('text', ''))) for item in dicts)
+    """저장한 조각들(JSON)을 조각으로. 표정을 적기 전의 조각은 기본 표정이다."""
+    return tuple(Segment(item.get('speaker'), str(item.get('text', '')), item.get('expression')) for item in dicts)

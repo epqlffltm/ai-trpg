@@ -31,9 +31,9 @@ def turn_frame(start: TurnStart) -> Frame:
     return Frame(event='turn', data=body.model_dump_json())
 
 
-def segment_frame(speaker: str | None) -> Frame:
-    """새 말 조각이 시작됐다."""
-    return Frame(event='segment', data=SegmentEvent(speaker=speaker).model_dump_json())
+def segment_frame(speaker: str | None, expression: str | None = None) -> Frame:
+    """새 말 조각이 시작됐다. expression 은 그 줄의 표정이다(기본이면 None)."""
+    return Frame(event='segment', data=SegmentEvent(speaker=speaker, expression=expression).model_dump_json())
 
 
 def delta_frame(text: str) -> Frame:

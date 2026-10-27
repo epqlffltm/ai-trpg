@@ -343,7 +343,8 @@ async def choose_branch(
 
 def edited_segments(message: Message, texts: list[str]) -> tuple[Segment, ...]:
     """
-    답의 조각마다 글만 바꾼 조각들. 말하는 사람과 차례는 그대로다. 글의 앞뒤 빈칸은 걷는다(모델의 조각과 같은 모양).
+    답의 조각마다 글만 바꾼 조각들. 말하는 사람과 표정과 차례는 그대로다.
+    글의 앞뒤 빈칸은 걷는다(모델의 조각과 같은 모양).
     답이 아니면 NotEditableError(not_editable), 조각의 수가 다르면 NotEditableError(segments_mismatch).
     """
     if message.role != Role.ASSISTANT:
@@ -351,7 +352,10 @@ def edited_segments(message: Message, texts: list[str]) -> tuple[Segment, ...]:
     stored = message.segments or []
     if len(stored) != len(texts):
         raise NotEditableError(SEGMENTS_MISMATCH)
-    return tuple(Segment(segment.get('speaker'), text.strip()) for segment, text in zip(stored, texts, strict=True))
+    return tuple(
+        Segment(segment.get('speaker'), text.strip(), segment.get('expression'))
+        for segment, text in zip(stored, texts, strict=True)
+    )
 
 
 async def edit_message(

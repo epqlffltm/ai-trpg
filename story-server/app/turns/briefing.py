@@ -32,14 +32,21 @@ class PlaceText(Named):
     description: str = ''
 
 
+class SpriteText(Part):
+    """캐릭터 그림 하나의 표정의 이름. 빈 글이면 기본 표정이다."""
+
+    expression: str = ''
+
+
 class CharacterText(Part):
-    """인물이 가리키는 캐릭터의 판에서 복사한 칸."""
+    """인물이 가리키는 캐릭터의 판에서 복사한 칸. sprites 는 그림마다의 표정이다(모델이 고를 수 있는 표정)."""
 
     name: str = ''
     intro_html: str = ''
     speech_examples: str = ''
     age: str = ''
     gender: str = ''
+    sprites: tuple[SpriteText, ...] = ()
 
 
 class CastText(Part):
@@ -74,6 +81,14 @@ class Briefing(Part):
     def member(self, cast_id: str) -> CastText | None:
         """그 id 의 인물. 없으면 None."""
         return next((member for member in self.cast if member.id == cast_id), None)
+
+    def expressions(self, cast_id: str) -> tuple[str, ...]:
+        """그 인물의 그림에 있는 표정의 이름들(기본 표정은 뺀다). 판의 차례이고 같은 것은 하나다. 없으면 빈 것."""
+        member = self.member(cast_id)
+        if member is None:
+            return ()
+        names = (sprite.expression.strip() for sprite in member.character.sprites)
+        return tuple(dict.fromkeys(name for name in names if name))
 
     def cast_name(self, cast_id: str) -> str:
         """그 id 의 인물의 이름. 없으면 id 그대로다."""

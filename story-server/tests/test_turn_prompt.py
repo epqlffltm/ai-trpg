@@ -7,7 +7,8 @@
 보는 것.
   - 카드: 지킬 것, 세계관, 지금(날, 시간대, 장소, 소지품), 장면의 인물(표식, 이름, 칸, 호감도 단계), 쓰는 법.
     빈 칸은 빼고, 소개의 HTML 은 글자만 보낸다. 장면에 아무도 없으면 서술만 쓰라고 한다. 장면 지시는 있을 때만.
-    다음 답 추천의 지시는 켰을 때만 맨 끝에 붙는다
+    다음 답 추천의 지시는 켰을 때만 맨 끝에 붙는다.
+    그림에 표정이 있는 장면의 인물이 있으면 쓰는 법에 표정을 고르는 법이 붙는다
   - 메시지: 카드가 먼저, 그 뒤에 최근의 말. 행동 말은 [행동] 을 붙인 사람의 차례다
   - 상태: 저장한 모양에서 그대로 되돌아온다. 가지의 끝에서 가장 가까운 상태를 쓰고, 없으면 처음의 상태다
 """
@@ -98,6 +99,20 @@ def test_the_suggestions_instruction_comes_last_only_when_asked():
     assert '[다음 답 추천]' not in render_card(BRIEFING, scene)
     assert asked.rsplit('\n\n', 1)[1].startswith('[다음 답 추천]\n')
     assert asked.endswith('선택지의 줄에는 말하는 사람의 표식을 붙이지 않는다.')
+
+
+def test_the_card_lists_the_expressions_of_the_scene():
+    sprites = [{'expression': ''}, {'expression': '웃음'}, {'expression': ' 웃음 '}, {'expression': '화남'}]
+    doc = document([{**member('mina', home='home'), 'character': {'name': '미나', 'sprites': sprites}}])
+    briefing, world = read_briefing(doc), read_world(doc)
+
+    card = render_card(briefing, scene_card(briefing, world, start_state(world), ['mina']))
+
+    # 기본(빈 이름)은 빼고 같은 것은 하나다
+    assert briefing.expressions('mina') == ('웃음', '화남')
+    assert briefing.expressions('nobody') == ()
+    assert '고를 수 있는 표정: @mina: 기본, 웃음, 화남' in card
+    assert '예: @mina: <expression>웃음</expression>정말?' in card
 
 
 def test_messages_start_with_the_card():

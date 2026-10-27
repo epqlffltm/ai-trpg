@@ -5,7 +5,9 @@
 
     event: turn     data: {"generation_id": ..., "user_message": {...}, "cast": ["mina"], "state": {...}}
                                                                 맨 처음. 답할 말(행동 말), 장면의 인물, 그 뒤의 상태
-    event: segment  data: {"speaker": "mina"}                   새 말 조각. 뒤의 delta 는 이 사람의 것(서술은 null)
+    event: segment  data: {"speaker": "mina", "expression": "웃음"}
+                                                                새 말 조각. 뒤의 delta 는 이 사람의 것(서술은 null).
+                                                                expression 은 그 줄의 표정(기본이면 null)
     event: delta    data: {"text": "..."}                       지금 조각에 붙는 글
     event: done     data: {"message": {...}}                    저장한 답(status 는 complete 나 partial)
     event: failed   data: {"code": "timeout"}                   답 없이 끝났다. 답은 저장하지 않았다
@@ -106,9 +108,13 @@ class TurnEvent(BaseModel):
 
 
 class SegmentEvent(BaseModel):
-    """segment 메시지. speaker 는 장면의 인물의 id 이고, 서술이면 null 이다."""
+    """
+    segment 메시지. speaker 는 장면의 인물의 id 이고, 서술이면 null 이다.
+    expression 은 이 조각의 표정(그 인물의 그림의 표정 이름)이다. 기본 표정이거나 서술이면 null 이다.
+    """
 
     speaker: str | None
+    expression: str | None = None
 
 
 class DeltaEvent(BaseModel):

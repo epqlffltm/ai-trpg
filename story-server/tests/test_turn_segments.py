@@ -10,6 +10,8 @@
   - 끝나면 남은 줄을 마저 자른다. 표식을 붙인 줄로 다시 쓰면 같은 조각이 된다
   - 이어서 출력: 첫 줄에 표식이 없으면 끊긴 마지막 조각을 앞의 빈칸째 이어 쓰고 새 조각을 알리지 않는다.
     첫 줄이 표식이면 새 조각이다. 줄을 바꾼 뒤의 표식 없는 줄은 서술이다. 이어 쓴 것이 없으면 조각이 없다
+  - 표정: 표정이 있는 인물의 줄 맨 앞의 표식을 떼어 그 조각의 표정으로 둔다(모르는 이름과 기본은 None).
+    서술과 표정이 없는 인물의 줄, 닫히지 않은 표식, 끊긴 조각을 이어 쓰는 줄은 글로 둔다. 저장은 고른 것만 적는다
 """
 
 import pytest
@@ -23,6 +25,7 @@ from app.turns.segments import (
     merge_events,
     render_segments,
     segment_dicts,
+    segments_of,
     speaker_labels,
     split_segments,
 )
@@ -189,3 +192,68 @@ def test_nothing_carried_on_is_no_segments():
     assert continued(['\n   \n'])[1] == ()
     # 장면에 없는 인물의 줄뿐이어도 이어 쓴 것이 없다
     assert continued(['@nobody: 안녕'])[1] == ()
+
+
+# --- 표정 ---
+
+FACES = {'mina': ('웃음', '화남')}
+
+
+def test_a_line_may_start_with_its_expression():
+    text = '@mina: <expression>웃음</expression> 늦었네.\n@jun: <expression>웃음</expression>나도.\n@narration: 바람.'
+
+    segments, _ = split_segments(text, LABELS, FACES)
+
+    # 표정이 없는 인물(준)과 서술은 표식을 찾지 않고 글로 둔다
+    assert segments == (
+        Segment('mina', '늦었네.', '웃음'),
+        Segment('jun', '<expression>웃음</expression>나도.'),
+        Segment(None, '바람.'),
+    )
+
+
+def test_an_unknown_or_base_expression_is_the_base_one():
+    text = '@mina: <expression>졸림</expression>음.\n@mina: <expression>기본</expression>응.\n@mina: 그래.'
+
+    segments, _ = split_segments(text, LABELS, FACES)
+
+    assert [(segment.text, segment.expression) for segment in segments] == [
+        ('음.', None),
+        ('응.', None),
+        ('그래.', None),
+    ]
+
+
+def test_the_expression_comes_with_the_segment_start_wherever_the_text_is_cut():
+    text = '@mina: <expression>화남</expression>왜 늦었어?'
+    splitter = SpeakerSplitter(LABELS, FACES)
+
+    events = [event for char in text for event in splitter.feed(char)] + splitter.finish()
+
+    assert merge_events(events) == [SegmentStart('mina', '화남'), SegmentText('왜 늦었어?')]
+
+
+def test_an_unclosed_marker_stays_as_text():
+    segments, _ = split_segments('@mina: <expression>웃음 늦었네.', LABELS, FACES)
+
+    assert segments == (Segment('mina', '<expression>웃음 늦었네.'),)
+
+
+def test_the_expression_is_stored_only_when_chosen():
+    stored = segment_dicts((Segment('mina', '늦었네.', '웃음'), Segment(None, '바람.')))
+
+    assert stored == [{'speaker': 'mina', 'text': '늦었네.', 'expression': '웃음'}, {'speaker': None, 'text': '바람.'}]
+    assert segments_of(stored) == (Segment('mina', '늦었네.', '웃음'), Segment(None, '바람.'))
+
+
+def test_carrying_on_a_cut_segment_keeps_its_expression():
+    splitter = continuing_splitter(LABELS, (Segment('mina', '늦었', '웃음'),), FACES)
+
+    splitter.feed('네. <expression>화남</expression>\n@mina: <expression>화남</expression>왜?')
+    splitter.finish()
+
+    # 이어 쓰는 줄은 표정을 찾지 않는다. 새 줄은 찾는다
+    assert splitter.segments() == (
+        Segment('mina', '늦었네. <expression>화남</expression>', '웃음'),
+        Segment('mina', '왜?', '화남'),
+    )

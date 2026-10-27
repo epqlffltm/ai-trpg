@@ -222,7 +222,7 @@ async def test_a_stopped_turn_keeps_what_it_got_and_charges_it(
     )
     frames = [item async for item in relay.frames()]
     assert frames[-1].event == 'done'
-    assert '"segments":[{"speaker":"mina","text":"어서 와"}]' in frames[-1].data
+    assert '"segments":[{"speaker":"mina","text":"어서 와","expression":null}]' in frames[-1].data
     assert '"status":"partial"' in frames[-1].data
 
 

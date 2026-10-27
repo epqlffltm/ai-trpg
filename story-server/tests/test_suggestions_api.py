@@ -94,7 +94,10 @@ async def test_suggestions_are_kept_apart_from_the_segments(
     streamed_text = ''.join(data['text'] for name, data in events if name == 'delta')
     assert streamed_text == '바람이 분다.왔구나.'
     done = events[-1][1]['message']
-    assert done['segments'] == [{'speaker': None, 'text': '바람이 분다.'}, {'speaker': 'mina', 'text': '왔구나.'}]
+    assert done['segments'] == [
+        {'speaker': None, 'text': '바람이 분다.', 'expression': None},
+        {'speaker': 'mina', 'text': '왔구나.', 'expression': None},
+    ]
     assert done['content'] == '@narration: 바람이 분다.\n@mina: 왔구나.'
     assert done['suggestions'] == ['어디 가?', '같이 걷자']
     read = (await client.get(f'{CONVERSATIONS_URL}/{conversation["id"]}', headers=mine)).json()
@@ -128,7 +131,10 @@ async def test_a_cut_answer_has_no_suggestions_until_it_is_finished(
     done = (await streamed(app, response))[-1][1]['message']
 
     assert cut['suggestions'] == []
-    assert (done['segments'], done['suggestions']) == ([{'speaker': 'mina', 'text': '늦었네.'}], ['미안해'])
+    assert (done['segments'], done['suggestions']) == (
+        [{'speaker': 'mina', 'text': '늦었네.', 'expression': None}],
+        ['미안해'],
+    )
     read = (await client.get(f'{CONVERSATIONS_URL}/{conversation["id"]}', headers=mine)).json()
     assert read['messages'][-1]['suggestions'] == ['미안해']
 

@@ -983,8 +983,11 @@ export interface components {
         /**
          * SegmentOut
          * @description 말 조각 하나. speaker 는 장면의 인물의 id(판의 cast 의 id)이고, 서술이면 null 이다.
+         *     expression 은 그 줄에서 모델이 고른 표정(그 인물의 그림의 표정 이름)이다. 기본 표정이거나 서술이면 null 이다.
          */
         SegmentOut: {
+            /** Expression */
+            expression?: string | null;
             /** Speaker */
             speaker: string | null;
             /** Text */

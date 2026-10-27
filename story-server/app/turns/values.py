@@ -60,6 +60,8 @@ class TurnStart:
     cast: tuple[str, ...] = ()
     # 표식의 이름 → 인물의 id(app/turns/segments.py 의 speaker_labels)
     labels: Mapping[str, str] = field(default_factory=dict)
+    # 인물의 id → 고를 수 있는 표정의 이름들(app/turns/segments.py). 표정이 없는 인물은 없다
+    expressions: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     # 사람의 말이나 행동 뒤의 상태(응답의 모양). turn 메시지에 싣는다
     state: StateOut | None = None
     # 이어서 출력이면 이어 쓰는 끊긴 답. 새 조각은 그 답에 붙는다(app/turns/service.py 의 extension_of)
