@@ -74,6 +74,7 @@ from app.engine.play import Played
 from app.engine.state import StoryState
 from app.engine.world import AfterEnding, World, read_world
 from app.lore.recall import LoreRecall
+from app.memory.service import notes_for_prompt, render_memory
 from app.ratings import Rating, allowed_ratings
 from app.records import repository as records
 from app.records.illustrations import unlocked_scenes
@@ -256,6 +257,8 @@ class Branch:
     persona: PersonaCard | None = None
     # 판의 사본의 id. 로어북의 벡터가 이것에 붙는다(app/lore/)
     world_id: uuid.UUID | None = None
+    # 세션의 기억 메모의 "[기억]" 블록. 메모가 없으면 None(app/memory/)
+    memory: str | None = None
 
 
 def lore_plan_of(branch: Branch, recent: Sequence[str]) -> LorePlan | None:
@@ -282,7 +285,7 @@ def card_for(branch: Branch, state: StoryState, stage: Staging, options: PromptO
     """카드. state 와 장면으로 만들고, 켜져 있으면 다음 답 추천의 지시를, 로어북이 있으면 고른 항목을 넣는다."""
     scene = scene_card(branch.briefing, branch.world, state, stage.cast, stage.direction)
     block = lore.block if lore is not None else None
-    return render_card(branch.briefing, scene, options.suggestions, branch.persona, block)
+    return render_card(branch.briefing, scene, options.suggestions, branch.persona, block, branch.memory)
 
 
 def prompt_for(
@@ -581,7 +584,8 @@ async def branch_at(
     path = await conversations.active_path(session, leaf_id)
     state = await state_at(session, world, path)
     persona = persona_card(await conversations.persona_of(session, conversation.id))
-    return Branch(world, read_briefing(imported.document), path, state, imported.document, persona, imported.id)
+    memory = render_memory(await notes_for_prompt(session, conversation.id))
+    return Branch(world, read_briefing(imported.document), path, state, imported.document, persona, imported.id, memory)
 
 
 async def branch_of(session: AsyncSession, conversation: Conversation, imported: ImportedWorld) -> Branch:
