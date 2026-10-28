@@ -1,7 +1,8 @@
 # story-server/app/memory/service.py
 
 """
-기억 메모를 보고, 더하고, 고치고, 지운다. 세션의 주인만 한다(남의 세션은 ConversationNotFoundError, 404).
+기억 메모를 보고, 더하고, 고치고, 지운다. 지금 가지의 굴리는 요약을 읽는다.
+세션의 주인만 한다(남의 세션은 ConversationNotFoundError, 404).
 
 답을 쓰는 중에도 고칠 수 있다. 고친 것은 다음 말부터 모델에 간다(chat 과 같다).
 세션 하나에 메모는 NOTES_PER_CONVERSATION 개까지다. 늘 모델에 가는 글이라 입력의 양을 지킨다.
@@ -11,10 +12,11 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.conversations import repository as conversations
 from app.conversations.service import get_conversation
 from app.core.dependencies import Viewer
 from app.memory import repository
-from app.memory.models import NOTES_PER_CONVERSATION, MemoryNote
+from app.memory.models import NOTES_PER_CONVERSATION, MemoryNote, Summary
 
 
 class NoteNotFoundError(Exception):
@@ -81,3 +83,10 @@ def render_memory(texts: list[str]) -> str | None:
     if not texts:
         return None
     return '\n'.join(['[기억]', *(f'- {text}' for text in texts)])
+
+
+async def current_summary(session: AsyncSession, viewer: Viewer, conversation_id: uuid.UUID) -> Summary | None:
+    """지금 가지에 붙은 요약 가운데 가장 뒤의 것. 없으면 None. 화면이 읽기만 한다."""
+    conversation, _ = await get_conversation(session, viewer, conversation_id)
+    path = await conversations.active_path(session, conversation.active_leaf_id)
+    return await repository.latest_summary_row(session, [message.id for message in path])

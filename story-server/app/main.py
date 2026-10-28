@@ -62,6 +62,7 @@ from app.lore.recall import LoreRecall
 from app.lore.setup import build_embedder
 from app.memory import router as memory
 from app.memory.service import NoteNotFoundError, NotesFullError
+from app.memory.summarizer import Summarizer
 from app.records import router as records
 from app.turns import router as messages
 from app.turns import settler
@@ -103,6 +104,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await revoking.halt()
     await settling.halt()
     await stop_turns(app.state.turns)
+    await app.state.summarizer.stop()
     if app.state.lore_indexer is not None:
         await app.state.lore_indexer.stop()
     await app.state.engine.dispose()
@@ -206,6 +208,12 @@ def create_app(
     app.state.lore_indexer = LoreIndexer(app.state.session_factory, embedder) if embedder is not None else None
     app.state.lore_recall = (
         LoreRecall(app.state.session_factory, embedder, app.state.lore_indexer) if embedder is not None else None
+    )
+
+    # 굴리는 요약(app/memory/summarizer.py). SUMMARY_MODEL 이 비어 있으면 요약하지 않는다.
+    # 모델을 부르는 것과 설정은 부를 때마다 앱에서 꺼낸다. 테스트가 가짜를 꽂는다
+    app.state.summarizer = Summarizer(
+        app.state.session_factory, router=lambda: app.state.model_router, settings=lambda: app.state.settings
     )
 
     # 요청 수 제한. REDIS_URL 이 있으면 Redis 로, 없으면 메모리로 센다(app/limits/)

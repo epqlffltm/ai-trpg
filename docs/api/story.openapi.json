@@ -1835,6 +1835,32 @@
         "title": "StateOut",
         "type": "object"
       },
+      "SummaryOut": {
+        "description": "지금 가지의 굴리는 요약(읽기만). covered_up_to 는 요약한 마지막 말의 id 다(첫 말부터 그 말까지를 요약했다).",
+        "properties": {
+          "covered_up_to": {
+            "format": "uuid",
+            "title": "Covered Up To",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "covered_up_to",
+          "created_at"
+        ],
+        "title": "SummaryOut",
+        "type": "object"
+      },
       "Tier": {
         "description": "결제 서버 가격표의 등급. 결제에 쓰는 등급은 이것이 기준이다(model-pricing-plan 9-1).\n\n결제 서버가 모르는 등급을 보내면 목록 전체를 읽지 못한다(503).\n그래서 결제 서버는 게임 서버와 chat, story 서버가 등급을 안 뒤에 그 줄을 넣는다.",
         "enum": [
@@ -2741,6 +2767,64 @@
         "summary": "Change Persona",
         "tags": [
           "conversations"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/story/conversations/{conversation_id}/summary": {
+      "get": {
+        "description": "지금 가지의 굴리는 요약. 아직 없으면 null 이다.",
+        "operationId": "read_summary_api_v1_story_conversations__conversation_id__summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SummaryOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Read Summary Api V1 Story Conversations  Conversation Id  Summary Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Summary",
+        "tags": [
+          "memory"
         ],
         "x-audience": "user"
       }

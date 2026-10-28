@@ -88,6 +88,11 @@ class Settings(CoreSettings):
     # 글의 다양함. 0 에 가까울수록 같은 입력에 비슷한 답이다. 받지 않는 모델에는 보내지 않는다(모델 목록)
     story_temperature: float = Field(default=0.9, ge=0, le=2)
 
+    # 굴리는 요약의 모델(모델 목록의 이름표). 싼 모델을 쓴다. 비우면 요약하지 않는다(app/memory/summarizer.py)
+    summary_model: str = ''
+    # 창 밖으로 밀려난 말이 마지막 요약 뒤로 이만큼 쌓이면 요약한다
+    summary_after_messages: int = Field(default=8, ge=2, le=200)
+
     # 로어북의 뜻으로 찾기(app/lore/). off 면 상시와 키워드만 쓴다. llm 이면 임베딩 모델을 부른다(fake 는 테스트용).
     # 이름은 chat, trpg-server 와 같다. 같은 Ollama 를 함께 쓴다
     embedder: Literal['off', 'fake', 'llm'] = 'off'
