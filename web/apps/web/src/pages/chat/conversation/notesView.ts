@@ -1,21 +1,25 @@
 // web/apps/web/src/pages/chat/conversation/notesView.ts
 // 기억 창(C5)의 글과 나눔. 순수한 함수다.
 // 받아들인 메모(모델에 가는 것)와 요약이 제안한 것(받아들이기를 기다리는 것)을 나눠 보인다. 스물은 받아들인 것만 센다.
+// story 의 기억 메모도 같은 창을 쓴다(제안이 없어 모두 받아들인 것이다). 그래서 메모의 모양은 필요한 칸만 본다.
 
 import { ApiError, NetworkError } from '../../../api/errors';
-import { NOTE_MAX, NOTES_MAX, type MemoryNote } from '../../../api/chatNotes';
+import { NOTE_MAX, NOTES_MAX } from '../../../api/chatNotes';
 
-export function splitNotes(notes: MemoryNote[]): { kept: MemoryNote[]; suggested: MemoryNote[] } {
+/** 창이 보는 메모의 칸. chat 은 출처와 기다림이 있고 story 는 없다 */
+export type NoteLike = { id: string; text: string; pending?: boolean; source?: string };
+
+export function splitNotes<T extends NoteLike>(notes: T[]): { kept: T[]; suggested: T[] } {
   return { kept: notes.filter((note) => !note.pending), suggested: notes.filter((note) => note.pending) };
 }
 
 /** "3 / 20" */
-export function notesCountLabel(kept: MemoryNote[]): string {
+export function notesCountLabel(kept: NoteLike[]): string {
   return `${kept.length} / ${NOTES_MAX}`;
 }
 
 /** 받아들인 것이 스물이면 더하거나 받아들일 수 없다 */
-export function notesFull(kept: MemoryNote[]): boolean {
+export function notesFull(kept: NoteLike[]): boolean {
   return kept.length >= NOTES_MAX;
 }
 
@@ -26,7 +30,7 @@ export function noteHint(text: string): string | undefined {
   return undefined;
 }
 
-export function sourceLabel(note: MemoryNote): string {
+export function sourceLabel(note: NoteLike): string {
   return note.source === 'summary' ? '요약이 제안' : '내가 씀';
 }
 

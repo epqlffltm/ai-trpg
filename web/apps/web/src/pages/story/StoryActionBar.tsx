@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/story/StoryActionBar.tsx
-// 장면(D2)의 행동 단추 줄. 시간 보내기, 하루 마치기(기한의 마지막 날이면 한 번 더 묻는다), 지도(이동, D3), 소지품(D4), 기록(엔딩과 이벤트, D6).
+// 장면(D2)의 행동 단추 줄. 시간 보내기, 하루 마치기(기한의 마지막 날이면 한 번 더 묻는다), 지도(이동, D3), 소지품(D4), 기록(엔딩과 이벤트, D6), 기억(기억 메모).
 // 행동은 엔진이 판정하고 반응을 받는다(청구 한 번). 받는 중이거나 끝난 세션이면 막는다.
 // 건네기는 인물 메뉴(StoryCastRow)에서 한다. 소지품 창은 가진 것을 보이기만 한다.
 
@@ -9,11 +9,12 @@ import type { StoryAction, StoryState, StoryView } from '../../api/story';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { canPassTime, heldItems, isLastDay } from './storyActions';
 import { StoryMapButton } from './StoryMapButton';
+import { StoryNotesButton } from './StoryNotesButton';
 import { StoryRecordsButton } from './StoryRecordsButton';
 
-type Props = { worldId: string; view: StoryView; state: StoryState; disabled: boolean; onAct: (action: StoryAction) => Promise<boolean> };
+type Props = { sessionId: string; worldId: string; view: StoryView; state: StoryState; disabled: boolean; onAct: (action: StoryAction) => Promise<boolean> };
 
-export function StoryActionBar({ worldId, view, state, disabled, onAct }: Props) {
+export function StoryActionBar({ sessionId, worldId, view, state, disabled, onAct }: Props) {
   const timeFlows = canPassTime(view, state);
   return (
     <div className="story-actions" role="toolbar" aria-label="행동">
@@ -28,6 +29,7 @@ export function StoryActionBar({ worldId, view, state, disabled, onAct }: Props)
       ) : null}
       <ItemsButton view={view} state={state} />
       <StoryRecordsButton worldId={worldId} view={view} />
+      <StoryNotesButton sessionId={sessionId} />
     </div>
   );
 }
