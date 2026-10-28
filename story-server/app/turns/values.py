@@ -13,6 +13,7 @@ from decimal import Decimal
 from ai_core.provider import ChatMessage
 
 from app.conversations.schemas import StateOut
+from app.turns.briefing import LoreText
 from app.turns.models import Outcome
 from app.turns.segments import Segment
 
@@ -32,6 +33,26 @@ class SavedMessage:
     event_id: str | None = None
     ending_id: str | None = None
     suggestions: tuple[str, ...] = ()
+
+
+# 로어북 항목을 가리키는 열쇠(로어북의 id, 항목의 id). 로어북의 id 가 없는 판이면 앞이 None 이다
+type LoreKey = tuple[uuid.UUID | None, str]
+
+
+@dataclass(frozen=True)
+class LorePlan:
+    """
+    로어북을 뜻으로 찾아 더할 바탕(app/lore/recall.py). 상시와 키워드로 고른 것(ranked, block)과 함께 든다.
+    world_id 는 판의 사본, entries 와 keys 는 판의 항목과 그 열쇠(같은 차례), query 는 찾는 글(최근 말 둘)이다.
+    block 은 카드에 이미 넣은 "[로어북]" 블록이다(고른 것이 없으면 None). 뜻으로 찾은 것을 더하면 이것을 바꾼다.
+    """
+
+    world_id: uuid.UUID
+    entries: tuple[LoreText, ...]
+    keys: tuple[LoreKey, ...]
+    ranked: tuple[int, ...]
+    query: str
+    block: str | None
 
 
 @dataclass(frozen=True)
@@ -66,6 +87,8 @@ class TurnStart:
     state: StateOut | None = None
     # 이어서 출력이면 이어 쓰는 끊긴 답. 새 조각은 그 답에 붙는다(app/turns/service.py 의 extension_of)
     continued: SavedMessage | None = None
+    # 로어북을 뜻으로 찾아 더할 바탕. 로어북의 항목이 없으면 None(app/lore/recall.py)
+    lore: LorePlan | None = None
 
 
 @dataclass(frozen=True)

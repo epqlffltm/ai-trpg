@@ -11,6 +11,10 @@ from server_core.database import NAMING_CONVENTION
 from sqlalchemy import MetaData
 from sqlalchemy.orm import DeclarativeBase
 
+# 연결의 search_path 에 설정의 스키마 뒤로 더하는 스키마. pgvector(vector 타입과 거리 연산자)가 놓인 곳이다
+# (docker/postgres/init/03-extensions.sql, 로어북의 벡터 app/lore/models.py). story 계정은 읽기(USAGE)만 받는다
+EXTRA_SCHEMAS = ('extensions',)
+
 
 class Base(DeclarativeBase):
     """

@@ -33,6 +33,13 @@ docker compose exec db psql -v ON_ERROR_STOP=1 -U trpg -d trpg -f /docker-entryp
 뼈대 때 계정을 손으로 만들었다면(`CREATE ROLE story ...`) 위의 스크립트는 돌리지 않는다("이미 있다"로 멈춘다).
 `tools/fill_env.py` 가 `story-server/.env` 에 적어 둔 비밀번호를 루트 `.env` 의 `STORY_DB_PASSWORD` 로 옮겨 적으므로 계정과 그대로 맞는다.
 
+로어북의 벡터(pgvector)를 쓰려면 story 계정이 `extensions` 스키마를 읽어야 한다(2026-10-28 에 스크립트에 더했다).
+그 전에 만든 볼륨이라면 한 번 준다. 주지 않으면 마이그레이션(`lore_embeddings`)이 vector 타입을 찾지 못해 멈춘다.
+
+```
+docker compose exec db psql -v ON_ERROR_STOP=1 -U trpg -d trpg -c "GRANT USAGE ON SCHEMA extensions TO story;"
+```
+
 ### 설치와 실행
 
 파이썬 3.13 과 [uv](https://docs.astral.sh/uv/) 가 있어야 한다.
@@ -85,6 +92,11 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `STORY_OUTPUT_LIMIT` | `1024` | 말 한 번의 답의 길이의 상한(토큰). 가격표의 출력 단계(`o0`)가 약속하는 길이다 |
 | `STORY_CONTEXT_CHARS` | `12000` | 모델에 보내는 지난 말의 양의 상한(글자). 가격표의 입력 단계(`i0`)가 약속하는 양이다 |
 | `STORY_SUGGESTIONS` | `true` | [다음 답 추천](#말-보내기). 켜면 답 끝에 선택지 셋을 함께 받는다. 호출은 늘지 않는다 |
+| `EMBEDDER` | `off` | [로어북의 뜻으로 찾기](#말-보내기). `off` 면 상시와 키워드만, `llm` 이면 임베딩 모델을 부른다(`fake` 는 테스트용). chat, trpg-server 와 같은 이름이다 |
+| `EMBEDDING_MODEL` | `bge-m3` | 임베딩 모델의 이름. 벡터에 함께 적는다(모델이 다르면 견주지 않는다) |
+| `EMBEDDING_BASE_URL` | 비어 있음 | 임베딩 모델의 주소(OpenAI 와 같은 모양, `/embeddings` 앞까지). `EMBEDDER=llm` 이면 꼭 적는다 |
+| `EMBEDDING_TIMEOUT_SECONDS` | `30` | 임베딩을 한 번 부르는 시간의 상한(초). 말 한 번의 찾기는 3초에 끊는다 |
+| `EMBEDDING_DIMENSIONS` | 비어 있음 | 벡터의 길이. 적으면 받은 벡터가 이 길이인지 본다 |
 | `STORY_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
 | `REDIS_URL` | 비어 있음(메모리) | [요청 수 제한](#요청-수-제한)을 세는 Redis(`redis://localhost:6379/3`). 비우면 서버 안의 메모리로 센다(서버가 하나일 때만 맞다). compose 는 DB 3 을 준다 |
 | `GENERATION_LIMIT`, `GENERATION_WINDOW_SECONDS` | `20`, `60` | 모델을 부르는 요청(말, 행동, 다시 생성, 이어서)을 한 사람이 이 시간(초) 안에 이만큼까지 |
@@ -200,7 +212,11 @@ event: failed   data: {"code": "timeout"}                                    답
 
 - **로어북**(2026-10-28, chat 의 키워드 고르기와 같다, `conversation_core/lorebook.py`). 세계관의 판에 복사된 로어북의 항목 가운데
   상시 항목과, 최근 말 넷(이번 말 포함)에 키워드가 나온 항목을 카드의 `[로어북]`(장면의 인물 뒤)에 넣는다. 8개, 2000자까지다.
-  뜻으로 찾기(임베딩, 벡터)는 아직 없다. 다음 단계에서 chat 의 `app/lore` 를 따라 더한다.
+- **로어북의 뜻으로 찾기**(2026-10-28, chat 의 `app/lore` 와 같다, `app/lore/`). `EMBEDDER` 가 켜져 있으면 모델을 부르기 직전에
+  최근 말 둘을 벡터로 바꿔, 그 판의 사본의 항목 벡터와 코사인 거리 0.45 안에서 가까운 것 셋까지를 키워드로 고른 것 뒤에 더한다.
+  3초 안에 끝나지 않거나 실패하면 상시와 키워드만으로 답한다(로그 `story.lore_recall`).
+  항목의 벡터(`lore_embeddings`)는 세션을 시작할 때 따로 도는 작업이 만든다. 찾을 때 모자라도 만들기를 맡긴다(로그 `story.lore_index`).
+  사본마다 만들어 사본을 지우면 함께 지워진다. 로어북의 id 가 없는 판의 항목은 카드에는 들어가고 벡터만 만들지 않는다.
 - **장면의 인물.** 가지의 끝의 상태로 엔진이 정한다(`app/engine/scene.py`). 장면 밖의 인물은 프롬프트에 넣지 않는다.
   선택지를 기다리는 동안 말을 하면 선택지는 사라진다(효과 없이). 그 상태를 사람의 말에 붙인다.
 - **말 조각.** 모델은 줄마다 `@인물의 id:` 나 `@narration:` 을 적는다(`app/turns/segments.py`). 서버는 흘러오는 대로 잘라 말하는 사람을 본다.
@@ -466,6 +482,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `messages` | 말 하나. 트리다(`parent_id`). 답은 말 조각(`segments`)과 그때의 장면의 인물(`cast`)을 갖는다. 사람이 고친 답은 `edited` 다. 다음 답 추천은 `suggestions`(셋까지)다. 세션의 `active_leaf_id` 가 지금 가지의 끝이다 |
 | `message_states` | 말에 붙은 엔진의 상태(JSONB). 상태가 바뀐 말에만 있다. 가지의 끝의 상태는 끝에서 가장 가까운 것이고, 없으면 처음의 상태다 |
 | `generations` | 모델을 한 번 부른 것과 그 청구(chat 서버의 표와 같은 모양). 버린 줄의 수(`dropped_segments`)를 더했다 |
+| `lore_embeddings` | 판의 사본에 든 로어북 항목의 벡터(pgvector, `extensions` 스키마). (사본, 임베딩 모델, 로어북, 항목)마다 하나. 사본이 지워지면 함께 지워진다 |
 | `ending_records` | 계정의 본 엔딩. (`owner_id`, `world_source`, `ending_id`)마다 처음 본 시각과 세션. 세션이 지워지면 세션만 비운다 |
 | `illustration_unlocks` | 계정의 연 일러스트. (`owner_id`, `world_source`, `scene_kind`, `scene_id`)마다 연 때의 그림(`image_id`), 장면의 인물(`cast`), 처음 연 시각과 세션 |
 

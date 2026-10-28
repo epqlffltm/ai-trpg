@@ -18,3 +18,7 @@ CREATE SCHEMA story AUTHORIZATION story;
 
 -- 테스트용 스키마. 테스트가 개발용 데이터를 건드리지 않게 따로 둔다
 CREATE SCHEMA story_test AUTHORIZATION story;
+
+-- pgvector(03-extensions.sql 의 extensions 스키마)를 쓴다. 세계관의 로어북 항목의 벡터를 저장하고 가까운 것을 찾는다.
+-- 읽기(USAGE)만 준다. story 서버는 search_path 에 이 스키마를 더한다(story-server/app/core/database.py)
+GRANT USAGE ON SCHEMA extensions TO story;

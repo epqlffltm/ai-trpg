@@ -59,6 +59,7 @@ from app.conversations.service import (
 )
 from app.core.dependencies import CurrentViewer, Now, Paging, Session
 from app.limits.routing import WRITE_LIMIT
+from app.lore.indexing import LoreIndexer
 from app.ratings import Rating
 
 router = APIRouter(prefix='/conversations', tags=['conversations'])
@@ -152,6 +153,12 @@ def to_path_message(message: Message, alternatives: dict[uuid.UUID | None, list[
     return PathMessageOut(
         **to_message(message).model_dump(), alternatives=alternatives.get(message.parent_id, [message.id])
     )
+
+
+def index_lore(indexer: LoreIndexer | None, world_id: uuid.UUID | None) -> None:
+    """판의 사본의 로어북 항목을 벡터로 바꿔 두라고 맡긴다(따로 돈다). 뜻으로 찾기를 껐으면 하지 않는다."""
+    if indexer is not None and world_id is not None:
+        indexer.request(world_id)
 
 
 def to_persona(persona: ConversationPersona | None) -> PersonaOut | None:
@@ -277,7 +284,9 @@ async def start_conversation(
 ) -> ConversationDetail:
     """세션을 시작한다. 세계관의 마지막 판을 가져와 고정한다. 페르소나와 모델은 지난번 것이거나 고른 것이다."""
     conversation_id = await service.start_conversation(session, request.app.state.asset, prices, viewer, data, now)
-    return await read_conversation(conversation_id, viewer, session, prices, now)
+    detail = await read_conversation(conversation_id, viewer, session, prices, now)
+    index_lore(request.app.state.lore_indexer, await service.conversation_world_id(session, conversation_id))
+    return detail
 
 
 @router.get('', response_model=ConversationPage, status_code=status.HTTP_200_OK)

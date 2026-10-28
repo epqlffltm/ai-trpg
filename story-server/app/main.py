@@ -53,9 +53,13 @@ from app.conversations.service import (
     WorldNotFoundError,
 )
 from app.core.config import Settings, get_settings
+from app.core.database import EXTRA_SCHEMAS
 from app.limits.attempts import TooManyAttempts
 from app.limits.responses import handle_too_many_attempts
 from app.limits.setup import build_limiting, build_redis
+from app.lore.indexing import LoreIndexer
+from app.lore.recall import LoreRecall
+from app.lore.setup import build_embedder
 from app.records import router as records
 from app.turns import router as messages
 from app.turns import settler
@@ -97,6 +101,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     await revoking.halt()
     await settling.halt()
     await stop_turns(app.state.turns)
+    if app.state.lore_indexer is not None:
+        await app.state.lore_indexer.stop()
     await app.state.engine.dispose()
     await app.state.http_client.aclose()
     if app.state.redis is not None:
@@ -160,7 +166,7 @@ def create_app(
 
     # 엔진과 세션 틀을 앱에 붙여 둔다. 앱마다 자기 엔진을 가지므로 테스트끼리 섞이지 않는다.
     # 엔진을 만드는 것만으로는 DB 에 연결하지 않는다. DB 가 꺼져 있어도 서버는 뜬다(/health/ready 가 503 이다)
-    app.state.engine = engine or create_engine(settings)
+    app.state.engine = engine or create_engine(settings, EXTRA_SCHEMAS)
     # 쿼리마다 span 을 건다(요청이나 작업 안의 것만). 같은 엔진에 여러 번 불러도 한 번만 단다
     instrument_engine(app.state.engine)
     watch_pool(pool_stats(app.state.engine, settings.db_max_connections))
@@ -192,6 +198,14 @@ def create_app(
     # 끝나지 않은 청구를 마저 끝내는 작업(app/turns/settler.py). lifespan 이 돌리고 멈춘다.
     # 결제 서버를 부르는 것은 부를 때마다 앱에서 꺼낸다. 테스트가 가짜를 꽂는다
     app.state.settler = settler.ChargeSettler(app.state.session_factory, billing=lambda: app.state.billing)
+
+    # 로어북을 뜻으로 찾기(app/lore/). EMBEDDER 가 off 면 둘 다 없다(상시와 키워드만 쓴다)
+    embedder = build_embedder(settings, app.state.http_client)
+    app.state.lore_indexer = LoreIndexer(app.state.session_factory, embedder) if embedder is not None else None
+    app.state.lore_recall = (
+        LoreRecall(app.state.session_factory, embedder, app.state.lore_indexer) if embedder is not None else None
+    )
+
     # 요청 수 제한. REDIS_URL 이 있으면 Redis 로, 없으면 메모리로 센다(app/limits/)
     app.state.redis = build_redis(settings)
     app.state.limiting = build_limiting(settings, app.state.redis)

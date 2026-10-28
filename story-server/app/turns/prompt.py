@@ -21,7 +21,6 @@ from html.parser import HTMLParser
 from ai_core.provider import ChatMessage, Role
 from conversation_core.expressions import CLOSE as EXPRESSION_CLOSE
 from conversation_core.expressions import OPEN as EXPRESSION_OPEN
-from conversation_core.lorebook import chosen_entries, ranked, render_lore
 from conversation_core.suggestions import instruction as suggestions_instruction
 from conversation_core.window import Turn
 
@@ -254,15 +253,24 @@ def suggestions_section() -> str:
     )
 
 
-def lore_section(briefing: Briefing, recent: Sequence[str]) -> str | None:
+# 뜻으로 찾은 항목을 더할 때 "[로어북]" 을 넣는 자리. 이 블록들 앞이다(render_card 의 차례)
+LORE_BEFORE = ('[장면 지시]', '[쓰는 법]')
+
+
+def with_lore(card: str, old: str | None, new: str | None) -> str:
     """
-    [로어북] 블록. 상시 항목과, 최근 말(recent, 오래된 것부터 이번 말까지)에 키워드가 나온 항목을
-    conversation_core/lorebook.py 의 규칙(차례, 수와 글자의 상한)으로 고른다. 고른 것이 없으면 None.
+    카드의 "[로어북]" 블록을 바꾼다(뜻으로 찾은 항목을 더한 뒤). old 는 render_card 가 넣은 블록이다.
+    old 가 없으면 장면 지시나 쓰는 법 앞(render_card 의 자리)에 넣는다. new 가 없으면 그대로다.
     """
-    entries = briefing.lore_entries()
-    if not entries:
-        return None
-    return render_lore(chosen_entries(entries, ranked(entries, recent)))
+    if new is None:
+        return card
+    if old is not None:
+        return card.replace(old, new, 1)
+    positions = [index for index in (card.find(f'\n\n{heading}') for heading in LORE_BEFORE) if index >= 0]
+    if not positions:
+        return f'{card}\n\n{new}'
+    position = min(positions)
+    return f'{card[:position]}\n\n{new}{card[position:]}'
 
 
 def render_card(
@@ -275,7 +283,7 @@ def render_card(
     """
     시스템 메시지(카드). 지킬 것, 세계관, 사용자, 지금, 장면의 인물, 로어북, 장면 지시, 쓰는 법의 차례다.
     빈 블록은 뺀다. suggest 면 맨 끝에 다음 답 추천의 지시를 붙인다(conversation_core/suggestions.py).
-    persona 가 있으면 사용자가 누구인지 적는다(세션에 가져온 페르소나). lore 는 고른 로어북의 블록(lore_section)이다.
+    persona 가 있으면 사용자가 누구인지 적는다(세션에 가져온 페르소나). lore 는 고른 로어북의 블록이다.
     """
     sections = [
         '\n'.join(RULES),
