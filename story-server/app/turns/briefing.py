@@ -49,6 +49,21 @@ class CharacterText(Part):
     sprites: tuple[SpriteText, ...] = ()
 
 
+class LoreText(Part):
+    """로어북의 항목 하나(conversation_core/lorebook.py 의 LoreEntry 모양). constant 면 늘 모델에 간다."""
+
+    name: str = ''
+    content: str = ''
+    keywords: list[str] = []
+    constant: bool = False
+
+
+class LorebookText(Part):
+    """세계관의 판에 복사된 로어북 하나. 항목은 판의 차례다."""
+
+    entries: tuple[LoreText, ...] = ()
+
+
 class CastText(Part):
     """인물 하나의 글."""
 
@@ -57,7 +72,7 @@ class CastText(Part):
 
 
 class Briefing(Part):
-    """모델에게 알려 줄 판의 글. 세계관의 이름과 소개, 시간대, 장소, 물건, 인물."""
+    """모델에게 알려 줄 판의 글. 세계관의 이름과 소개, 시간대, 장소, 물건, 인물, 로어북."""
 
     name: str = ''
     intro_html: str = ''
@@ -65,6 +80,16 @@ class Briefing(Part):
     places: tuple[PlaceText, ...] = ()
     items: tuple[Named, ...] = ()
     cast: tuple[CastText, ...] = ()
+    lorebooks: tuple[LorebookText, ...] = ()
+
+    def lore_entries(self) -> tuple[LoreText, ...]:
+        """로어북들의 항목(로어북의 차례, 그 안의 차례). 이름이나 내용이 빈 항목은 뺀다."""
+        return tuple(
+            entry
+            for lorebook in self.lorebooks
+            for entry in lorebook.entries
+            if entry.name.strip() and entry.content.strip()
+        )
 
     def place(self, place_id: str) -> PlaceText | None:
         """그 id 의 장소. 없으면 None."""

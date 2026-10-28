@@ -198,6 +198,9 @@ event: done     data: {"message": {... "segments": [{"speaker", "text", "express
 event: failed   data: {"code": "timeout"}                                    답 없이 끝났다
 ```
 
+- **로어북**(2026-10-28, chat 의 키워드 고르기와 같다, `conversation_core/lorebook.py`). 세계관의 판에 복사된 로어북의 항목 가운데
+  상시 항목과, 최근 말 넷(이번 말 포함)에 키워드가 나온 항목을 카드의 `[로어북]`(장면의 인물 뒤)에 넣는다. 8개, 2000자까지다.
+  뜻으로 찾기(임베딩, 벡터)는 아직 없다. 다음 단계에서 chat 의 `app/lore` 를 따라 더한다.
 - **장면의 인물.** 가지의 끝의 상태로 엔진이 정한다(`app/engine/scene.py`). 장면 밖의 인물은 프롬프트에 넣지 않는다.
   선택지를 기다리는 동안 말을 하면 선택지는 사라진다(효과 없이). 그 상태를 사람의 말에 붙인다.
 - **말 조각.** 모델은 줄마다 `@인물의 id:` 나 `@narration:` 을 적는다(`app/turns/segments.py`). 서버는 흘러오는 대로 잘라 말하는 사람을 본다.
