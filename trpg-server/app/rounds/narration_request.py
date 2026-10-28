@@ -130,6 +130,18 @@ def resisted_injury_name(effect: dict) -> str | None:
     return injury_roll['name'] if injury_roll and injury_roll.get('immune') else None
 
 
+def nature_name(effect: dict) -> str | None:
+    """HP 의 변화를 적은 문서에서 피해의 성질의 이름(#886 ③). 없으면 None."""
+    nature = effect.get('nature')
+    return nature['name'] if nature else None
+
+
+def nature_level(effect: dict) -> str | None:
+    """HP 의 변화를 적은 문서에서 맞은 쪽이 그 성질을 받은 단계(#886 ③). 그대로 받았거나 성질이 없으면 None."""
+    nature = effect.get('nature')
+    return nature['level'] if nature else None
+
+
 def spared_injury_name(effect: dict) -> str | None:
     """HP 의 변화를 적은 문서에서 동료의 장난이라 입지 않은 부상의 이름(#803). 없으면 None."""
     injury_roll = effect.get('injury_roll')
@@ -151,6 +163,8 @@ def to_impact(effect: dict | None) -> Impact | None:
         prank=effect.get('prank', False),
         spared=spared_injury_name(effect),
         resisted=resisted_injury_name(effect),
+        nature=nature_name(effect),
+        level=nature_level(effect),
     )
 
 
@@ -521,6 +535,8 @@ def to_npc_impact(effect: dict | None) -> NpcImpact | None:
         condition=effect['condition'],
         injury=new_injury_name(effect),
         resisted=resisted_injury_name(effect),
+        nature=nature_name(effect),
+        level=nature_level(effect),
     )
 
 

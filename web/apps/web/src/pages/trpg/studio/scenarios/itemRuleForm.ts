@@ -44,6 +44,8 @@ export type ItemRuleDraft = {
   aids: AidDraft[];
   /** 착용하고 있는 동안의 저항(#886 ②). 고치는 칸이 아직 없어 받은 대로 지녔다가 보낸다(착용하는 물건만) */
   resistances: ItemRule['resistances'];
+  /** 무기로 친 피해의 성질(#886 ③). 고르는 칸이 아직 없어 받은 대로 지녔다가 보낸다(공격 보정이 있는 무기만) */
+  nature: string | null;
 };
 
 function numberText(value: number | null | undefined): string {
@@ -69,6 +71,7 @@ export function itemRuleDraft(rule: ItemRule | undefined): ItemRuleDraft {
     throw: throwDraft(rule),
     aids: (rule?.aids ?? []).map(aidDraft),
     resistances: rule?.resistances ?? [],
+    nature: rule?.nature ?? null,
   };
 }
 
@@ -127,6 +130,7 @@ export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody 
     throw: toThrow(draft.throw),
     aids: draft.aids.map(toAid),
     resistances: worn ? draft.resistances : [],
+    nature: combat('attack') === null ? null : draft.nature,
   };
 }
 

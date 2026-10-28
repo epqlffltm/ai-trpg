@@ -25,7 +25,7 @@ from app.assets.models import NpcAttitude
 from app.assets.scenarios.snapshot import Snapshot, npc_attitude_of, npc_place_of, npc_sheet_of, person_entries
 from app.engine import health
 from app.engine.dice import Dice
-from app.engine.health import Change, ChangeKind
+from app.engine.health import Change, ChangeKind, Nature
 from app.engine.ruleset import Magnitude
 from app.engine.sheet import Sheet
 from app.tables.models import NpcStatus, TableNpc
@@ -87,15 +87,23 @@ def status_after(hp: int, lethal: bool) -> NpcStatus:
     return NpcStatus.DEAD if lethal else NpcStatus.DOWNED
 
 
-def change_npc(npc: TableNpc, kind: ChangeKind, magnitude: Magnitude, lethal: bool, dice: Dice, cut: int = 0) -> Change:
+def change_npc(
+    npc: TableNpc,
+    kind: ChangeKind,
+    magnitude: Magnitude,
+    lethal: bool,
+    dice: Dice,
+    cut: int = 0,
+    nature: Nature | None = None,
+) -> Change:
     """
     NPC 의 HP 와 생사를 한 번 바꾼다. 양을 정하는 주사위를 여기서 굴린다. 바뀐 것을 돌려준다.
 
     NPC 의 상태를 고치는 길은 이 함수 하나다. 상태를 고친다. 저장하지는 않는다. 죽은 NPC 에는 부르지 않는다.
     lethal 은 피해가 죽이려는 것인지다. 회복에는 뜻이 없다. 회복 뒤에는 HP 가 있어서 늘 살아 있다(status_after).
-    cut 은 방어구가 피해에서 깎는 양이다(#276).
+    cut 은 방어구가 피해에서 깎는 양이다(#276). nature 는 피해의 성질과 그 인물이 받는 단계다(#886 ③).
     """
-    change = health.change_hp(kind, magnitude, npc.hp, npc.max_hp, dice, cut)
+    change = health.change_hp(kind, magnitude, npc.hp, npc.max_hp, dice, cut, nature)
     npc.hp = change.after
     npc.status = status_after(change.after, lethal)
     return change

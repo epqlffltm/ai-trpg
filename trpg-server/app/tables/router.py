@@ -277,6 +277,7 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
             throw=to_throw(item.throw),
             aids=list(item.aids),
             resistances=list(item.resistances),
+            nature=item.nature,
         )
         for item in catalog.values()
     ]

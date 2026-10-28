@@ -416,6 +416,8 @@ class CatalogItemOut(BaseModel):
     # 착용하고 있는 동안 생기는 저항(#886 ②). 줄마다 성질(rules.natures 의 key)과 단계(resist 저항, immune 면역,
     # vulnerable 약점)다. 저항과 면역이면 그 성질의 부상과 수치를 내리는 맞추기를 받지 않는다
     resistances: list[Resistance] = []
+    # 무기로 친 피해의 성질(#886 ③, rules.natures 의 key). 무기가 아니거나 성질이 없으면 None 이다
+    nature: str | None = None
 
 
 class WornOut(BaseModel):

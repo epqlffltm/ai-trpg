@@ -14,7 +14,7 @@ import enum
 from dataclasses import dataclass, replace
 
 from app.engine.dice import Dice
-from app.engine.ruleset import Magnitude, Ruleset
+from app.engine.ruleset import Magnitude, ResistLevel, Ruleset
 
 
 class ChangeKind(enum.StrEnum):
@@ -42,6 +42,10 @@ class Change:
     after: int
     # 방어구가 깎은 양(#276). 눈을 더한 값에서 이만큼 빼서 amount 가 됐다. 깎지 않았으면 0 이다
     blocked: int = 0
+    # 피해의 성질(#886 ③). 성질이 없는 피해와 회복이면 None 이다
+    nature: str | None = None
+    # 맞은 쪽이 그 성질을 받은 단계(저항, 면역, 약점). 깎은 뒤의 양에 걸어 amount 가 됐다. 그대로 받았으면 None 이다
+    level: ResistLevel | None = None
 
     @property
     def downed(self) -> bool:
@@ -74,18 +78,57 @@ def heal(hp: int, max_hp: int, amount: int) -> int:
     return min(max_hp, hp + amount)
 
 
-def change_hp(kind: ChangeKind, magnitude: Magnitude, hp: int, max_hp: int, dice: Dice, cut: int = 0) -> Change:
+@dataclass(frozen=True)
+class Nature:
+    """피해의 성질(#886 ③)과 맞는 쪽이 그것을 받는 단계. 단계가 None 이면 그대로 받는다."""
+
+    key: str
+    level: ResistLevel | None = None
+
+
+def resist(amount: int, level: ResistLevel | None) -> int:
+    """
+    피해의 양에 저항의 단계를 건다(#886 ③). 저항은 반(내림), 면역은 0, 약점은 두 배, 없으면 그대로다.
+    """
+    if level == ResistLevel.IMMUNE:
+        return 0
+    if level == ResistLevel.RESIST:
+        return amount // 2
+    if level == ResistLevel.VULNERABLE:
+        return amount * 2
+    return amount
+
+
+def change_hp(
+    kind: ChangeKind,
+    magnitude: Magnitude,
+    hp: int,
+    max_hp: int,
+    dice: Dice,
+    cut: int = 0,
+    nature: Nature | None = None,
+) -> Change:
     """
     HP 를 한 번 바꾼다. 주사위를 굴려 양을 정하고, 바뀐 결과를 돌려준다.
 
     hp 와 max_hp 는 바뀌는 캐릭터의 지금 HP 와 최대 HP 다. 받은 값을 고치지 않는다.
     cut 은 피해에서 깎을 양이다(방어구, #276). 눈을 더한 값보다 많이 깎지 않는다. 회복에는 쓰지 않는다.
+    nature 는 피해의 성질과 맞는 쪽의 단계다(#886 ③). 방어구가 깎은 뒤의 양에 건다. 회복에는 쓰지 않는다.
     """
     rolls = roll_amount(magnitude, dice)
-    blocked = min(cut, sum(rolls)) if kind == ChangeKind.DAMAGE else 0
-    amount = sum(rolls) - blocked
-    after = hurt(hp, amount) if kind == ChangeKind.DAMAGE else heal(hp, max_hp, amount)
-    return Change(kind=kind, rolls=rolls, amount=amount, before=hp, after=after, blocked=blocked)
+    if kind == ChangeKind.DAMAGE:
+        return damage_change(rolls, hp, cut, nature)
+    amount = sum(rolls)
+    return Change(kind=kind, rolls=rolls, amount=amount, before=hp, after=heal(hp, max_hp, amount))
+
+
+def damage_change(rolls: tuple[int, ...], hp: int, cut: int, nature: Nature | None) -> Change:
+    """굴린 눈으로 피해를 정한다. 방어구가 깎고(cut), 남은 양에 성질의 단계를 건다(#886 ③)."""
+    blocked = min(cut, sum(rolls))
+    level = nature.level if nature is not None else None
+    amount = resist(sum(rolls) - blocked, level)
+    key = nature.key if nature is not None else None
+    return Change(ChangeKind.DAMAGE, rolls, amount, hp, hurt(hp, amount), blocked, key, level)
 
 
 # 장난(#803)의 피해가 남기는 HP 의 바닥. 이 아래로 내리지 못한다

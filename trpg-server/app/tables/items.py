@@ -40,6 +40,7 @@ class CatalogItem:
     throw 는 던지는 판정이다(#277). 던질 수 없는 물건이면 None.
     aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 행동에 붙여 쓰면 판정에 보정을 더한다.
     resistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, app/tables/resistances.py).
+    nature 는 무기로 친 피해의 성질이다(#886 ③). 무기가 아니거나 성질이 없으면 None.
     """
 
     entry_id: uuid.UUID
@@ -59,6 +60,7 @@ class CatalogItem:
     throw: ItemThrowSnapshot | None = None
     aids: tuple[ItemAid, ...] = ()
     resistances: tuple[Resistance, ...] = ()
+    nature: str | None = None
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
@@ -84,6 +86,7 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
             throw=rule.throw,
             aids=tuple(rule.aids),
             resistances=tuple(rule.resistances),
+            nature=rule.nature,
         )
     return items
 

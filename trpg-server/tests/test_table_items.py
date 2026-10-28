@@ -240,6 +240,7 @@ async def test_the_table_lists_the_things_of_its_version(client: AsyncClient, me
             'throw': None,
             'aids': [],
             'resistances': [],
+            'nature': None,
         },
         {
             'entry_id': lore['rope']['id'],
@@ -259,6 +260,7 @@ async def test_the_table_lists_the_things_of_its_version(client: AsyncClient, me
             'throw': None,
             'aids': [],
             'resistances': [],
+            'nature': None,
         },
         {
             'entry_id': lore['lamp']['id'],
@@ -278,6 +280,7 @@ async def test_the_table_lists_the_things_of_its_version(client: AsyncClient, me
             'throw': None,
             'aids': [],
             'resistances': [],
+            'nature': None,
         },
     ]
 

@@ -266,6 +266,7 @@ async def test_a_successful_hit_hurts_the_npc(
         'lethal': False,
         'status': 'alive',
         'injury_roll': None,
+        'nature': None,
     }
     assert closing['declarations'][0]['outcome']['effect'] is None
     assert await state_of(session, world['table'], world['lady']) == (6, NpcStatus.ALIVE)

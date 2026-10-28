@@ -26,7 +26,7 @@ from app.assets.bestiaries.models import MonsterKind
 from app.assets.scenarios.snapshot import MonsterSnapshot, Snapshot, monster_of
 from app.engine import health
 from app.engine.dice import Dice
-from app.engine.health import Change, ChangeKind
+from app.engine.health import Change, ChangeKind, Nature
 from app.engine.ruleset import Magnitude, Ruleset
 from app.tables.models import NpcStatus, TableMonster
 
@@ -116,15 +116,22 @@ def status_after(hp: int, lethal: bool, traits: Traits) -> NpcStatus:
 
 
 def change_monster(
-    monster: TableMonster, traits: Traits, magnitude: Magnitude, lethal: bool, dice: Dice, cut: int = 0
+    monster: TableMonster,
+    traits: Traits,
+    magnitude: Magnitude,
+    lethal: bool,
+    dice: Dice,
+    cut: int = 0,
+    nature: Nature | None = None,
 ) -> Change:
     """
     몬스터 한 마리가 피해를 한 번 입는다. 양을 정하는 주사위를 여기서 굴린다. 바뀐 것을 돌려준다.
 
     몬스터의 상태를 고치는 길은 이 함수 하나다. 상태를 고친다. 저장하지는 않는다. 죽은 몬스터에는 부르지 않는다.
     몬스터에게는 회복이 없다(app/engine/action.py 의 CheckAction). cut 은 방어구와 가죽이 피해에서 깎는 양이다(#276).
+    nature 는 피해의 성질과 그 마리가 받는 단계다(#886 ③).
     """
-    change = health.change_hp(ChangeKind.DAMAGE, magnitude, monster.hp, monster.max_hp, dice, cut)
+    change = health.change_hp(ChangeKind.DAMAGE, magnitude, monster.hp, monster.max_hp, dice, cut, nature)
     monster.hp = change.after
     monster.status = status_after(change.after, lethal, traits)
     return change

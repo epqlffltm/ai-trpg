@@ -278,6 +278,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'injury_roll',
         # 동료의 장난(#803)이었으면 참이다. 장난이 아니면 칸이 없다
         'prank',
+        # 피해의 성질과 받은 단계(#886 ③). 성질이 없으면 칸이 없다
+        'nature',
     ),
     # NPC 의 변화는 주사위의 눈, 양, 바뀐 생사만 보인다. HP 의 숫자(before, after, max_hp)는 GM 만 안다.
     # 몸 상태(condition)도 서술자에게 주는 말이라 내보내지 않는다. 이름은 장면에서 부르는 이름이다
@@ -294,6 +296,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'lethal',
         'status',
         'injury_roll',
+        'nature',
     ),
     # 몬스터의 변화도 NPC 와 같다. 주사위의 눈, 양, 바뀐 생사만 보인다. 이름은 장면에서 부르는 이름이다(수로 쥐 2)
     EventType.MONSTER_CHANGED: (
@@ -307,6 +310,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'lethal',
         'status',
         'injury_roll',
+        'nature',
     ),
     # 몬스터의 공격은 무엇으로 누구를 쳤고 맞혔는지만 보인다.
     # 굴림의 보정과 합은 몬스터의 능력치를 드러내서 싣지 않는다. 맞은 캐릭터의 HP 는 뒤따르는 hp_changed 에 있다.

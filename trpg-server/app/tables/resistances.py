@@ -1,17 +1,19 @@
 # trpg-server/app/tables/resistances.py
 
 """
-저항(#886 ②). 캐릭터, NPC, 몬스터가 지금 어느 성질을 막는가.
+저항(#886 ②, ③). 캐릭터, NPC, 몬스터가 지금 어느 성질을 막고, 그 성질의 피해를 어떻게 받는가.
 
 저항 한 줄은 성질과 단계(저항, 면역, 약점)다(app/engine/ruleset.py 의 Resistance). 저항이 오는 곳은 셋이다.
-  - 시트: 캐릭터의 시트(테이블의 시트에 복사해 둔다)와 NPC 시트의 타고난 저항
+  - 시트: 캐릭터의 시트(테이블의 시트에 복사해 둔다)와 NPC 시트와 몬스터 시트(#886 ③)의 타고난 저항
   - 착용한 장비: 아이템 규칙의 저항. 착용하고 있는 동안만이다. 소지품으로 들고만 있으면 들지 않는다
   - 부상(상태): 부상의 정의의 저항. 입고 있는 동안만이다(돌 피부)
 몬스터는 여기에 예전부터의 면역(타입마다의 면역과 시트의 immune, vulnerable, app/tables/monsters.py)을 더한다.
 
-막는 것은 저항과 면역이다. 한 곳이라도 막으면 막는다. 약점은 부상과 수치를 내리는 맞추기에 아무것도 하지 않는다
-(피해를 더 받는 것은 #886 ③ 이다). 막는 성질의 부상은 입지 않고(app/rounds/injuries.py 의 wound),
+막는 것은 저항과 면역이다. 한 곳이라도 막으면 막는다. 약점은 부상과 수치를 내리는 맞추기에 아무것도 하지 않는다.
+막는 성질의 부상은 입지 않고(app/rounds/injuries.py 의 wound),
 그 성질의 수치를 내리는 맞추기도 받지 않는다(app/engine/item_effects.py 의 is_resisted).
+피해(#886 ③)는 단계를 하나로 모은다(app/engine/ruleset.py 의 damage_level). 면역이 하나라도 있으면 0,
+저항과 약점이 함께 있으면 서로 지워 그대로, 하나만 있으면 반(내림)이나 두 배다. 몬스터의 타입과 시트의 면역도 면역이다.
 
 DB 를 모른다. 이미 읽어 온 시트와 상태와 판을 받아 읽기만 한다. 고치지 않는다.
 """
@@ -22,7 +24,8 @@ from dataclasses import dataclass
 
 from app.assets.scenarios.snapshot import MonsterSnapshot, NpcSheetSnapshot, Snapshot, monster_of, own_npc_sheet
 from app.engine import injury as injury_rules
-from app.engine.ruleset import Resistance, Ruleset, blocked_natures
+from app.engine.health import Nature
+from app.engine.ruleset import Resistance, Ruleset, blocked_natures, damage_level
 from app.tables import injuries, monster_items, monsters, npc_items
 from app.tables import items as table_items
 from app.tables.carried import Carried
@@ -73,9 +76,12 @@ def of_npc(
 def of_monster(
     ruleset: Ruleset, items: dict[uuid.UUID, CatalogItem], monster: TableMonster, definition: MonsterSnapshot
 ) -> list[Resistance]:
-    """몬스터 한 마리의 착용한 장비와 입은 부상의 저항. 타입과 시트의 면역은 따로다(monster_blocked)."""
+    """
+    몬스터 한 마리의 저항. 시트(#886 ③), 착용한 장비, 입은 부상의 차례다.
+    타입과 시트의 면역(immune, vulnerable)은 따로다(monster_blocked, monster_nature).
+    """
     worn = worn_by(items, wearing(monster_items.carried(monster, definition)))
-    return [*worn, *granted_by(ruleset, monster.injuries)]
+    return [*definition.resistances, *worn, *granted_by(ruleset, monster.injuries)]
 
 
 def member_blocked(ruleset: Ruleset, items: dict[uuid.UUID, CatalogItem], sheet: TableSheet) -> frozenset[str]:
@@ -95,6 +101,45 @@ def monster_blocked(
 ) -> frozenset[str]:
     """몬스터 한 마리가 지금 막는 성질들. 타입과 시트의 면역(#799)에 착용한 장비와 입은 부상의 저항을 더한다."""
     return monsters.immunities(ruleset, definition) | blocked_natures(of_monster(ruleset, items, monster, definition))
+
+
+def facing(resistances: list[Resistance], nature: str | None, immune: frozenset[str] = frozenset()) -> Nature | None:
+    """
+    그 성질의 피해를 받는 모양(#886 ③). 성질과, 저항들(과 몬스터의 면역)이 정한 단계다. 성질이 없으면 None.
+    """
+    if nature is None:
+        return None
+    return Nature(key=nature, level=damage_level(resistances, nature, immune))
+
+
+def member_nature(
+    ruleset: Ruleset, items: dict[uuid.UUID, CatalogItem], sheet: TableSheet, nature: str | None
+) -> Nature | None:
+    """캐릭터 하나가 그 성질의 피해를 받는 모양."""
+    return facing(of_member(ruleset, items, sheet), nature)
+
+
+def npc_nature(
+    ruleset: Ruleset,
+    items: dict[uuid.UUID, CatalogItem],
+    npc: TableNpc,
+    definition: NpcSheetSnapshot | None,
+    nature: str | None,
+) -> Nature | None:
+    """NPC 하나가 그 성질의 피해를 받는 모양."""
+    return facing(of_npc(ruleset, items, npc, definition), nature)
+
+
+def monster_nature(
+    ruleset: Ruleset,
+    items: dict[uuid.UUID, CatalogItem],
+    monster: TableMonster,
+    definition: MonsterSnapshot,
+    nature: str | None,
+) -> Nature | None:
+    """몬스터 한 마리가 그 성질의 피해를 받는 모양. 타입과 시트의 면역이면 면역이다."""
+    resistances = of_monster(ruleset, items, monster, definition)
+    return facing(resistances, nature, monsters.immunities(ruleset, definition))
 
 
 @dataclass(frozen=True)

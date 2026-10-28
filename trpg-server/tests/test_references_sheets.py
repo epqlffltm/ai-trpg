@@ -251,6 +251,7 @@ async def test_a_sheet_is_proposed_for_a_copied_monster_and_not_saved(
         'weapon': None,
         'cost': None,
         'effects': [],
+        'nature': None,
     }
     assert body['sheet']['attacks'] == [attack]
     assert body['notes'] == [] and body['copied_from'] == {'source': 'srd51', 'key': 'monsters/wolf'}

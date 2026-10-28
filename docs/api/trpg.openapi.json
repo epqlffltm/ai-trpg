@@ -361,6 +361,17 @@
             "title": "Name",
             "type": "string"
           },
+          "nature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
+          },
           "weapon": {
             "anyOf": [
               {
@@ -993,6 +1004,17 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "nature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
           },
           "price": {
             "anyOf": [
@@ -2126,7 +2148,7 @@
       },
       "DamageEffect": {
         "additionalProperties": false,
-        "description": "등급(magnitude)만큼 피해를 준다.",
+        "description": "등급(magnitude)만큼 피해를 준다.\n\n성질(nature, 룰북의 natures 의 이름표) 하나를 달 수 있다(#886 ③, 화염병). 맞는 쪽이 그 성질에 저항하면 반(내림),\n면역이면 0, 약점이면 두 배를 받는다. 비우면 누구나 그대로 받는다.",
         "properties": {
           "kind": {
             "const": "damage",
@@ -2138,6 +2160,19 @@
             "pattern": "^[a-z][a-z0-9_]*$",
             "title": "Magnitude",
             "type": "string"
+          },
+          "nature": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
           }
         },
         "required": [
@@ -2145,6 +2180,35 @@
           "magnitude"
         ],
         "title": "DamageEffect",
+        "type": "object"
+      },
+      "DamageNatureOut": {
+        "description": "피해의 성질(#886 ③)과 맞은 쪽이 받은 단계. 엔진이 정했다.\n\nlevel 이 resist 면 방어구가 깎은 뒤의 양의 반(내림), immune 이면 0, vulnerable 이면 두 배를 받았다(amount 에\n이미 들었다). None 이면 그대로 받았다.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResistLevel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "DamageNatureOut",
         "type": "object"
       },
       "DeathSave": {
@@ -2975,6 +3039,16 @@
           "max_hp": {
             "title": "Max Hp",
             "type": "integer"
+          },
+          "nature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DamageNatureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "prank": {
             "default": false,
@@ -4908,7 +4982,7 @@
       },
       "ItemRule-Input": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\naids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면\n판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.\n예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.\nresistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.\n성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\naids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면\n판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.\n예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.\nresistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.\nnature 는 무기로 친 피해의 성질이다(#886 ③, 화염 검, 축복받은 망치). 무기에만 적는다.\n성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).",
         "properties": {
           "aids": {
             "default": [],
@@ -5025,6 +5099,19 @@
               }
             ]
           },
+          "nature": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
+          },
           "price": {
             "anyOf": [
               {
@@ -5101,7 +5188,7 @@
       },
       "ItemRule-Output": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\naids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면\n판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.\n예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.\nresistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.\n성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\naids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면\n판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.\n예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.\nresistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.\nnature 는 무기로 친 피해의 성질이다(#886 ③, 화염 검, 축복받은 망치). 무기에만 적는다.\n성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).",
         "properties": {
           "aids": {
             "default": [],
@@ -5216,6 +5303,19 @@
                 "type": "null"
               }
             ]
+          },
+          "nature": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
           },
           "price": {
             "anyOf": [
@@ -5397,6 +5497,17 @@
                 "type": "null"
               }
             ]
+          },
+          "nature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
           },
           "price": {
             "anyOf": [
@@ -6861,7 +6972,7 @@
       },
       "MonsterAttack-Input": {
         "additionalProperties": false,
-        "description": "몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.\neffects 가 있으면(#805 ③-b) 맞혔을 때 대상에게 그 효과들(부상, 수치의 맞추기)이 더 든다.\n방어와 세이브는 피해만 막는다.\n피해 등급(harm)은 비울 수 있다. 그때는 효과만 있는 공격이다(독 뿜기). 피해도 효과도 없는 공격은 받지 않는다.\n\n이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).\nNPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.\ncost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.\n비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.",
+        "description": "몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.\neffects 가 있으면(#805 ③-b) 맞혔을 때 대상에게 그 효과들(부상, 수치의 맞추기)이 더 든다.\n방어와 세이브는 피해만 막는다.\n피해 등급(harm)은 비울 수 있다. 그때는 효과만 있는 공격이다(독 뿜기). 피해도 효과도 없는 공격은 받지 않는다.\n\n이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).\nNPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.\ncost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.\n비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.\nnature 는 피해의 성질이다(#886 ③). 맞은 쪽의 저항(반), 면역(0), 약점(두 배)을 따른다. 비우면 무기의 성질이다.",
         "properties": {
           "ability": {
             "maxLength": 20,
@@ -6926,6 +7037,19 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "nature": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
           },
           "weapon": {
             "anyOf": [
@@ -6950,7 +7074,7 @@
       },
       "MonsterAttack-Output": {
         "additionalProperties": false,
-        "description": "몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.\neffects 가 있으면(#805 ③-b) 맞혔을 때 대상에게 그 효과들(부상, 수치의 맞추기)이 더 든다.\n방어와 세이브는 피해만 막는다.\n피해 등급(harm)은 비울 수 있다. 그때는 효과만 있는 공격이다(독 뿜기). 피해도 효과도 없는 공격은 받지 않는다.\n\n이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).\nNPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.\ncost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.\n비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.",
+        "description": "몬스터의 공격(스킬) 하나. 몬스터의 차례에 이 능력치로 이 난이도에 판정하고, 맞으면 대상이 이 등급만큼 피해를 입는다.\neffects 가 있으면(#805 ③-b) 맞혔을 때 대상에게 그 효과들(부상, 수치의 맞추기)이 더 든다.\n방어와 세이브는 피해만 막는다.\n피해 등급(harm)은 비울 수 있다. 그때는 효과만 있는 공격이다(독 뿜기). 피해도 효과도 없는 공격은 받지 않는다.\n\n이름표(능력치, 난이도, 양의 등급)는 룰북의 것이다. 규칙에 있는지는 게시할 때 본다(monster_attack_invalid).\nNPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.\ncost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.\n비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.\nnature 는 피해의 성질이다(#886 ③). 맞은 쪽의 저항(반), 면역(0), 약점(두 배)을 따른다. 비우면 무기의 성질이다.",
         "properties": {
           "ability": {
             "maxLength": 20,
@@ -7015,6 +7139,19 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "nature": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
           },
           "weapon": {
             "anyOf": [
@@ -7187,6 +7324,16 @@
             "title": "Name",
             "type": "string"
           },
+          "nature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DamageNatureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "rolls": {
             "items": {
               "type": "integer"
@@ -7284,6 +7431,15 @@
             "title": "Natural Armor",
             "type": "array"
           },
+          "resistances": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Resistance"
+            },
+            "maxItems": 50,
+            "title": "Resistances",
+            "type": "array"
+          },
           "sheet": {
             "$ref": "#/components/schemas/Sheet"
           },
@@ -7377,6 +7533,15 @@
             },
             "maxItems": 8,
             "title": "Natural Armor",
+            "type": "array"
+          },
+          "resistances": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Resistance"
+            },
+            "maxItems": 50,
+            "title": "Resistances",
             "type": "array"
           },
           "sheet": {
@@ -7501,6 +7666,15 @@
               "$ref": "#/components/schemas/NaturalArmorSnapshot"
             },
             "title": "Natural Armor",
+            "type": "array"
+          },
+          "resistances": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Resistance"
+            },
+            "maxItems": 50,
+            "title": "Resistances",
             "type": "array"
           },
           "sheet": {
@@ -8420,6 +8594,16 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "nature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DamageNatureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "rolls": {
             "items": {

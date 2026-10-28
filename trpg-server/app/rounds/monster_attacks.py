@@ -123,6 +123,7 @@ def hit_outcome(judging: Judging, attack: AttackSnapshot, victim: TableMember, r
     맞은 부위의 방어가 피해를 깎는다(reduce). 맞혔고 세이브 방식이면 대상이 세이브를 굴리고, 막으면 맞지 않은 것과 같다
     (쓰러진 대상에게도 죽음의 굴림 실패가 쌓이지 않는다). 장비가 든 것(blow)이 있으면 붙인다(#276).
     피해 등급이 없는 공격(#805 ③-b)은 세이브를 굴리지 않고 HP 도 죽음의 굴림도 건드리지 않는다.
+    피해의 성질(#886 ③)은 공격의 것, 없으면 무기의 것이다. 맞은 캐릭터의 저항을 따른다.
     공격의 효과는 그 뒤에 낸다(with_effects). 세이브와 상관없이 판정에 맞혔으면 든다.
     """
     save = blows.roll_blow_save(judging, blow) if rolled.success and attack.harm is not None else None
@@ -133,7 +134,10 @@ def hit_outcome(judging: Judging, attack: AttackSnapshot, victim: TableMember, r
         struck = strike_downed(judging, victim, landed)
         outcome = {**attack_outcome(attack, victim, rolled, None), 'downed_strike': struck}
     else:
-        effect = change_sheet(judging, victim, ChangeKind.DAMAGE, attack.harm, blow.cut) if landed else None
+        nature = blows.blow_nature(blow, attack.nature)
+        effect = (
+            change_sheet(judging, victim, ChangeKind.DAMAGE, attack.harm, blow.cut, nature=nature) if landed else None
+        )
         outcome = attack_outcome(attack, victim, rolled, effect)
     return with_blow(judging, with_effects(judging, attack, victim, rolled.success, outcome), blow, save)
 
@@ -202,10 +206,10 @@ def short_outcome(attack: AttackSnapshot, victim: TableMember) -> dict:
 
 def attack_document(attack: AttackSnapshot) -> dict:
     """
-    결과에 적을 공격. 무기는 장비가 든 것(blow)에, 비용은 낸 것(cost)에, 효과는 든 것(injured, resources)에 적는다.
-    공격은 그 전의 모양 그대로다.
+    결과에 적을 공격. 무기는 장비가 든 것(blow)에, 비용은 낸 것(cost)에, 효과는 든 것(injured, resources)에,
+    피해의 성질(#886 ③)은 HP 의 변화(effect 의 nature)에 적는다. 공격은 그 전의 모양 그대로다.
     """
-    return attack.model_dump(exclude={'weapon', 'cost', 'effects'})
+    return attack.model_dump(exclude={'weapon', 'cost', 'effects', 'nature'})
 
 
 def attack_outcome(attack: AttackSnapshot, victim: TableMember, rolled: Check, effect: dict | None) -> dict:

@@ -105,6 +105,7 @@ async def test_items_are_saved_and_read_back(client: AsyncClient, me: dict[str, 
             'throw': None,
             'aids': [],
             'resistances': [],
+            'nature': None,
         },
         {
             'entry_id': lore['rope']['id'],
@@ -123,6 +124,7 @@ async def test_items_are_saved_and_read_back(client: AsyncClient, me: dict[str, 
             'throw': None,
             'aids': [],
             'resistances': [],
+            'nature': None,
         },
     ]
     assert read['starting_items'] == [stack(lore['rope'])]
@@ -223,6 +225,7 @@ async def test_items_are_frozen_into_the_version(client: AsyncClient, me: dict[s
             'throw': None,
             'aids': [],
             'resistances': [],
+            'nature': None,
         }
     ]
     assert snapshot['starting_items'] == [stack(lore['rope'], 3)]
@@ -298,6 +301,7 @@ async def test_a_consumable_may_heal_nothing(client: AsyncClient, me: dict[str, 
             'throw': None,
             'aids': [],
             'resistances': [],
+            'nature': None,
         }
     ]
 

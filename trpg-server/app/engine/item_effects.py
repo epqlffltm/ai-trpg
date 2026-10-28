@@ -7,6 +7,7 @@
   - heal: 등급(룰북의 magnitudes)만큼 HP 를 되돌린다. 몬스터에게는 회복이 없다.
   - cure: 적은 부상들(룰북의 부상의 이름표)을 푼다. 짧은 것과 오래 가는 것만 푼다(결손은 못 푼다).
   - damage: 등급만큼 피해를 준다. 인물과 몬스터에게는 방어와 세이브가 치기와 같다.
+    성질(#886 ③)을 달면 맞는 쪽의 저항(반), 면역(0), 약점(두 배)을 따른다. 방어구가 깎은 뒤에 건다.
   - injure: 부상 하나를 입힌다. 짧은 것, 오래 가는 것, 결손 모두 된다. 그 성질에 면역이나 저항이면 입지 않는다.
   - adjust: 수치 하나(룰북의 resources, #804)를 양만큼 올리거나(양수) 내린다(음수). 마나 물약, 저주받은 책.
     앉은 사람에게만 든다. 인물과 몬스터에게는 수치가 없다(아무 일도 없다). 내리는 것은 해롭다.
@@ -77,12 +78,18 @@ class CureEffect(BaseModel):
 
 
 class DamageEffect(BaseModel):
-    """등급(magnitude)만큼 피해를 준다."""
+    """
+    등급(magnitude)만큼 피해를 준다.
+
+    성질(nature, 룰북의 natures 의 이름표) 하나를 달 수 있다(#886 ③, 화염병). 맞는 쪽이 그 성질에 저항하면 반(내림),
+    면역이면 0, 약점이면 두 배를 받는다. 비우면 누구나 그대로 받는다.
+    """
 
     model_config = ConfigDict(extra='forbid')
 
     kind: Literal[EffectKind.DAMAGE]
     magnitude: Key
+    nature: Key | None = None
 
 
 class InjureEffect(BaseModel):
@@ -161,6 +168,11 @@ def is_harmful(effects: list) -> bool:
 def is_drain(effect) -> bool:
     """수치를 내리는 맞추기(#804)인가."""
     return effect.kind == EffectKind.ADJUST and effect.amount < 0
+
+
+def nature_of(effect) -> str | None:
+    """효과 하나의 성질(#886). 피해(③)와 수치의 맞추기(②)에만 있다. 없으면 None."""
+    return effect.nature if effect.kind in (EffectKind.DAMAGE, EffectKind.ADJUST) else None
 
 
 def is_resisted(effect, blocked: frozenset[str]) -> bool:

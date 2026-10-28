@@ -134,7 +134,7 @@ def apply_to_member(
         if one.kind == EffectKind.HEAL:
             effect = change_sheet(judging, target, ChangeKind.RECOVERY, one.magnitude)
         elif one.kind == EffectKind.DAMAGE:
-            effect = change_sheet(judging, target, ChangeKind.DAMAGE, one.magnitude, prank=prank)
+            effect = change_sheet(judging, target, ChangeKind.DAMAGE, one.magnitude, prank=prank, nature=one.nature)
         elif one.kind == EffectKind.CURE:
             cured.extend(cure(judging, rows, one.injuries, resisting.of_member(judging, target)))
         elif one.kind == EffectKind.INJURE:

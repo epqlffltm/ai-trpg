@@ -106,6 +106,24 @@ def injury_after(
     return round_injuries.take(judging.ruleset, rolled, rows, judging.table.id, judging.moment, immune, prank)
 
 
+def nature_document(ruleset: Ruleset, change: Change) -> dict | None:
+    """
+    피해의 성질(#886 ③)을 HP 의 변화의 문서에 넣을 모양. 이름표, 이름, 맞은 쪽이 받은 단계(그대로면 None)다.
+    성질이 없는 피해와 회복이면 None. 규칙에 없는 성질(게시할 때 막았다)이면 이름표를 이름으로 쓴다.
+    """
+    if change.nature is None:
+        return None
+    known = next((nature for nature in ruleset.natures if nature.key == change.nature), None)
+    level = change.level.value if change.level is not None else None
+    return {'key': change.nature, 'name': known.name if known else change.nature, 'level': level}
+
+
+def with_nature(ruleset: Ruleset, effect: dict, change: Change) -> dict:
+    """HP 의 변화의 문서에 피해의 성질(nature)을 붙인다. 성질이 없으면 그대로다(성질이 생기기 전과 같은 모양)."""
+    document = nature_document(ruleset, change)
+    return effect if document is None else {**effect, 'nature': document}
+
+
 def member_effect(affected: TableMember, magnitude: str, change: Change, injury_roll: dict | None) -> dict:
     """
     앉은 사람의 HP 가 바뀐 것을 선언의 outcome 에 넣을 문서로. 누구의 HP 가 얼마에서 얼마로 바뀌었는지가 다 담긴다.
