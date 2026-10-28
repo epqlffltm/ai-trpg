@@ -20,7 +20,7 @@ from app.engine.check import HinderedCheck
 from app.engine.dice import Dice
 from app.engine.health import Change
 from app.engine.injury import Hindrance, TableRoll, Trigger
-from app.engine.ruleset import Healing, Injury, InjuryNature, Ruleset
+from app.engine.ruleset import Healing, Injury, Ruleset
 from app.rounds.cast import Scene, find_cast_member
 from app.rounds.narrator import InjuryNote
 from app.tables import injuries, monsters, npcs, sheets
@@ -87,15 +87,15 @@ def roll_after(ruleset: Ruleset, dice: Dice, change: Change, max_hp: int, dead: 
 
 
 # 아무 성질에도 면역이 아니다. 캐릭터와 NPC 는 면역이 없다(#799)
-NO_IMMUNITY: frozenset[InjuryNature] = frozenset()
+NO_IMMUNITY: frozenset[str] = frozenset()
 
 
-def is_immune(definition: Injury, immune: frozenset[InjuryNature]) -> bool:
+def is_immune(definition: Injury, immune: frozenset[str]) -> bool:
     """이 부상의 성질 가운데 하나라도 면역이면 입지 않는다(#799). 성질이 없는 부상은 누구나 입는다."""
     return any(nature in immune for nature in definition.natures)
 
 
-def immune_to(ruleset: Ruleset, key: str, immune: frozenset[InjuryNature]) -> bool:
+def immune_to(ruleset: Ruleset, key: str, immune: frozenset[str]) -> bool:
     """이 이름표의 부상에 면역인가. 규칙에 없는 부상이면 아니다."""
     definition = injury_rules.find_injury(ruleset, key)
     return definition is not None and is_immune(definition, immune)
@@ -130,7 +130,7 @@ def wound(
     rows: list[TableInjury],
     table_id: uuid.UUID,
     moment: Moment,
-    immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    immune: frozenset[str] = NO_IMMUNITY,
     prank: bool = False,
 ) -> dict:
     """
@@ -166,7 +166,7 @@ def take(
     rows: list[TableInjury],
     table_id: uuid.UUID,
     moment: Moment,
-    immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    immune: frozenset[str] = NO_IMMUNITY,
     prank: bool = False,
 ) -> dict:
     """
@@ -188,7 +188,7 @@ def take_aimed(
     rows: list[TableInjury],
     table_id: uuid.UUID,
     moment: Moment,
-    immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    immune: frozenset[str] = NO_IMMUNITY,
     prank: bool = False,
 ) -> dict:
     """
@@ -217,7 +217,7 @@ def take_from_item(
     rows: list[TableInjury],
     table_id: uuid.UUID,
     moment: Moment,
-    immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    immune: frozenset[str] = NO_IMMUNITY,
     prank: bool = False,
     trigger: Trigger = Trigger.ITEM,
 ) -> dict:
@@ -239,7 +239,7 @@ def take_aftermath(
     rows: list[TableInjury],
     table_id: uuid.UUID,
     moment: Moment,
-    immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    immune: frozenset[str] = NO_IMMUNITY,
 ) -> dict:
     """후유증 표의 결과를 받아들인다. 후유증이 나왔으면 입히고(결손이다), 굴린 것을 문서로 돌려준다."""
     document = injury_document(rolled.trigger, rolled.roll)
@@ -255,7 +255,7 @@ def aftermath_of(
     rows: list[TableInjury],
     table_id: uuid.UUID,
     moment: Moment,
-    immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    immune: frozenset[str] = NO_IMMUNITY,
 ) -> dict | None:
     """
     나은 부상의 후유증 표를 굴리고, 나온 후유증을 입힌다. 굴린 것을 문서로 돌려준다. 굴리지 않았으면 None.
@@ -342,7 +342,7 @@ def close_out(
     rows: list[TableInjury],
     table_id: uuid.UUID,
     moment: Moment,
-    immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    immune: frozenset[str] = NO_IMMUNITY,
 ) -> Ended:
     """
     끝난 부상 하나를 정리한다. 오래 가는 것이면 나은 것이고 후유증 표를 굴린다. 짧은 것이면 풀린 것이다.
@@ -375,7 +375,7 @@ def expire_all(
     dice: Dice,
     table_id: uuid.UUID,
     moment: Moment,
-    immunities: dict[uuid.UUID, frozenset[InjuryNature]] | None = None,
+    immunities: dict[uuid.UUID, frozenset[str]] | None = None,
 ) -> list[Ended]:
     """
     이 라운드가 닫힐 때 풀리거나 나을 부상을 모두 끝낸다. 앉은 사람의 지금 캐릭터와 테이블의 NPC 와 몬스터 전부다.
@@ -417,7 +417,7 @@ def expire_monsters(
     dice: Dice,
     table_id: uuid.UUID,
     moment: Moment,
-    immunities: dict[uuid.UUID, frozenset[InjuryNature]],
+    immunities: dict[uuid.UUID, frozenset[str]],
 ) -> list[Ended]:
     """
     테이블의 몬스터들의 부상 중 때가 된 것을 끝낸다(#799). 장면의 마리의 것만 돌려준다(장면의 이름으로 부른다).

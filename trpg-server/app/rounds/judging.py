@@ -354,5 +354,7 @@ def expire_injuries(table: GameTable, scene: Scene, round_number: int, dice: Dic
     if not round_injuries.any_due(table.members, scene, moment):
         return []
     snapshot = read_snapshot(table.content)
-    immunities = {monster.id: table_monsters.immunities(monster) for monster in snapshot.monsters}
+    immunities = {
+        monster.id: table_monsters.immunities(snapshot.rulebook.rules, monster) for monster in snapshot.monsters
+    }
     return round_injuries.expire_all(table.members, scene, snapshot.rulebook.rules, dice, table.id, moment, immunities)

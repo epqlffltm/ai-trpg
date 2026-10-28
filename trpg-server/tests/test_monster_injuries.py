@@ -31,7 +31,6 @@ from app.assets.scenarios.schemas import MonsterSheet
 from app.assets.scenarios.snapshot import MonsterSnapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_60
 from app.engine.dice import ScriptedDice
-from app.engine.ruleset import InjuryNature
 from app.engine.templates import SRD5, Template, from_template
 from app.rounds.injuries import expire_monsters, immune_to
 from app.rounds.move_lines import describe_npc_impact
@@ -87,20 +86,34 @@ async def post(client: AsyncClient, url: str, headers: dict[str, str], **body) -
     return response.json()
 
 
-async def start_table(client: AsyncClient, me: dict[str, str], **rat_sheet) -> dict:
+async def start_table(
+    client: AsyncClient, me: dict[str, str], rulebook_fields: dict | None = None, **rat_sheet
+) -> dict:
     """
     쥐와 해골이 있는 입구에서 테이블을 시작한다. rat_sheet 는 쥐의 시트에 더할 칸이다(immune, vulnerable).
+    rulebook_fields 는 룰북을 만들 때 보낼 칸이다(natures, monster_immunities, #886).
 
     돌려주는 것은 테이블이다.
     """
+    scenario = await make_scenario(client, me, rulebook_fields, **rat_sheet)
+    await post(client, f'{SCENARIOS_URL}/{scenario["id"]}/versions', me)
+    table = await post(client, TABLES_URL, me, scenario_id=scenario['id'], version=1, capacity=1)
+    await client.put(table_url(table, '/character'), json={'name': '엘프'}, headers=me)
+    started = await client.post(table_url(table, '/start'), headers=me)
+    assert started.status_code == status.HTTP_200_OK, started.text
+    return table
+
+
+async def make_scenario(client: AsyncClient, me: dict[str, str], rulebook_fields: dict | None, **rat_sheet) -> dict:
+    """쥐와 해골이 있는 입구의 시나리오. 아직 게시하지 않는다."""
     lorebook = await post(client, LOREBOOKS_URL, me, title='지하 수로')
     gate = await post(client, f'{LOREBOOKS_URL}/{lorebook["id"]}/entries', me, name='수로 입구', kind='place')
     bestiary = await post(client, BESTIARIES_URL, me, title='지하 수로의 것들')
     monsters = f'{BESTIARIES_URL}/{bestiary["id"]}/monsters'
     rat = await post(client, monsters, me, name='수로 쥐', kind='beast', content='개만 한 쥐')
     skeleton = await post(client, monsters, me, name='해골 병사', kind='undead', content='녹슨 창을 든 해골')
-    rulebook = await post(client, RULEBOOKS_URL, me, title='룰북')
-    scenario = await post(
+    rulebook = await post(client, RULEBOOKS_URL, me, title='룰북', **(rulebook_fields or {}))
+    return await post(
         client,
         SCENARIOS_URL,
         me,
@@ -120,12 +133,6 @@ async def start_table(client: AsyncClient, me: dict[str, str], **rat_sheet) -> d
             {'place_id': gate['id'], 'monster_id': skeleton['id'], 'count': 1},
         ],
     )
-    await post(client, f'{SCENARIOS_URL}/{scenario["id"]}/versions', me)
-    table = await post(client, TABLES_URL, me, scenario_id=scenario['id'], version=1, capacity=1)
-    await client.put(table_url(table, '/character'), json={'name': '엘프'}, headers=me)
-    started = await client.post(table_url(table, '/start'), headers=me)
-    assert started.status_code == status.HTTP_200_OK, started.text
-    return table
 
 
 def monster_effect(closing: dict) -> dict:
@@ -305,24 +312,24 @@ def snapshot_of(kind: MonsterKind, immune: list[str] | None = None, vulnerable: 
     ('kind', 'immune', 'vulnerable', 'expected'),
     [
         (MonsterKind.BEAST, [], [], set()),
-        # 언데드는 독, 구조물은 독과 정신에 면역이다(타입의 성질표)
-        (MonsterKind.UNDEAD, [], [], {InjuryNature.POISON}),
-        (MonsterKind.CONSTRUCT, [], [], {InjuryNature.POISON, InjuryNature.MIND}),
+        # 언데드는 독, 구조물은 독과 정신에 면역이다(룰북의 타입마다의 면역, #886)
+        (MonsterKind.UNDEAD, [], [], {'poison'}),
+        (MonsterKind.CONSTRUCT, [], [], {'poison', 'mind'}),
         # 시트가 더하고 뺀다
-        (MonsterKind.BEAST, ['stun'], [], {InjuryNature.STUN}),
+        (MonsterKind.BEAST, ['stun'], [], {'stun'}),
         (MonsterKind.UNDEAD, [], ['poison'], set()),
-        (MonsterKind.CONSTRUCT, ['sense'], ['mind'], {InjuryNature.POISON, InjuryNature.SENSE}),
+        (MonsterKind.CONSTRUCT, ['sense'], ['mind'], {'poison', 'sense'}),
     ],
 )
 def test_immunities_are_the_kind_s_plus_the_sheet_s(kind, immune, vulnerable, expected):
-    assert immunities(snapshot_of(kind, immune, vulnerable)) == expected
+    assert immunities(SRD5, snapshot_of(kind, immune, vulnerable)) == expected
 
 
 def test_an_injury_without_natures_is_taken_by_anyone():
     rules = SRD5.model_copy(
         update={'injuries': tuple(injury.model_copy(update={'natures': ()}) for injury in SRD5.injuries)}
     )
-    everything = frozenset(InjuryNature)
+    everything = frozenset(nature.key for nature in SRD5.natures)
 
     assert immune_to(SRD5, 'poisoned', everything)
     assert not immune_to(rules, 'poisoned', everything)
@@ -339,7 +346,6 @@ def test_an_injury_without_natures_is_taken_by_anyone():
         {'immune': ['poison'], 'vulnerable': ['poison']},
         {'immune': ['poison', 'poison']},
         {'vulnerable': ['mind', 'mind']},
-        {'immune': ['fire']},
     ],
 )
 def test_a_sheet_with_confused_natures_is_refused(fields: dict):
@@ -403,7 +409,7 @@ def test_the_migration_knows_the_template_s_natures(template: Template):
     # 마이그레이션은 앱의 코드를 가져오지 않는다. 템플릿을 고치면 이 테스트가 깨진다
     migration = load_migration('injured_monsters')
     rules = from_template(template)
-    natures = {injury.key: [nature.value for nature in injury.natures] for injury in rules.injuries}
+    natures = {injury.key: list(injury.natures) for injury in rules.injuries}
 
     assert migration.TEMPLATE_NATURES[template] == natures
 

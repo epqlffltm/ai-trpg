@@ -152,7 +152,7 @@ def require_aimable_monster(monster: SceneMonster, aim: str, ruleset: Ruleset) -
     """노려 칠 부상을 그 마리가 이미 입었으면 already_injured, 그 성질에 면역이면 target_immune(#799)."""
     if round_injuries.wears(monster.state.injuries, aim):
         raise RoundConflictError(Conflict.ALREADY_INJURED)
-    if round_injuries.immune_to(ruleset, aim, table_monsters.immunities(monster.definition)):
+    if round_injuries.immune_to(ruleset, aim, table_monsters.immunities(ruleset, monster.definition)):
         raise RoundConflictError(Conflict.TARGET_IMMUNE)
 
 

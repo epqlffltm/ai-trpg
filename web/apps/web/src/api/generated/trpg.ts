@@ -3732,7 +3732,7 @@ export interface components {
          *     aftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.
          *     aimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.
          *     treat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).
-         *     natures 는 부상의 성질이다(#799). 몬스터의 타입이 그 성질에 면역이면 이 부상을 입지 않는다.
+         *     natures 는 부상의 성질이다(#799). 규칙의 성질(natures, #886)의 이름표다. 그 성질에 면역이면 이 부상을 입지 않는다.
          */
         Injury: {
             aftermath?: components["schemas"]["InjuryTable"] | null;
@@ -3759,7 +3759,7 @@ export interface components {
              * Natures
              * @default []
              */
-            natures: components["schemas"]["InjuryNature"][];
+            natures: string[];
             /** Rounds */
             rounds?: number | null;
             /** Treat Difficulty */
@@ -3767,14 +3767,6 @@ export interface components {
             /** Treat Minutes */
             treat_minutes?: number | null;
         };
-        /**
-         * InjuryNature
-         * @description 부상의 성질(#799). 몬스터의 타입이 무엇에 걸리지 않는지(면역)를 부상의 이름이 아니라 성질로 정한다.
-         *
-         *     부상의 이름은 룰북마다 다르다. 타입의 성질표(app/tables/monsters.py 의 Traits)는 이 성질로 면역을 적는다.
-         * @enum {string}
-         */
-        InjuryNature: "poison" | "stun" | "sense" | "body" | "mind";
         /**
          * InjuryOut
          * @description 캐릭터가 입고 있는 부상 하나. 이름과 사실, 효과는 테이블의 rules.injuries 에서 이름표(injury)로 찾는다.
@@ -4346,6 +4338,17 @@ export interface components {
         JoinRequest: {
             /** Invite Code */
             invite_code: string;
+        };
+        /**
+         * KindImmunity
+         * @description 몬스터의 타입 하나가 걸리지 않는 성질들(#886). 언데드는 독에, 구조물은 독과 정신에 걸리지 않는다.
+         *
+         *     예전에는 엔진에 박혀 있었다. 이제 룰북이 정한다. 몬스터의 시트가 더하거나(immune) 뺀다(vulnerable).
+         */
+        KindImmunity: {
+            kind: components["schemas"]["MonsterKind"];
+            /** Natures */
+            natures: string[];
         };
         /**
          * ListingDetail
@@ -4959,7 +4962,7 @@ export interface components {
              * Immune
              * @default []
              */
-            immune: components["schemas"]["InjuryNature"][];
+            immune: string[];
             /**
              * Inventory
              * @default []
@@ -4980,7 +4983,7 @@ export interface components {
              * Vulnerable
              * @default []
              */
-            vulnerable: components["schemas"]["InjuryNature"][];
+            vulnerable: string[];
             /** Ward */
             ward?: number | null;
         };
@@ -5011,7 +5014,7 @@ export interface components {
              * Immune
              * @default []
              */
-            immune: components["schemas"]["InjuryNature"][];
+            immune: string[];
             /**
              * Inventory
              * @default []
@@ -5029,7 +5032,7 @@ export interface components {
              * Vulnerable
              * @default []
              */
-            vulnerable: components["schemas"]["InjuryNature"][];
+            vulnerable: string[];
             /** Ward */
             ward?: number | null;
         };
@@ -5079,7 +5082,7 @@ export interface components {
              * Immune
              * @default []
              */
-            immune: components["schemas"]["InjuryNature"][];
+            immune: string[];
             /**
              * Inventory
              * @default []
@@ -5103,7 +5106,7 @@ export interface components {
              * Vulnerable
              * @default []
              */
-            vulnerable: components["schemas"]["InjuryNature"][];
+            vulnerable: string[];
             /** Ward */
             ward?: number | null;
         };
@@ -5434,6 +5437,21 @@ export interface components {
             every_minutes: number;
             /** Heal */
             heal: string;
+        };
+        /**
+         * Nature
+         * @description 성질 하나(#799, #886). 독, 기절, 화염 같은 것이다. 룰북이 정한다. 개수도 이름도 제작자의 것이다.
+         *
+         *     부상(injuries[].natures)이 성질을 가지고, 몬스터는 성질에 면역이다(타입마다의 monster_immunities, 시트의 immune).
+         *     category 는 묶음의 이름(원소, 상태이상, 몸)이다. 화면에서 묶어 보여 주고 서술에 준다. 엔진은 보지 않는다.
+         */
+        Nature: {
+            /** Category */
+            category?: string | null;
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
         };
         /**
          * NextPriceOut
@@ -7711,6 +7729,7 @@ export interface components {
          *     규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.
          *     방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.
          *     보내지 않으면 템플릿의 것이다. 수치(resources, #804)와 기술(skills, #805)도 같다. 보내면 템플릿의 예시 대신 쓴다.
+         *     성질(natures)과 타입마다의 면역(monster_immunities, #886)도 같다.
          */
         RulebookCreate: {
             armor?: components["schemas"]["Armor"] | null;
@@ -7724,6 +7743,10 @@ export interface components {
              * @default
              */
             gm_guide: string;
+            /** Monster Immunities */
+            monster_immunities?: components["schemas"]["KindImmunity"][] | null;
+            /** Natures */
+            natures?: components["schemas"]["Nature"][] | null;
             /** Resources */
             resources?: components["schemas"]["Resource"][] | null;
             /** Skills */
@@ -7785,7 +7808,8 @@ export interface components {
          * RulebookUpdate
          * @description 룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.
          *
-         *     규칙은 방어 규칙(armor), 수치(resources, #804), 기술(skills, #805)만 고칠 수 있다.
+         *     규칙은 방어 규칙(armor), 수치(resources, #804), 기술(skills, #805), 성질(natures)과 타입마다의 면역
+         *     (monster_immunities, #886)만 고칠 수 있다.
          *     방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.
          *     이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
          */
@@ -7795,6 +7819,10 @@ export interface components {
             description?: string | null;
             /** Gm Guide */
             gm_guide?: string | null;
+            /** Monster Immunities */
+            monster_immunities?: components["schemas"]["KindImmunity"][] | null;
+            /** Natures */
+            natures?: components["schemas"]["Nature"][] | null;
             /** Resources */
             resources?: components["schemas"]["Resource"][] | null;
             /** Skills */
@@ -7835,7 +7863,11 @@ export interface components {
             /** Magnitudes */
             magnitudes: components["schemas"]["Magnitude"][];
             modifier: components["schemas"]["Modifier"];
+            /** Monster Immunities */
+            monster_immunities: components["schemas"]["KindImmunity"][];
             narration: components["schemas"]["NarrationGuide"] | null;
+            /** Natures */
+            natures: components["schemas"]["Nature"][];
             point_buy: components["schemas"]["PointBuy"] | null;
             /** Resources */
             resources: components["schemas"]["Resource"][];
@@ -8618,7 +8650,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 66
+             * @default 67
              */
             format: number;
             /**

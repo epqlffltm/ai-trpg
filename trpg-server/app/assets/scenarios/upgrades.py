@@ -1146,6 +1146,35 @@ def upgrade_from_65(document: dict) -> dict:
     return upgraded
 
 
+# 형식 67 전의 성질(#886). 그때는 엔진에 박혀 있던 다섯이다. 이름은 그때 화면이 쓰던 것이다
+CLASSIC_NATURES = [
+    {'key': 'poison', 'name': '독', 'category': None},
+    {'key': 'stun', 'name': '기절', 'category': None},
+    {'key': 'sense', 'name': '감각', 'category': None},
+    {'key': 'body', 'name': '몸', 'category': None},
+    {'key': 'mind', 'name': '정신', 'category': None},
+]
+# 형식 67 전의 타입마다의 면역(#886). 그때 엔진의 표(언데드는 독, 구조물은 독과 정신)다
+CLASSIC_MONSTER_IMMUNITIES = [
+    {'kind': 'undead', 'natures': ['poison']},
+    {'kind': 'construct', 'natures': ['poison', 'mind']},
+]
+
+
+def upgrade_from_66(document: dict) -> dict:
+    """
+    형식 66 의 문서를 형식 67 로 올린다(#886). 룰북이 성질(natures)과 타입마다의 면역(monster_immunities)을 정한다.
+
+    그때는 둘 다 엔진에 박혀 있었다. 그때의 값으로 읽는다. 부상과 몬스터 시트의 성질은 같은 이름표라 고치지 않는다.
+    """
+    upgraded = dict(document)
+    rulebook = document['rulebook']
+    rules = {**rulebook['rules'], 'natures': CLASSIC_NATURES, 'monster_immunities': CLASSIC_MONSTER_IMMUNITIES}
+    upgraded['rulebook'] = {**rulebook, 'rules': rules}
+    upgraded['format'] = 67
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -1214,4 +1243,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     63: upgrade_from_63,
     64: upgrade_from_64,
     65: upgrade_from_65,
+    66: upgrade_from_66,
 }

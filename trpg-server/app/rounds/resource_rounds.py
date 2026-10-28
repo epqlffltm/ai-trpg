@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import read_snapshot
 from app.engine import injury as injury_rules
-from app.engine.ruleset import InjuryNature, ResourceHolder, Ruleset
+from app.engine.ruleset import ResourceHolder, Ruleset
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds.cast import Scene, find_cast_member
@@ -35,7 +35,7 @@ from app.tables import injuries, monsters, npcs, resources, sheets
 from app.tables.models import GameTable, InjurySource, TableInjury, TableMember
 from app.tables.resources import Bearer
 
-NO_IMMUNITY: frozenset[InjuryNature] = frozenset()
+NO_IMMUNITY: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -61,7 +61,7 @@ class Bearing:
     holder_kind: ResourceHolder
     owner_id: uuid.UUID | None
     holder: dict
-    immune: frozenset[InjuryNature] = NO_IMMUNITY
+    immune: frozenset[str] = NO_IMMUNITY
     seen: bool = True
 
 
@@ -112,7 +112,7 @@ def inflict_wanted(
     wanted: list[str],
     table_id: uuid.UUID,
     round_number: int,
-    immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    immune: frozenset[str] = NO_IMMUNITY,
 ) -> list[dict]:
     """닿아 있는 문턱의 부상 중 입고 있지 않고 면역도 아닌 것을 입힌다. 입힌 것을 문서로 돌려준다."""
     gained = []
@@ -130,7 +130,7 @@ def follow_thresholds(
     table_id: uuid.UUID,
     round_number: int,
     holder_kind: ResourceHolder = ResourceHolder.CHARACTERS,
-    immune: frozenset[InjuryNature] = NO_IMMUNITY,
+    immune: frozenset[str] = NO_IMMUNITY,
 ) -> tuple[list[dict], list[TableInjury]]:
     """가진 쪽의 부상을 수치의 문턱에 맞춘다. 벗어난 것을 먼저 풀고, 닿은 것을 입힌다. 입힌 것과 푼 것이다."""
     wanted = resources.wanted_injuries(ruleset, bearer, holder_kind)
@@ -172,7 +172,7 @@ def npc_bearings(scene: Scene) -> list[Bearing]:
     return bearings
 
 
-def monster_bearings(scene: Scene, immunities: dict[uuid.UUID, frozenset[InjuryNature]]) -> list[Bearing]:
+def monster_bearings(scene: Scene, immunities: dict[uuid.UUID, frozenset[str]]) -> list[Bearing]:
     """살아 있는 몬스터들. 판의 몬스터 ID, 번호 순서다. 장면의 마리만 이벤트에 적는다. 면역(#799)을 따른다."""
     names = {monster.state.id: monster.name for monster in scene.monsters}
     bearings = []
@@ -195,7 +195,7 @@ def settle(table: GameTable, round_: Round, scene: Scene) -> list[Drift]:
         return []
     snapshot = read_snapshot(table.content)
     ruleset = snapshot.rulebook.rules
-    immunities = {monster.id: monsters.immunities(monster) for monster in snapshot.monsters}
+    immunities = {monster.id: monsters.immunities(ruleset, monster) for monster in snapshot.monsters}
     bearings = [*member_bearings(table), *npc_bearings(scene), *monster_bearings(scene, immunities)]
     drifts = []
     for bearing in bearings:

@@ -93,7 +93,7 @@ from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
 from app.engine.item_aids import Aids
 from app.engine.item_effects import AttackEffects, Effects
-from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, InjuryNature, Key, SkillCost
+from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, RULESET_MAX_NATURES, Key, SkillCost
 from app.engine.sheet import CharacterSheet, Sheet
 
 # 스타팅 하나. 공백이 아닌 글자가 하나는 있어야 한다. 빈 스타팅은 고를 수 없으니 받지 않는다.
@@ -476,14 +476,14 @@ NaturalArmors = Annotated[
 ]
 
 
-def reject_repeated_natures(natures: list[InjuryNature]) -> list[InjuryNature]:
+def reject_repeated_natures(natures: list[str]) -> list[str]:
     """같은 성질을 두 번 적으면 거부한다."""
     if len(set(natures)) != len(natures):
         raise ValueError('같은 성질을 두 번 적었습니다.')
     return natures
 
 
-Natures = Annotated[list[InjuryNature], Field(max_length=len(InjuryNature)), AfterValidator(reject_repeated_natures)]
+Natures = Annotated[list[Key], Field(max_length=RULESET_MAX_NATURES), AfterValidator(reject_repeated_natures)]
 
 
 class MonsterSheet(BaseModel):

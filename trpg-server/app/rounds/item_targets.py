@@ -149,7 +149,9 @@ def struck_of(judging: Judging, action: Aimed) -> Struck | None:
         monster: SceneMonster | None = find_scene_monster(judging.monsters, action.monster)
         if monster is None or table_monsters.is_dead(monster.state):
             return None
-        return Struck(monster.state, ResourceHolder.MONSTERS, None, table_monsters.immunities(monster.definition))
+        return Struck(
+            monster.state, ResourceHolder.MONSTERS, None, table_monsters.immunities(judging.ruleset, monster.definition)
+        )
     person: CastMember | None = find_cast_member(judging.cast, action.npc)
     if person is None or npcs.is_dead(person.npc):
         return None

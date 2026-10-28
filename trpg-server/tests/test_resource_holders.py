@@ -21,7 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.engine import resources as engine
-from app.engine.ruleset import InjuryNature, Resource, ResourceHolder, Ruleset
+from app.engine.ruleset import Resource, ResourceHolder, Ruleset
 from app.engine.templates import from_template
 from app.rounds import resource_rounds
 from app.rounds.cast import CastMember
@@ -145,7 +145,7 @@ def test_a_monster_immune_to_the_threshold_injury_does_not_take_it():
     rat = bearer({'rage': 4})
 
     gained, _ = resource_rounds.follow_thresholds(
-        rules, rat, uuid.uuid4(), 2, ResourceHolder.MONSTERS, frozenset({InjuryNature.STUN})
+        rules, rat, uuid.uuid4(), 2, ResourceHolder.MONSTERS, frozenset({'stun'})
     )
 
     assert (gained, rat.injuries) == ([], [])

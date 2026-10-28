@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_44
+from app.assets.scenarios.upgrades import CLASSIC_MONSTER_IMMUNITIES, CLASSIC_NATURES, UPGRADES, upgrade_from_44
 from app.engine import templates
 from app.engine.check import find_difficulty, modifier_of, resolve
 from app.engine.dice import ScriptedDice
@@ -37,6 +37,12 @@ from app.engine.templates import (
 # 이미 내놓은 템플릿의 값은 고치지 않는다. 고치고 싶으면 새 이름으로 하나 더 낸다.
 # 규칙의 모양에 칸이 새로 생겨 템플릿에 그 칸을 더한 것이면(있던 값은 그대로) 해시를 새로 적는다.
 RELEASED = {
+    Template.SRD5: '6ef637c7ca4b9620e2ab1e463a481978be9d6747237de6daa50ff2201bda1960',
+    Template.HORROR: '427e008eb3c5f6afcf038331f1c3f21b2fab23ac2be3c6b09c055b94a3d4df98',
+    Template.LIGHT: 'ce5842578f701b4de2608106c9a2e3c650cb5b7663403926db09e5cea42c0072',
+}
+# 성질과 타입마다의 면역(natures, monster_immunities, #886)을 더하기 전의 해시. 두 칸을 뺀 규칙은 그때와 같아야 한다
+BEFORE_NATURE_DATA = {
     Template.SRD5: '4cf23d19eb4a1d4d52250d3102a5cd8d2286cefa856ae3f624893cc9075177a4',
     Template.HORROR: '7b6ff2351cb5b0544bcad8d8a7d5936ecf42e0d7ffa6cca7c4047f3238abd700',
     Template.LIGHT: '963d1cbabd573f357755d30b9efdf4468d475c31fa7fbfde15060f75f717d43a',
@@ -120,13 +126,19 @@ BEFORE_NARRATION = {
 COMMERCIAL_NAMES = ('d&d', 'dungeons', '던전 앤 드래곤', '던전즈', 'pathfinder', '패스파인더', 'cthulhu', '크툴루')
 
 
-def dumped(rules: Ruleset, natures: bool = True, resources: bool = False, skills: bool = False) -> dict:
+def dumped(
+    rules: Ruleset, natures: bool = True, resources: bool = False, skills: bool = False, nature_data: bool = False
+) -> dict:
     """
     규칙의 값. natures 가 거짓이면 부상의 성질(#799)과 그 뒤에 더한 물건을 쓰는 판정(item_check, #800)을 뺀다.
     성질을 더하기 전의 해시와 견줄 때 쓴다. resources 가 거짓이면 수치(#804)를 뺀다.
-    skills 가 거짓이면 가장 나중에 더한 기술(#805)을 뺀다. 지금의 값(RELEASED)과 견줄 때만 둘 다 참으로 준다.
+    skills 가 거짓이면 기술(#805)을 뺀다. nature_data 가 거짓이면 가장 나중에 더한 규칙의 성질의 목록과
+    타입마다의 면역(natures, monster_immunities, #886)을 뺀다. 지금의 값(RELEASED)과 견줄 때만 모두 참으로 준다.
     """
     values = rules.model_dump(mode='json')
+    if not nature_data:
+        values.pop('natures')
+        values.pop('monster_immunities')
     if not skills:
         values.pop('skills')
     if not resources:
@@ -140,10 +152,16 @@ def dumped(rules: Ruleset, natures: bool = True, resources: bool = False, skills
 
 
 def fingerprint(
-    rules: Ruleset, without: tuple[str, ...] = (), natures: bool = True, resources: bool = False, skills: bool = False
+    rules: Ruleset,
+    without: tuple[str, ...] = (),
+    natures: bool = True,
+    resources: bool = False,
+    skills: bool = False,
+    nature_data: bool = False,
 ) -> str:
     """규칙의 값을 정해진 차례의 JSON 으로 적어 해시를 낸다. without 의 칸은 빼고 낸다."""
-    values = {key: value for key, value in dumped(rules, natures, resources, skills).items() if key not in without}
+    values = dumped(rules, natures, resources, skills, nature_data)
+    values = {key: value for key, value in values.items() if key not in without}
     canonical = json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
     return hashlib.sha256(canonical.encode()).hexdigest()
 
@@ -213,9 +231,21 @@ def test_every_file_in_the_folder_is_a_template():
 def test_released_templates_keep_their_values():
     assert set(RELEASED) == set(Template), '새 템플릿을 내면 RELEASED 에 그 해시를 적는다'
     for template, expected in RELEASED.items():
-        assert fingerprint(TEMPLATES[template].rules, resources=True, skills=True) == expected, (
+        assert fingerprint(TEMPLATES[template].rules, resources=True, skills=True, nature_data=True) == expected, (
             f'{template.value} 의 값이 바뀌었다. 이미 내놓은 템플릿의 값은 고치지 않는다. 새 이름으로 하나 더 낸다'
         )
+
+
+def test_adding_the_nature_data_kept_the_other_values():
+    for template, expected in BEFORE_NATURE_DATA.items():
+        assert fingerprint(TEMPLATES[template].rules, resources=True, skills=True) == expected
+
+
+def test_every_template_has_the_classic_natures_and_immunities():
+    """템플릿의 성질과 타입마다의 면역은 예전에 엔진에 박혀 있던 값이다(#886, upgrades 의 CLASSIC_* 와 같다)."""
+    for template in Template:
+        rules = TEMPLATES[template].rules.model_dump(mode='json')
+        assert (rules['natures'], rules['monster_immunities']) == (CLASSIC_NATURES, CLASSIC_MONSTER_IMMUNITIES)
 
 
 def test_adding_the_skill_targets_kept_the_other_values():

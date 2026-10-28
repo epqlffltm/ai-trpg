@@ -27,7 +27,7 @@ from app.assets.scenarios.snapshot import MonsterSnapshot, Snapshot, monster_of
 from app.engine import health
 from app.engine.dice import Dice
 from app.engine.health import Change, ChangeKind
-from app.engine.ruleset import InjuryNature, Magnitude
+from app.engine.ruleset import Magnitude, Ruleset
 from app.tables.models import NpcStatus, TableMonster
 
 
@@ -41,29 +41,30 @@ class Traits:
 
     # HP 가 0 이 되면 제압이어도 부서진다(죽음). 의식이 없어 쓰러짐이 뜻이 없는 것들이다
     destroyed_at_zero: bool = False
-    # 걸리지 않는 부상의 성질(#799). 부상의 이름은 룰북마다 달라 성질로 적는다(app/engine/ruleset.py 의 InjuryNature)
-    immune_to: frozenset[InjuryNature] = frozenset()
+    # 걸리지 않는 성질은 여기 없다. 룰북이 타입마다 정한다(rules.monster_immunities, #886)
 
 
 # 타입마다의 성질. 모든 타입이 있어야 한다(tests/test_monster_combat.py 가 본다)
 TRAITS: dict[MonsterKind, Traits] = {
     MonsterKind.HUMANOID: Traits(),
     MonsterKind.BEAST: Traits(),
-    # 죽은 몸이라 독이 돌지 않는다
-    MonsterKind.UNDEAD: Traits(destroyed_at_zero=True, immune_to=frozenset({InjuryNature.POISON})),
-    # 만들어진 것이라 독이 돌지 않고 마음이 없다
-    MonsterKind.CONSTRUCT: Traits(
-        destroyed_at_zero=True, immune_to=frozenset({InjuryNature.POISON, InjuryNature.MIND})
-    ),
+    MonsterKind.UNDEAD: Traits(destroyed_at_zero=True),
+    MonsterKind.CONSTRUCT: Traits(destroyed_at_zero=True),
     MonsterKind.OTHER: Traits(),
 }
 
 
-def immunities(monster: MonsterSnapshot) -> frozenset[InjuryNature]:
+def kind_immunities(ruleset: Ruleset, kind: MonsterKind) -> frozenset[str]:
+    """그 타입이 걸리지 않는 성질들. 룰북이 정한다(rules.monster_immunities, #886). 적지 않은 타입은 없다."""
+    found = next((one for one in ruleset.monster_immunities if one.kind == kind), None)
+    return frozenset(found.natures) if found is not None else frozenset()
+
+
+def immunities(ruleset: Ruleset, monster: MonsterSnapshot) -> frozenset[str]:
     """
-    이 몬스터가 걸리지 않는 부상의 성질들(#799). 타입의 면역에 시트에서 더한 것을 넣고, 뺀 것을 뺀다.
+    이 몬스터가 걸리지 않는 부상의 성질들(#799). 타입의 면역(룰북, #886)에 시트에서 더한 것을 넣고, 뺀 것을 뺀다.
     """
-    return (traits_of(monster.kind).immune_to | frozenset(monster.immune)) - frozenset(monster.vulnerable)
+    return (kind_immunities(ruleset, monster.kind) | frozenset(monster.immune)) - frozenset(monster.vulnerable)
 
 
 def new_monster(table_id: uuid.UUID, monster: MonsterSnapshot, place_id: uuid.UUID, number: int) -> TableMonster:

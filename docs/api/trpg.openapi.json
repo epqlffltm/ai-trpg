@@ -4257,7 +4257,7 @@
       },
       "Injury": {
         "additionalProperties": false,
-        "description": "부상 하나. 예: 팔 골절.\n\n효과(effects)는 엔진이 판정에 적용하고, 사실(fact)은 서술자가 지킨다. 둘을 함께 적는다.\nrounds 는 짧은 것이 풀리기까지의 라운드 수다. 짧은 것에만 있다.\nheal_minutes 는 오래 가는 것이 저절로 낫기까지의 게임 안의 시간(분)이다. 오래 가는 것에만 있다.\n짧은 것은 \"한 장면 동안\"이라 라운드로, 오래 가는 것은 \"며칠\"이라 시간으로 센다(판 형식 25). 결손은 둘 다 없다.\naftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.\naimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.\ntreat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).\nnatures 는 부상의 성질이다(#799). 몬스터의 타입이 그 성질에 면역이면 이 부상을 입지 않는다.",
+        "description": "부상 하나. 예: 팔 골절.\n\n효과(effects)는 엔진이 판정에 적용하고, 사실(fact)은 서술자가 지킨다. 둘을 함께 적는다.\nrounds 는 짧은 것이 풀리기까지의 라운드 수다. 짧은 것에만 있다.\nheal_minutes 는 오래 가는 것이 저절로 낫기까지의 게임 안의 시간(분)이다. 오래 가는 것에만 있다.\n짧은 것은 \"한 장면 동안\"이라 라운드로, 오래 가는 것은 \"며칠\"이라 시간으로 센다(판 형식 25). 결손은 둘 다 없다.\naftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.\naimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.\ntreat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).\nnatures 는 부상의 성질이다(#799). 규칙의 성질(natures, #886)의 이름표다. 그 성질에 면역이면 이 부상을 입지 않는다.",
         "properties": {
           "aftermath": {
             "anyOf": [
@@ -4320,9 +4320,11 @@
           "natures": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/InjuryNature"
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
             },
-            "maxItems": 5,
+            "maxItems": 50,
             "title": "Natures",
             "type": "array"
           },
@@ -4374,18 +4376,6 @@
         ],
         "title": "Injury",
         "type": "object"
-      },
-      "InjuryNature": {
-        "description": "부상의 성질(#799). 몬스터의 타입이 무엇에 걸리지 않는지(면역)를 부상의 이름이 아니라 성질로 정한다.\n\n부상의 이름은 룰북마다 다르다. 타입의 성질표(app/tables/monsters.py 의 Traits)는 이 성질로 면역을 적는다.",
-        "enum": [
-          "poison",
-          "stun",
-          "sense",
-          "body",
-          "mind"
-        ],
-        "title": "InjuryNature",
-        "type": "string"
       },
       "InjuryOut": {
         "description": "캐릭터가 입고 있는 부상 하나. 이름과 사실, 효과는 테이블의 rules.injuries 에서 이름표(injury)로 찾는다.",
@@ -5732,6 +5722,31 @@
           "invite_code"
         ],
         "title": "JoinRequest",
+        "type": "object"
+      },
+      "KindImmunity": {
+        "additionalProperties": false,
+        "description": "몬스터의 타입 하나가 걸리지 않는 성질들(#886). 언데드는 독에, 구조물은 독과 정신에 걸리지 않는다.\n\n예전에는 엔진에 박혀 있었다. 이제 룰북이 정한다. 몬스터의 시트가 더하거나(immune) 뺀다(vulnerable).",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/MonsterKind"
+          },
+          "natures": {
+            "items": {
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Natures",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "natures"
+        ],
+        "title": "KindImmunity",
         "type": "object"
       },
       "ListingDetail": {
@@ -7172,9 +7187,11 @@
           "immune": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/InjuryNature"
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
             },
-            "maxItems": 5,
+            "maxItems": 50,
             "title": "Immune",
             "type": "array"
           },
@@ -7207,9 +7224,11 @@
           "vulnerable": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/InjuryNature"
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
             },
-            "maxItems": 5,
+            "maxItems": 50,
             "title": "Vulnerable",
             "type": "array"
           },
@@ -7264,9 +7283,11 @@
           "immune": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/InjuryNature"
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
             },
-            "maxItems": 5,
+            "maxItems": 50,
             "title": "Immune",
             "type": "array"
           },
@@ -7298,9 +7319,11 @@
           "vulnerable": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/InjuryNature"
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
             },
-            "maxItems": 5,
+            "maxItems": 50,
             "title": "Vulnerable",
             "type": "array"
           },
@@ -7386,7 +7409,7 @@
           "immune": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/InjuryNature"
+              "type": "string"
             },
             "title": "Immune",
             "type": "array"
@@ -7425,7 +7448,7 @@
           "vulnerable": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/InjuryNature"
+              "type": "string"
             },
             "title": "Vulnerable",
             "type": "array"
@@ -8193,6 +8216,43 @@
           "heal"
         ],
         "title": "NaturalRecovery",
+        "type": "object"
+      },
+      "Nature": {
+        "additionalProperties": false,
+        "description": "성질 하나(#799, #886). 독, 기절, 화염 같은 것이다. 룰북이 정한다. 개수도 이름도 제작자의 것이다.\n\n부상(injuries[].natures)이 성질을 가지고, 몬스터는 성질에 면역이다(타입마다의 monster_immunities, 시트의 immune).\ncategory 는 묶음의 이름(원소, 상태이상, 몸)이다. 화면에서 묶어 보여 주고 서술에 준다. 엔진은 보지 않는다.",
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "key": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name"
+        ],
+        "title": "Nature",
         "type": "object"
       },
       "NextPriceOut": {
@@ -12458,7 +12518,7 @@
       },
       "RulebookCreate": {
         "additionalProperties": false,
-        "description": "룰북을 만들 때 받는 값. 제목만 필수다.\n\n규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.\n방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.\n보내지 않으면 템플릿의 것이다. 수치(resources, #804)와 기술(skills, #805)도 같다. 보내면 템플릿의 예시 대신 쓴다.",
+        "description": "룰북을 만들 때 받는 값. 제목만 필수다.\n\n규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.\n방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.\n보내지 않으면 템플릿의 것이다. 수치(resources, #804)와 기술(skills, #805)도 같다. 보내면 템플릿의 예시 대신 쓴다.\n성질(natures)과 타입마다의 면역(monster_immunities, #886)도 같다.",
         "properties": {
           "armor": {
             "anyOf": [
@@ -12481,6 +12541,36 @@
             "maxLength": 4000,
             "title": "Gm Guide",
             "type": "string"
+          },
+          "monster_immunities": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/KindImmunity"
+                },
+                "maxItems": 5,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monster Immunities"
+          },
+          "natures": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Nature"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Natures"
           },
           "resources": {
             "anyOf": [
@@ -12610,7 +12700,7 @@
       },
       "RulebookUpdate": {
         "additionalProperties": false,
-        "description": "룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\n규칙은 방어 규칙(armor), 수치(resources, #804), 기술(skills, #805)만 고칠 수 있다.\n방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.\n이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.",
+        "description": "룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\n규칙은 방어 규칙(armor), 수치(resources, #804), 기술(skills, #805), 성질(natures)과 타입마다의 면역\n(monster_immunities, #886)만 고칠 수 있다.\n방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.\n이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.",
         "properties": {
           "armor": {
             "anyOf": [
@@ -12645,6 +12735,36 @@
               }
             ],
             "title": "Gm Guide"
+          },
+          "monster_immunities": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/KindImmunity"
+                },
+                "maxItems": 5,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monster Immunities"
+          },
+          "natures": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Nature"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Natures"
           },
           "resources": {
             "anyOf": [
@@ -12834,6 +12954,14 @@
           "modifier": {
             "$ref": "#/components/schemas/Modifier"
           },
+          "monster_immunities": {
+            "items": {
+              "$ref": "#/components/schemas/KindImmunity"
+            },
+            "maxItems": 5,
+            "title": "Monster Immunities",
+            "type": "array"
+          },
           "narration": {
             "anyOf": [
               {
@@ -12843,6 +12971,14 @@
                 "type": "null"
               }
             ]
+          },
+          "natures": {
+            "items": {
+              "$ref": "#/components/schemas/Nature"
+            },
+            "maxItems": 50,
+            "title": "Natures",
+            "type": "array"
           },
           "point_buy": {
             "anyOf": [
@@ -12967,7 +13103,9 @@
           "armor",
           "item_check",
           "resources",
-          "skills"
+          "skills",
+          "natures",
+          "monster_immunities"
         ],
         "title": "Ruleset",
         "type": "object"
@@ -14971,7 +15109,7 @@
             "type": "array"
           },
           "format": {
-            "default": 66,
+            "default": 67,
             "title": "Format",
             "type": "integer"
           },

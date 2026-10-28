@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from app.assets.scenarios.snapshot import EntrySnapshot, Snapshot
 from app.engine.dice import Dice
 from app.engine.health import Change
-from app.engine.ruleset import InjuryNature, Ruleset
+from app.engine.ruleset import Ruleset
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, condition_of
 from app.rounds.monster_scene import SceneMonster
@@ -91,7 +91,7 @@ def injury_after(
     max_hp: int,
     dead: bool,
     rows: list,
-    immune: frozenset[InjuryNature] = round_injuries.NO_IMMUNITY,
+    immune: frozenset[str] = round_injuries.NO_IMMUNITY,
     prank: bool = False,
 ) -> dict | None:
     """

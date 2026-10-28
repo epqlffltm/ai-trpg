@@ -18,11 +18,12 @@ DB 에는 문서(JSON)로 들어간다. DB 는 문서의 안을 검증하지 못
 import enum
 from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.engine.item_effects import EffectKind as ItemEffectKind
 from app.engine.item_effects import Effects
 from app.engine.keys import Key, Name
+from app.engine.monster_kinds import MonsterKind
 
 # 규칙 하나에 둘 수 있는 능력치, 난이도, 양의 등급의 수. 시트와 화면이 감당할 수 있는 만큼이다
 RULESET_MAX_ABILITIES = 12
@@ -71,6 +72,8 @@ RULESET_MAX_RESOURCES = 6
 RESOURCE_MAX_VALUE = 999
 # 규칙 하나에 둘 수 있는 기술·주문(#805)의 수와, 한 번 쓸 때 내는 비용의 상한
 RULESET_MAX_SKILLS = 20
+# 성질(#886)의 개수. 제작자가 정하는 목록이다. 정해 둔 성질이 아니라 한 룰북이 둘 수 있는 만큼이다
+RULESET_MAX_NATURES = 50
 SKILL_MAX_COST = 99
 
 Number = Annotated[int, Field(ge=0, le=RULESET_MAX_NUMBER)]
@@ -408,23 +411,39 @@ class Healing(enum.StrEnum):
     PERMANENT = 'permanent'
 
 
-class InjuryNature(enum.StrEnum):
+class Nature(Part):
     """
-    부상의 성질(#799). 몬스터의 타입이 무엇에 걸리지 않는지(면역)를 부상의 이름이 아니라 성질로 정한다.
+    성질 하나(#799, #886). 독, 기절, 화염 같은 것이다. 룰북이 정한다. 개수도 이름도 제작자의 것이다.
 
-    부상의 이름은 룰북마다 다르다. 타입의 성질표(app/tables/monsters.py 의 Traits)는 이 성질로 면역을 적는다.
+    부상(injuries[].natures)이 성질을 가지고, 몬스터는 성질에 면역이다(타입마다의 monster_immunities, 시트의 immune).
+    category 는 묶음의 이름(원소, 상태이상, 몸)이다. 화면에서 묶어 보여 주고 서술에 준다. 엔진은 보지 않는다.
     """
 
-    # 독. 중독
-    POISON = 'poison'
-    # 정신을 잃거나 몸이 굳는 것. 기절, 마비
-    STUN = 'stun'
-    # 감각을 잃는 것. 실명, 귀먹음
-    SENSE = 'sense'
-    # 몸이 상하는 것. 골절, 상처, 절단
-    BODY = 'body'
-    # 마음이 흔들리는 것. 공포, 매료, 광기
-    MIND = 'mind'
+    key: Key
+    name: Name
+    category: Name | None = None
+
+
+def reject_repeated_keys(keys: tuple[str, ...]) -> tuple[str, ...]:
+    """같은 이름표를 두 번 적지 않는다."""
+    if len(set(keys)) != len(keys):
+        raise ValueError('같은 성질을 두 번 적었습니다.')
+    return keys
+
+
+# 성질들의 이름표(#886). 규칙의 natures 에 있어야 한다(규칙이 본다)
+NatureKeys = Annotated[tuple[Key, ...], Field(max_length=RULESET_MAX_NATURES), AfterValidator(reject_repeated_keys)]
+
+
+class KindImmunity(Part):
+    """
+    몬스터의 타입 하나가 걸리지 않는 성질들(#886). 언데드는 독에, 구조물은 독과 정신에 걸리지 않는다.
+
+    예전에는 엔진에 박혀 있었다. 이제 룰북이 정한다. 몬스터의 시트가 더하거나(immune) 뺀다(vulnerable).
+    """
+
+    kind: MonsterKind
+    natures: NatureKeys
 
 
 def require_every_face(rows: tuple, sides: int, label: str) -> None:
@@ -482,7 +501,7 @@ class Injury(Part):
     aftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.
     aimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.
     treat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).
-    natures 는 부상의 성질이다(#799). 몬스터의 타입이 그 성질에 면역이면 이 부상을 입지 않는다.
+    natures 는 부상의 성질이다(#799). 규칙의 성질(natures, #886)의 이름표다. 그 성질에 면역이면 이 부상을 입지 않는다.
     """
 
     key: Key
@@ -499,14 +518,7 @@ class Injury(Part):
     # 치료에 한 번 성공할 때마다 나을 시각을 앞당기는 게임 안의 시간(분)
     treat_minutes: Annotated[int, Field(ge=1, le=RULESET_MAX_HEAL_MINUTES)] | None = None
     # 부상의 성질(#799). 비우면 어느 면역에도 걸리지 않는다(누구나 입는다)
-    natures: Annotated[tuple[InjuryNature, ...], Field(max_length=len(InjuryNature))] = ()
-
-    @model_validator(mode='after')
-    def reject_repeated_natures(self) -> Self:
-        """같은 성질을 두 번 적지 않는다."""
-        if len(set(self.natures)) != len(self.natures):
-            raise ValueError('같은 성질(natures)을 두 번 적었습니다.')
-        return self
+    natures: NatureKeys = ()
 
     @model_validator(mode='after')
     def require_treatment_pair_on_healing(self) -> Self:
@@ -987,6 +999,33 @@ class Ruleset(Part):
     resources: Annotated[tuple[Resource, ...], Field(max_length=RULESET_MAX_RESOURCES)]
     # 기술과 주문들(#805). 비어 있으면 기술이 없다. 누가 아는지는 시나리오의 시트에 적는다. 칸 자체는 늘 있어야 한다
     skills: Annotated[tuple[Skill, ...], Field(max_length=RULESET_MAX_SKILLS)]
+    # 성질들(#886). 부상과 면역이 가리키는 이름표의 목록이다. 칸 자체는 늘 있어야 한다
+    natures: Annotated[tuple[Nature, ...], Field(max_length=RULESET_MAX_NATURES)]
+    # 몬스터의 타입마다 걸리지 않는 성질(#886). 적지 않은 타입은 면역이 없다. 칸 자체는 늘 있어야 한다
+    monster_immunities: Annotated[tuple[KindImmunity, ...], Field(max_length=len(MonsterKind))]
+
+    @model_validator(mode='after')
+    def reject_unknown_natures(self) -> Self:
+        """
+        성질의 이름표가 겹치지 않고, 부상과 타입마다의 면역이 가리키는 성질이 이 규칙에 있어야 한다(#886).
+
+        한 타입은 한 번만 적는다.
+        """
+        keys = [nature.key for nature in self.natures]
+        duplicates = find_duplicates(keys)
+        if duplicates:
+            raise ValueError(f'같은 성질이 두 번 있습니다: {", ".join(duplicates)}')
+        known = set(keys)
+        strangers = [injury.key for injury in self.injuries if not set(injury.natures) <= known]
+        if strangers:
+            raise ValueError(f'부상의 성질이 규칙에 없습니다: {", ".join(strangers)}')
+        kinds = find_duplicates([immunity.kind for immunity in self.monster_immunities])
+        if kinds:
+            raise ValueError(f'같은 타입의 면역이 두 번 있습니다: {", ".join(kinds)}')
+        unknown = [one.kind for one in self.monster_immunities if not set(one.natures) <= known]
+        if unknown:
+            raise ValueError(f'타입의 면역이 규칙에 없는 성질을 가리킵니다: {", ".join(unknown)}')
+        return self
 
     @model_validator(mode='after')
     def reject_unknown_skills(self) -> Self:
