@@ -50,7 +50,7 @@ from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
 from app.engine.item_aids import ItemAid
 from app.engine.item_effects import AttackEffects, Effect
-from app.engine.ruleset import InjuryNature, Ruleset, SkillCost
+from app.engine.ruleset import Ruleset, SkillCost
 from app.engine.sheet import CharacterSheet, Sheet
 
 # 문서의 모양이 바뀔 때 올리는 번호. 옛 판을 읽는 코드가 어느 모양인지 알 수 있다.
@@ -144,7 +144,9 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      상대에게 쓰는 기술(대상 foe)과 맞히는 판정(check, #805 ②)은 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다.
 #      몬스터와 인물의 공격의 비용(monsters[].attacks[].cost, npc_sheets[].attacks[].cost, #805 ③-a)도 같다.
 #      공격의 효과(attacks[].effects)와 비울 수 있는 피해 등급(attacks[].harm, #805 ③-b)도 같다
-SNAPSHOT_FORMAT = 66
+#  67: 룰북이 성질을 정한다(#886). rulebook.rules.natures: 이름표, 이름, 묶음(category).
+#      rulebook.rules.monster_immunities: 몬스터의 타입마다 걸리지 않는 성질. 예전에는 엔진에 박혀 있었다
+SNAPSHOT_FORMAT = 67
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다
@@ -531,8 +533,8 @@ class MonsterSnapshot(BaseModel):
     # 타고난 불굴 세이브. 형식 49 보다 옛 판의 몬스터는 없다
     ward: int | None = None
     # 타입의 면역에 더하고 빼는 부상의 성질(#799). 형식 61 보다 옛 판의 몬스터는 타입의 면역 그대로다
-    immune: list[InjuryNature] = []
-    vulnerable: list[InjuryNature] = []
+    immune: list[str] = []
+    vulnerable: list[str] = []
 
 
 class EncounterSnapshot(BaseModel):
@@ -1088,8 +1090,8 @@ def snapshot_monster(
     dull: bool = False,
     natural_armor: list[NaturalArmorSnapshot] | None = None,
     ward: int | None = None,
-    immune: list[InjuryNature] | None = None,
-    vulnerable: list[InjuryNature] | None = None,
+    immune: list[str] | None = None,
+    vulnerable: list[str] | None = None,
 ) -> MonsterSnapshot:
     """몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어와 불굴 세이브, 면역에 더하고 빼는 성질을 굳힌다."""
     return MonsterSnapshot(

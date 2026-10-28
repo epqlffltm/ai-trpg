@@ -212,6 +212,8 @@ class Problem(enum.StrEnum):
     ENCOUNTER_MAP_MISSING = 'encounter_map_missing'
     # 몬스터의 공격의 능력치, 난이도, 양의 등급이 룰북의 규칙에 없다
     MONSTER_ATTACK_INVALID = 'monster_attack_invalid'
+    # 몬스터 시트의 면역이나 약함(immune, vulnerable)의 성질이 룰북의 성질(rules.natures)에 없다(#886)
+    MONSTER_NATURE_INVALID = 'monster_nature_invalid'
     # 네임드 몹이 두 마리 이상 놓인다. 조우 한 줄에 둘 이상이거나, 두 줄 이상에 나온다
     UNIQUE_MONSTER_REPEATED = 'unique_monster_repeated'
     # 돈을 쓰는 칸(물건의 값, 상인, 프리젠의 돈, 퀘스트의 돈의 보상)이 있는데 화폐가 없다(#278)
@@ -456,7 +458,15 @@ def find_monster_sheet_problems(scenario: Scenario, parts: Parts, ruleset: Rules
         attack_fault(ruleset, attack, ResourceHolder.MONSTERS) for sheet in monster_sheets for attack in sheet.attacks
     ):
         problems.append(Problem.MONSTER_ATTACK_INVALID)
+    if ruleset and any(nature_fault(ruleset, sheet) for sheet in monster_sheets):
+        problems.append(Problem.MONSTER_NATURE_INVALID)
     return problems
+
+
+def nature_fault(ruleset: Ruleset, sheet: MonsterSheet) -> bool:
+    """몬스터 시트의 면역과 약함이 룰북의 성질(#886)이 아닌 것을 가리키는가."""
+    known = {nature.key for nature in ruleset.natures}
+    return not set(sheet.immune) <= known or not set(sheet.vulnerable) <= known
 
 
 def attack_fault(ruleset: Ruleset, attack: MonsterAttack, holder: ResourceHolder) -> bool:

@@ -16,7 +16,6 @@ NPC 시트와 같은 까닭으로 숫자는 룰북을 정하는 쪽(시나리오
 새 종류는 자기 파일에 둔다. 마이그레이션이 이 파일을 불러온다(migrations/env.py).
 """
 
-import enum
 import uuid
 from datetime import datetime
 
@@ -32,6 +31,7 @@ from app.assets.models import (
     one_of,
 )
 from app.core.database import Base
+from app.engine.monster_kinds import MonsterKind
 
 # 도감 하나에 둘 수 있는 몬스터의 수. 로어북의 항목과 같다
 BESTIARY_MAX_MONSTERS = 100
@@ -39,26 +39,6 @@ BESTIARY_MAX_MONSTERS = 100
 MONSTER_NAME_MAX_LENGTH = 50
 # 몬스터의 내용. AI 가 읽는다. 장면에 나온 몬스터마다 들어가므로 길이가 곧 비용이다. 로어북의 항목과 같다
 MONSTER_CONTENT_MAX_LENGTH = 500
-
-
-class MonsterKind(enum.StrEnum):
-    """
-    몬스터의 타입. 엔진이 다르게 다룰 것만 나눈다. 자유 태그로 두지 않는다. 서버가 타입마다 다르게 다룰 수 없게 된다.
-
-    타입마다 엔진이 하는 일(예: 언데드와 구조물에는 치료가 듣지 않는다)은 판정에 몬스터를 붙일 때 정한다.
-    그때 값을 다시 본다. 지금은 값만 받는다. 세세한 생물 분류는 로어북의 종족 항목이 글로 맡는다.
-    """
-
-    # 사람처럼 생각하고 말하는 것. 도적, 고블린
-    HUMANOID = 'humanoid'
-    # 짐승. 늑대, 큰 거미
-    BEAST = 'beast'
-    # 죽었다가 움직이는 것. 해골, 망령
-    UNDEAD = 'undead'
-    # 만들어진 것. 골렘, 움직이는 갑옷
-    CONSTRUCT = 'construct'
-    # 위의 어느 것도 아닌 것. 정하지 않으면 이것이다
-    OTHER = 'other'
 
 
 class Bestiary(AssetContent):

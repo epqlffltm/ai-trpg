@@ -18,7 +18,8 @@
     "오래 가는 부상, 결손, 후유증, 부상 표, 노려 치기, 치료와 치료 실패 표는 SRD 5.1 에 없다. 이 프로젝트가 정한 값이다. 오래 가는 부상은 TRPG 의 흐름에 맞춰 실제보다 짧게 잡았다.",
     "치료의 능력을 지혜로 한 것은 SRD 5.1 의 의학(Medicine)이 지혜의 기술이기 때문이다.",
     "쉬기는 SRD 5.1 의 짧은 휴식(1시간)과 긴 휴식(8시간)이다. 짧은 휴식의 히트 다이스는 등급 하나(보통, 1d8)로 줄였다. 고비를 넘긴 캐릭터는 긴 휴식만큼 흐르면 d20 을 굴려 10 이상이면 깨어난다. 저절로 회복하기는 SRD 에 없다.",
-    "훔치기와 깨어날 때의 반응은 이 프로젝트가 정한 값이다."
+    "훔치기와 깨어날 때의 반응은 이 프로젝트가 정한 값이다.",
+    "성질(독, 기절, 감각, 몸, 정신)과 타입마다의 면역(언데드는 독, 구조물은 독과 정신)은 예전에 엔진에 박혀 있던 값이다(#886). 룰북에서 고칠 수 있다."
   ],
   "rules": {
     "template": "srd5",
@@ -635,6 +636,48 @@
       "difficulty": "medium"
     },
     "resources": [],
-    "skills": []
+    "skills": [],
+    "natures": [
+      {
+        "key": "poison",
+        "name": "독",
+        "category": null
+      },
+      {
+        "key": "stun",
+        "name": "기절",
+        "category": null
+      },
+      {
+        "key": "sense",
+        "name": "감각",
+        "category": null
+      },
+      {
+        "key": "body",
+        "name": "몸",
+        "category": null
+      },
+      {
+        "key": "mind",
+        "name": "정신",
+        "category": null
+      }
+    ],
+    "monster_immunities": [
+      {
+        "kind": "undead",
+        "natures": [
+          "poison"
+        ]
+      },
+      {
+        "kind": "construct",
+        "natures": [
+          "poison",
+          "mind"
+        ]
+      }
+    ]
   }
 }

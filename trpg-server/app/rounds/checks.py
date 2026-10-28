@@ -188,7 +188,7 @@ def monster_injury(judging: Judging, action: CheckAction, change: Change, monste
     state = monster.state
     if table_monsters.is_dead(state):
         return None
-    immune = table_monsters.immunities(monster.definition)
+    immune = table_monsters.immunities(judging.ruleset, monster.definition)
     if action.aim is not None and change.kind == ChangeKind.DAMAGE:
         return round_injuries.take_aimed(
             judging.ruleset, action.aim, state.injuries, judging.table.id, judging.moment, immune

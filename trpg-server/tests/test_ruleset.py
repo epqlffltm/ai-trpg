@@ -160,9 +160,11 @@ def test_the_migration_filled_old_rulebooks_with_the_same_rules():
     # 장비의 칸과 방어 방식도 같다. 옛 룰북은 칸도 방어 방식도 없는 것으로 둔다(#276).
     # 부상의 성질은 템플릿의 것을 채운다(#799). 룰북의 부상은 고칠 수 없어 템플릿의 부상 그대로다.
     # 물건을 쓰는 판정(#800)도 그 템플릿의 것을 채운다.
-    # 수치(#804)와 기술(#805)은 그 뒤의 마이그레이션이 빈 목록으로 채운다
+    # 수치(#804)와 기술(#805)은 그 뒤의 마이그레이션이 빈 목록으로 채운다.
+    # 성질과 타입마다의 면역(#886)도 그 뒤의 마이그레이션이 그때 엔진의 값으로 채운다
     template = SRD5.model_dump(mode='json')
-    old = {key: value for key, value in template.items() if key not in ('resources', 'skills')}
+    later = ('resources', 'skills', 'natures', 'monster_immunities')
+    old = {key: value for key, value in template.items() if key not in later}
     old = {**old, 'narration': None, 'equipment_slots': [], 'armor': None}
     assert load_backfill_rules() == old
 
