@@ -63,9 +63,13 @@ def make_format_24(rules: dict, round_minutes: int = 10) -> dict:
 
 
 def srd5_without_natures() -> dict:
-    """지금의 SRD5 규칙에서 부상의 성질(natures, #799)만 뺀 것. 그 성질은 이 형식보다 뒤에 생겼다."""
+    """
+    지금의 SRD5 규칙에서 부상의 성질(natures, #799)과 저항(resistances, #886 ②)만 뺀 것.
+    둘은 이 형식보다 뒤에 생겼다.
+    """
     rules = SRD5.model_dump(mode='json')
-    injuries = [{key: value for key, value in injury.items() if key != 'natures'} for injury in rules['injuries']]
+    later = ('natures', 'resistances')
+    injuries = [{key: value for key, value in injury.items() if key not in later} for injury in rules['injuries']]
     return {**rules, 'injuries': injuries}
 
 

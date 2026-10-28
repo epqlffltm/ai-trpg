@@ -499,6 +499,7 @@ class TableSheet(Base):
         # 수치(#804)는 이름표에서 값으로 가는 묶음이다. 범위는 규칙에 있어 엔진이 지킨다
         CheckConstraint("jsonb_typeof(resources) = 'object'", name='resources_is_object'),
         CheckConstraint("jsonb_typeof(skills) = 'array'", name='skills_is_array'),
+        CheckConstraint("jsonb_typeof(resistances) = 'array'", name='resistances_is_array'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -548,6 +549,10 @@ class TableSheet(Base):
     # 아는 기술(#805). 룰북의 기술의 이름표들이다. 시트를 받을 때 시나리오의 시트(기본 시트나 프리젠)에서 복사한다.
     # 이 칸이 생기기 전의 시트는 비어 있다(아는 기술이 없다). 바꾸는 길은 아직 없다
     skills: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    # 타고난 저항(#886 ②). 성질과 단계({nature, level})의 목록이다. 시트를 받을 때 시나리오의 시트에서 복사한다.
+    # 이 칸이 생기기 전의 시트는 비어 있다(저항이 없다). 착용한 물건과 입은 부상의 저항은 여기 적지 않는다.
+    # 그때그때 물건과 부상에서 읽는다(app/tables/resistances.py). 바꾸는 길은 아직 없다
+    resistances: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

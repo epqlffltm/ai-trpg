@@ -50,7 +50,7 @@ from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
 from app.engine.item_aids import ItemAid
 from app.engine.item_effects import AttackEffects, Effect
-from app.engine.ruleset import Ruleset, SkillCost
+from app.engine.ruleset import Resistances, Ruleset, SkillCost
 from app.engine.sheet import CharacterSheet, Sheet
 
 # 문서의 모양이 바뀔 때 올리는 번호. 옛 판을 읽는 코드가 어느 모양인지 알 수 있다.
@@ -146,6 +146,10 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      공격의 효과(attacks[].effects)와 비울 수 있는 피해 등급(attacks[].harm, #805 ③-b)도 같다
 #  67: 룰북이 성질을 정한다(#886). rulebook.rules.natures: 이름표, 이름, 묶음(category).
 #      rulebook.rules.monster_immunities: 몬스터의 타입마다 걸리지 않는 성질. 예전에는 엔진에 박혀 있었다
+#      저항(#886 ②)은 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다. 저항 한 줄은 성질과 단계(resist, immune,
+#      vulnerable)다. rulebook.rules.injuries[].resistances(입고 있는 동안), default_sheet·pregens[].sheet 와
+#      npc_sheets[] 의 resistances(타고난 것), items[].resistances(착용하고 있는 동안)에 있다.
+#      수치를 내리는 맞추기에 성질(effects[].nature)이 있다
 SNAPSHOT_FORMAT = 67
 
 
@@ -299,6 +303,8 @@ class ItemRuleSnapshot(BaseModel):
     throw: ItemThrowSnapshot | None = None
     # 거드는 행동들. 형식 64 보다 옛 판의 treat_bonus 는 치료의 거들기, 따기·고치기의 도구는 그 행동의 거들기가 된다
     aids: list[ItemAid] = []
+    # 착용하고 있는 동안 생기는 저항(#886 ②). 그 전의 판의 물건에는 없다
+    resistances: Resistances = ()
 
 
 class QuestConditionSnapshot(BaseModel):
@@ -497,6 +503,8 @@ class NpcSheetSnapshot(BaseModel):
     attacks: list[AttackSnapshot] = []
     # 상인인가(#278). 소지품 중 값이 있는 물건을 팔고, 값이 있는 물건을 사 준다. 형식 46 보다 옛 판의 인물은 아니다
     merchant: bool = False
+    # 타고난 저항(#886 ②). 성질과 단계(저항, 면역, 약점)다. 그 전의 판의 인물은 저항이 없다
+    resistances: Resistances = ()
 
 
 class NaturalArmorSnapshot(BaseModel):

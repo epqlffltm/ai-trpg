@@ -248,7 +248,7 @@ def test_only_the_scene_s_monsters_are_told_and_the_dead_keep_theirs():
     scene = SimpleNamespace(monsters=[SimpleNamespace(state=here, name='수로 쥐')], all_monsters=[here, away, dead])
     moment = Moment(round_number=2, now=0, scene_end=10)
 
-    ended = expire_monsters(scene, SRD5, ScriptedDice([]), uuid.uuid4(), moment, {})
+    ended = expire_monsters(scene, SRD5, ScriptedDice([]), uuid.uuid4(), moment, None)
 
     # 장면의 마리만 알린다(부를 이름이 있다). 다른 곳의 마리도 풀리지만 알리지 않는다
     assert [(one.holder, one.injury.injury) for one in ended] == [
@@ -434,7 +434,7 @@ def test_a_resisted_injury_is_not_told_as_a_new_one():
 def test_the_narrator_hears_what_the_monster_shrugged_off():
     impact = NpcImpact(kind='damage', name='해골 병사', amount=3, condition='크게 다침', resisted='중독')
 
-    assert describe_npc_impact(impact) == '→ 해골 병사 피해 3 (크게 다침). 중독에 면역이라 멀쩡하다'
+    assert describe_npc_impact(impact) == '→ 해골 병사 피해 3 (크게 다침). 막아 낸 부상: 중독'
 
 
 def test_the_narrator_hears_the_new_injury():

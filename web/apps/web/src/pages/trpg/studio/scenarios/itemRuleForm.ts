@@ -42,6 +42,8 @@ export type ItemRuleDraft = {
   lock: ItemLockDraft;
   throw: ThrowDraft;
   aids: AidDraft[];
+  /** 착용하고 있는 동안의 저항(#886 ②). 고치는 칸이 아직 없어 받은 대로 지녔다가 보낸다(착용하는 물건만) */
+  resistances: ItemRule['resistances'];
 };
 
 function numberText(value: number | null | undefined): string {
@@ -66,6 +68,7 @@ export function itemRuleDraft(rule: ItemRule | undefined): ItemRuleDraft {
     lock: itemLockDraft(rule?.lock),
     throw: throwDraft(rule),
     aids: (rule?.aids ?? []).map(aidDraft),
+    resistances: rule?.resistances ?? [],
   };
 }
 
@@ -123,6 +126,7 @@ export function toItemRule(entryId: string, draft: ItemRuleDraft): ItemRuleBody 
     lock: draft.kind === 'gear' ? toItemLock(draft.lock) : null,
     throw: toThrow(draft.throw),
     aids: draft.aids.map(toAid),
+    resistances: worn ? draft.resistances : [],
   };
 }
 

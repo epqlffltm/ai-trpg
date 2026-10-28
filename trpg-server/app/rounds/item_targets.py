@@ -12,7 +12,8 @@
   - 그 밖(풀기, 부상만)은 대상 없이 굴린다. 맞히면 그 대상에게 효과를 낸다.
   피해나 부상이 있으면 싸움이다. 맞든 빗나가든 그 대상과 싸운 것으로 적는다.
   HP 를 바꾼 다음에 풀기와 부상을 적힌 차례대로 낸다. 대상이 그 타격으로 죽었으면 내지 않는다.
-  몬스터는 그 성질에 면역인 부상을 입지 않는다(#799).
+  몬스터는 그 성질에 면역인 부상을 입지 않는다(#799). 누구든 막는 성질(#886 ②, 저항)의 부상과 수치를 내리는
+  맞추기는 받지 않는다(app/tables/resistances.py).
 가지고 있지 않으면(not_held), 겨눈 몬스터가 죽었거나 다른 곳에 있으면(target_gone) 굴리지 않고 물건도 그대로다.
 던지기는 앉은 사람도 맞힌다(#803). 해로운 물건이면 치기와 같이 해칠 수 있어야 하고, 장난이면 상한을 지킨다
 (app/rounds/friendly_fire.py). 앉은 사람과는 싸운 것으로 적지 않는다.
@@ -23,12 +24,14 @@ DB 를 모른다. 시트의 소지품과 맞은 쪽의 상태를 고친다. 저�
 """
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.engine.action import ActionKind, CheckAction, SkillAction, ThrowAction, UseAction, settle
 from app.engine.injury import Trigger
-from app.engine.item_effects import EffectKind, first_of, is_harmful
+from app.engine.item_effects import AdjustEffect, EffectKind, first_of, is_harmful, is_resisted
 from app.engine.ruleset import ResourceHolder
+from app.rounds import resisting
 from app.rounds.cast import CastMember, find_cast_member
 from app.rounds.checks import judge_check, monster_gone
 from app.rounds.effects import Judging, mark_fight, mark_npc_fight
@@ -124,43 +127,55 @@ def landed(outcome: dict, check: CheckAction) -> bool:
 class Struck:
     """
     맞은 쪽. 그 부상과 수치를 가진 것(앉은 사람의 시트, 몬스터의 상태, 인물의 상태)과 어느 쪽인지,
-    누구의 것인지(앉은 사람이면 그 사람), 면역이다.
+    누구의 것인지(앉은 사람이면 그 사람), 지금 막는 성질을 구하는 법이다(#886 ②).
     """
 
     bearer: Bearer
     holder: ResourceHolder
     owner_id: uuid.UUID | None
-    immune: frozenset = frozenset()
+    blocked: Callable[[], frozenset[str]]
+
+    @property
+    def immune(self) -> frozenset[str]:
+        """지금 막는 성질들. 효과마다 다시 구한다. 앞의 효과가 입힌 부상이 저항을 줄 수 있다."""
+        return self.blocked()
 
 
 def struck_of(judging: Judging, action: Aimed) -> Struck | None:
     """
     풀기와 부상과 맞추기를 낼 대상. 대상이 죽었거나 없으면 None.
 
-    몬스터면 그 마리의 면역(타입과 시트, #799)을, 인물과 앉은 사람(#803)이면 면역이 없다.
+    막는 성질은 몬스터면 그 마리의 면역(타입과 시트, #799)과 저항, 인물과 앉은 사람(#803)이면 저항이다(#886 ②).
     """
     ally = ally_of(action)
     if ally is not None:
         member = table_state.find_member(judging.table, ally)
         if member is None or member.sheet is None or sheets.is_dead(member):
             return None
-        return Struck(member.sheet, ResourceHolder.CHARACTERS, member.user_id)
+        return Struck(
+            member.sheet, ResourceHolder.CHARACTERS, member.user_id, lambda: resisting.of_member(judging, member)
+        )
     if action.monster is not None:
         monster: SceneMonster | None = find_scene_monster(judging.monsters, action.monster)
         if monster is None or table_monsters.is_dead(monster.state):
             return None
-        return Struck(
-            monster.state, ResourceHolder.MONSTERS, None, table_monsters.immunities(judging.ruleset, monster.definition)
-        )
+        return Struck(monster.state, ResourceHolder.MONSTERS, None, lambda: resisting.of_monster(judging, monster))
     person: CastMember | None = find_cast_member(judging.cast, action.npc)
     if person is None or npcs.is_dead(person.npc):
         return None
-    return Struck(person.npc, ResourceHolder.NPCS, None)
+    return Struck(person.npc, ResourceHolder.NPCS, None, lambda: resisting.of_cast(judging, person))
 
 
-def adjust_struck(judging: Judging, struck: Struck, key: str, amount: int) -> list[dict]:
-    """맞은 쪽의 수치를 맞춘다(#804). 그 쪽이 가지지 않는 수치거나 값이 같으면(이미 끝) 바뀐 것이 없다."""
-    shift = resources.adjust(judging.ruleset, struck.bearer, key, amount, struck.holder)
+def adjust_struck(judging: Judging, struck: Struck, effect: AdjustEffect) -> list[dict]:
+    """
+    맞은 쪽의 수치를 맞춘다(#804). 그 쪽이 가지지 않는 수치거나 값이 같으면(이미 끝) 바뀐 것이 없다.
+
+    맞은 쪽이 막는 성질의 내리는 맞추기면(#886 ②) 바꾸지 않고, 막아 낸 것(resisted)을 적는다.
+    """
+    if is_resisted(effect, struck.immune):
+        shift = resources.standing(judging.ruleset, struck.bearer, effect.resource, struck.holder)
+        return [] if shift is None else [resources.resisted_document(shift, struck.owner_id, effect.nature)]
+    shift = resources.adjust(judging.ruleset, struck.bearer, effect.resource, effect.amount, struck.holder)
     if shift is None or shift.before == shift.after:
         return []
     return [resources.shift_document(shift, struck.owner_id)]
@@ -184,11 +199,11 @@ def apply_after_hit(
     shifts: list[dict] = []
     for one in effects:
         if one.kind == EffectKind.CURE:
-            cured.extend(cure(judging, rows, one.injuries))
+            cured.extend(cure(judging, rows, one.injuries, struck.immune))
         elif one.kind == EffectKind.INJURE:
             injured.append(injure(judging, rows, one.injury, struck.immune, prank, trigger))
         elif one.kind == EffectKind.ADJUST:
-            shifts.extend(adjust_struck(judging, struck, one.resource, one.amount))
+            shifts.extend(adjust_struck(judging, struck, one))
     return {'cured': cured, 'injured': injured, 'resources': shifts}
 
 

@@ -60,6 +60,8 @@ class Impact:
     prank: bool = False
     # 장난이라 입지 않은 오래 가는 부상이나 결손의 이름(#803). 없으면 None 이다
     spared: str | None = None
+    # 나온 부상을 저항으로 막아 입지 않았으면 그 부상의 이름이다(#886 ②). 없으면 None 이다
+    resisted: str | None = None
 
 
 @dataclass(frozen=True)
@@ -81,7 +83,7 @@ class NpcImpact:
     condition: str
     # 이 피해로 새로 입은 부상의 이름. 없으면 None 이다
     injury: str | None = None
-    # 나온 부상에 면역이라 입지 않았으면 그 부상의 이름이다(#799, 몬스터). 없으면 None 이다
+    # 나온 부상을 면역이나 저항으로 막아 입지 않았으면 그 부상의 이름이다(#799, #886 ②). 없으면 None 이다
     resisted: str | None = None
 
 
@@ -276,6 +278,7 @@ class ResourceNote:
 
     value 는 지금 값(바뀐 것이면 바뀐 뒤), before 는 바뀐 것일 때 바뀌기 전의 값이다. 지금 값만이면 None 이다.
     숨긴 수치(모두가 보지 않는 것)는 숫자 없이 word(가득, 넉넉함, 모자람, 바닥)만 있다. 서술에 숫자가 새지 않게 한다.
+    resisted 면 내리는 맞추기를 저항으로 막아 내 바뀌지 않았다(#886 ②). 숫자를 주지 않는다.
     """
 
     name: str
@@ -283,6 +286,7 @@ class ResourceNote:
     max: int | None = None
     before: int | None = None
     word: str | None = None
+    resisted: bool = False
 
 
 @dataclass(frozen=True)
@@ -298,7 +302,7 @@ class ThrowNote:
     target: str | None
     done: bool
     reason: str | None = None
-    # 맞힌 대상에게서 푼 부상, 입힌 부상, 면역이라 입지 않은 부상의 이름들(#801, 물건의 효과)
+    # 맞힌 대상에게서 푼 부상, 입힌 부상, 면역이나 저항으로 막아 낸 부상의 이름들(#801, 물건의 효과, #886 ②)
     cured: list[str] = field(default_factory=list)
     injured: list[str] = field(default_factory=list)
     resisted: list[str] = field(default_factory=list)
@@ -329,7 +333,7 @@ class ItemActionNote:
     impact: Impact | None = None
     # 부상을 푸는 소모품을 썼으면 풀린 부상의 이름들(#277). 이 칸이 생기기 전에 굳힌 것은 빈 목록이다
     cured: list[str] = field(default_factory=list)
-    # 부상을 입히는 소모품을 썼으면 생긴 부상의 이름들과, 면역이라 입지 않은 부상의 이름들(#800)
+    # 부상을 입히는 소모품을 썼으면 생긴 부상의 이름들과, 면역이나 저항으로 막아 낸 부상의 이름들(#800, #886 ②)
     injured: list[str] = field(default_factory=list)
     resisted: list[str] = field(default_factory=list)
     # 동료의 장난이라 입지 않은 부상의 이름들(#803)
@@ -969,7 +973,7 @@ class MonsterTurnNote:
     공격의 비용(#805 ③-a)을 냈으면 cost 에 그 수치를 말로만 준다(NPC 와 몬스터의 수치는 숫자를 주지 않는다, #804).
     고른 공격의 비용이 모자라 하지 못했으면 short 가 참이다. 그때는 굴리지 않았다(hit 는 거짓).
     공격의 효과(#805 ③-b)로 맞은 캐릭터가 입은 부상의 이름들(injured)과 바뀐 수치(resources)도 준다.
-    캐릭터의 수치라 보이기를 따른다(숨긴 것은 말로만).
+    캐릭터의 수치라 보이기를 따른다(숨긴 것은 말로만). 저항으로 막아 낸 부상(resisted, #886 ②)도 준다.
     """
 
     # 부르는 이름(수로 쥐 2)
@@ -987,6 +991,8 @@ class MonsterTurnNote:
     short: bool = False
     injured: list[str] = field(default_factory=list)
     resources: list[ResourceNote] = field(default_factory=list)
+    # 맞은 캐릭터가 저항으로 막아 입지 않은 부상의 이름들(#886 ②)
+    resisted: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

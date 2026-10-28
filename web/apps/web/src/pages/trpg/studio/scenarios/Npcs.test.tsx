@@ -26,7 +26,7 @@ const SWORD = '00000000-0000-4000-8000-00000000a001';
 const BREAD = '00000000-0000-4000-8000-00000000a002';
 const rules = RULES as unknown as Ruleset;
 
-const SWORD_RULE = { entry_id: SWORD, kind: 'gear', rarity: 'normal', effects: [], price: 10, slots: ['main_hand'], slot_count: 1, attack: 2, ap: null, defense: null, guard: null, ward: null, aids: [] };
+const SWORD_RULE = { entry_id: SWORD, kind: 'gear', rarity: 'normal', effects: [], price: 10, slots: ['main_hand'], slot_count: 1, attack: 2, ap: null, defense: null, guard: null, ward: null, aids: [], resistances: [] };
 
 const MONK_SHEET = {
   entry_id: MONK,
@@ -149,6 +149,7 @@ describe('인물 탭', () => {
       equipment: [{ entry_id: SWORD, count: 1, chance: 50, wear: ['main_hand'] }],
       inventory: [{ entry_id: BREAD, count: 1, chance: 100, wear: [] }],
       attacks: [{ name: '검 휘두르기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: SWORD, cost: null, effects: [] }],
+      resistances: [],
     });
   });
 

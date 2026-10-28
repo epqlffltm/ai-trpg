@@ -568,7 +568,7 @@ async def test_the_narrator_hears_what_was_thrown(client: AsyncClient, app: Fast
         (ThrowNote(name='화염병', target=None, done=True), '(던진 물건: 화염병)'),
         (
             ThrowNote(name='독 병', target='해골 병사', done=True, injured=['기절'], resisted=['중독']),
-            '(던진 물건: 독 병 → 해골 병사) [입힌 부상: 기절] [면역이라 입지 않은 부상: 중독]',
+            '(던진 물건: 독 병 → 해골 병사) [입힌 부상: 기절] [막아 낸 부상: 중독]',
         ),
     ],
     ids=['thrown', 'not-held', 'target-gone', 'no-name', 'effects'],

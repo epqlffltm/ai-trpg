@@ -28,10 +28,10 @@ from app.engine.action import CheckAction, Consequence, Recipient
 from app.engine.armor import Protection, Save
 from app.engine.check import Check
 from app.engine.health import Change, ChangeKind
-from app.rounds import blows, drops, friendly_fire, wakes
+from app.rounds import blows, drops, friendly_fire, resisting, wakes
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import Blow
-from app.rounds.cast import find_cast_member
+from app.rounds.cast import CastMember, find_cast_member
 from app.rounds.effects import (
     Judging,
     injury_after,
@@ -46,7 +46,7 @@ from app.rounds.monster_scene import Gone, SceneMonster, find_scene_monster, gon
 from app.tables import monsters as table_monsters
 from app.tables import npcs, sheets
 from app.tables import state as table_state
-from app.tables.models import GameTable, TableMember, TableNpc
+from app.tables.models import GameTable, TableMember
 
 
 def find_affected(
@@ -117,25 +117,32 @@ def member_injury(judging: Judging, change: Change, member: TableMember, aim: st
     """
     HP 가 바뀐 앉은 사람이 입는 부상. 노려 친 피해면(#803) 그 부상이 확정으로 생기고 표를 굴리지 않는다.
     아니면 큰 타격이나 쓰러짐에 표를 굴린다. 캐릭터는 피해로 바로 죽지 않는다(죽음의 굴림으로 죽는다).
+    그 캐릭터가 막는 성질(#886 ②, 시트와 착용한 물건과 입은 부상의 저항)의 부상은 입지 않는다.
     """
     sheet = member.sheet
+    immune = resisting.of_member(judging, member)
     if aim is not None and change.kind == ChangeKind.DAMAGE:
         return round_injuries.take_aimed(
-            judging.ruleset, aim, sheet.injuries, judging.table.id, judging.moment, prank=prank
+            judging.ruleset, aim, sheet.injuries, judging.table.id, judging.moment, immune, prank
         )
-    return injury_after(judging, change, sheet.max_hp, False, sheet.injuries, prank=prank)
+    return injury_after(judging, change, sheet.max_hp, False, sheet.injuries, immune, prank)
 
 
-def npc_injury(judging: Judging, action: CheckAction, change: Change, npc: TableNpc) -> dict | None:
+def npc_injury(judging: Judging, action: CheckAction, change: Change, person: CastMember) -> dict | None:
     """
     HP 가 바뀐 NPC 가 입는 부상. 노려 친 타격이면 그 부상이 확정으로 생기고 표를 굴리지 않는다.
     아니면 큰 타격이나 쓰러짐에 표를 굴린다. 죽었으면 어느 쪽도 없다. 회복이면 아무것도 없다.
+    그 인물이 막는 성질(#886 ②, NPC 시트와 착용한 장비와 입은 부상의 저항)의 부상은 입지 않는다.
     """
+    npc = person.npc
     if npcs.is_dead(npc):
         return None
+    immune = resisting.of_cast(judging, person)
     if action.aim is not None and change.kind == ChangeKind.DAMAGE:
-        return round_injuries.take_aimed(judging.ruleset, action.aim, npc.injuries, judging.table.id, judging.moment)
-    return injury_after(judging, change, npc.max_hp, False, npc.injuries)
+        return round_injuries.take_aimed(
+            judging.ruleset, action.aim, npc.injuries, judging.table.id, judging.moment, immune
+        )
+    return injury_after(judging, change, npc.max_hp, False, npc.injuries, immune)
 
 
 def change_cast_member(judging: Judging, action: CheckAction, found: Consequence, cut: int = 0) -> dict | None:
@@ -155,7 +162,7 @@ def change_cast_member(judging: Judging, action: CheckAction, found: Consequence
     status_before = npc.status
     magnitude = health.find_magnitude(judging.ruleset, found.magnitude)
     change = npcs.change_npc(npc, found.kind, magnitude, action.lethal, judging.dice, cut)
-    injury_roll = npc_injury(judging, action, change, npc)
+    injury_roll = npc_injury(judging, action, change, member)
     return npc_effect(member, found.magnitude, change, action.lethal, status_before, injury_roll)
 
 
@@ -183,12 +190,13 @@ def monster_injury(judging: Judging, action: CheckAction, change: Change, monste
     HP 가 바뀐 몬스터가 입는 부상(#799). NPC 와 같다(npc_injury). 노려 친 타격이면 그 부상이 확정으로 생기고,
     아니면 큰 타격이나 쓰러짐에 표를 굴린다. 죽었으면(부서졌으면) 어느 쪽도 없다.
 
-    그 몬스터의 면역(타입과 시트, app/tables/monsters.py 의 immunities)인 성질의 부상은 입지 않는다.
+    그 몬스터의 면역(타입과 시트, app/tables/monsters.py 의 immunities)과 착용한 장비와 입은 부상의 저항(#886 ②)이
+    막는 성질의 부상은 입지 않는다.
     """
     state = monster.state
     if table_monsters.is_dead(state):
         return None
-    immune = table_monsters.immunities(judging.ruleset, monster.definition)
+    immune = resisting.of_monster(judging, monster)
     if action.aim is not None and change.kind == ChangeKind.DAMAGE:
         return round_injuries.take_aimed(
             judging.ruleset, action.aim, state.injuries, judging.table.id, judging.moment, immune

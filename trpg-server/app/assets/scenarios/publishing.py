@@ -82,7 +82,7 @@ from app.engine.item_aids import AidAct
 from app.engine.item_effects import EffectKind
 from app.engine.resources import find_resource, holds
 from app.engine.ruleset import Healing, ResourceHolder, Ruleset
-from app.engine.sheet import CharacterSheet, Sheet, fits, knows_only
+from app.engine.sheet import CharacterSheet, Sheet, fits, knows_only, resists_only_known
 
 
 class Problem(enum.StrEnum):
@@ -214,6 +214,9 @@ class Problem(enum.StrEnum):
     MONSTER_ATTACK_INVALID = 'monster_attack_invalid'
     # 몬스터 시트의 면역이나 약함(immune, vulnerable)의 성질이 룰북의 성질(rules.natures)에 없다(#886)
     MONSTER_NATURE_INVALID = 'monster_nature_invalid'
+    # 저항(기본 시트, 프리젠의 시트, NPC 시트, 아이템 규칙의 resistances)이나 수치를 내리는 물건의 효과의 성질이
+    # 룰북의 성질(rules.natures)에 없다(#886 ②)
+    NATURE_INVALID = 'nature_invalid'
     # 네임드 몹이 두 마리 이상 놓인다. 조우 한 줄에 둘 이상이거나, 두 줄 이상에 나온다
     UNIQUE_MONSTER_REPEATED = 'unique_monster_repeated'
     # 돈을 쓰는 칸(물건의 값, 상인, 프리젠의 돈, 퀘스트의 돈의 보상)이 있는데 화폐가 없다(#278)
@@ -298,9 +301,7 @@ def find_sheet_skill_problems(scenario: Scenario, ruleset: Ruleset | None) -> li
     """
     if ruleset is None:
         return []
-    sheets = [sheet for sheet in read_pregen_sheets(scenario) if sheet is not None]
-    if scenario.default_sheet is not None:
-        sheets.append(CharacterSheet.model_validate(scenario.default_sheet))
+    sheets = character_sheets(scenario)
     return [Problem.SHEET_SKILL_INVALID] if any(not knows_only(ruleset, sheet) for sheet in sheets) else []
 
 
@@ -463,6 +464,42 @@ def find_monster_sheet_problems(scenario: Scenario, parts: Parts, ruleset: Rules
     return problems
 
 
+def character_sheets(scenario: Scenario) -> list[CharacterSheet]:
+    """기본 시트와 프리젠의 시트들. 없는 것은 뺀다."""
+    sheets = [sheet for sheet in read_pregen_sheets(scenario) if sheet is not None]
+    if scenario.default_sheet is not None:
+        sheets.append(CharacterSheet.model_validate(scenario.default_sheet))
+    return sheets
+
+
+def find_resistance_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    저항과 맞추기의 성질(#886 ②)이 룰북의 성질인지 본다. 여럿 틀려도 한 번만 적는다(nature_invalid).
+
+    기본 시트, 프리젠의 시트, NPC 시트, 아이템 규칙의 저항과, 물건의 효과 중 수치를 내리는 맞추기의 성질이다.
+    몬스터와 인물의 공격의 효과의 성질은 공격의 검사가 본다(monster_attack_invalid, npc_attack_invalid).
+    룰북이 없으면 볼 수 없다.
+    """
+    if ruleset is None:
+        return []
+    rules = read_item_rules(scenario)
+    resistances = [
+        *(sheet.resistances for sheet in character_sheets(scenario)),
+        *(npc_sheet.resistances for npc_sheet in read_npc_sheets(scenario)),
+        *(rule.resistances for rule in rules),
+    ]
+    natures = {nature.key for nature in ruleset.natures}
+    drains = [effect.nature for rule in rules for effect in rule.effects if effect_nature(effect) is not None]
+    if any(not resists_only_known(ruleset, one) for one in resistances) or not set(drains) <= natures:
+        return [Problem.NATURE_INVALID]
+    return []
+
+
+def effect_nature(effect) -> str | None:
+    """효과 하나의 성질(#886 ②). 수치의 맞추기에만 있다. 없으면 None."""
+    return effect.nature if effect.kind == EffectKind.ADJUST else None
+
+
 def nature_fault(ruleset: Ruleset, sheet: MonsterSheet) -> bool:
     """몬스터 시트의 면역과 약함이 룰북의 성질(#886)이 아닌 것을 가리키는가."""
     known = {nature.key for nature in ruleset.natures}
@@ -485,11 +522,15 @@ def attack_fault(ruleset: Ruleset, attack: MonsterAttack, holder: ResourceHolder
 
 
 def attack_effect_fault(ruleset: Ruleset, effect) -> bool:
-    """공격의 효과 하나가 규칙에 없는 부상이거나, 캐릭터가 가지지 않는 수치를 맞추는가."""
+    """
+    공격의 효과 하나가 규칙에 없는 부상이거나, 캐릭터가 가지지 않는 수치를 맞추거나,
+    규칙에 없는 성질(#886 ②)을 단 맞추기인가.
+    """
     if effect.kind == EffectKind.INJURE:
         return find_injury(ruleset, effect.injury) is None
     resource = find_resource(ruleset, effect.resource)
-    return resource is None or not holds(resource, ResourceHolder.CHARACTERS)
+    unknown = effect.nature is not None and effect.nature not in {nature.key for nature in ruleset.natures}
+    return resource is None or not holds(resource, ResourceHolder.CHARACTERS) or unknown
 
 
 def cost_fault(ruleset: Ruleset, attack: MonsterAttack, holder: ResourceHolder) -> bool:
@@ -1226,6 +1267,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_npc_sheet_problems(scenario, parts, ruleset))
     problems.extend(find_default_npc_sheet_problems(scenario, parts, ruleset))
     problems.extend(find_monster_sheet_problems(scenario, parts, ruleset))
+    problems.extend(find_resistance_problems(scenario, ruleset))
     problems.extend(find_encounter_problems(scenario, parts))
     problems.extend(find_unique_problems(scenario, parts))
     problems.extend(find_item_problems(scenario, parts, ruleset))

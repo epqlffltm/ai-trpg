@@ -696,8 +696,11 @@ class ResourceSource:
 
 
 def recorded_shifts(shifts: list[dict]) -> list[dict]:
-    """이벤트에 적을 바뀐 수치들. 엔진만 보는 수치(#804)는 적지 않는다. 보이기가 없는 옛 문서는 적는다."""
-    return [shift for shift in shifts if shift.get('visibility', 'everyone') != 'engine']
+    """
+    이벤트에 적을 바뀐 수치들. 엔진만 보는 수치(#804)와 막아 내 바뀌지 않은 것(#886 ②)은 적지 않는다.
+    보이기가 없는 옛 문서는 적는다.
+    """
+    return [shift for shift in shifts if shift.get('visibility', 'everyone') != 'engine' and not shift.get('resisted')]
 
 
 # 수치를 가진 쪽을 가리키는 칸들(#804). 캐릭터, NPC, 몬스터 중 하나다

@@ -19,6 +19,7 @@ from app.assets.scenarios.snapshot import ItemStackSnapshot, ItemThrowSnapshot, 
 from app.engine import item_effects
 from app.engine.item_aids import ItemAid
 from app.engine.item_effects import Effect
+from app.engine.ruleset import Resistance
 from app.tables import equipment
 from app.tables.errors import Conflict, TableConflictError, TableOptionError
 from app.tables.models import TableItem, TableSheet
@@ -38,6 +39,7 @@ class CatalogItem:
     lock 은 문에 다는 자물쇠 물건인가다(#281). 열쇠와 따는 판정은 판에 있다.
     throw 는 던지는 판정이다(#277). 던질 수 없는 물건이면 None.
     aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 행동에 붙여 쓰면 판정에 보정을 더한다.
+    resistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, app/tables/resistances.py).
     """
 
     entry_id: uuid.UUID
@@ -56,6 +58,7 @@ class CatalogItem:
     lock: bool = False
     throw: ItemThrowSnapshot | None = None
     aids: tuple[ItemAid, ...] = ()
+    resistances: tuple[Resistance, ...] = ()
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
@@ -80,6 +83,7 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
             lock=rule.lock is not None,
             throw=rule.throw,
             aids=tuple(rule.aids),
+            resistances=tuple(rule.resistances),
         )
     return items
 

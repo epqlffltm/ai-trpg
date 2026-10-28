@@ -223,7 +223,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 모자라 못 한 차례도 적는다((비용이 모자라 하지 못함))
 #   narration-76: 몬스터와 인물의 공격의 효과(#805 ③-b). 차례의 줄에 입힌 부상과 바뀐 수치를 붙인다
 #                 (독거미: 엘프에게 독니 (맞음) → 엘프 피해 2 (HP 8/10) [입힌 부상: 중독] [수치: 마나 5 → 3/7])
-PROMPT_VERSION = 'narration-76'
+#   narration-77: 저항(#886 ②). 면역이나 저항으로 막아 입지 않은 부상을 같은 말로 적는다(. 막아 낸 부상: 중독),
+#                 ([막아 낸 부상: 중독]). 캐릭터의 HP 줄에도 붙는다. 막아 낸 수치의 맞추기는 [수치: 마나 막아 냄] 이다
+PROMPT_VERSION = 'narration-77'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

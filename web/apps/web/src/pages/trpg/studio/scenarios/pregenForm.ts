@@ -37,8 +37,9 @@ export function pregenHints(draft: PregenDraft, rules: Ruleset | null, others: s
 
 /** 보낼 프리젠. 원래 프리젠의 소지품과 돈은 그대로 둔다. 룰북이 없어 시트의 칸이 없으면 원래 시트를 둔다 */
 export function toPregen(draft: PregenDraft, rules: Ruleset | null, original: ScenarioPregen | null): PregenBody {
-  // 아는 기술(#805)은 고치는 칸이 아직 없어 원래 시트의 것을 붙인다
-  const sheet = rules && draft.sheet ? withSkills(toSheet(draft.sheet, rules), original?.sheet?.skills ?? []) : (original?.sheet ?? null);
+  // 아는 기술(#805)과 저항(#886 ②)은 고치는 칸이 아직 없어 원래 시트의 것을 붙인다
+  const kept = original?.sheet;
+  const sheet = rules && draft.sheet ? withSkills(toSheet(draft.sheet, rules), kept?.skills ?? [], kept?.resistances ?? []) : (kept ?? null);
   return {
     name: draft.name.trim(),
     description: draft.description,

@@ -17,8 +17,8 @@ def make_sheet(max_hp: int = 10, **scores: int) -> dict:
 
 
 def as_character(sheet: dict) -> dict:
-    """캐릭터의 시트로 읽어 돌려줄 때의 모양. 아는 기술(#805)을 적지 않았으면 빈 목록이 붙는다."""
-    return {'skills': [], **sheet}
+    """캐릭터의 시트로 읽어 돌려줄 때의 모양. 아는 기술(#805)과 저항(#886 ②)을 적지 않았으면 빈 목록이 붙는다."""
+    return {'skills': [], 'resistances': [], **sheet}
 
 
 def handed_out(sheet: dict) -> dict:
@@ -28,11 +28,12 @@ def handed_out(sheet: dict) -> dict:
     그 사람의 첫 캐릭터이고, HP 는 가득 차 있고, 죽음의 굴림은 센 것이 없고, 살아 있고, 입은 부상이 없다.
     판에 시작 소지품이 없으면 가진 것도 없다. 판에 화폐가 없으면 돈도 없다. 판에 맵이 없으면 서 있는 곳도 없다.
     판에 시작할 때의 착용이 없으면 착용한 것도 없다. 규칙에 수치(#804)가 없으면 수치도 없다.
-    시트에 아는 기술(#805)이 적혀 있지 않으면 아는 기술도 없다.
+    시트에 아는 기술(#805)과 저항(#886 ②)이 적혀 있지 않으면 둘 다 없다.
     """
     fresh = {'number': 1, 'hp': sheet['max_hp'], 'death_successes': 0, 'death_failures': 0, 'dead': False}
     return {
         'skills': [],
+        'resistances': [],
         **sheet,
         **fresh,
         'injuries': [],

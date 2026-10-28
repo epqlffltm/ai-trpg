@@ -22,6 +22,8 @@ export type NpcDraft = {
   equipment: StackDraft[];
   inventory: StackDraft[];
   attacks: AttackDraft[];
+  /** 타고난 저항(#886 ②). 고치는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
+  resistances: NpcSheet['resistances'];
 };
 
 export function npcDraft(npc: NpcSheet | undefined, rules: Ruleset): NpcDraft {
@@ -34,6 +36,7 @@ export function npcDraft(npc: NpcSheet | undefined, rules: Ruleset): NpcDraft {
     equipment: carriedDrafts(npc?.equipment ?? []),
     inventory: carriedDrafts(npc?.inventory ?? []),
     attacks: attackDrafts(npc?.attacks ?? []),
+    resistances: npc?.resistances ?? [],
   };
 }
 
@@ -82,6 +85,7 @@ export function toNpcSheet(entryId: string, draft: NpcDraft, rules: Ruleset): Np
     equipment: toCarried(draft.equipment),
     inventory: toCarried(draft.inventory.map((line) => ({ ...line, wear: [] }))),
     attacks: toAttacks(draft.attacks),
+    resistances: draft.resistances,
   };
 }
 

@@ -36,7 +36,7 @@ from app.catalog.models import Grade
 from app.catalog.steps import MAX_STEP
 from app.engine.item_aids import ItemAid
 from app.engine.item_effects import Effect
-from app.engine.ruleset import RULESET_MAX_ABILITIES, RULESET_MAX_EQUIPMENT_SLOTS, Key, Ruleset
+from app.engine.ruleset import RULESET_MAX_ABILITIES, RULESET_MAX_EQUIPMENT_SLOTS, Key, Resistance, Ruleset
 from app.engine.sheet import CharacterSheet, Score
 from app.tables.models import (
     CREDIT_WAIT_MAX,
@@ -413,6 +413,9 @@ class CatalogItemOut(BaseModel):
     # 줄마다 그 판정에 더하는 보정(bonus)과 굴린 뒤 어떻게 되나(wear: always 늘 하나 없어짐, on_fail 실패하면 부러짐,
     # never 안 없어짐)다. 도구가 있어야 하는 문은 그 행동을 거드는 물건이 있어야 따거나 고친다
     aids: list[ItemAid] = []
+    # 착용하고 있는 동안 생기는 저항(#886 ②). 줄마다 성질(rules.natures 의 key)과 단계(resist 저항, immune 면역,
+    # vulnerable 약점)다. 저항과 면역이면 그 성질의 부상과 수치를 내리는 맞추기를 받지 않는다
+    resistances: list[Resistance] = []
 
 
 class WornOut(BaseModel):
@@ -590,6 +593,9 @@ class SheetOut(BaseModel):
     resources: list[ResourceOut] = []
     # 아는 기술들(#805). 룰북의 기술(rules.skills)의 이름표다. 이름과 비용과 효과는 rules.skills 에 있다
     skills: list[str] = []
+    # 타고난 저항(#886 ②). 줄마다 성질(rules.natures 의 key)과 단계(resist, immune, vulnerable)다.
+    # 착용한 물건(items 의 resistances)과 입은 부상(rules.injuries 의 resistances)의 저항은 여기 없다. 함께 막는다
+    resistances: list[Resistance] = []
 
 
 class FallenOut(BaseModel):

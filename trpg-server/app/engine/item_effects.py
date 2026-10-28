@@ -7,9 +7,10 @@
   - heal: 등급(룰북의 magnitudes)만큼 HP 를 되돌린다. 몬스터에게는 회복이 없다.
   - cure: 적은 부상들(룰북의 부상의 이름표)을 푼다. 짧은 것과 오래 가는 것만 푼다(결손은 못 푼다).
   - damage: 등급만큼 피해를 준다. 인물과 몬스터에게는 방어와 세이브가 치기와 같다.
-  - injure: 부상 하나를 입힌다. 짧은 것, 오래 가는 것, 결손 모두 된다. 몬스터는 그 성질에 면역이면 입지 않는다.
+  - injure: 부상 하나를 입힌다. 짧은 것, 오래 가는 것, 결손 모두 된다. 그 성질에 면역이나 저항이면 입지 않는다.
   - adjust: 수치 하나(룰북의 resources, #804)를 양만큼 올리거나(양수) 내린다(음수). 마나 물약, 저주받은 책.
     앉은 사람에게만 든다. 인물과 몬스터에게는 수치가 없다(아무 일도 없다). 내리는 것은 해롭다.
+    내리는 것에 성질(#886 ②)을 달면, 맞는 쪽이 그 성질에 저항하거나 면역일 때 내리지 않는다.
 한 물건에 회복과 피해를 함께 적지 않는다. 회복, 풀기, 피해는 한 번씩이다. 입히기와 맞추기는 여럿이 된다
 (같은 부상, 같은 수치는 한 번).
 
@@ -20,7 +21,7 @@
 import enum
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from app.engine.keys import Key
 
@@ -101,13 +102,26 @@ def reject_zero(amount: int) -> int:
 
 
 class AdjustEffect(BaseModel):
-    """수치 하나(resource, 룰북의 resources 의 이름표)를 양(amount)만큼 올리거나(양수) 내린다(음수, #804)."""
+    """
+    수치 하나(resource, 룰북의 resources 의 이름표)를 양(amount)만큼 올리거나(양수) 내린다(음수, #804).
+
+    내리는 것에는 성질(nature, 룰북의 natures 의 이름표) 하나를 달 수 있다(#886 ②). 맞는 쪽이 그 성질에 저항하거나
+    면역이면 내리지 않는다. 비우면 누구나 받는다. 올리는 것은 해롭지 않아 막을 일이 없다. 성질을 달지 않는다.
+    """
 
     model_config = ConfigDict(extra='forbid')
 
     kind: Literal[EffectKind.ADJUST]
     resource: Key
     amount: Annotated[int, Field(ge=-EFFECT_MAX_ADJUST, le=EFFECT_MAX_ADJUST), AfterValidator(reject_zero)]
+    nature: Key | None = None
+
+    @model_validator(mode='after')
+    def nature_only_when_lowering(self) -> 'AdjustEffect':
+        """성질은 수치를 내리는 것(음수)에만 단다."""
+        if self.nature is not None and self.amount > 0:
+            raise ValueError('성질(nature)은 수치를 내리는 맞추기(음수)에만 답니다.')
+        return self
 
 
 Effect = Annotated[HealEffect | CureEffect | DamageEffect | InjureEffect | AdjustEffect, Field(discriminator='kind')]
@@ -147,6 +161,15 @@ def is_harmful(effects: list) -> bool:
 def is_drain(effect) -> bool:
     """수치를 내리는 맞추기(#804)인가."""
     return effect.kind == EffectKind.ADJUST and effect.amount < 0
+
+
+def is_resisted(effect, blocked: frozenset[str]) -> bool:
+    """
+    맞는 쪽이 막는 맞추기인가(#886 ②). 수치를 내리는 것이고, 그 성질을 맞는 쪽이 막는다(저항이나 면역).
+
+    blocked 는 맞는 쪽이 막는 성질들이다(app/tables/resistances.py). 성질이 없는 맞추기는 막지 못한다.
+    """
+    return is_drain(effect) and effect.nature is not None and effect.nature in blocked
 
 
 def first_of(effects: list, kind: EffectKind):

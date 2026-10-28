@@ -50,9 +50,16 @@ export function toSheet(draft: SheetDraft, rules: Ruleset): ScenarioSheet | null
   return { abilities, max_hp: Number(draft.maxHp.trim()) };
 }
 
-/** 캐릭터의 시트(기본 시트, 프리젠의 시트)로. 아는 기술(#805)은 고치는 칸이 아직 없어 받은 대로 붙인다 */
-export function withSkills(sheet: ScenarioSheet | null, skills: string[]): CharacterSheet | null {
-  return sheet ? { ...sheet, skills } : null;
+/**
+ * 캐릭터의 시트(기본 시트, 프리젠의 시트)로. 아는 기술(#805)과 저항(#886 ②)은 고치는 칸이 아직 없어
+ * 받은 대로 붙인다(저장할 때 지워지지 않게)
+ */
+export function withSkills(
+  sheet: ScenarioSheet | null,
+  skills: string[],
+  resistances: CharacterSheet['resistances'] = [],
+): CharacterSheet | null {
+  return sheet ? { ...sheet, skills, resistances } : null;
 }
 
 /** 목록의 한 줄. "근력 14 · 민첩 12 · HP 12", 시트가 없으면 null */

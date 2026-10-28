@@ -23,6 +23,7 @@ from app.engine.health import ChangeKind
 from app.engine.item_aids import AidAct
 from app.engine.ruleset import Injury, Mishap, Ruleset
 from app.rounds import injuries as round_injuries
+from app.rounds import resisting
 from app.rounds.aids import aid_bonus, aid_document, take_aid, wear_aid
 from app.rounds.cast import CastMember, find_cast_member
 from app.rounds.effects import Judging, mark_hurt, member_effect, npc_effect
@@ -107,6 +108,15 @@ def treatment_document(ruleset: Ruleset, injury: Injury, patient: Patient) -> di
     }
 
 
+def blocked_of(judging: Judging, patient: Patient) -> frozenset[str]:
+    """치료받는 쪽이 막는 성질들(#886 ②). 그 성질의 후유증은 입지 않는다."""
+    if patient.member is not None:
+        return resisting.of_member(judging, patient.member)
+    if patient.npc is not None:
+        return resisting.of_cast(judging, patient.npc)
+    return round_injuries.NO_IMMUNITY
+
+
 def cure(judging: Judging, patient: Patient, row, injury: Injury) -> dict:
     """
     치료에 성공했다. 나을 시각을 앞당긴다. 이 장면이 끝나는 때에 닿으면 그 자리에서 낫고 후유증 표를 굴린다.
@@ -118,7 +128,10 @@ def cure(judging: Judging, patient: Patient, row, injury: Injury) -> dict:
     after = treatment.shortened(before, injury)
     before_document = round_injuries.heals_at_document(before)
     if treatment.is_healed(after, moment.scene_end):
-        aftermath = round_injuries.heal(judging.ruleset, judging.dice, row, patient.rows, judging.table.id, moment)
+        immune = blocked_of(judging, patient)
+        aftermath = round_injuries.heal(
+            judging.ruleset, judging.dice, row, patient.rows, judging.table.id, moment, immune
+        )
         return {'heals_at_before': before_document, 'healed': True, 'aftermath': aftermath}
     injuries.reschedule(row, after)
     return {

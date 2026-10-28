@@ -60,6 +60,7 @@ from app.tables import (
     references,
     replacements,
     repository,
+    resistances,
     resources,
     rolls,
     route_locks,
@@ -275,6 +276,7 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
             lock=item.lock,
             throw=to_throw(item.throw),
             aids=list(item.aids),
+            resistances=list(item.resistances),
         )
         for item in catalog.values()
     ]
@@ -330,6 +332,7 @@ def to_sheet(
             if shown_to(level.resource.visibility, is_owner)
         ],
         skills=list(sheet.skills or []),
+        resistances=resistances.of_sheet(sheet),
     )
 
 

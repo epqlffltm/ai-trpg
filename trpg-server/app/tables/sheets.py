@@ -132,9 +132,11 @@ def build_player_made(snapshot: Snapshot, abilities: dict[str, int]) -> Characte
     if hp is None:
         return None
     built = build_sheet(snapshot.rulebook.rules, abilities, hp.base, hp.cap)
-    # 직접 만든 캐릭터는 기본 시트의 기술을 안다(#805). 기본 시트가 없으면 아는 기술이 없다
-    skills = snapshot.default_sheet.skills if snapshot.default_sheet is not None else []
-    return CharacterSheet(**built.model_dump(), skills=list(skills))
+    # 직접 만든 캐릭터는 기본 시트의 기술을 알고(#805) 그 저항을 가진다(#886 ②). 기본 시트가 없으면 둘 다 없다
+    default = snapshot.default_sheet
+    if default is None:
+        return CharacterSheet(**built.model_dump())
+    return CharacterSheet(**built.model_dump(), skills=list(default.skills), resistances=default.resistances)
 
 
 def find_source(snapshot: Snapshot, member: TableMember) -> CharacterSheet | None:
@@ -167,7 +169,7 @@ def give_sheet(member: TableMember, source: CharacterSheet) -> TableSheet:
     이 사람의 지금 캐릭터에게 시트를 준다. 준 시트를 돌려준다. HP 는 가득 찬 채로 시작한다.
 
     이 사람이 받은 시트들의 맨 뒤에 놓인다. 누구의 시트인지(이름, 프리젠)를 자리에서 복사해 둔다.
-    아는 기술(#805)도 그 시트에서 복사한다.
+    아는 기술(#805)과 타고난 저항(#886 ②)도 그 시트에서 복사한다.
     앞의 캐릭터가 죽었는지는 보지 않는다. 부르는 쪽이 확인한다.
     """
     sheet = TableSheet(
@@ -178,6 +180,7 @@ def give_sheet(member: TableMember, source: CharacterSheet) -> TableSheet:
         max_hp=source.max_hp,
         hp=source.max_hp,
         skills=list(source.skills),
+        resistances=[one.model_dump(mode='json') for one in source.resistances],
     )
     member.sheets.append(sheet)
     return sheet
