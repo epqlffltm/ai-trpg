@@ -7729,7 +7729,8 @@ export interface components {
          *     규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.
          *     방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.
          *     보내지 않으면 템플릿의 것이다. 수치(resources, #804)와 기술(skills, #805)도 같다. 보내면 템플릿의 예시 대신 쓴다.
-         *     성질(natures)과 타입마다의 면역(monster_immunities, #886)도 같다.
+         *     성질(natures)과 타입마다의 면역(monster_immunities, #886)도 같다. 부상(injuries)과 부상 표(injury_table, #886)도
+         *     같다. 부상 표에 null 을 보내면 부상 표가 없는 규칙이다(그때는 굴리는 때 injury_triggers 를 모두 꺼야 한다).
          */
         RulebookCreate: {
             armor?: components["schemas"]["Armor"] | null;
@@ -7743,6 +7744,10 @@ export interface components {
              * @default
              */
             gm_guide: string;
+            /** Injuries */
+            injuries?: components["schemas"]["Injury"][] | null;
+            injury_table?: components["schemas"]["InjuryTable"] | null;
+            injury_triggers?: components["schemas"]["InjuryTriggers"] | null;
             /** Monster Immunities */
             monster_immunities?: components["schemas"]["KindImmunity"][] | null;
             /** Natures */
@@ -7809,7 +7814,9 @@ export interface components {
          * @description 룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.
          *
          *     규칙은 방어 규칙(armor), 수치(resources, #804), 기술(skills, #805), 성질(natures)과 타입마다의 면역
-         *     (monster_immunities, #886)만 고칠 수 있다.
+         *     (monster_immunities, #886), 부상(injuries)과 부상 표(injury_table)와 굴리는 때(injury_triggers, #886)만
+         *     고칠 수 있다.
+         *     부상 표에 null 을 보내면 부상 표가 없는 규칙이 된다(굴리는 때를 모두 함께 꺼야 한다).
          *     방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.
          *     이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
          */
@@ -7819,6 +7826,10 @@ export interface components {
             description?: string | null;
             /** Gm Guide */
             gm_guide?: string | null;
+            /** Injuries */
+            injuries?: components["schemas"]["Injury"][] | null;
+            injury_table?: components["schemas"]["InjuryTable"] | null;
+            injury_triggers?: components["schemas"]["InjuryTriggers"] | null;
             /** Monster Immunities */
             monster_immunities?: components["schemas"]["KindImmunity"][] | null;
             /** Natures */

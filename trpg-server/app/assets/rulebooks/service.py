@@ -26,7 +26,7 @@ class RulesInvalidError(Exception):
     기술(#805)의 비용이나 효과가 규칙에 없는 것을 가리킨다.
 
     칸 하나의 모양은 받을 때 봤다. 이것은 칸끼리 맞는지다. message 는 왜 맞지 않는지, field 는 어느 칸인지다
-    (natures, monster_immunities, resources, skills 중 하나, #886).
+    (PART_FIELDS 중 하나, #886).
     """
 
     def __init__(self, message: str, field: str) -> None:
@@ -64,19 +64,38 @@ def problem_of(rules: dict) -> str | None:
     return None
 
 
-# 한꺼번에 바꿀 수 있는 규칙의 칸들. 앞의 것을 가리키는 것이 뒤에 온다(기술이 수치를, 면역이 성질을 가리킨다)
-PART_FIELDS = ('natures', 'monster_immunities', 'resources', 'skills')
+# 한꺼번에 바꿀 수 있는 규칙의 칸들. 앞의 것을 가리키는 것이 뒤에 온다
+# (부상과 면역이 성질을, 부상 표가 부상을, 수치의 문턱과 기술이 부상과 수치를 가리킨다)
+PART_FIELDS = ('natures', 'injuries', 'injury_table', 'injury_triggers', 'monster_immunities', 'resources', 'skills')
+# null 로 비울 수 있는 칸. 보낸 것은 null 이어도 바꾼다. 다른 칸의 null 은 "보내지 않았다"다
+NULLABLE_PARTS = ('injury_table',)
 
 
-def parts_of(data: RulebookCreate | RulebookUpdate) -> dict[str, list]:
-    """보낸 규칙의 칸들(PART_FIELDS 중 보낸 것). 이름 → 조각들. 차례는 PART_FIELDS 의 것이다."""
-    return {field: getattr(data, field) for field in PART_FIELDS if getattr(data, field) is not None}
+def parts_of(data: RulebookCreate | RulebookUpdate) -> dict[str, object]:
+    """보낸 규칙의 칸들(PART_FIELDS 중 보낸 것). 이름 → 값. 차례는 PART_FIELDS 의 것이다."""
+    return {field: getattr(data, field) for field in PART_FIELDS if was_sent(data, field)}
 
 
-def with_parts(rules: dict, parts: dict[str, list]) -> dict:
+def was_sent(data: RulebookCreate | RulebookUpdate, field: str) -> bool:
+    """그 칸을 보냈는가. 비울 수 있는 칸은 null 을 보낸 것도 보낸 것이다."""
+    if field in NULLABLE_PARTS:
+        return field in data.model_fields_set
+    return getattr(data, field) is not None
+
+
+def dump_part(value: object) -> object:
+    """규칙의 칸 하나를 DB 에 넣을 문서로. 목록이면 하나씩, 조각이면 그대로, null 은 null 이다."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return dump_all(value)
+    return value.model_dump(mode='json')
+
+
+def with_parts(rules: dict, parts: dict[str, object]) -> dict:
     """
-    규칙의 성질과 면역(#886), 수치(#804), 기술(#805) 중 보낸 것만 바꾼 문서. 받은 문서는 고치지 않는다.
-    아무것도 안 보냈으면 그대로다.
+    규칙의 성질과 면역과 부상과 부상 표와 굴리는 때(#886), 수치(#804), 기술(#805) 중 보낸 것만 바꾼 문서.
+    받은 문서는 고치지 않는다. 아무것도 안 보냈으면 그대로다.
 
     칸끼리 가리키는 것(기술의 비용이 수치를, 부상과 면역이 성질을)은 규칙의 다른 칸과 견주어야 알 수 있다.
     보낸 것을 모두 바꾼 규칙 한 벌로 다시 읽어 보고(수치를 지우며 그 수치를 쓰던 기술도 함께 고칠 수 있게),
@@ -85,18 +104,18 @@ def with_parts(rules: dict, parts: dict[str, list]) -> dict:
     """
     if not parts:
         return rules
-    changed = {**rules, **{field: dump_all(values) for field, values in parts.items()}}
+    changed = {**rules, **{field: dump_part(value) for field, value in parts.items()}}
     problem = problem_of(changed)
     if problem is None:
         return changed
     raise RulesInvalidError(problem, first_wrong(rules, parts))
 
 
-def first_wrong(rules: dict, parts: dict[str, list]) -> str:
+def first_wrong(rules: dict, parts: dict[str, object]) -> str:
     """보낸 칸을 차례로 하나씩 더해 갈 때 규칙이 처음 틀리는 칸. 끝까지 틀리지 않으면 마지막 칸이다."""
     step = rules
-    for field, values in parts.items():
-        step = {**step, field: dump_all(values)}
+    for field, value in parts.items():
+        step = {**step, field: dump_part(value)}
         if problem_of(step) is not None:
             return field
     return list(parts)[-1]
@@ -108,7 +127,7 @@ def dump_all(parts: list) -> list[dict]:
 
 
 def other_changes(data: RulebookUpdate) -> RulebookUpdate:
-    """규칙(방어, 성질, 면역, 수치, 기술)을 뺀 고칠 것. 공통의 고치기(app/assets/service.py)는 내용의 칸만 안다."""
+    """규칙(방어와 PART_FIELDS)을 뺀 고칠 것. 공통의 고치기(app/assets/service.py)는 내용의 칸만 안다."""
     changes = data.model_dump(exclude_unset=True, exclude={'armor', *PART_FIELDS})
     return RulebookUpdate.model_validate(changes)
 

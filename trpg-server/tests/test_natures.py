@@ -122,7 +122,7 @@ async def test_the_natures_of_a_rulebook_can_be_changed(client: AsyncClient, me:
     orphaned = await patch(client, url, me, natures=without_mind)
     unknown = await patch(client, url, me, monster_immunities=[{'kind': 'beast', 'natures': ['fire']}])
     both = await patch(client, url, me, natures=without_mind, monster_immunities=no_mind_table)
-    # 부상이 쓰는 성질(독)은 지울 수 없다. 룰북의 부상은 고칠 수 없다
+    # 부상이 쓰는 성질(독)은 그 부상도 함께 고치지 않으면 지울 수 없다
     poison_gone = await patch(client, url, me, natures=CLASSIC_NATURES[1:])
     # 둘을 보내 둘 다 틀리면 앞의 칸(성질)을 알려 준다
     first_wrong = await patch(client, url, me, natures=CLASSIC_NATURES[1:], monster_immunities=no_mind_table)
