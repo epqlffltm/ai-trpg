@@ -12,10 +12,14 @@ from app.assets.models import RULEBOOK_GM_GUIDE_MAX_LENGTH
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
 from app.engine.monster_kinds import MonsterKind
 from app.engine.ruleset import (
+    RULESET_MAX_INJURIES,
     RULESET_MAX_NATURES,
     RULESET_MAX_RESOURCES,
     RULESET_MAX_SKILLS,
     Armor,
+    Injury,
+    InjuryTable,
+    InjuryTriggers,
     KindImmunity,
     Nature,
     Resource,
@@ -33,6 +37,9 @@ Skills = Annotated[list[Skill], Field(max_length=RULESET_MAX_SKILLS)]
 Natures = Annotated[list[Nature], Field(max_length=RULESET_MAX_NATURES)]
 # 몬스터의 타입마다 걸리지 않는 성질(#886). 보내면 통째로 바뀐다(422 monster_immunities)
 MonsterImmunities = Annotated[list[KindImmunity], Field(max_length=len(MonsterKind))]
+# 룰북의 부상들(#886). 보내면 통째로 바뀐다. 부상 표, 후유증 표, 수치의 문턱, 기술이 가리키는 것은 규칙 전체로 본다
+# (422 injuries). 시나리오의 물건과 공격이 가리키는 부상은 게시할 때 본다
+Injuries = Annotated[list[Injury], Field(max_length=RULESET_MAX_INJURIES)]
 
 
 class RulebookCreate(AssetCreate):
@@ -42,7 +49,8 @@ class RulebookCreate(AssetCreate):
     규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.
     방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.
     보내지 않으면 템플릿의 것이다. 수치(resources, #804)와 기술(skills, #805)도 같다. 보내면 템플릿의 예시 대신 쓴다.
-    성질(natures)과 타입마다의 면역(monster_immunities, #886)도 같다.
+    성질(natures)과 타입마다의 면역(monster_immunities, #886)도 같다. 부상(injuries)과 부상 표(injury_table, #886)도
+    같다. 부상 표에 null 을 보내면 부상 표가 없는 규칙이다(그때는 굴리는 때 injury_triggers 를 모두 꺼야 한다).
     """
 
     gm_guide: GmGuide = ''
@@ -52,6 +60,9 @@ class RulebookCreate(AssetCreate):
     skills: Skills | None = None
     natures: Natures | None = None
     monster_immunities: MonsterImmunities | None = None
+    injuries: Injuries | None = None
+    injury_table: InjuryTable | None = None
+    injury_triggers: InjuryTriggers | None = None
 
 
 class RulebookUpdate(AssetUpdate):
@@ -59,7 +70,9 @@ class RulebookUpdate(AssetUpdate):
     룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.
 
     규칙은 방어 규칙(armor), 수치(resources, #804), 기술(skills, #805), 성질(natures)과 타입마다의 면역
-    (monster_immunities, #886)만 고칠 수 있다.
+    (monster_immunities, #886), 부상(injuries)과 부상 표(injury_table)와 굴리는 때(injury_triggers, #886)만
+    고칠 수 있다.
+    부상 표에 null 을 보내면 부상 표가 없는 규칙이 된다(굴리는 때를 모두 함께 꺼야 한다).
     방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.
     이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
     """
@@ -70,6 +83,9 @@ class RulebookUpdate(AssetUpdate):
     skills: Skills | None = None
     natures: Natures | None = None
     monster_immunities: MonsterImmunities | None = None
+    injuries: Injuries | None = None
+    injury_table: InjuryTable | None = None
+    injury_triggers: InjuryTriggers | None = None
 
 
 class RulebookDetail(AssetSummary):
