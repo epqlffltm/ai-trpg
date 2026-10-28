@@ -135,7 +135,7 @@ export function StoryRoom({ session, turns }: Props) {
           <StoryRecordsButton worldId={session.world.id} view={view} />
         </div>
       ) : (
-        <StoryActionBar worldId={session.world.id} view={view} state={scene.state} disabled={busy} onAct={act} />
+        <StoryActionBar sessionId={session.id} worldId={session.world.id} view={view} state={scene.state} disabled={busy} onAct={act} />
       )}
       {ended ? null : (
         <Composer

@@ -1,12 +1,13 @@
 // web/apps/web/src/pages/chat/conversation/NotesDialog.tsx
 // 기억 창(C5). 상대가 기억하는 것(기억 메모)을 보고 더하고 고치고 지운다. 요약이 제안한 메모는 따로 보이고 받아들이거나 버린다.
 // 앞부분의 요약은 읽기만 한다. 메모는 다음 말부터 모델에 간다. 청구하지 않고, 답을 받는 중에도 고칠 수 있다.
+// 창의 몸(NotesPanel)은 읽기와 보내기를 받아 그린다. story 의 기억 창(StoryNotesDialog)도 이것을 쓴다.
 
 import { Button, Dialog, Notice } from '@ai-trpg/ui';
 import { useState, type FormEvent } from 'react';
-import { NOTE_MAX, type MemoryNote } from '../../../api/chatNotes';
+import { NOTE_MAX } from '../../../api/chatNotes';
 import { TextAreaField } from '../../../components/TextAreaField';
-import { noteHint, noteProblemText, notesCountLabel, notesFull, sourceLabel, splitNotes } from './notesView';
+import { noteHint, noteProblemText, notesCountLabel, notesFull, sourceLabel, splitNotes, type NoteLike } from './notesView';
 import { useNotes, type NoteChange } from './useNotes';
 
 type Props = { conversationId: string; name: string; open: boolean; onClose: () => void };
@@ -21,13 +22,25 @@ export function NotesDialog({ conversationId, name, open, onClose }: Props) {
 
 function NotesBody({ conversationId, name }: { conversationId: string; name: string }) {
   const { notes, summary, change } = useNotes(conversationId, true);
+  return <NotesPanel name={name} notes={notes} summary={summary} change={change} />;
+}
+
+/** 창이 받는 읽기와 보내기. TanStack Query 의 결과에서 쓰는 칸만 본다 */
+export type NotesSource = {
+  notes: { data: NoteLike[] | undefined; isPending: boolean; isError: boolean; isSuccess: boolean };
+  summary: { data: { text: string } | null | undefined; isError: boolean };
+  change: { error: unknown; isPending: boolean; mutateAsync: (request: NoteChange) => Promise<unknown> };
+};
+
+/** 기억 창의 몸. 메모(받아들인 것과 제안), 새 메모, 앞의 줄거리 */
+export function NotesPanel({ name, intro, notes, summary, change }: NotesSource & { name: string; intro?: string }) {
   const { kept, suggested } = splitNotes(notes.data ?? []);
   const full = notesFull(kept);
   const act = (request: NoteChange) => change.mutateAsync(request).then(() => true, () => false);
 
   return (
     <div className="chat-notes">
-      <p className="hint">{name}이(가) 늘 기억하는 것입니다. 틀린 기억을 바로잡거나 기억할 것을 적습니다. 다음 말부터 들어가고 청구하지 않습니다.</p>
+      <p className="hint">{intro ?? `${name}이(가) 늘 기억하는 것입니다. 틀린 기억을 바로잡거나 기억할 것을 적습니다. 다음 말부터 들어가고 청구하지 않습니다.`}</p>
       {change.error ? <Notice tone="error">{noteProblemText(change.error)}</Notice> : null}
       {notes.isPending ? <p aria-busy="true">불러오는 중</p> : null}
       {notes.isError ? <Notice tone="error">메모를 불러오지 못했습니다. 창을 닫았다 다시 열어 주세요.</Notice> : null}
@@ -61,7 +74,7 @@ function NotesBody({ conversationId, name }: { conversationId: string; name: str
   );
 }
 
-type ItemProps = { note: MemoryNote; busy: boolean; full?: boolean; onAct: (request: NoteChange) => Promise<boolean> };
+type ItemProps = { note: NoteLike; busy: boolean; full?: boolean; onAct: (request: NoteChange) => Promise<boolean> };
 
 function NoteItem({ note, busy, full = false, onAct }: ItemProps) {
   const [editing, setEditing] = useState(false);
