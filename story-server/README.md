@@ -140,7 +140,8 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | GET | `/api/v1/story/conversations/{id}/notes` | [기억 메모](#기억-메모)들(먼저 쓴 것부터) | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/notes` | 기억 메모 더하기(`{"text"}`, 300자). 201. 가득 차면(20개) 409 `notes_full` | access 토큰 |
 | PATCH | `/api/v1/story/conversations/{id}/notes/{note_id}` | 기억 메모 고치기(`{"text"}`). 없으면 404 `note_not_found` | access 토큰 |
-| DELETE | `/api/v1/story/conversations/{id}/notes/{note_id}` | 기억 메모 지우기. 204 | access 토큰 |
+| POST | `/api/v1/story/conversations/{id}/notes/{note_id}/accept` | 요약이 제안한 메모를 받아들이기. 다음 말부터 모델에 간다. 가득 차면 409 `notes_full` | access 토큰 |
+| DELETE | `/api/v1/story/conversations/{id}/notes/{note_id}` | 기억 메모 지우기(제안을 버리는 것도 이것). 204 | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}/summary` | 지금 가지의 [굴리는 요약](#기억-메모)(`{text, covered_up_to, created_at}`, 읽기만). 없으면 null | access 토큰 |
 | GET | `/api/v1/story/gallery` | 그 세계관에서 내가 연 일러스트들(`?world_id=`, 처음 연 차례). [계정의 기록](#계정의-기록) | access 토큰 |
 
@@ -363,7 +364,10 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
   요약은 밀려난 마지막 말에 붙어(`summaries`) 어느 가지에서 읽어도 맞다. 다음 말부터 카드의 `[앞의 줄거리]`(사용자 뒤, 기억 앞)로 간다.
   싼 모델(`SUMMARY_MODEL`, 꺼 둔 모델도 된다)로 부르고 원가는 서비스가 낸다(청구하지 않고 행에 적는다). 비우면 요약하지 않는다.
   실패해도 이야기는 이어진다(로그 `story.summary`). 사람은 기다리지 않는다.
-- 요약이 제안하는 메모(chat 의 #677)는 아직 없다.
+- **요약이 제안하는 메모**(2026-10-29, chat 의 #677 과 같다). 요약을 쓰는 같은 호출에서 줄거리 뒤에 `<notes>` 와 오래 기억할 사실을 셋까지 받는다.
+  이미 적힌 메모(제안까지)를 보여 주어 되풀이하지 않게 하고, 받은 뒤에도 같은 것, 빈 것, 긴 것은 거른다. 잘린 요약은 제안하지 않는다.
+  제안은 `source: summary`, `pending: true` 로 메모 목록에 보이고, 받아들이기(`accept`) 전에는 모델에 가지 않고 20개의 수에도 들지 않는다.
+  기다리는 제안은 세션마다 10개까지 쌓인다. 버리기는 지우기다.
 
 ### 요청 수 제한
 

@@ -1,7 +1,7 @@
 # story-server/app/memory/schemas.py
 
 """
-기억 메모 API 의 입력과 응답의 모양(chat 의 것에서 사람이 쓴 메모의 칸만).
+기억 메모 API 의 입력과 응답의 모양(chat 과 같다).
 """
 
 import uuid
@@ -10,7 +10,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
-from app.memory.models import NOTE_MAX_CHARS
+from app.memory.models import NOTE_MAX_CHARS, NoteSource
 
 NoteText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=NOTE_MAX_CHARS)]
 
@@ -24,10 +24,16 @@ class NoteWrite(BaseModel):
 
 
 class NoteOut(BaseModel):
-    """메모 하나."""
+    """
+    메모 하나(chat 과 같은 모양). source 는 누가 썼는가(user, summary)다. pending 이면 요약의 제안이고 받아들이기 전이다
+    (모델에 가지 않는다. 화면은 받아들이기와 버리기를 보인다). accepted_at 은 제안을 받아들인 시각이다.
+    """
 
     id: uuid.UUID
     text: str
+    source: NoteSource
+    pending: bool
+    accepted_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
