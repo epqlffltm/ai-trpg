@@ -4,6 +4,7 @@
 // 만들거나 지우거나 게시하면 목록과, story 의 "내 세계관"(['story', 'my-worlds'])을 무른다.
 
 import { queryOptions } from '@tanstack/react-query';
+import { fetchMyCharacters } from '../../../api/characters';
 import { fetchMyStoryWorlds, fetchStoryWorld, fetchStoryWorldCheck, fetchStoryWorldVersions } from '../../../api/storyWorlds';
 
 export const WORLDS_KEY = ['story', 'studio', 'worlds'] as const;
@@ -41,4 +42,12 @@ export function worldCheckQuery(worldId: string) {
 
 export function worldVersionsQuery(worldId: string) {
   return queryOptions({ queryKey: worldVersionsKey(worldId), queryFn: ({ signal }) => fetchStoryWorldVersions(worldId, signal) });
+}
+
+/** 인물로 고를 내 캐릭터(최근에 고친 것부터 100 개). 게시한 판이 있는 것만 쓴다 */
+export function castCharactersQuery() {
+  return queryOptions({
+    queryKey: ['asset', 'characters', 'mine', 'world-cast'],
+    queryFn: ({ signal }) => fetchMyCharacters({ limit: 100, offset: 0 }, signal),
+  });
 }

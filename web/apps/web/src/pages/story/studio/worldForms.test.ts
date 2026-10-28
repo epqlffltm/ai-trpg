@@ -104,11 +104,13 @@ describe('세계관의 입력', () => {
 
   it('게시의 글과 실패의 글, 탭', () => {
     expect(worldProblemLine('start_place_missing')).toEqual({ text: '장소가 없거나 시작 장소를 고르지 않았습니다.', tab: 'progress' });
-    expect(worldProblemLine('cast_empty').tab).toBeUndefined();
+    expect(worldProblemLine('cast_empty').tab).toBe('cast');
+    expect(worldProblemLine('event_missing').tab).toBeUndefined();
     expect(worldProblemLine('new_problem')).toEqual({ text: 'new_problem' });
     expect(worldWarningText('ending_unreachable')).toBe('고를 일이 없는 엔딩이 있습니다.');
     expect(worldTabOf('map')).toBe('map');
-    expect(worldTabOf('cast')).toBe('basics');
+    expect(worldTabOf('cast')).toBe('cast');
+    expect(worldTabOf('events')).toBe('basics');
     expect(describeWorldProblem(new ApiError({ status: 422, detail: 'x', code: 'character_not_owned' })).message).toMatch(/내 캐릭터가 아닌/);
     expect(describeWorldProblem(new ApiError({ status: 403, detail: 'x', code: 'adult_content_required' })).fields).toHaveProperty('rating');
     expect(describeWorldPublishProblem(new ApiError({ status: 409, detail: 'x', body: { problems: ['cast_empty'] } })).message).toMatch(/게시할 조건/);
