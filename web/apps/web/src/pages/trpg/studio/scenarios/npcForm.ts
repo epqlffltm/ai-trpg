@@ -24,6 +24,8 @@ export type NpcDraft = {
   attacks: AttackDraft[];
   /** 타고난 저항(#886 ②). 고치는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
   resistances: NpcSheet['resistances'];
+  /** 타고난 피해의 성질(#886 ③). 고르는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
+  nature: string | null;
 };
 
 export function npcDraft(npc: NpcSheet | undefined, rules: Ruleset): NpcDraft {
@@ -37,6 +39,7 @@ export function npcDraft(npc: NpcSheet | undefined, rules: Ruleset): NpcDraft {
     inventory: carriedDrafts(npc?.inventory ?? []),
     attacks: attackDrafts(npc?.attacks ?? []),
     resistances: npc?.resistances ?? [],
+    nature: npc?.nature ?? null,
   };
 }
 
@@ -86,6 +89,7 @@ export function toNpcSheet(entryId: string, draft: NpcDraft, rules: Ruleset): Np
     inventory: toCarried(draft.inventory.map((line) => ({ ...line, wear: [] }))),
     attacks: toAttacks(draft.attacks),
     resistances: draft.resistances,
+    nature: draft.nature,
   };
 }
 

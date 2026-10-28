@@ -17,6 +17,7 @@
 """
 
 import uuid
+from collections.abc import Callable
 
 import pytest
 from fastapi import FastAPI
@@ -34,7 +35,9 @@ from app.rounds.move_lines import describe_impact, describe_npc_impact
 from app.rounds.narration_request import to_impact, to_npc_impact
 from tests import test_item_effects as item_world
 from tests import test_monster_turns as turns
+from tests import test_npc_turns as npc_turns
 from tests.sheets import make_sheet
+from tests.test_attack_costs import rewrite_content
 from tests.test_attack_effects import turn_outcome
 from tests.test_npc_sheets import refused
 from tests.test_resistances import item_table, scenario_with
@@ -367,3 +370,92 @@ def test_the_narrator_hears_the_nature_and_the_level():
     assert describe_impact(to_impact(member)) == '→ 엘프 독 피해 1 (HP 9/10, 저항)'
     assert describe_npc_impact(to_npc_impact(rat)) == '→ 수로 쥐 독 피해 6 (쓰러짐(의식 없음), 약점)'
     assert describe_impact(to_impact(plain)) == '→ 엘프 독 피해 1 (HP 9/10)'
+
+
+# --- 타고난 성질 ---
+
+
+async def innate_rat(client: AsyncClient, me: dict, attack: dict) -> tuple[dict, Callable[[dict], None]]:
+    """타고난 성질이 독인 쥐. 엘프는 독에 저항한다."""
+    sheet = {**make_sheet(), 'resistances': [{'nature': 'poison', 'level': 'resist'}]}
+    table = await turns.start_table(client, me, rat_sheet=FAST_RAT, attacks=[attack], sheet=sheet)
+
+    def poisonous(content: dict) -> None:
+        content['monsters'][0]['nature'] = 'poison'
+
+    return table, poisonous
+
+
+@pytest.mark.parametrize(
+    ('attack', 'expected', 'hp'),
+    [
+        ({k: v for k, v in VENOM.items() if k != 'nature'}, {'key': 'poison', 'name': '독', 'level': 'resist'}, 9),
+        ({**VENOM, 'nature': 'stun'}, {'key': 'stun', 'name': '기절', 'level': None}, 7),
+    ],
+    ids=['innate', 'attack-first'],
+)
+async def test_a_monster_s_innate_nature_comes_after_the_attack_s(
+    client: AsyncClient, app: FastAPI, me: dict, session: AsyncSession, attack: dict, expected: dict, hp: int
+):
+    table, poisonous = await innate_rat(client, me, attack)
+    await rewrite_content(session, table['id'], poisonous)
+    turns.load_dice(app, [PASS, 3, FAIL])
+
+    await turns.declare(client, me, table, turns.REST, turns.rest())
+
+    effect = (await turn_outcome(session, table))['effect']
+    assert (effect['nature'], effect['after']) == (expected, hp)
+
+
+async def test_a_person_s_innate_nature_marks_the_strike(
+    client: AsyncClient, app: FastAPI, me: dict, session: AsyncSession, narrated
+):
+    world = await npc_turns.armed_and_fighting(client, app, me, narrated, nature='poison')
+    npc_turns.load_dice(app, [npc_turns.HIT, npc_turns.SCRATCH])
+
+    await npc_turns.laugh(client, me, world)
+
+    (turn,) = npc_turns.npc_turns(await turns.turns_of(session, world['table'], 2))
+    assert turn['outcome']['effect']['nature'] == {'key': 'poison', 'name': '독', 'level': None}
+
+
+@pytest.mark.parametrize(
+    ('fields', 'problem'),
+    [
+        (
+            {
+                'monster_sheets': lambda world: [
+                    {'monster_id': world['rat']['id'], 'sheet': make_sheet(max_hp=4), 'nature': 'fire'}
+                ]
+            },
+            'monster_nature_invalid',
+        ),
+        (
+            {'npc_sheets': lambda world: [{'entry_id': world['lady']['id'], 'sheet': make_sheet(), 'nature': 'fire'}]},
+            'nature_invalid',
+        ),
+    ],
+    ids=['monster', 'person'],
+)
+async def test_an_innate_nature_is_one_of_the_rules(client: AsyncClient, me: dict, fields: dict, problem: str):
+    world = await scenario_with(client, me, **fields)
+
+    assert problem in await refused(client, me, world['scenario'])
+
+
+async def test_an_innate_nature_is_frozen_into_the_version(client: AsyncClient, me: dict):
+    world = await scenario_with(
+        client,
+        me,
+        monster_sheets=lambda world: [
+            {'monster_id': world['rat']['id'], 'sheet': make_sheet(max_hp=4), 'nature': 'poison'},
+            {'monster_id': world['skeleton']['id'], 'sheet': make_sheet(max_hp=6)},
+        ],
+        npc_sheets=lambda world: [{'entry_id': world['lady']['id'], 'sheet': make_sheet(), 'nature': 'stun'}],
+    )
+
+    response = await client.post(f'{turns.SCENARIOS_URL}/{world["scenario"]["id"]}/versions', json={}, headers=me)
+
+    snapshot = response.json()['snapshot']
+    assert sorted(monster['nature'] or '' for monster in snapshot['monsters']) == ['', 'poison']
+    assert snapshot['npc_sheets'][0]['nature'] == 'stun'

@@ -7431,6 +7431,19 @@
             "title": "Natural Armor",
             "type": "array"
           },
+          "nature": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
+          },
           "resistances": {
             "default": [],
             "items": {
@@ -7534,6 +7547,19 @@
             "maxItems": 8,
             "title": "Natural Armor",
             "type": "array"
+          },
+          "nature": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
           },
           "resistances": {
             "default": [],
@@ -7667,6 +7693,17 @@
             },
             "title": "Natural Armor",
             "type": "array"
+          },
+          "nature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
           },
           "resistances": {
             "default": [],
@@ -8742,6 +8779,19 @@
             "title": "Merchant",
             "type": "boolean"
           },
+          "nature": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
+          },
           "on_caught": {
             "$ref": "#/components/schemas/NpcCaught",
             "default": "hostile"
@@ -8815,6 +8865,19 @@
             "title": "Merchant",
             "type": "boolean"
           },
+          "nature": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
+          },
           "on_caught": {
             "$ref": "#/components/schemas/NpcCaught",
             "default": "hostile"
@@ -8884,6 +8947,17 @@
             "default": false,
             "title": "Merchant",
             "type": "boolean"
+          },
+          "nature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
           },
           "on_caught": {
             "$ref": "#/components/schemas/NpcCaught",

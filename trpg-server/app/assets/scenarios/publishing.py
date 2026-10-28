@@ -477,7 +477,7 @@ def find_resistance_problems(scenario: Scenario, ruleset: Ruleset | None) -> lis
     저항과 효과와 무기의 성질(#886 ②, ③)이 룰북의 성질인지 본다. 여럿 틀려도 한 번만 적는다(nature_invalid).
 
     기본 시트, 프리젠의 시트, NPC 시트, 아이템 규칙의 저항과, 물건의 효과(피해, 수치를 내리는 맞추기)와
-    무기의 성질이다. 몬스터 시트와 몬스터와 인물의 공격의 성질은 그 검사가 본다
+    무기와 NPC 의 타고난 피해의 성질이다. 몬스터 시트와 몬스터와 인물의 공격의 성질은 그 검사가 본다
     (monster_nature_invalid, monster_attack_invalid, npc_attack_invalid). 룰북이 없으면 볼 수 없다.
     """
     if ruleset is None:
@@ -489,7 +489,8 @@ def find_resistance_problems(scenario: Scenario, ruleset: Ruleset | None) -> lis
         *(rule.resistances for rule in rules),
     ]
     natures = {nature.key for nature in ruleset.natures}
-    if any(not resists_only_known(ruleset, one) for one in resistances) or not item_natures(rules) <= natures:
+    innate = {npc_sheet.nature for npc_sheet in read_npc_sheets(scenario)} - {None}
+    if any(not resists_only_known(ruleset, one) for one in resistances) or not item_natures(rules) | innate <= natures:
         return [Problem.NATURE_INVALID]
     return []
 
@@ -502,10 +503,11 @@ def item_natures(rules: list[ItemRule]) -> set[str]:
 
 
 def nature_fault(ruleset: Ruleset, sheet: MonsterSheet) -> bool:
-    """몬스터 시트의 면역과 약함과 저항(#886 ③)이 룰북의 성질(#886)이 아닌 것을 가리키는가."""
+    """몬스터 시트의 면역과 약함과 저항과 타고난 피해의 성질(#886 ③)이 룰북의 성질(#886)이 아닌 것을 가리키는가."""
     known = {nature.key for nature in ruleset.natures}
     listed = not set(sheet.immune) <= known or not set(sheet.vulnerable) <= known
-    return listed or not resists_only_known(ruleset, sheet.resistances)
+    innate = sheet.nature is not None and sheet.nature not in known
+    return listed or innate or not resists_only_known(ruleset, sheet.resistances)
 
 
 def attack_fault(ruleset: Ruleset, attack: MonsterAttack, holder: ResourceHolder) -> bool:
@@ -579,6 +581,7 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             monster_sheet.immune,
             monster_sheet.vulnerable,
             monster_sheet.resistances,
+            monster_sheet.nature,
         )
         for monster_sheet in read_monster_sheets(scenario)
     ]

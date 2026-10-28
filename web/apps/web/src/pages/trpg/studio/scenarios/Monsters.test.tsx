@@ -136,6 +136,7 @@ describe('몬스터 탭', () => {
       immune: ['mind'],
       vulnerable: ['poison'],
       resistances: [],
+      nature: null,
     });
     // 고치지 않은 시트의 면역은 그대로 간다
     expect(sent[0]?.immune).toEqual(['poison']);

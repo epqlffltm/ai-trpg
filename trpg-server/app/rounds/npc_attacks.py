@@ -133,5 +133,6 @@ def take_npc_turn(judging: Judging, person: CastMember) -> dict:
     cost = pay(judging, person.npc, attack, ResourceHolder.NPCS)
     blow = plan_attack_blow(judging, blows.npc_weapon(judging, person, attack), victim)
     rolled = roll_attack(judging, person, attack, blow)
-    outcome = hit_outcome(judging, attack, victim, rolled.check, blow)
+    innate = person.definition.nature if person.definition is not None else None
+    outcome = hit_outcome(judging, attack, victim, rolled.check, blow, innate)
     return {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}

@@ -431,6 +431,8 @@ class NpcSheet(BaseModel):
     merchant: bool = False
     # 타고난 저항(#886 ②). 성질이 룰북의 것인지는 게시할 때 본다(nature_invalid)
     resistances: Resistances = ()
+    # 타고난 피해의 성질(#886 ③). 공격과 무기에 성질이 없을 때 그 인물의 피해의 성질이다(불의 정령). 비우면 없다
+    nature: Key | None = None
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'NpcSheet':
@@ -529,6 +531,8 @@ class MonsterSheet(BaseModel):
     # 저항(#886 ③). 성질과 단계(저항, 면역, 약점)다. 부상과 수치는 NPC 와 같이 막고(저항, 면역),
     # 피해는 반, 0, 두 배다. 성질이 룰북의 것인지는 게시할 때 본다(monster_nature_invalid)
     resistances: Resistances = ()
+    # 타고난 피해의 성질(#886 ③). 공격과 무기에 성질이 없을 때 그 몬스터의 피해의 성질이다(화염 정령). 비우면 없다
+    nature: Key | None = None
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'MonsterSheet':

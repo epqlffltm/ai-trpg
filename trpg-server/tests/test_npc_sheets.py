@@ -122,6 +122,7 @@ def npc(entry: dict, sheet: dict) -> dict:
         'attacks': [],
         'merchant': False,
         'resistances': [],
+        'nature': None,
     }
 
 

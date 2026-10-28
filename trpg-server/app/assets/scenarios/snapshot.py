@@ -151,7 +151,8 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      npc_sheets[] 의 resistances(타고난 것), items[].resistances(착용하고 있는 동안)에 있다.
 #      수치를 내리는 맞추기에 성질(effects[].nature)이 있다.
 #      피해의 성질(#886 ③)도 뒤에 더했다. 효과의 damage 와 공격(monsters[].attacks[].nature, npc_sheets[].attacks[])과
-#      무기(items[].nature)에 있다. 몬스터의 저항(monsters[].resistances)도 같다. 비워도 되는 칸이라 형식이 그대로다
+#      무기(items[].nature)에 있다. 몬스터의 저항(monsters[].resistances)과 몬스터와 인물의 타고난 피해의 성질
+#      (monsters[].nature, npc_sheets[].nature)도 같다. 비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 67
 
 
@@ -511,6 +512,8 @@ class NpcSheetSnapshot(BaseModel):
     merchant: bool = False
     # 타고난 저항(#886 ②). 성질과 단계(저항, 면역, 약점)다. 그 전의 판의 인물은 저항이 없다
     resistances: Resistances = ()
+    # 타고난 피해의 성질(#886 ③). 공격과 무기에 성질이 없을 때 쓴다. 그 전의 판의 인물은 없다
+    nature: str | None = None
 
 
 class NaturalArmorSnapshot(BaseModel):
@@ -551,6 +554,8 @@ class MonsterSnapshot(BaseModel):
     vulnerable: list[str] = []
     # 저항(#886 ③). 성질과 단계다. 그 전의 판의 몬스터는 저항이 없다
     resistances: Resistances = ()
+    # 타고난 피해의 성질(#886 ③). 공격과 무기에 성질이 없을 때 쓴다. 그 전의 판의 몬스터는 없다
+    nature: str | None = None
 
 
 class EncounterSnapshot(BaseModel):
@@ -1109,10 +1114,11 @@ def snapshot_monster(
     immune: list[str] | None = None,
     vulnerable: list[str] | None = None,
     resistances: Resistances = (),
+    nature: str | None = None,
 ) -> MonsterSnapshot:
     """
-    몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어와 불굴 세이브, 면역에 더하고 빼는 성질, 저항(#886 ③)을
-    굳힌다.
+    몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어와 불굴 세이브, 면역에 더하고 빼는 성질, 저항과
+    타고난 피해의 성질(#886 ③)을 굳힌다.
     """
     return MonsterSnapshot(
         id=monster.id,
@@ -1130,6 +1136,7 @@ def snapshot_monster(
         immune=immune or [],
         vulnerable=vulnerable or [],
         resistances=resistances,
+        nature=nature,
     )
 
 
