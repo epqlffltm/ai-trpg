@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/me/MyStudioLink.tsx
-// 마이페이지의 "만들기". TRPG 의 제작 도구(B9)의 허브와 chat 의 캐릭터 만들기(C6), 캐릭터가 붙이는 chat 의 로어북으로 가는 길.
+// 마이페이지의 "만들기". TRPG 의 제작 도구(B9)의 허브와 chat 의 캐릭터 만들기(C6), 캐릭터와 세계관이 붙이는 로어북, story 의 세계관 만들기(D7)로 가는 길.
 
 import { Link } from 'react-router';
 
@@ -15,6 +15,9 @@ export function MyStudioLink() {
       </p>
       <p>
         <Link to="/chat/studio/lorebooks">chat 로어북 만들기</Link>
+      </p>
+      <p>
+        <Link to="/story/studio/worlds">story 세계관 만들기</Link>
       </p>
     </section>
   );

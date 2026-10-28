@@ -65,7 +65,10 @@ import {
   SettingsPage,
   StoryHomePage,
   StorySessionPage,
+  StoryWorldEditPage,
+  StoryWorldNewPage,
   StoryWorldPage,
+  StoryWorldsStudioPage,
   StudioPage,
   TableCreatePage,
   TableRoomPage,
@@ -325,6 +328,19 @@ export function App() {
             }
           />
           <Route path="worlds/:worldId" element={<StoryWorldPage />} />
+          {/* 세계관 만들기(D7). 모두 만든 사람 자신의 것이라 묶음째 로그인해야 열린다. 만들기는 지금 운영자만이다(서버가 막는다) */}
+          <Route
+            path="studio/worlds"
+            element={
+              <RequireSession>
+                <Outlet />
+              </RequireSession>
+            }
+          >
+            <Route index element={<StoryWorldsStudioPage />} />
+            <Route path="new" element={<StoryWorldNewPage />} />
+            <Route path=":worldId" element={<StoryWorldEditPage />} />
+          </Route>
           <Route
             path="sessions/:sessionId"
             element={
