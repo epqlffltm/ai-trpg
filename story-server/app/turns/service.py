@@ -74,7 +74,9 @@ from app.engine.play import Played
 from app.engine.state import StoryState
 from app.engine.world import AfterEnding, World, read_world
 from app.lore.recall import LoreRecall
+from app.memory import repository as memory_store
 from app.memory.service import notes_for_prompt, render_memory
+from app.memory.summaries import latest_summary, overflow, render_story
 from app.ratings import Rating, allowed_ratings
 from app.records import repository as records
 from app.records.illustrations import unlocked_scenes
@@ -259,6 +261,8 @@ class Branch:
     world_id: uuid.UUID | None = None
     # 세션의 기억 메모의 "[기억]" 블록. 메모가 없으면 None(app/memory/)
     memory: str | None = None
+    # 가지의 말 가운데 굴리는 요약이 붙은 것(말의 id → 요약의 글, app/memory/summaries.py)
+    summaries: Mapping[uuid.UUID, str] = field(default_factory=dict)
 
 
 def lore_plan_of(branch: Branch, recent: Sequence[str]) -> LorePlan | None:
@@ -281,11 +285,23 @@ def lore_plan_of(branch: Branch, recent: Sequence[str]) -> LorePlan | None:
     )
 
 
+def story_of(branch: Branch, chars: int) -> str | None:
+    """
+    카드의 "[앞의 줄거리]". 지난 말의 창(chars)에 들지 못하고 밀려난 말 가운데 요약이 붙은 가장 뒤의 것이다.
+    밀려난 말이 없거나 아직 요약이 없으면 None(app/memory/summaries.py).
+    """
+    return render_story(latest_summary(overflow(branch.path, chars), branch.summaries))
+
+
 def card_for(branch: Branch, state: StoryState, stage: Staging, options: PromptOptions, lore: LorePlan | None) -> str:
-    """카드. state 와 장면으로 만들고, 켜져 있으면 다음 답 추천의 지시를, 로어북이 있으면 고른 항목을 넣는다."""
+    """
+    카드. state 와 장면으로 만들고, 켜져 있으면 다음 답 추천의 지시를, 로어북이 있으면 고른 항목을 넣는다.
+    밀려난 말의 요약이 있으면 앞의 줄거리로 넣는다.
+    """
     scene = scene_card(branch.briefing, branch.world, state, stage.cast, stage.direction)
     block = lore.block if lore is not None else None
-    return render_card(branch.briefing, scene, options.suggestions, branch.persona, block, branch.memory)
+    story = story_of(branch, options.context_chars)
+    return render_card(branch.briefing, scene, options.suggestions, branch.persona, block, branch.memory, story)
 
 
 def prompt_for(
@@ -585,7 +601,18 @@ async def branch_at(
     state = await state_at(session, world, path)
     persona = persona_card(await conversations.persona_of(session, conversation.id))
     memory = render_memory(await notes_for_prompt(session, conversation.id))
-    return Branch(world, read_briefing(imported.document), path, state, imported.document, persona, imported.id, memory)
+    summaries = await memory_store.summaries_on(session, [message.id for message in path])
+    return Branch(
+        world,
+        read_briefing(imported.document),
+        path,
+        state,
+        imported.document,
+        persona,
+        imported.id,
+        memory,
+        summaries,
+    )
 
 
 async def branch_of(session: AsyncSession, conversation: Conversation, imported: ImportedWorld) -> Branch:

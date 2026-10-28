@@ -97,6 +97,8 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `EMBEDDING_BASE_URL` | 비어 있음 | 임베딩 모델의 주소(OpenAI 와 같은 모양, `/embeddings` 앞까지). `EMBEDDER=llm` 이면 꼭 적는다 |
 | `EMBEDDING_TIMEOUT_SECONDS` | `30` | 임베딩을 한 번 부르는 시간의 상한(초). 말 한 번의 찾기는 3초에 끊는다 |
 | `EMBEDDING_DIMENSIONS` | 비어 있음 | 벡터의 길이. 적으면 받은 벡터가 이 길이인지 본다 |
+| `SUMMARY_MODEL` | 비어 있음 | [굴리는 요약](#기억-메모)의 모델(모델 목록의 이름표). 비우면 요약하지 않는다 |
+| `SUMMARY_AFTER_MESSAGES` | `8` | 창 밖으로 밀려난 말이 마지막 요약 뒤로 이만큼 쌓이면 요약한다(2~200) |
 | `STORY_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
 | `REDIS_URL` | 비어 있음(메모리) | [요청 수 제한](#요청-수-제한)을 세는 Redis(`redis://localhost:6379/3`). 비우면 서버 안의 메모리로 센다(서버가 하나일 때만 맞다). compose 는 DB 3 을 준다 |
 | `GENERATION_LIMIT`, `GENERATION_WINDOW_SECONDS` | `20`, `60` | 모델을 부르는 요청(말, 행동, 다시 생성, 이어서)을 한 사람이 이 시간(초) 안에 이만큼까지 |
@@ -139,6 +141,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | POST | `/api/v1/story/conversations/{id}/notes` | 기억 메모 더하기(`{"text"}`, 300자). 201. 가득 차면(20개) 409 `notes_full` | access 토큰 |
 | PATCH | `/api/v1/story/conversations/{id}/notes/{note_id}` | 기억 메모 고치기(`{"text"}`). 없으면 404 `note_not_found` | access 토큰 |
 | DELETE | `/api/v1/story/conversations/{id}/notes/{note_id}` | 기억 메모 지우기. 204 | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}/summary` | 지금 가지의 [굴리는 요약](#기억-메모)(`{text, covered_up_to, created_at}`, 읽기만). 없으면 null | access 토큰 |
 | GET | `/api/v1/story/gallery` | 그 세계관에서 내가 연 일러스트들(`?world_id=`, 처음 연 차례). [계정의 기록](#계정의-기록) | access 토큰 |
 
 ### 세션
@@ -355,7 +358,12 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
 - 하나에 300자, 세션 하나에 20개까지다. 늘 가는 글이라 입력의 양을 지킨다. 더할 때 세션을 잠그고 센다(동시에 더해도 넘지 않는다).
 - 가지와 상관없이 세션에 하나의 목록이다. 답을 쓰는 중에도 고칠 수 있고 다음 말부터 들어간다. 모델을 부르지 않아 청구하지 않는다.
 - 남의 세션은 404, 그 세션에 없는 메모는 404 `note_not_found`, 가득 차면 409 `notes_full`, 빈 글과 긴 글은 422 다. 쓰기는 요청 수 제한의 쓰기로 센다.
-- 굴리는 요약과 요약이 제안하는 메모(chat 의 #677)는 아직 없다.
+- **굴리는 요약**(2026-10-28, chat 과 같다, `app/memory/summaries.py`, `summarizer.py`). 말 한 번이 끝나면 따로 돌아,
+  지난 말의 창(`STORY_CONTEXT_CHARS`) 밖으로 밀려난 말이 마지막 요약 뒤로 `SUMMARY_AFTER_MESSAGES` 개 쌓였으면 앞의 요약과 합쳐 새 요약을 쓴다.
+  요약은 밀려난 마지막 말에 붙어(`summaries`) 어느 가지에서 읽어도 맞다. 다음 말부터 카드의 `[앞의 줄거리]`(사용자 뒤, 기억 앞)로 간다.
+  싼 모델(`SUMMARY_MODEL`, 꺼 둔 모델도 된다)로 부르고 원가는 서비스가 낸다(청구하지 않고 행에 적는다). 비우면 요약하지 않는다.
+  실패해도 이야기는 이어진다(로그 `story.summary`). 사람은 기다리지 않는다.
+- 요약이 제안하는 메모(chat 의 #677)는 아직 없다.
 
 ### 요청 수 제한
 
@@ -497,6 +505,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `generations` | 모델을 한 번 부른 것과 그 청구(chat 서버의 표와 같은 모양). 버린 줄의 수(`dropped_segments`)를 더했다 |
 | `lore_embeddings` | 판의 사본에 든 로어북 항목의 벡터(pgvector, `extensions` 스키마). (사본, 임베딩 모델, 로어북, 항목)마다 하나. 사본이 지워지면 함께 지워진다 |
 | `memory_notes` | 세션의 기억 메모. 세션이 지워지면 함께 지워진다 |
+| `summaries` | 굴리는 요약. 요약한 마지막 말에 붙고(`message_id`), 부른 모델과 토큰, 원가를 적는다. 말이나 세션이 지워지면 함께 지워진다 |
 | `ending_records` | 계정의 본 엔딩. (`owner_id`, `world_source`, `ending_id`)마다 처음 본 시각과 세션. 세션이 지워지면 세션만 비운다 |
 | `illustration_unlocks` | 계정의 연 일러스트. (`owner_id`, `world_source`, `scene_kind`, `scene_id`)마다 연 때의 그림(`image_id`), 장면의 인물(`cast`), 처음 연 시각과 세션 |
 

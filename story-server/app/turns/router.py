@@ -105,7 +105,7 @@ def prompt_options(settings: Settings) -> PromptOptions:
 def keep_running(request: Request, start: TurnStart, stop: StopSwitch, coroutine: Coroutine) -> None:
     """
     따로 도는 작업을 띄우고 앱이 들고 있게 한다. 멈추는 스위치는 기록의 id 로 찾게 둔다(app.state.stops).
-    끝나면 둘 다 놓는다. 잡히지 않은 오류는 로그에 남긴다.
+    끝나면 둘 다 놓는다. 잡히지 않은 오류는 로그에 남긴다. 끝나면 그 세션을 요약할지 본다.
     """
     task = asyncio.create_task(coroutine)
     running: set[asyncio.Task] = request.app.state.turns
@@ -115,6 +115,13 @@ def keep_running(request: Request, start: TurnStart, stop: StopSwitch, coroutine
     task.add_done_callback(running.discard)
     task.add_done_callback(lambda _: stops.pop(start.generation_id, None))
     task.add_done_callback(log_failure)
+    task.add_done_callback(lambda done: summarize_after(request, start, done))
+
+
+def summarize_after(request: Request, start: TurnStart, task: asyncio.Task) -> None:
+    """말 한 번이 끝나면(서버가 꺼져 멈추지 않았으면) 그 세션을 요약할지 보러 간다(app/memory/summarizer.py)."""
+    if not task.cancelled():
+        request.app.state.summarizer.request(start.conversation_id)
 
 
 def log_failure(task: asyncio.Task) -> None:

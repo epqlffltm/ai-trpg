@@ -30,3 +30,11 @@ class NoteOut(BaseModel):
     text: str
     created_at: datetime
     updated_at: datetime
+
+
+class SummaryOut(BaseModel):
+    """지금 가지의 굴리는 요약(읽기만). covered_up_to 는 요약한 마지막 말의 id 다(첫 말부터 그 말까지를 요약했다)."""
+
+    text: str
+    covered_up_to: uuid.UUID
+    created_at: datetime

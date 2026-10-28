@@ -203,6 +203,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/conversations/{conversation_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Summary
+         * @description 지금 가지의 굴리는 요약. 아직 없으면 null 이다.
+         */
+        get: operations["read_summary_api_v1_story_conversations__conversation_id__summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/endings": {
         parameters: {
             query?: never;
@@ -1221,6 +1241,24 @@ export interface components {
             slot: string;
         };
         /**
+         * SummaryOut
+         * @description 지금 가지의 굴리는 요약(읽기만). covered_up_to 는 요약한 마지막 말의 id 다(첫 말부터 그 말까지를 요약했다).
+         */
+        SummaryOut: {
+            /**
+             * Covered Up To
+             * Format: uuid
+             */
+            covered_up_to: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Text */
+            text: string;
+        };
+        /**
          * Tier
          * @description 결제 서버 가격표의 등급. 결제에 쓰는 등급은 이것이 기준이다(model-pricing-plan 9-1).
          *
@@ -1683,6 +1721,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonaChoiceOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_summary_api_v1_story_conversations__conversation_id__summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SummaryOut"] | null;
                 };
             };
             /** @description 입력이 틀렸다 */
