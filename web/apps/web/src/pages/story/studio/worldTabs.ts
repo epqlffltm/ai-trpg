@@ -1,8 +1,8 @@
 // web/apps/web/src/pages/story/studio/worldTabs.ts
 // 세계관 고치기(D7)의 탭. 칸의 묶음마다 탭 하나이고 탭마다 저장한다(그 탭의 칸만 PATCH). 고른 탭은 주소의 ?tab= 에 둔다.
-// 이벤트, 엔딩의 탭은 다음 조각에서 더한다. 그때까지 그 칸은 저장된 그대로 남는다(다른 탭은 그 칸을 보내지 않는다).
+// 탭은 그 칸만 보내므로 다른 탭의 칸은 저장된 그대로 남는다.
 
-export type WorldTab = 'basics' | 'intro' | 'progress' | 'map' | 'items' | 'cast' | 'lorebooks' | 'publish';
+export type WorldTab = 'basics' | 'intro' | 'progress' | 'map' | 'items' | 'cast' | 'events' | 'endings' | 'lorebooks' | 'publish';
 
 const TAB_LABELS: Record<WorldTab, string> = {
   basics: '기본',
@@ -11,12 +11,14 @@ const TAB_LABELS: Record<WorldTab, string> = {
   map: '지도',
   items: '물건',
   cast: '인물',
+  events: '이벤트',
+  endings: '엔딩',
   lorebooks: '로어북',
   publish: '게시',
 };
 
 /** 화면의 탭. 차례가 곧 탭의 차례다 */
-export const WORLD_TABS: WorldTab[] = ['basics', 'intro', 'progress', 'map', 'items', 'cast', 'lorebooks', 'publish'];
+export const WORLD_TABS: WorldTab[] = ['basics', 'intro', 'progress', 'map', 'items', 'cast', 'events', 'endings', 'lorebooks', 'publish'];
 
 export function worldTabLabel(tab: WorldTab): string {
   return TAB_LABELS[tab];

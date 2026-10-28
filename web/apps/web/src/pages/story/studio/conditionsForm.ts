@@ -143,3 +143,28 @@ export function toConditions(draft: ConditionsDraft): StoryWorldConditions {
 export function conditionLabel(kind: StoryWorldConditionKind): string {
   return CONDITION_KINDS[kind].label;
 }
+
+type WorldParts = {
+  places: Choice[];
+  items: Choice[];
+  slots: Choice[];
+  cast: { id: string; character_id: string; affection: { stages: { name: string }[] } }[];
+};
+
+/**
+ * 저장된 세계관에서 고를 거리. 인물의 이름은 그 캐릭터의 이름이다(목록에 없으면 빈 이름).
+ * 이벤트는 쓰는 쪽이 넘긴다(이벤트 탭은 고치는 중인 이벤트, 엔딩 탭은 저장된 이벤트)
+ */
+export function savedChoices(world: WorldParts, characters: Choice[], events: Choice[]): ConditionChoices {
+  return {
+    places: world.places.map((place) => ({ id: place.id, name: place.name })),
+    items: world.items.map((item) => ({ id: item.id, name: item.name })),
+    slots: world.slots.map((slot) => ({ id: slot.id, name: slot.name })),
+    events,
+    cast: world.cast.map((member) => ({
+      id: member.id,
+      name: characters.find((character) => character.id === member.character_id)?.name ?? '',
+      stages: member.affection.stages.map((stage) => stage.name),
+    })),
+  };
+}

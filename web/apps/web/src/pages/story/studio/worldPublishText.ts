@@ -15,14 +15,14 @@ const PROBLEMS: Record<string, Line> = {
   slot_missing: { text: '없는 시간대를 가리키는 배경, 일정, 조건이 있습니다.', tab: 'progress' },
   item_missing: { text: '없는 물건을 가리키는 소지품, 선물, 조건, 효과가 있습니다.', tab: 'items' },
   cast_target_missing: { text: '없는 인물을 가리키는 조건, 효과, 장면, 엔딩이 있습니다.' },
-  event_missing: { text: '없는 이벤트를 가리키는 조건이나 엔딩이 있습니다.' },
+  event_missing: { text: '없는 이벤트를 가리키는 조건이나 엔딩이 있습니다.', tab: 'events' },
   stage_missing: { text: '인물에 없는 호감도의 단계를 가리킵니다(조건, 지도, 고백).', tab: 'cast' },
   character_missing: { text: '인물이 가리킨 캐릭터가 없습니다. 지웠거나 내 것이 아닙니다.', tab: 'cast' },
   character_unpublished: { text: '인물이 가리킨 캐릭터를 게시한 적이 없습니다. 캐릭터를 먼저 게시해 주세요.', tab: 'cast' },
   character_rating_too_high: { text: '전체이용가 세계관에 성인 등급 캐릭터가 있습니다.', tab: 'basics' },
   lorebook_missing: { text: '가리킨 로어북이 없습니다.', tab: 'lorebooks' },
   lorebook_unpublished: { text: '가리킨 로어북을 게시한 적이 없습니다.', tab: 'lorebooks' },
-  ending_missing: { text: '고백 성공, 끝내는 고백 실패, 기한 같은 시작마다 조건이 빈 엔딩이 하나는 있어야 합니다.' },
+  ending_missing: { text: '고백 성공, 끝내는 고백 실패, 기한 같은 시작마다 조건이 빈 엔딩이 하나는 있어야 합니다.', tab: 'endings' },
   image_not_owned: { text: '내가 올리지 않은 그림이 있습니다.' },
 };
 
