@@ -9,6 +9,8 @@
     비우면 요약하지 않는다. 원가는 서비스가 낸다(청구하지 않고 요약의 행에 적어 둔다)
   - 한 세션에 한 번에 하나만 돈다(이 서버 안). 서버가 여럿이라 같은 요약을 둘이 써도 먼저 쓴 것이 남는다
   - 서버가 꺼질 때 멈춘다(stop). 쓰다 만 요약은 버린다. 다음 말 한 번이 다시 쓴다
+  - 같은 호출에서 기억 메모를 제안받는다(chat 의 #677). 요약과 같은 트랜잭션에 제안으로 적는다
+    (받아들이기 전에는 모델에 가지 않는다). 길이 상한에서 잘린 답이면 제안은 버린다(줄이 잘렸을 수 있다)
 DB 연결은 읽을 때와 적을 때만 잡는다. 모델을 부르는 동안에는 잡지 않는다.
 """
 
@@ -27,7 +29,8 @@ from app.conversations.models import Conversation
 from app.core.config import Settings
 from app.memory import repository
 from app.memory.models import Summary
-from app.memory.summaries import SUMMARY_OUTPUT_LIMIT, Plan, overflow, plan_summary, summary_messages
+from app.memory.service import add_proposals
+from app.memory.summaries import SUMMARY_OUTPUT_LIMIT, Plan, overflow, plan_summary, split_summary, summary_messages
 from app.turns.providers import Router
 
 logger = logging.getLogger(__name__)
@@ -85,10 +88,11 @@ class Summarizer:
             path = await conversations.active_path(session, conversation.active_leaf_id)
             dropped = overflow(path, settings.story_context_chars)
             summaries = await repository.summaries_on(session, [message.id for message in dropped])
-        return plan_summary(dropped, summaries, settings.summary_after_messages)
+            known = [note.text for note in await repository.list_notes(session, conversation_id)]
+        return plan_summary(dropped, summaries, settings.summary_after_messages, known)
 
     async def write(self, conversation_id: uuid.UUID) -> bool:
-        """요약할 것이 있으면 모델을 불러 요약을 적는다. 모델이 빈 줄거리를 주면 적지 않는다."""
+        """요약할 것이 있으면 모델을 불러 요약과 메모의 제안을 적는다. 모델이 빈 줄거리를 주면 적지 않는다."""
         plan = await self.plan(conversation_id)
         if plan is None:
             return False
@@ -96,7 +100,7 @@ class Summarizer:
         route = await self.router().route(slug, allow_disabled=True)
         params = GenerationParams(max_tokens=SUMMARY_OUTPUT_LIMIT, temperature=SUMMARY_TEMPERATURE)
         completion = await route.provider.complete(summary_messages(plan), params)
-        text = completion.text.strip()
+        text, lines = split_summary(completion.text)
         if not text:
             return False
         cost, _ = charge_of(completion, route.price)
@@ -111,6 +115,8 @@ class Summarizer:
         )
         async with self.session_factory() as session:
             await repository.add_summary(session, summary)
+            if not completion.truncated:
+                await add_proposals(session, conversation_id, lines)
             await session.commit()
         return True
 

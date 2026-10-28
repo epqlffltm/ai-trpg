@@ -1214,8 +1214,20 @@
         "type": "object"
       },
       "NoteOut": {
-        "description": "메모 하나.",
+        "description": "메모 하나(chat 과 같은 모양). source 는 누가 썼는가(user, summary)다. pending 이면 요약의 제안이고 받아들이기 전이다\n(모델에 가지 않는다. 화면은 받아들이기와 버리기를 보인다). accepted_at 은 제안을 받아들인 시각이다.",
         "properties": {
+          "accepted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted At"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1225,6 +1237,13 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "boolean"
+          },
+          "source": {
+            "$ref": "#/components/schemas/NoteSource"
           },
           "text": {
             "title": "Text",
@@ -1239,11 +1258,23 @@
         "required": [
           "id",
           "text",
+          "source",
+          "pending",
+          "accepted_at",
           "created_at",
           "updated_at"
         ],
         "title": "NoteOut",
         "type": "object"
+      },
+      "NoteSource": {
+        "description": "메모를 누가 썼는가.",
+        "enum": [
+          "user",
+          "summary"
+        ],
+        "title": "NoteSource",
+        "type": "string"
       },
       "NoteWrite": {
         "additionalProperties": false,
@@ -2705,6 +2736,66 @@
           }
         ],
         "summary": "Edit Note",
+        "tags": [
+          "memory"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/story/conversations/{conversation_id}/notes/{note_id}/accept": {
+      "post": {
+        "description": "요약이 제안한 메모를 받아들인다. 다음 말부터 모델에 간다. 버리려면 지운다.",
+        "operationId": "accept_note_api_v1_story_conversations__conversation_id__notes__note_id__accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Note Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Accept Note",
         "tags": [
           "memory"
         ],

@@ -7,7 +7,8 @@
   - 창 밖은 창(최근 말)에 들지 못한 앞부분이다
   - 마지막 요약 뒤에 밀려난 말이 기준보다 적으면 요약하지 않는다. 많으면 앞의 요약과 그 뒤의 말로 굴린다
   - 모델에 보낼 요약은 밀려난 말 가운데 가장 뒤의 것이다
-  - 요약을 시키는 메시지에는 지시와, 앞의 줄거리(있으면), 말한 이의 이름을 붙인 이야기가 든다
+  - 요약을 시키는 메시지에는 지시와, 이미 적힌 기억(있으면), 앞의 줄거리(있으면), 말한 이의 이름을 붙인 이야기가 든다
+  - 메모의 제안: 표식 뒤의 줄을 나누고, 번호와 따옴표를 떼고, 빈 것·긴 것·이미 있는 것·겹치는 것을 빼고 셋까지
 """
 
 import uuid
@@ -15,7 +16,16 @@ from dataclasses import dataclass, field
 
 from ai_core.provider import Role
 
-from app.memory.summaries import Plan, latest_summary, overflow, plan_summary, render_story, summary_messages
+from app.memory.summaries import (
+    Plan,
+    latest_summary,
+    overflow,
+    pick_proposals,
+    plan_summary,
+    render_story,
+    split_summary,
+    summary_messages,
+)
 
 
 @dataclass(frozen=True)
@@ -72,3 +82,35 @@ def test_the_request_has_the_instruction_the_story_and_the_speakers():
 def test_the_story_block():
     assert render_story('줄거리') == '[앞의 줄거리]\n줄거리'
     assert render_story(None) is None
+
+
+def test_known_notes_are_shown_so_they_are_not_proposed_again():
+    plan = Plan(previous=None, fresh=[Said('user', '안녕')], known=('나는 전학생이다.',))
+
+    system, user = summary_messages(plan)
+
+    assert '<notes>' in system.content
+    assert user.content.startswith('[이미 적힌 기억]\n- 나는 전학생이다.\n\n[이어진 이야기]')
+
+
+def test_the_summary_and_the_proposals_are_split():
+    assert split_summary('둘은 만났다.\n<notes>\n1. 미나는 바다를 좋아한다.\n</notes>') == (
+        '둘은 만났다.',
+        ['', '1. 미나는 바다를 좋아한다.'],
+    )
+    assert split_summary('  둘은 만났다.  ') == ('둘은 만났다.', [])
+
+
+def test_proposals_are_cleaned_and_deduplicated():
+    lines = [
+        '1. 미나는 바다를 좋아한다.',
+        '"나는 전학생이다."',
+        '',
+        'x' * 301,
+        '- 미나는  바다를 좋아한다.',
+        '약속',
+        '축제',
+        '하나 더',
+    ]
+
+    assert pick_proposals(lines, ['나는 전학생이다.']) == ['미나는 바다를 좋아한다.', '약속', '축제']
