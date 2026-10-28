@@ -5,7 +5,7 @@
 
     [system] 세션의 카드(render_card): 지킬 것, 세계관, 사용자(페르소나가 있으면), 지금(날, 시간대, 장소, 소지품),
              장면의 인물,
-             기다리는 이벤트의 장면 지시, 쓰는 법(말하는 사람의 표식, 고를 수 있는 표정),
+             고른 로어북의 항목, 기다리는 이벤트의 장면 지시, 쓰는 법(말하는 사람의 표식, 고를 수 있는 표정),
              켜져 있으면 다음 답 추천의 지시
     [assistant / user ...] 최근의 말(conversation_core/window.py 의 select_window)
 
@@ -21,6 +21,7 @@ from html.parser import HTMLParser
 from ai_core.provider import ChatMessage, Role
 from conversation_core.expressions import CLOSE as EXPRESSION_CLOSE
 from conversation_core.expressions import OPEN as EXPRESSION_OPEN
+from conversation_core.lorebook import chosen_entries, ranked, render_lore
 from conversation_core.suggestions import instruction as suggestions_instruction
 from conversation_core.window import Turn
 
@@ -253,11 +254,28 @@ def suggestions_section() -> str:
     )
 
 
-def render_card(briefing: Briefing, scene: SceneCard, suggest: bool = False, persona: PersonaCard | None = None) -> str:
+def lore_section(briefing: Briefing, recent: Sequence[str]) -> str | None:
     """
-    시스템 메시지(카드). 지킬 것, 세계관, 사용자, 지금, 장면의 인물, 장면 지시, 쓰는 법의 차례다. 빈 블록은 뺀다.
-    suggest 면 맨 끝에 다음 답 추천의 지시를 붙인다(conversation_core/suggestions.py).
-    persona 가 있으면 사용자가 누구인지 적는다(세션에 가져온 페르소나).
+    [로어북] 블록. 상시 항목과, 최근 말(recent, 오래된 것부터 이번 말까지)에 키워드가 나온 항목을
+    conversation_core/lorebook.py 의 규칙(차례, 수와 글자의 상한)으로 고른다. 고른 것이 없으면 None.
+    """
+    entries = briefing.lore_entries()
+    if not entries:
+        return None
+    return render_lore(chosen_entries(entries, ranked(entries, recent)))
+
+
+def render_card(
+    briefing: Briefing,
+    scene: SceneCard,
+    suggest: bool = False,
+    persona: PersonaCard | None = None,
+    lore: str | None = None,
+) -> str:
+    """
+    시스템 메시지(카드). 지킬 것, 세계관, 사용자, 지금, 장면의 인물, 로어북, 장면 지시, 쓰는 법의 차례다.
+    빈 블록은 뺀다. suggest 면 맨 끝에 다음 답 추천의 지시를 붙인다(conversation_core/suggestions.py).
+    persona 가 있으면 사용자가 누구인지 적는다(세션에 가져온 페르소나). lore 는 고른 로어북의 블록(lore_section)이다.
     """
     sections = [
         '\n'.join(RULES),
@@ -265,6 +283,7 @@ def render_card(briefing: Briefing, scene: SceneCard, suggest: bool = False, per
         persona_section(persona),
         now_section(scene),
         cast_section(scene),
+        lore,
         f'[장면 지시]\n{scene.event.strip()}' if scene.event.strip() else None,
         format_section(scene),
         suggestions_section() if suggest else None,

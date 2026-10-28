@@ -9,7 +9,7 @@
     빈 칸은 빼고, 소개의 HTML 은 글자만 보낸다. 장면에 아무도 없으면 서술만 쓰라고 한다. 장면 지시는 있을 때만.
     다음 답 추천의 지시는 켰을 때만 맨 끝에 붙는다.
     그림에 표정이 있는 장면의 인물이 있으면 쓰는 법에 표정을 고르는 법이 붙는다.
-    페르소나가 있으면 세계관 뒤에 [사용자]가 온다
+    페르소나가 있으면 세계관 뒤에 [사용자]가 온다. 로어북은 상시와 최근 말의 키워드로 고른 항목이 장면의 인물 뒤에 온다
   - 메시지: 카드가 먼저, 그 뒤에 최근의 말. 행동 말은 [행동] 을 붙인 사람의 차례다
   - 상태: 저장한 모양에서 그대로 되돌아온다. 가지의 끝에서 가장 가까운 상태를 쓰고, 없으면 처음의 상태다
 """
@@ -27,6 +27,7 @@ from app.turns.prompt import (
     ACTION_PREFIX,
     PersonaCard,
     build_messages,
+    lore_section,
     plain_text,
     render_card,
     scene_card,
@@ -134,6 +135,62 @@ def test_a_persona_comes_after_the_world():
     assert (
         card.index('[세계관]') < card.index('[사용자]\n이름: 하루\n인물들이 부르는 호칭: 하루야') < card.index('[지금]')
     )
+
+
+LOREBOOKS = [
+    {
+        'id': '11111111-2222-4333-8444-555555555555',
+        'version': 1,
+        'name': '여름 마을의 설정',
+        'entries': [
+            {
+                'id': 'sea',
+                'name': '바다',
+                'kind': 'place',
+                'keywords': [],
+                'content': '마을 앞의 바다.',
+                'constant': True,
+            },
+            {
+                'id': 'well',
+                'name': '우물',
+                'kind': 'place',
+                'keywords': ['우물'],
+                'content': '소원을 빈다.',
+                'constant': False,
+            },
+            {
+                'id': 'fair',
+                'name': '축제',
+                'kind': 'event',
+                'keywords': ['축제'],
+                'content': '8월의 축제.',
+                'constant': False,
+            },
+            {'id': 'empty', 'name': '', 'kind': 'other', 'keywords': [], 'content': '이름 없음', 'constant': True},
+        ],
+    }
+]
+
+
+def test_the_lorebook_takes_constant_entries_and_keywords_from_recent_messages():
+    briefing = read_briefing(document(lorebooks=LOREBOOKS))
+
+    block = lore_section(briefing, ['@mina: 축제에 갈래?', '우물에 가 볼까'])
+
+    # 상시가 먼저, 그다음 키워드가 가장 최근에 나온 것부터. 이름이 빈 항목은 뺀다
+    assert block == '[로어북]\n- 바다: 마을 앞의 바다.\n- 우물: 소원을 빈다.\n- 축제: 8월의 축제.'
+    assert lore_section(read_briefing(document()), ['우물']) is None
+
+
+def test_the_lorebook_comes_after_the_cast():
+    briefing = read_briefing(document(lorebooks=LOREBOOKS))
+    scene = scene_card(briefing, WORLD, start_state(WORLD), ['mina'])
+
+    card = render_card(briefing, scene, lore=lore_section(briefing, ['안녕']))
+
+    assert card.index('[장면의 인물]') < card.index('[로어북]\n- 바다: 마을 앞의 바다.') < card.index('[쓰는 법]')
+    assert '우물' not in card
 
 
 def test_messages_start_with_the_card():

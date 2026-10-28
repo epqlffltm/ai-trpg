@@ -33,7 +33,7 @@ DB 접근, 바깥 호출(공급자, 결제 서버), 응답 만들기를 한 함�
 import asyncio
 import logging
 import uuid
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 
@@ -81,7 +81,7 @@ from app.turns.briefing import Briefing, read_briefing
 from app.turns.charging import HoldDeclined, Settled, Settlement
 from app.turns.frames import delta_frame, done_frame, failed_frame, segment_frame
 from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
-from app.turns.prompt import PersonaCard, build_messages, render_card, scene_card
+from app.turns.prompt import PersonaCard, build_messages, lore_section, render_card, scene_card
 from app.turns.providers import Router
 from app.turns.scenes import Staging, replayed, staging
 from app.turns.segments import (
@@ -254,10 +254,14 @@ class Branch:
     persona: PersonaCard | None = None
 
 
-def card_for(branch: Branch, state: StoryState, stage: Staging, options: PromptOptions) -> str:
-    """카드. state 와 장면으로 만들고, 켜져 있으면 다음 답 추천의 지시를 붙인다."""
+def card_for(branch: Branch, state: StoryState, stage: Staging, options: PromptOptions, recent: Sequence[str]) -> str:
+    """
+    카드. state 와 장면으로 만들고, 켜져 있으면 다음 답 추천의 지시를 붙인다.
+    로어북의 항목은 최근 말(recent, 오래된 것부터 이번 말까지)의 키워드로 고른다.
+    """
     scene = scene_card(branch.briefing, branch.world, state, stage.cast, stage.direction)
-    return render_card(branch.briefing, scene, options.suggestions, branch.persona)
+    lore = lore_section(branch.briefing, recent)
+    return render_card(branch.briefing, scene, options.suggestions, branch.persona, lore)
 
 
 def prompt_for(
@@ -269,7 +273,8 @@ def prompt_for(
     지난 답은 본문(content)만 간다. 다음 답 추천은 가지 않는다(모델이 흉내 내지 않게).
     """
     turns = [Turn(message.role, message.content) for message in [*branch.path, added]]
-    return build_messages(card_for(branch, state, stage, options), select_window(turns, options.context_chars))
+    card = card_for(branch, state, stage, options, [turn.content for turn in turns])
+    return build_messages(card, select_window(turns, options.context_chars))
 
 
 def shown_in_turn(branch: Branch, stage: Staging) -> frozenset[str]:
@@ -792,8 +797,9 @@ def continue_prompt(branch: Branch, state: StoryState, stage: Staging, options: 
     다 이어 쓰면 다음 답 추천도 받는다(카드의 지시).
     """
     turns = [Turn(message.role, message.content) for message in branch.path]
+    card = card_for(branch, state, stage, options, [turn.content for turn in turns])
     turns.append(Turn(Role.USER, continuation.instruction()))
-    return build_messages(card_for(branch, state, stage, options), select_window(turns, options.context_chars))
+    return build_messages(card, select_window(turns, options.context_chars))
 
 
 async def record_continue(
