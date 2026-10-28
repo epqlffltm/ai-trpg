@@ -183,15 +183,18 @@ def describe_healed(healed: list[HealNote]) -> str:
 def describe_impact(impact: Impact) -> str:
     """
     HP 가 바뀐 것을 한 줄로 적는다. 동료의 장난(#803)이면 그것과, 장난이라 입지 않은 부상을 붙인다.
+    저항으로 막아 낸 부상(#886 ②)도 붙인다.
 
     예: → 엘프 피해 3 (HP 7/10)
         → 영애 피해 6 (HP 1/10, 장난). 장난이라 입지 않은 부상: 팔 골절
+        → 드워프 피해 9 (HP 1/12). 막아 낸 부상: 중독
     """
     word = '피해' if impact.kind == 'damage' else '회복'
     state = (
         f'HP {impact.hp}/{impact.max_hp}' + (', 쓰러짐' if impact.downed else '') + (', 장난' if impact.prank else '')
     )
     line = f'→ {impact.character_name} {word} {impact.amount} ({state})' + new_injury(impact.injury)
+    line += resisted_injury(impact.resisted)
     return line + (f'. 장난이라 입지 않은 부상: {impact.spared}' if impact.spared else '')
 
 
@@ -213,8 +216,12 @@ def describe_npc_impact(impact: NpcImpact) -> str:
 
 
 def resisted_injury(name: str | None) -> str:
-    """면역이라 입지 않은 부상을 결과 줄 뒤에 붙일 글(#799). 없으면 빈 글이다. 예: ". 중독에 면역이라 멀쩡하다"."""
-    return f'. {name}에 면역이라 멀쩡하다' if name else ''
+    """
+    면역이나 저항으로 막아 입지 않은 부상을 결과 줄 뒤에 붙일 글(#799, #886 ②). 없으면 빈 글이다.
+
+    예: ". 막아 낸 부상: 중독"
+    """
+    return f'. 막아 낸 부상: {name}' if name else ''
 
 
 def describe_wake(wake: WakeNote) -> str:
@@ -299,11 +306,15 @@ def describe_rest(note: RestNote) -> str:
 def describe_resource(note: ResourceNote) -> str:
     """
     수치 하나(#804). 바뀐 것이면 전과 뒤를, 아니면 지금 값을 적는다. 숨긴 수치는 말로만 적는다.
+    저항으로 막아 내 바뀌지 않았으면(#886 ②) 그것만 적는다.
 
     예: 마나 1 → 6/6
         마나 3/6
         광기 모자람
+        마나 막아 냄
     """
+    if note.resisted:
+        return f'{note.name} 막아 냄'
     if note.word is not None:
         return f'{note.name} {note.word}'
     if note.before is None:
@@ -429,11 +440,11 @@ def describe_skill(note: SkillNote) -> str:
 def describe_item_action(note: ItemActionNote) -> str:
     """
     물건을 쓰거나 건넨 결과를 한 줄로 적는다. HP 가 바뀌었으면 그 변화를, 부상을 풀었으면 풀린 부상을,
-    입혔으면 생긴 부상과 면역이라 입지 않은 부상을 붙인다(#800).
+    입혔으면 생긴 부상과 면역이나 저항으로 막아 낸 부상을 붙인다(#800, #886 ②).
 
     예: (쓴 물건: 치유 물약) → 엘프 회복 3 (HP 8/10)
         (쓴 물건: 해독제 → 영애) [풀린 부상: 중독]
-        (쓴 물건: 독 바른 단검 → 해골 병사) [면역이라 입지 않은 부상: 중독]
+        (쓴 물건: 독 바른 단검 → 해골 병사) [막아 낸 부상: 중독]
         (건넨 물건: 밧줄 1개 → 영애)
         (쓰려던 물건: 치유 물약. 가지고 있지 않았다)
     """
@@ -462,7 +473,7 @@ def effect_tags(cured: list[str], injured: list[str], resisted: list[str], spare
     """
     물건의 효과가 부상에 한 일을 줄 뒤에 붙일 조각들(#800, #801, #803). 없으면 빈 목록이다.
 
-    예: [풀린 부상: 중독] [입힌 부상: 기절] [면역이라 입지 않은 부상: 중독] [장난이라 입지 않은 부상: 팔 골절]
+    예: [풀린 부상: 중독] [입힌 부상: 기절] [막아 낸 부상: 중독] [장난이라 입지 않은 부상: 팔 골절]
     """
     tags = []
     if cured:
@@ -470,7 +481,7 @@ def effect_tags(cured: list[str], injured: list[str], resisted: list[str], spare
     if injured:
         tags.append(f'[입힌 부상: {", ".join(injured)}]')
     if resisted:
-        tags.append(f'[면역이라 입지 않은 부상: {", ".join(resisted)}]')
+        tags.append(f'[막아 낸 부상: {", ".join(resisted)}]')
     if spared:
         tags.append(f'[장난이라 입지 않은 부상: {", ".join(spared)}]')
     return tags
@@ -949,7 +960,7 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
         line += f' {describe_impact(note.impact)}'
     if note.downed is not None and note.downed.added:
         line += f' {describe_downed_strike(note.target, note.downed)}'
-    return ' '.join([line, *effect_tags([], note.injured, []), *resource_tags(note.resources)])
+    return ' '.join([line, *effect_tags([], note.injured, note.resisted), *resource_tags(note.resources)])
 
 
 def describe_downed_strike(target: str, note: DownedStrikeNote) -> str:

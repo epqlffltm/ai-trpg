@@ -40,6 +40,7 @@ const SWORD_RULE = {
   guard: null,
   ward: null,
   aids: [],
+  resistances: [],
 };
 
 const KNIGHT = { name: '기사', description: '', sheet: { abilities: { str: 16, dex: 10, con: 14 }, max_hp: 14 }, items: [], money: 0 };

@@ -373,4 +373,4 @@ def test_the_prompt_puts_the_doors_after_those_moved():
 
     assert lines[2:4] == ['- 습격: 기사 → 탑, 성문 ↔ 광장 빗장 걸림', '- 경비 교대: 성문 ↔ 숲 자물쇠 잠김']
     assert '잠기거나 열린 문은 장면이 끝날 때 그 상태다' in prompt.HAPPENING_NOTE
-    assert prompt.PROMPT_VERSION == 'narration-76'
+    assert prompt.PROMPT_VERSION == 'narration-77'

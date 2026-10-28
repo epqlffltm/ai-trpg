@@ -10,7 +10,7 @@
 부상은 수치의 그림자다. 문턱에서 생긴 부상(source resource)은 라운드나 시간으로 풀리지 않고, 수치가 문턱을 벗어나야
 풀린다. 다른 길(물건의 풀기, 치료)로 풀렸어도 수치가 여전히 문턱에 있으면 다음 닫힘에 다시 입는다.
 같은 부상을 다른 까닭으로 이미 입고 있으면 또 입히지 않는다. 그 부상은 이 모듈이 풀지 않는다.
-몬스터가 그 부상의 성질에 면역이면(#799) 입히지 않는다.
+몬스터가 그 부상의 성질에 면역이거나(#799), 누구든 그 성질에 저항하면(#886 ②) 입히지 않는다.
 판정, 쉬기, 물건이 수치를 바꾼 것도 여기서 한 번에 문턱을 본다. 라운드 안에서는 수치가 문턱에 닿아도 부상이 없다.
 
 죽은 쪽은 보지 않는다. 장면에 나오지 않은 NPC 와 몬스터도 바꾸지만 이벤트에 적지 않는다. 부를 이름이 없다
@@ -31,8 +31,9 @@ from app.rounds.cast import Scene, find_cast_member
 from app.rounds.injuries import EndReason, immune_to
 from app.rounds.models import Round
 from app.rounds.records import ResourceSource, recorded_shifts, resource_payload
-from app.tables import injuries, monsters, npcs, resources, sheets
+from app.tables import injuries, monsters, npcs, resistances, resources, sheets
 from app.tables.models import GameTable, InjurySource, TableInjury, TableMember
+from app.tables.resistances import Guard
 from app.tables.resources import Bearer
 
 NO_IMMUNITY: frozenset[str] = frozenset()
@@ -55,7 +56,7 @@ class Drift:
 
 @dataclass(frozen=True)
 class Bearing:
-    """수치를 가진 쪽 하나와, 그 쪽이 어느 쪽인지, 누구의 것인지, 면역, 이벤트에 적을지다."""
+    """수치를 가진 쪽 하나와, 그 쪽이 어느 쪽인지, 누구의 것인지, 막는 성질(면역과 저항), 이벤트에 적을지다."""
 
     bearer: Bearer
     holder_kind: ResourceHolder
@@ -151,37 +152,42 @@ def drift(ruleset: Ruleset, bearing: Bearing, table_id: uuid.UUID, round_number:
     return Drift(holder=bearing.holder, shifts=shifts, gained=gained, ended=ended)
 
 
-def member_bearings(table: GameTable) -> list[Bearing]:
-    """살아 있는 캐릭터들. 들어온 순서다."""
+def member_bearings(table: GameTable, guard: Guard) -> list[Bearing]:
+    """살아 있는 캐릭터들. 들어온 순서다. 막는 성질(#886 ②, 저항)을 따른다."""
     return [
-        Bearing(member.sheet, ResourceHolder.CHARACTERS, member.user_id, holder_of(member))
+        Bearing(member.sheet, ResourceHolder.CHARACTERS, member.user_id, holder_of(member), guard.member(member.sheet))
         for member in table.members
         if member.sheet is not None and not sheets.is_dead(member)
     ]
 
 
-def npc_bearings(scene: Scene) -> list[Bearing]:
-    """살아 있는 NPC 들. 테이블의 NPC 상태의 순서다. 장면에 나온 인물만 이벤트에 적는다."""
+def npc_bearings(scene: Scene, guard: Guard) -> list[Bearing]:
+    """
+    살아 있는 NPC 들. 테이블의 NPC 상태의 순서다. 장면에 나온 인물만 이벤트에 적는다.
+    막는 성질(#886 ②, 저항)을 따른다.
+    """
     bearings = []
     for npc in scene.npcs:
         if npcs.is_dead(npc):
             continue
         seen = find_cast_member(scene.cast, npc.entry_id)
         holder = {'entry_id': str(npc.entry_id), 'name': seen.name if seen else ''}
-        bearings.append(Bearing(npc, ResourceHolder.NPCS, None, holder, seen=seen is not None))
+        bearings.append(Bearing(npc, ResourceHolder.NPCS, None, holder, guard.npc(npc), seen is not None))
     return bearings
 
 
-def monster_bearings(scene: Scene, immunities: dict[uuid.UUID, frozenset[str]]) -> list[Bearing]:
-    """살아 있는 몬스터들. 판의 몬스터 ID, 번호 순서다. 장면의 마리만 이벤트에 적는다. 면역(#799)을 따른다."""
+def monster_bearings(scene: Scene, guard: Guard) -> list[Bearing]:
+    """
+    살아 있는 몬스터들. 판의 몬스터 ID, 번호 순서다. 장면의 마리만 이벤트에 적는다.
+    막는 성질(면역 #799, 저항 #886 ②)을 따른다.
+    """
     names = {monster.state.id: monster.name for monster in scene.monsters}
     bearings = []
     for state in sorted(scene.all_monsters, key=lambda one: (str(one.monster_id), one.number)):
         if monsters.is_dead(state):
             continue
         holder = {'monster_id': str(state.id), 'name': names.get(state.id, '')}
-        immune = immunities.get(state.monster_id, NO_IMMUNITY)
-        bearings.append(Bearing(state, ResourceHolder.MONSTERS, None, holder, immune, state.id in names))
+        bearings.append(Bearing(state, ResourceHolder.MONSTERS, None, holder, guard.monster(state), state.id in names))
     return bearings
 
 
@@ -195,8 +201,8 @@ def settle(table: GameTable, round_: Round, scene: Scene) -> list[Drift]:
         return []
     snapshot = read_snapshot(table.content)
     ruleset = snapshot.rulebook.rules
-    immunities = {monster.id: monsters.immunities(ruleset, monster) for monster in snapshot.monsters}
-    bearings = [*member_bearings(table), *npc_bearings(scene), *monster_bearings(scene, immunities)]
+    guard = resistances.guard_of(snapshot)
+    bearings = [*member_bearings(table, guard), *npc_bearings(scene, guard), *monster_bearings(scene, guard)]
     drifts = []
     for bearing in bearings:
         one = drift(ruleset, bearing, table.id, round_.number)

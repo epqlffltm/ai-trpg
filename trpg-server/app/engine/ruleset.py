@@ -133,10 +133,15 @@ class Magnitude(Part):
 
 
 def effects_fit(ruleset: 'Ruleset', effects: list) -> bool:
-    """효과들이 가리키는 양의 등급, 부상, 수치가 모두 이 규칙에 있는가(#805 의 기술. 물건은 게시할 때 본다)."""
+    """
+    효과들이 가리키는 양의 등급, 부상, 수치, 성질이 모두 이 규칙에 있는가(#805 의 기술. 물건은 게시할 때 본다).
+
+    수치를 내리는 맞추기의 성질(#886 ②)은 비울 수 있다.
+    """
     magnitudes = {magnitude.key for magnitude in ruleset.magnitudes}
     injuries = {injury.key for injury in ruleset.injuries}
     resources = {resource.key for resource in ruleset.resources}
+    natures = {nature.key for nature in ruleset.natures}
     for effect in effects:
         if effect.kind in (ItemEffectKind.HEAL, ItemEffectKind.DAMAGE) and effect.magnitude not in magnitudes:
             return False
@@ -145,6 +150,8 @@ def effects_fit(ruleset: 'Ruleset', effects: list) -> bool:
         if effect.kind == ItemEffectKind.INJURE and effect.injury not in injuries:
             return False
         if effect.kind == ItemEffectKind.ADJUST and effect.resource not in resources:
+            return False
+        if effect.kind == ItemEffectKind.ADJUST and effect.nature is not None and effect.nature not in natures:
             return False
     return True
 
@@ -446,6 +453,50 @@ class KindImmunity(Part):
     natures: NatureKeys
 
 
+class ResistLevel(enum.StrEnum):
+    """저항의 단계(#886 ②). 그 성질의 해로운 것을 얼마나 받는가."""
+
+    # 저항. 그 성질의 부상과 수치를 내리는 맞추기를 받지 않는다. 피해는 덜 받는다(#886 ③)
+    RESIST = 'resist'
+    # 면역. 그 성질의 부상과 수치를 내리는 맞추기를 받지 않는다. 피해도 받지 않는다(#886 ③)
+    IMMUNE = 'immune'
+    # 약점. 부상과 맞추기에는 아무것도 하지 않는다. 피해를 더 받는다(#886 ③)
+    VULNERABLE = 'vulnerable'
+
+
+# 그 성질의 부상과 수치를 내리는 맞추기를 막는 단계
+BLOCKING_LEVELS = frozenset({ResistLevel.RESIST, ResistLevel.IMMUNE})
+
+
+class Resistance(Part):
+    """
+    저항 한 줄(#886 ②). 성질(nature, 규칙의 natures 의 이름표)과 그 단계(level)다.
+
+    캐릭터와 NPC 의 시트, 착용한 장비의 아이템 규칙, 부상(상태)의 정의에 단다. 입고 있는 동안 저항이 생긴다.
+    """
+
+    nature: Key
+    level: ResistLevel
+
+
+def reject_repeated_resistances(resistances: tuple[Resistance, ...]) -> tuple[Resistance, ...]:
+    """한 성질의 저항은 한 줄만 적는다. 두 줄이면 어느 단계인지 정할 수 없다."""
+    if len({one.nature for one in resistances}) != len(resistances):
+        raise ValueError('같은 성질의 저항을 두 번 적었습니다.')
+    return resistances
+
+
+# 저항들(#886 ②). 성질마다 한 줄이다. 성질이 규칙에 있는지는 규칙(부상)이나 게시(시트, 물건)가 본다
+Resistances = Annotated[
+    tuple[Resistance, ...], Field(max_length=RULESET_MAX_NATURES), AfterValidator(reject_repeated_resistances)
+]
+
+
+def blocked_natures(resistances) -> frozenset[str]:
+    """저항들 가운데 막는 단계(저항, 면역)인 성질들. 여러 곳에서 온 저항을 함께 받는다. 하나라도 막으면 막는다."""
+    return frozenset(one.nature for one in resistances if one.level in BLOCKING_LEVELS)
+
+
 def require_every_face(rows: tuple, sides: int, label: str) -> None:
     """
     표의 줄(low, high)이 1 부터 sides 까지를 빈틈도 겹침도 없이 차례로 덮는지 본다. 아니면 ValueError.
@@ -502,6 +553,7 @@ class Injury(Part):
     aimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.
     treat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).
     natures 는 부상의 성질이다(#799). 규칙의 성질(natures, #886)의 이름표다. 그 성질에 면역이면 이 부상을 입지 않는다.
+    resistances 는 이 부상을 입고 있는 동안 생기는 저항이다(#886 ②).
     """
 
     key: Key
@@ -519,6 +571,8 @@ class Injury(Part):
     treat_minutes: Annotated[int, Field(ge=1, le=RULESET_MAX_HEAL_MINUTES)] | None = None
     # 부상의 성질(#799). 비우면 어느 면역에도 걸리지 않는다(누구나 입는다)
     natures: NatureKeys = ()
+    # 이 부상(상태)을 입고 있는 동안 생기는 저항(#886 ②). 예: 돌 피부(몸에 저항), 화염 약점
+    resistances: Resistances = ()
 
     @model_validator(mode='after')
     def require_treatment_pair_on_healing(self) -> Self:
@@ -1007,7 +1061,7 @@ class Ruleset(Part):
     @model_validator(mode='after')
     def reject_unknown_natures(self) -> Self:
         """
-        성질의 이름표가 겹치지 않고, 부상과 타입마다의 면역이 가리키는 성질이 이 규칙에 있어야 한다(#886).
+        성질의 이름표가 겹치지 않고, 부상(성질과 저항)과 타입마다의 면역이 가리키는 성질이 이 규칙에 있어야 한다(#886).
 
         한 타입은 한 번만 적는다.
         """
@@ -1016,7 +1070,11 @@ class Ruleset(Part):
         if duplicates:
             raise ValueError(f'같은 성질이 두 번 있습니다: {", ".join(duplicates)}')
         known = set(keys)
-        strangers = [injury.key for injury in self.injuries if not set(injury.natures) <= known]
+        strangers = [
+            injury.key
+            for injury in self.injuries
+            if not set(injury.natures) <= known or not {one.nature for one in injury.resistances} <= known
+        ]
         if strangers:
             raise ValueError(f'부상의 성질이 규칙에 없습니다: {", ".join(strangers)}')
         kinds = find_duplicates([immunity.kind for immunity in self.monster_immunities])

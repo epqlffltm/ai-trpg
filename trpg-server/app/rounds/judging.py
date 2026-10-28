@@ -76,8 +76,7 @@ from app.rounds.throws import judge_throw
 from app.rounds.trades import judge_buy, judge_pay, judge_sell
 from app.rounds.treatments import judge_treatment
 from app.rounds.waits import judge_wait
-from app.tables import items, sheets
-from app.tables import monsters as table_monsters
+from app.tables import items, resistances, sheets
 from app.tables.models import GameTable, TableMember
 
 
@@ -347,14 +346,12 @@ def expire_injuries(table: GameTable, scene: Scene, round_number: int, dice: Dic
     짧은 것은 라운드로, 오래 가는 것은 이 장면이 끝나는 게임 안의 시각으로 본다(moment_of).
 
     오래 가는 것이 나으면 후유증 표를 굴린다. 그 순서는 앉은 사람, 그다음 NPC, 그다음 몬스터다(app/rounds/injuries.py).
-    몬스터의 후유증은 그 면역을 따른다(#799).
+    후유증은 입는 쪽이 막는 성질을 따른다(몬스터의 면역 #799, 저항 #886 ②).
     끝날 부상이 하나도 없으면 규칙을 읽지 않는다. 판에 굳은 복사본을 통째로 읽는 일이라 싸지 않다.
     """
     moment = round_injuries.moment_of(table, round_number)
     if not round_injuries.any_due(table.members, scene, moment):
         return []
     snapshot = read_snapshot(table.content)
-    immunities = {
-        monster.id: table_monsters.immunities(snapshot.rulebook.rules, monster) for monster in snapshot.monsters
-    }
-    return round_injuries.expire_all(table.members, scene, snapshot.rulebook.rules, dice, table.id, moment, immunities)
+    guard = resistances.guard_of(snapshot)
+    return round_injuries.expire_all(table.members, scene, snapshot.rulebook.rules, dice, table.id, moment, guard)

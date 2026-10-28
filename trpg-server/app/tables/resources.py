@@ -61,6 +61,19 @@ def adjust(
     return write(bearer, level, engine.adjusted(level, amount))
 
 
+def standing(ruleset: Ruleset, bearer: Bearer, key: str, holder: ResourceHolder = CHARACTERS) -> Shift | None:
+    """
+    수치 하나를 바꾸지 않고 지금 값 그대로를 바뀐 것의 모양으로(#886 ②). 막아 낸 맞추기를 적을 때 쓴다.
+
+    규칙에 없는 수치거나 이 쪽이 가지지 않는 수치면 None 이다(막을 것도 없었다).
+    """
+    resource = engine.find_resource(ruleset, key)
+    if resource is None or not engine.holds(resource, holder):
+        return None
+    level = level_of(ruleset, bearer, resource)
+    return engine.shift_of(level, level.value)
+
+
 def apply_shifts(
     ruleset: Ruleset,
     bearer: Bearer,
@@ -116,6 +129,15 @@ def shift_document(shift: Shift, owner_id: uuid.UUID | None) -> dict:
         'user_id': str(owner_id) if owner_id is not None else None,
         'visibility': shift.resource.visibility.value,
     }
+
+
+def resisted_document(shift: Shift, owner_id: uuid.UUID | None, nature: str) -> dict:
+    """
+    막아 낸 맞추기(#886 ②)를 결과에 적을 모양. 바뀐 것의 모양(전과 뒤가 같다)에 막은 성질(resisted)을 더한다.
+
+    값은 그대로다. 이벤트(resource_changed)에는 적지 않는다(app/rounds/records.py 의 recorded_shifts).
+    """
+    return {**shift_document(shift, owner_id), 'resisted': nature}
 
 
 def visible_shifts(shifts: list[dict] | None, viewer_id: uuid.UUID) -> list[dict]:

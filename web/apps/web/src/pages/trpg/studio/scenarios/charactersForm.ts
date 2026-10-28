@@ -5,7 +5,7 @@
 // - 기본 시트는 "이름과 설명만 쓰기"(custom)가 받는 숫자다. 룰북이 없으면 칸을 만들 수 없어 보내지 않는다(그대로 둔다)
 // - 최대 HP(기준값과 상한)는 능력치를 정하는 방식(manual, point_buy, rolled)이 쓴다. 그 방식이 없으면 보내지 않는다
 
-import type { CharacterMode, PlayerMadeHp, Ruleset, ScenarioDetail, ScenarioUpdate } from '../../../../api/types';
+import type { CharacterMode, CharacterSheet, PlayerMadeHp, Ruleset, ScenarioDetail, ScenarioUpdate } from '../../../../api/types';
 import { wholeNumber } from '../rulebooks/rulebookForm';
 import { sheetDraft, sheetHints, toSheet, withSkills, type SheetDraft } from './sheetForm';
 
@@ -26,6 +26,8 @@ export type CharactersDraft = {
   defaultSheet: SheetDraft | null;
   /** 기본 시트가 아는 기술(#805). 고치는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
   defaultSkills: string[];
+  /** 기본 시트의 저항(#886 ②). 고치는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
+  defaultResistances: CharacterSheet['resistances'];
   hpBase: string;
   hpCap: string;
 };
@@ -38,6 +40,7 @@ export function charactersDraft(scenario: ScenarioDetail, rules: Ruleset | null)
     reroll: scenario.reroll_allowed,
     defaultSheet: rules ? sheetDraft(scenario.default_sheet, rules) : null,
     defaultSkills: scenario.default_sheet?.skills ?? [],
+    defaultResistances: scenario.default_sheet?.resistances ?? [],
     hpBase: scenario.player_made_hp ? String(scenario.player_made_hp.base) : '',
     hpCap: scenario.player_made_hp ? String(scenario.player_made_hp.cap) : '',
   };
@@ -101,7 +104,7 @@ export function toCharactersBody(draft: CharactersDraft, rules: Ruleset | null):
     character_modes: draft.modes,
     reroll_allowed: draft.modes.includes('rolled') && draft.reroll,
   };
-  if (rules && draft.defaultSheet && usesDefaultSheet(draft.modes)) body.default_sheet = withSkills(toSheet(draft.defaultSheet, rules), draft.defaultSkills);
+  if (rules && draft.defaultSheet && usesDefaultSheet(draft.modes)) body.default_sheet = withSkills(toSheet(draft.defaultSheet, rules), draft.defaultSkills, draft.defaultResistances);
   if (usesPlayerMadeHp(draft.modes)) body.player_made_hp = toPlayerMadeHp(draft);
   return body;
 }

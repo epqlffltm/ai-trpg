@@ -27,8 +27,8 @@ from app.engine import injury as injury_rules
 from app.engine.action import GiveAction, UseAction
 from app.engine.health import ChangeKind
 from app.engine.injury import Trigger
-from app.engine.item_effects import EffectKind
-from app.rounds import friendly_fire
+from app.engine.item_effects import AdjustEffect, EffectKind, is_resisted
+from app.rounds import friendly_fire, resisting
 from app.rounds import injuries as round_injuries
 from app.rounds.checks import change_sheet
 from app.rounds.effects import Judging
@@ -72,25 +72,26 @@ def use_target(judging: Judging, member: TableMember, action: UseAction) -> Tabl
     return living(table_state.find_member(judging.table, target_id))
 
 
-def cure_one(judging: Judging, row: TableInjury, rows: list[TableInjury]) -> dict:
+def cure_one(judging: Judging, row: TableInjury, rows: list[TableInjury], immune=round_injuries.NO_IMMUNITY) -> dict:
     """
     부상 하나를 푼다. 푼 것을 결과에 적을 모양으로 돌려준다(이름표, 이름, 후유증).
 
     오래 가는 것이면 나은 것이라 후유증 표를 굴린다(치료로 나을 때와 같다). 짧은 것이면 풀릴 뿐이다.
+    immune 은 입는 쪽이 막는 성질이다(#886 ②). 그 성질의 후유증은 입지 않는다.
     """
     ruleset = judging.ruleset
     aftermath = None
     if round_injuries.is_lasting(ruleset, row):
-        aftermath = round_injuries.heal(ruleset, judging.dice, row, rows, judging.table.id, judging.moment)
+        aftermath = round_injuries.heal(ruleset, judging.dice, row, rows, judging.table.id, judging.moment, immune)
     else:
         injuries.end(row)
     definition = injury_rules.find_injury(ruleset, row.injury)
     return {'injury': row.injury, 'name': definition.name if definition else row.injury, 'aftermath': aftermath}
 
 
-def cure(judging: Judging, rows: list[TableInjury], keys: list[str]) -> list[dict]:
-    """입은 부상 중 그 이름표의 것을 모두 푼다. 생긴 순서다. 푼 것들을 돌려준다(#277)."""
-    return [cure_one(judging, row, rows) for row in injuries.active(rows) if row.injury in keys]
+def cure(judging: Judging, rows: list[TableInjury], keys: list[str], immune=round_injuries.NO_IMMUNITY) -> list[dict]:
+    """입은 부상 중 그 이름표의 것을 모두 푼다. 생긴 순서다. 푼 것들을 돌려준다(#277). 후유증은 immune 을 따른다."""
+    return [cure_one(judging, row, rows, immune) for row in injuries.active(rows) if row.injury in keys]
 
 
 def injure(
@@ -121,6 +122,8 @@ def apply_to_member(
     돌려주는 것은 HP 의 변화(effect, 회복이나 피해 하나), 푼 부상들(cured), 입힌 부상들(injured),
     맞춘 수치들(resources, #804)이다. prank 면 동료의 장난이다(#803). 피해와 부상이 상한을 지킨다.
     trigger 는 효과가 어디서 왔나다(물건 item, 기술 skill). 입힌 부상의 출처가 된다.
+    그 사람이 막는 성질(#886 ②)의 부상과 수치를 내리는 맞추기는 들지 않는다. 막는 성질은 효과마다 다시 본다.
+    앞의 효과가 입힌 부상이 저항을 줄 수 있다(돌 피부).
     """
     effect = None
     cured: list[dict] = []
@@ -133,17 +136,25 @@ def apply_to_member(
         elif one.kind == EffectKind.DAMAGE:
             effect = change_sheet(judging, target, ChangeKind.DAMAGE, one.magnitude, prank=prank)
         elif one.kind == EffectKind.CURE:
-            cured.extend(cure(judging, rows, one.injuries))
+            cured.extend(cure(judging, rows, one.injuries, resisting.of_member(judging, target)))
         elif one.kind == EffectKind.INJURE:
-            injured.append(injure(judging, rows, one.injury, prank=prank, trigger=trigger))
+            immune = resisting.of_member(judging, target)
+            injured.append(injure(judging, rows, one.injury, immune, prank, trigger))
         elif one.kind == EffectKind.ADJUST:
-            shifts.extend(adjust(judging, target, one.resource, one.amount))
+            shifts.extend(adjust(judging, target, one, resisting.of_member(judging, target)))
     return {'effect': effect, 'cured': cured, 'injured': injured, 'resources': shifts}
 
 
-def adjust(judging: Judging, target: TableMember, key: str, amount: int) -> list[dict]:
-    """앉은 사람 하나의 수치를 맞춘다(#804). 바뀐 것의 문서를 돌려준다. 값이 같으면(이미 끝) 바뀐 것이 없다."""
-    shift = resources.adjust(judging.ruleset, target.sheet, key, amount)
+def adjust(judging: Judging, target: TableMember, effect: AdjustEffect, blocked: frozenset[str]) -> list[dict]:
+    """
+    앉은 사람 하나의 수치를 맞춘다(#804). 바뀐 것의 문서를 돌려준다. 값이 같으면(이미 끝) 바뀐 것이 없다.
+
+    그 사람이 막는 성질(blocked)의 내리는 맞추기면(#886 ②) 바꾸지 않고, 막아 낸 것(resisted)을 적는다.
+    """
+    if is_resisted(effect, blocked):
+        shift = resources.standing(judging.ruleset, target.sheet, effect.resource)
+        return [] if shift is None else [resources.resisted_document(shift, target.user_id, effect.nature)]
+    shift = resources.adjust(judging.ruleset, target.sheet, effect.resource, effect.amount)
     if shift is None or shift.before == shift.after:
         return []
     return [resources.shift_document(shift, target.user_id)]

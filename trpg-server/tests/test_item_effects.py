@@ -551,7 +551,7 @@ def test_the_line_puts_the_thing_before_the_check():
     line = describe_move(Move(character_name='엘프', content='찌른다.', verdict=verdict, item_action=note))
 
     assert line.index('(쓴 물건: 독 단검 → 해골 병사)') < line.index('민첩')
-    assert '[면역이라 입지 않은 부상: 중독]' in line
+    assert '[막아 낸 부상: 중독]' in line
 
 
 def test_the_line_names_what_was_inflicted():

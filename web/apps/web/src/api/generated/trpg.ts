@@ -1934,6 +1934,9 @@ export interface components {
         /**
          * AdjustEffect
          * @description 수치 하나(resource, 룰북의 resources 의 이름표)를 양(amount)만큼 올리거나(양수) 내린다(음수, #804).
+         *
+         *     내리는 것에는 성질(nature, 룰북의 natures 의 이름표) 하나를 달 수 있다(#886 ②). 맞는 쪽이 그 성질에 저항하거나
+         *     면역이면 내리지 않는다. 비우면 누구나 받는다. 올리는 것은 해롭지 않아 막을 일이 없다. 성질을 달지 않는다.
          */
         AdjustEffect: {
             /** Amount */
@@ -1943,6 +1946,8 @@ export interface components {
              * @enum {string}
              */
             kind: "adjust";
+            /** Nature */
+            nature?: string | null;
             /** Resource */
             resource: string;
         };
@@ -2406,6 +2411,11 @@ export interface components {
             price?: number | null;
             rarity: components["schemas"]["ItemRarity"];
             /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
+            /**
              * Slot Count
              * @default 1
              */
@@ -2445,9 +2455,11 @@ export interface components {
         };
         /**
          * CharacterSheet
-         * @description 캐릭터(앉은 사람)의 시트. 기본 시트와 프리젠의 시트다. 아는 기술(#805)이 더 있다. NPC 와 몬스터의 시트에는 없다.
+         * @description 캐릭터(앉은 사람)의 시트. 기본 시트와 프리젠의 시트다. 아는 기술(#805)과 저항(#886 ②)이 더 있다.
+         *     NPC 와 몬스터의 시트에는 없다(NPC 의 저항은 NPC 시트에 적는다).
          *
          *     skills 는 룰북의 기술(rules.skills)의 이름표다. 비우면 아는 기술이 없다. 맞는지는 게시할 때 본다(knows_only).
+         *     resistances 는 타고난 저항이다(#886 ②). 성질이 룰북의 것인지는 게시할 때 본다(resists_only_known).
          */
         CharacterSheet: {
             /** Abilities */
@@ -2456,6 +2468,11 @@ export interface components {
             };
             /** Max Hp */
             max_hp: number;
+            /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
             /**
              * Skills
              * @default []
@@ -3733,6 +3750,7 @@ export interface components {
          *     aimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.
          *     treat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).
          *     natures 는 부상의 성질이다(#799). 규칙의 성질(natures, #886)의 이름표다. 그 성질에 면역이면 이 부상을 입지 않는다.
+         *     resistances 는 이 부상을 입고 있는 동안 생기는 저항이다(#886 ②).
          */
         Injury: {
             aftermath?: components["schemas"]["InjuryTable"] | null;
@@ -3760,6 +3778,11 @@ export interface components {
              * @default []
              */
             natures: string[];
+            /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
             /** Rounds */
             rounds?: number | null;
             /** Treat Difficulty */
@@ -4016,6 +4039,8 @@ export interface components {
          *     aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면
          *     판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.
          *     예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.
+         *     resistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.
+         *     성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).
          */
         "ItemRule-Input": {
             /**
@@ -4048,6 +4073,11 @@ export interface components {
             price?: number | null;
             /** @default normal */
             rarity: components["schemas"]["ItemRarity"];
+            /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
             /**
              * Slot Count
              * @default 1
@@ -4086,6 +4116,8 @@ export interface components {
          *     aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면
          *     판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.
          *     예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.
+         *     resistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.
+         *     성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).
          */
         "ItemRule-Output": {
             /**
@@ -4115,6 +4147,11 @@ export interface components {
             price?: number | null;
             /** @default normal */
             rarity: components["schemas"]["ItemRarity"];
+            /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
             /**
              * Slot Count
              * @default 1
@@ -4171,6 +4208,11 @@ export interface components {
             price?: number | null;
             /** @default normal */
             rarity: components["schemas"]["ItemRarity"];
+            /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
             /**
              * Slot Count
              * @default 1
@@ -5610,6 +5652,11 @@ export interface components {
             merchant: boolean;
             /** @default hostile */
             on_caught: components["schemas"]["NpcCaught"];
+            /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
             sheet: components["schemas"]["Sheet"];
         };
         /**
@@ -5659,6 +5706,11 @@ export interface components {
             merchant: boolean;
             /** @default hostile */
             on_caught: components["schemas"]["NpcCaught"];
+            /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
             sheet: components["schemas"]["Sheet"];
         };
         /**
@@ -5700,6 +5752,11 @@ export interface components {
             merchant: boolean;
             /** @default hostile */
             on_caught: components["schemas"]["NpcCaught"];
+            /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
             sheet: components["schemas"]["Sheet"];
         };
         /**
@@ -7074,6 +7131,23 @@ export interface components {
              * Format: uuid
              */
             place: string;
+        };
+        /**
+         * ResistLevel
+         * @description 저항의 단계(#886 ②). 그 성질의 해로운 것을 얼마나 받는가.
+         * @enum {string}
+         */
+        ResistLevel: "resist" | "immune" | "vulnerable";
+        /**
+         * Resistance
+         * @description 저항 한 줄(#886 ②). 성질(nature, 규칙의 natures 의 이름표)과 그 단계(level)다.
+         *
+         *     캐릭터와 NPC 의 시트, 착용한 장비의 아이템 규칙, 부상(상태)의 정의에 단다. 입고 있는 동안 저항이 생긴다.
+         */
+        Resistance: {
+            level: components["schemas"]["ResistLevel"];
+            /** Nature */
+            nature: string;
         };
         /**
          * Resource
@@ -8457,6 +8531,11 @@ export interface components {
             number: number;
             /** Place Id */
             place_id?: string | null;
+            /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
             /**
              * Resources
              * @default []

@@ -125,7 +125,7 @@ def new_injury_name(effect: dict) -> str | None:
 
 
 def resisted_injury_name(effect: dict) -> str | None:
-    """HP 의 변화를 적은 문서에서 면역이라 입지 않은 부상의 이름(#799, 몬스터). 없으면 None."""
+    """HP 의 변화를 적은 문서에서 면역이나 저항으로 막아 입지 않은 부상의 이름(#799, #886 ②). 없으면 None."""
     injury_roll = effect.get('injury_roll')
     return injury_roll['name'] if injury_roll and injury_roll.get('immune') else None
 
@@ -150,6 +150,7 @@ def to_impact(effect: dict | None) -> Impact | None:
         injury=new_injury_name(effect),
         prank=effect.get('prank', False),
         spared=spared_injury_name(effect),
+        resisted=resisted_injury_name(effect),
     )
 
 
@@ -158,7 +159,10 @@ def to_shift_note(shift: dict) -> ResourceNote:
     바뀐 수치 하나(#804)를 서술자에게 줄 모양으로. 숨긴 수치는 바뀐 뒤를 네 단계의 말로만 준다.
 
     보이기와 최소가 없는 옛 문서는 모두가 보는 것, 최소 0 으로 읽는다.
+    저항으로 막아 낸 것(#886 ②)은 막았다는 것만 준다.
     """
+    if shift.get('resisted'):
+        return ResourceNote(name=shift['name'], resisted=True)
     if shift.get('visibility', 'everyone') != 'everyone':
         return ResourceNote(name=shift['name'], word=band_of(shift['after'], shift.get('min', 0), shift['max']))
     return ResourceNote(name=shift['name'], value=shift['after'], max=shift['max'], before=shift['before'])
@@ -947,6 +951,7 @@ def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
         cost=to_cost_words(outcome.get('cost')),
         injured=[one['name'] for one in outcome.get('injured') or [] if one['injury'] is not None],
         resources=to_shift_notes(outcome.get('resources')),
+        resisted=[one['name'] for one in outcome.get('injured') or [] if one.get('immune')],
     )
 
 

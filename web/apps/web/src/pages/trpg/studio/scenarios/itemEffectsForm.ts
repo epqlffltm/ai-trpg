@@ -27,7 +27,16 @@ export const EFFECT_LABELS: Record<EffectKind, string> = {
 export const HARMFUL_KINDS: EffectKind[] = ['damage', 'injure'];
 const ADJUST_MAX = 99;
 
-export type EffectDraft = { kind: EffectKind; magnitude: string; injuries: string[]; injury: string; resource: string; amount: string };
+/** nature 는 수치를 내리는 맞추기의 성질(#886 ②). 고르는 칸이 아직 없어 받은 대로 지녔다가 보낸다(내리는 것만) */
+export type EffectDraft = {
+  kind: EffectKind;
+  magnitude: string;
+  injuries: string[];
+  injury: string;
+  resource: string;
+  amount: string;
+  nature?: string | null;
+};
 export type ThrowDraft = { on: boolean; ability: string; difficulty: string };
 
 export function newEffectDraft(kind: EffectKind = 'heal'): EffectDraft {
@@ -37,7 +46,7 @@ export function newEffectDraft(kind: EffectKind = 'heal'): EffectDraft {
 export function effectDraft(effect: Effect): EffectDraft {
   if (effect.kind === 'cure') return { ...newEffectDraft('cure'), injuries: effect.injuries };
   if (effect.kind === 'injure') return { ...newEffectDraft('injure'), injury: effect.injury };
-  if (effect.kind === 'adjust') return { ...newEffectDraft('adjust'), resource: effect.resource, amount: String(effect.amount) };
+  if (effect.kind === 'adjust') return { ...newEffectDraft('adjust'), resource: effect.resource, amount: String(effect.amount), nature: effect.nature };
   return { ...newEffectDraft(effect.kind), magnitude: effect.magnitude };
 }
 
@@ -50,8 +59,14 @@ export function throwDraft(rule: ItemRule | undefined): ThrowDraft {
 export function toEffect(draft: EffectDraft): Effect {
   if (draft.kind === 'cure') return { kind: 'cure', injuries: draft.injuries };
   if (draft.kind === 'injure') return { kind: 'injure', injury: draft.injury };
-  if (draft.kind === 'adjust') return { kind: 'adjust', resource: draft.resource, amount: Number(draft.amount.trim()) };
+  if (draft.kind === 'adjust') return toAdjust(draft);
   return { kind: draft.kind, magnitude: draft.magnitude };
+}
+
+/** 맞추기 하나. 받은 성질(#886 ②)은 내리는 것(음수)일 때만 붙인다. 올리는 것에 성질을 달면 서버가 받지 않는다 */
+function toAdjust(draft: EffectDraft): Effect {
+  const amount = Number(draft.amount.trim());
+  return draft.nature && amount < 0 ? { kind: 'adjust', resource: draft.resource, amount, nature: draft.nature } : { kind: 'adjust', resource: draft.resource, amount };
 }
 
 /** 맞추는 양의 글을 정수로. -99~99 의 0 이 아닌 정수가 아니면 null */

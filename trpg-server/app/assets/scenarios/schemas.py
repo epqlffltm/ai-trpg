@@ -93,7 +93,7 @@ from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
 from app.engine.item_aids import Aids
 from app.engine.item_effects import AttackEffects, Effects
-from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, RULESET_MAX_NATURES, Key, SkillCost
+from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, RULESET_MAX_NATURES, Key, Resistances, SkillCost
 from app.engine.sheet import CharacterSheet, Sheet
 
 # 스타팅 하나. 공백이 아닌 글자가 하나는 있어야 한다. 빈 스타팅은 고를 수 없으니 받지 않는다.
@@ -419,6 +419,8 @@ class NpcSheet(BaseModel):
     attacks: MonsterAttacks = []
     # 상인인가(#278). 화폐가 없는 시나리오에는 상인을 두지 못한다(게시의 currency_missing)
     merchant: bool = False
+    # 타고난 저항(#886 ②). 성질이 룰북의 것인지는 게시할 때 본다(nature_invalid)
+    resistances: Resistances = ()
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'NpcSheet':
@@ -700,6 +702,8 @@ class ItemRule(BaseModel):
     aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면
     판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.
     예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.
+    resistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.
+    성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -719,6 +723,7 @@ class ItemRule(BaseModel):
     lock: ItemLock | None = None
     throw: ItemThrow | None = None
     aids: Aids = []
+    resistances: Resistances = ()
 
     @model_validator(mode='after')
     def combat_only_when_worn(self) -> 'ItemRule':
@@ -726,6 +731,13 @@ class ItemRule(BaseModel):
         numbers = (self.attack, self.defense, self.guard, self.ap, self.ward)
         if not self.slots and any(number is not None for number in numbers):
             raise ValueError('공격 보정(attack, ap)과 방어(defense, guard, ward)는 칸(slots)이 있는 물건에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def resistances_only_when_worn(self) -> 'ItemRule':
+        """저항(#886 ②)은 착용하는 물건(칸이 있다)에만 적는다. 착용하고 있는 동안 생긴다."""
+        if self.resistances and not self.slots:
+            raise ValueError('저항(resistances)은 칸(slots)이 있는 물건에만 적습니다.')
         return self
 
     @model_validator(mode='after')

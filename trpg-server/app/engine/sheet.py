@@ -15,7 +15,14 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-from app.engine.ruleset import RULESET_MAX_ABILITIES, RULESET_MAX_NUMBER, RULESET_MAX_SKILLS, Key, Ruleset
+from app.engine.ruleset import (
+    RULESET_MAX_ABILITIES,
+    RULESET_MAX_NUMBER,
+    RULESET_MAX_SKILLS,
+    Key,
+    Resistances,
+    Ruleset,
+)
 
 # 최대 HP 가 가질 수 있는 가장 큰 값
 SHEET_MAX_HP = 999
@@ -43,12 +50,15 @@ def reject_repeated_skills(keys: list[str]) -> list[str]:
 
 class CharacterSheet(Sheet):
     """
-    캐릭터(앉은 사람)의 시트. 기본 시트와 프리젠의 시트다. 아는 기술(#805)이 더 있다. NPC 와 몬스터의 시트에는 없다.
+    캐릭터(앉은 사람)의 시트. 기본 시트와 프리젠의 시트다. 아는 기술(#805)과 저항(#886 ②)이 더 있다.
+    NPC 와 몬스터의 시트에는 없다(NPC 의 저항은 NPC 시트에 적는다).
 
     skills 는 룰북의 기술(rules.skills)의 이름표다. 비우면 아는 기술이 없다. 맞는지는 게시할 때 본다(knows_only).
+    resistances 는 타고난 저항이다(#886 ②). 성질이 룰북의 것인지는 게시할 때 본다(resists_only_known).
     """
 
     skills: Annotated[list[Key], Field(max_length=RULESET_MAX_SKILLS), AfterValidator(reject_repeated_skills)] = []
+    resistances: Resistances = ()
 
 
 def covers_abilities(ruleset: Ruleset, abilities: dict[str, int]) -> bool:
@@ -88,3 +98,8 @@ def fits(ruleset: Ruleset, sheet: Sheet) -> bool:
 def knows_only(ruleset: Ruleset, sheet: CharacterSheet) -> bool:
     """시트의 아는 기술이 모두 이 규칙의 기술인가(#805)."""
     return set(sheet.skills) <= {skill.key for skill in ruleset.skills}
+
+
+def resists_only_known(ruleset: Ruleset, resistances) -> bool:
+    """저항들의 성질이 모두 이 규칙의 성질인가(#886 ②). 캐릭터 시트, NPC 시트, 아이템 규칙이 함께 쓴다."""
+    return {one.nature for one in resistances} <= {nature.key for nature in ruleset.natures}
