@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import type { StoryWorldDetail } from '../../../api/storyWorlds';
 import { WorldBasicsTab } from './WorldBasicsTab';
+import { WorldCastTab } from './WorldCastTab';
 import { WorldCheckPanel } from './WorldCheckPanel';
 import { WorldIntroTab } from './WorldIntroTab';
 import { WorldItemsTab } from './WorldItemsTab';
@@ -58,7 +59,7 @@ function EditWorld({ world }: { world: StoryWorldDetail }) {
     <>
       <h1>{world.name}</h1>
       {wasCreated(location.state) ? <Notice>만들었습니다.</Notice> : null}
-      <p className="hint">인물, 이벤트, 엔딩의 칸은 아직 이 화면에 없습니다. 그 칸은 저장된 그대로 남고 게시에 들어갑니다.</p>
+      <p className="hint">이벤트와 엔딩의 칸은 아직 이 화면에 없습니다. 그 칸은 저장된 그대로 남고 게시에 들어갑니다.</p>
       <div className="scenario-editor">
         <WorldCheckPanel worldId={world.id} goTo={goTo} />
         <div className="scenario-editor__main">
@@ -80,6 +81,7 @@ function panelOf(tab: WorldTab, world: StoryWorldDetail): ReactNode {
   if (tab === 'progress') return <WorldProgressTab world={world} />;
   if (tab === 'map') return <WorldMapTab world={world} />;
   if (tab === 'items') return <WorldItemsTab world={world} />;
+  if (tab === 'cast') return <WorldCastTab world={world} />;
   if (tab === 'lorebooks') return <WorldLorebooksTab world={world} />;
   return <WorldPublishTab world={world} />;
 }
