@@ -5059,6 +5059,8 @@ export interface components {
              * @default []
              */
             natural_armor: components["schemas"]["NaturalArmor"][];
+            /** Nature */
+            nature?: string | null;
             /**
              * Resistances
              * @default []
@@ -5113,6 +5115,8 @@ export interface components {
              * @default []
              */
             natural_armor: components["schemas"]["NaturalArmor"][];
+            /** Nature */
+            nature?: string | null;
             /**
              * Resistances
              * @default []
@@ -5187,6 +5191,8 @@ export interface components {
              * @default []
              */
             natural_armor: components["schemas"]["NaturalArmorSnapshot"][];
+            /** Nature */
+            nature?: string | null;
             /**
              * Resistances
              * @default []
@@ -5705,6 +5711,8 @@ export interface components {
              * @default false
              */
             merchant: boolean;
+            /** Nature */
+            nature?: string | null;
             /** @default hostile */
             on_caught: components["schemas"]["NpcCaught"];
             /**
@@ -5759,6 +5767,8 @@ export interface components {
              * @default false
              */
             merchant: boolean;
+            /** Nature */
+            nature?: string | null;
             /** @default hostile */
             on_caught: components["schemas"]["NpcCaught"];
             /**
@@ -5805,6 +5815,8 @@ export interface components {
              * @default false
              */
             merchant: boolean;
+            /** Nature */
+            nature?: string | null;
             /** @default hostile */
             on_caught: components["schemas"]["NpcCaught"];
             /**

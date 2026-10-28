@@ -115,7 +115,14 @@ def roll_attack(judging: Judging, monster: SceneMonster, attack: AttackSnapshot,
     return checks.resolve_hindered(ruleset, score, difficulty, judging.dice, hindrance, bonus=blow.bonus)
 
 
-def hit_outcome(judging: Judging, attack: AttackSnapshot, victim: TableMember, rolled: Check, blow: Blow) -> dict:
+def hit_outcome(
+    judging: Judging,
+    attack: AttackSnapshot,
+    victim: TableMember,
+    rolled: Check,
+    blow: Blow,
+    innate: str | None = None,
+) -> dict:
     """
     판정 뒤의 일. 쓰러진 대상이면 죽음의 굴림 실패를 쌓고(downed_strike), 서 있는 대상이면 맞혔을 때 피해를 준다.
 
@@ -123,7 +130,8 @@ def hit_outcome(judging: Judging, attack: AttackSnapshot, victim: TableMember, r
     맞은 부위의 방어가 피해를 깎는다(reduce). 맞혔고 세이브 방식이면 대상이 세이브를 굴리고, 막으면 맞지 않은 것과 같다
     (쓰러진 대상에게도 죽음의 굴림 실패가 쌓이지 않는다). 장비가 든 것(blow)이 있으면 붙인다(#276).
     피해 등급이 없는 공격(#805 ③-b)은 세이브를 굴리지 않고 HP 도 죽음의 굴림도 건드리지 않는다.
-    피해의 성질(#886 ③)은 공격의 것, 없으면 무기의 것이다. 맞은 캐릭터의 저항을 따른다.
+    피해의 성질(#886 ③)은 공격의 것, 없으면 무기의 것, 그것도 없으면 친 쪽의 타고난 것(innate)이다.
+    맞은 캐릭터의 저항을 따른다.
     공격의 효과는 그 뒤에 낸다(with_effects). 세이브와 상관없이 판정에 맞혔으면 든다.
     """
     save = blows.roll_blow_save(judging, blow) if rolled.success and attack.harm is not None else None
@@ -134,7 +142,7 @@ def hit_outcome(judging: Judging, attack: AttackSnapshot, victim: TableMember, r
         struck = strike_downed(judging, victim, landed)
         outcome = {**attack_outcome(attack, victim, rolled, None), 'downed_strike': struck}
     else:
-        nature = blows.blow_nature(blow, attack.nature)
+        nature = blows.blow_nature(blow, attack.nature) or innate
         effect = (
             change_sheet(judging, victim, ChangeKind.DAMAGE, attack.harm, blow.cut, nature=nature) if landed else None
         )
@@ -256,5 +264,5 @@ def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
     cost = pay(judging, monster.state, attack, ResourceHolder.MONSTERS)
     blow = plan_attack_blow(judging, blows.monster_weapon(judging, monster, attack), victim)
     rolled = roll_attack(judging, monster, attack, blow)
-    outcome = hit_outcome(judging, attack, victim, rolled.check, blow)
+    outcome = hit_outcome(judging, attack, victim, rolled.check, blow, monster.definition.nature)
     return {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
