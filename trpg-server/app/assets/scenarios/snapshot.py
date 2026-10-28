@@ -149,7 +149,9 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      저항(#886 ②)은 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다. 저항 한 줄은 성질과 단계(resist, immune,
 #      vulnerable)다. rulebook.rules.injuries[].resistances(입고 있는 동안), default_sheet·pregens[].sheet 와
 #      npc_sheets[] 의 resistances(타고난 것), items[].resistances(착용하고 있는 동안)에 있다.
-#      수치를 내리는 맞추기에 성질(effects[].nature)이 있다
+#      수치를 내리는 맞추기에 성질(effects[].nature)이 있다.
+#      피해의 성질(#886 ③)도 뒤에 더했다. 효과의 damage 와 공격(monsters[].attacks[].nature, npc_sheets[].attacks[])과
+#      무기(items[].nature)에 있다. 몬스터의 저항(monsters[].resistances)도 같다. 비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 67
 
 
@@ -305,6 +307,8 @@ class ItemRuleSnapshot(BaseModel):
     aids: list[ItemAid] = []
     # 착용하고 있는 동안 생기는 저항(#886 ②). 그 전의 판의 물건에는 없다
     resistances: Resistances = ()
+    # 무기로 친 피해의 성질(#886 ③). 그 전의 판의 물건에는 없다
+    nature: str | None = None
 
 
 class QuestConditionSnapshot(BaseModel):
@@ -483,6 +487,8 @@ class AttackSnapshot(BaseModel):
     cost: SkillCost | None = None
     # 맞혔을 때 맞은 캐릭터에게 더 드는 효과들(#805 ③-b). 부상과 수치의 맞추기다
     effects: AttackEffects = []
+    # 피해의 성질(#886 ③). 비우면 무기의 성질이고, 그것도 없으면 성질이 없는 피해다
+    nature: str | None = None
 
 
 class NpcSheetSnapshot(BaseModel):
@@ -543,6 +549,8 @@ class MonsterSnapshot(BaseModel):
     # 타입의 면역에 더하고 빼는 부상의 성질(#799). 형식 61 보다 옛 판의 몬스터는 타입의 면역 그대로다
     immune: list[str] = []
     vulnerable: list[str] = []
+    # 저항(#886 ③). 성질과 단계다. 그 전의 판의 몬스터는 저항이 없다
+    resistances: Resistances = ()
 
 
 class EncounterSnapshot(BaseModel):
@@ -1100,8 +1108,12 @@ def snapshot_monster(
     ward: int | None = None,
     immune: list[str] | None = None,
     vulnerable: list[str] | None = None,
+    resistances: Resistances = (),
 ) -> MonsterSnapshot:
-    """몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어와 불굴 세이브, 면역에 더하고 빼는 성질을 굳힌다."""
+    """
+    몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어와 불굴 세이브, 면역에 더하고 빼는 성질, 저항(#886 ③)을
+    굳힌다.
+    """
     return MonsterSnapshot(
         id=monster.id,
         name=monster.name,
@@ -1117,6 +1129,7 @@ def snapshot_monster(
         ward=ward,
         immune=immune or [],
         vulnerable=vulnerable or [],
+        resistances=resistances,
     )
 
 

@@ -265,6 +265,7 @@ async def test_a_hit_wounds_the_monster(client: AsyncClient, app: FastAPI, me: d
             'immune': None,
             'spared': None,
         },
+        'nature': None,
     }
     assert await state_of(session, rat['id']) == (1, NpcStatus.ALIVE)
     # 다른 쥐는 그대로다

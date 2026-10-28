@@ -21,7 +21,7 @@ from typing import Annotated, Self
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.engine.item_effects import EffectKind as ItemEffectKind
-from app.engine.item_effects import Effects
+from app.engine.item_effects import Effects, nature_of
 from app.engine.keys import Key, Name
 from app.engine.monster_kinds import MonsterKind
 
@@ -136,7 +136,7 @@ def effects_fit(ruleset: 'Ruleset', effects: list) -> bool:
     """
     효과들이 가리키는 양의 등급, 부상, 수치, 성질이 모두 이 규칙에 있는가(#805 의 기술. 물건은 게시할 때 본다).
 
-    수치를 내리는 맞추기의 성질(#886 ②)은 비울 수 있다.
+    수치를 내리는 맞추기의 성질(#886 ②)과 피해의 성질(#886 ③)은 비울 수 있다.
     """
     magnitudes = {magnitude.key for magnitude in ruleset.magnitudes}
     injuries = {injury.key for injury in ruleset.injuries}
@@ -151,7 +151,7 @@ def effects_fit(ruleset: 'Ruleset', effects: list) -> bool:
             return False
         if effect.kind == ItemEffectKind.ADJUST and effect.resource not in resources:
             return False
-        if effect.kind == ItemEffectKind.ADJUST and effect.nature is not None and effect.nature not in natures:
+        if nature_of(effect) is not None and nature_of(effect) not in natures:
             return False
     return True
 
@@ -456,11 +456,11 @@ class KindImmunity(Part):
 class ResistLevel(enum.StrEnum):
     """저항의 단계(#886 ②). 그 성질의 해로운 것을 얼마나 받는가."""
 
-    # 저항. 그 성질의 부상과 수치를 내리는 맞추기를 받지 않는다. 피해는 덜 받는다(#886 ③)
+    # 저항. 그 성질의 부상과 수치를 내리는 맞추기를 받지 않는다. 피해는 반을 받는다(내림, #886 ③)
     RESIST = 'resist'
-    # 면역. 그 성질의 부상과 수치를 내리는 맞추기를 받지 않는다. 피해도 받지 않는다(#886 ③)
+    # 면역. 그 성질의 부상과 수치를 내리는 맞추기를 받지 않는다. 피해도 받지 않는다(0, #886 ③)
     IMMUNE = 'immune'
-    # 약점. 부상과 맞추기에는 아무것도 하지 않는다. 피해를 더 받는다(#886 ③)
+    # 약점. 부상과 맞추기에는 아무것도 하지 않는다. 피해를 두 배로 받는다(#886 ③)
     VULNERABLE = 'vulnerable'
 
 
@@ -490,6 +490,22 @@ def reject_repeated_resistances(resistances: tuple[Resistance, ...]) -> tuple[Re
 Resistances = Annotated[
     tuple[Resistance, ...], Field(max_length=RULESET_MAX_NATURES), AfterValidator(reject_repeated_resistances)
 ]
+
+
+def damage_level(resistances, nature: str, immune: frozenset[str] = frozenset()) -> ResistLevel | None:
+    """
+    그 성질의 피해를 받는 단계(#886 ③). 여러 곳에서 온 저항들(resistances)과, 몬스터의 면역(immune)을 함께 본다.
+
+    하나라도 면역이면(면역의 성질에 들었으면) 면역이다. 아니면 저항과 약점이 함께 있으면 서로 지워 그대로(None),
+    하나만 있으면 그것이다. 같은 단계는 여러 곳에서 와도 한 번이다.
+    """
+    levels = {one.level for one in resistances if one.nature == nature}
+    if nature in immune or ResistLevel.IMMUNE in levels:
+        return ResistLevel.IMMUNE
+    resist, weak = ResistLevel.RESIST in levels, ResistLevel.VULNERABLE in levels
+    if resist == weak:
+        return None
+    return ResistLevel.RESIST if resist else ResistLevel.VULNERABLE
 
 
 def blocked_natures(resistances) -> frozenset[str]:

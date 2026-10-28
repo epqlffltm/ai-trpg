@@ -15,6 +15,7 @@ from app.calendar.schemas import ClockTimeOut
 from app.engine.action import Action
 from app.engine.death import Fate
 from app.engine.health import ChangeKind
+from app.engine.ruleset import ResistLevel
 from app.rounds.models import DECLARATION_MAX_LENGTH, RoundStatus
 from app.tables.models import NpcStatus
 from app.tables.schemas import ResourceOut
@@ -139,6 +140,20 @@ class HindranceOut(BaseModel):
     rolls: list[int]
 
 
+class DamageNatureOut(BaseModel):
+    """
+    피해의 성질(#886 ③)과 맞은 쪽이 받은 단계. 엔진이 정했다.
+
+    level 이 resist 면 방어구가 깎은 뒤의 양의 반(내림), immune 이면 0, vulnerable 이면 두 배를 받았다(amount 에
+    이미 들었다). None 이면 그대로 받았다.
+    """
+
+    # 성질의 이름표(rules.natures 의 key)와 이름
+    key: str
+    name: str
+    level: ResistLevel | None = None
+
+
 class EffectOut(BaseModel):
     """판정의 결과로 HP 가 바뀐 것. 엔진이 정한 것이다."""
 
@@ -162,6 +177,8 @@ class EffectOut(BaseModel):
     injury_roll: InjuryRollOut | None = None
     # 동료의 장난(#803)이었으면 참이다. HP 가 1 아래로 내려가지 않았고, 짧은 부상만 입었다
     prank: bool = False
+    # 피해의 성질(#886 ③). 성질이 없는 피해와 회복이면 None 이다
+    nature: DamageNatureOut | None = None
 
 
 class NpcEffectOut(BaseModel):
@@ -187,6 +204,8 @@ class NpcEffectOut(BaseModel):
     status: NpcStatus
     # 이 피해로 부상 표를 굴렸으면 그 결과. 굴리지 않았으면 None 이다
     injury_roll: InjuryRollOut | None = None
+    # 피해의 성질(#886 ③). 성질이 없는 피해와 회복이면 None 이다
+    nature: DamageNatureOut | None = None
 
 
 class MonsterEffectOut(BaseModel):
@@ -209,6 +228,8 @@ class MonsterEffectOut(BaseModel):
     status: NpcStatus
     # 이 피해로 부상 표를 굴렸거나 노려 친 것이 맞았으면 그 결과(#799). 없었으면 None 이다
     injury_roll: InjuryRollOut | None = None
+    # 피해의 성질(#886 ③). 성질이 없는 피해와 회복이면 None 이다
+    nature: DamageNatureOut | None = None
 
 
 class DroppedItemOut(BaseModel):

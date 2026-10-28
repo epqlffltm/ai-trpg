@@ -122,6 +122,7 @@ def sheet_for(monster: dict, sheet: dict, attacks: list | None = None) -> dict:
         'ward': None,
         'immune': [],
         'vulnerable': [],
+        'resistances': [],
     }
     return {'monster_id': monster['id'], 'sheet': sheet, 'attacks': attacks or [], **carried}
 
@@ -254,6 +255,7 @@ async def test_only_monsters_with_a_sheet_go_into_the_version(client: AsyncClien
             'ward': None,
             'immune': [],
             'vulnerable': [],
+            'resistances': [],
         },
         {
             'id': beasts['rat']['id'],
@@ -270,6 +272,7 @@ async def test_only_monsters_with_a_sheet_go_into_the_version(client: AsyncClien
             'ward': None,
             'immune': [],
             'vulnerable': [],
+            'resistances': [],
         },
     ]
 

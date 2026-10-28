@@ -27,7 +27,10 @@ export const EFFECT_LABELS: Record<EffectKind, string> = {
 export const HARMFUL_KINDS: EffectKind[] = ['damage', 'injure'];
 const ADJUST_MAX = 99;
 
-/** nature 는 수치를 내리는 맞추기의 성질(#886 ②). 고르는 칸이 아직 없어 받은 대로 지녔다가 보낸다(내리는 것만) */
+/**
+ * nature 는 수치를 내리는 맞추기(#886 ②)와 피해(#886 ③)의 성질. 고르는 칸이 아직 없어 받은 대로 지녔다가 보낸다
+ * (맞추기는 내리는 것만)
+ */
 export type EffectDraft = {
   kind: EffectKind;
   magnitude: string;
@@ -47,6 +50,7 @@ export function effectDraft(effect: Effect): EffectDraft {
   if (effect.kind === 'cure') return { ...newEffectDraft('cure'), injuries: effect.injuries };
   if (effect.kind === 'injure') return { ...newEffectDraft('injure'), injury: effect.injury };
   if (effect.kind === 'adjust') return { ...newEffectDraft('adjust'), resource: effect.resource, amount: String(effect.amount), nature: effect.nature };
+  if (effect.kind === 'damage') return { ...newEffectDraft('damage'), magnitude: effect.magnitude, nature: effect.nature };
   return { ...newEffectDraft(effect.kind), magnitude: effect.magnitude };
 }
 
@@ -60,6 +64,7 @@ export function toEffect(draft: EffectDraft): Effect {
   if (draft.kind === 'cure') return { kind: 'cure', injuries: draft.injuries };
   if (draft.kind === 'injure') return { kind: 'injure', injury: draft.injury };
   if (draft.kind === 'adjust') return toAdjust(draft);
+  if (draft.kind === 'damage' && draft.nature) return { kind: 'damage', magnitude: draft.magnitude, nature: draft.nature };
   return { kind: draft.kind, magnitude: draft.magnitude };
 }
 

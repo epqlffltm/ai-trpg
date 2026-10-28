@@ -232,6 +232,7 @@ async def test_failing_a_risky_action_hurts_the_one_who_tried(
             'max_hp': 10,
             'downed': False,
             'prank': False,
+            'nature': None,
         }
     }
     assert await hp_of(client, friend, table) == {'엘프': 7, '영애': 10}
@@ -329,6 +330,7 @@ async def test_succeeding_heals_the_target(
             'max_hp': 10,
             'downed': False,
             'prank': False,
+            'nature': None,
         }
     }
     assert await hp_of(client, me, table) == {'엘프': 7, '영애': 10}

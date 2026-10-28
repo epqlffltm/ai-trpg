@@ -62,6 +62,9 @@ class Impact:
     spared: str | None = None
     # 나온 부상을 저항으로 막아 입지 않았으면 그 부상의 이름이다(#886 ②). 없으면 None 이다
     resisted: str | None = None
+    # 피해의 성질의 이름과 받은 단계(resist, immune, vulnerable, #886 ③). 없으면 None 이다
+    nature: str | None = None
+    level: str | None = None
 
 
 @dataclass(frozen=True)
@@ -85,6 +88,9 @@ class NpcImpact:
     injury: str | None = None
     # 나온 부상을 면역이나 저항으로 막아 입지 않았으면 그 부상의 이름이다(#799, #886 ②). 없으면 None 이다
     resisted: str | None = None
+    # 피해의 성질의 이름과 받은 단계(resist, immune, vulnerable, #886 ③). 없으면 None 이다
+    nature: str | None = None
+    level: str | None = None
 
 
 @dataclass(frozen=True)

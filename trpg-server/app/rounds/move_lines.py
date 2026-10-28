@@ -185,17 +185,39 @@ def describe_impact(impact: Impact) -> str:
     HP 가 바뀐 것을 한 줄로 적는다. 동료의 장난(#803)이면 그것과, 장난이라 입지 않은 부상을 붙인다.
     저항으로 막아 낸 부상(#886 ②)도 붙인다.
 
+    피해의 성질(#886 ③)이 있으면 피해 앞에 그 이름을, 받은 단계(저항, 면역, 약점)를 괄호에 붙인다.
+
     예: → 엘프 피해 3 (HP 7/10)
         → 영애 피해 6 (HP 1/10, 장난). 장난이라 입지 않은 부상: 팔 골절
         → 드워프 피해 9 (HP 1/12). 막아 낸 부상: 중독
+        → 엘프 화염 피해 2 (HP 8/10, 저항)
     """
-    word = '피해' if impact.kind == 'damage' else '회복'
+    word = change_word(impact.kind, impact.nature)
     state = (
-        f'HP {impact.hp}/{impact.max_hp}' + (', 쓰러짐' if impact.downed else '') + (', 장난' if impact.prank else '')
+        f'HP {impact.hp}/{impact.max_hp}'
+        + (', 쓰러짐' if impact.downed else '')
+        + (', 장난' if impact.prank else '')
+        + level_tag(impact.level)
     )
     line = f'→ {impact.character_name} {word} {impact.amount} ({state})' + new_injury(impact.injury)
     line += resisted_injury(impact.resisted)
     return line + (f'. 장난이라 입지 않은 부상: {impact.spared}' if impact.spared else '')
+
+
+# 피해의 성질을 받은 단계(#886 ③)를 서술자에게 주는 말
+LEVEL_WORDS = {'resist': '저항', 'immune': '면역', 'vulnerable': '약점'}
+
+
+def change_word(kind: str, nature: str | None) -> str:
+    """HP 의 변화의 말. 피해, 회복, 성질이 있는 피해면 그 이름을 앞에 붙인다(화염 피해, #886 ③)."""
+    if kind != 'damage':
+        return '회복'
+    return f'{nature} 피해' if nature else '피해'
+
+
+def level_tag(level: str | None) -> str:
+    """괄호 안에 붙일 받은 단계(#886 ③). 그대로 받았으면 빈 글이다. 예: ", 저항"."""
+    return f', {LEVEL_WORDS[level]}' if level in LEVEL_WORDS else ''
 
 
 def new_injury(name: str | None) -> str:
@@ -209,9 +231,15 @@ def describe_injuries(injuries: list[InjuryNote]) -> str:
 
 
 def describe_npc_impact(impact: NpcImpact) -> str:
-    """NPC 의 HP 가 바뀐 것을 한 줄로 적는다. 숫자는 양만 적는다. 예: → 악역영애 피해 5 (크게 다침)"""
-    word = '피해' if impact.kind == 'damage' else '회복'
-    line = f'→ {impact.name} {word} {impact.amount} ({impact.condition})' + new_injury(impact.injury)
+    """
+    NPC 의 HP 가 바뀐 것을 한 줄로 적는다. 숫자는 양만 적는다. 몬스터도 이 줄이다.
+
+    예: → 악역영애 피해 5 (크게 다침)
+        → 수로 쥐 화염 피해 8 (쓰러짐, 약점)
+    """
+    word = change_word(impact.kind, impact.nature)
+    condition = impact.condition + level_tag(impact.level)
+    line = f'→ {impact.name} {word} {impact.amount} ({condition})' + new_injury(impact.injury)
     return line + resisted_injury(impact.resisted)
 
 

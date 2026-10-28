@@ -2094,6 +2094,8 @@ export interface components {
             harm?: string | null;
             /** Name */
             name: string;
+            /** Nature */
+            nature?: string | null;
             /** Weapon */
             weapon?: string | null;
         };
@@ -2407,6 +2409,8 @@ export interface components {
             lock: boolean;
             /** Name */
             name: string;
+            /** Nature */
+            nature?: string | null;
             /** Price */
             price?: number | null;
             rarity: components["schemas"]["ItemRarity"];
@@ -2899,6 +2903,9 @@ export interface components {
         /**
          * DamageEffect
          * @description 등급(magnitude)만큼 피해를 준다.
+         *
+         *     성질(nature, 룰북의 natures 의 이름표) 하나를 달 수 있다(#886 ③, 화염병). 맞는 쪽이 그 성질에 저항하면 반(내림),
+         *     면역이면 0, 약점이면 두 배를 받는다. 비우면 누구나 그대로 받는다.
          */
         DamageEffect: {
             /**
@@ -2908,6 +2915,22 @@ export interface components {
             kind: "damage";
             /** Magnitude */
             magnitude: string;
+            /** Nature */
+            nature?: string | null;
+        };
+        /**
+         * DamageNatureOut
+         * @description 피해의 성질(#886 ③)과 맞은 쪽이 받은 단계. 엔진이 정했다.
+         *
+         *     level 이 resist 면 방어구가 깎은 뒤의 양의 반(내림), immune 이면 0, vulnerable 이면 두 배를 받았다(amount 에
+         *     이미 들었다). None 이면 그대로 받았다.
+         */
+        DamageNatureOut: {
+            /** Key */
+            key: string;
+            level?: components["schemas"]["ResistLevel"] | null;
+            /** Name */
+            name: string;
         };
         /**
          * DeathSave
@@ -3144,6 +3167,7 @@ export interface components {
             magnitude: string;
             /** Max Hp */
             max_hp: number;
+            nature?: components["schemas"]["DamageNatureOut"] | null;
             /**
              * Prank
              * @default false
@@ -4040,6 +4064,7 @@ export interface components {
          *     판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.
          *     예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.
          *     resistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.
+         *     nature 는 무기로 친 피해의 성질이다(#886 ③, 화염 검, 축복받은 망치). 무기에만 적는다.
          *     성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).
          */
         "ItemRule-Input": {
@@ -4069,6 +4094,8 @@ export interface components {
             /** @default gear */
             kind: components["schemas"]["ItemKind"];
             lock?: components["schemas"]["ItemLock-Input"] | null;
+            /** Nature */
+            nature?: string | null;
             /** Price */
             price?: number | null;
             /** @default normal */
@@ -4117,6 +4144,7 @@ export interface components {
          *     판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.
          *     예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.
          *     resistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.
+         *     nature 는 무기로 친 피해의 성질이다(#886 ③, 화염 검, 축복받은 망치). 무기에만 적는다.
          *     성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).
          */
         "ItemRule-Output": {
@@ -4143,6 +4171,8 @@ export interface components {
             /** @default gear */
             kind: components["schemas"]["ItemKind"];
             lock?: components["schemas"]["ItemLock-Output"] | null;
+            /** Nature */
+            nature?: string | null;
             /** Price */
             price?: number | null;
             /** @default normal */
@@ -4204,6 +4234,8 @@ export interface components {
             guard?: number | null;
             kind: components["schemas"]["ItemKind"];
             lock?: components["schemas"]["ItemLockSnapshot"] | null;
+            /** Nature */
+            nature?: string | null;
             /** Price */
             price?: number | null;
             /** @default normal */
@@ -4834,6 +4866,7 @@ export interface components {
          *     NPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.
          *     cost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.
          *     비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.
+         *     nature 는 피해의 성질이다(#886 ③). 맞은 쪽의 저항(반), 면역(0), 약점(두 배)을 따른다. 비우면 무기의 성질이다.
          */
         "MonsterAttack-Input": {
             /** Ability */
@@ -4850,6 +4883,8 @@ export interface components {
             harm?: string | null;
             /** Name */
             name: string;
+            /** Nature */
+            nature?: string | null;
             /** Weapon */
             weapon?: string | null;
         };
@@ -4864,6 +4899,7 @@ export interface components {
          *     NPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.
          *     cost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.
          *     비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.
+         *     nature 는 피해의 성질이다(#886 ③). 맞은 쪽의 저항(반), 면역(0), 약점(두 배)을 따른다. 비우면 무기의 성질이다.
          */
         "MonsterAttack-Output": {
             /** Ability */
@@ -4880,6 +4916,8 @@ export interface components {
             harm?: string | null;
             /** Name */
             name: string;
+            /** Nature */
+            nature?: string | null;
             /** Weapon */
             weapon?: string | null;
         };
@@ -4964,6 +5002,7 @@ export interface components {
             monster_id: string;
             /** Name */
             name: string;
+            nature?: components["schemas"]["DamageNatureOut"] | null;
             /** Rolls */
             rolls: number[];
             status: components["schemas"]["NpcStatus"];
@@ -5020,6 +5059,11 @@ export interface components {
              * @default []
              */
             natural_armor: components["schemas"]["NaturalArmor"][];
+            /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
             sheet: components["schemas"]["Sheet"];
             /**
              * Vulnerable
@@ -5069,6 +5113,11 @@ export interface components {
              * @default []
              */
             natural_armor: components["schemas"]["NaturalArmor"][];
+            /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
             sheet: components["schemas"]["Sheet"];
             /**
              * Vulnerable
@@ -5138,6 +5187,11 @@ export interface components {
              * @default []
              */
             natural_armor: components["schemas"]["NaturalArmorSnapshot"][];
+            /**
+             * Resistances
+             * @default []
+             */
+            resistances: components["schemas"]["Resistance"][];
             sheet: components["schemas"]["Sheet"];
             /**
              * Unique
@@ -5550,6 +5604,7 @@ export interface components {
             magnitude: string;
             /** Name */
             name: string;
+            nature?: components["schemas"]["DamageNatureOut"] | null;
             /** Rolls */
             rolls: number[];
             status: components["schemas"]["NpcStatus"];

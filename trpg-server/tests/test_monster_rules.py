@@ -54,6 +54,7 @@ BITE = {
     'weapon': None,
     'cost': None,
     'effects': [],
+    'nature': None,
 }
 SLAM = {
     'name': '내려치기',
@@ -63,6 +64,7 @@ SLAM = {
     'weapon': None,
     'cost': None,
     'effects': [],
+    'nature': None,
 }
 
 

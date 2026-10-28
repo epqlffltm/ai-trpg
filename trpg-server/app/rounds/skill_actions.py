@@ -38,7 +38,7 @@ from app.rounds.checks import judge_check, monster_gone
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.rounds.item_actions import apply_to_member, living, person
-from app.rounds.item_targets import apply_after_hit, landed, mark_harm, target_of, to_check
+from app.rounds.item_targets import apply_after_hit, damage_nature, landed, mark_harm, target_of, to_check
 from app.tables import resources, sheets
 from app.tables import state as table_state
 from app.tables.models import GameTable, TableMember, TableSheet
@@ -301,7 +301,7 @@ def judge_rolled_skill(judging: Judging, member: TableMember, skill: Skill, acti
     cost = pay(judging, member, skill.cost)
     mark_harm(judging, member, skill.effects, action, check)
     prank = is_prank_skill(judging, member, skill, action)
-    outcome = judge_check(judging, member, check)
+    outcome = judge_check(judging, member, check, damage_nature(skill.effects))
     hit = landed(outcome, check)
     applied = apply_after_hit(judging, skill.effects, action, prank, Trigger.SKILL) if hit else NOTHING_APPLIED
     used = {**skill_document(skill, None, target, (check.ability, check.difficulty)), 'cost': cost, **applied}

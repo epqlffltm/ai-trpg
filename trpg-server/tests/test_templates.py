@@ -39,6 +39,12 @@ from app.engine.templates import (
 RELEASED = {
     Template.SRD5: '42c25ec2b6ef80c06912f1d1818111ce3cd0b3a9638a54d2eb5a4bf413bf5e5b',
     Template.HORROR: '23a140e8109a19f064ca8e5ce408de11f0f2129ac0947b16a453c247b1eeba97',
+    Template.LIGHT: '19c8c4a4e5da3f05b2fcbea2d84d8a14c4d9bd6529975c3098126cb3d2613892',
+}
+# 피해의 성질(skills[].effects[] 의 damage 의 nature, #886 ③)을 더하기 전의 해시. 그 칸을 뺀 규칙은 그때와 같아야 한다
+BEFORE_DAMAGE_NATURES = {
+    Template.SRD5: '42c25ec2b6ef80c06912f1d1818111ce3cd0b3a9638a54d2eb5a4bf413bf5e5b',
+    Template.HORROR: '23a140e8109a19f064ca8e5ce408de11f0f2129ac0947b16a453c247b1eeba97',
     Template.LIGHT: 'b978c495fe09af701cb340b0ee1949ba88840b6a2eb63f4ea03ecd2d0052976d',
 }
 # 부상의 저항과 맞추기의 성질(injuries[].resistances, effects[].nature, #886 ②)을 더하기 전의 해시.
@@ -140,15 +146,28 @@ def dumped(
     skills: bool = False,
     nature_data: bool = False,
     resistances: bool = False,
+    damage_natures: bool = False,
 ) -> dict:
     """
     규칙의 값. natures 가 거짓이면 부상의 성질(#799)과 그 뒤에 더한 물건을 쓰는 판정(item_check, #800)을 뺀다.
     성질을 더하기 전의 해시와 견줄 때 쓴다. resources 가 거짓이면 수치(#804)를 뺀다.
     skills 가 거짓이면 기술(#805)을 뺀다. nature_data 가 거짓이면 가장 나중에 더한 규칙의 성질의 목록과
     타입마다의 면역(natures, monster_immunities, #886)을 뺀다. resistances 가 거짓이면 부상의 저항과 기술의 효과의
-    맞추기의 성질(#886 ②)을 뺀다. 지금의 값(RELEASED)과 견줄 때만 모두 참으로 준다.
+    맞추기의 성질(#886 ②)을 뺀다. damage_natures 가 거짓이면 기술의 효과의 피해의 성질(#886 ③)을 뺀다.
+    지금의 값(RELEASED)과 견줄 때만 모두 참으로 준다.
     """
     values = rules.model_dump(mode='json')
+    if not damage_natures:
+        values['skills'] = [
+            {
+                **skill,
+                'effects': [
+                    {key: value for key, value in one.items() if not (key == 'nature' and one['kind'] == 'damage')}
+                    for one in skill['effects']
+                ],
+            }
+            for skill in values['skills']
+        ]
     if not resistances:
         values['injuries'] = [
             {key: value for key, value in injury.items() if key != 'resistances'} for injury in values['injuries']
@@ -183,9 +202,10 @@ def fingerprint(
     skills: bool = False,
     nature_data: bool = False,
     resistances: bool = False,
+    damage_natures: bool = False,
 ) -> str:
     """규칙의 값을 정해진 차례의 JSON 으로 적어 해시를 낸다. without 의 칸은 빼고 낸다."""
-    values = dumped(rules, natures, resources, skills, nature_data, resistances)
+    values = dumped(rules, natures, resources, skills, nature_data, resistances, damage_natures)
     values = {key: value for key, value in values.items() if key not in without}
     canonical = json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
     return hashlib.sha256(canonical.encode()).hexdigest()
@@ -257,11 +277,22 @@ def test_released_templates_keep_their_values():
     assert set(RELEASED) == set(Template), '새 템플릿을 내면 RELEASED 에 그 해시를 적는다'
     for template, expected in RELEASED.items():
         current = fingerprint(
-            TEMPLATES[template].rules, resources=True, skills=True, nature_data=True, resistances=True
+            TEMPLATES[template].rules,
+            resources=True,
+            skills=True,
+            nature_data=True,
+            resistances=True,
+            damage_natures=True,
         )
         assert current == expected, (
             f'{template.value} 의 값이 바뀌었다. 이미 내놓은 템플릿의 값은 고치지 않는다. 새 이름으로 하나 더 낸다'
         )
+
+
+def test_adding_the_damage_natures_kept_the_other_values():
+    for template, expected in BEFORE_DAMAGE_NATURES.items():
+        rules = TEMPLATES[template].rules
+        assert fingerprint(rules, resources=True, skills=True, nature_data=True, resistances=True) == expected
 
 
 def test_adding_the_resistances_kept_the_other_values():

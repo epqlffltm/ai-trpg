@@ -37,6 +37,8 @@ export type MonsterDraft = {
   attacks: AttackDraft[];
   immune: InjuryNature[];
   vulnerable: InjuryNature[];
+  /** 저항(#886 ③). 고르는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
+  resistances: MonsterSheet['resistances'];
 };
 
 export function monsterDraft(monster: MonsterSheet | undefined, rules: Ruleset): MonsterDraft {
@@ -55,6 +57,7 @@ export function monsterDraft(monster: MonsterSheet | undefined, rules: Ruleset):
     attacks: attackDrafts(monster?.attacks ?? []),
     immune: monster?.immune ?? [],
     vulnerable: monster?.vulnerable ?? [],
+    resistances: monster?.resistances ?? [],
   };
 }
 
@@ -132,6 +135,7 @@ export function toMonsterSheet(monsterId: string, draft: MonsterDraft, rules: Ru
     attacks: toAttacks(draft.attacks),
     immune: draft.immune,
     vulnerable: draft.vulnerable,
+    resistances: draft.resistances,
   };
 }
 

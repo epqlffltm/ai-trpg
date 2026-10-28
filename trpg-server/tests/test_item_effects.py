@@ -208,7 +208,7 @@ def test_injuries_of_different_kinds_fit_together():
 
     parsed = ItemRule.model_validate(rule(effects=effects))
 
-    assert [effect.model_dump(mode='json') for effect in parsed.effects] == effects
+    assert [effect.model_dump(mode='json', exclude_none=True) for effect in parsed.effects] == effects
 
 
 async def test_effects_are_frozen_into_the_version(client: AsyncClient, me: dict):
@@ -251,7 +251,7 @@ async def test_the_table_lists_the_effects(client: AsyncClient, me: dict):
     read = await read_table(client, me, world['table'])
 
     dagger = next(item for item in read['items'] if item['name'] == '독 단검')
-    assert dagger['effects'] == [LIGHT_DAMAGE, POISON]
+    assert dagger['effects'] == [{**LIGHT_DAMAGE, 'nature': None}, POISON]
 
 
 # --- 자기와 동료 ---

@@ -72,6 +72,17 @@ def to_check(judging: Judging, effects: list, action: Aimed, ability: str, diffi
     return settle(judging.ruleset, check)
 
 
+def damage_nature(effects: list, fallback: str | None = None) -> str | None:
+    """
+    효과들의 피해의 성질(#886 ③). 피해 효과의 성질이고, 없으면 fallback(던진 무기의 성질)이다.
+    피해 효과가 없으면 None 이다(피해가 없다).
+    """
+    damage = first_of(effects, EffectKind.DAMAGE)
+    if damage is None:
+        return None
+    return damage.nature or fallback
+
+
 def target_of(judging: Judging, action: Aimed) -> dict:
     """
     쓴 쪽을 결과에 적을 모양. 몬스터면 그 마리의 id 와 이름, 인물이면 항목의 id 와 장면의 호칭,
@@ -226,7 +237,7 @@ def judge_use_on(judging: Judging, member: TableMember, action: UseAction) -> di
         return {'item_use': {**use_document(item, member, Reason.TARGET_GONE, target), **terms}, 'target_gone': gone}
     mark_harm(judging, member, item.effects, action, check)
     items.remove_items(member.sheet, action.item, 1)
-    outcome = judge_check(judging, member, check)
+    outcome = judge_check(judging, member, check, damage_nature(item.effects))
     applied = (
         apply_after_hit(judging, item.effects, action)
         if landed(outcome, check)

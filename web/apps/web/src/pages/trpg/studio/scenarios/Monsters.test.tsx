@@ -132,9 +132,10 @@ describe('몬스터 탭', () => {
       ward: 4,
       equipment: [{ entry_id: CLAW, count: 1, chance: 100, wear: [] }],
       inventory: [],
-      attacks: [{ name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: CLAW, cost: null, effects: [] }],
+      attacks: [{ name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: CLAW, cost: null, effects: [], nature: null }],
       immune: ['mind'],
       vulnerable: ['poison'],
+      resistances: [],
     });
     // 고치지 않은 시트의 면역은 그대로 간다
     expect(sent[0]?.immune).toEqual(['poison']);

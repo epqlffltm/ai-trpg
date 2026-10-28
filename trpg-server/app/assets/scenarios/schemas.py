@@ -343,6 +343,7 @@ class MonsterAttack(BaseModel):
     NPC 시트의 공격도 이 모양이다(#487). 그때 게시의 문제는 npc_attack_invalid 다.
     cost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.
     비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.
+    nature 는 피해의 성질이다(#886 ③). 맞은 쪽의 저항(반), 면역(0), 약점(두 배)을 따른다. 비우면 무기의 성질이다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -360,12 +361,21 @@ class MonsterAttack(BaseModel):
     cost: SkillCost | None = None
     # 맞혔을 때 더 드는 효과들(#805 ③-b). 부상(injure)과 수치의 맞추기(adjust)다. 대상은 맞은 캐릭터다
     effects: AttackEffects = []
+    # 피해의 성질(#886 ③, 룰북의 natures 의 이름표). 비우면 무기의 성질이고, 그것도 없으면 성질이 없는 피해다
+    nature: Key | None = None
 
     @model_validator(mode='after')
     def require_something(self) -> 'MonsterAttack':
         """피해도 효과도 없는 공격은 아무 일도 하지 않는다. 받지 않는다."""
         if self.harm is None and not self.effects:
             raise ValueError('공격에는 피해 등급(harm)이나 효과(effects)가 있어야 합니다.')
+        return self
+
+    @model_validator(mode='after')
+    def nature_only_with_harm(self) -> 'MonsterAttack':
+        """피해의 성질은 피해가 있는 공격에만 단다."""
+        if self.nature is not None and self.harm is None:
+            raise ValueError('피해의 성질(nature)은 피해 등급(harm)이 있는 공격에만 답니다.')
         return self
 
     @field_serializer('weapon')
@@ -516,6 +526,9 @@ class MonsterSheet(BaseModel):
     # 독을 먹는 골렘(빼기), 정신이 없는 짐승(더하기)처럼 그 몬스터만 다를 때 적는다
     immune: Natures = []
     vulnerable: Natures = []
+    # 저항(#886 ③). 성질과 단계(저항, 면역, 약점)다. 부상과 수치는 NPC 와 같이 막고(저항, 면역),
+    # 피해는 반, 0, 두 배다. 성질이 룰북의 것인지는 게시할 때 본다(monster_nature_invalid)
+    resistances: Resistances = ()
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'MonsterSheet':
@@ -703,6 +716,7 @@ class ItemRule(BaseModel):
     판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.
     예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.
     resistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.
+    nature 는 무기로 친 피해의 성질이다(#886 ③, 화염 검, 축복받은 망치). 무기에만 적는다.
     성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).
     """
 
@@ -724,6 +738,7 @@ class ItemRule(BaseModel):
     throw: ItemThrow | None = None
     aids: Aids = []
     resistances: Resistances = ()
+    nature: Key | None = None
 
     @model_validator(mode='after')
     def combat_only_when_worn(self) -> 'ItemRule':
@@ -731,6 +746,13 @@ class ItemRule(BaseModel):
         numbers = (self.attack, self.defense, self.guard, self.ap, self.ward)
         if not self.slots and any(number is not None for number in numbers):
             raise ValueError('공격 보정(attack, ap)과 방어(defense, guard, ward)는 칸(slots)이 있는 물건에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def nature_only_on_weapons(self) -> 'ItemRule':
+        """피해의 성질(#886 ③)은 무기(공격 보정이 있다)에만 적는다. 그 무기로 친 피해의 성질이다."""
+        if self.nature is not None and self.attack is None:
+            raise ValueError('피해의 성질(nature)은 공격 보정(attack)이 있는 무기에만 적습니다.')
         return self
 
     @model_validator(mode='after')

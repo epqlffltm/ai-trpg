@@ -79,7 +79,7 @@ from app.engine.check import find_ability, find_difficulty
 from app.engine.health import find_magnitude
 from app.engine.injury import find_injury
 from app.engine.item_aids import AidAct
-from app.engine.item_effects import EffectKind
+from app.engine.item_effects import EffectKind, nature_of
 from app.engine.resources import find_resource, holds
 from app.engine.ruleset import Healing, ResourceHolder, Ruleset
 from app.engine.sheet import CharacterSheet, Sheet, fits, knows_only, resists_only_known
@@ -474,11 +474,11 @@ def character_sheets(scenario: Scenario) -> list[CharacterSheet]:
 
 def find_resistance_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Problem]:
     """
-    저항과 맞추기의 성질(#886 ②)이 룰북의 성질인지 본다. 여럿 틀려도 한 번만 적는다(nature_invalid).
+    저항과 효과와 무기의 성질(#886 ②, ③)이 룰북의 성질인지 본다. 여럿 틀려도 한 번만 적는다(nature_invalid).
 
-    기본 시트, 프리젠의 시트, NPC 시트, 아이템 규칙의 저항과, 물건의 효과 중 수치를 내리는 맞추기의 성질이다.
-    몬스터와 인물의 공격의 효과의 성질은 공격의 검사가 본다(monster_attack_invalid, npc_attack_invalid).
-    룰북이 없으면 볼 수 없다.
+    기본 시트, 프리젠의 시트, NPC 시트, 아이템 규칙의 저항과, 물건의 효과(피해, 수치를 내리는 맞추기)와
+    무기의 성질이다. 몬스터 시트와 몬스터와 인물의 공격의 성질은 그 검사가 본다
+    (monster_nature_invalid, monster_attack_invalid, npc_attack_invalid). 룰북이 없으면 볼 수 없다.
     """
     if ruleset is None:
         return []
@@ -489,21 +489,23 @@ def find_resistance_problems(scenario: Scenario, ruleset: Ruleset | None) -> lis
         *(rule.resistances for rule in rules),
     ]
     natures = {nature.key for nature in ruleset.natures}
-    drains = [effect.nature for rule in rules for effect in rule.effects if effect_nature(effect) is not None]
-    if any(not resists_only_known(ruleset, one) for one in resistances) or not set(drains) <= natures:
+    if any(not resists_only_known(ruleset, one) for one in resistances) or not item_natures(rules) <= natures:
         return [Problem.NATURE_INVALID]
     return []
 
 
-def effect_nature(effect) -> str | None:
-    """효과 하나의 성질(#886 ②). 수치의 맞추기에만 있다. 없으면 None."""
-    return effect.nature if effect.kind == EffectKind.ADJUST else None
+def item_natures(rules: list[ItemRule]) -> set[str]:
+    """아이템 규칙들이 가리키는 성질. 효과(피해, 맞추기)의 성질과 무기의 성질이다."""
+    effects = {nature_of(effect) for rule in rules for effect in rule.effects}
+    weapons = {rule.nature for rule in rules}
+    return (effects | weapons) - {None}
 
 
 def nature_fault(ruleset: Ruleset, sheet: MonsterSheet) -> bool:
-    """몬스터 시트의 면역과 약함이 룰북의 성질(#886)이 아닌 것을 가리키는가."""
+    """몬스터 시트의 면역과 약함과 저항(#886 ③)이 룰북의 성질(#886)이 아닌 것을 가리키는가."""
     known = {nature.key for nature in ruleset.natures}
-    return not set(sheet.immune) <= known or not set(sheet.vulnerable) <= known
+    listed = not set(sheet.immune) <= known or not set(sheet.vulnerable) <= known
+    return listed or not resists_only_known(ruleset, sheet.resistances)
 
 
 def attack_fault(ruleset: Ruleset, attack: MonsterAttack, holder: ResourceHolder) -> bool:
@@ -511,6 +513,7 @@ def attack_fault(ruleset: Ruleset, attack: MonsterAttack, holder: ResourceHolder
     이 공격의 능력치, 난이도, 양의 등급 중 룰북의 규칙에 없는 것이 있는가. 양의 등급은 비울 수 있다(#805 ③-b).
     비용(#805 ③-a)의 수치는 그 쪽(인물이나 몬스터, holder)이 가지는 규칙의 수치여야 한다.
     효과(#805 ③-b)의 부상은 규칙의 부상이고, 맞추는 수치는 맞을 쪽(캐릭터)이 가지는 규칙의 수치여야 한다.
+    피해의 성질(#886 ③)은 규칙의 성질이어야 한다.
     """
     return (
         find_ability(ruleset, attack.ability) is None
@@ -518,6 +521,7 @@ def attack_fault(ruleset: Ruleset, attack: MonsterAttack, holder: ResourceHolder
         or (attack.harm is not None and find_magnitude(ruleset, attack.harm) is None)
         or cost_fault(ruleset, attack, holder)
         or any(attack_effect_fault(ruleset, effect) for effect in attack.effects)
+        or (attack.nature is not None and attack.nature not in {nature.key for nature in ruleset.natures})
     )
 
 
@@ -574,6 +578,7 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             monster_sheet.ward,
             monster_sheet.immune,
             monster_sheet.vulnerable,
+            monster_sheet.resistances,
         )
         for monster_sheet in read_monster_sheets(scenario)
     ]

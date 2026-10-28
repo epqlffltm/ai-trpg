@@ -148,7 +148,7 @@ describe('인물 탭', () => {
       merchant: false,
       equipment: [{ entry_id: SWORD, count: 1, chance: 50, wear: ['main_hand'] }],
       inventory: [{ entry_id: BREAD, count: 1, chance: 100, wear: [] }],
-      attacks: [{ name: '검 휘두르기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: SWORD, cost: null, effects: [] }],
+      attacks: [{ name: '검 휘두르기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: SWORD, cost: null, effects: [], nature: null }],
       resistances: [],
     });
   });
@@ -169,7 +169,7 @@ describe('인물 탭', () => {
 
 describe('인물 입력', () => {
   it('공격: 이름은 꼭, 겹치지 않게, 무기는 장비에 있는 물건', () => {
-    const attack = { name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: '', cost: null, effects: [] };
+    const attack = { name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: '', cost: null, effects: [], nature: null };
     expect(attacksHints([{ ...attack, name: ' ' }], [])[0]).toContain('이름');
     expect(attacksHints([attack, attack], [])[1]).toBe('같은 이름의 공격이 위에 있습니다.');
     expect(attacksHints([{ ...attack, weapon: SWORD }], [])[0]).toBe('무기는 장비에 적은 물건이어야 합니다.');

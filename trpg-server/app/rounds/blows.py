@@ -43,6 +43,8 @@ class Weapon:
     bonus: int
     # 관통력. 없으면 0 이다
     ap: int = 0
+    # 피해의 성질(#886 ③). 없으면 None 이다
+    nature: str | None = None
 
 
 @dataclass(frozen=True)
@@ -118,7 +120,7 @@ def weapon_of(item: CatalogItem | None) -> Weapon | None:
     """물건을 무기로. 공격 보정이 없는 물건이면 None."""
     if item is None or item.attack is None:
         return None
-    return Weapon(entry_id=item.entry_id, name=item.name, bonus=item.attack, ap=item.ap or 0)
+    return Weapon(entry_id=item.entry_id, name=item.name, bonus=item.attack, ap=item.ap or 0, nature=item.nature)
 
 
 def member_weapon(judging: Judging, member: TableMember, entry_id: uuid.UUID | None) -> Weapon | None:
@@ -199,6 +201,16 @@ def slot_name(ruleset: Ruleset, key: str | None) -> str | None:
     if key is None:
         return None
     return next((slot.name for slot in ruleset.equipment_slots if slot.key == key), key)
+
+
+def blow_nature(blow: Blow | None, own: str | None = None) -> str | None:
+    """
+    타격의 피해의 성질(#886 ③). 공격이나 효과가 적은 성질(own)이 먼저이고, 없으면 쓴 무기의 성질이다.
+    둘 다 없으면 None(성질이 없는 피해)이다.
+    """
+    if own is not None:
+        return own
+    return blow.weapon.nature if blow is not None and blow.weapon is not None else None
 
 
 def weapon_document(weapon: Weapon | None) -> dict | None:
