@@ -43,6 +43,7 @@ from ai_core.routing import MODEL_UNAVAILABLE as ROUTE_MODEL_UNAVAILABLE
 from ai_core.routing import Route
 from conversation_core import continuation
 from conversation_core.continuation import OverlapTrim
+from conversation_core.lorebook import chosen_entries, query_text, ranked, render_lore, with_recalled
 from conversation_core.relay import Relay
 from conversation_core.suggestions import MarkerHold, parse_suggestions, split_answer
 from conversation_core.window import Turn, select_window
@@ -72,6 +73,7 @@ from app.engine.events import drop_choice
 from app.engine.play import Played
 from app.engine.state import StoryState
 from app.engine.world import AfterEnding, World, read_world
+from app.lore.recall import LoreRecall
 from app.ratings import Rating, allowed_ratings
 from app.records import repository as records
 from app.records.illustrations import unlocked_scenes
@@ -81,7 +83,7 @@ from app.turns.briefing import Briefing, read_briefing
 from app.turns.charging import HoldDeclined, Settled, Settlement
 from app.turns.frames import delta_frame, done_frame, failed_frame, segment_frame
 from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
-from app.turns.prompt import PersonaCard, build_messages, lore_section, render_card, scene_card
+from app.turns.prompt import PersonaCard, build_messages, render_card, scene_card, with_lore
 from app.turns.providers import Router
 from app.turns.scenes import Staging, replayed, staging
 from app.turns.segments import (
@@ -98,7 +100,7 @@ from app.turns.segments import (
 )
 from app.turns.states import state_on_path, state_to_json, state_view
 from app.turns.stops import StopSwitch
-from app.turns.values import PromptOptions, SavedMessage, TurnResult, TurnStart
+from app.turns.values import LorePlan, PromptOptions, SavedMessage, TurnResult, TurnStart
 
 logger = logging.getLogger(__name__)
 
@@ -252,20 +254,39 @@ class Branch:
     document: Mapping
     # 세션에 가져온 페르소나(카드의 [사용자]). 페르소나 없이 시작했으면 None
     persona: PersonaCard | None = None
+    # 판의 사본의 id. 로어북의 벡터가 이것에 붙는다(app/lore/)
+    world_id: uuid.UUID | None = None
 
 
-def card_for(branch: Branch, state: StoryState, stage: Staging, options: PromptOptions, recent: Sequence[str]) -> str:
+def lore_plan_of(branch: Branch, recent: Sequence[str]) -> LorePlan | None:
     """
-    카드. state 와 장면으로 만들고, 켜져 있으면 다음 답 추천의 지시를 붙인다.
-    로어북의 항목은 최근 말(recent, 오래된 것부터 이번 말까지)의 키워드로 고른다.
+    판의 로어북에서 상시와 키워드로 고른 것(카드의 "[로어북]")과, 뜻으로 찾아 더할 바탕.
+    recent 는 최근 말들(오래된 것부터 이번 말까지)이다. 로어북의 항목이 없으면 None.
     """
+    keyed = branch.briefing.keyed_lore()
+    if not keyed or branch.world_id is None:
+        return None
+    entries = tuple(entry for _, entry in keyed)
+    order = tuple(ranked(entries, recent))
+    return LorePlan(
+        world_id=branch.world_id,
+        entries=entries,
+        keys=tuple(key for key, _ in keyed),
+        ranked=order,
+        query=query_text(recent),
+        block=render_lore(chosen_entries(entries, order)),
+    )
+
+
+def card_for(branch: Branch, state: StoryState, stage: Staging, options: PromptOptions, lore: LorePlan | None) -> str:
+    """카드. state 와 장면으로 만들고, 켜져 있으면 다음 답 추천의 지시를, 로어북이 있으면 고른 항목을 넣는다."""
     scene = scene_card(branch.briefing, branch.world, state, stage.cast, stage.direction)
-    lore = lore_section(branch.briefing, recent)
-    return render_card(branch.briefing, scene, options.suggestions, branch.persona, lore)
+    block = lore.block if lore is not None else None
+    return render_card(branch.briefing, scene, options.suggestions, branch.persona, block)
 
 
 def prompt_for(
-    branch: Branch, state: StoryState, stage: Staging, added: Message, options: PromptOptions
+    branch: Branch, state: StoryState, stage: Staging, added: Message, options: PromptOptions, lore: LorePlan | None
 ) -> list[ChatMessage]:
     """
     모델에 보낼 메시지. 카드(state 와 장면)와, 가지의 말들에 added 를 더한 것 가운데
@@ -273,7 +294,7 @@ def prompt_for(
     지난 답은 본문(content)만 간다. 다음 답 추천은 가지 않는다(모델이 흉내 내지 않게).
     """
     turns = [Turn(message.role, message.content) for message in [*branch.path, added]]
-    card = card_for(branch, state, stage, options, [turn.content for turn in turns])
+    card = card_for(branch, state, stage, options, lore)
     return build_messages(card, select_window(turns, options.context_chars))
 
 
@@ -560,7 +581,7 @@ async def branch_at(
     path = await conversations.active_path(session, leaf_id)
     state = await state_at(session, world, path)
     persona = persona_card(await conversations.persona_of(session, conversation.id))
-    return Branch(world, read_briefing(imported.document), path, state, imported.document, persona)
+    return Branch(world, read_briefing(imported.document), path, state, imported.document, persona, imported.id)
 
 
 async def branch_of(session: AsyncSession, conversation: Conversation, imported: ImportedWorld) -> Branch:
@@ -595,7 +616,8 @@ def turn_start(
     stage: Staging,
     options: PromptOptions,
 ) -> TurnStart:
-    """말 한 번의 시작. 그 뒤의 일은 이것만 들고 간다."""
+    """말 한 번의 시작. 그 뒤의 일은 이것만 들고 간다. 로어북은 가지의 말과 이번 말에서 고른다."""
+    lore = lore_plan_of(branch, [*(item.content for item in branch.path), message.content])
     return TurnStart(
         conversation_id=generation.conversation_id,
         generation_id=generation.id,
@@ -604,11 +626,12 @@ def turn_start(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(message),
-        messages=prompt_for(branch, state, stage, message, options),
+        messages=prompt_for(branch, state, stage, message, options, lore),
         cast=stage.cast,
         labels=labels_for(branch.briefing, stage.cast),
         expressions=expressions_for(branch.briefing, stage.cast),
         state=state_view(branch.world, state, stage.cast, shown_in_turn(branch, stage)),
+        lore=lore,
     )
 
 
@@ -790,14 +813,16 @@ async def begin_continue(
     return await begin(session_factory, viewer, conversation_id, now, record)
 
 
-def continue_prompt(branch: Branch, state: StoryState, stage: Staging, options: PromptOptions) -> list[ChatMessage]:
+def continue_prompt(
+    branch: Branch, state: StoryState, stage: Staging, options: PromptOptions, lore: LorePlan | None
+) -> list[ChatMessage]:
     """
     이어 쓰는 메시지. 카드와, 끊긴 답까지의 가지의 말들에 이어 쓰라는 지시(사람의 차례)를 더한 것 가운데
     지난 말의 양 안에 드는 최근 것들이다. 끊긴 답은 표식이 붙은 줄 그대로 가서 모델이 같은 모양으로 잇는다.
     다 이어 쓰면 다음 답 추천도 받는다(카드의 지시).
     """
     turns = [Turn(message.role, message.content) for message in branch.path]
-    card = card_for(branch, state, stage, options, [turn.content for turn in turns])
+    card = card_for(branch, state, stage, options, lore)
     turns.append(Turn(Role.USER, continuation.instruction()))
     return build_messages(card, select_window(turns, options.context_chars))
 
@@ -827,8 +852,9 @@ async def record_continue(
     # 메시지는 이어 쓰는 것으로 바꾼다. turn_start 가 만드는 보통의 메시지는 쓰지 않으므로 빈 가지로 만든다
     empty = replace(branch, path=[])
     start = turn_start(viewer.claims.user_id, generation, answered, empty, branch.state, stage, options)
-    messages = continue_prompt(branch, branch.state, stage, options)
-    return replace(start, messages=messages, continued=saved(target))
+    lore = lore_plan_of(branch, [message.content for message in branch.path])
+    messages = continue_prompt(branch, branch.state, stage, options, lore)
+    return replace(start, messages=messages, continued=saved(target), lore=lore)
 
 
 async def route_turn(router: Router, start: TurnStart) -> Route:
@@ -985,6 +1011,22 @@ async def settle_turn(
         await settle_generation(session_factory, billing, generation, now)
 
 
+async def with_recalled_lore(recall: LoreRecall | None, start: TurnStart) -> TurnStart:
+    """
+    로어북을 뜻으로 찾아 카드의 "[로어북]" 에 더한다(모델을 부르기 직전). 찾을 수 없거나 더할 것이 없으면 그대로다.
+    """
+    plan = start.lore
+    if recall is None or plan is None:
+        return start
+    recalled = await recall.recall(plan)
+    if not recalled:
+        return start
+    block = render_lore(chosen_entries(plan.entries, with_recalled(plan.ranked, recalled)))
+    card = start.messages[0]
+    rebuilt = replace(card, content=with_lore(card.content, plan.block, block))
+    return replace(start, messages=[rebuilt, *start.messages[1:]])
+
+
 async def stoppable_call(
     session_factory: async_sessionmaker[AsyncSession],
     route: Route,
@@ -1023,15 +1065,18 @@ async def run_generation(
     relay: Relay,
     clock: Callable[[], datetime],
     stop: StopSwitch,
+    recall: LoreRecall | None = None,
 ) -> None:
     """
     모델을 부르고, 흘려보내고, 저장하고, 맡긴다. 응답과 따로 도는 작업이다. 사람이 끊어도 끝까지 돈다.
+    부르기 전에 로어북을 뜻으로 찾아 카드에 더한다(recall 이 있을 때).
 
     사람이 멈추면(stop) 받은 만큼 저장하고 맡긴다(받은 조각이 있으면 partial 로 확정, 없으면 반환).
     서버가 꺼지며 멈추면 받은 만큼 저장하고 멈춘다. 맡기는 것은 다음에 뜬 서버의 정리 작업이 한다.
     저장하다 실패하면(DB 가 없다) 응답에 실패를 알리고 끝낸다.
     차례와 홀드는 오래되면 풀린다(GENERATION_STALE, 정리 작업).
     """
+    start = await with_recalled_lore(recall, start)
     collector = collector_for(start, relay)
     result = await stoppable_call(session_factory, route, start, params, collector, clock, stop)
     try:

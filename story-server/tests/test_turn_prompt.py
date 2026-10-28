@@ -14,6 +14,7 @@
   - 상태: 저장한 모양에서 그대로 되돌아온다. 가지의 끝에서 가장 가까운 상태를 쓰고, 없으면 처음의 상태다
 """
 
+import uuid
 from types import MappingProxyType
 
 from ai_core.provider import Role
@@ -27,12 +28,13 @@ from app.turns.prompt import (
     ACTION_PREFIX,
     PersonaCard,
     build_messages,
-    lore_section,
     plain_text,
     render_card,
     scene_card,
     stage_name,
+    with_lore,
 )
+from app.turns.service import Branch, lore_plan_of
 from app.turns.states import state_from_json, state_on_path, state_to_json
 from tests.engine_worlds import clock, document, member
 
@@ -175,22 +177,34 @@ LOREBOOKS = [
 
 def test_the_lorebook_takes_constant_entries_and_keywords_from_recent_messages():
     briefing = read_briefing(document(lorebooks=LOREBOOKS))
+    branch = Branch(WORLD, briefing, [], start_state(WORLD), {}, world_id=uuid.uuid4())
 
-    block = lore_section(briefing, ['@mina: 축제에 갈래?', '우물에 가 볼까'])
+    plan = lore_plan_of(branch, ['@mina: 축제에 갈래?', '우물에 가 볼까'])
 
     # 상시가 먼저, 그다음 키워드가 가장 최근에 나온 것부터. 이름이 빈 항목은 뺀다
-    assert block == '[로어북]\n- 바다: 마을 앞의 바다.\n- 우물: 소원을 빈다.\n- 축제: 8월의 축제.'
-    assert lore_section(read_briefing(document()), ['우물']) is None
+    assert plan.block == '[로어북]\n- 바다: 마을 앞의 바다.\n- 우물: 소원을 빈다.\n- 축제: 8월의 축제.'
+    assert plan.keys[1] == (uuid.UUID('11111111-2222-4333-8444-555555555555'), 'well')
+    assert plan.query == '@mina: 축제에 갈래?\n우물에 가 볼까'
+    empty = Branch(WORLD, read_briefing(document()), [], start_state(WORLD), {}, world_id=uuid.uuid4())
+    assert lore_plan_of(empty, ['우물']) is None
 
 
 def test_the_lorebook_comes_after_the_cast():
     briefing = read_briefing(document(lorebooks=LOREBOOKS))
     scene = scene_card(briefing, WORLD, start_state(WORLD), ['mina'])
 
-    card = render_card(briefing, scene, lore=lore_section(briefing, ['안녕']))
+    card = render_card(briefing, scene, lore='[로어북]\n- 바다: 마을 앞의 바다.')
 
     assert card.index('[장면의 인물]') < card.index('[로어북]\n- 바다: 마을 앞의 바다.') < card.index('[쓰는 법]')
-    assert '우물' not in card
+
+
+def test_recalled_entries_replace_or_add_the_lorebook_block():
+    card = '[장면의 인물]\n미나\n\n[로어북]\n- 바다\n\n[쓰는 법]\n표식'
+
+    assert with_lore(card, '[로어북]\n- 바다', '[로어북]\n- 바다\n- 탑').count('- 탑') == 1
+    added = with_lore('[장면의 인물]\n미나\n\n[장면 지시]\n비\n\n[쓰는 법]\n표식', None, '[로어북]\n- 탑')
+    assert added == '[장면의 인물]\n미나\n\n[로어북]\n- 탑\n\n[장면 지시]\n비\n\n[쓰는 법]\n표식'
+    assert with_lore(card, '[로어북]\n- 바다', None) == card
 
 
 def test_messages_start_with_the_card():

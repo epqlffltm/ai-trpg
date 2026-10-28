@@ -23,6 +23,7 @@ from server_core.testing.tokens import FakeAuthServer, SigningKey, make_signing_
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.core.config import Settings
+from app.core.database import EXTRA_SCHEMAS
 from app.main import create_app
 from tests.assets import FakeAsset
 from tests.cleaning import clear_tables
@@ -91,7 +92,7 @@ async def engine() -> AsyncIterator[AsyncEngine]:
     테스트마다 풀을 새로 만들면 연결을 매번 새로 맺는다. 연결을 맺는 데는 왕복이 여럿 든다.
     연결은 만든 이벤트 루프에 묶이므로 테스트의 루프도 하나다(pyproject.toml).
     """
-    shared = create_engine(make_test_settings())
+    shared = create_engine(make_test_settings(), EXTRA_SCHEMAS)
     yield shared
     await shared.dispose()
 

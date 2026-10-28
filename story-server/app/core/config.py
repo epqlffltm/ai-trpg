@@ -11,7 +11,7 @@ FastAPI 서버들이 함께 쓰는 칸(DB, 인증 서버, 로그, 수집기)은 
 """
 
 from functools import lru_cache
-from typing import ClassVar, Self
+from typing import ClassVar, Literal, Self
 
 from pydantic import Field, SecretStr, model_validator
 from server_core.service_auth.signing import MIN_SECRET_LENGTH
@@ -88,6 +88,18 @@ class Settings(CoreSettings):
     # 글의 다양함. 0 에 가까울수록 같은 입력에 비슷한 답이다. 받지 않는 모델에는 보내지 않는다(모델 목록)
     story_temperature: float = Field(default=0.9, ge=0, le=2)
 
+    # 로어북의 뜻으로 찾기(app/lore/). off 면 상시와 키워드만 쓴다. llm 이면 임베딩 모델을 부른다(fake 는 테스트용).
+    # 이름은 chat, trpg-server 와 같다. 같은 Ollama 를 함께 쓴다
+    embedder: Literal['off', 'fake', 'llm'] = 'off'
+    # 임베딩 모델의 이름. 벡터에 이 이름을 함께 적는다(모델이 다르면 벡터를 견줄 수 없다)
+    embedding_model: str = 'bge-m3'
+    # 임베딩 모델을 부르는 주소. OpenAI 와 같은 모양이고 /embeddings 앞까지 적는다(예: http://ollama:11434/v1)
+    embedding_base_url: str = ''
+    # 임베딩을 한 번 부르는 시간의 상한(초). 말 한 번의 찾기는 이보다 짧게 끊는다(app/lore/recall.py)
+    embedding_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
+    # 벡터의 길이(차원). 적으면 받은 벡터가 이 길이인지 본다
+    embedding_dimensions: int | None = Field(default=None, gt=0)
+
     # 요청 수 제한(app/limits/)을 세는 Redis 의 주소(redis://.../3).
     # 비우면 서버 안의 메모리로 센다(서버가 하나일 때만 맞다)
     redis_url: str = ''
@@ -103,6 +115,13 @@ class Settings(CoreSettings):
     # 모델을 부르지 않는 쓰기(세션 시작, 모델과 가지 바꾸기, 답 고치기). 한 사람이 이 시간(초) 안에 이만큼까지
     write_limit: int = Field(default=120, ge=1, le=10000)
     write_window_seconds: int = Field(default=60, ge=1, le=3600)
+
+    @model_validator(mode='after')
+    def require_an_embedding_address(self) -> Self:
+        """임베딩 모델을 부르겠다면서 주소나 모델의 이름이 없으면 뜨지 않는다."""
+        if self.embedder == 'llm' and not (self.embedding_base_url.strip() and self.embedding_model.strip()):
+            raise ValueError('EMBEDDER=llm 이면 EMBEDDING_BASE_URL 과 EMBEDDING_MODEL 을 적어야 합니다')
+        return self
 
     @model_validator(mode='after')
     def require_an_asset_secret(self) -> Self:

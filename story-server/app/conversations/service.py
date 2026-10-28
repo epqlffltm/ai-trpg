@@ -311,6 +311,12 @@ async def start_conversation(
     return await save_conversation(session, viewer.claims.user_id, copy, persona, model_slug)
 
 
+async def conversation_world_id(session: AsyncSession, conversation_id: uuid.UUID) -> uuid.UUID | None:
+    """세션이 쓰는 판의 사본의 id. 세션이 없으면 None."""
+    conversation = await session.get(Conversation, conversation_id)
+    return conversation.world_id if conversation is not None else None
+
+
 async def conversation_persona(session: AsyncSession, conversation: Conversation) -> ConversationPersona | None:
     """세션에 가져온 페르소나의 사본. 페르소나 없이 시작했으면 None."""
     return await repository.persona_of(session, conversation.id)

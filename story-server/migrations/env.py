@@ -21,10 +21,11 @@ from sqlalchemy.engine import Connection
 # 모델을 불러와야 Base.metadata 에 테이블이 등록된다. 이름을 직접 쓰지 않아도 불러오는 것 자체가 필요하다
 import app.catalog.models  # noqa: F401
 import app.conversations.models  # noqa: F401
+import app.lore.models  # noqa: F401
 import app.records.models  # noqa: F401
 import app.turns.models  # noqa: F401
 from app.core.config import get_settings
-from app.core.database import Base
+from app.core.database import EXTRA_SCHEMAS, Base
 
 config = context.config
 
@@ -55,7 +56,7 @@ async def run_migrations_with_app_engine() -> None:
 
     같은 엔진이므로 search_path 도 같다. 마이그레이션이 만드는 테이블이 앱이 찾는 스키마에 놓인다.
     """
-    engine = create_engine(settings)
+    engine = create_engine(settings, EXTRA_SCHEMAS)
     async with engine.connect() as connection:
         await connection.run_sync(run_migrations)
     await engine.dispose()

@@ -8,6 +8,7 @@
 (asset-server 의 app/worlds/documents.py). 모르는 칸은 버린다. 빈 칸은 빈 글로 읽는다.
 """
 
+import uuid
 from collections.abc import Mapping
 
 from pydantic import BaseModel, ConfigDict
@@ -50,8 +51,12 @@ class CharacterText(Part):
 
 
 class LoreText(Part):
-    """로어북의 항목 하나(conversation_core/lorebook.py 의 LoreEntry 모양). constant 면 늘 모델에 간다."""
+    """
+    로어북의 항목 하나(conversation_core/lorebook.py 의 LoreEntry 모양). constant 면 늘 모델에 간다.
+    id 는 로어북 안의 항목의 id 다(뜻으로 찾을 때 벡터를 가리킨다, app/lore/).
+    """
 
+    id: str = ''
     name: str = ''
     content: str = ''
     keywords: list[str] = []
@@ -59,8 +64,9 @@ class LoreText(Part):
 
 
 class LorebookText(Part):
-    """세계관의 판에 복사된 로어북 하나. 항목은 판의 차례다."""
+    """세계관의 판에 복사된 로어북 하나. id 는 asset 의 로어북 id 다. 항목은 판의 차례다."""
 
+    id: uuid.UUID | None = None
     entries: tuple[LoreText, ...] = ()
 
 
@@ -84,8 +90,15 @@ class Briefing(Part):
 
     def lore_entries(self) -> tuple[LoreText, ...]:
         """로어북들의 항목(로어북의 차례, 그 안의 차례). 이름이나 내용이 빈 항목은 뺀다."""
+        return tuple(entry for _, entry in self.keyed_lore())
+
+    def keyed_lore(self) -> tuple[tuple[tuple[uuid.UUID | None, str], LoreText], ...]:
+        """
+        lore_entries 와 같은 차례의 (열쇠, 항목). 열쇠는 (로어북의 id, 항목의 id)다(뜻으로 찾을 때 벡터를 가리킨다).
+        로어북의 id 가 없는 판이면 열쇠의 앞이 None 이다(그 항목은 벡터를 만들지 않는다).
+        """
         return tuple(
-            entry
+            ((lorebook.id, entry.id), entry)
             for lorebook in self.lorebooks
             for entry in lorebook.entries
             if entry.name.strip() and entry.content.strip()
