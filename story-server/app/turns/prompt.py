@@ -279,16 +279,19 @@ def render_card(
     suggest: bool = False,
     persona: PersonaCard | None = None,
     lore: str | None = None,
+    memory: str | None = None,
 ) -> str:
     """
     시스템 메시지(카드). 지킬 것, 세계관, 사용자, 지금, 장면의 인물, 로어북, 장면 지시, 쓰는 법의 차례다.
     빈 블록은 뺀다. suggest 면 맨 끝에 다음 답 추천의 지시를 붙인다(conversation_core/suggestions.py).
     persona 가 있으면 사용자가 누구인지 적는다(세션에 가져온 페르소나). lore 는 고른 로어북의 블록이다.
+    memory 는 기억 메모의 블록이다(사용자 뒤, 지금 앞. app/memory/service.py 의 render_memory).
     """
     sections = [
         '\n'.join(RULES),
         world_section(briefing),
         persona_section(persona),
+        memory,
         now_section(scene),
         cast_section(scene),
         lore,

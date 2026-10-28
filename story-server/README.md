@@ -135,6 +135,10 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | POST | `/api/v1/story/messages/{id}/continue` | [이어서 출력](#이어서-출력). 끊긴 답에 이어 쓴다. 바로 SSE 로 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/generations/{id}/stop` | [멈추기](#다시-생성과-멈추기). 도는 답을 멈추고 받은 만큼 저장한다. 204, 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
 | GET | `/api/v1/story/endings` | 그 세계관에서 내가 본 엔딩들(`?world_id=`, 처음 본 차례). [계정의 기록](#계정의-기록) | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}/notes` | [기억 메모](#기억-메모)들(먼저 쓴 것부터) | access 토큰 |
+| POST | `/api/v1/story/conversations/{id}/notes` | 기억 메모 더하기(`{"text"}`, 300자). 201. 가득 차면(20개) 409 `notes_full` | access 토큰 |
+| PATCH | `/api/v1/story/conversations/{id}/notes/{note_id}` | 기억 메모 고치기(`{"text"}`). 없으면 404 `note_not_found` | access 토큰 |
+| DELETE | `/api/v1/story/conversations/{id}/notes/{note_id}` | 기억 메모 지우기. 204 | access 토큰 |
 | GET | `/api/v1/story/gallery` | 그 세계관에서 내가 연 일러스트들(`?world_id=`, 처음 연 차례). [계정의 기록](#계정의-기록) | access 토큰 |
 
 ### 세션
@@ -344,6 +348,15 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
 - **키를 장면으로 둔 까닭**(2026-10-26). 일러스트는 인물이 아니라 이벤트와 엔딩의 장면에 붙어 있다. 한 장면에 인물이 0~4 명이라 인물 하나로 가리킬 수 없다.
   연 때의 그림을 적는 것은 제작자가 새 판에서 그림을 바꿔도 연 그림을 보이기 위해서다.
 
+### 기억 메모
+
+세션마다 사람이 쓰는 짧은 글이다(chat 의 기억 메모와 같다, `app/memory/`). 다음 말부터 카드의 `[기억]`(사용자 뒤, 지금 앞)으로 늘 모델에 간다.
+
+- 하나에 300자, 세션 하나에 20개까지다. 늘 가는 글이라 입력의 양을 지킨다. 더할 때 세션을 잠그고 센다(동시에 더해도 넘지 않는다).
+- 가지와 상관없이 세션에 하나의 목록이다. 답을 쓰는 중에도 고칠 수 있고 다음 말부터 들어간다. 모델을 부르지 않아 청구하지 않는다.
+- 남의 세션은 404, 그 세션에 없는 메모는 404 `note_not_found`, 가득 차면 409 `notes_full`, 빈 글과 긴 글은 422 다. 쓰기는 요청 수 제한의 쓰기로 센다.
+- 굴리는 요약과 요약이 제안하는 메모(chat 의 #677)는 아직 없다.
+
 ### 요청 수 제한
 
 chat 의 것과 같다(`app/limits/`). 한 사람이 정해진 시간 안에 몇 번 했는가를 세고, 넘으면 429 로 막는다. 크레딧과 별개로 짧은 시간에 몰아 보내는 것을 늦춘다.
@@ -483,6 +496,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `message_states` | 말에 붙은 엔진의 상태(JSONB). 상태가 바뀐 말에만 있다. 가지의 끝의 상태는 끝에서 가장 가까운 것이고, 없으면 처음의 상태다 |
 | `generations` | 모델을 한 번 부른 것과 그 청구(chat 서버의 표와 같은 모양). 버린 줄의 수(`dropped_segments`)를 더했다 |
 | `lore_embeddings` | 판의 사본에 든 로어북 항목의 벡터(pgvector, `extensions` 스키마). (사본, 임베딩 모델, 로어북, 항목)마다 하나. 사본이 지워지면 함께 지워진다 |
+| `memory_notes` | 세션의 기억 메모. 세션이 지워지면 함께 지워진다 |
 | `ending_records` | 계정의 본 엔딩. (`owner_id`, `world_source`, `ending_id`)마다 처음 본 시각과 세션. 세션이 지워지면 세션만 비운다 |
 | `illustration_unlocks` | 계정의 연 일러스트. (`owner_id`, `world_source`, `scene_kind`, `scene_id`)마다 연 때의 그림(`image_id`), 장면의 인물(`cast`), 처음 연 시각과 세션 |
 

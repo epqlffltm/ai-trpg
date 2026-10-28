@@ -134,6 +134,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/conversations/{conversation_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Notes
+         * @description 세션의 기억 메모들.
+         */
+        get: operations["list_notes_api_v1_story_conversations__conversation_id__notes_get"];
+        put?: never;
+        /**
+         * Add Note
+         * @description 기억 메모를 더한다. 다음 말부터 모델에 간다.
+         */
+        post: operations["add_note_api_v1_story_conversations__conversation_id__notes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/story/conversations/{conversation_id}/notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Note
+         * @description 기억 메모를 지운다.
+         */
+        delete: operations["delete_note_api_v1_story_conversations__conversation_id__notes__note_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit Note
+         * @description 기억 메모를 고친다.
+         */
+        patch: operations["edit_note_api_v1_story_conversations__conversation_id__notes__note_id__patch"];
+        trace?: never;
+    };
     "/api/v1/story/conversations/{conversation_id}/persona": {
         parameters: {
             query?: never;
@@ -893,6 +941,37 @@ export interface components {
             tier: components["schemas"]["Tier"] | null;
         };
         /**
+         * NoteOut
+         * @description 메모 하나.
+         */
+        NoteOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Text */
+            text: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * NoteWrite
+         * @description 메모를 쓰거나 고칠 때 받는 글. 앞뒤 빈칸은 걷는다.
+         */
+        NoteWrite: {
+            /** Text */
+            text: string;
+        };
+        /**
          * PassTimeAction
          * @description 다음 시간대로.
          */
@@ -1437,6 +1516,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConversationModelOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_notes_api_v1_story_conversations__conversation_id__notes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"][];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    add_note_api_v1_story_conversations__conversation_id__notes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    delete_note_api_v1_story_conversations__conversation_id__notes__note_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    edit_note_api_v1_story_conversations__conversation_id__notes__note_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteOut"];
                 };
             };
             /** @description 입력이 틀렸다 */

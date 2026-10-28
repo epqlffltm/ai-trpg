@@ -60,6 +60,8 @@ from app.limits.setup import build_limiting, build_redis
 from app.lore.indexing import LoreIndexer
 from app.lore.recall import LoreRecall
 from app.lore.setup import build_embedder
+from app.memory import router as memory
+from app.memory.service import NoteNotFoundError, NotesFullError
 from app.records import router as records
 from app.turns import router as messages
 from app.turns import settler
@@ -227,6 +229,8 @@ def create_app(
     app.include_router(messages.generation_router, prefix=API_PREFIX)
     # 계정의 기록. 본 엔딩
     app.include_router(records.router, prefix=API_PREFIX)
+    # 기억 메모(세션마다의 짧은 글, 모델에 늘 간다)
+    app.include_router(memory.router, prefix=API_PREFIX)
 
     # 세션의 예외를 응답으로 바꾼다(app/conversations/router.py)
     app.add_exception_handler(ConversationNotFoundError, conversations.handle_conversation_not_found)
@@ -238,6 +242,8 @@ def create_app(
     app.add_exception_handler(PriceListUnavailable, billing.handle_prices_unavailable)
     app.add_exception_handler(ConversationBusyError, conversations.handle_conversation_busy)
     app.add_exception_handler(NotEditableError, conversations.handle_not_editable)
+    app.add_exception_handler(NoteNotFoundError, memory.handle_note_not_found)
+    app.add_exception_handler(NotesFullError, memory.handle_notes_full)
     # 요청 수를 넘었다(app/limits/responses.py)
     app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
     # 말 보내기의 예외(app/turns/router.py)
