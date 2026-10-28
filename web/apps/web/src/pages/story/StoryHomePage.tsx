@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/story/StoryHomePage.tsx
 // story 의 첫 화면(/story). 로그인하지 않아도 열린다. 위에 공개 세계관(20 개씩 "더 보기", 누르면 소개 D1).
-// 로그인했으면 내 세션(최근 것부터, 20 개씩 "더 보기")과 게시한 내 세계관으로 새로 시작. 운영자에게는 "JSON 으로 세계관 넣기"로 가는 길이 있다.
+// 로그인했으면 내 세션(최근 것부터, 20 개씩 "더 보기")과 게시한 내 세계관으로 새로 시작. 운영자에게는 "세계관 만들기"(D7)와 "JSON 으로 세계관 넣기"로 가는 길이 있다.
 // 시작하면 세계관의 마지막 판을 고정한 새 세션이 생기고 장면(D2)으로 간다. 모델은 지난번 세션의 것이다.
 
 import { Button, Notice } from '@ai-trpg/ui';
@@ -136,7 +136,7 @@ function StartFromMyWorlds() {
         {operator ? (
           <>
             {' '}
-            <Link to="/story/worlds/import">JSON 으로 세계관 넣기</Link>
+            <Link to="/story/studio/worlds">세계관 만들기</Link> · <Link to="/story/worlds/import">JSON 으로 세계관 넣기</Link>
           </>
         ) : null}
       </p>

@@ -83,3 +83,6 @@ export const StoryHomePage = lazyPage(() => import('../pages/story/StoryHomePage
 export const StorySessionPage = lazyPage(() => import('../pages/story/StorySessionPage'), 'StorySessionPage');
 export const WorldImportPage = lazyPage(() => import('../pages/story/import/WorldImportPage'), 'WorldImportPage');
 export const StoryWorldPage = lazyPage(() => import('../pages/story/StoryWorldPage'), 'StoryWorldPage');
+export const StoryWorldsStudioPage = lazyPage(() => import('../pages/story/studio/StoryWorldsStudioPage'), 'StoryWorldsStudioPage');
+export const StoryWorldNewPage = lazyPage(() => import('../pages/story/studio/StoryWorldNewPage'), 'StoryWorldNewPage');
+export const StoryWorldEditPage = lazyPage(() => import('../pages/story/studio/StoryWorldEditPage'), 'StoryWorldEditPage');
