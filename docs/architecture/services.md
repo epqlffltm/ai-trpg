@@ -3,7 +3,7 @@
 이 저장소를 이루는 서버와 서비스가 무엇이고, 어떻게 나뉘고, 서로 무엇으로 이어지는지를 한곳에 적는다.
 서버를 더하거나 서버 사이의 길을 바꿀 때 이 문서를 먼저 고친다.
 
-- 기준: `main` `4b383c2` (2026-10-18)
+- 최초 설계 기준: `main` `4b383c2` (2026-10-18). 아래 구현 목록은 2026-10-29의 main 파일 구성에 맞춰 갱신했다.
 - 2026-10-19: 자산 서버(`asset-server`)를 두고, story 는 chat-server 의 모드로 맡기기로 한 결정을 반영했다. 그 밖의 표는 기준 커밋 그대로다.
 - 2026-10-21: TRPG, chat, story 를 서버 셋으로 나누기로 했다(`story-server` 를 다시 둔다). 셋이 함께 쓰는 코드는 `shared/` 에 두고 서버마다 그대로 쓰거나 정해 둔 자리에서 재정의한다([공용 코드 규칙](shared-code.md)).
 - **구현된 것**과 **계획인 것**을 나눠 적는다. 계획은 확정이 아니다. 정하지 않은 것은 [열린 질문](#열린-질문)에 있다.
@@ -28,13 +28,13 @@
 ## 한눈에
 
 ```
-                          프런트엔드 (React + TypeScript, 계획)
+                          프런트엔드 (React + TypeScript, 구현 중)
              사용자 화면 : 공통 껍데기 / TRPG / chat / story                관리자 화면
                                      │ REST, SSE
                                  프록시 (nginx)          /api/v1/<서비스>/...
    ┌──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┐
  auth      trpg       board     billing   notification  asset      chat       story      관리
- (Django)  (FastAPI)  (FastAPI) (Go)      (FastAPI)     (FastAPI)  (FastAPI,  (FastAPI,  (FastAPI,
+ (Django)  (FastAPI)  (FastAPI) (Go)      (FastAPI)     (FastAPI)  (FastAPI)  (FastAPI)  (계획)
                                                                     계획)      계획)      계획)
    │          │          │          │          │           │          │          │          │
  auth    game(+_test) board(+)  billing(+) notification(+) asset(+)  chat(+)    story(+)    ops
@@ -68,23 +68,29 @@
 - 세계관과 로어북은 지금 trpg-server 에 있고, 나중에 asset-server 로 옮긴다([순서](#순서)).
 - 결제는 실제 돈을 받지 않는다. 토스페이먼츠는 테스트 키만 쓴다.
 
-### 계획인 것
+### 추가로 구현된 것
 
-아직 폴더도 코드도 없다. 이름과 자리만 정해 둔다.
+아래 자산·chat·story 서버와 프런트엔드·공용 코드는 실제 폴더와 구현이 있다. 기능별 상세 범위는 각 서버 README가 기준이다.
 
 | 서비스 | 폴더 | 기술 | 포트 | 토큰의 대상 | 스키마 | 초기화 스크립트 | 하는 일 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 자산 | `asset-server/` | FastAPI | 8006 | `ai-trpg-asset` | `asset`, `asset_test` | `08-asset-role.sql` | 제작자가 만드는 자산(세계관, 로어북과 항목, 캐릭터, 일러스트)과 계정 페르소나의 원본. 게시와 판, 공개 범위, 등급, 그림 올리기와 내주기. 쓰는 서비스가 시작할 때 판과 페르소나를 가져가게 내준다. [asset 서버 설계](asset-server.md) |
-| chat | `chat-server/` | FastAPI | 8005 | `ai-trpg-chat` | `chat`, `chat_test` | `09-chat-role.sql` | 캐릭터 하나와 1:1 대화. 대화 조작(다시 생성, 분기), 기억, 로어북 검색, 장소와 소지품, 호감도. 뼈대와 인프라(compose, `09-chat-role.sql`, 프록시의 `/api/v1/chat/` 와 말을 보내는 스트리밍 주소)가 있다(#590). [chat 서버 설계](chat-server.md) |
-| story | `story-server/` | FastAPI | 8007 | `ai-trpg-story` | `story`, `story_test` | `10-story-role.sql` | 세계관 안에서 여러 인물과 이야기. 시각, 인물의 위치, 이벤트와 선택지, 호감도, 고백과 엔딩. 대화의 핵심은 chat 과 같은 공용 코드를 쓴다. 뼈대와 인프라(compose, `10-story-role.sql`, 프록시의 `/api/v1/story/`, 대시보드와 경보)가 있다(#591). [story 서버 설계](story.md) |
-| 관리 | 이름 미정(`ops-server` 후보) | FastAPI | 미정 | 미정 | `ops` | 미정 | 운영 조회와 집계, 관리자 작업 요청과 감사 기록. [관측 규격의 경계](../observability.md#관리-서버의-경계)를 따른다 |
-| 프런트엔드 | `web/` | React + TypeScript(Vite, SPA) | - | - | - | - | 사용자 화면과 관리자 화면. 같은 nginx 가 정적 파일로 내준다. [화면 명세](../product/screens.md#프런트-구조) |
-| 공용 코드 | `shared/` | Python 패키지 | - | - | - | - | FastAPI 서버의 공통부(`server-core`: 토큰 검증, 관측, 서버끼리의 서명. 있다, #588), AI 호출(`ai-core`. 있다, #499), 대화의 핵심(`conversation-core`. 있다, #591), 공용 템플릿. [공용 코드 규칙](shared-code.md) |
+| 자산 | `asset-server/` | FastAPI | 8006 | `ai-trpg-asset` | `asset`, `asset_test` | `08-asset-role.sql` | 페르소나, 캐릭터·로어북·story 세계관의 초안·게시·판·공개 목록, 이미지 처리, 서비스 간 판 공급. [asset 서버 설계](asset-server.md) |
+| chat | `chat-server/` | FastAPI | 8005 | `ai-trpg-chat` | `chat`, `chat_test` | `09-chat-role.sql` | 캐릭터 1:1 대화, 스트리밍·분기·중지·재생성, 기억·로어 검색·과금. [chat 서버 설계](chat-server.md) |
+| story | `story-server/` | FastAPI | 8007 | `ai-trpg-story` | `story`, `story_test` | `10-story-role.sql` | 세계관과 인물, 시각·이벤트·선택지·호감도·엔딩, 세션·스트리밍·기억·과금. [story 서버 설계](story.md) |
+| 프런트엔드 | `web/` | React + TypeScript(Vite, SPA) | - | - | - | - | 계정·TRPG·chat·story·게시판·결제 화면과 제작 도구. nginx가 정적 파일로 제공. [화면 명세](../product/screens.md#프런트-구조) |
+| 공용 코드 | `shared/` | Python 패키지 | - | - | - | - | `server-core`(인증·관측 등), `ai-core`(모델 호출), `conversation-core`(대화 공통 로직). [공용 코드 규칙](shared-code.md) |
 
-- 포트와 스크립트 번호는 비어 있는 다음 번호를 예약한 것이다. 서버를 실제로 만드는 PR 에서 확정한다.
-  알림 서버가 먼저 만들어져 8004 와 06 을 썼다. 07 은 메트릭을 읽는 계정(`07-monitor-role.sql`)이 먼저 썼다. story 가 예약했던 8006 과 08 은 asset 이 받았다.
-  asset 은 만드는 중이라(#564) 포트, 토큰의 대상, 스키마, 스크립트를 확정했다. chat 은 8005 와 `09-chat-role.sql` 이다(2026-10-21, 07 이 겹쳐 다시 정했다). story 는 8007 과 `10-story-role.sql` 이다(2026-10-21).
-- **TRPG, chat, story 를 서버 셋으로 나눈다(2026-10-21).** 2026-10-19 에는 story 를 chat-server 의 모드로 두기로 했으나 뒤집었다.
+### 계획인 것
+
+별도 관리 서버(`ops-server` 후보)는 아직 구현하지 않았다. 기존 서비스의 운영자 API와 화면이 별도 관리 서버의 존재를 뜻하지는 않는다.
+
+| 서비스 | 폴더 | 기술 | 포트 | 토큰의 대상 | 스키마 | 초기화 스크립트 | 하는 일 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 관리 | 이름 미정(`ops-server` 후보) | FastAPI | 미정 | 미정 | `ops` | 미정 | 운영 조회와 집계, 관리자 작업 요청과 감사 기록. [관측 규격의 경계](../observability.md#관리-서버의-경계)를 따른다 |
+
+- 자산·chat·story 서버의 포트와 DB 초기화 스크립트는 이미 코드와 compose에 반영됐다. 초기 번호 선정의 경위는 Git 기록을 따른다.
+
+- **TRPG, chat, story 를 별도 서버로 나눴다(2026-10-21).** 2026-10-19 에는 story 를 chat-server 의 모드로 두기로 했으나 뒤집었다.
   - 나누는 까닭: 셋은 쓰는 사람과 한 턴의 모양이 다르다(TRPG 는 판정과 여러 사람, chat 은 1:1, story 는 여러 인물과 이벤트). 한 서버의 장애가 다른 제품을 멈추지 않고, 따로 배포하고 따로 늘린다.
   - 나눌 때의 대가(같은 코드가 두 벌, 운영할 것이 늚)는 공용 코드로 줄인다. 함께 쓰는 코드는 `shared/` 의 패키지로 두고 빌드할 때 이미지에 넣는다. 서버끼리 실행 중에 부르지 않는다([나누는 기준](#나누는-기준)).
   - 대가로 남는 것: 서버마다 컨테이너, 마이그레이션, 대시보드, 경보, CI 가 한 벌씩 는다. VM 한 대의 메모리가 그만큼 준다([열린 질문](#열린-질문)).
@@ -269,7 +275,7 @@ PostgreSQL 의 `max_connections` 는 기본값 100 이고, superuser 의 몫 3 �
 3. `asset-server` 를 새로 만들고, 새 종류인 캐릭터를 처음부터 거기서 만든다. 같은 때에 trpg-server 가 세계관과 로어북의 게시된 판을, asset-server 가 나중에 줄 것과 같은 모양의 API 로 내준다.
 4. `chat-server` 의 첫 버전. 캐릭터를 쓴 대화(판 가져오기), 스트리밍 대화, 다시 생성, 자동 요약 기억, 모델 등급과 크레딧, 장소와 소지품. TRPG 의 지도, 물건, 인물을 공용 템플릿으로 올려 쓴다. 자세한 순서는 [chat 서버 설계](chat-server.md#만드는-순서).
 5. `story-server` 의 첫 버전. 여러 인물, 호감도(NPC 의 태도에서 이어 가는 수치), 이벤트와 엔딩(조건으로 드러나는 퀘스트의 모양). 규칙은 [story 서버 설계](story.md)에 있다(2026-10-20). chat 과 같은 대화의 핵심은 그때 `shared/conversation-core` 로 뽑아 함께 쓴다.
-6. 프런트엔드와 화면. 백엔드(1~5)가 거의 다 된 뒤 화면 명세와 API 목록으로 Stitch 의 시안을 받고, 디자인의 요소만 뽑아 React 로 쓴다. 프런트 하나에 TRPG, chat, story 를 경로로 나눈다([화면 명세의 프런트 구조](../product/screens.md#프런트-구조), 2026-10-21).
+6. 프런트엔드와 화면. React(Vite) 앱과 TRPG·chat·story·제작 도구 경로가 구현돼 있다. 이 항목은 당시 설계 순서의 기록이며 실제 화면의 완료·검증 범위는 [화면 명세](../product/screens.md)와 `web/` 코드를 따른다.
 7. 배포. VM 을 띄운다([배포 설계](deployment.md)). 로그·메트릭·추적 수집과 경보, staging 의 운영 설정과 TLS(#451), 바깥 백업, VM 준비 순서는 붙여 두었다.
 8. 관리 서버의 첫 버전(공개 베타 전, 2단계 동안). 신고 처리, 비용 집계, 지금 명령으로 하는 결제 운영 작업(가격표, 가격 할 일, 결과를 모르는 주문). 잔액 환불은 아직 없는 기능이라 설계가 필요하다([열린 질문](#열린-질문)).
 9. 세계관과 로어북(항목 포함)을 trpg-server 에서 asset-server 로 옮긴다. 쓰는 쪽이 복사본을 들고 있어서 chat 은 거의 안 바뀐다. 이전은 따로 설계한다.
