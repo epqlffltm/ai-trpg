@@ -3,7 +3,7 @@
 여러 서비스가 같은 코드나 형식을 쓸 때 지킬 것을 적는다. 서비스의 구조는 [서비스 구조 명세](services.md)에 있다.
 
 - 기준: `main` `4b383c2` (2026-10-18)
-- 패키지는 셋이다. `shared/server-core`(#588, [서버의 공통부](#서버의-공통부-sharedserver-core))는 알림 서버, asset 서버, chat 서버가 쓴다. `shared/ai-core`(#499, [AI 호출](#ai-호출-sharedai-core))는 게임 서버와 chat 서버가 쓴다. `shared/conversation-core`(#591, [대화의 핵심](#대화의-핵심-sharedconversation-core))는 chat 서버가 쓰고 story 서버가 세션을 만들 때 쓴다.
+- 현재 공용 패키지는 `shared/server-core`, `shared/ai-core`, `shared/conversation-core` 셋이다. FastAPI 서버들은 필요한 패키지를 빌드에 포함한다. 아래 기록의 '먼저 뽑는다', '후보'는 당시 결정 과정이며 현재 구현 여부는 각 패키지와 서버의 의존성 설정을 따른다.
 - 2026-10-19: 자산은 asset-server 가 원본을 갖는다는 결정을 반영했다(원칙 1·2, 공유 표, 템플릿, 열린 질문).
 - 2026-10-19: `app/ai` 를 뽑는 방식을 정했다(#380). 모델 목록, `shared/` 를 가져오는 법, CI, 뽑는 때다([정한 것](#정한-것)). "AI 호출"의 `app/ai` 표는 `main` `0930cf9` 기준이다.
 - 2026-10-20: 제작자가 쓰는 소개 글(HTML 과 인라인 CSS)을 거르는 규칙을 세 서비스에 하나로 정했다([소개 글의 HTML](#소개-글의-html)).

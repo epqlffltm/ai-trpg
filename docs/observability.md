@@ -1,9 +1,9 @@
 # 관측 규격
 
-서버들(`auth-server`, `trpg-server`, `board-server`, `billing-server`, `notification-server`)이 로그, 메트릭, 추적 정보를 같은 모양으로 남기기 위한 약속이다.
+백엔드 여덟 서비스(`auth-server`, `trpg-server`, `board-server`, `billing-server`, `notification-server`, `asset-server`, `chat-server`, `story-server`)가 로그, 메트릭, 추적 정보를 같은 모양으로 남기기 위한 약속이다.
 언어와 프레임워크는 서버마다 다르지만, 밖에서 보이는 칸의 이름과 뜻은 같다.
 
-이 문서가 기준이다. 칸의 이름이나 뜻을 바꾸려면 이 문서부터 고치고 네 서버를 함께 고친다.
+이 문서가 기준이다. 칸의 이름이나 뜻을 바꾸려면 이 문서부터 고치고 영향받는 서버들을 함께 고친다.
 
 ## 목차
 
@@ -80,7 +80,7 @@
 
 프록시는 서버 넷 앞에 서는 nginx 다(`docker/nginx/templates/`, 줄의 모양은 `http.inc.template` 의 `log_format`). 요청이 끝난 줄만 남긴다. [프록시의 줄](#프록시의-줄)에 따로 적었다.
 
-환경과 버전은 네 서버가 같은 이름의 환경 변수로 받는다. 비밀값이 아니다.
+환경과 버전은 서비스들이 같은 이름의 환경 변수로 받는다. 비밀값이 아니다.
 
 | 환경 변수 | 기본값 | 받는 모양 | 로그의 칸 |
 | --- | --- | --- | --- |
@@ -282,7 +282,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | 그 밖의 5xx | `error` | 처리하지 못한 예외. 다른 주소와 같다 |
 | 그 밖 | `debug` | 성공. 운영의 수준(`info`)에서는 남지 않는다. 확인이 오는지 보려면 `LOG_LEVEL=debug` 로 띄운다 |
 
-네 서버의 코드: 인증·게임 `observability/middleware.py` 의 `probe_level_of`, 게시판 공용 코드(`shared/server-core`)의 `server_core/observability/middleware.py` 의 `probe_level_of`, 결제 `internal/httpapi/observability.go` 의 `probeLevelOf`.
+각 서버의 요청 관측 미들웨어에서 이 규칙을 적용한다. 구체적인 구현은 각 서버의 `observability`와 `shared/server-core`를 따른다.
 인증 서버는 Django 가 따로 남기는 줄(`django.request` 의 "Service Unavailable: /주소")도 버린다. 예외가 없는 5xx 는 미들웨어의 줄과 겹치고, Django 는 그것을 늘 `error` 로 적는다(`observability/setup.py` 의 `OnlyUnloggedServerErrors`).
 
 ### 프록시의 줄
@@ -452,7 +452,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 
 ### 마지막 방어선
 
-위의 규칙은 로그를 남기는 코드가 지킨다. 그래도 실수는 난다. 그래서 줄이 나가기 직전에 한 번 더 거른다. 네 서버가 같은 규칙이다.
+위의 규칙은 로그를 남기는 코드가 지킨다. 그래도 실수는 난다. 그래서 줄이 나가기 직전에 한 번 더 거른다. 공용 또는 서비스별 로깅 코드가 이 규칙을 적용한다.
 
 **1. 칸의 이름을 본다.** 이름을 낱말로 쪼개(`access_token`, `accessToken`, `Access-Token` 은 모두 `access`, `token`) 다음에 걸리면 값을 `[REDACTED]` 로 바꾼다.
 
@@ -512,7 +512,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 - **인증 서버에는 서버 쪽의 전체 제한이 없다.** 동기 Django(psycopg)에는 쿼리 하나만 시간으로 끊는 장치가 없다.
   `statement_timeout` 은 DB 가 살아서 느릴 때만 듣고, DB 가 멈췄거나 네트워크가 끊겼을 때는 듣지 않는다. 스레드로 떼어 기다리면 멈춘 스레드가 쌓인다.
   그래서 연결 시간(5초)만 묶고, 연결된 뒤 멈춘 DB 는 healthcheck 의 5초가 실패로 센다. 그동안 그 요청이 워커를 쥐는 것은 같은 DB 앞의 보통 요청과 같다.
-- **실패하면 네 서버 모두 오류의 종류만 로그에 남긴다**(결제는 `error_type` 칸). 오류의 글에는 DB 주소와 계정 이름이 들어 있다.
+- **실패하면 서버는 오류의 종류만 로그에 남긴다**(결제는 `error_type` 칸). 오류의 글에는 DB 주소와 계정 이름이 들어 있을 수 있다.
 
 **응답에 서비스 이름과 버전을 더하지 않았다.** 세 서버의 테스트가 본문이 정확히 `{"status":"ok"}` 인 것을 확인하고 있고,
 프록시의 상태 확인이 본문을 글자 그대로 비교하도록 설정될 수 있다. 버전은 로그의 `version` 칸으로 안다.

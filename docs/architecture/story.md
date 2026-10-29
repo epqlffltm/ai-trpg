@@ -6,7 +6,7 @@ story 는 `story-server` 가 맡는다(2026-10-21. 그 전에는 `chat-server` �
 - chat 과 같은 것(대화 트리, 스트리밍, 과금, 기억, 장소와 소지품, 그림, 성인 등급)은 [chat 서버 설계](chat-server.md)를 따른다. 여기에는 story 에서 다르거나 더해지는 것만 적는다.
 - chat-server 와 나눈 선(주소, 포트, 토큰의 대상, 스키마, 가격 이름의 머리)과 함께 쓰는 코드(`shared/server-core`, `shared/ai-core`, `shared/conversation-core`)는 [chat 서버 설계의 story-server 와 나눈 선](chat-server.md#story-server-와-나눈-선)에 있다.
 - 화면은 [화면 명세의 D1~D7](../product/screens.md#story-화면의-공통-원칙)에 있다.
-- 서버는 뼈대만 있다(`story-server/`, #591). 아래의 규칙은 계획이다.
+- 현재 `story-server/`에는 세션, 이야기 진행, 이동·시각·이벤트·선택지·호감도·엔딩의 엔진, 스트리밍, 분기와 기억 요약 코드가 있다. 아래에는 구현된 규칙과 초기 설계 결정이 함께 적혀 있다. 실제 API와 기능 상태는 `story-server/README.md`와 코드를 따른다.
 
 ## 목차
 
