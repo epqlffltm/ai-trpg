@@ -1,8 +1,9 @@
 // web/apps/web/src/layout/AppHeader.tsx
 // 모든 화면의 머리. 이름(첫 화면으로), 서비스와 게시판, 내 정보 또는 로그인.
 // 로그인했으면 알림(A10, 읽지 않은 수)과 잔액(A6, 지갑으로)도 둔다. 밝기 고르기(시스템, 라이트, 다크)는 늘 둔다.
+// 지금 있는 서비스의 메뉴는 aria-current 로 알린다(NavLink). 아래 경로(/trpg/...)에 있어도 그 서비스다.
 
-import { Link, useLocation } from 'react-router';
+import { Link, NavLink, useLocation } from 'react-router';
 import { useSession } from '../auth/useSession';
 import { AccountMenu } from './AccountMenu';
 import { HeaderBalance } from './HeaderBalance';
@@ -15,13 +16,16 @@ export function AppHeader() {
   return (
     <header className="app-header">
       <Link to="/" className="app-header__brand">
+        <span className="app-header__mark" aria-hidden="true">
+          ✦
+        </span>
         AI TRPG
       </Link>
       <nav aria-label="주 메뉴" className="app-header__nav">
-        <Link to="/trpg">TRPG</Link>
-        <Link to="/chat">chat</Link>
-        <Link to="/story">story</Link>
-        <Link to="/board">게시판</Link>
+        <NavLink to="/trpg">TRPG</NavLink>
+        <NavLink to="/chat">chat</NavLink>
+        <NavLink to="/story">story</NavLink>
+        <NavLink to="/board">게시판</NavLink>
       </nav>
       <div className="app-header__account">
         <HeaderTheme />

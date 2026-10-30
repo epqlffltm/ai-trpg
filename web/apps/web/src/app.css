@@ -3,25 +3,63 @@
  * 반응형 한 벌이다(docs/product/screens.md 의 "화면마다"). 좁으면 한 줄에 하나, 넓으면 여럿.
  */
 
+/* 머리(Stitch 시안). 메뉴는 밑줄 없이, 지금 있는 서비스는 알약으로. 면은 조금 비쳐 바탕의 빛이 보인다.
+ * 위에 붙이지(sticky) 않는다. 화면 안에 이미 위에 붙는 것(좁은 화면의 HP 한 줄 등)이 있고, 좁은 화면에서 대화를 가린다 */
 .app-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px 24px;
-  padding: 12px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--ui-border);
-  background: var(--ui-surface);
+  background: color-mix(in srgb, var(--ui-surface) 82%, transparent);
+}
+
+.app-header a {
+  text-decoration: none;
 }
 
 .app-header__brand {
-  font-weight: 700;
-  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--ui-text);
+}
+
+.app-header__mark {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--ui-accent), color-mix(in srgb, var(--ui-accent) 55%, #000));
+  color: #fff;
+  font-size: 0.9em;
+  box-shadow: 0 4px 14px -6px var(--ui-accent);
 }
 
 .app-header__nav {
   display: flex;
-  gap: 16px;
+  gap: 4px;
+}
+
+.app-header__nav a {
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: var(--ui-text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.app-header__nav a:hover {
+  color: var(--ui-text);
+}
+
+.app-header__nav a[aria-current='page'] {
+  background: color-mix(in srgb, var(--ui-accent) 18%, transparent);
+  color: var(--ui-text);
 }
 
 .app-header__account {
@@ -32,22 +70,40 @@
   gap: 8px;
 }
 
-.app-header__account > a {
+.app-header__account > a,
+.app-header__account > .ui-button--quiet {
   white-space: nowrap;
+  color: var(--ui-text-muted);
+}
+
+.app-header__account > a:hover,
+.app-header__account > .ui-button--quiet:hover {
+  color: var(--ui-text);
+}
+
+/* 좁으면 메뉴를 둘째 줄 전체로 내리고, 넘치면 옆으로 민다 */
+@media (max-width: 640px) {
+  .app-header__nav {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+  }
 }
 
 .theme-switch {
   display: inline-flex;
+  gap: 2px;
+  padding: 2px;
   border: 1px solid var(--ui-border);
   border-radius: 999px;
-  overflow: hidden;
 }
 
 .theme-switch__option {
-  min-width: 32px;
-  min-height: 28px;
+  min-width: 30px;
+  min-height: 26px;
   padding: 0 8px;
   border: 0;
+  border-radius: 999px;
   background: transparent;
   color: var(--ui-text-muted);
   font: inherit;
@@ -55,12 +111,12 @@
 }
 
 .theme-switch__option[aria-pressed='true'] {
-  background: var(--ui-accent);
-  color: var(--ui-accent-text);
+  background: color-mix(in srgb, var(--ui-accent) 22%, transparent);
+  color: var(--ui-text);
 }
 
 .theme-switch__option:focus-visible {
-  outline: 2px solid var(--ui-accent);
+  outline: 2px solid var(--ui-focus);
   outline-offset: -2px;
 }
 
