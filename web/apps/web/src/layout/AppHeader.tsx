@@ -1,12 +1,13 @@
 // web/apps/web/src/layout/AppHeader.tsx
 // 모든 화면의 머리. 이름(첫 화면으로), 서비스와 게시판, 내 정보 또는 로그인.
-// 로그인했으면 알림(A10, 읽지 않은 수)과 잔액(A6, 지갑으로)도 둔다.
+// 로그인했으면 알림(A10, 읽지 않은 수)과 잔액(A6, 지갑으로)도 둔다. 밝기 고르기(시스템, 라이트, 다크)는 늘 둔다.
 
 import { Link, useLocation } from 'react-router';
 import { useSession } from '../auth/useSession';
 import { AccountMenu } from './AccountMenu';
 import { HeaderBalance } from './HeaderBalance';
 import { HeaderNotifications } from './HeaderNotifications';
+import { HeaderTheme } from './HeaderTheme';
 
 export function AppHeader() {
   const session = useSession();
@@ -23,6 +24,7 @@ export function AppHeader() {
         <Link to="/board">게시판</Link>
       </nav>
       <div className="app-header__account">
+        <HeaderTheme />
         {session ? (
           <>
             <HeaderNotifications />

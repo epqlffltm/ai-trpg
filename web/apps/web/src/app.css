@@ -27,8 +27,41 @@
 .app-header__account {
   margin-left: auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+.app-header__account > a {
+  white-space: nowrap;
+}
+
+.theme-switch {
+  display: inline-flex;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.theme-switch__option {
+  min-width: 32px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.theme-switch__option[aria-pressed='true'] {
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+}
+
+.theme-switch__option:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: -2px;
 }
 
 .page {
