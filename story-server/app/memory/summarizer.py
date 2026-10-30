@@ -83,7 +83,7 @@ class Summarizer:
         settings = self.settings()
         async with self.session_factory() as session:
             conversation = await session.get(Conversation, conversation_id)
-            if conversation is None:
+            if conversation is None or conversation.deleted_at is not None:
                 return None
             path = await conversations.active_path(session, conversation.active_leaf_id)
             dropped = overflow(path, settings.story_context_chars)

@@ -97,7 +97,10 @@ async def persona_of(session: AsyncSession, conversation_id: uuid.UUID) -> Conve
 
 
 async def last_model(session: AsyncSession, owner_id: uuid.UUID) -> str | None:
-    """이 사람이 가장 최근에 시작한 세션의 모델(이름표). 세션이 없거나 그 세션에 모델이 없었으면 None."""
+    """
+    이 사람이 가장 최근에 시작한 세션의 모델(이름표). 세션이 없거나 그 세션에 모델이 없었으면 None.
+    지운 세션도 센다. "지난번에 고른 것"이다(chat 과 같다).
+    """
     query = (
         select(Conversation.model_slug)
         .where(Conversation.owner_id == owner_id)
@@ -123,12 +126,13 @@ async def set_model(session: AsyncSession, conversation_id: uuid.UUID, slug: str
 
 
 def visible(owner_id: uuid.UUID, ratings: Sequence[Rating]) -> Select:
-    """이 사람의 세션 가운데 볼 수 있는 등급의 것. 세션과 판의 사본을 함께 고른다."""
+    """이 사람의 지우지 않은 세션 가운데 볼 수 있는 등급의 것. 세션과 판의 사본을 함께 고른다."""
     return (
         select(Conversation, ImportedWorld)
         .join(ImportedWorld, ImportedWorld.id == Conversation.world_id)
         .where(
             Conversation.owner_id == owner_id,
+            Conversation.deleted_at.is_(None),
             ImportedWorld.rating.in_([rating.value for rating in ratings]),
         )
     )

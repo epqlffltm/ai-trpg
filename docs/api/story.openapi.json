@@ -2221,6 +2221,47 @@
       }
     },
     "/api/v1/story/conversations/{conversation_id}": {
+      "delete": {
+        "description": "세션을 지운다. 목록과 읽기에 더는 나오지 않는다. 없거나 남의 것이면 404 conversation_not_found 다.",
+        "operationId": "delete_conversation_api_v1_story_conversations__conversation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Conversation",
+        "tags": [
+          "conversations"
+        ],
+        "x-audience": "user"
+      },
       "get": {
         "description": "세션 하나. 가져온 판과 지금 가지의 말까지. 가격 목록은 DB 를 읽기 전에 받는다.",
         "operationId": "read_conversation_api_v1_story_conversations__conversation_id__get",

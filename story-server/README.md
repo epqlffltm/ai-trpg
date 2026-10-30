@@ -103,7 +103,7 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `STORY_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
 | `REDIS_URL` | 비어 있음(메모리) | [요청 수 제한](#요청-수-제한)을 세는 Redis(`redis://localhost:6379/3`). 비우면 서버 안의 메모리로 센다(서버가 하나일 때만 맞다). compose 는 DB 3 을 준다 |
 | `GENERATION_LIMIT`, `GENERATION_WINDOW_SECONDS` | `20`, `60` | 모델을 부르는 요청(말, 행동, 다시 생성, 이어서)을 한 사람이 이 시간(초) 안에 이만큼까지 |
-| `WRITE_LIMIT`, `WRITE_WINDOW_SECONDS` | `120`, `60` | 모델을 부르지 않는 쓰기(세션 시작, 모델과 가지 바꾸기, 답 고치기)를 한 사람이 이 시간(초) 안에 이만큼까지 |
+| `WRITE_LIMIT`, `WRITE_WINDOW_SECONDS` | `120`, `60` | 모델을 부르지 않는 쓰기(세션 시작과 지우기, 모델과 가지 바꾸기, 답 고치기)를 한 사람이 이 시간(초) 안에 이만큼까지 |
 
 DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 함께 쓰는 칸은 공용 코드의 설정(`server_core.settings.CoreSettings`)에 있다.
 `tools/fill_env.py` 가 `ASSET_SECRET` 과 `BILLING_SECRET` 을 짝(asset 서버, 결제 서버의 `STORY_SERVER_SECRET`)과 같은 값으로 채운다.
@@ -130,6 +130,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id", "persona_id"?, "model"?}`). 세계관의 마지막 판과 페르소나를 가져와 고정한다. 201 | access 토큰 |
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}`. 항목마다 지금 가지의 끝까지 온 곳(`progress`) | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}` | 세션 하나(지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`, 화면이 쓰는 세계관의 칸 [`view`](#세션의-view), 가져온 페르소나 `persona`). 가져온 판의 문서는 싣지 않는다. 남의 것은 404 | access 토큰 |
+| DELETE | `/api/v1/story/conversations/{id}` | [세션](#세션) 지우기. 204. 지운 시각만 적는다. 없거나 남의 것이면 404 | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/branch` | [가지 고르기](#가지-고르기)(`{"message_id"}`). 바뀐 세션을 돌려준다 | access 토큰 |
 | PATCH | `/api/v1/story/messages/{id}` | [답 고치기](#답-고치기)(`{"segments": ["…"]}`). 고친 말을 돌려준다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content", "edit_of"?}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
@@ -176,7 +177,9 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
   후일담인가(`epilogue`, 엔딩을 봤고 세계관이 후일담을 골랐다)다. 화면이 D1 의 "D-12 / 진행 / 끝(엔딩 이름) / 후일담"을 그린다.
   상태는 말에 붙어 있어 가지를 바꾸거나 다시 생성하면 저장 없이 바뀐다. 그래서 세션 표에 적어 두지 않고 목록을 읽을 때 세션마다 센다
   (세션마다 쿼리 둘, 한 쪽은 `limit` 개까지). 느려지면 세션 표에 요약을 두는 방식으로 바꾼다(2026-10-27).
-- 지우기와 행동(상태를 바꾸는 것)은 그것을 쓰는 조각에서 더한다.
+- **지우기**(chat 과 같다). 지운 시각(`deleted_at`)만 적는다. 말, 상태, 판의 사본은 남는다. 지운 세션은 목록과 읽기에 나오지 않고,
+  말과 행동을 보내면 404 다. 요약도 하지 않는다. "지난번에 고른 모델과 페르소나"는 지운 세션도 센다. 계정의 기록(본 엔딩, 연 일러스트)은 그대로다.
+  행을 지우는 것은 [탈퇴](#탈퇴)뿐이다. 답을 쓰는 중에 지워도 그 답은 끝까지 저장되고 청구된다.
 
 | asset 서버의 답 | 이 서버의 답 |
 | --- | --- |
@@ -375,7 +378,7 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
 
 chat 의 것과 같다(`app/limits/`). 한 사람이 정해진 시간 안에 몇 번 했는가를 세고, 넘으면 429 로 막는다. 크레딧과 별개로 짧은 시간에 몰아 보내는 것을 늦춘다.
 
-- **무엇을 세나.** 모델을 부르는 요청(말 보내기, 행동, 다시 생성, 이어서 출력)과 모델을 부르지 않는 쓰기(세션 시작, 모델과 가지 바꾸기, 답 고치기)를 따로 센다.
+- **무엇을 세나.** 모델을 부르는 요청(말 보내기, 행동, 다시 생성, 이어서 출력)과 모델을 부르지 않는 쓰기(세션 시작과 지우기, 모델과 가지 바꾸기, 답 고치기)를 따로 센다.
   읽기와 멈추기는 세지 않는다. 모델을 부르는 주소는 라우터에 걸어(`app/turns/router.py`) 그 라우터에 더하는 주소도 저절로 센다.
 - **어떻게 세나.** 고정 구간이다(첫 시도에서 시작해 정한 초 뒤에 끝난다). Redis(DB 3, 키의 머리 `story:limit`)에 Lua 한 덩어리로 올리고 만료를 건다.
   사람의 번호는 해시해서 키에 넣는다. `REDIS_URL` 이 비면 서버 안의 메모리로 센다.
@@ -387,7 +390,7 @@ chat 의 것과 같다(`app/limits/`). 한 사람이 정해진 시간 안에 몇
 
 인증 서버가 계정을 비울 때 알린다(`POST /api/v1/story/service/users/{public_id}/withdrawal`, `app/withdrawal/`, chat 과 같다. [탈퇴 설계](../docs/architecture/withdrawal.md)).
 
-- 지우는 것: 세션과 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본), 가져온 세계관의 판의 사본과 그 로어북의 벡터, 계정의 기록(본 엔딩, 연 일러스트).
+- 지우는 것: 세션(지운 것으로 적어 둔 것도)과 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본), 가져온 세계관의 판의 사본과 그 로어북의 벡터, 계정의 기록(본 엔딩, 연 일러스트).
 - 남기는 것: 청구 기록(`generations`). 세션과 말을 가리키는 칸만 비운다(공개 ID, 모델, 토큰 수, 원가, 청구 상태, 홀드의 이름표가 남는다).
 - 한 트랜잭션이고 멱등이다. 같은 알림이 다시 와도, 이 서버에 그 사람의 것이 없어도 200 `{"status": "processed"}` 다. 모르는 칸은 버린다.
 - 인증 서버의 서명(`AUTH_SERVER_SECRET`)이 아니면 401, 본문의 모양이 틀리면 422, 본문이 16KB 를 넘으면 서명을 보기 전에 413 이다.
@@ -513,7 +516,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | 테이블 | 무엇 |
 | --- | --- |
 | `worlds` | asset 서버에서 가져온 세계관의 판의 사본. 사람마다, 판마다 하나(`owner_id`, `source_id`, `version` 이 고유). 문서는 받은 그대로(JSONB) |
-| `conversations` | 세션 하나. 판의 사본을 가리킨다(지우지 못하게 `RESTRICT`). 목록은 `owner_id`, `updated_at` 의 색인으로 읽는다. 세션의 모델(`model_slug`)을 가리킨다 |
+| `conversations` | 세션 하나. 판의 사본을 가리킨다(지우지 못하게 `RESTRICT`). 목록은 `owner_id`, `updated_at` 의 색인으로 읽는다. 세션의 모델(`model_slug`)을 가리킨다. 지운 세션은 지운 시각(`deleted_at`)만 적는다 |
 | `ai_models`, `ai_model_costs`, `ai_model_snapshots` | [모델 목록](#모델-목록). chat 서버의 표와 같은 모양이다 |
 | `conversation_personas` | 세션에 가져온 계정 페르소나의 사본(chat 의 표와 같은 모양). 세션마다 하나, 페르소나 없이 시작했으면 없다 |
 | `messages` | 말 하나. 트리다(`parent_id`). 답은 말 조각(`segments`)과 그때의 장면의 인물(`cast`)을 갖는다. 사람이 고친 답은 `edited` 다. 다음 답 추천은 `suggestions`(셋까지)다. 세션의 `active_leaf_id` 가 지금 가지의 끝이다 |

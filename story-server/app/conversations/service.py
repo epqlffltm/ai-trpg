@@ -26,6 +26,7 @@
 import uuid
 from datetime import datetime, timedelta
 
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.client import AssetAdultRequiredError, AssetClient, AssetNotFoundError
@@ -330,6 +331,13 @@ async def get_conversation(session: AsyncSession, viewer: Viewer, conversation_i
     if found is None:
         raise ConversationNotFoundError
     return found
+
+
+async def delete_conversation(session: AsyncSession, viewer: Viewer, conversation_id: uuid.UUID) -> None:
+    """세션을 지운다(지운 시각을 적는다, chat 과 같다). 없으면 ConversationNotFoundError."""
+    conversation, _ = await get_conversation(session, viewer, conversation_id)
+    conversation.deleted_at = func.now()
+    await session.commit()
 
 
 async def list_conversations(
