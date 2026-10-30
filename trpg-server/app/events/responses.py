@@ -130,10 +130,15 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'remaining',
     ),
     # 덫이 터진 것도 공개다(#806). 누가 어디서 무엇을 터뜨렸고, 피하는 판정과 피했는가. 효과는 뒤의 이벤트에 있다
+    # 몬스터나 싸우는 인물이 밟았으면(#806 ②-b) 캐릭터 대신 monster_id, monster_name 이나 npc_id, npc_name 이 있다
     EventType.TRAP_SPRUNG: (
         'round',
         'user_id',
         'character_name',
+        'monster_id',
+        'monster_name',
+        'npc_id',
+        'npc_name',
         'place',
         'entry_id',
         'name',

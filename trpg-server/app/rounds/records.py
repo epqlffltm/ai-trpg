@@ -904,7 +904,11 @@ def record_attack_turn(
         'round': round_number,
         attacker: turn[attacker],
         'name': turn['name'],
-        **{key: value for key, value in outcome.items() if key not in ('effect', 'cost', 'injured', 'resources')},
+        **{
+            key: value
+            for key, value in outcome.items()
+            if key not in ('effect', 'cost', 'injured', 'resources', 'trap')
+        },
     }
     attacked = recorder.record(session, table, event_type, payload=payload, group=group)
     attacker_of = {attacker: turn[attacker], 'name': turn['name']}
@@ -918,6 +922,44 @@ def record_attack_turn(
         holder = {'user_id': effect['user_id'], 'character_name': effect['character_name']}
         record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)
     record_attack_effects(session, table, outcome, cause=attacked)
+    record_foe_trap(session, table, round_number, turn, cause=attacked)
+
+
+# 덫을 밟은 쪽(#806 ②-b). 차례의 kind 로 찾는다. 이벤트에 적는 칸과, 그 쪽의 변화의 칸이다
+FOE_KEYS = {'monster': ('monster_id', 'monster_name', 'monster_effect'), 'npc': ('npc_id', 'npc_name', 'npc_effect')}
+
+
+def record_foe_trap(session: AsyncSession, table: GameTable, round_number: int, turn: dict, cause: TableEvent) -> None:
+    """
+    몬스터나 싸우는 인물이 그 차례에 덫을 밟은 것을 이벤트로 적는다(trap_sprung, #806 ②-b). 그 공격(cause)에 잇는다.
+
+    걸렸으면 그 뒤에 그 쪽의 변화(monster_changed, npc_changed)와 부상, 처음 쓰러져 나온 드롭,
+    덫이 입힌 부상과 맞춘 수치(source trap)를 터진 것에 잇는다. 밟지 않았으면 적지 않는다.
+    """
+    stepped = turn['outcome'].get('trap')
+    if stepped is None:
+        return
+    _, attacker = ATTACK_EVENTS[turn['kind']]
+    id_key, name_key, effect_key = FOE_KEYS[turn['kind']]
+    keys = ('place', 'entry_id', 'name', 'set_by', 'avoid', 'avoided')
+    payload = {
+        'round': round_number,
+        id_key: turn[attacker],
+        name_key: turn['name'],
+        **{key: stepped[key] for key in keys},
+    }
+    fired = recorder.record(session, table, EventType.TRAP_SPRUNG, payload=payload, cause=cause)
+    holder = {attacker: turn[attacker], 'name': turn['name']}
+    effect = stepped[effect_key]
+    if effect is not None:
+        record_change = record_monster_change if turn['kind'] == 'monster' else record_npc_change
+        changed = record_change(session, table, effect, cause=fired)
+        record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)
+        record_drop(session, table, stepped.get('drop'), cause=changed)
+    for one in stepped['injured']:
+        if one['injury'] is not None:
+            record_injury(session, table, one, holder, cause=fired)
+    record_resource_shifts(session, table, stepped['resources'], holder, ResourceSource.TRAP, fired)
 
 
 def record_attack_effects(session: AsyncSession, table: GameTable, outcome: dict, cause: TableEvent) -> None:

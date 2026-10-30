@@ -233,7 +233,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 해제의 줄을 적는다((해제: 올가미. 민첩 판정에 성공해 거둬 챙겼다))
 #   narration-81: 업힌 사람도 걸린 덫(#806 ②). 터진 덫의 줄에 붙인다
 #                 ((덫: 올가미. 민첩 판정에 실패해 걸렸다. 업힌 약사도 걸렸다))
-PROMPT_VERSION = 'narration-81'
+#   narration-82: 몬스터와 싸우는 인물이 밟은 덫(#806 ②-b). 차례의 줄 끝에 붙인다
+#                 ([덫: 올가미에 걸림], [덫: 올가미을(를) 피함])
+PROMPT_VERSION = 'narration-82'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

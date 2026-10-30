@@ -32,7 +32,7 @@ from app.engine import check as checks
 from app.engine.check import HinderedCheck
 from app.engine.dice import choose
 from app.engine.ruleset import ResourceHolder
-from app.rounds import blows
+from app.rounds import blows, foe_traps
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import NO_BLOW, Blow
 from app.rounds.cast import CastMember, reaches
@@ -118,6 +118,7 @@ def take_npc_turn(judging: Judging, person: CastMember) -> dict:
     움직이지 못하면 {'skipped': 까닭} 이다. 대상, 공격, 판정, 피해의 차례로 주사위를 굴린다.
     문서는 몬스터의 것(hit_outcome)에 부상의 영향(hindrance)을 더한 것이다.
     공격의 비용(#805 ③-a)은 몬스터와 같다. 모자라면 굴리지 않고, 비용이 있는 공격이면 낸 비용(cost)을 적는다.
+    공격을 굴렸으면 그 뒤에 장소가 있는 인물은 그 장소의 덫 하나를 밟는다(trap, #806 ②-b, app/rounds/foe_traps.py).
     """
     stopped = stopped_by(judging, person)
     if stopped is not None:
@@ -135,4 +136,5 @@ def take_npc_turn(judging: Judging, person: CastMember) -> dict:
     rolled = roll_attack(judging, person, attack, blow)
     innate = person.definition.nature if person.definition is not None else None
     outcome = hit_outcome(judging, attack, victim, rolled.check, blow, innate)
-    return {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
+    turn = {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
+    return foe_traps.with_trap(turn, foe_traps.npc_steps(judging, person, victim))

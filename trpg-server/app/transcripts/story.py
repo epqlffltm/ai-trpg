@@ -325,7 +325,8 @@ def trap_sprung(payload: dict, labels: Labels) -> list[Block]:
     avoid = payload.get('avoid') or {}
     numbers = f'{avoid.get("roll")} + {avoid.get("modifier")} = {avoid.get("total")}, 목표 {avoid.get("target")}'
     result = '피함' if payload.get('avoided') else '걸림'
-    return [Note(f'덫: {who(payload)} · {text_of(payload.get("name"))} {numbers} → {result}')]
+    stepper = text_of(payload.get('monster_name')) or text_of(payload.get('npc_name')) or who(payload)
+    return [Note(f'덫: {stepper} · {text_of(payload.get("name"))} {numbers} → {result}')]
 
 
 def trap_disarmed(payload: dict, labels: Labels) -> list[Block]:

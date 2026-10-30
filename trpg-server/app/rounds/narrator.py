@@ -1054,6 +1054,9 @@ class MonsterTurnNote:
     resources: list[ResourceNote] = field(default_factory=list)
     # 맞은 캐릭터가 저항으로 막아 입지 않은 부상의 이름들(#886 ②)
     resisted: list[str] = field(default_factory=list)
+    # 공격한 뒤 밟은 덫(#806 ②-b)의 이름과 걸렸는가. 밟지 않았으면 None 이다. 몸 상태는 [몬스터]와 인물의 줄이 말한다
+    trap: str | None = None
+    trapped: bool = False
 
 
 @dataclass(frozen=True)
