@@ -141,6 +141,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/admin/characters/{id}/reports` | 운영자: 그 캐릭터의 신고 전부(처리한 것까지) | access 토큰(운영자) |
 | PUT | `/api/v1/asset/admin/characters/{id}/reports/outcome` | 운영자: 열린 신고의 처리 `{outcome: actioned \| dismissed, reason}`. `actioned` 면 숨긴다 | access 토큰(운영자) |
 | PUT | `/api/v1/asset/admin/characters/{id}/hidden` | 운영자: 숨기기와 풀기 `{hidden, reason}` | access 토큰(운영자) |
+| PUT | `/api/v1/asset/admin/worlds/{id}/hidden` | 운영자: story 세계관의 [숨기기와 풀기](#신고와-숨김) `{hidden, reason}`. 없으면 404 | access 토큰(운영자) |
 | POST | `/api/v1/asset/images` | [그림](#그림) 올리기. 201. 본문은 그림 파일의 바이트(PNG, JPEG, WebP). 형식이 아니면 415 `image_format`, 열 수 없으면 422 `image_unreadable`, 크면 413, 저장소를 쓸 수 없으면 503 `image_store_unavailable` | access 토큰 |
 | GET | `/api/v1/asset/images/{id}` | 그림 내주기. 볼 수 있으면 본문 없이 200 과 `X-Accel-Redirect`, `X-Image-Source`(프록시가 그림을 내준다). 없거나 볼 수 없으면 404. 주인과, 공개 캐릭터나 공개 세계관의 판에 쓰였으면 그 판을 볼 수 있는 사람이 본다 | 없어도 된다 |
 | GET | `/api/v1/asset/service/{caller}/personas/{id}` | [다른 서버에](#다른-서버에-내주기) 페르소나의 사본과 `revision`. 토큰의 주인의 것만(아니면 404) | 서버의 서명 + access 토큰 |
@@ -479,9 +480,13 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
 - **처리.** 그 캐릭터의 열린 신고를 한꺼번에 처리한다. `actioned` 면 숨기고 `dismissed` 면 그대로 둔다. 숨기기와 풀기는 따로도 한다.
 - **숨김**(`characters.hidden_at`). 숨긴 캐릭터는 공개여도 공개 목록, 공개 소개, 남에게 내주는 판(chat 의 새 대화), 남이 보는 그림에서 빠진다.
   주인은 계속 쓴다(초안의 `hidden_at` 으로 안다). 주인이 비공개로 했다가 공개로 돌려도 숨김이 앞선다. 운영자만 푼다. 이미 시작한 남의 대화는 사본으로 돈다.
-- **감사 기록**(`operator_actions`). 조치마다 운영자, 시각, 종류(`character_hide`, `character_unhide`, `reports_dismiss`), 캐릭터, 사유(필수, 200자), 요청 식별자를 조치와 한 트랜잭션에 적는다.
+- **감사 기록**(`operator_actions`). 조치마다 운영자, 시각, 종류(`character_hide`, `character_unhide`, `reports_dismiss`, `world_hide`, `world_unhide`), 캐릭터나 세계관, 사유(필수, 200자), 요청 식별자를 조치와 한 트랜잭션에 적는다.
   덧붙이기만 한다(트리거가 고치기와 지우기를 막는다). 같은 것을 로그(`operator.act`, 사유는 빼고)에도 남긴다. 신고의 목록을 보는 것은 적지 않는다(운영자에게 보낸 것이다).
 - **알림.** 숨김이 바뀌면 주인에게, 신고를 처리하면 신고한 사람마다 알린다([알림 보내기](#알림-보내기)).
+- **세계관의 숨김**(`worlds.hidden_at`, `PUT /admin/worlds/{id}/hidden`). story 의 신고(세계관의 id 가 실린다)를 보고 운영자가 한다. 캐릭터의 숨김과 같은 규칙이다.
+  숨긴 세계관은 공개여도 공개 목록, 공개 소개, 남에게 내주는 판(story 의 새 세션), 남이 보는 그림에서 빠진다. 주인은 계속 쓴다(초안과 목록의 `hidden_at`).
+  주인이 공개로 돌려도 숨김이 앞선다. 운영자만 푼다. 이미 시작한 남의 세션은 story 의 사본으로 돈다(2026-10-31 유저 결정).
+  감사 기록의 종류는 `world_hide`, `world_unhide` 이고, 숨김이 바뀌면 주인에게 알린다. 세계관에 대한 신고는 asset 에 없다(story 의 답 신고가 대신한다).
 - **아직 없는 것.** 신고의 횟수 제한(유일 제약이 캐릭터마다 한 번으로 묶는다).
 - 캐릭터를 지우면 그 신고도 지워진다. 공개한 캐릭터를 지우면 문제가 된 것도 사라진다.
 
@@ -494,6 +499,8 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
 | --- | --- | --- |
 | `character.hidden` | 운영자가 숨겼다(직접, 또는 신고를 받아들여서). 캐릭터의 주인에게 | `character_id`, `name` |
 | `character.unhidden` | 운영자가 숨김을 풀었다. 캐릭터의 주인에게 | `character_id`, `name` |
+| `world.hidden` | 운영자가 세계관을 숨겼다. 세계관의 주인에게 | `world_id`, `name` |
+| `world.unhidden` | 운영자가 세계관의 숨김을 풀었다. 세계관의 주인에게 | `world_id`, `name` |
 | `character_report.handled` | 운영자가 신고를 처리했다. 신고한 사람에게 | `name` |
 
 - **숨김이 바뀐 때만 주인에게 간다.** 이미 숨긴 것을 또 숨기거나, 숨긴 캐릭터의 신고를 받아들여도 주인에게는 다시 가지 않는다.

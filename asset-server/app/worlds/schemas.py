@@ -650,6 +650,8 @@ class WorldDetail(BaseModel):
     lorebooks: list[uuid.UUID]
     latest_version: int | None
     published_at: datetime | None
+    # 운영자가 숨긴 시각. 숨긴 동안은 공개여도 남에게 보이지 않는다(캐릭터와 같다)
+    hidden_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -662,6 +664,7 @@ class WorldSummary(BaseModel):
     rating: Rating
     visibility: Visibility
     latest_version: int | None
+    hidden_at: datetime | None = None
     updated_at: datetime
 
 

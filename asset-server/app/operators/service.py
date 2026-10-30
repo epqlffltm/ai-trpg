@@ -1,7 +1,8 @@
 # asset-server/app/operators/service.py
 
 """
-운영자가 신고를 보고 캐릭터를 숨긴다(#678). docs/architecture/operators.md 의 규칙을 따른다.
+운영자가 신고를 보고 캐릭터를 숨긴다(#678). 세계관도 숨기고 푼다(story 의 신고를 보고).
+docs/architecture/operators.md 의 규칙을 따른다.
 
   - 조치는 감사 기록(operator_actions)과 한 트랜잭션에서 커밋한다. 조치가 되지 않았으면 기록도 없다
   - 숨긴 캐릭터는 공개 목록, 공개 소개, 남의 새 대화(판 내주기), 남이 보는 그림에서 빠진다.
@@ -27,6 +28,8 @@ from app.operators.models import ActionKind, OperatorAction
 from app.reports import repository as reports
 from app.reports.models import CharacterReport, ReportOutcome
 from app.reports.repository import HandledReport, OpenGroup
+from app.worlds.models import World
+from app.worlds.service import WorldNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +75,12 @@ def hide_kind(hidden: bool) -> ActionKind:
     return ActionKind.CHARACTER_HIDE if hidden else ActionKind.CHARACTER_UNHIDE
 
 
-def set_hidden(character: Character, hidden: bool, now: datetime) -> None:
-    """숨긴다(이미 숨겼으면 처음 숨긴 시각을 둔다) 또는 푼다."""
+def set_hidden(target: Character | World, hidden: bool, now: datetime) -> None:
+    """숨긴다(이미 숨겼으면 처음 숨긴 시각을 둔다) 또는 푼다. 캐릭터와 세계관이 같다."""
     if not hidden:
-        character.hidden_at = None
-    elif character.hidden_at is None:
-        character.hidden_at = now
+        target.hidden_at = None
+    elif target.hidden_at is None:
+        target.hidden_at = now
 
 
 async def record_action(session: AsyncSession, action: OperatorAction) -> None:
@@ -145,3 +148,41 @@ async def change_hidden(
     await session.commit()
     log_action(action)
     return character.hidden_at is not None
+
+
+async def locked_world(session: AsyncSession, world_id: uuid.UUID) -> World:
+    """잠가 읽은 세계관. 없으면 WorldNotFoundError."""
+    world = await repository.lock_world(session, world_id)
+    if world is None:
+        raise WorldNotFoundError
+    return world
+
+
+def world_hide_kind(hidden: bool) -> ActionKind:
+    """세계관의 숨기기와 풀기의 조치 종류."""
+    return ActionKind.WORLD_HIDE if hidden else ActionKind.WORLD_UNHIDE
+
+
+def tell_world_owner_if_changed(session: AsyncSession, world: World, was_hidden: bool, action: OperatorAction) -> None:
+    """세계관의 숨김이 바뀌었으면 주인에게 알린다. 그대로면 알리지 않는다."""
+    hidden = world.hidden_at is not None
+    if hidden != was_hidden:
+        outbox.tell_world_owner(session, world, hidden, action.id)
+
+
+async def change_world_hidden(
+    session: AsyncSession, operator_id: uuid.UUID, world_id: uuid.UUID, hidden: bool, reason: str, now: datetime
+) -> bool:
+    """
+    세계관을 숨기거나 푼다. 숨겨져 있는가를 돌려준다. 없으면 WorldNotFoundError.
+    이미 시작한 남의 세션은 story 의 사본으로 돈다. 새 세션과 공개 목록에서만 빠진다(캐릭터와 같다).
+    """
+    world = await locked_world(session, world_id)
+    was_hidden = world.hidden_at is not None
+    set_hidden(world, hidden, now)
+    action = build_action(operator_id, world_hide_kind(hidden), world_id, reason, now)
+    await record_action(session, action)
+    tell_world_owner_if_changed(session, world, was_hidden, action)
+    await session.commit()
+    log_action(action)
+    return world.hidden_at is not None

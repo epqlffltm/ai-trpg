@@ -74,6 +74,6 @@ class HiddenInput(BaseModel):
 
 
 class HiddenResult(BaseModel):
-    """조치한 뒤 캐릭터가 숨겨져 있는가."""
+    """조치한 뒤 캐릭터(또는 세계관)가 숨겨져 있는가."""
 
     hidden: bool

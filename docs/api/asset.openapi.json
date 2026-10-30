@@ -2224,7 +2224,7 @@
         "type": "object"
       },
       "HiddenResult": {
-        "description": "조치한 뒤 캐릭터가 숨겨져 있는가.",
+        "description": "조치한 뒤 캐릭터(또는 세계관)가 숨겨져 있는가.",
         "properties": {
           "hidden": {
             "title": "Hidden",
@@ -5040,6 +5040,18 @@
             "title": "Events",
             "type": "array"
           },
+          "hidden_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden At"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -5663,6 +5675,18 @@
       "WorldSummary": {
         "description": "내 세계관 목록의 한 줄.",
         "properties": {
+          "hidden_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden At"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -6465,6 +6489,66 @@
           }
         ],
         "summary": "Handle Reports",
+        "tags": [
+          "admin"
+        ],
+        "x-audience": "operator"
+      }
+    },
+    "/api/v1/asset/admin/worlds/{world_id}/hidden": {
+      "put": {
+        "description": "세계관을 숨기거나 푼다. 세계관이 없으면 404 다. story 의 신고(world_id)를 보고 한다.",
+        "operationId": "change_world_hidden_api_v1_asset_admin_worlds__world_id__hidden_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HiddenInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HiddenResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change World Hidden",
         "tags": [
           "admin"
         ],
