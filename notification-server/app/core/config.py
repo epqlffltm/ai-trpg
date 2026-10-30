@@ -48,6 +48,8 @@ class Settings(CoreSettings):
     # asset 서버(캐릭터의 숨김, 캐릭터 신고의 처리)와 chat 서버(대화 속 답의 신고의 처리)의 것(#678)
     asset_server_secret: SecretStr = SecretStr('')
     chat_server_secret: SecretStr = SecretStr('')
+    # story 서버(세션 속 답의 신고의 처리)의 것
+    story_server_secret: SecretStr = SecretStr('')
 
     # 인증 서버가 탈퇴를 알리는 요청의 서명 비밀(#603, app/withdrawals/).
     # 인증 서버의 NOTIFICATION_SECRET 과 같은 값이다.
@@ -73,6 +75,7 @@ class Settings(CoreSettings):
             'board': self.board_server_secret.get_secret_value(),
             'asset': self.asset_server_secret.get_secret_value(),
             'chat': self.chat_server_secret.get_secret_value(),
+            'story': self.story_server_secret.get_secret_value(),
         }
 
     def all_secrets(self) -> list[str]:

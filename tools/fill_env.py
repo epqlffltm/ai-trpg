@@ -155,6 +155,11 @@ SECRETS = (
         ('notification-server/.env', 'CHAT_SERVER_SECRET'),
     ),
     shared(
+        'story 서버 → 알림 서버',
+        ('story-server/.env', 'NOTIFICATION_SECRET'),
+        ('notification-server/.env', 'STORY_SERVER_SECRET'),
+    ),
+    shared(
         '인증 서버 → 알림 서버(탈퇴)',
         ('auth-server/.env', 'NOTIFICATION_SECRET'),
         ('notification-server/.env', 'AUTH_SERVER_SECRET'),

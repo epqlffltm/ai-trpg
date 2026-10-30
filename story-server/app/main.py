@@ -23,6 +23,9 @@ from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
 from server_core.database import create_engine, create_session_factory
 from server_core.input_errors import use_input_errors
+from server_core.notifications import dispatcher
+from server_core.notifications.setup import build_notifications
+from server_core.notifications.store import SqlOutboxStore
 from server_core.observability.db_spans import instrument_engine
 from server_core.observability.http_spans import traced_client
 from server_core.observability.metrics import configure_metrics, shutdown_metrics, watch_pool
@@ -63,6 +66,8 @@ from app.lore.setup import build_embedder
 from app.memory import router as memory
 from app.memory.service import NoteNotFoundError, NotesFullError
 from app.memory.summarizer import Summarizer
+from app.notifications import outbox
+from app.notifications.models import OutgoingNotification
 from app.operators import router as operators
 from app.operators.service import AlreadyHandledError, ReportNotFoundError
 from app.records import router as records
@@ -99,16 +104,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     서버가 뜰 때와 꺼질 때 할 일. yield 앞이 뜰 때, 뒤가 꺼질 때다.
 
-    뜰 때 끊긴 세션의 목록 받기(30초마다)와 청구 정리(5초마다)를 시작한다. 꺼질 때 그것들을 가장 먼저 멈춘다.
+    뜰 때 끊긴 세션의 목록 받기(30초마다)와 청구 정리(5초마다), 알림 보내기(5초마다)를 시작한다.
+    꺼질 때 그것들을 가장 먼저 멈춘다.
     도는 말 한 번은 멈춘다. 받은 만큼 저장하고 맡길 것을 적어 둔다(다음에 뜬 서버의 청구 정리가 맡긴다).
     그다음 DB 연결과 다른 서버로 가는 연결(Redis 도)을 닫는다. 닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
     마지막으로 모아 둔 span 과 메트릭을 보낸다. 보내기를 기다리느라 막히므로 스레드에서 한다.
     """
     revoking = revocations.start(app.state.revocations)
     settling = settler.start(app.state.settler)
+    dispatching = dispatcher.start(app.state.notification_dispatcher)
     yield
     await revoking.halt()
     await settling.halt()
+    await dispatching.halt()
     await stop_turns(app.state.turns)
     await app.state.summarizer.stop()
     if app.state.lore_indexer is not None:
@@ -208,6 +216,15 @@ def create_app(
     # 끝나지 않은 청구를 마저 끝내는 작업(app/turns/settler.py). lifespan 이 돌리고 멈춘다.
     # 결제 서버를 부르는 것은 부를 때마다 앱에서 꺼낸다. 테스트가 가짜를 꽂는다
     app.state.settler = settler.ChargeSettler(app.state.session_factory, billing=lambda: app.state.billing)
+    # 신고를 처리했다는 것을 넣는 알림 서버. 설정(NOTIFICATION_URL)이 정한다. 비우면 None 이고
+    # 알림은 발송함에 적히기만 한다. 같은 클라이언트로 부른다(client span 과 traceparent 가 걸린다)
+    app.state.notifications = build_notifications(settings, app.state.http_client, outbox.SOURCE)
+    # 발송함의 알림을 몇 초마다 알림 서버에 보내는 작업(server_core/notifications/dispatcher.py, chat 과 같다).
+    # lifespan 이 돌리고 멈춘다. 알림 서버를 부르는 것은 부를 때마다 앱에서 꺼낸다. 테스트가 가짜를 꽂는다
+    app.state.notification_dispatcher = dispatcher.NotificationDispatcher(
+        store=SqlOutboxStore(app.state.session_factory, OutgoingNotification),
+        notifications=lambda: app.state.notifications,
+    )
 
     # 로어북을 뜻으로 찾기(app/lore/). EMBEDDER 가 off 면 둘 다 없다(상시와 키워드만 쓴다)
     embedder = build_embedder(settings, app.state.http_client)

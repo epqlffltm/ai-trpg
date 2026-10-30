@@ -5,12 +5,22 @@
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.reports.models import MessageReport, ReportReason
+
+
+@dataclass(frozen=True)
+class HandledReport:
+    """처리한 신고 하나와 신고한 사람, 신고한 때의 세계관 이름. 처리했다는 알림을 보낼 때 쓴다."""
+
+    report_id: uuid.UUID
+    reporter_id: uuid.UUID
+    world_name: str
 
 
 def add(session: AsyncSession, report: MessageReport) -> None:
@@ -40,17 +50,18 @@ async def get(session: AsyncSession, report_id: uuid.UUID) -> MessageReport | No
 
 async def handle(
     session: AsyncSession, report_id: uuid.UUID, operator_id: uuid.UUID, outcome: str, now: datetime
-) -> uuid.UUID | None:
+) -> HandledReport | None:
     """
     열린 신고를 처리한 것으로 적는다. 이미 처리했거나 없으면 바꾸지 않고 None. 확인과 적기를 한 문장으로 한다.
 
-    처리한 신고의 신고한 사람을 돌려준다(처리 알림이 쓴다).
+    처리한 신고의 신고한 사람과 세계관의 이름을 돌려준다(처리 알림이 쓴다).
     """
     statement = (
         update(MessageReport)
         .where(MessageReport.id == report_id, MessageReport.handled_at.is_(None))
         .values(handled_at=now, handled_by=operator_id, outcome=outcome)
-        .returning(MessageReport.reporter_id)
+        .returning(MessageReport.id, MessageReport.reporter_id, MessageReport.world_name)
         .execution_options(synchronize_session=False)
     )
-    return (await session.execute(statement)).scalar_one_or_none()
+    row = (await session.execute(statement)).first()
+    return None if row is None else HandledReport(*row)

@@ -733,6 +733,7 @@ services:
       BOARD_SERVER_SECRET: ""
       ASSET_SERVER_SECRET: ""
       CHAT_SERVER_SECRET: ""
+      STORY_SERVER_SECRET: ""
       AUTH_SERVER_SECRET: ""
     depends_on:
       db:
@@ -869,7 +870,7 @@ services:
     env_file: ./story-server/.env
     # 마이그레이션은 DB 만 쓴다. asset 서버와 결제 서버의 주소와 서명 비밀, 모델의 키를 함께 비운다.
     # 주소만 남으면(.env.example 의 ASSET_URL) 설정의 검사가 "주소는 있고 비밀이 없다"로 막는다(chat-migrate 와 같다)
-    # 탈퇴 알림을 받는 비밀(AUTH_SERVER_SECRET)도 비운다. 받지 않고, 설정이 길이를 본다
+    # 탈퇴 알림을 받는 비밀(AUTH_SERVER_SECRET)과 알림 서버에 넣는 비밀(NOTIFICATION_SECRET)도 비운다. 설정이 길이를 본다
     environment:
       <<: *story-environment
       ASSET_URL: ""
@@ -877,6 +878,7 @@ services:
       BILLING_URL: ""
       BILLING_SECRET: ""
       AUTH_SERVER_SECRET: ""
+      NOTIFICATION_SECRET: ""
       OPENAI_API_KEY: ""
       ANTHROPIC_API_KEY: ""
       GEMINI_API_KEY: ""
@@ -902,6 +904,9 @@ services:
       # 모델의 값을 결제 서버의 가격 목록에서 읽는다(story-server/README.md 의 "모델 목록").
       # story-server/.env 에 BILLING_SECRET 이 있어야 뜬다(결제 서버의 STORY_SERVER_SECRET 과 같은 값)
       BILLING_URL: http://billing-server:8003
+      # 신고의 처리를 알림 서버에 넣는다. story-server/.env 에 NOTIFICATION_SECRET 이 있어야 뜬다
+      # (알림 서버의 STORY_SERVER_SECRET 과 같은 값). 마이그레이션(story-migrate)에는 넘기지 않는다
+      NOTIFICATION_URL: http://notification-server:8004
       # 요청 수 제한을 센다. DB 번호 3 은 story 의 몫이다(docs/architecture/services.md 의 "DB 와 Redis 의 한도")
       REDIS_URL: redis://redis:6379/3
     # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다

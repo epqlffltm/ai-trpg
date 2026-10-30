@@ -35,6 +35,7 @@ BILLING = 'billing'
 BOARD = 'board'
 ASSET = 'asset'
 CHAT = 'chat'
+STORY = 'story'
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,8 @@ KINDS: Mapping[str, KindRule] = MappingProxyType(
         # 자기가 신고한 것의 답이라 드물고, 끌 까닭이 적어 끌 수 없게 둔다
         'character_report.handled': rule(ASSET, 'name'),
         'message_report.handled': rule(CHAT, 'name'),
+        # story: 세션 속 답의 신고를 처리했다는 것을 신고한 사람에게. chat 의 것과 같다(name 은 세계관의 이름)
+        'story_report.handled': rule(STORY, 'name'),
     }
 )
 

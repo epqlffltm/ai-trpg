@@ -21,6 +21,7 @@ from app.notifications.catalog import (
     CHAT,
     GAME,
     KINDS,
+    STORY,
     Refusal,
     RefusalCode,
     is_mutable,
@@ -43,6 +44,7 @@ SENT_BY = {
     BOARD: {'post.commented', 'comment.replied'},
     ASSET: {'character.hidden', 'character.unhidden', 'character_report.handled'},
     CHAT: {'message_report.handled'},
+    STORY: {'story_report.handled'},
 }
 
 

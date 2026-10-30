@@ -13,7 +13,7 @@
 - 2026-10-24: chat 서버의 `app/conversation` 을 `shared/conversation-core` 로 옮겼다(#591). story 서버의 세션 앞에 옮긴 까닭은 [대화의 핵심](#대화의-핵심-sharedconversation-core)에 있다.
 - 2026-10-22: 게임 서버의 `app/ai` 를 `shared/ai-core` 로 옮겼다(#499 의 1단계). 모델 목록을 파일 원본으로 바꾸는 것은 2단계로 남았다.
 - 2026-10-22: 모델 목록의 원본을 `shared/ai-core` 의 TOML 파일 하나로 옮겼다(#499 의 2단계). 게임 서버는 관리 명령(`scripts.models sync`)으로 자기 표에 들여온다. 한 서비스만 쓰는 속성은 그 서비스의 표에 둔다([정한 것](#정한-것)).
-- 2026-10-23: 알림 서버로 보내는 발송함을 trpg-server 에서 `shared/server-core` 로 뽑았다(#678). asset 이 두 번째로, chat 이 세 번째로 쓴다. trpg 는 옮길 때(#589) 바꾼다.
+- 2026-10-23: 알림 서버로 보내는 발송함을 trpg-server 에서 `shared/server-core` 로 뽑았다(#678). asset 이 두 번째로, chat 이 세 번째로, story 가 네 번째로 쓴다. trpg 는 옮길 때(#589) 바꾼다.
 
 ## 목차
 
