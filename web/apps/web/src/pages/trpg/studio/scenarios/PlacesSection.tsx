@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/PlacesSection.tsx
 // 지도 탭의 장소(B9). 붙인 로어북의 장소 항목을 모두 늘어놓고 줄마다 "시작 · 길 3 · 커버 5 · 인물 2"를 보인다.
-// 줄을 고치면 창이 열리고 명소인지, 커버, 처음 있는 인물, 놓인 물건을 고친다. 창의 저장이 넷을 함께 바로 보낸다.
+// 줄을 고치면 창이 열리고 명소인지, 커버, 처음 있는 인물, 놓인 물건, 미리 놓인 덫(#806 ②)을 고친다.
+// 창의 저장이 모두를 함께 바로 보낸다.
 // 지도가 가리키지만 붙인 로어북에 없는 장소도 줄로 남겨 비울 수 있게 한다.
 
 import { Button, Checkbox, Dialog, TextField } from '@ai-trpg/ui';
@@ -8,7 +9,19 @@ import { useCallback, useState, type FormEvent } from 'react';
 import type { Ruleset, ScenarioDetail } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { PlaceItemsEditor } from './PlaceItemsEditor';
-import { applyPlace, mapPlaces, personElsewhere, placeDraft, placeHints, placeLine, togglePerson, type PlaceDraft } from './placesForm';
+import { PlaceTrapsEditor } from './PlaceTrapsEditor';
+import {
+  applyPlace,
+  mapPlaces,
+  personElsewhere,
+  placeDraft,
+  placeHints,
+  placeLine,
+  presetTraps,
+  togglePerson,
+  trapEntries,
+  type PlaceDraft,
+} from './placesForm';
 import type { EntryChoice } from './useLoreEntries';
 import { useScenarioSave } from './useScenarioSave';
 
@@ -29,6 +42,7 @@ function placeIds(scenario: ScenarioDetail, places: EntryChoice[]): string[] {
     ...scenario.covers.map((rule) => rule.place_id),
     ...scenario.npc_places.map((place) => place.place_id),
     ...scenario.place_items.map((item) => item.place_id),
+    ...presetTraps(scenario).map((trap) => trap.place_id),
   ];
   return [...listed, ...new Set(referred.filter((id) => !listed.includes(id)))];
 }
@@ -123,6 +137,20 @@ function PlaceForm({ scenario, rules, placeId, people, items, nameOf, done }: Fo
           rules={rules}
           hints={hints}
           others={scenario.place_items.filter((item) => item.place_id !== placeId).length}
+        />
+      </fieldset>
+      <fieldset className="scenario-choices">
+        <legend>미리 놓인 덫</legend>
+        <p className="ui-field__hint">
+          숨긴 덫은 이곳에 들어오는 캐릭터가 피하는 판정을 굴리고, 찾기로 찾아낼 수 있습니다. 처음부터 아는 덫은 맵에 보이고 밟지 않으며 해제할 수 있습니다. 덫 물건은 물건 탭에서 덫을 적은
+          것만 고릅니다.
+        </p>
+        <PlaceTrapsEditor
+          drafts={draft.traps}
+          onChange={(traps) => setDraft((current) => ({ ...current, traps }))}
+          entries={trapEntries(scenario, items)}
+          hints={hints}
+          others={presetTraps(scenario).filter((trap) => trap.place_id !== placeId).length}
         />
       </fieldset>
       <div className="actions">

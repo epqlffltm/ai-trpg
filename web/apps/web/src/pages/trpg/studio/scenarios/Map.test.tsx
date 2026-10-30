@@ -11,7 +11,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
-import { applyPlace, mapPlaces, placeLine } from './placesForm';
+import { applyPlace, mapPlaces, newPlaceTrap, placeDraft, placeHints, placeLine, trapEntries } from './placesForm';
 import { routeDraft, routeHints, toRoute } from './routesForm';
 
 const GAME = '/api/v1/game';
@@ -121,6 +121,7 @@ describe('지도 탭', () => {
       covers: [{ place_id: CRYPT, cover: 5 }],
       npc_places: [{ entry_id: KEEPER, place_id: CRYPT }],
       place_items: [],
+      traps: [],
     });
     expect(await list.findByText('명소 · 커버 5 · 인물 1')).toBeInTheDocument();
   });
@@ -179,12 +180,38 @@ describe('지도 입력', () => {
     const detail = scenario({ landmarks: [CRYPT], covers: [{ place_id: CRYPT, cover: 3 }] }) as unknown as ScenarioDetail;
     expect([...mapPlaces(detail)].sort()).toEqual([GATE, TOWER, CRYPT].sort());
     expect(placeLine(detail, CRYPT)).toBe('명소 · 커버 3');
-    expect(applyPlace(detail, CRYPT, { landmark: false, cover: '', people: [], items: [] })).toEqual({
+    expect(applyPlace(detail, CRYPT, { landmark: false, cover: '', people: [], items: [], traps: [] })).toEqual({
       landmarks: [],
       covers: [],
       npc_places: [{ entry_id: KEEPER, place_id: GATE }],
       place_items: [],
+      traps: [],
     });
+  });
+
+  it('미리 놓인 덫(#806 ②): 장소의 한 줄, 덫 물건만 고르고, 저장하면 다른 장소의 덫은 그대로다', () => {
+    const SNARE = '00000000-0000-4000-8000-0000000000a9';
+    const rules = [{ entry_id: SNARE, kind: 'gear', trap: { effects: [] } }, { entry_id: 'potion', kind: 'consumable', trap: null }];
+    const traps = [
+      { place_id: GATE, entry_id: SNARE, known: false },
+      { place_id: CRYPT, entry_id: SNARE, known: true },
+    ];
+    const detail = scenario({ landmarks: [CRYPT], items: rules, traps }) as unknown as ScenarioDetail;
+    expect(placeLine(detail, CRYPT)).toBe('명소 · 덫 1(알림 1)');
+    expect(placeDraft(detail, CRYPT).traps).toEqual([{ entryId: SNARE, known: true }]);
+    const entries = [
+      { id: SNARE, name: '올가미' },
+      { id: 'potion', name: '치유 물약' },
+    ];
+    expect(trapEntries(detail, entries as never).map((entry) => entry.name)).toEqual(['올가미']);
+    expect(newPlaceTrap([SNARE])).toEqual({ entryId: SNARE, known: false });
+    const draft = { ...placeDraft(detail, CRYPT), traps: [{ entryId: SNARE, known: false }, { entryId: '', known: false }] };
+    expect(placeHints(draft)['trap.1']).toBe('덫을 골라 주세요.');
+    expect(applyPlace(detail, CRYPT, { ...draft, traps: [{ entryId: SNARE, known: false }] }).traps).toEqual([
+      { place_id: GATE, entry_id: SNARE, known: false },
+      { place_id: CRYPT, entry_id: SNARE, known: false },
+    ]);
+    expect(placeLine(scenario({}) as unknown as ScenarioDetail, CRYPT)).not.toContain('덫');
   });
 
   it('길: 같은 끝, 빗장이 있는 끝, 시간, 숨김이 아니면 찾는 판정을 싣지 않는다', () => {

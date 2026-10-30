@@ -86,6 +86,14 @@ def visible_part(part: dict, viewer_id: uuid.UUID) -> dict:
     return {**part, **lists}
 
 
+def visible_trap(trap: dict, viewer_id: uuid.UUID) -> dict:
+    """터진 덫 하나(#806)가 업은 사람과 업힌 사람(#806 ②)에게 맞춘 수치 중 그 사람이 숫자로 보지 못하는 것을 뺀다."""
+    shown = visible_part(trap, viewer_id)
+    if trap.get('carried'):
+        shown['carried'] = visible_part(trap['carried'], viewer_id)
+    return shown
+
+
 def visible_outcome(outcome: dict | None, viewer_id: uuid.UUID) -> dict | None:
     """
     선언의 결과에서 그 사람이 숫자로 보지 못하는 수치의 바뀐 것을 뺀다(#804). 저장된 결과는 고치지 않는다.
@@ -100,7 +108,7 @@ def visible_outcome(outcome: dict | None, viewer_id: uuid.UUID) -> dict | None:
     }
     move = outcome.get('move')
     if isinstance(move, dict) and move.get('traps'):
-        changed['move'] = {**move, 'traps': [visible_part(trap, viewer_id) for trap in move['traps']]}
+        changed['move'] = {**move, 'traps': [visible_trap(trap, viewer_id) for trap in move['traps']]}
     return {**outcome, **changed} if changed else outcome
 
 

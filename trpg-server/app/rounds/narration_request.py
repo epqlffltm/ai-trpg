@@ -334,7 +334,14 @@ def to_trap(trap: dict, ruleset: Ruleset | None) -> TrapNote:
         name=trap['name'],
         check=cross_ability_name(ruleset, trap['avoid']),
         avoided=trap['avoided'],
+        carried=caught_name(trap),
     )
+
+
+def caught_name(trap: dict) -> str | None:
+    """터진 덫에 함께 걸린 업힌 사람의 이름(#806 ②). 업지 않았거나 업은 사람이 피했으면 None."""
+    carried = trap.get('carried')
+    return None if carried is None or trap['avoided'] else carried['character_name']
 
 
 def to_door(declaration: Declaration | None, ruleset: Ruleset | None = None) -> DoorNote | None:

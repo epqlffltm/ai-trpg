@@ -625,6 +625,16 @@ class CrossOut(BaseModel):
     hindrance: HindranceOut | None = None
 
 
+class TrapCaughtOut(BaseModel):
+    """덫에 함께 걸린 업힌 사람(#806 ②)과 그 사람에게 든 효과. 업은 사람이 피했으면 효과가 비어 있다."""
+
+    user_id: uuid.UUID
+    character_name: str
+    effect: EffectOut | None = None
+    injured: list['InjuredOut'] = []
+    resources: list['ResourceShiftOut'] = []
+
+
 class TrapSprungOut(BaseModel):
     """
     들어간 장소에서 터진 덫 하나(#806). 엔진이 정했다(app/rounds/trap_actions.py). 굴림은 공개다.
@@ -645,6 +655,8 @@ class TrapSprungOut(BaseModel):
     effect: EffectOut | None = None
     injured: list['InjuredOut'] = []
     resources: list['ResourceShiftOut'] = []
+    # 업고 들어갔으면 함께 걸린 업힌 사람(#806 ②). 피하는 판정은 업은 사람만 굴리고, 못 피하면 업힌 사람에게도 든다
+    carried: TrapCaughtOut | None = None
 
 
 class MoveOut(BaseModel):

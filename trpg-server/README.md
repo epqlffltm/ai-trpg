@@ -532,6 +532,7 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 | `landmarks` (명소, 100개) | 처음부터 아는 장소들(이름난 도시와 마을). 붙인 로어북의 장소 항목이다. 가는 길을 몰라도 이름은 안다. 같은 장소가 두 번 있으면 거부한다 |
 | `place_items` (놓인 물건, 100줄) | 맵의 장소에 놓인 물건. 하나하나가 `{"place_id", "entry_id", "count", "visibility", "find"}` 이다(1~99개). `visibility` 는 `open`(보임, 기본) 또는 `hidden`(숨김)이다. 숨긴 물건에는 찾는 판정 `find`(`{"ability", "difficulty"}`, 숨긴 길과 같다)가 있어야 하고 보이는 물건에는 없다. 같은 장소의 같은 물건이 같은 보이기로 두 줄이면 거부한다(한 줄에 개수로 적는다) |
 | `covers` (커버, 100개) | 장소마다 숨을 곳이 얼마나 좋은지(#276 의 커버 세이브). 하나하나가 `{"place_id", "cover"}` 다(맵의 장소, 1~10). 세이브 방식의 룰북에서 그 장소에 선 사람이 엄폐하면(`cover` 행동) 이 값으로 커버 세이브를 받는다. 다른 방식이면 엄폐를 받지 않는다. 같은 장소가 두 번 있으면 거부한다 |
+| `traps` (미리 놓인 덫, 50개) | 장소에 미리 놓인 덫(#806 ②). 하나하나가 `{"place_id", "entry_id", "known"}` 이다. 장소는 맵의 장소(아니면 `trap_off_map`), 물건은 아이템 규칙에 덫(`trap`)을 적은 물건이다(아니면 `trap_not_trap`, 붙인 로어북에 없으면 `item_entry_missing`). `known`(기본 `false`)이면 처음부터 테이블이 아는 덫이라 맵에 보이고 캐릭터가 밟지 않는다. 아니면 숨긴 덫이다. 한 장소에 여럿을 놓을 수 있다. 테이블을 시작할 때 덫마다 놓은 사람 없이 테이블의 덫(`table_traps`)이 된다. 판의 칸이며 비워도 되는 칸이라 판 형식이 그대로다(마이그레이션 `f9b1d3e5a7c0`) |
 | `happenings` (사건 규칙, 50개) | 조건이 채워지면 한 번 일어나는 판의 사건(#367). 하나하나가 `{"entry_id", "when", "match", "effects"}` 이다. `entry_id` 는 붙인 로어북의 사건 항목이다(같은 항목이 퀘스트여도 된다). `when`(1~5개)과 `match` 는 퀘스트의 조건과 모양도 종류도 같다(`consume` 은 쓰지 않는다). `effects`(1~5개)는 캐릭터 옮기기와 인물 옮기기, 길의 문 다루기다. 캐릭터 옮기기는 `{"kind": "move", "to_place", "from_place"}` 다. `from_place` 가 없으면 죽지 않은 캐릭터 모두를, 있으면 그 장소에 서 있던 사람만 `to_place` 로 옮긴다. 두 장소가 같으면 거부한다. 인물 옮기기는 `{"kind": "move_npc", "npc", "to_place"}` 다(#282). 붙인 로어북의 인물 항목 하나(`npc`)의 자리를 `to_place` 로 바꾼다(`from_place` 는 받지 않는다). 문 다루기는 `{"kind": "lock_route" \| "unlock_route", "from_place", "to_place", "device"}` 와 `{"kind": "repair_route", "from_place", "to_place"}` 다(#281). 두 끝이 그 둘인 길(방향은 보지 않는다)의 문을 잠그고, 열고, 부서진 것을 고친다. `device`(`lock`, `bar`)를 비우면 그 문의 장치 모두다. 두 끝이 같으면 거부한다. 같은 사건이 두 번 있으면 거부한다 |
 | `npc_places` (인물의 자리, 100개) | 인물이 처음 있는 맵의 장소(#282). 하나하나가 `{"entry_id", "place_id"}` 이다. 인물은 붙인 로어북의 인물 항목(NPC 시트가 없어도 된다), 장소는 맵의 장소다. 같은 인물이 두 번 있으면 거부한다. 자리를 적은 인물은 장면의 글이 아니라 장소로 장면에 들고, 같은 장소에서만 겨눈다([이번 장면의 인물](#라운드)). 적지 않은 인물은 지금처럼 장면의 글에 나왔는지로 든다 |
 | `player_made_hp` | 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값(`base`)과 상한(`cap`)을 함께 적는다. 초안일 때는 비워 둘 수 있다 |
@@ -813,6 +814,8 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 | `route_key_repeated` | 열쇠 하나를 두 자물쇠(길의 자물쇠, 자물쇠 물건의 자물쇠)에 적었다. 열쇠 하나는 자물쇠 하나만 연다(#281). 열쇠가 물건 항목이 아니면 `item_entry_missing`, `item_not_item` 이다 |
 | `place_item_off_map` | 놓인 물건이 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)에 있다 |
 | `cover_off_map` | 커버가 맵에 없는 장소에 있다(#276) |
+| `trap_off_map` | 미리 놓인 덫(`traps`)이 맵에 없는 장소에 있다(#806 ②) |
+| `trap_not_trap` | 미리 놓인 덫(`traps`)의 물건이 덫이 아니다. 아이템 규칙에 `trap` 을 적지 않았다(#806 ②) |
 | `place_item_find_invalid` | 숨긴 물건을 찾는 판정의 능력치나 난이도가 룰북의 규칙에 없다 |
 | `happening_entry_missing` | 붙인 로어북에 없는 항목을 가리키는 사건 규칙이 있다 |
 | `happening_not_event` | 사건이 아닌 항목(인물, 물건 …)을 가리키는 사건 규칙이 있다 |
@@ -912,7 +915,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
   - 형식 64: 물건이 다른 행동을 거든다(`items[].aids`, #802). 그 전 판의 `treat_bonus` 는 치료의 거들기(`always`)로, 따기와 고치기의 `tool` 은 도구가 있어야 하는가(`needs_tool`)와 그 물건의 그 행동의 거들기(보정 0, `never`, 규칙이 없던 물건이면 장비의 규칙)로 읽는다
   - 형식 65: HP 말고 다른 수치(`rulebook.rules.resources`, #804)와 물건의 맞추기(`adjust`). 그 전 판은 수치가 없는 것으로 읽는다
   - 형식 66: 기술과 주문(`rulebook.rules.skills`, #805)과 시트의 아는 기술(`skills`). 그 전 판은 기술이 없는 것으로 읽는다. 상대에게 쓰는 기술(`target: foe`)과 맞히는 판정(`check`, #805 ②)은 비워도 되는 칸이라 형식이 그대로다. 몬스터와 인물의 공격의 비용(`attacks[].cost`, #805 ③-a)과 효과(`attacks[].effects`), 비울 수 있는 피해 등급(`attacks[].harm`, #805 ③-b)도 같다
-  - 형식 67: 룰북이 정하는 성질(`rulebook.rules.natures`)과 타입마다의 면역(`rulebook.rules.monster_immunities`, #886). 그 전 판은 그때 엔진의 값(다섯 성질, 언데드는 독, 구조물은 독과 정신)으로 읽는다. 저항(#886 ②, 시트와 NPC 시트와 물건과 부상의 `resistances`, 맞추기의 `nature`)과 피해의 성질(#886 ③, 공격과 무기와 피해 효과의 `nature`, 몬스터의 `resistances`, 몬스터와 인물의 타고난 `nature`)과 덫(#806, 아이템 규칙의 `trap`)은 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
+  - 형식 67: 룰북이 정하는 성질(`rulebook.rules.natures`)과 타입마다의 면역(`rulebook.rules.monster_immunities`, #886). 그 전 판은 그때 엔진의 값(다섯 성질, 언데드는 독, 구조물은 독과 정신)으로 읽는다. 저항(#886 ②, 시트와 NPC 시트와 물건과 부상의 `resistances`, 맞추기의 `nature`)과 피해의 성질(#886 ③, 공격과 무기와 피해 효과의 `nature`, 몬스터의 `resistances`, 몬스터와 인물의 타고난 `nature`)과 덫(#806, 아이템 규칙의 `trap`, 시나리오의 미리 놓인 덫 `traps`)은 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 - 규칙을 템플릿의 값으로 채워 읽는 형식(4, 6~10, 14, 15, 23, 25, 28, 36)은 DB 의 룰북에도 같은 값을 채웠다(마이그레이션). 형식 12 의 항목의 종류와 형식 16 의 지목의 정답도 DB 의 항목에 채웠다.
 - 옛 판의 규칙에 점수제가 채워져도 그 판에서 점수제를 쓸 수 있게 되는 것은 아니다. 옛 판이 허용한 방식은 그때 있던 것 그대로다. 방식이 나중에 늘어도 옛 판에 저절로 켜지지 않는다.
 - 게시는 "굳히기"다. 남에게 보이게 하는 것은 따로다([공개와 소개 페이지](#공개와-소개-페이지)). 굳힌 내용(`snapshot`)은 공개해도 만든 사람만 본다.
@@ -1700,7 +1703,9 @@ records.py      일어난 일을 이벤트로 적기
     성공하면 덫을 거둬(`ended_reason: disarmed`) 그 덫 물건 하나를 갖는다. 한 가지의 상한(99)이면 그 장소에 보이게 둔다(`kept: 0`). 실패하면 덫은 그대로다. 목표보다 5 이상 모자라면 덫이 해제하던 사람에게 터진다(피하는 판정 없이 효과가 든다, `ended_reason: sprung`).
     결과는 `outcome.disarm`(`user_id`, `character_name`, `place`, `trap_id`, `entry_id`, `name`, `done`, `reason`, `check`(판정, `cross` 와 같은 모양, 굴리지 않았으면 `null`), `sprung`, `effect`, `injured`, `resources`(보는 사람이 숫자로 볼 수 있는 것만), `kept`)다.
     이벤트(`trap_disarmed`)가 행동에 이어 적힌다. 굴리지 못했어도 적는다. 터졌으면 그 뒤에 `hp_changed`, `injury_gained`, `resource_changed`(`source: trap`)가 잇는다.
-  - 업혀 들어온 사람, 사건이 옮긴 사람, 몬스터와 NPC 는 아직 터뜨리지 않는다(#806 ②).
+  - 미리 놓인 덫(#806 ②, 시나리오의 `traps`): 시작할 때 놓은 사람 없이(`set_by: null`) 놓인다. 숨긴 덫은 들어온 캐릭터가 밟고 찾기로 찾고, `known` 이면 처음부터 맵에 보이고 밟지 않는다.
+  - 업고 들어가면(#806 ②) 피하는 판정은 업은 사람만 굴린다. 못 피하면 업힌 사람에게도 효과가 든다. 결과의 터진 덫마다 `carried`(`user_id`, `character_name`, `effect`, `injured`, `resources`, 업지 않았으면 `null`)에 적히고, 이벤트 `trap_sprung` 에 `carried`(`user_id`, `character_name`)가 붙고 그 뒤에 업힌 사람의 `hp_changed` 들이 잇는다.
+  - 사건이 옮긴 사람, 몬스터와 NPC 는 아직 터뜨리지 않는다(#806 ②-b).
 
 **훔치기(#456, #457).** 같은 장소의 몬스터 한 마리나 이번 장면의 인물(NPC) 하나가 지닌 물건 하나를 훔친다(`app/rounds/steals.py`). 무엇을 지녔는지는 [이번 장면의 인물과 몬스터](#라운드)의 `items` 에서 고른다. `monster` 와 `npc` 중 하나만 적는다(둘 다거나 둘 다 없으면 422).
 
@@ -2129,6 +2134,7 @@ app/rounds/
   - `narration-73`: 쓴 기술의 줄(`(쓴 기술: 치유의 손길 → 영애, 마나 5 → 3/7) → 영애 회복 3 (HP 8/10)`)과 쓰지 못한 까닭(`(쓰려던 기술: 정신 집중. 비용이 모자랐다)`, #805)
   - `narration-74`: 굴린 기술의 줄은 판정 앞에 붙는다(`(쓴 기술: 마력 화살 → 수로 쥐 1, 마나 6 → 5/6) (지능 판정 성공: …)`, #805 ②). 못 쓴 까닭 `target_gone` 은 `받을 쪽이 없었다` 다
   - `narration-75`: 몬스터와 인물의 공격의 비용(#805 ③-a). 낸 비용을 말로 붙이고(`흑마법사: 엘프에게 화염구 (맞음) [마나 모자람]`), 모자라 못 한 차례도 적는다(`흑마법사: 엘프에게 화염구 (비용이 모자라 하지 못함)`)
+  - `narration-81`: 업힌 사람도 걸린 덫(#806 ②). 터진 덫의 줄에 붙인다(`(덫: 올가미. 민첩 판정에 실패해 걸렸다. 업힌 약사도 걸렸다)`)
   - `narration-80`: 덫 찾기와 해제(#806 ①-b). 찾기의 줄에 찾아낸 덫을 붙이고(`(찾기: 덫을 찾아냈다. 올가미)`), 해제의 줄을 적는다(`(해제: 올가미. 민첩 판정에 성공해 거둬 챙겼다)`, `(해제: 올가미. 민첩 판정에 크게 실패해 덫이 터졌다)`)
   - `narration-79`: 덫(#806). 덫을 놓은 줄(`(덫 놓기: 올가미을(를) 숨겨 놓았다)`)과 들어간 곳에서 터진 덫의 줄(`(덫: 올가미. 민첩 판정에 실패해 걸렸다)`)을 적는다
   - `narration-78`: 피해의 성질(#886 ③). HP 의 줄의 피해 앞에 성질을, 괄호에 받은 단계를 붙인다(`→ 엘프 화염 피해 2 (HP 8/10, 저항)`, `→ 수로 쥐 화염 피해 8 (쓰러짐, 약점)`)
@@ -2910,7 +2916,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `item_thrown` | 캐릭터가 물건을 몬스터나 인물에게 던졌다(또는 못 했다, #277). 그 행동 바로 뒤에 적힌다. 던졌으면 바로 뒤에 `check_rolled` 와 맞은 쪽의 변화 | `round`, `character_name`, `entry_id`, `name`, `thrown`, `reason`(`not_held`, `target_gone`), `target`(`monster_id` 나 `entry_id` 나 `user_id`, `name`), `remaining`, `cured`, `injured`(#801) |
 | `item_given` | 캐릭터가 물건을 건넸다(또는 못 했다). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `entry_id`, `name`, `count`, `given`, `reason`, `target`(받은 사람), `remaining`, `target_total` |
 | `trap_set` | 캐릭터가 덫을 숨겨 놓았다(또는 못 했다, #806). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `place`(`entry_id`, `name`), `entry_id`, `name`, `set`, `reason`(`not_held`), `remaining` |
-| `trap_sprung` | 장소에 들어온 캐릭터가 덫을 터뜨렸다(#806). 들어간 것(`character_moved`) 바로 뒤에 적힌다. 걸렸으면 바로 뒤에 `hp_changed`, `injury_gained`, `resource_changed`(`source: trap`) | `round`, `user_id`, `character_name`, `place`, `entry_id`, `name`, `set_by`, `avoid`(`ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`), `avoided` |
+| `trap_sprung` | 장소에 들어온 캐릭터가 덫을 터뜨렸다(#806). 들어간 것(`character_moved`) 바로 뒤에 적힌다. 걸렸으면 바로 뒤에 `hp_changed`, `injury_gained`, `resource_changed`(`source: trap`) | `round`, `user_id`, `character_name`, `place`, `entry_id`, `name`, `set_by`, `avoid`(`ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`), `avoided`, 업고 들어갔으면 `carried`(`user_id`, `character_name`, #806 ②) |
 | `trap_disarmed` | 캐릭터가 찾아낸 덫을 해제하려 했다(#806 ①-b). 그 행동 바로 뒤에 적힌다. 크게 실패해 터졌으면 바로 뒤에 `hp_changed`, `injury_gained`, `resource_changed`(`source: trap`) | `round`, `character_name`, `place`, `trap_id`, `entry_id`, `name`, `done`, `reason`(`gone`, `elsewhere`), `check`, `sprung`, `kept` |
 | `steal_attempted` | 캐릭터가 몬스터나 NPC 가 지닌 물건을 훔치려 했다(들켰어도). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `monster_id`, `monster_name`(몬스터일 때), `npc_id`, `npc_name`(NPC 일 때), `entry_id`, `name`, `check`(`roll`, `modifier`, `total`, `target`, `success`, 굴리지 않았으면 `null`), `hindrance`, `factors`, `stolen`, `count`, `left`, `total`(도둑이 가진 개수), `reason`(`gone`, `full`), `fight`(들켜 싸움이 붙었는가) |
 | `item_traded` | 캐릭터가 장면의 상인에게서 샀거나 상인에게 팔았다(또는 못 했다, #278). 그 행동 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `side`(`buy`, `sell`), `npc_id`, `npc_name`(장면의 호칭), `entry_id`, `name`, `count`, `price`(오간 돈), `traded`, `reason`, `total`(그 물건을 가진 개수), `money`(가진 돈) |

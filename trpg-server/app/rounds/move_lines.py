@@ -585,7 +585,9 @@ def describe_travel(note: TravelNote) -> str:
         (가려던 곳: 탑. 근력 판정에 실패해 넘지 못했다. 실패해 다쳤다)
         (간 곳: 광장 → 절벽 위, 근력 판정에 성공해 넘어)(쓴 물건: 밧줄 +2)
         (간 곳: 광장 → 숲)(덫: 올가미. 민첩 판정에 실패해 걸렸다)
+        (간 곳: 광장 → 숲, 약사을(를) 업고)(덫: 올가미. 민첩 판정에 실패해 걸렸다. 업힌 약사도 걸렸다)
     넘기에 붙여 쓴 물건(#802)이 있으면 뒤에 붙는다. 들어간 곳에서 터진 덫(#806)은 그 뒤에 하나씩 붙는다.
+    업은 사람이 못 피해 업힌 사람도 걸렸으면(#806 ②) 그 덫의 말에 붙는다.
     """
     tool = aid_text(note.aid) if note.aid else ''
     if not note.moved:
@@ -598,14 +600,16 @@ def describe_travel(note: TravelNote) -> str:
 
 def trap_text(note: TrapNote) -> str:
     """
-    들어간 곳에서 터진 덫 하나의 말(#806).
+    들어간 곳에서 터진 덫 하나의 말(#806). 업힌 사람이 함께 걸렸으면(#806 ②) 그것도 붙인다.
 
     예: (덫: 올가미. 민첩 판정에 성공해 피했다)
         (덫: 올가미. 민첩 판정에 실패해 걸렸다)
+        (덫: 올가미. 민첩 판정에 실패해 걸렸다. 업힌 약사도 걸렸다)
     """
     if note.avoided:
         return f'(덫: {note.name}. {note.check} 판정에 성공해 피했다)'
-    return f'(덫: {note.name}. {note.check} 판정에 실패해 걸렸다)'
+    carried = f'. 업힌 {note.carried}도 걸렸다' if note.carried else ''
+    return f'(덫: {note.name}. {note.check} 판정에 실패해 걸렸다{carried})'
 
 
 # 문을 다룬 것의 말. 해낸 것이다(#281). 잠그기와 열기는 장치마다 다르다

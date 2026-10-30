@@ -49,7 +49,18 @@ from app.realtime.signals import Kind, Signal
 from app.references.policy import references_allowed
 from app.rounds import opener
 from app.rounds.round_price import price_of
-from app.tables import departures, monsters, npcs, place_items, places, quests, repository, route_locks, sheets
+from app.tables import (
+    departures,
+    monsters,
+    npcs,
+    place_items,
+    places,
+    quests,
+    repository,
+    route_locks,
+    sheets,
+    traps,
+)
 from app.tables.building import build_table, hash_table_password, new_invite_code, require_rating
 from app.tables.characters import accept_character, roster, write_character
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
@@ -403,6 +414,7 @@ async def start_table(
     table.quests.extend(quests.make_quests(table.id, snapshot, table.clock.minutes))
     table.place_items.extend(place_items.make_place_items(table.id, snapshot))
     table.route_locks.extend(route_locks.make_route_locks(table.id, snapshot))
+    traps.set_preset(table, snapshot)
 
     table.status = TableStatus.PLAYING
     table.started_at = func.now()

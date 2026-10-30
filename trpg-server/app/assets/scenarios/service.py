@@ -55,6 +55,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         landmarks=list(data.landmarks),
         place_items=[rule.model_dump() for rule in data.place_items],
         covers=[rule.model_dump() for rule in data.covers],
+        traps=[trap.model_dump() for trap in data.traps],
         wanders=[table.model_dump() for table in data.wanders],
         happenings=[rule.model_dump() for rule in data.happenings],
         npc_places=[place.model_dump() for place in data.npc_places],
