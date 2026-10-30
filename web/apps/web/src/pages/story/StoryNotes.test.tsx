@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/story/StoryNotes.test.tsx
 // 장면(D2)의 기억 창. 행동 줄의 "기억"으로 열고, 기억 메모를 보고 더하고 고치고 지운다. 가득 차면(409 notes_full) 까닭을 알린다.
-// 앞의 줄거리(요약)는 읽기만 하고, 없으면 안내한다.
+// 앞의 줄거리(요약)는 읽기만 하고, 없으면 안내한다. 요약이 제안한 메모는 따로 보이고 받아들이거나 버린다.
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -31,8 +31,8 @@ function session(): StorySession {
   } as StorySession;
 }
 
-function note(n: number, text: string) {
-  return { id: N(n), text, created_at: AT, updated_at: AT };
+function note(n: number, text: string, pending = false): { id: string; text: string; source: string; pending: boolean; accepted_at: string | null; created_at: string; updated_at: string } {
+  return { id: N(n), text, source: pending ? 'summary' : 'user', pending, accepted_at: null, created_at: AT, updated_at: AT };
 }
 
 function signedIn(routes: Record<string, (request: SeenRequest) => Response> = {}) {
@@ -67,6 +67,32 @@ afterEach(() => {
 });
 
 describe('기억 창', () => {
+  it('요약이 제안한 메모를 받아들이면 메모가 되고, 버리면 지운다', async () => {
+    let notes = [note(1, '미나는 고양이를 무서워한다'), note(3, '불꽃놀이는 30일째다', true), note(4, '준은 수영부다', true)];
+    const { seen } = signedIn({
+      [`GET ${NOTES}`]: () => json(200, notes),
+      [`POST ${NOTES}/${N(3)}/accept`]: () => {
+        notes = notes.map((entry) => (entry.id === N(3) ? { ...entry, pending: false, accepted_at: AT } : entry));
+        return json(200, notes[1]);
+      },
+      [`DELETE ${NOTES}/${N(4)}`]: () => {
+        notes = notes.filter((entry) => entry.id !== N(4));
+        return new Response(null, { status: 204 });
+      },
+    });
+    renderApp(`/story/sessions/${SESSION}`);
+
+    await userEvent.click(await screen.findByRole('button', { name: '기억' }));
+    const dialog = within(screen.getByRole('dialog', { name: '기억' }));
+    const suggested = within(await dialog.findByRole('list', { name: '요약이 제안한 메모' }));
+    expect(dialog.getByText('1 / 20')).toBeInTheDocument();
+    await userEvent.click(within(suggested.getByText('불꽃놀이는 30일째다').closest('li') as HTMLElement).getByRole('button', { name: '받아들이기' }));
+    expect(await within(dialog.getByRole('list', { name: '기억 메모' })).findByText('불꽃놀이는 30일째다')).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole('button', { name: '버리기: 준은 수영부다' }));
+    await waitFor(() => expect(dialog.queryByRole('list', { name: '요약이 제안한 메모' })).toBeNull());
+    expect(seen.filter((request) => request.method !== 'GET' && request.url.startsWith(NOTES)).map((request) => `${request.method} ${request.url.slice(NOTES.length)}`)).toEqual([`POST /${N(3)}/accept`, `DELETE /${N(4)}`]);
+  });
+
   it('메모를 보고 더하고 고치고 지운다. 요약이 없으면 안내한다', async () => {
     const { seen } = signedIn();
     renderApp(`/story/sessions/${SESSION}`);
