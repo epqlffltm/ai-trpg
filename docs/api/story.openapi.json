@@ -1902,6 +1902,16 @@
         "title": "Tier",
         "type": "string"
       },
+      "TranscriptFormat": {
+        "description": "기록의 형식.",
+        "enum": [
+          "md",
+          "html",
+          "txt"
+        ],
+        "title": "TranscriptFormat",
+        "type": "string"
+      },
       "WithdrawalResult": {
         "description": "답. 지운 것이 없어도(이미 지웠다, 이 서버에 그 사람의 것이 없다) 같다. 인증 서버는 이것을 보고 그만 보낸다.",
         "properties": {
@@ -2970,6 +2980,63 @@
         "summary": "Read Summary",
         "tags": [
           "memory"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/story/conversations/{conversation_id}/transcript": {
+      "get": {
+        "description": "내 세션의 기록. 지금 보고 있는 가지의 말들이다. 없거나 볼 수 없는 세션이면 404.",
+        "operationId": "download_transcript_api_v1_story_conversations__conversation_id__transcript_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/TranscriptFormat",
+              "default": "md"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {},
+              "text/markdown": {},
+              "text/plain": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Transcript",
+        "tags": [
+          "transcripts"
         ],
         "x-audience": "user"
       }
