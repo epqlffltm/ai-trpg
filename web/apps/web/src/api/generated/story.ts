@@ -247,6 +247,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/conversations/{conversation_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Transcript
+         * @description 내 세션의 기록. 지금 보고 있는 가지의 말들이다. 없거나 볼 수 없는 세션이면 404.
+         */
+        get: operations["download_transcript_api_v1_story_conversations__conversation_id__transcript_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/endings": {
         parameters: {
             query?: never;
@@ -1324,6 +1344,12 @@ export interface components {
          */
         Tier: "basic" | "standard" | "premium";
         /**
+         * TranscriptFormat
+         * @description 기록의 형식.
+         * @enum {string}
+         */
+        TranscriptFormat: "md" | "html" | "txt";
+        /**
          * WithdrawalResult
          * @description 답. 지운 것이 없어도(이미 지웠다, 이 서버에 그 사람의 것이 없다) 같다. 인증 서버는 이것을 보고 그만 보낸다.
          */
@@ -1881,6 +1907,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SummaryOut"] | null;
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    download_transcript_api_v1_story_conversations__conversation_id__transcript_get: {
+        parameters: {
+            query?: {
+                format?: components["schemas"]["TranscriptFormat"];
+            };
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": unknown;
+                    "text/markdown": unknown;
+                    "text/plain": unknown;
                 };
             };
             /** @description 입력이 틀렸다 */

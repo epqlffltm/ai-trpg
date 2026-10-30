@@ -123,6 +123,9 @@ class Settings(CoreSettings):
     # 모델을 부르지 않는 쓰기(세션 시작, 모델과 가지 바꾸기, 답 고치기). 한 사람이 이 시간(초) 안에 이만큼까지
     write_limit: int = Field(default=120, ge=1, le=10000)
     write_window_seconds: int = Field(default=60, ge=1, le=3600)
+    # 기록 내려받기. 한 사람이 이 시간(초) 안에 이만큼까지(chat 과 같다)
+    transcript_limit: int = Field(default=10, ge=1, le=1000)
+    transcript_window_seconds: int = Field(default=600, ge=1, le=3600)
 
     @model_validator(mode='after')
     def require_an_embedding_address(self) -> Self:

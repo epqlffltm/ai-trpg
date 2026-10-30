@@ -64,6 +64,7 @@ from app.memory import router as memory
 from app.memory.service import NoteNotFoundError, NotesFullError
 from app.memory.summarizer import Summarizer
 from app.records import router as records
+from app.transcripts import router as transcripts
 from app.turns import router as messages
 from app.turns import settler
 from app.turns.actions import ActionRefusedError
@@ -238,6 +239,8 @@ def create_app(
     app.include_router(messages.generation_router, prefix=API_PREFIX)
     # 계정의 기록. 본 엔딩
     app.include_router(records.router, prefix=API_PREFIX)
+    # 기록 내려받기(지금 가지의 말을 파일 하나로)
+    app.include_router(transcripts.router, prefix=API_PREFIX)
     # 기억 메모(세션마다의 짧은 글, 모델에 늘 간다)
     app.include_router(memory.router, prefix=API_PREFIX)
     # 인증 서버의 탈퇴 알림. 다른 서버만 부르는 주소(/service/)라 프록시가 밖에서 받지 않는다

@@ -26,6 +26,8 @@ class Limits:
     generations: AttemptLimit
     # 모델을 부르지 않는 쓰기(세션 시작, 모델과 가지 바꾸기, 답 고치기). 청구하지 않아 넉넉하게 둔다
     writes: AttemptLimit
+    # 기록 내려받기. 세션의 말을 모두 읽어 파일을 쓴다. 짧은 시간에 몰아 받는 것을 막는다(chat 과 같다)
+    transcripts: AttemptLimit
 
 
 @dataclass(frozen=True)
@@ -43,6 +45,9 @@ def limits_from(settings: Settings) -> Limits:
             'generations', settings.generation_limit, timedelta(seconds=settings.generation_window_seconds)
         ),
         writes=AttemptLimit('writes', settings.write_limit, timedelta(seconds=settings.write_window_seconds)),
+        transcripts=AttemptLimit(
+            'transcripts', settings.transcript_limit, timedelta(seconds=settings.transcript_window_seconds)
+        ),
     )
 
 
