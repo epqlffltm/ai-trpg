@@ -1902,6 +1902,19 @@
         "title": "Tier",
         "type": "string"
       },
+      "WithdrawalResult": {
+        "description": "답. 지운 것이 없어도(이미 지웠다, 이 서버에 그 사람의 것이 없다) 같다. 인증 서버는 이것을 보고 그만 보낸다.",
+        "properties": {
+          "status": {
+            "const": "processed",
+            "default": "processed",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "WithdrawalResult",
+        "type": "object"
+      },
       "WorldSummary": {
         "description": "목록에 싣는 세계관. id 는 asset 서버의 세계관 id 이고 version 은 이 세션이 쓰는 판의 번호다.",
         "properties": {
@@ -3273,6 +3286,51 @@
           "models"
         ],
         "x-audience": "user"
+      }
+    },
+    "/api/v1/story/service/users/{public_id}/withdrawal": {
+      "post": {
+        "description": "탈퇴한 사람의 세션과 판의 사본, 계정의 기록을 지운다. 청구 기록은 세션과 끊어 남긴다.",
+        "operationId": "receive_withdrawal_api_v1_story_service_users__public_id__withdrawal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Public Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawalResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "summary": "Receive Withdrawal",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
       }
     },
     "/health": {

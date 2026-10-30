@@ -83,7 +83,7 @@
 | 게시판 | 글과 댓글(지운 것도)은 남기고 `author_id` 를 비워 "탈퇴한 사용자"로 보인다(`author_withdrawn`). 신고는 남기고 신고한 사람을 비운다. 닉네임과 보낼 알림을 지운다 | 받는 주소를 만들었다(`board-server/README.md` 의 "탈퇴 받기") |
 | asset | 페르소나, 비공개 캐릭터, 그림, 아직 보내지 않은 알림(#678)을 지운다. 공개 캐릭터와 그 판, 그 판에 쓰인 그림은 남긴다 | 받는 주소를 만들었다(`asset-server/README.md` 의 "탈퇴"). 그림도 지운다(#566. 저장소에서 먼저 지우고 행은 나중이다. 저장소에 닿지 못하면 503 이라 다시 보낸 알림이 마저 지운다) |
 | chat | 대화(지운 것으로 적어 둔 것까지)와 딸린 것(말, 상태, 요약, 기억 메모, 페르소나의 사본), 가져온 캐릭터의 판의 사본, 연 이벤트 씬의 기록, 아직 보내지 않은 알림(#678)을 지운다. 청구 기록(`generations`)은 남기고 대화와 말을 가리키는 칸만 비운다(공개 ID, 모델, 토큰 수, 원가, 청구 상태, 홀드의 이름표가 남는다. 2026-10-23 유저 결정) | 받는 주소를 만들었다(`chat-server/README.md` 의 "탈퇴", #670) |
-| story | 대화를 지운다 | 제안. 서버를 만들 때 정한다 |
+| story | 세션과 딸린 것(말, 상태, 요약, 기억 메모, 페르소나의 사본), 가져온 세계관의 판의 사본과 그 로어북의 벡터, 계정의 기록(본 엔딩, 연 일러스트)을 지운다. 청구 기록(`generations`)은 남기고 세션과 말을 가리키는 칸만 비운다(chat 과 같다) | 받는 주소를 만들었다(`story-server/README.md` 의 "탈퇴") |
 
 - 남긴 기록에서 사람을 알아볼 수 있는 것은 공개 ID 뿐이다. 인증 서버가 그 ID 의 이름을 지웠으므로 이름을 물으면 `null` 이다(`/public-names`). 화면은 "탈퇴한 사용자"로 보인다
 
@@ -100,8 +100,7 @@ POST /api/v1/<서버>/service/users/{public_id}/withdrawal
 - **받는 쪽은 멱등이다.** 같은 알림이 두 번 와도 결과가 같다. 이미 정리했으면 `200` 이다. 모르는 사용자(그 서버에 데이터가 없다)도 `200` 이다. 본문은 `{"status": "processed"}` 다. 그 밖의 답(옛 판이라 `404` 인 것 포함)은 다시 보낸다
 - **비밀이 비어 있는 서버에는 보내지 않는다.** 줄은 적어 두고 기다린다. 받는 주소를 만들고 비밀을 적으면 그 전에 탈퇴한 사람의 것도 나간다.
   그래서 받는 쪽의 PR 은 인증 서버의 코드를 고치지 않는다. `.env.example` 에 비밀 한 줄을 더할 뿐이다(인증 서버는 칸을 미리 열어 두었다)
-- 받는 주소가 없는 서버(story)는 표에 없다. 받는 주소를 만들 때 인증 서버의 표(`accounts/withdrawal_client.py` 의 `DESTINATIONS`, `WithdrawalTarget`)에 더한다.
-  story 는 세션과 판의 사본을 저장하기 시작했지만(#591) 화면이 아직 부르지 않아 사람의 데이터가 쌓이지 않는다. 화면을 붙이기 전에 받는 주소를 만든다
+- 새 서버는 받는 주소를 만들 때 인증 서버의 표(`accounts/withdrawal_client.py` 의 `DESTINATIONS`, `WithdrawalTarget`)에 더한다(story 가 그렇게 했다)
 
 **서버마다의 이름(인프라와 정함, 2026-10-21).** 비밀은 받는 서버마다 따로다. 인증 쪽의 이름은 `<서버>_SECRET`, 받는 쪽은 모두 `AUTH_SERVER_SECRET` 이다(인증 ↔ 결제의 짝과 같은 모양).
 
@@ -113,6 +112,7 @@ POST /api/v1/<서버>/service/users/{public_id}/withdrawal
 | 게시판 | `/api/v1/board` | `BOARD_URL`(8002) / `BOARD_SECRET` | `AUTH_SERVER_SECRET` | 받는 주소와 비밀을 만들었다 |
 | asset | `/api/v1/asset` | `ASSET_URL`(8006) / `ASSET_SECRET` | `AUTH_SERVER_SECRET` | 받는 주소와 비밀을 만들었다 |
 | chat | `/api/v1/chat` | `CHAT_URL`(8005) / `CHAT_SECRET` | `AUTH_SERVER_SECRET` | 받는 주소와 비밀을 만들었다(#670). 인증 서버의 표(`WithdrawalTarget`, `DESTINATIONS`)에도 더했다 |
+| story | `/api/v1/story` | `STORY_URL`(8007) / `STORY_SECRET` | `AUTH_SERVER_SECRET` | 받는 주소와 비밀을 만들었다. 인증 서버의 표(`WithdrawalTarget`, `DESTINATIONS`)에도 더했다 |
 
 - 주소의 기본값은 로컬의 포트다(`http://127.0.0.1:<포트>`). compose 에서는 그 서버의 컨테이너 이름으로 적는다
 - 받는 주소를 만드는 PR 이 함께 고치는 것: 두 서버의 `.env.example`, `secret_scope.py` 의 표, `fill_env.py` 의 짝과 그 시험, compose 에서 비우는 줄과 `auth-welcome-credits` 의 주소. 어려우면 인프라 쪽이 그 브랜치에 얹을 zip 을 준다

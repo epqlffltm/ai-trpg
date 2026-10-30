@@ -35,6 +35,7 @@ EXPECTED_PREFIXES = {
     'board': '/api/v1/board',
     'asset': '/api/v1/asset',
     'chat': '/api/v1/chat',
+    'story': '/api/v1/story',
 }
 
 
@@ -84,7 +85,13 @@ class RequestShapeTests(SimpleTestCase):
 
 class ConfiguredTests(SimpleTestCase):
     @override_settings(
-        BILLING_SECRET=SECRET, NOTIFICATION_SECRET='', GAME_SECRET='', BOARD_SECRET='', ASSET_SECRET='', CHAT_SECRET=''
+        BILLING_SECRET=SECRET,
+        NOTIFICATION_SECRET='',
+        GAME_SECRET='',
+        BOARD_SECRET='',
+        ASSET_SECRET='',
+        CHAT_SECRET='',
+        STORY_SECRET='',
     )
     def test_only_servers_with_a_secret_are_told(self):
         self.assertEqual(configured_targets(), ['billing'])
@@ -97,6 +104,7 @@ class ConfiguredTests(SimpleTestCase):
         BOARD_SECRET='',
         ASSET_SECRET=SECRET,
         CHAT_SECRET=SECRET,
+        STORY_SECRET=SECRET,
     )
     def test_writing_a_secret_opens_that_server(self):
-        self.assertEqual(configured_targets(), ['billing', 'asset', 'chat'])
+        self.assertEqual(configured_targets(), ['billing', 'asset', 'chat', 'story'])
