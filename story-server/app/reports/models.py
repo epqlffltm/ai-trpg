@@ -44,7 +44,7 @@ class ReportReason(enum.StrEnum):
 
 
 class ReportOutcome(enum.StrEnum):
-    """처리의 결과. 받아들였다, 받아들이지 않았다. 세계관을 숨기는 것은 asset 의 운영자 API 다."""
+    """처리의 결과. 받아들였다, 받아들이지 않았다. 처리는 기록일 뿐 세계관을 숨기지 않는다."""
 
     ACTIONED = 'actioned'
     DISMISSED = 'dismissed'

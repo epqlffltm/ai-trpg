@@ -134,6 +134,9 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | DELETE | `/api/v1/story/conversations/{id}` | [세션](#세션) 지우기. 204. 지운 시각만 적는다. 없거나 남의 것이면 404 | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/branch` | [가지 고르기](#가지-고르기)(`{"message_id"}`). 바뀐 세션을 돌려준다 | access 토큰 |
 | POST | `/api/v1/story/messages/{id}/reports` | [모델의 답 신고](#신고). `{reason, description?}`. 201. 사람의 말과 행동 말은 422 `not_reportable`, 두 번째는 409 `already_reported` | access 토큰 |
+| GET | `/api/v1/story/admin/message-reports` | 운영자: 열린 [신고](#신고)의 목록(`minor` 먼저, 오래된 것부터, 세션의 글은 없다). 운영자가 아니면 404 | access 토큰(운영자) |
+| GET | `/api/v1/story/admin/message-reports/{id}?reason=` | 운영자: 신고 하나와 굳힌 글. 사유 필수, 볼 때마다 감사 기록. 없으면 404 `report_not_found` | access 토큰(운영자) |
+| PUT | `/api/v1/story/admin/message-reports/{id}/outcome` | 운영자: 처리 `{outcome: actioned \| dismissed, reason}`. 204. 이미 처리했으면 409 `already_handled` | access 토큰(운영자) |
 | PATCH | `/api/v1/story/messages/{id}` | [답 고치기](#답-고치기)(`{"segments": ["…"]}`). 고친 말을 돌려준다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content", "edit_of"?}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/actions` | [행동](#행동)(`{"kind", …}`). 엔진이 판정하고 바로 SSE 로 반응을 흘려보낸다 | access 토큰 |
@@ -397,7 +400,7 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
 
 ### 신고
 
-자기 세션의 모델의 답을 신고한다(chat 의 #678 과 같은 모양, `app/reports/`). 세계관을 숨기는 것은 asset 의 운영자 API 다.
+자기 세션의 모델의 답을 신고한다(chat 의 #678 과 같은 모양, `app/reports/`, `app/operators/`).
 
 - **굳히기.** 세션은 그 사람만 보는 것이라 운영자가 읽지 않는다. 그래서 신고하는 순간 그 답과 앞의 말 여섯(그 답까지의 가지의 것),
   세계관(asset 의 id, 판, 이름)과 모델을 신고에 굳힌다. 답의 글은 저장한 본문 그대로다(줄마다 `@mina:` 같은 말하는 사람의 표식).
@@ -406,7 +409,11 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
   모델의 답만이다(사람의 말과 서버가 쓴 행동 말은 422 `not_reportable`). 같은 답은 한 번만(409 `already_reported`).
   볼 수 있는 세션의 말이 아니면(남의 것, 지운 세션, 볼 수 없는 등급) 404 `message_not_found` 다.
 - **지우기.** 세션을 지운 것으로 적어도 신고는 남는다. 세션의 행이 지워지면(탈퇴) 함께 지워진다. 신고에 든 것은 신고한 사람의 세션이라서다.
-- 운영자가 열린 신고를 보고 처리하는 API(감사 기록과 함께)와, 처리하면 신고한 사람에게 가는 알림은 다음 PR 에서 더한다.
+- **운영자 API**(`/admin/...`, `app/operators/`, 운영자가 아니면 404). 열린 신고의 목록은 `minor` 가 먼저, 그다음 오래된 것부터이고 세션의 글과 신고한 사람을 싣지 않는다.
+  신고 하나를 보려면 사유(`reason`, 쿼리, 1~200자)가 필수이고, 보기 전에 감사 기록(`operator_reads`)을 저장한다. 없는 신고를 본 시도도 남는다.
+  처리(`actioned`, `dismissed`)는 감사 기록(`operator_actions`)과 한 트랜잭션이다. 이미 처리했으면 409 `already_handled` 다.
+  두 기록은 덧붙이기만 한다(트리거가 고치기와 지우기를 막는다). 사유와 본 내용은 로그에 싣지 않는다.
+- **처리는 기록이다.** 세계관을 숨기지 않는다. asset 의 숨기기 API 는 아직 캐릭터만이다. 처리하면 신고한 사람에게 가는 알림은 다음 PR 에서 더한다.
 
 ### 요청 수 제한
 
@@ -426,6 +433,7 @@ chat 의 것과 같다(`app/limits/`). 한 사람이 정해진 시간 안에 몇
 
 - 지우는 것: 세션(지운 것으로 적어 둔 것도)과 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본, 그 세션의 [신고](#신고)), 가져온 세계관의 판의 사본과 그 로어북의 벡터, 계정의 기록(본 엔딩, 연 일러스트).
 - 남기는 것: 청구 기록(`generations`). 세션과 말을 가리키는 칸만 비운다(공개 ID, 모델, 토큰 수, 원가, 청구 상태, 홀드의 이름표가 남는다).
+  운영자의 감사 기록(`operator_reads`, `operator_actions`)도 남는다. 운영자와 신고의 id, 사유뿐이고 본 내용은 없다.
 - 한 트랜잭션이고 멱등이다. 같은 알림이 다시 와도, 이 서버에 그 사람의 것이 없어도 200 `{"status": "processed"}` 다. 모르는 칸은 버린다.
 - 인증 서버의 서명(`AUTH_SERVER_SECRET`)이 아니면 401, 본문의 모양이 틀리면 422, 본문이 16KB 를 넘으면 서명을 보기 전에 413 이다.
   사용자의 토큰은 없고 요청 수 제한도 걸지 않는다. 프록시는 `/api/v1/story/service/` 를 밖에서 받지 않는다(404).
@@ -562,6 +570,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `ending_records` | 계정의 본 엔딩. (`owner_id`, `world_source`, `ending_id`)마다 처음 본 시각과 세션. 세션이 지워지면 세션만 비운다 |
 | `illustration_unlocks` | 계정의 연 일러스트. (`owner_id`, `world_source`, `scene_kind`, `scene_id`)마다 연 때의 그림(`image_id`), 장면의 인물(`cast`), 처음 연 시각과 세션 |
 | `message_reports` | 모델의 답의 [신고](#신고)와 그때 굳힌 글(답과 앞의 말 여섯, 세계관과 판, 모델). (신고한 사람, 말)마다 하나. 열린 신고는 부분 색인으로 읽는다. 세션이 지워지면 함께 지워진다 |
+| `operator_reads`, `operator_actions` | 운영자가 신고의 글을 본 기록과 처리한 기록(chat 과 같은 칸). 덧붙이기만 한다(트리거). 신고와 세션에 외래 키가 없어 탈퇴해도 남는다. 테스트는 TRUNCATE 로 비운다 |
 
 모델의 모듈을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 
