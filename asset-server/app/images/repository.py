@@ -58,13 +58,13 @@ def used_by_public_character(image_id: uuid.UUID, ratings: Sequence[Rating]):
 
 
 def used_by_public_world(image_id: uuid.UUID, ratings: Sequence[Rating]):
-    """그 그림이 공개 세계관의 판에 쓰였고, 그 판의 등급이 ratings 안에 있다는 조건(#591)."""
+    """그 그림이 공개 세계관(숨기지 않은 것)의 판에 쓰였고, 그 판의 등급이 ratings 안에 있다는 조건(#591)."""
     return (
         exists()
         .where(WorldImageUse.image_id == image_id)
         .where(WorldVersion.id == WorldImageUse.version_id)
         .where(World.id == WorldVersion.world_id)
-        .where(World.visibility == Visibility.PUBLIC)
+        .where(World.visibility == Visibility.PUBLIC, World.hidden_at.is_(None))
         .where(WorldVersion.rating.in_(ratings))
     )
 

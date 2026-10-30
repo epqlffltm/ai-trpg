@@ -89,10 +89,15 @@ async def find_latest(session: AsyncSession, world_id: uuid.UUID) -> tuple[World
 
 def listed(ratings: Sequence[Rating]):
     """
-    공개 목록에 나오는 조건. 공개이고 마지막 판이 볼 수 있는 등급이다(캐릭터의 공개 목록과 같다).
+    공개 목록에 나오는 조건. 공개이고, 운영자가 숨기지 않았고, 마지막 판이 볼 수 있는 등급이다
+    (캐릭터의 공개 목록과 같다).
     등급은 판의 것으로 거른다. 초안의 등급을 바꿔도 다음 판까지는 게시한 판이 나간다.
     """
-    return (World.visibility == Visibility.PUBLIC) & WorldVersion.rating.in_([rating.value for rating in ratings])
+    return (
+        (World.visibility == Visibility.PUBLIC)
+        & World.hidden_at.is_(None)
+        & WorldVersion.rating.in_([rating.value for rating in ratings])
+    )
 
 
 async def list_public(
@@ -116,7 +121,7 @@ async def list_public(
 async def find_public(
     session: AsyncSession, world_id: uuid.UUID, ratings: Sequence[Rating]
 ) -> tuple[World, WorldVersion] | None:
-    """공개 세계관 하나와 그 마지막 판. 공개가 아니거나, 판이 없거나, 볼 수 없는 등급이면 None."""
+    """공개 세계관 하나와 그 마지막 판. 공개가 아니거나, 숨겼거나, 판이 없거나, 볼 수 없는 등급이면 None."""
     query = select(World, WorldVersion).join(WorldVersion, latest_join()).where(World.id == world_id, listed(ratings))
     row = (await session.execute(query)).first()
     return None if row is None else (row[0], row[1])

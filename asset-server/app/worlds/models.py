@@ -258,6 +258,9 @@ class World(Base):
 
     latest_version: Mapped[int | None] = mapped_column(Integer, default=None)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # 운영자가 숨긴 시각(캐릭터의 hidden_at 과 같다). 숨긴 세계관은 공개여도 공개 목록, 공개 소개,
+    # 남의 새 세션(판 내주기), 남이 보는 그림에서 빠진다. 주인은 계속 쓴다. 운영자만 푼다(app/operators/)
+    hidden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

@@ -270,8 +270,13 @@ def is_owner(world: World, viewer: AccessClaims) -> bool:
 
 
 def require_reachable(world: World, viewer: AccessClaims) -> None:
-    """주인이 아니면 공개여야 한다. 아니면 WorldNotFoundError(있는지도 드러내지 않는다)."""
-    if not is_owner(world, viewer) and world.visibility != Visibility.PUBLIC:
+    """
+    주인이 아니면 공개이고 숨기지 않은 것이어야 한다(캐릭터와 같다).
+    아니면 WorldNotFoundError(있는지도 드러내지 않는다).
+    """
+    if is_owner(world, viewer):
+        return
+    if world.visibility != Visibility.PUBLIC or world.hidden_at is not None:
         raise WorldNotFoundError
 
 

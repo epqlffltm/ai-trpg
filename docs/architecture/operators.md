@@ -73,9 +73,10 @@
 | --- | --- | --- |
 | 공개 캐릭터의 신고를 보고 처리한다(받아들이면 숨긴다) | `GET /api/v1/asset/admin/character-reports`, `PUT .../admin/characters/{id}/reports/outcome` | 했다(#678) |
 | 캐릭터를 숨기고 푼다. 숨긴 캐릭터는 남에게 보이지 않고 주인만 쓴다 | `PUT /api/v1/asset/admin/characters/{id}/hidden` | 했다(#678) |
+| story 의 세계관을 숨기고 푼다. 숨긴 세계관은 공개 목록과 남의 새 세션에서 빠지고 주인만 쓴다. 진행 중인 남의 세션은 사본으로 돈다 | `PUT /api/v1/asset/admin/worlds/{id}/hidden` | 했다(#591) |
 
 - 조치는 `operator_actions` 에 남긴다(아래 [감사 기록](#감사-기록)과 같은 칸, 덧붙이기만). 신고의 목록은 운영자에게 보낸 것이라 보기 기록을 남기지 않는다.
-- 숨김과 풀기는 캐릭터의 주인에게, 신고의 처리는 신고한 사람마다 알림함에 간다([asset 서버의 알림 보내기](../../asset-server/README.md#알림-보내기)).
+- 숨김과 풀기는 캐릭터(세계관)의 주인에게, 신고의 처리는 신고한 사람마다 알림함에 간다([asset 서버의 알림 보내기](../../asset-server/README.md#알림-보내기)).
   처리 알림에는 결과(숨김, 기각)와 사유를 싣지 않는다. 신고한 사람이 결과로 상대를 짐작하거나 운영 판단을 두고 다투지 않게 한다(2026-10-23 유저 결정).
 
 ### chat 서버
@@ -99,7 +100,7 @@
 | 무엇 | 어디서 | 구현 |
 | --- | --- | --- |
 | 신고된 모델의 답과 신고 때 굳힌 앞의 말(여섯)을 본다. 사유 필수, 볼 때마다 `operator_reads` | `GET /api/v1/story/admin/message-reports/{id}?reason=` | 했다(#591) |
-| 신고를 처리한다(`operator_actions`). 세계관을 숨기는 API 는 아직 없다(asset 의 숨기기는 캐릭터만) | `PUT /api/v1/story/admin/message-reports/{id}/outcome` | 했다(#591) |
+| 신고를 처리한다(`operator_actions`). 세계관을 숨기는 것은 asset 의 운영자 API(`PUT /api/v1/asset/admin/worlds/{id}/hidden`)로 따로 한다 | `PUT /api/v1/story/admin/message-reports/{id}/outcome` | 했다(#591) |
 
 - chat 과 같은 모양이다. 세션은 운영자가 열지 않고, 신고에 굳힌 글만 본다([story 서버의 신고](../../story-server/README.md#신고)).
 - 처리하면 신고한 사람의 알림함에 간다(`story_report.handled`). chat 처럼 결과와 사유는 싣지 않는다.

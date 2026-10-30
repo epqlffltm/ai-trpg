@@ -1,7 +1,7 @@
 # asset-server/app/operators/router.py
 
 """
-운영자 API(#678). 신고를 보고 캐릭터를 숨기고 푼다.
+운영자 API(#678). 신고를 보고 캐릭터를 숨기고 푼다. 세계관도 숨기고 푼다(story 의 신고를 보고).
 
 주소는 /admin 아래에 따로 묶는다. 일반 사용자의 API 에 섞지 않는다(docs/architecture/operators.md).
   - 운영자(토큰의 roles 에 "operator")가 아니면 404 다. 운영자의 주소가 있다는 것을 알리지 않는다
@@ -78,4 +78,13 @@ async def change_hidden(
 ) -> HiddenResult:
     """캐릭터를 숨기거나 푼다. 캐릭터가 없으면 404 다."""
     hidden = await service.change_hidden(session, operator.user_id, character_id, data.hidden, data.reason, utc_now())
+    return HiddenResult(hidden=hidden)
+
+
+@router.put('/worlds/{world_id}/hidden', response_model=HiddenResult, status_code=status.HTTP_200_OK)
+async def change_world_hidden(
+    world_id: uuid.UUID, data: HiddenInput, operator: Operator, session: Session
+) -> HiddenResult:
+    """세계관을 숨기거나 푼다. 세계관이 없으면 404 다. story 의 신고(world_id)를 보고 한다."""
+    hidden = await service.change_world_hidden(session, operator.user_id, world_id, data.hidden, data.reason, utc_now())
     return HiddenResult(hidden=hidden)

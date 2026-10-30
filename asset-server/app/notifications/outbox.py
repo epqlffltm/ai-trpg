@@ -7,6 +7,8 @@
 | --- | --- | --- |
 | character.hidden | 운영자가 숨겼다(직접, 또는 신고를 받아들여서). 캐릭터의 주인에게 | character_id, name |
 | character.unhidden | 운영자가 숨김을 풀었다. 캐릭터의 주인에게 | character_id, name |
+| world.hidden | 운영자가 세계관을 숨겼다. 세계관의 주인에게 | world_id, name |
+| world.unhidden | 운영자가 세계관의 숨김을 풀었다. 세계관의 주인에게 | world_id, name |
 | character_report.handled | 운영자가 신고를 처리했다. 신고한 사람에게 | name |
 
   - 숨김이 바뀐 때만 주인에게 알린다. 이미 숨긴 캐릭터를 또 숨겨도 알림은 없다
@@ -26,12 +28,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.characters.models import Character
 from app.notifications.models import OutgoingNotification
+from app.worlds.models import World
 
 # 알림 서버에 넣는 이 서버의 이름. 알림 서버의 주소와 비밀(ASSET_SERVER_SECRET)이 이 이름으로 정해진다
 SOURCE = 'asset'
 
 HIDDEN = 'character.hidden'
 UNHIDDEN = 'character.unhidden'
+WORLD_HIDDEN = 'world.hidden'
+WORLD_UNHIDDEN = 'world.unhidden'
 REPORT_HANDLED = 'character_report.handled'
 
 
@@ -50,6 +55,13 @@ def tell_owner(session: AsyncSession, character: Character, hidden: bool, action
     kind = hidden_kind(hidden)
     payload = {'character_id': str(character.id), 'name': character.name}
     return put(session, character.owner_id, kind, f'{kind}:{character.id}:{action_id}', payload)
+
+
+def tell_world_owner(session: AsyncSession, world: World, hidden: bool, action_id: int) -> OutgoingNotification:
+    """세계관의 숨김이 바뀐 것을 주인에게 알린다. action_id 는 그 조치의 감사 기록 번호다."""
+    kind = WORLD_HIDDEN if hidden else WORLD_UNHIDDEN
+    payload = {'world_id': str(world.id), 'name': world.name}
+    return put(session, world.owner_id, kind, f'{kind}:{world.id}:{action_id}', payload)
 
 
 def tell_reporter(

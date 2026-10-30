@@ -42,7 +42,7 @@ SENT_BY = {
     },
     BILLING: {'order.paid', 'order.refunded', 'credit.welcome', 'credit.expiring', 'credit.short'},
     BOARD: {'post.commented', 'comment.replied'},
-    ASSET: {'character.hidden', 'character.unhidden', 'character_report.handled'},
+    ASSET: {'character.hidden', 'character.unhidden', 'character_report.handled', 'world.hidden', 'world.unhidden'},
     CHAT: {'message_report.handled'},
     STORY: {'story_report.handled'},
 }

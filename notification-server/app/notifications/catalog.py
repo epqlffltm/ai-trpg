@@ -81,6 +81,9 @@ KINDS: Mapping[str, KindRule] = MappingProxyType(
         # asset: 운영자가 캐릭터를 숨기고 푼 것을 주인에게(#678). 제재라 끌 수 없다
         'character.hidden': rule(ASSET, 'character_id', 'name'),
         'character.unhidden': rule(ASSET, 'character_id', 'name'),
+        # asset: 운영자가 세계관을 숨기고 푼 것을 주인에게. 캐릭터의 것과 같다. 제재라 끌 수 없다
+        'world.hidden': rule(ASSET, 'world_id', 'name'),
+        'world.unhidden': rule(ASSET, 'world_id', 'name'),
         # asset, chat: 신고를 처리했다는 것을 신고한 사람에게(#678). 결과(숨김, 기각)는 싣지 않는다.
         # 자기가 신고한 것의 답이라 드물고, 끌 까닭이 적어 끌 수 없게 둔다
         'character_report.handled': rule(ASSET, 'name'),

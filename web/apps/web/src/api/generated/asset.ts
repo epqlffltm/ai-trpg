@@ -82,6 +82,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset/admin/worlds/{world_id}/hidden": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change World Hidden
+         * @description 세계관을 숨기거나 푼다. 세계관이 없으면 404 다. story 의 신고(world_id)를 보고 한다.
+         */
+        put: operations["change_world_hidden_api_v1_asset_admin_worlds__world_id__hidden_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset/characters": {
         parameters: {
             query?: never;
@@ -1758,7 +1778,7 @@ export interface components {
         };
         /**
          * HiddenResult
-         * @description 조치한 뒤 캐릭터가 숨겨져 있는가.
+         * @description 조치한 뒤 캐릭터(또는 세계관)가 숨겨져 있는가.
          */
         HiddenResult: {
             /** Hidden */
@@ -3143,6 +3163,8 @@ export interface components {
             endings: components["schemas"]["Ending"][];
             /** Events */
             events: components["schemas"]["Event"][];
+            /** Hidden At */
+            hidden_at?: string | null;
             /**
              * Id
              * Format: uuid
@@ -3376,6 +3398,8 @@ export interface components {
          * @description 내 세계관 목록의 한 줄.
          */
         WorldSummary: {
+            /** Hidden At */
+            hidden_at?: string | null;
             /**
              * Id
              * Format: uuid
@@ -3687,6 +3711,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OutcomeResult"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    change_world_hidden_api_v1_asset_admin_worlds__world_id__hidden_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HiddenInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HiddenResult"];
                 };
             };
             /** @description 입력이 틀렸다 */

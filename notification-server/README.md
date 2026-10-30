@@ -216,6 +216,8 @@ Content-Type: application/json
 | `comment.replied` | `board` | `board_slug`, `post_id`, `post_title`, `comment_id`, `parent_id` |
 | `character.hidden` | `asset` | `character_id`, `name` |
 | `character.unhidden` | `asset` | `character_id`, `name` |
+| `world.hidden` | `asset` | `world_id`, `name` |
+| `world.unhidden` | `asset` | `world_id`, `name` |
 | `character_report.handled` | `asset` | `name` |
 | `message_report.handled` | `chat` | `name` |
 | `story_report.handled` | `story` | `name` |
