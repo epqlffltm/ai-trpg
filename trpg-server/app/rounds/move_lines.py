@@ -1035,6 +1035,7 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
         흑마법사: 엘프에게 화염구 (맞음) [마나 모자람] → 엘프 피해 5 (HP 5/10)   비용을 냈다(#805 ③-a)
         흑마법사: 엘프에게 화염구 (비용이 모자라 하지 못함)
         독거미: 엘프에게 독니 (맞음) → 엘프 피해 2 (HP 8/10) [입힌 부상: 중독] [수치: 마나 5 → 3/7]   효과(#805 ③-b)
+        수로 쥐 2: 엘프에게 물기 (빗나감) [덫: 올가미에 걸림]   공격한 뒤 밟은 덫(#806 ②-b)
     도감의 글(생김새, 약점)은 싣지 않는다. 가짜 서술자는 이 줄을 장면으로 그대로 내보낸다.
     """
     if note.short:
@@ -1050,7 +1051,8 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
         line += f' {describe_impact(note.impact)}'
     if note.downed is not None and note.downed.added:
         line += f' {describe_downed_strike(note.target, note.downed)}'
-    return ' '.join([line, *effect_tags([], note.injured, note.resisted), *resource_tags(note.resources)])
+    trap = [f'[덫: {note.trap}{"에 걸림" if note.trapped else "을(를) 피함"}]'] if note.trap else []
+    return ' '.join([line, *effect_tags([], note.injured, note.resisted), *resource_tags(note.resources), *trap])
 
 
 def describe_downed_strike(target: str, note: DownedStrikeNote) -> str:

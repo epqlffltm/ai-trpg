@@ -1705,7 +1705,8 @@ records.py      일어난 일을 이벤트로 적기
     이벤트(`trap_disarmed`)가 행동에 이어 적힌다. 굴리지 못했어도 적는다. 터졌으면 그 뒤에 `hp_changed`, `injury_gained`, `resource_changed`(`source: trap`)가 잇는다.
   - 미리 놓인 덫(#806 ②, 시나리오의 `traps`): 시작할 때 놓은 사람 없이(`set_by: null`) 놓인다. 숨긴 덫은 들어온 캐릭터가 밟고 찾기로 찾고, `known` 이면 처음부터 맵에 보이고 밟지 않는다.
   - 업고 들어가면(#806 ②) 피하는 판정은 업은 사람만 굴린다. 못 피하면 업힌 사람에게도 효과가 든다. 결과의 터진 덫마다 `carried`(`user_id`, `character_name`, `effect`, `injured`, `resources`, 업지 않았으면 `null`)에 적히고, 이벤트 `trap_sprung` 에 `carried`(`user_id`, `character_name`)가 붙고 그 뒤에 업힌 사람의 `hp_changed` 들이 잇는다.
-  - 사건이 옮긴 사람, 몬스터와 NPC 는 아직 터뜨리지 않는다(#806 ②-b).
+  - 몬스터와 싸우는 인물(#806 ②-b, `app/rounds/foe_traps.py`): 몬스터는 장소를 옮기지 않는다. 자기 차례에 공격을 굴렸으면 그 뒤에 그 장소에 놓인 덫 하나를 놓은 순서대로 밟는다(장소가 있는 인물도 같다). 움직이지 못했거나 비용이 모자라 하지 못한 차례는 밟지 않는다. 테이블이 찾아낸 덫인지 모르고 밟는다. 피하는 판정은 그 쪽의 능력치로 굴리고(부상의 영향을 받는다), 못 피하면 피해(성질과 저항을 따른다, 죽이려는 공격이 아니다)와 부상과 수치의 맞추기가 든다. 처음 쓰러졌으면 드롭이 나온다. 이벤트는 그 공격(`monster_attacked`, `npc_attacked`)에 `trap_sprung`(`monster_id`, `monster_name` 이나 `npc_id`, `npc_name`)이 잇고, 걸렸으면 그 뒤에 `monster_changed`, `npc_changed` 와 부상, 드롭(`items_gained`), `resource_changed`(`source: trap`)가 잇는다.
+  - 사건이 옮긴 사람과 인물은 아직 터뜨리지 않는다(#806 ②-c).
 
 **훔치기(#456, #457).** 같은 장소의 몬스터 한 마리나 이번 장면의 인물(NPC) 하나가 지닌 물건 하나를 훔친다(`app/rounds/steals.py`). 무엇을 지녔는지는 [이번 장면의 인물과 몬스터](#라운드)의 `items` 에서 고른다. `monster` 와 `npc` 중 하나만 적는다(둘 다거나 둘 다 없으면 422).
 
@@ -2134,6 +2135,7 @@ app/rounds/
   - `narration-73`: 쓴 기술의 줄(`(쓴 기술: 치유의 손길 → 영애, 마나 5 → 3/7) → 영애 회복 3 (HP 8/10)`)과 쓰지 못한 까닭(`(쓰려던 기술: 정신 집중. 비용이 모자랐다)`, #805)
   - `narration-74`: 굴린 기술의 줄은 판정 앞에 붙는다(`(쓴 기술: 마력 화살 → 수로 쥐 1, 마나 6 → 5/6) (지능 판정 성공: …)`, #805 ②). 못 쓴 까닭 `target_gone` 은 `받을 쪽이 없었다` 다
   - `narration-75`: 몬스터와 인물의 공격의 비용(#805 ③-a). 낸 비용을 말로 붙이고(`흑마법사: 엘프에게 화염구 (맞음) [마나 모자람]`), 모자라 못 한 차례도 적는다(`흑마법사: 엘프에게 화염구 (비용이 모자라 하지 못함)`)
+  - `narration-82`: 몬스터와 싸우는 인물이 밟은 덫(#806 ②-b). 차례의 줄 끝에 붙인다(`[덫: 올가미에 걸림]`, `[덫: 올가미을(를) 피함]`)
   - `narration-81`: 업힌 사람도 걸린 덫(#806 ②). 터진 덫의 줄에 붙인다(`(덫: 올가미. 민첩 판정에 실패해 걸렸다. 업힌 약사도 걸렸다)`)
   - `narration-80`: 덫 찾기와 해제(#806 ①-b). 찾기의 줄에 찾아낸 덫을 붙이고(`(찾기: 덫을 찾아냈다. 올가미)`), 해제의 줄을 적는다(`(해제: 올가미. 민첩 판정에 성공해 거둬 챙겼다)`, `(해제: 올가미. 민첩 판정에 크게 실패해 덫이 터졌다)`)
   - `narration-79`: 덫(#806). 덫을 놓은 줄(`(덫 놓기: 올가미을(를) 숨겨 놓았다)`)과 들어간 곳에서 터진 덫의 줄(`(덫: 올가미. 민첩 판정에 실패해 걸렸다)`)을 적는다
@@ -2916,7 +2918,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `item_thrown` | 캐릭터가 물건을 몬스터나 인물에게 던졌다(또는 못 했다, #277). 그 행동 바로 뒤에 적힌다. 던졌으면 바로 뒤에 `check_rolled` 와 맞은 쪽의 변화 | `round`, `character_name`, `entry_id`, `name`, `thrown`, `reason`(`not_held`, `target_gone`), `target`(`monster_id` 나 `entry_id` 나 `user_id`, `name`), `remaining`, `cured`, `injured`(#801) |
 | `item_given` | 캐릭터가 물건을 건넸다(또는 못 했다). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `entry_id`, `name`, `count`, `given`, `reason`, `target`(받은 사람), `remaining`, `target_total` |
 | `trap_set` | 캐릭터가 덫을 숨겨 놓았다(또는 못 했다, #806). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `place`(`entry_id`, `name`), `entry_id`, `name`, `set`, `reason`(`not_held`), `remaining` |
-| `trap_sprung` | 장소에 들어온 캐릭터가 덫을 터뜨렸다(#806). 들어간 것(`character_moved`) 바로 뒤에 적힌다. 걸렸으면 바로 뒤에 `hp_changed`, `injury_gained`, `resource_changed`(`source: trap`) | `round`, `user_id`, `character_name`, `place`, `entry_id`, `name`, `set_by`, `avoid`(`ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`), `avoided`, 업고 들어갔으면 `carried`(`user_id`, `character_name`, #806 ②) |
+| `trap_sprung` | 장소에 들어온 캐릭터가 덫을 터뜨렸다(#806). 몬스터와 싸우는 인물이 차례에 밟았으면(#806 ②-b) 그 공격 바로 뒤에 적히고 캐릭터 대신 `monster_id`, `monster_name` 이나 `npc_id`, `npc_name` 이 있다. 들어간 것(`character_moved`) 바로 뒤에 적힌다. 걸렸으면 바로 뒤에 `hp_changed`, `injury_gained`, `resource_changed`(`source: trap`) | `round`, `user_id`, `character_name`, `place`, `entry_id`, `name`, `set_by`, `avoid`(`ability`, `difficulty`, `roll`, `modifier`, `total`, `target`, `success`, `hindrance`), `avoided`, 업고 들어갔으면 `carried`(`user_id`, `character_name`, #806 ②) |
 | `trap_disarmed` | 캐릭터가 찾아낸 덫을 해제하려 했다(#806 ①-b). 그 행동 바로 뒤에 적힌다. 크게 실패해 터졌으면 바로 뒤에 `hp_changed`, `injury_gained`, `resource_changed`(`source: trap`) | `round`, `character_name`, `place`, `trap_id`, `entry_id`, `name`, `done`, `reason`(`gone`, `elsewhere`), `check`, `sprung`, `kept` |
 | `steal_attempted` | 캐릭터가 몬스터나 NPC 가 지닌 물건을 훔치려 했다(들켰어도). 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `monster_id`, `monster_name`(몬스터일 때), `npc_id`, `npc_name`(NPC 일 때), `entry_id`, `name`, `check`(`roll`, `modifier`, `total`, `target`, `success`, 굴리지 않았으면 `null`), `hindrance`, `factors`, `stolen`, `count`, `left`, `total`(도둑이 가진 개수), `reason`(`gone`, `full`), `fight`(들켜 싸움이 붙었는가) |
 | `item_traded` | 캐릭터가 장면의 상인에게서 샀거나 상인에게 팔았다(또는 못 했다, #278). 그 행동 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `side`(`buy`, `sell`), `npc_id`, `npc_name`(장면의 호칭), `entry_id`, `name`, `count`, `price`(오간 돈), `traded`, `reason`, `total`(그 물건을 가진 개수), `money`(가진 돈) |

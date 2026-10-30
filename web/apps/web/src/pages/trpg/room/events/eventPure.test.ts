@@ -66,6 +66,9 @@ describe('eventLine', () => {
     const carried = { user_id: OTHER, character_name: '조' };
     expect(line('trap_sprung', { character_name: '미아', name: '올가미', place, avoided: false, carried })?.text).toBe('미아: 수도원 문에서 덫(올가미) 걸림 · 업힌 조도 걸림');
     expect(line('trap_sprung', { character_name: '미아', name: '올가미', avoided: true, carried })?.text).toBe('미아: 이곳에서 덫(올가미) 피함');
+    // 몬스터와 싸우는 인물도 밟는다(#806 ②-b)
+    expect(line('trap_sprung', { monster_id: 'm1', monster_name: '수로 쥐', name: '올가미', place, avoided: false })?.text).toBe('수로 쥐: 수도원 문에서 덫(올가미) 걸림');
+    expect(line('trap_sprung', { npc_id: 'n1', npc_name: '문지기', name: '올가미', avoided: true })?.text).toBe('문지기: 이곳에서 덫(올가미) 피함');
   });
 
   it('덫을 찾고 해제한 것(#806 ①-b)', () => {

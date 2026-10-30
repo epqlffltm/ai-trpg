@@ -1013,6 +1013,8 @@ def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
         injured=[one['name'] for one in outcome.get('injured') or [] if one['injury'] is not None],
         resources=to_shift_notes(outcome.get('resources')),
         resisted=[one['name'] for one in outcome.get('injured') or [] if one.get('immune')],
+        trap=(outcome.get('trap') or {}).get('name'),
+        trapped=bool(outcome.get('trap')) and not outcome['trap']['avoided'],
     )
 
 

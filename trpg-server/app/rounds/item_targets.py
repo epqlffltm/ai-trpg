@@ -204,6 +204,17 @@ def apply_after_hit(
     struck = struck_of(judging, action)
     if struck is None:
         return {'cured': [], 'injured': [], 'resources': []}
+    return apply_to_struck(judging, struck, effects, prank, trigger)
+
+
+def apply_to_struck(
+    judging: Judging, struck: Struck, effects: list, prank: bool = False, trigger: Trigger = Trigger.ITEM
+) -> dict:
+    """
+    맞은 쪽 하나에게 풀기와 부상과 맞추기를 적힌 차례대로 낸다. 푼 것(cured), 입힌 것(injured), 맞춘 수치(resources)다.
+
+    물건과 기술이 겨눈 대상(apply_after_hit)과, 덫을 밟은 몬스터와 인물(#806 ②-b)이 함께 쓴다.
+    """
     rows = struck.bearer.injuries
     cured: list[dict] = []
     injured: list[dict] = []

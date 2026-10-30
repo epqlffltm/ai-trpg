@@ -36,7 +36,7 @@ from app.engine.dice import choose
 from app.engine.health import ChangeKind
 from app.engine.injury import Trigger
 from app.engine.ruleset import Difficulty, ResourceHolder
-from app.rounds import blows
+from app.rounds import blows, foe_traps
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import NO_BLOW, Blow, Weapon
 from app.rounds.checks import change_sheet
@@ -249,6 +249,7 @@ def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
     움직이지 못하면 {'skipped': 까닭} 이다. 대상, 공격, 판정, 피해의 차례로 주사위를 굴린다.
     쓰러진 대상을 쳤으면 피해의 주사위가 없고 downed_strike 가 있다(hit_outcome).
     고른 공격의 비용이 모자라면 굴리지 않는다(short_outcome). 비용이 있는 공격이면 낸 비용(cost)을 적는다(#805 ③-a).
+    공격을 굴렸으면 그 뒤에 그 장소의 덫 하나를 밟는다(trap, #806 ②-b, app/rounds/foe_traps.py).
     """
     stopped = stopped_by(judging, monster)
     if stopped is not None:
@@ -265,4 +266,5 @@ def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
     blow = plan_attack_blow(judging, blows.monster_weapon(judging, monster, attack), victim)
     rolled = roll_attack(judging, monster, attack, blow)
     outcome = hit_outcome(judging, attack, victim, rolled.check, blow, monster.definition.nature)
-    return {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
+    turn = {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
+    return foe_traps.with_trap(turn, foe_traps.monster_steps(judging, monster))

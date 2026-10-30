@@ -425,7 +425,9 @@ const DESCRIBE: Record<EventType, Describe> = {
   trap_sprung: (p, ctx, e) => {
     const carried = part(p, 'carried');
     const also = carried && !flag(p, 'avoided') ? ` · 업힌 ${text(carried, 'character_name') ?? '사람'}도 걸림` : '';
-    return `${who(p, ctx, e)}: ${placeOf(p, 'place') ?? '이곳'}에서 덫(${text(p, 'name') ?? '?'}) ${flag(p, 'avoided') ? '피함' : '걸림'}${also}`;
+    // 몬스터나 싸우는 인물이 밟았으면(#806 ②-b) 그 이름이다
+    const stepper = text(p, 'monster_name') ?? text(p, 'npc_name') ?? who(p, ctx, e);
+    return `${stepper}: ${placeOf(p, 'place') ?? '이곳'}에서 덫(${text(p, 'name') ?? '?'}) ${flag(p, 'avoided') ? '피함' : '걸림'}${also}`;
   },
   trap_disarmed: (p, ctx, e) => {
     const name = text(p, 'name') ?? '덫';
