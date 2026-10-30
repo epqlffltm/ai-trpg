@@ -1,19 +1,20 @@
 /* web/packages/ui/src/styles.css
- * 공통 구성요소의 모양. 색, 글꼴, 간격은 맨 위의 변수에만 있다. Stitch 의 시안을 받으면 이 변수와 구성요소의 모양만 바꾼다.
+ * 공통 구성요소의 모양. 색, 글꼴, 간격은 맨 위의 변수에만 있다.
+ * 색과 모양은 Stitch 시안(Mystic Narrative Glass, 2026-10-31)을 따른다. 어두운 색은 시안의 값이고, 밝은 색은 시안에 없어 같은 남색 계열로 맞췄다.
  * 시스템 글꼴을 쓴다. 바깥의 글꼴을 부르지 않는다(화면의 CSP 가 같은 출처만 연다).
  */
 
 :root {
-  --ui-bg: #f7f6f3;
+  --ui-bg: #f5f6fb;
   --ui-surface: #ffffff;
-  --ui-text: #1d1b18;
-  --ui-text-muted: #5f5a52;
-  --ui-border: #ddd8cf;
-  --ui-accent: #7a3e14;
+  --ui-text: #0f172a;
+  --ui-text-muted: #475569;
+  --ui-border: #dbe0ea;
+  --ui-accent: #4f46e5;
   --ui-accent-text: #ffffff;
-  --ui-danger: #a3221b;
-  --ui-focus: #2f6fdb;
-  --ui-radius: 10px;
+  --ui-danger: #b91c1c;
+  --ui-focus: #4338ca;
+  --ui-radius: 12px;
   --ui-gap: 16px;
   --ui-font: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   color-scheme: light dark;
@@ -22,28 +23,28 @@
 /* 어두운 밝기. 기기가 어두우면 따르고, 화면의 설정(A12)이 html 의 data-theme 로 밝게나 어둡게를 고정할 수 있다 */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --ui-bg: #17150f;
-    --ui-surface: #211e18;
-    --ui-text: #f1ede6;
-    --ui-text-muted: #b3aca0;
-    --ui-border: #3a352c;
-    --ui-accent: #e0a46a;
-    --ui-accent-text: #1d1b18;
-    --ui-danger: #f08a80;
-    --ui-focus: #8bb4ff;
+    --ui-bg: #0b0f17;
+    --ui-surface: #111827;
+    --ui-text: #e2e8f0;
+    --ui-text-muted: #94a3b8;
+    --ui-border: #334155;
+    --ui-accent: #818cf8;
+    --ui-accent-text: #0b0f17;
+    --ui-danger: #f87171;
+    --ui-focus: #a5b4fc;
   }
 }
 
 :root[data-theme='dark'] {
-  --ui-bg: #17150f;
-  --ui-surface: #211e18;
-  --ui-text: #f1ede6;
-  --ui-text-muted: #b3aca0;
-  --ui-border: #3a352c;
-  --ui-accent: #e0a46a;
-  --ui-accent-text: #1d1b18;
-  --ui-danger: #f08a80;
-  --ui-focus: #8bb4ff;
+  --ui-bg: #0b0f17;
+  --ui-surface: #111827;
+  --ui-text: #e2e8f0;
+  --ui-text-muted: #94a3b8;
+  --ui-border: #334155;
+  --ui-accent: #818cf8;
+  --ui-accent-text: #0b0f17;
+  --ui-danger: #f87171;
+  --ui-focus: #a5b4fc;
   color-scheme: dark;
 }
 
@@ -59,7 +60,11 @@
 
 body {
   margin: 0;
-  background: var(--ui-bg);
+  /* 위쪽에 강조색을 아주 옅게 번지게 해 밋밋한 바탕을 피한다(시안의 은은한 빛) */
+  background:
+    radial-gradient(1200px 600px at 50% -240px, color-mix(in srgb, var(--ui-accent) 12%, transparent), transparent),
+    var(--ui-bg);
+  background-attachment: fixed;
   color: var(--ui-text);
   font-family: var(--ui-font);
   line-height: 1.5;
@@ -91,6 +96,12 @@ a {
 .ui-button--primary {
   background: var(--ui-accent);
   color: var(--ui-accent-text);
+  font-weight: 600;
+  box-shadow: 0 6px 20px -8px color-mix(in srgb, var(--ui-accent) 70%, transparent);
+}
+
+.ui-button--primary:hover:not(:disabled) {
+  filter: brightness(1.08);
 }
 
 .ui-button--secondary {
@@ -206,7 +217,8 @@ a {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgb(0 0 0 / 45%);
+  background: rgb(0 0 0 / 50%);
+  backdrop-filter: blur(4px);
   z-index: 10;
 }
 
@@ -215,10 +227,11 @@ a {
   max-height: min(85vh, 900px);
   display: flex;
   flex-direction: column;
-  border-radius: var(--ui-radius);
+  border: 1px solid var(--ui-border);
+  border-radius: calc(var(--ui-radius) + 8px);
   background: var(--ui-surface);
   color: var(--ui-text);
-  box-shadow: 0 10px 40px rgb(0 0 0 / 30%);
+  box-shadow: 0 20px 48px -8px rgb(0 0 0 / 45%);
 }
 
 .ui-dialog__head {
