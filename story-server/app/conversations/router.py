@@ -75,6 +75,15 @@ ASSET_RETRY_AFTER_SECONDS = 5
 # --- 응답의 모양으로 바꾸기 ---
 
 
+def genre_of(document: dict) -> str | None:
+    """
+    판의 장르. 형식 3 까지의 판이나 고르지 않은 판은 None 이다.
+    값의 목록은 asset 서버가 지킨다. 이 서버는 글자인지만 본다(장르가 늘어도 이 서버를 고치지 않아도 된다).
+    """
+    genre = document.get('genre')
+    return genre if isinstance(genre, str) and genre else None
+
+
 def to_world_summary(world: ImportedWorld) -> WorldSummary:
     """판의 사본을 목록의 모양으로."""
     return WorldSummary(
@@ -83,6 +92,7 @@ def to_world_summary(world: ImportedWorld) -> WorldSummary:
         name=world.name,
         image_id=world.document.get('image_id'),
         rating=world.rating,
+        genre=genre_of(world.document),
     )
 
 
