@@ -59,6 +59,9 @@ def make_test_settings(**overrides) -> Settings:
         # 결제 서버를 부르지 않는다(받지 않는 것). 값을 보는 테스트는 가격 목록을 바꿔 끼운다(tests/prices.py)
         'billing_url': '',
         'billing_secret': '',
+        # 알림 서버로 보내지 않는다. 발송함에 적기만 한다. 보내는 것을 보는 테스트는 가짜를 꽂는다
+        'notification_url': '',
+        'notification_secret': '',
         # 인증 서버의 탈퇴 알림을 받는다. 서명은 테스트가 이 값으로 한다(tests/test_withdrawal.py)
         'auth_server_secret': TEST_AUTH_SECRET,
         # 요청 수를 세지 않는다. 개발자의 .env 에 Redis 가 있어도 쓰지 않는다.

@@ -38,7 +38,7 @@ EXAMPLES = {
     'PG_WEBHOOK_SECRET=바꿔야합니다\nGAME_SERVER_SECRET=바꿔야합니다\nAUTH_SERVER_SECRET=바꿔야합니다\n'
     '# CHAT_SERVER_SECRET=\n# STORY_SERVER_SECRET=\n# NOTIFICATION_SECRET=\n# TOSS_SECRET_KEY=\n',
     'notification-server/.env': 'DATABASE_URL=postgresql+asyncpg://notification:여기에비밀번호@127.0.0.1:5432/trpg\n'
-    'GAME_SERVER_SECRET=\nBILLING_SERVER_SECRET=\nBOARD_SERVER_SECRET=\nAUTH_SERVER_SECRET=\n',
+    'GAME_SERVER_SECRET=\nBILLING_SERVER_SECRET=\nBOARD_SERVER_SECRET=\nSTORY_SERVER_SECRET=\nAUTH_SERVER_SECRET=\n',
     'asset-server/.env': 'DATABASE_URL=postgresql+asyncpg://asset:여기에비밀번호@127.0.0.1:5432/trpg\n'
     'CHAT_SERVER_SECRET=\nSTORY_SERVER_SECRET=\nAUTH_SERVER_SECRET=\n',
     'chat-server/.env': 'DATABASE_URL=postgresql+asyncpg://chat:여기에비밀번호@127.0.0.1:5432/trpg\n'
@@ -46,7 +46,7 @@ EXAMPLES = {
     '# AUTH_SERVER_SECRET=\n',
     'story-server/.env': 'DATABASE_URL=postgresql+asyncpg://story:여기에비밀번호@127.0.0.1:5432/trpg\n'
     'ASSET_URL=http://127.0.0.1:8006\n# ASSET_SECRET=\n# BILLING_URL=http://127.0.0.1:8003\n# BILLING_SECRET=\n'
-    '# AUTH_SERVER_SECRET=\n',
+    '# AUTH_SERVER_SECRET=\n# NOTIFICATION_SECRET=\n',
 }
 
 
@@ -130,6 +130,7 @@ class FillEnvTests(unittest.TestCase):
         self.assertEqual(game['NOTIFICATION_SECRET'], notification['GAME_SERVER_SECRET'])
         self.assertEqual(billing['NOTIFICATION_SECRET'], notification['BILLING_SERVER_SECRET'])
         self.assertEqual(board['NOTIFICATION_SECRET'], notification['BOARD_SERVER_SECRET'])
+        self.assertEqual(story['NOTIFICATION_SECRET'], notification['STORY_SERVER_SECRET'])
         self.assertEqual(chat['ASSET_SECRET'], asset['CHAT_SERVER_SECRET'])
         self.assertEqual(story['ASSET_SECRET'], asset['STORY_SERVER_SECRET'])
         self.assertNotEqual(asset['CHAT_SERVER_SECRET'], asset['STORY_SERVER_SECRET'])
@@ -169,6 +170,7 @@ class FillEnvTests(unittest.TestCase):
             ('billing-server/.env', 'STORY_SERVER_SECRET'),
             ('auth-server/.env', 'STORY_SECRET'),
             ('story-server/.env', 'AUTH_SERVER_SECRET'),
+            ('story-server/.env', 'NOTIFICATION_SECRET'),
         ):
             env = self.env(relative)
             self.assertNotIn(f'#{key}', env, relative)

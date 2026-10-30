@@ -201,10 +201,11 @@ write_new() {
 
 # 아홉 개의 .env 를 만든다. 주소는 compose 가 덮어쓰므로 비밀만 적는다.
 # 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버,
-# 알림 서버와 게임·결제·게시판·asset·chat 서버, asset 서버와 chat·story 서버, 결제 서버와 chat·story 서버)
+# 알림 서버와 게임·결제·게시판·asset·chat·story 서버, asset 서버와 chat·story 서버, 결제 서버와 chat·story 서버)
 write_env_files() {
   local game_secret auth_secret notify_secret billing_notify_secret board_notify_secret chat_asset_secret
   local chat_billing_secret asset_notify_secret chat_notify_secret story_asset_secret story_billing_secret
+  local story_notify_secret
   game_secret="$(throwaway)"
   auth_secret="$(throwaway)"
   notify_secret="$(throwaway)"
@@ -216,6 +217,7 @@ write_env_files() {
   chat_notify_secret="$(throwaway)"
   story_asset_secret="$(throwaway)"
   story_billing_secret="$(throwaway)"
+  story_notify_secret="$(throwaway)"
   write_new .env <<EOF
 POSTGRES_PASSWORD=$(throwaway)
 AUTH_DB_PASSWORD=$(throwaway)
@@ -262,6 +264,7 @@ BILLING_SERVER_SECRET=$billing_notify_secret
 BOARD_SERVER_SECRET=$board_notify_secret
 ASSET_SERVER_SECRET=$asset_notify_secret
 CHAT_SERVER_SECRET=$chat_notify_secret
+STORY_SERVER_SECRET=$story_notify_secret
 EOF
   # asset 서버와 chat 서버의 DB 비밀번호는 compose 가 루트 .env 의 것으로 주소를 만든다.
   # 둘이 함께 아는 비밀은 chat 이 대화를 시작할 때 판과 페르소나를 가져오는 서명이다.
@@ -284,12 +287,14 @@ EOF
   # story 서버의 DB 비밀번호는 compose 가 루트 .env 의 것으로 주소를 만든다.
   # asset 서버와 함께 아는 비밀은 세션을 시작할 때 세계관의 판을 가져오는 서명이다. compose 가 ASSET_URL 을 주므로
   # 이 비밀이 없으면 story 서버가 뜨지 않는다. ASSET_URL 은 .env.example 의 값을 둔다. 마이그레이션이 그 값을 비우는지 본다.
-  # 결제 서버의 비밀도 함께 안다. compose 가 story 서버에 BILLING_URL 을 준다. 마이그레이션은 BILLING_URL 도 비우는지 본다
+  # 결제 서버의 비밀도 함께 안다. compose 가 story 서버에 BILLING_URL 을 준다. 마이그레이션은 BILLING_URL 도 비우는지 본다.
+  # 신고의 처리를 알림 서버에 넣는다. compose 가 NOTIFICATION_URL 을 주므로 이 비밀이 없으면 뜨지 않는다
   write_new story-server/.env <<EOF
 ASSET_URL=http://127.0.0.1:8006
 ASSET_SECRET=$story_asset_secret
 BILLING_URL=http://127.0.0.1:8003
 BILLING_SECRET=$story_billing_secret
+NOTIFICATION_SECRET=$story_notify_secret
 EOF
 }
 
@@ -648,6 +653,36 @@ PY
 # chat 의 kind(message_report.handled)에 화면이 쓰는 칸(name)을 채워 보낸다
 chat_notification_accepted() {
   compose exec -T chat-server python - <<'PY'
+import asyncio
+import uuid
+
+import httpx
+from server_core.notifications.client import Delivery
+from server_core.notifications.setup import build_notifications
+
+from app.core.config import get_settings
+from app.notifications.models import OutgoingNotification
+from app.notifications.outbox import REPORT_HANDLED, SOURCE
+
+
+async def main() -> None:
+    async with httpx.AsyncClient() as client:
+        notifications = build_notifications(get_settings(), client, SOURCE)
+        notification = OutgoingNotification(
+            source_key=f'stack-smoke:{uuid.uuid4()}', user_id=uuid.uuid4(), kind=REPORT_HANDLED, payload={'name': 'smoke'}
+        )
+        sent = await notifications.send(notification)
+    raise SystemExit(0 if sent.delivery == Delivery.DELIVERED else 1)
+
+
+asyncio.run(main())
+PY
+}
+
+# story 서버가 제 설정으로 서명한 알림을 알림 서버가 받는가(201). chat 의 것과 같다.
+# story 의 kind(story_report.handled)에 화면이 쓰는 칸(name)을 채워 보낸다
+story_notification_accepted() {
+  compose exec -T story-server python - <<'PY'
 import asyncio
 import uuid
 
@@ -1512,6 +1547,8 @@ check() {
   report "asset 서버가 서명한 알림을 알림 서버가 받는다(NOTIFICATION_SECRET 의 짝)" asset_notification_accepted
   report "chat 서버가 알림 서버에 닿는다" reachable_from chat-server http://notification-server:8004/health
   report "chat 서버가 서명한 알림을 알림 서버가 받는다(NOTIFICATION_SECRET 의 짝)" chat_notification_accepted
+  report "story 서버가 알림 서버에 닿는다" reachable_from story-server http://notification-server:8004/health
+  report "story 서버가 서명한 알림을 알림 서버가 받는다(NOTIFICATION_SECRET 의 짝)" story_notification_accepted
   report "설정 검사(비밀, 열린 포트, 로그 상한, 대시보드)와 .env 를 채우는 도구의 규칙이 맞다" scope_rules_hold
   report_problems "staging 의 데이터 디스크 폴더의 주인이 컨테이너가 도는 사용자와 같다(prepare-disks.sh)" disk_owners_match
   report_problems "데이터 디스크의 폴더를 만드는 스크립트가 마운트를 확인하고 표대로 만든다(prepare-disks.sh)" prepare_disks_works

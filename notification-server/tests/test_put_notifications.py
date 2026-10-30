@@ -285,6 +285,18 @@ async def test_asset_and_chat_put_their_moderation_notices(client: AsyncClient, 
     assert sources == {'asset', 'chat'}
 
 
+async def test_story_puts_its_report_notice_but_not_chats(client: AsyncClient, session: AsyncSession):
+    handled = make_body(source_key='story-report:1', kind='story_report.handled', payload={'name': '여름 마을'})
+    borrowed = make_body(source_key='story-report:2', kind='message_report.handled', payload={'name': '여름 마을'})
+
+    accepted = await signed_put(client, handled, source='story')
+    refused = await signed_put(client, borrowed, source='story')
+
+    assert accepted.status_code == status.HTTP_201_CREATED
+    assert refused.json()['detail'] == {'code': 'kind_not_allowed', 'kind': 'message_report.handled'}
+    assert set(await session.scalars(select(Notification.source))) == {'story'}
+
+
 async def test_chat_cannot_hide_characters(client: AsyncClient, session: AsyncSession):
     hidden = make_body(kind='character.hidden', payload={'character_id': 'c-1', 'name': '세라'})
 

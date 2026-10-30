@@ -102,7 +102,7 @@
 | 신고를 처리한다(`operator_actions`). 세계관을 숨기는 API 는 아직 없다(asset 의 숨기기는 캐릭터만) | `PUT /api/v1/story/admin/message-reports/{id}/outcome` | 했다(#591) |
 
 - chat 과 같은 모양이다. 세션은 운영자가 열지 않고, 신고에 굳힌 글만 본다([story 서버의 신고](../../story-server/README.md#신고)).
-- 처리하면 신고한 사람에게 가는 알림은 아직 없다.
+- 처리하면 신고한 사람의 알림함에 간다(`story_report.handled`). chat 처럼 결과와 사유는 싣지 않는다.
 
 ### 결제와 인증
 

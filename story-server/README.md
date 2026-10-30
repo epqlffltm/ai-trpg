@@ -86,6 +86,9 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `ASSET_TIMEOUT_SECONDS` | `5` | asset 서버를 한 번 부르는 시간의 상한(초, 30까지). 세션을 만드는 사람이 기다린다 |
 | `BILLING_URL` | 비어 있음(받지 않음) | 결제 서버의 주소(`http://127.0.0.1:8003`). 모델의 값을 가격 목록에서 읽는다([모델 목록](#모델-목록)). 비우면 모델은 값 없이 보인다 |
 | `AUTH_SERVER_SECRET` | 비어 있음 | 인증 서버가 [탈퇴](#탈퇴)를 알리는 요청의 서명 비밀. `auth-server/.env` 의 `STORY_SECRET` 과 같은 값. 적으면 32자 이상이어야 뜬다. 비우면 탈퇴 알림을 받지 않는다(401). 비밀값이다 |
+| `NOTIFICATION_URL` | 비어 있음(보내지 않음) | [신고](#신고)의 처리를 넣는 알림 서버의 주소. compose 가 `http://notification-server:8004` 를 넘긴다. 비우면 발송함에 적기만 한다 |
+| `NOTIFICATION_SECRET` | 비어 있음 | 알림 서버에 넣을 때 서명하는 비밀. `notification-server/.env` 의 `STORY_SERVER_SECRET` 과 같은 값. 주소를 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
+| `NOTIFICATION_TIMEOUT_SECONDS` | `5` | 알림 서버를 부를 때 기다리는 시간. 넘기면 다시 보낸다 |
 | `BILLING_SECRET` | 비어 있음 | 결제 서버에 보내는 요청에 서명하는 비밀. `billing-server/.env` 의 `STORY_SERVER_SECRET` 과 같은 값. `BILLING_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
 | `BILLING_TIMEOUT_SECONDS` | `5` | 결제 서버를 한 번 부르는 시간의 상한(초, 10 까지). chat 서버와 같다 |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `ZAI_API_KEY`, `DEEPINFRA_API_KEY` | 비어 있음 | 모델 목록의 창구마다 키. 비우면 그 창구의 모델로 말을 보내면 503 `provider_unavailable` 이다. 공급자가 내주는 값이라 `tools/fill_env.py` 가 만들지 않는다. 비밀값이다 |
@@ -413,7 +416,12 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
   신고 하나를 보려면 사유(`reason`, 쿼리, 1~200자)가 필수이고, 보기 전에 감사 기록(`operator_reads`)을 저장한다. 없는 신고를 본 시도도 남는다.
   처리(`actioned`, `dismissed`)는 감사 기록(`operator_actions`)과 한 트랜잭션이다. 이미 처리했으면 409 `already_handled` 다.
   두 기록은 덧붙이기만 한다(트리거가 고치기와 지우기를 막는다). 사유와 본 내용은 로그에 싣지 않는다.
-- **처리는 기록이다.** 세계관을 숨기지 않는다. asset 의 숨기기 API 는 아직 캐릭터만이다. 처리하면 신고한 사람에게 가는 알림은 다음 PR 에서 더한다.
+- **처리는 기록이다.** 세계관을 숨기지 않는다. asset 의 숨기기 API 는 아직 캐릭터만이다.
+- **알림.** 처리하면(받아들이든 아니든) 신고한 사람의 알림함에 `story_report.handled` 를 하나 넣는다. `payload` 는 신고한 때의 세계관 이름(`name`)뿐이다.
+  결과, 사유, 세션의 글은 싣지 않는다(chat 의 신고와 같다). 열쇠는 `story_report.handled:<신고>` 다.
+  알림 서버는 kind 마다 넣을 수 있는 서버를 정해 두므로 chat 의 `message_report.handled` 를 빌려 쓰지 않고 따로 둔다.
+  처리와 한 트랜잭션에 발송함(`outgoing_notifications`, `app/notifications/`)에 적고, 알림 서버에는 뒤에서 5초마다 보낸다.
+  발송함과 보내는 작업은 공용 코드에 있다([server-core 의 알림 보내기](../shared/server-core/README.md#알림-보내기)). 탈퇴하면 보내지 않은 알림을 지운다.
 
 ### 요청 수 제한
 
@@ -431,7 +439,7 @@ chat 의 것과 같다(`app/limits/`). 한 사람이 정해진 시간 안에 몇
 
 인증 서버가 계정을 비울 때 알린다(`POST /api/v1/story/service/users/{public_id}/withdrawal`, `app/withdrawal/`, chat 과 같다. [탈퇴 설계](../docs/architecture/withdrawal.md)).
 
-- 지우는 것: 세션(지운 것으로 적어 둔 것도)과 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본, 그 세션의 [신고](#신고)), 가져온 세계관의 판의 사본과 그 로어북의 벡터, 계정의 기록(본 엔딩, 연 일러스트).
+- 지우는 것: 세션(지운 것으로 적어 둔 것도)과 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본, 그 세션의 [신고](#신고)), 가져온 세계관의 판의 사본과 그 로어북의 벡터, 계정의 기록(본 엔딩, 연 일러스트), 보내지 않은 알림.
 - 남기는 것: 청구 기록(`generations`). 세션과 말을 가리키는 칸만 비운다(공개 ID, 모델, 토큰 수, 원가, 청구 상태, 홀드의 이름표가 남는다).
   운영자의 감사 기록(`operator_reads`, `operator_actions`)도 남는다. 운영자와 신고의 id, 사유뿐이고 본 내용은 없다.
 - 한 트랜잭션이고 멱등이다. 같은 알림이 다시 와도, 이 서버에 그 사람의 것이 없어도 200 `{"status": "processed"}` 다. 모르는 칸은 버린다.
@@ -571,6 +579,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `illustration_unlocks` | 계정의 연 일러스트. (`owner_id`, `world_source`, `scene_kind`, `scene_id`)마다 연 때의 그림(`image_id`), 장면의 인물(`cast`), 처음 연 시각과 세션 |
 | `message_reports` | 모델의 답의 [신고](#신고)와 그때 굳힌 글(답과 앞의 말 여섯, 세계관과 판, 모델). (신고한 사람, 말)마다 하나. 열린 신고는 부분 색인으로 읽는다. 세션이 지워지면 함께 지워진다 |
 | `operator_reads`, `operator_actions` | 운영자가 신고의 글을 본 기록과 처리한 기록(chat 과 같은 칸). 덧붙이기만 한다(트리거). 신고와 세션에 외래 키가 없어 탈퇴해도 남는다. 테스트는 TRUNCATE 로 비운다 |
+| `outgoing_notifications` | 알림 서버에 보낼 알림의 발송함(공용 코드의 칸, chat 과 같다). 보낸 줄은 지우고 받지 않은 줄(`failed`)만 남는다. 탈퇴하면 그 사람의 것을 지운다 |
 
 모델의 모듈을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 

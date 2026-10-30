@@ -53,6 +53,7 @@ def make_test_settings(**overrides) -> Settings:
         'board_server_secret': TEST_SECRETS['board'],
         'asset_server_secret': TEST_SECRETS['asset'],
         'chat_server_secret': TEST_SECRETS['chat'],
+        'story_server_secret': TEST_SECRETS['story'],
         # 탈퇴를 알리는 인증 서버의 서명 비밀(tests/signing.py)
         'auth_server_secret': TEST_AUTH_SECRET,
         # span 을 내보내지 않는다. 개발자의 .env 에 수집기의 주소가 있어도 테스트는 보내지 않는다.
