@@ -152,6 +152,12 @@ def reject_conflicting_effects(effects: list) -> list:
 
 Effects = Annotated[list[Effect], Field(max_length=ITEM_MAX_EFFECTS), AfterValidator(reject_conflicting_effects)]
 
+# 덫이 터졌을 때 걸린 쪽에게 드는 효과(#806). 피해와 부상과 수치의 맞추기다. 회복과 풀기는 덫이 할 일이 아니다
+TrapEffect = Annotated[DamageEffect | InjureEffect | AdjustEffect, Field(discriminator='kind')]
+TrapEffects = Annotated[
+    list[TrapEffect], Field(min_length=1, max_length=ITEM_MAX_EFFECTS), AfterValidator(reject_conflicting_effects)
+]
+
 # 몬스터와 인물의 공격이 맞힌 캐릭터에게 더 내는 효과(#805 ③-b). 부상과 수치의 맞추기뿐이다.
 # 회복과 풀기는 적에게 쓸 일이 없고, 피해는 공격의 피해 등급(harm)이 맡는다
 AttackEffect = Annotated[InjureEffect | AdjustEffect, Field(discriminator='kind')]

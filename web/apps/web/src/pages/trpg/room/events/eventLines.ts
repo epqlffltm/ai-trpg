@@ -415,6 +415,12 @@ const DESCRIBE: Record<EventType, Describe> = {
     const place = placeOf(p, 'place');
     return `${who(p, ctx, e)}: ${thing(p)} 내려놓음${place ? `(${place})` : ''}`;
   },
+  trap_set: (p, ctx, e) => {
+    if (!flag(p, 'set')) return `${who(p, ctx, e)}: 덫을 놓지 못했습니다.`;
+    const place = placeOf(p, 'place');
+    return `${who(p, ctx, e)}: ${text(p, 'name') ?? '덫'} 숨겨 놓음${place ? `(${place})` : ''}`;
+  },
+  trap_sprung: (p, ctx, e) => `${who(p, ctx, e)}: ${placeOf(p, 'place') ?? '이곳'}에서 덫(${text(p, 'name') ?? '?'}) ${flag(p, 'avoided') ? '피함' : '걸림'}`,
   steal_attempted: (p, ctx, e) => stealText(p, ctx, e),
   item_traded: (p, ctx, e) => tradeText(p, ctx, e),
   money_paid: (p, ctx, e) => paidText(p, ctx, e),

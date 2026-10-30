@@ -67,6 +67,8 @@ from app.rounds.narrator import (
     TargetGoneNote,
     ThrowNote,
     TradeNote,
+    TrapNote,
+    TrapSetNote,
     TravelNote,
     TreatmentNote,
     TurnNote,
@@ -91,6 +93,7 @@ from app.rounds.state import (
     steal_of,
     take_of,
     trade_of,
+    trap_set_of,
     wait_of,
 )
 from app.tables import money, quests
@@ -319,6 +322,16 @@ def to_travel(declaration: Declaration | None, ruleset: Ruleset | None = None) -
         hurt=move.get('effect') is not None,
         unbarred=move.get('unbarred', False),
         aid=to_aid(move.get('aid')),
+        traps=[to_trap(trap, ruleset) for trap in move.get('traps', [])],
+    )
+
+
+def to_trap(trap: dict, ruleset: Ruleset | None) -> TrapNote:
+    """가기의 결과에 적힌 터진 덫 하나를 서술자에게 줄 모양으로 바꾼다(#806)."""
+    return TrapNote(
+        name=trap['name'],
+        check=cross_ability_name(ruleset, trap['avoid']),
+        avoided=trap['avoided'],
     )
 
 
@@ -461,6 +474,14 @@ def to_put_down(declaration: Declaration | None) -> PutDownNote | None:
     if put_down is None:
         return None
     return PutDownNote(name=put_down['name'], count=put_down['count'], put=put_down['put'])
+
+
+def to_trap_set(declaration: Declaration | None) -> TrapSetNote | None:
+    """선언에 적힌 덫 놓기의 결과를 서술자에게 줄 모양으로 바꾼다(#806). 덫을 놓는 행동이 아니면 None."""
+    trap_set = trap_set_of(declaration)
+    if trap_set is None:
+        return None
+    return TrapSetNote(name=trap_set['name'], set=trap_set['set'])
 
 
 def to_steal(declaration: Declaration | None) -> StealNote | None:

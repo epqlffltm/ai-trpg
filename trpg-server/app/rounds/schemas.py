@@ -625,6 +625,28 @@ class CrossOut(BaseModel):
     hindrance: HindranceOut | None = None
 
 
+class TrapSprungOut(BaseModel):
+    """
+    들어간 장소에서 터진 덫 하나(#806). 엔진이 정했다(app/rounds/trap_actions.py). 굴림은 공개다.
+
+    피하는 판정(avoid)에 성공하면 피했다(avoided). 못 피했으면 효과가 들었다(effect, injured, resources).
+    피했든 못 피했든 덫은 터져 끝났다.
+    """
+
+    trap_id: uuid.UUID
+    # 덫 물건(판의 물건 항목)과 그 이름
+    entry_id: uuid.UUID
+    name: str
+    # 놓은 사람. 판에 미리 놓인 덫이면 None 이다
+    set_by: uuid.UUID | None
+    avoid: CrossOut
+    avoided: bool
+    # 효과로 HP 가 바뀐 것, 입힌 부상, 맞춘 수치(보는 사람이 숫자로 볼 수 있는 것만). 피했으면 비어 있다
+    effect: EffectOut | None = None
+    injured: list['InjuredOut'] = []
+    resources: list['ResourceShiftOut'] = []
+
+
 class MoveOut(BaseModel):
     """한 칸 간 결과. 엔진이 정했다(app/rounds/map_actions.py). 넘기 판정(#281)이 있는 길이 아니면 판정이 없다."""
 
@@ -652,6 +674,8 @@ class MoveOut(BaseModel):
     carry: CarryOut | None = None
     # 넘기에 붙여 쓴 물건(#802, 밧줄). 붙이지 않았으면 None 이다
     aid: AidOut | None = None
+    # 들어간 장소에서 터진 덫들(#806). 놓은 순서다. 없었으면 비어 있다
+    traps: list[TrapSprungOut] = []
 
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 
@@ -787,6 +811,31 @@ class PutDownOutcome(BaseModel):
     """내려놓는 행동의 결과."""
 
     put_down: PutDownOut
+
+
+class TrapSetOut(BaseModel):
+    """
+    덫을 놓은 결과(#806). 엔진이 정했다(app/rounds/trap_actions.py). 판정이 없다.
+
+    set 이 참이면 그 장소에 숨겨 놓였다. 차례가 왔을 때 가지고 있지 않았으면 놓지 않았다(reason 이 not_held).
+    """
+
+    user_id: uuid.UUID
+    character_name: str
+    # 놓은 곳
+    place: PlaceRefOut | None
+    entry_id: uuid.UUID
+    name: str
+    set: bool
+    reason: str | None
+    # 놓은 뒤에 가진 개수
+    remaining: int
+
+
+class TrapSetOutcome(BaseModel):
+    """덫을 놓는 행동의 결과."""
+
+    trap_set: TrapSetOut
 
 
 class RolledOut(BaseModel):
@@ -1057,7 +1106,8 @@ class DeclarationOut(BaseModel):
     # 기술을 썼으면 SkillUseOutcome(#805, 굴린 기술은 CheckOutcome),
     # 물건을 쓰거나 건넸으면 ItemUseOutcome, ItemGiveOutcome, 던지지 못했으면 ItemThrowOutcome(던졌으면 CheckOutcome),
     # 맵에서 가거나 찾았으면 MoveOutcome, SearchOutcome,
-    # 놓인 물건을 주웠으면 TakeOutcome, 내려놓았으면 PutDownOutcome, 훔쳤으면 StealOutcome, 빼앗았으면 LootOutcome,
+    # 놓인 물건을 주웠으면 TakeOutcome, 내려놓았으면 PutDownOutcome, 덫을 놓았으면 TrapSetOutcome(#806),
+    # 훔쳤으면 StealOutcome, 빼앗았으면 LootOutcome,
     # 쉬었으면 RestOutcome, 기다렸으면 WaitOutcome, 사거나 팔았으면 TradeOutcome, 돈을 건넸으면 PayOutcome,
     # 엄폐했으면 CoverOutcome 이다.
     # 겨눈 몬스터를 칠 수 없어 굴리지 못했으면 TargetGoneOutcome,
@@ -1074,6 +1124,7 @@ class DeclarationOut(BaseModel):
         | DoorOutcome
         | TakeOutcome
         | PutDownOutcome
+        | TrapSetOutcome
         | StealOutcome
         | LootOutcome
         | RestOutcome

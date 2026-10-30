@@ -211,6 +211,7 @@ EFFECT_SOURCES = {
     Trigger.ITEM: InjurySource.ITEM,
     Trigger.SKILL: InjurySource.SKILL,
     Trigger.ATTACK: InjurySource.ATTACK,
+    Trigger.TRAP: InjurySource.TRAP,
 }
 
 

@@ -95,6 +95,21 @@ describe('availableKinds', () => {
     expect(availableKinds(full)).toEqual(expect.arrayContaining(['treat', 'steal', 'rest']));
   });
 
+  it('덫 놓기(#806)는 덫인 물건을 지녔고 맵에 서 있을 때', () => {
+    const SNARE = { entry_id: 'i7', name: '올가미', kind: 'gear', rarity: 'normal', count: 2 };
+    const withTrap = context({ items: [HERB, SNARE] });
+    (withTrap.table.items as unknown[]).push({ entry_id: 'i7', name: '올가미', kind: 'gear', rarity: 'normal', effects: [], aids: [], trap: { effects: [] } });
+    expect(availableKinds(withTrap)).toContain('set_trap');
+    expect(availableKinds(context())).not.toContain('set_trap');
+    const nowhere = context({ items: [HERB, SNARE], place_id: null });
+    (nowhere.table.items as unknown[]).push({ entry_id: 'i7', name: '올가미', trap: { effects: [] } });
+    expect(availableKinds(nowhere)).not.toContain('set_trap');
+    expect(actionHint(draft({ kind: 'set_trap' }), withTrap)).toBe('놓을 덫을 골라 주세요.');
+    expect(actionHint(draft({ kind: 'set_trap', item: 'i7' }), withTrap)).toBeNull();
+    expect(toAction(draft({ kind: 'set_trap', item: 'i7', count: 3 }), withTrap)).toEqual({ kind: 'set_trap', item: 'i7' });
+    expect(draftFromAction(RULES as unknown as TableDetail['rules'], { kind: 'set_trap', item: 'i7' })).toMatchObject({ kind: 'set_trap', item: 'i7' });
+  });
+
   it('쓰러졌거나 죽었으면 행동을 붙이지 못한다', () => {
     expect(availableKinds(context({ hp: 0 }))).toEqual([]);
     expect(availableKinds(context({ dead: true }))).toEqual([]);

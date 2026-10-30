@@ -44,6 +44,7 @@ from app.rounds.state import (
     steal_of,
     take_of,
     trade_of,
+    trap_set_of,
 )
 from app.rounds.steals import STEAL_SOURCE
 from app.tables.models import DeathCause, GameTable, InjurySource, TableMember
@@ -178,6 +179,8 @@ def source_of(injury_roll: dict) -> InjurySource:
         return InjurySource.SKILL
     if injury_roll['trigger'] == Trigger.ATTACK:
         return InjurySource.ATTACK
+    if injury_roll['trigger'] == Trigger.TRAP:
+        return InjurySource.TRAP
     return InjurySource.INJURY_TABLE
 
 
@@ -416,6 +419,38 @@ def record_move(session: AsyncSession, table: GameTable, declaration: Declaratio
         payload['unbarred'] = True
     moved = recorder.record(session, table, EventType.CHARACTER_MOVED, payload=payload, cause=cause)
     record_carried(session, table, move, moved)
+    for sprung in move.get('traps') or []:
+        record_trap_sprung(session, table, move, sprung, moved)
+
+
+def record_trap_set(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """덫을 놓은 결과를 이벤트로 적는다(trap_set, #806). 그 행동의 이벤트(cause)에 잇는다. 행한 사람을 적지 않는다."""
+    laid = {key: value for key, value in trap_set_of(declaration).items() if key != 'user_id'}
+    payload = {'round': cause.payload['round'], **laid}
+    recorder.record(session, table, EventType.TRAP_SET, payload=payload, cause=cause)
+
+
+def record_trap_sprung(session: AsyncSession, table: GameTable, move: dict, sprung: dict, cause: TableEvent) -> None:
+    """
+    들어간 캐릭터가 덫을 터뜨린 것을 이벤트로 적는다(trap_sprung, #806). 들어간 이벤트(cause)에 잇는다.
+
+    걸렸으면 그 뒤에 HP 의 변화(와 부상 표의 부상)와 덫이 입힌 부상과 맞춘 수치를 터진 것에 잇는다.
+    """
+    victim = {'user_id': move['user_id'], 'character_name': move['character_name']}
+    payload = {
+        'round': cause.payload['round'],
+        **victim,
+        'place': move['to'],
+        **{key: sprung[key] for key in ('entry_id', 'name', 'set_by', 'avoid', 'avoided')},
+    }
+    fired = recorder.record(session, table, EventType.TRAP_SPRUNG, payload=payload, cause=cause)
+    if sprung['effect'] is not None:
+        changed = record_hp_change(session, table, sprung['effect'], cause=fired)
+        record_injury(session, table, sprung['effect'].get('injury_roll'), victim, cause=changed)
+    for one in sprung['injured']:
+        if one['injury'] is not None:
+            record_injury(session, table, one, victim, cause=fired)
+    record_resource_shifts(session, table, sprung['resources'], victim, ResourceSource.TRAP, fired)
 
 
 def record_cross(session: AsyncSession, table: GameTable, character_name: str, move: dict, cause: TableEvent) -> None:
@@ -693,6 +728,8 @@ class ResourceSource:
     ATTACK = 'attack'
     # 라운드가 닫힐 때 저절로(resources[].each_round)
     ROUND = 'round'
+    # 덫(#806). 걸린 쪽의 수치를 맞춘 것
+    TRAP = 'trap'
 
 
 def recorded_shifts(shifts: list[dict]) -> list[dict]:
@@ -795,6 +832,8 @@ def record_declaration(
         record_take(session, table, declaration, cause=acted)
     elif put_down_of(declaration) is not None:
         record_put_down(session, table, declaration, cause=acted)
+    elif trap_set_of(declaration) is not None:
+        record_trap_set(session, table, declaration, cause=acted)
     elif steal_of(declaration) is not None:
         record_steal(session, table, declaration, cause=acted)
     elif loot_of(declaration) is not None:

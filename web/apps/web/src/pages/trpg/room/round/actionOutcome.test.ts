@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Declaration, Ruleset } from '../../../../api/types';
 import { RULES } from '../../../../test/tableFixtures';
-import { giveLine, itemUseLine, lootLine, putDownLine, restLine, stealLine, takeLine, waitLine } from './actionOutcome';
+import { giveLine, itemUseLine, lootLine, putDownLine, restLine, stealLine, takeLine, trapSetLine, waitLine } from './actionOutcome';
 import { outcomeLine } from './roundView';
 
 const rules = RULES as unknown as Ruleset;
@@ -18,6 +18,8 @@ describe('행동의 결과의 까닭', () => {
     expect(takeLine({ name: '약초', count: 3, taken: 0, reason: 'gone' } as never)).toBe('줍지 못했습니다(앞사람이 가져가 남은 것이 없었습니다)');
     expect(takeLine({ name: '약초', count: 1, taken: 1, reason: null } as never)).toBe('약초 ×1 주웠습니다');
     expect(putDownLine({ put: false, name: '약초', count: 1, reason: 'not_held' } as never)).toBe('내려놓지 못했습니다(내려놓을 만큼 가지고 있지 않았습니다)');
+    expect(trapSetLine({ set: true, name: '올가미', remaining: 1, reason: null } as never)).toBe('올가미 숨겨 놓음(남은 1개)');
+    expect(trapSetLine({ set: false, name: '올가미', remaining: 0, reason: 'not_held' } as never)).toBe('덫을 놓지 못했습니다(그만큼 가지고 있지 않았습니다)');
   });
 
   it('훔치기와 빼앗기: 들킴은 까닭 없이, 싸움, 이미 없음, 깨어 있음, 그만큼만', () => {

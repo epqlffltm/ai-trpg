@@ -24,7 +24,7 @@ import { AidSelect } from './AidSelect';
 import { CheckFields } from './CheckFields';
 import { DoorActionFields } from './DoorActionFields';
 import { ChoiceSelect } from './ChoiceSelect';
-import { GiveFields, PutDownFields, TakeFields, ThrowFields, UseFields, VictimFields } from './ItemActionFields';
+import { GiveFields, PutDownFields, SetTrapFields, TakeFields, ThrowFields, UseFields, VictimFields } from './ItemActionFields';
 import { BuyFields, PayFields, SellFields } from './TradeFields';
 import { minutesLabel, wayNotes } from '../../status/statusView';
 
@@ -70,6 +70,8 @@ function KindFields({ draft, ctx, onChange }: Omit<Props, 'error'>) {
       return <ThrowFields draft={draft} ctx={ctx} onChange={onChange} />;
     case 'put_down':
       return <PutDownFields draft={draft} ctx={ctx} onChange={onChange} />;
+    case 'set_trap':
+      return <SetTrapFields draft={draft} ctx={ctx} onChange={onChange} />;
     case 'take':
       return <TakeFields draft={draft} ctx={ctx} onChange={onChange} />;
     case 'steal':

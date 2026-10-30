@@ -92,7 +92,7 @@ from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
 from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
 from app.engine.item_aids import Aids
-from app.engine.item_effects import AttackEffects, Effects
+from app.engine.item_effects import AttackEffects, Effects, TrapEffects
 from app.engine.ruleset import RULESET_MAX_EQUIPMENT_SLOTS, RULESET_MAX_NATURES, Key, Resistances, SkillCost
 from app.engine.sheet import CharacterSheet, Sheet
 
@@ -695,6 +695,34 @@ class ItemThrow(BaseModel):
     difficulty: Key | None = None
 
 
+class TrapCheck(BaseModel):
+    """
+    덫의 판정 하나(#806). 피하기(avoid)와 해제(disarm)가 이 모양이다. 능력치와 난이도(비우면 룰북의 기본)다.
+    룰북의 규칙에 있는지는 게시할 때 본다(item_trap_invalid).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    ability: Key
+    difficulty: Key | None = None
+
+
+class ItemTrap(BaseModel):
+    """
+    덫(#806). 이 물건을 지금 장소에 숨겨 놓을 수 있다(행동 set_trap). 놓으면 소지품에서 하나 빠진다.
+
+    그 장소에 들어오는 쪽은 피하는 판정(avoid)을 굴린다. 실패하면 효과(effects)가 든다. 피하든 못 피하든 덫은 터진다.
+    효과는 피해, 부상, 수치의 맞추기다(소모품의 효과와 같은 모양). 해제(disarm)는 찾은 덫을 거두는 판정이다.
+    등급과 부상과 수치와 성질이 룰북에 있는지는 게시할 때 본다(item_trap_invalid).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    avoid: TrapCheck
+    disarm: TrapCheck
+    effects: TrapEffects
+
+
 class ItemRule(BaseModel):
     """
     아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.
@@ -721,6 +749,7 @@ class ItemRule(BaseModel):
     예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.
     resistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.
     nature 는 무기로 친 피해의 성질이다(#886 ③, 화염 검, 축복받은 망치). 무기에만 적는다.
+    trap 은 이 물건이 덫일 때의 그 덫이다(#806, 곰덫, 독침 함정). 장비와 소모품 모두 적는다.
     성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).
     """
 
@@ -743,6 +772,7 @@ class ItemRule(BaseModel):
     aids: Aids = []
     resistances: Resistances = ()
     nature: Key | None = None
+    trap: ItemTrap | None = None
 
     @model_validator(mode='after')
     def combat_only_when_worn(self) -> 'ItemRule':

@@ -109,6 +109,8 @@ async def test_a_character_goes_one_step_along_a_known_route(
         'effect': None,
         # 넘기에 붙여 쓴 물건(#802). 붙이지 않았다
         'aid': None,
+        # 들어간 곳에 놓인 덫이 없었다(#806)
+        'traps': [],
     }
     # 판의 사건이 옮길 때와 같은 이벤트다. 행동에 이어지고, 행한 사람은 없다(엔진이 옮겼다)
     [moved] = await events_of(client, friend, table, 'character_moved')

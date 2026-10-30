@@ -139,6 +139,8 @@ class InjurySource(enum.StrEnum):
     SKILL = 'skill'
     # 몬스터나 인물의 공격의 효과로(#805 ③-b, 독니, 부패한 손톱)
     ATTACK = 'attack'
+    # 덫의 효과로(#806, 곰덫, 독침 함정)
+    TRAP = 'trap'
 
 
 class NpcStatus(enum.StrEnum):
@@ -359,6 +361,12 @@ class GameTable(Base):
     # 이 테이블에서 일어난 판의 사건들(#367). 사건 규칙마다 많아야 하나다(많아야 50 개). 라운드가 닫힐 때마다
     # 일어나지 않은 것만 보므로 테이블을 읽을 때 함께 읽는다(app/rounds/happenings.py)
     happenings: Mapped[list['TableHappening']] = relationship(lazy='selectin', cascade='all, delete-orphan')
+
+    # 이 테이블의 장소에 놓인 덫들(#806). 놓은 순서다. 터지거나 거둔 것도 남는다(ended_at). 들어오는 쪽마다
+    # 그 장소의 덫을 봐야 해서 테이블을 읽을 때 함께 읽는다(app/tables/traps.py)
+    traps: Mapped[list['TableTrap']] = relationship(
+        lazy='selectin', cascade='all, delete-orphan', order_by='TableTrap.created_at, TableTrap.id'
+    )
 
 
 class TableMember(Base):
@@ -1052,6 +1060,48 @@ class TablePlaceItem(Base):
     count: Mapped[int] = mapped_column(SmallInteger)
     # 아직 찾지 않은 숨긴 물건인가. 찾으면 거짓이 된다
     hidden: Mapped[bool] = mapped_column(Boolean)
+
+
+class TrapEnd(enum.StrEnum):
+    """덫이 끝난 까닭(#806)."""
+
+    # 누군가 들어와 터졌다(피했든 못 피했든)
+    SPRUNG = 'sprung'
+    # 찾아서 해제해 거뒀다
+    DISARMED = 'disarmed'
+
+
+class TableTrap(Base):
+    """
+    테이블의 장소에 놓인 덫 하나(#806). 어느 장소에 어떤 덫 물건이 누가 언제 놓았는가.
+
+    덫 물건의 규칙(피하기, 해제, 효과)은 판의 아이템 규칙에 있다(items[].trap). 놓으면 숨긴 채다. 놓은 사람도 일행도
+    그 자리를 따로 알지 못한다. 들어오는 쪽이 터뜨리면(sprung) 끝난다. 끝나도 지우지 않는다. 무엇이 있었는지 남긴다.
+    바꾸는 것은 엔진뿐이다(app/tables/traps.py, app/rounds/trap_actions.py). 방장도 AI 도 바꾸지 못한다.
+    """
+
+    __tablename__ = 'table_traps'
+    __table_args__ = (
+        CheckConstraint('round_number >= 1', name='round_number_positive'),
+        CheckConstraint(one_of('ended_reason', TrapEnd), name='ended_reason_allowed'),
+        # 끝난 덫만 까닭이 있다
+        CheckConstraint('(ended_at IS NULL) = (ended_reason IS NULL)', name='end_has_reason'),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    # 테이블의 행이 지워지면 함께 지워진다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'))
+    # 판(content)의 로어북 장소 항목과 덫 물건 항목의 ID
+    place_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    entry_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    # 놓은 사람. 판에 미리 놓인 덫이면 비어 있다(#806 ②)
+    set_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    # 놓은 라운드
+    round_number: Mapped[int] = mapped_column(Integer)
+    # 끝난 시각과 까닭. 아직 놓여 있으면 둘 다 비어 있다
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_reason: Mapped[str | None] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class TableInjury(Base):

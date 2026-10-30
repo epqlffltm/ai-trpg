@@ -36,6 +36,8 @@ class Trigger(enum.StrEnum):
     SKILL = 'skill'
     # 몬스터나 인물의 공격의 효과(injure)로 그 부상이 확정으로 생겼다(#805 ③-b). 표를 굴리지 않는다
     ATTACK = 'attack'
+    # 덫의 효과(injure)로 그 부상이 확정으로 생겼다(#806). 표를 굴리지 않는다
+    TRAP = 'trap'
 
 
 @dataclass(frozen=True)

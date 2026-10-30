@@ -312,6 +312,22 @@ def item_put_down(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'{who(payload)}: {item}를 {place_name(payload.get("place"))}에 내려놓음')]
 
 
+def trap_set(payload: dict, labels: Labels) -> list[Block]:
+    """덫을 놓음(#806)."""
+    name = text_of(payload.get('name'))
+    if not payload.get('set'):
+        return [Note(f'{who(payload)}: {name} 놓지 못함')]
+    return [Note(f'{who(payload)}: {name}을 {place_name(payload.get("place"))}에 숨겨 놓음')]
+
+
+def trap_sprung(payload: dict, labels: Labels) -> list[Block]:
+    """덫이 터짐(#806). 피하는 판정의 눈과 피했는가."""
+    avoid = payload.get('avoid') or {}
+    numbers = f'{avoid.get("roll")} + {avoid.get("modifier")} = {avoid.get("total")}, 목표 {avoid.get("target")}'
+    result = '피함' if payload.get('avoided') else '걸림'
+    return [Note(f'덫: {who(payload)} · {text_of(payload.get("name"))} {numbers} → {result}')]
+
+
 def steal_attempted(payload: dict, labels: Labels) -> list[Block]:
     """훔치기. 누구에게서 무엇을, 판정의 눈과 성패, 들켰는가."""
     victim = text_of(payload.get('npc_name')) or text_of(payload.get('monster_name'))
@@ -455,6 +471,8 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.SKILL_USED: skill_used,
     EventType.AID_USED: aid_used,
     EventType.ITEM_PUT_DOWN: item_put_down,
+    EventType.TRAP_SET: trap_set,
+    EventType.TRAP_SPRUNG: trap_sprung,
     EventType.ITEM_TRADED: item_traded,
     EventType.EQUIPMENT_CHANGED: equipment_changed,
     EventType.MONEY_PAID: money_paid,

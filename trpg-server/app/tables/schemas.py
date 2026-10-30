@@ -376,6 +376,24 @@ class ItemThrowOut(BaseModel):
     difficulty: str | None
 
 
+class TrapCheckOut(BaseModel):
+    """덫의 판정 하나(#806). 능력치와 난이도(비면 rules 의 기본)다."""
+
+    ability: str
+    difficulty: str | None
+
+
+class ItemTrapOut(BaseModel):
+    """
+    덫(#806). 행동 '덫 놓기'(set_trap)로 지금 장소에 숨겨 놓는다. 그 장소에 들어오는 쪽이 피하는 판정(avoid)을 굴리고,
+    실패하면 효과(effects)가 든다. 해제(disarm)는 찾은 덫을 거두는 판정이다.
+    """
+
+    avoid: TrapCheckOut
+    disarm: TrapCheckOut
+    effects: list[Effect]
+
+
 class CatalogItemOut(BaseModel):
     """
     판에 있는 물건 하나. 로어북의 물건 항목이다.
@@ -418,6 +436,8 @@ class CatalogItemOut(BaseModel):
     resistances: list[Resistance] = []
     # 무기로 친 피해의 성질(#886 ③, rules.natures 의 key). 무기가 아니거나 성질이 없으면 None 이다
     nature: str | None = None
+    # 덫(#806). 덫이 아니면 None 이다
+    trap: ItemTrapOut | None = None
 
 
 class WornOut(BaseModel):

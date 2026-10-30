@@ -15,6 +15,7 @@ export const ACTION_LABELS: Record<ActionKind, string> = {
   rest: '쉬기',
   take: '줍기',
   put_down: '내려놓기',
+  set_trap: '덫 놓기',
   steal: '훔치기',
   loot: '빼앗기',
   wait: '기다리기',

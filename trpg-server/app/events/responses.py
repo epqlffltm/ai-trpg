@@ -118,6 +118,29 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'reason',
         'remaining',
     ),
+    # 덫을 놓은 것도 공개다(#806). 선언이 모두에게 보이듯이. 놓은 곳이 있고, 못 했으면 까닭(reason)이 있다
+    EventType.TRAP_SET: (
+        'round',
+        'character_name',
+        'place',
+        'entry_id',
+        'name',
+        'set',
+        'reason',
+        'remaining',
+    ),
+    # 덫이 터진 것도 공개다(#806). 누가 어디서 무엇을 터뜨렸고, 피하는 판정과 피했는가. 효과는 뒤의 이벤트에 있다
+    EventType.TRAP_SPRUNG: (
+        'round',
+        'user_id',
+        'character_name',
+        'place',
+        'entry_id',
+        'name',
+        'set_by',
+        'avoid',
+        'avoided',
+    ),
     # 착용도 공개다(#276). 소지품처럼 모두에게 보인다
     EventType.EQUIPMENT_CHANGED: ('user_id', 'character_name', 'change', 'entry_id', 'name', 'slots', 'removed'),
     # 사고판 것과 돈을 건넨 것도 공개다(#278). 소지품과 돈은 모두에게 보인다. 못 했으면 까닭(reason)이 있다
