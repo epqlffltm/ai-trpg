@@ -62,6 +62,10 @@ describe('eventLine', () => {
     expect(line('trap_set', { character_name: '렌', name: '올가미', set: false, reason: 'not_held' })?.text).toBe('렌: 덫을 놓지 못했습니다.');
     expect(line('trap_sprung', { character_name: '미아', name: '올가미', place, avoided: false })?.text).toBe('미아: 수도원 문에서 덫(올가미) 걸림');
     expect(line('trap_sprung', { character_name: '미아', name: '올가미', avoided: true })?.text).toBe('미아: 이곳에서 덫(올가미) 피함');
+    // 업힌 사람도 걸림(#806 ②)
+    const carried = { user_id: OTHER, character_name: '조' };
+    expect(line('trap_sprung', { character_name: '미아', name: '올가미', place, avoided: false, carried })?.text).toBe('미아: 수도원 문에서 덫(올가미) 걸림 · 업힌 조도 걸림');
+    expect(line('trap_sprung', { character_name: '미아', name: '올가미', avoided: true, carried })?.text).toBe('미아: 이곳에서 덫(올가미) 피함');
   });
 
   it('덫을 찾고 해제한 것(#806 ①-b)', () => {

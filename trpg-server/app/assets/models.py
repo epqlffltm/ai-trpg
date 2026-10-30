@@ -115,6 +115,8 @@ ENCOUNTER_MAX_COUNT = 10
 SCENARIO_MAX_PLACE_ITEMS = 100
 # 시나리오 하나의 커버(장소마다 숨을 곳, #276 의 커버 세이브)의 상한. 장소마다 하나다
 SCENARIO_MAX_COVERS = 100
+# 시나리오 하나에 미리 놓는 덫(#806 ②)의 수. 한 장소에 여럿을 놓을 수 있다
+SCENARIO_MAX_TRAPS = 50
 # 시나리오 하나의 무작위 조우 표(#283)의 수, 표 하나의 몬스터 줄의 수, 줄 하나가 뽑힐 몫의 상한.
 # 마리 수의 상한은 조우와 같다(ENCOUNTER_MAX_COUNT)
 SCENARIO_MAX_WANDERS = 50
@@ -621,6 +623,7 @@ class Scenario(AssetContent):
         CheckConstraint(f'jsonb_array_length(encounters) <= {SCENARIO_MAX_ENCOUNTERS}', name='encounters_count'),
         CheckConstraint(f'jsonb_array_length(place_items) <= {SCENARIO_MAX_PLACE_ITEMS}', name='place_items_count'),
         CheckConstraint(f'jsonb_array_length(covers) <= {SCENARIO_MAX_COVERS}', name='covers_count'),
+        CheckConstraint(f'jsonb_array_length(traps) <= {SCENARIO_MAX_TRAPS}', name='traps_count'),
         CheckConstraint(f'jsonb_array_length(wanders) <= {SCENARIO_MAX_WANDERS}', name='wanders_count'),
         CheckConstraint(f'jsonb_array_length(happenings) <= {SCENARIO_MAX_HAPPENINGS}', name='happenings_count'),
         CheckConstraint(f'jsonb_array_length(npc_places) <= {SCENARIO_MAX_NPC_PLACES}', name='npc_places_count'),
@@ -755,6 +758,11 @@ class Scenario(AssetContent):
     # 장소는 맵의 장소다. 그 장소에서 엄폐한(cover 행동) 앉은 사람은 그 라운드에 이 값으로 커버 세이브를 받는다.
     # 세이브 방식의 룰북에서만 쓰인다. 다른 방식이면 엄폐를 받지 않는다(app/rounds/covers.py)
     covers: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 미리 놓인 덫들(#806 ②). 하나하나가 {place_id, entry_id, known} 다. "이 장소에 이 덫 물건이 놓여 있다"는 뜻이다.
+    # 장소는 맵의 장소, 물건은 아이템 규칙에 덫(trap)을 적은 물건이다. known 이면 처음부터 테이블이 아는 덫이다.
+    # 테이블을 시작할 때 덫마다 테이블의 덫(table_traps, 놓은 사람 없음)이 생긴다. 판은 그대로다
+    traps: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 무작위 조우 표들(#283). 하나하나가 {place_id, times, chance, monsters} 다. "이 장소에서 이 때에 길을 오거나 길게
     # 쉬면 chance% 로 몬스터가 나온다"는 뜻이다. place_id 가 비면 판의 기본 표로, 표가 없는 장소에서 쓴다.

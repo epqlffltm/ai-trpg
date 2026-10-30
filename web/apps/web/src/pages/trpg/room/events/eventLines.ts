@@ -422,7 +422,11 @@ const DESCRIBE: Record<EventType, Describe> = {
     const place = placeOf(p, 'place');
     return `${who(p, ctx, e)}: ${text(p, 'name') ?? '덫'} 숨겨 놓음${place ? `(${place})` : ''}`;
   },
-  trap_sprung: (p, ctx, e) => `${who(p, ctx, e)}: ${placeOf(p, 'place') ?? '이곳'}에서 덫(${text(p, 'name') ?? '?'}) ${flag(p, 'avoided') ? '피함' : '걸림'}`,
+  trap_sprung: (p, ctx, e) => {
+    const carried = part(p, 'carried');
+    const also = carried && !flag(p, 'avoided') ? ` · 업힌 ${text(carried, 'character_name') ?? '사람'}도 걸림` : '';
+    return `${who(p, ctx, e)}: ${placeOf(p, 'place') ?? '이곳'}에서 덫(${text(p, 'name') ?? '?'}) ${flag(p, 'avoided') ? '피함' : '걸림'}${also}`;
+  },
   trap_disarmed: (p, ctx, e) => {
     const name = text(p, 'name') ?? '덫';
     if (flag(p, 'done')) return `${who(p, ctx, e)}: ${name} 해제해 거둠`;

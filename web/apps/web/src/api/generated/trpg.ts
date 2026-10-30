@@ -6506,6 +6506,72 @@ export interface components {
             name: string;
         };
         /**
+         * PlacedTrap
+         * @description 미리 놓인 덫 하나(#806 ②). 그 장소(place_id)에 덫 물건(entry_id) 하나가 놓여 있다.
+         *
+         *     물건은 아이템 규칙에 덫(trap)을 적은 물건이어야 하고, 장소는 맵의 장소여야 한다(게시할 때 본다).
+         *     known 이면 처음부터 테이블이 아는 덫이다(경고 표지가 붙은 함정). 캐릭터가 밟지 않고, 해제할 수 있다.
+         *     아니면(기본) 숨긴 덫이다. 찾기 행동으로 찾는다. 한 장소에 여럿을 놓을 수 있다.
+         */
+        "PlacedTrap-Input": {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /**
+             * Known
+             * @default false
+             */
+            known: boolean;
+            /**
+             * Place Id
+             * Format: uuid
+             */
+            place_id: string;
+        };
+        /**
+         * PlacedTrap
+         * @description 미리 놓인 덫 하나(#806 ②). 그 장소(place_id)에 덫 물건(entry_id) 하나가 놓여 있다.
+         *
+         *     물건은 아이템 규칙에 덫(trap)을 적은 물건이어야 하고, 장소는 맵의 장소여야 한다(게시할 때 본다).
+         *     known 이면 처음부터 테이블이 아는 덫이다(경고 표지가 붙은 함정). 캐릭터가 밟지 않고, 해제할 수 있다.
+         *     아니면(기본) 숨긴 덫이다. 찾기 행동으로 찾는다. 한 장소에 여럿을 놓을 수 있다.
+         */
+        "PlacedTrap-Output": {
+            /** Entry Id */
+            entry_id: string;
+            /**
+             * Known
+             * @default false
+             */
+            known: boolean;
+            /** Place Id */
+            place_id: string;
+        };
+        /**
+         * PlacedTrapSnapshot
+         * @description 미리 놓인 덫 하나(#806 ②). 판 안의 장소 항목(place_id)에 덫 물건(entry_id, 아이템 규칙에 trap 이 있다)이 놓였다.
+         *     known 이면 처음부터 테이블이 안다.
+         */
+        PlacedTrapSnapshot: {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /**
+             * Known
+             * @default false
+             */
+            known: boolean;
+            /**
+             * Place Id
+             * Format: uuid
+             */
+            place_id: string;
+        };
+        /**
          * PlayerMadeHp
          * @description 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한을 함께 보낸다.
          *
@@ -8382,6 +8448,11 @@ export interface components {
             /** Title */
             title: string;
             /**
+             * Traps
+             * @default []
+             */
+            traps: components["schemas"]["PlacedTrap-Input"][];
+            /**
              * Wanders
              * @default []
              */
@@ -8459,6 +8530,8 @@ export interface components {
             starting_items: components["schemas"]["ItemStack-Output"][];
             /** Title */
             title: string;
+            /** Traps */
+            traps: components["schemas"]["PlacedTrap-Output"][];
             /**
              * Updated At
              * Format: date-time
@@ -8515,7 +8588,7 @@ export interface components {
          *     null 을 보내면 비운다.
          *     보내지 않으면 그대로 둔다.
          *     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-         *     quests, routes, landmarks, place_items, covers, wanders, happenings, npc_places, character_modes 는
+         *     quests, routes, landmarks, place_items, covers, traps, wanders, happenings, npc_places, character_modes 는
          *     보낸 목록으로 통째로 바꾼다.
          *     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
          *     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -8575,6 +8648,8 @@ export interface components {
             starting_items?: components["schemas"]["ItemStack-Input"][] | null;
             /** Title */
             title?: string | null;
+            /** Traps */
+            traps?: components["schemas"]["PlacedTrap-Input"][] | null;
             /** Wanders */
             wanders?: components["schemas"]["WanderTable-Input"][] | null;
             /** World Id */
@@ -9068,6 +9143,11 @@ export interface components {
             starting_items: components["schemas"]["ItemStackSnapshot"][];
             /** Title */
             title: string;
+            /**
+             * Traps
+             * @default []
+             */
+            traps: components["schemas"]["PlacedTrapSnapshot"][];
             /**
              * Wanders
              * @default []
@@ -9713,6 +9793,30 @@ export interface components {
          */
         TranscriptFormat: "md" | "html" | "txt";
         /**
+         * TrapCaughtOut
+         * @description 덫에 함께 걸린 업힌 사람(#806 ②)과 그 사람에게 든 효과. 업은 사람이 피했으면 효과가 비어 있다.
+         */
+        TrapCaughtOut: {
+            /** Character Name */
+            character_name: string;
+            effect?: components["schemas"]["EffectOut"] | null;
+            /**
+             * Injured
+             * @default []
+             */
+            injured: components["schemas"]["InjuredOut"][];
+            /**
+             * Resources
+             * @default []
+             */
+            resources: components["schemas"]["ResourceShiftOut"][];
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
          * TrapCheck
          * @description 덫의 판정 하나(#806). 피하기(avoid)와 해제(disarm)가 이 모양이다. 능력치와 난이도(비우면 룰북의 기본)다.
          *     룰북의 규칙에 있는지는 게시할 때 본다(item_trap_invalid).
@@ -9790,6 +9894,7 @@ export interface components {
             avoid: components["schemas"]["CrossOut"];
             /** Avoided */
             avoided: boolean;
+            carried?: components["schemas"]["TrapCaughtOut"] | null;
             effect?: components["schemas"]["EffectOut"] | null;
             /**
              * Entry Id

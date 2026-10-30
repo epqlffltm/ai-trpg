@@ -429,7 +429,7 @@ def test_a_dead_character_springs_no_more(monkeypatch: pytest.MonkeyPatch):
     deaths = iter([False, True])
     monkeypatch.setattr(trap_actions.traps, 'hidden_at', lambda table, place: armed)
     monkeypatch.setattr(trap_actions.sheets, 'is_dead', lambda who: next(deaths))
-    monkeypatch.setattr(trap_actions, 'spring_one', lambda judging, who, trap: {'trap': trap})
+    monkeypatch.setattr(trap_actions, 'spring_one', lambda judging, who, trap, carried: {'trap': trap})
 
     sprung = trap_actions.spring_on_arrival(SimpleNamespace(table=None), member)
 
@@ -437,12 +437,12 @@ def test_a_dead_character_springs_no_more(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_a_move_without_traps_keeps_its_shape(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(trap_actions, 'spring_on_arrival', lambda judging, member: [])
+    monkeypatch.setattr(trap_actions, 'spring_on_arrival', lambda judging, member, carried: [])
     moved = {'move': {'moved': True}}
     stayed = {'move': {'moved': False}}
 
     assert trap_actions.with_traps(None, None, moved) is moved
-    monkeypatch.setattr(trap_actions, 'spring_on_arrival', lambda judging, member: pytest.fail('가지 못했다'))
+    monkeypatch.setattr(trap_actions, 'spring_on_arrival', lambda judging, member, carried: pytest.fail('가지 못했다'))
     assert trap_actions.with_traps(None, None, stayed) is stayed
 
 
@@ -471,7 +471,7 @@ def test_the_narration_lines_of_traps():
     assert to_trap({'name': '올가미', 'avoid': {'ability': 'zzz'}, 'avoided': True}, None) == TrapNote(
         name='올가미', check='zzz', avoided=True
     )
-    assert prompt.PROMPT_VERSION == 'narration-80'
+    assert prompt.PROMPT_VERSION == 'narration-81'
 
 
 async def test_the_narrator_hears_the_trap(

@@ -400,11 +400,13 @@ class TrapNote:
 
     name 은 덫 물건의 이름, check 는 피하는 판정의 능력치의 이름이다. avoided 가 참이면 피했다.
     못 피했으면 효과가 들었다. 얼마나 다쳤는지와 입은 부상은 HP 와 부상의 줄이 말한다.
+    carried 는 업혀 들어가 함께 걸린 사람의 이름이다(#806 ②). 업지 않았거나 피했으면 None 이다.
     """
 
     name: str
     check: str
     avoided: bool
+    carried: str | None = None
 
 
 @dataclass(frozen=True)

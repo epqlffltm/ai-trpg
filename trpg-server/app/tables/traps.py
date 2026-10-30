@@ -6,6 +6,8 @@
   - 놓기: 캐릭터가 가진 덫 물건 하나를 서 있는 장소에 숨겨 놓는다(app/rounds/trap_actions.py).
   - 놓인 덫은 숨긴 채다. 놓은 사람도 일행도 따로 알지 못한다. 그 장소에 들어오는 쪽이 터뜨린다.
   - 찾기 행동으로 찾으면(found) 테이블 모두가 안다(#806 ①-b). 아는 덫은 캐릭터가 밟지 않는다.
+  - 판에 미리 놓인 덫(#806 ②)은 테이블을 시작할 때 놓은 사람 없이 1 라운드에 놓인 것으로 둔다(set_preset).
+    판이 처음부터 아는 덫(known)으로 적었으면 찾아낸 것으로 둔다.
   - 터지면(sprung) 또는 해제해 거두면(disarmed) 끝난다. 끝난 덫은 지우지 않는다. 무엇이 있었는지 남긴다.
 
 DB 를 모른다. 이미 읽어 온 테이블의 덫(GameTable.traps)을 고친다. 저장은 부르는 쪽이 한다.
@@ -14,6 +16,7 @@ DB 를 모른다. 이미 읽어 온 테이블의 덫(GameTable.traps)을 고친�
 import uuid
 from datetime import UTC, datetime
 
+from app.assets.scenarios.snapshot import Snapshot
 from app.tables.models import GameTable, TableTrap, TrapEnd
 
 
@@ -37,6 +40,14 @@ def lay(
     )
     table.traps.append(trap)
     return trap
+
+
+def set_preset(table: GameTable, snapshot: Snapshot) -> None:
+    """판에 미리 놓인 덫들을 테이블에 놓는다(#806 ②). 시작할 때 한 번 부른다. 판의 순서가 놓은 순서다."""
+    for rule in snapshot.traps:
+        trap = lay(table, rule.place_id, rule.entry_id, None, 1)
+        if rule.known:
+            uncover(trap)
 
 
 def is_armed(trap: TableTrap) -> bool:

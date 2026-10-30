@@ -153,7 +153,8 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      피해의 성질(#886 ③)도 뒤에 더했다. 효과의 damage 와 공격(monsters[].attacks[].nature, npc_sheets[].attacks[])과
 #      무기(items[].nature)에 있다. 몬스터의 저항(monsters[].resistances)과 몬스터와 인물의 타고난 피해의 성질
 #      (monsters[].nature, npc_sheets[].nature)도 같다. 비워도 되는 칸이라 형식이 그대로다.
-#      덫(#806, items[].trap: 피하는 판정, 해제 판정, 효과)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
+#      덫(#806, items[].trap: 피하는 판정, 해제 판정, 효과, 찾기 판정)도 뒤에 더했다.
+#      비워도 되는 칸이라 형식이 그대로다. 미리 놓인 덫(#806 ②, traps: 장소, 덫 물건, 처음부터 아는가)도 같다
 SNAPSHOT_FORMAT = 67
 
 
@@ -617,6 +618,17 @@ class CoverSnapshot(BaseModel):
     cover: int
 
 
+class PlacedTrapSnapshot(BaseModel):
+    """
+    미리 놓인 덫 하나(#806 ②). 판 안의 장소 항목(place_id)에 덫 물건(entry_id, 아이템 규칙에 trap 이 있다)이 놓였다.
+    known 이면 처음부터 테이블이 안다.
+    """
+
+    place_id: uuid.UUID
+    entry_id: uuid.UUID
+    known: bool = False
+
+
 class WanderMonsterSnapshot(BaseModel):
     """무작위 조우 표의 한 줄(#283). 판의 몬스터 하나(monster_id)가 count 마리, 뽑힐 몫(weight), 누가 기습하는가."""
 
@@ -696,6 +708,8 @@ class Snapshot(BaseModel):
     place_items: list[PlaceItemSnapshot] = []
     # 장소마다의 커버(#276). 장소는 판 안의 장소 항목이다. 있으면 시작 장소도 있다. 형식 50 보다 옛 판에는 없다
     covers: list[CoverSnapshot] = []
+    # 미리 놓인 덫들(#806 ②). 장소는 판 안의 장소 항목, 물건은 덫을 적은 물건이다. 있으면 시작 장소도 있다
+    traps: list[PlacedTrapSnapshot] = []
     # 무작위 조우 표들(#283). 장소는 판 안의 장소 항목이고 몬스터는 판의 몬스터다. 있으면 시작 장소도 있다.
     # 형식 57 보다 옛 판에는 없다
     wanders: list[WanderTableSnapshot] = []
@@ -888,6 +902,21 @@ class Snapshot(BaseModel):
             raise ValueError('장소 항목이 아닌 것을 가리키는 커버가 있습니다.')
         if self.covers and self.start_place is None:
             raise ValueError('커버가 있는데 시작 장소가 없습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_trap_places(self) -> 'Snapshot':
+        """
+        미리 놓인 덫(#806 ②)이 판 안의 장소 항목과 덫을 적은 물건을 가리키는지, 덫이 있으면 시작 장소가 있는지 본다.
+
+        게시할 때 이미 막는다(scenarios/publishing.py). 테이블을 시작할 때(app/tables/traps.py) 믿고 쓴다.
+        """
+        places = {entry.id for entry in place_entries(self)}
+        traps = {rule.entry_id for rule in self.items if rule.trap is not None}
+        if any(trap.place_id not in places or trap.entry_id not in traps for trap in self.traps):
+            raise ValueError('장소 항목이 아닌 곳이나 덫이 아닌 물건을 가리키는 덫이 있습니다.')
+        if self.traps and self.start_place is None:
+            raise ValueError('덫이 있는데 시작 장소가 없습니다.')
         return self
 
     @model_validator(mode='after')
@@ -1224,6 +1253,7 @@ def build_snapshot(
         landmarks=list(scenario.landmarks),
         place_items=[PlaceItemSnapshot(**rule) for rule in scenario.place_items],
         covers=[CoverSnapshot(**rule) for rule in scenario.covers],
+        traps=[PlacedTrapSnapshot(**trap) for trap in scenario.traps],
         wanders=[WanderTableSnapshot(**table) for table in scenario.wanders],
         happenings=[HappeningSnapshot(**rule) for rule in scenario.happenings],
         npc_places=[NpcPlaceSnapshot(**place) for place in scenario.npc_places],

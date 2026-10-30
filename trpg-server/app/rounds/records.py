@@ -436,16 +436,22 @@ def record_trap_sprung(session: AsyncSession, table: GameTable, move: dict, spru
     들어간 캐릭터가 덫을 터뜨린 것을 이벤트로 적는다(trap_sprung, #806). 들어간 이벤트(cause)에 잇는다.
 
     걸렸으면 그 뒤에 HP 의 변화(와 부상 표의 부상)와 덫이 입힌 부상과 맞춘 수치를 터진 것에 잇는다.
+    업혀 들어간 사람(#806 ②)에게 든 것도 그 뒤에 터진 것에 잇는다. 업힌 사람은 carried 에 적는다.
     """
     victim = {'user_id': move['user_id'], 'character_name': move['character_name']}
+    carried = sprung.get('carried')
     payload = {
         'round': cause.payload['round'],
         **victim,
         'place': move['to'],
         **{key: sprung[key] for key in ('entry_id', 'name', 'set_by', 'avoid', 'avoided')},
     }
+    if carried is not None:
+        payload['carried'] = {'user_id': carried['user_id'], 'character_name': carried['character_name']}
     fired = recorder.record(session, table, EventType.TRAP_SPRUNG, payload=payload, cause=cause)
     record_trap_effects(session, table, sprung, victim, fired)
+    if carried is not None:
+        record_trap_effects(session, table, carried, payload['carried'], fired)
 
 
 def record_trap_effects(session: AsyncSession, table: GameTable, result: dict, victim: dict, cause: TableEvent) -> None:

@@ -140,6 +140,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'set_by',
         'avoid',
         'avoided',
+        'carried',
     ),
     # 덫의 해제도 공개다(#806 ①-b). 해제 판정과 거뒀는가, 터졌는가, 거둔 덫 물건을 가진 개수
     EventType.TRAP_DISARMED: (

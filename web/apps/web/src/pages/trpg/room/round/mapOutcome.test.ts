@@ -58,6 +58,16 @@ describe('들어간 곳에서 터진 덫(#806)', () => {
   });
 });
 
+describe('업힌 사람도 걸린 덫(#806 ②)', () => {
+  it('업은 사람이 못 피하면 업힌 사람의 HP 도 붙인다', () => {
+    const avoid = { ...ROLL, ability: 'dex' };
+    const effect = { kind: 'damage' as const, magnitude: 'light', user_id: ME, character_name: '렌', rolls: [2], amount: 2, before: 10, after: 8, max_hp: 12, downed: false, prank: false };
+    const carried = { user_id: 'u2', character_name: '미아', effect: { ...effect, character_name: '미아', before: 0, after: 0 }, injured: [], resources: [] };
+    const trap = { trap_id: 'x', entry_id: 'snare', name: '올가미', set_by: null, avoid, avoided: false, effect, injured: [], resources: [], carried };
+    expect(moveLine({ ...MOVE, traps: [trap] })).toBe('종탑에 닿았습니다 · 덫 올가미: 걸림(눈 8, 보정 -1, 합 7 / 목표 15) · 렌 HP 10 → 8 · 업힌 미아도 걸림 · 미아 HP 0 → 0');
+  });
+});
+
 describe('문을 다룬 결과', () => {
   it('해낸 일, 못 한 까닭, 판정', () => {
     const door = { user_id: ME, character_name: '렌', from: GATE, to: TOWER, act: 'force', device: null, done: false, reason: 'failed', check: ROLL };

@@ -10388,6 +10388,84 @@
         "title": "PlaceRefOut",
         "type": "object"
       },
+      "PlacedTrap-Input": {
+        "additionalProperties": false,
+        "description": "미리 놓인 덫 하나(#806 ②). 그 장소(place_id)에 덫 물건(entry_id) 하나가 놓여 있다.\n\n물건은 아이템 규칙에 덫(trap)을 적은 물건이어야 하고, 장소는 맵의 장소여야 한다(게시할 때 본다).\nknown 이면 처음부터 테이블이 아는 덫이다(경고 표지가 붙은 함정). 캐릭터가 밟지 않고, 해제할 수 있다.\n아니면(기본) 숨긴 덫이다. 찾기 행동으로 찾는다. 한 장소에 여럿을 놓을 수 있다.",
+        "properties": {
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "known": {
+            "default": false,
+            "title": "Known",
+            "type": "boolean"
+          },
+          "place_id": {
+            "format": "uuid",
+            "title": "Place Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "place_id",
+          "entry_id"
+        ],
+        "title": "PlacedTrap",
+        "type": "object"
+      },
+      "PlacedTrap-Output": {
+        "additionalProperties": false,
+        "description": "미리 놓인 덫 하나(#806 ②). 그 장소(place_id)에 덫 물건(entry_id) 하나가 놓여 있다.\n\n물건은 아이템 규칙에 덫(trap)을 적은 물건이어야 하고, 장소는 맵의 장소여야 한다(게시할 때 본다).\nknown 이면 처음부터 테이블이 아는 덫이다(경고 표지가 붙은 함정). 캐릭터가 밟지 않고, 해제할 수 있다.\n아니면(기본) 숨긴 덫이다. 찾기 행동으로 찾는다. 한 장소에 여럿을 놓을 수 있다.",
+        "properties": {
+          "entry_id": {
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "known": {
+            "default": false,
+            "title": "Known",
+            "type": "boolean"
+          },
+          "place_id": {
+            "title": "Place Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "place_id",
+          "entry_id"
+        ],
+        "title": "PlacedTrap",
+        "type": "object"
+      },
+      "PlacedTrapSnapshot": {
+        "description": "미리 놓인 덫 하나(#806 ②). 판 안의 장소 항목(place_id)에 덫 물건(entry_id, 아이템 규칙에 trap 이 있다)이 놓였다.\nknown 이면 처음부터 테이블이 안다.",
+        "properties": {
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "known": {
+            "default": false,
+            "title": "Known",
+            "type": "boolean"
+          },
+          "place_id": {
+            "format": "uuid",
+            "title": "Place Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "place_id",
+          "entry_id"
+        ],
+        "title": "PlacedTrapSnapshot",
+        "type": "object"
+      },
       "PlayerMadeHp": {
         "additionalProperties": false,
         "description": "플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값과 상한을 함께 보낸다.\n\n최대 HP = 기준값 + 능력치의 보정. 상한을 넘지 않는다. 어느 능력치의 보정인지는 룰북의 규칙이 정한다.\n상한을 기준값과 같게 두면 보정은 깎기만 한다.",
@@ -14368,6 +14446,15 @@
             "title": "Title",
             "type": "string"
           },
+          "traps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlacedTrap-Input"
+            },
+            "maxItems": 50,
+            "title": "Traps",
+            "type": "array"
+          },
           "wanders": {
             "default": [],
             "items": {
@@ -14641,6 +14728,13 @@
             "title": "Title",
             "type": "string"
           },
+          "traps": {
+            "items": {
+              "$ref": "#/components/schemas/PlacedTrap-Output"
+            },
+            "title": "Traps",
+            "type": "array"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -14699,6 +14793,7 @@
           "landmarks",
           "place_items",
           "covers",
+          "traps",
           "wanders",
           "happenings",
           "npc_places",
@@ -14782,7 +14877,7 @@
       },
       "ScenarioUpdate": {
         "additionalProperties": false,
-        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는\nnull 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, covers, wanders, happenings, npc_places, character_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
+        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는\nnull 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, covers, traps, wanders, happenings, npc_places, character_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
         "properties": {
           "bestiary_ids": {
             "anyOf": [
@@ -15196,6 +15291,21 @@
               }
             ],
             "title": "Title"
+          },
+          "traps": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PlacedTrap-Input"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Traps"
           },
           "wanders": {
             "anyOf": [
@@ -16211,6 +16321,14 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "traps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlacedTrapSnapshot"
+            },
+            "title": "Traps",
+            "type": "array"
           },
           "wanders": {
             "default": [],
@@ -17755,6 +17873,52 @@
         "title": "TranscriptFormat",
         "type": "string"
       },
+      "TrapCaughtOut": {
+        "description": "덫에 함께 걸린 업힌 사람(#806 ②)과 그 사람에게 든 효과. 업은 사람이 피했으면 효과가 비어 있다.",
+        "properties": {
+          "character_name": {
+            "title": "Character Name",
+            "type": "string"
+          },
+          "effect": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EffectOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "injured": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InjuredOut"
+            },
+            "title": "Injured",
+            "type": "array"
+          },
+          "resources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceShiftOut"
+            },
+            "title": "Resources",
+            "type": "array"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "character_name"
+        ],
+        "title": "TrapCaughtOut",
+        "type": "object"
+      },
       "TrapCheck": {
         "additionalProperties": false,
         "description": "덫의 판정 하나(#806). 피하기(avoid)와 해제(disarm)가 이 모양이다. 능력치와 난이도(비우면 룰북의 기본)다.\n룰북의 규칙에 있는지는 게시할 때 본다(item_trap_invalid).",
@@ -17922,6 +18086,16 @@
           "avoided": {
             "title": "Avoided",
             "type": "boolean"
+          },
+          "carried": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrapCaughtOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "effect": {
             "anyOf": [

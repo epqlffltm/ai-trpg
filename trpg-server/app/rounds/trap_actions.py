@@ -16,7 +16,8 @@
   - 해제(disarm): 찾아낸 덫 하나를 덫의 해제 판정으로 굴린다. 성공하면 덫을 거둬 그 물건을 갖는다(가득이면 그 자리에
     보이게 둔다). 실패하면 덫은 그대로다. 목표보다 BIG_MISS 이상 모자라면 덫이 해제하던 사람에게 터진다
     (피하는 판정 없이 효과가 든다). 차례가 왔을 때 앞사람이 거뒀거나 터뜨렸으면 굴리지 않는다(gone).
-  업혀 들어온 사람(carry)과, 사건이 옮긴 사람은 아직 터뜨리지 않는다. 몬스터와 NPC 도 아직이다(#806 ②).
+  업혀 들어온 사람(carry, #806 ②)은 따로 굴리지 않는다. 업은 사람이 못 피하면 업힌 사람에게도 효과가 든다.
+  사건이 옮긴 사람과 몬스터와 NPC 는 아직이다(#806 ②-b).
 
 DB 를 모른다. 시트의 소지품과 테이블의 덫과 걸린 사람의 상태를 고친다. 저장하지 않는다.
 """
@@ -33,6 +34,7 @@ from app.rounds.map_actions import roll_terms, terms_document
 from app.rounds.place_item_actions import Reason
 from app.tables import items, place_items, places, sheets, traps
 from app.tables.models import TableMember, TableTrap
+from app.tables.state import find_member
 
 # 덫을 피했을 때 효과의 칸들. 아무것도 들지 않았다
 UNTOUCHED = {'effect': None, 'injured': [], 'resources': []}
@@ -79,19 +81,19 @@ def judge_set_trap(judging: Judging, member: TableMember, action: SetTrapAction)
     }
 
 
-def spring_one(judging: Judging, member: TableMember, trap: TableTrap) -> dict:
+def spring_one(judging: Judging, member: TableMember, trap: TableTrap, carried: TableMember | None = None) -> dict:
     """
     들어온 캐릭터 하나가 덫 하나를 터뜨린다. 피하는 판정을 굴리고, 실패하면 효과를 낸다. 덫은 끝난다.
 
-    걸린 일을 문서로 돌려준다. 무엇이(entry_id, name), 누가 놓았나(set_by), 피하는 판정(avoid), 피했나(avoided),
-    효과가 든 것(effect, injured, resources)이다.
+    carried 는 그 캐릭터가 업고 들어온 사람이다(#806 ②). 피하는 판정은 업은 사람만 굴리고, 못 피하면 업힌 사람에게도
+    효과가 든다. 걸린 일을 문서로 돌려준다. 무엇이(entry_id, name), 누가 놓았나(set_by), 피하는 판정(avoid),
+    피했나(avoided), 효과가 든 것(effect, injured, resources), 업힌 사람에게 든 것(carried, 업지 않았으면 None)이다.
     """
     item = judging.items[trap.entry_id]
     rule = item.trap
     traps.spring(trap)
     rolled = roll_terms(judging, member, rule.avoid)
     avoided = rolled.check.success
-    applied = UNTOUCHED if avoided else effects_on(judging, member, rule)
     return {
         'trap_id': str(trap.id),
         'entry_id': str(trap.entry_id),
@@ -99,21 +101,29 @@ def spring_one(judging: Judging, member: TableMember, trap: TableTrap) -> dict:
         'set_by': str(trap.set_by) if trap.set_by is not None else None,
         'avoid': terms_document(judging, rule.avoid, rolled),
         'avoided': avoided,
-        **applied,
+        **(UNTOUCHED if avoided else effects_on(judging, member, rule)),
+        'carried': None if carried is None else caught_document(judging, carried, rule, avoided),
     }
 
 
-def spring_on_arrival(judging: Judging, member: TableMember) -> list[dict]:
+def caught_document(judging: Judging, carried: TableMember, rule: ItemTrapSnapshot, avoided: bool) -> dict:
+    """업힌 사람(#806 ②)에게 든 덫의 효과. 업은 사람이 피했으면 아무것도 들지 않는다."""
+    applied = UNTOUCHED if avoided else effects_on(judging, carried, rule)
+    return {'user_id': str(carried.user_id), 'character_name': carried.character_name, **applied}
+
+
+def spring_on_arrival(judging: Judging, member: TableMember, carried: TableMember | None = None) -> list[dict]:
     """
     방금 들어온 캐릭터가 그 장소에 놓인 덫을 놓은 순서대로 터뜨린다. 터진 것들을 문서로 돌려준다.
 
+    업고 들어왔으면(carried) 업힌 사람도 같은 덫에 함께 걸린다(spring_one).
     덫에 걸려 죽었으면 남은 덫은 그대로 둔다(다음에 들어오는 쪽의 것이다).
     """
     sprung = []
     for trap in traps.hidden_at(judging.table, member.sheet.place_id):
         if sheets.is_dead(member):
             break
-        sprung.append(spring_one(judging, member, trap))
+        sprung.append(spring_one(judging, member, trap, carried))
     return sprung
 
 
@@ -122,12 +132,20 @@ def with_traps(judging: Judging, member: TableMember, outcome: dict) -> dict:
     가기의 결과에 들어간 장소의 덫을 붙인다. 갔고 덫이 터졌을 때만 move 에 traps 를 더한다.
 
     가지 못했으면 그대로다. 덫이 없는 장소에 들어갔어도 그대로다(덫이 생기기 전의 결과와 같은 모양).
+    쓰러진 동료를 업고 갔으면 그 사람도 함께 걸린다(#806 ②).
     """
     move = outcome['move']
     if not move['moved']:
         return outcome
-    sprung = spring_on_arrival(judging, member)
+    sprung = spring_on_arrival(judging, member, carried_member(judging, move.get('carry')))
     return outcome if not sprung else {**outcome, 'move': {**move, 'traps': sprung}}
+
+
+def carried_member(judging: Judging, carry: dict | None) -> TableMember | None:
+    """함께 업고 간 사람. 업지 않았거나 업고 가지 못했으면 None."""
+    if carry is None or not carry['carried']:
+        return None
+    return find_member(judging.table, uuid.UUID(carry['user_id']))
 
 
 def finding_check(rule: ItemTrapSnapshot) -> TrapCheckSnapshot:

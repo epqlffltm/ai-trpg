@@ -55,6 +55,7 @@ from app.assets.scenarios.schemas import (
     NpcPlace,
     NpcSheet,
     PickCheck,
+    PlacedTrap,
     PlaceItem,
     Pregen,
     QuestCondition,
@@ -178,6 +179,10 @@ class Problem(enum.StrEnum):
     PLACE_ITEM_FIND_INVALID = 'place_item_find_invalid'
     # 커버의 장소가 맵의 장소가 아니다(시작 장소, 길의 끝, 명소). 맵에 없는 장소에는 아무도 서지 못한다(#276)
     COVER_OFF_MAP = 'cover_off_map'
+    # 미리 놓인 덫(#806 ②)의 장소가 맵의 장소가 아니다. 아무도 그곳에 서지 못한다
+    TRAP_OFF_MAP = 'trap_off_map'
+    # 미리 놓인 덫(#806 ②)의 물건이 덫이 아니다(아이템 규칙에 trap 이 없다)
+    TRAP_NOT_TRAP = 'trap_not_trap'
     # 무작위 조우 표의 장소가 맵의 장소가 아니거나, 맵(시작 장소)이 없는데 조우 표가 있다(#283)
     WANDER_OFF_MAP = 'wander_off_map'
     # 시트를 적지 않은 몬스터를 가리키는 무작위 조우 표가 있다. 판에 들어가지 않는 몬스터라 숫자가 없다(#283)
@@ -633,7 +638,8 @@ def read_quest_rules(scenario: Scenario) -> list[QuestRule]:
 def item_references(scenario: Scenario) -> list[uuid.UUID]:
     """
     물건 항목을 가리키는 것 전부. 아이템 규칙, 시작 소지품, 프리젠마다의 소지품, 퀘스트마다의 보상,
-    몬스터와 NPC 마다 지닌 물건(장비와 소지품), 장소에 놓인 물건, 길의 자물쇠의 열쇠, 자물쇠 물건의 열쇠(#281).
+    몬스터와 NPC 마다 지닌 물건(장비와 소지품), 장소에 놓인 물건, 길의 자물쇠의 열쇠, 자물쇠 물건의 열쇠(#281),
+    미리 놓인 덫(#806 ②).
     """
     stacks = [ItemStack.model_validate(document) for document in scenario.starting_items]
     for document in scenario.pregens:
@@ -643,11 +649,12 @@ def item_references(scenario: Scenario) -> list[uuid.UUID]:
     sheets = [*read_monster_sheets(scenario), *read_npc_sheets(scenario)]
     carried = [line.entry_id for sheet in sheets for line in [*sheet.equipment, *sheet.inventory]]
     placed = [rule.entry_id for rule in read_place_items(scenario)]
+    trapped = [trap.entry_id for trap in read_traps(scenario)]
     item_rules = read_item_rules(scenario)
     rules = [rule.entry_id for rule in item_rules]
     routes = read_routes(scenario)
     keys = lock_keys(routes) + item_lock_keys(item_rules)
-    return rules + [stack.entry_id for stack in stacks] + carried + placed + keys
+    return rules + [stack.entry_id for stack in stacks] + carried + placed + keys + trapped
 
 
 def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None) -> list[Problem]:
@@ -1194,6 +1201,28 @@ def find_cover_problems(scenario: Scenario) -> list[Problem]:
     return []
 
 
+def read_traps(scenario: Scenario) -> list[PlacedTrap]:
+    """미리 놓인 덫들을 읽는다(#806 ②)."""
+    return [PlacedTrap.model_validate(document) for document in scenario.traps]
+
+
+def find_trap_problems(scenario: Scenario) -> list[Problem]:
+    """
+    미리 놓인 덫(#806 ②)에서 문제를 찾는다. 장소는 맵의 장소, 물건은 아이템 규칙에 덫을 적은 물건이어야 한다.
+
+    물건이 붙인 로어북의 물건 항목인지는 다른 물건들과 함께 본다(find_item_problems).
+    """
+    placed = read_traps(scenario)
+    on_map = set(map_places(scenario, read_routes(scenario)))
+    traps = {rule.entry_id for rule in read_item_rules(scenario) if rule.trap is not None}
+    problems = []
+    if any(trap.place_id not in on_map for trap in placed):
+        problems.append(Problem.TRAP_OFF_MAP)
+    if any(trap.entry_id not in traps for trap in placed):
+        problems.append(Problem.TRAP_NOT_TRAP)
+    return problems
+
+
 def read_wanders(scenario: Scenario) -> list[WanderTable]:
     """무작위 조우 표들을 읽는다."""
     return [WanderTable.model_validate(document) for document in scenario.wanders]
@@ -1302,6 +1331,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_map_problems(scenario, parts, ruleset))
     problems.extend(find_place_item_problems(scenario, ruleset))
     problems.extend(find_cover_problems(scenario))
+    problems.extend(find_trap_problems(scenario))
     problems.extend(find_wander_problems(scenario))
     problems.extend(find_happening_problems(scenario, parts))
     problems.extend(find_npc_place_problems(scenario, parts))

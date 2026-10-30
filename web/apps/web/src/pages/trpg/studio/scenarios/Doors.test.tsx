@@ -168,7 +168,7 @@ describe('길의 문 입력', () => {
 
   it('놓인 물건: 같은 물건은 같은 보이기로 한 줄, 보이기가 다르면 두 줄도 된다', () => {
     const line = { entryId: COIN, count: '1', visibility: 'open' as const, findAbility: '', findDifficulty: '' };
-    expect(placeHints({ landmark: false, cover: '', people: [], items: [line, line] })['item.1']).toContain('같은 물건');
-    expect(placeHints({ landmark: false, cover: '', people: [], items: [line, { ...line, visibility: 'hidden', findAbility: 'dex' }] })).toEqual({});
+    expect(placeHints({ landmark: false, cover: '', people: [], items: [line, line], traps: [] })['item.1']).toContain('같은 물건');
+    expect(placeHints({ landmark: false, cover: '', people: [], items: [line, { ...line, visibility: 'hidden', findAbility: 'dex' }], traps: [] })).toEqual({});
   });
 });

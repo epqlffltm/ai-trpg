@@ -65,6 +65,7 @@ from app.assets.models import (
     SCENARIO_MAX_QUEST_RULES,
     SCENARIO_MAX_ROUTES,
     SCENARIO_MAX_STARTING_ITEMS,
+    SCENARIO_MAX_TRAPS,
     SCENARIO_MAX_WANDERS,
     SCENARIO_OPENING_MAX_LENGTH,
     TABLE_MAX_PLAYERS,
@@ -1277,6 +1278,30 @@ def reject_duplicate_covers(rules: list[CoverRule]) -> list[CoverRule]:
 Covers = Annotated[list[CoverRule], Field(max_length=SCENARIO_MAX_COVERS), AfterValidator(reject_duplicate_covers)]
 
 
+class PlacedTrap(BaseModel):
+    """
+    미리 놓인 덫 하나(#806 ②). 그 장소(place_id)에 덫 물건(entry_id) 하나가 놓여 있다.
+
+    물건은 아이템 규칙에 덫(trap)을 적은 물건이어야 하고, 장소는 맵의 장소여야 한다(게시할 때 본다).
+    known 이면 처음부터 테이블이 아는 덫이다(경고 표지가 붙은 함정). 캐릭터가 밟지 않고, 해제할 수 있다.
+    아니면(기본) 숨긴 덫이다. 찾기 행동으로 찾는다. 한 장소에 여럿을 놓을 수 있다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    place_id: uuid.UUID
+    entry_id: uuid.UUID
+    known: bool = False
+
+    @field_serializer('place_id', 'entry_id')
+    def id_as_text(self, value: uuid.UUID) -> str:
+        """ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(value)
+
+
+PlacedTraps = Annotated[list[PlacedTrap], Field(max_length=SCENARIO_MAX_TRAPS)]
+
+
 class WanderMonster(BaseModel):
     """
     무작위 조우 표의 한 줄(#283). 붙인 도감의 몬스터 하나(monster_id)가 count 마리 나온다.
@@ -1598,6 +1623,8 @@ class ScenarioCreate(AssetCreate):
     place_items: PlaceItems = []
     # 장소마다의 커버(#276). 세이브 방식의 룰북에서 엄폐할 때 쓴다
     covers: Covers = []
+    # 미리 놓인 덫(#806 ②)
+    traps: PlacedTraps = []
     # 무작위 조우 표(#283). 길을 오거나 길게 쉬면 엔진이 굴린다
     wanders: Wanders = []
     happenings: Happenings = []
@@ -1621,7 +1648,7 @@ class ScenarioUpdate(AssetUpdate):
     null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-    quests, routes, landmarks, place_items, covers, wanders, happenings, npc_places, character_modes 는
+    quests, routes, landmarks, place_items, covers, traps, wanders, happenings, npc_places, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -1654,6 +1681,7 @@ class ScenarioUpdate(AssetUpdate):
     landmarks: Landmarks | None = None
     place_items: PlaceItems | None = None
     covers: Covers | None = None
+    traps: PlacedTraps | None = None
     wanders: Wanders | None = None
     happenings: Happenings | None = None
     npc_places: NpcPlaces | None = None
@@ -1717,6 +1745,7 @@ class ScenarioDetail(ScenarioSummary):
     landmarks: list[uuid.UUID]
     place_items: list[PlaceItem]
     covers: list[CoverRule]
+    traps: list[PlacedTrap]
     wanders: list[WanderTable]
     happenings: list[HappeningRule]
     npc_places: list[NpcPlace]

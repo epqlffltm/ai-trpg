@@ -467,6 +467,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'landmarks': [],
         'place_items': [],
         'covers': [],
+        'traps': [],
         'wanders': [],
         'happenings': [],
         'npc_places': [],

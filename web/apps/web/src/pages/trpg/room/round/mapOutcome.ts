@@ -86,10 +86,16 @@ export function moveLine(move: Move): string {
 
 type Trap = Move['traps'][number];
 
-/** 들어간 곳에서 터진 덫 하나(#806). "덫 올가미: 피함(눈 15, …)", "덫 올가미: 걸림(눈 3, …) · 렌 HP 7 → 4" */
+/**
+ * 들어간 곳에서 터진 덫 하나(#806). "덫 올가미: 피함(눈 15, …)", "덫 올가미: 걸림(눈 3, …) · 렌 HP 7 → 4".
+ * 업힌 사람도 걸렸으면(#806 ②) " · 업힌 미아도 걸림 · 미아 HP 0 → 0"
+ */
 function trapPart(trap: Trap): string {
   const line = `덫 ${trap.name}: ${trap.avoided ? '피함' : '걸림'}(${rollText(trap.avoid)})`;
-  return trap.effect ? `${line} · ${trap.effect.character_name} HP ${trap.effect.before} → ${trap.effect.after}` : line;
+  const hurt = trap.effect ? ` · ${trap.effect.character_name} HP ${trap.effect.before} → ${trap.effect.after}` : '';
+  const carried = trap.carried && !trap.avoided ? ` · 업힌 ${trap.carried.character_name}도 걸림` : '';
+  const carriedHurt = trap.carried?.effect ? ` · ${trap.carried.effect.character_name} HP ${trap.carried.effect.before} → ${trap.carried.effect.after}` : '';
+  return `${line}${hurt}${carried}${carriedHurt}`;
 }
 
 /** 문을 다룬 행동. "종탑 쪽 빗장: 열었습니다", "종탑 쪽 문: 따지 못했습니다(판정에 실패했습니다) · 눈 8, 보정 +1, 합 9 / 목표 15" */
