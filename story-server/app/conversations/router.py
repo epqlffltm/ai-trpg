@@ -9,10 +9,12 @@
     PUT  /api/v1/story/conversations/{id}/model   세션의 모델 바꾸기
     PUT  /api/v1/story/conversations/{id}/persona 세션의 페르소나 바꾸기(같은 것이면 새 설정으로)
     PUT  /api/v1/story/conversations/{id}/branch  다른 대안의 가지를 보기. 바뀐 세션을 돌려준다
+    DELETE /api/v1/story/conversations/{id}       세션 지우기(지운 시각만 적는다). 204
     PATCH /api/v1/story/messages/{id}             답 고치기(조각마다 글만). 고친 말을 돌려준다
 
 모든 주소가 로그인을 요구한다. 남의 세션은 404 다(403 이면 그 ID 가 있다는 것이 드러난다).
-쓰기(시작, 모델과 가지 바꾸기, 답 고치기)는 사람마다 요청 수를 센다(app/limits/). 넘으면 429 too_many_attempts 다.
+쓰기(시작과 지우기, 모델과 가지 바꾸기, 답 고치기)는 사람마다 요청 수를 센다(app/limits/).
+넘으면 429 too_many_attempts 다.
 """
 
 import uuid
@@ -370,6 +372,12 @@ async def choose_branch(
     """
     await service.choose_branch(session, viewer, conversation_id, data.message_id, now)
     return await read_conversation(conversation_id, viewer, session, prices, now)
+
+
+@router.delete('/{conversation_id}', status_code=status.HTTP_204_NO_CONTENT, dependencies=[WRITE_LIMIT])
+async def delete_conversation(conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session) -> None:
+    """세션을 지운다. 목록과 읽기에 더는 나오지 않는다. 없거나 남의 것이면 404 conversation_not_found 다."""
+    await service.delete_conversation(session, viewer, conversation_id)
 
 
 @message_router.patch('/{message_id}', response_model=MessageOut, status_code=status.HTTP_200_OK)

@@ -21,7 +21,7 @@ from app.records.models import EndingRecord, IllustrationUnlock
 
 
 async def delete_conversations_owned(session: AsyncSession, owner_id: uuid.UUID) -> None:
-    """그 사람의 세션을 모두 지운다."""
+    """그 사람의 세션을 모두 지운다. 지운 것으로 적어 둔 것(deleted_at)도 지운다."""
     await session.execute(delete(Conversation).where(Conversation.owner_id == owner_id))
 
 
