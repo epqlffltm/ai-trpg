@@ -4,7 +4,7 @@
 규칙은 [story 서버 설계](../docs/architecture/story.md)에 있다. 캐릭터 하나와의 1:1 대화는 chat 서버가 맡는다.
 둘이 함께 쓰는 것과 나눈 선은 [chat 서버 설계의 story-server 와 나눈 선](../docs/architecture/chat-server.md#story-server-와-나눈-선)에 있다.
 
-**지금은 세션, 말 보내기, 행동, 다시 생성과 멈추기, 가지 고르기, 답 고치기, 이어서 출력, 계정의 기록, 기록 내려받기, 요청 수 제한까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
+**지금은 세션, 말 보내기, 행동, 다시 생성과 멈추기, 가지 고르기, 답 고치기, 이어서 출력, 계정의 기록, 기록 내려받기, 답의 신고, 요청 수 제한까지다(#591).** 공용 코드 `shared/server-core` 위에 설정, 로그, 추적, 메트릭, 상태 확인, 토큰 검증, Alembic 이 있고,
 asset 서버에서 세계관의 판을 가져와 [세션](#세션)을 만들고 목록으로 보인다. 말을 보내면 장면의 인물들과 서술의 답을 [말 조각](#말-보내기)으로 흘려보낸다.
 [행동](#행동)(이동, 시간, 선택지, 고백, 건네기)은 엔진이 판정하고 이벤트와 엔딩이 열린다. 답은 [다시 쓰고 멈출 수 있고](#다시-생성과-멈추기),
 [대안의 가지를 고르고](#가지-고르기) [답을 고칠 수 있다](#답-고치기). 끊긴 답은 [이어 쓸 수 있다](#이어서-출력).
@@ -103,7 +103,7 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `STORY_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
 | `REDIS_URL` | 비어 있음(메모리) | [요청 수 제한](#요청-수-제한)을 세는 Redis(`redis://localhost:6379/3`). 비우면 서버 안의 메모리로 센다(서버가 하나일 때만 맞다). compose 는 DB 3 을 준다 |
 | `GENERATION_LIMIT`, `GENERATION_WINDOW_SECONDS` | `20`, `60` | 모델을 부르는 요청(말, 행동, 다시 생성, 이어서)을 한 사람이 이 시간(초) 안에 이만큼까지 |
-| `WRITE_LIMIT`, `WRITE_WINDOW_SECONDS` | `120`, `60` | 모델을 부르지 않는 쓰기(세션 시작과 지우기, 모델과 가지 바꾸기, 답 고치기)를 한 사람이 이 시간(초) 안에 이만큼까지 |
+| `WRITE_LIMIT`, `WRITE_WINDOW_SECONDS` | `120`, `60` | 모델을 부르지 않는 쓰기(세션 시작과 지우기, 모델과 가지 바꾸기, 답 고치기, 신고)를 한 사람이 이 시간(초) 안에 이만큼까지 |
 | `TRANSCRIPT_LIMIT`, `TRANSCRIPT_WINDOW_SECONDS` | `10`, `600` | [기록 내려받기](#기록-내려받기)를 한 사람이 이 시간(초) 안에 이만큼까지 |
 
 DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 함께 쓰는 칸은 공용 코드의 설정(`server_core.settings.CoreSettings`)에 있다.
@@ -133,6 +133,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | GET | `/api/v1/story/conversations/{id}` | 세션 하나(지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`, 화면이 쓰는 세계관의 칸 [`view`](#세션의-view), 가져온 페르소나 `persona`). 가져온 판의 문서는 싣지 않는다. 남의 것은 404 | access 토큰 |
 | DELETE | `/api/v1/story/conversations/{id}` | [세션](#세션) 지우기. 204. 지운 시각만 적는다. 없거나 남의 것이면 404 | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/branch` | [가지 고르기](#가지-고르기)(`{"message_id"}`). 바뀐 세션을 돌려준다 | access 토큰 |
+| POST | `/api/v1/story/messages/{id}/reports` | [모델의 답 신고](#신고). `{reason, description?}`. 201. 사람의 말과 행동 말은 422 `not_reportable`, 두 번째는 409 `already_reported` | access 토큰 |
 | PATCH | `/api/v1/story/messages/{id}` | [답 고치기](#답-고치기)(`{"segments": ["…"]}`). 고친 말을 돌려준다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/messages` | [말 보내기](#말-보내기)(`{"content", "edit_of"?}`). 바로 SSE 로 장면의 인물들과 서술의 답을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/actions` | [행동](#행동)(`{"kind", …}`). 엔진이 판정하고 바로 SSE 로 반응을 흘려보낸다 | access 토큰 |
@@ -394,11 +395,24 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
 - 파일의 이름은 세션의 제목이다(`Content-Disposition` 의 `filename*`). `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` 를 붙인다.
 - 한 사람이 10분에 10번까지다([요청 수 제한](#요청-수-제한)). 없는 세션의 요청도 센다.
 
+### 신고
+
+자기 세션의 모델의 답을 신고한다(chat 의 #678 과 같은 모양, `app/reports/`). 세계관을 숨기는 것은 asset 의 운영자 API 다.
+
+- **굳히기.** 세션은 그 사람만 보는 것이라 운영자가 읽지 않는다. 그래서 신고하는 순간 그 답과 앞의 말 여섯(그 답까지의 가지의 것),
+  세계관(asset 의 id, 판, 이름)과 모델을 신고에 굳힌다. 답의 글은 저장한 본문 그대로다(줄마다 `@mina:` 같은 말하는 사람의 표식).
+  그 뒤에 답을 고치거나 가지를 바꿔도 운영자가 보는 글은 신고한 때의 것이다.
+- **규칙.** 사유는 asset 의 신고와 같다(`spam`, `abuse`, `sexual`, `minor`, `illegal`, `other`, `other` 는 설명 필수, 설명은 500자까지).
+  모델의 답만이다(사람의 말과 서버가 쓴 행동 말은 422 `not_reportable`). 같은 답은 한 번만(409 `already_reported`).
+  볼 수 있는 세션의 말이 아니면(남의 것, 지운 세션, 볼 수 없는 등급) 404 `message_not_found` 다.
+- **지우기.** 세션을 지운 것으로 적어도 신고는 남는다. 세션의 행이 지워지면(탈퇴) 함께 지워진다. 신고에 든 것은 신고한 사람의 세션이라서다.
+- 운영자가 열린 신고를 보고 처리하는 API(감사 기록과 함께)와, 처리하면 신고한 사람에게 가는 알림은 다음 PR 에서 더한다.
+
 ### 요청 수 제한
 
 chat 의 것과 같다(`app/limits/`). 한 사람이 정해진 시간 안에 몇 번 했는가를 세고, 넘으면 429 로 막는다. 크레딧과 별개로 짧은 시간에 몰아 보내는 것을 늦춘다.
 
-- **무엇을 세나.** 모델을 부르는 요청(말 보내기, 행동, 다시 생성, 이어서 출력)과 모델을 부르지 않는 쓰기(세션 시작과 지우기, 모델과 가지 바꾸기, 답 고치기)를 따로 센다.
+- **무엇을 세나.** 모델을 부르는 요청(말 보내기, 행동, 다시 생성, 이어서 출력)과 모델을 부르지 않는 쓰기(세션 시작과 지우기, 모델과 가지 바꾸기, 답 고치기, 신고)를 따로 센다.
   [기록 내려받기](#기록-내려받기)는 따로 센다(10분에 10번). 다른 읽기와 멈추기는 세지 않는다. 모델을 부르는 주소는 라우터에 걸어(`app/turns/router.py`) 그 라우터에 더하는 주소도 저절로 센다.
 - **어떻게 세나.** 고정 구간이다(첫 시도에서 시작해 정한 초 뒤에 끝난다). Redis(DB 3, 키의 머리 `story:limit`)에 Lua 한 덩어리로 올리고 만료를 건다.
   사람의 번호는 해시해서 키에 넣는다. `REDIS_URL` 이 비면 서버 안의 메모리로 센다.
@@ -410,7 +424,7 @@ chat 의 것과 같다(`app/limits/`). 한 사람이 정해진 시간 안에 몇
 
 인증 서버가 계정을 비울 때 알린다(`POST /api/v1/story/service/users/{public_id}/withdrawal`, `app/withdrawal/`, chat 과 같다. [탈퇴 설계](../docs/architecture/withdrawal.md)).
 
-- 지우는 것: 세션(지운 것으로 적어 둔 것도)과 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본), 가져온 세계관의 판의 사본과 그 로어북의 벡터, 계정의 기록(본 엔딩, 연 일러스트).
+- 지우는 것: 세션(지운 것으로 적어 둔 것도)과 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본, 그 세션의 [신고](#신고)), 가져온 세계관의 판의 사본과 그 로어북의 벡터, 계정의 기록(본 엔딩, 연 일러스트).
 - 남기는 것: 청구 기록(`generations`). 세션과 말을 가리키는 칸만 비운다(공개 ID, 모델, 토큰 수, 원가, 청구 상태, 홀드의 이름표가 남는다).
 - 한 트랜잭션이고 멱등이다. 같은 알림이 다시 와도, 이 서버에 그 사람의 것이 없어도 200 `{"status": "processed"}` 다. 모르는 칸은 버린다.
 - 인증 서버의 서명(`AUTH_SERVER_SECRET`)이 아니면 401, 본문의 모양이 틀리면 422, 본문이 16KB 를 넘으면 서명을 보기 전에 413 이다.
@@ -547,6 +561,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `summaries` | 굴리는 요약. 요약한 마지막 말에 붙고(`message_id`), 부른 모델과 토큰, 원가를 적는다. 말이나 세션이 지워지면 함께 지워진다 |
 | `ending_records` | 계정의 본 엔딩. (`owner_id`, `world_source`, `ending_id`)마다 처음 본 시각과 세션. 세션이 지워지면 세션만 비운다 |
 | `illustration_unlocks` | 계정의 연 일러스트. (`owner_id`, `world_source`, `scene_kind`, `scene_id`)마다 연 때의 그림(`image_id`), 장면의 인물(`cast`), 처음 연 시각과 세션 |
+| `message_reports` | 모델의 답의 [신고](#신고)와 그때 굳힌 글(답과 앞의 말 여섯, 세계관과 판, 모델). (신고한 사람, 말)마다 하나. 열린 신고는 부분 색인으로 읽는다. 세션이 지워지면 함께 지워진다 |
 
 모델의 모듈을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 

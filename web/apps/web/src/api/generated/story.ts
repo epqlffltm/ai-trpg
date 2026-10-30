@@ -419,6 +419,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/messages/{message_id}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Message
+         * @description 모델의 답을 신고한다. 그 답과 앞의 말 몇 개를 신고에 굳혀 둔다(운영자는 이것만 본다).
+         *     없거나 남의 세션의 말이면 404, 사람의 말이나 행동 말이면 422, 이미 신고했으면 409 다.
+         */
+        post: operations["report_message_api_v1_story_messages__message_id__reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/models": {
         parameters: {
             query?: never;
@@ -1224,6 +1245,40 @@ export interface components {
          * @enum {string}
          */
         Rating: "all" | "adult";
+        /**
+         * ReportCreate
+         * @description 신고할 때 받는 값. 사유가 other 면 설명이 있어야 한다(asset 의 신고와 같다).
+         */
+        ReportCreate: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            reason: components["schemas"]["ReportReason"];
+        };
+        /**
+         * ReportCreated
+         * @description 접수한 신고.
+         */
+        ReportCreated: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /**
+         * ReportReason
+         * @description 신고의 사유. asset 의 신고와 같다. minor 는 운영자의 목록에서 가장 먼저 보인다.
+         * @enum {string}
+         */
+        ReportReason: "spam" | "abuse" | "sexual" | "minor" | "illegal" | "other";
         /**
          * SceneKind
          * @description 일러스트가 붙은 장면의 종류. 이벤트와 엔딩의 id 는 서로 겹칠 수 있어 종류로 가른다.
@@ -2152,6 +2207,41 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": unknown;
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    report_message_api_v1_story_messages__message_id__reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportCreated"];
                 };
             };
             /** @description 입력이 틀렸다 */
