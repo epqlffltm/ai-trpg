@@ -29,7 +29,12 @@ function playing(mySheet: Record<string, unknown> = {}, extra: Record<string, un
     ],
     map: {
       places: [
-        { entry_id: 'p1', name: '수도원 문', items: [{ entry_id: 'i2', name: '횃불', count: 1 }] },
+        {
+          entry_id: 'p1',
+          name: '수도원 문',
+          items: [{ entry_id: 'i2', name: '횃불', count: 1 }],
+          traps: [{ trap_id: 't1', entry_id: 'i9', name: '올가미' }],
+        },
         { entry_id: 'p2', name: '부엌', items: [] },
       ],
       routes: [{ from_place: 'p1', to_place: 'p2', travel_minutes: 5, two_way: true }],
@@ -99,6 +104,8 @@ describe('StatusPanel', () => {
     expect(status.getByText('진행 중 · 기한 2일째 06:00')).toBeInTheDocument();
     expect(status.getByText(/지금 있는 곳: 수도원 문/)).toBeInTheDocument();
     expect(within(status.getByRole('list', { name: '여기 놓인 것' })).getByText(/횃불 ×1/)).toBeInTheDocument();
+    // 찾아낸 덫(#806 ①-b)과 해제
+    expect(within(status.getByRole('list', { name: '찾아낸 덫' })).getByText(/올가미/)).toBeInTheDocument();
     expect(within(status.getByRole('list', { name: '갈 수 있는 곳' })).getByText('부엌')).toBeInTheDocument();
   });
 

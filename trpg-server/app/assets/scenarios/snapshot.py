@@ -274,11 +274,15 @@ class TrapCheckSnapshot(BaseModel):
 
 
 class ItemTrapSnapshot(BaseModel):
-    """덫(#806). 들어온 쪽이 피하는 판정, 찾은 덫을 거두는 해제 판정, 걸렸을 때의 효과들이다."""
+    """
+    덫(#806). 들어온 쪽이 피하는 판정, 찾은 덫을 거두는 해제 판정, 걸렸을 때의 효과들이다.
+    찾기(find)는 숨긴 덫을 찾는 판정이다(#806 ①-b). 없으면 피하는 판정으로 찾는다.
+    """
 
     avoid: TrapCheckSnapshot
     disarm: TrapCheckSnapshot
     effects: TrapEffects
+    find: TrapCheckSnapshot | None = None
 
 
 class ItemLockSnapshot(BaseModel):

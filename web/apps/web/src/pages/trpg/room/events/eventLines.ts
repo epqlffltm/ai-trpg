@@ -192,9 +192,11 @@ function roundOpenedText(payload: Payload): string {
 function searchedText(payload: Payload, ctx: EventContext, event: TableEvent): string {
   const ways = listSize(payload, 'found');
   const items = listSize(payload, 'items');
+  const traps = listSize(payload, 'traps');
   const where = placeOf(payload, 'place') ?? '이곳';
-  if (ways + items === 0) return `${who(payload, ctx, event)}: ${where}에서 찾은 것이 없습니다.`;
-  return `${who(payload, ctx, event)}: ${where}에서 길 ${ways}개, 물건 ${items}가지를 찾았습니다.`;
+  if (ways + items + traps === 0) return `${who(payload, ctx, event)}: ${where}에서 찾은 것이 없습니다.`;
+  const trapPart = traps > 0 ? `, 덫 ${traps}개` : '';
+  return `${who(payload, ctx, event)}: ${where}에서 길 ${ways}개, 물건 ${items}가지${trapPart}를 찾았습니다.`;
 }
 
 function stealText(payload: Payload, ctx: EventContext, event: TableEvent): string {
@@ -421,6 +423,12 @@ const DESCRIBE: Record<EventType, Describe> = {
     return `${who(p, ctx, e)}: ${text(p, 'name') ?? '덫'} 숨겨 놓음${place ? `(${place})` : ''}`;
   },
   trap_sprung: (p, ctx, e) => `${who(p, ctx, e)}: ${placeOf(p, 'place') ?? '이곳'}에서 덫(${text(p, 'name') ?? '?'}) ${flag(p, 'avoided') ? '피함' : '걸림'}`,
+  trap_disarmed: (p, ctx, e) => {
+    const name = text(p, 'name') ?? '덫';
+    if (flag(p, 'done')) return `${who(p, ctx, e)}: ${name} 해제해 거둠`;
+    if (flag(p, 'sprung')) return `${who(p, ctx, e)}: ${name} 해제하다 터뜨림`;
+    return `${who(p, ctx, e)}: ${name} 해제 못 함`;
+  },
   steal_attempted: (p, ctx, e) => stealText(p, ctx, e),
   item_traded: (p, ctx, e) => tradeText(p, ctx, e),
   money_paid: (p, ctx, e) => paidText(p, ctx, e),

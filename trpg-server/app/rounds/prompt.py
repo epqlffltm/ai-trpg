@@ -229,7 +229,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 (→ 엘프 화염 피해 2 (HP 8/10, 저항)), (→ 수로 쥐 화염 피해 8 (쓰러짐, 약점))
 #   narration-79: 덫(#806). 덫을 놓은 줄((덫 놓기: 올가미을(를) 숨겨 놓았다))과,
 #                 들어간 곳에서 터진 덫의 줄((덫: 올가미. 민첩 판정에 실패해 걸렸다))을 적는다
-PROMPT_VERSION = 'narration-79'
+#   narration-80: 덫 찾기와 해제(#806 ①-b). 찾기의 줄에 찾아낸 덫을 붙이고((찾기: 덫을 찾아냈다. 올가미)),
+#                 해제의 줄을 적는다((해제: 올가미. 민첩 판정에 성공해 거둬 챙겼다))
+PROMPT_VERSION = 'narration-80'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

@@ -37,6 +37,7 @@ from app.rounds.narrator import (
     ClockNote,
     CoverNote,
     DeathSaveNote,
+    DisarmNote,
     DoorNote,
     DownedStrikeNote,
     DropNote,
@@ -81,6 +82,7 @@ from app.rounds.narrator import (
 from app.rounds.secret_names import secret_names
 from app.rounds.state import (
     cover_of,
+    disarm_of,
     door_of,
     has_outcome,
     item_throw_of,
@@ -457,6 +459,21 @@ def to_search(declaration: Declaration | None) -> SearchNote | None:
         place=place_name(place),
         found=[other_end(route, place) for route in search['found']],
         items=[ItemNote(name=one['name'], count=one['count']) for one in search.get('items', []) if one['count']],
+        traps=[trap['name'] for trap in search.get('traps', [])],
+    )
+
+
+def to_disarm(declaration: Declaration | None, ruleset: Ruleset | None = None) -> DisarmNote | None:
+    """선언에 적힌 덫 해제의 결과를 서술자에게 줄 모양으로 바꾼다(#806 ①-b). 해제하는 행동이 아니면 None."""
+    disarm = disarm_of(declaration)
+    if disarm is None:
+        return None
+    return DisarmNote(
+        name=disarm['name'],
+        check=cross_ability_name(ruleset, disarm['check']),
+        done=disarm['done'],
+        sprung=disarm['sprung'],
+        reason=disarm['reason'],
     )
 
 

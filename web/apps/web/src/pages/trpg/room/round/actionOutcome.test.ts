@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Declaration, Ruleset } from '../../../../api/types';
 import { RULES } from '../../../../test/tableFixtures';
-import { giveLine, itemUseLine, lootLine, putDownLine, restLine, stealLine, takeLine, trapSetLine, waitLine } from './actionOutcome';
+import { disarmLine, giveLine, itemUseLine, lootLine, putDownLine, restLine, stealLine, takeLine, trapSetLine, waitLine } from './actionOutcome';
 import { outcomeLine } from './roundView';
 
 const rules = RULES as unknown as Ruleset;
@@ -19,6 +19,17 @@ describe('행동의 결과의 까닭', () => {
     expect(takeLine({ name: '약초', count: 1, taken: 1, reason: null } as never)).toBe('약초 ×1 주웠습니다');
     expect(putDownLine({ put: false, name: '약초', count: 1, reason: 'not_held' } as never)).toBe('내려놓지 못했습니다(내려놓을 만큼 가지고 있지 않았습니다)');
     expect(trapSetLine({ set: true, name: '올가미', remaining: 1, reason: null } as never)).toBe('올가미 숨겨 놓음(남은 1개)');
+    const check = { total: 20, target: 20 };
+    expect(disarmLine({ name: '올가미', check, done: true, kept: 1 } as never)).toBe('올가미 거둠(판정 20 / 20)');
+    expect(disarmLine({ name: '올가미', check, done: true, kept: 0 } as never)).toBe('올가미 거둠(판정 20 / 20) · 더 가질 수 없어 그 자리에 둠');
+    const effect = { character_name: '렌', before: 10, after: 8 };
+    expect(disarmLine({ name: '올가미', check: { total: 15, target: 20 }, done: false, sprung: true, effect } as never)).toBe(
+      '올가미 해제 실패(판정 15 / 20) · 덫이 터짐 · 렌 HP 10 → 8',
+    );
+    expect(disarmLine({ name: '올가미', check: { total: 16, target: 20 }, done: false, sprung: false, effect: null } as never)).toBe(
+      '올가미 해제 실패(판정 16 / 20)',
+    );
+    expect(disarmLine({ name: null, check: null, done: false, reason: 'gone' } as never)).toBe('해제하지 못했습니다(앞사람이 거뒀거나 덫이 이미 터졌습니다)');
     expect(trapSetLine({ set: false, name: '올가미', remaining: 0, reason: 'not_held' } as never)).toBe('덫을 놓지 못했습니다(그만큼 가지고 있지 않았습니다)');
   });
 

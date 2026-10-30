@@ -75,7 +75,7 @@ def to_charge(charge: NarrationCharge) -> ChargeOut:
 
 
 # 결과 중 바뀐 수치를 싣는 것들(#804). 쉬기, 물건을 쓰기, 던지기, 기술을 쓰기(#805)다
-SHIFTING_OUTCOMES = ('rest', 'item_use', 'item_throw', 'skill_use')
+SHIFTING_OUTCOMES = ('rest', 'item_use', 'item_throw', 'skill_use', 'disarm')
 # 그 안에서 바뀐 수치의 목록인 칸들. 맞춘 수치(resources)와 기술의 비용(cost, #805)이다
 SHIFT_LISTS = ('resources', 'cost')
 
@@ -263,6 +263,7 @@ TARGET_ERRORS = {
     'carried': 'action.item 이 그 몬스터나 인물이 지금 지닌 물건이 아닙니다.',
     'carry': 'action.carry 가 같은 장소에 쓰러져 있는(죽지 않은) 다른 사람이 아닙니다.',
     'device': 'action.device 가 그 길의 문에 있는 장치(lock, bar)가 아니거나, 둘 다 있는 문인데 적지 않았습니다.',
+    'trap': 'action.trap 이 지금 장소에 놓인, 찾아낸 덫이 아닙니다.',
 }
 
 

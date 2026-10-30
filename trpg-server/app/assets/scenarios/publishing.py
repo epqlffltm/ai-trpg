@@ -689,10 +689,10 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
 
 
 def trap_invalid(trap: ItemTrap | None, ruleset: Ruleset) -> bool:
-    """덫(#806)의 두 판정과 효과가 룰북의 규칙에 맞지 않는가. 덫이 아니면 아니다."""
+    """덫(#806)의 판정들(피하기, 해제, 적었으면 찾기)과 효과가 룰북의 규칙에 맞지 않는가. 덫이 아니면 아니다."""
     if trap is None:
         return False
-    checks = (trap.avoid, trap.disarm)
+    checks = (trap.avoid, trap.disarm, trap.find)
     unknown = any(cross_invalid(check, ruleset) for check in checks)
     return unknown or not effects_fit(ruleset, trap.effects)
 

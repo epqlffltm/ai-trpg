@@ -141,6 +141,7 @@ async def test_a_trap_is_saved_published_and_shown(
         'avoid': {'ability': 'dex', 'difficulty': None},
         'disarm': {'ability': 'dex', 'difficulty': 'hard'},
         'effects': [{'kind': 'damage', 'magnitude': 'light', 'nature': None}],
+        'find': None,
     }
     assert potion['trap'] is None
     table = await start(client, me, friend, snares, session)
@@ -426,7 +427,7 @@ def test_a_dead_character_springs_no_more(monkeypatch: pytest.MonkeyPatch):
     member = SimpleNamespace(sheet=SimpleNamespace(place_id=uuid.uuid4()))
     armed = ['first', 'second', 'third']
     deaths = iter([False, True])
-    monkeypatch.setattr(trap_actions.traps, 'armed_at', lambda table, place: armed)
+    monkeypatch.setattr(trap_actions.traps, 'hidden_at', lambda table, place: armed)
     monkeypatch.setattr(trap_actions.sheets, 'is_dead', lambda who: next(deaths))
     monkeypatch.setattr(trap_actions, 'spring_one', lambda judging, who, trap: {'trap': trap})
 
@@ -470,7 +471,7 @@ def test_the_narration_lines_of_traps():
     assert to_trap({'name': '올가미', 'avoid': {'ability': 'zzz'}, 'avoided': True}, None) == TrapNote(
         name='올가미', check='zzz', avoided=True
     )
-    assert prompt.PROMPT_VERSION == 'narration-79'
+    assert prompt.PROMPT_VERSION == 'narration-80'
 
 
 async def test_the_narrator_hears_the_trap(

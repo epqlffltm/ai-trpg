@@ -387,11 +387,13 @@ class ItemTrapOut(BaseModel):
     """
     덫(#806). 행동 '덫 놓기'(set_trap)로 지금 장소에 숨겨 놓는다. 그 장소에 들어오는 쪽이 피하는 판정(avoid)을 굴리고,
     실패하면 효과(effects)가 든다. 해제(disarm)는 찾은 덫을 거두는 판정이다.
+    찾기(find)는 찾기 행동이 숨긴 덫을 찾는 판정이다(#806 ①-b). 비었으면 피하는 판정으로 찾는다.
     """
 
     avoid: TrapCheckOut
     disarm: TrapCheckOut
     effects: list[Effect]
+    find: TrapCheckOut | None = None
 
 
 class CatalogItemOut(BaseModel):
@@ -496,6 +498,17 @@ class PlaceItemOut(BaseModel):
     count: int
 
 
+class KnownTrapOut(BaseModel):
+    """
+    찾아낸 덫 하나(#806 ①-b). 찾기 행동으로 찾으면 테이블 모두가 안다. 아는 덫은 캐릭터가 밟지 않는다.
+    해제하기(disarm)로 거둔다. 이름은 덫 물건의 이름이다.
+    """
+
+    trap_id: uuid.UUID
+    entry_id: uuid.UUID
+    name: str
+
+
 class PlaceOut(BaseModel):
     """
     아는 장소 하나. 이름은 판의 로어북 장소 항목의 이름이다.
@@ -504,13 +517,15 @@ class PlaceOut(BaseModel):
     items 는 그곳에 보이게 놓인 물건들이다. 누군가 서 본 장소만 싣는다. 숨긴 물건은 싣지 않는다
     (app/tables/place_items.py). 캐릭터가 내려놓은 것(put_down)도 여기 보인다. 줍기(take)로 가져간다.
     cover 는 그 장소의 숨을 곳이 얼마나 좋은지다(#276). 세이브 방식의 판에서 엄폐하면 이 값으로 커버 세이브를 받는다.
-    커버가 없는 곳이면 0 이다.
+    커버가 없는 곳이면 0 이다. traps 는 찾아낸 덫들이다(#806 ①-b).
     """
 
     entry_id: uuid.UUID
     name: str
     items: list[PlaceItemOut] = []
     cover: int = 0
+    # 이 테이블이 찾아낸, 아직 놓여 있는 덫들(#806 ①-b). 놓은 순서다. 찾지 못한 덫은 싣지 않는다
+    traps: list[KnownTrapOut] = []
 
 
 class RouteCrossOut(BaseModel):

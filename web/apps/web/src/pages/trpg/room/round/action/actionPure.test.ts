@@ -6,6 +6,7 @@ import type { SceneCast, TableDetail, TableMember } from '../../../../../api/typ
 import { ME, member, OTHER, RULES, sheet, tableDetail } from '../../../../../test/tableFixtures';
 import { actionHint, draftFromAction, emptyActionDraft, toAction, type ActionDraft } from './actionDraft';
 import { throwTerms } from './ItemActionFields';
+import { actionLabel } from '../roundView';
 import {
   aidItems,
   availableKinds,
@@ -108,6 +109,20 @@ describe('availableKinds', () => {
     expect(actionHint(draft({ kind: 'set_trap', item: 'i7' }), withTrap)).toBeNull();
     expect(toAction(draft({ kind: 'set_trap', item: 'i7', count: 3 }), withTrap)).toEqual({ kind: 'set_trap', item: 'i7' });
     expect(draftFromAction(RULES as unknown as TableDetail['rules'], { kind: 'set_trap', item: 'i7' })).toMatchObject({ kind: 'set_trap', item: 'i7' });
+  });
+
+  it('덫 해제(#806 ①-b)는 선 곳에 찾아낸 덫이 있을 때', () => {
+    const found = context();
+    const gate = (found.table.map as unknown as { places: Record<string, unknown>[] }).places[0] as Record<string, unknown>;
+    gate.traps = [{ trap_id: 't1', entry_id: 'i9', name: '올가미' }];
+    expect(availableKinds(found)).toContain('disarm');
+    expect(availableKinds(context())).not.toContain('disarm');
+    expect(actionHint(draft({ kind: 'disarm' }), found)).toBe('해제할 덫을 골라 주세요.');
+    expect(actionHint(draft({ kind: 'disarm', trap: 't1' }), found)).toBeNull();
+    expect(toAction(draft({ kind: 'disarm', trap: 't1', item: 'i2' }), found)).toEqual({ kind: 'disarm', trap: 't1' });
+    expect(draftFromAction(RULES as unknown as TableDetail['rules'], { kind: 'disarm', trap: 't1' })).toMatchObject({ kind: 'disarm', trap: 't1' });
+    expect(actionLabel({ kind: 'disarm', trap: 't1' }, found.table)).toBe('덫 해제 · 올가미');
+    expect(actionLabel({ kind: 'disarm', trap: 'gone' }, found.table)).toBe('덫 해제');
   });
 
   it('쓰러졌거나 죽었으면 행동을 붙이지 못한다', () => {

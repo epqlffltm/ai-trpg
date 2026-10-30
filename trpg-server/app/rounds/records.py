@@ -27,6 +27,7 @@ from app.rounds.models import Declaration, Round
 from app.rounds.place_item_actions import Source
 from app.rounds.rests import Cause, Recovered
 from app.rounds.state import (
+    disarm_of,
     door_of,
     find_declaration,
     has_outcome,
@@ -444,13 +445,37 @@ def record_trap_sprung(session: AsyncSession, table: GameTable, move: dict, spru
         **{key: sprung[key] for key in ('entry_id', 'name', 'set_by', 'avoid', 'avoided')},
     }
     fired = recorder.record(session, table, EventType.TRAP_SPRUNG, payload=payload, cause=cause)
-    if sprung['effect'] is not None:
-        changed = record_hp_change(session, table, sprung['effect'], cause=fired)
-        record_injury(session, table, sprung['effect'].get('injury_roll'), victim, cause=changed)
-    for one in sprung['injured']:
+    record_trap_effects(session, table, sprung, victim, fired)
+
+
+def record_trap_effects(session: AsyncSession, table: GameTable, result: dict, victim: dict, cause: TableEvent) -> None:
+    """
+    덫의 효과가 든 것을 이벤트로 적는다(#806). HP 의 변화(와 부상 표의 부상), 입힌 부상, 맞춘 수치를 cause 에 잇는다.
+
+    덫이 터진 것(trap_sprung)과 해제에 크게 실패한 것(trap_disarmed)이 함께 쓴다. 효과가 없었으면 적지 않는다.
+    """
+    if result['effect'] is not None:
+        changed = record_hp_change(session, table, result['effect'], cause=cause)
+        record_injury(session, table, result['effect'].get('injury_roll'), victim, cause=changed)
+    for one in result['injured']:
         if one['injury'] is not None:
-            record_injury(session, table, one, victim, cause=fired)
-    record_resource_shifts(session, table, sprung['resources'], victim, ResourceSource.TRAP, fired)
+            record_injury(session, table, one, victim, cause=cause)
+    record_resource_shifts(session, table, result['resources'], victim, ResourceSource.TRAP, cause)
+
+
+def record_disarm(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
+    """
+    덫을 해제한 결과를 이벤트로 적는다(trap_disarmed, #806 ①-b). 그 행동의 이벤트(cause)에 잇는다.
+    행한 사람을 적지 않는다.
+
+    굴리지 못했어도 적는다(내려놓기와 같다). 크게 실패해 터졌으면 그 뒤에 덫의 효과를 잇는다.
+    """
+    disarm = disarm_of(declaration)
+    keys = ('character_name', 'place', 'trap_id', 'entry_id', 'name', 'done', 'reason', 'check', 'sprung', 'kept')
+    payload = {'round': cause.payload['round'], **{key: disarm[key] for key in keys}}
+    disarmed = recorder.record(session, table, EventType.TRAP_DISARMED, payload=payload, cause=cause)
+    victim = {'user_id': disarm['user_id'], 'character_name': disarm['character_name']}
+    record_trap_effects(session, table, disarm, victim, disarmed)
 
 
 def record_cross(session: AsyncSession, table: GameTable, character_name: str, move: dict, cause: TableEvent) -> None:
@@ -834,6 +859,8 @@ def record_declaration(
         record_put_down(session, table, declaration, cause=acted)
     elif trap_set_of(declaration) is not None:
         record_trap_set(session, table, declaration, cause=acted)
+    elif disarm_of(declaration) is not None:
+        record_disarm(session, table, declaration, cause=acted)
     elif steal_of(declaration) is not None:
         record_steal(session, table, declaration, cause=acted)
     elif loot_of(declaration) is not None:

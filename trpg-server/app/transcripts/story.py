@@ -328,6 +328,17 @@ def trap_sprung(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'덫: {who(payload)} · {text_of(payload.get("name"))} {numbers} → {result}')]
 
 
+def trap_disarmed(payload: dict, labels: Labels) -> list[Block]:
+    """덫 해제(#806 ①-b). 판정의 눈과 거뒀는가, 크게 실패해 터졌는가."""
+    name = text_of(payload.get('name'))
+    check = payload.get('check')
+    if not isinstance(check, dict):
+        return [Note(f'해제: {who(payload)} · {name} 굴리지 못함')]
+    numbers = f'{check.get("roll")} + {check.get("modifier")} = {check.get("total")}, 목표 {check.get("target")}'
+    result = '거둠' if payload.get('done') else '터짐' if payload.get('sprung') else '실패'
+    return [Note(f'해제: {who(payload)} · {name} {numbers} → {result}')]
+
+
 def steal_attempted(payload: dict, labels: Labels) -> list[Block]:
     """훔치기. 누구에게서 무엇을, 판정의 눈과 성패, 들켰는가."""
     victim = text_of(payload.get('npc_name')) or text_of(payload.get('monster_name'))
@@ -358,14 +369,15 @@ def happening_occurred(payload: dict, labels: Labels) -> list[Block]:
 
 
 def place_searched(payload: dict, labels: Labels) -> list[Block]:
-    """찾기. 찾은 길과 물건."""
+    """찾기. 찾은 길과 물건과 덫(#806 ①-b)."""
     routes = [
         f'{place_name(route.get("from_place"))} → {place_name(route.get("to_place"))}'
         for route in payload.get('found') or []
         if isinstance(route, dict)
     ]
     items = [text_of(item.get('name')) for item in payload.get('items') or [] if isinstance(item, dict)]
-    found = ', '.join([*(f'길 {route}' for route in routes), *items]) or '찾은 것 없음'
+    traps = [f'덫 {text_of(trap.get("name"))}' for trap in payload.get('traps') or [] if isinstance(trap, dict)]
+    found = ', '.join([*(f'길 {route}' for route in routes), *items, *traps]) or '찾은 것 없음'
     return [Note(f'찾기: {who(payload)} · {place_name(payload.get("place"))} → {found}')]
 
 
@@ -473,6 +485,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.ITEM_PUT_DOWN: item_put_down,
     EventType.TRAP_SET: trap_set,
     EventType.TRAP_SPRUNG: trap_sprung,
+    EventType.TRAP_DISARMED: trap_disarmed,
     EventType.ITEM_TRADED: item_traded,
     EventType.EQUIPMENT_CHANGED: equipment_changed,
     EventType.MONEY_PAID: money_paid,

@@ -551,13 +551,14 @@ class SearchNote:
     숨긴 길과 숨긴 물건을 찾은 결과(app/rounds/map_actions.py, app/rounds/place_item_actions.py).
 
     found 는 찾은 길이 이어지는 장소들의 이름, items 는 찾아서 가진 물건들(이름과 가진 개수)이다.
-    못 찾았으면 비어 있다.
+    traps 는 찾아낸 덫들의 이름이다(#806 ①-b). 이제 일행 모두가 알고 밟지 않는다. 못 찾았으면 비어 있다.
     숨긴 것이 없는 곳과, 있는데 못 찾은 곳의 결과가 같다. 굴린 판정은 적혀 있지 않다.
     """
 
     place: str | None
     found: list[str] = field(default_factory=list)
     items: list[ItemNote] = field(default_factory=list)
+    traps: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -599,6 +600,25 @@ class TrapSetNote:
 
     name: str
     set: bool
+
+
+@dataclass(frozen=True)
+class DisarmNote:
+    """
+    찾아낸 덫을 해제한 결과(app/rounds/trap_actions.py, #806 ①-b). 엔진이 정한 것이다.
+
+    name 은 덫 물건의 이름, check 는 해제 판정의 능력치의 이름이다(굴리지 못했으면 None).
+    done 이 참이면 거둬 챙겼다. 거짓이고 sprung 이 참이면 크게 실패해 덫이 해제하던 사람에게 터졌다.
+    둘 다 거짓이면 덫은 그대로 놓여 있다.
+    reason 은 굴리지 못한 까닭이다(gone: 이미 없었다, elsewhere: 그 자리에 없었다).
+    얼마나 다쳤는지와 입은 부상은 HP 와 부상의 줄이 말한다.
+    """
+
+    name: str | None
+    check: str | None
+    done: bool
+    sprung: bool = False
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -753,6 +773,8 @@ class Move:
     put_down: PutDownNote | None = None
     # 덫을 놓는 행동이면 그 결과(#806). 판정이 아니라 verdict 와 함께 있지 않다
     trap_set: TrapSetNote | None = None
+    # 찾아낸 덫을 해제하는 행동이면 그 결과(#806 ①-b). 판정이 아니라 verdict 와 함께 있지 않다
+    disarm: DisarmNote | None = None
     # 몬스터나 NPC 가 지닌 물건을 훔치는 행동이면 그 결과. verdict 와 함께 있지 않다(판정은 엔진이 따로 굴렸다)
     steal: StealNote | None = None
     # 쓰러졌거나 죽은 대상에게서 빼앗는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다

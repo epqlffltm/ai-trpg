@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/room/round/action/ItemActionFields.tsx
 // 물건을 다루는 행동의 칸. 쓰기(소모품, 효과가 있으면 받을 쪽: 나, 동료, 인물, 몬스터. #800), 건네기(받을 사람과 개수), 내려놓기(개수),
-// 줍기(내가 선 곳에 놓인 것과 개수), 덫 놓기(#806, 지닌 덫 하나), 훔치기와 빼앗기(대상과 그 대상이 지닌 물건),
+// 줍기(내가 선 곳에 놓인 것과 개수), 덫 놓기(#806, 지닌 덫 하나), 덫 해제(#806 ①-b, 선 곳의 찾아낸 덫 하나), 훔치기와 빼앗기(대상과 그 대상이 지닌 물건),
 // 던지기(#277, #801. 지닌 물건 아무것이나와 맞힐 대상. 판정은 물건이나 룰북에 적혀 있어 보이기만 한다).
 // 해로운 물건을 동료에게 쓰고 던지는 것(#803)은 해칠 수 있는 동료만 고르고, 장난이면 그렇게 알린다.
 
@@ -12,6 +12,7 @@ import {
   consumables,
   heldCount,
   heldItems,
+  knownTraps,
   isPrankToward,
   itemDamages,
   itemHarms,
@@ -136,6 +137,16 @@ export function SetTrapFields({ draft, ctx, onChange }: Props) {
     <div className="ability-grid">
       <ChoiceSelect label="놓을 덫" value={draft.item} choices={traps} empty="고르기" onChange={(item) => onChange({ item })} />
       <p className="hint">지금 있는 곳에 숨겨 놓습니다. 이곳에 들어오는 쪽이 피하는 판정을 굴립니다. 나와 일행도 걸립니다.</p>
+    </div>
+  );
+}
+
+export function DisarmFields({ draft, ctx, onChange }: Props) {
+  const traps = knownTraps(ctx).map((trap) => ({ value: trap.trap_id, label: trap.name }));
+  return (
+    <div className="ability-grid">
+      <ChoiceSelect label="해제할 덫" value={draft.trap} choices={traps} empty="고르기" onChange={(trap) => onChange({ trap })} />
+      <p className="hint">덫의 해제 판정을 굴립니다. 성공하면 거둬 챙기고, 크게 실패하면(목표보다 5 이상 모자라면) 덫이 터집니다.</p>
     </div>
   );
 }
