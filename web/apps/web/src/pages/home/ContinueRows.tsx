@@ -30,9 +30,9 @@ function MyTablesRow() {
       title="TRPG 이어하기"
       status={listStatus(query, items.length)}
       action={
-        <>
+        <span>
           <Link to="/trpg/tables/past">떠난 테이블</Link> · <Link to="/trpg">더 보기</Link>
-        </>
+        </span>
       }
       emptyText={
         <>

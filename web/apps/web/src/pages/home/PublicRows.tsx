@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/home/PublicRows.tsx
 // 공개된 것. TRPG 의 시나리오, chat 의 캐릭터, story 의 세계관을 서비스마다 한 줄씩. 로그인하지 않아도 보인다(#530).
+// 캐릭터와 세계관은 대표 그림 칸이다(탐색 화면과 같은 칸).
 
 import { ListSection } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -9,6 +10,7 @@ import { genreLabel } from '../trpg/labels';
 import { ratingBadge } from './labels';
 import { listStatus } from './listStatus';
 import { StoryWorldCard } from '../story/StoryWorldCard';
+import { CharacterCard } from '../chat/browse/CharacterCard';
 import { publicCharactersQuery, publicScenariosQuery, publicWorldsQuery } from './queries';
 
 export function PublicRows({ signedIn }: { signedIn: boolean }) {
@@ -60,12 +62,7 @@ function PublicCharactersRow({ signedIn }: { signedIn: boolean }) {
     >
       <ul className="item-grid">
         {items.map((character) => (
-          <ItemCard
-            key={character.id}
-            to={`/chat/characters/${character.id}`}
-            title={character.name}
-            meta={[ratingBadge(character.rating), ...character.tags]}
-          />
+          <CharacterCard key={character.id} character={character} />
         ))}
       </ul>
     </ListSection>

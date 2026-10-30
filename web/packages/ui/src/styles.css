@@ -178,9 +178,32 @@ a {
   gap: var(--ui-gap);
 }
 
+/* 제목 줄의 길(더 보기 등)은 밑줄 없이 굵게 */
+.ui-list-section__head a {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ui-list-section__head a:hover {
+  text-decoration: underline;
+}
+
 .ui-list-section__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 1.15rem;
   margin: 0 0 12px;
+}
+
+/* 제목 앞의 강조색 막대(Stitch 시안) */
+.ui-list-section__title::before {
+  content: '';
+  flex: none;
+  width: 4px;
+  height: 1em;
+  border-radius: 999px;
+  background: var(--ui-accent);
 }
 
 .ui-list-section__state {
