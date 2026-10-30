@@ -76,6 +76,7 @@ from app.turns.service import (
     SessionEndedError,
     TurnDeclinedError,
 )
+from app.withdrawal import router as withdrawal
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
 API_PREFIX = '/api/v1/story'
@@ -239,6 +240,8 @@ def create_app(
     app.include_router(records.router, prefix=API_PREFIX)
     # 기억 메모(세션마다의 짧은 글, 모델에 늘 간다)
     app.include_router(memory.router, prefix=API_PREFIX)
+    # 인증 서버의 탈퇴 알림. 다른 서버만 부르는 주소(/service/)라 프록시가 밖에서 받지 않는다
+    app.include_router(withdrawal.router, prefix=API_PREFIX)
 
     # 세션의 예외를 응답으로 바꾼다(app/conversations/router.py)
     app.add_exception_handler(ConversationNotFoundError, conversations.handle_conversation_not_found)

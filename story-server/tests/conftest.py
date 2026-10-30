@@ -29,6 +29,8 @@ from tests.assets import FakeAsset
 from tests.cleaning import clear_tables
 
 TEST_SCHEMA = 'story_test'
+# 인증 서버가 탈퇴를 알릴 때 서명하는 비밀(테스트용)
+TEST_AUTH_SECRET = 'test-auth-secret-0123456789abcdef'
 
 # 존재하지 않는 주소. 테스트는 실제 인증 서버에 요청을 보내지 않는다(server_core/testing/tokens.py 의 가짜가 받는다)
 TEST_JWKS_URL = 'http://auth.test/api/v1/auth/jwks'
@@ -57,6 +59,8 @@ def make_test_settings(**overrides) -> Settings:
         # 결제 서버를 부르지 않는다(받지 않는 것). 값을 보는 테스트는 가격 목록을 바꿔 끼운다(tests/prices.py)
         'billing_url': '',
         'billing_secret': '',
+        # 인증 서버의 탈퇴 알림을 받는다. 서명은 테스트가 이 값으로 한다(tests/test_withdrawal.py)
+        'auth_server_secret': TEST_AUTH_SECRET,
         # 요청 수를 세지 않는다. 개발자의 .env 에 Redis 가 있어도 쓰지 않는다.
         # 제한을 보는 테스트만 켠다(tests/test_limits.py)
         'limits_enabled': False,

@@ -27,7 +27,7 @@ EXAMPLES = {
     '# ALERT_TELEGRAM_BOT_TOKEN=\n# ALERT_TELEGRAM_CHAT_ID=\n',
     'auth-server/.env': 'SECRET_KEY=\nDATABASE_URL=postgres://auth:여기에_비밀번호@127.0.0.1:5432/trpg\n'
     '# SMTP_PASSWORD=\n# BILLING_SECRET=\n# ASSET_SECRET=\n# GAME_SECRET=\n# NOTIFICATION_SECRET=\n# BOARD_SECRET=\n'
-    '# CHAT_SECRET=\n'
+    '# CHAT_SECRET=\n# STORY_SECRET=\n'
     '# PASSWORD_RESET_URL=http://localhost:5173/reset-password\n',
     'trpg-server/.env': 'DATABASE_URL=postgresql+asyncpg://game:여기에비밀번호@127.0.0.1:5432/trpg\n'
     '# SIGNAL_SECRET=\n# AI_LOG_HMAC_KEY=\n# BILLING_SECRET=\n# NOTIFICATION_SECRET=\n# OPENAI_API_KEY=\n'
@@ -45,7 +45,8 @@ EXAMPLES = {
     '# ASSET_URL=http://127.0.0.1:8006\n# ASSET_SECRET=\n# BILLING_URL=http://127.0.0.1:8003\n# BILLING_SECRET=\n'
     '# AUTH_SERVER_SECRET=\n',
     'story-server/.env': 'DATABASE_URL=postgresql+asyncpg://story:여기에비밀번호@127.0.0.1:5432/trpg\n'
-    'ASSET_URL=http://127.0.0.1:8006\n# ASSET_SECRET=\n# BILLING_URL=http://127.0.0.1:8003\n# BILLING_SECRET=\n',
+    'ASSET_URL=http://127.0.0.1:8006\n# ASSET_SECRET=\n# BILLING_URL=http://127.0.0.1:8003\n# BILLING_SECRET=\n'
+    '# AUTH_SERVER_SECRET=\n',
 }
 
 
@@ -140,6 +141,8 @@ class FillEnvTests(unittest.TestCase):
         self.assertEqual(auth['NOTIFICATION_SECRET'], notification['AUTH_SERVER_SECRET'])
         self.assertEqual(auth['BOARD_SECRET'], board['AUTH_SERVER_SECRET'])
         self.assertEqual(auth['CHAT_SECRET'], chat['AUTH_SERVER_SECRET'])
+        self.assertEqual(auth['STORY_SECRET'], story['AUTH_SERVER_SECRET'])
+        self.assertNotEqual(auth['CHAT_SECRET'], auth['STORY_SECRET'])
 
     def test_both_sides_of_a_pair_are_uncommented(self):
         # compose 가 주소(BILLING_URL, NOTIFICATION_URL)를 주므로 비밀이 막혀 있으면 서버가 뜨지 않는다
@@ -164,6 +167,8 @@ class FillEnvTests(unittest.TestCase):
             ('story-server/.env', 'ASSET_SECRET'),
             ('story-server/.env', 'BILLING_SECRET'),
             ('billing-server/.env', 'STORY_SERVER_SECRET'),
+            ('auth-server/.env', 'STORY_SECRET'),
+            ('story-server/.env', 'AUTH_SERVER_SECRET'),
         ):
             env = self.env(relative)
             self.assertNotIn(f'#{key}', env, relative)

@@ -85,6 +85,7 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `ASSET_SECRET` | 비어 있음 | asset 서버에 보내는 요청에 서명하는 비밀. `asset-server/.env` 의 `STORY_SERVER_SECRET` 과 같은 값. `ASSET_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
 | `ASSET_TIMEOUT_SECONDS` | `5` | asset 서버를 한 번 부르는 시간의 상한(초, 30까지). 세션을 만드는 사람이 기다린다 |
 | `BILLING_URL` | 비어 있음(받지 않음) | 결제 서버의 주소(`http://127.0.0.1:8003`). 모델의 값을 가격 목록에서 읽는다([모델 목록](#모델-목록)). 비우면 모델은 값 없이 보인다 |
+| `AUTH_SERVER_SECRET` | 비어 있음 | 인증 서버가 [탈퇴](#탈퇴)를 알리는 요청의 서명 비밀. `auth-server/.env` 의 `STORY_SECRET` 과 같은 값. 적으면 32자 이상이어야 뜬다. 비우면 탈퇴 알림을 받지 않는다(401). 비밀값이다 |
 | `BILLING_SECRET` | 비어 있음 | 결제 서버에 보내는 요청에 서명하는 비밀. `billing-server/.env` 의 `STORY_SERVER_SECRET` 과 같은 값. `BILLING_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
 | `BILLING_TIMEOUT_SECONDS` | `5` | 결제 서버를 한 번 부르는 시간의 상한(초, 10 까지). chat 서버와 같다 |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `ZAI_API_KEY`, `DEEPINFRA_API_KEY` | 비어 있음 | 모델 목록의 창구마다 키. 비우면 그 창구의 모델로 말을 보내면 503 `provider_unavailable` 이다. 공급자가 내주는 값이라 `tools/fill_env.py` 가 만들지 않는다. 비밀값이다 |
@@ -135,6 +136,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | POST | `/api/v1/story/conversations/{id}/actions` | [행동](#행동)(`{"kind", …}`). 엔진이 판정하고 바로 SSE 로 반응을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/messages/{id}/regenerate` | [다시 생성](#다시-생성과-멈추기). 그 말에 다시 답한다. 바로 SSE 로 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/messages/{id}/continue` | [이어서 출력](#이어서-출력). 끊긴 답에 이어 쓴다. 바로 SSE 로 흘려보낸다 | access 토큰 |
+| POST | `/api/v1/story/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴) 알림. 인증 서버만 부른다(프록시가 밖에서 받지 않는다) | 인증 서버의 서명 |
 | POST | `/api/v1/story/generations/{id}/stop` | [멈추기](#다시-생성과-멈추기). 도는 답을 멈추고 받은 만큼 저장한다. 204, 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
 | GET | `/api/v1/story/endings` | 그 세계관에서 내가 본 엔딩들(`?world_id=`, 처음 본 차례). [계정의 기록](#계정의-기록) | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}/notes` | [기억 메모](#기억-메모)들(먼저 쓴 것부터) | access 토큰 |
@@ -380,6 +382,16 @@ chat 의 것과 같다(`app/limits/`). 한 사람이 정해진 시간 안에 몇
 - **막히면.** 429 `too_many_attempts`, 본문의 `retry_after` 와 `Retry-After` 에 기다릴 초를 싣는다. 몇 번까지인지는 알리지 않는다.
 - **Redis 에 닿지 못하면** 막지 않고 경고(`limits.unavailable`)만 남긴다. 이야기를 막아서 잃는 것이 더 크다.
 - 같은 코드가 trpg, chat, story 세 곳에 있다. server-core 로 뽑는 것은 따로 한다(server-core 에 Redis 의존이 붙어 모든 서버의 잠금 파일이 바뀐다).
+
+### 탈퇴
+
+인증 서버가 계정을 비울 때 알린다(`POST /api/v1/story/service/users/{public_id}/withdrawal`, `app/withdrawal/`, chat 과 같다. [탈퇴 설계](../docs/architecture/withdrawal.md)).
+
+- 지우는 것: 세션과 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본), 가져온 세계관의 판의 사본과 그 로어북의 벡터, 계정의 기록(본 엔딩, 연 일러스트).
+- 남기는 것: 청구 기록(`generations`). 세션과 말을 가리키는 칸만 비운다(공개 ID, 모델, 토큰 수, 원가, 청구 상태, 홀드의 이름표가 남는다).
+- 한 트랜잭션이고 멱등이다. 같은 알림이 다시 와도, 이 서버에 그 사람의 것이 없어도 200 `{"status": "processed"}` 다. 모르는 칸은 버린다.
+- 인증 서버의 서명(`AUTH_SERVER_SECRET`)이 아니면 401, 본문의 모양이 틀리면 422, 본문이 16KB 를 넘으면 서명을 보기 전에 413 이다.
+  사용자의 토큰은 없고 요청 수 제한도 걸지 않는다. 프록시는 `/api/v1/story/service/` 를 밖에서 받지 않는다(404).
 
 ### 토큰 검증
 

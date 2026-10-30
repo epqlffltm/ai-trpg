@@ -415,6 +415,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/service/users/{public_id}/withdrawal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive Withdrawal
+         * @description 탈퇴한 사람의 세션과 판의 사본, 계정의 기록을 지운다. 청구 기록은 세션과 끊어 남긴다.
+         */
+        post: operations["receive_withdrawal_api_v1_story_service_users__public_id__withdrawal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1300,6 +1320,18 @@ export interface components {
          */
         Tier: "basic" | "standard" | "premium";
         /**
+         * WithdrawalResult
+         * @description 답. 지운 것이 없어도(이미 지웠다, 이 서버에 그 사람의 것이 없다) 같다. 인증 서버는 이것을 보고 그만 보낸다.
+         */
+        WithdrawalResult: {
+            /**
+             * Status
+             * @default processed
+             * @constant
+             */
+            status: "processed";
+        };
+        /**
          * WorldSummary
          * @description 목록에 싣는 세계관. id 는 asset 서버의 세계관 id 이고 version 은 이 세션이 쓰는 판의 번호다.
          */
@@ -2055,6 +2087,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelList"];
+                };
+            };
+        };
+    };
+    receive_withdrawal_api_v1_story_service_users__public_id__withdrawal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WithdrawalResult"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };

@@ -55,6 +55,9 @@ class Settings(CoreSettings):
     # 결제 서버에 보내는 요청에 서명하는 비밀. 결제 서버의 STORY_SERVER_SECRET 과 같은 값이어야 한다.
     # 32자 이상. 비밀값이다. 로그와 오류에 싣지 않는다
     billing_secret: SecretStr = SecretStr('')
+    # 인증 서버가 탈퇴를 알리는 요청의 서명 비밀(app/withdrawal/). 인증 서버의 STORY_SECRET 과 같은 값이다.
+    # 비우면 탈퇴 알림을 받지 않는다(401). 인증 서버는 받을 때까지 다시 보낸다
+    auth_server_secret: SecretStr = SecretStr('')
 
     # 결제 서버를 한 번 부르는 시간의 상한(초). 말을 기다리는 사람이 있으므로 짧게 둔다(chat 과 같다)
     billing_timeout_seconds: float = Field(default=5.0, gt=0, le=10)
@@ -144,6 +147,18 @@ class Settings(CoreSettings):
         """
         if self.billing_url.strip() and len(self.billing_secret.get_secret_value()) < MIN_SECRET_LENGTH:
             raise ValueError(f'BILLING_URL 을 적었으면 BILLING_SECRET 을 {MIN_SECRET_LENGTH}자 이상 적어야 합니다')
+        return self
+
+    @model_validator(mode='after')
+    def require_a_long_auth_server_secret(self) -> Self:
+        """
+        적은 인증 서버의 비밀이 짧으면 뜨지 않는다. 받기 시작한 뒤에 모든 탈퇴 알림이 401 인 것보다 낫다.
+
+        마이그레이션(compose 의 story-migrate)은 받지 않으므로 이 값을 비운다.
+        """
+        secret = self.auth_server_secret.get_secret_value()
+        if secret and len(secret) < MIN_SECRET_LENGTH:
+            raise ValueError(f'AUTH_SERVER_SECRET 은 {MIN_SECRET_LENGTH}자 이상이어야 합니다')
         return self
 
 
