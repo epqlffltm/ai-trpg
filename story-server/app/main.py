@@ -63,6 +63,8 @@ from app.lore.setup import build_embedder
 from app.memory import router as memory
 from app.memory.service import NoteNotFoundError, NotesFullError
 from app.memory.summarizer import Summarizer
+from app.operators import router as operators
+from app.operators.service import AlreadyHandledError, ReportNotFoundError
 from app.records import router as records
 from app.reports import router as reports
 from app.reports.service import AlreadyReportedError, NotReportableError
@@ -247,6 +249,8 @@ def create_app(
     app.include_router(memory.router, prefix=API_PREFIX)
     # 모델의 답의 신고(답과 앞의 말을 굳혀 둔다)
     app.include_router(reports.router, prefix=API_PREFIX)
+    # 운영자 API(신고를 보고 처리한다. 운영자가 아니면 404)
+    app.include_router(operators.router, prefix=API_PREFIX)
     # 인증 서버의 탈퇴 알림. 다른 서버만 부르는 주소(/service/)라 프록시가 밖에서 받지 않는다
     app.include_router(withdrawal.router, prefix=API_PREFIX)
 
@@ -264,6 +268,8 @@ def create_app(
     app.add_exception_handler(NotesFullError, memory.handle_notes_full)
     app.add_exception_handler(NotReportableError, reports.handle_not_reportable)
     app.add_exception_handler(AlreadyReportedError, reports.handle_already_reported)
+    app.add_exception_handler(ReportNotFoundError, operators.handle_report_not_found)
+    app.add_exception_handler(AlreadyHandledError, operators.handle_already_handled)
     # 요청 수를 넘었다(app/limits/responses.py)
     app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
     # 말 보내기의 예외(app/turns/router.py)

@@ -94,6 +94,16 @@
 - 성인 등급의 확인을 받지 않는다. 판정은 게임 서버처럼 함수 한 곳이다.
 - [감사 기록](#감사-기록)을 같은 모양으로 남긴다.
 
+### story 서버
+
+| 무엇 | 어디서 | 구현 |
+| --- | --- | --- |
+| 신고된 모델의 답과 신고 때 굳힌 앞의 말(여섯)을 본다. 사유 필수, 볼 때마다 `operator_reads` | `GET /api/v1/story/admin/message-reports/{id}?reason=` | 했다(#591) |
+| 신고를 처리한다(`operator_actions`). 세계관을 숨기는 API 는 아직 없다(asset 의 숨기기는 캐릭터만) | `PUT /api/v1/story/admin/message-reports/{id}/outcome` | 했다(#591) |
+
+- chat 과 같은 모양이다. 세션은 운영자가 열지 않고, 신고에 굳힌 글만 본다([story 서버의 신고](../../story-server/README.md#신고)).
+- 처리하면 신고한 사람에게 가는 알림은 아직 없다.
+
 ### 결제와 인증
 
 - 결제: 지금 운영 작업은 명령(`cmd/prices`, `cmd/pricereviews`, `cmd/orders`, `cmd/grants`)이다. 관리 서버가 생기면 관리자용 주소로 연다([services.md](services.md)).

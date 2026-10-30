@@ -2,6 +2,66 @@
 // docs/api/story.openapi.json 에서 만든 타입. 손으로 고치지 않는다(npm run gen:api).
 
 export interface paths {
+    "/api/v1/story/admin/message-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Reports
+         * @description 열린 신고의 목록. minor 가 먼저, 그다음 오래된 것부터. 세션의 글은 싣지 않는다.
+         */
+        get: operations["list_reports_api_v1_story_admin_message_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/story/admin/message-reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Report
+         * @description 신고 하나와 굳힌 세션의 글. 볼 때마다 감사 기록에 남는다(사유가 필수다). 없으면 404 다.
+         */
+        get: operations["read_report_api_v1_story_admin_message_reports__report_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/story/admin/message-reports/{report_id}/outcome": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Handle Report
+         * @description 신고를 처리한다. 없으면 404, 이미 처리했으면 409 다.
+         */
+        put: operations["handle_report_api_v1_story_admin_message_reports__report_id__outcome_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/conversations": {
         parameters: {
             query?: never;
@@ -626,6 +686,16 @@ export interface components {
             kind: "confess";
         };
         /**
+         * ContextMessageOut
+         * @description 신고에 굳힌 앞의 말 하나. role 은 user, assistant, action 이다.
+         */
+        ContextMessageOut: {
+            /** Content */
+            content: string;
+            /** Role */
+            role: string;
+        };
+        /**
          * ConversationCreate
          * @description 세션을 시작할 때 받는 값. 세계관을 고른다. 그 세계관의 마지막 판을 가져와 고정한다.
          *
@@ -1089,6 +1159,15 @@ export interface components {
             text: string;
         };
         /**
+         * OutcomeInput
+         * @description 신고의 처리. reason 은 감사 기록의 사유다. 처리는 기록일 뿐 세계관을 숨기지 않는다.
+         */
+        OutcomeInput: {
+            outcome: components["schemas"]["ReportOutcome"];
+            /** Reason */
+            reason: string;
+        };
+        /**
          * PassTimeAction
          * @description 다음 시간대로.
          */
@@ -1274,11 +1353,92 @@ export interface components {
             id: string;
         };
         /**
+         * ReportDetailOut
+         * @description 신고 하나와 굳힌 글. 볼 때마다 감사 기록에 남는다.
+         */
+        ReportDetailOut: {
+            /** Content */
+            content: string;
+            /** Context */
+            context: components["schemas"]["ContextMessageOut"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Handled At */
+            handled_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Model Slug */
+            model_slug: string | null;
+            outcome: components["schemas"]["ReportOutcome"] | null;
+            reason: components["schemas"]["ReportReason"];
+            /**
+             * World Id
+             * Format: uuid
+             */
+            world_id: string;
+            /** World Name */
+            world_name: string;
+            /** World Version */
+            world_version: number;
+        };
+        /**
+         * ReportOutcome
+         * @description 처리의 결과. 받아들였다, 받아들이지 않았다. 처리는 기록일 뿐 세계관을 숨기지 않는다.
+         * @enum {string}
+         */
+        ReportOutcome: "actioned" | "dismissed";
+        /**
+         * ReportPage
+         * @description 열린 신고의 한 쪽과 전체 수.
+         */
+        ReportPage: {
+            /** Items */
+            items: components["schemas"]["ReportSummaryOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
          * ReportReason
          * @description 신고의 사유. asset 의 신고와 같다. minor 는 운영자의 목록에서 가장 먼저 보인다.
          * @enum {string}
          */
         ReportReason: "spam" | "abuse" | "sexual" | "minor" | "illegal" | "other";
+        /**
+         * ReportSummaryOut
+         * @description 열린 신고의 한 줄. 세션의 글은 싣지 않는다(열어 볼 때 감사 기록과 함께 준다). 신고한 사람의 id 도 없다.
+         */
+        ReportSummaryOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Model Slug */
+            model_slug: string | null;
+            reason: components["schemas"]["ReportReason"];
+            /**
+             * World Id
+             * Format: uuid
+             */
+            world_id: string;
+            /** World Name */
+            world_name: string;
+            /** World Version */
+            world_version: number;
+        };
         /**
          * SceneKind
          * @description 일러스트가 붙은 장면의 종류. 이벤트와 엔딩의 id 는 서로 겹칠 수 있어 종류로 가른다.
@@ -1478,6 +1638,104 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_reports_api_v1_story_admin_message_reports_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportPage"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_report_api_v1_story_admin_message_reports__report_id__get: {
+        parameters: {
+            query: {
+                reason: string;
+            };
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportDetailOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    handle_report_api_v1_story_admin_message_reports__report_id__outcome_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutcomeInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     list_conversations_api_v1_story_conversations_get: {
         parameters: {
             query?: {

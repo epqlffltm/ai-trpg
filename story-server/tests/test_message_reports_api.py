@@ -22,18 +22,15 @@ from server_core.testing.tokens import SigningKey
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.main import API_PREFIX
 from app.reports.models import CONTEXT_MESSAGES, MessageReport
 from app.withdrawal.service import erase_user
 from tests.assets import FakeAsset
-from tests.models import FakeRouter, ScriptedProvider
-from tests.turns import CONVERSATIONS_URL, ME, bearer, start_with_luna, turn_on_luna
+from tests.reporting import ANSWER, MESSAGES_URL, messages, report, talk
+from tests.turns import CONVERSATIONS_URL, ME, bearer
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
-MESSAGES_URL = f'{API_PREFIX}/messages'
 THEM = uuid.UUID('99999999-2222-4333-8444-555555555555')
-ANSWER = '@narration: 바람이 분다.\n@mina: 위험한 답.'
 
 
 @pytest.fixture
@@ -46,22 +43,6 @@ def theirs(signing_key: SigningKey) -> dict[str, str]:
     return bearer(signing_key, THEM)
 
 
-async def say(client: AsyncClient, app: FastAPI, headers: dict, conversation: dict, content: str) -> None:
-    url = f'{CONVERSATIONS_URL}/{conversation["id"]}/messages'
-    response = await client.post(url, json={'content': content}, headers=headers)
-    assert response.status_code == status.HTTP_200_OK, response.text
-    await asyncio.gather(*list(app.state.turns))
-
-
-async def messages(client: AsyncClient, headers: dict, conversation: dict) -> list[dict]:
-    return (await client.get(f'{CONVERSATIONS_URL}/{conversation["id"]}', headers=headers)).json()['messages']
-
-
-async def report(client: AsyncClient, headers: dict, message: dict, reason: str = 'minor', description: str = ''):
-    body = {'reason': reason, 'description': description}
-    return await client.post(f'{MESSAGES_URL}/{message["id"]}/reports', json=body, headers=headers)
-
-
 async def reports(session: AsyncSession) -> int:
     return await session.scalar(select(func.count()).select_from(MessageReport))
 
@@ -69,12 +50,7 @@ async def reports(session: AsyncSession) -> int:
 @pytest.fixture
 async def talked(clean_tables: None, client: AsyncClient, app: FastAPI, session: AsyncSession, asset: FakeAsset, mine):
     """말을 넷 주고받은 세션. 마지막 말은 모델의 답이다."""
-    app.state.model_router = FakeRouter(ScriptedProvider(pieces=[ANSWER]))
-    await turn_on_luna(session)
-    conversation = await start_with_luna(client, asset, mine)
-    for number in range(4):
-        await say(client, app, mine, conversation, f'말 {number}')
-    return conversation
+    return await talk(client, app, session, asset, mine)
 
 
 async def test_an_answer_is_reported_with_its_context(
