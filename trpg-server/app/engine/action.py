@@ -108,6 +108,8 @@ class ActionKind(enum.StrEnum):
     FORCE = 'force'
     # 지금 장소에 닿은 길의 부서진 문을 판에 적힌 판정으로 고친다(#281)
     REPAIR = 'repair'
+    # 가진 덫 물건 하나를 지금 장소에 숨겨 놓는다(#806). 그 장소에 들어오는 쪽이 피하는 판정을 굴린다
+    SET_TRAP = 'set_trap'
     # 지금 장소에 닿은 길의 문의 자물쇠를 가진 자물쇠 물건으로 바꿔 단다. 옛 열쇠로는 더 열지 못한다(#281)
     REPLACE = 'replace'
     # 아는 기술이나 주문 하나를 쓴다. 비용을 내고 대상에게 그 효과들이 든다(#805)
@@ -716,6 +718,20 @@ class CoverAction(BaseModel):
     kind: Literal[ActionKind.COVER]
 
 
+class SetTrapAction(BaseModel):
+    """
+    가진 덫 물건(item) 하나를 지금 서 있는 장소에 숨겨 놓는 행동(#806, app/rounds/trap_actions.py). 판정이 없다.
+
+    덫은 숨긴 채 남는다. 그 장소에 들어오는 쪽(놓은 사람과 일행도)이 피하는 판정을 굴리고, 실패하면 덫의 효과가 든다.
+    피하든 못 피하든 덫은 터진다. 덫인 물건은 판의 아이템 규칙에 덫(trap)을 적은 것이다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.SET_TRAP]
+    item: uuid.UUID
+
+
 AnyAction = (
     CheckAction
     | TreatAction
@@ -742,6 +758,7 @@ AnyAction = (
     | ReplaceAction
     | ThrowAction
     | SkillAction
+    | SetTrapAction
 )
 
 # 선언에 붙는 행동. kind 로 종류를 가른다

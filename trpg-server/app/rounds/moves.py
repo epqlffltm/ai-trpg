@@ -142,6 +142,7 @@ def build_moves(
                 door=narration_request.to_door(declaration, snapshot.rulebook.rules if snapshot else None),
                 take=narration_request.to_take(declaration),
                 put_down=narration_request.to_put_down(declaration),
+                trap_set=narration_request.to_trap_set(declaration),
                 steal=narration_request.to_steal(declaration),
                 loot=narration_request.to_loot(declaration),
                 trade=narration_request.to_trade(declaration, currency),

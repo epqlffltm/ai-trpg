@@ -1061,6 +1061,16 @@
               }
             ]
           },
+          "trap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemTrapOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "ward": {
             "anyOf": [
               {
@@ -2316,6 +2326,7 @@
                     "rest": "#/components/schemas/RestAction",
                     "search": "#/components/schemas/SearchAction",
                     "sell": "#/components/schemas/SellAction",
+                    "set_trap": "#/components/schemas/SetTrapAction",
                     "skill": "#/components/schemas/SkillAction",
                     "steal": "#/components/schemas/StealAction",
                     "take": "#/components/schemas/TakeAction",
@@ -2402,6 +2413,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/SkillAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SetTrapAction"
                   }
                 ]
               },
@@ -2460,6 +2474,9 @@
               },
               {
                 "$ref": "#/components/schemas/PutDownOutcome"
+              },
+              {
+                "$ref": "#/components/schemas/TrapSetOutcome"
               },
               {
                 "$ref": "#/components/schemas/StealOutcome"
@@ -2536,6 +2553,7 @@
                     "rest": "#/components/schemas/RestAction",
                     "search": "#/components/schemas/SearchAction",
                     "sell": "#/components/schemas/SellAction",
+                    "set_trap": "#/components/schemas/SetTrapAction",
                     "skill": "#/components/schemas/SkillAction",
                     "steal": "#/components/schemas/StealAction",
                     "take": "#/components/schemas/TakeAction",
@@ -2622,6 +2640,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/SkillAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SetTrapAction"
                   }
                 ]
               },
@@ -3577,6 +3598,8 @@
           "item_thrown",
           "aid_used",
           "item_put_down",
+          "trap_set",
+          "trap_sprung",
           "equipment_changed",
           "item_traded",
           "money_paid",
@@ -4982,7 +5005,7 @@
       },
       "ItemRule-Input": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\naids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면\n판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.\n예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.\nresistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.\nnature 는 무기로 친 피해의 성질이다(#886 ③, 화염 검, 축복받은 망치). 무기에만 적는다.\n성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\naids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면\n판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.\n예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.\nresistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.\nnature 는 무기로 친 피해의 성질이다(#886 ③, 화염 검, 축복받은 망치). 무기에만 적는다.\ntrap 은 이 물건이 덫일 때의 그 덫이다(#806, 곰덫, 독침 함정). 장비와 소모품 모두 적는다.\n성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).",
         "properties": {
           "aids": {
             "default": [],
@@ -5166,6 +5189,16 @@
               }
             ]
           },
+          "trap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemTrap"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "ward": {
             "anyOf": [
               {
@@ -5188,7 +5221,7 @@
       },
       "ItemRule-Output": {
         "additionalProperties": false,
-        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\naids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면\n판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.\n예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.\nresistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.\nnature 는 무기로 친 피해의 성질이다(#886 ③, 화염 검, 축복받은 망치). 무기에만 적는다.\n성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).",
+        "description": "아이템 규칙 하나. 붙인 로어북의 물건 항목 하나(entry_id)가 엔진에서 무엇인지 정한다.\n\n규칙이 없는 물건 항목은 장비(gear)이고 노말이다. 소모품만 효과 목록(effects)을 적을 수 있다(#800).\n효과는 쓰면 대상에게 일어나는 일들이다(회복, 풀기, 피해, 부상, app/engine/item_effects.py). 차례대로 실행한다.\n등급과 부상이 룰북에 있는지는 게시할 때 본다. 예전의 heals(회복의 양)와 cures(푸는 부상)는 효과가 됐다.\nrarity 는 물건의 등급이다(노말, 레어, 유니크, 에픽, 레전드). 높을수록 훔치기 어렵다.\nprice 는 상인이 파는 값이다(#278). 사 줄 때는 화폐의 백분율(currency.sell_percent)을 곱한다.\n비우면 사고팔 수 없는 물건이다. 화폐가 없는 시나리오에는 값을 적지 못한다(게시의 currency_missing).\nslots 는 착용할 때 들어갈 수 있는 룰북의 칸들, slot_count 는 그중 몇 칸을 함께 차지하는가다(#276).\n두 손 검은 주손과 보조손을 함께(2), 단검은 둘 중 하나(1)다. slots 를 비우면 착용하지 않는 물건이다.\n장비에만 적는다. 칸이 룰북에 있는지는 게시할 때 본다(item_slot_invalid).\nattack 은 무기의 공격 보정이다. 이 물건을 착용하고 공격할 때 판정에 더한다(#276).\ndefense 는 차지한 칸(부위)의 방어, guard 는 모든 부위의 방어다(방패). 착용하면 공격을 막는다.\n어떻게 막는지는 룰북의 방어 규칙(armor.mode)이 정한다. 셋 다 착용하는 물건에만 적는다.\nap 는 무기의 관통력이다. 관통하면 방어구로는 막지 못한다. ward 는 불굴 세이브의 값이다(부적, 역장).\n세이브 방식에서 관통을 무시하고 막는다. 여러 개를 착용하면 가장 큰 것을 쓴다.\nlock 은 이 물건이 문에 다는 새 자물쇠일 때의 그 자물쇠다(#281). 장비에만 적는다.\nthrow 는 던지는 판정이다(#277). 장비에도 적을 수 있다(#801, 투척 도끼). 적지 않으면 룰북의 맞히는 판정으로 던진다.\n행동 '던지기'로 같은 장소의 몬스터나 인물에게 던지고, 맞으면 그 물건의 효과가 든다.\naids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 치료, 따기, 고치기, 부수기, 넘기에 붙여 쓰면\n판정에 보정을 더하고, 굴린 뒤 정한 대로 없어진다(늘, 실패하면, 안 없어짐). 장비와 소모품 모두 적는다.\n예전의 치료 보정(treat_bonus)은 치료의 거들기(늘 없어짐)가 됐다.\nresistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, 화염 저항의 망토). 착용하는 물건에만 적는다.\nnature 는 무기로 친 피해의 성질이다(#886 ③, 화염 검, 축복받은 망치). 무기에만 적는다.\ntrap 은 이 물건이 덫일 때의 그 덫이다(#806, 곰덫, 독침 함정). 장비와 소모품 모두 적는다.\n성질이 룰북의 것인지는 게시할 때 본다(nature_invalid).",
         "properties": {
           "aids": {
             "default": [],
@@ -5365,6 +5398,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ItemThrow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemTrap"
               },
               {
                 "type": "null"
@@ -5550,6 +5593,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ItemThrowSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemTrapSnapshot"
               },
               {
                 "type": "null"
@@ -5746,6 +5799,148 @@
           "ability"
         ],
         "title": "ItemThrowSnapshot",
+        "type": "object"
+      },
+      "ItemTrap": {
+        "additionalProperties": false,
+        "description": "덫(#806). 이 물건을 지금 장소에 숨겨 놓을 수 있다(행동 set_trap). 놓으면 소지품에서 하나 빠진다.\n\n그 장소에 들어오는 쪽은 피하는 판정(avoid)을 굴린다. 실패하면 효과(effects)가 든다. 피하든 못 피하든 덫은 터진다.\n효과는 피해, 부상, 수치의 맞추기다(소모품의 효과와 같은 모양). 해제(disarm)는 찾은 덫을 거두는 판정이다.\n등급과 부상과 수치와 성질이 룰북에 있는지는 게시할 때 본다(item_trap_invalid).",
+        "properties": {
+          "avoid": {
+            "$ref": "#/components/schemas/TrapCheck"
+          },
+          "disarm": {
+            "$ref": "#/components/schemas/TrapCheck"
+          },
+          "effects": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "adjust": "#/components/schemas/AdjustEffect",
+                  "damage": "#/components/schemas/DamageEffect",
+                  "injure": "#/components/schemas/InjureEffect"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/DamageEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/InjureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/AdjustEffect"
+                }
+              ]
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Effects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "avoid",
+          "disarm",
+          "effects"
+        ],
+        "title": "ItemTrap",
+        "type": "object"
+      },
+      "ItemTrapOut": {
+        "description": "덫(#806). 행동 '덫 놓기'(set_trap)로 지금 장소에 숨겨 놓는다. 그 장소에 들어오는 쪽이 피하는 판정(avoid)을 굴리고,\n실패하면 효과(effects)가 든다. 해제(disarm)는 찾은 덫을 거두는 판정이다.",
+        "properties": {
+          "avoid": {
+            "$ref": "#/components/schemas/TrapCheckOut"
+          },
+          "disarm": {
+            "$ref": "#/components/schemas/TrapCheckOut"
+          },
+          "effects": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "adjust": "#/components/schemas/AdjustEffect",
+                  "cure": "#/components/schemas/CureEffect",
+                  "damage": "#/components/schemas/DamageEffect",
+                  "heal": "#/components/schemas/HealEffect",
+                  "injure": "#/components/schemas/InjureEffect"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/HealEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/CureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/DamageEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/InjureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/AdjustEffect"
+                }
+              ]
+            },
+            "title": "Effects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "avoid",
+          "disarm",
+          "effects"
+        ],
+        "title": "ItemTrapOut",
+        "type": "object"
+      },
+      "ItemTrapSnapshot": {
+        "description": "덫(#806). 들어온 쪽이 피하는 판정, 찾은 덫을 거두는 해제 판정, 걸렸을 때의 효과들이다.",
+        "properties": {
+          "avoid": {
+            "$ref": "#/components/schemas/TrapCheckSnapshot"
+          },
+          "disarm": {
+            "$ref": "#/components/schemas/TrapCheckSnapshot"
+          },
+          "effects": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "adjust": "#/components/schemas/AdjustEffect",
+                  "damage": "#/components/schemas/DamageEffect",
+                  "injure": "#/components/schemas/InjureEffect"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/DamageEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/InjureEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/AdjustEffect"
+                }
+              ]
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Effects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "avoid",
+          "disarm",
+          "effects"
+        ],
+        "title": "ItemTrapSnapshot",
         "type": "object"
       },
       "ItemUseOut": {
@@ -8053,6 +8248,14 @@
           },
           "to": {
             "$ref": "#/components/schemas/PlaceRefOut"
+          },
+          "traps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TrapSprungOut"
+            },
+            "title": "Traps",
+            "type": "array"
           },
           "travel_minutes": {
             "anyOf": [
@@ -14982,6 +15185,28 @@
         "title": "SellAction",
         "type": "object"
       },
+      "SetTrapAction": {
+        "additionalProperties": false,
+        "description": "가진 덫 물건(item) 하나를 지금 서 있는 장소에 숨겨 놓는 행동(#806, app/rounds/trap_actions.py). 판정이 없다.\n\n덫은 숨긴 채 남는다. 그 장소에 들어오는 쪽(놓은 사람과 일행도)이 피하는 판정을 굴리고, 실패하면 덫의 효과가 든다.\n피하든 못 피하든 덫은 터진다. 덫인 물건은 판의 아이템 규칙에 덫(trap)을 적은 것이다.",
+        "properties": {
+          "item": {
+            "format": "uuid",
+            "title": "Item",
+            "type": "string"
+          },
+          "kind": {
+            "const": "set_trap",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "item"
+        ],
+        "title": "SetTrapAction",
+        "type": "object"
+      },
       "Sheet": {
         "additionalProperties": false,
         "description": "캐릭터 시트 하나.",
@@ -17258,6 +17483,238 @@
         ],
         "title": "TranscriptFormat",
         "type": "string"
+      },
+      "TrapCheck": {
+        "additionalProperties": false,
+        "description": "덫의 판정 하나(#806). 피하기(avoid)와 해제(disarm)가 이 모양이다. 능력치와 난이도(비우면 룰북의 기본)다.\n룰북의 규칙에 있는지는 게시할 때 본다(item_trap_invalid).",
+        "properties": {
+          "ability": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          }
+        },
+        "required": [
+          "ability"
+        ],
+        "title": "TrapCheck",
+        "type": "object"
+      },
+      "TrapCheckOut": {
+        "description": "덫의 판정 하나(#806). 능력치와 난이도(비면 rules 의 기본)다.",
+        "properties": {
+          "ability": {
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          }
+        },
+        "required": [
+          "ability",
+          "difficulty"
+        ],
+        "title": "TrapCheckOut",
+        "type": "object"
+      },
+      "TrapCheckSnapshot": {
+        "description": "덫의 판정 하나(#806). 능력치와 난이도(없으면 룰북의 기본)다.",
+        "properties": {
+          "ability": {
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          }
+        },
+        "required": [
+          "ability"
+        ],
+        "title": "TrapCheckSnapshot",
+        "type": "object"
+      },
+      "TrapSetOut": {
+        "description": "덫을 놓은 결과(#806). 엔진이 정했다(app/rounds/trap_actions.py). 판정이 없다.\n\nset 이 참이면 그 장소에 숨겨 놓였다. 차례가 왔을 때 가지고 있지 않았으면 놓지 않았다(reason 이 not_held).",
+        "properties": {
+          "character_name": {
+            "title": "Character Name",
+            "type": "string"
+          },
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "remaining": {
+            "title": "Remaining",
+            "type": "integer"
+          },
+          "set": {
+            "title": "Set",
+            "type": "boolean"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "character_name",
+          "place",
+          "entry_id",
+          "name",
+          "set",
+          "reason",
+          "remaining"
+        ],
+        "title": "TrapSetOut",
+        "type": "object"
+      },
+      "TrapSetOutcome": {
+        "description": "덫을 놓는 행동의 결과.",
+        "properties": {
+          "trap_set": {
+            "$ref": "#/components/schemas/TrapSetOut"
+          }
+        },
+        "required": [
+          "trap_set"
+        ],
+        "title": "TrapSetOutcome",
+        "type": "object"
+      },
+      "TrapSprungOut": {
+        "description": "들어간 장소에서 터진 덫 하나(#806). 엔진이 정했다(app/rounds/trap_actions.py). 굴림은 공개다.\n\n피하는 판정(avoid)에 성공하면 피했다(avoided). 못 피했으면 효과가 들었다(effect, injured, resources).\n피했든 못 피했든 덫은 터져 끝났다.",
+        "properties": {
+          "avoid": {
+            "$ref": "#/components/schemas/CrossOut"
+          },
+          "avoided": {
+            "title": "Avoided",
+            "type": "boolean"
+          },
+          "effect": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EffectOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "injured": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InjuredOut"
+            },
+            "title": "Injured",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "resources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceShiftOut"
+            },
+            "title": "Resources",
+            "type": "array"
+          },
+          "set_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set By"
+          },
+          "trap_id": {
+            "format": "uuid",
+            "title": "Trap Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trap_id",
+          "entry_id",
+          "name",
+          "set_by",
+          "avoid",
+          "avoided"
+        ],
+        "title": "TrapSprungOut",
+        "type": "object"
       },
       "TreatAction": {
         "additionalProperties": false,

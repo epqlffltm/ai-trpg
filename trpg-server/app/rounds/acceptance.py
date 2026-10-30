@@ -53,6 +53,7 @@ from app.engine.action import (
     RestAction,
     SearchAction,
     SellAction,
+    SetTrapAction,
     SkillAction,
     StealAction,
     TakeAction,
@@ -457,6 +458,21 @@ def accept_put_down(table: GameTable, member: TableMember, action: PutDownAction
     return action.model_dump(mode='json')
 
 
+def accept_set_trap(table: GameTable, member: TableMember, action: SetTrapAction) -> dict:
+    """
+    덫을 놓는 행동(#806)을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다.
+
+      - 맵에 서 있지 않으면 RoundConflictError(not_on_map). 놓을 곳이 없다.
+      - 판의 물건이 아니거나 덫이 아니면 ActionNotInRulesError(item).
+      - 가지고 있지 않으면 RoundConflictError(item_not_held).
+    """
+    standing_place(member)
+    if find_item(table, action.item).trap is None:
+        raise ActionNotInRulesError('item')
+    require_held(member, action.item, 1)
+    return action.model_dump(mode='json')
+
+
 def require_carried_by_victim(scene: Scene, action: StealAction | LootAction) -> None:
     """훔칠 대상(몬스터나 NPC)이 그 물건을 지금 지녔는지 본다. 아니면 ActionTargetError(carried)."""
     if action.monster is not None:
@@ -532,7 +548,7 @@ def accept_action(
     나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming, accept_use, accept_give,
     accept_move, accept_search, accept_rest, accept_take, accept_put_down, accept_steal, accept_loot,
     accept_buy, accept_sell, accept_pay, accept_cover, 문을 다루는 accept_door, 던지는 accept_throw,
-    기술을 쓰는 accept_skill, #805).
+    기술을 쓰는 accept_skill, #805, 덫을 놓는 accept_set_trap, #806).
     """
     if action is None:
         return None
@@ -557,6 +573,8 @@ def accept_action(
         return accept_take(table, member, action)
     if isinstance(action, PutDownAction):
         return accept_put_down(table, member, action)
+    if isinstance(action, SetTrapAction):
+        return accept_set_trap(table, member, action)
     if isinstance(action, StealAction):
         return accept_steal(ruleset, member, scene, action)
     if isinstance(action, LootAction):

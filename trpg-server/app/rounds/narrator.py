@@ -394,6 +394,20 @@ class PlaceNote:
 
 
 @dataclass(frozen=True)
+class TrapNote:
+    """
+    들어간 장소에서 터진 덫 하나(app/rounds/trap_actions.py, #806). 엔진이 정한 것이다.
+
+    name 은 덫 물건의 이름, check 는 피하는 판정의 능력치의 이름이다. avoided 가 참이면 피했다.
+    못 피했으면 효과가 들었다. 얼마나 다쳤는지와 입은 부상은 HP 와 부상의 줄이 말한다.
+    """
+
+    name: str
+    check: str
+    avoided: bool
+
+
+@dataclass(frozen=True)
 class TravelNote:
     """
     맵에서 한 칸 간 결과(app/rounds/map_actions.py). 엔진이 정한 것이다.
@@ -408,6 +422,7 @@ class TravelNote:
     carried 는 업고 가려던 쓰러진 동료의 이름이다(#367). 업지 않았으면 None 이다.
     carry_reason 은 업고 가지 못한 까닭이다(standing, dead, elsewhere, not_moved). 업고 갔으면 None 이다.
     aid 는 넘기에 붙여 쓴 물건이다(#802, 밧줄). 쓰지 않았거나 굴리지 않았으면 None.
+    traps 는 들어간 장소에서 터진 덫들이다(#806). 놓인 순서다.
     """
 
     from_place: str | None
@@ -422,6 +437,7 @@ class TravelNote:
     hurt: bool = False
     unbarred: bool = False
     aid: AidNote | None = None
+    traps: list[TrapNote] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -570,6 +586,19 @@ class PutDownNote:
     name: str
     count: int
     put: bool
+
+
+@dataclass(frozen=True)
+class TrapSetNote:
+    """
+    가진 덫을 서 있는 장소에 숨겨 놓은 결과(app/rounds/trap_actions.py, #806). 엔진이 정한 것이다. 판정이 없다.
+
+    set 이 참이면 놓였다. 거짓이면 차례가 왔을 때 가지고 있지 않아 놓지 못했다.
+    서술자는 놓은 덫을 다른 캐릭터가 알아채는 장면을 쓰지 않는다. 덫은 숨겨져 있다.
+    """
+
+    name: str
+    set: bool
 
 
 @dataclass(frozen=True)
@@ -722,6 +751,8 @@ class Move:
     take: TakeNote | None = None
     # 가진 물건을 내려놓는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다
     put_down: PutDownNote | None = None
+    # 덫을 놓는 행동이면 그 결과(#806). 판정이 아니라 verdict 와 함께 있지 않다
+    trap_set: TrapSetNote | None = None
     # 몬스터나 NPC 가 지닌 물건을 훔치는 행동이면 그 결과. verdict 와 함께 있지 않다(판정은 엔진이 따로 굴렸다)
     steal: StealNote | None = None
     # 쓰러졌거나 죽은 대상에게서 빼앗는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다

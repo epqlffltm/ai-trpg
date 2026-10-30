@@ -47,6 +47,7 @@ from app.assets.scenarios.schemas import (
     ItemRule,
     ItemStack,
     ItemThrow,
+    ItemTrap,
     MonsterAttack,
     MonsterSheet,
     MoveEffect,
@@ -61,6 +62,7 @@ from app.assets.scenarios.schemas import (
     RepairRouteEffect,
     RouteDoorEffect,
     RouteRule,
+    TrapCheck,
     VersionCreate,
     WanderTable,
 )
@@ -81,7 +83,7 @@ from app.engine.injury import find_injury
 from app.engine.item_aids import AidAct
 from app.engine.item_effects import EffectKind, nature_of
 from app.engine.resources import find_resource, holds
-from app.engine.ruleset import Healing, ResourceHolder, Ruleset
+from app.engine.ruleset import Healing, ResourceHolder, Ruleset, effects_fit
 from app.engine.sheet import CharacterSheet, Sheet, fits, knows_only, resists_only_known
 
 
@@ -139,6 +141,8 @@ class Problem(enum.StrEnum):
     ITEM_RESOURCE_INVALID = 'item_resource_invalid'
     # 던지는 소모품의 판정의 능력치나 난이도나 피해의 등급이 룰북의 규칙에 없다(#277)
     ITEM_THROW_INVALID = 'item_throw_invalid'
+    # 덫(#806)의 피하는 판정과 해제 판정의 능력치와 난이도, 효과의 등급과 부상과 수치와 성질이 룰북에 없다
+    ITEM_TRAP_INVALID = 'item_trap_invalid'
     # 붙인 로어북에 없는 항목을 가리키는 퀘스트 규칙이 있다
     QUEST_ENTRY_MISSING = 'quest_entry_missing'
     # 사건이 아닌 항목(인물, 물건 …)을 가리키는 퀘스트 규칙이 있다
@@ -655,6 +659,7 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
     입히는 부상은 룰북의 부상, 맞추는 수치는 룰북의 수치여야 한다(#804).
     자물쇠 물건의 따는 판정은 룰북의 능력치와 난이도여야 한다(#281).
     던지는 소모품의 판정은 룰북의 능력치와 난이도와 피해의 등급이어야 한다(#277).
+    덫(#806)의 판정과 효과도 룰북의 것이어야 한다.
     룰북이 없으면 볼 수 없다(그때는 RULEBOOK_MISSING 이다).
     """
     entries = lore_entries(parts)
@@ -678,7 +683,18 @@ def find_item_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None
         problems.append(Problem.ITEM_RESOURCE_INVALID)
     if ruleset and any(cross_invalid(rule.throw, ruleset) for rule in rules):
         problems.append(Problem.ITEM_THROW_INVALID)
+    if ruleset and any(trap_invalid(rule.trap, ruleset) for rule in rules):
+        problems.append(Problem.ITEM_TRAP_INVALID)
     return problems
+
+
+def trap_invalid(trap: ItemTrap | None, ruleset: Ruleset) -> bool:
+    """덫(#806)의 두 판정과 효과가 룰북의 규칙에 맞지 않는가. 덫이 아니면 아니다."""
+    if trap is None:
+        return False
+    checks = (trap.avoid, trap.disarm)
+    unknown = any(cross_invalid(check, ruleset) for check in checks)
+    return unknown or not effects_fit(ruleset, trap.effects)
 
 
 def effect_magnitudes(effects: list) -> list[str]:
@@ -1079,7 +1095,7 @@ def opening_checks(route: RouteRule) -> list[PickCheck | ForceCheck]:
     return [check for check in (pick, route.force, route.repair) if check is not None]
 
 
-def cross_invalid(cross: CrossCheck | ItemThrow | None, ruleset: Ruleset) -> bool:
+def cross_invalid(cross: CrossCheck | ItemThrow | TrapCheck | None, ruleset: Ruleset) -> bool:
     """
     길을 넘는 판정이 룰북의 규칙에 맞지 않는가(#281). 능력치와 난이도는 찾는 판정과 같이 보고,
     실패의 피해를 적었으면 룰북의 양의 등급이어야 한다.

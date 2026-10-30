@@ -30,7 +30,7 @@ const ALL: EventType[] = [
   'whisper_notice_changed', 'friendly_fire_changed', 'friendly_fire_consent_changed', 'references_changed', 'ledger_drafts_changed', 'whisper_sent', 'table_started', 'gm_narration',
   'round_opened', 'player_action', 'check_rolled', 'hp_changed', 'resource_changed', 'npc_changed', 'npc_attitude_changed', 'monster_changed',
   'monster_attacked', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_treated', 'naming_resolved', 'death_save_rolled',
-  'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'steal_attempted',
+  'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'trap_set', 'trap_sprung', 'steal_attempted',
   'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'place_searched', 'character_rested',
   'character_revived', 'round_closed', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
   'narration_model_not_for_sale', 'narration_model_retiring', 'narration_model_replaced', 'narration_model_unavailable',
@@ -54,6 +54,14 @@ describe('eventLine', () => {
     const monster = { id: 'm1', name: '수로 쥐' };
     expect(line('monsters_appeared', { place, monster, count: 3, cause: 'arrive' })?.text).toBe('조우: 깊은 수로 · 수로 쥐 3마리가 나타났습니다');
     expect(line('monsters_appeared', { place, monster, count: 1, cause: 'rest' })?.text).toBe('조우: 깊은 수로 · 수로 쥐 1마리가 쉬는 중에 덮쳤습니다');
+  });
+
+  it('덫을 놓은 것과 터진 것(#806)', () => {
+    const place = { entry_id: 'p1', name: '수도원 문' };
+    expect(line('trap_set', { character_name: '렌', name: '올가미', set: true, place })?.text).toBe('렌: 올가미 숨겨 놓음(수도원 문)');
+    expect(line('trap_set', { character_name: '렌', name: '올가미', set: false, reason: 'not_held' })?.text).toBe('렌: 덫을 놓지 못했습니다.');
+    expect(line('trap_sprung', { character_name: '미아', name: '올가미', place, avoided: false })?.text).toBe('미아: 수도원 문에서 덫(올가미) 걸림');
+    expect(line('trap_sprung', { character_name: '미아', name: '올가미', avoided: true })?.text).toBe('미아: 이곳에서 덫(올가미) 피함');
   });
 
   it('사람은 캐릭터의 이름, 없으면 user_id, 없으면 행한 사람으로 부른다', () => {

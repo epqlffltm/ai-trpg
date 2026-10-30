@@ -15,7 +15,14 @@ import uuid
 from dataclasses import dataclass
 
 from app.assets.models import ITEM_STACK_MAX, ItemKind, ItemRarity
-from app.assets.scenarios.snapshot import ItemStackSnapshot, ItemThrowSnapshot, Snapshot, item_entries, item_rule_of
+from app.assets.scenarios.snapshot import (
+    ItemStackSnapshot,
+    ItemThrowSnapshot,
+    ItemTrapSnapshot,
+    Snapshot,
+    item_entries,
+    item_rule_of,
+)
 from app.engine import item_effects
 from app.engine.item_aids import ItemAid
 from app.engine.item_effects import Effect
@@ -41,6 +48,7 @@ class CatalogItem:
     aids 는 이 물건이 거드는 행동들이다(#802, app/engine/item_aids.py). 행동에 붙여 쓰면 판정에 보정을 더한다.
     resistances 는 착용하고 있는 동안 생기는 저항이다(#886 ②, app/tables/resistances.py).
     nature 는 무기로 친 피해의 성질이다(#886 ③). 무기가 아니거나 성질이 없으면 None.
+    trap 은 덫이다(#806, app/rounds/trap_actions.py). 덫이 아니면 None.
     """
 
     entry_id: uuid.UUID
@@ -61,6 +69,7 @@ class CatalogItem:
     aids: tuple[ItemAid, ...] = ()
     resistances: tuple[Resistance, ...] = ()
     nature: str | None = None
+    trap: ItemTrapSnapshot | None = None
 
 
 def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
@@ -87,6 +96,7 @@ def catalog(snapshot: Snapshot) -> dict[uuid.UUID, CatalogItem]:
             aids=tuple(rule.aids),
             resistances=tuple(rule.resistances),
             nature=rule.nature,
+            trap=rule.trap,
         )
     return items
 

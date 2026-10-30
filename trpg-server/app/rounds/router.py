@@ -87,7 +87,10 @@ def visible_part(part: dict, viewer_id: uuid.UUID) -> dict:
 
 
 def visible_outcome(outcome: dict | None, viewer_id: uuid.UUID) -> dict | None:
-    """선언의 결과에서 그 사람이 숫자로 보지 못하는 수치의 바뀐 것을 뺀다(#804). 저장된 결과는 고치지 않는다."""
+    """
+    선언의 결과에서 그 사람이 숫자로 보지 못하는 수치의 바뀐 것을 뺀다(#804). 저장된 결과는 고치지 않는다.
+    가기에서 터진 덫(#806)이 맞춘 수치도 같다.
+    """
     if outcome is None:
         return None
     changed = {
@@ -95,6 +98,9 @@ def visible_outcome(outcome: dict | None, viewer_id: uuid.UUID) -> dict | None:
         for key in SHIFTING_OUTCOMES
         if isinstance(outcome.get(key), dict) and any(outcome[key].get(one) for one in SHIFT_LISTS)
     }
+    move = outcome.get('move')
+    if isinstance(move, dict) and move.get('traps'):
+        changed['move'] = {**move, 'traps': [visible_part(trap, viewer_id) for trap in move['traps']]}
     return {**outcome, **changed} if changed else outcome
 
 

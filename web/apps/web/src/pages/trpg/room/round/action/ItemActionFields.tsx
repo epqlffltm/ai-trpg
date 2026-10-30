@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/room/round/action/ItemActionFields.tsx
 // 물건을 다루는 행동의 칸. 쓰기(소모품, 효과가 있으면 받을 쪽: 나, 동료, 인물, 몬스터. #800), 건네기(받을 사람과 개수), 내려놓기(개수),
-// 줍기(내가 선 곳에 놓인 것과 개수), 훔치기와 빼앗기(대상과 그 대상이 지닌 물건),
+// 줍기(내가 선 곳에 놓인 것과 개수), 덫 놓기(#806, 지닌 덫 하나), 훔치기와 빼앗기(대상과 그 대상이 지닌 물건),
 // 던지기(#277, #801. 지닌 물건 아무것이나와 맞힐 대상. 판정은 물건이나 룰북에 적혀 있어 보이기만 한다).
 // 해로운 물건을 동료에게 쓰고 던지는 것(#803)은 해칠 수 있는 동료만 고르고, 장난이면 그렇게 알린다.
 
@@ -21,6 +21,7 @@ import {
   placeItems,
   recipients,
   throwables,
+  trapItems,
   throwTargets,
   victimItems,
   victims,
@@ -125,6 +126,16 @@ export function PutDownFields({ draft, ctx, onChange }: Props) {
     <div className="ability-grid">
       <ChoiceSelect label="내려놓을 물건" value={draft.item} choices={mine(ctx)} empty="고르기" onChange={(item) => onChange({ item, count: 1 })} />
       <CountField draft={draft} max={draft.item ? heldCount(ctx.me, draft.item) : COUNT_MAX} onChange={onChange} />
+    </div>
+  );
+}
+
+export function SetTrapFields({ draft, ctx, onChange }: Props) {
+  const traps = trapItems(ctx).map((item) => ({ value: item.entry_id, label: `${item.name} ×${item.count}` }));
+  return (
+    <div className="ability-grid">
+      <ChoiceSelect label="놓을 덫" value={draft.item} choices={traps} empty="고르기" onChange={(item) => onChange({ item })} />
+      <p className="hint">지금 있는 곳에 숨겨 놓습니다. 이곳에 들어오는 쪽이 피하는 판정을 굴립니다. 나와 일행도 걸립니다.</p>
     </div>
   );
 }

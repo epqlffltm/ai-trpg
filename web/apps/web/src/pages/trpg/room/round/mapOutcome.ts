@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/room/round/mapOutcome.ts
-// 맵의 행동의 결과 한 줄. 가기(지나며 연 문, 넘기 판정과 다친 것, 업기)와 문을 다루는 행동(#281). 순수한 함수다.
+// 맵의 행동의 결과 한 줄. 가기(지나며 연 문, 넘기 판정과 다친 것, 업기, 들어간 곳에서 터진 덫 #806)와 문을 다루는 행동(#281). 순수한 함수다.
 // 못 한 까닭은 서버의 이름(trpg-server/app/rounds/schemas.py 의 MoveOut, CarryOut, app/rounds/door_actions.py 의 DoorReason)을 글로 바꾼다.
 // 못 한 것은 이벤트로 오지 않아 이 줄에만 보인다. 이름 뒤에는 조사를 붙이지 않는다("종탑 쪽 문: 열었습니다").
 
@@ -79,8 +79,17 @@ export function moveLine(move: Move): string {
     move.moved && move.travel_minutes ? `${move.travel_minutes}분 걸림` : null,
     carryPart(move.carry),
     aidPart(move.aid),
+    ...move.traps.map(trapPart),
   ];
   return parts.filter((part): part is string => part !== null).join(' · ');
+}
+
+type Trap = Move['traps'][number];
+
+/** 들어간 곳에서 터진 덫 하나(#806). "덫 올가미: 피함(눈 15, …)", "덫 올가미: 걸림(눈 3, …) · 렌 HP 7 → 4" */
+function trapPart(trap: Trap): string {
+  const line = `덫 ${trap.name}: ${trap.avoided ? '피함' : '걸림'}(${rollText(trap.avoid)})`;
+  return trap.effect ? `${line} · ${trap.effect.character_name} HP ${trap.effect.before} → ${trap.effect.after}` : line;
 }
 
 /** 문을 다룬 행동. "종탑 쪽 빗장: 열었습니다", "종탑 쪽 문: 따지 못했습니다(판정에 실패했습니다) · 눈 8, 보정 +1, 합 9 / 목표 15" */

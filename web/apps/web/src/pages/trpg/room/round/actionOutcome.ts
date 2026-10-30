@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/room/round/actionOutcome.ts
 // 물건, 훔치기와 빼앗기, 쉬기와 기다리기의 결과 한 줄. 순수한 함수다. 못 한 것과 덜 한 것은 서버의 까닭(reason)을 괄호로 붙인다.
-// 까닭의 이름은 서버의 것이다(trpg-server/app/rounds 의 item_actions.py, throws.py, place_item_actions.py, steals.py, loots.py, rests.py, waits.py).
+// 까닭의 이름은 서버의 것이다(trpg-server/app/rounds 의 item_actions.py, throws.py, place_item_actions.py, trap_actions.py, steals.py, loots.py, rests.py, waits.py).
 // 못 한 것은 이벤트로 오지 않아 이 줄에만 보인다. 이름 뒤에는 조사를 붙이지 않는다.
 
 import type { Declaration, ResourceChange } from '../../../../api/types';
@@ -81,6 +81,11 @@ export function takeLine(take: Part<'take'>): string {
 
 export function putDownLine(put: Part<'put_down'>): string {
   return put.put ? `${put.name} ×${put.count} 내려놓았습니다` : `내려놓지 못했습니다${because(PLACE_REASONS, put.reason)}`;
+}
+
+/** 덫을 놓은 것(#806). "올가미 숨겨 놓음(남은 1개)". 놓지 못했으면 까닭을 붙인다 */
+export function trapSetLine(trap: Part<'trap_set'>): string {
+  return trap.set ? `${trap.name} 숨겨 놓음(남은 ${trap.remaining}개)` : `덫을 놓지 못했습니다${because(ITEM_REASONS, trap.reason)}`;
 }
 
 /** 훔치기. 들켰으면 까닭 없이 "훔치지 못했습니다", 싸움이 붙었으면 그것도 적는다 */

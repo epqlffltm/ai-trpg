@@ -49,7 +49,7 @@ from app.assets.scenarios.upgrades import UPGRADES
 from app.calendar.clock import TimeOfDay
 from app.engine.action import DoorDevice
 from app.engine.item_aids import ItemAid
-from app.engine.item_effects import AttackEffects, Effect
+from app.engine.item_effects import AttackEffects, Effect, TrapEffects
 from app.engine.ruleset import Resistances, Ruleset, SkillCost
 from app.engine.sheet import CharacterSheet, Sheet
 
@@ -152,7 +152,8 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      수치를 내리는 맞추기에 성질(effects[].nature)이 있다.
 #      피해의 성질(#886 ③)도 뒤에 더했다. 효과의 damage 와 공격(monsters[].attacks[].nature, npc_sheets[].attacks[])과
 #      무기(items[].nature)에 있다. 몬스터의 저항(monsters[].resistances)과 몬스터와 인물의 타고난 피해의 성질
-#      (monsters[].nature, npc_sheets[].nature)도 같다. 비워도 되는 칸이라 형식이 그대로다
+#      (monsters[].nature, npc_sheets[].nature)도 같다. 비워도 되는 칸이라 형식이 그대로다.
+#      덫(#806, items[].trap: 피하는 판정, 해제 판정, 효과)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 67
 
 
@@ -265,6 +266,21 @@ class ItemThrowSnapshot(BaseModel):
     difficulty: str | None = None
 
 
+class TrapCheckSnapshot(BaseModel):
+    """덫의 판정 하나(#806). 능력치와 난이도(없으면 룰북의 기본)다."""
+
+    ability: str
+    difficulty: str | None = None
+
+
+class ItemTrapSnapshot(BaseModel):
+    """덫(#806). 들어온 쪽이 피하는 판정, 찾은 덫을 거두는 해제 판정, 걸렸을 때의 효과들이다."""
+
+    avoid: TrapCheckSnapshot
+    disarm: TrapCheckSnapshot
+    effects: TrapEffects
+
+
 class ItemLockSnapshot(BaseModel):
     """물건이 문에 다는 새 자물쇠(#281). 여는 열쇠(판 안의 물건 항목)와 따는 판정(없으면 못 딴다)."""
 
@@ -310,6 +326,8 @@ class ItemRuleSnapshot(BaseModel):
     resistances: Resistances = ()
     # 무기로 친 피해의 성질(#886 ③). 그 전의 판의 물건에는 없다
     nature: str | None = None
+    # 덫(#806). 그 전의 판의 물건은 덫이 아니다
+    trap: ItemTrapSnapshot | None = None
 
 
 class QuestConditionSnapshot(BaseModel):

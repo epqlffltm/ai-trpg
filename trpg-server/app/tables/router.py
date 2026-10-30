@@ -21,6 +21,7 @@ from app.assets.scenarios.snapshot import (
     CurrencySnapshot,
     ForceSnapshot,
     ItemThrowSnapshot,
+    ItemTrapSnapshot,
     PickSnapshot,
     RepairSnapshot,
     RouteSnapshot,
@@ -104,6 +105,7 @@ from app.tables.schemas import (
     InjuryOut,
     ItemOut,
     ItemThrowOut,
+    ItemTrapOut,
     JoinRequest,
     LobbyJoinRequest,
     MapOut,
@@ -256,6 +258,13 @@ def to_throw(throw: ItemThrowSnapshot | None) -> ItemThrowOut | None:
     return ItemThrowOut(ability=throw.ability, difficulty=throw.difficulty)
 
 
+def to_trap(trap: ItemTrapSnapshot | None) -> ItemTrapOut | None:
+    """판의 덫(#806)을 응답으로 바꾼다. 덫이 아니면 None."""
+    if trap is None:
+        return None
+    return ItemTrapOut.model_validate(trap.model_dump())
+
+
 def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
     """판의 물건들을 응답으로 바꾼다."""
     return [
@@ -278,6 +287,7 @@ def to_catalog(catalog: dict[uuid.UUID, CatalogItem]) -> list[CatalogItemOut]:
             aids=list(item.aids),
             resistances=list(item.resistances),
             nature=item.nature,
+            trap=to_trap(item.trap),
         )
         for item in catalog.values()
     ]

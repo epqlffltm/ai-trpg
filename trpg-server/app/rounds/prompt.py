@@ -227,7 +227,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 ([막아 낸 부상: 중독]). 캐릭터의 HP 줄에도 붙는다. 막아 낸 수치의 맞추기는 [수치: 마나 막아 냄] 이다
 #   narration-78: 피해의 성질(#886 ③). HP 의 줄의 피해 앞에 성질을 붙이고, 받은 단계를 괄호에 붙인다
 #                 (→ 엘프 화염 피해 2 (HP 8/10, 저항)), (→ 수로 쥐 화염 피해 8 (쓰러짐, 약점))
-PROMPT_VERSION = 'narration-78'
+#   narration-79: 덫(#806). 덫을 놓은 줄((덫 놓기: 올가미을(를) 숨겨 놓았다))과,
+#                 들어간 곳에서 터진 덫의 줄((덫: 올가미. 민첩 판정에 실패해 걸렸다))을 적는다
+PROMPT_VERSION = 'narration-79'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

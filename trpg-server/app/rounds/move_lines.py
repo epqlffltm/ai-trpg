@@ -49,6 +49,8 @@ from app.rounds.narrator import (
     TargetGoneNote,
     ThrowNote,
     TradeNote,
+    TrapNote,
+    TrapSetNote,
     TravelNote,
     TreatmentNote,
     TurnNote,
@@ -581,14 +583,28 @@ def describe_travel(note: TravelNote) -> str:
         (가려던 곳: 광장. 그쪽으로 이어진 길이 없었다)
         (가려던 곳: 탑. 근력 판정에 실패해 넘지 못했다. 실패해 다쳤다)
         (간 곳: 광장 → 절벽 위, 근력 판정에 성공해 넘어)(쓴 물건: 밧줄 +2)
-    넘기에 붙여 쓴 물건(#802)이 있으면 뒤에 붙는다.
+        (간 곳: 광장 → 숲)(덫: 올가미. 민첩 판정에 실패해 걸렸다)
+    넘기에 붙여 쓴 물건(#802)이 있으면 뒤에 붙는다. 들어간 곳에서 터진 덫(#806)은 그 뒤에 하나씩 붙는다.
     """
     tool = aid_text(note.aid) if note.aid else ''
     if not note.moved:
         return f'(가려던 곳: {note.to_place}. {travel_failure(note)}){tool}'
     start = f'{note.from_place} → ' if note.from_place else ''
     took = f', {duration_text(note.travel_minutes)} 걸림' if note.travel_minutes else ''
-    return f'(간 곳: {start}{note.to_place}{took}{passage_text(note)}{carry_text(note)}){tool}'
+    sprung = ''.join(trap_text(trap) for trap in note.traps)
+    return f'(간 곳: {start}{note.to_place}{took}{passage_text(note)}{carry_text(note)}){tool}{sprung}'
+
+
+def trap_text(note: TrapNote) -> str:
+    """
+    들어간 곳에서 터진 덫 하나의 말(#806).
+
+    예: (덫: 올가미. 민첩 판정에 성공해 피했다)
+        (덫: 올가미. 민첩 판정에 실패해 걸렸다)
+    """
+    if note.avoided:
+        return f'(덫: {note.name}. {note.check} 판정에 성공해 피했다)'
+    return f'(덫: {note.name}. {note.check} 판정에 실패해 걸렸다)'
 
 
 # 문을 다룬 것의 말. 해낸 것이다(#281). 잠그기와 열기는 장치마다 다르다
@@ -710,6 +726,18 @@ def describe_take(note: TakeNote) -> str:
     if note.reason is None:
         return f'(줍기: {taken})'
     return f'(줍기: {taken}. {TAKE_SHORT_WORDS[note.reason]})'
+
+
+def describe_trap_set(note: TrapSetNote) -> str:
+    """
+    덫을 놓은 결과를 한 줄로 적는다(#806).
+
+    예: (덫 놓기: 올가미을(를) 숨겨 놓았다)
+        (덫 놓기: 올가미을(를) 가지고 있지 않았다)
+    """
+    if note.set:
+        return f'(덫 놓기: {note.name}을(를) 숨겨 놓았다)'
+    return f'(덫 놓기: {note.name}을(를) 가지고 있지 않았다)'
 
 
 def describe_put_down(note: PutDownNote) -> str:
@@ -897,6 +925,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_take(move.take))
     if move.put_down is not None:
         parts.append(describe_put_down(move.put_down))
+    if move.trap_set is not None:
+        parts.append(describe_trap_set(move.trap_set))
     if move.steal is not None:
         parts.append(describe_steal(move.steal))
     if move.loot is not None:

@@ -10,7 +10,7 @@ import { actionLabel, outcomeLine } from './roundView';
 const ME = '00000000-0000-4000-8000-0000000000e1';
 const GATE = { entry_id: 'g', name: '수도원 문' };
 const TOWER = { entry_id: 't', name: '종탑' };
-const MOVE = { user_id: ME, character_name: '렌', from: GATE, to: TOWER, moved: true, reason: null, unlocked: false, unbarred: false };
+const MOVE = { user_id: ME, character_name: '렌', from: GATE, to: TOWER, moved: true, reason: null, unlocked: false, unbarred: false, traps: [] };
 const ROLL = { ability: 'str', difficulty: 'normal', modifier: -1, roll: 8, total: 7, target: 15, success: false };
 
 describe('가기의 결과', () => {
@@ -42,6 +42,19 @@ describe('넘기에 붙여 쓴 물건(#802)', () => {
     );
     expect(moveLine({ ...MOVE, moved: false, reason: 'not_adjacent', aid: { ...aid, used: false, bonus: 0 } })).toBe('가지 못했습니다(그사이 옮겨져 이어진 길이 없었습니다)');
     expect(moveLine({ ...MOVE, aid: { ...aid, bonus: 0, lost: true, broken: false } })).toBe('종탑에 닿았습니다 · 밧줄 씀, 다 씀');
+  });
+});
+
+describe('들어간 곳에서 터진 덫(#806)', () => {
+  it('덫마다 피했는지와 판정, 걸렸으면 HP 를 붙인다', () => {
+    const avoid = { ...ROLL, ability: 'dex' };
+    const base = { trap_id: 'x', entry_id: 'snare', name: '올가미', set_by: ME, injured: [], resources: [] };
+    const effect = { kind: 'damage' as const, magnitude: 'light', user_id: ME, character_name: '렌', rolls: [3], amount: 3, before: 7, after: 4, max_hp: 12, downed: false, prank: false };
+    const caught = { ...base, avoid, avoided: false, effect };
+    const dodged = { ...base, trap_id: 'y', avoid: { ...avoid, roll: 18, total: 17, success: true }, avoided: true, effect: null };
+    expect(moveLine({ ...MOVE, traps: [caught, dodged] })).toBe(
+      '종탑에 닿았습니다 · 덫 올가미: 걸림(눈 8, 보정 -1, 합 7 / 목표 15) · 렌 HP 7 → 4 · 덫 올가미: 피함(눈 18, 보정 -1, 합 17 / 목표 15)',
+    );
   });
 });
 

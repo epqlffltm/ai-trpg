@@ -118,6 +118,8 @@ export function draftFromAction(rules: Ruleset, action: DeclaredAction | null): 
     case 'take':
     case 'put_down':
       return { ...base, kind: action.kind, item: action.item, count: action.count };
+    case 'set_trap':
+      return { ...base, kind: 'set_trap', item: action.item };
     case 'steal':
     case 'loot':
       return { ...base, kind: action.kind, item: action.item, target: refOf(null, action.npc, action.monster) };
@@ -191,6 +193,8 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
       return countHint(draft.count, heldCount(ctx.me, draft.item));
     case 'put_down':
       return draft.item ? countHint(draft.count, heldCount(ctx.me, draft.item)) : '내려놓을 물건을 골라 주세요.';
+    case 'set_trap':
+      return draft.item ? null : '놓을 덫을 골라 주세요.';
     case 'take':
       return draft.item ? countHint(draft.count, COUNT_MAX) : '주울 물건을 골라 주세요.';
     case 'move':
@@ -303,6 +307,8 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
       return { kind: 'take', item: draft.item, count: Math.min(draft.count, placeCount(ctx, draft.item)) };
     case 'put_down':
       return { kind: 'put_down', item: draft.item, count: draft.count };
+    case 'set_trap':
+      return { kind: 'set_trap', item: draft.item };
     case 'steal':
     case 'loot':
       return { kind: draft.kind, item: draft.item, ...(npc ? { npc } : {}), ...(monster ? { monster } : {}) };
