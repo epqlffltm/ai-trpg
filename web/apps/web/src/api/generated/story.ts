@@ -1579,8 +1579,11 @@ export interface components {
         /**
          * WorldSummary
          * @description 목록에 싣는 세계관. id 는 asset 서버의 세계관 id 이고 version 은 이 세션이 쓰는 판의 번호다.
+         *     genre 는 판의 장르다(화면이 장면의 테마를 고른다). 형식 3 까지의 판이거나 고르지 않았으면 null 이다.
          */
         WorldSummary: {
+            /** Genre */
+            genre?: string | null;
             /**
              * Id
              * Format: uuid
