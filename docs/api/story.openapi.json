@@ -1667,6 +1667,60 @@
         "title": "Rating",
         "type": "string"
       },
+      "ReportCreate": {
+        "additionalProperties": false,
+        "description": "신고할 때 받는 값. 사유가 other 면 설명이 있어야 한다(asset 의 신고와 같다).",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ReportReason"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ReportCreate",
+        "type": "object"
+      },
+      "ReportCreated": {
+        "description": "접수한 신고.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at"
+        ],
+        "title": "ReportCreated",
+        "type": "object"
+      },
+      "ReportReason": {
+        "description": "신고의 사유. asset 의 신고와 같다. minor 는 운영자의 목록에서 가장 먼저 보인다.",
+        "enum": [
+          "spam",
+          "abuse",
+          "sexual",
+          "minor",
+          "illegal",
+          "other"
+        ],
+        "title": "ReportReason",
+        "type": "string"
+      },
       "SceneKind": {
         "description": "일러스트가 붙은 장면의 종류. 이벤트와 엔딩의 id 는 서로 겹칠 수 있어 종류로 가른다.",
         "enum": [
@@ -3362,6 +3416,66 @@
           }
         ],
         "summary": "Regenerate",
+        "tags": [
+          "messages"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/story/messages/{message_id}/reports": {
+      "post": {
+        "description": "모델의 답을 신고한다. 그 답과 앞의 말 몇 개를 신고에 굳혀 둔다(운영자는 이것만 본다).\n없거나 남의 세션의 말이면 404, 사람의 말이나 행동 말이면 422, 이미 신고했으면 409 다.",
+        "operationId": "report_message_api_v1_story_messages__message_id__reports_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Report Message",
         "tags": [
           "messages"
         ],
