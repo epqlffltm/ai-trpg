@@ -30,7 +30,7 @@ const ALL: EventType[] = [
   'whisper_notice_changed', 'friendly_fire_changed', 'friendly_fire_consent_changed', 'references_changed', 'ledger_drafts_changed', 'whisper_sent', 'table_started', 'gm_narration',
   'round_opened', 'player_action', 'check_rolled', 'hp_changed', 'resource_changed', 'npc_changed', 'npc_attitude_changed', 'monster_changed',
   'monster_attacked', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_treated', 'naming_resolved', 'death_save_rolled',
-  'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'trap_set', 'trap_sprung', 'steal_attempted',
+  'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'trap_set', 'trap_sprung', 'trap_disarmed', 'steal_attempted',
   'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'place_searched', 'character_rested',
   'character_revived', 'round_closed', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
   'narration_model_not_for_sale', 'narration_model_retiring', 'narration_model_replaced', 'narration_model_unavailable',
@@ -62,6 +62,15 @@ describe('eventLine', () => {
     expect(line('trap_set', { character_name: '렌', name: '올가미', set: false, reason: 'not_held' })?.text).toBe('렌: 덫을 놓지 못했습니다.');
     expect(line('trap_sprung', { character_name: '미아', name: '올가미', place, avoided: false })?.text).toBe('미아: 수도원 문에서 덫(올가미) 걸림');
     expect(line('trap_sprung', { character_name: '미아', name: '올가미', avoided: true })?.text).toBe('미아: 이곳에서 덫(올가미) 피함');
+  });
+
+  it('덫을 찾고 해제한 것(#806 ①-b)', () => {
+    expect(line('place_searched', { character_name: '렌', place: { name: '부엌' }, found: [], items: [], traps: [{}] })?.text).toBe(
+      '렌: 부엌에서 길 0개, 물건 0가지, 덫 1개를 찾았습니다.',
+    );
+    expect(line('trap_disarmed', { character_name: '렌', name: '올가미', done: true })?.text).toBe('렌: 올가미 해제해 거둠');
+    expect(line('trap_disarmed', { character_name: '렌', name: '올가미', done: false, sprung: true })?.text).toBe('렌: 올가미 해제하다 터뜨림');
+    expect(line('trap_disarmed', { character_name: '렌', name: '올가미', done: false, sprung: false })?.text).toBe('렌: 올가미 해제 못 함');
   });
 
   it('사람은 캐릭터의 이름, 없으면 user_id, 없으면 행한 사람으로 부른다', () => {

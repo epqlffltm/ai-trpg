@@ -22,6 +22,7 @@ from app.rounds.narrator import (
     BlowNote,
     CoverNote,
     DeathSaveNote,
+    DisarmNote,
     DoorNote,
     DownedStrikeNote,
     DropNote,
@@ -691,6 +692,7 @@ def describe_search(note: SearchNote) -> str:
 
     예: (찾기: 길을 찾아냈다. 지하실(으)로 이어진다)
         (찾기: 은열쇠을(를) 찾아 챙겼다)
+        (찾기: 덫을 찾아냈다. 올가미)
         (찾기: 찾은 것이 없다)
     """
     parts = []
@@ -698,6 +700,8 @@ def describe_search(note: SearchNote) -> str:
         parts.append(f'길을 찾아냈다. {", ".join(note.found)}(으)로 이어진다')
     if note.items:
         parts.append(f'{describe_items(note.items)}을(를) 찾아 챙겼다')
+    if note.traps:
+        parts.append(f'덫을 찾아냈다. {", ".join(note.traps)}')
     return f'(찾기: {". ".join(parts) or "찾은 것이 없다"})'
 
 
@@ -738,6 +742,28 @@ def describe_trap_set(note: TrapSetNote) -> str:
     if note.set:
         return f'(덫 놓기: {note.name}을(를) 숨겨 놓았다)'
     return f'(덫 놓기: {note.name}을(를) 가지고 있지 않았다)'
+
+
+# 해제를 굴리지 못한 까닭의 말(app/rounds/trap_actions.py 의 DisarmReason)
+DISARM_FAILURES = {'gone': '덫이 이미 없었다', 'elsewhere': '덫이 있는 곳에 없었다'}
+
+
+def describe_disarm(note: DisarmNote) -> str:
+    """
+    덫을 해제한 결과를 한 줄로 적는다(#806 ①-b).
+
+    예: (해제: 올가미. 민첩 판정에 성공해 거둬 챙겼다)
+        (해제: 올가미. 민첩 판정에 실패했다. 덫은 그대로다)
+        (해제: 올가미. 민첩 판정에 크게 실패해 덫이 터졌다)
+        (해제: 덫이 이미 없었다)
+    """
+    if note.reason is not None:
+        return f'(해제: {DISARM_FAILURES.get(note.reason, "해제하지 못했다")})'
+    if note.done:
+        return f'(해제: {note.name}. {note.check} 판정에 성공해 거둬 챙겼다)'
+    if note.sprung:
+        return f'(해제: {note.name}. {note.check} 판정에 크게 실패해 덫이 터졌다)'
+    return f'(해제: {note.name}. {note.check} 판정에 실패했다. 덫은 그대로다)'
 
 
 def describe_put_down(note: PutDownNote) -> str:
@@ -927,6 +953,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_put_down(move.put_down))
     if move.trap_set is not None:
         parts.append(describe_trap_set(move.trap_set))
+    if move.disarm is not None:
+        parts.append(describe_disarm(move.disarm))
     if move.steal is not None:
         parts.append(describe_steal(move.steal))
     if move.loot is not None:

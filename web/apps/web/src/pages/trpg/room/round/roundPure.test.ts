@@ -93,6 +93,8 @@ describe('roundView', () => {
     expect(outcomeLine(give as unknown as Declaration['outcome'], rules)).toBe('약초 ×2 → 미아');
     const search = { search: { place: null, found: [{ to_place: { entry_id: 'p2', name: '지하실' } }], items: [] } };
     expect(outcomeLine(search as unknown as Declaration['outcome'], rules)).toBe('찾았습니다: 지하실 쪽 길');
+    const trapped = { search: { place: null, found: [], items: [], traps: [{ trap_id: 't1', entry_id: 'i9', name: '올가미' }] } };
+    expect(outcomeLine(trapped as unknown as Declaration['outcome'], rules)).toBe('찾았습니다: 덫(올가미)');
     expect(outcomeLine({ wait: { waited: true, minutes: 30, reason: null } } as unknown as Declaration['outcome'], rules)).toBe('30분을 기다렸습니다');
   });
 

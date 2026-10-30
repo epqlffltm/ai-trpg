@@ -110,6 +110,8 @@ class ActionKind(enum.StrEnum):
     REPAIR = 'repair'
     # 가진 덫 물건 하나를 지금 장소에 숨겨 놓는다(#806). 그 장소에 들어오는 쪽이 피하는 판정을 굴린다
     SET_TRAP = 'set_trap'
+    # 지금 장소의 찾아낸 덫 하나를 해제해 거둔다(#806 ①-b). 덫의 해제 판정을 굴린다. 크게 실패하면 덫이 터진다
+    DISARM = 'disarm'
     # 지금 장소에 닿은 길의 문의 자물쇠를 가진 자물쇠 물건으로 바꿔 단다. 옛 열쇠로는 더 열지 못한다(#281)
     REPLACE = 'replace'
     # 아는 기술이나 주문 하나를 쓴다. 비용을 내고 대상에게 그 효과들이 든다(#805)
@@ -732,6 +734,22 @@ class SetTrapAction(BaseModel):
     item: uuid.UUID
 
 
+class DisarmAction(BaseModel):
+    """
+    지금 서 있는 장소의 찾아낸 덫(trap) 하나를 해제하는 행동(#806 ①-b, app/rounds/trap_actions.py).
+
+    덫 물건에 적힌 해제 판정(능력, 난이도)으로 한 번 굴린다. 성공하면 덫을 거둬 그 물건을 갖는다.
+    실패하면 덫은 그대로다. 목표보다 5 이상 모자라게 실패하면 덫이 해제하던 사람에게 터진다
+    (피하는 판정 없이 효과가 든다).
+    trap 은 테이블의 맵에 보이는 찾아낸 덫의 id(trap_id)다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.DISARM]
+    trap: uuid.UUID
+
+
 AnyAction = (
     CheckAction
     | TreatAction
@@ -759,6 +777,7 @@ AnyAction = (
     | ThrowAction
     | SkillAction
     | SetTrapAction
+    | DisarmAction
 )
 
 # 선언에 붙는 행동. kind 로 종류를 가른다

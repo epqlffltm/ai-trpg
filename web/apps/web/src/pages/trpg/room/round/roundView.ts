@@ -5,7 +5,8 @@
 import type { Declaration, DeclaredAction, Round, Ruleset, TableDetail } from '../../../../api/types';
 import { amountLabel, type Currency } from '../money';
 import { ACTION_LABELS } from './action/actionLabels';
-import { giveLine, itemUseLine, lootLine, putDownLine, restLine, stealLine, takeLine, throwLine, trapSetLine, waitLine } from './actionOutcome';
+import { disarmLine, giveLine, itemUseLine, lootLine, putDownLine, restLine, stealLine, takeLine, throwLine, trapSetLine, waitLine } from './actionOutcome';
+import { knownTrapName } from './action/actionOptions';
 import { doorLine, moveLine } from './mapOutcome';
 
 type Outcome = NonNullable<Declaration['outcome']>;
@@ -54,6 +55,8 @@ function actionDetail(action: DeclaredAction, table: TableDetail): string | null
     case 'loot':
     case 'set_trap':
       return itemName(table, action.item);
+    case 'disarm':
+      return knownTrapName(table, action.trap);
     case 'move':
       return table.map?.places.find((place) => place.entry_id === action.place)?.name ?? null;
     case 'rest':
@@ -266,6 +269,7 @@ function otherLine(outcome: Outcome): string | null {
   if ('take' in outcome) return takeLine(outcome.take);
   if ('put_down' in outcome) return putDownLine(outcome.put_down);
   if ('trap_set' in outcome) return trapSetLine(outcome.trap_set);
+  if ('disarm' in outcome) return disarmLine(outcome.disarm);
   if ('steal' in outcome) return stealLine(outcome.steal);
   if ('loot' in outcome) return lootLine(outcome.loot);
   if ('rest' in outcome) return restLine(outcome.rest);
@@ -282,7 +286,11 @@ function coverLine(cover: Extract<Outcome, { cover: unknown }>['cover']): string
 }
 
 function searchLine(search: Extract<Outcome, { search: unknown }>['search']): string {
-  const found = [...search.found.map((route) => `${route.to_place.name} 쪽 길`), ...search.items.map((item) => `${item.name} ×${item.count}`)];
+  const found = [
+    ...search.found.map((route) => `${route.to_place.name} 쪽 길`),
+    ...search.items.map((item) => `${item.name} ×${item.count}`),
+    ...(search.traps ?? []).map((trap) => `덫(${trap.name})`),
+  ];
   return found.length > 0 ? `찾았습니다: ${found.join(', ')}` : '찾은 것이 없습니다.';
 }
 

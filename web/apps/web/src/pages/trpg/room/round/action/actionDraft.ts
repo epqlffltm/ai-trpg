@@ -67,6 +67,8 @@ export type ActionDraft = {
   minutes: number;
   /** 건넬 돈 */
   amount: number;
+  /** 해제할 덫(#806 ①-b). 맵에 보이는 찾아낸 덫의 trap_id */
+  trap: string;
 };
 
 export function emptyActionDraft(rules: Ruleset): ActionDraft {
@@ -93,6 +95,7 @@ export function emptyActionDraft(rules: Ruleset): ActionDraft {
     length: 'short',
     minutes: 60,
     amount: 1,
+    trap: '',
   };
 }
 
@@ -120,6 +123,8 @@ export function draftFromAction(rules: Ruleset, action: DeclaredAction | null): 
       return { ...base, kind: action.kind, item: action.item, count: action.count };
     case 'set_trap':
       return { ...base, kind: 'set_trap', item: action.item };
+    case 'disarm':
+      return { ...base, kind: 'disarm', trap: action.trap };
     case 'steal':
     case 'loot':
       return { ...base, kind: action.kind, item: action.item, target: refOf(null, action.npc, action.monster) };
@@ -195,6 +200,8 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
       return draft.item ? countHint(draft.count, heldCount(ctx.me, draft.item)) : '내려놓을 물건을 골라 주세요.';
     case 'set_trap':
       return draft.item ? null : '놓을 덫을 골라 주세요.';
+    case 'disarm':
+      return draft.trap ? null : '해제할 덫을 골라 주세요.';
     case 'take':
       return draft.item ? countHint(draft.count, COUNT_MAX) : '주울 물건을 골라 주세요.';
     case 'move':
@@ -309,6 +316,8 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
       return { kind: 'put_down', item: draft.item, count: draft.count };
     case 'set_trap':
       return { kind: 'set_trap', item: draft.item };
+    case 'disarm':
+      return { kind: 'disarm', trap: draft.trap };
     case 'steal':
     case 'loot':
       return { kind: draft.kind, item: draft.item, ...(npc ? { npc } : {}), ...(monster ? { monster } : {}) };

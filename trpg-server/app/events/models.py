@@ -142,6 +142,10 @@ class EventType(enum.StrEnum):
     # 장소에 들어온 캐릭터가 덫을 터뜨렸다(#806). 피하는 판정과 피했는가. 원인은 들어간 것(character_moved)이다.
     # 걸렸으면 바로 뒤에 HP 의 변화(hp_changed)와 입힌 부상(injury_gained)과 맞춘 수치(resource_changed)가 잇는다
     TRAP_SPRUNG = 'trap_sprung'
+    # 캐릭터가 찾아낸 덫을 해제하려 했다(#806 ①-b). 해제 판정과 거뒀는가, 크게 실패해 터졌는가.
+    # 원인은 그 행동의 이벤트다.
+    # 터졌으면 바로 뒤에 HP 의 변화(hp_changed)와 입힌 부상(injury_gained)과 맞춘 수치(resource_changed)가 잇는다
+    TRAP_DISARMED = 'trap_disarmed'
     # 캐릭터가 장비를 착용하거나 벗었다(#276). 본인이 화면에서 바꿨다(행한 사람이 본인). 무엇을 어느 칸에,
     # 끼우느라 함께 빠진 것. 소지품이 줄어 저절로 벗은 것은 적지 않는다(그 일의 이벤트에 소지품이 있다)
     EQUIPMENT_CHANGED = 'equipment_changed'

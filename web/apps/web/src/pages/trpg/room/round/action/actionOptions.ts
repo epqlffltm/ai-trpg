@@ -7,7 +7,7 @@
 //   - 치료: 규칙에 치료(rules.treatment)가 있을 때
 //   - 쉬기: 규칙에 휴식(rules.rest)이 있을 때
 //   - 물건 쓰기: 소모품을 지녔을 때. 던지기(#277): 던지는 판정이 있는 소모품을 지녔고 맞힐 대상(인물, 몬스터, 같은 곳의 동료)이 있을 때. 건네기: 물건을 지녔고 살아 있는 다른 사람이 있을 때. 내려놓기: 물건을 지녔고 맵에 서 있을 때.
-//     덫 놓기(#806): 덫인 물건(판의 물건에 trap 이 있다)을 지녔고 맵에 서 있을 때
+//     덫 놓기(#806): 덫인 물건(판의 물건에 trap 이 있다)을 지녔고 맵에 서 있을 때. 덫 해제(#806 ①-b): 선 곳에 찾아낸 덫이 있을 때
 //   - 가기: 아는 길이 있을 때. 찾기: 맵에 서 있을 때. 줍기: 선 곳에 보이게 놓인 물건이 있을 때
 //   - 훔치기: 규칙에 훔치기(rules.steal)가 있고 물건을 지닌 산 대상이 있을 때. 빼앗기: 물건을 지닌 쓰러지거나 죽은 대상이 있을 때
 //   - 사기, 팔기, 돈 건네기(#278): 화폐가 있는 판에서만. 사기는 파는 것이 있는 상인이 장면에 있을 때, 팔기는 상인이 사 주는 판이고
@@ -58,6 +58,7 @@ const ACTION_ORDER: ActionKind[] = [
   'take',
   'put_down',
   'set_trap',
+  'disarm',
   'steal',
   'loot',
   'buy',
@@ -98,6 +99,8 @@ function kindAvailable(kind: ActionKind, ctx: ActionContext): boolean {
       return heldItems(ctx.me).length > 0 && hereId(ctx) !== null;
     case 'set_trap':
       return trapItems(ctx).length > 0 && hereId(ctx) !== null;
+    case 'disarm':
+      return knownTraps(ctx).length > 0;
     case 'move':
       return ways(ctx).length > 0;
     case 'search':
@@ -359,6 +362,22 @@ export function carriable(ctx: ActionContext): Choice[] {
 }
 
 /** 내가 선 곳에 보이게 놓인 물건 */
+/** 내가 선 곳의 찾아낸 덫들(#806 ①-b). 해제할 수 있는 것 */
+export function knownTraps(ctx: ActionContext) {
+  const here = hereId(ctx);
+  return ctx.table.map?.places.find((place) => place.entry_id === here)?.traps ?? [];
+}
+
+/** 맵에 보이는 찾아낸 덫의 이름. 맵에서 사라졌으면(거뒀거나 터졌다) null */
+export function knownTrapName(table: TableDetail, trapId: string): string | null {
+  for (const place of table.map?.places ?? []) {
+    // 덫 찾기 전(#806 ①-b)의 응답에는 칸이 없다
+    const found = (place.traps ?? []).find((trap) => trap.trap_id === trapId);
+    if (found) return found.name;
+  }
+  return null;
+}
+
 export function placeItems(ctx: ActionContext) {
   const here = hereId(ctx);
   return ctx.table.map?.places.find((place) => place.entry_id === here)?.items ?? [];

@@ -1098,6 +1098,8 @@ class TableTrap(Base):
     set_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     # 놓은 라운드
     round_number: Mapped[int] = mapped_column(Integer)
+    # 찾기 행동으로 찾아낸 시각(#806 ①-b). 찾으면 테이블 모두가 알고, 캐릭터는 밟지 않는다. 못 찾았으면 비어 있다
+    found_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 끝난 시각과 까닭. 아직 놓여 있으면 둘 다 비어 있다
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     ended_reason: Mapped[str | None] = mapped_column(String(20))

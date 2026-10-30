@@ -32,6 +32,7 @@ from app.engine.action import (
     AnyAction,
     BuyAction,
     CoverAction,
+    DisarmAction,
     DoorAction,
     GiveAction,
     LootAction,
@@ -75,7 +76,7 @@ from app.rounds.state import find_declaration, rules_of
 from app.rounds.steals import judge_steal
 from app.rounds.throws import judge_throw
 from app.rounds.trades import judge_buy, judge_pay, judge_sell
-from app.rounds.trap_actions import judge_set_trap, with_traps
+from app.rounds.trap_actions import judge_disarm, judge_set_trap, search_traps, with_traps
 from app.rounds.treatments import judge_treatment
 from app.rounds.waits import judge_wait
 from app.tables import items, resistances, sheets
@@ -88,7 +89,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     행동의 종류에 따라 판정(judge_check), 치료(judge_treatment), 지목(judge_naming),
     물건 쓰기(judge_use, 인물이나 몬스터에게는 judge_use_on, #800), 건네기(judge_give),
     가기(judge_move, 들어간 장소의 덫이 터진다, with_traps, #806), 찾기(search_place), 줍기(judge_take),
-    내려놓기(judge_put_down), 덫 놓기(judge_set_trap, #806), 훔치기(judge_steal), 빼앗기(judge_loot),
+    내려놓기(judge_put_down), 덫 놓기(judge_set_trap, #806), 덫 해제(judge_disarm, #806 ①-b),
+    훔치기(judge_steal), 빼앗기(judge_loot),
     쉬기(judge_rest), 기다리기(judge_wait), 사기(judge_buy), 팔기(judge_sell), 돈 건네기(judge_pay),
     엄폐하기(judge_cover), 문 다루기(judge_door: 잠그기, 열기, 따기, 부수기, #281), 던지기(judge_throw, #277),
     기술 쓰기(judge_skill, #805)다.
@@ -117,6 +119,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
         return judge_put_down(judging, member, action)
     if isinstance(action, SetTrapAction):
         return judge_set_trap(judging, member, action)
+    if isinstance(action, DisarmAction):
+        return judge_disarm(judging, member, action)
     if isinstance(action, StealAction):
         return judge_steal(judging, member, action)
     if isinstance(action, LootAction):
@@ -140,11 +144,13 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
 
 def search_place(judging: Judging, member: TableMember) -> dict:
     """
-    지금 장소를 찾는다. 숨긴 길을 먼저(app/rounds/map_actions.py), 숨긴 물건을 그다음에 굴린다
-    (app/rounds/place_item_actions.py). 찾은 것만 결과에 적는다.
+    지금 장소를 찾는다. 숨긴 길을 먼저(app/rounds/map_actions.py), 숨긴 물건을 그다음에
+    (app/rounds/place_item_actions.py), 숨긴 덫을 마지막에 굴린다(app/rounds/trap_actions.py, #806 ①-b).
+    찾은 것만 결과에 적는다.
     """
     outcome = judge_search(judging, member)
     outcome['search']['items'] = search_items(judging, member)
+    outcome['search']['traps'] = search_traps(judging, member)
     return outcome
 
 

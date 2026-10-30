@@ -43,6 +43,7 @@ from app.engine.action import (
     BuyAction,
     CheckAction,
     CoverAction,
+    DisarmAction,
     DoorAction,
     GiveAction,
     LootAction,
@@ -83,7 +84,7 @@ from app.rounds.steals import require_steal
 from app.rounds.trades import accept_buy, accept_pay, accept_sell
 from app.rounds.victims import find_monster_carried, find_npc_carried
 from app.rounds.waits import accept_wait
-from app.tables import items, npcs, sheets
+from app.tables import items, npcs, sheets, traps
 from app.tables import monsters as table_monsters
 from app.tables import state as table_state
 from app.tables.items import CatalogItem
@@ -473,6 +474,20 @@ def accept_set_trap(table: GameTable, member: TableMember, action: SetTrapAction
     return action.model_dump(mode='json')
 
 
+def accept_disarm(table: GameTable, member: TableMember, action: DisarmAction) -> dict:
+    """
+    덫을 해제하는 행동(#806 ①-b)을 이 테이블과 견주어 보고, 저장할 모양으로 바꾼다.
+
+      - 맵에 서 있지 않으면 RoundConflictError(not_on_map).
+      - 지금 장소에 놓여 있고 테이블이 찾아낸 덫이 아니면 ActionTargetError(trap).
+        없는 덫, 끝난 덫, 다른 장소의 덫, 아직 찾지 못한 덫이 모두 같은 답이다. 답이 다르면 숨긴 덫이 드러난다.
+    """
+    here = standing_place(member)
+    if all(trap.id != action.trap for trap in traps.known_at(table, here)):
+        raise ActionTargetError('trap')
+    return action.model_dump(mode='json')
+
+
 def require_carried_by_victim(scene: Scene, action: StealAction | LootAction) -> None:
     """훔칠 대상(몬스터나 NPC)이 그 물건을 지금 지녔는지 본다. 아니면 ActionTargetError(carried)."""
     if action.monster is not None:
@@ -548,7 +563,7 @@ def accept_action(
     나머지는 행동의 종류마다 본다(accept_check, accept_treatment, accept_naming, accept_use, accept_give,
     accept_move, accept_search, accept_rest, accept_take, accept_put_down, accept_steal, accept_loot,
     accept_buy, accept_sell, accept_pay, accept_cover, 문을 다루는 accept_door, 던지는 accept_throw,
-    기술을 쓰는 accept_skill, #805, 덫을 놓는 accept_set_trap, #806).
+    기술을 쓰는 accept_skill, #805, 덫을 놓는 accept_set_trap, #806, 덫을 해제하는 accept_disarm, #806 ①-b).
     """
     if action is None:
         return None
@@ -575,6 +590,8 @@ def accept_action(
         return accept_put_down(table, member, action)
     if isinstance(action, SetTrapAction):
         return accept_set_trap(table, member, action)
+    if isinstance(action, DisarmAction):
+        return accept_disarm(table, member, action)
     if isinstance(action, StealAction):
         return accept_steal(ruleset, member, scene, action)
     if isinstance(action, LootAction):

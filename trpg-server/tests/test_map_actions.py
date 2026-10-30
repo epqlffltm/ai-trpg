@@ -198,7 +198,7 @@ async def test_searching_finds_a_hidden_route_for_everyone(
     assert dice.remaining == 0
     found = {'from_place': place_ref(lore['square']), 'to_place': place_ref(lore['cellar']), 'two_way': False}
     assert (await outcome_of(client, friend, table, 1, ME)) == {
-        'search': {'place': place_ref(lore['square']), 'found': [found], 'items': []}
+        'search': {'place': place_ref(lore['square']), 'found': [found], 'items': [], 'traps': []}
     }
     [searched] = await events_of(client, friend, table, 'place_searched')
     assert searched['payload'] == {
@@ -207,6 +207,8 @@ async def test_searching_finds_a_hidden_route_for_everyone(
         'place': place_ref(lore['square']),
         'found': [found],
         'items': [],
+        # 찾아낸 덫(#806 ①-b). 덫이 없다
+        'traps': [],
     }
     # 찾은 길과 그 끝은 이제 모두가 안다. 방장도 이제야 안다
     for viewer in (me, friend):
@@ -246,7 +248,7 @@ async def test_a_failed_search_looks_like_finding_nothing(
 
     # 숨긴 길이 있는데 못 찾았다. 결과에는 찾은 길이 없다는 것뿐이다. 굴린 눈도, 숨긴 길이 있었다는 것도 없다
     outcome = await outcome_of(client, me, table, 1, ME)
-    assert outcome == {'search': {'place': place_ref(lore['square']), 'found': [], 'items': []}}
+    assert outcome == {'search': {'place': place_ref(lore['square']), 'found': [], 'items': [], 'traps': []}}
     round_ = (await client.get(table_url(table, '/rounds/1'), headers=me)).json()
     events = (await client.get(table_url(table, '/events'), params={'limit': 100}, headers=me)).json()
     for seen in (round_, events, await read_table(client, me, table)):
@@ -264,7 +266,7 @@ async def test_searching_where_nothing_is_hidden_rolls_nothing(
     await play(client, me, friend, table, narrated, mine=SEARCHING)
 
     searched = await outcome_of(client, me, table, 1, ME)
-    assert searched == {'search': {'place': place_ref(lore['gate']), 'found': [], 'items': []}}
+    assert searched == {'search': {'place': place_ref(lore['gate']), 'found': [], 'items': [], 'traps': []}}
 
 
 async def test_a_route_found_first_is_not_searched_again(

@@ -121,6 +121,8 @@ function Places({ table, map, mine, shortcuts }: PlacesProps) {
   const ways = waysFrom(map, here);
   const place = map.places.find((entry) => entry.entry_id === here);
   const cover = placeCover(table, here);
+  // 찾아낸 덫(#806 ①-b). 덫 찾기 전의 응답에는 칸이 없다
+  const traps = place?.traps ?? [];
   return (
     <section aria-labelledby="places-heading">
       <h3 id="places-heading" className="waiting-room__label">
@@ -140,6 +142,18 @@ function Places({ table, map, mine, shortcuts }: PlacesProps) {
               <li key={item.entry_id}>
                 {item.name} ×{item.count}{' '}
                 <ActionButton shortcuts={shortcuts} patch={{ kind: 'take', item: item.entry_id, count: 1 }} label="줍기" what={item.name} />
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {traps.length > 0 ? (
+        <>
+          <p className="hint">찾아낸 덫(들어가도 밟지 않습니다)</p>
+          <ul className="ways" aria-label="찾아낸 덫">
+            {traps.map((trap) => (
+              <li key={trap.trap_id}>
+                {trap.name} <ActionButton shortcuts={shortcuts} patch={{ kind: 'disarm', trap: trap.trap_id }} label="해제" what={trap.name} />
               </li>
             ))}
           </ul>

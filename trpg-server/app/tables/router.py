@@ -69,6 +69,7 @@ from app.tables import (
     sheets,
     styles,
     time_limits,
+    traps,
     wearing,
     whisper_notices,
 )
@@ -107,6 +108,7 @@ from app.tables.schemas import (
     ItemThrowOut,
     ItemTrapOut,
     JoinRequest,
+    KnownTrapOut,
     LobbyJoinRequest,
     MapOut,
     MemberOut,
@@ -368,6 +370,14 @@ def to_place_items(table: GameTable, place_id: uuid.UUID, catalog: dict[uuid.UUI
     ]
 
 
+def to_known_traps(table: GameTable, place_id: uuid.UUID, catalog: dict[uuid.UUID, CatalogItem]) -> list[KnownTrapOut]:
+    """그 장소에 놓여 있고 테이블이 찾아낸 덫들을 응답으로 바꾼다(#806 ①-b). 찾지 못한 덫은 싣지 않는다."""
+    return [
+        KnownTrapOut(trap_id=trap.id, entry_id=trap.entry_id, name=catalog[trap.entry_id].name)
+        for trap in traps.known_at(table, place_id)
+    ]
+
+
 def to_map(table: GameTable, snapshot: Snapshot, catalog: dict[uuid.UUID, CatalogItem]) -> MapOut | None:
     """
     테이블이 아는 맵을 응답으로 바꾼다. 맵이 없는 판이면 None. 아는 것만 싣는다(app/tables/places.py).
@@ -384,6 +394,7 @@ def to_map(table: GameTable, snapshot: Snapshot, catalog: dict[uuid.UUID, Catalo
                 name=place.name,
                 items=to_place_items(table, place.id, catalog),
                 cover=cover_at(snapshot, place.id),
+                traps=to_known_traps(table, place.id, catalog),
             )
             for place in known.places
         ],

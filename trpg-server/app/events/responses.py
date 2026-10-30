@@ -141,6 +141,20 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'avoid',
         'avoided',
     ),
+    # 덫의 해제도 공개다(#806 ①-b). 해제 판정과 거뒀는가, 터졌는가, 거둔 덫 물건을 가진 개수
+    EventType.TRAP_DISARMED: (
+        'round',
+        'character_name',
+        'place',
+        'trap_id',
+        'entry_id',
+        'name',
+        'done',
+        'reason',
+        'check',
+        'sprung',
+        'kept',
+    ),
     # 착용도 공개다(#276). 소지품처럼 모두에게 보인다
     EventType.EQUIPMENT_CHANGED: ('user_id', 'character_name', 'change', 'entry_id', 'name', 'slots', 'removed'),
     # 사고판 것과 돈을 건넨 것도 공개다(#278). 소지품과 돈은 모두에게 보인다. 못 했으면 까닭(reason)이 있다
@@ -216,7 +230,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     # 판의 사건은 공개다. 일어난 것과 옮긴 것만 적는다. 조건은 적지 않는다(아직 일어나지 않은 사건이 드러나지 않게)
     EventType.HAPPENING_OCCURRED: ('round', 'entry_id', 'name', 'moves'),
     # 찾은 길은 공개다. 찾았으니 이제 모두가 아는 길이다. 굴린 판정은 처음부터 적지 않는다
-    EventType.PLACE_SEARCHED: ('round', 'character_name', 'place', 'found', 'items'),
+    # 찾아낸 덫(#806 ①-b)도 공개다. 찾으면 테이블 모두가 안다
+    EventType.PLACE_SEARCHED: ('round', 'character_name', 'place', 'found', 'items', 'traps'),
     # 문은 맵에 보이는 것이다. 무슨 열쇠로 했는지는 적지 않는다(#281)
     EventType.DOOR_CHANGED: ('round', 'user_id', 'character_name', 'act', 'device', 'from', 'to'),
     # 무작위 조우로 나온 무리는 일행이 서 있는 곳에 나오므로 공개다. 마리의 숫자(HP, 능력치)는 적지 않는다(#283)

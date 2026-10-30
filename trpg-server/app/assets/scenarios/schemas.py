@@ -713,6 +713,7 @@ class ItemTrap(BaseModel):
 
     그 장소에 들어오는 쪽은 피하는 판정(avoid)을 굴린다. 실패하면 효과(effects)가 든다. 피하든 못 피하든 덫은 터진다.
     효과는 피해, 부상, 수치의 맞추기다(소모품의 효과와 같은 모양). 해제(disarm)는 찾은 덫을 거두는 판정이다.
+    찾기(find)는 찾기 행동이 숨긴 덫을 찾는 판정이다(#806 ①-b). 비우면 피하는 판정과 같은 능력과 난이도로 굴린다.
     등급과 부상과 수치와 성질이 룰북에 있는지는 게시할 때 본다(item_trap_invalid).
     """
 
@@ -721,6 +722,7 @@ class ItemTrap(BaseModel):
     avoid: TrapCheck
     disarm: TrapCheck
     effects: TrapEffects
+    find: TrapCheck | None = None
 
 
 class ItemRule(BaseModel):

@@ -2981,13 +2981,13 @@ export interface components {
          */
         DeclarationOut: {
             /** Action */
-            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"] | components["schemas"]["ThrowAction"] | components["schemas"]["SkillAction"] | components["schemas"]["SetTrapAction"]) | null;
+            action: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"] | components["schemas"]["ThrowAction"] | components["schemas"]["SkillAction"] | components["schemas"]["SetTrapAction"] | components["schemas"]["DisarmAction"]) | null;
             /** Character Name */
             character_name: string;
             /** Content */
             content: string | null;
             /** Outcome */
-            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["SkillUseOutcome"] | components["schemas"]["ItemThrowOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["DoorOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["TrapSetOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TradeOutcome"] | components["schemas"]["PayOutcome"] | components["schemas"]["CoverOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
+            outcome: components["schemas"]["CheckOutcome"] | components["schemas"]["NamingOutcome"] | components["schemas"]["ItemUseOutcome"] | components["schemas"]["SkillUseOutcome"] | components["schemas"]["ItemThrowOutcome"] | components["schemas"]["ItemGiveOutcome"] | components["schemas"]["MoveOutcome"] | components["schemas"]["SearchOutcome"] | components["schemas"]["DoorOutcome"] | components["schemas"]["TakeOutcome"] | components["schemas"]["PutDownOutcome"] | components["schemas"]["TrapSetOutcome"] | components["schemas"]["DisarmOutcome"] | components["schemas"]["StealOutcome"] | components["schemas"]["LootOutcome"] | components["schemas"]["RestOutcome"] | components["schemas"]["WaitOutcome"] | components["schemas"]["TradeOutcome"] | components["schemas"]["PayOutcome"] | components["schemas"]["CoverOutcome"] | components["schemas"]["TargetGoneOutcome"] | components["schemas"]["TurnLostOutcome"] | null;
             /**
              * User Id
              * Format: uuid
@@ -3003,7 +3003,7 @@ export interface components {
          */
         DeclarationUpdate: {
             /** Action */
-            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"] | components["schemas"]["ThrowAction"] | components["schemas"]["SkillAction"] | components["schemas"]["SetTrapAction"]) | null;
+            action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"] | components["schemas"]["ThrowAction"] | components["schemas"]["SkillAction"] | components["schemas"]["SetTrapAction"] | components["schemas"]["DisarmAction"]) | null;
             /** Content */
             content: string;
         };
@@ -3024,6 +3024,82 @@ export interface components {
             name: string;
             /** Target */
             target: number;
+        };
+        /**
+         * DisarmAction
+         * @description 지금 서 있는 장소의 찾아낸 덫(trap) 하나를 해제하는 행동(#806 ①-b, app/rounds/trap_actions.py).
+         *
+         *     덫 물건에 적힌 해제 판정(능력, 난이도)으로 한 번 굴린다. 성공하면 덫을 거둬 그 물건을 갖는다.
+         *     실패하면 덫은 그대로다. 목표보다 5 이상 모자라게 실패하면 덫이 해제하던 사람에게 터진다
+         *     (피하는 판정 없이 효과가 든다).
+         *     trap 은 테이블의 맵에 보이는 찾아낸 덫의 id(trap_id)다.
+         */
+        DisarmAction: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "disarm";
+            /**
+             * Trap
+             * Format: uuid
+             */
+            trap: string;
+        };
+        /**
+         * DisarmOut
+         * @description 찾아낸 덫을 해제한 결과(#806 ①-b). 엔진이 정했다(app/rounds/trap_actions.py).
+         *
+         *     done 이 참이면 거뒀다. kept 는 그 덫 물건을 가진 개수다(0 이면 가득이라 그 장소에 보이게 두었다).
+         *     실패하면 덫은 그대로다. 목표보다 5 이상 모자랐으면 덫이 터졌다(sprung). 그때 효과가 해제하던 사람에게 들었다
+         *     (effect, injured, resources). 차례가 왔을 때 굴리지 못했으면 reason 이 있고(gone: 그 덫이 이미 끝났다,
+         *     elsewhere: 그 덫의 장소에 없었다) check 는 None 이다.
+         */
+        DisarmOut: {
+            /** Character Name */
+            character_name: string;
+            check: components["schemas"]["CrossOut"] | null;
+            /** Done */
+            done: boolean;
+            effect?: components["schemas"]["EffectOut"] | null;
+            /** Entry Id */
+            entry_id: string | null;
+            /**
+             * Injured
+             * @default []
+             */
+            injured: components["schemas"]["InjuredOut"][];
+            /** Kept */
+            kept: number;
+            /** Name */
+            name: string | null;
+            place: components["schemas"]["PlaceRefOut"] | null;
+            /** Reason */
+            reason: string | null;
+            /**
+             * Resources
+             * @default []
+             */
+            resources: components["schemas"]["ResourceShiftOut"][];
+            /** Sprung */
+            sprung: boolean;
+            /**
+             * Trap Id
+             * Format: uuid
+             */
+            trap_id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
+        /**
+         * DisarmOutcome
+         * @description 덫을 해제하는 행동의 결과.
+         */
+        DisarmOutcome: {
+            disarm: components["schemas"]["DisarmOut"];
         };
         /**
          * DoorDevice
@@ -3408,7 +3484,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -3526,6 +3602,24 @@ export interface components {
             to_place: components["schemas"]["PlaceRefOut"];
             /** Two Way */
             two_way: boolean;
+        };
+        /**
+         * FoundTrapOut
+         * @description 찾아낸 숨긴 덫 하나(#806 ①-b, app/rounds/trap_actions.py). 이제 테이블 모두가 알고, 캐릭터는 밟지 않는다.
+         */
+        FoundTrapOut: {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Trap Id
+             * Format: uuid
+             */
+            trap_id: string;
         };
         /**
          * FriendlyFire
@@ -4365,6 +4459,7 @@ export interface components {
          *
          *     그 장소에 들어오는 쪽은 피하는 판정(avoid)을 굴린다. 실패하면 효과(effects)가 든다. 피하든 못 피하든 덫은 터진다.
          *     효과는 피해, 부상, 수치의 맞추기다(소모품의 효과와 같은 모양). 해제(disarm)는 찾은 덫을 거두는 판정이다.
+         *     찾기(find)는 찾기 행동이 숨긴 덫을 찾는 판정이다(#806 ①-b). 비우면 피하는 판정과 같은 능력과 난이도로 굴린다.
          *     등급과 부상과 수치와 성질이 룰북에 있는지는 게시할 때 본다(item_trap_invalid).
          */
         ItemTrap: {
@@ -4372,27 +4467,32 @@ export interface components {
             disarm: components["schemas"]["TrapCheck"];
             /** Effects */
             effects: (components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"] | components["schemas"]["AdjustEffect"])[];
+            find?: components["schemas"]["TrapCheck"] | null;
         };
         /**
          * ItemTrapOut
          * @description 덫(#806). 행동 '덫 놓기'(set_trap)로 지금 장소에 숨겨 놓는다. 그 장소에 들어오는 쪽이 피하는 판정(avoid)을 굴리고,
          *     실패하면 효과(effects)가 든다. 해제(disarm)는 찾은 덫을 거두는 판정이다.
+         *     찾기(find)는 찾기 행동이 숨긴 덫을 찾는 판정이다(#806 ①-b). 비었으면 피하는 판정으로 찾는다.
          */
         ItemTrapOut: {
             avoid: components["schemas"]["TrapCheckOut"];
             disarm: components["schemas"]["TrapCheckOut"];
             /** Effects */
             effects: (components["schemas"]["HealEffect"] | components["schemas"]["CureEffect"] | components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"] | components["schemas"]["AdjustEffect"])[];
+            find?: components["schemas"]["TrapCheckOut"] | null;
         };
         /**
          * ItemTrapSnapshot
          * @description 덫(#806). 들어온 쪽이 피하는 판정, 찾은 덫을 거두는 해제 판정, 걸렸을 때의 효과들이다.
+         *     찾기(find)는 숨긴 덫을 찾는 판정이다(#806 ①-b). 없으면 피하는 판정으로 찾는다.
          */
         ItemTrapSnapshot: {
             avoid: components["schemas"]["TrapCheckSnapshot"];
             disarm: components["schemas"]["TrapCheckSnapshot"];
             /** Effects */
             effects: (components["schemas"]["DamageEffect"] | components["schemas"]["InjureEffect"] | components["schemas"]["AdjustEffect"])[];
+            find?: components["schemas"]["TrapCheckSnapshot"] | null;
         };
         /**
          * ItemUseOut
@@ -4464,6 +4564,25 @@ export interface components {
             kind: components["schemas"]["MonsterKind"];
             /** Natures */
             natures: string[];
+        };
+        /**
+         * KnownTrapOut
+         * @description 찾아낸 덫 하나(#806 ①-b). 찾기 행동으로 찾으면 테이블 모두가 안다. 아는 덫은 캐릭터가 밟지 않는다.
+         *     해제하기(disarm)로 거둔다. 이름은 덫 물건의 이름이다.
+         */
+        KnownTrapOut: {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Trap Id
+             * Format: uuid
+             */
+            trap_id: string;
         };
         /**
          * ListingDetail
@@ -6347,7 +6466,7 @@ export interface components {
          *     items 는 그곳에 보이게 놓인 물건들이다. 누군가 서 본 장소만 싣는다. 숨긴 물건은 싣지 않는다
          *     (app/tables/place_items.py). 캐릭터가 내려놓은 것(put_down)도 여기 보인다. 줍기(take)로 가져간다.
          *     cover 는 그 장소의 숨을 곳이 얼마나 좋은지다(#276). 세이브 방식의 판에서 엄폐하면 이 값으로 커버 세이브를 받는다.
-         *     커버가 없는 곳이면 0 이다.
+         *     커버가 없는 곳이면 0 이다. traps 는 찾아낸 덫들이다(#806 ①-b).
          */
         PlaceOut: {
             /**
@@ -6367,6 +6486,11 @@ export interface components {
             items: components["schemas"]["PlaceItemOut"][];
             /** Name */
             name: string;
+            /**
+             * Traps
+             * @default []
+             */
+            traps: components["schemas"]["KnownTrapOut"][];
         };
         /**
          * PlaceRefOut
@@ -8556,6 +8680,11 @@ export interface components {
              */
             items: components["schemas"]["FoundItemOut"][];
             place: components["schemas"]["PlaceRefOut"] | null;
+            /**
+             * Traps
+             * @default []
+             */
+            traps: components["schemas"]["FoundTrapOut"][];
         };
         /**
          * SearchOutcome

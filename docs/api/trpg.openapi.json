@@ -2312,6 +2312,7 @@
                     "buy": "#/components/schemas/BuyAction",
                     "check": "#/components/schemas/CheckAction",
                     "cover": "#/components/schemas/CoverAction",
+                    "disarm": "#/components/schemas/DisarmAction",
                     "force": "#/components/schemas/ForceAction",
                     "give": "#/components/schemas/GiveAction",
                     "lock": "#/components/schemas/LockAction",
@@ -2416,6 +2417,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/SetTrapAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DisarmAction"
                   }
                 ]
               },
@@ -2479,6 +2483,9 @@
                 "$ref": "#/components/schemas/TrapSetOutcome"
               },
               {
+                "$ref": "#/components/schemas/DisarmOutcome"
+              },
+              {
                 "$ref": "#/components/schemas/StealOutcome"
               },
               {
@@ -2539,6 +2546,7 @@
                     "buy": "#/components/schemas/BuyAction",
                     "check": "#/components/schemas/CheckAction",
                     "cover": "#/components/schemas/CoverAction",
+                    "disarm": "#/components/schemas/DisarmAction",
                     "force": "#/components/schemas/ForceAction",
                     "give": "#/components/schemas/GiveAction",
                     "lock": "#/components/schemas/LockAction",
@@ -2643,6 +2651,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/SetTrapAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DisarmAction"
                   }
                 ]
               },
@@ -2704,6 +2715,167 @@
           "target"
         ],
         "title": "Difficulty",
+        "type": "object"
+      },
+      "DisarmAction": {
+        "additionalProperties": false,
+        "description": "지금 서 있는 장소의 찾아낸 덫(trap) 하나를 해제하는 행동(#806 ①-b, app/rounds/trap_actions.py).\n\n덫 물건에 적힌 해제 판정(능력, 난이도)으로 한 번 굴린다. 성공하면 덫을 거둬 그 물건을 갖는다.\n실패하면 덫은 그대로다. 목표보다 5 이상 모자라게 실패하면 덫이 해제하던 사람에게 터진다\n(피하는 판정 없이 효과가 든다).\ntrap 은 테이블의 맵에 보이는 찾아낸 덫의 id(trap_id)다.",
+        "properties": {
+          "kind": {
+            "const": "disarm",
+            "title": "Kind",
+            "type": "string"
+          },
+          "trap": {
+            "format": "uuid",
+            "title": "Trap",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "trap"
+        ],
+        "title": "DisarmAction",
+        "type": "object"
+      },
+      "DisarmOut": {
+        "description": "찾아낸 덫을 해제한 결과(#806 ①-b). 엔진이 정했다(app/rounds/trap_actions.py).\n\ndone 이 참이면 거뒀다. kept 는 그 덫 물건을 가진 개수다(0 이면 가득이라 그 장소에 보이게 두었다).\n실패하면 덫은 그대로다. 목표보다 5 이상 모자랐으면 덫이 터졌다(sprung). 그때 효과가 해제하던 사람에게 들었다\n(effect, injured, resources). 차례가 왔을 때 굴리지 못했으면 reason 이 있고(gone: 그 덫이 이미 끝났다,\nelsewhere: 그 덫의 장소에 없었다) check 는 None 이다.",
+        "properties": {
+          "character_name": {
+            "title": "Character Name",
+            "type": "string"
+          },
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CrossOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "effect": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EffectOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entry_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Id"
+          },
+          "injured": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/InjuredOut"
+            },
+            "title": "Injured",
+            "type": "array"
+          },
+          "kept": {
+            "title": "Kept",
+            "type": "integer"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceRefOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "resources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ResourceShiftOut"
+            },
+            "title": "Resources",
+            "type": "array"
+          },
+          "sprung": {
+            "title": "Sprung",
+            "type": "boolean"
+          },
+          "trap_id": {
+            "format": "uuid",
+            "title": "Trap Id",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "character_name",
+          "place",
+          "trap_id",
+          "entry_id",
+          "name",
+          "done",
+          "reason",
+          "check",
+          "sprung",
+          "kept"
+        ],
+        "title": "DisarmOut",
+        "type": "object"
+      },
+      "DisarmOutcome": {
+        "description": "덫을 해제하는 행동의 결과.",
+        "properties": {
+          "disarm": {
+            "$ref": "#/components/schemas/DisarmOut"
+          }
+        },
+        "required": [
+          "disarm"
+        ],
+        "title": "DisarmOutcome",
         "type": "object"
       },
       "DoorDevice": {
@@ -3600,6 +3772,7 @@
           "item_put_down",
           "trap_set",
           "trap_sprung",
+          "trap_disarmed",
           "equipment_changed",
           "item_traded",
           "money_paid",
@@ -3882,6 +4055,32 @@
           "two_way"
         ],
         "title": "FoundRouteOut",
+        "type": "object"
+      },
+      "FoundTrapOut": {
+        "description": "찾아낸 숨긴 덫 하나(#806 ①-b, app/rounds/trap_actions.py). 이제 테이블 모두가 알고, 캐릭터는 밟지 않는다.",
+        "properties": {
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "trap_id": {
+            "format": "uuid",
+            "title": "Trap Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trap_id",
+          "entry_id",
+          "name"
+        ],
+        "title": "FoundTrapOut",
         "type": "object"
       },
       "FriendlyFire": {
@@ -5803,7 +6002,7 @@
       },
       "ItemTrap": {
         "additionalProperties": false,
-        "description": "덫(#806). 이 물건을 지금 장소에 숨겨 놓을 수 있다(행동 set_trap). 놓으면 소지품에서 하나 빠진다.\n\n그 장소에 들어오는 쪽은 피하는 판정(avoid)을 굴린다. 실패하면 효과(effects)가 든다. 피하든 못 피하든 덫은 터진다.\n효과는 피해, 부상, 수치의 맞추기다(소모품의 효과와 같은 모양). 해제(disarm)는 찾은 덫을 거두는 판정이다.\n등급과 부상과 수치와 성질이 룰북에 있는지는 게시할 때 본다(item_trap_invalid).",
+        "description": "덫(#806). 이 물건을 지금 장소에 숨겨 놓을 수 있다(행동 set_trap). 놓으면 소지품에서 하나 빠진다.\n\n그 장소에 들어오는 쪽은 피하는 판정(avoid)을 굴린다. 실패하면 효과(effects)가 든다. 피하든 못 피하든 덫은 터진다.\n효과는 피해, 부상, 수치의 맞추기다(소모품의 효과와 같은 모양). 해제(disarm)는 찾은 덫을 거두는 판정이다.\n찾기(find)는 찾기 행동이 숨긴 덫을 찾는 판정이다(#806 ①-b). 비우면 피하는 판정과 같은 능력과 난이도로 굴린다.\n등급과 부상과 수치와 성질이 룰북에 있는지는 게시할 때 본다(item_trap_invalid).",
         "properties": {
           "avoid": {
             "$ref": "#/components/schemas/TrapCheck"
@@ -5837,6 +6036,16 @@
             "minItems": 1,
             "title": "Effects",
             "type": "array"
+          },
+          "find": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrapCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -5848,7 +6057,7 @@
         "type": "object"
       },
       "ItemTrapOut": {
-        "description": "덫(#806). 행동 '덫 놓기'(set_trap)로 지금 장소에 숨겨 놓는다. 그 장소에 들어오는 쪽이 피하는 판정(avoid)을 굴리고,\n실패하면 효과(effects)가 든다. 해제(disarm)는 찾은 덫을 거두는 판정이다.",
+        "description": "덫(#806). 행동 '덫 놓기'(set_trap)로 지금 장소에 숨겨 놓는다. 그 장소에 들어오는 쪽이 피하는 판정(avoid)을 굴리고,\n실패하면 효과(effects)가 든다. 해제(disarm)는 찾은 덫을 거두는 판정이다.\n찾기(find)는 찾기 행동이 숨긴 덫을 찾는 판정이다(#806 ①-b). 비었으면 피하는 판정으로 찾는다.",
         "properties": {
           "avoid": {
             "$ref": "#/components/schemas/TrapCheckOut"
@@ -5888,6 +6097,16 @@
             },
             "title": "Effects",
             "type": "array"
+          },
+          "find": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrapCheckOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -5899,7 +6118,7 @@
         "type": "object"
       },
       "ItemTrapSnapshot": {
-        "description": "덫(#806). 들어온 쪽이 피하는 판정, 찾은 덫을 거두는 해제 판정, 걸렸을 때의 효과들이다.",
+        "description": "덫(#806). 들어온 쪽이 피하는 판정, 찾은 덫을 거두는 해제 판정, 걸렸을 때의 효과들이다.\n찾기(find)는 숨긴 덫을 찾는 판정이다(#806 ①-b). 없으면 피하는 판정으로 찾는다.",
         "properties": {
           "avoid": {
             "$ref": "#/components/schemas/TrapCheckSnapshot"
@@ -5933,6 +6152,16 @@
             "minItems": 1,
             "title": "Effects",
             "type": "array"
+          },
+          "find": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrapCheckSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -6119,6 +6348,32 @@
           "natures"
         ],
         "title": "KindImmunity",
+        "type": "object"
+      },
+      "KnownTrapOut": {
+        "description": "찾아낸 덫 하나(#806 ①-b). 찾기 행동으로 찾으면 테이블 모두가 안다. 아는 덫은 캐릭터가 밟지 않는다.\n해제하기(disarm)로 거둔다. 이름은 덫 물건의 이름이다.",
+        "properties": {
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "trap_id": {
+            "format": "uuid",
+            "title": "Trap Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trap_id",
+          "entry_id",
+          "name"
+        ],
+        "title": "KnownTrapOut",
         "type": "object"
       },
       "ListingDetail": {
@@ -10073,7 +10328,7 @@
         "type": "string"
       },
       "PlaceOut": {
-        "description": "아는 장소 하나. 이름은 판의 로어북 장소 항목의 이름이다.\n\n장소의 글은 싣지 않는다. 로어북은 AI 가 읽는 설정이다.\nitems 는 그곳에 보이게 놓인 물건들이다. 누군가 서 본 장소만 싣는다. 숨긴 물건은 싣지 않는다\n(app/tables/place_items.py). 캐릭터가 내려놓은 것(put_down)도 여기 보인다. 줍기(take)로 가져간다.\ncover 는 그 장소의 숨을 곳이 얼마나 좋은지다(#276). 세이브 방식의 판에서 엄폐하면 이 값으로 커버 세이브를 받는다.\n커버가 없는 곳이면 0 이다.",
+        "description": "아는 장소 하나. 이름은 판의 로어북 장소 항목의 이름이다.\n\n장소의 글은 싣지 않는다. 로어북은 AI 가 읽는 설정이다.\nitems 는 그곳에 보이게 놓인 물건들이다. 누군가 서 본 장소만 싣는다. 숨긴 물건은 싣지 않는다\n(app/tables/place_items.py). 캐릭터가 내려놓은 것(put_down)도 여기 보인다. 줍기(take)로 가져간다.\ncover 는 그 장소의 숨을 곳이 얼마나 좋은지다(#276). 세이브 방식의 판에서 엄폐하면 이 값으로 커버 세이브를 받는다.\n커버가 없는 곳이면 0 이다. traps 는 찾아낸 덫들이다(#806 ①-b).",
         "properties": {
           "cover": {
             "default": 0,
@@ -10096,6 +10351,14 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "traps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/KnownTrapOut"
+            },
+            "title": "Traps",
+            "type": "array"
           }
         },
         "required": [
@@ -15128,6 +15391,14 @@
                 "type": "null"
               }
             ]
+          },
+          "traps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FoundTrapOut"
+            },
+            "title": "Traps",
+            "type": "array"
           }
         },
         "required": [
