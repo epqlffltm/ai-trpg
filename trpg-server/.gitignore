@@ -1,2 +1,4 @@
 .pytest_cache/
 .ruff_cache/
+# 무작위 시험(Hypothesis)이 찾은 실패를 다시 돌리려고 적어 두는 곳
+.hypothesis/
