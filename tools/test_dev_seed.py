@@ -155,7 +155,7 @@ class ScenarioTest(unittest.TestCase):
         self.assertEqual(created['start_place'], IDS['수도원 문'])
         self.assertEqual(created['lorebook_ids'], ['l1'])
         listing = next(body for method, path, body in game.calls if path.endswith('/listing') and method == 'PATCH')
-        self.assertEqual(listing['genres'], ['horror', 'mystery'])
+        self.assertEqual(listing['genre'], 'horror')
 
     def test_existing_listed_scenario_with_world_is_left_alone(self):
         game = FakeGame(

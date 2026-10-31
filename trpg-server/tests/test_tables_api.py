@@ -136,7 +136,7 @@ async def publish_scenario(client: AsyncClient, headers: dict[str, str], **field
 async def make_public(client: AsyncClient, headers: dict[str, str], scenario: dict) -> None:
     """시나리오의 1번 판을 공개한다."""
     url = f'{SCENARIOS_URL}/{scenario["id"]}/listing'
-    await client.patch(url, json={'tagline': '바이크와 엘프', 'genres': ['sf']}, headers=headers)
+    await client.patch(url, json={'tagline': '바이크와 엘프', 'genre': 'sf'}, headers=headers)
     response = await client.put(f'{url}/publication', json={'version': 1}, headers=headers)
     assert response.status_code == status.HTTP_200_OK, response.text
 

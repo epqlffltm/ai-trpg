@@ -38,7 +38,7 @@ class Problem(enum.StrEnum):
 
     # 한줄소개가 비어 있다. 목록에 보일 글이 없다
     TAGLINE_EMPTY = 'tagline_empty'
-    # 장르를 하나도 고르지 않았다. 장르로 찾을 수 없다
+    # 장르를 고르지 않았다. 장르로 찾을 수 없고, 화면의 테마도 정할 수 없다
     GENRE_MISSING = 'genre_missing'
 
 
@@ -59,7 +59,7 @@ def find_problems(listing: Listing) -> list[Problem]:
     problems = []
     if not listing.tagline:
         problems.append(Problem.TAGLINE_EMPTY)
-    if not listing.genres:
+    if listing.genre is None:
         problems.append(Problem.GENRE_MISSING)
     return problems
 
@@ -89,19 +89,21 @@ def unpublish(listing: Listing) -> None:
 
 def build_empty(scenario_id: uuid.UUID) -> Listing:
     """아무것도 쓰지 않은 공개 정보를 만든다. 아직 저장하지 않는다."""
-    return Listing(scenario_id=scenario_id, tagline='', description='', genres=[], tags=[], rating=Rating.ALL)
+    return Listing(scenario_id=scenario_id, tagline='', description='', genre=None, tags=[], rating=Rating.ALL)
 
 
-async def get_or_create(session: AsyncSession, scenario_id: uuid.UUID) -> Listing:
+async def start_listing(session: AsyncSession, scenario_id: uuid.UUID, data: ListingUpdate) -> Listing:
     """
-    고칠 공개 정보를 돌려준다. 아직 없으면 빈 것을 만들어 세션에 올린다.
+    처음 쓰는 공개 정보를 만들어 세션에 올린다. 장르가 없으면 ListingNotReadyError(genre_missing).
 
     공개 정보는 처음 고칠 때 생긴다. 시나리오를 만들 때 함께 만들지 않는다.
+    장르는 반드시 하나다. 그래서 처음 쓸 때 장르를 함께 보내야 한다. 장르 없는 행은 만들지 않는다.
     """
-    listing = await repository.find_listing(session, scenario_id)
-    if listing is None:
-        listing = build_empty(scenario_id)
-        repository.add_listing(session, listing)
+    listing = build_empty(scenario_id)
+    apply_changes(listing, data)
+    if listing.genre is None:
+        raise ListingNotReadyError([Problem.GENRE_MISSING])
+    repository.add_listing(session, listing)
     return listing
 
 
@@ -128,15 +130,19 @@ async def update_listing(
     """
     자기 시나리오의 소개 페이지를 고친다. 시나리오가 없으면 AssetNotFoundError.
 
-    공개 중인 페이지를 고쳐서 조건을 못 갖추게 되면 ListingNotReadyError. 고치려면 공개를 먼저 내린다.
+    처음 쓰는데 장르가 없거나, 공개 중인 페이지를 고쳐서 조건을 못 갖추게 되면 ListingNotReadyError.
+    공개 중인 페이지를 비우려면 공개를 먼저 내린다.
     시나리오나 공개 중인 판이 성인용인데 allowed 에 성인용이 없으면 AdultContentRequiredError(#390).
     시나리오를 잠그고 한다. 공개 정보가 없을 때 두 요청이 동시에 만들면 부딪힌다.
     """
     scenario = await assets.lock_owned(session, Scenario, owner_id, scenario_id)
     require_rating(scenario.asset.rating, allowed)
-    listing = await get_or_create(session, scenario_id)
-    require_rating(listing.rating, allowed)
-    apply_changes(listing, data)
+    listing = await repository.find_listing(session, scenario_id)
+    if listing is None:
+        listing = await start_listing(session, scenario_id, data)
+    else:
+        require_rating(listing.rating, allowed)
+        apply_changes(listing, data)
 
     if listing.version_id is not None:
         problems = find_problems(listing)
@@ -164,7 +170,9 @@ async def set_publication(
     공개를 내리는 것은 등급과 상관없이 된다. 성인용을 공개의 길에서 거두는 일이라 막을 까닭이 없다.
     """
     await assets.lock_owned(session, Scenario, owner_id, scenario_id)
-    listing = await get_or_create(session, scenario_id)
+    found = await repository.find_listing(session, scenario_id)
+    # 아직 쓰지 않은 소개 페이지는 저장하지 않는다(장르 없는 행을 만들지 않는다). 공개하려 하면 조건을 못 갖춰 막힌다
+    listing = found or build_empty(scenario_id)
 
     if data.version is None:
         unpublish(listing)
@@ -180,7 +188,8 @@ async def set_publication(
         publish_version(listing, version)
 
     await session.commit()
-    await session.refresh(listing)
+    if found is not None:
+        await session.refresh(listing)
     return listing
 
 

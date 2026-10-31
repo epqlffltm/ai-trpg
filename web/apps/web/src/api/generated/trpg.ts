@@ -3641,13 +3641,16 @@ export interface components {
         };
         /**
          * Genre
-         * @description 장르. 운영자가 정한 목록에서 고른다. 제작자가 자유롭게 적는 것은 태그다.
+         * @description 장르. 운영자가 정한 목록에서 시나리오마다 하나를 고른다. 제작자가 자유롭게 적는 것은 태그다.
          *
+         *     장르는 플레이 화면과 소개 화면의 테마를 정한다. 그래서 하나뿐이고, 이야기의 종류만 둔다.
+         *     누구를 위한 이야기인가(남성향, 여성향)는 장르가 아니다. 태그로 적는다.
          *     목록을 바꾸려면 여기를 고쳐 배포한다. 값은 주소와 저장에 쓰는 이름이고, 화면에 보이는 말은 화면이 정한다.
+         *     asset-server 의 캐릭터와 세계관도 같은 목록을 쓴다. 바꿀 때 함께 바꾼다.
          *     등급(성인용)은 장르가 아니다. 시나리오의 등급에서 온다.
          * @enum {string}
          */
-        Genre: "fantasy" | "wuxia" | "urban_fantasy" | "sf" | "apocalypse" | "horror" | "mystery" | "romance" | "slice_of_life" | "alt_history" | "comedy" | "for_men" | "for_women";
+        Genre: "fantasy" | "wuxia" | "urban_fantasy" | "sf" | "apocalypse" | "horror" | "mystery" | "romance" | "slice_of_life" | "alt_history" | "comedy";
         /**
          * GiveAction
          * @description 물건을 건네는 행동. 가진 물건 count 개를 앉은 다른 사람(target)에게 건넨다(app/rounds/item_actions.py).
@@ -4591,8 +4594,7 @@ export interface components {
         ListingDetail: {
             /** Description */
             description: string;
-            /** Genres */
-            genres: components["schemas"]["Genre"][];
+            genre: components["schemas"]["Genre"] | null;
             /** Published At */
             published_at: string | null;
             rating: components["schemas"]["Rating"] | null;
@@ -4625,14 +4627,14 @@ export interface components {
          * ListingUpdate
          * @description 소개 페이지를 고칠 때 받는 값. 보낸 칸만 바꾼다.
          *
-         *     None 은 "보내지 않았다"는 뜻이다. 장르나 태그를 전부 없애려면 빈 목록을 보낸다.
+         *     None 은 "보내지 않았다"는 뜻이다. 태그를 전부 없애려면 빈 목록을 보낸다.
+         *     장르는 반드시 하나다. 처음 쓸 때 함께 보내야 하고(없으면 409 genre_missing), 그 뒤에는 다른 것으로 바꿀 수만 있다.
          *     어느 판을 공개할지는 여기서 받지 않는다. 공개는 따로 하는 일이다(PublicationUpdate).
          */
         ListingUpdate: {
             /** Description */
             description?: string | null;
-            /** Genres */
-            genres?: components["schemas"]["Genre"][] | null;
+            genre?: components["schemas"]["Genre"] | null;
             /** Tagline */
             tagline?: string | null;
             /** Tags */
@@ -6735,8 +6737,7 @@ export interface components {
             creator_id: string;
             /** Description */
             description: string;
-            /** Genres */
-            genres: components["schemas"]["Genre"][];
+            genre: components["schemas"]["Genre"];
             /**
              * Published At
              * Format: date-time
@@ -6781,8 +6782,7 @@ export interface components {
             creator_id: string;
             /** Description */
             description: string;
-            /** Genres */
-            genres: components["schemas"]["Genre"][];
+            genre: components["schemas"]["Genre"];
             /** Openings */
             openings: string[];
             /** Pregens */

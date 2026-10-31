@@ -2,14 +2,14 @@
 // 시나리오의 소개 탭(B9). 공개 목록(B1)과 소개(B2)에 보일 한줄소개, 소개글, 장르, 태그를 탭의 저장으로 보낸다.
 // 판에 굳지 않는다. 공개 중이면 저장하자마자 공개된 소개가 바뀐다. 공개할 판은 게시 탭에서 고른다.
 
-import { Button, Checkbox, Notice, TextField } from '@ai-trpg/ui';
+import { Button, Notice, Radio, TextField } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import type { Genre, ListingDetail, ScenarioDetail } from '../../../../api/types';
 import { TextAreaField } from '../../../../components/TextAreaField';
 import { GENRE_VALUES, genreLabel } from '../../labels';
-import { GENRES_MAX, LISTING_DESCRIPTION_MAX, listingDraft, listingHints, TAGLINE_MAX, TAG_MAX, TAGS_MAX, toggleGenre, toListingBody, type ListingDraft } from './listingForm';
+import { LISTING_DESCRIPTION_MAX, listingDraft, listingHints, TAGLINE_MAX, TAG_MAX, TAGS_MAX, toListingBody, type ListingDraft } from './listingForm';
 import { listingQuery } from './scenarioQueries';
 import { ScenarioForm } from './ScenarioForm';
 import { useListingSave } from './useListingSave';
@@ -71,7 +71,7 @@ function ListingForm({ scenarioId, listing }: { scenarioId: string; listing: Lis
         error={hints.description}
         hint={`소개 화면에 보입니다. 진행 지침이나 GM 메모와 달리 누구나 봅니다. ${draft.description.length.toLocaleString('ko-KR')} / ${LISTING_DESCRIPTION_MAX.toLocaleString('ko-KR')}자.`}
       />
-      <GenreChoices genres={draft.genres} error={hints.genres} onChange={(genres) => update({ genres })} />
+      <GenreChoices genre={draft.genre} error={hints.genre} onChange={(genre) => update({ genre })} />
       <div className="field-with-hint">
         <TextField label="태그(선택, 쉼표로 나눔)" name="tags" value={draft.tags} onChange={(event) => update({ tags: event.target.value })} error={hints.tags} />
         <p className="ui-field__hint">
@@ -93,25 +93,18 @@ function PublicationStatus({ scenarioId, listing }: { scenarioId: string; listin
   );
 }
 
-type GenreProps = { genres: Genre[]; error: string | undefined; onChange: (genres: Genre[]) => void };
+type GenreProps = { genre: Genre | null; error: string | undefined; onChange: (genre: Genre) => void };
 
-function GenreChoices({ genres, error, onChange }: GenreProps) {
-  const full = genres.length >= GENRES_MAX;
+function GenreChoices({ genre: chosen, error, onChange }: GenreProps) {
   return (
     <fieldset className="scenario-choices scenario-genres">
       <legend>장르</legend>
       <p className="ui-field__hint">
-        공개하려면 하나는 있어야 합니다. {GENRES_MAX}개까지 고릅니다({genres.length} / {GENRES_MAX}).
+        반드시 하나를 고릅니다. 장르마다 플레이 화면과 소개 화면의 모양이 다릅니다. 남성향·여성향은 태그로 적으세요.
       </p>
       <div className="scenario-genres__list">
         {GENRE_VALUES.map((genre) => (
-          <Checkbox
-            key={genre}
-            label={genreLabel(genre)}
-            checked={genres.includes(genre)}
-            disabled={full && !genres.includes(genre)}
-            onChange={() => onChange(toggleGenre(genres, genre))}
-          />
+          <Radio key={genre} name="scenario_genre" label={genreLabel(genre)} checked={chosen === genre} onChange={() => onChange(genre)} />
         ))}
       </div>
       {error ? <p className="ui-field__error">{error}</p> : null}

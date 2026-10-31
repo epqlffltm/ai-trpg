@@ -18,7 +18,7 @@ const LISTING = {
   title: '잿빛 수도원',
   tagline: '',
   description: '',
-  genres: ['horror'],
+  genre: 'horror',
   tags: [],
   rating: 'all',
   recommended_players: { min: 2, max: 4 },

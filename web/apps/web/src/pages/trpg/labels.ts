@@ -12,7 +12,7 @@ import type {
   RecommendedPlayers,
 } from '../../api/types';
 
-// 차례가 곧 거르는 칩의 차례다. 앞의 열한 개는 이야기의 종류, 뒤의 둘은 누구를 위한 이야기인가(화면 명세 B1)
+// 차례가 곧 거르는 칩과 고르는 단추의 차례다. 장르는 이야기의 종류만이다(남성향·여성향은 태그, 화면 명세 B1)
 const GENRES: Record<Genre, string> = {
   fantasy: '판타지',
   wuxia: '무협',
@@ -25,8 +25,6 @@ const GENRES: Record<Genre, string> = {
   slice_of_life: '일상',
   alt_history: '대체역사',
   comedy: '코미디',
-  for_men: '남성향',
-  for_women: '여성향',
 };
 
 const CHARACTER_MODES: Record<CharacterMode, string> = {

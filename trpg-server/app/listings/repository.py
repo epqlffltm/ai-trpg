@@ -68,7 +68,7 @@ def visible(allowed_ratings: list[Rating]) -> Select[PublicRow]:
 def filtered(query: Select[PublicRow], where: ListingFilter) -> Select[PublicRow]:
     """장르, 태그, 인원으로 거른다. 비워 둔 조건은 거르지 않는다."""
     if where.genre is not None:
-        query = query.where(Listing.genres.contains([where.genre]))
+        query = query.where(Listing.genre == where.genre)
     if where.tag is not None:
         query = query.where(Listing.tags.contains([where.tag]))
     if where.players is not None:

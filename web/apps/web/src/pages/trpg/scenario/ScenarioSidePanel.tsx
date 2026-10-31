@@ -17,7 +17,7 @@ export function ScenarioSidePanel({ listing }: { listing: PublicListingDetail })
         <dt>등급</dt>
         <dd>{listing.rating === 'adult' ? '성인' : '전체이용가'}</dd>
         <dt>장르</dt>
-        <dd>{listing.genres.map(genreLabel).join(', ') || '없음'}</dd>
+        <dd>{listing.genre ? genreLabel(listing.genre) : '없음'}</dd>
         <dt>추천 인원</dt>
         <dd>{playersLabel(listing.recommended_players)}</dd>
         <dt>판</dt>
