@@ -45,7 +45,7 @@ async def read(client: AsyncClient, headers: dict, conversation: dict) -> dict:
 def test_format_four_is_read():
     document = WorldDocument.model_validate(world_document(fmt=4, genre='romance'))
 
-    assert (WORLD_FORMAT_MAX, document.format, document.model_dump()['genre']) == (4, 4, 'romance')
+    assert (WORLD_FORMAT_MAX >= 4, document.format, document.model_dump()['genre']) == (True, 4, 'romance')
 
 
 @pytest.mark.parametrize(

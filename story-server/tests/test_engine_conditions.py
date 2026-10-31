@@ -47,6 +47,7 @@ def met(kind: str, now: StoryState, target: str | None = None, value: str | None
         ('slot_is', 'night', None, 1, state(minutes=clock(1, 20)), state()),
         ('accompanied', 'mina', None, 1, state(companions=('yuna', 'mina')), state(companions=('yuna',))),
         ('event_seen', 'meet', None, 1, state(seen=frozenset({'meet'})), state()),
+        ('ending_seen', 'solo', None, 1, state(cleared=frozenset({'solo'})), state(seen=frozenset({'solo'}))),
     ],
 )
 def test_each_kind(kind: str, target, value, count: int, yes: StoryState, no: StoryState):

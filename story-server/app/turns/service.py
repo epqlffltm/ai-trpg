@@ -460,9 +460,13 @@ def settled_values(generation: Generation, capture: bool, settlement: Settlement
 # --- 응답을 시작하기 전 ---
 
 
-async def state_at(session: AsyncSession, world: World, path: list[Message]) -> StoryState:
-    """가지의 끝의 상태. 말에 붙은 상태 가운데 끝에서 가장 가까운 것이고, 없으면 처음의 상태다."""
-    return state_on_path(world, await conversations.states_on(session, [message.id for message in path]))
+async def state_at(session: AsyncSession, world: World, conversation: Conversation, path: list[Message]) -> StoryState:
+    """
+    가지의 끝의 상태. 말에 붙은 상태 가운데 끝에서 가장 가까운 것이고, 없으면 처음의 상태다.
+    세션에 굳힌 계정의 본 엔딩(회차 혜택)을 붙인다.
+    """
+    states = await conversations.states_on(session, [message.id for message in path])
+    return state_on_path(world, states, frozenset(conversation.cleared_endings or ()))
 
 
 # 차례를 쥔 채로 말 한 번을 세션에 올리는 것(record_turn, record_action 에 인자를 채운 것)
@@ -598,7 +602,7 @@ async def branch_at(
     """leaf_id 에서 끝나는 가지. 판을 읽고, 가지의 말들과 끝의 상태, 세션의 페르소나를 읽는다."""
     world = read_world(imported.document)
     path = await conversations.active_path(session, leaf_id)
-    state = await state_at(session, world, path)
+    state = await state_at(session, world, conversation, path)
     persona = persona_card(await conversations.persona_of(session, conversation.id))
     memory = render_memory(await notes_for_prompt(session, conversation.id))
     summaries = await memory_store.summaries_on(session, [message.id for message in path])
