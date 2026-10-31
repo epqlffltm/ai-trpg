@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import Asset, AssetType, Scenario, ScenarioVersion
 from app.engine.templates import SRD5
-from app.listings.models import LISTING_MAX_GENRES, LISTING_MAX_TAGS, TAG_MAX_LENGTH, TAGLINE_MAX_LENGTH, Listing
+from app.listings.models import LISTING_MAX_TAGS, TAG_MAX_LENGTH, TAGLINE_MAX_LENGTH, Listing
 from app.main import API_PREFIX
 from tests.narration_model import TEST_MODEL, with_model
 from tests.sheets import SHEET
@@ -46,7 +46,7 @@ OPENING = '사이렌이 울린다. 뒤를 돌아보니 마법소년 차림의 �
 GM_GUIDE = '진지한 장면은 금지다. 모든 추격은 바이크로 한다.'
 TAGLINE = '바이크, 엘프, 그리고 17건의 사형 선고'
 DESCRIPTION = '실연당한 악역영애와 함께 달린다. 뒤는 돌아보지 않는 편이 좋다.'
-GENRES = ['sf', 'comedy']
+GENRE = 'sf'
 TAGS = ['추격전', '폭주족', '바이크']
 
 
@@ -109,7 +109,7 @@ async def publish_version(client: AsyncClient, headers: dict[str, str], scenario
 
 async def write_page(client: AsyncClient, headers: dict[str, str], scenario: dict, **fields) -> dict:
     """소개 페이지를 쓴다. 공개할 조건(한줄소개, 장르)을 갖춘 내용이 기본이다."""
-    body = {'tagline': TAGLINE, 'genres': GENRES}
+    body = {'tagline': TAGLINE, 'genre': GENRE}
     body.update(fields)
     response = await client.patch(listing_url(scenario), json=body, headers=headers)
     assert response.status_code == status.HTTP_200_OK, response.text
@@ -118,7 +118,7 @@ async def write_page(client: AsyncClient, headers: dict[str, str], scenario: dic
 
 async def make_public(client: AsyncClient, headers: dict[str, str], **fields) -> dict:
     """시나리오를 만들고, 게시하고, 소개 페이지를 쓰고, 공개까지 한다. 시나리오를 돌려준다."""
-    page = {key: fields.pop(key) for key in ('tagline', 'description', 'genres', 'tags') if key in fields}
+    page = {key: fields.pop(key) for key in ('tagline', 'description', 'genre', 'tags') if key in fields}
     scenario = await create_scenario(client, headers, **fields)
     number = await publish_version(client, headers, scenario)
     await write_page(client, headers, scenario, **page)
@@ -159,7 +159,7 @@ async def test_a_scenario_starts_with_an_empty_page(client: AsyncClient, my_head
         'scenario_id': scenario['id'],
         'tagline': '',
         'description': '',
-        'genres': [],
+        'genre': None,
         'tags': [],
         'version': None,
         'rating': None,
@@ -175,7 +175,7 @@ async def test_writes_the_page(client: AsyncClient, my_headers: dict[str, str]):
 
     assert page['tagline'] == TAGLINE
     assert page['description'] == DESCRIPTION
-    assert page['genres'] == GENRES
+    assert page['genre'] == GENRE
     assert page['tags'] == TAGS
     # 소개 페이지를 쓰는 것과 공개하는 것은 따로다
     assert page['version'] is None
@@ -194,18 +194,51 @@ async def test_updates_only_the_fields_that_were_sent(client: AsyncClient, my_he
     assert page['tagline'] == '새 한줄소개'
     # 보내지 않은 칸과 null 로 보낸 칸은 그대로다
     assert page['description'] == DESCRIPTION
-    assert page['genres'] == GENRES
+    assert page['genre'] == GENRE
     assert page['tags'] == TAGS
 
 
-async def test_an_empty_list_clears_genres_and_tags(client: AsyncClient, my_headers: dict[str, str]):
+async def test_an_empty_list_clears_the_tags(client: AsyncClient, my_headers: dict[str, str]):
     scenario = await create_scenario(client, my_headers)
     await write_page(client, my_headers, scenario, tags=TAGS)
 
-    response = await client.patch(listing_url(scenario), json={'genres': [], 'tags': []}, headers=my_headers)
+    response = await client.patch(listing_url(scenario), json={'tags': []}, headers=my_headers)
 
-    assert response.json()['genres'] == []
     assert response.json()['tags'] == []
+    # 장르는 그대로다
+    assert response.json()['genre'] == GENRE
+
+
+async def test_the_first_write_needs_a_genre(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create_scenario(client, my_headers)
+
+    response = await client.patch(listing_url(scenario), json={'tagline': TAGLINE}, headers=my_headers)
+
+    # 장르는 반드시 하나다. 장르 없이는 소개 페이지를 만들지 않는다
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.json()['problems'] == ['genre_missing']
+    assert (await client.get(listing_url(scenario), headers=my_headers)).json()['tagline'] == ''
+
+
+async def test_unpublishing_a_page_never_written_saves_nothing(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create_scenario(client, my_headers)
+
+    response = await client.put(f'{listing_url(scenario)}/publication', json={'version': None}, headers=my_headers)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert (response.json()['version'], response.json()['genre']) == (None, None)
+
+
+async def test_the_genre_can_be_changed_but_not_cleared(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await create_scenario(client, my_headers)
+    await write_page(client, my_headers, scenario)
+
+    changed = await client.patch(listing_url(scenario), json={'genre': 'horror'}, headers=my_headers)
+    sent_null = await client.patch(listing_url(scenario), json={'genre': None}, headers=my_headers)
+
+    # 장르는 하나다. 다른 것으로 바꿀 수 있고, null 은 보내지 않은 것으로 본다(비우지 않는다)
+    assert changed.json()['genre'] == 'horror'
+    assert sent_null.json()['genre'] == 'horror'
 
 
 async def test_tags_and_the_tagline_are_trimmed(client: AsyncClient, my_headers: dict[str, str]):
@@ -217,14 +250,13 @@ async def test_tags_and_the_tagline_are_trimmed(client: AsyncClient, my_headers:
     assert page['tags'] == ['추격전', '바이크']
 
 
-async def test_accepts_the_most_genres_and_tags_allowed(client: AsyncClient, my_headers: dict[str, str]):
+async def test_accepts_the_most_tags_allowed(client: AsyncClient, my_headers: dict[str, str]):
     scenario = await create_scenario(client, my_headers)
-    genres = ['fantasy', 'wuxia', 'for_men'][:LISTING_MAX_GENRES]
     tags = [f'태그{number}' for number in range(LISTING_MAX_TAGS)]
 
-    page = await write_page(client, my_headers, scenario, genres=genres, tags=tags)
+    page = await write_page(client, my_headers, scenario, genre='fantasy', tags=tags)
 
-    assert page['genres'] == genres
+    assert page['genre'] == 'fantasy'
     assert page['tags'] == tags
 
 
@@ -233,13 +265,16 @@ async def test_accepts_the_most_genres_and_tags_allowed(client: AsyncClient, my_
     [
         {'tagline': '가' * (TAGLINE_MAX_LENGTH + 1)},
         {'description': '가' * 5001},
-        # 장르는 정해진 목록에서만 고른다
-        {'genres': ['없는장르']},
-        {'genres': ['fantasy', 'wuxia', 'sf', 'horror'][: LISTING_MAX_GENRES + 1]},
-        {'genres': ['sf', 'sf']},
-        {'genres': 'sf'},
+        # 장르는 정해진 목록에서 하나만 고른다
+        {'genre': '없는장르'},
+        {'genre': ['sf']},
+        # 장르를 하나로 줄이기 전의 칸은 받지 않는다
+        {'genres': ['sf']},
         # 성인용은 장르가 아니다. 시나리오의 등급에서 온다
-        {'genres': ['adult']},
+        {'genre': 'adult'},
+        # 남성향·여성향은 장르가 아니다. 태그로 적는다
+        {'genre': 'for_men'},
+        {'genre': 'for_women'},
         {'tags': [f'태그{number}' for number in range(LISTING_MAX_TAGS + 1)]},
         {'tags': ['가' * (TAG_MAX_LENGTH + 1)]},
         {'tags': ['   ']},
@@ -350,10 +385,11 @@ async def test_taking_it_down_keeps_the_page(client: AsyncClient, my_headers: di
 @pytest.mark.parametrize(
     ('page', 'problems'),
     [
+        # 장르 없이 처음 쓰면 소개 페이지가 생기지 않는다(test_the_first_write_needs_a_genre). 아무것도 갖추지 못했다
         ({}, ['tagline_empty', 'genre_missing']),
-        ({'tagline': TAGLINE}, ['genre_missing']),
-        ({'genres': GENRES}, ['tagline_empty']),
-        ({'tagline': '   ', 'genres': GENRES}, ['tagline_empty']),
+        ({'tagline': TAGLINE}, ['tagline_empty', 'genre_missing']),
+        ({'genre': GENRE}, ['tagline_empty']),
+        ({'tagline': '   ', 'genre': GENRE}, ['tagline_empty']),
     ],
 )
 async def test_a_page_that_is_not_ready_cannot_go_public(
@@ -374,11 +410,11 @@ async def test_a_page_that_is_not_ready_cannot_go_public(
 async def test_a_public_page_cannot_be_emptied(client: AsyncClient, my_headers: dict[str, str]):
     scenario = await make_public(client, my_headers)
 
-    response = await client.patch(listing_url(scenario), json={'tagline': '', 'genres': []}, headers=my_headers)
+    response = await client.patch(listing_url(scenario), json={'tagline': ''}, headers=my_headers)
 
     # 공개 중인 페이지는 공개할 조건을 계속 갖춰야 한다. 비우려면 공개를 먼저 내린다
     assert response.status_code == status.HTTP_409_CONFLICT
-    assert response.json()['problems'] == ['tagline_empty', 'genre_missing']
+    assert response.json()['problems'] == ['tagline_empty']
     assert (await client.get(listing_url(scenario), headers=my_headers)).json()['tagline'] == TAGLINE
 
 
@@ -436,7 +472,7 @@ async def test_others_see_a_public_scenario(
         'title': TITLE,
         'tagline': TAGLINE,
         'description': DESCRIPTION,
-        'genres': GENRES,
+        'genre': GENRE,
         'tags': TAGS,
         'rating': 'all',
         'recommended_players': {'min': 1, 'max': 4},
@@ -506,9 +542,9 @@ async def test_lists_the_most_recently_published_first(client: AsyncClient, my_h
 
 
 async def test_filters_by_genre_and_tag(client: AsyncClient, my_headers: dict[str, str]):
-    chase = await make_public(client, my_headers, title='추격전', genres=['sf', 'comedy'], tags=['바이크'])
-    ghost = await make_public(client, my_headers, title='귀신', genres=['horror'], tags=['폐가', '바이크'])
-    sword = await make_public(client, my_headers, title='검객', genres=['wuxia', 'comedy'], tags=['복수'])
+    chase = await make_public(client, my_headers, title='추격전', genre='comedy', tags=['바이크'])
+    ghost = await make_public(client, my_headers, title='귀신', genre='horror', tags=['폐가', '바이크'])
+    sword = await make_public(client, my_headers, title='검객', genre='comedy', tags=['복수'])
 
     async def ids(**params) -> set[str]:
         response = await client.get(LISTINGS_URL, params=params, headers=my_headers)
@@ -691,14 +727,6 @@ async def make_scenario(session: AsyncSession) -> uuid.UUID:
     session.add(scenario)
     await session.commit()
     return scenario.asset_id
-
-
-async def test_the_database_rejects_too_many_genres(session: AsyncSession):
-    scenario_id = await make_scenario(session)
-    session.add(Listing(scenario_id=scenario_id, genres=['fantasy', 'wuxia', 'sf', 'horror']))
-
-    with pytest.raises(IntegrityError):
-        await session.commit()
 
 
 async def test_the_database_rejects_too_many_tags(session: AsyncSession):

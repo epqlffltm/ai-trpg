@@ -14,7 +14,7 @@ const SCENARIO = {
   title: '잿빛 수도원',
   tagline: '종이 울리지 않는 밤',
   description: '',
-  genres: ['호러'],
+  genre: 'horror',
   tags: [],
   rating: 'all',
   recommended_players: { min: 2, max: 4 },

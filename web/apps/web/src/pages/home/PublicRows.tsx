@@ -41,7 +41,7 @@ function PublicScenariosRow({ signedIn }: { signedIn: boolean }) {
             to={`/trpg/scenarios/${listing.scenario_id}`}
             title={listing.title}
             description={listing.tagline}
-            meta={[ratingBadge(listing.rating), ...listing.genres.map(genreLabel)]}
+            meta={[ratingBadge(listing.rating), listing.genre ? genreLabel(listing.genre) : null]}
           />
         ))}
       </ul>

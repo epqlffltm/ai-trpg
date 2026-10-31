@@ -12,7 +12,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME } from '../../../../test/tableFixtures';
-import { listingHints, toggleGenre, toListingBody } from './listingForm';
+import { listingHints, toListingBody } from './listingForm';
 import { describeListingProblem, describePublicationProblem } from './listingProblem';
 
 const GAME = '/api/v1/game';
@@ -21,10 +21,10 @@ const SCENARIO = `${GAME}/scenarios/${ID}`;
 const LISTING = `${SCENARIO}/listing`;
 const PUBLICATION = `${LISTING}/publication`;
 
-type Listing = { tagline: string; description: string; genres: string[]; tags: string[]; version: number | null };
+type Listing = { tagline: string; description: string; genre: string | null; tags: string[]; version: number | null };
 
-const EMPTY: Listing = { tagline: '', description: '', genres: [], tags: [], version: null };
-const READY: Listing = { tagline: '비 내리는 밤의 수도원', description: '', genres: ['horror'], tags: ['수도원'], version: 1 };
+const EMPTY: Listing = { tagline: '', description: '', genre: null, tags: [], version: null };
+const READY: Listing = { tagline: '비 내리는 밤의 수도원', description: '', genre: 'horror', tags: ['수도원'], version: 1 };
 
 function detail(listing: Listing) {
   return { scenario_id: ID, ...listing, rating: listing.version === null ? null : 'all', published_at: null, updated_at: null };
@@ -69,7 +69,7 @@ afterEach(() => {
 });
 
 describe('소개 탭', () => {
-  it('한줄소개, 소개글, 장르(셋까지), 쉼표로 나눈 태그를 탭의 저장으로 보낸다. 같은 태그는 막는다', async () => {
+  it('한줄소개, 소개글, 장르(하나), 쉼표로 나눈 태그를 탭의 저장으로 보낸다. 같은 태그는 막는다', async () => {
     const { seen } = signedIn(EMPTY);
     renderApp(`/trpg/studio/scenarios/${ID}?tab=listing`);
 
@@ -77,8 +77,12 @@ describe('소개 탭', () => {
     expect(form.getByText(/공개하지 않았습니다/)).toBeInTheDocument();
     await userEvent.type(form.getByRole('textbox', { name: '한줄소개' }), '  비 내리는 밤의 수도원  ');
     await userEvent.type(form.getByRole('textbox', { name: '소개글(선택)' }), '종이 열 번 울린다.');
-    for (const genre of ['호러', '미스터리', '판타지']) await userEvent.click(form.getByRole('checkbox', { name: genre }));
-    expect(form.getByRole('checkbox', { name: 'SF' })).toBeDisabled();
+    // 장르는 하나다. 다른 것을 누르면 바뀐다. 남성향·여성향은 장르에 없다(태그)
+    await userEvent.click(form.getByRole('radio', { name: '호러' }));
+    await userEvent.click(form.getByRole('radio', { name: '미스터리' }));
+    expect(form.getByRole('radio', { name: '호러' })).not.toBeChecked();
+    expect(form.getByRole('radio', { name: '미스터리' })).toBeChecked();
+    expect(form.queryByRole('radio', { name: '남성향' })).not.toBeInTheDocument();
     await userEvent.type(form.getByRole('textbox', { name: '태그(선택, 쉼표로 나눔)' }), '수도원, 언데드, 수도원');
     expect(form.getByText('같은 태그가 두 번 있습니다.')).toBeInTheDocument();
     expect(form.getByRole('button', { name: '저장' })).toBeDisabled();
@@ -88,20 +92,33 @@ describe('소개 탭', () => {
 
     expect(await form.findByText('저장했습니다.')).toBeInTheDocument();
     expect(sent(seen, 'PATCH', LISTING)).toEqual([
-      { tagline: '비 내리는 밤의 수도원', description: '종이 열 번 울린다.', genres: ['horror', 'mystery', 'fantasy'], tags: ['수도원', '언데드'] },
+      { tagline: '비 내리는 밤의 수도원', description: '종이 열 번 울린다.', genre: 'mystery', tags: ['수도원', '언데드'] },
     ]);
     expect(form.getByRole('textbox', { name: '한줄소개' })).toHaveValue('비 내리는 밤의 수도원');
   });
 
-  it('공개 중이면 공개된 소개로 가는 길을 보이고, 한줄소개나 장르를 비우면 저장을 막는다', async () => {
+  it('공개 중이면 공개된 소개로 가는 길을 보이고, 한줄소개를 비우면 저장을 막는다', async () => {
     signedIn(READY);
     renderApp(`/trpg/studio/scenarios/${ID}?tab=listing`);
 
     const form = within(await (await panel('소개')).findByRole('form', { name: '소개' }));
     expect(form.getByRole('link', { name: '공개된 소개 보기' })).toHaveAttribute('href', `/trpg/scenarios/${ID}`);
-    await userEvent.click(form.getByRole('checkbox', { name: '호러' }));
-    expect(form.getByText(/장르가 없습니다. 공개 중에는 비울 수 없습니다/)).toBeInTheDocument();
+    expect(form.getByRole('radio', { name: '호러' })).toBeChecked();
+    await userEvent.clear(form.getByRole('textbox', { name: '한줄소개' }));
+    expect(form.getByText(/공개 중에는 비울 수 없습니다/)).toBeInTheDocument();
     expect(form.getByRole('button', { name: '저장' })).toBeDisabled();
+  });
+
+  it('아직 쓰지 않은 소개는 장르를 고르기 전까지 저장을 막는다(장르는 반드시 하나다)', async () => {
+    signedIn(EMPTY);
+    renderApp(`/trpg/studio/scenarios/${ID}?tab=listing`);
+
+    const form = within(await (await panel('소개')).findByRole('form', { name: '소개' }));
+    await userEvent.type(form.getByRole('textbox', { name: '한줄소개' }), '비 내리는 밤');
+    expect(form.getByText('장르를 골라 주세요. 장르는 반드시 하나입니다.')).toBeInTheDocument();
+    expect(form.getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.click(form.getByRole('radio', { name: '판타지' }));
+    expect(form.getByRole('button', { name: '저장' })).toBeEnabled();
   });
 });
 
@@ -132,7 +149,7 @@ describe('공개', () => {
     const publish = await panel('게시');
     const list = within(await publish.findByRole('list', { name: '판' }));
     expect(await list.findByRole('button', { name: '2판 공개' })).toBeDisabled();
-    expect(publish.getByText(/한줄소개가 비어 있습니다. 장르를 하나도 고르지 않았습니다./)).toBeInTheDocument();
+    expect(publish.getByText(/한줄소개가 비어 있습니다. 장르를 고르지 않았습니다./)).toBeInTheDocument();
     await userEvent.click(publish.getByRole('button', { name: '소개 탭으로' }));
     expect(await screen.findByRole('tab', { name: '소개', selected: true })).toBeInTheDocument();
   });
@@ -148,21 +165,23 @@ describe('공개', () => {
 });
 
 describe('소개와 공개의 입력', () => {
-  it('장르는 셋까지 켜고, 태그는 개수·길이·대소문자만 다른 겹침을 막고, 보낼 때 나누고 다듬는다', () => {
-    expect(toggleGenre(['horror', 'sf', 'comedy'], 'fantasy')).toEqual(['horror', 'sf', 'comedy']);
-    expect(toggleGenre(['horror', 'sf'], 'sf')).toEqual(['horror']);
-    const draft = { tagline: '한 줄', description: '', genres: ['horror' as const], tags: 'Moon, moon' };
+  it('태그는 개수·길이·대소문자만 다른 겹침을 막고, 보낼 때 나누고 다듬는다. 장르는 하나를 그대로 보낸다', () => {
+    const draft = { tagline: '한 줄', description: '', genre: 'horror' as const, tags: 'Moon, moon' };
     expect(listingHints(draft, false).tags).toBe('같은 태그가 두 번 있습니다.');
     expect(listingHints({ ...draft, tags: 'a'.repeat(21) }, false).tags).toBe('태그 하나는 20자까지입니다.');
     expect(listingHints({ ...draft, tagline: '', tags: '' }, false)).toEqual({});
+    expect(listingHints({ ...draft, genre: null }, false).genre).toBe('장르를 골라 주세요. 장르는 반드시 하나입니다.');
     expect(listingHints({ ...draft, tagline: ' ', tags: '' }, true).tagline).toContain('공개 중에는 비울 수 없습니다');
-    expect(toListingBody({ ...draft, tagline: ' 한 줄 ', tags: ' 달, , 별 ' })).toEqual({ tagline: '한 줄', description: '', genres: ['horror'], tags: ['달', '별'] });
+    expect(toListingBody({ ...draft, tagline: ' 한 줄 ', tags: ' 달, , 별 ' })).toEqual({ tagline: '한 줄', description: '', genre: 'horror', tags: ['달', '별'] });
   });
 
   it('실패: 409 의 까닭, 공개 금지, 성인 확인, 없는 판', () => {
     const notReady = new ApiError({ status: 409, detail: 'x', body: { problems: ['genre_missing'] } });
-    expect(describePublicationProblem(notReady).message).toBe('소개 탭에서 한줄소개와 장르를 적어야 공개할 수 있습니다. 장르를 하나도 고르지 않았습니다.');
-    expect(describeListingProblem(notReady).message).toContain('먼저 게시 탭에서 공개를 내리세요');
+    expect(describePublicationProblem(notReady).message).toBe('소개 탭에서 한줄소개와 장르를 적어야 공개할 수 있습니다. 장르를 고르지 않았습니다.');
+    // 장르 없음 하나뿐이면 처음 쓰는 소개 페이지다. 공개를 내리라고 하지 않는다
+    expect(describeListingProblem(notReady).message).toBe('장르는 반드시 하나를 골라야 저장할 수 있습니다. 장르를 고르지 않았습니다.');
+    const emptied = new ApiError({ status: 409, detail: 'x', body: { problems: ['tagline_empty'] } });
+    expect(describeListingProblem(emptied).message).toContain('먼저 게시 탭에서 공개를 내리세요');
     expect(describePublicationProblem(new ApiError({ status: 403, detail: 'x', code: 'publishing_banned' })).message).toContain('공개 금지 중');
     expect(describeListingProblem(new ApiError({ status: 403, detail: 'x', code: 'adult_content_required' })).message).toContain('성인 확인');
     expect(describePublicationProblem(new ApiError({ status: 404, detail: 'x' })).message).toContain('그 판이나 시나리오가 없습니다');

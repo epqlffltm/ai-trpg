@@ -254,7 +254,7 @@ def listing_body() -> dict:
             '마을의 부탁을 받고 버려진 수도원에 간다. 안에서 누군가 노래를 부른다.\n\n'
             '화면을 손으로 보려고 만든 견본이다.'
         ),
-        'genres': ['horror', 'mystery'],
+        'genre': 'horror',
         'tags': ['견본', '수도원'],
     }
 

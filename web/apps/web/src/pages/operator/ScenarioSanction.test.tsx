@@ -31,7 +31,7 @@ const DETAIL = {
   title: '잿빛 수도원',
   tagline: '',
   description: '',
-  genres: [],
+  genre: null,
   tags: [],
   rating: 'all',
   recommended_players: { min: 2, max: 4 },

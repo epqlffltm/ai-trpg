@@ -53,10 +53,10 @@ async def test_only_scenarios_that_fit_the_party_are_listed(client: AsyncClient,
 
 
 async def test_it_combines_with_genre_and_tag(client: AsyncClient, my_headers: dict):
-    chase = await make_public(client, my_headers, title='추격전', genres=['comedy'], tags=['바이크'], **players(2, 4))
-    await make_public(client, my_headers, title='혼자 웃기', genres=['comedy'], tags=['바이크'], **players(1, 1))
-    await make_public(client, my_headers, title='귀신', genres=['horror'], tags=['바이크'], **players(2, 4))
-    await make_public(client, my_headers, title='검객', genres=['comedy'], tags=['복수'], **players(2, 4))
+    chase = await make_public(client, my_headers, title='추격전', genre='comedy', tags=['바이크'], **players(2, 4))
+    await make_public(client, my_headers, title='혼자 웃기', genre='comedy', tags=['바이크'], **players(1, 1))
+    await make_public(client, my_headers, title='귀신', genre='horror', tags=['바이크'], **players(2, 4))
+    await make_public(client, my_headers, title='검객', genre='comedy', tags=['복수'], **players(2, 4))
 
     assert await ids(client, my_headers, players=2, genre='comedy', tag='바이크') == {chase['id']}
 

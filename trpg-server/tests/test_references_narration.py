@@ -157,7 +157,7 @@ async def test_the_world_carries_the_permission(client: AsyncClient, me: dict):
 async def test_the_public_listing_says_whether_it_can_be_turned_on(client: AsyncClient, me: dict, friend: dict):
     scenario, _ = await open_table(client, me, allowed=False)
     listing_url = f'{SCENARIOS_URL}/{scenario["id"]}/listing'
-    await client.patch(listing_url, json={'tagline': '어둡다', 'genres': ['fantasy']}, headers=me)
+    await client.patch(listing_url, json={'tagline': '어둡다', 'genre': 'fantasy'}, headers=me)
     published = await client.put(f'{listing_url}/publication', json={'version': 1}, headers=me)
     assert published.status_code == status.HTTP_200_OK, published.text
 

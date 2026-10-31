@@ -72,7 +72,7 @@ function ScenarioGrid({ items, nameOf }: { items: PublicListing[]; nameOf: NameL
           title={listing.title}
           description={listing.tagline}
           byline={nameOf(listing.creator_id)}
-          meta={[ratingBadge(listing.rating), ...listing.genres.map(genreLabel), playersLabel(listing.recommended_players)]}
+          meta={[ratingBadge(listing.rating), listing.genre ? genreLabel(listing.genre) : null, playersLabel(listing.recommended_players)]}
         />
       ))}
     </ul>

@@ -56,8 +56,8 @@ async def test_the_list_is_open_without_logging_in(client: AsyncClient, my_adult
 
 
 async def test_the_list_looks_the_same_as_for_someone_logged_in(client: AsyncClient, my_headers: dict):
-    await make_public(client, my_headers, title='추격전', genres=['comedy'], recommended_players={'min': 2, 'max': 3})
-    await make_public(client, my_headers, title='귀신', genres=['horror'])
+    await make_public(client, my_headers, title='추격전', genre='comedy', recommended_players={'min': 2, 'max': 3})
+    await make_public(client, my_headers, title='귀신', genre='horror')
 
     anonymous = await client.get(LISTINGS_URL)
     logged_in = await client.get(LISTINGS_URL, headers=my_headers)

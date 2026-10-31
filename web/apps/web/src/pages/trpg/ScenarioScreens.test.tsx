@@ -18,7 +18,7 @@ function listing(index: number, extra: Record<string, unknown> = {}) {
     title: `시나리오 ${index}`,
     tagline: `한 줄 ${index}`,
     description: '',
-    genres: ['horror'],
+    genre: 'horror',
     tags: ['좀비'],
     rating: 'all',
     recommended_players: { min: 2, max: 4 },

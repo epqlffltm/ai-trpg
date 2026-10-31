@@ -162,7 +162,9 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     scenario = (await client.post(f'{url}/scenarios', json=with_model(body), headers=me)).json()
     await client.post(f'{url}/scenarios/{scenario["id"]}/versions', json={}, headers=me)
     await app.state.jobs.drain()
-    await client.patch(f'{url}/scenarios/{scenario["id"]}/listing', json={'tagline': '달린다'}, headers=me)
+    await client.patch(
+        f'{url}/scenarios/{scenario["id"]}/listing', json={'tagline': '달린다', 'genre': 'sf'}, headers=me
+    )
 
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 1}
     table = (await client.post(f'{url}/tables', json=body, headers=me)).json()

@@ -19,19 +19,11 @@ from app.engine.ruleset import Ability
 from app.engine.sheet import CharacterSheet
 from app.listings.models import (
     LISTING_DESCRIPTION_MAX_LENGTH,
-    LISTING_MAX_GENRES,
     LISTING_MAX_TAGS,
     TAG_MAX_LENGTH,
     TAGLINE_MAX_LENGTH,
     Genre,
 )
-
-
-def reject_duplicate_genres(genres: list[Genre]) -> list[Genre]:
-    """같은 장르가 두 번 있으면 거부한다."""
-    if len(set(genres)) != len(genres):
-        raise ValueError('같은 장르가 두 번 있습니다.')
-    return genres
 
 
 def reject_duplicate_tags(tags: list[str]) -> list[str]:
@@ -44,7 +36,6 @@ def reject_duplicate_tags(tags: list[str]) -> list[str]:
 
 Tagline = Annotated[str, StringConstraints(strip_whitespace=True, max_length=TAGLINE_MAX_LENGTH)]
 ListingDescription = Annotated[str, StringConstraints(max_length=LISTING_DESCRIPTION_MAX_LENGTH)]
-Genres = Annotated[list[Genre], Field(max_length=LISTING_MAX_GENRES), AfterValidator(reject_duplicate_genres)]
 
 # 태그 하나. 앞뒤 공백을 떼고, 그러고도 한 글자 이상이어야 한다
 Tag = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=TAG_MAX_LENGTH)]
@@ -55,7 +46,8 @@ class ListingUpdate(BaseModel):
     """
     소개 페이지를 고칠 때 받는 값. 보낸 칸만 바꾼다.
 
-    None 은 "보내지 않았다"는 뜻이다. 장르나 태그를 전부 없애려면 빈 목록을 보낸다.
+    None 은 "보내지 않았다"는 뜻이다. 태그를 전부 없애려면 빈 목록을 보낸다.
+    장르는 반드시 하나다. 처음 쓸 때 함께 보내야 하고(없으면 409 genre_missing), 그 뒤에는 다른 것으로 바꿀 수만 있다.
     어느 판을 공개할지는 여기서 받지 않는다. 공개는 따로 하는 일이다(PublicationUpdate).
     """
 
@@ -63,7 +55,7 @@ class ListingUpdate(BaseModel):
 
     tagline: Tagline | None = None
     description: ListingDescription | None = None
-    genres: Genres | None = None
+    genre: Genre | None = None
     tags: Tags | None = None
 
 
@@ -85,7 +77,8 @@ class ListingDetail(BaseModel):
     scenario_id: uuid.UUID
     tagline: str
     description: str
-    genres: list[Genre]
+    # 장르. 소개 페이지를 아직 쓰지 않았을 때만 None 이다(쓴 소개 페이지에는 늘 있다)
+    genre: Genre | None
     tags: list[str]
     # 공개 중인 판의 번호. 공개하지 않았으면 None 이다
     version: int | None
@@ -108,7 +101,8 @@ class PublicListing(BaseModel):
     title: str
     tagline: str
     description: str
-    genres: list[Genre]
+    # 장르. 플레이 화면과 소개 화면의 테마를 정한다
+    genre: Genre
     tags: list[str]
     rating: Rating
     # 제작자가 추천하는 인원. 강제하지 않는다

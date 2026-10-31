@@ -24,9 +24,6 @@ from app.core.database import Base
 TAGLINE_MAX_LENGTH = 100
 LISTING_DESCRIPTION_MAX_LENGTH = 5000
 
-# 시나리오 하나에 고를 수 있는 장르의 수. 전부 고르면 장르가 뜻을 잃는다
-LISTING_MAX_GENRES = 3
-
 # 제작자가 자유롭게 적는 태그
 LISTING_MAX_TAGS = 10
 TAG_MAX_LENGTH = 20
@@ -34,13 +31,15 @@ TAG_MAX_LENGTH = 20
 
 class Genre(enum.StrEnum):
     """
-    장르. 운영자가 정한 목록에서 고른다. 제작자가 자유롭게 적는 것은 태그다.
+    장르. 운영자가 정한 목록에서 시나리오마다 하나를 고른다. 제작자가 자유롭게 적는 것은 태그다.
 
+    장르는 플레이 화면과 소개 화면의 테마를 정한다. 그래서 하나뿐이고, 이야기의 종류만 둔다.
+    누구를 위한 이야기인가(남성향, 여성향)는 장르가 아니다. 태그로 적는다.
     목록을 바꾸려면 여기를 고쳐 배포한다. 값은 주소와 저장에 쓰는 이름이고, 화면에 보이는 말은 화면이 정한다.
+    asset-server 의 캐릭터와 세계관도 같은 목록을 쓴다. 바꿀 때 함께 바꾼다.
     등급(성인용)은 장르가 아니다. 시나리오의 등급에서 온다.
     """
 
-    # 이야기의 종류
     FANTASY = 'fantasy'  # 판타지
     WUXIA = 'wuxia'  # 무협. 동양판타지를 포함한다
     URBAN_FANTASY = 'urban_fantasy'  # 현대판타지
@@ -52,10 +51,6 @@ class Genre(enum.StrEnum):
     SLICE_OF_LIFE = 'slice_of_life'  # 일상
     ALT_HISTORY = 'alt_history'  # 대체역사
     COMEDY = 'comedy'  # 개그
-
-    # 누구를 위한 이야기인가
-    FOR_MEN = 'for_men'  # 남성향
-    FOR_WOMEN = 'for_women'  # 여성향
 
 
 class Listing(Base):
@@ -69,7 +64,6 @@ class Listing(Base):
     __tablename__ = 'listings'
     __table_args__ = (
         CheckConstraint(at_most('description', LISTING_DESCRIPTION_MAX_LENGTH), name='description_length'),
-        CheckConstraint(f'cardinality(genres) <= {LISTING_MAX_GENRES}', name='genres_count'),
         CheckConstraint(f'cardinality(tags) <= {LISTING_MAX_TAGS}', name='tags_count'),
         CheckConstraint(one_of('rating', Rating), name='rating_allowed'),
         CheckConstraint(
@@ -107,9 +101,10 @@ class Listing(Base):
     # 소개글. 소개 페이지의 본문이다. 지금은 꾸밈 없는 글이다
     description: Mapped[str] = mapped_column(Text, default='')
 
-    # 장르. Genre 의 값들이다. 허용 값의 검사는 입력의 모양(schemas.py)이 한다.
-    # DB 의 CHECK 로 걸지 않는다. 장르 목록을 바꿀 때마다 마이그레이션이 필요해진다
-    genres: Mapped[list[str]] = mapped_column(ARRAY(String(30)), default=list)
+    # 장르. Genre 의 값 하나다. 반드시 있다(소개 페이지를 처음 쓸 때 함께 고른다).
+    # 허용 값의 검사는 입력의 모양(schemas.py)이 한다. DB 의 CHECK 로 걸지 않는다.
+    # 걸면 장르 목록을 바꿀 때마다 마이그레이션이 필요해진다
+    genre: Mapped[str] = mapped_column(String(30), index=True)
 
     # 태그. 제작자가 자유롭게 적는다
     tags: Mapped[list[str]] = mapped_column(ARRAY(String(TAG_MAX_LENGTH)), default=list)

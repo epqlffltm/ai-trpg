@@ -26,6 +26,12 @@ function notReadyText(error: ApiError, lead: string): string | null {
   return `${lead} ${problems.map(listingProblemText).join(' ')}`;
 }
 
+/** 409 의 까닭이 장르 없음 하나뿐인가(처음 쓰는 소개 페이지에 장르가 없다) */
+function genreOnly(error: ApiError): boolean {
+  const problems = knownListingProblems(error.body.problems);
+  return problems.length === 1 && problems[0] === 'genre_missing';
+}
+
 /** 403 의 code 를 글로. 모르는 code 면 null */
 function refusalText(error: ApiError): string | null {
   if (error.status !== 403 || !error.code) return null;
@@ -35,7 +41,8 @@ function refusalText(error: ApiError): string | null {
 /** 소개 페이지 고치기 */
 export function describeListingProblem(error: unknown): FormProblem {
   if (commonProblem(error) || !(error instanceof ApiError)) return describeSaveProblem(error, 'scenarios');
-  const text = notReadyText(error, '공개 중이라 비울 수 없습니다. 먼저 게시 탭에서 공개를 내리세요.') ?? refusalText(error);
+  const lead = genreOnly(error) ? '장르는 반드시 하나를 골라야 저장할 수 있습니다.' : '공개 중이라 비울 수 없습니다. 먼저 게시 탭에서 공개를 내리세요.';
+  const text = notReadyText(error, lead) ?? refusalText(error);
   return text ? { message: text } : describeSaveProblem(error, 'scenarios');
 }
 

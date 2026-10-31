@@ -4108,7 +4108,7 @@
         "type": "object"
       },
       "Genre": {
-        "description": "장르. 운영자가 정한 목록에서 고른다. 제작자가 자유롭게 적는 것은 태그다.\n\n목록을 바꾸려면 여기를 고쳐 배포한다. 값은 주소와 저장에 쓰는 이름이고, 화면에 보이는 말은 화면이 정한다.\n등급(성인용)은 장르가 아니다. 시나리오의 등급에서 온다.",
+        "description": "장르. 운영자가 정한 목록에서 시나리오마다 하나를 고른다. 제작자가 자유롭게 적는 것은 태그다.\n\n장르는 플레이 화면과 소개 화면의 테마를 정한다. 그래서 하나뿐이고, 이야기의 종류만 둔다.\n누구를 위한 이야기인가(남성향, 여성향)는 장르가 아니다. 태그로 적는다.\n목록을 바꾸려면 여기를 고쳐 배포한다. 값은 주소와 저장에 쓰는 이름이고, 화면에 보이는 말은 화면이 정한다.\nasset-server 의 캐릭터와 세계관도 같은 목록을 쓴다. 바꿀 때 함께 바꾼다.\n등급(성인용)은 장르가 아니다. 시나리오의 등급에서 온다.",
         "enum": [
           "fantasy",
           "wuxia",
@@ -4120,9 +4120,7 @@
           "romance",
           "slice_of_life",
           "alt_history",
-          "comedy",
-          "for_men",
-          "for_women"
+          "comedy"
         ],
         "title": "Genre",
         "type": "string"
@@ -6383,12 +6381,15 @@
             "title": "Description",
             "type": "string"
           },
-          "genres": {
-            "items": {
-              "$ref": "#/components/schemas/Genre"
-            },
-            "title": "Genres",
-            "type": "array"
+          "genre": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Genre"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "published_at": {
             "anyOf": [
@@ -6456,7 +6457,7 @@
           "scenario_id",
           "tagline",
           "description",
-          "genres",
+          "genre",
           "tags",
           "version",
           "rating",
@@ -6491,7 +6492,7 @@
       },
       "ListingUpdate": {
         "additionalProperties": false,
-        "description": "소개 페이지를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nNone 은 \"보내지 않았다\"는 뜻이다. 장르나 태그를 전부 없애려면 빈 목록을 보낸다.\n어느 판을 공개할지는 여기서 받지 않는다. 공개는 따로 하는 일이다(PublicationUpdate).",
+        "description": "소개 페이지를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nNone 은 \"보내지 않았다\"는 뜻이다. 태그를 전부 없애려면 빈 목록을 보낸다.\n장르는 반드시 하나다. 처음 쓸 때 함께 보내야 하고(없으면 409 genre_missing), 그 뒤에는 다른 것으로 바꿀 수만 있다.\n어느 판을 공개할지는 여기서 받지 않는다. 공개는 따로 하는 일이다(PublicationUpdate).",
         "properties": {
           "description": {
             "anyOf": [
@@ -6505,20 +6506,15 @@
             ],
             "title": "Description"
           },
-          "genres": {
+          "genre": {
             "anyOf": [
               {
-                "items": {
-                  "$ref": "#/components/schemas/Genre"
-                },
-                "maxItems": 3,
-                "type": "array"
+                "$ref": "#/components/schemas/Genre"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Genres"
+            ]
           },
           "tagline": {
             "anyOf": [
@@ -10766,12 +10762,8 @@
             "title": "Description",
             "type": "string"
           },
-          "genres": {
-            "items": {
-              "$ref": "#/components/schemas/Genre"
-            },
-            "title": "Genres",
-            "type": "array"
+          "genre": {
+            "$ref": "#/components/schemas/Genre"
           },
           "published_at": {
             "format": "date-time",
@@ -10819,7 +10811,7 @@
           "title",
           "tagline",
           "description",
-          "genres",
+          "genre",
           "tags",
           "rating",
           "recommended_players",
@@ -10856,12 +10848,8 @@
             "title": "Description",
             "type": "string"
           },
-          "genres": {
-            "items": {
-              "$ref": "#/components/schemas/Genre"
-            },
-            "title": "Genres",
-            "type": "array"
+          "genre": {
+            "$ref": "#/components/schemas/Genre"
           },
           "openings": {
             "items": {
@@ -10938,7 +10926,7 @@
           "title",
           "tagline",
           "description",
-          "genres",
+          "genre",
           "tags",
           "rating",
           "recommended_players",
