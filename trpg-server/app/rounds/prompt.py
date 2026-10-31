@@ -235,7 +235,8 @@ from app.rounds.time_words import duration_text, time_text
 #                 ((덫: 올가미. 민첩 판정에 실패해 걸렸다. 업힌 약사도 걸렸다))
 #   narration-82: 몬스터와 싸우는 인물이 밟은 덫(#806 ②-b). 차례의 줄 끝에 붙인다
 #                 ([덫: 올가미에 걸림], [덫: 올가미을(를) 피함])
-PROMPT_VERSION = 'narration-82'
+#   narration-83: 사건이 옮긴 쪽이 밟은 덫(#806 ②-c). 사건의 줄에 붙인다(- 함정: 약사 → 숲, 약사: 덫 올가미에 걸림)
+PROMPT_VERSION = 'narration-83'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3
@@ -915,7 +916,7 @@ def happening_lines(happenings: list[HappeningNote]) -> list[str]:
     if not happenings:
         return []
     lines = [
-        f'- {happening.name}: {", ".join([*happening.moved, *happening.doors]) or HAPPENING_NO_MOVE}'
+        f'- {happening.name}: {", ".join([*happening.moved, *happening.doors, *happening.traps]) or HAPPENING_NO_MOVE}'
         for happening in happenings
     ]
     return [HAPPENING_TITLE, HAPPENING_NOTE, *lines, '']

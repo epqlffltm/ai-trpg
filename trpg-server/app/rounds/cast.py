@@ -138,6 +138,16 @@ def cast_of(
     ]
 
 
+def cast_member_of(snapshot: Snapshot, scene: str, npc: TableNpc) -> CastMember:
+    """
+    인물 하나를 장면의 인물의 모양으로. 장면에 있는지는 보지 않는다.
+
+    사건이 장면 밖으로 옮긴 인물이 덫을 밟을 때(#806 ②-c, app/rounds/happening_traps.py) 쓴다.
+    """
+    entry = next(entry for entry in person_entries(snapshot) if entry.id == npc.entry_id)
+    return CastMember(entry.id, label_of(entry, scene, npc), npc, own_npc_sheet(snapshot, entry.id))
+
+
 def labels_of(snapshot: Snapshot, scene: str, npcs: Iterable[TableNpc]) -> dict[uuid.UUID, str]:
     """
     이 테이블의 인물마다 부를 이름(label_of). 장면 밖의 인물도 든다. 상태가 없는 인물은 뺀다.

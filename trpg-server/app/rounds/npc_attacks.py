@@ -137,4 +137,4 @@ def take_npc_turn(judging: Judging, person: CastMember) -> dict:
     innate = person.definition.nature if person.definition is not None else None
     outcome = hit_outcome(judging, attack, victim, rolled.check, blow, innate)
     turn = {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
-    return foe_traps.with_trap(turn, foe_traps.npc_steps(judging, person, victim))
+    return foe_traps.with_trap(turn, foe_traps.npc_steps(judging, person))

@@ -49,7 +49,7 @@ from app.assets.scenarios.snapshot import (
 )
 from app.engine.action import DoorDevice
 from app.events import recorder
-from app.events.models import EventType
+from app.events.models import EventType, TableEvent
 from app.rounds.quest_goals import all_met
 from app.tables import npcs as table_npcs
 from app.tables import places, route_locks, sheets
@@ -232,6 +232,8 @@ def happen(
             moves=moves,
             npc_moves=moved_npcs,
             doors=doors,
+            # 옮긴 쪽이 밟은 덫(#806 ②-c)은 사건을 다 일으킨 뒤에 정한다(app/rounds/happening_traps.py)
+            traps=[],
         )
     )
     return {
@@ -263,14 +265,20 @@ def settle_happenings(
     return occurred
 
 
-def record_happenings(session: AsyncSession, table: GameTable, occurred: list[dict], group: uuid.UUID) -> None:
+def record_happenings(
+    session: AsyncSession, table: GameTable, occurred: list[dict], group: uuid.UUID
+) -> list[tuple[dict, TableEvent]]:
     """
     일어난 사건마다 이벤트를 적는다. 닫힘의 묶음(group)에 넣는다. 행한 사람은 없다(엔진이 일으켰다).
 
     사건(happening_occurred) 뒤에 옮긴 사람마다 character_moved 를 잇는다. 어느 사건이 옮겼는지(happening)가 적힌다.
+    사건마다 그 모양과 적은 이벤트를 돌려준다. 옮긴 쪽이 밟은 덫(#806 ②-c)을 그 이벤트에 잇는다.
     """
+    recorded = []
     for payload in occurred:
         event = recorder.record(session, table, EventType.HAPPENING_OCCURRED, payload=payload, group=group)
+        recorded.append((payload, event))
         for move in payload['moves']:
             moved = {'round': payload['round'], **move, 'travel_minutes': None, 'happening': payload['entry_id']}
             recorder.record(session, table, EventType.CHARACTER_MOVED, payload=moved, cause=event)
+    return recorded
