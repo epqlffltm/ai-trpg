@@ -78,11 +78,11 @@ describe('소개 탭', () => {
     await userEvent.type(form.getByRole('textbox', { name: '한줄소개' }), '  비 내리는 밤의 수도원  ');
     await userEvent.type(form.getByRole('textbox', { name: '소개글(선택)' }), '종이 열 번 울린다.');
     // 장르는 하나다. 다른 것을 누르면 바뀐다. 남성향·여성향은 장르에 없다(태그)
-    await userEvent.click(form.getByRole('radio', { name: '호러' }));
-    await userEvent.click(form.getByRole('radio', { name: '미스터리' }));
-    expect(form.getByRole('radio', { name: '호러' })).not.toBeChecked();
-    expect(form.getByRole('radio', { name: '미스터리' })).toBeChecked();
-    expect(form.queryByRole('radio', { name: '남성향' })).not.toBeInTheDocument();
+    const genre = form.getByRole('combobox', { name: '장르' });
+    await userEvent.selectOptions(genre, '호러');
+    await userEvent.selectOptions(genre, '미스터리');
+    expect(genre).toHaveValue('mystery');
+    expect(form.queryByRole('option', { name: '남성향' })).not.toBeInTheDocument();
     await userEvent.type(form.getByRole('textbox', { name: '태그(선택, 쉼표로 나눔)' }), '수도원, 언데드, 수도원');
     expect(form.getByText('같은 태그가 두 번 있습니다.')).toBeInTheDocument();
     expect(form.getByRole('button', { name: '저장' })).toBeDisabled();
@@ -103,7 +103,7 @@ describe('소개 탭', () => {
 
     const form = within(await (await panel('소개')).findByRole('form', { name: '소개' }));
     expect(form.getByRole('link', { name: '공개된 소개 보기' })).toHaveAttribute('href', `/trpg/scenarios/${ID}`);
-    expect(form.getByRole('radio', { name: '호러' })).toBeChecked();
+    expect(form.getByRole('combobox', { name: '장르' })).toHaveValue('horror');
     await userEvent.clear(form.getByRole('textbox', { name: '한줄소개' }));
     expect(form.getByText(/공개 중에는 비울 수 없습니다/)).toBeInTheDocument();
     expect(form.getByRole('button', { name: '저장' })).toBeDisabled();
@@ -117,7 +117,7 @@ describe('소개 탭', () => {
     await userEvent.type(form.getByRole('textbox', { name: '한줄소개' }), '비 내리는 밤');
     expect(form.getByText('장르를 골라 주세요. 장르는 반드시 하나입니다.')).toBeInTheDocument();
     expect(form.getByRole('button', { name: '저장' })).toBeDisabled();
-    await userEvent.click(form.getByRole('radio', { name: '판타지' }));
+    await userEvent.selectOptions(form.getByRole('combobox', { name: '장르' }), '판타지');
     expect(form.getByRole('button', { name: '저장' })).toBeEnabled();
   });
 });
