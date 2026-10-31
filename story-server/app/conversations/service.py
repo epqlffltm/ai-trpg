@@ -38,6 +38,7 @@ from app.catalog.choice import is_choosable
 from app.catalog.models import AiModel
 from app.catalog.offers import is_sold
 from app.conversations import repository
+from app.conversations.genres import filled_document
 from app.conversations.models import Conversation, ConversationPersona, ImportedWorld, Message, Role
 from app.conversations.repository import ConversationRow
 from app.conversations.schemas import ConversationCreate, ProgressOut, StateOut, WorldView
@@ -273,11 +274,22 @@ async def pick_model(
     return slug if model is not None and model_usable(model, rating, book, now) else None
 
 
+def fill_genre(world: ImportedWorld, copy: WorldCopy) -> None:
+    """
+    둔 사본에 장르가 없고 받은 판에 있으면 채운다(app/conversations/genres.py). 저장은 부른 쪽이 한다.
+    asset 이 옛 판에도 장르를 적었으므로, 형식 4 전에 가져온 사본도 그 판으로 세션을 다시 시작할 때 채워진다.
+    """
+    filled = filled_document(world.document, copy.document.model_dump(mode='json'))
+    if filled is not None:
+        world.document = filled
+
+
 async def save_conversation(
     session: AsyncSession, owner_id: uuid.UUID, copy: WorldCopy, persona: PersonaCopy | None, model_slug: str | None
 ) -> uuid.UUID:
     """판의 사본, 세션, 페르소나의 사본을 한 번에 저장하고 세션의 id 를 돌려준다."""
     world = await repository.keep_world(session, build_world(owner_id, copy))
+    fill_genre(world, copy)
     conversation = build_conversation(owner_id, world, model_slug)
     repository.add(session, conversation)
     if persona is not None:

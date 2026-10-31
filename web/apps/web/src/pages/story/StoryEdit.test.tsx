@@ -47,7 +47,7 @@ function session(messages: StoryMessage[]): StorySession {
   return {
     id: SESSION,
     title: '여름 학교',
-    world: { id: WORLD, version: 1, name: '여름 학교', image_id: null, rating: 'all', document: {} },
+    world: { id: WORLD, version: 1, name: '여름 학교', image_id: null, rating: 'all', genre: 'fantasy', document: {} },
     view: VIEW,
     model: { slug: 'luna', display_name: 'Luna', vendor: 'openai', grade: 'standard', retires_on: null, usable: true },
     messages,
