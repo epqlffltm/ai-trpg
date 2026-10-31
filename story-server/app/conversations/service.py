@@ -140,9 +140,23 @@ def build_persona(conversation_id: uuid.UUID, copy: PersonaCopy) -> Conversation
     )
 
 
-def build_conversation(owner_id: uuid.UUID, world: ImportedWorld, model_slug: str | None) -> Conversation:
-    """세션을 만든다. 제목은 세계관의 이름이다. 아직 저장하지 않는다."""
-    return Conversation(id=uuid.uuid4(), owner_id=owner_id, world_id=world.id, title=world.name, model_slug=model_slug)
+def build_conversation(
+    owner_id: uuid.UUID, world: ImportedWorld, model_slug: str | None, cleared: list[str]
+) -> Conversation:
+    """세션을 만든다. 제목은 세계관의 이름이다. cleared 는 계정의 본 엔딩(시작할 때 굳힌다). 아직 저장하지 않는다."""
+    return Conversation(
+        id=uuid.uuid4(),
+        owner_id=owner_id,
+        world_id=world.id,
+        title=world.name,
+        model_slug=model_slug,
+        cleared_endings=cleared,
+    )
+
+
+async def cleared_endings(session: AsyncSession, owner_id: uuid.UUID, world_source: uuid.UUID) -> list[str]:
+    """그 사람이 그 세계관에서 본 엔딩의 id 들(계정의 기록, 처음 본 차례)."""
+    return [record.ending_id for record in await records.endings_of(session, owner_id, world_source)]
 
 
 def model_usable(model: AiModel, rating: Rating, book: PriceBook | None, now: datetime) -> bool:
@@ -290,7 +304,7 @@ async def save_conversation(
     """판의 사본, 세션, 페르소나의 사본을 한 번에 저장하고 세션의 id 를 돌려준다."""
     world = await repository.keep_world(session, build_world(owner_id, copy))
     fill_genre(world, copy)
-    conversation = build_conversation(owner_id, world, model_slug)
+    conversation = build_conversation(owner_id, world, model_slug, await cleared_endings(session, owner_id, copy.id))
     repository.add(session, conversation)
     if persona is not None:
         # 세션이 먼저 저장되어야 사본이 그것을 가리킬 수 있다
@@ -371,9 +385,16 @@ async def branch_states(session: AsyncSession, messages: list[Message]) -> list[
     return await repository.states_on(session, [message.id for message in messages])
 
 
-async def branch_state(session: AsyncSession, world: World, messages: list[Message]) -> StoryState:
+def cleared_of(conversation: Conversation) -> frozenset[str]:
+    """세션에 굳힌 계정의 본 엔딩."""
+    return frozenset(conversation.cleared_endings or ())
+
+
+async def branch_state(
+    session: AsyncSession, world: World, conversation: Conversation, messages: list[Message]
+) -> StoryState:
     """지금 가지의 끝의 엔진의 상태."""
-    return state_on_path(world, await branch_states(session, messages))
+    return state_on_path(world, await branch_states(session, messages), cleared_of(conversation))
 
 
 def places_on(states: list[dict | None]) -> list[str | None]:
@@ -391,16 +412,17 @@ def state_out(world: World, state: StoryState, shown: frozenset[str]) -> StateOu
 
 
 async def conversation_state(
-    session: AsyncSession, viewer: Viewer, imported: ImportedWorld, messages: list[Message]
+    session: AsyncSession, viewer: Viewer, row: ConversationRow, messages: list[Message]
 ) -> tuple[StateOut, WorldView]:
     """
     지금 가지의 끝의 상태와, 그 상태에 맞춘 세계관의 칸(app/conversations/views.py).
     만난 인물은 가지의 답들의 장면의 인물이고, 가 본 장소는 가지의 말에 붙은 상태들의 장소와 시작 장소다.
     본 엔딩은 이 사람의 계정의 기록과 이 가지의 엔딩이다.
     """
+    conversation, imported = row
     world = read_world(imported.document)
     states = await branch_states(session, messages)
-    state = state_on_path(world, states)
+    state = state_on_path(world, states, cleared_of(conversation))
     met = met_on(message.cast or () for message in messages if message.role == Role.ASSISTANT)
     visited = visited_on(world.start_place, places_on(states))
     recorded = frozenset(
@@ -547,7 +569,7 @@ async def conversation_progress(
     """
     world = read_world(imported.document)
     messages = await repository.active_path(session, conversation.active_leaf_id)
-    return progress_of(world, await branch_state(session, world, messages))
+    return progress_of(world, await branch_state(session, world, conversation, messages))
 
 
 async def conversation_progresses(session: AsyncSession, rows: list[ConversationRow]) -> dict[uuid.UUID, ProgressOut]:

@@ -131,6 +131,9 @@ class Conversation(Base):
     generating_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     # 지운 시각(chat 과 같다). 지운 세션은 목록과 읽기에 나오지 않는다. 행을 지우는 것은 탈퇴뿐이다
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # 세션을 시작할 때 이 사람이 이 세계관에서 본 엔딩들(계정의 기록, 회차 혜택). 조건의 ending_seen 이 본다.
+    # 시작할 때 굳힌다. 다른 세션에서 새로 본 엔딩은 다음 세션부터다(다시 생성해도 판정이 같다, 2026-10-31 유저 결정)
+    cleared_endings: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default='{}')
 
 
 class ConversationPersona(Base):

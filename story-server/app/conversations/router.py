@@ -323,7 +323,7 @@ async def read_conversation(
     models = await service.conversation_models(session, [row[0]])
     messages = await service.conversation_messages(session, row[0])
     alternatives = await service.message_alternatives(session, row[0], messages)
-    state, view = await service.conversation_state(session, viewer, row[1], messages)
+    state, view = await service.conversation_state(session, viewer, row, messages)
     persona = await service.conversation_persona(session, row[0])
     return to_detail(row, models, book, now, messages, alternatives, state, view, persona)
 

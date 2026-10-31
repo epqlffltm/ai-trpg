@@ -59,6 +59,7 @@ CHECKS: dict[ConditionKind, Callable[[Condition, StoryState, World], bool]] = {
     ConditionKind.SLOT_IS: lambda condition, state, world: slot_of(world, state.minutes) == condition.target,
     ConditionKind.ACCOMPANIED: lambda condition, state, world: condition.target in state.companions,
     ConditionKind.EVENT_SEEN: lambda condition, state, world: condition.target in state.seen,
+    ConditionKind.ENDING_SEEN: lambda condition, state, world: condition.target in state.cleared,
 }
 
 

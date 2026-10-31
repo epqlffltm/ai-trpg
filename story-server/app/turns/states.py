@@ -13,6 +13,7 @@ JSON 의 칸은 상태의 칸과 같은 이름이다. 모르는 칸은 버리고
 """
 
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from types import MappingProxyType
 
 from app.conversations.schemas import StateOut
@@ -60,15 +61,18 @@ def state_from_json(data: Mapping) -> StoryState:
     )
 
 
-def state_on_path(world: World, path_states: Sequence[Mapping | None]) -> StoryState:
+def state_on_path(
+    world: World, path_states: Sequence[Mapping | None], cleared: frozenset[str] = frozenset()
+) -> StoryState:
     """
     가지의 끝의 상태. path_states 는 가지의 말들(첫 말부터)에 붙은 상태다(없으면 None).
     끝에서 가장 가까운 것을 쓴다. 하나도 없으면 처음의 상태다.
+    cleared(세션에 굳힌 계정의 본 엔딩)는 저장하지 않으므로 여기서 붙인다.
     """
     for data in reversed(path_states):
         if data is not None:
-            return state_from_json(data)
-    return start_state(world)
+            return replace(state_from_json(data), cleared=cleared)
+    return start_state(world, cleared)
 
 
 def state_view(world: World, state: StoryState, cast: Sequence[str], shown: frozenset[str]) -> StateOut:
