@@ -136,6 +136,8 @@ class ConditionKind(enum.StrEnum):
       slot_is            target: 시간대        지금의 시간대가 그것이다
       accompanied        target: 인물          그 인물과 동행 중이다
       event_seen         target: 이벤트        그 이벤트가 열린 적이 있다(판의 형식 2)
+      ending_seen        target: 엔딩          이 계정이 그 엔딩을 본 적이 있다(회차 혜택, 판의 형식 5).
+                                               story 가 세션을 시작할 때 계정의 기록을 굳혀 판정한다
     """
 
     REACH_PLACE = 'reach_place'
@@ -148,6 +150,7 @@ class ConditionKind(enum.StrEnum):
     SLOT_IS = 'slot_is'
     ACCOMPANIED = 'accompanied'
     EVENT_SEEN = 'event_seen'
+    ENDING_SEEN = 'ending_seen'
 
 
 class ConfessionFailure(enum.StrEnum):

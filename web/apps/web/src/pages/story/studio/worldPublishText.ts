@@ -16,6 +16,7 @@ const PROBLEMS: Record<string, Line> = {
   item_missing: { text: '없는 물건을 가리키는 소지품, 선물, 조건, 효과가 있습니다.', tab: 'items' },
   cast_target_missing: { text: '없는 인물을 가리키는 조건, 효과, 장면, 엔딩이 있습니다.' },
   event_missing: { text: '없는 이벤트를 가리키는 조건이나 엔딩이 있습니다.', tab: 'events' },
+  ending_target_missing: { text: '없는 엔딩을 본 적이 있어야 한다는 조건(회차)이 있습니다.', tab: 'events' },
   stage_missing: { text: '인물에 없는 호감도의 단계를 가리킵니다(조건, 지도, 고백).', tab: 'cast' },
   character_missing: { text: '인물이 가리킨 캐릭터가 없습니다. 지웠거나 내 것이 아닙니다.', tab: 'cast' },
   character_unpublished: { text: '인물이 가리킨 캐릭터를 게시한 적이 없습니다. 캐릭터를 먼저 게시해 주세요.', tab: 'cast' },

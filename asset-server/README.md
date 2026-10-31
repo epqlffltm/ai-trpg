@@ -431,6 +431,7 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
   | `slot_is` | `target`(시간대) | 지금의 시간대가 그것이다 |
   | `accompanied` | `target`(인물) | 그 인물과 동행 중이다 |
   | `event_seen` | `target`(이벤트) | 그 이벤트가 열린 적이 있다 |
+  | `ending_seen` | `target`(엔딩) | 이 계정이 그 엔딩을 본 적이 있다(회차 혜택, 판의 형식 5). story 가 세션을 시작할 때의 계정 기록으로 판정한다 |
 
 - **이벤트**(50개까지, 판의 형식 2). 세계관 자체의 목록이다(로어북의 사건 항목이 아니다, 2026-10-24 유저 결정). story 의 엔진이 행동 뒤에 `when` 을 맞춰 보고, 맞는 것 가운데 적은 차례로 하나만 연다.
   `repeat` 이 아니면 한 번만 열린다. `scene` 은 장면 지시(`text` 1,000자, 모델이 읽는다), 장면에 부르는 인물(4명까지), 일러스트다.
@@ -453,15 +454,15 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
 
 - **게시.** 막는 것(409, 게시해 보기에도 같은 이름)과 알리는 것(`warnings`, 게시는 된다)을 나눈다(2026-10-24 유저 결정).
   - 막는 것: `start_place_missing`(장소가 없거나 시작 장소가 없다), `start_slot_missing`, `cast_empty`, `place_missing`, `slot_missing`, `item_missing`,
-    `cast_target_missing`(조건, 효과, 장면, 엔딩의 시작), `event_missing`(없는 이벤트를 봤다, 없는 이벤트의 엔딩), `stage_missing`(조건의 단계나 지도의 단계가 그 인물에 없다), `character_missing`(지웠거나 남의 것), `character_unpublished`,
+    `cast_target_missing`(조건, 효과, 장면, 엔딩의 시작), `event_missing`(없는 이벤트를 봤다, 없는 이벤트의 엔딩), `ending_target_missing`(회차 혜택의 조건이 없는 엔딩을 가리킨다), `stage_missing`(조건의 단계나 지도의 단계가 그 인물에 없다), `character_missing`(지웠거나 남의 것), `character_unpublished`,
     `character_rating_too_high`(전체이용가 세계관에 성인 캐릭터), `lorebook_missing`, `lorebook_unpublished`, `image_not_owned`,
     `ending_missing`(엔딩의 빠짐: 고백할 수 있는 인물의 고백 성공, 실패하면 끝내는 인물의 고백 실패, 기한이 있으면 기한, 엔딩에 적은 시작마다
     조건이 빈 엔딩이 하나는 있어야 한다. 고백에 성공했는데 고를 엔딩이 없는 일을 막는다)
   - 알리는 것: `place_unreachable`(시작 장소에서 길로 닿지 않는 장소), `event_unreachable`(열릴 수 없는 이벤트: 자기를 봐야 열린다,
-    열릴 수 없는 이벤트를 봐야 열린다, 기한 뒤의 날을 기다린다, 날짜의 조건이 겹치지 않는다), `cast_never_present`(기본 장소도 일정도 없고 장면에도 동행에도 나오지 않는 인물),
+    열릴 수 없는 이벤트를 봐야 열린다, 기한 뒤의 날을 기다린다, 날짜의 조건이 겹치지 않는다, 계정에 남지 않는 엔딩을 봐야 열린다), `cast_never_present`(기본 장소도 일정도 없고 장면에도 동행에도 나오지 않는 인물),
     `ending_unreachable`(고를 일이 없는 엔딩: 기한이 없는데 기한의 엔딩, 고백할 수 없는 인물의 고백 엔딩, 실패해도 계속하는 인물의 실패 엔딩,
     열릴 수 없는 이벤트의 엔딩, 같은 시작의 조건이 빈 엔딩 뒤에 적은 엔딩)
-- **판**(형식 4. 1 의 판은 이벤트가, 2 까지의 판은 고백과 엔딩이 없는 것으로 읽는다). 인물마다 캐릭터의 마지막 판에서 story 에 쓰는 칸 `{id, version, name, intro_html, speech_examples, age, gender, image_id, sprites}` 만 복사한다.
+- **판**(형식 5. 1 의 판은 이벤트가, 2 까지의 판은 고백과 엔딩이 없는 것으로 읽는다). 인물마다 캐릭터의 마지막 판에서 story 에 쓰는 칸 `{id, version, name, intro_html, speech_examples, age, gender, image_id, sprites}` 만 복사한다.
   chat 에만 쓰는 칸(지도, 시작 상황, 물건, 호감도, 이벤트 씬)은 넣지 않는다. 보이기는 기본을 채운 정해진 값으로 굳힌다. 로어북은 캐릭터처럼 마지막 판을 복사한다.
   캐릭터나 로어북을 고쳐도 이미 게시한 세계관의 판은 그대로다. 판에 쓰인 그림(대표, 소개, 장소, 물건, 인물의 그림, 이벤트와 엔딩의 일러스트)을 적어 두고, 공개 세계관이면 남도 그 그림을 본다.
 - **story 에 내주기.** [다른 서버에 내주기](#다른-서버에-내주기)의 `/worlds/{id}/latest` 와 `/latest/number` 다. 캐릭터의 판과 같은 규칙이다

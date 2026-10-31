@@ -193,6 +193,7 @@ CONDITION_FIELDS: dict[ConditionKind, frozenset[str]] = {
     ConditionKind.SLOT_IS: frozenset({'target'}),
     ConditionKind.ACCOMPANIED: frozenset({'target'}),
     ConditionKind.EVENT_SEEN: frozenset({'target'}),
+    ConditionKind.ENDING_SEEN: frozenset({'target'}),
 }
 # count 를 쓰지 않는 종류의 count. 세지 않는다
 UNCOUNTED = 1
