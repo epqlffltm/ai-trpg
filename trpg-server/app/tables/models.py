@@ -953,6 +953,10 @@ class TableHappening(Base):
     # device 는 lock, bar, 고치기면 null, 장소는 ID). 바뀐 장치마다 하나, 효과의 차례다.
     # 이벤트에는 싣지 않는다. 일행이 그 길의 끝에 있을 때만 서술이 그린다
     doors: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    # 옮겨진 캐릭터와 인물이 닿은 곳에서 밟은 덫들(#806 ②-c). 하나하나가 {kind, place, trap} 에 캐릭터면 user_id,
+    # character_name, 인물이면 entry_id, name 이다(trap 은 터진 덫의 결과, app/rounds/happening_traps.py).
+    # 사건의 이벤트에는 싣지 않는다(맞춘 수치의 보이기가 있다). trap_sprung 이벤트로 따로 적는다
+    traps: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -961,11 +961,14 @@ class HappeningNote:
     name 은 사건 항목의 이름, moved 는 옮겨진 사람마다 "이름 → 장소"다. 사건의 글은 로어북 검색이 따로 준다.
     옮겨진 인물(NPC)도 일행이 본 것이면 같은 모양으로 캐릭터들 뒤에 든다(#282).
     doors 는 일행이 그 길의 끝에 있을 때 다룬 문마다 "장소 ↔ 장소 빗장 걸림"이다(#281).
+    traps 는 옮겨진 쪽이 닿은 곳에서 밟은 덫마다 "이름: 덫 이름에 걸림(피함)"이다(#806 ②-c).
+    인물은 일행이 그 장소에 있을 때만 준다. 얼마나 다쳤는지는 HP 와 인물의 줄이 말한다.
     """
 
     name: str
     moved: list[str] = field(default_factory=list)
     doors: list[str] = field(default_factory=list)
+    traps: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

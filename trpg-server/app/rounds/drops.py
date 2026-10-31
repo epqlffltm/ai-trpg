@@ -177,6 +177,15 @@ def npc_drop_after(judging: Judging, actor: TableMember, effect: dict | None) ->
     살아 있다가 쓰러진 것이 아니거나, 전에 이미 쓰러진 적이 있는 NPC 면 굴리지 않고 None 이다.
     처음 쓰러진 것이면 지닌 것이 없어도 그 라운드를 적는다(npcs.mark_first_fall). 아무것도 안 나왔으면 None 이다.
     """
+    return npc_drop_at(judging, actor.sheet.place_id, effect)
+
+
+def npc_drop_at(judging: Judging, place_id: uuid.UUID | None, effect: dict | None) -> dict | None:
+    """
+    NPC 의 변화 뒤에 드롭을 굴리고 그 장소(place_id)의 한 명에게 준다(npc_drop_after 와 같다).
+
+    친 사람 없이 쓰러진 인물(덫을 밟았다, #806 ②)은 그 인물이 선 곳이 받는 곳이다.
+    """
     if effect is None or not downed_now(effect):
         return None
     person = find_cast_member(judging.cast, uuid.UUID(effect['entry_id']))
@@ -185,4 +194,4 @@ def npc_drop_after(judging: Judging, actor: TableMember, effect: dict | None) ->
     dropped = fall_from_npc(person, judging)
     if not dropped:
         return None
-    return hand_out_npc(judging, actor.sheet.place_id, person, dropped)
+    return hand_out_npc(judging, place_id, person, dropped)

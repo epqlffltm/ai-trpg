@@ -14,7 +14,7 @@ app/rounds/npc_attacks.py).
     물건의 효과와 같이(면역과 저항을 따른다, app/rounds/item_targets.py 의 apply_to_struck) 든다.
     피해로 죽었으면 부상과 맞추기는 들지 않는다.
     덫은 죽이려는 공격이 아니다(lethal 이 아니다). 쓰러질지 죽을지는 몬스터의 타입이 정한다.
-  - 덫에 처음 쓰러졌으면 드롭을 굴린다(app/rounds/drops.py). 몬스터는 그 장소, 인물은 공격받은 사람이 선 장소다.
+  - 덫에 처음 쓰러졌으면 드롭을 굴린다(app/rounds/drops.py). 몬스터도 인물도 그 장소(덫이 있는 곳)다.
   - 피하든 못 피하든 덫은 터져 끝난다.
 
 DB 를 모른다. 덫과 밟은 쪽의 상태와 드롭을 받은 사람의 소지품을 고친다. 저장하지 않는다.
@@ -39,7 +39,7 @@ from app.rounds.map_actions import terms_document
 from app.rounds.monster_scene import SceneMonster
 from app.tables import monsters as table_monsters
 from app.tables import npcs, places, traps
-from app.tables.models import TableMember, TableTrap
+from app.tables.models import TableTrap
 from app.tables.resources import Bearer
 
 
@@ -129,11 +129,12 @@ def monster_steps(judging: Judging, monster: SceneMonster) -> dict | None:
     return stepped if drop is None else {**stepped, 'drop': drop}
 
 
-def npc_steps(judging: Judging, person: CastMember, victim: TableMember) -> dict | None:
+def npc_steps(judging: Judging, person: CastMember) -> dict | None:
     """
-    싸우는 인물 하나가 그 장소의 덫 하나를 밟는다. 밟은 일을 문서로 돌려준다. 장소가 없거나 덫이 없으면 None.
+    인물 하나가 그 장소의 덫 하나를 밟는다. 밟은 일을 문서로 돌려준다. 장소가 없거나 덫이 없으면 None.
 
-    victim 은 그 차례에 공격받은 사람이다. 덫에 처음 쓰러진 인물의 드롭을 받는 장소가 그 사람이 선 곳이다.
+    싸우는 인물의 차례와, 사건이 덫이 있는 곳으로 옮긴 인물(#806 ②-c, app/rounds/happening_traps.py)이 함께 쓴다.
+    덫에 처음 쓰러진 인물의 드롭은 그 장소(인물이 선 곳)에 있는 사람이 받는다.
     못 피했으면 인물의 변화(npc_effect), 입힌 부상(injured), 맞춘 수치(resources)가 있다.
     처음 쓰러졌으면 드롭(drop)도 있다.
     """
@@ -150,7 +151,7 @@ def npc_steps(judging: Judging, person: CastMember, victim: TableMember) -> dict
     struck = Struck(person.npc, ResourceHolder.NPCS, None, lambda: resisting.of_cast(judging, person))
     landed = SPARED if npcs.is_dead(person.npc) else struck_effects(judging, struck, rule)
     stepped = {**head, 'npc_effect': effect, **landed}
-    drop = drops.npc_drop_after(judging, victim, effect)
+    drop = drops.npc_drop_at(judging, person.npc.place_id, effect)
     return stepped if drop is None else {**stepped, 'drop': drop}
 
 

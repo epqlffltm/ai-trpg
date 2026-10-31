@@ -940,19 +940,33 @@ def record_foe_trap(session: AsyncSession, table: GameTable, round_number: int, 
     if stepped is None:
         return
     _, attacker = ATTACK_EVENTS[turn['kind']]
-    id_key, name_key, effect_key = FOE_KEYS[turn['kind']]
+    record_stepped(session, table, round_number, turn['kind'], turn[attacker], turn['name'], stepped, cause)
+
+
+def record_stepped(
+    session: AsyncSession,
+    table: GameTable,
+    round_number: int,
+    kind: str,
+    foe_id: str,
+    foe_name: str,
+    stepped: dict,
+    cause: TableEvent,
+) -> None:
+    """
+    몬스터(kind monster)나 인물(kind npc)이 밟은 덫 하나를 이벤트로 적는다(trap_sprung). cause 에 잇는다.
+
+    싸우는 차례(record_foe_trap)와 사건이 옮긴 인물(#806 ②-c, app/rounds/happening_traps.py)이 함께 쓴다.
+    """
+    _, attacker = ATTACK_EVENTS[kind]
+    id_key, name_key, effect_key = FOE_KEYS[kind]
     keys = ('place', 'entry_id', 'name', 'set_by', 'avoid', 'avoided')
-    payload = {
-        'round': round_number,
-        id_key: turn[attacker],
-        name_key: turn['name'],
-        **{key: stepped[key] for key in keys},
-    }
+    payload = {'round': round_number, id_key: foe_id, name_key: foe_name, **{key: stepped[key] for key in keys}}
     fired = recorder.record(session, table, EventType.TRAP_SPRUNG, payload=payload, cause=cause)
-    holder = {attacker: turn[attacker], 'name': turn['name']}
+    holder = {attacker: foe_id, 'name': foe_name}
     effect = stepped[effect_key]
     if effect is not None:
-        record_change = record_monster_change if turn['kind'] == 'monster' else record_npc_change
+        record_change = record_monster_change if kind == 'monster' else record_npc_change
         changed = record_change(session, table, effect, cause=fired)
         record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)
         record_drop(session, table, stepped.get('drop'), cause=changed)

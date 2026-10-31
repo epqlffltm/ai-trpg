@@ -915,7 +915,20 @@ def to_happening_note(
     moved = [f'{move["character_name"]} → {move["to"]["name"]}' for move in row.moves]
     moved.extend(describe_npc_move(move, labels, places) for move in row.npc_moves if is_seen(move, here))
     doors = [describe_happening_door(change, places) for change in row.doors if is_seen(change, here)]
-    return HappeningNote(name=name, moved=moved, doors=doors)
+    trapped = [describe_happening_trap(one, labels) for one in row.traps or [] if is_trap_seen(one, here)]
+    return HappeningNote(name=name, moved=moved, doors=doors, traps=trapped)
+
+
+def is_trap_seen(one: dict, here: Set[uuid.UUID]) -> bool:
+    """사건이 옮긴 쪽이 밟은 덫을 일행이 봤는가(#806 ②-c). 캐릭터는 늘, 인물은 그 장소에 캐릭터가 있을 때만이다."""
+    return one['kind'] == 'pc' or uuid.UUID(one['place']['entry_id']) in here
+
+
+def describe_happening_trap(one: dict, labels: Mapping[uuid.UUID, str]) -> str:
+    """사건이 옮긴 쪽이 밟은 덫 하나를 "이름: 덫 올가미에 걸림"으로. 인물은 부르는 이름이다."""
+    who = one['character_name'] if one['kind'] == 'pc' else labels.get(uuid.UUID(one['entry_id']), one['name'])
+    result = '을(를) 피함' if one['trap']['avoided'] else '에 걸림'
+    return f'{who}: 덫 {one["trap"]["name"]}{result}'
 
 
 def to_happening_notes(

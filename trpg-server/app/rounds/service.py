@@ -61,6 +61,7 @@ from app.events.models import EventType, TableEvent
 from app.observability.metrics import record_round_closed
 from app.rounds import (
     deadlines,
+    happening_traps,
     happenings,
     narration_request,
     opener,
@@ -296,6 +297,7 @@ def begin_closing(
     drifts = resource_rounds.settle(table, round_, scene)
     settled = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs)
     occurred = happenings.settle_happenings(table, round_.number, scene.all_monsters, scene.npcs)
+    happening_traps.settle(table, round_, dice, scene)
     overdue = deadlines.expire_quests(table)
     round_.expired_quests = [failure['entry_id'] for failure in overdue]
     after_overdue = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs) if overdue else []
@@ -309,7 +311,7 @@ def begin_closing(
     record_recoveries(session, table, recovered, group)
     resource_rounds.record(session, table, drifts, round_.number, group)
     quest_goals.record_changes(session, table, settled, group)
-    happenings.record_happenings(session, table, occurred, group)
+    happening_traps.record(session, table, round_.number, happenings.record_happenings(session, table, occurred, group))
     deadlines.record_failures(session, table, overdue, group)
     quest_goals.record_changes(session, table, after_overdue, group)
     idle = [str(user_id) for user_id in waiting_for(table, round_)]
