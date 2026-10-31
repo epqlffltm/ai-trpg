@@ -2,13 +2,13 @@
 // 시나리오의 소개 탭(B9). 공개 목록(B1)과 소개(B2)에 보일 한줄소개, 소개글, 장르, 태그를 탭의 저장으로 보낸다.
 // 판에 굳지 않는다. 공개 중이면 저장하자마자 공개된 소개가 바뀐다. 공개할 판은 게시 탭에서 고른다.
 
-import { Button, Notice, Radio, TextField } from '@ai-trpg/ui';
+import { Button, Notice, SelectField, TextField } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import type { Genre, ListingDetail, ScenarioDetail } from '../../../../api/types';
 import { TextAreaField } from '../../../../components/TextAreaField';
-import { GENRE_VALUES, genreLabel } from '../../labels';
+import { GENRE_VALUES, genreLabel, isGenre } from '../../labels';
 import { LISTING_DESCRIPTION_MAX, listingDraft, listingHints, TAGLINE_MAX, TAG_MAX, TAGS_MAX, toListingBody, type ListingDraft } from './listingForm';
 import { listingQuery } from './scenarioQueries';
 import { ScenarioForm } from './ScenarioForm';
@@ -95,19 +95,29 @@ function PublicationStatus({ scenarioId, listing }: { scenarioId: string; listin
 
 type GenreProps = { genre: Genre | null; error: string | undefined; onChange: (genre: Genre) => void };
 
+/** 장르 고르기 칸(셀렉트). 아직 쓰지 않은 소개 페이지만 "장르를 고르세요"가 보이고, 그것은 고를 수 없다 */
 function GenreChoices({ genre: chosen, error, onChange }: GenreProps) {
   return (
-    <fieldset className="scenario-choices scenario-genres">
-      <legend>장르</legend>
-      <p className="ui-field__hint">
-        반드시 하나를 고릅니다. 장르마다 플레이 화면과 소개 화면의 모양이 다릅니다. 남성향·여성향은 태그로 적으세요.
-      </p>
-      <div className="scenario-genres__list">
-        {GENRE_VALUES.map((genre) => (
-          <Radio key={genre} name="scenario_genre" label={genreLabel(genre)} checked={chosen === genre} onChange={() => onChange(genre)} />
-        ))}
-      </div>
-      {error ? <p className="ui-field__error">{error}</p> : null}
-    </fieldset>
+    <SelectField
+      label="장르"
+      name="genre"
+      value={chosen ?? ''}
+      onChange={(event) => {
+        if (isGenre(event.target.value)) onChange(event.target.value);
+      }}
+      error={error}
+      hint="반드시 하나를 고릅니다. 장르마다 플레이 화면과 소개 화면의 모양이 다릅니다. 남성향·여성향은 태그로 적으세요."
+    >
+      {chosen === null ? (
+        <option value="" disabled>
+          장르를 고르세요
+        </option>
+      ) : null}
+      {GENRE_VALUES.map((genre) => (
+        <option key={genre} value={genre}>
+          {genreLabel(genre)}
+        </option>
+      ))}
+    </SelectField>
   );
 }
