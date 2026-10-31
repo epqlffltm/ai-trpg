@@ -130,6 +130,9 @@ describe('캐릭터 만들기', () => {
     const form = await screen.findByRole('form', { name: '기본' });
     await userEvent.type(within(form).getByLabelText('태그(쉼표로 나눈다)'), '기사, 판타지, 기사');
     await userEvent.type(within(form).getByLabelText('나이(선택)'), ' 스물 ');
+    // 장르는 하나를 고른다. 남성향·여성향은 장르에 없다(태그)
+    expect(within(form).queryByRole('option', { name: '남성향' })).not.toBeInTheDocument();
+    await userEvent.selectOptions(within(form).getByLabelText('장르(선택)'), '무협');
     await userEvent.click(within(form).getByRole('button', { name: '저장' }));
 
     expect(await within(form).findByText('저장했습니다.')).toBeInTheDocument();
@@ -137,6 +140,7 @@ describe('캐릭터 만들기', () => {
       name: '세라',
       age: '스물',
       gender: '',
+      genre: 'wuxia',
       tags: ['기사', '판타지'],
       rating: 'all',
       visibility: 'private',

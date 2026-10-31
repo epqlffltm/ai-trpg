@@ -1,11 +1,12 @@
 // web/apps/web/src/pages/chat/studio/characters/BasicsTab.tsx
-// 캐릭터의 기본 탭(C6): 이름, 나이, 성별, 태그, 등급, 공개 범위. 지우기도 여기에 둔다.
+// 캐릭터의 기본 탭(C6): 이름, 나이, 성별, 장르, 태그, 등급, 공개 범위. 지우기도 여기에 둔다.
 
 import { SelectField, TextField } from '@ai-trpg/ui';
 import { useState } from 'react';
 import type { AssetCharacterDetail, AssetRating, AssetVisibility } from '../../../../api/types';
 import { AGE_MAX, basicsDraft, basicsHints, GENDER_MAX, NAME_MAX, toBasicsBody, type BasicsDraft } from './basicsForm';
 import { CharacterForm } from './CharacterForm';
+import { GenreSelect } from './GenreSelect';
 import { DeleteCharacterButton } from './DeleteCharacterButton';
 import { useCharacterSave } from './useCharacterSave';
 
@@ -62,6 +63,7 @@ export function BasicsTab({ character }: { character: AssetCharacterDetail }) {
         onChange={(event) => update({ gender: event.target.value })}
         error={hints.gender}
       />
+      <GenreSelect value={draft.genre} error={fields.genre} onChange={(genre) => update({ genre })} where="대화" />
       <TextField
         label="태그(쉼표로 나눈다)"
         name="tags"

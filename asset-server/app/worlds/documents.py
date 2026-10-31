@@ -9,6 +9,8 @@
   - 2: 이벤트(열리는 조건, 되풀이, 장면 지시, 열릴 때의 효과, 선택지)와 조건의 event_seen 을 더했다(2026-10-24).
        1 의 판은 이벤트가 없는 것으로 읽는다
   - 3: 인물의 고백(confession)과 엔딩(endings)을 더했다(2026-10-24). 2 까지의 판은 고백할 수 있는 인물과 엔딩이 없다
+  - 4: 장르(genre, app/genres.py 의 값 하나 또는 null)를 더했다(2026-10-31). 3 까지의 판은 장르가 없다(null).
+       받는 쪽(story)은 장면 화면의 테마를 이 값으로 고른다
 
 인물의 보이기는 판에서는 정해진 값이다. 초안의 덮어쓰기가 비어 있으면 세계관의 기본을 채워 넣는다.
 받는 쪽(story)이 기본과 덮어쓰기를 다시 합치지 않아도 된다.
@@ -22,6 +24,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.characters.documents import LorebookCopyDocument, PathDocument, SpriteDocument, StageDocument
 from app.characters.models import AffectionDisplay
+from app.genres import Genre
 from app.ratings import Rating
 from app.worlds.models import (
     AfterEnding,
@@ -37,7 +40,7 @@ from app.worlds.models import (
 )
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 3
+DOCUMENT_FORMAT = 4
 
 
 class SlotDocument(BaseModel):
@@ -275,6 +278,7 @@ class WorldDocument(BaseModel):
     lorebooks: list[LorebookCopyDocument]
     events: list[EventDocument] = []
     endings: list[EndingDocument] = []
+    genre: Genre | None = None
 
 
 def character_copy(character_id: uuid.UUID, number: int, document: Mapping) -> CastCharacterDocument:
@@ -339,6 +343,7 @@ def build_document(
         lorebooks=list(lorebooks),
         events=world.events,
         endings=world.endings,
+        genre=Genre(world.genre) if world.genre else None,
     )
 
 

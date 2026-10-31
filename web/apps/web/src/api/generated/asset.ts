@@ -1099,6 +1099,7 @@ export interface components {
              * @default
              */
             gender: string;
+            genre?: components["schemas"]["Genre"] | null;
             /**
              * Greeting
              * @default
@@ -1180,6 +1181,7 @@ export interface components {
             event_scenes: components["schemas"]["EventScene"][];
             /** Gender */
             gender: string;
+            genre: components["schemas"]["Genre"] | null;
             /** Greeting */
             greeting: string;
             /** Hidden At */
@@ -1245,6 +1247,7 @@ export interface components {
             format: number;
             /** Gender */
             gender: string;
+            genre?: components["schemas"]["Genre"] | null;
             /** Greeting */
             greeting: string;
             /** Image Id */
@@ -1341,6 +1344,7 @@ export interface components {
             event_scenes?: components["schemas"]["EventScene"][] | null;
             /** Gender */
             gender?: string | null;
+            genre?: components["schemas"]["Genre"] | null;
             /** Greeting */
             greeting?: string | null;
             /** Image Id */
@@ -1729,6 +1733,14 @@ export interface components {
             title: string;
             when: components["schemas"]["SceneConditionDocument"];
         };
+        /**
+         * Genre
+         * @description 장르의 목록. 허용 값의 검사는 입력의 모양(schemas.py)이 한다.
+         *
+         *     DB 의 CHECK 로 걸지 않는다. 걸면 목록을 바꿀 때마다 마이그레이션이 필요해진다(TRPG 와 같다).
+         * @enum {string}
+         */
+        Genre: "fantasy" | "wuxia" | "urban_fantasy" | "sf" | "apocalypse" | "horror" | "mystery" | "romance" | "slice_of_life" | "alt_history" | "comedy";
         /**
          * Gift
          * @description 선물의 규칙 하나. 그 물건을 건네면 호감도를 change 만큼 바꾼다(0~100 안으로 자른다).
@@ -2467,6 +2479,7 @@ export interface components {
          * @description 공개 목록의 한 줄. 마지막 판의 값이다.
          */
         PublicCharacterSummary: {
+            genre: components["schemas"]["Genre"] | null;
             /**
              * Id
              * Format: uuid
@@ -2501,6 +2514,7 @@ export interface components {
             deadline_days: number | null;
             /** Ending Count */
             ending_count: number;
+            genre: components["schemas"]["Genre"] | null;
             /**
              * Id
              * Format: uuid
@@ -2540,6 +2554,7 @@ export interface components {
         PublicWorldSummary: {
             /** Deadline Days */
             deadline_days: number | null;
+            genre: components["schemas"]["Genre"] | null;
             /**
              * Id
              * Format: uuid
@@ -3059,6 +3074,7 @@ export interface components {
              * @default []
              */
             events: components["schemas"]["Event"][];
+            genre?: components["schemas"]["Genre"] | null;
             /** Image Id */
             image_id?: string | null;
             /**
@@ -3163,6 +3179,7 @@ export interface components {
             endings: components["schemas"]["Ending"][];
             /** Events */
             events: components["schemas"]["Event"][];
+            genre: components["schemas"]["Genre"] | null;
             /** Hidden At */
             hidden_at?: string | null;
             /**
@@ -3229,6 +3246,7 @@ export interface components {
             events: components["schemas"]["EventDocument"][];
             /** Format */
             format: number;
+            genre?: components["schemas"]["Genre"] | null;
             /** Image Id */
             image_id: string | null;
             /** Intro Html */
@@ -3433,6 +3451,7 @@ export interface components {
             endings?: components["schemas"]["Ending"][] | null;
             /** Events */
             events?: components["schemas"]["Event"][] | null;
+            genre?: components["schemas"]["Genre"] | null;
             /** Image Id */
             image_id?: string | null;
             /** Intro Html */

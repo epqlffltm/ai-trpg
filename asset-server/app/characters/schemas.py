@@ -59,6 +59,7 @@ from app.characters.models import (
     Visibility,
 )
 from app.content.html import INTRO_MAX_BYTES, RemovedKind, intro_too_long
+from app.genres import Genre
 from app.ratings import Rating
 
 
@@ -371,7 +372,7 @@ def attached_images(
 
 
 # 고칠 때 null 로 비울 수 있는 칸. 그림, 처음 있는 장소, 호감도는 "없음"이 null 이다. 글과 목록의 칸은 빈 값으로 비운다
-NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'affection'})
+NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'affection', 'genre'})
 
 
 class CharacterCreate(BaseModel):
@@ -386,6 +387,7 @@ class CharacterCreate(BaseModel):
     age: Age = ''
     gender: Gender = ''
     tags: Tags = []
+    genre: Genre | None = None
     starts: Starts = []
     image_id: uuid.UUID | None = None
     rating: Rating = Rating.ALL
@@ -428,6 +430,7 @@ class CharacterUpdate(BaseModel):
     age: Age | None = None
     gender: Gender | None = None
     tags: Tags | None = None
+    genre: Genre | None = None
     starts: Starts | None = None
     image_id: uuid.UUID | None = None
     rating: Rating | None = None
@@ -478,6 +481,8 @@ class CharacterDetail(BaseModel):
     age: str
     gender: str
     tags: list[str]
+    # 장르. 고르지 않았으면 null 이다
+    genre: Genre | None
     starts: list[Start]
     image_id: uuid.UUID | None
     rating: Rating
@@ -578,6 +583,8 @@ class PublicCharacterSummary(BaseModel):
     version: int
     name: str
     tags: list[str]
+    # 장르. 고르지 않았으면 null 이다
+    genre: Genre | None
     rating: Rating
     image_id: uuid.UUID | None
     published_at: datetime

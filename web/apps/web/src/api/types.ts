@@ -222,6 +222,8 @@ export type AssetCharacterUpdate = Asset['schemas']['CharacterUpdate'];
 export type AssetCharacterStart = Asset['schemas']['Start'];
 export type AssetRating = Asset['schemas']['Rating'];
 export type AssetVisibility = Asset['schemas']['Visibility'];
+/** 캐릭터와 세계관의 장르(하나, 비울 수 있다). TRPG 시나리오의 장르와 같은 값이다 */
+export type AssetGenre = Asset['schemas']['Genre'];
 export type AssetPublishCheck = Asset['schemas']['PublishCheck'];
 export type AssetPublishResult = Asset['schemas']['PublishResult'];
 export type AssetVersionSummary = Asset['schemas']['VersionSummary'];

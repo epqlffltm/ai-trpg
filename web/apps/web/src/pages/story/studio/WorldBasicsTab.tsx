@@ -1,11 +1,12 @@
 // web/apps/web/src/pages/story/studio/WorldBasicsTab.tsx
-// 세계관의 기본 탭(D7): 이름, 태그, 등급, 공개 범위, 대표 그림. 지우기도 여기에 둔다.
+// 세계관의 기본 탭(D7): 이름, 장르, 태그, 등급, 공개 범위, 대표 그림. 지우기도 여기에 둔다.
 
 import { SelectField, TextField } from '@ai-trpg/ui';
 import { useState } from 'react';
 import type { StoryWorldDetail } from '../../../api/storyWorlds';
 import { ImagePicker } from '../../../components/ImagePicker';
 import { CharacterForm as StudioForm } from '../../chat/studio/characters/CharacterForm';
+import { GenreSelect } from '../../chat/studio/characters/GenreSelect';
 import { DeleteWorldButton } from './DeleteWorldButton';
 import { useWorldSave } from './useWorldSave';
 import { NAME_MAX, toWorldBasicsBody, worldBasicsDraft, worldBasicsHints, type WorldBasicsDraft, type WorldRating, type WorldVisibility } from './worldBasicsForm';
@@ -39,6 +40,7 @@ export function WorldBasicsTab({ world }: { world: StoryWorldDetail }) {
       actions={<DeleteWorldButton worldId={world.id} name={world.name} />}
     >
       <TextField label="이름" name="name" maxLength={NAME_MAX} value={draft.name} onChange={(event) => update({ name: event.target.value })} error={hints.name} />
+      <GenreSelect value={draft.genre} error={fields.genre} onChange={(genre) => update({ genre })} where="장면" />
       <TextField label="태그(쉼표로 나눈다)" name="tags" value={draft.tags} onChange={(event) => update({ tags: event.target.value })} error={hints.tags} />
       <SelectField
         label="등급"

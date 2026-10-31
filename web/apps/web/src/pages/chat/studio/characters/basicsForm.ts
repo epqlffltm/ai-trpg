@@ -1,8 +1,9 @@
 // web/apps/web/src/pages/chat/studio/characters/basicsForm.ts
-// 캐릭터의 기본 탭(이름, 나이, 성별, 태그, 등급, 공개 범위)의 입력. 순수한 함수다.
+// 캐릭터의 기본 탭(이름, 나이, 성별, 장르, 태그, 등급, 공개 범위)의 입력. 순수한 함수다.
+// 장르는 하나이고 비워 둘 수 있다(빈 값 → null 로 보내 비운다). 대화와 소개 화면의 테마를 정한다.
 // 상한은 서버와 같다(asset-server/app/characters/models.py). 태그는 쉼표로 나눠 한 칸에 적는다.
 
-import type { AssetCharacterDetail, AssetCharacterUpdate, AssetRating, AssetVisibility } from '../../../../api/types';
+import type { AssetCharacterDetail, AssetCharacterUpdate, AssetGenre, AssetRating, AssetVisibility } from '../../../../api/types';
 
 export const NAME_MAX = 50;
 export const AGE_MAX = 20;
@@ -14,6 +15,8 @@ export type BasicsDraft = {
   name: string;
   age: string;
   gender: string;
+  /** 고르지 않았으면 빈 값 */
+  genre: AssetGenre | '';
   tags: string;
   rating: AssetRating;
   visibility: AssetVisibility;
@@ -24,6 +27,7 @@ export function basicsDraft(character: AssetCharacterDetail): BasicsDraft {
     name: character.name,
     age: character.age,
     gender: character.gender,
+    genre: character.genre ?? '',
     tags: character.tags.join(', '),
     rating: character.rating,
     visibility: character.visibility,
@@ -56,6 +60,7 @@ export function toBasicsBody(draft: BasicsDraft): AssetCharacterUpdate {
     name: draft.name.trim(),
     age: draft.age.trim(),
     gender: draft.gender.trim(),
+    genre: draft.genre || null,
     tags: parseTags(draft.tags),
     rating: draft.rating,
     visibility: draft.visibility,
