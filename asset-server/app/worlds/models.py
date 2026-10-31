@@ -222,8 +222,8 @@ class World(Base):
     # 소개(HTML). 초안에는 쓴 그대로 둔다. 거르는 것은 게시할 때다(app/content/html.py)
     intro_html: Mapped[str] = mapped_column(Text, default='', server_default='')
     tags: Mapped[list[str]] = mapped_column(ARRAY(String(20)), default=list, server_default='{}')
-    # 장르(app/genres.py 의 값 하나). 고르지 않았으면 비어 있다. 장면과 소개 화면의 테마를 정한다
-    genre: Mapped[str | None] = mapped_column(String(GENRE_MAX_LENGTH), default=None)
+    # 장르(app/genres.py 의 값 하나). 반드시 있다. 장면과 소개 화면의 테마를 정한다
+    genre: Mapped[str] = mapped_column(String(GENRE_MAX_LENGTH))
     # 대표 그림. 자기가 올린 그림만 붙인다. 그림이 지워지면(탈퇴) 비운다
     image_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey('images.id', ondelete='SET NULL'), default=None, index=True

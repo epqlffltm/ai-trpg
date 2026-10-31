@@ -100,7 +100,7 @@ async def test_an_adult_world_goes_only_to_adults(
 
 @pytest.mark.parametrize('suffix', BOTH_PATHS)
 async def test_unpublished_and_missing_worlds_are_not_there(client: AsyncClient, owner: dict, suffix: str):
-    draft = await create_world(client, owner, {'name': '초안'})
+    draft = await create_world(client, owner, {'genre': 'romance', 'name': '초안'})
 
     responses = [
         await signed_get(client, f'/worlds/{draft["id"]}{suffix}', owner),

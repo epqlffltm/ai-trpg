@@ -54,7 +54,7 @@ def operator(signing_key: SigningKey) -> dict:
 
 
 async def create(client: AsyncClient, headers: dict, **fields) -> dict:
-    body = {'name': '세라', 'starts': [START], **WORLD, 'affection': AFFECTION, **fields}
+    body = {'genre': 'romance', 'name': '세라', 'starts': [START], **WORLD, 'affection': AFFECTION, **fields}
     response = await client.post(CHARACTERS_URL, json=body, headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()

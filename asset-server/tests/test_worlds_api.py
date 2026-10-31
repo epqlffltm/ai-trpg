@@ -59,7 +59,7 @@ async def open_client(auth_server: FakeAuthServer, engine: AsyncEngine) -> Async
 
 
 async def test_a_world_starts_with_the_default_slots_and_shows_everything(client: AsyncClient, owner: dict):
-    made = await create_world(client, owner, {'name': '여름 학원'})
+    made = await create_world(client, owner, {'genre': 'romance', 'name': '여름 학원'})
 
     assert [slot['id'] for slot in made['slots']] == ['morning', 'day', 'evening', 'night']
     assert [slot['start_hour'] for slot in made['slots']] == [7, 11, 17, 21]
@@ -72,29 +72,31 @@ async def test_a_world_starts_with_the_default_slots_and_shows_everything(client
 async def test_the_start_slot_can_be_any_slot(client: AsyncClient, owner: dict):
     slots = [{'id': 'am', 'name': '오전', 'start_hour': 6}, {'id': 'pm', 'name': '오후', 'start_hour': 12}]
 
-    made = await create_world(client, owner, {'name': '둘', 'slots': slots, 'start_slot': 'pm'})
+    made = await create_world(client, owner, {'genre': 'romance', 'name': '둘', 'slots': slots, 'start_slot': 'pm'})
 
     assert (made['start_slot'], [slot['id'] for slot in made['slots']]) == ('pm', ['am', 'pm'])
 
 
 async def test_only_operators_make_worlds_for_now(client: AsyncClient, plain: dict):
-    response = await client.post(WORLDS_URL, json={'name': '여름 학원'}, headers=plain)
+    response = await client.post(WORLDS_URL, json={'genre': 'romance', 'name': '여름 학원'}, headers=plain)
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert response.json()['code'] == 'operator_only'
 
 
 async def test_operators_and_adults_use_the_adult_rating(client: AsyncClient, owner: dict, signing_key: SigningKey):
-    response = await client.post(WORLDS_URL, json={'name': '밤', 'rating': 'adult'}, headers=owner)
+    response = await client.post(WORLDS_URL, json={'genre': 'romance', 'name': '밤', 'rating': 'adult'}, headers=owner)
     adult = bearer(signing_key, OWNER, adult=True)
-    allowed = await client.post(WORLDS_URL, json={'name': '밤', 'rating': 'adult'}, headers=adult)
+    allowed = await client.post(WORLDS_URL, json={'genre': 'romance', 'name': '밤', 'rating': 'adult'}, headers=adult)
 
     # 운영자는 성인 등급을 쓸 수 있다(app/ratings.py)
     assert (response.status_code, allowed.status_code) == (status.HTTP_201_CREATED, status.HTTP_201_CREATED)
 
 
 async def test_a_plain_user_cannot_use_the_adult_rating(open_client: AsyncClient, plain: dict):
-    response = await open_client.post(WORLDS_URL, json={'name': '밤', 'rating': 'adult'}, headers=plain)
+    response = await open_client.post(
+        WORLDS_URL, json={'genre': 'romance', 'name': '밤', 'rating': 'adult'}, headers=plain
+    )
 
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
@@ -103,7 +105,7 @@ async def test_a_plain_user_cannot_use_the_adult_rating(open_client: AsyncClient
 
 
 async def test_the_owner_lists_reads_updates_and_deletes(client: AsyncClient, owner: dict):
-    made = await create_world(client, owner, {'name': '여름 학원', 'deadline_days': 30})
+    made = await create_world(client, owner, {'genre': 'romance', 'name': '여름 학원', 'deadline_days': 30})
     url = f'{WORLDS_URL}/{made["id"]}'
 
     listed = await client.get(WORLDS_URL, headers=owner)
@@ -119,7 +121,7 @@ async def test_the_owner_lists_reads_updates_and_deletes(client: AsyncClient, ow
 
 
 async def test_someone_elses_world_is_not_there(client: AsyncClient, owner: dict, other: dict):
-    made = await create_world(client, owner, {'name': '여름 학원'})
+    made = await create_world(client, owner, {'genre': 'romance', 'name': '여름 학원'})
     url = f'{WORLDS_URL}/{made["id"]}'
 
     responses = [
@@ -136,7 +138,7 @@ async def test_someone_elses_world_is_not_there(client: AsyncClient, owner: dict
 
 
 async def test_null_is_only_for_the_clearable_fields(client: AsyncClient, owner: dict):
-    made = await create_world(client, owner, {'name': '여름 학원'})
+    made = await create_world(client, owner, {'genre': 'romance', 'name': '여름 학원'})
 
     response = await client.patch(f'{WORLDS_URL}/{made["id"]}', json={'name': None}, headers=owner)
     cleared = await client.patch(
@@ -148,7 +150,7 @@ async def test_null_is_only_for_the_clearable_fields(client: AsyncClient, owner:
 
 
 async def test_only_operators_make_a_world_public(open_client: AsyncClient, plain: dict):
-    made = await create_world(open_client, plain, {'name': '여름 학원'})
+    made = await create_world(open_client, plain, {'genre': 'romance', 'name': '여름 학원'})
 
     response = await open_client.patch(f'{WORLDS_URL}/{made["id"]}', json={'visibility': 'public'}, headers=plain)
     private = await open_client.patch(f'{WORLDS_URL}/{made["id"]}', json={'visibility': 'private'}, headers=plain)
@@ -158,7 +160,7 @@ async def test_only_operators_make_a_world_public(open_client: AsyncClient, plai
 
 
 async def test_an_adult_rating_change_is_checked(open_client: AsyncClient, plain: dict):
-    made = await create_world(open_client, plain, {'name': '여름 학원'})
+    made = await create_world(open_client, plain, {'genre': 'romance', 'name': '여름 학원'})
 
     response = await open_client.patch(f'{WORLDS_URL}/{made["id"]}', json={'rating': 'adult'}, headers=plain)
 
@@ -190,7 +192,7 @@ async def test_an_adult_rating_change_is_checked(open_client: AsyncClient, plain
     ],
 )
 async def test_bad_fields_are_rejected(client: AsyncClient, owner: dict, body: dict):
-    response = await client.post(WORLDS_URL, json={'name': '여름 학원', **body}, headers=owner)
+    response = await client.post(WORLDS_URL, json={'genre': 'romance', 'name': '여름 학원', **body}, headers=owner)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -212,7 +214,9 @@ async def test_a_condition_fills_only_the_fields_of_its_kind(client: AsyncClient
     line = {'slot': 'day', 'place': 'a', 'when': {'items': [condition]}}
     cast = [member('ari', str(uuid.uuid4()), schedule=[line])]
 
-    response = await client.post(WORLDS_URL, json={'name': '여름 학원', 'cast': cast}, headers=owner)
+    response = await client.post(
+        WORLDS_URL, json={'genre': 'romance', 'name': '여름 학원', 'cast': cast}, headers=owner
+    )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -229,7 +233,8 @@ async def test_the_same_character_and_a_still_gift_are_rejected(client: AsyncCli
     ]
 
     responses = [
-        await client.post(WORLDS_URL, json={'name': '여름', 'cast': cast}, headers=owner) for cast in (twice, still)
+        await client.post(WORLDS_URL, json={'genre': 'romance', 'name': '여름', 'cast': cast}, headers=owner)
+        for cast in (twice, still)
     ]
 
     assert [response.status_code for response in responses] == [status.HTTP_422_UNPROCESSABLE_CONTENT] * 2
@@ -242,8 +247,12 @@ async def test_the_cast_points_at_my_characters_only(client: AsyncClient, owner:
     mine = await character(client, owner)
     theirs = await character(client, other, '버')
 
-    made = await client.post(WORLDS_URL, json={'name': '여', 'cast': [member('ari', mine['id'])]}, headers=owner)
-    stolen = await client.post(WORLDS_URL, json={'name': '여', 'cast': [member('beo', theirs['id'])]}, headers=owner)
+    made = await client.post(
+        WORLDS_URL, json={'genre': 'romance', 'name': '여', 'cast': [member('ari', mine['id'])]}, headers=owner
+    )
+    stolen = await client.post(
+        WORLDS_URL, json={'genre': 'romance', 'name': '여', 'cast': [member('beo', theirs['id'])]}, headers=owner
+    )
     missing = await client.patch(
         f'{WORLDS_URL}/{made.json()["id"]}', json={'cast': [member('x', str(uuid.uuid4()))]}, headers=owner
     )
@@ -256,7 +265,9 @@ async def test_the_cast_points_at_my_characters_only(client: AsyncClient, owner:
 async def test_the_world_points_at_my_lorebooks_only(client: AsyncClient, owner: dict, other: dict):
     theirs = await client.post(LOREBOOKS_URL, json={'name': '남의 것'}, headers=other)
 
-    response = await client.post(WORLDS_URL, json={'name': '여', 'lorebooks': [theirs.json()['id']]}, headers=owner)
+    response = await client.post(
+        WORLDS_URL, json={'genre': 'romance', 'name': '여', 'lorebooks': [theirs.json()['id']]}, headers=owner
+    )
 
     assert (response.status_code, response.json()['code']) == (
         status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -268,6 +279,6 @@ async def test_the_same_lorebook_twice_is_rejected(client: AsyncClient, owner: d
     made = await client.post(LOREBOOKS_URL, json={'name': '제국'}, headers=owner)
     twice = [made.json()['id']] * 2
 
-    response = await client.post(WORLDS_URL, json={'name': '여', 'lorebooks': twice}, headers=owner)
+    response = await client.post(WORLDS_URL, json={'genre': 'romance', 'name': '여', 'lorebooks': twice}, headers=owner)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

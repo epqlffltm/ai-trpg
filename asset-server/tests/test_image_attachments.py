@@ -75,7 +75,9 @@ def intro_with(image_id: str) -> str:
 
 
 async def create_character(client: AsyncClient, headers: dict, **fields) -> dict:
-    response = await client.post(CHARACTERS_URL, json={'name': '세라', 'starts': START, **fields}, headers=headers)
+    response = await client.post(
+        CHARACTERS_URL, json={'genre': 'romance', 'name': '세라', 'starts': START, **fields}, headers=headers
+    )
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()
 
@@ -126,7 +128,7 @@ async def test_a_character_takes_only_its_owners_image(
     theirs = await own_image(session, OTHER)
 
     foreign = await client.post(
-        CHARACTERS_URL, json={'name': '세라', 'starts': START, 'image_id': theirs}, headers=owner
+        CHARACTERS_URL, json={'genre': 'romance', 'name': '세라', 'starts': START, 'image_id': theirs}, headers=owner
     )
     character = await create_character(client, owner)
     attached = await client.patch(f'{CHARACTERS_URL}/{character["id"]}', json={'image_id': mine}, headers=owner)

@@ -536,7 +536,7 @@
       },
       "CharacterCreate": {
         "additionalProperties": false,
-        "description": "캐릭터를 만들 때 받는 값. 이름만 필수다. 처음에는 비공개다.",
+        "description": "캐릭터를 만들 때 받는 값. 이름과 장르가 필수다. 처음에는 비공개다.",
         "properties": {
           "affection": {
             "anyOf": [
@@ -570,14 +570,7 @@
             "type": "string"
           },
           "genre": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Genre"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/Genre"
           },
           "greeting": {
             "default": "",
@@ -709,7 +702,8 @@
           }
         },
         "required": [
-          "name"
+          "name",
+          "genre"
         ],
         "title": "CharacterCreate",
         "type": "object"
@@ -748,14 +742,7 @@
             "type": "string"
           },
           "genre": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Genre"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/Genre"
           },
           "greeting": {
             "title": "Greeting",
@@ -972,14 +959,7 @@
             "type": "string"
           },
           "genre": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Genre"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/Genre"
           },
           "greeting": {
             "title": "Greeting",
@@ -1097,7 +1077,8 @@
           "tags",
           "starts",
           "image_id",
-          "rating"
+          "rating",
+          "genre"
         ],
         "title": "CharacterDocument",
         "type": "object"
@@ -3724,14 +3705,7 @@
         "description": "공개 목록의 한 줄. 마지막 판의 값이다.",
         "properties": {
           "genre": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Genre"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/Genre"
           },
           "id": {
             "format": "uuid",
@@ -3816,14 +3790,7 @@
             "type": "integer"
           },
           "genre": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Genre"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/Genre"
           },
           "id": {
             "format": "uuid",
@@ -3925,14 +3892,7 @@
             "title": "Deadline Days"
           },
           "genre": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Genre"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/Genre"
           },
           "id": {
             "format": "uuid",
@@ -4880,7 +4840,7 @@
       },
       "WorldCreate": {
         "additionalProperties": false,
-        "description": "세계관을 만들 때 받는 값. 이름만 필수다. 시간대는 아침, 낮, 저녁, 밤에서 시작한다. 처음에는 비공개다.",
+        "description": "세계관을 만들 때 받는 값. 이름과 장르가 필수다. 시간대는 아침, 낮, 저녁, 밤에서 시작한다. 처음에는 비공개다.",
         "properties": {
           "after_ending": {
             "$ref": "#/components/schemas/AfterEnding",
@@ -4927,14 +4887,7 @@
             "type": "array"
           },
           "genre": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Genre"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/Genre"
           },
           "image_id": {
             "anyOf": [
@@ -5094,7 +5047,8 @@
           }
         },
         "required": [
-          "name"
+          "name",
+          "genre"
         ],
         "title": "WorldCreate",
         "type": "object"
@@ -5143,14 +5097,7 @@
             "type": "array"
           },
           "genre": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Genre"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/Genre"
           },
           "hidden_at": {
             "anyOf": [
@@ -5376,14 +5323,7 @@
             "type": "integer"
           },
           "genre": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Genre"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/Genre"
           },
           "image_id": {
             "anyOf": [
@@ -5483,7 +5423,8 @@
           "items",
           "start_items",
           "cast",
-          "lorebooks"
+          "lorebooks",
+          "genre"
         ],
         "title": "WorldDocument",
         "type": "object"

@@ -41,6 +41,7 @@ function world(extra: Partial<StoryWorldDetail> = {}): StoryWorldDetail {
     id: ID,
     name: '여름 학교',
     intro_html: '',
+    genre: 'romance',
     tags: [],
     image_id: null,
     rating: 'all',

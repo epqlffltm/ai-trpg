@@ -36,7 +36,7 @@ def bearer(signing_key: SigningKey, user_id: uuid.UUID, operator: bool = True, a
 
 async def character(client: AsyncClient, headers: dict, name: str = '아리', published: bool = True, **fields) -> dict:
     """캐릭터 하나. published 면 게시까지 한다."""
-    body = {'name': name, 'starts': [START], 'speech_examples': f'{name}의 말투', **fields}
+    body = {'genre': 'romance', 'name': name, 'starts': [START], 'speech_examples': f'{name}의 말투', **fields}
     response = await client.post(CHARACTERS_URL, json=body, headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     made = response.json()
@@ -102,6 +102,7 @@ def full_world(ari: str, beo: str) -> dict:
     아리에게 고백할 수 있고, 고백 성공과 기한의 엔딩이 하나씩 있다.
     """
     return {
+        'genre': 'romance',
         'name': '여름 학원',
         'intro_html': '<p>여름 방학의 학원.</p><script>x()</script>',
         'tags': ['학원'],

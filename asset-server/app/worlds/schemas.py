@@ -498,7 +498,7 @@ Endings = Annotated[list[Ending], Field(max_length=WORLD_MAX_ENDINGS), AfterVali
 # DB 에 dict(의 목록)로 적는 칸
 DOCUMENT_LISTS = ('slots', 'places', 'paths', 'items', 'start_items', 'cast', 'events', 'endings')
 # 고칠 때 null 로 비울 수 있는 칸. 그림, 시작 장소와 시간대, 기한은 "없음"이 null 이다
-NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'start_slot', 'deadline_days', 'genre'})
+NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'start_slot', 'deadline_days'})
 
 
 def attached_images(
@@ -533,14 +533,15 @@ def as_rows(model: BaseModel, names: set[str]) -> dict:
 
 
 class WorldCreate(BaseModel):
-    """세계관을 만들 때 받는 값. 이름만 필수다. 시간대는 아침, 낮, 저녁, 밤에서 시작한다. 처음에는 비공개다."""
+    """세계관을 만들 때 받는 값. 이름과 장르가 필수다. 시간대는 아침, 낮, 저녁, 밤에서 시작한다. 처음에는 비공개다."""
 
     model_config = ConfigDict(extra='forbid')
 
     name: Name
     intro_html: Intro = ''
     tags: Tags = []
-    genre: Genre | None = None
+    # 장르. 반드시 하나를 고른다(app/genres.py)
+    genre: Genre
     image_id: uuid.UUID | None = None
     rating: Rating = Rating.ALL
     slots: Slots = list(DEFAULT_SLOTS)
@@ -633,8 +634,7 @@ class WorldDetail(BaseModel):
     name: str
     intro_html: str
     tags: list[str]
-    # 장르. 고르지 않았으면 null 이다
-    genre: Genre | None
+    genre: Genre
     image_id: uuid.UUID | None
     rating: Rating
     visibility: Visibility
@@ -755,8 +755,7 @@ class PublicWorldSummary(BaseModel):
     version: int
     name: str
     tags: list[str]
-    # 장르. 고르지 않았으면 null 이다
-    genre: Genre | None
+    genre: Genre
     rating: Rating
     image_id: uuid.UUID | None
     deadline_days: int | None
@@ -795,8 +794,8 @@ class PublicWorldDetail(BaseModel):
     name: str
     intro_html: str
     tags: list[str]
-    # 장르. 고르지 않았으면 null 이다. 소개 화면의 테마를 정한다
-    genre: Genre | None
+    # 장르. 소개 화면의 테마를 정한다
+    genre: Genre
     rating: Rating
     image_id: uuid.UUID | None
     deadline_days: int | None

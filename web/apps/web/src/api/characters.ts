@@ -29,8 +29,8 @@ export function fetchMyCharacters(paging: { limit: number; offset: number }, sig
   return apiRequest<AssetCharacterPage>(CHARACTERS, { query: paging, ...withSignal(signal) });
 }
 
-/** 만들 때 보내는 것. 나머지 칸은 서버가 기본으로 채운다(전체 이용가, 빈 칸들). 처음에는 비공개다 */
-export type CharacterCreateBody = Pick<AssetCharacterCreate, 'name'>;
+/** 만들 때 보내는 것. 이름과 장르(반드시 하나). 나머지 칸은 서버가 기본으로 채운다(전체 이용가, 빈 칸들). 처음에는 비공개다 */
+export type CharacterCreateBody = Pick<AssetCharacterCreate, 'name' | 'genre'>;
 
 export function createCharacter(body: CharacterCreateBody): Promise<AssetCharacterDetail> {
   return apiRequest<AssetCharacterDetail>(CHARACTERS, { method: 'POST', body });

@@ -54,7 +54,7 @@ async def character(
     client: AsyncClient, headers: dict, public: bool = True, published: bool = True, rating: str = 'all'
 ) -> dict:
     response = await client.post(
-        CHARACTERS_URL, json={'name': '세라', 'starts': [START], 'rating': rating}, headers=headers
+        CHARACTERS_URL, json={'genre': 'romance', 'name': '세라', 'starts': [START], 'rating': rating}, headers=headers
     )
     made = response.json()
     if public:

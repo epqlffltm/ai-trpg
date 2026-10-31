@@ -39,6 +39,7 @@ PLAYER = uuid.UUID('99999999-2222-4333-8444-555555555555')
 NO_SUCH_ID = '00000000-0000-4000-8000-000000000000'
 START = {'title': '비 오는 밤', 'situation': '문을 두드리는 소리가 난다.', 'hour': 21}
 FULL = {
+    'genre': 'romance',
     'name': '세라',
     'intro_html': '<p>도서관의 <strong>사서</strong>.</p><script>alert(1)</script><a href="javascript:x">링크</a>',
     'greeting': '어서 와요. 찾는 책이 있나요?',

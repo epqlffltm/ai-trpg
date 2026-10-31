@@ -18,6 +18,7 @@ function world(extra: Record<string, unknown> = {}) {
     id: ID,
     name: '여름 학교',
     intro_html: '',
+    genre: 'romance',
     tags: [],
     image_id: null,
     rating: 'all',
@@ -97,10 +98,11 @@ describe('세계관 만들기', () => {
     expect(await screen.findByText('아직 만든 세계관이 없습니다.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('link', { name: '첫 세계관 만들기' }));
     await userEvent.type(await screen.findByLabelText('이름'), '여름 학교');
+    await userEvent.selectOptions(screen.getByLabelText('장르'), '로맨스');
     await userEvent.click(screen.getByRole('button', { name: '만들기' }));
 
     expect(await screen.findByText('만들었습니다.')).toBeInTheDocument();
-    expect(seen.filter((request) => request.method === 'POST' && request.url === WORLDS).map((request) => request.body)).toEqual([{ name: '여름 학교' }]);
+    expect(seen.filter((request) => request.method === 'POST' && request.url === WORLDS).map((request) => request.body)).toEqual([{ name: '여름 학교', genre: 'romance' }]);
     const problems = within(await screen.findByRole('list', { name: '고칠 것' }));
     expect(problems.getByText('인물이 하나도 없습니다.')).toBeInTheDocument();
     await userEvent.click(problems.getByRole('button', { name: '진행 탭으로' }));
@@ -112,6 +114,7 @@ describe('세계관 만들기', () => {
     renderApp('/story/studio/worlds/new');
 
     await userEvent.type(await screen.findByLabelText('이름'), '여름 학교');
+    await userEvent.selectOptions(screen.getByLabelText('장르'), '일상');
     await userEvent.click(screen.getByRole('button', { name: '만들기' }));
     expect(await screen.findByText('지금은 운영자만 세계관을 만들고 공개로 둘 수 있습니다.')).toBeInTheDocument();
   });
@@ -122,7 +125,7 @@ describe('세계관 만들기', () => {
 
     const basics = await screen.findByRole('form', { name: '기본' });
     await userEvent.type(within(basics).getByLabelText('태그(쉼표로 나눈다)'), '학원, 청춘, 학원');
-    await userEvent.selectOptions(within(basics).getByLabelText('장르(선택)'), '로맨스');
+    await userEvent.selectOptions(within(basics).getByLabelText('장르'), '로맨스');
     await userEvent.click(within(basics).getByRole('button', { name: '저장' }));
     await waitFor(() =>
       expect(patches(seen)).toEqual([{ name: '여름 학교', genre: 'romance', tags: ['학원', '청춘'], rating: 'all', visibility: 'private', image_id: null }]),

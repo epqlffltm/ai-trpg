@@ -45,8 +45,8 @@ export function fetchMyStoryWorlds(signal?: AbortSignal): Promise<StoryWorldPage
   return apiRequest<StoryWorldPage>('/api/v1/asset/worlds', { query: { limit: MY_WORLDS_LIMIT, offset: 0 }, ...(signal ? { signal } : {}) });
 }
 
-/** 만들 때 보내는 값. 이름만 필수이고 나머지는 서버의 기본값이다 */
-export type StoryWorldCreateBody = Pick<StoryWorldCreate, 'name'> & Partial<StoryWorldCreate>;
+/** 만들 때 보내는 값. 이름과 장르(반드시 하나)가 필수이고 나머지는 서버의 기본값이다 */
+export type StoryWorldCreateBody = Pick<StoryWorldCreate, 'name' | 'genre'> & Partial<StoryWorldCreate>;
 
 /** 세계관 만들기. 처음에는 비공개 초안이다 */
 export function createStoryWorld(body: StoryWorldCreateBody): Promise<StoryWorldDetail> {

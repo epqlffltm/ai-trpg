@@ -65,6 +65,7 @@ async def picture(session: AsyncSession) -> str:
 
 async def create(client: AsyncClient, headers: dict, **fields) -> dict:
     body = {
+        'genre': 'romance',
         'name': '세라',
         'starts': [START],
         'places': [CAFE],
