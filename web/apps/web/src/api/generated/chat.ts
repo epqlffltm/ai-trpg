@@ -629,10 +629,10 @@ export interface components {
             message_id: string;
         };
         /**
-         * CharacterDocument
-         * @description 판에 굳힌 캐릭터. intro_html 은 asset 서버가 허용 목록으로 거른 소개다.
+         * CharacterDocumentOut
+         * @description 응답에 싣는 판의 문서. 장르가 늘 있다(사본에 없으면 기본 장르, app/genres.py). 화면이 대화의 테마를 고른다.
          */
-        CharacterDocument: {
+        CharacterDocumentOut: {
             affection?: components["schemas"]["AffectionDocument"] | null;
             /** Age */
             age: string;
@@ -645,6 +645,8 @@ export interface components {
             format: number;
             /** Gender */
             gender: string;
+            /** Genre */
+            genre: string;
             /** Greeting */
             greeting: string;
             /** Image Id */
@@ -698,7 +700,7 @@ export interface components {
          * @description 대화 하나에 싣는 캐릭터. 가져온 판의 문서까지다.
          */
         CharacterOut: {
-            document: components["schemas"]["CharacterDocument"];
+            document: components["schemas"]["CharacterDocumentOut"];
             /**
              * Id
              * Format: uuid

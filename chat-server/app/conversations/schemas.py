@@ -93,13 +93,19 @@ class CharacterSummary(BaseModel):
     rating: Rating
 
 
+class CharacterDocumentOut(CharacterDocument):
+    """응답에 싣는 판의 문서. 장르가 늘 있다(사본에 없으면 기본 장르, app/genres.py). 화면이 대화의 테마를 고른다."""
+
+    genre: str
+
+
 class CharacterOut(BaseModel):
     """대화 하나에 싣는 캐릭터. 가져온 판의 문서까지다."""
 
     id: uuid.UUID
     version: int
     rating: Rating
-    document: CharacterDocument
+    document: CharacterDocumentOut
 
 
 class PersonaOut(BaseModel):

@@ -22,7 +22,6 @@ from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.assets.client import AssetUnavailableError
-from app.assets.schemas import CharacterDocument
 from app.billing.prices import PriceBook
 from app.billing.routing import Prices
 from app.catalog.models import AiModel
@@ -30,6 +29,7 @@ from app.conversations import service
 from app.conversations.models import Conversation, ConversationPersona, ImportedCharacter, Message, Role
 from app.conversations.schemas import (
     BranchChoice,
+    CharacterDocumentOut,
     CharacterOut,
     CharacterSummary,
     ConversationCreate,
@@ -56,6 +56,7 @@ from app.conversations.service import (
     StartNotFoundError,
 )
 from app.core.dependencies import CurrentViewer, Now, Paging, Session
+from app.genres import shown_genre
 from app.limits.routing import WRITE_LIMIT
 from app.ratings import Rating
 from app.world import service as world
@@ -128,6 +129,11 @@ def to_summary(
     )
 
 
+def document_out(document: dict) -> CharacterDocumentOut:
+    """사본의 문서를 응답의 모양으로. 장르가 없으면 기본 장르를 싣는다(app/genres.py)."""
+    return CharacterDocumentOut.model_validate({**document, 'genre': shown_genre(document)})
+
+
 def to_persona(persona: ConversationPersona | None) -> PersonaOut | None:
     """페르소나의 사본을 응답의 모양으로. 없으면 None."""
     if persona is None:
@@ -197,7 +203,7 @@ def to_detail(
             id=character.source_id,
             version=character.version,
             rating=character.rating,
-            document=CharacterDocument.model_validate(character.document),
+            document=document_out(character.document),
         ),
         persona=to_persona(persona),
         model=conversation_model(conversation, character, models, book, now),
