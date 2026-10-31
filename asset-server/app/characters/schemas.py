@@ -372,11 +372,11 @@ def attached_images(
 
 
 # 고칠 때 null 로 비울 수 있는 칸. 그림, 처음 있는 장소, 호감도는 "없음"이 null 이다. 글과 목록의 칸은 빈 값으로 비운다
-NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'affection', 'genre'})
+NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'affection'})
 
 
 class CharacterCreate(BaseModel):
-    """캐릭터를 만들 때 받는 값. 이름만 필수다. 처음에는 비공개다."""
+    """캐릭터를 만들 때 받는 값. 이름과 장르가 필수다. 처음에는 비공개다."""
 
     model_config = ConfigDict(extra='forbid')
 
@@ -387,7 +387,8 @@ class CharacterCreate(BaseModel):
     age: Age = ''
     gender: Gender = ''
     tags: Tags = []
-    genre: Genre | None = None
+    # 장르. 반드시 하나를 고른다(app/genres.py)
+    genre: Genre
     starts: Starts = []
     image_id: uuid.UUID | None = None
     rating: Rating = Rating.ALL
@@ -481,8 +482,7 @@ class CharacterDetail(BaseModel):
     age: str
     gender: str
     tags: list[str]
-    # 장르. 고르지 않았으면 null 이다
-    genre: Genre | None
+    genre: Genre
     starts: list[Start]
     image_id: uuid.UUID | None
     rating: Rating
@@ -583,8 +583,7 @@ class PublicCharacterSummary(BaseModel):
     version: int
     name: str
     tags: list[str]
-    # 장르. 고르지 않았으면 null 이다
-    genre: Genre | None
+    genre: Genre
     rating: Rating
     image_id: uuid.UUID | None
     published_at: datetime

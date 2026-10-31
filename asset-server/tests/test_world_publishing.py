@@ -206,7 +206,7 @@ async def test_lorebooks_are_copied_in_order(client: AsyncClient, owner: dict):
 
 
 async def test_an_empty_world_lists_what_it_lacks(client: AsyncClient, owner: dict):
-    world = await create_world(client, owner, {'name': '빈 세계'})
+    world = await create_world(client, owner, {'genre': 'romance', 'name': '빈 세계'})
 
     assert await problems_of(client, owner, world) == ['start_place_missing', 'cast_empty']
 
@@ -369,7 +369,7 @@ async def test_withdrawal_drops_private_worlds_and_keeps_public_world_images(
     public = await ready_world(client, owner, image_id=kept)
     await client.patch(f'{WORLDS_URL}/{public["id"]}', json={'visibility': 'public'}, headers=owner)
     await publish(client, owner, public)
-    private = await create_world(client, owner, {'name': '비밀', 'image_id': dropped})
+    private = await create_world(client, owner, {'genre': 'romance', 'name': '비밀', 'image_id': dropped})
 
     response = await signed_withdrawal(client, str(OWNER))
 

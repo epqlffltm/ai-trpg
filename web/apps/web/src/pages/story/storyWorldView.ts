@@ -2,12 +2,12 @@
 // 공개 세계관(D1)에 보일 글. 순수한 함수다.
 
 import type { PublicCastMember, PublicWorldSummary } from '../../api/storyWorlds';
-import { genreBadge } from '../../genres/genres';
+import { genreName } from '../../genres/genres';
 import { ratingBadge } from '../home/labels';
 
 /** 칸의 표시들. 성인, 장르, 기한("30일"), 태그. 같은 것은 한 번 */
 export function worldTags(world: Pick<PublicWorldSummary, 'rating' | 'genre' | 'deadline_days' | 'tags'>): string[] {
-  const tags = [ratingBadge(world.rating), genreBadge(world.genre), world.deadline_days ? `${world.deadline_days}일` : null, ...world.tags];
+  const tags = [ratingBadge(world.rating), genreName(world.genre), world.deadline_days ? `${world.deadline_days}일` : null, ...world.tags];
   return [...new Set(tags.filter((tag): tag is string => Boolean(tag)))];
 }
 

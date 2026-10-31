@@ -1,13 +1,15 @@
 // web/apps/web/src/pages/story/studio/StoryWorldNewPage.tsx
-// 세계관 만들기(D7, /story/studio/worlds/new). 이름만 받고, 만들면 고치기로 간다(처음에는 비공개, 시간대는 아침·낮·저녁·밤).
+// 세계관 만들기(D7, /story/studio/worlds/new). 이름과 장르(반드시 하나)를 받고, 만들면 고치기로 간다(처음에는 비공개, 시간대는 아침·낮·저녁·밤).
 // 나머지 칸은 고치기의 탭에서 채운다. 지금은 운영자만 만든다(아니면 403 operator_only).
 
 import { Button, TextField } from '@ai-trpg/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import type { AssetGenre } from '../../../api/types';
 import { Link, useNavigate } from 'react-router';
 import { createStoryWorld } from '../../../api/storyWorlds';
 import { ProblemNotice } from '../../../components/ProblemNotice';
+import { GenreSelect } from '../../chat/studio/characters/GenreSelect';
 import { useCharacterSending } from '../../chat/studio/characters/useCharacterSending';
 import { NAME_MAX, worldNameHint } from './worldBasicsForm';
 import { WORLDS_PATH, worldPath } from './worldPaths';
@@ -19,6 +21,7 @@ export const CREATED_STATE = { created: true } as const;
 
 export function StoryWorldNewPage() {
   const [name, setName] = useState('');
+  const [genre, setGenre] = useState<AssetGenre | ''>('');
   const [touched, setTouched] = useState(false);
   const sending = useCharacterSending(describeWorldProblem);
   const navigate = useNavigate();
@@ -28,8 +31,8 @@ export function StoryWorldNewPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setTouched(true);
-    if (hint) return;
-    const created = await sending.send(() => createStoryWorld({ name: name.trim() }));
+    if (hint || genre === '') return;
+    const created = await sending.send(() => createStoryWorld({ name: name.trim(), genre }));
     if (!created) return;
     void queryClient.invalidateQueries({ queryKey: worldListKey() });
     void queryClient.invalidateQueries({ queryKey: MY_WORLDS_KEY });
@@ -45,6 +48,7 @@ export function StoryWorldNewPage() {
       <form onSubmit={(event) => void submit(event)} noValidate aria-label="세계관 만들기">
         <ProblemNotice problem={sending.problem} />
         <TextField label="이름" name="name" maxLength={NAME_MAX} value={name} onChange={(event) => setName(event.target.value)} error={touched ? hint : undefined} />
+        <GenreSelect value={genre} error={touched && genre === '' ? '장르를 골라 주세요.' : undefined} onChange={setGenre} where="장면" />
         <p className="hint">처음에는 비공개이고 시간대는 아침, 낮, 저녁, 밤입니다. 나머지 칸은 만든 뒤에 채웁니다.</p>
         <div className="form-actions">
           <Button type="submit" busy={sending.busy}>

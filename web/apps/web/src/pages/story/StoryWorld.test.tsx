@@ -100,7 +100,7 @@ describe('공개 세계관', () => {
 
   it('순수한 함수', () => {
     expect(worldTags({ rating: 'adult', genre: 'romance', deadline_days: 100, tags: ['학원', '학원'] })).toEqual(['성인', '로맨스', '100일', '학원']);
-    expect(worldTags({ rating: 'all', genre: null, deadline_days: null, tags: [] })).toEqual([]);
+    expect(worldTags({ rating: 'all', genre: 'slice_of_life', deadline_days: null, tags: [] })).toEqual(['일상']);
     expect(castLabel({ name: null, reveal: 'silhouette' })).toBe('???');
     expect(castLabel({ name: '미나', reveal: 'shown' })).toBe('미나');
     expect(endingLine(0, 2)).toBeNull();

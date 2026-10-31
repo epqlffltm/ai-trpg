@@ -35,6 +35,7 @@ LEAVER = uuid.UUID('11111111-2222-4333-8444-555555555555')
 STAYER = uuid.UUID('99999999-2222-4333-8444-555555555555')
 PROCESSED = {'status': 'processed'}
 CHARACTER = {
+    'genre': 'romance',
     'name': '세라',
     'starts': [{'title': '비 오는 밤', 'situation': '문을 두드리는 소리가 난다.'}],
 }

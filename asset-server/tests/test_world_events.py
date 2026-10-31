@@ -98,8 +98,10 @@ async def test_events_are_frozen_in_order_with_their_choices(client: AsyncClient
 
 
 def test_a_format_one_version_reads_without_events():
+    # 장르는 판의 형식과 상관없이 늘 있다(마이그레이션 genre required 가 옛 판에도 적었다)
     old = {
         'format': 1,
+        'genre': 'romance',
         'name': '옛 판',
         'intro_html': '',
         'tags': [],
@@ -138,7 +140,7 @@ def test_a_format_one_version_reads_without_events():
     ],
 )
 async def test_an_effect_writes_the_amount_its_kind_needs(client: AsyncClient, owner: dict, effect: dict):
-    body = {'name': '여', 'events': [event('x', on_open=[effect])]}
+    body = {'genre': 'romance', 'name': '여', 'events': [event('x', on_open=[effect])]}
 
     response = await client.post(WORLDS_URL, json=body, headers=owner)
 
@@ -163,7 +165,7 @@ async def test_an_effect_writes_the_amount_its_kind_needs(client: AsyncClient, o
     ],
 )
 async def test_bad_events_are_rejected(client: AsyncClient, owner: dict, events: list):
-    response = await client.post(WORLDS_URL, json={'name': '여', 'events': events}, headers=owner)
+    response = await client.post(WORLDS_URL, json={'genre': 'romance', 'name': '여', 'events': events}, headers=owner)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -263,7 +265,7 @@ async def test_an_event_illustration_is_mine_and_recorded(client: AsyncClient, o
     collectible = {**MEET, 'scene': {**MEET['scene'], 'image_id': picture, 'collectible': True}}
     stolen = {**MEET, 'scene': {**MEET['scene'], 'image_id': theirs}}
 
-    rejected = await client.post(WORLDS_URL, json={'name': '여', 'events': [stolen]}, headers=owner)
+    rejected = await client.post(WORLDS_URL, json={'genre': 'romance', 'name': '여', 'events': [stolen]}, headers=owner)
     world = await world_with(client, owner, events=[collectible])
     version = (await publish(client, owner, world)).json()
 

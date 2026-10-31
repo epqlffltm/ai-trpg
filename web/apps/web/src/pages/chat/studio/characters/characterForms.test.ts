@@ -20,7 +20,7 @@ import {
 } from './startsForm';
 import { INTRO_MAX_BYTES, introHint, speechHints, utf8Bytes } from './textsForm';
 
-const BASICS: BasicsDraft = { name: '세라', age: '', gender: '', genre: '', tags: '', rating: 'all', visibility: 'private' };
+const BASICS: BasicsDraft = { name: '세라', age: '', gender: '', genre: 'romance', tags: '', rating: 'all', visibility: 'private' };
 
 describe('기본', () => {
   it('태그는 쉼표로 나누고 빈 것과 겹친 것을 뺀다', () => {
@@ -42,16 +42,16 @@ describe('기본', () => {
       name: '세라',
       age: '스물',
       gender: '',
-      genre: null,
+      genre: 'romance',
       tags: ['기사'],
       rating: 'all',
       visibility: 'private',
     });
-    // 장르는 하나다. 고르면 그 값을 보내고, 비우면(빈 값) null 로 비운다
+    // 장르는 반드시 하나다. 고른 값을 그대로 보낸다
     expect(toBasicsBody({ ...BASICS, genre: 'wuxia' }).genre).toBe('wuxia');
-    const character = { name: '렌', age: '20', gender: '남', genre: null, tags: ['a', 'b'], rating: 'adult', visibility: 'public' } as AssetCharacterDetail;
+    const character = { name: '렌', age: '20', gender: '남', genre: 'fantasy', tags: ['a', 'b'], rating: 'adult', visibility: 'public' } as AssetCharacterDetail;
     expect(basicsDraft(character).tags).toBe('a, b');
-    expect(basicsDraft(character).genre).toBe('');
+    expect(basicsDraft(character).genre).toBe('fantasy');
   });
 });
 

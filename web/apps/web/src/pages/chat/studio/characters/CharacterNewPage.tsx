@@ -1,16 +1,18 @@
 // web/apps/web/src/pages/chat/studio/characters/CharacterNewPage.tsx
-// 캐릭터 만들기(C6, /chat/studio/characters/new). 이름만 받고, 만들면 고치기로 간다(처음에는 비공개).
+// 캐릭터 만들기(C6, /chat/studio/characters/new). 이름과 장르(반드시 하나)를 받고, 만들면 고치기로 간다(처음에는 비공개).
 // 나머지 칸은 고치기의 탭에서 채운다. 지금은 운영자만 만든다(아니면 403 operator_only).
 
 import { Button, TextField } from '@ai-trpg/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
+import type { AssetGenre } from '../../../../api/types';
 import { Link, useNavigate } from 'react-router';
 import { createCharacter } from '../../../../api/characters';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { NAME_MAX } from './basicsForm';
 import { characterPath, CHARACTERS_PATH } from './characterPaths';
 import { describeCharacterProblem } from './characterProblem';
+import { GenreSelect } from './GenreSelect';
 import { characterListKey } from './characterQueries';
 import { useCharacterSending } from './useCharacterSending';
 
@@ -19,6 +21,7 @@ export const CREATED_STATE = { created: true } as const;
 
 export function CharacterNewPage() {
   const [name, setName] = useState('');
+  const [genre, setGenre] = useState<AssetGenre | ''>('');
   const [touched, setTouched] = useState(false);
   const sending = useCharacterSending(describeCharacterProblem);
   const navigate = useNavigate();
@@ -29,8 +32,8 @@ export function CharacterNewPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setTouched(true);
-    if (hint) return;
-    const created = await sending.send(() => createCharacter({ name: trimmed }));
+    if (hint || genre === '') return;
+    const created = await sending.send(() => createCharacter({ name: trimmed, genre }));
     if (!created) return;
     void queryClient.invalidateQueries({ queryKey: characterListKey() });
     navigate(characterPath(created.id), { state: CREATED_STATE });
@@ -52,6 +55,7 @@ export function CharacterNewPage() {
           onChange={(event) => setName(event.target.value)}
           error={touched ? hint : undefined}
         />
+        <GenreSelect value={genre} error={touched && genre === '' ? '장르를 골라 주세요.' : undefined} onChange={setGenre} where="대화" />
         <p className="hint">처음에는 비공개입니다. 나머지 칸은 만든 뒤에 채웁니다.</p>
         <div className="form-actions">
           <Button type="submit" busy={sending.busy}>

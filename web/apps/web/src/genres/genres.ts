@@ -1,7 +1,7 @@
 // web/apps/web/src/genres/genres.ts
 // 장르의 차례와 화면의 이름. chat 의 캐릭터와 story 의 세계관이 같은 목록을 쓴다(asset-server/app/genres.py).
 // TRPG 시나리오의 장르도 같은 값이다(trpg-server/app/listings/models.py). 서버는 값만 주고, 보이는 말은 여기서 정한다.
-// 장르는 하나뿐이고 플레이 화면과 소개 화면의 테마를 정한다. 남성향·여성향과 성인용은 장르가 아니다(태그와 등급).
+// 장르는 반드시 하나이고 장르마다 플레이 화면과 소개 화면의 테마가 있다. 남성향·여성향과 성인용은 장르가 아니다(태그와 등급).
 
 import type { AssetGenre } from '../api/types';
 
@@ -26,11 +26,6 @@ export const GENRE_VALUES = Object.keys(GENRES) as GenreValue[];
 
 export function genreName(genre: GenreValue): string {
   return GENRES[genre];
-}
-
-/** 장르가 있으면 그 이름, 없으면 null. 표시들(칩)의 한 칸으로 쓴다 */
-export function genreBadge(genre: GenreValue | null | undefined): string | null {
-  return genre ? GENRES[genre] : null;
 }
 
 export function isGenreValue(value: string): value is GenreValue {

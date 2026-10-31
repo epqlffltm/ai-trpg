@@ -56,7 +56,7 @@ async def test_public_published_worlds_are_listed_newest_first(client: AsyncClie
     second = await published(client, owner, name='두 번째 여름')
     await published(client, owner, public=False, name='비공개')
     # 공개로 두었지만 게시한 적이 없다
-    draft = await create_world(client, owner, {'name': '게시 안 함'})
+    draft = await create_world(client, owner, {'genre': 'romance', 'name': '게시 안 함'})
     await client.patch(f'{WORLDS_URL}/{draft["id"]}', json={'visibility': 'public'}, headers=owner)
 
     response = await client.get(LISTINGS_URL)

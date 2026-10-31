@@ -60,7 +60,7 @@ async def lorebook(client: AsyncClient, headers: dict, name: str = '제국', pub
 
 
 async def character(client: AsyncClient, headers: dict, lorebooks: list[dict]):
-    body = {'name': '세라', 'starts': [START], 'lorebooks': [item['id'] for item in lorebooks]}
+    body = {'genre': 'romance', 'name': '세라', 'starts': [START], 'lorebooks': [item['id'] for item in lorebooks]}
     return await client.post(CHARACTERS_URL, json=body, headers=headers)
 
 

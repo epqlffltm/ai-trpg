@@ -173,8 +173,8 @@ class Character(Base):
     age: Mapped[str] = mapped_column(String(CHARACTER_AGE_MAX_LENGTH), default='', server_default='')
     gender: Mapped[str] = mapped_column(String(CHARACTER_GENDER_MAX_LENGTH), default='', server_default='')
     tags: Mapped[list[str]] = mapped_column(ARRAY(String(CHARACTER_TAG_MAX_LENGTH)), default=list, server_default='{}')
-    # 장르(app/genres.py 의 값 하나). 고르지 않았으면 비어 있다. 대화와 소개 화면의 테마를 정한다
-    genre: Mapped[str | None] = mapped_column(String(GENRE_MAX_LENGTH), default=None)
+    # 장르(app/genres.py 의 값 하나). 반드시 있다. 대화와 소개 화면의 테마를 정한다
+    genre: Mapped[str] = mapped_column(String(GENRE_MAX_LENGTH))
     # 시작 상황들. [{"title", "situation", "hour"}]. 모양은 schemas.Start 가 정한다.
     # 캐릭터에 딸린 짧은 목록이라 문서로 둔다
     starts: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')

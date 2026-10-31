@@ -92,8 +92,10 @@ async def test_confessions_and_endings_are_frozen_in_order(client: AsyncClient, 
 
 
 def test_a_format_two_version_reads_without_endings():
+    # 장르는 판의 형식과 상관없이 늘 있다(마이그레이션 genre required 가 옛 판에도 적었다)
     old = {
         'format': 2,
+        'genre': 'romance',
         'name': '옛 판',
         'intro_html': '',
         'tags': [],
@@ -129,7 +131,7 @@ def test_a_format_two_version_reads_without_endings():
     ],
 )
 async def test_bad_endings_are_rejected(client: AsyncClient, owner: dict, body: dict):
-    response = await client.post(WORLDS_URL, json={'name': '여', **body}, headers=owner)
+    response = await client.post(WORLDS_URL, json={'genre': 'romance', 'name': '여', **body}, headers=owner)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
@@ -153,7 +155,7 @@ async def test_bad_confessions_are_rejected(client: AsyncClient, owner: dict, co
         }
     ]
 
-    response = await client.post(WORLDS_URL, json={'name': '여', 'cast': cast}, headers=owner)
+    response = await client.post(WORLDS_URL, json={'genre': 'romance', 'name': '여', 'cast': cast}, headers=owner)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 

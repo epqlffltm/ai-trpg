@@ -50,10 +50,8 @@ describe('세계관의 입력', () => {
   it('기본: 이름과 태그를 검사하고 겹친 태그를 뺀다', () => {
     expect(worldNameHint(' ')).toBe('이름을 적어 주세요.');
     expect(worldNameHint('가'.repeat(51))).toMatch(/50자/);
-    expect(worldBasicsHints({ name: '가', genre: '', tags: Array.from({ length: 11 }, (_, i) => `t${i}`).join(','), rating: 'all', visibility: 'private', imageId: null }).tags).toMatch(/10개/);
-    expect(toWorldBasicsBody({ name: ' 여름 ', genre: '', tags: 'a, a, b', rating: 'adult', visibility: 'public', imageId: 'img' })).toEqual({ name: '여름', genre: null, tags: ['a', 'b'], rating: 'adult', visibility: 'public', image_id: 'img' });
-    // 장르는 하나다. 고르면 그 값, 비우면 null 로 보내 비운다
-    expect(toWorldBasicsBody({ name: '여름', genre: 'romance', tags: '', rating: 'all', visibility: 'private', imageId: null }).genre).toBe('romance');
+    expect(worldBasicsHints({ name: '가', genre: 'romance', tags: Array.from({ length: 11 }, (_, i) => `t${i}`).join(','), rating: 'all', visibility: 'private', imageId: null }).tags).toMatch(/10개/);
+    expect(toWorldBasicsBody({ name: ' 여름 ', genre: 'romance', tags: 'a, a, b', rating: 'adult', visibility: 'public', imageId: 'img' })).toEqual({ name: '여름', genre: 'romance', tags: ['a', 'b'], rating: 'adult', visibility: 'public', image_id: 'img' });
   });
 
   it('진행: 시간대를 하나는 남기고, 지운 시작 시간대를 비우고, 시각과 이름을 검사한다', () => {

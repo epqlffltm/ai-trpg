@@ -55,7 +55,7 @@ async def picture(session: AsyncSession) -> str:
 
 
 async def create(client: AsyncClient, headers: dict, **fields) -> dict:
-    body = {'name': '세라', 'starts': [START], 'items': [SCARF, COOKIE], **fields}
+    body = {'genre': 'romance', 'name': '세라', 'starts': [START], 'items': [SCARF, COOKIE], **fields}
     response = await client.post(CHARACTERS_URL, json=body, headers=headers)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return response.json()

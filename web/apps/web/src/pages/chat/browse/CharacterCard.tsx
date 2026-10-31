@@ -5,12 +5,12 @@
 import { Link } from 'react-router';
 import type { PublicCharacterSummary } from '../../../api/types';
 import { useImageUrl } from '../../../hooks/useImageUrl';
-import { genreBadge } from '../../../genres/genres';
+import { genreName } from '../../../genres/genres';
 import { ratingBadge } from '../../home/labels';
 
 export function CharacterCard({ character }: { character: PublicCharacterSummary }) {
   const image = useImageUrl(character.image_id);
-  const tags = [ratingBadge(character.rating), genreBadge(character.genre), ...character.tags].filter((tag): tag is string => Boolean(tag));
+  const tags = [ratingBadge(character.rating), genreName(character.genre), ...character.tags].filter((tag): tag is string => Boolean(tag));
   return (
     <li className="item-card character-card">
       <Link to={`/chat/characters/${character.id}`} className="item-card__link">

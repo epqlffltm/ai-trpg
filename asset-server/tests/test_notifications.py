@@ -84,7 +84,9 @@ def readers(signing_key: SigningKey) -> list[dict]:
 
 
 async def public_character(client: AsyncClient, headers: dict, name: str = '세라') -> dict:
-    made = (await client.post(CHARACTERS_URL, json={'name': name, 'starts': [START]}, headers=headers)).json()
+    made = (
+        await client.post(CHARACTERS_URL, json={'genre': 'romance', 'name': name, 'starts': [START]}, headers=headers)
+    ).json()
     await client.patch(f'{CHARACTERS_URL}/{made["id"]}', json={'visibility': 'public'}, headers=headers)
     await client.post(f'{CHARACTERS_URL}/{made["id"]}/versions', json={}, headers=headers)
     return made

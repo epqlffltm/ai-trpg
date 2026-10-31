@@ -1080,7 +1080,7 @@ export interface components {
         };
         /**
          * CharacterCreate
-         * @description 캐릭터를 만들 때 받는 값. 이름만 필수다. 처음에는 비공개다.
+         * @description 캐릭터를 만들 때 받는 값. 이름과 장르가 필수다. 처음에는 비공개다.
          */
         CharacterCreate: {
             affection?: components["schemas"]["Affection"] | null;
@@ -1099,7 +1099,7 @@ export interface components {
              * @default
              */
             gender: string;
-            genre?: components["schemas"]["Genre"] | null;
+            genre: components["schemas"]["Genre"];
             /**
              * Greeting
              * @default
@@ -1181,7 +1181,7 @@ export interface components {
             event_scenes: components["schemas"]["EventScene"][];
             /** Gender */
             gender: string;
-            genre: components["schemas"]["Genre"] | null;
+            genre: components["schemas"]["Genre"];
             /** Greeting */
             greeting: string;
             /** Hidden At */
@@ -1247,7 +1247,7 @@ export interface components {
             format: number;
             /** Gender */
             gender: string;
-            genre?: components["schemas"]["Genre"] | null;
+            genre: components["schemas"]["Genre"];
             /** Greeting */
             greeting: string;
             /** Image Id */
@@ -2479,7 +2479,7 @@ export interface components {
          * @description 공개 목록의 한 줄. 마지막 판의 값이다.
          */
         PublicCharacterSummary: {
-            genre: components["schemas"]["Genre"] | null;
+            genre: components["schemas"]["Genre"];
             /**
              * Id
              * Format: uuid
@@ -2514,7 +2514,7 @@ export interface components {
             deadline_days: number | null;
             /** Ending Count */
             ending_count: number;
-            genre: components["schemas"]["Genre"] | null;
+            genre: components["schemas"]["Genre"];
             /**
              * Id
              * Format: uuid
@@ -2554,7 +2554,7 @@ export interface components {
         PublicWorldSummary: {
             /** Deadline Days */
             deadline_days: number | null;
-            genre: components["schemas"]["Genre"] | null;
+            genre: components["schemas"]["Genre"];
             /**
              * Id
              * Format: uuid
@@ -3052,7 +3052,7 @@ export interface components {
         };
         /**
          * WorldCreate
-         * @description 세계관을 만들 때 받는 값. 이름만 필수다. 시간대는 아침, 낮, 저녁, 밤에서 시작한다. 처음에는 비공개다.
+         * @description 세계관을 만들 때 받는 값. 이름과 장르가 필수다. 시간대는 아침, 낮, 저녁, 밤에서 시작한다. 처음에는 비공개다.
          */
         WorldCreate: {
             /** @default end */
@@ -3074,7 +3074,7 @@ export interface components {
              * @default []
              */
             events: components["schemas"]["Event"][];
-            genre?: components["schemas"]["Genre"] | null;
+            genre: components["schemas"]["Genre"];
             /** Image Id */
             image_id?: string | null;
             /**
@@ -3179,7 +3179,7 @@ export interface components {
             endings: components["schemas"]["Ending"][];
             /** Events */
             events: components["schemas"]["Event"][];
-            genre: components["schemas"]["Genre"] | null;
+            genre: components["schemas"]["Genre"];
             /** Hidden At */
             hidden_at?: string | null;
             /**
@@ -3246,7 +3246,7 @@ export interface components {
             events: components["schemas"]["EventDocument"][];
             /** Format */
             format: number;
-            genre?: components["schemas"]["Genre"] | null;
+            genre: components["schemas"]["Genre"];
             /** Image Id */
             image_id: string | null;
             /** Intro Html */

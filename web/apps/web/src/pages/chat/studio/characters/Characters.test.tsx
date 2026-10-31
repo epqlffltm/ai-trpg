@@ -22,6 +22,7 @@ function character(extra: Record<string, unknown> = {}) {
     name: '세라',
     age: '',
     gender: '',
+    genre: 'romance',
     tags: [],
     rating: 'all',
     visibility: 'private',
@@ -95,14 +96,19 @@ describe('캐릭터 만들기', () => {
     await userEvent.click(await screen.findByRole('link', { name: '첫 캐릭터 만들기' }));
     await userEvent.click(await screen.findByRole('button', { name: '만들기' }));
     expect(screen.getByText('이름을 적어 주세요.')).toBeInTheDocument();
+    // 장르는 반드시 하나를 고른다. 고르지 않으면 만들지 않는다
+    expect(screen.getByText('장르를 골라 주세요.')).toBeInTheDocument();
     expect(calls(seen, 'POST', CHARACTERS)).toHaveLength(0);
 
     await userEvent.type(screen.getByLabelText('이름'), ' 세라 ');
     await userEvent.click(screen.getByRole('button', { name: '만들기' }));
+    expect(calls(seen, 'POST', CHARACTERS)).toHaveLength(0);
+    await userEvent.selectOptions(screen.getByLabelText('장르'), '로맨스');
+    await userEvent.click(screen.getByRole('button', { name: '만들기' }));
 
     expect(await screen.findByRole('heading', { name: '세라', level: 1 })).toBeInTheDocument();
     expect(screen.getByText('만들었습니다.')).toBeInTheDocument();
-    expect(calls(seen, 'POST', CHARACTERS)[0]?.body).toEqual({ name: '세라' });
+    expect(calls(seen, 'POST', CHARACTERS)[0]?.body).toEqual({ name: '세라', genre: 'romance' });
 
     const problems = await screen.findByRole('list', { name: '고칠 것' });
     expect(within(problems).getByText('시작 상황이 하나도 없습니다.')).toBeInTheDocument();
@@ -118,6 +124,7 @@ describe('캐릭터 만들기', () => {
     renderApp('/chat/studio/characters/new');
 
     await userEvent.type(await screen.findByLabelText('이름'), '세라');
+    await userEvent.selectOptions(screen.getByLabelText('장르'), '판타지');
     await userEvent.click(screen.getByRole('button', { name: '만들기' }));
 
     expect(await screen.findByText(/지금은 운영자만 캐릭터를 만들고/)).toBeInTheDocument();
@@ -132,7 +139,7 @@ describe('캐릭터 만들기', () => {
     await userEvent.type(within(form).getByLabelText('나이(선택)'), ' 스물 ');
     // 장르는 하나를 고른다. 남성향·여성향은 장르에 없다(태그)
     expect(within(form).queryByRole('option', { name: '남성향' })).not.toBeInTheDocument();
-    await userEvent.selectOptions(within(form).getByLabelText('장르(선택)'), '무협');
+    await userEvent.selectOptions(within(form).getByLabelText('장르'), '무협');
     await userEvent.click(within(form).getByRole('button', { name: '저장' }));
 
     expect(await within(form).findByText('저장했습니다.')).toBeInTheDocument();

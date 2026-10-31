@@ -4,11 +4,10 @@
 캐릭터와 세계관의 장르(app/genres.py)를 검증한다. 실제 DB(asset_test)에서 돈다.
 
 보는 것.
-  - 장르는 정해진 목록에서 하나다. 비워 둘 수 있고(null), 고친 뒤 null 로 다시 비울 수 있다.
-    목록에 없는 값, 남성향·여성향, 성인용, 여러 개는 받지 않는다(422)
+  - 장르는 정해진 목록에서 반드시 하나다. 만들 때 없으면, null 로 비우려 하면 받지 않는다(422).
+    목록에 없는 값, 남성향·여성향, 성인용, 여러 개도 받지 않는다. 다른 장르로 바꿀 수는 있다
   - 게시하면 판의 문서에 굳는다(캐릭터 형식 9, 세계관 형식 4). 그 뒤에 초안을 고쳐도 판의 장르는 그대로다
   - 공개 목록과 소개에 판의 장르가 실린다
-  - 장르가 생기기 전의 판(캐릭터 8, 세계관 3)은 장르가 없는 것(null)으로 읽는다
 """
 
 import pytest
@@ -17,7 +16,6 @@ from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey
 
 from app.characters.documents import DOCUMENT_FORMAT as CHARACTER_FORMAT
-from app.characters.documents import CharacterDocument
 from app.main import API_PREFIX
 from app.worlds.documents import DOCUMENT_FORMAT as WORLD_FORMAT
 from tests.worlds import CHARACTERS_URL, OWNER, START, WORLDS_URL, bearer, character, create_world, full_world, publish
@@ -26,6 +24,7 @@ pytestmark = pytest.mark.usefixtures('clean_tables')
 
 CHARACTER_LISTINGS_URL = f'{API_PREFIX}/listings/characters'
 WORLD_LISTINGS_URL = f'{API_PREFIX}/listings/worlds'
+BAD_GENRES = ['없는장르', 'for_men', 'for_women', 'adult', ['fantasy'], '', None]
 
 
 @pytest.fixture
@@ -55,13 +54,14 @@ async def public_world(client: AsyncClient, headers: dict, **fields) -> dict:
 # --- 캐릭터 ---
 
 
-async def test_a_character_has_no_genre_until_one_is_chosen(client: AsyncClient, owner: dict):
-    made = await character(client, owner, published=False)
+async def test_a_character_needs_a_genre(client: AsyncClient, owner: dict):
+    response = await client.post(CHARACTERS_URL, json={'name': '세라', 'starts': [START]}, headers=owner)
 
-    assert made['genre'] is None
+    # 장르를 고르지 않은 캐릭터는 만들 수 없다
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
-async def test_a_character_genre_can_be_chosen_changed_and_cleared(client: AsyncClient, owner: dict):
+async def test_a_character_genre_can_be_changed_but_not_cleared(client: AsyncClient, owner: dict):
     made = await character(client, owner, published=False, genre='fantasy')
     url = f'{CHARACTERS_URL}/{made["id"]}'
 
@@ -73,11 +73,12 @@ async def test_a_character_genre_can_be_chosen_changed_and_cleared(client: Async
     assert changed.json()['genre'] == 'horror'
     # 보내지 않으면 그대로다
     assert untouched.json()['genre'] == 'horror'
-    # null 은 비우기다(그림처럼)
-    assert cleared.json()['genre'] is None
+    # 비울 수 없다
+    assert cleared.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert (await client.get(url, headers=owner)).json()['genre'] == 'horror'
 
 
-@pytest.mark.parametrize('genre', ['없는장르', 'for_men', 'for_women', 'adult', ['fantasy'], ''])
+@pytest.mark.parametrize('genre', BAD_GENRES)
 async def test_a_bad_character_genre_is_refused(client: AsyncClient, owner: dict, genre: object):
     body = {'name': '세라', 'starts': [START], 'genre': genre}
 
@@ -100,39 +101,16 @@ async def test_publishing_freezes_the_character_genre(client: AsyncClient, owner
     assert detail['genre'] == 'wuxia'
 
 
-async def test_a_character_without_a_genre_is_published_without_one(client: AsyncClient, owner: dict):
-    await public_character(client, owner)
-
-    listed = (await client.get(CHARACTER_LISTINGS_URL)).json()['items']
-
-    # 장르는 게시의 조건이 아니다. 고르지 않았으면 화면이 기본 테마를 쓴다
-    assert [item['genre'] for item in listed] == [None]
-
-
-def test_a_character_version_from_before_genres_reads_as_none():
-    document = CharacterDocument.model_validate(
-        {
-            'format': 8,
-            'name': '세라',
-            'intro_html': '',
-            'greeting': '',
-            'speech_examples': '',
-            'age': '',
-            'gender': '',
-            'tags': [],
-            'starts': [START],
-            'image_id': None,
-            'rating': 'all',
-        }
-    )
-
-    assert document.genre is None
-
-
 # --- 세계관 ---
 
 
-async def test_a_world_genre_can_be_chosen_changed_and_cleared(client: AsyncClient, owner: dict):
+async def test_a_world_needs_a_genre(client: AsyncClient, owner: dict):
+    response = await client.post(WORLDS_URL, json={'name': '여름 학원'}, headers=owner)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+async def test_a_world_genre_can_be_changed_but_not_cleared(client: AsyncClient, owner: dict):
     world = await create_world(client, owner, {'name': '여름 학원', 'genre': 'romance'})
     url = f'{WORLDS_URL}/{world["id"]}'
 
@@ -141,10 +119,10 @@ async def test_a_world_genre_can_be_chosen_changed_and_cleared(client: AsyncClie
 
     assert world['genre'] == 'romance'
     assert changed.json()['genre'] == 'slice_of_life'
-    assert cleared.json()['genre'] is None
+    assert cleared.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
-@pytest.mark.parametrize('genre', ['없는장르', 'for_women', ['romance']])
+@pytest.mark.parametrize('genre', BAD_GENRES)
 async def test_a_bad_world_genre_is_refused(client: AsyncClient, owner: dict, genre: object):
     response = await client.post(WORLDS_URL, json={'name': '여름 학원', 'genre': genre}, headers=owner)
 
