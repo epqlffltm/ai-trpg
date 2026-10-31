@@ -173,6 +173,11 @@ async def find_visible_message(
     return await session.scalar(query)
 
 
+async def lock_conversation(session: AsyncSession, conversation_id: uuid.UUID) -> None:
+    """세션의 행을 잠근다(트랜잭션이 끝날 때까지). 복사하는 동안 새 말이 차례를 잡지 못하게 한다."""
+    await session.execute(select(Conversation.id).where(Conversation.id == conversation_id).with_for_update())
+
+
 async def active_path(session: AsyncSession, leaf_id: uuid.UUID | None) -> list[Message]:
     """
     가지의 끝(leaf_id)에서 첫 말까지 거슬러 올라간 말들. 첫 말부터 차례로 돌려준다. 끝이 없으면 빈 목록이다.

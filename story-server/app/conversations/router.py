@@ -10,6 +10,7 @@
     PUT  /api/v1/story/conversations/{id}/persona 세션의 페르소나 바꾸기(같은 것이면 새 설정으로)
     PUT  /api/v1/story/conversations/{id}/branch  다른 대안의 가지를 보기. 바뀐 세션을 돌려준다
     DELETE /api/v1/story/conversations/{id}       세션 지우기(지운 시각만 적는다). 204
+    POST /api/v1/story/conversations/{id}/copy    플레이 복사(지금 가지를 새 세션으로). 201, 새 세션
     PATCH /api/v1/story/messages/{id}             답 고치기(조각마다 글만). 고친 말을 돌려준다
 
 모든 주소가 로그인을 요구한다. 남의 세션은 404 다(403 이면 그 ID 가 있다는 것이 드러난다).
@@ -28,7 +29,7 @@ from app.assets.client import AssetUnavailableError
 from app.billing.prices import PriceBook
 from app.billing.routing import Prices
 from app.catalog.models import AiModel
-from app.conversations import service
+from app.conversations import copying, service
 from app.conversations.genres import shown_genre
 from app.conversations.models import Conversation, ConversationPersona, ImportedWorld, Message
 from app.conversations.repository import ConversationRow
@@ -374,6 +375,23 @@ async def choose_branch(
     """
     await service.choose_branch(session, viewer, conversation_id, data.message_id, now)
     return await read_conversation(conversation_id, viewer, session, prices, now)
+
+
+@router.post(
+    '/{conversation_id}/copy',
+    response_model=ConversationDetail,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[WRITE_LIMIT],
+)
+async def copy_conversation(
+    conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session, prices: Prices, now: Now
+) -> ConversationDetail:
+    """
+    지금 보고 있는 가지를 새 세션으로 복사한다(app/conversations/copying.py). 새 세션을 돌려준다.
+    다시 청구하지 않는다. 없거나 남의 것이면 404, 답을 쓰는 중이면 409 generation_in_progress 다.
+    """
+    copied = await copying.copy_conversation(session, viewer, conversation_id, now)
+    return await read_conversation(copied, viewer, session, prices, now)
 
 
 @router.delete('/{conversation_id}', status_code=status.HTTP_204_NO_CONTENT, dependencies=[WRITE_LIMIT])
