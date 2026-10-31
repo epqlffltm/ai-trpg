@@ -14,6 +14,7 @@
 | [architecture/chat-server.md](architecture/chat-server.md) | chat 서버 설계. chat(1:1), story-server 와 나눈 선과 함께 쓰는 코드, 권한의 선, 자산 가져오기, 데이터의 모양, 장소와 소지품, 그림, 과금, 기억, 성인 콘텐츠, 만드는 순서 |
 | [architecture/asset-server.md](architecture/asset-server.md) | asset 서버 설계. 맡는 것, 계정 페르소나(TRPG 의 시트와 나누기), 게시와 판, 그림(올리기의 격리, 권한을 보고 nginx 가 내주기), 쓰는 서비스에 내주기, 만드는 순서 |
 | [architecture/story.md](architecture/story.md) | story 서버 설계. 열린 세계와 기한, 시각, 인물의 위치와 여러 인물의 말, 이벤트와 선택지, 조건과 효과, 호감도, 고백과 엔딩, 세션과 기록 |
+| [architecture/chapters.md](architecture/chapters.md) | 장(章) 설계. TRPG 의 시나리오와 story 의 세계관이 함께 쓰는 장의 모양(넘어오는 조건, 여는 것)과 규칙, 게시 검사(#481 의 A) |
 | [architecture/shared-code.md](architecture/shared-code.md) | 공용 코드 규칙. 형식과 코드는 공유하고 데이터는 공유하지 않는다. `shared/` 의 패키지(`server-core`, `ai-core`, `conversation-core`), 재정의하는 법, 언제 누가 뽑는지, 버전과 CI, `app/ai` 를 뽑는 방식의 결정(#380) |
 | [api/README.md](api/README.md) | 서버마다의 API 목록(OpenAPI). 파일, 뽑는 법, 누가 부르는가(`x-audience`), CI |
 | [product/platform.md](product/platform.md) | 플랫폼과 제품 방향. 제품 셋(TRPG, chat, story), 원칙, 화면과 모바일의 방향, 정하지 않은 것 |
