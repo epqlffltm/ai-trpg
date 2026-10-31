@@ -155,6 +155,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/conversations/{conversation_id}/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Conversation
+         * @description 지금 보고 있는 가지를 새 세션으로 복사한다(app/conversations/copying.py). 새 세션을 돌려준다.
+         *     다시 청구하지 않는다. 없거나 남의 것이면 404, 답을 쓰는 중이면 409 generation_in_progress 다.
+         */
+        post: operations["copy_conversation_api_v1_story_conversations__conversation_id__copy_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/conversations/{conversation_id}/messages": {
         parameters: {
             query?: never;
@@ -1918,6 +1939,37 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    copy_conversation_api_v1_story_conversations__conversation_id__copy_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

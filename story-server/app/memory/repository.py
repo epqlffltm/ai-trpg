@@ -79,6 +79,13 @@ async def summaries_on(session: AsyncSession, message_ids: Sequence[uuid.UUID]) 
     return {message_id: text for message_id, text in await session.execute(query)}
 
 
+async def summary_rows(session: AsyncSession, message_ids: Sequence[uuid.UUID]) -> list[Summary]:
+    """그 말들에 붙은 요약의 행들(플레이 복사가 옮긴다)."""
+    if not message_ids:
+        return []
+    return list(await session.scalars(select(Summary).where(Summary.message_id.in_(message_ids))))
+
+
 async def latest_summary_row(session: AsyncSession, message_ids: Sequence[uuid.UUID]) -> Summary | None:
     """그 말들(가지의 차례) 가운데 요약이 붙은 가장 뒤의 말의 요약. 없으면 None."""
     if not message_ids:

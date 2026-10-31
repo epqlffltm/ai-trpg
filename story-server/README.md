@@ -114,7 +114,7 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `STORY_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
 | `REDIS_URL` | 비어 있음(메모리) | [요청 수 제한](#요청-수-제한)을 세는 Redis(`redis://localhost:6379/3`). 비우면 서버 안의 메모리로 센다(서버가 하나일 때만 맞다). compose 는 DB 3 을 준다 |
 | `GENERATION_LIMIT`, `GENERATION_WINDOW_SECONDS` | `20`, `60` | 모델을 부르는 요청(말, 행동, 다시 생성, 이어서)을 한 사람이 이 시간(초) 안에 이만큼까지 |
-| `WRITE_LIMIT`, `WRITE_WINDOW_SECONDS` | `120`, `60` | 모델을 부르지 않는 쓰기(세션 시작과 지우기, 모델과 가지 바꾸기, 답 고치기, 신고)를 한 사람이 이 시간(초) 안에 이만큼까지 |
+| `WRITE_LIMIT`, `WRITE_WINDOW_SECONDS` | `120`, `60` | 모델을 부르지 않는 쓰기(세션 시작과 지우기와 복사, 모델과 가지 바꾸기, 답 고치기, 신고)를 한 사람이 이 시간(초) 안에 이만큼까지 |
 | `TRANSCRIPT_LIMIT`, `TRANSCRIPT_WINDOW_SECONDS` | `10`, `600` | [기록 내려받기](#기록-내려받기)를 한 사람이 이 시간(초) 안에 이만큼까지 |
 
 DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 함께 쓰는 칸은 공용 코드의 설정(`server_core.settings.CoreSettings`)에 있다.
@@ -143,6 +143,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}`. 항목마다 지금 가지의 끝까지 온 곳(`progress`) | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}` | 세션 하나(지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`, 화면이 쓰는 세계관의 칸 [`view`](#세션의-view), 가져온 페르소나 `persona`). 가져온 판의 문서는 싣지 않는다. 남의 것은 404 | access 토큰 |
 | DELETE | `/api/v1/story/conversations/{id}` | [세션](#세션) 지우기. 204. 지운 시각만 적는다. 없거나 남의 것이면 404 | access 토큰 |
+| POST | `/api/v1/story/conversations/{id}/copy` | [플레이 복사](#세션). 지금 가지를 새 세션으로 복사한다. 201, 새 세션. 답을 쓰는 중이면 409 `generation_in_progress` | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/branch` | [가지 고르기](#가지-고르기)(`{"message_id"}`). 바뀐 세션을 돌려준다 | access 토큰 |
 | POST | `/api/v1/story/messages/{id}/reports` | [모델의 답 신고](#신고). `{reason, description?}`. 201. 사람의 말과 행동 말은 422 `not_reportable`, 두 번째는 409 `already_reported` | access 토큰 |
 | GET | `/api/v1/story/admin/message-reports` | 운영자: 열린 [신고](#신고)의 목록(`minor` 먼저, 오래된 것부터, 세션의 글은 없다). 운영자가 아니면 404 | access 토큰(운영자) |
@@ -198,6 +199,10 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
   후일담인가(`epilogue`, 엔딩을 봤고 세계관이 후일담을 골랐다)다. 화면이 D1 의 "D-12 / 진행 / 끝(엔딩 이름) / 후일담"을 그린다.
   상태는 말에 붙어 있어 가지를 바꾸거나 다시 생성하면 저장 없이 바뀐다. 그래서 세션 표에 적어 두지 않고 목록을 읽을 때 세션마다 센다
   (세션마다 쿼리 둘, 한 쪽은 `limit` 개까지). 느려지면 세션 표에 요약을 두는 방식으로 바꾼다(2026-10-27).
+- **플레이 복사**(`POST /conversations/{id}/copy`, `app/conversations/copying.py`). 지금 보고 있는 가지를 새 세션으로 복사한다. 제목 뒤에 " (복사)" 를 붙인다.
+  옮기는 것: 가지의 말들(글, 조각, 장면의 인물, 열린 이벤트와 본 엔딩, 고친 표시, 다음 답 추천, 처음의 시각)과 말에 붙은 상태, 그 말들의 요약(원가와 토큰 수는 빼고),
+  기억 메모(제안까지), 페르소나의 사본, 세션의 모델, 굳힌 본 엔딩(같은 회차를 이어 간다). 판의 사본은 같은 것을 가리킨다.
+  옮기지 않는 것: 다른 가지(대안), 청구 기록(다시 청구하지 않는다), 신고. 원래 세션을 잠그고 한 트랜잭션에서 한다. 답을 쓰는 중이면 409 `generation_in_progress` 다.
 - **지우기**(chat 과 같다). 지운 시각(`deleted_at`)만 적는다. 말, 상태, 판의 사본은 남는다. 지운 세션은 목록과 읽기에 나오지 않고,
   말과 행동을 보내면 404 다. 요약도 하지 않는다. "지난번에 고른 모델과 페르소나"는 지운 세션도 센다. 계정의 기록(본 엔딩, 연 일러스트)은 그대로다.
   행을 지우는 것은 [탈퇴](#탈퇴)뿐이다. 답을 쓰는 중에 지워도 그 답은 끝까지 저장되고 청구된다.
@@ -442,7 +447,7 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
 
 chat 의 것과 같다(`app/limits/`). 한 사람이 정해진 시간 안에 몇 번 했는가를 세고, 넘으면 429 로 막는다. 크레딧과 별개로 짧은 시간에 몰아 보내는 것을 늦춘다.
 
-- **무엇을 세나.** 모델을 부르는 요청(말 보내기, 행동, 다시 생성, 이어서 출력)과 모델을 부르지 않는 쓰기(세션 시작과 지우기, 모델과 가지 바꾸기, 답 고치기, 신고)를 따로 센다.
+- **무엇을 세나.** 모델을 부르는 요청(말 보내기, 행동, 다시 생성, 이어서 출력)과 모델을 부르지 않는 쓰기(세션 시작과 지우기와 복사, 모델과 가지 바꾸기, 답 고치기, 신고)를 따로 센다.
   [기록 내려받기](#기록-내려받기)는 따로 센다(10분에 10번). 다른 읽기와 멈추기는 세지 않는다. 모델을 부르는 주소는 라우터에 걸어(`app/turns/router.py`) 그 라우터에 더하는 주소도 저절로 센다.
 - **어떻게 세나.** 고정 구간이다(첫 시도에서 시작해 정한 초 뒤에 끝난다). Redis(DB 3, 키의 머리 `story:limit`)에 Lua 한 덩어리로 올리고 만료를 건다.
   사람의 번호는 해시해서 키에 넣는다. `REDIS_URL` 이 비면 서버 안의 메모리로 센다.
