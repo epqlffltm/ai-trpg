@@ -105,7 +105,8 @@ async def test_starting_fixes_the_version_and_the_greeting(client: AsyncClient, 
     assert made['title'] == '세라'
     assert made['start'] == {'title': '비 오는 밤', 'situation': '문을 두드리는 소리가 난다.', 'hour': 12}
     assert (made['character']['id'], made['character']['version']) == (str(character.id), 3)
-    assert made['character']['document'] == character.document.model_dump(mode='json')
+    # 장르를 고르지 않은 판이면 응답에는 기본 장르가 실린다(tests/test_character_genre.py)
+    assert made['character']['document'] == {**character.document.model_dump(mode='json'), 'genre': 'fantasy'}
     assert made['persona'] is None
     (opening,) = made['messages']
     assert (opening['role'], opening['content'], opening['status']) == (

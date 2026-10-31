@@ -18,6 +18,7 @@ PersonaCopy). 받은 것을 이 모양으로 검사한 뒤에만 쓴다. 모양�
   - 7: 물건의 giftable(상대가 줄 수 있다)과 호감도의 model_step(모델이 답 하나에 바꿀 수 있는 크기, #676).
        6 까지의 판은 줄 수 있는 물건이 없고 model_step 이 AFFECTION_MODEL_STEP_DEFAULT 다
   - 8: 로어북(lorebooks, 캐릭터가 가리킨 로어북의 게시할 때의 마지막 판, #672). 7 까지의 판은 로어북이 없다
+  - 9: 장르(genre, asset 의 app/genres.py 의 값 하나). 대화 화면의 테마다. 그 전의 판과 사본에는 없다
 """
 
 import uuid
@@ -245,6 +246,8 @@ class CharacterDocument(BaseModel):
     event_scenes: list[EventSceneDocument] = []
     sprites: list[SpriteDocument] = []
     lorebooks: list[LorebookCopyDocument] = []
+    # 장르(형식 9). 값의 목록은 asset 이 지키고 이 서버는 받은 그대로 둔다. 응답에 실을 때 기본을 채운다(app/genres.py)
+    genre: str | None = None
 
     @model_validator(mode='before')
     @classmethod

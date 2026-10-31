@@ -52,6 +52,7 @@ from app.conversations.models import (
 from app.conversations.repository import ConversationRow
 from app.conversations.schemas import ConversationCreate
 from app.core.dependencies import Viewer
+from app.genres import filled_document
 from app.ratings import Rating, allowed_ratings
 
 # 차례(generating_since)를 쥔 채 이만큼 지나면 서버가 도중에 꺼진 것으로 본다.
@@ -298,6 +299,16 @@ async def pick_model(
     return slug if model is not None and model_usable(model, rating, book, now) else None
 
 
+def fill_genre(character: ImportedCharacter, copy: CharacterCopy) -> None:
+    """
+    둔 사본에 장르가 없고 받은 판에 있으면 채운다(app/genres.py). 저장은 부른 쪽이 한다.
+    형식 9 전에 가져온 사본도 그 판으로 대화를 다시 시작할 때 채워진다(asset 이 옛 판에도 장르를 적었다).
+    """
+    filled = filled_document(character.document, copy.document.model_dump(mode='json'))
+    if filled is not None:
+        character.document = filled
+
+
 async def save_conversation(
     session: AsyncSession,
     owner_id: uuid.UUID,
@@ -308,6 +319,7 @@ async def save_conversation(
 ) -> uuid.UUID:
     """판의 사본, 대화, 페르소나의 사본, 첫 말을 한 번에 저장하고 대화의 id 를 돌려준다."""
     character = await repository.keep_character(session, build_character(owner_id, copy))
+    fill_genre(character, copy)
     conversation = build_conversation(owner_id, character, start, model_slug)
     repository.add(session, conversation)
     if persona is not None:
