@@ -2,7 +2,7 @@
 // 조건 목록(일정의 줄, 고백, 이벤트, 엔딩이 같은 모양을 쓴다)의 입력. 순수한 함수다. 규칙은 서버와 같다(asset-server/app/worlds/schemas.py 의 Condition).
 //
 //   - 조건은 종류마다 쓰는 칸이 다르다(CONDITION_FIELDS). 쓰지 않는 칸은 보내지 않는다(수는 1 로 보낸다, 서버의 "세지 않음")
-//   - 대상은 표에서 고른다(글로 식을 적지 않는다). 고를 거리(장소, 물건, 인물과 그 단계, 시간대, 이벤트)는 쓰는 쪽이 넘긴다
+//   - 대상은 표에서 고른다(글로 식을 적지 않는다). 고를 거리(장소, 물건, 인물과 그 단계, 시간대, 이벤트, 엔딩)는 쓰는 쪽이 넘긴다
 //   - 종류를 바꾸면 대상과 값을 비우고, 호감도의 인물을 바꾸면 단계를 비운다
 //   - 고를 거리에 없는 대상(그사이 지운 장소, 인물)은 다시 고르라고 알린다
 //   - 목록은 10 개까지이고, 모두 맞아야 하는가(all) 하나라도 맞으면 되는가(any)
@@ -15,7 +15,7 @@ const UNCOUNTED = 1;
 
 type Field = 'target' | 'value' | 'count';
 /** 대상이 무엇의 id 인가. 값(value)은 물건의 id 나 그 인물의 호감도 단계의 이름이다 */
-type TargetKind = 'place' | 'item' | 'cast' | 'slot' | 'event';
+type TargetKind = 'place' | 'item' | 'cast' | 'slot' | 'event' | 'ending';
 
 type KindSpec = { label: string; fields: Field[]; target?: TargetKind; value?: 'item' | 'stage'; count?: string };
 
@@ -30,13 +30,15 @@ export const CONDITION_KINDS: Record<StoryWorldConditionKind, KindSpec> = {
   slot_is: { label: '지금 그 시간대', fields: ['target'], target: 'slot' },
   accompanied: { label: '그 인물과 함께 다닌다', fields: ['target'], target: 'cast' },
   event_seen: { label: '그 이벤트가 열린 적이 있다', fields: ['target'], target: 'event' },
+  // 회차 혜택. 계정이 그 엔딩을 본 적이 있다(세션을 시작할 때의 기록). 계정에 남는 엔딩만 맞출 수 있다
+  ending_seen: { label: '그 엔딩을 본 적이 있다(회차)', fields: ['target'], target: 'ending' },
 };
 
 export const CONDITION_KIND_ORDER = Object.keys(CONDITION_KINDS) as StoryWorldConditionKind[];
 
 export type Choice = { id: string; name: string };
 /** 고를 거리. 인물마다 호감도 단계의 이름도 넘긴다 */
-export type ConditionChoices = { places: Choice[]; items: Choice[]; cast: (Choice & { stages: string[] })[]; slots: Choice[]; events: Choice[] };
+export type ConditionChoices = { places: Choice[]; items: Choice[]; cast: (Choice & { stages: string[] })[]; slots: Choice[]; events: Choice[]; endings?: Choice[] };
 
 export type ConditionDraft = { kind: StoryWorldConditionKind; target: string; value: string; count: string };
 export type ConditionsDraft = { match: StoryWorldConditions['match']; items: ConditionDraft[] };
@@ -81,6 +83,7 @@ export function targetChoices(kind: StoryWorldConditionKind, choices: ConditionC
   if (target === 'cast') return choices.cast;
   if (target === 'slot') return choices.slots;
   if (target === 'event') return choices.events;
+  if (target === 'ending') return choices.endings ?? [];
   return [];
 }
 
@@ -149,6 +152,7 @@ type WorldParts = {
   items: Choice[];
   slots: Choice[];
   cast: { id: string; character_id: string; affection: { stages: { name: string }[] } }[];
+  endings?: Choice[];
 };
 
 /**
@@ -161,6 +165,7 @@ export function savedChoices(world: WorldParts, characters: Choice[], events: Ch
     items: world.items.map((item) => ({ id: item.id, name: item.name })),
     slots: world.slots.map((slot) => ({ id: slot.id, name: slot.name })),
     events,
+    endings: (world.endings ?? []).map((ending) => ({ id: ending.id, name: ending.name })),
     cast: world.cast.map((member) => ({
       id: member.id,
       name: characters.find((character) => character.id === member.character_id)?.name ?? '',

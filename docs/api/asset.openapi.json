@@ -1622,7 +1622,7 @@
         "type": "object"
       },
       "ConditionKind": {
-        "description": "조건 하나가 무엇을 보는가(story.md 의 \"조건\"). 엔진(story 서버)이 이미 아는 사실만 본다.\n\n종류마다 쓰는 칸이 정해져 있다(app/worlds/schemas.py 의 Condition).\n  reach_place        target: 장소          사용자가 그 장소에 있다\n  hold_item          target: 물건, count   그 물건을 count 개 이상 가졌다\n  gave_item          target: 인물, value: 물건   그 인물에게 그 물건을 건넨 적이 있다\n  affection_at_least target: 인물, value: 단계   그 인물의 호감도가 그 단계 이상이다\n  affection_below    target: 인물, value: 단계   그 인물의 호감도가 그 단계보다 아래다\n  day_at_least       count                 n일째 이상이다\n  day_at_most        count                 n일째 이하다\n  slot_is            target: 시간대        지금의 시간대가 그것이다\n  accompanied        target: 인물          그 인물과 동행 중이다\n  event_seen         target: 이벤트        그 이벤트가 열린 적이 있다(판의 형식 2)",
+        "description": "조건 하나가 무엇을 보는가(story.md 의 \"조건\"). 엔진(story 서버)이 이미 아는 사실만 본다.\n\n종류마다 쓰는 칸이 정해져 있다(app/worlds/schemas.py 의 Condition).\n  reach_place        target: 장소          사용자가 그 장소에 있다\n  hold_item          target: 물건, count   그 물건을 count 개 이상 가졌다\n  gave_item          target: 인물, value: 물건   그 인물에게 그 물건을 건넨 적이 있다\n  affection_at_least target: 인물, value: 단계   그 인물의 호감도가 그 단계 이상이다\n  affection_below    target: 인물, value: 단계   그 인물의 호감도가 그 단계보다 아래다\n  day_at_least       count                 n일째 이상이다\n  day_at_most        count                 n일째 이하다\n  slot_is            target: 시간대        지금의 시간대가 그것이다\n  accompanied        target: 인물          그 인물과 동행 중이다\n  event_seen         target: 이벤트        그 이벤트가 열린 적이 있다(판의 형식 2)\n  ending_seen        target: 엔딩          이 계정이 그 엔딩을 본 적이 있다(회차 혜택, 판의 형식 5).\n                                           story 가 세션을 시작할 때 계정의 기록을 굳혀 판정한다",
         "enum": [
           "reach_place",
           "hold_item",
@@ -1633,7 +1633,8 @@
           "day_at_most",
           "slot_is",
           "accompanied",
-          "event_seen"
+          "event_seen",
+          "ending_seen"
         ],
         "title": "ConditionKind",
         "type": "string"

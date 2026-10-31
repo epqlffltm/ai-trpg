@@ -1462,9 +1462,11 @@ export interface components {
          *       slot_is            target: 시간대        지금의 시간대가 그것이다
          *       accompanied        target: 인물          그 인물과 동행 중이다
          *       event_seen         target: 이벤트        그 이벤트가 열린 적이 있다(판의 형식 2)
+         *       ending_seen        target: 엔딩          이 계정이 그 엔딩을 본 적이 있다(회차 혜택, 판의 형식 5).
+         *                                                story 가 세션을 시작할 때 계정의 기록을 굳혀 판정한다
          * @enum {string}
          */
-        ConditionKind: "reach_place" | "hold_item" | "gave_item" | "affection_at_least" | "affection_below" | "day_at_least" | "day_at_most" | "slot_is" | "accompanied" | "event_seen";
+        ConditionKind: "reach_place" | "hold_item" | "gave_item" | "affection_at_least" | "affection_below" | "day_at_least" | "day_at_most" | "slot_is" | "accompanied" | "event_seen" | "ending_seen";
         /**
          * Conditions
          * @description 조건 목록과 맞추는 법. 목록이 비면 늘 맞는다.

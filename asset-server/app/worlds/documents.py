@@ -12,6 +12,9 @@
   - 4: 장르(genre, app/genres.py 의 값 하나, 반드시 있다)를 더했다(2026-10-31).
        받는 쪽(story)은 장면 화면의 테마를 이 값으로 고른다.
        3 까지의 판에도 장르를 적었다(마이그레이션 genre required 가 초안의 장르를 판의 문서에 넣었다)
+  - 5: 조건의 ending_seen(이 계정이 그 엔딩을 본 적이 있다, 회차 혜택)을 더했다(2026-10-31).
+       4 까지의 판에는 그 조건이 없다.
+       받는 쪽(story)은 세션을 시작할 때 계정의 본 엔딩을 굳혀 판정한다
 
 인물의 보이기는 판에서는 정해진 값이다. 초안의 덮어쓰기가 비어 있으면 세계관의 기본을 채워 넣는다.
 받는 쪽(story)이 기본과 덮어쓰기를 다시 합치지 않아도 된다.
@@ -41,7 +44,7 @@ from app.worlds.models import (
 )
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 4
+DOCUMENT_FORMAT = 5
 
 
 class SlotDocument(BaseModel):

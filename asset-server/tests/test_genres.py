@@ -137,6 +137,6 @@ async def test_publishing_freezes_the_world_genre(client: AsyncClient, owner: di
     listed = (await client.get(WORLD_LISTINGS_URL)).json()['items']
     detail = (await client.get(f'{WORLD_LISTINGS_URL}/{world["id"]}')).json()
 
-    assert (frozen['format'], frozen['genre']) == (WORLD_FORMAT, 'horror') == (4, 'horror')
+    assert (frozen['format'], frozen['genre']) == (WORLD_FORMAT, 'horror')
     assert [item['genre'] for item in listed] == ['horror']
     assert detail['genre'] == 'horror'

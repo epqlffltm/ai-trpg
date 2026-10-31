@@ -39,6 +39,7 @@ SLOT_TARGETS = frozenset({ConditionKind.SLOT_IS})
 STAGE_VALUES = frozenset({ConditionKind.AFFECTION_AT_LEAST, ConditionKind.AFFECTION_BELOW})
 ITEM_VALUES = frozenset({ConditionKind.GAVE_ITEM})
 EVENT_TARGETS = frozenset({ConditionKind.EVENT_SEEN})
+ENDING_TARGETS = frozenset({ConditionKind.ENDING_SEEN})
 # 효과의 종류마다 target 이 가리키는 것(인물, 물건, 장소)
 CAST_EFFECTS = frozenset({EffectKind.AFFECTION, EffectKind.ACCOMPANY_START, EffectKind.ACCOMPANY_END})
 ITEM_EFFECTS = frozenset({EffectKind.GIVE_ITEM, EffectKind.TAKE_ITEM})
@@ -66,6 +67,8 @@ class Problem(enum.StrEnum):
     CAST_TARGET_MISSING = 'cast_target_missing'
     # 조건(event_seen)이 없는 이벤트를 가리킨다
     EVENT_MISSING = 'event_missing'
+    # 조건(ending_seen, 회차 혜택)이 이 세계관에 없는 엔딩을 가리킨다
+    ENDING_TARGET_MISSING = 'ending_target_missing'
     # 조건이나 지도에 보이는 단계(map_stage)가 그 인물에 없는 호감도의 단계를 가리키거나,
     # 지도가 stage 인 인물에 단계를 고르지 않았다
     STAGE_MISSING = 'stage_missing'
@@ -219,6 +222,20 @@ def stage_pointers(world: World) -> list[tuple[str, str]]:
     return pointers
 
 
+def ending_ids(world: World) -> set[str]:
+    return {ending['id'] for ending in world.endings}
+
+
+def recorded_endings(world: World) -> set[str]:
+    """계정에 남는 엔딩들(unlock). 회차 혜택의 조건(ending_seen)은 이것만 맞출 수 있다."""
+    return {ending['id'] for ending in world.endings if ending.get('unlock', True)}
+
+
+def endings_pointed(world: World) -> list[str]:
+    """조건(ending_seen)이 가리키는 엔딩들."""
+    return [item['target'] for item in all_conditions(world) if item['kind'] in ENDING_TARGETS]
+
+
 def missing(pointed: Sequence[str], known: set[str], problem: Problem) -> list[Problem]:
     """가리킨 것 가운데 없는 것이 있으면 그 문제 하나."""
     return [problem] if any(name not in known for name in pointed) else []
@@ -239,6 +256,7 @@ def reference_problems(world: World) -> list[Problem]:
         *missing(pointed_items(world), item_ids(world), Problem.ITEM_MISSING),
         *missing(pointed_cast(world), cast, Problem.CAST_TARGET_MISSING),
         *missing(events_pointed, event_ids(world), Problem.EVENT_MISSING),
+        *missing(endings_pointed(world), ending_ids(world), Problem.ENDING_TARGET_MISSING),
         *([Problem.STAGE_MISSING] if stage_missing else []),
     ]
 
@@ -294,15 +312,17 @@ def reachable_places(world: World, start: str) -> set[str]:
     return reached
 
 
-def possible_item(item: dict, event_id: str, opened: set[str], deadline: int | None) -> bool:
+def possible_item(item: dict, event_id: str, opened: set[str], deadline: int | None, recorded: set[str]) -> bool:
     """
     조건 하나가 언젠가 맞을 수 있는가.
     이벤트를 봤다는 열릴 수 있는 다른 이벤트여야 하고(처음 열릴 때 자기는 아직 안 봤다),
-    n일째 이상은 기한 안이어야 한다.
+    n일째 이상은 기한 안이어야 한다. 엔딩을 봤다(회차 혜택)는 계정에 남는 엔딩이어야 한다(recorded).
     나머지는 사용자의 행동으로 맞출 수 있는 것으로 본다.
     """
     if item['kind'] == ConditionKind.EVENT_SEEN:
         return item['target'] != event_id and item['target'] in opened
+    if item['kind'] == ConditionKind.ENDING_SEEN:
+        return item['target'] in recorded
     if item['kind'] == ConditionKind.DAY_AT_LEAST:
         return deadline is None or item['count'] <= deadline
     return True
@@ -315,10 +335,13 @@ def days_overlap(items: list[dict]) -> bool:
     return not least or not most or max(least) <= min(most)
 
 
-def possible_event(event: dict, opened: set[str], deadline: int | None) -> bool:
-    """그 이벤트가 열릴 수 있는가. opened 는 지금까지 열릴 수 있다고 본 이벤트들이다. 조건이 비면 늘 열린다."""
+def possible_event(event: dict, opened: set[str], deadline: int | None, recorded: set[str]) -> bool:
+    """
+    그 이벤트가 열릴 수 있는가. opened 는 지금까지 열릴 수 있다고 본 이벤트들이고,
+    recorded 는 계정에 남는 엔딩들이다. 조건이 비면 늘 열린다.
+    """
     items = event['when']['items']
-    checks = [possible_item(item, event['id'], opened, deadline) for item in items]
+    checks = [possible_item(item, event['id'], opened, deadline, recorded) for item in items]
     if not items:
         return True
     if event['when']['match'] == Match.ANY:
@@ -330,7 +353,11 @@ def openable_events(world: World) -> set[str]:
     """열릴 수 있는 이벤트들. 더 늘지 않을 때까지 되풀이한다(이벤트가 다른 이벤트를 봐야 열리는 사슬을 따라간다)."""
     opened: set[str] = set()
     while True:
-        more = {event['id'] for event in world.events if possible_event(event, opened, world.deadline_days)} - opened
+        more = {
+            event['id']
+            for event in world.events
+            if possible_event(event, opened, world.deadline_days, recorded_endings(world))
+        } - opened
         if not more:
             return opened
         opened |= more

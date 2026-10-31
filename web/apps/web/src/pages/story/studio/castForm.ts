@@ -181,13 +181,18 @@ type Named = { id: string; name: string };
  * 조건에서 고를 거리. 장소, 물건, 시간대, 이벤트는 저장된 세계관에서, 인물은 지금 고치는 초안에서 온다
  * (인물의 이름은 고른 캐릭터의 이름이다. 고르지 않았으면 빈 이름)
  */
-export function castChoices(world: Pick<StoryWorldDetail, 'places' | 'items' | 'slots' | 'events'>, cast: CastDraft[], characters: Named[]): ConditionChoices {
+export function castChoices(
+  world: Pick<StoryWorldDetail, 'places' | 'items' | 'slots' | 'events'> & { endings?: Named[] },
+  cast: CastDraft[],
+  characters: Named[],
+): ConditionChoices {
   const nameOf = (id: string) => characters.find((character) => character.id === id)?.name ?? '';
   return {
     places: world.places.map((place) => ({ id: place.id, name: place.name })),
     items: world.items.map((item) => ({ id: item.id, name: item.name })),
     slots: world.slots.map((slot) => ({ id: slot.id, name: slot.name })),
     events: world.events.map((event) => ({ id: event.id, name: event.name })),
+    endings: (world.endings ?? []).map((ending) => ({ id: ending.id, name: ending.name })),
     cast: cast.map((member) => ({ id: member.id, name: nameOf(member.characterId), stages: stageNames(member) })),
   };
 }
