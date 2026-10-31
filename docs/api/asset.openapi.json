@@ -569,6 +569,16 @@
             "title": "Gender",
             "type": "string"
           },
+          "genre": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Genre"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "greeting": {
             "default": "",
             "maxLength": 2000,
@@ -737,6 +747,16 @@
             "title": "Gender",
             "type": "string"
           },
+          "genre": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Genre"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "greeting": {
             "title": "Greeting",
             "type": "string"
@@ -894,6 +914,7 @@
           "age",
           "gender",
           "tags",
+          "genre",
           "starts",
           "image_id",
           "rating",
@@ -949,6 +970,16 @@
           "gender": {
             "title": "Gender",
             "type": "string"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Genre"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "greeting": {
             "title": "Greeting",
@@ -1204,6 +1235,16 @@
               }
             ],
             "title": "Gender"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Genre"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "greeting": {
             "anyOf": [
@@ -2119,6 +2160,24 @@
         ],
         "title": "EventSceneDocument",
         "type": "object"
+      },
+      "Genre": {
+        "description": "장르의 목록. 허용 값의 검사는 입력의 모양(schemas.py)이 한다.\n\nDB 의 CHECK 로 걸지 않는다. 걸면 목록을 바꿀 때마다 마이그레이션이 필요해진다(TRPG 와 같다).",
+        "enum": [
+          "fantasy",
+          "wuxia",
+          "urban_fantasy",
+          "sf",
+          "apocalypse",
+          "horror",
+          "mystery",
+          "romance",
+          "slice_of_life",
+          "alt_history",
+          "comedy"
+        ],
+        "title": "Genre",
+        "type": "string"
       },
       "Gift": {
         "additionalProperties": false,
@@ -3664,6 +3723,16 @@
       "PublicCharacterSummary": {
         "description": "공개 목록의 한 줄. 마지막 판의 값이다.",
         "properties": {
+          "genre": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Genre"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -3710,6 +3779,7 @@
           "version",
           "name",
           "tags",
+          "genre",
           "rating",
           "image_id",
           "published_at"
@@ -3744,6 +3814,16 @@
           "ending_count": {
             "title": "Ending Count",
             "type": "integer"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Genre"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "format": "uuid",
@@ -3797,6 +3877,7 @@
           "name",
           "intro_html",
           "tags",
+          "genre",
           "rating",
           "image_id",
           "deadline_days",
@@ -3842,6 +3923,16 @@
               }
             ],
             "title": "Deadline Days"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Genre"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "format": "uuid",
@@ -3889,6 +3980,7 @@
           "version",
           "name",
           "tags",
+          "genre",
           "rating",
           "image_id",
           "deadline_days",
@@ -4834,6 +4926,16 @@
             "title": "Events",
             "type": "array"
           },
+          "genre": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Genre"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "image_id": {
             "anyOf": [
               {
@@ -5040,6 +5142,16 @@
             "title": "Events",
             "type": "array"
           },
+          "genre": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Genre"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "hidden_at": {
             "anyOf": [
               {
@@ -5192,6 +5304,7 @@
           "name",
           "intro_html",
           "tags",
+          "genre",
           "image_id",
           "rating",
           "visibility",
@@ -5261,6 +5374,16 @@
           "format": {
             "title": "Format",
             "type": "integer"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Genre"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "image_id": {
             "anyOf": [
@@ -5801,6 +5924,16 @@
               }
             ],
             "title": "Events"
+          },
+          "genre": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Genre"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "image_id": {
             "anyOf": [

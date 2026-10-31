@@ -116,7 +116,7 @@ async def test_publishing_copies_the_latest_lorebook_versions(client: AsyncClien
 
     document = (await publish(client, mine, made)).json()['document']
 
-    assert document['format'] == DOCUMENT_FORMAT == 8
+    assert document['format'] == DOCUMENT_FORMAT == 9
     assert copied(document) == [(second['id'], 2, '둘째', 1), (first['id'], 1, '제국', 1)]
     assert document['lorebooks'][0]['entries'] == [{**CITY, 'constant': False}]
 

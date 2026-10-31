@@ -5,6 +5,7 @@
 import type { PublicCharacterDetail } from '../../../api/types';
 import { useSession } from '../../../auth/useSession';
 import { formatDate } from '../../../format/dateTime';
+import { genreName } from '../../../genres/genres';
 import { useImageUrl } from '../../../hooks/useImageUrl';
 import { CharacterConversations } from './CharacterConversations';
 import { CharacterScenes } from './CharacterScenes';
@@ -48,6 +49,7 @@ function CharacterHead({ character }: { character: PublicCharacterDetail }) {
         {profile ? <p className="character-page__profile">{profile}</p> : null}
         <ul className="tag-links" aria-label="태그">
           {document.rating === 'adult' ? <li className="item-card__tag">성인</li> : null}
+          {document.genre ? <li className="item-card__tag">{genreName(document.genre)}</li> : null}
           {document.tags.map((tag) => (
             <li key={tag} className="item-card__tag">
               #{tag}

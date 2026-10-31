@@ -40,6 +40,7 @@ from app.characters.schemas import (
     unique_paths,
     unique_start_items,
 )
+from app.genres import Genre
 from app.ratings import Rating
 from app.worlds.documents import WorldDocument
 from app.worlds.models import (
@@ -497,7 +498,7 @@ Endings = Annotated[list[Ending], Field(max_length=WORLD_MAX_ENDINGS), AfterVali
 # DB 에 dict(의 목록)로 적는 칸
 DOCUMENT_LISTS = ('slots', 'places', 'paths', 'items', 'start_items', 'cast', 'events', 'endings')
 # 고칠 때 null 로 비울 수 있는 칸. 그림, 시작 장소와 시간대, 기한은 "없음"이 null 이다
-NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'start_slot', 'deadline_days'})
+NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'start_slot', 'deadline_days', 'genre'})
 
 
 def attached_images(
@@ -539,6 +540,7 @@ class WorldCreate(BaseModel):
     name: Name
     intro_html: Intro = ''
     tags: Tags = []
+    genre: Genre | None = None
     image_id: uuid.UUID | None = None
     rating: Rating = Rating.ALL
     slots: Slots = list(DEFAULT_SLOTS)
@@ -583,6 +585,7 @@ class WorldUpdate(BaseModel):
     name: Name | None = None
     intro_html: Intro | None = None
     tags: Tags | None = None
+    genre: Genre | None = None
     image_id: uuid.UUID | None = None
     rating: Rating | None = None
     visibility: Visibility | None = None
@@ -630,6 +633,8 @@ class WorldDetail(BaseModel):
     name: str
     intro_html: str
     tags: list[str]
+    # 장르. 고르지 않았으면 null 이다
+    genre: Genre | None
     image_id: uuid.UUID | None
     rating: Rating
     visibility: Visibility
@@ -750,6 +755,8 @@ class PublicWorldSummary(BaseModel):
     version: int
     name: str
     tags: list[str]
+    # 장르. 고르지 않았으면 null 이다
+    genre: Genre | None
     rating: Rating
     image_id: uuid.UUID | None
     deadline_days: int | None
@@ -788,6 +795,8 @@ class PublicWorldDetail(BaseModel):
     name: str
     intro_html: str
     tags: list[str]
+    # 장르. 고르지 않았으면 null 이다. 소개 화면의 테마를 정한다
+    genre: Genre | None
     rating: Rating
     image_id: uuid.UUID | None
     deadline_days: int | None

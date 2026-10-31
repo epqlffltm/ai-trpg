@@ -31,6 +31,7 @@ def to_public_summary(character: Character, version: CharacterVersion) -> Public
         version=version.number,
         name=document.name,
         tags=document.tags,
+        genre=document.genre,
         rating=document.rating,
         image_id=document.image_id,
         published_at=version.created_at,

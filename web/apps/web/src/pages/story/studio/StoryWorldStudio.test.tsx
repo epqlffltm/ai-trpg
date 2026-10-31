@@ -116,14 +116,17 @@ describe('세계관 만들기', () => {
     expect(await screen.findByText('지금은 운영자만 세계관을 만들고 공개로 둘 수 있습니다.')).toBeInTheDocument();
   });
 
-  it('기본 탭은 이름, 태그, 등급, 공개 범위, 그림만 보낸다', async () => {
+  it('기본 탭은 이름, 장르, 태그, 등급, 공개 범위, 그림만 보낸다', async () => {
     const { seen } = signedIn();
     renderApp(`/story/studio/worlds/${ID}`);
 
     const basics = await screen.findByRole('form', { name: '기본' });
     await userEvent.type(within(basics).getByLabelText('태그(쉼표로 나눈다)'), '학원, 청춘, 학원');
+    await userEvent.selectOptions(within(basics).getByLabelText('장르(선택)'), '로맨스');
     await userEvent.click(within(basics).getByRole('button', { name: '저장' }));
-    await waitFor(() => expect(patches(seen)).toEqual([{ name: '여름 학교', tags: ['학원', '청춘'], rating: 'all', visibility: 'private', image_id: null }]));
+    await waitFor(() =>
+      expect(patches(seen)).toEqual([{ name: '여름 학교', genre: 'romance', tags: ['학원', '청춘'], rating: 'all', visibility: 'private', image_id: null }]),
+    );
   });
 
   it('진행 탭은 시간대의 차례를 검사하고, 기한·엔딩 뒤·보이기·시작 장소와 소지품을 보낸다', async () => {
