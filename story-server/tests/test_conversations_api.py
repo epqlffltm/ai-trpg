@@ -99,7 +99,7 @@ async def test_starting_fixes_the_latest_version(client: AsyncClient, asset: Fak
         'name': '여름 마을',
         'image_id': str(IMAGE_ID),
         'rating': 'all',
-        'genre': None,
+        'genre': 'fantasy',
     }
     assert started['created_at'] == started['updated_at']
 
@@ -207,7 +207,7 @@ async def test_the_list_is_mine_and_newest_first(client: AsyncClient, asset: Fak
         'name': '여름 마을',
         'image_id': str(IMAGE_ID),
         'rating': 'all',
-        'genre': None,
+        'genre': 'fantasy',
     }
 
 

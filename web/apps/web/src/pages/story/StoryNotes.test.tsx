@@ -21,7 +21,7 @@ function session(): StorySession {
   return {
     id: SESSION,
     title: '여름 학교',
-    world: { id: WORLD, version: 1, name: '여름 학교', image_id: null, rating: 'all' },
+    world: { id: WORLD, version: 1, name: '여름 학교', image_id: null, rating: 'all', genre: 'fantasy' },
     view: storyView({ slots: [{ id: 'morning', name: '아침', start_hour: 7 }], places: [{ id: 'park', name: '공원', description: '', image_id: null, backgrounds: {} }] }),
     model: { slug: 'luna', display_name: 'Luna', vendor: 'openai', grade: 'standard', retires_on: null, usable: true },
     messages: [],
