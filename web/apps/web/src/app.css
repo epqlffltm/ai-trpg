@@ -2538,6 +2538,13 @@ a.ui-button {
   color: var(--ui-text-muted);
 }
 
+/* 장이 넘어간 행동 말 위의 장 제목("2장: 축제") */
+.chat-message__chapter {
+  margin: 0 0 4px;
+  font-weight: 700;
+  color: var(--ui-accent);
+}
+
 .chat-message__marks,
 .chat-message__changes {
   margin: 4px 0 0;
