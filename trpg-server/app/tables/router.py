@@ -53,6 +53,7 @@ from app.tables import (
     deaths,
     equipment,
     friendly_fire_changes,
+    growth,
     injuries,
     items,
     narration_models,
@@ -348,6 +349,10 @@ def to_sheet(
         ],
         skills=list(sheet.skills or []),
         resistances=resistances.of_sheet(sheet),
+        xp=sheet.xp,
+        level=growth.level_of(sheet.xp, ruleset.progression),
+        next_level_xp=growth.next_level_xp(sheet.xp, ruleset.progression),
+        points=sheet.points,
     )
 
 

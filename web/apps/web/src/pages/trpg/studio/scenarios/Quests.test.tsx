@@ -150,6 +150,7 @@ describe('퀘스트·사건 탭', () => {
       fail_match: 'all',
       reward: [],
       reward_money: 30,
+      reward_xp: 0,
       time_limit_minutes: 1440,
     });
   });

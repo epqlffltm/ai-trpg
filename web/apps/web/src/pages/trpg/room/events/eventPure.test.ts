@@ -31,7 +31,7 @@ const ALL: EventType[] = [
   'round_opened', 'player_action', 'check_rolled', 'hp_changed', 'resource_changed', 'npc_changed', 'npc_attitude_changed', 'monster_changed',
   'monster_attacked', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_treated', 'naming_resolved', 'death_save_rolled',
   'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'trap_set', 'trap_sprung', 'trap_disarmed', 'steal_attempted',
-  'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'chapter_changed', 'place_searched', 'character_rested',
+  'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'chapter_changed', 'character_leveled', 'place_searched', 'character_rested',
   'character_revived', 'round_closed', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
   'narration_model_not_for_sale', 'narration_model_retiring', 'narration_model_replaced', 'narration_model_unavailable',
   'member_dropped', 'narration_credits_released', 'table_ended', 'item_traded', 'money_paid',
@@ -59,6 +59,10 @@ describe('eventLine', () => {
   it('다음 장으로 넘어간 것은 몇째 장과 이름이다(#481)', () => {
     const payload = { round: 2, from: { id: 'a', name: '도착' }, to: { id: 'b', name: '지하' }, number: 2 };
     expect(line('chapter_changed', payload)?.text).toBe('2장: 지하');
+  });
+
+  it('레벨이 오른 것은 누가 몇에서 몇으로다(#286)', () => {
+    expect(line('character_leveled', { character_name: '렌', previous_level: 1, level: 3, xp: 320, max_hp: 16, points: 2 })?.text).toBe('렌: 레벨 1 → 3');
   });
 
   it('덫을 놓은 것과 터진 것(#806)', () => {

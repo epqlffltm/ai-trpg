@@ -174,7 +174,7 @@ def test_an_old_version_gets_the_engine_s_old_values():
 
     upgraded = upgrade_from_66(old)
 
-    assert upgraded['format'] == 67 == SNAPSHOT_FORMAT
+    assert upgraded['format'] == 67 <= SNAPSHOT_FORMAT
     assert upgraded['rulebook']['rules'] == {
         'skills': [],
         'natures': CLASSIC_NATURES,

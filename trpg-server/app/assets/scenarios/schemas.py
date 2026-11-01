@@ -50,6 +50,7 @@ from app.assets.models import (
     QUEST_CONDITION_MAX_COUNT,
     QUEST_LINK_CONDITIONS,
     QUEST_MAX_CONDITIONS,
+    QUEST_MAX_REWARD_XP,
     QUEST_MAX_TIME_LIMIT_MINUTES,
     ROUND_MAX_MINUTES,
     SCENARIO_MAX_BESTIARIES,
@@ -941,6 +942,8 @@ class QuestRule(BaseModel):
 
     start 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.
     reward_money 는 성공했을 때 받는 돈이다(#278). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 돈은 없다.
+    reward_xp 는 성공했을 때 받는 경험치다(#286). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 경험치는 없다.
+    룰북에 성장(progression)이 없으면 게시하지 못한다.
     time_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.
     비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).
     conditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).
@@ -965,6 +968,7 @@ class QuestRule(BaseModel):
     # 시작 소지품과 모양이 같다. 같은 물건은 한 줄에 개수로 적는다
     reward: StartingItems = []
     reward_money: Money = 0
+    reward_xp: int = Field(default=0, ge=0, le=QUEST_MAX_REWARD_XP)
     time_limit_minutes: int | None = Field(default=None, ge=1, le=QUEST_MAX_TIME_LIMIT_MINUTES)
     conditions: QuestConditions = []
     match: QuestMatch = QuestMatch.ALL

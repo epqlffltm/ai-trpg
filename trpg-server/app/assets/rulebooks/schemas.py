@@ -22,6 +22,7 @@ from app.engine.ruleset import (
     InjuryTriggers,
     KindImmunity,
     Nature,
+    Progression,
     Resource,
     Ruleset,
     Skill,
@@ -51,6 +52,7 @@ class RulebookCreate(AssetCreate):
     보내지 않으면 템플릿의 것이다. 수치(resources, #804)와 기술(skills, #805)도 같다. 보내면 템플릿의 예시 대신 쓴다.
     성질(natures)과 타입마다의 면역(monster_immunities, #886)도 같다. 부상(injuries)과 부상 표(injury_table, #886)도
     같다. 부상 표에 null 을 보내면 부상 표가 없는 규칙이다(그때는 굴리는 때 injury_triggers 를 모두 꺼야 한다).
+    성장(progression, #286)도 같다. null 을 보내면 캐릭터가 성장하지 않는 규칙이다.
     """
 
     gm_guide: GmGuide = ''
@@ -63,6 +65,7 @@ class RulebookCreate(AssetCreate):
     injuries: Injuries | None = None
     injury_table: InjuryTable | None = None
     injury_triggers: InjuryTriggers | None = None
+    progression: Progression | None = None
 
 
 class RulebookUpdate(AssetUpdate):
@@ -73,6 +76,7 @@ class RulebookUpdate(AssetUpdate):
     (monster_immunities, #886), 부상(injuries)과 부상 표(injury_table)와 굴리는 때(injury_triggers, #886)만
     고칠 수 있다.
     부상 표에 null 을 보내면 부상 표가 없는 규칙이 된다(굴리는 때를 모두 함께 꺼야 한다).
+    성장(progression, #286)도 고칠 수 있다. null 을 보내면 캐릭터가 성장하지 않는 규칙이 된다.
     방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.
     이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
     """
@@ -86,6 +90,7 @@ class RulebookUpdate(AssetUpdate):
     injuries: Injuries | None = None
     injury_table: InjuryTable | None = None
     injury_triggers: InjuryTriggers | None = None
+    progression: Progression | None = None
 
 
 class RulebookDetail(AssetSummary):

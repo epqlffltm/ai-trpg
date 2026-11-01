@@ -245,6 +245,8 @@ class Problem(enum.StrEnum):
     UNIQUE_MONSTER_REPEATED = 'unique_monster_repeated'
     # 돈을 쓰는 칸(물건의 값, 상인, 프리젠의 돈, 퀘스트의 돈의 보상)이 있는데 화폐가 없다(#278)
     CURRENCY_MISSING = 'currency_missing'
+    # 퀘스트가 경험치를 주는데 룰북에 성장(progression)이 없다(#286). 받은 경험치가 어디에도 쓰이지 않는다
+    PROGRESSION_MISSING = 'progression_missing'
     # 아이템 규칙의 장비의 칸(slots)이 룰북의 규칙에 없다(#276)
     ITEM_SLOT_INVALID = 'item_slot_invalid'
     # 시작할 때의 착용(wear)이 틀렸다. 그 물건의 칸이 아니거나, 차지하는 칸의 수와 다르거나, 두 줄이 한 칸에 겹친다
@@ -821,6 +823,19 @@ def uses_money(scenario: Scenario) -> bool:
         or any(Pregen.model_validate(document).money for document in scenario.pregens)
         or any(quest.reward_money for quest in read_quest_rules(scenario))
     )
+
+
+def find_progression_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Problem]:
+    """
+    경험치를 주는 퀘스트가 있으면 룰북에 성장이 있어야 한다(#286). 성장이 없는 규칙에서는 경험치가 쌓일 곳이 없다.
+
+    룰북이 없으면 보지 않는다. 그때는 룰북이 없다는 문제(rulebook_missing)가 먼저다.
+    """
+    if ruleset is None:
+        return []
+    if ruleset.progression is None and any(quest.reward_xp for quest in read_quest_rules(scenario)):
+        return [Problem.PROGRESSION_MISSING]
+    return []
 
 
 def find_currency_problems(scenario: Scenario) -> list[Problem]:
@@ -1403,6 +1418,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_item_problems(scenario, parts, ruleset))
     problems.extend(find_quest_problems(scenario, parts))
     problems.extend(find_currency_problems(scenario))
+    problems.extend(find_progression_problems(scenario, ruleset))
     problems.extend(find_wear_problems(scenario, ruleset))
     problems.extend(find_combat_problems(scenario, ruleset))
     problems.extend(find_map_problems(scenario, parts, ruleset))

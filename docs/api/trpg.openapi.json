@@ -4024,6 +4024,7 @@
           "character_moved",
           "happening_occurred",
           "chapter_changed",
+          "character_leveled",
           "place_searched",
           "door_changed",
           "monsters_appeared",
@@ -6615,6 +6616,37 @@
           "name"
         ],
         "title": "KnownTrapOut",
+        "type": "object"
+      },
+      "LevelStep": {
+        "additionalProperties": false,
+        "description": "레벨표의 한 줄(#286). 그 레벨이 되는 누적 경험치(xp)와, 그 레벨에 오를 때 받는 것이다.\n\nmax_hp 는 오를 때 최대 HP 에 더하는 양이다. 지금 HP 도 그만큼 오른다(쓰러져 있으면 최대만 오른다).\npoints 는 오를 때 받는 능력치 점수다. 플레이어가 능력치에 놓을 때까지 시트에 쌓여 있다.",
+        "properties": {
+          "max_hp": {
+            "default": 0,
+            "maximum": 99.0,
+            "minimum": 0.0,
+            "title": "Max Hp",
+            "type": "integer"
+          },
+          "points": {
+            "default": 0,
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Points",
+            "type": "integer"
+          },
+          "xp": {
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Xp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "xp"
+        ],
+        "title": "LevelStep",
         "type": "object"
       },
       "ListingDetail": {
@@ -10993,6 +11025,26 @@
         "title": "PregenSnapshot",
         "type": "object"
       },
+      "Progression": {
+        "additionalProperties": false,
+        "description": "성장(#286). 경험치를 모아 레벨이 오른다. 캐릭터는 레벨 1, 경험치 0 에서 시작한다.\n\nlevels 는 레벨 2 부터 차례로 그 레벨이 되는 누적 경험치와 받는 것이다. 경험치는 줄마다 커야 한다.\n경험치를 주는 것(퀘스트의 보상 …)은 판이 적고, 레벨을 올리는 것은 엔진만 한다(app/tables/growth.py).",
+        "properties": {
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/LevelStep"
+            },
+            "maxItems": 19,
+            "minItems": 1,
+            "title": "Levels",
+            "type": "array"
+          }
+        },
+        "required": [
+          "levels"
+        ],
+        "title": "Progression",
+        "type": "object"
+      },
       "PublicListing": {
         "description": "다른 사용자가 공개된 시나리오를 볼 때의 값. 목록과 상세가 같은 모양이다.\n\n여기 적힌 칸만 나간다. 초안의 내용, 판의 굳힌 내용, 공개하지 않은 판의 정보는 나가지 않는다.",
         "properties": {
@@ -11625,7 +11677,7 @@
       },
       "QuestRule-Input": {
         "additionalProperties": false,
-        "description": "퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.\n\nstart 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.\nreward_money 는 성공했을 때 받는 돈이다(#278). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 돈은 없다.\ntime_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.\n비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).\nconditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).\nmatch 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.\n조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.\n숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기와 실패하는 조건에 쓴다.\n자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).\n사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다(#367).\n진행 중인 퀘스트의 조건이 채워지면 엔진이 실패로 바꾼다.\n같은 라운드에 이루는 조건도 채워졌으면 성공이 먼저다. 물건을 잃는 것(lose_item)은 여기에만 쓴다.\n조건이 없으면 기한으로만 실패한다. 사람(방장)은 퀘스트를 실패로 바꾸지 못한다.\n규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.\n가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.",
+        "description": "퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.\n\nstart 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.\nreward_money 는 성공했을 때 받는 돈이다(#278). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 돈은 없다.\nreward_xp 는 성공했을 때 받는 경험치다(#286). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 경험치는 없다.\n룰북에 성장(progression)이 없으면 게시하지 못한다.\ntime_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.\n비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).\nconditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).\nmatch 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.\n조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.\n숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기와 실패하는 조건에 쓴다.\n자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).\n사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다(#367).\n진행 중인 퀘스트의 조건이 채워지면 엔진이 실패로 바꾼다.\n같은 라운드에 이루는 조건도 채워졌으면 성공이 먼저다. 물건을 잃는 것(lose_item)은 여기에만 쓴다.\n조건이 없으면 기한으로만 실패한다. 사람(방장)은 퀘스트를 실패로 바꾸지 못한다.\n규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.\n가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.",
         "properties": {
           "conditions": {
             "default": [],
@@ -11687,6 +11739,13 @@
             "title": "Reward Money",
             "type": "integer"
           },
+          "reward_xp": {
+            "default": 0,
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Reward Xp",
+            "type": "integer"
+          },
           "start": {
             "$ref": "#/components/schemas/QuestStart",
             "default": "hidden"
@@ -11713,7 +11772,7 @@
       },
       "QuestRule-Output": {
         "additionalProperties": false,
-        "description": "퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.\n\nstart 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.\nreward_money 는 성공했을 때 받는 돈이다(#278). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 돈은 없다.\ntime_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.\n비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).\nconditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).\nmatch 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.\n조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.\n숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기와 실패하는 조건에 쓴다.\n자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).\n사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다(#367).\n진행 중인 퀘스트의 조건이 채워지면 엔진이 실패로 바꾼다.\n같은 라운드에 이루는 조건도 채워졌으면 성공이 먼저다. 물건을 잃는 것(lose_item)은 여기에만 쓴다.\n조건이 없으면 기한으로만 실패한다. 사람(방장)은 퀘스트를 실패로 바꾸지 못한다.\n규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.\n가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.",
+        "description": "퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.\n\nstart 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.\nreward_money 는 성공했을 때 받는 돈이다(#278). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 돈은 없다.\nreward_xp 는 성공했을 때 받는 경험치다(#286). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 경험치는 없다.\n룰북에 성장(progression)이 없으면 게시하지 못한다.\ntime_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.\n비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).\nconditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).\nmatch 는 조건이 여럿일 때 모두(all) 채워야 하는지, 하나라도(any) 채우면 되는지다.\n조건이 없으면 성공하지 않는다. 사람(방장, 장부 초안)은 퀘스트를 성공으로 바꾸지 못한다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 엔진이 보고 드러낸다.\n숨긴 채로 시작하는 퀘스트에만 적는다. 다른 퀘스트를 보는 조건(퀘스트 잇기)은 여기와 실패하는 조건에 쓴다.\n자기 자신을 보면 거부한다. 드러나는 조건이 없는 숨긴 퀘스트는 이루어야만 드러난다(드러내며 바로 성공).\n사람(방장, 장부 초안)은 퀘스트를 드러내지 못한다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다(#367).\n진행 중인 퀘스트의 조건이 채워지면 엔진이 실패로 바꾼다.\n같은 라운드에 이루는 조건도 채워졌으면 성공이 먼저다. 물건을 잃는 것(lose_item)은 여기에만 쓴다.\n조건이 없으면 기한으로만 실패한다. 사람(방장)은 퀘스트를 실패로 바꾸지 못한다.\n규칙이 없는 사건 항목은 숨긴 채로 시작하고 보상과 기한과 조건이 없다.\n가리키는 사건과 보상의 물건이 붙인 로어북에 있는지는 게시할 때 본다.",
         "properties": {
           "conditions": {
             "default": [],
@@ -11774,6 +11833,13 @@
             "title": "Reward Money",
             "type": "integer"
           },
+          "reward_xp": {
+            "default": 0,
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Reward Xp",
+            "type": "integer"
+          },
           "start": {
             "$ref": "#/components/schemas/QuestStart",
             "default": "hidden"
@@ -11799,7 +11865,7 @@
         "type": "object"
       },
       "QuestRuleSnapshot": {
-        "description": "퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.\n\nstart 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건, reward_money 는 받는 돈이다.\ntime_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.\nconditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다. 없으면 기한으로만 실패한다.",
+        "description": "퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.\n\nstart 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건, reward_money 는 받는 돈이다.\nreward_xp 는 받는 경험치다(#286). 형식 68 보다 옛 판의 퀘스트는 경험치를 주지 않는다.\ntime_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.\nconditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.\nreveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.\nfail 은 실패하는 조건, fail_match 는 그것을 맞추는 법이다. 없으면 기한으로만 실패한다.",
         "properties": {
           "conditions": {
             "default": [],
@@ -11853,6 +11919,11 @@
           "reward_money": {
             "default": 0,
             "title": "Reward Money",
+            "type": "integer"
+          },
+          "reward_xp": {
+            "default": 0,
+            "title": "Reward Xp",
             "type": "integer"
           },
           "start": {
@@ -13731,7 +13802,7 @@
       },
       "RulebookCreate": {
         "additionalProperties": false,
-        "description": "룰북을 만들 때 받는 값. 제목만 필수다.\n\n규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.\n방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.\n보내지 않으면 템플릿의 것이다. 수치(resources, #804)와 기술(skills, #805)도 같다. 보내면 템플릿의 예시 대신 쓴다.\n성질(natures)과 타입마다의 면역(monster_immunities, #886)도 같다. 부상(injuries)과 부상 표(injury_table, #886)도\n같다. 부상 표에 null 을 보내면 부상 표가 없는 규칙이다(그때는 굴리는 때 injury_triggers 를 모두 꺼야 한다).",
+        "description": "룰북을 만들 때 받는 값. 제목만 필수다.\n\n규칙을 직접 받지 않는다. 템플릿의 이름만 받고, 그 템플릿의 규칙을 서버가 채운다.\n방어 규칙(armor)만은 고를 수 있다(#276). 보내면 템플릿의 것 대신 쓴다. null 이면 방어구가 막지 않는 규칙이다.\n보내지 않으면 템플릿의 것이다. 수치(resources, #804)와 기술(skills, #805)도 같다. 보내면 템플릿의 예시 대신 쓴다.\n성질(natures)과 타입마다의 면역(monster_immunities, #886)도 같다. 부상(injuries)과 부상 표(injury_table, #886)도\n같다. 부상 표에 null 을 보내면 부상 표가 없는 규칙이다(그때는 굴리는 때 injury_triggers 를 모두 꺼야 한다).\n성장(progression, #286)도 같다. null 을 보내면 캐릭터가 성장하지 않는 규칙이다.",
         "properties": {
           "armor": {
             "anyOf": [
@@ -13819,6 +13890,16 @@
               }
             ],
             "title": "Natures"
+          },
+          "progression": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Progression"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "resources": {
             "anyOf": [
@@ -13948,7 +14029,7 @@
       },
       "RulebookUpdate": {
         "additionalProperties": false,
-        "description": "룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\n규칙은 방어 규칙(armor), 수치(resources, #804), 기술(skills, #805), 성질(natures)과 타입마다의 면역\n(monster_immunities, #886), 부상(injuries)과 부상 표(injury_table)와 굴리는 때(injury_triggers, #886)만\n고칠 수 있다.\n부상 표에 null 을 보내면 부상 표가 없는 규칙이 된다(굴리는 때를 모두 함께 꺼야 한다).\n방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.\n이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.",
+        "description": "룰북을 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\n규칙은 방어 규칙(armor), 수치(resources, #804), 기술(skills, #805), 성질(natures)과 타입마다의 면역\n(monster_immunities, #886), 부상(injuries)과 부상 표(injury_table)와 굴리는 때(injury_triggers, #886)만\n고칠 수 있다.\n부상 표에 null 을 보내면 부상 표가 없는 규칙이 된다(굴리는 때를 모두 함께 꺼야 한다).\n성장(progression, #286)도 고칠 수 있다. null 을 보내면 캐릭터가 성장하지 않는 규칙이 된다.\n방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.\n이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.",
         "properties": {
           "armor": {
             "anyOf": [
@@ -14048,6 +14129,16 @@
               }
             ],
             "title": "Natures"
+          },
+          "progression": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Progression"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "resources": {
             "anyOf": [
@@ -14273,6 +14364,16 @@
               }
             ]
           },
+          "progression": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Progression"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "resources": {
             "items": {
               "$ref": "#/components/schemas/Resource"
@@ -14388,7 +14489,8 @@
           "resources",
           "skills",
           "natures",
-          "monster_immunities"
+          "monster_immunities",
+          "progression"
         ],
         "title": "Ruleset",
         "type": "object"
@@ -15982,6 +16084,11 @@
             "title": "Items",
             "type": "array"
           },
+          "level": {
+            "default": 1,
+            "title": "Level",
+            "type": "integer"
+          },
           "max_hp": {
             "title": "Max Hp",
             "type": "integer"
@@ -15990,6 +16097,17 @@
             "default": 0,
             "title": "Money",
             "type": "integer"
+          },
+          "next_level_xp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Level Xp"
           },
           "number": {
             "title": "Number",
@@ -16006,6 +16124,11 @@
               }
             ],
             "title": "Place Id"
+          },
+          "points": {
+            "default": 0,
+            "title": "Points",
+            "type": "integer"
           },
           "resistances": {
             "default": [],
@@ -16038,6 +16161,11 @@
             },
             "title": "Worn",
             "type": "array"
+          },
+          "xp": {
+            "default": 0,
+            "title": "Xp",
+            "type": "integer"
           }
         },
         "required": [
@@ -16502,7 +16630,7 @@
             "type": "array"
           },
           "format": {
-            "default": 67,
+            "default": 68,
             "title": "Format",
             "type": "integer"
           },

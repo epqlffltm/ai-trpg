@@ -319,6 +319,11 @@ async def test_a_player_whose_character_died_brings_in_a_new_one(
         'money': 0,
         'place_id': None,
         'resources': [],
+        # 새 캐릭터는 앞 캐릭터의 경험치를 물려받지 않는다(#286)
+        'xp': 0,
+        'level': 1,
+        'next_level_xp': None,
+        'points': 0,
     }
     assert seat['sheet'] == {**as_character(PLAIN), **fresh}
     # 죽은 캐릭터는 지워지지 않고 떠난 캐릭터로 남는다

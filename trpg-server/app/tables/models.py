@@ -515,6 +515,9 @@ class TableSheet(Base):
         CheckConstraint("jsonb_typeof(resources) = 'object'", name='resources_is_object'),
         CheckConstraint("jsonb_typeof(skills) = 'array'", name='skills_is_array'),
         CheckConstraint("jsonb_typeof(resistances) = 'array'", name='resistances_is_array'),
+        # 경험치와 아직 놓지 않은 능력치 점수(#286)는 0 아래로 내려가지 않는다. 상한은 엔진이 지킨다
+        CheckConstraint('xp >= 0', name='xp_not_negative'),
+        CheckConstraint('points >= 0', name='points_not_negative'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -568,6 +571,11 @@ class TableSheet(Base):
     # 이 칸이 생기기 전의 시트는 비어 있다(저항이 없다). 착용한 물건과 입은 부상의 저항은 여기 적지 않는다.
     # 그때그때 물건과 부상에서 읽는다(app/tables/resistances.py). 바꾸는 길은 아직 없다
     resistances: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    # 모은 경험치(#286). 레벨은 이것과 판의 레벨표로 정한다(app/tables/growth.py). 레벨을 따로 적지 않는다.
+    # 바꾸는 것은 엔진뿐이다(퀘스트의 보상 …). 이 칸이 생기기 전의 시트와 성장이 없는 규칙의 시트는 0 이다
+    xp: Mapped[int] = mapped_column(Integer, default=0, server_default=text('0'))
+    # 레벨이 올라 받았지만 아직 능력치에 놓지 않은 점수(#286). 레벨표가 정한 만큼 쌓인다
+    points: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

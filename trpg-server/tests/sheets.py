@@ -29,6 +29,7 @@ def handed_out(sheet: dict) -> dict:
     판에 시작 소지품이 없으면 가진 것도 없다. 판에 화폐가 없으면 돈도 없다. 판에 맵이 없으면 서 있는 곳도 없다.
     판에 시작할 때의 착용이 없으면 착용한 것도 없다. 규칙에 수치(#804)가 없으면 수치도 없다.
     시트에 아는 기술(#805)과 저항(#886 ②)이 적혀 있지 않으면 둘 다 없다.
+    처음이라 경험치와 쌓인 능력치 점수가 없고 레벨 1 이다. 규칙에 성장(#286)이 없으면 다음 레벨도 없다.
     """
     fresh = {'number': 1, 'hp': sheet['max_hp'], 'death_successes': 0, 'death_failures': 0, 'dead': False}
     return {
@@ -42,4 +43,8 @@ def handed_out(sheet: dict) -> dict:
         'money': 0,
         'place_id': None,
         'resources': [],
+        'xp': 0,
+        'level': 1,
+        'next_level_xp': None,
+        'points': 0,
     }

@@ -407,6 +407,15 @@ SAMPLES = {
         'from': {'entry_id': 'f636e7ee-d24e-404f-91fc-eb6c3fda07c6', 'name': '수로 입구'},
         'to': {'entry_id': 'dbc7f2df-b069-439b-8d01-b55cc1da02d6', 'name': '깊은 수로'},
     },
+    'character_leveled': {
+        'user_id': '22222222-2222-4333-8444-555555555555',
+        'character_name': '드워프 기사',
+        'previous_level': 2,
+        'level': 3,
+        'xp': 320,
+        'max_hp': 14,
+        'points': 1,
+    },
     'chapter_changed': {
         'round': 2,
         'from': {'id': 'arrival', 'name': '도착'},

@@ -1175,6 +1175,19 @@ def upgrade_from_66(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_67(document: dict) -> dict:
+    """
+    형식 67 의 문서를 형식 68 로 올린다(#286). 룰북의 규칙에 성장(progression)이 생겼다.
+
+    그때는 캐릭터가 성장하지 않았다. 성장이 없는 규칙(None)으로 읽는다.
+    """
+    upgraded = dict(document)
+    rulebook = document['rulebook']
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'progression': None}}
+    upgraded['format'] = 68
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -1244,4 +1257,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     64: upgrade_from_64,
     65: upgrade_from_65,
     66: upgrade_from_66,
+    67: upgrade_from_67,
 }

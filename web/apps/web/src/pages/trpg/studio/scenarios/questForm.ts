@@ -23,6 +23,8 @@ export type QuestDraft = {
   failMatch: QuestMatch;
   reward: StackDraft[];
   money: string;
+  /** 경험치의 보상(#286). 고치는 칸은 아직 없어 판에 적힌 것을 그대로 보낸다 */
+  xp: string;
   minutes: string;
 };
 
@@ -37,6 +39,7 @@ export function questDraft(rule: QuestRule | undefined): QuestDraft {
     failMatch: rule?.fail_match ?? 'all',
     reward: stackDrafts(rule?.reward ?? []),
     money: String(rule?.reward_money ?? 0),
+    xp: String(rule?.reward_xp ?? 0),
     minutes: rule?.time_limit_minutes ? String(rule.time_limit_minutes) : '',
   };
 }
@@ -84,6 +87,7 @@ export function toQuestRule(entryId: string, draft: QuestDraft): QuestRuleBody {
     fail_match: draft.failMatch,
     reward: toStacks(draft.reward.map((line) => ({ ...line, wear: [] }))),
     reward_money: Number(draft.money.trim()),
+    reward_xp: Number(draft.xp.trim()),
     time_limit_minutes: draft.minutes.trim() === '' ? null : Number(draft.minutes.trim()),
   };
 }

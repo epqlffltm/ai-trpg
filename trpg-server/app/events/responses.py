@@ -237,6 +237,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.HAPPENING_OCCURRED: ('round', 'entry_id', 'name', 'moves'),
     # 넘어간 장은 공개다. 넘어온 장과 이름, 몇째 장인가만 적는다. 다음 장의 조건은 적지 않는다(#481)
     EventType.CHAPTER_CHANGED: ('round', 'from', 'to', 'number'),
+    # 레벨은 공개다. 앉은 사람은 서로의 시트를 본다(#286)
+    EventType.CHARACTER_LEVELED: ('user_id', 'character_name', 'previous_level', 'level', 'xp', 'max_hp', 'points'),
     # 찾은 길은 공개다. 찾았으니 이제 모두가 아는 길이다. 굴린 판정은 처음부터 적지 않는다
     # 찾아낸 덫(#806 ①-b)도 공개다. 찾으면 테이블 모두가 안다
     EventType.PLACE_SEARCHED: ('round', 'character_name', 'place', 'found', 'items', 'traps'),

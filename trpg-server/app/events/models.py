@@ -179,6 +179,10 @@ class EventType(enum.StrEnum):
     # 테이블이 다음 장으로 넘어갔다(app/rounds/chapters.py, #481). 장의 조건이 채워져 엔진이 넘겼다. 행한 사람이 없다.
     # 몇째 라운드에 어느 장(id, 이름)에서 어느 장으로, 몇째 장인가. 조건은 적지 않는다
     CHAPTER_CHANGED = 'chapter_changed'
+    # 캐릭터의 레벨이 올랐다(app/tables/growth.py, #286). 받은 경험치(퀘스트의 보상 …)가 레벨표의 다음 줄에 닿았다.
+    # 행한 사람이 없다. 경험치를 준 것(quest_changed 의 rewards[].xp)에 이어진다.
+    # 누구(user_id, character_name)가 몇에서 몇 레벨로, 그 뒤의 경험치와 최대 HP 와 쌓인 능력치 점수
+    CHARACTER_LEVELED = 'character_leveled'
     # 캐릭터가 서 있는 곳에서 숨긴 길을 찾았다(app/rounds/map_actions.py). 찾은 길만 적는다. 못 찾았으면 빈 목록이다.
     # 굴린 판정은 적지 않는다. 숨긴 길이 있었는지가 드러난다
     PLACE_SEARCHED = 'place_searched'

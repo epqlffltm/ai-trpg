@@ -3640,7 +3640,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "character_leveled" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -4742,6 +4742,27 @@ export interface components {
              * Format: uuid
              */
             trap_id: string;
+        };
+        /**
+         * LevelStep
+         * @description 레벨표의 한 줄(#286). 그 레벨이 되는 누적 경험치(xp)와, 그 레벨에 오를 때 받는 것이다.
+         *
+         *     max_hp 는 오를 때 최대 HP 에 더하는 양이다. 지금 HP 도 그만큼 오른다(쓰러져 있으면 최대만 오른다).
+         *     points 는 오를 때 받는 능력치 점수다. 플레이어가 능력치에 놓을 때까지 시트에 쌓여 있다.
+         */
+        LevelStep: {
+            /**
+             * Max Hp
+             * @default 0
+             */
+            max_hp: number;
+            /**
+             * Points
+             * @default 0
+             */
+            points: number;
+            /** Xp */
+            xp: number;
         };
         /**
          * ListingDetail
@@ -6880,6 +6901,17 @@ export interface components {
             sheet: components["schemas"]["CharacterSheet"];
         };
         /**
+         * Progression
+         * @description 성장(#286). 경험치를 모아 레벨이 오른다. 캐릭터는 레벨 1, 경험치 0 에서 시작한다.
+         *
+         *     levels 는 레벨 2 부터 차례로 그 레벨이 되는 누적 경험치와 받는 것이다. 경험치는 줄마다 커야 한다.
+         *     경험치를 주는 것(퀘스트의 보상 …)은 판이 적고, 레벨을 올리는 것은 엔진만 한다(app/tables/growth.py).
+         */
+        Progression: {
+            /** Levels */
+            levels: components["schemas"]["LevelStep"][];
+        };
+        /**
          * PublicListing
          * @description 다른 사용자가 공개된 시나리오를 볼 때의 값. 목록과 상세가 같은 모양이다.
          *
@@ -7209,6 +7241,8 @@ export interface components {
          *
          *     start 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.
          *     reward_money 는 성공했을 때 받는 돈이다(#278). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 돈은 없다.
+         *     reward_xp 는 성공했을 때 받는 경험치다(#286). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 경험치는 없다.
+         *     룰북에 성장(progression)이 없으면 게시하지 못한다.
          *     time_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.
          *     비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).
          *     conditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).
@@ -7262,6 +7296,11 @@ export interface components {
              * @default 0
              */
             reward_money: number;
+            /**
+             * Reward Xp
+             * @default 0
+             */
+            reward_xp: number;
             /** @default hidden */
             start: components["schemas"]["QuestStart"];
             /** Time Limit Minutes */
@@ -7273,6 +7312,8 @@ export interface components {
          *
          *     start 는 테이블이 시작할 때의 상태다(숨김, 진행 중). reward 는 성공했을 때 받는 물건이다.
          *     reward_money 는 성공했을 때 받는 돈이다(#278). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 돈은 없다.
+         *     reward_xp 는 성공했을 때 받는 경험치다(#286). 살아 있는 캐릭터마다 이만큼 받는다. 0 이면 경험치는 없다.
+         *     룰북에 성장(progression)이 없으면 게시하지 못한다.
          *     time_limit_minutes 는 기한이다. 퀘스트가 드러난(진행 중이 된) 때부터 게임 안의 시간으로 센다.
          *     비우면 기한이 없다. 지나면 서버가 실패로 바꾼다(app/rounds/deadlines.py).
          *     conditions 는 이루는 조건이다. 라운드가 닫힐 때 엔진이 보고 채워졌으면 성공으로 바꾼다(app/rounds/quest_goals.py).
@@ -7323,6 +7364,11 @@ export interface components {
              * @default 0
              */
             reward_money: number;
+            /**
+             * Reward Xp
+             * @default 0
+             */
+            reward_xp: number;
             /** @default hidden */
             start: components["schemas"]["QuestStart"];
             /** Time Limit Minutes */
@@ -7333,6 +7379,7 @@ export interface components {
          * @description 퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.
          *
          *     start 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건, reward_money 는 받는 돈이다.
+         *     reward_xp 는 받는 경험치다(#286). 형식 68 보다 옛 판의 퀘스트는 경험치를 주지 않는다.
          *     time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.
          *     conditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.
          *     reveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.
@@ -7375,6 +7422,11 @@ export interface components {
              * @default 0
              */
             reward_money: number;
+            /**
+             * Reward Xp
+             * @default 0
+             */
+            reward_xp: number;
             /** @default hidden */
             start: components["schemas"]["QuestStart"];
             /** Time Limit Minutes */
@@ -8268,6 +8320,7 @@ export interface components {
          *     보내지 않으면 템플릿의 것이다. 수치(resources, #804)와 기술(skills, #805)도 같다. 보내면 템플릿의 예시 대신 쓴다.
          *     성질(natures)과 타입마다의 면역(monster_immunities, #886)도 같다. 부상(injuries)과 부상 표(injury_table, #886)도
          *     같다. 부상 표에 null 을 보내면 부상 표가 없는 규칙이다(그때는 굴리는 때 injury_triggers 를 모두 꺼야 한다).
+         *     성장(progression, #286)도 같다. null 을 보내면 캐릭터가 성장하지 않는 규칙이다.
          */
         RulebookCreate: {
             armor?: components["schemas"]["Armor"] | null;
@@ -8289,6 +8342,7 @@ export interface components {
             monster_immunities?: components["schemas"]["KindImmunity"][] | null;
             /** Natures */
             natures?: components["schemas"]["Nature"][] | null;
+            progression?: components["schemas"]["Progression"] | null;
             /** Resources */
             resources?: components["schemas"]["Resource"][] | null;
             /** Skills */
@@ -8354,6 +8408,7 @@ export interface components {
          *     (monster_immunities, #886), 부상(injuries)과 부상 표(injury_table)와 굴리는 때(injury_triggers, #886)만
          *     고칠 수 있다.
          *     부상 표에 null 을 보내면 부상 표가 없는 규칙이 된다(굴리는 때를 모두 함께 꺼야 한다).
+         *     성장(progression, #286)도 고칠 수 있다. null 을 보내면 캐릭터가 성장하지 않는 규칙이 된다.
          *     방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.
          *     이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
          */
@@ -8371,6 +8426,7 @@ export interface components {
             monster_immunities?: components["schemas"]["KindImmunity"][] | null;
             /** Natures */
             natures?: components["schemas"]["Nature"][] | null;
+            progression?: components["schemas"]["Progression"] | null;
             /** Resources */
             resources?: components["schemas"]["Resource"][] | null;
             /** Skills */
@@ -8417,6 +8473,7 @@ export interface components {
             /** Natures */
             natures: components["schemas"]["Nature"][];
             point_buy: components["schemas"]["PointBuy"] | null;
+            progression: components["schemas"]["Progression"] | null;
             /** Resources */
             resources: components["schemas"]["Resource"][];
             rest: components["schemas"]["Rest"] | null;
@@ -9025,6 +9082,11 @@ export interface components {
              * @default []
              */
             items: components["schemas"]["ItemOut"][];
+            /**
+             * Level
+             * @default 1
+             */
+            level: number;
             /** Max Hp */
             max_hp: number;
             /**
@@ -9032,10 +9094,17 @@ export interface components {
              * @default 0
              */
             money: number;
+            /** Next Level Xp */
+            next_level_xp?: number | null;
             /** Number */
             number: number;
             /** Place Id */
             place_id?: string | null;
+            /**
+             * Points
+             * @default 0
+             */
+            points: number;
             /**
              * Resistances
              * @default []
@@ -9056,6 +9125,11 @@ export interface components {
              * @default []
              */
             worn: components["schemas"]["WornOut"][];
+            /**
+             * Xp
+             * @default 0
+             */
+            xp: number;
         };
         /**
          * ShortRest
@@ -9250,7 +9324,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 67
+             * @default 68
              */
             format: number;
             /**
