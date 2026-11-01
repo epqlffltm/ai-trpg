@@ -651,3 +651,20 @@ uv run ruff format --check .
 
 CI 는 `.github/workflows/story-server.yml` 이다. 린트, 모양, 의존성 취약점, 마이그레이션(적용, 누락, 되돌리기), 테스트와 커버리지(95% 이상)를 본다.
 PR 에서는 관문(`ci.yml`)이 바뀐 파일을 보고(`changed-servers.sh`) 이 워크플로를 부른다.
+
+### 장면 재기
+
+실제 모델로 장면을 써 보며 잰다(`scripts/try_scene.py`). 서버도 DB 도 쓰지 않고, 스크립트에 적은 예시 판(바닷가 마을의 여름 축제)으로 돈다.
+자동 테스트가 아니라 CI 에서 돌지 않는다. 판단은 사람이 한다. 서버와 같은 카드와 말 조각 나누기를 거친다.
+
+- `cast`: 장면의 인물 수(엔진의 상한 4명)가 모델마다 맞는가. 수를 바꿔(1~6) 말한 인물, 말 없는 인물, 장면에 없는 인물의 줄(버림), 조각의 수와 시간을 센다.
+- `flow`: 이벤트가 열린 행동의 답(장면 지시)과 이어서 선택지를 고른 행동의 답(반응)의 토큰과 원가. 지금은 둘을 따로 청구한다. 묶을지 정할 근거다.
+
+```powershell
+cd story-server
+uv run python -m scripts.try_scene --model gemma4:26b --cast 1 2 3 4 5 6 --repeat 3 --out scene.md
+uv run python -m scripts.try_scene --model gemma4:26b --check flow --repeat 3
+```
+
+외부 모델은 `--base-url` 에 OpenAI 모양의 주소를, `--api-key-env` 에 키가 든 환경 변수의 이름을 준다(키를 명령줄에 적지 않는다).
+단가(`--price-in`, `--price-out`, USD, 백만 토큰당, 모델 목록의 원가)를 주면 원가를 센다.
