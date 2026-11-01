@@ -8,7 +8,7 @@ import { useCallback, useState, type FormEvent } from 'react';
 import type { QuestStart, Ruleset, ScenarioDetail } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { ConditionsEditor } from './ConditionsEditor';
-import { KINDS_FOR, type Targets } from './conditionsForm';
+import { KINDS_FOR, withChapterKind, type Targets } from './conditionsForm';
 import { moneyText } from './currencyForm';
 import { hasQuestHints, questDraft, questHints, questLine, toQuestRule, withoutQuestRule, withQuestRule, type QuestDraft } from './questForm';
 import { MAX_STARTING_ITEMS } from './stacksForm';
@@ -105,7 +105,7 @@ function QuestForm({ scenario, rules, targets, row, done }: FormProps) {
         <p className="ui-field__hint">비우면 이 퀘스트는 성공하지 않습니다. 물건 지니기에는 이룰 때 그 물건을 가져가게(배달) 할 수 있습니다.</p>
         <ConditionsEditor
           label="이루는 조건"
-          kinds={KINDS_FOR.goal}
+          kinds={withChapterKind(KINDS_FOR.goal, targets)}
           drafts={draft.conditions}
           onChange={(conditions) => update({ conditions })}
           match={draft.match}
@@ -121,7 +121,7 @@ function QuestForm({ scenario, rules, targets, row, done }: FormProps) {
           <p className="ui-field__hint">비우면 이룰 때 드러나며 바로 성공합니다. 다른 퀘스트의 성공·실패로 이어 드러나게 할 수 있습니다.</p>
           <ConditionsEditor
             label="드러나는 조건"
-            kinds={KINDS_FOR.reveal}
+            kinds={withChapterKind(KINDS_FOR.reveal, targets)}
             drafts={draft.reveal}
             onChange={(reveal) => update({ reveal })}
             match={draft.revealMatch}
@@ -136,7 +136,7 @@ function QuestForm({ scenario, rules, targets, row, done }: FormProps) {
         <p className="ui-field__hint">진행 중에 채워지면 실패합니다. 같은 라운드에 이루는 조건도 채워지면 성공이 먼저입니다. 지켜야 할 물건(잃는다)과 인물(죽는다)에 씁니다.</p>
         <ConditionsEditor
           label="실패하는 조건"
-          kinds={KINDS_FOR.any}
+          kinds={withChapterKind(KINDS_FOR.any, targets)}
           drafts={draft.fail}
           onChange={(fail) => update({ fail })}
           match={draft.failMatch}

@@ -113,6 +113,22 @@ describe('TableRoom', () => {
     expect(reads).toBe(2);
   });
 
+  it('장이 넘어가면(chapter_changed) 테이블을 다시 읽어 머리의 지금 장이 바뀐다', async () => {
+    let reads = 0;
+    open({
+      [`GET ${BASE}`]: () => {
+        reads += 1;
+        const chapter = reads >= 2 ? { id: 'below', name: '지하', number: 2, total: 2, entered_round: 3 } : { id: 'arrival', name: '도착', number: 1, total: 2, entered_round: null };
+        return json(200, tableDetail(TABLE_ID, { chapter }));
+      },
+      [`GET ${BASE}/stream`]: (request) => sseResponse(request, [sse('table_event', { sequence: 4, type: 'chapter_changed', payload: { round: 3, number: 2 } }, '4-0-0')]),
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    expect(await screen.findByText(/1장: 도착 \(1\/2\)/)).toBeInTheDocument();
+    expect(await screen.findByText(/2장: 지하 \(2\/2\)/, undefined, { timeout: 3000 })).toBeInTheDocument();
+  });
+
   it('서버가 꺼지면 잠깐 쉬었다가 마지막 id 를 Last-Event-ID 로 보내며 다시 붙는다', async () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     let opened = 0;
