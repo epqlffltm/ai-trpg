@@ -177,6 +177,17 @@ function MonsterFields({ scenario, rules, items, monsterId, sheet, used, saving,
         </div>
       </fieldset>
       <NatureFields draft={draft} error={hints.natures} onChange={update} />
+      <TextField
+        label="쓰러뜨리면 주는 경험치"
+        inputMode="numeric"
+        value={draft.xp}
+        onChange={(event) => update({ xp: event.target.value })}
+        error={hints.xp ?? undefined}
+      />
+      <p className="ui-field__hint">
+        한 마리마다 한 번, 그 마리가 있던 장소의 일행이 받습니다. 각자 다 받는지 나누는지는 캐릭터 탭에서 정합니다.
+        {rules.progression ? '' : ' 이 룰북에는 성장이 없어 0 이 아니면 게시 점검이 알립니다.'}
+      </p>
       <fieldset className="scenario-choices">
         <legend>장비(착용한 물건)</legend>
         <StacksEditor

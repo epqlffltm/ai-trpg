@@ -1,11 +1,13 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/charactersForm.ts
-// 시나리오의 캐릭터 탭(추천 인원, 캐릭터 방식, 다시 굴리기, 기본 시트, 능력치를 정하는 방식의 최대 HP)의 입력. 순수한 함수다.
+// 시나리오의 캐릭터 탭(추천 인원, 캐릭터 방식, 다시 굴리기, 기본 시트, 능력치를 정하는 방식의 최대 HP,
+// 경험치를 나누는 법 #286)의 입력. 순수한 함수다.
 // 프리젠은 이 폼이 아니라 창에서 따로 저장한다(pregenForm.ts).
 //
 // - 기본 시트는 "이름과 설명만 쓰기"(custom)가 받는 숫자다. 룰북이 없으면 칸을 만들 수 없어 보내지 않는다(그대로 둔다)
 // - 최대 HP(기준값과 상한)는 능력치를 정하는 방식(manual, point_buy, rolled)이 쓴다. 그 방식이 없으면 보내지 않는다
+// - 경험치를 나누는 법(xp_split)은 몬스터와 사건이 준 경험치에만 쓴다. 퀘스트의 경험치는 각자 다 받는다. 늘 보낸다
 
-import type { CharacterMode, CharacterSheet, PlayerMadeHp, Ruleset, ScenarioDetail, ScenarioUpdate } from '../../../../api/types';
+import type { CharacterMode, CharacterSheet, PlayerMadeHp, Ruleset, ScenarioDetail, ScenarioUpdate, XpSplit } from '../../../../api/types';
 import { wholeNumber } from '../rulebooks/rulebookForm';
 import { sheetDraft, sheetHints, toSheet, withSkills, type SheetDraft } from './sheetForm';
 
@@ -16,6 +18,12 @@ export const PLAYER_MADE_HP_MAX = 999;
 export const CHARACTER_MODES: CharacterMode[] = ['pregen', 'custom', 'manual', 'point_buy', 'rolled'];
 
 const PLAYER_MADE: CharacterMode[] = ['manual', 'point_buy', 'rolled'];
+
+/** 경험치를 나누는 법의 차례와 글 */
+export const XP_SPLITS: { split: XpSplit; label: string; description: string }[] = [
+  { split: 'share', label: '받는 사람 수로 나눔', description: '그 자리의 일행이 나눠 받습니다. 나머지는 버립니다.' },
+  { split: 'each', label: '각자 다 받음', description: '그 자리의 일행이 저마다 그 경험치를 다 받습니다.' },
+];
 
 export type CharactersDraft = {
   minPlayers: number;
@@ -30,6 +38,8 @@ export type CharactersDraft = {
   defaultResistances: CharacterSheet['resistances'];
   hpBase: string;
   hpCap: string;
+  /** 몬스터와 사건이 준 경험치를 받는 사람들이 나누는가(#286 ②) */
+  xpSplit: XpSplit;
 };
 
 export function charactersDraft(scenario: ScenarioDetail, rules: Ruleset | null): CharactersDraft {
@@ -43,6 +53,7 @@ export function charactersDraft(scenario: ScenarioDetail, rules: Ruleset | null)
     defaultResistances: scenario.default_sheet?.resistances ?? [],
     hpBase: scenario.player_made_hp ? String(scenario.player_made_hp.base) : '',
     hpCap: scenario.player_made_hp ? String(scenario.player_made_hp.cap) : '',
+    xpSplit: scenario.xp_split,
   };
 }
 
@@ -103,6 +114,7 @@ export function toCharactersBody(draft: CharactersDraft, rules: Ruleset | null):
     recommended_players: { min: draft.minPlayers, max: draft.maxPlayers },
     character_modes: draft.modes,
     reroll_allowed: draft.modes.includes('rolled') && draft.reroll,
+    xp_split: draft.xpSplit,
   };
   if (rules && draft.defaultSheet && usesDefaultSheet(draft.modes)) body.default_sheet = withSkills(toSheet(draft.defaultSheet, rules), draft.defaultSkills, draft.defaultResistances);
   if (usesPlayerMadeHp(draft.modes)) body.player_made_hp = toPlayerMadeHp(draft);

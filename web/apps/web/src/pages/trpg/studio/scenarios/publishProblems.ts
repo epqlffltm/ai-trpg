@@ -38,6 +38,7 @@ const PROBLEMS: Record<string, ProblemText> = {
   quest_condition_impossible: { text: '이룰 수 없는 퀘스트의 조건이 있습니다.', section: 'quests' },
   quest_reveal_cycle: { text: '퀘스트가 드러나는 조건이 서로를 기다립니다.', section: 'quests' },
   currency_missing: { text: '값이나 돈을 적었는데 화폐가 없습니다.', section: 'items' },
+  progression_missing: { text: '경험치를 주는 것(퀘스트, 몬스터, 사건)이 있는데 룰북에 성장이 없습니다.', section: 'materials' },
   item_slot_invalid: { text: '룰북에 없는 장비 칸을 쓰는 물건이 있습니다.', section: 'items' },
   starting_wear_invalid: { text: '시작할 때의 착용이 맞지 않습니다.', section: 'items' },
   carried_wear_invalid: { text: '인물이나 몬스터의 착용이 맞지 않습니다.', section: 'npcs' },

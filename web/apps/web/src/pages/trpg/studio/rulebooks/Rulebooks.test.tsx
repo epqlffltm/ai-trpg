@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/studio/rulebooks/Rulebooks.test.tsx
 // 룰북 화면(B9). 마이페이지에서 빈 목록으로, 세이브 방식으로 만들기(본문), 고치기에서 방어 규칙 바꾸기(PATCH 본문),
-// 쓰는 시나리오가 있어 지우지 못함(409), 지우고 목록으로, 없는 룰북을 본다.
+// 고치기에서 성장(레벨표, #286)을 켜고 줄을 더하기(PATCH 본문), 쓰는 시나리오가 있어 지우지 못함(409), 지우고 목록으로, 없는 룰북을 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -103,6 +103,7 @@ describe('룰북', () => {
       template: 'srd5',
       armor: { mode: 'save', pierce_base: 10, save_target: 7 },
       resources: [],
+      progression: null,
     });
   });
 
@@ -130,7 +131,7 @@ describe('룰북', () => {
     await userEvent.click(form.getByRole('button', { name: '저장' }));
 
     expect(await screen.findByText('저장했습니다.')).toBeInTheDocument();
-    expect(sent(seen, 'PATCH', `/${ID}`)[0]?.body).toEqual({ title: '내 규칙', description: '', gm_guide: '', armor: null, resources: [] });
+    expect(sent(seen, 'PATCH', `/${ID}`)[0]?.body).toEqual({ title: '내 규칙', description: '', gm_guide: '', armor: null, resources: [], progression: null });
     expect(within(screen.getByRole('form', { name: '룰북' })).getByRole('radio', { name: '방어구가 막지 않음' })).toBeChecked();
   });
 
@@ -155,6 +156,37 @@ describe('룰북', () => {
     expect((sent(seen, 'PATCH', `/${ID}`)[0]?.body as { resources: unknown }).resources).toEqual([
       { key: 'resource', name: '마나', min: 0, max: { base: 5, ability: 'heart', cap: null }, start: 'max', rest: { short: null, long: { kind: 'fill', amount: null } }, each_round: null, at_min: null, at_max: null, visibility: 'everyone', holders: ['characters'] },
     ]);
+  });
+
+  it('고치기에서 성장을 켜고 레벨을 더하면 레벨표를 PATCH 로 보낸다. 경험치가 줄지 않으면 보내기 전에 알린다', async () => {
+    const { seen } = signedIn({
+      [`PATCH ${BASE}/${ID}`]: (request) => json(200, detail({ rules: { ...rules('srd5', null), progression: (request.body as { progression: unknown }).progression } })),
+    });
+    renderApp(`/trpg/studio/rulebooks/${ID}`);
+
+    const form = within(await screen.findByRole('form', { name: '룰북' }));
+    expect(form.queryByRole('group', { name: '레벨 2' })).toBeNull();
+    await userEvent.click(form.getByRole('checkbox', { name: /경험치를 모아 레벨이 오름/ }));
+    await userEvent.click(form.getByRole('button', { name: '레벨 더하기' }));
+    const second = within(form.getByRole('group', { name: '레벨 3' }));
+    expect(second.getByLabelText('누적 경험치')).toHaveValue('200');
+    await userEvent.clear(second.getByLabelText('누적 경험치'));
+    await userEvent.type(second.getByLabelText('누적 경험치'), '100');
+    expect(second.getByText('레벨 2의 경험치보다 커야 합니다.')).toBeInTheDocument();
+    expect(form.getByRole('button', { name: '저장' })).toBeDisabled();
+
+    await userEvent.type(second.getByLabelText('누적 경험치'), '0');
+    await userEvent.clear(second.getByLabelText('최대 HP 증가'));
+    await userEvent.type(second.getByLabelText('최대 HP 증가'), '4');
+    await userEvent.click(form.getByRole('button', { name: '저장' }));
+
+    expect(await screen.findByText('저장했습니다.')).toBeInTheDocument();
+    expect((sent(seen, 'PATCH', `/${ID}`)[0]?.body as { progression: unknown }).progression).toEqual({
+      levels: [
+        { xp: 100, max_hp: 0, points: 1 },
+        { xp: 1000, max_hp: 4, points: 1 },
+      ],
+    });
   });
 
   it('쓰는 시나리오가 있으면 지우지 못하고 그 제목을 알린다. 없으면 지우고 목록으로 간다', async () => {
