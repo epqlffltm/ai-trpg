@@ -416,6 +416,26 @@ SAMPLES = {
         'max_hp': 14,
         'points': 1,
     },
+    'experience_gained': {
+        'round': 2,
+        'source': {'kind': 'monster', 'id': '6b0e1c3a-5d2f-4a8e-9c71-2f4d8e6a1b91', 'name': '수로 쥐 2'},
+        'split': 'share',
+        'gains': [
+            {
+                'user_id': '22222222-2222-4333-8444-555555555555',
+                'character_name': '드워프 기사',
+                'xp': {
+                    'count': 25,
+                    'total': 125,
+                    'capped': False,
+                    'previous_level': 1,
+                    'level': 2,
+                    'max_hp': 13,
+                    'points': 1,
+                },
+            }
+        ],
+    },
     'chapter_changed': {
         'round': 2,
         'from': {'id': 'arrival', 'name': '도착'},

@@ -47,8 +47,9 @@ from app.assets.scenarios.snapshot import QuestConditionSnapshot, read_snapshot
 from app.engine.ruleset import Progression
 from app.events import recorder
 from app.events.models import EventType
+from app.rounds.experience import record_leveled
 from app.rounds.quest_handover import hand_over
-from app.tables import chapters, growth, items, quests, sheets
+from app.tables import chapters, items, quests, sheets
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, NpcStatus, QuestStatus, TableMember, TableMonster, TableNpc, TableQuest
 from app.tables.quest_changes import describe
@@ -309,22 +310,4 @@ def record_changes(session: AsyncSession, table: GameTable, changes: list[dict],
     """
     for payload in changes:
         recorder.record(session, table, EventType.QUEST_CHANGED, payload=payload, group=group)
-        for reward in payload['rewards']:
-            if growth.leveled(reward.get('xp')):
-                recorder.record(
-                    session, table, EventType.CHARACTER_LEVELED, payload=leveled_payload(reward), group=group
-                )
-
-
-def leveled_payload(reward: dict) -> dict:
-    """레벨이 오른 캐릭터의 이벤트(character_leveled). 누구이고, 몇에서 몇으로, 그 뒤의 최대 HP 와 쌓인 점수다."""
-    gained = reward['xp']
-    return {
-        'user_id': reward['user_id'],
-        'character_name': reward['character_name'],
-        'previous_level': gained['previous_level'],
-        'level': gained['level'],
-        'xp': gained['total'],
-        'max_hp': gained['max_hp'],
-        'points': gained['points'],
-    }
+        record_leveled(session, table, payload['rewards'], group=group)

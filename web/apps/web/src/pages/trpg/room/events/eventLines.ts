@@ -111,6 +111,13 @@ function styleText(payload: Payload): string {
   return style ? narrationStyleLabel(style) : '시나리오의 추천';
 }
 
+/** 받은 경험치(#286 ②). "경험치: 들쥐 1 · 기사 +12, 약사 +12" */
+function experienceText(payload: Payload): string {
+  const gains = Array.isArray(payload.gains) ? (payload.gains as Payload[]) : [];
+  const lines = gains.map((gain) => `${text(gain, 'character_name') ?? '누군가'} +${count(part(gain, 'xp') ?? {}, 'count') ?? '?'}`);
+  return `경험치: ${placeOf(payload, 'source') ?? '?'} · ${lines.join(', ') || '받은 사람 없음'}`;
+}
+
 function questText(payload: Payload): string {
   const status = text(payload, 'status');
   const known = status === 'hidden' || status === 'active' || status === 'succeeded' || status === 'failed';
@@ -374,6 +381,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   narration_model_unavailable: (p, ctx) => `서술 모델 ${model(p, ctx)}: 쓸 수 없습니다. 방장이 모델을 고를 때까지 서술하지 못합니다.`,
   happening_occurred: (p) => `일어난 일: ${text(p, 'name') ?? '?'}`,
   chapter_changed: (p) => `${count(p, 'number') ?? '?'}장: ${placeOf(p, 'to') ?? '?'}`,
+  experience_gained: (p) => experienceText(p),
   character_leveled: (p, ctx, e) => `${who(p, ctx, e)}: 레벨 ${count(p, 'previous_level') ?? '?'} → ${count(p, 'level') ?? '?'}`,
   monsters_appeared: (p) => wanderText(p),
 

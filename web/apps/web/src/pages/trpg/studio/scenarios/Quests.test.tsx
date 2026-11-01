@@ -225,9 +225,21 @@ describe('퀘스트·사건 입력', () => {
     expect(toQuestRule(HUNT, draft).reveal).toEqual([]);
     const happening = happeningDraft(undefined);
     expect(happeningHints(happening, COLLAPSE).fields.effects).toBeDefined();
-    const same = { ...happening, effects: [{ kind: 'move' as const, toPlace: GATE, fromPlace: GATE, npc: '', route: '', device: '' as const }] };
+    const same = { ...happening, effects: [{ kind: 'move' as const, toPlace: GATE, fromPlace: GATE, npc: '', route: '', device: '' as const, amount: '' }] };
     expect(happeningHints(same, COLLAPSE).effects[0]).toContain('같습니다');
     const rule = toHappening(COLLAPSE, { ...same, when: [{ kind: 'npc_dead', target: KEEPER, count: '1', consume: false }], effects: [{ ...same.effects[0]!, fromPlace: '' }] });
     expect(happeningLine(rule as unknown as HappeningRule, TARGETS)).toBe('늙은 문지기 죽음 ⇒ 모두 → 수도원 문');
+  });
+
+  it('경험치 주기는 양이 1~100,000 이고, 모두나 한 장소에 선 사람에게 준다(#286 ②)', () => {
+    const gift = { kind: 'give_xp' as const, toPlace: '', fromPlace: '', npc: '', route: '', device: '' as const, amount: '0' };
+    const draft = { ...happeningDraft(undefined), when: [{ kind: 'npc_dead' as const, target: KEEPER, count: '1', consume: false }], effects: [gift] };
+    expect(happeningHints(draft, COLLAPSE).effects[0]).toContain('경험치는 1~100,000');
+    const there = { ...draft, effects: [{ ...gift, amount: '40', fromPlace: GATE }] };
+    expect(happeningHints(there, COLLAPSE).effects).toEqual({});
+    const rule = toHappening(COLLAPSE, there);
+    expect(rule.effects).toEqual([{ kind: 'give_xp', amount: 40, from_place: GATE }]);
+    expect(happeningLine(rule as unknown as HappeningRule, TARGETS)).toBe('늙은 문지기 죽음 ⇒ 수도원 문의 사람에게 경험치 40');
+    expect(happeningDraft(rule as unknown as HappeningRule).effects[0]).toMatchObject({ kind: 'give_xp', amount: '40', fromPlace: GATE });
   });
 });

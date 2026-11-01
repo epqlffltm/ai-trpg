@@ -1,11 +1,12 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/EffectsEditor.tsx
 // 사건의 효과들을 고치는 칸(B9 퀘스트·사건 탭). 효과마다 종류를 고르면 그 종류의 칸이 나온다.
-// 캐릭터 옮기기(옮겨 갈 장소, 그 장소에 선 사람만이면 그 장소), 인물 옮기기(인물, 장소), 길의 문(판의 길, 장치). 검사는 happeningForm.ts.
+// 캐릭터 옮기기(옮겨 갈 장소, 그 장소에 선 사람만이면 그 장소), 인물 옮기기(인물, 장소), 길의 문(판의 길, 장치),
+// 경험치 주기(양, 그 장소에 선 사람만이면 그 장소, #286 ②). 검사는 happeningForm.ts.
 
-import { Button, SelectField } from '@ai-trpg/ui';
+import { Button, SelectField, TextField } from '@ai-trpg/ui';
 import type { DoorDevice, RouteRule } from '../../../../api/types';
 import type { Targets } from './conditionsForm';
-import { EFFECT_KINDS, effectKindLabel, MAX_EFFECTS, newEffect, routeKey, type EffectDraft, type EffectKind } from './happeningForm';
+import { EFFECT_KINDS, effectKindLabel, MAX_EFFECTS, MAX_GIVEN_XP, newEffect, routeKey, type EffectDraft, type EffectKind } from './happeningForm';
 import type { EntryChoice } from './useLoreEntries';
 
 type Props = {
@@ -36,6 +37,12 @@ export function EffectsEditor({ drafts, onChange, targets, routes, hints }: Prop
               <>
                 <ChoiceSelect label="옮겨 갈 장소" value={draft.toPlace} choices={targets.places} onChange={(toPlace) => change(index, { toPlace })} />
                 <ChoiceSelect label="누구를" value={draft.fromPlace} choices={targets.places} empty="모든 캐릭터" prefix="그 장소에 선 사람: " onChange={(fromPlace) => change(index, { fromPlace })} />
+              </>
+            ) : null}
+            {draft.kind === 'give_xp' ? (
+              <>
+                <TextField label={`경험치(1~${MAX_GIVEN_XP.toLocaleString('ko-KR')})`} inputMode="numeric" value={draft.amount} onChange={(event) => change(index, { amount: event.target.value })} />
+                <ChoiceSelect label="누구에게" value={draft.fromPlace} choices={targets.places} empty="모든 캐릭터" prefix="그 장소에 선 사람: " onChange={(fromPlace) => change(index, { fromPlace })} />
               </>
             ) : null}
             {draft.kind === 'move_npc' ? (

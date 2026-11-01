@@ -869,6 +869,9 @@ class TableMonster(Base):
     surprise: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)
     # 수치의 지금 값(#804). 규칙이 몬스터에게 준 수치만 있다(resources[].holders). 모양은 NPC 와 같다
     resources: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
+    # 쓰러뜨린 경험치(#286 ②)를 이미 줬는가. 한 마리는 한 번만 준다(쓰러졌다 죽어도, 다시 일어나도).
+    # 라운드가 닫힐 때 쓰러지거나 죽은 마리 중 아직 주지 않은 것에 준다(app/rounds/monster_xp.py)
+    xp_given: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

@@ -3640,7 +3640,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "character_leveled" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "character_leveled" | "experience_gained" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -3834,6 +3834,44 @@ export interface components {
             target: string;
         };
         /**
+         * GiveXpEffect
+         * @description 사건의 효과 하나: 경험치를 준다(give_xp, #286 ②).
+         *
+         *     from_place 가 없으면 죽지 않은 캐릭터 모두가, 있으면 그 장소에 서 있던 죽지 않은 캐릭터가 받는다.
+         *     같은 사건의 옮기기를 낸 뒤에 본다(옮겨진 곳에 선 사람이 받는다). 받는 사람들이 나누는지는 시나리오의 xp_split 이다.
+         *     룰북에 성장이 없으면 게시하지 못한다(progression_missing). 장소가 맵의 장소인지는 게시할 때 본다.
+         */
+        "GiveXpEffect-Input": {
+            /** Amount */
+            amount: number;
+            /** From Place */
+            from_place?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "give_xp";
+        };
+        /**
+         * GiveXpEffect
+         * @description 사건의 효과 하나: 경험치를 준다(give_xp, #286 ②).
+         *
+         *     from_place 가 없으면 죽지 않은 캐릭터 모두가, 있으면 그 장소에 서 있던 죽지 않은 캐릭터가 받는다.
+         *     같은 사건의 옮기기를 낸 뒤에 본다(옮겨진 곳에 선 사람이 받는다). 받는 사람들이 나누는지는 시나리오의 xp_split 이다.
+         *     룰북에 성장이 없으면 게시하지 못한다(progression_missing). 장소가 맵의 장소인지는 게시할 때 본다.
+         */
+        "GiveXpEffect-Output": {
+            /** Amount */
+            amount: number;
+            /** From Place */
+            from_place?: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "give_xp";
+        };
+        /**
          * Grade
          * @description 보이는 분류. 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 모델 목록의 파일에 적는다.
          * @enum {string}
@@ -3844,7 +3882,7 @@ export interface components {
          * @description 사건이 일어났을 때 하는 일의 종류(#367). 효과는 목록이라 종류가 늘어도 판의 모양은 그대로다.
          * @enum {string}
          */
-        HappeningEffectKind: "move" | "move_npc" | "lock_route" | "unlock_route" | "repair_route";
+        HappeningEffectKind: "move" | "move_npc" | "lock_route" | "unlock_route" | "repair_route" | "give_xp";
         /**
          * HappeningEffectSnapshot
          * @description 사건의 효과 하나. 캐릭터 옮기기(move), 인물 옮기기(move_npc, #282), 길의 문 다루기(#281)다.
@@ -3854,19 +3892,23 @@ export interface components {
          *     move_npc: 판 안의 인물 항목 하나(npc)를 to_place 로 옮긴다. 죽은 인물은 옮기지 않는다. from_place 는 없다.
          *     lock_route, unlock_route, repair_route: 두 끝이 from_place 와 to_place 인 길(방향은 보지 않는다)의 문을
          *     잠그고, 열고, 고친다. 잠그고 열기는 device 의 장치만, 비었으면 그 문의 장치 모두다. 형식 54 보다 옛 판에는 없다.
+         *     give_xp: 경험치 amount 를 준다(#286 ②). from_place 가 없으면 죽지 않은 캐릭터 모두가, 있으면 그 장소에 선 사람이
+         *     받는다. to_place 는 없다.
          */
         HappeningEffectSnapshot: {
+            /**
+             * Amount
+             * @default 0
+             */
+            amount: number;
             device?: components["schemas"]["DoorDevice"] | null;
             /** From Place */
             from_place?: string | null;
             kind: components["schemas"]["HappeningEffectKind"];
             /** Npc */
             npc?: string | null;
-            /**
-             * To Place
-             * Format: uuid
-             */
-            to_place: string;
+            /** To Place */
+            to_place?: string | null;
         };
         /**
          * HappeningRule
@@ -3878,12 +3920,13 @@ export interface components {
          *     물건을 잃는 조건(lose_item)도 쓸 수 있다. 같은 사건 항목이 퀘스트이기도 해도 된다(이름만 함께 쓴다).
          *     라운드가 닫힐 때 퀘스트를 본 뒤에 엔진이 본다. 일어난 것은 테이블에 적어 다시 일어나지 않는다
          *     (app/rounds/happenings.py).
-         *     효과는 캐릭터 옮기기(MoveEffect)와 인물 옮기기(MoveNpcEffect, #282)다. kind 로 가른다.
+         *     효과는 캐릭터 옮기기(MoveEffect)와 인물 옮기기(MoveNpcEffect, #282), 문 다루기(#281), 경험치 주기
+         *     (GiveXpEffect, #286 ②)다. kind 로 가른다.
          *     가리키는 사건과 장소, 옮기는 인물이 붙인 로어북에 있는지는 게시할 때 본다.
          */
         "HappeningRule-Input": {
             /** Effects */
-            effects: (components["schemas"]["MoveEffect-Input"] | components["schemas"]["MoveNpcEffect-Input"] | components["schemas"]["RouteDoorEffect-Input"] | components["schemas"]["RepairRouteEffect-Input"])[];
+            effects: (components["schemas"]["MoveEffect-Input"] | components["schemas"]["MoveNpcEffect-Input"] | components["schemas"]["RouteDoorEffect-Input"] | components["schemas"]["RepairRouteEffect-Input"] | components["schemas"]["GiveXpEffect-Input"])[];
             /**
              * Entry Id
              * Format: uuid
@@ -3904,12 +3947,13 @@ export interface components {
          *     물건을 잃는 조건(lose_item)도 쓸 수 있다. 같은 사건 항목이 퀘스트이기도 해도 된다(이름만 함께 쓴다).
          *     라운드가 닫힐 때 퀘스트를 본 뒤에 엔진이 본다. 일어난 것은 테이블에 적어 다시 일어나지 않는다
          *     (app/rounds/happenings.py).
-         *     효과는 캐릭터 옮기기(MoveEffect)와 인물 옮기기(MoveNpcEffect, #282)다. kind 로 가른다.
+         *     효과는 캐릭터 옮기기(MoveEffect)와 인물 옮기기(MoveNpcEffect, #282), 문 다루기(#281), 경험치 주기
+         *     (GiveXpEffect, #286 ②)다. kind 로 가른다.
          *     가리키는 사건과 장소, 옮기는 인물이 붙인 로어북에 있는지는 게시할 때 본다.
          */
         "HappeningRule-Output": {
             /** Effects */
-            effects: (components["schemas"]["MoveEffect-Output"] | components["schemas"]["MoveNpcEffect-Output"] | components["schemas"]["RouteDoorEffect-Output"] | components["schemas"]["RepairRouteEffect-Output"])[];
+            effects: (components["schemas"]["MoveEffect-Output"] | components["schemas"]["MoveNpcEffect-Output"] | components["schemas"]["RouteDoorEffect-Output"] | components["schemas"]["RepairRouteEffect-Output"] | components["schemas"]["GiveXpEffect-Output"])[];
             /** Entry Id */
             entry_id: string;
             /** @default all */
@@ -5413,6 +5457,11 @@ export interface components {
             vulnerable: string[];
             /** Ward */
             ward?: number | null;
+            /**
+             * Xp
+             * @default 0
+             */
+            xp: number;
         };
         /**
          * MonsterSheet
@@ -5469,6 +5518,11 @@ export interface components {
             vulnerable: string[];
             /** Ward */
             ward?: number | null;
+            /**
+             * Xp
+             * @default 0
+             */
+            xp: number;
         };
         /**
          * MonsterSheetProposal
@@ -5550,6 +5604,11 @@ export interface components {
             vulnerable: string[];
             /** Ward */
             ward?: number | null;
+            /**
+             * Xp
+             * @default 0
+             */
+            xp: number;
         };
         /**
          * MonsterUpdate
@@ -8681,6 +8740,8 @@ export interface components {
             wanders: components["schemas"]["WanderTable-Input"][];
             /** World Id */
             world_id?: string | null;
+            /** @default share */
+            xp_split: components["schemas"]["XpSplit"];
         };
         /**
          * ScenarioDetail
@@ -8766,6 +8827,7 @@ export interface components {
             wanders: components["schemas"]["WanderTable-Output"][];
             /** World Id */
             world_id: string | null;
+            xp_split: components["schemas"]["XpSplit"];
         };
         /**
          * ScenarioPage
@@ -8880,6 +8942,7 @@ export interface components {
             wanders?: components["schemas"]["WanderTable-Input"][] | null;
             /** World Id */
             world_id?: string | null;
+            xp_split?: components["schemas"]["XpSplit"] | null;
         };
         /**
          * SceneCastOut
@@ -9402,6 +9465,8 @@ export interface components {
              */
             wanders: components["schemas"]["WanderTableSnapshot"][];
             world: components["schemas"]["WorldSnapshot"] | null;
+            /** @default share */
+            xp_split: components["schemas"]["XpSplit"];
         };
         /**
          * Steal
@@ -10767,6 +10832,14 @@ export interface components {
             /** Slots */
             slots: string[];
         };
+        /**
+         * XpSplit
+         * @description 몬스터를 쓰러뜨리거나 판의 사건이 준 경험치를 받는 사람들이 어떻게 받는가(#286 ②). 시나리오의 제작자가 정한다.
+         *
+         *     퀘스트의 경험치는 이것과 상관없이 살아 있는 캐릭터마다 다 받는다.
+         * @enum {string}
+         */
+        XpSplit: "each" | "share";
         /**
          * ItemThrowOut
          * @description 물건을 던진 결과(#277). 엔진이 정했다(app/rounds/throws.py). 던졌으면 판정의 결과가 함께 있다.

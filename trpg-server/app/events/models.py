@@ -183,6 +183,10 @@ class EventType(enum.StrEnum):
     # 행한 사람이 없다. 경험치를 준 것(quest_changed 의 rewards[].xp)에 이어진다.
     # 누구(user_id, character_name)가 몇에서 몇 레벨로, 그 뒤의 경험치와 최대 HP 와 쌓인 능력치 점수
     CHARACTER_LEVELED = 'character_leveled'
+    # 캐릭터들이 경험치를 받았다(#286 ②). 쓰러뜨린 몬스터(app/rounds/monster_xp.py)나 판의 사건의 경험치 주기
+    # (app/rounds/happenings.py)다. 퀘스트의 보상은 quest_changed 에 적는다. 행한 사람이 없다.
+    # 무엇이 줬나(source: kind monster·happening, id, name), 나누는 법(split), 받은 사람마다 받은 것(gains)
+    EXPERIENCE_GAINED = 'experience_gained'
     # 캐릭터가 서 있는 곳에서 숨긴 길을 찾았다(app/rounds/map_actions.py). 찾은 길만 적는다. 못 찾았으면 빈 목록이다.
     # 굴린 판정은 적지 않는다. 숨긴 길이 있었는지가 드러난다
     PLACE_SEARCHED = 'place_searched'

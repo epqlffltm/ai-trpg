@@ -62,6 +62,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         npc_places=[place.model_dump() for place in data.npc_places],
         player_made_hp=data.player_made_hp.model_dump() if data.player_made_hp else None,
         reroll_allowed=data.reroll_allowed,
+        xp_split=data.xp_split,
         narration_style=data.narration_style,
         narration_model=data.narration_model,
         clock=data.clock.model_dump(),

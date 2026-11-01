@@ -239,6 +239,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.CHAPTER_CHANGED: ('round', 'from', 'to', 'number'),
     # 레벨은 공개다. 앉은 사람은 서로의 시트를 본다(#286)
     EventType.CHARACTER_LEVELED: ('user_id', 'character_name', 'previous_level', 'level', 'xp', 'max_hp', 'points'),
+    # 받은 경험치는 공개다. 무엇이 줬는지(쓰러진 마리, 일어난 사건)도 모두가 안다(#286 ②)
+    EventType.EXPERIENCE_GAINED: ('round', 'source', 'split', 'gains'),
     # 찾은 길은 공개다. 찾았으니 이제 모두가 아는 길이다. 굴린 판정은 처음부터 적지 않는다
     # 찾아낸 덫(#806 ①-b)도 공개다. 찾으면 테이블 모두가 안다
     EventType.PLACE_SEARCHED: ('round', 'character_name', 'place', 'found', 'items', 'traps'),
