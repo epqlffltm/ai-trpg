@@ -9,6 +9,7 @@ asset 서버, 모델은 가짜다(tests/assets.py, tests/models.py).
   - 닫힌 장소로 가면 422 cannot_move 이고 아무것도 저장하지 않는다
   - 장이 넘어간 행동 말에 그 장(chapter_id)과 장의 시작 글이 남고, 모델에도 그 글이 간다. 그 뒤로 새 장소가 보인다
   - 기록 내려받기에 장이 넘어간 표시가 남는다
+  - 목록의 진행에 지금 장의 차례와 이름이 실린다
 """
 
 import asyncio
@@ -130,3 +131,12 @@ async def test_the_transcript_marks_the_chapter(client: AsyncClient, app: FastAP
 
     assert response.status_code == status.HTTP_200_OK, response.text
     assert '장: 축제' in response.text
+
+
+async def test_the_list_shows_the_current_chapter(client: AsyncClient, app: FastAPI, started: dict, mine: dict):
+    before = (await client.get(CONVERSATIONS_URL, headers=mine)).json()['items'][0]['progress']
+    await act(client, app, mine, started['id'], {'kind': 'move', 'place': 'beach'})
+    after = (await client.get(CONVERSATIONS_URL, headers=mine)).json()['items'][0]['progress']
+
+    assert (before['chapter_number'], before['chapter_name']) == (1, '여름의 시작')
+    assert (after['chapter_number'], after['chapter_name']) == (2, '축제')

@@ -166,6 +166,7 @@ describe('순수한 함수', () => {
     expect(progressLine({ day: 3, slot: 'evening', deadline_days: null, ending: null, ending_name: null, epilogue: false })).toBe('3일째');
     expect(progressLine({ day: 9, slot: 'evening', deadline_days: 30, ending: 'spring', ending_name: '봄의 약속', epilogue: false })).toBe('끝: 봄의 약속');
     expect(progressLine({ day: 9, slot: 'evening', deadline_days: 30, ending: 'spring', ending_name: '봄의 약속', epilogue: true })).toBe('후일담 · 9일째');
+    expect(progressLine({ day: 3, slot: 'evening', deadline_days: 30, ending: null, ending_name: null, epilogue: false, chapter_number: 2, chapter_name: '축제' })).toBe('2장: 축제 · 3일째 · D-27');
     expect(progressLine(undefined)).toBeNull();
   });
 });

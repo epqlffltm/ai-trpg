@@ -95,10 +95,11 @@ export function eventNames(view: StoryView, cast: Pick<StoryViewCast, 'events'>)
   return cast.events.map((id) => eventName(view, id));
 }
 
-/** 세션 목록의 진행 한 줄. "3일째 · D-12", "끝: 봄의 약속", "후일담 · 5일째" */
+/** 세션 목록의 진행 한 줄. "3일째 · D-12", "2장: 축제 · 3일째", "끝: 봄의 약속", "후일담 · 5일째". 장이 없는 판은 장을 쓰지 않는다 */
 export function progressLine(progress: StoryProgress | null | undefined): string | null {
   if (!progress) return null;
   if (progress.ending !== null && !progress.epilogue) return `끝: ${progress.ending_name ?? progress.ending}`;
   const left = typeof progress.deadline_days === 'number' && !progress.epilogue ? Math.max(0, progress.deadline_days - progress.day) : null;
-  return [progress.epilogue ? '후일담' : null, `${progress.day}일째`, left !== null ? `D-${left}` : null].filter(Boolean).join(' · ');
+  const chapter = typeof progress.chapter_number === 'number' ? `${progress.chapter_number}장${progress.chapter_name ? `: ${progress.chapter_name}` : ''}` : null;
+  return [progress.epilogue ? '후일담' : null, chapter, `${progress.day}일째`, left !== null ? `D-${left}` : null].filter(Boolean).join(' · ');
 }
