@@ -22,6 +22,10 @@
     고친 문은 열린 채다. 이미 그렇게 되어 있는 장치는 적지 않는다. 문의 상태가 없는 테이블(문이 생기기 전에 시작)이면
     아무것도 하지 않는다. 다룬 문은 이벤트에 적지 않는다. 길의 상태는 테이블을 읽으면 보이고(아는 길만),
     서술은 일행이 그 길의 끝에 있을 때만 받는다.
+  - 경험치 주기(give_xp, #286 ②): 죽지 않은 캐릭터 모두(from_place 가 없다)나 그 장소에 서 있던 캐릭터가
+    amount 를 받는다. 나누는 법은 시나리오의 xp_split 이다. 같은 사건의 옮기기를 낸 뒤에 본다(옮겨진 곳에 선 사람).
+    성장이 없는 규칙이면 아무도 받지 않는다. 받은 것은 사건에 이어 experience_gained 로,
+    오른 레벨은 character_leveled 로 남는다.
   - 판의 순서로 하나씩 본다. 앞 사건이 옮긴 위치를 뒤 사건이 본다.
   - 라운드가 닫힐 때 퀘스트를 본 뒤, 기한을 보기 전에 본다(app/rounds/service.py 의 begin_closing).
     퀘스트의 성공과 실패로 일어나는 사건이 같은 라운드에 일어난다. 사건이 옮긴 곳에 닿아 이루는 퀘스트는
@@ -50,8 +54,9 @@ from app.assets.scenarios.snapshot import (
 from app.engine.action import DoorDevice
 from app.events import recorder
 from app.events.models import EventType, TableEvent
+from app.rounds.experience import record_leveled
 from app.rounds.quest_goals import all_met
-from app.tables import chapters, places, route_locks, sheets
+from app.tables import chapters, growth, places, route_locks, sheets
 from app.tables import npcs as table_npcs
 from app.tables.models import GameTable, TableHappening, TableMember, TableMonster, TableNpc
 
@@ -207,6 +212,43 @@ def door_changes(table: GameTable, snapshot: Snapshot, rule: HappeningSnapshot) 
     ]
 
 
+# 경험치를 준 것의 종류. 이벤트의 source.kind 에 적는다
+HAPPENING = 'happening'
+
+
+def xp_receivers(table: GameTable, effect: HappeningEffectSnapshot) -> list[TableMember]:
+    """
+    경험치 주기의 효과가 줄 사람들(#286 ②). 앉은 순서다.
+
+    죽지 않은 캐릭터다. from_place 가 있으면 그 장소에 서 있던 사람만이다.
+    """
+    return [
+        member
+        for member in table.members
+        if member.sheet is not None
+        and not sheets.is_dead(member)
+        and (effect.from_place is None or member.sheet.place_id == effect.from_place)
+    ]
+
+
+def give_experience(table: GameTable, snapshot: Snapshot, rule: HappeningSnapshot, round_number: int) -> list[dict]:
+    """
+    사건 하나의 경험치 주기(#286 ②)를 효과의 차례로 낸다. 받은 사람이 있는 효과마다 이벤트에 적을 모양을 돌려준다.
+
+    성장이 없는 규칙이면 아무도 받지 않는다(게시할 때 막는다).
+    """
+    progression = snapshot.rulebook.rules.progression
+    source = {'kind': HAPPENING, 'id': str(rule.entry_id), 'name': entry_name(snapshot, rule.entry_id)}
+    given = []
+    for effect in rule.effects:
+        if effect.kind != HappeningEffectKind.GIVE_XP:
+            continue
+        gains = growth.grant(xp_receivers(table, effect), effect.amount, snapshot.xp_split, progression)
+        if gains:
+            given.append({'round': round_number, 'source': source, 'split': snapshot.xp_split, 'gains': gains})
+    return given
+
+
 def entry_name(snapshot: Snapshot, entry_id: uuid.UUID) -> str:
     """사건 항목의 이름."""
     return next(entry.name for entry in quest_entries(snapshot) if entry.id == entry_id)
@@ -219,11 +261,14 @@ def happen(
     사건 하나를 일으킨다. 효과를 내고, 일어났다고 테이블에 적는다. 이벤트에 적을 모양을 돌려준다.
 
     캐릭터를 옮기고, 인물을 옮기고, 문을 다룬다(#281). 셋은 서로를 보지 않으므로 순서가 결과를 바꾸지 않는다.
+    그 뒤에 경험치를 준다(#286 ②). 옮겨진 곳에 선 사람이 받는다.
     옮긴 인물과 다룬 문은 테이블의 줄에만 적고 이벤트의 모양에는 싣지 않는다.
+    준 경험치는 experience 에 싣는다. 사건의 이벤트에는 적지 않고 뒤에 잇는 experience_gained 에 적는다.
     """
     moves = character_moves(table, snapshot, rule)
     moved_npcs = npc_moves(npcs, rule)
     doors = door_changes(table, snapshot, rule)
+    experience = give_experience(table, snapshot, rule, round_number)
     table.happenings.append(
         TableHappening(
             table_id=table.id,
@@ -241,6 +286,7 @@ def happen(
         'entry_id': str(rule.entry_id),
         'name': entry_name(snapshot, rule.entry_id),
         'moves': moves,
+        'experience': experience,
     }
 
 
@@ -284,12 +330,17 @@ def record_happenings(
 
     사건(happening_occurred) 뒤에 옮긴 사람마다 character_moved 를 잇는다. 어느 사건이 옮겼는지(happening)가 적힌다.
     사건마다 그 모양과 적은 이벤트를 돌려준다. 옮긴 쪽이 밟은 덫(#806 ②-c)을 그 이벤트에 잇는다.
+    준 경험치(#286 ②)는 옮긴 것 뒤에 experience_gained 로, 오른 레벨은 그 뒤에 character_leveled 로 잇는다.
     """
     recorded = []
     for payload in occurred:
-        event = recorder.record(session, table, EventType.HAPPENING_OCCURRED, payload=payload, group=group)
+        shown = {key: value for key, value in payload.items() if key != 'experience'}
+        event = recorder.record(session, table, EventType.HAPPENING_OCCURRED, payload=shown, group=group)
         recorded.append((payload, event))
         for move in payload['moves']:
             moved = {'round': payload['round'], **move, 'travel_minutes': None, 'happening': payload['entry_id']}
             recorder.record(session, table, EventType.CHARACTER_MOVED, payload=moved, cause=event)
+        for given in payload.get('experience', []):
+            gained = recorder.record(session, table, EventType.EXPERIENCE_GAINED, payload=given, cause=event)
+            record_leveled(session, table, given['gains'], cause=gained)
     return recorded

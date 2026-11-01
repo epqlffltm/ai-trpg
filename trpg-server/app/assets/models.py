@@ -97,6 +97,8 @@ SCENARIO_MAX_QUEST_RULES = 50
 QUEST_MAX_TIME_LIMIT_MINUTES = 365 * 24 * 60
 # 퀘스트 하나가 살아 있는 캐릭터마다 주는 경험치의 상한(#286). 레벨표의 경험치의 상한보다 작다
 QUEST_MAX_REWARD_XP = 100_000
+# 몬스터 한 마리와 사건의 효과 하나가 주는 경험치의 상한(#286 ②). 퀘스트의 것과 같다
+GRANT_MAX_XP = QUEST_MAX_REWARD_XP
 # 퀘스트 하나의 조건의 수와, 조건 하나가 세는 수(쓰러뜨린 마리, 가진 개수)의 상한
 QUEST_MAX_CONDITIONS = 5
 QUEST_CONDITION_MAX_COUNT = 99
@@ -326,6 +328,23 @@ QUEST_LINK_CONDITIONS = frozenset({QuestConditionKind.QUEST_SUCCEEDED, QuestCond
 FAIL_ONLY_CONDITIONS = frozenset({QuestConditionKind.LOSE_ITEM})
 
 
+class XpSplit(enum.StrEnum):
+    """
+    몬스터를 쓰러뜨리거나 판의 사건이 준 경험치를 받는 사람들이 어떻게 받는가(#286 ②). 시나리오의 제작자가 정한다.
+
+    퀘스트의 경험치는 이것과 상관없이 살아 있는 캐릭터마다 다 받는다.
+    """
+
+    # 받는 사람마다 다 받는다. 여럿이 잡아도 한 사람이 잡은 것과 같다
+    EACH = 'each'
+    # 받는 사람의 수로 나눈다. 나머지는 버린다. 혼자 잡으면 다 받는다
+    SHARE = 'share'
+
+
+# 정하지 않은 시나리오의 나누는 법
+DEFAULT_XP_SPLIT = XpSplit.SHARE
+
+
 class QuestMatch(enum.StrEnum):
     """퀘스트의 조건이 여럿일 때 언제 이룬 것인가."""
 
@@ -348,6 +367,8 @@ class HappeningEffectKind(enum.StrEnum):
     UNLOCK_ROUTE = 'unlock_route'
     # 길 하나의 부서진 문을 고친다(#281). 고친 문은 열린 채다. 다시 잠그려면 잠그는 효과를 잇는다
     REPAIR_ROUTE = 'repair_route'
+    # 경험치를 준다(#286 ②). 죽지 않은 캐릭터 모두이거나, 한 장소에 서 있던 캐릭터들이다. 나누는 법은 시나리오의 것이다
+    GIVE_XP = 'give_xp'
 
 
 class Visibility(enum.StrEnum):
@@ -654,6 +675,7 @@ class Scenario(AssetContent):
             name='player_made_hp',
         ),
         CheckConstraint(one_of('narration_style', NarrationStyle), name='narration_style_allowed'),
+        CheckConstraint(one_of('xp_split', XpSplit), name='xp_split_allowed'),
     )
 
     # 가리키는 대상이 assets 가 아니라 rulebooks 다. 룰북 자리에 세계관을 넣는 일을 DB 가 막는다.
@@ -692,6 +714,9 @@ class Scenario(AssetContent):
     # 켜면 방장이 테이블에서 특정한 사람에게 "한 번 더"를 줄 수 있다. 꺼져 있으면 방장도 주지 못한다.
     # 나쁜 눈이 나와도 그대로 가는 것이 이 시나리오의 뜻일 수 있다. 그래서 방장이 아니라 제작자가 정한다
     reroll_allowed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text('false'))
+
+    # 몬스터와 판의 사건이 준 경험치를 받는 사람들이 나누는가(#286 ②). 제작자가 정한다. 기본은 나눈다
+    xp_split: Mapped[str] = mapped_column(String(10), default=DEFAULT_XP_SPLIT, server_default=text("'share'"))
 
     # 추천 문체. 제작자가 이 시나리오에 어울린다고 고른 GM 의 문체다. 기본은 정통이다.
     # 테이블의 방장이 문체를 고르지 않으면 이것을 쓴다. 판에 굳히므로 나중에 바꿔도 진행 중인 테이블은 그대로다

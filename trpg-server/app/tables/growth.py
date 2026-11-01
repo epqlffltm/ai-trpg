@@ -4,7 +4,8 @@
 캐릭터의 성장(#286). 경험치를 모아 레벨이 오른다. 규칙은 판의 룰북의 레벨표(Ruleset.progression)다.
 
   - 캐릭터는 레벨 1, 경험치 0 에서 시작한다. 레벨은 모은 경험치와 레벨표로 정한다(level_of). 따로 적지 않는다.
-  - 경험치를 주는 것은 엔진뿐이다(퀘스트의 보상 …). 방장도 AI 도 주지 못한다.
+  - 경험치를 주는 것은 엔진뿐이다. 퀘스트의 보상(각자 다), 쓰러뜨린 몬스터와 판의 사건(#286 ②, 시나리오의
+    xp_split 대로 각자 다 또는 받는 사람 수로 나눔, share_of)이다. 방장도 AI 도 주지 못한다.
   - 경험치가 레벨표의 다음 줄에 닿으면 그 레벨이 된다. 한 번에 여러 레벨을 오를 수 있다.
     오른 레벨마다 최대 HP 에 그 줄의 양을 더하고(지금 HP 도 그만큼, 쓰러져 있으면 최대만), 능력치 점수를 쌓는다.
     최대 HP 는 시트의 상한(SHEET_MAX_HP)을 넘지 않는다. 경험치도 상한(PROGRESSION_MAX_XP)까지만 모은다.
@@ -15,9 +16,10 @@
 DB 를 모른다. 시트의 칸만 고친다. 저장은 부르는 쪽이 한다.
 """
 
+from app.assets.models import XpSplit
 from app.engine.ruleset import PROGRESSION_MAX_XP, Progression
 from app.engine.sheet import SHEET_MAX_HP
-from app.tables.models import TableSheet
+from app.tables.models import TableMember, TableSheet
 
 
 def level_of(xp: int, progression: Progression | None) -> int:
@@ -80,3 +82,30 @@ def gain(sheet: TableSheet, amount: int, progression: Progression | None) -> dic
 def leveled(gained: dict | None) -> bool:
     """그 경험치로 레벨이 올랐는가."""
     return gained is not None and gained['level'] > gained['previous_level']
+
+
+def share_of(amount: int, receivers: int, split: XpSplit) -> int:
+    """
+    한 사람이 받는 몫. 각자 다(each)면 그대로, 나눔(share)이면 받는 사람 수로 나눈 몫이다(나머지는 버린다).
+
+    받는 사람이 없으면 0 이다.
+    """
+    if receivers == 0:
+        return 0
+    return amount if split == XpSplit.EACH else amount // receivers
+
+
+def grant(members: list[TableMember], amount: int, split: XpSplit, progression: Progression | None) -> list[dict]:
+    """
+    그 사람들의 지금 캐릭터에게 경험치를 나눠 준다(몬스터, 사건, #286 ②). 앉은 순서로, 받은 사람마다
+    누구(user_id, character_name)와 받은 것(xp, gain 의 모양)을 돌려준다. 퀘스트의 보상(rewards)과 같은 모양이다.
+
+    몫이 0 이거나(나누어 떨어지지 않게 작다) 성장이 없는 규칙이면 아무도 받지 않는다(빈 목록).
+    """
+    each = share_of(amount, len(members), split)
+    given = [(member, gain(member.sheet, each, progression)) for member in members]
+    return [
+        {'user_id': str(member.user_id), 'character_name': member.character_name, 'xp': gained}
+        for member, gained in given
+        if gained is not None
+    ]

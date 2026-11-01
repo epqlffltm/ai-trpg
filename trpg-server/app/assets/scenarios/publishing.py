@@ -43,6 +43,7 @@ from app.assets.scenarios.schemas import (
     Encounter,
     FindCheck,
     ForceCheck,
+    GiveXpEffect,
     HappeningEffect,
     HappeningRule,
     ItemRule,
@@ -245,7 +246,7 @@ class Problem(enum.StrEnum):
     UNIQUE_MONSTER_REPEATED = 'unique_monster_repeated'
     # 돈을 쓰는 칸(물건의 값, 상인, 프리젠의 돈, 퀘스트의 돈의 보상)이 있는데 화폐가 없다(#278)
     CURRENCY_MISSING = 'currency_missing'
-    # 퀘스트가 경험치를 주는데 룰북에 성장(progression)이 없다(#286). 받은 경험치가 어디에도 쓰이지 않는다
+    # 경험치를 주는 것(퀘스트, 몬스터, 사건, #286)이 있는데 룰북에 성장(progression)이 없다. 받은 경험치가 쓰이지 않는다
     PROGRESSION_MISSING = 'progression_missing'
     # 아이템 규칙의 장비의 칸(slots)이 룰북의 규칙에 없다(#276)
     ITEM_SLOT_INVALID = 'item_slot_invalid'
@@ -608,6 +609,7 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             monster_sheet.vulnerable,
             monster_sheet.resistances,
             monster_sheet.nature,
+            monster_sheet.xp,
         )
         for monster_sheet in read_monster_sheets(scenario)
     ]
@@ -825,15 +827,25 @@ def uses_money(scenario: Scenario) -> bool:
     )
 
 
+def scenario_gives_xp(scenario: Scenario) -> bool:
+    """시나리오에 경험치를 주는 것이 있는가(#286). 퀘스트의 보상, 몬스터 시트, 사건의 경험치 주기다."""
+    return (
+        any(quest.reward_xp for quest in read_quest_rules(scenario))
+        or any(monster_sheet.xp for monster_sheet in read_monster_sheets(scenario))
+        or any(isinstance(effect, GiveXpEffect) for rule in read_happenings(scenario) for effect in rule.effects)
+    )
+
+
 def find_progression_problems(scenario: Scenario, ruleset: Ruleset | None) -> list[Problem]:
     """
-    경험치를 주는 퀘스트가 있으면 룰북에 성장이 있어야 한다(#286). 성장이 없는 규칙에서는 경험치가 쌓일 곳이 없다.
+    경험치를 주는 것(퀘스트의 보상, 몬스터, 사건의 경험치 주기, #286)이 있으면 룰북에 성장이 있어야 한다.
+    성장이 없는 규칙에서는 경험치가 쌓일 곳이 없다.
 
     룰북이 없으면 보지 않는다. 그때는 룰북이 없다는 문제(rulebook_missing)가 먼저다.
     """
     if ruleset is None:
         return []
-    if ruleset.progression is None and any(quest.reward_xp for quest in read_quest_rules(scenario)):
+    if ruleset.progression is None and scenario_gives_xp(scenario):
         return [Problem.PROGRESSION_MISSING]
     return []
 
@@ -1071,6 +1083,7 @@ HAPPENING_CONDITION_PROBLEMS = {
 def effect_places(effect: HappeningEffect) -> list[uuid.UUID]:
     """
     사건의 효과 하나가 옮기는 데 가리키는 장소들. 옮기는 곳과, 캐릭터를 옮기면 옮겨질 사람이 선 곳(있으면)이다.
+    경험치 주기(#286 ②)는 받는 사람이 선 곳(있으면)이다.
 
     문을 다루는 효과(#281)는 옮기지 않는다. 그 두 끝은 길로 본다(door_effect_invalid).
     """
@@ -1078,6 +1091,8 @@ def effect_places(effect: HappeningEffect) -> list[uuid.UUID]:
         return [effect.to_place]
     if isinstance(effect, MoveEffect):
         return [effect.to_place, effect.from_place]
+    if isinstance(effect, GiveXpEffect) and effect.from_place is not None:
+        return [effect.from_place]
     return []
 
 

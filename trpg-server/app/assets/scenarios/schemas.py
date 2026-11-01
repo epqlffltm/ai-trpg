@@ -39,9 +39,11 @@ from app.assets.models import (
     DEFAULT_SELL_PERCENT,
     DEFAULT_START_DAY,
     DEFAULT_START_HOUR,
+    DEFAULT_XP_SPLIT,
     DROP_CHANCE_MAX,
     ENCOUNTER_MAX_COUNT,
     FAIL_ONLY_CONDITIONS,
+    GRANT_MAX_XP,
     HAPPENING_MAX_EFFECTS,
     ITEM_STACK_MAX,
     MONEY_MAX,
@@ -91,6 +93,7 @@ from app.assets.models import (
     Rating,
     RouteVisibility,
     Surprise,
+    XpSplit,
 )
 from app.assets.scenarios.recommended_model import ModelState
 from app.assets.scenarios.snapshot import Snapshot
@@ -539,6 +542,9 @@ class MonsterSheet(BaseModel):
     resistances: Resistances = ()
     # 타고난 피해의 성질(#886 ③). 공격과 무기에 성질이 없을 때 그 몬스터의 피해의 성질이다(화염 정령). 비우면 없다
     nature: Key | None = None
+    # 쓰러뜨리면 주는 경험치(#286 ②). 한 마리마다 한 번, 그 장소에 있던 일행이 받는다(나누는 법은 시나리오의 xp_split).
+    # 0 이면 주지 않는다. 룰북에 성장이 없으면 게시하지 못한다(progression_missing)
+    xp: int = Field(default=0, ge=0, le=GRANT_MAX_XP)
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'MonsterSheet':
@@ -1527,8 +1533,29 @@ class RepairRouteEffect(RouteEnds):
     kind: Literal[HappeningEffectKind.REPAIR_ROUTE]
 
 
+class GiveXpEffect(BaseModel):
+    """
+    사건의 효과 하나: 경험치를 준다(give_xp, #286 ②).
+
+    from_place 가 없으면 죽지 않은 캐릭터 모두가, 있으면 그 장소에 서 있던 죽지 않은 캐릭터가 받는다.
+    같은 사건의 옮기기를 낸 뒤에 본다(옮겨진 곳에 선 사람이 받는다). 받는 사람들이 나누는지는 시나리오의 xp_split 이다.
+    룰북에 성장이 없으면 게시하지 못한다(progression_missing). 장소가 맵의 장소인지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[HappeningEffectKind.GIVE_XP]
+    amount: int = Field(ge=1, le=GRANT_MAX_XP)
+    from_place: uuid.UUID | None = None
+
+    @field_serializer('from_place')
+    def place_as_text(self, place: uuid.UUID | None) -> str | None:
+        """장소의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return None if place is None else str(place)
+
+
 HappeningEffect = Annotated[
-    MoveEffect | MoveNpcEffect | RouteDoorEffect | RepairRouteEffect, Field(discriminator='kind')
+    MoveEffect | MoveNpcEffect | RouteDoorEffect | RepairRouteEffect | GiveXpEffect, Field(discriminator='kind')
 ]
 HappeningEffects = Annotated[list[HappeningEffect], Field(min_length=1, max_length=HAPPENING_MAX_EFFECTS)]
 
@@ -1543,7 +1570,8 @@ class HappeningRule(BaseModel):
     물건을 잃는 조건(lose_item)도 쓸 수 있다. 같은 사건 항목이 퀘스트이기도 해도 된다(이름만 함께 쓴다).
     라운드가 닫힐 때 퀘스트를 본 뒤에 엔진이 본다. 일어난 것은 테이블에 적어 다시 일어나지 않는다
     (app/rounds/happenings.py).
-    효과는 캐릭터 옮기기(MoveEffect)와 인물 옮기기(MoveNpcEffect, #282)다. kind 로 가른다.
+    효과는 캐릭터 옮기기(MoveEffect)와 인물 옮기기(MoveNpcEffect, #282), 문 다루기(#281), 경험치 주기
+    (GiveXpEffect, #286 ②)다. kind 로 가른다.
     가리키는 사건과 장소, 옮기는 인물이 붙인 로어북에 있는지는 게시할 때 본다.
     """
 
@@ -1743,6 +1771,9 @@ class ScenarioCreate(AssetCreate):
     player_made_hp: PlayerMadeHp | None = None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
     reroll_allowed: bool = False
+    # 몬스터와 판의 사건이 준 경험치를 받는 사람들이 나누는가(#286 ②). each 는 각자 다, share 는 사람 수로 나눈다.
+    # 안 보내면 나눈다. 퀘스트의 경험치는 이것과 상관없이 각자 다 받는다
+    xp_split: XpSplit = DEFAULT_XP_SPLIT
     # 추천 문체. 테이블의 방장이 고르지 않으면 이것으로 서술한다. 안 보내면 정통이다
     narration_style: NarrationStyle = DEFAULT_NARRATION_STYLE
     # 추천 서술 모델의 이름표. 반드시 보낸다. 서비스 중인 모델이어야 한다(app/assets/scenarios/recommended_model.py)
@@ -1799,6 +1830,7 @@ class ScenarioUpdate(AssetUpdate):
     npc_places: NpcPlaces | None = None
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
+    xp_split: XpSplit | None = None
     narration_style: NarrationStyle | None = None
     # 비울 수 없다. 보내면 서비스 중인 모델이어야 한다
     narration_model: Slug | None = None
@@ -1864,6 +1896,7 @@ class ScenarioDetail(ScenarioSummary):
     npc_places: list[NpcPlace]
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
+    xp_split: XpSplit
     narration_style: NarrationStyle
     # 이 규칙 전에 만든 시나리오만 비어 있다
     narration_model: str | None

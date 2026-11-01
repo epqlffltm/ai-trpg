@@ -1,14 +1,17 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/happeningForm.ts
 // 사건 규칙 하나의 입력과 사건 규칙 목록을 바꾸는 것(B9 퀘스트·사건 탭, #367). 순수한 함수다.
 // 사건 규칙은 붙인 로어북의 사건 항목 하나다. 조건(1~5, 퀘스트의 것과 같다, 가져가기 없음)이 채워지면 한 번 일어나 효과(1~5)를 낸다.
-// 효과: 캐릭터 옮기기(모두, 또는 한 장소에 선 사람), 인물 옮기기, 길의 문 잠그기·열기(장치 하나 또는 모두), 부서진 문 고치기.
+// 효과: 캐릭터 옮기기(모두, 또는 한 장소에 선 사람), 인물 옮기기, 길의 문 잠그기·열기(장치 하나 또는 모두), 부서진 문 고치기,
+// 경험치 주기(모두, 또는 한 장소에 선 사람, #286 ②. 받는 사람들이 나누는지는 시나리오의 나누는 법이다).
 // 문의 효과는 판의 길(두 끝)을 가리킨다. 그 길에 문이 있는지는 게시 점검이 본다(happening_route_invalid).
 
 import type { DoorDevice, HappeningEffect, HappeningEffectBody, HappeningRule, HappeningRuleBody, QuestMatch } from '../../../../api/types';
+import { wholeNumber } from '../rulebooks/rulebookForm';
 import { conditionDrafts, conditionsHints, conditionLine, toConditions, type ConditionDraft, type Targets } from './conditionsForm';
 
 export const MAX_HAPPENINGS = 50;
 export const MAX_EFFECTS = 5;
+export const MAX_GIVEN_XP = 100_000;
 
 export type EffectKind = HappeningEffect['kind'];
 
@@ -18,6 +21,7 @@ const EFFECT_LABELS: Record<EffectKind, string> = {
   lock_route: '길의 문을 잠근다',
   unlock_route: '길의 문을 연다',
   repair_route: '부서진 문을 고친다',
+  give_xp: '경험치를 준다',
 };
 
 export const EFFECT_KINDS = Object.keys(EFFECT_LABELS) as EffectKind[];
@@ -26,23 +30,24 @@ export function effectKindLabel(kind: EffectKind): string {
   return EFFECT_LABELS[kind];
 }
 
-/** 효과 하나의 입력. 길은 "from|to"(판의 길의 두 끝), 장치는 '' 이면 그 문의 장치 모두 */
-export type EffectDraft = { kind: EffectKind; toPlace: string; fromPlace: string; npc: string; route: string; device: '' | DoorDevice };
+/** 효과 하나의 입력. 길은 "from|to"(판의 길의 두 끝), 장치는 '' 이면 그 문의 장치 모두, amount 는 주는 경험치 */
+export type EffectDraft = { kind: EffectKind; toPlace: string; fromPlace: string; npc: string; route: string; device: '' | DoorDevice; amount: string };
 
 export function routeKey(from: string, to: string): string {
   return `${from}|${to}`;
 }
 
 function effectDraft(effect: HappeningEffect): EffectDraft {
-  const blank: EffectDraft = { kind: effect.kind, toPlace: '', fromPlace: '', npc: '', route: '', device: '' };
+  const blank: EffectDraft = { kind: effect.kind, toPlace: '', fromPlace: '', npc: '', route: '', device: '', amount: '' };
   if (effect.kind === 'move') return { ...blank, toPlace: effect.to_place ?? '', fromPlace: effect.from_place ?? '' };
+  if (effect.kind === 'give_xp') return { ...blank, amount: String(effect.amount), fromPlace: effect.from_place ?? '' };
   if (effect.kind === 'move_npc') return { ...blank, npc: effect.npc, toPlace: effect.to_place };
   if (effect.kind === 'repair_route') return { ...blank, route: routeKey(effect.from_place, effect.to_place) };
   return { ...blank, route: routeKey(effect.from_place, effect.to_place), device: effect.device ?? '' };
 }
 
 export function newEffect(): EffectDraft {
-  return { kind: 'move', toPlace: '', fromPlace: '', npc: '', route: '', device: '' };
+  return { kind: 'move', toPlace: '', fromPlace: '', npc: '', route: '', device: '', amount: '' };
 }
 
 export type HappeningDraft = { when: ConditionDraft[]; match: QuestMatch; effects: EffectDraft[] };
@@ -60,6 +65,7 @@ function effectHint(effect: EffectDraft): string | null {
   }
   if (effect.kind === 'move_npc' && (effect.npc === '' || effect.toPlace === '')) return '옮길 인물과 장소를 골라 주세요.';
   if ((effect.kind === 'lock_route' || effect.kind === 'unlock_route' || effect.kind === 'repair_route') && effect.route === '') return '길을 골라 주세요.';
+  if (effect.kind === 'give_xp' && wholeNumber(effect.amount, 1, MAX_GIVEN_XP) === null) return `경험치는 1~${MAX_GIVEN_XP.toLocaleString('ko-KR')} 사이의 정수입니다.`;
   return null;
 }
 
@@ -88,6 +94,8 @@ function toEffect(effect: EffectDraft): HappeningEffectBody {
       return { kind: 'move_npc', npc: effect.npc, to_place: effect.toPlace };
     case 'repair_route':
       return { kind: 'repair_route', from_place: from, to_place: to };
+    case 'give_xp':
+      return { kind: 'give_xp', amount: Number(effect.amount.trim()), from_place: effect.fromPlace || null };
     default:
       return { kind: effect.kind, from_place: from, to_place: to, device: effect.device || null };
   }
@@ -127,6 +135,8 @@ export function effectLine(effect: HappeningEffect, targets: Targets): string {
       return `${place(effect.from_place)}–${place(effect.to_place)}의 ${device(effect.device)} 열림`;
     case 'repair_route':
       return `${place(effect.from_place)}–${place(effect.to_place)}의 문 고침`;
+    case 'give_xp':
+      return effect.from_place ? `${place(effect.from_place)}의 사람에게 경험치 ${effect.amount}` : `모두에게 경험치 ${effect.amount}`;
   }
 }
 

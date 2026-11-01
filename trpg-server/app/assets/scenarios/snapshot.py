@@ -24,6 +24,7 @@ from app.assets.models import (
     DEFAULT_ROUND_MINUTES,
     DEFAULT_START_DAY,
     DEFAULT_START_HOUR,
+    DEFAULT_XP_SPLIT,
     CharacterMode,
     HappeningEffectKind,
     ItemKind,
@@ -44,6 +45,7 @@ from app.assets.models import (
     Scenario,
     Surprise,
     World,
+    XpSplit,
 )
 from app.assets.scenarios.upgrades import UPGRADES
 from app.calendar.clock import TimeOfDay
@@ -157,7 +159,9 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      비워도 되는 칸이라 형식이 그대로다. 미리 놓인 덫(#806 ②, traps: 장소, 덫 물건, 처음부터 아는가)도 같다.
 #      장(#481, chapters: id, 이름, 넘어오는 조건, 여는 장소와 퀘스트)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 #  68: 룰북의 규칙에 성장이 있다(#286). rulebook.rules.progression: 레벨표(레벨마다 누적 경험치, 최대 HP, 능력치 점수).
-#      없으면(null) 성장하지 않는다. 퀘스트의 경험치의 보상(quests[].reward_xp)도 함께 더했다. 비워도 되는 칸이다
+#      없으면(null) 성장하지 않는다. 퀘스트의 경험치의 보상(quests[].reward_xp)도 함께 더했다. 비워도 되는 칸이다.
+#      몬스터가 주는 경험치(monsters[].xp), 사건의 경험치 주기(happenings[].effects[] 의 give_xp: amount, from_place),
+#      받는 사람들이 나누는 법(xp_split, #286 ②)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 68
 
 
@@ -388,13 +392,16 @@ class HappeningEffectSnapshot(BaseModel):
     move_npc: 판 안의 인물 항목 하나(npc)를 to_place 로 옮긴다. 죽은 인물은 옮기지 않는다. from_place 는 없다.
     lock_route, unlock_route, repair_route: 두 끝이 from_place 와 to_place 인 길(방향은 보지 않는다)의 문을
     잠그고, 열고, 고친다. 잠그고 열기는 device 의 장치만, 비었으면 그 문의 장치 모두다. 형식 54 보다 옛 판에는 없다.
+    give_xp: 경험치 amount 를 준다(#286 ②). from_place 가 없으면 죽지 않은 캐릭터 모두가, 있으면 그 장소에 선 사람이
+    받는다. to_place 는 없다.
     """
 
     kind: HappeningEffectKind
-    to_place: uuid.UUID
+    to_place: uuid.UUID | None = None
     from_place: uuid.UUID | None = None
     npc: uuid.UUID | None = None
     device: DoorDevice | None = None
+    amount: int = 0
 
 
 class HappeningSnapshot(BaseModel):
@@ -608,6 +615,8 @@ class MonsterSnapshot(BaseModel):
     resistances: Resistances = ()
     # 타고난 피해의 성질(#886 ③). 공격과 무기에 성질이 없을 때 쓴다. 그 전의 판의 몬스터는 없다
     nature: str | None = None
+    # 쓰러뜨리면 주는 경험치(#286 ②). 그 전의 판의 몬스터는 주지 않는다
+    xp: int = 0
 
 
 class EncounterSnapshot(BaseModel):
@@ -753,6 +762,8 @@ class Snapshot(BaseModel):
     player_made_hp: PlayerMadeHpSnapshot | None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 제작자가 정한 것이다
     reroll_allowed: bool
+    # 몬스터와 사건이 준 경험치를 받는 사람들이 나누는가(#286 ②). 그 전의 판은 나눈다(share)
+    xp_split: XpSplit = DEFAULT_XP_SPLIT
     # 추천 문체. 테이블의 방장이 문체를 고르지 않으면 이것으로 서술한다
     narration_style: NarrationStyle
     # 게임 안의 시계. 테이블의 시계가 여기서 시작한다(app/calendar)
@@ -889,12 +900,12 @@ class Snapshot(BaseModel):
     @model_validator(mode='after')
     def require_progression_for_xp(self) -> 'Snapshot':
         """
-        경험치를 주는 퀘스트가 있으면 룰북에 성장이 있는지 본다(#286). 아니면 거부한다.
+        경험치를 주는 것(퀘스트, 몬스터, 사건, #286)이 있으면 룰북에 성장이 있는지 본다. 아니면 거부한다.
 
         게시할 때 이미 막는다(progression_missing). 판을 읽는 쪽(보상)은 경험치가 있으면 성장도 있다고 믿고 쓴다.
         """
-        if self.rulebook.rules.progression is None and any(quest.reward_xp for quest in self.quests):
-            raise ValueError('경험치를 주는 퀘스트가 있는데 룰북에 성장이 없습니다.')
+        if self.rulebook.rules.progression is None and gives_xp(self):
+            raise ValueError('경험치를 주는 것(퀘스트, 몬스터, 사건)이 있는데 룰북에 성장이 없습니다.')
         return self
 
     @model_validator(mode='after')
@@ -1164,6 +1175,15 @@ def quest_entries(snapshot: Snapshot) -> list[EntrySnapshot]:
     return [entry for lorebook in snapshot.lorebooks for entry in lorebook.entries if entry.kind == LoreKind.EVENT]
 
 
+def gives_xp(snapshot: Snapshot) -> bool:
+    """판에 경험치를 주는 것이 있는가(#286). 퀘스트의 보상, 몬스터, 사건의 경험치 주기다."""
+    return (
+        any(quest.reward_xp for quest in snapshot.quests)
+        or any(monster.xp for monster in snapshot.monsters)
+        or any(effect.kind == HappeningEffectKind.GIVE_XP for rule in snapshot.happenings for effect in rule.effects)
+    )
+
+
 def quest_rule_of(snapshot: Snapshot, entry_id: uuid.UUID) -> QuestRuleSnapshot:
     """사건 항목 하나의 퀘스트 규칙. 적어 둔 규칙이 있으면 그것, 없으면 숨긴 채로 시작하고 보상이 없다."""
     own = next((rule for rule in snapshot.quests if rule.entry_id == entry_id), None)
@@ -1231,10 +1251,11 @@ def snapshot_monster(
     vulnerable: list[str] | None = None,
     resistances: Resistances = (),
     nature: str | None = None,
+    xp: int = 0,
 ) -> MonsterSnapshot:
     """
     몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어와 불굴 세이브, 면역에 더하고 빼는 성질, 저항과
-    타고난 피해의 성질(#886 ③)을 굳힌다.
+    타고난 피해의 성질(#886 ③), 쓰러뜨리면 주는 경험치(#286 ②)를 굳힌다.
     """
     return MonsterSnapshot(
         id=monster.id,
@@ -1253,6 +1274,7 @@ def snapshot_monster(
         vulnerable=vulnerable or [],
         resistances=resistances,
         nature=nature,
+        xp=xp,
     )
 
 
@@ -1325,6 +1347,7 @@ def build_snapshot(
         npc_places=[NpcPlaceSnapshot(**place) for place in scenario.npc_places],
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
+        xp_split=scenario.xp_split,
         narration_style=scenario.narration_style,
         clock=ClockSnapshot(**scenario.clock),
         rulebook=snapshot_rulebook(rulebook),

@@ -89,6 +89,7 @@ def to_detail(scenario: Scenario, found: ModelStatus | None) -> ScenarioDetail:
         npc_places=scenario.npc_places,
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
+        xp_split=scenario.xp_split,
         narration_style=scenario.narration_style,
         narration_model=scenario.narration_model,
         narration_model_status=to_status_out(found),
