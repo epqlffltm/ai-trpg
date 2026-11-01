@@ -12,6 +12,7 @@ import { AssetLoad } from '../AssetLoad';
 import { kindText, studioPath } from '../studioKinds';
 import { useSavedNotice } from '../useSavedNotice';
 import { BasicsTab } from './BasicsTab';
+import { ChaptersTab } from './ChaptersTab';
 import { CharactersTab } from './CharactersTab';
 import { CheckPanel } from './CheckPanel';
 import { ItemsTab } from './ItemsTab';
@@ -82,6 +83,7 @@ function panelOf(tab: ScenarioTab, scenario: ScenarioDetail, goTo: (tab: Scenari
   if (tab === 'map') return <MapTab scenario={scenario} goTo={goTo} />;
   if (tab === 'monsters') return <MonstersTab scenario={scenario} goTo={goTo} />;
   if (tab === 'quests') return <QuestsTab scenario={scenario} goTo={goTo} />;
+  if (tab === 'chapters') return <ChaptersTab scenario={scenario} />;
   if (tab === 'listing') return <ListingTab scenario={scenario} />;
   return <PublishTab scenario={scenario} goTo={goTo} />;
 }

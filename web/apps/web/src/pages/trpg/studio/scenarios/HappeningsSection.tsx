@@ -8,7 +8,7 @@ import { useCallback, useState, type FormEvent } from 'react';
 import type { ScenarioDetail } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { ConditionsEditor } from './ConditionsEditor';
-import { KINDS_FOR, type Targets } from './conditionsForm';
+import { KINDS_FOR, withChapterKind, type Targets } from './conditionsForm';
 import { EffectsEditor } from './EffectsEditor';
 import { eventRows, type EventRow } from './eventRows';
 import { happeningDraft, happeningHints, happeningLine, hasHappeningHints, MAX_HAPPENINGS, toHappening, withHappening, withoutHappening, type HappeningDraft } from './happeningForm';
@@ -99,7 +99,7 @@ function HappeningForm({ scenario, targets, row, done }: FormProps) {
         <legend>일어나는 조건</legend>
         <ConditionsEditor
           label="일어나는 조건"
-          kinds={KINDS_FOR.any}
+          kinds={withChapterKind(KINDS_FOR.any, targets)}
           drafts={draft.when}
           onChange={(when) => setDraft((current) => ({ ...current, when }))}
           match={draft.match}

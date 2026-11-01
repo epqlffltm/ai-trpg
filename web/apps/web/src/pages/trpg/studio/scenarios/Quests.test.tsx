@@ -11,7 +11,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
-import { conditionDrafts, conditionLine, conditionsHints, toConditions, type Targets } from './conditionsForm';
+import { conditionDrafts, conditionLine, conditionsHints, KINDS_FOR, toConditions, withChapterKind, type Targets } from './conditionsForm';
 import { happeningDraft, happeningHints, happeningLine, toHappening } from './happeningForm';
 import { questDraft, toQuestRule } from './questForm';
 
@@ -207,7 +207,16 @@ describe('퀘스트·사건 입력', () => {
     expect(conditionsHints(drafts, HUNT)).toEqual({});
     expect(conditionsHints([{ ...drafts[0]!, chapter: '' }], HUNT)[0]).toBe('장을 골라 주세요.');
     expect(toConditions(drafts, true)).toEqual([{ kind: 'chapter_at_least', chapter: 'below', count: 1, consume: false }]);
-    expect(conditionLine({ kind: 'chapter_at_least', chapter: 'below', count: 1, consume: false }, TARGETS)).toBe('장 below 이상');
+    const below = { kind: 'chapter_at_least' as const, chapter: 'below', count: 1, consume: false };
+    expect(conditionLine(below, { ...TARGETS, chapters: [{ id: 'below', name: '지하' }] })).toBe('「지하」 장 이상');
+    // 시나리오에 없는 장이면 적힌 이름표를 그대로 보인다
+    expect(conditionLine(below, TARGETS)).toBe('「below」(찾을 수 없음) 장 이상');
+  });
+
+  it('장이 있는 시나리오에서만 조건에 장을 고를 수 있다', () => {
+    expect(withChapterKind(KINDS_FOR.goal, TARGETS)).toEqual(KINDS_FOR.goal);
+    expect(withChapterKind(KINDS_FOR.goal, { ...TARGETS, chapters: [] })).toEqual(KINDS_FOR.goal);
+    expect(withChapterKind(KINDS_FOR.any, { ...TARGETS, chapters: [{ id: 'below', name: '지하' }] })).toEqual([...KINDS_FOR.any, 'chapter_at_least']);
   });
 
   it('진행 중으로 시작하면 드러나는 조건을 보내지 않는다. 사건은 효과가 있어야 하고 옮기는 곳이 같으면 막는다', () => {

@@ -74,6 +74,13 @@ const PROBLEMS: Record<string, ProblemText> = {
   encounter_map_missing: { text: '조우가 있는데 시작 장소가 없습니다.', section: 'monsters' },
   wander_off_map: { text: '맵에 없는 장소의 무작위 조우 표가 있거나, 맵이 없는데 무작위 조우 표가 있습니다.', section: 'monsters' },
   wander_monster_missing: { text: '시트가 없는 몬스터를 적은 무작위 조우 표가 있습니다.', section: 'monsters' },
+  chapter_place_off_map: { text: '맵에 없는 장소를 여는 장이 있습니다.', section: 'chapters' },
+  chapter_quest_missing: { text: '붙인 로어북에 없는 항목을 퀘스트로 여는 장이 있습니다.', section: 'chapters' },
+  chapter_quest_not_event: { text: '사건이 아닌 항목을 퀘스트로 여는 장이 있습니다.', section: 'chapters' },
+  chapter_condition_missing: { text: '장으로 넘어오는 조건이 가리키는 것이 없습니다.', section: 'chapters' },
+  chapter_condition_invalid: { text: '장으로 넘어오는 조건이 맞지 않는 종류를 가리킵니다.', section: 'chapters' },
+  chapter_condition_impossible: { text: '채울 수 없는 장의 넘어오는 조건이 있습니다.', section: 'chapters' },
+  chapter_start_locked: { text: '시작 장소를 첫 장 뒤의 장이 엽니다. 시작 장소는 처음부터 열려 있어야 합니다.', section: 'chapters' },
 };
 
 /** 문제 하나의 글과 묶음. 모르는 이름이면 이름 그대로, 묶음은 없다 */

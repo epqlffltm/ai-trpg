@@ -6,8 +6,8 @@
 // - 퀘스트 잇기(성공했다, 실패했다)는 드러나는 조건과 실패하는 조건, 사건의 조건에 쓴다. 자기 자신은 가리키지 못한다
 // - 물건 잃기는 실패하는 조건과 사건의 조건에만 쓴다
 // - 한 목록에 같은 종류의 같은 대상은 한 줄, 5 줄까지
-// - 장(chapter_at_least, #481)은 대상(target) 대신 장의 id(chapter)를 적는다. 고르는 칸은 장의 탭이 생길 때 더한다.
-//   그 전에는 판에 적힌 것을 그대로 보이고 그대로 보낸다
+// - 장(chapter_at_least, #481)은 대상(target) 대신 장의 id(chapter)를 적는다. 시나리오의 장 가운데서 고른다(Targets.chapters).
+//   장이 없는 시나리오에서는 고를 수 없다(withChapterKind). 장의 넘어오는 조건에는 쓰지 않는다(서버도 받지 않는다)
 
 import type { QuestCondition, QuestConditionBody, QuestConditionKind } from '../../../../api/types';
 import { wholeNumber } from '../rulebooks/rulebookForm';
@@ -56,8 +56,13 @@ export const KINDS_FOR = {
   any: ['reach_place', 'defeat_monster', 'hold_item', 'defeat_npc', 'npc_dead', 'lose_item', 'quest_succeeded', 'quest_failed'],
 } satisfies Record<string, QuestConditionKind[]>;
 
-/** 고를 대상들. 종류마다 이름이 있는 목록이다 */
-export type Targets = Record<TargetKind, EntryChoice[]>;
+/** 고를 대상들. 종류마다 이름이 있는 목록이다. chapters 는 장(chapter_at_least)이 고르는 시나리오의 장(id, 이름)이다 */
+export type Targets = Record<TargetKind, EntryChoice[]> & { chapters?: EntryChoice[] };
+
+/** 장이 있는 시나리오면 그 목록의 종류에 장(chapter_at_least)을 더한다. 장이 없으면 그대로 */
+export function withChapterKind(kinds: QuestConditionKind[], targets: Targets): QuestConditionKind[] {
+  return (targets.chapters ?? []).length > 0 ? [...kinds, 'chapter_at_least'] : kinds;
+}
 
 export function kindLabel(kind: QuestConditionKind): string {
   return KIND_LABELS[kind];
@@ -124,7 +129,13 @@ export function toConditions(drafts: ConditionDraft[], allowConsume: boolean): Q
   );
 }
 
-/** 조건 한 줄. "구울 3마리를 쓰러뜨린다", "수도원 문에 닿는다" */
+/** 장의 이름(「축제」). 시나리오에 없는 장이면 적힌 id 를 그대로 */
+function chapterName(chapter: string | null | undefined, targets: Targets): string {
+  const found = (targets.chapters ?? []).find((one) => one.id === chapter);
+  return found ? `「${found.name}」` : `「${chapter ?? '?'}」(찾을 수 없음)`;
+}
+
+/** 조건 한 줄. "구울 3마리를 쓰러뜨린다", "수도원 문에 닿는다", "「축제」 장 이상" */
 export function conditionLine(condition: Pick<QuestCondition, 'kind' | 'target' | 'chapter' | 'count' | 'consume'>, targets: Targets): string {
   const kind = targetKindOf(condition.kind);
   const name = (kind ? targets[kind].find((one) => one.id === condition.target)?.name : undefined) ?? '(찾을 수 없음)';
@@ -146,6 +157,6 @@ export function conditionLine(condition: Pick<QuestCondition, 'kind' | 'target' 
     case 'quest_failed':
       return `「${name}」 실패`;
     case 'chapter_at_least':
-      return `장 ${condition.chapter ?? '?'} 이상`;
+      return `${chapterName(condition.chapter, targets)} 장 이상`;
   }
 }

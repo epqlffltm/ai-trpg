@@ -1,8 +1,9 @@
 // web/apps/web/src/pages/trpg/room/RoomHeader.tsx
-// 테이블 방의 머리. 제목, 상태, 시나리오(소개로), 스트림의 상태, 기록 받기(시작한 뒤), 나가기.
+// 테이블 방의 머리. 제목, 상태, 지금 장(장이 있는 판, #481), 시나리오(소개로), 스트림의 상태, 기록 받기(시작한 뒤), 나가기.
+// 장은 엔진이 넘긴다. 넘어가면 이벤트(chapter_changed)가 오고 테이블을 다시 읽어 바뀐다. 다음 장의 이름은 서버가 주지 않는다.
 
 import { Link } from 'react-router';
-import type { TableDetail } from '../../../api/types';
+import type { ChapterOut, TableDetail } from '../../../api/types';
 import { tableStatusLabel } from '../../home/labels';
 import { LeaveButton } from './LeaveButton';
 import { TranscriptButton } from './transcript/TranscriptButton';
@@ -15,6 +16,7 @@ export function RoomHeader({ table, stream }: { table: TableDetail; stream: Stre
         <h1>{table.title}</h1>
         <p className="hint">
           {tableStatusLabel(table.status)} · {table.member_count}/{table.capacity}명 ·{' '}
+          {table.chapter ? <span className="room__chapter">{chapterLabel(table.chapter)} · </span> : null}
           <Link to={`/trpg/scenarios/${table.scenario_id}`}>시나리오 소개</Link>
         </p>
       </div>
@@ -25,6 +27,11 @@ export function RoomHeader({ table, stream }: { table: TableDetail; stream: Stre
       </div>
     </header>
   );
+}
+
+/** 지금 장. "2장: 숲 (2/3)" */
+export function chapterLabel(chapter: ChapterOut): string {
+  return `${chapter.number}장: ${chapter.name} (${chapter.number}/${chapter.total})`;
 }
 
 /** 실시간으로 받고 있는지. 끊겨 다시 붙는 중이면 알린다(그동안의 것은 다시 붙으면 온다) */

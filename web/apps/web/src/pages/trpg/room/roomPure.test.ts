@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../../api/errors';
-import { streamLabel } from './RoomHeader';
+import { chapterLabel, streamLabel } from './RoomHeader';
 import { describeChatProblem, describeStartProblem } from './roomProblem';
 import type { TableEvent } from '../../../api/types';
 import { event } from '../../../test/tableFixtures';
@@ -76,6 +76,12 @@ describe('streamLabel', () => {
     expect(streamLabel({ state: 'open' })).toBeNull();
     expect(streamLabel({ state: 'stopped', reason: 'table_ended' })).toBeNull();
     expect(streamLabel({ state: 'reconnecting', inMs: 2500 })).toMatch(/3초 뒤/);
+  });
+});
+
+describe('chapterLabel', () => {
+  it('지금 장을 몇째 장과 이름, 판의 장 몇 개 중인지로 보인다', () => {
+    expect(chapterLabel({ id: 'below', name: '지하', number: 2, total: 3, entered_round: 4 })).toBe('2장: 지하 (2/3)');
   });
 });
 

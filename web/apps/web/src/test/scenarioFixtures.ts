@@ -37,6 +37,7 @@ export function scenarioDetail(extra: Record<string, unknown> = {}) {
     place_items: [],
     covers: [],
     happenings: [],
+    chapters: [],
     npc_places: [],
     player_made_hp: null,
     reroll_allowed: false,

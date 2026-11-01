@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/ConditionsEditor.tsx
 // 조건의 목록을 고치는 칸(B9 퀘스트·사건 탭). 이루는 조건, 드러나는 조건, 실패하는 조건, 사건의 조건이 함께 쓴다.
-// 줄마다 종류, 대상, 세는 종류면 개수, 가져가기를 쓰는 목록이면 가져가기. 목록 위에 모두/하나라도를 고른다. 검사는 conditionsForm.ts.
+// 줄마다 종류, 대상(장이면 시나리오의 장), 세는 종류면 개수, 가져가기를 쓰는 목록이면 가져가기. 목록 위에 모두/하나라도를 고른다. 검사는 conditionsForm.ts.
 
 import { Button, Checkbox, SelectField, TextField } from '@ai-trpg/ui';
 import type { QuestConditionKind, QuestMatch } from '../../../../api/types';
@@ -15,6 +15,7 @@ import {
   type ConditionDraft,
   type Targets,
 } from './conditionsForm';
+import type { EntryChoice } from './useLoreEntries';
 
 type Props = {
   /** 목록의 이름. "이루는 조건" */
@@ -30,17 +31,16 @@ type Props = {
   consume?: boolean;
 };
 
-type TargetProps = { draft: ConditionDraft; targets: Targets; onChange: (target: string) => void };
+type TargetProps = { draft: ConditionDraft; targets: Targets; onChange: (draft: ConditionDraft) => void };
 
-/** 대상을 고르는 칸. 장(chapter_at_least)은 대상이 없어 적힌 장을 글로 보인다(장의 탭이 생기면 고르게 한다) */
-function TargetSelect({ draft, targets, onChange }: TargetProps) {
-  const kind = targetKindOf(draft.kind);
-  if (kind === null) return <p className="hint">장: {draft.chapter || '(없음)'}</p>;
-  const choices = targets[kind];
+type ChoiceProps = { label: string; value: string; choices: EntryChoice[]; onChange: (value: string) => void };
+
+/** 고르는 칸 하나. 고른 것이 목록에 없으면(지웠다) "(찾을 수 없음)"으로 남긴다 */
+function ChoiceSelect({ label, value, choices, onChange }: ChoiceProps) {
   return (
-    <SelectField label="대상" value={draft.target} onChange={(event) => onChange(event.target.value)}>
-      {draft.target === '' ? <option value="">고르기</option> : null}
-      {draft.target !== '' && !choices.some((one) => one.id === draft.target) ? <option value={draft.target}>(찾을 수 없음)</option> : null}
+    <SelectField label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+      {value === '' ? <option value="">고르기</option> : null}
+      {value !== '' && !choices.some((one) => one.id === value) ? <option value={value}>(찾을 수 없음)</option> : null}
       {choices.map((one) => (
         <option key={one.id} value={one.id}>
           {one.name}
@@ -48,6 +48,15 @@ function TargetSelect({ draft, targets, onChange }: TargetProps) {
       ))}
     </SelectField>
   );
+}
+
+/** 대상을 고르는 칸. 장(chapter_at_least)은 대상 대신 시나리오의 장을 고른다 */
+function TargetSelect({ draft, targets, onChange }: TargetProps) {
+  const kind = targetKindOf(draft.kind);
+  if (kind === null) {
+    return <ChoiceSelect label="장" value={draft.chapter ?? ''} choices={targets.chapters ?? []} onChange={(chapter) => onChange({ ...draft, chapter })} />;
+  }
+  return <ChoiceSelect label="대상" value={draft.target} choices={targets[kind]} onChange={(target) => onChange({ ...draft, target })} />;
 }
 
 export function ConditionsEditor({ label, kinds, drafts, onChange, match, onMatch, targets, hints, consume = false }: Props) {
@@ -73,7 +82,7 @@ export function ConditionsEditor({ label, kinds, drafts, onChange, match, onMatc
                 </option>
               ))}
             </SelectField>
-            <TargetSelect draft={draft} targets={targets} onChange={(target) => change(index, { ...draft, target })} />
+            <TargetSelect draft={draft} targets={targets} onChange={(next) => change(index, next)} />
             {isCounted(draft.kind) ? (
               <TextField
                 label={`개수(1~${CONDITION_MAX_COUNT})`}
