@@ -154,7 +154,8 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      무기(items[].nature)에 있다. 몬스터의 저항(monsters[].resistances)과 몬스터와 인물의 타고난 피해의 성질
 #      (monsters[].nature, npc_sheets[].nature)도 같다. 비워도 되는 칸이라 형식이 그대로다.
 #      덫(#806, items[].trap: 피하는 판정, 해제 판정, 효과, 찾기 판정)도 뒤에 더했다.
-#      비워도 되는 칸이라 형식이 그대로다. 미리 놓인 덫(#806 ②, traps: 장소, 덫 물건, 처음부터 아는가)도 같다
+#      비워도 되는 칸이라 형식이 그대로다. 미리 놓인 덫(#806 ②, traps: 장소, 덫 물건, 처음부터 아는가)도 같다.
+#      장(#481, chapters: id, 이름, 넘어오는 조건, 여는 장소와 퀘스트)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 67
 
 
@@ -401,6 +402,28 @@ class HappeningSnapshot(BaseModel):
     when: list[QuestConditionSnapshot]
     match: QuestMatch = QuestMatch.ALL
     effects: list[HappeningEffectSnapshot]
+
+
+class ChapterOpensSnapshot(BaseModel):
+    """장 하나가 여는 것(#481). 판 안의 장소 항목(places)과 사건 항목(quests)이다."""
+
+    places: list[uuid.UUID] = []
+    quests: list[uuid.UUID] = []
+
+
+class ChapterSnapshot(BaseModel):
+    """
+    장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.
+
+    when 은 그 장으로 넘어오는 조건(퀘스트의 조건과 같은 모양), match 는 그것을 맞추는 법이다. 첫 장은 조건이 없다.
+    opens 는 그 장부터 열리는 장소와 퀘스트다.
+    """
+
+    id: str
+    name: str
+    when: list[QuestConditionSnapshot] = []
+    match: QuestMatch = QuestMatch.ALL
+    opens: ChapterOpensSnapshot = ChapterOpensSnapshot()
 
 
 class FindSnapshot(BaseModel):
@@ -715,6 +738,8 @@ class Snapshot(BaseModel):
     wanders: list[WanderTableSnapshot] = []
     # 사건 규칙들. 판 안의 로어북 사건 항목마다 많아야 하나다. 효과의 장소는 판의 맵의 장소다(#367)
     happenings: list[HappeningSnapshot] = []
+    # 장들(#481). 비면 장이 없는 판이다. 여는 장소는 판의 맵의 장소, 여는 퀘스트는 판 안의 사건 항목이다
+    chapters: list[ChapterSnapshot] = []
     # 인물의 자리들(#282). 인물 하나에 많아야 하나다. 인물은 판 안의 인물 항목, 장소는 판 안의 장소 항목이다.
     # 있으면 시작 장소도 있다. 자리가 없는 인물은 장면의 글로 나온다
     npc_places: list[NpcPlaceSnapshot] = []
@@ -977,6 +1002,26 @@ class Snapshot(BaseModel):
             raise ValueError('문이 없는 길이나 그 길에 없는 장치를 다루는 사건의 효과가 있습니다.')
         if self.happenings and self.start_place is None:
             raise ValueError('사건 규칙이 있는데 시작 장소가 없습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_chapter_targets(self) -> 'Snapshot':
+        """
+        장(#481)이 판 안의 장소 항목과 사건 항목만 열고, 첫 장에 조건이 없고, 시작 장소를 첫 장 뒤에 열지 않는지 본다.
+        아니면 거부한다.
+
+        게시할 때 이미 막는다(scenarios/publishing.py). 판을 읽는 쪽(테이블)은 장이 맞는 것을 가리킨다고 믿고 쓴다.
+        """
+        places = {entry.id for entry in place_entries(self)}
+        events = {entry.id for entry in quest_entries(self)}
+        if any(place not in places for chapter in self.chapters for place in chapter.opens.places):
+            raise ValueError('장소 항목이 아닌 것을 여는 장이 있습니다.')
+        if any(quest not in events for chapter in self.chapters for quest in chapter.opens.quests):
+            raise ValueError('사건 항목이 아닌 것을 여는 장이 있습니다.')
+        if self.chapters and self.chapters[0].when:
+            raise ValueError('첫 장에 넘어오는 조건이 있습니다.')
+        if any(self.start_place in chapter.opens.places for chapter in self.chapters[1:]):
+            raise ValueError('시작 장소를 첫 장 뒤에 엽니다.')
         return self
 
     @model_validator(mode='after')
@@ -1256,6 +1301,7 @@ def build_snapshot(
         traps=[PlacedTrapSnapshot(**trap) for trap in scenario.traps],
         wanders=[WanderTableSnapshot(**table) for table in scenario.wanders],
         happenings=[HappeningSnapshot(**rule) for rule in scenario.happenings],
+        chapters=[ChapterSnapshot(**chapter) for chapter in scenario.chapters],
         npc_places=[NpcPlaceSnapshot(**place) for place in scenario.npc_places],
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,

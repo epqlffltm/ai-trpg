@@ -58,6 +58,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         traps=[trap.model_dump() for trap in data.traps],
         wanders=[table.model_dump() for table in data.wanders],
         happenings=[rule.model_dump() for rule in data.happenings],
+        chapters=[chapter.model_dump() for chapter in data.chapters],
         npc_places=[place.model_dump() for place in data.npc_places],
         player_made_hp=data.player_made_hp.model_dump() if data.player_made_hp else None,
         reroll_allowed=data.reroll_allowed,

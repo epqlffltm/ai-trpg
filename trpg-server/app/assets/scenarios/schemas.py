@@ -23,6 +23,9 @@ from app.assets.models import (
     ATTACK_NAME_MAX_LENGTH,
     CARRIED_MAX_EQUIPMENT,
     CARRIED_MAX_INVENTORY,
+    CHAPTER_ID_MAX_LENGTH,
+    CHAPTER_MAX_OPENS,
+    CHAPTER_NAME_MAX_LENGTH,
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
     CLOCK_MAX_DAY,
@@ -50,6 +53,7 @@ from app.assets.models import (
     QUEST_MAX_TIME_LIMIT_MINUTES,
     ROUND_MAX_MINUTES,
     SCENARIO_MAX_BESTIARIES,
+    SCENARIO_MAX_CHAPTERS,
     SCENARIO_MAX_COVERS,
     SCENARIO_MAX_ENCOUNTERS,
     SCENARIO_MAX_HAPPENINGS,
@@ -1552,6 +1556,84 @@ Happenings = Annotated[
 ]
 
 
+ChapterId = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=CHAPTER_ID_MAX_LENGTH)]
+ChapterName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=CHAPTER_NAME_MAX_LENGTH)]
+
+
+# 장 하나가 여는 것들. 같은 것을 두 번 적는 것은 장들을 함께 볼 때 막는다(check_chapters)
+OpenedIds = Annotated[list[uuid.UUID], Field(max_length=CHAPTER_MAX_OPENS)]
+
+
+class ChapterOpens(BaseModel):
+    """
+    장 하나가 여는 것(#481). 그 장부터 갈 수 있는 장소(places, 로어북의 장소 항목)와
+    그 장부터 드러나고 이룰 수 있는 퀘스트(quests, 로어북의 사건 항목)다.
+
+    장소는 맵의 장소여야 하고, 퀘스트는 붙인 로어북의 사건 항목이어야 한다(게시할 때 본다).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    places: OpenedIds = []
+    quests: OpenedIds = []
+
+    @field_serializer('places', 'quests')
+    def ids_as_text(self, ids: list[uuid.UUID]) -> list[str]:
+        """ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return [str(one) for one in ids]
+
+
+class Chapter(BaseModel):
+    """
+    장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.
+
+    id 는 판이 바뀌어도 그대로 두는 장의 이름표다. name 은 화면에 보이는 장의 이름이다("축제").
+    when 은 그 장으로 넘어오는 조건이다. 모양과 종류는 퀘스트의 조건과 같고(QuestCondition),
+    match 는 그것을 맞추는 법이다.
+    첫 장은 처음부터 그 장이라 조건을 적지 않는다. 그 뒤의 장에는 하나 이상 적는다(Chapters 가 본다).
+    가져가기(consume)는 쓰지 않는다. 장은 물건을 받지 않는다.
+    opens 는 그 장부터 열리는 장소와 퀘스트다. 어느 장에도 적지 않은 것은 처음부터 열려 있다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: ChapterId
+    name: ChapterName
+    when: QuestConditions = []
+    match: QuestMatch = QuestMatch.ALL
+    opens: ChapterOpens = ChapterOpens()
+
+    @model_validator(mode='after')
+    def nothing_consumed(self) -> 'Chapter':
+        """장은 물건을 가져가지 않는다. 가져가는 것은 퀘스트를 이룰 때다."""
+        if any(condition.consume for condition in self.when):
+            raise ValueError('consume 은 퀘스트의 이루는 조건(conditions)에만 적습니다.')
+        return self
+
+
+def check_chapters(chapters: list[Chapter]) -> list[Chapter]:
+    """
+    장들의 모양을 본다. id 가 겹치지 않고, 첫 장에는 조건이 없고 그 뒤의 장에는 조건이 있고,
+    장소와 퀘스트 하나는 한 장에만, 한 번만 적는다. 아니면 거부한다.
+    """
+    ids = [chapter.id for chapter in chapters]
+    if len(set(ids)) != len(ids):
+        raise ValueError('같은 id 의 장이 두 번 있습니다.')
+    if chapters and chapters[0].when:
+        raise ValueError('첫 장에는 넘어오는 조건(when)을 적지 않습니다. 처음부터 그 장입니다.')
+    if any(not chapter.when for chapter in chapters[1:]):
+        raise ValueError('첫 장 뒤의 장에는 넘어오는 조건(when)을 하나 이상 적습니다.')
+    places = [one for chapter in chapters for one in chapter.opens.places]
+    quests = [one for chapter in chapters for one in chapter.opens.quests]
+    for opened in (places, quests):
+        if len(set(opened)) != len(opened):
+            raise ValueError('장소와 퀘스트는 한 장에만 적습니다.')
+    return chapters
+
+
+Chapters = Annotated[list[Chapter], Field(max_length=SCENARIO_MAX_CHAPTERS), AfterValidator(check_chapters)]
+
+
 def in_fixed_order(modes: list[CharacterMode]) -> list[CharacterMode]:
     """
     방식의 목록을 정해진 순서로 놓는다. 같은 것이 두 번 있으면 거부한다.
@@ -1628,6 +1710,8 @@ class ScenarioCreate(AssetCreate):
     # 무작위 조우 표(#283). 길을 오거나 길게 쉬면 엔진이 굴린다
     wanders: Wanders = []
     happenings: Happenings = []
+    # 장(#481). 장마다 넘어오는 조건과 여는 장소·퀘스트다
+    chapters: Chapters = []
     npc_places: NpcPlaces = []
     player_made_hp: PlayerMadeHp | None = None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
@@ -1648,7 +1732,7 @@ class ScenarioUpdate(AssetUpdate):
     null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-    quests, routes, landmarks, place_items, covers, traps, wanders, happenings, npc_places, character_modes 는
+    quests, routes, landmarks, place_items, covers, traps, wanders, happenings, chapters, npc_places, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -1684,6 +1768,7 @@ class ScenarioUpdate(AssetUpdate):
     traps: PlacedTraps | None = None
     wanders: Wanders | None = None
     happenings: Happenings | None = None
+    chapters: Chapters | None = None
     npc_places: NpcPlaces | None = None
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
@@ -1748,6 +1833,7 @@ class ScenarioDetail(ScenarioSummary):
     traps: list[PlacedTrap]
     wanders: list[WanderTable]
     happenings: list[HappeningRule]
+    chapters: list[Chapter]
     npc_places: list[NpcPlace]
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
