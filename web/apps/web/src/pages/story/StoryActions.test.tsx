@@ -182,6 +182,25 @@ describe('장면의 행동', () => {
     await waitFor(() => expect(actions(seen)).toEqual([{ kind: 'end_day' }]));
   });
 
+  it('장이 넘어간 행동 말 위와 머리에 지금 장을 띄운다', async () => {
+    const chapters = [
+      { id: 'summer', name: '여름의 시작' },
+      { id: 'festival', name: '축제' },
+    ];
+    signedIn({}, () =>
+      session({
+        view: { ...VIEW, chapters },
+        messages: [...MESSAGES, message(3, 'action', { content: '[행동] 공원으로 갔다. 2장 「축제」이(가) 시작됐다.', chapter_id: 'festival' })],
+        state: state({ chapter: 'festival' }),
+      }),
+    );
+    renderApp(`/story/sessions/${SESSION}`);
+
+    const log = within(await screen.findByRole('region', { name: '이야기' }));
+    expect(await log.findByText('2장: 축제')).toBeInTheDocument();
+    expect(screen.getByText(/^2장: 축제 · 3일째/)).toBeInTheDocument();
+  });
+
   it('할 수 없는 행동이면 까닭을 알린다', async () => {
     signedIn({ [`POST ${ACTIONS}`]: () => json(422, { detail: '그렇게 할 수 없습니다.', code: 'cooling_down' }) });
     renderApp(`/story/sessions/${SESSION}`);

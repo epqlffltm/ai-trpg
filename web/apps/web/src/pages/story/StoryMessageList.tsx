@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/story/StoryMessageList.tsx
 // 대사창(D2 의 아래). 지금 가지의 말들과 흘러 들어오는 답. 답은 말 조각마다 이름표(서술은 이름표 없음)를 붙인다.
-// 사람의 말은 "나", 행동 말은 서버가 쓴 글 그대로다(엔진이 정한 결과다). 새 글이 오면 끝으로 내린다.
+// 사람의 말은 "나", 행동 말은 서버가 쓴 글 그대로다(엔진이 정한 결과다). 장이 넘어간 행동 말 위에는 "2장: 축제"를 띄운다.
+// 새 글이 오면 끝으로 내린다.
 // 끝의 말에 할 수 있는 일(답 받기, 다시 생성, 이어서)과 대안 넘기기, 고치기(내 말은 새 가지로, 답은 조각마다 그 자리에서)는 여기 둔다.
 // 행동 말은 엔진의 결과라 고치지 않는다. 받는 중에는 모두 막는다.
 
@@ -9,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { StoryMessage, StorySegment, StorySession, StoryView } from '../../api/story';
 import { StoryMessageEditor } from './StoryMessageEditor';
 import { storyAlternatives, storyTail, visibleStoryMessages } from './storyView';
-import { speakerName } from './storyWorld';
+import { chapterTitle, speakerName } from './storyWorld';
 import type { StoryTurnState } from './storyTurnState';
 
 type Props = {
@@ -97,8 +98,10 @@ function StoryMessageItem({ message, view, streaming, busy, onBranch, onSendEdit
       </li>
     );
   }
+  const chapter = message.role === 'action' ? chapterTitle(view, message.chapter_id) : null;
   return (
     <li className={`chat-message chat-message--${message.role}`} aria-busy={streaming || undefined}>
+      {chapter ? <p className="chat-message__chapter">{chapter}</p> : null}
       {message.role === 'assistant' ? (
         <Segments segments={message.segments} view={view} />
       ) : (

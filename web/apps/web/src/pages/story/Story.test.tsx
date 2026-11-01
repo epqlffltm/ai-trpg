@@ -15,7 +15,7 @@ import { renderApp } from '../../test/renderApp';
 import { describeStartProblem, describeStoryTurnProblem } from './storyTurnProblem';
 import { applyStoryTurnMessage, EMPTY_STORY_TURN } from './storyTurnState';
 import { sceneOf, storyTail, visibleStoryMessages } from './storyView';
-import { castName, daysLeft, isEnded, speakerName, stateLine } from './storyWorld';
+import { castName, chapterTitle, daysLeft, isEnded, speakerName, stateLine } from './storyWorld';
 import { ApiError } from '../../api/errors';
 
 const STORY = '/api/v1/story';
@@ -261,6 +261,18 @@ describe('순수한 함수', () => {
     expect(stateLine({ ...VIEW, deadline_days: null }, state({ slot: 'morning', place: 'park' }))).toBe('3일째 · 아침 · 공원');
     expect(isEnded({ after_ending: 'epilogue' }, state({ ending: 'spring' }))).toBe(false);
     expect(isEnded(VIEW, state({ ending: 'spring' }))).toBe(true);
+  });
+
+  it('장의 제목은 닿은 장들의 차례다. 닿지 않은 장과 장이 없는 판은 쓰지 않는다', () => {
+    const chapters = [
+      { id: 'summer', name: '여름의 시작' },
+      { id: 'festival', name: '축제' },
+    ];
+    expect(chapterTitle({ chapters }, 'festival')).toBe('2장: 축제');
+    expect(chapterTitle({ chapters: [{ id: 'summer', name: '' }] }, 'summer')).toBe('1장');
+    expect(chapterTitle({ chapters }, 'finale')).toBeNull();
+    expect(chapterTitle({}, null)).toBeNull();
+    expect(stateLine({ ...VIEW, deadline_days: null, chapters }, state({ slot: 'morning', place: 'park', chapter: 'festival' }))).toBe('2장: 축제 · 3일째 · 아침 · 공원');
   });
 
   it('흘러 들어오는 조각을 쌓는다', () => {

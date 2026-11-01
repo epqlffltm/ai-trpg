@@ -51,10 +51,24 @@ export function daysLeft(deadline: number | null | undefined, day: number): numb
   return typeof deadline === 'number' ? Math.max(0, deadline - day) : null;
 }
 
-/** 머리의 한 줄. "3일째 · 저녁 · 학교 · D-97" 또는 엔딩을 봤으면 "엔딩: ○○" 이 붙는다 */
+/**
+ * 장의 제목("2장: 축제", docs/architecture/chapters.md). 차례는 view 의 닿은 장들에서의 차례다(첫 장부터 온다).
+ * 이 가지에서 닿지 않은 장이거나(답을 받는 중이라 view 가 아직 앞의 것) 장이 없는 판이면 null. 이름이 비면 "2장" 이다
+ */
+export function chapterTitle(view: Pick<StoryView, 'chapters'>, chapterId: string | null | undefined): string | null {
+  if (!chapterId) return null;
+  const chapters = view.chapters ?? [];
+  const index = chapters.findIndex((chapter) => chapter.id === chapterId);
+  if (index < 0) return null;
+  const name = chapters[index]?.name;
+  return name ? `${index + 1}장: ${name}` : `${index + 1}장`;
+}
+
+/** 머리의 한 줄. "2장: 축제 · 3일째 · 저녁 · 학교 · D-97" 또는 엔딩을 봤으면 "엔딩: ○○" 이 붙는다. 장이 없는 판은 장을 쓰지 않는다 */
 export function stateLine(view: StoryView, state: StoryState): string {
   const left = daysLeft(view.deadline_days, state.day);
   return [
+    chapterTitle(view, state.chapter),
     `${state.day}일째`,
     slotName(view, state.slot),
     placeName(view, state.place),
