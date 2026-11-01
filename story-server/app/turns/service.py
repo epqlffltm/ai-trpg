@@ -82,7 +82,7 @@ from app.records import repository as records
 from app.records.illustrations import unlocked_scenes
 from app.turns import charging, repository
 from app.turns.actions import action_text, perform
-from app.turns.briefing import Briefing, read_briefing
+from app.turns.briefing import Briefing, LoreText, read_briefing
 from app.turns.charging import HoldDeclined, Settled, Settlement
 from app.turns.frames import delta_frame, done_frame, failed_frame, segment_frame
 from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
@@ -103,7 +103,7 @@ from app.turns.segments import (
 )
 from app.turns.states import state_on_path, state_to_json, state_view
 from app.turns.stops import StopSwitch
-from app.turns.values import LorePlan, PromptOptions, SavedMessage, TurnResult, TurnStart
+from app.turns.values import LoreKey, LorePlan, PromptOptions, SavedMessage, TurnResult, TurnStart
 
 logger = logging.getLogger(__name__)
 
@@ -266,12 +266,24 @@ class Branch:
     summaries: Mapping[uuid.UUID, str] = field(default_factory=dict)
 
 
-def lore_plan_of(branch: Branch, recent: Sequence[str]) -> LorePlan | None:
+def open_lore(branch: Branch, state: StoryState) -> tuple[tuple[LoreKey, LoreText], ...]:
     """
-    판의 로어북에서 상시와 키워드로 고른 것(카드의 "[로어북]")과, 뜻으로 찾아 더할 바탕.
-    recent 는 최근 말들(오래된 것부터 이번 말까지)이다. 로어북의 항목이 없으면 None.
+    판의 로어북 항목 가운데 지금 장(state.chapter)에서 열린 것. 닫힌 항목은 상시든 키워드든 뜻이든 모델에 가지 않는다
+    (뒤 장의 비밀이 서술로 새지 않게, docs/architecture/chapters.md). 장이 없는 판은 모두 열려 있다.
     """
-    keyed = branch.briefing.keyed_lore()
+    return tuple(
+        (key, entry)
+        for key, entry in branch.briefing.keyed_lore()
+        if branch.world.lore_open(key[0], key[1], state.chapter)
+    )
+
+
+def lore_plan_of(branch: Branch, state: StoryState, recent: Sequence[str]) -> LorePlan | None:
+    """
+    판의 로어북에서 상시와 키워드로 고른 것(카드의 "[로어북]")과, 뜻으로 찾아 더할 바탕. 지금 장에서 열린 항목만 본다.
+    recent 는 최근 말들(오래된 것부터 이번 말까지)이다. 열린 로어북의 항목이 없으면 None.
+    """
+    keyed = open_lore(branch, state)
     if not keyed or branch.world_id is None:
         return None
     entries = tuple(entry for _, entry in keyed)
@@ -654,7 +666,7 @@ def turn_start(
     options: PromptOptions,
 ) -> TurnStart:
     """말 한 번의 시작. 그 뒤의 일은 이것만 들고 간다. 로어북은 가지의 말과 이번 말에서 고른다."""
-    lore = lore_plan_of(branch, [*(item.content for item in branch.path), message.content])
+    lore = lore_plan_of(branch, state, [*(item.content for item in branch.path), message.content])
     return TurnStart(
         conversation_id=generation.conversation_id,
         generation_id=generation.id,
@@ -890,7 +902,7 @@ async def record_continue(
     # 메시지는 이어 쓰는 것으로 바꾼다. turn_start 가 만드는 보통의 메시지는 쓰지 않으므로 빈 가지로 만든다
     empty = replace(branch, path=[])
     start = turn_start(viewer.claims.user_id, generation, answered, empty, branch.state, stage, options)
-    lore = lore_plan_of(branch, [message.content for message in branch.path])
+    lore = lore_plan_of(branch, branch.state, [message.content for message in branch.path])
     messages = continue_prompt(branch, branch.state, stage, options, lore)
     return replace(start, messages=messages, continued=saved(target), lore=lore)
 

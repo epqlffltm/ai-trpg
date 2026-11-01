@@ -6,6 +6,7 @@
 판은 asset 서버가 게시할 때 검사했다(없는 것을 가리키지 않는다, 칸의 모양이 맞다). 여기서는 엔진이 쓰는 칸만
 읽는 모양으로 바꾼다. 모르는 칸은 버린다(extra='ignore'). 쓰는 칸이 늘면 그 칸을 여기에 더한다.
 판의 형식 1 에는 이벤트가 없다. 그 판은 이벤트가 빈 것으로 읽는다. 형식 5 까지는 장이 없다(장이 빈 것으로 읽는다).
+형식 6 의 장은 로어북 항목을 열지 않는다(장이 여는 로어북 항목이 빈 것으로 읽는다).
 시간대는 시작 시각이 이른 것부터 적혀 있다(asset 서버가 게시할 때 검사한다).
 """
 
@@ -227,11 +228,19 @@ class AfterEnding(enum.StrEnum):
     EPILOGUE = 'epilogue'
 
 
+class LoreRef(Part):
+    """로어북 항목 하나를 가리키는 것. 판에 복사된 로어북의 id 와 그 안의 항목의 id 다."""
+
+    lorebook: uuid.UUID
+    entry: str
+
+
 class ChapterOpens(Part):
-    """장이 여는 콘텐츠. 장소의 id 와 이벤트의 id 다."""
+    """장이 여는 콘텐츠. 장소의 id, 이벤트의 id, 로어북 항목(판의 형식 7)이다."""
 
     places: tuple[str, ...] = ()
     events: tuple[str, ...] = ()
+    lore: tuple[LoreRef, ...] = ()
 
 
 class Chapter(Part):
@@ -317,6 +326,17 @@ class World(Part):
     def event_open(self, event_id: str, chapter_id: str | None) -> bool:
         """지금 장(chapter_id)에서 그 이벤트가 열려 있나. 장소와 같다."""
         return self.opening_index('events', event_id) <= self.reached_index(chapter_id)
+
+    def lore_opening_index(self, lorebook_id: uuid.UUID | None, entry_id: str) -> int:
+        """그 로어북 항목을 여는 장의 차례. 어느 장에도 적지 않았으면(로어북의 id 가 없는 판도) 0(처음부터 열림)이다."""
+        for index, chapter in enumerate(self.chapters):
+            if any(ref.lorebook == lorebook_id and ref.entry == entry_id for ref in chapter.opens.lore):
+                return index
+        return 0
+
+    def lore_open(self, lorebook_id: uuid.UUID | None, entry_id: str, chapter_id: str | None) -> bool:
+        """지금 장(chapter_id)에서 그 로어북 항목이 열려 있나. 닫힌 항목은 모델에 가지 않는다(상시 항목도)."""
+        return self.lore_opening_index(lorebook_id, entry_id) <= self.reached_index(chapter_id)
 
 
 def read_world(document: Mapping) -> World:

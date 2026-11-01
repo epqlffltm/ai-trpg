@@ -198,14 +198,14 @@ def test_the_lorebook_takes_constant_entries_and_keywords_from_recent_messages()
     briefing = read_briefing(document(lorebooks=LOREBOOKS))
     branch = Branch(WORLD, briefing, [], start_state(WORLD), {}, world_id=uuid.uuid4())
 
-    plan = lore_plan_of(branch, ['@mina: 축제에 갈래?', '우물에 가 볼까'])
+    plan = lore_plan_of(branch, branch.state, ['@mina: 축제에 갈래?', '우물에 가 볼까'])
 
     # 상시가 먼저, 그다음 키워드가 가장 최근에 나온 것부터. 이름이 빈 항목은 뺀다
     assert plan.block == '[로어북]\n- 바다: 마을 앞의 바다.\n- 우물: 소원을 빈다.\n- 축제: 8월의 축제.'
     assert plan.keys[1] == (uuid.UUID('11111111-2222-4333-8444-555555555555'), 'well')
     assert plan.query == '@mina: 축제에 갈래?\n우물에 가 볼까'
     empty = Branch(WORLD, read_briefing(document()), [], start_state(WORLD), {}, world_id=uuid.uuid4())
-    assert lore_plan_of(empty, ['우물']) is None
+    assert lore_plan_of(empty, empty.state, ['우물']) is None
 
 
 def test_the_lorebook_comes_after_the_cast():
