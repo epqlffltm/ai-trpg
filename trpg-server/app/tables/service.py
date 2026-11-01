@@ -417,6 +417,7 @@ async def start_table(
     table.route_locks.extend(route_locks.make_route_locks(table.id, snapshot))
     traps.set_preset(table, snapshot)
     chapters.start(table, snapshot)
+    chapters.hold_back_quests(table)
 
     table.status = TableStatus.PLAYING
     table.started_at = func.now()

@@ -20,6 +20,7 @@ from dataclasses import dataclass
 
 from app.assets.models import RouteVisibility
 from app.assets.scenarios.snapshot import EntrySnapshot, RouteSnapshot, Snapshot, has_map, place_entries
+from app.tables import chapters
 from app.tables.models import GameTable, TableFoundRoute, TableMember, TableSheet, TableVisit
 
 # 길 하나를 가리키는 값. 판에 적힌 두 끝(from_place, to_place)이다
@@ -28,10 +29,15 @@ RouteKey = tuple[uuid.UUID, uuid.UUID]
 
 @dataclass(frozen=True)
 class Knowledge:
-    """테이블이 맵에 대해 겪은 것. 서 본 곳과 찾은 숨긴 길이다. 아는 것은 이것과 판의 규칙으로 계산한다."""
+    """
+    테이블이 맵에 대해 겪은 것. 서 본 곳과 찾은 숨긴 길이다. 아는 것은 이것과 판의 규칙으로 계산한다.
+
+    locked 는 아직 열리지 않은 장의 장소들이다(#481). 그곳으로 이어진 길은 모르는 길이고, 그 장소도 지도에 없다.
+    """
 
     seen: frozenset[uuid.UUID]
     found: frozenset[RouteKey]
+    locked: frozenset[uuid.UUID] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -56,6 +62,7 @@ def knowledge(table: GameTable) -> Knowledge:
     return Knowledge(
         seen=frozenset(visit.entry_id for visit in table.visits),
         found=frozenset((route.from_place, route.to_place) for route in table.found_routes),
+        locked=chapters.locked_ids(table),
     )
 
 
@@ -69,7 +76,10 @@ def route_known(route: RouteSnapshot, known: Knowledge) -> bool:
     이 길을 아는가. 열린 길은 늘, 안개 길은 한쪽 끝에 서 본 적이 있으면, 숨긴 길은 찾았으면 안다.
 
     한쪽으로만 가는 길도 양쪽 끝 어디에서든 보인다. 내려가는 구멍은 아래에서도 올려다보인다.
+    한쪽 끝이 아직 열리지 않은 장의 장소면(#481) 어떤 길이든 모른다.
     """
+    if any(touches(route, place) for place in known.locked):
+        return False
     if route.visibility == RouteVisibility.OPEN:
         return True
     if route.visibility == RouteVisibility.FOG:
@@ -84,6 +94,7 @@ def known_map(snapshot: Snapshot, known: Knowledge) -> KnownMap | None:
     routes = [route for route in snapshot.routes if route_known(route, known)]
     places = {snapshot.start_place, *snapshot.landmarks, *known.seen}
     places.update(end for route in routes for end in (route.from_place, route.to_place))
+    places -= known.locked
     return KnownMap(places=[entry for entry in place_entries(snapshot) if entry.id in places], routes=routes)
 
 
@@ -128,11 +139,17 @@ def route_joining(known: KnownMap | None, here: uuid.UUID | None, there: uuid.UU
 
 
 def hidden_routes_at(snapshot: Snapshot, known: Knowledge, place_id: uuid.UUID) -> list[RouteSnapshot]:
-    """그 장소에 한쪽 끝이 닿은, 아직 찾지 않은 숨긴 길들. 판의 길 순서다. 찾기가 굴릴 길들이다."""
+    """
+    그 장소에 한쪽 끝이 닿은, 아직 찾지 않은 숨긴 길들. 판의 길 순서다. 찾기가 굴릴 길들이다.
+    아직 열리지 않은 장의 장소로 이어진 길은 찾지 못한다(#481).
+    """
     return [
         route
         for route in snapshot.routes
-        if route.visibility == RouteVisibility.HIDDEN and touches(route, place_id) and key_of(route) not in known.found
+        if route.visibility == RouteVisibility.HIDDEN
+        and touches(route, place_id)
+        and key_of(route) not in known.found
+        and not any(touches(route, place) for place in known.locked)
     ]
 
 

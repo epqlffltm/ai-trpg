@@ -864,10 +864,11 @@ def to_quest_notes(table: GameTable, snapshot: Snapshot, expired: list[str] | No
     catalog = quests.catalog(snapshot)
     scene_end = scene_end_of(table)
     missed = set(expired or [])
-    return [
-        to_quest_note(row, catalog[row.entry_id], scene_end, missed)
-        for row in quests.in_catalog_order(table.quests, catalog)
-    ]
+    # 아직 열리지 않은 장의 퀘스트는 주지 않는다(#481). 오지 않은 이야기가 서술에 새지 않게 한다
+    locked = chapters.locked_ids(table)
+    rows = [row for row in table.quests if row.entry_id not in locked]
+    ordered = quests.in_catalog_order(rows, catalog)
+    return [to_quest_note(row, catalog[row.entry_id], scene_end, missed) for row in ordered]
 
 
 def is_seen(move: dict, here: Set[uuid.UUID]) -> bool:

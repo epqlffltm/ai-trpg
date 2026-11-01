@@ -48,6 +48,7 @@ from app.catalog.steps import NarrationSteps, scaled_chars
 from app.lore import repository
 from app.lore.texts import version_entries
 from app.rounds.narrator import LoreNote, NarrationRequest
+from app.tables import chapters
 from app.tables import repository as table_repository
 
 logger = logging.getLogger(__name__)
@@ -228,9 +229,10 @@ async def load_candidates(session_factory: async_sessionmaker[AsyncSession], tab
             return None
         npcs = await table_repository.list_npcs(session, table_id)
         named = frozenset(npc.entry_id for npc in npcs if npc.named_round is not None)
-        return Candidates(
-            version_id=table.version_id, entries=version_entries(read_snapshot(table.content)), named=named
-        )
+        # 아직 열리지 않은 장의 장소와 퀘스트는 고르지 않는다(#481). 오지 않은 이야기가 서술에 새지 않게 한다
+        locked = chapters.locked_ids(table)
+        entries = [entry for entry in version_entries(read_snapshot(table.content)) if entry.id not in locked]
+        return Candidates(version_id=table.version_id, entries=entries, named=named)
 
 
 @dataclass(frozen=True)

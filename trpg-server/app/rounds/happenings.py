@@ -51,8 +51,8 @@ from app.engine.action import DoorDevice
 from app.events import recorder
 from app.events.models import EventType, TableEvent
 from app.rounds.quest_goals import all_met
+from app.tables import chapters, places, route_locks, sheets
 from app.tables import npcs as table_npcs
-from app.tables import places, route_locks, sheets
 from app.tables.models import GameTable, TableHappening, TableMember, TableMonster, TableNpc
 
 
@@ -244,11 +244,21 @@ def happen(
     }
 
 
+def leads_to_locked(rule: HappeningSnapshot, locked: frozenset[uuid.UUID]) -> bool:
+    """
+    캐릭터를 아직 열리지 않은 장의 장소로 옮기는 사건인가(#481). 그런 사건은 그 장이 열릴 때까지 일어나지 않는다.
+
+    조건이 채워져도 기다린다. 일어난 것으로 적지 않으므로 장이 열린 뒤 조건이 채워져 있으면 그때 일어난다.
+    """
+    return any(effect.kind == HappeningEffectKind.MOVE and effect.to_place in locked for effect in rule.effects)
+
+
 def settle_happenings(
     table: GameTable, round_number: int, monsters: list[TableMonster], npcs: list[TableNpc]
 ) -> list[dict]:
     """
     아직 일어나지 않은 사건 중 조건이 채워진 것을 판의 순서로 일으킨다. 일어난 차례로 이벤트의 모양을 돌려준다.
+    아직 열리지 않은 장의 장소로 캐릭터를 옮기는 사건은 기다린다(leads_to_locked, #481).
 
     monsters 와 npcs 는 테이블의 상태 전부다(장면 밖도). 사건 규칙이 없는 판이면 판을 읽지 않는다.
     """
@@ -257,8 +267,9 @@ def settle_happenings(
     snapshot = read_snapshot(table.content)
     done = happened(table)
     occurred = []
+    locked = chapters.locked_ids(table)
     for rule in snapshot.happenings:
-        if rule.entry_id in done:
+        if rule.entry_id in done or leads_to_locked(rule, locked):
             continue
         if all_met(tuple(rule.when), rule.match, table, monsters, npcs):
             occurred.append(happen(table, snapshot, rule, round_number, npcs))
