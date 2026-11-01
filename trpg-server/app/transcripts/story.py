@@ -393,6 +393,16 @@ def experience_gained(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'경험치: {text_of(source.get("name"))} · {", ".join(gains) or "받은 사람 없음"}')]
 
 
+def abilities_raised(payload: dict, labels: Labels) -> list[Block]:
+    """능력치 점수를 놓았다(#286 ③). "능력치: 기사 · 근력 12 → 13, 건강 10 → 11"다."""
+    raises = [
+        f'{text_of(one.get("name"))} {text_of(one.get("from"))} → {text_of(one.get("to"))}'
+        for one in payload.get('raises') or []
+        if isinstance(one, dict)
+    ]
+    return [Note(f'능력치: {who(payload)} · {", ".join(raises)}')]
+
+
 def place_searched(payload: dict, labels: Labels) -> list[Block]:
     """찾기. 찾은 길과 물건과 덫(#806 ①-b)."""
     routes = [
@@ -521,6 +531,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.CHAPTER_CHANGED: chapter_changed,
     EventType.CHARACTER_LEVELED: character_leveled,
     EventType.EXPERIENCE_GAINED: experience_gained,
+    EventType.ABILITIES_RAISED: abilities_raised,
     EventType.PLACE_SEARCHED: place_searched,
     EventType.DOOR_CHANGED: door_changed,
     EventType.MONSTERS_APPEARED: monsters_appeared,

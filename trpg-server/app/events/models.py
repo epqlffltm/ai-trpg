@@ -187,6 +187,9 @@ class EventType(enum.StrEnum):
     # (app/rounds/happenings.py)다. 퀘스트의 보상은 quest_changed 에 적는다. 행한 사람이 없다.
     # 무엇이 줬나(source: kind monster·happening, id, name), 나누는 법(split), 받은 사람마다 받은 것(gains)
     EXPERIENCE_GAINED = 'experience_gained'
+    # 캐릭터가 쌓인 능력치 점수를 능력치에 놓았다(app/tables/raising.py, #286 ③). 행한 사람은 그 사람이다.
+    # 누가, 어느 능력치(ability, name)를 몇에서 몇으로(raises), 남은 점수(points), 그 뒤의 최대 HP(max_hp)
+    ABILITIES_RAISED = 'abilities_raised'
     # 캐릭터가 서 있는 곳에서 숨긴 길을 찾았다(app/rounds/map_actions.py). 찾은 길만 적는다. 못 찾았으면 빈 목록이다.
     # 굴린 판정은 적지 않는다. 숨긴 길이 있었는지가 드러난다
     PLACE_SEARCHED = 'place_searched'

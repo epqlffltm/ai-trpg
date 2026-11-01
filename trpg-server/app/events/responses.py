@@ -241,6 +241,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.CHARACTER_LEVELED: ('user_id', 'character_name', 'previous_level', 'level', 'xp', 'max_hp', 'points'),
     # 받은 경험치는 공개다. 무엇이 줬는지(쓰러진 마리, 일어난 사건)도 모두가 안다(#286 ②)
     EventType.EXPERIENCE_GAINED: ('round', 'source', 'split', 'gains'),
+    # 능력치는 시트에 보이는 것이다. 앉은 사람 모두가 본다(#286 ③)
+    EventType.ABILITIES_RAISED: ('user_id', 'character_name', 'raises', 'points', 'max_hp'),
     # 찾은 길은 공개다. 찾았으니 이제 모두가 아는 길이다. 굴린 판정은 처음부터 적지 않는다
     # 찾아낸 덫(#806 ①-b)도 공개다. 찾으면 테이블 모두가 안다
     EventType.PLACE_SEARCHED: ('round', 'character_name', 'place', 'found', 'items', 'traps'),

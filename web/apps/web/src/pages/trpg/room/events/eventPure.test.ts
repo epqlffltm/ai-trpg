@@ -31,7 +31,7 @@ const ALL: EventType[] = [
   'round_opened', 'player_action', 'check_rolled', 'hp_changed', 'resource_changed', 'npc_changed', 'npc_attitude_changed', 'monster_changed',
   'monster_attacked', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_treated', 'naming_resolved', 'death_save_rolled',
   'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'trap_set', 'trap_sprung', 'trap_disarmed', 'steal_attempted',
-  'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'chapter_changed', 'character_leveled', 'experience_gained', 'place_searched', 'character_rested',
+  'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'chapter_changed', 'character_leveled', 'experience_gained', 'abilities_raised', 'place_searched', 'character_rested',
   'character_revived', 'round_closed', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
   'narration_model_not_for_sale', 'narration_model_retiring', 'narration_model_replaced', 'narration_model_unavailable',
   'member_dropped', 'narration_credits_released', 'table_ended', 'item_traded', 'money_paid',
@@ -67,6 +67,14 @@ describe('eventLine', () => {
       { character_name: '미아', xp: { count: 12 } },
     ];
     expect(line('experience_gained', { source: { kind: 'monster', id: 'm1', name: '들쥐 1' }, split: 'share', gains })?.text).toBe('경험치: 들쥐 1 · 렌 +12, 미아 +12');
+  });
+
+  it('놓은 능력치 점수는 누가 어느 능력치를 몇에서 몇으로다(#286 ③)', () => {
+    const raises = [
+      { ability: 'str', name: '근력', from: 12, to: 13 },
+      { ability: 'con', name: '건강', from: 10, to: 12 },
+    ];
+    expect(line('abilities_raised', { character_name: '렌', raises, points: 0, max_hp: 14 })?.text).toBe('렌: 능력치 근력 12 → 13, 건강 10 → 12');
   });
 
   it('레벨이 오른 것은 누가 몇에서 몇으로다(#286)', () => {
