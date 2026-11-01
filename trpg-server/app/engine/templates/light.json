@@ -329,6 +329,30 @@
           "mind"
         ]
       }
-    ]
+    ],
+    "progression": {
+      "levels": [
+        {
+          "xp": 100,
+          "max_hp": 2,
+          "points": 1
+        },
+        {
+          "xp": 300,
+          "max_hp": 2,
+          "points": 1
+        },
+        {
+          "xp": 600,
+          "max_hp": 2,
+          "points": 1
+        },
+        {
+          "xp": 1000,
+          "max_hp": 2,
+          "points": 1
+        }
+      ]
+    }
   }
 }

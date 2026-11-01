@@ -95,6 +95,8 @@ DEFAULT_SELL_PERCENT = 50
 SCENARIO_MAX_QUEST_RULES = 50
 # 퀘스트의 기한(분). 드러난 때부터 센다. 상한은 한 해다(오래 가는 부상이 낫는 기간과 같다)
 QUEST_MAX_TIME_LIMIT_MINUTES = 365 * 24 * 60
+# 퀘스트 하나가 살아 있는 캐릭터마다 주는 경험치의 상한(#286). 레벨표의 경험치의 상한보다 작다
+QUEST_MAX_REWARD_XP = 100_000
 # 퀘스트 하나의 조건의 수와, 조건 하나가 세는 수(쓰러뜨린 마리, 가진 개수)의 상한
 QUEST_MAX_CONDITIONS = 5
 QUEST_CONDITION_MAX_COUNT = 99

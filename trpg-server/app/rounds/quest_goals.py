@@ -33,7 +33,7 @@
     기한의 실패(app/rounds/deadlines.py)와 같은 모양이다.
 
 DB 를 모른다. 잠근 테이블의 퀘스트 행과 소지품을 고치고 이벤트에 적을 모양을 돌려준다.
-이벤트를 적는 것은 record_changes 다.
+이벤트를 적는 것은 record_changes 다. 보상의 경험치로 레벨이 오른 캐릭터마다 character_leveled 를 잇는다(#286).
 """
 
 import uuid
@@ -44,10 +44,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import QuestConditionKind, QuestMatch
 from app.assets.scenarios.snapshot import QuestConditionSnapshot, read_snapshot
+from app.engine.ruleset import Progression
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds.quest_handover import hand_over
-from app.tables import chapters, items, quests, sheets
+from app.tables import chapters, growth, items, quests, sheets
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, NpcStatus, QuestStatus, TableMember, TableMonster, TableNpc, TableQuest
 from app.tables.quest_changes import describe
@@ -169,9 +170,11 @@ def succeed(
     quest: CatalogQuest,
     things: dict[uuid.UUID, CatalogItem],
     consumed: list[QuestConditionSnapshot],
+    progression: Progression | None = None,
 ) -> dict:
     """
     이룬 퀘스트 하나를 성공으로 바꾸고, 가져가는 물건을 뺀 뒤 보상을 준다. 이벤트에 적을 모양을 돌려준다.
+    progression 은 판의 룰북의 레벨표다. 경험치의 보상으로 레벨을 올린다(#286).
 
     숨긴 채로 이룬 것에는 기한이 끝나는 시각을 적지 않는다. 드러나는 순간 끝났다.
     """
@@ -179,7 +182,7 @@ def succeed(
     row.status = QuestStatus.SUCCEEDED
     row.changed_at = func.now()
     handed = hand_over(living(table), consumed, things)
-    rewards = quests.give_rewards(table, quest, things)
+    rewards = quests.give_rewards(table, quest, things, progression)
     return describe(quest, previous, QuestStatus.SUCCEEDED, rewards, row.due_at, reason=CONDITIONS_MET, consumed=handed)
 
 
@@ -246,6 +249,7 @@ def complete_quests(
     things: dict[uuid.UUID, CatalogItem],
     monsters: list[TableMonster],
     npcs: list[TableNpc],
+    progression: Progression | None = None,
 ) -> list[dict]:
     """
     이룬 퀘스트를 모두 성공으로 바꾼다. 판의 순서로, 이벤트에 적을 모양들을 돌려준다.
@@ -257,7 +261,7 @@ def complete_quests(
         quest = catalog[row.entry_id]
         if is_achieved(quest, table, monsters, npcs):
             consumed = consumed_conditions(quest, table, monsters, npcs)
-            changes.append(succeed(table, row, quest, things, consumed))
+            changes.append(succeed(table, row, quest, things, consumed, progression))
     return changes
 
 
@@ -290,7 +294,7 @@ def settle_quests(table: GameTable, monsters: list[TableMonster], npcs: list[Tab
     changes: list[dict] = []
     while True:
         changed = reveal_quests(table, catalog, monsters, npcs)
-        changed.extend(complete_quests(table, catalog, things, monsters, npcs))
+        changed.extend(complete_quests(table, catalog, things, monsters, npcs, snapshot.rulebook.rules.progression))
         changed.extend(fail_quests(table, catalog, monsters, npcs))
         if not changed:
             return changes
@@ -298,6 +302,29 @@ def settle_quests(table: GameTable, monsters: list[TableMonster], npcs: list[Tab
 
 
 def record_changes(session: AsyncSession, table: GameTable, changes: list[dict], group: uuid.UUID) -> None:
-    """엔진이 바꾼 퀘스트마다 이벤트를 적는다. 닫힘의 묶음(group)에 넣는다. 행한 사람은 없다."""
+    """
+    엔진이 바꾼 퀘스트마다 이벤트를 적는다. 닫힘의 묶음(group)에 넣는다. 행한 사람은 없다.
+
+    보상의 경험치로 레벨이 오른 캐릭터마다 그 퀘스트의 이벤트 뒤에 character_leveled 를 잇는다(#286).
+    """
     for payload in changes:
         recorder.record(session, table, EventType.QUEST_CHANGED, payload=payload, group=group)
+        for reward in payload['rewards']:
+            if growth.leveled(reward.get('xp')):
+                recorder.record(
+                    session, table, EventType.CHARACTER_LEVELED, payload=leveled_payload(reward), group=group
+                )
+
+
+def leveled_payload(reward: dict) -> dict:
+    """레벨이 오른 캐릭터의 이벤트(character_leveled). 누구이고, 몇에서 몇으로, 그 뒤의 최대 HP 와 쌓인 점수다."""
+    gained = reward['xp']
+    return {
+        'user_id': reward['user_id'],
+        'character_name': reward['character_name'],
+        'previous_level': gained['previous_level'],
+        'level': gained['level'],
+        'xp': gained['total'],
+        'max_hp': gained['max_hp'],
+        'points': gained['points'],
+    }

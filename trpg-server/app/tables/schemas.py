@@ -633,6 +633,12 @@ class SheetOut(BaseModel):
     # 타고난 저항(#886 ②). 줄마다 성질(rules.natures 의 key)과 단계(resist, immune, vulnerable)다.
     # 착용한 물건(items 의 resistances)과 입은 부상(rules.injuries 의 resistances)의 저항은 여기 없다. 함께 막는다
     resistances: list[Resistance] = []
+    # 성장(#286). 모은 경험치, 레벨(1 부터), 다음 레벨이 되는 누적 경험치(마지막 레벨이거나 성장이 없는 규칙이면 None),
+    # 레벨이 올라 받았지만 아직 능력치에 놓지 않은 점수. 레벨표는 테이블의 rules.progression 에 있다
+    xp: int = 0
+    level: int = 1
+    next_level_xp: int | None = None
+    points: int = 0
 
 
 class FallenOut(BaseModel):

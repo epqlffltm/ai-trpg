@@ -375,6 +375,13 @@ def chapter_changed(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'{text_of(payload.get("number"))}장: {text_of(to.get("name"))}')]
 
 
+def character_leveled(payload: dict, labels: Labels) -> list[Block]:
+    """레벨이 올랐다(#286). "레벨: 기사 · 2 → 3 (최대 HP 14, 능력치 점수 1)"다."""
+    levels = f'{text_of(payload.get("previous_level"))} → {text_of(payload.get("level"))}'
+    after = f'최대 HP {text_of(payload.get("max_hp"))}, 능력치 점수 {text_of(payload.get("points"))}'
+    return [Note(f'레벨: {who(payload)} · {levels} ({after})')]
+
+
 def place_searched(payload: dict, labels: Labels) -> list[Block]:
     """찾기. 찾은 길과 물건과 덫(#806 ①-b)."""
     routes = [
@@ -501,6 +508,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.CHARACTER_MOVED: character_moved,
     EventType.HAPPENING_OCCURRED: happening_occurred,
     EventType.CHAPTER_CHANGED: chapter_changed,
+    EventType.CHARACTER_LEVELED: character_leveled,
     EventType.PLACE_SEARCHED: place_searched,
     EventType.DOOR_CHANGED: door_changed,
     EventType.MONSTERS_APPEARED: monsters_appeared,

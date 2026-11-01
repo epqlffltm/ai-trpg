@@ -1,0 +1,82 @@
+# trpg-server/app/tables/growth.py
+
+"""
+캐릭터의 성장(#286). 경험치를 모아 레벨이 오른다. 규칙은 판의 룰북의 레벨표(Ruleset.progression)다.
+
+  - 캐릭터는 레벨 1, 경험치 0 에서 시작한다. 레벨은 모은 경험치와 레벨표로 정한다(level_of). 따로 적지 않는다.
+  - 경험치를 주는 것은 엔진뿐이다(퀘스트의 보상 …). 방장도 AI 도 주지 못한다.
+  - 경험치가 레벨표의 다음 줄에 닿으면 그 레벨이 된다. 한 번에 여러 레벨을 오를 수 있다.
+    오른 레벨마다 최대 HP 에 그 줄의 양을 더하고(지금 HP 도 그만큼, 쓰러져 있으면 최대만), 능력치 점수를 쌓는다.
+    최대 HP 는 시트의 상한(SHEET_MAX_HP)을 넘지 않는다. 경험치도 상한(PROGRESSION_MAX_XP)까지만 모은다.
+  - 마지막 레벨에 닿은 뒤에도 경험치는 모인다(상한까지). 레벨은 그대로다.
+  - 쌓인 능력치 점수를 능력치에 놓는 것은 플레이어가 고른다(다음 일).
+  - 성장이 없는 규칙(progression 이 None)이면 아무것도 하지 않는다.
+
+DB 를 모른다. 시트의 칸만 고친다. 저장은 부르는 쪽이 한다.
+"""
+
+from app.engine.ruleset import PROGRESSION_MAX_XP, Progression
+from app.engine.sheet import SHEET_MAX_HP
+from app.tables.models import TableSheet
+
+
+def level_of(xp: int, progression: Progression | None) -> int:
+    """그 경험치의 레벨. 1 부터다. 성장이 없는 규칙이면 늘 1 이다."""
+    if progression is None:
+        return 1
+    return 1 + sum(1 for level in progression.levels if level.xp <= xp)
+
+
+def next_level_xp(xp: int, progression: Progression | None) -> int | None:
+    """다음 레벨이 되는 누적 경험치. 마지막 레벨이거나 성장이 없는 규칙이면 None."""
+    if progression is None:
+        return None
+    return next((level.xp for level in progression.levels if level.xp > xp), None)
+
+
+def is_downed(sheet: TableSheet) -> bool:
+    """쓰러져 있는가. 쓰러진 캐릭터는 최대 HP 만 오르고 지금 HP 는 그대로다(일어나는 것은 회복의 일이다)."""
+    return sheet.hp == 0
+
+
+def raise_max_hp(sheet: TableSheet, amount: int) -> int:
+    """최대 HP 를 그만큼 올린다(상한까지). 쓰러져 있지 않으면 지금 HP 도 같이 올린다. 실제로 올린 양을 돌려준다."""
+    raised = min(sheet.max_hp + amount, SHEET_MAX_HP) - sheet.max_hp
+    if not is_downed(sheet):
+        sheet.hp += raised
+    sheet.max_hp += raised
+    return raised
+
+
+def gain(sheet: TableSheet, amount: int, progression: Progression | None) -> dict | None:
+    """
+    시트에 경험치를 준다. 레벨이 오르면 오른 레벨마다 최대 HP 와 능력치 점수를 받는다.
+    이벤트에 적을 모양을 돌려준다. 성장이 없는 규칙이거나 줄 경험치가 없으면 아무것도 하지 않고 None.
+
+    count 는 받은 경험치(상한에 닿으면 덜 받는다, capped), total 은 그 뒤의 경험치다.
+    level 은 그 뒤의 레벨, previous_level 은 그 앞의 레벨이다. 같으면 오르지 않았다.
+    max_hp 는 그 뒤의 최대 HP, points 는 그 뒤의 쌓인 능력치 점수다.
+    """
+    if progression is None or amount <= 0:
+        return None
+    previous_level = level_of(sheet.xp, progression)
+    count = min(amount, PROGRESSION_MAX_XP - sheet.xp)
+    sheet.xp += count
+    level = level_of(sheet.xp, progression)
+    reached = progression.levels[previous_level - 1 : level - 1]
+    raise_max_hp(sheet, sum(step.max_hp for step in reached))
+    sheet.points += sum(step.points for step in reached)
+    return {
+        'count': count,
+        'total': sheet.xp,
+        'capped': count < amount,
+        'previous_level': previous_level,
+        'level': level,
+        'max_hp': sheet.max_hp,
+        'points': sheet.points,
+    }
+
+
+def leveled(gained: dict | None) -> bool:
+    """그 경험치로 레벨이 올랐는가."""
+    return gained is not None and gained['level'] > gained['previous_level']

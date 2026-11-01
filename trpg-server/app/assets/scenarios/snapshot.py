@@ -156,7 +156,9 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      덫(#806, items[].trap: 피하는 판정, 해제 판정, 효과, 찾기 판정)도 뒤에 더했다.
 #      비워도 되는 칸이라 형식이 그대로다. 미리 놓인 덫(#806 ②, traps: 장소, 덫 물건, 처음부터 아는가)도 같다.
 #      장(#481, chapters: id, 이름, 넘어오는 조건, 여는 장소와 퀘스트)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
-SNAPSHOT_FORMAT = 67
+#  68: 룰북의 규칙에 성장이 있다(#286). rulebook.rules.progression: 레벨표(레벨마다 누적 경험치, 최대 HP, 능력치 점수).
+#      없으면(null) 성장하지 않는다. 퀘스트의 경험치의 보상(quests[].reward_xp)도 함께 더했다. 비워도 되는 칸이다
+SNAPSHOT_FORMAT = 68
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다
@@ -356,6 +358,7 @@ class QuestRuleSnapshot(BaseModel):
     퀘스트 규칙 하나. 판 안의 로어북 사건 항목 하나(entry_id)가 퀘스트로서 어떤지다.
 
     start 는 테이블이 시작할 때의 상태, reward 는 성공했을 때 받는 판 안의 물건, reward_money 는 받는 돈이다.
+    reward_xp 는 받는 경험치다(#286). 형식 68 보다 옛 판의 퀘스트는 경험치를 주지 않는다.
     time_limit_minutes 는 드러난 때부터 세는 기한(분)이다. 비어 있으면 기한이 없다.
     conditions 는 이루는 조건, match 는 그것을 모두 채워야 하는지 하나라도 되는지다. 조건이 없으면 성공하지 않는다.
     reveal 은 숨긴 퀘스트가 드러나는 조건, reveal_match 는 그것을 맞추는 법이다. 없으면 이루어야만 드러난다.
@@ -366,6 +369,7 @@ class QuestRuleSnapshot(BaseModel):
     start: QuestStart = QuestStart.HIDDEN
     reward: list[ItemStackSnapshot] = []
     reward_money: int = 0
+    reward_xp: int = 0
     time_limit_minutes: int | None = None
     conditions: list[QuestConditionSnapshot] = []
     match: QuestMatch = QuestMatch.ALL
@@ -880,6 +884,17 @@ class Snapshot(BaseModel):
         )
         if uses_money and self.currency is None:
             raise ValueError('돈을 쓰는 칸이 있는데 화폐가 없습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_progression_for_xp(self) -> 'Snapshot':
+        """
+        경험치를 주는 퀘스트가 있으면 룰북에 성장이 있는지 본다(#286). 아니면 거부한다.
+
+        게시할 때 이미 막는다(progression_missing). 판을 읽는 쪽(보상)은 경험치가 있으면 성장도 있다고 믿고 쓴다.
+        """
+        if self.rulebook.rules.progression is None and any(quest.reward_xp for quest in self.quests):
+            raise ValueError('경험치를 주는 퀘스트가 있는데 룰북에 성장이 없습니다.')
         return self
 
     @model_validator(mode='after')

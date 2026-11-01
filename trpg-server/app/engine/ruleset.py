@@ -75,6 +75,13 @@ RULESET_MAX_SKILLS = 20
 # 성질(#886)의 개수. 제작자가 정하는 목록이다. 정해 둔 성질이 아니라 한 룰북이 둘 수 있는 만큼이다
 RULESET_MAX_NATURES = 50
 SKILL_MAX_COST = 99
+# 레벨(#286). 레벨 1 에서 시작해 이 레벨까지 오른다. 레벨표의 줄은 레벨 2 부터라 하나 적다
+RULESET_MAX_LEVEL = 20
+# 레벨이 되는 누적 경험치의 상한. 시트가 모을 수 있는 경험치의 상한과 같다(app/tables/growth.py)
+PROGRESSION_MAX_XP = 1_000_000
+# 레벨 하나가 오를 때 더하는 최대 HP 와 받는 능력치 점수의 상한
+LEVEL_MAX_HP_GAIN = 99
+LEVEL_MAX_POINTS = 10
 
 Number = Annotated[int, Field(ge=0, le=RULESET_MAX_NUMBER)]
 
@@ -1004,6 +1011,38 @@ class Skill(Part):
         return self
 
 
+class LevelStep(Part):
+    """
+    레벨표의 한 줄(#286). 그 레벨이 되는 누적 경험치(xp)와, 그 레벨에 오를 때 받는 것이다.
+
+    max_hp 는 오를 때 최대 HP 에 더하는 양이다. 지금 HP 도 그만큼 오른다(쓰러져 있으면 최대만 오른다).
+    points 는 오를 때 받는 능력치 점수다. 플레이어가 능력치에 놓을 때까지 시트에 쌓여 있다.
+    """
+
+    xp: Annotated[int, Field(ge=1, le=PROGRESSION_MAX_XP)]
+    max_hp: Annotated[int, Field(ge=0, le=LEVEL_MAX_HP_GAIN)] = 0
+    points: Annotated[int, Field(ge=0, le=LEVEL_MAX_POINTS)] = 0
+
+
+class Progression(Part):
+    """
+    성장(#286). 경험치를 모아 레벨이 오른다. 캐릭터는 레벨 1, 경험치 0 에서 시작한다.
+
+    levels 는 레벨 2 부터 차례로 그 레벨이 되는 누적 경험치와 받는 것이다. 경험치는 줄마다 커야 한다.
+    경험치를 주는 것(퀘스트의 보상 …)은 판이 적고, 레벨을 올리는 것은 엔진만 한다(app/tables/growth.py).
+    """
+
+    levels: Annotated[tuple[LevelStep, ...], Field(min_length=1, max_length=RULESET_MAX_LEVEL - 1)]
+
+    @model_validator(mode='after')
+    def require_rising_xp(self) -> Self:
+        """뒤의 레벨일수록 더 많은 경험치가 든다. 같거나 적으면 두 레벨을 한꺼번에 오르게 되어 표가 뜻이 없다."""
+        needed = [level.xp for level in self.levels]
+        if any(later <= earlier for earlier, later in zip(needed, needed[1:], strict=False)):
+            raise ValueError('레벨표의 경험치는 줄마다 커야 합니다.')
+        return self
+
+
 class Ruleset(Part):
     """
     규칙 한 벌.
@@ -1073,6 +1112,8 @@ class Ruleset(Part):
     natures: Annotated[tuple[Nature, ...], Field(max_length=RULESET_MAX_NATURES)]
     # 몬스터의 타입마다 걸리지 않는 성질(#886). 적지 않은 타입은 면역이 없다. 칸 자체는 늘 있어야 한다
     monster_immunities: Annotated[tuple[KindImmunity, ...], Field(max_length=len(MonsterKind))]
+    # 성장(#286). 경험치와 레벨표다. None 이면 이 규칙에서는 캐릭터가 성장하지 않는다. 칸 자체는 늘 있어야 한다
+    progression: Progression | None
 
     @model_validator(mode='after')
     def reject_unknown_natures(self) -> Self:

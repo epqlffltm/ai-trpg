@@ -66,9 +66,18 @@ def problem_of(rules: dict) -> str | None:
 
 # 한꺼번에 바꿀 수 있는 규칙의 칸들. 앞의 것을 가리키는 것이 뒤에 온다
 # (부상과 면역이 성질을, 부상 표가 부상을, 수치의 문턱과 기술이 부상과 수치를 가리킨다)
-PART_FIELDS = ('natures', 'injuries', 'injury_table', 'injury_triggers', 'monster_immunities', 'resources', 'skills')
-# null 로 비울 수 있는 칸. 보낸 것은 null 이어도 바꾼다. 다른 칸의 null 은 "보내지 않았다"다
-NULLABLE_PARTS = ('injury_table',)
+PART_FIELDS = (
+    'natures',
+    'injuries',
+    'injury_table',
+    'injury_triggers',
+    'monster_immunities',
+    'resources',
+    'skills',
+    'progression',
+)
+# null 로 비울 수 있는 칸(부상 표, 성장 #286). 보낸 것은 null 이어도 바꾼다. 다른 칸의 null 은 "보내지 않았다"다
+NULLABLE_PARTS = ('injury_table', 'progression')
 
 
 def parts_of(data: RulebookCreate | RulebookUpdate) -> dict[str, object]:
@@ -94,7 +103,7 @@ def dump_part(value: object) -> object:
 
 def with_parts(rules: dict, parts: dict[str, object]) -> dict:
     """
-    규칙의 성질과 면역과 부상과 부상 표와 굴리는 때(#886), 수치(#804), 기술(#805) 중 보낸 것만 바꾼 문서.
+    규칙의 성질과 면역과 부상과 부상 표와 굴리는 때(#886), 수치(#804), 기술(#805), 성장(#286) 중 보낸 것만 바꾼 문서.
     받은 문서는 고치지 않는다. 아무것도 안 보냈으면 그대로다.
 
     칸끼리 가리키는 것(기술의 비용이 수치를, 부상과 면역이 성질을)은 규칙의 다른 칸과 견주어야 알 수 있다.
