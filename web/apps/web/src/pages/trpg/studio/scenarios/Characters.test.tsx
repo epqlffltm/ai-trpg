@@ -96,6 +96,8 @@ describe('캐릭터 탭', () => {
     await userEvent.type(sheet.getByRole('textbox', { name: '건강' }), '12');
     await userEvent.type(form.getByRole('textbox', { name: '기준값' }), '8');
     await userEvent.type(form.getByRole('textbox', { name: '상한' }), '20');
+    expect(form.getByRole('radio', { name: /받는 사람 수로 나눔/ })).toBeChecked();
+    await userEvent.click(form.getByRole('radio', { name: /각자 다 받음/ }));
     await userEvent.click(form.getByRole('button', { name: '저장' }));
 
     expect(await form.findByText('저장했습니다.')).toBeInTheDocument();
@@ -103,6 +105,7 @@ describe('캐릭터 탭', () => {
       recommended_players: { min: 2, max: 4 },
       character_modes: ['pregen', 'custom', 'manual', 'rolled'],
       reroll_allowed: true,
+      xp_split: 'each',
       default_sheet: { abilities: { str: 12, dex: 12, con: 12 }, max_hp: 10, skills: [], resistances: [] },
       player_made_hp: { base: 8, cap: 20 },
     });
@@ -174,6 +177,7 @@ describe('캐릭터 입력', () => {
       recommended_players: { min: 1, max: 4 },
       character_modes: ['pregen'],
       reroll_allowed: false,
+      xp_split: 'share',
     });
     expect(toCharactersBody({ ...draft, modes: ['custom', 'manual'] }, rules)).toMatchObject({ default_sheet: null, player_made_hp: null });
     expect(toCharactersBody({ ...draft, modes: ['custom'] }, null)).not.toHaveProperty('default_sheet');

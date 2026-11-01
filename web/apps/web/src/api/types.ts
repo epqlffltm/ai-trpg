@@ -57,6 +57,10 @@ export type Resource = Trpg['schemas']['Resource'];
 export type ResourceShift = Trpg['schemas']['ResourceShift'];
 export type SheetResource = Trpg['schemas']['ResourceOut'];
 export type ResourceChange = Trpg['schemas']['ResourceShiftOut'];
+// 성장(#286). 룰북의 레벨표(rules.progression)와 그 한 줄, 몬스터와 사건의 경험치를 받는 사람들이 나누는 법
+export type Progression = Trpg['schemas']['Progression'];
+export type LevelStep = Trpg['schemas']['LevelStep'];
+export type XpSplit = Trpg['schemas']['XpSplit'];
 export type WorldDetail = Trpg['schemas']['WorldDetail'];
 export type WorldCreate = Trpg['schemas']['WorldCreate'];
 export type WorldUpdate = Trpg['schemas']['WorldUpdate'];

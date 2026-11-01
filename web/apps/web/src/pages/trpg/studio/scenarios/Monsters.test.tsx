@@ -114,6 +114,12 @@ describe('몬스터 탭', () => {
     expect(dialog.getByRole('button', { name: '저장' })).toBeDisabled();
     await userEvent.click(dialog.getByRole('checkbox', { name: '정신에 약함' }));
     await userEvent.click(dialog.getByRole('checkbox', { name: '독에 약함' }));
+    await userEvent.clear(dialog.getByRole('textbox', { name: '쓰러뜨리면 주는 경험치' }));
+    await userEvent.type(dialog.getByRole('textbox', { name: '쓰러뜨리면 주는 경험치' }), '1.5');
+    expect(dialog.getByText('0~100,000 사이의 정수입니다.')).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.clear(dialog.getByRole('textbox', { name: '쓰러뜨리면 주는 경험치' }));
+    await userEvent.type(dialog.getByRole('textbox', { name: '쓰러뜨리면 주는 경험치' }), '50');
     await userEvent.click(dialog.getByRole('button', { name: '장비 더하기' }));
     await userEvent.click(dialog.getByRole('button', { name: '공격 더하기' }));
     const attack = within(dialog.getByRole('group', { name: '공격 1' }));
@@ -137,7 +143,7 @@ describe('몬스터 탭', () => {
       vulnerable: ['poison'],
       resistances: [],
       nature: null,
-      xp: 0,
+      xp: 50,
     });
     // 고치지 않은 시트의 면역은 그대로 간다
     expect(sent[0]?.immune).toEqual(['poison']);

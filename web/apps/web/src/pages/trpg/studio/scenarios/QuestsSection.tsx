@@ -168,6 +168,16 @@ function QuestForm({ scenario, rules, targets, row, done }: FormProps) {
         {draft.money.trim() !== '0' && draft.money.trim() !== '' ? (
           <p className="ui-field__hint">{scenario.currency ? moneyText(scenario.currency, Number(draft.money) || 0) : '화폐가 없으면 게시 점검이 알립니다.'}</p>
         ) : null}
+        <TextField
+          label="살아 있는 캐릭터마다 받는 경험치"
+          inputMode="numeric"
+          value={draft.xp}
+          onChange={(event) => update({ xp: event.target.value })}
+          error={hints.fields.xp}
+        />
+        {draft.xp.trim() !== '0' && draft.xp.trim() !== '' && !rules?.progression ? (
+          <p className="ui-field__hint">룰북에 성장이 없으면 게시 점검이 알립니다.</p>
+        ) : null}
       </fieldset>
       <TextField
         label="기한(분, 선택)"

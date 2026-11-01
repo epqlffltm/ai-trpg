@@ -1,9 +1,10 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/CharactersTab.tsx
-// 시나리오의 캐릭터 탭(B9): 추천 인원, 캐릭터 방식, 다시 굴리기, 기본 시트, 능력치를 정하는 방식의 최대 HP(탭의 저장),
+// 시나리오의 캐릭터 탭(B9): 추천 인원, 캐릭터 방식, 다시 굴리기, 기본 시트, 능력치를 정하는 방식의 최대 HP,
+// 경험치를 나누는 법(#286, 탭의 저장),
 // 그리고 프리젠(창에서 따로 저장, PregensSection). 시트의 칸은 저장된 룰북의 능력치에서 만든다.
 // 룰북이 없으면 시트를 적을 수 없다고 알리고 재료 탭으로 가는 길을 둔다.
 
-import { Button, Checkbox, Notice, SelectField, TextField } from '@ai-trpg/ui';
+import { Button, Checkbox, Notice, Radio, SelectField, TextField } from '@ai-trpg/ui';
 import { useState } from 'react';
 import type { CharacterMode, Ruleset, ScenarioDetail } from '../../../../api/types';
 import { characterModeLabel } from '../../labels';
@@ -18,6 +19,7 @@ import {
   toggleMode,
   usesDefaultSheet,
   usesPlayerMadeHp,
+  XP_SPLITS,
   type CharactersDraft,
 } from './charactersForm';
 import { PregensSection } from './PregensSection';
@@ -94,6 +96,7 @@ function CharactersForm({ scenario, rules }: { scenario: ScenarioDetail; rules: 
         />
       ) : null}
       {usesPlayerMadeHp(draft.modes) ? <HpFields draft={draft} rules={rules} hints={hints} update={update} /> : null}
+      <XpSplitFields draft={draft} rules={rules} update={update} />
     </ScenarioForm>
   );
 }
@@ -179,6 +182,28 @@ function HpFields({ draft, rules, hints, update }: FieldsProps & { rules: Rulese
           error={hints.hp_cap}
         />
       </div>
+    </fieldset>
+  );
+}
+
+function XpSplitFields({ draft, rules, update }: FieldsProps & { rules: Ruleset | null }) {
+  return (
+    <fieldset className="choice-list">
+      <legend>몬스터와 사건의 경험치</legend>
+      <p className="ui-field__hint">
+        쓰러뜨린 몬스터와 사건이 준 경험치를 그 자리의 일행이 어떻게 받는지입니다. 퀘스트의 경험치는 살아 있는 캐릭터가 각자 다 받습니다.
+        {rules && !rules.progression ? ' 이 룰북에는 성장이 없어 경험치를 쓰지 않습니다.' : ''}
+      </p>
+      {XP_SPLITS.map((choice) => (
+        <Radio
+          key={choice.split}
+          name="xp_split"
+          label={choice.label}
+          description={choice.description}
+          checked={draft.xpSplit === choice.split}
+          onChange={() => update({ xpSplit: choice.split })}
+        />
+      ))}
     </fieldset>
   );
 }

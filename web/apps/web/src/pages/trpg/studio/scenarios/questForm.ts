@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/questForm.ts
 // 퀘스트 규칙 하나의 입력과 퀘스트 규칙 목록을 바꾸는 것(B9 퀘스트·사건 탭). 순수한 함수다.
 // 퀘스트 규칙은 붙인 로어북의 사건 항목 하나가 퀘스트로서 어떤지 정한다: 처음 상태(숨김, 진행 중), 이루는 조건,
-// 드러나는 조건(숨김으로 시작할 때만), 실패하는 조건, 보상(물건, 돈), 기한(분). 규칙이 없으면 숨김으로 시작하고 조건이 없다.
+// 드러나는 조건(숨김으로 시작할 때만), 실패하는 조건, 보상(물건, 돈, 경험치 #286), 기한(분). 규칙이 없으면 숨김으로 시작하고 조건이 없다.
 // 퀘스트의 성공·실패·드러남은 엔진만 정한다. 사람(방장, 서술)은 바꾸지 못한다.
 
 import type { ItemRule, QuestMatch, QuestRule, QuestRuleBody, QuestStart } from '../../../../api/types';
@@ -12,6 +12,8 @@ import { stackDrafts, stacksHints, toStacks, type StackDraft } from './stacksFor
 
 export const MAX_QUESTS = 50;
 export const QUEST_MAX_MINUTES = 365 * 24 * 60;
+// 서버의 한도(trpg-server/app/assets/models.py 의 QUEST_MAX_REWARD_XP)
+export const QUEST_MAX_XP = 100_000;
 
 export type QuestDraft = {
   start: QuestStart;
@@ -23,7 +25,7 @@ export type QuestDraft = {
   failMatch: QuestMatch;
   reward: StackDraft[];
   money: string;
-  /** 경험치의 보상(#286). 고치는 칸은 아직 없어 판에 적힌 것을 그대로 보낸다 */
+  /** 살아 있는 캐릭터마다 받는 경험치(#286). 0 이면 없다 */
   xp: string;
   minutes: string;
 };
@@ -49,13 +51,14 @@ export type QuestHints = {
   reveal: Record<number, string>;
   fail: Record<number, string>;
   reward: Record<number, string>;
-  /** money, minutes */
+  /** money, xp, minutes */
   fields: Record<string, string>;
 };
 
 export function questHints(draft: QuestDraft, entryId: string, itemRules: ItemRule[]): QuestHints {
   const fields: Record<string, string> = {};
   if (wholeNumber(draft.money, 0, MONEY_MAX) === null) fields.money = `0~${MONEY_MAX.toLocaleString('ko-KR')} 사이의 정수입니다.`;
+  if (wholeNumber(draft.xp, 0, QUEST_MAX_XP) === null) fields.xp = `0~${QUEST_MAX_XP.toLocaleString('ko-KR')} 사이의 정수입니다.`;
   if (draft.minutes.trim() !== '' && wholeNumber(draft.minutes, 1, QUEST_MAX_MINUTES) === null) fields.minutes = `1~${QUEST_MAX_MINUTES} 사이의 정수입니다(1년까지).`;
   return {
     conditions: conditionsHints(draft.conditions, entryId),
@@ -104,7 +107,7 @@ function matchText(match: QuestMatch, count: number): string {
   return count > 1 ? (match === 'all' ? '(모두)' : '(하나라도)') : '';
 }
 
-/** 목록의 한 줄. "진행 중으로 시작 · 이룸: 구울 3마리를 쓰러뜨린다 · 보상 1줄 · 돈 30 · 기한 1440분" */
+/** 목록의 한 줄. "진행 중으로 시작 · 이룸: 구울 3마리를 쓰러뜨린다 · 보상 1줄 · 돈 30 · 경험치 300 · 기한 1440분" */
 export function questLine(rule: QuestRule, targets: Targets): string {
   const parts = [rule.start === 'active' ? '진행 중으로 시작' : '숨김으로 시작'];
   if (rule.conditions.length > 0) parts.push(`이룸${matchText(rule.match, rule.conditions.length)}: ${rule.conditions.map((one) => conditionLine(one, targets)).join(', ')}`);
@@ -113,6 +116,7 @@ export function questLine(rule: QuestRule, targets: Targets): string {
   if (rule.fail.length > 0) parts.push(`실패: ${rule.fail.map((one) => conditionLine(one, targets)).join(', ')}`);
   if (rule.reward.length > 0) parts.push(`보상 ${rule.reward.length}줄`);
   if (rule.reward_money > 0) parts.push(`돈 ${rule.reward_money}`);
+  if (rule.reward_xp > 0) parts.push(`경험치 ${rule.reward_xp}`);
   if (rule.time_limit_minutes) parts.push(`기한 ${rule.time_limit_minutes}분`);
   return parts.join(' · ');
 }

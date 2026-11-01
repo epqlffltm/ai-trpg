@@ -1,13 +1,16 @@
 // web/apps/web/src/pages/trpg/studio/rulebooks/rulebookForm.ts
 // 룰북 만들기와 고치기(B9)의 입력. 처음 값, 보내기 전의 검사, 서버에 보낼 본문. 화면을 그리지 않는 순수한 함수다.
 //
-//   - 규칙은 템플릿에서 온다. 고칠 수 있는 규칙은 방어 규칙(armor, #276)과 수치(resources, #804, resourcesForm.ts)다
-//   - 만들 때 템플릿을 바꾸면 수치도 그 템플릿의 예시로 돌아간다
+//   - 규칙은 템플릿에서 온다. 고칠 수 있는 규칙은 방어 규칙(armor, #276), 수치(resources, #804, resourcesForm.ts),
+//     성장(progression, #286, progressionForm.ts)이다
+//   - 만들 때 템플릿을 바꾸면 수치와 성장도 그 템플릿의 것으로 돌아간다
+//   - 성장은 늘 보낸다. 끄면 null 이다(서버는 보낸 null 을 "성장하지 않음"으로 읽는다)
 //   - 만들 때는 고른 템플릿의 방어 규칙을 채워 보인다. 템플릿을 바꾸면 방어 규칙도 그 템플릿의 것으로 돌아간다
 //   - 숫자 칸은 고치는 동안 글로 둔다(비워 두거나 지우는 중일 수 있다). 보낼 때 정수로 바꾼다
 //   - 세이브의 목표값은 save 방식에만 있고 반드시 있다. 다른 방식에 보내면 서버가 422 다. 그래서 save 일 때만 싣는다
 
 import type { Armor, ArmorMode, RulebookCreate, RulebookDetail, RulebookTemplate, RulebookTemplates, RulebookUpdate, TemplateKey } from '../../../../api/types';
+import { progressionDraft, progressionHints, toProgression, type ProgressionDraft } from './progressionForm';
 import { resourceDraft, resourceHints, toResource, type ResourceDraft } from './resourcesForm';
 
 /** 방어 규칙의 고를 거리. none 은 방어구가 막지 않는 규칙(armor: null) */
@@ -23,6 +26,8 @@ export type RulebookDraft = ArmorDraft & {
   template: TemplateKey | string;
   /** HP 말고 다른 수치(#804) */
   resources: ResourceDraft[];
+  /** 성장(#286). 레벨표 */
+  progression: ProgressionDraft;
 };
 
 // 서버의 한도(trpg-server/app/assets/models.py, app/engine/ruleset.py 의 RULESET_MAX_NUMBER)
@@ -52,13 +57,20 @@ export function newRulebookDraft(templates: RulebookTemplates): RulebookDraft {
     template: template?.key ?? templates.default,
     ...armorDraft(template?.rules.armor ?? null),
     resources: (template?.rules.resources ?? []).map(resourceDraft),
+    progression: progressionDraft(template?.rules.progression),
   };
 }
 
 /** 템플릿을 바꾼다. 방어 규칙도 그 템플릿의 것으로 돌아간다 */
 export function withTemplate(draft: RulebookDraft, templates: RulebookTemplates, key: TemplateKey): RulebookDraft {
   const template = templateOf(templates, key);
-  return { ...draft, template: key, ...armorDraft(template?.rules.armor ?? null), resources: (template?.rules.resources ?? []).map(resourceDraft) };
+  return {
+    ...draft,
+    template: key,
+    ...armorDraft(template?.rules.armor ?? null),
+    resources: (template?.rules.resources ?? []).map(resourceDraft),
+    progression: progressionDraft(template?.rules.progression),
+  };
 }
 
 /** 고칠 때의 처음 값. 지금 룰북의 것 */
@@ -70,6 +82,7 @@ export function rulebookDraft(rulebook: RulebookDetail): RulebookDraft {
     template: rulebook.rules.template,
     ...armorDraft(rulebook.rules.armor),
     resources: rulebook.rules.resources.map(resourceDraft),
+    progression: progressionDraft(rulebook.rules.progression),
   };
 }
 
@@ -94,7 +107,7 @@ export function rulebookHints(draft: RulebookDraft): Record<string, string> {
   if (draft.armor !== 'none' && wholeNumber(draft.pierceBase, 0, NUMBER_MAX) === null) {
     hints.pierce_base = `관통의 기준값을 0~${NUMBER_MAX} 사이의 정수로 적어 주세요.`;
   }
-  return { ...hints, ...resourceHints(draft.resources) };
+  return { ...hints, ...resourceHints(draft.resources), ...progressionHints(draft.progression) };
 }
 
 /** 보낼 방어 규칙. 막지 않음이면 null. 검사(rulebookHints)를 지난 뒤에 부른다 */
@@ -114,6 +127,7 @@ export function toRulebookCreate(draft: RulebookDraft): RulebookCreate {
     template: draft.template as TemplateKey,
     armor: toArmor(draft),
     resources: draft.resources.map(toResource),
+    progression: toProgression(draft.progression),
   };
 }
 
@@ -125,5 +139,6 @@ export function toRulebookUpdate(draft: RulebookDraft): RulebookUpdate {
     gm_guide: draft.gmGuide,
     armor: toArmor(draft),
     resources: draft.resources.map(toResource),
+    progression: toProgression(draft.progression),
   };
 }

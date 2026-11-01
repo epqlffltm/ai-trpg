@@ -134,6 +134,12 @@ describe('퀘스트·사건 탭', () => {
 
     await userEvent.clear(dialog.getByRole('textbox', { name: '살아 있는 캐릭터마다 받는 돈' }));
     await userEvent.type(dialog.getByRole('textbox', { name: '살아 있는 캐릭터마다 받는 돈' }), '30');
+    await userEvent.clear(dialog.getByRole('textbox', { name: '살아 있는 캐릭터마다 받는 경험치' }));
+    await userEvent.type(dialog.getByRole('textbox', { name: '살아 있는 캐릭터마다 받는 경험치' }), '100001');
+    expect(dialog.getByText('0~100,000 사이의 정수입니다.')).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.clear(dialog.getByRole('textbox', { name: '살아 있는 캐릭터마다 받는 경험치' }));
+    await userEvent.type(dialog.getByRole('textbox', { name: '살아 있는 캐릭터마다 받는 경험치' }), '300');
     await userEvent.type(dialog.getByRole('textbox', { name: '기한(분, 선택)' }), '1440');
     await userEvent.click(dialog.getByRole('button', { name: '저장' }));
 
@@ -150,7 +156,7 @@ describe('퀘스트·사건 탭', () => {
       fail_match: 'all',
       reward: [],
       reward_money: 30,
-      reward_xp: 0,
+      reward_xp: 300,
       time_limit_minutes: 1440,
     });
   });

@@ -41,6 +41,7 @@ export function scenarioDetail(extra: Record<string, unknown> = {}) {
     npc_places: [],
     player_made_hp: null,
     reroll_allowed: false,
+    xp_split: 'share',
     narration_style: 'classic',
     narration_model: 'glm-air',
     narration_model_status: { state: 'ok', retires_on: null, replacement: null },

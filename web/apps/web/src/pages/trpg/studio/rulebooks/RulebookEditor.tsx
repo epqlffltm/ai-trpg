@@ -9,6 +9,7 @@ import type { FormProblem } from '../../../../auth/problem';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { TextAreaField } from '../../../../components/TextAreaField';
 import { ArmorFields } from './ArmorFields';
+import { ProgressionFields } from './ProgressionFields';
 import { ResourceFields } from './ResourceFields';
 import { DESCRIPTION_MAX, GM_GUIDE_MAX, rulebookHints, TITLE_MAX, withTemplate, type RulebookDraft } from './rulebookForm';
 import { templateAbilities, templateDie } from './rulebookView';
@@ -85,6 +86,7 @@ export function RulebookEditor({ initial, templates, die, abilities, submitLabel
         hints={hints}
         onChange={(resources) => update({ resources })}
       />
+      <ProgressionFields progression={draft.progression} hints={hints} onChange={(progression) => update({ progression })} />
       <div className="form-actions">
         <Button type="submit" busy={busy} disabled={Object.keys(hints).length > 0}>
           {submitLabel}
