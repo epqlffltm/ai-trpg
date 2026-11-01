@@ -37,6 +37,7 @@ from app.assets.models import (
 from app.assets.ratings import ALL_AGES_ONLY, require_rating
 from app.assets.scenarios import repository
 from app.assets.scenarios.schemas import (
+    Chapter,
     CoverRule,
     CrossCheck,
     Encounter,
@@ -203,6 +204,20 @@ class Problem(enum.StrEnum):
     HAPPENING_NPC_NOT_PERSON = 'happening_npc_not_person'
     # 문을 다루는 사건의 효과(#281)가 판에 없는 길, 문(자물쇠나 빗장)이 없는 길, 그 길에 없는 장치를 가리킨다
     HAPPENING_ROUTE_INVALID = 'happening_route_invalid'
+    # 장(#481)이 맵의 장소가 아닌 것을 연다. 맵에 없는 장소에는 아무도 서지 못한다
+    CHAPTER_PLACE_OFF_MAP = 'chapter_place_off_map'
+    # 장(#481)이 붙인 로어북에 없는 항목을 퀘스트로 연다
+    CHAPTER_QUEST_MISSING = 'chapter_quest_missing'
+    # 장(#481)이 사건 항목이 아닌 것(장소, 물건 …)을 퀘스트로 연다
+    CHAPTER_QUEST_NOT_EVENT = 'chapter_quest_not_event'
+    # 장으로 넘어오는 조건이 가리키는 것이 없다(퀘스트의 조건과 같이 본다)
+    CHAPTER_CONDITION_MISSING = 'chapter_condition_missing'
+    # 장으로 넘어오는 조건이 맞지 않는 종류를 가리킨다
+    CHAPTER_CONDITION_INVALID = 'chapter_condition_invalid'
+    # 장으로 넘어오는 조건을 채울 수 없다(맵에 없는 장소, 놓인 마리보다 많이, 성공하지 않는 퀘스트 …)
+    CHAPTER_CONDITION_IMPOSSIBLE = 'chapter_condition_impossible'
+    # 시작 장소를 첫 장 뒤의 장이 연다. 처음부터 서는 곳은 처음부터 열려 있어야 한다
+    CHAPTER_START_LOCKED = 'chapter_start_locked'
     # 붙인 로어북의 인물 항목이 아닌 것(없는 항목, 장소, 물건 …)의 자리가 있다(#282)
     NPC_PLACE_NOT_PERSON = 'npc_place_not_person'
     # 인물의 자리가 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)다. 아무도 그 인물을 만날 수 없다
@@ -965,6 +980,64 @@ def read_happenings(scenario: Scenario) -> list[HappeningRule]:
     return [HappeningRule.model_validate(document) for document in scenario.happenings]
 
 
+def read_chapters(scenario: Scenario) -> list[Chapter]:
+    """장들을 읽는다(#481)."""
+    return [Chapter.model_validate(document) for document in scenario.chapters]
+
+
+CHAPTER_CONDITION_PROBLEMS = {
+    Problem.QUEST_CONDITION_MISSING: Problem.CHAPTER_CONDITION_MISSING,
+    Problem.QUEST_CONDITION_INVALID: Problem.CHAPTER_CONDITION_INVALID,
+    Problem.QUEST_CONDITION_IMPOSSIBLE: Problem.CHAPTER_CONDITION_IMPOSSIBLE,
+}
+
+# 장의 문제를 적는 차례
+CHAPTER_PROBLEM_ORDER = [
+    Problem.CHAPTER_PLACE_OFF_MAP,
+    Problem.CHAPTER_QUEST_MISSING,
+    Problem.CHAPTER_QUEST_NOT_EVENT,
+    Problem.CHAPTER_CONDITION_MISSING,
+    Problem.CHAPTER_CONDITION_INVALID,
+    Problem.CHAPTER_CONDITION_IMPOSSIBLE,
+    Problem.CHAPTER_START_LOCKED,
+]
+
+
+def chapter_quest_problems(chapters: list[Chapter], parts: Parts) -> set[Problem]:
+    """장이 여는 퀘스트의 문제. 붙인 로어북의 사건 항목이어야 한다."""
+    entries = lore_entries(parts)
+    opened = [quest for chapter in chapters for quest in chapter.opens.quests]
+    found = set()
+    if any(quest not in entries for quest in opened):
+        found.add(Problem.CHAPTER_QUEST_MISSING)
+    if any(quest in entries and entries[quest].kind != LoreKind.EVENT for quest in opened):
+        found.add(Problem.CHAPTER_QUEST_NOT_EVENT)
+    return found
+
+
+def find_chapter_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
+    """
+    장(#481, docs/architecture/chapters.md)에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만, 정한 순서로 적는다.
+
+    여는 장소는 맵의 장소(시작 장소, 길의 끝, 명소)여야 하고, 여는 퀘스트는 붙인 로어북의 사건 항목이어야 한다.
+    넘어오는 조건은 퀘스트의 조건과 같이 본다(condition_problem). 시작 장소는 첫 장 뒤에 열지 않는다.
+    id 가 겹치는 것, 첫 장의 조건, 두 장에 적힌 것은 저장할 때 이미 막는다(schemas.Chapters).
+    """
+    chapters = read_chapters(scenario)
+    on_map = set(map_places(scenario, read_routes(scenario)))
+    found = chapter_quest_problems(chapters, parts)
+    if any(place not in on_map for chapter in chapters for place in chapter.opens.places):
+        found.add(Problem.CHAPTER_PLACE_OFF_MAP)
+    for chapter in chapters:
+        for condition in chapter.when:
+            problem = condition_problem(condition, scenario, parts)
+            if problem is not None:
+                found.add(CHAPTER_CONDITION_PROBLEMS[problem])
+    if any(scenario.start_place in chapter.opens.places for chapter in chapters[1:]):
+        found.add(Problem.CHAPTER_START_LOCKED)
+    return [problem for problem in CHAPTER_PROBLEM_ORDER if problem in found]
+
+
 # 길의 문을 다루는 사건의 효과의 모양(#281)
 ROUTE_EFFECT_TYPES = (RouteDoorEffect, RepairRouteEffect)
 
@@ -1334,6 +1407,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_trap_problems(scenario))
     problems.extend(find_wander_problems(scenario))
     problems.extend(find_happening_problems(scenario, parts))
+    problems.extend(find_chapter_problems(scenario, parts))
     problems.extend(find_npc_place_problems(scenario, parts))
     problems.extend(find_seating_problems(scenario))
     return problems

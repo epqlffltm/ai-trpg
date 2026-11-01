@@ -126,6 +126,12 @@ WANDER_MAX_WEIGHT = 100
 # 조건의 수는 퀘스트와 같다(QUEST_MAX_CONDITIONS)
 SCENARIO_MAX_HAPPENINGS = 50
 HAPPENING_MAX_EFFECTS = 5
+# 시나리오 하나의 장(#481, docs/architecture/chapters.md)의 수, 장의 id 와 이름의 길이,
+# 장 하나가 여는 장소와 퀘스트의 수. 조건의 수는 퀘스트와 같다(QUEST_MAX_CONDITIONS)
+SCENARIO_MAX_CHAPTERS = 20
+CHAPTER_ID_MAX_LENGTH = 40
+CHAPTER_NAME_MAX_LENGTH = 40
+CHAPTER_MAX_OPENS = 100
 # 몬스터 하나의 공격(스킬)의 수와 이름의 길이. 공격이 여럿이면 차례마다 서버의 주사위로 하나를 고른다
 MONSTER_MAX_ATTACKS = 5
 ATTACK_NAME_MAX_LENGTH = 30
@@ -626,6 +632,7 @@ class Scenario(AssetContent):
         CheckConstraint(f'jsonb_array_length(traps) <= {SCENARIO_MAX_TRAPS}', name='traps_count'),
         CheckConstraint(f'jsonb_array_length(wanders) <= {SCENARIO_MAX_WANDERS}', name='wanders_count'),
         CheckConstraint(f'jsonb_array_length(happenings) <= {SCENARIO_MAX_HAPPENINGS}', name='happenings_count'),
+        CheckConstraint(f'jsonb_array_length(chapters) <= {SCENARIO_MAX_CHAPTERS}', name='chapters_count'),
         CheckConstraint(f'jsonb_array_length(npc_places) <= {SCENARIO_MAX_NPC_PLACES}', name='npc_places_count'),
         # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
         CheckConstraint(
@@ -774,6 +781,12 @@ class Scenario(AssetContent):
     # 효과는 캐릭터 옮기기(move)와 인물 옮기기(move_npc, #282)다.
     # 잡혀 끌려가기, 함정, 휩쓸림처럼 길로 이어지지 않은 이동을 판이 정한다(app/rounds/happenings.py)
     happenings: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 장들(#481, docs/architecture/chapters.md). 하나하나가 {id, name, when, match, opens} 다.
+    # 목록의 차례가 장의 차례다.
+    # when 은 그 장으로 넘어오는 조건(퀘스트의 조건과 같은 모양), opens 는 그 장부터 열리는 장소와 퀘스트다.
+    # 어느 장에도 적지 않은 것은 처음부터 열려 있다. 비면 장이 없는 판이다
+    chapters: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 인물의 자리들(#282). 하나하나가 {entry_id, place_id} 다. "이 인물은 처음에 이 장소에 있다"는 뜻이다.
     # 인물은 붙인 로어북의 인물 항목, 장소는 맵의 장소다. 자리가 있는 인물은 장면의 글이 아니라 장소로 나온다.

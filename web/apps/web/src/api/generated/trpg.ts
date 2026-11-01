@@ -2441,6 +2441,143 @@ export interface components {
          */
         ChangeKind: "damage" | "recovery";
         /**
+         * Chapter
+         * @description 장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.
+         *
+         *     id 는 판이 바뀌어도 그대로 두는 장의 이름표다. name 은 화면에 보이는 장의 이름이다("축제").
+         *     when 은 그 장으로 넘어오는 조건이다. 모양과 종류는 퀘스트의 조건과 같고(QuestCondition),
+         *     match 는 그것을 맞추는 법이다.
+         *     첫 장은 처음부터 그 장이라 조건을 적지 않는다. 그 뒤의 장에는 하나 이상 적는다(Chapters 가 본다).
+         *     가져가기(consume)는 쓰지 않는다. 장은 물건을 받지 않는다.
+         *     opens 는 그 장부터 열리는 장소와 퀘스트다. 어느 장에도 적지 않은 것은 처음부터 열려 있다.
+         */
+        "Chapter-Input": {
+            /** Id */
+            id: string;
+            /** @default all */
+            match: components["schemas"]["QuestMatch"];
+            /** Name */
+            name: string;
+            /**
+             * @default {
+             *       "places": [],
+             *       "quests": []
+             *     }
+             */
+            opens: components["schemas"]["ChapterOpens-Input"];
+            /**
+             * When
+             * @default []
+             */
+            when: components["schemas"]["QuestCondition-Input"][];
+        };
+        /**
+         * Chapter
+         * @description 장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.
+         *
+         *     id 는 판이 바뀌어도 그대로 두는 장의 이름표다. name 은 화면에 보이는 장의 이름이다("축제").
+         *     when 은 그 장으로 넘어오는 조건이다. 모양과 종류는 퀘스트의 조건과 같고(QuestCondition),
+         *     match 는 그것을 맞추는 법이다.
+         *     첫 장은 처음부터 그 장이라 조건을 적지 않는다. 그 뒤의 장에는 하나 이상 적는다(Chapters 가 본다).
+         *     가져가기(consume)는 쓰지 않는다. 장은 물건을 받지 않는다.
+         *     opens 는 그 장부터 열리는 장소와 퀘스트다. 어느 장에도 적지 않은 것은 처음부터 열려 있다.
+         */
+        "Chapter-Output": {
+            /** Id */
+            id: string;
+            /** @default all */
+            match: components["schemas"]["QuestMatch"];
+            /** Name */
+            name: string;
+            /**
+             * @default {
+             *       "places": [],
+             *       "quests": []
+             *     }
+             */
+            opens: components["schemas"]["ChapterOpens-Output"];
+            /**
+             * When
+             * @default []
+             */
+            when: components["schemas"]["QuestCondition-Output"][];
+        };
+        /**
+         * ChapterOpens
+         * @description 장 하나가 여는 것(#481). 그 장부터 갈 수 있는 장소(places, 로어북의 장소 항목)와
+         *     그 장부터 드러나고 이룰 수 있는 퀘스트(quests, 로어북의 사건 항목)다.
+         *
+         *     장소는 맵의 장소여야 하고, 퀘스트는 붙인 로어북의 사건 항목이어야 한다(게시할 때 본다).
+         */
+        "ChapterOpens-Input": {
+            /**
+             * Places
+             * @default []
+             */
+            places: string[];
+            /**
+             * Quests
+             * @default []
+             */
+            quests: string[];
+        };
+        /**
+         * ChapterOpens
+         * @description 장 하나가 여는 것(#481). 그 장부터 갈 수 있는 장소(places, 로어북의 장소 항목)와
+         *     그 장부터 드러나고 이룰 수 있는 퀘스트(quests, 로어북의 사건 항목)다.
+         *
+         *     장소는 맵의 장소여야 하고, 퀘스트는 붙인 로어북의 사건 항목이어야 한다(게시할 때 본다).
+         */
+        "ChapterOpens-Output": {
+            /** Places */
+            places?: string[];
+            /** Quests */
+            quests?: string[];
+        };
+        /**
+         * ChapterOpensSnapshot
+         * @description 장 하나가 여는 것(#481). 판 안의 장소 항목(places)과 사건 항목(quests)이다.
+         */
+        ChapterOpensSnapshot: {
+            /**
+             * Places
+             * @default []
+             */
+            places: string[];
+            /**
+             * Quests
+             * @default []
+             */
+            quests: string[];
+        };
+        /**
+         * ChapterSnapshot
+         * @description 장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.
+         *
+         *     when 은 그 장으로 넘어오는 조건(퀘스트의 조건과 같은 모양), match 는 그것을 맞추는 법이다. 첫 장은 조건이 없다.
+         *     opens 는 그 장부터 열리는 장소와 퀘스트다.
+         */
+        ChapterSnapshot: {
+            /** Id */
+            id: string;
+            /** @default all */
+            match: components["schemas"]["QuestMatch"];
+            /** Name */
+            name: string;
+            /**
+             * @default {
+             *       "places": [],
+             *       "quests": []
+             *     }
+             */
+            opens: components["schemas"]["ChapterOpensSnapshot"];
+            /**
+             * When
+             * @default []
+             */
+            when: components["schemas"]["QuestConditionSnapshot"][];
+        };
+        /**
          * CharacterMode
          * @description 테이블에 앉는 사람이 캐릭터를 얻는 방식.
          *
@@ -8324,6 +8461,11 @@ export interface components {
              */
             bestiary_ids: string[];
             /**
+             * Chapters
+             * @default []
+             */
+            chapters: components["schemas"]["Chapter-Input"][];
+            /**
              * Character Modes
              * @default [
              *       "pregen",
@@ -8467,6 +8609,8 @@ export interface components {
         ScenarioDetail: {
             /** Bestiary Ids */
             bestiary_ids: string[];
+            /** Chapters */
+            chapters: components["schemas"]["Chapter-Output"][];
             /** Character Modes */
             character_modes: components["schemas"]["CharacterMode"][];
             clock: components["schemas"]["Clock"];
@@ -8588,7 +8732,7 @@ export interface components {
          *     null 을 보내면 비운다.
          *     보내지 않으면 그대로 둔다.
          *     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-         *     quests, routes, landmarks, place_items, covers, traps, wanders, happenings, npc_places, character_modes 는
+         *     quests, routes, landmarks, place_items, covers, traps, wanders, happenings, chapters, npc_places, character_modes 는
          *     보낸 목록으로 통째로 바꾼다.
          *     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
          *     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -8596,6 +8740,8 @@ export interface components {
         ScenarioUpdate: {
             /** Bestiary Ids */
             bestiary_ids?: string[] | null;
+            /** Chapters */
+            chapters?: components["schemas"]["Chapter-Input"][] | null;
             /** Character Modes */
             character_modes?: components["schemas"]["CharacterMode"][] | null;
             clock?: components["schemas"]["Clock"] | null;
@@ -9049,6 +9195,11 @@ export interface components {
          *     gm_guide 와 gm_notes 가 들어 있다. 만든 사람이 아닌 사람에게 이 문서를 그대로 내주면 안 된다.
          */
         Snapshot: {
+            /**
+             * Chapters
+             * @default []
+             */
+            chapters: components["schemas"]["ChapterSnapshot"][];
             /** Character Modes */
             character_modes: components["schemas"]["CharacterMode"][];
             /**
