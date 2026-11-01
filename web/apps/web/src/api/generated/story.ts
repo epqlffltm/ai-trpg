@@ -1338,8 +1338,14 @@ export interface components {
          *     day 는 며칠째, slot 은 시간대의 id, deadline_days 는 판의 기한(없으면 null)이다. 남은 날은 deadline_days - day 다.
          *     ending 은 이 가지에서 본 엔딩의 id 와 이름(못 봤으면 null)이다.
          *     epilogue 는 엔딩을 봤고 세계관이 후일담을 골라 이야기가 이어지는 것이다(엔딩을 봤는데 거짓이면 끝난 세션이다).
+         *     chapter_number 와 chapter_name 은 지금 장의 차례(첫 장이 1)와 이름이다(장이 없는 판은 null,
+         *     docs/architecture/chapters.md). 지금 장이라 이미 닿은 장이다.
          */
         ProgressOut: {
+            /** Chapter Name */
+            chapter_name?: string | null;
+            /** Chapter Number */
+            chapter_number?: number | null;
             /** Day */
             day: number;
             /** Deadline Days */

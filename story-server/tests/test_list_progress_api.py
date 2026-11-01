@@ -68,6 +68,8 @@ async def test_a_new_session_starts_on_day_one_without_an_ending(
         'ending': None,
         'ending_name': None,
         'epilogue': False,
+        'chapter_number': None,
+        'chapter_name': None,
     }
 
 

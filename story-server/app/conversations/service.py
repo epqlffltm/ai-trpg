@@ -546,9 +546,19 @@ async def change_persona(
     return await repository.persona_of(session, conversation_id)
 
 
+def chapter_progress(world: World, state: StoryState) -> tuple[int | None, str | None]:
+    """지금 장의 차례(첫 장이 1)와 이름. 장이 없는 판이면 (None, None)이다. 이름이 비면 id 다."""
+    if not world.chapters:
+        return None, None
+    index = world.reached_index(state.chapter)
+    chapter = world.chapters[index]
+    return index + 1, chapter.name or chapter.id
+
+
 def progress_of(world: World, state: StoryState) -> ProgressOut:
     """가지의 끝의 상태를 목록의 진행으로. 엔딩의 이름은 판에서 찾는다(없으면 id 그대로)."""
     ending = world.ending(state.ending) if state.ending is not None else None
+    chapter_number, chapter_name = chapter_progress(world, state)
     return ProgressOut(
         day=day_of(state.minutes),
         slot=slot_of(world, state.minutes),
@@ -556,6 +566,8 @@ def progress_of(world: World, state: StoryState) -> ProgressOut:
         ending=state.ending,
         ending_name=(ending.name or ending.id) if ending is not None else state.ending,
         epilogue=state.ending is not None and world.after_ending == AfterEnding.EPILOGUE,
+        chapter_number=chapter_number,
+        chapter_name=chapter_name,
     )
 
 
