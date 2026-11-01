@@ -80,6 +80,9 @@ CONFESSION_MAX_COOLDOWN_DAYS = 30
 WORLD_MAX_ENDINGS = 30
 ENDING_NAME_MAX_LENGTH = 30
 ENDING_HINT_MAX_LENGTH = 100
+# 장(docs/architecture/chapters.md, 판의 형식 6). 개수와 이름의 길이. id 는 다른 id 와 같은 열쇠(40자)다
+WORLD_MAX_CHAPTERS = 20
+CHAPTER_NAME_MAX_LENGTH = 40
 
 
 class AfterEnding(enum.StrEnum):
@@ -138,6 +141,7 @@ class ConditionKind(enum.StrEnum):
       event_seen         target: 이벤트        그 이벤트가 열린 적이 있다(판의 형식 2)
       ending_seen        target: 엔딩          이 계정이 그 엔딩을 본 적이 있다(회차 혜택, 판의 형식 5).
                                                story 가 세션을 시작할 때 계정의 기록을 굳혀 판정한다
+      chapter_at_least   target: 장            지금 장이 그 장이거나 그 뒤다(판의 형식 6, docs/architecture/chapters.md)
     """
 
     REACH_PLACE = 'reach_place'
@@ -151,6 +155,7 @@ class ConditionKind(enum.StrEnum):
     ACCOMPANIED = 'accompanied'
     EVENT_SEEN = 'event_seen'
     ENDING_SEEN = 'ending_seen'
+    CHAPTER_AT_LEAST = 'chapter_at_least'
 
 
 class ConfessionFailure(enum.StrEnum):
@@ -254,6 +259,9 @@ class World(Base):
     # 엔딩들 [{"id", "name", "trigger", "when", "scene", "unlock", "hint"}](판의 형식 3). 적은 차례가 맞춰 보는 차례다.
     # 인물마다의 고백(confession)은 인물(cast)의 칸이다
     endings: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    # 장들 [{"id", "name", "when", "opens": {"places", "events"}}](판의 형식 6, docs/architecture/chapters.md).
+    # 적은 차례가 장의 차례다. 비면 장이 없다(모든 장소와 이벤트가 처음부터 열려 있다)
+    chapters: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
     # 가리키는 로어북들의 id(자기 로어북만). 게시할 때 그 마지막 판이 판에 복사된다
     lorebooks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), default=list, server_default='{}')
 

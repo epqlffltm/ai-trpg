@@ -10,6 +10,7 @@ import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import type { StoryWorldDetail } from '../../../api/storyWorlds';
 import { WorldBasicsTab } from './WorldBasicsTab';
 import { WorldCastTab } from './WorldCastTab';
+import { WorldChaptersTab } from './WorldChaptersTab';
 import { WorldCheckPanel } from './WorldCheckPanel';
 import { WorldEndingsTab } from './WorldEndingsTab';
 import { WorldEventsTab } from './WorldEventsTab';
@@ -85,6 +86,7 @@ function panelOf(tab: WorldTab, world: StoryWorldDetail): ReactNode {
   if (tab === 'cast') return <WorldCastTab world={world} />;
   if (tab === 'events') return <WorldEventsTab world={world} />;
   if (tab === 'endings') return <WorldEndingsTab world={world} />;
+  if (tab === 'chapters') return <WorldChaptersTab world={world} />;
   if (tab === 'lorebooks') return <WorldLorebooksTab world={world} />;
   return <WorldPublishTab world={world} />;
 }

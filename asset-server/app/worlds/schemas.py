@@ -46,6 +46,7 @@ from app.worlds.documents import WorldDocument
 from app.worlds.models import (
     CAST_MAX_GIFTS,
     CAST_MAX_SCHEDULE,
+    CHAPTER_NAME_MAX_LENGTH,
     CHOICE_TEXT_MAX_LENGTH,
     CONDITION_MAX_COUNT,
     CONFESSION_COOLDOWN_DEFAULT_DAYS,
@@ -66,6 +67,7 @@ from app.worlds.models import (
     SLOT_NAME_MAX_LENGTH,
     VERSION_NOTE_MAX_LENGTH,
     WORLD_MAX_CAST,
+    WORLD_MAX_CHAPTERS,
     WORLD_MAX_ENDINGS,
     WORLD_MAX_EVENTS,
     WORLD_MAX_ITEMS,
@@ -194,6 +196,7 @@ CONDITION_FIELDS: dict[ConditionKind, frozenset[str]] = {
     ConditionKind.ACCOMPANIED: frozenset({'target'}),
     ConditionKind.EVENT_SEEN: frozenset({'target'}),
     ConditionKind.ENDING_SEEN: frozenset({'target'}),
+    ConditionKind.CHAPTER_AT_LEAST: frozenset({'target'}),
 }
 # count 를 쓰지 않는 종류의 count. 세지 않는다
 UNCOUNTED = 1
@@ -204,7 +207,7 @@ ConditionValue = Annotated[str, StringConstraints(min_length=1, max_length=40)]
 class Condition(BaseModel):
     """
     조건 하나(story.md 의 "조건"). 종류(kind)마다 쓰는 칸이 다르다(CONDITION_FIELDS).
-    target 은 장소, 물건, 인물, 시간대, 이벤트의 id 다. value 는 물건의 id(건넸다)나 호감도 단계의 이름이다.
+    target 은 장소, 물건, 인물, 시간대, 이벤트, 엔딩, 장의 id 다. value 는 물건의 id(건넸다)나 호감도 단계의 이름이다.
     count 는 물건의 수(가졌다)나 날짜(n일째)다. 쓰지 않는 칸은 적지 않는다.
     """
 
@@ -496,8 +499,52 @@ def unique_endings(endings: list[Ending]) -> list[Ending]:
 
 Endings = Annotated[list[Ending], Field(max_length=WORLD_MAX_ENDINGS), AfterValidator(unique_endings)]
 
+
+class ChapterOpens(BaseModel):
+    """장이 여는 장소와 이벤트(의 id). 어느 장에도 적지 않은 것은 처음부터 열려 있다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    places: Annotated[list[Key], Field(max_length=WORLD_MAX_PLACES)] = []
+    events: Annotated[list[Key], Field(max_length=WORLD_MAX_EVENTS)] = []
+
+
+class Chapter(BaseModel):
+    """
+    장 하나(docs/architecture/chapters.md). 적은 차례가 장의 차례다. when 은 그 장으로 넘어오는 조건이다.
+    첫 장은 조건을 적지 않고, 그 뒤의 장은 조건을 하나 이상 적는다(Chapters 가 본다).
+    id 는 판이 바뀌어도 그대로 둔다(나중에 장 경계에서 새 판으로 갈아탈 수 있게).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: Key
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=CHAPTER_NAME_MAX_LENGTH)]
+    when: Conditions = Conditions()
+    opens: ChapterOpens = ChapterOpens()
+
+
+def ordered_chapters(chapters: list[Chapter]) -> list[Chapter]:
+    """
+    모양만으로 아는 것을 저장할 때 막는다(TRPG 와 같다). id 는 하나씩이고, 첫 장에는 조건이 없고 뒤의 장에는 있다.
+    장소와 이벤트 하나는 한 장에만 적는다. 가리키는 것이 있는지는 게시할 때 본다.
+    """
+    reject_repeated_keys([chapter.id for chapter in chapters])
+    if chapters and chapters[0].when.items:
+        raise ValueError('첫 장에는 넘어오는 조건을 적지 않습니다(처음부터 그 장입니다).')
+    if any(not chapter.when.items for chapter in chapters[1:]):
+        raise ValueError('첫 장 뒤의 장에는 넘어오는 조건을 하나 이상 적습니다.')
+    places = [place for chapter in chapters for place in chapter.opens.places]
+    events = [event for chapter in chapters for event in chapter.opens.events]
+    if len(set(places)) != len(places) or len(set(events)) != len(events):
+        raise ValueError('장소나 이벤트 하나는 한 장에만 적습니다.')
+    return chapters
+
+
+Chapters = Annotated[list[Chapter], Field(max_length=WORLD_MAX_CHAPTERS), AfterValidator(ordered_chapters)]
+
 # DB 에 dict(의 목록)로 적는 칸
-DOCUMENT_LISTS = ('slots', 'places', 'paths', 'items', 'start_items', 'cast', 'events', 'endings')
+DOCUMENT_LISTS = ('slots', 'places', 'paths', 'items', 'start_items', 'cast', 'events', 'endings', 'chapters')
 # 고칠 때 null 로 비울 수 있는 칸. 그림, 시작 장소와 시간대, 기한은 "없음"이 null 이다
 NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'start_slot', 'deadline_days'})
 
@@ -558,6 +605,7 @@ class WorldCreate(BaseModel):
     cast: Cast = []
     events: Events = []
     endings: Endings = []
+    chapters: Chapters = []
     lorebooks: Lorebooks = []
 
     def image_ids(self) -> list[uuid.UUID]:
@@ -604,6 +652,7 @@ class WorldUpdate(BaseModel):
     cast: Cast | None = None
     events: Events | None = None
     endings: Endings | None = None
+    chapters: Chapters | None = None
     lorebooks: Lorebooks | None = None
 
     @model_validator(mode='after')
@@ -653,6 +702,8 @@ class WorldDetail(BaseModel):
     cast: list[CastMember]
     events: list[Event]
     endings: list[Ending]
+    # 장들(판의 형식 6). 기본값이 있어 웹의 생성 타입에서는 고르는 칸이다
+    chapters: list[Chapter] = []
     lorebooks: list[uuid.UUID]
     latest_version: int | None
     published_at: datetime | None
