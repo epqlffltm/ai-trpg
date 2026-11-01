@@ -373,6 +373,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   narration_model_replaced: (p, ctx) => `서술 모델을 바꿨습니다: ${model(p, ctx, 'from')} → ${model(p, ctx)}(앞의 모델이 끝남)`,
   narration_model_unavailable: (p, ctx) => `서술 모델 ${model(p, ctx)}: 쓸 수 없습니다. 방장이 모델을 고를 때까지 서술하지 못합니다.`,
   happening_occurred: (p) => `일어난 일: ${text(p, 'name') ?? '?'}`,
+  chapter_changed: (p) => `${count(p, 'number') ?? '?'}장: ${placeOf(p, 'to') ?? '?'}`,
   monsters_appeared: (p) => wanderText(p),
 
   // 몸

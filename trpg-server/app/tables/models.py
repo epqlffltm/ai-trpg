@@ -44,6 +44,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.assets.models import (
+    CHAPTER_ID_MAX_LENGTH,
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
     CREATOR_MADE_MODES,
@@ -230,6 +231,12 @@ class GameTable(Base):
 
     # 고른 스타팅. content 의 openings 에서 몇 번째인가(0 부터). 테이블을 만드는 사람이 고른다
     opening_index: Mapped[int] = mapped_column(SmallInteger)
+
+    # 지금 장(#481, app/rounds/chapters.py). 판의 장의 id 다. 장이 있는 판은 시작할 때 첫 장이고, 엔진만 넘긴다.
+    # 장이 없는 판과 이 칸이 생기기 전에 시작한 테이블은 비어 있다.
+    # chapter_round 는 지금 장으로 넘어온 라운드다. 첫 장이면 비어 있다. 그 라운드의 서술이 장이 바뀐 것을 받는다
+    chapter_id: Mapped[str | None] = mapped_column(String(CHAPTER_ID_MAX_LENGTH))
+    chapter_round: Mapped[int | None] = mapped_column(Integer)
 
     # 정원. 방장을 포함해 몇 명까지 앉는가
     capacity: Mapped[int] = mapped_column(SmallInteger)

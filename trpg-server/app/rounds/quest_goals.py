@@ -47,7 +47,7 @@ from app.assets.scenarios.snapshot import QuestConditionSnapshot, read_snapshot
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds.quest_handover import hand_over
-from app.tables import items, quests, sheets
+from app.tables import chapters, items, quests, sheets
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, NpcStatus, QuestStatus, TableMember, TableMonster, TableNpc, TableQuest
 from app.tables.quest_changes import describe
@@ -104,6 +104,8 @@ def is_met(
     condition: QuestConditionSnapshot, table: GameTable, monsters: list[TableMonster], npcs: list[TableNpc]
 ) -> bool:
     """조건 하나가 지금 채워졌는가."""
+    if condition.kind == QuestConditionKind.CHAPTER_AT_LEAST:
+        return chapters.at_least(table, condition.chapter)
     if condition.kind in LINKED_STATUS:
         return quest_ended(table, condition.target, LINKED_STATUS[condition.kind])
     if condition.kind == QuestConditionKind.REACH_PLACE:

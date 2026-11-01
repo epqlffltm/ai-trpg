@@ -176,6 +176,9 @@ class EventType(enum.StrEnum):
     # 판의 사건이 일어났다(app/rounds/happenings.py, #367). 조건이 채워져 엔진이 한 번 일으켰다. 행한 사람이 없다.
     # 어느 사건(사건 항목과 이름)이 몇째 라운드에 누구를 어디에서 어디로 옮겼는가. 조건은 적지 않는다
     HAPPENING_OCCURRED = 'happening_occurred'
+    # 테이블이 다음 장으로 넘어갔다(app/rounds/chapters.py, #481). 장의 조건이 채워져 엔진이 넘겼다. 행한 사람이 없다.
+    # 몇째 라운드에 어느 장(id, 이름)에서 어느 장으로, 몇째 장인가. 조건은 적지 않는다
+    CHAPTER_CHANGED = 'chapter_changed'
     # 캐릭터가 서 있는 곳에서 숨긴 길을 찾았다(app/rounds/map_actions.py). 찾은 길만 적는다. 못 찾았으면 빈 목록이다.
     # 굴린 판정은 적지 않는다. 숨긴 길이 있었는지가 드러난다
     PLACE_SEARCHED = 'place_searched'

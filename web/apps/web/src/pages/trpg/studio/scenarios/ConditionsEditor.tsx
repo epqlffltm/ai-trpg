@@ -30,6 +30,26 @@ type Props = {
   consume?: boolean;
 };
 
+type TargetProps = { draft: ConditionDraft; targets: Targets; onChange: (target: string) => void };
+
+/** 대상을 고르는 칸. 장(chapter_at_least)은 대상이 없어 적힌 장을 글로 보인다(장의 탭이 생기면 고르게 한다) */
+function TargetSelect({ draft, targets, onChange }: TargetProps) {
+  const kind = targetKindOf(draft.kind);
+  if (kind === null) return <p className="hint">장: {draft.chapter || '(없음)'}</p>;
+  const choices = targets[kind];
+  return (
+    <SelectField label="대상" value={draft.target} onChange={(event) => onChange(event.target.value)}>
+      {draft.target === '' ? <option value="">고르기</option> : null}
+      {draft.target !== '' && !choices.some((one) => one.id === draft.target) ? <option value={draft.target}>(찾을 수 없음)</option> : null}
+      {choices.map((one) => (
+        <option key={one.id} value={one.id}>
+          {one.name}
+        </option>
+      ))}
+    </SelectField>
+  );
+}
+
 export function ConditionsEditor({ label, kinds, drafts, onChange, match, onMatch, targets, hints, consume = false }: Props) {
   const change = (index: number, draft: ConditionDraft) => onChange(drafts.map((one, at) => (at === index ? draft : one)));
   return (
@@ -53,17 +73,7 @@ export function ConditionsEditor({ label, kinds, drafts, onChange, match, onMatc
                 </option>
               ))}
             </SelectField>
-            <SelectField label="대상" value={draft.target} onChange={(event) => change(index, { ...draft, target: event.target.value })}>
-              {draft.target === '' ? <option value="">고르기</option> : null}
-              {draft.target !== '' && !targets[targetKindOf(draft.kind)].some((one) => one.id === draft.target) ? (
-                <option value={draft.target}>(찾을 수 없음)</option>
-              ) : null}
-              {targets[targetKindOf(draft.kind)].map((one) => (
-                <option key={one.id} value={one.id}>
-                  {one.name}
-                </option>
-              ))}
-            </SelectField>
+            <TargetSelect draft={draft} targets={targets} onChange={(target) => change(index, { ...draft, target })} />
             {isCounted(draft.kind) ? (
               <TextField
                 label={`개수(1~${CONDITION_MAX_COUNT})`}

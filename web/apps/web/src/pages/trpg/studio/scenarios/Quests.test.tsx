@@ -11,7 +11,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
-import { conditionLine, conditionsHints, toConditions, type Targets } from './conditionsForm';
+import { conditionDrafts, conditionLine, conditionsHints, toConditions, type Targets } from './conditionsForm';
 import { happeningDraft, happeningHints, happeningLine, toHappening } from './happeningForm';
 import { questDraft, toQuestRule } from './questForm';
 
@@ -199,6 +199,15 @@ describe('퀘스트·사건 입력', () => {
       { kind: 'reach_place', target: GATE, count: 1, consume: false },
     ]);
     expect(conditionLine({ kind: 'lose_item', target: RELIC, count: 1, consume: false }, TARGETS)).toBe('지닌 성유물 1개 미만');
+  });
+
+  it('장의 조건(chapter_at_least, #481)은 대상 대신 장을 그대로 받고 그대로 보낸다', () => {
+    const drafts = conditionDrafts([{ kind: 'chapter_at_least', chapter: 'below', count: 1, consume: false }]);
+    expect(drafts[0]).toMatchObject({ kind: 'chapter_at_least', target: '', chapter: 'below' });
+    expect(conditionsHints(drafts, HUNT)).toEqual({});
+    expect(conditionsHints([{ ...drafts[0]!, chapter: '' }], HUNT)[0]).toBe('장을 골라 주세요.');
+    expect(toConditions(drafts, true)).toEqual([{ kind: 'chapter_at_least', chapter: 'below', count: 1, consume: false }]);
+    expect(conditionLine({ kind: 'chapter_at_least', chapter: 'below', count: 1, consume: false }, TARGETS)).toBe('장 below 이상');
   });
 
   it('진행 중으로 시작하면 드러나는 조건을 보내지 않는다. 사건은 효과가 있어야 하고 옮기는 곳이 같으면 막는다', () => {

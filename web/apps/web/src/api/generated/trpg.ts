@@ -2551,6 +2551,25 @@ export interface components {
             quests: string[];
         };
         /**
+         * ChapterOut
+         * @description 테이블의 지금 장(#481). 몇째 장(number, 1 부터)이고 판의 장 몇 개 중인가(total), 이름, 넘어온 라운드다.
+         *
+         *     다음 장의 이름과 조건은 싣지 않는다. 아직 오지 않은 이야기가 드러나지 않게 한다.
+         *     첫 장이면 넘어온 라운드(entered_round)가 비어 있다.
+         */
+        ChapterOut: {
+            /** Entered Round */
+            entered_round: number | null;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Number */
+            number: number;
+            /** Total */
+            total: number;
+        };
+        /**
          * ChapterSnapshot
          * @description 장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.
          *
@@ -3621,7 +3640,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -7073,42 +7092,16 @@ export interface components {
          *     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),
          *     hold_item 과 lose_item 은 물건 항목,
          *     defeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
+         *     chapter_at_least(#481)는 target 대신 chapter 에 장의 id 를 적는다. 지금 장이 그 장이거나 그 뒤면 채워진다.
+         *     적지 않은 칸(target, chapter 중 하나)은 꺼낼 때 빠진다(그 전의 모양 그대로).
          *     count 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.
          *     consume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).
          *     일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.
          *     가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.
          */
         "QuestCondition-Input": {
-            /**
-             * Consume
-             * @default false
-             */
-            consume: boolean;
-            /**
-             * Count
-             * @default 1
-             */
-            count: number;
-            kind: components["schemas"]["QuestConditionKind"];
-            /**
-             * Target
-             * Format: uuid
-             */
-            target: string;
-        };
-        /**
-         * QuestCondition
-         * @description 퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).
-         *
-         *     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),
-         *     hold_item 과 lose_item 은 물건 항목,
-         *     defeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
-         *     count 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.
-         *     consume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).
-         *     일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.
-         *     가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.
-         */
-        "QuestCondition-Output": {
+            /** Chapter */
+            chapter?: string | null;
             /**
              * Consume
              * @default false
@@ -7121,25 +7114,25 @@ export interface components {
             count: number;
             kind: components["schemas"]["QuestConditionKind"];
             /** Target */
-            target: string;
+            target?: string | null;
         };
         /**
-         * QuestConditionKind
-         * @description 퀘스트의 조건 하나가 무엇을 보는가. 엔진이 이미 아는 사실(상태)만 본다(app/rounds/quest_goals.py).
+         * QuestCondition
+         * @description 퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).
          *
-         *     target 이 무엇을 가리키는지는 종류마다 다르다. 장소, 판의 몬스터, 물건, 인물, 다른 퀘스트(사건)다.
-         *     다른 퀘스트를 보는 것(퀘스트 잇기)은 드러나는 조건(reveal)과 실패하는 조건(fail)에 쓴다.
-         *     이루는 조건(conditions)에는 쓰지 않는다. 물건을 잃는 것(lose_item)은 실패하는 조건에만 쓴다(#367).
-         * @enum {string}
+         *     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),
+         *     hold_item 과 lose_item 은 물건 항목,
+         *     defeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
+         *     chapter_at_least(#481)는 target 대신 chapter 에 장의 id 를 적는다. 지금 장이 그 장이거나 그 뒤면 채워진다.
+         *     적지 않은 칸(target, chapter 중 하나)은 꺼낼 때 빠진다(그 전의 모양 그대로).
+         *     count 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.
+         *     consume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).
+         *     일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.
+         *     가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.
          */
-        QuestConditionKind: "reach_place" | "defeat_monster" | "hold_item" | "defeat_npc" | "npc_dead" | "lose_item" | "quest_succeeded" | "quest_failed";
-        /**
-         * QuestConditionSnapshot
-         * @description 퀘스트의 조건 하나. target 은 종류마다 판 안의 장소 항목, 몬스터, 물건 항목, 인물 항목, 사건 항목(퀘스트)이다.
-         *
-         *     consume 은 물건 갖기(hold_item)를 이룰 때 그 물건을 가져가는지다(배달). 이루는 조건에만 있다.
-         */
-        QuestConditionSnapshot: {
+        "QuestCondition-Output": {
+            /** Chapter */
+            chapter?: string | null;
             /**
              * Consume
              * @default false
@@ -7151,11 +7144,41 @@ export interface components {
              */
             count: number;
             kind: components["schemas"]["QuestConditionKind"];
+            /** Target */
+            target?: string | null;
+        };
+        /**
+         * QuestConditionKind
+         * @description 퀘스트의 조건 하나가 무엇을 보는가. 엔진이 이미 아는 사실(상태)만 본다(app/rounds/quest_goals.py).
+         *
+         *     target 이 무엇을 가리키는지는 종류마다 다르다. 장소, 판의 몬스터, 물건, 인물, 다른 퀘스트(사건)다.
+         *     다른 퀘스트를 보는 것(퀘스트 잇기)은 드러나는 조건(reveal)과 실패하는 조건(fail)에 쓴다.
+         *     이루는 조건(conditions)에는 쓰지 않는다. 물건을 잃는 것(lose_item)은 실패하는 조건에만 쓴다(#367).
+         * @enum {string}
+         */
+        QuestConditionKind: "reach_place" | "defeat_monster" | "hold_item" | "defeat_npc" | "npc_dead" | "lose_item" | "quest_succeeded" | "quest_failed" | "chapter_at_least";
+        /**
+         * QuestConditionSnapshot
+         * @description 퀘스트의 조건 하나. target 은 종류마다 판 안의 장소 항목, 몬스터, 물건 항목, 인물 항목, 사건 항목(퀘스트)이다.
+         *
+         *     consume 은 물건 갖기(hold_item)를 이룰 때 그 물건을 가져가는지다(배달). 이루는 조건에만 있다.
+         */
+        QuestConditionSnapshot: {
+            /** Chapter */
+            chapter?: string | null;
             /**
-             * Target
-             * Format: uuid
+             * Consume
+             * @default false
              */
-            target: string;
+            consume: boolean;
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            kind: components["schemas"]["QuestConditionKind"];
+            /** Target */
+            target?: string | null;
         };
         /**
          * QuestMatch
@@ -9538,6 +9561,7 @@ export interface components {
         TableDetail: {
             /** Capacity */
             capacity: number;
+            chapter?: components["schemas"]["ChapterOut"] | null;
             /** Character Modes */
             character_modes: components["schemas"]["CharacterMode"][];
             clock: components["schemas"]["ClockOut"];

@@ -1264,6 +1264,47 @@
         "title": "ChapterOpensSnapshot",
         "type": "object"
       },
+      "ChapterOut": {
+        "description": "테이블의 지금 장(#481). 몇째 장(number, 1 부터)이고 판의 장 몇 개 중인가(total), 이름, 넘어온 라운드다.\n\n다음 장의 이름과 조건은 싣지 않는다. 아직 오지 않은 이야기가 드러나지 않게 한다.\n첫 장이면 넘어온 라운드(entered_round)가 비어 있다.",
+        "properties": {
+          "entered_round": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entered Round"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "number",
+          "total",
+          "entered_round"
+        ],
+        "title": "ChapterOut",
+        "type": "object"
+      },
       "ChapterSnapshot": {
         "description": "장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.\n\nwhen 은 그 장으로 넘어오는 조건(퀘스트의 조건과 같은 모양), match 는 그것을 맞추는 법이다. 첫 장은 조건이 없다.\nopens 는 그 장부터 열리는 장소와 퀘스트다.",
         "properties": {
@@ -3982,6 +4023,7 @@
           "clock_step_changed",
           "character_moved",
           "happening_occurred",
+          "chapter_changed",
           "place_searched",
           "door_changed",
           "monsters_appeared",
@@ -11377,8 +11419,21 @@
       },
       "QuestCondition-Input": {
         "additionalProperties": false,
-        "description": "퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).\n\nreach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),\nhold_item 과 lose_item 은 물건 항목,\ndefeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.\ncount 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.\nconsume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).\n일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.\n가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.",
+        "description": "퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).\n\nreach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),\nhold_item 과 lose_item 은 물건 항목,\ndefeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.\nchapter_at_least(#481)는 target 대신 chapter 에 장의 id 를 적는다. 지금 장이 그 장이거나 그 뒤면 채워진다.\n적지 않은 칸(target, chapter 중 하나)은 꺼낼 때 빠진다(그 전의 모양 그대로).\ncount 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.\nconsume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).\n일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.\n가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.",
         "properties": {
+          "chapter": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter"
+          },
           "consume": {
             "default": false,
             "title": "Consume",
@@ -11395,22 +11450,41 @@
             "$ref": "#/components/schemas/QuestConditionKind"
           },
           "target": {
-            "format": "uuid",
-            "title": "Target",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
           }
         },
         "required": [
-          "kind",
-          "target"
+          "kind"
         ],
         "title": "QuestCondition",
         "type": "object"
       },
       "QuestCondition-Output": {
         "additionalProperties": false,
-        "description": "퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).\n\nreach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),\nhold_item 과 lose_item 은 물건 항목,\ndefeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.\ncount 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.\nconsume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).\n일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.\n가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.",
+        "description": "퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).\n\nreach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),\nhold_item 과 lose_item 은 물건 항목,\ndefeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.\nchapter_at_least(#481)는 target 대신 chapter 에 장의 id 를 적는다. 지금 장이 그 장이거나 그 뒤면 채워진다.\n적지 않은 칸(target, chapter 중 하나)은 꺼낼 때 빠진다(그 전의 모양 그대로).\ncount 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.\nconsume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).\n일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.\n가리키는 것이 있는지, 맞는 종류인지, 이룰 수 있는지는 게시할 때 본다.",
         "properties": {
+          "chapter": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter"
+          },
           "consume": {
             "default": false,
             "title": "Consume",
@@ -11427,13 +11501,19 @@
             "$ref": "#/components/schemas/QuestConditionKind"
           },
           "target": {
-            "title": "Target",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
           }
         },
         "required": [
-          "kind",
-          "target"
+          "kind"
         ],
         "title": "QuestCondition",
         "type": "object"
@@ -11448,7 +11528,8 @@
           "npc_dead",
           "lose_item",
           "quest_succeeded",
-          "quest_failed"
+          "quest_failed",
+          "chapter_at_least"
         ],
         "title": "QuestConditionKind",
         "type": "string"
@@ -11456,6 +11537,17 @@
       "QuestConditionSnapshot": {
         "description": "퀘스트의 조건 하나. target 은 종류마다 판 안의 장소 항목, 몬스터, 물건 항목, 인물 항목, 사건 항목(퀘스트)이다.\n\nconsume 은 물건 갖기(hold_item)를 이룰 때 그 물건을 가져가는지다(배달). 이루는 조건에만 있다.",
         "properties": {
+          "chapter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter"
+          },
           "consume": {
             "default": false,
             "title": "Consume",
@@ -11470,14 +11562,20 @@
             "$ref": "#/components/schemas/QuestConditionKind"
           },
           "target": {
-            "format": "uuid",
-            "title": "Target",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
           }
         },
         "required": [
-          "kind",
-          "target"
+          "kind"
         ],
         "title": "QuestConditionSnapshot",
         "type": "object"
@@ -17125,6 +17223,16 @@
           "capacity": {
             "title": "Capacity",
             "type": "integer"
+          },
+          "chapter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChapterOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "character_modes": {
             "items": {

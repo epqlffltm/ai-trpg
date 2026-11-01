@@ -954,6 +954,20 @@ class WhisperNote:
 
 
 @dataclass(frozen=True)
+class ChapterNote:
+    """
+    테이블의 지금 장(#481, app/rounds/chapters.py). 엔진이 정한 것이다.
+
+    number 는 몇째 장(1 부터), name 은 장의 이름이다. entered 면 이번 라운드가 닫힐 때 이 장으로 넘어왔다.
+    다음 장의 이름과 조건은 싣지 않는다(아직 오지 않은 이야기).
+    """
+
+    number: int
+    name: str
+    entered: bool = False
+
+
+@dataclass(frozen=True)
 class HappeningNote:
     """
     이번 라운드가 닫힐 때 일어난 판의 사건 하나(app/rounds/happenings.py, #367). 엔진이 정한 것이다.
@@ -1130,6 +1144,8 @@ class NarrationRequest:
     quests: list[QuestNote] = field(default_factory=list)
     # 이번 라운드가 닫힐 때 일어난 판의 사건들. 판의 순서다. 서술을 맡길 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
     happenings: list[HappeningNote] = field(default_factory=list)
+    # 테이블의 지금 장(#481). 장이 없는 판이면 None. 서술을 맡길 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
+    chapter: ChapterNote | None = None
     # 이번 장면의 몬스터들. 판의 몬스터 순서다. 서술을 맡길 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
     monsters: list[MonsterNote] = field(default_factory=list)
     # 이 라운드의 차례(라운드의 turns). 맞붙은 몬스터가 없었으면 비어 있고, 그때는 moves 의 순서다.

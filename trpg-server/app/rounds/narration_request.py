@@ -34,6 +34,7 @@ from app.rounds.models import Declaration, Round
 from app.rounds.narrator import (
     AidNote,
     BlowNote,
+    ChapterNote,
     ClockNote,
     CoverNote,
     DeathSaveNote,
@@ -98,7 +99,7 @@ from app.rounds.state import (
     trap_set_of,
     wait_of,
 )
-from app.tables import money, quests
+from app.tables import chapters, money, quests
 from app.tables.models import GameTable, QuestStatus, TableHappening, TableNpc, TableQuest
 from app.tables.npc_attitudes import ATTITUDE_WORDS
 from app.tables.quests import CatalogQuest
@@ -929,6 +930,19 @@ def describe_happening_trap(one: dict, labels: Mapping[uuid.UUID, str]) -> str:
     who = one['character_name'] if one['kind'] == 'pc' else labels.get(uuid.UUID(one['entry_id']), one['name'])
     result = '을(를) 피함' if one['trap']['avoided'] else '에 걸림'
     return f'{who}: 덫 {one["trap"]["name"]}{result}'
+
+
+def to_chapter_note(table: GameTable, snapshot: Snapshot, round_number: int) -> ChapterNote | None:
+    """
+    테이블의 지금 장을 서술자에게 줄 모양으로 바꾼다(#481). 장이 없는 판이면 None.
+
+    그 라운드가 닫힐 때 넘어왔으면 entered 다. 다시 맡겨도 같은 것을 받는다(다음 라운드가 닫히기 전에만 맡긴다).
+    """
+    chapter = chapters.current(table, snapshot)
+    if chapter is None:
+        return None
+    number = snapshot.chapters.index(chapter) + 1
+    return ChapterNote(number=number, name=chapter.name, entered=table.chapter_round == round_number)
 
 
 def to_happening_notes(

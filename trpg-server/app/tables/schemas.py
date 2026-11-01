@@ -749,6 +749,21 @@ class TablePage(BaseModel):
     total: int = Field(ge=0)
 
 
+class ChapterOut(BaseModel):
+    """
+    테이블의 지금 장(#481). 몇째 장(number, 1 부터)이고 판의 장 몇 개 중인가(total), 이름, 넘어온 라운드다.
+
+    다음 장의 이름과 조건은 싣지 않는다. 아직 오지 않은 이야기가 드러나지 않게 한다.
+    첫 장이면 넘어온 라운드(entered_round)가 비어 있다.
+    """
+
+    id: str
+    name: str
+    number: int
+    total: int
+    entered_round: int | None
+
+
 class TableDetail(TableSummary):
     """
     참가자가 테이블을 볼 때의 값. 여기 적힌 칸만 나간다.
@@ -783,6 +798,8 @@ class TableDetail(TableSummary):
     map: MapOut | None
     # 게임 안의 지금 시각과 다음 라운드에 흐를 시간. GET .../clock 과 같은 값이다. 시작 전에는 판의 시작 시각이다
     clock: ClockOut
+    # 지금 장(#481). 장이 없는 판이나 시작 전이면 None 이다
+    chapter: ChapterOut | None = None
     members: list[MemberOut]
     # 초대 코드. 방장에게만 보인다
     invite_code: str | None

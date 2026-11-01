@@ -48,6 +48,7 @@ from app.personas.schemas import PersonaOut
 from app.rounds import service as round_service
 from app.rounds.router import Closing
 from app.tables import (
+    chapters,
     credit_waits,
     deaths,
     equipment,
@@ -96,6 +97,7 @@ from app.tables.models import (
 from app.tables.retirement_watch import RetirementWatch
 from app.tables.schemas import (
     CatalogItemOut,
+    ChapterOut,
     CharacterOut,
     CharacterUpdate,
     CreditWaitUpdate,
@@ -539,6 +541,17 @@ def can_grant_rerolls(table: GameTable, snapshot: Snapshot) -> bool:
     return snapshot.reroll_allowed and CharacterMode.ROLLED in table.character_modes
 
 
+def to_chapter(table: GameTable, snapshot: Snapshot) -> ChapterOut | None:
+    """테이블의 지금 장(#481). 장이 없는 판이나 시작 전이면 None."""
+    chapter = chapters.current(table, snapshot)
+    if chapter is None:
+        return None
+    number = snapshot.chapters.index(chapter) + 1
+    return ChapterOut(
+        id=chapter.id, name=chapter.name, number=number, total=len(snapshot.chapters), entered_round=table.chapter_round
+    )
+
+
 def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
     """
     테이블을 참가자에게 보여 주는 응답으로 바꾼다. 여기 적은 칸만 나간다.
@@ -564,6 +577,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         quests=[to_quest(quest, quest_catalog) for quest in quests.visible_quests(table, quest_catalog)],
         map=to_map(table, snapshot, catalog),
         clock=to_clock(table),
+        chapter=to_chapter(table, snapshot),
         members=[to_member(table, member, catalog, snapshot.rulebook.rules, viewer_id) for member in table.members],
         invite_code=table.invite_code if viewer_id == table.host_id else None,
         started_at=table.started_at,

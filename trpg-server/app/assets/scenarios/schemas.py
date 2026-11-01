@@ -862,6 +862,11 @@ def reject_duplicate_rules(rules: list[ItemRule]) -> list[ItemRule]:
 ItemRules = Annotated[list[ItemRule], Field(max_length=SCENARIO_MAX_ITEM_RULES), AfterValidator(reject_duplicate_rules)]
 
 
+# 장(#481)의 id 와 이름. 장의 id 는 판이 바뀌어도 그대로 두는 이름표다
+ChapterId = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=CHAPTER_ID_MAX_LENGTH)]
+ChapterName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=CHAPTER_NAME_MAX_LENGTH)]
+
+
 class QuestCondition(BaseModel):
     """
     퀘스트의 조건 하나. 종류(kind)마다 target 이 가리키는 것이 다르다(QuestConditionKind).
@@ -869,6 +874,8 @@ class QuestCondition(BaseModel):
     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),
     hold_item 과 lose_item 은 물건 항목,
     defeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
+    chapter_at_least(#481)는 target 대신 chapter 에 장의 id 를 적는다. 지금 장이 그 장이거나 그 뒤면 채워진다.
+    적지 않은 칸(target, chapter 중 하나)은 꺼낼 때 빠진다(그 전의 모양 그대로).
     count 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.
     consume 은 hold_item 에만 쓴다. 참이면 이룰 때 그 물건을 count 개 일행의 소지품에서 가져간다(배달).
     일행이 고르게 나눠 낸다(app/rounds/quest_handover.py). 이루는 조건(conditions)에만 적는다.
@@ -878,9 +885,22 @@ class QuestCondition(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     kind: QuestConditionKind
-    target: uuid.UUID
+    # 가리키는 것. chapter_at_least 말고는 반드시 적는다. 비었으면 꺼낼 때 빠진다
+    target: uuid.UUID | None = Field(default=None, exclude_if=lambda value: value is None)
+    # chapter_at_least(#481)가 가리키는 장의 id. 그 종류에만 적는다. 비었으면 꺼낼 때 빠진다(장이 생기기 전의 모양)
+    chapter: ChapterId | None = Field(default=None, exclude_if=lambda value: value is None)
     count: int = Field(default=1, ge=1, le=QUEST_CONDITION_MAX_COUNT)
     consume: bool = False
+
+    @model_validator(mode='after')
+    def target_or_chapter(self) -> 'QuestCondition':
+        """chapter_at_least 는 장(chapter)만, 나머지는 가리키는 것(target)만 적는다."""
+        if self.kind == QuestConditionKind.CHAPTER_AT_LEAST:
+            if self.chapter is None or self.target is not None:
+                raise ValueError('chapter_at_least 는 target 없이 chapter 를 적습니다.')
+        elif self.target is None or self.chapter is not None:
+            raise ValueError('chapter_at_least 말고는 chapter 없이 target 을 적습니다.')
+        return self
 
     @model_validator(mode='after')
     def count_only_when_counted(self) -> 'QuestCondition':
@@ -897,14 +917,14 @@ class QuestCondition(BaseModel):
         return self
 
     @field_serializer('target')
-    def target_as_text(self, target: uuid.UUID) -> str:
+    def target_as_text(self, target: uuid.UUID | None) -> str | None:
         """가리키는 것의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
-        return str(target)
+        return str(target) if target is not None else None
 
 
 def reject_duplicate_conditions(conditions: list[QuestCondition]) -> list[QuestCondition]:
     """같은 종류의 같은 대상이 두 줄이면 거부한다. 한 줄에 count 로 적는다."""
-    pairs = [(condition.kind, condition.target) for condition in conditions]
+    pairs = [(condition.kind, condition.target, condition.chapter) for condition in conditions]
     if len(set(pairs)) != len(pairs):
         raise ValueError('같은 조건이 두 번 있습니다.')
     return conditions
@@ -1556,10 +1576,6 @@ Happenings = Annotated[
 ]
 
 
-ChapterId = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=CHAPTER_ID_MAX_LENGTH)]
-ChapterName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=CHAPTER_NAME_MAX_LENGTH)]
-
-
 # 장 하나가 여는 것들. 같은 것을 두 번 적는 것은 장들을 함께 볼 때 막는다(check_chapters)
 OpenedIds = Annotated[list[uuid.UUID], Field(max_length=CHAPTER_MAX_OPENS)]
 
@@ -1608,6 +1624,13 @@ class Chapter(BaseModel):
         """장은 물건을 가져가지 않는다. 가져가는 것은 퀘스트를 이룰 때다."""
         if any(condition.consume for condition in self.when):
             raise ValueError('consume 은 퀘스트의 이루는 조건(conditions)에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def no_chapter_condition(self) -> 'Chapter':
+        """장으로 넘어오는 조건에는 장(chapter_at_least)을 쓰지 않는다. 장은 차례로만 넘어간다."""
+        if any(condition.kind == QuestConditionKind.CHAPTER_AT_LEAST for condition in self.when):
+            raise ValueError('chapter_at_least 는 장의 넘어오는 조건(when)에 쓰지 않습니다.')
         return self
 
 
