@@ -60,6 +60,7 @@ from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
 from app.observability.metrics import record_round_closed
 from app.rounds import (
+    chapters,
     deadlines,
     happening_traps,
     happenings,
@@ -298,6 +299,7 @@ def begin_closing(
     settled = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs)
     occurred = happenings.settle_happenings(table, round_.number, scene.all_monsters, scene.npcs)
     happening_traps.settle(table, round_, dice, scene)
+    chapter = chapters.settle(table, round_.number, scene.all_monsters, scene.npcs)
     overdue = deadlines.expire_quests(table)
     round_.expired_quests = [failure['entry_id'] for failure in overdue]
     after_overdue = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs) if overdue else []
@@ -312,6 +314,7 @@ def begin_closing(
     resource_rounds.record(session, table, drifts, round_.number, group)
     quest_goals.record_changes(session, table, settled, group)
     happening_traps.record(session, table, round_.number, happenings.record_happenings(session, table, occurred, group))
+    chapters.record(session, table, chapter, group)
     deadlines.record_failures(session, table, overdue, group)
     quest_goals.record_changes(session, table, after_overdue, group)
     idle = [str(user_id) for user_id in waiting_for(table, round_)]
@@ -563,6 +566,7 @@ async def load_closing_request(
         happenings=narration_request.to_happening_notes(
             table, snapshot, round_.number, labels_of(snapshot, round_.scene, scene.npcs), occupied_places(table)
         ),
+        chapter=narration_request.to_chapter_note(table, snapshot, round_.number),
         monsters=to_monster_notes(snapshot, scene.monsters),
         turns=narration_request.to_turn_notes(round_.turns),
         clock=narration_request.to_clock_note(table),

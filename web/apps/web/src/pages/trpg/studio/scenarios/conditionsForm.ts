@@ -6,6 +6,8 @@
 // - 퀘스트 잇기(성공했다, 실패했다)는 드러나는 조건과 실패하는 조건, 사건의 조건에 쓴다. 자기 자신은 가리키지 못한다
 // - 물건 잃기는 실패하는 조건과 사건의 조건에만 쓴다
 // - 한 목록에 같은 종류의 같은 대상은 한 줄, 5 줄까지
+// - 장(chapter_at_least, #481)은 대상(target) 대신 장의 id(chapter)를 적는다. 고르는 칸은 장의 탭이 생길 때 더한다.
+//   그 전에는 판에 적힌 것을 그대로 보이고 그대로 보낸다
 
 import type { QuestCondition, QuestConditionBody, QuestConditionKind } from '../../../../api/types';
 import { wholeNumber } from '../rulebooks/rulebookForm';
@@ -23,12 +25,14 @@ const KIND_LABELS: Record<QuestConditionKind, string> = {
   lose_item: '물건을 잃는다(지닌 것이 개수보다 적다)',
   quest_succeeded: '다른 퀘스트가 성공했다',
   quest_failed: '다른 퀘스트가 실패했다',
+  chapter_at_least: '지금 장이 그 장 이상이다',
 };
 
 /** 조건의 대상의 종류 */
 export type TargetKind = 'places' | 'monsters' | 'items' | 'npcs' | 'quests';
 
-const TARGETS: Record<QuestConditionKind, TargetKind> = {
+// 장(chapter_at_least)은 대상이 없다. 장의 id 를 적는다
+const TARGETS: Record<Exclude<QuestConditionKind, 'chapter_at_least'>, TargetKind> = {
   reach_place: 'places',
   defeat_monster: 'monsters',
   hold_item: 'items',
@@ -59,37 +63,48 @@ export function kindLabel(kind: QuestConditionKind): string {
   return KIND_LABELS[kind];
 }
 
-export function targetKindOf(kind: QuestConditionKind): TargetKind {
-  return TARGETS[kind];
+/** 그 종류의 대상의 종류. 장(chapter_at_least)은 대상이 없어 null 이다 */
+export function targetKindOf(kind: QuestConditionKind): TargetKind | null {
+  return kind === 'chapter_at_least' ? null : TARGETS[kind];
 }
 
 export function isCounted(kind: QuestConditionKind): boolean {
   return COUNTED.includes(kind);
 }
 
-export type ConditionDraft = { kind: QuestConditionKind; target: string; count: string; consume: boolean };
+/** 조건 한 줄의 초안. chapter 는 장(chapter_at_least)일 때만 쓴다 */
+export type ConditionDraft = { kind: QuestConditionKind; target: string; chapter?: string; count: string; consume: boolean };
 
 export function conditionDrafts(conditions: QuestCondition[]): ConditionDraft[] {
-  return conditions.map((condition) => ({ kind: condition.kind, target: condition.target, count: String(condition.count), consume: condition.consume }));
+  return conditions.map((condition) => ({
+    kind: condition.kind,
+    target: condition.target ?? '',
+    chapter: condition.chapter ?? '',
+    count: String(condition.count),
+    consume: condition.consume,
+  }));
 }
 
 /** 새 조건. 그 목록이 쓸 수 있는 첫 종류 */
 export function newCondition(kinds: QuestConditionKind[]): ConditionDraft {
-  return { kind: kinds[0] ?? 'reach_place', target: '', count: '1', consume: false };
+  return { kind: kinds[0] ?? 'reach_place', target: '', chapter: '', count: '1', consume: false };
 }
 
-/** 종류를 바꾸면 대상과 개수, 가져가기를 비운다(대상의 종류가 바뀐다) */
+/** 종류를 바꾸면 대상과 장, 개수, 가져가기를 비운다(대상의 종류가 바뀐다) */
 export function withKind(kind: QuestConditionKind): ConditionDraft {
-  return { kind, target: '', count: '1', consume: false };
+  return { kind, target: '', chapter: '', count: '1', consume: false };
 }
 
 /** 조건마다의 문제. 차례 → 글. selfId 는 이 퀘스트·사건의 사건 항목(자기 자신을 가리키지 못한다) */
 export function conditionsHints(drafts: ConditionDraft[], selfId: string): Record<number, string> {
   const hints: Record<number, string> = {};
   drafts.forEach((draft, index) => {
-    if (draft.target === '') hints[index] = '대상을 골라 주세요.';
+    if (draft.kind === 'chapter_at_least') {
+      if (!draft.chapter) hints[index] = '장을 골라 주세요.';
+    } else if (draft.target === '') hints[index] = '대상을 골라 주세요.';
     else if (LINKS.includes(draft.kind) && draft.target === selfId) hints[index] = '자기 자신을 가리킬 수 없습니다.';
-    else if (drafts.findIndex((other) => other.kind === draft.kind && other.target === draft.target) !== index) hints[index] = '같은 조건이 위에 있습니다.';
+    else if (drafts.findIndex((other) => other.kind === draft.kind && other.target === draft.target && (other.chapter ?? '') === (draft.chapter ?? '')) !== index)
+      hints[index] = '같은 조건이 위에 있습니다.';
     else if (isCounted(draft.kind) && wholeNumber(draft.count, 1, CONDITION_MAX_COUNT) === null) hints[index] = `개수는 1~${CONDITION_MAX_COUNT} 사이의 정수입니다.`;
   });
   return hints;
@@ -97,17 +112,22 @@ export function conditionsHints(drafts: ConditionDraft[], selfId: string): Recor
 
 /** 보낼 조건들. 세지 않는 조건은 개수 1, 가져가기는 allowConsume 이고 물건 지니기일 때만 */
 export function toConditions(drafts: ConditionDraft[], allowConsume: boolean): QuestConditionBody[] {
-  return drafts.map((draft) => ({
-    kind: draft.kind,
-    target: draft.target,
-    count: isCounted(draft.kind) ? Number(draft.count.trim()) : 1,
-    consume: allowConsume && draft.kind === 'hold_item' && draft.consume,
-  }));
+  return drafts.map((draft) =>
+    draft.kind === 'chapter_at_least'
+      ? { kind: draft.kind, chapter: draft.chapter ?? '', count: 1, consume: false }
+      : {
+          kind: draft.kind,
+          target: draft.target,
+          count: isCounted(draft.kind) ? Number(draft.count.trim()) : 1,
+          consume: allowConsume && draft.kind === 'hold_item' && draft.consume,
+        },
+  );
 }
 
 /** 조건 한 줄. "구울 3마리를 쓰러뜨린다", "수도원 문에 닿는다" */
-export function conditionLine(condition: Pick<QuestCondition, 'kind' | 'target' | 'count' | 'consume'>, targets: Targets): string {
-  const name = targets[targetKindOf(condition.kind)].find((one) => one.id === condition.target)?.name ?? '(찾을 수 없음)';
+export function conditionLine(condition: Pick<QuestCondition, 'kind' | 'target' | 'chapter' | 'count' | 'consume'>, targets: Targets): string {
+  const kind = targetKindOf(condition.kind);
+  const name = (kind ? targets[kind].find((one) => one.id === condition.target)?.name : undefined) ?? '(찾을 수 없음)';
   switch (condition.kind) {
     case 'reach_place':
       return `${name}에 닿는다`;
@@ -125,5 +145,7 @@ export function conditionLine(condition: Pick<QuestCondition, 'kind' | 'target' 
       return `「${name}」 성공`;
     case 'quest_failed':
       return `「${name}」 실패`;
+    case 'chapter_at_least':
+      return `장 ${condition.chapter ?? '?'} 이상`;
   }
 }

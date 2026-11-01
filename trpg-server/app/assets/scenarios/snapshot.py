@@ -344,7 +344,9 @@ class QuestConditionSnapshot(BaseModel):
     """
 
     kind: QuestConditionKind
-    target: uuid.UUID
+    # chapter_at_least(#481)에는 없고 chapter(장의 id)가 있다
+    target: uuid.UUID | None = None
+    chapter: str | None = None
     count: int = 1
     consume: bool = False
 
@@ -1022,6 +1024,9 @@ class Snapshot(BaseModel):
             raise ValueError('첫 장에 넘어오는 조건이 있습니다.')
         if any(self.start_place in chapter.opens.places for chapter in self.chapters[1:]):
             raise ValueError('시작 장소를 첫 장 뒤에 엽니다.')
+        known = {chapter.id for chapter in self.chapters}
+        if any(condition.chapter not in known for condition in chapter_conditions(self)):
+            raise ValueError('판에 없는 장을 기다리는 조건이 있습니다.')
         return self
 
     @model_validator(mode='after')
@@ -1311,6 +1316,15 @@ def build_snapshot(
         world=snapshot_world(world) if world else None,
         lorebooks=[snapshot_lorebook(lorebook, entries) for lorebook, entries in lorebooks],
     )
+
+
+def chapter_conditions(snapshot: Snapshot) -> list[QuestConditionSnapshot]:
+    """장을 기다리는 조건들(chapter_at_least, #481). 퀘스트(이루기, 드러나기, 실패하기)와 사건의 조건에 있다."""
+    conditions = [
+        *(condition for rule in snapshot.quests for condition in [*rule.conditions, *rule.reveal, *rule.fail]),
+        *(condition for rule in snapshot.happenings for condition in rule.when),
+    ]
+    return [condition for condition in conditions if condition.kind == QuestConditionKind.CHAPTER_AT_LEAST]
 
 
 def read_snapshot(document: dict) -> Snapshot:

@@ -369,6 +369,12 @@ def happening_occurred(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'사건: {text_of(payload.get("name"))}')]
 
 
+def chapter_changed(payload: dict, labels: Labels) -> list[Block]:
+    """다음 장으로 넘어갔다(#481). "2장: 축제"다."""
+    to = payload.get('to') if isinstance(payload.get('to'), dict) else {}
+    return [Note(f'{text_of(payload.get("number"))}장: {text_of(to.get("name"))}')]
+
+
 def place_searched(payload: dict, labels: Labels) -> list[Block]:
     """찾기. 찾은 길과 물건과 덫(#806 ①-b)."""
     routes = [
@@ -494,6 +500,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.QUEST_CHANGED: quest_changed,
     EventType.CHARACTER_MOVED: character_moved,
     EventType.HAPPENING_OCCURRED: happening_occurred,
+    EventType.CHAPTER_CHANGED: chapter_changed,
     EventType.PLACE_SEARCHED: place_searched,
     EventType.DOOR_CHANGED: door_changed,
     EventType.MONSTERS_APPEARED: monsters_appeared,

@@ -49,6 +49,7 @@ from app.rounds.move_lines import (
     round_lines,
 )
 from app.rounds.narrator import (
+    ChapterNote,
     ClockNote,
     HappeningNote,
     LoreNote,
@@ -236,7 +237,8 @@ from app.rounds.time_words import duration_text, time_text
 #   narration-82: 몬스터와 싸우는 인물이 밟은 덫(#806 ②-b). 차례의 줄 끝에 붙인다
 #                 ([덫: 올가미에 걸림], [덫: 올가미을(를) 피함])
 #   narration-83: 사건이 옮긴 쪽이 밟은 덫(#806 ②-c). 사건의 줄에 붙인다(- 함정: 약사 → 숲, 약사: 덫 올가미에 걸림)
-PROMPT_VERSION = 'narration-83'
+#   narration-84: 지금 장(#481). [장] 아래에 "2장: 지하"와, 이번 라운드에 넘어왔으면 그것을 그리라는 말을 적는다
+PROMPT_VERSION = 'narration-84'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3
@@ -922,6 +924,28 @@ def happening_lines(happenings: list[HappeningNote]) -> list[str]:
     return [HAPPENING_TITLE, HAPPENING_NOTE, *lines, '']
 
 
+CHAPTER_TITLE = '[장]'
+CHAPTER_NOTE = '이야기의 지금 장이다. 게임이 정한다. 장의 이름을 장면에 그대로 쓰지 않아도 된다.'
+CHAPTER_ENTERED_NOTE = (
+    '이번 라운드가 끝날 때 이 장으로 넘어왔다. 이야기의 흐름이 바뀌는 순간으로 그려라. '
+    '아직 오지 않은 장의 일은 지어내지 마라.'
+)
+
+
+def chapter_lines(chapter: ChapterNote | None) -> list[str]:
+    """
+    지금 장을 적는 줄들(#481, narration-84). 다루는 법, "2장: 지하", 넘어왔으면 그것을 그리라는 말.
+
+    끝에 빈 줄이 붙는다. 장이 없는 판이면 빈 목록이다.
+    """
+    if chapter is None:
+        return []
+    lines = [CHAPTER_TITLE, CHAPTER_NOTE, f'- {chapter.number}장: {chapter.name}']
+    if chapter.entered:
+        lines.append(CHAPTER_ENTERED_NOTE)
+    return [*lines, '']
+
+
 def clock_lines(clock: ClockNote | None) -> list[str]:
     """
     게임 안의 시각을 적는 줄들. 다루는 법, 시작하는 때, 흐르는 시간, 끝나는 때.
@@ -1043,6 +1067,7 @@ def round_text(request: NarrationRequest) -> str:
     lines.extend(whisper_lines(request.whispers))
     lines.extend(quest_lines(request.quests))
     lines.extend(happening_lines(request.happenings))
+    lines.extend(chapter_lines(request.chapter))
     lines.extend(clock_lines(request.clock))
     lines.extend(map_lines(request.moves))
     lines.extend(monster_lines(request.monsters))

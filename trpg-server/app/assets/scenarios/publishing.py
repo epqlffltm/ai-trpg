@@ -899,7 +899,11 @@ def condition_problem(condition: QuestCondition, scenario: Scenario, parts: Part
     장소에 닿기는 맵의 장소여야 한다(시작 장소, 길의 끝, 명소). 맵에 없는 장소에는 설 수 없다.
     다른 퀘스트의 성공을 기다리면 그 퀘스트에 이루는 조건이 있어야 한다. 없으면 성공하지 않는다.
     다른 퀘스트의 실패를 기다리면 그 퀘스트에 실패하는 조건이나 기한이 있어야 한다. 없으면 실패하지 않는다.
+    장(chapter_at_least, #481)은 판의 장 하나여야 한다.
     """
+    if condition.kind == QuestConditionKind.CHAPTER_AT_LEAST:
+        known = {chapter.id for chapter in read_chapters(scenario)}
+        return None if condition.chapter in known else Problem.QUEST_CONDITION_MISSING
     if condition.kind == QuestConditionKind.DEFEAT_MONSTER:
         sheeted = {sheet.monster_id for sheet in read_monster_sheets(scenario)}
         if condition.target not in sheeted:

@@ -309,6 +309,9 @@ class QuestConditionKind(enum.StrEnum):
     QUEST_SUCCEEDED = 'quest_succeeded'
     # 그 퀘스트가 실패했다
     QUEST_FAILED = 'quest_failed'
+    # 지금 장이 그 장이거나 그 뒤다(#481). target 이 아니라 chapter(장의 id)를 가리킨다.
+    # 장의 넘어오는 조건에는 쓰지 않는다
+    CHAPTER_AT_LEAST = 'chapter_at_least'
 
 
 # count 를 쓰는 조건. 나머지는 1 이다
