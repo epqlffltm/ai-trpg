@@ -71,7 +71,8 @@ class Problem(enum.StrEnum):
     EVENT_MISSING = 'event_missing'
     # 조건(ending_seen, 회차 혜택)이 이 세계관에 없는 엔딩을 가리킨다
     ENDING_TARGET_MISSING = 'ending_target_missing'
-    # 장(chapters)이 없는 장소나 이벤트를 연다(docs/architecture/chapters.md)
+    # 장(chapters)이 없는 장소, 이벤트, 로어북 항목을 연다(docs/architecture/chapters.md).
+    # 로어북 항목은 세계관이 붙인 로어북의 마지막 판에 있어야 한다
     CHAPTER_CONTENT_MISSING = 'chapter_content_missing'
     # 조건(chapter_at_least)이 이 세계관에 없는 장을 가리킨다
     CHAPTER_TARGET_MISSING = 'chapter_target_missing'
@@ -277,6 +278,22 @@ def chapter_problems(world: World) -> list[Problem]:
         *missing(pointed, set(chapter_ids(world)), Problem.CHAPTER_TARGET_MISSING),
         *([Problem.CHAPTER_START_LOCKED] if start_locked else []),
     ]
+
+
+def chapter_lore_problems(world: World, copies: Sequence[LorebookCopyDocument]) -> list[Problem]:
+    """
+    장이 연 로어북 항목이 없는 것. 세계관이 붙이지 않은 로어북이거나, 그 로어북의 마지막 판(copies)에 없는 항목이다.
+    붙였지만 지웠거나 게시하지 않은 로어북은 로어북의 문제(lorebook_missing, lorebook_unpublished)가 따로 막는다.
+    """
+    attached = {str(lorebook_id) for lorebook_id in world.lorebooks}
+    entries = {str(copy.id): {entry.id for entry in copy.entries} for copy in copies}
+    for chapter in world.chapters:
+        for item in chapter['opens'].get('lore', []):
+            if item['lorebook'] not in attached:
+                return [Problem.CHAPTER_CONTENT_MISSING]
+            if item['lorebook'] in entries and item['entry'] not in entries[item['lorebook']]:
+                return [Problem.CHAPTER_CONTENT_MISSING]
+    return []
 
 
 def missing(pointed: Sequence[str], known: set[str], problem: Problem) -> list[Problem]:

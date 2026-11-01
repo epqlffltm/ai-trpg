@@ -1069,6 +1069,7 @@ export interface components {
             /**
              * @default {
              *       "events": [],
+             *       "lore": [],
              *       "places": []
              *     }
              */
@@ -1094,8 +1095,35 @@ export interface components {
             when: components["schemas"]["ConditionsDocument"];
         };
         /**
+         * ChapterLore
+         * @description 장이 여는 로어북 항목 하나. 세계관이 붙인 로어북의 id 와 그 안의 항목의 id 다(판의 형식 7).
+         */
+        ChapterLore: {
+            /** Entry */
+            entry: string;
+            /**
+             * Lorebook
+             * Format: uuid
+             */
+            lorebook: string;
+        };
+        /**
+         * ChapterLoreDocument
+         * @description 장이 여는 로어북 항목 하나. 판에 복사한 로어북의 id 와 그 안의 항목의 id 다.
+         */
+        ChapterLoreDocument: {
+            /** Entry */
+            entry: string;
+            /**
+             * Lorebook
+             * Format: uuid
+             */
+            lorebook: string;
+        };
+        /**
          * ChapterOpens
-         * @description 장이 여는 장소와 이벤트(의 id). 어느 장에도 적지 않은 것은 처음부터 열려 있다.
+         * @description 장이 여는 장소와 이벤트(의 id)와 로어북 항목. 어느 장에도 적지 않은 것은 처음부터 열려 있다.
+         *     닫힌 로어북 항목은 story 가 모델에 보내지 않는다(뒤 장의 비밀이 서술로 새지 않게).
          */
         ChapterOpens: {
             /**
@@ -1104,6 +1132,11 @@ export interface components {
              */
             events: string[];
             /**
+             * Lore
+             * @default []
+             */
+            lore: components["schemas"]["ChapterLore"][];
+            /**
              * Places
              * @default []
              */
@@ -1111,11 +1144,16 @@ export interface components {
         };
         /**
          * ChapterOpensDocument
-         * @description 장이 여는 장소와 이벤트(의 id).
+         * @description 장이 여는 장소와 이벤트(의 id)와 로어북 항목.
          */
         ChapterOpensDocument: {
             /** Events */
             events: string[];
+            /**
+             * Lore
+             * @default []
+             */
+            lore: components["schemas"]["ChapterLoreDocument"][];
             /** Places */
             places: string[];
         };

@@ -12,6 +12,8 @@
   - 알리는 것: 넘어오는 조건이 그 장이나 뒤의 장에서야 열리는 것을 기다린다(chapter_unreachable).
     앞의 장에 닿을 수 있는 가장 이른 날보다 앞의 날을 기다리는 장도 넘어올 수 없다(chapter_unreachable)
   - 알리는 것: 장에 닿을 때는 이미 지난 날을 기다리는 이벤트와 엔딩(chapter_content_late). 장이 없으면 알리지 않는다
+  - 장이 여는 로어북 항목(판의 형식 7): 판에 그대로 굳는다. 두 장에 적으면 422, 붙이지 않은 로어북이나
+    그 마지막 판에 없는 항목을 열면 게시하지 못한다(chapter_content_missing)
 """
 
 import pytest
@@ -19,6 +21,7 @@ from fastapi import status
 from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey
 
+from app.main import API_PREFIX
 from app.worlds.documents import DOCUMENT_FORMAT
 from tests.worlds import OWNER, WORLDS_URL, bearer, character, check, create_world, full_world, publish
 
@@ -58,9 +61,9 @@ async def test_chapters_are_frozen_in_a_format_six_version(client: AsyncClient, 
 
     assert response.status_code == status.HTTP_201_CREATED, response.text
     document = response.json()['document']
-    assert document['format'] == DOCUMENT_FORMAT == 6
+    assert document['format'] == DOCUMENT_FORMAT >= 6
     assert [entry['id'] for entry in document['chapters']] == ['summer', 'letters']
-    assert document['chapters'][1]['opens'] == {'places': ['roof'], 'events': ['hint']}
+    assert document['chapters'][1]['opens'] == {'places': ['roof'], 'events': ['hint'], 'lore': []}
     assert document['chapters'][1]['when']['items'] == [
         {'kind': 'event_seen', 'target': 'meet', 'value': None, 'count': 1}
     ]
@@ -199,3 +202,62 @@ async def test_without_chapters_a_day_limit_is_not_a_chapter_warning(client: Asy
     )
 
     assert 'chapter_content_late' not in (await check(client, owner, world))['warnings']
+
+
+LOREBOOKS_URL = f'{API_PREFIX}/lorebooks'
+CITY = {'id': 'city', 'name': '가나폴리아', 'kind': 'place', 'keywords': ['수도'], 'content': '제국의 수도.'}
+
+
+async def published_lorebook(client: AsyncClient, headers: dict) -> str:
+    """항목 city 하나를 가진 로어북을 만들어 게시한다."""
+    response = await client.post(LOREBOOKS_URL, json={'name': '제국', 'entries': [CITY]}, headers=headers)
+    assert response.status_code == status.HTTP_201_CREATED, response.text
+    lorebook_id = response.json()['id']
+    published = await client.post(f'{LOREBOOKS_URL}/{lorebook_id}/versions', json={}, headers=headers)
+    assert published.status_code == status.HTTP_201_CREATED, published.text
+    return lorebook_id
+
+
+def lore_chapters(lorebook_id: str, entry: str = 'city') -> list[dict]:
+    letters = chapter('letters', SEEN_MEET)
+    letters['opens']['lore'] = [{'lorebook': lorebook_id, 'entry': entry}]
+    return [chapter('summer'), letters]
+
+
+async def test_lore_opened_by_a_chapter_is_frozen_in_a_format_seven_version(client: AsyncClient, owner: dict):
+    lorebook_id = await published_lorebook(client, owner)
+    body = await body_with(client, owner, lorebooks=[lorebook_id], chapters=lore_chapters(lorebook_id))
+    world = await create_world(client, owner, body)
+
+    response = await publish(client, owner, world)
+
+    assert response.status_code == status.HTTP_201_CREATED, response.text
+    document = response.json()['document']
+    assert document['format'] == DOCUMENT_FORMAT == 7
+    assert document['chapters'][1]['opens']['lore'] == [{'lorebook': lorebook_id, 'entry': 'city'}]
+    assert document['chapters'][0]['opens']['lore'] == []
+
+
+async def test_lore_written_in_two_chapters_is_refused_on_save(client: AsyncClient, owner: dict):
+    lorebook_id = await published_lorebook(client, owner)
+    chapters = lore_chapters(lorebook_id)
+    chapters[0]['opens']['lore'] = [{'lorebook': lorebook_id, 'entry': 'city'}]
+
+    body = await body_with(client, owner, lorebooks=[lorebook_id], chapters=chapters)
+    response = await client.post(WORLDS_URL, json=body, headers=owner)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+@pytest.mark.parametrize('attached', [True, False], ids=['missing-entry', 'lorebook-not-attached'])
+async def test_lore_that_is_not_there_blocks_publishing(client: AsyncClient, owner: dict, attached: bool):
+    lorebook_id = await published_lorebook(client, owner)
+    entry = 'ghost' if attached else 'city'
+    lorebooks = [lorebook_id] if attached else []
+    world = await create_world(
+        client, owner, await body_with(client, owner, lorebooks=lorebooks, chapters=lore_chapters(lorebook_id, entry))
+    )
+
+    checked = await check(client, owner, world)
+
+    assert checked['problems'] == ['chapter_content_missing']

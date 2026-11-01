@@ -83,6 +83,8 @@ ENDING_HINT_MAX_LENGTH = 100
 # 장(docs/architecture/chapters.md, 판의 형식 6). 개수와 이름의 길이. id 는 다른 id 와 같은 열쇠(40자)다
 WORLD_MAX_CHAPTERS = 20
 CHAPTER_NAME_MAX_LENGTH = 40
+# 장 하나가 여는 로어북 항목의 수(판의 형식 7)
+CHAPTER_MAX_LORE = 100
 
 
 class AfterEnding(enum.StrEnum):
@@ -259,7 +261,8 @@ class World(Base):
     # 엔딩들 [{"id", "name", "trigger", "when", "scene", "unlock", "hint"}](판의 형식 3). 적은 차례가 맞춰 보는 차례다.
     # 인물마다의 고백(confession)은 인물(cast)의 칸이다
     endings: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
-    # 장들 [{"id", "name", "when", "opens": {"places", "events"}}](판의 형식 6, docs/architecture/chapters.md).
+    # 장들 [{"id", "name", "when", "opens": {"places", "events", "lore"}}](판의 형식 6, docs/architecture/chapters.md).
+    # lore 는 장이 여는 로어북 항목 [{"lorebook", "entry"}] 이다(판의 형식 7).
     # 적은 차례가 장의 차례다. 비면 장이 없다(모든 장소와 이벤트가 처음부터 열려 있다)
     chapters: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
     # 가리키는 로어북들의 id(자기 로어북만). 게시할 때 그 마지막 판이 판에 복사된다

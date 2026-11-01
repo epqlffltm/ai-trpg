@@ -38,6 +38,7 @@ from app.worlds.models import World, WorldVersion
 from app.worlds.publishing import (
     Problem,
     WorldNotReadyError,
+    chapter_lore_problems,
     character_copies,
     cleaned_intro,
     find_problems,
@@ -190,6 +191,7 @@ async def prepare(session: AsyncSession, world: World) -> Prepared:
     lorebook_list, lorebook_problems = await lorebook_parts(session, world)
     used = used_image_ids(world, cleaned.html, list(copies.values()))
     problems = find_problems(world) + character_problems + lorebook_problems
+    problems = list(dict.fromkeys(problems + chapter_lore_problems(world, lorebook_list)))
     problems += await image_problems(session, world, used)
     return Prepared(copies, lorebook_list, problems, cleaned.html, cleaned.removed, used)
 
