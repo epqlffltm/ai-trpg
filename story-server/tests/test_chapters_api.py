@@ -10,6 +10,7 @@ asset 서버, 모델은 가짜다(tests/assets.py, tests/models.py).
   - 장이 넘어간 행동 말에 그 장(chapter_id)과 장의 시작 글이 남고, 모델에도 그 글이 간다. 그 뒤로 새 장소가 보인다
   - 기록 내려받기에 장이 넘어간 표시가 남는다
   - 목록의 진행에 지금 장의 차례와 이름이 실린다
+  - 장이 여는 로어북 항목(판의 형식 7)은 그 장에 닿기 전에는 카드에 가지 않는다(상시 항목도)
 """
 
 import asyncio
@@ -140,3 +141,53 @@ async def test_the_list_shows_the_current_chapter(client: AsyncClient, app: Fast
 
     assert (before['chapter_number'], before['chapter_name']) == (1, '여름의 시작')
     assert (after['chapter_number'], after['chapter_name']) == (2, '축제')
+
+
+BOOK_ID = '11111111-2222-4333-8444-555555555555'
+BOOK = {
+    'id': BOOK_ID,
+    'version': 1,
+    'name': '여름 마을의 설정',
+    'entries': [
+        {'id': 'sea', 'name': '바다', 'kind': 'place', 'keywords': [], 'content': '마을 앞의 바다.', 'constant': True},
+        {
+            'id': 'secret',
+            'name': '비밀',
+            'kind': 'event',
+            'keywords': [],
+            'content': '축제는 가짜다.',
+            'constant': True,
+        },
+    ],
+}
+
+
+async def card_after(client: AsyncClient, app: FastAPI, router: FakeRouter, headers: dict, conversation_id: str) -> str:
+    """말을 하나 보내고 모델에 간 카드를 돌려준다."""
+    url = f'{CONVERSATIONS_URL}/{conversation_id}/messages'
+    response = await client.post(url, json={'content': '안녕'}, headers=headers)
+    assert response.status_code == status.HTTP_200_OK, response.text
+    await asyncio.gather(*list(app.state.turns))
+    return router.provider.calls[-1][0][0].content
+
+
+async def test_lore_opened_by_a_later_chapter_stays_out_of_the_card_until_then(
+    clean_tables: None,
+    client: AsyncClient,
+    app: FastAPI,
+    session: AsyncSession,
+    asset: FakeAsset,
+    router: FakeRouter,
+    mine: dict,
+):
+    await turn_on_luna(session)
+    festival = {**CHAPTERS[1], 'opens': {**CHAPTERS[1]['opens'], 'lore': [{'lorebook': BOOK_ID, 'entry': 'secret'}]}}
+    fields = {**WORLD_FIELDS, **FIELDS, 'format': 7, 'chapters': [CHAPTERS[0], festival], 'lorebooks': [BOOK]}
+    started = await start_with_luna(client, asset, mine, fields)
+
+    before = await card_after(client, app, router, mine, started['id'])
+    await act(client, app, mine, started['id'], {'kind': 'move', 'place': 'beach'})
+    after = await card_after(client, app, router, mine, started['id'])
+
+    assert ('바다: 마을 앞의 바다.' in before, '축제는 가짜다.' in before) == (True, False)
+    assert '- 비밀: 축제는 가짜다.' in after

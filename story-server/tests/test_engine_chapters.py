@@ -154,3 +154,18 @@ def test_the_chapter_is_stored_and_old_states_read_as_the_first_chapter():
     assert state_on_path(rules, [state_to_json(moved)]).chapter == 'festival'
     assert state_on_path(rules, [old]).chapter is None
     assert (rules.place_open('square', None), rules.reached_index(None)) == (False, 0)
+
+
+def test_lore_entries_open_with_their_chapter():
+    book = '11111111-2222-4333-8444-555555555555'
+    rules = chaptered(
+        SUMMER, {**FESTIVAL, 'opens': {**FESTIVAL['opens'], 'lore': [{'lorebook': book, 'entry': 'secret'}]}}
+    )
+    lorebook = rules.chapters[1].opens.lore[0].lorebook
+
+    assert (rules.lore_open(lorebook, 'secret', 'summer'), rules.lore_open(lorebook, 'secret', 'festival')) == (
+        False,
+        True,
+    )
+    # 어느 장에도 적지 않은 항목과 로어북의 id 가 없는 판의 항목은 처음부터 열려 있다
+    assert rules.lore_open(lorebook, 'sea', 'summer') and rules.lore_open(None, 'secret', 'summer')
