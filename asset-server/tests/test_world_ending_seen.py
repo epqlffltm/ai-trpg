@@ -47,14 +47,14 @@ def secret(ending_id: str | None) -> dict:
     return {'id': 'secret', 'name': '숨은 이야기', 'when': {'match': 'all', 'items': [item]}, 'scene': {'text': '장면'}}
 
 
-async def test_the_condition_is_frozen_in_a_format_five_version(client: AsyncClient, owner: dict):
+async def test_the_condition_is_frozen_in_the_version(client: AsyncClient, owner: dict):
     world = await world_with(client, owner, events=[MEET, secret('solo')])
 
     response = await publish(client, owner, world)
 
     assert response.status_code == status.HTTP_201_CREATED, response.text
     document = response.json()['document']
-    assert DOCUMENT_FORMAT == document['format'] == 5
+    assert document['format'] == DOCUMENT_FORMAT >= 5
     assert document['events'][1]['when']['items'] == [
         {'kind': 'ending_seen', 'target': 'solo', 'value': None, 'count': 1}
     ]

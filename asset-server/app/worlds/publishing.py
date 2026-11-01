@@ -7,7 +7,8 @@
   - 막는 것: 이야기를 시작할 수 없거나(시작 장소, 시작 시간대, 인물이 없다), 칸끼리 가리키는 것이 없거나,
     남의 그림을 쓰거나, 인물의 캐릭터나 로어북을 판에 복사할 수 없다. 게시가 409 로 돌려준다.
     초안은 고치는 중이라 어긋날 수 있다(장소를 지웠는데 일정이 남았다). 판에는 맞는 것만 들어간다.
-  - 알리는 것: 시작 장소에서 길로 닿지 않는 장소, 열릴 수 없는 이벤트, 어디에도 나오지 않는 인물, 고를 일이 없는 엔딩.
+  - 알리는 것: 시작 장소에서 길로 닿지 않는 장소, 열릴 수 없는 이벤트, 어디에도 나오지 않는 인물, 고를 일이 없는 엔딩,
+    넘어올 수 없는 장.
     만드는 중에 일부러 남겨 둔 것일 수 있어 게시는 된다.
   - 걸러 낸 것: 소개에서 걸러 낸 태그, 속성, CSS, 링크, 그림(app/content/html.py).
 그림이 자기 것인지, 캐릭터와 로어북의 마지막 판은 DB 를 봐야 알아서 서비스가 찾아 넘긴다(app/worlds/service.py).
@@ -40,6 +41,7 @@ STAGE_VALUES = frozenset({ConditionKind.AFFECTION_AT_LEAST, ConditionKind.AFFECT
 ITEM_VALUES = frozenset({ConditionKind.GAVE_ITEM})
 EVENT_TARGETS = frozenset({ConditionKind.EVENT_SEEN})
 ENDING_TARGETS = frozenset({ConditionKind.ENDING_SEEN})
+CHAPTER_TARGETS = frozenset({ConditionKind.CHAPTER_AT_LEAST})
 # 효과의 종류마다 target 이 가리키는 것(인물, 물건, 장소)
 CAST_EFFECTS = frozenset({EffectKind.AFFECTION, EffectKind.ACCOMPANY_START, EffectKind.ACCOMPANY_END})
 ITEM_EFFECTS = frozenset({EffectKind.GIVE_ITEM, EffectKind.TAKE_ITEM})
@@ -69,6 +71,12 @@ class Problem(enum.StrEnum):
     EVENT_MISSING = 'event_missing'
     # 조건(ending_seen, 회차 혜택)이 이 세계관에 없는 엔딩을 가리킨다
     ENDING_TARGET_MISSING = 'ending_target_missing'
+    # 장(chapters)이 없는 장소나 이벤트를 연다(docs/architecture/chapters.md)
+    CHAPTER_CONTENT_MISSING = 'chapter_content_missing'
+    # 조건(chapter_at_least)이 이 세계관에 없는 장을 가리킨다
+    CHAPTER_TARGET_MISSING = 'chapter_target_missing'
+    # 시작 장소를 첫 장 뒤의 장이 연다. 처음부터 서는 곳은 처음부터 열려 있어야 한다
+    CHAPTER_START_LOCKED = 'chapter_start_locked'
     # 조건이나 지도에 보이는 단계(map_stage)가 그 인물에 없는 호감도의 단계를 가리키거나,
     # 지도가 stage 인 인물에 단계를 고르지 않았다
     STAGE_MISSING = 'stage_missing'
@@ -101,6 +109,8 @@ class WorldWarning(enum.StrEnum):
     # 고를 일이 없는 엔딩이 있다. 기한이 없는데 기한의 엔딩, 고백할 수 없는 인물의 고백 엔딩,
     # 실패해도 계속하는 인물의 실패 엔딩, 열릴 수 없는 이벤트의 엔딩, 같은 시작의 조건이 빈 엔딩 뒤에 적은 엔딩
     ENDING_UNREACHABLE = 'ending_unreachable'
+    # 넘어올 수 없는 장이 있다. 넘어오는 조건이 그 장이나 그 뒤의 장에서야 열리는 장소, 이벤트, 장을 기다린다
+    CHAPTER_UNREACHABLE = 'chapter_unreachable'
 
 
 class WorldNotReadyError(Exception):
@@ -133,7 +143,7 @@ def event_ids(world: World) -> set[str]:
 
 
 def all_conditions(world: World) -> Iterator[dict]:
-    """초안의 조건 전부. 인물의 일정과 이벤트가 열리는 조건이다(엔딩의 조건은 다음 조각에서 더한다)."""
+    """초안의 조건 전부. 인물의 일정, 이벤트, 고백, 엔딩, 장으로 넘어오는 조건이다."""
     for member in world.cast:
         for line in member.get('schedule', []):
             yield from line['when']['items']
@@ -144,6 +154,8 @@ def all_conditions(world: World) -> Iterator[dict]:
             yield from member['confession']['when']['items']
     for ending in world.endings:
         yield from ending['when']['items']
+    for chapter in world.chapters:
+        yield from chapter['when']['items']
 
 
 def all_effects(world: World) -> Iterator[dict]:
@@ -236,6 +248,35 @@ def endings_pointed(world: World) -> list[str]:
     return [item['target'] for item in all_conditions(world) if item['kind'] in ENDING_TARGETS]
 
 
+def chapter_ids(world: World) -> list[str]:
+    """장의 id 들. 적은 차례(장의 차례)다."""
+    return [chapter['id'] for chapter in world.chapters]
+
+
+def opening_chapter(world: World, kind: str, content_id: str) -> int:
+    """그 장소나 이벤트(kind 는 places, events)를 여는 장의 차례. 어느 장에도 적지 않았으면 0(처음부터)이다."""
+    for index, chapter in enumerate(world.chapters):
+        if content_id in chapter['opens'][kind]:
+            return index
+    return 0
+
+
+def chapter_problems(world: World) -> list[Problem]:
+    """장의 문제. 없는 장소와 이벤트를 열거나, 조건이 없는 장을 가리키거나, 시작 장소가 첫 장에 열리지 않는다."""
+    opened_places = [place for chapter in world.chapters for place in chapter['opens']['places']]
+    opened_events = [event for chapter in world.chapters for event in chapter['opens']['events']]
+    content_missing = any(place not in place_ids(world) for place in opened_places) or any(
+        event not in event_ids(world) for event in opened_events
+    )
+    pointed = [item['target'] for item in all_conditions(world) if item['kind'] in CHAPTER_TARGETS]
+    start_locked = world.start_place is not None and opening_chapter(world, 'places', world.start_place) > 0
+    return [
+        *([Problem.CHAPTER_CONTENT_MISSING] if content_missing else []),
+        *missing(pointed, set(chapter_ids(world)), Problem.CHAPTER_TARGET_MISSING),
+        *([Problem.CHAPTER_START_LOCKED] if start_locked else []),
+    ]
+
+
 def missing(pointed: Sequence[str], known: set[str], problem: Problem) -> list[Problem]:
     """가리킨 것 가운데 없는 것이 있으면 그 문제 하나."""
     return [problem] if any(name not in known for name in pointed) else []
@@ -295,7 +336,7 @@ def ending_problems(world: World) -> list[Problem]:
 
 def find_problems(world: World) -> list[Problem]:
     """초안만 보고 아는, 게시를 막는 것들. 없으면 빈 목록이다."""
-    return start_problems(world) + reference_problems(world) + ending_problems(world)
+    return start_problems(world) + reference_problems(world) + ending_problems(world) + chapter_problems(world)
 
 
 def reachable_places(world: World, start: str) -> set[str]:
@@ -404,8 +445,39 @@ def unreachable_endings(world: World) -> list[str]:
     return never + shadowed_endings(world)
 
 
+def too_late(item: dict, index: int, world: World) -> bool:
+    """
+    그 조건이 index 번째 장으로 넘어오기 전에는 맞을 수 없는가.
+    그 장이나 그 뒤의 장이 여는 장소에 있다, 그런 이벤트를 봤다, 그 장이나 그 뒤의 장 이상이다.
+    """
+    if item['kind'] == ConditionKind.REACH_PLACE:
+        return opening_chapter(world, 'places', item['target']) >= index
+    if item['kind'] == ConditionKind.EVENT_SEEN:
+        return opening_chapter(world, 'events', item['target']) >= index
+    if item['kind'] == ConditionKind.CHAPTER_AT_LEAST:
+        ids = chapter_ids(world)
+        return item['target'] in ids and ids.index(item['target']) >= index
+    return False
+
+
+def unreachable_chapters(world: World) -> list[str]:
+    """
+    넘어올 수 없는 장들. 모두(all)면 조건 하나라도, 하나라도(any)면 조건 모두가 너무 늦은 것(too_late)을 기다린다.
+    다른 까닭(기한 뒤의 날, 열릴 수 없는 이벤트)은 이벤트의 알림이 본다.
+    """
+    unreachable = []
+    for index, chapter in enumerate(world.chapters):
+        late = [too_late(item, index, world) for item in chapter['when']['items']]
+        if late and (any(late) if chapter['when']['match'] == Match.ALL else all(late)):
+            unreachable.append(chapter['id'])
+    return unreachable
+
+
 def find_warnings(world: World) -> list[WorldWarning]:
-    """알리기만 하는 것들. 닿지 않는 장소, 열릴 수 없는 이벤트, 어디에도 나오지 않는 인물, 고를 일이 없는 엔딩."""
+    """
+    알리기만 하는 것들. 닿지 않는 장소, 열릴 수 없는 이벤트, 어디에도 나오지 않는 인물, 고를 일이 없는 엔딩,
+    넘어올 수 없는 장.
+    """
     warnings = []
     if world.start_place is not None and place_ids(world) - reachable_places(world, world.start_place):
         warnings.append(WorldWarning.PLACE_UNREACHABLE)
@@ -415,6 +487,8 @@ def find_warnings(world: World) -> list[WorldWarning]:
         warnings.append(WorldWarning.CAST_NEVER_PRESENT)
     if unreachable_endings(world):
         warnings.append(WorldWarning.ENDING_UNREACHABLE)
+    if unreachable_chapters(world):
+        warnings.append(WorldWarning.CHAPTER_UNREACHABLE)
     return warnings
 
 

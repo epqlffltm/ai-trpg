@@ -33,6 +33,7 @@ export type StoryWorldEffectKind = Schemas['EffectKind'];
 export type StoryWorldScene = Schemas['Scene'];
 export type StoryWorldEvent = Schemas['Event'];
 export type StoryWorldEnding = Schemas['Ending'];
+export type StoryWorldChapter = Schemas['Chapter'];
 export type PublicWorldPage = Schemas['PublicWorldPage'];
 export type PublicWorldSummary = Schemas['PublicWorldSummary'];
 export type PublicWorldDetail = Schemas['PublicWorldDetail'];

@@ -15,6 +15,8 @@
   - 5: 조건의 ending_seen(이 계정이 그 엔딩을 본 적이 있다, 회차 혜택)을 더했다(2026-10-31).
        4 까지의 판에는 그 조건이 없다.
        받는 쪽(story)은 세션을 시작할 때 계정의 본 엔딩을 굳혀 판정한다
+  - 6: 장(chapters)과 조건의 chapter_at_least 를 더했다(2026-11-01, docs/architecture/chapters.md).
+       5 까지의 판은 장이 없는 것으로 읽는다(모든 장소와 이벤트가 처음부터 열려 있다)
 
 인물의 보이기는 판에서는 정해진 값이다. 초안의 덮어쓰기가 비어 있으면 세계관의 기본을 채워 넣는다.
 받는 쪽(story)이 기본과 덮어쓰기를 다시 합치지 않아도 된다.
@@ -44,7 +46,7 @@ from app.worlds.models import (
 )
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 5
+DOCUMENT_FORMAT = 6
 
 
 class SlotDocument(BaseModel):
@@ -258,6 +260,26 @@ class EndingDocument(BaseModel):
     hint: str
 
 
+class ChapterOpensDocument(BaseModel):
+    """장이 여는 장소와 이벤트(의 id)."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    places: list[str]
+    events: list[str]
+
+
+class ChapterDocument(BaseModel):
+    """장 하나. 판의 차례가 장의 차례다. when 은 그 장으로 넘어오는 조건이다(첫 장은 비어 있다)."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    id: str
+    name: str
+    when: ConditionsDocument
+    opens: ChapterOpensDocument
+
+
 class WorldDocument(BaseModel):
     """판에 굳힌 세계관. intro_html 은 허용 목록으로 거른 소개다."""
 
@@ -283,6 +305,7 @@ class WorldDocument(BaseModel):
     events: list[EventDocument] = []
     endings: list[EndingDocument] = []
     genre: Genre
+    chapters: list[ChapterDocument] = []
 
 
 def character_copy(character_id: uuid.UUID, number: int, document: Mapping) -> CastCharacterDocument:
@@ -348,6 +371,7 @@ def build_document(
         events=world.events,
         endings=world.endings,
         genre=Genre(world.genre),
+        chapters=world.chapters,
     )
 
 

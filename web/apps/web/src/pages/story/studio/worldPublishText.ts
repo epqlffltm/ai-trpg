@@ -25,6 +25,9 @@ const PROBLEMS: Record<string, Line> = {
   lorebook_unpublished: { text: '가리킨 로어북을 게시한 적이 없습니다.', tab: 'lorebooks' },
   ending_missing: { text: '고백 성공, 끝내는 고백 실패, 기한 같은 시작마다 조건이 빈 엔딩이 하나는 있어야 합니다.', tab: 'endings' },
   image_not_owned: { text: '내가 올리지 않은 그림이 있습니다.' },
+  chapter_content_missing: { text: '장이 없는 장소나 이벤트를 엽니다.', tab: 'chapters' },
+  chapter_target_missing: { text: '없는 장을 가리키는 조건(그 장 이상)이 있습니다.', tab: 'chapters' },
+  chapter_start_locked: { text: '시작 장소를 첫 장 뒤의 장이 엽니다. 시작 장소는 처음부터 열려 있어야 합니다.', tab: 'chapters' },
 };
 
 const WARNINGS: Record<string, string> = {
@@ -32,6 +35,7 @@ const WARNINGS: Record<string, string> = {
   event_unreachable: '열릴 수 없는 이벤트가 있습니다.',
   cast_never_present: '어디에도 나오지 않는 인물이 있습니다.',
   ending_unreachable: '고를 일이 없는 엔딩이 있습니다.',
+  chapter_unreachable: '넘어올 수 없는 장이 있습니다. 그 장이나 뒤의 장에서야 열리는 것을 기다립니다.',
 };
 
 /** 게시를 막는 것 하나. 고칠 탭이 있으면 그 탭 */

@@ -1056,6 +1056,70 @@ export interface components {
             schedule: components["schemas"]["ScheduleLine"][];
         };
         /**
+         * Chapter
+         * @description 장 하나(docs/architecture/chapters.md). 적은 차례가 장의 차례다. when 은 그 장으로 넘어오는 조건이다.
+         *     첫 장은 조건을 적지 않고, 그 뒤의 장은 조건을 하나 이상 적는다(Chapters 가 본다).
+         *     id 는 판이 바뀌어도 그대로 둔다(나중에 장 경계에서 새 판으로 갈아탈 수 있게).
+         */
+        Chapter: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * @default {
+             *       "events": [],
+             *       "places": []
+             *     }
+             */
+            opens: components["schemas"]["ChapterOpens"];
+            /**
+             * @default {
+             *       "items": [],
+             *       "match": "all"
+             *     }
+             */
+            when: components["schemas"]["Conditions"];
+        };
+        /**
+         * ChapterDocument
+         * @description 장 하나. 판의 차례가 장의 차례다. when 은 그 장으로 넘어오는 조건이다(첫 장은 비어 있다).
+         */
+        ChapterDocument: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            opens: components["schemas"]["ChapterOpensDocument"];
+            when: components["schemas"]["ConditionsDocument"];
+        };
+        /**
+         * ChapterOpens
+         * @description 장이 여는 장소와 이벤트(의 id). 어느 장에도 적지 않은 것은 처음부터 열려 있다.
+         */
+        ChapterOpens: {
+            /**
+             * Events
+             * @default []
+             */
+            events: string[];
+            /**
+             * Places
+             * @default []
+             */
+            places: string[];
+        };
+        /**
+         * ChapterOpensDocument
+         * @description 장이 여는 장소와 이벤트(의 id).
+         */
+        ChapterOpensDocument: {
+            /** Events */
+            events: string[];
+            /** Places */
+            places: string[];
+        };
+        /**
          * CharacterCopy
          * @description 다른 서버(chat, story)에 내주는 판. 대화를 시작할 때 가져가 고정한다.
          *
@@ -1419,7 +1483,7 @@ export interface components {
         /**
          * Condition
          * @description 조건 하나(story.md 의 "조건"). 종류(kind)마다 쓰는 칸이 다르다(CONDITION_FIELDS).
-         *     target 은 장소, 물건, 인물, 시간대, 이벤트의 id 다. value 는 물건의 id(건넸다)나 호감도 단계의 이름이다.
+         *     target 은 장소, 물건, 인물, 시간대, 이벤트, 엔딩, 장의 id 다. value 는 물건의 id(건넸다)나 호감도 단계의 이름이다.
          *     count 는 물건의 수(가졌다)나 날짜(n일째)다. 쓰지 않는 칸은 적지 않는다.
          */
         Condition: {
@@ -1464,9 +1528,10 @@ export interface components {
          *       event_seen         target: 이벤트        그 이벤트가 열린 적이 있다(판의 형식 2)
          *       ending_seen        target: 엔딩          이 계정이 그 엔딩을 본 적이 있다(회차 혜택, 판의 형식 5).
          *                                                story 가 세션을 시작할 때 계정의 기록을 굳혀 판정한다
+         *       chapter_at_least   target: 장            지금 장이 그 장이거나 그 뒤다(판의 형식 6, docs/architecture/chapters.md)
          * @enum {string}
          */
-        ConditionKind: "reach_place" | "hold_item" | "gave_item" | "affection_at_least" | "affection_below" | "day_at_least" | "day_at_most" | "slot_is" | "accompanied" | "event_seen" | "ending_seen";
+        ConditionKind: "reach_place" | "hold_item" | "gave_item" | "affection_at_least" | "affection_below" | "day_at_least" | "day_at_most" | "slot_is" | "accompanied" | "event_seen" | "ending_seen" | "chapter_at_least";
         /**
          * Conditions
          * @description 조건 목록과 맞추는 법. 목록이 비면 늘 맞는다.
@@ -3064,6 +3129,11 @@ export interface components {
              * @default []
              */
             cast: components["schemas"]["CastMember"][];
+            /**
+             * Chapters
+             * @default []
+             */
+            chapters: components["schemas"]["Chapter"][];
             /** Deadline Days */
             deadline_days?: number | null;
             /**
@@ -3171,6 +3241,11 @@ export interface components {
             /** Cast */
             cast: components["schemas"]["CastMember"][];
             /**
+             * Chapters
+             * @default []
+             */
+            chapters: components["schemas"]["Chapter"][];
+            /**
              * Created At
              * Format: date-time
              */
@@ -3234,6 +3309,11 @@ export interface components {
             after_ending: components["schemas"]["AfterEnding"];
             /** Cast */
             cast: components["schemas"]["CastDocument"][];
+            /**
+             * Chapters
+             * @default []
+             */
+            chapters: components["schemas"]["ChapterDocument"][];
             /** Deadline Days */
             deadline_days: number | null;
             /**
@@ -3447,6 +3527,8 @@ export interface components {
             after_ending?: components["schemas"]["AfterEnding"] | null;
             /** Cast */
             cast?: components["schemas"]["CastMember"][] | null;
+            /** Chapters */
+            chapters?: components["schemas"]["Chapter"][] | null;
             /** Deadline Days */
             deadline_days?: number | null;
             /** Endings */
