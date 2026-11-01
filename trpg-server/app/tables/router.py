@@ -60,6 +60,7 @@ from app.tables import (
     place_items,
     places,
     quests,
+    raising,
     references,
     replacements,
     repository,
@@ -124,6 +125,7 @@ from app.tables.schemas import (
     PlaceOut,
     PregenChoice,
     QuestOut,
+    RaiseRequest,
     ReferencesUpdate,
     ResourceOut,
     RollOut,
@@ -815,6 +817,19 @@ async def wear_equipment(table_id: uuid.UUID, data: WearRequest, user: CurrentUs
     가지고 있지 않으면 409(not_enough_items). 모두에게 이벤트(equipment_changed)가 간다.
     """
     table = await wearing.wear_item(session, user.user_id, table_id, data.entry_id, data.slots)
+    return to_detail(table, user.user_id)
+
+
+@router.post('/{table_id}/abilities', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def raise_abilities(table_id: uuid.UUID, data: RaiseRequest, user: CurrentUser, session: Session) -> TableDetail:
+    """
+    자기 캐릭터의 쌓인 능력치 점수(#286 ③)를 고른 능력치에 놓는다. 라운드의 행동이 아니다.
+
+    선언을 받는 중에만 된다(닫는 중이면 409 round_closing). 죽었으면 409 character_dead.
+    규칙에 없는 능력치면 422(raises), 점수가 모자라면 409 not_enough_points, 규칙의 상한을 넘으면 409 ability_at_max.
+    최대 HP 에 닿는 능력치의 보정이 오르면 최대 HP 도 오른다. 모두에게 이벤트(abilities_raised)가 간다.
+    """
+    table = await raising.raise_abilities(session, user.user_id, table_id, data.raises)
     return to_detail(table, user.user_id)
 
 

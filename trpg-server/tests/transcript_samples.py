@@ -416,6 +416,13 @@ SAMPLES = {
         'max_hp': 14,
         'points': 1,
     },
+    'abilities_raised': {
+        'user_id': '22222222-2222-4333-8444-555555555555',
+        'character_name': '드워프 기사',
+        'raises': [{'ability': 'str', 'name': '근력', 'from': 12, 'to': 13}],
+        'points': 0,
+        'max_hp': 13,
+    },
     'experience_gained': {
         'round': 2,
         'source': {'kind': 'monster', 'id': '6b0e1c3a-5d2f-4a8e-9c71-2f4d8e6a1b91', 'name': '수로 쥐 2'},

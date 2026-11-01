@@ -36,7 +36,15 @@ from app.catalog.models import Grade
 from app.catalog.steps import MAX_STEP
 from app.engine.item_aids import ItemAid
 from app.engine.item_effects import Effect
-from app.engine.ruleset import RULESET_MAX_ABILITIES, RULESET_MAX_EQUIPMENT_SLOTS, Key, Resistance, Ruleset
+from app.engine.ruleset import (
+    LEVEL_MAX_POINTS,
+    RULESET_MAX_ABILITIES,
+    RULESET_MAX_EQUIPMENT_SLOTS,
+    RULESET_MAX_LEVEL,
+    Key,
+    Resistance,
+    Ruleset,
+)
 from app.engine.sheet import CharacterSheet, Score
 from app.tables.models import (
     CREDIT_WAIT_MAX,
@@ -448,6 +456,23 @@ class WornOut(BaseModel):
     entry_id: uuid.UUID
     name: str
     slots: list[str]
+
+
+# 한 번에 한 능력치에 놓을 수 있는 점수의 상한. 레벨이 다 올라 받는 점수보다 많을 수 없다(#286 ③)
+RAISE_MAX_POINTS = LEVEL_MAX_POINTS * (RULESET_MAX_LEVEL - 1)
+RaisePoints = Annotated[int, Field(ge=1, le=RAISE_MAX_POINTS)]
+
+
+class RaiseRequest(BaseModel):
+    """
+    쌓인 능력치 점수를 놓을 때 받는 값(#286 ③). 능력치의 이름표에서 놓을 점수(1 이상)로 간다.
+
+    한 점이 능력치 1 이다. 합이 쌓인 점수(SheetOut.points)를 넘거나 규칙의 상한을 넘으면 409 다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    raises: Annotated[dict[Key, RaisePoints], Field(min_length=1, max_length=RULESET_MAX_ABILITIES)]
 
 
 class WearRequest(BaseModel):

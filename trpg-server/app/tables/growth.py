@@ -10,15 +10,20 @@
     오른 레벨마다 최대 HP 에 그 줄의 양을 더하고(지금 HP 도 그만큼, 쓰러져 있으면 최대만), 능력치 점수를 쌓는다.
     최대 HP 는 시트의 상한(SHEET_MAX_HP)을 넘지 않는다. 경험치도 상한(PROGRESSION_MAX_XP)까지만 모은다.
   - 마지막 레벨에 닿은 뒤에도 경험치는 모인다(상한까지). 레벨은 그대로다.
-  - 쌓인 능력치 점수를 능력치에 놓는 것은 플레이어가 고른다(다음 일).
+  - 쌓인 능력치 점수를 능력치에 놓는 것은 플레이어가 고른다(raise_abilities, #286 ③). 한 점이 능력치 1 이다.
+    규칙의 상한(score_max)을 넘지 못한다. 최대 HP 에 닿는 능력치(Ruleset.hp_ability)를 올려 보정이 오르면
+    최대 HP 도 그만큼 오른다(지금 HP 도, 쓰러져 있으면 최대만).
+    수치의 최대는 능력치로 그때그때 구하므로 따로 고치지 않는다.
   - 성장이 없는 규칙(progression 이 None)이면 아무것도 하지 않는다.
 
 DB 를 모른다. 시트의 칸만 고친다. 저장은 부르는 쪽이 한다.
 """
 
 from app.assets.models import XpSplit
-from app.engine.ruleset import PROGRESSION_MAX_XP, Progression
+from app.engine.creation import hp_bonus
+from app.engine.ruleset import PROGRESSION_MAX_XP, Progression, Ruleset
 from app.engine.sheet import SHEET_MAX_HP
+from app.tables.errors import Conflict, TableConflictError, TableOptionError
 from app.tables.models import TableMember, TableSheet
 
 
@@ -108,4 +113,39 @@ def grant(members: list[TableMember], amount: int, split: XpSplit, progression: 
         {'user_id': str(member.user_id), 'character_name': member.character_name, 'xp': gained}
         for member, gained in given
         if gained is not None
+    ]
+
+
+def require_raisable(ruleset: Ruleset, sheet: TableSheet, raises: dict[str, int]) -> None:
+    """
+    쌓인 점수로 그만큼 올릴 수 있는지 본다(#286 ③).
+
+    규칙에 없는 능력치면 TableOptionError(raises), 점수가 모자라면 TableConflictError(not_enough_points),
+    상한(score_max)을 넘으면 TableConflictError(ability_at_max).
+    """
+    known = {ability.key for ability in ruleset.abilities}
+    if any(key not in known for key in raises):
+        raise TableOptionError('raises')
+    if sum(raises.values()) > sheet.points:
+        raise TableConflictError(Conflict.NOT_ENOUGH_POINTS)
+    if any(sheet.abilities[key] + amount > ruleset.score_max for key, amount in raises.items()):
+        raise TableConflictError(Conflict.ABILITY_AT_MAX)
+
+
+def raise_abilities(ruleset: Ruleset, sheet: TableSheet, raises: dict[str, int]) -> list[dict]:
+    """
+    쌓인 능력치 점수를 능력치에 놓는다(#286 ③). 능력치마다 앞뒤의 점수를 규칙의 차례로 돌려준다.
+
+    못 놓으면 아무것도 바꾸지 않고 오류다(require_raisable). 최대 HP 에 닿는 능력치의 보정이 오르면 최대 HP 도 오른다.
+    """
+    require_raisable(ruleset, sheet, raises)
+    before = dict(sheet.abilities)
+    # JSONB 칸은 새 묶음을 넣어야 바뀐 것으로 적힌다
+    sheet.abilities = {key: score + raises.get(key, 0) for key, score in before.items()}
+    sheet.points -= sum(raises.values())
+    raise_max_hp(sheet, hp_bonus(ruleset, sheet.abilities) - hp_bonus(ruleset, before))
+    return [
+        {'ability': ability.key, 'name': ability.name, 'from': before[ability.key], 'to': sheet.abilities[ability.key]}
+        for ability in ruleset.abilities
+        if ability.key in raises
     ]

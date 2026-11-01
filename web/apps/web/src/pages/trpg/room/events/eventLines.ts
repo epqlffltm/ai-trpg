@@ -111,6 +111,13 @@ function styleText(payload: Payload): string {
   return style ? narrationStyleLabel(style) : '시나리오의 추천';
 }
 
+/** 놓은 능력치 점수(#286 ③). "렌: 능력치 근력 12 → 13, 건강 10 → 12" */
+function raisedText(payload: Payload, ctx: EventContext, event: TableEvent): string {
+  const raises = Array.isArray(payload.raises) ? (payload.raises as Payload[]) : [];
+  const lines = raises.map((one) => `${text(one, 'name') ?? '?'} ${count(one, 'from') ?? '?'} → ${count(one, 'to') ?? '?'}`);
+  return `${who(payload, ctx, event)}: 능력치 ${lines.join(', ') || '?'}`;
+}
+
 /** 받은 경험치(#286 ②). "경험치: 들쥐 1 · 기사 +12, 약사 +12" */
 function experienceText(payload: Payload): string {
   const gains = Array.isArray(payload.gains) ? (payload.gains as Payload[]) : [];
@@ -382,6 +389,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   happening_occurred: (p) => `일어난 일: ${text(p, 'name') ?? '?'}`,
   chapter_changed: (p) => `${count(p, 'number') ?? '?'}장: ${placeOf(p, 'to') ?? '?'}`,
   experience_gained: (p) => experienceText(p),
+  abilities_raised: (p, ctx, e) => raisedText(p, ctx, e),
   character_leveled: (p, ctx, e) => `${who(p, ctx, e)}: 레벨 ${count(p, 'previous_level') ?? '?'} → ${count(p, 'level') ?? '?'}`,
   monsters_appeared: (p) => wanderText(p),
 

@@ -67,6 +67,10 @@ class Conflict(enum.StrEnum):
     CHARACTER_NOT_DOWNED = 'character_not_downed'
     # 캐릭터가 이미 죽었다
     CHARACTER_DEAD = 'character_dead'
+    # 쌓인 능력치 점수보다 많이 놓으려 했다(#286 ③)
+    NOT_ENOUGH_POINTS = 'not_enough_points'
+    # 능력치를 규칙의 상한(score_max)보다 높이려 했다(#286 ③)
+    ABILITY_AT_MAX = 'ability_at_max'
     # 캐릭터가 살아 있다. 진행 중에는 캐릭터가 죽은 사람만 새 캐릭터를 정한다
     CHARACTER_ALIVE = 'character_alive'
     # 한 가지 물건을 가질 수 있는 개수(99)를 넘는다

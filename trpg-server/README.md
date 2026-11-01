@@ -228,6 +228,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | POST | `/api/v1/game/tables/{id}/character/persona` | 이 테이블의 내 캐릭터를 내 보관함에 저장하기. 201. 이름, 설명, 시작할 때의 능력치. 프리젠은 안 된다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/character/roll` | 내 능력치의 점수를 주사위로 굴리기. 본문 없음. 서버가 굴린다. 캐릭터 하나에 한 번. 모집 중에, 또는 진행 중에 내 캐릭터가 죽었을 때 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/equipment` | 내 캐릭터가 가진 물건 하나를 칸에 착용하기(`{"entry_id", "slots"}`, [장비](#장비)). 라운드가 선언을 받는 중에만. 찬 칸의 것은 벗겨진다. 라운드의 행동이 아니고 AI 를 부르지 않는다 | access 토큰 |
+| POST | `/api/v1/game/tables/{id}/abilities` | 내 캐릭터의 쌓인 능력치 점수를 능력치에 놓기(`{"raises": {"str": 1, "con": 2}}`, #286 ③, [성장](#성장)). 라운드가 선언을 받는 중에만. 규칙에 없는 능력치면 422 `raises`, 점수가 모자라면 409 `not_enough_points`, 상한을 넘으면 409 `ability_at_max`, 죽었으면 409 `character_dead`. 라운드의 행동이 아니고 AI 를 부르지 않는다 | access 토큰 |
 | DELETE | `/api/v1/game/tables/{id}/equipment/{slot}` | 내 캐릭터의 그 칸을 비우기. 그 칸을 차지한 착용이 통째로 빠진다. 비어 있으면 아무것도 하지 않는다 | access 토큰 |
 | DELETE | `/api/v1/game/tables/{id}/members/me` | 테이블에서 나가기. 204 | access 토큰 |
 | DELETE | `/api/v1/game/tables/{id}/members/{user_id}` | 참가자 내보내기. 방장만. 초대 코드가 새로 만들어진다 | access 토큰 |
@@ -1271,6 +1272,8 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 | `character_alive` | 캐릭터가 살아 있다. 진행 중에는 캐릭터가 죽은 사람만 새 캐릭터를 굴리고 들인다 |
 | `too_many_items` | 한 가지 물건을 가질 수 있는 개수(99)를 넘는다 |
 | `not_enough_items` | 가진 것보다 많이 빼앗으려 했다. 가지지 않은 물건이면 이 이유다 |
+| `not_enough_points` | 쌓인 능력치 점수보다 많이 놓으려 했다(#286 ③) |
+| `ability_at_max` | 능력치를 규칙의 상한(`score_max`)보다 높이려 했다(#286 ③) |
 | `narration_model_locked` | 시작한 테이블의 서술 모델을 바꾸려 했다. 지금 모델을 쓸 수 있으면 시작한 뒤에는 고정이다 |
 
 ```json
@@ -1476,7 +1479,13 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 - 경험치가 레벨표의 다음 줄에 닿으면 그 레벨이 된다. 한 번에 여러 레벨을 오를 수 있다. 오른 레벨마다 최대 HP 에 그 줄의 양을 더하고(지금 HP 도 그만큼, 쓰러져 있으면 최대만. 일어나는 것은 회복의 일이다) 능력치 점수를 쌓는다. 최대 HP 는 999, 경험치는 1,000,000 을 넘지 않는다. 마지막 레벨 뒤에도 경험치는 모인다.
 - 퀘스트로 받은 것은 이벤트 `quest_changed` 의 `rewards[].xp` 에, 몬스터와 사건으로 받은 것은 `experience_gained` 에 남는다. 레벨이 오른 캐릭터마다 `character_leveled` 가 그 뒤에 잇는다(같은 묶음).
 - 테이블을 읽으면 시트에 `xp`, `level`, `next_level_xp`(마지막 레벨이거나 성장이 없으면 `null`), `points` 가 보인다.
-- 아직 하지 않는 것: 쌓인 능력치 점수를 능력치에 놓기, 서술에 레벨을 알리기, 다음 판으로 성장을 가져가기.
+- **쌓인 점수는 플레이어가 능력치에 놓는다(#286 ③, `POST /tables/{id}/abilities`, `app/tables/raising.py`).** 한 점이 능력치 1 이다. 한 번에 여러 능력치에 나눠 놓을 수 있다.
+  - 자기 캐릭터만, 진행 중이고 라운드가 선언을 받는 중일 때만(닫는 중이면 409 `round_closing`) 놓는다. 죽은 캐릭터는 못 놓고 쓰러진 캐릭터는 놓는다. 방장도 서술도 남의 점수를 놓지 못한다.
+  - 규칙의 상한(`score_max`)을 넘지 못한다. 막히면 아무것도 바뀌지 않는다.
+  - 최대 HP 에 닿는 능력치(`rules.hp_ability`)를 올려 그 보정이 오르면 최대 HP 도 그만큼 오른다(지금 HP 도, 쓰러져 있으면 최대만). 점수가 올라도 보정이 그대로면(10 → 11) 그대로다. 프리젠과 기본 시트의 캐릭터도 같다.
+  - 수치(#804)의 최대는 능력치로 그때그때 구하므로 함께 오른다. 지금 값은 그대로다.
+  - 놓은 것은 이벤트 `abilities_raised` 로 남는다(행한 사람은 그 사람).
+- 아직 하지 않는 것: 서술에 레벨을 알리기, 다음 판으로 성장을 가져가기.
 
 ## 라운드
 
@@ -2990,6 +2999,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `chapter_changed` | 테이블이 다음 장으로 넘어갔다(#481). 장의 조건이 채워져 엔진이 넘겼다. 행한 사람이 없다. 라운드가 닫힌 일과 같은 묶음이고 그보다 앞이다 | `round`, `from`(`id`, `name`), `to`(`id`, `name`), `number`(몇째 장). 조건은 적지 않는다 |
 | `character_leveled` | 캐릭터의 레벨이 올랐다(#286). 받은 경험치가 레벨표의 다음 줄에 닿았다. 행한 사람이 없다. 경험치를 준 이벤트(`quest_changed`, `experience_gained`)에 이어지고 같은 묶음이다 | `user_id`, `character_name`, `previous_level`, `level`, `xp`(그 뒤의 경험치), `max_hp`(그 뒤의 최대 HP), `points`(쌓인 능력치 점수) |
 | `experience_gained` | 캐릭터들이 몬스터나 판의 사건에서 경험치를 받았다(#286 ②). 행한 사람이 없다. 몬스터면 닫힘의 묶음에, 사건이면 그 사건(`happening_occurred`)에 이어진다. 레벨이 오른 사람마다 `character_leveled` 가 이것에 잇는다 | `round`, `source`(`kind`: `monster`·`happening`, `id`(테이블의 마리나 사건 항목), `name`), `split`(`each`, `share`), `gains`: 받은 사람마다 `user_id`, `character_name`, `xp`(`count`, `total`, `capped`, `previous_level`, `level`, `max_hp`, `points`) |
+| `abilities_raised` | 캐릭터가 쌓인 능력치 점수를 능력치에 놓았다(#286 ③). 행한 사람은 그 사람이다 | `user_id`, `character_name`, `raises`(놓은 능력치마다 `ability`, `name`, `from`, `to`, 규칙의 차례), `points`(남은 점수), `max_hp`(그 뒤의 최대 HP) |
 | `happening_occurred` | 판의 사건이 일어났다(#367). 조건이 채워져 엔진이 한 번 일으켰다. 행한 사람이 없다 | `round`, `entry_id`, `name`(사건 항목의 이름), `moves`(옮긴 사람마다 `user_id`, `character_name`, `from`, `to`). 조건은 싣지 않는다 |
 | `door_changed` | 캐릭터가 길의 문을 잠그거나 열거나 따거나 부수거나 고치거나 자물쇠를 바꿨다(#281). 해낸 것만 적힌다. 그 행동(따기, 부수기, 고치기는 그 판정) 바로 뒤에 적힌다 | `round`, `user_id`, `character_name`, `act`(`lock`, `unlock`, `pick`, `force`, `repair`, `replace`), `device`(`lock`, `bar`, 따기, 부수기, 고치기, 바꾸기는 `null`), `from`, `to` |
 | `place_searched` | 캐릭터가 서 있는 곳에서 숨긴 길과 숨긴 물건과 숨긴 덫을 찾았다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `place`, `found`: 찾은 길마다 `from_place`, `to_place`, `two_way`. `items`: 찾아서 가진 물건마다 `entry_id`, `name`, `count`, `left`, `total`. `traps`: 찾아낸 덫마다 `trap_id`, `entry_id`, `name`(#806 ①-b). 못 찾았으면 빈 목록. 굴린 판정은 없다 |
