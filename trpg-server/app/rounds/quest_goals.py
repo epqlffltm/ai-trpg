@@ -183,16 +183,17 @@ def succeed(
     return describe(quest, previous, QuestStatus.SUCCEEDED, rewards, row.due_at, reason=CONDITIONS_MET, consumed=handed)
 
 
-def show(table: GameTable, row: TableQuest, quest: CatalogQuest) -> dict:
+def show(table: GameTable, row: TableQuest, quest: CatalogQuest, reason: str = CONDITIONS_MET) -> dict:
     """
     드러날 때가 된 숨긴 퀘스트 하나를 진행 중으로 바꾼다. 이벤트에 적을 모양을 돌려준다.
 
     판의 기한이 있으면 이 라운드가 열린 시각부터 센다(app/tables/quests.py 의 reveal).
+    reason 은 드러난 까닭이다. 조건이 채워졌거나(conditions_met), 그 퀘스트를 여는 장이 열렸다(chapter_opened, #481).
     """
     row.status = QuestStatus.ACTIVE
     row.changed_at = func.now()
     quests.reveal(row, quest, table.clock.minutes)
-    return describe(quest, QuestStatus.HIDDEN, QuestStatus.ACTIVE, [], row.due_at, reason=CONDITIONS_MET)
+    return describe(quest, QuestStatus.HIDDEN, QuestStatus.ACTIVE, [], row.due_at, reason=reason)
 
 
 def fail(row: TableQuest, quest: CatalogQuest) -> dict:
@@ -206,19 +207,25 @@ def fail(row: TableQuest, quest: CatalogQuest) -> dict:
     return describe(quest, QuestStatus.ACTIVE, QuestStatus.FAILED, [], row.due_at, reason=CONDITIONS_MET)
 
 
+def unlocked(table: GameTable) -> list[TableQuest]:
+    """열린 퀘스트들(#481). 아직 열리지 않은 장의 퀘스트는 드러나지도, 이루지도, 실패하지도 않는다."""
+    locked = chapters.locked_ids(table)
+    return [row for row in table.quests if row.entry_id not in locked]
+
+
 def open_quests(table: GameTable) -> list[TableQuest]:
-    """아직 끝나지 않은 퀘스트들(숨김, 진행 중). 이 중에서 이룬 것을 찾는다."""
-    return [row for row in table.quests if row.status not in FINISHED]
+    """아직 끝나지 않은 열린 퀘스트들(숨김, 진행 중). 이 중에서 이룬 것을 찾는다."""
+    return [row for row in unlocked(table) if row.status not in FINISHED]
 
 
 def active_quests(table: GameTable) -> list[TableQuest]:
-    """진행 중인 퀘스트들. 이 중에서 실패할 것을 찾는다. 숨긴 것은 실패하지 않는다."""
-    return [row for row in table.quests if row.status == QuestStatus.ACTIVE]
+    """진행 중인 열린 퀘스트들. 이 중에서 실패할 것을 찾는다. 숨긴 것은 실패하지 않는다."""
+    return [row for row in unlocked(table) if row.status == QuestStatus.ACTIVE]
 
 
 def hidden_quests(table: GameTable) -> list[TableQuest]:
-    """숨긴 퀘스트들. 이 중에서 드러날 것을 찾는다."""
-    return [row for row in table.quests if row.status == QuestStatus.HIDDEN]
+    """숨긴 열린 퀘스트들. 이 중에서 드러날 것을 찾는다."""
+    return [row for row in unlocked(table) if row.status == QuestStatus.HIDDEN]
 
 
 def reveal_quests(
