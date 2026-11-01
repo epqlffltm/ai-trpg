@@ -4,6 +4,7 @@
 시각을 흘리는 행동(docs/architecture/story.md 의 "시각"). 판과 상태를 받아 행동 뒤의 상태를 돌려주는 순수 함수다.
 
   - 이동(move_to): 지금 있는 장소와 길로 바로 이어진 장소로만 간다(chat 의 app/world/moves.py 와 같다).
+    지금 장에서 열리지 않은 장소로는 가지 않는다(docs/architecture/chapters.md).
     길에 적은 시간만큼 시각이 흐른다. 동행 중인 인물은 따라온다. 인물의 자리는 상태의 장소로 계산하므로
     따로 옮기지 않는다(app/engine/scene.py)
   - 시간 보내기(pass_time): 다음 시간대의 시작으로
@@ -20,7 +21,7 @@ from app.engine.world import World
 
 
 class CannotMove(Exception):
-    """그 장소로 갈 수 없다. 지금 있는 곳이거나, 길로 바로 이어지지 않았다."""
+    """그 장소로 갈 수 없다. 지금 있는 곳이거나, 길로 바로 이어지지 않았거나, 아직 열리지 않았다."""
 
 
 def path_minutes(world: World, start: str, end: str) -> int | None:
@@ -33,7 +34,7 @@ def path_minutes(world: World, start: str, end: str) -> int | None:
 
 def move_to(world: World, state: StoryState, place: str) -> StoryState:
     """그 장소로 옮긴 상태. 길의 시간만큼 시각이 흐른다. 갈 수 없으면 CannotMove."""
-    if place == state.place:
+    if place == state.place or not world.place_open(place, state.chapter):
         raise CannotMove
     minutes = path_minutes(world, state.place, place)
     if minutes is None:

@@ -197,6 +197,8 @@ class Message(Base):
     # 그 행동에 다시 답할 때 같은 장면을 쓴다. 열린 것이 없으면 비어 있다
     event_id: Mapped[str | None] = mapped_column(String(40), default=None)
     ending_id: Mapped[str | None] = mapped_column(String(40), default=None)
+    # 행동 말에서 그 행동으로 넘어간 장(판의 id). 화면이 "2장: 축제"를 보인다. 넘어가지 않았으면 비어 있다
+    chapter_id: Mapped[str | None] = mapped_column(String(40), default=None)
     edited: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     suggestions: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default='{}')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

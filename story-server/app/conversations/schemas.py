@@ -218,6 +218,13 @@ class EndingOut(BaseModel):
     unlock: bool
 
 
+class ChapterOut(BaseModel):
+    """장 하나(docs/architecture/chapters.md). 이 가지에서 닿은 장만 싣는다(뒤 장의 이름은 보이지 않는다)."""
+
+    id: str
+    name: str
+
+
 class MapPlaceOut(BaseModel):
     """
     지도의 장소 하나(D3). visited 는 이 가지에서 가 본 곳인가다.
@@ -234,6 +241,7 @@ class WorldView(BaseModel):
     """
     세션에서 화면이 쓰는 세계관의 칸. 판의 문서에서 지금 보여도 되는 것만 골라 이 가지의 상태에 맞춘다.
     이벤트와 엔딩의 조건, 일정, 호감도의 규칙, 만나지 않은 인물은 싣지 않는다.
+    지금 장에서 열리지 않은 장소와 그 장소로 이어진 길도 싣지 않는다(장소, 길, 지도).
     """
 
     name: str
@@ -251,6 +259,9 @@ class WorldView(BaseModel):
     endings: list[EndingOut]
     # 지도의 장소마다 가 본 곳인가와 지금 거기 보이는 인물(판의 장소 차례)
     map: list[MapPlaceOut]
+    # 이 가지에서 닿은 장들(판의 차례, 마지막이 지금 장). 장이 없는 판은 빈 목록이다.
+    # 늘 싣는다. 기본값이 있어 웹의 생성 타입에서는 고르는 칸이다(지금의 화면과 그 테스트를 깨지 않는다)
+    chapters: list[ChapterOut] = Field(default_factory=list)
 
 
 class ProgressOut(BaseModel):
@@ -313,9 +324,10 @@ class MessageOut(BaseModel):
     status: str
     segments: list[SegmentOut]
     cast: list[str]
-    # 행동 말에서 그 행동 뒤에 열린 이벤트와 본 엔딩(판의 id). 없으면 null 이다
+    # 행동 말에서 그 행동 뒤에 열린 이벤트와 본 엔딩, 넘어간 장(판의 id). 없으면 null 이다
     event_id: str | None = None
     ending_id: str | None = None
+    chapter_id: str | None = None
     # 사람이 답의 글을 고쳤는가
     edited: bool = False
     # 다음 답 추천(셋까지). 다 쓴 답에만 있고, 끊긴 답, 사람의 말, 행동 말, 고친 답은 빈 목록이다.
@@ -369,6 +381,7 @@ class StateOut(BaseModel):
     (view 의 cast 에 affection 이 있는 인물).
     숫자로 보일지 단계로 보일지는 view 의 affection.display 를 따라 화면이 정한다.
     choosing 은 선택지를 기다리는 이벤트, ending 은 이 가지에서 본 엔딩이다. cast 는 지금 장소의 장면의 인물이다.
+    chapter 는 지금 장의 id 다(장이 없는 판은 null). 이름은 view 의 chapters 에 있다.
     """
 
     minutes: int
@@ -381,6 +394,8 @@ class StateOut(BaseModel):
     choosing: str | None
     ending: str | None
     cast: list[str]
+    # 늘 싣는다. 기본값이 있어 웹의 생성 타입에서는 고르는 칸이다(지금의 화면과 그 테스트를 깨지 않는다)
+    chapter: str | None = None
 
 
 class PersonaOut(BaseModel):

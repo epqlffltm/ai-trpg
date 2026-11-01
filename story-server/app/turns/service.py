@@ -209,6 +209,7 @@ def saved(message: Message) -> SavedMessage:
         cast=tuple(message.cast or ()),
         event_id=message.event_id,
         ending_id=message.ending_id,
+        chapter_id=message.chapter_id,
         suggestions=tuple(message.suggestions or ()),
     )
 
@@ -351,6 +352,7 @@ def user_message(
         cast=[],
         event_id=None,
         ending_id=None,
+        chapter_id=None,
         created_at=now,
     )
 
@@ -716,11 +718,12 @@ async def record_turn(
 def action_message(
     conversation: Conversation, branch: Branch, action: play.Action, played: Played, now: datetime
 ) -> Message:
-    """행동 말. 행동의 글과, 그 행동 뒤에 열린 이벤트와 본 엔딩을 적는다. 아직 저장하지 않는다."""
+    """행동 말. 행동의 글과, 그 행동 뒤에 열린 이벤트와 본 엔딩과 넘어간 장을 적는다. 아직 저장하지 않는다."""
     text = action_text(branch.briefing, branch.world, action, played)
     message = user_message(conversation, conversation.active_leaf_id, text, now, Role.ACTION)
     message.event_id = played.event.id if played.event is not None else None
     message.ending_id = played.ending.id if played.ending is not None else None
+    message.chapter_id = played.chapter.id if played.chapter is not None else None
     return message
 
 

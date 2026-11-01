@@ -27,6 +27,7 @@ class StoryState:
     (app/engine/events.py).
     cooldowns 는 고백에 실패한 인물마다 다시 고백할 수 있는 시각이다. ending 은 이 가지에서 본 엔딩이다
     (본 뒤에는 엔딩과 기한이 다시 일어나지 않고 고백을 받지 않는다, app/engine/endings.py).
+    chapter 는 지금 장의 id 다(장이 없는 판은 None, app/engine/chapters.py). 엔진만 넘긴다.
     cleared 는 이 계정이 세션을 시작할 때까지 본 엔딩이다(회차 혜택, 조건의 ending_seen). 세션에 굳혀 두고
     상태를 읽을 때 붙인다. 말마다 저장하지 않는다(app/turns/states.py). 엔진은 바꾸지 않는다.
     """
@@ -41,6 +42,7 @@ class StoryState:
     choosing: str | None = None
     cooldowns: MappingProxyType[str, int] = field(default_factory=lambda: MappingProxyType({}))
     ending: str | None = None
+    chapter: str | None = None
     cleared: frozenset[str] = frozenset()
 
 
@@ -54,7 +56,8 @@ def start_items(world: World) -> dict[str, int]:
 
 def start_state(world: World, cleared: frozenset[str] = frozenset()) -> StoryState:
     """
-    판으로 만든 처음의 상태. 1일째 처음의 시간대가 시작하는 시각, 처음의 장소와 소지품, 인물마다의 시작 호감도다.
+    판으로 만든 처음의 상태. 1일째 처음의 시간대가 시작하는 시각, 처음의 장소와 소지품, 인물마다의 시작 호감도,
+    처음의 장이다.
     cleared 는 세션에 굳힌 계정의 본 엔딩이다.
     """
     return StoryState(
@@ -62,5 +65,6 @@ def start_state(world: World, cleared: frozenset[str] = frozenset()) -> StorySta
         place=world.start_place,
         items=MappingProxyType(start_items(world)),
         affection=MappingProxyType({member.id: member.affection.start for member in world.cast}),
+        chapter=world.first_chapter(),
         cleared=cleared,
     )

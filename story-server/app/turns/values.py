@@ -32,6 +32,7 @@ class SavedMessage:
     cast: tuple[str, ...] = ()
     event_id: str | None = None
     ending_id: str | None = None
+    chapter_id: str | None = None
     suggestions: tuple[str, ...] = ()
 
 
