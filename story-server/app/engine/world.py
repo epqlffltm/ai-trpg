@@ -5,7 +5,7 @@
 
 판은 asset 서버가 게시할 때 검사했다(없는 것을 가리키지 않는다, 칸의 모양이 맞다). 여기서는 엔진이 쓰는 칸만
 읽는 모양으로 바꾼다. 모르는 칸은 버린다(extra='ignore'). 쓰는 칸이 늘면 그 칸을 여기에 더한다.
-판의 형식 1 에는 이벤트가 없다. 그 판은 이벤트가 빈 것으로 읽는다.
+판의 형식 1 에는 이벤트가 없다. 그 판은 이벤트가 빈 것으로 읽는다. 형식 5 까지는 장이 없다(장이 빈 것으로 읽는다).
 시간대는 시작 시각이 이른 것부터 적혀 있다(asset 서버가 게시할 때 검사한다).
 """
 
@@ -33,6 +33,7 @@ class ConditionKind(enum.StrEnum):
       accompanied        target: 인물          그 인물과 동행 중이다
       event_seen         target: 이벤트        그 이벤트가 열린 적이 있다
       ending_seen        target: 엔딩          이 계정이 그 엔딩을 본 적이 있다(세션을 시작할 때의 기록, 판의 형식 5)
+      chapter_at_least   target: 장            지금 장이 그 장이거나 그 뒤다(판의 형식 6)
     """
 
     REACH_PLACE = 'reach_place'
@@ -46,6 +47,7 @@ class ConditionKind(enum.StrEnum):
     ACCOMPANIED = 'accompanied'
     EVENT_SEEN = 'event_seen'
     ENDING_SEEN = 'ending_seen'
+    CHAPTER_AT_LEAST = 'chapter_at_least'
 
 
 class Match(enum.StrEnum):
@@ -225,6 +227,25 @@ class AfterEnding(enum.StrEnum):
     EPILOGUE = 'epilogue'
 
 
+class ChapterOpens(Part):
+    """장이 여는 콘텐츠. 장소의 id 와 이벤트의 id 다."""
+
+    places: tuple[str, ...] = ()
+    events: tuple[str, ...] = ()
+
+
+class Chapter(Part):
+    """
+    장 하나(docs/architecture/chapters.md). 판의 차례가 장의 차례다. when 은 그 장으로 넘어오는 조건이다.
+    첫 장은 조건이 없고 그 뒤의 장은 조건이 있다(asset 서버가 게시할 때 검사한다).
+    """
+
+    id: str
+    name: str = ''
+    when: Conditions = Conditions()
+    opens: ChapterOpens = ChapterOpens()
+
+
 class StartItem(Part):
     """사용자가 처음에 가진 물건과 그 수."""
 
@@ -247,6 +268,8 @@ class World(Part):
     # 판의 형식 2 까지는 엔딩이 없다
     endings: tuple[Ending, ...] = ()
     after_ending: AfterEnding = AfterEnding.END
+    # 판의 형식 5 까지는 장이 없다. 비면 모든 장소와 이벤트가 처음부터 열려 있다
+    chapters: tuple[Chapter, ...] = ()
 
     def member(self, cast_id: str) -> CastMember | None:
         """그 id 의 인물. 없으면 None."""
@@ -263,6 +286,37 @@ class World(Part):
     def ending(self, ending_id: str) -> Ending | None:
         """그 id 의 엔딩. 없으면 None."""
         return next((ending for ending in self.endings if ending.id == ending_id), None)
+
+    def first_chapter(self) -> str | None:
+        """처음의 장의 id. 장이 없는 판이면 None."""
+        return self.chapters[0].id if self.chapters else None
+
+    def chapter_index(self, chapter_id: str | None) -> int | None:
+        """그 장의 차례(첫 장이 0). 장이 없는 판이거나 그런 장이 없으면 None."""
+        return next((index for index, chapter in enumerate(self.chapters) if chapter.id == chapter_id), None)
+
+    def reached_index(self, chapter_id: str | None) -> int:
+        """지금 장의 차례. 상태에 장이 없으면(장이 없던 때의 상태) 첫 장이다."""
+        index = self.chapter_index(chapter_id)
+        return 0 if index is None else index
+
+    def opening_index(self, kind: str, content_id: str) -> int:
+        """그 콘텐츠(kind 는 places 나 events)를 여는 장의 차례. 어느 장에도 적지 않았으면 0(처음부터 열림)이다."""
+        for index, chapter in enumerate(self.chapters):
+            if content_id in getattr(chapter.opens, kind):
+                return index
+        return 0
+
+    def place_open(self, place_id: str, chapter_id: str | None) -> bool:
+        """
+        지금 장(chapter_id)에서 그 장소가 열려 있나.
+        지금 장과 그 앞의 장이 연 것, 그리고 어느 장에도 적지 않은 것이 열려 있다.
+        """
+        return self.opening_index('places', place_id) <= self.reached_index(chapter_id)
+
+    def event_open(self, event_id: str, chapter_id: str | None) -> bool:
+        """지금 장(chapter_id)에서 그 이벤트가 열려 있나. 장소와 같다."""
+        return self.opening_index('events', event_id) <= self.reached_index(chapter_id)
 
 
 def read_world(document: Mapping) -> World:

@@ -80,6 +80,7 @@ def copied_messages(
             cast=list(message.cast or ()),
             event_id=message.event_id,
             ending_id=message.ending_id,
+            chapter_id=message.chapter_id,
             edited=message.edited,
             suggestions=list(message.suggestions or ()),
             created_at=message.created_at,

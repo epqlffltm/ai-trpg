@@ -9,6 +9,7 @@
   2. 열리면 "본 이벤트"에 넣고 열릴 때의 효과를 반영한다. 선택지가 있으면 고르기를 기다린다(상태의 choosing)
   3. 사용자가 선택지를 고르면(choose) 그 효과를 반영하고 기다림을 끝낸다. 고르는 것도 행동이라 그 뒤에 다시 1 을 본다
   4. 선택지를 고르지 않고 말을 잇거나 다른 행동을 하면 선택지는 사라지고 효과는 없다(drop_choice)
+지금 장에서 열리지 않은 이벤트는 열리지 않는다(docs/architecture/chapters.md).
 행동 하나에 이벤트는 하나만 열린다. 열린 이벤트의 효과로 다른 이벤트의 조건이 맞아도 다음 행동 뒤에 연다.
 이벤트가 열린 뒤의 장면(모델이 쓰는 글)과 일러스트를 계정에 남기는 것은 이 모듈 밖의 일이다.
 """
@@ -26,7 +27,12 @@ class ChoiceRefused(Exception):
 
 
 def can_open(event: Event, state: StoryState, world: World) -> bool:
-    """그 이벤트가 지금 열릴 수 있나. 한 번만인데 이미 열렸으면 아니다. 그다음 조건을 본다."""
+    """
+    그 이벤트가 지금 열릴 수 있나. 지금 장에서 열리지 않았거나, 한 번만인데 이미 열렸으면 아니다.
+    그다음 조건을 본다.
+    """
+    if not world.event_open(event.id, state.chapter):
+        return False
     if not event.repeat and event.id in state.seen:
         return False
     return match_conditions(event.when, state, world)

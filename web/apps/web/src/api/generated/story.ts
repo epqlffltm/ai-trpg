@@ -671,6 +671,16 @@ export interface components {
             sprites: components["schemas"]["SpriteOut"][];
         };
         /**
+         * ChapterOut
+         * @description 장 하나(docs/architecture/chapters.md). 이 가지에서 닿은 장만 싣는다(뒤 장의 이름은 보이지 않는다).
+         */
+        ChapterOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
          * ChoiceOut
          * @description 선택지 하나.
          */
@@ -1031,6 +1041,8 @@ export interface components {
         MessageOut: {
             /** Cast */
             cast: string[];
+            /** Chapter Id */
+            chapter_id?: string | null;
             /** Content */
             content: string;
             /**
@@ -1210,6 +1222,8 @@ export interface components {
             alternatives: string[];
             /** Cast */
             cast: string[];
+            /** Chapter Id */
+            chapter_id?: string | null;
             /** Content */
             content: string;
             /**
@@ -1525,6 +1539,7 @@ export interface components {
          *     (view 의 cast 에 affection 이 있는 인물).
          *     숫자로 보일지 단계로 보일지는 view 의 affection.display 를 따라 화면이 정한다.
          *     choosing 은 선택지를 기다리는 이벤트, ending 은 이 가지에서 본 엔딩이다. cast 는 지금 장소의 장면의 인물이다.
+         *     chapter 는 지금 장의 id 다(장이 없는 판은 null). 이름은 view 의 chapters 에 있다.
          */
         StateOut: {
             /** Affection */
@@ -1533,6 +1548,8 @@ export interface components {
             };
             /** Cast */
             cast: string[];
+            /** Chapter */
+            chapter?: string | null;
             /** Choosing */
             choosing: string | null;
             /** Companions */
@@ -1622,12 +1639,15 @@ export interface components {
          * WorldView
          * @description 세션에서 화면이 쓰는 세계관의 칸. 판의 문서에서 지금 보여도 되는 것만 골라 이 가지의 상태에 맞춘다.
          *     이벤트와 엔딩의 조건, 일정, 호감도의 규칙, 만나지 않은 인물은 싣지 않는다.
+         *     지금 장에서 열리지 않은 장소와 그 장소로 이어진 길도 싣지 않는다(장소, 길, 지도).
          */
         WorldView: {
             /** After Ending */
             after_ending: string;
             /** Cast */
             cast: components["schemas"]["CastOut"][];
+            /** Chapters */
+            chapters?: components["schemas"]["ChapterOut"][];
             /** Deadline Days */
             deadline_days: number | null;
             /** Endings */

@@ -35,6 +35,7 @@ def state_to_json(state: StoryState) -> dict:
         'choosing': state.choosing,
         'cooldowns': dict(state.cooldowns),
         'ending': state.ending,
+        'chapter': state.chapter,
     }
 
 
@@ -58,6 +59,7 @@ def state_from_json(data: Mapping) -> StoryState:
         choosing=data.get('choosing'),
         cooldowns=counts(data.get('cooldowns')),
         ending=data.get('ending'),
+        chapter=data.get('chapter'),
     )
 
 
@@ -91,4 +93,5 @@ def state_view(world: World, state: StoryState, cast: Sequence[str], shown: froz
         choosing=state.choosing,
         ending=state.ending,
         cast=list(cast),
+        chapter=state.chapter,
     )

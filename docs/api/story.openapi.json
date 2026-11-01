@@ -176,6 +176,25 @@
         "title": "CastOut",
         "type": "object"
       },
+      "ChapterOut": {
+        "description": "장 하나(docs/architecture/chapters.md). 이 가지에서 닿은 장만 싣는다(뒤 장의 이름은 보이지 않는다).",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ChapterOut",
+        "type": "object"
+      },
       "ChoiceOut": {
         "description": "선택지 하나.",
         "properties": {
@@ -953,6 +972,17 @@
             "title": "Cast",
             "type": "array"
           },
+          "chapter_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter Id"
+          },
           "content": {
             "title": "Content",
             "type": "string"
@@ -1366,6 +1396,17 @@
             },
             "title": "Cast",
             "type": "array"
+          },
+          "chapter_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter Id"
           },
           "content": {
             "title": "Content",
@@ -2055,7 +2096,7 @@
         "type": "object"
       },
       "StateOut": {
-        "description": "가지의 끝의 상태(엔진의 상태). 화면이 시계, 지도, 소지품, 인물 창, 선택지, 엔딩을 그린다.\n\nminutes 는 1일째 0시부터 흐른 분이고, day 와 slot(시간대의 id)은 그 수에서 계산한 것이다.\naffection 은 인물마다의 호감도(0~100)다. 인물 창에 호감도를 보이는 인물만 실린다\n(view 의 cast 에 affection 이 있는 인물).\n숫자로 보일지 단계로 보일지는 view 의 affection.display 를 따라 화면이 정한다.\nchoosing 은 선택지를 기다리는 이벤트, ending 은 이 가지에서 본 엔딩이다. cast 는 지금 장소의 장면의 인물이다.",
+        "description": "가지의 끝의 상태(엔진의 상태). 화면이 시계, 지도, 소지품, 인물 창, 선택지, 엔딩을 그린다.\n\nminutes 는 1일째 0시부터 흐른 분이고, day 와 slot(시간대의 id)은 그 수에서 계산한 것이다.\naffection 은 인물마다의 호감도(0~100)다. 인물 창에 호감도를 보이는 인물만 실린다\n(view 의 cast 에 affection 이 있는 인물).\n숫자로 보일지 단계로 보일지는 view 의 affection.display 를 따라 화면이 정한다.\nchoosing 은 선택지를 기다리는 이벤트, ending 은 이 가지에서 본 엔딩이다. cast 는 지금 장소의 장면의 인물이다.\nchapter 는 지금 장의 id 다(장이 없는 판은 null). 이름은 view 의 chapters 에 있다.",
         "properties": {
           "affection": {
             "additionalProperties": {
@@ -2070,6 +2111,17 @@
             },
             "title": "Cast",
             "type": "array"
+          },
+          "chapter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapter"
           },
           "choosing": {
             "anyOf": [
@@ -2246,7 +2298,7 @@
         "type": "object"
       },
       "WorldView": {
-        "description": "세션에서 화면이 쓰는 세계관의 칸. 판의 문서에서 지금 보여도 되는 것만 골라 이 가지의 상태에 맞춘다.\n이벤트와 엔딩의 조건, 일정, 호감도의 규칙, 만나지 않은 인물은 싣지 않는다.",
+        "description": "세션에서 화면이 쓰는 세계관의 칸. 판의 문서에서 지금 보여도 되는 것만 골라 이 가지의 상태에 맞춘다.\n이벤트와 엔딩의 조건, 일정, 호감도의 규칙, 만나지 않은 인물은 싣지 않는다.\n지금 장에서 열리지 않은 장소와 그 장소로 이어진 길도 싣지 않는다(장소, 길, 지도).",
         "properties": {
           "after_ending": {
             "title": "After Ending",
@@ -2257,6 +2309,13 @@
               "$ref": "#/components/schemas/CastOut"
             },
             "title": "Cast",
+            "type": "array"
+          },
+          "chapters": {
+            "items": {
+              "$ref": "#/components/schemas/ChapterOut"
+            },
+            "title": "Chapters",
             "type": "array"
           },
           "deadline_days": {

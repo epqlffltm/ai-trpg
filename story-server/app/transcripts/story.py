@@ -83,8 +83,15 @@ def said_blocks(message: Message, head: Head) -> Iterator[Block]:
         yield Paragraph(lines_of(message.content))
 
 
+def chapter_name(rules: World, chapter_id: str) -> str:
+    """장의 이름. 판에 없거나 이름이 비면 id 그대로다."""
+    index = rules.chapter_index(chapter_id)
+    name = rules.chapters[index].name if index is not None else ''
+    return name or chapter_id
+
+
 def mark_blocks(message: Message, head: Head) -> Iterator[Block]:
-    """말에 붙은 표시. 끊긴 답, 고친 답, 그 행동 뒤에 열린 이벤트와 본 엔딩이다."""
+    """말에 붙은 표시. 끊긴 답, 고친 답, 그 행동 뒤에 열린 이벤트와 본 엔딩과 넘어간 장이다."""
     if message.status == MessageStatus.PARTIAL:
         yield Note('여기서 끊긴 답이다')
     if message.edited:
@@ -93,6 +100,8 @@ def mark_blocks(message: Message, head: Head) -> Iterator[Block]:
         yield Note(f'이벤트: {event_name(head.rules, message.event_id)}')
     if message.ending_id:
         yield Note(f'엔딩: {ending_name(head.rules, message.ending_id)}')
+    if message.chapter_id:
+        yield Note(f'장: {chapter_name(head.rules, message.chapter_id)}')
 
 
 def message_blocks(message: Message, head: Head) -> Iterator[Block]:

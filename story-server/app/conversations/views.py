@@ -20,6 +20,8 @@
     가 본 곳은 가지의 말에 붙은 상태의 장소와 시작 장소다(visited_on). 인물의 자리는 엔진이 정한다(동행, 일정, 기본).
     가 본 곳에 있고, 만났고, 제작자의 지도 보이기(보임, 숨김, 호감도 단계 이상)를 통과한 인물만 보인다.
     함께 다니는 인물은 넣지 않는다
+  - 장: 지금 장에서 열리지 않은 장소는 장소, 길, 지도에서 뺀다(그 장소로 이어진 길도). 닿은 장의 이름만 싣는다
+    (docs/architecture/chapters.md). 열림은 엔진의 판이 정한다(app/engine/world.py 의 place_open)
 판의 모양은 asset 서버의 WorldDocument 다. 모르는 칸은 버리고 빈 칸은 기본값으로 읽는다.
 """
 
@@ -31,6 +33,7 @@ from pydantic import BaseModel, ConfigDict
 from app.conversations.schemas import (
     CastAffectionOut,
     CastOut,
+    ChapterOut,
     ChoiceOut,
     EndingOut,
     EventOut,
@@ -366,10 +369,33 @@ def where_on_map(world: World, member: ViewCast, state: StoryState) -> str | Non
     return place_of_character(engine_member, state, world).place
 
 
+def open_places(world: World, document: ViewDocument, state: StoryState) -> list[ViewPlace]:
+    """지금 장에서 열린 장소들. 판의 차례다."""
+    return [place for place in document.places if world.place_open(place.id, state.chapter)]
+
+
+def open_paths(world: World, document: ViewDocument, state: StoryState) -> list[ViewPath]:
+    """양 끝이 모두 지금 장에서 열린 길들. 닫힌 장소로 이어진 길은 보이지 않는다."""
+    return [
+        path
+        for path in document.paths
+        if world.place_open(path.a, state.chapter) and world.place_open(path.b, state.chapter)
+    ]
+
+
+def reached_chapters(world: World, state: StoryState) -> list[ChapterOut]:
+    """이 가지에서 닿은 장들(첫 장부터 지금 장까지). 장이 없는 판은 빈 목록이다."""
+    reached = world.chapters[: world.reached_index(state.chapter) + 1]
+    return [ChapterOut(id=chapter.id, name=chapter.name) for chapter in reached]
+
+
 def map_out(
     world: World, document: ViewDocument, state: StoryState, met: frozenset[str], visited: frozenset[str]
 ) -> list[MapPlaceOut]:
-    """지도의 장소마다 가 본 곳인가와 지금 거기 보이는 인물. 장소는 판의 차례, 인물도 판의 차례다."""
+    """
+    지도의 장소마다 가 본 곳인가와 지금 거기 보이는 인물. 장소는 판의 차례, 인물도 판의 차례다.
+    지금 장에서 열리지 않은 장소는 빠진다.
+    """
     seen_here: dict[str, list[str]] = {}
     for member in document.cast:
         place = where_on_map(world, member, state)
@@ -377,7 +403,7 @@ def map_out(
             seen_here.setdefault(place, []).append(member.id)
     return [
         MapPlaceOut(id=place.id, visited=place.id in visited, cast=seen_here.get(place.id, []))
-        for place in document.places
+        for place in open_places(world, document, state)
     ]
 
 
@@ -404,11 +430,12 @@ def world_view(
         deadline_days=read.deadline_days,
         after_ending=read.after_ending,
         slots=[slot_out(slot) for slot in read.slots],
-        places=[place_out(place) for place in read.places],
-        paths=[path_out(path) for path in read.paths],
+        places=[place_out(place) for place in open_places(world, read, state)],
+        paths=[path_out(path) for path in open_paths(world, read, state)],
         items=[item_out(item) for item in read.items],
         cast=visible_cast(read, state, met),
         events=[event_out(event, state) for event in read.events if event.id in state.seen],
         endings=[ending_out(ending, ending.id in seen) for ending in read.endings],
         map=map_out(world, read, state, met, visited | {state.place}),
+        chapters=reached_chapters(world, state),
     )

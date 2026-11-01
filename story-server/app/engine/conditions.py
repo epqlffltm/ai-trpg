@@ -45,6 +45,12 @@ def affection_below(condition: Condition, state: StoryState, world: World) -> bo
     return floor is not None and affection_of(state, world, condition.target) < floor
 
 
+def chapter_at_least(condition: Condition, state: StoryState, world: World) -> bool:
+    """지금 장이 그 장이거나 그 뒤인가. 없는 장이면 아니다."""
+    target = world.chapter_index(condition.target)
+    return target is not None and world.reached_index(state.chapter) >= target
+
+
 # 조건의 종류마다 맞추는 법. 판은 게시할 때 검사했으므로 종류마다 쓰는 칸이 채워져 있다
 CHECKS: dict[ConditionKind, Callable[[Condition, StoryState, World], bool]] = {
     ConditionKind.REACH_PLACE: lambda condition, state, world: state.place == condition.target,
@@ -60,6 +66,7 @@ CHECKS: dict[ConditionKind, Callable[[Condition, StoryState, World], bool]] = {
     ConditionKind.ACCOMPANIED: lambda condition, state, world: condition.target in state.companions,
     ConditionKind.EVENT_SEEN: lambda condition, state, world: condition.target in state.seen,
     ConditionKind.ENDING_SEEN: lambda condition, state, world: condition.target in state.cleared,
+    ConditionKind.CHAPTER_AT_LEAST: chapter_at_least,
 }
 
 

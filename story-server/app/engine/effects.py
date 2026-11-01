@@ -12,6 +12,7 @@
   accompany_start  target: 인물               그 인물과 동행을 시작한다. 이미 동행 중이면 그대로다
   accompany_end    target: 인물               그 인물과 동행을 끝낸다. 동행 중이 아니면 그대로다
   move_to          target: 장소               사용자(와 동행)를 그 장소로 옮긴다. 시간은 흐르지 않는다. 길이 없어도 된다
+                                              지금 장에서 열리지 않은 장소면 이 효과만 하지 않는다(장, chapters.md)
 
 일러스트를 여는 것은 효과가 아니라 이벤트의 장면의 칸(collectible)이다.
 판은 asset 서버가 게시할 때 검사했다(종류마다 쓰는 칸이 채워져 있고, 없는 것을 가리키지 않는다).
@@ -107,7 +108,9 @@ def end_accompanying(effect: Effect, state: 'StoryState', world: 'World') -> 'St
 
 
 def move_user(effect: Effect, state: 'StoryState', world: 'World') -> 'StoryState':
-    """사용자(와 동행)를 그 장소로 옮긴다. 시간은 흐르지 않는다."""
+    """사용자(와 동행)를 그 장소로 옮긴다. 시간은 흐르지 않는다. 아직 열리지 않은 장소면 그대로다."""
+    if not world.place_open(effect.target, state.chapter):
+        return state
     return replace(state, place=effect.target)
 
 

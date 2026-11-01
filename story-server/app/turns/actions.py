@@ -8,9 +8,10 @@
   - 행동 말의 글은 사람이 한 행동과 엔진이 정한 결과(고백을 받아들였는가, 선물을 반가워했는가)를 적는다.
     모델에 [행동] 을 붙여 간다.
     모델은 그 결과를 바꾸지 못하고 그에 맞는 반응만 쓴다. 열린 이벤트와 본 엔딩은 장면 지시로 간다(app/turns/scenes.py)
+  - 장이 넘어간 행동이면 행동 말의 글 끝에 장의 시작을 적는다(chapter_text)
 
     거절의 code
-      cannot_move                         지금 장소이거나 길로 바로 이어지지 않은 장소다
+      cannot_move                         지금 장소이거나 길로 바로 이어지지 않았거나 지금 장에서 열리지 않은 장소다
       no_choice                           고르기를 기다리는 이벤트가 없거나 그런 선택지가 없다
       over, not_in_scene,                 고백을 받지 않는다(이미 엔딩을 봤다, 장면에 없는 인물이다,
       not_confessable, cooling_down       고백할 수 없는 인물이다, 다시 고백할 시각이 아직이다)
@@ -25,7 +26,7 @@ from app.engine.events import ChoiceRefused
 from app.engine.gifts import GiftRefused
 from app.engine.play import Played
 from app.engine.state import StoryState
-from app.engine.world import World
+from app.engine.world import Chapter, World
 from app.turns.briefing import Briefing
 from app.turns.schemas import (
     ActionCreate,
@@ -104,7 +105,25 @@ def gift_text(briefing: Briefing, cast: str, item: str, change: int | None) -> s
 
 
 def action_text(briefing: Briefing, world: World, action: play.Action, played: Played) -> str:
-    """행동 말의 글. 사람이 한 것과 엔진이 정한 결과다."""
+    """
+    행동 말의 글. 사람이 한 것과 엔진이 정한 결과다. 장이 넘어갔으면 끝에 적는다.
+    글은 말에 저장되므로 다시 생성해도 모델은 같은 장의 시작을 본다.
+    """
+    text = done_text(briefing, world, action, played)
+    if played.chapter is None:
+        return text
+    return f'{text} {chapter_text(world, played.chapter)}'
+
+
+def chapter_text(world: World, chapter: Chapter) -> str:
+    """장이 넘어간 글('2장 「축제」가 시작됐다.'). 이름이 비면 차례만 적는다."""
+    number = (world.chapter_index(chapter.id) or 0) + 1
+    name = chapter.name.strip()
+    return f'{number}장 「{name}」이(가) 시작됐다.' if name else f'{number}장이 시작됐다.'
+
+
+def done_text(briefing: Briefing, world: World, action: play.Action, played: Played) -> str:
+    """사람이 한 것과 엔진이 정한 결과의 글."""
     match action:
         case play.Move(place=place):
             return f'{place_name(briefing, place)}(으)로 갔다. 지금은 {clock_words(briefing, world, played.state)}.'
