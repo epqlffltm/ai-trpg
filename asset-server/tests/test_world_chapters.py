@@ -9,7 +9,9 @@
     장소나 이벤트 하나를 두 장에 적었다, chapter_at_least 에 대상이 없다
   - 게시를 막는 것: 없는 장소·이벤트를 연다(chapter_content_missing), 없는 장을 가리킨다(chapter_target_missing),
     시작 장소를 뒤의 장이 연다(chapter_start_locked)
-  - 알리는 것: 넘어오는 조건이 그 장이나 뒤의 장에서야 열리는 것을 기다린다(chapter_unreachable)
+  - 알리는 것: 넘어오는 조건이 그 장이나 뒤의 장에서야 열리는 것을 기다린다(chapter_unreachable).
+    앞의 장에 닿을 수 있는 가장 이른 날보다 앞의 날을 기다리는 장도 넘어올 수 없다(chapter_unreachable)
+  - 알리는 것: 장에 닿을 때는 이미 지난 날을 기다리는 이벤트와 엔딩(chapter_content_late). 장이 없으면 알리지 않는다
 """
 
 import pytest
@@ -131,3 +133,69 @@ async def test_a_chapter_waiting_for_its_own_content_is_warned(client: AsyncClie
 
     assert checked['problems'] == []
     assert 'chapter_unreachable' in checked['warnings']
+
+
+def day(kind: str, count: int) -> dict:
+    return {'kind': kind, 'count': count}
+
+
+def event(event_id: str, *items: dict) -> dict:
+    return {'id': event_id, 'name': event_id, 'when': {'match': 'all', 'items': list(items)}, 'scene': {'text': '장면'}}
+
+
+# 2장(가을)은 10일째부터다
+AUTUMN = [chapter('summer'), chapter('autumn', day('day_at_least', 10), events=['festival'])]
+
+
+@pytest.mark.parametrize(
+    ('festival', 'warned'),
+    [(event('festival', day('day_at_most', 5)), True), (event('festival', day('day_at_most', 15)), False)],
+    ids=['past', 'still-ahead'],
+)
+async def test_an_event_waiting_for_a_day_past_its_chapter_is_warned(
+    client: AsyncClient, owner: dict, festival: dict, warned: bool
+):
+    body = await body_with(client, owner, chapters=AUTUMN)
+    world = await create_world(client, owner, {**body, 'events': [*body['events'], festival]})
+
+    checked = await check(client, owner, world)
+
+    assert checked['problems'] == []
+    assert ('chapter_content_late' in checked['warnings']) is warned
+
+
+async def test_an_ending_waiting_for_a_day_past_its_chapter_is_warned(client: AsyncClient, owner: dict):
+    body = await body_with(client, owner, chapters=AUTUMN)
+    early = {
+        'id': 'early',
+        'name': '이른 끝',
+        'trigger': {'kind': 'deadline'},
+        'when': {'match': 'all', 'items': [{'kind': 'chapter_at_least', 'target': 'autumn'}, day('day_at_most', 5)]},
+        'scene': {'text': '장면'},
+    }
+    fields = {'events': [*body['events'], event('festival')], 'endings': [early, *body['endings']]}
+    world = await create_world(client, owner, {**body, **fields})
+
+    checked = await check(client, owner, world)
+
+    assert checked['problems'] == []
+    assert 'chapter_content_late' in checked['warnings']
+
+
+async def test_a_chapter_waiting_for_a_day_already_past_is_unreachable(client: AsyncClient, owner: dict):
+    chapters = [*AUTUMN, chapter('winter', day('day_at_most', 5))]
+    body = await body_with(client, owner, chapters=chapters)
+    world = await create_world(client, owner, {**body, 'events': [*body['events'], event('festival')]})
+
+    checked = await check(client, owner, world)
+
+    assert 'chapter_unreachable' in checked['warnings']
+
+
+async def test_without_chapters_a_day_limit_is_not_a_chapter_warning(client: AsyncClient, owner: dict):
+    body = await body_with(client, owner)
+    world = await create_world(
+        client, owner, {**body, 'events': [*body['events'], event('festival', day('day_at_most', 5))]}
+    )
+
+    assert 'chapter_content_late' not in (await check(client, owner, world))['warnings']

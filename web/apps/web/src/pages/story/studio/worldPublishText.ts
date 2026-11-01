@@ -35,7 +35,8 @@ const WARNINGS: Record<string, string> = {
   event_unreachable: '열릴 수 없는 이벤트가 있습니다.',
   cast_never_present: '어디에도 나오지 않는 인물이 있습니다.',
   ending_unreachable: '고를 일이 없는 엔딩이 있습니다.',
-  chapter_unreachable: '넘어올 수 없는 장이 있습니다. 그 장이나 뒤의 장에서야 열리는 것을 기다립니다.',
+  chapter_unreachable: '넘어올 수 없는 장이 있습니다. 그 장이나 뒤의 장에서야 열리는 것이나 이미 지난 날을 기다립니다.',
+  chapter_content_late: '장에 닿을 때는 이미 지난 날을 기다리는 이벤트나 엔딩이 있습니다.',
 };
 
 /** 게시를 막는 것 하나. 고칠 탭이 있으면 그 탭 */

@@ -11,7 +11,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../test/
 import { renderApp } from '../../../test/renderApp';
 import { addChapter, changeChapter, chaptersHints, hasChaptersHints, moveChapterUp, toChaptersBody, toggleOpen, type ChapterDraft } from './chaptersForm';
 import { addCondition, changeCondition, type ConditionChoices } from './conditionsForm';
-import { worldProblemLine } from './worldPublishText';
+import { worldProblemLine, worldWarningText } from './worldPublishText';
 
 const WORLDS = '/api/v1/asset/worlds';
 const ID = '00000000-0000-4000-8000-0000000000fa';
@@ -142,5 +142,6 @@ describe('순수한 함수', () => {
   it('장의 막는 것은 장 탭으로 간다', () => {
     expect(worldProblemLine('chapter_start_locked').tab).toBe('chapters');
     expect(worldProblemLine('chapter_content_missing').tab).toBe('chapters');
+    expect(worldWarningText('chapter_content_late')).toMatch(/이미 지난 날/);
   });
 });

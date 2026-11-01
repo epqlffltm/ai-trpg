@@ -8,7 +8,7 @@
     남의 그림을 쓰거나, 인물의 캐릭터나 로어북을 판에 복사할 수 없다. 게시가 409 로 돌려준다.
     초안은 고치는 중이라 어긋날 수 있다(장소를 지웠는데 일정이 남았다). 판에는 맞는 것만 들어간다.
   - 알리는 것: 시작 장소에서 길로 닿지 않는 장소, 열릴 수 없는 이벤트, 어디에도 나오지 않는 인물, 고를 일이 없는 엔딩,
-    넘어올 수 없는 장.
+    넘어올 수 없는 장, 장에 닿을 때는 이미 지난 날을 기다리는 이벤트와 엔딩.
     만드는 중에 일부러 남겨 둔 것일 수 있어 게시는 된다.
   - 걸러 낸 것: 소개에서 걸러 낸 태그, 속성, CSS, 링크, 그림(app/content/html.py).
 그림이 자기 것인지, 캐릭터와 로어북의 마지막 판은 DB 를 봐야 알아서 서비스가 찾아 넘긴다(app/worlds/service.py).
@@ -111,6 +111,8 @@ class WorldWarning(enum.StrEnum):
     ENDING_UNREACHABLE = 'ending_unreachable'
     # 넘어올 수 없는 장이 있다. 넘어오는 조건이 그 장이나 그 뒤의 장에서야 열리는 장소, 이벤트, 장을 기다린다
     CHAPTER_UNREACHABLE = 'chapter_unreachable'
+    # 장에 닿을 때는 이미 지난 날(며칠째 이하)을 기다리는 이벤트나 엔딩이 있다. 그 장의 조건이 그보다 늦은 날을 기다린다
+    CHAPTER_CONTENT_LATE = 'chapter_content_late'
 
 
 class WorldNotReadyError(Exception):
@@ -460,23 +462,82 @@ def too_late(item: dict, index: int, world: World) -> bool:
     return False
 
 
+def all_items(conditions: dict) -> list[dict]:
+    """모두(all) 맞아야 하는 조건들. 하나라도(any)면 어느 것이 맞을지 몰라 빈 목록이다."""
+    return conditions['items'] if conditions['match'] == Match.ALL else []
+
+
+def counts_of(items: list[dict], kind: ConditionKind) -> list[int]:
+    return [item['count'] for item in items if item['kind'] == kind]
+
+
+def earliest_day(world: World, index: int) -> int:
+    """
+    index 번째 장에 닿을 수 있는 가장 이른 날. 그 장까지의 장들이 모두 맞아야 하는 "며칠째 이상"의 가장 큰 것이다
+    (없으면 1일째). 장은 앞으로만 한 장씩 가므로 앞의 장의 날짜 조건이 쌓인다.
+    """
+    days = [
+        day
+        for chapter in world.chapters[1 : index + 1]
+        for day in counts_of(all_items(chapter['when']), ConditionKind.DAY_AT_LEAST)
+    ]
+    return max([1, *days])
+
+
+def needed_chapter(world: World, items: list[dict], opening: int = 0) -> int:
+    """그 조건들(모두 맞아야 하는 것)이 기다리는 장의 차례. 여는 장(opening)과 "그 장 이상"의 장 가운데 늦은 것이다."""
+    ids = chapter_ids(world)
+    waited = [
+        ids.index(item['target'])
+        for item in items
+        if item['kind'] == ConditionKind.CHAPTER_AT_LEAST and item['target'] in ids
+    ]
+    return max([opening, *waited])
+
+
+def past_day(world: World, items: list[dict], index: int) -> bool:
+    """그 조건들의 "며칠째 이하"가 index 번째 장에 닿을 수 있는 가장 이른 날보다 앞인가(그때는 이미 지났다)."""
+    latest = counts_of(items, ConditionKind.DAY_AT_MOST)
+    return bool(latest) and min(latest) < earliest_day(world, index)
+
+
 def unreachable_chapters(world: World) -> list[str]:
     """
     넘어올 수 없는 장들. 모두(all)면 조건 하나라도, 하나라도(any)면 조건 모두가 너무 늦은 것(too_late)을 기다린다.
+    모두 맞아야 하는 "며칠째 이하"가 앞의 장에 닿을 수 있는 가장 이른 날보다 앞이어도 넘어올 수 없다.
     다른 까닭(기한 뒤의 날, 열릴 수 없는 이벤트)은 이벤트의 알림이 본다.
     """
     unreachable = []
     for index, chapter in enumerate(world.chapters):
         late = [too_late(item, index, world) for item in chapter['when']['items']]
-        if late and (any(late) if chapter['when']['match'] == Match.ALL else all(late)):
+        waits_later = bool(late) and (any(late) if chapter['when']['match'] == Match.ALL else all(late))
+        if waits_later or (index > 0 and past_day(world, all_items(chapter['when']), index - 1)):
             unreachable.append(chapter['id'])
     return unreachable
+
+
+def late_content(world: World) -> list[str]:
+    """
+    장에 닿을 때는 이미 지난 날을 기다리는 이벤트와 엔딩들. 이벤트는 여는 장과 "그 장 이상"의 장,
+    엔딩은 "그 장 이상"의 장에 닿을 수 있는 가장 이른 날보다 모두 맞아야 하는 "며칠째 이하"가 앞이다.
+    장이 없는 판에서는 늘 빈 목록이다(가장 이른 날이 1일째).
+    """
+    late = []
+    for event in world.events:
+        items = all_items(event['when'])
+        if past_day(world, items, needed_chapter(world, items, opening_chapter(world, 'events', event['id']))):
+            late.append(event['id'])
+    for ending in world.endings:
+        items = all_items(ending['when'])
+        if past_day(world, items, needed_chapter(world, items)):
+            late.append(ending['id'])
+    return late
 
 
 def find_warnings(world: World) -> list[WorldWarning]:
     """
     알리기만 하는 것들. 닿지 않는 장소, 열릴 수 없는 이벤트, 어디에도 나오지 않는 인물, 고를 일이 없는 엔딩,
-    넘어올 수 없는 장.
+    넘어올 수 없는 장, 장에 닿을 때는 이미 지난 날을 기다리는 이벤트와 엔딩.
     """
     warnings = []
     if world.start_place is not None and place_ids(world) - reachable_places(world, world.start_place):
@@ -489,6 +550,8 @@ def find_warnings(world: World) -> list[WorldWarning]:
         warnings.append(WorldWarning.ENDING_UNREACHABLE)
     if unreachable_chapters(world):
         warnings.append(WorldWarning.CHAPTER_UNREACHABLE)
+    if late_content(world):
+        warnings.append(WorldWarning.CHAPTER_CONTENT_LATE)
     return warnings
 
 
