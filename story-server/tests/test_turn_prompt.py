@@ -115,6 +115,13 @@ def test_the_format_rules_from_the_measurements():
         assert (line in with_cast, line in alone) == (True, True)
 
 
+def test_the_rules_keep_the_users_choices_and_call_them_you():
+    card = render_card(BRIEFING, scene_card(BRIEFING, WORLD, start_state(WORLD), []))
+
+    assert '다음 행동은 사용자가 고른다.' in card
+    assert "사용자를 부를 때는 '당신'이라고 쓴다" in card
+
+
 def test_the_suggestions_instruction_comes_last_only_when_asked():
     scene = scene_card(BRIEFING, WORLD, start_state(WORLD), ['mina'])
 
