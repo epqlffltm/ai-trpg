@@ -17,6 +17,8 @@
        받는 쪽(story)은 세션을 시작할 때 계정의 본 엔딩을 굳혀 판정한다
   - 6: 장(chapters)과 조건의 chapter_at_least 를 더했다(2026-11-01, docs/architecture/chapters.md).
        5 까지의 판은 장이 없는 것으로 읽는다(모든 장소와 이벤트가 처음부터 열려 있다)
+  - 7: 장이 여는 로어북 항목(chapters[].opens.lore: [{"lorebook", "entry"}])을 더했다(2026-11-02).
+       6 의 판은 장이 로어북 항목을 열지 않는 것으로 읽는다. 받는 쪽(story)은 닫힌 항목을 모델에 보내지 않는다
 
 인물의 보이기는 판에서는 정해진 값이다. 초안의 덮어쓰기가 비어 있으면 세계관의 기본을 채워 넣는다.
 받는 쪽(story)이 기본과 덮어쓰기를 다시 합치지 않아도 된다.
@@ -46,7 +48,7 @@ from app.worlds.models import (
 )
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 6
+DOCUMENT_FORMAT = 7
 
 
 class SlotDocument(BaseModel):
@@ -260,13 +262,23 @@ class EndingDocument(BaseModel):
     hint: str
 
 
+class ChapterLoreDocument(BaseModel):
+    """장이 여는 로어북 항목 하나. 판에 복사한 로어북의 id 와 그 안의 항목의 id 다."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    lorebook: uuid.UUID
+    entry: str
+
+
 class ChapterOpensDocument(BaseModel):
-    """장이 여는 장소와 이벤트(의 id)."""
+    """장이 여는 장소와 이벤트(의 id)와 로어북 항목."""
 
     model_config = ConfigDict(extra='forbid', frozen=True)
 
     places: list[str]
     events: list[str]
+    lore: list[ChapterLoreDocument] = []
 
 
 class ChapterDocument(BaseModel):

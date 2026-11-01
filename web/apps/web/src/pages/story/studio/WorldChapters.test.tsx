@@ -9,13 +9,14 @@ import { REFRESH_PATH } from '../../../api/refresh';
 import type { StoryWorldDetail } from '../../../api/storyWorlds';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../../test/fakeFetch';
 import { renderApp } from '../../../test/renderApp';
-import { addChapter, changeChapter, chaptersHints, hasChaptersHints, moveChapterUp, toChaptersBody, toggleOpen, type ChapterDraft } from './chaptersForm';
+import { addChapter, changeChapter, chaptersHints, hasChaptersHints, loreChoices, loreKey, moveChapterUp, toChaptersBody, toggleOpen, type ChapterDraft } from './chaptersForm';
 import { addCondition, changeCondition, type ConditionChoices } from './conditionsForm';
 import { worldProblemLine, worldWarningText } from './worldPublishText';
 
 const WORLDS = '/api/v1/asset/worlds';
 const ID = '00000000-0000-4000-8000-0000000000fa';
 const AT = '2026-11-01T00:00:00Z';
+const BOOK = '00000000-0000-4000-8000-0000000000fb';
 
 function world(): StoryWorldDetail {
   return {
@@ -44,7 +45,7 @@ function world(): StoryWorldDetail {
     events: [{ id: 'rain', name: '소나기', when: { match: 'all', items: [] }, repeat: false, scene: { text: '비가 온다.', cast: [], image_id: null, collectible: false }, on_open: [], choices: [] }],
     endings: [],
     chapters: [],
-    lorebooks: [],
+    lorebooks: [BOOK],
     latest_version: null,
     published_at: null,
     created_at: AT,
@@ -67,6 +68,8 @@ function signedIn() {
     [`GET ${WORLDS}/${ID}/publish-check`]: () => json(200, { ready: true, problems: [], warnings: [], removed: [] }),
     [`GET ${WORLDS}/${ID}/versions`]: () => json(200, []),
     'GET /api/v1/asset/lorebooks': () => json(200, { items: [], total: 0 }),
+    [`GET /api/v1/asset/lorebooks/${BOOK}`]: () =>
+      json(200, { id: BOOK, name: '제국', entries: [{ id: 'city', name: '가나폴리아', kind: 'place', keywords: [], content: '수도.', constant: true }], latest_version: 1 }),
     'GET /api/v1/asset/characters': () => json(200, { items: [], total: 0 }),
   });
 }
@@ -95,6 +98,7 @@ describe('장 탭', () => {
     await userEvent.selectOptions(form.getByLabelText('축제의 조건 1의 대상'), 'park');
     await userEvent.click(form.getByLabelText('축제: 광장'));
     await userEvent.click(form.getByLabelText('축제: 소나기'));
+    await userEvent.click(await form.findByLabelText('축제: 제국: 가나폴리아'));
     await userEvent.click(form.getByRole('button', { name: '저장' }));
 
     await waitFor(() => expect(patches(seen)).toHaveLength(1));
@@ -104,7 +108,7 @@ describe('장 탭', () => {
     expect(body.chapters[1]).toMatchObject({
       name: '축제',
       when: { match: 'all', items: [{ kind: 'reach_place', target: 'park', count: 1 }] },
-      opens: { places: ['square'], events: ['rain'] },
+      opens: { places: ['square'], events: ['rain'], lore: [{ lorebook: BOOK, entry: 'city' }] },
     });
   });
 });
@@ -117,6 +121,13 @@ describe('순수한 함수', () => {
     chapters = changeChapter(chapters, 'a', (chapter) => ({ ...chapter, name: '시작' }));
     return changeChapter(chapters, 'b', (chapter) => ({ ...chapter, name: '축제', when: changeCondition(addCondition(chapter.when), 0, { target: 'park' }) }));
   }
+
+  it('로어북 항목은 열쇠로 들고 다니다가 {lorebook, entry} 로 보낸다', () => {
+    const chapters = toggleOpen(two(), 'b', 'lore', loreKey(BOOK, 'city'));
+    const body = toChaptersBody(chapters) as { chapters: { opens: { lore: unknown[] } }[] };
+    expect(body.chapters.map((chapter) => chapter.opens.lore)).toEqual([[], [{ lorebook: BOOK, entry: 'city' }]]);
+    expect(loreChoices([{ id: BOOK, name: '제국', entries: [{ id: 'city', name: '가나폴리아' }] }])).toEqual([{ id: loreKey(BOOK, 'city'), name: '제국: 가나폴리아' }]);
+  });
 
   it('하나는 한 장에만 연다. 다른 장에서 고르면 앞의 장에서 빠진다', () => {
     const chapters = toggleOpen(toggleOpen(two(), 'a', 'places', 'square'), 'b', 'places', 'square');

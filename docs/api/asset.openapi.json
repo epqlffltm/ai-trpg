@@ -521,6 +521,7 @@
             "$ref": "#/components/schemas/ChapterOpens",
             "default": {
               "events": [],
+              "lore": [],
               "places": []
             }
           },
@@ -567,9 +568,54 @@
         "title": "ChapterDocument",
         "type": "object"
       },
+      "ChapterLore": {
+        "additionalProperties": false,
+        "description": "장이 여는 로어북 항목 하나. 세계관이 붙인 로어북의 id 와 그 안의 항목의 id 다(판의 형식 7).",
+        "properties": {
+          "entry": {
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Entry",
+            "type": "string"
+          },
+          "lorebook": {
+            "format": "uuid",
+            "title": "Lorebook",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lorebook",
+          "entry"
+        ],
+        "title": "ChapterLore",
+        "type": "object"
+      },
+      "ChapterLoreDocument": {
+        "additionalProperties": false,
+        "description": "장이 여는 로어북 항목 하나. 판에 복사한 로어북의 id 와 그 안의 항목의 id 다.",
+        "properties": {
+          "entry": {
+            "title": "Entry",
+            "type": "string"
+          },
+          "lorebook": {
+            "format": "uuid",
+            "title": "Lorebook",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lorebook",
+          "entry"
+        ],
+        "title": "ChapterLoreDocument",
+        "type": "object"
+      },
       "ChapterOpens": {
         "additionalProperties": false,
-        "description": "장이 여는 장소와 이벤트(의 id). 어느 장에도 적지 않은 것은 처음부터 열려 있다.",
+        "description": "장이 여는 장소와 이벤트(의 id)와 로어북 항목. 어느 장에도 적지 않은 것은 처음부터 열려 있다.\n닫힌 로어북 항목은 story 가 모델에 보내지 않는다(뒤 장의 비밀이 서술로 새지 않게).",
         "properties": {
           "events": {
             "default": [],
@@ -581,6 +627,15 @@
             },
             "maxItems": 50,
             "title": "Events",
+            "type": "array"
+          },
+          "lore": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChapterLore"
+            },
+            "maxItems": 100,
+            "title": "Lore",
             "type": "array"
           },
           "places": {
@@ -601,13 +656,21 @@
       },
       "ChapterOpensDocument": {
         "additionalProperties": false,
-        "description": "장이 여는 장소와 이벤트(의 id).",
+        "description": "장이 여는 장소와 이벤트(의 id)와 로어북 항목.",
         "properties": {
           "events": {
             "items": {
               "type": "string"
             },
             "title": "Events",
+            "type": "array"
+          },
+          "lore": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChapterLoreDocument"
+            },
+            "title": "Lore",
             "type": "array"
           },
           "places": {

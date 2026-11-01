@@ -46,6 +46,7 @@ from app.worlds.documents import WorldDocument
 from app.worlds.models import (
     CAST_MAX_GIFTS,
     CAST_MAX_SCHEDULE,
+    CHAPTER_MAX_LORE,
     CHAPTER_NAME_MAX_LENGTH,
     CHOICE_TEXT_MAX_LENGTH,
     CONDITION_MAX_COUNT,
@@ -500,13 +501,26 @@ def unique_endings(endings: list[Ending]) -> list[Ending]:
 Endings = Annotated[list[Ending], Field(max_length=WORLD_MAX_ENDINGS), AfterValidator(unique_endings)]
 
 
+class ChapterLore(BaseModel):
+    """장이 여는 로어북 항목 하나. 세계관이 붙인 로어북의 id 와 그 안의 항목의 id 다(판의 형식 7)."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    lorebook: uuid.UUID
+    entry: Key
+
+
 class ChapterOpens(BaseModel):
-    """장이 여는 장소와 이벤트(의 id). 어느 장에도 적지 않은 것은 처음부터 열려 있다."""
+    """
+    장이 여는 장소와 이벤트(의 id)와 로어북 항목. 어느 장에도 적지 않은 것은 처음부터 열려 있다.
+    닫힌 로어북 항목은 story 가 모델에 보내지 않는다(뒤 장의 비밀이 서술로 새지 않게).
+    """
 
     model_config = ConfigDict(extra='forbid')
 
     places: Annotated[list[Key], Field(max_length=WORLD_MAX_PLACES)] = []
     events: Annotated[list[Key], Field(max_length=WORLD_MAX_EVENTS)] = []
+    lore: Annotated[list[ChapterLore], Field(max_length=CHAPTER_MAX_LORE)] = []
 
 
 class Chapter(BaseModel):
@@ -536,8 +550,9 @@ def ordered_chapters(chapters: list[Chapter]) -> list[Chapter]:
         raise ValueError('첫 장 뒤의 장에는 넘어오는 조건을 하나 이상 적습니다.')
     places = [place for chapter in chapters for place in chapter.opens.places]
     events = [event for chapter in chapters for event in chapter.opens.events]
-    if len(set(places)) != len(places) or len(set(events)) != len(events):
-        raise ValueError('장소나 이벤트 하나는 한 장에만 적습니다.')
+    lore = [(item.lorebook, item.entry) for chapter in chapters for item in chapter.opens.lore]
+    if any(len(set(found)) != len(found) for found in (places, events, lore)):
+        raise ValueError('장소, 이벤트, 로어북 항목 하나는 한 장에만 적습니다.')
     return chapters
 
 
