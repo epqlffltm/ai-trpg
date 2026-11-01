@@ -234,12 +234,19 @@ def format_section(scene: SceneCard) -> str:
     """
     [쓰는 법] 블록. 줄마다 말하는 사람의 표식을 적게 한다(app/turns/segments.py).
     고를 수 있는 표정이 있으면 그 법도 적는다.
+    실측(scripts/try_scene.py, 2026-11-01)에서 보인 것을 막는 줄이 있다: 인물의 줄에 괄호로 적은 행동,
+    표식 없이 쓴 장면 밖 사람의 대사(서술로 돌아가 "사회자: …" 처럼 보인다), 말투의 예를 그대로 되풀이하기,
+    한자·영어 같은 다른 글자 섞기.
     """
     speakers = ', '.join(f'@{card.id}' for card in scene.cast)
     lines = [
         '줄마다 맨 앞에 말하는 사람의 표식을 적는다. 서술은 @narration: 이다.',
-        f'인물의 말과 행동은 그 인물의 표식으로 적는다. 쓸 수 있는 인물: {speakers}' if speakers else None,
+        f'인물의 줄에는 그 인물의 말만 쓴다. 쓸 수 있는 인물: {speakers}' if speakers else None,
+        '행동과 표정은 @narration: 줄에 따로 쓴다. 인물의 줄에 괄호로 행동을 적지 않는다.' if speakers else None,
         '위에 없는 인물은 말하지 않는다. 사용자의 말은 쓰지 않는다. 한 줄에 한 사람만 쓴다.',
+        '위에 없는 사람의 말이 꼭 필요하면 @narration: 줄 안에 따옴표로 옮긴다.',
+        '말투의 예는 말투를 보여 주는 참고다. 그 문장을 그대로 되풀이하지 않는다.' if speakers else None,
+        '한국어로만 쓴다. 한자, 영어 같은 다른 글자를 섞지 않는다.',
         '예:\n@narration: 바람이 분다.' + (f'\n@{scene.cast[0].id}: 왔구나.' if scene.cast else ''),
         *expression_lines(scene),
     ]

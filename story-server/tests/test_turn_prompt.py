@@ -103,6 +103,18 @@ def test_an_empty_scene_asks_for_narration_and_an_event_adds_its_direction():
     assert '[장면 지시]\n비가 쏟아진다.' in card
 
 
+def test_the_format_rules_from_the_measurements():
+    with_cast = render_card(BRIEFING, scene_card(BRIEFING, WORLD, start_state(WORLD), ['mina']))
+    alone = render_card(BRIEFING, scene_card(BRIEFING, WORLD, start_state(WORLD), []))
+
+    # 인물이 있을 때만: 행동은 서술 줄로, 말투의 예를 되풀이하지 않는다
+    for line in ('인물의 줄에 괄호로 행동을 적지 않는다', '그 문장을 그대로 되풀이하지 않는다'):
+        assert (line in with_cast, line in alone) == (True, False)
+    # 늘: 장면 밖 사람의 말은 서술 안에 따옴표로, 한국어로만
+    for line in ('@narration: 줄 안에 따옴표로 옮긴다', '한국어로만 쓴다'):
+        assert (line in with_cast, line in alone) == (True, True)
+
+
 def test_the_suggestions_instruction_comes_last_only_when_asked():
     scene = scene_card(BRIEFING, WORLD, start_state(WORLD), ['mina'])
 
