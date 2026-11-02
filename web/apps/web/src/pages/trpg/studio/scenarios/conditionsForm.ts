@@ -5,6 +5,7 @@
 // - 개수(1~99)는 몬스터 쓰러뜨리기, 물건 지니기, 물건 잃기만 쓴다. 가져가기(consume)는 퀘스트의 이루는 조건의 물건 지니기만
 // - 퀘스트 잇기(성공했다, 실패했다)는 드러나는 조건과 실패하는 조건, 사건의 조건에 쓴다. 자기 자신은 가리키지 못한다
 // - 물건 잃기는 실패하는 조건과 사건의 조건에만 쓴다
+// - 캠페인의 앞 편의 퀘스트(campaign_quest_succeeded, campaign_quest_failed, #481 B)는 아직 고르는 칸이 없다. 받은 대로 보인다
 // - 한 목록에 같은 종류의 같은 대상은 한 줄, 5 줄까지
 // - 장(chapter_at_least, #481)은 대상(target) 대신 장의 id(chapter)를 적는다. 시나리오의 장 가운데서 고른다(Targets.chapters).
 //   장이 없는 시나리오에서는 고를 수 없다(withChapterKind). 장의 넘어오는 조건에는 쓰지 않는다(서버도 받지 않는다)
@@ -26,6 +27,8 @@ const KIND_LABELS: Record<QuestConditionKind, string> = {
   quest_succeeded: '다른 퀘스트가 성공했다',
   quest_failed: '다른 퀘스트가 실패했다',
   chapter_at_least: '지금 장이 그 장 이상이다',
+  campaign_quest_succeeded: '캠페인의 앞 편에서 그 퀘스트가 성공했다',
+  campaign_quest_failed: '캠페인의 앞 편에서 그 퀘스트가 실패했다',
 };
 
 /** 조건의 대상의 종류 */
@@ -41,6 +44,10 @@ const TARGETS: Record<Exclude<QuestConditionKind, 'chapter_at_least'>, TargetKin
   lose_item: 'items',
   quest_succeeded: 'quests',
   quest_failed: 'quests',
+  // 캠페인의 앞 편의 퀘스트(#481 B)는 이 시나리오 밖의 사건이다. 고르는 칸은 캠페인 화면과 함께 더한다(KINDS_FOR 에 없다).
+  // 이미 적힌 조건의 한 줄은 이 시나리오의 퀘스트에서 이름을 찾고, 없으면 찾을 수 없다고 보인다
+  campaign_quest_succeeded: 'quests',
+  campaign_quest_failed: 'quests',
 };
 
 const COUNTED: QuestConditionKind[] = ['defeat_monster', 'hold_item', 'lose_item'];
@@ -158,5 +165,9 @@ export function conditionLine(condition: Pick<QuestCondition, 'kind' | 'target' 
       return `「${name}」 실패`;
     case 'chapter_at_least':
       return `${chapterName(condition.chapter, targets)} 장 이상`;
+    case 'campaign_quest_succeeded':
+      return `앞 편에서 「${name}」 성공`;
+    case 'campaign_quest_failed':
+      return `앞 편에서 「${name}」 실패`;
   }
 }

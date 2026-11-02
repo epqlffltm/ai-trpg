@@ -95,6 +95,25 @@ def quest_ended(table: GameTable, entry_id: uuid.UUID, status: QuestStatus) -> b
     return row is not None and row.status == status
 
 
+# 캠페인의 앞 편의 퀘스트를 보는 조건(#481 B)마다 기다리는 결과
+CAMPAIGN_RESULTS = {
+    QuestConditionKind.CAMPAIGN_QUEST_SUCCEEDED: QuestStatus.SUCCEEDED,
+    QuestConditionKind.CAMPAIGN_QUEST_FAILED: QuestStatus.FAILED,
+}
+
+
+def campaign_ended(table: GameTable, entry_id: uuid.UUID, result: str) -> bool:
+    """
+    캠페인의 앞 편에서 그 퀘스트가 그 결과로 끝났는가(#481 B).
+
+    앞 편의 결과는 그 편의 테이블을 열 때 테이블의 복사본(content 의 campaign_quests)에 적힌다.
+    캠페인 밖의 테이블은 비어 있다.
+    복사본을 통째로 읽지 않고 그 칸만 본다. 라운드마다 조건 하나에 판 전체를 읽을 까닭이 없다.
+    """
+    rows = table.content.get('campaign_quests') or []
+    return any(row['entry_id'] == str(entry_id) and row['result'] == result for row in rows)
+
+
 # 퀘스트 잇기의 조건마다 기다리는 끝난 상태
 LINKED_STATUS = {
     QuestConditionKind.QUEST_SUCCEEDED: QuestStatus.SUCCEEDED,
@@ -110,6 +129,8 @@ def is_met(
         return chapters.at_least(table, condition.chapter)
     if condition.kind in LINKED_STATUS:
         return quest_ended(table, condition.target, LINKED_STATUS[condition.kind])
+    if condition.kind in CAMPAIGN_RESULTS:
+        return campaign_ended(table, condition.target, CAMPAIGN_RESULTS[condition.kind])
     if condition.kind == QuestConditionKind.REACH_PLACE:
         return reached(table, condition.target)
     if condition.kind == QuestConditionKind.HOLD_ITEM:

@@ -21,6 +21,7 @@ from app.assets.bestiaries import repository as monsters
 from app.assets.bestiaries.models import Bestiary, Monster
 from app.assets.lorebooks import repository as entries
 from app.assets.models import (
+    CAMPAIGN_CONDITIONS,
     PLAYER_MADE_MODES,
     QUEST_LINK_CONDITIONS,
     CharacterMode,
@@ -927,7 +928,10 @@ def condition_problem(condition: QuestCondition, scenario: Scenario, parts: Part
     다른 퀘스트의 성공을 기다리면 그 퀘스트에 이루는 조건이 있어야 한다. 없으면 성공하지 않는다.
     다른 퀘스트의 실패를 기다리면 그 퀘스트에 실패하는 조건이나 기한이 있어야 한다. 없으면 실패하지 않는다.
     장(chapter_at_least, #481)은 판의 장 하나여야 한다.
+    캠페인의 앞 편의 퀘스트(#481 B)는 이 판 밖의 것이라 보지 않는다. 캠페인을 게시할 때 본다.
     """
+    if condition.kind in CAMPAIGN_CONDITIONS:
+        return None
     if condition.kind == QuestConditionKind.CHAPTER_AT_LEAST:
         known = {chapter.id for chapter in read_chapters(scenario)}
         return None if condition.chapter in known else Problem.QUEST_CONDITION_MISSING

@@ -318,6 +318,11 @@ class QuestConditionKind(enum.StrEnum):
     # 지금 장이 그 장이거나 그 뒤다(#481). target 이 아니라 chapter(장의 id)를 가리킨다.
     # 장의 넘어오는 조건에는 쓰지 않는다
     CHAPTER_AT_LEAST = 'chapter_at_least'
+    # 캠페인(#481 B)의 앞 편에서 그 퀘스트(사건 항목)가 성공했다 / 실패했다. target 은 앞 편의 판의 사건 항목이다.
+    # 이 판 안의 것이 아니라서 시나리오를 게시할 때는 보지 않고 캠페인을 게시할 때 본다.
+    # 캠페인 밖의 테이블에서는 채워지지 않는다
+    CAMPAIGN_QUEST_SUCCEEDED = 'campaign_quest_succeeded'
+    CAMPAIGN_QUEST_FAILED = 'campaign_quest_failed'
 
 
 # count 를 쓰는 조건. 나머지는 1 이다
@@ -326,6 +331,8 @@ COUNTED_CONDITIONS = frozenset(
 )
 # 다른 퀘스트를 보는 조건(퀘스트 잇기). 드러나는 조건과 실패하는 조건에 쓴다
 QUEST_LINK_CONDITIONS = frozenset({QuestConditionKind.QUEST_SUCCEEDED, QuestConditionKind.QUEST_FAILED})
+# 캠페인의 앞 편의 퀘스트를 보는 조건(#481 B). 퀘스트 잇기와 같은 곳(드러나는 조건, 실패하는 조건, 사건, 장)에 쓴다
+CAMPAIGN_CONDITIONS = frozenset({QuestConditionKind.CAMPAIGN_QUEST_SUCCEEDED, QuestConditionKind.CAMPAIGN_QUEST_FAILED})
 # 실패하는 조건에만 쓰는 조건. 잃어서 이루거나 드러나는 퀘스트는 없다
 FAIL_ONLY_CONDITIONS = frozenset({QuestConditionKind.LOSE_ITEM})
 

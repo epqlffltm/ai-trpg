@@ -183,6 +183,20 @@ async def seat_host(session: AsyncSession, run: CampaignRun, table: GameTable) -
         await seating.seat_carried(session, run, table, member)
 
 
+async def hand_down_quests(session: AsyncSession, run: CampaignRun, table: GameTable) -> None:
+    """
+    앞 편들에서 끝난 퀘스트를 새 편의 테이블의 복사본(content 의 campaign_quests)에 적는다.
+
+    조건 campaign_quest_succeeded, campaign_quest_failed 가 이것을 읽는다(app/rounds/quest_goals.py). 앞 편은 이미 끝나
+    그 편을 하는 동안 바뀌지 않는다. 같은 사건이 여러 편에 있으면 결과도 여럿이다
+    (어느 편에서든 그렇게 끝났으면 채워진다).
+    """
+    # 플레이의 퀘스트 결과는 끝난 편의 것뿐이다. 새 편의 테이블은 방금 열어 아직 결과가 없다
+    rows = await repository.quest_results(session, run.id)
+    handed = [{'entry_id': str(row.entry_id), 'result': row.result} for row in rows]
+    table.content = {**table.content, 'campaign_quests': handed}
+
+
 async def open_next(
     session: AsyncSession, viewer: AccessClaims, run_id: uuid.UUID, options: RunTable, picker: ModelPicker
 ) -> CampaignRun:
@@ -196,6 +210,7 @@ async def open_next(
     snapshot = await run_snapshot(session, run)
     await advance(session, run, snapshot)
     table = await tables.open_table(session, viewer, episode_table(options, snapshot, run.position), picker)
+    await hand_down_quests(session, run, table)
     repository.add(session, CampaignTable(table_id=table.id, run_id=run_id, position=run.position))
     await seat_host(session, run, table)
     await tables.commit(session, table)
