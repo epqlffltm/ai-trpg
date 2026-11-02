@@ -1,6 +1,7 @@
 // web/apps/web/src/api/tableRoom.ts
 // 테이블 방(B6)이 부르는 것. 테이블 하나, 캐릭터 정하기와 굴리기(B5), 시작(방장), 나가기, 채팅(읽기, 쓰기, 입력 중),
 // 일어난 일(이벤트)의 끝부분, 스트림을 열 번호, 내 캐릭터의 장비 착용과 벗기(#276, 선언이 아니라 바로 바꾼다),
+// 쌓인 능력치 점수를 능력치에 놓기(#286, 바로 바꾼다),
 // 나를 겨누는 것을 받아들이는 정도(#803).
 // 앉아 있는 사람만 부른다. 앉지 않았거나 없는 테이블은 404 다(있다는 것을 드러내지 않는다).
 
@@ -40,6 +41,11 @@ export function wearItem(tableId: string, entryId: string, slots: string[]): Pro
 /** 그 칸을 비운다. 그 칸을 차지한 착용이 통째로 빠진다. 비어 있으면 그대로다 */
 export function takeOffSlot(tableId: string, slot: string): Promise<TableDetail> {
   return apiRequest<TableDetail>(tablePath(tableId, `/equipment/${encodeURIComponent(slot)}`), { method: 'DELETE' });
+}
+
+/** 내 캐릭터의 쌓인 점수를 능력치에 놓는다(한 점이 능력치 1). raises 는 능력치의 이름표 → 놓을 점수 */
+export function raiseAbilities(tableId: string, raises: Record<string, number>): Promise<TableDetail> {
+  return apiRequest<TableDetail>(tablePath(tableId, '/abilities'), { method: 'POST', body: { raises } });
 }
 
 /** 내 캐릭터를 정한다(모집 중). 보낸 것으로 통째로 바꾼다. 방식마다 적는 칸이 다르다(CharacterUpdate) */

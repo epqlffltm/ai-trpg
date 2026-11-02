@@ -1,11 +1,12 @@
 // web/apps/web/src/pages/trpg/room/status/CharacterCards.tsx
-// 앉은 사람마다의 캐릭터(C). 이름, 사람, HP, 부상, 능력치, 떠난 캐릭터. 나를 맨 앞에 둔다.
+// 앉은 사람마다의 캐릭터(C). 이름, 사람, HP, 레벨(#286), 부상, 능력치, 떠난 캐릭터. 나를 맨 앞에 둔다.
 // 앉은 사람은 서로의 시트를 본다(서버가 모두에게 준다).
 
 import type { Ruleset, TableMember } from '../../../../api/types';
 import type { NameLookup } from '../../../../hooks/usePublicNames';
 import { SheetStats } from '../character/SheetStats';
 import { HpBar } from './HpBar';
+import { LevelBar } from './LevelBar';
 import { ResourceBars } from './ResourceBars';
 import { injuryName, injuryTiming, meFirst } from './statusView';
 
@@ -39,6 +40,7 @@ function SheetDetails({ member, rules }: { member: TableMember; rules: Ruleset }
     <>
       <HpBar sheet={sheet} rules={rules} />
       <ResourceBars sheet={sheet} />
+      <LevelBar sheet={sheet} rules={rules} />
       {sheet.injuries.length > 0 ? (
         <ul className="injuries" aria-label="부상">
           {sheet.injuries.map((injury) => (
