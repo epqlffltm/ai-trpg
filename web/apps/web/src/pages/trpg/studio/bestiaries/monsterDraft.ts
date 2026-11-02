@@ -1,4 +1,4 @@
-// web/apps/web/src/pages/trpg/studio/bestiaries/monsterForm.ts
+// web/apps/web/src/pages/trpg/studio/bestiaries/monsterDraft.ts
 // 몬스터 하나의 입력. 순수한 함수다. 한도는 서버의 것이다(trpg-server/app/assets/bestiaries/models.py).
 // 숫자(HP, 공격, 지닌 물건)는 여기가 아니라 시나리오의 몬스터 시트가 정한다.
 

@@ -1,4 +1,4 @@
-// web/apps/web/src/pages/chat/character/introHtml.ts
+// web/apps/web/src/pages/chat/character/introHtmlFilter.ts
 // 제작자가 쓴 소개 글(HTML 과 인라인 CSS)을 그리기 전에 한 번 더 거른다(두 번째 겹). 게시할 때 asset 서버가 이미 걸렀다.
 // 허용 목록은 asset-server/app/content/html.py 와 같다(docs/architecture/shared-code.md 의 "소개 글의 HTML"). 바꾸면 세 곳을 함께 바꾼다.
 //

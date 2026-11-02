@@ -1,13 +1,13 @@
 // web/apps/web/src/pages/chat/character/IntroHtml.tsx
-// 캐릭터의 소개 글을 그린다. 거른 HTML(introHtml.ts)을 넘치면 잘리는 상자(overflow: hidden, contain: content) 안에만 넣는다.
-// 그린 뒤에 거른 인라인 CSS 를 CSSOM 으로 입힌다(CSP 가 HTML 의 style 속성을 막는다. introHtml.ts 의 머리말).
+// 캐릭터의 소개 글을 그린다. 거른 HTML(introHtmlFilter.ts)을 넘치면 잘리는 상자(overflow: hidden, contain: content) 안에만 넣는다.
+// 그린 뒤에 거른 인라인 CSS 를 CSSOM 으로 입힌다(CSP 가 HTML 의 style 속성을 막는다. introHtmlFilter.ts 의 머리말).
 // 글 속의 그림은 토큰을 실어 받아(useImageUrl 과 같은 열쇠로 한 번만) blob: 주소를 넣고, 화면이 사라지면 주소를 놓는다.
 
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 import { fetchImage } from '../../../api/images';
 import { imageKey } from '../../../hooks/useImageUrl';
-import { sanitizeIntro } from './introHtml';
+import { sanitizeIntro } from './introHtmlFilter';
 
 export function IntroHtml({ html }: { html: string }) {
   const clean = useMemo(() => sanitizeIntro(html), [html]);

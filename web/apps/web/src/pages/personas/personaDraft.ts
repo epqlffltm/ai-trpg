@@ -1,4 +1,4 @@
-// web/apps/web/src/pages/personas/personaForm.ts
+// web/apps/web/src/pages/personas/personaDraft.ts
 // 페르소나 폼의 값과 검사, 보낼 본문. 순수한 함수다. 상한은 asset 서버(PersonaCreate)와 같다.
 // 이름만 꼭 적는다. 나머지는 비워도 된다. 나이와 성별은 적어 두는 글이고 서버도 화면도 거르지 않는다.
 

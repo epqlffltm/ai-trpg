@@ -4,7 +4,7 @@
 
 import { SelectField } from '@ai-trpg/ui';
 import type { Ruleset } from '../../../../api/types';
-import { costOf, pointsSpent, purchasableScores } from './characterForm';
+import { costOf, pointsSpent, purchasableScores } from './characterDraft';
 
 type Props = {
   rules: Ruleset;

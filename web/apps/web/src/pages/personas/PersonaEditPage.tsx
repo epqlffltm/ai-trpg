@@ -9,7 +9,7 @@ import { ApiError } from '../../api/errors';
 import { updatePersona } from '../../api/personas';
 import type { Persona } from '../../api/types';
 import { PersonaForm } from './PersonaForm';
-import { draftOf, personaBody, type PersonaDraft } from './personaForm';
+import { draftOf, personaBody, type PersonaDraft } from './personaDraft';
 import { describePersonaProblem } from './personaProblem';
 import { personaQuery, personasKey } from './personaQueries';
 

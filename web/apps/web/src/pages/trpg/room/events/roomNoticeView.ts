@@ -1,4 +1,4 @@
-// web/apps/web/src/pages/trpg/room/events/roomNotices.ts
+// web/apps/web/src/pages/trpg/room/events/roomNoticeView.ts
 // 방 위의 알림. 일어난 일 가운데 지금 서술을 막는 것만 고른다. 순수한 함수다.
 //
 // - 이번 라운드의 일: 크레딧이 모자람, 모델을 팔지 않음, 서술 실패와 그만둠, 자리에서 빠짐.

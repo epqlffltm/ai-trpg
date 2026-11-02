@@ -18,7 +18,7 @@ import {
   newEntryDraft,
   toEntryBody,
   type EntryDraft,
-} from './entryForm';
+} from './entryDraft';
 
 type Props = { lorebookId: string; entry: LoreEntry | null; done: () => void };
 

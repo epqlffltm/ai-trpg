@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/room/character/AbilityInputs.tsx
 // 능력치를 직접 적기(manual). 규칙의 능력치마다 숫자 칸 하나. 범위(score_min~score_max) 안이면 무엇이든 된다.
-// 비운 칸은 NaN 으로 둔다. 보내기 전에 막는다(characterForm.ts 의 draftHints).
+// 비운 칸은 NaN 으로 둔다. 보내기 전에 막는다(characterDraft.ts 의 draftHints).
 
 import { TextField } from '@ai-trpg/ui';
 import type { Ruleset } from '../../../../api/types';

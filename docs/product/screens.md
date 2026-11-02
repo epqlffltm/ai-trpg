@@ -2160,7 +2160,7 @@ PC 는 왼쪽에 그림과 소개, 오른쪽에 시작 상황과 대화 목록. 
 - 이 캐릭터와의 대화(로그인한 사람만): `GET /chat/conversations?character_id=`, 20 개씩 "더 보기". 제목, 마지막으로 말한 때, 모델(쓸 수 없으면 그렇게 적는다). 대화의 판이 공개된 판보다 옛것이면 "새 판이 있음"만 적는다.
 - 일러스트: 해금 대상 씬마다 칸 하나(C7 의 칸과 같다). 연 것은 `GET /chat/gallery?character_id=` 로 읽는다. 로그인하지 않았으면 모두 닫힌 칸이다. 해금 대상이 없으면 칸을 그리지 않는다. "갤러리에서 보기"로 C7 에, C7 의 캐릭터 이름에서 여기로 온다.
 - 볼 수 없는 캐릭터(404, 경로가 UUID 가 아니어서 422)는 "볼 수 없는 캐릭터"와 탐색으로 가는 길이다. 까닭을 가르지 않는다.
-- 소개의 HTML 은 DOMPurify 로 asset 서버와 같은 허용 목록(`pages/chat/character/introHtml.ts`)으로 한 번 더 거르고, 넘치면 잘리는 상자(`overflow: hidden`, `contain: content`)에 그린다. 링크는 새 창, `rel="noopener noreferrer"`, 바깥 링크 표시(↗)다.
+- 소개의 HTML 은 DOMPurify 로 asset 서버와 같은 허용 목록(`pages/chat/character/introHtmlFilter.ts`)으로 한 번 더 거르고, 넘치면 잘리는 상자(`overflow: hidden`, `contain: content`)에 그린다. 링크는 새 창, `rel="noopener noreferrer"`, 바깥 링크 표시(↗)다.
   - 화면의 CSP(`default-src 'self'`)는 HTML 의 `style` 속성을 막는다. CSP 를 넓히지 않고, 거른 CSS 를 `data-intro-style` 로 옮겨 두었다가 그린 뒤 CSSOM(`element.style`)으로 입힌다. 거르려고 HTML 을 읽는 inert 문서에서 브라우저가 CSP 경고를 콘솔에 남긴다(화면에는 영향이 없다).
   - 글 속의 그림(우리 그림 저장소의 것만)은 src 를 빼 두었다가 토큰을 실어 받아 blob: 주소를 넣는다. 성인 등급과 주인만 보는 그림도 보인다.
 

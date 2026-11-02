@@ -9,7 +9,7 @@ import { ItemsSection } from '../collection/ItemsSection';
 import { preview } from '../collection/itemsView';
 import { useItemActions } from '../collection/useItemActions';
 import { EntryForm } from './EntryForm';
-import { LOREBOOK_MAX_ENTRIES, LORE_KINDS } from './entryForm';
+import { LOREBOOK_MAX_ENTRIES, LORE_KINDS } from './entryDraft';
 import { entriesQuery } from './lorebookQueries';
 
 export function LorebookEditPage() {

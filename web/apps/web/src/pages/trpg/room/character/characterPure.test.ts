@@ -17,7 +17,7 @@ import {
   slotsFor,
   toCharacterUpdate,
   type CharacterDraft,
-} from './characterForm';
+} from './characterDraft';
 import { describeCharacterProblem } from './characterProblem';
 import { startingNumbers } from './CharacterPanel';
 

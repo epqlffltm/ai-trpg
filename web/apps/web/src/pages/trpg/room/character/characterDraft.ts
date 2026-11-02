@@ -1,4 +1,4 @@
-// web/apps/web/src/pages/trpg/room/character/characterForm.ts
+// web/apps/web/src/pages/trpg/room/character/characterDraft.ts
 // 캐릭터 정하기(B5)의 입력과 검사. 화면을 그리지 않는 순수한 함수다.
 //
 // 맞는지는 서버가 다시 본다(trpg-server/app/tables/characters.py 의 accept_character). 여기는 보내기 전에 알리는 것이다.

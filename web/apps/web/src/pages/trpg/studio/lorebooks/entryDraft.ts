@@ -1,4 +1,4 @@
-// web/apps/web/src/pages/trpg/studio/lorebooks/entryForm.ts
+// web/apps/web/src/pages/trpg/studio/lorebooks/entryDraft.ts
 // 로어북 항목 하나의 입력. 순수한 함수다. 한도는 서버의 것이다(trpg-server/app/assets/models.py 의 LORE_*).
 //   - 키워드: 서술하는 AI 가 장면에서 이 낱말을 보면 이 항목을 읽는다. 쉼표로 나눠 5 개까지, 하나에 30 자
 //   - 지목할 이름: 인물의 진짜 이름으로 맞다고 받는 이름들. 인물에만 뜻이 있어 인물일 때만 보낸다(비우면 항목의 이름)

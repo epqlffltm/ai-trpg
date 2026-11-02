@@ -27,7 +27,7 @@ import {
   placeSlot,
   toCharacterUpdate,
   type CharacterDraft,
-} from './characterForm';
+} from './characterDraft';
 import { describeCharacterProblem, type CharacterProblem } from './characterProblem';
 import { PointBuyInputs } from './PointBuyInputs';
 import { PregenPicker } from './PregenPicker';

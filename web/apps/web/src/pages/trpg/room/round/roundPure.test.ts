@@ -7,7 +7,7 @@ import type { Declaration, Round, Ruleset, TableDetail, TableMember } from '../.
 import { declaration, ME, member, OTHER, round, RULES, sheet, tableDetail } from '../../../../test/tableFixtures';
 import { routeMessage } from '../streamPolicy';
 import type { ActionContext } from './action/actionOptions';
-import { declarationHints, initialDeclarationDraft, toDeclarationUpdate } from './declarationForm';
+import { declarationHints, initialDeclarationDraft, toDeclarationUpdate } from './declarationDraft';
 import { applyPreview, type NarrationPreview } from './preview';
 import { describeCloseProblem, describeDeclarationProblem } from './roundProblem';
 import { actionLabel, deathSaveLine, myDeclaration, outcomeLine, pastRounds, remainingSeconds } from './roundView';
@@ -126,7 +126,7 @@ describe('roundView', () => {
   });
 });
 
-describe('declarationForm', () => {
+describe('declarationDraft', () => {
   it('글이 있어야 하고, 행동을 붙이면 그 행동의 칸도 맞아야 한다', () => {
     const empty = initialDeclarationDraft(rules, undefined);
     expect(empty.content).toBe('');

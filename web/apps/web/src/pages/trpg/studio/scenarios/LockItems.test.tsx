@@ -12,7 +12,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
-import { doorDraft, doorHints } from './doorForm';
+import { doorDraft, doorHints } from './doorDraft';
 import { itemLockHints, keysElsewhere } from './itemLockForm';
 import { itemRuleDraft, itemRuleLine, toItemRule } from './itemRuleForm';
 
