@@ -1,12 +1,12 @@
 // web/apps/web/src/api/account.ts
-// 로그인한 본인의 계정(인증 서버). 동의의 상태와 바꾸기, 비밀번호 바꾸기, 모든 기기 로그아웃, 탈퇴 취소.
+// 로그인한 본인의 계정(인증 서버). 동의의 상태와 바꾸기, 비밀번호 바꾸기, 모든 기기 로그아웃, 탈퇴 요청과 취소.
 //
 // 다시 동의하거나 탈퇴를 취소해도 지금의 토큰은 그대로 인증 서버에만 통한다.
 // 모든 서버에 통하는 토큰은 그 뒤의 /refresh 가 준다(refresh.ts). 동의와 취소의 화면이 마지막에 부른다.
 
 import { apiRequest } from './http';
 import { clearSession, storeTokens, type Session } from './session';
-import type { ConsentState, ConsentStates, LoginResponse } from './types';
+import type { ConsentState, ConsentStates, LoginResponse, WithdrawalState } from './types';
 
 const AUTH = '/api/v1/auth';
 
@@ -46,6 +46,17 @@ export async function changePassword(currentPassword: string, newPassword: strin
 export async function logoutAll(): Promise<void> {
   await apiRequest<void>(`${AUTH}/logout-all`, { method: 'POST' });
   clearSession();
+}
+
+/**
+ * 탈퇴를 요청한다(비밀번호를 확인한다). 7일 뒤에 계정을 비운다. 그 시각을 돌려준다.
+ * 이 기기를 포함한 모든 세션이 끊기므로(서버가 refresh 쿠키도 지운다) 화면의 상태도 비운다.
+ * 비밀번호가 틀리면 400 password, 너무 많이 틀리면 429 다
+ */
+export async function requestWithdrawal(password: string): Promise<string | null> {
+  const response = await apiRequest<WithdrawalState>(`${AUTH}/me/withdrawal`, { method: 'POST', body: { password } });
+  clearSession();
+  return response.withdrawal_scheduled_at;
 }
 
 /** 유예 중인 탈퇴를 취소한다. 요청하지 않았어도 200 이다 */

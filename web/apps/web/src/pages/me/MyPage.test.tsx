@@ -1,13 +1,15 @@
 // web/apps/web/src/pages/me/MyPage.test.tsx
-// 마이페이지(A5). 로그인해야 열리는지, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의를 켜고 끄는 것을 본다.
+// 마이페이지(A5). 로그인해야 열리는지, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의를 켜고 끄는 것, 탈퇴 요청을 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { getSession } from '../../api/session';
+import { formatDateTime } from '../../format/dateTime';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
+import { requestedNotice } from './WithdrawalSection';
 
 const ME = {
   public_id: '0b6f1d2e-0000-4000-8000-000000000001',
@@ -138,5 +140,73 @@ describe('MyPage', () => {
 
     expect(await screen.findByText('[필수] 이용약관')).toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /이용약관/ })).not.toBeInTheDocument();
+  });
+
+  it('탈퇴는 남은 크레딧을 알리고, 비밀번호를 받아 요청한 뒤 지울 시각을 적어 로그인으로 보낸다', async () => {
+    const scheduledAt = '2026-11-09T03:00:00Z';
+    const { seen } = signedIn({
+      'GET /api/v1/billing/wallet': () => json(200, { paid: '80', free: '10', total: '90', next_expiry: null }),
+      'POST /api/v1/auth/me/withdrawal': () => json(202, { withdrawal_scheduled_at: scheduledAt }),
+    });
+    renderApp('/me');
+
+    expect(await screen.findByText(/지금 남은 것: 골드 80 · 실버 10/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '탈퇴하기' }));
+    const dialog = screen.getByRole('dialog', { name: '탈퇴하기' });
+    const send = within(dialog).getByRole('button', { name: '탈퇴 요청하기' });
+    expect(send).toBeDisabled();
+    await userEvent.type(within(dialog).getByLabelText('비밀번호'), 'my-pass-1234');
+    await userEvent.click(send);
+
+    expect(await screen.findByText(new RegExp(`${formatDateTime(scheduledAt)}에 계정을 지웁니다`))).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '로그인' })).toBeInTheDocument();
+    expect(getSession()).toBeNull();
+    expect(seen.find((request) => request.url === '/api/v1/auth/me/withdrawal')?.body).toEqual({
+      password: 'my-pass-1234',
+    });
+  });
+
+  it('탈퇴의 비밀번호가 틀리면 그 칸에 서버의 글을 보이고 그대로 머문다', async () => {
+    signedIn({
+      'GET /api/v1/billing/wallet': () => json(503, { detail: 'down' }),
+      'POST /api/v1/auth/me/withdrawal': () => json(400, { password: ['비밀번호가 올바르지 않습니다.'] }),
+    });
+    renderApp('/me');
+
+    await userEvent.click(await screen.findByRole('button', { name: '탈퇴하기' }));
+    const dialog = screen.getByRole('dialog', { name: '탈퇴하기' });
+    await userEvent.type(within(dialog).getByLabelText('비밀번호'), 'wrong');
+    await userEvent.click(within(dialog).getByRole('button', { name: '탈퇴 요청하기' }));
+
+    expect(await within(dialog).findByText('비밀번호가 올바르지 않습니다.')).toBeInTheDocument();
+    expect(getSession()?.accessToken).toBe('a1');
+    // 잔액을 읽지 못해도 사라진다는 문장은 보인다
+    expect(screen.getByText(/남은 크레딧은 모두 사라지고/)).toBeInTheDocument();
+  });
+
+  it('탈퇴를 너무 많이 틀리면 기다리게 한다', async () => {
+    signedIn({
+      'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: '0', total: '0', next_expiry: null }),
+      'POST /api/v1/auth/me/withdrawal': () =>
+        new Response(JSON.stringify({ detail: 'too many' }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json', 'Retry-After': '30' },
+        }),
+    });
+    renderApp('/me');
+
+    await userEvent.click(await screen.findByRole('button', { name: '탈퇴하기' }));
+    const dialog = screen.getByRole('dialog', { name: '탈퇴하기' });
+    await userEvent.type(within(dialog).getByLabelText('비밀번호'), 'my-pass-1234');
+    await userEvent.click(within(dialog).getByRole('button', { name: '탈퇴 요청하기' }));
+
+    expect(await within(dialog).findByText(/30초 뒤에 다시 시도하세요/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /초 뒤에 다시/ })).toBeDisabled();
+  });
+});
+
+describe('requestedNotice', () => {
+  it('지울 시각을 모르면 7일 뒤라고 쓴다', () => {
+    expect(requestedNotice(null)).toContain('7일 뒤에 계정을 지웁니다');
   });
 });
