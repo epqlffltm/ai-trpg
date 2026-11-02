@@ -46,3 +46,27 @@ async def list_after(
         query = query.where(TableEvent.sequence <= until)
     query = query.order_by(TableEvent.sequence).limit(limit)
     return list(await session.scalars(query))
+
+
+async def list_reverted_groups(session: AsyncSession, table_id: uuid.UUID, until: int | None = None) -> set[uuid.UUID]:
+    """
+    테이블에서 되돌린 묶음들(#288). round_reverted 의 group 이다. until 을 주면 그 번호까지의 되돌림만 본다.
+
+    되돌린 묶음의 이벤트는 남아 있다. 기록을 쓰는 쪽(app/transcripts/reading.py)이 이것으로 뺀다.
+    """
+    query = select(TableEvent.payload).where(
+        TableEvent.table_id == table_id, TableEvent.type == EventType.ROUND_REVERTED
+    )
+    if until is not None:
+        query = query.where(TableEvent.sequence <= until)
+    return {uuid.UUID(payload['group']) for payload in await session.scalars(query)}
+
+
+async def list_types_after(session: AsyncSession, table_id: uuid.UUID, after: int) -> list[str]:
+    """테이블의 이벤트 중 after 번 뒤의 것의 종류들. 번호 순이다."""
+    query = (
+        select(TableEvent.type)
+        .where(TableEvent.table_id == table_id, TableEvent.sequence > after)
+        .order_by(TableEvent.sequence)
+    )
+    return list(await session.scalars(query))

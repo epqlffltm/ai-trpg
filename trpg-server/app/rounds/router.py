@@ -363,3 +363,16 @@ async def close_round(
     """
     table, round_ = await service.force_close(session, user.user_id, table_id, closer, dice)
     return to_round(table, round_, user.user_id)
+
+
+@router.post('/current/revert', response_model=RoundOut, status_code=status.HTTP_200_OK)
+async def revert_round(table_id: uuid.UUID, user: CurrentUser, session: Session) -> RoundOut:
+    """
+    방장이 바로 앞 라운드를 되돌린다(#288). 같은 번호로 다시 연 라운드가 돌아온다.
+
+    게임의 상태가 그 라운드를 닫기 직전으로 돌아가고, 그때의 선언이 옮겨 적혀 고칠 수 있다. 모두 내면 다시 닫힌다.
+    서술 값은 돌려주지 않는다. 다시 닫으면 다시 받는다.
+    방장이 아니면 403. 되돌릴 것이 없거나(nothing_to_revert) 다음 라운드가 열린 뒤에 일이 있었으면(revert_blocked) 409.
+    """
+    table, round_ = await service.revert_round(session, user.user_id, table_id)
+    return to_round(table, round_, user.user_id)

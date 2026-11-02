@@ -12,11 +12,13 @@
 
 라운드의 상태는 셋이다(RoundStatus). 열림(2) → 닫는 중(3, 4) → 닫힘(5).
 
-테이블 둘이 있다.
+테이블 셋이 있다.
   - table_rounds: 라운드. 테이블마다 번호가 1 부터 하나씩 올라간다.
   - round_declarations: 선언. 한 라운드에 한 사람이 하나씩 낸다.
+  - round_snapshots: 라운드를 닫기 직전의 게임 상태. 테이블마다 마지막 하나다. 방장이 되돌릴 때 쓴다(#288).
 
 닫힌 라운드와 그 선언은 고치지 않는다. 지나간 일의 기록이다.
+되돌린 라운드(reverted_at)도 지우지 않고 남긴다. 그 번호는 다시 여는 라운드가 쓴다(app/rounds/reverting.py).
 
 스키마 이름을 적지 않는다. 연결의 search_path 가 정한다(app/core/database.py).
 """
@@ -34,7 +36,6 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
-    UniqueConstraint,
     Uuid,
     func,
     text,
@@ -91,8 +92,9 @@ class Round(Base):
         # 서술의 입력·출력 단계(#387). 0 부터 MAX_STEP 까지다
         CheckConstraint(f'input_step BETWEEN 0 AND {MAX_STEP}', name='input_step_range'),
         CheckConstraint(f'output_step BETWEEN 0 AND {MAX_STEP}', name='output_step_range'),
-        # 한 테이블에 같은 번호의 라운드가 둘일 수 없다
-        UniqueConstraint('table_id', 'number'),
+        # 한 테이블에 같은 번호의 라운드가 둘일 수 없다. 되돌린 라운드는 빼고 센다.
+        # 되돌리면 다음 라운드가 되돌린 라운드의 번호를 다시 쓴다(#288)
+        Index('uq_table_rounds_number', 'table_id', 'number', unique=True, postgresql_where='reverted_at IS NULL'),
         # 한 테이블에 닫히지 않은 라운드(열림, 닫는 중)는 하나뿐이다. 조건이 붙은 유일 색인이다.
         # 닫힌 라운드(closed_at 이 있는 것)는 이 색인에 들어가지 않으므로 몇 개든 된다.
         # 코드가 틀려서 라운드를 닫지 않고 새로 열어도, DB 가 막는다
@@ -195,6 +197,9 @@ class Round(Base):
     # 선언을 받는 중인 라운드는 비어 있다(None). 이 칸이 생기기 전에 닫기 시작한 라운드도 비어 있다
     narration_style: Mapped[str | None] = mapped_column(String(20))
 
+    # 방장이 되돌린 시각(#288). 되돌린 라운드는 기록으로만 남는다. 목록과 번호로 찾기, 서술자의 지난 기록,
+    # 기억에 들지 않는다. 비어 있으면 되돌리지 않았다
+    reverted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 이 라운드의 선언들. 낸 순서다. 많아야 넷이라 라운드를 읽을 때 함께 읽는다
     declarations: Mapped[list['Declaration']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='Declaration.created_at, Declaration.user_id'
@@ -247,3 +252,23 @@ class Declaration(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class RoundSnapshot(Base):
+    """
+    라운드를 닫기 직전의 게임 상태(#288). 테이블마다 마지막 하나다. 다음 라운드를 닫을 때 덮어쓴다.
+
+    무엇을 찍고 무엇을 빼는지는 app/rounds/snapshots.py 가 정한다. 여기는 그 글을 그대로 담는다.
+    방장이 바로 앞 라운드를 되돌리면 이 상태로 덮는다(app/rounds/reverting.py).
+    테이블의 행이 지워지면 함께 지워진다. 찍은 라운드가 지워져도 함께 지워진다.
+    """
+
+    __tablename__ = 'round_snapshots'
+
+    # 테이블마다 하나다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
+    # 닫기 직전을 찍은 라운드. 되돌릴 라운드가 이것이어야 쓴다
+    round_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('table_rounds.id', ondelete='CASCADE'), index=True)
+    # 표마다의 행들(app/rounds/snapshots.py). 칸의 이름과 값이다
+    state: Mapped[dict] = mapped_column(JSONB)
+    taken_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

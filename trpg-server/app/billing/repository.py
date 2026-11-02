@@ -26,11 +26,15 @@ def add_charges(session: AsyncSession, charges: list[NarrationCharge]) -> None:
 
 
 async def find_round_charges(session: AsyncSession, table_id: uuid.UUID, number: int) -> list[NarrationCharge]:
-    """테이블의 이 라운드의 청구들. 이 기록이 생기기 전에 연 라운드면 빈 목록이다."""
+    """
+    테이블의 이 라운드의 청구들. 이 기록이 생기기 전에 연 라운드면 빈 목록이다.
+
+    되돌린 라운드(#288)의 것은 빼고 읽는다. 그 번호는 다시 연 라운드의 것이다.
+    """
     query = (
         select(NarrationCharge)
         .join(Round, Round.id == NarrationCharge.round_id)
-        .where(Round.table_id == table_id, Round.number == number)
+        .where(Round.table_id == table_id, Round.number == number, Round.reverted_at.is_(None))
         .order_by(NarrationCharge.created_at, NarrationCharge.id)
     )
     return list(await session.scalars(query))

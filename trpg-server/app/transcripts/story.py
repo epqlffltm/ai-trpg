@@ -492,6 +492,11 @@ def carried_items_left(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'{who(payload)}: 앞 편의 {names} 옮기지 못함')]
 
 
+def round_reverted(payload: dict, labels: Labels) -> list[Block]:
+    """방장이 바로 앞 라운드를 되돌림(#288). 그 라운드의 결과는 기록에서 빠졌다."""
+    return [Note(f'방장이 {payload.get("number")} 라운드를 되돌림. 같은 라운드를 다시 진행한다')]
+
+
 def table_ended(payload: dict, labels: Labels) -> list[Block]:
     """테이블이 끝남."""
     return [Heading('끝')]
@@ -550,6 +555,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.NAMING_RESOLVED: naming_resolved,
     EventType.NPC_ATTITUDE_CHANGED: npc_attitude_changed,
     EventType.CARRIED_ITEMS_LEFT: carried_items_left,
+    EventType.ROUND_REVERTED: round_reverted,
     EventType.TABLE_ENDED: table_ended,
 }
 

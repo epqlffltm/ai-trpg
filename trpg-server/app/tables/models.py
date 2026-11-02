@@ -327,6 +327,11 @@ class GameTable(Base):
     # 이 테이블에 적힌 마지막 채팅의 번호(app/chat/models.py). 이벤트의 번호와 따로 센다. 방식은 같다
     last_message_sequence: Mapped[int] = mapped_column(Integer, default=0, server_default=text('0'))
 
+    # 방장이 되돌린 라운드의 수(#288, app/rounds/reverting.py). 되돌리면 다음 라운드가 그 번호를 다시 쓴다.
+    # 서술 값의 이름표(app/billing/charges.py 의 reference_for)가 라운드의 번호로 지어지므로, 이 수를 끝에 붙여
+    # 앞서 같은 번호로 지은 이름표와 겹치지 않게 한다. 되돌린 적이 없으면 0 이고 이름표는 예전과 같다
+    revert_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text('0'))
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # 방장이 시작한 시각과 테이블이 끝난 시각. 아직이면 비어 있다
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
