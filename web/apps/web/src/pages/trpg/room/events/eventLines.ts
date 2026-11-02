@@ -4,7 +4,7 @@
 //
 // - 종류마다 하나씩 빠짐없이 적는다(DESCRIBE 가 EventType 의 모든 값을 갖는다. 서버에 종류가 늘면 타입 검사가 알린다)
 // - 라운드의 기록(GM 의 서술, 선언, 판정)은 라운드 화면에 있어 여기서 뺀다(null)
-// - 서술을 막거나 사람과 캐릭터를 잃는 일은 important 다. 기록에서 두드러지고, 일부는 방 위의 알림이 된다(roomNotices.ts)
+// - 서술을 막거나 사람과 캐릭터를 잃는 일은 important 다. 기록에서 두드러지고, 일부는 방 위의 알림이 된다(roomNoticeView.ts)
 // 글은 "누가: 무엇" 꼴이다. 이름 뒤의 조사를 고르지 않아도 되게.
 
 import type { TableDetail, TableEvent } from '../../../../api/types';

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { TableDetail, TableEvent } from '../../../../api/types';
 import { event, ME, OTHER, tableDetail } from '../../../../test/tableFixtures';
 import { eventLine, eventRound, eventRows, type EventContext, type EventType } from './eventLines';
-import { modelNoticeEvent, roomNotices, roundNoticeEvents } from './roomNotices';
+import { modelNoticeEvent, roomNotices, roundNoticeEvents } from './roomNoticeView';
 
 const NAMES: Record<string, string> = { [ME]: '렌', [OTHER]: '미아' };
 
@@ -221,7 +221,7 @@ describe('eventRound, eventRows', () => {
   });
 });
 
-describe('roomNotices', () => {
+describe('roomNoticeView', () => {
   it('이번 라운드의 알림만, 같은 사람의 같은 알림은 나중 것 하나', () => {
     const events = [
       ev(1, 'narration_credits_short', { round: 1, user_id: OTHER }),

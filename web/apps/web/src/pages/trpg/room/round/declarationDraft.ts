@@ -1,4 +1,4 @@
-// web/apps/web/src/pages/trpg/room/round/declarationForm.ts
+// web/apps/web/src/pages/trpg/room/round/declarationDraft.ts
 // 선언 내기의 입력과 검사. 순수한 함수다. 맞는지는 서버가 다시 본다(trpg-server/app/rounds/schemas.py 의 DeclarationUpdate).
 //   - 글: 빈칸만이 아니고 1000자까지
 //   - 행동: 하나를 붙이거나 붙이지 않는다. 종류마다의 칸은 action/actionDraft.ts 다

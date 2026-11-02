@@ -11,7 +11,7 @@ import type { Persona } from '../../api/types';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
 import { ME } from '../../test/tableFixtures';
-import { draftOf, draftProblems, EMPTY_PERSONA, personaBody } from './personaForm';
+import { draftOf, draftProblems, EMPTY_PERSONA, personaBody } from './personaDraft';
 import { describePersonaProblem } from './personaProblem';
 
 const BASE = '/api/v1/asset/personas';

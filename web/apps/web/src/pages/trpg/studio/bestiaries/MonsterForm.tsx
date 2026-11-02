@@ -17,7 +17,7 @@ import {
   newMonsterDraft,
   toMonsterBody,
   type MonsterDraft,
-} from './monsterForm';
+} from './monsterDraft';
 
 type Props = { bestiaryId: string; monster: Monster | null; done: () => void };
 

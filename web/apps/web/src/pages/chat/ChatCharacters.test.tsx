@@ -12,7 +12,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fak
 import { renderApp } from '../../test/renderApp';
 import { ME } from '../../test/tableFixtures';
 import { conversationLine, hasNewerVersion, profileLine, stageNames, startTimeLabel } from './character/characterView';
-import { cleanStyle, sanitizeIntro } from './character/introHtml';
+import { cleanStyle, sanitizeIntro } from './character/introHtmlFilter';
 import { describeStartProblem } from './character/startProblem';
 import { nextOffset } from './chatQueries';
 

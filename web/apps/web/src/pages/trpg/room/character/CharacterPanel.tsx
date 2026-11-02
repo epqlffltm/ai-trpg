@@ -7,7 +7,7 @@ import { useState } from 'react';
 import type { TableDetail, TableMember } from '../../../../api/types';
 import { characterModeLabel } from '../../labels';
 import { CharacterForm } from './CharacterForm';
-import { maxHpPreview } from './characterForm';
+import { maxHpPreview } from './characterDraft';
 import { SheetStats } from './SheetStats';
 
 export function CharacterPanel({ table, member }: { table: TableDetail; member: TableMember }) {

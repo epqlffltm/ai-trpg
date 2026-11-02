@@ -8,7 +8,7 @@ import type { FormProblem } from '../../auth/problem';
 import { ImagePicker } from '../../components/ImagePicker';
 import { ProblemNotice } from '../../components/ProblemNotice';
 import { TextAreaField } from '../../components/TextAreaField';
-import { draftProblems, PERSONA_LIMITS, type PersonaDraft } from './personaForm';
+import { draftProblems, PERSONA_LIMITS, type PersonaDraft } from './personaDraft';
 
 type Props = {
   initial: PersonaDraft;

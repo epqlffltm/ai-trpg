@@ -4,7 +4,7 @@
 
 import { Radio } from '@ai-trpg/ui';
 import type { TableDetail } from '../../../../api/types';
-import { pregenAvailable } from './characterForm';
+import { pregenAvailable } from './characterDraft';
 import { SheetStats } from './SheetStats';
 
 type Props = {

@@ -1,4 +1,4 @@
-// web/apps/web/src/pages/chat/studio/lorebooks/entriesForm.ts
+// web/apps/web/src/pages/chat/studio/lorebooks/entriesDraft.ts
 // 로어북 항목의 입력. 순수한 함수다. 규칙은 서버와 같다(asset-server/app/lorebooks/schemas.py 의 LoreEntry).
 //
 //   - 항목은 200 개까지. 이름(100자)과 내용(500자)은 꼭 있어야 하고 둘 다 모델에 간다

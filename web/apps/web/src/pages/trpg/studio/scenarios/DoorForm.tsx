@@ -1,14 +1,14 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/DoorForm.tsx
 // 길 하나의 문(B9 지도, #281). 넘기 판정, 자물쇠(열쇠, 처음에 잠김, 따기와 도구가 있어야 하는가), 빗장(어느 쪽, 처음에 걸림),
 // 부수기, 고치기(도구가 있어야 하는가, #802).
-// 켜고 끄는 상자마다 칸이 열린다. 창의 저장이 길 목록을 통째로 바로 보내되 이 길의 문만 바꾼다. 검사는 doorForm.ts.
+// 켜고 끄는 상자마다 칸이 열린다. 창의 저장이 길 목록을 통째로 바로 보내되 이 길의 문만 바꾼다. 검사는 doorDraft.ts.
 
 import { Button, Checkbox, SelectField } from '@ai-trpg/ui';
 import { useState, type FormEvent } from 'react';
 import type { Ruleset, ScenarioDetail } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { CheckSelects } from './CheckSelects';
-import { doorDraft, doorHints, withDoor, type DoorDraft } from './doorForm';
+import { doorDraft, doorHints, withDoor, type DoorDraft } from './doorDraft';
 import { ItemSelect } from './ItemSelect';
 import type { EntryChoice } from './useLoreEntries';
 import { useScenarioSave } from './useScenarioSave';

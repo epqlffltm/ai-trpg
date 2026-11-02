@@ -11,7 +11,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
-import { doorDraft, doorHints, withDoor } from './doorForm';
+import { doorDraft, doorHints, withDoor } from './doorDraft';
 import { placeHints } from './placesForm';
 import { routeDraft, routeLine, toRoute } from './routesForm';
 

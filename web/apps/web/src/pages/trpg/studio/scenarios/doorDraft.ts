@@ -1,4 +1,4 @@
-// web/apps/web/src/pages/trpg/studio/scenarios/doorForm.ts
+// web/apps/web/src/pages/trpg/studio/scenarios/doorDraft.ts
 // 길의 문(#281)의 입력. 넘기 판정(cross), 자물쇠(lock)와 따기(pick), 빗장(bar), 부수기(force), 고치기(repair). 순수한 함수다.
 //
 // 서버의 검사(RouteRule, 게시의 route_* 문제)를 따른다:

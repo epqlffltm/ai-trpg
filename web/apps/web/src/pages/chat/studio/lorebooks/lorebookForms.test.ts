@@ -13,7 +13,7 @@ import {
   moveLorebookUp,
   toLorebooksBody,
 } from '../characters/lorebooksForm';
-import { addEntry, changeEntry, ENTRIES_MAX, entriesHints, entryDrafts, removeEntry, splitKeywords, toEntriesBody, type EntryDraft } from './entriesForm';
+import { addEntry, changeEntry, ENTRIES_MAX, entriesHints, entryDrafts, removeEntry, splitKeywords, toEntriesBody, type EntryDraft } from './entriesDraft';
 import { infoHints, nameHint, toInfoBody } from './lorebookForm';
 
 describe('이름과 설명', () => {

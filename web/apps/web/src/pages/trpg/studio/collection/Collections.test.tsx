@@ -9,7 +9,7 @@ import { REFRESH_PATH } from '../../../../api/refresh';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../test/fakeFetch';
 import { renderApp } from '../../../../test/renderApp';
 import { ME } from '../../../../test/tableFixtures';
-import { entryHints, newEntryDraft, toEntryBody } from '../lorebooks/entryForm';
+import { entryHints, newEntryDraft, toEntryBody } from '../lorebooks/entryDraft';
 import { splitWords, wordsHint } from './collectionForm';
 import { itemsOfKind, kindCounts, preview } from './itemsView';
 

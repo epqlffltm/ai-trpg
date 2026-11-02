@@ -20,7 +20,7 @@ import {
   removeEntry,
   toEntriesBody,
   type EntryDraft,
-} from './entriesForm';
+} from './entriesDraft';
 import { useLorebookSave } from './useLorebookSave';
 
 export function EntriesForm({ lorebook }: { lorebook: AssetLorebookDetail }) {

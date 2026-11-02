@@ -10,7 +10,7 @@ import { preview } from '../collection/itemsView';
 import { useItemActions } from '../collection/useItemActions';
 import { monstersQuery } from './bestiaryQueries';
 import { MonsterForm } from './MonsterForm';
-import { BESTIARY_MAX_MONSTERS, MONSTER_KINDS } from './monsterForm';
+import { BESTIARY_MAX_MONSTERS, MONSTER_KINDS } from './monsterDraft';
 
 export function BestiaryEditPage() {
   const { bestiaryId = '' } = useParams();

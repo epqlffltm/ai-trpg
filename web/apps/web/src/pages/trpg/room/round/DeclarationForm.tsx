@@ -20,7 +20,7 @@ import {
   initialDeclarationDraft,
   toDeclarationUpdate,
   type DeclarationDraft,
-} from './declarationForm';
+} from './declarationDraft';
 import { tableQuery } from '../roomQueries';
 import { replaceCurrentRound, roundsKey, sceneCastQuery } from './roundQueries';
 import { describeDeclarationProblem, type RoundProblem } from './roundProblem';

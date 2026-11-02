@@ -2,7 +2,7 @@
 // 방장의 운영에서 무엇을 보일지. 순수한 함수다. 맞는지는 서버가 다시 본다.
 
 import type { TableDetail, TableMember } from '../../../../api/types';
-import { freshRoll } from '../character/characterForm';
+import { freshRoll } from '../character/characterDraft';
 
 /** 나를 뺀 앉은 사람들. 내보내기, 방장 넘기기의 대상이다 */
 export function otherMembers(table: TableDetail, myId: string | undefined): TableMember[] {

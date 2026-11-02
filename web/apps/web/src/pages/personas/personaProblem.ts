@@ -3,7 +3,7 @@
 
 import { ApiError } from '../../api/errors';
 import { commonProblem, unknownProblem, type FormProblem } from '../../auth/problem';
-import { SERVER_FIELDS } from './personaForm';
+import { SERVER_FIELDS } from './personaDraft';
 
 export function describePersonaProblem(error: unknown): FormProblem {
   const common = commonProblem(error);

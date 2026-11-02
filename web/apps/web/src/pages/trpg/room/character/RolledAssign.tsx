@@ -12,7 +12,7 @@ import { rollAbilities } from '../../../../api/tableRoom';
 import type { AbilityRoll, TableDetail } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { tableQuery } from '../roomQueries';
-import { currentSlots, slotTaken, type CharacterDraft } from './characterForm';
+import { currentSlots, slotTaken, type CharacterDraft } from './characterDraft';
 import { describeCharacterProblem, type CharacterProblem } from './characterProblem';
 
 type Props = {

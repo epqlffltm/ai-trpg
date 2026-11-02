@@ -4,7 +4,7 @@
 // - 두 끝은 다른 장소다. 같은 두 장소를 잇는 길은 하나뿐이다(방향이 달라도 같다)
 // - 보임: 처음부터 앎(open), 끝에 서 보면 앎(fog), 찾아야 앎(hidden). 숨긴 길만 찾는 판정(능력치, 난이도)이 있다
 // - 걸리는 시간(분)은 비우면 라운드의 걸음 안이다(옆방). 1~10080
-// - 길의 문(넘기, 자물쇠, 빗장, 부수기)은 문의 창(doorForm.ts)이 고친다. 길의 창은 그대로 둔다. 빗장이 있으면 그 끝은 바꾸지 못한다
+// - 길의 문(넘기, 자물쇠, 빗장, 부수기)은 문의 창(doorDraft.ts)이 고친다. 길의 창은 그대로 둔다. 빗장이 있으면 그 끝은 바꾸지 못한다
 
 import type { RouteRule, RouteRuleBody, RouteVisibility, Ruleset } from '../../../../api/types';
 import { wholeNumber } from '../rulebooks/rulebookForm';

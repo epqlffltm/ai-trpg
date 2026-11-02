@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router';
 import { createPersona } from '../../api/personas';
 import { PersonaForm } from './PersonaForm';
-import { EMPTY_PERSONA, personaBody, type PersonaDraft } from './personaForm';
+import { EMPTY_PERSONA, personaBody, type PersonaDraft } from './personaDraft';
 import { describePersonaProblem } from './personaProblem';
 import { personasKey } from './personaQueries';
 
