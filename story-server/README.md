@@ -336,7 +336,8 @@ chat 의 것과 같은 모양이다(`app/turns/service.py` 의 `begin_regenerate
   모델과 청구의 거절은 말 보내기와 같다.
 - **멈추기.** `POST /api/v1/story/generations/{id}/stop`. `id` 는 SSE 의 turn 의 `generation_id` 다. 모델을 부르는 일만 끊는다.
   받은 조각이 있으면 partial 로 저장하고 확정한다(`error_code` `stopped`). 없으면 반환하고 SSE 는 `failed`(`stopped`)로 끝난다.
-  스위치는 그 생성을 돌리는 서버의 메모리에 있다(`app.state.stops`). 끝난 것, 남의 것, 다른 서버에서 도는 것은 404 `generation_not_running` 이다.
+  스위치는 그 생성을 돌리는 서버의 메모리에 있다(`app.state.stops`). 다른 서버에서 도는 내 생성이면 PostgreSQL 의 NOTIFY 로 알리고 204 다
+  (chat 과 같다, `server_core/stop_signals.py`, #674). 끝난 것, 남의 것, 15분 넘게 도중인 채 남은 것은 404 `generation_not_running` 이다.
 - 다시 생성은 모델을 부르는 요청으로 센다. 멈추기는 세지 않는다([요청 수 제한](#요청-수-제한)).
 
 ### 이어서 출력

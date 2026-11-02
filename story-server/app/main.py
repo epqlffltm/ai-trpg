@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from server_core import loops, stop_signals
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
 from server_core.database import create_engine, create_session_factory
@@ -86,6 +87,7 @@ from app.turns.service import (
     SessionEndedError,
     TurnDeclinedError,
 )
+from app.turns.stops import stop_here
 from app.withdrawal import router as withdrawal
 
 # 이 서버의 API 가 놓이는 주소. 다른 서버처럼 /api/v1/<서버 이름> 이다(인증 /api/v1/auth, 게임 /api/v1/game)
@@ -104,7 +106,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     서버가 뜰 때와 꺼질 때 할 일. yield 앞이 뜰 때, 뒤가 꺼질 때다.
 
-    뜰 때 끊긴 세션의 목록 받기(30초마다)와 청구 정리(5초마다), 알림 보내기(5초마다)를 시작한다.
+    뜰 때 끊긴 세션의 목록 받기(30초마다)와 청구 정리(5초마다), 알림 보내기(5초마다), 멈추기 알림 듣기를 시작한다.
     꺼질 때 그것들을 가장 먼저 멈춘다.
     도는 말 한 번은 멈춘다. 받은 만큼 저장하고 맡길 것을 적어 둔다(다음에 뜬 서버의 청구 정리가 맡긴다).
     그다음 DB 연결과 다른 서버로 가는 연결(Redis 도)을 닫는다. 닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
@@ -113,10 +115,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     revoking = revocations.start(app.state.revocations)
     settling = settler.start(app.state.settler)
     dispatching = dispatcher.start(app.state.notification_dispatcher)
+    listening = loops.start(app.state.stop_listener, 'stop-listener')
     yield
     await revoking.halt()
     await settling.halt()
     await dispatching.halt()
+    await listening.halt()
     await stop_turns(app.state.turns)
     await app.state.summarizer.stop()
     if app.state.lore_indexer is not None:
@@ -211,8 +215,16 @@ def create_app(
     app.state.model_router = build_router(settings, app.state.http_client, app.state.session_factory)
     # 도는 말 한 번들(app/turns/router.py 의 keep_running). 서버가 꺼질 때 멈춘다
     app.state.turns = set()
-    # 도는 말 한 번의 멈추는 스위치(기록의 id → (주인, 스위치)). 멈추기가 찾는다. 이 서버에서 도는 것만 있다
+    # 도는 말 한 번의 멈추는 스위치(기록의 id → (주인, 스위치)). 멈추기가 찾는다. 이 서버에서 도는 것만 있다.
+    # 다른 서버에 닿은 멈추기는 DB 의 NOTIFY 로 알려 오고, 여기서 듣는다(server_core/stop_signals.py, #674).
+    # 듣는 연결은 풀 밖의 하나다. lifespan 이 듣기를 시작하고 멈춘다
     app.state.stops = {}
+    app.state.stop_channel = stop_signals.channel_name(settings.db_schema)
+    app.state.stop_listener = stop_signals.StopListener(
+        stop_signals.listen_dsn(settings.database_url),
+        app.state.stop_channel,
+        on_stop=lambda generation_id: stop_here(app.state.stops, generation_id),
+    )
     # 끝나지 않은 청구를 마저 끝내는 작업(app/turns/settler.py). lifespan 이 돌리고 멈춘다.
     # 결제 서버를 부르는 것은 부를 때마다 앱에서 꺼낸다. 테스트가 가짜를 꽂는다
     app.state.settler = settler.ChargeSettler(app.state.session_factory, billing=lambda: app.state.billing)

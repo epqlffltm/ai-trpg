@@ -199,8 +199,8 @@ PostgreSQL 의 `max_connections` 는 기본값 100 이고, superuser 의 몫 3 �
 | 쓰는 곳 | 몫 | 정하는 곳 |
 | --- | --- | --- |
 | trpg | 16 | 풀 5 + 10(설정 `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` 의 기본값, #589). 실시간 신호의 LISTEN 연결 1 은 풀 밖이다 |
-| chat | 10 | compose 의 `DB_POOL_SIZE` 5, `DB_MAX_OVERFLOW` 5 |
-| story | 10 | compose 의 `DB_POOL_SIZE` 5, `DB_MAX_OVERFLOW` 5(chat 과 같다, #591) |
+| chat | 11 | compose 의 `DB_POOL_SIZE` 5, `DB_MAX_OVERFLOW` 5. 멈추기 알림의 LISTEN 연결 1 은 풀 밖이다(#674) |
+| story | 11 | compose 의 `DB_POOL_SIZE` 5, `DB_MAX_OVERFLOW` 5(chat 과 같다, #591). 멈추기 알림의 LISTEN 연결 1 은 풀 밖이다(#674) |
 | notification | 5 | compose 의 2 + 3 |
 | asset | 5 | compose 의 2 + 3. 그림은 S3 로 가고 DB 에는 줄만 쓴다 |
 | billing | 12 | 서버 8, sweeper 2, cron 2(`billing-server/README.md` 에 잰 값) |
@@ -208,7 +208,7 @@ PostgreSQL 의 `max_connections` 는 기본값 100 이고, superuser 의 몫 3 �
 | auth | 4 | gunicorn 의 워커 1(`WEB_CONCURRENCY`), mail, welcome-credits, cron 이 1 씩. Django 는 요청마다 연결을 맺고 닫는다 |
 | 관리(계획) | 5 | 운영자만 쓴다 |
 | 감시(monitor), 백업, 배포 중의 마이그레이션 | 3 | |
-| **합** | **80** | 남는 17 은 auth 의 워커를 늘리거나 잰 뒤 몫을 고치는 데 쓴다 |
+| **합** | **82** | 남는 15 는 auth 의 워커를 늘리거나 잰 뒤 몫을 고치는 데 쓴다 |
 
 - **몫은 쓰는 양이 아니라 상한이다.** 붐빌 때만 넘침(overflow)까지 맺고 돌려주면 닫는다. DB 의 CPU 가 둘이라 동시에 도는 쿼리는 이보다 훨씬 적어야 빠르다(결제 서버가 잰 것으로는 연결 8 과 16 이 같은 빠르기다)
 - **FastAPI 서버(server-core)의 몫은 compose 에 적는다.** 다시 빌드하지 않고 값만 바꾼다. 적지 않으면 SQLAlchemy 의 기본(5 + 10)이다. PC 에서 서버를 직접 띄울 때가 그렇다
