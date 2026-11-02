@@ -10,6 +10,8 @@
     떠난 뒤의 일은 받지 않는다.
 둘 다 아니면 TableNotFoundError(404)다. 테이블이 있다는 것도 드러내지 않는다.
 
+방장이 되돌린 라운드(#288)의 닫힘의 묶음은 쓰지 않는다. 없었던 일이다. 되돌렸다는 줄(round_reverted)은 쓴다.
+
 쪽지는 받는 사람의 쪽지함(보냈거나 받은 것)에서만 읽는다. 남의 쪽지함은 읽는 길이 없다(app/whispers/repository.py).
 셋 다 쪽마다 새 세션으로 읽는다. 큰 판도 메모리에 다 올리지 않고, 보내는 동안 DB 연결을 붙잡지 않는다.
 """
@@ -43,7 +45,7 @@ class Cut:
     """
     받을 기록의 범위. until 번까지의 이벤트, chat_until 번까지의 채팅, owner_id 의 쪽지함의 whisper_until 번까지다.
 
-    departed 면 떠난 사람이 받는 것이다. labels 는 판의 이름들이다.
+    departed 면 떠난 사람이 받는 것이다. labels 는 판의 이름들이다. reverted 는 빼는 묶음들이다(되돌린 라운드, #288).
     """
 
     table_id: uuid.UUID
@@ -54,6 +56,7 @@ class Cut:
     owner_id: uuid.UUID | None = None
     chat_until: int = 0
     whisper_until: int = 0
+    reverted: frozenset[uuid.UUID] = frozenset()
 
 
 async def seated_cut(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID) -> Cut:
@@ -68,6 +71,7 @@ async def seated_cut(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.U
         owner_id=user_id,
         chat_until=await chats.last_sequence(session, table.id),
         whisper_until=await whispers.last_sequence(session, table.id, user_id),
+        reverted=frozenset(await events.list_reverted_groups(session, table.id, table.last_sequence)),
     )
 
 
@@ -89,6 +93,7 @@ async def departed_cut(session: AsyncSession, user_id: uuid.UUID, table_id: uuid
         owner_id=user_id,
         chat_until=await chats.last_sequence(session, table_id, before=departure.left_at),
         whisper_until=await whispers.last_sequence(session, table_id, user_id, before=departure.left_at),
+        reverted=frozenset(await events.list_reverted_groups(session, table_id, departure.last_sequence)),
     )
 
 
@@ -113,13 +118,14 @@ async def iter_pages(
 async def iter_events(
     session_factory: async_sessionmaker[AsyncSession], cut: Cut, page_size: int = PAGE_SIZE
 ) -> AsyncIterator[TableEvent]:
-    """범위 안의 이벤트를 일어난 차례대로 하나씩 내놓는다."""
+    """범위 안의 이벤트를 일어난 차례대로 하나씩 내놓는다. 되돌린 묶음(cut.reverted)의 것은 빼고 내놓는다."""
 
     async def read_page(session: AsyncSession, after: int) -> list[TableEvent]:
         return await events.list_after(session, cut.table_id, after, page_size, until=cut.until)
 
     async for event in iter_pages(session_factory, read_page, page_size):
-        yield event
+        if event.action_group_id not in cut.reverted:
+            yield event
 
 
 async def iter_chats(

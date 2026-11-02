@@ -4607,6 +4607,7 @@
           "resource_changed",
           "character_revived",
           "round_closed",
+          "round_reverted",
           "narration_failed",
           "narration_abandoned",
           "narration_credits_short",
@@ -27530,6 +27531,56 @@
           }
         ],
         "summary": "Read Scene Cast",
+        "tags": [
+          "rounds"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/tables/{table_id}/rounds/current/revert": {
+      "post": {
+        "description": "방장이 바로 앞 라운드를 되돌린다(#288). 같은 번호로 다시 연 라운드가 돌아온다.\n\n게임의 상태가 그 라운드를 닫기 직전으로 돌아가고, 그때의 선언이 옮겨 적혀 고칠 수 있다. 모두 내면 다시 닫힌다.\n서술 값은 돌려주지 않는다. 다시 닫으면 다시 받는다.\n방장이 아니면 403. 되돌릴 것이 없거나(nothing_to_revert) 다음 라운드가 열린 뒤에 일이 있었으면(revert_blocked) 409.",
+        "operationId": "revert_round_api_v1_game_tables__table_id__rounds_current_revert_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoundOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revert Round",
         "tags": [
           "rounds"
         ],

@@ -461,6 +461,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'place',
     ),
     EventType.ROUND_CLOSED: ('number', 'idle', 'reason'),
+    # 되돌린 묶음(group)은 화면이 빼고 보인다. 다시 연 라운드의 마감과 시각은 열린 것과 같다
+    EventType.ROUND_REVERTED: ('number', 'group', 'deadline_at', 'clock'),
     # 실패의 이유도 보인다(timeout, cut_off …). 모델이 쓴 글이나 보낸 프롬프트는 싣지 않는다
     EventType.NARRATION_FAILED: ('round', 'reason'),
     EventType.NARRATION_ABANDONED: ('round', 'reason', 'failures'),

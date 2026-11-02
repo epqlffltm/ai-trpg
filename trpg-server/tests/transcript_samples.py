@@ -525,5 +525,11 @@ SAMPLES = {
         'character_name': '기사',
         'items': [{'entry_id': '33333333-3333-4444-8555-666666666666', 'name': '지도', 'count': 1}],
     },
+    'round_reverted': {
+        'number': 3,
+        'group': '44444444-4444-4555-8666-777777777777',
+        'deadline_at': None,
+        'clock': {'day': 1, 'hour': 9, 'minute': 0, 'time_of_day': 'morning'},
+    },
     'table_ended': {},
 }

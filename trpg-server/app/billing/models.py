@@ -116,7 +116,7 @@ class NarrationCharge(Base):
     # 결제 서버가 이 홀드를 가리키는 이름표. 결제 서버의 규칙(영문자, 숫자, . _ : -, 8~200자)을 따른다
     reference: Mapped[str] = mapped_column(String(200), unique=True)
 
-    # 만료되어 돌려받은 홀드를 새 이름표로 다시 건 횟수. 이름표의 끝에 붙는다(charges.reference_for)
+    # 만료되어 돌려받은 홀드를 새 이름표로 다시 건 횟수. 이름표의 끝에 붙는다(charges.renewed_reference)
     renewals: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
 
     # 결제 서버의 가격표 이름. 값은 결제 서버가 정한다. 게임 서버는 금액을 모른다

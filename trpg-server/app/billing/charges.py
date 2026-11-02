@@ -11,6 +11,7 @@ DB 를 쓰는 함수는 부른 쪽의 트랜잭션 안에서 돈다. 라운드�
 결제 서버를 부르는 것은 그 트랜잭션이 끝난 뒤다(app/billing/settling.py).
 """
 
+import re
 import uuid
 from datetime import datetime, timedelta
 
@@ -84,14 +85,30 @@ async def reprice_round(session: AsyncSession, round_: Round, now: datetime) -> 
     return await repository.reprice_round(session, round_.id, REPRICEABLE, price_code_of(round_), now)
 
 
-def reference_for(table_id: uuid.UUID, number: int, payer_id: uuid.UUID, renewals: int = 0) -> str:
+def reference_for(table_id: uuid.UUID, number: int, payer_id: uuid.UUID, reverts: int = 0) -> str:
     """
     결제 서버의 이름표. 테이블, 라운드, 내는 사람으로 짓는다. 같은 라운드의 같은 사람이면 언제 지어도 같다.
 
-    만료되어 다시 건 홀드는 그 횟수를 끝에 붙인다(:r1, :r2 …). 처음 건 홀드는 붙이지 않는다(그 전에 지은 이름표와 같다).
+    reverts 는 그 테이블에서 되돌린 라운드의 수다(GameTable.revert_count, #288). 되돌리면 다음 라운드가 앞서 쓴
+    번호를 다시 쓰므로, 그 수를 붙여(:v1, :v2 …) 앞서 지은 이름표와 겹치지 않게 한다.
+    되돌린 적이 없으면 붙이지 않는다(그 전에 지은 이름표와 같다).
     """
     base = f'narration:{table_id}:{number}:{payer_id}'
-    return f'{base}:r{renewals}' if renewals else base
+    return f'{base}:v{reverts}' if reverts else base
+
+
+# 다시 건 횟수의 꼬리(:r1, :r2 …)
+RENEWAL_SUFFIX = re.compile(r':r[0-9]+$')
+
+
+def renewed_reference(reference: str, renewals: int) -> str:
+    """
+    만료되어 다시 거는 홀드의 이름표. 처음 지은 이름표에 다시 건 횟수를 붙인다(:r1, :r2 …).
+
+    번호로 다시 짓지 않고 처음 이름표에서 짓는다. 되돌린 뒤(#288) 라운드의 번호가 바뀌어도 그 청구의 이름표는
+    처음 것에서 이어지고, 다른 청구의 이름표와 겹치지 않는다.
+    """
+    return f'{RENEWAL_SUFFIX.sub("", reference)}:r{renewals}'
 
 
 def retry_delay(attempts: int) -> timedelta:
@@ -127,7 +144,7 @@ def charge_round(session: AsyncSession, table: GameTable, round_: Round, now: da
         NarrationCharge(
             round=round_,
             payer_id=payer,
-            reference=reference_for(table.id, round_.number, payer),
+            reference=reference_for(table.id, round_.number, payer, table.revert_count),
             price_code=price_code_of(round_),
             status=ChargeStatus.PENDING,
             next_attempt_at=now,

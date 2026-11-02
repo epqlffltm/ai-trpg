@@ -92,6 +92,12 @@ class Conflict(enum.StrEnum):
     WEAPON_NOT_WORN = 'weapon_not_worn'
     # 엄폐하려는데 서 있는 장소에 숨을 곳(커버)이 없다(#276)
     NO_COVER = 'no_cover'
+    # 되돌릴 라운드가 없다(#288). 첫 라운드이거나, 닫기 직전을 찍어 둔 것이 없다(이 기능 전에 닫았거나,
+    # 그 뒤로 표의 모양이 바뀌었다). 바로 앞 라운드 하나만 되돌린다
+    NOTHING_TO_REVERT = 'nothing_to_revert'
+    # 다음 라운드가 열린 뒤에 일이 있었다(#288). 선언, 장비, 들고 나기 같은 것이다. 쪽지와 설정 바꾸기만 괜찮다.
+    # 그 일을 닫기 직전의 상태로 덮어 버리면 안 된다
+    REVERT_BLOCKED = 'revert_blocked'
 
 
 class RoundConflictError(Exception):

@@ -211,6 +211,10 @@ class EventType(enum.StrEnum):
     CHARACTER_REVIVED = 'character_revived'
     # 라운드가 닫혔다
     ROUND_CLOSED = 'round_closed'
+    # 방장이 바로 앞 라운드를 되돌렸다(#288, app/rounds/reverting.py). 그 라운드의 닫힘의 묶음(group)은 없었던 일이다.
+    # 이벤트는 지우지 않는다. 읽는 쪽이 그 묶음을 빼고 본다. 게임의 상태는 닫기 직전으로 돌아갔고,
+    # 그 번호(number)의 라운드가 다시 열렸다. 선언은 옮겨 적혔고 고칠 수 있다
+    ROUND_REVERTED = 'round_reverted'
     # GM 의 서술이 끝내 실패했다. 라운드는 닫는 중에 머물고, 방장이 다시 맡길 수 있다
     NARRATION_FAILED = 'narration_failed'
     # GM 의 서술이 정해 둔 횟수만큼 실패해 서술을 그만뒀다. 서술 값은 받지 않는다(돌려준다).

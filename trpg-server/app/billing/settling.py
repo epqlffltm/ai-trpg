@@ -31,7 +31,7 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.billing import repository
-from app.billing.charges import EXTEND_REJECTED_RETRY, next_extension, reference_for, retry_delay
+from app.billing.charges import EXTEND_REJECTED_RETRY, next_extension, renewed_reference, retry_delay
 from app.billing.client import (
     PRICE_UNAVAILABLE,
     Billing,
@@ -327,15 +327,13 @@ async def rename(
 
     같은 이름표는 결제 서버에서 끝난 홀드라 다시 걸면 끝난 것을 돌려받는다. 다시 건 횟수를 이름표 끝에 붙인다.
     """
-    async with session_factory() as session:
-        table_id, number = await repository.find_round_of(session, charge)
     renewals = charge.renewals + 1
     return await write_move(
         session_factory,
         charge,
         allowed,
         ChargeStatus.PENDING,
-        reference=reference_for(table_id, number, charge.payer_id, renewals),
+        reference=renewed_reference(charge.reference, renewals),
         renewals=renewals,
         attempts=0,
         last_error=reason,

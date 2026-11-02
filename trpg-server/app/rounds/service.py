@@ -36,6 +36,9 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 칸을 따로 두지 않는다. 시각은 테이블을 잠근 채로만 고치고, 다시 맡기려면 실패가 적혔거나 한참 지나야 해서
 같은 시각이 두 번 적히지 않는다.
 
+닫기 시작하기 바로 전에 게임 상태를 찍어 둔다(start_closing, app/rounds/snapshots.py). 방장이 바로 앞 라운드를
+되돌리면 그 상태로 덮고 같은 번호의 라운드를 다시 연다(revert_round, app/rounds/reverting.py, #288).
+
 죽은 캐릭터의 플레이어는 선언을 낼 수 없다. 새 캐릭터가 있어야 한다.
 새 캐릭터를 들인 라운드에는 선언을 내지 않는다. 다음 라운드부터 낸다.
 """
@@ -51,6 +54,7 @@ from app.billing import charges
 from app.billing import repository as billing_repository
 from app.billing.models import NarrationCharge
 from app.billing.price_list import FREE_PRICES, PriceList
+from app.calendar import state as calendar
 from app.catalog.steps import steps_of
 from app.core.config import BILLING_BUDGET_SECONDS, NARRATION_BUDGET_SECONDS
 from app.engine.dice import Dice
@@ -58,6 +62,7 @@ from app.engine.ruleset import Ruleset
 from app.events import recorder
 from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
+from app.memory import repository as memory_repository
 from app.observability.metrics import record_round_closed
 from app.rounds import (
     chapters,
@@ -71,6 +76,8 @@ from app.rounds import (
     repository,
     resource_rounds,
     rests,
+    reverting,
+    snapshots,
     waits,
     wanders,
 )
@@ -328,6 +335,30 @@ def begin_closing(
     round_.closing_at = datetime.now(UTC)
 
 
+async def take_snapshot(session: AsyncSession, table: GameTable, round_: Round) -> None:
+    """
+    지금의 게임 상태를 이 라운드의 닫기 직전으로 찍어 둔다(#288). 테이블의 앞선 사진을 덮는다. 저장하지는 않는다.
+
+    세션이 들고 있는 바꾼 것(방금 낸 선언 같은 것)은 읽기 전에 DB 에 보내진다.
+    """
+    rows, values = await repository.read_state(session, table.id)
+    await repository.save_snapshot(session, table.id, round_.id, snapshots.make_state(rows, values))
+
+
+async def start_closing(
+    session: AsyncSession,
+    table: GameTable,
+    round_: Round,
+    dice: Dice,
+    scene: Scene,
+    reason: CloseReason,
+    closer_id: uuid.UUID | None = None,
+) -> None:
+    """닫기 직전의 상태를 찍고(take_snapshot) 닫기 시작한다(begin_closing). 라운드를 닫는 길은 모두 이것을 쓴다."""
+    await take_snapshot(session, table, round_)
+    begin_closing(session, table, round_, dice, scene, reason, closer_id)
+
+
 async def lock_current_round(
     session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID
 ) -> tuple[GameTable, TableMember, Round]:
@@ -413,7 +444,7 @@ async def declare(
 
     everyone_declared = not waiting_for(table, round_)
     if everyone_declared:
-        begin_closing(session, table, round_, dice, scene, CloseReason.ALL_DECLARED)
+        await start_closing(session, table, round_, dice, scene, CloseReason.ALL_DECLARED)
     saved = await save(session, table)
     # 저장한 뒤에 맡기고 센다. 먼저 맡기면 서술을 맡은 작업이 아직 저장되지 않은 것을 읽는다
     if everyone_declared:
@@ -444,7 +475,7 @@ async def force_close(
     closing = round_.status == RoundStatus.OPEN
     if closing:
         scene = await load_scene(session, table, round_)
-        begin_closing(session, table, round_, dice, scene, CloseReason.HOST, closer_id=host_id)
+        await start_closing(session, table, round_, dice, scene, CloseReason.HOST, closer_id=host_id)
     elif is_stalled(round_, datetime.now(UTC)):
         round_.closing_at = datetime.now(UTC)
         round_.narration_failed_at = None
@@ -458,6 +489,43 @@ async def force_close(
     if closing:
         record_round_closed(CloseReason.HOST)
     return saved
+
+
+async def revert_round(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID) -> tuple[GameTable, Round]:
+    """
+    방장이 바로 앞 라운드를 되돌린다(#288). 다시 연 라운드와 테이블을 돌려준다. 규칙은 app/rounds/reverting.py 에 있다.
+
+    방장이 아니면 NotHostError. 되돌릴 수 없으면 RoundConflictError(까닭은 reverting.blocker).
+    테이블을 잠그고 한다. 한 트랜잭션이다. 덮는 도중에 실패하면 아무것도 바뀌지 않는다.
+    """
+    table, _, current = await lock_current_round(session, host_id, table_id)
+    table_state.require_host(table, host_id)
+    previous = await repository.find_round(session, table_id, current.number - 1) if current.number > 1 else None
+    snapshot = await repository.find_snapshot(session, table_id)
+    opened = await event_repository.find_latest(session, table_id, EventType.ROUND_OPENED)
+    after = await event_repository.list_types_after(session, table_id, opened.sequence) if opened else []
+    conflict = reverting.blocker(current, previous, snapshot, after)
+    if conflict is not None or previous is None or snapshot is None or opened is None:
+        raise RoundConflictError(conflict or Conflict.NOTHING_TO_REVERT)
+
+    now = datetime.now(UTC)
+    previous.reverted_at = now
+    # 앞 라운드의 번호를 먼저 비운다(uq_table_rounds_number). 그다음 지금 라운드가 그 번호를 받는다
+    await session.flush()
+    deadline = opener.deadline_for(table, now)
+    reverting.reopen(current, previous, deadline)
+    table.revert_count += 1
+    await session.flush()
+    group = opened.action_group_id
+    await repository.replace_state(session, table_id, snapshot.state)
+    await memory_repository.delete_vectors_from(session, table_id, previous.number)
+    # 덮은 표들의 객체는 낡았다. 세션에서 모두 떼고 테이블을 다시 읽는다(덮은 시계의 시각을 이벤트에 싣는다).
+    # 떼지 않으면 세션이 사라진 행의 객체를 들고 있다가 저장할 때 건드릴 수 있다. 잠금은 트랜잭션에 남아 있다
+    session.expunge_all()
+    table = await table_repository.reload_table(session, table_id)
+    payload = reverting.reverted_payload(previous.number, group, deadline, calendar.describe(table))
+    recorder.record(session, table, EventType.ROUND_REVERTED, actor_id=host_id, payload=payload)
+    return await save(session, table)
 
 
 # --- 요청이 아닌 일로 닫기 시작하기. 마감이 지났거나, 안 낸 사람이 떠났다 ---
@@ -493,7 +561,7 @@ async def close_on_time(
         await session.commit()
         return False
     table, round_ = found
-    begin_closing(session, table, round_, dice, await load_scene(session, table, round_), CloseReason.TIMEOUT)
+    await start_closing(session, table, round_, dice, await load_scene(session, table, round_), CloseReason.TIMEOUT)
     hand_over(scheduler, await save(session, table))
     record_round_closed(CloseReason.TIMEOUT)
     return True
@@ -515,7 +583,9 @@ async def close_when_ready(
         await session.commit()
         return False
     table, round_ = found
-    begin_closing(session, table, round_, dice, await load_scene(session, table, round_), CloseReason.ALL_DECLARED)
+    await start_closing(
+        session, table, round_, dice, await load_scene(session, table, round_), CloseReason.ALL_DECLARED
+    )
     hand_over(scheduler, await save(session, table))
     record_round_closed(CloseReason.ALL_DECLARED)
     return True

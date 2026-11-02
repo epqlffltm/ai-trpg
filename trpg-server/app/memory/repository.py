@@ -4,7 +4,7 @@
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,8 +13,12 @@ from app.rounds.models import Round
 
 
 async def list_rounds_until(session: AsyncSession, table_id: uuid.UUID, last: int | None = None) -> list[Round]:
-    """테이블의 라운드들. 번호 순이다. last 를 주면 그 번호까지만이다(선언도 함께 읽힌다)."""
-    query = select(Round).where(Round.table_id == table_id).order_by(Round.number)
+    """
+    테이블의 라운드들. 번호 순이다. last 를 주면 그 번호까지만이다(선언도 함께 읽힌다).
+
+    되돌린 라운드(#288)는 빼고 읽는다. 없었던 일이다.
+    """
+    query = select(Round).where(Round.table_id == table_id, Round.reverted_at.is_(None)).order_by(Round.number)
     if last is not None:
         query = query.where(Round.number <= last)
     return list(await session.scalars(query))
@@ -39,6 +43,17 @@ async def add_vectors(session: AsyncSession, table_id: uuid.UUID, model: str, ve
         for number, vector in vectors.items()
     ]
     await session.execute(insert(RoundMemory).values(rows).on_conflict_do_nothing())
+
+
+async def delete_vectors_from(session: AsyncSession, table_id: uuid.UUID, number: int) -> None:
+    """
+    이 테이블의 number 번 라운드부터의 벡터를 모두 지운다(#288). 모든 모델의 것이다.
+
+    라운드 N 의 기억은 N 의 선언과 N+1 의 장면이다. 되돌린 라운드 N 의 기억은 없었던 일이라 지우고,
+    다시 닫은 뒤에 다음 색인이 새로 만든다. 그 앞(N-1)의 기억은 N 의 장면이 그대로라 남는다.
+    """
+    query = delete(RoundMemory).where(RoundMemory.table_id == table_id, RoundMemory.round_number >= number)
+    await session.execute(query)
 
 
 async def count_vectors(session: AsyncSession, table_id: uuid.UUID, model: str) -> int:
