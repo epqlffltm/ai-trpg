@@ -14,6 +14,7 @@ import { BOARD_KEY, boardsQuery, postQuery } from './boardQueries';
 import { describeBoardWriteProblem } from './boardWriteProblem';
 import { PostForm } from './PostForm';
 import { useBoardMe } from './useBoardMe';
+import { putQueryData } from '../../queryClient';
 
 export function PostEditPage() {
   const { postId = '' } = useParams();
@@ -62,7 +63,7 @@ function useSavePost(postId: string, postPath: string) {
   const mutation = useMutation({
     mutationFn: (patch: PostUpdate) => updatePost(postId, patch),
     onSuccess: async (saved: Post) => {
-      queryClient.setQueryData(postQuery(postId).queryKey, saved);
+      await putQueryData(queryClient, postQuery(postId).queryKey, saved);
       await queryClient.invalidateQueries({ queryKey: [...BOARD_KEY, 'posts', saved.board] });
       await queryClient.invalidateQueries({ queryKey: [...BOARD_KEY, 'search'] });
       void navigate(postPath);

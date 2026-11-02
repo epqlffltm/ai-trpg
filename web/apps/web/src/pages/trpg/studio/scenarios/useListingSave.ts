@@ -8,6 +8,7 @@ import type { ListingDetail, ListingUpdate } from '../../../../api/types';
 import { useSending } from '../useSending';
 import { describeListingProblem } from './listingProblem';
 import { listingKey } from './scenarioQueries';
+import { putQueryData } from '../../../../queryClient';
 
 export function useListingSave(scenarioId: string) {
   const queryClient = useQueryClient();
@@ -19,7 +20,7 @@ export function useListingSave(scenarioId: string) {
     setSaved(false);
     const listing = await sending.send(() => updateListing(scenarioId, body), describeListingProblem);
     if (!listing) return null;
-    queryClient.setQueryData(listingKey(scenarioId), listing);
+    await putQueryData(queryClient, listingKey(scenarioId), listing);
     setSaved(true);
     return listing;
   }

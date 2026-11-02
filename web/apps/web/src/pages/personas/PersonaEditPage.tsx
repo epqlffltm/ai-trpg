@@ -12,6 +12,7 @@ import { PersonaForm } from './PersonaForm';
 import { draftOf, personaBody, type PersonaDraft } from './personaDraft';
 import { describePersonaProblem } from './personaProblem';
 import { personaQuery, personasKey } from './personaQueries';
+import { putQueryData } from '../../queryClient';
 
 export function PersonaEditPage() {
   const { personaId = '' } = useParams();
@@ -33,8 +34,8 @@ function EditForm({ persona }: { persona: Persona }) {
   const queryClient = useQueryClient();
   const saving = useMutation({
     mutationFn: (draft: PersonaDraft) => updatePersona(persona.id, personaBody(draft)),
-    onSuccess: (saved) => {
-      queryClient.setQueryData([...personasKey(), saved.id], saved);
+    onSuccess: async (saved) => {
+      await putQueryData(queryClient, [...personasKey(), saved.id], saved);
       void queryClient.invalidateQueries({ queryKey: personasKey(), exact: true });
     },
   });

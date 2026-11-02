@@ -27,6 +27,7 @@ import { describeChangeProblem } from './turnProblem';
 import { TurnNotice } from './TurnNotice';
 import type { TurnOpener, useConversationTurn } from './useConversationTurn';
 import { WorldToolbar } from './WorldToolbar';
+import { putQueryData } from '../../../queryClient';
 
 type Props = { detail: ConversationDetail; turns: ReturnType<typeof useConversationTurn> };
 
@@ -109,7 +110,7 @@ function useBranch(conversationId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (messageId: string) => chooseBranch(conversationId, messageId),
-    onSuccess: (detail) => queryClient.setQueryData(conversationKey(conversationId), detail),
+    onSuccess: (detail) => putQueryData(queryClient, conversationKey(conversationId), detail),
   });
 }
 
@@ -119,7 +120,7 @@ function useAssistantEdit(conversationId: string) {
   return useMutation({
     mutationFn: ({ messageId, content }: { messageId: string; content: string }) => editAssistantMessage(messageId, content),
     onSuccess: (saved) =>
-      queryClient.setQueryData(conversationKey(conversationId), (detail: ConversationDetail | undefined) =>
+      putQueryData(queryClient, conversationKey(conversationId), (detail: ConversationDetail | undefined) =>
         detail ? { ...detail, messages: detail.messages.map((message) => (message.id === saved.id ? { ...message, ...saved } : message)) } : detail,
       ),
   });

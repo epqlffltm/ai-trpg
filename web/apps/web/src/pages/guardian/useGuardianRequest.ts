@@ -9,6 +9,7 @@ import { requestGuardianConsent } from '../../api/guardian';
 import type { Me } from '../../api/types';
 import { meQuery } from '../../auth/queries';
 import { describeRequestProblem, type RequestProblem } from './guardianProblem';
+import { putQueryData } from '../../queryClient';
 
 type State = { busy: boolean; problem: RequestProblem | null; sentTo: string | null };
 
@@ -17,7 +18,7 @@ export function useGuardianRequest() {
   const [state, setState] = useState<State>({ busy: false, problem: null, sentTo: null });
 
   function settle(email: string) {
-    queryClient.setQueryData(meQuery().queryKey, (me: Me | undefined) => (me ? { ...me, guardian_consent: 'requested' as const } : me));
+    void putQueryData(queryClient, meQuery().queryKey, (me: Me | undefined) => (me ? { ...me, guardian_consent: 'requested' as const } : me));
     setState({ busy: false, problem: null, sentTo: email });
   }
 

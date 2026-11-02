@@ -8,6 +8,7 @@ import { ApiError } from '../../api/errors';
 import { setMute } from '../../api/notifications';
 import { mutesQuery } from './notificationQueries';
 import { notificationProblemText } from './notificationProblem';
+import { putQueryData } from '../../queryClient';
 
 type State = { busyKind: string | null; problem: string | null };
 
@@ -19,7 +20,7 @@ export function useMuteToggle() {
     if (state.busyKind) return;
     setState({ busyKind: kind, problem: null });
     try {
-      queryClient.setQueryData(mutesQuery().queryKey, await setMute(kind, muted));
+      await putQueryData(queryClient, mutesQuery().queryKey, await setMute(kind, muted));
       setState({ busyKind: null, problem: null });
     } catch (error) {
       setState({ busyKind: null, problem: notificationProblemText(error) });

@@ -39,6 +39,7 @@ import { sceneOf, sceneSegments, storySuggestions, visibleStoryMessages } from '
 import { isEnded, placeName } from './storyWorld';
 import { useStartStorySession } from './useStartStorySession';
 import type { StoryTurnOpener, useStoryTurn } from './useStoryTurn';
+import { putQueryData } from '../../queryClient';
 
 type Props = { session: StorySession; turns: ReturnType<typeof useStoryTurn> };
 
@@ -159,7 +160,7 @@ function useBranch(sessionId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (messageId: string) => chooseStoryBranch(sessionId, messageId),
-    onSuccess: (session) => queryClient.setQueryData(storySessionKey(sessionId), session),
+    onSuccess: (session) => putQueryData(queryClient, storySessionKey(sessionId), session),
   });
 }
 
@@ -170,7 +171,7 @@ function useAnswerEdit(sessionId: string) {
   return useMutation({
     mutationFn: ({ messageId, segments }: { messageId: string; segments: string[] }) => editStoryAnswer(messageId, segments),
     onSuccess: (saved) =>
-      queryClient.setQueryData(storySessionKey(sessionId), (session: StorySession | undefined) =>
+      putQueryData(queryClient, storySessionKey(sessionId), (session: StorySession | undefined) =>
         session ? { ...session, messages: session.messages.map((message) => (message.id === saved.id ? { ...message, ...saved } : message)) } : session,
       ),
     onError: () => queryClient.invalidateQueries({ queryKey: storySessionKey(sessionId) }),

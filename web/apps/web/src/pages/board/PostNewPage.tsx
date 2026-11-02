@@ -12,6 +12,7 @@ import { BOARD_KEY, boardsQuery, postQuery } from './boardQueries';
 import { describeBoardWriteProblem } from './boardWriteProblem';
 import { PostForm } from './PostForm';
 import { useBoardMe } from './useBoardMe';
+import { putQueryData } from '../../queryClient';
 
 export function PostNewPage() {
   const { slug = '' } = useParams();
@@ -24,7 +25,7 @@ export function PostNewPage() {
   const creating = useMutation({
     mutationFn: (draft: PostDraft) => createPost(slug, postBody(draft)),
     onSuccess: async (post) => {
-      queryClient.setQueryData(postQuery(post.id).queryKey, post);
+      await putQueryData(queryClient, postQuery(post.id).queryKey, post);
       await queryClient.invalidateQueries({ queryKey: [...BOARD_KEY, 'posts', slug] });
       void navigate(`/board/posts/${encodeURIComponent(post.id)}`);
     },
