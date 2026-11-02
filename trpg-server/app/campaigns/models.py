@@ -7,6 +7,7 @@
   - campaign_runs: 플레이 하나. 캠페인의 판 하나에 고정한다. 방장, 지금 편(0 이 1편), 상태.
   - campaign_tables: 플레이의 편마다의 테이블. 편 하나에 테이블 하나다. 테이블 쪽(game_tables)에는 칸을 더하지 않는다.
   - campaign_carries: 편이 끝날 때 앉은 사람마다 적은 넘길 것(app/campaigns/carrying.py). 한 번 적으면 고치지 않는다.
+  - campaign_seats: 다음 편의 테이블에서 넘긴 캐릭터로 앉은 자리(app/campaigns/seating.py).
   - campaign_quest_results: 편이 끝날 때 그 편에서 이루거나 실패한 퀘스트(사건 항목).
     다음 편의 조건 campaign_quest 가 읽는다.
 
@@ -105,6 +106,20 @@ class CampaignCarry(Base):
     # 넘길 것. 한 번 쓰고 고치지 않는 기록이라 문서 하나로 둔다
     carry: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CampaignSeat(Base):
+    """
+    편의 테이블에서 넘긴 캐릭터로 앉은 자리. 시작할 때 이 넘길 것으로 시트를 준다(app/campaigns/seating.py).
+
+    이 자리의 사람은 캐릭터를 바꾸지 못한다. 넘긴 것이 지워지면(탈퇴) 함께 지워진다.
+    """
+
+    __tablename__ = 'campaign_seats'
+
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='RESTRICT'), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    carry_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('campaign_carries.id', ondelete='CASCADE'), index=True)
 
 
 class CampaignQuestResult(Base):

@@ -4,6 +4,7 @@
 탈퇴한 사람을 게임에서 정리한다(docs/architecture/withdrawal.md 의 "마칠 때: 다른 서버", 2026-10-21 유저 결정).
 
   - 보관함(trpg 페르소나)을 지운다. 가져간 테이블은 사본으로 돈다
+  - 캠페인에서 넘길 것(#481 B)을 지운다. 보관함과 같은 그 사람의 캐릭터다. 이미 받은 시트는 테이블에 남는다
   - 시나리오의 공개를 모두 내린다. 자산(시나리오, 세계관, 룰북, 로어북, 도감)과 판은 지우지 않고 그대로 둔다.
     진행 중인 테이블은 판의 사본으로 계속 돈다. 공개를 내렸으니 로비에서 새로 고를 수는 없다
   - 아직 보내지 않은 그 사람의 알림을 지운다
@@ -21,6 +22,7 @@ import uuid
 from server_core.notifications import repository as notifications
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.campaigns import repository as campaign_runs
 from app.listings import repository as listings
 from app.notifications.models import OutgoingNotification
 from app.personas import repository as personas
@@ -29,8 +31,9 @@ from app.tables import service as seating
 
 
 async def erase_belongings(session: AsyncSession, user_id: uuid.UUID) -> None:
-    """보관함을 지우고, 공개를 내리고, 보내지 않은 알림을 지운다. 한 번에 저장한다."""
+    """보관함과 넘길 것을 지우고, 공개를 내리고, 보내지 않은 알림을 지운다. 한 번에 저장한다."""
     await personas.delete_all_owned(session, user_id)
+    await campaign_runs.delete_carries_of(session, user_id)
     await listings.unpublish_all_owned(session, user_id)
     await notifications.drop_for_user(session, OutgoingNotification, user_id)
     await session.commit()

@@ -366,6 +366,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/campaign-runs/{run_id}/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Join Run
+         * @description 그 플레이의 사람이 지금 편의 테이블에 앉는다. 넘긴 캐릭터가 있으면 그것으로 앉는다. 앉는 규칙은 테이블과 같다.
+         */
+        post: operations["join_run_api_v1_game_campaign_runs__run_id__join_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/campaign-runs/{run_id}/next": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Next
+         * @description 방장이 다음 편의 테이블을 연다. 방장이 넘긴 캐릭터가 있으면 그것으로 앉는다.
+         *
+         *     앞 편이 끝나지 않았으면 409 episode_not_ended, 마지막 편까지 끝났으면 409 run_ended, 방장이 아니면 403.
+         */
+        post: operations["open_next_api_v1_game_campaign_runs__run_id__next_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/campaigns": {
         parameters: {
             query?: never;
@@ -12262,6 +12304,72 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    join_run_api_v1_game_campaign_runs__run_id__join_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    open_next_api_v1_game_campaign_runs__run_id__next_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunTable"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -22275,6 +22275,116 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/game/campaign-runs/{run_id}/join": {
+      "post": {
+        "description": "그 플레이의 사람이 지금 편의 테이블에 앉는다. 넘긴 캐릭터가 있으면 그것으로 앉는다. 앉는 규칙은 테이블과 같다.",
+        "operationId": "join_run_api_v1_game_campaign_runs__run_id__join_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Join Run",
+        "tags": [
+          "campaign-runs"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/campaign-runs/{run_id}/next": {
+      "post": {
+        "description": "방장이 다음 편의 테이블을 연다. 방장이 넘긴 캐릭터가 있으면 그것으로 앉는다.\n\n앞 편이 끝나지 않았으면 409 episode_not_ended, 마지막 편까지 끝났으면 409 run_ended, 방장이 아니면 403.",
+        "operationId": "open_next_api_v1_game_campaign_runs__run_id__next_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunTable"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Open Next",
+        "tags": [
+          "campaign-runs"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/game/campaigns": {
       "get": {
         "description": "자기 캠페인의 목록을 최근에 만든 것부터.",

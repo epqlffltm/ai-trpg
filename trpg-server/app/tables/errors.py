@@ -85,6 +85,12 @@ class Conflict(enum.StrEnum):
     NARRATION_MODEL_LOCKED = 'narration_model_locked'
     # 판의 작가 글(진행 지침, 세계관, GM 메모)이 서술의 입력 예산을 넘어 시작할 수 없다(app/rounds/budget.py)
     STORY_TOO_LONG = 'story_too_long'
+    # 캠페인(#481 B): 지금 편의 테이블이 아직 끝나지 않아 다음 편을 열 수 없다
+    EPISODE_NOT_ENDED = 'episode_not_ended'
+    # 캠페인: 마지막 편까지 끝난 플레이다
+    RUN_ENDED = 'run_ended'
+    # 캠페인: 넘긴 캐릭터로 앉은 자리라 캐릭터를 바꾸지 못한다
+    CHARACTER_CARRIED = 'character_carried'
 
 
 class TableConflictError(Exception):

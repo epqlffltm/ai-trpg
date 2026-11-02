@@ -6,13 +6,15 @@
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.campaigns.models import CampaignCarry, CampaignQuestResult, CampaignRun, CampaignTable
+from app.campaigns.models import CampaignCarry, CampaignQuestResult, CampaignRun, CampaignSeat, CampaignTable
 
 
-def add(session: AsyncSession, row: CampaignRun | CampaignTable | CampaignCarry | CampaignQuestResult) -> None:
+def add(
+    session: AsyncSession, row: CampaignRun | CampaignTable | CampaignCarry | CampaignQuestResult | CampaignSeat
+) -> None:
     """새 행을 세션에 올린다."""
     session.add(row)
 
@@ -30,6 +32,12 @@ async def lock_run(session: AsyncSession, run_id: uuid.UUID) -> CampaignRun | No
 async def find_link(session: AsyncSession, table_id: uuid.UUID) -> CampaignTable | None:
     """그 테이블이 어느 플레이의 몇 편인가. 캠페인의 테이블이 아니면 None."""
     return await session.get(CampaignTable, table_id)
+
+
+async def table_at(session: AsyncSession, run_id: uuid.UUID, position: int) -> CampaignTable | None:
+    """플레이의 그 편의 테이블. 아직 열지 않았으면 None."""
+    query = select(CampaignTable).where(CampaignTable.run_id == run_id, CampaignTable.position == position)
+    return await session.scalar(query)
 
 
 async def run_tables(session: AsyncSession, run_id: uuid.UUID) -> list[CampaignTable]:
@@ -59,3 +67,8 @@ async def quest_results(session: AsyncSession, run_id: uuid.UUID) -> list[Campai
     """플레이의 편마다의 퀘스트 결과. 편의 차례다."""
     query = select(CampaignQuestResult).where(CampaignQuestResult.run_id == run_id)
     return list(await session.scalars(query.order_by(CampaignQuestResult.position, CampaignQuestResult.entry_id)))
+
+
+async def delete_carries_of(session: AsyncSession, user_id: uuid.UUID) -> None:
+    """그 사람의 넘길 것을 모두 지운다(탈퇴). 그것으로 앉은 자리의 표시(campaign_seats)도 함께 지워진다."""
+    await session.execute(delete(CampaignCarry).where(CampaignCarry.user_id == user_id))
