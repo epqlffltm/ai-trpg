@@ -520,5 +520,10 @@ SAMPLES = {
         'attitude': 'hostile',
         'reason': 'caught_stealing',
     },
+    'carried_items_left': {
+        'user_id': '22222222-2222-4333-8444-555555555555',
+        'character_name': '기사',
+        'items': [{'entry_id': '33333333-3333-4444-8555-666666666666', 'name': '지도', 'count': 1}],
+    },
     'table_ended': {},
 }

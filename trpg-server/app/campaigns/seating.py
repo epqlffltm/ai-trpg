@@ -11,6 +11,7 @@
   - 시작할 때: 넘긴 능력치, 최대 HP(지금 HP 는 가득), 경험치, 놓지 않은 점수, 기술, 저항, 돈을 그대로 준다.
     소지품은 이 편의 판에 같은 물건 항목이 있는 것만 옮긴다. 착용은 풀어서 옮긴다(입지 않은 채로 시작한다).
     판의 시작 소지품과 시작 돈은 받지 않는다. 넘긴 것이 그 캐릭터의 것이다.
+    옮기지 못한 물건은 사람마다 이벤트(carried_items_left)로 알린다(left_behind). 적는 것은 테이블의 시작이 한다.
 
 같은 룰북이라 숫자를 다시 계산하지 않는다(게시할 때 막는다). 레벨은 경험치와 레벨표로 정해진다.
 """
@@ -84,6 +85,35 @@ def kept_items(carried: list[CarryItem], snapshot: Snapshot) -> list[ItemStackSn
     """넘긴 소지품 가운데 이 편의 판에 같은 물건 항목이 있는 것."""
     known = {entry.id for entry in item_entries(snapshot)}
     return [ItemStackSnapshot(entry_id=item.entry_id, count=item.count) for item in carried if item.entry_id in known]
+
+
+def left_items(carried: list[CarryItem], snapshot: Snapshot) -> list[CarryItem]:
+    """넘긴 소지품 가운데 이 편의 판에 같은 물건 항목이 없어 옮기지 못하는 것."""
+    known = {entry.id for entry in item_entries(snapshot)}
+    return [item for item in carried if item.entry_id not in known]
+
+
+def left_behind(table: GameTable, snapshot: Snapshot, carried: dict[uuid.UUID, Carry]) -> list[dict]:
+    """
+    넘긴 캐릭터로 앉은 사람마다 옮기지 못한 물건. 이벤트 carried_items_left 의 내용이다. 앉은 차례다.
+
+    옮기지 못한 물건이 없는 사람은 빠진다. 물건의 이름은 앞 편의 판의 것이다(이 판에는 없다).
+    """
+    payloads = []
+    for member in table.members:
+        carry = carried.get(member.user_id)
+        left = left_items(carry.items, snapshot) if carry else []
+        if carry and left:
+            payloads.append(
+                {
+                    'user_id': str(member.user_id),
+                    'character_name': carry.character_name,
+                    'items': [
+                        {'entry_id': str(item.entry_id), 'name': item.name, 'count': item.count} for item in left
+                    ],
+                }
+            )
+    return payloads
 
 
 def give_carried(table: GameTable, snapshot: Snapshot, member: TableMember, carry: Carry) -> None:

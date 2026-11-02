@@ -1318,7 +1318,7 @@
         "type": "object"
       },
       "CarryItem": {
-        "description": "넘기는 소지품 한 가지. 앞 편의 판의 물건 항목과 개수다.",
+        "description": "넘기는 소지품 한 가지. 앞 편의 판의 물건 항목과 개수, 그 판의 물건 이름(이 칸이 생기기 전의 것은 비어 있다).",
         "properties": {
           "count": {
             "minimum": 1.0,
@@ -1328,6 +1328,11 @@
           "entry_id": {
             "format": "uuid",
             "title": "Entry Id",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "title": "Name",
             "type": "string"
           }
         },
@@ -4611,7 +4616,8 @@
           "narration_model_unavailable",
           "member_dropped",
           "narration_credits_released",
-          "table_ended"
+          "table_ended",
+          "carried_items_left"
         ],
         "title": "EventType",
         "type": "string"

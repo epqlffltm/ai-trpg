@@ -485,6 +485,13 @@ def npc_attitude_changed(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'태도: {text_of(payload.get("name"))} · {before} → {after}')]
 
 
+def carried_items_left(payload: dict, labels: Labels) -> list[Block]:
+    """캠페인의 앞 편에서 넘긴 물건 가운데 이 편에 옮기지 못한 것."""
+    items = payload.get('items') or []
+    names = ', '.join(item_count(item) for item in items if isinstance(item, dict))
+    return [Note(f'{who(payload)}: 앞 편의 {names} 옮기지 못함')]
+
+
 def table_ended(payload: dict, labels: Labels) -> list[Block]:
     """테이블이 끝남."""
     return [Heading('끝')]
@@ -542,6 +549,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.CHARACTER_JOINED: character_joined,
     EventType.NAMING_RESOLVED: naming_resolved,
     EventType.NPC_ATTITUDE_CHANGED: npc_attitude_changed,
+    EventType.CARRIED_ITEMS_LEFT: carried_items_left,
     EventType.TABLE_ENDED: table_ended,
 }
 

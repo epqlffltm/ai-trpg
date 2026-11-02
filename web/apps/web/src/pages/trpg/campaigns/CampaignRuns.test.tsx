@@ -32,7 +32,7 @@ const CARRY: CampaignCarry = {
   skills: [],
   resistances: [],
   money: 40,
-  items: [{ entry_id: '00000000-0000-4000-8000-0000000000c1', count: 2 }],
+  items: [{ entry_id: '00000000-0000-4000-8000-0000000000c1', count: 2, name: '횃불' }],
 };
 
 function run(tables: [string | null, string | null], extra: Partial<CampaignRun> = {}): CampaignRun {

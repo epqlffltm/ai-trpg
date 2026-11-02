@@ -118,6 +118,13 @@ function raisedText(payload: Payload, ctx: EventContext, event: TableEvent): str
   return `${who(payload, ctx, event)}: 능력치 ${lines.join(', ') || '?'}`;
 }
 
+/** 캠페인의 앞 편에서 넘겼지만 이 편의 판에 없어 옮기지 못한 물건(#481 B). "기사: 앞 편의 지도 ×1 — 이 편에 없어 옮기지 못했습니다" */
+function leftText(payload: Payload, ctx: EventContext, event: TableEvent): string {
+  const items = Array.isArray(payload.items) ? (payload.items as Payload[]) : [];
+  const names = items.map((item) => `${text(item, 'name') || '물건'} ×${count(item, 'count') ?? '?'}`);
+  return `${who(payload, ctx, event)}: 앞 편의 ${names.join(', ') || '물건'} — 이 편에 없어 옮기지 못했습니다`;
+}
+
 /** 받은 경험치(#286 ②). "경험치: 들쥐 1 · 기사 +12, 약사 +12" */
 function experienceText(payload: Payload): string {
   const gains = Array.isArray(payload.gains) ? (payload.gains as Payload[]) : [];
@@ -355,6 +362,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   reroll_granted: (p, ctx) => `${member(p, ctx)}: 한 번 더 굴릴 수 있습니다.`,
   whisper_sent: (p, ctx, e) => `${who(p, ctx, e)} → ${text(p, 'recipient_character_name') ?? member(p, ctx, 'recipient_id')}: 쪽지`,
   table_started: () => '테이블을 시작했습니다.',
+  carried_items_left: (p, ctx, e) => leftText(p, ctx, e),
   table_ended: (p) => `테이블이 끝났습니다${text(p, 'by') === 'operator' ? '(운영자)' : ''}.`,
 
   // 방장의 설정

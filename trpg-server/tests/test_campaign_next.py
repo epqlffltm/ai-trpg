@@ -13,7 +13,7 @@
     바꾸지 못한다(409 character_carried).
     죽어 넘긴 것이 없는 사람은 판의 방식대로 새로 만든다. 플레이의 사람이 아니면 404, 이미 앉았으면 409.
   - 시작: 넘긴 캐릭터는 능력치, 최대 HP(지금 HP 는 가득), 경험치, 점수, 돈을 그대로,
-    소지품은 2편의 판에 있는 것만 받는다.
+    소지품은 2편의 판에 있는 것만 받는다. 옮기지 못한 것(지도)은 그 사람의 이벤트 carried_items_left 로 알린다.
   - 탈퇴: 넘길 것을 지운다.
 """
 
@@ -213,6 +213,23 @@ async def test_the_carried_character_starts_as_it_ended(
     assert [(item['entry_id'], item['count']) for item in sheet['items']] == [(str(torch), 2)]
     # 넘긴 것이 없던 도적은 보통처럼 판의 기본 시트를 받는다
     assert seat_of(started.json(), FRIEND)['sheet']['xp'] == 0
+
+
+async def test_the_items_left_behind_are_told(client: AsyncClient, me: dict, friend: dict, session: AsyncSession):
+    run, _ = await episode_one_done(client, me, friend, session)
+    await next_episode(client, me, run)
+    table = (await join(client, friend, run)).json()
+    await client.post(f'{TABLES_URL}/{table["id"]}/start', headers=me)
+
+    events = (await client.get(f'{TABLES_URL}/{table["id"]}/events', headers=friend)).json()['items']
+    started = next(event for event in events if event['type'] == 'table_started')
+    left = [event for event in events if event['type'] == 'carried_items_left']
+
+    # 넘긴 것이 횃불뿐인 도적에게는 없고, 기사는 1편에만 있는 지도를 옮기지 못했다. 이름은 1편의 판의 것이다
+    assert [event['payload']['character_name'] for event in left] == ['기사']
+    assert left[0]['payload']['user_id'] == str(ME)
+    assert [(item['name'], item['count']) for item in left[0]['payload']['items']] == [('지도', 1)]
+    assert (left[0]['actor_id'], left[0]['caused_by_sequence']) == (None, started['sequence'])
 
 
 async def test_the_run_ends_after_the_last_episode(client: AsyncClient, me: dict, friend: dict, session: AsyncSession):

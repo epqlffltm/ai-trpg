@@ -10,22 +10,25 @@
 레벨(경험치와 레벨표로 다시 정한다).
 
 같은 룰북이라 숫자를 그대로 적는다(게시할 때 막는다). 다음 편의 판에 없는 물건을 거르는 것은 옮길 때 한다.
+소지품에는 그 편의 판의 물건 이름도 적는다. 다음 편에서 옮기지 못한 물건을 알릴 때 쓴다(그 판에는 그 물건이 없다).
 """
 
 import uuid
 
 from pydantic import BaseModel, Field
 
+from app.assets.scenarios.snapshot import item_entries, read_snapshot
 from app.campaigns.models import QuestResult
 from app.tables.models import GameTable, QuestStatus, TableMember
 from app.tables.sheets import is_dead
 
 
 class CarryItem(BaseModel):
-    """넘기는 소지품 한 가지. 앞 편의 판의 물건 항목과 개수다."""
+    """넘기는 소지품 한 가지. 앞 편의 판의 물건 항목과 개수, 그 판의 물건 이름(이 칸이 생기기 전의 것은 비어 있다)."""
 
     entry_id: uuid.UUID
     count: int = Field(ge=1)
+    name: str = ''
 
 
 class Carry(BaseModel):
@@ -45,8 +48,13 @@ class Carry(BaseModel):
     items: list[CarryItem]
 
 
-def carry_of(member: TableMember) -> Carry | None:
-    """앉은 사람 하나의 넘길 것. 캐릭터의 시트가 없거나(시작 전) 죽었으면 None 이다."""
+def carry_of(member: TableMember, item_names: dict[uuid.UUID, str] | None = None) -> Carry | None:
+    """
+    앉은 사람 하나의 넘길 것. 캐릭터의 시트가 없거나(시작 전) 죽었으면 None 이다.
+
+    item_names 는 그 편의 판의 물건 항목마다의 이름이다. 없는 물건은 이름을 비운다.
+    """
+    names = item_names or {}
     sheet = member.sheet
     if sheet is None or is_dead(member):
         return None
@@ -61,13 +69,17 @@ def carry_of(member: TableMember) -> Carry | None:
         skills=list(sheet.skills),
         resistances=list(sheet.resistances),
         money=sheet.money,
-        items=[CarryItem(entry_id=item.entry_id, count=item.count) for item in sheet.items],
+        items=[
+            CarryItem(entry_id=item.entry_id, count=item.count, name=names.get(item.entry_id, ''))
+            for item in sheet.items
+        ],
     )
 
 
 def carries_of(table: GameTable) -> dict[uuid.UUID, Carry]:
     """앉은 사람마다의 넘길 것. 넘길 것이 없는 사람은 빠진다. 앉은 차례다."""
-    found = {member.user_id: carry_of(member) for member in table.members}
+    names = {entry.id: entry.name for entry in item_entries(read_snapshot(table.content))}
+    found = {member.user_id: carry_of(member, names) for member in table.members}
     return {user_id: carry for user_id, carry in found.items() if carry is not None}
 
 

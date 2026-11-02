@@ -35,7 +35,7 @@ const ALL: EventType[] = [
   'character_revived', 'round_closed', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
   'narration_model_not_for_sale', 'narration_model_retiring', 'narration_model_replaced', 'narration_model_unavailable',
   'member_dropped', 'narration_credits_released', 'table_ended', 'item_traded', 'money_paid',
-  'equipment_changed', 'door_changed', 'monsters_appeared',
+  'equipment_changed', 'door_changed', 'monsters_appeared', 'carried_items_left',
 ];
 
 const IN_ROUNDS: EventType[] = ['gm_narration', 'player_action', 'check_rolled'];
@@ -54,6 +54,16 @@ describe('eventLine', () => {
     const monster = { id: 'm1', name: '수로 쥐' };
     expect(line('monsters_appeared', { place, monster, count: 3, cause: 'arrive' })?.text).toBe('조우: 깊은 수로 · 수로 쥐 3마리가 나타났습니다');
     expect(line('monsters_appeared', { place, monster, count: 1, cause: 'rest' })?.text).toBe('조우: 깊은 수로 · 수로 쥐 1마리가 쉬는 중에 덮쳤습니다');
+  });
+
+  it('캠페인의 앞 편에서 옮기지 못한 물건은 누구의 무엇 몇 개인지 보인다(#481 B)', () => {
+    const items = [
+      { entry_id: 'i1', name: '지도', count: 1 },
+      { entry_id: 'i2', name: '', count: 2 },
+    ];
+    expect(line('carried_items_left', { user_id: 'u1', character_name: '기사', items })?.text).toBe(
+      '기사: 앞 편의 지도 ×1, 물건 ×2 — 이 편에 없어 옮기지 못했습니다',
+    );
   });
 
   it('다음 장으로 넘어간 것은 몇째 장과 이름이다(#481)', () => {
