@@ -28,6 +28,8 @@ export const GuardianRevokePage = lazyPage(() => import('../pages/guardian/Guard
 export const NotificationsPage = lazyPage(() => import('../pages/notifications/NotificationsPage'), 'NotificationsPage');
 export const BoardIndexPage = lazyPage(() => import('../pages/board/BoardIndexPage'), 'BoardIndexPage');
 export const BoardListPage = lazyPage(() => import('../pages/board/BoardListPage'), 'BoardListPage');
+// 작품 검색 결과(#984). 서비스마다 묶는다
+export const SearchPage = lazyPage(() => import('../pages/search/SearchPage'), 'SearchPage');
 export const BoardSearchPage = lazyPage(() => import('../pages/board/BoardSearchPage'), 'BoardSearchPage');
 export const PostPage = lazyPage(() => import('../pages/board/PostPage'), 'PostPage');
 export const PostNewPage = lazyPage(() => import('../pages/board/PostNewPage'), 'PostNewPage');

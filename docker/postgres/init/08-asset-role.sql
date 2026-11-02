@@ -17,3 +17,7 @@ CREATE SCHEMA asset AUTHORIZATION asset;
 
 -- 테스트용 스키마. 테스트가 개발용 데이터를 건드리지 않게 따로 둔다
 CREATE SCHEMA asset_test AUTHORIZATION asset;
+
+-- 글자 조각 색인(03-extensions.sql 의 pg_trgm)의 연산자 묶음을 쓴다. 공개 목록의 이름 검색(#984).
+-- 읽기(USAGE)만 준다. 색인을 만들 때 연산자 묶음을 스키마 이름으로 적어 부르므로 search_path 는 바꾸지 않는다
+GRANT USAGE ON SCHEMA extensions TO asset;

@@ -13,9 +13,11 @@ from collections.abc import Sequence
 from sqlalchemy import delete as delete_rows
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import ColumnElement
 
 from app.characters.models import Character, CharacterVersion, Visibility
 from app.ratings import Rating
+from app.search import LIKE_ESCAPE, SearchTerms, contains_pattern, name_of
 
 
 def add(session: AsyncSession, row: Character | CharacterVersion) -> None:
@@ -105,11 +107,18 @@ def latest_join():
     return (CharacterVersion.character_id == Character.id) & (CharacterVersion.number == Character.latest_version)
 
 
+def searched(terms: SearchTerms) -> ColumnElement[bool]:
+    """검색어의 조건(#984). 태그는 마지막 판에 그 태그가 붙은 것, 글은 마지막 판의 이름에 들어 있는 것이다."""
+    if terms.tag is not None:
+        return CharacterVersion.document['tags'].contains([terms.tag])
+    return name_of(CharacterVersion.document).ilike(contains_pattern(terms.text or ''), escape=LIKE_ESCAPE)
+
+
 async def list_public(
-    session: AsyncSession, ratings: Sequence[Rating], limit: int, offset: int
+    session: AsyncSession, ratings: Sequence[Rating], search: SearchTerms | None, limit: int, offset: int
 ) -> tuple[list[tuple[Character, CharacterVersion]], int]:
     """공개 목록의 한 쪽(최근에 게시한 것부터)과 전체 개수. 캐릭터마다 마지막 판과 함께다."""
-    condition = listed(ratings)
+    condition = listed(ratings) if search is None else listed(ratings) & searched(search)
     query = (
         select(Character, CharacterVersion)
         .join(CharacterVersion, latest_join())

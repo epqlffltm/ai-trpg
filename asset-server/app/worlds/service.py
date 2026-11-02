@@ -32,6 +32,7 @@ from app.content.html import Removed
 from app.images import service as images
 from app.lorebooks import repository as lorebooks
 from app.ratings import AdultContentRequiredError, allowed_ratings, require_rating
+from app.search import SearchTerms
 from app.worlds import repository
 from app.worlds.documents import CastCharacterDocument, build_document
 from app.worlds.models import World, WorldVersion
@@ -308,10 +309,13 @@ async def get_usable_latest(
 
 
 async def list_public(
-    session: AsyncSession, viewer: AccessClaims | None, limit: int, offset: int
+    session: AsyncSession, viewer: AccessClaims | None, search: SearchTerms | None, limit: int, offset: int
 ) -> tuple[list[tuple[World, WorldVersion]], int]:
-    """공개 목록의 한 쪽과 전체 개수. 보는 사람(로그인하지 않았으면 None)이 볼 수 있는 등급만이다."""
-    return await repository.list_public(session, allowed_ratings(viewer), limit, offset)
+    """
+    공개 목록의 한 쪽과 전체 개수. 보는 사람(로그인하지 않았으면 None)이 볼 수 있는 등급만이다.
+    검색어가 있으면 그것으로도 거른다.
+    """
+    return await repository.list_public(session, allowed_ratings(viewer), search, limit, offset)
 
 
 async def get_public(

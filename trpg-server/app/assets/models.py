@@ -30,6 +30,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     SmallInteger,
     String,
@@ -529,6 +530,14 @@ class Asset(Base):
         CheckConstraint(one_of('visibility', Visibility), name='visibility_allowed'),
         CheckConstraint(one_of('rating', Rating), name='rating_allowed'),
         CheckConstraint(at_most('description', DESCRIPTION_MAX_LENGTH), name='description_length'),
+        # 공개 목록의 제목 검색(ILIKE '%글%')을 빠르게 하는 글자 조각 색인(#984, app/listings/search.py).
+        # 연산자 묶음은 extensions 스키마의 pg_trgm 것이다(docker/postgres/init/03-extensions.sql)
+        Index(
+            'ix_assets_title_trgm',
+            'title',
+            postgresql_using='gin',
+            postgresql_ops={'title': 'extensions.gin_trgm_ops'},
+        ),
     )
 
     # API 주소에 드러나는 값이다. 순서대로 늘어나는 정수면 남의 자산이 몇 개인지, 있는지를 추측할 수 있다.

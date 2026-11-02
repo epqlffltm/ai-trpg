@@ -81,12 +81,42 @@
   color: var(--ui-text);
 }
 
-/* 좁으면 메뉴를 둘째 줄 전체로 내리고, 넘치면 옆으로 민다 */
+/* 작품 검색칸(#984). 메뉴 옆에 두고 남는 폭을 조금 나눠 갖는다 */
+.app-header__search {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 1 16em;
+  min-width: 10em;
+}
+
+.app-header__search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+}
+
+.app-header__search .ui-button {
+  white-space: nowrap;
+}
+
+/* 좁으면 메뉴를 둘째 줄 전체로 내리고, 넘치면 옆으로 민다. 검색칸은 그 아래 줄 전체다 */
 @media (max-width: 640px) {
   .app-header__nav {
     order: 3;
     width: 100%;
     overflow-x: auto;
+  }
+
+  .app-header__search {
+    order: 4;
+    flex-basis: 100%;
   }
 }
 

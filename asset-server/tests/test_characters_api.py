@@ -28,6 +28,7 @@ from app.characters.documents import DOCUMENT_FORMAT
 from app.characters.models import CHARACTER_MAX_TAGS, Character, CharacterVersion
 from app.content.html import INTRO_MAX_BYTES
 from app.main import API_PREFIX, create_app
+from app.search import SEARCH_MAX_LENGTH
 from tests.conftest import make_client, make_test_settings
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -387,6 +388,64 @@ async def test_a_wrong_token_on_the_listing_is_refused(client: AsyncClient):
     response = await client.get(LISTINGS_URL, headers={'Authorization': 'Bearer not-a-token'})
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+async def searched_names(client: AsyncClient, q: str, headers: dict | None = None) -> list[str]:
+    response = await client.get(LISTINGS_URL, params={'q': q}, headers=headers or {})
+    assert response.status_code == status.HTTP_200_OK, response.text
+    assert response.json()['total'] == len(response.json()['items'])
+    return [item['name'] for item in response.json()['items']]
+
+
+async def test_the_listing_searches_the_name(client: AsyncClient, operator: dict):
+    await make_public(client, operator, name='은하 기사')
+    await make_public(client, operator, name='Neon 소녀')
+    await make_public(client, operator, name='검객')
+
+    # 이름에 들어 있으면 나온다. 영문은 대소문자를 가리지 않고, 앞뒤 공백은 지운다
+    assert await searched_names(client, ' 은하 ') == ['은하 기사']
+    assert await searched_names(client, 'NEON') == ['Neon 소녀']
+    assert await searched_names(client, '없는 이름') == []
+
+
+async def test_the_listing_searches_the_published_name_not_the_draft(client: AsyncClient, operator: dict):
+    character = await make_public(client, operator, name='은하 기사')
+    await client.patch(f'{CHARACTERS_URL}/{character["id"]}', json={'name': '고친 이름'}, headers=operator)
+
+    assert await searched_names(client, '은하') == ['은하 기사']
+    assert await searched_names(client, '고친') == []
+
+
+async def test_a_hash_searches_one_tag(client: AsyncClient, operator: dict):
+    await make_public(client, operator, name='학원의 기사', tags=['판타지'])
+    await make_public(client, operator, name='학원 반장', tags=['학원'])
+
+    # 태그는 그 태그가 붙은 것만이다. 이름에 같은 말이 있어도 나오지 않는다
+    assert await searched_names(client, '#학원') == ['학원 반장']
+    assert await searched_names(client, '# 판타지') == ['학원의 기사']
+
+
+async def test_like_wildcards_are_searched_as_letters(client: AsyncClient, operator: dict):
+    await make_public(client, operator, name='100% 기사')
+    await make_public(client, operator, name='기사')
+
+    assert await searched_names(client, '%') == ['100% 기사']
+    assert await searched_names(client, '_') == []
+
+
+async def test_the_search_still_hides_adult_characters(client: AsyncClient, operator: dict, player: dict, adult: dict):
+    await make_public(client, operator, name='밤의 기사', rating='adult')
+
+    assert await searched_names(client, '기사') == []
+    assert await searched_names(client, '기사', player) == []
+    assert await searched_names(client, '기사', adult) == ['밤의 기사']
+
+
+@pytest.mark.parametrize('q', ['', '   ', '#', '# ', '가' * (SEARCH_MAX_LENGTH + 1)])
+async def test_the_listing_rejects_a_bad_search(client: AsyncClient, q: str):
+    response = await client.get(LISTINGS_URL, params={'q': q})
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 async def test_the_listing_pages(client: AsyncClient, operator: dict):

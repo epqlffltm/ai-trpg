@@ -12,6 +12,7 @@ from server_core.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.search import SEARCH_MAX_LENGTH, SEARCH_PATTERN, SearchTerms, parse_search
 
 # 요청 하나가 쓰는 DB 세션
 Session = Annotated[AsyncSession, Depends(get_session)]
@@ -40,3 +41,18 @@ class PageParams:
 
 # 목록 API 가 인자의 형식으로 쓴다
 Paging = Annotated[PageParams, Depends()]
+
+
+def get_search(
+    q: Annotated[str | None, Query(max_length=SEARCH_MAX_LENGTH, pattern=SEARCH_PATTERN)] = None,
+) -> SearchTerms | None:
+    """
+    공개 목록의 검색어(#984). 주소의 ?q=.. 에서 읽는다. 비워 두면 거르지 않는다(None).
+
+    "#"로 시작하면 태그, 아니면 이름에서 찾는다(app/search.py). 공백뿐이거나 "#" 하나뿐이면 422 다.
+    """
+    return parse_search(q) if q is not None else None
+
+
+# 공개 목록 API 가 인자의 형식으로 쓴다
+Search = Annotated[SearchTerms | None, Depends(get_search)]

@@ -557,7 +557,9 @@ export interface paths {
         };
         /**
          * List Listings
-         * @description 공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르, 태그, 함께 할 인원으로 거를 수 있다.
+         * @description 공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르, 태그, 함께 할 인원, 검색어(q)로 거를 수 있다.
+         *
+         *     검색어가 "#"로 시작하면 그 태그가 붙은 것, 아니면 제목이나 한 줄 소개에 그 글이 들어 있는 것이다(#984).
          *
          *     로그인하지 않아도 읽는다(#530). 그때는 전체 이용가만 나온다. 토큰을 보냈는데 틀렸으면 401 이다.
          */
@@ -12870,6 +12872,7 @@ export interface operations {
                 genre?: components["schemas"]["Genre"] | null;
                 tag?: string | null;
                 players?: number | null;
+                q?: string | null;
             };
             header?: never;
             path?: never;
