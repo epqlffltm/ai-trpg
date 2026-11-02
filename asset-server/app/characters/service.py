@@ -44,6 +44,7 @@ from app.content.html import Removed
 from app.images import service as images
 from app.lorebooks import repository as lorebooks
 from app.ratings import AdultContentRequiredError, allowed_ratings, require_rating
+from app.search import SearchTerms
 
 
 class CharacterNotFoundError(Exception):
@@ -252,10 +253,10 @@ async def get_version(
 
 
 async def list_public(
-    session: AsyncSession, viewer: AccessClaims | None, limit: int, offset: int
+    session: AsyncSession, viewer: AccessClaims | None, search: SearchTerms | None, limit: int, offset: int
 ) -> tuple[list[tuple[Character, CharacterVersion]], int]:
-    """공개 목록의 한 쪽과 전체 개수. 보는 사람이 볼 수 있는 등급만이다."""
-    return await repository.list_public(session, allowed_ratings(viewer), limit, offset)
+    """공개 목록의 한 쪽과 전체 개수. 보는 사람이 볼 수 있는 등급만이다. 검색어가 있으면 그것으로도 거른다."""
+    return await repository.list_public(session, allowed_ratings(viewer), search, limit, offset)
 
 
 async def get_public(

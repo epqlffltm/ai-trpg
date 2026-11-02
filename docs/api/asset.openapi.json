@@ -7414,7 +7414,7 @@
     },
     "/api/v1/asset/listings/characters": {
       "get": {
-        "description": "공개 캐릭터의 목록. 최근에 게시한 것부터다.",
+        "description": "공개 캐릭터의 목록. 최근에 게시한 것부터다.\n\n검색어(q)가 \"#\"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).",
         "operationId": "list_public_api_v1_asset_listings_characters_get",
         "parameters": [
           {
@@ -7438,6 +7438,24 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 50,
+                  "pattern": "^\\s*(?:#\\s*)?[^\\s#]",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
             }
           }
         ],
@@ -7587,7 +7605,7 @@
     },
     "/api/v1/asset/listings/worlds": {
       "get": {
-        "description": "공개 세계관의 목록. 최근에 게시한 것부터다.",
+        "description": "공개 세계관의 목록. 최근에 게시한 것부터다.\n\n검색어(q)가 \"#\"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).",
         "operationId": "list_public_api_v1_asset_listings_worlds_get",
         "parameters": [
           {
@@ -7611,6 +7629,24 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 50,
+                  "pattern": "^\\s*(?:#\\s*)?[^\\s#]",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
             }
           }
         ],

@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.models import Asset, AssetType, Scenario, ScenarioVersion
 from app.engine.templates import SRD5
 from app.listings.models import LISTING_MAX_TAGS, TAG_MAX_LENGTH, TAGLINE_MAX_LENGTH, Listing
+from app.listings.search import SEARCH_MAX_LENGTH
 from app.main import API_PREFIX
 from tests.narration_model import TEST_MODEL, with_model
 from tests.sheets import SHEET
@@ -560,8 +561,86 @@ async def test_filters_by_genre_and_tag(client: AsyncClient, my_headers: dict[st
     assert await ids(tag='없는태그') == set()
 
 
+async def test_searches_the_title_and_the_tagline(client: AsyncClient, my_headers: dict[str, str]):
+    chase = await make_public(client, my_headers, title='은하 추격전', tagline='바이크로 달린다')
+    ghost = await make_public(client, my_headers, title='폐가의 밤', tagline='은하수가 보이는 폐가')
+    await make_public(client, my_headers, title='검객', tagline='복수의 칼')
+
+    async def ids(q: str) -> set[str]:
+        response = await client.get(LISTINGS_URL, params={'q': q}, headers=my_headers)
+        assert response.status_code == status.HTTP_200_OK, response.text
+        assert response.json()['total'] == len(response.json()['items'])
+        return {item['scenario_id'] for item in response.json()['items']}
+
+    # 제목이나 한 줄 소개에 들어 있으면 나온다. 앞뒤 공백은 지운다
+    assert await ids('은하') == {chase['id'], ghost['id']}
+    assert await ids('  바이크 ') == {chase['id']}
+    assert await ids('없는 글') == set()
+
+
+async def test_searches_latin_letters_without_case(client: AsyncClient, my_headers: dict[str, str]):
+    neon = await make_public(client, my_headers, title='NEON 거리')
+
+    response = await client.get(LISTINGS_URL, params={'q': 'neon'}, headers=my_headers)
+
+    assert [item['scenario_id'] for item in response.json()['items']] == [neon['id']]
+
+
+async def test_a_hash_searches_one_tag(client: AsyncClient, my_headers: dict[str, str]):
+    chase = await make_public(client, my_headers, title='추격전', tags=['바이크'])
+    await make_public(client, my_headers, title='바이크 수리점', tags=['일상'])
+
+    response = await client.get(LISTINGS_URL, params={'q': '# 바이크'}, headers=my_headers)
+
+    # 태그는 그 태그가 붙은 것만이다. 제목에 같은 말이 있어도 나오지 않는다
+    assert [item['scenario_id'] for item in response.json()['items']] == [chase['id']]
+
+
+async def test_the_search_works_with_the_other_filters(client: AsyncClient, my_headers: dict[str, str]):
+    comedy = await make_public(client, my_headers, title='추격전 하나', genre='comedy', tags=['바이크'])
+    await make_public(client, my_headers, title='추격전 둘', genre='horror', tags=['바이크'])
+
+    response = await client.get(LISTINGS_URL, params={'q': '추격전', 'genre': 'comedy'}, headers=my_headers)
+
+    assert [item['scenario_id'] for item in response.json()['items']] == [comedy['id']]
+
+
+async def test_like_wildcards_are_searched_as_letters(client: AsyncClient, my_headers: dict[str, str]):
+    percent = await make_public(client, my_headers, title='100% 생존')
+    await make_public(client, my_headers, title='생존 게임')
+
+    async def ids(q: str) -> set[str]:
+        response = await client.get(LISTINGS_URL, params={'q': q}, headers=my_headers)
+        return {item['scenario_id'] for item in response.json()['items']}
+
+    # %, _ 는 "아무 글자"가 아니라 그 글자다
+    assert await ids('%') == {percent['id']}
+    assert await ids('_') == set()
+
+
+async def test_the_search_still_hides_adult_scenarios(
+    client: AsyncClient, my_adult_headers: dict[str, str], their_headers: dict[str, str]
+):
+    await make_public(client, my_adult_headers, title='밤의 추격전', rating='adult')
+
+    response = await client.get(LISTINGS_URL, params={'q': '추격전'}, headers=their_headers)
+
+    assert response.json()['items'] == []
+
+
 @pytest.mark.parametrize(
-    'params', [{'genre': '없는장르'}, {'tag': ''}, {'tag': '가' * (TAG_MAX_LENGTH + 1)}, {'limit': 0}]
+    'params',
+    [
+        {'genre': '없는장르'},
+        {'tag': ''},
+        {'tag': '가' * (TAG_MAX_LENGTH + 1)},
+        {'limit': 0},
+        {'q': ''},
+        {'q': '   '},
+        {'q': '#'},
+        {'q': '# '},
+        {'q': '가' * (SEARCH_MAX_LENGTH + 1)},
+    ],
 )
 async def test_rejects_a_bad_filter(client: AsyncClient, my_headers: dict[str, str], params: dict):
     response = await client.get(LISTINGS_URL, params=params, headers=my_headers)

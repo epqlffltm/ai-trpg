@@ -27,6 +27,17 @@
 docker compose exec db psql -v ON_ERROR_STOP=1 -U trpg -d trpg -f /docker-entrypoint-initdb.d/08-asset-role.sql
 ```
 
+공개 목록의 이름 검색(#984)은 pg_trgm(글자 조각 색인)을 쓴다. 슈퍼유저만 켤 수 있어서 마이그레이션이 켜지 않는다.
+`03-extensions.sql` 이 `extensions` 스키마에 켜고, `08-asset-role.sql` 이 `asset` 계정에게 그 스키마의 읽기를 준다.
+pg_trgm 이 생기기 전에 만든 볼륨이면 아래 둘을 차례로 한 번 실행한다. 앞의 것은 몇 번 실행해도 된다.
+`08-asset-role.sql` 은 계정을 다시 만들다 멈추므로 다시 실행하지 않고, 그 안의 읽기 권한 한 줄만 실행한다.
+실행하지 않으면 마이그레이션이 이것을 실행하라는 말을 남기고 멈춘다.
+
+```
+docker compose exec db psql -v ON_ERROR_STOP=1 -U trpg -d trpg -f /docker-entrypoint-initdb.d/03-extensions.sql
+docker compose exec db psql -v ON_ERROR_STOP=1 -U trpg -d trpg -c "GRANT USAGE ON SCHEMA extensions TO asset;"
+```
+
 초기화 스크립트, compose(`asset-migrate`, `asset-server`), 프록시의 `/api/v1/asset/`, 관문 CI, `.env` 도구는 인프라 세션이 따로 PR 로 맞춘다.
 그 PR 이 들어가기 전에는 PC 에서 직접 띄운다(아래).
 
@@ -132,9 +143,9 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/worlds/{id}/publish-check` | 게시해 보기(`{ready, problems, warnings, removed}`). 판은 생기지 않는다 | access 토큰 |
 | POST | `/api/v1/asset/worlds/{id}/versions` | 세계관 게시 `{note?}`. 201. 새 판과 `removed`, `warnings`. 막는 것이 있으면 409 `{problems}` | access 토큰 |
 | GET | `/api/v1/asset/worlds/{id}/versions`, `/versions/{number}` | 세계관의 판의 목록(최근 것부터), 판 하나(굳힌 문서까지) | access 토큰 |
-| GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만 | 없어도 된다 |
+| GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`([공개 목록의 검색](#캐릭터와-게시)) | 없어도 된다 |
 | GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서). 볼 수 없으면 404 | 없어도 된다 |
-| GET | `/api/v1/asset/listings/worlds` | 공개 세계관의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만 | 없어도 된다 |
+| GET | `/api/v1/asset/listings/worlds` | 공개 세계관의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`(캐릭터와 같다) | 없어도 된다 |
 | GET | `/api/v1/asset/listings/worlds/{id}` | 공개 세계관의 소개(마지막 판에서 보여도 되는 것만: 이름, 거른 소개, 태그, 장르, 등급, 대표 그림, 기한, 엔딩 뒤, 공개한 인물, 계정에 남는 엔딩의 수). 볼 수 없으면 404 | 없어도 된다 |
 | POST | `/api/v1/asset/listings/characters/{id}/reports` | [신고](#신고와-숨김) `{reason, description?}`. 201. 볼 수 없으면 404, 자기 것은 403 `own_character`, 두 번째는 409 `already_reported` | access 토큰 |
 | GET | `/api/v1/asset/admin/character-reports` | [운영자](#신고와-숨김): 열린 신고를 캐릭터마다 묶은 목록(`minor` 가 먼저). 운영자가 아니면 404 | access 토큰(운영자) |
@@ -241,6 +252,9 @@ TRPG 시나리오의 장르와 같은 목록이고(판타지, 무협, 현대 판
     형식 5 의 이벤트 씬은 그때의 이름(`illustrations`, 장면의 설명 `scene`)을 지금의 이름으로 바꿔 읽는다.
 - **공개 목록.** 공개이고 게시한 판이 있는 캐릭터의 **마지막 판**을 낸다(초안이 아니다). 등급은 **판의 등급**으로 거른다. 초안의 등급을 바꿔도 다음 판까지는 게시한 판이 나간다.
   로그인하지 않은 사람과 성인 확인을 하지 않은 사람에게 성인 캐릭터는 없는 것이다(404). 토큰을 보냈는데 틀렸으면 401 이다.
+- **공개 목록의 검색(#984).** 검색어 `q`(50자까지)가 `#`로 시작하면 마지막 판에 그 태그가 붙은 것, 아니면 마지막 판의 이름에 그 글이 들어 있는 것이다(대소문자를 가리지 않는다).
+  공백뿐이거나 `#` 하나뿐이면 422 다. 등급 거르기는 검색하지 않을 때와 같다. 이름은 글자 조각 색인(`ix_character_versions_name_trgm`, `ix_world_versions_name_trgm`)으로 찾는다.
+  세계관의 목록도 같다. 만든 사람의 이름으로 찾는 것은 제작자 프로필(#992)이 생긴 뒤다.
 - 지우면 판도 함께 지워진다. 이미 가져간 대화는 사본으로 돈다.
 - chat(나중에 story)은 [다른 서버에 내주기](#다른-서버에-내주기)의 주소로 마지막 판을 가져가고, 지금의 번호를 묻는다.
 

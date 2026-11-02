@@ -13,7 +13,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, SmallInteger, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, SmallInteger, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -72,6 +72,13 @@ class Listing(Base):
         ),
         # 공개 중이면 공개한 시각이 있고, 아니면 없다. 둘이 어긋난 행이 생기지 않는다
         CheckConstraint('(version_id IS NULL) = (published_at IS NULL)', name='published_together'),
+        # 공개 목록의 한 줄 소개 검색(ILIKE '%글%')을 빠르게 하는 글자 조각 색인(#984, app/listings/search.py)
+        Index(
+            'ix_listings_tagline_trgm',
+            'tagline',
+            postgresql_using='gin',
+            postgresql_ops={'tagline': 'extensions.gin_trgm_ops'},
+        ),
     )
 
     # 기본 키이면서 시나리오를 가리킨다. 시나리오 하나에 공개 정보가 둘 붙을 수 없다

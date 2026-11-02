@@ -17,6 +17,7 @@ from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey
 
 from app.main import API_PREFIX
+from app.search import SEARCH_MAX_LENGTH
 from tests.worlds import OTHER, OWNER, WORLDS_URL, bearer, character, create_world, full_world, publish
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -140,3 +141,34 @@ async def test_hidden_cast_members_are_left_out(client: AsyncClient, owner: dict
     detail = (await client.get(f'{LISTINGS_URL}/{world["id"]}')).json()
 
     assert [member['id'] for member in detail['cast']] == ['ari']
+
+
+async def searched_ids(client: AsyncClient, q: str, headers: dict | None = None) -> list[str]:
+    response = await client.get(LISTINGS_URL, params={'q': q}, headers=headers or {})
+    assert response.status_code == status.HTTP_200_OK, response.text
+    assert response.json()['total'] == len(response.json()['items'])
+    return [item['id'] for item in response.json()['items']]
+
+
+async def test_the_listing_searches_the_name_or_one_tag(client: AsyncClient, owner: dict):
+    summer = await published(client, owner, name='첫 여름', tags=['학원'])
+    winter = await published(client, owner, name='여름 없는 겨울', tags=['판타지'])
+
+    assert await searched_ids(client, '여름') == [winter['id'], summer['id']]
+    assert await searched_ids(client, '첫') == [summer['id']]
+    assert await searched_ids(client, '#판타지') == [winter['id']]
+    assert await searched_ids(client, '#여름') == []
+
+
+async def test_the_search_still_hides_adult_worlds(client: AsyncClient, owner: dict, player: dict, adult: dict):
+    world = await published(client, owner, name='밤의 여름', rating='adult')
+
+    assert await searched_ids(client, '여름', player) == []
+    assert await searched_ids(client, '여름', adult) == [world['id']]
+
+
+@pytest.mark.parametrize('q', ['', '  ', '#', '가' * (SEARCH_MAX_LENGTH + 1)])
+async def test_the_listing_rejects_a_bad_search(client: AsyncClient, q: str):
+    response = await client.get(LISTINGS_URL, params={'q': q})
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

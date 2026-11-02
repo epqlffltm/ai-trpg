@@ -12,12 +12,13 @@
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import Select, func, select, update
+from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from app.assets.models import Asset, Rating, ScenarioVersion
 from app.listings.models import Genre, Listing
+from app.listings.search import LIKE_ESCAPE, SearchTerms, contains_pattern
 
 # 공개된 것 하나를 보여 주는 데 필요한 것들: 공개 정보, 시나리오의 공통 부분(제목, 만든 사람), 공개 중인 판
 PublicRow = tuple[Listing, Asset, ScenarioVersion]
@@ -29,11 +30,13 @@ class ListingFilter:
     목록을 거르는 조건. 비워 둔 것(None)은 거르지 않는다.
 
     players 는 함께 할 사람의 수다. 추천 인원(min_players ~ max_players) 안에 드는 시나리오만 고른다(#428).
+    search 는 검색칸의 검색어다(#984). tag 와 함께 오면 둘 다 맞아야 한다.
     """
 
     genre: Genre | None = None
     tag: str | None = None
     players: int | None = None
+    search: SearchTerms | None = None
 
 
 async def find_listing(session: AsyncSession, scenario_id: uuid.UUID) -> Listing | None:
@@ -66,14 +69,26 @@ def visible(allowed_ratings: list[Rating]) -> Select[PublicRow]:
 
 
 def filtered(query: Select[PublicRow], where: ListingFilter) -> Select[PublicRow]:
-    """장르, 태그, 인원으로 거른다. 비워 둔 조건은 거르지 않는다."""
+    """장르, 태그, 인원, 검색어로 거른다. 비워 둔 조건은 거르지 않는다."""
     if where.genre is not None:
         query = query.where(Listing.genre == where.genre)
     if where.tag is not None:
         query = query.where(Listing.tags.contains([where.tag]))
     if where.players is not None:
         query = query.where(Listing.min_players <= where.players, Listing.max_players >= where.players)
+    if where.search is not None:
+        query = searched(query, where.search)
     return query
+
+
+def searched(query: Select[PublicRow], terms: SearchTerms) -> Select[PublicRow]:
+    """검색어로 거른다. 태그는 그 태그가 붙은 것, 글은 제목이나 한 줄 소개에 들어 있는 것이다."""
+    if terms.tag is not None:
+        return query.where(Listing.tags.contains([terms.tag]))
+    pattern = contains_pattern(terms.text or '')
+    return query.where(
+        or_(Asset.title.ilike(pattern, escape=LIKE_ESCAPE), Listing.tagline.ilike(pattern, escape=LIKE_ESCAPE))
+    )
 
 
 async def find_public(session: AsyncSession, scenario_id: uuid.UUID, allowed_ratings: list[Rating]) -> PublicRow | None:

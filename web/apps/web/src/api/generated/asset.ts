@@ -268,6 +268,8 @@ export interface paths {
         /**
          * List Public
          * @description 공개 캐릭터의 목록. 최근에 게시한 것부터다.
+         *
+         *     검색어(q)가 "#"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).
          */
         get: operations["list_public_api_v1_asset_listings_characters_get"];
         put?: never;
@@ -328,6 +330,8 @@ export interface paths {
         /**
          * List Public
          * @description 공개 세계관의 목록. 최근에 게시한 것부터다.
+         *
+         *     검색어(q)가 "#"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).
          */
         get: operations["list_public_api_v1_asset_listings_worlds_get"];
         put?: never;
@@ -4250,6 +4254,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                q?: string | null;
             };
             header?: never;
             path?: never;
@@ -4348,6 +4353,7 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                q?: string | null;
             };
             header?: never;
             path?: never;

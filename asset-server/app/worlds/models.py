@@ -21,7 +21,19 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+    literal_column,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -297,6 +309,14 @@ class WorldVersion(Base):
         UniqueConstraint('world_id', 'number', name='uq_world_versions_number'),
         CheckConstraint('number >= 1', name='number_positive'),
         CheckConstraint(f"rating IN ('{Rating.ALL}', '{Rating.ADULT}')", name='rating_allowed'),
+        # 공개 목록의 이름 검색(ILIKE '%글%')을 빠르게 하는 글자 조각 색인(#984, app/search.py).
+        # 연산자 묶음은 extensions 스키마의 pg_trgm 것이다(docker/postgres/init/03-extensions.sql)
+        Index(
+            'ix_world_versions_name_trgm',
+            literal_column("(document ->> 'name')").label('name'),
+            postgresql_using='gin',
+            postgresql_ops={'name': 'extensions.gin_trgm_ops'},
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

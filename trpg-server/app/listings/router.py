@@ -34,6 +34,7 @@ from app.listings.schemas import (
     PublicListingDetail,
     PublicListingPage,
 )
+from app.listings.search import SEARCH_MAX_LENGTH, SEARCH_PATTERN, parse_search
 from app.listings.service import ListingNotReadyError
 from app.references.policy import references_allowed
 
@@ -148,11 +149,17 @@ GenreFilter = Annotated[Genre | None, Query()]
 TagFilter = Annotated[str | None, Query(min_length=1, max_length=TAG_MAX_LENGTH)]
 # 테이블의 정원보다 많은 수는 어떤 시나리오에도 맞지 않는다. 빈 목록 대신 422 로 화면의 잘못을 알린다
 PlayersFilter = Annotated[int | None, Query(ge=1, le=TABLE_MAX_PLAYERS)]
+# 검색칸의 검색어(#984). "#"로 시작하면 태그, 아니면 제목과 한 줄 소개에서 찾는다(app/listings/search.py).
+# 공백뿐이거나 "#" 하나뿐인 검색어는 찾을 것이 없으므로 거절한다
+SearchFilter = Annotated[str | None, Query(max_length=SEARCH_MAX_LENGTH, pattern=SEARCH_PATTERN)]
 
 
-def to_filter(genre: GenreFilter = None, tag: TagFilter = None, players: PlayersFilter = None) -> ListingFilter:
+def to_filter(
+    genre: GenreFilter = None, tag: TagFilter = None, players: PlayersFilter = None, q: SearchFilter = None
+) -> ListingFilter:
     """주소의 거르는 값을 하나로 묶는다."""
-    return ListingFilter(genre=genre, tag=tag, players=players)
+    search = parse_search(q) if q is not None else None
+    return ListingFilter(genre=genre, tag=tag, players=players, search=search)
 
 
 Filter = Annotated[ListingFilter, Depends(to_filter)]
@@ -161,7 +168,9 @@ Filter = Annotated[ListingFilter, Depends(to_filter)]
 @public_router.get('', response_model=PublicListingPage, status_code=status.HTTP_200_OK)
 async def list_listings(user: OptionalUser, session: Session, paging: Paging, where: Filter) -> PublicListingPage:
     """
-    공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르, 태그, 함께 할 인원으로 거를 수 있다.
+    공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르, 태그, 함께 할 인원, 검색어(q)로 거를 수 있다.
+
+    검색어가 "#"로 시작하면 그 태그가 붙은 것, 아니면 제목이나 한 줄 소개에 그 글이 들어 있는 것이다(#984).
 
     로그인하지 않아도 읽는다(#530). 그때는 전체 이용가만 나온다. 토큰을 보냈는데 틀렸으면 401 이다.
     """

@@ -19,7 +19,7 @@ import uuid
 from fastapi import APIRouter, status
 from server_core.auth.dependencies import OptionalUser
 
-from app.core.dependencies import Paging, Session
+from app.core.dependencies import Paging, Search, Session
 from app.worlds import service
 from app.worlds.documents import CastDocument, WorldDocument
 from app.worlds.models import Reveal, World, WorldVersion
@@ -84,9 +84,13 @@ def to_public_detail(world: World, version: WorldVersion) -> PublicWorldDetail:
 
 
 @router.get('', response_model=PublicWorldPage, status_code=status.HTTP_200_OK)
-async def list_public(user: OptionalUser, session: Session, paging: Paging) -> PublicWorldPage:
-    """공개 세계관의 목록. 최근에 게시한 것부터다."""
-    rows, total = await service.list_public(session, user, paging.limit, paging.offset)
+async def list_public(user: OptionalUser, session: Session, paging: Paging, search: Search) -> PublicWorldPage:
+    """
+    공개 세계관의 목록. 최근에 게시한 것부터다.
+
+    검색어(q)가 "#"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).
+    """
+    rows, total = await service.list_public(session, user, search, paging.limit, paging.offset)
     return PublicWorldPage(items=[to_public_summary(world, version) for world, version in rows], total=total)
 
 
