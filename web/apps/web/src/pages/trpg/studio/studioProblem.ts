@@ -3,7 +3,7 @@
 //
 // 게임 서버의 답(trpg-server/app/assets/routing.py):
 //   - 404: 그런 재료가 없다. 남의 것도 404 다
-//   - 409(지울 때): 이 재료를 쓰는 시나리오가 있다. 본문의 used_by[{id, title}]
+//   - 409(지울 때): 이 재료를 쓰는 시나리오가 있다. 본문의 used_by[{id, title}]. 시나리오를 지울 때는 쓰는 캠페인이다
 //   - 409(더할 때): 로어북, 몬스터 모음이 가득 찼다
 //   - 422: 받지 않는 값. 화면이 먼저 검사하므로 서버의 규칙이 바뀌었을 때만 온다. 칸이 틀린 것(errors)이면 그 칸에 보인다
 //     규칙 한 벌로 맞지 않는 룰북(#804, 수치)은 {detail, field} 다. code 없이 field 로 칸을 알리고, detail 이 보일 문장이다
@@ -27,13 +27,17 @@ export function describeSaveProblem(error: unknown, kind: StudioKind): FormProbl
   return unknownProblem(error, FAILED);
 }
 
-/** 지우기. 쓰는 시나리오가 있으면 그 제목들을 함께 적는다 */
+/** 지우기. 쓰는 시나리오(시나리오면 캠페인)가 있으면 그 제목들을 함께 적는다 */
 export function describeDeleteProblem(error: unknown, kind: StudioKind): FormProblem {
   const common = commonProblem(error);
   if (common || !(error instanceof ApiError)) return common ?? { message: FAILED };
   if (error.status === 404) return { message: kindText(kind).missing };
   if (error.status === 409) {
     const titles = usedByTitles(error.body);
+    if (kind === 'scenarios') {
+      const list = titles.length > 0 ? ` 쓰는 캠페인: ${titles.join(', ')}.` : '';
+      return { message: `이 시나리오를 쓰는 캠페인이 있어 지울 수 없습니다. 캠페인의 편에서 뺀 뒤 다시 지우세요.${list}` };
+    }
     const list = titles.length > 0 ? ` 쓰는 시나리오: ${titles.join(', ')}.` : '';
     return { message: `이 재료를 쓰는 시나리오가 있어 지울 수 없습니다. 시나리오에서 뗀 뒤 다시 지우세요.${list}` };
   }

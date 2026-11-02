@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/studio/collection/CollectionEditPage.tsx
-// 묶음 재료(로어북, 몬스터 모음) 하나의 화면. 위에 제목과 소개(고치기, 지우기), 아래에 담긴 것(children)이 있다.
-// 이미 게시한 판은 게시할 때의 것으로 굳어 있어 여기서 고쳐도 바뀌지 않는다고 알린다.
+// 묶음 재료(로어북, 몬스터 모음, 캠페인) 하나의 화면. 위에 제목과 소개(고치기, 지우기), 아래에 담긴 것(children)이 있다.
+// 이미 게시한 판은 게시할 때의 것으로 굳어 있어 여기서 고쳐도 바뀌지 않는다고 알린다(frozenNote, 없으면 시나리오의 판의 글).
 
 import { Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -25,9 +25,14 @@ type Props = {
   update: (body: { title: string; description: string }) => Promise<AssetSummary>;
   /** 담긴 것의 영역 */
   children: ReactNode;
+  /** 게시한 판이 굳어 있다는 알림. 없으면 시나리오의 판의 글이다 */
+  frozenNote?: string;
 };
 
-export function CollectionEditPage({ kind, assetId, load, update, children }: Props) {
+const SCENARIO_FROZEN =
+  '이미 게시한 시나리오의 판은 게시할 때의 것으로 굳어 있어, 여기서 고쳐도 바뀌지 않습니다. 다음에 게시하는 판부터 들어갑니다.';
+
+export function CollectionEditPage({ kind, assetId, load, update, children, frozenNote = SCENARIO_FROZEN }: Props) {
   const query = useQuery({ queryKey: assetDetailKey(kind, assetId), queryFn: ({ signal }) => load(assetId, signal) });
   return (
     <main className="page page--medium">
@@ -37,7 +42,7 @@ export function CollectionEditPage({ kind, assetId, load, update, children }: Pr
       <AssetLoad kind={kind} pending={query.isPending} error={query.error} retry={() => void query.refetch()} />
       {query.data ? (
         <>
-          <EditCollection kind={kind} asset={query.data} update={update} />
+          <EditCollection kind={kind} asset={query.data} update={update} frozenNote={frozenNote} />
           {children}
         </>
       ) : null}
@@ -45,9 +50,9 @@ export function CollectionEditPage({ kind, assetId, load, update, children }: Pr
   );
 }
 
-type EditProps = { kind: StudioKind; asset: AssetSummary; update: Props['update'] };
+type EditProps = { kind: StudioKind; asset: AssetSummary; update: Props['update']; frozenNote: string };
 
-function EditCollection({ kind, asset, update }: EditProps) {
+function EditCollection({ kind, asset, update, frozenNote }: EditProps) {
   const saving = useSaveAsset<AssetSummary>(kind);
   const notice = useSavedNotice();
 
@@ -59,7 +64,7 @@ function EditCollection({ kind, asset, update }: EditProps) {
   return (
     <>
       <h1>{asset.title}</h1>
-      <Notice>이미 게시한 시나리오의 판은 게시할 때의 것으로 굳어 있어, 여기서 고쳐도 바뀌지 않습니다. 다음에 게시하는 판부터 들어갑니다.</Notice>
+      <Notice>{frozenNote}</Notice>
       {notice.notice ? <Notice>{notice.notice}</Notice> : null}
       <CollectionEditor
         key={asset.updated_at}

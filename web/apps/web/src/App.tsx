@@ -18,6 +18,9 @@ import {
   BestiariesPage,
   BestiaryEditPage,
   BestiaryNewPage,
+  CampaignEditPage,
+  CampaignNewPage,
+  CampaignsPage,
   BoardIndexPage,
   BoardListPage,
   BoardSearchPage,
@@ -255,6 +258,9 @@ export function App() {
             <Route path="scenarios" element={<ScenariosPage />} />
             <Route path="scenarios/new" element={<ScenarioNewPage />} />
             <Route path="scenarios/:scenarioId" element={<ScenarioEditPage />} />
+            <Route path="campaigns" element={<CampaignsPage />} />
+            <Route path="campaigns/new" element={<CampaignNewPage />} />
+            <Route path="campaigns/:campaignId" element={<CampaignEditPage />} />
           </Route>
           <Route path="*" element={<PlaceholderPage service="TRPG" />} />
         </Route>

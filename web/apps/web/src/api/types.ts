@@ -85,6 +85,15 @@ export type ModelStatus = Trpg['schemas']['ModelStatusOut'];
 export type PublishCheck = Trpg['schemas']['PublishCheck'];
 export type VersionSummary = Trpg['schemas']['VersionSummary'];
 export type VersionDetail = Trpg['schemas']['VersionDetail'];
+// 캠페인(#481 B). 시나리오 여러 편을 차례로 묶는다. 편의 이름이 겹치지 않게 앞에 Campaign 을 붙인다
+export type CampaignDetail = Trpg['schemas']['CampaignDetail'];
+export type CampaignCreate = Trpg['schemas']['CampaignCreate'];
+export type CampaignUpdate = Trpg['schemas']['CampaignUpdate'];
+export type CampaignEpisode = Trpg['schemas']['EpisodeOut'];
+export type CampaignEpisodeBody = Trpg['schemas']['EpisodeIn'];
+export type CampaignPublishCheck = Trpg['schemas']['CampaignPublishCheck'];
+export type CampaignVersionSummary = Trpg['schemas']['CampaignVersionSummary'];
+export type CampaignVersionDetail = Trpg['schemas']['CampaignVersionDetail'];
 export type ScenarioSheet = Trpg['schemas']['Sheet'];
 // 캐릭터의 시트(기본 시트, 프리젠의 시트). 아는 기술(skills, #805)이 더 있다
 export type CharacterSheet = Trpg['schemas']['CharacterSheet'];
