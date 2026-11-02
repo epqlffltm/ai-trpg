@@ -290,6 +290,8 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/campaigns/{id}/versions` | 캠페인의 판 목록. 최근 것부터 | access 토큰 |
 | GET | `/api/v1/game/campaigns/{id}/versions/{number}` | 캠페인의 판 하나. 굳힌 내용(`snapshot`)과 함께 | access 토큰 |
 | POST | `/api/v1/game/campaign-runs` | [캠페인의 플레이](#캠페인의-플레이) 시작. 201. `{"campaign_id", "version"(비우면 마지막 판), "table"(테이블 만들기의 값, 시나리오와 판은 빼고)}`. 첫 편의 테이블이 열린다 | access 토큰 |
+| GET | `/api/v1/game/campaign-runs` | 내 플레이. 내가 열었거나, 그 플레이의 테이블에 앉아 있거나, 넘긴 것이 있는 것. 최근에 시작한 것부터 `?limit=&offset=`. 지금 편(`position`, `episode_title`)과 그 테이블(`table_id`, 열지 않았으면 null) | access 토큰 |
+| GET | `/api/v1/game/campaign-runs/of-table/{table_id}` | 그 테이블의 플레이(플레이 하나와 같은 모양). 캠페인의 테이블이 아니거나 볼 수 없으면 null | access 토큰 |
 | GET | `/api/v1/game/campaign-runs/{id}` | 플레이 하나. 편마다의 테이블, 끝난 퀘스트의 결과, 내가 가장 나중에 넘긴 것(`my_carry`). 방장과 그 플레이의 테이블에 앉았던 사람만 | access 토큰 |
 | POST | `/api/v1/game/campaign-runs/{id}/next` | 다음 편의 테이블 열기. 201. 방장만(403). 본문은 테이블 만들기의 값(시나리오와 판은 빼고). 앞 편이 끝나지 않았으면 409 `episode_not_ended`, 마지막 편까지 끝났으면 409 `run_ended` | access 토큰 |
 | POST | `/api/v1/game/campaign-runs/{id}/join` | 그 플레이의 사람이 지금 편의 테이블에 초대 코드 없이 앉기. 넘긴 캐릭터가 있으면 그것으로 앉는다 | access 토큰 |

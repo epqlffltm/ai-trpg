@@ -333,13 +333,37 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Runs
+         * @description 내 플레이. 내가 열었거나, 그 플레이의 테이블에 앉아 있거나, 넘긴 것이 있는 것. 최근에 시작한 것부터.
+         */
+        get: operations["list_runs_api_v1_game_campaign_runs_get"];
         put?: never;
         /**
          * Start Run
          * @description 플레이를 시작한다. 시작한 사람이 첫 편의 테이블의 방장이 된다. 열 수 없는 까닭은 테이블 만들기와 같다.
          */
         post: operations["start_run_api_v1_game_campaign_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/campaign-runs/of-table/{table_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Run Of Table
+         * @description 그 테이블의 플레이. 캠페인의 테이블이 아니거나 볼 수 없으면 null(있다는 것을 드러내지 않는다).
+         */
+        get: operations["read_run_of_table_api_v1_game_campaign_runs_of_table__table_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9181,11 +9205,60 @@ export interface components {
             version: number;
         };
         /**
+         * RunPage
+         * @description 내 플레이 목록의 한 쪽.
+         */
+        RunPage: {
+            /** Items */
+            items: components["schemas"]["RunSummary"][];
+            /** Total */
+            total: number;
+        };
+        /**
          * RunStatus
          * @description 플레이의 상태. 한 방향으로만 나아간다.
          * @enum {string}
          */
         RunStatus: "playing" | "ended";
+        /**
+         * RunSummary
+         * @description 플레이의 목록에 싣는 값. 캠페인의 제목, 지금 편과 편의 수, 지금 편의 테이블(아직 열지 않았으면 None).
+         */
+        RunSummary: {
+            /**
+             * Campaign Id
+             * Format: uuid
+             */
+            campaign_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Episode Count */
+            episode_count: number;
+            /** Episode Title */
+            episode_title: string;
+            /**
+             * Host Id
+             * Format: uuid
+             */
+            host_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Position */
+            position: number;
+            status: components["schemas"]["RunStatus"];
+            /** Table Id */
+            table_id: string | null;
+            /** Title */
+            title: string;
+        };
         /**
          * RunTable
          * @description 편의 테이블을 여는 값. TableCreate 와 같되, 시나리오와 판은 받지 않는다(보내면 422).
@@ -12278,6 +12351,38 @@ export interface operations {
             };
         };
     };
+    list_runs_api_v1_game_campaign_runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunPage"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     start_run_api_v1_game_campaign_runs_post: {
         parameters: {
             query?: never;
@@ -12298,6 +12403,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_run_of_table_api_v1_game_campaign_runs_of_table__table_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunDetail"] | null;
                 };
             };
             /** @description 입력이 틀렸다 */

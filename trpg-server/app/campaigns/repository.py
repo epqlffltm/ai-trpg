@@ -6,10 +6,12 @@
 
 import uuid
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.assets.campaigns.models import CampaignVersion
 from app.campaigns.models import CampaignCarry, CampaignQuestResult, CampaignRun, CampaignSeat, CampaignTable
+from app.tables.models import TableMember
 
 
 def add(
@@ -72,3 +74,49 @@ async def quest_results(session: AsyncSession, run_id: uuid.UUID) -> list[Campai
 async def delete_carries_of(session: AsyncSession, user_id: uuid.UUID) -> None:
     """그 사람의 넘길 것을 모두 지운다(탈퇴). 그것으로 앉은 자리의 표시(campaign_seats)도 함께 지워진다."""
     await session.execute(delete(CampaignCarry).where(CampaignCarry.user_id == user_id))
+
+
+def runs_of(user_id: uuid.UUID):
+    """그 사람의 플레이를 고르는 조건. 연 사람이거나, 그 플레이의 테이블에 앉아 있거나, 넘긴 것이 있다."""
+    seated = (
+        select(CampaignTable.run_id)
+        .join(TableMember, TableMember.table_id == CampaignTable.table_id)
+        .where(TableMember.user_id == user_id)
+    )
+    carried = select(CampaignCarry.run_id).where(CampaignCarry.user_id == user_id)
+    return or_(CampaignRun.host_id == user_id, CampaignRun.id.in_(seated), CampaignRun.id.in_(carried))
+
+
+async def list_runs_of(session: AsyncSession, user_id: uuid.UUID, limit: int, offset: int) -> list[CampaignRun]:
+    """그 사람의 플레이의 한 쪽. 최근에 시작한 것부터."""
+    query = (
+        select(CampaignRun)
+        .where(runs_of(user_id))
+        .order_by(CampaignRun.created_at.desc(), CampaignRun.id)
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(await session.scalars(query))
+
+
+async def count_runs_of(session: AsyncSession, user_id: uuid.UUID) -> int:
+    """그 사람의 플레이의 수."""
+    return await session.scalar(select(func.count()).select_from(CampaignRun).where(runs_of(user_id))) or 0
+
+
+async def versions_of(session: AsyncSession, version_ids: list[uuid.UUID]) -> dict[uuid.UUID, CampaignVersion]:
+    """판들을 한 번에 읽는다. id → 판."""
+    if not version_ids:
+        return {}
+    query = select(CampaignVersion).where(CampaignVersion.id.in_(version_ids))
+    return {version.id: version for version in await session.scalars(query)}
+
+
+async def current_tables(session: AsyncSession, runs: list[CampaignRun]) -> dict[uuid.UUID, uuid.UUID]:
+    """플레이마다 지금 편의 테이블. 아직 열지 않은 플레이는 빠진다. 플레이의 id → 테이블의 id."""
+    if not runs:
+        return {}
+    positions = {run.id: run.position for run in runs}
+    query = select(CampaignTable).where(CampaignTable.run_id.in_(positions))
+    links = await session.scalars(query)
+    return {link.run_id: link.table_id for link in links if positions[link.run_id] == link.position}

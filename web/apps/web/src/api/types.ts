@@ -94,6 +94,14 @@ export type CampaignEpisodeBody = Trpg['schemas']['EpisodeIn'];
 export type CampaignPublishCheck = Trpg['schemas']['CampaignPublishCheck'];
 export type CampaignVersionSummary = Trpg['schemas']['CampaignVersionSummary'];
 export type CampaignVersionDetail = Trpg['schemas']['CampaignVersionDetail'];
+// 캠페인의 플레이(#481 B). 캠페인의 판 하나로 하는 한 번의 플레이와 편이 끝날 때 넘긴 캐릭터
+export type CampaignRun = Trpg['schemas']['RunDetail'];
+export type CampaignRunSummary = Trpg['schemas']['RunSummary'];
+export type CampaignRunPage = Trpg['schemas']['RunPage'];
+export type CampaignRunEpisode = Trpg['schemas']['RunEpisodeOut'];
+export type CampaignCarry = Trpg['schemas']['Carry'];
+// 편의 테이블을 여는 값. 정원만 꼭 적고 나머지는 서버의 기본값이다
+export type CampaignRunTable = Partial<Trpg['schemas']['RunTable']> & { capacity: number };
 export type ScenarioSheet = Trpg['schemas']['Sheet'];
 // 캐릭터의 시트(기본 시트, 프리젠의 시트). 아는 기술(skills, #805)이 더 있다
 export type CharacterSheet = Trpg['schemas']['CharacterSheet'];
