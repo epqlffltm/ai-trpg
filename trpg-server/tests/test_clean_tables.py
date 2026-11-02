@@ -25,7 +25,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai_log.call_log import DbCallLog
-from app.campaigns.models import CampaignCarry, CampaignQuestResult
+from app.campaigns.models import CampaignCarry, CampaignQuestResult, CampaignSeat
 from app.catalog.models import Grade
 from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX
@@ -244,7 +244,11 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         session.add(PublishingBan(user_id=ME, banned_at=datetime.now(UTC), reason='신고'))
         outbox.put(session, ME, 'narration_model.retiring', 'narration_model.retiring:1', {})
         run_id = uuid.UUID(run.json()['id'])
-        session.add(CampaignCarry(run_id=run_id, position=0, user_id=ME, carry={}))
+        carry = CampaignCarry(run_id=run_id, position=0, user_id=ME, carry={})
+        session.add(carry)
+        await session.flush()
+        run_table = uuid.UUID(run.json()['episodes'][0]['table_id'])
+        session.add(CampaignSeat(table_id=run_table, user_id=ME, carry_id=carry.id))
         session.add(CampaignQuestResult(run_id=run_id, position=0, entry_id=uuid.uuid4(), result='succeeded'))
         await session.commit()
 

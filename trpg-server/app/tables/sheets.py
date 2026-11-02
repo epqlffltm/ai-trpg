@@ -186,17 +186,19 @@ def give_sheet(member: TableMember, source: CharacterSheet) -> TableSheet:
     return sheet
 
 
-def hand_out(table: GameTable, snapshot: Snapshot) -> bool:
+def hand_out(table: GameTable, snapshot: Snapshot, skip: frozenset[uuid.UUID] = frozenset()) -> bool:
     """
     앉은 사람 모두에게 시트와 시작 소지품과 시작 돈을 준다.
     받을 시트가 없는 사람이 하나라도 있으면 아무에게도 주지 않고 False.
 
     먼저 모두의 것을 찾고, 다 있을 때만 준다. 몇 사람만 받은 상태를 만들지 않는다.
+    skip 의 사람은 건너뛴다. 캠페인에서 넘긴 캐릭터로 앉은 사람이다. 그 시트는 app/campaigns/seating.py 가 준다.
     """
-    sources = [find_source(snapshot, member) for member in table.members]
+    given = [member for member in table.members if member.user_id not in skip]
+    sources = [find_source(snapshot, member) for member in given]
     if any(source is None for source in sources):
         return False
-    for member, source in zip(table.members, sources, strict=True):
+    for member, source in zip(given, sources, strict=True):
         sheet = give_sheet(member, source)
         items.equip(table.id, sheet, snapshot, member.pregen_index)
         money.endow(sheet, snapshot, member.pregen_index)

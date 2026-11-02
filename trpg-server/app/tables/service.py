@@ -40,6 +40,7 @@ from app.billing import charges
 from app.billing.price_list import FREE_PRICES, PriceList
 from app.calendar import state as calendar
 from app.campaigns import ending as campaign_ending
+from app.campaigns import seating as campaign_seating
 from app.catalog.steps import NarrationSteps, steps_of
 from app.events import recorder
 from app.events.models import EventType
@@ -115,8 +116,16 @@ def created_payload(choice: ModelChoice, steps: NarrationSteps) -> dict:
 async def create_table(
     session: AsyncSession, viewer: AccessClaims, data: TableCreate, picker: ModelPicker
 ) -> GameTable:
+    """테이블을 만들고 저장한다. 만드는 규칙과 거절되는 까닭은 open_table 이다."""
+    table = await open_table(session, viewer, data, picker)
+    await commit(session, table)
+    return await repository.reload_table(session, table.id)
+
+
+async def open_table(session: AsyncSession, viewer: AccessClaims, data: TableCreate, picker: ModelPicker) -> GameTable:
     """
-    테이블을 만든다. 만든 사람이 방장이 되어 앉는다.
+    테이블을 만들어 세션에 올린다. 저장(커밋)은 부른 쪽이 한다. 캠페인의 편은 플레이에 잇는 것과 한 묶음으로 저장한다.
+    만든 사람이 방장이 되어 앉는다.
     서술 모델은 방장이 고른 것, 아니면 시나리오의 추천 모델, 쓸 수 없으면 같은 회사의 대신 쓸 모델이다
     (app/tables/model_choice.py). picker 로 지금 고를 수 있는지 본다.
     판의 시작 시각을 가리키는 게임 안의 시계를 함께 단다(app/calendar/).
@@ -158,8 +167,7 @@ async def create_table(
     await session.flush()
     payload = created_payload(choice, steps)
     recorder.record(session, table, EventType.TABLE_CREATED, actor_id=viewer.user_id, payload=payload)
-    await commit(session, table)
-    return await repository.reload_table(session, table.id)
+    return table
 
 
 # --- 읽기 ---
@@ -287,10 +295,11 @@ async def set_character(
     숫자(시트)는 여기서 주지 않는다. 게임을 시작할 때 준다. 직접 정한 능력치는 그때까지 자리에 적어 둔다.
 
     진행 중에는 이 길로 캐릭터를 바꾸지 못한다. 캐릭터가 죽은 사람이 새 캐릭터를 들이는 길은 따로 있다
-    (app/tables/replacements.py).
+    (app/tables/replacements.py). 캠페인에서 넘긴 캐릭터로 앉은 자리는 바꾸지 못한다(character_carried).
     """
     table, member = await lock_seated(session, user_id, table_id)
     require_recruiting(table)
+    await campaign_seating.require_not_carried(session, table.id, user_id)
     chosen = accept_character(table, read_snapshot(table.content), member, data)
     write_character(member, chosen)
     return await save(session, table)
@@ -407,9 +416,12 @@ async def start_table(
     require_recruiting(table)
     snapshot = read_snapshot(table.content)
     require_story_fits(table, snapshot)
-    # 캐릭터를 정하지 않은 사람이 있으면 그 사람이 받을 시트도 없다. 아무에게도 주지 않고 거절한다
-    if not sheets.hand_out(table, snapshot):
+    # 캐릭터를 정하지 않은 사람이 있으면 그 사람이 받을 시트도 없다. 아무에게도 주지 않고 거절한다.
+    # 캠페인에서 넘긴 캐릭터로 앉은 사람은 넘긴 것으로 받는다(app/campaigns/seating.py)
+    carried = await campaign_seating.carried_for(session, table)
+    if not sheets.hand_out(table, snapshot, skip=frozenset(carried)):
         raise TableConflictError(Conflict.CHARACTERS_MISSING)
+    campaign_seating.hand_out_carried(table, snapshot, carried)
     places.place_at_start(table, snapshot)
     repository.add_npcs(session, npcs.make_npcs(table.id, snapshot))
     repository.add_monsters(session, monsters.make_monsters(table.id, snapshot))
