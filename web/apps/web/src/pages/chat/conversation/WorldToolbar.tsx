@@ -1,22 +1,31 @@
 // web/apps/web/src/pages/chat/conversation/WorldToolbar.tsx
-// 그림 창 아래의 단추들(C3): 소지품, 상대의 차림, 지도(판에 지도가 있을 때), 기억(C5), 시간 보내기, 기록 받기. 창은 겹쳐 연다.
+// 그림 창 아래의 단추들(C3): 소지품, 상대의 차림, 지도(판에 지도가 있을 때), 기억(C5), 책갈피(#982), 시간 보내기, 기록 받기. 창은 겹쳐 연다.
 // 행동(쓰기, 건네기, 이동, 시간 보내기)은 반응을 받으므로 받는 중이면 막는다. 창을 여는 것, 기억 고치기, 기록 받기는 막지 않는다.
 // 시간 보내기는 다음 시간대가 시작하는 시각까지 흐른다(밤이면 다음 날 새벽 4시).
 
 import { Button } from '@ai-trpg/ui';
 import { useCallback, useState } from 'react';
 import type { ConversationAction, ConversationDetail } from '../../../api/types';
+import { BookmarksDialog } from './BookmarksDialog';
 import { ChatTranscriptButton } from './ChatTranscriptButton';
 import { InventoryDialog } from './InventoryDialog';
 import { MapDialog } from './MapDialog';
 import { NotesDialog } from './NotesDialog';
 import { OutfitDialog } from './OutfitDialog';
+import type { BookmarksSource } from './useBookmarks';
 import { hasMap } from './worldView';
 
-type Window = 'inventory' | 'outfit' | 'map' | 'notes' | null;
-type Props = { detail: ConversationDetail; busy: boolean; onAction: (action: ConversationAction) => void };
+type Window = 'inventory' | 'outfit' | 'map' | 'notes' | 'bookmarks' | null;
+type Props = {
+  detail: ConversationDetail;
+  busy: boolean;
+  onAction: (action: ConversationAction) => void;
+  bookmarks: BookmarksSource;
+  /** 책갈피의 자리로 간다 */
+  onGoTo: (messageId: string) => void;
+};
 
-export function WorldToolbar({ detail, busy, onAction }: Props) {
+export function WorldToolbar({ detail, busy, onAction, bookmarks, onGoTo }: Props) {
   const [open, setOpen] = useState<Window>(null);
   // 창(Dialog)은 onClose 가 바뀌면 닫기 단추에 초점을 다시 둔다. 건네며 할 말을 쓰는 동안 초점이 튀지 않게 고정한다
   const close = useCallback(() => setOpen(null), []);
@@ -42,6 +51,9 @@ export function WorldToolbar({ detail, busy, onAction }: Props) {
       <Button variant="secondary" onClick={() => setOpen('notes')}>
         기억
       </Button>
+      <Button variant="secondary" onClick={() => setOpen('bookmarks')}>
+        책갈피
+      </Button>
       <Button variant="secondary" disabled={busy} onClick={() => act({ kind: 'wait' })}>
         시간 보내기
       </Button>
@@ -50,6 +62,7 @@ export function WorldToolbar({ detail, busy, onAction }: Props) {
       <OutfitDialog detail={detail} open={open === 'outfit'} onClose={close} />
       <MapDialog detail={detail} open={open === 'map'} busy={busy} onClose={close} onAction={act} />
       <NotesDialog conversationId={detail.id} name={detail.character.document.name} open={open === 'notes'} onClose={close} />
+      <BookmarksDialog source={bookmarks} open={open === 'bookmarks'} busy={busy} onClose={close} onGo={onGoTo} />
     </div>
   );
 }

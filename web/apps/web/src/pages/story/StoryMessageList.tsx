@@ -3,11 +3,13 @@
 // 사람의 말은 "나", 행동 말은 서버가 쓴 글 그대로다(엔진이 정한 결과다). 장이 넘어간 행동 말 위에는 "2장: 축제"를 띄운다.
 // 새 글이 오면 끝으로 내린다.
 // 끝의 말에 할 수 있는 일(답 받기, 다시 생성, 이어서)과 대안 넘기기, 고치기(내 말은 새 가지로, 답은 조각마다 그 자리에서)는 여기 둔다.
-// 행동 말은 엔진의 결과라 고치지 않는다. 받는 중에는 모두 막는다.
+// 행동 말은 엔진의 결과라 고치지 않는다. 받는 중에는 모두 막는다. 책갈피(#982)는 받는 중에도 달고 뗀다.
 
 import { Button } from '@ai-trpg/ui';
 import { useEffect, useRef, useState } from 'react';
 import type { StoryMessage, StorySegment, StorySession, StoryView } from '../../api/story';
+import { messageAnchor } from '../chat/conversation/bookmarksView';
+import { BookmarkToggle } from '../chat/conversation/BookmarkToggle';
 import { StoryMessageEditor } from './StoryMessageEditor';
 import { storyAlternatives, storyTail, visibleStoryMessages } from './storyView';
 import { chapterTitle, speakerName } from './storyWorld';
@@ -24,9 +26,12 @@ type Props = {
   onSendEdit: (message: StoryMessage, content: string) => Promise<boolean>;
   /** 답의 조각을 그 자리에서 고친다. 고쳤으면 true */
   onSaveSegments: (message: StoryMessage, segments: string[]) => Promise<boolean>;
+  /** 책갈피를 단 말들과 달고 떼기 */
+  marked: ReadonlySet<string>;
+  onBookmark: (message: StoryMessage) => void;
 };
 
-export function StoryMessageList({ session, turn, busy, onBranch, onRegenerate, onContinue, onSendEdit, onSaveSegments }: Props) {
+export function StoryMessageList({ session, turn, busy, onBranch, onRegenerate, onContinue, onSendEdit, onSaveSegments, marked, onBookmark }: Props) {
   const { items, pending, streamingId } = visibleStoryMessages(session.messages, turn);
   const end = useRef<HTMLDivElement>(null);
   const growth = items.length + (pending?.reduce((sum, segment) => sum + segment.text.length + 1, 0) ?? 0);
@@ -49,6 +54,8 @@ export function StoryMessageList({ session, turn, busy, onBranch, onRegenerate, 
             onBranch={onBranch}
             onSendEdit={(content) => onSendEdit(message, content)}
             onSaveSegments={(segments) => onSaveSegments(message, segments)}
+            marked={marked.has(message.id)}
+            onBookmark={() => onBookmark(message)}
           />
         ))}
         {pending !== null ? (
@@ -73,9 +80,11 @@ type ItemProps = {
   onBranch: (messageId: string) => void;
   onSendEdit: (content: string) => Promise<boolean>;
   onSaveSegments: (segments: string[]) => Promise<boolean>;
+  marked: boolean;
+  onBookmark: () => void;
 };
 
-function StoryMessageItem({ message, view, streaming, busy, onBranch, onSendEdit, onSaveSegments }: ItemProps) {
+function StoryMessageItem({ message, view, streaming, busy, onBranch, onSendEdit, onSaveSegments, marked, onBookmark }: ItemProps) {
   const [editing, setEditing] = useState(false);
   const marks = [streaming ? '쓰는 중' : null, !streaming && message.status === 'partial' ? '끊긴 답' : null, message.edited ? '고침' : null].filter(Boolean);
   const editable = message.role !== 'action' && !streaming;
@@ -100,7 +109,7 @@ function StoryMessageItem({ message, view, streaming, busy, onBranch, onSendEdit
   }
   const chapter = message.role === 'action' ? chapterTitle(view, message.chapter_id) : null;
   return (
-    <li className={`chat-message chat-message--${message.role}`} aria-busy={streaming || undefined}>
+    <li id={messageAnchor(message.id)} className={`chat-message chat-message--${message.role}`} aria-busy={streaming || undefined}>
       {chapter ? <p className="chat-message__chapter">{chapter}</p> : null}
       {message.role === 'assistant' ? (
         <Segments segments={message.segments} view={view} />
@@ -118,6 +127,7 @@ function StoryMessageItem({ message, view, streaming, busy, onBranch, onSendEdit
             고치기
           </Button>
         ) : null}
+        {streaming ? null : <BookmarkToggle marked={marked} disabled={false} onToggle={onBookmark} />}
       </div>
     </li>
   );

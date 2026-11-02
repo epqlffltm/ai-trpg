@@ -3,6 +3,7 @@
 // 한 대화에 한 생성이다. 이 화면이 받는 중이거나(turn) 다른 곳에서 쓰는 중이면(generating) 보내기, 다시 생성, 이어서, 대안, 행동, 고치기를 막는다.
 // 답을 받는 일(말 보내기, 행동, 내 말 고치기)은 모델이 있어야 한다. 없으면 보내기 전에 고르게 한다(서버의 409 model_required 를 기다리지 않는다).
 // 상대의 말 고치기는 모델을 부르지 않아 모델이 없어도 된다.
+// 책갈피(#982)는 말마다 달고 떼며 받는 중에도 된다. 책갈피의 자리로 갈 때 지금 가지에 없는 말이면 가지를 바꾼다(바꾸는 것은 받는 중이 아닐 때만).
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -16,6 +17,7 @@ import {
   openRegenerateTurn,
 } from '../../../api/chatConversation';
 import type { ConversationAction, ConversationDetail, ConversationMessage } from '../../../api/types';
+import { bookmarkProblemText, isOnBranch, messageAnchor } from './bookmarksView';
 import { Composer } from './Composer';
 import { ConversationHeader } from './ConversationHeader';
 import { conversationKey } from './conversationQueries';
@@ -25,6 +27,7 @@ import { ModelDialog } from './ModelDialog';
 import { PicturePane } from './PicturePane';
 import { describeChangeProblem } from './turnProblem';
 import { TurnNotice } from './TurnNotice';
+import { useBookmarks } from './useBookmarks';
 import type { TurnOpener, useConversationTurn } from './useConversationTurn';
 import { WorldToolbar } from './WorldToolbar';
 import { putQueryData } from '../../../queryClient';
@@ -34,6 +37,7 @@ type Props = { detail: ConversationDetail; turns: ReturnType<typeof useConversat
 export function ConversationRoom({ detail, turns }: Props) {
   const branching = useBranch(detail.id);
   const editing = useAssistantEdit(detail.id);
+  const bookmarks = useBookmarks('chat', detail.id);
   const [draft, setDraft] = useState('');
   const [choosingModel, setChoosingModel] = useState(false);
   const closeModel = useCallback(() => setChoosingModel(false), []);
@@ -72,11 +76,29 @@ export function ConversationRoom({ detail, turns }: Props) {
     }
   }
 
+  function toggleBookmark(message: ConversationMessage) {
+    const request = bookmarks.marked.has(message.id) ? { kind: 'remove' as const, messageId: message.id } : { kind: 'put' as const, messageId: message.id };
+    bookmarks.change.mutate(request);
+  }
+
+  /** 책갈피의 자리로 간다. 지금 가지에 없으면 그 가지로 바꾼 뒤 내린다 */
+  async function goTo(messageId: string) {
+    if (!isOnBranch(detail.messages.map((message) => message.id), messageId)) {
+      if (busy) return;
+      try {
+        await branching.mutateAsync(messageId);
+      } catch {
+        return;
+      }
+    }
+    requestAnimationFrame(() => document.getElementById(messageAnchor(messageId))?.scrollIntoView?.({ block: 'center' }));
+  }
+
   return (
     <main className="page conversation">
       <ConversationHeader detail={detail} busy={busy} onChooseModel={() => setChoosingModel(true)} />
       <PicturePane picture={picture} name={detail.character.document.name} />
-      <WorldToolbar detail={detail} busy={busy} onAction={act} />
+      <WorldToolbar detail={detail} busy={busy} onAction={act} bookmarks={bookmarks} onGoTo={(messageId) => void goTo(messageId)} />
       <MessageList
         detail={detail}
         turn={turns.turn}
@@ -85,10 +107,13 @@ export function ConversationRoom({ detail, turns }: Props) {
         onRegenerate={(messageId) => void answer((signal) => openRegenerateTurn(messageId, signal))}
         onContinue={(messageId) => void answer((signal) => openContinueTurn(messageId, signal))}
         onEdit={edit}
+        marked={bookmarks.marked}
+        onBookmark={toggleBookmark}
       />
       {detail.generating && !streaming ? <p className="hint">답을 쓰는 중입니다. 끝나면 보입니다.</p> : null}
       {branching.error ? <p className="ui-field__error">{describeChangeProblem(branching.error)}</p> : null}
       {editing.error ? <p className="ui-field__error">{describeChangeProblem(editing.error)}</p> : null}
+      {bookmarks.change.error ? <p className="ui-field__error">{bookmarkProblemText(bookmarks.change.error)}</p> : null}
       <TurnNotice problem={turns.problem} failure={turns.failure} onChooseModel={() => setChoosingModel(true)} onClose={turns.clearNotice} />
       <Composer
         draft={draft}
