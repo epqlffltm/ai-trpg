@@ -280,6 +280,15 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/bestiaries/{id}/monsters` | 몬스터 전부. 만든 순서 | access 토큰 |
 | PATCH | `/api/v1/game/bestiaries/{id}/monsters/{monster_id}` | 몬스터 고치기. 보낸 칸만 바뀐다 | access 토큰 |
 | DELETE | `/api/v1/game/bestiaries/{id}/monsters/{monster_id}` | 몬스터 지우기. 204 | access 토큰 |
+| POST | `/api/v1/game/campaigns` | [캠페인](#캠페인) 만들기. 201. 편(`episodes`)은 자기 시나리오만, 같은 시나리오는 한 번만(아니면 422). 비워도 된다 | access 토큰 |
+| GET | `/api/v1/game/campaigns` | 내 캠페인 목록. `limit`, `offset`. 등급과 편의 수가 함께 온다 | access 토큰 |
+| GET | `/api/v1/game/campaigns/{id}` | 내 캠페인 하나. 편마다 시나리오의 지금 제목과 게시한 마지막 판 번호 | access 토큰 |
+| PATCH | `/api/v1/game/campaigns/{id}` | 내 캠페인 고치기. 보낸 칸만 바뀐다. 편은 목록을 통째로 바꾼다 | access 토큰 |
+| DELETE | `/api/v1/game/campaigns/{id}` | 내 캠페인 지우기. 204 | access 토큰 |
+| GET | `/api/v1/game/campaigns/{id}/publish-check` | 지금 게시하면 막히는 이유(`problems`)와 알릴 것(`warnings`)을 미리 본다 | access 토큰 |
+| POST | `/api/v1/game/campaigns/{id}/versions` | 캠페인 게시. 201. 편마다 시나리오의 마지막 판 번호가 굳는다. 막히면 409 `problems` | access 토큰 |
+| GET | `/api/v1/game/campaigns/{id}/versions` | 캠페인의 판 목록. 최근 것부터 | access 토큰 |
+| GET | `/api/v1/game/campaigns/{id}/versions/{number}` | 캠페인의 판 하나. 굳힌 내용(`snapshot`)과 함께 | access 토큰 |
 | POST | `/api/v1/game/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴)한 사람을 정리한다. 200 `{"status":"processed"}`. 프록시가 바깥에 열지 않는다 | 인증 서버의 서명 |
 
 `/health`와 `/health/ready`는 API 주소 밖에 둔다. 프록시와 컨테이너 관리 도구가 부르는 주소라 버전이 없다.
@@ -292,7 +301,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | 503 | 토큰이 맞는지 확인할 수 없다(공개키를 구하지 못함) | `Retry-After` 뒤에 다시 시도한다. 로그아웃시키지 않는다 |
 | 404 | 그런 자산이 없다. 남의 자산도, 종류가 다른 자산도 404다. 공개하지 않은 시나리오, 볼 수 없는 등급의 시나리오도 `/listings` 에서는 404다. 내가 앉지 않은 테이블, 틀린 초대 코드도 404다 | |
 | 403 | 방장만 할 수 있는 일을 참가자가 하려 했다. 테이블의 비밀번호가 틀렸다 | |
-| 409 | 지금 상태와 부딪힌다. 시나리오가 가리키는 세계관, 룰북, 로어북을 지우려 했거나, 가득 찬 로어북에 항목을(도감에 몬스터를) 더하려 했거나, 조건을 못 갖춘 시나리오를 게시하거나 공개하려 했거나, 테이블의 지금 상태에서 할 수 없는 일을 하려 했다 | 응답의 `used_by` 에 적힌 시나리오에서 먼저 떼어 낸다. 항목을 지우거나 로어북을 나눈다. 응답의 `problems` 에 적힌 것을 채운다. 테이블은 응답의 `reason` 을 본다([테이블](#테이블)) |
+| 409 | 지금 상태와 부딪힌다. 시나리오가 가리키는 세계관, 룰북, 로어북을(캠페인이 가리키는 시나리오를) 지우려 했거나, 가득 찬 로어북에 항목을(도감에 몬스터를) 더하려 했거나, 조건을 못 갖춘 시나리오를 게시하거나 공개하려 했거나, 테이블의 지금 상태에서 할 수 없는 일을 하려 했다 | 응답의 `used_by` 에 적힌 시나리오에서 먼저 떼어 낸다. 항목을 지우거나 로어북을 나눈다. 응답의 `problems` 에 적힌 것을 채운다. 테이블은 응답의 `reason` 을 본다([테이블](#테이블)) |
 | 422 | 입력이 틀렸다. 모르는 칸을 보낸 경우, 시나리오가 가리키려는 자산이 없는 경우, 판에 없는 스타팅이나 프리젠을 고른 경우도 포함한다 | 응답의 `detail`에 어느 칸이 왜 틀렸는지 있다 |
 
 ## 토큰 검증
@@ -353,7 +362,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 
 ## 자산
 
-자산은 사용자가 만들어 두고 플레이할 때 조립해 쓰는 재료다. 지금은 세계관, 룰북, 시나리오, 로어북, 몬스터 도감이 있다.
+자산은 사용자가 만들어 두고 플레이할 때 조립해 쓰는 재료다. 지금은 세계관, 룰북, 시나리오, 로어북, 몬스터 도감, 캠페인이 있다.
 시나리오는 룰북을 중심으로 다른 자산을 합친 조립물이다. 지금은 룰북, 세계관, 로어북을 가리키고, 나중에 NPC 등이 붙는다.
 
 공통 부분과 종류별 내용을 다른 테이블에 둔다.
@@ -371,6 +380,9 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | `bestiaries` | 몬스터 도감. 자신의 칸은 없다 |
 | `monsters` | 도감의 몬스터. `name`, `content`, `kind`(타입). 숫자(시트)는 없다. 자산이 아니다 |
 | `scenario_versions` | 시나리오의 판. 번호, 변경 내용, 굳힌 내용(`snapshot`, JSON) |
+| `campaigns` | 캠페인. 자신의 칸은 없다 |
+| `campaign_episodes` | 캠페인의 편. `position`(차례), `scenario_id`, `title`. 자산이 아니다 |
+| `campaign_versions` | 캠페인의 판. 번호, 변경 내용, 굳힌 내용(`snapshot`, JSON) |
 
 코드도 같은 모양으로 나뉜다.
 
@@ -383,6 +395,7 @@ app/assets/
                snapshot.py  upgrades.py  publishing.py  repository.py   게시와 판(옛 판을 올려 읽는 것은 upgrades.py)
   lorebooks/   schemas.py  repository.py  service.py  router.py    로어북과 항목
   bestiaries/  models.py  schemas.py  repository.py  service.py  router.py   몬스터 도감과 몬스터(모델도 여기 있다)
+  campaigns/   models.py  schemas.py  repository.py  service.py  publishing.py  router.py   캠페인과 편과 판
 app/engine/
   ruleset.py                                                       규칙의 모양. DB 도 HTTP 도 모른다
   templates/   __init__.py  srd5.json  horror.json  light.json    내장 템플릿. 원본은 JSON 파일이고 뜰 때 한 번 읽는다
@@ -726,9 +739,36 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 
 몬스터가 나오는 것은 엔진이 정한다. 서술자가 몬스터를 만들어 내지 못한다. 옵션을 켜도 서술자는 제안만 하고, 꺼낼지는 서버가 정한다.
 
+### 캠페인
+
+시나리오 여러 개를 차례로 묶는 자산이다(#481 B). 설계는 [캠페인 설계](../docs/architecture/campaigns.md)다.
+지금은 자산(초안, 게시, 게시 검사, 판)까지다. 한 판(플레이)과 넘길 것, 조건 `campaign_quest`, 화면은 다음 단계다.
+
+| 칸 | 제한 | 내용 |
+| --- | --- | --- |
+| `title`, `description` | 자산과 같다 | 이름과 메모 |
+| `episodes` | 10편까지 | 편들. 목록의 차례가 편의 차례다. 줄마다 `scenario_id`(자기 시나리오, 같은 것은 한 번만)와 `title`(30자, 비우면 시나리오의 제목) |
+
+- 편이 가리키는 시나리오는 지우지 못한다(409, `used_by` 에 캠페인). 캠페인에서 빼거나 캠페인을 지운 뒤에 지운다.
+- 게시하면 판(`campaign_versions`)에 편마다 그때의 시나리오의 **마지막 판 번호**를 굳힌다(`{"scenario_id", "version", "title"}`). 편의 이름을 비웠으면 그 판의 시나리오의 제목이다.
+  시나리오를 고쳐 다시 게시해도 캠페인을 다시 게시하기 전까지는 앞의 판이다.
+- 등급은 편의 판들의 등급 가운데 가장 높은 것이다(성인용이 하나라도 있으면 성인용). 게시할 때 정해 캠페인에도 적는다. 성인용을 볼 수 없는 사람은 성인용 캠페인을 게시하지 못한다(403).
+
+| 막는 것(409 `problems`) | 뜻 |
+| --- | --- |
+| `episodes_too_few` | 편이 둘보다 적다 |
+| `episode_scenario_missing` | 편의 시나리오가 없다 |
+| `episode_unpublished` | 편의 시나리오에 게시한 판이 없다 |
+| `rulebook_mismatch` | 편들의 마지막 판이 같은 룰북의 같은 규칙을 쓰지 않는다. 성장을 그대로 옮기려면 레벨표와 능력치가 같아야 한다. 룰북을 고친 뒤 일부 편만 다시 게시해도 걸린다 |
+
+| 알리는 것(`warnings`, 막지 않는다) | 뜻 |
+| --- | --- |
+| `progression_missing` | 룰북에 성장이 없다. 경험치와 레벨이 옮겨지지 않는다 |
+| `items_not_carried` | 앞의 편의 판에 있는 물건 항목이 뒤의 편들의 판 어디에도 없다. 그 물건은 옮겨지지 않는다 |
+
 ### 등급
 
-이용 등급은 **시나리오에만** 있다. 시나리오를 조립할 때 제작자가 고른다.
+이용 등급은 **시나리오에만** 있다. 시나리오를 조립할 때 제작자가 고른다. 캠페인의 등급은 편의 판들에서 정해진다([캠페인](#캠페인)).
 재료(세계관, 룰북, 로어북, 몬스터 도감)는 등급을 가리지 않는다. 등급을 받지도 않고(보내면 422) 응답에 싣지도 않는다.
 같은 재료로 전체 이용가 시나리오와 성인용 시나리오를 둘 다 만들 수 있다.
 

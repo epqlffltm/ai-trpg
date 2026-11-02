@@ -19,6 +19,7 @@ import uuid
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.assets.campaigns.models import CampaignEpisode
 from app.assets.models import Asset, AssetContent, Scenario, ScenarioBestiary, ScenarioLorebook
 
 
@@ -74,8 +75,9 @@ async def find_referrers(session: AsyncSession, asset_id: uuid.UUID) -> list[Ass
     """
     이 자산을 가리키는, 지우지 않은 자산들을 돌려준다. 없으면 빈 목록이다.
 
-    지금 다른 자산을 가리키는 것은 시나리오뿐이다. 가리키는 종류가 늘면 여기에 더한다.
-    자기 자산만 가리킬 수 있으므로, 돌려주는 것은 모두 이 자산의 주인의 것이다.
+    다른 자산을 가리키는 것은 시나리오(재료를)와 캠페인(편의 시나리오를, #481 B)이다.
+    가리키는 종류가 늘면 여기에 더한다.
+    자기 자산만 가리킬 수 있으므로, 돌려주는 것은 모두 이 자산의 주인의 것이다. 만든 차례다.
     """
     attached_here = select(ScenarioLorebook.scenario_id).where(ScenarioLorebook.lorebook_id == asset_id)
     bestiary_here = select(ScenarioBestiary.scenario_id).where(ScenarioBestiary.bestiary_id == asset_id)
@@ -85,10 +87,11 @@ async def find_referrers(session: AsyncSession, asset_id: uuid.UUID) -> list[Ass
         Scenario.asset_id.in_(attached_here),
         Scenario.asset_id.in_(bestiary_here),
     )
+    scenarios_here = select(Scenario.asset_id).where(points_here)
+    campaigns_here = select(CampaignEpisode.campaign_id).where(CampaignEpisode.scenario_id == asset_id)
     query = (
         select(Asset)
-        .join(Scenario, Scenario.asset_id == Asset.id)
-        .where(points_here, Asset.deleted_at.is_(None))
+        .where(or_(Asset.id.in_(scenarios_here), Asset.id.in_(campaigns_here)), Asset.deleted_at.is_(None))
         .order_by(Asset.created_at, Asset.id)
         .limit(MAX_REFERRERS)
     )

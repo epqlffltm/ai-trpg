@@ -696,6 +696,371 @@
         "title": "CalledShotOut",
         "type": "object"
       },
+      "CampaignCreate": {
+        "additionalProperties": false,
+        "description": "캠페인을 만들 때 받는 값. 편은 비워도 된다.",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Description",
+            "type": "string"
+          },
+          "episodes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EpisodeIn"
+            },
+            "maxItems": 10,
+            "title": "Episodes",
+            "type": "array"
+          },
+          "title": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "CampaignCreate",
+        "type": "object"
+      },
+      "CampaignDetail": {
+        "description": "캠페인 하나. 편들을 차례대로 싣는다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "episode_count": {
+            "title": "Episode Count",
+            "type": "integer"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/EpisodeOut"
+            },
+            "title": "Episodes",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "visibility",
+          "created_at",
+          "updated_at",
+          "rating",
+          "episode_count",
+          "episodes"
+        ],
+        "title": "CampaignDetail",
+        "type": "object"
+      },
+      "CampaignPage": {
+        "description": "캠페인 목록의 한 쪽.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CampaignSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "CampaignPage",
+        "type": "object"
+      },
+      "CampaignPublishCheck": {
+        "description": "지금 게시하면 막히는 이유와 알릴 것. 판을 만들지 않는다.\n\nproblems 는 게시가 409 로 돌려주는 것과 같은 이름들이다. 비어 있으면 지금 게시할 수 있다(ready).\nwarnings 는 게시를 막지 않는 알림이다(옮겨지지 않는 물건, 성장이 없는 룰북).",
+        "properties": {
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ready",
+          "problems",
+          "warnings"
+        ],
+        "title": "CampaignPublishCheck",
+        "type": "object"
+      },
+      "CampaignSnapshot": {
+        "description": "캠페인의 판 하나의 내용. 편들과 등급이다.\n\n등급은 편의 판들의 등급 가운데 가장 높은 것이다(성인용이 하나라도 있으면 성인용).\n룰북은 편들이 모두 같다(게시할 때 막는다).\nrulebook_id 는 그 룰북이 어디서 왔는지 알려 줄 뿐이다. 규칙은 편마다의 시나리오 판에 굳어 있다.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/EpisodeSnapshot"
+            },
+            "maxItems": 10,
+            "minItems": 2,
+            "title": "Episodes",
+            "type": "array"
+          },
+          "format": {
+            "default": 1,
+            "title": "Format",
+            "type": "integer"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "rulebook_id": {
+            "format": "uuid",
+            "title": "Rulebook Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "description",
+          "rating",
+          "rulebook_id",
+          "episodes"
+        ],
+        "title": "CampaignSnapshot",
+        "type": "object"
+      },
+      "CampaignSummary": {
+        "description": "캠페인의 목록에 싣는 값. 공통 값에 등급(마지막으로 게시할 때 정한 것)과 편의 수를 더한다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "episode_count": {
+            "title": "Episode Count",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "visibility",
+          "created_at",
+          "updated_at",
+          "rating",
+          "episode_count"
+        ],
+        "title": "CampaignSummary",
+        "type": "object"
+      },
+      "CampaignUpdate": {
+        "additionalProperties": false,
+        "description": "캠페인을 고칠 때 받는 값. 보낸 칸만 바뀐다. 편은 목록을 통째로 바꾼다.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "episodes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EpisodeIn"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episodes"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "CampaignUpdate",
+        "type": "object"
+      },
+      "CampaignVersionCreate": {
+        "additionalProperties": false,
+        "description": "게시할 때 받는 값. 변경 내용만 적는다. 판의 내용은 서버가 초안에서 굳힌다.",
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "title": "CampaignVersionCreate",
+        "type": "object"
+      },
+      "CampaignVersionDetail": {
+        "description": "캠페인의 판 하나. 굳힌 내용을 싣는다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/CampaignSnapshot"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "note",
+          "created_at",
+          "snapshot"
+        ],
+        "title": "CampaignVersionDetail",
+        "type": "object"
+      },
+      "CampaignVersionSummary": {
+        "description": "캠페인의 판의 목록에 싣는 값. 굳힌 내용은 싣지 않는다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "note",
+          "created_at"
+        ],
+        "title": "CampaignVersionSummary",
+        "type": "object"
+      },
       "CarriedItem-Input": {
         "additionalProperties": false,
         "description": "몬스터나 NPC 가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 count 개 지녔다. 몬스터는 마리마다다.\n\nchance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).\n줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.\nwear 는 그 물건 하나를 착용한 칸들이다(#276). 한 개라도 지니고 있는 동안 착용한 것이다.\n떨어뜨리거나 빼앗겨 남은 것이 없으면 그 부위는 빈다. 칸이 맞는지는 게시할 때 본다(carried_wear_invalid).\n항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).",
@@ -3848,6 +4213,91 @@
           }
         },
         "title": "EntryUpdate",
+        "type": "object"
+      },
+      "EpisodeIn": {
+        "additionalProperties": false,
+        "description": "편 하나. 시나리오와 이름(비우면 시나리오의 제목).",
+        "properties": {
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "maxLength": 30,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scenario_id"
+        ],
+        "title": "EpisodeIn",
+        "type": "object"
+      },
+      "EpisodeOut": {
+        "description": "초안의 편 하나. 시나리오의 제목(지금의 것)과 게시한 마지막 판 번호(없으면 None)를 함께 싣는다.",
+        "properties": {
+          "last_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Version"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "scenario_title": {
+            "title": "Scenario Title",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scenario_id",
+          "title",
+          "scenario_title",
+          "last_version"
+        ],
+        "title": "EpisodeOut",
+        "type": "object"
+      },
+      "EpisodeSnapshot": {
+        "description": "판에 굳힌 편 하나. 시나리오와 그때의 마지막 판 번호, 편의 이름(비웠으면 그때의 시나리오의 제목).",
+        "properties": {
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scenario_id",
+          "version",
+          "title"
+        ],
+        "title": "EpisodeSnapshot",
         "type": "object"
       },
       "EquipmentSlot": {
@@ -21279,6 +21729,485 @@
         "summary": "Update Monster",
         "tags": [
           "bestiaries"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/campaigns": {
+      "get": {
+        "description": "자기 캠페인의 목록을 최근에 만든 것부터.",
+        "operationId": "list_campaigns_api_v1_game_campaigns_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Campaigns",
+        "tags": [
+          "campaigns"
+        ],
+        "x-audience": "user"
+      },
+      "post": {
+        "description": "캠페인을 만든다. 편은 자기 시나리오만 가리킨다. 비워도 된다.",
+        "operationId": "create_campaign_api_v1_game_campaigns_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Campaign",
+        "tags": [
+          "campaigns"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/campaigns/{campaign_id}": {
+      "delete": {
+        "description": "자기 캠페인을 지운다.",
+        "operationId": "delete_campaign_api_v1_game_campaigns__campaign_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaign_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Campaign Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Campaign",
+        "tags": [
+          "campaigns"
+        ],
+        "x-audience": "user"
+      },
+      "get": {
+        "description": "자기 캠페인 하나.",
+        "operationId": "read_campaign_api_v1_game_campaigns__campaign_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaign_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Campaign Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Campaign",
+        "tags": [
+          "campaigns"
+        ],
+        "x-audience": "user"
+      },
+      "patch": {
+        "description": "자기 캠페인을 고친다. 보낸 칸만 바뀐다. 편은 목록을 통째로 바꾼다.",
+        "operationId": "update_campaign_api_v1_game_campaigns__campaign_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaign_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Campaign Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Campaign",
+        "tags": [
+          "campaigns"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/campaigns/{campaign_id}/publish-check": {
+      "get": {
+        "description": "지금 게시하면 막히는 이유와 알릴 것을 미리 본다. 게시(POST /versions)와 같은 검사다.",
+        "operationId": "check_publishable_api_v1_game_campaigns__campaign_id__publish_check_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaign_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Campaign Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignPublishCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Publishable",
+        "tags": [
+          "campaigns"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/campaigns/{campaign_id}/versions": {
+      "get": {
+        "description": "자기 캠페인의 판을 최근 것부터. 굳힌 내용은 싣지 않는다.",
+        "operationId": "list_versions_api_v1_game_campaigns__campaign_id__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaign_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Campaign Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CampaignVersionSummary"
+                  },
+                  "title": "Response List Versions Api V1 Game Campaigns  Campaign Id  Versions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Versions",
+        "tags": [
+          "campaigns"
+        ],
+        "x-audience": "user"
+      },
+      "post": {
+        "description": "자기 캠페인을 게시한다. 편마다 시나리오의 마지막 판 번호가 새 판으로 굳는다.",
+        "operationId": "publish_campaign_api_v1_game_campaigns__campaign_id__versions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaign_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Campaign Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignVersionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignVersionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Publish Campaign",
+        "tags": [
+          "campaigns"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/campaigns/{campaign_id}/versions/{number}": {
+      "get": {
+        "description": "자기 캠페인의 판 하나를 굳힌 내용과 함께.",
+        "operationId": "read_version_api_v1_game_campaigns__campaign_id__versions__number__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "campaign_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Campaign Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "title": "Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignVersionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Version",
+        "tags": [
+          "campaigns"
         ],
         "x-audience": "user"
       }

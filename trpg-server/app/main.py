@@ -36,6 +36,7 @@ from app.ai_log import retention
 from app.api import health, me, readiness
 from app.assets.bestiaries import router as bestiaries
 from app.assets.bestiaries.service import BestiaryFullError
+from app.assets.campaigns import router as campaigns
 from app.assets.lorebooks import router as lorebooks
 from app.assets.lorebooks.service import LorebookFullError
 from app.assets.ratings import AdultContentRequiredError
@@ -344,6 +345,7 @@ def create_app(
     app.include_router(scenarios.router, prefix=API_PREFIX)
     app.include_router(lorebooks.router, prefix=API_PREFIX)
     app.include_router(bestiaries.router, prefix=API_PREFIX)
+    app.include_router(campaigns.router, prefix=API_PREFIX)
     app.include_router(references.router, prefix=API_PREFIX)
     app.include_router(listings.owner_router, prefix=API_PREFIX)
     app.include_router(listings.public_router, prefix=API_PREFIX)
