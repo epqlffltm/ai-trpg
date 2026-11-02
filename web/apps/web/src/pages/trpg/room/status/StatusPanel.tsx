@@ -1,11 +1,13 @@
 // web/apps/web/src/pages/trpg/room/status/StatusPanel.tsx
-// 상태 패널(B7). 진행 중과 끝난 테이블의 옆에 둔다. 위에 내 HP 한 줄을 늘 보이고, 아래는 탭으로 나눈다.
-//   - 캐릭터(C): 앉은 사람마다 HP, 부상, 능력치, 떠난 캐릭터
+// 상태 패널(B7). 진행 중과 끝난 테이블의 옆에 둔다. 위에 내 HP 한 줄(과 성장이 있는 규칙이면 레벨, 쌓인 점수를 놓는 단추 #286)을
+// 늘 보이고, 아래는 탭으로 나눈다.
+//   - 캐릭터(C): 앉은 사람마다 HP, 레벨, 부상, 능력치, 떠난 캐릭터
 //   - 소지품(I): 캐릭터마다 지닌 물건
 //   - 퀘스트·장소(J): 게임 안의 시각, 퀘스트, 장소와 길
 //   - 일어난 일(L): 이벤트를 한 줄씩(events/EventLog)
 // 상태를 바꾸지 않는다. 값은 이벤트가 오면 테이블을 다시 읽어 바뀐다(useBatchedRefetch).
 // 물건과 장소의 단추는 선언 입력의 행동 칸을 채울 뿐이다(useActionShortcuts). 보내는 것은 선언이다.
+// 점수 놓기는 선언이 아니라 바로 바꾼다(useRaise).
 
 import { useState } from 'react';
 import type { TableDetail } from '../../../../api/types';
@@ -14,10 +16,13 @@ import { EventLog } from '../events/EventLog';
 import { displayName } from '../MemberList';
 import { CharacterCards } from './CharacterCards';
 import { HpBar } from './HpBar';
+import { LevelBar } from './LevelBar';
+import { RaiseButton } from './RaiseButton';
 import { ResourceBars } from './ResourceBars';
 import { Inventory } from './Inventory';
 import { STATUS_TABS, type StatusTab } from './statusTabs';
 import { useActionShortcuts } from './useActionShortcuts';
+import { useRaise } from './useRaise';
 import { useStatusShortcuts } from './useStatusShortcuts';
 import { WorldInfo } from './WorldInfo';
 
@@ -27,6 +32,7 @@ export function StatusPanel({ table, myId, nameOf }: Props) {
   const [tab, setTab] = useState<StatusTab>('characters');
   useStatusShortcuts(setTab);
   const shortcuts = useActionShortcuts(table, myId);
+  const raising = useRaise(table, myId);
   const mine = table.members.find((member) => member.user_id === myId);
   return (
     <section className="room-panel status" aria-labelledby="status-heading">
@@ -36,6 +42,8 @@ export function StatusPanel({ table, myId, nameOf }: Props) {
           <span className="status-card__name">{mine.character?.name}</span>
           <HpBar sheet={mine.sheet} rules={table.rules} />
           <ResourceBars sheet={mine.sheet} />
+          <LevelBar sheet={mine.sheet} rules={table.rules} />
+          {table.rules.progression ? <RaiseButton sheet={mine.sheet} rules={table.rules} raising={raising} /> : null}
         </div>
       ) : null}
       <div className="status__tabs" role="tablist" aria-label="상태 패널">
