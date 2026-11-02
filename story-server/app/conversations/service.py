@@ -33,6 +33,7 @@ from app.assets.client import AssetAdultRequiredError, AssetClient, AssetNotFoun
 from app.assets.schemas import PersonaCopy, WorldCopy
 from app.billing.price_list import PriceList, PriceListUnavailable
 from app.billing.prices import PriceBook
+from app.bookmarks import repository as bookmarks
 from app.catalog import repository as catalog
 from app.catalog.choice import is_choosable
 from app.catalog.models import AiModel
@@ -360,9 +361,13 @@ async def get_conversation(session: AsyncSession, viewer: Viewer, conversation_i
 
 
 async def delete_conversation(session: AsyncSession, viewer: Viewer, conversation_id: uuid.UUID) -> None:
-    """세션을 지운다(지운 시각을 적는다, chat 과 같다). 없으면 ConversationNotFoundError."""
+    """
+    세션을 지운다(지운 시각을 적는다, chat 과 같다). 책갈피는 같은 트랜잭션에서 뗀다(#982).
+    없으면 ConversationNotFoundError.
+    """
     conversation, _ = await get_conversation(session, viewer, conversation_id)
     conversation.deleted_at = func.now()
+    await bookmarks.remove_all(session, conversation.id)
     await session.commit()
 
 

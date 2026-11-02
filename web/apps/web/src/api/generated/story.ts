@@ -134,6 +134,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/conversations/{conversation_id}/bookmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Bookmarks
+         * @description 세션의 책갈피들.
+         */
+        get: operations["list_bookmarks_api_v1_story_conversations__conversation_id__bookmarks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/story/conversations/{conversation_id}/bookmarks/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Bookmark
+         * @description 그 말에 책갈피를 단다. 이미 있으면 메모만 바꾼다.
+         */
+        put: operations["put_bookmark_api_v1_story_conversations__conversation_id__bookmarks__message_id__put"];
+        post?: never;
+        /**
+         * Remove Bookmark
+         * @description 그 말의 책갈피를 뗀다.
+         */
+        delete: operations["remove_bookmark_api_v1_story_conversations__conversation_id__bookmarks__message_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/conversations/{conversation_id}/branch": {
         parameters: {
             query?: never;
@@ -612,6 +656,37 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * BookmarkOut
+         * @description 책갈피 하나. 그 말의 역할(user, assistant, action)과 앞부분(excerpt)을 함께 싣는다(목록에서 어느 말인지 알아보게).
+         *     그 자리로 가려면 가지 고르기(PUT /conversations/{id}/branch, message_id)를 부른다.
+         *     다른 가지의 말이면 그 가지가 보인다.
+         */
+        BookmarkOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Excerpt */
+            excerpt: string;
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
+            /** Note */
+            note: string | null;
+            role: components["schemas"]["Role"];
+        };
+        /**
+         * BookmarkWrite
+         * @description 책갈피를 달 때 받는 것. 메모는 없어도 된다(비우면 메모가 없다).
+         */
+        BookmarkWrite: {
+            /** Note */
+            note?: string | null;
+        };
         /**
          * BranchChoice
          * @description 볼 가지. 대안 가운데 하나의 id 다. 그 말 아래에서 가장 나중에 생긴 말이 가지의 끝이 된다.
@@ -1482,6 +1557,13 @@ export interface components {
             world_version: number;
         };
         /**
+         * Role
+         * @description 누가 한 말인가. action 은 사람이 한 행동(이동, 시간, 선택지, 고백)이다. 행동 말은 서버가 쓴 글이다.
+         *     assistant 는 모델의 답이다. 장면의 인물들과 서술의 말 조각(segments)으로 되어 있다.
+         * @enum {string}
+         */
+        Role: "user" | "assistant" | "action";
+        /**
          * SceneKind
          * @description 일러스트가 붙은 장면의 종류. 이벤트와 엔딩의 id 는 서로 겹칠 수 있어 종류로 가른다.
          * @enum {string}
@@ -1937,6 +2019,103 @@ export interface operations {
                 content: {
                     "text/event-stream": unknown;
                 };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_bookmarks_api_v1_story_conversations__conversation_id__bookmarks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkOut"][];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    put_bookmark_api_v1_story_conversations__conversation_id__bookmarks__message_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookmarkWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    remove_bookmark_api_v1_story_conversations__conversation_id__bookmarks__message_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description 입력이 틀렸다 */
             422: {

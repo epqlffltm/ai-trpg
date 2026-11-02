@@ -128,6 +128,8 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | GET | `/api/v1/chat/conversations/{id}/summary` | 지금 가지의 [굴리는 요약](#굴리는-요약)(읽기만, `{text, covered_up_to, created_at}`). 아직 없으면 `null` | access 토큰 |
 | PATCH, DELETE | `/api/v1/chat/conversations/{id}/notes/{note_id}` | 메모 고치기 `{text}`, 지우기(204). 없으면 404 `note_not_found` | access 토큰 |
 | POST | `/api/v1/chat/conversations/{id}/notes/{note_id}/accept` | [요약이 제안한 메모](#요약이-제안하는-메모) 받아들이기(200). 가득 차면 409 `notes_full` | access 토큰 |
+| GET | `/api/v1/chat/conversations/{id}/bookmarks` | [책갈피](#책갈피)들(나중에 단 것부터, `{message_id, note, role, excerpt, created_at}`) | access 토큰 |
+| PUT, DELETE | `/api/v1/chat/conversations/{id}/bookmarks/{message_id}` | 책갈피 달기 `{note?}`(이미 있으면 메모만 바꾼다), 떼기(204, 달지 않았어도). 다른 대화의 말은 404 `message_not_found`, 가득 차면 409 `bookmarks_full` | access 토큰 |
 | PATCH | `/api/v1/chat/messages/{id}` | [상대의 말 고치기](#고치기). `{content}`. 고친 말을 돌려준다. 사람의 말이면 422 `not_editable` | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/reports` | [캐릭터의 답 신고](#신고). `{reason, description?}`. 201. 사람의 말은 422 `not_reportable`, 두 번째는 409 `already_reported` | access 토큰 |
 | GET | `/api/v1/chat/admin/message-reports` | 운영자: 열린 신고의 목록(`minor` 먼저, 오래된 것부터, 대화의 글은 없다). 운영자가 아니면 404 | access 토큰(운영자) |
@@ -465,6 +467,16 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - 한 번에 적힌 제안끼리는 같은 시각이라 목록에서 그 안의 순서는 정해지지 않는다.
 - 모델은 제안만 한다. 모델에 가는 것은 사람이 받아들인 것뿐이라 지어낸 기억이 저절로 굳지 않는다.
 
+### 책갈피
+
+대화의 말 하나에 책갈피를 단다(#982, `app/bookmarks/`). 긴 대화에서 좋았던 자리로 돌아가려고 다는 표시다. 모델에는 가지 않는다.
+
+- 말 하나에 하나다. 다시 달면 메모만 바뀐다. 메모는 100자까지이고 비워도 된다. 대화마다 100개까지(넘으면 409 `bookmarks_full`, 이미 단 말의 메모는 바꾼다).
+- 어느 가지의 말이든 단다. 그 자리로 가는 것은 [가지 고르기](#다시-생성-멈추기-대안)(`PUT /conversations/{id}/branch`, `message_id`)다. 다른 가지의 말이면 그 가지가 보인다.
+- 목록에는 말의 역할과 앞부분(80자, 줄바꿈은 띄어쓰기)을 함께 싣는다. 모델을 부르지 않아 청구하지 않고, 답을 쓰는 중에도 된다. 쓰기는 요청 수 제한의 쓰기로 센다.
+- 대화를 지우면(지운 시각) 같은 트랜잭션에서 뗀다. 말이나 대화의 행이 지워지면(탈퇴) 외래 키로 함께 지워진다.
+- 스크린샷(고른 말들을 그림으로)은 화면이 만든다. 서버에 올리지 않는다.
+
 ### 로어북
 
 캐릭터의 판에 복사된 로어북(asset 의 판 형식 8)에서 항목을 골라 카드의 "[로어북]" 에 넣는다(#672, `conversation_core/lorebook.py`).
@@ -575,7 +587,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 
 인증 서버가 유예(7일)가 지난 탈퇴를 알리면 그 사람의 것을 지운다(#670, [탈퇴 설계](../docs/architecture/withdrawal.md), `app/withdrawal/`).
 
-- **지우는 것.** 대화(지운 것으로 적어 둔 것까지)와 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 페르소나의 사본, 그 대화의 [신고](#신고)), 가져온 캐릭터의 판의 사본(과 로어북의 벡터), 연 이벤트 씬의 기록, 보내지 않은 알림이다. 한 트랜잭션이다.
+- **지우는 것.** 대화(지운 것으로 적어 둔 것까지)와 딸린 것(말, 말마다의 상태, 요약, 기억 메모, 책갈피, 페르소나의 사본, 그 대화의 [신고](#신고)), 가져온 캐릭터의 판의 사본(과 로어북의 벡터), 연 이벤트 씬의 기록, 보내지 않은 알림이다. 한 트랜잭션이다.
 - **남기는 것.** 청구 기록(`generations`)이다. 대화와 말을 가리키는 칸만 비운다(외래 키가 `SET NULL`, 2026-10-23 유저 결정).
   남는 것은 공개 ID, 모델, 토큰 수, 원가, 청구 상태, 홀드의 이름표이고 글은 없다. 결제 서버도 원장과 홀드를 공개 ID 로 남기므로 서로 맞추고 원가를 셀 때 쓴다.
 - **받는 길.** `POST /api/v1/chat/service/users/{public_id}/withdrawal`, 본문 `{"withdrawn_at": "..."}`. 인증 서버의 비밀(`AUTH_SERVER_SECRET`)로 서명한다(`app/core/service_auth.py`).

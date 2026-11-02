@@ -163,6 +163,8 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | PATCH | `/api/v1/story/conversations/{id}/notes/{note_id}` | 기억 메모 고치기(`{"text"}`). 없으면 404 `note_not_found` | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/notes/{note_id}/accept` | 요약이 제안한 메모를 받아들이기. 다음 말부터 모델에 간다. 가득 차면 409 `notes_full` | access 토큰 |
 | DELETE | `/api/v1/story/conversations/{id}/notes/{note_id}` | 기억 메모 지우기(제안을 버리는 것도 이것). 204 | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}/bookmarks` | [책갈피](#책갈피)들(나중에 단 것부터, `{message_id, note, role, excerpt, created_at}`) | access 토큰 |
+| PUT, DELETE | `/api/v1/story/conversations/{id}/bookmarks/{message_id}` | 책갈피 달기 `{note?}`(이미 있으면 메모만 바꾼다), 떼기(204, 달지 않았어도). 다른 세션의 말은 404 `message_not_found`, 가득 차면 409 `bookmarks_full` | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}/summary` | 지금 가지의 [굴리는 요약](#기억-메모)(`{text, covered_up_to, created_at}`, 읽기만). 없으면 null | access 토큰 |
 | GET | `/api/v1/story/gallery` | 그 세계관에서 내가 연 일러스트들(`?world_id=`, 처음 연 차례). [계정의 기록](#계정의-기록) | access 토큰 |
 
@@ -203,7 +205,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 - **플레이 복사**(`POST /conversations/{id}/copy`, `app/conversations/copying.py`). 지금 보고 있는 가지를 새 세션으로 복사한다. 제목 뒤에 " (복사)" 를 붙인다.
   옮기는 것: 가지의 말들(글, 조각, 장면의 인물, 열린 이벤트와 본 엔딩, 고친 표시, 다음 답 추천, 처음의 시각)과 말에 붙은 상태, 그 말들의 요약(원가와 토큰 수는 빼고),
   기억 메모(제안까지), 페르소나의 사본, 세션의 모델, 굳힌 본 엔딩(같은 회차를 이어 간다). 판의 사본은 같은 것을 가리킨다.
-  옮기지 않는 것: 다른 가지(대안), 청구 기록(다시 청구하지 않는다), 신고. 원래 세션을 잠그고 한 트랜잭션에서 한다. 답을 쓰는 중이면 409 `generation_in_progress` 다.
+  옮기지 않는 것: 다른 가지(대안), 청구 기록(다시 청구하지 않는다), 신고, 책갈피. 원래 세션을 잠그고 한 트랜잭션에서 한다. 답을 쓰는 중이면 409 `generation_in_progress` 다.
 - **지우기**(chat 과 같다). 지운 시각(`deleted_at`)만 적는다. 말, 상태, 판의 사본은 남는다. 지운 세션은 목록과 읽기에 나오지 않고,
   말과 행동을 보내면 404 다. 요약도 하지 않는다. "지난번에 고른 모델과 페르소나"는 지운 세션도 센다. 계정의 기록(본 엔딩, 연 일러스트)은 그대로다.
   행을 지우는 것은 [탈퇴](#탈퇴)뿐이다. 답을 쓰는 중에 지워도 그 답은 끝까지 저장되고 청구된다.
@@ -397,6 +399,15 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
   다시 생성과 가지 바꾸기에도 판정이 같다. 다른 세션에서 새로 본 엔딩은 다음 세션부터다.
 - **키를 장면으로 둔 까닭**(2026-10-26). 일러스트는 인물이 아니라 이벤트와 엔딩의 장면에 붙어 있다. 한 장면에 인물이 0~4 명이라 인물 하나로 가리킬 수 없다.
   연 때의 그림을 적는 것은 제작자가 새 판에서 그림을 바꿔도 연 그림을 보이기 위해서다.
+
+### 책갈피
+
+세션의 말 하나에 책갈피를 단다(#982, chat 과 같다, `app/bookmarks/`). 모델에는 가지 않는다.
+
+- 말 하나에 하나, 메모 100자(비워도 된다), 세션마다 100개(409 `bookmarks_full`). 사람의 말, 행동 말, 답 모두 단다.
+- 그 자리로 가는 것은 가지 고르기(`PUT /conversations/{id}/branch`, `message_id`)다. 다른 가지의 말이면 그 가지가 보인다.
+- 목록의 앞부분(80자)은 답이면 말 조각의 글을 잇는다(표식 `@이름:` 은 빠진다).
+- 세션을 지우면 같은 트랜잭션에서 뗀다. 플레이 복사는 책갈피를 옮기지 않는다. 탈퇴하면 세션과 함께 지워진다.
 
 ### 기억 메모
 
