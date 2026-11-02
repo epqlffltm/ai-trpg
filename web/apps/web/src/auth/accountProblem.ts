@@ -1,5 +1,5 @@
 // web/apps/web/src/auth/accountProblem.ts
-// 계정 화면(마이페이지, 다시 동의, 탈퇴 취소)의 실패를 화면에 보일 것으로 바꾼다. 순수한 함수다.
+// 계정 화면(마이페이지, 다시 동의, 탈퇴 요청과 취소)의 실패를 화면에 보일 것으로 바꾼다. 순수한 함수다.
 
 import { ApiError } from '../api/errors';
 import { commonProblem, fieldProblem, unknownProblem, type FormProblem } from './problem';
@@ -18,6 +18,14 @@ export function describePasswordChangeProblem(error: unknown): FormProblem {
   const common = commonProblem(error);
   if (common || !(error instanceof ApiError)) return common ?? { message: FAILED };
   if (error.status === 400) return fieldProblem(error, '입력을 확인해 주세요.');
+  return unknownProblem(error, FAILED);
+}
+
+/** 탈퇴 요청. 비밀번호가 틀리면 그 칸에 서버의 글을 보인다. 너무 많이 틀리면 기다리게 한다(429) */
+export function describeWithdrawalProblem(error: unknown): FormProblem {
+  const common = commonProblem(error);
+  if (common || !(error instanceof ApiError)) return common ?? { message: FAILED };
+  if (error.status === 400) return fieldProblem(error, '비밀번호를 확인해 주세요.');
   return unknownProblem(error, FAILED);
 }
 
