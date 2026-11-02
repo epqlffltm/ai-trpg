@@ -165,6 +165,15 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
     await client.patch(
         f'{url}/scenarios/{scenario["id"]}/listing', json={'tagline': '달린다', 'genre': 'sf'}, headers=me
     )
+    # 캠페인(#481 B)은 같은 룰북의 게시한 시나리오가 둘 있어야 게시된다. 둘째 편은 첫 편과 같은 몸으로 만든다
+    sequel = (await client.post(f'{url}/scenarios', json=with_model({**body, 'title': '뒤편'}), headers=me)).json()
+    await client.post(f'{url}/scenarios/{sequel["id"]}/versions', json={}, headers=me)
+    await app.state.jobs.drain()
+    episodes = [{'scenario_id': scenario['id']}, {'scenario_id': sequel['id']}]
+    campaign = (
+        await client.post(f'{url}/campaigns', json={'title': '캠페인', 'episodes': episodes}, headers=me)
+    ).json()
+    await client.post(f'{url}/campaigns/{campaign["id"]}/versions', json={}, headers=me)
 
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 1}
     table = (await client.post(f'{url}/tables', json=body, headers=me)).json()

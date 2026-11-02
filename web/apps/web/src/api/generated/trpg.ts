@@ -326,6 +326,122 @@ export interface paths {
         patch: operations["update_monster_api_v1_game_bestiaries__bestiary_id__monsters__monster_id__patch"];
         trace?: never;
     };
+    "/api/v1/game/campaigns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Campaigns
+         * @description 자기 캠페인의 목록을 최근에 만든 것부터.
+         */
+        get: operations["list_campaigns_api_v1_game_campaigns_get"];
+        put?: never;
+        /**
+         * Create Campaign
+         * @description 캠페인을 만든다. 편은 자기 시나리오만 가리킨다. 비워도 된다.
+         */
+        post: operations["create_campaign_api_v1_game_campaigns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/campaigns/{campaign_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Campaign
+         * @description 자기 캠페인 하나.
+         */
+        get: operations["read_campaign_api_v1_game_campaigns__campaign_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Campaign
+         * @description 자기 캠페인을 지운다.
+         */
+        delete: operations["delete_campaign_api_v1_game_campaigns__campaign_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Campaign
+         * @description 자기 캠페인을 고친다. 보낸 칸만 바뀐다. 편은 목록을 통째로 바꾼다.
+         */
+        patch: operations["update_campaign_api_v1_game_campaigns__campaign_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/game/campaigns/{campaign_id}/publish-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check Publishable
+         * @description 지금 게시하면 막히는 이유와 알릴 것을 미리 본다. 게시(POST /versions)와 같은 검사다.
+         */
+        get: operations["check_publishable_api_v1_game_campaigns__campaign_id__publish_check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/campaigns/{campaign_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Versions
+         * @description 자기 캠페인의 판을 최근 것부터. 굳힌 내용은 싣지 않는다.
+         */
+        get: operations["list_versions_api_v1_game_campaigns__campaign_id__versions_get"];
+        put?: never;
+        /**
+         * Publish Campaign
+         * @description 자기 캠페인을 게시한다. 편마다 시나리오의 마지막 판 번호가 새 판으로 굳는다.
+         */
+        post: operations["publish_campaign_api_v1_game_campaigns__campaign_id__versions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/campaigns/{campaign_id}/versions/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Version
+         * @description 자기 캠페인의 판 하나를 굳힌 내용과 함께.
+         */
+        get: operations["read_version_api_v1_game_campaigns__campaign_id__versions__number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/listings": {
         parameters: {
             query?: never;
@@ -2274,6 +2390,200 @@ export interface components {
             mode: string;
         };
         /**
+         * CampaignCreate
+         * @description 캠페인을 만들 때 받는 값. 편은 비워도 된다.
+         */
+        CampaignCreate: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Episodes
+             * @default []
+             */
+            episodes: components["schemas"]["EpisodeIn"][];
+            /** Title */
+            title: string;
+        };
+        /**
+         * CampaignDetail
+         * @description 캠페인 하나. 편들을 차례대로 싣는다.
+         */
+        CampaignDetail: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Episode Count */
+            episode_count: number;
+            /** Episodes */
+            episodes: components["schemas"]["EpisodeOut"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            rating: components["schemas"]["Rating"];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            visibility: components["schemas"]["Visibility"];
+        };
+        /**
+         * CampaignPage
+         * @description 캠페인 목록의 한 쪽.
+         */
+        CampaignPage: {
+            /** Items */
+            items: components["schemas"]["CampaignSummary"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * CampaignPublishCheck
+         * @description 지금 게시하면 막히는 이유와 알릴 것. 판을 만들지 않는다.
+         *
+         *     problems 는 게시가 409 로 돌려주는 것과 같은 이름들이다. 비어 있으면 지금 게시할 수 있다(ready).
+         *     warnings 는 게시를 막지 않는 알림이다(옮겨지지 않는 물건, 성장이 없는 룰북).
+         */
+        CampaignPublishCheck: {
+            /** Problems */
+            problems: string[];
+            /** Ready */
+            ready: boolean;
+            /** Warnings */
+            warnings: string[];
+        };
+        /**
+         * CampaignSnapshot
+         * @description 캠페인의 판 하나의 내용. 편들과 등급이다.
+         *
+         *     등급은 편의 판들의 등급 가운데 가장 높은 것이다(성인용이 하나라도 있으면 성인용).
+         *     룰북은 편들이 모두 같다(게시할 때 막는다).
+         *     rulebook_id 는 그 룰북이 어디서 왔는지 알려 줄 뿐이다. 규칙은 편마다의 시나리오 판에 굳어 있다.
+         */
+        CampaignSnapshot: {
+            /** Description */
+            description: string;
+            /** Episodes */
+            episodes: components["schemas"]["EpisodeSnapshot"][];
+            /**
+             * Format
+             * @default 1
+             */
+            format: number;
+            rating: components["schemas"]["Rating"];
+            /**
+             * Rulebook Id
+             * Format: uuid
+             */
+            rulebook_id: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * CampaignSummary
+         * @description 캠페인의 목록에 싣는 값. 공통 값에 등급(마지막으로 게시할 때 정한 것)과 편의 수를 더한다.
+         */
+        CampaignSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Episode Count */
+            episode_count: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            rating: components["schemas"]["Rating"];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            visibility: components["schemas"]["Visibility"];
+        };
+        /**
+         * CampaignUpdate
+         * @description 캠페인을 고칠 때 받는 값. 보낸 칸만 바뀐다. 편은 목록을 통째로 바꾼다.
+         */
+        CampaignUpdate: {
+            /** Description */
+            description?: string | null;
+            /** Episodes */
+            episodes?: components["schemas"]["EpisodeIn"][] | null;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * CampaignVersionCreate
+         * @description 게시할 때 받는 값. 변경 내용만 적는다. 판의 내용은 서버가 초안에서 굳힌다.
+         */
+        CampaignVersionCreate: {
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /**
+         * CampaignVersionDetail
+         * @description 캠페인의 판 하나. 굳힌 내용을 싣는다.
+         */
+        CampaignVersionDetail: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string;
+            /** Number */
+            number: number;
+            snapshot: components["schemas"]["CampaignSnapshot"];
+        };
+        /**
+         * CampaignVersionSummary
+         * @description 캠페인의 판의 목록에 싣는 값. 굳힌 내용은 싣지 않는다.
+         */
+        CampaignVersionSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note */
+            note: string;
+            /** Number */
+            number: number;
+        };
+        /**
          * CarriedItem
          * @description 몬스터나 NPC 가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 count 개 지녔다. 몬스터는 마리마다다.
          *
@@ -3599,6 +3909,54 @@ export interface components {
             name?: string | null;
             /** True Names */
             true_names?: string[] | null;
+        };
+        /**
+         * EpisodeIn
+         * @description 편 하나. 시나리오와 이름(비우면 시나리오의 제목).
+         */
+        EpisodeIn: {
+            /**
+             * Scenario Id
+             * Format: uuid
+             */
+            scenario_id: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
+        /**
+         * EpisodeOut
+         * @description 초안의 편 하나. 시나리오의 제목(지금의 것)과 게시한 마지막 판 번호(없으면 None)를 함께 싣는다.
+         */
+        EpisodeOut: {
+            /** Last Version */
+            last_version: number | null;
+            /**
+             * Scenario Id
+             * Format: uuid
+             */
+            scenario_id: string;
+            /** Scenario Title */
+            scenario_title: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * EpisodeSnapshot
+         * @description 판에 굳힌 편 하나. 시나리오와 그때의 마지막 판 번호, 편의 이름(비웠으면 그때의 시나리오의 제목).
+         */
+        EpisodeSnapshot: {
+            /**
+             * Scenario Id
+             * Format: uuid
+             */
+            scenario_id: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
         };
         /**
          * EquipmentSlot
@@ -11595,6 +11953,295 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonsterDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_campaigns_api_v1_game_campaigns_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignPage"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    create_campaign_api_v1_game_campaigns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_campaign_api_v1_game_campaigns__campaign_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    delete_campaign_api_v1_game_campaigns__campaign_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    update_campaign_api_v1_game_campaigns__campaign_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    check_publishable_api_v1_game_campaigns__campaign_id__publish_check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignPublishCheck"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_versions_api_v1_game_campaigns__campaign_id__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignVersionSummary"][];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    publish_campaign_api_v1_game_campaigns__campaign_id__versions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignVersionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignVersionDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_version_api_v1_game_campaigns__campaign_id__versions__number__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignVersionDetail"];
                 };
             };
             /** @description 입력이 틀렸다 */

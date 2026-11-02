@@ -170,6 +170,8 @@ class AssetType(enum.StrEnum):
     LOREBOOK = 'lorebook'
     # 몬스터 도감. 모델은 app/assets/bestiaries/models.py 에 있다
     BESTIARY = 'bestiary'
+    # 캠페인(#481 B). 시나리오들을 차례로 묶는다. 모델은 app/assets/campaigns/models.py 에 있다
+    CAMPAIGN = 'campaign'
 
 
 class ItemKind(enum.StrEnum):
