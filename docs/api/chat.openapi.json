@@ -142,6 +142,68 @@
         "title": "AffectionRuleDocument",
         "type": "object"
       },
+      "BookmarkOut": {
+        "description": "책갈피 하나. 그 말의 역할과 앞부분(excerpt)을 함께 싣는다(목록에서 어느 말인지 알아보게).\n그 자리로 가려면 가지 고르기(PUT /conversations/{id}/branch, message_id)를 부른다.\n다른 가지의 말이면 그 가지가 보인다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "excerpt": {
+            "title": "Excerpt",
+            "type": "string"
+          },
+          "message_id": {
+            "format": "uuid",
+            "title": "Message Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "required": [
+          "message_id",
+          "note",
+          "role",
+          "excerpt",
+          "created_at"
+        ],
+        "title": "BookmarkOut",
+        "type": "object"
+      },
+      "BookmarkWrite": {
+        "additionalProperties": false,
+        "description": "책갈피를 달 때 받는 것. 메모는 없어도 된다(비우면 메모가 없다).",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "BookmarkWrite",
+        "type": "object"
+      },
       "BranchChoice": {
         "additionalProperties": false,
         "description": "볼 가지. 대안 가운데 하나의 id 다. 그 말 아래에서 가장 나중에 생긴 말이 가지의 끝이 된다.",
@@ -1955,6 +2017,16 @@
         "title": "ReportSummaryOut",
         "type": "object"
       },
+      "Role": {
+        "description": "누가 한 말인가. action 은 사람이 한 행동(지도에서 이동, 물건 쓰기, 건네기)이다.\n행동 말은 서버가 쓴 글이고, 그 뒤의 상태가 app/world 의 message_states 에 있다.",
+        "enum": [
+          "user",
+          "assistant",
+          "action"
+        ],
+        "title": "Role",
+        "type": "string"
+      },
       "SceneConditionDocument": {
         "description": "이벤트 씬이 나오는 조건. kind 는 reach_place(장소의 id), give_item(물건의 id), affection_stage(단계의 이름)다.\n모르는 종류도 받아 둔다(맞는 일이 없을 뿐이다).",
         "properties": {
@@ -2850,6 +2922,181 @@
         "summary": "Act",
         "tags": [
           "messages"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/conversations/{conversation_id}/bookmarks": {
+      "get": {
+        "description": "대화의 책갈피들.",
+        "operationId": "list_bookmarks_api_v1_chat_conversations__conversation_id__bookmarks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BookmarkOut"
+                  },
+                  "title": "Response List Bookmarks Api V1 Chat Conversations  Conversation Id  Bookmarks Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Bookmarks",
+        "tags": [
+          "bookmarks"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/conversations/{conversation_id}/bookmarks/{message_id}": {
+      "delete": {
+        "description": "그 말의 책갈피를 뗀다.",
+        "operationId": "remove_bookmark_api_v1_chat_conversations__conversation_id__bookmarks__message_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Bookmark",
+        "tags": [
+          "bookmarks"
+        ],
+        "x-audience": "user"
+      },
+      "put": {
+        "description": "그 말에 책갈피를 단다. 이미 있으면 메모만 바꾼다.",
+        "operationId": "put_bookmark_api_v1_chat_conversations__conversation_id__bookmarks__message_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookmarkWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookmarkOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Bookmark",
+        "tags": [
+          "bookmarks"
         ],
         "x-audience": "user"
       }

@@ -134,6 +134,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/conversations/{conversation_id}/bookmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Bookmarks
+         * @description 대화의 책갈피들.
+         */
+        get: operations["list_bookmarks_api_v1_chat_conversations__conversation_id__bookmarks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{conversation_id}/bookmarks/{message_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Bookmark
+         * @description 그 말에 책갈피를 단다. 이미 있으면 메모만 바꾼다.
+         */
+        put: operations["put_bookmark_api_v1_chat_conversations__conversation_id__bookmarks__message_id__put"];
+        post?: never;
+        /**
+         * Remove Bookmark
+         * @description 그 말의 책갈피를 뗀다.
+         */
+        delete: operations["remove_bookmark_api_v1_chat_conversations__conversation_id__bookmarks__message_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/conversations/{conversation_id}/branch": {
         parameters: {
             query?: never;
@@ -617,6 +661,37 @@ export interface components {
              * @default false
              */
             once: boolean;
+        };
+        /**
+         * BookmarkOut
+         * @description 책갈피 하나. 그 말의 역할과 앞부분(excerpt)을 함께 싣는다(목록에서 어느 말인지 알아보게).
+         *     그 자리로 가려면 가지 고르기(PUT /conversations/{id}/branch, message_id)를 부른다.
+         *     다른 가지의 말이면 그 가지가 보인다.
+         */
+        BookmarkOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Excerpt */
+            excerpt: string;
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
+            /** Note */
+            note: string | null;
+            role: components["schemas"]["Role"];
+        };
+        /**
+         * BookmarkWrite
+         * @description 책갈피를 달 때 받는 것. 메모는 없어도 된다(비우면 메모가 없다).
+         */
+        BookmarkWrite: {
+            /** Note */
+            note?: string | null;
         };
         /**
          * BranchChoice
@@ -1476,6 +1551,13 @@ export interface components {
             reason: components["schemas"]["ReportReason"];
         };
         /**
+         * Role
+         * @description 누가 한 말인가. action 은 사람이 한 행동(지도에서 이동, 물건 쓰기, 건네기)이다.
+         *     행동 말은 서버가 쓴 글이고, 그 뒤의 상태가 app/world 의 message_states 에 있다.
+         * @enum {string}
+         */
+        Role: "user" | "assistant" | "action";
+        /**
          * SceneConditionDocument
          * @description 이벤트 씬이 나오는 조건. kind 는 reach_place(장소의 id), give_item(물건의 id), affection_stage(단계의 이름)다.
          *     모르는 종류도 받아 둔다(맞는 일이 없을 뿐이다).
@@ -1949,6 +2031,103 @@ export interface operations {
                 content: {
                     "text/event-stream": unknown;
                 };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_bookmarks_api_v1_chat_conversations__conversation_id__bookmarks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkOut"][];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    put_bookmark_api_v1_chat_conversations__conversation_id__bookmarks__message_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookmarkWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    remove_bookmark_api_v1_chat_conversations__conversation_id__bookmarks__message_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description 입력이 틀렸다 */
             422: {

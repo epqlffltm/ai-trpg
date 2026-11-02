@@ -45,6 +45,8 @@ from app.assets.client import AssetClient, AssetUnavailableError
 from app.billing import router as billing
 from app.billing.price_list import PriceListUnavailable
 from app.billing.setup import build_billing, build_price_list
+from app.bookmarks import router as bookmarks
+from app.bookmarks.service import BookmarksFullError
 from app.catalog import router as catalog
 from app.conversations import router as conversations
 from app.conversations.service import (
@@ -276,6 +278,8 @@ def create_app(
     app.include_router(transcripts.router, prefix=API_PREFIX)
     # 기억 메모(세션마다의 짧은 글, 모델에 늘 간다)
     app.include_router(memory.router, prefix=API_PREFIX)
+    # 말의 책갈피(#982, chat 과 같다). 모델을 부르지 않는다
+    app.include_router(bookmarks.router, prefix=API_PREFIX)
     # 모델의 답의 신고(답과 앞의 말을 굳혀 둔다)
     app.include_router(reports.router, prefix=API_PREFIX)
     # 운영자 API(신고를 보고 처리한다. 운영자가 아니면 404)
@@ -295,6 +299,7 @@ def create_app(
     app.add_exception_handler(NotEditableError, conversations.handle_not_editable)
     app.add_exception_handler(NoteNotFoundError, memory.handle_note_not_found)
     app.add_exception_handler(NotesFullError, memory.handle_notes_full)
+    app.add_exception_handler(BookmarksFullError, bookmarks.handle_bookmarks_full)
     app.add_exception_handler(NotReportableError, reports.handle_not_reportable)
     app.add_exception_handler(AlreadyReportedError, reports.handle_already_reported)
     app.add_exception_handler(ReportNotFoundError, operators.handle_report_not_found)
