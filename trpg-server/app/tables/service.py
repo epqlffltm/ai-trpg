@@ -39,6 +39,7 @@ from app.assets.service import AssetNotFoundError
 from app.billing import charges
 from app.billing.price_list import FREE_PRICES, PriceList
 from app.calendar import state as calendar
+from app.campaigns import ending as campaign_ending
 from app.catalog.steps import NarrationSteps, steps_of
 from app.events import recorder
 from app.events.models import EventType
@@ -431,7 +432,7 @@ async def start_table(
 
 async def end_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID) -> GameTable:
     """
-    방장이 테이블을 끝낸다.
+    방장이 테이블을 끝낸다. 캠페인의 편이면 넘길 것을 함께 적는다(app/campaigns/ending.py).
 
     방장이 아니면 NotHostError, 이미 끝났으면 TableConflictError.
     """
@@ -440,5 +441,6 @@ async def end_table(session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UU
     require_not_ended(table)
 
     end(table)
+    await campaign_ending.record_end(session, table)
     recorder.record(session, table, EventType.TABLE_ENDED, actor_id=host_id)
     return await save(session, table)

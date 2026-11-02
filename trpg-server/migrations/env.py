@@ -25,6 +25,7 @@ from app.assets.bestiaries import models as bestiary_models  # noqa: F401
 from app.assets.campaigns import models as campaign_models  # noqa: F401
 from app.billing import models as billing_models  # noqa: F401
 from app.calendar import models as calendar_models  # noqa: F401
+from app.campaigns import models as campaign_run_models  # noqa: F401
 from app.catalog import models as catalog_models  # noqa: F401
 from app.chat import models as chat_models  # noqa: F401
 from app.core.config import get_settings

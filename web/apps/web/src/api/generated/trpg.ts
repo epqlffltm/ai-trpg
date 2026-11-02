@@ -326,6 +326,46 @@ export interface paths {
         patch: operations["update_monster_api_v1_game_bestiaries__bestiary_id__monsters__monster_id__patch"];
         trace?: never;
     };
+    "/api/v1/game/campaign-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Run
+         * @description 플레이를 시작한다. 시작한 사람이 첫 편의 테이블의 방장이 된다. 열 수 없는 까닭은 테이블 만들기와 같다.
+         */
+        post: operations["start_run_api_v1_game_campaign_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/campaign-runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Run
+         * @description 플레이 하나. 편마다의 테이블, 끝난 퀘스트의 결과, 내가 가장 나중에 넘긴 것.
+         */
+        get: operations["read_run_api_v1_game_campaign_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/campaigns": {
         parameters: {
             query?: never;
@@ -2685,6 +2725,51 @@ export interface components {
             /** Price */
             price?: number | null;
             rarity: components["schemas"]["ItemRarity"];
+        };
+        /**
+         * Carry
+         * @description 한 사람의 넘길 것. campaign_carries.carry 에 이 모양으로 적는다.
+         */
+        Carry: {
+            /** Abilities */
+            abilities: {
+                [key: string]: number;
+            };
+            /** Character Description */
+            character_description: string;
+            /** Character Name */
+            character_name: string;
+            /** Items */
+            items: components["schemas"]["CarryItem"][];
+            /** Max Hp */
+            max_hp: number;
+            /** Money */
+            money: number;
+            /** Points */
+            points: number;
+            /** Pregen */
+            pregen: boolean;
+            /** Resistances */
+            resistances: {
+                [key: string]: unknown;
+            }[];
+            /** Skills */
+            skills: string[];
+            /** Xp */
+            xp: number;
+        };
+        /**
+         * CarryItem
+         * @description 넘기는 소지품 한 가지. 앞 편의 판의 물건 항목과 개수다.
+         */
+        CarryItem: {
+            /** Count */
+            count: number;
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
         };
         /**
          * CarryOut
@@ -7677,6 +7762,26 @@ export interface components {
             status: components["schemas"]["QuestStatus"];
         };
         /**
+         * QuestResult
+         * @description 편이 끝날 때의 퀘스트의 결과. 숨겨졌거나 진행 중이던 퀘스트는 적지 않는다.
+         * @enum {string}
+         */
+        QuestResult: "succeeded" | "failed";
+        /**
+         * QuestResultOut
+         * @description 편이 끝날 때의 퀘스트 결과 하나.
+         */
+        QuestResultOut: {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** Position */
+            position: number;
+            result: components["schemas"]["QuestResult"];
+        };
+        /**
          * QuestRule
          * @description 퀘스트 규칙 하나. 붙인 로어북의 사건 항목 하나(entry_id)가 퀘스트로서 어떤지 정한다.
          *
@@ -8942,6 +9047,151 @@ export interface components {
             /** Template */
             template: string;
             treatment: components["schemas"]["Treatment"] | null;
+        };
+        /**
+         * RunCreate
+         * @description 플레이를 시작할 때 받는 값. 캠페인과 그 판의 번호(비우면 마지막 판), 첫 편의 테이블을 여는 값.
+         */
+        RunCreate: {
+            /**
+             * Campaign Id
+             * Format: uuid
+             */
+            campaign_id: string;
+            table: components["schemas"]["RunTable"];
+            /** Version */
+            version?: number | null;
+        };
+        /**
+         * RunDetail
+         * @description 플레이 하나. 편들과 지금 편, 편마다 끝난 퀘스트의 결과, 보는 사람이 가장 나중에 넘긴 것(없으면 None).
+         *
+         *     넘긴 것은 본인의 것만 싣는다. 다른 사람의 캐릭터는 그 편의 테이블에서 본다.
+         */
+        RunDetail: {
+            /**
+             * Campaign Id
+             * Format: uuid
+             */
+            campaign_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Episodes */
+            episodes: components["schemas"]["RunEpisodeOut"][];
+            /**
+             * Host Id
+             * Format: uuid
+             */
+            host_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            my_carry: components["schemas"]["Carry"] | null;
+            /** Position */
+            position: number;
+            /** Quest Results */
+            quest_results: components["schemas"]["QuestResultOut"][];
+            status: components["schemas"]["RunStatus"];
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
+        /**
+         * RunEpisodeOut
+         * @description 플레이의 편 하나. 편의 이름과 시나리오의 판, 그 편의 테이블(아직 열지 않았으면 None).
+         */
+        RunEpisodeOut: {
+            /** Position */
+            position: number;
+            /**
+             * Scenario Id
+             * Format: uuid
+             */
+            scenario_id: string;
+            /** Table Id */
+            table_id: string | null;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
+        /**
+         * RunStatus
+         * @description 플레이의 상태. 한 방향으로만 나아간다.
+         * @enum {string}
+         */
+        RunStatus: "playing" | "ended";
+        /**
+         * RunTable
+         * @description 편의 테이블을 여는 값. TableCreate 와 같되, 시나리오와 판은 받지 않는다(보내면 422).
+         */
+        RunTable: {
+            /** Capacity */
+            capacity: number;
+            /** Character Modes */
+            character_modes?: components["schemas"]["CharacterMode"][] | null;
+            /**
+             * Credit Wait Seconds
+             * @default 300
+             */
+            credit_wait_seconds: number;
+            /**
+             * Input Step
+             * @default 0
+             */
+            input_step: number;
+            /**
+             * Is Public
+             * @default false
+             */
+            is_public: boolean;
+            /** Narration Model */
+            narration_model?: string | null;
+            narration_style?: components["schemas"]["NarrationStyle"] | null;
+            /**
+             * Opening Index
+             * @default 0
+             */
+            opening_index: number;
+            /**
+             * Output Step
+             * @default 0
+             */
+            output_step: number;
+            /** Password */
+            password?: string | null;
+            /**
+             * References Enabled
+             * @default false
+             */
+            references_enabled: boolean;
+            /**
+             * Remove Short Payers
+             * @default true
+             */
+            remove_short_payers: boolean;
+            /**
+             * Round Time Limit
+             * @default 300
+             */
+            round_time_limit: number | null;
+            /** Scenario Id */
+            scenario_id?: null;
+            /** Version */
+            version?: null;
+            /**
+             * Whisper Notice
+             * @default false
+             */
+            whisper_notice: boolean;
         };
         /**
          * SanctionOut
@@ -11953,6 +12203,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonsterDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    start_run_api_v1_game_campaign_runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_run_api_v1_game_campaign_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunDetail"];
                 };
             };
             /** @description 입력이 틀렸다 */
