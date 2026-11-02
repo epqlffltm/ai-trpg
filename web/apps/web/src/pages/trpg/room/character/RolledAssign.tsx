@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { rollAbilities } from '../../../../api/tableRoom';
 import type { AbilityRoll, TableDetail } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
-import { tableQuery } from '../roomQueries';
+import { putTable, tableQuery } from '../roomQueries';
 import { currentSlots, slotTaken, type CharacterDraft } from './characterDraft';
 import { describeCharacterProblem, type CharacterProblem } from './characterProblem';
 
@@ -77,7 +77,7 @@ function RollButton({ table, roll, canRoll }: { table: TableDetail; roll: Abilit
     setBusy(true);
     setProblem(undefined);
     try {
-      queryClient.setQueryData(tableQuery(table.id).queryKey, await rollAbilities(table.id));
+      await putTable(queryClient, await rollAbilities(table.id));
     } catch (error) {
       const next = describeCharacterProblem(error);
       setProblem(next);
