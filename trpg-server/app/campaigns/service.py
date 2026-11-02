@@ -27,7 +27,7 @@ from app.assets.service import AssetNotFoundError
 from app.campaigns import repository
 from app.campaigns.carrying import Carry
 from app.campaigns.models import CampaignCarry, CampaignRun, CampaignTable
-from app.campaigns.schemas import EpisodeOut, QuestResultOut, RunCreate, RunDetail
+from app.campaigns.schemas import QuestResultOut, RunCreate, RunDetail, RunEpisodeOut
 from app.tables import service as tables
 from app.tables.model_picker import ModelPicker
 from app.tables.models import TableMember
@@ -107,7 +107,7 @@ async def describe(session: AsyncSession, run: CampaignRun, viewer_id: uuid.UUID
         status=run.status,
         position=run.position,
         episodes=[
-            EpisodeOut(
+            RunEpisodeOut(
                 position=position,
                 title=episode.title,
                 scenario_id=episode.scenario_id,

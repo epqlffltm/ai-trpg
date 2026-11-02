@@ -2462,7 +2462,7 @@ export interface components {
             /** Episode Count */
             episode_count: number;
             /** Episodes */
-            episodes: components["schemas"]["app__assets__campaigns__schemas__EpisodeOut"][];
+            episodes: components["schemas"]["EpisodeOut"][];
             /**
              * Id
              * Format: uuid
@@ -2656,6 +2656,35 @@ export interface components {
             wear: string[];
         };
         /**
+         * CarriedItem
+         * @description 몬스터나 NPC 가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 count 개 지녔다. 몬스터는 마리마다다.
+         *
+         *     chance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).
+         *     줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.
+         *     wear 는 그 물건 하나를 착용한 칸들이다(#276). 한 개라도 지니고 있는 동안 착용한 것이다.
+         *     떨어뜨리거나 빼앗겨 남은 것이 없으면 그 부위는 빈다. 칸이 맞는지는 게시할 때 본다(carried_wear_invalid).
+         *     항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).
+         */
+        "CarriedItem-Output": {
+            /**
+             * Chance
+             * @default 100
+             */
+            chance: number;
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /** Entry Id */
+            entry_id: string;
+            /**
+             * Wear
+             * @default []
+             */
+            wear: string[];
+        };
+        /**
          * CarriedItemSnapshot
          * @description 몬스터나 NPC 가 지닌 물건 한 줄. 판 안의 로어북 물건 항목 하나(entry_id)를 count 개 지녔다. 몬스터는 마리마다다.
          *
@@ -2711,7 +2740,7 @@ export interface components {
             /** Character Name */
             character_name: string;
             /** Items */
-            items: components["schemas"]["app__campaigns__carrying__CarriedItem"][];
+            items: components["schemas"]["CarryItem"][];
             /** Max Hp */
             max_hp: number;
             /** Money */
@@ -2728,6 +2757,19 @@ export interface components {
             skills: string[];
             /** Xp */
             xp: number;
+        };
+        /**
+         * CarryItem
+         * @description 넘기는 소지품 한 가지. 앞 편의 판의 물건 항목과 개수다.
+         */
+        CarryItem: {
+            /** Count */
+            count: number;
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
         };
         /**
          * CarryOut
@@ -3967,6 +4009,23 @@ export interface components {
              * Title
              * @default
              */
+            title: string;
+        };
+        /**
+         * EpisodeOut
+         * @description 초안의 편 하나. 시나리오의 제목(지금의 것)과 게시한 마지막 판 번호(없으면 None)를 함께 싣는다.
+         */
+        EpisodeOut: {
+            /** Last Version */
+            last_version: number | null;
+            /**
+             * Scenario Id
+             * Format: uuid
+             */
+            scenario_id: string;
+            /** Scenario Title */
+            scenario_title: string;
+            /** Title */
             title: string;
         };
         /**
@@ -5893,7 +5952,7 @@ export interface components {
              * Equipment
              * @default []
              */
-            equipment: components["schemas"]["app__assets__scenarios__schemas__CarriedItem-Output"][];
+            equipment: components["schemas"]["CarriedItem-Output"][];
             /**
              * Immune
              * @default []
@@ -5903,7 +5962,7 @@ export interface components {
              * Inventory
              * @default []
              */
-            inventory: components["schemas"]["app__assets__scenarios__schemas__CarriedItem-Output"][];
+            inventory: components["schemas"]["CarriedItem-Output"][];
             /** Monster Id */
             monster_id: string;
             /**
@@ -6567,12 +6626,12 @@ export interface components {
              * Equipment
              * @default []
              */
-            equipment: components["schemas"]["app__assets__scenarios__schemas__CarriedItem-Output"][];
+            equipment: components["schemas"]["CarriedItem-Output"][];
             /**
              * Inventory
              * @default []
              */
-            inventory: components["schemas"]["app__assets__scenarios__schemas__CarriedItem-Output"][];
+            inventory: components["schemas"]["CarriedItem-Output"][];
             /**
              * Merchant
              * @default false
@@ -9023,7 +9082,7 @@ export interface components {
             /** Ended At */
             ended_at: string | null;
             /** Episodes */
-            episodes: components["schemas"]["app__campaigns__schemas__EpisodeOut"][];
+            episodes: components["schemas"]["RunEpisodeOut"][];
             /**
              * Host Id
              * Format: uuid
@@ -9040,6 +9099,25 @@ export interface components {
             /** Quest Results */
             quest_results: components["schemas"]["QuestResultOut"][];
             status: components["schemas"]["RunStatus"];
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
+        /**
+         * RunEpisodeOut
+         * @description 플레이의 편 하나. 편의 이름과 시나리오의 판, 그 편의 테이블(아직 열지 않았으면 None).
+         */
+        RunEpisodeOut: {
+            /** Position */
+            position: number;
+            /**
+             * Scenario Id
+             * Format: uuid
+             */
+            scenario_id: string;
+            /** Table Id */
+            table_id: string | null;
             /** Title */
             title: string;
             /** Version */
@@ -11406,84 +11484,6 @@ export interface components {
          * @enum {string}
          */
         XpSplit: "each" | "share";
-        /**
-         * EpisodeOut
-         * @description 초안의 편 하나. 시나리오의 제목(지금의 것)과 게시한 마지막 판 번호(없으면 None)를 함께 싣는다.
-         */
-        app__assets__campaigns__schemas__EpisodeOut: {
-            /** Last Version */
-            last_version: number | null;
-            /**
-             * Scenario Id
-             * Format: uuid
-             */
-            scenario_id: string;
-            /** Scenario Title */
-            scenario_title: string;
-            /** Title */
-            title: string;
-        };
-        /**
-         * CarriedItem
-         * @description 몬스터나 NPC 가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 count 개 지녔다. 몬스터는 마리마다다.
-         *
-         *     chance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).
-         *     줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.
-         *     wear 는 그 물건 하나를 착용한 칸들이다(#276). 한 개라도 지니고 있는 동안 착용한 것이다.
-         *     떨어뜨리거나 빼앗겨 남은 것이 없으면 그 부위는 빈다. 칸이 맞는지는 게시할 때 본다(carried_wear_invalid).
-         *     항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).
-         */
-        "app__assets__scenarios__schemas__CarriedItem-Output": {
-            /**
-             * Chance
-             * @default 100
-             */
-            chance: number;
-            /**
-             * Count
-             * @default 1
-             */
-            count: number;
-            /** Entry Id */
-            entry_id: string;
-            /**
-             * Wear
-             * @default []
-             */
-            wear: string[];
-        };
-        /**
-         * CarriedItem
-         * @description 넘기는 소지품 한 가지. 앞 편의 판의 물건 항목과 개수다.
-         */
-        app__campaigns__carrying__CarriedItem: {
-            /** Count */
-            count: number;
-            /**
-             * Entry Id
-             * Format: uuid
-             */
-            entry_id: string;
-        };
-        /**
-         * EpisodeOut
-         * @description 플레이의 편 하나. 편의 이름과 시나리오의 판, 그 편의 테이블(아직 열지 않았으면 None).
-         */
-        app__campaigns__schemas__EpisodeOut: {
-            /** Position */
-            position: number;
-            /**
-             * Scenario Id
-             * Format: uuid
-             */
-            scenario_id: string;
-            /** Table Id */
-            table_id: string | null;
-            /** Title */
-            title: string;
-            /** Version */
-            version: number;
-        };
         /**
          * ItemThrowOut
          * @description 물건을 던진 결과(#277). 엔진이 정했다(app/rounds/throws.py). 던졌으면 판정의 결과가 함께 있다.

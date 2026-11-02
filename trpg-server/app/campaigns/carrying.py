@@ -21,7 +21,7 @@ from app.tables.models import GameTable, QuestStatus, TableMember
 from app.tables.sheets import is_dead
 
 
-class CarriedItem(BaseModel):
+class CarryItem(BaseModel):
     """넘기는 소지품 한 가지. 앞 편의 판의 물건 항목과 개수다."""
 
     entry_id: uuid.UUID
@@ -42,7 +42,7 @@ class Carry(BaseModel):
     skills: list[str]
     resistances: list[dict]
     money: int
-    items: list[CarriedItem]
+    items: list[CarryItem]
 
 
 def carry_of(member: TableMember) -> Carry | None:
@@ -61,7 +61,7 @@ def carry_of(member: TableMember) -> Carry | None:
         skills=list(sheet.skills),
         resistances=list(sheet.resistances),
         money=sheet.money,
-        items=[CarriedItem(entry_id=item.entry_id, count=item.count) for item in sheet.items],
+        items=[CarryItem(entry_id=item.entry_id, count=item.count) for item in sheet.items],
     )
 
 

@@ -33,7 +33,7 @@ class RunCreate(BaseModel):
     table: RunTable
 
 
-class EpisodeOut(BaseModel):
+class RunEpisodeOut(BaseModel):
     """플레이의 편 하나. 편의 이름과 시나리오의 판, 그 편의 테이블(아직 열지 않았으면 None)."""
 
     position: int
@@ -65,7 +65,7 @@ class RunDetail(BaseModel):
     host_id: uuid.UUID
     status: RunStatus
     position: int
-    episodes: list[EpisodeOut]
+    episodes: list[RunEpisodeOut]
     quest_results: list[QuestResultOut]
     my_carry: Carry | None
     created_at: datetime
