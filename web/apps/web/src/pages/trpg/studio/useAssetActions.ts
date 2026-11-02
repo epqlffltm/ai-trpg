@@ -8,15 +8,16 @@ import type { FormProblem } from '../../../auth/problem';
 import { describeDeleteProblem, describeSaveProblem } from './studioProblem';
 import { assetDetailKey, assetListKey } from './studioQueries';
 import { useSending } from './useSending';
+import { putQueryData } from '../../../queryClient';
 
 type Saved = { id: string };
 
 /** 받은 재료를 낱개의 읽기에 넣고 목록을 무른다 */
 function useRemember(kind: StudioKind) {
   const queryClient = useQueryClient();
-  return (asset: Saved) => {
-    queryClient.setQueryData(assetDetailKey(kind, asset.id), asset);
+  return async (asset: Saved) => {
     void queryClient.invalidateQueries({ queryKey: assetListKey(kind) });
+    await putQueryData(queryClient, assetDetailKey(kind, asset.id), asset);
   };
 }
 
@@ -29,7 +30,7 @@ export function useSaveAsset<T extends Saved>(kind: StudioKind, describe?: (erro
   const remember = useRemember(kind);
   async function save(request: () => Promise<T>): Promise<T | null> {
     const saved = await sending.send(request, describe ?? ((error) => describeSaveProblem(error, kind)));
-    if (saved) remember(saved);
+    if (saved) await remember(saved);
     return saved;
   }
   return { busy: sending.busy, problem: sending.problem, save };

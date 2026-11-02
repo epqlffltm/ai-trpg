@@ -8,6 +8,7 @@ import { useCallback } from 'react';
 import { markNotificationRead } from '../../api/notifications';
 import type { AppNotification, NotificationPage } from '../../api/types';
 import { NOTIFICATION_KEY, notificationsQuery, unreadCountQuery } from './notificationQueries';
+import { putQueryData } from '../../queryClient';
 
 function replaceItem(data: InfiniteData<NotificationPage> | undefined, next: AppNotification) {
   if (!data) return data;
@@ -20,9 +21,9 @@ export function useReadNotification(): (notification: AppNotification) => void {
     (notification: AppNotification) => {
       if (notification.read_at) return;
       markNotificationRead(notification.id)
-        .then((next) => {
-          queryClient.setQueryData(notificationsQuery().queryKey, (data: InfiniteData<NotificationPage> | undefined) => replaceItem(data, next));
+        .then(async (next) => {
           void queryClient.invalidateQueries({ queryKey: unreadCountQuery().queryKey });
+          await putQueryData(queryClient, notificationsQuery().queryKey, (data: InfiniteData<NotificationPage> | undefined) => replaceItem(data, next));
         })
         .catch(() => void queryClient.invalidateQueries({ queryKey: NOTIFICATION_KEY }));
     },

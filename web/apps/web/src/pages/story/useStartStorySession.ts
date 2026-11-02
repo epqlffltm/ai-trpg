@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { startStorySession } from '../../api/story';
 import { STORY_SESSIONS_KEY, storySessionKey } from './storyQueries';
+import { putQueryData } from '../../queryClient';
 
 /** 시작할 세계관과 페르소나. persona 가 undefined 면 보내지 않는다, null 이면 없이 시작한다 */
 export type StoryStart = { worldId: string; persona?: string | null | undefined };
@@ -16,7 +17,7 @@ export function useStartStorySession() {
   return useMutation({
     mutationFn: ({ worldId, persona }: StoryStart) => startStorySession(worldId, persona),
     onSuccess: async (session) => {
-      queryClient.setQueryData(storySessionKey(session.id), session);
+      await putQueryData(queryClient, storySessionKey(session.id), session);
       await queryClient.invalidateQueries({ queryKey: STORY_SESSIONS_KEY });
       void navigate(`/story/sessions/${encodeURIComponent(session.id)}`);
     },

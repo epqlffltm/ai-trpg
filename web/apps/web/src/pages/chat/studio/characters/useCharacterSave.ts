@@ -9,6 +9,7 @@ import type { AssetCharacterDetail, AssetCharacterUpdate } from '../../../../api
 import { describeCharacterProblem } from './characterProblem';
 import { characterKey, characterListKey, checkKey } from './characterQueries';
 import { useCharacterSending } from './useCharacterSending';
+import { putQueryData } from '../../../../queryClient';
 
 export function useCharacterSave(characterId: string) {
   const queryClient = useQueryClient();
@@ -21,7 +22,7 @@ export function useCharacterSave(characterId: string) {
     const result = await sending.send(() => updateCharacter(characterId, body));
     if (!result) return null;
     setSaved(true);
-    queryClient.setQueryData(characterKey(characterId), result);
+    await putQueryData(queryClient, characterKey(characterId), result);
     void queryClient.invalidateQueries({ queryKey: checkKey(characterId) });
     void queryClient.invalidateQueries({ queryKey: characterListKey() });
     return result;

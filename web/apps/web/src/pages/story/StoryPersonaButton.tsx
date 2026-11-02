@@ -11,6 +11,7 @@ import { PersonaSelect, usePersonaList } from '../personas/PersonaSelect';
 import { personaLabel, staleRevision } from './storyPersonaView';
 import { storySessionKey } from './storyQueries';
 import { describePersonaProblem } from './storyTurnProblem';
+import { putQueryData } from '../../queryClient';
 
 type Props = { session: StorySession; disabled: boolean };
 
@@ -66,8 +67,8 @@ function usePersonaChange(sessionId: string, onDone: () => void) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (personaId: string | null) => changeStoryPersona(sessionId, personaId),
-    onSuccess: ({ persona }) => {
-      queryClient.setQueryData(storySessionKey(sessionId), (session: StorySession | undefined) => (session ? { ...session, persona } : session));
+    onSuccess: async ({ persona }) => {
+      await putQueryData(queryClient, storySessionKey(sessionId), (session: StorySession | undefined) => (session ? { ...session, persona } : session));
       onDone();
     },
   });

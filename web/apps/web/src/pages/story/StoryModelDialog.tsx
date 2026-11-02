@@ -10,6 +10,7 @@ import { chooseStoryModel, type StorySession } from '../../api/story';
 import { groupModels, modelLine, modelsFor } from '../chat/conversation/modelView';
 import { describeChangeProblem } from '../chat/conversation/turnProblem';
 import { STORY_SESSIONS_KEY, storyModelsQuery, storySessionKey } from './storyQueries';
+import { putQueryData } from '../../queryClient';
 
 type Props = { session: StorySession; open: boolean; onClose: () => void };
 
@@ -60,8 +61,8 @@ function useModelChoice(sessionId: string, onDone: () => void) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (model: string) => chooseStoryModel(sessionId, model),
-    onSuccess: (model) => {
-      queryClient.setQueryData(storySessionKey(sessionId), (session: StorySession | undefined) => (session ? { ...session, model } : session));
+    onSuccess: async (model) => {
+      await putQueryData(queryClient, storySessionKey(sessionId), (session: StorySession | undefined) => (session ? { ...session, model } : session));
       void queryClient.invalidateQueries({ queryKey: STORY_SESSIONS_KEY });
       onDone();
     },

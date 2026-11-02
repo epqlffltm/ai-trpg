@@ -8,6 +8,7 @@ import { updateStoryWorld, type StoryWorldDetail, type StoryWorldUpdate } from '
 import { useCharacterSending } from '../../chat/studio/characters/useCharacterSending';
 import { describeWorldProblem } from './worldProblem';
 import { worldCheckKey, worldKey, worldListKey } from './worldQueries';
+import { putQueryData } from '../../../queryClient';
 
 export function useWorldSave(worldId: string) {
   const queryClient = useQueryClient();
@@ -20,7 +21,7 @@ export function useWorldSave(worldId: string) {
     const result = await sending.send(() => updateStoryWorld(worldId, body));
     if (!result) return null;
     setSaved(true);
-    queryClient.setQueryData(worldKey(worldId), result);
+    await putQueryData(queryClient, worldKey(worldId), result);
     void queryClient.invalidateQueries({ queryKey: worldCheckKey(worldId) });
     void queryClient.invalidateQueries({ queryKey: worldListKey() });
     return result;
