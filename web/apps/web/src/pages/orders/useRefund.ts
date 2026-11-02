@@ -9,6 +9,7 @@ import type { Order } from '../../api/types';
 import { WALLET_KEY } from '../wallet/walletQueries';
 import { ORDERS_KEY, orderQuery } from './orderQueries';
 import { describeRefundProblem, type RefundProblem } from './refundProblem';
+import { putQueryData } from '../../queryClient';
 
 export type Refund = { busy: boolean; problem: RefundProblem | undefined; refund: () => Promise<boolean> };
 
@@ -18,7 +19,7 @@ export function useRefund(orderId: string): Refund {
   const [problem, setProblem] = useState<RefundProblem | undefined>();
 
   function refreshAfter(changed: Order | null) {
-    if (changed) queryClient.setQueryData(orderQuery(orderId).queryKey, changed);
+    if (changed) void putQueryData(queryClient, orderQuery(orderId).queryKey, changed);
     void queryClient.invalidateQueries({ queryKey: ORDERS_KEY });
     void queryClient.invalidateQueries({ queryKey: WALLET_KEY });
   }

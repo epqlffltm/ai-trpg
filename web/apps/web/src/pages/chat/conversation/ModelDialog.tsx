@@ -10,6 +10,7 @@ import type { ConversationDetail } from '../../../api/types';
 import { chatModelsQuery, conversationKey } from './conversationQueries';
 import { groupModels, modelLine, modelsFor } from './modelView';
 import { describeChangeProblem } from './turnProblem';
+import { putQueryData } from '../../../queryClient';
 
 type Props = { detail: ConversationDetail; open: boolean; onClose: () => void };
 
@@ -60,8 +61,8 @@ function useModelChoice(conversationId: string, onDone: () => void) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (model: string) => chooseConversationModel(conversationId, model),
-    onSuccess: (model) => {
-      queryClient.setQueryData(conversationKey(conversationId), (detail: ConversationDetail | undefined) => (detail ? { ...detail, model } : detail));
+    onSuccess: async (model) => {
+      await putQueryData(queryClient, conversationKey(conversationId), (detail: ConversationDetail | undefined) => (detail ? { ...detail, model } : detail));
       void queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
       onDone();
     },

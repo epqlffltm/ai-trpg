@@ -13,6 +13,7 @@ import type { IdentityAnswer, Me } from '../../api/types';
 import { meQuery } from '../../auth/queries';
 import { useLeaveSignedOut } from '../../auth/useLeaveSignedOut';
 import { describeIdentityProblem } from './identityProblem';
+import { putQueryData } from '../../queryClient';
 
 type State = { busy: boolean; problem: string | null };
 
@@ -22,7 +23,7 @@ export function useVerifyIdentity() {
   const [state, setState] = useState<State>({ busy: false, problem: null });
 
   function settle(answer: IdentityAnswer) {
-    queryClient.setQueryData(meQuery().queryKey, (me: Me | undefined) => (me ? { ...me, identity: answer.identity } : me));
+    void putQueryData(queryClient, meQuery().queryKey, (me: Me | undefined) => (me ? { ...me, identity: answer.identity } : me));
     void refreshSession().catch(() => undefined);
     void queryClient.invalidateQueries({ queryKey: ['billing'] });
   }

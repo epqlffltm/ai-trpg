@@ -16,6 +16,7 @@ import { ProblemNotice } from '../../components/ProblemNotice';
 import { formatDate } from '../../format/dateTime';
 import { ConsentDocumentDialog, type ViewingDocument } from '../../legal/ConsentDocumentDialog';
 import { consentDocumentName, consentItemInfo } from '../../legal/consentItems';
+import { putQueryData } from '../../queryClient';
 
 export function MyConsents() {
   const consents = useQuery(myConsentsQuery());
@@ -32,7 +33,7 @@ export function MyConsents() {
     setBusyItem(item);
     setProblem(undefined);
     try {
-      queryClient.setQueryData(myConsentsQuery().queryKey, await action());
+      await putQueryData(queryClient, myConsentsQuery().queryKey, await action());
       setAgreeing(null);
     } catch (error) {
       const next = describeConsentProblem(error);

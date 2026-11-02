@@ -9,6 +9,7 @@ import type { AssetLorebookDetail, AssetLorebookUpdate } from '../../../../api/t
 import { useCharacterSending } from '../characters/useCharacterSending';
 import { describeLorebookProblem } from './lorebookProblem';
 import { lorebookKey, lorebookListKey, lorebookPickerKey } from './lorebookQueries';
+import { putQueryData } from '../../../../queryClient';
 
 export function useLorebookSave(lorebookId: string) {
   const queryClient = useQueryClient();
@@ -21,7 +22,7 @@ export function useLorebookSave(lorebookId: string) {
     const result = await sending.send(() => updateLorebook(lorebookId, body));
     if (!result) return null;
     setSaved(true);
-    queryClient.setQueryData(lorebookKey(lorebookId), result);
+    await putQueryData(queryClient, lorebookKey(lorebookId), result);
     void queryClient.invalidateQueries({ queryKey: lorebookListKey() });
     void queryClient.invalidateQueries({ queryKey: lorebookPickerKey() });
     return result;

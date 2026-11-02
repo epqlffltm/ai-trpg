@@ -8,6 +8,7 @@ import type { ListingDetail } from '../../../../api/types';
 import { useSending } from '../useSending';
 import { describePublicationProblem } from './listingProblem';
 import { listingKey } from './scenarioQueries';
+import { putQueryData } from '../../../../queryClient';
 
 export function usePublication(scenarioId: string) {
   const queryClient = useQueryClient();
@@ -16,7 +17,7 @@ export function usePublication(scenarioId: string) {
   /** 바뀐 소개 페이지, 못 했으면 null. version 이 null 이면 공개를 내린다 */
   async function publish(version: number | null): Promise<ListingDetail | null> {
     const listing = await sending.send(() => setPublication(scenarioId, version), describePublicationProblem);
-    if (listing) queryClient.setQueryData(listingKey(scenarioId), listing);
+    if (listing) await putQueryData(queryClient, listingKey(scenarioId), listing);
     return listing;
   }
 
