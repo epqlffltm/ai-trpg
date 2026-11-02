@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/Quests.test.tsx
 // 시나리오의 퀘스트·사건 탭(B9). 퀘스트(처음 상태, 이루는 조건과 배달, 드러나는 조건의 퀘스트 잇기, 실패하는 조건, 보상, 기한)와
-// 사건(일어나는 조건, 캐릭터 옮기기, 길의 문 잠그기)을 창에서 바로 보내기. 입력의 순수한 함수(조건, 효과, 한 줄).
+// 사건(일어나는 조건, 캐릭터 옮기기, 길의 문 잠그기)을 창에서 바로 보내기. 캠페인의 앞 편의 퀘스트를 내 로어북의 사건에서 고르기.
+// 입력의 순수한 함수(조건, 효과, 한 줄).
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -12,6 +13,7 @@ import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
 import { conditionDrafts, conditionLine, conditionsHints, KINDS_FOR, toConditions, withChapterKind, type Targets } from './conditionsForm';
+import { earlierQuestChoices, usesEarlierQuests } from './useEarlierQuests';
 import { happeningDraft, happeningHints, happeningLine, toHappening } from './happeningForm';
 import { questDraft, toQuestRule } from './questForm';
 
@@ -29,6 +31,8 @@ const GHOUL = '00000000-0000-4000-8000-00000000e001';
 const HUNT = '00000000-0000-4000-8000-00000000f001';
 const DELIVER = '00000000-0000-4000-8000-00000000f002';
 const COLLAPSE = '00000000-0000-4000-8000-00000000f003';
+const FIRST_LORE = '00000000-0000-4000-8000-0000000000d5';
+const RESCUE = '00000000-0000-4000-8000-00000000f101';
 
 const GHOUL_SHEET = {
   monster_id: GHOUL,
@@ -74,6 +78,15 @@ function signedIn(start: Record<string, unknown> = {}) {
         entry(DELIVER, '성유물 배달', 'event'),
         entry(COLLAPSE, '묘지 붕괴', 'event'),
       ]),
+    [`GET ${GAME}/lorebooks`]: () =>
+      json(200, {
+        items: [
+          { id: FIRST_LORE, title: '1편 로어북', description: '', visibility: 'private', created_at: '', updated_at: '' },
+          { id: LOREBOOK, title: '2편 로어북', description: '', visibility: 'private', created_at: '', updated_at: '' },
+        ],
+        total: 2,
+      }),
+    [`GET ${GAME}/lorebooks/${FIRST_LORE}/entries`]: () => json(200, [entry(RESCUE, '구출', 'event'), entry(GATE, '성문', 'place')]),
     [`GET ${GAME}/bestiaries/${BESTIARY}/monsters`]: () => json(200, [{ id: GHOUL, name: '구울', kind: 'undead', content: '', unique: false, created_at: '', updated_at: '' }]),
     [`GET ${SCENARIO}`]: () => json(200, current),
     [`GET ${SCENARIO}/publish-check`]: () => json(200, { ready: true, problems: [] }),
@@ -195,6 +208,43 @@ describe('퀘스트·사건 탭', () => {
   });
 });
 
+describe('캠페인의 앞 편의 퀘스트', () => {
+  it('사건의 조건에서 내 로어북들의 사건을 골라 보내고, 저장한 한 줄에 그 이름을 보인다', async () => {
+    const { seen } = signedIn();
+    renderApp(`/trpg/studio/scenarios/${ID}?tab=quests`);
+
+    const list = within(await (await questsPanel()).findByRole('list', { name: '사건' }));
+    await userEvent.click(list.getByRole('button', { name: '묘지 붕괴 사건 고치기' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    await userEvent.click(dialog.getByRole('button', { name: '일어나는 조건 더하기' }));
+    const when = within(dialog.getByRole('group', { name: '일어나는 조건 1' }));
+    await userEvent.selectOptions(when.getByRole('combobox', { name: '종류' }), 'campaign_quest_succeeded');
+    const earlier = await when.findByRole('combobox', { name: '앞 편의 퀘스트' });
+    // 사건만 고른다. 장소는 고를 수 없다
+    expect(await within(earlier).findByRole('option', { name: '구출(1편 로어북)' })).toBeInTheDocument();
+    expect(within(earlier).queryByRole('option', { name: '성문(1편 로어북)' })).toBeNull();
+    await userEvent.selectOptions(earlier, RESCUE);
+    await userEvent.click(dialog.getByRole('button', { name: '효과 더하기' }));
+    await userEvent.selectOptions(within(dialog.getByRole('group', { name: '효과 1' })).getByRole('combobox', { name: '옮겨 갈 장소' }), GATE);
+    await userEvent.click(dialog.getByRole('button', { name: '저장' }));
+
+    await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
+    expect((patches(seen)[0]?.happenings as HappeningRule[])[0]?.when).toEqual([
+      { kind: 'campaign_quest_succeeded', target: RESCUE, count: 1, consume: false },
+    ]);
+    expect(await list.findByText(/^앞 편에서 「구출\(1편 로어북\)」 성공 ⇒/)).toBeInTheDocument();
+  });
+
+  it('저장된 조건이 앞 편의 퀘스트를 쓰면 처음 열 때도 한 줄에 그 이름을 보인다', async () => {
+    const when = [{ kind: 'campaign_quest_failed', target: RESCUE, count: 1, consume: false }];
+    signedIn({ happenings: [{ entry_id: COLLAPSE, when, match: 'all', effects: [{ kind: 'move', to_place: GATE, from_place: null }] }] });
+    renderApp(`/trpg/studio/scenarios/${ID}?tab=quests`);
+
+    const list = within(await (await questsPanel()).findByRole('list', { name: '사건' }));
+    expect(await list.findByText(/^앞 편에서 「구출\(1편 로어북\)」 실패 ⇒/)).toBeInTheDocument();
+  });
+});
+
 describe('퀘스트·사건 입력', () => {
   it('조건: 대상, 자기 자신, 같은 조건, 개수. 세지 않는 조건은 1, 가져가기는 물건 지니기만', () => {
     expect(conditionsHints([{ kind: 'reach_place', target: '', count: '1', consume: false }], HUNT)[0]).toBe('대상을 골라 주세요.');
@@ -220,11 +270,29 @@ describe('퀘스트·사건 입력', () => {
     expect(conditionLine(below, TARGETS)).toBe('「below」(찾을 수 없음) 장 이상');
   });
 
-  it('캠페인의 앞 편의 퀘스트(#481 B)는 받은 대로 보이고 아직 고르는 칸에는 없다', () => {
-    const earlier = { kind: 'campaign_quest_succeeded' as const, target: HUNT, count: 1, consume: false };
-    expect(conditionLine(earlier, TARGETS)).toMatch(/^앞 편에서 「.+」 성공$/);
-    expect(conditionLine({ ...earlier, kind: 'campaign_quest_failed', target: 'elsewhere' }, TARGETS)).toBe('앞 편에서 「(찾을 수 없음)」 실패');
-    expect(Object.values(KINDS_FOR).flat()).not.toContain('campaign_quest_succeeded');
+  it('캠페인의 앞 편의 퀘스트(#481 B)는 이루는 조건 말고 모두에 쓰고, 이름은 내 로어북들의 사건에서 찾는다', () => {
+    const earlier = { kind: 'campaign_quest_succeeded' as const, target: RESCUE, count: 1, consume: false };
+    expect(conditionLine(earlier, { ...TARGETS, earlierQuests: [{ id: RESCUE, name: '구출(1편 로어북)' }] })).toBe('앞 편에서 「구출(1편 로어북)」 성공');
+    // 이 시나리오의 퀘스트에서 찾지 않는다
+    expect(conditionLine({ ...earlier, target: HUNT }, TARGETS)).toBe('앞 편에서 「(찾을 수 없음)」 성공');
+    expect(KINDS_FOR.goal).not.toContain('campaign_quest_succeeded');
+    expect(KINDS_FOR.reveal).toContain('campaign_quest_failed');
+    expect(KINDS_FOR.any).toContain('campaign_quest_succeeded');
+    // 자기 자신의 검사는 하지 않는다(같은 로어북을 쓰는 앞 편의 같은 사건일 수 있다)
+    expect(conditionsHints([{ kind: 'campaign_quest_failed', target: HUNT, count: '1', consume: false }], HUNT)).toEqual({});
+  });
+
+  it('앞 편의 퀘스트의 고를 것은 로어북마다의 사건이고, 저장된 조건이 쓸 때만 이름을 읽는다', () => {
+    const lorebooks = [
+      { id: 'a', title: '1편', description: '', visibility: 'private' as const, created_at: '', updated_at: '' },
+      { id: 'b', title: '2편', description: '', visibility: 'private' as const, created_at: '', updated_at: '' },
+    ];
+    const lists = [[entry(RESCUE, '구출', 'event'), entry(GATE, '성문', 'place')], undefined];
+    expect(earlierQuestChoices(lorebooks, lists as never)).toEqual([{ id: RESCUE, name: '구출(1편)' }]);
+    const reveal = { kind: 'campaign_quest_failed' as const, target: RESCUE, count: 1, consume: false };
+    const rule = { entry_id: HUNT, start: 'hidden', reveal: [reveal], fail: [] };
+    expect(usesEarlierQuests(scenarioDetail({ quests: [rule] }) as never)).toBe(true);
+    expect(usesEarlierQuests(scenarioDetail({ quests: [{ ...rule, reveal: [] }] }) as never)).toBe(false);
   });
 
   it('장이 있는 시나리오에서만 조건에 장을 고를 수 있다', () => {

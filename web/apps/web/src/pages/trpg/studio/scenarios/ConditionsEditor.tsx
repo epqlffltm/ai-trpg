@@ -1,20 +1,24 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/ConditionsEditor.tsx
 // 조건의 목록을 고치는 칸(B9 퀘스트·사건 탭). 이루는 조건, 드러나는 조건, 실패하는 조건, 사건의 조건이 함께 쓴다.
 // 줄마다 종류, 대상(장이면 시나리오의 장), 세는 종류면 개수, 가져가기를 쓰는 목록이면 가져가기. 목록 위에 모두/하나라도를 고른다. 검사는 conditionsForm.ts.
+// 캠페인의 앞 편의 퀘스트(#481 B)는 그 종류를 고른 줄에서만 내 로어북들의 사건을 읽어 고른다(useEarlierQuests).
 
 import { Button, Checkbox, SelectField, TextField } from '@ai-trpg/ui';
 import type { QuestConditionKind, QuestMatch } from '../../../../api/types';
 import {
   CONDITION_MAX_COUNT,
   isCounted,
+  isEarlierQuest,
   kindLabel,
   MAX_CONDITIONS,
   newCondition,
   targetKindOf,
+  targetsOf,
   withKind,
   type ConditionDraft,
   type Targets,
 } from './conditionsForm';
+import { useEarlierQuests } from './useEarlierQuests';
 import type { EntryChoice } from './useLoreEntries';
 
 type Props = {
@@ -56,7 +60,21 @@ function TargetSelect({ draft, targets, onChange }: TargetProps) {
   if (kind === null) {
     return <ChoiceSelect label="장" value={draft.chapter ?? ''} choices={targets.chapters ?? []} onChange={(chapter) => onChange({ ...draft, chapter })} />;
   }
-  return <ChoiceSelect label="대상" value={draft.target} choices={targets[kind]} onChange={(target) => onChange({ ...draft, target })} />;
+  if (isEarlierQuest(draft.kind)) return <EarlierQuestSelect draft={draft} onChange={onChange} />;
+  return <ChoiceSelect label="대상" value={draft.target} choices={targetsOf(targets, kind)} onChange={(target) => onChange({ ...draft, target })} />;
+}
+
+/** 캠페인의 앞 편의 퀘스트. 내 로어북들의 사건에서 고른다 */
+function EarlierQuestSelect({ draft, onChange }: Omit<TargetProps, 'targets'>) {
+  const earlier = useEarlierQuests(true);
+  return (
+    <div>
+      {earlier.pending ? <p aria-busy="true">내 로어북의 사건을 불러오는 중</p> : null}
+      {earlier.failed ? <p className="ui-field__error">내 로어북의 사건을 다 불러오지 못했습니다.</p> : null}
+      <ChoiceSelect label="앞 편의 퀘스트" value={draft.target} choices={earlier.choices} onChange={(target) => onChange({ ...draft, target })} />
+      <p className="hint">같은 캠페인의 앞 편 시나리오에서 퀘스트인 사건을 고르세요. 앞 편에 그 퀘스트가 있는지는 캠페인을 게시할 때 확인합니다.</p>
+    </div>
+  );
 }
 
 export function ConditionsEditor({ label, kinds, drafts, onChange, match, onMatch, targets, hints, consume = false }: Props) {
