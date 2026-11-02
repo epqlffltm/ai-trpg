@@ -3,10 +3,13 @@
 // 행동 말(이동, 건네기)은 이름 없이 서버가 쓴 글 그대로 보인다.
 // 고치기: 내 말은 새 가지로 고쳐 보내고(답을 다시 받는다, 청구), 상대의 말은 그 자리에서 고친다(청구 없음, "고침" 표시).
 // 행동 말은 서버가 쓴 글이라 고치지 않는다. 받는 중에는 고치지 못한다.
+// 책갈피(#982)는 어느 말에나 달고 뗀다. 받는 중에도 된다(흘러 들어오는 답에는 없다).
 
 import { Button } from '@ai-trpg/ui';
 import { useState } from 'react';
 import type { ConversationDetail, ConversationMessage } from '../../../api/types';
+import { messageAnchor } from './bookmarksView';
+import { BookmarkToggle } from './BookmarkToggle';
 import { alternativeView, changeLines, speakerName } from './conversationView';
 import { MessageEditor } from './MessageEditor';
 
@@ -18,9 +21,12 @@ type Props = {
   onBranch: (messageId: string) => void;
   /** 고친 글을 보낸다. 받아들여졌으면 true(편집 칸을 닫는다) */
   onEdit: (message: ConversationMessage, content: string) => Promise<boolean>;
+  /** 이 말에 책갈피가 있는가와 달고 떼기 */
+  marked: boolean;
+  onBookmark: (message: ConversationMessage) => void;
 };
 
-export function MessageItem({ message, detail, streaming, busy, onBranch, onEdit }: Props) {
+export function MessageItem({ message, detail, streaming, busy, onBranch, onEdit, marked, onBookmark }: Props) {
   const [editing, setEditing] = useState(false);
   const speaker = speakerName(message.role, detail);
   const changes = changeLines(message.changes ?? [], detail.character.document);
@@ -31,7 +37,7 @@ export function MessageItem({ message, detail, streaming, busy, onBranch, onEdit
   }
 
   return (
-    <li className={`chat-message chat-message--${message.role}`} aria-busy={streaming || undefined}>
+    <li id={messageAnchor(message.id)} className={`chat-message chat-message--${message.role}`} aria-busy={streaming || undefined}>
       {speaker ? <p className="chat-message__speaker">{speaker}</p> : null}
       {editing ? (
         <MessageEditor message={message} busy={busy} onSubmit={(content) => void submit(content)} onCancel={() => setEditing(false)} />
@@ -53,6 +59,7 @@ export function MessageItem({ message, detail, streaming, busy, onBranch, onEdit
             고치기
           </Button>
         ) : null}
+        {streaming ? null : <BookmarkToggle marked={marked} disabled={false} onToggle={() => onBookmark(message)} />}
       </div>
     </li>
   );

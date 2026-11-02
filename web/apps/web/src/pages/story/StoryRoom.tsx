@@ -5,6 +5,7 @@
 // 행동(시간 보내기, 하루 마치기, 이동, 선택지, 건네기, 고백)은 엔진이 판정하고 반응을 받는다. 말과 같이 모델이 있어야 한다.
 // 엔딩 장면의 답이 끝나면 엔딩 화면을 띄운다. 위의 그림 창은 장면의 일러스트나 지금 장소·시간대의 배경이다.
 // 내 말 고치기는 새 가지로 답을 다시 받고(모델이 있어야 한다), 답 고치기는 조각마다 글만 그 자리에서 고친다(청구 없음). 끊긴 답은 이어 쓴다.
+// 책갈피(#982)는 말마다 달고 떼며 받는 중에도 된다. 책갈피의 자리로 갈 때 지금 가지에 없는 말이면 가지를 바꾼다.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -19,11 +20,14 @@ import {
   type StoryMessage,
   type StorySession,
 } from '../../api/story';
+import { bookmarkProblemText, isOnBranch, messageAnchor } from '../chat/conversation/bookmarksView';
 import { Composer } from '../chat/conversation/Composer';
 import { describeChangeProblem } from '../chat/conversation/turnProblem';
 import { TurnNotice } from '../chat/conversation/TurnNotice';
+import { useBookmarks } from '../chat/conversation/useBookmarks';
 import { freshEnding, pendingChoices } from './storyActions';
 import { StoryActionBar } from './StoryActionBar';
+import { StoryBookmarksButton } from './StoryBookmarksButton';
 import { StoryRecordsButton } from './StoryRecordsButton';
 import { backgroundOf, expressionsOf, sceneOf as pictureSceneOf } from './storyCastView';
 import { StoryCastRow } from './StoryCastRow';
@@ -46,6 +50,7 @@ type Props = { session: StorySession; turns: ReturnType<typeof useStoryTurn> };
 export function StoryRoom({ session, turns }: Props) {
   const branching = useBranch(session.id);
   const editing = useAnswerEdit(session.id);
+  const bookmarks = useBookmarks('story', session.id);
   const [draft, setDraft] = useState('');
   const [choosingModel, setChoosingModel] = useState(false);
   const closeModel = useCallback(() => setChoosingModel(false), []);
@@ -96,6 +101,26 @@ export function StoryRoom({ session, turns }: Props) {
     return answer((signal) => openStoryActionTurn(session.id, action, signal));
   }
 
+  function toggleBookmark(message: StoryMessage) {
+    const request = bookmarks.marked.has(message.id) ? { kind: 'remove' as const, messageId: message.id } : { kind: 'put' as const, messageId: message.id };
+    bookmarks.change.mutate(request);
+  }
+
+  /** 책갈피의 자리로 간다. 지금 가지에 없으면 그 가지로 바꾼 뒤 내린다 */
+  async function goTo(messageId: string) {
+    if (!isOnBranch(session.messages.map((message) => message.id), messageId)) {
+      if (busy) return;
+      try {
+        await branching.mutateAsync(messageId);
+      } catch {
+        return;
+      }
+    }
+    requestAnimationFrame(() => document.getElementById(messageAnchor(messageId))?.scrollIntoView?.({ block: 'center' }));
+  }
+
+  const bookmarksButton = <StoryBookmarksButton source={bookmarks} busy={busy} onGoTo={(messageId) => void goTo(messageId)} />;
+
   return (
     <main className="page conversation story">
       <StoryHeader session={session} state={scene.state} busy={busy} onChooseModel={() => setChoosingModel(true)} />
@@ -114,9 +139,12 @@ export function StoryRoom({ session, turns }: Props) {
         onContinue={(messageId) => void answer((signal) => openStoryContinueTurn(messageId, signal))}
         onSendEdit={sendEdit}
         onSaveSegments={saveSegments}
+        marked={bookmarks.marked}
+        onBookmark={toggleBookmark}
       />
       {branching.error ? <p className="ui-field__error">{describeChangeProblem(branching.error)}</p> : null}
       {editing.error ? <p className="ui-field__error">{describeStoryEditProblem(editing.error)}</p> : null}
+      {bookmarks.change.error ? <p className="ui-field__error">{bookmarkProblemText(bookmarks.change.error)}</p> : null}
       {showEnding ? (
         <StoryEnding
           worldId={session.world.id}
@@ -134,9 +162,10 @@ export function StoryRoom({ session, turns }: Props) {
         <div className="story-actions">
           <p className="hint story-ended">이야기가 끝났습니다. 대안을 넘겨 보거나 끝의 장면을 다시 쓸 수 있습니다.</p>
           <StoryRecordsButton worldId={session.world.id} view={view} />
+          {bookmarksButton}
         </div>
       ) : (
-        <StoryActionBar sessionId={session.id} worldId={session.world.id} view={view} state={scene.state} disabled={busy} onAct={act} />
+        <StoryActionBar sessionId={session.id} worldId={session.world.id} view={view} state={scene.state} disabled={busy} onAct={act} bookmarks={bookmarksButton} />
       )}
       {ended ? null : (
         <Composer

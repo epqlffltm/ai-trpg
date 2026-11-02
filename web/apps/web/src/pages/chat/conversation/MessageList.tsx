@@ -18,9 +18,12 @@ type Props = {
   onRegenerate: (messageId: string) => void;
   onContinue: (messageId: string) => void;
   onEdit: (message: ConversationMessage, content: string) => Promise<boolean>;
+  /** 책갈피를 단 말들과 달고 떼기(#982) */
+  marked: ReadonlySet<string>;
+  onBookmark: (message: ConversationMessage) => void;
 };
 
-export function MessageList({ detail, turn, busy, onBranch, onRegenerate, onContinue, onEdit }: Props) {
+export function MessageList({ detail, turn, busy, onBranch, onRegenerate, onContinue, onEdit, marked, onBookmark }: Props) {
   const { items, pending } = visibleMessages(detail.messages, turn);
   const end = useRef<HTMLDivElement>(null);
   const growth = items.length + (pending?.length ?? 0) + (turn?.text.length ?? 0);
@@ -36,7 +39,17 @@ export function MessageList({ detail, turn, busy, onBranch, onRegenerate, onCont
       </div>
       <ol className="plain-list chat-messages" aria-label="말">
         {items.map((item) => (
-          <MessageItem key={item.message.id} message={item.message} detail={detail} streaming={item.streaming} busy={busy} onBranch={onBranch} onEdit={onEdit} />
+          <MessageItem
+            key={item.message.id}
+            message={item.message}
+            detail={detail}
+            streaming={item.streaming}
+            busy={busy}
+            onBranch={onBranch}
+            onEdit={onEdit}
+            marked={marked.has(item.message.id)}
+            onBookmark={onBookmark}
+          />
         ))}
         {pending !== null ? (
           <li className="chat-message chat-message--assistant" aria-busy="true">
@@ -52,7 +65,7 @@ export function MessageList({ detail, turn, busy, onBranch, onRegenerate, onCont
   );
 }
 
-function TailActions({ detail, busy, onRegenerate, onContinue }: Omit<Props, 'turn' | 'onBranch' | 'onEdit'>) {
+function TailActions({ detail, busy, onRegenerate, onContinue }: Omit<Props, 'turn' | 'onBranch' | 'onEdit' | 'marked' | 'onBookmark'>) {
   const actions = tailActions(detail.messages);
   if (!actions.answer && !actions.regenerate && !actions.continueFrom) return null;
   return (
