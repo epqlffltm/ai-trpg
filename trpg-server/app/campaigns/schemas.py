@@ -70,3 +70,26 @@ class RunDetail(BaseModel):
     my_carry: Carry | None
     created_at: datetime
     ended_at: datetime | None
+
+
+class RunSummary(BaseModel):
+    """플레이의 목록에 싣는 값. 캠페인의 제목, 지금 편과 편의 수, 지금 편의 테이블(아직 열지 않았으면 None)."""
+
+    id: uuid.UUID
+    campaign_id: uuid.UUID
+    title: str
+    host_id: uuid.UUID
+    status: RunStatus
+    position: int
+    episode_count: int
+    episode_title: str
+    table_id: uuid.UUID | None
+    created_at: datetime
+    ended_at: datetime | None
+
+
+class RunPage(BaseModel):
+    """내 플레이 목록의 한 쪽."""
+
+    items: list[RunSummary]
+    total: int = Field(ge=0)

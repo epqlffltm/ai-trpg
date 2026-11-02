@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/room/TableRoom.tsx
 // 테이블 방(B6)의 틀. 스트림을 붙잡고, 받은 것을 나눠 준다. 가운데는 테이블의 상태에 따라(모집 중, 진행 중, 끝남),
-// 옆에는 방장의 운영(방장에게만), 앉은 사람(모집 중) 또는 상태 패널(B7, 진행 중과 끝남), 채팅.
+// 옆에는 방장의 운영(방장에게만), 캠페인의 편(캠페인의 테이블에만, #481 B), 앉은 사람(모집 중) 또는 상태 패널(B7, 진행 중과 끝남), 채팅.
 //
 // 스트림에서 받은 것:
 //   - 이벤트: 일어난 일에 더하고, 테이블과 라운드를 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다.
@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import type { ChatMessage, EventPage, MessagePage, TableDetail, TableEvent } from '../../../api/types';
 import { meQuery } from '../../../auth/queries';
+import { CampaignPanel } from '../campaigns/CampaignPanel';
 import { usePublicNames } from '../../../hooks/usePublicNames';
 import { ChatPanel } from './ChatPanel';
 import { displayName, MemberList } from './MemberList';
@@ -98,6 +99,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
           </div>
           <div className="room__side">
             <HostPanel table={table} myId={myId} nameOfMember={(userId) => displayName(userId, table.members, nameOf)} />
+            <CampaignPanel table={table} myId={myId} />
             <FriendlyFirePanel
               table={table}
               myId={myId}

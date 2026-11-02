@@ -15402,6 +15402,29 @@
         "title": "RunEpisodeOut",
         "type": "object"
       },
+      "RunPage": {
+        "description": "내 플레이 목록의 한 쪽.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "RunPage",
+        "type": "object"
+      },
       "RunStatus": {
         "description": "플레이의 상태. 한 방향으로만 나아간다.",
         "enum": [
@@ -15410,6 +15433,89 @@
         ],
         "title": "RunStatus",
         "type": "string"
+      },
+      "RunSummary": {
+        "description": "플레이의 목록에 싣는 값. 캠페인의 제목, 지금 편과 편의 수, 지금 편의 테이블(아직 열지 않았으면 None).",
+        "properties": {
+          "campaign_id": {
+            "format": "uuid",
+            "title": "Campaign Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "episode_count": {
+            "title": "Episode Count",
+            "type": "integer"
+          },
+          "episode_title": {
+            "title": "Episode Title",
+            "type": "string"
+          },
+          "host_id": {
+            "format": "uuid",
+            "title": "Host Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "table_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "campaign_id",
+          "title",
+          "host_id",
+          "status",
+          "position",
+          "episode_count",
+          "episode_title",
+          "table_id",
+          "created_at",
+          "ended_at"
+        ],
+        "title": "RunSummary",
+        "type": "object"
       },
       "RunTable": {
         "additionalProperties": false,
@@ -22208,6 +22314,67 @@
       }
     },
     "/api/v1/game/campaign-runs": {
+      "get": {
+        "description": "내 플레이. 내가 열었거나, 그 플레이의 테이블에 앉아 있거나, 넘긴 것이 있는 것. 최근에 시작한 것부터.",
+        "operationId": "list_runs_api_v1_game_campaign_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Runs",
+        "tags": [
+          "campaign-runs"
+        ],
+        "x-audience": "user"
+      },
       "post": {
         "description": "플레이를 시작한다. 시작한 사람이 첫 편의 테이블의 방장이 된다. 열 수 없는 까닭은 테이블 만들기와 같다.",
         "operationId": "start_run_api_v1_game_campaign_runs_post",
@@ -22249,6 +22416,64 @@
           }
         ],
         "summary": "Start Run",
+        "tags": [
+          "campaign-runs"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/campaign-runs/of-table/{table_id}": {
+      "get": {
+        "description": "그 테이블의 플레이. 캠페인의 테이블이 아니거나 볼 수 없으면 null(있다는 것을 드러내지 않는다).",
+        "operationId": "read_run_of_table_api_v1_game_campaign_runs_of_table__table_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/RunDetail"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Read Run Of Table Api V1 Game Campaign Runs Of Table  Table Id  Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Run Of Table",
         "tags": [
           "campaign-runs"
         ],

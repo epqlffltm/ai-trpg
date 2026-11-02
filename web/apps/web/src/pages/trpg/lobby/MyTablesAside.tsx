@@ -1,9 +1,11 @@
 // web/apps/web/src/pages/trpg/lobby/MyTablesAside.tsx
 // 로비 옆의 "내 테이블". 앉아 있는 테이블로 돌아간다. 첫 화면의 이어하기와 같은 것을 읽는다(GET /tables, 6개).
+// 그 아래에 내 캠페인의 플레이(GET /campaign-runs, 6개)가 있다.
 
 import { ListSection } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
+import { MyRunsList } from '../campaigns/MyRunsList';
 import { listStatus } from '../../home/listStatus';
 import { tableStatusLabel } from '../../home/labels';
 import { myTablesQuery } from '../../home/queries';
@@ -31,6 +33,7 @@ export function MyTablesAside() {
           ))}
         </ul>
       </ListSection>
+      <MyRunsList />
     </aside>
   );
 }
