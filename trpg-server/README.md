@@ -3092,6 +3092,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `narration_credits_short` | 이 라운드의 서술 값을 내는 사람 하나의 크레딧이 모자란다. 서버가 값을 걸어 보고 알았다. 한 라운드에 사람마다 한 번 | `round`, `user_id`: 모자란 사람, `reason`: 무엇이 모자란가(`insufficient` 크레딧, `gold_required` 프리미엄의 골드). 그 사람이 충전하지 않거나 방장이 내보내지 않으면 라운드를 닫을 때 서술이 실패한다(`insufficient_credits`, `gold_required`) |
 | `member_dropped` | 크레딧이 모자란 사람을 기다리는 시간이 지나 서버가 그 사람을 자리에서 뺐다. 나머지로 다시 서술한다. 방장이었으면 바로 뒤에 `host_changed` | `round`, `user_id`, `character_name` |
 | `narration_credits_released` | 크레딧이 모자란 사람을 기다리는 시간이 지나 낼 수 있는 사람의 값을 돌려줬다(자동으로 빼기를 끈 테이블). 라운드는 멈춘 채로 있다. 방장이 다시 맡기면 모두에게 다시 건다 | `round` |
+| `carried_items_left` | 캠페인의 다음 편이 시작할 때, 넘긴 캐릭터의 소지품 가운데 이 편의 판에 없는 물건을 옮기지 못했다(#481 B). 사람마다 하나. 행한 사람이 없다. 시작(`table_started`)에 이어진다. 그 물건은 이 편에 없고 이 편이 끝날 때의 넘길 것에도 들지 않는다 | `user_id`, `character_name`, `items`: 물건마다 `entry_id`, `name`(앞 편의 판의 이름. 이 칸이 생기기 전에 넘긴 것은 빈 글자), `count` |
 | `table_ended` | 테이블이 끝났다 | |
 
 모집 중에 캐릭터를 정하는 것은 적지 않는다. 시작할 때의 명단(`table_started`)에 한 번 적힌다.

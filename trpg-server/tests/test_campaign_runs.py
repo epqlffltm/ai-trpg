@@ -228,7 +228,8 @@ async def test_the_end_of_an_episode_carries_the_living(
         1,
         40,
     )
-    assert carry['items'] == [{'entry_id': str(torch), 'count': 2}]
+    # 물건의 이름은 그 편의 판의 것이다(다음 편에서 옮기지 못하면 알린다)
+    assert carry['items'] == [{'entry_id': str(torch), 'count': 2, 'name': '횃불'}]
     assert sorted((row['entry_id'], row['result']) for row in mine['quest_results']) == sorted(
         [(str(rescue), 'succeeded'), (str(siege), 'failed')]
     )

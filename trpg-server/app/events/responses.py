@@ -473,6 +473,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.NARRATION_CREDITS_RELEASED: ('round',),
     # 누가 끝냈는가. 운영자가 끝냈으면 'operator' 다(#392). 방장이 끝냈으면 없다(actor_id 가 방장). 사유는 싣지 않는다
     EventType.TABLE_ENDED: ('by',),
+    # 캠페인의 다음 편에서 옮기지 못한 물건(#481 B). 소지품처럼 공개다. 이름은 앞 편의 판의 것이다
+    EventType.CARRIED_ITEMS_LEFT: ('user_id', 'character_name', 'items'),
 }
 
 

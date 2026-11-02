@@ -234,6 +234,10 @@ class EventType(enum.StrEnum):
     NARRATION_CREDITS_RELEASED = 'narration_credits_released'
     # 테이블이 끝났다
     TABLE_ENDED = 'table_ended'
+    # 캠페인의 다음 편이 시작할 때, 넘긴 캐릭터의 소지품 가운데 이 편의 판에 없는 물건을 옮기지 못했다(#481 B).
+    # 사람마다 하나. 행한 사람이 없다. 시작(table_started)에 이어진다. 누구(user_id, character_name), 무엇을(items:
+    # entry_id, 앞 편의 판의 이름 name, count). 그 물건은 이 편에 없고, 이 편이 끝날 때의 넘길 것에도 들지 않는다
+    CARRIED_ITEMS_LEFT = 'carried_items_left'
 
 
 class TableEvent(Base):

@@ -436,6 +436,8 @@ async def start_table(
     table.started_at = func.now()
     payload = {'members': roster(table)}
     started = recorder.record(session, table, EventType.TABLE_STARTED, actor_id=host_id, payload=payload)
+    for left in campaign_seating.left_behind(table, snapshot, carried):
+        recorder.record(session, table, EventType.CARRIED_ITEMS_LEFT, payload=left, cause=started)
     opening = snapshot.openings[table.opening_index]
     price = await price_of(session, prices, table.narration_model, datetime.now(UTC), steps_of(table))
     opener.open_round(session, table, number=1, scene=opening, cause=started, price=price)
