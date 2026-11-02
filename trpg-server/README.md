@@ -244,7 +244,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PUT | `/api/v1/game/tables/{id}/members/me/friendly-fire` | 자기를 겨누는 것을 받아들이는 정도(`friendly_fire`) 바꾸기(#803). 앉은 사람이 자기 것만. 언제든 된다 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/references` | 서술에 [참고 자료](#참고-자료)를 넣을지(`references_enabled`) 바꾸기. 방장만. 모집 중에만(시작하면 409 `not_recruiting`). 켜려면 판의 세계관이 허용해야 한다(아니면 422) | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/start` | 테이블 시작하기. 방장만. 모두 캐릭터가 있어야 한다. 모두가 시트를 받는다 | access 토큰 |
-| POST | `/api/v1/game/tables/{id}/end` | 테이블 끝내기. 방장만 | access 토큰 |
+| POST | `/api/v1/game/tables/{id}/end` | 테이블 끝내기. 방장만. 캠페인의 편이면 넘길 것을 함께 적는다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/rounds` | 라운드 목록. 처음 것부터. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/rounds/current` | 가장 최근 라운드. 진행 중이면 지금 선언을 받는 라운드 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/rounds/{number}` | 라운드 하나 | access 토큰 |
@@ -289,6 +289,8 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | POST | `/api/v1/game/campaigns/{id}/versions` | 캠페인 게시. 201. 편마다 시나리오의 마지막 판 번호가 굳는다. 막히면 409 `problems` | access 토큰 |
 | GET | `/api/v1/game/campaigns/{id}/versions` | 캠페인의 판 목록. 최근 것부터 | access 토큰 |
 | GET | `/api/v1/game/campaigns/{id}/versions/{number}` | 캠페인의 판 하나. 굳힌 내용(`snapshot`)과 함께 | access 토큰 |
+| POST | `/api/v1/game/campaign-runs` | [캠페인의 플레이](#캠페인의-플레이) 시작. 201. `{"campaign_id", "version"(비우면 마지막 판), "table"(테이블 만들기의 값, 시나리오와 판은 빼고)}`. 첫 편의 테이블이 열린다 | access 토큰 |
+| GET | `/api/v1/game/campaign-runs/{id}` | 플레이 하나. 편마다의 테이블, 끝난 퀘스트의 결과, 내가 가장 나중에 넘긴 것(`my_carry`). 방장과 그 플레이의 테이블에 앉았던 사람만 | access 토큰 |
 | POST | `/api/v1/game/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴)한 사람을 정리한다. 200 `{"status":"processed"}`. 프록시가 바깥에 열지 않는다 | 인증 서버의 서명 |
 
 `/health`와 `/health/ready`는 API 주소 밖에 둔다. 프록시와 컨테이너 관리 도구가 부르는 주소라 버전이 없다.
@@ -742,7 +744,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 ### 캠페인
 
 시나리오 여러 개를 차례로 묶는 자산이다(#481 B). 설계는 [캠페인 설계](../docs/architecture/campaigns.md)다.
-지금은 자산(초안, 게시, 게시 검사, 판)까지다. 한 판(플레이)과 넘길 것, 조건 `campaign_quest`, 화면은 다음 단계다.
+자산(초안, 게시, 게시 검사, 판)과 [플레이의 시작과 편의 끝](#캠페인의-플레이)까지다. 다음 편 열기와 넘긴 캐릭터로 앉기, 조건 `campaign_quest`, 화면은 다음 단계다.
 
 | 칸 | 제한 | 내용 |
 | --- | --- | --- |
@@ -765,6 +767,26 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 | --- | --- |
 | `progression_missing` | 룰북에 성장이 없다. 경험치와 레벨이 옮겨지지 않는다 |
 | `items_not_carried` | 앞의 편의 판에 있는 물건 항목이 뒤의 편들의 판 어디에도 없다. 그 물건은 옮겨지지 않는다 |
+
+### 캠페인의 플레이
+
+캠페인을 한 번 하는 것이 플레이다(`app/campaigns/`). 시작할 때의 캠페인 판에 고정한다. 편마다 테이블 하나를 가진다.
+
+| 테이블 | 내용 |
+| --- | --- |
+| `campaign_runs` | 플레이. 캠페인과 그 판(`version_id`), 방장, 지금 편(`position`, 0 이 1편), 상태(`playing`, `ended`) |
+| `campaign_tables` | 편마다의 테이블. 테이블 하나는 많아야 한 플레이의 한 편이다. 테이블(`game_tables`)에는 칸을 더하지 않았다 |
+| `campaign_carries` | 편이 끝날 때 앉은 사람마다 적은 넘길 것(`carry`, JSON). 한 사람은 한 편에 하나다. 고치지 않는다 |
+| `campaign_quest_results` | 편이 끝날 때 그 편에서 이루었거나(`succeeded`) 실패한(`failed`) 퀘스트(사건 항목) |
+
+- **시작.** 캠페인의 주인이 자기 캠페인의 판으로 시작한다(`POST /campaign-runs`). 첫 편의 테이블은 보통의 테이블 만들기와 같은 길로 열린다. 시나리오와 판만 캠페인의 판이 정한다(테이블의 값에 적으면 422). 테이블을 연 뒤에 플레이를 저장한다. 플레이의 저장이 실패하면 보통의 테이블로 남는다.
+- **편의 끝.** 방장이 그 편의 테이블을 끝내면 테이블이 끝나는 것과 한 묶음으로 적는다(`app/campaigns/ending.py`).
+  앉은 사람마다 지금 캐릭터의 이름과 설명, 능력치, 최대 HP(레벨로 늘어난 몫이 들어 있다), 경험치, 놓지 않은 점수, 기술, 타고난 저항, 돈, 소지품(물건 항목과 개수)이다. 프리젠이었는지도 적는다(보관함에 넣지 못한다).
+  죽은 캐릭터와 시작 전이라 시트가 없는 사람은 적지 않는다. 지금 HP, 수치, 부상, 서 있던 장소, 레벨은 적지 않는다(레벨은 경험치와 레벨표로 다시 정한다).
+  마지막 편이면 플레이가 끝난다(`ended`).
+- 모두 나가 끝난 테이블과 운영자의 제재로 끝난 테이블은 적지 않는다. 넘길 사람이 없거나 넘기면 안 되는 끝이다.
+- **보기.** 방장과 그 플레이의 테이블에 앉은 사람, 넘긴 것이 있는 사람만 본다(남은 404). 넘긴 것은 본인의 것만 싣는다.
+- 캠페인을 지워도(지운 것으로 적힐 뿐이다) 플레이는 그 판으로 그대로 간다.
 
 ### 등급
 

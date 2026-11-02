@@ -25,6 +25,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai_log.call_log import DbCallLog
+from app.campaigns.models import CampaignCarry, CampaignQuestResult
 from app.catalog.models import Grade
 from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX
@@ -174,6 +175,10 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         await client.post(f'{url}/campaigns', json={'title': '캠페인', 'episodes': episodes}, headers=me)
     ).json()
     await client.post(f'{url}/campaigns/{campaign["id"]}/versions', json={}, headers=me)
+    # 캠페인의 플레이(#481 B). 시작하면 플레이와 첫 편의 테이블이 생긴다. 넘길 것과 퀘스트 결과는 아래에서 직접 넣는다
+    run = await client.post(
+        f'{url}/campaign-runs', json={'campaign_id': campaign['id'], 'table': {'capacity': 1}}, headers=me
+    )
 
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': 1}
     table = (await client.post(f'{url}/tables', json=body, headers=me)).json()
@@ -238,6 +243,9 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         session.add(ScenarioSanction(version_id=version_id, scenario_id=uuid.uuid4(), owner_id=ME, **sanctioned))
         session.add(PublishingBan(user_id=ME, banned_at=datetime.now(UTC), reason='신고'))
         outbox.put(session, ME, 'narration_model.retiring', 'narration_model.retiring:1', {})
+        run_id = uuid.UUID(run.json()['id'])
+        session.add(CampaignCarry(run_id=run_id, position=0, user_id=ME, carry={}))
+        session.add(CampaignQuestResult(run_id=run_id, position=0, entry_id=uuid.uuid4(), result='succeeded'))
         await session.commit()
 
     async with app.state.session_factory() as session:

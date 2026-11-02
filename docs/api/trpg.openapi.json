@@ -746,7 +746,7 @@
           },
           "episodes": {
             "items": {
-              "$ref": "#/components/schemas/EpisodeOut"
+              "$ref": "#/components/schemas/app__assets__campaigns__schemas__EpisodeOut"
             },
             "title": "Episodes",
             "type": "array"
@@ -1102,46 +1102,6 @@
         "title": "CarriedItem",
         "type": "object"
       },
-      "CarriedItem-Output": {
-        "additionalProperties": false,
-        "description": "몬스터나 NPC 가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 count 개 지녔다. 몬스터는 마리마다다.\n\nchance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).\n줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.\nwear 는 그 물건 하나를 착용한 칸들이다(#276). 한 개라도 지니고 있는 동안 착용한 것이다.\n떨어뜨리거나 빼앗겨 남은 것이 없으면 그 부위는 빈다. 칸이 맞는지는 게시할 때 본다(carried_wear_invalid).\n항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).",
-        "properties": {
-          "chance": {
-            "default": 100,
-            "maximum": 100.0,
-            "minimum": 1.0,
-            "title": "Chance",
-            "type": "integer"
-          },
-          "count": {
-            "default": 1,
-            "maximum": 99.0,
-            "minimum": 1.0,
-            "title": "Count",
-            "type": "integer"
-          },
-          "entry_id": {
-            "title": "Entry Id",
-            "type": "string"
-          },
-          "wear": {
-            "default": [],
-            "items": {
-              "maxLength": 20,
-              "pattern": "^[a-z][a-z0-9_]*$",
-              "type": "string"
-            },
-            "maxItems": 8,
-            "title": "Wear",
-            "type": "array"
-          }
-        },
-        "required": [
-          "entry_id"
-        ],
-        "title": "CarriedItem",
-        "type": "object"
-      },
       "CarriedItemSnapshot": {
         "description": "몬스터나 NPC 가 지닌 물건 한 줄. 판 안의 로어북 물건 항목 하나(entry_id)를 count 개 지녔다. 몬스터는 마리마다다.\n\nchance(%)는 처음 쓰러졌을 때 이 줄이 떨어질 확률이다.",
         "properties": {
@@ -1218,6 +1178,83 @@
           "equipped"
         ],
         "title": "CarriedOut",
+        "type": "object"
+      },
+      "Carry": {
+        "description": "한 사람의 넘길 것. campaign_carries.carry 에 이 모양으로 적는다.",
+        "properties": {
+          "abilities": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Abilities",
+            "type": "object"
+          },
+          "character_description": {
+            "title": "Character Description",
+            "type": "string"
+          },
+          "character_name": {
+            "title": "Character Name",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/app__campaigns__carrying__CarriedItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "max_hp": {
+            "title": "Max Hp",
+            "type": "integer"
+          },
+          "money": {
+            "title": "Money",
+            "type": "integer"
+          },
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "pregen": {
+            "title": "Pregen",
+            "type": "boolean"
+          },
+          "resistances": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Resistances",
+            "type": "array"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
+          "xp": {
+            "title": "Xp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "character_name",
+          "character_description",
+          "pregen",
+          "abilities",
+          "max_hp",
+          "xp",
+          "points",
+          "skills",
+          "resistances",
+          "money",
+          "items"
+        ],
+        "title": "Carry",
         "type": "object"
       },
       "CarryOut": {
@@ -4235,43 +4272,6 @@
           "scenario_id"
         ],
         "title": "EpisodeIn",
-        "type": "object"
-      },
-      "EpisodeOut": {
-        "description": "초안의 편 하나. 시나리오의 제목(지금의 것)과 게시한 마지막 판 번호(없으면 None)를 함께 싣는다.",
-        "properties": {
-          "last_version": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Version"
-          },
-          "scenario_id": {
-            "format": "uuid",
-            "title": "Scenario Id",
-            "type": "string"
-          },
-          "scenario_title": {
-            "title": "Scenario Title",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "scenario_id",
-          "title",
-          "scenario_title",
-          "last_version"
-        ],
-        "title": "EpisodeOut",
         "type": "object"
       },
       "EpisodeSnapshot": {
@@ -8778,7 +8778,7 @@
           "equipment": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/CarriedItem-Output"
+              "$ref": "#/components/schemas/app__assets__scenarios__schemas__CarriedItem-Output"
             },
             "maxItems": 5,
             "title": "Equipment",
@@ -8798,7 +8798,7 @@
           "inventory": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/CarriedItem-Output"
+              "$ref": "#/components/schemas/app__assets__scenarios__schemas__CarriedItem-Output"
             },
             "maxItems": 10,
             "title": "Inventory",
@@ -10134,7 +10134,7 @@
           "equipment": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/CarriedItem-Output"
+              "$ref": "#/components/schemas/app__assets__scenarios__schemas__CarriedItem-Output"
             },
             "maxItems": 5,
             "title": "Equipment",
@@ -10143,7 +10143,7 @@
           "inventory": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/CarriedItem-Output"
+              "$ref": "#/components/schemas/app__assets__scenarios__schemas__CarriedItem-Output"
             },
             "maxItems": 10,
             "title": "Inventory",
@@ -12233,6 +12233,39 @@
           "status"
         ],
         "title": "QuestOut",
+        "type": "object"
+      },
+      "QuestResult": {
+        "description": "편이 끝날 때의 퀘스트의 결과. 숨겨졌거나 진행 중이던 퀘스트는 적지 않는다.",
+        "enum": [
+          "succeeded",
+          "failed"
+        ],
+        "title": "QuestResult",
+        "type": "string"
+      },
+      "QuestResultOut": {
+        "description": "편이 끝날 때의 퀘스트 결과 하나.",
+        "properties": {
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "result": {
+            "$ref": "#/components/schemas/QuestResult"
+          }
+        },
+        "required": [
+          "position",
+          "entry_id",
+          "result"
+        ],
+        "title": "QuestResultOut",
         "type": "object"
       },
       "QuestRule-Input": {
@@ -15080,6 +15113,276 @@
           "progression"
         ],
         "title": "Ruleset",
+        "type": "object"
+      },
+      "RunCreate": {
+        "additionalProperties": false,
+        "description": "플레이를 시작할 때 받는 값. 캠페인과 그 판의 번호(비우면 마지막 판), 첫 편의 테이블을 여는 값.",
+        "properties": {
+          "campaign_id": {
+            "format": "uuid",
+            "title": "Campaign Id",
+            "type": "string"
+          },
+          "table": {
+            "$ref": "#/components/schemas/RunTable"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "campaign_id",
+          "table"
+        ],
+        "title": "RunCreate",
+        "type": "object"
+      },
+      "RunDetail": {
+        "description": "플레이 하나. 편들과 지금 편, 편마다 끝난 퀘스트의 결과, 보는 사람이 가장 나중에 넘긴 것(없으면 None).\n\n넘긴 것은 본인의 것만 싣는다. 다른 사람의 캐릭터는 그 편의 테이블에서 본다.",
+        "properties": {
+          "campaign_id": {
+            "format": "uuid",
+            "title": "Campaign Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/app__campaigns__schemas__EpisodeOut"
+            },
+            "title": "Episodes",
+            "type": "array"
+          },
+          "host_id": {
+            "format": "uuid",
+            "title": "Host Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "my_carry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Carry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "quest_results": {
+            "items": {
+              "$ref": "#/components/schemas/QuestResultOut"
+            },
+            "title": "Quest Results",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "campaign_id",
+          "title",
+          "version",
+          "host_id",
+          "status",
+          "position",
+          "episodes",
+          "quest_results",
+          "my_carry",
+          "created_at",
+          "ended_at"
+        ],
+        "title": "RunDetail",
+        "type": "object"
+      },
+      "RunStatus": {
+        "description": "플레이의 상태. 한 방향으로만 나아간다.",
+        "enum": [
+          "playing",
+          "ended"
+        ],
+        "title": "RunStatus",
+        "type": "string"
+      },
+      "RunTable": {
+        "additionalProperties": false,
+        "description": "편의 테이블을 여는 값. TableCreate 와 같되, 시나리오와 판은 받지 않는다(보내면 422).",
+        "properties": {
+          "capacity": {
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Capacity",
+            "type": "integer"
+          },
+          "character_modes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CharacterMode"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Modes"
+          },
+          "credit_wait_seconds": {
+            "default": 300,
+            "maximum": 3600.0,
+            "minimum": 30.0,
+            "title": "Credit Wait Seconds",
+            "type": "integer"
+          },
+          "input_step": {
+            "default": 0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Input Step",
+            "type": "integer"
+          },
+          "is_public": {
+            "default": false,
+            "title": "Is Public",
+            "type": "boolean"
+          },
+          "narration_model": {
+            "anyOf": [
+              {
+                "maxLength": 48,
+                "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Narration Model"
+          },
+          "narration_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NarrationStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "opening_index": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Opening Index",
+            "type": "integer"
+          },
+          "output_step": {
+            "default": 0,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Output Step",
+            "type": "integer"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 4,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "references_enabled": {
+            "default": false,
+            "title": "References Enabled",
+            "type": "boolean"
+          },
+          "remove_short_payers": {
+            "default": true,
+            "title": "Remove Short Payers",
+            "type": "boolean"
+          },
+          "round_time_limit": {
+            "anyOf": [
+              {
+                "maximum": 3600.0,
+                "minimum": 30.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": 300,
+            "title": "Round Time Limit"
+          },
+          "scenario_id": {
+            "title": "Scenario Id",
+            "type": "null"
+          },
+          "version": {
+            "title": "Version",
+            "type": "null"
+          },
+          "whisper_notice": {
+            "default": false,
+            "title": "Whisper Notice",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "capacity"
+        ],
+        "title": "RunTable",
         "type": "object"
       },
       "SanctionOut": {
@@ -20372,6 +20675,147 @@
         "title": "XpSplit",
         "type": "string"
       },
+      "app__assets__campaigns__schemas__EpisodeOut": {
+        "description": "초안의 편 하나. 시나리오의 제목(지금의 것)과 게시한 마지막 판 번호(없으면 None)를 함께 싣는다.",
+        "properties": {
+          "last_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Version"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "scenario_title": {
+            "title": "Scenario Title",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scenario_id",
+          "title",
+          "scenario_title",
+          "last_version"
+        ],
+        "title": "EpisodeOut",
+        "type": "object"
+      },
+      "app__assets__scenarios__schemas__CarriedItem-Output": {
+        "additionalProperties": false,
+        "description": "몬스터나 NPC 가 지닌 물건 한 줄. 붙인 로어북의 물건 항목(entry_id)을 count 개 지녔다. 몬스터는 마리마다다.\n\nchance 는 살아 있던 몬스터나 NPC 가 처음 쓰러졌을 때 이 줄이 떨어질 확률(%)이다. 비우면 늘 떨어진다(100).\n줄마다 따로 굴린다. 떨어지지 않은 것은 그대로 지닌다.\nwear 는 그 물건 하나를 착용한 칸들이다(#276). 한 개라도 지니고 있는 동안 착용한 것이다.\n떨어뜨리거나 빼앗겨 남은 것이 없으면 그 부위는 빈다. 칸이 맞는지는 게시할 때 본다(carried_wear_invalid).\n항목이 붙인 로어북의 물건인지는 게시할 때 본다. 소지품과 같은 문제로 알린다(item_entry_missing, item_not_item).",
+        "properties": {
+          "chance": {
+            "default": 100,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Chance",
+            "type": "integer"
+          },
+          "count": {
+            "default": 1,
+            "maximum": 99.0,
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "entry_id": {
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "wear": {
+            "default": [],
+            "items": {
+              "maxLength": 20,
+              "pattern": "^[a-z][a-z0-9_]*$",
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Wear",
+            "type": "array"
+          }
+        },
+        "required": [
+          "entry_id"
+        ],
+        "title": "CarriedItem",
+        "type": "object"
+      },
+      "app__campaigns__carrying__CarriedItem": {
+        "description": "넘기는 소지품 한 가지. 앞 편의 판의 물건 항목과 개수다.",
+        "properties": {
+          "count": {
+            "minimum": 1.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entry_id",
+          "count"
+        ],
+        "title": "CarriedItem",
+        "type": "object"
+      },
+      "app__campaigns__schemas__EpisodeOut": {
+        "description": "플레이의 편 하나. 편의 이름과 시나리오의 판, 그 편의 테이블(아직 열지 않았으면 None).",
+        "properties": {
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "table_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "position",
+          "title",
+          "scenario_id",
+          "version",
+          "table_id"
+        ],
+        "title": "EpisodeOut",
+        "type": "object"
+      },
       "app__rounds__schemas__ItemThrowOut": {
         "description": "물건을 던진 결과(#277). 엔진이 정했다(app/rounds/throws.py). 던졌으면 판정의 결과가 함께 있다.",
         "properties": {
@@ -21729,6 +22173,104 @@
         "summary": "Update Monster",
         "tags": [
           "bestiaries"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/campaign-runs": {
+      "post": {
+        "description": "플레이를 시작한다. 시작한 사람이 첫 편의 테이블의 방장이 된다. 열 수 없는 까닭은 테이블 만들기와 같다.",
+        "operationId": "start_run_api_v1_game_campaign_runs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Run",
+        "tags": [
+          "campaign-runs"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/campaign-runs/{run_id}": {
+      "get": {
+        "description": "플레이 하나. 편마다의 테이블, 끝난 퀘스트의 결과, 내가 가장 나중에 넘긴 것.",
+        "operationId": "read_run_api_v1_game_campaign_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Run",
+        "tags": [
+          "campaign-runs"
         ],
         "x-audience": "user"
       }
