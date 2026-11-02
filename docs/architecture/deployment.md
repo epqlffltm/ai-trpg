@@ -248,7 +248,7 @@ age -d -i master.key -o trpg-<시각>.dump trpg-<시각>.dump.age
 
 ## 그림 저장소
 
-chat 과 story 의 그림(배경, 캐릭터, 일러스트)을 둔다(#540, 2026-10-20 결정). 그림을 올리고 누가 볼 수 있는지 정하는 것은 asset-server 이고, 아직 없다. 지금 있는 것은 로컬의 흉내(`object-store`)와 CI 의 확인이다.
+chat 과 story 의 그림(배경, 캐릭터, 일러스트)을 둔다(#540, 2026-10-20 결정). 그림을 올리고 누가 볼 수 있는지 정하는 것은 asset-server 다(#566, [asset-server 의 그림](asset-server.md#그림)).
 
 | 항목 | 정한 것 | 까닭 |
 | --- | --- | --- |
@@ -273,7 +273,7 @@ chat 과 story 의 그림(배경, 캐릭터, 일러스트)을 둔다(#540, 2026-
 - **로컬.** `docker compose up -d` 가 DB, Redis 와 함께 띄운다. S3 는 `127.0.0.1:8333`(`IMAGE_STORE_PORT`)이다. 비밀 키는 루트 `.env` 의 `IMAGE_STORE_SECRET_ACCESS_KEY` 이고 `tools/fill_env.py` 가 채운다. 접근 키의 이름은 `ai-trpg-local`, 버킷은 `ai-trpg-images` 다. 그림은 볼륨 `objectdata` 에 남는다.
 - **CI.** stack 이 서명해 올리고 받고 지워 보고, 서명 없는 요청과 틀린 키와 없는 버킷을 막는지 본다(`check_object_store`). 서명한 주소로 받기와 올리기는 SeaweedFS 4.48 에서 손으로 확인했다(200, 바꾼 주소는 403). CI 에서는 asset-server 를 만들 때 그 서버의 코드로 본다.
 - **staging.** `object-store` 를 띄우지 않는다. 그림 버킷(서울, 공개 접근 차단)과 그 버킷만 쓰는 IAM 사용자(`docker/object-store/iam-policy.json`: 올리기, 받기, 지우기)를 만들고, 그 키를 루트 `.env` 의 `IMAGE_STORE_ACCESS_KEY_ID`, `IMAGE_STORE_SECRET_ACCESS_KEY` 에 사람이 적는다([staging VM 준비](../operations/staging-vm.md)의 1번과 6번). `tools/staging_env.py` 는 버킷의 이름(`--image-bucket`)을 적고 두 키를 비워 둔다. 비어 있으면 compose 가 뜨기를 거부한다. 백업과 같은 버킷을 주면 그 도구가 거절한다.
-- 아직 정하지 않은 것은 [열린 질문](#열린-질문)에 있다.
+- 아직 정하지 않은 것(줄인 그림을 언제 만들지 등)은 [asset-server 의 열린 질문](asset-server.md#열린-질문)에 있다.
 
 ## 디스크
 
@@ -360,9 +360,8 @@ PR 하나에 한 가지다.
 
 공개 베타 전에:
 
-- 화면(#290). 디자인은 Stitch, 그림은 나노 바나나로 만든다. 화면이 사용자 글, 채팅, AI 서술을 HTML 로 실행하지 않는다(#274).
-- 실제 본인인증(#336)과 `APP_ENVIRONMENT=production`. 그 전에 지인 베타를 연다면 성인 콘텐츠와 환영 크레딧을 막는 방법을 정한다.
-- 가입 때의 약관과 개인정보 동의(#450). 개인정보 처리방침과 이용약관(운영자가 기록을 볼 수 있다는 것, `docs/architecture/operators.md` 의 "사용자에게 알릴 것").
+- 실제 휴대폰 본인확인 업체(#524)와 `APP_ENVIRONMENT=production`. 가짜 본인인증으로는 `production` 이 뜨지 않는다. 지인 베타는 초대한 사람만 허용 주소로 들이고 미성년자가 없어 가짜 업체 그대로 연다(위).
+- 개인정보 처리방침과 이용약관의 빈칸(〔정할 것〕: 사업자 이름, 연락처, 메일과 본인인증 업체)을 채우고 변호사 검토를 받는다(#450). 초안(`docs/legal/`), 가입과 마이페이지의 동의 화면, 다시 동의하기 전에 다른 서버를 막는 것은 끝났다.
 - 메일을 SES 로.
 - 사업자등록, 실제 결제, 청소년 보호와 콘텐츠 관련 규정의 확인(법률 검토가 아니다).
 - 허용 주소를 뺀다. 그때부터 요청 수 제한과 시도 제한이 실제 방어선이 된다.
@@ -373,4 +372,3 @@ PR 하나에 한 가지다.
   - 로컬 VM 의 바닥값(2026-10-22, 2코어 8GB, 아무도 쓰지 않을 때): 2.3Gi 를 쓰고 5.4Gi 가 남는다. 관측(Grafana 451MiB, Alloy 362MiB, Tempo 260MiB, Loki 179MiB, Prometheus 154MiB)이 서버 일곱(하나에 90~120MiB)보다 크다. 임베딩의 Ollama 는 173MiB 다. DB 의 연결은 17. 기본 디스크는 이미지와 빌드 캐시로 21GB 를 쓴다([로컬 VM 리허설의 결과](../operations/local-vm-rehearsal.md#결과-2026-10-22)). 클라우드 VM 의 값이 나오면 바꾼다.
 - staging 의 가격표에 시험용 모델(GLM-4.7-Flash, 집 PC 의 Ollama)의 이름표를 넣을지와 그 값. 결제 서버가 떠 있으면 가격표에 있는 모델만 고를 수 있다. 무료 모델은 가격표에 올리지 않기로 했으므로(게임 서버 README), 지금 그대로는 staging 에서 서술 모델로 고를 수 없다.
 - 모델 회사마다의 월 사용 한도를 어디에 기록해 둘지.
-- 그림 저장소(#540): 올리는 크기의 상한, 이미지 디코딩의 격리. asset-server 를 만들 때 정한다([그림 저장소](#그림-저장소)). nginx 가 받는 법과 캐시는 정했다(#566).

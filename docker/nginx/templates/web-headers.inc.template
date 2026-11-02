@@ -13,7 +13,8 @@
 #   base-uri 'self'        <base> 로 상대 주소를 다른 곳으로 돌리지 못한다
 #   frame-ancestors 'none' 다른 사이트의 iframe 에 들어가지 못한다(클릭재킹)
 # 인라인 스크립트는 쓰지 않는다('unsafe-inline' 이 없다). 빌드한 index.html 에도 인라인 스크립트가 없다.
-# 제작자가 꾸민 소개(HTML)를 그리는 법은 소개 화면(C2, D1)을 만들 때 정한다. 샌드박스 iframe 이 후보다.
+# 제작자가 꾸민 소개(HTML)는 iframe 없이 그린다(#290). 화면이 DOMPurify 로 한 번 더 거르고(introHtmlFilter.ts),
+# 넘치면 잘리는 상자에만 넣는다. 인라인 CSS 는 style 속성이 아니라 CSSOM 으로 입혀(IntroHtml.tsx) 이 CSP 를 그대로 둔다.
 add_header X-Content-Type-Options "nosniff" always;
 add_header Content-Security-Policy "default-src 'self'; img-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
 add_header Referrer-Policy "no-referrer" always;
