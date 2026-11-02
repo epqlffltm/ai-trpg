@@ -2,12 +2,13 @@
 // 떠난 테이블의 이벤트를 읽을 이야기로 묶는다. 순수한 함수다.
 // 이벤트에는 서술(gm_narration)이 먼저, 그 서술로 여는 라운드(round_opened)가 뒤에 적힌다. 그래서 둘이 이어지면
 // 라운드의 머리 아래에 그 장면을 둔다. 선언(player_action)은 캐릭터의 이름과 글, 판정의 굴림(check_rolled)은 한 줄,
-// 그 밖의 일은 일어난 일의 한 줄(eventLines.ts).
+// 그 밖의 일은 일어난 일의 한 줄(eventLines.ts). 방장이 되돌린 라운드(#288)의 일은 뺀다(revertedEvents.ts).
 
 import type { TableEvent } from '../../../api/types';
 import { ACTION_LABELS } from '../room/round/action/actionLabels';
 import type { ActionKind } from '../room/round/action/actionOptions';
 import { eventLine, type EventContext } from '../room/events/eventLines';
+import { withoutReverted } from '../room/events/revertedEvents';
 
 export type StoryBlock =
   | { kind: 'round'; key: number; number: number | null; scene: string | null }
@@ -52,7 +53,8 @@ function actionBlock(event: TableEvent): StoryBlock {
   return { kind: 'action', key: event.sequence, name: text(payload, 'character_name') ?? '누군가', content: text(payload, 'content') ?? '', action: actionName(payload) };
 }
 
-export function pastStory(events: TableEvent[], ctx: EventContext): StoryBlock[] {
+export function pastStory(all: TableEvent[], ctx: EventContext): StoryBlock[] {
+  const events = withoutReverted(all);
   const blocks: StoryBlock[] = [];
   for (let index = 0; index < events.length; index += 1) {
     const event = events[index] as TableEvent;

@@ -47,11 +47,16 @@ export function recentRoundsQuery(tableId: string, from: number | null = null) {
 
 /**
  * anchor 번 앞의 라운드들(B10). 한 쪽에 ROUND_PAGE 개, 다음 쪽은 앞 쪽의 첫 번호 앞이다. 1 번에 닿으면 끝.
- * 닫힌 라운드는 바뀌지 않는다. 그래서 열쇠를 roundsKey 밖에 두어 이벤트가 와도 다시 읽지 않는다
+ * 닫힌 라운드는 바뀌지 않는다. 그래서 열쇠를 roundsKey 밖에 두어 이벤트가 와도 다시 읽지 않는다(되돌리기는 예외, #288)
  */
+/** 앞의 라운드(B10) 읽기 모두의 앞부분. 라운드를 되돌리면(#288) 버린다. 되돌린 라운드가 목록에서 빠진다 */
+export function roundHistoryKey(tableId: string) {
+  return ['trpg', 'tables', tableId, 'round-history'] as const;
+}
+
 export function earlierRoundsQuery(tableId: string, anchor: number) {
   return infiniteQueryOptions({
-    queryKey: ['trpg', 'tables', tableId, 'round-history', anchor],
+    queryKey: [...roundHistoryKey(tableId), anchor],
     queryFn: ({ pageParam, signal }) => fetchRoundsBefore(tableId, pageParam, signal),
     initialPageParam: anchor,
     getNextPageParam: (lastPage) => {

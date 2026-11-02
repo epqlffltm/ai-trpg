@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/trpg/room/events/EventLog.test.tsx
 // 일어난 일(④-2). 상태 패널의 탭(L)에 읽어 둔 끝부분과 스트림으로 온 것이 최근 것부터 보이는지,
 // 번호가 많을 때 끝부분만 읽는지, 이번 라운드의 서술을 막는 일이 지금 라운드 위의 알림으로 뜨는지,
-// 스트림이 읽어 둔 끝 번호부터 받는지를 본다.
+// 스트림이 읽어 둔 끝 번호부터 받는지, 방장이 되돌린 라운드의 일이 빠지는지(#288)를 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -71,6 +71,24 @@ describe('일어난 일', () => {
     expect(log.queryByText(/비가 온다/)).not.toBeInTheDocument();
     const stream = seen.find((request) => request.url.startsWith(`${BASE}/stream`));
     expect(stream?.url).toContain('events_after=10');
+  });
+
+  it('방장이 라운드를 되돌리면 그 닫힘의 묶음이 빠지고 되돌렸다는 줄이 남는다', async () => {
+    const closing = { action_group_id: 'g-closing' };
+    open({
+      [`GET ${BASE}/stream`]: (request) =>
+        sseResponse(request, [
+          sse('table_event', event(11, 'hp_changed', { round: 1, character_name: '렌', before: 10, after: 2 }, closing), '11-0-0'),
+          sse('table_event', event(12, 'round_closed', { number: 1 }, closing), '12-0-0'),
+          sse('table_event', event(13, 'round_reverted', { number: 1, group: 'g-closing' }), '13-0-0'),
+        ]),
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    const log = await logTab();
+    expect(await log.findByText('라운드 1: 방장이 되돌렸습니다. 같은 라운드를 다시 진행합니다.')).toBeInTheDocument();
+    expect(log.queryByText('렌: HP 10 → 2')).not.toBeInTheDocument();
+    expect(log.queryByText('라운드 1: 마감')).not.toBeInTheDocument();
   });
 
   it('번호가 많으면 끝의 100개만 읽고, 앞의 것은 보이지 않는다고 알린다', async () => {

@@ -113,4 +113,17 @@ describe('떠난 테이블의 순수한 함수', () => {
     expect(departureLabel('dropped')).toBe('크레딧이 모자라 빠짐');
     expect(pastProblemText(new ApiError({ status: 500, detail: 'x' }))).toContain('불러오지 못했습니다');
   });
+
+  it('방장이 되돌린 라운드의 일은 이야기에서 뺀다(#288)', () => {
+    const ctx = { table: { rules: null, currency: null }, nameOfMember: () => '누군가', modelName: (slug: string) => slug };
+    const events = [
+      event(1, 'player_action', { character_name: '렌', content: '뛰어내린다' }, { action_group_id: 'g1' }),
+      event(2, 'gm_narration', { text: '렌이 떨어진다.' }, { action_group_id: 'g1' }),
+      event(3, 'round_reverted', { number: 1, group: 'g1' }, { action_group_id: 'g2' }),
+    ] as unknown as TableEvent[];
+
+    const blocks = pastStory(events, ctx);
+
+    expect(blocks).toEqual([{ kind: 'line', key: 3, text: '라운드 1: 방장이 되돌렸습니다. 같은 라운드를 다시 진행합니다.', important: false }]);
+  });
 });

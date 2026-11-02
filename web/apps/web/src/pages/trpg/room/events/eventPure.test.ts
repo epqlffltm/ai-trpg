@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { TableDetail, TableEvent } from '../../../../api/types';
 import { event, ME, OTHER, tableDetail } from '../../../../test/tableFixtures';
 import { eventLine, eventRound, eventRows, type EventContext, type EventType } from './eventLines';
+import { revertedGroups, withoutReverted } from './revertedEvents';
 import { modelNoticeEvent, roomNotices, roundNoticeEvents } from './roomNoticeView';
 
 const NAMES: Record<string, string> = { [ME]: '렌', [OTHER]: '미아' };
@@ -32,7 +33,7 @@ const ALL: EventType[] = [
   'monster_attacked', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_treated', 'naming_resolved', 'death_save_rolled',
   'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'trap_set', 'trap_sprung', 'trap_disarmed', 'steal_attempted',
   'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'chapter_changed', 'character_leveled', 'experience_gained', 'abilities_raised', 'place_searched', 'character_rested',
-  'character_revived', 'round_closed', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
+  'character_revived', 'round_closed', 'round_reverted', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
   'narration_model_not_for_sale', 'narration_model_retiring', 'narration_model_replaced', 'narration_model_unavailable',
   'member_dropped', 'narration_credits_released', 'table_ended', 'item_traded', 'money_paid',
   'equipment_changed', 'door_changed', 'monsters_appeared', 'carried_items_left',
@@ -267,5 +268,30 @@ describe('roomNoticeView', () => {
       ['info', '서술 모델 Gemini Flash: 끝납니다(3일 남음).'],
       ['error', '라운드 2: 서술에 실패했습니다(timeout).'],
     ]);
+  });
+});
+
+describe('되돌린 라운드(#288)', () => {
+  const closing = { action_group_id: 'g-closing' };
+  const events = [
+    ev(1, 'round_opened', { number: 2 }, { action_group_id: 'g-open' }),
+    ev(2, 'hp_changed', { round: 2, character_name: '렌', before: 10, after: 3 }, closing),
+    ev(3, 'round_closed', { number: 2 }, closing),
+    ev(4, 'gm_narration', { text: '렌이 쓰러진다.' }, closing),
+    ev(5, 'round_opened', { number: 3 }, closing),
+    ev(6, 'whisper_sent', {}, { action_group_id: 'g-whisper' }),
+    ev(7, 'round_reverted', { number: 2, group: 'g-closing' }, { action_group_id: 'g-revert' }),
+  ];
+
+  it('되돌린 닫힘의 묶음을 빼고, 되돌렸다는 줄과 그 사이의 일은 남긴다', () => {
+    expect(revertedGroups(events)).toEqual(new Set(['g-closing']));
+    expect(withoutReverted(events).map((one) => one.sequence)).toEqual([1, 6, 7]);
+    expect(line('round_reverted', { number: 2 })?.text).toBe('라운드 2: 방장이 되돌렸습니다. 같은 라운드를 다시 진행합니다.');
+  });
+
+  it('되돌린 것이 없으면 그대로 둔다', () => {
+    const plain = events.slice(0, 6);
+
+    expect(withoutReverted(plain)).toBe(plain);
   });
 });
