@@ -1,10 +1,12 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/useConditionTargets.ts
 // 조건과 효과가 고를 대상들(B9). 퀘스트·사건 탭과 장 탭이 함께 쓴다.
 // 장소·물건·인물·사건은 저장된 로어북들의 항목, 몬스터는 시트를 적은 몬스터, 장은 저장된 시나리오의 장(#481)이다.
+// 캠페인의 앞 편의 퀘스트(#481 B)는 저장된 조건이 그것을 쓸 때만 내 로어북들의 사건을 읽는다(한 줄의 이름). 고르는 칸은 따로 읽는다.
 
 import type { ScenarioDetail } from '../../../../api/types';
 import type { Targets } from './conditionsForm';
 import { monsterNameOf, useBestiaryMonsters } from './useBestiaryMonsters';
+import { useEarlierQuests, usesEarlierQuests } from './useEarlierQuests';
 import { useLoreEntries } from './useLoreEntries';
 
 export function useConditionTargets(scenario: ScenarioDetail) {
@@ -13,6 +15,7 @@ export function useConditionTargets(scenario: ScenarioDetail) {
   const items = useLoreEntries(scenario.lorebook_ids, 'item');
   const npcs = useLoreEntries(scenario.lorebook_ids, 'person');
   const monsters = useBestiaryMonsters(scenario.bestiary_ids);
+  const earlier = useEarlierQuests(usesEarlierQuests(scenario));
   const monsterName = monsterNameOf(monsters.monsters);
   const targets: Targets = {
     places: places.entries,
@@ -21,6 +24,7 @@ export function useConditionTargets(scenario: ScenarioDetail) {
     quests: events.entries,
     monsters: scenario.monster_sheets.map((sheet) => ({ id: sheet.monster_id, name: monsterName(sheet.monster_id) })),
     chapters: scenario.chapters.map((chapter) => ({ id: chapter.id, name: chapter.name })),
+    earlierQuests: earlier.choices,
   };
   return { targets, pending: events.pending || monsters.pending, failed: events.failed };
 }
