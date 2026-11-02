@@ -22,7 +22,7 @@ export type StudioKindText = {
   deleteNote?: string;
 };
 
-export const STUDIO_KINDS: StudioKind[] = ['rulebooks', 'worlds', 'lorebooks', 'bestiaries', 'scenarios'];
+export const STUDIO_KINDS: StudioKind[] = ['rulebooks', 'worlds', 'lorebooks', 'bestiaries', 'scenarios', 'campaigns'];
 
 const TEXTS: Record<StudioKind, StudioKindText> = {
   rulebooks: {
@@ -69,7 +69,17 @@ const TEXTS: Record<StudioKind, StudioKindText> = {
     empty: '아직 만든 시나리오가 없습니다.',
     first: '첫 시나리오 만들기',
     missing: '시나리오를 찾을 수 없습니다. 지워졌을 수 있습니다.',
-    deleteNote: '지우면 되돌릴 수 없습니다. 공개했다면 소개 페이지도 더는 열리지 않습니다.',
+    deleteNote: '지우면 되돌릴 수 없습니다. 공개했다면 소개 페이지도 더는 열리지 않습니다. 이 시나리오를 쓰는 캠페인이 있으면 지우지 못합니다.',
+  },
+  campaigns: {
+    label: '캠페인',
+    title: '내 캠페인',
+    intro: '캠페인은 같은 룰북을 쓰는 내 시나리오 여러 편을 차례로 묶은 것입니다. 앞 편을 끝낸 캐릭터가 성장과 소지품을 데리고 다음 편으로 갑니다.',
+    create: '새 캠페인 만들기',
+    empty: '아직 만든 캠페인이 없습니다.',
+    first: '첫 캠페인 만들기',
+    missing: '캠페인을 찾을 수 없습니다. 지워졌을 수 있습니다.',
+    deleteNote: '지우면 되돌릴 수 없고, 이 캠페인으로 새 플레이를 시작할 수 없게 됩니다.',
   },
 };
 

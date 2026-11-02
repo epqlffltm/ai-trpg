@@ -60,6 +60,9 @@ export const BestiaryEditPage = lazyPage(() => import('../pages/trpg/studio/best
 export const ScenariosPage = lazyPage(() => import('../pages/trpg/studio/scenarios/ScenariosPage'), 'ScenariosPage');
 export const ScenarioNewPage = lazyPage(() => import('../pages/trpg/studio/scenarios/ScenarioNewPage'), 'ScenarioNewPage');
 export const ScenarioEditPage = lazyPage(() => import('../pages/trpg/studio/scenarios/ScenarioEditPage'), 'ScenarioEditPage');
+export const CampaignsPage = lazyPage(() => import('../pages/trpg/studio/campaigns/CampaignsPage'), 'CampaignsPage');
+export const CampaignNewPage = lazyPage(() => import('../pages/trpg/studio/campaigns/CampaignNewPage'), 'CampaignNewPage');
+export const CampaignEditPage = lazyPage(() => import('../pages/trpg/studio/campaigns/CampaignEditPage'), 'CampaignEditPage');
 
 // 운영자의 신고 처리(E4). 운영자만 가는 곳이라 사용자의 첫 묶음에 넣지 않는다
 export const ReportsPage = lazyPage(() => import('../pages/operator/ReportsPage'), 'ReportsPage');
