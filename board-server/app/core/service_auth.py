@@ -13,8 +13,10 @@
     다만 본문이 JSON 이 아니면 서명보다 먼저 400 이다(본문을 읽는 단계다. NestJS 로 쓰던 때도 같았다)
 
 서명의 모양과 셈은 공용 코드(server_core/service_auth/signing.py)의 것을 쓴다.
-머리말을 읽는 법만 NestJS 로 쓰던 때(src/service-auth/signing.ts)와 같게 따로 둔다.
-그때는 시각을 수로 바꾼 뒤 그 수로 서명을 셈했다(t=0042 는 "42" 로 셈한다). 지금의 보내는 쪽과는 어느 쪽이든 같다.
+머리말을 읽는 법은 NestJS 로 쓰던 때(src/service-auth/signing.ts)처럼 따로 둔다.
+시각은 앞에 0 이나 부호가 없는 10진수만 받는다. NestJS 때는 t=0042 를 "42" 로 셈해 받았지만,
+다른 서버들과 같게 받지 않는다(shared/contracts/service-signature.json, #786).
+보내는 쪽(인증 서버)은 그 모양으로 보낸 적이 없다.
 """
 
 import hmac
@@ -30,8 +32,8 @@ from app.core.errors import ApiError
 # 서명이 맞지 않을 때의 응답. 무엇이 틀렸는지 싣지 않는다
 BAD_SIGNATURE_DETAIL = '요청의 서명이 맞지 않습니다.'
 
-# 머리말의 모양. 시각은 정수, 서명은 16진수 64자다
-HEADER = re.compile(r'^t=(?P<sent_at>-?\d{1,19}),v1=(?P<signature>[0-9a-f]{64})\Z', re.ASCII)
+# 머리말의 모양. 시각은 앞에 0 이나 부호가 없는 10진수, 서명은 16진수 소문자 64자다
+HEADER = re.compile(r'^t=(?P<sent_at>0|[1-9]\d{0,18}),v1=(?P<signature>[0-9a-f]{64})\Z', re.ASCII)
 
 # API 목록에 적는 서명의 머리말. 의존성이 머리말을 직접 읽으므로(없으면 400 이 아니라 401) 따로 적는다
 SIGNATURE_PARAMETER = {

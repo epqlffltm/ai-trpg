@@ -51,9 +51,19 @@ def split_header(header: str) -> tuple[str, str] | None:
     return time_part.removeprefix('t='), signature_part.removeprefix('v1=')
 
 
+def is_canonical_time(sent_at: str) -> bool:
+    """
+    시각이 서명하는 쪽이 쓰는 모양(0 이상의 10진수, 앞에 0 이나 부호가 없다)인가.
+
+    다른 모양(+170…, 0170…)도 같은 시각으로 읽히지만, 서명은 글자 그대로에 걸려 있어 서버마다 다르게 받을 수 있다.
+    세 서버가 이 모양만 받는다(shared/contracts/service-signature.json).
+    """
+    return sent_at.isascii() and sent_at.isdigit() and (sent_at == '0' or not sent_at.startswith('0'))
+
+
 def is_fresh(sent_at: str, now: float) -> bool:
-    """서명의 시각이 지금에서 앞뒤 TOLERANCE_SECONDS 안쪽인가. 숫자가 아니면 아니다."""
-    if not sent_at.isascii() or not sent_at.isdigit():
+    """서명의 시각이 지금에서 앞뒤 TOLERANCE_SECONDS 안쪽인가. 그 모양의 숫자가 아니면 아니다."""
+    if not is_canonical_time(sent_at):
         return False
     return abs(now - int(sent_at)) <= TOLERANCE_SECONDS
 

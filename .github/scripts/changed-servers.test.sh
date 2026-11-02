@@ -88,6 +88,7 @@ expect "아무도 쓰지 않는 공용 패키지는 공용 코드만" "shared" "
 expect "이름이 비슷한 패키지는 쓰는 것으로 보지 않는다" "shared" "shared/server/x.py"
 expect "공용 코드의 안내는 공용 코드만" "shared" "shared/README.md"
 expect "공용 코드의 워크플로는 공용 코드" "shared" ".github/workflows/shared.yml"
+expect "공통 규격의 시험 파일은 그것을 읽는 공용 코드, 인증, 게시판, 결제" "auth board billing shared" "shared/contracts/redaction.json"
 expect "shared 라는 이름의 다른 폴더는 고르지 않는다" "" "docs/shared/x.md" "shared-old/x"
 SERVER_ROOT=.
 

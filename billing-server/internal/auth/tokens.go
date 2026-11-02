@@ -91,6 +91,8 @@ func NewVerifier(keys KeySource, sessions SessionChecker, issuer string, audienc
 		jwt.WithAudience(audience),
 		// exp 가 없는 토큰을 "만료가 없다"로 받지 않는다
 		jwt.WithExpirationRequired(),
+		// 발급 시각(iat)이 미래인 토큰을 받지 않는다. 공용 코드(PyJWT)도 받지 않는다(shared/contracts/access-tokens.json)
+		jwt.WithIssuedAt(),
 		jwt.WithLeeway(ClockSkew),
 		jwt.WithTimeFunc(now),
 	)
@@ -138,6 +140,10 @@ func (v *Verifier) findKey(ctx context.Context) jwt.Keyfunc {
 // access 토큰이 아니거나 사용자 ID 를 읽을 수 없으면 거부한다.
 func toClaims(claims tokenClaims) (Claims, error) {
 	if claims.TokenType != accessTokenType {
+		return Claims{}, ErrInvalidToken
+	}
+	// 세션 버전은 0 이상이다. 음수를 받으면 끊긴 세션의 목록에 없는 사람의 토큰으로 통한다(공용 코드도 거부한다)
+	if claims.Version < 0 {
 		return Claims{}, ErrInvalidToken
 	}
 	userID, err := uuid.Parse(claims.Subject)
