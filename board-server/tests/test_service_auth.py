@@ -95,10 +95,11 @@ def test_rejects_malformed_header(header: str | None):
     assert not accepts(header)
 
 
-def test_time_is_read_as_a_number_like_nest():
-    # 서명은 "1793156400" 으로 셈했고 머리말은 앞에 0 을 붙였다. NestJS 때도 받았다
+def test_time_with_leading_zeros_is_rejected_like_the_other_servers():
+    # 서명은 "1793156400" 으로 셈했고 머리말은 앞에 0 을 붙였다.
+    # NestJS 때는 받았지만 다른 서버들과 같게 받지 않는다(#786)
     digest = signed().split(',v1=')[1]
-    assert accepts(f't=00{NOW},v1={digest}')
+    assert not accepts(f't=00{NOW},v1={digest}')
 
 
 def test_now_seconds_is_whole_seconds():

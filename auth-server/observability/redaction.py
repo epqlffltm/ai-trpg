@@ -51,10 +51,11 @@ _WORD_BREAK = re.compile(r'[_.\-\s]+|(?<=[a-z0-9])(?=[A-Z])')
 
 # JWT 의 모양. 점으로 이은 세 마디고 첫 마디가 eyJ 로 시작한다
 _JWT = re.compile(r'eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]*')
-# Authorization 머리말의 값
-_AUTH_SCHEME = re.compile(r'\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}', re.IGNORECASE)
-# 주소에 든 계정과 비밀번호(postgres://계정:비밀번호@호스트)
-_URL_USERINFO = re.compile(r'://[^/\s:@]+:[^@\s/]+@')
+# Authorization 머리말의 값. 앞이 ASCII 의 낱말 글자가 아니면 된다(한글 바로 뒤도 가린다).
+# 사이의 빈칸은 유니코드의 빈칸이다. 세 서버가 같게 가린다(shared/contracts/redaction.json)
+_AUTH_SCHEME = re.compile(r'(?<![A-Za-z0-9_])(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}', re.IGNORECASE)
+# 주소에 든 계정과 비밀번호(postgres://계정:비밀번호@호스트). 계정이 빈 것(redis://:비밀번호@호스트)도 가린다
+_URL_USERINFO = re.compile(r'://[^/\s:@]*:[^@\s/]+@')
 # 이메일 주소
 _EMAIL = re.compile(r'([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*@([A-Za-z0-9.-]+\.[A-Za-z]{2,})')
 

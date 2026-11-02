@@ -21,6 +21,7 @@
 #   - 공용 코드(shared/<패키지>/)가 바뀌면 공용 코드의 검사(shared)와, 그 패키지를 쓰는 서버들.
 #     쓰는 서버는 서버마다 pyproject.toml 의 경로 의존(path = "../shared/<패키지>")을 읽어 고른다. 따로 표를 두지 않는다.
 #     새 서버가 공용 코드를 쓰기 시작하면 저절로 잡힌다(docs/architecture/shared-code.md 의 "버전과 CI")
+#   - 공통 규격의 시험 파일(shared/contracts/, #786)이 바뀌면 그 파일을 읽는 테스트가 있는 곳: 공용 코드, 인증, 게시판, 결제
 #   - 화면의 폴더(web/)나 그 워크플로(.github/workflows/web.yml)가 바뀌면 화면(web). 화면은 서버의 API 목록에서 타입을 만들고
 #     동의 문서(docs/legal/*.md)의 사본을 가지므로 둘이 바뀌어도 화면이다. 모두를 고르는 경로(docker/ 등)도 화면을 고른다(프록시의 이미지가 화면을 담는다)
 #   - 그 밖(문서, 루트 README 등)은 아무것도 고르지 않는다
@@ -52,6 +53,11 @@ shared_path() {
 # 화면의 경로인가. 화면의 폴더, 그 워크플로, 화면이 타입을 만드는 서버의 API 목록, 화면이 사본을 갖는 동의 문서다.
 web_path() {
   [[ "$1" == web/* || "$1" == ".github/workflows/web.yml" || "$1" == docs/api/*.openapi.json || "$1" == docs/legal/*.md ]]
+}
+
+# 공통 규격의 시험 파일인가. 공용 코드(server-core), 인증 서버(Django), 게시판, 결제 서버(Go)의 테스트가 함께 읽는다(#786).
+contracts_path() {
+  [[ "$1" == shared/contracts/* ]]
 }
 
 # 공용 코드의 경로에서 패키지의 이름을 꺼낸다(shared/server-core/src/x.py -> server-core). 패키지 밖이면 비어 있다.
@@ -121,6 +127,11 @@ select_servers() {
     fi
     if web_path "$path"; then
       picked[web]=1
+    fi
+    if contracts_path "$path"; then
+      picked[auth]=1
+      picked[board]=1
+      picked[billing]=1
     fi
     if shared_path "$path"; then
       picked[shared]=1

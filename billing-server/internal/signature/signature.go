@@ -15,8 +15,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"regexp"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -65,19 +65,22 @@ func mac(secret string, timestamp string, payload []byte) []byte {
 	return hash.Sum(nil)
 }
 
+// headerPattern 은 받는 머리말의 모양이다. 시각은 앞에 0 이나 부호가 없는 10진수, 서명은 16진수 소문자 64자다.
+// 서명하는 쪽(Sign)이 만드는 모양만 받는다. 대문자 16진수나 +170…, 0170… 도 같은 값으로 읽히지만,
+// 서버마다 받기도 하고 안 받기도 하면 안 된다. 인증 서버와 공용 코드도 이 모양만 받는다(shared/contracts/service-signature.json).
+var headerPattern = regexp.MustCompile(`^t=(0|[1-9][0-9]{0,18}),v1=([0-9a-f]{64})$`)
+
 // split 은 "t=<시각>,v1=<서명>" 을 시각과 서명으로 나눈다. 그 모양이 아니면 false 다.
 func split(header string) (timestamp string, signature []byte, ok bool) {
-	timePart, signaturePart, found := strings.Cut(header, ",")
-	timestamp, hasTime := strings.CutPrefix(timePart, "t=")
-	encoded, hasSignature := strings.CutPrefix(signaturePart, "v1=")
-	if !found || !hasTime || !hasSignature {
+	parts := headerPattern.FindStringSubmatch(header)
+	if parts == nil {
 		return "", nil, false
 	}
-	signature, err := hex.DecodeString(encoded)
+	signature, err := hex.DecodeString(parts[2])
 	if err != nil {
 		return "", nil, false
 	}
-	return timestamp, signature, true
+	return parts[1], signature, true
 }
 
 // fresh 는 서명의 시각이 지금에서 Tolerance 안쪽인지 본다.

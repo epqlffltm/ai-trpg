@@ -1,0 +1,202 @@
+{
+  "_note": "shared/contracts/generate.py 가 만든다. 손으로 고치지 않는다. 규칙은 shared/contracts/README.md",
+  "secret": "contract-only-secret-0123456789-abcdef",
+  "now": 1800000000,
+  "sign": [
+    {
+      "name": "본문이 있는 POST",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "sent_at": 1800000000,
+      "header": "t=1800000000,v1=76328c5051cb0e7835579612e4f8f37d835618c6b91bf001c9b9b7184a358faf"
+    },
+    {
+      "name": "본문이 빈 GET(주소에 물음표 뒤의 값)",
+      "method": "GET",
+      "path": "/api/v1/billing/service/wallets/u1?limit=20",
+      "body": "",
+      "sent_at": 1800000000,
+      "header": "t=1800000000,v1=ae678881a13b9ac2656c566d018311a655596f9605ed8d737f1547cc576b85c6"
+    },
+    {
+      "name": "한글과 그림 글자가 든 본문",
+      "method": "POST",
+      "path": "/api/v1/notifications/service/notices",
+      "body": "{\"title\":\"새 알림 🎲\"}",
+      "sent_at": 1800000000,
+      "header": "t=1800000000,v1=fef4ecd0df6a4a40d0a8b83dd31254bb504a9d3b2eb53027f5a6aa14ebb3d86c"
+    }
+  ],
+  "verify": [
+    {
+      "name": "맞는 서명",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=1800000000,v1=76328c5051cb0e7835579612e4f8f37d835618c6b91bf001c9b9b7184a358faf",
+      "valid": true
+    },
+    {
+      "name": "5분 전에 만든 서명",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=1799999700,v1=436ea2dde395b91227a2a1d411577fb2aaef86d0fe0655ee7823e6bf17a67b91",
+      "valid": true
+    },
+    {
+      "name": "5분 뒤의 서명(시계가 빠른 서버)",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=1800000300,v1=b0ce540bc8ce658dd529bafeb1f4c3ba3bd8a40aa1c52f9d5b16fe7454c1f5d6",
+      "valid": true
+    },
+    {
+      "name": "5분 1초 전에 만든 서명",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=1799999699,v1=b44b109b69c2594f79fd881b71dd26165e4bfbe77826ae3755a732e20a97be4d",
+      "valid": false
+    },
+    {
+      "name": "5분 1초 뒤의 서명",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=1800000301,v1=398b1039f34b353cde1cee96c825e9a1de0f4fba40a31c668ca3f618e7424c20",
+      "valid": false
+    },
+    {
+      "name": "다른 비밀로 만든 서명",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=1800000000,v1=4919b6d134642c8858e624b5b9e570ace09031d2f5d161641d30414fef9db680",
+      "valid": false
+    },
+    {
+      "name": "다른 주소의 서명",
+      "method": "POST",
+      "path": "/api/v1/billing/service/grants",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=1800000000,v1=76328c5051cb0e7835579612e4f8f37d835618c6b91bf001c9b9b7184a358faf",
+      "valid": false
+    },
+    {
+      "name": "다른 메서드의 서명",
+      "method": "PUT",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=1800000000,v1=76328c5051cb0e7835579612e4f8f37d835618c6b91bf001c9b9b7184a358faf",
+      "valid": false
+    },
+    {
+      "name": "본문이 바뀐 요청",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"} ",
+      "header": "t=1800000000,v1=76328c5051cb0e7835579612e4f8f37d835618c6b91bf001c9b9b7184a358faf",
+      "valid": false
+    },
+    {
+      "name": "서명이 대문자 16진수",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=1800000000,v1=76328C5051CB0E7835579612E4F8F37D835618C6B91BF001C9B9B7184A358FAF",
+      "valid": false
+    },
+    {
+      "name": "시각 앞에 0",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=01800000000,v1=c62fecaa458de59fa1c046d765346cb878a5b3d61cddb365ddf9aa108e42a5e0",
+      "valid": false
+    },
+    {
+      "name": "시각 앞에 0(서명은 0 이 없는 시각으로)",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=01800000000,v1=76328c5051cb0e7835579612e4f8f37d835618c6b91bf001c9b9b7184a358faf",
+      "valid": false
+    },
+    {
+      "name": "시각 앞에 +",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=+1800000000,v1=32b0e2f3286f63a1e2df07629234942407ce24e1a05fcabca93e7f0370f5c490",
+      "valid": false
+    },
+    {
+      "name": "음수의 시각",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=-1,v1=3225601866780315b5ae83d6b82b25604dafdb94b6e025b525ba9d7ed64afb12",
+      "valid": false
+    },
+    {
+      "name": "칸의 차례가 뒤바뀜",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "v1=76328c5051cb0e7835579612e4f8f37d835618c6b91bf001c9b9b7184a358faf,t=1800000000",
+      "valid": false
+    },
+    {
+      "name": "쉼표 뒤의 빈칸",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=1800000000, v1=76328c5051cb0e7835579612e4f8f37d835618c6b91bf001c9b9b7184a358faf",
+      "valid": false
+    },
+    {
+      "name": "뒤에 다른 칸",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=1800000000,v1=76328c5051cb0e7835579612e4f8f37d835618c6b91bf001c9b9b7184a358faf,v2=00",
+      "valid": false
+    },
+    {
+      "name": "v1 이 없음",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "t=1800000000",
+      "valid": false
+    },
+    {
+      "name": "빈 머리말",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": "",
+      "valid": false
+    },
+    {
+      "name": "머리말이 없음",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "header": null,
+      "valid": false
+    },
+    {
+      "name": "짧은 비밀(31자)로는 맞는 서명도 받지 않는다",
+      "method": "POST",
+      "path": "/api/v1/billing/service/holds",
+      "body": "{\"user_id\":\"u1\",\"amount\":\"12.5\"}",
+      "secret": "contract-only-secret-0123456789",
+      "header": "t=1800000000,v1=96ce215872c70e4e7e4f2780f74951aec2bb68987fac3b204d14f6e0fa8637cf",
+      "valid": false
+    }
+  ]
+}
