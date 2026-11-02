@@ -129,6 +129,9 @@ class Conversation(Base):
     # 모델이 답을 쓰는 중이면 그 시작 시각. 한 세션에 한 번에 하나의 생성만 받는다(app/turns/repository.py).
     # 서버가 도중에 꺼져 남아도 오래되면(GENERATION_STALE) 다음 말이 다시 잡는다(chat 과 같다)
     generating_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # 굴리는 요약을 쓰는 중이면 그 시작 시각. 서버가 여럿이어도 한 세션에 한 번에 하나만 쓴다(app/memory/repository.py).
+    # 서버가 도중에 꺼져 남아도 오래되면(SUMMARY_STALE) 다음 요약이 다시 잡는다
+    summarizing_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     # 지운 시각(chat 과 같다). 지운 세션은 목록과 읽기에 나오지 않는다. 행을 지우는 것은 탈퇴뿐이다
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     # 세션을 시작할 때 이 사람이 이 세계관에서 본 엔딩들(계정의 기록, 회차 혜택). 조건의 ending_seen 이 본다.
