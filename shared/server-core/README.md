@@ -74,6 +74,18 @@ trpg-server 의 `app/notifications/` 에서 뽑았다. 쓰는 서버는 asset-se
 서버 이름(`asset`, `chat`)은 알림 서버의 주소에 들어가고, 알림 서버는 그 이름의 비밀(`ASSET_SERVER_SECRET` 등)로 서명을 본다.
 알림의 종류는 알림 서버의 목록에 그 서버의 것으로 있어야 받는다.
 
+## 서버 사이의 멈추기
+
+답을 멈추는 스위치는 그 생성을 돌리는 서버의 메모리에 있다. 서버가 여럿이면 멈추기가 다른 서버에 닿으므로,
+PostgreSQL 의 NOTIFY 로 모든 서버에 알리고 LISTEN 으로 듣는다(`server_core/stop_signals.py`, #674). 쓰는 서버는 chat-server, story-server 다.
+
+| 서버가 하는 것 | 공용 코드가 하는 것 |
+| --- | --- |
+| 이 서버에 스위치가 없으면 DB 로 그 사람의 생성이 도는 중인지 맞춰 보고 `announce(session, channel, id)` 한다 | `pg_notify` 와 커밋 |
+| 앱에 `StopListener(listen_dsn(database_url), channel_name(db_schema), on_stop)` 을 붙이고 lifespan 에서 `loops.start` 한다. `on_stop` 은 그 id 의 스위치가 있으면 멈춘다 | 풀 밖의 연결 하나로 듣기, 끊기면 5초 뒤 다시 맺기, 알아볼 수 없는 글은 버리기 |
+
+채널은 스키마마다 따로다(`chat_stops`, `story_test_stops`). 알림에는 생성의 id 만 싣고 서명하지 않는다(맞힐 수 없는 UUID 이고, 거짓 알림이 할 수 있는 것은 멈추기뿐이다).
+
 ## 테스트
 
 ```bash

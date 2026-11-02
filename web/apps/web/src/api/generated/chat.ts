@@ -337,7 +337,8 @@ export interface paths {
          * @description 모델을 부르는 것을 멈춘다(공급자의 호출도 끊는다).
          *     받은 만큼 partial 로 저장하고 청구한다. 받은 글이 없으면 반환한다.
          *
-         *     멈출 생성이 없으면(끝났다, 남의 것이다, 이 서버에서 도는 것이 아니다) 404 generation_not_running 이다.
+         *     이 서버에서 도는 생성이면 바로 멈춘다. 아니면 DB 로 내 생성이 도는 중인지 보고 모든 서버에 알린다(#674).
+         *     멈출 생성이 없으면(끝났다, 남의 것이다, 없다) 404 generation_not_running 이다.
          */
         post: operations["stop_generation_api_v1_chat_generations__generation_id__stop_post"];
         delete?: never;

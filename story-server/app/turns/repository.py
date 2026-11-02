@@ -97,6 +97,22 @@ async def get_generation(session: AsyncSession, generation_id: uuid.UUID) -> Gen
     return await session.get(Generation, generation_id, populate_existing=True)
 
 
+async def is_running(session: AsyncSession, generation_id: uuid.UUID, owner_id: uuid.UUID, since: datetime) -> bool:
+    """
+    그 사람의 생성이 아직 도는 중인가(pending, held 이고 since 뒤에 시작했다). 어느 서버에서 도는지는 모른다.
+    since 보다 앞에 시작해 도중인 채 남은 것은 서버가 꺼진 것이다(정리 작업이 맡는다).
+    """
+    found = await session.scalar(
+        select(Generation.id).where(
+            Generation.id == generation_id,
+            Generation.owner_id == owner_id,
+            Generation.billing_status.in_(OPEN_STATUSES),
+            Generation.created_at >= since,
+        )
+    )
+    return found is not None
+
+
 async def move_billing(
     session: AsyncSession, generation_id: uuid.UUID, expected: frozenset[BillingStatus], values: dict[str, object]
 ) -> bool:

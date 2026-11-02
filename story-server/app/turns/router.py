@@ -309,15 +309,23 @@ async def continue_message(
 
 
 @generation_router.post('/{generation_id}/stop', status_code=status.HTTP_204_NO_CONTENT)
-async def stop_generation(generation_id: uuid.UUID, viewer: CurrentViewer, request: Request) -> Response:
+async def stop_generation(generation_id: uuid.UUID, viewer: CurrentViewer, request: Request, now: Now) -> Response:
     """
     모델을 부르는 것을 멈춘다(공급자의 호출도 끊는다).
     받은 만큼 partial 로 저장하고 청구한다. 받은 조각이 없으면 반환한다.
 
-    멈출 생성이 없으면(끝났다, 남의 것이다, 이 서버에서 도는 것이 아니다) 404 generation_not_running 이다.
+    이 서버에서 도는 생성이면 바로 멈춘다. 아니면 DB 로 내 생성이 도는 중인지 보고 모든 서버에 알린다(#674).
+    멈출 생성이 없으면(끝났다, 남의 것이다, 없다) 404 generation_not_running 이다.
     """
-    found = request.app.state.stops.get(generation_id)
-    if found is None or found[0] != viewer.claims.user_id or not found[1].request():
+    state = request.app.state
+    found = state.stops.get(generation_id)
+    if found is not None:
+        stopped = found[0] == viewer.claims.user_id and found[1].request()
+    else:
+        stopped = await service.announce_stop(
+            state.session_factory, state.stop_channel, viewer.claims.user_id, generation_id, now
+        )
+    if not stopped:
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
             content={'detail': '멈출 답이 없습니다.', 'code': 'generation_not_running'},

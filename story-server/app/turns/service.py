@@ -47,6 +47,7 @@ from conversation_core.lorebook import chosen_entries, query_text, ranked, rende
 from conversation_core.relay import Relay
 from conversation_core.suggestions import MarkerHold, parse_suggestions, split_answer
 from conversation_core.window import Turn, select_window
+from server_core import stop_signals
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.billing.client import Billing
@@ -1075,6 +1076,24 @@ async def with_recalled_lore(recall: LoreRecall | None, start: TurnStart) -> Tur
     card = start.messages[0]
     rebuilt = replace(card, content=with_lore(card.content, plan.block, block))
     return replace(start, messages=[rebuilt, *start.messages[1:]])
+
+
+async def announce_stop(
+    session_factory: async_sessionmaker[AsyncSession],
+    channel: str,
+    owner_id: uuid.UUID,
+    generation_id: uuid.UUID,
+    now: datetime,
+) -> bool:
+    """
+    이 서버에 없는 생성의 멈추기. 그 사람의 생성이 다른 서버에서 도는 중이면 모든 서버에 알리고 True, 아니면 False.
+    알린 뒤 멈추는 것은 그 서버의 일이라 기다리지 않는다. 그 사이에 다 받았으면 아무것도 멈추지 않는다.
+    """
+    async with session_factory() as session:
+        if not await repository.is_running(session, generation_id, owner_id, now - GENERATION_STALE):
+            return False
+        await stop_signals.announce(session, channel, generation_id)
+    return True
 
 
 async def stoppable_call(
