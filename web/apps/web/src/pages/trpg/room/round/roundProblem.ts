@@ -5,7 +5,7 @@
 //   - 409: 테이블이나 라운드의 지금 상태와 부딪힌다. 까닭은 reason(ApiError.code)
 //   - 422: 행동이 규칙에 없는 것을 가리키거나(action.<칸> 가 이 테이블의 규칙에 없습니다), 겨눌 수 없는 대상이다.
 //     어느 칸인지는 글(detail)에만 있어 하나로 알리고 다시 읽는다
-//   - 403: 방장이 아니다(닫기)
+//   - 403: 방장이 아니다(닫기, 되돌리기)
 // refresh 가 켜지면 라운드를 다시 읽는다(그 사이 마감했거나 다음 라운드가 열렸다).
 
 import { ApiError } from '../../../../api/errors';
@@ -65,5 +65,21 @@ export function describeCloseProblem(error: unknown): RoundProblem {
   if (common || !(error instanceof ApiError)) return common ?? { message: FAILED };
   if (error.status === 403) return { message: '방장만 라운드를 닫을 수 있습니다.', refresh: true };
   if (error.status === 409) return { ...(CONFLICTS[error.code ?? ''] ?? { message: FAILED }), refresh: true };
+  return unknownProblem(error, FAILED);
+}
+
+/** 되돌리기의 까닭(#288). 409 의 reason 이다 */
+const REVERT_CONFLICTS: Record<string, RoundProblem> = {
+  nothing_to_revert: { message: '되돌릴 라운드가 없습니다. 바로 앞 라운드 하나만, 이 기능이 생긴 뒤에 닫은 것만 되돌립니다.', refresh: true },
+  revert_blocked: { message: '이 라운드가 열린 뒤에 선언이나 다른 일이 있어 되돌릴 수 없습니다.', refresh: true },
+  round_closing: { message: '그 사이에 선언을 마감했습니다. 결과를 기다려 주세요.', refresh: true },
+};
+
+/** 바로 앞 라운드 되돌리기(방장, POST .../rounds/current/revert) */
+export function describeRevertProblem(error: unknown): RoundProblem {
+  const common = commonProblem(error);
+  if (common || !(error instanceof ApiError)) return common ?? { message: FAILED };
+  if (error.status === 403) return { message: '방장만 라운드를 되돌릴 수 있습니다.', refresh: true };
+  if (error.status === 409) return { ...(REVERT_CONFLICTS[error.code ?? ''] ?? { message: FAILED }), refresh: true };
   return unknownProblem(error, FAILED);
 }

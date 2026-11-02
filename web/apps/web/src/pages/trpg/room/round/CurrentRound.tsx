@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/room/round/CurrentRound.tsx
 // 지금 라운드. 장면(GM 의 서술)을 보이고, 상태에 따라 아래가 다르다.
-//   - 선언을 받는 중: 마감까지 남은 시간, 아직 내지 않은 사람, 내 선언, 방장의 닫기
+//   - 선언을 받는 중: 마감까지 남은 시간, 아직 내지 않은 사람, 내 선언, 방장의 닫기와 바로 앞 라운드 되돌리기(#288)
 //   - 결과를 서술하는 중: 모두의 선언과 판정 결과를 먼저 보이고, 쓰이는 서술을 미리 보인다. 실패하면 방장이 다시 맡긴다
 //   - 끝난 테이블의 마지막 라운드: 선언과 결과만
 // 다음 라운드가 열린 것은 스트림의 이벤트로 알고 다시 읽는다.
@@ -12,6 +12,7 @@ import { CloseRoundButton } from './CloseRoundButton';
 import { DeclarationList } from './DeclarationList';
 import { DeclarationPanel } from './DeclarationPanel';
 import { NarrationPreviewText } from './NarrationPreviewText';
+import { canOfferRevert, RevertRoundButton } from './RevertRoundButton';
 import type { NarrationPreview } from './preview';
 import { remainingSeconds, roundStatusLabel } from './roundView';
 
@@ -38,6 +39,7 @@ export function CurrentRound({ table, round, myId, preview, nameOfMember }: Prop
           <WaitingFor ids={round.waiting_for} nameOfMember={nameOfMember} />
           <DeclarationPanel table={table} round={round} myId={myId} />
           {isHost ? <CloseRoundButton tableId={table.id} round={round} /> : null}
+          {isHost && canOfferRevert(round) ? <RevertRoundButton tableId={table.id} round={round} /> : null}
         </>
       ) : (
         <DeclarationList round={round} table={table} />

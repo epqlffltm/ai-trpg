@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/room/round/RoundStage.test.tsx
 // 진행 중인 테이블의 라운드(B6 의 ③). 지난 라운드와 지금 라운드, 판정을 붙인 선언, 고치기, 마감한 뒤의 결과,
-// 서술의 미리 보기와 끝, 방장의 닫기, 그 사이 마감했을 때를 본다.
+// 서술의 미리 보기와 끝, 방장의 닫기와 되돌리기(#288), 그 사이 마감했을 때를 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -216,5 +216,49 @@ describe('RoundStage', () => {
 
     expect(await screen.findByText(/결과를 서술하는 중입니다/)).toBeInTheDocument();
     expect(reads).toBeGreaterThanOrEqual(2);
+  });
+
+  it('방장이 한 번 더 묻고 바로 앞 라운드를 되돌리면 그 라운드가 그때의 선언으로 다시 열린다', async () => {
+    const reopened = round(1, { declarations: [declaration(ME, { content: '문을 밀어 연다' })], waiting_for: [OTHER] });
+    const { seen } = open({ [`POST ${BASE}/rounds/current/revert`]: () => json(200, reopened) });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    await userEvent.click(await screen.findByRole('button', { name: '1 라운드 되돌리기' }));
+    const dialog = within(screen.getByRole('dialog'));
+    expect(dialog.getByText(/서술 값은 돌려주지 않습니다/)).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole('button', { name: '되돌리기' }));
+
+    expect(await screen.findByRole('heading', { name: /^라운드 1/ })).toBeInTheDocument();
+    expect(screen.getByText('아직 선언하지 않은 사람: 미아')).toBeInTheDocument();
+    expect(sent(seen, 'POST', '/rounds/current/revert')).toHaveLength(1);
+  });
+
+  it('첫 라운드에는 되돌릴 앞 라운드가 없어 되돌리기를 보이지 않는다', async () => {
+    open({
+      [`GET ${BASE}/rounds/current`]: () => json(200, round(1)),
+      [`GET ${BASE}/rounds`]: () => json(200, { items: [round(1)], total: 1 }),
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    expect(await screen.findByRole('button', { name: '라운드 닫기' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /라운드 되돌리기$/ })).not.toBeInTheDocument();
+  });
+
+  it('그 사이 다른 일이 있어 되돌릴 수 없으면 까닭을 알린다', async () => {
+    open({ [`POST ${BASE}/rounds/current/revert`]: () => json(409, { detail: 'x', reason: 'revert_blocked' }) });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    await userEvent.click(await screen.findByRole('button', { name: '1 라운드 되돌리기' }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '되돌리기' }));
+
+    expect(await screen.findByText(/선언이나 다른 일이 있어 되돌릴 수 없습니다/)).toBeInTheDocument();
+  });
+
+  it('누가 선언한 라운드에는 되돌리기를 보이지 않는다', async () => {
+    open({ [`GET ${BASE}/rounds/current`]: () => json(200, round(2, { declarations: [declaration(OTHER)], waiting_for: [ME] })) });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    expect(await screen.findByRole('button', { name: '라운드 닫기' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '1 라운드 되돌리기' })).not.toBeInTheDocument();
   });
 });

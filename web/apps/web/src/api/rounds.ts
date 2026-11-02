@@ -1,5 +1,6 @@
 // web/apps/web/src/api/rounds.ts
-// 테이블 방(B6)의 라운드가 부르는 것. 지금 라운드, 최근의 라운드들, 앞의 라운드(B10), 장면의 인물과 몬스터, 선언 내기, 라운드 닫기(방장).
+// 테이블 방(B6)의 라운드가 부르는 것. 지금 라운드, 최근의 라운드들, 앞의 라운드(B10), 장면의 인물과 몬스터, 선언 내기,
+// 라운드 닫기와 바로 앞 라운드 되돌리기(방장, #288).
 // 앉아 있는 사람만 부른다. 시작하지 않은 테이블에는 라운드가 없다(409 not_started).
 // 선언을 받는 동안에는 남의 선언의 글과 행동이 null 이다(누가 냈는지만 보인다). 마감하면 모두의 것이 보인다.
 
@@ -68,4 +69,12 @@ export function declare(tableId: string, body: DeclarationUpdate): Promise<Round
 /** 방장이 라운드를 닫는다(202). 서술에 실패해 멈춘 라운드에 다시 부르면 서술을 다시 맡긴다 */
 export function closeRound(tableId: string): Promise<Round> {
   return apiRequest<Round>(roundsPath(tableId, '/current/close'), { method: 'POST' });
+}
+
+/**
+ * 방장이 바로 앞 라운드를 되돌린다(#288). 게임의 상태가 그 라운드를 닫기 직전으로 돌아가고, 같은 번호의 라운드가
+ * 그때의 장면과 선언으로 다시 열린 것이 온다. 서술 값은 돌려주지 않는다
+ */
+export function revertRound(tableId: string): Promise<Round> {
+  return apiRequest<Round>(roundsPath(tableId, '/current/revert'), { method: 'POST' });
 }

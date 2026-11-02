@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import type { TableDetail } from '../../../../api/types';
 import { eventsQuery } from '../roomQueries';
+import { withoutReverted } from './revertedEvents';
 import { roomNotices } from './roomNoticeView';
 import { useEventContext } from './useEventContext';
 
@@ -18,7 +19,7 @@ export function RoomNotices({ table, currentRound, myId, nameOfMember }: Props) 
   const events = useQuery(eventsQuery(table.id));
   const ctx = useEventContext(table, nameOfMember);
   if (table.status !== 'playing' || !events.data) return null;
-  const notices = roomNotices(events.data.items, currentRound, ctx, myId);
+  const notices = roomNotices(withoutReverted(events.data.items), currentRound, ctx, myId);
   if (notices.length === 0) return null;
   return (
     <div className="room-notices">
