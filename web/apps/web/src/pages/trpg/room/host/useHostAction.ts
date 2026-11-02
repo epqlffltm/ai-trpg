@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import type { TableDetail } from '../../../../api/types';
 import { narrationModelsQuery } from '../../queries';
-import { tableQuery } from '../roomQueries';
+import { putTable, tableQuery } from '../roomQueries';
 import { describeHostProblem, type HostProblem } from './hostProblem';
 
 export type HostAction = {
@@ -27,7 +27,7 @@ export function useHostAction(tableId: string): HostAction {
       setProblem(undefined);
       try {
         const table = await call();
-        queryClient.setQueryData(tableQuery(tableId).queryKey, table);
+        await putTable(queryClient, table);
         return table;
       } catch (error) {
         const next = describeHostProblem(error);

@@ -1,12 +1,15 @@
 // web/apps/web/src/pages/trpg/room/roomPure.test.ts
 // 스트림이 끝난 뒤의 일, 받은 메시지의 갈래, 채팅과 일어난 일 합치기, 입력 중 지우기, 실패의 글을 순수한 함수로 본다.
+// 바꾼 테이블 넣기(putTable)는 먼저 떠난 읽기가 나중에 닿아도 덮이지 않는지 본다.
 
+import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../../api/errors';
 import { chapterLabel, streamLabel } from './RoomHeader';
 import { describeChatProblem, describeStartProblem } from './roomProblem';
-import type { TableEvent } from '../../../api/types';
-import { event } from '../../../test/tableFixtures';
+import type { TableDetail, TableEvent } from '../../../api/types';
+import { event, tableDetail } from '../../../test/tableFixtures';
+import { putTable, tableQuery } from './roomQueries';
 import { mergeEvents, mergeMessages, nextStep, routeMessage } from './streamPolicy';
 import { withoutExpired } from './useTypingPeople';
 
@@ -91,5 +94,24 @@ describe('roomProblem', () => {
     expect(describeStartProblem(missing).message).toMatch(/캐릭터를 정하지 않은 사람/);
     expect(describeChatProblem(new ApiError({ status: 429, detail: 'x', retryAfter: 7 }))).toMatchObject({ waitSeconds: 7 });
     expect(describeChatProblem(new ApiError({ status: 409, detail: 'x' })).message).toMatch(/끝난 테이블/);
+  });
+});
+
+describe('putTable', () => {
+  it('바꾸기 전에 떠난 테이블의 읽기가 나중에 닿아도 바꾼 테이블이 남는다', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const before = tableDetail('t1', { invite_code: 'OLD111' }) as unknown as TableDetail;
+    const after = tableDetail('t1', { invite_code: 'NEW999' }) as unknown as TableDetail;
+    let arrive: (table: TableDetail) => void = () => undefined;
+    // 다시 읽기가 떠났고(스트림이 붙을 때, 15초마다), 서버는 바꾸기 전의 테이블을 읽었다
+    const reading = queryClient
+      .fetchQuery({ queryKey: tableQuery('t1').queryKey, queryFn: () => new Promise<TableDetail>((resolve) => (arrive = resolve)) })
+      .catch(() => null);
+
+    await putTable(queryClient, after);
+    arrive(before);
+    await reading;
+
+    expect(queryClient.getQueryData<TableDetail>(tableQuery('t1').queryKey)?.invite_code).toBe('NEW999');
   });
 });

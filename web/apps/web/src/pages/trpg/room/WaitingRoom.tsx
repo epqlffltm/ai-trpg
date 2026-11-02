@@ -12,7 +12,7 @@ import type { FormProblem } from '../../../auth/problem';
 import { ProblemNotice } from '../../../components/ProblemNotice';
 import { CharacterPanel } from './character/CharacterPanel';
 import { everyoneHasCharacter } from './MemberList';
-import { tableQuery } from './roomQueries';
+import { putTable } from './roomQueries';
 import { describeStartProblem } from './roomProblem';
 
 export function WaitingRoom({ table, myId }: { table: TableDetail; myId: string | undefined }) {
@@ -63,7 +63,7 @@ function StartButton({ table }: { table: TableDetail }) {
     setBusy(true);
     setProblem(undefined);
     try {
-      queryClient.setQueryData(tableQuery(table.id).queryKey, await startTable(table.id));
+      await putTable(queryClient, await startTable(table.id));
     } catch (error) {
       setProblem(describeStartProblem(error));
     }

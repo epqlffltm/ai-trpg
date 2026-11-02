@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { raiseAbilities } from '../../../../api/tableRoom';
 import type { TableDetail } from '../../../../api/types';
 import { currentRoundQuery } from '../round/roundQueries';
-import { tableQuery } from '../roomQueries';
+import { putTable, tableQuery } from '../roomQueries';
 import { canRaise, type Raises } from './growthView';
 import { describeRaiseProblem, type RaiseProblem } from './raiseProblem';
 
@@ -35,7 +35,7 @@ export function useRaise(table: TableDetail, myId: string | undefined): Raising 
     setBusy(true);
     setProblem(undefined);
     try {
-      queryClient.setQueryData(tableQuery(table.id).queryKey, await raiseAbilities(table.id, raises));
+      await putTable(queryClient, await raiseAbilities(table.id, raises));
       return true;
     } catch (error) {
       const next = describeRaiseProblem(error);

@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { takeOffSlot, wearItem } from '../../../../api/tableRoom';
 import type { TableDetail } from '../../../../api/types';
 import { currentRoundQuery } from '../round/roundQueries';
-import { tableQuery } from '../roomQueries';
+import { putTable, tableQuery } from '../roomQueries';
 import { describeEquipmentProblem, type EquipmentProblem } from './equipmentProblem';
 import { canChangeEquipment } from './equipmentView';
 
@@ -33,7 +33,7 @@ export function useEquipment(table: TableDetail, myId: string | undefined): Equi
     setBusy(true);
     setProblem(undefined);
     try {
-      queryClient.setQueryData(tableQuery(table.id).queryKey, await change());
+      await putTable(queryClient, await change());
       return true;
     } catch (error) {
       const next = describeEquipmentProblem(error);

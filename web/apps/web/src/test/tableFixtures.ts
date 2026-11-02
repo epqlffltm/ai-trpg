@@ -222,8 +222,36 @@ export function sseResponse(request: SeenRequest, chunks: string[], keepOpen = t
 }
 
 /** 방이 열릴 때 부르는 것들(테이블, 채팅, 번호, 스트림). 바꿀 것만 overrides 로 넘긴다 */
-export function roomRoutes(tableId: string, overrides: Record<string, (request: SeenRequest) => Response> = {}) {
+type Route = (request: SeenRequest) => Response | Promise<Response>;
+
+/** 응답의 본문이 그 테이블(TableDetail)인가 */
+async function tableIn(response: Response, tableId: string): Promise<unknown> {
+  if (!response.ok || !response.headers.get('Content-Type')?.includes('json')) return null;
+  const body: unknown = await response.clone().json();
+  const record = body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+  return record && record.id === tableId && Array.isArray(record.members) ? body : null;
+}
+
+/**
+ * 테이블 방의 기본 답. overrides 로 바꾼다.
+ * 서버처럼, 바꾸는 요청(GET 이 아닌 것)이 돌려준 테이블을 그 뒤의 테이블 읽기도 준다. 스트림이 붙으며 다시 읽는 때가
+ * 붐빌 때 바꾼 뒤로 밀리면, 처음의 테이블을 주는 읽기가 바꾼 것을 덮어 시험이 떨어졌다(앱이 아니라 가짜 서버의 탓이다)
+ */
+export function roomRoutes(tableId: string, overrides: Record<string, Route> = {}) {
   const base = `/api/v1/game/tables/${tableId}`;
+  const routes = defaultRoomRoutes(tableId, base, overrides);
+  let latest: unknown = null;
+  const remember = (route: Route): Route => async (request) => {
+    const response = await route(request);
+    latest = (await tableIn(response, tableId)) ?? latest;
+    return response;
+  };
+  const read = routes[`GET ${base}`] as Route;
+  const wrapped = Object.fromEntries(Object.entries(routes).map(([key, route]) => [key, key.startsWith('GET ') ? route : remember(route)]));
+  return { ...wrapped, [`GET ${base}`]: (request: SeenRequest) => (latest ? json(200, latest) : read(request)) };
+}
+
+function defaultRoomRoutes(tableId: string, base: string, overrides: Record<string, Route>): Record<string, Route> {
   return {
     [`GET ${base}`]: () => json(200, tableDetail(tableId)),
     [`GET ${base}/messages`]: () => json(200, { items: [], last_sequence: 0 }),

@@ -12,7 +12,7 @@ import { setCharacter } from '../../../../api/tableRoom';
 import type { CharacterMode, TableDetail, TableMember } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { characterModeLabel } from '../../labels';
-import { tableQuery } from '../roomQueries';
+import { putTable, tableQuery } from '../roomQueries';
 import { AbilityInputs } from './AbilityInputs';
 import {
   chosenAbilities,
@@ -68,7 +68,7 @@ export function CharacterForm({ table, member, onDone, onCancel }: Props) {
     setProblem(undefined);
     try {
       const saved = await setCharacter(table.id, toCharacterUpdate(draft, table.rules, roll));
-      queryClient.setQueryData(tableQuery(table.id).queryKey, saved);
+      await putTable(queryClient, saved);
       onDone();
     } catch (error) {
       const next = describeCharacterProblem(error);
