@@ -7,6 +7,7 @@
 import { infiniteQueryOptions, queryOptions, type QueryClient } from '@tanstack/react-query';
 import { fetchCurrentRound, fetchRecentRounds, fetchRoundsBefore, fetchRoundsFrom, fetchSceneCast } from '../../../../api/rounds';
 import type { Round } from '../../../../api/types';
+import { putQueryData } from '../../../../queryClient';
 
 /** 선언을 받는 동안 지금 라운드를 다시 읽는 사이 */
 export const OPEN_POLL_MS = 10_000;
@@ -29,10 +30,8 @@ export function currentRoundQuery(tableId: string) {
  * 그 전에 하던 읽기를 멈춘다. 보내기 전에 시작한 읽기(이벤트의 묶은 읽기, 10초 읽기)가 늦게 돌아와
  * 방금 받은 새 라운드를 낡은 것으로 덮지 않게(낸 선언이 사라지고 입력이 다시 열린다).
  */
-export async function replaceCurrentRound(queryClient: QueryClient, tableId: string, round: Round): Promise<void> {
-  const { queryKey } = currentRoundQuery(tableId);
-  await queryClient.cancelQueries({ queryKey, exact: true });
-  queryClient.setQueryData(queryKey, round);
+export function replaceCurrentRound(queryClient: QueryClient, tableId: string, round: Round): Promise<void> {
+  return putQueryData(queryClient, currentRoundQuery(tableId).queryKey, round);
 }
 
 /**

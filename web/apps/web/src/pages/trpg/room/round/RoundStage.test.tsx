@@ -90,18 +90,25 @@ describe('RoundStage', () => {
 
   it('선언을 내는 동안 시작한 라운드 읽기가 늦게 돌아와도 낸 선언을 덮지 않는다', async () => {
     const mine = declaration(ME, { content: '기다린다', action: null });
+    const declared = round(2, { declarations: [mine], waiting_for: [OTHER] });
     let reads = 0;
+    let sent = false;
     let releaseStale: (() => void) | undefined;
     open({
-      // 첫 읽기는 바로, 두 번째(스트림이 붙은 뒤의 묶은 읽기)는 선언을 낸 뒤까지 붙잡아 둔다
+      // 첫 읽기는 바로, 두 번째(스트림이 붙은 뒤의 묶은 읽기)는 선언을 낸 뒤까지 붙잡아 둔다(선언 전의 라운드다).
+      // 선언을 받은 뒤의 읽기는 서버처럼 낸 선언이 든 라운드를 준다(멈춘 읽기를 대신해 다시 읽는다)
       [`GET ${BASE}/rounds/current`]: (() => {
         reads += 1;
         if (reads === 1) return json(200, round(2));
+        if (sent) return json(200, declared);
         return new Promise<Response>((resolve) => {
           releaseStale = () => resolve(json(200, round(2)));
         });
       }) as unknown as () => Response,
-      [`PUT ${BASE}/rounds/current/declaration`]: () => json(200, round(2, { declarations: [mine], waiting_for: [OTHER] })),
+      [`PUT ${BASE}/rounds/current/declaration`]: () => {
+        sent = true;
+        return json(200, declared);
+      },
     });
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
