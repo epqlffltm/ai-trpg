@@ -6,7 +6,8 @@
   - 응답과 따로 돈다. 사람은 기다리지 않는다. 실패해도 대화는 이어진다(로그만 남는다). 다음 말 한 번이 끝나면 다시 본다
   - 싼 모델(SUMMARY_MODEL)로 부른다. 모델 목록의 이름표다. 사용자에게 팔지 않는(꺼 둔) 모델도 쓴다.
     비우면 요약하지 않는다. 원가는 서비스가 낸다(청구하지 않고 요약의 행에 적어 둔다)
-  - 한 대화에 한 번에 하나만 돈다(이 서버 안). 서버가 여럿이라 같은 요약을 둘이 써도 먼저 쓴 것이 남는다
+  - 한 대화에 한 번에 하나만 돈다. 이 서버 안에서는 running 으로, 서버 사이로는 DB 의 차례(summarizing_since)로 막는다.
+    차례를 쥐는 동안 DB 연결은 쥐지 않는다(UPDATE 로 잡고 놓는다)
   - 서버가 꺼질 때 멈춘다(stop). 쓰다 만 요약은 버린다. 다음 말 한 번이 다시 쓴다
   - 같은 호출에서 기억 메모를 제안받는다(#677). 요약과 같은 트랜잭션에 제안으로 적는다
     (받아들이기 전에는 모델에 가지 않는다).
@@ -19,6 +20,7 @@ import logging
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 
 from ai_core.costs import charge_of
 from ai_core.provider import GenerationParams
@@ -42,6 +44,10 @@ from app.turns.providers import Router
 
 logger = logging.getLogger(__name__)
 
+# 요약의 차례를 쥔 채 이만큼 지나면 그 서버가 도중에 꺼진 것으로 본다.
+# 모델을 부르는 시간의 상한(LLM_TIMEOUT_SECONDS, 10분까지)보다 길다
+SUMMARY_STALE = timedelta(minutes=15)
+
 # 요약의 다양함. 사실을 옮기는 일이라 낮게 둔다
 SUMMARY_TEMPERATURE = 0.3
 # 로그의 operation
@@ -61,6 +67,7 @@ class Summarizer:
     settings: Callable[[], Settings]
     running: set[uuid.UUID] = field(default_factory=set)
     tasks: set[asyncio.Task] = field(default_factory=set)
+    clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
 
     def request(self, conversation_id: uuid.UUID) -> None:
         """그 대화를 요약할지 보러 간다(따로 돈다). 요약을 끄거나 이미 보는 중이면 하지 않는다."""
@@ -99,6 +106,24 @@ class Summarizer:
         return plan_summary(dropped, summaries, settings.summary_after_messages, known)
 
     async def write(self, conversation_id: uuid.UUID) -> bool:
+        """
+        차례를 잡고 요약한다. 다른 서버가 쓰는 중이면 쓰지 않는다(False). 끝나거나 실패하거나 멈춰도 차례를 놓는다.
+        잡은 뒤에 쓸 것을 정한다. 다른 서버가 방금 쓴 요약을 다시 쓰지 않게 한다.
+        """
+        since = self.clock()
+        async with self.session_factory() as session:
+            claimed = await repository.claim_summary(session, conversation_id, since, SUMMARY_STALE)
+            await session.commit()
+        if not claimed:
+            return False
+        try:
+            return await self.compose(conversation_id)
+        finally:
+            async with self.session_factory() as session:
+                await repository.release_summary(session, conversation_id, since)
+                await session.commit()
+
+    async def compose(self, conversation_id: uuid.UUID) -> bool:
         """요약할 것이 있으면 모델을 불러 요약과 메모의 제안을 적는다. 모델이 빈 줄거리를 주면 적지 않는다."""
         plan = await self.plan(conversation_id)
         if plan is None:

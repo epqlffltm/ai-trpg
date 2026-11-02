@@ -11,20 +11,24 @@
   - 요약이 실패해도 대화는 이어진다. 다른 가지로 가면 그 가지의 요약만 쓴다
   - 요약은 GET /summary 로 읽는다(없으면 null). 남의 대화는 404
   - 같은 말의 요약은 하나만 남는다. 서버가 꺼지면 도는 요약을 멈춘다
+  - 서버 사이로도 한 대화에 하나만 쓴다(summarizing_since). 다른 서버가 쓰는 중이면 쓰지 않고, 오래된 차례는 넘겨받는다.
+    끝나거나 실패하면 차례를 놓되 넘겨받힌 차례는 그대로 둔다. 목록의 차례(updated_at)는 바꾸지 않는다
 """
 
 import asyncio
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from ai_core.provider import ProviderError
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.conversations.models import Conversation
 from app.memory import repository
 from app.memory.models import Summary
 from app.memory.summaries import overflow
@@ -303,3 +307,81 @@ async def test_shutdown_stops_the_summaries(app: FastAPI, conversation: dict):
     await app.state.summarizer.stop()
 
     assert task.cancelled()
+
+
+# --- 서버 사이의 차례 ---
+
+
+async def claimed_at(session: AsyncSession, conversation: dict, since: datetime | None) -> None:
+    """다른 서버가 since 에 요약의 차례를 잡은 것처럼 적는다."""
+    statement = update(Conversation).where(Conversation.id == uuid.UUID(conversation['id']))
+    await session.execute(statement.values(summarizing_since=since))
+    await session.commit()
+
+
+async def row(session: AsyncSession, conversation: dict) -> Conversation:
+    session.expire_all()
+    return await session.get(Conversation, uuid.UUID(conversation['id']), populate_existing=True)
+
+
+async def ready_to_summarize(client: AsyncClient, app: FastAPI, headers: dict, conversation: dict) -> None:
+    """요약을 끈 채 말을 쌓고 요약을 켠다. 이제 write 를 부르면 쓸 것이 있다."""
+    for _ in range(3):
+        await say(client, app, headers, conversation)
+    app.state.settings = app.state.settings.model_copy(
+        update={'summary_model': 'luna', 'chat_context_chars': 1000, 'summary_after_messages': 2}
+    )
+
+
+async def test_a_summary_another_server_is_writing_is_left_alone(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, conversation: dict, provider: Answers, mine: dict
+):
+    await ready_to_summarize(client, app, mine, conversation)
+    now = datetime.now(UTC)
+    await claimed_at(session, conversation, now)
+
+    written = await app.state.summarizer.write(uuid.UUID(conversation['id']))
+
+    assert (written, provider.summaries, await summaries(session)) == (False, [], [])
+    assert (await row(session, conversation)).summarizing_since == now
+
+
+async def test_a_stale_claim_is_taken_over_and_released_without_touching_the_list_order(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, conversation: dict, mine: dict
+):
+    await ready_to_summarize(client, app, mine, conversation)
+    await claimed_at(session, conversation, datetime.now(UTC) - timedelta(hours=1))
+    before = (await row(session, conversation)).updated_at
+
+    written = await app.state.summarizer.write(uuid.UUID(conversation['id']))
+
+    assert written
+    assert [summary.text for summary in await summaries(session)] == ['줄거리 1']
+    after = await row(session, conversation)
+    assert (after.summarizing_since, after.updated_at) == (None, before)
+
+
+async def test_a_failed_summary_releases_the_claim(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, conversation: dict, provider: Answers, mine: dict
+):
+    await ready_to_summarize(client, app, mine, conversation)
+    provider.error = ProviderError('timeout')
+
+    assert not await app.state.summarizer.summarize(uuid.UUID(conversation['id']))
+
+    assert (await row(session, conversation)).summarizing_since is None
+
+
+async def test_releasing_keeps_a_claim_taken_over_by_another_server(session: AsyncSession, conversation: dict):
+    conversation_id = uuid.UUID(conversation['id'])
+    mine_since = datetime.now(UTC) - timedelta(hours=1)
+    theirs_since = datetime.now(UTC)
+    assert await repository.claim_summary(session, conversation_id, mine_since, timedelta(minutes=15))
+    assert not await repository.claim_summary(session, conversation_id, mine_since, timedelta(hours=2))
+    # 오래 걸려 다른 서버가 넘겨받았다
+    assert await repository.claim_summary(session, conversation_id, theirs_since, timedelta(minutes=15))
+
+    await repository.release_summary(session, conversation_id, mine_since)
+    await session.commit()
+
+    assert (await row(session, conversation)).summarizing_since == theirs_since

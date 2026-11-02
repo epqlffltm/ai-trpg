@@ -6,8 +6,9 @@
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime, timedelta
 
-from sqlalchemy import and_, delete, func, not_, select
+from sqlalchemy import and_, delete, func, not_, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -102,3 +103,35 @@ async def add_summary(session: AsyncSession, summary: Summary) -> None:
         column.key: getattr(summary, column.key) for column in Summary.__table__.columns if column.key != 'created_at'
     }
     await session.execute(insert(Summary).values(**values).on_conflict_do_nothing(index_elements=['message_id']))
+
+
+async def claim_summary(session: AsyncSession, conversation_id: uuid.UUID, now: datetime, stale: timedelta) -> bool:
+    """
+    그 세션의 요약을 쓸 차례를 잡는다. 아무도 쥐고 있지 않거나 쥔 지 stale 이 지났으면 잡고 True.
+    말 한 번의 차례(generating_since)와 같은 조건을 붙인 UPDATE 하나다. 두 서버가 함께 와도 하나만 잡는다.
+    목록의 차례(updated_at)는 바꾸지 않는다. 요약은 사람이 한 일이 아니다.
+    """
+    statement = (
+        update(Conversation)
+        .where(
+            Conversation.id == conversation_id,
+            or_(Conversation.summarizing_since.is_(None), Conversation.summarizing_since < now - stale),
+        )
+        .values(summarizing_since=now, updated_at=Conversation.updated_at)
+        .returning(Conversation.id)
+        .execution_options(synchronize_session=False)
+    )
+    return (await session.execute(statement)).first() is not None
+
+
+async def release_summary(session: AsyncSession, conversation_id: uuid.UUID, since: datetime) -> None:
+    """
+    잡은 차례를 놓는다. 쥔 시각이 since 일 때만 놓는다.
+    오래 걸려 다른 서버가 넘겨받았으면 그 차례는 그대로 둔다.
+    """
+    await session.execute(
+        update(Conversation)
+        .where(Conversation.id == conversation_id, Conversation.summarizing_since == since)
+        .values(summarizing_since=None, updated_at=Conversation.updated_at)
+        .execution_options(synchronize_session=False)
+    )
