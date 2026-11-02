@@ -8,6 +8,8 @@
   - episode_scenario_missing: 편의 시나리오가 없다(지웠다)
   - episode_unpublished: 편의 시나리오에 게시한 판이 없다
   - rulebook_mismatch: 편들의 시나리오의 마지막 판이 같은 룰북의 같은 규칙을 쓰지 않는다
+  - campaign_quest_missing: 조건 campaign_quest_succeeded, campaign_quest_failed 가 그 편보다 앞의 편의 판에 없는
+    퀘스트(사건 항목)를 가리킨다. 첫 편에서 쓰면 늘 걸린다
 같은 시나리오가 두 번 있는 것과 남의 시나리오는 입력에서 막는다(422).
 
 알리는 것(warnings, 막지 않는다):
@@ -15,7 +17,6 @@
   - items_not_carried: 한 편의 판에 있는 물건 항목이 뒤의 편들의 판 어디에도 없다. 그 물건은 옮겨지지 않는다
 
 판에는 편마다 그때의 시나리오의 마지막 판 번호를 굳힌다. 등급은 그 판들의 등급 가운데 가장 높은 것이다.
-조건 campaign_quest 의 검사는 그 조건을 더할 때(만드는 순서 4) 함께 더한다.
 """
 
 import uuid
@@ -29,16 +30,17 @@ from app.assets import service as assets
 from app.assets.campaigns import repository
 from app.assets.campaigns.models import CAMPAIGN_MIN_EPISODES, Campaign, CampaignVersion
 from app.assets.campaigns.schemas import CampaignSnapshot, CampaignVersionCreate, EpisodeSnapshot
-from app.assets.models import Rating, Scenario
+from app.assets.models import CAMPAIGN_CONDITIONS, Rating, Scenario
 from app.assets.ratings import ALL_AGES_ONLY, require_rating
 from app.assets.scenarios.publishing import ScenarioNotReadyError
-from app.assets.scenarios.snapshot import Snapshot, item_entries, read_snapshot
+from app.assets.scenarios.snapshot import Snapshot, every_condition, item_entries, quest_entries, read_snapshot
 from app.assets.service import AssetNotFoundError
 
 EPISODES_TOO_FEW = 'episodes_too_few'
 EPISODE_SCENARIO_MISSING = 'episode_scenario_missing'
 EPISODE_UNPUBLISHED = 'episode_unpublished'
 RULEBOOK_MISMATCH = 'rulebook_mismatch'
+CAMPAIGN_QUEST_MISSING = 'campaign_quest_missing'
 
 PROGRESSION_MISSING = 'progression_missing'
 ITEMS_NOT_CARRIED = 'items_not_carried'
@@ -104,6 +106,24 @@ def same_rulebook(episodes: list[EpisodeVersion]) -> bool:
     return all(key == keys[0] for key in keys[1:])
 
 
+def campaign_targets(snapshot: Snapshot) -> set[uuid.UUID]:
+    """그 판의 조건 가운데 캠페인의 앞 편의 퀘스트를 보는 것들이 가리키는 사건 항목."""
+    return {
+        condition.target
+        for condition in every_condition(snapshot)
+        if condition.kind in CAMPAIGN_CONDITIONS and condition.target is not None
+    }
+
+
+def campaign_quests_known(episodes: list[EpisodeVersion]) -> bool:
+    """편마다 캠페인의 조건이 가리키는 퀘스트가 그 편보다 앞의 편들의 판에 있는가."""
+    for index, episode in enumerate(episodes):
+        earlier = {entry.id for before in episodes[:index] for entry in quest_entries(before.snapshot)}
+        if not campaign_targets(episode.snapshot) <= earlier:
+            return False
+    return True
+
+
 def items_not_carried(episodes: list[EpisodeVersion]) -> bool:
     """
     앞의 편의 물건 항목 가운데 뒤의 편들의 판 어디에도 없는 것이 있는가.
@@ -135,6 +155,8 @@ async def readiness(session: AsyncSession, owner_id: uuid.UUID, campaign: Campai
     episodes = await episode_versions(session, owner_id, campaign, problems)
     if episodes and not same_rulebook(episodes):
         problems.append(RULEBOOK_MISMATCH)
+    if not campaign_quests_known(episodes):
+        problems.append(CAMPAIGN_QUEST_MISSING)
     if problems:
         return Readiness(problems=problems)
     return Readiness(warnings=find_warnings(episodes), episodes=episodes)

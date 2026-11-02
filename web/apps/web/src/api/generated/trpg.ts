@@ -2546,6 +2546,19 @@ export interface components {
             warnings: string[];
         };
         /**
+         * CampaignQuestSnapshot
+         * @description 캠페인의 앞 편에서 끝난 퀘스트 하나(#481 B). 앞 편의 판의 사건 항목과 그 결과(succeeded, failed)다.
+         */
+        CampaignQuestSnapshot: {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /** Result */
+            result: string;
+        };
+        /**
          * CampaignSnapshot
          * @description 캠페인의 판 하나의 내용. 편들과 등급이다.
          *
@@ -7692,6 +7705,7 @@ export interface components {
          *     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),
          *     hold_item 과 lose_item 은 물건 항목,
          *     defeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
+         *     campaign_quest_succeeded 와 campaign_quest_failed(#481 B)는 캠페인의 앞 편의 판의 사건 항목이다.
          *     chapter_at_least(#481)는 target 대신 chapter 에 장의 id 를 적는다. 지금 장이 그 장이거나 그 뒤면 채워진다.
          *     적지 않은 칸(target, chapter 중 하나)은 꺼낼 때 빠진다(그 전의 모양 그대로).
          *     count 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.
@@ -7723,6 +7737,7 @@ export interface components {
          *     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),
          *     hold_item 과 lose_item 은 물건 항목,
          *     defeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
+         *     campaign_quest_succeeded 와 campaign_quest_failed(#481 B)는 캠페인의 앞 편의 판의 사건 항목이다.
          *     chapter_at_least(#481)는 target 대신 chapter 에 장의 id 를 적는다. 지금 장이 그 장이거나 그 뒤면 채워진다.
          *     적지 않은 칸(target, chapter 중 하나)은 꺼낼 때 빠진다(그 전의 모양 그대로).
          *     count 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.
@@ -7756,7 +7771,7 @@ export interface components {
          *     이루는 조건(conditions)에는 쓰지 않는다. 물건을 잃는 것(lose_item)은 실패하는 조건에만 쓴다(#367).
          * @enum {string}
          */
-        QuestConditionKind: "reach_place" | "defeat_monster" | "hold_item" | "defeat_npc" | "npc_dead" | "lose_item" | "quest_succeeded" | "quest_failed" | "chapter_at_least";
+        QuestConditionKind: "reach_place" | "defeat_monster" | "hold_item" | "defeat_npc" | "npc_dead" | "lose_item" | "quest_succeeded" | "quest_failed" | "chapter_at_least" | "campaign_quest_succeeded" | "campaign_quest_failed";
         /**
          * QuestConditionSnapshot
          * @description 퀘스트의 조건 하나. target 은 종류마다 판 안의 장소 항목, 몬스터, 물건 항목, 인물 항목, 사건 항목(퀘스트)이다.
@@ -10041,6 +10056,11 @@ export interface components {
          *     gm_guide 와 gm_notes 가 들어 있다. 만든 사람이 아닌 사람에게 이 문서를 그대로 내주면 안 된다.
          */
         Snapshot: {
+            /**
+             * Campaign Quests
+             * @default []
+             */
+            campaign_quests: components["schemas"]["CampaignQuestSnapshot"][];
             /**
              * Chapters
              * @default []

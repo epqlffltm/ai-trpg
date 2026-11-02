@@ -21,6 +21,7 @@ from pydantic import (
 
 from app.assets.models import (
     ATTACK_NAME_MAX_LENGTH,
+    CAMPAIGN_CONDITIONS,
     CARRIED_MAX_EQUIPMENT,
     CARRIED_MAX_INVENTORY,
     CHAPTER_ID_MAX_LENGTH,
@@ -881,6 +882,7 @@ class QuestCondition(BaseModel):
     reach_place 는 장소 항목, defeat_monster 는 붙인 도감의 몬스터(시트를 적은 것),
     hold_item 과 lose_item 은 물건 항목,
     defeat_npc 와 npc_dead 는 인물 항목, quest_succeeded 와 quest_failed 는 다른 퀘스트(사건 항목)다.
+    campaign_quest_succeeded 와 campaign_quest_failed(#481 B)는 캠페인의 앞 편의 판의 사건 항목이다.
     chapter_at_least(#481)는 target 대신 chapter 에 장의 id 를 적는다. 지금 장이 그 장이거나 그 뒤면 채워진다.
     적지 않은 칸(target, chapter 중 하나)은 꺼낼 때 빠진다(그 전의 모양 그대로).
     count 는 defeat_monster, hold_item, lose_item 만 쓴다. 나머지는 1 로 둔다.
@@ -927,6 +929,11 @@ class QuestCondition(BaseModel):
     def target_as_text(self, target: uuid.UUID | None) -> str | None:
         """가리키는 것의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
         return str(target) if target is not None else None
+
+
+def on_itself(condition: QuestCondition, entry_id: uuid.UUID) -> bool:
+    """그 조건이 이 퀘스트 자신을 가리키는가. 캠페인의 앞 편의 퀘스트를 보는 조건은 다른 편의 일이라 아니다."""
+    return condition.kind not in CAMPAIGN_CONDITIONS and condition.target == entry_id
 
 
 def reject_duplicate_conditions(conditions: list[QuestCondition]) -> list[QuestCondition]:
@@ -993,9 +1000,10 @@ class QuestRule(BaseModel):
     @model_validator(mode='after')
     def no_links_in_conditions(self) -> 'QuestRule':
         """다른 퀘스트를 보는 조건은 이루는 조건에 쓰지 않는다. 이루는 것은 이 퀘스트의 일로 정한다."""
-        if any(condition.kind in QUEST_LINK_CONDITIONS for condition in self.conditions):
+        if any(condition.kind in QUEST_LINK_CONDITIONS | CAMPAIGN_CONDITIONS for condition in self.conditions):
             raise ValueError(
-                'quest_succeeded 와 quest_failed 는 드러나는 조건(reveal)과 실패하는 조건(fail)에만 적습니다.'
+                'quest_succeeded, quest_failed 와 campaign_quest_succeeded, campaign_quest_failed 는 '
+                '드러나는 조건(reveal)과 실패하는 조건(fail)에만 적습니다.'
             )
         return self
 
@@ -1015,8 +1023,12 @@ class QuestRule(BaseModel):
 
     @model_validator(mode='after')
     def fail_not_on_itself(self) -> 'QuestRule':
-        """자기 자신이 끝나야 실패하는 조건은 뜻이 없다. 끝난 퀘스트는 더 실패하지 않는다."""
-        if any(condition.target == self.entry_id for condition in self.fail):
+        """
+        자기 자신이 끝나야 실패하는 조건은 뜻이 없다. 끝난 퀘스트는 더 실패하지 않는다.
+
+        캠페인의 앞 편의 퀘스트(#481 B)는 다른 편의 일이라 같은 사건 항목을 가리켜도 된다(로어북을 함께 쓰는 편).
+        """
+        if any(on_itself(condition, self.entry_id) for condition in self.fail):
             raise ValueError('실패하는 조건이 자기 자신을 가리킵니다.')
         return self
 
@@ -1029,8 +1041,8 @@ class QuestRule(BaseModel):
 
     @model_validator(mode='after')
     def reveal_not_on_itself(self) -> 'QuestRule':
-        """자기 자신이 끝나야 드러나는 조건은 뜻이 없다. 숨긴 채로 끝나면 그때 드러난다."""
-        if any(condition.target == self.entry_id for condition in self.reveal):
+        """자기 자신이 끝나야 드러나는 조건은 뜻이 없다. 숨긴 채로 끝나면 그때 드러난다. 캠페인의 조건은 된다."""
+        if any(on_itself(condition, self.entry_id) for condition in self.reveal):
             raise ValueError('드러나는 조건이 자기 자신을 가리킵니다.')
         return self
 

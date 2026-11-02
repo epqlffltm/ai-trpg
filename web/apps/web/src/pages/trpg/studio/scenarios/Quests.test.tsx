@@ -220,6 +220,13 @@ describe('퀘스트·사건 입력', () => {
     expect(conditionLine(below, TARGETS)).toBe('「below」(찾을 수 없음) 장 이상');
   });
 
+  it('캠페인의 앞 편의 퀘스트(#481 B)는 받은 대로 보이고 아직 고르는 칸에는 없다', () => {
+    const earlier = { kind: 'campaign_quest_succeeded' as const, target: HUNT, count: 1, consume: false };
+    expect(conditionLine(earlier, TARGETS)).toMatch(/^앞 편에서 「.+」 성공$/);
+    expect(conditionLine({ ...earlier, kind: 'campaign_quest_failed', target: 'elsewhere' }, TARGETS)).toBe('앞 편에서 「(찾을 수 없음)」 실패');
+    expect(Object.values(KINDS_FOR).flat()).not.toContain('campaign_quest_succeeded');
+  });
+
   it('장이 있는 시나리오에서만 조건에 장을 고를 수 있다', () => {
     expect(withChapterKind(KINDS_FOR.goal, TARGETS)).toEqual(KINDS_FOR.goal);
     expect(withChapterKind(KINDS_FOR.goal, { ...TARGETS, chapters: [] })).toEqual(KINDS_FOR.goal);

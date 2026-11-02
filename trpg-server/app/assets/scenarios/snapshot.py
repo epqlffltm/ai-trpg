@@ -17,7 +17,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from app.assets.bestiaries.models import Monster, MonsterKind
 from app.assets.models import (
@@ -161,7 +161,9 @@ from app.engine.sheet import CharacterSheet, Sheet
 #  68: 룰북의 규칙에 성장이 있다(#286). rulebook.rules.progression: 레벨표(레벨마다 누적 경험치, 최대 HP, 능력치 점수).
 #      없으면(null) 성장하지 않는다. 퀘스트의 경험치의 보상(quests[].reward_xp)도 함께 더했다. 비워도 되는 칸이다.
 #      몬스터가 주는 경험치(monsters[].xp), 사건의 경험치 주기(happenings[].effects[] 의 give_xp: amount, from_place),
-#      받는 사람들이 나누는 법(xp_split, #286 ②)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
+#      받는 사람들이 나누는 법(xp_split, #286 ②)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다.
+#      캠페인의 앞 편의 퀘스트 결과(campaign_quests, #481 B)도 뒤에 더했다. 판에는 늘 비어 있고, 캠페인의 편의 테이블을
+#      열 때 테이블의 복사본에만 채운다. 조건 campaign_quest_succeeded, campaign_quest_failed 의 target 도 같다
 SNAPSHOT_FORMAT = 68
 
 
@@ -355,6 +357,13 @@ class QuestConditionSnapshot(BaseModel):
     chapter: str | None = None
     count: int = 1
     consume: bool = False
+
+
+class CampaignQuestSnapshot(BaseModel):
+    """캠페인의 앞 편에서 끝난 퀘스트 하나(#481 B). 앞 편의 판의 사건 항목과 그 결과(succeeded, failed)다."""
+
+    entry_id: uuid.UUID
+    result: str
 
 
 class QuestRuleSnapshot(BaseModel):
@@ -771,6 +780,11 @@ class Snapshot(BaseModel):
     rulebook: RulebookSnapshot
     world: WorldSnapshot | None
     lorebooks: list[LorebookSnapshot]
+    # 캠페인의 앞 편들에서 끝난 퀘스트(#481 B). 판에는 늘 비어 있다.
+    # 캠페인의 편의 테이블을 열 때 테이블의 복사본에만 채운다
+    # (app/campaigns/service.py). 그 편을 하는 동안 바뀌지 않는다(앞 편은 이미 끝났다).
+    # 비었으면 꺼낼 때 빠진다(판의 모양 그대로)
+    campaign_quests: list[CampaignQuestSnapshot] = Field(default=[], exclude_if=lambda value: not value)
 
     @model_validator(mode='after')
     def require_npc_sheets(self) -> 'Snapshot':
@@ -1354,6 +1368,15 @@ def build_snapshot(
         world=snapshot_world(world) if world else None,
         lorebooks=[snapshot_lorebook(lorebook, entries) for lorebook, entries in lorebooks],
     )
+
+
+def every_condition(snapshot: Snapshot) -> list[QuestConditionSnapshot]:
+    """판의 조건 모두. 퀘스트(이루기, 드러나기, 실패하기), 사건, 장으로 넘어오는 조건이다."""
+    return [
+        *(condition for rule in snapshot.quests for condition in [*rule.conditions, *rule.reveal, *rule.fail]),
+        *(condition for rule in snapshot.happenings for condition in rule.when),
+        *(condition for chapter in snapshot.chapters for condition in chapter.when),
+    ]
 
 
 def chapter_conditions(snapshot: Snapshot) -> list[QuestConditionSnapshot]:
