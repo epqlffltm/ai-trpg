@@ -43,7 +43,7 @@ from conversation_core.window import Turn, select_window
 from server_core import stop_signals
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.assets.schemas import CharacterDocument
+from app.assets.schemas import CharacterDocument, ShortcutDocument
 from app.billing.client import Billing
 from app.billing.prices import chat_code
 from app.catalog import repository as catalog
@@ -75,6 +75,7 @@ from app.memory import service as memory
 from app.memory.service import render_memory
 from app.memory.summaries import latest_summary, overflow, render_story
 from app.ratings import Rating, allowed_ratings
+from app.shortcuts.calls import body_for, model_text
 from app.turns import charging, repository
 from app.turns.charging import HoldDeclined, Settled, Settlement
 from app.turns.frames import delta_frame, done_frame, expression_frame, failed_frame
@@ -262,12 +263,14 @@ def prompt_for(
     options: PromptOptions,
     extras: CardExtras,
     closing: str | None = None,
+    current: uuid.UUID | None = None,
 ) -> list[ChatMessage]:
     """
     모델에 보낼 메시지. 카드와, 지금 가지의 말들 가운데 context_chars 안에 드는 최근 것들이다.
     지난 말은 본문(content)만 보낸다. 선택지(suggestions)는 보내지 않는다.
     extras 는 기억 메모와 가지 끝의 장소와 소지품이다. 카드에 들어간다.
     closing 이 있으면 맨 끝에 사람의 차례로 붙인다(이어서 출력의 지시). 창은 늘 그것을 넣는다.
+    current 는 이번에 답하는 사람의 말이다. 그 말이 부른 단축어의 본문만 붙는다(app/shortcuts/calls.py).
     """
     card = render_card(
         character_card(character),
@@ -281,7 +284,10 @@ def prompt_for(
         changes=extras.offer,
         lore=extras.lore,
     )
-    turns = [Turn(message.role, message.content) for message in path]
+    turns = [
+        Turn(message.role, model_text(message.content, message.shortcut_body, message.id == current))
+        for message in path
+    ]
     if closing is not None:
         turns.append(Turn(Role.USER, closing))
     return build_messages(card, select_window(turns, options.context_chars))
@@ -354,9 +360,17 @@ def require_model(conversation: Conversation, model: AiModel | None, rating: Rat
 
 
 def user_message(
-    conversation: Conversation, parent_id: uuid.UUID | None, content: str, now: datetime, role: Role = Role.USER
+    conversation: Conversation,
+    parent_id: uuid.UUID | None,
+    content: str,
+    now: datetime,
+    role: Role = Role.USER,
+    shortcut_body: str | None = None,
 ) -> Message:
-    """사람의 말(또는 행동 말, role action). parent_id(보통은 지금 가지의 끝) 아래에 붙는다. 아직 저장하지 않는다."""
+    """
+    사람의 말(또는 행동 말, role action). parent_id(보통은 지금 가지의 끝) 아래에 붙는다. 아직 저장하지 않는다.
+    shortcut_body 는 그 말이 부른 단축어의 본문이다(없으면 None).
+    """
     return Message(
         id=uuid.uuid4(),
         conversation_id=conversation.id,
@@ -364,6 +378,7 @@ def user_message(
         role=role,
         content=content,
         status=MessageStatus.COMPLETE,
+        shortcut_body=shortcut_body,
         created_at=now,
     )
 
@@ -528,9 +543,11 @@ async def begin_turn(
     options: PromptOptions,
     now: datetime,
     edit_of: uuid.UUID | None = None,
+    mine: Sequence[ShortcutDocument] = (),
 ) -> TurnStart:
     """
     차례를 잡고 사람의 말과 기록(pending)을 저장한다. 모델에 보낼 메시지를 함께 만든다.
+    말이 "/이름"으로 시작하면 캐릭터의 판의 단축어, 없으면 내 단축어(mine, 미리 가져온 것)에서 찾아 본문을 적어 둔다.
 
     새 말은 지금 가지의 끝에 붙는다. edit_of(고칠 사람의 말)가 있으면 그 말의 부모 아래에 붙는다(새 가지).
     가지의 끝은 차례를 잡은 뒤에 다시 읽는다. 그사이 가지를 바꿨어도 바꾼 곳에 붙는다.
@@ -549,7 +566,8 @@ async def begin_turn(
         parent_id = edited if edit_of is not None else conversation.active_leaf_id
         path = await conversations.active_path(session, parent_id)
         extras = await extras_on(session, conversation, character, path, options.context_chars, incoming=[content])
-        message = user_message(conversation, parent_id, content, now)
+        body = body_for(content, world.document_of(character).shortcuts, mine)
+        message = user_message(conversation, parent_id, content, now, shortcut_body=body)
         repository.add(session, message)
         await session.flush()
         await repository.move_leaf(session, conversation.id, message.id)
@@ -564,7 +582,7 @@ async def begin_turn(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(message),
-        messages=prompt_for(conversation, character, persona, [*path, message], options, extras),
+        messages=prompt_for(conversation, character, persona, [*path, message], options, extras, current=message.id),
         expressions=extras.expressions,
         world=extras.world,
         lore=extras.lore_plan,
@@ -710,7 +728,7 @@ async def begin_regenerate(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(path[-1]),
-        messages=prompt_for(conversation, character, persona, path, options, extras),
+        messages=prompt_for(conversation, character, persona, path, options, extras, current=parent_id),
         expressions=extras.expressions,
         world=extras.world,
         lore=extras.lore_plan,
@@ -777,7 +795,9 @@ async def begin_continue(
         reference=generation.reference,
         price_code=generation.price_code,
         user_message=saved(path[-2]),
-        messages=prompt_for(conversation, character, persona, path, options, extras, continuation.instruction()),
+        messages=prompt_for(
+            conversation, character, persona, path, options, extras, continuation.instruction(), current=parent_id
+        ),
         continued=saved(target),
         world=extras.world,
         lore=extras.lore_plan,

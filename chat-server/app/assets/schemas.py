@@ -19,6 +19,7 @@ PersonaCopy). 받은 것을 이 모양으로 검사한 뒤에만 쓴다. 모양�
        6 까지의 판은 줄 수 있는 물건이 없고 model_step 이 AFFECTION_MODEL_STEP_DEFAULT 다
   - 8: 로어북(lorebooks, 캐릭터가 가리킨 로어북의 게시할 때의 마지막 판, #672). 7 까지의 판은 로어북이 없다
   - 9: 장르(genre, asset 의 app/genres.py 의 값 하나). 대화 화면의 테마다. 그 전의 판과 사본에는 없다
+  - 10: 제작자 단축어(shortcuts, #981). "/이름"으로 부르면 그 턴에 본문이 붙는다(app/shortcuts). 그 전의 판에는 없다
 """
 
 import uuid
@@ -209,6 +210,27 @@ class LorebookCopyDocument(BaseModel):
     entries: list[LoreEntryDocument] = []
 
 
+class ShortcutDocument(BaseModel):
+    """
+    단축어 하나(제작자의 것이든 내 것이든). 길이와 이름의 모양은 asset 서버가 지킨다.
+    여기서는 검사하지 않는다(판의 사본을 읽지 못하게 되면 대화 전체를 못 쓴다). 붙일 때 자른다(app/shortcuts/calls.py).
+    """
+
+    model_config = ConfigDict(extra='ignore')
+
+    name: str
+    description: str = ''
+    body: str
+
+
+class ShortcutListCopy(BaseModel):
+    """asset 서버가 내주는 내 단축어들. 적은 차례 그대로다."""
+
+    model_config = ConfigDict(extra='ignore')
+
+    items: list[ShortcutDocument] = []
+
+
 def legacy_scenes(data: dict) -> dict:
     """형식 5 의 판의 이벤트 씬(illustrations, scene)을 지금의 이름(event_scenes, description)으로 바꾼다."""
     if 'illustrations' not in data or data.get('event_scenes'):
@@ -248,6 +270,8 @@ class CharacterDocument(BaseModel):
     lorebooks: list[LorebookCopyDocument] = []
     # 장르(형식 9). 값의 목록은 asset 이 지키고 이 서버는 받은 그대로 둔다. 응답에 실을 때 기본을 채운다(app/genres.py)
     genre: str | None = None
+    # 제작자 단축어(형식 10, #981). 이 캐릭터와의 대화에서만 쓴다
+    shortcuts: list[ShortcutDocument] = []
 
     @model_validator(mode='before')
     @classmethod

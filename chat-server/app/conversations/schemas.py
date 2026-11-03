@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 from ai_core.catalog_contract import Grade
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.assets.schemas import CharacterDocument
+from app.assets.schemas import CharacterDocument, ShortcutDocument
 from app.ratings import Rating
 from app.world.schemas import StateOut
 
@@ -94,9 +94,13 @@ class CharacterSummary(BaseModel):
 
 
 class CharacterDocumentOut(CharacterDocument):
-    """응답에 싣는 판의 문서. 장르가 늘 있다(사본에 없으면 기본 장르, app/genres.py). 화면이 대화의 테마를 고른다."""
+    """
+    응답에 싣는 판의 문서. 장르가 늘 있다(사본에 없으면 기본 장르, app/genres.py). 화면이 대화의 테마를 고른다.
+    제작자 단축어(shortcuts)는 싣지 않는다. 본문은 모델에만 가고, 고르는 목록은 GET /conversations/{id}/shortcuts 다.
+    """
 
     genre: str
+    shortcuts: list[ShortcutDocument] = Field(default=[], exclude=True)
 
 
 class CharacterOut(BaseModel):

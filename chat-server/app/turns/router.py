@@ -41,6 +41,7 @@ from server_core.observability.metrics import measured_stream
 from app.core.config import Settings
 from app.core.dependencies import CurrentViewer, Now, utc_now
 from app.limits.routing import GENERATION_LIMIT
+from app.shortcuts import service as shortcuts
 from app.turns import service
 from app.turns.charging import CREDIT_SHORT, GOLD_REQUIRED, MODEL_UNAVAILABLE
 from app.turns.frames import turn_frame
@@ -206,11 +207,13 @@ async def send_message(
     """
     말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다.
     edit_of 가 있으면 그 사람의 말을 고친 새 가지다(원본은 남는다). 캐릭터의 말이면 422 not_editable.
+    말이 "/이름"으로 시작하면 그 단축어의 본문이 이번 답의 프롬프트에 붙는다(app/shortcuts). 없는 이름이면 그냥 글이다.
     """
     state = request.app.state
     options = prompt_options(state.settings)
+    mine = await shortcuts.mine_for(state.asset, viewer, data.content)
     start = await service.begin_turn(
-        state.session_factory, viewer, conversation_id, data.content, options, now, data.edit_of
+        state.session_factory, viewer, conversation_id, data.content, options, now, data.edit_of, mine
     )
     return await stream_turn(request, start, now)
 
