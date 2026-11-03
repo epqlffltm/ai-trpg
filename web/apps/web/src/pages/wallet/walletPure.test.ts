@@ -37,6 +37,15 @@ describe('원장의 줄', () => {
     expect(entryLabel(entry('release'))).toBe('서술 값 반환');
   });
 
+  it('받은 줄은 어디서 왔는지로 말한다. 모르면 까닭의 말이다', () => {
+    expect(entryLabel(entry('grant', { source: 'coupon' }))).toBe('쿠폰');
+    expect(entryLabel(entry('grant', { source: 'attendance' }))).toBe('출석');
+    expect(entryLabel(entry('grant', { source: 'welcome' }))).toBe('환영 실버');
+    expect(entryLabel(entry('grant', { source: 'other' }))).toBe('지급');
+    expect(entryLabel(entry('grant'))).toBe(entryLabel(entry('grant', { source: null })));
+    expect(entryLabel(entry('deposit', { source: 'coupon' }))).toBe('충전');
+  });
+
   it('내부 정리는 숨기고, 양에는 부호를 붙인다', () => {
     expect(visibleEntries([entry('grant'), entry('regroup'), entry('spend')]).map((one) => one.reason)).toEqual(['grant', 'spend']);
     expect(signedAmount('80')).toBe('+80');
