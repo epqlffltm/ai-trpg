@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/wallet"
@@ -262,4 +263,22 @@ func TestGrantFreeOnceInTxChecksTheAmountAndKey(t *testing.T) {
 		t.Errorf("틀린 이름은 ErrInvalidGrantKey 이어야 하는데 %v 다", err)
 	}
 	f.wantBalance(0, 0)
+}
+
+func TestGrantFreeOnceForInTxSetsItsOwnExpiry(t *testing.T) {
+	f := setUp(t, freeFirst)
+	tx, err := f.pool.Begin(ctx(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 이 시험은 적지 않는다. 끝나면 되돌린다
+	defer func() { _ = tx.Rollback(ctx(t)) }()
+
+	grant, err := f.service.GrantFreeOnceForInTx(ctx(t), tx, f.user, 300, "coupon-1", 3*24*time.Hour)
+	if err != nil || !grant.ExpiresAt.Equal(f.clock.Now().Add(72*time.Hour)) {
+		t.Fatalf("준 것 = %+v, %v. 사흘 뒤에 사라져야 한다", grant, err)
+	}
+	if _, err := f.service.GrantFreeOnceForInTx(ctx(t), tx, f.user, 300, "coupon-2", -time.Second); !errors.Is(err, wallet.ErrInvalidTTL) {
+		t.Fatalf("음수의 기한 = %v, ErrInvalidTTL 이어야 한다", err)
+	}
 }

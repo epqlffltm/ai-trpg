@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/signup/ProfileStep.tsx
-// 가입 3단계. 아이디, 닉네임, 비밀번호, 만 14세 이상, 동의를 받아 계정을 만든다. 가입 티켓은 30분 유효하다.
+// 가입 3단계. 아이디, 닉네임, 비밀번호, 만 14세 이상, 동의, 초대 코드(고를 수 있다, #990)를 받아 계정을 만든다. 가입 티켓은 30분 유효하다.
 // 동의 항목과 판은 서버(GET /consents)에서 읽는다. 판이 바뀌었다고 하면 다시 읽고 체크를 비운다.
 // 실패는 그 칸에 보인다. 티켓을 쓸 수 없으면 1단계로, 이미 가입한 이메일이면 로그인으로 보낸다.
 
@@ -12,19 +12,21 @@ import { ProblemNotice } from '../../components/ProblemNotice';
 import { formatRemaining, useCountdown } from '../../hooks/useCountdown';
 import { itemsWithoutDocument } from '../../legal/consentItems';
 import { ConsentList } from './ConsentList';
-import { canSubmit, EMPTY_DRAFT, profileHints, toSignupProfile, type ProfileDraft } from './profileForm';
+import { canSubmit, EMPTY_DRAFT, INVITE_CODE_MAX_LENGTH, profileHints, toSignupProfile, type ProfileDraft } from './profileForm';
 
 type Props = {
   ticket: string;
+  /** 초대 링크로 왔으면 그 코드. 칸에 미리 채운다 */
+  initialInviteCode?: string;
   ticketEndsAt: number;
   onDone: (username: string) => void;
   onRestart: (problem: SignupProblem) => void;
   onAlreadyRegistered: (problem: SignupProblem) => void;
 };
 
-export function ProfileStep({ ticket, ticketEndsAt, onDone, onRestart, onAlreadyRegistered }: Props) {
+export function ProfileStep({ ticket, initialInviteCode = '', ticketEndsAt, onDone, onRestart, onAlreadyRegistered }: Props) {
   const consents = useQuery({ queryKey: ['auth', 'consents'], queryFn: ({ signal }) => fetchConsentDocuments(signal) });
-  const [draft, setDraft] = useState<ProfileDraft>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<ProfileDraft>({ ...EMPTY_DRAFT, inviteCode: initialInviteCode });
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<SignupProblem | undefined>();
   const ticketClock = useCountdown(ticketEndsAt);
@@ -112,6 +114,15 @@ export function ProfileStep({ ticket, ticketEndsAt, onDone, onRestart, onAlready
         onChange={(event) => update('passwordAgain', event.target.value)}
         error={hints.passwordAgain}
         required
+      />
+      <TextField
+        label="초대 코드 (선택)"
+        name="inviteCode"
+        autoComplete="off"
+        maxLength={INVITE_CODE_MAX_LENGTH}
+        value={draft.inviteCode}
+        onChange={(event) => update('inviteCode', event.target.value)}
+        error={problem?.fields?.invite_code}
       />
       <Checkbox
         label="만 14세 이상입니다"

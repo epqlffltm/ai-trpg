@@ -280,6 +280,29 @@
         ],
         "type": "object"
       },
+      "CouponRedemption": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "받은 쿠폰의 코드(대문자)",
+            "type": "string"
+          },
+          "expires_at": {
+            "description": "받은 실버가 사라지는 때",
+            "format": "date-time",
+            "type": "string"
+          },
+          "silver": {
+            "$ref": "#/components/schemas/Amount"
+          }
+        },
+        "required": [
+          "code",
+          "silver",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "Entries": {
         "additionalProperties": false,
         "properties": {
@@ -359,6 +382,19 @@
               "forfeit"
             ],
             "type": "string"
+          },
+          "source": {
+            "description": "받은 줄(reason 이 grant)이 어디서 왔는지(#979). 받은 줄이 아니면 null",
+            "enum": [
+              "welcome",
+              "attendance",
+              "chest",
+              "event",
+              "coupon",
+              "other"
+            ],
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -370,6 +406,7 @@
           "order_id",
           "hold_id",
           "hold_status",
+          "source",
           "created_at"
         ],
         "type": "object"
@@ -992,6 +1029,112 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/billing/coupons/redeem": {
+      "post": {
+        "operationId": "redeemCoupon",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "code": {
+                    "description": "넣은 코드. 앞뒤 빈칸을 지우고 대문자로 바꿔 찾는다",
+                    "example": "LAUNCH-2026",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponRedemption"
+                }
+              }
+            },
+            "description": "받은 실버"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "본인인증 전이다(coupon.verification_required)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "그런 코드가 없다(coupon.not_found). 틀린 시도로 센다"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "이미 받았다(coupon.already_redeemed), 다 찼다(coupon.exhausted), 지났거나 멈췄다(coupon.ended), 아직이다(coupon.not_started)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "한 시간에 열 번 넘게 틀렸다(coupon.too_many_attempts). Retry-After 의 초 뒤에 다시 넣는다",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "쿠폰 코드를 넣어 실버를 받는다(#979). 한 사람은 한 쿠폰을 한 번만 받는다",
+        "tags": [
+          "coupons"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/billing/me": {
       "get": {
         "operationId": "getMe",
@@ -1524,6 +1667,89 @@
           }
         ],
         "summary": "(인증 서버) 사용자의 결제 자격(성년이 되는 날, 보호자 동의)을 받아 적는다. 가진 것보다 높은 버전만 받는다",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
+    "/api/v1/billing/service/grants/invite": {
+      "post": {
+        "operationId": "grantInvite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "reward_id": {
+                    "description": "인증 서버의 초대 보상 하나의 번호",
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "role": {
+                    "description": "초대한 사람 또는 초대받은 사람",
+                    "enum": [
+                      "inviter",
+                      "invitee"
+                    ],
+                    "type": "string"
+                  },
+                  "user_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "user_id",
+                  "reward_id",
+                  "role"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Welcome"
+                }
+              }
+            },
+            "description": "이미 줬다(already_granted) 또는 주지 않게 해 두었다(disabled)"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Welcome"
+                }
+              }
+            },
+            "description": "줬다(granted)"
+          },
+          "400": {
+            "$ref": "#/components/responses/ServiceBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/ServiceUnauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [
+          {
+            "serviceSignature": []
+          }
+        ],
+        "summary": "(인증 서버) 초대 보상(#990)을 준다. 보상 하나에 초대한 사람과 초대받은 사람이 한 번씩 받는다",
         "tags": [
           "service"
         ],
@@ -2317,6 +2543,9 @@
     },
     {
       "name": "attendance"
+    },
+    {
+      "name": "coupons"
     },
     {
       "name": "webhooks"

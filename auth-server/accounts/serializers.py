@@ -10,6 +10,7 @@ from rest_framework import serializers
 
 from accounts.consents import signup_consent_problems
 from accounts.email_codes import CODE_LENGTH
+from accounts.invites import INVITE_CODE_INPUT_MAX_LENGTH
 from accounts.models import GuardianNoticeKind, User
 from accounts.validators import (
     validate_nickname_format,
@@ -83,6 +84,9 @@ class SignupCompleteSerializer(serializers.Serializer):
     # 동의한 항목과 그 판(#450). {"terms": 1, "privacy": 1, "marketing": 1}. 넣지 않은 선택 항목은 동의하지 않은 것이다.
     # 판을 받는 까닭은 화면이 보인 문서가 지금의 판인지 보려는 것이다. 옛 판이면 400 이다
     consents = serializers.DictField(child=serializers.IntegerField(min_value=1), allow_empty=True)
+    # 초대 코드(#990). 고를 수 있다. 공백과 하이픈, 대소문자는 가리지 않는다(invites.py)
+    # 적지 않으면 services.complete_signup 의 기본값(빈 글)이다. 기본값을 여기 두면 API 목록에서 꼭 적을 칸이 된다
+    invite_code = serializers.CharField(required=False, allow_blank=True, max_length=INVITE_CODE_INPUT_MAX_LENGTH)
 
     def validate_consents(self, consents: dict[str, int]) -> dict[str, int]:
         problems = signup_consent_problems(consents)
@@ -286,3 +290,11 @@ class PublicNameSerializer(serializers.Serializer):
 
     public_id = serializers.UUIDField()
     nickname = serializers.CharField(allow_null=True)
+
+
+class MyInviteSerializer(serializers.Serializer):
+    """내 초대 코드와 받은 보상(#990). 상한은 서버의 설정이다. 보상은 내가 본인인증을 마친 뒤부터 센다."""
+
+    code = serializers.CharField()
+    rewarded = serializers.IntegerField(help_text='초대한 사람으로서 받은 보상의 수')
+    limit = serializers.IntegerField(help_text='받을 수 있는 보상의 수. 0 이면 초대 보상이 꺼져 있다')

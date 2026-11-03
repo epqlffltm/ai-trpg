@@ -6,6 +6,7 @@
 // 엔딩 장면의 답이 끝나면 엔딩 화면을 띄운다. 위의 그림 창은 장면의 일러스트나 지금 장소·시간대의 배경이다.
 // 내 말 고치기는 새 가지로 답을 다시 받고(모델이 있어야 한다), 답 고치기는 조각마다 글만 그 자리에서 고친다(청구 없음). 끊긴 답은 이어 쓴다.
 // 책갈피(#982)는 말마다 달고 떼며 받는 중에도 된다. 책갈피의 자리로 갈 때 지금 가지에 없는 말이면 가지를 바꾼다.
+// 그림으로 저장(#982)은 지금 가지의 말들로 이 기기에서 그림을 만든다.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -28,6 +29,7 @@ import { useBookmarks } from '../chat/conversation/useBookmarks';
 import { freshEnding, pendingChoices } from './storyActions';
 import { StoryActionBar } from './StoryActionBar';
 import { StoryBookmarksButton } from './StoryBookmarksButton';
+import { StoryScreenshotButton } from './StoryScreenshotButton';
 import { StoryRecordsButton } from './StoryRecordsButton';
 import { backgroundOf, expressionsOf, sceneOf as pictureSceneOf } from './storyCastView';
 import { StoryCastRow } from './StoryCastRow';
@@ -119,7 +121,12 @@ export function StoryRoom({ session, turns }: Props) {
     requestAnimationFrame(() => document.getElementById(messageAnchor(messageId))?.scrollIntoView?.({ block: 'center' }));
   }
 
-  const bookmarksButton = <StoryBookmarksButton source={bookmarks} busy={busy} onGoTo={(messageId) => void goTo(messageId)} />;
+  const sessionTools = (
+    <>
+      <StoryBookmarksButton source={bookmarks} busy={busy} onGoTo={(messageId) => void goTo(messageId)} />
+      <StoryScreenshotButton session={session} />
+    </>
+  );
 
   return (
     <main className="page conversation story">
@@ -162,10 +169,10 @@ export function StoryRoom({ session, turns }: Props) {
         <div className="story-actions">
           <p className="hint story-ended">이야기가 끝났습니다. 대안을 넘겨 보거나 끝의 장면을 다시 쓸 수 있습니다.</p>
           <StoryRecordsButton worldId={session.world.id} view={view} />
-          {bookmarksButton}
+          {sessionTools}
         </div>
       ) : (
-        <StoryActionBar sessionId={session.id} worldId={session.world.id} view={view} state={scene.state} disabled={busy} onAct={act} bookmarks={bookmarksButton} />
+        <StoryActionBar sessionId={session.id} worldId={session.world.id} view={view} state={scene.state} disabled={busy} onAct={act} tools={sessionTools} />
       )}
       {ended ? null : (
         <Composer

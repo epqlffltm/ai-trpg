@@ -42,6 +42,7 @@ from app.characters.schemas import (
 )
 from app.genres import Genre
 from app.ratings import Rating
+from app.shortcuts.schemas import Shortcut, Shortcuts
 from app.worlds.documents import WorldDocument
 from app.worlds.models import (
     CAST_MAX_GIFTS,
@@ -559,7 +560,18 @@ def ordered_chapters(chapters: list[Chapter]) -> list[Chapter]:
 Chapters = Annotated[list[Chapter], Field(max_length=WORLD_MAX_CHAPTERS), AfterValidator(ordered_chapters)]
 
 # DB 에 dict(의 목록)로 적는 칸
-DOCUMENT_LISTS = ('slots', 'places', 'paths', 'items', 'start_items', 'cast', 'events', 'endings', 'chapters')
+DOCUMENT_LISTS = (
+    'slots',
+    'places',
+    'paths',
+    'items',
+    'start_items',
+    'cast',
+    'events',
+    'endings',
+    'chapters',
+    'shortcuts',
+)
 # 고칠 때 null 로 비울 수 있는 칸. 그림, 시작 장소와 시간대, 기한은 "없음"이 null 이다
 NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'start_slot', 'deadline_days'})
 
@@ -622,6 +634,8 @@ class WorldCreate(BaseModel):
     endings: Endings = []
     chapters: Chapters = []
     lorebooks: Lorebooks = []
+    # 제작자 단축어(#981). 세션 중에 "/이름"으로 부른다
+    shortcuts: Shortcuts = []
 
     def image_ids(self) -> list[uuid.UUID]:
         """붙인 그림들. 자기 그림인지 볼 것들이다."""
@@ -669,6 +683,7 @@ class WorldUpdate(BaseModel):
     endings: Endings | None = None
     chapters: Chapters | None = None
     lorebooks: Lorebooks | None = None
+    shortcuts: Shortcuts | None = None
 
     @model_validator(mode='after')
     def null_only_where_allowed(self) -> Self:
@@ -720,6 +735,8 @@ class WorldDetail(BaseModel):
     # 장들(판의 형식 6). 기본값이 있어 웹의 생성 타입에서는 고르는 칸이다
     chapters: list[Chapter] = []
     lorebooks: list[uuid.UUID]
+    # 제작자 단축어(#981, 판의 형식 8). 기본값이 있어 웹의 생성 타입에서는 고르는 칸이다
+    shortcuts: list[Shortcut] = []
     latest_version: int | None
     published_at: datetime | None
     # 운영자가 숨긴 시각. 숨긴 동안은 공개여도 남에게 보이지 않는다(캐릭터와 같다)

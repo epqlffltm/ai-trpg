@@ -125,4 +125,28 @@ describe('SignupPage', () => {
 
     expect(screen.getByText(/영문 소문자, 숫자, 밑줄로 4~20자/)).toBeInTheDocument();
   });
+
+  it('초대 링크로 오면 초대 코드를 채워 보내고, 없는 코드면 그 칸에 서버의 글을 보인다', async () => {
+    let answer = json(400, { detail: '입력이 올바르지 않습니다.', errors: { invite_code: ['초대 코드를 찾지 못했습니다. 다시 확인해 주세요.'] } });
+    const { seen } = routes(() => answer);
+    renderApp('/signup?invite=ABCD2345');
+
+    await reachProfileStep();
+    expect(screen.getByLabelText('초대 코드 (선택)')).toHaveValue('ABCD2345');
+    await fillProfile();
+    await userEvent.click(screen.getByLabelText('[필수] 이용약관'));
+    await userEvent.click(screen.getByLabelText('[필수] 개인정보 수집·이용'));
+    await userEvent.click(screen.getByRole('button', { name: '가입하기' }));
+
+    expect(await screen.findByText('초대 코드를 찾지 못했습니다. 다시 확인해 주세요.')).toBeInTheDocument();
+    const body = seen.find((request) => request.url === '/api/v1/auth/signup/complete')?.body as Record<string, unknown>;
+    expect(body.invite_code).toBe('ABCD2345');
+
+    answer = json(201, { detail: '가입했다' });
+    await userEvent.clear(screen.getByLabelText('초대 코드 (선택)'));
+    await userEvent.click(screen.getByRole('button', { name: '가입하기' }));
+    expect(await screen.findByText('가입했습니다. 로그인해 주세요.')).toBeInTheDocument();
+    const last = seen.filter((request) => request.url === '/api/v1/auth/signup/complete').at(-1)?.body as Record<string, unknown>;
+    expect(last).not.toHaveProperty('invite_code');
+  });
 });

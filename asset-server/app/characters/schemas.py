@@ -61,6 +61,7 @@ from app.characters.models import (
 from app.content.html import INTRO_MAX_BYTES, RemovedKind, intro_too_long
 from app.genres import Genre
 from app.ratings import Rating
+from app.shortcuts.schemas import Shortcut, Shortcuts
 
 
 def fits_intro_size(html: str) -> str:
@@ -354,7 +355,7 @@ def reject_repeated_ids(ids: list[uuid.UUID]) -> list[uuid.UUID]:
 
 Lorebooks = Annotated[list[uuid.UUID], Field(max_length=CHARACTER_MAX_LOREBOOKS), AfterValidator(reject_repeated_ids)]
 
-WORLD_LISTS = ('places', 'paths', 'items', 'start_items', 'event_scenes', 'sprites')
+WORLD_LISTS = ('places', 'paths', 'items', 'start_items', 'event_scenes', 'sprites', 'shortcuts')
 
 
 def attached_images(
@@ -401,6 +402,8 @@ class CharacterCreate(BaseModel):
     event_scenes: EventScenes = []
     sprites: Sprites = []
     lorebooks: Lorebooks = []
+    # 제작자 단축어(#981). 대화 중에 "/이름"으로 부른다
+    shortcuts: Shortcuts = []
 
     def image_ids(self) -> list[uuid.UUID]:
         """붙인 그림들. 자기 그림인지 볼 것들이다."""
@@ -445,6 +448,7 @@ class CharacterUpdate(BaseModel):
     event_scenes: EventScenes | None = None
     sprites: Sprites | None = None
     lorebooks: Lorebooks | None = None
+    shortcuts: Shortcuts | None = None
 
     @model_validator(mode='after')
     def null_only_for_the_image(self) -> Self:
@@ -497,6 +501,8 @@ class CharacterDetail(BaseModel):
     sprites: list[Sprite]
     # 가리키는 로어북들의 id(#672). 지운 로어북의 id 가 남아 있을 수 있다(다시 게시할 때 막힌다)
     lorebooks: list[uuid.UUID]
+    # 제작자 단축어(#981). 기본값이 있어 웹의 생성 타입에서는 고르는 칸이다
+    shortcuts: list[Shortcut] = []
     latest_version: int | None
     published_at: datetime | None
     # 운영자가 숨긴 시각(#678). 숨긴 동안은 공개여도 남에게 보이지 않는다

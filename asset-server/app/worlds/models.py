@@ -279,6 +279,8 @@ class World(Base):
     chapters: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
     # 가리키는 로어북들의 id(자기 로어북만). 게시할 때 그 마지막 판이 판에 복사된다
     lorebooks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), default=list, server_default='{}')
+    # 제작자 단축어들 [{"name", "description", "body"}](#981, 판의 형식 8). 모양은 app/shortcuts/schemas.py 가 정한다
+    shortcuts: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
 
     rating: Mapped[str] = mapped_column(String(10), default=Rating.ALL, server_default=Rating.ALL.value)
     visibility: Mapped[str] = mapped_column(

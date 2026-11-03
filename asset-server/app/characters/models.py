@@ -216,6 +216,9 @@ class Character(Base):
     # 가리키는 로어북들의 id(#672, 자기 로어북만). 게시할 때 그 마지막 판이 판에 복사된다.
     # 로어북을 지워도 여기서 빠지지 않는다. 다시 게시할 때 막힌다(lorebook_missing)
     lorebooks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), default=list, server_default='{}')
+    # 제작자 단축어들 [{"name", "description", "body"}](#981). 게시하면 판에 굳는다.
+    # 모양은 app/shortcuts/schemas.py 가 정한다
+    shortcuts: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
 
     rating: Mapped[str] = mapped_column(String(10), default=Rating.ALL, server_default=Rating.ALL.value)
     visibility: Mapped[str] = mapped_column(

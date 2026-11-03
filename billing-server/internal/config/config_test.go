@@ -86,8 +86,9 @@ func TestLoadFillsDefaults(t *testing.T) {
 		HoldTTL:     24 * time.Hour,
 		ChatHoldTTL: 10 * time.Minute,
 		OrderTTL:    24 * time.Hour,
-		// 적지 않으면 환영 크레딧은 1,000 이다
+		// 적지 않으면 환영 크레딧은 1,000 이고 초대 보상은 한 사람에 500 이다
 		WelcomeCredits: 1_000,
+		InviteCredits:  500,
 		// 적지 않으면 출석은 140 에서 260 까지 7일이다
 		AttendanceSilver: attendance.Schedule{140, 160, 180, 200, 220, 240, 260},
 		WebhookSecret:    webhookSecret,
@@ -121,6 +122,7 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		"GAME_SERVER_SECRET":           "fedcba9876543210fedcba9876543210",
 		"AUTH_SERVER_SECRET":           "00112233445566778899aabbccddeeff",
 		"WELCOME_CREDITS":              "250",
+		"INVITE_CREDITS":               "300",
 		"ATTENDANCE_SILVER":            " 10, 20 ,30",
 		"APP_ENVIRONMENT":              "production",
 		"APP_VERSION":                  "3f2a9c1",
@@ -152,6 +154,7 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		ChatHoldTTL:        7 * time.Minute,
 		OrderTTL:           30 * time.Minute,
 		WelcomeCredits:     250,
+		InviteCredits:      300,
 		// 칸 사이의 빈칸은 무시한다
 		AttendanceSilver: attendance.Schedule{10, 20, 30},
 		// 꼭 32자다. 받는 가장 짧은 길이다
@@ -250,6 +253,8 @@ func TestLoadRejectsBadValues(t *testing.T) {
 		{"환영 크레딧이 음수다", required(map[string]string{"WELCOME_CREDITS": "-1"}), "WELCOME_CREDITS"},
 		{"환영 크레딧이 소수다", required(map[string]string{"WELCOME_CREDITS": "10.5"}), "WELCOME_CREDITS"},
 		{"환영 크레딧이 너무 많다", required(map[string]string{"WELCOME_CREDITS": "1000001"}), "WELCOME_CREDITS"},
+		{"초대 보상이 음수다", required(map[string]string{"INVITE_CREDITS": "-1"}), "INVITE_CREDITS"},
+		{"초대 보상이 너무 많다", required(map[string]string{"INVITE_CREDITS": "1000001"}), "INVITE_CREDITS"},
 		{"알림의 비밀이 짧다", required(map[string]string{"PG_WEBHOOK_SECRET": "0123456789abcdef0123456789abcde"}), "PG_WEBHOOK_SECRET"},
 		{"공개키 주소가 비었다", required(map[string]string{"AUTH_JWKS_URL": ""}), "AUTH_JWKS_URL"},
 		{"공개키 주소에 http 가 없다", required(map[string]string{"AUTH_JWKS_URL": "127.0.0.1:8000/jwks"}), "AUTH_JWKS_URL"},
