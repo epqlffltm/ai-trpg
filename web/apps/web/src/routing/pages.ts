@@ -13,6 +13,7 @@ import { lazyPage } from './lazyPage';
 export const MyPage = lazyPage(() => import('../pages/me/MyPage'), 'MyPage');
 // 내 페르소나(C4). 목록, 만들기, 고치기
 export const PersonasPage = lazyPage(() => import('../pages/personas/PersonasPage'), 'PersonasPage');
+export const MyShortcutsPage = lazyPage(() => import('../pages/me/shortcuts/MyShortcutsPage'), 'MyShortcutsPage');
 export const PersonaNewPage = lazyPage(() => import('../pages/personas/PersonaNewPage'), 'PersonaNewPage');
 export const PersonaEditPage = lazyPage(() => import('../pages/personas/PersonaEditPage'), 'PersonaEditPage');
 

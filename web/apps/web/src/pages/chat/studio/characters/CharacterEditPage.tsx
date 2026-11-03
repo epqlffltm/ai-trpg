@@ -23,6 +23,7 @@ import { LorebooksTab } from './LorebooksTab';
 import { MapTab } from './MapTab';
 import { PublishTab } from './PublishTab';
 import { ScenesTab } from './ScenesTab';
+import { ShortcutsTab } from './ShortcutsTab';
 import { SpeechTab } from './SpeechTab';
 import { SpritesTab } from './SpritesTab';
 import { StartsTab } from './StartsTab';
@@ -100,6 +101,7 @@ function panelOf(tab: CharacterTab, character: AssetCharacterDetail): ReactNode 
   if (tab === 'sprites') return <SpritesTab character={character} />;
   if (tab === 'scenes') return <ScenesTab character={character} />;
   if (tab === 'lorebooks') return <LorebooksTab character={character} />;
+  if (tab === 'shortcuts') return <ShortcutsTab character={character} />;
   return <PublishTab character={character} />;
 }
 
