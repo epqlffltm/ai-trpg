@@ -45,6 +45,7 @@ import {
   LorebooksPage,
   MessageReportPage,
   MyPage,
+  MyShortcutsPage,
   NotificationsPage,
   OrderPage,
   OrdersPage,
@@ -114,6 +115,15 @@ export function App() {
           <Route path="new" element={<PersonaNewPage />} />
           <Route path=":personaId" element={<PersonaEditPage />} />
         </Route>
+        {/* 내 단축어(#981). 주인만 보고 고친다 */}
+        <Route
+          path="me/shortcuts"
+          element={
+            <RequireSession>
+              <MyShortcutsPage />
+            </RequireSession>
+          }
+        />
         <Route
           path="gallery"
           element={

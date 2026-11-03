@@ -20,6 +20,7 @@ import { WorldLorebooksTab } from './WorldLorebooksTab';
 import { WorldMapTab } from './WorldMapTab';
 import { WorldProgressTab } from './WorldProgressTab';
 import { WorldPublishTab } from './WorldPublishTab';
+import { WorldShortcutsTab } from './WorldShortcutsTab';
 import { WORLDS_PATH } from './worldPaths';
 import { isMissingWorld } from './worldProblem';
 import { worldQuery } from './worldQueries';
@@ -88,6 +89,7 @@ function panelOf(tab: WorldTab, world: StoryWorldDetail): ReactNode {
   if (tab === 'endings') return <WorldEndingsTab world={world} />;
   if (tab === 'chapters') return <WorldChaptersTab world={world} />;
   if (tab === 'lorebooks') return <WorldLorebooksTab world={world} />;
+  if (tab === 'shortcuts') return <WorldShortcutsTab world={world} />;
   return <WorldPublishTab world={world} />;
 }
 

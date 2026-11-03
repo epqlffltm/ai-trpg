@@ -14,6 +14,7 @@ export type CharacterTab =
   | 'sprites'
   | 'scenes'
   | 'lorebooks'
+  | 'shortcuts'
   | 'publish';
 
 const TAB_LABELS: Record<CharacterTab, string> = {
@@ -29,6 +30,7 @@ const TAB_LABELS: Record<CharacterTab, string> = {
   sprites: '캐릭터 그림',
   scenes: '이벤트 씬',
   lorebooks: '로어북',
+  shortcuts: '단축어',
 };
 
 /** 화면의 탭. 차례가 곧 탭의 차례다 */
@@ -44,6 +46,7 @@ export const CHARACTER_TABS: CharacterTab[] = [
   'sprites',
   'scenes',
   'lorebooks',
+  'shortcuts',
   'publish',
 ];
 
