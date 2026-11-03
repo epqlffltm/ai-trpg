@@ -9,7 +9,7 @@
      개인정보를 보호자의 동의 없이 모으지 못하게 한다. 이 서비스는 보호자 동의를 받아 가입시키지 않는다
   4. 정지된 채 탈퇴한 사람이면(return_blocks.py, #634) 사유의 규칙대로 인증을 거절하거나 이 계정도 정지한다
   5. 다른 계정이 이미 인증한 사람이면 거절한다. 한 사람은 한 계정에서만 인증한다
-  6. 인증 기록과 환영 크레딧, 결제 서버에 알릴 결제 자격을 한 트랜잭션에서 적는다
+  6. 인증 기록과 환영 크레딧, 초대 보상(#990), 결제 서버에 알릴 결제 자격을 한 트랜잭션에서 적는다
 
 결과는 바로 토큰에 실리지 않는다. 다음에 토큰을 갱신할 때 실린다(tokens.py). 화면은 인증 뒤에 갱신을 부른다.
 """
@@ -24,6 +24,7 @@ from accounts.age import adult_content_from, has_reached, is_under_min_age, kore
 from accounts.consents import erase_consents
 from accounts.erasure import blank_account, erase_mail_records
 from accounts.identity_providers import IdentityResult, get_identity_provider
+from accounts.invite_rewards import request_invite_reward
 from accounts.models import IdentityVerification, ReturnBlock, ReturnBlockKind, SecurityEventKind, User
 from accounts.payment_eligibility import mark_changed
 from accounts.return_blocks import IdentityRule, active_block, policy_for
@@ -120,7 +121,7 @@ def _record_verification(
     user: User, result: IdentityResult, provider_name: str, today: date, key: str
 ) -> IdentityVerification:
     """
-    인증 기록과 환영 크레딧, 결제 자격을 한 트랜잭션에서 적는다.
+    인증 기록과 환영 크레딧, 초대 보상, 결제 자격을 한 트랜잭션에서 적는다.
 
     계정의 줄을 잠근다. 같은 계정의 요청 둘이 함께 와도 하나만 적힌다. 그래서 남는 유일 제약 위반은
     사람 열쇠뿐이다. 다른 계정이 먼저 그 사람으로 인증했다.
@@ -140,6 +141,8 @@ def _record_verification(
         # 트랜잭션 전체가 취소된다. 환영 크레딧도 적히지 않는다
         raise IdentityInUseError from exc
     request_welcome_credit(user_public_id=locked.public_id, recipient_key=key)
+    # 초대받아 가입했으면 두 사람의 보상을 정한다(#990). 초대한 계정의 줄을 잠근다(invite_rewards.py)
+    request_invite_reward(invitee=locked, invitee_key=key)
     # 결제 서버가 이 사용자의 나이(성년이 되는 날)를 알게 한다. 결제는 그것으로 가른다(#337)
     mark_changed(locked)
     return verification

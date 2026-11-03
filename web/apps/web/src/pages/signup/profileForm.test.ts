@@ -72,4 +72,9 @@ describe('toSignupProfile', () => {
       consents: { terms: 2, privacy: 1 },
     });
   });
+
+  it('초대 코드는 앞뒤 공백을 지우고 적었을 때만 보낸다', () => {
+    expect(toSignupProfile({ ...FILLED, inviteCode: '  abcd2345 ' }, DOCUMENTS).invite_code).toBe('abcd2345');
+    expect(toSignupProfile({ ...FILLED, inviteCode: '   ' }, DOCUMENTS)).not.toHaveProperty('invite_code');
+  });
 });

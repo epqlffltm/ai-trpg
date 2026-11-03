@@ -66,6 +66,9 @@ const (
 	DefaultWelcomeCredits credit.Amount = 1_000
 	// MaxWelcomeCredits 는 WELCOME_CREDITS 로 받는 가장 큰 양이다. 0 을 몇 개 더 붙인 실수를 막는다.
 	MaxWelcomeCredits credit.Amount = 1_000_000
+	// DefaultInviteCredits 는 초대 보상(#990)으로 초대한 사람과 초대받은 사람이 한 번씩 받는 무료 크레딧의 양이다.
+	// 상한도 환영 크레딧과 같다(MaxWelcomeCredits).
+	DefaultInviteCredits credit.Amount = 500
 	// MinServiceSecretLength 는 GAME_SERVER_SECRET 의 가장 짧은 길이다.
 	MinServiceSecretLength = 32
 	// MinWebhookSecretLength 는 PG_WEBHOOK_SECRET 의 가장 짧은 길이다. 짧은 비밀은 서명을 꾸며 내기 쉽다.
@@ -142,6 +145,8 @@ type Settings struct {
 	OrderTTL time.Duration
 	// WelcomeCredits 는 사용자가 한 번 받는 환영 크레딧의 양이다. 0 이면 주지 않는다.
 	WelcomeCredits credit.Amount
+	// InviteCredits 는 초대 보상 한 번에 두 사람이 각각 받는 무료 크레딧의 양이다(#990). 0 이면 주지 않는다.
+	InviteCredits credit.Amount
 	// AttendanceSilver 는 출석의 하루 양이다(#339). 첫째 값이 1일째이고, 길이가 주기의 날 수다. 마지막 날에 보물 상자를 연다.
 	// 바꾸면 그 뒤에 받는 출석부터 적용된다. 이미 받은 날의 기록은 그대로다.
 	AttendanceSilver attendance.Schedule
@@ -286,11 +291,13 @@ func Load(lookup Lookup) (Settings, error) {
 	chatSecret, chatSecretErr := readOptionalSecret(lookup, "CHAT_SERVER_SECRET", MinServiceSecretLength)
 	storySecret, storySecretErr := readOptionalSecret(lookup, "STORY_SERVER_SECRET", MinServiceSecretLength)
 	welcome, welcomeErr := readCredits(lookup, "WELCOME_CREDITS", DefaultWelcomeCredits, MaxWelcomeCredits)
+	invite, inviteErr := readCredits(lookup, "INVITE_CREDITS", DefaultInviteCredits, MaxWelcomeCredits)
 	attendanceSilver, attendanceErr := readSchedule(lookup, "ATTENDANCE_SILVER")
 	payment, paymentErr := loadPayment(lookup)
 
 	if err := errors.Join(
-		debugErr, portErr, dbErr, jwksErr, revocationsErr, rulesErr, loggingErr, webhookErr, welcomeErr, attendanceErr, paymentErr,
+		debugErr, portErr, dbErr, jwksErr, revocationsErr, rulesErr, loggingErr, webhookErr, welcomeErr, inviteErr, attendanceErr,
+		paymentErr,
 		gameSecretErr, authSecretErr, chatSecretErr, storySecretErr,
 		distinctSecrets(webhookSecret, gameSecret, authSecret, chatSecret, storySecret),
 		providerAllowed(logging, payment),
@@ -316,6 +323,7 @@ func Load(lookup Lookup) (Settings, error) {
 		ChatHoldTTL:        rules.ChatHoldTTL,
 		OrderTTL:           rules.OrderTTL,
 		WelcomeCredits:     welcome,
+		InviteCredits:      invite,
 		AttendanceSilver:   attendanceSilver,
 		WebhookSecret:      webhookSecret,
 		GameServerSecret:   gameSecret,

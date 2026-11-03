@@ -1,8 +1,9 @@
 # auth-server/accounts/billing_client.py
 
 """
-결제 서버를 부른다. 부르는 일은 둘이다.
+결제 서버를 부른다. 부르는 일은 셋이다.
   - 본인인증을 마친 사용자에게 환영 크레딧을 주라고 맡긴다(welcome_credit.py)
+  - 초대 보상의 실버를 주라고 맡긴다(invite_grants.py, #990)
   - 사용자의 결제 자격(성년이 되는 날, 보호자 동의)을 알린다(payment_eligibility.py, #336)
 
 요청마다 서명을 붙인다(service_client.py). 결제 서버가 그것으로 인증 서버임을 확인한다.
@@ -22,6 +23,9 @@ from accounts.service_client import ServiceUnavailableError, post_signed
 
 # 환영 크레딧을 주라고 맡기는 주소. 호스트를 뺀 경로다. 서명에도 이 글자가 들어간다
 WELCOME_PATH = '/api/v1/billing/service/grants/welcome'
+
+# 초대 보상을 주라고 맡기는 주소(#990)
+INVITE_PATH = '/api/v1/billing/service/grants/invite'
 
 # 결제 자격을 알리는 주소(결제 서버의 #337)
 ELIGIBILITY_PATH = '/api/v1/billing/service/eligibility'
@@ -59,6 +63,20 @@ def grant_welcome_credit(*, user_public_id: UUID) -> str:
     """
     body = json.dumps({'user_id': str(user_public_id)}).encode()
     status_code, text = _post(WELCOME_PATH, body)
+    if status_code not in (200, 201):
+        raise BillingUnavailableError(f'결제 서버가 {status_code} 로 답했다')
+    return _read_outcome(text, WELCOME_OUTCOMES)
+
+
+def grant_invite_credit(*, user_public_id: UUID, reward_id: UUID, role: str) -> str:
+    """
+    결제 서버에 초대 보상 하나를 주라고 맡기고, 결과를 돌려준다(#990). role 은 inviter 나 invitee 다.
+
+    양은 보내지 않는다. 결제 서버의 설정(INVITE_CREDITS)이 정한다. 결과와 실패는 환영 크레딧과 같다.
+    같은 보상, 같은 사람으로 여러 번 불러도 한 번만 들어간다. 결제 서버가 지급의 이름으로 지킨다.
+    """
+    body = json.dumps({'user_id': str(user_public_id), 'reward_id': str(reward_id), 'role': role}).encode()
+    status_code, text = _post(INVITE_PATH, body)
     if status_code not in (200, 201):
         raise BillingUnavailableError(f'결제 서버가 {status_code} 로 답했다')
     return _read_outcome(text, WELCOME_OUTCOMES)

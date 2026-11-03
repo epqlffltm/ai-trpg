@@ -1530,6 +1530,89 @@
         "x-audience": "service"
       }
     },
+    "/api/v1/billing/service/grants/invite": {
+      "post": {
+        "operationId": "grantInvite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "reward_id": {
+                    "description": "인증 서버의 초대 보상 하나의 번호",
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "role": {
+                    "description": "초대한 사람 또는 초대받은 사람",
+                    "enum": [
+                      "inviter",
+                      "invitee"
+                    ],
+                    "type": "string"
+                  },
+                  "user_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "user_id",
+                  "reward_id",
+                  "role"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Welcome"
+                }
+              }
+            },
+            "description": "이미 줬다(already_granted) 또는 주지 않게 해 두었다(disabled)"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Welcome"
+                }
+              }
+            },
+            "description": "줬다(granted)"
+          },
+          "400": {
+            "$ref": "#/components/responses/ServiceBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/ServiceUnauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [
+          {
+            "serviceSignature": []
+          }
+        ],
+        "summary": "(인증 서버) 초대 보상(#990)을 준다. 보상 하나에 초대한 사람과 초대받은 사람이 한 번씩 받는다",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
     "/api/v1/billing/service/grants/welcome": {
       "post": {
         "operationId": "grantWelcome",

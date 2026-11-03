@@ -35,6 +35,8 @@ type Dependencies struct {
 	// Welcome 은 환영 크레딧을 준다. WelcomeCredits 는 그 양이다. 0 이면 주지 않는다.
 	Welcome        WelcomeGranter
 	WelcomeCredits credit.Amount
+	// InviteCredits 는 초대 보상 한 번에 두 사람이 각각 받는 양이다(#990). 0 이면 주지 않는다. 주는 것은 Welcome 이 한다.
+	InviteCredits credit.Amount
 	// Attendance 는 출석과 보물 상자다(#339). 넣지 않으면 그 주소들을 열지 않는다.
 	Attendance AttendanceService
 	// Orders 는 주문을 만들고 치른다. 서버는 결제 자격으로 감싼 것(eligibility.Guard)을 넣는다.
@@ -161,6 +163,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 
 	authServer := service.Group("", requireService(AuthServer, deps.AuthServerSecret, deps.Now))
 	authServer.POST("/grants/welcome", grantWelcome(deps.Welcome, deps.WelcomeCredits))
+	authServer.POST("/grants/invite", grantInvite(deps.Welcome, deps.InviteCredits))
 	authServer.POST("/eligibility", recordEligibility(deps.Eligibility))
 	authServer.POST("/users/:id/withdrawal", processWithdrawal(deps.Withdrawals))
 

@@ -288,6 +288,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내 초대 코드와 받은 초대 보상의 수. 코드가 없으면 만든다
+         * @description GET /api/v1/auth/me/invite. 내 초대 코드(#990). 처음 부르면 만든다.
+         */
+        get: operations["me_invite_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me/withdrawal": {
         parameters: {
             query?: never;
@@ -758,6 +778,14 @@ export interface components {
          * @enum {string}
          */
         MeGuardianConsentEnum: "none" | "requested" | "consented" | "revoked";
+        /** @description 내 초대 코드와 받은 보상(#990). 상한은 서버의 설정이다. 보상은 내가 본인인증을 마친 뒤부터 센다. */
+        MyInvite: {
+            code: string;
+            /** @description 받을 수 있는 보상의 수. 0 이면 초대 보상이 꺼져 있다 */
+            limit: number;
+            /** @description 초대한 사람으로서 받은 보상의 수 */
+            rewarded: number;
+        };
         /**
          * @description 비밀번호 변경 요청의 형식을 검증한다.
          *
@@ -811,6 +839,7 @@ export interface components {
             consents: {
                 [key: string]: number;
             };
+            invite_code?: string;
             nickname: string;
             password: string;
             signup_ticket: string;
@@ -1580,6 +1609,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
+    me_invite_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyInvite"];
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
                 };
             };
         };

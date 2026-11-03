@@ -33,6 +33,7 @@ from accounts.email_codes import (
     issue_signup_code,
     reserve_signup_slot,
 )
+from accounts.invites import InvalidInviteCodeError, find_inviter, record_invitation
 from accounts.login_tickets import issue_login_ticket, read_login_ticket
 from accounts.mail import (
     send_already_registered_notice,
@@ -171,16 +172,23 @@ def verify_signup(*, email: str, code: str) -> str:
 
 
 def complete_signup(
-    *, signup_ticket: str, username: str, nickname: str, password: str, consents: Mapping[str, int]
+    *,
+    signup_ticket: str,
+    username: str,
+    nickname: str,
+    password: str,
+    consents: Mapping[str, int],
+    invite_code: str = '',
 ) -> User:
     """
     가입의 3단계. 티켓의 이메일로 인증된 계정을 만든다.
 
     환영 크레딧은 여기서 적지 않는다. 본인인증 때 적는다(identity.py, #336). 이메일은 얼마든지 만들 수 있다.
     동의(consents, 항목 → 판)는 검증을 지난 것을 받아 계정과 한 트랜잭션에 적는다(consents.py, #450).
+    초대 코드(invite_code, #990)를 적었으면 초대한 사람을 계정과 한 트랜잭션에 적는다. 보상은 본인인증 때 정한다.
 
     티켓이 틀렸거나 만료됐으면 InvalidSignupTicketError, 아이디나 비밀번호가 규칙에 맞지 않거나
-    아이디나 닉네임을 다른 계정이 쓰면 InvalidSignupFieldError, 이미 그 이메일로 가입했으면
+    아이디나 닉네임을 다른 계정이 쓰거나 초대 코드를 찾지 못하면 InvalidSignupFieldError, 이미 그 이메일로 가입했으면
     EmailAlreadyRegisteredError, 사전 조회 뒤에 다른 요청이 먼저 저장했으면 DuplicateAccountError 를 낸다.
     """
     email = read_signup_ticket(signup_ticket)
@@ -188,17 +196,30 @@ def complete_signup(
     _check_password_strength(username=username, email=email, nickname=nickname, password=password)
     _ensure_email_free(email)
     _ensure_not_taken(username=username, nickname=nickname)
+    inviter_public_id = _find_inviter_or_none(invite_code)
 
     try:
         # 유일 제약에 걸리면 이 안쪽만 되돌린다. 바깥에 트랜잭션이 있어도 그대로 쓸 수 있다
         with transaction.atomic():
             user = _create_verified_user(username=username, email=email, nickname=nickname, password=password)
             record_signup_consents(user, consents, timezone.now())
+            if inviter_public_id is not None:
+                record_invitation(user, inviter_public_id)
     except IntegrityError as exc:
         # 사전 조회를 통과한 뒤 다른 요청이 같은 값으로 먼저 저장한 경우.
         # 같은 티켓을 동시에 두 번 보낸 것도 여기다(이메일의 유일 제약)
         raise DuplicateAccountError from exc
     return user
+
+
+def _find_inviter_or_none(invite_code: str):
+    """초대 코드의 주인(공개 ID). 비웠으면 None 이다. 찾지 못하면 그 칸의 오류다."""
+    if not invite_code.strip():
+        return None
+    try:
+        return find_inviter(invite_code)
+    except InvalidInviteCodeError as exc:
+        raise InvalidSignupFieldError('invite_code', ['초대 코드를 찾지 못했습니다. 다시 확인해 주세요.']) from exc
 
 
 def delete_stale_signup_codes() -> int:

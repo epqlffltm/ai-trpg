@@ -104,8 +104,8 @@ def agree_to_required(user: User) -> None:
     )
 
 
-def complete_signup(client, ticket: str, *, username: str, nickname: str, password: str):
-    """가입의 3단계만 보낸다. 만 14세 이상이라고 확인하고 필수 항목에 동의한다."""
+def complete_signup(client, ticket: str, *, username: str, nickname: str, password: str, **extra):
+    """가입의 3단계만 보낸다. 만 14세 이상이라고 확인하고 필수 항목에 동의한다. extra 는 본문에 더할 칸이다."""
     payload = {
         'signup_ticket': ticket,
         'username': username,
@@ -113,6 +113,7 @@ def complete_signup(client, ticket: str, *, username: str, nickname: str, passwo
         'password': password,
         'age_over_14': True,
         'consents': required_consents(),
+        **extra,
     }
     return client.post(SIGNUP_COMPLETE_URL, payload, format='json')
 

@@ -893,3 +893,128 @@ class WithdrawalNotice(models.Model):
 
     def __str__(self) -> str:
         return f'{self.user} / {self.get_target_display()} / {"알림" if self.delivered_at else "보낼 것"}'
+
+
+class InviteCode(models.Model):
+    """
+    계정마다 하나인 초대 코드(#990). 처음 물을 때 만든다(invites.py).
+    남이 가입할 때 적으면 그 계정이 초대한 사람이 된다.
+
+    막힌 계정(탈퇴, 정지, 만 14세 미만으로 막음)의 코드는 가입 때 받지 않는다. 줄은 계정과 함께만 지워진다.
+    """
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='invite_code',
+        verbose_name='계정',
+    )
+    # 헷갈리는 글자(0, O, 1, I, L)를 뺀 대문자와 숫자 8자(invites.py)
+    code = models.CharField('초대 코드', max_length=8, unique=True)
+    created_at = models.DateTimeField('만든 시각', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '초대 코드'
+        verbose_name_plural = '초대 코드'
+
+    def __str__(self) -> str:
+        return f'{self.user} / {self.code}'
+
+
+class Invitation(models.Model):
+    """
+    가입할 때 적은 초대 코드의 주인(#990). 가입한 계정마다 많아야 하나다. 보상은 본인인증 때 정한다(invite_rewards.py).
+
+    초대한 사람은 외래 키가 아니라 공개 ID 로 둔다. 초대한 계정이 지워져도 이 줄의 뜻은 남는다(그때는 보상이 없다).
+    """
+
+    invitee = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='invitation',
+        verbose_name='초대받은 계정',
+    )
+    inviter_public_id = models.UUIDField('초대한 계정의 공개 ID', db_index=True)
+    created_at = models.DateTimeField('가입한 시각', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '초대'
+        verbose_name_plural = '초대'
+
+    def __str__(self) -> str:
+        return f'{self.inviter_public_id} → {self.invitee}'
+
+
+class InviteReward(models.Model):
+    """
+    초대 보상 한 번(#990). 초대받은 사람이 본인인증을 마쳤고 규칙에 맞아 두 사람이 실버를 받기로 한 기록이다.
+
+    지우지 않는다(계정을 지워도 남는다). 두 규칙을 이 줄로 지킨다.
+      - 초대받은 사람은 사람마다 한 번 보상을 받는다(invitee_key 가 유일하다). 계정을 지우고 다시 가입해도 같다
+      - 초대한 사람은 사람마다 INVITE_REWARD_LIMIT 번까지 받는다(inviter_key 로 센다)
+    사람의 열쇠는 본인인증의 사람 열쇠(IdentityVerification.person_key)와 같은 값이다. DI 를 그대로 적지 않는다.
+    결제 서버에 맡길 일은 InviteGrant 두 줄이다.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    invitee_key = models.CharField('초대받은 사람의 열쇠', max_length=64, unique=True)
+    inviter_key = models.CharField('초대한 사람의 열쇠', max_length=64, db_index=True)
+    # 받는 계정의 공개 ID. 외래 키로 두지 않는다. 계정이 지워져도 이 줄은 남아야 한다
+    invitee_public_id = models.UUIDField('초대받은 계정의 공개 ID')
+    inviter_public_id = models.UUIDField('초대한 계정의 공개 ID', db_index=True)
+    created_at = models.DateTimeField('정한 시각', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '초대 보상'
+        verbose_name_plural = '초대 보상'
+
+    def __str__(self) -> str:
+        return f'{self.inviter_public_id} → {self.invitee_public_id}'
+
+
+class InviteGrantRole(models.TextChoices):
+    INVITER = 'inviter', '초대한 사람'
+    INVITEE = 'invitee', '초대받은 사람'
+
+
+class InviteGrant(models.Model):
+    """
+    초대 보상을 결제 서버에 맡길 일 하나(outbox, #990). 보상 하나에 받는 사람마다 한 줄, 두 줄이다.
+
+    환영 크레딧(WelcomeCredit)과 같은 구조다. 본인인증과 같은 트랜잭션에서 적고, 워커가 꺼내 맡기고,
+    실패하면 간격을 늘려 다시 맡긴다. 버리지 않는다. 끝난 줄도 지우지 않는다.
+    같은 줄을 몇 번 맡겨도 한 번만 들어간다. 결제 서버가 (사용자, 지급의 이름)으로 지킨다.
+    """
+
+    reward = models.ForeignKey(InviteReward, on_delete=models.PROTECT, related_name='grants', verbose_name='초대 보상')
+    role = models.CharField('받는 사람', max_length=10, choices=InviteGrantRole.choices)
+    user_public_id = models.UUIDField('받는 계정의 공개 ID')
+
+    status = models.CharField(
+        '상태',
+        max_length=20,
+        choices=WelcomeCreditStatus.choices,
+        default=WelcomeCreditStatus.PENDING,
+    )
+    attempts = models.PositiveIntegerField('시도 횟수', default=0)
+    last_error = models.CharField('마지막 오류', max_length=200, blank=True)
+
+    created_at = models.DateTimeField('만든 시각', auto_now_add=True)
+    next_attempt_at = models.DateTimeField('다음 시도 시각')
+    finished_at = models.DateTimeField('끝난 시각', null=True, blank=True)
+
+    class Meta:
+        verbose_name = '초대 보상 지급'
+        verbose_name_plural = '초대 보상 지급'
+        constraints = [
+            models.UniqueConstraint(fields=['reward', 'role'], name='accounts_invite_grant_once'),
+        ]
+        indexes = [
+            # 워커가 "지금 맡길 수 있는 줄" 을 찾을 때 쓴다
+            models.Index(fields=['status', 'next_attempt_at'], name='accounts_invite_grant_due_idx'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.user_public_id} / {self.get_role_display()} / {self.get_status_display()}'

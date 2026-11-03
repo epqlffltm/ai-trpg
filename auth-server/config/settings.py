@@ -497,6 +497,12 @@ BILLING_URL = validate_billing_url(env('BILLING_URL', default='http://127.0.0.1:
 # 비어 있으면 워커가 돌지 못한다. 서버는 이 값 없이도 뜬다. 가입과 로그인에는 쓰이지 않는다
 BILLING_SECRET = validate_service_secret(env('BILLING_SECRET', default=''))
 
+# 초대 보상(#990). 한 사람이 초대한 사람으로서 보상을 받는 횟수의 상한이다(accounts/invite_rewards.py).
+# 0 이면 초대 보상을 주지 않는다. 보상의 양은 결제 서버의 INVITE_CREDITS 가 정한다
+INVITE_REWARD_LIMIT = env.int('INVITE_REWARD_LIMIT', default=5)
+if INVITE_REWARD_LIMIT < 0:
+    raise ImproperlyConfigured('INVITE_REWARD_LIMIT 은 0 이상이어야 합니다.')
+
 # 탈퇴를 알릴 다른 서버(#603, docs/architecture/withdrawal.md 의 "알리는 길").
 # 서버마다 주소와 비밀이다. 비밀은 받는 서버의 AUTH_SERVER_SECRET 과 같은 값이다.
 # 비밀이 비어 있으면 그 서버에는 알리지 않는다. 알릴 줄은 쌓여 있다가 비밀을 적은 뒤에 나간다.

@@ -88,6 +88,8 @@ from accounts.identity import (
 )
 from accounts.identity_providers import IdentityTokenError, IdentityUnavailableError
 from accounts.identity_status import identity_status_of
+from accounts.invite_rewards import rewarded_count
+from accounts.invites import my_invite_code
 from accounts.jwks import build_jwks
 from accounts.login_tickets import InvalidLoginTicketError
 from accounts.models import User
@@ -110,6 +112,7 @@ from accounts.serializers import (
     LoginSerializer,
     LoginTicketSerializer,
     LoginVerifySerializer,
+    MyInviteSerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PublicNameSerializer,
@@ -1115,6 +1118,26 @@ class MeView(APIView):
             'withdrawal_scheduled_at': withdrawal_scheduled_at(request.user),
         }
         return Response(body, status=status.HTTP_200_OK)
+
+
+class MyInviteView(APIView):
+    """GET /api/v1/auth/me/invite. 내 초대 코드(#990). 처음 부르면 만든다."""
+
+    # 로그인한 본인만. 기본 권한(IsAuthenticated)을 쓴다
+
+    @extend_schema(
+        summary='내 초대 코드와 받은 초대 보상의 수. 코드가 없으면 만든다',
+        responses={200: MyInviteSerializer, 401: unauthenticated()},
+    )
+    def get(self, request: Request) -> Response:
+        body = MyInviteSerializer(
+            {
+                'code': my_invite_code(request.user).code,
+                'rewarded': rewarded_count(request.user),
+                'limit': settings.INVITE_REWARD_LIMIT,
+            }
+        )
+        return Response(body.data, status=status.HTTP_200_OK)
 
 
 class MyWithdrawalView(APIView):
