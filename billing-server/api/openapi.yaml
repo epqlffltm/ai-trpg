@@ -21,6 +21,7 @@ tags:
   - name: wallet
   - name: orders
   - name: attendance
+  - name: coupons
   - name: webhooks
   - name: service
 
@@ -375,6 +376,57 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Rewards" }
+        "500": { $ref: "#/components/responses/ServerError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/billing/coupons/redeem:
+    post:
+      tags: [coupons]
+      summary: 쿠폰 코드를 넣어 실버를 받는다(#979). 한 사람은 한 쿠폰을 한 번만 받는다
+      operationId: redeemCoupon
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code:
+                  type: string
+                  description: 넣은 코드. 앞뒤 빈칸을 지우고 대문자로 바꿔 찾는다
+                  example: LAUNCH-2026
+      responses:
+        "201":
+          description: 받은 실버
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CouponRedemption" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: 본인인증 전이다(coupon.verification_required)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: 그런 코드가 없다(coupon.not_found). 틀린 시도로 센다
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: 이미 받았다(coupon.already_redeemed), 다 찼다(coupon.exhausted), 지났거나 멈췄다(coupon.ended), 아직이다(coupon.not_started)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: 한 시간에 열 번 넘게 틀렸다(coupon.too_many_attempts). Retry-After 의 초 뒤에 다시 넣는다
+          headers:
+            Retry-After: { schema: { type: integer } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "500": { $ref: "#/components/responses/ServerError" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
@@ -859,7 +911,7 @@ components:
     Entry:
       type: object
       additionalProperties: false
-      required: [id, operation_id, kind, reason, amount, order_id, hold_id, hold_status, created_at]
+      required: [id, operation_id, kind, reason, amount, order_id, hold_id, hold_status, source, created_at]
       properties:
         id:
           type: string
@@ -876,6 +928,11 @@ components:
           type: string
           enum: [held, captured, released]
           nullable: true
+        source:
+          type: string
+          enum: [welcome, attendance, chest, event, coupon, other]
+          nullable: true
+          description: 받은 줄(reason 이 grant)이 어디서 왔는지(#979). 받은 줄이 아니면 null
         created_at: { type: string, format: date-time }
 
     Product:
@@ -954,6 +1011,17 @@ components:
             outcome: { type: string }
             name: { type: string }
             silver: { $ref: "#/components/schemas/Amount" }
+        expires_at:
+          type: string
+          format: date-time
+          description: 받은 실버가 사라지는 때
+    CouponRedemption:
+      type: object
+      additionalProperties: false
+      required: [code, silver, expires_at]
+      properties:
+        code: { type: string, description: 받은 쿠폰의 코드(대문자) }
+        silver: { $ref: "#/components/schemas/Amount" }
         expires_at:
           type: string
           format: date-time

@@ -37,6 +37,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/coupons/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 쿠폰 코드를 넣어 실버를 받는다(#979). 한 사람은 한 쿠폰을 한 번만 받는다 */
+        post: operations["redeemCoupon"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/me": {
         parameters: {
             query?: never;
@@ -451,6 +468,16 @@ export interface components {
             /** @description 본인인증을 마쳤는가. 아니면 받을 수 없다 */
             verified: boolean;
         };
+        CouponRedemption: {
+            /** @description 받은 쿠폰의 코드(대문자) */
+            code: string;
+            /**
+             * Format: date-time
+             * @description 받은 실버가 사라지는 때
+             */
+            expires_at: string;
+            silver: components["schemas"]["Amount"];
+        };
         Entries: {
             entries: components["schemas"]["Entry"][];
             /** @description 다음 쪽을 읽을 때 before 에 넣는다. 더 읽을 것이 없으면 null */
@@ -474,6 +501,11 @@ export interface components {
             order_id: string | null;
             /** @enum {string} */
             reason: "deposit" | "grant" | "spend" | "expire" | "hold" | "release" | "regroup" | "refund" | "unrefund" | "forfeit";
+            /**
+             * @description 받은 줄(reason 이 grant)이 어디서 왔는지(#979). 받은 줄이 아니면 null
+             * @enum {string|null}
+             */
+            source: "welcome" | "attendance" | "chest" | "event" | "coupon" | "other" | null;
         };
         Error: {
             /** @description 화면과 서버가 갈래를 나누는 오류의 이름(price.unknown 같은 것). 한번 정하면 바꾸지 않는다. 필요한 곳에만 있다 */
@@ -832,6 +864,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Rewards"];
+                };
+            };
+            500: components["responses"]["ServerError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    redeemCoupon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description 넣은 코드. 앞뒤 빈칸을 지우고 대문자로 바꿔 찾는다
+                     * @example LAUNCH-2026
+                     */
+                    code: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 받은 실버 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CouponRedemption"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description 본인인증 전이다(coupon.verification_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description 그런 코드가 없다(coupon.not_found). 틀린 시도로 센다 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description 이미 받았다(coupon.already_redeemed), 다 찼다(coupon.exhausted), 지났거나 멈췄다(coupon.ended), 아직이다(coupon.not_started) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description 한 시간에 열 번 넘게 틀렸다(coupon.too_many_attempts). Retry-After 의 초 뒤에 다시 넣는다 */
+            429: {
+                headers: {
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             500: components["responses"]["ServerError"];
