@@ -20,6 +20,16 @@ const REASONS: Record<Exclude<WalletEntry['reason'], 'hold'>, string> = {
   regroup: '정리',
 };
 
+/** 받은 줄(grant)의 말. 어디서 받았는지(source, #979)로 가른다 */
+const SOURCES: Record<NonNullable<WalletEntry['source']>, string> = {
+  welcome: '환영 실버',
+  attendance: '출석',
+  chest: '보물 상자',
+  event: '이벤트',
+  coupon: '쿠폰',
+  other: '지급',
+};
+
 const HOLDS: Record<NonNullable<WalletEntry['hold_status']>, string> = {
   held: '서술 값 대기',
   captured: '서술 값 사용',
@@ -33,8 +43,9 @@ export function kindLabel(kind: WalletEntry['kind']): string {
   return KINDS[kind];
 }
 
-/** 원장 한 줄의 말. "충전", "서술 값 대기" … */
+/** 원장 한 줄의 말. "충전", "쿠폰", "서술 값 대기" … */
 export function entryLabel(entry: WalletEntry): string {
+  if (entry.reason === 'grant' && entry.source) return SOURCES[entry.source];
   if (entry.reason !== 'hold') return REASONS[entry.reason];
   return entry.hold_status ? HOLDS[entry.hold_status] : '서술 값';
 }
