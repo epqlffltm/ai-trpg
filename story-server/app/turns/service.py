@@ -50,6 +50,7 @@ from conversation_core.window import Turn, select_window
 from server_core import stop_signals
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.assets.schemas import ShortcutDocument, shortcuts_of
 from app.billing.client import Billing
 from app.billing.prices import story_code
 from app.catalog import repository as catalog
@@ -81,6 +82,7 @@ from app.memory.summaries import latest_summary, overflow, render_story
 from app.ratings import Rating, allowed_ratings
 from app.records import repository as records
 from app.records.illustrations import unlocked_scenes
+from app.shortcuts.calls import body_for, model_text
 from app.turns import charging, repository
 from app.turns.actions import action_text, perform
 from app.turns.briefing import Briefing, LoreText, read_briefing
@@ -318,6 +320,17 @@ def card_for(branch: Branch, state: StoryState, stage: Staging, options: PromptO
     return render_card(branch.briefing, scene, options.suggestions, branch.persona, block, branch.memory, story)
 
 
+def turns_of(messages: Sequence[Message], current: uuid.UUID) -> list[Turn]:
+    """
+    가지의 말들을 모델에 보낼 차례들로. current(이번에 답하는 사람의 말)가 부른 단축어의 본문만 붙는다.
+    지난 말은 부른 이름을 뗀 글이 간다(app/shortcuts/calls.py).
+    """
+    return [
+        Turn(message.role, model_text(message.content, message.shortcut_body, message.id == current))
+        for message in messages
+    ]
+
+
 def prompt_for(
     branch: Branch, state: StoryState, stage: Staging, added: Message, options: PromptOptions, lore: LorePlan | None
 ) -> list[ChatMessage]:
@@ -325,8 +338,9 @@ def prompt_for(
     모델에 보낼 메시지. 카드(state 와 장면)와, 가지의 말들에 added 를 더한 것 가운데
     지난 말의 양 안에 드는 최근 것들이다.
     지난 답은 본문(content)만 간다. 다음 답 추천은 가지 않는다(모델이 흉내 내지 않게).
+    added 가 부른 단축어의 본문은 added 에만 붙는다.
     """
-    turns = [Turn(message.role, message.content) for message in [*branch.path, added]]
+    turns = turns_of([*branch.path, added], added.id)
     card = card_for(branch, state, stage, options, lore)
     return build_messages(card, select_window(turns, options.context_chars))
 
@@ -351,9 +365,17 @@ def labels_for(briefing: Briefing, cast: tuple[str, ...]) -> dict[str, str]:
 
 
 def user_message(
-    conversation: Conversation, parent_id: uuid.UUID | None, content: str, now: datetime, role: Role = Role.USER
+    conversation: Conversation,
+    parent_id: uuid.UUID | None,
+    content: str,
+    now: datetime,
+    role: Role = Role.USER,
+    shortcut_body: str | None = None,
 ) -> Message:
-    """사람의 말. parent_id(보통은 지금 가지의 끝) 아래에 붙는다. 아직 저장하지 않는다."""
+    """
+    사람의 말. parent_id(보통은 지금 가지의 끝) 아래에 붙는다. 아직 저장하지 않는다.
+    shortcut_body 는 그 말이 부른 단축어의 본문이다(없으면 None).
+    """
     return Message(
         id=uuid.uuid4(),
         conversation_id=conversation.id,
@@ -366,6 +388,7 @@ def user_message(
         event_id=None,
         ending_id=None,
         chapter_id=None,
+        shortcut_body=shortcut_body,
         created_at=now,
     )
 
@@ -524,16 +547,18 @@ async def begin_turn(
     options: PromptOptions,
     now: datetime,
     edit_of: uuid.UUID | None = None,
+    mine: Sequence[ShortcutDocument] = (),
 ) -> TurnStart:
     """
     차례를 잡고 사람의 말과 기록(pending)을 저장한다. 장면의 인물을 정하고 모델에 보낼 메시지를 함께 만든다.
+    말이 "/이름"으로 시작하면 세계관의 판의 단축어, 없으면 내 단축어(mine, 미리 가져온 것)에서 찾아 본문을 적어 둔다.
     새 말은 지금 가지의 끝에 붙는다. edit_of(고칠 사람의 말)가 있으면 그 말의 부모 아래에 붙는다(새 가지).
     가지의 끝은 차례를 잡은 뒤에 다시 읽는다. 고칠 말이 틀리면 MessageNotFoundError, NotEditableError.
     나머지 실패는 begin 과 같다.
     """
 
     async def record(session: AsyncSession, conversation: Conversation, imported: ImportedWorld, slug: str):
-        return await record_turn(session, viewer, conversation, imported, slug, content, options, now, edit_of)
+        return await record_turn(session, viewer, conversation, imported, slug, content, options, now, edit_of, mine)
 
     return await begin(session_factory, viewer, conversation_id, now, record)
 
@@ -709,6 +734,7 @@ async def record_turn(
     options: PromptOptions,
     now: datetime,
     edit_of: uuid.UUID | None = None,
+    mine: Sequence[ShortcutDocument] = (),
 ) -> TurnStart:
     """
     차례를 쥔 채로 사람의 말과 기록을 세션에 올린다(커밋하지 않는다). 끝난 세션이면 SessionEndedError.
@@ -722,7 +748,8 @@ async def record_turn(
     require_open(branch.world, branch.state)
     changed = talked_state(branch.state)
     state = changed or branch.state
-    message = user_message(conversation, parent_id, content, now)
+    body = body_for(content, shortcuts_of(imported.document), mine)
+    message = user_message(conversation, parent_id, content, now, shortcut_body=body)
     await attach(session, conversation, message, changed)
     generation = add_generation(session, conversation, viewer.claims.user_id, message, slug)
     return turn_start(viewer.claims.user_id, generation, message, branch, state, staging(branch.world, state), options)
@@ -870,9 +897,9 @@ def continue_prompt(
     """
     이어 쓰는 메시지. 카드와, 끊긴 답까지의 가지의 말들에 이어 쓰라는 지시(사람의 차례)를 더한 것 가운데
     지난 말의 양 안에 드는 최근 것들이다. 끊긴 답은 표식이 붙은 줄 그대로 가서 모델이 같은 모양으로 잇는다.
-    다 이어 쓰면 다음 답 추천도 받는다(카드의 지시).
+    다 이어 쓰면 다음 답 추천도 받는다(카드의 지시). 끊긴 답이 답한 말(끝의 바로 앞)이 부른 단축어의 본문이 붙는다.
     """
-    turns = [Turn(message.role, message.content) for message in branch.path]
+    turns = turns_of(branch.path, branch.path[-2].id)
     card = card_for(branch, state, stage, options, lore)
     turns.append(Turn(Role.USER, continuation.instruction()))
     return build_messages(card, select_window(turns, options.context_chars))

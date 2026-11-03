@@ -2121,6 +2121,38 @@
         "title": "SegmentOut",
         "type": "object"
       },
+      "ShortcutOut": {
+        "description": "고를 수 있는 단축어 하나.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ShortcutSource"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "source"
+        ],
+        "title": "ShortcutOut",
+        "type": "object"
+      },
+      "ShortcutSource": {
+        "description": "단축어가 어디의 것인가. work 는 세계관의 판(제작자), mine 은 내 단축어다.",
+        "enum": [
+          "work",
+          "mine"
+        ],
+        "title": "ShortcutSource",
+        "type": "string"
+      },
       "SlotOut": {
         "description": "시간대 하나. start_hour 부터 다음 시간대가 시작할 때까지다.",
         "properties": {
@@ -3755,6 +3787,60 @@
         "summary": "Change Persona",
         "tags": [
           "conversations"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/story/conversations/{conversation_id}/shortcuts": {
+      "get": {
+        "description": "그 세션에서 고를 수 있는 단축어들. 본문은 싣지 않는다.",
+        "operationId": "list_shortcuts_api_v1_story_conversations__conversation_id__shortcuts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ShortcutOut"
+                  },
+                  "title": "Response List Shortcuts Api V1 Story Conversations  Conversation Id  Shortcuts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Shortcuts",
+        "tags": [
+          "shortcuts"
         ],
         "x-audience": "user"
       }

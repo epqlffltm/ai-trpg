@@ -352,6 +352,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/conversations/{conversation_id}/shortcuts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Shortcuts
+         * @description 그 세션에서 고를 수 있는 단축어들. 본문은 싣지 않는다.
+         */
+        get: operations["list_shortcuts_api_v1_story_conversations__conversation_id__shortcuts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/conversations/{conversation_id}/summary": {
         parameters: {
             query?: never;
@@ -1583,6 +1603,23 @@ export interface components {
             text: string;
         };
         /**
+         * ShortcutOut
+         * @description 고를 수 있는 단축어 하나.
+         */
+        ShortcutOut: {
+            /** Description */
+            description: string;
+            /** Name */
+            name: string;
+            source: components["schemas"]["ShortcutSource"];
+        };
+        /**
+         * ShortcutSource
+         * @description 단축어가 어디의 것인가. work 는 세계관의 판(제작자), mine 은 내 단축어다.
+         * @enum {string}
+         */
+        ShortcutSource: "work" | "mine";
+        /**
          * SlotOut
          * @description 시간대 하나. start_hour 부터 다음 시간대가 시작할 때까지다.
          */
@@ -2450,6 +2487,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonaChoiceOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_shortcuts_api_v1_story_conversations__conversation_id__shortcuts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShortcutOut"][];
                 };
             };
             /** @description 입력이 틀렸다 */

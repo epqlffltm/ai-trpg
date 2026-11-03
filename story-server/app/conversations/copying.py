@@ -83,6 +83,7 @@ def copied_messages(
             chapter_id=message.chapter_id,
             edited=message.edited,
             suggestions=list(message.suggestions or ()),
+            shortcut_body=message.shortcut_body,
             created_at=message.created_at,
         )
         for message in path

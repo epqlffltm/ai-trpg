@@ -76,6 +76,7 @@ from app.operators.service import AlreadyHandledError, ReportNotFoundError
 from app.records import router as records
 from app.reports import router as reports
 from app.reports.service import AlreadyReportedError, NotReportableError
+from app.shortcuts import router as shortcuts
 from app.transcripts import router as transcripts
 from app.turns import router as messages
 from app.turns import settler
@@ -280,6 +281,7 @@ def create_app(
     app.include_router(memory.router, prefix=API_PREFIX)
     # 말의 책갈피(#982, chat 과 같다). 모델을 부르지 않는다
     app.include_router(bookmarks.router, prefix=API_PREFIX)
+    app.include_router(shortcuts.router, prefix=API_PREFIX)
     # 모델의 답의 신고(답과 앞의 말을 굳혀 둔다)
     app.include_router(reports.router, prefix=API_PREFIX)
     # 운영자 API(신고를 보고 처리한다. 운영자가 아니면 404)

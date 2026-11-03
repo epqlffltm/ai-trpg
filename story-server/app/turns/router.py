@@ -49,6 +49,7 @@ from server_core.observability.metrics import measured_stream
 from app.core.config import Settings
 from app.core.dependencies import CurrentViewer, Now, utc_now
 from app.limits.routing import GENERATION_LIMIT
+from app.shortcuts import service as shortcuts
 from app.turns import service
 from app.turns.actions import ActionRefusedError, to_engine
 from app.turns.charging import CREDIT_SHORT, GOLD_REQUIRED, MODEL_UNAVAILABLE
@@ -235,8 +236,9 @@ async def send_message(
     """
     state = request.app.state
     options = prompt_options(state.settings)
+    mine = await shortcuts.mine_for(state.asset, viewer, data.content)
     start = await service.begin_turn(
-        state.session_factory, viewer, conversation_id, data.content, options, now, data.edit_of
+        state.session_factory, viewer, conversation_id, data.content, options, now, data.edit_of, mine
     )
     return await stream_turn(request, start, now)
 
