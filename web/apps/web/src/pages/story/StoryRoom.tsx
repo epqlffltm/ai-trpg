@@ -26,6 +26,7 @@ import { Composer } from '../chat/conversation/Composer';
 import { describeChangeProblem } from '../chat/conversation/turnProblem';
 import { TurnNotice } from '../chat/conversation/TurnNotice';
 import { useBookmarks } from '../chat/conversation/useBookmarks';
+import { useConversationShortcuts } from '../chat/conversation/useConversationShortcuts';
 import { freshEnding, pendingChoices } from './storyActions';
 import { StoryActionBar } from './StoryActionBar';
 import { StoryBookmarksButton } from './StoryBookmarksButton';
@@ -54,6 +55,7 @@ export function StoryRoom({ session, turns }: Props) {
   const editing = useAnswerEdit(session.id);
   const bookmarks = useBookmarks('story', session.id);
   const [draft, setDraft] = useState('');
+  const shortcuts = useConversationShortcuts('story', session.id, draft);
   const [choosingModel, setChoosingModel] = useState(false);
   const closeModel = useCallback(() => setChoosingModel(false), []);
   const streaming = turns.turn !== null;
@@ -184,6 +186,7 @@ export function StoryRoom({ session, turns }: Props) {
           canStop={Boolean(turns.turn?.generationId)}
           onSend={() => void send()}
           onStop={() => void turns.stop()}
+          shortcuts={shortcuts}
         />
       )}
       <StoryModelDialog session={session} open={choosingModel} onClose={closeModel} />

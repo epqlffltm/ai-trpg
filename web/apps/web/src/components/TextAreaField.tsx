@@ -2,9 +2,11 @@
 // 이름표가 붙은 여러 줄 입력 칸 하나. 입력 칸(@ai-trpg/ui 의 TextField)과 모양이 같고, 칸 아래에 설명과 오류 글을 둔다.
 // 공통 구성요소로 옮기는 것은 시안(Stitch)을 받을 때 함께 한다.
 
-import { useId, type ReactNode, type TextareaHTMLAttributes } from 'react';
+import { useId, type ReactNode, type Ref, type TextareaHTMLAttributes } from 'react';
 
 type Props = TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  /** 입력 칸 자체(포커스를 옮길 때). 그대로 textarea 에 붙는다 */
+  ref?: Ref<HTMLTextAreaElement>;
   label: string;
   error?: string | undefined;
   hint?: ReactNode;
