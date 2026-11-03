@@ -3,6 +3,7 @@
 // 공개 목록은 로그인했는지에 따라 내용이 다르다(로그인 전에는 전체이용가만). 그래서 열쇠에 그것을 넣는다.
 
 import { queryOptions } from '@tanstack/react-query';
+import { fetchAssetBanners, fetchScenarioBanners } from '../../api/banners';
 import { fetchMyConversations, fetchMyTables, fetchPublicCharacters, fetchPublicScenarios } from '../../api/lists';
 import { fetchStorySessions } from '../../api/story';
 import { fetchPublicWorlds } from '../../api/storyWorlds';
@@ -50,5 +51,20 @@ export function myStorySessionsQuery() {
   return queryOptions({
     queryKey: ['story', 'sessions', 'home'],
     queryFn: ({ signal }) => fetchStorySessions(0, signal),
+  });
+}
+
+/** 홍보 배너(#994). 서버마다 따로다. 로그인했는지에 따라 등급이 다르다 */
+export function scenarioBannersQuery(signedIn: boolean) {
+  return queryOptions({
+    queryKey: ['trpg', 'banners', { signedIn }],
+    queryFn: ({ signal }) => fetchScenarioBanners(signal),
+  });
+}
+
+export function assetBannersQuery(signedIn: boolean) {
+  return queryOptions({
+    queryKey: ['asset', 'banners', { signedIn }],
+    queryFn: ({ signal }) => fetchAssetBanners(signal),
   });
 }

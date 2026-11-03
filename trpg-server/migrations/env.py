@@ -23,6 +23,7 @@ from app.ai_log import models as ai_models  # noqa: F401
 from app.assets import models as asset_models  # noqa: F401
 from app.assets.bestiaries import models as bestiary_models  # noqa: F401
 from app.assets.campaigns import models as campaign_models  # noqa: F401
+from app.banners import models as banner_models  # noqa: F401
 from app.billing import models as billing_models  # noqa: F401
 from app.calendar import models as calendar_models  # noqa: F401
 from app.campaigns import models as campaign_run_models  # noqa: F401

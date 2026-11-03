@@ -39,6 +39,7 @@ from server_core.observability.tracing import FASTAPI_TELEMETRY, build_resource,
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api import health, me, readiness
+from app.banners import router as banners
 from app.characters import listings as character_listings
 from app.characters import router as characters
 from app.characters import supply as character_supply
@@ -193,6 +194,9 @@ def create_app(
     app.add_exception_handler(OwnCharacterReportError, reports.handle_own_character)
     app.add_exception_handler(AlreadyReportedError, reports.handle_already_reported)
     app.include_router(operators.router, prefix=API_PREFIX)
+    # 첫 화면의 홍보 배너(#994). 보는 주소와 운영자의 주소
+    app.include_router(banners.public_router, prefix=API_PREFIX)
+    app.include_router(banners.admin_router, prefix=API_PREFIX)
 
     app.include_router(lorebooks.router, prefix=API_PREFIX)
     app.add_exception_handler(LorebookNotFoundError, lorebooks.handle_lorebook_not_found)

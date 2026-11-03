@@ -25,6 +25,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai_log.call_log import DbCallLog
+from app.banners.models import Banner
 from app.campaigns.models import CampaignCarry, CampaignQuestResult, CampaignSeat
 from app.catalog.models import Grade
 from app.engine.dice import ScriptedDice
@@ -242,6 +243,9 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         sanctioned = {'operator_id': OTHER, 'sanctioned_at': datetime.now(UTC), 'reason': '신고'}
         session.add(ScenarioSanction(version_id=version_id, scenario_id=uuid.uuid4(), owner_id=ME, **sanctioned))
         session.add(PublishingBan(user_id=ME, banned_at=datetime.now(UTC), reason='신고'))
+        # 홍보 배너(#994). 운영자의 주소 대신 직접 넣는다
+        banner = {'scenario_id': uuid.UUID(scenario['id']), 'starts_at': datetime.now(UTC), 'created_by': OTHER}
+        session.add(Banner(**banner))
         outbox.put(session, ME, 'narration_model.retiring', 'narration_model.retiring:1', {})
         run_id = uuid.UUID(run.json()['id'])
         carry = CampaignCarry(run_id=run_id, position=0, user_id=ME, carry={})

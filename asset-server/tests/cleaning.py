@@ -9,6 +9,7 @@ conftest.py 에 두지 않고 따로 둔다. 테스트 파일이 conftest.py 를
 from sqlalchemy import Table, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+import app.banners.models  # noqa: F401
 import app.characters.models  # noqa: F401
 import app.images.models  # noqa: F401
 import app.lorebooks.models  # noqa: F401

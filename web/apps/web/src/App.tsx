@@ -23,6 +23,7 @@ import {
   CampaignsPage,
   BoardIndexPage,
   BoardListPage,
+  BannersPage,
   BoardSearchPage,
   CharacterBrowsePage,
   CharacterEditPage,
@@ -277,6 +278,7 @@ export function App() {
           }
         >
           <Route path="reports" element={<ReportsPage />} />
+          <Route path="banners" element={<BannersPage />} />
           <Route path="reports/messages/:reportId" element={<MessageReportPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
