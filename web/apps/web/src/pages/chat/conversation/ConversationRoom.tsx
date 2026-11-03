@@ -28,6 +28,7 @@ import { PicturePane } from './PicturePane';
 import { describeChangeProblem } from './turnProblem';
 import { TurnNotice } from './TurnNotice';
 import { useBookmarks } from './useBookmarks';
+import { useConversationShortcuts } from './useConversationShortcuts';
 import type { TurnOpener, useConversationTurn } from './useConversationTurn';
 import { WorldToolbar } from './WorldToolbar';
 import { putQueryData } from '../../../queryClient';
@@ -39,6 +40,7 @@ export function ConversationRoom({ detail, turns }: Props) {
   const editing = useAssistantEdit(detail.id);
   const bookmarks = useBookmarks('chat', detail.id);
   const [draft, setDraft] = useState('');
+  const shortcuts = useConversationShortcuts('chat', detail.id, draft);
   const [choosingModel, setChoosingModel] = useState(false);
   const closeModel = useCallback(() => setChoosingModel(false), []);
   const streaming = turns.turn !== null;
@@ -124,6 +126,7 @@ export function ConversationRoom({ detail, turns }: Props) {
         canStop={Boolean(turns.turn?.generationId)}
         onSend={() => void send()}
         onStop={() => void turns.stop()}
+        shortcuts={shortcuts}
       />
       <ModelDialog detail={detail} open={choosingModel} onClose={closeModel} />
     </main>

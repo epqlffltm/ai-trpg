@@ -2,10 +2,13 @@
 // 말 쓰기(C3). 다음 답 추천(누르면 입력칸을 채운다. 보내는 것은 사람이다), 입력칸, 보내기와 멈추기.
 // Enter 로 보내고 Shift+Enter 로 줄을 바꾼다. 한글을 조합하는 중의 Enter 는 보내지 않는다.
 // 답을 받는 중이면 멈추기만 누를 수 있다. 4000자까지, 빈칸만 있는 말은 보내지 않는다(서버의 규칙과 같다).
+// "/"로 시작해 이름을 적는 중이면 고를 수 있는 단축어를 보인다(#981, shortcutPicks.ts). 고르면 "/이름 "이 되고 입력칸으로 돌아간다.
 
 import { Button } from '@ai-trpg/ui';
-import type { FormEvent, KeyboardEvent } from 'react';
+import { useRef, type FormEvent, type KeyboardEvent } from 'react';
+import type { ConversationShortcut } from '../../../api/conversationShortcuts';
 import { TextAreaField } from '../../../components/TextAreaField';
+import { pickedDraft, pickLabel, picksFor } from './shortcutPicks';
 
 export const MESSAGE_MAX = 4000;
 
@@ -20,10 +23,19 @@ type Props = {
   canStop: boolean;
   onSend: () => void;
   onStop: () => void;
+  /** 고를 수 있는 단축어(#981). 없으면 고르는 목록을 보이지 않는다 */
+  shortcuts?: readonly ConversationShortcut[];
 };
 
-export function Composer({ draft, onDraft, suggestions, streaming, disabled, canStop, onSend, onStop }: Props) {
+export function Composer({ draft, onDraft, suggestions, streaming, disabled, canStop, onSend, onStop, shortcuts = [] }: Props) {
   const sendable = canSend(draft) && !disabled;
+  const input = useRef<HTMLTextAreaElement>(null);
+  const picks = picksFor(draft, shortcuts);
+
+  function pick(shortcut: ConversationShortcut) {
+    onDraft(pickedDraft(shortcut));
+    input.current?.focus();
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -49,7 +61,18 @@ export function Composer({ draft, onDraft, suggestions, streaming, disabled, can
           ))}
         </ul>
       ) : null}
-      <TextAreaField label="보낼 말" rows={3} maxLength={MESSAGE_MAX} value={draft} onChange={(event) => onDraft(event.target.value)} onKeyDown={sendOnEnter} />
+      {picks.length > 0 ? (
+        <ul className="plain-list chat-suggestions" aria-label="단축어">
+          {picks.map((shortcut) => (
+            <li key={shortcut.name}>
+              <Button variant="quiet" onClick={() => pick(shortcut)}>
+                {pickLabel(shortcut)}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <TextAreaField ref={input} label="보낼 말" rows={3} maxLength={MESSAGE_MAX} value={draft} onChange={(event) => onDraft(event.target.value)} onKeyDown={sendOnEnter} />
       <div className="conversation__send">
         {streaming ? (
           <Button variant="secondary" disabled={!canStop} onClick={onStop}>
