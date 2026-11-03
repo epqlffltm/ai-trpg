@@ -280,6 +280,29 @@
         ],
         "type": "object"
       },
+      "CouponRedemption": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "받은 쿠폰의 코드(대문자)",
+            "type": "string"
+          },
+          "expires_at": {
+            "description": "받은 실버가 사라지는 때",
+            "format": "date-time",
+            "type": "string"
+          },
+          "silver": {
+            "$ref": "#/components/schemas/Amount"
+          }
+        },
+        "required": [
+          "code",
+          "silver",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "Entries": {
         "additionalProperties": false,
         "properties": {
@@ -359,6 +382,19 @@
               "forfeit"
             ],
             "type": "string"
+          },
+          "source": {
+            "description": "받은 줄(reason 이 grant)이 어디서 왔는지(#979). 받은 줄이 아니면 null",
+            "enum": [
+              "welcome",
+              "attendance",
+              "chest",
+              "event",
+              "coupon",
+              "other"
+            ],
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -370,6 +406,7 @@
           "order_id",
           "hold_id",
           "hold_status",
+          "source",
           "created_at"
         ],
         "type": "object"
@@ -988,6 +1025,112 @@
         "summary": "하루 양과 보물 상자의 확률. 로그인 없이 누구나 본다",
         "tags": [
           "attendance"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/billing/coupons/redeem": {
+      "post": {
+        "operationId": "redeemCoupon",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "code": {
+                    "description": "넣은 코드. 앞뒤 빈칸을 지우고 대문자로 바꿔 찾는다",
+                    "example": "LAUNCH-2026",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponRedemption"
+                }
+              }
+            },
+            "description": "받은 실버"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "본인인증 전이다(coupon.verification_required)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "그런 코드가 없다(coupon.not_found). 틀린 시도로 센다"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "이미 받았다(coupon.already_redeemed), 다 찼다(coupon.exhausted), 지났거나 멈췄다(coupon.ended), 아직이다(coupon.not_started)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "한 시간에 열 번 넘게 틀렸다(coupon.too_many_attempts). Retry-After 의 초 뒤에 다시 넣는다",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "쿠폰 코드를 넣어 실버를 받는다(#979). 한 사람은 한 쿠폰을 한 번만 받는다",
+        "tags": [
+          "coupons"
         ],
         "x-audience": "user"
       }
@@ -2317,6 +2460,9 @@
     },
     {
       "name": "attendance"
+    },
+    {
+      "name": "coupons"
     },
     {
       "name": "webhooks"

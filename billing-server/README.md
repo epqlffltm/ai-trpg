@@ -290,6 +290,7 @@ uv run --no-project python tools/export_openapi.py billing
 | `GET /api/v1/billing/attendance` | 200, 오늘의 출석 | 오늘 받았는지, 주기의 며칠째인지, 오늘의 하루 양, 상자를 여는 날인지. 본인인증 전이면 `verified` 가 `false` |
 | `POST /api/v1/billing/attendance` | 201, 받은 보상 | 오늘의 출석 보상을 받는다. 본인인증 전이면 403, 오늘 받았으면 409 |
 | `GET /api/v1/billing/attendance/rewards` | 200, 보상표 | 하루 양과 보물 상자의 확률. **로그인 없이** 누구나 본다 |
+| `POST /api/v1/billing/coupons/redeem` | 201, 받은 실버 | 쿠폰 코드를 넣어 실버를 받는다(#979). 아래 [크레딧](#크레딧)의 "쿠폰" |
 
 로그인 없이 받는 주소가 하나 있다. 결제 대행사가 부른다. 토큰 대신 본문의 서명을 확인한다.
 
@@ -346,6 +347,7 @@ uv run --no-project python tools/export_openapi.py billing
 | `amount` | 늘었으면 양수, 줄었으면 음수 |
 | `order_id` | 이 크레딧이 들어온 주문. 주문으로 들어온 줄이 아니면 `null` |
 | `hold_id` | 이 줄을 남긴 홀드. 빠진 줄(`hold`)과 돌아온 줄(`release`)이 같은 값을 갖는다. 그 밖의 줄은 `null` |
+| `source` | 받은 줄(`reason` 이 `grant`)이 어디서 왔는지(#979). 지급 묶음의 이름의 앞부분으로 안다. `welcome`(환영), `attendance`(출석), `chest`(보물 상자), `event`(이벤트 실버), `coupon`(쿠폰), `other`. 받은 줄이 아니면 `null` |
 | `hold_status` | 그 홀드의 지금 상태(#430). `held`(서술의 결과를 기다림), `captured`(확정되어 그대로 쓰임), `released`(돌려줌. 같은 `hold_id` 의 `release` 줄이 있다). 홀드의 줄이 아니면 `null` |
 
 확정은 원장에 줄을 남기지 않는다([홀드](#홀드)). 그래서 `hold` 줄만으로는 아직 기다리는지 쓰였는지 알 수 없어, 읽을 때 그 홀드의 상태를 붙인다.
@@ -1001,7 +1003,8 @@ narration.old-model.i0.o0,stop,,,
 - 5xx 에는 `code` 가 없다. 이름으로 가릴 것이 없고, 같은 요청을 다시 보내면 된다
 - 사용자가 부르는 주소(`/me`, `/wallet`, `/orders`)의 오류에는 `code` 가 없다(칸이 빠진다). 웹 화면은 상태 코드와 `detail` 만 쓴다.
   하나 다른 것이 결제 자격의 403 이다(`payment.verification_required`, `payment.guardian_consent_required`, 위의 "결제할 수 있는 사람"). 화면이 갈 곳을 가른다.
-  출석의 403·409(`attendance.verification_required`, `attendance.already_claimed`, [크레딧](#크레딧)의 "출석과 보물 상자")와
+  출석의 403·409(`attendance.verification_required`, `attendance.already_claimed`, [크레딧](#크레딧)의 "출석과 보물 상자"),
+  쿠폰의 403·404·409·429(`coupon.*`, 같은 곳의 "쿠폰")와
   청약철회의 409(`refund.*`, [주문과 결제](#주문과-결제)의 "청약철회")도 같다. 화면이 할 수 없는 까닭을 나눠 보인다
 - 상태 코드는 그대로다. `code` 를 읽지 않는 옛 게임 서버도 지금처럼 돈다
 
@@ -1210,7 +1213,7 @@ POST /api/v1/billing/service/grants/welcome
 
 "한 번만"은 지급 묶음에 붙는 이름(`free_grants.grant_key`)으로 지킨다. 환영 크레딧의 이름은 `welcome` 이다.
 한 사용자가 같은 이름의 지급을 둘 가질 수 없게 DB 의 유일 색인이 막는다. 이름이 없는 지급은 몇 번이고 줄 수 있다.
-출석은 날마다 `attendance-<날짜>`, 이벤트 지급은 `event-<이름>` 이다(아래 "이벤트 실버").
+출석은 날마다 `attendance-<날짜>`, 이벤트 지급은 `event-<이름>`, 쿠폰은 `coupon-<쿠폰 번호>` 다(아래 "이벤트 실버", "쿠폰").
 
 **두 서버가 나눠 지키는 것.** 이 서버는 "사용자 번호 하나에 한 번"을 지킨다. 한 사람이 계정을 여럿 만들어 여러 번 받는 것은
 이 서버가 알 수 없다. 이 서버는 메일 주소를 모른다. 그것은 인증 서버가 "메일함마다 한 번"으로 지킨다.
@@ -1284,6 +1287,41 @@ POST /api/v1/billing/attendance
 - 같은 사용자의 출석은 트랜잭션 잠금(`pg_advisory_xact_lock`)으로 차례로 처리한다. 자정 무렵에 두 요청이 함께 와도 뒤의 것이 앞의 것의 줄을 보고 센다
 - 본인인증은 결제 자격의 표(`payment_eligibility`)로 본다. 인증 서버는 본인인증을 한 사용자만 알려 준다. 막 인증한 사용자는 그것이 닿기까지 몇 초 동안 403 을 받을 수 있다
 - `ATTENDANCE_SILVER` 를 바꾸면 그 뒤의 출석부터 적용된다. 주기를 줄여 어제가 새 주기의 길이를 넘으면 1일째다
+
+**쿠폰(#979, 2026-11-03 결정).** 운영자가 코드를 만들고(`cmd/coupons`), 본인인증을 한 사용자가 그 코드를 넣으면 실버를 받는다.
+
+```
+go run ./cmd/coupons create -code LAUNCH-2026 -silver 500 -from 2026-11-10 -until 2026-11-30 -max 1000 -reason "출시 기념"
+go run ./cmd/coupons list
+go run ./cmd/coupons stop LAUNCH-2026
+```
+
+- **실버만 준다.** 골드는 환불과 청약철회의 계산에 들어가서 주지 않는다. 받은 실버는 스탠다드에만 쓴다
+- **공용 코드다.** 한 코드를 여럿이 넣는다. 한 사람은 한 쿠폰을 한 번만 받는다. `-max` 는 모두 합쳐 받을 수 있는 사람의 수다(적지 않으면 한도 없음, 1 이면 한 사람용처럼 쓴다)
+- 코드는 영문 대문자, 숫자, `-` 로 된 4자에서 32자다. 넣을 때 앞뒤 빈칸을 지우고 대문자로 바꿔 찾는다(`launch-2026` 도 된다)
+- `-from` 날의 한국 0시부터 `-until` 날의 한국 24시 전까지 넣을 수 있다. `-days` 는 받은 실버가 사라질 때까지의 날 수다(1~365, 적지 않으면 `FREE_CREDIT_TTL`)
+- 멈춘 쿠폰은 다시 열지 않는다. 이미 받은 실버는 그대로다. 만들기와 멈추기는 로그(`coupon.create`, `coupon.stop`)에 남는다. 관리 서버가 생기면 같은 일을 관리자용 주소로 연다
+- **두 번 받기는 두 겹으로 막는다.** 받은 기록의 기본 키(쿠폰, 사용자, `coupon_redemptions`)와 지급의 이름(`coupon-<번호>`)이다. 받은 기록, 받은 사람의 수, 실버는 한 트랜잭션이다
+- **한도는 쿠폰의 줄을 잠가 지킨다**(`SELECT … FOR UPDATE`). 같은 쿠폰을 받는 요청은 차례로 지나가며 뒤의 것은 앞의 것이 늘린 수를 본다. 수가 한도를 넘으면 DB 의 제약(`coupons_redemptions_in_range`)도 막는다. 인기 쿠폰은 한 줄에 요청이 몰리지만 지금의 규모에서는 문제가 되지 않는다
+- **틀린 코드를 마구 넣어 보는 것을 막는다.** 사람마다 한 시간 창에 틀린 코드(없는 코드, 모양이 틀린 코드)를 열 번 넣으면 창이 끝날 때까지 429 다(`coupon_attempts`). 있는 코드가 멈췄거나 지난 것은 세지 않는다. IP 마다는 프록시가 이 주소만 1분에 10번으로 막는다(`docker/nginx/templates/api.inc.template`, 인증의 민감한 요청과 같은 구역)
+- 받은 기록과 틀린 수는 탈퇴해도 남는다(출석의 기록과 같다. 공개 ID 만 있다)
+- 원장의 줄은 다른 지급과 같은 `grant` 다. 원장을 읽으면 `source` 가 `coupon` 이다
+
+```
+POST /api/v1/billing/coupons/redeem
+{"code": "launch-2026"}
+201 {"code":"LAUNCH-2026","silver":"500","expires_at":"2026-12-10T03:00:00Z"}
+```
+
+| 상태 | `code` | 뜻 | 화면이 할 일 |
+| --- | --- | --- | --- |
+| 403 | `coupon.verification_required` | 본인인증을 하지 않았다 | 본인인증으로 보낸다 |
+| 404 | `coupon.not_found` | 그런 코드가 없다(모양이 틀린 것도). 틀린 시도로 센다 | 코드를 다시 확인하라고 한다 |
+| 409 | `coupon.already_redeemed` | 이미 받았다 | "이미 받은 쿠폰" |
+| 409 | `coupon.exhausted` | 받을 수 있는 사람의 수가 다 찼다 | "모두 받아 간 쿠폰" |
+| 409 | `coupon.ended` | 기간이 지났거나 운영자가 멈췄다 | "기간이 지난 쿠폰" |
+| 409 | `coupon.not_started` | 아직 쓸 수 있는 때가 아니다 | "아직 쓸 수 없는 쿠폰" |
+| 429 | `coupon.too_many_attempts` | 한 시간에 열 번 넘게 틀렸다. `Retry-After` 의 초 뒤에 다시 넣는다 | 기다리라고 한다 |
 
 **쓰는 순서.** 홀드로 뺄 때도 같은 순서다(프리미엄 홀드는 산 크레딧만 쓴다). `SPEND_FREE_FIRST` 가 `true`(기본값)면 무료 크레딧을 먼저 쓰고 모자란 만큼만 산 크레딧에서 뺀다.
 `false` 면 그 반대다. 무료 크레딧끼리는 설정과 상관없이 **먼저 사라지는 것부터**, 산 크레딧끼리는 **먼저 들어온 묶음부터** 쓴다.
@@ -1582,6 +1620,7 @@ go run ./cmd/migrate down     마지막으로 적용한 것 하나를 되돌린�
 `00018_orders_by_user.sql` 은 언제든 되돌려진다. 색인 하나뿐이다. 되돌리면 주문 목록(`GET /orders`)이 느려질 뿐이다.
 `00019_user_notices_credit_short.sql` 은 언제든 되돌려진다. 아직 보내지 않은 크레딧 부족의 알림이 지워진다. 되돌린 서버가 402 를 답하면 적지 못해 warning 이 남는다(402 는 그대로다).
 `00020_withdrawal.sql` 은 원장에 `forfeit` 줄이 있거나 탈퇴로 돌려준 홀드가 하나라도 있으면 되돌려지지 않는다. 지우면 탈퇴로 정리한 기록이 사라진다.
+`00021_coupons.sql` 은 쿠폰을 받은 기록이 하나라도 있으면 되돌려지지 않는다. 지갑의 지급(`coupon-<번호>`)이 그 기록을 가리킨다.
 
 `00005_expiry.sql` 을 적용할 때 이미 있는 `held` 홀드는 **적용한 때부터** 하루를 받는다. 만든 때부터 세면 적용하자마자 오래된 것이 한꺼번에 풀린다.
 이미 있는 주문은 만든 때부터 하루다. `pending` 은 돈이 오간 적이 없어 바로 끝나도 안전하다.
@@ -1599,6 +1638,7 @@ go run ./cmd/migrate down     마지막으로 적용한 것 하나를 되돌린�
 `00015_price_basic.sql` 과 `00016_price_promo.sql` 도 서버를 켠 채로 적용해도 된다. 서버는 가격표를 읽기만 한다. 다만 새 서버는 `promo` 칸을 읽으므로 새 서버를 띄우기 전에 `00016` 까지 적용한다.
 `promo` 칸에는 기본값이 없으므로, 적용한 뒤에는 새 `cmd/prices` 로 값을 넣는다(옛 것은 표시를 적지 않아 실패한다). 이미 있는 줄은 모두 정가(`false`)다.
 `00020_withdrawal.sql` 도 서버를 켠 채로 적용해도 된다. 이유와 색인을 늘리기만 한다. 다만 새 서버는 이것을 적용한 뒤에 띄운다(탈퇴를 받으면 새 이유를 적는다).
+`00021_coupons.sql` 도 서버를 켠 채로 적용해도 된다. 새 표 셋을 만들 뿐이다. 새 서버는 이것을 적용한 뒤에 띄운다(쿠폰의 주소가 그 표를 읽는다).
 조건을 다시 거는 동안 원장과 홀드의 쓰기가 잠시 멈춘다(있는 줄을 모두 다시 본다).
 
 서버와 같은 설정(`.env` 의 `DATABASE_URL`, `DB_SCHEMA`)을 읽는다. 접속 주소를 명령 줄에 적지 않는다.
@@ -2006,6 +2046,7 @@ billing-server/
   cmd/reconcile/main.go   대사. 하루 한 번 돌려 장부를 맞춰 보고, 끝 코드로 결과를 알린다
   cmd/orders/main.go      결과를 끝내 모르는 주문을 보고, 운영자가 결과를 정하는 명령
   cmd/grants/main.go      명단의 사용자들에게 이벤트 실버를 한 번씩 주는 명령(운영자용)
+  cmd/coupons/main.go     쿠폰을 만들고, 보고, 멈추는 명령(운영자용, #979)
   cmd/openapi/main.go     API 목록을 읽고 검사해 JSON 으로 표준 출력에 낸다(tools/export_openapi.py 가 부른다)
   api/                    API 목록(openapi.yaml, 손으로 쓴다). 실행 파일과 테스트에 담긴다(api.go)
   migrations/             테이블을 만들고 바꾸는 SQL. 실행 파일에 담긴다(embed.go)
@@ -2058,6 +2099,11 @@ billing-server/
       store.go              오늘의 출석, 받기(잠그고, 적고, 실버를 한 트랜잭션에서)
       queries.sql           이 패키지가 쓰는 SQL 전부
       attendancedb/         sqlc 가 queries.sql 에서 만든 코드
+    coupon/               쿠폰(#979). 코드를 넣으면 실버를 한 번. 공용 코드, 전체 한도, 틀린 시도의 한도
+      coupon.go             타입, 오류, 코드의 모양, 받을 수 있는 때, 틀린 시도의 창, 만들 값의 확인. DB 를 건드리지 않는다
+      store.go              받기(쿠폰을 잠그고, 실버를 주고, 기록을 한 트랜잭션에서), 틀린 시도 세기, 만들기, 목록, 멈추기
+      queries.sql           이 패키지가 쓰는 SQL 전부
+      coupondb/             sqlc 가 queries.sql 에서 만든 코드
     guardiannotice/       미성년자의 결제를 보호자에게 알리라고 인증 서버에 보내기. 주문에서 찾아 적고, 서명해 보낸다
       notice.go             타입(알릴 일, 종류, 결과), 보내는 것의 모양
       store.go              적기(주문에서 찾기), 차지하고 보내기, 다시 보내기

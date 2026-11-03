@@ -161,8 +161,8 @@ func TestEntriesReturnsLinesAndTheNextCursor(t *testing.T) {
 		t.Fatalf("상태 코드 = %d, 기대 = %d", response.Code, http.StatusOK)
 	}
 	want := `{"entries":[` +
-		`{"id":"42","operation_id":"99999999-8888-4777-8666-555555555555","kind":"paid","reason":"spend","amount":"-20","order_id":null,"hold_id":null,"hold_status":null,"created_at":"2026-03-02T09:00:00Z"},` +
-		`{"id":"41","operation_id":"99999999-8888-4777-8666-555555555555","kind":"free","reason":"spend","amount":"-30","order_id":null,"hold_id":null,"hold_status":null,"created_at":"2026-03-02T09:00:00Z"}` +
+		`{"id":"42","operation_id":"99999999-8888-4777-8666-555555555555","kind":"paid","reason":"spend","amount":"-20","order_id":null,"hold_id":null,"hold_status":null,"source":null,"created_at":"2026-03-02T09:00:00Z"},` +
+		`{"id":"41","operation_id":"99999999-8888-4777-8666-555555555555","kind":"free","reason":"spend","amount":"-30","order_id":null,"hold_id":null,"hold_status":null,"source":null,"created_at":"2026-03-02T09:00:00Z"}` +
 		`],"next_before":"41"}`
 	if got := body(response); got != want {
 		t.Errorf("본문 = %s\n기대 = %s", got, want)
@@ -289,5 +289,17 @@ func TestWalletWithTheRealDatabase(t *testing.T) {
 	rest := asUser(t, service, user.String(), entriesURL+"?limit=3&before="+*parsed.NextBefore)
 	if got := body(rest); !strings.Contains(got, `"reason":"deposit","amount":"100"`) || !strings.HasSuffix(got, `"next_before":null}`) {
 		t.Errorf("나머지 쪽 = %s", got)
+	}
+}
+
+func TestAGrantLineSaysWhereItCameFrom(t *testing.T) {
+	reader := &fakeWallet{page: wallet.Page{Entries: []wallet.Entry{
+		{ID: 9, Kind: wallet.KindFree, Reason: wallet.ReasonGrant, Amount: 300, Source: wallet.SourceCoupon},
+	}}}
+
+	response := asUser(t, reader, testenv.UserID, entriesURL)
+
+	if response.Code != http.StatusOK || !strings.Contains(body(response), `"source":"coupon"`) {
+		t.Fatalf("받은 줄 = %d %s, source 가 coupon 이어야 한다", response.Code, body(response))
 	}
 }

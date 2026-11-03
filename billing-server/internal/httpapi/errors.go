@@ -54,6 +54,21 @@ const (
 	codeAttendanceVerificationRequired = "attendance.verification_required"
 	// codeAttendanceAlreadyClaimed 는 오늘 이미 출석 보상을 받았다는 것이다(409). 다음 날 한국 자정에 다시 받을 수 있다.
 	codeAttendanceAlreadyClaimed = "attendance.already_claimed"
+	// 쿠폰을 받지 못한 까닭(#979). 화면이 까닭마다 안내를 보인다.
+	// codeCouponNotFound 는 그런 코드가 없다는 것이다(404). 모양이 틀린 코드도 같다. 틀린 시도로 센다.
+	codeCouponNotFound = "coupon.not_found"
+	// codeCouponVerificationRequired 는 본인인증을 하지 않아 받을 수 없다는 것이다(403). 화면은 본인인증으로 보낸다.
+	codeCouponVerificationRequired = "coupon.verification_required"
+	// codeCouponAlreadyRedeemed 는 이미 받은 쿠폰이라는 것이다(409).
+	codeCouponAlreadyRedeemed = "coupon.already_redeemed"
+	// codeCouponExhausted 는 받을 수 있는 사람의 수가 다 찼다는 것이다(409).
+	codeCouponExhausted = "coupon.exhausted"
+	// codeCouponEnded 는 기간이 지났거나 운영자가 멈춘 쿠폰이라는 것이다(409).
+	codeCouponEnded = "coupon.ended"
+	// codeCouponNotStarted 는 아직 쓸 수 있는 때가 오지 않았다는 것이다(409).
+	codeCouponNotStarted = "coupon.not_started"
+	// codeCouponTooManyAttempts 는 틀린 코드를 너무 자주 넣었다는 것이다(429). Retry-After 의 초 뒤에 다시 넣는다.
+	codeCouponTooManyAttempts = "coupon.too_many_attempts"
 	// 청약철회를 할 수 없는 까닭(409, #430). 화면이 "왜 환불할 수 없는지"를 보인다.
 	// codeRefundWindowClosed 는 치른 지 7일이 지났다는 것이다.
 	codeRefundWindowClosed = "refund.window_closed"

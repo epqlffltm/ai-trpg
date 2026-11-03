@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,6 +41,8 @@ var (
 	ErrInvalidGrantKey = errors.New("지급의 이름은 영문 소문자, 숫자, 밑줄, 붙임표로 된 1자에서 64자여야 합니다")
 	// ErrAlreadyGranted 는 이 사용자가 그 이름의 지급을 이미 받았다는 오류다. 이 오류가 나면 아무것도 바뀌지 않는다.
 	ErrAlreadyGranted = errors.New("이미 받은 크레딧입니다")
+	// ErrInvalidTTL 은 무료 크레딧이 사라질 때까지의 시간이 음수라는 오류다.
+	ErrInvalidTTL = errors.New("무료 크레딧이 사라질 때까지의 시간은 0 이상이어야 합니다")
 	// ErrInsufficient 는 쓰려는 양이 가진 것보다 많다는 오류다. 이 오류가 나면 아무것도 바뀌지 않는다.
 	ErrInsufficient = errors.New("크레딧이 모자랍니다")
 	// ErrPaidInsufficient 는 산 크레딧(골드)으로만 내야 하는데 산 크레딧이 모자라다는 오류다(PaidOnly).
@@ -159,7 +162,55 @@ type Entry struct {
 	HoldID *uuid.UUID
 	// HoldStatus 는 그 홀드의 지금 상태다(읽은 순간의 것). 홀드의 줄이 아니면 비어 있다(#430).
 	HoldStatus HoldStatus
-	CreatedAt  time.Time
+	// Source 는 받은 줄(grant)이 어디서 왔는지다(#979). 받은 줄이 아니면 비어 있다.
+	Source    GrantSource
+	CreatedAt time.Time
+}
+
+// GrantSource 는 무료 크레딧을 받은 길이다. 지급 묶음의 이름(free_grants.grant_key)의 앞부분으로 안다.
+// 이름이 없는 지급(GrantFree)이나 모르는 앞부분은 other 다.
+type GrantSource string
+
+const (
+	// SourceWelcome 은 환영 크레딧이다(welcome).
+	SourceWelcome GrantSource = "welcome"
+	// SourceAttendance 는 출석의 하루 양이다(attendance-<날짜>).
+	SourceAttendance GrantSource = "attendance"
+	// SourceChest 는 출석의 보물 상자다(chest-<날짜>).
+	SourceChest GrantSource = "chest"
+	// SourceEvent 는 운영자의 이벤트 실버다(event-<이름>).
+	SourceEvent GrantSource = "event"
+	// SourceCoupon 은 쿠폰이다(coupon-<번호>, #979).
+	SourceCoupon GrantSource = "coupon"
+	// SourceOther 는 그 밖의 지급이다.
+	SourceOther GrantSource = "other"
+)
+
+// grantSourcePrefixes 는 지급의 이름의 앞부분과 그 받은 길이다. welcome 은 이름 전체가 같아야 해서 따로 본다.
+var grantSourcePrefixes = []struct {
+	prefix string
+	source GrantSource
+}{
+	{"attendance-", SourceAttendance},
+	{"chest-", SourceChest},
+	{"event-", SourceEvent},
+	{"coupon-", SourceCoupon},
+}
+
+// SourceOf 는 받은 줄의 지급 묶음의 이름으로 받은 길을 안다. reason 이 grant 가 아니면 비어 있다.
+func SourceOf(reason Reason, grantKey string) GrantSource {
+	if reason != ReasonGrant {
+		return ""
+	}
+	if grantKey == "welcome" {
+		return SourceWelcome
+	}
+	for _, known := range grantSourcePrefixes {
+		if strings.HasPrefix(grantKey, known.prefix) {
+			return known.source
+		}
+	}
+	return SourceOther
 }
 
 // HoldStatus 는 원장의 홀드 줄이 가리키는 홀드의 지금 상태다. 화면이 hold 줄을 "기다림", "씀", "돌아옴"으로 나눠 보인다.
