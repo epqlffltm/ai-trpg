@@ -13,7 +13,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, SmallInteger, String, Text, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, SmallInteger, String, Text, false, func
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -115,6 +115,11 @@ class Listing(Base):
 
     # 태그. 제작자가 자유롭게 적는다
     tags: Mapped[list[str]] = mapped_column(ARRAY(String(TAG_MAX_LENGTH)), default=list)
+
+    # 링크 공개(#993). 참이면 공개해도 목록과 검색에 나오지 않는다.
+    # 주소(시나리오 ID)를 아는 사람만 소개를 열고 테이블을 만든다.
+    # 시나리오 ID 는 추측할 수 없는 UUID 다. 링크를 바꾸는 길은 없다. 막으려면 공개를 내린다
+    unlisted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

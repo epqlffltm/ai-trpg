@@ -2,6 +2,7 @@
 // 세계관의 기본 탭(D7): 이름, 장르, 태그, 등급, 공개 범위, 대표 그림. 지우기도 여기에 둔다.
 
 import { SelectField, TextField } from '@ai-trpg/ui';
+import { ShareAddress } from '../../../components/ShareAddress';
 import { useState } from 'react';
 import type { StoryWorldDetail } from '../../../api/storyWorlds';
 import { ImagePicker } from '../../../components/ImagePicker';
@@ -12,7 +13,11 @@ import { useWorldSave } from './useWorldSave';
 import { NAME_MAX, toWorldBasicsBody, worldBasicsDraft, worldBasicsHints, type WorldBasicsDraft, type WorldRating, type WorldVisibility } from './worldBasicsForm';
 
 const RATINGS: Record<WorldRating, string> = { all: '전체 이용가', adult: '성인용' };
-const VISIBILITIES: Record<WorldVisibility, string> = { private: '비공개(나만 시작한다)', public: '공개(게시한 판으로 누구나 시작한다)' };
+const VISIBILITIES: Record<WorldVisibility, string> = {
+  private: '비공개(나만 시작한다)',
+  public: '공개(게시한 판으로 누구나 시작한다)',
+  unlisted: '링크 공개(목록에 없고 주소를 아는 사람이 시작한다)',
+};
 
 export function WorldBasicsTab({ world }: { world: StoryWorldDetail }) {
   const [draft, setDraft] = useState<WorldBasicsDraft>(() => worldBasicsDraft(world));
@@ -62,7 +67,7 @@ export function WorldBasicsTab({ world }: { world: StoryWorldDetail }) {
         value={draft.visibility}
         onChange={(event) => update({ visibility: event.target.value as WorldVisibility })}
         error={fields.visibility}
-        hint="공개해도 게시한 판이 있어야 목록에 나옵니다. 지금은 운영자만 공개로 둘 수 있습니다."
+        hint="공개해도 게시한 판이 있어야 목록에 나옵니다. 링크 공개는 목록과 검색에 나오지 않습니다. 지금은 운영자만 공개나 링크 공개로 둘 수 있습니다."
       >
         {Object.entries(VISIBILITIES).map(([visibility, label]) => (
           <option key={visibility} value={visibility}>
@@ -70,6 +75,7 @@ export function WorldBasicsTab({ world }: { world: StoryWorldDetail }) {
           </option>
         ))}
       </SelectField>
+      {world.visibility === 'unlisted' && world.latest_version !== null ? <ShareAddress path={`/story/worlds/${world.id}`} /> : null}
       <ImagePicker label="대표 그림" imageId={draft.imageId} onChange={(imageId) => update({ imageId })} hint="목록과 소개에 나오는 그림입니다. 저장해야 붙습니다." />
     </StudioForm>
   );

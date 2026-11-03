@@ -151,10 +151,26 @@ class ItemKind(enum.StrEnum):
 
 
 class Visibility(enum.StrEnum):
-    """누구에게 보이는가. 비공개는 만든 사람만, 공개는 게시한 판이 있으면 목록에 나온다."""
+    """
+    누구에게 보이는가. 비공개는 만든 사람만, 공개는 게시한 판이 있으면 목록에 나온다.
+
+    링크 공개(#993)는 목록과 검색에 나오지 않고, 주소(작품 ID)를 아는 사람이 소개를 열고 쓴다.
+    ID 는 추측할 수 없는 UUID 라 따로 링크 값을 두지 않는다. 링크를 막으려면 비공개로 돌린다.
+    """
 
     PRIVATE = 'private'
     PUBLIC = 'public'
+    UNLISTED = 'unlisted'
+
+
+# 주인이 아닌 사람도 여는 공개 범위. 목록에 나오는 것은 PUBLIC 뿐이다
+OPEN_VISIBILITIES = (Visibility.PUBLIC, Visibility.UNLISTED)
+
+
+def visibility_allowed() -> str:
+    """공개 범위 칸의 CHECK 조건. 캐릭터와 세계관이 함께 쓴다."""
+    values = ', '.join(f"'{value}'" for value in Visibility)
+    return f'visibility IN ({values})'
 
 
 class Character(Base):
@@ -168,7 +184,7 @@ class Character(Base):
     __tablename__ = 'characters'
     __table_args__ = (
         CheckConstraint(f"rating IN ('{Rating.ALL}', '{Rating.ADULT}')", name='rating_allowed'),
-        CheckConstraint(f"visibility IN ('{Visibility.PRIVATE}', '{Visibility.PUBLIC}')", name='visibility_allowed'),
+        CheckConstraint(visibility_allowed(), name='visibility_allowed'),
         CheckConstraint(f'cardinality(tags) <= {CHARACTER_MAX_TAGS}', name='tags_count'),
         CheckConstraint('(latest_version IS NULL) = (published_at IS NULL)', name='published_paired'),
     )

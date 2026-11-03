@@ -5,6 +5,7 @@
 // - 공개하려면 한줄소개와 장르가 있어야 한다. 공개 중에는 한줄소개를 비울 수 없다(서버가 409). 먼저 공개를 내린다
 // - 장르는 반드시 하나다. 플레이 화면과 소개 화면의 테마를 정한다. 고르기 전에는 저장하지 않는다(서버도 409 genre_missing)
 // - 태그는 쉼표로 나눈 한 칸이다(로어북 항목의 키워드와 같다)
+// - 공개 범위(#993): 목록에 공개하거나, 링크 공개(목록과 검색에 없고 주소를 아는 사람만 연다)
 
 import type { Genre, ListingDetail, ListingUpdate } from '../../../../api/types';
 import { splitWords, wordsHint } from '../collection/collectionForm';
@@ -21,6 +22,8 @@ export type ListingDraft = {
   genre: Genre | null;
   /** 쉼표로 나눈 태그 */
   tags: string;
+  /** 링크 공개(#993). 참이면 공개해도 목록과 검색에 나오지 않고 주소를 아는 사람만 연다 */
+  unlisted: boolean;
 };
 
 /** 공개하지 못하는 까닭(서버의 Problem) */
@@ -32,7 +35,13 @@ const PROBLEM_TEXTS: Record<ListingProblem, string> = {
 };
 
 export function listingDraft(listing: ListingDetail): ListingDraft {
-  return { tagline: listing.tagline, description: listing.description, genre: listing.genre, tags: listing.tags.join(', ') };
+  return {
+    tagline: listing.tagline,
+    description: listing.description,
+    genre: listing.genre,
+    tags: listing.tags.join(', '),
+    unlisted: listing.unlisted,
+  };
 }
 
 /** 소개 페이지가 공개할 조건을 갖추지 못한 까닭 전부. 비면 공개할 수 있다 */
@@ -71,7 +80,13 @@ function addPublishedHints(hints: Record<string, string>, draft: ListingDraft): 
   if (draft.tagline.trim() === '') hints.tagline = `한줄소개가 비어 있습니다.${emptied}`;
 }
 
-/** 보낼 본문. 칸 넷을 모두 보낸다(빈 태그 목록은 "모두 없앤다", 장르 null 은 "보내지 않았다") */
+/** 보낼 본문. 칸 다섯을 모두 보낸다(빈 태그 목록은 "모두 없앤다", 장르 null 은 "보내지 않았다") */
 export function toListingBody(draft: ListingDraft): ListingUpdate {
-  return { tagline: draft.tagline.trim(), description: draft.description, genre: draft.genre, tags: splitWords(draft.tags) };
+  return {
+    tagline: draft.tagline.trim(),
+    description: draft.description,
+    genre: draft.genre,
+    tags: splitWords(draft.tags),
+    unlisted: draft.unlisted,
+  };
 }

@@ -206,7 +206,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/scenarios/{id}/versions` | 내 시나리오의 판 목록. 최근 것부터. 굳힌 내용은 싣지 않는다 | access 토큰 |
 | GET | `/api/v1/game/scenarios/{id}/versions/{number}` | 판 하나. 굳힌 내용까지 | access 토큰 |
 | GET | `/api/v1/game/scenarios/{id}/listing` | 내 시나리오의 공개 정보(소개 페이지와 공개 중인 판). 아직 쓰지 않았으면 빈 것 | access 토큰 |
-| PATCH | `/api/v1/game/scenarios/{id}/listing` | 소개 페이지 고치기. 보낸 칸만 바뀐다. 공개 중인데 조건을 못 갖추게 되면 409 | access 토큰 |
+| PATCH | `/api/v1/game/scenarios/{id}/listing` | 소개 페이지 고치기. 보낸 칸만 바뀐다. 공개 중인데 조건을 못 갖추게 되면 409. `unlisted` 가 참이면 링크 공개(#993): 공개해도 목록과 검색에 나오지 않고, 주소(시나리오 ID)를 아는 사람이 소개를 열고 테이블을 만든다 | access 토큰 |
 | PUT | `/api/v1/game/scenarios/{id}/listing/publication` | 공개할 판 정하기. `version` 을 `null` 로 보내면 공개를 내린다. 조건을 못 갖췄으면 409 | access 토큰 |
 | GET | `/api/v1/game/listings` | 공개된 시나리오 목록. 최근에 공개한 것부터. `genre`, `tag`, `players`, `q`, `limit`, `offset`. `q` 는 검색어다(50자까지). `#`로 시작하면 그 태그가 붙은 것, 아니면 제목이나 한 줄 소개에 그 글이 들어 있는 것이다(대소문자를 가리지 않는다, #984). 공백뿐이거나 `#` 하나뿐이면 422 | 없어도 된다(전체 이용가만, #530) |
 | GET | `/api/v1/game/listings/{scenario_id}` | 공개된 시나리오 하나. 남의 것도 본다. 목록의 칸에 테이블을 만들기 전에 고를 것들(스타팅, 캐릭터 방식, 프리젠, 능력치의 이름, 추천 서술 모델, 참고 자료를 켤 수 있는지 `references_allowed`)이 더 있다(#428) | 없어도 된다(전체 이용가만, #530) |

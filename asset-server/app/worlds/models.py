@@ -37,7 +37,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.characters.models import Visibility
+from app.characters.models import Visibility, visibility_allowed
 from app.core.database import Base
 from app.genres import GENRE_MAX_LENGTH
 from app.ratings import Rating
@@ -227,7 +227,7 @@ class World(Base):
     __tablename__ = 'worlds'
     __table_args__ = (
         CheckConstraint(f"rating IN ('{Rating.ALL}', '{Rating.ADULT}')", name='rating_allowed'),
-        CheckConstraint(f"visibility IN ('{Visibility.PRIVATE}', '{Visibility.PUBLIC}')", name='visibility_allowed'),
+        CheckConstraint(visibility_allowed(), name='visibility_allowed'),
         CheckConstraint(f"after_ending IN ('{AfterEnding.END}', '{AfterEnding.EPILOGUE}')", name='after_allowed'),
         CheckConstraint(f'cardinality(tags) <= {WORLD_MAX_TAGS}', name='tags_count'),
         CheckConstraint(

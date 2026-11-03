@@ -89,7 +89,9 @@ def unpublish(listing: Listing) -> None:
 
 def build_empty(scenario_id: uuid.UUID) -> Listing:
     """아무것도 쓰지 않은 공개 정보를 만든다. 아직 저장하지 않는다."""
-    return Listing(scenario_id=scenario_id, tagline='', description='', genre=None, tags=[], rating=Rating.ALL)
+    return Listing(
+        scenario_id=scenario_id, tagline='', description='', genre=None, tags=[], rating=Rating.ALL, unlisted=False
+    )
 
 
 async def start_listing(session: AsyncSession, scenario_id: uuid.UUID, data: ListingUpdate) -> Listing:

@@ -5405,6 +5405,8 @@ export interface components {
             tagline: string;
             /** Tags */
             tags: string[];
+            /** Unlisted */
+            unlisted: boolean;
             /** Updated At */
             updated_at: string | null;
             /** Version */
@@ -5437,6 +5439,8 @@ export interface components {
             tagline?: string | null;
             /** Tags */
             tags?: string[] | null;
+            /** Unlisted */
+            unlisted?: boolean | null;
         };
         /**
          * LobbyJoinRequest

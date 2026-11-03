@@ -10,7 +10,7 @@ from collections.abc import Collection, Sequence
 from sqlalchemy import delete, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.characters.models import Character, CharacterVersion, Visibility
+from app.characters.models import OPEN_VISIBILITIES, Character, CharacterVersion
 from app.images.models import Image, ImageUse
 from app.ratings import Rating
 from app.worlds.models import World, WorldImageUse, WorldVersion
@@ -46,25 +46,25 @@ def add_world_uses(session: AsyncSession, version_id: uuid.UUID, image_ids: Coll
 
 
 def used_by_public_character(image_id: uuid.UUID, ratings: Sequence[Rating]):
-    """그 그림이 공개 캐릭터(숨기지 않은 것)의 판에 쓰였고, 그 판의 등급이 ratings 안에 있다는 조건."""
+    """그림이 공개나 링크 공개(#993) 캐릭터(숨기지 않은 것)의 판에 쓰였고 그 판의 등급이 ratings 안이라는 조건."""
     return (
         exists()
         .where(ImageUse.image_id == image_id)
         .where(CharacterVersion.id == ImageUse.version_id)
         .where(Character.id == CharacterVersion.character_id)
-        .where(Character.visibility == Visibility.PUBLIC, Character.hidden_at.is_(None))
+        .where(Character.visibility.in_(OPEN_VISIBILITIES), Character.hidden_at.is_(None))
         .where(CharacterVersion.rating.in_(ratings))
     )
 
 
 def used_by_public_world(image_id: uuid.UUID, ratings: Sequence[Rating]):
-    """그 그림이 공개 세계관(숨기지 않은 것)의 판에 쓰였고, 그 판의 등급이 ratings 안에 있다는 조건(#591)."""
+    """그림이 공개나 링크 공개 세계관(숨기지 않은 것)의 판에 쓰였고 그 판의 등급이 ratings 안이라는 조건(#591)."""
     return (
         exists()
         .where(WorldImageUse.image_id == image_id)
         .where(WorldVersion.id == WorldImageUse.version_id)
         .where(World.id == WorldVersion.world_id)
-        .where(World.visibility == Visibility.PUBLIC, World.hidden_at.is_(None))
+        .where(World.visibility.in_(OPEN_VISIBILITIES), World.hidden_at.is_(None))
         .where(WorldVersion.rating.in_(ratings))
     )
 

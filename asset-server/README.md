@@ -127,7 +127,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | POST | `/api/v1/asset/characters` | [캐릭터](#캐릭터와-게시) 만들기. 201. 처음에는 비공개. 1~2단계에는 운영자만(403 `operator_only`). 성인 등급은 성인 확인이 필요하다(403 `adult_content_required`) | access 토큰 |
 | GET | `/api/v1/asset/characters` | 자기 캐릭터의 목록(`{items, total}`). 최근에 고친 것부터. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/asset/characters/{id}` | 자기 캐릭터의 초안 하나. 남의 것과 없는 것은 404 | access 토큰 |
-| PATCH | `/api/v1/asset/characters/{id}` | 초안 고치기. 보낸 칸만 바뀐다. 게시한 판은 그대로다. 공개로 두는 것(`visibility`)은 운영자만 | access 토큰 |
+| PATCH | `/api/v1/asset/characters/{id}` | 초안 고치기. 보낸 칸만 바뀐다. 게시한 판은 그대로다. 공개나 링크 공개로 두는 것(`visibility`)은 운영자만 | access 토큰 |
 | DELETE | `/api/v1/asset/characters/{id}` | 지우기. 204. 판도 함께 지워진다 | access 토큰 |
 | GET | `/api/v1/asset/characters/{id}/publish-check` | 게시해 보기(`{ready, problems, removed}`). 판은 생기지 않는다 | access 토큰 |
 | POST | `/api/v1/asset/characters/{id}/versions` | 게시. 201. 새 판과 소개에서 걸러 낸 것(`removed`). 막는 것이 있으면 409 `{problems}` | access 토큰 |
@@ -241,7 +241,7 @@ chat 의 상대가 되는 캐릭터다(#567, [설계](../docs/architecture/asset
 | `event_scenes` | 30개 | [이벤트 씬](#이벤트-씬) `{id, title(30자), image_id, description(300자), collectible, when: {kind, target}}` |
 | `sprites` | 30개 | [캐릭터 그림](#캐릭터-그림) `{id, image_id, expression(20자), outfit(옷의 id 또는 null)}` |
 | `lorebooks` | 3개 | 가리키는 [로어북](#로어북)의 id. 자기 로어북만(아니면 422 `lorebook_not_owned`). 게시할 때 그 마지막 판이 판에 복사된다 |
-| `visibility` | `private`, `public` | 공개 범위. 처음에는 비공개. 고칠 때만 바꾼다 |
+| `visibility` | `private`, `public`, `unlisted` | 공개 범위. 처음에는 비공개. 고칠 때만 바꾼다. `unlisted` 는 링크 공개(#993) |
 | `latest_version`, `published_at` | 응답에만 | 마지막으로 게시한 판의 번호와 시각 |
 
 첫 칸은 대화에 필요한 핵심만이었다(2026-10-21 유저 결정). 지도와 물건은 chat 의 만드는 순서 4 에서 캐릭터에 넣었다(2026-10-22 유저 결정, 판의 형식 2).
@@ -268,6 +268,10 @@ TRPG 시나리오의 장르와 같은 목록이고(판타지, 무협, 현대 판
 - **공개 목록의 검색(#984).** 검색어 `q`(50자까지)가 `#`로 시작하면 마지막 판에 그 태그가 붙은 것, 아니면 마지막 판의 이름에 그 글이 들어 있는 것이다(대소문자를 가리지 않는다).
   공백뿐이거나 `#` 하나뿐이면 422 다. 등급 거르기는 검색하지 않을 때와 같다. 이름은 글자 조각 색인(`ix_character_versions_name_trgm`, `ix_world_versions_name_trgm`)으로 찾는다.
   세계관의 목록도 같다. 만든 사람의 이름으로 찾는 것은 제작자 프로필(#992)이 생긴 뒤다.
+- **링크 공개(#993, `unlisted`).** 목록과 검색에 나오지 않고 수도 세지 않는다. 주소(작품 ID)를 아는 사람은 소개를 열고(`/listings/…/{id}`), 신고하고,
+  다른 서버(chat, story)가 판을 가져가고, 판의 그림을 본다. 등급 거르기와 운영자의 숨김은 공개와 같다. 정할 수 있는 사람도 공개와 같다(지금은 운영자만).
+  링크 값을 따로 두지 않는다. ID 는 추측할 수 없는 UUID 다. 링크를 막으려면 비공개로 돌린다(그 뒤에 다시 열면 같은 주소다).
+  탈퇴할 때 비공개 작품만 지운다. 링크 공개는 공개처럼 남는다(남이 이미 쓰고 있을 수 있다). 세계관도 같다.
 - 지우면 판도 함께 지워진다. 이미 가져간 대화는 사본으로 돈다.
 - chat(나중에 story)은 [다른 서버에 내주기](#다른-서버에-내주기)의 주소로 마지막 판을 가져가고, 지금의 번호를 묻는다.
 

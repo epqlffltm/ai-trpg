@@ -7,6 +7,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import type { AssetCharacterSummary } from '../../../../api/types';
 import { formatDate } from '../../../../format/dateTime';
+import { visibilityShort } from '../../../../format/visibility';
 import { characterPath, NEW_CHARACTER_PATH } from './characterPaths';
 import { myCharactersQuery } from './characterQueries';
 
@@ -57,7 +58,7 @@ function CharacterItem({ character }: { character: AssetCharacterSummary }) {
       <Link to={characterPath(character.id)}>{character.name}</Link>{' '}
       {character.hidden_at ? <span className="badge">운영자가 숨김</span> : null}
       <p className="hint">
-        {character.visibility === 'public' ? '공개' : '비공개'} ·{' '}
+        {visibilityShort(character.visibility)} ·{' '}
         {character.latest_version === null ? '아직 게시하지 않음' : `${character.latest_version}판까지 게시`} · 고친 날{' '}
         {formatDate(character.updated_at)}
       </p>

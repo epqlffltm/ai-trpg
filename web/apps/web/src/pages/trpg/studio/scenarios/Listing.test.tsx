@@ -21,10 +21,10 @@ const SCENARIO = `${GAME}/scenarios/${ID}`;
 const LISTING = `${SCENARIO}/listing`;
 const PUBLICATION = `${LISTING}/publication`;
 
-type Listing = { tagline: string; description: string; genre: string | null; tags: string[]; version: number | null };
+type Listing = { tagline: string; description: string; genre: string | null; tags: string[]; unlisted: boolean; version: number | null };
 
-const EMPTY: Listing = { tagline: '', description: '', genre: null, tags: [], version: null };
-const READY: Listing = { tagline: '비 내리는 밤의 수도원', description: '', genre: 'horror', tags: ['수도원'], version: 1 };
+const EMPTY: Listing = { tagline: '', description: '', genre: null, tags: [], unlisted: false, version: null };
+const READY: Listing = { tagline: '비 내리는 밤의 수도원', description: '', genre: 'horror', tags: ['수도원'], unlisted: false, version: 1 };
 
 function detail(listing: Listing) {
   return { scenario_id: ID, ...listing, rating: listing.version === null ? null : 'all', published_at: null, updated_at: null };
@@ -92,9 +92,23 @@ describe('소개 탭', () => {
 
     expect(await form.findByText('저장했습니다.')).toBeInTheDocument();
     expect(sent(seen, 'PATCH', LISTING)).toEqual([
-      { tagline: '비 내리는 밤의 수도원', description: '종이 열 번 울린다.', genre: 'mystery', tags: ['수도원', '언데드'] },
+      { tagline: '비 내리는 밤의 수도원', description: '종이 열 번 울린다.', genre: 'mystery', tags: ['수도원', '언데드'], unlisted: false },
     ]);
     expect(form.getByRole('textbox', { name: '한줄소개' })).toHaveValue('비 내리는 밤의 수도원');
+  });
+
+  it('링크 공개를 고르면 보내고, 공개 중인 링크 공개면 나눌 주소를 보인다', async () => {
+    const { seen } = signedIn(READY);
+    renderApp(`/trpg/studio/scenarios/${ID}?tab=listing`);
+
+    const form = within(await (await panel('소개')).findByRole('form', { name: '소개' }));
+    expect(form.queryByText(/링크 공개 주소/)).not.toBeInTheDocument();
+    await userEvent.selectOptions(form.getByRole('combobox', { name: '공개 범위' }), '링크 공개');
+    await userEvent.click(form.getByRole('button', { name: '저장' }));
+
+    expect(await form.findByText('저장했습니다.')).toBeInTheDocument();
+    expect((sent(seen, 'PATCH', LISTING)[0] as { unlisted: boolean }).unlisted).toBe(true);
+    expect(await form.findByText(`${window.location.origin}/trpg/scenarios/${ID}`)).toBeInTheDocument();
   });
 
   it('공개 중이면 공개된 소개로 가는 길을 보이고, 한줄소개를 비우면 저장을 막는다', async () => {
@@ -166,13 +180,13 @@ describe('공개', () => {
 
 describe('소개와 공개의 입력', () => {
   it('태그는 개수·길이·대소문자만 다른 겹침을 막고, 보낼 때 나누고 다듬는다. 장르는 하나를 그대로 보낸다', () => {
-    const draft = { tagline: '한 줄', description: '', genre: 'horror' as const, tags: 'Moon, moon' };
+    const draft = { tagline: '한 줄', description: '', genre: 'horror' as const, tags: 'Moon, moon', unlisted: false };
     expect(listingHints(draft, false).tags).toBe('같은 태그가 두 번 있습니다.');
     expect(listingHints({ ...draft, tags: 'a'.repeat(21) }, false).tags).toBe('태그 하나는 20자까지입니다.');
     expect(listingHints({ ...draft, tagline: '', tags: '' }, false)).toEqual({});
     expect(listingHints({ ...draft, genre: null }, false).genre).toBe('장르를 골라 주세요. 장르는 반드시 하나입니다.');
     expect(listingHints({ ...draft, tagline: ' ', tags: '' }, true).tagline).toContain('공개 중에는 비울 수 없습니다');
-    expect(toListingBody({ ...draft, tagline: ' 한 줄 ', tags: ' 달, , 별 ' })).toEqual({ tagline: '한 줄', description: '', genre: 'horror', tags: ['달', '별'] });
+    expect(toListingBody({ ...draft, tagline: ' 한 줄 ', tags: ' 달, , 별 ', unlisted: true })).toEqual({ tagline: '한 줄', description: '', genre: 'horror', tags: ['달', '별'], unlisted: true });
   });
 
   it('실패: 409 의 까닭, 공개 금지, 성인 확인, 없는 판', () => {

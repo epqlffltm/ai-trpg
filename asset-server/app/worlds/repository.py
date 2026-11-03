@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
-from app.characters.models import Visibility
+from app.characters.models import OPEN_VISIBILITIES, Visibility
 from app.ratings import Rating
 from app.search import LIKE_ESCAPE, SearchTerms, contains_pattern, name_of
 from app.worlds.models import World, WorldVersion
@@ -74,6 +74,19 @@ async def find_version(session: AsyncSession, world_id: uuid.UUID, number: int) 
     return await session.scalar(query)
 
 
+def opened(ratings: Sequence[Rating]):
+    """
+    주소로 하나를 열 때의 조건(#993). 목록의 조건(listed)과 같지만 링크 공개도 연다.
+
+    공개이거나 링크 공개이고, 숨기지 않았고, 마지막 판이 볼 수 있는 등급이다.
+    """
+    return (
+        World.visibility.in_([visibility.value for visibility in OPEN_VISIBILITIES])
+        & World.hidden_at.is_(None)
+        & WorldVersion.rating.in_([rating.value for rating in ratings])
+    )
+
+
 def latest_join():
     """세계관과 그 마지막 판을 잇는 조건. 게시한 적이 없는 세계관은 이어지지 않는다."""
     return (WorldVersion.world_id == World.id) & (WorldVersion.number == World.latest_version)
@@ -130,7 +143,7 @@ async def list_public(
 async def find_public(
     session: AsyncSession, world_id: uuid.UUID, ratings: Sequence[Rating]
 ) -> tuple[World, WorldVersion] | None:
-    """공개 세계관 하나와 그 마지막 판. 공개가 아니거나, 숨겼거나, 판이 없거나, 볼 수 없는 등급이면 None."""
-    query = select(World, WorldVersion).join(WorldVersion, latest_join()).where(World.id == world_id, listed(ratings))
+    """공개나 링크 공개(#993) 세계관 하나와 그 마지막 판. 아니거나, 숨겼거나, 판이 없거나, 볼 수 없는 등급이면 None."""
+    query = select(World, WorldVersion).join(WorldVersion, latest_join()).where(World.id == world_id, opened(ratings))
     row = (await session.execute(query)).first()
     return None if row is None else (row[0], row[1])

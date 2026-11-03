@@ -91,8 +91,17 @@ def searched(query: Select[PublicRow], terms: SearchTerms) -> Select[PublicRow]:
     )
 
 
+def listed(query: Select[PublicRow]) -> Select[PublicRow]:
+    """목록과 검색에 나오는 것만 고른다. 링크 공개(#993)는 빠진다. 하나를 열 때(find_public)는 쓰지 않는다."""
+    return query.where(Listing.unlisted.is_(False))
+
+
 async def find_public(session: AsyncSession, scenario_id: uuid.UUID, allowed_ratings: list[Rating]) -> PublicRow | None:
-    """공개된 시나리오 하나를 찾는다. 공개하지 않았거나, 지웠거나, 볼 수 없는 등급이면 None."""
+    """
+    공개된 시나리오 하나를 찾는다. 공개하지 않았거나, 지웠거나, 볼 수 없는 등급이면 None.
+
+    링크 공개(#993)도 찾는다. 주소를 아는 사람은 연다.
+    """
     query = visible(allowed_ratings).where(Listing.scenario_id == scenario_id)
     row = (await session.execute(query)).first()
     return tuple(row) if row else None
@@ -110,7 +119,7 @@ async def list_public(
 
     판의 굳힌 내용(snapshot)은 읽지 않는다. 목록에는 싣지 않는 큰 문서다(하나를 볼 때만 읽는다, #428).
     """
-    query = filtered(visible(allowed_ratings), where).options(defer(ScenarioVersion.snapshot))
+    query = listed(filtered(visible(allowed_ratings), where)).options(defer(ScenarioVersion.snapshot))
     # 공개한 시각이 같은 것끼리의 순서도 정해 둔다. 정하지 않으면 쪽을 넘길 때 같은 것이 두 번 나오거나 빠진다
     query = query.order_by(Listing.published_at.desc(), Listing.scenario_id).limit(limit).offset(offset)
     result = await session.execute(query)
@@ -119,7 +128,7 @@ async def list_public(
 
 async def count_public(session: AsyncSession, allowed_ratings: list[Rating], where: ListingFilter) -> int:
     """공개된 시나리오가 몇 개인지 센다."""
-    query = filtered(visible(allowed_ratings), where)
+    query = listed(filtered(visible(allowed_ratings), where))
     return await session.scalar(select(func.count()).select_from(query.subquery())) or 0
 
 

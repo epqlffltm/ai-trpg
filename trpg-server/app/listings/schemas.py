@@ -57,6 +57,8 @@ class ListingUpdate(BaseModel):
     description: ListingDescription | None = None
     genre: Genre | None = None
     tags: Tags | None = None
+    # 링크 공개(#993). 참이면 목록과 검색에 나오지 않고 주소로만 연다
+    unlisted: bool | None = None
 
 
 class PublicationUpdate(BaseModel):
@@ -80,6 +82,8 @@ class ListingDetail(BaseModel):
     # 장르. 소개 페이지를 아직 쓰지 않았을 때만 None 이다(쓴 소개 페이지에는 늘 있다)
     genre: Genre | None
     tags: list[str]
+    # 링크 공개(#993). 참이면 공개해도 목록과 검색에 나오지 않는다
+    unlisted: bool
     # 공개 중인 판의 번호. 공개하지 않았으면 None 이다
     version: int | None
     # 공개 중인 판의 등급. 공개하지 않았으면 None 이다

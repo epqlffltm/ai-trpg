@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/ListingTab.tsx
-// 시나리오의 소개 탭(B9). 공개 목록(B1)과 소개(B2)에 보일 한줄소개, 소개글, 장르, 태그를 탭의 저장으로 보낸다.
+// 시나리오의 소개 탭(B9). 공개 목록(B1)과 소개(B2)에 보일 한줄소개, 소개글, 장르, 태그, 공개 범위(#993)를 탭의 저장으로 보낸다.
 // 판에 굳지 않는다. 공개 중이면 저장하자마자 공개된 소개가 바뀐다. 공개할 판은 게시 탭에서 고른다.
 
 import { Button, Notice, SelectField, TextField } from '@ai-trpg/ui';
@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import type { Genre, ListingDetail, ScenarioDetail } from '../../../../api/types';
+import { ShareAddress } from '../../../../components/ShareAddress';
 import { TextAreaField } from '../../../../components/TextAreaField';
 import { GENRE_VALUES, genreLabel, isGenre } from '../../labels';
 import { LISTING_DESCRIPTION_MAX, listingDraft, listingHints, TAGLINE_MAX, TAG_MAX, TAGS_MAX, toListingBody, type ListingDraft } from './listingForm';
@@ -78,6 +79,17 @@ function ListingForm({ scenarioId, listing }: { scenarioId: string; listing: Lis
           공개 목록에서 태그로 찾을 수 있습니다. {TAGS_MAX}개까지, 하나에 {TAG_MAX}자까지입니다.
         </p>
       </div>
+      <SelectField
+        label="공개 범위"
+        name="unlisted"
+        value={draft.unlisted ? 'unlisted' : 'listed'}
+        onChange={(event) => update({ unlisted: event.target.value === 'unlisted' })}
+        hint="링크 공개는 공개해도 목록과 검색에 나오지 않습니다. 주소를 아는 사람만 소개를 열고 테이블을 만듭니다."
+      >
+        <option value="listed">목록에 공개</option>
+        <option value="unlisted">링크 공개</option>
+      </SelectField>
+      {listing.unlisted && listing.version !== null ? <ShareAddress path={`/trpg/scenarios/${scenarioId}`} /> : null}
     </ScenarioForm>
   );
 }

@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
-from app.characters.models import Character, CharacterVersion, Visibility
+from app.characters.models import OPEN_VISIBILITIES, Character, CharacterVersion, Visibility
 from app.ratings import Rating
 from app.search import LIKE_ESCAPE, SearchTerms, contains_pattern, name_of
 
@@ -102,6 +102,19 @@ def listed(ratings: Sequence[Rating]):
     )
 
 
+def opened(ratings: Sequence[Rating]):
+    """
+    주소로 하나를 열 때의 조건(#993). 목록의 조건(listed)과 같지만 링크 공개도 연다.
+
+    공개이거나 링크 공개이고, 숨기지 않았고, 마지막 판이 볼 수 있는 등급이다.
+    """
+    return (
+        Character.visibility.in_([visibility.value for visibility in OPEN_VISIBILITIES])
+        & Character.hidden_at.is_(None)
+        & CharacterVersion.rating.in_([rating.value for rating in ratings])
+    )
+
+
 def latest_join():
     """캐릭터와 그 마지막 판을 잇는 조건. 게시한 적이 없는 캐릭터는 이어지지 않는다."""
     return (CharacterVersion.character_id == Character.id) & (CharacterVersion.number == Character.latest_version)
@@ -148,11 +161,11 @@ async def find_latest(session: AsyncSession, character_id: uuid.UUID) -> tuple[C
 async def find_public(
     session: AsyncSession, character_id: uuid.UUID, ratings: Sequence[Rating]
 ) -> tuple[Character, CharacterVersion] | None:
-    """공개 캐릭터 하나와 그 마지막 판. 공개가 아니거나, 판이 없거나, 볼 수 없는 등급이면 None."""
+    """공개나 링크 공개(#993) 캐릭터 하나와 그 마지막 판. 아니거나, 숨겼거나, 판이 없거나, 볼 수 없는 등급이면 None."""
     query = (
         select(Character, CharacterVersion)
         .join(CharacterVersion, latest_join())
-        .where(Character.id == character_id, listed(ratings))
+        .where(Character.id == character_id, opened(ratings))
     )
     row = (await session.execute(query)).first()
     return None if row is None else (row[0], row[1])
