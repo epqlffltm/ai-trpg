@@ -1,11 +1,13 @@
 // web/apps/web/src/pages/signup/SignupPage.tsx
 // 가입(A2). 세 단계다: 이메일 → 6자리 코드 → 아이디, 닉네임, 비밀번호와 동의.
 // 이 화면은 단계를 잇기만 한다. 끝나면 로그인으로 보낸다(인증 서버는 가입과 로그인을 따로 한다).
+// 초대 링크(/signup?invite=코드, #990)로 오면 그 코드를 3단계의 초대 코드 칸에 채운다.
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import type { SignupProblem } from '../../auth/signupProblem';
 import { secondsFromNow } from '../../hooks/useCountdown';
+import { INVITE_PARAM } from '../me/inviteView';
 import { EmailStep } from './EmailStep';
 import { ProfileStep } from './ProfileStep';
 import { SignupCodeStep } from './SignupCodeStep';
@@ -23,6 +25,8 @@ const STEP_NUMBER: Record<Stage['step'], number> = { email: 1, code: 2, profile:
 export function SignupPage() {
   const [stage, setStage] = useState<Stage>({ step: 'email' });
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const inviteCode = params.get(INVITE_PARAM) ?? '';
   const toLogin = (state: { notice: string; username?: string }) => navigate('/login', { replace: true, state });
 
   return (
@@ -44,6 +48,7 @@ export function SignupPage() {
       {stage.step === 'profile' ? (
         <ProfileStep
           ticket={stage.ticket}
+          initialInviteCode={inviteCode}
           ticketEndsAt={stage.ticketEndsAt}
           onDone={(username) => toLogin({ notice: '가입했습니다. 로그인해 주세요.', username })}
           onRestart={(problem) => setStage({ step: 'email', problem })}

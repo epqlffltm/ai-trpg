@@ -1,9 +1,9 @@
 // web/apps/web/src/pages/me/MyPage.test.tsx
-// 마이페이지(A5). 로그인해야 열리는지, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의를 켜고 끄는 것, 탈퇴 요청을 본다.
+// 마이페이지(A5). 로그인해야 열리는지, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의를 켜고 끄는 것, 탈퇴 요청, 친구 초대(#990)를 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { getSession } from '../../api/session';
 import { formatDateTime } from '../../format/dateTime';
@@ -40,6 +40,7 @@ function signedIn(extra: Record<string, (request: SeenRequest) => Response> = {}
     [`POST ${REFRESH_PATH}`]: () => json(200, tokens('a1')),
     'GET /api/v1/auth/me': () => json(200, ME),
     'GET /api/v1/auth/me/consents': () => json(200, { items: CONSENTS }),
+    'GET /api/v1/auth/me/invite': () => json(200, { code: 'ABCD2345', rewarded: 1, limit: 5 }),
     ...extra,
   });
 }
@@ -208,5 +209,20 @@ describe('MyPage', () => {
 describe('requestedNotice', () => {
   it('지울 시각을 모르면 7일 뒤라고 쓴다', () => {
     expect(requestedNotice(null)).toContain('7일 뒤에 계정을 지웁니다');
+  });
+
+  it('친구 초대에 내 코드와 받은 보상의 수를 보이고 가입 주소를 복사한다', async () => {
+    signedIn();
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    renderApp('/me');
+
+    const invite = (await screen.findByRole('heading', { name: '친구 초대' })).closest('section') as HTMLElement;
+    expect(await within(invite).findByText('ABCD2345')).toBeInTheDocument();
+    expect(within(invite).getByText('받은 초대 보상 1 / 5번')).toBeInTheDocument();
+    await userEvent.click(within(invite).getByRole('button', { name: '가입 주소 복사' }));
+
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/signup?invite=ABCD2345`);
+    expect(await within(invite).findByRole('button', { name: '복사했습니다' })).toBeInTheDocument();
   });
 });

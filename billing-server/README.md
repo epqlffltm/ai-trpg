@@ -198,6 +198,7 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `CHAT_HOLD_TTL` | `10m` | chat 서버와 story 서버가 건 홀드만의 만료 시간. 말 한 번은 몇십 초면 끝나서 하루를 기다리지 않는다. 1분보다 짧을 수 없다 |
 | `ORDER_TTL` | `24h` | 주문을 만든 뒤 만료될 때까지의 시간. 1분보다 짧을 수 없다([주문과 결제](#주문과-결제)의 "만료") |
 | `WELCOME_CREDITS` | `1000` | 본인인증을 마친 사용자가 한 번 받는 환영 크레딧(무료)의 양. 0 이면 주지 않는다. 100만까지 |
+| `INVITE_CREDITS` | `500` | 초대 보상(#990) 한 번에 초대한 사람과 초대받은 사람이 각각 받는 무료 크레딧의 양. 0 이면 주지 않는다. 100만까지 |
 | `ATTENDANCE_SILVER` | `140,160,180,200,220,240,260` | 출석의 하루 양(실버). 쉼표로 나눈 목록이고 첫째가 1일째다. 길이가 주기의 날 수이고(1~14일), 마지막 날에 보물 상자를 연다. 하루에 1~10만 실버([크레딧](#크레딧)의 "출석과 보물 상자") |
 | `PG_WEBHOOK_SECRET` | 없음(필수) | 결제 대행사의 알림에 붙은 서명을 확인하는 비밀. 32자 이상. 로그와 오류에 싣지 않는다 |
 | `GAME_SERVER_SECRET` | 없음(필수) | 게임 서버가 보낸 요청의 서명을 확인하는 비밀. 32자 이상. `PG_WEBHOOK_SECRET` 과 달라야 한다. 로그와 오류에 싣지 않는다 |
@@ -267,7 +268,7 @@ uv run --no-project python tools/export_openapi.py billing
 | 게임 서버 | `/service/holds...`, `/service/prices` | 요청(메서드, 주소, 본문)의 서명(`GAME_SERVER_SECRET`) |
 | chat 서버 | `/service/holds...`, `/service/prices` | 요청의 서명(`CHAT_SERVER_SECRET`). 게임 서버와 같은 주소다. 쓸 수 있는 가격표는 다르다([홀드](#홀드)의 "서버마다의 가격표") |
 | story 서버 | `/service/holds...`, `/service/prices` | 요청의 서명(`STORY_SERVER_SECRET`). chat 서버와 같다. 가격표는 `story` 머리의 것만 쓴다 |
-| 인증 서버 | `/service/grants/welcome`, `/service/eligibility`, `/service/users/{id}/withdrawal` | 요청(메서드, 주소, 본문)의 서명(`AUTH_SERVER_SECRET`) |
+| 인증 서버 | `/service/grants/welcome`, `/service/grants/invite`, `/service/eligibility`, `/service/users/{id}/withdrawal` | 요청(메서드, 주소, 본문)의 서명(`AUTH_SERVER_SECRET`) |
 
 사용자가 부르는 주소는 모두 로그인이 필요하다. `Authorization: Bearer <access 토큰>` 머리말을 싣는다.
 하나 다른 것이 출석의 보상표(`GET /attendance/rewards`)다. 보물 상자의 확률을 공개하는 주소라 로그인 없이 누구나 본다.
@@ -313,6 +314,7 @@ uv run --no-project python tools/export_openapi.py billing
 | 주소 | 답 | 뜻 |
 | --- | --- | --- |
 | `POST /api/v1/billing/service/grants/welcome` | 201 또는 200 `{"status":"granted","granted":"1000","expires_at":"..."}` | 본인인증을 마친 사용자에게 환영 크레딧을 준다. 한 사용자에 한 번 |
+| `POST /api/v1/billing/service/grants/invite` | 201 또는 200(환영 크레딧과 같은 모양) | 초대 보상을 준다(#990). 아래 "초대 보상" |
 | `POST /api/v1/billing/service/eligibility` | 200 `{"status":"applied"}` 또는 `{"status":"stale"}` | 사용자의 결제 자격(성년이 되는 날, 보호자 동의)을 받아 적는다(아래 "결제할 수 있는 사람") |
 | `POST /api/v1/billing/service/users/{id}/withdrawal` | 200 `{"status":"processed"}` | 사용자의 탈퇴를 반영한다. 걸린 홀드를 돌려주고 남은 크레딧을 없앤다([탈퇴](#탈퇴)) |
 
@@ -1215,6 +1217,19 @@ POST /api/v1/billing/service/grants/welcome
 **두 서버가 나눠 지키는 것.** 이 서버는 "사용자 번호 하나에 한 번"을 지킨다. 한 사람이 계정을 여럿 만들어 여러 번 받는 것은
 이 서버가 알 수 없다. 이 서버는 메일 주소를 모른다. 그것은 인증 서버가 "메일함마다 한 번"으로 지킨다.
 사용자가 직접 받는 주소(`POST /wallet/welcome`)는 없앴다. 그 주소가 있으면 인증 서버의 규칙을 건너뛸 수 있다.
+
+**초대 보상(#990).** 초대받은 사람이 휴대폰 본인인증을 마치면 두 사람이 무료 크레딧 `INVITE_CREDITS`(기본 500)를 한 번씩 받는다.
+사용자가 직접 받지 않는다. 누구에게 줄지는 [인증 서버](../auth-server/README.md)가 정해 맡긴다(초대한 사람의 상한, 초대받은 사람은 사람마다 한 번, 자기 초대).
+
+```
+POST /api/v1/billing/service/grants/invite
+{ "user_id": "...", "reward_id": "...", "role": "inviter" }
+```
+
+- 답은 환영 크레딧과 같다(201 `granted`, 200 `already_granted`, 200 `disabled`, 400, 401). 양은 받지 않는다
+- 지급의 이름: 초대받은 사람은 `invited` 하나다(한 사용자 번호가 한 번). 초대한 사람은 보상마다 `invite-<reward_id>` 다
+  (같은 보상을 두 번 맡겨도 한 번). 상한을 세는 것은 이 서버가 아니라 인증 서버다. 이 서버는 사람을 모른다
+- 다른 무료 크레딧처럼 `FREE_CREDIT_TTL` 뒤에 사라진다
 
 **이벤트 실버.** 기념일 이벤트, 장애 보상, 당첨자처럼 정해진 사람들에게 같은 양의 실버를 한 번씩 준다. 운영자의 명령이다(`cmd/grants`).
 가격표의 값은 1 부터라 "이벤트 동안 무료"는 가격표로 적지 못한다. 무료로 열고 싶으면 이것으로 실버를 준다. 할인은 행사가 줄이다([홀드](#홀드)의 "행사가").

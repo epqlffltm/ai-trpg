@@ -16,6 +16,8 @@ export type ProfileDraft = {
   ageOver14: boolean;
   /** 항목마다 체크했는가. 처음에는 모두 비어 있다(미리 체크하지 않는다) */
   agreed: Record<string, boolean>;
+  /** 초대 코드(#990). 고를 수 있다. 초대 링크(/signup?invite=)로 오면 미리 채운다 */
+  inviteCode: string;
 };
 
 export const EMPTY_DRAFT: ProfileDraft = {
@@ -25,7 +27,11 @@ export const EMPTY_DRAFT: ProfileDraft = {
   passwordAgain: '',
   ageOver14: false,
   agreed: {},
+  inviteCode: '',
 };
+
+/** 초대 코드의 길이 상한. 서버와 같다(공백과 하이픈을 섞어 적은 것까지) */
+export const INVITE_CODE_MAX_LENGTH = 20;
 
 /** 칸마다 미리 알려 줄 것. 아직 쓰지 않은 칸은 말하지 않는다 */
 export function profileHints(draft: ProfileDraft): Record<string, string> {
@@ -54,17 +60,19 @@ export function canSubmit(draft: ProfileDraft, documents: ConsentDocument[]): bo
   return filled && valid && draft.ageOver14 && missingRequired(documents, draft.agreed).length === 0;
 }
 
-/** 서버에 보낼 가입 내용. 동의는 체크한 항목과 화면이 보인 판이다 */
+/** 서버에 보낼 가입 내용. 동의는 체크한 항목과 화면이 보인 판이다. 초대 코드는 적었을 때만 싣는다 */
 export function toSignupProfile(draft: ProfileDraft, documents: ConsentDocument[]): SignupProfile {
   const consents: Record<string, number> = {};
   for (const document of documents) {
     if (draft.agreed[document.item]) consents[document.item] = document.version;
   }
+  const inviteCode = draft.inviteCode.trim();
   return {
     username: draft.username,
     nickname: draft.nickname,
     password: draft.password,
     age_over_14: draft.ageOver14,
     consents,
+    ...(inviteCode ? { invite_code: inviteCode } : {}),
   };
 }

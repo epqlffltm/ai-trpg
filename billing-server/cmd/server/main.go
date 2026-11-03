@@ -115,6 +115,7 @@ func run() error {
 		Wallet:            services.Wallet,
 		Welcome:           services.Wallet,
 		WelcomeCredits:    settings.WelcomeCredits,
+		InviteCredits:     settings.InviteCredits,
 		Eligibility:       services.Eligibility,
 		Withdrawals:       services.Withdrawals,
 		Attendance:        attendances,

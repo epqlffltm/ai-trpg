@@ -575,6 +575,39 @@ paths:
         "500": { $ref: "#/components/responses/ServerError" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
+  /api/v1/billing/service/grants/invite:
+    post:
+      tags: [service]
+      summary: (인증 서버) 초대 보상(#990)을 준다. 보상 하나에 초대한 사람과 초대받은 사람이 한 번씩 받는다
+      operationId: grantInvite
+      security: [{ serviceSignature: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, reward_id, role]
+              properties:
+                user_id: { type: string, format: uuid }
+                reward_id: { type: string, format: uuid, description: 인증 서버의 초대 보상 하나의 번호 }
+                role: { type: string, enum: [inviter, invitee], description: 초대한 사람 또는 초대받은 사람 }
+      responses:
+        "201":
+          description: 줬다(granted)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Welcome" }
+        "200":
+          description: 이미 줬다(already_granted) 또는 주지 않게 해 두었다(disabled)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Welcome" }
+        "400": { $ref: "#/components/responses/ServiceBadRequest" }
+        "401": { $ref: "#/components/responses/ServiceUnauthorized" }
+        "500": { $ref: "#/components/responses/ServerError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
   /api/v1/billing/service/eligibility:
     post:
       tags: [service]

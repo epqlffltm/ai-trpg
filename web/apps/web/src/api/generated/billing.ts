@@ -157,6 +157,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/service/grants/invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** (인증 서버) 초대 보상(#990)을 준다. 보상 하나에 초대한 사람과 초대받은 사람이 한 번씩 받는다 */
+        post: operations["grantInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/service/grants/welcome": {
         parameters: {
             query?: never;
@@ -1111,6 +1128,56 @@ export interface operations {
                         /** @enum {string} */
                         status: "applied" | "stale";
                     };
+                };
+            };
+            400: components["responses"]["ServiceBadRequest"];
+            401: components["responses"]["ServiceUnauthorized"];
+            500: components["responses"]["ServerError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    grantInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uuid
+                     * @description 인증 서버의 초대 보상 하나의 번호
+                     */
+                    reward_id: string;
+                    /**
+                     * @description 초대한 사람 또는 초대받은 사람
+                     * @enum {string}
+                     */
+                    role: "inviter" | "invitee";
+                    /** Format: uuid */
+                    user_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 이미 줬다(already_granted) 또는 주지 않게 해 두었다(disabled) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Welcome"];
+                };
+            };
+            /** @description 줬다(granted) */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Welcome"];
                 };
             };
             400: components["responses"]["ServiceBadRequest"];
