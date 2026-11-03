@@ -172,3 +172,20 @@ async def test_the_listing_rejects_a_bad_search(client: AsyncClient, q: str):
     response = await client.get(LISTINGS_URL, params={'q': q})
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+async def test_an_unlisted_world_is_not_listed_but_opens_by_its_id(client: AsyncClient, owner: dict, player: dict):
+    shown = await published(client, owner, name='보이는 여름')
+    ari = await character(client, owner, '아리')
+    beo = await character(client, owner, '버')
+    hidden = await create_world(client, owner, {**full_world(ari['id'], beo['id']), 'name': '링크만 여름'})
+    await client.patch(f'{WORLDS_URL}/{hidden["id"]}', json={'visibility': 'unlisted'}, headers=owner)
+    assert (await publish(client, owner, hidden)).status_code == status.HTTP_201_CREATED
+
+    page = (await client.get(LISTINGS_URL, headers=player)).json()
+    opened = await client.get(f'{LISTINGS_URL}/{hidden["id"]}', headers=player)
+
+    # 목록과 검색에는 없다(#993). 주소를 알면 소개가 열린다
+    assert ([item['id'] for item in page['items']], page['total']) == ([shown['id']], 1)
+    assert await searched_ids(client, '여름', player) == [shown['id']]
+    assert (opened.status_code, opened.json()['name']) == (status.HTTP_200_OK, '링크만 여름')

@@ -26,7 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.characters import repository as characters
 from app.characters.documents import LorebookCopyDocument
-from app.characters.models import Visibility
+from app.characters.models import OPEN_VISIBILITIES, Visibility
 from app.characters.service import LorebookNotOwnedError, OperatorOnlyError, require_own_images
 from app.content.html import Removed
 from app.images import service as images
@@ -65,8 +65,11 @@ def require_maker(viewer: AccessClaims, for_everyone: bool) -> None:
 
 
 def require_visibility(viewer: AccessClaims, visibility: Visibility | None, public_for_everyone: bool) -> None:
-    """공개로 두려면 운영자여야 한다(PUBLIC_FOR_EVERYONE 이면 누구나). 비공개로 두거나 바꾸지 않으면 누구나 된다."""
-    if visibility == Visibility.PUBLIC and not (viewer.is_operator or public_for_everyone):
+    """
+    공개나 링크 공개(#993)로 두려면 운영자여야 한다(PUBLIC_FOR_EVERYONE 이면 누구나).
+    비공개로 두거나 바꾸지 않으면 누구나 된다.
+    """
+    if visibility in OPEN_VISIBILITIES and not (viewer.is_operator or public_for_everyone):
         raise OperatorOnlyError
 
 
@@ -274,12 +277,12 @@ def is_owner(world: World, viewer: AccessClaims) -> bool:
 
 def require_reachable(world: World, viewer: AccessClaims) -> None:
     """
-    주인이 아니면 공개이고 숨기지 않은 것이어야 한다(캐릭터와 같다).
+    주인이 아니면 공개나 링크 공개(#993)이고 숨기지 않은 것이어야 한다(캐릭터와 같다).
     아니면 WorldNotFoundError(있는지도 드러내지 않는다).
     """
     if is_owner(world, viewer):
         return
-    if world.visibility != Visibility.PUBLIC or world.hidden_at is not None:
+    if world.visibility not in OPEN_VISIBILITIES or world.hidden_at is not None:
         raise WorldNotFoundError
 
 

@@ -3210,9 +3210,12 @@ export interface components {
         /**
          * Visibility
          * @description 누구에게 보이는가. 비공개는 만든 사람만, 공개는 게시한 판이 있으면 목록에 나온다.
+         *
+         *     링크 공개(#993)는 목록과 검색에 나오지 않고, 주소(작품 ID)를 아는 사람이 소개를 열고 쓴다.
+         *     ID 는 추측할 수 없는 UUID 라 따로 링크 값을 두지 않는다. 링크를 막으려면 비공개로 돌린다.
          * @enum {string}
          */
-        Visibility: "private" | "public";
+        Visibility: "private" | "public" | "unlisted";
         /**
          * WithdrawalResult
          * @description 답. 지운 것이 없어도(이미 지웠다, 이 서버에 그 사람의 것이 없다) 같다. 인증 서버는 이것을 보고 그만 보낸다.

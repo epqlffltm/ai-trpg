@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.characters import repository
 from app.characters.documents import LorebookCopyDocument, build_document
-from app.characters.models import Character, CharacterVersion, Visibility
+from app.characters.models import OPEN_VISIBILITIES, Character, CharacterVersion, Visibility
 from app.characters.publishing import (
     CharacterNotReadyError,
     Problem,
@@ -67,10 +67,10 @@ def require_maker(viewer: AccessClaims, for_everyone: bool) -> None:
 
 def require_visibility(viewer: AccessClaims, visibility: Visibility | None, public_for_everyone: bool) -> None:
     """
-    공개로 두려면 운영자여야 한다. 설정(PUBLIC_FOR_EVERYONE)을 켜면 누구나 된다(#678).
-    비공개로 두거나 바꾸지 않으면 누구나 된다.
+    공개나 링크 공개(#993)로 두려면 운영자여야 한다. 설정(PUBLIC_FOR_EVERYONE)을 켜면 누구나 된다(#678).
+    링크 공개도 남이 열고 쓰는 것이라 공개와 같은 규칙이다. 비공개로 두거나 바꾸지 않으면 누구나 된다.
     """
-    if visibility == Visibility.PUBLIC and not (viewer.is_operator or public_for_everyone):
+    if visibility in OPEN_VISIBILITIES and not (viewer.is_operator or public_for_everyone):
         raise OperatorOnlyError
 
 
@@ -276,11 +276,12 @@ def is_owner(character: Character, viewer: AccessClaims) -> bool:
 
 def require_reachable(character: Character, viewer: AccessClaims) -> None:
     """
-    주인이 아니면 공개이고 숨기지 않은 것이어야 한다(#678). 아니면 CharacterNotFoundError(있는지도 드러내지 않는다).
+    주인이 아니면 공개나 링크 공개(#993)이고 숨기지 않은 것이어야 한다(#678).
+    아니면 CharacterNotFoundError(있는지도 드러내지 않는다).
     """
     if is_owner(character, viewer):
         return
-    if character.visibility != Visibility.PUBLIC or character.hidden_at is not None:
+    if character.visibility not in OPEN_VISIBILITIES or character.hidden_at is not None:
         raise CharacterNotFoundError
 
 

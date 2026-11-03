@@ -162,6 +162,7 @@ async def test_a_scenario_starts_with_an_empty_page(client: AsyncClient, my_head
         'description': '',
         'genre': None,
         'tags': [],
+        'unlisted': False,
         'version': None,
         'rating': None,
         'published_at': None,
@@ -646,6 +647,46 @@ async def test_rejects_a_bad_filter(client: AsyncClient, my_headers: dict[str, s
     response = await client.get(LISTINGS_URL, params=params, headers=my_headers)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+async def test_an_unlisted_scenario_is_not_in_the_list_but_opens_by_its_address(
+    client: AsyncClient, my_headers: dict[str, str], their_headers: dict[str, str]
+):
+    shown = await make_public(client, my_headers, title='보이는 추격전')
+    hidden = await make_public(client, my_headers, title='링크만 추격전')
+    await write_page(client, my_headers, hidden, unlisted=True)
+
+    listed = (await client.get(LISTINGS_URL, headers=their_headers)).json()
+    searched = (await client.get(LISTINGS_URL, params={'q': '추격전'}, headers=their_headers)).json()
+    opened = await client.get(f'{LISTINGS_URL}/{hidden["id"]}', headers=their_headers)
+
+    # 목록과 검색에는 나오지 않는다(#993). 수도 세지 않는다. 주소를 알면 소개가 열린다
+    assert ([item['scenario_id'] for item in listed['items']], listed['total']) == ([shown['id']], 1)
+    assert [item['scenario_id'] for item in searched['items']] == [shown['id']]
+    assert opened.status_code == status.HTTP_200_OK
+    assert opened.json()['title'] == '링크만 추격전'
+
+
+async def test_the_owner_sees_and_clears_the_unlisted_flag(client: AsyncClient, my_headers: dict[str, str]):
+    scenario = await make_public(client, my_headers)
+
+    marked = await write_page(client, my_headers, scenario, unlisted=True)
+    cleared = await write_page(client, my_headers, scenario, unlisted=False)
+
+    assert (marked['unlisted'], cleared['unlisted']) == (True, False)
+    listed = (await client.get(LISTINGS_URL, headers=my_headers)).json()
+    assert [item['scenario_id'] for item in listed['items']] == [scenario['id']]
+
+
+async def test_an_unlisted_adult_scenario_still_needs_adult_content(
+    client: AsyncClient, my_adult_headers: dict[str, str], their_headers: dict[str, str]
+):
+    scenario = await make_public(client, my_adult_headers, rating='adult')
+    await write_page(client, my_adult_headers, scenario, unlisted=True)
+
+    response = await client.get(f'{LISTINGS_URL}/{scenario["id"]}', headers=their_headers)
+
+    assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
 async def test_the_title_follows_the_scenario(client: AsyncClient, my_headers: dict[str, str]):

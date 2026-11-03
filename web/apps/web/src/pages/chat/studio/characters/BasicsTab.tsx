@@ -2,6 +2,7 @@
 // 캐릭터의 기본 탭(C6): 이름, 나이, 성별, 장르, 태그, 등급, 공개 범위. 지우기도 여기에 둔다.
 
 import { SelectField, TextField } from '@ai-trpg/ui';
+import { ShareAddress } from '../../../../components/ShareAddress';
 import { useState } from 'react';
 import type { AssetCharacterDetail, AssetRating, AssetVisibility } from '../../../../api/types';
 import { AGE_MAX, basicsDraft, basicsHints, GENDER_MAX, NAME_MAX, toBasicsBody, type BasicsDraft } from './basicsForm';
@@ -11,7 +12,11 @@ import { DeleteCharacterButton } from './DeleteCharacterButton';
 import { useCharacterSave } from './useCharacterSave';
 
 const RATINGS: Record<AssetRating, string> = { all: '전체 이용가', adult: '성인용' };
-const VISIBILITIES: Record<AssetVisibility, string> = { private: '비공개(나만 대화한다)', public: '공개(게시한 판으로 누구나 대화한다)' };
+const VISIBILITIES: Record<AssetVisibility, string> = {
+  private: '비공개(나만 대화한다)',
+  public: '공개(게시한 판으로 누구나 대화한다)',
+  unlisted: '링크 공개(목록에 없고 주소를 아는 사람이 대화한다)',
+};
 
 export function BasicsTab({ character }: { character: AssetCharacterDetail }) {
   const [draft, setDraft] = useState<BasicsDraft>(() => basicsDraft(character));
@@ -91,7 +96,7 @@ export function BasicsTab({ character }: { character: AssetCharacterDetail }) {
         value={draft.visibility}
         onChange={(event) => update({ visibility: event.target.value as AssetVisibility })}
         error={fields.visibility}
-        hint="공개해도 게시한 판이 있어야 목록에 나옵니다. 지금은 운영자만 공개로 둘 수 있습니다."
+        hint="공개해도 게시한 판이 있어야 목록에 나옵니다. 링크 공개는 목록과 검색에 나오지 않습니다. 지금은 운영자만 공개나 링크 공개로 둘 수 있습니다."
       >
         {Object.entries(VISIBILITIES).map(([visibility, label]) => (
           <option key={visibility} value={visibility}>
@@ -99,6 +104,7 @@ export function BasicsTab({ character }: { character: AssetCharacterDetail }) {
           </option>
         ))}
       </SelectField>
+      {character.visibility === 'unlisted' && character.latest_version !== null ? <ShareAddress path={`/chat/characters/${character.id}`} /> : null}
     </CharacterForm>
   );
 }

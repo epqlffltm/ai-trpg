@@ -86,10 +86,10 @@ async def publish(client: AsyncClient, headers: dict, character: dict):
     return await client.post(f'{CHARACTERS_URL}/{character["id"]}/versions', json={}, headers=headers)
 
 
-async def published_public(client: AsyncClient, headers: dict, **fields) -> dict:
-    """공개로 두고 게시한 캐릭터."""
+async def published_public(client: AsyncClient, headers: dict, visibility: str = 'public', **fields) -> dict:
+    """공개(또는 visibility 의 범위)로 두고 게시한 캐릭터."""
     character = await create_character(client, headers, **fields)
-    await client.patch(f'{CHARACTERS_URL}/{character["id"]}', json={'visibility': 'public'}, headers=headers)
+    await client.patch(f'{CHARACTERS_URL}/{character["id"]}', json={'visibility': visibility}, headers=headers)
     response = await publish(client, headers, character)
     assert response.status_code == status.HTTP_201_CREATED, response.text
     return character
@@ -187,6 +187,16 @@ async def test_a_public_characters_image_is_seen_by_anyone(
 
     assert [await sees(client, image_id) for image_id in (cover, inside)] == [status.HTTP_200_OK] * 2
     assert await sees(client, cover, other) == status.HTTP_200_OK
+
+
+async def test_an_unlisted_characters_image_is_seen_by_anyone(
+    client: AsyncClient, other: dict, owner: dict, session: AsyncSession, store: FakeImageStore
+):
+    # 링크 공개(#993)로 소개를 연 사람도 그림을 본다
+    cover = await own_image(session, OWNER)
+    await published_public(client, owner, visibility='unlisted', image_id=cover)
+
+    assert (await sees(client, cover), await sees(client, cover, other)) == (status.HTTP_200_OK,) * 2
 
 
 async def test_a_hidden_characters_image_is_seen_by_the_owner_only(

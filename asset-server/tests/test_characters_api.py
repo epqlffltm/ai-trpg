@@ -448,6 +448,43 @@ async def test_the_listing_rejects_a_bad_search(client: AsyncClient, q: str):
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
+async def test_an_unlisted_character_is_not_listed_but_opens_by_its_id(
+    client: AsyncClient, operator: dict, player: dict
+):
+    await make_public(client, operator, name='보이는 기사')
+    hidden = await create(client, operator, name='링크만 기사')
+    await client.patch(f'{CHARACTERS_URL}/{hidden["id"]}', json={'visibility': 'unlisted'}, headers=operator)
+    await publish(client, operator, hidden)
+
+    page = (await client.get(LISTINGS_URL, headers=player)).json()
+    opened = await client.get(f'{LISTINGS_URL}/{hidden["id"]}', headers=player)
+
+    # 목록과 검색에는 없고 수도 세지 않는다(#993). 주소를 알면 소개가 열린다
+    assert ([item['name'] for item in page['items']], page['total']) == (['보이는 기사'], 1)
+    assert await searched_names(client, '기사', player) == ['보이는 기사']
+    assert opened.status_code == status.HTTP_200_OK
+    assert opened.json()['document']['name'] == '링크만 기사'
+
+
+async def test_an_unlisted_adult_character_still_needs_adult_content(client: AsyncClient, operator: dict, player: dict):
+    hidden = await create(client, operator, rating='adult')
+    await client.patch(f'{CHARACTERS_URL}/{hidden["id"]}', json={'visibility': 'unlisted'}, headers=operator)
+    await publish(client, operator, hidden)
+
+    assert (await client.get(f'{LISTINGS_URL}/{hidden["id"]}', headers=player)).status_code == status.HTTP_404_NOT_FOUND
+
+
+async def test_only_operators_make_a_character_unlisted_for_now(open_app: FastAPI, player: dict):
+    # 링크 공개도 남이 쓰는 것이라 공개와 같은 규칙이다. 모두에게 열지 않았으면 운영자만이다
+    async with make_client(open_app) as open_client:
+        mine = await create(open_client, player)
+        refused = await open_client.patch(
+            f'{CHARACTERS_URL}/{mine["id"]}', json={'visibility': 'unlisted'}, headers=player
+        )
+
+    assert refused.status_code == status.HTTP_403_FORBIDDEN
+
+
 async def test_the_listing_pages(client: AsyncClient, operator: dict):
     for number in range(3):
         await make_public(client, operator, name=f'캐릭터 {number}')

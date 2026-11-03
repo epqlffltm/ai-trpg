@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import type { StoryWorldSummary } from '../../../api/storyWorlds';
 import { formatDate } from '../../../format/dateTime';
+import { visibilityShort } from '../../../format/visibility';
 import { NEW_WORLD_PATH, worldPath } from './worldPaths';
 import { myWorldsQuery } from './worldQueries';
 
@@ -49,7 +50,7 @@ function WorldItem({ world }: { world: StoryWorldSummary }) {
     <li className="studio-list__item">
       <Link to={worldPath(world.id)}>{world.name}</Link>
       <p className="hint">
-        {world.visibility === 'public' ? '공개' : '비공개'}
+        {visibilityShort(world.visibility)}
         {world.rating === 'adult' ? ' · 성인' : ''} · {world.latest_version === null ? '아직 게시하지 않음' : `${world.latest_version}판까지 게시`} · 고친 날{' '}
         {formatDate(world.updated_at)}
       </p>

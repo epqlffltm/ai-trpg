@@ -182,6 +182,18 @@ async def test_others_use_a_public_one(client: AsyncClient, operator: dict, play
 
 
 @pytest.mark.parametrize('suffix', BOTH_PATHS)
+async def test_others_use_an_unlisted_one_by_its_id(client: AsyncClient, operator: dict, player: dict, suffix: str):
+    # 링크 공개(#993)는 목록에 없을 뿐 주소를 아는 사람이 쓴다. chat 이 이 길로 판을 가져간다
+    character = await create(client, operator)
+    await set_visibility(client, operator, character, 'unlisted')
+    await publish(client, operator, character)
+
+    response = await latest(client, player, character, suffix)
+
+    assert response.status_code == status.HTTP_200_OK
+
+
+@pytest.mark.parametrize('suffix', BOTH_PATHS)
 async def test_made_private_again_it_is_gone_for_others(client: AsyncClient, operator: dict, player: dict, suffix: str):
     character = await make_public(client, operator)
     await set_visibility(client, operator, character, 'private')

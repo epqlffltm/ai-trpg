@@ -7370,6 +7370,10 @@
             "title": "Tags",
             "type": "array"
           },
+          "unlisted": {
+            "title": "Unlisted",
+            "type": "boolean"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -7400,6 +7404,7 @@
           "description",
           "genre",
           "tags",
+          "unlisted",
           "version",
           "rating",
           "published_at",
@@ -7485,6 +7490,17 @@
               }
             ],
             "title": "Tags"
+          },
+          "unlisted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unlisted"
           }
         },
         "title": "ListingUpdate",

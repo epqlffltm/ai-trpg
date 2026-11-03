@@ -50,6 +50,7 @@ def to_detail(listing: Listing, version: ScenarioVersion | None) -> ListingDetai
         description=listing.description,
         genre=listing.genre,
         tags=listing.tags,
+        unlisted=listing.unlisted,
         version=version.number if version else None,
         rating=Rating(listing.rating) if version else None,
         published_at=listing.published_at,
