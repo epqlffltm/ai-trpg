@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/chat/conversation/WorldToolbar.tsx
-// 그림 창 아래의 단추들(C3): 소지품, 상대의 차림, 지도(판에 지도가 있을 때), 기억(C5), 책갈피(#982), 시간 보내기, 기록 받기. 창은 겹쳐 연다.
+// 그림 창 아래의 단추들(C3): 소지품, 상대의 차림, 지도(판에 지도가 있을 때), 기억(C5), 책갈피와 그림으로 저장(#982), 시간 보내기, 기록 받기. 창은 겹쳐 연다.
 // 행동(쓰기, 건네기, 이동, 시간 보내기)은 반응을 받으므로 받는 중이면 막는다. 창을 여는 것, 기억 고치기, 기록 받기는 막지 않는다.
 // 시간 보내기는 다음 시간대가 시작하는 시각까지 흐른다(밤이면 다음 날 새벽 4시).
 
@@ -12,10 +12,13 @@ import { InventoryDialog } from './InventoryDialog';
 import { MapDialog } from './MapDialog';
 import { NotesDialog } from './NotesDialog';
 import { OutfitDialog } from './OutfitDialog';
+import { ScreenshotDialog } from './ScreenshotDialog';
+import { chatShotItems, shotSubtitle } from './screenshotView';
 import type { BookmarksSource } from './useBookmarks';
 import { hasMap } from './worldView';
+import { genreName, isGenreValue } from '../../../genres/genres';
 
-type Window = 'inventory' | 'outfit' | 'map' | 'notes' | 'bookmarks' | null;
+type Window = 'inventory' | 'outfit' | 'map' | 'notes' | 'bookmarks' | 'screenshot' | null;
 type Props = {
   detail: ConversationDetail;
   busy: boolean;
@@ -54,6 +57,9 @@ export function WorldToolbar({ detail, busy, onAction, bookmarks, onGoTo }: Prop
       <Button variant="secondary" onClick={() => setOpen('bookmarks')}>
         책갈피
       </Button>
+      <Button variant="secondary" onClick={() => setOpen('screenshot')}>
+        그림으로 저장
+      </Button>
       <Button variant="secondary" disabled={busy} onClick={() => act({ kind: 'wait' })}>
         시간 보내기
       </Button>
@@ -63,6 +69,14 @@ export function WorldToolbar({ detail, busy, onAction, bookmarks, onGoTo }: Prop
       <MapDialog detail={detail} open={open === 'map'} busy={busy} onClose={close} onAction={act} />
       <NotesDialog conversationId={detail.id} name={detail.character.document.name} open={open === 'notes'} onClose={close} />
       <BookmarksDialog source={bookmarks} open={open === 'bookmarks'} busy={busy} onClose={close} onGo={onGoTo} />
+      <ScreenshotDialog
+        title={detail.character.document.name}
+        subtitle={shotSubtitle(isGenreValue(detail.character.document.genre) ? genreName(detail.character.document.genre) : null, detail.character.rating === 'adult')}
+        items={chatShotItems(detail)}
+        imageId={detail.character.document.image_id ?? null}
+        open={open === 'screenshot'}
+        onClose={close}
+      />
     </div>
   );
 }
