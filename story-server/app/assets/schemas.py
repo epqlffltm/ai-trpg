@@ -21,12 +21,16 @@ app/worlds/documents.py 의 WorldDocument). 받은 것을 이 모양으로 검�
 그보다 새 형식의 판은 받지 않는다. 모르는 규칙(조건, 효과의 종류)을 엔진이 판정할 수 없어서다.
 """
 
+import logging
 import uuid
+from collections.abc import Mapping
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.ratings import Rating
+
+logger = logging.getLogger(__name__)
 
 # 이 서버가 읽을 줄 아는 판의 형식의 끝. asset 서버가 형식을 올리면 그것을 읽는 법과 함께 올린다
 WORLD_FORMAT_MAX = 8
@@ -57,6 +61,39 @@ class WorldCopy(BaseModel):
     rating: Rating
     published_at: datetime
     document: WorldDocument
+
+
+class ShortcutDocument(BaseModel):
+    """
+    단축어 하나(제작자의 것이든 내 것이든). 길이와 이름의 모양은 asset 서버가 지킨다.
+    여기서는 검사하지 않는다. 붙일 때 자른다(app/shortcuts/calls.py).
+    """
+
+    model_config = ConfigDict(extra='ignore')
+
+    name: str
+    description: str = ''
+    body: str
+
+
+class ShortcutListCopy(BaseModel):
+    """asset 서버가 내주는 내 단축어들. 적은 차례 그대로다."""
+
+    model_config = ConfigDict(extra='ignore')
+
+    items: list[ShortcutDocument] = []
+
+
+def shortcuts_of(document: Mapping) -> list[ShortcutDocument]:
+    """
+    판의 사본(document)의 제작자 단축어(형식 8). 없으면 빈 목록이다.
+    모양이 틀린 것은 단축어가 없는 것으로 본다(세션 전체를 못 쓰게 하지 않는다).
+    """
+    try:
+        return [ShortcutDocument.model_validate(item) for item in document.get('shortcuts') or ()]
+    except (ValidationError, TypeError):
+        logger.warning('판의 사본의 단축어를 읽지 못했다. 단축어가 없는 것으로 본다')
+        return []
 
 
 class PersonaCopy(BaseModel):

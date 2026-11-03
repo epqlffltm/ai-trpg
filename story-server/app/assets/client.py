@@ -5,6 +5,7 @@ asset 서버를 부른다(asset-server/README.md 의 "다른 서버에 내주기
 
     GET {ASSET_URL}/api/v1/asset/service/story/worlds/{id}/latest
     GET {ASSET_URL}/api/v1/asset/service/story/personas/{id}
+    GET {ASSET_URL}/api/v1/asset/service/story/shortcuts          토큰의 주인의 단축어(#981)
     X-Service-Signature: 이 서버의 비밀(ASSET_SECRET)로 한 서명(server_core/service_auth/signing.py)
     Authorization: Bearer <사용자의 토큰>  누구를 위해 가져가는지. asset 서버가 쓸 수 있는 사람인지 본다
 
@@ -24,7 +25,7 @@ import httpx
 from pydantic import BaseModel, ValidationError
 from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 
-from app.assets.schemas import PersonaCopy, WorldCopy
+from app.assets.schemas import PersonaCopy, ShortcutListCopy, WorldCopy
 
 # asset 서버의 주소의 머리. 이 서버의 이름(story)까지다. 주소까지 서명하므로 남의 이름으로 부를 수 없다
 SERVICE_PATH = '/api/v1/asset/service/story'
@@ -53,6 +54,11 @@ def world_path(world_id: uuid.UUID) -> str:
 def persona_path(persona_id: uuid.UUID) -> str:
     """계정 페르소나의 사본을 가져오는 주소."""
     return f'{SERVICE_PATH}/personas/{persona_id}'
+
+
+def shortcuts_path() -> str:
+    """토큰의 주인의 단축어를 가져오는 주소."""
+    return f'{SERVICE_PATH}/shortcuts'
 
 
 def signed_headers(secret: str, token: str, path: str, now: float) -> dict[str, str]:
@@ -110,3 +116,7 @@ class AssetClient:
     async def fetch_persona(self, token: str, persona_id: uuid.UUID) -> PersonaCopy:
         """그 사람의 계정 페르소나의 사본."""
         return read_answer(await self.get(persona_path(persona_id), token), PersonaCopy)
+
+    async def fetch_shortcuts(self, token: str) -> ShortcutListCopy:
+        """그 사람의 단축어들."""
+        return read_answer(await self.get(shortcuts_path(), token), ShortcutListCopy)

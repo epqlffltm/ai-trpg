@@ -204,6 +204,10 @@ class Message(Base):
     chapter_id: Mapped[str | None] = mapped_column(String(40), default=None)
     edited: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     suggestions: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default='{}')
+    # 사람의 말이 "/이름"으로 부른 단축어의 본문(app/shortcuts, #981). 보낼 때 찾아 잘라 둔 것이다.
+    # 그 말에 답하는 차례(다시 쓰기, 이어 쓰기까지)의 프롬프트에만 붙는다.
+    # 응답에 싣지 않는다(본문에는 부른 이름만 남는다). 단축어를 쓰지 않은 말이면 비어 있다
+    shortcut_body: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

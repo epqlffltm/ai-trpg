@@ -165,6 +165,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | DELETE | `/api/v1/story/conversations/{id}/notes/{note_id}` | 기억 메모 지우기(제안을 버리는 것도 이것). 204 | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}/bookmarks` | [책갈피](#책갈피)들(나중에 단 것부터, `{message_id, note, role, excerpt, created_at}`) | access 토큰 |
 | PUT, DELETE | `/api/v1/story/conversations/{id}/bookmarks/{message_id}` | 책갈피 달기 `{note?}`(이미 있으면 메모만 바꾼다), 떼기(204, 달지 않았어도). 다른 세션의 말은 404 `message_not_found`, 가득 차면 409 `bookmarks_full` | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}/shortcuts` | 그 세션에서 고를 수 있는 [단축어](#단축어)(`{name, description, source}`, 세계관의 것(`work`) 다음 내 것(`mine`)). 본문은 싣지 않는다 | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}/summary` | 지금 가지의 [굴리는 요약](#기억-메모)(`{text, covered_up_to, created_at}`, 읽기만). 없으면 null | access 토큰 |
 | GET | `/api/v1/story/gallery` | 그 세계관에서 내가 연 일러스트들(`?world_id=`, 처음 연 차례). [계정의 기록](#계정의-기록) | access 토큰 |
 
@@ -190,7 +191,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 - **사본은 바뀌지 않는다.** 제작자가 다시 게시해도 그 세션은 처음의 판으로 돈다. 새 판은 새로 시작한 세션이 쓴다.
 - **판의 문서는 받은 그대로 둔다.** 지금 검사하는 칸은 형식, 이름, 등급, 그림뿐이고(`app/assets/schemas.py`),
   나머지(시간대, 지도, 물건, 인물, 이벤트, 엔딩)는 그 칸을 쓰는 조각이 읽는 모양을 더한다.
-- **모르는 형식의 판은 받지 않는다.** 이 서버가 읽을 줄 아는 형식은 7 까지다(`WORLD_FORMAT_MAX`, 형식 6 은 장, 7 은 장이 여는 로어북 항목). 모르는 조건이나 효과를 엔진이 판정할 수 없어서다.
+- **모르는 형식의 판은 받지 않는다.** 이 서버가 읽을 줄 아는 형식은 8 까지다(`WORLD_FORMAT_MAX`, 형식 6 은 장, 7 은 장이 여는 로어북 항목, 8 은 제작자 [단축어](#단축어)). 모르는 조건이나 효과를 엔진이 판정할 수 없어서다.
   asset 서버가 형식을 올리면 그것을 읽는 법과 함께 이 값을 올린다.
 - **장르**(판의 형식 4, `app/conversations/genres.py`). 세션의 `world.genre` 에 판의 장르를 늘 싣는다(시작, 읽기, 목록). 화면이 장면(D2)의 테마를 고른다.
   값의 목록은 asset 서버(`asset-server/app/genres.py`)가 지킨다. 이 서버는 글자인지만 보고 그대로 싣는다. 규칙이 아니라 화면의 일이라 엔진은 보지 않는다.
@@ -408,6 +409,19 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
 - 그 자리로 가는 것은 가지 고르기(`PUT /conversations/{id}/branch`, `message_id`)다. 다른 가지의 말이면 그 가지가 보인다.
 - 목록의 앞부분(80자)은 답이면 말 조각의 글을 잇는다(표식 `@이름:` 은 빠진다).
 - 세션을 지우면 같은 트랜잭션에서 뗀다. 플레이 복사는 책갈피를 옮기지 않는다. 탈퇴하면 세션과 함께 지워진다.
+
+### 단축어
+
+사람의 말이 "/이름"으로 시작하면 정해 둔 연출의 글(본문)을 그 턴에만 붙인다(#981, chat 과 같은 규칙, `app/shortcuts/`). 단축어 자체는 asset 서버의 것이다.
+
+- **찾는 차례.** 세계관의 판의 제작자 단축어(판 형식 8)가 먼저, 없으면 내 단축어(asset 의 `GET /service/story/shortcuts`)다. 없는 이름이면 그냥 글이다.
+  말의 맨 앞만 본다. 판 사본의 단축어의 모양이 틀리면 단축어가 없는 것으로 본다.
+- **내 단축어를 부르는 때.** "/이름"으로 시작하는 말에만 asset 서버를 부른다. 차례를 잡기 전에 부른다. 죽어 있으면 세계관의 것만 쓴다.
+- **붙는 자리.** 그 턴의 사람의 말 끝에 `[단축어] 본문` 으로 붙는다(400자까지). 카드(시스템 지시)에 넣지 않는다.
+  사람의 입력과 똑같이 다룬다. 말은 엔진의 상태를 바꾸지 않으므로 단축어도 바꾸지 못한다(판정은 행동 API 만 한다).
+- **기록.** 말의 본문에는 적은 그대로(`/일기 …`) 남는다. 찾은 본문은 말에 따로 적어 두되(`shortcut_body`) 응답에 싣지 않는다.
+  그 말에 다시 쓰기, 이어 쓰기를 하면 다시 붙는다. 다음 턴부터는 부른 이름을 뗀 글만 간다. 플레이 복사는 적어 둔 본문도 옮긴다.
+- 청구는 보통 턴과 같다(붙은 본문도 입력이다).
 
 ### 기억 메모
 

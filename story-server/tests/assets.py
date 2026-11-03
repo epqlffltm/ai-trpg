@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from app.assets.client import AssetAdultRequiredError, AssetNotFoundError, AssetUnavailableError
-from app.assets.schemas import PersonaCopy, WorldCopy, WorldDocument
+from app.assets.schemas import PersonaCopy, ShortcutDocument, ShortcutListCopy, WorldCopy, WorldDocument
 from app.ratings import Rating
 
 IMAGE_ID = uuid.UUID('0b7c6f1e-2d3a-4b5c-8d9e-0f1a2b3c4d5e')
@@ -86,13 +86,14 @@ class FakeAsset:
     """
     가짜 asset 서버. worlds 와 personas 에 있는 것을 내준다. 없으면 404(AssetNotFoundError)다.
 
-    adult_required 에 넣은 세계관은 403, down 이면 모든 요청이 AssetUnavailableError 다.
+    shortcuts 는 내 단축어다. adult_required 에 넣은 세계관은 403, down 이면 모든 요청이 AssetUnavailableError 다.
     무엇을 어느 토큰으로 불렀는지 calls 에 남는다.
     """
 
     worlds: dict[uuid.UUID, WorldCopy] = field(default_factory=dict)
     personas: dict[uuid.UUID, PersonaCopy] = field(default_factory=dict)
     adult_required: set[uuid.UUID] = field(default_factory=set)
+    shortcuts: list[ShortcutDocument] = field(default_factory=list)
     down: bool = False
     calls: list[tuple[uuid.UUID, str]] = field(default_factory=list)
 
@@ -111,6 +112,13 @@ class FakeAsset:
         if persona_id not in self.personas:
             raise AssetNotFoundError
         return self.personas[persona_id]
+
+    async def fetch_shortcuts(self, token: str) -> ShortcutListCopy:
+        """토큰의 주인의 단축어. 테스트의 토큰은 한 사람의 것이라 누구의 것인지 가르지 않는다."""
+        self.calls.append((uuid.UUID(int=0), token))
+        if self.down:
+            raise AssetUnavailableError('asset 서버가 죽었다(테스트)')
+        return ShortcutListCopy(items=self.shortcuts)
 
     async def fetch_world(self, token: str, world_id: uuid.UUID) -> WorldCopy:
         self.calls.append((world_id, token))
