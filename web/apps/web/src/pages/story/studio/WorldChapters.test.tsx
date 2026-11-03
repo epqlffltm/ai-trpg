@@ -45,6 +45,7 @@ function world(): StoryWorldDetail {
     events: [{ id: 'rain', name: '소나기', when: { match: 'all', items: [] }, repeat: false, scene: { text: '비가 온다.', cast: [], image_id: null, collectible: false }, on_open: [], choices: [] }],
     endings: [],
     chapters: [],
+    shortcuts: [],
     lorebooks: [BOOK],
     latest_version: null,
     published_at: null,

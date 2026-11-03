@@ -17,6 +17,7 @@ app/worlds/documents.py 의 WorldDocument). 받은 것을 이 모양으로 검�
   - 5: 조건의 ending_seen(이 계정이 그 엔딩을 본 적이 있다, 회차 혜택). 4 까지의 판에는 그 조건이 없다
   - 6: 장(chapters, 조건의 chapter_at_least, docs/architecture/chapters.md). 5 까지의 판은 장이 없다
   - 7: 장이 여는 로어북 항목(chapters[].opens.lore). 6 의 판은 장이 로어북 항목을 열지 않는다
+  - 8: 제작자 단축어(shortcuts, #981). 규칙이 아니라 말을 보낼 때 붙이는 글이다. 7 까지의 판은 단축어가 없다
 그보다 새 형식의 판은 받지 않는다. 모르는 규칙(조건, 효과의 종류)을 엔진이 판정할 수 없어서다.
 """
 
@@ -28,7 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.ratings import Rating
 
 # 이 서버가 읽을 줄 아는 판의 형식의 끝. asset 서버가 형식을 올리면 그것을 읽는 법과 함께 올린다
-WORLD_FORMAT_MAX = 7
+WORLD_FORMAT_MAX = 8
 
 
 class WorldDocument(BaseModel):

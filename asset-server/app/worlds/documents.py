@@ -19,6 +19,8 @@
        5 까지의 판은 장이 없는 것으로 읽는다(모든 장소와 이벤트가 처음부터 열려 있다)
   - 7: 장이 여는 로어북 항목(chapters[].opens.lore: [{"lorebook", "entry"}])을 더했다(2026-11-02).
        6 의 판은 장이 로어북 항목을 열지 않는 것으로 읽는다. 받는 쪽(story)은 닫힌 항목을 모델에 보내지 않는다
+  - 8: 제작자 단축어(shortcuts: [{"name", "description", "body"}])를 더했다(2026-11-03, #981).
+       7 까지의 판은 단축어가 없다. 받는 쪽(story)이 형식의 상한(WORLD_FORMAT_MAX)을 먼저 8 로 올린다
 
 인물의 보이기는 판에서는 정해진 값이다. 초안의 덮어쓰기가 비어 있으면 세계관의 기본을 채워 넣는다.
 받는 쪽(story)이 기본과 덮어쓰기를 다시 합치지 않아도 된다.
@@ -34,6 +36,7 @@ from app.characters.documents import LorebookCopyDocument, PathDocument, SpriteD
 from app.characters.models import AffectionDisplay
 from app.genres import Genre
 from app.ratings import Rating
+from app.shortcuts.schemas import Shortcut
 from app.worlds.models import (
     AfterEnding,
     ConditionKind,
@@ -48,7 +51,7 @@ from app.worlds.models import (
 )
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 7
+DOCUMENT_FORMAT = 8
 
 
 class SlotDocument(BaseModel):
@@ -318,6 +321,7 @@ class WorldDocument(BaseModel):
     endings: list[EndingDocument] = []
     genre: Genre
     chapters: list[ChapterDocument] = []
+    shortcuts: list[Shortcut] = []
 
 
 def character_copy(character_id: uuid.UUID, number: int, document: Mapping) -> CastCharacterDocument:
@@ -384,6 +388,7 @@ def build_document(
         endings=world.endings,
         genre=Genre(world.genre),
         chapters=world.chapters,
+        shortcuts=world.shortcuts,
     )
 
 

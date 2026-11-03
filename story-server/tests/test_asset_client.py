@@ -74,6 +74,15 @@ async def test_a_world_is_fetched_with_a_signature_and_the_token():
     assert fetched == copy
 
 
+async def test_a_format_eight_world_keeps_its_shortcuts():
+    shortcut = {'name': '일기', 'description': '', 'body': '오늘의 일을 일기로 써 줘.'}
+    body = copy_body(fmt=8, shortcuts=[shortcut])
+
+    fetched = await client_answering(lambda request: answer(200, body)).fetch_world(TOKEN, WORLD_ID)
+
+    assert (fetched.document.format, fetched.document.model_dump()['shortcuts']) == (8, [shortcut])
+
+
 def test_the_path_carries_this_servers_name():
     assert world_path(WORLD_ID) == f'/api/v1/asset/service/story/worlds/{WORLD_ID}/latest'
     assert persona_path(WORLD_ID) == f'/api/v1/asset/service/story/personas/{WORLD_ID}'

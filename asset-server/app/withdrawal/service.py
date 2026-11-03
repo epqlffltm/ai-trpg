@@ -25,12 +25,14 @@ from app.images.store import ImageStore
 from app.lorebooks import repository as lorebooks
 from app.notifications import outbox
 from app.personas import repository as personas
+from app.shortcuts import repository as shortcuts
 from app.worlds import repository as worlds
 
 
 async def erase_belongings(session: AsyncSession, user_id: uuid.UUID) -> None:
-    """그 사람의 페르소나와 비공개 캐릭터와 세계관, 로어북, 보내지 않은 알림을 지우고 저장한다."""
+    """그 사람의 페르소나와 내 단축어, 비공개 캐릭터와 세계관, 로어북, 보내지 않은 알림을 지우고 저장한다."""
     await personas.delete_all_owned(session, user_id)
+    await shortcuts.delete_owned(session, user_id)
     await characters.delete_private_owned(session, user_id)
     await worlds.delete_private_owned(session, user_id)
     await lorebooks.delete_owned(session, user_id)

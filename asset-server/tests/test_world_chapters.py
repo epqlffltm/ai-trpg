@@ -233,7 +233,7 @@ async def test_lore_opened_by_a_chapter_is_frozen_in_a_format_seven_version(clie
 
     assert response.status_code == status.HTTP_201_CREATED, response.text
     document = response.json()['document']
-    assert document['format'] == DOCUMENT_FORMAT == 7
+    assert document['format'] == DOCUMENT_FORMAT >= 7
     assert document['chapters'][1]['opens']['lore'] == [{'lorebook': lorebook_id, 'entry': 'city'}]
     assert document['chapters'][0]['opens']['lore'] == []
 
