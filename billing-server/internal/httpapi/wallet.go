@@ -58,7 +58,10 @@ type entryBody struct {
 	HoldID *uuid.UUID `json:"hold_id"`
 	// HoldStatus 는 그 홀드의 지금 상태다(held, captured, released). 홀드의 줄이 아니면 null 이다(#430).
 	HoldStatus *wallet.HoldStatus `json:"hold_status"`
-	CreatedAt  time.Time          `json:"created_at"`
+	// Source 는 받은 줄(reason 이 grant)이 어디서 왔는지다(welcome, attendance, chest, event, coupon, other, #979).
+	// 받은 줄이 아니면 null 이다
+	Source    *wallet.GrantSource `json:"source"`
+	CreatedAt time.Time           `json:"created_at"`
 }
 
 // entriesBody 는 원장 응답의 모양이다.
@@ -151,6 +154,10 @@ func toEntryBody(entry wallet.Entry) entryBody {
 	if entry.HoldStatus != "" {
 		status := entry.HoldStatus
 		body.HoldStatus = &status
+	}
+	if entry.Source != "" {
+		source := entry.Source
+		body.Source = &source
 	}
 	return body
 }
