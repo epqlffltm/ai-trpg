@@ -1,8 +1,8 @@
 // web/apps/web/src/pages/trpg/room/roomPure.test.ts
 // 스트림이 끝난 뒤의 일, 받은 메시지의 갈래, 채팅과 일어난 일 합치기, 입력 중 지우기, 실패의 글을 순수한 함수로 본다.
-// 바꾼 테이블 넣기(putTable)는 먼저 떠난 읽기가 나중에 닿아도 덮이지 않는지 본다.
+// 바꾼 테이블 넣기(putTable)는 먼저 떠난 읽기가 나중에 닿아도 덮이지 않는지, 멈춘 읽기를 다시 하지 않는지(#975) 본다.
 
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../../api/errors';
 import { chapterLabel, streamLabel } from './RoomHeader';
@@ -112,6 +112,22 @@ describe('putTable', () => {
     arrive(before);
     await reading;
 
+    expect(queryClient.getQueryData<TableDetail>(tableQuery('t1').queryKey)?.invite_code).toBe('NEW999');
+  });
+
+  it('답이 테이블 전체라서, 화면이 보고 있어도 멈춘 읽기를 다시 하지 않는다', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const arrivals: ((table: TableDetail) => void)[] = [];
+    const read = () => new Promise<TableDetail>((resolve) => arrivals.push(resolve));
+    const stop = new QueryObserver(queryClient, { queryKey: tableQuery('t1').queryKey, queryFn: read }).subscribe(() => undefined);
+    await Promise.resolve();
+
+    await putTable(queryClient, tableDetail('t1', { invite_code: 'NEW999' }) as unknown as TableDetail);
+    arrivals[0]?.(tableDetail('t1', { invite_code: 'OLD111' }) as unknown as TableDetail);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    stop();
+
+    expect(arrivals).toHaveLength(1);
     expect(queryClient.getQueryData<TableDetail>(tableQuery('t1').queryKey)?.invite_code).toBe('NEW999');
   });
 });

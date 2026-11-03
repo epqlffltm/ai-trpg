@@ -1,6 +1,8 @@
 // web/apps/web/src/pages/trpg/room/round/roundPure.test.ts
 // 라운드(B6 의 ③)의 순수한 함수. 미리 보기 잇기, 결과의 글, 선언의 입력과 검사, 실패의 글을 본다.
+// 지금 라운드 바꾸기(replaceCurrentRound)는 먼저 떠난 읽기가 덮지 않고, 멈춘 읽기를 다시 하지 않는지(#975) 본다.
 
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../../../api/errors';
 import type { Declaration, Round, Ruleset, TableDetail, TableMember } from '../../../../api/types';
@@ -10,6 +12,7 @@ import type { ActionContext } from './action/actionOptions';
 import { declarationHints, initialDeclarationDraft, toDeclarationUpdate } from './declarationDraft';
 import { applyPreview, type NarrationPreview } from './preview';
 import { describeCloseProblem, describeDeclarationProblem } from './roundProblem';
+import { currentRoundQuery, replaceCurrentRound } from './roundQueries';
 import { actionLabel, deathSaveLine, myDeclaration, outcomeLine, pastRounds, remainingSeconds } from './roundView';
 
 const rules = RULES as unknown as Ruleset;
@@ -161,5 +164,24 @@ describe('roundProblem', () => {
     expect(describeDeclarationProblem(new ApiError({ status: 409, detail: 'x', code: 'round_closing' }))).toMatchObject({ refresh: true });
     expect(describeDeclarationProblem(new ApiError({ status: 409, detail: 'x', code: 'character_downed' })).message).toContain('글만');
     expect(describeCloseProblem(new ApiError({ status: 403, detail: 'x' })).message).toBe('방장만 라운드를 닫을 수 있습니다.');
+  });
+});
+
+describe('replaceCurrentRound', () => {
+  it('먼저 떠난 읽기가 나중에 닿아도 받은 라운드가 남고, 답이 라운드 전체라서 다시 읽지 않는다', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = currentRoundQuery('t1').queryKey;
+    const arrivals: ((value: Round) => void)[] = [];
+    const read = () => new Promise<Round>((resolve) => arrivals.push(resolve));
+    const stop = new QueryObserver(queryClient, { queryKey: key, queryFn: read }).subscribe(() => undefined);
+    await Promise.resolve();
+
+    await replaceCurrentRound(queryClient, 't1', round(3) as unknown as Round);
+    arrivals[0]?.(round(2) as unknown as Round);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    stop();
+
+    expect(arrivals).toHaveLength(1);
+    expect(queryClient.getQueryData<Round>(key)?.number).toBe(3);
   });
 });
