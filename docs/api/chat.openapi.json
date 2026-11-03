@@ -221,7 +221,7 @@
         "type": "object"
       },
       "CharacterDocumentOut": {
-        "description": "응답에 싣는 판의 문서. 장르가 늘 있다(사본에 없으면 기본 장르, app/genres.py). 화면이 대화의 테마를 고른다.",
+        "description": "응답에 싣는 판의 문서. 장르가 늘 있다(사본에 없으면 기본 장르, app/genres.py). 화면이 대화의 테마를 고른다.\n제작자 단축어(shortcuts)는 싣지 않는다. 본문은 모델에만 가고, 고르는 목록은 GET /conversations/{id}/shortcuts 다.",
         "properties": {
           "affection": {
             "anyOf": [
@@ -2046,6 +2046,62 @@
         "title": "SceneConditionDocument",
         "type": "object"
       },
+      "ShortcutDocument": {
+        "description": "단축어 하나(제작자의 것이든 내 것이든). 길이와 이름의 모양은 asset 서버가 지킨다.\n여기서는 검사하지 않는다(판의 사본을 읽지 못하게 되면 대화 전체를 못 쓴다). 붙일 때 자른다(app/shortcuts/calls.py).",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ],
+        "title": "ShortcutDocument",
+        "type": "object"
+      },
+      "ShortcutOut": {
+        "description": "고를 수 있는 단축어 하나.",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ShortcutSource"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "source"
+        ],
+        "title": "ShortcutOut",
+        "type": "object"
+      },
+      "ShortcutSource": {
+        "description": "단축어가 어디의 것인가. work 는 캐릭터의 판(제작자), mine 은 내 단축어다.",
+        "enum": [
+          "work",
+          "mine"
+        ],
+        "title": "ShortcutSource",
+        "type": "string"
+      },
       "SpriteDocument": {
         "description": "캐릭터 그림 하나(배경이 투명한 서 있는 그림). expression 은 표정(빈 글이면 기본),\noutfit 은 이 그림의 차림인 옷(물건의 id, 없으면 처음 차림)이다.",
         "properties": {
@@ -3163,7 +3219,7 @@
     },
     "/api/v1/chat/conversations/{conversation_id}/messages": {
       "post": {
-        "description": "말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다.\nedit_of 가 있으면 그 사람의 말을 고친 새 가지다(원본은 남는다). 캐릭터의 말이면 422 not_editable.",
+        "description": "말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다.\nedit_of 가 있으면 그 사람의 말을 고친 새 가지다(원본은 남는다). 캐릭터의 말이면 422 not_editable.\n말이 \"/이름\"으로 시작하면 그 단축어의 본문이 이번 답의 프롬프트에 붙는다(app/shortcuts). 없는 이름이면 그냥 글이다.",
         "operationId": "send_message_api_v1_chat_conversations__conversation_id__messages_post",
         "parameters": [
           {
@@ -3566,6 +3622,60 @@
         "summary": "Accept Note",
         "tags": [
           "memory"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/conversations/{conversation_id}/shortcuts": {
+      "get": {
+        "description": "그 대화에서 고를 수 있는 단축어들. 본문은 싣지 않는다.",
+        "operationId": "list_shortcuts_api_v1_chat_conversations__conversation_id__shortcuts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ShortcutOut"
+                  },
+                  "title": "Response List Shortcuts Api V1 Chat Conversations  Conversation Id  Shortcuts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Shortcuts",
+        "tags": [
+          "shortcuts"
         ],
         "x-audience": "user"
       }

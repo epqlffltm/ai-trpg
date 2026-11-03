@@ -209,4 +209,9 @@ class Message(Base):
     # [{"kind": "affection", "delta", "rising"}, {"kind": "gift", "item"}, {"kind": "move", "place", "minutes"}]
     # 화면이 답 아래에 칩으로 보인다. 받아들인 것이 없으면 빈 목록이다
     changes: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    # 사람의 말이 "/이름"으로 부른 단축어의 본문(app/shortcuts, #981). 보낼 때 찾아 잘라 둔 것이다.
+    # 그 말에 답하는 차례(다시 쓰기, 이어 쓰기까지)의 프롬프트에만 붙는다.
+    # 응답에 싣지 않는다(본문에는 부른 이름만 남는다)
+    # 단축어를 쓰지 않은 말이면 비어 있다
+    shortcut_body: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

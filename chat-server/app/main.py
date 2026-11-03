@@ -76,6 +76,7 @@ from app.operators import router as operators
 from app.operators.service import AlreadyHandledError, ReportNotFoundError
 from app.reports import router as reports
 from app.reports.service import AlreadyReportedError, NotReportableError
+from app.shortcuts import router as shortcuts
 from app.transcripts import router as transcripts
 from app.turns import router as messages
 from app.turns import settler
@@ -264,6 +265,7 @@ def create_app(
     app.include_router(notes.router, prefix=API_PREFIX)
     # 말의 책갈피(#982). 모델을 부르지 않는다
     app.include_router(bookmarks.router, prefix=API_PREFIX)
+    app.include_router(shortcuts.router, prefix=API_PREFIX)
     # 말 보내기, 다시 쓰기, 멈추기. 앞의 둘은 바로 SSE 로 답한다
     app.include_router(messages.router, prefix=API_PREFIX)
     app.include_router(messages.message_router, prefix=API_PREFIX)

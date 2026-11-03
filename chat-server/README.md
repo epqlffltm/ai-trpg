@@ -130,6 +130,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | POST | `/api/v1/chat/conversations/{id}/notes/{note_id}/accept` | [요약이 제안한 메모](#요약이-제안하는-메모) 받아들이기(200). 가득 차면 409 `notes_full` | access 토큰 |
 | GET | `/api/v1/chat/conversations/{id}/bookmarks` | [책갈피](#책갈피)들(나중에 단 것부터, `{message_id, note, role, excerpt, created_at}`) | access 토큰 |
 | PUT, DELETE | `/api/v1/chat/conversations/{id}/bookmarks/{message_id}` | 책갈피 달기 `{note?}`(이미 있으면 메모만 바꾼다), 떼기(204, 달지 않았어도). 다른 대화의 말은 404 `message_not_found`, 가득 차면 409 `bookmarks_full` | access 토큰 |
+| GET | `/api/v1/chat/conversations/{id}/shortcuts` | 그 대화에서 고를 수 있는 [단축어](#단축어)(`{name, description, source}`, 캐릭터의 것(`work`) 다음 내 것(`mine`)). 본문은 싣지 않는다 | access 토큰 |
 | PATCH | `/api/v1/chat/messages/{id}` | [상대의 말 고치기](#고치기). `{content}`. 고친 말을 돌려준다. 사람의 말이면 422 `not_editable` | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/reports` | [캐릭터의 답 신고](#신고). `{reason, description?}`. 201. 사람의 말은 422 `not_reportable`, 두 번째는 409 `already_reported` | access 토큰 |
 | GET | `/api/v1/chat/admin/message-reports` | 운영자: 열린 신고의 목록(`minor` 먼저, 오래된 것부터, 대화의 글은 없다). 운영자가 아니면 404 | access 토큰(운영자) |
@@ -476,6 +477,18 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - 목록에는 말의 역할과 앞부분(80자, 줄바꿈은 띄어쓰기)을 함께 싣는다. 모델을 부르지 않아 청구하지 않고, 답을 쓰는 중에도 된다. 쓰기는 요청 수 제한의 쓰기로 센다.
 - 대화를 지우면(지운 시각) 같은 트랜잭션에서 뗀다. 말이나 대화의 행이 지워지면(탈퇴) 외래 키로 함께 지워진다.
 - 스크린샷(고른 말들을 그림으로)은 화면이 만든다. 서버에 올리지 않는다.
+
+### 단축어
+
+사람의 말이 "/이름"으로 시작하면 정해 둔 연출의 글(본문)을 그 턴에만 붙인다(#981, `app/shortcuts/`). 단축어 자체는 asset 서버의 것이다.
+
+- **찾는 차례.** 캐릭터의 판의 제작자 단축어(판 형식 10)가 먼저, 없으면 내 단축어(asset 의 `GET /service/chat/shortcuts`)다. 없는 이름이면 그냥 글이다.
+  말의 맨 앞만 본다. 이름 뒤는 빈칸이나 말의 끝이다.
+- **내 단축어를 부르는 때.** "/이름"으로 시작하는 말에만 asset 서버를 부른다. 차례를 잡기 전에 부른다(DB 의 연결을 쥐지 않는다). 죽어 있으면 캐릭터의 것만 쓴다.
+- **붙는 자리.** 그 턴의 사람의 말 끝에 `[단축어] 본문` 으로 붙는다(400자까지). 카드(시스템 지시)에 넣지 않는다. 사람의 입력과 똑같이 다루고 상태(호감도, 소지품)를 바꾸지 못한다.
+- **기록.** 말의 본문에는 적은 그대로(`/일기 …`) 남는다. 찾은 본문은 말에 따로 적어 두되(`shortcut_body`) 응답에 싣지 않는다.
+  그 말에 다시 쓰기, 이어 쓰기를 하면 다시 붙는다. 다음 턴부터는 부른 이름을 뗀 글만 간다.
+- 청구는 보통 턴과 같다(붙은 본문도 입력이다).
 
 ### 로어북
 

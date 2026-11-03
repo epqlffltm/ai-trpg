@@ -211,6 +211,7 @@ export interface paths {
          * Send Message
          * @description 말을 보낸다. 사람의 말을 저장하고 모델의 답을 흘려보낸다. 끊겨도 서버는 끝까지 답을 저장한다.
          *     edit_of 가 있으면 그 사람의 말을 고친 새 가지다(원본은 남는다). 캐릭터의 말이면 422 not_editable.
+         *     말이 "/이름"으로 시작하면 그 단축어의 본문이 이번 답의 프롬프트에 붙는다(app/shortcuts). 없는 이름이면 그냥 글이다.
          */
         post: operations["send_message_api_v1_chat_conversations__conversation_id__messages_post"];
         delete?: never;
@@ -301,6 +302,26 @@ export interface paths {
          * @description 요약이 제안한 메모를 받아들인다. 다음 말부터 모델에 간다. 버리려면 지운다.
          */
         post: operations["accept_note_api_v1_chat_conversations__conversation_id__notes__note_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{conversation_id}/shortcuts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Shortcuts
+         * @description 그 대화에서 고를 수 있는 단축어들. 본문은 싣지 않는다.
+         */
+        get: operations["list_shortcuts_api_v1_chat_conversations__conversation_id__shortcuts_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -707,6 +728,7 @@ export interface components {
         /**
          * CharacterDocumentOut
          * @description 응답에 싣는 판의 문서. 장르가 늘 있다(사본에 없으면 기본 장르, app/genres.py). 화면이 대화의 테마를 고른다.
+         *     제작자 단축어(shortcuts)는 싣지 않는다. 본문은 모델에만 가고, 고르는 목록은 GET /conversations/{id}/shortcuts 다.
          */
         CharacterDocumentOut: {
             affection?: components["schemas"]["AffectionDocument"] | null;
@@ -1569,6 +1591,39 @@ export interface components {
             target: string;
         };
         /**
+         * ShortcutDocument
+         * @description 단축어 하나(제작자의 것이든 내 것이든). 길이와 이름의 모양은 asset 서버가 지킨다.
+         *     여기서는 검사하지 않는다(판의 사본을 읽지 못하게 되면 대화 전체를 못 쓴다). 붙일 때 자른다(app/shortcuts/calls.py).
+         */
+        ShortcutDocument: {
+            /** Body */
+            body: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ShortcutOut
+         * @description 고를 수 있는 단축어 하나.
+         */
+        ShortcutOut: {
+            /** Description */
+            description: string;
+            /** Name */
+            name: string;
+            source: components["schemas"]["ShortcutSource"];
+        };
+        /**
+         * ShortcutSource
+         * @description 단축어가 어디의 것인가. work 는 캐릭터의 판(제작자), mine 은 내 단축어다.
+         * @enum {string}
+         */
+        ShortcutSource: "work" | "mine";
+        /**
          * SpriteDocument
          * @description 캐릭터 그림 하나(배경이 투명한 서 있는 그림). expression 은 표정(빈 글이면 기본),
          *     outfit 은 이 그림의 차림인 옷(물건의 id, 없으면 처음 차림)이다.
@@ -2396,6 +2451,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_shortcuts_api_v1_chat_conversations__conversation_id__shortcuts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShortcutOut"][];
                 };
             };
             /** @description 입력이 틀렸다 */
