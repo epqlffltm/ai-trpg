@@ -650,6 +650,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset/service/{caller}/shortcuts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Supply Shortcuts
+         * @description 토큰의 주인의 단축어들.
+         */
+        get: operations["supply_shortcuts_api_v1_asset_service__caller__shortcuts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset/service/{caller}/worlds/{world_id}/latest": {
         parameters: {
             query?: never;
@@ -683,6 +703,30 @@ export interface paths {
          */
         get: operations["read_latest_number_api_v1_asset_service__caller__worlds__world_id__latest_number_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/shortcuts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Shortcuts
+         * @description 내 단축어들.
+         */
+        get: operations["read_shortcuts_api_v1_asset_shortcuts_get"];
+        /**
+         * Replace Shortcuts
+         * @description 내 단축어를 통째로 바꾼다.
+         */
+        put: operations["replace_shortcuts_api_v1_asset_shortcuts_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1243,6 +1287,11 @@ export interface components {
             /** @default all */
             rating: components["schemas"]["Rating"];
             /**
+             * Shortcuts
+             * @default []
+             */
+            shortcuts: components["schemas"]["Shortcut"][];
+            /**
              * Speech Examples
              * @default
              */
@@ -1316,6 +1365,11 @@ export interface components {
             /** Published At */
             published_at: string | null;
             rating: components["schemas"]["Rating"];
+            /**
+             * Shortcuts
+             * @default []
+             */
+            shortcuts: components["schemas"]["Shortcut"][];
             /** Speech Examples */
             speech_examples: string;
             /** Sprites */
@@ -1383,6 +1437,11 @@ export interface components {
              */
             places: components["schemas"]["PlaceDocument"][];
             rating: components["schemas"]["Rating"];
+            /**
+             * Shortcuts
+             * @default []
+             */
+            shortcuts: components["schemas"]["Shortcut"][];
             /** Speech Examples */
             speech_examples: string;
             /**
@@ -1468,6 +1527,8 @@ export interface components {
             /** Places */
             places?: components["schemas"]["Place"][] | null;
             rating?: components["schemas"]["Rating"] | null;
+            /** Shortcuts */
+            shortcuts?: components["schemas"]["Shortcut"][] | null;
             /** Speech Examples */
             speech_examples?: string | null;
             /** Sprites */
@@ -2906,6 +2967,32 @@ export interface components {
             when: components["schemas"]["ConditionsDocument"];
         };
         /**
+         * Shortcut
+         * @description 단축어 하나. 받을 때도 판의 문서에 굳힐 때도 이 모양이다.
+         */
+        Shortcut: {
+            /** Body */
+            body: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ShortcutList
+         * @description 내 단축어 전체. 바꿀 때도 읽을 때도 목록을 통째로 주고받는다(적은 차례가 고르는 목록의 차례다).
+         */
+        ShortcutList: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["Shortcut"][];
+        };
+        /**
          * Show
          * @description 보이기의 기본. 인물의 공개, 지도에 인물을 보이는지, 인물 창의 항목이다. 인물마다 덮어쓴다.
          */
@@ -3221,6 +3308,11 @@ export interface components {
             /** @default all */
             rating: components["schemas"]["Rating"];
             /**
+             * Shortcuts
+             * @default []
+             */
+            shortcuts: components["schemas"]["Shortcut"][];
+            /**
              * @default {
              *       "map": "shown",
              *       "panel": [
@@ -3325,6 +3417,11 @@ export interface components {
             /** Published At */
             published_at: string | null;
             rating: components["schemas"]["Rating"];
+            /**
+             * Shortcuts
+             * @default []
+             */
+            shortcuts: components["schemas"]["Shortcut"][];
             show: components["schemas"]["Show"];
             /** Slots */
             slots: components["schemas"]["Slot"][];
@@ -3386,6 +3483,11 @@ export interface components {
             /** Places */
             places: components["schemas"]["WorldPlaceDocument"][];
             rating: components["schemas"]["Rating"];
+            /**
+             * Shortcuts
+             * @default []
+             */
+            shortcuts: components["schemas"]["Shortcut"][];
             /** Slots */
             slots: components["schemas"]["SlotDocument"][];
             /** Start Items */
@@ -3593,6 +3695,8 @@ export interface components {
             /** Places */
             places?: components["schemas"]["WorldPlace"][] | null;
             rating?: components["schemas"]["Rating"] | null;
+            /** Shortcuts */
+            shortcuts?: components["schemas"]["Shortcut"][] | null;
             show?: components["schemas"]["Show"] | null;
             /** Slots */
             slots?: components["schemas"]["Slot"][] | null;
@@ -5028,6 +5132,37 @@ export interface operations {
             };
         };
     };
+    supply_shortcuts_api_v1_asset_service__caller__shortcuts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caller: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShortcutList"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     copy_latest_api_v1_asset_service__caller__worlds__world_id__latest_get: {
         parameters: {
             query?: never;
@@ -5079,6 +5214,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorldVersionNumber"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_shortcuts_api_v1_asset_shortcuts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShortcutList"];
+                };
+            };
+        };
+    };
+    replace_shortcuts_api_v1_asset_shortcuts_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShortcutList"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShortcutList"];
                 };
             };
             /** @description 입력이 틀렸다 */

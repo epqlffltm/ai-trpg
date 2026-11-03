@@ -830,6 +830,15 @@
             "$ref": "#/components/schemas/Rating",
             "default": "all"
           },
+          "shortcuts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Shortcut"
+            },
+            "maxItems": 20,
+            "title": "Shortcuts",
+            "type": "array"
+          },
           "speech_examples": {
             "default": "",
             "maxLength": 2000,
@@ -1028,6 +1037,14 @@
           "rating": {
             "$ref": "#/components/schemas/Rating"
           },
+          "shortcuts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Shortcut"
+            },
+            "title": "Shortcuts",
+            "type": "array"
+          },
           "speech_examples": {
             "title": "Speech Examples",
             "type": "string"
@@ -1207,6 +1224,14 @@
           },
           "rating": {
             "$ref": "#/components/schemas/Rating"
+          },
+          "shortcuts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Shortcut"
+            },
+            "title": "Shortcuts",
+            "type": "array"
           },
           "speech_examples": {
             "title": "Speech Examples",
@@ -1533,6 +1558,21 @@
                 "type": "null"
               }
             ]
+          },
+          "shortcuts": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Shortcut"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shortcuts"
           },
           "speech_examples": {
             "anyOf": [
@@ -4577,6 +4617,54 @@
         "title": "ScheduleLineDocument",
         "type": "object"
       },
+      "Shortcut": {
+        "additionalProperties": false,
+        "description": "단축어 하나. 받을 때도 판의 문서에 굳힐 때도 이 모양이다.",
+        "properties": {
+          "body": {
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 30,
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 10,
+            "minLength": 1,
+            "pattern": "^[^\\s/]+$",
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "body"
+        ],
+        "title": "Shortcut",
+        "type": "object"
+      },
+      "ShortcutList": {
+        "additionalProperties": false,
+        "description": "내 단축어 전체. 바꿀 때도 읽을 때도 목록을 통째로 주고받는다(적은 차례가 고르는 목록의 차례다).",
+        "properties": {
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Shortcut"
+            },
+            "maxItems": 20,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "title": "ShortcutList",
+        "type": "object"
+      },
       "Show": {
         "additionalProperties": false,
         "description": "보이기의 기본. 인물의 공개, 지도에 인물을 보이는지, 인물 창의 항목이다. 인물마다 덮어쓴다.",
@@ -5152,6 +5240,15 @@
             "$ref": "#/components/schemas/Rating",
             "default": "all"
           },
+          "shortcuts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Shortcut"
+            },
+            "maxItems": 20,
+            "title": "Shortcuts",
+            "type": "array"
+          },
           "show": {
             "$ref": "#/components/schemas/Show",
             "default": {
@@ -5398,6 +5495,14 @@
           "rating": {
             "$ref": "#/components/schemas/Rating"
           },
+          "shortcuts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Shortcut"
+            },
+            "title": "Shortcuts",
+            "type": "array"
+          },
           "show": {
             "$ref": "#/components/schemas/Show"
           },
@@ -5590,6 +5695,14 @@
           },
           "rating": {
             "$ref": "#/components/schemas/Rating"
+          },
+          "shortcuts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Shortcut"
+            },
+            "title": "Shortcuts",
+            "type": "array"
           },
           "slots": {
             "items": {
@@ -6212,6 +6325,21 @@
                 "type": "null"
               }
             ]
+          },
+          "shortcuts": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Shortcut"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shortcuts"
           },
           "show": {
             "anyOf": [
@@ -8753,6 +8881,56 @@
         "x-audience": "service"
       }
     },
+    "/api/v1/asset/service/{caller}/shortcuts": {
+      "get": {
+        "description": "토큰의 주인의 단축어들.",
+        "operationId": "supply_shortcuts_api_v1_asset_service__caller__shortcuts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caller",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Caller",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortcutList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Supply Shortcuts",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
     "/api/v1/asset/service/{caller}/worlds/{world_id}/latest": {
       "get": {
         "description": "토큰의 주인이 쓸 수 있는 세계관의 마지막 판.",
@@ -8871,6 +9049,80 @@
           "service"
         ],
         "x-audience": "service"
+      }
+    },
+    "/api/v1/asset/shortcuts": {
+      "get": {
+        "description": "내 단축어들.",
+        "operationId": "read_shortcuts_api_v1_asset_shortcuts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortcutList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Shortcuts",
+        "tags": [
+          "shortcuts"
+        ],
+        "x-audience": "user"
+      },
+      "put": {
+        "description": "내 단축어를 통째로 바꾼다.",
+        "operationId": "replace_shortcuts_api_v1_asset_shortcuts_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShortcutList"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortcutList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Replace Shortcuts",
+        "tags": [
+          "shortcuts"
+        ],
+        "x-audience": "user"
       }
     },
     "/api/v1/asset/worlds": {

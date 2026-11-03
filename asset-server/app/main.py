@@ -61,6 +61,8 @@ from app.personas.service import PersonaLimitError, PersonaNotFoundError
 from app.ratings import AdultContentRequiredError, handle_adult_content_required
 from app.reports import router as reports
 from app.reports.service import AlreadyReportedError, OwnCharacterReportError
+from app.shortcuts import router as shortcuts
+from app.shortcuts import supply as shortcut_supply
 from app.withdrawal import router as withdrawal
 from app.worlds import listings as world_listings
 from app.worlds import router as worlds
@@ -172,6 +174,8 @@ def create_app(
     app.include_router(me.router, prefix=API_PREFIX)
     # 계정 페르소나(#565). 주인만 다룬다
     app.include_router(personas.router, prefix=API_PREFIX)
+    # 내 단축어(#981). 계정의 것이다. 대화 중에 "/이름"으로 부른다
+    app.include_router(shortcuts.router, prefix=API_PREFIX)
 
     app.add_exception_handler(PersonaNotFoundError, personas.handle_persona_not_found)
     app.add_exception_handler(PersonaLimitError, personas.handle_persona_limit)
@@ -211,6 +215,7 @@ def create_app(
     # 그 서버의 서명(app/core/service_auth.py)과 사용자의 토큰을 함께 본다.
     # 프록시가 바깥에 열지 않는다(docker/nginx/templates/api.inc.template)
     app.include_router(persona_supply.router, prefix=API_PREFIX)
+    app.include_router(shortcut_supply.router, prefix=API_PREFIX)
     app.include_router(character_supply.router, prefix=API_PREFIX)
     app.include_router(world_supply.router, prefix=API_PREFIX)
     # 인증 서버가 탈퇴를 알리는 주소(docs/architecture/withdrawal.md). 인증 서버의 서명만 본다

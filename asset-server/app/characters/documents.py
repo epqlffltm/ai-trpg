@@ -24,6 +24,8 @@ TRPG 의 판 형식과 같은 방식이다.
   - 9: 장르(genre, app/genres.py 의 값 하나, 반드시 있다)를 더했다(2026-10-31).
        받는 쪽(chat)은 대화 화면의 테마를 이 값으로 고른다.
        8 까지의 판에도 장르를 적었다(마이그레이션 genre required 가 초안의 장르를 판의 문서에 넣었다)
+  - 10: 제작자 단축어(shortcuts: [{"name", "description", "body"}])를 더했다(2026-11-03, #981).
+       9 까지의 판은 단축어가 없다
 DB 를 모르는 순수한 함수다. 초안(Character)과 거른 소개에서 문서를 만든다.
 """
 
@@ -45,9 +47,10 @@ from app.characters.models import (
 from app.genres import Genre
 from app.lorebooks.documents import LoreEntryDocument
 from app.ratings import Rating
+from app.shortcuts.schemas import Shortcut
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 9
+DOCUMENT_FORMAT = 10
 
 
 class StartDocument(BaseModel):
@@ -238,6 +241,7 @@ class CharacterDocument(BaseModel):
     sprites: list[SpriteDocument] = []
     lorebooks: list[LorebookCopyDocument] = []
     genre: Genre
+    shortcuts: list[Shortcut] = []
 
     @model_validator(mode='before')
     @classmethod
@@ -272,4 +276,5 @@ def build_document(
         sprites=[SpriteDocument.model_validate(sprite) for sprite in character.sprites],
         lorebooks=list(lorebooks),
         genre=Genre(character.genre),
+        shortcuts=[Shortcut.model_validate(shortcut) for shortcut in character.shortcuts],
     )
