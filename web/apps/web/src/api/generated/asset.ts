@@ -2,6 +2,54 @@
 // docs/api/asset.openapi.json 에서 만든 타입. 손으로 고치지 않는다(npm run gen:api).
 
 export interface paths {
+    "/api/v1/asset/admin/banners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List All Banners
+         * @description 모든 배너(지난 것까지)와 지금 보이는지. 차례대로다.
+         */
+        get: operations["list_all_banners_api_v1_asset_admin_banners_get"];
+        put?: never;
+        /**
+         * Create Banner
+         * @description 공개 목록에 나오는 작품의 배너를 건다. 아니면 409 not_published, 끝이 지금보다 앞이면 422 다.
+         */
+        post: operations["create_banner_api_v1_asset_admin_banners_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/admin/banners/{banner_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Banner
+         * @description 배너를 내린다. 없으면 404 다.
+         */
+        delete: operations["delete_banner_api_v1_asset_admin_banners__banner_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Banner
+         * @description 배너의 차례와 기간을 고친다. 없으면 404, 기간이 거꾸로면 422 다.
+         */
+        patch: operations["update_banner_api_v1_asset_admin_banners__banner_id__patch"];
+        trace?: never;
+    };
     "/api/v1/asset/admin/character-reports": {
         parameters: {
             query?: never;
@@ -95,6 +143,26 @@ export interface paths {
          * @description 세계관을 숨기거나 푼다. 세계관이 없으면 404 다. story 의 신고(world_id)를 보고 한다.
          */
         put: operations["change_world_hidden_api_v1_asset_admin_worlds__world_id__hidden_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/banners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Banners
+         * @description 지금 걸린 배너. 차례대로다. 비공개로 돌렸거나 숨긴 작품, 볼 수 없는 등급은 빠진다.
+         */
+        get: operations["list_banners_api_v1_asset_banners_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -986,6 +1054,82 @@ export interface components {
          * @enum {string}
          */
         AfterEnding: "end" | "epilogue";
+        /**
+         * BannerCreate
+         * @description 배너를 건다. 시작을 비우면 지금부터, 끝을 비우면 내릴 때까지다.
+         */
+        BannerCreate: {
+            /** Ends At */
+            ends_at?: string | null;
+            kind: components["schemas"]["BannerKind"];
+            /**
+             * Position
+             * @default 0
+             */
+            position: number;
+            /** Starts At */
+            starts_at?: string | null;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+        };
+        /**
+         * BannerKind
+         * @description 무엇을 거는가.
+         * @enum {string}
+         */
+        BannerKind: "character" | "world";
+        /**
+         * BannerOut
+         * @description 운영자가 보는 배너 하나. 이름은 작품의 지금 이름(초안)이다.
+         *
+         *     지금 보이는지(shown)는 기간과 공개를 함께 본 것이다.
+         */
+        BannerOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Ends At */
+            ends_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["BannerKind"];
+            /** Name */
+            name: string;
+            /** Position */
+            position: number;
+            /** Shown */
+            shown: boolean;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+        };
+        /**
+         * BannerUpdate
+         * @description 배너의 차례와 기간을 고친다. 보낸 칸만 바뀐다. ends_at 을 null 로 보내면 내릴 때까지가 된다.
+         */
+        BannerUpdate: {
+            /** Ends At */
+            ends_at?: string | null;
+            /** Position */
+            position?: number | null;
+            /** Starts At */
+            starts_at?: string | null;
+        };
         /**
          * CastAffection
          * @description 인물의 호감도. 값 하나(0~100)와 단계들이다. chat 의 호감도와 보이는 방식과 단계가 같다.
@@ -2602,6 +2746,28 @@ export interface components {
             name: string;
         };
         /**
+         * PublicBanner
+         * @description 첫 화면에 보이는 배너 하나. 둘 가운데 kind 의 것 하나만 찬다. 공개 목록의 한 줄과 같은 모양이다.
+         */
+        PublicBanner: {
+            character?: components["schemas"]["PublicCharacterSummary"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["BannerKind"];
+            world?: components["schemas"]["PublicWorldSummary"] | null;
+        };
+        /**
+         * PublicBannerList
+         * @description 지금 걸린 배너. 차례대로다(캐릭터와 세계관이 함께 차례를 갖는다).
+         */
+        PublicBannerList: {
+            /** Items */
+            items: components["schemas"]["PublicBanner"][];
+        };
+        /**
          * PublicCastMember
          * @description 소개에 보이는 인물 하나. reveal 이 silhouette 이면 이름과 그림을 싣지 않는다(null).
          *     숨김(hidden)인 인물은 목록에 없다.
@@ -3843,6 +4009,130 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_all_banners_api_v1_asset_admin_banners_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerOut"][];
+                };
+            };
+        };
+    };
+    create_banner_api_v1_asset_admin_banners_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BannerCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerOut"];
+                };
+            };
+            /** @description 공개 목록에 나오는 작품이 아니다(code: not_published) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    delete_banner_api_v1_asset_admin_banners__banner_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                banner_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    update_banner_api_v1_asset_admin_banners__banner_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                banner_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BannerUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     list_open_reports_api_v1_asset_admin_character_reports_get: {
         parameters: {
             query?: {
@@ -4007,6 +4297,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_banners_api_v1_asset_banners_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicBannerList"];
                 };
             };
         };

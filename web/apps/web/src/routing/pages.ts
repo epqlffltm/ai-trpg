@@ -69,6 +69,8 @@ export const CampaignEditPage = lazyPage(() => import('../pages/trpg/studio/camp
 
 // 운영자의 신고 처리(E4). 운영자만 가는 곳이라 사용자의 첫 묶음에 넣지 않는다
 export const ReportsPage = lazyPage(() => import('../pages/operator/ReportsPage'), 'ReportsPage');
+// 홍보 배너 관리(#994)
+export const BannersPage = lazyPage(() => import('../pages/operator/BannersPage'), 'BannersPage');
 export const MessageReportPage = lazyPage(() => import('../pages/operator/MessageReportPage'), 'MessageReportPage');
 
 // chat 의 캐릭터 탐색(C1)과 소개(C2), 대화(C3)

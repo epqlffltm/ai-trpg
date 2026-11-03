@@ -53,6 +53,7 @@ from app.assets.scenarios.publishing import ScenarioNotReadyError
 from app.assets.scenarios.recommended_model import RecommendedModelError
 from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferenceError
 from app.assets.worlds import router as worlds
+from app.banners import router as banners
 from app.billing import settler
 from app.billing.price_list import PriceListUnavailable
 from app.billing.setup import build_billing, build_price_list
@@ -350,6 +351,9 @@ def create_app(
     app.include_router(references.router, prefix=API_PREFIX)
     app.include_router(listings.owner_router, prefix=API_PREFIX)
     app.include_router(listings.public_router, prefix=API_PREFIX)
+    # 첫 화면의 홍보 배너(#994). 보는 주소와 운영자의 주소
+    app.include_router(banners.public_router, prefix=API_PREFIX)
+    app.include_router(banners.admin_router, prefix=API_PREFIX)
     app.include_router(personas.router, prefix=API_PREFIX)
     # /tables/past 는 /tables/{table_id} 보다 먼저다. 먼저 등록한 주소가 먼저 맞춰진다
     app.include_router(past_tables.router, prefix=API_PREFIX)

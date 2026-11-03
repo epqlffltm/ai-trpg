@@ -2914,3 +2914,69 @@ a.ui-button {
 .story-profile {
   margin-bottom: var(--ui-gap);
 }
+
+/* 첫 화면의 홍보 배너(#994). 한 장씩 넘긴다. 그림이 있으면 왼쪽(좁으면 위)에 둔다 */
+.promo-banner {
+  margin-bottom: var(--ui-gap);
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: var(--ui-surface);
+  overflow: hidden;
+}
+
+.promo-banner__slide {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  color: var(--ui-text);
+  text-decoration: none;
+}
+
+.promo-banner__image {
+  width: 160px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.promo-banner__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.promo-banner__service {
+  color: var(--ui-text-muted);
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.promo-banner__title {
+  font-size: 1.3em;
+  font-weight: 800;
+}
+
+.promo-banner__line {
+  color: var(--ui-text-muted);
+}
+
+.promo-banner__controls {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+@media (max-width: 640px) {
+  .promo-banner__slide {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .promo-banner__image {
+    width: 100%;
+  }
+}

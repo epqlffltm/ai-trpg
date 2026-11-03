@@ -2,6 +2,54 @@
 // docs/api/trpg.openapi.json 에서 만든 타입. 손으로 고치지 않는다(npm run gen:api).
 
 export interface paths {
+    "/api/v1/game/admin/banners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List All Banners
+         * @description 모든 배너(지난 것까지)와 지금 보이는지. 차례대로다.
+         */
+        get: operations["list_all_banners_api_v1_game_admin_banners_get"];
+        put?: never;
+        /**
+         * Create Banner
+         * @description 공개 중인 시나리오의 배너를 건다. 공개 중이 아니면 409 not_published, 끝이 지금보다 앞이면 422 다.
+         */
+        post: operations["create_banner_api_v1_game_admin_banners_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/admin/banners/{banner_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Banner
+         * @description 배너를 내린다. 없으면 404 다.
+         */
+        delete: operations["delete_banner_api_v1_game_admin_banners__banner_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Banner
+         * @description 배너의 차례와 기간을 고친다. 없으면 404, 기간이 거꾸로면 422 다.
+         */
+        patch: operations["update_banner_api_v1_game_admin_banners__banner_id__patch"];
+        trace?: never;
+    };
     "/api/v1/game/admin/scenarios/{scenario_id}": {
         parameters: {
             query?: never;
@@ -198,6 +246,26 @@ export interface paths {
          * @description 공개 금지를 푼다. 금지 중이 아니면 409(not_banned). 그 뒤의 제재부터 다시 센다.
          */
         post: operations["lift_ban_api_v1_game_admin_users__user_id__publishing_ban_lift_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/banners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Banners
+         * @description 지금 걸린 배너. 차례대로다. 공개를 내렸거나 지운 시나리오, 볼 수 없는 등급은 빠진다.
+         */
+        get: operations["list_banners_api_v1_game_banners_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2380,6 +2448,72 @@ export interface components {
             previous: components["schemas"]["NpcAttitude"];
             /** Reason */
             reason: string;
+        };
+        /**
+         * BannerCreate
+         * @description 배너를 건다. 시작을 비우면 지금부터, 끝을 비우면 내릴 때까지다.
+         */
+        BannerCreate: {
+            /** Ends At */
+            ends_at?: string | null;
+            /**
+             * Position
+             * @default 0
+             */
+            position: number;
+            /**
+             * Scenario Id
+             * Format: uuid
+             */
+            scenario_id: string;
+            /** Starts At */
+            starts_at?: string | null;
+        };
+        /**
+         * BannerOut
+         * @description 운영자가 보는 배너 하나. 지금 보이는지(shown)는 기간과 시나리오의 공개를 함께 본 것이다.
+         */
+        BannerOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Ends At */
+            ends_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Position */
+            position: number;
+            /**
+             * Scenario Id
+             * Format: uuid
+             */
+            scenario_id: string;
+            /** Shown */
+            shown: boolean;
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * BannerUpdate
+         * @description 배너의 차례와 기간을 고친다. 보낸 칸만 바뀐다. ends_at 을 null 로 보내면 내릴 때까지가 된다.
+         */
+        BannerUpdate: {
+            /** Ends At */
+            ends_at?: string | null;
+            /** Position */
+            position?: number | null;
+            /** Starts At */
+            starts_at?: string | null;
         };
         /**
          * BarSnapshot
@@ -7552,6 +7686,26 @@ export interface components {
             levels: components["schemas"]["LevelStep"][];
         };
         /**
+         * PublicBanner
+         * @description 첫 화면에 보이는 배너 하나. 시나리오의 공개 정보 그대로다.
+         */
+        PublicBanner: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            listing: components["schemas"]["PublicListing"];
+        };
+        /**
+         * PublicBannerList
+         * @description 지금 걸린 배너. 차례대로다.
+         */
+        PublicBannerList: {
+            /** Items */
+            items: components["schemas"]["PublicBanner"][];
+        };
+        /**
          * PublicListing
          * @description 다른 사용자가 공개된 시나리오를 볼 때의 값. 목록과 상세가 같은 모양이다.
          *
@@ -11714,6 +11868,130 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_all_banners_api_v1_game_admin_banners_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerOut"][];
+                };
+            };
+        };
+    };
+    create_banner_api_v1_game_admin_banners_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BannerCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerOut"];
+                };
+            };
+            /** @description 공개 중인 시나리오가 아니다(code: not_published) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    delete_banner_api_v1_game_admin_banners__banner_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                banner_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    update_banner_api_v1_game_admin_banners__banner_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                banner_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BannerUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BannerOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     read_scenario_api_v1_game_admin_scenarios__scenario_id__get: {
         parameters: {
             query: {
@@ -12055,6 +12333,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_banners_api_v1_game_banners_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicBannerList"];
                 };
             };
         };

@@ -415,6 +415,159 @@
         "title": "AttitudeChangeOut",
         "type": "object"
       },
+      "BannerCreate": {
+        "additionalProperties": false,
+        "description": "배너를 건다. 시작을 비우면 지금부터, 끝을 비우면 내릴 때까지다.",
+        "properties": {
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "position": {
+            "default": 0,
+            "maximum": 999.0,
+            "minimum": 0.0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          }
+        },
+        "required": [
+          "scenario_id"
+        ],
+        "title": "BannerCreate",
+        "type": "object"
+      },
+      "BannerOut": {
+        "description": "운영자가 보는 배너 하나. 지금 보이는지(shown)는 기간과 시나리오의 공개를 함께 본 것이다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "integer"
+          },
+          "scenario_id": {
+            "format": "uuid",
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "shown": {
+            "title": "Shown",
+            "type": "boolean"
+          },
+          "starts_at": {
+            "format": "date-time",
+            "title": "Starts At",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "scenario_id",
+          "title",
+          "position",
+          "starts_at",
+          "ends_at",
+          "created_at",
+          "shown"
+        ],
+        "title": "BannerOut",
+        "type": "object"
+      },
+      "BannerUpdate": {
+        "additionalProperties": false,
+        "description": "배너의 차례와 기간을 고친다. 보낸 칸만 바뀐다. ends_at 을 null 로 보내면 내릴 때까지가 된다.",
+        "properties": {
+          "ends_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ends At"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "maximum": 999.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          }
+        },
+        "title": "BannerUpdate",
+        "type": "object"
+      },
       "BarSnapshot": {
         "description": "길의 빗장(#281). 있는 쪽(길의 한 끝)과 시작할 때 걸려 있는가.",
         "properties": {
@@ -11746,6 +11899,42 @@
         "title": "Progression",
         "type": "object"
       },
+      "PublicBanner": {
+        "description": "첫 화면에 보이는 배너 하나. 시나리오의 공개 정보 그대로다.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "listing": {
+            "$ref": "#/components/schemas/PublicListing"
+          }
+        },
+        "required": [
+          "id",
+          "listing"
+        ],
+        "title": "PublicBanner",
+        "type": "object"
+      },
+      "PublicBannerList": {
+        "description": "지금 걸린 배너. 차례대로다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicBanner"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PublicBannerList",
+        "type": "object"
+      },
       "PublicListing": {
         "description": "다른 사용자가 공개된 시나리오를 볼 때의 값. 목록과 상세가 같은 모양이다.\n\n여기 적힌 칸만 나간다. 초안의 내용, 판의 굳힌 내용, 공개하지 않은 판의 정보는 나가지 않는다.",
         "properties": {
@@ -21095,6 +21284,188 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/game/admin/banners": {
+      "get": {
+        "description": "모든 배너(지난 것까지)와 지금 보이는지. 차례대로다.",
+        "operationId": "list_all_banners_api_v1_game_admin_banners_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BannerOut"
+                  },
+                  "title": "Response List All Banners Api V1 Game Admin Banners Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List All Banners",
+        "tags": [
+          "operators"
+        ],
+        "x-audience": "operator"
+      },
+      "post": {
+        "description": "공개 중인 시나리오의 배너를 건다. 공개 중이 아니면 409 not_published, 끝이 지금보다 앞이면 422 다.",
+        "operationId": "create_banner_api_v1_game_admin_banners_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BannerCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BannerOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "공개 중인 시나리오가 아니다(code: not_published)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Banner",
+        "tags": [
+          "operators"
+        ],
+        "x-audience": "operator"
+      }
+    },
+    "/api/v1/game/admin/banners/{banner_id}": {
+      "delete": {
+        "description": "배너를 내린다. 없으면 404 다.",
+        "operationId": "delete_banner_api_v1_game_admin_banners__banner_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "banner_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Banner Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Banner",
+        "tags": [
+          "operators"
+        ],
+        "x-audience": "operator"
+      },
+      "patch": {
+        "description": "배너의 차례와 기간을 고친다. 없으면 404, 기간이 거꾸로면 422 다.",
+        "operationId": "update_banner_api_v1_game_admin_banners__banner_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "banner_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Banner Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BannerUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BannerOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Banner",
+        "tags": [
+          "operators"
+        ],
+        "x-audience": "operator"
+      }
+    },
     "/api/v1/game/admin/scenarios/{scenario_id}": {
       "get": {
         "description": "남의 시나리오의 초안을 만든 사람이 보는 모양 그대로 본다.",
@@ -21783,6 +22154,34 @@
           "operators"
         ],
         "x-audience": "operator"
+      }
+    },
+    "/api/v1/game/banners": {
+      "get": {
+        "description": "지금 걸린 배너. 차례대로다. 공개를 내렸거나 지운 시나리오, 볼 수 없는 등급은 빠진다.",
+        "operationId": "list_banners_api_v1_game_banners_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicBannerList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Banners",
+        "tags": [
+          "banners"
+        ],
+        "x-audience": "user"
       }
     },
     "/api/v1/game/bestiaries": {
