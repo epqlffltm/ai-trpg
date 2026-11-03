@@ -23,9 +23,12 @@ export function tableQuery(tableId: string) {
   });
 }
 
-/** 바꾸는 요청이 돌려준 테이블을 넣는다. 그보다 먼저 떠나 아직 오는 중인 테이블의 읽기는 멈춘다(바뀌기 전의 것이다) */
+/**
+ * 바꾸는 요청이 돌려준 테이블을 넣는다. 그보다 먼저 떠나 아직 오는 중인 테이블의 읽기는 멈춘다(바뀌기 전의 것이다).
+ * 답이 테이블 전체라서 멈춘 읽기를 다시 하지 않는다(#975)
+ */
 export function putTable(queryClient: QueryClient, table: TableDetail): Promise<void> {
-  return putQueryData(queryClient, tableQuery(table.id).queryKey, table);
+  return putQueryData(queryClient, tableQuery(table.id).queryKey, table, { whole: true });
 }
 
 export function chatQuery(tableId: string) {
