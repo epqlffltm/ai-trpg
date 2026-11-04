@@ -7,7 +7,9 @@
   - gemini: Nano Banana(GEMINI_API_KEY 가 있어야 한다). 운영의 것이다
   - comfyui: 이 서버 곁의 ComfyUI 의 Stable Diffusion(COMFYUI_URL, COMFYUI_CHECKPOINT). 개발·시험용이다
   - fake: 정해 둔 그림(테스트용)
-가격표 이름은 그림 모델의 이름에서 점을 붙임표로 바꾼 것이다(image.gemini-nano-banana-2-1).
+가격표 이름은 이 서버의 머리(chat)와 image 뒤에 그림 모델의 이름에서 점을 붙임표로 바꾼 것이다
+(chat.image.gemini-nano-banana-2-1). 결제 서버는 서버마다 자기 머리의 가격표로만 홀드를 받는다
+(billing-server/internal/httpapi/price_scope.go). 머리가 없으면 400 price.unknown 이다.
 """
 
 import httpx
@@ -16,10 +18,11 @@ from ai_core.fake import FakeImageProvider
 from ai_core.gemini_image import GeminiImageProvider
 from ai_core.image_provider import ImageProvider
 
+from app.billing.prices import PRICE_CODE_PREFIX
 from app.core.config import Settings
 
-# 가격표 이름의 앞
-PRICE_PREFIX = 'image.'
+# 가격표 이름의 앞. 이 서버의 머리 다음에 둔다
+PRICE_PREFIX = f'{PRICE_CODE_PREFIX}.image.'
 
 
 def price_code_of(model: str) -> str:

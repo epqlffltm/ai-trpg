@@ -114,7 +114,7 @@ class Settings(CoreSettings, NotificationSettings):
     # 장면 그림(app/snapshots/, #983). off 면 만들지 않는다(503 snapshot_unavailable).
     # gemini 는 Nano Banana(GEMINI_API_KEY 를 쓴다), comfyui 는 곁의 ComfyUI(개발·시험용), fake 는 테스트용이다
     snapshot_provider: Literal['off', 'fake', 'gemini', 'comfyui'] = 'off'
-    # 그림 모델의 이름. 가격표 이름은 이것에서 점을 붙임표로 바꾼 것이다(image.gemini-nano-banana-2-1)
+    # 그림 모델의 이름. 가격표 이름은 이것에서 점을 붙임표로 바꾼 것이다(story.image.gemini-nano-banana-2-1)
     snapshot_model: str = 'gemini-nano-banana-2.1'
     # 그림 한 장을 만드는 시간의 상한(초)
     snapshot_timeout_seconds: float = Field(default=120.0, gt=0, le=600)

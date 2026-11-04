@@ -104,7 +104,7 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `STORY_OUTPUT_LIMIT` | `1024` | 말 한 번의 답의 길이의 상한(토큰). 가격표의 출력 단계(`o0`)가 약속하는 길이다 |
 | `STORY_CONTEXT_CHARS` | `12000` | 모델에 보내는 지난 말의 양의 상한(글자). 가격표의 입력 단계(`i0`)가 약속하는 양이다 |
 | `STORY_SUGGESTIONS` | `true` | [다음 답 추천](#말-보내기). 켜면 답 끝에 선택지 셋을 함께 받는다. 호출은 늘지 않는다 |
-| `SNAPSHOT_PROVIDER`, `SNAPSHOT_MODEL` | `off`, `gemini-nano-banana-2.1` | [장면 그림](#장면-그림). `gemini` 는 Nano Banana(`GEMINI_API_KEY`), `comfyui` 는 곁의 ComfyUI(`COMFYUI_URL`, `COMFYUI_CHECKPOINT`, 개발·시험용), `fake` 는 테스트용. 가격표 이름은 모델 이름의 점을 붙임표로 바꾼 것(`image.gemini-nano-banana-2-1`) |
+| `SNAPSHOT_PROVIDER`, `SNAPSHOT_MODEL` | `off`, `gemini-nano-banana-2.1` | [장면 그림](#장면-그림). `gemini` 는 Nano Banana(`GEMINI_API_KEY`), `comfyui` 는 곁의 ComfyUI(`COMFYUI_URL`, `COMFYUI_CHECKPOINT`, 개발·시험용), `fake` 는 테스트용. 가격표 이름은 `story.image.` 뒤에 모델 이름의 점을 붙임표로 바꾼 것(`story.image.gemini-nano-banana-2-1`) |
 | `EMBEDDER` | `off` | [로어북의 뜻으로 찾기](#말-보내기). `off` 면 상시와 키워드만, `llm` 이면 임베딩 모델을 부른다(`fake` 는 테스트용). chat, trpg-server 와 같은 이름이다 |
 | `EMBEDDING_MODEL` | `bge-m3` | 임베딩 모델의 이름. 벡터에 함께 적는다(모델이 다르면 견주지 않는다) |
 | `EMBEDDING_BASE_URL` | 비어 있음 | 임베딩 모델의 주소(OpenAI 와 같은 모양, `/embeddings` 앞까지). `EMBEDDER=llm` 이면 꼭 적는다 |

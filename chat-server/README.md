@@ -86,7 +86,7 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `CHAT_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
 | `SUMMARY_MODEL` | 비어 있음(요약하지 않음) | [굴리는 요약](#굴리는-요약)의 모델(모델 목록의 이름표). 싼 모델을 쓴다. 사용자에게 팔지 않는(꺼 둔) 모델도 된다. 원가는 서비스가 낸다 |
 | `SUMMARY_AFTER_MESSAGES` | `8` | 창 밖으로 밀려난 말이 마지막 요약 뒤로 이만큼(2~200) 쌓이면 요약한다 |
-| `SNAPSHOT_PROVIDER`, `SNAPSHOT_MODEL` | `off`, `gemini-nano-banana-2.1` | [장면 그림](#장면-그림). `gemini` 는 Nano Banana(`GEMINI_API_KEY`), `comfyui` 는 곁의 ComfyUI(`COMFYUI_URL`, `COMFYUI_CHECKPOINT`, 개발·시험용), `fake` 는 테스트용. 가격표 이름은 모델 이름의 점을 붙임표로 바꾼 것(`image.gemini-nano-banana-2-1`) |
+| `SNAPSHOT_PROVIDER`, `SNAPSHOT_MODEL` | `off`, `gemini-nano-banana-2.1` | [장면 그림](#장면-그림). `gemini` 는 Nano Banana(`GEMINI_API_KEY`), `comfyui` 는 곁의 ComfyUI(`COMFYUI_URL`, `COMFYUI_CHECKPOINT`, 개발·시험용), `fake` 는 테스트용. 가격표 이름은 `chat.image.` 뒤에 모델 이름의 점을 붙임표로 바꾼 것(`chat.image.gemini-nano-banana-2-1`) |
 | `EMBEDDER` | `off` | [로어북](#로어북)의 뜻으로 찾기. `off` 면 상시와 키워드만, `llm` 이면 임베딩 모델을 부른다(`fake` 는 테스트용). 이름은 trpg-server 와 같다 |
 | `EMBEDDING_MODEL`, `EMBEDDING_BASE_URL` | `bge-m3`, 비어 있음 | 임베딩 모델의 이름과 주소(OpenAI 와 같은 모양, `/embeddings` 앞까지). `llm` 이면 둘 다 있어야 뜬다 |
 | `EMBEDDING_TIMEOUT_SECONDS`, `EMBEDDING_DIMENSIONS` | `30`, 비어 있음 | 임베딩을 한 번 부르는 시간의 상한(벡터를 만들 때), 벡터의 길이(적으면 맞는지 본다) |
