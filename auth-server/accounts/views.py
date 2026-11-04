@@ -61,6 +61,7 @@ from accounts.consents import (
     pending_items,
     withdraw,
 )
+from accounts.content_settings import AdultContentRequiredError, content_settings_of, update_content_settings
 from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refresh_cookie
 from accounts.email_codes import InvalidEmailCodeError
 from accounts.exception_handlers import input_error_body
@@ -100,6 +101,7 @@ from accounts.serializers import (
     ConsentAgreeSerializer,
     ConsentDocumentSerializer,
     ConsentStateSerializer,
+    ContentSettingsSerializer,
     EmailSerializer,
     GuardianConsentSerializer,
     GuardianNoticeSerializer,
@@ -1116,8 +1118,44 @@ class MeView(APIView):
             'consents_pending': pending_items(request.user),
             # 탈퇴를 요청했으면 계정을 비울 시각(#603). 화면은 취소할지 묻는 화면만 연다
             'withdrawal_scheduled_at': withdrawal_scheduled_at(request.user),
+            # 목록을 거르는 내 설정(#986, #987)
+            'content_settings': content_settings_of(request.user),
         }
         return Response(body, status=status.HTTP_200_OK)
+
+
+class MyContentSettingsView(APIView):
+    """PATCH /api/v1/auth/me/content-settings. 목록을 거르는 내 설정을 고친다(#986, #987)."""
+
+    # 로그인한 본인만. 기본 권한(IsAuthenticated)을 쓴다
+
+    @extend_schema(
+        summary='목록을 거르는 내 설정(성인 작품 표시, 성향)을 고친다. 보낸 칸만 바뀐다',
+        request=ContentSettingsSerializer,
+        responses={
+            200: ContentSettingsSerializer,
+            400: bad_request('모르는 성향'),
+            401: unauthenticated(),
+            403: OpenApiResponse(
+                response=BAD_REQUEST_BODY,
+                description='성인 확인 전에 성인 작품 표시를 켜려 했다(adult_content_required)',
+            ),
+        },
+    )
+    def patch(self, request: Request) -> Response:
+        serializer = ContentSettingsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            user = update_content_settings(
+                request.user,
+                show_adult_content=serializer.validated_data.get('show_adult_content'),
+                orientation=serializer.validated_data.get('orientation'),
+            )
+        except AdultContentRequiredError:
+            return build_coded_error_response(
+                '본인인증으로 성인 확인을 마쳐야 켤 수 있습니다.', 'adult_content_required', status.HTTP_403_FORBIDDEN
+            )
+        return Response(ContentSettingsSerializer(content_settings_of(user)).data, status=status.HTTP_200_OK)
 
 
 class MyInviteView(APIView):

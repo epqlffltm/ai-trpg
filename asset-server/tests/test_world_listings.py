@@ -189,3 +189,19 @@ async def test_an_unlisted_world_is_not_listed_but_opens_by_its_id(client: Async
     assert ([item['id'] for item in page['items']], page['total']) == ([shown['id']], 1)
     assert await searched_ids(client, '여름', player) == [shown['id']]
     assert (opened.status_code, opened.json()['name']) == (status.HTTP_200_OK, '링크만 여름')
+
+
+async def test_world_listing_preferences(client: AsyncClient, owner: dict, adult: dict):
+    day = await published(client, owner, name='낮의 여름', tags=['여성향'])
+    await published(client, owner, name='밤의 여름', rating='adult')
+
+    async def ids(**params) -> list[str]:
+        response = await client.get(LISTINGS_URL, params=params, headers=adult)
+        assert response.json()['total'] == len(response.json()['items'])
+        return [item['id'] for item in response.json()['items']]
+
+    # 성인 작품 숨김(#986)과 성향(#987)은 캐릭터의 목록과 같다
+    assert len(await ids()) == 2
+    assert await ids(hide_adult='true') == [day['id']]
+    assert await ids(orientation='female') == [day['id']]
+    assert await ids(orientation='male') == []

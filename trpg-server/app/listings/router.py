@@ -23,7 +23,7 @@ from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.listings import service
-from app.listings.models import TAG_MAX_LENGTH, Genre, Listing
+from app.listings.models import TAG_MAX_LENGTH, Genre, Listing, Orientation
 from app.listings.repository import ListingFilter
 from app.listings.schemas import (
     ListingDetail,
@@ -153,14 +153,24 @@ PlayersFilter = Annotated[int | None, Query(ge=1, le=TABLE_MAX_PLAYERS)]
 # 검색칸의 검색어(#984). "#"로 시작하면 태그, 아니면 제목과 한 줄 소개에서 찾는다(app/listings/search.py).
 # 공백뿐이거나 "#" 하나뿐인 검색어는 찾을 것이 없으므로 거절한다
 SearchFilter = Annotated[str | None, Query(max_length=SEARCH_MAX_LENGTH, pattern=SEARCH_PATTERN)]
+# 보는 사람의 설정(#986, #987). 인증 서버의 내 정보에 있고, 화면이 읽어 싣는다. 이 서버는 인증 서버를 부르지 않는다
+HideAdultFilter = Annotated[bool, Query()]
+OrientationFilter = Annotated[Orientation | None, Query()]
 
 
 def to_filter(
-    genre: GenreFilter = None, tag: TagFilter = None, players: PlayersFilter = None, q: SearchFilter = None
+    genre: GenreFilter = None,
+    tag: TagFilter = None,
+    players: PlayersFilter = None,
+    q: SearchFilter = None,
+    hide_adult: HideAdultFilter = False,
+    orientation: OrientationFilter = None,
 ) -> ListingFilter:
     """주소의 거르는 값을 하나로 묶는다."""
     search = parse_search(q) if q is not None else None
-    return ListingFilter(genre=genre, tag=tag, players=players, search=search)
+    return ListingFilter(
+        genre=genre, tag=tag, players=players, search=search, hide_adult=hide_adult, orientation=orientation
+    )
 
 
 Filter = Annotated[ListingFilter, Depends(to_filter)]
@@ -172,6 +182,8 @@ async def list_listings(user: OptionalUser, session: Session, paging: Paging, wh
     공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르, 태그, 함께 할 인원, 검색어(q)로 거를 수 있다.
 
     검색어가 "#"로 시작하면 그 태그가 붙은 것, 아니면 제목이나 한 줄 소개에 그 글이 들어 있는 것이다(#984).
+    hide_adult 가 참이면 성인용을 뺀다(#986). orientation 을 주면 그 성향의 태그가 붙은 것만이다(#987).
+    둘 다 보는 사람의 설정이고 화면이 싣는다.
 
     로그인하지 않아도 읽는다(#530). 그때는 전체 이용가만 나온다. 토큰을 보냈는데 틀렸으면 401 이다.
     """

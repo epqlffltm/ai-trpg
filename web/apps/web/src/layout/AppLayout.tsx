@@ -15,12 +15,14 @@ import { useSession } from '../auth/useSession';
 import { LimitedSessionGate } from '../pages/limited/LimitedSessionGate';
 import { RouteBoundary } from '../routing/RouteBoundary';
 import { AppHeader } from './AppHeader';
+import { ListingPreferencesSync } from './ListingPreferencesSync';
 
 export function AppLayout() {
   const boot = useBootSession();
   return (
     <>
       <AppHeader />
+      <ListingPreferencesSync />
       {boot === 'checking' ? (
         <p className="page page--loading">불러오는 중</p>
       ) : (

@@ -1,9 +1,11 @@
 // web/apps/web/src/api/banners.ts
 // 첫 화면의 홍보 배너(#994). 시나리오의 배너는 게임 서버, 캐릭터와 세계관의 배너는 asset 서버가 가진다.
 // 서버마다 따로 부르고 화면이 잇는다(#593). 보는 주소는 로그인하지 않아도 부른다(전체이용가만 온다).
+// 보는 주소에는 공개 목록처럼 보는 사람의 설정(성인 작품 숨김, 성향)을 싣는다(listingPreferences.ts, #986, #987).
 // 운영자의 주소(/admin/banners)는 운영자가 아니면 404 다.
 
 import { apiRequest } from './http';
+import { listingPreferences } from './listingPreferences';
 import type { components as Asset } from './generated/asset';
 import type { components as Trpg } from './generated/trpg';
 
@@ -23,13 +25,13 @@ function withSignal(signal: AbortSignal | undefined): { signal?: AbortSignal } {
 
 /** 지금 걸린 시나리오의 배너. 차례대로다 */
 export async function fetchScenarioBanners(signal?: AbortSignal): Promise<ScenarioBanner[]> {
-  const body = await apiRequest<Trpg['schemas']['PublicBannerList']>(`${GAME}/banners`, withSignal(signal));
+  const body = await apiRequest<Trpg['schemas']['PublicBannerList']>(`${GAME}/banners`, { query: listingPreferences(), ...withSignal(signal) });
   return body.items;
 }
 
 /** 지금 걸린 캐릭터와 세계관의 배너. 차례대로다 */
 export async function fetchAssetBanners(signal?: AbortSignal): Promise<AssetBanner[]> {
-  const body = await apiRequest<Asset['schemas']['PublicBannerList']>(`${ASSET}/banners`, withSignal(signal));
+  const body = await apiRequest<Asset['schemas']['PublicBannerList']>(`${ASSET}/banners`, { query: listingPreferences(), ...withSignal(signal) });
   return body.items;
 }
 

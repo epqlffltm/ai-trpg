@@ -25,6 +25,14 @@ from accounts.validators import (
 )
 
 
+class Orientation(models.TextChoices):
+    """목록을 거르는 성향(#987). 목록 서버가 작품의 태그 "남성향", "여성향"으로 거른다."""
+
+    ALL = 'all', '전체'
+    MALE = 'male', '남성향'
+    FEMALE = 'female', '여성향'
+
+
 class UserManager(DjangoUserManager):
     """User 를 만드는 방법을 모아 둔 매니저."""
 
@@ -95,6 +103,14 @@ class User(AbstractUser):
     # 마치기 하루 전의 알림 메일을 보낸 시각(#624). 요청마다 한 통만 보내려고 적는다.
     # 요청할 때 비운다. 취소하고 다시 요청하면 새 요청에 한 통을 더 보낸다
     withdrawal_reminded_at = models.DateTimeField('탈퇴 하루 전 알림을 보낸 시각', null=True, blank=True)
+
+    # 목록을 거르는 내 설정(#986, #987, content_settings.py).
+    # 여러 서비스의 화면이 /me 에서 읽어 공개 목록을 부를 때 싣는다.
+    # 목록을 내는 서버는 이 값을 모른다(실행 중에 인증 서버를 부르지 않는다). 성인용을 볼 수 있는지는 본인인증이 정하고,
+    # 이 값은 볼 수 있는 사람이 목록에서 성인용을 숨길지다. 처음에는 보인다
+    show_adult_content = models.BooleanField('성인 작품 표시', default=True)
+    # 성향(남성향, 여성향). 고르면 그 태그가 붙은 작품만 목록에 나온다. 처음에는 거르지 않는다
+    orientation = models.CharField('성향', max_length=10, choices=Orientation.choices, default=Orientation.ALL)
 
     # AbstractUser 가 가진 실명 필드를 없앤다. 수집하지 않는 정보의 컬럼은 두지 않는다
     first_name = None

@@ -160,6 +160,8 @@ export interface paths {
         /**
          * List Banners
          * @description 지금 걸린 배너. 차례대로다. 비공개로 돌렸거나 숨긴 작품, 볼 수 없는 등급은 빠진다.
+         *
+         *     공개 목록처럼 성인 작품을 숨기거나(hide_adult) 성향(orientation)의 태그가 붙은 것만 낸다.
          */
         get: operations["list_banners_api_v1_asset_banners_get"];
         put?: never;
@@ -338,6 +340,7 @@ export interface paths {
          * @description 공개 캐릭터의 목록. 최근에 게시한 것부터다.
          *
          *     검색어(q)가 "#"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).
+         *     hide_adult, orientation 은 보는 사람의 설정이다(#986, #987, app/preferences.py). 화면이 싣는다.
          */
         get: operations["list_public_api_v1_asset_listings_characters_get"];
         put?: never;
@@ -400,6 +403,7 @@ export interface paths {
          * @description 공개 세계관의 목록. 최근에 게시한 것부터다.
          *
          *     검색어(q)가 "#"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).
+         *     hide_adult, orientation 은 보는 사람의 설정이다(#986, #987, app/preferences.py). 화면이 싣는다.
          */
         get: operations["list_public_api_v1_asset_listings_worlds_get"];
         put?: never;
@@ -2497,6 +2501,12 @@ export interface components {
             total: number;
         };
         /**
+         * Orientation
+         * @description 목록을 거르는 성향.
+         * @enum {string}
+         */
+        Orientation: "male" | "female";
+        /**
          * OutcomeInput
          * @description 열린 신고의 처리. actioned 면 캐릭터를 숨긴다. reason 은 감사 기록의 사유다.
          */
@@ -4303,7 +4313,10 @@ export interface operations {
     };
     list_banners_api_v1_asset_banners_get: {
         parameters: {
-            query?: never;
+            query?: {
+                hide_adult?: boolean;
+                orientation?: components["schemas"]["Orientation"] | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -4317,6 +4330,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicBannerList"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -4672,6 +4694,8 @@ export interface operations {
                 limit?: number;
                 offset?: number;
                 q?: string | null;
+                hide_adult?: boolean;
+                orientation?: components["schemas"]["Orientation"] | null;
             };
             header?: never;
             path?: never;
@@ -4771,6 +4795,8 @@ export interface operations {
                 limit?: number;
                 offset?: number;
                 q?: string | null;
+                hide_adult?: boolean;
+                orientation?: components["schemas"]["Orientation"] | null;
             };
             header?: never;
             path?: never;

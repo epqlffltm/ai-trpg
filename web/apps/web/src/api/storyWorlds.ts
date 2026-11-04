@@ -9,6 +9,7 @@
 
 import type { components } from './generated/asset';
 import { apiRequest } from './http';
+import { listingPreferences } from './listingPreferences';
 
 type Schemas = components['schemas'];
 export type StoryWorldPage = Schemas['WorldPage'];
@@ -92,7 +93,7 @@ export function publishStoryWorld(worldId: string, note: string): Promise<StoryW
 
 /** 공개 세계관. 최근에 게시한 것부터 */
 export function fetchPublicWorlds(paging: { limit: number; offset: number }, signal?: AbortSignal): Promise<PublicWorldPage> {
-  return apiRequest<PublicWorldPage>('/api/v1/asset/listings/worlds', { query: paging, ...(signal ? { signal } : {}) });
+  return apiRequest<PublicWorldPage>('/api/v1/asset/listings/worlds', { query: { ...paging, ...listingPreferences() }, ...(signal ? { signal } : {}) });
 }
 
 export function fetchPublicWorld(worldId: string, signal?: AbortSignal): Promise<PublicWorldDetail> {

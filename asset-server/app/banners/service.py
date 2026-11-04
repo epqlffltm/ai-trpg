@@ -18,6 +18,7 @@ from app.banners import repository
 from app.banners.models import Banner, BannerKind
 from app.banners.schemas import BannerCreate, BannerUpdate, require_order
 from app.characters.models import Character, CharacterVersion
+from app.preferences import Preferences, shown_ratings
 from app.ratings import allowed_ratings
 from app.worlds.models import World, WorldVersion
 
@@ -48,20 +49,24 @@ class BannerView:
     shown: bool
 
 
-async def list_shown(session: AsyncSession, viewer: AccessClaims | None, now: datetime) -> list[ShownBanner]:
+async def list_shown(
+    session: AsyncSession, viewer: AccessClaims | None, preferences: Preferences, now: datetime
+) -> list[ShownBanner]:
     """
     지금 걸린 배너. 보는 사람(로그인하지 않았으면 None)이 볼 수 있는 등급만이다.
 
+    공개 목록처럼 보는 사람의 설정(#986, #987)으로 성인 작품을 숨기고 성향의 태그로 거른다.
     캐릭터와 세계관을 한 차례로 늘어놓는다(한 서버 안이라 섞어도 된다).
     """
-    ratings = allowed_ratings(viewer)
+    ratings = shown_ratings(allowed_ratings(viewer), preferences)
+    tag = preferences.orientation_tag
     found = [
         ShownBanner(banner, character=(character, version))
-        for banner, character, version in await repository.shown_characters(session, ratings, now)
+        for banner, character, version in await repository.shown_characters(session, ratings, tag, now)
     ]
     found += [
         ShownBanner(banner, world=(world, version))
-        for banner, world, version in await repository.shown_worlds(session, ratings, now)
+        for banner, world, version in await repository.shown_worlds(session, ratings, tag, now)
     ]
     return sorted(found, key=lambda shown: repository.order_key(shown.banner))
 

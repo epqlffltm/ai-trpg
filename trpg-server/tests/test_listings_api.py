@@ -689,6 +689,49 @@ async def test_an_unlisted_adult_scenario_still_needs_adult_content(
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+async def test_an_adult_can_hide_adult_scenarios(
+    client: AsyncClient, my_adult_headers: dict[str, str], adult_headers: dict[str, str]
+):
+    shown = await make_public(client, my_adult_headers, title='낮')
+    await make_public(client, my_adult_headers, title='밤', rating='adult')
+
+    async def titles(**params) -> list[str]:
+        response = await client.get(LISTINGS_URL, params=params, headers=adult_headers)
+        assert response.json()['total'] == len(response.json()['items'])
+        return sorted(item['title'] for item in response.json()['items'])
+
+    # 볼 수 있는 사람이 숨기는 설정이다(#986). 검색에도 같다
+    assert await titles() == ['낮', '밤']
+    assert await titles(hide_adult='true') == ['낮']
+    assert await titles(hide_adult='true', q='밤') == []
+    assert shown['id']
+
+
+async def test_the_orientation_lists_only_that_tag(client: AsyncClient, my_headers: dict[str, str]):
+    await make_public(client, my_headers, title='남', tags=['남성향', '판타지'])
+    await make_public(client, my_headers, title='여', tags=['여성향'])
+    await make_public(client, my_headers, title='모두', tags=['판타지'])
+
+    async def titles(**params) -> list[str]:
+        response = await client.get(LISTINGS_URL, params=params, headers=my_headers)
+        assert response.status_code == status.HTTP_200_OK, response.text
+        assert response.json()['total'] == len(response.json()['items'])
+        return sorted(item['title'] for item in response.json()['items'])
+
+    # 고른 성향의 태그가 붙은 것만이다(#987). 다른 거르기와 함께 쓴다
+    assert await titles(orientation='male') == ['남']
+    assert await titles(orientation='female') == ['여']
+    assert await titles(orientation='male', tag='판타지') == ['남']
+    assert await titles() == ['남', '모두', '여']
+
+
+@pytest.mark.parametrize('params', [{'orientation': 'both'}, {'hide_adult': 'maybe'}])
+async def test_rejects_a_bad_preference(client: AsyncClient, my_headers: dict[str, str], params: dict):
+    response = await client.get(LISTINGS_URL, params=params, headers=my_headers)
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
 async def test_the_title_follows_the_scenario(client: AsyncClient, my_headers: dict[str, str]):
     scenario = await make_public(client, my_headers)
 

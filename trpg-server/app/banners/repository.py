@@ -12,7 +12,7 @@ from sqlalchemy.orm import defer
 from app.assets.models import Asset, Rating, ScenarioVersion
 from app.banners.models import Banner
 from app.listings.models import Listing
-from app.listings.repository import PublicRow, visible
+from app.listings.repository import ListingFilter, PublicRow, filtered, listed, visible
 
 
 def in_period(now: datetime):
@@ -21,15 +21,16 @@ def in_period(now: datetime):
 
 
 async def list_shown(
-    session: AsyncSession, allowed_ratings: list[Rating], now: datetime
+    session: AsyncSession, allowed_ratings: list[Rating], where: ListingFilter, now: datetime
 ) -> list[tuple[Banner, PublicRow]]:
     """
     지금 보이는 배너와 그 시나리오의 공개 정보. 차례(작은 것 먼저), 같으면 먼저 건 것부터다.
 
-    시나리오는 공개 목록의 조건(visible: 공개 중, 지우지 않음, 볼 수 있는 등급)에 맞아야 한다.
+    시나리오는 공개 목록의 조건(visible: 공개 중, 지우지 않음, 볼 수 있는 등급)에 맞고 목록에 나와야 한다
+    (listed: 링크로만 여는 것이 아님, #993). 보는 사람의 설정(where: 성인 작품 숨김, 성향)으로도 거른다.
     """
     query = (
-        visible(allowed_ratings)
+        filtered(listed(visible(allowed_ratings)), where)
         .add_columns(Banner)
         .join(Banner, Banner.scenario_id == Listing.scenario_id)
         .where(in_period(now))
@@ -51,12 +52,21 @@ async def list_all(session: AsyncSession) -> list[tuple[Banner, str]]:
 
 
 async def shown_ids(session: AsyncSession, now: datetime) -> set[uuid.UUID]:
-    """지금 누군가에게 보이는 배너의 번호. 등급은 가리지 않는다(성인용도 성인에게는 보인다)."""
+    """
+    지금 누군가에게 보이는 배너의 번호. 링크로만 여는 것은 빠진다.
+
+    등급과 보는 사람의 설정은 가리지 않는다(성인용도 성인에게는 보인다).
+    """
     query = (
         select(Banner.id)
         .join(Listing, Listing.scenario_id == Banner.scenario_id)
         .join(Asset, Asset.id == Banner.scenario_id)
-        .where(in_period(now), Listing.version_id.is_not(None), Asset.deleted_at.is_(None))
+        .where(
+            in_period(now),
+            Listing.version_id.is_not(None),
+            Listing.unlisted.is_(False),
+            Asset.deleted_at.is_(None),
+        )
     )
     return set(await session.scalars(query))
 

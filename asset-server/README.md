@@ -144,9 +144,9 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/worlds/{id}/publish-check` | 게시해 보기(`{ready, problems, warnings, removed}`). 판은 생기지 않는다 | access 토큰 |
 | POST | `/api/v1/asset/worlds/{id}/versions` | 세계관 게시 `{note?}`. 201. 새 판과 `removed`, `warnings`. 막는 것이 있으면 409 `{problems}` | access 토큰 |
 | GET | `/api/v1/asset/worlds/{id}/versions`, `/versions/{number}` | 세계관의 판의 목록(최근 것부터), 판 하나(굳힌 문서까지) | access 토큰 |
-| GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`([공개 목록의 검색](#캐릭터와-게시)) | 없어도 된다 |
+| GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`([공개 목록의 검색](#캐릭터와-게시)). `hide_adult=true` 면 성인용을 빼고(#986), `orientation`(`male`, `female`)을 주면 마지막 판에 그 태그(`남성향`, `여성향`)가 붙은 것만이다(#987, `app/preferences.py`) | 없어도 된다 |
 | GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서). 볼 수 없으면 404 | 없어도 된다 |
-| GET | `/api/v1/asset/listings/worlds` | 공개 세계관의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`(캐릭터와 같다) | 없어도 된다 |
+| GET | `/api/v1/asset/listings/worlds` | 공개 세계관의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`, `hide_adult`, `orientation`(캐릭터와 같다) | 없어도 된다 |
 | GET | `/api/v1/asset/listings/worlds/{id}` | 공개 세계관의 소개(마지막 판에서 보여도 되는 것만: 이름, 거른 소개, 태그, 장르, 등급, 대표 그림, 기한, 엔딩 뒤, 공개한 인물, 계정에 남는 엔딩의 수). 볼 수 없으면 404 | 없어도 된다 |
 | POST | `/api/v1/asset/listings/characters/{id}/reports` | [신고](#신고와-숨김) `{reason, description?}`. 201. 볼 수 없으면 404, 자기 것은 403 `own_character`, 두 번째는 409 `already_reported` | access 토큰 |
 | GET | `/api/v1/asset/admin/character-reports` | [운영자](#신고와-숨김): 열린 신고를 캐릭터마다 묶은 목록(`minor` 가 먼저). 운영자가 아니면 404 | access 토큰(운영자) |
