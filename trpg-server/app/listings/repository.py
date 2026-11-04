@@ -34,6 +34,7 @@ class ListingFilter:
     hide_adult 는 성인 작품을 숨길지다(#986). 볼 수 있는 사람이 목록에서 숨기는 설정이다.
     볼 수 없는 사람에게는 이미 없다.
     orientation 은 성향이다(#987). 고르면 그 태그(ORIENTATION_TAGS)가 붙은 것만 나온다.
+    creator 는 만든 사람의 공개 ID 다(#992). 제작자 페이지가 그 사람의 공개 시나리오만 고른다.
     """
 
     genre: Genre | None = None
@@ -42,6 +43,7 @@ class ListingFilter:
     search: SearchTerms | None = None
     hide_adult: bool = False
     orientation: Orientation | None = None
+    creator: uuid.UUID | None = None
 
 
 async def find_listing(session: AsyncSession, scenario_id: uuid.UUID) -> Listing | None:
@@ -74,7 +76,7 @@ def visible(allowed_ratings: list[Rating]) -> Select[PublicRow]:
 
 
 def filtered(query: Select[PublicRow], where: ListingFilter) -> Select[PublicRow]:
-    """장르, 태그, 인원, 검색어, 성인 작품 숨김, 성향으로 거른다. 비워 둔 조건은 거르지 않는다."""
+    """장르, 태그, 인원, 검색어, 성인 작품 숨김, 성향, 만든 사람으로 거른다. 비워 둔 조건은 거르지 않는다."""
     if where.genre is not None:
         query = query.where(Listing.genre == where.genre)
     if where.tag is not None:
@@ -87,6 +89,8 @@ def filtered(query: Select[PublicRow], where: ListingFilter) -> Select[PublicRow
         query = query.where(Listing.rating == Rating.ALL)
     if where.orientation is not None:
         query = query.where(Listing.tags.contains([ORIENTATION_TAGS[where.orientation]]))
+    if where.creator is not None:
+        query = query.where(Asset.owner_id == where.creator)
     return query
 
 

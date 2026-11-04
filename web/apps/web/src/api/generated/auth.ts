@@ -22,6 +22,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/creators/{public_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 제작자 한 사람의 프로필(표시 이름과 소개). 로그인 없이 읽는다
+         * @description GET /api/v1/auth/creators/<공개 ID>. 제작자 한 사람의 프로필(#992). 제작자 페이지가 부른다.
+         *
+         *     공개 목록처럼 로그인 없이 연다. 닉네임과 소개만 나간다(accounts/creator_profiles.py).
+         *     없는 공개 ID 와 비운 계정은 같은 404 다.
+         */
+        get: operations["creators_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/guardian/consent": {
         parameters: {
             query?: never;
@@ -326,6 +349,26 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 제작자로서의 내 소개를 고친다. 200자까지, 비우면 소개가 없다
+         * @description PATCH /api/v1/auth/me/profile. 제작자로서의 내 소개를 고친다(#992).
+         */
+        patch: operations["me_profile_partial_update"];
         trace?: never;
     };
     "/api/v1/auth/me/withdrawal": {
@@ -667,6 +710,13 @@ export interface components {
             orientation?: components["schemas"]["OrientationEnum"];
             show_adult_content?: boolean;
         };
+        /** @description 남에게 보이는 제작자(#992). 표시 이름은 닉네임이다. */
+        Creator: {
+            bio: string;
+            nickname: string;
+            /** Format: uuid */
+            public_id: string;
+        };
         /** @description 글 하나만 싣는 응답. 성공의 안내도, 이유를 가르지 않는 거절도 이 모양이다. */
         Detail: {
             detail: string;
@@ -798,8 +848,12 @@ export interface components {
             code: string;
             login_ticket: string;
         };
-        /** @description GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태, 목록을 거르는 설정을 더한다. */
+        /**
+         * @description GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태, 목록을 거르는 설정,
+         *     제작자로서의 소개를 더한다.
+         */
         Me: {
+            bio: string;
             consents_pending: string[];
             content_settings: components["schemas"]["ContentSettings"];
             /**
@@ -837,6 +891,10 @@ export interface components {
             /** @description 초대한 사람으로서 받은 보상의 수 */
             rewarded: number;
         };
+        /** @description 제작자로서의 내 소개(#992). 200자까지, 비워 둘 수 있다. 앞뒤 공백은 지운다. */
+        MyProfile: {
+            bio: string;
+        };
         /**
          * @description * `all` - 전체
          *     * `male` - 남성향
@@ -869,6 +927,10 @@ export interface components {
         PatchedContentSettingsRequest: {
             orientation?: components["schemas"]["OrientationEnum"];
             show_adult_content?: boolean;
+        };
+        /** @description 제작자로서의 내 소개(#992). 200자까지, 비워 둘 수 있다. 앞뒤 공백은 지운다. */
+        PatchedMyProfileRequest: {
+            bio?: string;
         };
         /** @description 다른 사람의 공개 ID 와 이름. 없거나 막은 계정이면 nickname 이 null 이다. */
         PublicName: {
@@ -990,6 +1052,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConsentDocuments"];
+                };
+            };
+        };
+    };
+    creators_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Creator"];
+                };
+            };
+            /** @description 없는 제작자다(creator_not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
                 };
             };
         };
@@ -1785,6 +1877,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MyInvite"];
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    me_profile_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedMyProfileRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyProfile"];
+                };
+            };
+            /** @description 200자를 넘었다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
                 };
             };
             /** @description access 토큰이 없거나 받아들일 수 없다 */

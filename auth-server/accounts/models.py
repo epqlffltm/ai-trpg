@@ -112,6 +112,9 @@ class User(AbstractUser):
     # 성향(남성향, 여성향). 고르면 그 태그가 붙은 작품만 목록에 나온다. 처음에는 거르지 않는다
     orientation = models.CharField('성향', max_length=10, choices=Orientation.choices, default=Orientation.ALL)
 
+    # 제작자의 소개(#992, creator_profiles.py). 제작자 페이지에서 누구나 본다. 표시 이름은 닉네임이다
+    bio = models.CharField('소개', max_length=200, blank=True, default='')
+
     # AbstractUser 가 가진 실명 필드를 없앤다. 수집하지 않는 정보의 컬럼은 두지 않는다
     first_name = None
     last_name = None

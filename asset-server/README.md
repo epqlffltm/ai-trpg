@@ -144,10 +144,10 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/worlds/{id}/publish-check` | 게시해 보기(`{ready, problems, warnings, removed}`). 판은 생기지 않는다 | access 토큰 |
 | POST | `/api/v1/asset/worlds/{id}/versions` | 세계관 게시 `{note?}`. 201. 새 판과 `removed`, `warnings`. 막는 것이 있으면 409 `{problems}` | access 토큰 |
 | GET | `/api/v1/asset/worlds/{id}/versions`, `/versions/{number}` | 세계관의 판의 목록(최근 것부터), 판 하나(굳힌 문서까지) | access 토큰 |
-| GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`([공개 목록의 검색](#캐릭터와-게시)). `hide_adult=true` 면 성인용을 빼고(#986), `orientation`(`male`, `female`)을 주면 마지막 판에 그 태그(`남성향`, `여성향`)가 붙은 것만이다(#987, `app/preferences.py`) | 없어도 된다 |
-| GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서). 볼 수 없으면 404 | 없어도 된다 |
-| GET | `/api/v1/asset/listings/worlds` | 공개 세계관의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`, `hide_adult`, `orientation`(캐릭터와 같다) | 없어도 된다 |
-| GET | `/api/v1/asset/listings/worlds/{id}` | 공개 세계관의 소개(마지막 판에서 보여도 되는 것만: 이름, 거른 소개, 태그, 장르, 등급, 대표 그림, 기한, 엔딩 뒤, 공개한 인물, 계정에 남는 엔딩의 수). 볼 수 없으면 404 | 없어도 된다 |
+| GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`([공개 목록의 검색](#캐릭터와-게시)). `hide_adult=true` 면 성인용을 빼고(#986), `orientation`(`male`, `female`)을 주면 마지막 판에 그 태그(`남성향`, `여성향`)가 붙은 것만이다(#987, `app/preferences.py`). `creator`(만든 사람의 공개 ID)를 주면 그 사람의 것만이다(제작자 페이지, #992). 줄마다 `creator_id` 가 실린다 | 없어도 된다 |
+| GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서와 만든 사람의 공개 ID `creator_id`). 볼 수 없으면 404 | 없어도 된다 |
+| GET | `/api/v1/asset/listings/worlds` | 공개 세계관의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`, `hide_adult`, `orientation`, `creator`(캐릭터와 같다). 줄마다 `creator_id` 가 실린다 | 없어도 된다 |
+| GET | `/api/v1/asset/listings/worlds/{id}` | 공개 세계관의 소개(마지막 판에서 보여도 되는 것만: 만든 사람의 공개 ID, 이름, 거른 소개, 태그, 장르, 등급, 대표 그림, 기한, 엔딩 뒤, 공개한 인물, 계정에 남는 엔딩의 수). 볼 수 없으면 404 | 없어도 된다 |
 | POST | `/api/v1/asset/listings/characters/{id}/reports` | [신고](#신고와-숨김) `{reason, description?}`. 201. 볼 수 없으면 404, 자기 것은 403 `own_character`, 두 번째는 409 `already_reported` | access 토큰 |
 | GET | `/api/v1/asset/admin/character-reports` | [운영자](#신고와-숨김): 열린 신고를 캐릭터마다 묶은 목록(`minor` 가 먼저). 운영자가 아니면 404 | access 토큰(운영자) |
 | GET | `/api/v1/asset/admin/characters/{id}/reports` | 운영자: 그 캐릭터의 신고 전부(처리한 것까지) | access 토큰(운영자) |
@@ -162,7 +162,6 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/service/{caller}/characters/{id}/latest/number` | 마지막 판의 번호(`{id, version}`). 같은 규칙 | 서버의 서명 + access 토큰 |
 | GET | `/api/v1/asset/service/{caller}/worlds/{id}/latest` | 쓸 수 있는 [세계관](#세계관)의 마지막 판(`{id, version, rating, published_at, document}`). 캐릭터와 같은 규칙 | 서버의 서명 + access 토큰 |
 | GET | `/api/v1/asset/service/{caller}/worlds/{id}/latest/number` | 세계관의 마지막 판의 번호(`{id, version}`) | 서버의 서명 + access 토큰 |
-| POST, DELETE | `/api/v1/asset/service/{caller}/images[/{id}]` | 만든 [장면 그림](#다른-서버에-내주기)을 토큰의 주인의 그림으로 맡기기(본문은 그림의 바이트, 201 과 그림의 행), 지우기(204, 남의 것·없는 것·판에 쓰인 것은 그대로) | 서버의 서명 + access 토큰 |
 | POST | `/api/v1/asset/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴)한 사람의 페르소나와 비공개 캐릭터와 세계관, 쓰이지 않는 그림을 지운다. 200 `{"status":"processed"}`. 그림 저장소에 닿지 못하면 503 | 인증 서버의 서명 |
 
 ### 계정 페르소나
@@ -620,10 +619,7 @@ chat(나중에 story 와 TRPG)이 세션을 시작할 때 페르소나의 사본
   토큰만으로는 이 주소를 부르지 못한다. 프록시가 `/api/v1/asset/service/` 를 바깥에 열지 않고(404), 서명이 없으면 401 이다.
 - **서명.** 알림 서버의 것과 같다(`app/core/service_auth.py`). `caller` 는 주소에 있고 주소까지 서명하므로 남의 이름으로 부를 수 없다.
   비밀은 부르는 서버마다 따로다(`CHAT_SERVER_SECRET`, `STORY_SERVER_SECRET`). 서명이 없거나, 틀렸거나, 앞뒤 5분을 넘겼거나, 남의 주소의 것이거나,
-  모르는 서버이거나, 그 서버의 비밀이 비었으면 모두 같은 401 이다. 토큰보다 서명을 먼저 본다. 본문은 16KB 까지(넘으면 413). 그림을 맡기는 주소만 그림 올리기의 상한(`IMAGE_MAX_BYTES`)이다.
-- **장면 그림**(#983). chat 과 story 가 만든 그림을 맡긴다(`POST /service/{caller}/images`, `app/images/supply.py`). 서명은 그림의 바이트까지 본다.
-  사용자가 올린 그림과 같은 길이다. 따로 된 프로세스에서 열어 다시 인코딩하고(받지 않는 형식 415, 열 수 없으면 422), 주인만 본다. 공급자가 준 바이트를 그대로 내주지 않는다.
-  대화를 지우면 그 서버가 지운다(`DELETE /service/{caller}/images/{id}`). 남의 것, 없는 것, 판에 쓰인 것은 그대로 두고 204 다. 탈퇴하면 다른 그림처럼 지운다.
+  모르는 서버이거나, 그 서버의 비밀이 비었으면 모두 같은 401 이다. 토큰보다 서명을 먼저 본다. 본문은 16KB 까지(넘으면 413).
 - **내 단축어**(#981). 토큰의 주인의 목록을 내준다(`GET /service/{caller}/shortcuts`). 판이 없어 부르는 쪽은 "/이름"이 있는 턴에만 읽는다.
 - **페르소나.** 토큰의 주인의 것만 내준다. 남의 것과 없는 것은 404 다. 사본은 모델에 넣을 내용과 `revision` 이다(기본인지와 시각은 싣지 않는다).
 - **판.** 마지막 판을 내준다. 쓸 수 있는 사람인지는 asset 서버가 판단한다.

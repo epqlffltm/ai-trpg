@@ -4,6 +4,7 @@
 라우터들이 함께 쓰는 의존성. 요청 하나의 DB 세션, 앱의 설정, 목록의 쪽 나누기다.
 """
 
+import uuid
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -72,3 +73,6 @@ def get_preferences(
 
 # 공개 목록 API 가 인자의 형식으로 쓴다
 ListingPreferences = Annotated[Preferences, Depends(get_preferences)]
+
+# 만든 사람의 공개 ID(#992). 제작자 페이지가 그 사람의 공개 작품만 부른다. 비워 두면 거르지 않는다
+Creator = Annotated[uuid.UUID | None, Query()]

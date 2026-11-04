@@ -586,6 +586,8 @@ class PublicCharacterSummary(BaseModel):
     """공개 목록의 한 줄. 마지막 판의 값이다."""
 
     id: uuid.UUID
+    # 만든 사람의 공개 ID(#992). 이름은 화면이 인증 서버에 묻는다
+    creator_id: uuid.UUID
     version: int
     name: str
     tags: list[str]
@@ -606,6 +608,8 @@ class PublicCharacterDetail(BaseModel):
     """공개 캐릭터 하나. 마지막 판의 문서다."""
 
     id: uuid.UUID
+    # 만든 사람의 공개 ID(#992). 이름은 화면이 인증 서버에 묻는다
+    creator_id: uuid.UUID
     version: int
     published_at: datetime
     document: CharacterDocument

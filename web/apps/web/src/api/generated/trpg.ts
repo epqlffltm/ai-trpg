@@ -631,7 +631,7 @@ export interface paths {
          *
          *     검색어가 "#"로 시작하면 그 태그가 붙은 것, 아니면 제목이나 한 줄 소개에 그 글이 들어 있는 것이다(#984).
          *     hide_adult 가 참이면 성인용을 뺀다(#986). orientation 을 주면 그 성향의 태그가 붙은 것만이다(#987).
-         *     둘 다 보는 사람의 설정이고 화면이 싣는다.
+         *     둘 다 보는 사람의 설정이고 화면이 싣는다. creator 를 주면 그 사람이 만든 것만이다(제작자 페이지, #992).
          *
          *     로그인하지 않아도 읽는다(#530). 그때는 전체 이용가만 나온다. 토큰을 보냈는데 틀렸으면 401 이다.
          */
@@ -13199,6 +13199,7 @@ export interface operations {
                 q?: string | null;
                 hide_adult?: boolean;
                 orientation?: components["schemas"]["Orientation"] | null;
+                creator?: string | null;
             };
             header?: never;
             path?: never;

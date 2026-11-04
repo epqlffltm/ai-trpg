@@ -514,7 +514,25 @@ async def test_the_orientation_lists_only_that_tag(client: AsyncClient, operator
     assert await listed_with(client, {}) == ['남', '모두', '여']
 
 
-@pytest.mark.parametrize('params', [{'orientation': 'both'}, {'hide_adult': 'maybe'}])
+async def test_the_creator_lists_only_their_characters(client: AsyncClient, operator: dict, signing_key: SigningKey):
+    # 지금은 운영자만 캐릭터를 만든다. 다른 운영자를 하나 더 둔다
+    mine = await make_public(client, operator, name='운영자의 세라')
+    theirs = await make_public(client, bearer(signing_key, PLAYER, operator=True), name='플레이어의 세라')
+
+    # 목록과 소개에 만든 사람의 공개 ID 가 실리고, 제작자 페이지(#992)는 그 사람의 것만 부른다
+    listed = (await client.get(LISTINGS_URL)).json()['items']
+    detail = (await client.get(f'{LISTINGS_URL}/{theirs["id"]}')).json()
+    assert {item['name']: item['creator_id'] for item in listed} == {
+        '운영자의 세라': str(OPERATOR),
+        '플레이어의 세라': str(PLAYER),
+    }
+    assert detail['creator_id'] == str(PLAYER)
+    assert await listed_with(client, {}, creator=str(OPERATOR)) == ['운영자의 세라']
+    assert await listed_with(client, {}, creator=str(PLAYER)) == ['플레이어의 세라']
+    assert mine['id'] != theirs['id']
+
+
+@pytest.mark.parametrize('params', [{'orientation': 'both'}, {'hide_adult': 'maybe'}, {'creator': 'me'}])
 async def test_the_listing_rejects_a_bad_preference(client: AsyncClient, params: dict):
     assert (await client.get(LISTINGS_URL, params=params)).status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
