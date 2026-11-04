@@ -18,6 +18,7 @@ from sqlalchemy.orm import defer
 
 from app.assets.models import Asset, Rating, ScenarioVersion
 from app.listings.models import ORIENTATION_TAGS, Genre, Listing, Orientation
+from app.listings.popularity import ListingOrder, by_popularity, popular_since
 from app.listings.search import LIKE_ESCAPE, SearchTerms, contains_pattern
 
 # 공개된 것 하나를 보여 주는 데 필요한 것들: 공개 정보, 시나리오의 공통 부분(제목, 만든 사람), 공개 중인 판
@@ -126,15 +127,20 @@ async def list_public(
     where: ListingFilter,
     limit: int,
     offset: int,
+    order: ListingOrder = ListingOrder.RECENT,
 ) -> list[PublicRow]:
     """
-    공개된 시나리오를 최근에 공개한 것부터 돌려준다.
+    공개된 시나리오를 최근에 공개한 것부터(또는 인기순으로, #985) 돌려준다.
 
     판의 굳힌 내용(snapshot)은 읽지 않는다. 목록에는 싣지 않는 큰 문서다(하나를 볼 때만 읽는다, #428).
     """
     query = listed(filtered(visible(allowed_ratings), where)).options(defer(ScenarioVersion.snapshot))
-    # 공개한 시각이 같은 것끼리의 순서도 정해 둔다. 정하지 않으면 쪽을 넘길 때 같은 것이 두 번 나오거나 빠진다
-    query = query.order_by(Listing.published_at.desc(), Listing.scenario_id).limit(limit).offset(offset)
+    if order == ListingOrder.POPULAR:
+        query = by_popularity(query, popular_since())
+    else:
+        # 공개한 시각이 같은 것끼리의 순서도 정해 둔다. 정하지 않으면 쪽을 넘길 때 같은 것이 두 번 나오거나 빠진다
+        query = query.order_by(Listing.published_at.desc(), Listing.scenario_id)
+    query = query.limit(limit).offset(offset)
     result = await session.execute(query)
     return [tuple(row) for row in result]
 

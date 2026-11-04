@@ -28,6 +28,7 @@ from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.service import AssetNotFoundError
 from app.listings import repository
 from app.listings.models import Listing
+from app.listings.popularity import ListingOrder
 from app.listings.repository import ListingFilter, PublicRow
 from app.listings.schemas import ListingUpdate, PublicationUpdate
 from app.operators.publishing import require_publishable
@@ -231,7 +232,12 @@ async def get_public_detail(
 
 
 async def list_public(
-    session: AsyncSession, viewer: AccessClaims | None, where: ListingFilter, limit: int, offset: int
+    session: AsyncSession,
+    viewer: AccessClaims | None,
+    where: ListingFilter,
+    limit: int,
+    offset: int,
+    order: ListingOrder = ListingOrder.RECENT,
 ) -> tuple[list[PublicRow], int]:
     """
     공개된 시나리오의 한 쪽과 전체 개수를 돌려준다. 보는 사람이 볼 수 있는 등급만 나온다.
@@ -239,6 +245,6 @@ async def list_public(
     viewer 가 None 이면 로그인하지 않은 사람이다. 전체 이용가만 본다(#530).
     """
     ratings = allowed_ratings(viewer)
-    rows = await repository.list_public(session, ratings, where, limit, offset)
+    rows = await repository.list_public(session, ratings, where, limit, offset, order)
     total = await repository.count_public(session, ratings, where)
     return rows, total

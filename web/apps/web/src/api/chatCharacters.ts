@@ -10,6 +10,7 @@
 //   - 503 asset_unavailable, prices_unavailable: 다른 서버에 닿지 못했다. Retry-After 가 붙는다
 
 import { apiRequest } from './http';
+import { orderQuery, type ListingOrder } from './listingOrder';
 import { listingPreferences } from './listingPreferences';
 import type { ChatUnlockPage, ConversationCreate, ConversationDetail, ConversationPage, PublicCharacterPage } from './types';
 
@@ -20,8 +21,12 @@ export const CONVERSATION_PAGE_SIZE = 20;
 /** 한 캐릭터의 연 장면을 한 번에 읽는 수(서버의 최대). 한 캐릭터의 씬은 이보다 적다 */
 const UNLOCK_LIMIT = 100;
 
-export function fetchPublicCharacterPage(offset: number, signal?: AbortSignal): Promise<PublicCharacterPage> {
-  return apiRequest<PublicCharacterPage>('/api/v1/asset/listings/characters', { query: { limit: CHARACTER_PAGE_SIZE, offset, ...listingPreferences() }, ...withSignal(signal) });
+/** 공개 캐릭터의 한 쪽. 최근에 게시한 것부터, order 가 popular 면 최근 7일에 대화를 많이 시작한 것부터(#985) */
+export function fetchPublicCharacterPage(offset: number, signal?: AbortSignal, order?: ListingOrder): Promise<PublicCharacterPage> {
+  return apiRequest<PublicCharacterPage>('/api/v1/asset/listings/characters', {
+    query: { limit: CHARACTER_PAGE_SIZE, offset, ...orderQuery(order), ...listingPreferences() },
+    ...withSignal(signal),
+  });
 }
 
 /** 이 캐릭터(asset 의 id)와의 내 대화. 최근에 말한 것부터 */

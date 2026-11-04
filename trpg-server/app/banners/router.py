@@ -20,7 +20,7 @@ from app.banners import service
 from app.banners.schemas import BannerCreate, BannerOut, BannerUpdate, PublicBanner, PublicBannerList
 from app.banners.service import BannerNotFoundError, BannerView, ScenarioNotPublishedError
 from app.listings.repository import ListingFilter
-from app.listings.router import HideAdultFilter, OrientationFilter, to_public
+from app.listings.router import HideAdultFilter, OrientationFilter, public_items
 from app.operators.router import Operator
 
 public_router = APIRouter(prefix='/banners', tags=['banners'])
@@ -63,7 +63,10 @@ async def list_banners(
     """
     where = ListingFilter(hide_adult=hide_adult, orientation=orientation)
     rows = await service.list_shown(session, user, where, utc_now())
-    return PublicBannerList(items=[PublicBanner(id=banner.id, listing=to_public(*row)) for banner, row in rows])
+    listings = await public_items(session, [row for _, row in rows])
+    return PublicBannerList(
+        items=[PublicBanner(id=banner.id, listing=listing) for (banner, _), listing in zip(rows, listings, strict=True)]
+    )
 
 
 @admin_router.get('', response_model=list[BannerOut], status_code=status.HTTP_200_OK)

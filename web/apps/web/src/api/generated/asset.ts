@@ -342,6 +342,7 @@ export interface paths {
          *     검색어(q)가 "#"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).
          *     hide_adult, orientation 은 보는 사람의 설정이다(#986, #987, app/preferences.py). 화면이 싣는다.
          *     creator 를 주면 그 사람이 만든 것만이다(제작자 페이지, #992).
+         *     sort 가 popular 면 최근 7일에 많이 시작한 것부터다(#985). 줄마다 시작한 모든 수(start_count)가 실린다.
          */
         get: operations["list_public_api_v1_asset_listings_characters_get"];
         put?: never;
@@ -456,6 +457,7 @@ export interface paths {
          *     검색어(q)가 "#"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).
          *     hide_adult, orientation 은 보는 사람의 설정이다(#986, #987, app/preferences.py). 화면이 싣는다.
          *     creator 를 주면 그 사람이 만든 것만이다(제작자 페이지, #992).
+         *     sort 가 popular 면 최근 7일에 많이 시작한 것부터다(#985). 줄마다 시작한 모든 수(start_count)가 실린다.
          */
         get: operations["list_public_api_v1_asset_listings_worlds_get"];
         put?: never;
@@ -2439,6 +2441,12 @@ export interface components {
          */
         ItemKind: "thing" | "clothing";
         /**
+         * ListingOrder
+         * @description 공개 목록의 차례. recent 는 최근에 게시한 것부터, popular 는 최근 7일에 많이 시작한 것부터다.
+         * @enum {string}
+         */
+        ListingOrder: "recent" | "popular";
+        /**
          * LoreEntry
          * @description 항목 하나. 이름과 내용은 모델에 간다. constant 면 늘 간다.
          */
@@ -3038,6 +3046,8 @@ export interface components {
              * Format: date-time
              */
             published_at: string;
+            /** Start Count */
+            start_count: number;
             /** Version */
             version: number;
         };
@@ -3079,6 +3089,8 @@ export interface components {
              */
             published_at: string;
             rating: components["schemas"]["Rating"];
+            /** Start Count */
+            start_count: number;
             /** Tags */
             tags: string[];
             /** Version */
@@ -3123,6 +3135,8 @@ export interface components {
              */
             published_at: string;
             rating: components["schemas"]["Rating"];
+            /** Start Count */
+            start_count: number;
             /** Tags */
             tags: string[];
             /** Version */
@@ -3168,6 +3182,8 @@ export interface components {
              */
             published_at: string;
             rating: components["schemas"]["Rating"];
+            /** Start Count */
+            start_count: number;
             /** Tags */
             tags: string[];
             /** Version */
@@ -4978,6 +4994,7 @@ export interface operations {
         parameters: {
             query?: {
                 creator?: string | null;
+                sort?: components["schemas"]["ListingOrder"];
                 limit?: number;
                 offset?: number;
                 q?: string | null;
@@ -5205,6 +5222,7 @@ export interface operations {
         parameters: {
             query?: {
                 creator?: string | null;
+                sort?: components["schemas"]["ListingOrder"];
                 limit?: number;
                 offset?: number;
                 q?: string | null;

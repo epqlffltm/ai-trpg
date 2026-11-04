@@ -250,6 +250,9 @@ class Character(Base):
     # 관심(하트)을 둔 사람의 수(#989). 두고 거둘 때 같은 트랜잭션에서 하나씩 더하고 뺀다(app/hearts/repository.py).
     # 목록마다 세지 않으려고 적어 둔다
     heart_count: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
+    # 대화(캐릭터)나 세션(세계관)을 시작한 모든 수(#985). 그 서버에서 받아 올 때마다 고친다(app/stats/repository.py).
+    # 카드에 보인다. 한 시간까지 늦다
+    start_count: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

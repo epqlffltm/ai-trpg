@@ -19,10 +19,11 @@ import uuid
 from fastapi import APIRouter, status
 from server_core.auth.dependencies import CurrentUser, OptionalUser
 
-from app.core.dependencies import Creator, ListingPreferences, Paging, Search, Session
+from app.core.dependencies import Creator, ListingPreferences, Order, Paging, Search, Session
 from app.hearts import service as hearts
 from app.hearts.kinds import WORLD_HEARTS
 from app.hearts.schemas import HeartState
+from app.popularity import ListingOrder
 from app.worlds import service
 from app.worlds.documents import CastDocument, WorldDocument
 from app.worlds.models import Reveal, World, WorldVersion
@@ -47,6 +48,7 @@ def to_public_summary(world: World, version: WorldVersion) -> PublicWorldSummary
         deadline_days=document.deadline_days,
         published_at=version.created_at,
         heart_count=world.heart_count,
+        start_count=world.start_count,
     )
 
 
@@ -88,6 +90,7 @@ def to_public_detail(world: World, version: WorldVersion) -> PublicWorldDetail:
         cast=public_cast(document),
         ending_count=sum(1 for ending in document.endings if ending.unlock),
         heart_count=world.heart_count,
+        start_count=world.start_count,
     )
 
 
@@ -99,6 +102,7 @@ async def list_public(
     search: Search,
     preferences: ListingPreferences,
     creator: Creator = None,
+    sort: Order = ListingOrder.RECENT,
 ) -> PublicWorldPage:
     """
     공개 세계관의 목록. 최근에 게시한 것부터다.
@@ -106,8 +110,11 @@ async def list_public(
     검색어(q)가 "#"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).
     hide_adult, orientation 은 보는 사람의 설정이다(#986, #987, app/preferences.py). 화면이 싣는다.
     creator 를 주면 그 사람이 만든 것만이다(제작자 페이지, #992).
+    sort 가 popular 면 최근 7일에 많이 시작한 것부터다(#985). 줄마다 시작한 모든 수(start_count)가 실린다.
     """
-    rows, total = await service.list_public(session, user, search, preferences, creator, paging.limit, paging.offset)
+    rows, total = await service.list_public(
+        session, user, search, preferences, creator, paging.limit, paging.offset, sort
+    )
     return PublicWorldPage(items=[to_public_summary(world, version) for world, version in rows], total=total)
 
 

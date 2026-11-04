@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/trpg/browse/ScenarioBrowsePage.tsx
-// 시나리오 탐색(B1, /trpg). 공개된 시나리오를 최근 공개한 것부터 보이고, 장르·인원·태그로 거른다.
+// 시나리오 탐색(B1, /trpg). 공개된 시나리오를 최근 공개한 것부터(또는 인기순, #985) 보이고, 장르·인원·태그로 거른다.
+// 카드에 연 테이블의 수와 관심의 수(#989)를 붙인다.
 // 로그인하지 않아도 열린다(#530, 전체이용가만). 카드를 누르면 소개(B2)로 간다.
 //
 // 거르는 조건은 주소의 쿼리에 둔다(filters.ts). 쪽은 "더 보기"로 이어 읽는다(한 쪽 20개).
@@ -12,6 +13,7 @@ import type { ListingFilters } from '../../../api/listings';
 import type { PublicListing } from '../../../api/types';
 import { useSession } from '../../../auth/useSession';
 import { ItemCard } from '../../../components/ItemCard';
+import { usageTags } from '../../../format/usage';
 import { usePublicNames, type NameLookup } from '../../../hooks/usePublicNames';
 import { ratingBadge } from '../../home/labels';
 import { AdultContentHint } from '../AdultContentHint';
@@ -43,7 +45,7 @@ export function ScenarioBrowsePage() {
       <AdultContentHint />
       {query.isPending ? <p aria-busy="true">불러오는 중</p> : null}
       {query.isError && items.length === 0 ? <LoadFailed onRetry={() => void query.refetch()} /> : null}
-      {query.isSuccess && items.length === 0 ? <Empty filtered={hasFilters(filters)} onClear={() => change({})} /> : null}
+      {query.isSuccess && items.length === 0 ? <Empty filtered={hasFilters(filters)} onClear={() => change({ sort: filters.sort })} /> : null}
       {items.length > 0 ? (
         <>
           <p className="result-count">{pages[0]?.total ?? items.length}개</p>
@@ -72,7 +74,12 @@ function ScenarioGrid({ items, nameOf }: { items: PublicListing[]; nameOf: NameL
           title={listing.title}
           description={listing.tagline}
           byline={nameOf(listing.creator_id)}
-          meta={[ratingBadge(listing.rating), listing.genre ? genreLabel(listing.genre) : null, playersLabel(listing.recommended_players)]}
+          meta={[
+            ratingBadge(listing.rating),
+            listing.genre ? genreLabel(listing.genre) : null,
+            playersLabel(listing.recommended_players),
+            ...usageTags('테이블', listing.start_count, listing.heart_count),
+          ]}
         />
       ))}
     </ul>

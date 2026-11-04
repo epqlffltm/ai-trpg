@@ -9,6 +9,7 @@ import { useParams } from 'react-router';
 import { ApiError } from '../../api/errors';
 import { useSession } from '../../auth/useSession';
 import { ItemCard } from '../../components/ItemCard';
+import { usageTags } from '../../format/usage';
 import { CharacterCard } from '../chat/browse/CharacterCard';
 import { ratingBadge } from '../home/labels';
 import { listStatus } from '../home/listStatus';
@@ -67,7 +68,7 @@ function CreatorScenarios({ publicId, signedIn }: WorksProps) {
             to={`/trpg/scenarios/${listing.scenario_id}`}
             title={listing.title}
             description={listing.tagline}
-            meta={[ratingBadge(listing.rating), listing.genre ? genreLabel(listing.genre) : null]}
+            meta={[ratingBadge(listing.rating), listing.genre ? genreLabel(listing.genre) : null, ...usageTags('테이블', listing.start_count, listing.heart_count)]}
           />
         ))}
       </ul>

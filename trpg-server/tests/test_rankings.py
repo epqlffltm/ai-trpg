@@ -6,6 +6,7 @@
   - 최근 7일에 연 테이블이 많은 것부터다. 같으면 모든 수가 많은 것부터다. 7일보다 앞의 테이블은 최근의 수에 들지 않는다
   - 최근의 수가 0 인 것, 공개를 내린 것, 링크로만 여는 것(#993), 볼 수 없는 등급은 빠진다
   - 보는 사람의 설정(hide_adult, orientation)으로 거르고, limit 만큼만 준다
+  - 공개 목록의 줄마다 연 테이블의 모든 수가 실리고, sort=popular 면 랭킹과 같은 차례다
 """
 
 import uuid
@@ -98,3 +99,28 @@ async def test_rejects_a_bad_query(client: AsyncClient, params: dict):
     response = await client.get(RANKING_URL, params=params)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+async def test_the_listing_carries_start_counts_and_sorts_by_popularity(
+    client: AsyncClient, session: AsyncSession, my_headers: dict
+):
+    await make_public(client, my_headers, title='새것')
+    busy = await make_public(client, my_headers, title='이번 주')
+    old = await make_public(client, my_headers, title='지난 일')
+    await open_tables(client, my_headers, busy, 2)
+    await age(session, await open_tables(client, my_headers, old, 5), days=30)
+
+    async def titles(**params) -> list[tuple[str, int]]:
+        response = await client.get(f'{API_PREFIX}/listings', params=params)
+        assert response.status_code == status.HTTP_200_OK, response.text
+        return [(item['title'], item['start_count']) for item in response.json()['items']]
+
+    # 카드의 수는 모든 기간이다. 기본은 최근에 공개한 것부터다(만든 차례의 거꾸로)
+    assert await titles() == [('지난 일', 5), ('이번 주', 2), ('새것', 0)]
+    # 인기순은 최근 7일의 수, 같으면 모든 수, 그것도 같으면 최근에 공개한 것이다(#985)
+    assert await titles(sort='popular') == [('이번 주', 2), ('지난 일', 5), ('새것', 0)]
+    assert await titles(sort='popular', limit=1, offset=1) == [('지난 일', 5)]
+    detail = (await client.get(f'{API_PREFIX}/listings/{busy["id"]}')).json()
+    assert detail['start_count'] == 2
+    bad = await client.get(f'{API_PREFIX}/listings', params={'sort': 'best'})
+    assert bad.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT

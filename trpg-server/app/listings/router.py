@@ -10,6 +10,7 @@
 """
 
 import uuid
+from collections.abc import Sequence
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -24,7 +25,8 @@ from app.assets.scenarios.schemas import RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.listings import hearts, service
 from app.listings.models import TAG_MAX_LENGTH, Genre, Listing, Orientation
-from app.listings.repository import ListingFilter
+from app.listings.popularity import ListingOrder, start_counts
+from app.listings.repository import ListingFilter, PublicRow
 from app.listings.schemas import (
     HeartState,
     ListingDetail,
@@ -84,8 +86,12 @@ def to_public_detail(public: PublicListing, snapshot: Snapshot, recommended: str
     )
 
 
-def to_public(listing: Listing, asset: Asset, version: ScenarioVersion) -> PublicListing:
-    """공개된 시나리오를 다른 사용자에게 보여 주는 응답으로 바꾼다. 여기 적은 칸만 나간다."""
+def to_public(listing: Listing, asset: Asset, version: ScenarioVersion, start_count: int) -> PublicListing:
+    """
+    공개된 시나리오를 다른 사용자에게 보여 주는 응답으로 바꾼다. 여기 적은 칸만 나간다.
+
+    start_count 는 연 테이블의 수다(public_items 가 한 번에 센다).
+    """
     return PublicListing(
         scenario_id=listing.scenario_id,
         creator_id=asset.owner_id,
@@ -100,6 +106,7 @@ def to_public(listing: Listing, asset: Asset, version: ScenarioVersion) -> Publi
         version_note=version.note,
         published_at=listing.published_at,
         heart_count=listing.heart_count,
+        start_count=start_count,
     )
 
 
@@ -185,10 +192,20 @@ def to_filter(
 
 
 Filter = Annotated[ListingFilter, Depends(to_filter)]
+# 목록의 차례(#985). recent(최근에 공개한 것부터, 기본) 또는 popular(최근 7일에 많이 연 것부터)
+OrderParam = Annotated[ListingOrder, Query()]
+
+
+async def public_items(session: AsyncSession, rows: Sequence[PublicRow]) -> list[PublicListing]:
+    """공개 정보의 줄들을 응답으로 바꾼다. 연 테이블의 수를 한 번에 센다."""
+    counts = await start_counts(session, [listing.scenario_id for listing, _, _ in rows])
+    return [to_public(listing, asset, version, counts.get(listing.scenario_id, 0)) for listing, asset, version in rows]
 
 
 @public_router.get('', response_model=PublicListingPage, status_code=status.HTTP_200_OK)
-async def list_listings(user: OptionalUser, session: Session, paging: Paging, where: Filter) -> PublicListingPage:
+async def list_listings(
+    user: OptionalUser, session: Session, paging: Paging, where: Filter, sort: OrderParam = ListingOrder.RECENT
+) -> PublicListingPage:
     """
     공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르, 태그, 함께 할 인원, 검색어(q)로 거를 수 있다.
 
@@ -196,10 +213,12 @@ async def list_listings(user: OptionalUser, session: Session, paging: Paging, wh
     hide_adult 가 참이면 성인용을 뺀다(#986). orientation 을 주면 그 성향의 태그가 붙은 것만이다(#987).
     둘 다 보는 사람의 설정이고 화면이 싣는다. creator 를 주면 그 사람이 만든 것만이다(제작자 페이지, #992).
 
+    sort 가 popular 면 최근 7일에 테이블을 많이 연 것부터다(#985). 줄마다 연 테이블의 수(start_count)가 실린다.
+
     로그인하지 않아도 읽는다(#530). 그때는 전체 이용가만 나온다. 토큰을 보냈는데 틀렸으면 401 이다.
     """
-    rows, total = await service.list_public(session, user, where, paging.limit, paging.offset)
-    return PublicListingPage(items=[to_public(*row) for row in rows], total=total)
+    rows, total = await service.list_public(session, user, where, paging.limit, paging.offset, sort)
+    return PublicListingPage(items=await public_items(session, rows), total=total)
 
 
 @public_router.get('/hearted', response_model=PublicListingPage, status_code=status.HTTP_200_OK)
@@ -210,7 +229,7 @@ async def list_hearted_listings(user: CurrentUser, session: Session, paging: Pag
     지금 볼 수 있는 것만 나온다(공개를 내렸거나 볼 수 없는 등급이 된 것은 빠진다). 링크 공개도 나온다.
     """
     rows, total = await hearts.list_mine(session, user, paging.limit, paging.offset)
-    return PublicListingPage(items=[to_public(*row) for row in rows], total=total)
+    return PublicListingPage(items=await public_items(session, rows), total=total)
 
 
 @public_router.get('/{scenario_id}/heart', response_model=HeartState, status_code=status.HTTP_200_OK)
@@ -239,4 +258,5 @@ async def read_public_listing(scenario_id: uuid.UUID, user: OptionalUser, sessio
     로그인하지 않아도 읽는다(#530). 그때 성인용은 없는 것(404)이다.
     """
     (listing, asset, version), recommended = await service.get_public_detail(session, user, scenario_id)
-    return to_public_detail(to_public(listing, asset, version), read_snapshot(version.snapshot), recommended)
+    (public,) = await public_items(session, [(listing, asset, version)])
+    return to_public_detail(public, read_snapshot(version.snapshot), recommended)

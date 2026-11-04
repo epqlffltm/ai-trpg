@@ -633,6 +633,8 @@ export interface paths {
          *     hide_adult 가 참이면 성인용을 뺀다(#986). orientation 을 주면 그 성향의 태그가 붙은 것만이다(#987).
          *     둘 다 보는 사람의 설정이고 화면이 싣는다. creator 를 주면 그 사람이 만든 것만이다(제작자 페이지, #992).
          *
+         *     sort 가 popular 면 최근 7일에 테이블을 많이 연 것부터다(#985). 줄마다 연 테이블의 수(start_count)가 실린다.
+         *
          *     로그인하지 않아도 읽는다(#530). 그때는 전체 이용가만 나온다. 토큰을 보냈는데 틀렸으면 401 이다.
          */
         get: operations["list_listings_api_v1_game_listings_get"];
@@ -5631,6 +5633,12 @@ export interface components {
             version: number | null;
         };
         /**
+         * ListingOrder
+         * @description 공개 목록의 차례. recent 는 최근에 공개한 것부터, popular 는 최근 7일에 많이 연 것부터다.
+         * @enum {string}
+         */
+        ListingOrder: "recent" | "popular";
+        /**
          * ListingPregen
          * @description 공개된 판의 프리젠 하나. 테이블을 만들기 전에 고를 거리를 보는 값이다. 함께 받는 소지품은 싣지 않는다.
          */
@@ -7824,6 +7832,8 @@ export interface components {
              * Format: uuid
              */
             scenario_id: string;
+            /** Start Count */
+            start_count: number;
             /** Tagline */
             tagline: string;
             /** Tags */
@@ -7879,6 +7889,8 @@ export interface components {
              * Format: uuid
              */
             scenario_id: string;
+            /** Start Count */
+            start_count: number;
             /** Tagline */
             tagline: string;
             /** Tags */
@@ -13296,6 +13308,7 @@ export interface operations {
     list_listings_api_v1_game_listings_get: {
         parameters: {
             query?: {
+                sort?: components["schemas"]["ListingOrder"];
                 limit?: number;
                 offset?: number;
                 genre?: components["schemas"]["Genre"] | null;

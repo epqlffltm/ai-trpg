@@ -43,6 +43,7 @@ from app.characters.schemas import CharacterCreate, CharacterUpdate
 from app.content.html import Removed
 from app.images import service as images
 from app.lorebooks import repository as lorebooks
+from app.popularity import ListingOrder
 from app.preferences import Preferences, shown_ratings
 from app.ratings import AdultContentRequiredError, allowed_ratings, require_rating
 from app.search import SearchTerms
@@ -261,6 +262,7 @@ async def list_public(
     creator: uuid.UUID | None,
     limit: int,
     offset: int,
+    order: ListingOrder = ListingOrder.RECENT,
 ) -> tuple[list[tuple[Character, CharacterVersion]], int]:
     """
     공개 목록의 한 쪽과 전체 개수. 보는 사람이 볼 수 있는 등급만이다. 검색어가 있으면 그것으로도 거른다.
@@ -268,7 +270,9 @@ async def list_public(
     보는 사람의 설정(#986, #987)으로 성인 작품을 숨기고 성향의 태그로 거른다.
     """
     ratings = shown_ratings(allowed_ratings(viewer), preferences)
-    return await repository.list_public(session, ratings, search, preferences.orientation_tag, creator, limit, offset)
+    return await repository.list_public(
+        session, ratings, search, preferences.orientation_tag, creator, limit, offset, order
+    )
 
 
 async def get_public(

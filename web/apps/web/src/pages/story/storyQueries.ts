@@ -4,6 +4,7 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import { isClientError } from '../../api/http';
 import { fetchStoryEndings, fetchStoryGallery, fetchStoryModels, fetchStorySession, fetchStorySessions, SESSION_PAGE_SIZE } from '../../api/story';
+import type { ListingOrder } from '../../api/listingOrder';
 import { fetchMyStoryWorlds, fetchPublicWorld, fetchPublicWorlds } from '../../api/storyWorlds';
 
 export const STORY_KEY = ['story'] as const;
@@ -52,10 +53,10 @@ export function storyModelsQuery() {
 /** 한 쪽의 공개 세계관 수 */
 export const PUBLIC_WORLD_PAGE_SIZE = 20;
 
-export function publicWorldsQuery(signedIn: boolean) {
+export function publicWorldsQuery(signedIn: boolean, order: ListingOrder = 'recent') {
   return infiniteQueryOptions({
-    queryKey: [...STORY_KEY, 'public-worlds', { signedIn }],
-    queryFn: ({ pageParam, signal }) => fetchPublicWorlds({ limit: PUBLIC_WORLD_PAGE_SIZE, offset: pageParam }, signal),
+    queryKey: [...STORY_KEY, 'public-worlds', { signedIn, order }],
+    queryFn: ({ pageParam, signal }) => fetchPublicWorlds({ limit: PUBLIC_WORLD_PAGE_SIZE, offset: pageParam }, signal, order),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
       const read = allPages.length * PUBLIC_WORLD_PAGE_SIZE;

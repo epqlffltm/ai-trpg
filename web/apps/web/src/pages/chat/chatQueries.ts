@@ -3,12 +3,13 @@
 // 캐릭터 하나의 판은 갤러리(C7)와 같은 열쇠(publicCharacterQuery)를 쓴다. 한 번 읽은 판을 두 화면이 함께 쓴다.
 
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
+import type { ListingOrder } from '../../api/listingOrder';
 import { CHARACTER_PAGE_SIZE, CONVERSATION_PAGE_SIZE, fetchConversationsWith, fetchPublicCharacterPage, fetchUnlocksOf } from '../../api/chatCharacters';
 
-export function characterBrowseQuery(signedIn: boolean) {
+export function characterBrowseQuery(signedIn: boolean, order: ListingOrder = 'recent') {
   return infiniteQueryOptions({
-    queryKey: ['chat', 'characters', 'browse', { signedIn }],
-    queryFn: ({ pageParam, signal }) => fetchPublicCharacterPage(pageParam, signal),
+    queryKey: ['chat', 'characters', 'browse', { signedIn, order }],
+    queryFn: ({ pageParam, signal }) => fetchPublicCharacterPage(pageParam, signal, order),
     initialPageParam: 0,
     getNextPageParam: (lastPage, pages) => nextOffset(pages.length, CHARACTER_PAGE_SIZE, lastPage.total),
   });
