@@ -2158,6 +2158,7 @@ compose 로 띄울 때는 루트 `.env` 에 적는다(프로필 `observability` 
 | `billing_idempotency_total` | 서버 | `kind`(`order`, `hold`), `outcome`(`first`, `replayed`, `conflict`) |
 | `billing_orders_total` | 서버, 정리 작업(`expired`), 대사 | `status`. 그 상태가 된 주문의 수 |
 | `billing_user_notices_total` | 서버(`credit.short` 를 적은 것), 정리 작업 | `kind`(알림의 종류), `outcome`(`queued`, `duplicate`, `sent`, `retried`, `rejected`). 사용자의 알림함에 보낼 일 |
+| `billing_auto_charges_total` | 자동 충전의 결제 작업 | `outcome`(`paid`, `declined`, `skipped`, `retried`), 그만둔 것은 `reason`(까닭). 결제 작업이 끝낸 충전할 일의 수. 사람의 결정은 세지 않는다 |
 | `payment_provider_calls_total` | 서버, 대사 | `provider`(`PAYMENT_PROVIDER`), `operation`(`confirm`, `lookup`, `cancel`), `outcome` |
 | `payment_webhooks_total` | 서버 | `provider`(서명한 알림은 `fake`, 토스의 알림은 `toss`), `result`(`accepted`, `ignored`, `bad_signature`, `bad_request`, `unavailable`) |
 

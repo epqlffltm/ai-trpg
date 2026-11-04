@@ -116,6 +116,10 @@ func run(args []string, out io.Writer) error {
 	}
 	cards := app.NewCards(settings.Payment)
 	charger := autocharge.NewService(pool, time.Now, cards, services.Eligibility).WithCharging(cards, services.Orders)
+	// 충전할 일을 끝낸 결과(결제됨, 거절, 그만둠과 그 까닭, 다시 보낼 것)를 센다
+	if err := charger.Measure(meters.Meter()); err != nil {
+		return err
+	}
 
 	if opts.once {
 		result, err := round(ctx, charger, opts.limit)

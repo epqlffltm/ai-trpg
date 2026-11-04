@@ -35,11 +35,13 @@ type Service struct {
 	// charger 와 orders 는 결제하는 작업만 붙인다(WithCharging, charge.go). 처음에는 없다
 	charger payment.CardCharger
 	orders  Orders
+	// metrics 는 결제 작업이 끝낸 일을 센다(metrics.go). Measure 를 부르기 전에는 세지 않는다
+	metrics chargeMetrics
 }
 
 // NewService 는 Service 를 만든다.
 func NewService(pool *pgxpool.Pool, now func() time.Time, issuer payment.CardIssuer, eligibility Eligibility) *Service {
-	return &Service{pool: pool, clock: now, issuer: issuer, eligibility: eligibility}
+	return &Service{pool: pool, clock: now, issuer: issuer, eligibility: eligibility, metrics: noChargeMetrics()}
 }
 
 // --- 카드 ---

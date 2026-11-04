@@ -1,7 +1,7 @@
 {
   "uid": "billing-server",
   "title": "결제 서버",
-  "description": "결제 서버(billing-server)의 요청, DB 연결, 결제, 원장, 정리 작업. 규칙과 이름은 docs/observability.md 의 \"메트릭\"에 있다",
+  "description": "결제 서버(billing-server)의 요청, DB 연결, 결제, 원장, 정리 작업, 자동 충전. 규칙과 이름은 docs/observability.md 의 \"메트릭\"에 있다",
   "tags": [
     "billing-server"
   ],
@@ -1609,6 +1609,135 @@
           },
           "expr": "sum by (outcome) (rate(billing_user_notices_total{service=\"billing-server\", kind=\"credit.short\", outcome=~\"queued|duplicate\"}[$__rate_interval])) * 60",
           "legendFormat": "{{outcome}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 33,
+      "title": "자동 충전",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 95
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 34,
+      "title": "자동 충전의 결과",
+      "description": "결제 작업(autocharge)이 충전할 일을 끝낸 수. paid(결제됨), declined(카드사의 거절), skipped(보내기 전에 그만둠), retried(답을 받지 못해 다시 보낼 것). 사람이 정한 것(cmd/autocharges)은 세지 않는다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 96
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "opm",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (outcome) (rate(billing_auto_charges_total{service=\"billing-server\"}[$__rate_interval])) * 60",
+          "legendFormat": "{{outcome}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 35,
+      "title": "그만둔 자동 충전의 까닭",
+      "description": "보내기 전에 그만둔 까닭. terms_outdated 는 지금의 자동 결제 동의가 없어 멈춘 것, stale 은 결제 작업이 하루 넘게 멈춰 있었던 것이다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 96
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "opm",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (reason) (rate(billing_auto_charges_total{service=\"billing-server\", outcome=\"skipped\"}[$__rate_interval])) * 60",
+          "legendFormat": "{{reason}}",
           "refId": "A",
           "range": true,
           "instant": false

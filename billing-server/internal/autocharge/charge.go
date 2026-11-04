@@ -217,7 +217,10 @@ func (s *Service) prepare(ctx context.Context, request autochargedb.AutoChargeRe
 		}
 	}
 	if reason != "" {
-		_, err := queries.SkipRequest(ctx, autochargedb.SkipRequestParams{ID: request.ID, Reason: reason, Now: now})
+		skipped, err := queries.SkipRequest(ctx, autochargedb.SkipRequestParams{ID: request.ID, Reason: reason, Now: now})
+		if err == nil && skipped > 0 {
+			s.metrics.ended(ctx, outcomeLabelSkipped, reason)
+		}
 		return request, true, err
 	}
 	if _, err := queries.StartCharging(ctx, autochargedb.StartChargingParams{
@@ -237,14 +240,20 @@ func PastPending(createdAt time.Time, now time.Time) bool {
 // skipStale 은 늦은 일을 그만두고 armed 를 다시 켠다. 한 트랜잭션이다. 다른 쪽이 먼저 끝냈으면 켜지 않는다.
 // 일을 적을 때 armed 를 껐다. 다시 켜지 않으면 잔액이 기준 아래에 있는 동안 다시 사지 않는다(기준 이상을 봐야 켜진다).
 func (s *Service) skipStale(ctx context.Context, request autochargedb.AutoChargeRequest, now time.Time) error {
-	return txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
+	ended := false
+	err := txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
 		queries := autochargedb.New(tx)
 		skipped, err := queries.SkipRequest(ctx, autochargedb.SkipRequestParams{ID: request.ID, Reason: SkipStale, Now: now})
 		if err != nil || skipped == 0 {
 			return err
 		}
+		ended = true
 		return queries.SetArmed(ctx, autochargedb.SetArmedParams{UserID: request.UserID, Armed: true})
 	})
+	if err == nil && ended {
+		s.metrics.ended(ctx, outcomeLabelSkipped, SkipStale)
+	}
+	return err
 }
 
 // refusal 은 보내지 않을 까닭이다. 보내도 되면 빈 글자다. 결제 자격의 오류가 아닌 오류(DB)는 오류로 돌려준다.
@@ -303,13 +312,23 @@ func (s *Service) settle(
 		if cause == nil {
 			cause = errors.New("결제 대행사가 아직 결과를 모른다")
 		}
-		return outcomeRetried, s.delay(ctx, request, cause, now)
+		if err := s.delay(ctx, request, cause, now); err != nil {
+			return outcomeRetried, err
+		}
+		s.metrics.ended(ctx, outcomeLabelRetried, "")
+		return outcomeRetried, nil
 	}
 	if charged.Status == payment.StatusApproved {
-		_, err := s.settlePaid(ctx, request, charged.PaymentKey)
+		settled, err := s.settlePaid(ctx, request, charged.PaymentKey)
+		if settled {
+			s.metrics.ended(ctx, outcomeLabelPaid, "")
+		}
 		return outcomePaid, err
 	}
-	_, err = s.settleDeclined(ctx, request, charged.Code)
+	settled, err := s.settleDeclined(ctx, request, charged.Code)
+	if settled {
+		s.metrics.ended(ctx, outcomeLabelDeclined, "")
+	}
 	return outcomeDeclined, err
 }
 
