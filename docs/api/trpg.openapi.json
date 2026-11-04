@@ -16717,6 +16717,38 @@
         "title": "ScenarioRanking",
         "type": "object"
       },
+      "ScenarioStats": {
+        "description": "내 시나리오의 숫자. total 과 recent 는 내 시나리오 모두를 더한 것이다.\n\nitems 는 최근의 수가 많은 것부터 MAX_STATS_ITEMS 개까지다. 더한 수는 잘린 것까지 센다.\n테이블을 열 때마다 바로 바뀐다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkStarts"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "recent": {
+            "title": "Recent",
+            "type": "integer"
+          },
+          "recent_days": {
+            "title": "Recent Days",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "recent_days",
+          "total",
+          "recent",
+          "items"
+        ],
+        "title": "ScenarioStats",
+        "type": "object"
+      },
       "ScenarioSummary": {
         "description": "시나리오의 목록에 싣는 값. 공통 값에 등급을 더한다. 목록에서 등급으로 가려 보여 줄 수 있어야 한다.",
         "properties": {
@@ -21030,6 +21062,36 @@
         "title": "WithdrawalResult",
         "type": "object"
       },
+      "WorkStarts": {
+        "description": "작품 하나의 수. total 은 모든 기간에, recent 는 최근 recent_days 일 동안 연 테이블의 수다.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "recent": {
+            "title": "Recent",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "total",
+          "recent"
+        ],
+        "title": "WorkStarts",
+        "type": "object"
+      },
       "WorldCreate": {
         "additionalProperties": false,
         "description": "세계관을 만들 때 받는 값. 제목만 필수다.",
@@ -24700,6 +24762,34 @@
         "summary": "Read Me",
         "tags": [
           "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/me/stats/scenarios": {
+      "get": {
+        "description": "내 시나리오의 숫자. 최근 7일에 많이 연 것부터다.",
+        "operationId": "read_scenario_stats_api_v1_game_me_stats_scenarios_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioStats"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Scenario Stats",
+        "tags": [
+          "creator-stats"
         ],
         "x-audience": "user"
       }

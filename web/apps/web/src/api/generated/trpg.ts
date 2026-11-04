@@ -861,6 +861,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/me/stats/scenarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Scenario Stats
+         * @description 내 시나리오의 숫자. 최근 7일에 많이 연 것부터다.
+         */
+        get: operations["read_scenario_stats_api_v1_game_me_stats_scenarios_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/personas": {
         parameters: {
             query?: never;
@@ -9930,6 +9950,23 @@ export interface components {
             recent_days: number;
         };
         /**
+         * ScenarioStats
+         * @description 내 시나리오의 숫자. total 과 recent 는 내 시나리오 모두를 더한 것이다.
+         *
+         *     items 는 최근의 수가 많은 것부터 MAX_STATS_ITEMS 개까지다. 더한 수는 잘린 것까지 센다.
+         *     테이블을 열 때마다 바로 바뀐다.
+         */
+        ScenarioStats: {
+            /** Items */
+            items: components["schemas"]["WorkStarts"][];
+            /** Recent */
+            recent: number;
+            /** Recent Days */
+            recent_days: number;
+            /** Total */
+            total: number;
+        };
+        /**
          * ScenarioSummary
          * @description 시나리오의 목록에 싣는 값. 공통 값에 등급을 더한다. 목록에서 등급으로 가려 보여 줄 수 있어야 한다.
          */
@@ -11810,6 +11847,23 @@ export interface components {
              * @constant
              */
             status: "processed";
+        };
+        /**
+         * WorkStarts
+         * @description 작품 하나의 수. total 은 모든 기간에, recent 는 최근 recent_days 일 동안 연 테이블의 수다.
+         */
+        WorkStarts: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Recent */
+            recent: number;
+            /** Title */
+            title: string;
+            /** Total */
+            total: number;
         };
         /**
          * WorldCreate
@@ -13844,6 +13898,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+        };
+    };
+    read_scenario_stats_api_v1_game_me_stats_scenarios_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioStats"];
                 };
             };
         };
