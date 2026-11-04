@@ -77,6 +77,10 @@ from app.operators.service import AlreadyHandledError, ReportNotFoundError
 from app.reports import router as reports
 from app.reports.service import AlreadyReportedError, NotReportableError
 from app.shortcuts import router as shortcuts
+from app.snapshots import router as snapshots
+from app.snapshots import settler as snapshot_settler
+from app.snapshots.providers import build_image_provider
+from app.snapshots.service import NotDrawableError, SnapshotBusyError, SnapshotDeclinedError, SnapshotUnavailableError
 from app.transcripts import router as transcripts
 from app.turns import router as messages
 from app.turns import settler
@@ -115,14 +119,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     revoking = revocations.start(app.state.revocations)
     settling = settler.start(app.state.settler)
+    snapshot_settling = snapshot_settler.start(app.state.snapshot_settler)
     dispatching = dispatcher.start(app.state.notification_dispatcher)
     listening = loops.start(app.state.stop_listener, 'stop-listener')
     yield
     await revoking.halt()
     await settling.halt()
+    await snapshot_settling.halt()
     await dispatching.halt()
     await listening.halt()
     await stop_turns(app.state.turns)
+    await stop_turns(app.state.snapshot_tasks)
     await app.state.summarizer.stop()
     if app.state.lore_indexer is not None:
         await app.state.lore_indexer.stop()
@@ -228,6 +235,13 @@ def create_app(
     )
     # 청구 정리. 결제 서버는 부를 때마다 앱에서 꺼낸다(테스트가 바꿔 꽂는다)
     app.state.settler = settler.ChargeSettler(app.state.session_factory, billing=lambda: app.state.billing)
+    # 장면 그림(app/snapshots/, #983). SNAPSHOT_PROVIDER 가 off 거나 키가 없으면 provider 가 None 이다(503).
+    # 그리는 일들은 서버가 꺼질 때 멈춘다. 청구 정리는 따로 돈다
+    app.state.image_provider = build_image_provider(settings, app.state.http_client)
+    app.state.snapshot_tasks = set()
+    app.state.snapshot_settler = snapshot_settler.SnapshotSettler(
+        app.state.session_factory, billing=lambda: app.state.billing
+    )
     # 신고를 처리했다는 것을 넣는 알림 서버(#678). 설정(NOTIFICATION_URL)이 정한다. 비우면 None 이고
     # 알림은 발송함에 적히기만 한다. 같은 클라이언트로 부른다(client span 과 traceparent 가 걸린다)
     app.state.notifications = build_notifications(settings, app.state.http_client, outbox.SOURCE)
@@ -270,6 +284,9 @@ def create_app(
     app.include_router(messages.router, prefix=API_PREFIX)
     app.include_router(messages.message_router, prefix=API_PREFIX)
     app.include_router(messages.generation_router, prefix=API_PREFIX)
+    # 장면 그림(#983). 그리기는 응답과 따로 돈다
+    app.include_router(snapshots.router, prefix=API_PREFIX)
+    app.include_router(snapshots.conversation_router, prefix=API_PREFIX)
     # 대화 기록 내려받기(#617). 지금 보고 있는 가지를 파일 하나로
     app.include_router(transcripts.router, prefix=API_PREFIX)
     # 내가 연 이벤트 씬(#669). 소개의 이벤트 씬 칸과 갤러리가 읽는다
@@ -298,6 +315,10 @@ def create_app(
     app.add_exception_handler(NotEditableError, conversations.handle_not_editable)
     app.add_exception_handler(NoteNotFoundError, notes.handle_note_not_found)
     app.add_exception_handler(NotesFullError, notes.handle_notes_full)
+    app.add_exception_handler(SnapshotUnavailableError, snapshots.handle_unavailable)
+    app.add_exception_handler(NotDrawableError, snapshots.handle_not_drawable)
+    app.add_exception_handler(SnapshotBusyError, snapshots.handle_busy)
+    app.add_exception_handler(SnapshotDeclinedError, snapshots.handle_declined)
     app.add_exception_handler(BookmarksFullError, bookmarks.handle_bookmarks_full)
     app.add_exception_handler(TurnDeclinedError, messages.handle_turn_declined)
     app.add_exception_handler(NotReportableError, reports.handle_not_reportable)

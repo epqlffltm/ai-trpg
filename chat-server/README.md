@@ -86,6 +86,7 @@ compose 로 함께 띄울 때도 같은 `chat-server/.env` 를 쓴다. 주소(DB
 | `CHAT_TEMPERATURE` | `0.9` | 글의 다양함(0~2). 받지 않는 모델에는 보내지 않는다 |
 | `SUMMARY_MODEL` | 비어 있음(요약하지 않음) | [굴리는 요약](#굴리는-요약)의 모델(모델 목록의 이름표). 싼 모델을 쓴다. 사용자에게 팔지 않는(꺼 둔) 모델도 된다. 원가는 서비스가 낸다 |
 | `SUMMARY_AFTER_MESSAGES` | `8` | 창 밖으로 밀려난 말이 마지막 요약 뒤로 이만큼(2~200) 쌓이면 요약한다 |
+| `SNAPSHOT_PROVIDER`, `SNAPSHOT_MODEL` | `off`, `gemini-nano-banana-2.1` | [장면 그림](#장면-그림). `gemini` 는 Nano Banana(`GEMINI_API_KEY`), `comfyui` 는 곁의 ComfyUI(`COMFYUI_URL`, `COMFYUI_CHECKPOINT`, 개발·시험용), `fake` 는 테스트용. 가격표 이름은 모델 이름의 점을 붙임표로 바꾼 것(`image.gemini-nano-banana-2-1`) |
 | `EMBEDDER` | `off` | [로어북](#로어북)의 뜻으로 찾기. `off` 면 상시와 키워드만, `llm` 이면 임베딩 모델을 부른다(`fake` 는 테스트용). 이름은 trpg-server 와 같다 |
 | `EMBEDDING_MODEL`, `EMBEDDING_BASE_URL` | `bge-m3`, 비어 있음 | 임베딩 모델의 이름과 주소(OpenAI 와 같은 모양, `/embeddings` 앞까지). `llm` 이면 둘 다 있어야 뜬다 |
 | `EMBEDDING_TIMEOUT_SECONDS`, `EMBEDDING_DIMENSIONS` | `30`, 비어 있음 | 임베딩을 한 번 부르는 시간의 상한(벡터를 만들 때), 벡터의 길이(적으면 맞는지 본다) |
@@ -131,6 +132,8 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | GET | `/api/v1/chat/conversations/{id}/bookmarks` | [책갈피](#책갈피)들(나중에 단 것부터, `{message_id, note, role, excerpt, created_at}`) | access 토큰 |
 | PUT, DELETE | `/api/v1/chat/conversations/{id}/bookmarks/{message_id}` | 책갈피 달기 `{note?}`(이미 있으면 메모만 바꾼다), 떼기(204, 달지 않았어도). 다른 대화의 말은 404 `message_not_found`, 가득 차면 409 `bookmarks_full` | access 토큰 |
 | GET | `/api/v1/chat/conversations/{id}/shortcuts` | 그 대화에서 고를 수 있는 [단축어](#단축어)(`{name, description, source}`, 캐릭터의 것(`work`) 다음 내 것(`mine`)). 본문은 싣지 않는다 | access 토큰 |
+| POST | `/api/v1/chat/messages/{id}/snapshot` | 그 답의 [장면 그림](#장면-그림)을 그린다. 홀드를 건 뒤 202(`drawing`). 사람의 말은 422 `not_drawable`, 그리는 중이면 409 `snapshot_in_progress`, 크레딧이 모자라면 402, 만들지 않는 서버·팔지 않는 가격표면 503 `snapshot_unavailable` | access 토큰 |
+| GET | `/api/v1/chat/conversations/{id}/snapshots` | 그 대화의 장면 그림들(`{id, message_id, status, image_id, code, created_at}`, 만든 차례). `drawing` 이면 다시 읽는다 | access 토큰 |
 | PATCH | `/api/v1/chat/messages/{id}` | [상대의 말 고치기](#고치기). `{content}`. 고친 말을 돌려준다. 사람의 말이면 422 `not_editable` | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/reports` | [캐릭터의 답 신고](#신고). `{reason, description?}`. 201. 사람의 말은 422 `not_reportable`, 두 번째는 409 `already_reported` | access 토큰 |
 | GET | `/api/v1/chat/admin/message-reports` | 운영자: 열린 신고의 목록(`minor` 먼저, 오래된 것부터, 대화의 글은 없다). 운영자가 아니면 404 | access 토큰(운영자) |
@@ -489,6 +492,16 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - **기록.** 말의 본문에는 적은 그대로(`/일기 …`) 남는다. 찾은 본문은 말에 따로 적어 두되(`shortcut_body`) 응답에 싣지 않는다.
   그 말에 다시 쓰기, 이어 쓰기를 하면 다시 붙는다. 다음 턴부터는 부른 이름을 뗀 글만 간다.
 - 청구는 보통 턴과 같다(붙은 본문도 입력이다).
+
+### 장면 그림
+
+캐릭터의 답 하나를 골라 그 장면을 그림 한 장으로 만든다(#983, `app/snapshots/`). 한 장마다 청구한다.
+
+- **지시.** 서버의 상태로 만든다(`app/snapshots/prompt.py`). 판의 인물(이름, 나이, 성별, 소개의 글자), 그 답까지의 가지의 시각과 장소와 차림, 그 답과 그 답이 답한 사람의 말(앞의 몇 글자)이다. 모델이 글로 지어낸 상태를 쓰지 않는다. 맨 앞에 지킬 것(전체이용가, 글자 없음)을 둔다. 모든 등급에서 전체이용가로만 그린다.
+- **차례.** 기록(pending)을 저장하고 홀드를 건 뒤 202 로 답한다. 그리는 일은 따로 돈다(공급자 → asset 서버에 맡기기 `POST /service/chat/images`). 됐으면 확정, 실패하거나 거절되면 돌려준다. 같은 실패를 저절로 되풀이하지 않는다.
+- **한 대화에 하나.** 그리는 중인 것은 대화마다 하나다(부분 유일 색인). 서버가 그리는 도중에 꺼지면 정리 작업(`app/snapshots/settler.py`)이 10분 뒤 실패(`abandoned`)로 적고 돌려준다.
+- **그림.** asset 서버의 그림이다. 다시 인코딩하고 주인만 본다(`GET /api/v1/asset/images/{image_id}`). 대화를 지우면 asset 에 지우라고 한다(못 지우면 로그만 남긴다).
+- **아직 없는 것.** 참고 그림(캐릭터의 그림으로 얼굴 맞추기)은 asset 서버가 그림의 바이트를 내주는 주소가 생기면 더한다.
 
 ### 로어북
 

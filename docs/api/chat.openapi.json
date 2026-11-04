@@ -2102,6 +2102,79 @@
         "title": "ShortcutSource",
         "type": "string"
       },
+      "SnapshotOut": {
+        "description": "장면 그림 한 장. 실패했으면 code 에 까닭이 있다(refused, credit_short …).",
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SnapshotStatus"
+          }
+        },
+        "required": [
+          "id",
+          "message_id",
+          "status",
+          "image_id",
+          "code",
+          "created_at"
+        ],
+        "title": "SnapshotOut",
+        "type": "object"
+      },
+      "SnapshotStatus": {
+        "description": "화면에 보이는 상태. drawing 이면 그리는 중이다(다시 읽는다).",
+        "enum": [
+          "drawing",
+          "ready",
+          "failed"
+        ],
+        "title": "SnapshotStatus",
+        "type": "string"
+      },
       "SpriteDocument": {
         "description": "캐릭터 그림 하나(배경이 투명한 서 있는 그림). expression 은 표정(빈 글이면 기본),\noutfit 은 이 그림의 차림인 옷(물건의 id, 없으면 처음 차림)이다.",
         "properties": {
@@ -2814,7 +2887,7 @@
     },
     "/api/v1/chat/conversations/{conversation_id}": {
       "delete": {
-        "description": "대화를 지운다. 목록과 읽기에 더는 나오지 않는다.",
+        "description": "대화를 지운다. 목록과 읽기에 더는 나오지 않는다. 그 대화의 장면 그림은 asset 에서 지운다(#983).",
         "operationId": "delete_conversation_api_v1_chat_conversations__conversation_id__delete",
         "parameters": [
           {
@@ -3680,6 +3753,60 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/chat/conversations/{conversation_id}/snapshots": {
+      "get": {
+        "description": "그 대화의 그림들. 만든 차례다.",
+        "operationId": "list_snapshots_api_v1_chat_conversations__conversation_id__snapshots_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SnapshotOut"
+                  },
+                  "title": "Response List Snapshots Api V1 Chat Conversations  Conversation Id  Snapshots Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Snapshots",
+        "tags": [
+          "snapshots"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/chat/conversations/{conversation_id}/summary": {
       "get": {
         "description": "지금 가지의 굴리는 요약. 아직 없으면 null 이다.",
@@ -4156,6 +4283,56 @@
         "summary": "Report Message",
         "tags": [
           "messages"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/messages/{message_id}/snapshot": {
+      "post": {
+        "description": "그 답의 장면 그림을 그리기 시작한다. 홀드가 걸리면 202 이고 그림은 목록에서 받는다.",
+        "operationId": "draw_api_v1_chat_messages__message_id__snapshot_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Draw",
+        "tags": [
+          "snapshots"
         ],
         "x-audience": "user"
       }

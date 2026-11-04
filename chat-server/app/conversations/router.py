@@ -59,6 +59,7 @@ from app.core.dependencies import CurrentViewer, Now, Paging, Session
 from app.genres import shown_genre
 from app.limits.routing import WRITE_LIMIT
 from app.ratings import Rating
+from app.snapshots import service as snapshots
 from app.world import service as world
 from app.world.schemas import state_out
 from app.world.state import WorldState
@@ -395,6 +396,10 @@ async def edit_message(
 
 
 @router.delete('/{conversation_id}', status_code=status.HTTP_204_NO_CONTENT, dependencies=[WRITE_LIMIT])
-async def delete_conversation(conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session) -> None:
-    """대화를 지운다. 목록과 읽기에 더는 나오지 않는다."""
+async def delete_conversation(
+    conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session, request: Request
+) -> None:
+    """대화를 지운다. 목록과 읽기에 더는 나오지 않는다. 그 대화의 장면 그림은 asset 에서 지운다(#983)."""
     await service.delete_conversation(session, viewer, conversation_id)
+    state = request.app.state
+    await snapshots.discard_images(state.session_factory, state.asset, viewer, conversation_id)

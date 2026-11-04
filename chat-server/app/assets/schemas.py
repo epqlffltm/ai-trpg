@@ -231,6 +231,14 @@ class ShortcutListCopy(BaseModel):
     items: list[ShortcutDocument] = []
 
 
+class KeptImage(BaseModel):
+    """asset 서버에 맡긴 그림(#983). id 만 읽는다."""
+
+    model_config = ConfigDict(extra='ignore')
+
+    id: uuid.UUID
+
+
 def legacy_scenes(data: dict) -> dict:
     """형식 5 의 판의 이벤트 씬(illustrations, scene)을 지금의 이름(event_scenes, description)으로 바꾼다."""
     if 'illustrations' not in data or data.get('event_scenes'):
