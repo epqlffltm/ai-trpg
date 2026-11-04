@@ -10,6 +10,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel
 
+from app.billing.prices import Tier
+
 
 class SnapshotStatus(StrEnum):
     """화면에 보이는 상태. drawing 이면 그리는 중이다(다시 읽는다)."""
@@ -28,3 +30,16 @@ class SnapshotOut(BaseModel):
     image_id: uuid.UUID | None
     code: str | None
     created_at: datetime
+
+
+class SnapshotPriceOut(BaseModel):
+    """
+    장면 그림 한 장의 값. available 이 거짓이면 지금은 그릴 수 없다(단추를 숨긴다).
+    credits 는 결제 서버가 정한 값(글자, "160")이다. 결제 서버 없이 도는 서버면 credits 와 tier 가 null 이다.
+    tier 가 premium 이면 골드(유료 크레딧)로만 낸다. promo 면 행사가다.
+    """
+
+    available: bool
+    credits: str | None = None
+    tier: Tier | None = None
+    promo: bool = False

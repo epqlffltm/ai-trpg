@@ -2165,6 +2165,46 @@
         "title": "SnapshotOut",
         "type": "object"
       },
+      "SnapshotPriceOut": {
+        "description": "장면 그림 한 장의 값. available 이 거짓이면 지금은 그릴 수 없다(단추를 숨긴다).\ncredits 는 결제 서버가 정한 값(글자, \"160\")이다. 결제 서버 없이 도는 서버면 credits 와 tier 가 null 이다.\ntier 가 premium 이면 골드(유료 크레딧)로만 낸다. promo 면 행사가다.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "credits": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credits"
+          },
+          "promo": {
+            "default": false,
+            "title": "Promo",
+            "type": "boolean"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Tier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "available"
+        ],
+        "title": "SnapshotPriceOut",
+        "type": "object"
+      },
       "SnapshotStatus": {
         "description": "화면에 보이는 상태. drawing 이면 그리는 중이다(다시 읽는다).",
         "enum": [
@@ -4478,6 +4518,34 @@
           "service"
         ],
         "x-audience": "service"
+      }
+    },
+    "/api/v1/chat/snapshots/price": {
+      "get": {
+        "description": "장면 그림 한 장의 값. 가격 목록을 받지 못했고 받아 둔 것도 없으면 503 prices_unavailable 이다.",
+        "operationId": "read_price_api_v1_chat_snapshots_price_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotPriceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Price",
+        "tags": [
+          "snapshots"
+        ],
+        "x-audience": "user"
       }
     },
     "/health": {
