@@ -595,6 +595,8 @@ class PublicCharacterSummary(BaseModel):
     rating: Rating
     image_id: uuid.UUID | None
     published_at: datetime
+    # 관심(하트)을 둔 사람의 수(#989)
+    heart_count: int
 
 
 class PublicCharacterPage(BaseModel):
@@ -613,6 +615,8 @@ class PublicCharacterDetail(BaseModel):
     version: int
     published_at: datetime
     document: CharacterDocument
+    # 관심(하트)을 둔 사람의 수(#989)
+    heart_count: int
 
 
 class CharacterCopy(BaseModel):

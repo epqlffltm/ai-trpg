@@ -29,6 +29,7 @@ from app.banners.models import Banner
 from app.campaigns.models import CampaignCarry, CampaignQuestResult, CampaignSeat
 from app.catalog.models import Grade
 from app.engine.dice import ScriptedDice
+from app.listings.models import Listing, ListingHeart
 from app.main import API_PREFIX
 from app.memory.indexing import index_table
 from app.notifications import outbox
@@ -246,6 +247,9 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         # 홍보 배너(#994). 운영자의 주소 대신 직접 넣는다
         banner = {'scenario_id': uuid.UUID(scenario['id']), 'starts_at': datetime.now(UTC), 'created_by': OTHER}
         session.add(Banner(**banner))
+        # 관심(하트, #989). 공개 정보가 있는 시나리오에 둔다
+        listed = await session.scalar(select(Listing.scenario_id).limit(1))
+        session.add(ListingHeart(user_id=OTHER, scenario_id=listed))
         outbox.put(session, ME, 'narration_model.retiring', 'narration_model.retiring:1', {})
         run_id = uuid.UUID(run.json()['id'])
         carry = CampaignCarry(run_id=run_id, position=0, user_id=ME, carry={})

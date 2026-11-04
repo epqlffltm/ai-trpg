@@ -234,6 +234,7 @@ class World(Base):
             f'deadline_days IS NULL OR deadline_days BETWEEN 1 AND {DEADLINE_MAX_DAYS}', name='deadline_range'
         ),
         CheckConstraint('(latest_version IS NULL) = (published_at IS NULL)', name='published_paired'),
+        CheckConstraint('heart_count >= 0', name='heart_count_not_negative'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -292,6 +293,9 @@ class World(Base):
     # 운영자가 숨긴 시각(캐릭터의 hidden_at 과 같다). 숨긴 세계관은 공개여도 공개 목록, 공개 소개,
     # 남의 새 세션(판 내주기), 남이 보는 그림에서 빠진다. 주인은 계속 쓴다. 운영자만 푼다(app/operators/)
     hidden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    # 관심(하트)을 둔 사람의 수(#989). 두고 거둘 때 같은 트랜잭션에서 하나씩 더하고 뺀다(app/hearts/repository.py).
+    # 목록마다 세지 않으려고 적어 둔다
+    heart_count: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -347,3 +351,24 @@ class WorldImageUse(Base):
     image_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey('images.id', ondelete='RESTRICT'), primary_key=True, index=True
     )
+
+
+class WorldHeart(Base):
+    """
+    한 사람이 세계관 하나에 둔 관심(#989). 둘 수 있는 것은 그 사람이 볼 수 있는 공개(또는 링크 공개) 세계관이다.
+
+    한 사람에 한 번이다(기본 키). 세계관을 지우면 함께 지워진다. 탈퇴하면 그 사람의 것을 지운다.
+    """
+
+    __tablename__ = 'world_hearts'
+    __table_args__ = (
+        # 내 관심 작품: 최근에 둔 것부터
+        Index('ix_world_hearts_user_created', 'user_id', 'created_at'),
+    )
+
+    # 인증 서버의 public_id 다
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    world_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('worlds.id', ondelete='CASCADE'), primary_key=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

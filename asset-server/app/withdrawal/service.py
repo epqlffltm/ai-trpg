@@ -4,12 +4,14 @@
 탈퇴한 사람의 것을 지운다(docs/architecture/withdrawal.md 의 "마칠 때: 다른 서버").
 
   - 페르소나를 모두 지운다. 가져간 세션은 사본으로 돈다
+  - 그 사람이 둔 관심(하트, #989)을 거둔다. 작품마다의 관심 수도 하나씩 뺀다
   - 비공개 캐릭터를 판과 함께 지운다. 공개 캐릭터는 남긴다(남이 쓰는 것이다)
   - 비공개 세계관을 판과 함께 지운다(#591). 공개 세계관은 남긴다. 남긴 세계관의 판에 복사된 인물과 그림은 남는다
   - 로어북을 판과 함께 모두 지운다(#672, 지금은 만든 사람만 쓴다). 남긴 공개 캐릭터의 판에 복사된 것은 남는다
   - 그 사람의 그림 가운데 어느 판에도 쓰이지 않은 것을 저장소와 표에서 지운다(#566). 남긴 공개 캐릭터의 그림은 남는다
   - 그 사람에게 아직 보내지 않은 알림을 발송함에서 지운다(#678). 알림 서버도 그 사람의 알림함을 지운다
-페르소나와 캐릭터와 세계관과 로어북과 알림은 한 트랜잭션이다. 그림은 그다음이다(app/images/service.py 의 erase_images).
+페르소나와 관심과 캐릭터와 세계관과 로어북과 알림은 한 트랜잭션이다.
+그림은 그다음이다(app/images/service.py 의 erase_images).
 저장소에서 지우다 실패하면 ImageStoreUnavailableError(503)다. 인증 서버가 다시 보내면 남은 그림을 다시 지운다.
 같은 알림이 다시 와도 결과가 같다. 지울 것이 없으면 아무것도 하지 않는다(멱등).
 """
@@ -20,6 +22,8 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.characters import repository as characters
+from app.hearts import repository as hearts
+from app.hearts.kinds import CHARACTER_HEARTS, WORLD_HEARTS
 from app.images import service as images
 from app.images.store import ImageStore
 from app.lorebooks import repository as lorebooks
@@ -32,6 +36,9 @@ from app.worlds import repository as worlds
 async def erase_belongings(session: AsyncSession, user_id: uuid.UUID) -> None:
     """그 사람의 페르소나와 내 단축어, 비공개 캐릭터와 세계관, 로어북, 보내지 않은 알림을 지우고 저장한다."""
     await personas.delete_all_owned(session, user_id)
+    # 그 사람이 둔 관심(#989). 작품마다의 관심 수도 하나씩 뺀다. 지우는 작품보다 먼저 한다
+    await hearts.remove_all_of(session, CHARACTER_HEARTS, user_id)
+    await hearts.remove_all_of(session, WORLD_HEARTS, user_id)
     await shortcuts.delete_owned(session, user_id)
     await characters.delete_private_owned(session, user_id)
     await worlds.delete_private_owned(session, user_id)

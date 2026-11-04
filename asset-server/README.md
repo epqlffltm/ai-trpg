@@ -145,6 +145,8 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | POST | `/api/v1/asset/worlds/{id}/versions` | 세계관 게시 `{note?}`. 201. 새 판과 `removed`, `warnings`. 막는 것이 있으면 409 `{problems}` | access 토큰 |
 | GET | `/api/v1/asset/worlds/{id}/versions`, `/versions/{number}` | 세계관의 판의 목록(최근 것부터), 판 하나(굳힌 문서까지) | access 토큰 |
 | GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`([공개 목록의 검색](#캐릭터와-게시)). `hide_adult=true` 면 성인용을 빼고(#986), `orientation`(`male`, `female`)을 주면 마지막 판에 그 태그(`남성향`, `여성향`)가 붙은 것만이다(#987, `app/preferences.py`). `creator`(만든 사람의 공개 ID)를 주면 그 사람의 것만이다(제작자 페이지, #992). 줄마다 `creator_id` 가 실린다 | 없어도 된다 |
+| GET | `/api/v1/asset/listings/characters/hearted`, `/api/v1/asset/listings/worlds/hearted` | 내 관심(하트) 캐릭터와 세계관(#989). 최근에 둔 것부터 `{items, total}`, `limit`, `offset`. 지금 열 수 있는 것만이다(링크 공개도 든다) | access 토큰 |
+| GET, PUT, DELETE | `/api/v1/asset/listings/characters/{id}/heart`, `/api/v1/asset/listings/worlds/{id}/heart` | 관심을 읽고, 두고, 거둔다(#989, `app/hearts/`). `{hearted, heart_count}`. 두 번 해도 같다. 열 수 없는 작품에 두거나 읽으면 404, 거두는 것은 비공개로 돌린 뒤에도 된다. 목록과 소개의 줄마다 `heart_count` 가 실린다(작품의 `heart_count`, 두고 거둘 때 같은 트랜잭션에서 고친다). 작품을 지우면 관심도 지워진다 | access 토큰 |
 | GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서와 만든 사람의 공개 ID `creator_id`). 볼 수 없으면 404 | 없어도 된다 |
 | GET | `/api/v1/asset/listings/worlds` | 공개 세계관의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`, `hide_adult`, `orientation`, `creator`(캐릭터와 같다). 줄마다 `creator_id` 가 실린다 | 없어도 된다 |
 | GET | `/api/v1/asset/listings/worlds/{id}` | 공개 세계관의 소개(마지막 판에서 보여도 되는 것만: 만든 사람의 공개 ID, 이름, 거른 소개, 태그, 장르, 등급, 대표 그림, 기한, 엔딩 뒤, 공개한 인물, 계정에 남는 엔딩의 수). 볼 수 없으면 404 | 없어도 된다 |
@@ -646,7 +648,7 @@ chat(나중에 story 와 TRPG)이 세션을 시작할 때 페르소나의 사본
     본문: {"withdrawn_at": "2026-10-28T03:00:00Z"}
     서명: 인증 서버의 비밀(AUTH_SERVER_SECRET). 사용자의 토큰은 없다
 
-- **지우는 것.** 페르소나 모두, 내 단축어, 비공개 캐릭터(판까지), 비공개 [세계관](#세계관)(판까지), [로어북](#로어북) 모두(판까지). 한 트랜잭션이다. 남긴 공개 캐릭터의 판에 복사된 로어북은 남는다.
+- **지우는 것.** 페르소나 모두, 내 단축어, 그 사람이 둔 관심(#989, 작품마다의 관심 수도 뺀다), 비공개 캐릭터(판까지), 비공개 [세계관](#세계관)(판까지), [로어북](#로어북) 모두(판까지). 한 트랜잭션이다. 남긴 공개 캐릭터의 판에 복사된 로어북은 남는다.
   그다음 그 사람의 [그림](#그림) 가운데 남은 판(남긴 공개 캐릭터와 공개 세계관의 판)에 쓰이지 않은 것을 저장소에서 지우고, 그 행을 지운다.
   남긴 공개 캐릭터의 초안이 가리키던 그림이 지워지면 초안의 `image_id` 가 비워진다.
   저장소에서 지우다 실패하면 503 이다. 행이 남아 있어 인증 서버가 다시 보낸 알림이 마저 지운다.

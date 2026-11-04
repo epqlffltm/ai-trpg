@@ -46,6 +46,7 @@ import {
   LorebookNewPage,
   LorebooksPage,
   MessageReportPage,
+  MyHeartsPage,
   MyPage,
   MyShortcutsPage,
   NotificationsPage,
@@ -123,6 +124,15 @@ export function App() {
           element={
             <RequireSession>
               <MyShortcutsPage />
+            </RequireSession>
+          }
+        />
+        {/* 내 관심 작품(#989). 로그인해야 열린다 */}
+        <Route
+          path="me/hearts"
+          element={
+            <RequireSession>
+              <MyHeartsPage />
             </RequireSession>
           }
         />

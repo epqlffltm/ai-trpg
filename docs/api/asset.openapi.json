@@ -2676,6 +2676,25 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "HeartState": {
+        "description": "내가 관심을 두었는지와 관심의 수. 두고 거둔 뒤의 값이다.",
+        "properties": {
+          "heart_count": {
+            "title": "Heart Count",
+            "type": "integer"
+          },
+          "hearted": {
+            "title": "Hearted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "hearted",
+          "heart_count"
+        ],
+        "title": "HeartState",
+        "type": "object"
+      },
       "HiddenInput": {
         "additionalProperties": false,
         "description": "숨기기(true)와 풀기(false). reason 은 감사 기록의 사유다.",
@@ -4160,6 +4179,10 @@
           "document": {
             "$ref": "#/components/schemas/CharacterDocument"
           },
+          "heart_count": {
+            "title": "Heart Count",
+            "type": "integer"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -4180,7 +4203,8 @@
           "creator_id",
           "version",
           "published_at",
-          "document"
+          "document",
+          "heart_count"
         ],
         "title": "PublicCharacterDetail",
         "type": "object"
@@ -4217,6 +4241,10 @@
           },
           "genre": {
             "$ref": "#/components/schemas/Genre"
+          },
+          "heart_count": {
+            "title": "Heart Count",
+            "type": "integer"
           },
           "id": {
             "format": "uuid",
@@ -4268,7 +4296,8 @@
           "genre",
           "rating",
           "image_id",
-          "published_at"
+          "published_at",
+          "heart_count"
         ],
         "title": "PublicCharacterSummary",
         "type": "object"
@@ -4308,6 +4337,10 @@
           },
           "genre": {
             "$ref": "#/components/schemas/Genre"
+          },
+          "heart_count": {
+            "title": "Heart Count",
+            "type": "integer"
           },
           "id": {
             "format": "uuid",
@@ -4368,7 +4401,8 @@
           "deadline_days",
           "after_ending",
           "cast",
-          "ending_count"
+          "ending_count",
+          "heart_count"
         ],
         "title": "PublicWorldDetail",
         "type": "object"
@@ -4416,6 +4450,10 @@
           },
           "genre": {
             "$ref": "#/components/schemas/Genre"
+          },
+          "heart_count": {
+            "title": "Heart Count",
+            "type": "integer"
           },
           "id": {
             "format": "uuid",
@@ -4468,7 +4506,8 @@
           "rating",
           "image_id",
           "deadline_days",
-          "published_at"
+          "published_at",
+          "heart_count"
         ],
         "title": "PublicWorldSummary",
         "type": "object"
@@ -8288,6 +8327,69 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/asset/listings/characters/hearted": {
+      "get": {
+        "description": "내가 관심(하트)을 둔 캐릭터(#989). 최근에 둔 것부터다.\n\n지금 열 수 있는 것만 나온다(비공개로 돌렸거나 숨긴 것, 볼 수 없는 등급은 빠진다). 링크 공개도 나온다.",
+        "operationId": "list_hearted_api_v1_asset_listings_characters_hearted_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicCharacterPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Hearted",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/asset/listings/characters/{character_id}": {
       "get": {
         "description": "공개 캐릭터 하나. 마지막 판의 문서다.",
@@ -8332,6 +8434,152 @@
           }
         ],
         "summary": "Read Public",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/listings/characters/{character_id}/heart": {
+      "delete": {
+        "description": "관심을 거둔다(#989). 두지 않았거나 비공개로 돌린 것이어도 된다.",
+        "operationId": "take_heart_api_v1_asset_listings_characters__character_id__heart_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Take Heart",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      },
+      "get": {
+        "description": "내가 관심을 두었는지와 관심의 수(#989). 열 수 없는 캐릭터이면 404 다.",
+        "operationId": "read_heart_api_v1_asset_listings_characters__character_id__heart_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Heart",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      },
+      "put": {
+        "description": "관심을 둔다(#989). 이미 두었으면 그대로다. 열 수 없는 캐릭터이면 404 다.",
+        "operationId": "put_heart_api_v1_asset_listings_characters__character_id__heart_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Heart",
         "tags": [
           "listings"
         ],
@@ -8522,6 +8770,69 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/asset/listings/worlds/hearted": {
+      "get": {
+        "description": "내가 관심(하트)을 둔 세계관(#989). 최근에 둔 것부터다.\n\n지금 열 수 있는 것만 나온다(비공개로 돌렸거나 숨긴 것, 볼 수 없는 등급은 빠진다). 링크 공개도 나온다.",
+        "operationId": "list_hearted_api_v1_asset_listings_worlds_hearted_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicWorldPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Hearted",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/asset/listings/worlds/{world_id}": {
       "get": {
         "description": "공개 세계관의 소개. 볼 수 없으면 404 다.",
@@ -8566,6 +8877,152 @@
           }
         ],
         "summary": "Read Public",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/listings/worlds/{world_id}/heart": {
+      "delete": {
+        "description": "관심을 거둔다(#989). 두지 않았거나 비공개로 돌린 것이어도 된다.",
+        "operationId": "take_heart_api_v1_asset_listings_worlds__world_id__heart_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Take Heart",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      },
+      "get": {
+        "description": "내가 관심을 두었는지와 관심의 수(#989). 열 수 없는 세계관이면 404 다.",
+        "operationId": "read_heart_api_v1_asset_listings_worlds__world_id__heart_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Heart",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      },
+      "put": {
+        "description": "관심을 둔다(#989). 이미 두었으면 그대로다. 열 수 없는 세계관이면 404 다.",
+        "operationId": "put_heart_api_v1_asset_listings_worlds__world_id__heart_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Heart",
         "tags": [
           "listings"
         ],

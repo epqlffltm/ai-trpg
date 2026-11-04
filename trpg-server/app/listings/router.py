@@ -22,10 +22,11 @@ from app.assets.ratings import allowed_ratings
 from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
-from app.listings import service
+from app.listings import hearts, service
 from app.listings.models import TAG_MAX_LENGTH, Genre, Listing, Orientation
 from app.listings.repository import ListingFilter
 from app.listings.schemas import (
+    HeartState,
     ListingDetail,
     ListingPregen,
     ListingUpdate,
@@ -98,6 +99,7 @@ def to_public(listing: Listing, asset: Asset, version: ScenarioVersion) -> Publi
         version=version.number,
         version_note=version.note,
         published_at=listing.published_at,
+        heart_count=listing.heart_count,
     )
 
 
@@ -198,6 +200,35 @@ async def list_listings(user: OptionalUser, session: Session, paging: Paging, wh
     """
     rows, total = await service.list_public(session, user, where, paging.limit, paging.offset)
     return PublicListingPage(items=[to_public(*row) for row in rows], total=total)
+
+
+@public_router.get('/hearted', response_model=PublicListingPage, status_code=status.HTTP_200_OK)
+async def list_hearted_listings(user: CurrentUser, session: Session, paging: Paging) -> PublicListingPage:
+    """
+    내가 관심(하트)을 둔 시나리오(#989). 최근에 둔 것부터다.
+
+    지금 볼 수 있는 것만 나온다(공개를 내렸거나 볼 수 없는 등급이 된 것은 빠진다). 링크 공개도 나온다.
+    """
+    rows, total = await hearts.list_mine(session, user, paging.limit, paging.offset)
+    return PublicListingPage(items=[to_public(*row) for row in rows], total=total)
+
+
+@public_router.get('/{scenario_id}/heart', response_model=HeartState, status_code=status.HTTP_200_OK)
+async def read_heart(scenario_id: uuid.UUID, user: CurrentUser, session: Session) -> HeartState:
+    """내가 관심을 두었는지와 관심의 수(#989). 볼 수 없는 시나리오면 404 다."""
+    return await hearts.state_of(session, user, scenario_id)
+
+
+@public_router.put('/{scenario_id}/heart', response_model=HeartState, status_code=status.HTTP_200_OK)
+async def put_heart(scenario_id: uuid.UUID, user: CurrentUser, session: Session) -> HeartState:
+    """관심을 둔다(#989). 이미 두었으면 그대로다. 볼 수 없는 시나리오면 404 다."""
+    return await hearts.put_heart(session, user, scenario_id)
+
+
+@public_router.delete('/{scenario_id}/heart', response_model=HeartState, status_code=status.HTTP_200_OK)
+async def take_heart(scenario_id: uuid.UUID, user: CurrentUser, session: Session) -> HeartState:
+    """관심을 거둔다(#989). 두지 않았거나 공개를 내린 것이어도 된다."""
+    return await hearts.take_heart(session, user, scenario_id)
 
 
 @public_router.get('/{scenario_id}', response_model=PublicListingDetail, status_code=status.HTTP_200_OK)

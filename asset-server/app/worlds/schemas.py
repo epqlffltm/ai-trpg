@@ -846,6 +846,8 @@ class PublicWorldSummary(BaseModel):
     image_id: uuid.UUID | None
     deadline_days: int | None
     published_at: datetime
+    # 관심(하트)을 둔 사람의 수(#989)
+    heart_count: int
 
 
 class PublicWorldPage(BaseModel):
@@ -890,3 +892,5 @@ class PublicWorldDetail(BaseModel):
     after_ending: AfterEnding
     cast: list[PublicCastMember]
     ending_count: int
+    # 관심(하트)을 둔 사람의 수(#989)
+    heart_count: int

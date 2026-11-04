@@ -352,6 +352,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset/listings/characters/hearted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Hearted
+         * @description 내가 관심(하트)을 둔 캐릭터(#989). 최근에 둔 것부터다.
+         *
+         *     지금 열 수 있는 것만 나온다(비공개로 돌렸거나 숨긴 것, 볼 수 없는 등급은 빠진다). 링크 공개도 나온다.
+         */
+        get: operations["list_hearted_api_v1_asset_listings_characters_hearted_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset/listings/characters/{character_id}": {
         parameters: {
             query?: never;
@@ -367,6 +389,34 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/listings/characters/{character_id}/heart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Heart
+         * @description 내가 관심을 두었는지와 관심의 수(#989). 열 수 없는 캐릭터이면 404 다.
+         */
+        get: operations["read_heart_api_v1_asset_listings_characters__character_id__heart_get"];
+        /**
+         * Put Heart
+         * @description 관심을 둔다(#989). 이미 두었으면 그대로다. 열 수 없는 캐릭터이면 404 다.
+         */
+        put: operations["put_heart_api_v1_asset_listings_characters__character_id__heart_put"];
+        post?: never;
+        /**
+         * Take Heart
+         * @description 관심을 거둔다(#989). 두지 않았거나 비공개로 돌린 것이어도 된다.
+         */
+        delete: operations["take_heart_api_v1_asset_listings_characters__character_id__heart_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -416,6 +466,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset/listings/worlds/hearted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Hearted
+         * @description 내가 관심(하트)을 둔 세계관(#989). 최근에 둔 것부터다.
+         *
+         *     지금 열 수 있는 것만 나온다(비공개로 돌렸거나 숨긴 것, 볼 수 없는 등급은 빠진다). 링크 공개도 나온다.
+         */
+        get: operations["list_hearted_api_v1_asset_listings_worlds_hearted_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset/listings/worlds/{world_id}": {
         parameters: {
             query?: never;
@@ -431,6 +503,34 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/listings/worlds/{world_id}/heart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Heart
+         * @description 내가 관심을 두었는지와 관심의 수(#989). 열 수 없는 세계관이면 404 다.
+         */
+        get: operations["read_heart_api_v1_asset_listings_worlds__world_id__heart_get"];
+        /**
+         * Put Heart
+         * @description 관심을 둔다(#989). 이미 두었으면 그대로다. 열 수 없는 세계관이면 404 다.
+         */
+        put: operations["put_heart_api_v1_asset_listings_worlds__world_id__heart_put"];
+        post?: never;
+        /**
+         * Take Heart
+         * @description 관심을 거둔다(#989). 두지 않았거나 비공개로 돌린 것이어도 된다.
+         */
+        delete: operations["take_heart_api_v1_asset_listings_worlds__world_id__heart_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2211,6 +2311,16 @@ export interface components {
             status: string;
         };
         /**
+         * HeartState
+         * @description 내가 관심을 두었는지와 관심의 수. 두고 거둔 뒤의 값이다.
+         */
+        HeartState: {
+            /** Heart Count */
+            heart_count: number;
+            /** Hearted */
+            hearted: boolean;
+        };
+        /**
          * HiddenInput
          * @description 숨기기(true)와 풀기(false). reason 은 감사 기록의 사유다.
          */
@@ -2916,6 +3026,8 @@ export interface components {
              */
             creator_id: string;
             document: components["schemas"]["CharacterDocument"];
+            /** Heart Count */
+            heart_count: number;
             /**
              * Id
              * Format: uuid
@@ -2950,6 +3062,8 @@ export interface components {
              */
             creator_id: string;
             genre: components["schemas"]["Genre"];
+            /** Heart Count */
+            heart_count: number;
             /**
              * Id
              * Format: uuid
@@ -2990,6 +3104,8 @@ export interface components {
             /** Ending Count */
             ending_count: number;
             genre: components["schemas"]["Genre"];
+            /** Heart Count */
+            heart_count: number;
             /**
              * Id
              * Format: uuid
@@ -3035,6 +3151,8 @@ export interface components {
             /** Deadline Days */
             deadline_days: number | null;
             genre: components["schemas"]["Genre"];
+            /** Heart Count */
+            heart_count: number;
             /**
              * Id
              * Format: uuid
@@ -4892,6 +5010,38 @@ export interface operations {
             };
         };
     };
+    list_hearted_api_v1_asset_listings_characters_hearted_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicCharacterPage"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     read_public_api_v1_asset_listings_characters__character_id__get: {
         parameters: {
             query?: never;
@@ -4910,6 +5060,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicCharacterDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_heart_api_v1_asset_listings_characters__character_id__heart_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartState"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    put_heart_api_v1_asset_listings_characters__character_id__heart_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartState"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    take_heart_api_v1_asset_listings_characters__character_id__heart_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartState"];
                 };
             };
             /** @description 입력이 틀렸다 */
@@ -4994,6 +5237,38 @@ export interface operations {
             };
         };
     };
+    list_hearted_api_v1_asset_listings_worlds_hearted_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicWorldPage"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     read_public_api_v1_asset_listings_worlds__world_id__get: {
         parameters: {
             query?: never;
@@ -5012,6 +5287,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicWorldDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_heart_api_v1_asset_listings_worlds__world_id__heart_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartState"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    put_heart_api_v1_asset_listings_worlds__world_id__heart_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartState"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    take_heart_api_v1_asset_listings_worlds__world_id__heart_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                world_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartState"];
                 };
             };
             /** @description 입력이 틀렸다 */

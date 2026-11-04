@@ -644,6 +644,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/listings/hearted": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Hearted Listings
+         * @description 내가 관심(하트)을 둔 시나리오(#989). 최근에 둔 것부터다.
+         *
+         *     지금 볼 수 있는 것만 나온다(공개를 내렸거나 볼 수 없는 등급이 된 것은 빠진다). 링크 공개도 나온다.
+         */
+        get: operations["list_hearted_listings_api_v1_game_listings_hearted_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/listings/{scenario_id}": {
         parameters: {
             query?: never;
@@ -661,6 +683,34 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/listings/{scenario_id}/heart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Heart
+         * @description 내가 관심을 두었는지와 관심의 수(#989). 볼 수 없는 시나리오면 404 다.
+         */
+        get: operations["read_heart_api_v1_game_listings__scenario_id__heart_get"];
+        /**
+         * Put Heart
+         * @description 관심을 둔다(#989). 이미 두었으면 그대로다. 볼 수 없는 시나리오면 404 다.
+         */
+        put: operations["put_heart_api_v1_game_listings__scenario_id__heart_put"];
+        post?: never;
+        /**
+         * Take Heart
+         * @description 관심을 거둔다(#989). 두지 않았거나 공개를 내린 것이어도 된다.
+         */
+        delete: operations["take_heart_api_v1_game_listings__scenario_id__heart_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4740,6 +4790,16 @@ export interface components {
             status: string;
         };
         /**
+         * HeartState
+         * @description 내가 관심을 두었는지와 관심의 수(#989). 두고 거둔 뒤의 값이다.
+         */
+        HeartState: {
+            /** Heart Count */
+            heart_count: number;
+            /** Hearted */
+            hearted: boolean;
+        };
+        /**
          * HindranceOut
          * @description 입은 부상이 판정에 준 것. 보정을 깎았거나 불리하게 했다. 엔진이 정했다.
          */
@@ -7750,6 +7810,8 @@ export interface components {
             /** Description */
             description: string;
             genre: components["schemas"]["Genre"];
+            /** Heart Count */
+            heart_count: number;
             /**
              * Published At
              * Format: date-time
@@ -7795,6 +7857,8 @@ export interface components {
             /** Description */
             description: string;
             genre: components["schemas"]["Genre"];
+            /** Heart Count */
+            heart_count: number;
             /** Openings */
             openings: string[];
             /** Pregens */
@@ -13268,6 +13332,38 @@ export interface operations {
             };
         };
     };
+    list_hearted_listings_api_v1_game_listings_hearted_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicListingPage"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     read_public_listing_api_v1_game_listings__scenario_id__get: {
         parameters: {
             query?: never;
@@ -13286,6 +13382,99 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicListingDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_heart_api_v1_game_listings__scenario_id__heart_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartState"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    put_heart_api_v1_game_listings__scenario_id__heart_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartState"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    take_heart_api_v1_game_listings__scenario_id__heart_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartState"];
                 };
             };
             /** @description 입력이 틀렸다 */

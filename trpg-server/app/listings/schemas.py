@@ -115,6 +115,15 @@ class PublicListing(BaseModel):
     version: int
     version_note: str
     published_at: datetime
+    # 관심(하트)을 둔 사람의 수(#989)
+    heart_count: int
+
+
+class HeartState(BaseModel):
+    """내가 관심을 두었는지와 관심의 수(#989). 두고 거둔 뒤의 값이다."""
+
+    hearted: bool
+    heart_count: int
 
 
 class ListingPregen(BaseModel):
