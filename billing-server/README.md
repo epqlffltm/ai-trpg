@@ -1516,6 +1516,7 @@ go run ./cmd/autocharge -interval 30s -limit 20  간격(1초 이상)과 한 바�
 대사처럼 결제 대행사의 설정(`PAYMENT_PROVIDER`, `TOSS_SECRET_KEY`)을 읽는다(`config.LoadAutoCharge`). 서버와 정리 작업은 키 없이 돈다. 결제를 이 작업에 모았다.
 compose 는 `billing-autocharge` 로 띄우고 `TOSS_SECRET_KEY` 와 DB 의 비밀번호만 남긴다(요청을 받지 않고 인증 서버·알림 서버를 부르지 않는다).
 정리 작업처럼 성공한 바퀴마다 심장박동(`HEARTBEAT_FILE`)을 남기고 healthcheck 가 본다. 10분 넘게 성공하지 않으면 `BillingAutoChargeStalled` 가 울린다.
+지난 1시간에 끝난 결제가 다섯 번 이상이고 절반을 넘게 거절되면 `BillingAutoChargeDeclines`, 지금의 판에 동의하지 않아 그만둔 것이 열 번을 넘으면 `BillingAutoChargeTermsPaused` 가 울린다(`billing_auto_charges_total`).
 
 **최근 내역**(`GET /auto-charge/history`, `internal/autocharge/history.go`). 지갑(A6)이 보이는 최근 자동 결제다. 그 사람의 충전할 일을 늦게 적힌 것부터 20개(`autocharge.HistorySize`) 돌려준다.
 

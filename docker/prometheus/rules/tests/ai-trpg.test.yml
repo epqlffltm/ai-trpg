@@ -397,6 +397,61 @@ tests:
         alertname: BillingAutoChargeStalled
         exp_alerts: []
 
+  # 자동 충전의 거절: 끝난 결제가 다섯 번 이상이고 거절이 절반을 넘으면 울린다. 절반이면 울리지 않는다.
+  # 계열은 결제 작업이 처음 셀 때 생기므로 0 부터 둔다(처음 생긴 계열의 첫 값은 increase 가 세지 않는다)
+  - interval: 1m
+    input_series:
+      - series: 'billing_auto_charges_total{service="billing-server", outcome="paid", instance="autocharge-a"}'
+        values: '0+1x3 3x60'
+      - series: 'billing_auto_charges_total{service="billing-server", outcome="declined", instance="autocharge-a"}'
+        values: '0+1x3 3x8 3+1x2 5x60'
+      - series: 'billing_auto_charges_total{service="billing-server", outcome="retried", instance="autocharge-a"}'
+        values: '0+5x60'
+    alert_rule_test:
+      # 결제 3, 거절 3: 여섯이지만 절반이다
+      - eval_time: 5m
+        alertname: BillingAutoChargeDeclines
+        exp_alerts: []
+      # 결제 3, 거절 5: 여덟 중 다섯이다. 다시 보낼 것(retried)은 세지 않는다
+      - eval_time: 15m
+        alertname: BillingAutoChargeDeclines
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 지난 1시간의 자동 충전에서 거절이 절반을 넘었다
+              description: 결제 작업(billing-autocharge)의 로그에서 거절 코드를 보고, 토스페이먼츠 상점관리자에서 같은 시각의 결제를 본다. 세 번 이어서 거절된 사람은 자동 충전이 꺼진다
+
+  # 거절이 모두여도 다섯 번보다 적으면 울리지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'billing_auto_charges_total{service="billing-server", outcome="declined", instance="autocharge-a"}'
+        values: '0+1x3 4x60'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: BillingAutoChargeDeclines
+        exp_alerts: []
+
+  # 자동 결제 동의가 없어 멈춘 것: 1시간에 열 번을 넘으면 울린다. 다른 까닭(한 달 상한)은 세지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'billing_auto_charges_total{service="billing-server", outcome="skipped", reason="terms_outdated", instance="autocharge-a"}'
+        values: '0+1x10 10x10 10+1x2 12x60'
+      - series: 'billing_auto_charges_total{service="billing-server", outcome="skipped", reason="monthly_limit", instance="autocharge-a"}'
+        values: '0+50x60'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: BillingAutoChargeTermsPaused
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: BillingAutoChargeTermsPaused
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 자동 결제 동의가 없어 멈춘 자동 충전이 지난 1시간에 열 번을 넘었다
+              description: 판을 올린 뒤가 아니면 auto_charge_consents 와 결제 서버의 로그를 본다. 판을 올린 뒤라면 다시 동의하라는 알림이 갔는지 본다
+
   # 대사: 돈 적이 있는데 26시간 동안 없으면 울린다. 실패하면 하루 동안 울린다
   - interval: 1h
     input_series:
