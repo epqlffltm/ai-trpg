@@ -1,4 +1,4 @@
-# auth-server/accounts/migrations/0031_receipt_notices.py
+# auth-server/accounts/migrations/0032_receipt_notices.py
 
 """
 결제한 본인에게 보내는 결제·청약철회 메일의 기록(#553)과 그 메일의 종류(payment_receipt, refund_receipt).
@@ -12,7 +12,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("accounts", "0030_invites"),
+        ("accounts", "0031_content_settings"),
     ]
 
     operations = [

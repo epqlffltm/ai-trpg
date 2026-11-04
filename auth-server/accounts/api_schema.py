@@ -22,7 +22,7 @@ from drf_spectacular.utils import OpenApiResponse
 from rest_framework import serializers
 
 from accounts.models import GuardianConsentStatus, GuardianNoticeOutcome, ReceiptNoticeOutcome
-from accounts.serializers import IdentityStatusSerializer, UserSerializer
+from accounts.serializers import ContentSettingsSerializer, IdentityStatusSerializer, UserSerializer
 
 
 class SessionVersionJWTScheme(SimpleJWTScheme):
