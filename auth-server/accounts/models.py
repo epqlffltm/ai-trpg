@@ -467,6 +467,8 @@ class MailKind(models.TextChoices):
     GUARDIAN_REVOKED = 'guardian_revoked', '보호자 동의 철회 확인'
     MINOR_GUARDIAN = 'minor_guardian', '미성년자에게 보호자 동의 알림'
     GUARDIAN_PAYMENT = 'guardian_payment', '보호자에게 결제 알림'
+    PAYMENT_RECEIPT = 'payment_receipt', '결제한 본인에게 결제 확인'
+    REFUND_RECEIPT = 'refund_receipt', '결제한 본인에게 청약철회 확인'
     WITHDRAWAL_REQUESTED = 'withdrawal_requested', '탈퇴 요청 확인'
     WITHDRAWAL_REMINDER = 'withdrawal_reminder', '탈퇴 하루 전 알림'
     WITHDRAWAL_COMPLETED = 'withdrawal_completed', '탈퇴를 마침'
@@ -798,6 +800,65 @@ class GuardianNotice(models.Model):
         verbose_name_plural = '보호자 결제 알림'
         constraints = [
             models.UniqueConstraint(fields=['order_id', 'kind'], name='accounts_guardiannotice_once'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.order_id} / {self.get_kind_display()} / {self.get_outcome_display()}'
+
+
+class ReceiptNoticeOutcome(models.TextChoices):
+    # 결제한 본인에게 보낼 메일을 적었다
+    QUEUED = 'queued', '메일을 적음'
+    # 알릴 계정이 없다(계정이 지워졌다, 탈퇴했다)
+    SKIPPED = 'skipped', '알릴 계정이 없음'
+
+
+class ReceiptNotice(models.Model):
+    """
+    결제 서버가 보낸 본인 결제 알림 하나(#553). 결제와 청약철회를 결제한 본인에게 메일로 알린다.
+
+    결제 영수증은 결제 대행사가 보낸다. 이 메일은 거기에 없는 것(받은 크레딧, 청약철회의 기한과 하는 길)을 싣는다.
+    주문과 종류(결제, 청약철회)마다 한 줄이다. 결제 서버가 답을 못 받고 다시 보내도 메일은 한 번만 간다.
+    메일을 보냈는지는 붙인 기록(MailReceipt)이 남긴다. 종류는 보호자 알림과 같다(GuardianNoticeKind).
+    """
+
+    # 결제 서버의 주문 번호
+    order_id = models.UUIDField('주문 번호')
+    kind = models.CharField('종류', max_length=20, choices=GuardianNoticeKind.choices)
+    # 결제한 사람. 계정이 지워져도 기록은 남긴다
+    user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='receipt_notices',
+        verbose_name='결제한 사람',
+    )
+    user_public_id = models.UUIDField('결제한 사람의 공개 ID')
+    product_id = models.CharField('상품', max_length=100)
+    # 원(KRW)이다
+    price = models.PositiveBigIntegerField('값')
+    credits = models.PositiveBigIntegerField('크레딧')
+    paid_at = models.DateTimeField('결제가 끝난 시각')
+    occurred_at = models.DateTimeField('결제나 청약철회가 끝난 시각')
+    # 청약철회를 받는 마지막 시각. 결제 서버가 정해 보낸다
+    refundable_until = models.DateTimeField('청약철회 기한')
+    outcome = models.CharField('결과', max_length=20, choices=ReceiptNoticeOutcome.choices)
+    receipt = models.OneToOneField(
+        MailReceipt,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='receipt_notice',
+        verbose_name='보낸 메일의 기록',
+    )
+    created_at = models.DateTimeField('받은 시각', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '본인 결제 알림'
+        verbose_name_plural = '본인 결제 알림'
+        constraints = [
+            models.UniqueConstraint(fields=['order_id', 'kind'], name='accounts_receiptnotice_once'),
         ]
 
     def __str__(self) -> str:

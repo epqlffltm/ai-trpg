@@ -474,6 +474,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/service/receipt-notices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 결제 서버가 결제와 청약철회를 알린다. 결제한 본인에게 메일로 알린다(서버끼리)
+         * @description POST /api/v1/auth/service/receipt-notices. 결제 서버가 결제와 청약철회를 알린다. 본인에게 메일로 알린다(#553).
+         */
+        post: operations["service_receipt_notices_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/session-revocations": {
         parameters: {
             query?: never;
@@ -858,6 +878,27 @@ export interface components {
         };
         PublicNames: {
             names: components["schemas"]["PublicName"][];
+        };
+        /** @description 결제 서버에 주는 답. queued(메일을 적었다), skipped(알릴 계정이 없다), duplicate(이미 받았다). */
+        ReceiptNoticeAnswer: {
+            status: components["schemas"]["StatusEnum"];
+        };
+        /** @description 결제 서버가 보낸 본인 결제 알림(#553). 본문의 모양만 본다. 서명은 뷰가 먼저 본다. */
+        ReceiptNoticeRequest: {
+            credits: number;
+            kind: components["schemas"]["KindEnum"];
+            /** Format: date-time */
+            occurred_at: string;
+            /** Format: uuid */
+            order_id: string;
+            /** Format: date-time */
+            paid_at: string;
+            price: number;
+            product_id: string;
+            /** Format: date-time */
+            refundable_until: string;
+            /** Format: uuid */
+            user_id: string;
         };
         /** @description 시도가 너무 많거나 메일을 지금은 보낼 수 없을 때(429). retry_after 초 뒤에는 된다. Retry-After 머리말도 같다. */
         RetryLater: {
@@ -2084,6 +2125,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GuardianNoticeAnswer"];
+                };
+            };
+            /** @description 요청을 받을 수 없다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description 결제 서버의 서명이 맞지 않다(service_bad_signature) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
+    service_receipt_notices_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiptNoticeRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceiptNoticeAnswer"];
                 };
             };
             /** @description 요청을 받을 수 없다 */

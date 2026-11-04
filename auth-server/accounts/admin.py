@@ -21,6 +21,7 @@ from accounts.models import (
     NetworkBlock,
     OutgoingMail,
     PaymentEligibility,
+    ReceiptNotice,
     ReturnBlock,
     SecurityEvent,
     SignupCode,
@@ -392,6 +393,24 @@ class GuardianNoticeAdmin(ReadOnlyAdmin):
 
     @admin.display(description='메일을 보낸 시각')
     def mailed_at(self, notice: GuardianNotice):
+        return notice.receipt.sent_at if notice.receipt else None
+
+
+@admin.register(ReceiptNotice)
+class ReceiptNoticeAdmin(ReadOnlyAdmin):
+    """
+    결제 서버가 보낸 본인 결제 알림을 조회만 한다(#553). 다툼이 생기면 "언제 무엇을 알렸는가"를 여기서 본다.
+
+    메일을 보냈는지는 붙은 기록(보낸 메일의 기록)의 보낸 시각이다.
+    """
+
+    list_display = ('order_id', 'kind', 'user', 'price', 'occurred_at', 'outcome', 'mailed_at', 'created_at')
+    list_filter = ('kind', 'outcome')
+    search_fields = ('order_id', 'user__username')
+    ordering = ('-created_at',)
+
+    @admin.display(description='메일을 보낸 시각')
+    def mailed_at(self, notice: ReceiptNotice):
         return notice.receipt.sent_at if notice.receipt else None
 
 

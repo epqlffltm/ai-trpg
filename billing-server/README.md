@@ -185,6 +185,7 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `AUTH_JWKS_URL` | 없음(필수) | 인증 서버가 공개키를 내주는 주소. `http://127.0.0.1:8000/api/v1/auth/jwks` |
 | `AUTH_SESSION_REVOCATIONS_URL` | `AUTH_JWKS_URL` 옆(`…/session-revocations`) | 인증 서버가 끊긴 세션의 목록을 내주는 주소(#274). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
 | `AUTH_GUARDIAN_NOTICES_URL` | `AUTH_JWKS_URL` 옆(`…/service/guardian-notices`) | (정리 작업) 보호자 결제 알림을 보내는 인증 서버의 주소(#352). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
+| `AUTH_RECEIPT_NOTICES_URL` | `AUTH_JWKS_URL` 옆(`…/service/receipt-notices`) | (정리 작업) 결제한 본인에게 결제와 청약철회를 알리는 인증 서버의 주소(#553). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
 | `NOTIFICATION_URL` | 없음(보내지 않음) | (정리 작업) 사용자의 알림을 넣는 알림 서버의 주소(#385). `http://127.0.0.1:8004`. 경로는 붙이지 않는다. 비우면 알릴 일을 적기만 한다 |
 | `NOTIFICATION_SECRET` | 없음 | (정리 작업) 알림 서버에 보내는 요청에 서명하는 비밀. 알림 서버의 `BILLING_SERVER_SECRET` 과 같은 값, 32자 이상, `AUTH_SERVER_SECRET` 과 달라야 한다. 비우면 적기만 한다. 로그와 오류에 싣지 않는다 |
 | `JWT_ISSUER` | `ai-trpg-auth` | 토큰을 발급한 서버의 이름(`iss`). 인증 서버의 `JWT_ISSUER` 와 같아야 한다 |
@@ -1456,18 +1457,19 @@ POST /api/v1/billing/service/users/{id}/withdrawal        (인증 서버의 서�
 둘 다 서버와 같은 `.env` 를 읽는다. 포트, 공개키 주소, 서명의 비밀은 없어도 돈다([설정](#설정)).
 compose 로 띄우면 둘 다 저절로 돈다([compose 로 모든 서버와 함께 띄우기](#compose-로-모든-서버와-함께-띄우기)).
 
-**정리 작업**(`cmd/sweeper`)은 계속 도는 프로세스다. 한 바퀴에 다섯을 차례로 한다.
+**정리 작업**(`cmd/sweeper`)은 계속 도는 프로세스다. 한 바퀴에 여섯을 차례로 한다.
 
 1. 만료된 홀드를 돌려준다(`release_reason` 이 `expired`). 크레딧이 뺐던 자리로 돌아간다
 2. 기한이 지난 무료 크레딧을, 그 뒤로 변경이 없는 사용자의 원장에도 적는다(`expire` 줄)
 3. 만료된 `pending` 주문을 `expired` 로 끝낸다. `confirming` 은 건드리지 않는다. 돈이 나갔을 수 있다
 4. 미성년자의 결제와 청약철회를 보호자에게 알리라고 인증 서버에 보낸다(#352, 아래 "보호자 결제 알림")
 5. 결제, 청약철회, 환영 크레딧, 곧 사라질 무료 크레딧을 사용자의 알림함에 넣는다(#385, 아래 "사용자의 알림함"). 서버가 적어 둔 크레딧 부족(#525)도 함께 보낸다
+6. 결제와 청약철회를 결제한 본인에게 메일로 알리라고 인증 서버에 보낸다(#553, 아래 "본인 결제 알림")
 
 앞의 셋은 DB 만으로 끝난다. 결제 대행사를 부르지 않아서 결제 대행사의 설정(`PAYMENT_PROVIDER`, `TOSS_*`)을 읽지 않고, 키가 없어도 돈다(`config.LoadSweeper`).
 주문 서비스에는 부르면 오류(`payment.ErrNoProvider`)를 내는 자리 채움(`payment.None`)을 끼운다. 가짜를 끼우면 잘못 불렸을 때 "승인됨" 같은 답으로 원장이 바뀐다.
 compose 는 정리 작업에 `TOSS_SECRET_KEY` 를 주지 않는다. 결제 대행사에 묻는 것은 서버와 대사뿐이다.
-넷째 일 때문에 `AUTH_SERVER_SECRET` 은 준다. 인증 서버를 부르는 것은 정리 작업뿐이다.
+넷째와 여섯째 일 때문에 `AUTH_SERVER_SECRET` 은 준다. 인증 서버를 부르는 것은 정리 작업뿐이다.
 다섯째 일 때문에 `NOTIFICATION_SECRET` 도 준다. 알림 서버를 부르는 것도 정리 작업뿐이다(서버와 대사는 받지 않는다).
 
 **보호자 결제 알림(#352).** 이 서버는 보호자의 이메일을 모른다. 알릴 일을 인증 서버에 보내고, 인증 서버가 동의한 보호자의 메일로 알린다.
@@ -1483,6 +1485,22 @@ compose 는 정리 작업에 `TOSS_SECRET_KEY` 를 주지 않는다. 결제 대�
 POST /api/v1/auth/service/guardian-notices        (인증 서버의 주소. AUTH_SERVER_SECRET 으로 서명)
 {"order_id": "...", "kind": "paid", "user_id": "...", "product_id": "credits-1000", "price": 1000, "credits": 1000, "occurred_at": "2026-03-02T09:30:00Z"}
 → 200 {"status": "queued"}(메일을 적었다), {"status": "skipped"}(알릴 보호자가 없다), {"status": "duplicate"}(이미 받았다)
+```
+
+**본인 결제 알림(#553).** 결제와 청약철회를 결제한 본인의 메일로 알린다. 보호자 결제 알림과 같은 길이다(`internal/receiptnotice`, 표 `receipt_notices`).
+알림함은 30일 뒤에 지워져 사용자의 손에 남지 않는다. 이 메일은 거래 확인으로 남는다.
+
+- 결제 영수증(결제 수단, 승인 번호)은 결제 대행사가 보낸다. 그래서 이 메일은 받은 골드와 청약철회의 기한, 하는 길만 더 싣는다(인증 서버의 README "본인 결제 알림")
+- 미성년자의 결제도 적는다. 보호자 알림과 따로 본인에게도 간다
+- 청약철회의 기한(`refundable_until`)은 이 서버가 계산해 보낸다(`paid_at` + `order.RefundWindow`). 기한의 규칙을 인증 서버가 따로 갖지 않는다
+- 이 표가 생기기 전의 결제와 청약철회는 알리지 않는다. 마이그레이션(`00022`)이 `skipped` 로 적어 두어, 처음 켤 때 지난 30일의 메일이 몰려 나가지 않는다
+- 적기, 보내기, 다시 보내기, 설정이 없을 때 적기만 하는 것은 보호자 알림과 같다
+
+```
+POST /api/v1/auth/service/receipt-notices         (인증 서버의 주소. AUTH_SERVER_SECRET 으로 서명)
+{"order_id": "...", "kind": "paid", "user_id": "...", "product_id": "credits-1000", "price": 1000, "credits": 1000,
+ "paid_at": "2026-03-02T09:30:00Z", "occurred_at": "2026-03-02T09:30:00Z", "refundable_until": "2026-03-09T09:30:00Z"}
+→ 200 {"status": "queued"}(메일을 적었다), {"status": "skipped"}(알릴 계정이 없다), {"status": "duplicate"}(이미 받았다)
 ```
 
 **사용자의 알림함(#385).** 알림함은 알림 서버에 있다(`notification-server/README.md`). 보호자 결제 알림과 같은 방식이다(`internal/usernotice`).
@@ -1636,6 +1654,7 @@ go run ./cmd/migrate down     마지막으로 적용한 것 하나를 되돌린�
 `00019_user_notices_credit_short.sql` 은 언제든 되돌려진다. 아직 보내지 않은 크레딧 부족의 알림이 지워진다. 되돌린 서버가 402 를 답하면 적지 못해 warning 이 남는다(402 는 그대로다).
 `00020_withdrawal.sql` 은 원장에 `forfeit` 줄이 있거나 탈퇴로 돌려준 홀드가 하나라도 있으면 되돌려지지 않는다. 지우면 탈퇴로 정리한 기록이 사라진다.
 `00021_coupons.sql` 은 쿠폰을 받은 기록이 하나라도 있으면 되돌려지지 않는다. 지갑의 지급(`coupon-<번호>`)이 그 기록을 가리킨다.
+`00022_receipt_notices.sql` 은 언제든 되돌려진다. 다시 적용하면 그때까지의 결제를 다시 `skipped` 로 적어, 메일이 다시 가지 않는다. 되돌린 동안 끝난 결제의 메일은 가지 않는다.
 
 `00005_expiry.sql` 을 적용할 때 이미 있는 `held` 홀드는 **적용한 때부터** 하루를 받는다. 만든 때부터 세면 적용하자마자 오래된 것이 한꺼번에 풀린다.
 이미 있는 주문은 만든 때부터 하루다. `pending` 은 돈이 오간 적이 없어 바로 끝나도 안전하다.
@@ -1654,6 +1673,7 @@ go run ./cmd/migrate down     마지막으로 적용한 것 하나를 되돌린�
 `promo` 칸에는 기본값이 없으므로, 적용한 뒤에는 새 `cmd/prices` 로 값을 넣는다(옛 것은 표시를 적지 않아 실패한다). 이미 있는 줄은 모두 정가(`false`)다.
 `00020_withdrawal.sql` 도 서버를 켠 채로 적용해도 된다. 이유와 색인을 늘리기만 한다. 다만 새 서버는 이것을 적용한 뒤에 띄운다(탈퇴를 받으면 새 이유를 적는다).
 `00021_coupons.sql` 도 서버를 켠 채로 적용해도 된다. 새 표 셋을 만들 뿐이다. 새 서버는 이것을 적용한 뒤에 띄운다(쿠폰의 주소가 그 표를 읽는다).
+`00022_receipt_notices.sql` 도 서버를 켠 채로 적용해도 된다. 새 표를 만들고 지난 결제를 적어 둘 뿐이다. 새 정리 작업은 이것을 적용한 뒤에 띄운다.
 조건을 다시 거는 동안 원장과 홀드의 쓰기가 잠시 멈춘다(있는 줄을 모두 다시 본다).
 
 서버와 같은 설정(`.env` 의 `DATABASE_URL`, `DB_SCHEMA`)을 읽는다. 접속 주소를 명령 줄에 적지 않는다.
@@ -2125,6 +2145,12 @@ billing-server/
       http.go               인증 서버에 서명한 요청을 보내기
       queries.sql           이 패키지가 쓰는 SQL 전부
       guardiannoticedb/     sqlc 가 queries.sql 에서 만든 코드
+    receiptnotice/        결제와 청약철회를 결제한 본인에게 알리라고 인증 서버에 보내기(#553). 보호자 알림과 같은 길이다
+      notice.go             타입(알릴 일, 종류, 결과), 청약철회 기한, 보내는 것의 모양
+      store.go              적기(주문에서 찾기), 차지하고 보내기, 다시 보내기
+      http.go               인증 서버에 서명한 요청을 보내기
+      queries.sql           이 패키지가 쓰는 SQL 전부
+      receiptnoticedb/      sqlc 가 queries.sql 에서 만든 코드
     usernotice/           결제와 크레딧의 일을 사용자의 알림함(알림 서버)에 넣기. 주문과 지급 묶음에서 찾아 적고(크레딧 부족은 홀드가 적는다), 서명해 보낸다
       notice.go             타입(알릴 일, 종류, 보낸 결과, 한 바퀴의 결과), 기간들, 보내는 것의 모양
       store.go              적기, 정리(보내지 않기로 하기, 지우기), 차지하고 보내기, 결과 적기

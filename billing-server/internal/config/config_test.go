@@ -762,6 +762,30 @@ func TestLoadSweeperFindsWhereToSendGuardianNotices(t *testing.T) {
 	}
 }
 
+func TestLoadSweeperFindsWhereToSendReceiptNotices(t *testing.T) {
+	derived, derivedErr := config.LoadSweeper(from(map[string]string{
+		"DATABASE_URL": databaseURL, "AUTH_JWKS_URL": "http://auth:8000/api/v1/auth/jwks", "AUTH_SERVER_SECRET": authSecret,
+	}))
+	written, writtenErr := config.LoadSweeper(from(map[string]string{
+		"DATABASE_URL": databaseURL, "AUTH_RECEIPT_NOTICES_URL": "http://other:9000/receipts", "AUTH_SERVER_SECRET": authSecret,
+	}))
+	bad, badErr := config.LoadSweeper(from(map[string]string{
+		"DATABASE_URL": databaseURL, "AUTH_RECEIPT_NOTICES_URL": "file:///etc/passwd", "AUTH_SERVER_SECRET": authSecret,
+	}))
+
+	if derivedErr != nil || derived.ReceiptNotices.URL != "http://auth:8000/api/v1/auth/service/receipt-notices" ||
+		derived.ReceiptNotices.Secret != authSecret || !derived.ReceiptNotices.Enabled() {
+		t.Errorf("만든 주소 = %+v, %v", derived.ReceiptNotices, derivedErr)
+	}
+	// 영수증의 주소만 적으면 보호자 알림의 주소는 만들 곳이 없어 비고, 영수증만 나간다
+	if writtenErr != nil || written.ReceiptNotices.URL != "http://other:9000/receipts" || written.GuardianNotices.Enabled() {
+		t.Errorf("적은 주소 = %+v, %v", written.ReceiptNotices, writtenErr)
+	}
+	if badErr == nil {
+		t.Errorf("http 가 아닌 주소를 받았다: %+v", bad.ReceiptNotices)
+	}
+}
+
 func TestLoadSweeperRunsWithoutTheAuthServer(t *testing.T) {
 	// 비밀이나 주소가 없으면 보호자 알림을 적기만 한다. 정리 작업은 뜬다
 	for name, values := range map[string]map[string]string{
@@ -771,8 +795,8 @@ func TestLoadSweeperRunsWithoutTheAuthServer(t *testing.T) {
 	} {
 		values["DATABASE_URL"] = databaseURL
 		sweeper, err := config.LoadSweeper(from(values))
-		if err != nil || sweeper.GuardianNotices.Enabled() {
-			t.Errorf("%s: %+v, %v", name, sweeper.GuardianNotices, err)
+		if err != nil || sweeper.GuardianNotices.Enabled() || sweeper.ReceiptNotices.Enabled() {
+			t.Errorf("%s: %+v, %+v, %v", name, sweeper.GuardianNotices, sweeper.ReceiptNotices, err)
 		}
 	}
 }

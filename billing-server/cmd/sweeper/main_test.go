@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/guardiannotice"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/receiptnotice"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/sweep"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/usernotice"
 )
@@ -143,10 +144,12 @@ func TestPrintResultShowsTheCounts(t *testing.T) {
 	printResult(&out, sweep.Result{
 		Holds: 2, FreeCreditUsers: 1, Orders: 3, Notices: guardiannotice.Result{Queued: 4, Sent: 5, Retried: 6},
 		UserNotices: usernotice.Result{Queued: 7, Sent: 8, Retried: 9, Rejected: 1, Expired: 2, Purged: 3},
+		Receipts:    receiptnotice.Result{Queued: 5, Sent: 4, Retried: 2},
 	})
 	for _, want := range []string{
 		"돌려준 홀드: 2", "무료 크레딧을 정리한 사용자: 1", "끝낸 주문: 3", "보호자 알림: 적음 4, 보냄 5, 다시 보낼 것 6",
 		"사용자 알림: 적음 7, 보냄 8, 다시 보낼 것 9, 받지 않음 1, 보내지 않기로 함 2, 지움 3",
+		"결제한 본인에게 알림: 적음 5, 보냄 4, 다시 보낼 것 2",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("화면 = %q, %q 가 없다", out.String(), want)

@@ -335,6 +335,90 @@ def send_guardian_payment_notice(
     )
 
 
+def _korean_time(moment: datetime) -> str:
+    """메일에 적는 한국 시각."""
+    return moment.astimezone(_KOREA).strftime('%Y-%m-%d %H:%M')
+
+
+def build_order_link(order_id: str) -> str:
+    """주문 내역 화면의 그 주문. 그 화면에서 청약철회를 한다."""
+    return f'{settings.ORDERS_URL.rstrip("/")}/{order_id}'
+
+
+def send_payment_receipt(
+    *,
+    user: User,
+    order_id: str,
+    product_id: str,
+    price: int,
+    credits: int,
+    paid_at: datetime,
+    refundable_until: datetime,
+    receipt: MailReceipt,
+    deadline: timedelta,
+) -> None:
+    """
+    결제한 본인에게 결제가 끝났음을 알린다(#553). 받은 골드와 청약철회의 기한, 하는 길을 싣는다.
+
+    결제 영수증(결제 수단, 승인 번호)은 결제 대행사가 보낸다.
+    결제 수단, 결제 번호, 카드 번호는 이 서버가 모르고 적지도 않는다.
+    """
+    enqueue_mail(
+        to_email=user.email,
+        subject='[AI TRPG] 결제를 확인했습니다',
+        body=(
+            f'{user.nickname} 님, 결제가 끝났습니다.\n\n'
+            f'주문 번호: {order_id}\n'
+            f'상품: {product_id}\n'
+            f'금액: {price:,}원\n'
+            f'받은 골드: {credits:,}\n'
+            f'결제 시각: {_korean_time(paid_at)} (한국 시각)\n\n'
+            f'청약철회(환불)는 {_korean_time(refundable_until)} (한국 시각)까지, '
+            '이 주문으로 받은 골드를 하나도 쓰지 않았을 때 할 수 있습니다.\n'
+            f'주문 내역에서 합니다: {build_order_link(order_id)}\n\n'
+            '결제 영수증(결제 수단, 승인 번호)은 결제 대행사가 따로 보냅니다.\n'
+            '이 메일은 거래를 확인해 드리는 메일이라 받지 않도록 끌 수 없습니다.'
+        ),
+        receipt=receipt,
+        deadline=deadline,
+        kind=MailKind.PAYMENT_RECEIPT,
+    )
+
+
+def send_refund_receipt(
+    *,
+    user: User,
+    order_id: str,
+    product_id: str,
+    price: int,
+    credits: int,
+    paid_at: datetime,
+    refunded_at: datetime,
+    receipt: MailReceipt,
+    deadline: timedelta,
+) -> None:
+    """결제한 본인에게 청약철회(환불)가 끝났음을 알린다(#553). 돌려준 금액과 거둬들인 골드를 싣는다."""
+    enqueue_mail(
+        to_email=user.email,
+        subject='[AI TRPG] 청약철회를 마쳤습니다',
+        body=(
+            f'{user.nickname} 님, 청약철회(환불)를 마쳤습니다.\n\n'
+            f'주문 번호: {order_id}\n'
+            f'상품: {product_id}\n'
+            f'돌려 드리는 금액: {price:,}원\n'
+            f'거둬들인 골드: {credits:,}\n'
+            f'결제 시각: {_korean_time(paid_at)} (한국 시각)\n'
+            f'청약철회 시각: {_korean_time(refunded_at)} (한국 시각)\n\n'
+            '돈이 결제 수단으로 돌아오기까지 카드사나 은행에 따라 며칠이 걸릴 수 있습니다.\n'
+            f'주문 내역: {build_order_link(order_id)}\n\n'
+            '이 메일은 거래를 확인해 드리는 메일이라 받지 않도록 끌 수 없습니다.'
+        ),
+        receipt=receipt,
+        deadline=deadline,
+        kind=MailKind.REFUND_RECEIPT,
+    )
+
+
 def send_withdrawal_requested_notice(*, user: User, scheduled_at: datetime) -> None:
     """
     탈퇴 요청을 받았다고 알린다(#603). 언제 지우는지, 취소하는 법, 직접 하지 않았으면 할 일을 적는다.

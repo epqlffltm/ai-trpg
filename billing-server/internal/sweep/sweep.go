@@ -7,6 +7,7 @@
 //  3. 만료 시각이 지난 pending 주문을 expired 로 끝낸다(order.ExpireDue).
 //  4. 미성년자의 결제와 청약철회를 보호자에게 알리라고 인증 서버에 보낸다(guardiannotice, #352). 붙였을 때만 한다(WithNotices).
 //  5. 결제, 청약철회, 환영 크레딧, 곧 사라질 무료 크레딧을 사용자의 알림함에 넣는다(usernotice, #385). 붙였을 때만 한다(WithUserNotices).
+//  6. 결제와 청약철회를 결제한 본인에게 메일로 알리라고 인증 서버에 보낸다(receiptnotice, #553). 붙였을 때만 한다(WithReceipts).
 //
 // 홀드를 먼저 한다. 돌아온 무료 크레딧이 이미 기한이 지났으면 2 에서 함께 적히게 하려는 것이다(실제로는 돌려줄 때 바로 적힌다).
 // 셋은 서로 기대지 않는다. 하나가 실패해도 나머지는 한다.
@@ -21,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/guardiannotice"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/receiptnotice"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/usernotice"
 )
 
@@ -48,6 +50,11 @@ type Notices interface {
 	Round(ctx context.Context, limit int) (guardiannotice.Result, error)
 }
 
+// Receipts 는 결제한 본인에게 알릴 결제를 적고 보내는 것이다. *receiptnotice.Service 가 이 모양이다.
+type Receipts interface {
+	Round(ctx context.Context, limit int) (receiptnotice.Result, error)
+}
+
 // UserNotices 는 사용자의 알림함에 알릴 일을 적고 보내는 것이다. *usernotice.Service 가 이 모양이다.
 type UserNotices interface {
 	Round(ctx context.Context, limit int) (usernotice.Result, error)
@@ -65,11 +72,13 @@ type Result struct {
 	Notices guardiannotice.Result
 	// UserNotices 는 사용자에게 알릴 일을 적고 보낸 수다.
 	UserNotices usernotice.Result
+	// Receipts 는 결제한 본인에게 알릴 결제를 적고 보낸 수다.
+	Receipts receiptnotice.Result
 }
 
 // Any 는 이 바퀴에서 정리한 것이 하나라도 있는지다.
 func (r Result) Any() bool {
-	return r.Holds > 0 || r.FreeCreditUsers > 0 || r.Orders > 0 || r.Notices.Any() || r.UserNotices.Any()
+	return r.Holds > 0 || r.FreeCreditUsers > 0 || r.Orders > 0 || r.Notices.Any() || r.UserNotices.Any() || r.Receipts.Any()
 }
 
 // Sweeper 는 정리 작업의 한 바퀴를 돈다.
@@ -79,6 +88,7 @@ type Sweeper struct {
 	orders      Orders
 	notices     Notices
 	userNotices UserNotices
+	receipts    Receipts
 	limit       int
 }
 
@@ -104,6 +114,13 @@ func (s *Sweeper) WithUserNotices(userNotices UserNotices) *Sweeper {
 	return &changed
 }
 
+// WithReceipts 는 결제한 본인에게 알리는 일을 붙인 Sweeper 를 돌려준다.
+func (s *Sweeper) WithReceipts(receipts Receipts) *Sweeper {
+	changed := *s
+	changed.receipts = receipts
+	return &changed
+}
+
 // Round 는 한 바퀴를 돈다. 하나가 실패해도 나머지는 하고, 실패한 것들을 묶어 돌려준다. 정리한 수는 오류가 있어도 맞다.
 func (s *Sweeper) Round(ctx context.Context) (Result, error) {
 	var result Result
@@ -111,12 +128,15 @@ func (s *Sweeper) Round(ctx context.Context) (Result, error) {
 	result.Holds, holdsErr = s.holds.ExpireDue(ctx, s.limit)
 	result.FreeCreditUsers, walletsErr = s.wallets.ExpireIdle(ctx, s.limit)
 	result.Orders, ordersErr = s.orders.ExpireDue(ctx, s.limit)
-	var noticesErr, userNoticesErr error
+	var noticesErr, userNoticesErr, receiptsErr error
 	if s.notices != nil {
 		result.Notices, noticesErr = s.notices.Round(ctx, s.limit)
 	}
 	if s.userNotices != nil {
 		result.UserNotices, userNoticesErr = s.userNotices.Round(ctx, s.limit)
+	}
+	if s.receipts != nil {
+		result.Receipts, receiptsErr = s.receipts.Round(ctx, s.limit)
 	}
 	return result, errors.Join(
 		label("홀드를", holdsErr),
@@ -124,6 +144,7 @@ func (s *Sweeper) Round(ctx context.Context) (Result, error) {
 		label("주문을", ordersErr),
 		label("보호자에게 알릴 결제를", noticesErr),
 		label("사용자에게 알릴 일을", userNoticesErr),
+		label("결제한 본인에게 알릴 결제를", receiptsErr),
 	)
 }
 
