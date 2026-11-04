@@ -4,6 +4,7 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import { fetchChatUnlocks, fetchPublicCharacter, UNLOCK_PAGE_SIZE } from '../../api/gallery';
 import { isClientError } from '../../api/http';
+import { fetchKeptSnapshots, KEPT_PAGE_SIZE, type SnapshotService } from '../../api/snapshots';
 
 export function chatUnlocksQuery() {
   return infiniteQueryOptions({
@@ -12,6 +13,19 @@ export function chatUnlocksQuery() {
     initialPageParam: 0,
     getNextPageParam: (lastPage, pages) => {
       const read = pages.length * UNLOCK_PAGE_SIZE;
+      return read < lastPage.total ? read : undefined;
+    },
+  });
+}
+
+/** 내 다 그린 장면 그림들(서비스마다). 쪽으로 이어 읽는다 */
+export function keptSnapshotsQuery(service: SnapshotService) {
+  return infiniteQueryOptions({
+    queryKey: [service, 'snapshots', 'kept'],
+    queryFn: ({ pageParam, signal }) => fetchKeptSnapshots(service, pageParam, signal),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) => {
+      const read = pages.length * KEPT_PAGE_SIZE;
       return read < lastPage.total ? read : undefined;
     },
   });

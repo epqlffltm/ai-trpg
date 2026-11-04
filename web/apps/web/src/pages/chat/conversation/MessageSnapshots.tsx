@@ -5,7 +5,7 @@
 
 import { Button, Dialog } from '@ai-trpg/ui';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { Snapshot, SnapshotPrice } from '../../../api/snapshots';
 import { saveBlob } from '../../../components/saveFile';
 import { imageKey, useImageUrl } from '../../../hooks/useImageUrl';
@@ -45,10 +45,10 @@ function SnapshotImage({ imageId }: { imageId: string | null }) {
   );
 }
 
-type ViewerProps = { imageId: string; url: string; open: boolean; onClose: () => void };
+type ViewerProps = { imageId: string; url: string; open: boolean; onClose: () => void; children?: ReactNode };
 
-/** 장면 그림을 크게 보는 창. 받아 둔 바이트를 이 기기에 저장한다(다시 받지 않는다) */
-function SnapshotViewer({ imageId, url, open, onClose }: ViewerProps) {
+/** 장면 그림을 크게 보는 창. 받아 둔 바이트를 이 기기에 저장한다(다시 받지 않는다). 갤러리(C7)도 쓴다. children 은 창 아래에 더할 것이다 */
+export function SnapshotViewer({ imageId, url, open, onClose, children }: ViewerProps) {
   const queryClient = useQueryClient();
 
   function save() {
@@ -63,6 +63,7 @@ function SnapshotViewer({ imageId, url, open, onClose }: ViewerProps) {
       <Button variant="secondary" onClick={save}>
         이 기기에 저장
       </Button>
+      {children}
     </Dialog>
   );
 }
