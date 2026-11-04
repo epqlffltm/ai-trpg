@@ -527,6 +527,7 @@ class MeTests(APITestCase):
                 'guardian_consent',
                 'consents_pending',
                 'withdrawal_scheduled_at',
+                'content_settings',
             },
         )
 

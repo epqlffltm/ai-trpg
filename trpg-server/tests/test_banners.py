@@ -3,7 +3,8 @@
 """
 홍보 배너(#994)를 검증한다. 운영자가 공개 중인 시나리오를 걸고, 누구나 지금 걸린 것을 차례대로 본다.
 
-  - 공개를 내렸거나 지운 시나리오, 볼 수 없는 등급, 기간 밖의 배너는 보이지 않는다
+  - 공개를 내렸거나 지운 시나리오, 링크로만 여는 것, 볼 수 없는 등급, 기간 밖의 배너는 보이지 않는다
+  - 공개 목록처럼 보는 사람의 설정(성인 작품 숨김, 성향)으로 거른다
   - 운영자의 주소는 운영자가 아니면 404 다
 """
 
@@ -15,7 +16,7 @@ from httpx import AsyncClient
 
 from app.main import API_PREFIX
 from tests import test_listings_api as listing_tests
-from tests.test_listings_api import SCENARIOS_URL, create_scenario, listing_url, make_public
+from tests.test_listings_api import SCENARIOS_URL, create_scenario, listing_url, make_public, write_page
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -41,9 +42,9 @@ async def hang(client: AsyncClient, headers: dict, scenario: dict, **fields) -> 
     return response.json()
 
 
-async def shown(client: AsyncClient, headers: dict | None = None) -> list[str]:
+async def shown(client: AsyncClient, headers: dict | None = None, params: dict | None = None) -> list[str]:
     """지금 보이는 배너의 시나리오 제목, 차례대로."""
-    response = await client.get(BANNERS_URL, headers=headers or {})
+    response = await client.get(BANNERS_URL, params=params or {}, headers=headers or {})
     assert response.status_code == status.HTTP_200_OK, response.text
     return [item['listing']['title'] for item in response.json()['items']]
 
@@ -105,6 +106,32 @@ async def test_an_adult_banner_is_shown_only_to_adults(
 
     assert (await shown(client), await shown(client, their_headers)) == ([], [])
     assert await shown(client, adult_headers) == ['밤']
+
+
+async def test_an_unlisted_scenario_is_not_shown(client: AsyncClient, my_headers: dict, operator_headers: dict):
+    scenario = await make_public(client, my_headers, title='링크만')
+    await hang(client, operator_headers, scenario)
+
+    await write_page(client, my_headers, scenario, unlisted=True)
+    listed = (await client.get(ADMIN_URL, headers=operator_headers)).json()
+
+    # 링크로만 여는 시나리오(#993)는 공개 목록처럼 배너에도 나오지 않는다. 운영자에게는 보이지 않는다고 나온다
+    assert await shown(client) == []
+    assert [(item['title'], item['shown']) for item in listed] == [('링크만', False)]
+
+
+async def test_banners_follow_the_viewer_preferences(
+    client: AsyncClient, my_adult_headers: dict, adult_headers: dict, operator_headers: dict
+):
+    night = await make_public(client, my_adult_headers, title='밤', rating='adult', tags=['남성향'])
+    day = await make_public(client, my_adult_headers, title='낮', tags=['여성향'])
+    await hang(client, operator_headers, night, position=1)
+    await hang(client, operator_headers, day, position=2)
+
+    # 공개 목록처럼 성인 작품 숨김(#986)과 성향(#987)으로 거른다
+    assert await shown(client, adult_headers) == ['밤', '낮']
+    assert await shown(client, adult_headers, {'hide_adult': 'true'}) == ['낮']
+    assert await shown(client, adult_headers, {'orientation': 'male'}) == ['밤']
 
 
 async def test_banners_show_only_within_their_period(client: AsyncClient, my_headers: dict, operator_headers: dict):

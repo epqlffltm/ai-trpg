@@ -6,6 +6,7 @@
 import { Link, NavLink, useLocation } from 'react-router';
 import { useSession } from '../auth/useSession';
 import { AccountMenu } from './AccountMenu';
+import { HeaderAdultSwitch } from './HeaderAdultSwitch';
 import { HeaderBalance } from './HeaderBalance';
 import { HeaderNotifications } from './HeaderNotifications';
 import { HeaderSearch } from './HeaderSearch';
@@ -33,6 +34,7 @@ export function AppHeader() {
         <HeaderTheme />
         {session ? (
           <>
+            <HeaderAdultSwitch />
             <HeaderNotifications />
             <HeaderBalance />
             <AccountMenu />

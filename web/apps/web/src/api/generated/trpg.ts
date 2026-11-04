@@ -261,7 +261,9 @@ export interface paths {
         };
         /**
          * List Banners
-         * @description 지금 걸린 배너. 차례대로다. 공개를 내렸거나 지운 시나리오, 볼 수 없는 등급은 빠진다.
+         * @description 지금 걸린 배너. 차례대로다. 공개를 내렸거나 지운 시나리오, 링크로만 여는 것, 볼 수 없는 등급은 빠진다.
+         *
+         *     공개 목록처럼 성인 작품을 숨기거나(hide_adult) 성향(orientation)의 태그가 붙은 것만 낸다.
          */
         get: operations["list_banners_api_v1_game_banners_get"];
         put?: never;
@@ -628,6 +630,8 @@ export interface paths {
          * @description 공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르, 태그, 함께 할 인원, 검색어(q)로 거를 수 있다.
          *
          *     검색어가 "#"로 시작하면 그 태그가 붙은 것, 아니면 제목이나 한 줄 소개에 그 글이 들어 있는 것이다(#984).
+         *     hide_adult 가 참이면 성인용을 뺀다(#986). orientation 을 주면 그 성향의 태그가 붙은 것만이다(#987).
+         *     둘 다 보는 사람의 설정이고 화면이 싣는다.
          *
          *     로그인하지 않아도 읽는다(#530). 그때는 전체 이용가만 나온다. 토큰을 보냈는데 틀렸으면 401 이다.
          */
@@ -7022,6 +7026,12 @@ export interface components {
             total: number;
         };
         /**
+         * Orientation
+         * @description 목록을 거르는 성향(#987). 보는 사람의 설정이다(인증 서버의 내 정보). 화면이 목록을 부를 때 싣는다.
+         * @enum {string}
+         */
+        Orientation: "male" | "female";
+        /**
          * Outcome
          * @description 판정 결과의 단계. 엔진의 판정(app/engine/check.py)이 내는 것이다.
          *
@@ -12339,7 +12349,10 @@ export interface operations {
     };
     list_banners_api_v1_game_banners_get: {
         parameters: {
-            query?: never;
+            query?: {
+                hide_adult?: boolean;
+                orientation?: components["schemas"]["Orientation"] | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -12353,6 +12366,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicBannerList"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };
@@ -13175,6 +13197,8 @@ export interface operations {
                 tag?: string | null;
                 players?: number | null;
                 q?: string | null;
+                hide_adult?: boolean;
+                orientation?: components["schemas"]["Orientation"] | null;
             };
             header?: never;
             path?: never;

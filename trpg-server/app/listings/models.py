@@ -29,6 +29,17 @@ LISTING_MAX_TAGS = 10
 TAG_MAX_LENGTH = 20
 
 
+class Orientation(enum.StrEnum):
+    """목록을 거르는 성향(#987). 보는 사람의 설정이다(인증 서버의 내 정보). 화면이 목록을 부를 때 싣는다."""
+
+    MALE = 'male'
+    FEMALE = 'female'
+
+
+# 성향마다 거르는 태그. 제작자가 이 태그를 적는다. asset-server 의 app/preferences.py 와 같다
+ORIENTATION_TAGS = {Orientation.MALE: '남성향', Orientation.FEMALE: '여성향'}
+
+
 class Genre(enum.StrEnum):
     """
     장르. 운영자가 정한 목록에서 시나리오마다 하나를 고른다. 제작자가 자유롭게 적는 것은 태그다.

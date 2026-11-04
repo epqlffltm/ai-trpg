@@ -288,6 +288,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/content-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 목록을 거르는 내 설정(성인 작품 표시, 성향)을 고친다. 보낸 칸만 바뀐다
+         * @description PATCH /api/v1/auth/me/content-settings. 목록을 거르는 내 설정을 고친다(#986, #987).
+         */
+        patch: operations["me_content_settings_partial_update"];
+        trace?: never;
+    };
     "/api/v1/auth/me/invite": {
         parameters: {
             query?: never;
@@ -617,6 +637,16 @@ export interface components {
         ConsentStates: {
             items: components["schemas"]["ConsentState"][];
         };
+        /**
+         * @description 목록을 거르는 내 설정(#986, #987). 고칠 때는 보낸 칸만 바뀐다.
+         *
+         *     show_adult_content: 성인 작품을 목록에 보일지. 성인 확인을 한 계정만 켤 수 있다(처음에는 켜져 있다).
+         *     orientation: all(거르지 않음), male(남성향 태그만), female(여성향 태그만).
+         */
+        ContentSettings: {
+            orientation?: components["schemas"]["OrientationEnum"];
+            show_adult_content?: boolean;
+        };
         /** @description 글 하나만 싣는 응답. 성공의 안내도, 이유를 가르지 않는 거절도 이 모양이다. */
         Detail: {
             detail: string;
@@ -748,9 +778,10 @@ export interface components {
             code: string;
             login_ticket: string;
         };
-        /** @description GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태를 더한다. */
+        /** @description GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태, 목록을 거르는 설정을 더한다. */
         Me: {
             consents_pending: string[];
+            content_settings: components["schemas"]["ContentSettings"];
             /**
              * 이메일
              * Format: email
@@ -787,6 +818,13 @@ export interface components {
             rewarded: number;
         };
         /**
+         * @description * `all` - 전체
+         *     * `male` - 남성향
+         *     * `female` - 여성향
+         * @enum {string}
+         */
+        OrientationEnum: "all" | "male" | "female";
+        /**
          * @description 비밀번호 변경 요청의 형식을 검증한다.
          *
          *     새 비밀번호의 강도는 여기서 보지 않는다. services.py 가 사용자와 함께 검사한다.
@@ -801,6 +839,16 @@ export interface components {
             email: string;
             new_password: string;
             token: string;
+        };
+        /**
+         * @description 목록을 거르는 내 설정(#986, #987). 고칠 때는 보낸 칸만 바뀐다.
+         *
+         *     show_adult_content: 성인 작품을 목록에 보일지. 성인 확인을 한 계정만 켤 수 있다(처음에는 켜져 있다).
+         *     orientation: all(거르지 않음), male(남성향 태그만), female(여성향 태그만).
+         */
+        PatchedContentSettingsRequest: {
+            orientation?: components["schemas"]["OrientationEnum"];
+            show_adult_content?: boolean;
         };
         /** @description 다른 사람의 공개 ID 와 이름. 없거나 막은 계정이면 nickname 이 null 이다. */
         PublicName: {
@@ -1609,6 +1657,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
+    me_content_settings_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedContentSettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSettings"];
+                };
+            };
+            /** @description 모르는 성향 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 성인 확인 전에 성인 작품 표시를 켜려 했다(adult_content_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
                 };
             };
         };

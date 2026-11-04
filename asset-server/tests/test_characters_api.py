@@ -485,6 +485,40 @@ async def test_only_operators_make_a_character_unlisted_for_now(open_app: FastAP
     assert refused.status_code == status.HTTP_403_FORBIDDEN
 
 
+async def listed_with(client: AsyncClient, headers: dict, **params) -> list[str]:
+    response = await client.get(LISTINGS_URL, params=params, headers=headers)
+    assert response.status_code == status.HTTP_200_OK, response.text
+    assert response.json()['total'] == len(response.json()['items'])
+    return sorted(item['name'] for item in response.json()['items'])
+
+
+async def test_an_adult_can_hide_adult_characters(client: AsyncClient, operator: dict, adult: dict):
+    await make_public(client, operator, name='낮')
+    await make_public(client, operator, name='밤', rating='adult')
+
+    # 볼 수 있는 사람이 숨기는 설정이다(#986). 검색에도 같다
+    assert await listed_with(client, adult) == ['낮', '밤']
+    assert await listed_with(client, adult, hide_adult='true') == ['낮']
+    assert await listed_with(client, adult, hide_adult='true', q='밤') == []
+
+
+async def test_the_orientation_lists_only_that_tag(client: AsyncClient, operator: dict):
+    await make_public(client, operator, name='남', tags=['남성향', '판타지'])
+    await make_public(client, operator, name='여', tags=['여성향'])
+    await make_public(client, operator, name='모두', tags=['판타지'])
+
+    # 고른 성향의 태그가 마지막 판에 붙은 것만이다(#987)
+    assert await listed_with(client, {}, orientation='male') == ['남']
+    assert await listed_with(client, {}, orientation='female') == ['여']
+    assert await listed_with(client, {}, orientation='male', q='#판타지') == ['남']
+    assert await listed_with(client, {}) == ['남', '모두', '여']
+
+
+@pytest.mark.parametrize('params', [{'orientation': 'both'}, {'hide_adult': 'maybe'}])
+async def test_the_listing_rejects_a_bad_preference(client: AsyncClient, params: dict):
+    assert (await client.get(LISTINGS_URL, params=params)).status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
 async def test_the_listing_pages(client: AsyncClient, operator: dict):
     for number in range(3):
         await make_public(client, operator, name=f'캐릭터 {number}')

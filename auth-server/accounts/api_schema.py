@@ -22,7 +22,7 @@ from drf_spectacular.utils import OpenApiResponse
 from rest_framework import serializers
 
 from accounts.models import GuardianConsentStatus, GuardianNoticeOutcome
-from accounts.serializers import IdentityStatusSerializer, UserSerializer
+from accounts.serializers import ContentSettingsSerializer, IdentityStatusSerializer, UserSerializer
 
 
 class SessionVersionJWTScheme(SimpleJWTScheme):
@@ -97,12 +97,14 @@ class IdentityAnswerSerializer(serializers.Serializer):
 
 
 class MeSerializer(UserSerializer):
-    """GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태를 더한다."""
+    """GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태, 목록을 거르는 설정을 더한다."""
 
     identity = IdentityStatusSerializer()
     guardian_consent = serializers.ChoiceField(choices=['none', *GuardianConsentStatus.values])
     consents_pending = serializers.ListField(child=serializers.CharField())
     withdrawal_scheduled_at = serializers.DateTimeField(allow_null=True)
+    # 목록을 거르는 내 설정(#986, #987). 화면이 공개 목록을 부를 때 싣는다
+    content_settings = ContentSettingsSerializer()
 
     class Meta(UserSerializer.Meta):
         fields = (
@@ -111,6 +113,7 @@ class MeSerializer(UserSerializer):
             'guardian_consent',
             'consents_pending',
             'withdrawal_scheduled_at',
+            'content_settings',
         )
         read_only_fields = fields
 

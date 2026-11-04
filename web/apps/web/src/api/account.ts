@@ -1,9 +1,11 @@
 // web/apps/web/src/api/account.ts
-// 로그인한 본인의 계정(인증 서버). 동의의 상태와 바꾸기, 비밀번호 바꾸기, 모든 기기 로그아웃, 탈퇴 요청과 취소.
+// 로그인한 본인의 계정(인증 서버). 동의의 상태와 바꾸기, 비밀번호 바꾸기, 모든 기기 로그아웃, 탈퇴 요청과 취소,
+// 목록을 거르는 설정(성인 작품 표시, 성향, #986, #987).
 //
 // 다시 동의하거나 탈퇴를 취소해도 지금의 토큰은 그대로 인증 서버에만 통한다.
 // 모든 서버에 통하는 토큰은 그 뒤의 /refresh 가 준다(refresh.ts). 동의와 취소의 화면이 마지막에 부른다.
 
+import type { components } from './generated/auth';
 import { apiRequest } from './http';
 import { clearSession, storeTokens, type Session } from './session';
 import type { ConsentState, ConsentStates, LoginResponse, WithdrawalState } from './types';
@@ -64,3 +66,10 @@ export async function cancelWithdrawal(): Promise<void> {
   await apiRequest<unknown>(`${AUTH}/me/withdrawal`, { method: 'DELETE' });
 }
 
+
+export type ContentSettings = components['schemas']['ContentSettings'];
+
+/** 목록을 거르는 내 설정을 고친다. 보낸 칸만 바뀐다. 성인 확인 전에 성인 작품 표시를 켜면 403 adult_content_required */
+export function updateContentSettings(changes: Partial<ContentSettings>): Promise<ContentSettings> {
+  return apiRequest<ContentSettings>(`${AUTH}/me/content-settings`, { method: 'PATCH', body: changes });
+}
