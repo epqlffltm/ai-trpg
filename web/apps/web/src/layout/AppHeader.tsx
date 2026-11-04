@@ -1,9 +1,10 @@
 // web/apps/web/src/layout/AppHeader.tsx
-// 모든 화면의 머리. 이름(첫 화면으로), 서비스와 게시판, 작품 검색칸(#984), 내 정보 또는 로그인.
-// 로그인했으면 알림(A10, 읽지 않은 수)과 잔액(A6, 지갑으로)도 둔다. 밝기 고르기(시스템, 라이트, 다크)는 늘 둔다.
-// 지금 있는 서비스의 메뉴는 aria-current 로 알린다(NavLink). 아래 경로(/trpg/...)에 있어도 그 서비스다.
+// 모든 화면의 위쪽 줄(Stitch 설계서의 [모든 화면의 틀]). 이름과 주 메뉴는 왼쪽 메뉴 열(AppSidebar)로 옮겼다.
+// 왼쪽부터: 메뉴 열을 펴고 접는 ☰(넓은 화면), 이름(좁은 화면에만, 왼쪽 메뉴 열이 없어서), 작품 검색칸(#984),
+// 오른쪽에 밝기 고르기(늘), 로그인했으면 성인 작품 표시(#986), 알림(A10, 읽지 않은 수), 잔액(A6, 지갑으로), 내 정보.
+// 로그인 전이면 오른쪽은 밝기 고르기와 "로그인", "가입"뿐이다.
 
-import { Link, NavLink, useLocation } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { useSession } from '../auth/useSession';
 import { AccountMenu } from './AccountMenu';
 import { HeaderAdultSwitch } from './HeaderAdultSwitch';
@@ -11,24 +12,24 @@ import { HeaderBalance } from './HeaderBalance';
 import { HeaderNotifications } from './HeaderNotifications';
 import { HeaderSearch } from './HeaderSearch';
 import { HeaderTheme } from './HeaderTheme';
+import { SiteBrand } from './SiteBrand';
+import type { Sidebar } from './useSidebar';
 
-export function AppHeader() {
+export function AppHeader({ sidebar }: { sidebar: Sidebar }) {
   const session = useSession();
   const location = useLocation();
   return (
     <header className="app-header">
-      <Link to="/" className="app-header__brand">
-        <span className="app-header__mark" aria-hidden="true">
-          ✦
-        </span>
-        AI TRPG
-      </Link>
-      <nav aria-label="주 메뉴" className="app-header__nav">
-        <NavLink to="/trpg">TRPG</NavLink>
-        <NavLink to="/chat">chat</NavLink>
-        <NavLink to="/story">story</NavLink>
-        <NavLink to="/board">게시판</NavLink>
-      </nav>
+      <button
+        type="button"
+        className="app-header__menu"
+        aria-expanded={sidebar.open}
+        aria-label={sidebar.open ? '사이트 메뉴 접기' : '사이트 메뉴 펼치기'}
+        onClick={sidebar.toggle}
+      >
+        <span aria-hidden="true">☰</span>
+      </button>
+      <SiteBrand className="site-brand--compact" />
       <HeaderSearch />
       <div className="app-header__account">
         <HeaderTheme />

@@ -3,13 +3,120 @@
  * 반응형 한 벌이다(docs/product/screens.md 의 "화면마다"). 좁으면 한 줄에 하나, 넓으면 여럿.
  */
 
-/* 머리(Stitch 시안). 메뉴는 밑줄 없이, 지금 있는 서비스는 옅은 면으로. 면은 불투명한 종이다.
- * 위에 붙이지(sticky) 않는다. 화면 안에 이미 위에 붙는 것(좁은 화면의 HP 한 줄 등)이 있고, 좁은 화면에서 대화를 가린다 */
+/* 사이트의 틀(Stitch 설계서의 [모든 화면의 틀]). 넓은 화면은 왼쪽 메뉴 열 + 오른쪽(위쪽 줄과 본문),
+ * 좁은 화면(768px 미만)은 왼쪽 메뉴 열을 숨기고 맨 아래 탭 바를 둔다. 메뉴 열은 화면을 따라 내려오지 않고 제자리에 붙는다 */
+.app-shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 100vh;
+}
+
+.app-shell[data-sidebar='open'] {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+.app-shell__main {
+  min-width: 0;
+}
+
+/* 왼쪽 메뉴 열: 종이 면에 오른쪽 괘선 한 줄 */
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 16px 12px;
+  border-right: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+
+.app-sidebar a {
+  text-decoration: none;
+}
+
+/* 눈에 띄는 큰 주 단추 "만들기" */
+.app-sidebar__create {
+  display: block;
+  padding: 10px 12px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+  font-weight: 700;
+  text-align: center;
+}
+
+.app-sidebar__create:hover {
+  background: var(--ui-accent-hover);
+}
+
+.app-sidebar__nav,
+.app-sidebar__footer {
+  display: grid;
+  gap: 2px;
+}
+
+.app-sidebar__nav a,
+.app-sidebar__footer a {
+  padding: 8px 12px;
+  border-radius: var(--ui-radius);
+  color: var(--ui-text-muted);
+  font-weight: 600;
+}
+
+.app-sidebar__nav a:hover,
+.app-sidebar__footer a:hover {
+  color: var(--ui-text);
+  background: var(--ui-surface-subtle);
+}
+
+/* 지금 있는 곳: 옅은 면과 왼쪽 괘선 */
+.app-sidebar__nav a[aria-current='page'] {
+  background: var(--ui-surface-subtle);
+  box-shadow: inset 3px 0 0 var(--ui-accent);
+  color: var(--ui-accent);
+}
+
+.app-sidebar__footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border);
+  font-size: 0.9em;
+}
+
+/* 사이트의 이름과 낙관 모양의 표식 */
+.site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--ui-font-serif);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ui-text);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-brand__mark {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+  font-family: var(--ui-font-serif);
+  font-size: 0.95em;
+}
+
+/* 위쪽 줄. 위에 붙이지(sticky) 않는다. 화면 안에 이미 위에 붙는 것(좁은 화면의 HP 한 줄 등)이 있고, 좁은 화면에서 대화를 가린다 */
 .app-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px 24px;
+  gap: 12px 16px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--ui-border);
   background: var(--ui-surface);
@@ -19,48 +126,20 @@
   text-decoration: none;
 }
 
-.app-header__brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--ui-font-serif);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--ui-text);
-}
-
-.app-header__mark {
-  display: inline-grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
+.app-header__menu {
+  min-width: 36px;
+  min-height: 32px;
+  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
-  background: var(--ui-accent);
-  color: var(--ui-accent-text);
-  font-family: var(--ui-font-serif);
-  font-size: 0.9em;
-}
-
-.app-header__nav {
-  display: flex;
-  gap: 4px;
-}
-
-.app-header__nav a {
-  padding: 6px 12px;
-  border-radius: var(--ui-radius);
-  color: var(--ui-text-muted);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.app-header__nav a:hover {
+  background: var(--ui-surface);
   color: var(--ui-text);
+  font: inherit;
+  cursor: pointer;
 }
 
-.app-header__nav a[aria-current='page'] {
-  background: var(--ui-surface-subtle);
-  color: var(--ui-accent);
+/* 이름은 왼쪽 메뉴 열에 있다. 위쪽 줄의 이름은 좁은 화면에만(메뉴 열이 없다) */
+.site-brand--compact {
+  display: none;
 }
 
 .app-header__account {
@@ -107,18 +186,90 @@
   white-space: nowrap;
 }
 
-/* 좁으면 메뉴를 둘째 줄 전체로 내리고, 넘치면 옆으로 민다. 검색칸은 그 아래 줄 전체다 */
-@media (max-width: 640px) {
-  .app-header__nav {
-    order: 3;
-    width: 100%;
-    overflow-x: auto;
+/* 좁은 화면(768px 미만): 왼쪽 메뉴 열과 ☰ 를 숨기고 위쪽 줄에 이름을 둔다. 검색칸은 둘째 줄 전체다.
+ * 맨 아래 탭 바가 본문을 가리지 않게 본문 아래에 그만큼 띄운다 */
+@media (max-width: 767px) {
+  .app-shell,
+  .app-shell[data-sidebar='open'] {
+    grid-template-columns: 1fr;
+    padding-bottom: 64px;
+  }
+
+  .app-sidebar,
+  .app-header__menu {
+    display: none;
+  }
+
+  .site-brand--compact {
+    display: inline-flex;
   }
 
   .app-header__search {
     order: 4;
     flex-basis: 100%;
   }
+}
+
+/* 좁은 화면의 맨 아래 탭 바. 넓은 화면에서는 숨긴다 */
+.mobile-tab-bar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .mobile-tab-bar {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 5;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    border-top: 1px solid var(--ui-border);
+    background: var(--ui-surface);
+  }
+}
+
+.mobile-tab-bar__item {
+  display: grid;
+  place-items: center;
+  min-height: 56px;
+  border: 0;
+  background: none;
+  color: var(--ui-text-muted);
+  font: inherit;
+  font-size: 0.85em;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.mobile-tab-bar__item[aria-current='page'],
+.mobile-tab-bar__item[aria-expanded='true'] {
+  color: var(--ui-accent);
+}
+
+/* 가운데의 만들기는 눈에 띄게 */
+.mobile-tab-bar__item--create {
+  margin: 6px;
+  min-height: 44px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+}
+
+/* 탐색의 작은 창. 탭 바 바로 위에 붙는다 */
+.mobile-tab-bar__sheet {
+  position: absolute;
+  inset: auto 0 100%;
+  display: grid;
+  border-top: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+.mobile-tab-bar__sheet a {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-text);
+  text-decoration: none;
 }
 
 .theme-switch {

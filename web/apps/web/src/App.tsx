@@ -37,6 +37,7 @@ import {
   ChatLorebookNewPage,
   ChatLorebooksPage,
   ConversationPage,
+  CreatePage,
   CreatorPage,
   GalleryPage,
   GuardianConsentPage,
@@ -143,6 +144,15 @@ export function App() {
           element={
             <RequireSession>
               <GalleryPage />
+            </RequireSession>
+          }
+        />
+        {/* 만들기의 입구. 왼쪽 메뉴 열과 아래 탭 바의 "만들기" */}
+        <Route
+          path="create"
+          element={
+            <RequireSession>
+              <CreatePage />
             </RequireSession>
           }
         />
