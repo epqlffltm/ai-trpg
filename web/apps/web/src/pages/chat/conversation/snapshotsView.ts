@@ -4,6 +4,16 @@
 import { ApiError } from '../../../api/errors';
 import type { Snapshot, SnapshotPrice } from '../../../api/snapshots';
 
+/** 장면 그림 아래와 크게 보는 창에 적는 것 */
+export const AI_IMAGE_NOTE = 'AI 가 만든 그림';
+
+const IMAGE_EXTENSIONS: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+
+/** 저장할 때의 파일 이름. "장면그림-1a2b3c4d.png". 모르는 형식이면 png 로 둔다 */
+export function snapshotFileName(imageId: string, mimeType: string): string {
+  return `장면그림-${imageId.slice(0, 8)}.${IMAGE_EXTENSIONS[mimeType] ?? 'png'}`;
+}
+
 /** 그리는 중인 것이 있으면 목록을 이만큼마다 다시 읽는다(ms) */
 export const SNAPSHOT_POLL_MS = 3000;
 

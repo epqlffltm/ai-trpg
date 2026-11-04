@@ -1,7 +1,8 @@
 // web/apps/web/src/pages/chat/conversation/ConversationSnapshots.test.tsx
 // 장면 그림(#983). 상대의 답 아래의 "장면 그림"으로 그리기를 시작하고, 그리는 동안 목록을 다시 읽어 다 그린 그림을 띄운다.
 // 그리는 중이면 새로 그리지 못한다. 실패로 남은 것과 시작하지 못한 까닭을 알린다.
-// 단추에 한 장의 값을 싣고, 그 서버에서 그릴 수 없으면 단추를 숨긴다. 순수한 함수.
+// 단추에 한 장의 값을 싣고, 그 서버에서 그릴 수 없으면 단추를 숨긴다.
+// 그림 아래에 "AI 가 만든 그림"을 적고, 누르면 크게 보는 창에서 받아 둔 바이트를 저장한다. 순수한 함수.
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -11,7 +12,24 @@ import type { Snapshot, SnapshotPrice } from '../../../api/snapshots';
 import { AT, ID, M, PATH, signedIn } from '../../../test/chatFixtures';
 import { json, type SeenRequest } from '../../../test/fakeFetch';
 import { renderApp } from '../../../test/renderApp';
-import { canOfferSnapshot, isDrawing, snapshotButtonHint, snapshotButtonLabel, snapshotFailureText, snapshotProblemText, snapshotsOf } from './snapshotsView';
+import {
+  AI_IMAGE_NOTE,
+  canOfferSnapshot,
+  isDrawing,
+  snapshotButtonHint,
+  snapshotButtonLabel,
+  snapshotFailureText,
+  snapshotFileName,
+  snapshotProblemText,
+  snapshotsOf,
+} from './snapshotsView';
+
+const saved = vi.hoisted(() => ({ names: [] as string[] }));
+vi.mock('../../../components/saveFile', () => ({
+  saveBlob: (_blob: Blob, name: string) => {
+    saved.names.push(name);
+  },
+}));
 
 const SNAPSHOTS = `${PATH}/snapshots`;
 const PRICE = '/api/v1/chat/snapshots/price';
@@ -63,6 +81,24 @@ describe('장면 그림', () => {
     await waitFor(() => expect(answerItem('비가 오네요.').getByAltText('장면 그림')).toHaveAttribute('src', 'blob:image'), { timeout: 5000 });
     expect(answerItem('어서 와요.').getByRole('button', { name: '장면 그림' })).toBeEnabled();
     expect(seen.filter((request) => request.method === 'POST' && request.url === DRAW)).toHaveLength(1);
+  });
+
+  it('그림 아래에 AI 표시가 있고, 크게 보는 창에서 저장한다', async () => {
+    saved.names.length = 0;
+    snapshotsServer(() => [shot(1, 'ready', { image_id: IMAGE })]);
+    renderApp(`/chat/conversations/${ID}`);
+
+    await screen.findByText('비가 오네요.');
+    const answer = answerItem('비가 오네요.');
+    const open = await answer.findByRole('button', { name: '장면 그림 크게 보기' });
+    expect(answer.getByText(AI_IMAGE_NOTE)).toBeInTheDocument();
+    await userEvent.click(open);
+    const dialog = within(await screen.findByRole('dialog', { name: '장면 그림' }));
+    await userEvent.click(dialog.getByRole('button', { name: '이 기기에 저장' }));
+
+    expect(dialog.getByText(AI_IMAGE_NOTE)).toBeInTheDocument();
+    expect(dialog.getByAltText('장면 그림(크게)')).toHaveAttribute('src', 'blob:image');
+    expect(saved.names).toEqual([snapshotFileName(IMAGE, '')]);
   });
 
   it('단추에 한 장의 값을 싣는다', async () => {
@@ -122,6 +158,12 @@ describe('장면 그림의 글과 고르기', () => {
     expect(snapshotButtonHint(price({ tier: 'premium', promo: true }))).toBe('160 크레딧을 씁니다 · 골드로만 · 행사가. 그리지 못하면 돌려받습니다.');
     expect(snapshotButtonHint(undefined)).toBe('크레딧을 씁니다. 그리지 못하면 돌려받습니다.');
     expect([canOfferSnapshot(undefined), canOfferSnapshot(price({})), canOfferSnapshot(price({ available: false }))]).toEqual([true, true, false]);
+  });
+
+  it('저장할 파일의 이름은 형식을 따른다', () => {
+    expect(snapshotFileName(IMAGE, 'image/webp')).toBe('장면그림-00000000.webp');
+    expect(snapshotFileName(IMAGE, 'image/jpeg')).toBe('장면그림-00000000.jpg');
+    expect(snapshotFileName(IMAGE, 'text/plain')).toBe('장면그림-00000000.png');
   });
 
   it('그리는 중인 것이 있는가', () => {
