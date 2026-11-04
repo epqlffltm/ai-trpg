@@ -2,9 +2,10 @@
 // 가입(A2). 세 단계다: 이메일 → 6자리 코드 → 아이디, 닉네임, 비밀번호와 동의.
 // 이 화면은 단계를 잇기만 한다. 끝나면 로그인으로 보낸다(인증 서버는 가입과 로그인을 따로 한다).
 // 초대 링크(/signup?invite=코드, #990)로 오면 그 코드를 3단계의 초대 코드 칸에 채운다.
+// 카드 아래에는 단계와 상관없이 로그인으로 가는 길이 있다(Stitch 4).
 
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import type { SignupProblem } from '../../auth/signupProblem';
 import { secondsFromNow } from '../../hooks/useCountdown';
 import { INVITE_PARAM } from '../me/inviteView';
@@ -30,7 +31,7 @@ export function SignupPage() {
   const toLogin = (state: { notice: string; username?: string }) => navigate('/login', { replace: true, state });
 
   return (
-    <main className="page page--narrow">
+    <main className="page page--narrow auth-card">
       <h1>가입</h1>
       <p className="step-indicator">{STEP_NUMBER[stage.step]} / 3</p>
       {stage.step === 'email' ? (
@@ -55,6 +56,9 @@ export function SignupPage() {
           onAlreadyRegistered={(problem) => toLogin({ notice: problem.message })}
         />
       ) : null}
+      <p className="auth-links">
+        <Link to="/login">이미 계정이 있으면 로그인</Link>
+      </p>
     </main>
   );
 }

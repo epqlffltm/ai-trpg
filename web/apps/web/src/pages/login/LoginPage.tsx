@@ -34,7 +34,7 @@ export function LoginPage() {
   const notice = textOf(state?.notice);
 
   return (
-    <main className="page page--narrow">
+    <main className="page page--narrow auth-card">
       <h1>로그인</h1>
       {notice && stage.step === 'credentials' && !stage.problem ? <Notice>{notice}</Notice> : null}
       {stage.step === 'credentials' ? (

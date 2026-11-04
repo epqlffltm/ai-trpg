@@ -29,7 +29,7 @@ export function WithdrawalPendingPage({ scheduledAt }: { scheduledAt: string }) 
   }
 
   return (
-    <main className="page page--medium">
+    <main className="page page--medium auth-card">
       <h1>탈퇴를 기다리는 중입니다</h1>
       <p>
         <strong>{formatDateTime(scheduledAt)}</strong>에 계정을 지웁니다. 그때까지는 다른 서비스를 쓸 수 없습니다.

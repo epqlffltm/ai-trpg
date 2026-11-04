@@ -48,7 +48,7 @@ export function ResetPasswordPage() {
 
   if (!link || problem?.restart) {
     return (
-      <main className="page page--narrow">
+      <main className="page page--narrow auth-card">
         <h1>비밀번호 새로 정하기</h1>
         <Notice tone="error">{problem?.message ?? '링크가 온전하지 않습니다. 메일의 링크를 다시 눌러 주세요.'}</Notice>
         <Link to="/password/forgot">재설정 메일 다시 받기</Link>
@@ -57,7 +57,7 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <main className="page page--narrow">
+    <main className="page page--narrow auth-card">
       <h1>비밀번호 새로 정하기</h1>
       <form onSubmit={submit} noValidate>
         <p>{link.email} 의 비밀번호를 새로 정합니다.</p>

@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/signup/SignupPage.test.tsx
-// 가입 세 단계를 화면에서 따라가 본다. 서버는 가짜 fetch 다.
+// 가입 세 단계를 화면에서 따라가 본다. 서버는 가짜 fetch 다. 카드 아래 로그인으로 가는 길도 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -48,6 +48,16 @@ async function fillProfile() {
 }
 
 describe('SignupPage', () => {
+  it('어느 단계에서나 카드 아래에 로그인으로 가는 길이 있다', async () => {
+    routes(() => json(201, { detail: '가입했다' }));
+    renderApp('/signup');
+
+    const card = (await screen.findByRole('heading', { name: '가입', level: 1 })).closest('main') as HTMLElement;
+    expect(within(card).getByRole('link', { name: '이미 계정이 있으면 로그인' })).toHaveAttribute('href', '/login');
+    await reachProfileStep();
+    expect(within(card).getByRole('link', { name: '이미 계정이 있으면 로그인' })).toHaveAttribute('href', '/login');
+  });
+
   it('세 단계를 마치면 체크한 동의만 보내고 로그인으로 가서 아이디를 채운다', async () => {
     const { seen } = routes(() => json(201, { detail: '가입했다' }));
     renderApp('/signup');
