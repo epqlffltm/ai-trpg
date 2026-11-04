@@ -324,6 +324,29 @@ func TestLoadJobsNeedsNoServerSettings(t *testing.T) {
 	}
 }
 
+func TestLoadAutoChargeReadsTheJobsAndTheHeartbeat(t *testing.T) {
+	values := map[string]string{
+		"DATABASE_URL": databaseURL, "DB_SCHEMA": "billing_test", "APP_ENVIRONMENT": "staging", "HEARTBEAT_FILE": "/tmp/heartbeat",
+	}
+	settings, err := config.LoadAutoCharge(from(values))
+	if err != nil {
+		t.Fatalf("설정을 읽지 못했다: %v", err)
+	}
+	jobs, err := config.LoadJobs(from(values))
+	if err != nil || settings.Jobs != jobs || settings.HeartbeatFile != "/tmp/heartbeat" {
+		t.Errorf("설정 = %+v, 작업 명령의 설정 = %+v, %v", settings, jobs, err)
+	}
+	delete(values, "HEARTBEAT_FILE")
+	if settings, err := config.LoadAutoCharge(from(values)); err != nil || settings.HeartbeatFile != "" {
+		t.Errorf("심장박동 파일이 없을 때 = %+v, %v", settings, err)
+	}
+	// 작업 명령처럼 결제 대행사의 설정을 검사한다
+	values["PAYMENT_PROVIDER"] = "nobody"
+	if _, err := config.LoadAutoCharge(from(values)); err == nil {
+		t.Error("모르는 결제 대행사를 받았다")
+	}
+}
+
 func TestLoadSweeperNeedsNoPaymentSettings(t *testing.T) {
 	// 정리 작업은 결제 대행사를 부르지 않는다. 토스페이먼츠를 골라 두고 키를 주지 않아도, 운영에서 가짜를 골라도 뜬다
 	for name, values := range map[string]map[string]string{

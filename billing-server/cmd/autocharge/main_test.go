@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -56,10 +58,46 @@ func TestTheLoopKeepsGoingAfterAFailedRound(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	charger := &fakeRounder{stopAfter: 3, cancel: cancel, err: errors.New("DB 가 끊겼다")}
 
-	loop(ctx, charger, time.Millisecond, 7)
+	loop(ctx, charger, time.Millisecond, 7, "")
 
 	if charger.rounds != 3 || charger.limit != 7 {
 		t.Errorf("바퀴 = %d, limit = %d", charger.rounds, charger.limit)
+	}
+}
+
+func TestTheLoopBeatsOnlyAfterASuccessfulRound(t *testing.T) {
+	// 심장박동은 DB 에 닿아 끝낸 바퀴만 남긴다. healthy 가 "DB 에 닿으며 돈다"는 뜻이 된다
+	cases := map[string]struct {
+		err       error
+		wantBeats bool
+	}{
+		"성공한 바퀴": {err: nil, wantBeats: true},
+		"실패한 바퀴": {err: errors.New("db is down"), wantBeats: false},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			charger := &fakeRounder{stopAfter: 1, cancel: cancel, err: c.err}
+			heartbeat := filepath.Join(t.TempDir(), "heartbeat")
+
+			loop(ctx, charger, time.Hour, 1, heartbeat)
+
+			_, statErr := os.Stat(heartbeat)
+			if beat := statErr == nil; beat != c.wantBeats {
+				t.Errorf("심장박동 = %v, 기대 = %v", beat, c.wantBeats)
+			}
+		})
+	}
+}
+
+func TestTheLoopKeepsGoingWhenTheHeartbeatCannotBeWritten(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	charger := &fakeRounder{stopAfter: 2, cancel: cancel}
+
+	loop(ctx, charger, time.Millisecond, 1, filepath.Join(t.TempDir(), "no-such-folder", "heartbeat"))
+
+	if charger.rounds != 2 {
+		t.Errorf("바퀴 = %d, 기대 = 2", charger.rounds)
 	}
 }
 

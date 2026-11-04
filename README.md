@@ -127,7 +127,7 @@ docker compose --profile app up -d --build
 docker compose --profile app ps -a
 ```
 
-`*-migrate` 여섯이 `Exited (0)`, `*-server` 여섯과 `proxy` 와 워커 넷(`auth-mail`, `auth-welcome-credits`, `billing-sweeper`, `db-backup`)이 `healthy`,
+`*-migrate` 여섯이 `Exited (0)`, `*-server` 여섯과 `proxy` 와 워커 다섯(`auth-mail`, `auth-welcome-credits`, `billing-sweeper`, `billing-autocharge`, `db-backup`)이 `healthy`,
 cron 둘(`auth-cron`, `billing-cron`)이 `Up` 이면 된다.
 서버의 `healthy` 는 그 서버가 DB 에 닿는다는 뜻이다(healthcheck 가 `/health/ready` 를 부른다). DB 가 죽으면 `unhealthy` 로 보이고, DB 가 돌아오면 저절로 `healthy` 가 된다.
 워커의 `healthy` 는 그 워커가 DB 에 닿으며 돈다는 뜻이다(2분 안에 한 바퀴를 끝냈다. `docs/observability.md` 의 "워커의 상태").
@@ -404,7 +404,7 @@ IP 마다 요청 수를 센다: 인증의 민감한 요청(로그인, 인증 코
 이미지는 `nginxinc/nginx-unprivileged` 다. root 가 아닌 사용자로 돈다.
 
 **워커와 주기 명령은 서버와 같은 이미지의 컨테이너로 따로 돈다.** 컨테이너 하나에 프로세스 하나다. 워커가 죽어도 서버는 살아 있고, 따로 다시 뜬다.
-계속 도는 것: 인증 서버의 메일 워커(`auth-mail`)와 환영 크레딧 워커(`auth-welcome-credits`), 결제 서버의 정리 작업(`billing-sweeper`).
+계속 도는 것: 인증 서버의 메일 워커(`auth-mail`)와 환영 크레딧 워커(`auth-welcome-credits`), 결제 서버의 정리 작업(`billing-sweeper`)과 자동 충전의 결제 작업(`billing-autocharge`).
 정한 시각에 도는 것은 [supercronic](https://github.com/aptible/supercronic)(컨테이너용 cron)이 `docker/cron/` 의 crontab 대로 부른다(`auth-cron`, `billing-cron`).
 시각은 UTC 다. 보안 이벤트 요약은 매시 5분, 오래된 가입 코드 정리와 만료된 토큰 정리, 결제의 대사는 매일 한국 시각 새벽 4시대에 10분씩 띄워 돈다.
 앞의 실행이 끝나지 않았으면 다음 실행을 건너뛴다. supercronic 은 명령이 남기는 줄을 그대로 내보내고, 제 줄은 실패만 남긴다.

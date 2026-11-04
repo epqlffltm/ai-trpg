@@ -534,7 +534,7 @@ Python 서버들은 예외가 실린 줄(`logger.exception`)에 코드를 따로
 | 서버 | 워커 | 심장박동 |
 | --- | --- | --- |
 | auth-server | 메일(`send_outgoing_mail`), 환영 크레딧(`send_welcome_credits`) | 있다(`observability/heartbeat.py`) |
-| billing-server | 정리 작업(`cmd/sweeper`) | 있다(`internal/jobs/heartbeat.go`) |
+| billing-server | 정리 작업(`cmd/sweeper`), 자동 충전의 결제 작업(`cmd/autocharge`) | 있다(`internal/jobs/heartbeat.go`) |
 | auth-server, billing-server | 주기 명령(supercronic) | 없다. 하루 한 번이라 심장박동으로 볼 것이 없다. 실패는 `job.failed` 로그가 알린다 |
 | trpg-server | 서버 안의 작업(라운드 시계, 청구 정리) | 없다. 서버 프로세스 안에서 돈다. 서술이 사라진 라운드는 시계가 찾아 다시 맡긴다(#275, `round.recover`) |
 | notification-server | 서버 안의 작업(지난 알림 지우기, 끊긴 세션 목록 받기) | 없다. 서버 프로세스 안에서 돈다. 실패는 `job.failed`(지우기)와 `auth.revocations_unavailable`(목록) 로그가 알린다 |
@@ -951,6 +951,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | billing-server | `BillingPaymentProviderUnavailable` | warning | 지난 15분에 결제 대행사를 부르지 못한 것이 세 번을 넘는다 |
 | billing-server | `BillingLedgerRollbacks` | warning | 지난 15분에 원장에 적었다가 되돌린 일이 있다(`expire` 는 뺀다. [목록](#목록)의 뜻) |
 | billing-server | `BillingSweepStalled` | warning | 결제 서버가 떠 있는데 정리 작업이 10분 넘게 성공하지 않았다 |
+| billing-server | `BillingAutoChargeStalled` | warning | 결제 서버가 떠 있는데 자동 충전의 결제 작업이 10분 넘게 성공하지 않았다. 그 작업이 돈 적이 없으면(지난 이레) 울리지 않는다 |
 | billing-server | `BillingReconcileMissed` | warning | 지난 이레 안에 돈 대사가 지난 26시간에는 돌지 않았다. 한 번도 돈 적이 없으면 울리지 않는다 |
 | billing-server | `BillingReconcileFailed` | warning | 지난 하루의 대사가 성공하지 못했다 |
 | notification-server | `NotificationDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
@@ -1033,7 +1034,7 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | `internal/jobs/metrics.go` | 작업 넷. 로그처럼 프로세스에 하나를 둔다(`jobs.Measure`) |
 | `internal/txn/txn.go` | 커밋한 뒤에 할 일을 실어 나르는 트랜잭션(`txn.Run`, `txn.AfterCommit`). 원장의 메트릭이 쓴다 |
 | `internal/wallet/metrics.go`, `internal/order/metrics.go`, `internal/payment/metrics.go`, `internal/hold/metrics.go`, `internal/metrics/idempotency.go` | 업무 메트릭. 서비스마다 `Measure(meter)` 로 켠다(`app.MeasureServices`). 결제 대행사는 감싸서 센다(`payment.Measured`) |
-| `cmd/server`, `cmd/sweeper`, `cmd/reconcile` | 메트릭을 켜고(`app.StartMetrics`) 끌 때 보낸다(`app.CloseMetrics`). 사람이 치는 명령은 켜지 않는다 |
+| `cmd/server`, `cmd/sweeper`, `cmd/autocharge`, `cmd/reconcile` | 메트릭을 켜고(`app.StartMetrics`) 끌 때 보낸다(`app.CloseMetrics`). 사람이 치는 명령은 켜지 않는다 |
 
 - **전역(otel.SetMeterProvider)에 두지 않는다.** 만든 쪽이 Meter 를 넘긴다. 테스트가 라우터마다 제 Meter 를 넣는다. 작업만 프로세스에 하나다(로그의 기본 로거와 같다).
 - **메트릭 때문에 서버가 뜨지 못하지 않는다.** 계측기를 만들지 못하면 까닭을 남기고 세지 않는다. 수집기가 죽어 있어도 뜬다.
