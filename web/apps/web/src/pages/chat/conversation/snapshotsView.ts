@@ -2,10 +2,27 @@
 // 장면 그림(#983)의 글과 고르기. chat 의 대화와 story 의 장면이 함께 쓴다. 순수한 함수다.
 
 import { ApiError } from '../../../api/errors';
-import type { Snapshot } from '../../../api/snapshots';
+import type { Snapshot, SnapshotPrice } from '../../../api/snapshots';
 
 /** 그리는 중인 것이 있으면 목록을 이만큼마다 다시 읽는다(ms) */
 export const SNAPSHOT_POLL_MS = 3000;
+
+/** 단추를 보일까. 값을 아직 모르거나 받지 못했으면 보인다(그릴 수 있는지는 서버가 다시 본다) */
+export function canOfferSnapshot(price: SnapshotPrice | undefined): boolean {
+  return price?.available !== false;
+}
+
+/** 단추의 글. 값을 알면 "장면 그림 · 160", 결제 서버 없이 돌거나 값을 모르면 "장면 그림" */
+export function snapshotButtonLabel(price: SnapshotPrice | undefined): string {
+  return price?.credits ? `장면 그림 · ${price.credits}` : '장면 그림';
+}
+
+/** 단추의 설명. "160 크레딧을 씁니다 · 골드로만 · 행사가. 그리지 못하면 돌려받습니다." */
+export function snapshotButtonHint(price: SnapshotPrice | undefined): string {
+  const cost = price?.credits ? `${price.credits} 크레딧을 씁니다` : '크레딧을 씁니다';
+  const parts = [cost, price?.tier === 'premium' ? '골드로만' : null, price?.promo ? '행사가' : null].filter(Boolean);
+  return `${parts.join(' · ')}. 그리지 못하면 돌려받습니다.`;
+}
 
 /** 그 대화에 그리는 중인 그림이 있는가. 있으면 새로 그리지 못한다(서버도 409) */
 export function isDrawing(snapshots: readonly Snapshot[]): boolean {

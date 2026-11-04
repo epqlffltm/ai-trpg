@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/story/StorySnapshots.test.tsx
 // 장면(D2)의 장면 그림(#983). 조각이 있는 답 아래의 "장면 그림"으로 그리기를 시작하고, 그린 그림을 말 아래에 띄운다.
-// 내 말에는 단추가 없다. 그리는 모습과 글은 chat 과 같다(ConversationSnapshots.test.tsx 가 자세히 본다).
+// 내 말에는 단추가 없다. 단추에 한 장의 값을 싣는다. 그리는 모습과 글은 chat 과 같다(ConversationSnapshots.test.tsx 가 자세히 본다).
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -54,6 +54,7 @@ function signedIn() {
       return json(202, { ...list[0], status: 'drawing', image_id: null });
     },
     [`GET /api/v1/asset/images/${IMAGE}`]: () => new Response('png', { status: 200 }),
+    'GET /api/v1/story/snapshots/price': () => json(200, { available: true, credits: '160', tier: 'premium', promo: false }),
   });
 }
 
@@ -71,7 +72,7 @@ describe('장면의 장면 그림', () => {
     renderApp(`/story/sessions/${SESSION}`);
 
     const answer = within((await screen.findByText('안녕.')).closest('li') as HTMLElement);
-    await userEvent.click(answer.getByRole('button', { name: '장면 그림' }));
+    await userEvent.click(await answer.findByRole('button', { name: '장면 그림 · 160' }));
 
     await waitFor(() => expect(answer.getByAltText('장면 그림')).toHaveAttribute('src', 'blob:image'));
     expect(seen.filter((request) => request.method === 'POST' && request.url === DRAW)).toHaveLength(1);
@@ -83,6 +84,6 @@ describe('장면의 장면 그림', () => {
 
     const mine = within((await screen.findByText('안녕?')).closest('li') as HTMLElement);
 
-    expect(mine.queryByRole('button', { name: '장면 그림' })).not.toBeInTheDocument();
+    expect(mine.queryByRole('button', { name: /장면 그림/ })).not.toBeInTheDocument();
   });
 });
