@@ -1,13 +1,16 @@
 // web/apps/web/src/pages/settings/SettingsPage.tsx
-// 설정(A12, /settings). 서버가 모르는 화면 쪽 설정: 밝기, 글자 크기, 테이블 방의 단축키. 로그인하지 않아도 열린다.
+// 설정(A12, /settings). 화면 쪽 설정: 밝기, 글자 크기, 테이블 방의 단축키. 로그인하지 않아도 열린다.
 // 고르면 바로 입히고 이 브라우저에 둔다(settingsStore.ts). 저장이 막힌 브라우저면 이 창을 닫을 때까지만 둔다고 알린다.
+// 로그인했으면 목록 거르기(성인 작품 표시, 성향)도 둔다. 이것은 내 정보에 둔다(ListingFilterSection).
 // 선택 동의(마케팅, AI 학습)는 마이페이지(A5)에 있다. 시나리오의 테마는 대표 장르가 정해 여기서 바꾸지 않는다.
 
 import { Button, Checkbox, Notice, Radio } from '@ai-trpg/ui';
 import { Link } from 'react-router';
+import { useSession } from '../../auth/useSession';
 import { DEFAULT_SETTINGS, TEXT_SIZES, textSizeLabel, THEMES, themeLabel } from '../../settings/settings';
 import { updateSettings } from '../../settings/settingsStore';
 import { useSettings } from '../../settings/useSettings';
+import { ListingFilterSection } from './ListingFilterSection';
 
 const SHORTCUTS = [
   ['C', '캐릭터'],
@@ -18,11 +21,12 @@ const SHORTCUTS = [
 
 export function SettingsPage() {
   const { settings, persistent } = useSettings();
+  const session = useSession();
   return (
     <main className="page page--medium">
       <h1>설정</h1>
       <p className="hint">
-        이 브라우저에만 적용됩니다. 선택 동의(마케팅 정보, AI 학습)는 <Link to="/me">내 정보</Link>에서 바꿉니다.
+        목록 거르기 말고는 이 브라우저에만 적용됩니다. 선택 동의(마케팅 정보, AI 학습)는 <Link to="/me">내 정보</Link>에서 바꿉니다.
       </p>
       {persistent ? null : <Notice>이 브라우저는 저장을 막고 있어 창을 닫으면 설정이 처음으로 돌아갑니다.</Notice>}
       <fieldset className="page-section scenario-choices">
@@ -59,6 +63,7 @@ export function SettingsPage() {
           </tbody>
         </table>
       </section>
+      {session ? <ListingFilterSection /> : null}
       <p>
         <Button variant="secondary" onClick={() => updateSettings(DEFAULT_SETTINGS)}>
           처음으로 되돌리기

@@ -2,6 +2,7 @@
 
 """
 홍보 배너(#994)의 규칙. 운영자가 공개 중인 시나리오만 건다. 보는 사람에게는 지금 기간 안이고 볼 수 있는 것만 낸다.
+링크로만 여는 시나리오(#993)와 보는 사람이 거른 것(성인 작품 숨김 #986, 성향 #987)은 공개 목록처럼 빠진다.
 
 거는 때만 "공개 중"을 본다. 그 뒤에 공개를 내리거나 지우면 배너는 남지만 보이지 않는다(읽을 때 거른다).
 다시 공개하면 기간 안이면 다시 보인다.
@@ -18,7 +19,7 @@ from app.assets.ratings import allowed_ratings
 from app.banners import repository
 from app.banners.models import Banner
 from app.banners.schemas import BannerCreate, BannerUpdate, require_order
-from app.listings.repository import PublicRow
+from app.listings.repository import ListingFilter, PublicRow
 
 
 class BannerNotFoundError(Exception):
@@ -39,10 +40,10 @@ class BannerView:
 
 
 async def list_shown(
-    session: AsyncSession, viewer: AccessClaims | None, now: datetime
+    session: AsyncSession, viewer: AccessClaims | None, where: ListingFilter, now: datetime
 ) -> list[tuple[Banner, PublicRow]]:
-    """지금 걸린 배너. 보는 사람(로그인하지 않았으면 None)이 볼 수 있는 등급만이다."""
-    return await repository.list_shown(session, allowed_ratings(viewer), now)
+    """지금 걸린 배너. 보는 사람(로그인하지 않았으면 None)이 볼 수 있는 등급만이고, 그 사람의 설정(where)으로 거른다."""
+    return await repository.list_shown(session, allowed_ratings(viewer), where, now)
 
 
 async def list_for_operator(session: AsyncSession, now: datetime) -> list[BannerView]:

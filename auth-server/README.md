@@ -205,6 +205,7 @@ Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 �
 | DELETE | `/api/v1/auth/me/consents/{item}` | 선택 항목의 동의를 철회한다 | 필요 |
 | POST | `/api/v1/auth/me/withdrawal` | 탈퇴를 요청한다. 본문 `{"password": "..."}`. 모든 세션이 끊기고 7일 뒤에 계정을 비운다 | 필요 |
 | DELETE | `/api/v1/auth/me/withdrawal` | 유예 중인 탈퇴를 취소한다 | 필요 |
+| PATCH | `/api/v1/auth/me/content-settings` | 목록 거르기의 설정을 고친다. 본문 `{"show_adult_content"?: bool, "orientation"?: "all" \| "male" \| "female"}`, 보낸 칸만 바뀐다. 성인 확인 전에 성인 작품 표시를 켜면 403 `adult_content_required`(#986, #987) | 필요 |
 | GET | `/api/v1/auth/me/invite` | 내 초대 코드(없으면 만든다), 초대한 사람으로서 받은 보상의 수와 상한(#990) | 필요 |
 | POST | `/api/v1/auth/identity/verify` | 휴대폰 본인인증. 본인확인 업체에서 받은 `token` 을 낸다 | 필요 |
 | POST | `/api/v1/auth/guardian/request` | 미성년자가 보호자에게 결제 동의를 부탁한다. 보호자의 메일로 동의 링크가 간다 | 필요 |
@@ -302,6 +303,10 @@ API 밖에 상태 확인 주소가 둘 있다. 다른 세 서버와 같은 뜻�
 
 본인인증을 하지 않은 계정은 셋 다 `false` 다. 나이를 모르면 성인으로 보지 않는다.
 `/me` 에는 보호자 동의의 상태(`guardian_consent`)도 실린다. `none`(요청한 적 없음), `requested`, `consented`, `revoked` 중 하나다.
+
+`/me` 의 `content_settings` 는 공개 목록을 거르는 설정이다(`accounts/content_settings.py`). `show_adult_content`(처음은 `true`)와 `orientation`(`all`, `male`, `female`, 처음은 `all`)이다.
+목록을 내는 서버(게임, asset)는 인증 서버를 부르지 않는다. 화면이 이 값을 읽어 공개 목록의 주소에 싣는다(`hide_adult`, `orientation`).
+성인 확인을 하지 않은 사람에게는 서버들이 이미 성인용을 빼서, `show_adult_content` 는 성인 확인을 한 사람이 숨길 때만 뜻이 있다.
 다시 동의를 받아야 하는 필수 항목(`consents_pending`, 예: `["terms"]`)도 실린다. 아래 [동의](#동의)
 
 미성년자(성년 전)는 보호자가 동의해야 결제할 수 있다(#336). 결제를 막는 것은 결제 서버다(#337). 보호자는 계정을 만들지 않는다.

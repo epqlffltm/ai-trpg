@@ -3,6 +3,7 @@
 // 공개 목록과 소개는 로그인하지 않아도 부른다. 그때는 토큰이 없어 전체이용가만 온다(#530). 성인용은 없는 것(목록에서 빠지고 소개는 404)이다.
 
 import { apiRequest } from './http';
+import { listingPreferences } from './listingPreferences';
 import type { Genre, NarrationModels, PublicListingDetail, PublicListingPage } from './types';
 
 const GAME = '/api/v1/game';
@@ -21,7 +22,7 @@ export function fetchListings(
   signal?: AbortSignal,
 ): Promise<PublicListingPage> {
   return apiRequest<PublicListingPage>(`${GAME}/listings`, {
-    query: { ...page, genre: filters.genre, tag: filters.tag, players: filters.players },
+    query: { ...page, genre: filters.genre, tag: filters.tag, players: filters.players, ...listingPreferences() },
     ...(signal ? { signal } : {}),
   });
 }

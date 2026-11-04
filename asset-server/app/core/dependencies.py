@@ -12,6 +12,7 @@ from server_core.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.preferences import Orientation, Preferences
 from app.search import SEARCH_MAX_LENGTH, SEARCH_PATTERN, SearchTerms, parse_search
 
 # 요청 하나가 쓰는 DB 세션
@@ -56,3 +57,18 @@ def get_search(
 
 # 공개 목록 API 가 인자의 형식으로 쓴다
 Search = Annotated[SearchTerms | None, Depends(get_search)]
+
+
+def get_preferences(
+    hide_adult: Annotated[bool, Query()] = False, orientation: Annotated[Orientation | None, Query()] = None
+) -> Preferences:
+    """
+    공개 목록을 거르는 보는 사람의 설정(#986, #987). 주소의 ?hide_adult=..&orientation=.. 에서 읽는다.
+
+    설정은 인증 서버의 내 정보에 있다. 화면이 읽어 싣는다(app/preferences.py).
+    """
+    return Preferences(hide_adult=hide_adult, orientation=orientation)
+
+
+# 공개 목록 API 가 인자의 형식으로 쓴다
+ListingPreferences = Annotated[Preferences, Depends(get_preferences)]

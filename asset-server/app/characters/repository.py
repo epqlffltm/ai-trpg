@@ -128,10 +128,18 @@ def searched(terms: SearchTerms) -> ColumnElement[bool]:
 
 
 async def list_public(
-    session: AsyncSession, ratings: Sequence[Rating], search: SearchTerms | None, limit: int, offset: int
+    session: AsyncSession,
+    ratings: Sequence[Rating],
+    search: SearchTerms | None,
+    orientation_tag: str | None,
+    limit: int,
+    offset: int,
 ) -> tuple[list[tuple[Character, CharacterVersion]], int]:
     """공개 목록의 한 쪽(최근에 게시한 것부터)과 전체 개수. 캐릭터마다 마지막 판과 함께다."""
     condition = listed(ratings) if search is None else listed(ratings) & searched(search)
+    if orientation_tag is not None:
+        # 성향(#987). 마지막 판에 그 태그가 붙은 것만이다
+        condition = condition & CharacterVersion.document['tags'].contains([orientation_tag])
     query = (
         select(Character, CharacterVersion)
         .join(CharacterVersion, latest_join())

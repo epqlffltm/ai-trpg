@@ -147,6 +147,19 @@
         ],
         "type": "object"
       },
+      "ContentSettings": {
+        "additionalProperties": false,
+        "description": "목록을 거르는 내 설정(#986, #987). 고칠 때는 보낸 칸만 바뀐다.\n\nshow_adult_content: 성인 작품을 목록에 보일지. 성인 확인을 한 계정만 켤 수 있다(처음에는 켜져 있다).\norientation: all(거르지 않음), male(남성향 태그만), female(여성향 태그만).",
+        "properties": {
+          "orientation": {
+            "$ref": "#/components/schemas/OrientationEnum"
+          },
+          "show_adult_content": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "Detail": {
         "additionalProperties": false,
         "description": "글 하나만 싣는 응답. 성공의 안내도, 이유를 가르지 않는 거절도 이 모양이다.",
@@ -547,13 +560,16 @@
       },
       "Me": {
         "additionalProperties": false,
-        "description": "GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태를 더한다.",
+        "description": "GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태, 목록을 거르는 설정을 더한다.",
         "properties": {
           "consents_pending": {
             "items": {
               "type": "string"
             },
             "type": "array"
+          },
+          "content_settings": {
+            "$ref": "#/components/schemas/ContentSettings"
           },
           "email": {
             "format": "email",
@@ -591,6 +607,7 @@
         },
         "required": [
           "consents_pending",
+          "content_settings",
           "email",
           "guardian_consent",
           "identity",
@@ -633,6 +650,15 @@
           "rewarded"
         ],
         "type": "object"
+      },
+      "OrientationEnum": {
+        "description": "* `all` - 전체\n* `male` - 남성향\n* `female` - 여성향",
+        "enum": [
+          "all",
+          "male",
+          "female"
+        ],
+        "type": "string"
       },
       "PasswordChangeRequest": {
         "additionalProperties": false,
@@ -683,6 +709,19 @@
           "new_password",
           "token"
         ],
+        "type": "object"
+      },
+      "PatchedContentSettingsRequest": {
+        "additionalProperties": false,
+        "description": "목록을 거르는 내 설정(#986, #987). 고칠 때는 보낸 칸만 바뀐다.\n\nshow_adult_content: 성인 작품을 목록에 보일지. 성인 확인을 한 계정만 켤 수 있다(처음에는 켜져 있다).\norientation: all(거르지 않음), male(남성향 태그만), female(여성향 태그만).",
+        "properties": {
+          "orientation": {
+            "$ref": "#/components/schemas/OrientationEnum"
+          },
+          "show_adult_content": {
+            "type": "boolean"
+          }
+        },
         "type": "object"
       },
       "PublicName": {
@@ -2223,6 +2262,165 @@
           }
         ],
         "summary": "그 항목에 동의한다(본문의 판으로)",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/me/content-settings": {
+      "patch": {
+        "description": "PATCH /api/v1/auth/me/content-settings. 목록을 거르는 내 설정을 고친다(#986, #987).",
+        "operationId": "me_content_settings_partial_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedContentSettingsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentSettings"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "모르는 성향"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "성인 확인 전에 성인 작품 표시를 켜려 했다(adult_content_required)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "목록을 거르는 내 설정(성인 작품 표시, 성향)을 고친다. 보낸 칸만 바뀐다",
         "tags": [
           "me"
         ],

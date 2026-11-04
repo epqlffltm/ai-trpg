@@ -11,7 +11,7 @@ from rest_framework import serializers
 from accounts.consents import signup_consent_problems
 from accounts.email_codes import CODE_LENGTH
 from accounts.invites import INVITE_CODE_INPUT_MAX_LENGTH
-from accounts.models import GuardianNoticeKind, User
+from accounts.models import GuardianNoticeKind, Orientation, User
 from accounts.validators import (
     validate_nickname_format,
     validate_nickname_not_reserved,
@@ -312,3 +312,15 @@ class MyInviteSerializer(serializers.Serializer):
     code = serializers.CharField()
     rewarded = serializers.IntegerField(help_text='초대한 사람으로서 받은 보상의 수')
     limit = serializers.IntegerField(help_text='받을 수 있는 보상의 수. 0 이면 초대 보상이 꺼져 있다')
+
+
+class ContentSettingsSerializer(serializers.Serializer):
+    """
+    목록을 거르는 내 설정(#986, #987). 고칠 때는 보낸 칸만 바뀐다.
+
+    show_adult_content: 성인 작품을 목록에 보일지. 성인 확인을 한 계정만 켤 수 있다(처음에는 켜져 있다).
+    orientation: all(거르지 않음), male(남성향 태그만), female(여성향 태그만).
+    """
+
+    show_adult_content = serializers.BooleanField(required=False)
+    orientation = serializers.ChoiceField(choices=Orientation.choices, required=False)

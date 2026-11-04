@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from app.assets.models import Asset, Rating, ScenarioVersion
-from app.listings.models import Genre, Listing
+from app.listings.models import ORIENTATION_TAGS, Genre, Listing, Orientation
 from app.listings.search import LIKE_ESCAPE, SearchTerms, contains_pattern
 
 # 공개된 것 하나를 보여 주는 데 필요한 것들: 공개 정보, 시나리오의 공통 부분(제목, 만든 사람), 공개 중인 판
@@ -31,12 +31,17 @@ class ListingFilter:
 
     players 는 함께 할 사람의 수다. 추천 인원(min_players ~ max_players) 안에 드는 시나리오만 고른다(#428).
     search 는 검색칸의 검색어다(#984). tag 와 함께 오면 둘 다 맞아야 한다.
+    hide_adult 는 성인 작품을 숨길지다(#986). 볼 수 있는 사람이 목록에서 숨기는 설정이다.
+    볼 수 없는 사람에게는 이미 없다.
+    orientation 은 성향이다(#987). 고르면 그 태그(ORIENTATION_TAGS)가 붙은 것만 나온다.
     """
 
     genre: Genre | None = None
     tag: str | None = None
     players: int | None = None
     search: SearchTerms | None = None
+    hide_adult: bool = False
+    orientation: Orientation | None = None
 
 
 async def find_listing(session: AsyncSession, scenario_id: uuid.UUID) -> Listing | None:
@@ -69,7 +74,7 @@ def visible(allowed_ratings: list[Rating]) -> Select[PublicRow]:
 
 
 def filtered(query: Select[PublicRow], where: ListingFilter) -> Select[PublicRow]:
-    """장르, 태그, 인원, 검색어로 거른다. 비워 둔 조건은 거르지 않는다."""
+    """장르, 태그, 인원, 검색어, 성인 작품 숨김, 성향으로 거른다. 비워 둔 조건은 거르지 않는다."""
     if where.genre is not None:
         query = query.where(Listing.genre == where.genre)
     if where.tag is not None:
@@ -78,6 +83,10 @@ def filtered(query: Select[PublicRow], where: ListingFilter) -> Select[PublicRow
         query = query.where(Listing.min_players <= where.players, Listing.max_players >= where.players)
     if where.search is not None:
         query = searched(query, where.search)
+    if where.hide_adult:
+        query = query.where(Listing.rating == Rating.ALL)
+    if where.orientation is not None:
+        query = query.where(Listing.tags.contains([ORIENTATION_TAGS[where.orientation]]))
     return query
 
 

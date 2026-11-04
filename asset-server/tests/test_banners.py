@@ -4,6 +4,7 @@
 홍보 배너(#994)를 검증한다. 운영자가 공개된 캐릭터와 세계관을 걸고, 누구나 지금 걸린 것을 차례대로 본다.
 
   - 비공개로 돌렸거나 숨긴 작품, 볼 수 없는 등급, 기간 밖의 배너는 보이지 않는다. 작품을 지우면 배너도 지워진다
+  - 공개 목록처럼 보는 사람의 설정(성인 작품 숨김, 성향)으로 거른다
   - 운영자의 주소는 운영자가 아니면 404 다
 """
 
@@ -41,18 +42,18 @@ async def hang(client: AsyncClient, headers: dict, kind: str, target: dict, **fi
     return response.json()
 
 
-async def public_world(client: AsyncClient, headers: dict, name: str) -> dict:
+async def public_world(client: AsyncClient, headers: dict, name: str, **fields) -> dict:
     """공개로 두고 게시한 세계관."""
     ari, beo = await character(client, headers, '아리'), await character(client, headers, '버')
-    world = await create_world(client, headers, {**full_world(ari['id'], beo['id']), 'name': name})
+    world = await create_world(client, headers, {**full_world(ari['id'], beo['id']), 'name': name, **fields})
     await client.patch(f'{WORLDS_URL}/{world["id"]}', json={'visibility': 'public'}, headers=headers)
     assert (await publish(client, headers, world)).status_code == status.HTTP_201_CREATED
     return world
 
 
-async def shown(client: AsyncClient, headers: dict | None = None) -> list[str]:
+async def shown(client: AsyncClient, headers: dict | None = None, params: dict | None = None) -> list[str]:
     """지금 보이는 배너의 작품 이름, 차례대로."""
-    response = await client.get(BANNERS_URL, headers=headers or {})
+    response = await client.get(BANNERS_URL, params=params or {}, headers=headers or {})
     assert response.status_code == status.HTTP_200_OK, response.text
     return [(item['character'] or item['world'])['name'] for item in response.json()['items']]
 
@@ -118,6 +119,21 @@ async def test_an_adult_banner_is_shown_only_to_adults(client: AsyncClient, oper
 
     assert (await shown(client), await shown(client, player)) == ([], [])
     assert await shown(client, adult) == ['밤의 세라']
+
+
+async def test_banners_follow_the_viewer_preferences(client: AsyncClient, operator: dict, adult: dict):
+    night = await make_public(client, operator, name='밤의 세라', rating='adult', tags=['남성향'])
+    day = await make_public(client, operator, name='낮의 세라', tags=['여성향'])
+    summer = await public_world(client, operator, '여름 학원', tags=['여성향'])
+    await hang(client, operator, 'character', night, position=1)
+    await hang(client, operator, 'character', day, position=2)
+    await hang(client, operator, 'world', summer, position=3)
+
+    # 공개 목록처럼 성인 작품 숨김(#986)과 성향(#987)으로 거른다. 캐릭터와 세계관 모두다
+    assert await shown(client, adult) == ['밤의 세라', '낮의 세라', '여름 학원']
+    assert await shown(client, adult, {'hide_adult': 'true'}) == ['낮의 세라', '여름 학원']
+    assert await shown(client, adult, {'orientation': 'female'}) == ['낮의 세라', '여름 학원']
+    assert await shown(client, adult, {'orientation': 'male'}) == ['밤의 세라']
 
 
 async def test_banners_show_only_within_their_period(client: AsyncClient, operator: dict):

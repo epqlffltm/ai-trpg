@@ -18,7 +18,7 @@ from app.characters import service
 from app.characters.documents import CharacterDocument
 from app.characters.models import Character, CharacterVersion
 from app.characters.schemas import PublicCharacterDetail, PublicCharacterPage, PublicCharacterSummary
-from app.core.dependencies import Paging, Search, Session
+from app.core.dependencies import ListingPreferences, Paging, Search, Session
 
 router = APIRouter(prefix='/listings/characters', tags=['listings'])
 
@@ -39,13 +39,16 @@ def to_public_summary(character: Character, version: CharacterVersion) -> Public
 
 
 @router.get('', response_model=PublicCharacterPage, status_code=status.HTTP_200_OK)
-async def list_public(user: OptionalUser, session: Session, paging: Paging, search: Search) -> PublicCharacterPage:
+async def list_public(
+    user: OptionalUser, session: Session, paging: Paging, search: Search, preferences: ListingPreferences
+) -> PublicCharacterPage:
     """
     공개 캐릭터의 목록. 최근에 게시한 것부터다.
 
     검색어(q)가 "#"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).
+    hide_adult, orientation 은 보는 사람의 설정이다(#986, #987, app/preferences.py). 화면이 싣는다.
     """
-    rows, total = await service.list_public(session, user, search, paging.limit, paging.offset)
+    rows, total = await service.list_public(session, user, search, preferences, paging.limit, paging.offset)
     return PublicCharacterPage(
         items=[to_public_summary(character, version) for character, version in rows], total=total
     )
