@@ -75,7 +75,8 @@ describe('알림', () => {
     signedIn();
     renderApp('/');
 
-    await userEvent.click(await screen.findByRole('link', { name: '알림, 읽지 않은 것 2개' }));
+    await userEvent.click(await screen.findByRole('button', { name: '알림, 읽지 않은 것 2개' }));
+    await userEvent.click(within(await screen.findByRole('region', { name: '알림 창' })).getByRole('link', { name: '모두 보기' }));
     const list = within(await screen.findByRole('list', { name: '알림' }));
     expect(await list.findByRole('link', { name: '충전했습니다: 1,000원 · 골드 1,000' })).toHaveAttribute('href', `/wallet/orders/${ORDER}`);
     expect(await list.findByRole('link', { name: /"종탑" 테이블의 서술 모델 GPT X: 11월 21일에 끝납니다\(7일 남음\)/ })).toHaveAttribute('href', `/trpg/tables/${TABLE}`);
@@ -90,11 +91,11 @@ describe('알림', () => {
     const list = within(await screen.findByRole('list', { name: '알림' }));
     await userEvent.click(await list.findByRole('button', { name: '읽음: 충전했습니다: 1,000원 · 골드 1,000' }));
     await vi.waitFor(() => expect(list.getAllByText('새 알림')).toHaveLength(1));
-    expect(await screen.findByRole('link', { name: '알림, 읽지 않은 것 1개' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '알림, 읽지 않은 것 1개' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '모두 읽음' }));
     await vi.waitFor(() => expect(posts(seen, `${BOX}/read-all`)).toEqual([{ up_to: 12 }]));
-    expect(await screen.findByRole('link', { name: '알림' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '알림' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '모두 읽음' })).toBeNull();
   });
 

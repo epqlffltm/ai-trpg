@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
+import { openAccountMenu } from '../../test/accountMenu';
 import { renderApp } from '../../test/renderApp';
 import { ME } from '../../test/tableFixtures';
 
@@ -46,19 +47,22 @@ function order(status: string, extra: Record<string, unknown> = {}) {
 }
 
 function signedIn(routes: Record<string, (request: SeenRequest) => Response> = {}) {
-  let wallet = 0;
+  let confirmed = false;
   return installFakeFetch({
     [`POST ${REFRESH_PATH}`]: () => json(200, tokens('a1')),
     'GET /api/v1/auth/me': () => json(200, { nickname: '모험가', public_id: ME }),
-    // 처음에는 0, 다시 읽으면 1000 이다. 승인된 뒤 지갑을 다시 읽는지 머리말의 잔액으로 본다
+    // 승인 전에는 0, 승인된 뒤에는 1000 이다. 승인된 뒤 내 메뉴의 잔액이 새 값인지 본다
     [`GET ${BILLING}/wallet`]: () => {
-      wallet += 1;
-      return json(200, { paid: wallet === 1 ? '0' : '1000', free: '0', total: wallet === 1 ? '0' : '1000', next_expiry: null });
+      const paid = confirmed ? '1000' : '0';
+      return json(200, { paid, free: '0', total: paid, next_expiry: null });
     },
     [`GET ${BILLING}/wallet/entries`]: () => json(200, { entries: [], next_before: null }),
     [`GET ${BILLING}/products`]: () => json(200, { products: PRODUCTS }),
     [`POST ${BILLING}/orders`]: () => json(201, order('pending')),
-    [`POST ${BILLING}/orders/${ORDER_ID}/confirm`]: () => json(200, order('paid', { paid_at: '2026-11-04T00:01:00Z' })),
+    [`POST ${BILLING}/orders/${ORDER_ID}/confirm`]: () => {
+      confirmed = true;
+      return json(200, order('paid', { paid_at: '2026-11-04T00:01:00Z' }));
+    },
     ...routes,
   });
 }
@@ -142,7 +146,8 @@ describe('결제창이 돌아오는 화면', () => {
     expect(await screen.findByText('충전을 마쳤습니다: 골드 1,000')).toBeInTheDocument();
     expect(confirms(seen)).toEqual(['tviva20261104']);
     expect(screen.getByRole('link', { name: '지갑 보기' })).toBeInTheDocument();
-    expect(await screen.findByRole('link', { name: '지갑: 골드 1000 · 실버 0' })).toBeInTheDocument();
+    // 잔액은 내 메뉴에 있다. 승인된 뒤에 펼치면 새 값이다
+    expect(await (await openAccountMenu()).findByRole('link', { name: '지갑: 골드 1000 · 실버 0' })).toBeInTheDocument();
   });
 
   it('결과를 모르면 다시 확인은 같은 결제 번호로 보낸다', async () => {

@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
+import { openAccountMenu } from '../../test/accountMenu';
 import { renderApp } from '../../test/renderApp';
 
 const ASSET = '/api/v1/asset/admin';
@@ -95,7 +96,7 @@ describe('신고 처리', () => {
     renderApp('/operator/reports');
 
     expect(await screen.findByRole('heading', { name: '찾을 수 없습니다' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '신고 처리' })).not.toBeInTheDocument();
+    expect((await openAccountMenu()).queryByRole('link', { name: '신고 처리' })).not.toBeInTheDocument();
     expect(seen.some((request) => request.url.includes('/admin/'))).toBe(false);
   });
 
@@ -103,7 +104,7 @@ describe('신고 처리', () => {
     signedInAs(['operator']);
     renderApp('/');
 
-    await userEvent.click(await screen.findByRole('link', { name: '신고 처리' }));
+    await userEvent.click((await openAccountMenu()).getByRole('link', { name: '신고 처리' }));
 
     // 목록은 읽기 전에도 빈 채로 있다. 받은 것이 그려질 때까지 기다린다
     const characters = await screen.findByRole('list', { name: '신고된 캐릭터' });

@@ -113,6 +113,7 @@
 
 /* 위쪽 줄. 위에 붙이지(sticky) 않는다. 화면 안에 이미 위에 붙는 것(좁은 화면의 HP 한 줄 등)이 있고, 좁은 화면에서 대화를 가린다 */
 .app-header {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -207,6 +208,115 @@
   .app-header__search {
     order: 4;
     flex-basis: 100%;
+  }
+}
+
+/* 위쪽 줄의 펼침 창(알림 종, 프로필 메뉴). 단추 바로 아래 오른쪽에 붙는 불투명한 종이 창이다 */
+.header-popover {
+  position: relative;
+}
+
+.header-popover__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  box-shadow: var(--ui-shadow);
+}
+
+.header-popover__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.header-popover__more {
+  display: block;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-border);
+  font-weight: 600;
+  text-align: center;
+}
+
+.app-header__notifications,
+.app-header__profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.app-header__notifications[aria-expanded='true'],
+.app-header__profile[aria-expanded='true'] {
+  border-color: var(--ui-accent);
+}
+
+/* 프로필 메뉴: 위에 프로필 카드(닉네임, 잔액, 출석·충전), 그 아래 괘선으로 나눈 묶음 */
+.profile-panel__card {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-subtle);
+}
+
+.profile-panel__actions {
+  display: flex;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.profile-panel__links {
+  display: grid;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.profile-panel__links a {
+  display: block;
+  padding: 6px 4px;
+  color: var(--ui-text);
+  text-decoration: none;
+}
+
+.profile-panel__links a:hover {
+  background: var(--ui-surface-subtle);
+}
+
+/* 좁은 화면의 위쪽 줄: 밝기와 성인 작품 표시는 숨긴다(설정 화면에 있다). 펼침 창은 화면 폭에 맞춘다 */
+@media (max-width: 767px) {
+  .app-header .theme-switch {
+    display: none;
+  }
+
+  .header-popover {
+    position: static;
+  }
+
+  .header-popover__panel {
+    top: auto;
+    right: 16px;
+    left: 16px;
+    width: auto;
   }
 }
 
@@ -1530,10 +1640,10 @@ a.ui-button {
 
 /* 지갑(A6). 머리의 잔액, 잔액 칸, 원장. 크레딧(골드, 실버)이다. 판 안의 돈(.money)과 다르다 */
 .app-header__balance {
-  margin-right: 8px;
+  justify-self: start;
   padding: 2px 10px;
   border: 1px solid var(--ui-border);
-  border-radius: 999px;
+  border-radius: var(--ui-radius);
   color: inherit;
   font-size: 0.85em;
   font-variant-numeric: tabular-nums;
@@ -2106,13 +2216,6 @@ a.ui-button {
 }
 
 /* 알림(A10). 머리의 "알림"과 읽지 않은 수, 알림 목록. 읽지 않은 줄은 왼쪽 줄로 가른다 */
-.app-header__notifications {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-right: 8px;
-  white-space: nowrap;
-}
 
 .app-header__badge {
   min-width: 1.5em;
