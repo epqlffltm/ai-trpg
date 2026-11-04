@@ -201,11 +201,11 @@ write_new() {
 
 # 아홉 개의 .env 를 만든다. 주소는 compose 가 덮어쓰므로 비밀만 적는다.
 # 서버끼리 함께 아는 비밀은 두 파일에 같은 값을 넣는다(결제 서버와 게임 서버, 결제 서버와 인증 서버,
-# 알림 서버와 게임·결제·게시판·asset·chat·story 서버, asset 서버와 chat·story 서버, 결제 서버와 chat·story 서버)
+# 알림 서버와 게임·결제·게시판·asset·chat·story 서버, asset 서버와 게임·chat·story 서버, 결제 서버와 chat·story 서버)
 write_env_files() {
   local game_secret auth_secret notify_secret billing_notify_secret board_notify_secret chat_asset_secret
   local chat_billing_secret asset_notify_secret chat_notify_secret story_asset_secret story_billing_secret
-  local story_notify_secret
+  local story_notify_secret trpg_asset_secret
   game_secret="$(throwaway)"
   auth_secret="$(throwaway)"
   notify_secret="$(throwaway)"
@@ -218,6 +218,7 @@ write_env_files() {
   story_asset_secret="$(throwaway)"
   story_billing_secret="$(throwaway)"
   story_notify_secret="$(throwaway)"
+  trpg_asset_secret="$(throwaway)"
   write_new .env <<EOF
 POSTGRES_PASSWORD=$(throwaway)
 AUTH_DB_PASSWORD=$(throwaway)
@@ -243,9 +244,11 @@ EOF
 SECRET_KEY=$(throwaway)
 BILLING_SECRET=$auth_secret
 EOF
+  # compose 가 게임 서버에 ASSET_URL 을 주므로(장면 그림, #983) asset 서버와 함께 아는 비밀이 없으면 뜨지 않는다
   write_new trpg-server/.env <<EOF
 BILLING_SECRET=$game_secret
 NOTIFICATION_SECRET=$notify_secret
+ASSET_SECRET=$trpg_asset_secret
 EOF
   write_new board-server/.env <<EOF
 NOTIFICATION_SECRET=$board_notify_secret
@@ -275,6 +278,7 @@ EOF
   write_new asset-server/.env <<EOF
 CHAT_SERVER_SECRET=$chat_asset_secret
 STORY_SERVER_SECRET=$story_asset_secret
+TRPG_SERVER_SECRET=$trpg_asset_secret
 NOTIFICATION_SECRET=$asset_notify_secret
 EOF
   write_new chat-server/.env <<EOF
