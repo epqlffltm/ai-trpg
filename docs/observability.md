@@ -179,9 +179,10 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | trpg-server | 마감이 지난 라운드 닫기, 크레딧을 기다리는 시간이 지난 라운드 마무리, 서술이 사라진 라운드 다시 맡기기(서버의 시계가 5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `closed`, `credit_waits`, `recovered`, `gave_up`) | `round.close_overdue` |
 | trpg-server | 끝나지 않은 서술 값의 청구를 결제 서버에 마저 맡기기(정리 작업이 5초마다 한 바퀴. 바퀴마다 새 `job_id`) | `charge.settle` |
 | chat-server, story-server | 끝나지 않은 말 한 번의 청구를 결제 서버에 마저 맡기기(정리 작업이 5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `settled`, `duration_ms`) | `charge.settle` |
-| chat-server, story-server | 끝나지 않은 장면 그림의 청구를 마저 맡기고, 그리는 도중에 오래 남은 것을 실패로 적어 돌려주기(정리 작업이 5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `settled`, `duration_ms`) | `snapshot.settle` |
+| chat-server, story-server, trpg-server | 끝나지 않은 장면 그림의 청구를 마저 맡기고, 그리는 도중에 오래 남은 것을 실패로 적어 돌려주기(정리 작업이 5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `settled`, `duration_ms`) | `snapshot.settle` |
 | trpg-server | 서술 모델의 은퇴를 알리고, 은퇴하면 같은 회사의 다른 모델로 바꾸기(지켜보기가 한 시간마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `noticed`, `replaced`, `stranded`, `failed`) | `model.retirement` |
 | trpg-server | 발송함의 알림을 알림 서버에 보내기(5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `sent`, `retried`, `rejected`, `failed`, `dropped`) | `notification.send` |
+| trpg-server | 테이블의 장면 그림 한 장을 그려 asset 서버에 맡기고 값을 확정하거나 돌려주기(#983) | `snapshot.draw` |
 | trpg-server | 로어북 항목의 벡터 만들기 | `lore.index` |
 | trpg-server | 지난 라운드(기억)의 벡터 만들기 | `memory.index` |
 | auth-server | 발송함의 메일 보내기(워커가 한 번 훑는 것) | `mail.deliver_outgoing` |
@@ -346,7 +347,8 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `lore.index` | game | 로어북 색인 |
 | `memory.index` | game | 기억 색인 |
 | `charge.settle` | game, chat, story | 끝나지 않은 청구(게임은 서술 값, chat·story 는 말 한 번)를 결제 서버에 마저 맡기기(정리 작업의 한 바퀴) |
-| `snapshot.settle` | chat, story | 끝나지 않은 장면 그림의 청구를 결제 서버에 마저 맡기기(정리 작업의 한 바퀴). 맡기지 못한 그림마다 `snapshot_id` 를 싣는다 |
+| `snapshot.draw` | game | 테이블의 장면 그림 한 장을 그리기(요청이 맡긴 작업. `snapshot:<id>` 의 이름) |
+| `snapshot.settle` | chat, story, game | 끝나지 않은 장면 그림의 청구를 결제 서버에 마저 맡기기(정리 작업의 한 바퀴). 맡기지 못한 그림마다 `snapshot_id` 를 싣는다 |
 | `model.retirement` | game | 서술 모델의 은퇴를 알리고 바꾸기(지켜보기의 한 바퀴, 한 시간마다. 라운드가 열린 뒤 그 테이블 하나도 본다) |
 | `notification.send` | game, billing, board | 알림 서버에 알림을 보내기. 게임·게시판 서버는 발송함 작업의 한 바퀴(5초마다), 결제 서버는 정리 작업(`sweep.run`) 안에서 못 보낸 알림마다 한 줄이다. 못 보낸 알림마다 발송함의 번호(게임 `notification_id`, 결제 `notice_id`), `kind`, `reason` 을 싣는다. 받는 사람과 `payload` 는 싣지 않는다 |
 | `ai_log.prune` | game | AI 호출 기록에서 보관 기간(기본 30일)이 지난 원문 비우기(정리 작업의 한 바퀴, 한 시간마다. `cleared`, `retention_days`) |

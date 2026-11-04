@@ -31,6 +31,7 @@
 - [테이블](#테이블)
 - [라운드](#라운드)
 - [서술 값](#서술-값)
+- [장면 그림](#장면-그림)
 - [모델 목록](#모델-목록)
 - [알림 보내기](#알림-보내기)
 - [탈퇴](#탈퇴)
@@ -254,6 +255,10 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/tables/{id}/rounds/current` | 가장 최근 라운드. 진행 중이면 지금 선언을 받는 라운드 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/rounds/{number}` | 라운드 하나 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/rounds/{number}/charges` | 그 라운드의 서술 값을 내는 사람마다의 청구(`[{"user_id", "status", "credits"}]`). `credits` 는 결제 서버가 실제로 홀드한 값이고 걸기 전에는 `null` 이다. 앉은 사람만([라운드의 값](#라운드의-값)) | access 토큰 |
+| POST | `/api/v1/game/tables/{id}/rounds/{number}/snapshot` | 그 라운드의 장면을 그림 한 장으로 그리기 시작한다(#983). 202. 앉은 사람 누구나. 누른 사람이 낸다([장면 그림](#장면-그림)) | access 토큰 |
+| GET | `/api/v1/game/tables/{id}/snapshots` | 그 테이블의 장면 그림들(`[{"id", "round_number", "status", "by_me", "code", "created_at"}]`). 만든 차례. 앉은 사람만 | access 토큰 |
+| GET | `/api/v1/game/tables/{id}/snapshots/{snapshot_id}/image` | 장면 그림의 바이트. 이 서버가 asset 서버에서 받아 대신 내준다. 앉은 사람만 | access 토큰 |
+| GET | `/api/v1/game/snapshots/price` | 장면 그림 한 장의 값과 그릴 수 있는지(`available`, `credits`, `tier`, `promo`) | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/rounds/current/declaration` | 선언 내기. 다시 내면 바뀐다. `action` 으로 행동(판정)을 하나 붙일 수 있다. 모두 냈으면 라운드가 닫기 시작한다(`closing`). 다음 라운드는 스트림으로 온다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/rounds/current/close` | 라운드 닫기. 202. 방장만. 선언을 기다리지 않고 넘어간다. 오래 멈춘 라운드에 다시 부르면 서술을 다시 맡긴다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/rounds/current/revert` | 바로 앞 라운드 되돌리기(#288). 방장만. 닫기 직전의 상태로 돌아가 같은 번호의 라운드가 다시 열린다. 아래의 "되돌리기" | access 토큰 |
@@ -2794,6 +2799,31 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **모델을 바꾸면** 아직 서술하지 않은 지금 라운드의 알린 값도 새 모델의 것으로 바뀌고(`narration_model_changed`, `narration_model_replaced` 의 `price`), 홀드한 값은 새 가격표로 다시 걸 때(서술 전)까지 비운다.
 - **알릴 수 없으면** 비운다(`null`). 결제 서버 없이 도는 서버, 모델이 없는 옛 테이블, 지금 팔지 않는 모델, 가격 목록을 받지 못한 때다. 라운드를 여는 것은 막지 않는다.
 - 실버와 골드 중 무엇으로 냈는지는 아직 싣지 않는다. 결제 서버의 홀드의 답이 나눠 주는지 확인한 뒤 더한다.
+
+## 장면 그림
+
+테이블에 앉은 사람이 라운드의 장면을 그림 한 장으로 만든다(`app/snapshots/`, #983). chat·story 서버의 장면 그림과 같은 길이다.
+
+- **누가 내나.** 누른 사람이 낸다. 앉은 사람 누구나 누를 수 있다. 가격표는 `narration.image.<모델의 이름에서 점을 붙임표로 바꾼 것>`(`narration.image.gemini-nano-banana-2-1`)이고 홀드의 이름표는 `game:img:<기록의 id>` 다. 결제 서버는 게임 서버에 `narration` 머리의 가격표만 허락한다.
+- **차례.** 기록을 저장하고(한 테이블에 그리는 중인 것은 하나다. 둘째는 409 `snapshot_in_progress`), 홀드를 건 뒤 202 로 답한다. 그림은 작업 관리자(`app/core/jobs.py`, 종류 `snapshot.draw`)가 그리고, 누른 사람의 토큰으로 asset 서버에 그 사람의 그림으로 맡긴 뒤 확정한다. 그리지 못하면(공급자의 거절, asset 이 죽었다) 실패로 적고 돌려준다. 같은 실패를 저절로 되풀이하지 않는다.
+- **지시.** 그 라운드의 장면(앉은 사람 모두에게 보이는 GM 의 서술, 앞의 800자)과 테이블의 제목, 캐릭터의 이름으로 만든다. GM 만 보는 판의 글은 넣지 않는다. 등급과 상관없이 전체이용가로 그린다. 그림 모델은 상태를 바꾸지 못한다.
+- **보기.** 앉은 사람 모두가 목록에서 보고, 그림의 바이트는 이 서버가 asset 서버에서 서명만으로 받아 대신 내준다(`GET /api/v1/asset/service/trpg/images/{id}/kept`). asset 서버는 이 서버가 맡긴 그림만 내준다. 실패의 까닭(`code`)은 누른 사람에게만 싣는다.
+- **남은 것.** 서버가 꺼져 그리다 만 것은 정리 작업(`app/snapshots/settler.py`)이 실패로 적고 돌려준다(10분이 지나면 `abandoned`). 확정이나 반환을 못 했으면 같은 작업이 5초, 10초 … 5분마다 다시 맡긴다.
+- **실패.** 402 `credit_short`·`gold_required`, 422 `not_drawable`(장면의 글자가 없다), 503 `snapshot_unavailable`(그리지 않는 서버이거나 팔지 않는다)·`billing_unavailable`·`asset_unavailable`, 404(앉지 않은 테이블, 없는 라운드, `snapshot_not_found`).
+
+| 환경 변수 | 기본값 | 설명 |
+| --- | --- | --- |
+| `SNAPSHOT_PROVIDER` | `off` | 그림 provider. `off` 면 만들지 않는다. `gemini`(Nano Banana, `GEMINI_API_KEY`), `comfyui`(곁의 ComfyUI, 개발·시험용), `fake`(테스트용) |
+| `SNAPSHOT_MODEL` | `gemini-nano-banana-2.1` | 그림 모델의 이름. 가격표 이름이 여기서 나온다 |
+| `SNAPSHOT_TIMEOUT_SECONDS` | `120` | 그림 한 장의 시간 상한(초, 600 까지) |
+| `COMFYUI_URL`, `COMFYUI_CHECKPOINT` | `http://127.0.0.1:8188`, 없음 | `comfyui` 일 때의 주소와 체크포인트 |
+| `ASSET_URL` | 없음 | asset 서버의 주소. 비우면 장면 그림을 만들지 않는다(`SNAPSHOT_PROVIDER` 를 켜도 `off` 와 같다). 도커로 띄우면 `docker-compose.yml` 이 넣는다 |
+| `ASSET_SECRET` | 없음 | asset 서버를 부를 때 서명하는 비밀. asset 서버의 `TRPG_SERVER_SECRET` 과 같은 값, 32자 이상. `ASSET_URL` 을 적었으면 없을 때 서버가 뜨지 않는다. 비밀값이다(`tools/fill_env.py` 가 맞춘다) |
+| `ASSET_TIMEOUT_SECONDS` | `10` | asset 서버를 한 번 부르는 시간의 상한(초, 60 까지) |
+
+**알려진 한계**
+- 그림을 지우는 길은 아직 없다. 테이블을 지우면 기록의 테이블 칸만 비고 asset 서버의 그림은 남는다(그린 사람의 그림이다).
+- 그리는 일은 이 서버 프로세스 안에서 돈다. 그리는 도중에 서버가 꺼지면 그 한 장은 실패로 돌려준다.
 
 ## 모델 목록
 

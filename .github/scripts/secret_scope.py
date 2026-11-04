@@ -120,6 +120,9 @@ SECRETS = [
     *secrets('chat-server', ['chat-server'], 'ASSET_SECRET'),
     # story 서버가 asset 서버를 부를 때 서명하는 비밀. 서버만 쓴다. 마이그레이션(story-migrate)에는 주지 않는다
     *secrets('story-server', ['story-server'], 'ASSET_SECRET'),
+    # 게임 서버가 asset 서버에 장면 그림을 맡기고 받을 때 서명하는 비밀(#983). 서버만 쓴다.
+    # 마이그레이션(trpg-migrate)에는 주지 않는다
+    *secrets('trpg-server', ['trpg-server'], 'ASSET_SECRET'),
     # chat 서버가 결제 서버를 부를 때 서명하는 비밀. 서버만 쓴다. 마이그레이션(chat-migrate)에는 주지 않는다
     *secrets('chat-server', ['chat-server'], 'BILLING_SECRET'),
     # story 서버가 결제 서버를 부를 때 서명하는 비밀. 서버만 쓴다. 마이그레이션(story-migrate)에는 주지 않는다
