@@ -13,7 +13,20 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, SmallInteger, String, Text, false, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+    Uuid,
+    false,
+    func,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -83,6 +96,7 @@ class Listing(Base):
         ),
         # 공개 중이면 공개한 시각이 있고, 아니면 없다. 둘이 어긋난 행이 생기지 않는다
         CheckConstraint('(version_id IS NULL) = (published_at IS NULL)', name='published_together'),
+        CheckConstraint('heart_count >= 0', name='heart_count_not_negative'),
         # 공개 목록의 한 줄 소개 검색(ILIKE '%글%')을 빠르게 하는 글자 조각 색인(#984, app/listings/search.py)
         Index(
             'ix_listings_tagline_trgm',
@@ -132,7 +146,32 @@ class Listing(Base):
     # 시나리오 ID 는 추측할 수 없는 UUID 다. 링크를 바꾸는 길은 없다. 막으려면 공개를 내린다
     unlisted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
+    # 관심(하트)을 둔 사람의 수(#989). 관심을 두고 거둘 때 같은 트랜잭션에서 하나씩 더하고 뺀다(app/listings/hearts.py).
+    # 목록마다 세지 않으려고 적어 둔다. 공개를 내렸다가 다시 올려도 남는다
+    heart_count: Mapped[int] = mapped_column(Integer, default=0, server_default='0')
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class ListingHeart(Base):
+    """
+    한 사람이 시나리오 하나에 둔 관심(#989). 둘 수 있는 것은 공개 중이고 그 사람이 볼 수 있는 시나리오다.
+
+    한 사람에 한 번이다(기본 키). 시나리오의 행을 지우면 함께 지워진다. 탈퇴하면 그 사람의 것을 지운다.
+    """
+
+    __tablename__ = 'listing_hearts'
+    __table_args__ = (
+        # 내 관심 작품: 최근에 둔 것부터
+        Index('ix_listing_hearts_user_created', 'user_id', 'created_at'),
+    )
+
+    # 인증 서버의 public_id 다
+    user_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    scenario_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey('listings.scenario_id', ondelete='CASCADE'), primary_key=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

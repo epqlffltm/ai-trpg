@@ -12,13 +12,17 @@
 import uuid
 
 from fastapi import APIRouter, status
-from server_core.auth.dependencies import OptionalUser
+from server_core.auth.dependencies import CurrentUser, OptionalUser
 
 from app.characters import service
 from app.characters.documents import CharacterDocument
 from app.characters.models import Character, CharacterVersion
 from app.characters.schemas import PublicCharacterDetail, PublicCharacterPage, PublicCharacterSummary
+from app.characters.service import CharacterNotFoundError
 from app.core.dependencies import Creator, ListingPreferences, Paging, Search, Session
+from app.hearts import service as hearts
+from app.hearts.kinds import CHARACTER_HEARTS
+from app.hearts.schemas import HeartState
 
 router = APIRouter(prefix='/listings/characters', tags=['listings'])
 
@@ -36,6 +40,7 @@ def to_public_summary(character: Character, version: CharacterVersion) -> Public
         rating=document.rating,
         image_id=document.image_id,
         published_at=version.created_at,
+        heart_count=character.heart_count,
     )
 
 
@@ -61,6 +66,37 @@ async def list_public(
     )
 
 
+@router.get('/hearted', response_model=PublicCharacterPage, status_code=status.HTTP_200_OK)
+async def list_hearted(user: CurrentUser, session: Session, paging: Paging) -> PublicCharacterPage:
+    """
+    내가 관심(하트)을 둔 캐릭터(#989). 최근에 둔 것부터다.
+
+    지금 열 수 있는 것만 나온다(비공개로 돌렸거나 숨긴 것, 볼 수 없는 등급은 빠진다). 링크 공개도 나온다.
+    """
+    rows, total = await hearts.list_mine(session, CHARACTER_HEARTS, user, paging.limit, paging.offset)
+    return PublicCharacterPage(
+        items=[to_public_summary(character, version) for character, version in rows], total=total
+    )
+
+
+@router.get('/{character_id}/heart', response_model=HeartState, status_code=status.HTTP_200_OK)
+async def read_heart(character_id: uuid.UUID, user: CurrentUser, session: Session) -> HeartState:
+    """내가 관심을 두었는지와 관심의 수(#989). 열 수 없는 캐릭터이면 404 다."""
+    return await hearts.state_of(session, CHARACTER_HEARTS, user, character_id, CharacterNotFoundError)
+
+
+@router.put('/{character_id}/heart', response_model=HeartState, status_code=status.HTTP_200_OK)
+async def put_heart(character_id: uuid.UUID, user: CurrentUser, session: Session) -> HeartState:
+    """관심을 둔다(#989). 이미 두었으면 그대로다. 열 수 없는 캐릭터이면 404 다."""
+    return await hearts.put_heart(session, CHARACTER_HEARTS, user, character_id, CharacterNotFoundError)
+
+
+@router.delete('/{character_id}/heart', response_model=HeartState, status_code=status.HTTP_200_OK)
+async def take_heart(character_id: uuid.UUID, user: CurrentUser, session: Session) -> HeartState:
+    """관심을 거둔다(#989). 두지 않았거나 비공개로 돌린 것이어도 된다."""
+    return await hearts.take_heart(session, CHARACTER_HEARTS, user, character_id)
+
+
 @router.get('/{character_id}', response_model=PublicCharacterDetail, status_code=status.HTTP_200_OK)
 async def read_public(character_id: uuid.UUID, user: OptionalUser, session: Session) -> PublicCharacterDetail:
     """공개 캐릭터 하나. 마지막 판의 문서다."""
@@ -71,4 +107,5 @@ async def read_public(character_id: uuid.UUID, user: OptionalUser, session: Sess
         version=version.number,
         published_at=version.created_at,
         document=CharacterDocument.model_validate(version.document),
+        heart_count=character.heart_count,
     )

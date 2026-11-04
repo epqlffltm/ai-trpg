@@ -5504,6 +5504,25 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "HeartState": {
+        "description": "내가 관심을 두었는지와 관심의 수(#989). 두고 거둔 뒤의 값이다.",
+        "properties": {
+          "heart_count": {
+            "title": "Heart Count",
+            "type": "integer"
+          },
+          "hearted": {
+            "title": "Hearted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "hearted",
+          "heart_count"
+        ],
+        "title": "HeartState",
+        "type": "object"
+      },
       "HindranceOut": {
         "description": "입은 부상이 판정에 준 것. 보정을 깎았거나 불리하게 했다. 엔진이 정했다.",
         "properties": {
@@ -11959,6 +11978,10 @@
           "genre": {
             "$ref": "#/components/schemas/Genre"
           },
+          "heart_count": {
+            "title": "Heart Count",
+            "type": "integer"
+          },
           "published_at": {
             "format": "date-time",
             "title": "Published At",
@@ -12011,7 +12034,8 @@
           "recommended_players",
           "version",
           "version_note",
-          "published_at"
+          "published_at",
+          "heart_count"
         ],
         "title": "PublicListing",
         "type": "object"
@@ -12044,6 +12068,10 @@
           },
           "genre": {
             "$ref": "#/components/schemas/Genre"
+          },
+          "heart_count": {
+            "title": "Heart Count",
+            "type": "integer"
           },
           "openings": {
             "items": {
@@ -12127,6 +12155,7 @@
           "version",
           "version_note",
           "published_at",
+          "heart_count",
           "openings",
           "character_modes",
           "pregens",
@@ -23809,6 +23838,69 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/game/listings/hearted": {
+      "get": {
+        "description": "내가 관심(하트)을 둔 시나리오(#989). 최근에 둔 것부터다.\n\n지금 볼 수 있는 것만 나온다(공개를 내렸거나 볼 수 없는 등급이 된 것은 빠진다). 링크 공개도 나온다.",
+        "operationId": "list_hearted_listings_api_v1_game_listings_hearted_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicListingPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Hearted Listings",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/game/listings/{scenario_id}": {
       "get": {
         "description": "공개된 시나리오 하나를 돌려준다. 테이블을 만들기 전에 고를 것들(스타팅, 캐릭터 방식, 프리젠, 추천 모델)이 함께 있다.\n\n로그인하지 않아도 읽는다(#530). 그때 성인용은 없는 것(404)이다.",
@@ -23853,6 +23945,152 @@
           }
         ],
         "summary": "Read Public Listing",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/listings/{scenario_id}/heart": {
+      "delete": {
+        "description": "관심을 거둔다(#989). 두지 않았거나 공개를 내린 것이어도 된다.",
+        "operationId": "take_heart_api_v1_game_listings__scenario_id__heart_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Take Heart",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      },
+      "get": {
+        "description": "내가 관심을 두었는지와 관심의 수(#989). 볼 수 없는 시나리오면 404 다.",
+        "operationId": "read_heart_api_v1_game_listings__scenario_id__heart_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Heart",
+        "tags": [
+          "listings"
+        ],
+        "x-audience": "user"
+      },
+      "put": {
+        "description": "관심을 둔다(#989). 이미 두었으면 그대로다. 볼 수 없는 시나리오면 404 다.",
+        "operationId": "put_heart_api_v1_game_listings__scenario_id__heart_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Heart",
         "tags": [
           "listings"
         ],

@@ -7,6 +7,7 @@
   - 캠페인에서 넘길 것(#481 B)을 지운다. 보관함과 같은 그 사람의 캐릭터다. 이미 받은 시트는 테이블에 남는다
   - 시나리오의 공개를 모두 내린다. 자산(시나리오, 세계관, 룰북, 로어북, 도감)과 판은 지우지 않고 그대로 둔다.
     진행 중인 테이블은 판의 사본으로 계속 돈다. 공개를 내렸으니 로비에서 새로 고를 수는 없다
+  - 그 사람이 둔 관심(하트, #989)을 거둔다. 시나리오마다의 관심 수도 하나씩 뺀다
   - 아직 보내지 않은 그 사람의 알림을 지운다
   - 모집 중이거나 진행 중인 테이블에서 나간다. 스스로 나가기와 같다(방장이면 넘기고, 마지막이면 끝낸다).
     끝난 테이블의 자리는 기록으로 남긴다
@@ -23,6 +24,7 @@ from server_core.notifications import repository as notifications
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.campaigns import repository as campaign_runs
+from app.listings import heart_repository as hearts
 from app.listings import repository as listings
 from app.notifications.models import OutgoingNotification
 from app.personas import repository as personas
@@ -31,8 +33,9 @@ from app.tables import service as seating
 
 
 async def erase_belongings(session: AsyncSession, user_id: uuid.UUID) -> None:
-    """보관함과 넘길 것을 지우고, 공개를 내리고, 보내지 않은 알림을 지운다. 한 번에 저장한다."""
+    """보관함과 넘길 것을 지우고, 공개를 내리고, 둔 관심(#989)을 거두고, 보내지 않은 알림을 지운다. 한 번에 저장한다."""
     await personas.delete_all_owned(session, user_id)
+    await hearts.remove_all_of(session, user_id)
     await campaign_runs.delete_carries_of(session, user_id)
     await listings.unpublish_all_owned(session, user_id)
     await notifications.drop_for_user(session, OutgoingNotification, user_id)

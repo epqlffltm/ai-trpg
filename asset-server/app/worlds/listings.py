@@ -17,13 +17,17 @@
 import uuid
 
 from fastapi import APIRouter, status
-from server_core.auth.dependencies import OptionalUser
+from server_core.auth.dependencies import CurrentUser, OptionalUser
 
 from app.core.dependencies import Creator, ListingPreferences, Paging, Search, Session
+from app.hearts import service as hearts
+from app.hearts.kinds import WORLD_HEARTS
+from app.hearts.schemas import HeartState
 from app.worlds import service
 from app.worlds.documents import CastDocument, WorldDocument
 from app.worlds.models import Reveal, World, WorldVersion
 from app.worlds.schemas import PublicCastMember, PublicWorldDetail, PublicWorldPage, PublicWorldSummary
+from app.worlds.service import WorldNotFoundError
 
 router = APIRouter(prefix='/listings/worlds', tags=['listings'])
 
@@ -42,6 +46,7 @@ def to_public_summary(world: World, version: WorldVersion) -> PublicWorldSummary
         image_id=document.image_id,
         deadline_days=document.deadline_days,
         published_at=version.created_at,
+        heart_count=world.heart_count,
     )
 
 
@@ -82,6 +87,7 @@ def to_public_detail(world: World, version: WorldVersion) -> PublicWorldDetail:
         after_ending=document.after_ending,
         cast=public_cast(document),
         ending_count=sum(1 for ending in document.endings if ending.unlock),
+        heart_count=world.heart_count,
     )
 
 
@@ -103,6 +109,35 @@ async def list_public(
     """
     rows, total = await service.list_public(session, user, search, preferences, creator, paging.limit, paging.offset)
     return PublicWorldPage(items=[to_public_summary(world, version) for world, version in rows], total=total)
+
+
+@router.get('/hearted', response_model=PublicWorldPage, status_code=status.HTTP_200_OK)
+async def list_hearted(user: CurrentUser, session: Session, paging: Paging) -> PublicWorldPage:
+    """
+    내가 관심(하트)을 둔 세계관(#989). 최근에 둔 것부터다.
+
+    지금 열 수 있는 것만 나온다(비공개로 돌렸거나 숨긴 것, 볼 수 없는 등급은 빠진다). 링크 공개도 나온다.
+    """
+    rows, total = await hearts.list_mine(session, WORLD_HEARTS, user, paging.limit, paging.offset)
+    return PublicWorldPage(items=[to_public_summary(world, version) for world, version in rows], total=total)
+
+
+@router.get('/{world_id}/heart', response_model=HeartState, status_code=status.HTTP_200_OK)
+async def read_heart(world_id: uuid.UUID, user: CurrentUser, session: Session) -> HeartState:
+    """내가 관심을 두었는지와 관심의 수(#989). 열 수 없는 세계관이면 404 다."""
+    return await hearts.state_of(session, WORLD_HEARTS, user, world_id, WorldNotFoundError)
+
+
+@router.put('/{world_id}/heart', response_model=HeartState, status_code=status.HTTP_200_OK)
+async def put_heart(world_id: uuid.UUID, user: CurrentUser, session: Session) -> HeartState:
+    """관심을 둔다(#989). 이미 두었으면 그대로다. 열 수 없는 세계관이면 404 다."""
+    return await hearts.put_heart(session, WORLD_HEARTS, user, world_id, WorldNotFoundError)
+
+
+@router.delete('/{world_id}/heart', response_model=HeartState, status_code=status.HTTP_200_OK)
+async def take_heart(world_id: uuid.UUID, user: CurrentUser, session: Session) -> HeartState:
+    """관심을 거둔다(#989). 두지 않았거나 비공개로 돌린 것이어도 된다."""
+    return await hearts.take_heart(session, WORLD_HEARTS, user, world_id)
 
 
 @router.get('/{world_id}', response_model=PublicWorldDetail, status_code=status.HTTP_200_OK)
