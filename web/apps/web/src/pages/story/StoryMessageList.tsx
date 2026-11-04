@@ -136,7 +136,7 @@ function StoryMessageItem({ message, view, streaming, busy, onBranch, onSendEdit
         </>
       )}
       {marks.length > 0 ? <p className="hint chat-message__marks">{marks.join(' · ')}</p> : null}
-      <MessageSnapshots snapshots={snapshots} />
+      <MessageSnapshots service="story" snapshots={snapshots} />
       <div className="chat-message__tools">
         {streaming ? null : <Alternatives message={message} busy={busy} onBranch={onBranch} />}
         {editable ? (

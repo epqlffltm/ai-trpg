@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/gallery/SnapshotGallery.tsx
 // 갤러리(C7)의 "내 장면 그림"(#983). 그 서비스에서 내가 그린 장면 그림을 최근 것부터 칸으로 늘어놓는다.
-// 칸을 누르면 크게 보는 창(대화의 것과 같다)을 열고, 창에서 저장하거나 그 대화로 간다. 그림은 토큰을 실어 받는다.
+// 칸을 누르면 크게 보는 창(대화의 것과 같다)을 열고, 창에서 저장하거나 지우거나 그 대화로 간다. 그림은 토큰을 실어 받는다.
 // 지운 대화의 그림은 서버가 싣지 않는다. 읽지 못하면 이 칸만 실패를 알린다(아래의 일러스트는 따로 돈다).
 
 import { Button } from '@ai-trpg/ui';
@@ -77,7 +77,7 @@ function SnapshotTile({ service, snapshot }: { service: SnapshotService; snapsho
         {formatDate(snapshot.created_at)} · {AI_IMAGE_NOTE}
       </p>
       {image.url ? (
-        <SnapshotViewer imageId={snapshot.image_id} url={image.url} open={open} onClose={() => setOpen(false)}>
+        <SnapshotViewer service={service} snapshotId={snapshot.id} imageId={snapshot.image_id} url={image.url} open={open} onClose={() => setOpen(false)}>
           <Link to={conversationPath(service, snapshot.conversation_id)}>{conversationLinkLabel(service)}</Link>
         </SnapshotViewer>
       ) : null}

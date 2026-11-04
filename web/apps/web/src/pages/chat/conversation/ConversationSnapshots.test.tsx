@@ -2,7 +2,8 @@
 // 장면 그림(#983). 상대의 답 아래의 "장면 그림"으로 그리기를 시작하고, 그리는 동안 목록을 다시 읽어 다 그린 그림을 띄운다.
 // 그리는 중이면 새로 그리지 못한다. 실패로 남은 것과 시작하지 못한 까닭을 알린다.
 // 단추에 한 장의 값을 싣고, 그 서버에서 그릴 수 없으면 단추를 숨긴다.
-// 그림 아래에 "AI 가 만든 그림"을 적고, 누르면 크게 보는 창에서 받아 둔 바이트를 저장한다. 순수한 함수.
+// 그림 아래에 "AI 가 만든 그림"을 적고, 누르면 크게 보는 창에서 받아 둔 바이트를 저장한다.
+// 창에서 한 번 더 확인한 뒤 지우고 목록을 다시 읽는다. 지우지 못한 까닭을 알린다. 순수한 함수.
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -12,6 +13,7 @@ import type { Snapshot, SnapshotPrice } from '../../../api/snapshots';
 import { AT, ID, M, PATH, signedIn } from '../../../test/chatFixtures';
 import { json, type SeenRequest } from '../../../test/fakeFetch';
 import { renderApp } from '../../../test/renderApp';
+import { isSnapshotList } from './useDeleteSnapshot';
 import {
   AI_IMAGE_NOTE,
   canOfferSnapshot,
@@ -20,6 +22,7 @@ import {
   snapshotButtonLabel,
   snapshotFailureText,
   snapshotFileName,
+  snapshotDeleteProblemText,
   snapshotProblemText,
   snapshotsOf,
 } from './snapshotsView';
@@ -101,6 +104,46 @@ describe('장면 그림', () => {
     expect(saved.names).toEqual([snapshotFileName(IMAGE, '')]);
   });
 
+  it('크게 보는 창에서 한 번 더 확인한 뒤 지우고 목록을 다시 읽는다', async () => {
+    let list = [shot(1, 'ready', { image_id: IMAGE })];
+    const { seen } = snapshotsServer(() => list, {
+      [`DELETE /api/v1/chat/snapshots/${S(1)}`]: () => {
+        list = [];
+        return new Response(null, { status: 204 });
+      },
+    });
+    renderApp(`/chat/conversations/${ID}`);
+
+    await screen.findByText('비가 오네요.');
+    await userEvent.click(await answerItem('비가 오네요.').findByRole('button', { name: '장면 그림 크게 보기' }));
+    const dialog = within(await screen.findByRole('dialog', { name: '장면 그림' }));
+    await userEvent.click(dialog.getByRole('button', { name: '지우기' }));
+    expect(dialog.getByText(/돌려받지 못하고/)).toBeInTheDocument();
+    expect(seen.some((request) => request.method === 'DELETE')).toBe(false);
+    await userEvent.click(dialog.getByRole('button', { name: '지우기 확인' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '장면 그림' })).not.toBeInTheDocument());
+    await waitFor(() => expect(answerItem('비가 오네요.').queryByAltText('장면 그림')).not.toBeInTheDocument());
+    expect(seen.filter((request) => request.method === 'DELETE').map((request) => request.url)).toEqual([`/api/v1/chat/snapshots/${S(1)}`]);
+  });
+
+  it('지우지 못하면 창에 까닭을 알리고 그만둘 수 있다', async () => {
+    snapshotsServer(() => [shot(1, 'ready', { image_id: IMAGE })], {
+      [`DELETE /api/v1/chat/snapshots/${S(1)}`]: () => json(409, { detail: '정리 중', code: 'snapshot_settling' }),
+    });
+    renderApp(`/chat/conversations/${ID}`);
+
+    await screen.findByText('비가 오네요.');
+    await userEvent.click(await answerItem('비가 오네요.').findByRole('button', { name: '장면 그림 크게 보기' }));
+    const dialog = within(await screen.findByRole('dialog', { name: '장면 그림' }));
+    await userEvent.click(dialog.getByRole('button', { name: '지우기' }));
+    await userEvent.click(dialog.getByRole('button', { name: '지우기 확인' }));
+
+    expect(await dialog.findByText(/청구를 정리하는 중입니다/)).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole('button', { name: '그만두기' }));
+    expect(dialog.getByRole('button', { name: '지우기' })).toBeInTheDocument();
+  });
+
   it('단추에 한 장의 값을 싣는다', async () => {
     snapshotsServer(() => [], { [`GET ${PRICE}`]: () => json(200, { available: true, credits: '160', tier: 'standard', promo: false }) });
     renderApp(`/chat/conversations/${ID}`);
@@ -164,6 +207,17 @@ describe('장면 그림의 글과 고르기', () => {
     expect(snapshotFileName(IMAGE, 'image/webp')).toBe('장면그림-00000000.webp');
     expect(snapshotFileName(IMAGE, 'image/jpeg')).toBe('장면그림-00000000.jpg');
     expect(snapshotFileName(IMAGE, 'text/plain')).toBe('장면그림-00000000.png');
+  });
+
+  it('지우지 못한 까닭과 다시 읽을 목록', () => {
+    expect(snapshotDeleteProblemText(new ApiError({ status: 404, detail: '', code: 'snapshot_not_found' }))).toMatch(/이미 지웠거나/);
+    expect(snapshotDeleteProblemText(new ApiError({ status: 409, detail: '', code: 'snapshot_in_progress' }))).toMatch(/그리는 중/);
+    expect(snapshotDeleteProblemText(new Error('x'))).toMatch(/지우지 못했습니다/);
+    expect(isSnapshotList('chat', { queryKey: ['chat', 'conversation', 'c1', 'snapshots'] })).toBe(true);
+    expect(isSnapshotList('chat', { queryKey: ['chat', 'snapshots', 'kept'] })).toBe(true);
+    expect(isSnapshotList('chat', { queryKey: ['chat', 'snapshots', 'price'] })).toBe(false);
+    expect(isSnapshotList('chat', { queryKey: ['story', 'snapshots', 'kept'] })).toBe(false);
+    expect(isSnapshotList('chat', { queryKey: ['chat', 'conversation', 'c1', 'bookmarks'] })).toBe(false);
   });
 
   it('그리는 중인 것이 있는가', () => {
