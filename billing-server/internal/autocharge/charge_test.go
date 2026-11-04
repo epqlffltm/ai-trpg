@@ -529,3 +529,44 @@ func TestASuccessClearsTheFailures(t *testing.T) {
 		t.Errorf("결과 = %+v, 이어서 실패한 수 = %d", result, f.view().ConsecutiveFailures)
 	}
 }
+
+func TestAQueuedChargeIsSentUntilADayHasPassed(t *testing.T) {
+	// 결제 작업이 하루 가까이 멈췄다 돌아와도 하루가 되기 전이면 보낸다
+	f := setUpCharging(t)
+	f.enable("")
+	f.deposit(60)
+	f.spend()
+	f.clock.advance(autocharge.PendingFor - time.Second)
+
+	result := f.round()
+
+	if result.Paid != 1 || !equal(f.requests(), "paid::") {
+		t.Errorf("결과 = %+v, 일 = %v", result, f.requests())
+	}
+}
+
+func TestAChargeQueuedADayAgoIsNotSentAndBuysOnTheNextDrop(t *testing.T) {
+	// 결제 작업이 하루 넘게 멈춰 있었다. 며칠 전의 잔액으로 사지 않는다. 실패로 세지 않는다(알리지 않는 것은 usernotice 의 시험).
+	// 다음에 골드가 떨어지면 그때 산다(armed 를 다시 켰다)
+	f := setUpCharging(t)
+	f.enable("")
+	f.deposit(60)
+	f.spend() // 10: 떨어졌다. 적었다
+	f.clock.advance(autocharge.PendingFor)
+
+	stale := f.round()
+
+	if stale.Skipped != 1 || f.charger.count() != 0 || !equal(f.requests(), "skipped:"+autocharge.SkipStale+":") || f.gold() != 10 {
+		t.Fatalf("결과 = %+v, 보낸 수 = %d, 일 = %v, 골드 = %s", stale, f.charger.count(), f.requests(), f.gold())
+	}
+	if got := f.view().ConsecutiveFailures; got != 0 {
+		t.Errorf("이어서 실패한 수 = %d. 세지 않아야 한다", got)
+	}
+	f.deposit(60) // 70
+	f.spend()     // 20: 다시 떨어졌다
+	next := f.round()
+
+	if next.Paid != 1 || !equal(f.requests(), "skipped:"+autocharge.SkipStale+":", "paid::") || f.gold() != 20+1_000 {
+		t.Errorf("다음 = %+v, 일 = %v, 골드 = %s", next, f.requests(), f.gold())
+	}
+}

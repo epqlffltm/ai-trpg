@@ -23,7 +23,9 @@ import (
 //
 //  1. 차지하기: 때가 된 일 하나를 잠그고 임대를 건다. 결제 대행사를 부르는 동안에는 잠금을 쥐지 않는다
 //  2. 보내기 전(pending): 아직 켜져 있는지, 카드가 있는지, 지금 결제할 수 있는지, 한 달 상한을 넘지 않는지 본다.
-//     하나라도 아니면 그만둔다(skipped). 실패로 세지 않는다. 모두 맞으면 카드를 일에 옮겨 적고 charging 으로 바꾼다
+//     하나라도 아니면 그만둔다(skipped). 실패로 세지 않는다. 모두 맞으면 카드를 일에 옮겨 적고 charging 으로 바꾼다.
+//     적힌 지 PendingFor(하루)가 지난 일은 보내지 않고 그만둔다(stale). 결제 작업이 멈춰 있었던 것이다.
+//     며칠 전의 잔액으로 사지 않고, armed 를 다시 켜 다음에 골드가 떨어질 때 그때의 설정으로 산다(2026-11-04 결정)
 //  3. 보내기(charging): 일의 번호를 주문 번호이자 멱등키로 빌링키 결제를 보낸다
 //     - 승인: 한 트랜잭션에서 일을 끝내고, paid 인 주문을 적고, 골드를 넣고, 이어서 실패한 수를 0 으로 한다
 //     - 거절: 일을 끝내고 이어서 실패한 수를 늘린다. MaxFailures 가 되면 끈다. 다시 보내지 않는다
@@ -38,6 +40,10 @@ import (
 const (
 	// MaxFailures 는 이어서 실패하면 자동 충전을 끄는 수다(2026-11-04 결정).
 	MaxFailures = 3
+	// PendingFor 는 보내지 않은 일(pending)을 보내는 기한이다. 일이 적힌 때부터 센다(2026-11-04 결정).
+	// 결제 작업은 10초마다 돌아서, 이만큼 남았으면 작업이 멈춰 있었던 것이다. 대사가 사람에게 넘기는 기준(하루)과 같다.
+	// ResendFor 와 다르다. 그것은 이미 보낸 일(charging)을 다시 보내는 기한이고, 보낸 일은 돈이 나갔을 수 있어 그만두지 않는다.
+	PendingFor = 24 * time.Hour
 	// ResendFor 는 답을 받지 못한 결제를 다시 보내는 기한이다. 일이 적힌 때부터 센다(2026-11-04 결정).
 	// 그 뒤로는 주문 번호로 조회만 한다. 결제 대행사의 멱등키(15일)보다 넉넉히 짧고,
 	// 골드가 떨어진 지 며칠 뒤에 결제되어 사용자가 놀라는 일을 줄인다.
@@ -67,6 +73,8 @@ const (
 	SkipNoCard      = "no_card"
 	SkipNotEligible = "not_eligible"
 	SkipMonthlyCap  = "monthly_limit"
+	// SkipStale 은 적힌 지 PendingFor 가 지나도록 보내지 못한 것이다. 실패로 세지 않고 알리지 않는다(사용자가 할 일이 없다)
+	SkipStale = "stale"
 )
 
 // korea 는 한 달의 시작을 셀 때의 시간대다. 한국은 일광 절약 시간이 없어 고정이다.
@@ -188,6 +196,9 @@ func (s *Service) claim(ctx context.Context, now time.Time) (autochargedb.AutoCh
 
 // prepare 는 보내기 전의 일을 살펴 그만두거나, 카드를 옮겨 적고 charging 으로 바꾼다. 그만뒀으면 두 번째 값이 true 다.
 func (s *Service) prepare(ctx context.Context, request autochargedb.AutoChargeRequest, now time.Time) (autochargedb.AutoChargeRequest, bool, error) {
+	if PastPending(request.CreatedAt, now) {
+		return request, true, s.skipStale(ctx, request, now)
+	}
 	reason, err := s.refusal(ctx, request, now)
 	if err != nil {
 		return request, false, err
@@ -213,6 +224,24 @@ func (s *Service) prepare(ctx context.Context, request autochargedb.AutoChargeRe
 	}
 	request.Status, request.BillingKey, request.CustomerKey = statusCharging, pgtextOf(card.BillingKey), pguuidOf(card.CustomerKey)
 	return request, false, nil
+}
+
+// PastPending 은 그때 적힌 일이 지금은 보내는 기한(PendingFor)을 지났는지다. 지났으면 보내지 않는다.
+func PastPending(createdAt time.Time, now time.Time) bool {
+	return !now.Before(createdAt.Add(PendingFor))
+}
+
+// skipStale 은 늦은 일을 그만두고 armed 를 다시 켠다. 한 트랜잭션이다. 다른 쪽이 먼저 끝냈으면 켜지 않는다.
+// 일을 적을 때 armed 를 껐다. 다시 켜지 않으면 잔액이 기준 아래에 있는 동안 다시 사지 않는다(기준 이상을 봐야 켜진다).
+func (s *Service) skipStale(ctx context.Context, request autochargedb.AutoChargeRequest, now time.Time) error {
+	return txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
+		queries := autochargedb.New(tx)
+		skipped, err := queries.SkipRequest(ctx, autochargedb.SkipRequestParams{ID: request.ID, Reason: SkipStale, Now: now})
+		if err != nil || skipped == 0 {
+			return err
+		}
+		return queries.SetArmed(ctx, autochargedb.SetArmedParams{UserID: request.UserID, Armed: true})
+	})
 }
 
 // refusal 은 보내지 않을 까닭이다. 보내도 되면 빈 글자다. 결제 자격의 오류가 아닌 오류(DB)는 오류로 돌려준다.
