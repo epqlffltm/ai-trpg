@@ -12,6 +12,7 @@
 //  4. 1 을 하고도 하루 넘게 결과를 모르는 주문을 찾는다. 사람이 확인하고 cmd/orders 로 결과를 정한다.
 //  5. 공급사 가격 변경의 할 일(D-30 첫 공지, D-14 자세한 공지와 새 값 예약, D-1 마지막 알림) 가운데
 //     때가 되었는데 끝내지 않은 것을 찾는다. 사람이 하고 cmd/pricereviews done 으로 끝냈다고 적는다.
+//  6. 하루 넘게 끝나지 않은 자동 충전의 일을 찾는다(#980). 사람이 상점관리자에서 일의 번호(주문 번호)로 확인한다.
 //
 // 끝 코드로 결과를 알린다. 예약한 쪽이 이것으로 경보를 건다.
 //
@@ -19,7 +20,8 @@
 //	1  맞지 않는 줄이 있다. 줄마다 error(ledger.mismatch) 로 남긴다. 사람이 봐야 한다
 //	2  끝내지 못했다(설정, DB, 결제 대행사). 다음에 다시 돌린다
 //	3  장부는 맞는데, 사람이 할 일이 있다. 결과를 끝내 모르는 주문은 주문마다 warning(order.stuck),
-//	   때가 된 가격 변경의 할 일은 할 일마다 warning(pricing.review_due) 로 남긴다
+//	   때가 된 가격 변경의 할 일은 할 일마다 warning(pricing.review_due),
+//	   오래 끝나지 않은 자동 충전의 일은 일마다 warning(autocharge.stuck) 으로 남긴다
 //
 // 여럿이면 앞의 것을 알린다(1, 2, 3 의 차례). 장부가 틀린 것이 가장 급하다.
 package main
@@ -58,6 +60,7 @@ const (
 	errorCodeBehind   = "sweep.behind"
 	errorCodeStuck    = "order.stuck"
 	errorCodeReview   = "pricing.review_due"
+	errorCodeAuto     = "autocharge.stuck"
 	// defaultStaleAfter 는 confirming·refunding 에 이만큼 머문 주문을 결제 대행사에 묻는다.
 	// 승인·취소 요청 하나는 길어야 몇십 초다(order.ProviderTimeout). 그보다 넉넉히 둬서 진행 중인 요청과 엇갈리지 않게 한다.
 	defaultStaleAfter = 10 * time.Minute
@@ -160,7 +163,7 @@ func parseOptions(args []string) (options, error) {
 	flags.SetOutput(io.Discard)
 	var opts options
 	flags.DurationVar(&opts.staleAfter, "stale-after", defaultStaleAfter, "confirming·refunding 에 이만큼 머문 주문을 결제 대행사에 묻는다")
-	flags.DurationVar(&opts.stuckAfter, "stuck-after", order.StuckAfter, "결과를 모르는 채로 이만큼 지난 주문을 사람이 볼 주문으로 센다")
+	flags.DurationVar(&opts.stuckAfter, "stuck-after", order.StuckAfter, "결과를 모르는 채로 이만큼 지난 주문과 끝나지 않은 자동 충전의 일을 사람이 볼 것으로 센다")
 	flags.IntVar(&opts.limit, "limit", reconcile.DefaultLimit, "검사마다 돌려주는 가장 많은 수")
 	if err := flags.Parse(args); err != nil {
 		return options{}, fmt.Errorf("%w\n쓰는 법: go run ./cmd/reconcile [-stale-after 10m] [-stuck-after 24h] [-limit 1000]", err)
@@ -226,6 +229,7 @@ func logReport(ctx context.Context, report reconcile.Report) {
 		)
 	}
 	logReviews(ctx, report.Reviews)
+	logAutoCharges(ctx, report.AutoCharges)
 	if report.Overdue.Any() {
 		slog.WarnContext(ctx, "정리 작업이 밀려 있습니다",
 			slog.String(obs.FieldOperation, operation),
@@ -253,6 +257,21 @@ func logReviews(ctx context.Context, due []pricereview.Due) {
 	}
 }
 
+// logAutoCharges 는 오래 끝나지 않은 자동 충전의 일을 하나씩 warning 으로 남긴다. 끝날 때까지 날마다 남긴다.
+// 사용자와 카드는 적지 않는다. 상점관리자에서는 일의 번호(주문 번호)로 찾는다.
+func logAutoCharges(ctx context.Context, stuck []reconcile.StuckAutoCharge) {
+	for _, s := range stuck {
+		slog.WarnContext(ctx, "끝나지 않은 채로 하루가 지난 자동 충전입니다. 사람이 확인해야 합니다",
+			slog.String(obs.FieldOperation, operation),
+			slog.String(obs.FieldErrorCode, errorCodeAuto),
+			slog.String("auto_charge_id", s.ID.String()),
+			slog.String("status", s.Status),
+			slog.Int("attempts", int(s.Attempts)),
+			slog.Time("since", s.CreatedAt),
+		)
+	}
+}
+
 // printReport 는 결과를 사람이 읽게 찍는다. 사용자, 주문, 원장의 번호는 찍지 않는다. 번호는 로그에 있다.
 // 가격 변경 할 일의 번호는 찍는다. 운영자가 적은 할 일이고, cmd/pricereviews done 에 그 번호를 쓴다.
 func printReport(out io.Writer, report reconcile.Report, err error) {
@@ -264,6 +283,7 @@ func printReport(out io.Writer, report reconcile.Report, err error) {
 		report.Overdue.Holds, report.Overdue.Orders, report.Overdue.FreeGrants)
 	printStuck(out, report.Stuck)
 	printReviews(out, report.Reviews)
+	printAutoCharges(out, report.AutoCharges)
 	if err != nil {
 		fmt.Fprintln(out, "끝내지 못했습니다. 로그를 봐 주세요")
 	}
@@ -282,6 +302,26 @@ func printStuck(out io.Writer, stuck []order.Order) {
 	fmt.Fprintf(out, "사람이 볼 주문: %d (승인 확인 %d, 환불 확인 %d)\n", len(stuck), confirming, refunding)
 	if len(stuck) > 0 {
 		fmt.Fprintln(out, "go run ./cmd/orders stuck 으로 보고, 상점관리자에서 확인한 뒤 go run ./cmd/orders decide 로 정합니다")
+	}
+}
+
+// printAutoCharges 는 오래 끝나지 않은 자동 충전의 일의 수를 찍는다. 있으면 다음에 할 일도 알린다.
+// 일의 번호는 찍지 않는다(로그의 auto_charge_id 에 있다).
+func printAutoCharges(out io.Writer, stuck []reconcile.StuckAutoCharge) {
+	pending, charging := 0, 0
+	for _, s := range stuck {
+		if s.Status == "charging" {
+			charging++
+		} else {
+			pending++
+		}
+	}
+	fmt.Fprintf(out, "사람이 볼 자동 충전: %d (보내지 않음 %d, 답을 모름 %d)\n", len(stuck), pending, charging)
+	if pending > 0 {
+		fmt.Fprintln(out, "보내지 않은 것이 있으면 결제 작업(cmd/autocharge)이 도는지 먼저 봅니다")
+	}
+	if charging > 0 {
+		fmt.Fprintln(out, "답을 모르는 것은 로그(autocharge.stuck)의 auto_charge_id 를 주문 번호로 상점관리자에서 찾습니다. 결제 작업은 계속 다시 보냅니다")
 	}
 }
 
@@ -312,7 +352,7 @@ func dayLabel(daysLeft int) string {
 }
 
 // exitCode 는 결과를 끝 코드로 바꾼다. 맞지 않는 줄이 있으면, 끝내지 못한 것보다 먼저 알린다.
-// 사람이 볼 주문은 그 둘이 없을 때 알린다. 장부가 틀렸거나 대사가 끝나지 않았으면 그것부터 봐야 한다.
+// 사람이 볼 것(주문, 가격 변경의 할 일, 자동 충전)은 그 둘이 없을 때 알린다. 장부가 틀렸거나 대사가 끝나지 않았으면 그것부터 봐야 한다.
 func exitCode(report reconcile.Report, err error) int {
 	switch {
 	case !report.Clean():

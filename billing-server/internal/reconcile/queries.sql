@@ -120,3 +120,13 @@ SELECT
     (SELECT COUNT(*) FROM holds WHERE status = 'held' AND expires_at <= sqlc.arg(now)::TIMESTAMPTZ)::BIGINT AS held_holds,
     (SELECT COUNT(*) FROM orders WHERE status = 'pending' AND expires_at <= sqlc.arg(now)::TIMESTAMPTZ)::BIGINT AS pending_orders,
     (SELECT COUNT(*) FROM free_grants WHERE remaining > 0 AND expires_at <= sqlc.arg(now)::TIMESTAMPTZ)::BIGINT AS free_grants;
+
+-- name: StuckAutoCharges :many
+-- 끝나지 않은 채(pending, charging) before 보다 먼저 적힌 자동 충전의 일(#980). 사람이 볼 일이다.
+-- pending 이 오래 남았으면 결제 작업(cmd/autocharge)이 돌지 않는 것이다. charging 이 오래 남았으면 결제 대행사가 끝내 답하지 않는 것이다.
+-- 끝나지 않은 일은 사람마다 하나라 적다(auto_charge_requests_one_open).
+SELECT id, status, attempts, created_at
+FROM auto_charge_requests
+WHERE status IN ('pending', 'charging') AND created_at <= sqlc.arg(before)::TIMESTAMPTZ
+ORDER BY created_at, id
+LIMIT sqlc.arg(row_limit);
