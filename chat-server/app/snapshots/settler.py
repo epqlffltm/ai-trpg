@@ -8,17 +8,24 @@
   - 그리는 도중에 오래 남은 것(pending, held 인 채로 SNAPSHOT_STALE 이 지났다): 서버가 꺼진 것이다.
     실패로 적고 돌려준다. 그러면 그 대화에서 다시 그릴 수 있다(그리는 중인 것은 하나다)
 서버가 여럿이면 모두 같은 일을 한다. 결제 서버는 같은 이름표를 한 번만 처리하고, 기록은 "지금 이 상태일 때만" 옮긴다.
+바퀴마다 job_id 를 걸고 작업의 메트릭(background_jobs_*)을 센다. 한 일이 없으면 debug, 있으면 info 로 한 줄을 남긴다
+(말 한 번의 청구 정리와 같다).
 """
 
 import asyncio
 import contextlib
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
 from server_core import loops
 from server_core.loops import Running
+from server_core.observability.context import job_scope
+from server_core.observability.identifiers import new_job_id
+from server_core.observability.metrics import measured_job
+from server_core.observability.spans import JOB_FAILED_ERROR_CODE, add_handled, job_span
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.billing.client import Billing
@@ -26,6 +33,7 @@ from app.core.dependencies import utc_now
 from app.snapshots import repository, service
 from app.snapshots.models import Snapshot, SnapshotOutcome
 from app.turns.models import DUE_STATUSES, OPEN_STATUSES, BillingStatus
+from app.turns.settler import elapsed_ms
 
 logger = logging.getLogger(__name__)
 
@@ -77,23 +85,43 @@ class SnapshotSettler:
         except Exception:
             logger.exception(
                 '장면 그림의 청구를 정리하지 못했습니다',
-                extra={'operation': SETTLE_OPERATION, 'snapshot_id': str(snapshot.id), 'result': 'server_error'},
+                extra={
+                    'operation': SETTLE_OPERATION,
+                    'snapshot_id': str(snapshot.id),
+                    'result': 'server_error',
+                    'error_code': JOB_FAILED_ERROR_CODE,
+                },
             )
             return False
         return True
 
-    async def tick(self) -> int:
-        """한 바퀴. 차례가 된 청구를 맡기고 맡긴 수를 돌려준다."""
+    async def sweep(self) -> int:
+        """한 바퀴의 일. 차례가 된 청구를 맡기고 맡긴 수를 돌려준다."""
         now = self.clock()
+        snapshots = await self.due(now)
+        add_handled(len(snapshots))
         settled = 0
-        for snapshot in await self.due(now):
+        for snapshot in snapshots:
             settled += await self.settle_one(snapshot, now)
-        if settled:
-            logger.info(
-                '장면 그림의 청구 정리가 한 바퀴를 돌았습니다',
-                extra={'operation': SETTLE_OPERATION, 'settled': settled, 'result': 'success'},
-            )
         return settled
+
+    async def tick(self) -> int:
+        """한 바퀴. 제 job_id 를 걸고 쓸어 담은 뒤 한 줄을 남긴다. 찾는 일이 통째로 실패하면 그대로 올린다."""
+        job_id = new_job_id()
+        with job_span(SETTLE_OPERATION, job_id), job_scope(job_id), measured_job(SETTLE_OPERATION):
+            started = time.perf_counter()
+            settled = await self.sweep()
+            logger.log(
+                logging.INFO if settled else logging.DEBUG,
+                '장면 그림의 청구 정리가 한 바퀴를 돌았습니다',
+                extra={
+                    'operation': SETTLE_OPERATION,
+                    'settled': settled,
+                    'duration_ms': elapsed_ms(started),
+                    'result': 'success',
+                },
+            )
+            return settled
 
     async def run(self, stop: asyncio.Event) -> None:
         """stop 이 켜질 때까지 interval 마다 한 바퀴씩 돈다. 한 바퀴가 통째로 실패해도 멈추지 않는다."""
@@ -103,7 +131,11 @@ class SnapshotSettler:
             except Exception:
                 logger.exception(
                     '장면 그림의 청구 정리가 한 바퀴를 돌지 못했습니다',
-                    extra={'operation': SETTLE_OPERATION, 'result': 'server_error'},
+                    extra={
+                        'operation': SETTLE_OPERATION,
+                        'result': 'server_error',
+                        'error_code': JOB_FAILED_ERROR_CODE,
+                    },
                 )
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=self.interval)
