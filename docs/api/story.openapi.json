@@ -2449,6 +2449,53 @@
         "title": "WithdrawalResult",
         "type": "object"
       },
+      "WorkStarts": {
+        "description": "세계관 하나(asset 서버의 id)의 세션 시작 수. recent 는 최근 recent_days 일 동안의 수다.",
+        "properties": {
+          "recent": {
+            "title": "Recent",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "work_id": {
+            "format": "uuid",
+            "title": "Work Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "work_id",
+          "total",
+          "recent"
+        ],
+        "title": "WorkStarts",
+        "type": "object"
+      },
+      "WorkStartsList": {
+        "description": "한 번이라도 세션을 시작한 세계관 모두. 시작한 적이 없는 것은 빠진다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkStarts"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "recent_days": {
+            "title": "Recent Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "recent_days",
+          "items"
+        ],
+        "title": "WorkStartsList",
+        "type": "object"
+      },
       "WorldSummary": {
         "description": "목록에 싣는 세계관. id 는 asset 서버의 세계관 id 이고 version 은 이 세션이 쓰는 판의 번호다.\ngenre 는 판의 장르다(화면이 장면의 테마를 고른다). 늘 있다. 사본에 없으면 기본 장르다(app/conversations/genres.py).",
         "properties": {
@@ -4550,6 +4597,29 @@
           "models"
         ],
         "x-audience": "user"
+      }
+    },
+    "/api/v1/story/service/stats/world-starts": {
+      "get": {
+        "description": "세계관마다 모든 세션의 수와 최근 RECENT_DAYS 일의 수.",
+        "operationId": "list_starts_api_v1_story_service_stats_world_starts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkStartsList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Starts",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
       }
     },
     "/api/v1/story/service/users/{public_id}/withdrawal": {

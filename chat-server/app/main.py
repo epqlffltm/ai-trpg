@@ -81,6 +81,7 @@ from app.snapshots import router as snapshots
 from app.snapshots import settler as snapshot_settler
 from app.snapshots.providers import build_image_provider
 from app.snapshots.service import NotDrawableError, SnapshotBusyError, SnapshotDeclinedError, SnapshotUnavailableError
+from app.stats import router as stats
 from app.transcripts import router as transcripts
 from app.turns import router as messages
 from app.turns import settler
@@ -296,6 +297,8 @@ def create_app(
     app.include_router(operators.router, prefix=API_PREFIX)
     # 인증 서버가 탈퇴를 알리는 주소(#670). 서버끼리만 부른다(서명). 프록시는 밖에서 받지 않는다
     app.include_router(withdrawal.router, prefix=API_PREFIX)
+    # asset 서버가 받아 가는 작품마다의 시작 수(#985). 서명한 요청만이다
+    app.include_router(stats.router, prefix=API_PREFIX)
 
     app.add_exception_handler(ConversationNotFoundError, conversations.handle_conversation_not_found)
     app.add_exception_handler(CharacterNotFoundError, conversations.handle_character_not_found)

@@ -1,10 +1,12 @@
 // web/apps/web/src/pages/home/queries.ts
 // 첫 화면이 읽는 것들의 열쇠와 부르는 함수. 줄마다 열쇠가 따로라서 따로 불러오고 따로 실패한다.
 // 공개 목록은 로그인했는지에 따라 내용이 다르다(로그인 전에는 전체이용가만). 그래서 열쇠에 그것을 넣는다.
+// 이번 주 인기(#985)의 열쇠도 공개 목록의 것으로 시작한다. 보는 사람의 설정이 바뀌면 함께 다시 읽힌다(ListingPreferencesSync).
 
 import { queryOptions } from '@tanstack/react-query';
 import { fetchAssetBanners, fetchScenarioBanners } from '../../api/banners';
 import { fetchMyConversations, fetchMyTables, fetchPublicCharacters, fetchPublicScenarios } from '../../api/lists';
+import { fetchCharacterRanking, fetchScenarioRanking, fetchWorldRanking } from '../../api/rankings';
 import { fetchStorySessions } from '../../api/story';
 import { fetchPublicWorlds } from '../../api/storyWorlds';
 
@@ -66,5 +68,26 @@ export function assetBannersQuery(signedIn: boolean) {
   return queryOptions({
     queryKey: ['asset', 'banners', { signedIn }],
     queryFn: ({ signal }) => fetchAssetBanners(signal),
+  });
+}
+
+export function scenarioRankingQuery(signedIn: boolean) {
+  return queryOptions({
+    queryKey: ['trpg', 'listings', 'ranking', { signedIn, limit: ROW_LIMIT }],
+    queryFn: ({ signal }) => fetchScenarioRanking(ROW_LIMIT, signal),
+  });
+}
+
+export function characterRankingQuery(signedIn: boolean) {
+  return queryOptions({
+    queryKey: ['chat', 'characters', 'ranking', { signedIn, limit: ROW_LIMIT }],
+    queryFn: ({ signal }) => fetchCharacterRanking(ROW_LIMIT, signal),
+  });
+}
+
+export function worldRankingQuery(signedIn: boolean) {
+  return queryOptions({
+    queryKey: ['story', 'public-worlds', 'ranking', { signedIn, limit: ROW_LIMIT }],
+    queryFn: ({ signal }) => fetchWorldRanking(ROW_LIMIT, signal),
   });
 }

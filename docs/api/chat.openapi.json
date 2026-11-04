@@ -2565,6 +2565,53 @@
         },
         "title": "WithdrawalResult",
         "type": "object"
+      },
+      "WorkStarts": {
+        "description": "캐릭터 하나(asset 서버의 id)의 대화 시작 수. recent 는 최근 recent_days 일 동안의 수다.",
+        "properties": {
+          "recent": {
+            "title": "Recent",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "work_id": {
+            "format": "uuid",
+            "title": "Work Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "work_id",
+          "total",
+          "recent"
+        ],
+        "title": "WorkStarts",
+        "type": "object"
+      },
+      "WorkStartsList": {
+        "description": "한 번이라도 대화을 시작한 캐릭터 모두. 시작한 적이 없는 것은 빠진다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkStarts"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "recent_days": {
+            "title": "Recent Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "recent_days",
+          "items"
+        ],
+        "title": "WorkStartsList",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -4363,6 +4410,29 @@
           "models"
         ],
         "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/service/stats/character-starts": {
+      "get": {
+        "description": "캐릭터마다 모든 대화의 수와 최근 RECENT_DAYS 일의 수.",
+        "operationId": "list_starts_api_v1_chat_service_stats_character_starts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkStartsList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Starts",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
       }
     },
     "/api/v1/chat/service/users/{public_id}/withdrawal": {
