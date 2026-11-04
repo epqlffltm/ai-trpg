@@ -183,6 +183,7 @@ func round(ctx context.Context, charger rounder, limit int) (autocharge.ChargeRe
 				slog.Int("declined", result.Declined),
 				slog.Int("skipped", result.Skipped),
 				slog.Int("retried", result.Retried),
+				slog.Int("looked_up", result.LookedUp),
 			)
 		}
 		return err
@@ -202,8 +203,8 @@ func beat(ctx context.Context, heartbeat string) {
 
 // printResult 는 -once 로 돌았을 때 한 일을 사람이 읽게 찍는다.
 func printResult(out io.Writer, result autocharge.ChargeResult) {
-	fmt.Fprintf(out, "결제함: %d\n거절됨: %d\n그만둠: %d\n다시 보낼 것: %d\n",
-		result.Paid, result.Declined, result.Skipped, result.Retried)
+	fmt.Fprintf(out, "결제함: %d\n거절됨: %d\n그만둠: %d\n다시 보낼 것: %d\n주문 번호로 조회함: %d\n",
+		result.Paid, result.Declined, result.Skipped, result.Retried, result.LookedUp)
 }
 
 // loadDotEnv 는 현재 폴더의 .env 를 환경 변수로 올린다. 파일이 없으면 아무것도 하지 않는다.

@@ -316,7 +316,7 @@ func TestPrintReportCountsStuckAutoChargesByKind(t *testing.T) {
 
 	text := out.String()
 	if !strings.Contains(text, "사람이 볼 자동 충전: 3 (보내지 않음 1, 답을 모름 2)") ||
-		!strings.Contains(text, "cmd/autocharge") || !strings.Contains(text, "상점관리자") {
+		!strings.Contains(text, "(cmd/autocharge)이 도는지") || !strings.Contains(text, "cmd/autocharges decide") {
 		t.Errorf("화면 = %s", text)
 	}
 	if strings.Contains(text, report.AutoCharges[0].ID.String()) {
@@ -325,7 +325,7 @@ func TestPrintReportCountsStuckAutoChargesByKind(t *testing.T) {
 
 	out.Reset()
 	printReport(&out, reconcile.Report{AutoCharges: report.AutoCharges[1:]}, nil)
-	if strings.Contains(out.String(), "cmd/autocharge") || !strings.Contains(out.String(), "상점관리자") {
+	if strings.Contains(out.String(), "(cmd/autocharge)이 도는지") || !strings.Contains(out.String(), "cmd/autocharges decide") {
 		t.Errorf("답을 모르는 것만 있을 때의 화면 = %s", out.String())
 	}
 

@@ -321,7 +321,7 @@ func printAutoCharges(out io.Writer, stuck []reconcile.StuckAutoCharge) {
 		fmt.Fprintln(out, "보내지 않은 것이 있으면 결제 작업(cmd/autocharge)이 도는지 먼저 봅니다")
 	}
 	if charging > 0 {
-		fmt.Fprintln(out, "답을 모르는 것은 로그(autocharge.stuck)의 auto_charge_id 를 주문 번호로 상점관리자에서 찾습니다. 결제 작업은 계속 다시 보냅니다")
+		fmt.Fprintln(out, "답을 모르는 것은 결제 작업이 3일 동안 다시 보내고 그 뒤로는 주문 번호로 조회합니다. 그래도 남으면 go run ./cmd/autocharges stuck 으로 보고, 상점관리자에서 확인한 뒤 go run ./cmd/autocharges decide 로 정합니다")
 	}
 }
 

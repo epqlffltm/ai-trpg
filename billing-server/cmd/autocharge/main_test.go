@@ -103,9 +103,9 @@ func TestTheLoopKeepsGoingWhenTheHeartbeatCannotBeWritten(t *testing.T) {
 
 func TestPrintResultShowsTheCounts(t *testing.T) {
 	var out bytes.Buffer
-	printResult(&out, autocharge.ChargeResult{Paid: 1, Declined: 2, Skipped: 3, Retried: 4})
+	printResult(&out, autocharge.ChargeResult{Paid: 1, Declined: 2, Skipped: 3, Retried: 4, LookedUp: 5})
 
-	for _, want := range []string{"결제함: 1", "거절됨: 2", "그만둠: 3", "다시 보낼 것: 4"} {
+	for _, want := range []string{"결제함: 1", "거절됨: 2", "그만둠: 3", "다시 보낼 것: 4", "주문 번호로 조회함: 5"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("화면 = %q, %q 가 없다", out.String(), want)
 		}

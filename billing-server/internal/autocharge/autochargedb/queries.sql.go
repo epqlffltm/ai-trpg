@@ -194,6 +194,35 @@ func (q *Queries) GetCustomerKey(ctx context.Context, userID uuid.UUID) (uuid.UU
 	return customer_key, err
 }
 
+const getRequest = `-- name: GetRequest :one
+SELECT id, user_id, product_id, price, credits, status, skip_reason, failure_code, billing_key, customer_key, attempts, last_error, next_attempt_at, created_at, finished_at, turned_off FROM auto_charge_requests WHERE id = $1
+`
+
+// 충전할 일 하나. 사람이 결과를 정할 때 읽는다.
+func (q *Queries) GetRequest(ctx context.Context, id uuid.UUID) (AutoChargeRequest, error) {
+	row := q.db.QueryRow(ctx, getRequest, id)
+	var i AutoChargeRequest
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ProductID,
+		&i.Price,
+		&i.Credits,
+		&i.Status,
+		&i.SkipReason,
+		&i.FailureCode,
+		&i.BillingKey,
+		&i.CustomerKey,
+		&i.Attempts,
+		&i.LastError,
+		&i.NextAttemptAt,
+		&i.CreatedAt,
+		&i.FinishedAt,
+		&i.TurnedOff,
+	)
+	return i, err
+}
+
 const getSettings = `-- name: GetSettings :one
 SELECT user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, updated_at, armed FROM auto_charge_settings WHERE user_id = $1
 `
@@ -310,6 +339,56 @@ type LeaseRequestParams struct {
 func (q *Queries) LeaseRequest(ctx context.Context, arg LeaseRequestParams) error {
 	_, err := q.db.Exec(ctx, leaseRequest, arg.Until, arg.ID)
 	return err
+}
+
+const listOpenRequests = `-- name: ListOpenRequests :many
+SELECT id, user_id, product_id, price, credits, status, skip_reason, failure_code, billing_key, customer_key, attempts, last_error, next_attempt_at, created_at, finished_at, turned_off FROM auto_charge_requests
+WHERE status IN ('pending', 'charging') AND created_at <= $1::TIMESTAMPTZ
+ORDER BY created_at, id
+LIMIT $2
+`
+
+type ListOpenRequestsParams struct {
+	Before   time.Time
+	RowLimit int32
+}
+
+// 끝나지 않은 채(pending, charging) before 보다 먼저 적힌 일. 사람이 볼 일의 목록이다(cmd/autocharges stuck).
+func (q *Queries) ListOpenRequests(ctx context.Context, arg ListOpenRequestsParams) ([]AutoChargeRequest, error) {
+	rows, err := q.db.Query(ctx, listOpenRequests, arg.Before, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AutoChargeRequest
+	for rows.Next() {
+		var i AutoChargeRequest
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.ProductID,
+			&i.Price,
+			&i.Credits,
+			&i.Status,
+			&i.SkipReason,
+			&i.FailureCode,
+			&i.BillingKey,
+			&i.CustomerKey,
+			&i.Attempts,
+			&i.LastError,
+			&i.NextAttemptAt,
+			&i.CreatedAt,
+			&i.FinishedAt,
+			&i.TurnedOff,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const lockCard = `-- name: LockCard :one

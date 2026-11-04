@@ -134,3 +134,14 @@ WHERE user_id = sqlc.arg(user_id) AND status = 'pending';
 -- 이 거절로 자동 충전을 껐다고 적는다. 알림에 함께 싣는다(#980).
 UPDATE auto_charge_requests SET turned_off = true WHERE id = sqlc.arg(id);
 
+
+-- name: GetRequest :one
+-- 충전할 일 하나. 사람이 결과를 정할 때 읽는다.
+SELECT * FROM auto_charge_requests WHERE id = sqlc.arg(id);
+
+-- name: ListOpenRequests :many
+-- 끝나지 않은 채(pending, charging) before 보다 먼저 적힌 일. 사람이 볼 일의 목록이다(cmd/autocharges stuck).
+SELECT * FROM auto_charge_requests
+WHERE status IN ('pending', 'charging') AND created_at <= sqlc.arg(before)::TIMESTAMPTZ
+ORDER BY created_at, id
+LIMIT sqlc.arg(row_limit);
