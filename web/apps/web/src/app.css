@@ -3,7 +3,7 @@
  * 반응형 한 벌이다(docs/product/screens.md 의 "화면마다"). 좁으면 한 줄에 하나, 넓으면 여럿.
  */
 
-/* 머리(Stitch 시안). 메뉴는 밑줄 없이, 지금 있는 서비스는 알약으로. 면은 조금 비쳐 바탕의 빛이 보인다.
+/* 머리(Stitch 시안). 메뉴는 밑줄 없이, 지금 있는 서비스는 옅은 면으로. 면은 불투명한 종이다.
  * 위에 붙이지(sticky) 않는다. 화면 안에 이미 위에 붙는 것(좁은 화면의 HP 한 줄 등)이 있고, 좁은 화면에서 대화를 가린다 */
 .app-header {
   display: flex;
@@ -12,7 +12,7 @@
   gap: 12px 24px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--ui-border);
-  background: color-mix(in srgb, var(--ui-surface) 82%, transparent);
+  background: var(--ui-surface);
 }
 
 .app-header a {
@@ -23,7 +23,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-weight: 800;
+  font-family: var(--ui-font-serif);
+  font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--ui-text);
 }
@@ -33,11 +34,11 @@
   place-items: center;
   width: 30px;
   height: 30px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, var(--ui-accent), color-mix(in srgb, var(--ui-accent) 55%, #000));
-  color: #fff;
+  border-radius: var(--ui-radius);
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+  font-family: var(--ui-font-serif);
   font-size: 0.9em;
-  box-shadow: 0 4px 14px -6px var(--ui-accent);
 }
 
 .app-header__nav {
@@ -47,7 +48,7 @@
 
 .app-header__nav a {
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: var(--ui-radius);
   color: var(--ui-text-muted);
   font-weight: 600;
   white-space: nowrap;
@@ -58,8 +59,8 @@
 }
 
 .app-header__nav a[aria-current='page'] {
-  background: color-mix(in srgb, var(--ui-accent) 18%, transparent);
-  color: var(--ui-text);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-accent);
 }
 
 .app-header__account {
