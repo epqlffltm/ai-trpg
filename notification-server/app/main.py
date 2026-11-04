@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api import health, readiness
 from app.core.config import Settings, get_settings
+from app.follows import router as follows
 from app.inbox import router as inbox
 from app.mutes import router as mutes
 from app.notifications import retention
@@ -136,6 +137,9 @@ def create_app(
     app.include_router(inbox.router, prefix=API_PREFIX)
     # 사용자가 알림의 종류별로 끄고 켜는 주소. 알림함과 같은 토큰으로 확인한다
     app.include_router(mutes.router, prefix=API_PREFIX)
+    # 제작자 팔로우(#989). 팔로잉은 같은 토큰으로, 팔로워의 수는 누구나 읽는다
+    app.include_router(follows.router, prefix=API_PREFIX)
+    app.include_router(follows.public_router, prefix=API_PREFIX)
     # 인증 서버가 탈퇴를 알리는 주소(#603). 인증 서버의 서명으로 확인한다
     app.include_router(withdrawals.router, prefix=API_PREFIX)
 

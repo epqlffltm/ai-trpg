@@ -65,6 +65,7 @@ uv run uvicorn app.main:app --port 8004 --reload
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | 비어 있음(보내지 않음) | span 과 메트릭을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318` 처럼 경로 없이 적는다([추적](#추적), [메트릭](#메트릭)) |
 | `OTEL_METRIC_EXPORT_INTERVAL` | `15000` | 메트릭을 보내는 간격(밀리초, 1000 이상). 결제 서버와 같은 이름이다 |
 | `NOTIFICATION_RETENTION_DAYS` | `30` | 알림을 지우기 전까지 두는 날 수. 받은 시각부터 센다 |
+| `FOLLOW_MAX_PER_USER` | `1000` | 한 사람이 팔로우할 수 있는 제작자의 수([제작자 팔로우](#제작자-팔로우)) |
 | `AUTH_JWKS_URL` | 없음(필수) | 인증 서버가 공개키를 내주는 주소. 여기서 받은 키로 서명된 토큰을 믿는다 |
 | `AUTH_SESSION_REVOCATIONS_URL` | `AUTH_JWKS_URL` 옆(`…/session-revocations`) | 인증 서버가 끊긴 세션의 목록을 내주는 주소(#274). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
 | `JWT_ISSUER` | `ai-trpg-auth` | 토큰의 발급자(`iss`). 인증 서버의 `JWT_ISSUER`와 같아야 한다 |
@@ -132,6 +133,23 @@ uv run uvicorn app.main:app --port 8004 --reload
   끈 알림도 줄이 쌓여 보관 기간까지 남는다. 넣는 서버에는 받은 것과 같은 200 으로 답한다([알림 넣기](#알림-넣기서버끼리)의 `muted`).
 - **이미 받은 알림은 그대로다.** 끄기 전에 들어온 그 종류의 알림은 지우지 않는다. 읽지 않은 수에도 남는다.
 - 끄기와 켜기는 몇 번 해도 같다. 이미 꺼진 것을 꺼도, 켜진 것을 켜도 200 이다.
+
+### 제작자 팔로우
+
+사용자가 제작자를 팔로우한다(#989, `app/follows/`). 알림함과 같은 토큰으로 부른다. 팔로우한 제작자가 새 작품을 처음 공개하면
+알림을 나눠 넣는 곳이 이 서버라서 팔로우도 여기 둔다(새 작품의 알림은 다음 단계다).
+
+| 메서드 | 주소 | 무엇을 | 답 |
+| --- | --- | --- | --- |
+| GET | `/api/v1/notification/me/follows` | 내 팔로잉. 최근에 한 것부터. `limit`(1~100, 기본 20), `offset` | 200 `{"items": [{"creator_id": "…", "followed_at": "…"}], "total": 3}` |
+| GET | `/api/v1/notification/me/follows/{creator_id}` | 내가 팔로우하는지와 그 제작자의 팔로워 수 | 200 `{"following": true, "follower_count": 12}` |
+| PUT | `/api/v1/notification/me/follows/{creator_id}` | 팔로우한다 | 200 바뀐 뒤의 값. 자기 자신이면 422 `{"detail": {"code": "follow_self"}}`, 상한을 넘으면 409 `{"detail": {"code": "follow_limit"}}` |
+| DELETE | `/api/v1/notification/me/follows/{creator_id}` | 팔로우를 끊는다 | 200 바뀐 뒤의 값 |
+| GET | `/api/v1/notification/creators/{creator_id}/followers` | 그 제작자의 팔로워 수. 로그인하지 않아도 된다 | 200 `{"follower_count": 12}` |
+
+- **제작자는 인증 서버의 공개 ID 다.** 이 서버는 그런 사람이 있는지 모른다(실행 중에 인증 서버를 부르지 않는다). 없는 공개 ID 를 팔로우해도 알림이 오지 않을 뿐이다. 이름은 화면이 인증 서버에 묻는다
+- **한 사람이 팔로우하는 제작자는 `FOLLOW_MAX_PER_USER`(기본 1,000) 명까지다.** 같은 사람의 팔로우는 트랜잭션 잠금(advisory lock)으로 하나씩 해서 동시에 눌러도 상한을 넘지 않는다. 이미 팔로우하는 제작자를 다시 팔로우하는 것은 상한에 걸리지 않는다
+- 팔로우하기와 끊기는 몇 번 해도 같다. 남의 팔로잉은 읽을 길이 없다(팔로워의 수만 누구나 본다)
 
 ### 토큰 검증
 
@@ -254,11 +272,11 @@ Content-Type: application/json
 | 413 | 본문이 16KB 를 넘는다 |
 | 422 | 주소의 `user_id` 가 UUID 가 아니다, `withdrawn_at` 이 없거나 시간대가 있는 시각이 아니다, 모르는 칸이 있다 |
 
-- **지우는 것:** 그 사람의 알림(읽은 것, 읽지 않은 것 모두)과 끈 알림의 종류. 한 트랜잭션이다. 남기는 것은 없다. 알림의 원문은 그 일을 맡은 서버에 있고, 그 서버가 탈퇴를 따로 받는다
+- **지우는 것:** 그 사람의 알림(읽은 것, 읽지 않은 것 모두)과 끈 알림의 종류, 팔로우(그 사람이 한 것과 그 사람을 팔로우한 것, #989). 한 트랜잭션이다. 남기는 것은 없다. 알림의 원문은 그 일을 맡은 서버에 있고, 그 서버가 탈퇴를 따로 받는다
 - **몇 번을 받아도 같다.** 인증 서버는 200 과 `processed` 를 받을 때까지 간격을 늘려 다시 보낸다. 그래서 두 번째에도, 모르는 사람에게도 200 이다
 - 비밀이 비어 있는 동안 인증 서버는 보내지 않고 쌓아 둔다. 비밀을 적으면 그 전에 탈퇴한 사람의 것부터 온다
 - 서명은 [알림 넣기](#알림-넣기서버끼리)와 같은 모양이다. 본문은 서명을 확인한 뒤에 읽는다(`app/core/signed_requests.py` 를 함께 쓴다)
-- 로그에는 지운 수만 남긴다(`operation`: `notification.withdrawal`, `deleted_notifications`, `deleted_mutes`). 사람은 남기지 않는다
+- 로그에는 지운 수만 남긴다(`operation`: `notification.withdrawal`, `deleted_notifications`, `deleted_mutes`, `deleted_follows`). 사람은 남기지 않는다
 - 탈퇴한 뒤에 다른 서버가 그 사람의 알림을 늦게 넣으면 다시 생긴다. 보관 기간(30일)이 지나면 지워진다. 넣는 서버들이 탈퇴를 받으면(설계 문서의 만드는 순서 5) 넣지 않는다
 
 ## 보관 기간
@@ -343,6 +361,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. �
 | --- | --- | --- |
 | `notifications` | 사람 하나에게 간 알림 하나(#385) | `20261018_3f9a1c7e5b2d_notifications.py` |
 | `notification_mutes` | 사람 하나가 끈 알림의 종류 하나(#525). 줄이 있으면 꺼져 있다. 기본 키가 (`user_id`, `kind`)다 | `20261020_7c2e4a9d1b6f_notification_mutes.py` |
+| `creator_follows` | 한 사람이 제작자 하나를 팔로우한 것(#989). 기본 키가 (`follower_id`, `creator_id`)다. 자기 자신은 안 된다(CHECK). 팔로워 수는 `creator_id` 의 색인으로 센다 | `20261104_7fe0cf7007c0_creator_follows.py` |
 
 `notifications` 의 칸과 규칙(`app/notifications/models.py`):
 

@@ -57,6 +57,7 @@ def log_erased(erased: Erased) -> None:
             'operation': WITHDRAWAL_OPERATION,
             'deleted_notifications': erased.notifications,
             'deleted_mutes': erased.mutes,
+            'deleted_follows': erased.follows,
         },
     )
 

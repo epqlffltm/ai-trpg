@@ -2,6 +2,74 @@
 // docs/api/notification.openapi.json 에서 만든 타입. 손으로 고치지 않는다(npm run gen:api).
 
 export interface paths {
+    "/api/v1/notification/creators/{creator_id}/followers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Count Followers
+         * @description 그 제작자의 팔로워 수. 로그인하지 않아도 본다. 누가 팔로우하는지는 싣지 않는다.
+         */
+        get: operations["count_followers_api_v1_notification_creators__creator_id__followers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notification/me/follows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Following
+         * @description 내가 팔로우한 제작자들. 최근에 팔로우한 것부터다. 이름은 화면이 인증 서버에 묻는다.
+         */
+        get: operations["list_following_api_v1_notification_me_follows_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notification/me/follows/{creator_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Follow
+         * @description 내가 그 제작자를 팔로우하는지와 그 제작자의 팔로워 수.
+         */
+        get: operations["read_follow_api_v1_notification_me_follows__creator_id__get"];
+        /**
+         * Follow
+         * @description 그 제작자를 팔로우한다. 이미 하고 있어도 200 이다.
+         */
+        put: operations["follow_api_v1_notification_me_follows__creator_id__put"];
+        post?: never;
+        /**
+         * Unfollow
+         * @description 팔로우를 끊는다. 하고 있지 않아도 200 이다.
+         */
+        delete: operations["unfollow_api_v1_notification_me_follows__creator_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notification/me/notifications": {
         parameters: {
             query?: never;
@@ -216,6 +284,50 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * FollowState
+         * @description 내가 그 제작자를 팔로우하는지와 그 제작자의 팔로워 수. 팔로우하고 끊은 뒤의 값이다.
+         */
+        FollowState: {
+            /** Follower Count */
+            follower_count: number;
+            /** Following */
+            following: boolean;
+        };
+        /**
+         * Followed
+         * @description 내가 팔로우한 제작자 하나. 이름은 화면이 인증 서버에 묻는다.
+         */
+        Followed: {
+            /**
+             * Creator Id
+             * Format: uuid
+             */
+            creator_id: string;
+            /**
+             * Followed At
+             * Format: date-time
+             */
+            followed_at: string;
+        };
+        /**
+         * FollowerCount
+         * @description 그 제작자의 팔로워 수. 누구나 본다.
+         */
+        FollowerCount: {
+            /** Follower Count */
+            follower_count: number;
+        };
+        /**
+         * FollowingPage
+         * @description 내 팔로잉의 한 쪽과 전체 수. 최근에 팔로우한 것부터다.
+         */
+        FollowingPage: {
+            /** Items */
+            items: components["schemas"]["Followed"][];
+            /** Total */
+            total: number;
+        };
         /** HealthResponse */
         HealthResponse: {
             /** Status */
@@ -349,6 +461,167 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    count_followers_api_v1_notification_creators__creator_id__followers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                creator_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowerCount"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_following_api_v1_notification_me_follows_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowingPage"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_follow_api_v1_notification_me_follows__creator_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                creator_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowState"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    follow_api_v1_notification_me_follows__creator_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                creator_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowState"];
+                };
+            };
+            /** @description 팔로우할 수 있는 제작자의 수를 넘었다(follow_limit) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 자기 자신이다(follow_self) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unfollow_api_v1_notification_me_follows__creator_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                creator_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowState"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     list_notifications_api_v1_notification_me_notifications_get: {
         parameters: {
             query?: {
