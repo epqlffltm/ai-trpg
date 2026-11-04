@@ -169,6 +169,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | PUT, DELETE | `/api/v1/story/conversations/{id}/bookmarks/{message_id}` | 책갈피 달기 `{note?}`(이미 있으면 메모만 바꾼다), 떼기(204, 달지 않았어도). 다른 세션의 말은 404 `message_not_found`, 가득 차면 409 `bookmarks_full` | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}/shortcuts` | 그 세션에서 고를 수 있는 [단축어](#단축어)(`{name, description, source}`, 세계관의 것(`work`) 다음 내 것(`mine`)). 본문은 싣지 않는다 | access 토큰 |
 | POST | `/api/v1/story/messages/{id}/snapshot` | 그 답의 [장면 그림](#장면-그림)을 그린다. 홀드를 건 뒤 202(`drawing`). 사람의 말·행동 말은 422 `not_drawable`, 그리는 중이면 409 `snapshot_in_progress`, 크레딧이 모자라면 402, 만들지 않는 서버·팔지 않는 가격표면 503 `snapshot_unavailable` | access 토큰 |
+| GET | `/api/v1/story/snapshots/price` | [장면 그림](#장면-그림) 한 장의 값(`{available, credits, tier, promo}`). 그림 provider 가 없거나 가격표가 팔지 않으면 `available` 이 거짓이다(단추를 숨긴다). 결제 서버 없이 돌면 값이 null 이다. 가격 목록을 받지 못하면 503 `prices_unavailable` | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}/snapshots` | 그 세션의 장면 그림들(`{id, message_id, status, image_id, code, created_at}`, 만든 차례). `drawing` 이면 다시 읽는다 | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}/summary` | 지금 가지의 [굴리는 요약](#기억-메모)(`{text, covered_up_to, created_at}`, 읽기만). 없으면 null | access 토큰 |
 | GET | `/api/v1/story/gallery` | 그 세계관에서 내가 연 일러스트들(`?world_id=`, 처음 연 차례). [계정의 기록](#계정의-기록) | access 토큰 |

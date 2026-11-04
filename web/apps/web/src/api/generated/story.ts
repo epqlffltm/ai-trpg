@@ -687,6 +687,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/snapshots/price": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Price
+         * @description 장면 그림 한 장의 값. 가격 목록을 받지 못했고 받아 둔 것도 없으면 503 prices_unavailable 이다.
+         */
+        get: operations["read_price_api_v1_story_snapshots_price_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1714,6 +1734,24 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             status: components["schemas"]["SnapshotStatus"];
+        };
+        /**
+         * SnapshotPriceOut
+         * @description 장면 그림 한 장의 값. available 이 거짓이면 지금은 그릴 수 없다(단추를 숨긴다).
+         *     credits 는 결제 서버가 정한 값(글자, "160")이다. 결제 서버 없이 도는 서버면 credits 와 tier 가 null 이다.
+         *     tier 가 premium 이면 골드(유료 크레딧)로만 낸다. promo 면 행사가다.
+         */
+        SnapshotPriceOut: {
+            /** Available */
+            available: boolean;
+            /** Credits */
+            credits?: string | null;
+            /**
+             * Promo
+             * @default false
+             */
+            promo: boolean;
+            tier?: components["schemas"]["Tier"] | null;
         };
         /**
          * SnapshotStatus
@@ -3086,6 +3124,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_price_api_v1_story_snapshots_price_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnapshotPriceOut"];
                 };
             };
         };

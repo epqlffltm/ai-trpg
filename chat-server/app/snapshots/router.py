@@ -4,6 +4,7 @@
 장면 그림 API(#983).
 
     POST /api/v1/chat/messages/{id}/snapshot          그 답의 장면 그림을 그린다. 홀드를 건 뒤 202(그리는 중)
+    GET  /api/v1/chat/snapshots/price                 장면 그림 한 장의 값과 그릴 수 있는지
     GET  /api/v1/chat/conversations/{id}/snapshots    그 대화의 그림들(만든 차례). 그리는 중이면 다시 읽는다
 
 그림은 asset 서버의 주소(GET /api/v1/asset/images/{image_id})로 받는다. 주인만 본다(토큰을 실어 받는다).
@@ -23,10 +24,13 @@ import uuid
 from fastapi import APIRouter, Request, status
 from fastapi.responses import JSONResponse
 
-from app.core.dependencies import CurrentViewer, Session, utc_now
+from app.billing.routing import Prices
+from app.core.dependencies import CurrentViewer, Now, Session, utc_now
 from app.limits.routing import GENERATION_LIMIT
 from app.snapshots import service
-from app.snapshots.schemas import SnapshotOut
+from app.snapshots.pricing import snapshot_price
+from app.snapshots.providers import price_code_of
+from app.snapshots.schemas import SnapshotOut, SnapshotPriceOut
 from app.snapshots.service import (
     NotDrawableError,
     SnapshotBusyError,
@@ -40,6 +44,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/messages', tags=['snapshots'])
 conversation_router = APIRouter(prefix='/conversations', tags=['snapshots'])
+price_router = APIRouter(prefix='/snapshots', tags=['snapshots'])
 
 # 503 에 싣는 "이만큼 뒤에 다시"(초)
 RETRY_AFTER_SECONDS = 5
@@ -95,6 +100,14 @@ async def draw(message_id: uuid.UUID, viewer: CurrentViewer, request: Request) -
 async def list_snapshots(conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session) -> list[SnapshotOut]:
     """그 대화의 그림들. 만든 차례다."""
     return await service.list_snapshots(session, viewer, conversation_id)
+
+
+@price_router.get('/price', response_model=SnapshotPriceOut, status_code=status.HTTP_200_OK)
+async def read_price(viewer: CurrentViewer, request: Request, prices: Prices, now: Now) -> SnapshotPriceOut:
+    """장면 그림 한 장의 값. 가격 목록을 받지 못했고 받아 둔 것도 없으면 503 prices_unavailable 이다."""
+    state = request.app.state
+    book = await prices.book()
+    return snapshot_price(book, price_code_of(state.settings.snapshot_model), state.image_provider is not None, now)
 
 
 # --- 예외를 응답으로. 앱에 한 번 등록한다(app/main.py) ---
