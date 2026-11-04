@@ -38,7 +38,7 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <main className="page page--narrow">
+    <main className="page page--narrow auth-card">
       <h1>비밀번호 찾기</h1>
       {sent ? (
         <>

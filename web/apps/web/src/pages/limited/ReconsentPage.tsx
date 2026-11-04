@@ -52,7 +52,7 @@ export function ReconsentPage() {
   }
 
   return (
-    <main className="page page--medium">
+    <main className="page page--medium auth-card">
       <h1>바뀐 약관에 동의해 주세요</h1>
       <p>아래 문서의 새 판이 시행됩니다. 동의해야 서비스를 계속 쓸 수 있습니다. 동의하지 않으려면 로그아웃하세요.</p>
       {consents.isPending ? <p>불러오는 중</p> : null}
