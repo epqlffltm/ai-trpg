@@ -126,7 +126,10 @@ describe('프로필 메뉴', () => {
     const menu = await openAccountMenu();
     await userEvent.click(menu.getByRole('button', { name: '로그아웃' }));
 
-    expect(await screen.findByRole('link', { name: '로그인' })).toBeInTheDocument();
+    // 첫 화면에도 "로그인" 링크(이어 보기의 안내)가 있다. 그리는 차례에 따라 하나일 수도 둘일 수도 있어 모두 받고,
+    // 그 가운데 위쪽 줄(.app-header)의 것이 있는지 본다. 첫 화면의 목록 머리(header)도 banner 로 잡혀 역할로는 가를 수 없다
+    const links = await screen.findAllByRole('link', { name: '로그인' });
+    expect(links.some((link) => link.closest('.app-header') !== null)).toBe(true);
     expect(seen.some((request) => request.method === 'POST' && request.url === '/api/v1/auth/logout')).toBe(true);
   });
 });
