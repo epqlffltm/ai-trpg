@@ -14,6 +14,7 @@
   - 장면 그림을 만들지 않는 서버, 팔지 않는 가격표면 503 snapshot_unavailable 이다
   - 세션을 지우면 맡긴 그림을 asset 에서 지운다
   - 그리는 도중에 서버가 꺼진 것은 정리 작업이 실패로 적고 돌려준다
+  - 내 그림들(갤러리)은 다 그린 것만 최근 것부터다. 남의 것, 지운 대화의 것은 보이지 않는다
 """
 
 import asyncio
@@ -49,6 +50,7 @@ SNAPSHOT_PRICE = 160
 START = 1000
 SOMEONE_ELSE = uuid.UUID('99999999-2222-4333-8444-555555555555')
 MESSAGES_URL = f'{API_PREFIX}/messages'
+KEPT_URL = f'{API_PREFIX}/snapshots'
 # 미나의 대표 그림과 기본 표정의 그림
 PORTRAIT = uuid.UUID('7a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d')
 SPRITE = uuid.UUID('7a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4e')
@@ -352,3 +354,38 @@ async def test_an_abandoned_drawing_is_released_by_the_settler(
     assert settled == 1
     assert (snapshot['status'], snapshot['code']) == ('failed', 'abandoned')
     assert billing.holds[f'story:img:{snapshot["id"]}'].status == 'released'
+
+
+async def test_my_gallery_lists_the_ready_ones_newest_first(
+    client: AsyncClient,
+    app: FastAPI,
+    answered: tuple,
+    painter: FakeImageProvider,
+    mine: dict,
+    signing_key: SigningKey,
+):
+    conversation, _, answer_id = answered
+    for error in (None, 'refused', None):
+        painter.error = error
+        await draw(client, mine, answer_id)
+        await finished(app)
+    ready = [item for item in await listed(client, mine, conversation) if item['status'] == 'ready']
+
+    page = await client.get(KEPT_URL, headers=mine)
+    second = await client.get(KEPT_URL, params={'limit': 1, 'offset': 1}, headers=mine)
+    theirs = await client.get(KEPT_URL, headers=bearer(signing_key, SOMEONE_ELSE))
+    await client.delete(f'{CONVERSATIONS_URL}/{conversation["id"]}', headers=mine)
+    after_delete = await client.get(KEPT_URL, headers=mine)
+
+    assert page.status_code == status.HTTP_200_OK, page.text
+    body = page.json()
+    assert body['total'] == 2 and [item['id'] for item in body['items']] == [ready[1]['id'], ready[0]['id']]
+    first = body['items'][0]
+    assert (first['image_id'], first['conversation_id'], first['message_id']) == (
+        ready[1]['image_id'],
+        conversation['id'],
+        answer_id,
+    )
+    assert (first['conversation_title'], first['work_name']) == (conversation['title'], '여름 마을')
+    assert [item['id'] for item in second.json()['items']] == [ready[0]['id']]
+    assert theirs.json() == after_delete.json() == {'items': [], 'total': 0}

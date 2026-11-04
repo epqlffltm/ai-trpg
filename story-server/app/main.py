@@ -291,7 +291,7 @@ def create_app(
     # 장면 그림(#983). 그리기는 응답과 따로 돈다
     app.include_router(snapshots.router, prefix=API_PREFIX)
     app.include_router(snapshots.conversation_router, prefix=API_PREFIX)
-    app.include_router(snapshots.price_router, prefix=API_PREFIX)
+    app.include_router(snapshots.own_router, prefix=API_PREFIX)
     # 계정의 기록. 본 엔딩
     app.include_router(records.router, prefix=API_PREFIX)
     # 기록 내려받기(지금 가지의 말을 파일 하나로)

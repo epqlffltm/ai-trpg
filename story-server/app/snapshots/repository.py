@@ -7,12 +7,16 @@
 """
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime, timedelta
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.snapshots.models import Snapshot
+from app.conversations.models import Conversation, ImportedWorld
+from app.conversations.repository import visible
+from app.ratings import Rating
+from app.snapshots.models import Snapshot, SnapshotOutcome
 from app.turns.models import DUE_STATUSES, OPEN_STATUSES, BillingStatus
 
 
@@ -36,6 +40,31 @@ async def kept_images(session: AsyncSession, conversation_id: uuid.UUID) -> list
     """그 세션의 그림 가운데 asset 에 맡긴 것들의 id."""
     query = select(Snapshot.image_id).where(Snapshot.conversation_id == conversation_id, Snapshot.image_id.is_not(None))
     return [image_id for image_id in await session.scalars(query) if image_id is not None]
+
+
+def kept_of(owner_id: uuid.UUID, ratings: Sequence[Rating]) -> Select:
+    """이 사람의 다 그린 그림들. 지우지 않았고 볼 수 있는 등급의 세션의 것만이다. (세션, 판의 사본, 그림)을 고른다."""
+    return (
+        visible(owner_id, ratings)
+        .add_columns(Snapshot)
+        .join(Snapshot, Snapshot.conversation_id == Conversation.id)
+        .where(
+            Snapshot.owner_id == owner_id,
+            Snapshot.outcome == SnapshotOutcome.READY,
+            Snapshot.image_id.is_not(None),
+        )
+    )
+
+
+async def list_kept(
+    session: AsyncSession, owner_id: uuid.UUID, ratings: Sequence[Rating], limit: int, offset: int
+) -> tuple[list[tuple[Snapshot, Conversation, ImportedWorld]], int]:
+    """이 사람의 다 그린 그림들의 한 쪽과 전체 개수. 최근에 만든 것부터다."""
+    query = kept_of(owner_id, ratings)
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
+    page = query.order_by(Snapshot.created_at.desc(), Snapshot.id.desc()).limit(limit).offset(offset)
+    rows = await session.execute(page)
+    return [(row[2], row[0], row[1]) for row in rows], total or 0
 
 
 async def drawing(session: AsyncSession, conversation_id: uuid.UUID) -> Snapshot | None:

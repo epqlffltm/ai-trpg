@@ -43,3 +43,25 @@ class SnapshotPriceOut(BaseModel):
     credits: str | None = None
     tier: Tier | None = None
     promo: bool = False
+
+
+class KeptSnapshotOut(BaseModel):
+    """
+    내 다 그린 장면 그림 한 장(갤러리). conversation_title 은 그 대화의 제목, work_name 은 캐릭터의 이름이다.
+    message_id 는 그린 답이다(지웠으면 null). 그림은 asset 서버의 주소로 받는다(주인만).
+    """
+
+    id: uuid.UUID
+    image_id: uuid.UUID
+    conversation_id: uuid.UUID
+    conversation_title: str
+    work_name: str
+    message_id: uuid.UUID | None
+    created_at: datetime
+
+
+class KeptSnapshotPage(BaseModel):
+    """목록의 한 쪽과 전체 개수. 대화 목록과 같은 모양이다."""
+
+    items: list[KeptSnapshotOut]
+    total: int
