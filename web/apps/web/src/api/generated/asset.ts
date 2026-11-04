@@ -724,6 +724,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset/service/{caller}/images/{image_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Image Content
+         * @description 토큰의 주인이 볼 수 있는 그림의 바이트. 볼 수 없거나 없으면 404 다.
+         */
+        get: operations["image_content_api_v1_asset_service__caller__images__image_id__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset/service/{caller}/personas/{persona_id}": {
         parameters: {
             query?: never;
@@ -5516,6 +5536,36 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    image_content_api_v1_asset_service__caller__images__image_id__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+                caller: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 그림의 바이트(image/png, image/jpeg, image/webp) */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

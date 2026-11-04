@@ -52,6 +52,12 @@ class FakeImageStore:
             raise ImageStoreUnavailableError('고장')
         self.objects.pop(key, None)
 
+    async def get(self, key: str, now: datetime) -> tuple[bytes, str]:
+        if self.broken or key not in self.objects:
+            raise ImageStoreUnavailableError('고장')
+        stored = self.objects[key]
+        return stored.data, stored.content_type
+
     def presigned_get(self, key: str, now: datetime) -> str:
         if self.broken:
             raise ImageStoreUnavailableError('고장')

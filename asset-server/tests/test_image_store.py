@@ -232,3 +232,30 @@ async def test_a_refused_delete_means_the_store_is_unavailable():
         await store_answering(lambda request: httpx.Response(403)).delete(KEY, NOW)
     with pytest.raises(ImageStoreUnavailableError):
         await UnconfiguredImageStore().delete(KEY, NOW)
+
+
+# --- 받기(다른 서버의 참고 그림, #983) ---
+
+
+async def test_get_reads_the_signed_object_and_its_type():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, content=b'\x89PNG-bytes', headers={'Content-Type': 'image/png'})
+
+    data, content_type = await store_answering(handler).get(KEY, NOW)
+
+    (request,) = seen
+    assert (request.method, str(request.url)) == ('GET', f'http://object-store:8333/ai-trpg-images/{KEY}')
+    signed = {name: request.headers[name] for name in ('host', 'x-amz-content-sha256', 'x-amz-date')}
+    expected = authorization_header(LOCAL, 'GET', f'/ai-trpg-images/{KEY}', signed, sha256_hex(b''), NOW)
+    assert request.headers['authorization'] == expected
+    assert (data, content_type) == (b'\x89PNG-bytes', 'image/png')
+
+
+async def test_a_missing_object_or_no_store_is_unavailable():
+    with pytest.raises(ImageStoreUnavailableError):
+        await store_answering(lambda request: httpx.Response(404)).get(KEY, NOW)
+    with pytest.raises(ImageStoreUnavailableError):
+        await UnconfiguredImageStore().get(KEY, NOW)
