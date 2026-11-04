@@ -26,6 +26,7 @@ from pydantic import ValidationError
 from server_core.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.announcements import service as announcements
 from app.core.signed_requests import body_signed_with
 from app.notifications import catalog, service
 from app.notifications.metrics import record_notification
@@ -125,6 +126,8 @@ async def put_notification(
     """알림 하나를 넣는다. 같은 알림을 다시 보내면 같은 id 로 200 이다. 받는 사람이 껐으면 적지 않고 200 이다."""
     incoming = parse_notification(body)
     ensure_listed(source, incoming)
+    if catalog.is_for_followers(incoming.kind):
+        return await announce(source, response, incoming, session)
     try:
         result = await service.put_notification(session, source, incoming, datetime.now(UTC))
     except service.KeyReusedError as error:
@@ -147,3 +150,23 @@ async def put_notification(
         },
     )
     return result
+
+
+async def announce(source: str, response: Response, incoming: NotificationIn, session: AsyncSession) -> NotificationPut:
+    """새 작품 알림(#989)을 만든 사람의 팔로워에게 나눠 넣는다. 처음이면 201, 이미 한 것이면 200 이다."""
+    announced = await announcements.announce(session, source, incoming, datetime.now(UTC))
+    if announced.put.status is not PutStatus.CREATED:
+        response.status_code = status.HTTP_200_OK
+    record_notification(source, announced.put.status.value)
+    # 만든 사람과 받는 사람은 남기지 않는다. 몇 명에게 넣었는지만 남긴다
+    logger.info(
+        '새 작품 알림을 팔로워에게 나눠 넣었다',
+        extra={
+            'operation': PUT_OPERATION,
+            'source': source,
+            'kind': incoming.kind,
+            'outcome': announced.put.status.value,
+            'recipients': announced.recipients,
+        },
+    )
+    return announced.put

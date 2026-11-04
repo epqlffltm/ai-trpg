@@ -39,3 +39,5 @@ class Erased:
     mutes: int
     # 그 사람이 한 팔로우와 받은 팔로우(#989)
     follows: int
+    # 그 사람이 만든 작품의 새 작품 알림 기록(#989)
+    announcements: int

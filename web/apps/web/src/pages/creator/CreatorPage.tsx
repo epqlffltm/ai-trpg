@@ -2,12 +2,14 @@
 // 제작자 페이지(#992, /creators/:publicId). 로그인하지 않아도 열린다. 작품의 소개에서 "만든 사람"을 누르면 온다.
 // 표시 이름(닉네임)과 소개는 인증 서버, 공개 작품은 서비스마다 그 서버가 준다. 서버마다 따로 부르고 섞어 정렬하지 않는다(#593).
 // 프로필을 읽지 못해도 작품의 묶음은 따로 보인다. 없거나 탈퇴한 제작자(404)면 그 안내만 보인다.
+// 이름 아래에 팔로워 수와 팔로우 단추(#989, FollowButton)를 둔다. 작품의 "만든 사람" 줄의 것과 같다.
 
 import { Button, ListSection, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router';
 import { ApiError } from '../../api/errors';
 import { useSession } from '../../auth/useSession';
+import { FollowButton } from '../../components/FollowButton';
 import { ItemCard } from '../../components/ItemCard';
 import { usageTags } from '../../format/usage';
 import { CharacterCard } from '../chat/browse/CharacterCard';
@@ -33,6 +35,11 @@ export function CreatorPage() {
   return (
     <main className="page">
       <h1>{creator.data?.nickname ?? '제작자'}</h1>
+      {creator.data ? (
+        <p className="hint">
+          <FollowButton creatorId={publicId} leading={false} />
+        </p>
+      ) : null}
       {creator.data?.bio ? <p className="prose">{creator.data.bio}</p> : null}
       {creator.isError ? (
         <Notice tone="error">

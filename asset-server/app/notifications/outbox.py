@@ -10,6 +10,12 @@
 | world.hidden | 운영자가 세계관을 숨겼다. 세계관의 주인에게 | world_id, name |
 | world.unhidden | 운영자가 세계관의 숨김을 풀었다. 세계관의 주인에게 | world_id, name |
 | character_report.handled | 운영자가 신고를 처리했다. 신고한 사람에게 | name |
+| character.published | 캐릭터가 목록에 나오게 되었다. 만든 사람의 팔로워에게(#989) | character_id, name, creator_id |
+| world.published | 세계관이 목록에 나오게 되었다. 만든 사람의 팔로워에게(#989) | world_id, name, creator_id |
+
+  - 새 작품 알림의 받는 사람은 알림 서버가 정한다(팔로우는 알림 서버에 있다). user_id 에 만든 사람을 적는다.
+    목록에 나오게 될 때마다(공개 범위를 공개로, 처음 게시) "<kind>:<작품>" 으로 적는다. 처음인지는 알림 서버가 본다.
+    링크 공개(#993)와 운영자가 숨긴 것은 목록에 나오지 않아 알리지 않는다. 이름은 초안의 이름이다
 
   - 숨김이 바뀐 때만 주인에게 알린다. 이미 숨긴 캐릭터를 또 숨겨도 알림은 없다
   - 신고를 처리한 알림에는 결과(숨김, 기각)를 싣지 않는다. 신고한 사람이 결과로 상대를 짐작하거나
@@ -22,11 +28,12 @@
 """
 
 import uuid
+from typing import Any
 
 from server_core.notifications import repository
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.characters.models import Character
+from app.characters.models import Character, Visibility
 from app.notifications.models import OutgoingNotification
 from app.worlds.models import World
 
@@ -38,6 +45,8 @@ UNHIDDEN = 'character.unhidden'
 WORLD_HIDDEN = 'world.hidden'
 WORLD_UNHIDDEN = 'world.unhidden'
 REPORT_HANDLED = 'character_report.handled'
+CHARACTER_PUBLISHED = 'character.published'
+WORLD_PUBLISHED = 'world.published'
 
 
 def put(session: AsyncSession, user_id: uuid.UUID, kind: str, source_key: str, payload: dict) -> OutgoingNotification:
@@ -74,3 +83,20 @@ def tell_reporter(
 async def drop_for_user(session: AsyncSession, user_id: uuid.UUID) -> None:
     """그 사람에게 아직 보내지 않은 알림을 지운다(탈퇴). 저장하지 않는다."""
     await repository.drop_for_user(session, OutgoingNotification, user_id)
+
+
+def is_listed(work: Any) -> bool:
+    """캐릭터(세계관)가 공개 목록에 나오는가. 공개이고, 게시한 판이 있고, 숨기지 않았다."""
+    return work.visibility == Visibility.PUBLIC and work.latest_version is not None and work.hidden_at is None
+
+
+async def announce_if_listed(session: AsyncSession, work: Character | World, was_listed: bool) -> None:
+    """이번에 목록에 나오게 되었으면 만든 사람의 팔로워에게 알린다. 발송함에 같은 열쇠가 남아 있으면 적지 않는다."""
+    if was_listed or not is_listed(work):
+        return
+    if isinstance(work, Character):
+        kind, payload = CHARACTER_PUBLISHED, {'character_id': str(work.id)}
+    else:
+        kind, payload = WORLD_PUBLISHED, {'world_id': str(work.id)}
+    payload |= {'name': work.name, 'creator_id': str(work.owner_id)}
+    await repository.put_once(session, OutgoingNotification, work.owner_id, kind, f'{kind}:{work.id}', payload)

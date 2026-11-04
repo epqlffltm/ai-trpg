@@ -7,6 +7,10 @@
 (app/tables/model_retirement.py). 모델을 바꿀 수 있는 사람이 방장이라 방장에게만 보낸다.
 앉은 사람은 같은 이름의 테이블 이벤트로 이미 본다.
 
+시나리오를 처음 목록에 올린 것을 만든 사람의 팔로워에게 알리는 것(announce_scenario, #989)도 여기 있다.
+받는 사람은 알림 서버가 정한다(팔로우는 알림 서버에 있다). 이 서버는 user_id 에 만든 사람을 적어 보낸다.
+열쇠는 "scenario.published:<시나리오>" 다. 다시 올려도 같은 열쇠라 알림 서버가 처음 한 번만 나눠 넣는다.
+
 열쇠(source_key)는 "<kind>:<테이블>:<이벤트의 번호>" 다. 이벤트의 번호는 테이블 안에서 하나라서
 은퇴 예정의 네 단계(30, 14, 7, 1 일 전)가 서로 다른 알림이 되고, 같은 이벤트를 다시 보내면 같은 열쇠다.
 """
@@ -16,12 +20,16 @@ import uuid
 from server_core.notifications import repository
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.assets.models import Asset
 from app.events.models import EventType, TableEvent
 from app.notifications.models import OutgoingNotification
 from app.tables.models import GameTable
 
 # 알림 서버에 넣는 이 서버의 이름. 알림 서버의 주소와 비밀(GAME_SERVER_SECRET)이 이 이름으로 정해진다
 SOURCE = 'game'
+
+# 새 작품 알림(#989)의 종류
+SCENARIO_PUBLISHED = 'scenario.published'
 
 # 방장에게 알리는 테이블의 이벤트와 그 알림의 종류
 HOST_NOTICES = {
@@ -54,3 +62,16 @@ def tell_host(session: AsyncSession, table: GameTable, event: TableEvent) -> Out
     """테이블의 이벤트를 방장에게 알린다. 알리는 이벤트가 아니면 KeyError 다(부른 쪽의 버그)."""
     kind = HOST_NOTICES[event.type]
     return put(session, table.host_id, kind, event_key(kind, event), table_payload(table, event))
+
+
+async def announce_scenario(session: AsyncSession, scenario: Asset) -> None:
+    """시나리오를 목록에 올린 것을 만든 사람의 팔로워에게 알린다. 발송함에 같은 열쇠가 남아 있으면 적지 않는다."""
+    payload = {'scenario_id': str(scenario.id), 'title': scenario.title, 'creator_id': str(scenario.owner_id)}
+    await repository.put_once(
+        session,
+        OutgoingNotification,
+        scenario.owner_id,
+        SCENARIO_PUBLISHED,
+        f'{SCENARIO_PUBLISHED}:{scenario.id}',
+        payload,
+    )

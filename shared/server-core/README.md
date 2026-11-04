@@ -67,7 +67,7 @@ trpg-server 의 `app/notifications/` 에서 뽑았다. 쓰는 서버는 asset-se
 | 서버가 하는 것 | 공용 코드가 하는 것 |
 | --- | --- |
 | 표를 만든다: `class OutgoingNotification(OutgoingNotificationColumns, Base)` 와 마이그레이션(trpg-server 와 같은 모양) | 칸, 이름 붙은 제약, 기다리는 것만 담는 색인(`models.py`) |
-| 무엇을 누구에게 알릴지 정하고, 그 일과 같은 트랜잭션에서 `repository.put` 으로 적는다. 탈퇴하면 `repository.drop_for_user` | 쿼리. 바꾸는 것은 아직 기다리는 줄만(`repository.py`) |
+| 무엇을 누구에게 알릴지 정하고, 그 일과 같은 트랜잭션에서 `repository.put` 으로 적는다. 같은 일이 여러 번 일어날 수 있는 알림(새 작품, #989)은 `repository.put_once`(같은 열쇠가 남아 있으면 적지 않는다). 탈퇴하면 `repository.drop_for_user` | 쿼리. 바꾸는 것은 아직 기다리는 줄만(`repository.py`) |
 | 설정에 `NotificationSettings` 를 물려받는다(`NOTIFICATION_URL`, `NOTIFICATION_SECRET`, `NOTIFICATION_TIMEOUT_SECONDS`) | 주소를 적으면 비밀이 32자 이상이어야 뜬다(`settings.py`) |
 | 앱에 `build_notifications(settings, http_client, '<서버 이름>')` 과 `NotificationDispatcher(SqlOutboxStore(session_factory, 표), ...)` 를 붙이고 lifespan 에서 `dispatcher.start` 한다 | 서명해 넣기와 답의 뜻(`client.py`), 5초마다 보내기, 10초에서 두 배씩 1시간까지 다시 보내기, 받지 않은 것은 실패로 남기기, 7일 지난 것 지우기, 로그(`notification.send`)와 추적, 메트릭(`dispatcher.py`) |
 

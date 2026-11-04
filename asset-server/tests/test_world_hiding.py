@@ -78,7 +78,9 @@ async def listed_ids(client: AsyncClient, headers: dict) -> list[str]:
 
 async def outgoing(session: AsyncSession) -> list[OutgoingNotification]:
     session.expire_all()
-    return list(await session.scalars(select(OutgoingNotification).order_by(OutgoingNotification.id)))
+    # 공개할 때 적히는 새 작품 알림(#989)은 뺀다(test_new_work_notifications 가 본다)
+    query = select(OutgoingNotification).where(OutgoingNotification.kind != 'world.published')
+    return list(await session.scalars(query.order_by(OutgoingNotification.id)))
 
 
 async def test_only_operators_hide_with_a_reason(client: AsyncClient, owner: dict, player: dict, operator: dict):

@@ -97,6 +97,50 @@ describe('제작자 페이지', () => {
   });
 });
 
+describe('제작자 페이지의 팔로우', () => {
+  const WORKS = {
+    'GET /api/v1/game/listings': () => json(200, { items: [], total: 0 }),
+    'GET /api/v1/asset/listings/characters': () => json(200, { items: [], total: 0 }),
+    'GET /api/v1/asset/listings/worlds': () => json(200, { items: [], total: 0 }),
+    [`GET /api/v1/auth/creators/${CREATOR}`]: () => json(200, PROFILE),
+  };
+  const FOLLOW = `/api/v1/notification/me/follows/${CREATOR}`;
+
+  it('로그인하지 않았으면 팔로워 수와 로그인으로 가는 길을 보인다', async () => {
+    installFakeFetch({
+      [`POST ${REFRESH_PATH}`]: () => json(401, { detail: 'no cookie' }),
+      [`GET /api/v1/notification/creators/${CREATOR}/followers`]: () => json(200, { follower_count: 3 }),
+      ...WORKS,
+    });
+    renderApp(PATH);
+
+    expect(await screen.findByRole('link', { name: '로그인하고 팔로우' })).toHaveAttribute('href', '/login');
+    expect(screen.getByText(/^팔로워 3/)).toBeInTheDocument();
+  });
+
+  it('로그인했으면 팔로우하고 끊는다', async () => {
+    let state = { following: false, follower_count: 3 };
+    installFakeFetch({
+      [`POST ${REFRESH_PATH}`]: () => json(200, tokens('a1')),
+      'GET /api/v1/auth/me': () => json(200, { nickname: '모험가', identity: { adult_content: false } }),
+      'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: '0', total: '0', next_expiry: null }),
+      'GET /api/v1/notification/me/notifications/unread-count': () => json(200, { count: 0 }),
+      [`GET ${FOLLOW}`]: () => json(200, state),
+      [`PUT ${FOLLOW}`]: () => {
+        state = { following: true, follower_count: 4 };
+        return json(200, state);
+      },
+      ...WORKS,
+    });
+    renderApp(PATH);
+
+    await userEvent.click(await screen.findByRole('button', { name: '팔로우' }));
+
+    expect(await screen.findByRole('button', { name: '팔로잉' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/^팔로워 4/)).toBeInTheDocument();
+  });
+});
+
 describe('제작자 소개', () => {
   it('마이페이지에서 소개를 고쳐 저장한다', async () => {
     const me = {

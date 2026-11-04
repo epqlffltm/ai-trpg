@@ -15,6 +15,8 @@
     칸의 값의 모양(글자인지 숫자인지)은 보지 않는다. 그건 넣는 서버의 테스트가 지킨다
 
 사용자가 끌 수 있는 종류(mutable)도 이 표가 정한다(#525, app/mutes).
+받는 사람(audience)도 정한다. 대개 user_id 의 그 사람이고, 새 작품 알림(*.published, #989)은 user_id 가 만든 사람이며
+그 사람의 팔로워에게 나눠 넣는다(app/announcements). 작품마다 처음 한 번만이다.
 돈이 오간 일(결제, 청약철회)과 제재, 내 테이블의 모델이 이미 바뀐 일처럼 꼭 알아야 하는 것은 끌 수 없다.
 한 번뿐인 일(환영 크레딧)도 끌 까닭이 없어 두지 않는다.
 
@@ -38,6 +40,13 @@ CHAT = 'chat'
 STORY = 'story'
 
 
+class Audience(enum.StrEnum):
+    """알림을 받는 사람. recipient 는 user_id 의 그 사람, followers 는 user_id(만든 사람)의 팔로워들이다."""
+
+    RECIPIENT = 'recipient'
+    FOLLOWERS = 'followers'
+
+
 @dataclass(frozen=True)
 class KindRule:
     """kind 하나의 규칙. 넣을 수 있는 서버와 payload 에 꼭 있어야 하는 칸이다."""
@@ -46,11 +55,12 @@ class KindRule:
     required: frozenset[str]
     # 사용자가 이 종류를 끌 수 있는가. 끈 종류는 넣을 때 거른다(app/mutes)
     mutable: bool = False
+    audience: Audience = Audience.RECIPIENT
 
 
-def rule(source: str, *required: str, mutable: bool = False) -> KindRule:
+def rule(source: str, *required: str, mutable: bool = False, audience: Audience = Audience.RECIPIENT) -> KindRule:
     """규칙을 만든다. 표를 짧게 적으려는 것이다."""
-    return KindRule(source=source, required=frozenset(required), mutable=mutable)
+    return KindRule(source=source, required=frozenset(required), mutable=mutable, audience=audience)
 
 
 # 받는 알림의 표. 넣는 서버의 코드가 원본이다
@@ -92,6 +102,15 @@ KINDS: Mapping[str, KindRule] = MappingProxyType(
         'message_report.handled': rule(CHAT, 'name'),
         # story: 세션 속 답의 신고를 처리했다는 것을 신고한 사람에게. chat 의 것과 같다(name 은 세계관의 이름)
         'story_report.handled': rule(STORY, 'name'),
+        # 새 작품(#989): 팔로우한 제작자가 작품을 처음 목록에 올렸다. user_id 는 만든 사람이고 팔로워에게 나눠 넣는다.
+        # 링크 공개는 목록에 나오지 않아 알리지 않는다. 끌 수 있다
+        'scenario.published': rule(
+            GAME, 'scenario_id', 'title', 'creator_id', mutable=True, audience=Audience.FOLLOWERS
+        ),
+        'character.published': rule(
+            ASSET, 'character_id', 'name', 'creator_id', mutable=True, audience=Audience.FOLLOWERS
+        ),
+        'world.published': rule(ASSET, 'world_id', 'name', 'creator_id', mutable=True, audience=Audience.FOLLOWERS),
     }
 )
 
@@ -121,6 +140,12 @@ def is_mutable(kind: str) -> bool:
     """사용자가 끌 수 있는 종류인가. 표에 없는 종류는 끌 수 없다."""
     kind_rule = KINDS.get(kind)
     return kind_rule is not None and kind_rule.mutable
+
+
+def is_for_followers(kind: str) -> bool:
+    """팔로워에게 나눠 넣는 종류인가. 표에 없는 종류는 아니다."""
+    kind_rule = KINDS.get(kind)
+    return kind_rule is not None and kind_rule.audience is Audience.FOLLOWERS
 
 
 def missing_fields(kind_rule: KindRule, payload: Mapping[str, Any]) -> tuple[str, ...]:

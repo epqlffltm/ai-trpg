@@ -18,10 +18,10 @@ from alembic import context
 from server_core.database import create_engine
 from sqlalchemy.engine import Connection
 
+# 모델을 불러와야 Base.metadata 에 테이블이 등록된다. 이름을 직접 쓰지 않아도 불러오는 것 자체가 필요하다
+from app.announcements import models as announcement_models  # noqa: F401
 from app.core.config import get_settings
 from app.core.database import Base
-
-# 모델을 불러와야 Base.metadata 에 테이블이 등록된다. 이름을 직접 쓰지 않아도 불러오는 것 자체가 필요하다
 from app.follows import models as follow_models  # noqa: F401
 from app.notifications import models as notification_models  # noqa: F401
 

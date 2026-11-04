@@ -43,6 +43,7 @@ from app.characters.schemas import CharacterCreate, CharacterUpdate
 from app.content.html import Removed
 from app.images import service as images
 from app.lorebooks import repository as lorebooks
+from app.notifications.outbox import announce_if_listed, is_listed
 from app.popularity import ListingOrder
 from app.preferences import Preferences, shown_ratings
 from app.ratings import AdultContentRequiredError, allowed_ratings, require_rating
@@ -144,7 +145,9 @@ async def update_character(
         require_rating(data.rating, allowed_ratings(viewer))
     await require_own_images(session, viewer.user_id, data.image_ids())
     await require_own_lorebooks(session, viewer.user_id, data.lorebooks or [])
+    was_listed = is_listed(character)
     apply_changes(character, data.changes())
+    await announce_if_listed(session, character, was_listed)
     await session.commit()
     await session.refresh(character)
     return character
@@ -230,8 +233,10 @@ async def publish(
     repository.add(session, version)
     await session.flush()
     images.record_uses(session, version.id, used_image_ids(character, cleaned.html))
+    was_listed = is_listed(character)
     character.latest_version = version.number
     character.published_at = func.now()
+    await announce_if_listed(session, character, was_listed)
     await session.commit()
     await session.refresh(version)
     return version, cleaned.removed

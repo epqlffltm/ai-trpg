@@ -31,6 +31,7 @@ from app.characters.service import LorebookNotOwnedError, OperatorOnlyError, req
 from app.content.html import Removed
 from app.images import service as images
 from app.lorebooks import repository as lorebooks
+from app.notifications.outbox import announce_if_listed, is_listed
 from app.popularity import ListingOrder
 from app.preferences import Preferences, shown_ratings
 from app.ratings import AdultContentRequiredError, allowed_ratings, require_rating
@@ -136,7 +137,9 @@ async def update_world(
     await require_own_images(session, viewer.user_id, data.image_ids())
     await require_own_characters(session, viewer.user_id, data.character_ids())
     await require_own_lorebooks(session, viewer.user_id, data.lorebooks or [])
+    was_listed = is_listed(world)
     apply_changes(world, data.changes())
+    await announce_if_listed(session, world, was_listed)
     await session.commit()
     await session.refresh(world)
     return world
@@ -249,8 +252,10 @@ async def publish(
     repository.add(session, version)
     await session.flush()
     images.record_world_uses(session, version.id, prepared.images)
+    was_listed = is_listed(world)
     world.latest_version = version.number
     world.published_at = func.now()
+    await announce_if_listed(session, world, was_listed)
     warnings = [str(warning) for warning in find_warnings(world)]
     await session.commit()
     await session.refresh(version)

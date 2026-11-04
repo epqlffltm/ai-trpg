@@ -108,10 +108,18 @@ async def set_hidden(client: AsyncClient, headers: dict, made: dict, hidden: boo
     return await client.put(f'{ADMIN_URL}/characters/{made["id"]}/hidden', json=body, headers=headers)
 
 
+NEW_WORK_KINDS = ('character.published', 'world.published')
+
+
 async def outgoing(session: AsyncSession) -> list[OutgoingNotification]:
-    """발송함의 모든 줄. 적은 차례다. 세션이 기억한 것을 버리고 DB 에서 다시 읽는다."""
+    """
+    발송함의 줄. 적은 차례다. 세션이 기억한 것을 버리고 DB 에서 다시 읽는다.
+
+    공개할 때 적히는 새 작품 알림(#989)은 뺀다(test_new_work_notifications 가 본다).
+    """
     session.expire_all()
-    return list(await session.scalars(select(OutgoingNotification).order_by(OutgoingNotification.id)))
+    query = select(OutgoingNotification).where(OutgoingNotification.kind.not_in(NEW_WORK_KINDS))
+    return list(await session.scalars(query.order_by(OutgoingNotification.id)))
 
 
 async def action_ids(session: AsyncSession) -> list[int]:
