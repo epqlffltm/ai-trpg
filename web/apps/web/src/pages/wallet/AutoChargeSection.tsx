@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/wallet/AutoChargeSection.tsx
 // 지갑(A6)의 자동 충전(#980). 카드(CardPanel)와 설정(AutoChargeForm)을 묶고, 서버에 보내고, 되지 않은 까닭을 보인다.
-// 설정을 적으면 서버가 돌려준 것을 그대로 넣는다(putQueryData). 카드를 등록하거나 지우면 다시 읽는다(서버가 설정도 바꿀 수 있다).
+// 설정을 적으면 서버가 돌려준 것을 그대로 넣는다(putQueryData). 자동 결제 동의의 판이 바뀌었다는 답(409)이면 다시 읽는다. 카드를 등록하거나 지우면 다시 읽는다(서버가 설정도 바꿀 수 있다).
 // 상품 목록은 충전(A7)과 같은 것을 쓴다.
 // 토스페이먼츠의 카드 등록 창(toss)은 고객 키를 받은 뒤 현재 창에서 연다. 창이 열리면 이 페이지를 떠나므로 마친 글을 보이지 않는다.
 // 사용자가 창을 닫았으면 아무것도 보이지 않는다. 열지 못했으면 까닭을 보인다.
@@ -72,8 +72,16 @@ export function AutoChargeSection() {
 
   const save = (settings: AutoChargeSettings) =>
     run(async () => {
-      const saved = await saveAutoCharge(settings);
-      await putQueryData<AutoCharge>(queryClient, AUTO_CHARGE_KEY, saved, { whole: true });
+      try {
+        const saved = await saveAutoCharge(settings);
+        await putQueryData<AutoCharge>(queryClient, AUTO_CHARGE_KEY, saved, { whole: true });
+      } catch (error) {
+        // 자동 결제 동의의 판이 바뀌었다. 다시 읽어 바뀐 판을 보인다(폼이 새로 그려지고 동의 칸이 비워진다)
+        if (error instanceof ApiError && error.code === 'autocharge.terms_outdated') {
+          await queryClient.invalidateQueries({ queryKey: AUTO_CHARGE_KEY });
+        }
+        throw error;
+      }
     }, settings.enabled ? '자동 충전을 켰습니다.' : '자동 충전 설정을 저장했습니다.');
 
   return (
@@ -101,7 +109,7 @@ export function AutoChargeSection() {
             onRemove={remove}
           />
           <AutoChargeForm
-            key={JSON.stringify(current.data.settings)}
+            key={JSON.stringify([current.data.settings, current.data.terms])}
             current={current.data}
             products={products.data}
             busy={busy}

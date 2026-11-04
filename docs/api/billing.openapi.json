@@ -336,12 +336,33 @@
               "monthly_limit"
             ],
             "type": "object"
+          },
+          "terms": {
+            "additionalProperties": false,
+            "description": "자동 결제 동의(docs/legal/auto-charge.md)의 판. 켤 때 지금의 판에 동의해야 한다",
+            "properties": {
+              "agreed_version": {
+                "description": "마지막으로 동의한 판. 동의한 적이 없으면 null",
+                "nullable": true,
+                "type": "integer"
+              },
+              "version": {
+                "description": "지금의 판",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "version",
+              "agreed_version"
+            ],
+            "type": "object"
           }
         },
         "required": [
           "settings",
           "consecutive_failures",
-          "card"
+          "card",
+          "terms"
         ],
         "type": "object"
       },
@@ -1172,6 +1193,10 @@
                     "example": "credits-5000",
                     "type": "string"
                   },
+                  "terms_version": {
+                    "description": "동의한 자동 결제 동의의 판. 켤 때는 지금의 판(AutoCharge 의 terms.version)이어야 한다. 끌 때는 보지 않는다",
+                    "type": "integer"
+                  },
                   "threshold": {
                     "allOf": [
                       {
@@ -1212,7 +1237,7 @@
                 }
               }
             },
-            "description": "본문이나 값이 틀렸다(autocharge.invalid_settings)"
+            "description": "본문이나 값이 틀렸다(autocharge.invalid_settings). 켜는데 자동 결제에 동의하지 않았다(autocharge.terms_required)"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -1235,7 +1260,7 @@
                 }
               }
             },
-            "description": "카드 없이 켜려 했다(autocharge.no_card)"
+            "description": "카드 없이 켜려 했다(autocharge.no_card). 옛 판에 동의했다(autocharge.terms_outdated)"
           },
           "500": {
             "$ref": "#/components/responses/ServerError"
@@ -1249,7 +1274,7 @@
             "bearer": []
           }
         ],
-        "summary": "자동 충전의 설정을 적는다. 켜려면 카드가 있고 지금 결제할 수 있어야 한다(#980)",
+        "summary": "자동 충전의 설정을 적는다. 켜려면 자동 결제에 동의하고, 카드가 있고, 지금 결제할 수 있어야 한다(#980)",
         "tags": [
           "auto-charge"
         ],

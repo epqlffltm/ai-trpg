@@ -135,7 +135,7 @@ func (f chargeFixture) settings(enabled bool, monthlyLimit int64) {
 	f.t.Helper()
 	if _, err := f.service.Update(context.Background(), f.user, autocharge.Settings{
 		Enabled: enabled, Threshold: threshold, ProductID: "credits-1000", MonthlyLimit: monthlyLimit,
-	}); err != nil {
+	}, autocharge.TermsVersion); err != nil {
 		f.t.Fatalf("설정을 적지 못했다: %v", err)
 	}
 }
@@ -495,7 +495,7 @@ func TestAPurchaseThatLeavesItBelowTheThresholdIsNotRepeated(t *testing.T) {
 	f.enable("")
 	if _, err := f.service.Update(context.Background(), f.user, autocharge.Settings{
 		Enabled: true, Threshold: 5_000, ProductID: "credits-1000", MonthlyLimit: 30_000,
-	}); err != nil {
+	}, autocharge.TermsVersion); err != nil {
 		t.Fatalf("설정을 적지 못했다: %v", err)
 	}
 	f.deposit(60)

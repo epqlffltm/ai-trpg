@@ -74,6 +74,10 @@ const (
 	codeAutoChargeInvalidSettings = "autocharge.invalid_settings"
 	// codeAutoChargeNoCard 는 카드를 등록하지 않고 켜려 했다는 것이다(409). 화면은 카드 등록으로 보낸다.
 	codeAutoChargeNoCard = "autocharge.no_card"
+	// codeAutoChargeTermsRequired 는 자동 결제에 동의하지 않고 켜려 했다는 것이다(400).
+	codeAutoChargeTermsRequired = "autocharge.terms_required"
+	// codeAutoChargeTermsOutdated 는 옛 판에 동의하고 켜려 했다는 것이다(409). 화면은 자동 충전을 다시 읽어 지금의 판을 보인다.
+	codeAutoChargeTermsOutdated = "autocharge.terms_outdated"
 	// codeCardInvalidRequest 는 카드 등록의 본문이 틀렸다는 것이다(400).
 	codeCardInvalidRequest = "card.invalid_request"
 	// codeCardCustomerKeyMismatch 는 카드 등록 창에 쓴 고객 키가 이 사람의 것이 아니라는 것이다(409). 처음부터 다시 한다.

@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/autocharge/autochargedb"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/catalog"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/txn"
 )
@@ -125,10 +126,15 @@ func (s *Service) Get(ctx context.Context, userID uuid.UUID) (View, error) {
 }
 
 // Update 는 설정을 적는다. 값이 틀렸으면 ErrInvalidSettings 다.
-// 켜려면 카드가 있어야 하고(ErrNoCard) 지금 결제할 수 있어야 한다(eligibility 의 오류). 끄는 것은 언제나 된다.
+// 켜려면 자동 결제 동의의 지금의 판에 동의해야 하고(agreedTerms, ErrTermsRequired·ErrTermsOutdated), 카드가 있어야 하고(ErrNoCard),
+// 지금 결제할 수 있어야 한다(eligibility 의 오류). 끄는 것은 언제나 된다(agreedTerms 를 보지 않는다).
 // 켜는 동안 카드의 줄을 잠근다. 카드를 지우는 요청과 엇갈려도 "카드 없이 켜짐"으로 남지 않는다.
-func (s *Service) Update(ctx context.Context, userID uuid.UUID, settings Settings) (View, error) {
+// 켜면 같은 트랜잭션에서 동의를 한 줄 적는다. 설정만 적히고 동의가 빠지는 일이 없다.
+func (s *Service) Update(ctx context.Context, userID uuid.UUID, settings Settings, agreedTerms int) (View, error) {
 	if err := settings.Validate(); err != nil {
+		return View{}, err
+	}
+	if err := CheckTerms(settings.Enabled, agreedTerms); err != nil {
 		return View{}, err
 	}
 	if settings.Enabled {
@@ -144,11 +150,17 @@ func (s *Service) Update(ctx context.Context, userID uuid.UUID, settings Setting
 				return err
 			}
 		}
+		now := s.clock()
 		if _, err := queries.UpsertSettings(ctx, autochargedb.UpsertSettingsParams{
 			UserID: userID, Enabled: settings.Enabled, Threshold: settings.Threshold,
-			ProductID: settings.ProductID, MonthlyLimit: settings.MonthlyLimit, Now: s.clock(),
+			ProductID: settings.ProductID, MonthlyLimit: settings.MonthlyLimit, Now: now,
 		}); err != nil {
 			return err
+		}
+		if settings.Enabled {
+			if err := recordConsent(ctx, queries, userID, settings, now); err != nil {
+				return err
+			}
 		}
 		var err error
 		updated, err = view(ctx, queries, userID)
@@ -158,6 +170,15 @@ func (s *Service) Update(ctx context.Context, userID uuid.UUID, settings Setting
 		return View{}, err
 	}
 	return updated, nil
+}
+
+// recordConsent 는 지금의 판과 그 조건으로 자동 결제에 동의했다고 적는다. 상품의 값은 지금의 목록에서 옮겨 적는다(Validate 가 봤다).
+func recordConsent(ctx context.Context, queries *autochargedb.Queries, userID uuid.UUID, settings Settings, now time.Time) error {
+	product, _ := catalog.Find(settings.ProductID)
+	return queries.InsertConsent(ctx, autochargedb.InsertConsentParams{
+		UserID: userID, TermsVersion: TermsVersion, Threshold: int64(settings.Threshold),
+		ProductID: settings.ProductID, Price: product.Price, MonthlyLimit: settings.MonthlyLimit, Now: now,
+	})
 }
 
 // requireCard 는 카드의 줄을 잠근다. 카드가 없으면 ErrNoCard 다.
@@ -172,6 +193,7 @@ func requireCard(ctx context.Context, queries *autochargedb.Queries, userID uuid
 // --- 탈퇴 ---
 
 // Erase 는 그 사람의 설정, 카드, 고객 키를 지우고, 아직 보내지 않은 충전할 일을 그만둔다. 지운 것이 있으면 true 다.
+// 자동 결제 동의의 기록은 지우지 않는다. 결제의 근거다(주문처럼).
 // 몇 번을 불러도 같다. 이미 보낸 일(charging)은 옮겨 적은 카드로 답을 받을 때까지 둔다. 돈이 나갔을 수 있다.
 func (s *Service) Erase(ctx context.Context, userID uuid.UUID) (bool, error) {
 	var erased int64
@@ -215,6 +237,13 @@ func view(ctx context.Context, queries *autochargedb.Queries, userID uuid.UUID) 
 	switch {
 	case err == nil:
 		result.Card = &Card{IssuerCode: card.IssuerCode, Number: card.CardNumber, RegisteredAt: card.RegisteredAt}
+	case !errors.Is(err, pgx.ErrNoRows):
+		return View{}, err
+	}
+	agreed, err := queries.LatestConsentVersion(ctx, userID)
+	switch {
+	case err == nil:
+		result.AgreedTermsVersion = int(agreed)
 	case !errors.Is(err, pgx.ErrNoRows):
 		return View{}, err
 	}

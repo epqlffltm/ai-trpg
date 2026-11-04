@@ -25,7 +25,7 @@ const BILLING = '/api/v1/billing';
 const CLIENT_KEY = 'test_ck_D5GePWvyJnrK0W0k6q8gLzN97Eoq';
 const CUSTOMER_KEY = '6b1c7c2e-2b0b-4d7e-9a1d-1f5f0c8a9b11';
 const CARD = { issuer_code: '61', number: '43301234****123*', registered_at: '2026-11-04T01:00:00Z' };
-const NOTHING = { settings: null, consecutive_failures: 0, card: null };
+const NOTHING = { settings: null, consecutive_failures: 0, card: null, terms: { version: 1, agreed_version: null } };
 
 function signedIn(routes: Record<string, (request: SeenRequest) => Response> = {}) {
   return installFakeFetch({

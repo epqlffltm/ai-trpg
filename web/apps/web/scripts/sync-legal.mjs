@@ -6,7 +6,7 @@
 //
 // 원본의 모양: 제목(# 이용약관 (초안)), 작성자를 위한 안내, ---, 본문, ---, 검토할 것과 근거.
 // 두 --- 사이의 본문과 제목(괄호를 뺀 것)만 담는다. 원본을 고치면 이것을 다시 돌려 함께 올린다. CI(web.yml)가 어긋나면 실패한다.
-// 판을 올리면(consents.py 의 POLICIES) DOCUMENTS 에 새 판을 더한다. 옛 판의 파일은 지우지 않는다(그 판에 동의한 기록이 남는다).
+// 판을 올리면(consents.py 의 POLICIES, 자동 충전은 billing-server 의 autocharge.TermsVersion) DOCUMENTS 에 새 판을 더한다. 옛 판의 파일은 지우지 않는다(그 판에 동의한 기록이 남는다).
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -20,6 +20,8 @@ const OUT_DIR = join(APP_ROOT, 'src', 'legal', 'documents');
 const DOCUMENTS = [
   { name: 'terms', version: 1, source: 'terms.md' },
   { name: 'privacy', version: 1, source: 'privacy.md' },
+  // 자동 충전 이용 동의(#980). 인증 서버가 아니라 결제 서버가 판을 갖는다(autocharge.TermsVersion)
+  { name: 'auto-charge', version: 1, source: 'auto-charge.md' },
 ];
 
 const RULE = /^---\s*$/m;

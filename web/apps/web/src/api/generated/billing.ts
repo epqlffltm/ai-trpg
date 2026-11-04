@@ -46,7 +46,7 @@ export interface paths {
         };
         /** 자동 충전의 설정과 등록한 카드(#980) */
         get: operations["getAutoCharge"];
-        /** 자동 충전의 설정을 적는다. 켜려면 카드가 있고 지금 결제할 수 있어야 한다(#980) */
+        /** 자동 충전의 설정을 적는다. 켜려면 자동 결제에 동의하고, 카드가 있고, 지금 결제할 수 있어야 한다(#980) */
         put: operations["putAutoCharge"];
         post?: never;
         delete?: never;
@@ -539,6 +539,13 @@ export interface components {
                 product_id: string;
                 threshold: components["schemas"]["Amount"];
             } | null;
+            /** @description 자동 결제 동의(docs/legal/auto-charge.md)의 판. 켤 때 지금의 판에 동의해야 한다 */
+            terms: {
+                /** @description 마지막으로 동의한 판. 동의한 적이 없으면 null */
+                agreed_version: number | null;
+                /** @description 지금의 판 */
+                version: number;
+            };
         };
         Card: {
             /** @description 카드를 낸 곳의 코드(결제 대행사의 issuerCode) */
@@ -994,6 +1001,8 @@ export interface operations {
                     monthly_limit: number;
                     /** @example credits-5000 */
                     product_id: string;
+                    /** @description 동의한 자동 결제 동의의 판. 켤 때는 지금의 판(AutoCharge 의 terms.version)이어야 한다. 끌 때는 보지 않는다 */
+                    terms_version?: number;
                     /** @description 골드가 이 값 아래로 떨어지면 산다. 0 에서 100000 */
                     threshold: components["schemas"]["Amount"];
                 };
@@ -1009,7 +1018,7 @@ export interface operations {
                     "application/json": components["schemas"]["AutoCharge"];
                 };
             };
-            /** @description 본문이나 값이 틀렸다(autocharge.invalid_settings) */
+            /** @description 본문이나 값이 틀렸다(autocharge.invalid_settings). 켜는데 자동 결제에 동의하지 않았다(autocharge.terms_required) */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -1028,7 +1037,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description 카드 없이 켜려 했다(autocharge.no_card) */
+            /** @description 카드 없이 켜려 했다(autocharge.no_card). 옛 판에 동의했다(autocharge.terms_outdated) */
             409: {
                 headers: {
                     [name: string]: unknown;

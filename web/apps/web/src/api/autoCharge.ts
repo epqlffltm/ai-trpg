@@ -6,7 +6,8 @@
 //   2. 등록 창이 준 인증 키와 고객 키를 보낸다(registerCard). 서버가 빌링키를 받아 적는다. 빌링키는 화면에 오지 않는다
 //
 // 실패:
-//   - 설정: 400 autocharge.invalid_settings, 409 autocharge.no_card, 403 payment.verification_required·payment.guardian_consent_required
+//   - 설정: 400 autocharge.invalid_settings·autocharge.terms_required, 409 autocharge.no_card·autocharge.terms_outdated,
+//     403 payment.verification_required·payment.guardian_consent_required
 //   - 카드: 400 card.invalid_request, 409 card.customer_key_mismatch(처음부터), 422 card.refused, 503 card.issuer_unavailable(다시)
 
 import { apiRequest } from './http';
@@ -14,8 +15,14 @@ import type { AutoCharge, PaymentCard } from './types';
 
 const BILLING = '/api/v1/billing';
 
-/** 적어 둔 대로 사는 설정. 기준 골드는 다른 양처럼 글자다 */
-export type AutoChargeSettings = { enabled: boolean; threshold: string; product_id: string; monthly_limit: number };
+/** 적어 둔 대로 사는 설정. 기준 골드는 다른 양처럼 글자다. 켤 때는 동의한 자동 결제 동의의 판(terms_version)을 함께 보낸다 */
+export type AutoChargeSettings = {
+  enabled: boolean;
+  threshold: string;
+  product_id: string;
+  monthly_limit: number;
+  terms_version?: number;
+};
 
 export function fetchAutoCharge(signal?: AbortSignal): Promise<AutoCharge> {
   return apiRequest<AutoCharge>(`${BILLING}/auto-charge`, signal ? { signal } : {});

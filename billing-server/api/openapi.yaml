@@ -448,7 +448,7 @@ paths:
         "503": { $ref: "#/components/responses/Unavailable" }
     put:
       tags: [auto-charge]
-      summary: 자동 충전의 설정을 적는다. 켜려면 카드가 있고 지금 결제할 수 있어야 한다(#980)
+      summary: 자동 충전의 설정을 적는다. 켜려면 자동 결제에 동의하고, 카드가 있고, 지금 결제할 수 있어야 한다(#980)
       operationId: putAutoCharge
       security: [{ bearer: [] }]
       requestBody:
@@ -468,6 +468,9 @@ paths:
                   type: integer
                   format: int64
                   description: 한 달(한국 날짜의 달)에 자동으로 결제하는 돈의 상한(원). 고른 상품의 값에서 500000 사이
+                terms_version:
+                  type: integer
+                  description: 동의한 자동 결제 동의의 판. 켤 때는 지금의 판(AutoCharge 의 terms.version)이어야 한다. 끌 때는 보지 않는다
       responses:
         "200":
           description: 적은 뒤의 자동 충전
@@ -475,7 +478,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AutoCharge" }
         "400":
-          description: 본문이나 값이 틀렸다(autocharge.invalid_settings)
+          description: 본문이나 값이 틀렸다(autocharge.invalid_settings). 켜는데 자동 결제에 동의하지 않았다(autocharge.terms_required)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -486,7 +489,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
-          description: 카드 없이 켜려 했다(autocharge.no_card)
+          description: 카드 없이 켜려 했다(autocharge.no_card). 옛 판에 동의했다(autocharge.terms_outdated)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -1158,7 +1161,7 @@ components:
     AutoCharge:
       type: object
       additionalProperties: false
-      required: [settings, consecutive_failures, card]
+      required: [settings, consecutive_failures, card, terms]
       properties:
         settings:
           type: object
@@ -1184,6 +1187,17 @@ components:
             issuer_code: { type: string }
             number: { type: string }
             registered_at: { type: string, format: date-time }
+        terms:
+          type: object
+          description: 자동 결제 동의(docs/legal/auto-charge.md)의 판. 켤 때 지금의 판에 동의해야 한다
+          additionalProperties: false
+          required: [version, agreed_version]
+          properties:
+            version: { type: integer, description: 지금의 판 }
+            agreed_version:
+              type: integer
+              nullable: true
+              description: 마지막으로 동의한 판. 동의한 적이 없으면 null
     Card:
       type: object
       additionalProperties: false

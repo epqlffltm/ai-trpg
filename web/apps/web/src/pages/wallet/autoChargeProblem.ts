@@ -9,6 +9,8 @@ export type AutoChargeProblem = { message: string; link: { to: string; label: st
 const BY_CODE: Record<string, AutoChargeProblem> = {
   'autocharge.no_card': { message: '자동 충전을 켜려면 먼저 카드를 등록해 주세요.', link: null },
   'autocharge.invalid_settings': { message: '설정의 값이 맞지 않습니다. 다시 확인해 주세요.', link: null },
+  'autocharge.terms_required': { message: '자동 충전을 켜려면 자동 결제에 동의해 주세요.', link: null },
+  'autocharge.terms_outdated': { message: '자동 결제 동의의 내용이 바뀌었습니다. 바뀐 내용을 읽고 다시 동의해 주세요.', link: null },
   'payment.verification_required': {
     message: '본인인증을 마친 계정만 자동 충전을 켤 수 있습니다.',
     link: { to: '/me/identity', label: '본인인증하기' },
