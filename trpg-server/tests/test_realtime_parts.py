@@ -5,7 +5,7 @@
 
   - 신호와 서술의 조각을 글자로 바꾸고 되돌리기(signals)
   - 방송실: 기다리는 자리를 깨우기(hub)
-  - 저장하지 않는 것(입력 중, 서술의 조각)을 메시지로 바꾸기(service)
+  - 저장하지 않는 것(입력 중, 서술의 조각, 장면 그림이 바뀜)을 메시지로 바꾸기(service)
   - SSE 의 글자 형식(sse)
   - 어디까지 받았는지를 요청에서 읽기(router.read_cursor)
 """
@@ -22,9 +22,11 @@ from app.realtime.hub import Hub
 from app.realtime.router import read_cursor
 from app.realtime.service import (
     NARRATION_FRAME,
+    SNAPSHOT_FRAME,
     Cursor,
     live_frames,
     narration_frames,
+    snapshot_frames,
     typing_frames,
     wake_interval,
 )
@@ -365,3 +367,32 @@ def test_rejects_a_header_that_is_not_a_mark(mark: str):
         read_cursor(mark, events_after=0, messages_after=0, whispers_after=0)
 
     assert raised.value.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+def test_a_snapshot_signal_survives_the_channel():
+    signal = Signal(table_id=TABLE, kind=Kind.SNAPSHOTS)
+
+    assert signals.decode(signals.encode(signal)) == signal
+
+
+def test_snapshot_changes_become_one_frame_without_an_id():
+    received = {Signal(table_id=TABLE, kind=Kind.SNAPSHOTS), Signal(table_id=TABLE, kind=Kind.EVENTS), piece(0)}
+
+    (frame,) = snapshot_frames(received)
+
+    assert (frame.event, frame.data, frame.id) == (SNAPSHOT_FRAME, '{}', None)
+    assert snapshot_frames({piece(0)}) == []
+
+
+def test_snapshot_changes_come_after_typing_and_pieces():
+    received = {
+        Signal(table_id=TABLE, kind=Kind.SNAPSHOTS),
+        piece(0),
+        Signal(table_id=TABLE, kind=Kind.TYPING, user_id=SOMEONE),
+    }
+
+    assert [frame.event for frame in live_frames(received, viewer_id=TABLE)] == [
+        'typing',
+        NARRATION_FRAME,
+        SNAPSHOT_FRAME,
+    ]

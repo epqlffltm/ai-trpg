@@ -19,6 +19,9 @@
   - 바깥(공급자, asset, 결제 서버)을 부르는 동안 DB 의 연결을 쥐지 않는다
   - 같은 실패를 저절로 되풀이하지 않는다(사람이 다시 누른다). 실패하면 돈은 돌려준다
   - 누른 사람의 토큰은 그 요청이 맡긴 작업 안에서 asset 에 맡길 때만 쓰고 저장하지 않는다
+  - 그리기 시작(홀드가 걸림)과 끝(다 그림, 실패)은 테이블의 스트림에 알린다(scene_snapshot).
+    같은 트랜잭션에서 신호를 보내므로 기록이 옮겨진 때에만 나간다.
+    청구의 확정·반환은 화면이 볼 것이 바뀌지 않아 알리지 않는다
 """
 
 import asyncio
@@ -35,6 +38,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.asset_server.client import AssetClient, AssetNotFoundError, AssetUnavailableError, ImageContent
 from app.billing.client import Billing
+from app.realtime import signals
+from app.realtime.signals import Kind, Signal
 from app.rounds.models import Round
 from app.rounds.service import get_round
 from app.snapshots import charging, repository
@@ -159,15 +164,24 @@ async def begin_snapshot(
     )
 
 
+async def announce(session: AsyncSession, table_id: uuid.UUID | None) -> None:
+    """테이블의 스트림에 "장면 그림이 바뀌었다"를 보낸다. 커밋될 때 나간다. 테이블을 지웠으면 보내지 않는다."""
+    if table_id is not None:
+        await signals.publish(session, Signal(table_id=table_id, kind=Kind.SNAPSHOTS))
+
+
 async def mark(
     session_factory: async_sessionmaker[AsyncSession],
     snapshot_id: uuid.UUID,
     expected: frozenset[SnapshotBilling],
     values: dict[str, object],
+    table_id: uuid.UUID | None = None,
 ) -> bool:
-    """청구의 상태를 옮기고 커밋한다. 옮겼으면 True."""
+    """청구의 상태를 옮기고 커밋한다. 옮겼으면 True. table_id 를 주면 옮겼을 때 그 테이블에 알린다."""
     async with session_factory() as session:
         moved = await repository.move_billing(session, snapshot_id, expected, values)
+        if moved:
+            await announce(session, table_id)
         await session.commit()
     return moved
 
@@ -192,6 +206,7 @@ async def hold_snapshot(
         start.snapshot_id,
         frozenset({SnapshotBilling.PENDING}),
         {'billing_status': SnapshotBilling.HELD},
+        start.table_id,
     )
 
 
@@ -232,12 +247,13 @@ async def draw_and_keep(provider: ImageProvider, asset: AssetClient, token: str,
 async def finish(
     session_factory: async_sessionmaker[AsyncSession],
     billing: Billing,
-    snapshot_id: uuid.UUID,
+    start: SnapshotStart,
     values: dict,
     now: datetime,
 ) -> None:
-    """그린 결과를 적고, 확정이나 반환할 차례가 됐으면 바로 맡긴다."""
-    await mark(session_factory, snapshot_id, frozenset({SnapshotBilling.HELD}), values)
+    """그린 결과를 적고 테이블에 알린다. 확정이나 반환할 차례가 됐으면 바로 맡긴다."""
+    snapshot_id = start.snapshot_id
+    await mark(session_factory, snapshot_id, frozenset({SnapshotBilling.HELD}), values, start.table_id)
     async with session_factory() as session:
         snapshot = await repository.get(session, snapshot_id)
     if snapshot is not None and snapshot.billing_status in DUE_STATUSES:
@@ -260,21 +276,20 @@ async def draw_snapshot(
     try:
         values = await draw_and_keep(provider, asset, token, start, clock())
     except asyncio.CancelledError:
-        await mark(
-            session_factory, start.snapshot_id, frozenset({SnapshotBilling.HELD}), failed_values(CANCELLED, clock())
-        )
+        values = failed_values(CANCELLED, clock())
+        await mark(session_factory, start.snapshot_id, frozenset({SnapshotBilling.HELD}), values, start.table_id)
         raise
     except Exception:
         logger.exception('장면 그림을 만들지 못했습니다', extra={'snapshot_id': str(start.snapshot_id)})
         values = failed_values(SERVER_ERROR, clock())
-    await finish(session_factory, billing, start.snapshot_id, values, clock())
+    await finish(session_factory, billing, start, values, clock())
 
 
 async def refuse_snapshot(
     session_factory: async_sessionmaker[AsyncSession], billing: Billing, start: SnapshotStart, now: datetime
 ) -> None:
     """작업의 자리가 없어 그리지 못했다. 실패로 적고 돌려준다."""
-    await finish(session_factory, billing, start.snapshot_id, failed_values(JOBS_FULL, now), now)
+    await finish(session_factory, billing, start, failed_values(JOBS_FULL, now), now)
 
 
 def settled_values(snapshot: TableSnapshot, capture: bool, result: charging.Settlement, now: datetime) -> dict:

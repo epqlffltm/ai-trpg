@@ -64,6 +64,7 @@ MESSAGE_FRAME = 'chat_message'
 WHISPER_FRAME = 'whisper'
 TYPING_FRAME = 'typing'
 NARRATION_FRAME = 'narration_preview'
+SNAPSHOT_FRAME = 'scene_snapshot'
 CLOSED_FRAME = 'closed'
 
 
@@ -171,9 +172,20 @@ def narration_frames(received: set[Notice]) -> list[Frame]:
     ]
 
 
+def snapshot_frames(received: set[Notice]) -> list[Frame]:
+    """
+    받은 신호 중 "장면 그림이 바뀌었다"를 메시지 하나로 바꾼다(#983). 여럿이 와도 하나다. id 를 붙이지 않는다.
+
+    무엇이 바뀌었는지 싣지 않는다. 받는 쪽은 그림 목록(GET /tables/{id}/snapshots)을 다시 읽는다.
+    그린 사람 자신에게도 보낸다. 다 그린 것은 그 사람도 이것으로 안다.
+    """
+    changed = any(isinstance(signal, Signal) and signal.kind == Kind.SNAPSHOTS for signal in received)
+    return [Frame(event=SNAPSHOT_FRAME, data='{}')] if changed else []
+
+
 def live_frames(received: set[Notice], viewer_id: uuid.UUID) -> list[Frame]:
-    """받은 신호 중 저장하지 않는 것들을 메시지로 바꾼다. 입력 중을 먼저, 서술의 조각을 나중에."""
-    return typing_frames(received, viewer_id) + narration_frames(received)
+    """받은 신호 중 저장하지 않는 것들을 메시지로 바꾼다. 입력 중, 서술의 조각, 장면 그림의 차례다."""
+    return typing_frames(received, viewer_id) + narration_frames(received) + snapshot_frames(received)
 
 
 async def read_events(session: AsyncSession, table_id: uuid.UUID, cursor: Cursor) -> tuple[list[Frame], bool]:

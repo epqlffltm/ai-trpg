@@ -2807,6 +2807,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **누가 내나.** 누른 사람이 낸다. 앉은 사람 누구나 누를 수 있다. 가격표는 `narration.image.<모델의 이름에서 점을 붙임표로 바꾼 것>`(`narration.image.gemini-nano-banana-2-1`)이고 홀드의 이름표는 `game:img:<기록의 id>` 다. 결제 서버는 게임 서버에 `narration` 머리의 가격표만 허락한다.
 - **차례.** 기록을 저장하고(한 테이블에 그리는 중인 것은 하나다. 둘째는 409 `snapshot_in_progress`), 홀드를 건 뒤 202 로 답한다. 그림은 작업 관리자(`app/core/jobs.py`, 종류 `snapshot.draw`)가 그리고, 누른 사람의 토큰으로 asset 서버에 그 사람의 그림으로 맡긴 뒤 확정한다. 그리지 못하면(공급자의 거절, asset 이 죽었다) 실패로 적고 돌려준다. 같은 실패를 저절로 되풀이하지 않는다.
 - **지시.** 그 라운드의 장면(앉은 사람 모두에게 보이는 GM 의 서술, 앞의 800자)과 테이블의 제목, 캐릭터의 이름으로 만든다. GM 만 보는 판의 글은 넣지 않는다. 등급과 상관없이 전체이용가로 그린다. 그림 모델은 상태를 바꾸지 못한다.
+- **알림.** 그리기 시작(홀드가 걸림)과 끝(다 그림, 실패, 정리 작업이 돌려준 것)을 앉은 사람 모두의 스트림에 `scene_snapshot` 으로 알린다. 내용을 싣지 않아 놓쳐도 다시 읽으면 된다. 청구의 확정·반환은 알리지 않는다.
 - **보기.** 앉은 사람 모두가 목록에서 보고, 그림의 바이트는 이 서버가 asset 서버에서 서명만으로 받아 대신 내준다(`GET /api/v1/asset/service/trpg/images/{id}/kept`). asset 서버는 이 서버가 맡긴 그림만 내준다. 실패의 까닭(`code`)은 누른 사람에게만 싣는다.
 - **남은 것.** 서버가 꺼져 그리다 만 것은 정리 작업(`app/snapshots/settler.py`)이 실패로 적고 돌려준다(10분이 지나면 `abandoned`). 확정이나 반환을 못 했으면 같은 작업이 5초, 10초 … 5분마다 다시 맡긴다.
 - **실패.** 402 `credit_short`·`gold_required`, 422 `not_drawable`(장면의 글자가 없다), 503 `snapshot_unavailable`(그리지 않는 서버이거나 팔지 않는다)·`billing_unavailable`·`asset_unavailable`, 404(앉지 않은 테이블, 없는 라운드, `snapshot_not_found`).
@@ -3275,6 +3276,7 @@ data: {"reason": "table_ended"}
 | `whisper` | 자기 쪽지함의 쪽지 한 장. `GET /whispers` 의 한 줄과 모양이 같다. 보낸 사람과 받은 사람에게만 간다 |
 | `typing` | 누가 채팅을 입력 중이다. `{"user_id": "..."}`. `id` 가 없다 |
 | `narration_preview` | 쓰이는 중인 서술의 조각. `{"round": 3, "attempt": 1, "seq": 0, "text": "..."}`. `id` 가 없다. 아래 [서술의 미리 보기](#서술의-미리-보기) |
+| `scene_snapshot` | 테이블의 장면 그림이 바뀌었다(그리기 시작, 다 그림, 실패, #983). `{}`. `id` 가 없다. 화면은 `GET /tables/{id}/snapshots` 를 다시 읽는다. 그린 사람에게도 간다. 한 묶음에 여럿이면 하나만 간다([장면 그림](#장면-그림)) |
 | `closed` | 서버가 스트림을 닫는다. `reason`: `not_seated`(나갔거나 내보내졌다), `table_ended`, `token_expired`(새 토큰으로 다시 붙는다), `server_shutdown`(서버가 꺼진다. 잠깐 쉬었다가 다시 붙는다) |
 
 `:` 로 시작하는 줄은 주석이다. 15초마다 `: ping` 이 간다. 써 봐야 연결이 죽었는지 알고, 중간의 프록시가 조용한 연결을 끊지 않는다.

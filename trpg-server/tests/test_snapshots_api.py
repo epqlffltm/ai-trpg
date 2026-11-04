@@ -14,6 +14,8 @@
   - 한 테이블에 그리는 중인 것은 하나다(409)
   - provider 가 없으면 503 snapshot_unavailable 이고, 값은 available=false 다
   - 정리 작업은 그리는 도중에 오래 남은 것을 실패로 적고 돌려준다
+  - 그리기 시작과 끝은 앉은 사람 모두의 스트림에 scene_snapshot 으로 알린다(그린 사람에게도).
+    다른 테이블에는 가지 않는다
 """
 
 import asyncio
@@ -29,17 +31,22 @@ from server_core.testing.tokens import SigningKey
 
 from app.billing.routing import utc_now
 from app.main import API_PREFIX
+from app.realtime.service import SNAPSHOT_FRAME, Cursor
+from app.realtime.sse import Frame
 from app.snapshots import service
 from app.snapshots.models import SnapshotBilling, SnapshotOutcome, TableSnapshot
 from app.snapshots.providers import price_code_of
 from app.snapshots.settler import SnapshotSettler
 from tests.asset_server import FakeAsset
 from tests.billing import PRICES, FakeBillingServer
+from tests.streaming import Reader
 from tests.test_round_closing import FRIEND, ME, OPENINGS, bearer, start_duo, table_url
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
 STRANGER = uuid.UUID('33333333-2222-4333-8444-555555555555')
+# 다른 테이블에 함께 앉는 사람
+OUTSIDER = uuid.UUID('44444444-2222-4333-8444-555555555555')
 # 장면 그림 한 장의 값(가짜 결제 서버의 가격표)
 PRICE = 160
 CREDITS = 1000
@@ -58,6 +65,11 @@ def friend(signing_key: SigningKey) -> dict[str, str]:
 @pytest.fixture
 def stranger(signing_key: SigningKey) -> dict[str, str]:
     return bearer(signing_key, STRANGER)
+
+
+@pytest.fixture
+def outsider(signing_key: SigningKey) -> dict[str, str]:
+    return bearer(signing_key, OUTSIDER)
 
 
 @pytest.fixture
@@ -339,3 +351,64 @@ async def test_the_settler_leaves_a_fresh_drawing_alone(app: FastAPI, client: As
 
     assert await settler.tick() == 0
     assert [s['status'] for s in await listed(client, me, table)] == ['drawing']
+
+
+async def snapshot_frames_of(reader: Reader, limit: int = 20) -> list[Frame]:
+    """스트림에서 장면 그림의 알림만 고른다. 조용해질 때까지 읽는다."""
+    found = []
+    for _ in range(limit):
+        try:
+            frame = await reader.next(timeout=0.5)
+        except TimeoutError:
+            break
+        if frame.event == SNAPSHOT_FRAME:
+            found.append(frame)
+    return found
+
+
+@pytest.mark.usefixtures('provider', 'asset', 'billing')
+async def test_drawing_is_announced_to_everyone_at_the_table(app: FastAPI, client: AsyncClient, me, friend, connect):
+    table = await start_duo(client, me, friend)
+    mine, friends = connect(table, ME, Cursor(events=1000)), connect(table, FRIEND, Cursor(events=1000))
+    await mine.settle()
+    await friends.settle()
+
+    await draw(client, friend, table)
+    await drawn(app)
+
+    for reader in (mine, friends):
+        frames = await snapshot_frames_of(reader)
+        assert frames, '장면 그림의 알림이 오지 않았다'
+        assert {(frame.data, frame.id) for frame in frames} == {('{}', None)}
+
+
+@pytest.mark.usefixtures('provider', 'asset', 'billing')
+async def test_drawing_is_not_announced_to_another_table(
+    app: FastAPI, client: AsyncClient, me, friend, stranger, outsider, connect
+):
+    table = await start_duo(client, me, friend)
+    other = await start_duo(client, stranger, outsider)
+    strangers = connect(other, STRANGER, Cursor(events=1000))
+    await strangers.settle()
+
+    await draw(client, me, table)
+    await drawn(app)
+
+    assert await snapshot_frames_of(strangers) == []
+
+
+async def test_the_settler_announces_a_drawing_it_gives_back(app: FastAPI, client: AsyncClient, me, friend, connect):
+    table = await start_duo(client, me, friend)
+    snapshot = service.new_snapshot(uuid.UUID(table['id']), 1, ME, app.state.settings.snapshot_model)
+    snapshot.billing_status = SnapshotBilling.HELD
+    async with app.state.session_factory() as session:
+        session.add(snapshot)
+        await session.commit()
+    friends = connect(table, FRIEND, Cursor(events=1000))
+    await friends.settle()
+    later = utc_now() + service.SNAPSHOT_STALE + timedelta(minutes=1)
+    settler = SnapshotSettler(app.state.session_factory, lambda: app.state.billing, clock=lambda: later)
+
+    await settler.tick()
+
+    assert len(await snapshot_frames_of(friends)) == 1
