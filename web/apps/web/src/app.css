@@ -2696,6 +2696,13 @@ a.ui-button {
   border-radius: var(--ui-radius);
 }
 
+.chat-snapshots__delete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
 .chat-snapshots__note {
   margin: 0;
 }
