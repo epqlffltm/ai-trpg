@@ -14,12 +14,14 @@
   - 장면 그림을 만들지 않는 서버, 팔지 않는 가격표면 503 snapshot_unavailable 이다
   - 대화를 지우면 맡긴 그림을 asset 에서 지운다
   - 그리는 도중에 서버가 꺼진 것은 정리 작업이 실패로 적고 돌려준다
+  - 정리 작업의 한 바퀴는 job_id, span, 작업 메트릭을 단다
   - 내 그림들(갤러리)은 다 그린 것만 최근 것부터다. 남의 것, 지운 대화의 것은 보이지 않는다
   - 내 그림 한 장을 지우면 asset 의 그림까지 지운다. 그리는 중이나 청구를 정리하는 중이면 409, 남의 것은 404.
     asset 이 안 되면 503 이고 기록은 남는다
 """
 
 import asyncio
+import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -29,6 +31,10 @@ from ai_core.fake import FakeImageProvider
 from ai_core.image_provider import GeneratedImage, ImageRequest, ReferenceImage, ReferenceKind
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.observability.spans import ATTRIBUTE_JOB_ID
+from server_core.testing.logs import rendered
+from server_core.testing.metrics import MetricsRecorder
+from server_core.testing.spans import SpanRecorder
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +43,7 @@ from app.main import API_PREFIX
 from app.snapshots.models import Snapshot
 from app.snapshots.prompt import REFERENCE_RULE, RULES
 from app.snapshots.providers import price_code_of
-from app.snapshots.settler import SnapshotSettler
+from app.snapshots.settler import SETTLE_OPERATION, SnapshotSettler
 from app.turns.models import BillingStatus
 from tests.assets import FakeAsset
 from tests.billing import FakeBillingServer
@@ -454,3 +460,41 @@ async def test_a_failed_snapshot_is_deleted_without_asset(
 
     assert (failed['status'], response.status_code) == ('failed', status.HTTP_204_NO_CONTENT)
     assert asset.discarded == [] and await listed(client, mine, conversation) == []
+
+
+async def test_a_settler_round_is_a_job_with_its_own_id(
+    app: FastAPI,
+    session: AsyncSession,
+    client: AsyncClient,
+    answered: tuple,
+    billing: FakeBillingServer,
+    mine: dict,
+    spans: SpanRecorder,
+    metrics: MetricsRecorder,
+    caplog: pytest.LogCaptureFixture,
+):
+    _, _, answer_id = answered
+    slow = SlowImageProvider()
+    app.state.image_provider = slow
+    await draw(client, mine, answer_id)
+    for task in list(app.state.snapshot_tasks):
+        app.state.snapshot_tasks.discard(task)
+    await session.execute(update(Snapshot).values(created_at=datetime.now(UTC) - timedelta(hours=1)))
+    await session.commit()
+    settler = SnapshotSettler(app.state.session_factory, billing=lambda: app.state.billing)
+
+    with caplog.at_level(logging.DEBUG, logger='app.snapshots.settler'):
+        settled = await settler.tick()
+        idle = await settler.tick()
+    slow.hold.set()
+
+    # 할 일이 없던 바퀴의 span 은 버려진다(server_core/observability/idle_rounds.py). 로그와 메트릭은 남는다
+    (busy_span,) = [span for span in spans.ended() if span.name == SETTLE_OPERATION]
+    busy, quiet = rendered(caplog.records, 'app.snapshots.settler')
+    assert (settled, idle) == (1, 0)
+    assert (busy['level'], busy['settled'], quiet['level'], quiet['settled']) == ('info', 1, 'debug', 0)
+    assert busy['job_id'] == busy_span.attributes[ATTRIBUTE_JOB_ID] != quiet['job_id']
+    assert busy['trace_id'] != quiet['trace_id'] and isinstance(busy['duration_ms'], int)
+    labels = {'operation': SETTLE_OPERATION}
+    assert metrics.value('background_jobs_started', **labels) == 2
+    assert metrics.value('background_jobs_finished', **labels, result='success') == 2
