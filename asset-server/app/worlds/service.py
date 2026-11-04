@@ -334,7 +334,7 @@ async def list_public(
     """
     ratings = shown_ratings(allowed_ratings(viewer), preferences)
     return await repository.list_public(
-        session, ratings, search, preferences.orientation_tag, creator, limit, offset, order
+        session, ratings, search, preferences.orientation_tag, creator, limit, offset, order, preferences.excluded
     )
 
 

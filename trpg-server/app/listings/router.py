@@ -24,6 +24,7 @@ from app.assets.routing import Paging, Session
 from app.assets.scenarios.schemas import RecommendedPlayers
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.listings import hearts, service
+from app.listings.exclusions import ExclusionsParam
 from app.listings.models import TAG_MAX_LENGTH, Genre, Listing, Orientation
 from app.listings.popularity import ListingOrder, start_counts
 from app.listings.repository import ListingFilter, PublicRow
@@ -170,6 +171,7 @@ CreatorFilter = Annotated[uuid.UUID | None, Query()]
 
 
 def to_filter(
+    excluded: ExclusionsParam,
     genre: GenreFilter = None,
     tag: TagFilter = None,
     players: PlayersFilter = None,
@@ -188,6 +190,7 @@ def to_filter(
         hide_adult=hide_adult,
         orientation=orientation,
         creator=creator,
+        excluded=excluded,
     )
 
 

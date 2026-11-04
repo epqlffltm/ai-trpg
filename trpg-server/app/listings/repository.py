@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from app.assets.models import Asset, Rating, ScenarioVersion
+from app.listings.exclusions import Exclusions
 from app.listings.models import ORIENTATION_TAGS, Genre, Listing, Orientation
 from app.listings.popularity import ListingOrder, by_popularity, popular_since
 from app.listings.search import LIKE_ESCAPE, SearchTerms, contains_pattern
@@ -36,6 +37,7 @@ class ListingFilter:
     볼 수 없는 사람에게는 이미 없다.
     orientation 은 성향이다(#987). 고르면 그 태그(ORIENTATION_TAGS)가 붙은 것만 나온다.
     creator 는 만든 사람의 공개 ID 다(#992). 제작자 페이지가 그 사람의 공개 시나리오만 고른다.
+    excluded 는 보는 사람이 막은 제작자와 태그다(#988). 그 제작자의 것과 그 태그가 하나라도 붙은 것을 뺀다.
     """
 
     genre: Genre | None = None
@@ -45,6 +47,7 @@ class ListingFilter:
     hide_adult: bool = False
     orientation: Orientation | None = None
     creator: uuid.UUID | None = None
+    excluded: Exclusions = Exclusions()
 
 
 async def find_listing(session: AsyncSession, scenario_id: uuid.UUID) -> Listing | None:
@@ -92,6 +95,15 @@ def filtered(query: Select[PublicRow], where: ListingFilter) -> Select[PublicRow
         query = query.where(Listing.tags.contains([ORIENTATION_TAGS[where.orientation]]))
     if where.creator is not None:
         query = query.where(Asset.owner_id == where.creator)
+    return without_excluded(query, where.excluded)
+
+
+def without_excluded(query: Select[PublicRow], excluded: Exclusions) -> Select[PublicRow]:
+    """막은 제작자의 것과 막은 태그가 하나라도 붙은 것을 뺀다(#988)."""
+    if excluded.creators:
+        query = query.where(Asset.owner_id.not_in(excluded.creators))
+    if excluded.tags:
+        query = query.where(~Listing.tags.overlap(list(excluded.tags)))
     return query
 
 

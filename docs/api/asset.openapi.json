@@ -7718,6 +7718,39 @@
               ],
               "title": "Orientation"
             }
+          },
+          {
+            "in": "query",
+            "name": "exclude_creators",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 3700,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Creators"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_tag",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "maxLength": 20,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 30,
+              "title": "Exclude Tag",
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -8404,6 +8437,39 @@
               ],
               "title": "Orientation"
             }
+          },
+          {
+            "in": "query",
+            "name": "exclude_creators",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 3700,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Creators"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_tag",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "maxLength": 20,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 30,
+              "title": "Exclude Tag",
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -8855,6 +8921,39 @@
                 }
               ],
               "title": "Orientation"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_creators",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 3700,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Creators"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_tag",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "maxLength": 20,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 30,
+              "title": "Exclude Tag",
+              "type": "array"
             }
           }
         ],
@@ -9983,6 +10082,39 @@
               ],
               "title": "Orientation"
             }
+          },
+          {
+            "in": "query",
+            "name": "exclude_creators",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 3700,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Creators"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_tag",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "maxLength": 20,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 30,
+              "title": "Exclude Tag",
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -10060,6 +10192,39 @@
                 }
               ],
               "title": "Orientation"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_creators",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 3700,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Creators"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_tag",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "maxLength": 20,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 30,
+              "title": "Exclude Tag",
+              "type": "array"
             }
           }
         ],
