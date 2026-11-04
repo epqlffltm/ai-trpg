@@ -3,11 +3,14 @@
 //   - 선언을 받는 중: 마감까지 남은 시간, 아직 내지 않은 사람, 내 선언, 방장의 닫기와 바로 앞 라운드 되돌리기(#288)
 //   - 결과를 서술하는 중: 모두의 선언과 판정 결과를 먼저 보이고, 쓰이는 서술을 미리 보인다. 실패하면 방장이 다시 맡긴다
 //   - 끝난 테이블의 마지막 라운드: 선언과 결과만
+// 장면 아래에 그 라운드의 장면 그림(#983)을 둔다.
 // 다음 라운드가 열린 것은 스트림의 이벤트로 알고 다시 읽는다.
 
 import type { Round, TableDetail } from '../../../../api/types';
 import { formatRemaining } from '../../../../hooks/useCountdown';
 import { useNow } from '../../../../hooks/useNow';
+import { RoundSnapshots } from '../snapshots/RoundSnapshots';
+import type { TableSnapshotsSource } from '../snapshots/useTableSnapshots';
 import { CloseRoundButton } from './CloseRoundButton';
 import { DeclarationList } from './DeclarationList';
 import { DeclarationPanel } from './DeclarationPanel';
@@ -22,9 +25,10 @@ type Props = {
   myId: string | undefined;
   preview: NarrationPreview | null;
   nameOfMember: (userId: string) => string;
+  snapshots: TableSnapshotsSource;
 };
 
-export function CurrentRound({ table, round, myId, preview, nameOfMember }: Props) {
+export function CurrentRound({ table, round, myId, preview, nameOfMember, snapshots }: Props) {
   const playing = table.status === 'playing';
   const isHost = myId !== undefined && table.host_id === myId;
   return (
@@ -33,6 +37,7 @@ export function CurrentRound({ table, round, myId, preview, nameOfMember }: Prop
         라운드 {round.number} <span className="hint">· {roundStatusLabel(round.status)}</span>
       </h3>
       <p className="prose scene">{round.scene}</p>
+      <RoundSnapshots tableId={table.id} roundNumber={round.number} scene={round.scene} source={snapshots} />
       {round.status === 'open' && playing ? (
         <>
           <RoundDeadline deadlineAt={round.deadline_at} />
