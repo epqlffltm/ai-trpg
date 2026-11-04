@@ -367,6 +367,36 @@ tests:
         alertname: BillingSweepStalled
         exp_alerts: []
 
+  # 결제 서버가 떠 있는데 자동 충전의 결제 작업이 성공하지 않으면 울린다
+  - interval: 1m
+    input_series:
+      - series: 'db_up{service="billing-server", instance="server-a"}'
+        values: '1x30'
+      - series: 'background_jobs_finished_total{service="billing-server", operation="autocharge.run", result="success", instance="autocharge-a"}'
+        values: '0+6x5 30x25'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: BillingAutoChargeStalled
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: BillingAutoChargeStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: 자동 충전의 결제 작업이 10분 넘게 성공하지 않았다
+              description: 골드가 떨어진 사람의 자동 충전이 결제되지 않는다. docker compose ps billing-autocharge 와 그 로그를 본다
+
+  # 자동 충전의 결제 작업을 띄운 적이 없는 곳에서는 결제 서버가 떠 있어도 울리지 않는다
+  - interval: 1m
+    input_series:
+      - series: 'db_up{service="billing-server", instance="server-a"}'
+        values: '1x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: BillingAutoChargeStalled
+        exp_alerts: []
+
   # 대사: 돈 적이 있는데 26시간 동안 없으면 울린다. 실패하면 하루 동안 울린다
   - interval: 1h
     input_series:

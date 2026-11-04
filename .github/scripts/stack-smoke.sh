@@ -59,9 +59,9 @@ SERVERS=(auth trpg board billing notification asset chat story)
 # 서버마다 컨테이너 안에서 듣는 포트
 declare -A PORTS=([auth]=8000 [trpg]=8001 [board]=8002 [billing]=8003 [notification]=8004 [chat]=8005 [asset]=8006 [story]=8007)
 # 계속 도는 워커와 주기 명령의 컨테이너
-WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-cron db-backup)
+WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-autocharge billing-cron db-backup)
 # 그 가운데 상태 확인이 있는 워커. 심장박동(docker-compose.yml 의 x-worker-heartbeat)을 보거나, DB 의 백업은 최근 백업 파일을 본다
-HEARTBEAT_WORKERS=(auth-mail auth-welcome-credits billing-sweeper db-backup)
+HEARTBEAT_WORKERS=(auth-mail auth-welcome-credits billing-sweeper billing-autocharge db-backup)
 # 서명 개인키를 받지 않는 인증의 프로세스(#274). 키 폴더는 auth-server 에만 붙는다
 KEYLESS=(auth-migrate auth-mail auth-welcome-credits auth-cron)
 # 주기 명령의 컨테이너와 그 crontab
@@ -1259,9 +1259,11 @@ check_server_metrics() {
         eventually prometheus_finds "db_pool_connections{service=\"$service\", state=\"idle\"} and on(instance) db_pool_connections_max"
     fi
   done
-  # 결제 서버의 작업. 정리 작업은 30초마다 돌고, 대사는 check_workers 가 한 번 돌렸다(끝날 때 한 번 민다)
+  # 결제 서버의 작업. 정리 작업은 30초마다, 자동 충전의 결제 작업은 10초마다 돌고, 대사는 check_workers 가 한 번 돌렸다(끝날 때 한 번 민다)
   report "결제 서버의 정리 작업이 작업 메트릭을 민다(sweep.run, instance=sweeper-…)" \
     eventually prometheus_finds 'background_jobs_finished_total{service="billing-server", operation="sweep.run", result="success", instance=~"sweeper-.+"}'
+  report "자동 충전의 결제 작업이 작업 메트릭을 민다(autocharge.run, instance=autocharge-…)" \
+    eventually prometheus_finds 'background_jobs_finished_total{service="billing-server", operation="autocharge.run", result="success", instance=~"autocharge-.+"}'
   report "결제 서버의 대사가 끝날 때 작업 메트릭을 민다(reconcile.run)" \
     eventually prometheus_finds 'background_jobs_finished_total{service="billing-server", operation="reconcile.run"}'
   # 업무 메트릭. 주문과 결제 대행사는 CI 에 결제가 없어 값이 생기지 않는다. 알림은 서명 없는 것을 하나 보내 만든다

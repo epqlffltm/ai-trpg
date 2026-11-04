@@ -169,7 +169,7 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 
 - 같은 `billing-server/.env` 를 쓴다. 주소(DB, 인증 서버의 공개키)와 `HOST`, `PORT` 만 compose 가 덮어쓴다
 - 테이블은 `billing-migrate` 가 서버보다 먼저 한 번 만든다
-- 정리 작업은 `billing-sweeper` 가 계속 돌고, 대사는 `billing-cron` 이 매일 UTC 19:30(한국 04:30)에 한 번 돈다(`docker/cron/billing.crontab`). 따로 띄울 것이 없다
+- 정리 작업은 `billing-sweeper` 가, 자동 충전의 결제 작업은 `billing-autocharge` 가 계속 돌고, 대사는 `billing-cron` 이 매일 UTC 19:30(한국 04:30)에 한 번 돈다(`docker/cron/billing.crontab`). 따로 띄울 것이 없다
 - 바깥 주소는 프록시 하나다. `http://127.0.0.1:8080/api/v1/billing/...`. 결제 서버의 포트(8003)는 열지 않는다
 - 서버끼리 부르는 `/api/v1/billing/service/` 는 프록시가 바깥에서 막는다(404). 게임 서버와 인증 서버는 프록시를 거치지 않고 컨테이너 이름(`billing-server:8003`)으로 부른다. 결제 대행사의 알림(`/webhooks/payment`, `/webhooks/toss`)은 열려 있다
 - `/health` 와 개발용 결제 화면(`/dev/checkout`)은 `/api/v1/` 밖이라 바깥에서 열리지 않는다. 결제 화면은 PC 에서 직접 띄워 쓴다
@@ -1420,7 +1420,7 @@ DB 의 칸과 API 의 모양은 그대로다. 그래서 API 는 처음부터 양
 
 **골드가 정한 값 아래로 떨어지면 등록한 카드로 정한 상품을 산다(#980).** 카드를 등록하고 설정을 적으면(첫 단계),
 홀드가 골드를 뺄 때 "충전할 일"을 적고, 결제 대행사의 키를 가진 따로 도는 작업(`cmd/autocharge`)이 결제한다(둘째 단계, 아래 "결제").
-되지 않은 것은 정리 작업이 알림함에 알린다(`autocharge.failed`, 아래 "정리 작업과 대사"의 "사용자의 알림함"). 화면(카드 등록 창, 설정)과 compose 에 작업을 붙이는 것은 다음 단계다.
+되지 않은 것은 정리 작업이 알림함에 알린다(`autocharge.failed`, 아래 "정리 작업과 대사"의 "사용자의 알림함"). 화면은 지갑(A6)에 있고, compose 는 결제 작업을 `billing-autocharge` 로 띄운다.
 정한 것(2026-11-04): 잔액 기준만 둔다(날짜 기준은 나중). 실패하면 다시 하지 않고 알리며 세 번 이어서 실패하면 끈다. 미성년자는 보호자가 동의했으면 켤 수 있다.
 
 **카드 등록(빌링키).** 결제 대행사의 자동결제다(토스페이먼츠, `POST /v1/billing/authorizations/issue`).
@@ -1491,7 +1491,9 @@ go run ./cmd/autocharge -once                    한 바퀴만 돌고 한 일을
 go run ./cmd/autocharge -interval 30s -limit 20  간격(1초 이상)과 한 바퀴에 결제하는 수(기본 50)
 ```
 
-대사처럼 결제 대행사의 설정(`PAYMENT_PROVIDER`, `TOSS_SECRET_KEY`)을 읽는다(`config.LoadJobs`). 서버와 정리 작업은 키 없이 돈다. 결제를 이 작업에 모았다.
+대사처럼 결제 대행사의 설정(`PAYMENT_PROVIDER`, `TOSS_SECRET_KEY`)을 읽는다(`config.LoadAutoCharge`). 서버와 정리 작업은 키 없이 돈다. 결제를 이 작업에 모았다.
+compose 는 `billing-autocharge` 로 띄우고 `TOSS_SECRET_KEY` 와 DB 의 비밀번호만 남긴다(요청을 받지 않고 인증 서버·알림 서버를 부르지 않는다).
+정리 작업처럼 성공한 바퀴마다 심장박동(`HEARTBEAT_FILE`)을 남기고 healthcheck 가 본다. 10분 넘게 성공하지 않으면 `BillingAutoChargeStalled` 가 울린다.
 
 **정하지 않은 것.** 결제 수단을 저장하는 데 받을 동의 문구와 약관(법률 검토와 함께), 실제 계약(라이브 키)에서의 자동결제 심사,
 결과를 모르는 채로 오래 남은 일을 대사가 찾는 것, 결제 대행사의 멱등키가 지나는 기한(15일)이 넘도록 답을 받지 못한 일의 처리(사람이 상점관리자에서 본다).
@@ -2089,7 +2091,7 @@ compose 로 띄울 때는 루트 `.env` 에 적는다(프로필 `observability` 
 | `db_pool_connections` | 서버, 정리 작업, 대사 | `state`(`idle`, `in_use`) |
 | `db_pool_connections_max` | 서버, 정리 작업, 대사 | 없음 |
 | `db_pool_wait_seconds` | 서버, 정리 작업, 대사 | 없음. 풀에서 연결을 얻으려고 기다린 시간 |
-| `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | 정리 작업(`sweep.run`), 대사(`reconcile.run`) | `operation`. 끝난 수에는 `result`(`success`, `server_error`, `cancelled`) |
+| `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | 정리 작업(`sweep.run`), 자동 충전의 결제 작업(`autocharge.run`), 대사(`reconcile.run`) | `operation`. 끝난 수에는 `result`(`success`, `server_error`, `cancelled`) |
 | `billing_ledger_operations_total` | 서버, 정리 작업, 대사 | `reason`(원장의 이유), `result`(`success`, `failure`). 원장에 적은 일(작업 번호 하나)의 수 |
 | `billing_idempotency_total` | 서버 | `kind`(`order`, `hold`), `outcome`(`first`, `replayed`, `conflict`) |
 | `billing_orders_total` | 서버, 정리 작업(`expired`), 대사 | `status`. 그 상태가 된 주문의 수 |
@@ -2097,7 +2099,7 @@ compose 로 띄울 때는 루트 `.env` 에 적는다(프로필 `observability` 
 | `payment_provider_calls_total` | 서버, 대사 | `provider`(`PAYMENT_PROVIDER`), `operation`(`confirm`, `lookup`, `cancel`), `outcome` |
 | `payment_webhooks_total` | 서버 | `provider`(서명한 알림은 `fake`, 토스의 알림은 `toss`), `result`(`accepted`, `ignored`, `bad_signature`, `bad_request`, `unavailable`) |
 
-- 모든 메트릭에 `service="billing-server"` 가 붙는다(수집기가 붙인다). 프로세스는 `instance` 의 앞부분으로 가른다: `server-…`, `sweeper-…`, `reconcile-…`
+- 모든 메트릭에 `service="billing-server"` 가 붙는다(수집기가 붙인다). 프로세스는 `instance` 의 앞부분으로 가른다: `server-…`, `sweeper-…`, `autocharge-…`, `reconcile-…`
 - 메서드는 HTTP 가 정한 것만 그대로 적고, 그 밖은 `_OTHER` 다. 실제 주소, 사용자, 주문 번호는 label 로 쓰지 않는다
 - 대사는 하루 한 번 짧게 돌고 끝난다. 보내는 간격(15초)을 기다리지 않고 끝날 때 한 번 보낸다. 수집기가 답하지 않으면 5초 뒤에 버리고 끝난다
 - 수집기가 죽어 있어도 서버는 뜨고 요청은 영향을 받지 않는다. 보내지 못한 묶음은 버린다
@@ -2151,7 +2153,7 @@ Tempo 에 들어오는지는 저장소의 CI(`stack`)가 본다.
 7. 만들어진 코드가 SQL 과 맞는지 (`sqlc diff`)
 8. 빌드 (`go build ./...`)
 9. 마이그레이션을 개발용 스키마에 적용하고, 되돌리고, 다시 적용한다. 되돌리는 SQL 이 틀렸으면 여기서 드러난다
-10. 정리 작업을 한 바퀴(`cmd/sweeper -once`), 대사를 한 번(`cmd/reconcile`) 돌린다. 서버의 비밀 없이 뜨는지, 막 만든 스키마가 깨끗한지(끝 코드 0) 본다
+10. 정리 작업을 한 바퀴(`cmd/sweeper -once`), 자동 충전의 결제 작업을 한 바퀴(`cmd/autocharge -once`), 대사를 한 번(`cmd/reconcile`) 돌린다. 서버의 비밀 없이 뜨는지, 막 만든 스키마가 깨끗한지(끝 코드 0) 본다
 11. 테스트 (`go test -race -coverpkg=./... -coverprofile=coverage.out ./...`). 경쟁 감지기를 켠다. 테스트용 스키마를 쓰므로 9, 10번과 부딪치지 않는다.
     `-coverpkg` 로 패키지를 건너 지나간 줄까지 센다. 그러지 않으면 sqlc 가 만든 패키지처럼 다른 패키지의 테스트로만 지나가는 코드가 0% 로 잡힌다
 12. 커버리지 요약: sqlc 가 만든 코드와 `internal/testenv` 를 빼고 합계와 덜 지나간 함수를 작업 요약(Summary)에 적는다
@@ -2431,7 +2433,7 @@ DB 에서 읽을 때도 UTC 로 받는다(`internal/database` 의 `readTimesInUT
 
 **DB 도 스스로 끊는다(#296).** 연결을 맺을 때 세 설정을 함께 보낸다(`database.Limits`, 한 곳 `database.NewPoolConfig`).
 
-| 설정 | 서버(`cmd/server`) | 작업 명령(sweeper, reconcile, orders, prices) | 막는 것 |
+| 설정 | 서버(`cmd/server`) | 작업 명령(sweeper, autocharge, reconcile, orders, prices) | 막는 것 |
 | --- | --- | --- | --- |
 | `client_connection_check_interval` | 1초 | 1초 | 앱이 죽은 뒤에도 DB 가 그 쿼리를 쥐고 있다가, 잠금이 풀리면 끝까지 적는 일 |
 | `lock_timeout` | 5초 | 5초 | 마감이 없는 길(홀드와 지갑의 API, 일괄 작업)이 잠금을 끝없이 기다리는 일 |
@@ -2469,7 +2471,7 @@ DB 에서 읽을 때도 UTC 로 받는다(`internal/database` 의 `readTimesInUT
 | 프로세스 | 연결 |
 | --- | --- |
 | 서버(`cmd/server`) | 8 |
-| 작업 명령(sweeper, reconcile, orders, prices, pricereviews) | 2 |
+| 작업 명령(sweeper, autocharge, reconcile, orders, prices, pricereviews) | 2 |
 | 마이그레이션(`cmd/migrate`) | pgx 의 기본 |
 
 - 전에는 pgx 의 기본(앱이 도는 PC 의 CPU 수와 4 중 큰 것)이었다. 이 값은 축이 틀렸다. 쿼리를 하는 것은 DB 인데, 앱의 CPU 를 본다.

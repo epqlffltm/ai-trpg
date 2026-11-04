@@ -6,7 +6,8 @@
 //	go run ./cmd/autocharge -once        한 바퀴만 돌고, 한 일을 화면에 찍고 끝난다
 //	go run ./cmd/autocharge -interval 30s -limit 50
 //
-// 일을 적는 것은 서버다(홀드가 골드를 뺄 때). 이 작업은 결제 대행사를 부른다. 그래서 대사처럼 결제 대행사의 설정을 읽는다(config.LoadJobs).
+// 일을 적는 것은 서버다(홀드가 골드를 뺄 때). 이 작업은 결제 대행사를 부른다. 그래서 대사처럼 결제 대행사의 설정을 읽는다(config.LoadAutoCharge).
+// compose 는 billing-autocharge 로 띄운다. 바퀴가 성공할 때마다 심장박동(HEARTBEAT_FILE)의 시각을 바꾸고, healthcheck 가 그것을 본다.
 // 서버와 정리 작업은 결제 대행사의 키 없이도 돈다. 키를 가진 프로세스를 늘리지 않으려고 결제를 이 작업에 모았다.
 //
 // 바퀴 하나가 작업 하나다(job_id). 바퀴가 실패해도 끄지 않는다. 둘을 띄워도 같은 일을 두 번 결제하지 않는다
@@ -79,7 +80,7 @@ func run(args []string, out io.Writer) error {
 		return err
 	}
 	loadDotEnv()
-	settings, err := config.LoadJobs(os.LookupEnv)
+	settings, err := config.LoadAutoCharge(os.LookupEnv)
 	if err != nil {
 		return err
 	}
@@ -125,7 +126,7 @@ func run(args []string, out io.Writer) error {
 		slog.String(obs.FieldOperation, operation),
 		slog.Int64("interval_ms", opts.interval.Milliseconds()),
 	)
-	loop(ctx, charger, opts.interval, opts.limit)
+	loop(ctx, charger, opts.interval, opts.limit, settings.HeartbeatFile)
 	return nil
 }
 
@@ -153,10 +154,14 @@ func parseOptions(args []string) (options, error) {
 }
 
 // loop 는 ctx 가 끝날 때까지 interval 마다 한 바퀴씩 돈다. 바퀴가 실패해도 멈추지 않는다.
-func loop(ctx context.Context, charger rounder, interval time.Duration, limit int) {
+// 바퀴가 성공하면 심장박동(heartbeat 파일)의 시각을 바꾼다. 실패한 바퀴(DB 에 닿지 못한 것)는 바꾸지 않는다.
+// 결제 대행사가 답하지 않은 것은 바퀴의 실패가 아니다(일을 미뤄 두고 다음에 다시 보낸다).
+func loop(ctx context.Context, charger rounder, interval time.Duration, limit int, heartbeat string) {
 	for {
 		// 실패는 바퀴가 이미 남겼다. 다음 바퀴에 다시 한다
-		_, _ = round(ctx, charger, limit)
+		if _, err := round(ctx, charger, limit); err == nil {
+			beat(ctx, heartbeat)
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -183,6 +188,16 @@ func round(ctx context.Context, charger rounder, limit int) (autocharge.ChargeRe
 		return err
 	})
 	return result, err
+}
+
+// beat 는 심장박동을 남긴다. 남기지 못해도 결제 작업은 멈추지 않는다. healthcheck 가 unhealthy 로 알린다.
+func beat(ctx context.Context, heartbeat string) {
+	if err := jobs.Beat(heartbeat); err != nil {
+		slog.WarnContext(ctx, "심장박동 파일을 바꾸지 못했습니다",
+			slog.String(obs.FieldOperation, operation),
+			slog.String(obs.FieldErrorType, fmt.Sprintf("%T", err)),
+		)
+	}
 }
 
 // printResult 는 -once 로 돌았을 때 한 일을 사람이 읽게 찍는다.

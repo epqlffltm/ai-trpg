@@ -699,6 +699,27 @@ services:
       billing-migrate:
         condition: service_completed_successfully
 
+  # 자동 충전의 결제 작업(#980). 골드가 기준 아래로 떨어져 서버가 적어 둔 일을 등록한 카드로 결제한다. 10초마다 돈다
+  billing-autocharge:
+    <<: *billing-image
+    profiles: [app]
+    logging: *logging
+    restart: unless-stopped
+    command: ["/app/autocharge"]
+    env_file: ./billing-server/.env
+    # 결제 대행사에 빌링키 결제를 보낸다. TOSS_SECRET_KEY 는 남긴다(config.LoadAutoCharge).
+    # 요청을 받지 않고 인증 서버와 알림 서버를 부르지 않는다. 사용자에게 알릴 일은 DB 에 적고 정리 작업이 보낸다
+    environment:
+      <<: [*billing-environment, *billing-without-request-secrets, *telemetry-environment]
+      NOTIFICATION_SECRET: ""
+      HEARTBEAT_FILE: /tmp/heartbeat
+    # 작업 메트릭을 Alloy 에 민다(telemetry). 결제 대행사에는 default 로 나간다
+    networks: [default, telemetry]
+    healthcheck: *worker-heartbeat
+    depends_on:
+      billing-migrate:
+        condition: service_completed_successfully
+
   # 결제 서버의 주기 명령(대사). 시각은 docker/cron/billing.crontab 에 있다
   billing-cron:
     <<: *billing-image

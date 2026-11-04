@@ -124,11 +124,12 @@ jobs:
           go run ./cmd/migrate up
           go run ./cmd/migrate status
 
-      # 정리 작업과 대사가 실제 DB 에서 뜨고 끝까지 도는지 본다. 서버의 비밀이 없어도 돌아야 한다.
+      # 정리 작업, 자동 충전의 결제 작업, 대사가 실제 DB 에서 뜨고 끝까지 도는지 본다. 서버의 비밀이 없어도 돌아야 한다.
       # 막 만든 스키마라 대사는 맞지 않는 줄이 없어야 한다(끝 코드 0)
-      - name: 정리 작업과 대사
+      - name: 정리 작업, 자동 충전, 대사
         run: |
           go run ./cmd/sweeper -once
+          go run ./cmd/autocharge -once
           go run ./cmd/reconcile
 
       # -count=1 은 캐시된 결과를 쓰지 않고 매번 실제로 돌린다. DB 를 쓰는 테스트가 있다.

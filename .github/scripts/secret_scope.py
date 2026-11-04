@@ -91,8 +91,9 @@ SECRETS = [
     *secrets('billing-server', ['billing-server'], 'PG_WEBHOOK_SECRET', 'GAME_SERVER_SECRET'),
     # 인증 서버와 함께 아는 비밀. 서버가 인증 서버의 요청을 확인하고, 정리 작업이 보호자 알림(#352)에 서명한다
     *secrets('billing-server', ['billing-server', 'billing-sweeper'], 'AUTH_SERVER_SECRET'),
-    # 결제 대행사의 키. 서버와 대사(cron)가 결제 대행사를 부른다. 정리 작업(sweeper)은 부르지 않는다(config.LoadSweeper)
-    *secrets('billing-server', ['billing-server', 'billing-cron'], 'TOSS_SECRET_KEY'),
+    # 결제 대행사의 키. 서버, 대사(cron), 자동 충전의 결제 작업(autocharge, #980)이 결제 대행사를 부른다.
+    # 정리 작업(sweeper)은 부르지 않는다(config.LoadSweeper)
+    *secrets('billing-server', ['billing-server', 'billing-cron', 'billing-autocharge'], 'TOSS_SECRET_KEY'),
     # 알림 서버와 함께 아는 비밀. 정리 작업이 사용자에게 알릴 일을 알림 서버에 넣는다(#385). 서버와 대사는 부르지 않는다
     *secrets('billing-server', ['billing-sweeper'], 'NOTIFICATION_SECRET'),
     # 알림 서버가 알림을 넣는 요청과 탈퇴의 알림(#603)의 서명을 확인하는 비밀. 부르는 서버마다 하나다.
@@ -181,7 +182,9 @@ ROOT_SECRETS: dict[str, frozenset[str]] = {
         {'db', 'auth-migrate', 'auth-server', 'auth-mail', 'auth-welcome-credits', 'auth-cron'}
     ),
     'GAME_DB_PASSWORD': frozenset({'db', 'trpg-migrate', 'trpg-server'}),
-    'BILLING_DB_PASSWORD': frozenset({'db', 'billing-migrate', 'billing-server', 'billing-sweeper', 'billing-cron'}),
+    'BILLING_DB_PASSWORD': frozenset(
+        {'db', 'billing-migrate', 'billing-server', 'billing-sweeper', 'billing-cron', 'billing-autocharge'}
+    ),
     'BOARD_DB_PASSWORD': frozenset({'db', 'board-migrate', 'board-server'}),
     'NOTIFICATION_DB_PASSWORD': frozenset({'db', 'notification-migrate', 'notification-server'}),
     'ASSET_DB_PASSWORD': frozenset({'db', 'asset-migrate', 'asset-server'}),

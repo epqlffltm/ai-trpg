@@ -227,6 +227,14 @@ type Jobs struct {
 	Payment  Payment
 }
 
+// AutoCharge 는 자동 충전의 결제 작업(cmd/autocharge, #980)이 읽는 설정이다. 작업 명령(Jobs)의 것에 심장박동 파일을 더한다.
+// 계속 도는 프로세스라서 compose 가 심장박동으로 살아 있는지 본다(정리 작업과 같다).
+type AutoCharge struct {
+	Jobs
+	// HeartbeatFile 은 한 바퀴를 끝낼 때마다 시각을 바꾸는 파일이다(jobs.Beat). 비어 있으면 쓰지 않는다(PC 에서 돌릴 때)
+	HeartbeatFile string
+}
+
 // Sweeper 는 정리 작업(cmd/sweeper)이 읽는 설정이다. 결제 대행사의 설정은 읽지 않는다.
 // 정리 작업이 다루는 것(만료된 홀드, 사라진 무료 크레딧, 만료된 pending 주문)은 DB 만으로 끝난다.
 // 그래서 결제 대행사의 키(TOSS_SECRET_KEY)를 주지 않아도 돈다. 비밀은 쓰는 프로세스에만 준다(docker-compose.yml).
@@ -360,6 +368,15 @@ func LoadJobs(lookup Lookup) (Jobs, error) {
 		return Jobs{}, err
 	}
 	return Jobs{Database: db, Logging: logging, Rules: rules, Payment: payment}, nil
+}
+
+// LoadAutoCharge 는 자동 충전의 결제 작업이 쓰는 설정을 읽어 검사한다. 작업 명령의 설정(LoadJobs)과 심장박동 파일이다.
+func LoadAutoCharge(lookup Lookup) (AutoCharge, error) {
+	jobs, err := LoadJobs(lookup)
+	if err != nil {
+		return AutoCharge{}, err
+	}
+	return AutoCharge{Jobs: jobs, HeartbeatFile: readString(lookup, "HEARTBEAT_FILE", "")}, nil
 }
 
 // LoadSweeper 는 정리 작업이 쓰는 설정만 읽어 검사한다. 틀린 것이 여럿이면 한 번에 모두 알려 준다.

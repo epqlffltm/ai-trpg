@@ -244,6 +244,20 @@ groups:
           summary: 결제 서버의 정리 작업이 10분 넘게 성공하지 않았다
           description: 만료된 홀드와 주문이 돌아가지 않는다. docker compose ps billing-sweeper 와 그 로그를 본다
 
+      - alert: BillingAutoChargeStalled
+        # 자동 충전의 결제 작업(#980)은 10초마다 돈다. 결제 서버가 떠 있는데 10분 동안 성공이 없으면 멈췄다.
+        # 한 번도 돈 적이 없는 PC(작업을 띄우지 않은 곳)에서는 울리지 않는다
+        expr: |
+          (sum(increase(background_jobs_finished_total{service="billing-server", operation="autocharge.run", result="success"}[10m])) or vector(0)) == 0
+          and on() count(db_up{service="billing-server"}) > 0
+          and on() count(last_over_time(background_jobs_finished_total{service="billing-server", operation="autocharge.run"}[7d])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 자동 충전의 결제 작업이 10분 넘게 성공하지 않았다
+          description: 골드가 떨어진 사람의 자동 충전이 결제되지 않는다. docker compose ps billing-autocharge 와 그 로그를 본다
+
       - alert: BillingReconcileMissed
         # 대사는 하루 한 번 돌고 끝날 때 한 번 민다. 지난 이레 안에 돈 적이 있는데 지난 26시간에는 없으면 빠졌다.
         # 처음 띄운 PC 처럼 한 번도 돈 적이 없으면 울리지 않는다
