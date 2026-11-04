@@ -2,11 +2,13 @@
 // 갤러리(C7, /gallery?tab=chat|story). 내가 연 일러스트(이벤트 씬)를 다시 본다. 로그인해야 열린다.
 // 서비스마다 탭이고 탭마다 그 서버만 부른다(#593). chat 은 캐릭터마다, 최근에 연 캐릭터부터. 연 것은 그림과 연 날, 열지 않은 것은 흐린 그림이다.
 // story 는 내 세션의 세계관마다, 인물마다 묶는다(StoryGallery).
+// 탭마다 맨 위에 그 서비스에서 내가 그린 장면 그림(#983, SnapshotGallery)을 둔다. 일러스트와 따로 읽고 따로 실패한다.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router';
 import { CharacterGallery } from './CharacterGallery';
+import { SnapshotGallery } from './SnapshotGallery';
 import { chatUnlocksQuery } from './galleryQueries';
 import { StoryGallery } from './StoryGallery';
 import { groupUnlocks } from './galleryView';
@@ -29,6 +31,7 @@ export function GalleryPage() {
           </Link>
         ))}
       </nav>
+      <SnapshotGallery key={tab} service={tab} />
       {tab === 'chat' ? <ChatGallery /> : <StoryGallery />}
     </main>
   );
