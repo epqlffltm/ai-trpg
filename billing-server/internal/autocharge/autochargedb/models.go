@@ -28,6 +28,7 @@ type AutoChargeRequest struct {
 	NextAttemptAt time.Time
 	CreatedAt     time.Time
 	FinishedAt    pgtype.Timestamptz
+	TurnedOff     bool
 }
 
 type AutoChargeSetting struct {

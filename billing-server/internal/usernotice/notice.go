@@ -36,6 +36,8 @@ const (
 	KindCreditsExpiring Kind = "credit.expiring"
 	// KindCreditsShort 는 크레딧이 모자라 홀드를 걸지 못했다는 것이다. 사람마다 하루(한국 날짜)에 한 번이다.
 	KindCreditsShort Kind = "credit.short"
+	// KindAutoChargeFailed 는 자동 충전(#980)이 되지 않았다는 것이다(거절, 한 달 상한, 결제 자격, 카드 없음).
+	KindAutoChargeFailed Kind = "autocharge.failed"
 )
 
 const (

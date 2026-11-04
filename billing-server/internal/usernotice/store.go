@@ -60,7 +60,7 @@ func (s *Service) Round(ctx context.Context, limit int) (Result, error) {
 	return result, errors.Join(queueErr, tidyErr, sendErr)
 }
 
-// queue 는 최근의 결제, 청약철회, 환영 크레딧과 곧 사라질 무료 크레딧을 적는다. 새로 적은 수를 돌려준다.
+// queue 는 최근의 결제, 청약철회, 환영 크레딧, 되지 않은 자동 충전과 곧 사라질 무료 크레딧을 적는다. 새로 적은 수를 돌려준다.
 func (s *Service) queue(ctx context.Context) (int, error) {
 	now := s.clock()
 	since := now.Add(-LookBack)
@@ -71,11 +71,14 @@ func (s *Service) queue(ctx context.Context) (int, error) {
 	expiring, expiringErr := queries.QueueExpiringNotices(ctx, usernoticedb.QueueExpiringNoticesParams{
 		Now: now, UpTo: now.Add(ExpiringWithin), NoticedSince: now.Add(-ExpiringWithin),
 	})
+	autoCharge, autoChargeErr := queries.QueueAutoChargeFailures(ctx, usernoticedb.QueueAutoChargeFailuresParams{Now: now, Since: since})
 	s.count(ctx, KindOrderPaid, OutcomeQueued, paid)
 	s.count(ctx, KindOrderRefunded, OutcomeQueued, refunded)
 	s.count(ctx, KindWelcomeCredits, OutcomeQueued, welcome)
 	s.count(ctx, KindCreditsExpiring, OutcomeQueued, expiring)
-	return int(paid + refunded + welcome + expiring), errors.Join(paidErr, refundedErr, welcomeErr, expiringErr)
+	s.count(ctx, KindAutoChargeFailed, OutcomeQueued, autoCharge)
+	return int(paid + refunded + welcome + expiring + autoCharge),
+		errors.Join(paidErr, refundedErr, welcomeErr, expiringErr, autoChargeErr)
 }
 
 // tidy 는 오래 보내지 못한 것을 보내지 않기로 하고, 끝난 지 오래된 것을 지운다. 그 두 수를 돌려준다.

@@ -75,6 +75,21 @@ function creditShort(payload: Payload): NotificationLine {
   return { text: `크레딧이 모자라 서술 값을 걸지 못했습니다${amount ? `(${goldAmount(amount)})` : ''}${gold}`, to: '/wallet/charge' };
 }
 
+/** 자동 충전(#980)이 되지 않은 까닭마다의 말. 결제 대행사의 거절 이유는 서버가 싣지 않는다 */
+const AUTO_CHARGE_REASONS: Record<string, string> = {
+  declined: '카드사가 결제를 거절해 자동 충전하지 못했습니다',
+  monthly_limit: '이번 달 자동 충전 상한에 닿아 충전하지 않았습니다',
+  not_eligible: '지금은 결제할 수 없어 자동 충전하지 않았습니다. 본인인증이나 보호자 동의를 확인하세요',
+  no_card: '등록한 카드가 없어 자동 충전하지 않았습니다',
+};
+
+function autoChargeFailed(payload: Payload): NotificationLine {
+  const reason = AUTO_CHARGE_REASONS[text(payload, 'reason') ?? ''] ?? '자동 충전하지 못했습니다';
+  const price = typeof payload.price === 'number' ? `(${wonLabel(payload.price)})` : '';
+  const off = payload.turned_off === true ? '. 이어서 실패해 자동 충전을 껐습니다' : '';
+  return { text: `${reason}${price}${off}`, to: '/wallet' };
+}
+
 const LINES: Record<string, Describe> = {
   'game narration_model.retiring': retiring,
   'game narration_model.replaced': (p, ctx) => ({ text: `${tableName(p)} 테이블의 서술 모델을 바꿨습니다: ${model(p, ctx, 'from')} → ${model(p, ctx)}(앞의 모델이 끝남)`, to: tableTo(p) }),
@@ -93,6 +108,7 @@ const LINES: Record<string, Describe> = {
     return { text: `실버가 곧 사라집니다: 실버 ${goldAmount(text(p, 'amount') ?? '?')}${from ? ` · ${formatDate(from)}부터` : ''}`, to: '/wallet' };
   },
   'billing credit.short': creditShort,
+  'billing autocharge.failed': autoChargeFailed,
   'board post.commented': (p) => ({ text: `내 글 ${quoted(p, 'post_title')}에 댓글이 달렸습니다`, to: path('/board/posts', p, 'post_id') }),
   'board comment.replied': (p) => ({ text: `내 댓글에 답글이 달렸습니다: ${quoted(p, 'post_title')}`, to: path('/board/posts', p, 'post_id') }),
   'asset character.hidden': (p) => ({ text: `운영자가 캐릭터를 숨겼습니다: ${text(p, 'name') ?? '?'}. 공개 목록과 남의 새 대화에서 빠지고, 나는 계속 씁니다`, to: path('/chat/studio/characters', p, 'character_id') }),

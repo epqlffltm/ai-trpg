@@ -40,7 +40,7 @@ SENT_BY = {
         'publishing.banned',
         'publishing.unbanned',
     },
-    BILLING: {'order.paid', 'order.refunded', 'credit.welcome', 'credit.expiring', 'credit.short'},
+    BILLING: {'order.paid', 'order.refunded', 'credit.welcome', 'credit.expiring', 'credit.short', 'autocharge.failed'},
     BOARD: {'post.commented', 'comment.replied'},
     ASSET: {'character.hidden', 'character.unhidden', 'character_report.handled', 'world.hidden', 'world.unhidden'},
     CHAT: {'message_report.handled'},
@@ -134,7 +134,9 @@ def test_only_the_chosen_kinds_can_be_muted():
     )
 
 
-@pytest.mark.parametrize('kind', ['order.paid', 'order.refunded', 'scenario.sanctioned', 'publishing.banned'])
+@pytest.mark.parametrize(
+    'kind', ['order.paid', 'order.refunded', 'autocharge.failed', 'scenario.sanctioned', 'publishing.banned']
+)
 def test_money_and_sanctions_cannot_be_muted(kind: str):
     assert not is_mutable(kind)
 
