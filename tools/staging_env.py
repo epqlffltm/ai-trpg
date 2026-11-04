@@ -89,6 +89,10 @@ OPTIONAL_SECRETS = frozenset(
         'TOSS_SECRET_KEY',
         'TOSS_CLIENT_KEY',
         'ALERT_SMTP_PASSWORD',
+        # TRPG 서버가 asset 서버에 장면 그림을 맡기는 비밀(#983).
+        # TRPG 서버가 부르기 시작하면 fill_env.py 의 짝으로 옮긴다.
+        # 그때까지 비워 두면 asset 서버가 trpg 의 요청을 받지 않을 뿐이다
+        'TRPG_SERVER_SECRET',
     }
 )
 # 사람이 채울 것: (파일, 이름, 까닭)

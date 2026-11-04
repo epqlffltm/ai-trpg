@@ -1,7 +1,8 @@
 # asset-server/tests/signing.py
 
 """
-테스트가 페르소나와 판을 가져가는 서버(chat, story)와 탈퇴를 알리는 인증 서버의 흉내를 낼 때 쓰는 도구.
+테스트가 페르소나와 판을 가져가는 서버(chat, story), 장면 그림을 맡기는 서버(trpg)와
+탈퇴를 알리는 인증 서버의 흉내를 낼 때 쓰는 도구.
 그 서버처럼 요청에 서명한다. 가져가는 서버는 사용자의 토큰을 함께 보낸다.
 """
 
@@ -16,6 +17,7 @@ from app.main import API_PREFIX
 TEST_SECRETS = {
     'chat': 'test-chat-secret-0123456789abcdef',
     'story': 'test-story-secret-0123456789abcdef',
+    'trpg': 'test-trpg-secret-0123456789abcdef',
 }
 # 인증 서버의 테스트용 서명 비밀(탈퇴 알림)
 TEST_AUTH_SECRET = 'test-auth-secret-0123456789abcdef'

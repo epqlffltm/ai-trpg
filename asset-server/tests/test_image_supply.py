@@ -11,6 +11,8 @@
   - 지우기: 내 그림은 저장소와 행에서 지운다. 남의 것, 없는 것, 판에 쓰인 것은 그대로 두고 204
   - 바이트 내주기: 볼 수 있는 그림(내 것, 공개된 판에 쓰인 것)의 바이트와 형식. 남의 비공개 그림과 없는 그림은 404,
     저장소를 쓸 수 없으면 503
+  - 맡긴 서버가 받기(kept): 맡긴 서버를 적고, 그 서버는 토큰 없이 서명만으로 받는다. 다른 서버가 맡긴 것, 사용자가
+    올린 것, 없는 것은 404. 서명이 틀리면 401
 """
 
 import time
@@ -59,13 +61,17 @@ def store(app: FastAPI) -> FakeImageStore:
 
 
 async def signed(
-    client: AsyncClient, method: str, rest: str, headers: dict, body: bytes = b'', signed_body: bytes | None = None
+    client: AsyncClient,
+    method: str,
+    rest: str,
+    headers: dict,
+    body: bytes = b'',
+    signed_body: bytes | None = None,
+    caller: str = 'story',
 ) -> Response:
-    """story 서버처럼 서명해 보낸다. signed_body 를 주면 그 바이트로 서명한다(바꿔치기한 본문)."""
-    path = service_path('story', rest)
-    signature = sign(
-        TEST_SECRETS['story'], int(time.time()), method, path, body if signed_body is None else signed_body
-    )
+    """그 서버(기본 story)처럼 서명해 보낸다. signed_body 를 주면 그 바이트로 서명한다(바꿔치기한 본문)."""
+    path = service_path(caller, rest)
+    signature = sign(TEST_SECRETS[caller], int(time.time()), method, path, body if signed_body is None else signed_body)
     return await client.request(method, path, content=body, headers={**headers, SIGNATURE_HEADER: signature})
 
 
@@ -160,3 +166,26 @@ async def test_the_bytes_of_a_viewable_image(client: AsyncClient, store: FakeIma
     assert shared.status_code == status.HTTP_200_OK and opened(shared.content).size == (4, 4)
     assert hidden.status_code == missing.status_code == status.HTTP_404_NOT_FOUND
     assert broken.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+
+async def test_the_keeping_server_reads_its_image_without_a_token(
+    client: AsyncClient, session: AsyncSession, store: FakeImageStore, mine: dict
+):
+    kept = (await signed(client, 'POST', '/images', mine, png_bytes((5, 5)), caller='trpg')).json()['id']
+    by_story = (await signed(client, 'POST', '/images', mine, png_bytes((4, 4)))).json()['id']
+    uploaded = (await client.post(f'{API_PREFIX}/images', content=png_bytes((3, 3)), headers=mine)).json()['id']
+
+    own = await signed(client, 'GET', f'/images/{kept}/kept', {}, caller='trpg')
+    others = await signed(client, 'GET', f'/images/{by_story}/kept', {}, caller='trpg')
+    from_user = await signed(client, 'GET', f'/images/{uploaded}/kept', {}, caller='trpg')
+    missing = await signed(client, 'GET', f'/images/{uuid.uuid4()}/kept', {}, caller='trpg')
+    unsigned = await client.get(service_path('trpg', f'/images/{kept}/kept'))
+    wrong_server = await signed(client, 'GET', f'/images/{kept}/kept', {}, caller='story')
+
+    assert (own.status_code, own.headers['content-type']) == (status.HTTP_200_OK, 'image/png')
+    assert own.content == store.objects[kept].data
+    assert others.status_code == from_user.status_code == missing.status_code == status.HTTP_404_NOT_FOUND
+    assert wrong_server.status_code == status.HTTP_404_NOT_FOUND
+    assert unsigned.status_code == status.HTTP_401_UNAUTHORIZED
+    kept_rows = {str(row.id): row.kept_by for row in await session.scalars(select(Image))}
+    assert kept_rows == {kept: 'trpg', by_story: 'story', uploaded: None}

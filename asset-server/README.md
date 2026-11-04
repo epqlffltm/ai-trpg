@@ -86,6 +86,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | `PUBLIC_FOR_EVERYONE` | `false` | 일반 사용자도 캐릭터를 공개로 두는가(#678). [신고](#신고와-숨김)가 생겨 열 수 있게 되었다. 운영 준비(관리자 화면 E4, 약관)가 되면 켠다 |
 | `CHAT_SERVER_SECRET` | 비어 있음(받지 않음) | chat 서버가 페르소나와 판을 가져갈 때 서명하는 비밀([다른 서버에 내주기](#다른-서버에-내주기)). `chat-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상. 비밀값이다 |
 | `STORY_SERVER_SECRET` | 비어 있음(받지 않음) | story 서버가 [세계관](#세계관)의 판을 가져갈 때 서명하는 비밀. `story-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상이고 다른 비밀과 달라야 한다. 비밀값이다 |
+| `TRPG_SERVER_SECRET` | 비어 있음(받지 않음) | TRPG 서버가 장면 그림을 맡기고 테이블의 사람들에게 대신 내줄 때(`GET /service/trpg/images/{id}/kept`) 서명하는 비밀(#983). 적으면 32자 이상이고 다른 비밀과 달라야 한다. 비밀값이다 |
 | `AUTH_SERVER_SECRET` | 비어 있음(받지 않음) | 인증 서버가 [탈퇴](#탈퇴)를 알릴 때 서명하는 비밀. `auth-server/.env` 의 `ASSET_SECRET` 과 같은 값. 적으면 32자 이상이고 다른 비밀과 달라야 한다. 비밀값이다 |
 | `NOTIFICATION_URL` | 비어 있음(보내지 않음) | [알림](#알림-보내기)을 넣는 알림 서버의 주소. compose 가 `http://notification-server:8004` 를 넘긴다. 비우면 발송함에 적기만 한다 |
 | `NOTIFICATION_SECRET` | 비어 있음 | 알림 서버에 넣을 때 서명하는 비밀. `notification-server/.env` 의 `ASSET_SERVER_SECRET` 과 같은 값. 주소를 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
@@ -100,7 +101,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | `IMAGE_DECODE_MEMORY_MB`, `IMAGE_DECODE_CPU_SECONDS`, `IMAGE_DECODE_WALL_SECONDS` | `768`, `10`, `15` | 그림을 여는 따로 된 프로세스의 상한(주소 공간, CPU 시간, 벽시계) |
 | `IMAGE_DECODE_CONCURRENCY` | `2` | 한꺼번에 여는 수. 메모리는 상한 × 이 수까지 쓴다 |
 
-부르는 서버마다 비밀을 따로 둔다(chat 은 `CHAT_SERVER_SECRET`, story 는 `STORY_SERVER_SECRET`). TRPG 는 그 서버가 가져가기 시작할 때 `TRPG_SERVER_SECRET` 으로 더한다.
+부르는 서버마다 비밀을 따로 둔다(chat 은 `CHAT_SERVER_SECRET`, story 는 `STORY_SERVER_SECRET`, TRPG 는 `TRPG_SERVER_SECRET`). TRPG 는 지금 장면 그림만 맡기고 받는다.
 
 ## 상태 확인
 
@@ -166,6 +167,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/service/{caller}/worlds/{id}/latest/number` | 세계관의 마지막 판의 번호(`{id, version}`) | 서버의 서명 + access 토큰 |
 | POST, DELETE | `/api/v1/asset/service/{caller}/images[/{id}]` | 만든 [장면 그림](#다른-서버에-내주기)을 토큰의 주인의 그림으로 맡기기(본문은 그림의 바이트, 201 과 그림의 행), 지우기(204, 남의 것·없는 것·판에 쓰인 것은 그대로) | 서버의 서명 + access 토큰 |
 | GET | `/api/v1/asset/service/{caller}/images/{id}/content` | 토큰의 주인이 볼 수 있는 그림의 바이트(장면 그림의 참고 그림). `GET /images/{id}` 와 같은 규칙이고 아니면 404 | 서버의 서명 + access 토큰 |
+| GET | `/api/v1/asset/service/{caller}/images/{id}/kept` | 그 서버가 맡긴 그림의 바이트(#983). 맡길 때 맡긴 서버를 적어 두고(`kept_by`), 그 서버만 토큰 없이 받는다. TRPG 서버가 테이블의 사람들에게 장면 그림을 대신 내줄 때 쓴다. 다른 서버가 맡긴 것, 사용자가 올린 것, 없는 것은 404 | 서버의 서명 |
 | POST | `/api/v1/asset/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴)한 사람의 페르소나와 비공개 캐릭터와 세계관, 쓰이지 않는 그림을 지운다. 200 `{"status":"processed"}`. 그림 저장소에 닿지 못하면 503 | 인증 서버의 서명 |
 
 ### 계정 페르소나
@@ -627,13 +629,15 @@ chat(나중에 story 와 TRPG)이 세션을 시작할 때 페르소나의 사본
   서버의 비밀이 새도 그것만으로는 아무의 페르소나도 가져가지 못한다(그 사람의 토큰이 있어야 한다).
   토큰만으로는 이 주소를 부르지 못한다. 프록시가 `/api/v1/asset/service/` 를 바깥에 열지 않고(404), 서명이 없으면 401 이다.
 - **서명.** 알림 서버의 것과 같다(`app/core/service_auth.py`). `caller` 는 주소에 있고 주소까지 서명하므로 남의 이름으로 부를 수 없다.
-  비밀은 부르는 서버마다 따로다(`CHAT_SERVER_SECRET`, `STORY_SERVER_SECRET`). 서명이 없거나, 틀렸거나, 앞뒤 5분을 넘겼거나, 남의 주소의 것이거나,
+  비밀은 부르는 서버마다 따로다(`CHAT_SERVER_SECRET`, `STORY_SERVER_SECRET`, `TRPG_SERVER_SECRET`). 서명이 없거나, 틀렸거나, 앞뒤 5분을 넘겼거나, 남의 주소의 것이거나,
   모르는 서버이거나, 그 서버의 비밀이 비었으면 모두 같은 401 이다. 토큰보다 서명을 먼저 본다. 본문은 16KB 까지(넘으면 413). 그림을 맡기는 주소만 그림 올리기의 상한(`IMAGE_MAX_BYTES`)이다.
 - **장면 그림**(#983). chat 과 story 가 만든 그림을 맡긴다(`POST /service/{caller}/images`, `app/images/supply.py`). 서명은 그림의 바이트까지 본다.
   사용자가 올린 그림과 같은 길이다. 따로 된 프로세스에서 열어 다시 인코딩하고(받지 않는 형식 415, 열 수 없으면 422), 주인만 본다. 공급자가 준 바이트를 그대로 내주지 않는다.
   대화를 지우면 그 서버가 지운다(`DELETE /service/{caller}/images/{id}`). 남의 것, 없는 것, 판에 쓰인 것은 그대로 두고 204 다. 탈퇴하면 다른 그림처럼 지운다.
   장면 그림을 그릴 때 캐릭터·인물의 그림을 참고 그림으로 넘기려고 그림의 바이트를 가져간다(`GET /service/{caller}/images/{id}/content`).
   토큰의 주인이 볼 수 있는 그림만이다(주인이거나, 공개된 판에 쓰였고 그 등급을 볼 수 있다). 아니면 404, 저장소를 쓸 수 없으면 503 이다.
+  맡긴 그림에는 맡긴 서버를 적는다(`images.kept_by`). 그 서버는 토큰 없이 서명만으로 그 바이트를 받는다(`GET /service/{caller}/images/{id}/kept`).
+  TRPG 서버가 테이블의 사람들에게 장면 그림을 대신 내줄 때 쓴다. 누구에게 보일지는 그 서버가 정한다. 다른 서버가 맡긴 것, 사용자가 올린 것, 이 칸이 생기기 전에 맡긴 것은 404 다.
 - **내 단축어**(#981). 토큰의 주인의 목록을 내준다(`GET /service/{caller}/shortcuts`). 판이 없어 부르는 쪽은 "/이름"이 있는 턴에만 읽는다.
 - **페르소나.** 토큰의 주인의 것만 내준다. 남의 것과 없는 것은 404 다. 사본은 모델에 넣을 내용과 `revision` 이다(기본인지와 시각은 싣지 않는다).
 - **판.** 마지막 판을 내준다. 쓸 수 있는 사람인지는 asset 서버가 판단한다.

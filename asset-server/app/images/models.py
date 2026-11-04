@@ -6,6 +6,8 @@
   - 그림은 바뀌지 않는다. 고치면 새 id 다. 그래서 nginx 가 그림의 id 로 캐시해도 틀어지지 않는다.
   - 형식, 크기(바이트), 너비와 높이는 다시 인코딩한 뒤의 것이다(app/images/decoder.py).
   - 누가 볼 수 있는지: 주인, 그리고 그 그림이 쓰인 판(image_uses)이 공개 캐릭터의 것이고 그 판의 등급을 볼 수 있는 사람.
+  - 다른 서버가 맡긴 그림(장면 그림, #983)은 맡긴 서버(kept_by)도 서명만으로 바이트를 받는다. 그 서버가 누구에게
+    보일지 정한다(TRPG 는 테이블의 사람들). 사용자가 올린 그림은 kept_by 가 비어 있어 어느 서버도 이렇게 받지 못한다.
 
 표 둘이다.
   - images: 그림 하나에 한 줄.
@@ -44,6 +46,8 @@ class Image(Base):
 
     # 주인. 인증 서버의 public_id 다. 탈퇴할 때 "이 사람의 그림들"을 찾는다
     owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    # 맡긴 서버(chat, story, trpg). 그 서버의 서비스 주소로 올린 그림만 적힌다. 사용자가 올린 그림은 비어 있다
+    kept_by: Mapped[str | None] = mapped_column(String(32), default=None)
 
     format: Mapped[str] = mapped_column(String(10))
     byte_size: Mapped[int] = mapped_column(Integer)

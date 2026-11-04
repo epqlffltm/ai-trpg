@@ -792,6 +792,7 @@ services:
       <<: *asset-environment
       CHAT_SERVER_SECRET: ""
       STORY_SERVER_SECRET: ""
+      TRPG_SERVER_SECRET: ""
       AUTH_SERVER_SECRET: ""
       NOTIFICATION_SECRET: ""
     depends_on:

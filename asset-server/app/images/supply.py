@@ -6,6 +6,7 @@
     POST   /api/v1/asset/service/{caller}/images              본문은 그림의 바이트. 토큰의 주인의 그림으로 올린다. 201
     DELETE /api/v1/asset/service/{caller}/images/{image_id}   토큰의 주인의 그림을 지운다(대화를 지울 때). 204
     GET    /api/v1/asset/service/{caller}/images/{image_id}/content   그림의 바이트(참고 그림으로 넘길 때)
+    GET    /api/v1/asset/service/{caller}/images/{image_id}/kept      그 서버가 맡긴 그림의 바이트. 토큰 없이 서명만으로
 
   - 서명이 틀리면 401 이다. 토큰보다 먼저 본다. 서명은 받은 바이트 그대로 본다(그림의 바이트까지)
   - 맡긴 그림은 사용자가 올린 그림과 같다. 다시 인코딩하고(받지 않는 형식 415, 열 수 없으면 422, 상한을 넘으면 413),
@@ -13,16 +14,20 @@
   - 지우기는 남의 것, 없는 것, 판에 쓰인 것이면 아무 일도 하지 않고 204 다(어느 것인지 알리지 않는다)
   - 바이트 내주기는 토큰의 주인이 볼 수 있는 그림만이다(GET /images/{id} 와 같은 규칙. 주인이거나, 공개된 판에 쓰였고
     그 등급을 볼 수 있다). 아니면 404 다. 장면 그림을 그릴 때 캐릭터의 그림을 참고 그림으로 넘기려고 쓴다
+  - 맡긴 그림에는 맡긴 서버(kept_by)를 적는다. 그 서버는 토큰 없이 서명만으로 그 바이트를 받는다(kept). TRPG 서버가
+    테이블의 사람들에게 장면 그림을 대신 내줄 때 쓴다. 누구에게 보일지는 그 서버가 정한다. 남의 서버가 맡긴 것이나
+    사용자가 올린 그림은 404 다
 """
 
 import uuid
 from datetime import UTC, datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Path, Response, status
 from server_core.auth.dependencies import CurrentUser
 
 from app.core.dependencies import Session
-from app.core.service_auth import SignedImageBody, verify_caller
+from app.core.service_auth import CALLER_PATTERN, SignedCaller, SignedImageBody, verify_caller
 from app.images import service
 from app.images.router import Decoder, Store, to_detail
 from app.images.schemas import ImageDetail
@@ -37,10 +42,15 @@ def utc_now() -> datetime:
 
 @router.post('', response_model=ImageDetail, status_code=status.HTTP_201_CREATED)
 async def keep_image(
-    data: SignedImageBody, user: CurrentUser, session: Session, store: Store, decoder: Decoder
+    caller: Annotated[str, Path(pattern=CALLER_PATTERN)],
+    data: SignedImageBody,
+    user: CurrentUser,
+    session: Session,
+    store: Store,
+    decoder: Decoder,
 ) -> ImageDetail:
-    """만든 그림을 토큰의 주인의 그림으로 올린다."""
-    image = await service.upload_image(session, store, decoder, user.user_id, data, utc_now())
+    """만든 그림을 토큰의 주인의 그림으로 올린다. 맡긴 서버(caller)를 함께 적는다."""
+    image = await service.upload_image(session, store, decoder, user.user_id, data, utc_now(), caller)
     return to_detail(image)
 
 
@@ -60,4 +70,16 @@ async def discard_image(image_id: uuid.UUID, user: CurrentUser, session: Session
 async def image_content(image_id: uuid.UUID, user: CurrentUser, session: Session, store: Store) -> Response:
     """토큰의 주인이 볼 수 있는 그림의 바이트. 볼 수 없거나 없으면 404 다."""
     data, content_type = await service.image_content(session, store, user, image_id, utc_now())
+    return Response(content=data, media_type=content_type)
+
+
+@router.get(
+    '/{image_id}/kept',
+    status_code=status.HTTP_200_OK,
+    response_class=Response,
+    responses={status.HTTP_200_OK: {'description': '그림의 바이트(image/png, image/jpeg, image/webp)'}},
+)
+async def kept_content(caller: SignedCaller, image_id: uuid.UUID, session: Session, store: Store) -> Response:
+    """그 서버가 맡긴 그림의 바이트. 토큰은 받지 않는다(서명만). 그 서버가 맡긴 것이 아니면 404 다."""
+    data, content_type = await service.kept_content(session, store, caller, image_id, utc_now())
     return Response(content=data, media_type=content_type)

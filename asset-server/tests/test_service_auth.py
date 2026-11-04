@@ -196,5 +196,5 @@ async def test_every_service_route_needs_the_signature(app: FastAPI, client: Asy
         answer = await client.request(method, url, headers=mine, json={'withdrawn_at': '2026-10-28T03:00:00Z'})
         answers[(method, path)] = (answer.status_code, answer.json())
 
-    assert len(routes) == 11
+    assert len(routes) == 12
     assert answers == {route: (status.HTTP_401_UNAUTHORIZED, BAD_SIGNATURE) for route in routes}
