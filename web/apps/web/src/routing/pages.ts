@@ -19,6 +19,9 @@ export const MyHeartsPage = lazyPage(() => import('../pages/me/hearts/MyHeartsPa
 export const PersonaNewPage = lazyPage(() => import('../pages/personas/PersonaNewPage'), 'PersonaNewPage');
 export const PersonaEditPage = lazyPage(() => import('../pages/personas/PersonaEditPage'), 'PersonaEditPage');
 
+// 만들기의 입구(Stitch 19번의 첫 칸)
+export const CreatePage = lazyPage(() => import('../pages/create/CreatePage'), 'CreatePage');
+
 export const GalleryPage = lazyPage(() => import('../pages/gallery/GalleryPage'), 'GalleryPage');
 export const SettingsPage = lazyPage(() => import('../pages/settings/SettingsPage'), 'SettingsPage');
 export const WalletPage = lazyPage(() => import('../pages/wallet/WalletPage'), 'WalletPage');
