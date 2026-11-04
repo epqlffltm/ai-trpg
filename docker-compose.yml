@@ -949,6 +949,10 @@ services:
   proxy:
     build:
       context: ./web
+      # 화면의 결제창(web/Dockerfile 의 ARG). 루트 .env 에 적는다. 적지 않으면 시험용 창(fake)이다
+      args:
+        VITE_PAYMENT_GATEWAY: ${WEB_PAYMENT_GATEWAY:-fake}
+        VITE_TOSS_CLIENT_KEY: ${TOSS_CLIENT_KEY:-}
     image: ai-trpg/proxy:local
     profiles: [app]
     logging: *logging
