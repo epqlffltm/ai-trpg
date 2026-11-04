@@ -5,7 +5,9 @@
 
 보는 것.
   - 캐릭터의 답을 고르면 202(그리는 중), 다 그리면 asset 에 맡기고 확정한다. 목록에 ready 와 그림의 id 가 보인다
-  - 지시는 지킬 것(전체이용가), 판의 인물, 서버의 시각, 그 답과 그 답이 답한 사람의 말로 만든다. 참고 그림은 아직 없다
+  - 지시는 지킬 것(전체이용가), 판의 인물, 서버의 시각, 그 답과 그 답이 답한 사람의 말로 만든다
+  - 캐릭터의 그림을 참고 그림으로 넘기고 지시에 누구의 그림인지 적는다. 받지 못한 그림은 빼고 그린다.
+    참고 그림을 받지 않는 provider 에는 받지도 넘기지도 않는다
   - 사람의 말은 422 not_drawable, 남의 말은 404, 남의 대화의 목록도 404 다
   - 한 대화에 그리는 중인 것은 하나다(둘째는 409, 홀드를 걸지 않는다). 끝나면 다시 그린다
   - 크레딧이 모자라면 402 이고 실패로 남는다. 공급자의 거절, asset 의 실패는 실패로 적고 돈을 돌려준다
@@ -21,7 +23,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from ai_core.fake import FakeImageProvider
-from ai_core.image_provider import GeneratedImage, ImageRequest
+from ai_core.image_provider import GeneratedImage, ImageRequest, ReferenceImage, ReferenceKind
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey
@@ -30,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.main import API_PREFIX
 from app.snapshots.models import Snapshot
-from app.snapshots.prompt import RULES
+from app.snapshots.prompt import REFERENCE_RULE, RULES
 from app.snapshots.providers import price_code_of
 from app.snapshots.settler import SnapshotSettler
 from tests.assets import FakeAsset
@@ -45,6 +47,8 @@ PRICE_CODE = price_code_of(MODEL)
 SNAPSHOT_PRICE = 160
 START = 1000
 SOMEONE_ELSE = uuid.UUID('99999999-2222-4333-8444-555555555555')
+# make_character 의 대표 그림
+PORTRAIT = uuid.UUID('0b7c6f1e-2d3a-4b5c-8d9e-0f1a2b3c4d5e')
 MESSAGES_URL = f'{API_PREFIX}/messages'
 
 
@@ -140,10 +144,44 @@ async def test_an_answer_is_drawn_kept_and_charged(
     assert billing.holds[f'chat:img:{snapshot["id"]}'].status == 'captured'
     assert billing.balances[ME] == START - 30 - SNAPSHOT_PRICE
     (request,) = painter.calls
-    assert request.references == ()
     assert request.prompt.startswith('\n'.join(RULES))
     assert '이름: 세라' in request.prompt and '시각: ' in request.prompt
     assert '사용자: 오늘 날씨 어때?' in request.prompt and '창밖에 비가 내려요.' in request.prompt
+    # 대표 그림을 받으려 했지만 asset 에 없어(404) 빼고 그렸다
+    assert request.references == () and '[참고 그림]' not in request.prompt
+    assert any(call[:2] == ('fetch_image', PORTRAIT) for call in asset.calls)
+
+
+async def test_the_character_image_is_passed_as_a_reference(
+    client: AsyncClient, app: FastAPI, answered: tuple, painter: FakeImageProvider, asset: FakeAsset, mine: dict
+):
+    _, _, answer_id = answered
+    asset.images[PORTRAIT] = b'portrait-png'
+
+    await draw(client, mine, answer_id)
+    await finished(app)
+
+    (request,) = painter.calls
+    portrait = ReferenceImage(data=b'portrait-png', mime_type='image/png', kind=ReferenceKind.CHARACTER)
+    assert request.references == (portrait,)
+    assert request.prompt.endswith(f'[참고 그림]\n1번째 그림: 세라\n{REFERENCE_RULE}')
+    assert ('fetch_image', PORTRAIT, mine['Authorization'].removeprefix('Bearer ')) in asset.calls
+
+
+async def test_a_provider_without_references_gets_none_and_nothing_is_fetched(
+    client: AsyncClient, app: FastAPI, answered: tuple, painter: FakeImageProvider, asset: FakeAsset, mine: dict
+):
+    conversation, _, answer_id = answered
+    asset.images[PORTRAIT] = b'portrait-png'
+    painter.supports_references = False
+
+    await draw(client, mine, answer_id)
+    await finished(app)
+    (snapshot,) = await listed(client, mine, conversation)
+
+    (request,) = painter.calls
+    assert (snapshot['status'], request.references) == ('ready', ())
+    assert not any(call[0] == 'fetch_image' for call in asset.calls)
 
 
 async def test_only_my_assistant_answers_are_drawn(

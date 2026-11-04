@@ -7,6 +7,7 @@ asset 서버를 부른다(asset-server/README.md 의 "다른 서버에 내주기
     GET {ASSET_URL}/api/v1/asset/service/story/personas/{id}
     GET {ASSET_URL}/api/v1/asset/service/story/shortcuts          토큰의 주인의 단축어(#981)
     POST, DELETE {ASSET_URL}/api/v1/asset/service/story/images[/{id}]  만든 장면 그림을 맡기고 지운다(#983)
+    GET {ASSET_URL}/api/v1/asset/service/story/images/{id}/content      그림의 바이트(장면 그림의 참고 그림, #983)
     X-Service-Signature: 이 서버의 비밀(ASSET_SECRET)로 한 서명(server_core/service_auth/signing.py)
     Authorization: Bearer <사용자의 토큰>  누구를 위해 가져가는지. asset 서버가 쓸 수 있는 사람인지 본다
 
@@ -21,6 +22,7 @@ asset 서버를 부른다(asset-server/README.md 의 "다른 서버에 내주기
 
 import time
 import uuid
+from dataclasses import dataclass
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -47,6 +49,14 @@ class AssetUnavailableError(Exception):
     """asset 서버를 쓸 수 없다. 설정이 없거나, 닿지 못했거나, 알 수 없는 답이다."""
 
 
+@dataclass(frozen=True)
+class ImageContent:
+    """받은 그림의 바이트와 형식(image/png 같은 것)."""
+
+    data: bytes
+    mime_type: str
+
+
 def world_path(world_id: uuid.UUID) -> str:
     """세계관의 마지막 판을 가져오는 주소."""
     return f'{SERVICE_PATH}/worlds/{world_id}/latest'
@@ -60,6 +70,11 @@ def persona_path(persona_id: uuid.UUID) -> str:
 def images_path(image_id: uuid.UUID | None = None) -> str:
     """장면 그림을 맡기는(지우는) 주소."""
     return f'{SERVICE_PATH}/images' if image_id is None else f'{SERVICE_PATH}/images/{image_id}'
+
+
+def image_content_path(image_id: uuid.UUID) -> str:
+    """그림의 바이트를 받는 주소."""
+    return f'{images_path(image_id)}/content'
 
 
 def shortcuts_path() -> str:
@@ -152,3 +167,18 @@ class AssetClient:
         response = await self.send('DELETE', images_path(image_id), token)
         if response.status_code != httpx.codes.NO_CONTENT:
             raise AssetUnavailableError(f'asset 서버가 그림을 지우지 않았다({response.status_code})')
+
+    async def fetch_image(self, token: str, image_id: uuid.UUID) -> ImageContent:
+        """
+        그 사람이 볼 수 있는 그림의 바이트. 없거나 볼 수 없으면 AssetNotFoundError,
+        그 밖의 답이나 그림이 아닌 형식이면 AssetUnavailableError.
+        """
+        response = await self.get(image_content_path(image_id), token)
+        if response.status_code == httpx.codes.NOT_FOUND:
+            raise AssetNotFoundError
+        if response.status_code != httpx.codes.OK:
+            raise AssetUnavailableError(f'asset 서버가 그림을 내주지 않았다({response.status_code})')
+        mime_type = response.headers.get('content-type', '').split(';')[0].strip()
+        if not mime_type.startswith('image/') or not response.content:
+            raise AssetUnavailableError('asset 서버가 그림이 아닌 것을 내줬다')
+        return ImageContent(data=response.content, mime_type=mime_type)
