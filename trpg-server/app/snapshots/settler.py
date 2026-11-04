@@ -61,7 +61,7 @@ class SnapshotSettler:
             return await repository.find_due(session, now, service.SNAPSHOT_STALE, SETTLE_BATCH)
 
     async def abandon(self, snapshot: TableSnapshot, now: datetime) -> TableSnapshot | None:
-        """도중에 오래 남은 것을 실패로 적고 돌려줄 것으로 바꾼다. 그사이 끝났으면 None."""
+        """도중에 오래 남은 것을 실패로 적고 돌려줄 것으로 바꾼다. 테이블에 알린다. 그사이 끝났으면 None."""
         values = {
             'billing_status': SnapshotBilling.RELEASE_DUE,
             'outcome': SnapshotOutcome.FAILED,
@@ -70,6 +70,8 @@ class SnapshotSettler:
         }
         async with self.session_factory() as session:
             moved = await repository.move_billing(session, snapshot.id, OPEN_STATUSES, values)
+            if moved:
+                await service.announce(session, snapshot.table_id)
             await session.commit()
             return await repository.get(session, snapshot.id) if moved else None
 
