@@ -46,6 +46,7 @@ from app.characters import supply as character_supply
 from app.characters.publishing import CharacterNotReadyError
 from app.characters.service import CharacterNotFoundError, LorebookNotOwnedError, OperatorOnlyError
 from app.core.config import Settings, get_settings
+from app.creator_stats import router as creator_stats
 from app.images import router as images
 from app.images import supply as image_supply
 from app.images.isolation import ImageUnreadableError
@@ -214,6 +215,8 @@ def create_app(
     app.include_router(banners.admin_router, prefix=API_PREFIX)
     # 캐릭터와 세계관의 랭킹(#985). 받아 쌓아 둔 시작 수로 늘어놓는다. 로그인하지 않아도 읽는다
     app.include_router(rankings.router, prefix=API_PREFIX)
+    # 제작자가 보는 자기 캐릭터와 세계관의 숫자(#991)
+    app.include_router(creator_stats.router, prefix=API_PREFIX)
 
     app.include_router(lorebooks.router, prefix=API_PREFIX)
     app.add_exception_handler(LorebookNotFoundError, lorebooks.handle_lorebook_not_found)

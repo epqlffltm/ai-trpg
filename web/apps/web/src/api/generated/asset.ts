@@ -654,6 +654,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset/me/stats/characters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Character Stats
+         * @description 내 캐릭터의 숫자. 최근 7일에 많이 시작한 것부터다.
+         */
+        get: operations["read_character_stats_api_v1_asset_me_stats_characters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/me/stats/worlds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read World Stats
+         * @description 내 세계관의 숫자. 최근 7일에 많이 시작한 것부터다.
+         */
+        get: operations["read_world_stats_api_v1_asset_me_stats_worlds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset/personas": {
         parameters: {
             query?: never;
@@ -3695,6 +3735,42 @@ export interface components {
             status: "processed";
         };
         /**
+         * WorkStarts
+         * @description 작품 하나의 수. total 은 모든 기간에, recent 는 최근 recent_days 일 동안 시작한 수다.
+         */
+        WorkStarts: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Recent */
+            recent: number;
+            /** Title */
+            title: string;
+            /** Total */
+            total: number;
+        };
+        /**
+         * WorkStats
+         * @description 내 캐릭터(또는 세계관)의 숫자. total 과 recent 는 내 작품 모두를 더한 것이다.
+         *
+         *     items 는 최근의 수가 많은 것부터 MAX_STATS_ITEMS 개까지다. 더한 수는 잘린 것까지 센다.
+         *     수는 chat 과 story 서버에서 한 시간마다 받아 온 것이다. refreshed_at 은 그 시각이고, 받은 적이 없으면 null 이다.
+         */
+        WorkStats: {
+            /** Items */
+            items: components["schemas"]["WorkStarts"][];
+            /** Recent */
+            recent: number;
+            /** Recent Days */
+            recent_days: number;
+            /** Refreshed At */
+            refreshed_at: string | null;
+            /** Total */
+            total: number;
+        };
+        /**
          * WorldCopy
          * @description story 서버에 내주는 판. 세션을 시작할 때 가져가 고정한다.
          *     가져간 쪽은 번호를 적어 두고, 지금의 번호(WorldVersionNumber)가 크면 "새 판이 있다"를 알린다.
@@ -5685,6 +5761,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+        };
+    };
+    read_character_stats_api_v1_asset_me_stats_characters_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkStats"];
+                };
+            };
+        };
+    };
+    read_world_stats_api_v1_asset_me_stats_worlds_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkStats"];
                 };
             };
         };

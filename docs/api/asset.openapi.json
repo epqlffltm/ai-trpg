@@ -5491,6 +5491,81 @@
         "title": "WithdrawalResult",
         "type": "object"
       },
+      "WorkStarts": {
+        "description": "작품 하나의 수. total 은 모든 기간에, recent 는 최근 recent_days 일 동안 시작한 수다.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "recent": {
+            "title": "Recent",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "total",
+          "recent"
+        ],
+        "title": "WorkStarts",
+        "type": "object"
+      },
+      "WorkStats": {
+        "description": "내 캐릭터(또는 세계관)의 숫자. total 과 recent 는 내 작품 모두를 더한 것이다.\n\nitems 는 최근의 수가 많은 것부터 MAX_STATS_ITEMS 개까지다. 더한 수는 잘린 것까지 센다.\n수는 chat 과 story 서버에서 한 시간마다 받아 온 것이다. refreshed_at 은 그 시각이고, 받은 적이 없으면 null 이다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkStarts"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "recent": {
+            "title": "Recent",
+            "type": "integer"
+          },
+          "recent_days": {
+            "title": "Recent Days",
+            "type": "integer"
+          },
+          "refreshed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshed At"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "recent_days",
+          "refreshed_at",
+          "total",
+          "recent",
+          "items"
+        ],
+        "title": "WorkStats",
+        "type": "object"
+      },
       "WorldCopy": {
         "description": "story 서버에 내주는 판. 세션을 시작할 때 가져가 고정한다.\n가져간 쪽은 번호를 적어 두고, 지금의 번호(WorldVersionNumber)가 크면 \"새 판이 있다\"를 알린다.",
         "properties": {
@@ -9529,6 +9604,62 @@
         "summary": "Read Me",
         "tags": [
           "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/me/stats/characters": {
+      "get": {
+        "description": "내 캐릭터의 숫자. 최근 7일에 많이 시작한 것부터다.",
+        "operationId": "read_character_stats_api_v1_asset_me_stats_characters_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkStats"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Character Stats",
+        "tags": [
+          "creator-stats"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/me/stats/worlds": {
+      "get": {
+        "description": "내 세계관의 숫자. 최근 7일에 많이 시작한 것부터다.",
+        "operationId": "read_world_stats_api_v1_asset_me_stats_worlds_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkStats"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read World Stats",
+        "tags": [
+          "creator-stats"
         ],
         "x-audience": "user"
       }

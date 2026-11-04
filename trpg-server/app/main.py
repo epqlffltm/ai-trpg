@@ -64,6 +64,7 @@ from app.chat.typing import TypingThrottle
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine
 from app.core.job_setup import build_jobs
+from app.creator_stats import router as creator_stats
 from app.engine.dice import RandomDice
 from app.events import router as events
 from app.limits.attempts import LimitsUnavailable, TooManyAttempts
@@ -357,6 +358,8 @@ def create_app(
     app.include_router(banners.admin_router, prefix=API_PREFIX)
     # 시나리오의 랭킹(#985). 최근 7일에 연 테이블의 수다. 로그인하지 않아도 읽는다
     app.include_router(rankings.router, prefix=API_PREFIX)
+    # 제작자가 보는 자기 시나리오의 숫자(#991)
+    app.include_router(creator_stats.router, prefix=API_PREFIX)
     app.include_router(personas.router, prefix=API_PREFIX)
     # /tables/past 는 /tables/{table_id} 보다 먼저다. 먼저 등록한 주소가 먼저 맞춰진다
     app.include_router(past_tables.router, prefix=API_PREFIX)
