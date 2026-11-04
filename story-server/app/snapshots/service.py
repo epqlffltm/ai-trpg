@@ -13,10 +13,10 @@
     4. settle_snapshot: 결제 서버에 확정이나 반환을 맡긴다. 못 했으면 정리 작업(app/snapshots/settler.py)이 마저 한다
 
   - 그림의 지시는 엔진의 상태로 만든다(app/snapshots/prompt.py). 그림 모델은 상태를 바꾸지 못한다(그림만 돌려준다)
-  - 참고 그림(인물의 그림으로 얼굴 맞추기)은 asset 서버가 그림의 바이트를 내주는 주소가 생기면 더한다
+  - 참고 그림(인물의 그림으로 얼굴 맞추기)은 1 에서 고르고 3 에서 asset 에서 받아 넘긴다(snapshots/references.py)
   - 바깥(공급자, asset, 결제 서버)을 부르는 동안 DB 의 연결을 쥐지 않는다
   - 같은 실패를 저절로 되풀이하지 않는다(사람이 다시 누른다). 실패하면 돈은 돌려준다
-  - 사람의 토큰은 그 요청이 띄운 작업 안에서 asset 에 맡길 때만 쓰고 저장하지 않는다
+  - 사람의 토큰은 그 요청이 띄운 작업 안에서 asset 을 부를 때(참고 그림 받기, 맡기기)만 쓰고 저장하지 않는다
 """
 
 import asyncio
@@ -40,8 +40,9 @@ from app.core.dependencies import Viewer
 from app.ratings import allowed_ratings
 from app.snapshots import repository
 from app.snapshots.models import Snapshot, SnapshotOutcome
-from app.snapshots.prompt import snapshot_prompt
+from app.snapshots.prompt import snapshot_prompt, with_references
 from app.snapshots.providers import price_code_of
+from app.snapshots.references import ReferenceTarget, cast_targets, fetch_references
 from app.snapshots.schemas import SnapshotOut, SnapshotStatus
 from app.turns import charging
 from app.turns.charging import HoldDeclined, Settled
@@ -89,6 +90,7 @@ class SnapshotStart:
     reference: str
     price_code: str
     prompt: str
+    references: tuple[ReferenceTarget, ...] = ()
 
 
 def hold_reference(snapshot_id: uuid.UUID) -> str:
@@ -156,6 +158,7 @@ async def begin_snapshot(
             list(target.segments or ()),
             asked_before(branch.path),
         )
+        references = cast_targets(imported.document, tuple(target.cast or ()))
         snapshot = new_snapshot(conversation.id, target, viewer.claims.user_id, model)
         await saved(session, snapshot)
     return SnapshotStart(
@@ -166,6 +169,7 @@ async def begin_snapshot(
         reference=snapshot.reference,
         price_code=snapshot.price_code,
         prompt=prompt,
+        references=references,
     )
 
 
@@ -225,9 +229,11 @@ def failed_values(code: str, now: datetime) -> dict:
 
 
 async def draw_and_keep(provider: ImageProvider, asset: AssetClient, token: str, start: SnapshotStart, now: datetime):
-    """그림을 만들고 asset 에 맡긴다. 적을 것을 돌려준다(실패해도 예외를 올리지 않는다. 멈춤은 올린다)."""
+    """참고 그림을 받아 그림을 만들고 asset 에 맡긴다. 적을 것을 돌려준다(실패해도 올리지 않는다. 멈춤은 올린다)."""
     try:
-        image = await provider.generate(ImageRequest(prompt=start.prompt))
+        fetched = await fetch_references(provider, asset, token, start.references)
+        prompt = with_references(start.prompt, [target.name for target, _ in fetched])
+        image = await provider.generate(ImageRequest(prompt=prompt, references=tuple(image for _, image in fetched)))
         image_id = await asset.keep_image(token, image.data)
     except ProviderError as error:
         return failed_values(str(error), now)

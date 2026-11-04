@@ -9,6 +9,7 @@ chat 의 것(chat-server/app/snapshots/prompt.py)과 같은 규칙이다.
   - 장면의 인물은 그 답에 적힌 인물(엔진이 정한 장면의 인물)이다
   - 일어나는 일은 그 답의 말 조각(과 그 답이 답한 사람의 말)에서 앞의 몇 글자만 쓴다
   - 맨 앞에 지킬 것을 둔다. 모든 등급에서 전체이용가로 그린다
+  - 참고 그림을 넘기면 끝에 [참고 그림] 블록으로 몇 번째 그림이 누구인지 적는다. 받은 그림으로만 적는다(그릴 때 붙인다)
 """
 
 from collections.abc import Mapping, Sequence
@@ -25,6 +26,8 @@ RULES = (
     '전체이용가로 그린다. 노출, 성적인 묘사, 잔혹한 묘사를 넣지 않는다.',
     '글자, 말풍선, 서명, 워터마크를 넣지 않는다.',
 )
+# 참고 그림을 넘길 때 덧붙이는 것
+REFERENCE_RULE = '그림 속 인물의 얼굴, 머리 모양, 체형을 참고 그림에 맞춘다. 참고 그림의 배경과 구도는 따르지 않는다.'
 # 소개에서 쓰는 글자 수(세계관, 인물마다)
 WORLD_INTRO_CHARS = 200
 MEMBER_INTRO_CHARS = 150
@@ -111,3 +114,14 @@ def snapshot_prompt(
     """그림의 지시 전부. 지킬 것, 세계관, 장면, 일어나는 일의 차례다."""
     blocks = ['\n'.join(RULES), world_block(briefing), scene_block(briefing, world, state, cast)]
     return '\n\n'.join([*blocks, moment_block(answer_text(briefing, segments), asked)])
+
+
+def reference_block(names: list[str]) -> str:
+    """[참고 그림] 블록. 넘긴 차례대로 그 그림의 인물을 적는다."""
+    lines = [f'{index}번째 그림: {name}' for index, name in enumerate(names, start=1)]
+    return '\n'.join(['[참고 그림]', *lines, REFERENCE_RULE])
+
+
+def with_references(prompt: str, names: list[str]) -> str:
+    """참고 그림이 있으면 지시 끝에 [참고 그림] 블록을 붙인다. 없으면 그대로."""
+    return prompt if not names else f'{prompt}\n\n{reference_block(names)}'

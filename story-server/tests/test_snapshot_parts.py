@@ -8,6 +8,9 @@
   - 지시: 지킬 것이 맨 앞, 비어 있는 칸은 뺌, 때와 장소는 엔진의 상태에서, 판에 없는 인물은 뺌, 서술은 글만
   - 가격표 이름은 점을 붙임표로 바꾼다. off 거나 키·체크포인트가 없으면 provider 가 없다
   - 맡기기는 그림의 바이트까지 서명한 POST 이고 201 의 id 를 읽는다. 지우기는 204. 그 밖의 답은 쓸 수 없는 것이다
+  - 참고 그림은 장면의 인물의 차례로, 기본 표정 그림이나 대표 그림이다. 그림이 없거나 판에 없는 인물은 빼고 넷까지다.
+    지시 끝에 몇 번째 그림이 누구인지 적는다
+  - 그림 받기는 서명한 GET 이고 200 의 바이트와 형식을 읽는다. 404 는 없는 것, 그림이 아닌 답은 쓸 수 없는 것이다
 """
 
 import json
@@ -22,12 +25,13 @@ from ai_core.gemini_image import GeminiImageProvider
 from pydantic import SecretStr
 from server_core.service_auth.signing import SIGNATURE_HEADER, is_valid
 
-from app.assets.client import AssetClient, AssetUnavailableError, images_path
+from app.assets.client import AssetClient, AssetNotFoundError, AssetUnavailableError, image_content_path, images_path
 from app.core.config import Settings
 from app.engine.state import StoryState
 from app.engine.world import read_world
-from app.snapshots.prompt import RULES, snapshot_prompt
+from app.snapshots.prompt import REFERENCE_RULE, RULES, snapshot_prompt, with_references
 from app.snapshots.providers import build_image_provider, price_code_of
+from app.snapshots.references import MAX_REFERENCES, ReferenceTarget, cast_targets
 from app.turns.briefing import read_briefing
 from tests.assets import world_document
 
@@ -122,3 +126,59 @@ async def test_discarding_and_unexpected_answers():
         await client_answering(lambda request: httpx.Response(201, content=b'{}')).keep_image(TOKEN, b'x')
     with pytest.raises(AssetUnavailableError):
         await client_answering(lambda request: httpx.Response(503)).discard_image(TOKEN, image_id)
+
+
+def test_the_references_follow_the_scene_cast():
+    ids = [uuid.uuid4() for _ in range(7)]
+    jun = {'name': '', 'image_id': str(ids[1]), 'sprites': [{'id': 'b', 'image_id': str(ids[2])}]}
+    cast = [
+        {'id': 'mina', 'character': {'name': '미나', 'image_id': str(ids[0])}},
+        {'id': 'jun', 'character': jun},
+        {'id': 'faceless', 'character': {'name': '얼굴 없음'}},
+        *({'id': f'c{n}', 'character': {'name': f'인물{n}', 'image_id': str(ids[n])}} for n in (3, 4, 5)),
+    ]
+    document = world_document(cast=cast)
+
+    targets = cast_targets(document, ['jun', 'ghost', 'faceless', 'mina', 'jun', 'c3', 'c4', 'c5'])
+
+    assert targets[:2] == (ReferenceTarget(name='jun', image_id=ids[2]), ReferenceTarget(name='미나', image_id=ids[0]))
+    assert len(targets) == MAX_REFERENCES == 4 and targets[-1].name == '인물4'
+    assert cast_targets(document, []) == ()
+
+
+def test_the_reference_block_names_each_image_in_order():
+    expected = f'지시\n\n[참고 그림]\n1번째 그림: 미나\n2번째 그림: 준\n{REFERENCE_RULE}'
+    assert with_references('지시', []) == '지시'
+    assert with_references('지시', ['미나', '준']) == expected
+
+
+async def test_fetching_an_image_reads_its_bytes_and_type():
+    image_id = uuid.uuid4()
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, content=b'png', headers={'Content-Type': 'image/png'})
+
+    content = await client_answering(handler).fetch_image(TOKEN, image_id)
+
+    (request,) = seen
+    assert (request.method, request.url.path) == ('GET', image_content_path(image_id))
+    assert image_content_path(image_id) == f'/api/v1/asset/service/story/images/{image_id}/content'
+    assert is_valid(SECRET, request.headers[SIGNATURE_HEADER], 'GET', image_content_path(image_id), b'', time.time())
+    assert request.headers['Authorization'] == f'Bearer {TOKEN}'
+    assert (content.data, content.mime_type) == (b'png', 'image/png')
+
+
+@pytest.mark.parametrize(
+    ('answer', 'error'),
+    [
+        (httpx.Response(404), AssetNotFoundError),
+        (httpx.Response(503), AssetUnavailableError),
+        (httpx.Response(200, content=b'{}', headers={'Content-Type': 'application/json'}), AssetUnavailableError),
+        (httpx.Response(200, content=b'', headers={'Content-Type': 'image/png'}), AssetUnavailableError),
+    ],
+)
+async def test_fetching_an_image_that_is_missing_or_not_an_image(answer: httpx.Response, error: type[Exception]):
+    with pytest.raises(error):
+        await client_answering(lambda request: answer).fetch_image(TOKEN, uuid.uuid4())

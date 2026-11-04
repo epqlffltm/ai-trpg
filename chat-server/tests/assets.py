@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from app.assets.client import AssetAdultRequiredError, AssetNotFoundError, AssetUnavailableError
+from app.assets.client import AssetAdultRequiredError, AssetNotFoundError, AssetUnavailableError, ImageContent
 from app.assets.schemas import (
     CharacterCopy,
     CharacterDocument,
@@ -83,6 +83,7 @@ class FakeAsset:
     가짜 asset 서버. characters 와 personas 에 있는 것을 내준다. 없으면 404(AssetNotFoundError)다.
 
     shortcuts 는 내 단축어다. 맡긴 장면 그림은 kept 에, 지운 것은 discarded 에 남는다.
+    images 는 바이트를 내줄 수 있는 그림(참고 그림)이다. 없는 것은 404 다.
     adult_required 에 넣은 캐릭터는 403, down 이면 모든 요청이 AssetUnavailableError 다.
     무엇을 어느 토큰으로 불렀는지 calls 에 남는다.
     """
@@ -94,6 +95,8 @@ class FakeAsset:
     # 맡긴 장면 그림(그림의 id → 바이트)과 지운 그림의 id(#983)
     kept: dict[uuid.UUID, bytes] = field(default_factory=dict)
     discarded: list[uuid.UUID] = field(default_factory=list)
+    # 바이트를 내줄 그림(그림의 id → 바이트, 형식은 image/png)
+    images: dict[uuid.UUID, bytes] = field(default_factory=dict)
     down: bool = False
     calls: list[tuple[str, uuid.UUID, str]] = field(default_factory=list)
 
@@ -144,3 +147,12 @@ class FakeAsset:
             raise AssetUnavailableError('asset 서버가 죽었다(테스트)')
         self.discarded.append(image_id)
         self.kept.pop(image_id, None)
+
+    async def fetch_image(self, token: str, image_id: uuid.UUID) -> ImageContent:
+        """그림의 바이트. images 에 없으면 404 다."""
+        self.calls.append(('fetch_image', image_id, token))
+        if self.down:
+            raise AssetUnavailableError('asset 서버가 죽었다(테스트)')
+        if image_id not in self.images:
+            raise AssetNotFoundError
+        return ImageContent(data=self.images[image_id], mime_type='image/png')
