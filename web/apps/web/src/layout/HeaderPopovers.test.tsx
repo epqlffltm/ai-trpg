@@ -126,7 +126,9 @@ describe('프로필 메뉴', () => {
     const menu = await openAccountMenu();
     await userEvent.click(menu.getByRole('button', { name: '로그아웃' }));
 
-    expect(await screen.findByRole('link', { name: '로그인' })).toBeInTheDocument();
+    // 위쪽 줄에서만 찾는다. 첫 화면에도 "로그인" 링크(이어 보기의 안내)가 있어, 화면이 먼저 그려지면 둘이 된다
+    const header = within(screen.getByRole('banner'));
+    expect(await header.findByRole('link', { name: '로그인' })).toBeInTheDocument();
     expect(seen.some((request) => request.method === 'POST' && request.url === '/api/v1/auth/logout')).toBe(true);
   });
 });
