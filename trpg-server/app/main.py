@@ -85,6 +85,7 @@ from app.operators.publishing import PublicationRefusedError
 from app.operators.sanctions import SanctionConflictError
 from app.personas import router as personas
 from app.personas.service import PersonaConflictError, PersonaNotFoundError
+from app.rankings import router as rankings
 from app.realtime import router as realtime
 from app.realtime.hub import Hub
 from app.realtime.listener import PostgresListener
@@ -354,6 +355,8 @@ def create_app(
     # 첫 화면의 홍보 배너(#994). 보는 주소와 운영자의 주소
     app.include_router(banners.public_router, prefix=API_PREFIX)
     app.include_router(banners.admin_router, prefix=API_PREFIX)
+    # 시나리오의 랭킹(#985). 최근 7일에 연 테이블의 수다. 로그인하지 않아도 읽는다
+    app.include_router(rankings.router, prefix=API_PREFIX)
     app.include_router(personas.router, prefix=API_PREFIX)
     # /tables/past 는 /tables/{table_id} 보다 먼저다. 먼저 등록한 주소가 먼저 맞춰진다
     app.include_router(past_tables.router, prefix=API_PREFIX)

@@ -155,6 +155,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | POST | `/api/v1/story/conversations/{id}/actions` | [행동](#행동)(`{"kind", …}`). 엔진이 판정하고 바로 SSE 로 반응을 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/messages/{id}/regenerate` | [다시 생성](#다시-생성과-멈추기). 그 말에 다시 답한다. 바로 SSE 로 흘려보낸다 | access 토큰 |
 | POST | `/api/v1/story/messages/{id}/continue` | [이어서 출력](#이어서-출력). 끊긴 답에 이어 쓴다. 바로 SSE 로 흘려보낸다 | access 토큰 |
+| GET | `/api/v1/story/service/stats/world-starts` | 세계관(asset 의 id)마다 세션을 시작한 수 `{recent_days: 7, items: [{work_id, total, recent}]}`(#985). asset 서버가 한 시간마다 받아 가 랭킹을 만든다. 지운 세션도 센다. 프록시가 밖에서 받지 않는다 | asset 서버의 서명(`ASSET_SECRET`) |
 | POST | `/api/v1/story/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴) 알림. 인증 서버만 부른다(프록시가 밖에서 받지 않는다) | 인증 서버의 서명 |
 | POST | `/api/v1/story/generations/{id}/stop` | [멈추기](#다시-생성과-멈추기). 도는 답을 멈추고 받은 만큼 저장한다. 204, 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}/transcript` | [기록 내려받기](#기록-내려받기). `?format=md`(기본), `html`, `txt`. 지금 가지의 말들을 파일 하나로. 없거나 볼 수 없는 세션이면 404 | access 토큰 |

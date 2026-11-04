@@ -64,6 +64,17 @@ class Settings(CoreSettings, NotificationSettings):
     # 비워 두면 탈퇴 알림을 받지 않는다(401). 인증 서버는 받을 때까지 다시 보낸다
     auth_server_secret: SecretStr = SecretStr('')
 
+    # 작품마다의 시작 수(#985, app/stats/). chat 은 캐릭터마다 대화를, story 는 세계관마다 세션을 시작한 수를 준다.
+    # 이 서버가 몇 분마다 통째로 받아 와 랭킹을 만든다. 비우면 그 서버의 수를 받지 않는다(랭킹이 빈다).
+    # 서명은 그 서버가 이 서버를 부를 때와 같은 비밀(CHAT_SERVER_SECRET, STORY_SERVER_SECRET)로 한다.
+    # 주소를 적으면 비밀도 적어야 뜬다
+    chat_url: str = ''
+    story_url: str = ''
+    # 받아 오는 간격(초). 수는 이만큼 늦게 반영된다
+    stats_refresh_seconds: int = Field(default=3600, ge=60, le=86400)
+    # 한 번 받는 시간의 상한(초). 사람이 기다리는 요청이 아니다
+    stats_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+
     # 그림 저장소(#566, app/images/store.py). compose 가 넘긴다(docker-compose.yml 의 x-asset-image-store).
     # 주소가 비어 있으면 저장소가 없는 서버다. 그림 올리기와 내주기가 503 이다. 주소를 적으면 나머지도 적어야 뜬다.
     # 주소는 nginx 가 서명한 주소를 따라가는 곳이기도 하다. compose 밖에서 띄우면 nginx 가 그 주소를 받지 않는다
@@ -101,6 +112,17 @@ class Settings(CoreSettings, NotificationSettings):
         ]
         if missing:
             raise ValueError(f'IMAGE_STORE_ENDPOINT 를 적었으면 {", ".join(missing)} 도 적어야 한다')
+        return self
+
+    @model_validator(mode='after')
+    def require_secrets_for_stats(self) -> Self:
+        """수를 받아 올 주소를 적었으면 그 서버의 비밀도 적어야 한다. 바퀴마다 401 인 것보다 뜨지 않는 것이 낫다."""
+        for url_name, url, secret_name, secret in (
+            ('CHAT_URL', self.chat_url, 'CHAT_SERVER_SECRET', self.chat_server_secret),
+            ('STORY_URL', self.story_url, 'STORY_SERVER_SECRET', self.story_server_secret),
+        ):
+            if url and not secret.get_secret_value():
+                raise ValueError(f'{url_name} 를 적었으면 {secret_name} 도 적어야 한다')
         return self
 
     @model_validator(mode='after')

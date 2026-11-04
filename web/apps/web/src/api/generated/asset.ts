@@ -624,6 +624,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset/rankings/characters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rank Characters
+         * @description 최근 7일에 대화를 많이 시작한 캐릭터. 1위부터다.
+         */
+        get: operations["rank_characters_api_v1_asset_rankings_characters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/rankings/worlds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rank Worlds
+         * @description 최근 7일에 세션을 많이 시작한 세계관. 1위부터다.
+         */
+        get: operations["rank_worlds_api_v1_asset_rankings_worlds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset/service/users/{public_id}/withdrawal": {
         parameters: {
             query?: never;
@@ -1680,6 +1720,18 @@ export interface components {
             items: components["schemas"]["CharacterSummary"][];
             /** Total */
             total: number;
+        };
+        /**
+         * CharacterRanking
+         * @description 캐릭터의 랭킹. refreshed_at 은 수를 받아 온 시각이다(몇 분마다 받는다). 한 번도 받지 못했으면 null 이고 비어 있다.
+         */
+        CharacterRanking: {
+            /** Items */
+            items: components["schemas"]["RankedCharacter"][];
+            /** Recent Days */
+            recent_days: number;
+            /** Refreshed At */
+            refreshed_at: string | null;
         };
         /**
          * CharacterSummary
@@ -3043,6 +3095,28 @@ export interface components {
             removed: components["schemas"]["RemovedItem"][];
         };
         /**
+         * RankedCharacter
+         * @description 랭킹의 캐릭터 하나. rank 는 1 부터다. starts 는 최근 recent_days 일 동안 대화를 시작한 수다.
+         */
+        RankedCharacter: {
+            character: components["schemas"]["PublicCharacterSummary"];
+            /** Rank */
+            rank: number;
+            /** Starts */
+            starts: number;
+        };
+        /**
+         * RankedWorld
+         * @description 랭킹의 세계관 하나. starts 는 최근 recent_days 일 동안 세션을 시작한 수다.
+         */
+        RankedWorld: {
+            /** Rank */
+            rank: number;
+            /** Starts */
+            starts: number;
+            world: components["schemas"]["PublicWorldSummary"];
+        };
+        /**
          * Rating
          * @description 이용 등급. 게임 서버와 같은 값이다.
          * @enum {string}
@@ -3897,6 +3971,18 @@ export interface components {
             removed: components["schemas"]["RemovedItem"][];
             /** Warnings */
             warnings: string[];
+        };
+        /**
+         * WorldRanking
+         * @description 세계관의 랭킹. 모양은 캐릭터의 것과 같다.
+         */
+        WorldRanking: {
+            /** Items */
+            items: components["schemas"]["RankedWorld"][];
+            /** Recent Days */
+            recent_days: number;
+            /** Refreshed At */
+            refreshed_at: string | null;
         };
         /**
          * WorldSummary
@@ -5383,6 +5469,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonaDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    rank_characters_api_v1_asset_rankings_characters_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                hide_adult?: boolean;
+                orientation?: components["schemas"]["Orientation"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CharacterRanking"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    rank_worlds_api_v1_asset_rankings_worlds_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                hide_adult?: boolean;
+                orientation?: components["schemas"]["Orientation"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorldRanking"];
                 };
             };
             /** @description 입력이 틀렸다 */

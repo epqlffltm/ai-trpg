@@ -861,6 +861,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/rankings/scenarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rank Scenarios
+         * @description 최근 7일에 테이블을 많이 연 시나리오. 1위부터다.
+         */
+        get: operations["rank_scenarios_api_v1_game_rankings_scenarios_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/references": {
         parameters: {
             query?: never;
@@ -8288,6 +8308,17 @@ export interface components {
             };
         };
         /**
+         * RankedScenario
+         * @description 랭킹의 시나리오 하나. rank 는 1 부터다. starts 는 최근 recent_days 일 동안 이 시나리오로 연 테이블의 수다.
+         */
+        RankedScenario: {
+            listing: components["schemas"]["PublicListing"];
+            /** Rank */
+            rank: number;
+            /** Starts */
+            starts: number;
+        };
+        /**
          * Rating
          * @description 이용 등급.
          * @enum {string}
@@ -9811,6 +9842,16 @@ export interface components {
             items: components["schemas"]["ScenarioSummary"][];
             /** Total */
             total: number;
+        };
+        /**
+         * ScenarioRanking
+         * @description 시나리오의 랭킹. 테이블을 열 때마다 바로 바뀐다.
+         */
+        ScenarioRanking: {
+            /** Items */
+            items: components["schemas"]["RankedScenario"][];
+            /** Recent Days */
+            recent_days: number;
         };
         /**
          * ScenarioSummary
@@ -13753,6 +13794,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    rank_scenarios_api_v1_game_rankings_scenarios_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                hide_adult?: boolean;
+                orientation?: components["schemas"]["Orientation"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioRanking"];
+                };
             };
             /** @description 입력이 틀렸다 */
             422: {

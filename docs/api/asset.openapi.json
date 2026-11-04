@@ -1488,6 +1488,41 @@
         "title": "CharacterPage",
         "type": "object"
       },
+      "CharacterRanking": {
+        "description": "캐릭터의 랭킹. refreshed_at 은 수를 받아 온 시각이다(몇 분마다 받는다). 한 번도 받지 못했으면 null 이고 비어 있다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RankedCharacter"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "recent_days": {
+            "title": "Recent Days",
+            "type": "integer"
+          },
+          "refreshed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshed At"
+          }
+        },
+        "required": [
+          "recent_days",
+          "refreshed_at",
+          "items"
+        ],
+        "title": "CharacterRanking",
+        "type": "object"
+      },
       "CharacterSummary": {
         "description": "내 캐릭터 목록의 한 줄.",
         "properties": {
@@ -4511,6 +4546,52 @@
         "title": "PublishResult",
         "type": "object"
       },
+      "RankedCharacter": {
+        "description": "랭킹의 캐릭터 하나. rank 는 1 부터다. starts 는 최근 recent_days 일 동안 대화를 시작한 수다.",
+        "properties": {
+          "character": {
+            "$ref": "#/components/schemas/PublicCharacterSummary"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "starts": {
+            "title": "Starts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rank",
+          "starts",
+          "character"
+        ],
+        "title": "RankedCharacter",
+        "type": "object"
+      },
+      "RankedWorld": {
+        "description": "랭킹의 세계관 하나. starts 는 최근 recent_days 일 동안 세션을 시작한 수다.",
+        "properties": {
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "starts": {
+            "title": "Starts",
+            "type": "integer"
+          },
+          "world": {
+            "$ref": "#/components/schemas/PublicWorldSummary"
+          }
+        },
+        "required": [
+          "rank",
+          "starts",
+          "world"
+        ],
+        "title": "RankedWorld",
+        "type": "object"
+      },
       "Rating": {
         "description": "이용 등급. 게임 서버와 같은 값이다.",
         "enum": [
@@ -6322,6 +6403,41 @@
           "warnings"
         ],
         "title": "WorldPublishResult",
+        "type": "object"
+      },
+      "WorldRanking": {
+        "description": "세계관의 랭킹. 모양은 캐릭터의 것과 같다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RankedWorld"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "recent_days": {
+            "title": "Recent Days",
+            "type": "integer"
+          },
+          "refreshed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshed At"
+          }
+        },
+        "required": [
+          "recent_days",
+          "refreshed_at",
+          "items"
+        ],
+        "title": "WorldRanking",
         "type": "object"
       },
       "WorldSummary": {
@@ -9186,6 +9302,162 @@
         "summary": "Make Default",
         "tags": [
           "personas"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/rankings/characters": {
+      "get": {
+        "description": "최근 7일에 대화를 많이 시작한 캐릭터. 1위부터다.",
+        "operationId": "rank_characters_api_v1_asset_rankings_characters_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hide_adult",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Hide Adult",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "orientation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Orientation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Orientation"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterRanking"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rank Characters",
+        "tags": [
+          "rankings"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/asset/rankings/worlds": {
+      "get": {
+        "description": "최근 7일에 세션을 많이 시작한 세계관. 1위부터다.",
+        "operationId": "rank_worlds_api_v1_asset_rankings_worlds_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hide_adult",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Hide Adult",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "orientation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Orientation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Orientation"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorldRanking"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rank Worlds",
+        "tags": [
+          "rankings"
         ],
         "x-audience": "user"
       }

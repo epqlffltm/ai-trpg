@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/home/HomePage.tsx
-// 첫 화면(A1). 홍보 배너(#994), 서비스 고르기, 본인인증 안내·출석 알림과 이어하기(로그인했을 때), 공개된 것.
+// 첫 화면(A1). 홍보 배너(#994), 서비스 고르기, 본인인증 안내·출석 알림과 이어하기(로그인했을 때), 이번 주 인기(#985), 공개된 것.
 // 로그인하지 않아도 전체이용가의 목록까지 보이는 메인이다(2026-10-20 결정).
 // 다시 동의하거나 탈퇴를 기다리는 중이면 이 화면 대신 그 화면이 뜬다(AppLayout 의 LimitedSessionGate).
 
@@ -11,6 +11,7 @@ import { ContinueRows } from './ContinueRows';
 import { IdentityNotice } from './IdentityNotice';
 import { PromoBanner } from './PromoBanner';
 import { PublicRows } from './PublicRows';
+import { RankingRows } from './RankingRows';
 import { ServicePicker } from './ServicePicker';
 
 export function HomePage() {
@@ -23,6 +24,7 @@ export function HomePage() {
       {session ? <IdentityNotice /> : null}
       {session ? <AttendanceNotice /> : null}
       {session ? <ContinueRows /> : <SignInNotice />}
+      <RankingRows signedIn={session !== null} />
       <PublicRows signedIn={session !== null} />
     </main>
   );

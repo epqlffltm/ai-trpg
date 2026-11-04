@@ -147,6 +147,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | GET | `/api/v1/chat/conversations/{id}/transcript` | [기록 내려받기](#기록-내려받기). `?format=md`(기본), `html`, `txt`. 지금 가지의 말들을 파일 하나로. 없거나 볼 수 없는 대화면 404 | access 토큰 |
 | DELETE | `/api/v1/chat/conversations/{id}` | 지우기. 204. 지운 시각만 적는다 | access 토큰 |
 | GET | `/api/v1/chat/gallery` | 내가 연 [이벤트 씬](#이벤트-씬)(`{items: [{character_id, scene_id, unlocked_at}], total}`). 최근에 연 것부터. `character_id`(asset 서버의 캐릭터 id), `limit`, `offset` | access 토큰 |
+| GET | `/api/v1/chat/service/stats/character-starts` | 캐릭터(asset 의 id)마다 대화를 시작한 수 `{recent_days: 7, items: [{work_id, total, recent}]}`(#985). asset 서버가 한 시간마다 받아 가 랭킹을 만든다. 지운 대화도 센다. 프록시는 밖에서 받지 않는다(404) | asset 서버의 서명(`ASSET_SECRET`) |
 | POST | `/api/v1/chat/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴) 알림 받기. `{withdrawn_at}`. 200 `{"status": "processed"}`. 프록시는 밖에서 받지 않는다(404) | 인증 서버의 서명 |
 
 **스트리밍(정한 것).** 말을 보내는 `POST /api/v1/chat/conversations/{id}/messages`, `POST /api/v1/chat/messages/{id}/regenerate`, `/continue`(모두 만들었다)가

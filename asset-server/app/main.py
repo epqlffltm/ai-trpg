@@ -60,11 +60,13 @@ from app.operators import router as operators
 from app.personas import router as personas
 from app.personas import supply as persona_supply
 from app.personas.service import PersonaLimitError, PersonaNotFoundError
+from app.rankings import router as rankings
 from app.ratings import AdultContentRequiredError, handle_adult_content_required
 from app.reports import router as reports
 from app.reports.service import AlreadyReportedError, OwnCharacterReportError
 from app.shortcuts import router as shortcuts
 from app.shortcuts import supply as shortcut_supply
+from app.stats import refresher
 from app.withdrawal import router as withdrawal
 from app.worlds import listings as world_listings
 from app.worlds import router as worlds
@@ -81,13 +83,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """
     서버가 뜰 때와 꺼질 때 할 일. yield 앞이 뜰 때, 뒤가 꺼질 때다.
 
-    뜰 때 끊긴 세션의 목록 받기(30초마다)와 알림 보내기(5초마다)를 시작한다. 꺼질 때 그것들을 가장 먼저 멈추고,
+    뜰 때 끊긴 세션의 목록 받기(30초마다), 알림 보내기(5초마다), 작품의 시작 수 받기(STATS_REFRESH_SECONDS 마다)를
+    시작한다. 꺼질 때 그것들을 가장 먼저 멈추고,
     DB 연결과 인증 서버로 가는 연결을 닫는다. 닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
     마지막으로 모아 둔 span 과 메트릭을 보낸다. 보내기를 기다리느라 막히므로 스레드에서 한다.
     """
     revoking = revocations.start(app.state.revocations)
     dispatching = dispatcher.start(app.state.notification_dispatcher)
+    counting = refresher.start(app.state.starts_refresher)
     yield
+    await counting.halt()
     await dispatching.halt()
     await revoking.halt()
     await app.state.engine.dispose()
@@ -168,6 +173,15 @@ def create_app(
         notifications=lambda: app.state.notifications,
     )
 
+    # chat 과 story 서버에서 작품마다의 시작 수를 몇 분마다 받아 와 쌓는 작업(#985, app/stats/).
+    # 주소(CHAT_URL, STORY_URL)가 없는 곳은 받지 않는다. lifespan 이 돌리고 멈춘다
+    app.state.starts_refresher = refresher.StartsRefresher(
+        session_factory=app.state.session_factory,
+        client=app.state.http_client,
+        sources=refresher.build_sources(settings),
+        interval=settings.stats_refresh_seconds,
+    )
+
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
     app.include_router(readiness.router)
@@ -198,6 +212,8 @@ def create_app(
     # 첫 화면의 홍보 배너(#994). 보는 주소와 운영자의 주소
     app.include_router(banners.public_router, prefix=API_PREFIX)
     app.include_router(banners.admin_router, prefix=API_PREFIX)
+    # 캐릭터와 세계관의 랭킹(#985). 받아 쌓아 둔 시작 수로 늘어놓는다. 로그인하지 않아도 읽는다
+    app.include_router(rankings.router, prefix=API_PREFIX)
 
     app.include_router(lorebooks.router, prefix=API_PREFIX)
     app.add_exception_handler(LorebookNotFoundError, lorebooks.handle_lorebook_not_found)

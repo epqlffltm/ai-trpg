@@ -12929,6 +12929,29 @@
         "title": "RaiseRequest",
         "type": "object"
       },
+      "RankedScenario": {
+        "description": "랭킹의 시나리오 하나. rank 는 1 부터다. starts 는 최근 recent_days 일 동안 이 시나리오로 연 테이블의 수다.",
+        "properties": {
+          "listing": {
+            "$ref": "#/components/schemas/PublicListing"
+          },
+          "rank": {
+            "title": "Rank",
+            "type": "integer"
+          },
+          "starts": {
+            "title": "Starts",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rank",
+          "starts",
+          "listing"
+        ],
+        "title": "RankedScenario",
+        "type": "object"
+      },
       "Rating": {
         "description": "이용 등급.",
         "enum": [
@@ -16622,6 +16645,28 @@
           "total"
         ],
         "title": "ScenarioPage",
+        "type": "object"
+      },
+      "ScenarioRanking": {
+        "description": "시나리오의 랭킹. 테이블을 열 때마다 바로 바뀐다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RankedScenario"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "recent_days": {
+            "title": "Recent Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "recent_days",
+          "items"
+        ],
+        "title": "ScenarioRanking",
         "type": "object"
       },
       "ScenarioSummary": {
@@ -24647,6 +24692,84 @@
         "summary": "Update Persona",
         "tags": [
           "personas"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/rankings/scenarios": {
+      "get": {
+        "description": "최근 7일에 테이블을 많이 연 시나리오. 1위부터다.",
+        "operationId": "rank_scenarios_api_v1_game_rankings_scenarios_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hide_adult",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Hide Adult",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "orientation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Orientation"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Orientation"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioRanking"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rank Scenarios",
+        "tags": [
+          "rankings"
         ],
         "x-audience": "user"
       }

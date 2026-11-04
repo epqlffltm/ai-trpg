@@ -580,6 +580,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/service/stats/character-starts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Starts
+         * @description 캐릭터마다 모든 대화의 수와 최근 RECENT_DAYS 일의 수.
+         */
+        get: operations["list_starts_api_v1_chat_service_stats_character_starts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/service/users/{public_id}/withdrawal": {
         parameters: {
             query?: never;
@@ -1898,6 +1918,31 @@ export interface components {
              */
             status: "processed";
         };
+        /**
+         * WorkStarts
+         * @description 캐릭터 하나(asset 서버의 id)의 대화 시작 수. recent 는 최근 recent_days 일 동안의 수다.
+         */
+        WorkStarts: {
+            /** Recent */
+            recent: number;
+            /** Total */
+            total: number;
+            /**
+             * Work Id
+             * Format: uuid
+             */
+            work_id: string;
+        };
+        /**
+         * WorkStartsList
+         * @description 한 번이라도 대화을 시작한 캐릭터 모두. 시작한 적이 없는 것은 빠진다.
+         */
+        WorkStartsList: {
+            /** Items */
+            items: components["schemas"]["WorkStarts"][];
+            /** Recent Days */
+            recent_days: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -2923,6 +2968,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModelList"];
+                };
+            };
+        };
+    };
+    list_starts_api_v1_chat_service_stats_character_starts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkStartsList"];
                 };
             };
         };
