@@ -258,6 +258,30 @@ groups:
           summary: 자동 충전의 결제 작업이 10분 넘게 성공하지 않았다
           description: 골드가 떨어진 사람의 자동 충전이 결제되지 않는다. docker compose ps billing-autocharge 와 그 로그를 본다
 
+      - alert: BillingAutoChargeDeclines
+        # 자동 충전(#980)의 결제가 지난 1시간에 다섯 번 이상 끝났는데 그 절반을 넘게 카드사가 거절했다.
+        # 사람마다의 거절(한도, 정지된 카드)은 드물게 흩어진다. 몰리면 카드사나 결제 대행사, 계약(자동결제 심사)의 문제다.
+        # 다섯 번보다 적으면 한두 사람의 거절로 울리므로 보지 않는다
+        expr: |
+          sum(increase(billing_auto_charges_total{service="billing-server", outcome="declined"}[1h]))
+            / sum(increase(billing_auto_charges_total{service="billing-server", outcome=~"paid|declined"}[1h])) > 0.5
+          and on() sum(increase(billing_auto_charges_total{service="billing-server", outcome=~"paid|declined"}[1h])) >= 5
+        labels:
+          severity: warning
+        annotations:
+          summary: 지난 1시간의 자동 충전에서 거절이 절반을 넘었다
+          description: 결제 작업(billing-autocharge)의 로그에서 거절 코드를 보고, 토스페이먼츠 상점관리자에서 같은 시각의 결제를 본다. 세 번 이어서 거절된 사람은 자동 충전이 꺼진다
+
+      - alert: BillingAutoChargeTermsPaused
+        # 자동 결제 동의의 지금의 판에 동의하지 않아 그만둔 자동 충전(terms_outdated)이 지난 1시간에 열 번을 넘었다.
+        # 판(autocharge.TermsVersion)을 올린 뒤라면 예상한 것이다. 올린 적이 없으면 동의를 적거나 읽는 길이 깨졌다
+        expr: sum(increase(billing_auto_charges_total{service="billing-server", outcome="skipped", reason="terms_outdated"}[1h])) > 10
+        labels:
+          severity: warning
+        annotations:
+          summary: 자동 결제 동의가 없어 멈춘 자동 충전이 지난 1시간에 열 번을 넘었다
+          description: 판을 올린 뒤가 아니면 auto_charge_consents 와 결제 서버의 로그를 본다. 판을 올린 뒤라면 다시 동의하라는 알림이 갔는지 본다
+
       - alert: BillingReconcileMissed
         # 대사는 하루 한 번 돌고 끝날 때 한 번 민다. 지난 이레 안에 돈 적이 있는데 지난 26시간에는 없으면 빠졌다.
         # 처음 띄운 PC 처럼 한 번도 돈 적이 없으면 울리지 않는다

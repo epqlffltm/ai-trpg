@@ -956,6 +956,8 @@ Prometheus(규칙을 15초마다 평가) ─▶ Alertmanager(묶기, 되풀이, 
 | billing-server | `BillingLedgerRollbacks` | warning | 지난 15분에 원장에 적었다가 되돌린 일이 있다(`expire` 는 뺀다. [목록](#목록)의 뜻) |
 | billing-server | `BillingSweepStalled` | warning | 결제 서버가 떠 있는데 정리 작업이 10분 넘게 성공하지 않았다 |
 | billing-server | `BillingAutoChargeStalled` | warning | 결제 서버가 떠 있는데 자동 충전의 결제 작업이 10분 넘게 성공하지 않았다. 그 작업이 돈 적이 없으면(지난 이레) 울리지 않는다 |
+| billing-server | `BillingAutoChargeDeclines` | warning | 지난 1시간에 끝난 자동 충전의 결제(결제됨과 거절)가 다섯 번 이상이고 그 절반을 넘게 거절되었다(`billing_auto_charges_total`). 다시 보낼 것(`retried`)과 그만둔 것은 세지 않는다 |
+| billing-server | `BillingAutoChargeTermsPaused` | warning | 자동 결제 동의의 지금의 판에 동의하지 않아 그만둔 자동 충전(`terms_outdated`)이 지난 1시간에 열 번을 넘었다. 판을 올린 뒤라면 예상한 것이다 |
 | billing-server | `BillingReconcileMissed` | warning | 지난 이레 안에 돈 대사가 지난 26시간에는 돌지 않았다. 한 번도 돈 적이 없으면 울리지 않는다 |
 | billing-server | `BillingReconcileFailed` | warning | 지난 하루의 대사가 성공하지 못했다 |
 | notification-server | `NotificationDatabaseUnreachable` | critical | `db_up` 이 1분 동안 0 이다 |
