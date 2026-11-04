@@ -1,7 +1,8 @@
 # shared/ai-core/src/ai_core/fake.py
 
 """
-가짜 provider 와 가짜 임베더. 모델을 부르지 않고 정해 둔 글, 글에서 바로 계산한 벡터를 돌려준다.
+가짜 provider, 가짜 임베더, 가짜 그림 provider.
+모델을 부르지 않고 정해 둔 글, 글에서 바로 계산한 벡터, 정해 둔 그림을 돌려준다.
 
 자동 테스트(CI 포함)는 이것만 쓴다. 실제 모델은 느리고, 돈이 들고, 같은 입력에 같은 글을 내지 않는다.
 받은 것을 적어 두어서, 테스트가 "모델에게 무엇을 보냈나"를 들여다볼 수 있다.
@@ -15,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar
 
 from ai_core.calls import CallRecord
+from ai_core.image_provider import REFERENCES_UNSUPPORTED, GeneratedImage, ImageRequest
 from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError, TextSink, ignore_text
 
 # 가짜 모델의 이름. 기록에 남을 때 진짜 모델과 섞이지 않게 한다
@@ -25,6 +27,12 @@ PIECE_SIZE = 4
 
 # 가짜 임베더의 벡터 길이. 진짜(bge-m3 는 1024)보다 짧다. 테스트에서 낱말이 겹치는지만 드러나면 된다
 FAKE_DIMENSIONS = 64
+
+# 가짜 그림. 1x1 크기의 PNG 다(그림으로 읽히는 가장 작은 것)
+FAKE_PNG = bytes.fromhex(
+    '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489'
+    '0000000d49444154789c6360606060000000050001a5f645400000000049454e44ae426082'
+)
 
 # 낱말을 가르는 것. 글자와 숫자가 아닌 것(공백, 문장 부호)에서 자른다
 WORD_PATTERN = re.compile(r'\w+')
@@ -123,3 +131,31 @@ class FakeCallLog:
     async def write(self, record: CallRecord) -> None:
         """기록 하나를 쌓는다."""
         self.records.append(record)
+
+
+@dataclass
+class FakeImageProvider:
+    """
+    정해 둔 그림(기본은 1x1 PNG)을 돌려주는 그림 provider. 받은 요청이 calls 에 쌓인다.
+
+    error 를 두면 부를 때마다 그 이유로 실패한다(refused, no_image …).
+    supports_references 를 끄면 참고 그림을 넘길 때 진짜처럼 references_unsupported 로 실패한다.
+    """
+
+    kind: ClassVar[str] = 'fake'
+
+    image: bytes = FAKE_PNG
+    mime_type: str = 'image/png'
+    model: str = FAKE_MODEL
+    supports_references: bool = True
+    error: str | None = None
+    calls: list[ImageRequest] = field(default_factory=list)
+
+    async def generate(self, request: ImageRequest) -> GeneratedImage:
+        """받은 것을 적어 두고 정해 둔 그림을 돌려준다."""
+        self.calls.append(request)
+        if request.references and not self.supports_references:
+            raise ProviderError(REFERENCES_UNSUPPORTED)
+        if self.error is not None:
+            raise ProviderError(self.error)
+        return GeneratedImage(data=self.image, mime_type=self.mime_type, model=self.model)

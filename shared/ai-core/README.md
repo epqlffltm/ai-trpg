@@ -27,7 +27,11 @@
 | `costs` | 호출 한 번의 원가를 그날의 단가로 센다 |
 | `retry_budget` | 같은 모델로 다시 부르는 예산(최근 1분의 첫 시도의 10%, 적어도 3번) |
 | `embedder`, `openai_embedder` | 임베더의 모양과 OpenAI 모양의 `/embeddings` 를 부르는 구현 |
-| `fake` | 가짜 provider, 임베더, 기록장. 자동 테스트는 이것만 쓴다 |
+| `image_provider` | 그림 provider 의 모양(`ImageProvider`)과 요청, 참고 그림, 결과의 타입(#983) |
+| `gemini_image` | Gemini 의 그림 모델(Nano Banana)을 부르는 provider. 참고 그림(인물 4장, 물건 10장까지), 막힘은 `refused` |
+| `comfyui` | 로컬 ComfyUI 로 Stable Diffusion 계열 모델을 돌리는 provider. 연구·개발·시험용이다. 참고 그림은 받지 않는다 |
+| `image_http` | 그림 provider 들의 HTTP 의 일. 실패의 이름은 글 모델과 같고, 그림의 크기에 상한을 둔다 |
+| `fake` | 가짜 provider, 임베더, 그림 provider, 기록장. 자동 테스트는 이것만 쓴다 |
 
 ## 서버에 붙이기
 
@@ -69,3 +73,28 @@ uv run pytest --cov
 
 DB 도 모델도 부르지 않는다. httpx 의 가짜 전송(`MockTransport`)이 모델의 창구인 척 답한다.
 DB 의 모델 목록, 호출 기록의 표, 서술자처럼 서버에 붙은 것은 쓰는 서버의 테스트가 본다.
+
+## 로컬 Stable Diffusion(연구·개발용, #983)
+
+운영의 장면 그림은 외부 API(Nano Banana)로 만든다. 로컬 모델은 API 값 없이 지시 글과 흐름을 시험하는 데 쓴다.
+같은 모양(`ImageProvider`)이라 서버에서도 개발할 때 바꿔 끼울 수 있다.
+
+1. 그림을 그릴 PC(RTX 3090 같은 GPU)에 [ComfyUI](https://github.com/comfyanonymous/ComfyUI) 를 깔고 띄운다. 기본 주소는 `http://127.0.0.1:8188` 이다.
+2. 체크포인트(모델 파일)를 `ComfyUI/models/checkpoints/` 에 둔다. 기본 흐름은 SDXL 계열의 글→그림이다.
+   모델마다 상업 이용 조건(라이선스)이 다르다. 받기 전에 확인하고, 운영에 쓸 모델은 따로 정한다.
+3. 그림 한 장을 만들어 본다. 걸린 시간과 씨앗이 찍힌다.
+
+   ```powershell
+   cd shared/ai-core; uv run python scripts/try_image.py comfyui --checkpoint sd_xl_base_1.0.safetensors --prompt "rainy library, a librarian by the window" --out rain.png
+   ```
+
+4. 다른 흐름(IP-Adapter 로 얼굴 맞추기 같은 것)은 ComfyUI 에서 "API 형식으로 저장"한 JSON 을 `--workflow` 로 넘긴다.
+   흐름 안의 글이 정확히 `{{prompt}}`, `{{negative}}`, `{{seed}}` 인 칸을 바꿔 넣는다.
+5. Nano Banana 와 견줘 보려면 키를 환경 변수에 넣고 같은 지시로 부른다(장마다 값이 든다).
+
+   ```powershell
+   cd shared/ai-core; $env:GEMINI_API_KEY = "<키>"; uv run python scripts/try_image.py gemini --prompt "rainy library, a librarian by the window" --ref face.png --out rain-nb.png
+   ```
+
+- 로컬 모델에는 공급자의 안전 필터가 없다. 성인 등급에 쓰려면 지시 거르기, 그림 분류기, 인물 나이 확인과 법률 확인을 먼저 갖춘다(#983).
+- GPU 하나는 한 번에 한 장을 그린다. 로컬 글 모델(Ollama)과 같은 GPU 를 나눠 쓰면 서로 기다린다.
