@@ -953,6 +953,84 @@
         "title": "ItemDocument",
         "type": "object"
       },
+      "KeptSnapshotOut": {
+        "description": "내 다 그린 장면 그림 한 장(갤러리). conversation_title 은 그 대화의 제목, work_name 은 캐릭터의 이름이다.\nmessage_id 는 그린 답이다(지웠으면 null). 그림은 asset 서버의 주소로 받는다(주인만).",
+        "properties": {
+          "conversation_id": {
+            "format": "uuid",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "conversation_title": {
+            "title": "Conversation Title",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "work_name": {
+            "title": "Work Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "image_id",
+          "conversation_id",
+          "conversation_title",
+          "work_name",
+          "message_id",
+          "created_at"
+        ],
+        "title": "KeptSnapshotOut",
+        "type": "object"
+      },
+      "KeptSnapshotPage": {
+        "description": "목록의 한 쪽과 전체 개수. 대화 목록과 같은 모양이다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/KeptSnapshotOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "KeptSnapshotPage",
+        "type": "object"
+      },
       "LoreEntryDocument": {
         "description": "로어북의 항목 하나. constant 면 늘 모델에 간다. 아니면 최근 말에 keywords 가운데 하나가 나올 때 간다\n(conversation_core/lorebook.py). kind 는 종류(person, place …)다. 모르는 종류도 받아 둔다.",
         "properties": {
@@ -4518,6 +4596,69 @@
           "service"
         ],
         "x-audience": "service"
+      }
+    },
+    "/api/v1/chat/snapshots": {
+      "get": {
+        "description": "내 다 그린 그림들. 지운 대화와 볼 수 없는 등급의 것은 뺀다. 최근에 만든 것부터다.",
+        "operationId": "list_kept_api_v1_chat_snapshots_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeptSnapshotPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Kept",
+        "tags": [
+          "snapshots"
+        ],
+        "x-audience": "user"
       }
     },
     "/api/v1/chat/snapshots/price": {

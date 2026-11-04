@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.assets.client import AssetClient, AssetUnavailableError
 from app.billing.client import Billing
 from app.conversations import repository as conversations
-from app.conversations.models import Message, Role
+from app.conversations.models import Conversation, ImportedCharacter, Message, Role
 from app.conversations.service import MessageNotFoundError, get_conversation
 from app.core.dependencies import Viewer
 from app.ratings import allowed_ratings
@@ -42,7 +42,7 @@ from app.snapshots.models import Snapshot, SnapshotOutcome
 from app.snapshots.prompt import snapshot_prompt, with_references
 from app.snapshots.providers import price_code_of
 from app.snapshots.references import ReferenceTarget, character_targets, fetch_references
-from app.snapshots.schemas import SnapshotOut, SnapshotStatus
+from app.snapshots.schemas import KeptSnapshotOut, KeptSnapshotPage, SnapshotOut, SnapshotStatus
 from app.turns import charging
 from app.turns.charging import HoldDeclined, Settled
 from app.turns.models import DUE_STATUSES, BillingStatus
@@ -310,6 +310,26 @@ async def list_snapshots(session: AsyncSession, viewer: Viewer, conversation_id:
     """그 대화의 그림들. 남의 대화면 ConversationNotFoundError."""
     conversation, _, _ = await get_conversation(session, viewer, conversation_id)
     return [snapshot_out(snapshot) for snapshot in await repository.of_conversation(session, conversation.id)]
+
+
+def kept_out(snapshot: Snapshot, conversation: Conversation, work: ImportedCharacter) -> KeptSnapshotOut:
+    """갤러리의 한 장의 응답."""
+    return KeptSnapshotOut(
+        id=snapshot.id,
+        image_id=snapshot.image_id,
+        conversation_id=conversation.id,
+        conversation_title=conversation.title,
+        work_name=work.name,
+        message_id=snapshot.message_id,
+        created_at=snapshot.created_at,
+    )
+
+
+async def list_kept(session: AsyncSession, viewer: Viewer, limit: int, offset: int) -> KeptSnapshotPage:
+    """내 다 그린 그림들(갤러리). 지운 대화와 볼 수 없는 등급의 것은 뺀다. 최근에 만든 것부터다."""
+    owner_id = viewer.claims.user_id
+    rows, total = await repository.list_kept(session, owner_id, allowed_ratings(viewer.claims), limit, offset)
+    return KeptSnapshotPage(items=[kept_out(*row) for row in rows], total=total)
 
 
 async def snapshot_by_id(session_factory: async_sessionmaker[AsyncSession], snapshot_id: uuid.UUID) -> SnapshotOut:

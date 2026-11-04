@@ -929,6 +929,84 @@
         "title": "ItemOut",
         "type": "object"
       },
+      "KeptSnapshotOut": {
+        "description": "내 다 그린 장면 그림 한 장(갤러리). conversation_title 은 그 세션의 제목, work_name 은 세계관의 이름이다.\nmessage_id 는 그린 답이다(지웠으면 null). 그림은 asset 서버의 주소로 받는다(주인만).",
+        "properties": {
+          "conversation_id": {
+            "format": "uuid",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "conversation_title": {
+            "title": "Conversation Title",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "work_name": {
+            "title": "Work Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "image_id",
+          "conversation_id",
+          "conversation_title",
+          "work_name",
+          "message_id",
+          "created_at"
+        ],
+        "title": "KeptSnapshotOut",
+        "type": "object"
+      },
+      "KeptSnapshotPage": {
+        "description": "목록의 한 쪽과 전체 개수. 세션 목록과 같은 모양이다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/KeptSnapshotOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "KeptSnapshotPage",
+        "type": "object"
+      },
       "MapPlaceOut": {
         "description": "지도의 장소 하나(D3). visited 는 이 가지에서 가 본 곳인가다.\ncast 는 지금 거기 있는 것이 보이는 인물들이다: 가 본 곳이고, 만난 적이 있고, 제작자의 지도 보이기를 통과한 인물.\n함께 다니는 인물은 넣지 않는다(상태의 companions 로 내 자리 옆에 보인다).",
         "properties": {
@@ -4705,6 +4783,69 @@
           "service"
         ],
         "x-audience": "service"
+      }
+    },
+    "/api/v1/story/snapshots": {
+      "get": {
+        "description": "내 다 그린 그림들. 지운 세션과 볼 수 없는 등급의 것은 뺀다. 최근에 만든 것부터다.",
+        "operationId": "list_kept_api_v1_story_snapshots_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeptSnapshotPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Kept",
+        "tags": [
+          "snapshots"
+        ],
+        "x-audience": "user"
       }
     },
     "/api/v1/story/snapshots/price": {

@@ -687,6 +687,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Kept
+         * @description 내 다 그린 그림들. 지운 세션과 볼 수 없는 등급의 것은 뺀다. 최근에 만든 것부터다.
+         */
+        get: operations["list_kept_api_v1_story_snapshots_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/snapshots/price": {
         parameters: {
             query?: never;
@@ -1164,6 +1184,49 @@ export interface components {
             image_id: string | null;
             /** Name */
             name: string;
+        };
+        /**
+         * KeptSnapshotOut
+         * @description 내 다 그린 장면 그림 한 장(갤러리). conversation_title 은 그 세션의 제목, work_name 은 세계관의 이름이다.
+         *     message_id 는 그린 답이다(지웠으면 null). 그림은 asset 서버의 주소로 받는다(주인만).
+         */
+        KeptSnapshotOut: {
+            /**
+             * Conversation Id
+             * Format: uuid
+             */
+            conversation_id: string;
+            /** Conversation Title */
+            conversation_title: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+            /** Message Id */
+            message_id: string | null;
+            /** Work Name */
+            work_name: string;
+        };
+        /**
+         * KeptSnapshotPage
+         * @description 목록의 한 쪽과 전체 개수. 세션 목록과 같은 모양이다.
+         */
+        KeptSnapshotPage: {
+            /** Items */
+            items: components["schemas"]["KeptSnapshotOut"][];
+            /** Total */
+            total: number;
         };
         /**
          * MapPlaceOut
@@ -3115,6 +3178,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WithdrawalResult"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_kept_api_v1_story_snapshots_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeptSnapshotPage"];
                 };
             };
             /** @description 입력이 틀렸다 */

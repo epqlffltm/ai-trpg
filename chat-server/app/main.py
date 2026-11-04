@@ -288,7 +288,7 @@ def create_app(
     # 장면 그림(#983). 그리기는 응답과 따로 돈다
     app.include_router(snapshots.router, prefix=API_PREFIX)
     app.include_router(snapshots.conversation_router, prefix=API_PREFIX)
-    app.include_router(snapshots.price_router, prefix=API_PREFIX)
+    app.include_router(snapshots.own_router, prefix=API_PREFIX)
     # 대화 기록 내려받기(#617). 지금 보고 있는 가지를 파일 하나로
     app.include_router(transcripts.router, prefix=API_PREFIX)
     # 내가 연 이벤트 씬(#669). 소개의 이벤트 씬 칸과 갤러리가 읽는다

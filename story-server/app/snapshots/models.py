@@ -45,6 +45,8 @@ class Snapshot(Base):
         ),
         # 세션의 그림들을 말의 차례로 찾는다
         Index('ix_snapshots_conversation_created', 'conversation_id', 'created_at'),
+        # 내 그림들(갤러리)을 최근에 만든 것부터 찾는다
+        Index('ix_snapshots_owner_created', 'owner_id', 'created_at'),
         # 정리 작업이 맡길 차례가 된 청구를 찾는다
         Index('ix_snapshots_billing_status_next_settle_at', 'billing_status', 'next_settle_at'),
     )
