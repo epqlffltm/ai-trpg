@@ -67,15 +67,18 @@ func TestAFailedAutoChargeIsTold(t *testing.T) {
 }
 
 func TestWhatTheUserDidIsNotTold(t *testing.T) {
-	// 사용자가 끈 것, 탈퇴, 끝나지 않은 일, 오래된 일은 알리지 않는다
+	// 사용자가 끈 것, 탈퇴, 결제 작업이 멈춰 늦어서 그만둔 것(stale), 끝나지 않은 일, 오래된 일은 알리지 않는다
 	f := setUp(t)
 	user := f.user()
 	f.finished(user, "skipped", "disabled", false, f.clock.now)
 	f.finished(user, "skipped", "withdrawn", false, f.clock.now)
+	f.finished(user, "skipped", "stale", false, f.clock.now)
 	f.finished(user, "declined", "", false, f.clock.now.Add(-usernotice.LookBack-time.Minute))
+	// 다음 시도 시각은 아주 먼 뒤로 둔다. 결제 작업은 사용자를 가리지 않아, 지금으로 두면 함께 도는 autocharge 의 시험이
+	// 이 일을 가져가 그 시험의 수가 흔들린다
 	if _, err := f.pool.Exec(context.Background(), `
 		INSERT INTO auto_charge_requests (id, user_id, product_id, price, credits, status, next_attempt_at, created_at)
-		VALUES ($1, $2, 'credits-5000', 5000, 5000, 'pending', $3, $3)`, uuid.New(), user, f.clock.now); err != nil {
+		VALUES ($1, $2, 'credits-5000', 5000, 5000, 'pending', '2999-01-01T00:00:00Z', $3)`, uuid.New(), user, f.clock.now); err != nil {
 		t.Fatalf("충전할 일을 적지 못했다: %v", err)
 	}
 
