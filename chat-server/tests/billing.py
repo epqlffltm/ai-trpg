@@ -34,6 +34,8 @@ BILLING_URL = 'http://billing.test'
 SECRET = 'test-billing-secret-0123456789abcdef'
 # 가격표. 말 한 번의 값이다
 PRICES = {'chat.standard': 50, 'chat.premium': 120}
+# 이 서버가 쓸 수 있는 가격표 이름의 머리. 다른 머리의 이름은 없는 가격표와 같다(400 price.unknown)
+PRICE_SCOPE = 'chat'
 # 결제 서버가 받아 주는 시각의 차이(초)
 TOLERANCE = 300
 # chat 서버가 건 홀드가 걸리거나 연장된 뒤 만료될 때까지(결제 서버의 CHAT_HOLD_TTL 기본값)
@@ -80,6 +82,10 @@ class FakeBillingServer:
     clock: Callable[[], datetime] = utc_now
     ttl: timedelta = HOLD_TTL
 
+    def in_scope(self, price_code: str) -> bool:
+        """이 서버가 쓸 수 있는 가격표 이름인가. 첫 점의 앞이 이 서버의 머리여야 한다(결제 서버의 price_scope.go)."""
+        return price_code.split('.', 1)[0] == PRICE_SCOPE
+
     def signed(self, request: httpx.Request) -> bool:
         """머리말의 서명이 이 요청의 것이고 방금 만든 것인가."""
         header = request.headers.get('X-Service-Signature', '')
@@ -112,7 +118,7 @@ class FakeBillingServer:
         if existing is not None:
             same = (existing.user_id, existing.price_code) == (user_id, price_code)
             return self.answer(200, reference) if same else self.answer(409)
-        if price_code not in self.prices:
+        if not self.in_scope(price_code) or price_code not in self.prices:
             return self.answer(400, code='price.unknown')
         if price_code in self.not_for_sale:
             return self.answer(400, code='price.not_for_sale')

@@ -58,7 +58,7 @@ class Snapshot(Base):
     # 그림 모델의 이름(gemini-nano-banana-2.1 같은 것)
     model: Mapped[str] = mapped_column(String(80))
 
-    # 결제 서버의 홀드의 이름표(chat:img:<id>)와 가격표 이름(image.<이름표>)
+    # 결제 서버의 홀드의 이름표(chat:img:<id>)와 가격표 이름(chat.image.<이름표>)
     reference: Mapped[str] = mapped_column(String(80), unique=True)
     price_code: Mapped[str] = mapped_column(String(120))
     billing_status: Mapped[str] = mapped_column(String(20), default=BillingStatus.PENDING)

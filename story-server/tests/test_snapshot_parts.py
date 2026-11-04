@@ -76,7 +76,7 @@ def settings(**fields) -> Settings:
 def test_the_price_code_and_the_provider_choice():
     http = httpx.AsyncClient()
 
-    assert price_code_of('gemini-nano-banana-2.1') == 'image.gemini-nano-banana-2-1'
+    assert price_code_of('gemini-nano-banana-2.1') == 'story.image.gemini-nano-banana-2-1'
     assert build_image_provider(settings(), http) is None
     assert build_image_provider(settings(snapshot_provider='gemini'), http) is None
     assert isinstance(build_image_provider(settings(snapshot_provider='fake'), http), FakeImageProvider)
