@@ -1098,3 +1098,40 @@ class InviteGrant(models.Model):
 
     def __str__(self) -> str:
         return f'{self.user_public_id} / {self.get_role_display()} / {self.get_status_display()}'
+
+
+class CreatorBlock(models.Model):
+    """
+    한 사람이 막은 제작자 하나(#988). 막은 제작자의 작품은 그 사람의 공개 목록에서 빠진다.
+
+    제작자는 공개 ID 로 적는다(목록 서버가 아는 값이다). 그런 계정이 있는지는 보지 않는다. 자기 자신은 막지 않는다.
+    한 사람이 막는 수는 blocks.py 의 상한까지다. 막은 사람이 탈퇴하면 지우고, 막힌 제작자가 탈퇴해도 지운다.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='creator_blocks', verbose_name='막은 사람')
+    creator_public_id = models.UUIDField('막은 제작자의 공개 ID', db_index=True)
+    created_at = models.DateTimeField('막은 시각', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '막은 제작자'
+        verbose_name_plural = '막은 제작자'
+        constraints = [models.UniqueConstraint(fields=['user', 'creator_public_id'], name='uq_creator_block')]
+
+    def __str__(self) -> str:
+        return f'{self.user} / {self.creator_public_id}'
+
+
+class TagBlock(models.Model):
+    """한 사람이 막은 태그 하나(#988). 그 태그가 붙은 작품은 그 사람의 공개 목록에서 빠진다. 태그는 글자 그대로다."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tag_blocks', verbose_name='막은 사람')
+    tag = models.CharField('태그', max_length=20)
+    created_at = models.DateTimeField('막은 시각', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '막은 태그'
+        verbose_name_plural = '막은 태그'
+        constraints = [models.UniqueConstraint(fields=['user', 'tag'], name='uq_tag_block')]
+
+    def __str__(self) -> str:
+        return f'{self.user} / {self.tag}'

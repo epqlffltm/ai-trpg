@@ -265,6 +265,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/blocks/creators/{public_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 제작자를 막는다. 그 제작자의 작품이 공개 목록에서 빠진다. 다시 해도 같다
+         * @description PUT, DELETE /api/v1/auth/me/blocks/creators/{public_id}. 제작자를 막고 푼다(#988).
+         */
+        put: operations["me_blocks_creators_update"];
+        post?: never;
+        /**
+         * 제작자의 막기를 푼다. 막지 않았어도 된다
+         * @description PUT, DELETE /api/v1/auth/me/blocks/creators/{public_id}. 제작자를 막고 푼다(#988).
+         */
+        delete: operations["me_blocks_creators_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me/blocks/tags/{tag}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 태그를 막는다. 그 태그가 붙은 작품이 공개 목록에서 빠진다. 다시 해도 같다
+         * @description PUT, DELETE /api/v1/auth/me/blocks/tags/{tag}. 태그를 막고 푼다(#988). 태그는 주소에 인코딩해 싣는다.
+         */
+        put: operations["me_blocks_tags_update"];
+        post?: never;
+        /**
+         * 태그의 막기를 푼다. 막지 않았어도 된다
+         * @description PUT, DELETE /api/v1/auth/me/blocks/tags/{tag}. 태그를 막고 푼다(#988). 태그는 주소에 인코딩해 싣는다.
+         */
+        delete: operations["me_blocks_tags_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me/consents": {
         parameters: {
             query?: never;
@@ -667,6 +715,11 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** @description 막은 제작자(공개 ID)와 태그(#988). 최근에 막은 것부터다. */
+        Blocks: {
+            creators: string[];
+            tags: string[];
+        };
         /** @description 화면이 가를 수 있게 오류의 이름(code)을 싣는 거절. */
         CodedError: {
             code: string;
@@ -854,6 +907,7 @@ export interface components {
          */
         Me: {
             bio: string;
+            blocks: components["schemas"]["Blocks"];
             consents_pending: string[];
             content_settings: components["schemas"]["ContentSettings"];
             /**
@@ -1635,6 +1689,202 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    me_blocks_creators_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 바뀐 뒤의 막은 것 전체 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Blocks"];
+                };
+            };
+            /** @description 자기 자신을 막으려 했다(block_self) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 상한을 넘는다(block_limit) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+        };
+    };
+    me_blocks_creators_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                public_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 바뀐 뒤의 막은 것 전체 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Blocks"];
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    me_blocks_tags_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tag: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 바뀐 뒤의 막은 것 전체 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Blocks"];
+                };
+            };
+            /** @description 태그가 비었거나 20자를 넘는다(invalid_tag) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 상한을 넘는다(block_limit) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+        };
+    };
+    me_blocks_tags_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tag: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 바뀐 뒤의 막은 것 전체 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Blocks"];
                 };
             };
             /** @description access 토큰이 없거나 받아들일 수 없다 */

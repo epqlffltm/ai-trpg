@@ -13,7 +13,10 @@
 ## 만드는 차례
 
 1. 목록을 내는 서버(trpg-server, asset-server)가 뺄 값을 받는다 — 이 문서의 "주소" (먼저 한다. 화면이 싣기 전에 서버가 받아야 한다)
-2. 인증 서버가 막은 목록을 갖고(`/me` 의 API), 화면이 차단 관리와 "차단하기"를 두고 목록의 주소에 싣는다
+2. 인증 서버가 막은 목록을 갖고, 화면이 차단 관리와 "차단하기"를 두고 목록의 주소에 싣는다
+   - 인증 서버: `/me` 의 `blocks`(`{creators, tags}`, 최근에 막은 것부터), `PUT`·`DELETE /me/blocks/creators/{공개 ID}`, `PUT`·`DELETE /me/blocks/tags/{태그}`
+     ([auth-server/README.md](../../auth-server/README.md), `accounts/blocks.py`). 계정을 비우면 막은 것과 그 사람을 막은 것을 지운다
+   - 화면: 제작자 페이지의 "차단하기", 마이페이지의 "차단"(풀기, 태그 더하기). 바꾸면 내 정보가 바뀌어 공개 목록을 다시 읽는다
 
 ## 주소
 

@@ -529,6 +529,7 @@ class MeTests(APITestCase):
                 'withdrawal_scheduled_at',
                 'content_settings',
                 'bio',
+                'blocks',
             },
         )
 
