@@ -65,11 +65,14 @@ def detect_format(data: bytes) -> ImageFormat:
     return image_format
 
 
-def build_image(owner_id: uuid.UUID, image_format: ImageFormat, decoded: DecodedImage) -> Image:
-    """다시 인코딩한 그림의 행. 아직 저장하지 않는다."""
+def build_image(
+    owner_id: uuid.UUID, image_format: ImageFormat, decoded: DecodedImage, kept_by: str | None = None
+) -> Image:
+    """다시 인코딩한 그림의 행. kept_by 는 맡긴 서버다(사용자가 올렸으면 None). 아직 저장하지 않는다."""
     return Image(
         id=uuid.uuid4(),
         owner_id=owner_id,
+        kept_by=kept_by,
         format=image_format,
         byte_size=len(decoded.data),
         width=decoded.width,
@@ -84,14 +87,16 @@ async def upload_image(
     owner_id: uuid.UUID,
     data: bytes,
     now: datetime,
+    kept_by: str | None = None,
 ) -> Image:
     """
-    그림을 올린다. 형식이 아니면 UnsupportedImageError, 열 수 없으면 ImageUnreadableError,
+    그림을 올린다. kept_by 는 맡긴 서버다(서비스 주소로 올렸을 때).
+    형식이 아니면 UnsupportedImageError, 열 수 없으면 ImageUnreadableError,
     저장소에 넣지 못하면 ImageStoreUnavailableError 다.
     """
     image_format = detect_format(data)
     decoded = await decoder.decode(data, image_format)
-    image = build_image(owner_id, image_format, decoded)
+    image = build_image(owner_id, image_format, decoded, kept_by)
     await store.put(str(image.id), decoded.data, CONTENT_TYPES[image_format], now)
     await repository.add_image(session, image)
     await session.commit()
@@ -177,6 +182,21 @@ async def image_content(
     """
     image = await viewable_image(session, viewer, image_id)
     await session.commit()
+    data, _ = await store.get(str(image.id), now)
+    return data, CONTENT_TYPES[ImageFormat(image.format)]
+
+
+async def kept_content(
+    session: AsyncSession, store: ImageStore, caller: str, image_id: uuid.UUID, now: datetime
+) -> tuple[bytes, str]:
+    """
+    그 서버가 맡긴 그림의 바이트와 형식(#983). 사용자의 토큰 없이 서명만으로 받는다. 그 서버가 맡긴 것이 아니거나
+    없으면 ImageNotFoundError(어느 쪽인지 알리지 않는다), 저장소에서 받지 못하면 ImageStoreUnavailableError.
+    """
+    image = await repository.get_image(session, image_id)
+    await session.commit()
+    if image is None or image.kept_by != caller:
+        raise ImageNotFoundError
     data, _ = await store.get(str(image.id), now)
     return data, CONTENT_TYPES[ImageFormat(image.format)]
 

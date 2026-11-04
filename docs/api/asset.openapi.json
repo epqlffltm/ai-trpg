@@ -10264,7 +10264,7 @@
     },
     "/api/v1/asset/service/{caller}/images": {
       "post": {
-        "description": "만든 그림을 토큰의 주인의 그림으로 올린다.",
+        "description": "만든 그림을 토큰의 주인의 그림으로 올린다. 맡긴 서버(caller)를 함께 적는다.",
         "operationId": "keep_image_api_v1_asset_service__caller__images_post",
         "parameters": [
           {
@@ -10412,6 +10412,54 @@
           }
         ],
         "summary": "Image Content",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
+    "/api/v1/asset/service/{caller}/images/{image_id}/kept": {
+      "get": {
+        "description": "그 서버가 맡긴 그림의 바이트. 토큰은 받지 않는다(서명만). 그 서버가 맡긴 것이 아니면 404 다.",
+        "operationId": "kept_content_api_v1_asset_service__caller__images__image_id__kept_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "caller",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Caller",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "그림의 바이트(image/png, image/jpeg, image/webp)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "summary": "Kept Content",
         "tags": [
           "service"
         ],
