@@ -28,12 +28,20 @@ import (
 //     - 승인: 한 트랜잭션에서 일을 끝내고, paid 인 주문을 적고, 골드를 넣고, 이어서 실패한 수를 0 으로 한다
 //     - 거절: 일을 끝내고 이어서 실패한 수를 늘린다. MaxFailures 가 되면 끈다. 다시 보내지 않는다
 //     - 모름: 그대로 두고 간격을 늘려 같은 것을 다시 보낸다. 결제 대행사가 처음의 답을 준다
+//  4. 다시 보내는 것은 일이 적힌 뒤 ResendFor(3일)까지다. 결제 대행사의 멱등키는 15일만 쓸 수 있어서 그 전에 멈춘다.
+//     그 뒤로는 보내지 않고 주문 번호로 조회한다(payment.CardCharger.LookupCharge). 조회는 결제를 만들지 않는다
+//     - 완료: 승인과 같다. 결제가 없거나 끝내 되지 않았다: 거절과 같다(돈이 나가지 않았다)
+//     - 그 밖: 그대로 두고 간격을 두어 다시 조회한다. 하루가 지나면 대사가 사람에게 넘긴다(autocharge.stuck). 사람은 Resolve 로 정한다
 //
 // charging 이 된 일은 그만두지 않는다. 돈이 나갔을 수 있다. 그새 끄거나 카드를 지워도 옮겨 적은 카드로 답을 받을 때까지 보낸다.
 
 const (
 	// MaxFailures 는 이어서 실패하면 자동 충전을 끄는 수다(2026-11-04 결정).
 	MaxFailures = 3
+	// ResendFor 는 답을 받지 못한 결제를 다시 보내는 기한이다. 일이 적힌 때부터 센다(2026-11-04 결정).
+	// 그 뒤로는 주문 번호로 조회만 한다. 결제 대행사의 멱등키(15일)보다 넉넉히 짧고,
+	// 골드가 떨어진 지 며칠 뒤에 결제되어 사용자가 놀라는 일을 줄인다.
+	ResendFor = 72 * time.Hour
 	// ChargeTimeout 은 빌링키 결제의 답을 기다리는 가장 긴 시간이다.
 	ChargeTimeout = 15 * time.Second
 	// ChargeLease 는 보내는 동안 다른 작업이 가져가지 않는 시간이다. ChargeTimeout 보다 넉넉하다.
@@ -76,13 +84,15 @@ type ChargeResult struct {
 	Paid     int
 	Declined int
 	Skipped  int
-	// Retried 는 답을 받지 못해 다시 보낼 수다.
+	// Retried 는 답을 받지 못해 다시 보내거나 다시 조회할 수다.
 	Retried int
+	// LookedUp 은 다시 보내는 기한이 지나 보내지 않고 조회한 수다. 조회의 결과도 Paid, Declined, Retried 에 함께 센다.
+	LookedUp int
 }
 
 // Any 는 한 일이 있는지다.
 func (r ChargeResult) Any() bool {
-	return r.Paid > 0 || r.Declined > 0 || r.Skipped > 0 || r.Retried > 0
+	return r.Paid > 0 || r.Declined > 0 || r.Skipped > 0 || r.Retried > 0 || r.LookedUp > 0
 }
 
 // WithCharging 은 결제하는 일을 붙인 Service 를 돌려준다. 결제하는 작업(cmd/autocharge)만 붙인다.
@@ -96,7 +106,10 @@ func (s *Service) WithCharging(charger payment.CardCharger, orders Orders) *Serv
 func (s *Service) ChargeRound(ctx context.Context, limit int) (ChargeResult, error) {
 	var result ChargeResult
 	for range limit {
-		outcome, err := s.chargeNext(ctx)
+		outcome, lookedUp, err := s.chargeNext(ctx)
+		if lookedUp {
+			result.LookedUp++
+		}
 		if err != nil {
 			return result, err
 		}
@@ -126,21 +139,31 @@ const (
 	outcomeRetried
 )
 
-// chargeNext 는 때가 된 일 하나를 차지하고 끝까지 한다.
-func (s *Service) chargeNext(ctx context.Context) (outcome, error) {
+// chargeNext 는 때가 된 일 하나를 차지하고 끝까지 한다. 다시 보내는 기한이 지났으면 보내지 않고 조회한다(두 번째 값이 true).
+func (s *Service) chargeNext(ctx context.Context) (outcome, bool, error) {
 	now := s.clock()
 	request, found, err := s.claim(ctx, now)
 	if err != nil || !found {
-		return outcomeNone, err
+		return outcomeNone, false, err
 	}
 	if request.Status == statusPending {
 		started, skipped, err := s.prepare(ctx, request, now)
 		if err != nil || skipped {
-			return outcomeSkipped, err
+			return outcomeSkipped, false, err
 		}
 		request = started
 	}
-	return s.send(ctx, request, now)
+	if PastResend(request.CreatedAt, now) {
+		result, err := s.lookUp(ctx, request, now)
+		return result, true, err
+	}
+	result, err := s.send(ctx, request, now)
+	return result, false, err
+}
+
+// PastResend 는 그때 적힌 일이 지금은 다시 보내는 기한(ResendFor)을 지났는지다. 지났으면 보내지 않는다.
+func PastResend(createdAt time.Time, now time.Time) bool {
+	return !now.Before(createdAt.Add(ResendFor))
 }
 
 // claim 은 때가 된 일 하나를 잠그고, 임대가 끝나는 때까지 다른 쪽이 가져가지 않게 적는다.
@@ -226,6 +249,19 @@ func (s *Service) eligibilityRefusal(ctx context.Context, userID uuid.UUID) (str
 // send 는 빌링키 결제를 보내고 답을 적는다.
 func (s *Service) send(ctx context.Context, request autochargedb.AutoChargeRequest, now time.Time) (outcome, error) {
 	charged, err := s.charge(ctx, request)
+	return s.settle(ctx, request, charged, err, now)
+}
+
+// lookUp 은 주문 번호로 결제를 조회하고 답을 적는다. 결제를 만들지 않는다.
+func (s *Service) lookUp(ctx context.Context, request autochargedb.AutoChargeRequest, now time.Time) (outcome, error) {
+	found, err := s.lookup(ctx, request)
+	return s.settle(ctx, request, found, err, now)
+}
+
+// settle 은 결제 대행사의 답(보낸 것이나 조회한 것)을 적는다. 답이 없거나 아직 모르면 미룬다.
+func (s *Service) settle(
+	ctx context.Context, request autochargedb.AutoChargeRequest, charged payment.ChargeResult, err error, now time.Time,
+) (outcome, error) {
 	if err != nil || charged.Status == payment.StatusPending {
 		cause := err
 		if cause == nil {
@@ -234,9 +270,11 @@ func (s *Service) send(ctx context.Context, request autochargedb.AutoChargeReque
 		return outcomeRetried, s.delay(ctx, request, cause, now)
 	}
 	if charged.Status == payment.StatusApproved {
-		return outcomePaid, s.settlePaid(ctx, request, charged.PaymentKey)
+		_, err := s.settlePaid(ctx, request, charged.PaymentKey)
+		return outcomePaid, err
 	}
-	return outcomeDeclined, s.settleDeclined(ctx, request, charged.Code)
+	_, err = s.settleDeclined(ctx, request, charged.Code)
+	return outcomeDeclined, err
 }
 
 // charge 는 옮겨 적은 카드로 빌링키 결제를 보내되 ChargeTimeout 까지만 기다린다.
@@ -250,16 +288,27 @@ func (s *Service) charge(ctx context.Context, request autochargedb.AutoChargeReq
 	})
 }
 
+// lookup 은 주문 번호로 결제를 조회하되 ChargeTimeout 까지만 기다린다.
+func (s *Service) lookup(ctx context.Context, request autochargedb.AutoChargeRequest) (payment.ChargeResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, ChargeTimeout)
+	defer cancel()
+	return s.charger.LookupCharge(ctx, payment.CardCharge{
+		BillingKey: request.BillingKey.String, CustomerKey: uuid.UUID(request.CustomerKey.Bytes).String(),
+		OrderID: request.ID, Amount: request.Price,
+	})
+}
+
 // settlePaid 는 한 트랜잭션에서 일을 끝내고, 주문을 적고, 골드를 넣고, 이어서 실패한 수를 0 으로 한다.
-// 다른 작업이 먼저 끝냈으면 아무것도 하지 않는다.
-func (s *Service) settlePaid(ctx context.Context, request autochargedb.AutoChargeRequest, paymentKey string) error {
-	recorded := false
+// 다른 쪽(다른 작업, 사람의 결정)이 먼저 끝냈으면 아무것도 하지 않는다. 끝냈으면 true 다.
+func (s *Service) settlePaid(ctx context.Context, request autochargedb.AutoChargeRequest, paymentKey string) (bool, error) {
+	recorded, settled := false, false
 	err := txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
 		queries := autochargedb.New(tx)
 		finished, err := queries.FinishRequest(ctx, autochargedb.FinishRequestParams{ID: request.ID, Status: statusPaid, Now: s.clock()})
 		if err != nil || finished == 0 {
 			return err
 		}
+		settled = true
 		recorded, err = s.orders.RecordAutoPaidInTx(ctx, tx, order.AutoPaid{
 			ID: request.ID, UserID: request.UserID, ProductID: request.ProductID,
 			Price: request.Price, Credits: request.Credits, PaymentKey: paymentKey,
@@ -272,15 +321,17 @@ func (s *Service) settlePaid(ctx context.Context, request autochargedb.AutoCharg
 	if err == nil && recorded {
 		s.orders.CountAutoPaid(ctx)
 	}
-	return err
+	return settled && err == nil, err
 }
 
 // settleDeclined 는 한 트랜잭션에서 일을 끝내고 이어서 실패한 수를 늘린다. MaxFailures 가 되면 끈다.
-func (s *Service) settleDeclined(ctx context.Context, request autochargedb.AutoChargeRequest, code string) error {
+// 다른 쪽이 먼저 끝냈으면 아무것도 하지 않는다. 끝냈으면 true 다.
+func (s *Service) settleDeclined(ctx context.Context, request autochargedb.AutoChargeRequest, code string) (bool, error) {
 	if code == "" {
 		code = order.FailureCodeUnspecified
 	}
-	return txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
+	settled := false
+	err := txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
 		queries := autochargedb.New(tx)
 		finished, err := queries.FinishRequest(ctx, autochargedb.FinishRequestParams{
 			ID: request.ID, Status: statusDeclined, FailureCode: code, Now: s.clock(),
@@ -288,6 +339,7 @@ func (s *Service) settleDeclined(ctx context.Context, request autochargedb.AutoC
 		if err != nil || finished == 0 {
 			return err
 		}
+		settled = true
 		counted, err := queries.CountFailed(ctx, autochargedb.CountFailedParams{UserID: request.UserID, MaxFailures: MaxFailures, Now: s.clock()})
 		if errors.Is(err, pgx.ErrNoRows) {
 			// 설정을 지웠다(탈퇴). 셀 곳이 없다
@@ -298,6 +350,7 @@ func (s *Service) settleDeclined(ctx context.Context, request autochargedb.AutoC
 		}
 		return queries.MarkTurnedOff(ctx, request.ID)
 	})
+	return settled && err == nil, err
 }
 
 // turnedOff 는 이번 거절로 자동 충전을 껐는지다. 이어서 실패한 수가 처음 MaxFailures 에 닿은 때다.

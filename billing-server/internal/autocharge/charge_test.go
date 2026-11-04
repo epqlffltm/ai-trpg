@@ -48,11 +48,25 @@ func (c *movingClock) advance(d time.Duration) {
 	c.now = c.now.Add(d)
 }
 
-// countingCharger 는 보낸 결제를 세고, 앞의 lost 번은 답을 주지 않은 뒤 가짜에게 넘긴다.
+// countingCharger 는 보낸 결제와 조회를 세고, 앞의 lost 번은 답을 주지 않은 뒤 가짜에게 넘긴다. 조회는 늘 가짜에게 넘긴다.
 type countingCharger struct {
-	mu    sync.Mutex
-	lost  int
-	calls []payment.CardCharge
+	mu      sync.Mutex
+	lost    int
+	calls   []payment.CardCharge
+	lookups []payment.CardCharge
+}
+
+func (c *countingCharger) LookupCharge(ctx context.Context, charge payment.CardCharge) (payment.ChargeResult, error) {
+	c.mu.Lock()
+	c.lookups = append(c.lookups, charge)
+	c.mu.Unlock()
+	return payment.Fake{}.LookupCharge(ctx, charge)
+}
+
+func (c *countingCharger) lookupCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.lookups)
 }
 
 func (c *countingCharger) ChargeCard(ctx context.Context, charge payment.CardCharge) (payment.ChargeResult, error) {

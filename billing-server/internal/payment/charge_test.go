@@ -136,3 +136,92 @@ func TestFakeChargesByTheMark(t *testing.T) {
 		t.Errorf("모름 = %v, 없음 = %v", lostErr, noneErr)
 	}
 }
+
+func TestTossLooksUpTheChargeByTheOrderWithoutAKey(t *testing.T) {
+	toss, fake, _ := startToss(t, http.StatusOK, chargedPayment("DONE"))
+
+	result, err := toss.LookupCharge(context.Background(), cardCharge())
+
+	if err != nil || result.Status != payment.StatusApproved || result.PaymentKey != "tviva20261104" {
+		t.Fatalf("결과 = %+v, %v", result, err)
+	}
+	request := fake.last(t)
+	if request.method != http.MethodGet || request.rawPath != "/v1/payments/orders/"+chargeOrder.String() {
+		t.Errorf("요청 = %s %s", request.method, request.rawPath)
+	}
+	// 조회는 결제를 만들지 않는다. 멱등키가 없다(기한도 없다)
+	if request.header.Get("Idempotency-Key") != "" {
+		t.Errorf("멱등키 = %q", request.header.Get("Idempotency-Key"))
+	}
+}
+
+func TestTossLookupSaysNotChargedOnlyWhenItIsSure(t *testing.T) {
+	for name, answer := range map[string]struct {
+		status   int
+		body     string
+		wantCode string
+	}{
+		"결제가 없다":    {http.StatusNotFound, `{"code":"NOT_FOUND_PAYMENT","message":"없음"}`, payment.CodeChargeNotFound},
+		"끝내 되지 않았다": {http.StatusOK, chargedPayment("ABORTED"), "ABORTED"},
+		"기한이 지났다":   {http.StatusOK, chargedPayment("EXPIRED"), "EXPIRED"},
+		"취소되어 돌려줬다": {http.StatusOK, chargedPayment("CANCELED"), "CANCELED"},
+	} {
+		toss, _, _ := startToss(t, answer.status, answer.body)
+
+		result, err := toss.LookupCharge(context.Background(), cardCharge())
+
+		if err != nil || result.Status != payment.StatusDeclined || result.Code != answer.wantCode {
+			t.Errorf("%s: %+v, %v", name, result, err)
+		}
+	}
+}
+
+func TestTossLookupAnythingElseIsUnknown(t *testing.T) {
+	for name, answer := range map[string]struct {
+		status int
+		body   string
+	}{
+		"다른 까닭의 404": {http.StatusNotFound, `{"code":"NOT_FOUND","message":"주소가 없음"}`},
+		"코드 없는 404":  {http.StatusNotFound, `not json`},
+		"서버 오류":      {http.StatusInternalServerError, `{"code":"FAILED_INTERNAL_SYSTEM_PROCESSING"}`},
+		"우리 키의 문제":   {http.StatusUnauthorized, `{"code":"UNAUTHORIZED_KEY"}`},
+		"다른 주문의 결제":  {http.StatusOK, strings.Replace(chargedPayment("DONE"), chargeOrder.String(), uuid.NewString(), 1)},
+		"다른 금액":      {http.StatusOK, strings.Replace(chargedPayment("DONE"), "5000", "50000", 1)},
+	} {
+		toss, _, _ := startToss(t, answer.status, answer.body)
+
+		result, err := toss.LookupCharge(context.Background(), cardCharge())
+
+		if !errors.Is(err, payment.ErrUnknownOutcome) {
+			t.Errorf("%s: %+v, %v. 모름이어야 한다", name, result, err)
+		}
+	}
+	toss, _, _ := startToss(t, http.StatusOK, chargedPayment("IN_PROGRESS"))
+	if result, err := toss.LookupCharge(context.Background(), cardCharge()); err != nil || result.Status != payment.StatusPending {
+		t.Errorf("처리 중: %+v, %v. 아직 모르는 것이어야 한다", result, err)
+	}
+}
+
+func TestFakeLooksUpByTheMark(t *testing.T) {
+	ctx := context.Background()
+	charge := cardCharge()
+	charge.BillingKey = "fake_billing_" + payment.FakeChargeLost + "_" + payment.FakeLookupPaid
+	paid, paidErr := payment.Fake{}.LookupCharge(ctx, charge)
+	charged, _ := payment.Fake{}.ChargeCard(ctx, cardCharge())
+	charge.BillingKey = "fake_billing_" + payment.FakeChargeLost + "_" + payment.FakeLookupMissing
+	missing, missingErr := payment.Fake{}.LookupCharge(ctx, charge)
+	charge.BillingKey = "fake_billing_" + payment.FakeChargeLost
+	_, lostErr := payment.Fake{}.LookupCharge(ctx, charge)
+	_, noneErr := payment.None{}.LookupCharge(ctx, charge)
+
+	// 조회로 찾은 결제 번호는 결제할 때 붙였을 것과 같다
+	if paidErr != nil || paid.Status != payment.StatusApproved || paid.PaymentKey == "" || paid.PaymentKey != charged.PaymentKey {
+		t.Errorf("완료 = %+v, %v (결제의 번호 %q)", paid, paidErr, charged.PaymentKey)
+	}
+	if missingErr != nil || missing.Status != payment.StatusDeclined || missing.Code != payment.CodeChargeNotFound {
+		t.Errorf("없음 = %+v, %v", missing, missingErr)
+	}
+	if !errors.Is(lostErr, payment.ErrUnknownOutcome) || !errors.Is(noneErr, payment.ErrNoProvider) {
+		t.Errorf("모름 = %v, 없음 = %v", lostErr, noneErr)
+	}
+}
