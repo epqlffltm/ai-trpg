@@ -37,6 +37,8 @@ function signedIn(routes: Record<string, (request: SeenRequest) => Response> = {
     'GET /api/v1/auth/me': () => json(200, { nickname: '모험가', public_id: ME }),
     [`GET ${WALLET}`]: () => json(200, BALANCE),
     [`GET ${ENTRIES}`]: () => json(200, { entries: [], next_before: null }),
+    'GET /api/v1/billing/auto-charge': () => json(200, { settings: null, consecutive_failures: 0, card: null }),
+    'GET /api/v1/billing/products': () => json(200, { products: [] }),
     ...routes,
   });
 }
