@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/home/HomePage.test.tsx
 // 첫 화면(A1): 줄마다 따로 실패하고, 로그인 전에는 이어하기를 부르지 않으며 토큰을 싣지 않는다. story 이어하기는 진행 한 줄을 보인다.
+// 줄의 차례(새로 공개된 것 다음에 이번 주 인기)와 서비스 목록으로 가는 전체 보기도 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -96,5 +97,23 @@ describe('HomePage', () => {
     charactersFail = false;
     await userEvent.click(retry);
     expect(await within(section('새로 공개된 캐릭터')).findByText('아직 공개된 캐릭터가 없습니다.')).toBeInTheDocument();
+  });
+  it('새로 공개된 줄이 이번 주 인기보다 먼저고, 전체 보기는 그 서비스의 목록으로 간다', async () => {
+    installFakeFetch({
+      [`POST ${REFRESH_PATH}`]: () => json(401, { detail: 'no cookie' }),
+      'GET /api/v1/game/listings': () => json(200, { items: [], total: 0 }),
+      'GET /api/v1/asset/listings/characters': () => json(200, { items: [], total: 0 }),
+      'GET /api/v1/asset/listings/worlds': () => json(200, { items: [], total: 0 }),
+    });
+    renderApp('/');
+
+    expect(await screen.findByRole('heading', { name: '이매망량의 서재', level: 1 })).toBeInTheDocument();
+    await screen.findByRole('heading', { name: '이번 주 인기 세계관' });
+    const titles = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
+    expect(titles.indexOf('새로 공개된 세계관')).toBeLessThan(titles.indexOf('이번 주 인기 시나리오'));
+    const links = ['새로 공개된 시나리오', '새로 공개된 캐릭터', '새로 공개된 세계관'].map((title) =>
+      within(section(title)).getByRole('link', { name: '전체 보기' }).getAttribute('href'),
+    );
+    expect(links).toEqual(['/trpg', '/chat', '/story']);
   });
 });

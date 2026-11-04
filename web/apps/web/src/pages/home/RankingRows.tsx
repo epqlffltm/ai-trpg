@@ -35,7 +35,7 @@ function ScenarioRankingRow({ signedIn }: { signedIn: boolean }) {
       emptyText="이번 주에 열린 테이블이 아직 없습니다."
       onRetry={() => void query.refetch()}
     >
-      <ol className="item-grid">
+      <ol className="item-grid item-grid--row">
         {items.map(({ rank, starts, listing }) => (
           <ItemCard
             key={listing.scenario_id}
@@ -60,7 +60,7 @@ function CharacterRankingRow({ signedIn }: { signedIn: boolean }) {
       emptyText="이번 주에 시작한 대화가 아직 없습니다."
       onRetry={() => void query.refetch()}
     >
-      <ol className="item-grid">
+      <ol className="item-grid item-grid--row">
         {items.map(({ rank, starts, character }) => (
           <CharacterCard key={character.id} character={character} badges={rankBadges(rank, starts)} />
         ))}
@@ -79,7 +79,7 @@ function WorldRankingRow({ signedIn }: { signedIn: boolean }) {
       emptyText="이번 주에 시작한 이야기가 아직 없습니다."
       onRetry={() => void query.refetch()}
     >
-      <ol className="item-grid">
+      <ol className="item-grid item-grid--row">
         {items.map(({ rank, starts, world }) => (
           <StoryWorldCard key={world.id} world={world} badges={rankBadges(rank, starts)} />
         ))}
