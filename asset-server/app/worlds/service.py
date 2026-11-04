@@ -317,6 +317,7 @@ async def list_public(
     viewer: AccessClaims | None,
     search: SearchTerms | None,
     preferences: Preferences,
+    creator: uuid.UUID | None,
     limit: int,
     offset: int,
 ) -> tuple[list[tuple[World, WorldVersion]], int]:
@@ -325,7 +326,7 @@ async def list_public(
     검색어가 있으면 그것으로도 거른다. 보는 사람의 설정(#986, #987)으로 성인 작품을 숨기고 성향의 태그로 거른다.
     """
     ratings = shown_ratings(allowed_ratings(viewer), preferences)
-    return await repository.list_public(session, ratings, search, preferences.orientation_tag, limit, offset)
+    return await repository.list_public(session, ratings, search, preferences.orientation_tag, creator, limit, offset)
 
 
 async def get_public(

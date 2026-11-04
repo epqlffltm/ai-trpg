@@ -10,6 +10,7 @@ accounts 앱의 API 뷰.
 import contextlib
 import math
 import time
+import uuid
 from datetime import timedelta
 
 from django.conf import settings
@@ -64,6 +65,7 @@ from accounts.consents import (
 )
 from accounts.content_settings import AdultContentRequiredError, content_settings_of, update_content_settings
 from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refresh_cookie
+from accounts.creator_profiles import find_creator, update_bio
 from accounts.email_codes import InvalidEmailCodeError
 from accounts.exception_handlers import input_error_body
 from accounts.guardian import (
@@ -104,6 +106,7 @@ from accounts.serializers import (
     ConsentDocumentSerializer,
     ConsentStateSerializer,
     ContentSettingsSerializer,
+    CreatorSerializer,
     EmailSerializer,
     GuardianConsentSerializer,
     GuardianNoticeSerializer,
@@ -117,6 +120,7 @@ from accounts.serializers import (
     LoginTicketSerializer,
     LoginVerifySerializer,
     MyInviteSerializer,
+    MyProfileSerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PublicNameSerializer,
@@ -1166,6 +1170,8 @@ class MeView(APIView):
             'withdrawal_scheduled_at': withdrawal_scheduled_at(request.user),
             # 목록을 거르는 내 설정(#986, #987)
             'content_settings': content_settings_of(request.user),
+            # 제작자로서의 내 소개(#992)
+            'bio': request.user.bio,
         }
         return Response(body, status=status.HTTP_200_OK)
 
@@ -1202,6 +1208,23 @@ class MyContentSettingsView(APIView):
                 '본인인증으로 성인 확인을 마쳐야 켤 수 있습니다.', 'adult_content_required', status.HTTP_403_FORBIDDEN
             )
         return Response(ContentSettingsSerializer(content_settings_of(user)).data, status=status.HTTP_200_OK)
+
+
+class MyProfileView(APIView):
+    """PATCH /api/v1/auth/me/profile. 제작자로서의 내 소개를 고친다(#992)."""
+
+    # 로그인한 본인만. 기본 권한(IsAuthenticated)을 쓴다
+
+    @extend_schema(
+        summary='제작자로서의 내 소개를 고친다. 200자까지, 비우면 소개가 없다',
+        request=MyProfileSerializer,
+        responses={200: MyProfileSerializer, 400: bad_request('200자를 넘었다'), 401: unauthenticated()},
+    )
+    def patch(self, request: Request) -> Response:
+        serializer = MyProfileSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = update_bio(request.user, serializer.validated_data['bio'])
+        return Response(MyProfileSerializer({'bio': user.bio}).data, status=status.HTTP_200_OK)
 
 
 class MyInviteView(APIView):
@@ -1391,5 +1414,29 @@ class PublicNamesView(APIView):
             return build_coded_error_response(str(exc), 'public_ids_invalid', status.HTTP_400_BAD_REQUEST)
         names = PublicNameSerializer(find_names(ids), many=True).data
         response = Response({'names': names}, status=status.HTTP_200_OK)
+        response['Cache-Control'] = f'public, max-age={PUBLIC_NAMES_CACHE_SECONDS}'
+        return response
+
+
+class CreatorView(APIView):
+    """
+    GET /api/v1/auth/creators/<공개 ID>. 제작자 한 사람의 프로필(#992). 제작자 페이지가 부른다.
+
+    공개 목록처럼 로그인 없이 연다. 닉네임과 소개만 나간다(accounts/creator_profiles.py).
+    없는 공개 ID 와 비운 계정은 같은 404 다.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    @extend_schema(
+        summary='제작자 한 사람의 프로필(표시 이름과 소개). 로그인 없이 읽는다',
+        responses={200: CreatorSerializer, 404: coded('없는 제작자다(creator_not_found)')},
+    )
+    def get(self, request: Request, public_id: uuid.UUID) -> Response:
+        creator = find_creator(public_id)
+        if creator is None:
+            return build_coded_error_response('그런 제작자가 없습니다.', 'creator_not_found', status.HTTP_404_NOT_FOUND)
+        response = Response(CreatorSerializer(creator).data, status=status.HTTP_200_OK)
         response['Cache-Control'] = f'public, max-age={PUBLIC_NAMES_CACHE_SECONDS}'
         return response

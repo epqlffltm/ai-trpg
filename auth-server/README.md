@@ -199,12 +199,14 @@ Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 �
 | GET | `/api/v1/auth/session-revocations` | 끊긴 세션의 목록. 다른 서버가 만료 전의 토큰을 거부하는 데 쓴다 | 불필요 |
 | GET | `/api/v1/auth/me` | 내 계정 정보와 본인인증 상태 | 필요 |
 | GET | `/api/v1/auth/public-names?ids=` | 다른 사람의 닉네임을 공개 ID 로 한꺼번에 찾음(100개까지) | 불필요 |
+| GET | `/api/v1/auth/creators/{공개 ID}` | 제작자 한 사람의 프로필(닉네임, 소개, #992). 없거나 비운 계정은 404 `creator_not_found` | 불필요 |
 | GET | `/api/v1/auth/consents` | 동의를 받는 항목마다 지금의 판(이용약관, 개인정보 수집·이용, 선택 동의) | 불필요 |
 | GET | `/api/v1/auth/me/consents` | 내 동의 상태(항목마다) | 필요 |
 | PUT | `/api/v1/auth/me/consents/{item}` | 그 항목에 동의한다. 본문 `{"version": 1}` | 필요 |
 | DELETE | `/api/v1/auth/me/consents/{item}` | 선택 항목의 동의를 철회한다 | 필요 |
 | POST | `/api/v1/auth/me/withdrawal` | 탈퇴를 요청한다. 본문 `{"password": "..."}`. 모든 세션이 끊기고 7일 뒤에 계정을 비운다 | 필요 |
 | DELETE | `/api/v1/auth/me/withdrawal` | 유예 중인 탈퇴를 취소한다 | 필요 |
+| PATCH | `/api/v1/auth/me/profile` | 제작자로서의 내 소개를 고친다. 본문 `{"bio": "..."}`(200자까지, 비우면 소개가 없다, 앞뒤 공백은 지운다, #992) | 필요 |
 | PATCH | `/api/v1/auth/me/content-settings` | 목록 거르기의 설정을 고친다. 본문 `{"show_adult_content"?: bool, "orientation"?: "all" \| "male" \| "female"}`, 보낸 칸만 바뀐다. 성인 확인 전에 성인 작품 표시를 켜면 403 `adult_content_required`(#986, #987) | 필요 |
 | GET | `/api/v1/auth/me/invite` | 내 초대 코드(없으면 만든다), 초대한 사람으로서 받은 보상의 수와 상한(#990) | 필요 |
 | POST | `/api/v1/auth/identity/verify` | 휴대폰 본인인증. 본인확인 업체에서 받은 `token` 을 낸다 | 필요 |
@@ -345,6 +347,18 @@ GET /api/v1/auth/public-names?ids=<공개 ID>,<공개 ID>
 - **없는 ID 와 만 14세 미만으로 막은 계정은 `nickname` 이 `null` 이다.** 둘을 나누지 않는다. 화면은 "탈퇴한 사용자"로 보인다. 정지된 계정은 이름이 그대로 보인다
 - 목록이 비었거나, UUID 가 아닌 것이 있거나, 100개를 넘으면 `400` `code: public_ids_invalid` 다
 - 브라우저가 60초 기억한다(`Cache-Control: public, max-age=60`). 다른 서버는 이름을 적어 두지 않으므로 이름이 바뀌면 그 뒤로 바로 보인다
+
+제작자 페이지(#992)는 한 사람의 프로필을 `GET /api/v1/auth/creators/{공개 ID}` 로 읽는다(`accounts/creator_profiles.py`).
+
+```
+GET /api/v1/auth/creators/<공개 ID>
+→ 200 {"public_id": "…", "nickname": "플레이어1", "bio": "밤의 이야기를 씁니다"}
+```
+
+- **표시 이름은 닉네임 그대로다.** 제작자 이름을 따로 두지 않는다. 소개(`bio`)는 200자까지이고 비울 수 있다. 그림은 아직 없다
+- 로그인 없이 읽고 60초 기억한다(`public-names` 와 같다). 닉네임과 소개만 나간다
+- 없는 공개 ID 와 비운 계정(만 14세 미만, 탈퇴)은 같은 404 `creator_not_found` 다. 계정을 비우면 소개도 지운다(`erasure.py`). 정지된 계정은 그대로 보인다
+- 내 소개는 `/me` 의 `bio` 로 읽고 `PATCH /me/profile` 로 고친다
 
 ### 동의
 

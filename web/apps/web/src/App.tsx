@@ -35,6 +35,7 @@ import {
   ChatLorebookNewPage,
   ChatLorebooksPage,
   ConversationPage,
+  CreatorPage,
   GalleryPage,
   GuardianConsentPage,
   GuardianRequestPage,
@@ -372,6 +373,8 @@ export function App() {
         </Route>
         {/* 작품 검색 결과(#984). 로그인하지 않아도 열린다(전체이용가만 나온다) */}
         <Route path="search" element={<SearchPage />} />
+        {/* 제작자 페이지(#992). 로그인하지 않아도 열린다(전체이용가만 나온다) */}
+        <Route path="creators/:publicId" element={<CreatorPage />} />
         {/* 공지·게시판(A11). 읽기는 로그인하지 않아도 열린다. 쓰기와 고치기는 로그인해야 한다 */}
         <Route path="board">
           <Route index element={<BoardIndexPage />} />

@@ -156,6 +156,8 @@ SearchFilter = Annotated[str | None, Query(max_length=SEARCH_MAX_LENGTH, pattern
 # 보는 사람의 설정(#986, #987). 인증 서버의 내 정보에 있고, 화면이 읽어 싣는다. 이 서버는 인증 서버를 부르지 않는다
 HideAdultFilter = Annotated[bool, Query()]
 OrientationFilter = Annotated[Orientation | None, Query()]
+# 만든 사람의 공개 ID(#992). 제작자 페이지가 그 사람의 공개 시나리오만 부른다
+CreatorFilter = Annotated[uuid.UUID | None, Query()]
 
 
 def to_filter(
@@ -165,11 +167,18 @@ def to_filter(
     q: SearchFilter = None,
     hide_adult: HideAdultFilter = False,
     orientation: OrientationFilter = None,
+    creator: CreatorFilter = None,
 ) -> ListingFilter:
     """주소의 거르는 값을 하나로 묶는다."""
     search = parse_search(q) if q is not None else None
     return ListingFilter(
-        genre=genre, tag=tag, players=players, search=search, hide_adult=hide_adult, orientation=orientation
+        genre=genre,
+        tag=tag,
+        players=players,
+        search=search,
+        hide_adult=hide_adult,
+        orientation=orientation,
+        creator=creator,
     )
 
 
@@ -183,7 +192,7 @@ async def list_listings(user: OptionalUser, session: Session, paging: Paging, wh
 
     검색어가 "#"로 시작하면 그 태그가 붙은 것, 아니면 제목이나 한 줄 소개에 그 글이 들어 있는 것이다(#984).
     hide_adult 가 참이면 성인용을 뺀다(#986). orientation 을 주면 그 성향의 태그가 붙은 것만이다(#987).
-    둘 다 보는 사람의 설정이고 화면이 싣는다.
+    둘 다 보는 사람의 설정이고 화면이 싣는다. creator 를 주면 그 사람이 만든 것만이다(제작자 페이지, #992).
 
     로그인하지 않아도 읽는다(#530). 그때는 전체 이용가만 나온다. 토큰을 보냈는데 틀렸으면 401 이다.
     """

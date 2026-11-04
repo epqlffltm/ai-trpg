@@ -528,6 +528,7 @@ class MeTests(APITestCase):
                 'consents_pending',
                 'withdrawal_scheduled_at',
                 'content_settings',
+                'bio',
             },
         )
 

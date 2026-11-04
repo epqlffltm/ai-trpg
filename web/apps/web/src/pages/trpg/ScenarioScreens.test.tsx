@@ -152,7 +152,8 @@ describe('ScenarioPage', () => {
     expect(screen.getByText(/준비된 캐릭터\(프리젠\), 이름과 설명만 쓰기/)).toBeInTheDocument();
     expect(screen.getByText('1판에서 바뀐 것')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '#던전 탐험' })).toHaveAttribute('href', '/trpg?tag=%EB%8D%98%EC%A0%84+%ED%83%90%ED%97%98');
-    expect(await screen.findByText('만든 사람 이야기꾼')).toBeInTheDocument();
+    // 만든 사람을 누르면 제작자 페이지(#992)로 간다
+    expect(await screen.findByRole('link', { name: '이야기꾼' })).toHaveAttribute('href', `/creators/${CREATOR}`);
     expect(screen.getByRole('link', { name: '로그인하고 테이블 만들기' })).toHaveAttribute('href', '/login');
     expect(screen.queryByText('추천 서술 모델')).not.toBeInTheDocument();
     expect(seen.some((entry) => entry.url.includes('narration-models'))).toBe(false);

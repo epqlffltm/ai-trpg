@@ -1,9 +1,11 @@
 // web/apps/web/src/pages/chat/character/CharacterDetail.tsx
 // 캐릭터 소개(C2)를 그린다. 왼쪽(모바일은 위)에 그림과 소개, 호감도의 단계, 오른쪽(모바일은 아래)에 시작 상황과 내 대화.
 // 아래에 해금 대상 일러스트의 칸. 보이는 것은 마지막으로 공개한 판이다. 신고는 2단계(E4)다.
+// 머리의 "만든 사람"을 누르면 제작자 페이지(#992)로 간다.
 
 import type { PublicCharacterDetail } from '../../../api/types';
 import { useSession } from '../../../auth/useSession';
+import { CreatorByline } from '../../../components/CreatorByline';
 import { formatDate } from '../../../format/dateTime';
 import { genreName } from '../../../genres/genres';
 import { useImageUrl } from '../../../hooks/useImageUrl';
@@ -47,6 +49,7 @@ function CharacterHead({ character }: { character: PublicCharacterDetail }) {
       <div>
         <h1>{document.name}</h1>
         {profile ? <p className="character-page__profile">{profile}</p> : null}
+        <CreatorByline creatorId={character.creator_id} />
         <ul className="tag-links" aria-label="태그">
           {document.rating === 'adult' ? <li className="item-card__tag">성인</li> : null}
           <li className="item-card__tag">{genreName(document.genre)}</li>

@@ -725,7 +725,25 @@ async def test_the_orientation_lists_only_that_tag(client: AsyncClient, my_heade
     assert await titles() == ['남', '모두', '여']
 
 
-@pytest.mark.parametrize('params', [{'orientation': 'both'}, {'hide_adult': 'maybe'}])
+async def test_the_creator_lists_only_their_scenarios(
+    client: AsyncClient, my_headers: dict[str, str], their_headers: dict[str, str]
+):
+    await make_public(client, my_headers, title='내 것')
+    await make_public(client, their_headers, title='남의 것')
+
+    async def titles(**params) -> list[str]:
+        response = await client.get(LISTINGS_URL, params=params)
+        assert response.status_code == status.HTTP_200_OK, response.text
+        assert response.json()['total'] == len(response.json()['items'])
+        return sorted(item['title'] for item in response.json()['items'])
+
+    # 제작자 페이지(#992)는 그 사람의 공개 시나리오만 부른다. 로그인하지 않아도 된다
+    assert await titles(creator=str(ME)) == ['내 것']
+    assert await titles(creator=str(SOMEONE_ELSE)) == ['남의 것']
+    assert await titles(creator=NO_SUCH_ID) == []
+
+
+@pytest.mark.parametrize('params', [{'orientation': 'both'}, {'hide_adult': 'maybe'}, {'creator': 'me'}])
 async def test_rejects_a_bad_preference(client: AsyncClient, my_headers: dict[str, str], params: dict):
     response = await client.get(LISTINGS_URL, params=params, headers=my_headers)
 

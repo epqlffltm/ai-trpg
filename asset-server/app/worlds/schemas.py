@@ -836,6 +836,8 @@ class PublicWorldSummary(BaseModel):
     """공개 목록의 한 줄. 마지막 판의 값이다. deadline_days 는 기한(날 수)이고 없으면 null 이다."""
 
     id: uuid.UUID
+    # 만든 사람의 공개 ID(#992). 이름은 화면이 인증 서버에 묻는다
+    creator_id: uuid.UUID
     version: int
     name: str
     tags: list[str]
@@ -873,6 +875,8 @@ class PublicWorldDetail(BaseModel):
     """
 
     id: uuid.UUID
+    # 만든 사람의 공개 ID(#992). 이름은 화면이 인증 서버에 묻는다
+    creator_id: uuid.UUID
     version: int
     published_at: datetime
     name: str

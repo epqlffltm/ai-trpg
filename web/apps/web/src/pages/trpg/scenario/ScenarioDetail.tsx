@@ -7,6 +7,7 @@ import { Link } from 'react-router';
 import type { PublicListingDetail } from '../../../api/types';
 import { isOperator } from '../../../auth/roles';
 import { useSession } from '../../../auth/useSession';
+import { CreatorByline } from '../../../components/CreatorByline';
 import { usePublicNames } from '../../../hooks/usePublicNames';
 import { ScenarioOperatorPanel } from '../../operator/ScenarioOperatorPanel';
 import { tagSearchPath } from '../browse/filters';
@@ -15,15 +16,15 @@ import { PregenList } from './PregenList';
 import { ScenarioSidePanel } from './ScenarioSidePanel';
 
 export function ScenarioDetail({ listing }: { listing: PublicListingDetail }) {
-  const nameOf = usePublicNames([[listing.creator_id]]);
-  const creator = nameOf(listing.creator_id);
+  // 운영자의 제재 칸이 이름을 함께 보인다. 머리의 "만든 사람"과 같은 읽기라 한 번만 묻는다
+  const creator = usePublicNames([[listing.creator_id]])(listing.creator_id);
   const operator = isOperator(useSession());
   return (
     <main className="page scenario">
       <header className="scenario__head">
         <h1>{listing.title}</h1>
         {listing.tagline ? <p className="scenario__tagline">{listing.tagline}</p> : null}
-        {creator ? <p className="scenario__byline">만든 사람 {creator}</p> : null}
+        <CreatorByline creatorId={listing.creator_id} className="scenario__byline" />
       </header>
       <div className="scenario__body">
         <div className="scenario__main">

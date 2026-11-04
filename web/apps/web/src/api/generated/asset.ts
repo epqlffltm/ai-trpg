@@ -341,6 +341,7 @@ export interface paths {
          *
          *     검색어(q)가 "#"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).
          *     hide_adult, orientation 은 보는 사람의 설정이다(#986, #987, app/preferences.py). 화면이 싣는다.
+         *     creator 를 주면 그 사람이 만든 것만이다(제작자 페이지, #992).
          */
         get: operations["list_public_api_v1_asset_listings_characters_get"];
         put?: never;
@@ -404,6 +405,7 @@ export interface paths {
          *
          *     검색어(q)가 "#"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).
          *     hide_adult, orientation 은 보는 사람의 설정이다(#986, #987, app/preferences.py). 화면이 싣는다.
+         *     creator 를 주면 그 사람이 만든 것만이다(제작자 페이지, #992).
          */
         get: operations["list_public_api_v1_asset_listings_worlds_get"];
         put?: never;
@@ -2836,6 +2838,11 @@ export interface components {
          * @description 공개 캐릭터 하나. 마지막 판의 문서다.
          */
         PublicCharacterDetail: {
+            /**
+             * Creator Id
+             * Format: uuid
+             */
+            creator_id: string;
             document: components["schemas"]["CharacterDocument"];
             /**
              * Id
@@ -2865,6 +2872,11 @@ export interface components {
          * @description 공개 목록의 한 줄. 마지막 판의 값이다.
          */
         PublicCharacterSummary: {
+            /**
+             * Creator Id
+             * Format: uuid
+             */
+            creator_id: string;
             genre: components["schemas"]["Genre"];
             /**
              * Id
@@ -2896,6 +2908,11 @@ export interface components {
             after_ending: components["schemas"]["AfterEnding"];
             /** Cast */
             cast: components["schemas"]["PublicCastMember"][];
+            /**
+             * Creator Id
+             * Format: uuid
+             */
+            creator_id: string;
             /** Deadline Days */
             deadline_days: number | null;
             /** Ending Count */
@@ -2938,6 +2955,11 @@ export interface components {
          * @description 공개 목록의 한 줄. 마지막 판의 값이다. deadline_days 는 기한(날 수)이고 없으면 null 이다.
          */
         PublicWorldSummary: {
+            /**
+             * Creator Id
+             * Format: uuid
+             */
+            creator_id: string;
             /** Deadline Days */
             deadline_days: number | null;
             genre: components["schemas"]["Genre"];
@@ -4731,6 +4753,7 @@ export interface operations {
     list_public_api_v1_asset_listings_characters_get: {
         parameters: {
             query?: {
+                creator?: string | null;
                 limit?: number;
                 offset?: number;
                 q?: string | null;
@@ -4832,6 +4855,7 @@ export interface operations {
     list_public_api_v1_asset_listings_worlds_get: {
         parameters: {
             query?: {
+                creator?: string | null;
                 limit?: number;
                 offset?: number;
                 q?: string | null;

@@ -9,6 +9,7 @@ Serializer 는 검증과 변환만 한다. 계정을 만드는 일은 services.p
 from rest_framework import serializers
 
 from accounts.consents import signup_consent_problems
+from accounts.creator_profiles import BIO_MAX_LENGTH
 from accounts.email_codes import CODE_LENGTH
 from accounts.invites import INVITE_CODE_INPUT_MAX_LENGTH
 from accounts.models import GuardianNoticeKind, Orientation, User
@@ -324,3 +325,17 @@ class ContentSettingsSerializer(serializers.Serializer):
 
     show_adult_content = serializers.BooleanField(required=False)
     orientation = serializers.ChoiceField(choices=Orientation.choices, required=False)
+
+
+class MyProfileSerializer(serializers.Serializer):
+    """제작자로서의 내 소개(#992). 200자까지, 비워 둘 수 있다. 앞뒤 공백은 지운다."""
+
+    bio = serializers.CharField(max_length=BIO_MAX_LENGTH, allow_blank=True)
+
+
+class CreatorSerializer(serializers.Serializer):
+    """남에게 보이는 제작자(#992). 표시 이름은 닉네임이다."""
+
+    public_id = serializers.UUIDField()
+    nickname = serializers.CharField()
+    bio = serializers.CharField()

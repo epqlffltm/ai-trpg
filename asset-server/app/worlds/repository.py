@@ -127,6 +127,7 @@ async def list_public(
     ratings: Sequence[Rating],
     search: SearchTerms | None,
     orientation_tag: str | None,
+    creator: uuid.UUID | None,
     limit: int,
     offset: int,
 ) -> tuple[list[tuple[World, WorldVersion]], int]:
@@ -135,6 +136,9 @@ async def list_public(
     if orientation_tag is not None:
         # 성향(#987). 마지막 판에 그 태그가 붙은 것만이다
         condition = condition & WorldVersion.document['tags'].contains([orientation_tag])
+    if creator is not None:
+        # 만든 사람(#992). 제작자 페이지가 그 사람의 것만 고른다
+        condition = condition & (World.owner_id == creator)
     query = (
         select(World, WorldVersion)
         .join(WorldVersion, latest_join())

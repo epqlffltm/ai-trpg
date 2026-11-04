@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/story/StoryWorldPage.tsx
 // 세계관 소개(D1, /story/worlds/:worldId). 로그인하지 않아도 전체이용가면 보인다. 볼 수 없으면(내렸다, 등급, 없다) 서버는 모두 404 다.
-// 머리(대표 그림, 이름, 등급·기한·태그), 제작자가 꾸민 소개(거른 HTML), 인물(보임: 이름과 그림, 실루엣: "???", 숨김은 오지 않는다),
+// 머리(대표 그림, 이름, 만든 사람(누르면 제작자 페이지, #992), 등급·기한·태그), 제작자가 꾸민 소개(거른 HTML), 인물(보임: 이름과 그림, 실루엣: "???", 숨김은 오지 않는다),
 // 엔딩("엔딩 2/5", 본 수는 로그인했을 때), 내 세션(이 세계관의 것), 새로 시작(로그인하지 않았으면 로그인으로).
 // 새로 시작할 때 페르소나가 있으면 "나"를 고른다(기본이 골라져 있고 "페르소나 없이"도 있다).
 
@@ -11,6 +11,7 @@ import { Link, useLocation, useParams } from 'react-router';
 import { ApiError } from '../../api/errors';
 import type { PublicCastMember, PublicWorldDetail } from '../../api/storyWorlds';
 import { useSession } from '../../auth/useSession';
+import { CreatorByline } from '../../components/CreatorByline';
 import { formatDateTime } from '../../format/dateTime';
 import { useImageUrl } from '../../hooks/useImageUrl';
 import { IntroHtml } from '../chat/character/IntroHtml';
@@ -43,6 +44,7 @@ function WorldDetail({ world, signedIn }: { world: PublicWorldDetail; signedIn: 
       <header className="story-world__head">
         {image.url ? <img src={image.url} alt="" className="story-world__image" /> : null}
         <h1>{world.name}</h1>
+        <CreatorByline creatorId={world.creator_id} />
         <p className="hint">
           {[...worldTags(world), `${world.version}판`, world.after_ending === 'epilogue' ? '엔딩 뒤 후일담' : null].filter(Boolean).join(' · ')}
         </p>

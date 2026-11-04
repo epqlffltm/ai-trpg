@@ -205,3 +205,24 @@ async def test_world_listing_preferences(client: AsyncClient, owner: dict, adult
     assert await ids(hide_adult='true') == [day['id']]
     assert await ids(orientation='female') == [day['id']]
     assert await ids(orientation='male') == []
+
+
+async def test_the_creator_lists_only_their_worlds(client: AsyncClient, owner: dict, signing_key: SigningKey):
+    mine = await published(client, owner, name='내 여름')
+    theirs = await published(client, bearer(signing_key, OTHER), name='남의 여름')
+
+    async def ids(**params) -> list[str]:
+        response = await client.get(LISTINGS_URL, params=params)
+        assert response.json()['total'] == len(response.json()['items'])
+        return [item['id'] for item in response.json()['items']]
+
+    # 목록과 소개에 만든 사람의 공개 ID 가 실리고, 제작자 페이지(#992)는 그 사람의 것만 부른다
+    listed = (await client.get(LISTINGS_URL)).json()['items']
+    detail = (await client.get(f'{LISTINGS_URL}/{mine["id"]}')).json()
+    assert {item['id']: item['creator_id'] for item in listed} == {mine['id']: str(OWNER), theirs['id']: str(OTHER)}
+    assert detail['creator_id'] == str(OWNER)
+    assert await ids(creator=str(OWNER)) == [mine['id']]
+    assert await ids(creator=str(OTHER)) == [theirs['id']]
+    assert (
+        await client.get(LISTINGS_URL, params={'creator': 'me'})
+    ).status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
