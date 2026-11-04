@@ -31,6 +31,7 @@ from app.listings.models import Listing
 from app.listings.popularity import ListingOrder
 from app.listings.repository import ListingFilter, PublicRow
 from app.listings.schemas import ListingUpdate, PublicationUpdate
+from app.notifications.outbox import announce_scenario
 from app.operators.publishing import require_publishable
 
 
@@ -80,6 +81,21 @@ def publish_version(listing: Listing, version: ScenarioVersion) -> None:
     listing.min_players = snapshot.recommended_players.min
     listing.max_players = snapshot.recommended_players.max
     listing.published_at = func.now()
+
+
+def is_listed(listing: Listing) -> bool:
+    """공개 중이고 목록과 검색에 나오는가. 링크 공개(#993)는 나오지 않는다."""
+    return listing.version_id is not None and not listing.unlisted
+
+
+async def announce_if_listed(session: AsyncSession, scenario: Scenario, was_listed: bool, listing: Listing) -> None:
+    """
+    이번에 목록에 나오게 되었으면 팔로워에게 알린다(#989). 저장은 부른 쪽이 그 조치와 함께 한다.
+
+    처음인지는 알림 서버가 본다(작품마다 한 번). 이 서버는 목록에 나오게 될 때마다 같은 열쇠로 적는다.
+    """
+    if not was_listed and is_listed(listing):
+        await announce_scenario(session, scenario.asset)
 
 
 def unpublish(listing: Listing) -> None:
@@ -141,6 +157,7 @@ async def update_listing(
     scenario = await assets.lock_owned(session, Scenario, owner_id, scenario_id)
     require_rating(scenario.asset.rating, allowed)
     listing = await repository.find_listing(session, scenario_id)
+    was_listed = listing is not None and is_listed(listing)
     if listing is None:
         listing = await start_listing(session, scenario_id, data)
     else:
@@ -152,6 +169,7 @@ async def update_listing(
         if problems:
             raise ListingNotReadyError(problems)
 
+    await announce_if_listed(session, scenario, was_listed, listing)
     await session.commit()
     await session.refresh(listing)
     return listing
@@ -172,10 +190,11 @@ async def set_publication(
     운영자가 제재한 판이거나 공개 금지 중이면 PublicationRefusedError(#392, app/operators/publishing.py).
     공개를 내리는 것은 등급과 상관없이 된다. 성인용을 공개의 길에서 거두는 일이라 막을 까닭이 없다.
     """
-    await assets.lock_owned(session, Scenario, owner_id, scenario_id)
+    scenario = await assets.lock_owned(session, Scenario, owner_id, scenario_id)
     found = await repository.find_listing(session, scenario_id)
     # 아직 쓰지 않은 소개 페이지는 저장하지 않는다(장르 없는 행을 만들지 않는다). 공개하려 하면 조건을 못 갖춰 막힌다
     listing = found or build_empty(scenario_id)
+    was_listed = is_listed(listing)
 
     if data.version is None:
         unpublish(listing)
@@ -190,6 +209,7 @@ async def set_publication(
             raise ListingNotReadyError(problems)
         publish_version(listing, version)
 
+    await announce_if_listed(session, scenario, was_listed, listing)
     await session.commit()
     if found is not None:
         await session.refresh(listing)

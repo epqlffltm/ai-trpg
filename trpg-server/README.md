@@ -2956,6 +2956,16 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 - **테이블 끝내기는 알리지 않는다.** 앉은 사람이 테이블의 이벤트(`table_ended`, `by: operator`)로 본다.
 - 열쇠는 `<kind>:<감사 기록의 번호>` 다. 같은 사람을 다시 금지해도 다른 알림이다. 저절로 오른 금지는 원인인 시나리오 제재의 번호를 쓴다(kind 가 달라 겹치지 않는다).
 
+**새 작품**(#989, `app/listings/service.py`, `app/notifications/outbox.py` 의 `announce_scenario`). 공개 정보를 바꾸는 트랜잭션에 적는다.
+
+| 일 | 받는 사람 | 알림의 `kind` | 알림의 `payload` |
+| --- | --- | --- | --- |
+| 시나리오가 목록에 나오게 되었다(공개, 링크 공개를 풂) | 만든 사람의 팔로워(알림 서버가 정한다) | `scenario.published` | `scenario_id`, `title`, `creator_id` |
+
+- `user_id` 에 만든 사람을 적는다. 팔로우는 알림 서버에 있어 받는 사람은 알림 서버가 정한다
+- 열쇠는 `scenario.published:<시나리오>` 다. 목록에 나오게 될 때마다 같은 열쇠로 적고(발송함에 남아 있으면 적지 않는다), 처음 한 번만 알리는 것은 알림 서버가 지킨다
+- 링크 공개(#993)는 목록에 나오지 않아 알리지 않는다. 이미 목록에 있는 것의 판을 바꾸거나 소개를 고쳐도 알리지 않는다
+
 **발송함에 먼저 적는다.** 알림을 정한 이벤트와 같은 트랜잭션에 발송함(`outgoing_notifications`)에 한 줄을 적고, 알림 서버에는 뒤에서 보낸다(`server_core/notifications/dispatcher.py`, 5초마다).
 - 발송함의 칸과 쿼리, 알림 서버를 부르는 것, 보내는 작업은 FastAPI 서버들이 함께 쓰는 공용 코드다(`shared/server-core` 의 `server_core/notifications/`, #589). 이 서버에는 표(`app/notifications/models.py`)와 무엇을 누구에게 알릴지(`app/notifications/outbox.py`)만 있다. 알림 서버에는 `game` 이라는 이름으로 넣는다.
 - 이벤트만 남고 알림이 사라지거나, 알림만 가고 일이 되돌려지는 일이 없다. 알림 서버를 부르는 동안 테이블을 잠그지 않고, 알림 서버가 죽어도 게임의 일은 멈추지 않는다.

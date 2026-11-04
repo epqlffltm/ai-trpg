@@ -64,6 +64,6 @@ class PutStatus(enum.StrEnum):
 class NotificationPut(BaseModel):
     """넣기의 답. 넣는 서버는 이것을 받으면 발송함에서 그 줄을 지운다."""
 
-    # 적은 줄의 번호. 받는 사람이 꺼서 적지 않았으면(muted) 없다
+    # 적은 줄의 번호. 받는 사람이 꺼서 적지 않았으면(muted), 팔로워에게 나눠 넣은 것(새 작품, #989)이면 없다
     id: int | None
     status: PutStatus

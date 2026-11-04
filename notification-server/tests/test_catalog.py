@@ -24,6 +24,7 @@ from app.notifications.catalog import (
     STORY,
     Refusal,
     RefusalCode,
+    is_for_followers,
     is_mutable,
     mutable_kinds,
     refusal_for,
@@ -39,10 +40,19 @@ SENT_BY = {
         'scenario.sanctioned',
         'publishing.banned',
         'publishing.unbanned',
+        'scenario.published',
     },
     BILLING: {'order.paid', 'order.refunded', 'credit.welcome', 'credit.expiring', 'credit.short', 'autocharge.failed'},
     BOARD: {'post.commented', 'comment.replied'},
-    ASSET: {'character.hidden', 'character.unhidden', 'character_report.handled', 'world.hidden', 'world.unhidden'},
+    ASSET: {
+        'character.hidden',
+        'character.unhidden',
+        'character_report.handled',
+        'world.hidden',
+        'world.unhidden',
+        'character.published',
+        'world.published',
+    },
     CHAT: {'message_report.handled'},
     STORY: {'story_report.handled'},
 }
@@ -126,11 +136,14 @@ def test_the_table_cannot_be_changed_at_run_time():
 def test_only_the_chosen_kinds_can_be_muted():
     # 이 목록을 바꾸는 PR 은 화면 명세(A10)와 README 의 "알림 끄기"도 고친다
     assert mutable_kinds() == (
+        'character.published',
         'comment.replied',
         'credit.expiring',
         'credit.short',
         'narration_model.retiring',
         'post.commented',
+        'scenario.published',
+        'world.published',
     )
 
 
@@ -143,3 +156,13 @@ def test_money_and_sanctions_cannot_be_muted(kind: str):
 
 def test_a_kind_that_is_not_listed_cannot_be_muted():
     assert not is_mutable('stack.smoke')
+
+
+def test_only_new_works_go_to_followers():
+    # 새 작품 알림(#989)만 user_id(만든 사람)의 팔로워에게 나눠 넣는다
+    assert sorted(kind for kind in KINDS if is_for_followers(kind)) == [
+        'character.published',
+        'scenario.published',
+        'world.published',
+    ]
+    assert not is_for_followers('stack.smoke')

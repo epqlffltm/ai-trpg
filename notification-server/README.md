@@ -125,8 +125,9 @@ uv run uvicorn app.main:app --port 8004 --reload
 | PUT | `/api/v1/notification/me/notifications/mutes/{kind}` | 그 종류를 끈다 | 200 바뀐 뒤의 설정 전체. 끌 수 없는 종류면 422 `{"detail": {"code": "kind_not_mutable", "kind": "…"}}` |
 | DELETE | `/api/v1/notification/me/notifications/mutes/{kind}` | 그 종류를 다시 켠다 | 위와 같다 |
 
-- **끌 수 있는 종류는 다섯이다.** `narration_model.retiring`, `credit.expiring`, `credit.short`, `post.commented`, `comment.replied`.
-  [알림의 종류](#알림의-종류) 표(`app/notifications/catalog.py` 의 `mutable`)가 정한다. 답은 이 다섯을 이름 차례로 싣는다.
+- **끌 수 있는 종류는 여덟이다.** `narration_model.retiring`, `credit.expiring`, `credit.short`, `post.commented`, `comment.replied`,
+  팔로우한 제작자의 새 작품(`scenario.published`, `character.published`, `world.published`, #989).
+  [알림의 종류](#알림의-종류) 표(`app/notifications/catalog.py` 의 `mutable`)가 정한다. 답은 이 여덟을 이름 차례로 싣는다.
 - **꼭 알아야 하는 것은 끌 수 없다.** 돈이 오간 일(`order.paid`, `order.refunded`), 제재(`scenario.sanctioned`, `publishing.*`),
   내 테이블의 모델이 이미 바뀐 일(`narration_model.replaced`, `narration_model.unavailable`)이다. 한 번뿐인 환영 크레딧(`credit.welcome`)도 끌 까닭이 없어 두지 않았다.
 - **끈 종류는 넣을 때 거른다.** 적지 않으므로 다시 켜도 꺼 둔 동안의 알림은 없다. 읽을 때 거르면 다시 켰을 때 지난 것이 한꺼번에 보이고,
@@ -137,7 +138,7 @@ uv run uvicorn app.main:app --port 8004 --reload
 ### 제작자 팔로우
 
 사용자가 제작자를 팔로우한다(#989, `app/follows/`). 알림함과 같은 토큰으로 부른다. 팔로우한 제작자가 새 작품을 처음 공개하면
-알림을 나눠 넣는 곳이 이 서버라서 팔로우도 여기 둔다(새 작품의 알림은 다음 단계다).
+알림을 나눠 넣는 곳이 이 서버라서 팔로우도 여기 둔다([새 작품 알림](#새-작품-알림)).
 
 | 메서드 | 주소 | 무엇을 | 답 |
 | --- | --- | --- | --- |
@@ -240,6 +241,9 @@ Content-Type: application/json
 | `character_report.handled` | `asset` | `name` |
 | `message_report.handled` | `chat` | `name` |
 | `story_report.handled` | `story` | `name` |
+| `scenario.published` | `game` | `scenario_id`, `title`, `creator_id` |
+| `character.published` | `asset` | `character_id`, `name`, `creator_id` |
+| `world.published` | `asset` | `world_id`, `name`, `creator_id` |
 
 - 각 칸의 뜻과 받는 사람은 넣는 서버의 README(게임과 게시판의 "알림 보내기", 결제의 "정리 작업과 대사")와
   화면 명세(`docs/product/screens.md` 의 A10)에 있다.
@@ -252,6 +256,20 @@ Content-Type: application/json
 **새 `kind` 를 더할 때:** 넣는 서버의 코드와 함께 이 표(`app/notifications/catalog.py` 와 이 README), 화면 명세(A10)를 같은 PR 에서 고친다.
 배포는 알림 서버가 먼저다. 넣는 서버가 먼저 나가면 그 사이의 알림은 422 로 `failed` 가 되어 버려진다.
 `tests/test_catalog.py` 의 `SENT_BY` 에도 더한다. 표와 넣는 서버의 목록이 어긋나면 테스트가 실패한다.
+
+### 새 작품 알림
+
+팔로우한 제작자가 작품을 처음 목록에 올리면 팔로워에게 알린다(#989, `app/announcements/`). 주소와 서명은 다른 알림과 같다.
+
+- **`*.published` 의 `user_id` 는 받는 사람이 아니라 만든 사람이다.** 표의 `audience` 가 `followers` 인 종류다.
+  넣는 서버는 팔로우를 모른다(팔로우는 이 서버에 있다). 이 서버가 그때의 팔로워마다 한 줄씩 넣는다(INSERT … SELECT 한 문장).
+  팔로워마다의 열쇠는 `<받은 열쇠>:<팔로워>` 다
+- **작품마다 처음 한 번이다(2026-11-04 유저 결정).** 나눠 넣은 기록(`work_announcements`)을 작품의 열쇠(`scenario.published:<시나리오>`)로 남긴다.
+  같은 열쇠가 다시 오면(다시 보냄, 공개를 내렸다가 다시 올림) 아무것도 넣지 않고 200 `existing` 이다. 기록은 알림의 보관 기간이 지나도 남는다
+- 처음이면 201 `{"id": null, "status": "created"}` 다. 줄이 여럿이라 `id` 는 없다. 팔로워가 없어도 기록은 남는다(뒤에 팔로우한 사람에게는 가지 않는다)
+- 그 종류를 끈 팔로워에게는 넣지 않는다. 기록과 알림은 한 트랜잭션이다
+- 넣는 서버는 작품이 목록에 나오게 될 때마다(링크 공개와 비공개는 빼고) 같은 열쇠로 발송함에 적는다. 발송함에 같은 열쇠가 남아 있으면 더 적지 않는다(`server_core` 의 `put_once`)
+- 로그에는 넣은 수만 남긴다(`recipients`). 만든 사람과 받는 사람은 남기지 않는다
 
 ## 탈퇴 받기(서버끼리)
 
@@ -272,11 +290,11 @@ Content-Type: application/json
 | 413 | 본문이 16KB 를 넘는다 |
 | 422 | 주소의 `user_id` 가 UUID 가 아니다, `withdrawn_at` 이 없거나 시간대가 있는 시각이 아니다, 모르는 칸이 있다 |
 
-- **지우는 것:** 그 사람의 알림(읽은 것, 읽지 않은 것 모두)과 끈 알림의 종류, 팔로우(그 사람이 한 것과 그 사람을 팔로우한 것, #989). 한 트랜잭션이다. 남기는 것은 없다. 알림의 원문은 그 일을 맡은 서버에 있고, 그 서버가 탈퇴를 따로 받는다
+- **지우는 것:** 그 사람의 알림(읽은 것, 읽지 않은 것 모두)과 끈 알림의 종류, 팔로우(그 사람이 한 것과 그 사람을 팔로우한 것, #989), 그 사람이 만든 작품의 새 작품 알림 기록(#989). 한 트랜잭션이다. 남기는 것은 없다. 알림의 원문은 그 일을 맡은 서버에 있고, 그 서버가 탈퇴를 따로 받는다
 - **몇 번을 받아도 같다.** 인증 서버는 200 과 `processed` 를 받을 때까지 간격을 늘려 다시 보낸다. 그래서 두 번째에도, 모르는 사람에게도 200 이다
 - 비밀이 비어 있는 동안 인증 서버는 보내지 않고 쌓아 둔다. 비밀을 적으면 그 전에 탈퇴한 사람의 것부터 온다
 - 서명은 [알림 넣기](#알림-넣기서버끼리)와 같은 모양이다. 본문은 서명을 확인한 뒤에 읽는다(`app/core/signed_requests.py` 를 함께 쓴다)
-- 로그에는 지운 수만 남긴다(`operation`: `notification.withdrawal`, `deleted_notifications`, `deleted_mutes`, `deleted_follows`). 사람은 남기지 않는다
+- 로그에는 지운 수만 남긴다(`operation`: `notification.withdrawal`, `deleted_notifications`, `deleted_mutes`, `deleted_follows`, `deleted_announcements`). 사람은 남기지 않는다
 - 탈퇴한 뒤에 다른 서버가 그 사람의 알림을 늦게 넣으면 다시 생긴다. 보관 기간(30일)이 지나면 지워진다. 넣는 서버들이 탈퇴를 받으면(설계 문서의 만드는 순서 5) 넣지 않는다
 
 ## 보관 기간
@@ -361,6 +379,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. �
 | --- | --- | --- |
 | `notifications` | 사람 하나에게 간 알림 하나(#385) | `20261018_3f9a1c7e5b2d_notifications.py` |
 | `notification_mutes` | 사람 하나가 끈 알림의 종류 하나(#525). 줄이 있으면 꺼져 있다. 기본 키가 (`user_id`, `kind`)다 | `20261020_7c2e4a9d1b6f_notification_mutes.py` |
+| `work_announcements` | 새 작품 알림을 팔로워에게 나눠 넣은 기록(#989). 기본 키가 (`source`, `source_key`)다. 있으면 다시 나눠 넣지 않는다. 탈퇴하면 `creator_id` 로 지운다 | `20261105_37b5abc4d0b2_work_announcements.py` |
 | `creator_follows` | 한 사람이 제작자 하나를 팔로우한 것(#989). 기본 키가 (`follower_id`, `creator_id`)다. 자기 자신은 안 된다(CHECK). 팔로워 수는 `creator_id` 의 색인으로 센다 | `20261104_7fe0cf7007c0_creator_follows.py` |
 
 `notifications` 의 칸과 규칙(`app/notifications/models.py`):

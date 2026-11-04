@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import delete, or_, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server_core.notifications.models import OutboxStatus, OutgoingNotificationColumns
@@ -30,6 +31,19 @@ def put[T: OutgoingNotificationColumns](
     notification = model(user_id=user_id, kind=kind, source_key=source_key, payload=payload)
     session.add(notification)
     return notification
+
+
+async def put_once(
+    session: AsyncSession, model: Outbox, user_id: uuid.UUID, kind: str, source_key: str, payload: dict
+) -> None:
+    """
+    발송함에 알림 하나를 적는다. 같은 열쇠의 줄이 이미 있으면 적지 않는다. 저장하지 않는다.
+
+    같은 일이 여러 번 일어날 수 있는 알림(새 작품: 공개를 내렸다가 다시 올림, #989)에 쓴다.
+    put 은 같은 열쇠가 발송함에 남아 있으면 저장할 때 유일 제약에 걸린다. 그 조치까지 함께 실패하게 된다.
+    """
+    values = {'user_id': user_id, 'kind': kind, 'source_key': source_key, 'payload': payload}
+    await session.execute(insert(model).values(**values).on_conflict_do_nothing(index_elements=['source_key']))
 
 
 async def find_due[T: OutgoingNotificationColumns](

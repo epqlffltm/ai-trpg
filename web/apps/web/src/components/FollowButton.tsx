@@ -12,7 +12,8 @@ import type { Session } from '../api/session';
 import { tokenClaims } from '../auth/roles';
 import { useSession } from '../auth/useSession';
 
-type Props = { creatorId: string };
+/** leading 이면 앞의 글("만든 사람 …")에 이어 " · "로 시작한다. 제작자 페이지처럼 홀로 둘 때는 끈다 */
+type Props = { creatorId: string; leading?: boolean };
 
 /** 팔로우의 열쇠. 내 팔로잉의 열쇠는 FOLLOWING_KEY 다 */
 export function followQueryKey(creatorId: string) {
@@ -27,19 +28,23 @@ export function sessionPublicId(session: Session): string | undefined {
   return typeof sub === 'string' ? sub : undefined;
 }
 
-export function FollowButton({ creatorId }: Props) {
+export function FollowButton({ creatorId, leading = true }: Props) {
   const session = useSession();
-  if (session && sessionPublicId(session) !== creatorId) return <SignedInFollow creatorId={creatorId} />;
-  return <FollowerCountOnly creatorId={creatorId} signedIn={session !== null} />;
+  if (session && sessionPublicId(session) !== creatorId) return <SignedInFollow creatorId={creatorId} leading={leading} />;
+  return <FollowerCountOnly creatorId={creatorId} leading={leading} signedIn={session !== null} />;
 }
 
-function FollowerCountOnly({ creatorId, signedIn }: Props & { signedIn: boolean }) {
+function lead(leading: boolean | undefined): string {
+  return leading === false ? '' : ' · ';
+}
+
+function FollowerCountOnly({ creatorId, leading, signedIn }: Props & { signedIn: boolean }) {
   const location = useLocation();
   const count = useQuery({ queryKey: ['follows', 'count', creatorId], queryFn: ({ signal }) => fetchFollowerCount(creatorId, signal) });
   if (!count.data) return null;
   return (
     <>
-      {' · '}팔로워 {count.data.follower_count.toLocaleString('ko-KR')}
+      {lead(leading)}팔로워 {count.data.follower_count.toLocaleString('ko-KR')}
       {signedIn ? null : (
         <>
           {' · '}
@@ -52,7 +57,7 @@ function FollowerCountOnly({ creatorId, signedIn }: Props & { signedIn: boolean 
   );
 }
 
-function SignedInFollow({ creatorId }: Props) {
+function SignedInFollow({ creatorId, leading }: Props) {
   const queryClient = useQueryClient();
   const key = followQueryKey(creatorId);
   const state = useQuery({ queryKey: key, queryFn: ({ signal }) => fetchFollow(creatorId, signal) });
@@ -76,7 +81,7 @@ function SignedInFollow({ creatorId }: Props) {
 
   return (
     <>
-      {' · '}팔로워 {follower_count.toLocaleString('ko-KR')}{' '}
+      {lead(leading)}팔로워 {follower_count.toLocaleString('ko-KR')}{' '}
       <button type="button" className="ui-button ui-button--secondary" aria-pressed={following} disabled={busy} onClick={() => void toggle()}>
         {following ? '팔로잉' : '팔로우'}
       </button>

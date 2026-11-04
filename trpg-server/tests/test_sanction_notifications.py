@@ -52,9 +52,10 @@ def operator(signing_key: SigningKey) -> dict[str, str]:
 
 
 async def outgoing(session: AsyncSession) -> list[OutgoingNotification]:
-    """발송함의 모든 줄. 적은 차례다."""
+    """발송함의 줄. 적은 차례다. 공개할 때 적히는 새 작품 알림(#989)은 뺀다(test_new_work_notifications 가 본다)."""
     session.expire_all()
-    return list(await session.scalars(select(OutgoingNotification).order_by(OutgoingNotification.id)))
+    query = select(OutgoingNotification).where(OutgoingNotification.kind != 'scenario.published')
+    return list(await session.scalars(query.order_by(OutgoingNotification.id)))
 
 
 async def action_ids(session: AsyncSession) -> list[int]:
