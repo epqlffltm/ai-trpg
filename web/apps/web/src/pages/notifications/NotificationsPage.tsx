@@ -2,7 +2,7 @@
 // 알림(A10, /notifications). 로그인해야 열린다(RequireSession). 머리의 "알림"에서 온다.
 // 최근 것부터 한 쪽씩(더 보기). 글은 notificationText.ts 가 짓는다. 누르면 읽음으로 하고 그 화면으로 간다.
 // 모두 읽음은 받은 것 가운데 가장 새 번호까지만. 아래에 받을 알림(끄기). 30일이 지난 알림은 서버가 지운다.
-// PC 의 머리에서 여는 패널은 두지 않았다. 같은 목록을 나중에 감싸면 된다.
+// 위쪽 줄의 알림 종이 같은 목록의 첫 몇 개를 창으로 펼친다(layout/NotificationPanel.tsx). "모두 보기"가 이 화면이다.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';

@@ -9,6 +9,7 @@ import { ApiError } from '../../api/errors';
 import { REFRESH_PATH } from '../../api/refresh';
 import type { AttendanceStatus } from '../../api/types';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
+import { openAccountMenu } from '../../test/accountMenu';
 import { renderApp } from '../../test/renderApp';
 import { ME } from '../../test/tableFixtures';
 import { describeClaimProblem } from './attendanceProblem';
@@ -80,6 +81,9 @@ describe('출석', () => {
     expect(await screen.findByText('받음: 실버 180 (3일째)')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '오늘은 받았습니다' })).toBeDisabled();
     expect(screen.getByText('오늘은 3일째 · 실버 180 · 받았습니다. 내일 다시 오세요.')).toBeInTheDocument();
+    // 잔액은 내 메뉴에 있다. 펼치면 새로 읽는다
+    const menu = await openAccountMenu();
+    expect(await menu.findByRole('link', { name: /^지갑:/ })).toBeInTheDocument();
     await vi.waitFor(() => expect(count(seen, 'GET', `${BILLING}/wallet`)).toBeGreaterThan(walletReads));
   });
 

@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
+import { openAccountMenu } from '../../test/accountMenu';
 import { renderApp } from '../../test/renderApp';
 import { ME } from '../../test/tableFixtures';
 
@@ -92,7 +93,7 @@ describe('충전', () => {
 
     expect(await screen.findByText('충전을 마쳤습니다: 골드 1,000')).toBeInTheDocument();
     expect((sent(seen, 'POST', `/orders/${ORDER_ID}/confirm`)[0]?.body as { payment_key: string }).payment_key).toMatch(/^fake_ok_/);
-    expect(await screen.findByRole('link', { name: '지갑: 골드 1000 · 실버 0' })).toBeInTheDocument();
+    expect(await (await openAccountMenu()).findByRole('link', { name: '지갑: 골드 1000 · 실버 0' })).toBeInTheDocument();
   });
 
   it('거절되면 이유와 돈이 나가지 않았음을 알리고 처음부터 다시 고르게 한다', async () => {

@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
+import { openAccountMenu } from '../../test/accountMenu';
 import { renderApp } from '../../test/renderApp';
 import { ME } from '../../test/tableFixtures';
 
@@ -108,6 +109,8 @@ describe('주문 내역', () => {
 
     expect(await screen.findByText('환불됨')).toBeInTheDocument();
     expect(count(seen, 'POST', `/orders/${PAID}/refund`)).toBe(1);
+    // 잔액은 내 메뉴에 있다. 펼치면 새로 읽는다
+    await openAccountMenu();
     await vi.waitFor(() => expect(count(seen, 'GET', '/wallet')).toBeGreaterThan(walletReads));
   });
 

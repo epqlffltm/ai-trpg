@@ -76,7 +76,7 @@ web/
     src/pages/            화면. home(A1), create(만들기의 입구), login·signup·password(A2), limited(다시 동의, 탈퇴 유예), me(A5), identity(A3 본인인증), guardian(A4 보호자 동의와 보호자의 링크 화면), notifications(A10 알림), settings(A12 설정), personas(C4 내 페르소나), gallery(C7 갤러리), board(A11 공지·게시판의 읽기와 쓰기), wallet(A6), charge(A7), orders(A8), attendance(A9 출석·보물 상자), trpg(B1 탐색, B2 소개, B3 로비, B4 테이블 만들기, room 의 B6 테이블 방, room/character 의 B5 캐릭터 정하기, room/round 의 라운드(앞의 라운드 B10)와 round/action 의 행동, room/transcript 의 기록 받기, past 의 떠난 테이블(B10), room/status 의 B7 상태 패널, room/money.ts 의 판 안의 돈, room/events 의 일어난 일, room/host 의 방장의 운영, models 의 B8 서술 모델 고르기, studio 의 B9 제작 도구: 허브, 룰북, 세계관, 로어북, 몬스터 모음, 시나리오 조립의 뼈대, 캐릭터, 물건·돈, 인물, 지도와 길의 문, 몬스터, 퀘스트·사건, 장, 소개와 공개), operator(E4 신고 처리와 시나리오의 제재), creator(제작자 페이지, #992), chat/browse(C1 캐릭터 탐색), chat/character(C2 캐릭터 소개, 소개 글을 거르는 introHtmlFilter.ts), chat/conversation(C3 대화, C5 기억 창), story(D 의 내 이야기와 장면 D2), chat/studio/characters(C6 캐릭터 만들기), 준비 중, 없는 경로
     src/components/       여러 화면이 함께 쓰는 것(목록 한 칸, 실패 한 줄, 한 번 더 묻는 단추)
     src/hooks/            남은 초 세기, 다른 사람의 이름 찾기(public-names, #532)
-    src/layout/           사이트의 틀: 왼쪽 메뉴 열(AppSidebar, ☰ 로 접고 폄, 플레이 화면은 접은 채로), 위쪽 줄(AppHeader), 좁은 화면의 아래 탭 바(MobileTabBar)
+    src/layout/           사이트의 틀: 왼쪽 메뉴 열(AppSidebar, ☰ 로 접고 폄, 플레이 화면은 접은 채로), 위쪽 줄(AppHeader)과 그 펼침 창(알림 종 NotificationPanel, 프로필 메뉴 AccountMenu), 좁은 화면의 아래 탭 바(MobileTabBar)
     src/routing/          코드 분할. 처음 갈 때 받는 화면들(pages.ts), 받지 못했거나 깨졌을 때의 안내(RouteBoundary)
   packages/ui/            공통 구성요소(버튼, 입력 칸, 고르기 칸, 체크, 라디오, 창, 칩, 안내, 목록 한 줄)와 색·글꼴의 변수(styles.css)
 ```

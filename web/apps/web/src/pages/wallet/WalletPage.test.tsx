@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
+import { openAccountMenu } from '../../test/accountMenu';
 import { renderApp } from '../../test/renderApp';
 import { event, ME, member, round, roomRoutes, sheet, sse, sseResponse, tableDetail } from '../../test/tableFixtures';
 
@@ -48,11 +49,13 @@ afterEach(() => {
 });
 
 describe('지갑', () => {
-  it('머리의 잔액을 누르면 지갑으로 간다. 골드, 실버, 합과 곧 사라질 실버를 보인다', async () => {
+  it('내 메뉴의 잔액을 누르면 지갑으로 간다. 골드, 실버, 합과 곧 사라질 실버를 보인다', async () => {
     signedIn();
     renderApp('/');
 
-    await userEvent.click(await screen.findByRole('link', { name: '지갑: 골드 80 · 실버 10' }));
+    const menu = await openAccountMenu();
+    await userEvent.click(await menu.findByRole('link', { name: '지갑: 골드 80 · 실버 10' }));
+    expect(screen.queryByRole('navigation', { name: '내 메뉴' })).toBeNull();
 
     const balance = within(await screen.findByRole('region', { name: '잔액' }));
     expect(await balance.findByText('80')).toBeInTheDocument();
@@ -85,13 +88,14 @@ describe('지갑', () => {
     expect(screen.queryByRole('button', { name: '더 보기' })).not.toBeInTheDocument();
   });
 
-  it('결제 서버가 503 이면 다시 시도하게 하고 로그아웃시키지 않는다. 머리에는 잔액을 두지 않는다', async () => {
+  it('결제 서버가 503 이면 다시 시도하게 하고 로그아웃시키지 않는다. 내 메뉴에는 잔액을 두지 않는다', async () => {
     signedIn({ [`GET ${WALLET}`]: () => json(503, { detail: 'busy' }, { 'Retry-After': '3' }) });
     renderApp('/wallet');
 
     expect(await screen.findByText(/결제 서버가 지금 답하지 못합니다. 3초 뒤에/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '모험가' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /지갑:/ })).not.toBeInTheDocument();
+    const menu = await openAccountMenu();
+    expect(menu.getByText('모험가')).toBeInTheDocument();
+    expect(menu.queryByRole('link', { name: /지갑:/ })).not.toBeInTheDocument();
   });
 
   it('테이블 방에서 다음 라운드가 열리면 잔액을 다시 읽는다', async () => {
@@ -113,8 +117,10 @@ describe('지갑', () => {
       }),
     });
     renderApp(`/trpg/tables/${TABLE_ID}`);
+    // 잔액은 내 메뉴에 있다. 펼쳐 둔 채로 라운드가 열리면 다시 읽는다
+    const menu = await openAccountMenu();
 
-    expect(await screen.findByRole('link', { name: '지갑: 골드 80 · 실버 7' }, { timeout: 3000 })).toBeInTheDocument();
+    expect(await menu.findByRole('link', { name: '지갑: 골드 80 · 실버 7' }, { timeout: 3000 })).toBeInTheDocument();
   });
 });
 
@@ -140,7 +146,7 @@ describe('쿠폰', () => {
     await enter(' launch-2026 ');
 
     expect(await screen.findByText(/쿠폰 LAUNCH-2026: 실버 500을 받았습니다/)).toBeInTheDocument();
-    expect(await screen.findByRole('link', { name: '지갑: 골드 80 · 실버 510' })).toBeInTheDocument();
+    expect(await (await openAccountMenu()).findByRole('link', { name: '지갑: 골드 80 · 실버 510' })).toBeInTheDocument();
     expect(within(await screen.findByRole('list', { name: /내역/ })).getByText('쿠폰')).toBeInTheDocument();
     expect(seen.find((request) => request.method === 'POST' && request.url.includes(COUPONS))?.body).toEqual({ code: ' launch-2026 ' });
     expect(screen.getByRole('textbox', { name: '쿠폰 코드' })).toHaveValue('');
