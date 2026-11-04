@@ -28,6 +28,7 @@ import app.notifications.models  # noqa: F401
 import app.operators.models  # noqa: F401
 import app.records.models  # noqa: F401
 import app.reports.models  # noqa: F401
+import app.snapshots.models  # noqa: F401
 import app.turns.models  # noqa: F401
 from app.core.config import get_settings
 from app.core.database import EXTRA_SCHEMAS, Base

@@ -86,7 +86,8 @@ class FakeAsset:
     """
     가짜 asset 서버. worlds 와 personas 에 있는 것을 내준다. 없으면 404(AssetNotFoundError)다.
 
-    shortcuts 는 내 단축어다. adult_required 에 넣은 세계관은 403, down 이면 모든 요청이 AssetUnavailableError 다.
+    shortcuts 는 내 단축어다. 맡긴 장면 그림은 kept 에, 지운 것은 discarded 에 남는다.
+    adult_required 에 넣은 세계관은 403, down 이면 모든 요청이 AssetUnavailableError 다.
     무엇을 어느 토큰으로 불렀는지 calls 에 남는다.
     """
 
@@ -94,6 +95,9 @@ class FakeAsset:
     personas: dict[uuid.UUID, PersonaCopy] = field(default_factory=dict)
     adult_required: set[uuid.UUID] = field(default_factory=set)
     shortcuts: list[ShortcutDocument] = field(default_factory=list)
+    # 맡긴 장면 그림(그림의 id → 바이트)과 지운 그림의 id(#983)
+    kept: dict[uuid.UUID, bytes] = field(default_factory=dict)
+    discarded: list[uuid.UUID] = field(default_factory=list)
     down: bool = False
     calls: list[tuple[uuid.UUID, str]] = field(default_factory=list)
 
@@ -129,3 +133,20 @@ class FakeAsset:
         if world_id not in self.worlds:
             raise AssetNotFoundError
         return self.worlds[world_id]
+
+    async def keep_image(self, token: str, data: bytes) -> uuid.UUID:
+        """장면 그림을 맡긴다. 새 id 를 돌려준다."""
+        self.calls.append((uuid.UUID(int=1), token))
+        if self.down:
+            raise AssetUnavailableError('asset 서버가 죽었다(테스트)')
+        image_id = uuid.uuid4()
+        self.kept[image_id] = data
+        return image_id
+
+    async def discard_image(self, token: str, image_id: uuid.UUID) -> None:
+        """장면 그림을 지운다."""
+        self.calls.append((image_id, token))
+        if self.down:
+            raise AssetUnavailableError('asset 서버가 죽었다(테스트)')
+        self.discarded.append(image_id)
+        self.kept.pop(image_id, None)

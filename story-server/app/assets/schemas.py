@@ -96,6 +96,14 @@ def shortcuts_of(document: Mapping) -> list[ShortcutDocument]:
         return []
 
 
+class KeptImage(BaseModel):
+    """asset 서버에 맡긴 그림(#983). id 만 읽는다."""
+
+    model_config = ConfigDict(extra='ignore')
+
+    id: uuid.UUID
+
+
 class PersonaCopy(BaseModel):
     """asset 서버의 계정 페르소나의 사본. id 는 asset 서버의 페르소나 id 다(chat 이 받는 것과 같다)."""
 

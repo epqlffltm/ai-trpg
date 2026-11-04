@@ -111,6 +111,17 @@ class Settings(CoreSettings, NotificationSettings):
     # 벡터의 길이(차원). 적으면 받은 벡터가 이 길이인지 본다
     embedding_dimensions: int | None = Field(default=None, gt=0)
 
+    # 장면 그림(app/snapshots/, #983). off 면 만들지 않는다(503 snapshot_unavailable).
+    # gemini 는 Nano Banana(GEMINI_API_KEY 를 쓴다), comfyui 는 곁의 ComfyUI(개발·시험용), fake 는 테스트용이다
+    snapshot_provider: Literal['off', 'fake', 'gemini', 'comfyui'] = 'off'
+    # 그림 모델의 이름. 가격표 이름은 이것에서 점을 붙임표로 바꾼 것이다(image.gemini-nano-banana-2-1)
+    snapshot_model: str = 'gemini-nano-banana-2.1'
+    # 그림 한 장을 만드는 시간의 상한(초)
+    snapshot_timeout_seconds: float = Field(default=120.0, gt=0, le=600)
+    # 곁의 ComfyUI 의 주소와 체크포인트(models/checkpoints 안의 파일 이름). comfyui 일 때만 쓴다
+    comfyui_url: str = 'http://127.0.0.1:8188'
+    comfyui_checkpoint: str = ''
+
     # 요청 수 제한(app/limits/)을 세는 Redis 의 주소(redis://.../3).
     # 비우면 서버 안의 메모리로 센다(서버가 하나일 때만 맞다)
     redis_url: str = ''
