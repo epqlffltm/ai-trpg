@@ -12,6 +12,8 @@
     (로그인하지 않아도 전체 이용가는 본다). 볼 수 없으면 없는 그림과 같다(404).
 붙이기: 페르소나와 캐릭터의 대표 그림, 소개 글의 그림은 자기 그림이어야 한다. 남의 그림 id 를 적어 그 그림을 공개로
   돌리는 길을 막는다. 초안에 붙일 때(require_own_images)와 게시할 때(foreign_ids) 본다.
+맡기기(#983): chat 과 story 가 만든 장면 그림을 그 사람의 그림으로 올린다(app/images/supply.py). 올리기와 같은 길이다
+  (따로 된 프로세스에서 열어 다시 인코딩한다). 대화를 지우면 그 서버가 지우라고 부른다(discard_image).
 지우기(탈퇴): 그 사람의 그림 가운데 어느 판에도 쓰이지 않은 것을 저장소에서 먼저 지우고, 그다음 행을 지운다.
   저장소에서 지우다 실패하면 행이 남아 다시 온 알림이 다시 지운다. 남이 쓰는 공개 캐릭터의 그림은 남는다.
 
@@ -145,6 +147,23 @@ async def erase_images(session: AsyncSession, store: ImageStore, owner_id: uuid.
     for image_id in image_ids:
         await store.delete(str(image_id), now)
     await repository.delete_unused(session, image_ids)
+    await session.commit()
+
+
+async def discard_image(
+    session: AsyncSession, store: ImageStore, owner_id: uuid.UUID, image_id: uuid.UUID, now: datetime
+) -> None:
+    """
+    그 사람의 그림 하나를 지운다. 남의 것, 없는 것, 판에 쓰인 것은 그대로 둔다(아무 일도 하지 않는다).
+    저장소 먼저, 행은 나중이다. 저장소를 부르는 동안 DB 연결을 잡지 않는다.
+    저장소에서 지우지 못하면 ImageStoreUnavailableError 이고 행은 남는다(다시 부르면 다시 지운다).
+    """
+    found = await repository.unused_owned(session, owner_id, image_id)
+    await session.commit()
+    if not found:
+        return
+    await store.delete(str(image_id), now)
+    await repository.delete_unused(session, [image_id])
     await session.commit()
 
 

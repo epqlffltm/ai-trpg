@@ -47,6 +47,7 @@ from app.characters.publishing import CharacterNotReadyError
 from app.characters.service import CharacterNotFoundError, LorebookNotOwnedError, OperatorOnlyError
 from app.core.config import Settings, get_settings
 from app.images import router as images
+from app.images import supply as image_supply
 from app.images.isolation import ImageUnreadableError
 from app.images.service import ImageNotFoundError, ImageNotOwnedError, UnsupportedImageError
 from app.images.setup import build_decoder, build_image_store
@@ -222,6 +223,8 @@ def create_app(
     app.include_router(shortcut_supply.router, prefix=API_PREFIX)
     app.include_router(character_supply.router, prefix=API_PREFIX)
     app.include_router(world_supply.router, prefix=API_PREFIX)
+    # chat 과 story 가 만든 장면 그림을 맡기는 주소(#983). 본문(그림)의 상한은 그림 올리기와 같다
+    app.include_router(image_supply.router, prefix=API_PREFIX)
     # 인증 서버가 탈퇴를 알리는 주소(docs/architecture/withdrawal.md). 인증 서버의 서명만 본다
     app.include_router(withdrawal.router, prefix=API_PREFIX)
 

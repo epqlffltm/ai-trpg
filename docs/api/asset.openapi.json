@@ -9297,6 +9297,109 @@
         "x-audience": "service"
       }
     },
+    "/api/v1/asset/service/{caller}/images": {
+      "post": {
+        "description": "만든 그림을 토큰의 주인의 그림으로 올린다.",
+        "operationId": "keep_image_api_v1_asset_service__caller__images_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "caller",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Caller",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Keep Image",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
+    "/api/v1/asset/service/{caller}/images/{image_id}": {
+      "delete": {
+        "description": "토큰의 주인의 그림을 지운다. 지울 것이 없어도 204 다.",
+        "operationId": "discard_image_api_v1_asset_service__caller__images__image_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "caller",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Caller",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Discard Image",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
     "/api/v1/asset/service/{caller}/personas/{persona_id}": {
       "get": {
         "description": "토큰의 주인의 페르소나 하나의 사본.",
