@@ -109,9 +109,9 @@ SECRETS = [
         'STORY_SERVER_SECRET',
         'AUTH_SERVER_SECRET',
     ),
-    # asset 서버가 페르소나와 판을 가져가는 요청의 서명을 확인하는 비밀. 가져가는 서버마다 하나다.
-    # 요청을 받는 서버만 쓴다. 마이그레이션(asset-migrate)에는 주지 않는다
-    *secrets('asset-server', ['asset-server'], 'CHAT_SERVER_SECRET', 'STORY_SERVER_SECRET'),
+    # asset 서버가 페르소나와 판을 가져가는 요청(chat, story)과 장면 그림을 맡기고 받는 요청(trpg, #983)의 서명을
+    # 확인하는 비밀. 부르는 서버마다 하나다. 요청을 받는 서버만 쓴다. 마이그레이션(asset-migrate)에는 주지 않는다
+    *secrets('asset-server', ['asset-server'], 'CHAT_SERVER_SECRET', 'STORY_SERVER_SECRET', 'TRPG_SERVER_SECRET'),
     # asset, chat, story 서버가 알림 서버에 넣을 때 서명하는 비밀(#678). 서버만 쓴다. 마이그레이션에는 주지 않는다
     *secrets('asset-server', ['asset-server'], 'NOTIFICATION_SECRET'),
     *secrets('chat-server', ['chat-server'], 'NOTIFICATION_SECRET'),
