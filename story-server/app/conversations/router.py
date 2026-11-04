@@ -65,6 +65,7 @@ from app.core.dependencies import CurrentViewer, Now, Paging, Session
 from app.limits.routing import WRITE_LIMIT
 from app.lore.indexing import LoreIndexer
 from app.ratings import Rating
+from app.snapshots import service as snapshots
 
 router = APIRouter(prefix='/conversations', tags=['conversations'])
 # 답 고치기는 모델을 부르지 않는 쓰기다. 사람마다 요청 수를 센다(app/limits/)
@@ -396,9 +397,16 @@ async def copy_conversation(
 
 
 @router.delete('/{conversation_id}', status_code=status.HTTP_204_NO_CONTENT, dependencies=[WRITE_LIMIT])
-async def delete_conversation(conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session) -> None:
-    """세션을 지운다. 목록과 읽기에 더는 나오지 않는다. 없거나 남의 것이면 404 conversation_not_found 다."""
+async def delete_conversation(
+    conversation_id: uuid.UUID, viewer: CurrentViewer, session: Session, request: Request
+) -> None:
+    """
+    세션을 지운다. 목록과 읽기에 더는 나오지 않는다. 없거나 남의 것이면 404 conversation_not_found 다.
+    그 세션의 장면 그림은 asset 에서 지운다(#983).
+    """
     await service.delete_conversation(session, viewer, conversation_id)
+    state = request.app.state
+    await snapshots.discard_images(state.session_factory, state.asset, viewer, conversation_id)
 
 
 @message_router.patch('/{message_id}', response_model=MessageOut, status_code=status.HTTP_200_OK)

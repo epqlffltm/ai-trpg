@@ -103,6 +103,7 @@ export interface paths {
         /**
          * Delete Conversation
          * @description 세션을 지운다. 목록과 읽기에 더는 나오지 않는다. 없거나 남의 것이면 404 conversation_not_found 다.
+         *     그 세션의 장면 그림은 asset 에서 지운다(#983).
          */
         delete: operations["delete_conversation_api_v1_story_conversations__conversation_id__delete"];
         options?: never;
@@ -372,6 +373,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/conversations/{conversation_id}/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Snapshots
+         * @description 그 세션의 그림들. 만든 차례다.
+         */
+        get: operations["list_snapshots_api_v1_story_conversations__conversation_id__snapshots_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/conversations/{conversation_id}/summary": {
         parameters: {
             query?: never;
@@ -580,6 +601,26 @@ export interface paths {
          *     없거나 남의 세션의 말이면 404, 사람의 말이나 행동 말이면 422, 이미 신고했으면 409 다.
          */
         post: operations["report_message_api_v1_story_messages__message_id__reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/story/messages/{message_id}/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draw
+         * @description 그 답의 장면 그림을 그리기 시작한다. 홀드가 걸리면 202 이고 그림은 목록에서 받는다.
+         */
+        post: operations["draw_api_v1_story_messages__message_id__snapshot_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1632,6 +1673,35 @@ export interface components {
             start_hour: number;
         };
         /**
+         * SnapshotOut
+         * @description 장면 그림 한 장. 실패했으면 code 에 까닭이 있다(refused, credit_short …).
+         */
+        SnapshotOut: {
+            /** Code */
+            code: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Message Id */
+            message_id: string | null;
+            status: components["schemas"]["SnapshotStatus"];
+        };
+        /**
+         * SnapshotStatus
+         * @description 화면에 보이는 상태. drawing 이면 그리는 중이다(다시 읽는다).
+         * @enum {string}
+         */
+        SnapshotStatus: "drawing" | "ready" | "failed";
+        /**
          * SpriteOut
          * @description 인물의 그림 하나. expression 은 표정(빈 글이면 기본)이다.
          */
@@ -2531,6 +2601,37 @@ export interface operations {
             };
         };
     };
+    list_snapshots_api_v1_story_conversations__conversation_id__snapshots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnapshotOut"][];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     read_summary_api_v1_story_conversations__conversation_id__summary_get: {
         parameters: {
             query?: never;
@@ -2829,6 +2930,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReportCreated"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    draw_api_v1_story_messages__message_id__snapshot_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnapshotOut"];
                 };
             };
             /** @description 입력이 틀렸다 */

@@ -104,6 +104,7 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `STORY_OUTPUT_LIMIT` | `1024` | 말 한 번의 답의 길이의 상한(토큰). 가격표의 출력 단계(`o0`)가 약속하는 길이다 |
 | `STORY_CONTEXT_CHARS` | `12000` | 모델에 보내는 지난 말의 양의 상한(글자). 가격표의 입력 단계(`i0`)가 약속하는 양이다 |
 | `STORY_SUGGESTIONS` | `true` | [다음 답 추천](#말-보내기). 켜면 답 끝에 선택지 셋을 함께 받는다. 호출은 늘지 않는다 |
+| `SNAPSHOT_PROVIDER`, `SNAPSHOT_MODEL` | `off`, `gemini-nano-banana-2.1` | [장면 그림](#장면-그림). `gemini` 는 Nano Banana(`GEMINI_API_KEY`), `comfyui` 는 곁의 ComfyUI(`COMFYUI_URL`, `COMFYUI_CHECKPOINT`, 개발·시험용), `fake` 는 테스트용. 가격표 이름은 모델 이름의 점을 붙임표로 바꾼 것(`image.gemini-nano-banana-2-1`) |
 | `EMBEDDER` | `off` | [로어북의 뜻으로 찾기](#말-보내기). `off` 면 상시와 키워드만, `llm` 이면 임베딩 모델을 부른다(`fake` 는 테스트용). chat, trpg-server 와 같은 이름이다 |
 | `EMBEDDING_MODEL` | `bge-m3` | 임베딩 모델의 이름. 벡터에 함께 적는다(모델이 다르면 견주지 않는다) |
 | `EMBEDDING_BASE_URL` | 비어 있음 | 임베딩 모델의 주소(OpenAI 와 같은 모양, `/embeddings` 앞까지). `EMBEDDER=llm` 이면 꼭 적는다 |
@@ -166,6 +167,8 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | GET | `/api/v1/story/conversations/{id}/bookmarks` | [책갈피](#책갈피)들(나중에 단 것부터, `{message_id, note, role, excerpt, created_at}`) | access 토큰 |
 | PUT, DELETE | `/api/v1/story/conversations/{id}/bookmarks/{message_id}` | 책갈피 달기 `{note?}`(이미 있으면 메모만 바꾼다), 떼기(204, 달지 않았어도). 다른 세션의 말은 404 `message_not_found`, 가득 차면 409 `bookmarks_full` | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}/shortcuts` | 그 세션에서 고를 수 있는 [단축어](#단축어)(`{name, description, source}`, 세계관의 것(`work`) 다음 내 것(`mine`)). 본문은 싣지 않는다 | access 토큰 |
+| POST | `/api/v1/story/messages/{id}/snapshot` | 그 답의 [장면 그림](#장면-그림)을 그린다. 홀드를 건 뒤 202(`drawing`). 사람의 말·행동 말은 422 `not_drawable`, 그리는 중이면 409 `snapshot_in_progress`, 크레딧이 모자라면 402, 만들지 않는 서버·팔지 않는 가격표면 503 `snapshot_unavailable` | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}/snapshots` | 그 세션의 장면 그림들(`{id, message_id, status, image_id, code, created_at}`, 만든 차례). `drawing` 이면 다시 읽는다 | access 토큰 |
 | GET | `/api/v1/story/conversations/{id}/summary` | 지금 가지의 [굴리는 요약](#기억-메모)(`{text, covered_up_to, created_at}`, 읽기만). 없으면 null | access 토큰 |
 | GET | `/api/v1/story/gallery` | 그 세계관에서 내가 연 일러스트들(`?world_id=`, 처음 연 차례). [계정의 기록](#계정의-기록) | access 토큰 |
 
@@ -409,6 +412,16 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
 - 그 자리로 가는 것은 가지 고르기(`PUT /conversations/{id}/branch`, `message_id`)다. 다른 가지의 말이면 그 가지가 보인다.
 - 목록의 앞부분(80자)은 답이면 말 조각의 글을 잇는다(표식 `@이름:` 은 빠진다).
 - 세션을 지우면 같은 트랜잭션에서 뗀다. 플레이 복사는 책갈피를 옮기지 않는다. 탈퇴하면 세션과 함께 지워진다.
+
+### 장면 그림
+
+모델의 답 하나를 골라 그 장면을 그림 한 장으로 만든다(#983, chat 과 같은 길, `app/snapshots/`). 한 장마다 청구한다.
+
+- **지시.** 세계관(이름, 소개의 글자), 그 답까지의 가지의 엔진 상태(며칠째, 시간대, 장소), 그 답의 장면의 인물(이름, 나이, 성별, 소개의 글자), 그 답의 말 조각과 그 답이 답한 사람의 말(앞의 몇 글자)로 만든다(`app/snapshots/prompt.py`). 모델이 지어낸 상태를 쓰지 않는다. 모든 등급에서 전체이용가로만 그린다.
+- **차례.** 기록(pending) → 홀드 → 202. 그리기는 따로 돈다(공급자 → asset 에 맡기기 `POST /service/story/images` → 확정, 실패·거절은 반환).
+- **한 세션에 하나.** 그리는 중인 것은 세션마다 하나다. 서버가 도중에 꺼지면 정리 작업(`app/snapshots/settler.py`)이 10분 뒤 실패(`abandoned`)로 적고 돌려준다.
+- **그림.** asset 서버의 그림이다(주인만 본다). 세션을 지우면 asset 에 지우라고 한다. 플레이 복사는 그림을 옮기지 않는다.
+- **아직 없는 것.** 참고 그림(인물의 그림으로 얼굴 맞추기)은 asset 이 그림의 바이트를 내주는 주소가 생기면 더한다.
 
 ### 단축어
 
