@@ -3,7 +3,8 @@
 """
 다른 서버가 부르는 주소의 서명을 확인한다(server_core/service_auth/signing.py).
 
-    /api/v1/asset/service/{caller}/...                   페르소나와 판을 가져가는 서버(chat, 나중에 story, TRPG)
+    /api/v1/asset/service/{caller}/...                   페르소나와 판을 가져가는 서버(chat, story, 나중에 TRPG)
+    /api/v1/asset/service/{caller}/images                만든 장면 그림을 맡기는 서버(chat, story, #983)
     /api/v1/asset/service/users/{public_id}/withdrawal   인증 서버의 탈퇴 알림(app/withdrawal/)
 
   - caller 는 부르는 서버의 이름이다. 주소까지 서명하므로 남의 이름으로 부를 수 없다
@@ -25,7 +26,7 @@ from fastapi import Depends, HTTPException, Path, Request, status
 from server_core.service_auth.signing import SIGNATURE_HEADER, is_valid
 
 # 받는 본문의 상한(바이트). 서명을 확인하려면 본문 전체를 읽어야 하므로, 서명을 확인하기 전에 크기부터 자른다.
-# 지금의 주소는 모두 GET 이라 본문이 없다. 넉넉히 둔다
+# 가져가는 주소는 GET 이라 본문이 없다. 넉넉히 둔다. 그림을 맡기는 주소만 그림의 상한(IMAGE_MAX_BYTES)을 쓴다
 BODY_MAX_BYTES = 16 * 1024
 
 # 부르는 서버의 이름의 모양. 설정에 없는 이름은 비밀이 없는 것과 같다(401)
@@ -82,9 +83,9 @@ def auth_server_secret(request: Request) -> str:
     return request.app.state.settings.auth_server_secret.get_secret_value()
 
 
-async def verified_body(request: Request, secret: str) -> bytes:
-    """그 비밀로 서명을 확인하고 받은 본문을 돌려준다. 틀리면 401 이다."""
-    body = await read_body(request)
+async def verified_body(request: Request, secret: str, limit: int = BODY_MAX_BYTES) -> bytes:
+    """그 비밀로 서명을 확인하고 받은 본문을 돌려준다. 틀리면 401, 본문이 limit 을 넘으면 413 이다."""
+    body = await read_body(request, limit)
     header = request.headers.get(SIGNATURE_HEADER)
     if not is_valid(secret, header, request.method, signed_path(request), body, time.time()):
         raise unauthorized()
@@ -101,6 +102,15 @@ async def verify_caller(request: Request, caller: Annotated[str, Path(pattern=CA
     return caller
 
 
+async def verified_image_body(request: Request, caller: Annotated[str, Path(pattern=CALLER_PATTERN)]) -> bytes:
+    """
+    그림을 맡기는 서버의 서명을 확인하고 그림의 바이트(본문)를 돌려준다. FastAPI 의 의존성으로 쓴다.
+    본문의 상한은 그림 올리기와 같다(설정의 image_max_bytes).
+    """
+    limit = request.app.state.settings.image_max_bytes
+    return await verified_body(request, caller_secret(request, caller), limit)
+
+
 async def verify_auth_server(request: Request) -> bytes:
     """인증 서버의 서명을 확인하고 본문을 돌려준다. FastAPI 의 의존성으로 쓴다. 본문은 그다음에 해석한다."""
     return await verified_body(request, auth_server_secret(request))
@@ -108,5 +118,7 @@ async def verify_auth_server(request: Request) -> bytes:
 
 # 서명을 확인한 부르는 서버의 이름. 라우터의 의존성(dependencies=[...])이나 인자로 쓴다
 SignedCaller = Annotated[str, Depends(verify_caller)]
+# 그림을 맡기는 서버가 서명한 그림의 바이트
+SignedImageBody = Annotated[bytes, Depends(verified_image_body)]
 # 인증 서버가 서명한 본문
 AuthServerBody = Annotated[bytes, Depends(verify_auth_server)]

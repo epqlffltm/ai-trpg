@@ -682,6 +682,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/asset/service/{caller}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep Image
+         * @description 만든 그림을 토큰의 주인의 그림으로 올린다.
+         */
+        post: operations["keep_image_api_v1_asset_service__caller__images_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/asset/service/{caller}/images/{image_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Discard Image
+         * @description 토큰의 주인의 그림을 지운다. 지울 것이 없어도 204 다.
+         */
+        delete: operations["discard_image_api_v1_asset_service__caller__images__image_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/asset/service/{caller}/personas/{persona_id}": {
         parameters: {
             query?: never;
@@ -5395,6 +5435,67 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CharacterVersionNumber"];
                 };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    keep_image_api_v1_asset_service__caller__images_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caller: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    discard_image_api_v1_asset_service__caller__images__image_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+                caller: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description 입력이 틀렸다 */
             422: {

@@ -86,6 +86,12 @@ async def unused_owned_ids(session: AsyncSession, owner_id: uuid.UUID) -> list[u
     return list(await session.scalars(query.order_by(Image.id)))
 
 
+async def unused_owned(session: AsyncSession, owner_id: uuid.UUID, image_id: uuid.UUID) -> bool:
+    """그 그림이 이 사람의 것이고 어느 판에도 쓰이지 않았나."""
+    query = select(Image.id).where(Image.id == image_id, Image.owner_id == owner_id, unused())
+    return await session.scalar(query) is not None
+
+
 async def delete_unused(session: AsyncSession, image_ids: Collection[uuid.UUID]) -> None:
     """그 id 들의 그림을 지운다. 그사이 판에 쓰인 것은 남긴다."""
     if not image_ids:
