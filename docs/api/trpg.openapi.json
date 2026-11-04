@@ -22322,7 +22322,7 @@
     },
     "/api/v1/game/banners": {
       "get": {
-        "description": "지금 걸린 배너. 차례대로다. 공개를 내렸거나 지운 시나리오, 링크로만 여는 것, 볼 수 없는 등급은 빠진다.\n\n공개 목록처럼 성인 작품을 숨기거나(hide_adult) 성향(orientation)의 태그가 붙은 것만 낸다.",
+        "description": "지금 걸린 배너. 차례대로다. 공개를 내렸거나 지운 시나리오, 링크로만 여는 것, 볼 수 없는 등급은 빠진다.\n\n공개 목록처럼 성인 작품을 숨기거나(hide_adult) 성향(orientation)의 태그가 붙은 것만 낸다.\n막은 제작자와 태그(#988)의 것은 뺀다.",
         "operationId": "list_banners_api_v1_game_banners_get",
         "parameters": [
           {
@@ -22349,6 +22349,39 @@
                 }
               ],
               "title": "Orientation"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_creators",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 3700,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Creators"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_tag",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "maxLength": 20,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 30,
+              "title": "Exclude Tag",
+              "type": "array"
             }
           }
         ],
@@ -23892,6 +23925,39 @@
               ],
               "title": "Creator"
             }
+          },
+          {
+            "in": "query",
+            "name": "exclude_creators",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 3700,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Creators"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_tag",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "maxLength": 20,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 30,
+              "title": "Exclude Tag",
+              "type": "array"
+            }
           }
         ],
         "responses": {
@@ -25093,6 +25159,39 @@
                 }
               ],
               "title": "Orientation"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_creators",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 3700,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exclude Creators"
+            }
+          },
+          {
+            "in": "query",
+            "name": "exclude_tag",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "maxLength": 20,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 30,
+              "title": "Exclude Tag",
+              "type": "array"
             }
           }
         ],

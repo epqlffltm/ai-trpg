@@ -41,7 +41,9 @@ async def rank_characters(
 ) -> CharacterRanking:
     """최근 7일에 대화를 많이 시작한 캐릭터. 1위부터다."""
     ratings = shown_ratings(allowed_ratings(user), preferences)
-    rows = await repository.ranked_characters(session, ratings, preferences.orientation_tag, limit)
+    rows = await repository.ranked_characters(
+        session, ratings, preferences.orientation_tag, limit, preferences.excluded
+    )
     return CharacterRanking(
         recent_days=RECENT_DAYS,
         refreshed_at=await repository.refreshed_at(session, WorkKind.CHARACTER),
@@ -58,7 +60,7 @@ async def rank_worlds(
 ) -> WorldRanking:
     """최근 7일에 세션을 많이 시작한 세계관. 1위부터다."""
     ratings = shown_ratings(allowed_ratings(user), preferences)
-    rows = await repository.ranked_worlds(session, ratings, preferences.orientation_tag, limit)
+    rows = await repository.ranked_worlds(session, ratings, preferences.orientation_tag, limit, preferences.excluded)
     return WorldRanking(
         recent_days=RECENT_DAYS,
         refreshed_at=await repository.refreshed_at(session, WorkKind.WORLD),

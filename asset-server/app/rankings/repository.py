@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.characters import repository as characters
 from app.characters.models import Character, CharacterVersion
+from app.exclusions import NO_EXCLUSIONS, Exclusions, not_excluded
 from app.ratings import Rating
 from app.stats.models import WorkKind, WorkStarts
 from app.worlds import repository as worlds
@@ -22,10 +23,15 @@ from app.worlds.models import World, WorldVersion
 
 
 async def ranked_characters(
-    session: AsyncSession, ratings: Sequence[Rating], orientation_tag: str | None, limit: int
+    session: AsyncSession,
+    ratings: Sequence[Rating],
+    orientation_tag: str | None,
+    limit: int,
+    excluded: Exclusions = NO_EXCLUSIONS,
 ) -> list[tuple[Character, CharacterVersion, int]]:
-    """볼 수 있는 캐릭터의 랭킹. 캐릭터, 마지막 판, 최근의 수다."""
+    """볼 수 있는 캐릭터의 랭킹. 캐릭터, 마지막 판, 최근의 수다. 막은 제작자와 태그(#988)의 것은 뺀다."""
     condition = characters.listed(ratings) & (WorkStarts.recent > 0)
+    condition = condition & not_excluded(excluded, Character.owner_id, CharacterVersion.document)
     if orientation_tag is not None:
         condition = condition & CharacterVersion.document['tags'].contains([orientation_tag])
     query = (
@@ -41,10 +47,15 @@ async def ranked_characters(
 
 
 async def ranked_worlds(
-    session: AsyncSession, ratings: Sequence[Rating], orientation_tag: str | None, limit: int
+    session: AsyncSession,
+    ratings: Sequence[Rating],
+    orientation_tag: str | None,
+    limit: int,
+    excluded: Exclusions = NO_EXCLUSIONS,
 ) -> list[tuple[World, WorldVersion, int]]:
-    """볼 수 있는 세계관의 랭킹. 세계관, 마지막 판, 최근의 수다."""
+    """볼 수 있는 세계관의 랭킹. 세계관, 마지막 판, 최근의 수다. 막은 제작자와 태그(#988)의 것은 뺀다."""
     condition = worlds.listed(ratings) & (WorkStarts.recent > 0)
+    condition = condition & not_excluded(excluded, World.owner_id, WorldVersion.document)
     if orientation_tag is not None:
         condition = condition & WorldVersion.document['tags'].contains([orientation_tag])
     query = (

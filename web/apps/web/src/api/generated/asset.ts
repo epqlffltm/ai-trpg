@@ -4714,6 +4714,8 @@ export interface operations {
             query?: {
                 hide_adult?: boolean;
                 orientation?: components["schemas"]["Orientation"] | null;
+                exclude_creators?: string | null;
+                exclude_tag?: string[];
             };
             header?: never;
             path?: never;
@@ -5096,6 +5098,8 @@ export interface operations {
                 q?: string | null;
                 hide_adult?: boolean;
                 orientation?: components["schemas"]["Orientation"] | null;
+                exclude_creators?: string | null;
+                exclude_tag?: string[];
             };
             header?: never;
             path?: never;
@@ -5324,6 +5328,8 @@ export interface operations {
                 q?: string | null;
                 hide_adult?: boolean;
                 orientation?: components["schemas"]["Orientation"] | null;
+                exclude_creators?: string | null;
+                exclude_tag?: string[];
             };
             header?: never;
             path?: never;
@@ -6010,6 +6016,8 @@ export interface operations {
                 limit?: number;
                 hide_adult?: boolean;
                 orientation?: components["schemas"]["Orientation"] | null;
+                exclude_creators?: string | null;
+                exclude_tag?: string[];
             };
             header?: never;
             path?: never;
@@ -6043,6 +6051,8 @@ export interface operations {
                 limit?: number;
                 hide_adult?: boolean;
                 orientation?: components["schemas"]["Orientation"] | null;
+                exclude_creators?: string | null;
+                exclude_tag?: string[];
             };
             header?: never;
             path?: never;

@@ -39,7 +39,7 @@ asset-server ──(STATS_REFRESH_SECONDS 마다, 기본 한 시간)──▶ GE
 | GET | `/api/v1/asset/rankings/characters`, `/api/v1/asset/rankings/worlds` | 캐릭터와 세계관의 랭킹 `{recent_days, refreshed_at, items: [{rank, starts, character 또는 world}]}`. 한 번도 받지 못했으면 비어 있고 `refreshed_at` 이 `null` 이다 | 누구나 |
 | GET | `/api/v1/chat/service/stats/character-starts`, `/api/v1/story/service/stats/world-starts` | 작품(asset 의 id)마다 모든 수와 최근 7일의 수. 시작한 적이 없는 것은 빠진다 | asset 서버의 서명 |
 
-- 랭킹은 `limit`(1~20, 기본 10), `hide_adult`, `orientation` 을 받는다. 공개 목록의 조건(공개 중, 숨기지 않음, 링크 공개가 아님, 볼 수 있는 등급)과 보는 사람의 설정을 그대로 쓴다
+- 랭킹은 `limit`(1~20, 기본 10), `hide_adult`, `orientation`, 막은 제작자와 태그(`exclude_creators`, `exclude_tag`, [차단](blocks.md))를 받는다. 공개 목록의 조건(공개 중, 숨기지 않음, 링크 공개가 아님, 볼 수 있는 등급)과 보는 사람의 설정을 그대로 쓴다
 - 순서는 최근 7일의 수, 같으면 모든 수, 그것도 같으면 최근에 공개한 것이다. 최근의 수가 0 인 것은 빠진다
 
 ## 설정(asset-server)

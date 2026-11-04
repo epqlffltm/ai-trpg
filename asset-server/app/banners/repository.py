@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.banners.models import Banner, BannerKind
 from app.characters import repository as characters
 from app.characters.models import Character, CharacterVersion, Visibility
+from app.exclusions import NO_EXCLUSIONS, Exclusions, not_excluded
 from app.ratings import Rating
 from app.worlds import repository as worlds
 from app.worlds.models import World, WorldVersion
@@ -36,18 +37,23 @@ def order_key(banner: Banner) -> tuple:
 
 
 async def shown_characters(
-    session: AsyncSession, ratings: Sequence[Rating], orientation_tag: str | None, now: datetime
+    session: AsyncSession,
+    ratings: Sequence[Rating],
+    orientation_tag: str | None,
+    now: datetime,
+    excluded: Exclusions = NO_EXCLUSIONS,
 ) -> list[tuple[Banner, Character, CharacterVersion]]:
     """
     지금 보이는 캐릭터의 배너와 그 캐릭터, 마지막 판. 공개 목록의 조건(characters.listed)을 지킨다.
 
-    orientation_tag 를 주면 마지막 판에 그 태그가 붙은 것만이다(성향, #987).
+    orientation_tag 를 주면 마지막 판에 그 태그가 붙은 것만이다(성향, #987). 막은 제작자와 태그(#988)의 것은 뺀다.
     """
     query = (
         select(Banner, Character, CharacterVersion)
         .join(Character, Character.id == Banner.character_id)
         .join(CharacterVersion, characters.latest_join())
         .where(in_period(now), characters.listed(ratings))
+        .where(not_excluded(excluded, Character.owner_id, CharacterVersion.document))
     )
     if orientation_tag is not None:
         query = query.where(CharacterVersion.document['tags'].contains([orientation_tag]))
@@ -55,18 +61,23 @@ async def shown_characters(
 
 
 async def shown_worlds(
-    session: AsyncSession, ratings: Sequence[Rating], orientation_tag: str | None, now: datetime
+    session: AsyncSession,
+    ratings: Sequence[Rating],
+    orientation_tag: str | None,
+    now: datetime,
+    excluded: Exclusions = NO_EXCLUSIONS,
 ) -> list[tuple[Banner, World, WorldVersion]]:
     """
     지금 보이는 세계관의 배너와 그 세계관, 마지막 판. 공개 목록의 조건(worlds.listed)을 지킨다.
 
-    orientation_tag 를 주면 마지막 판에 그 태그가 붙은 것만이다(성향, #987).
+    orientation_tag 를 주면 마지막 판에 그 태그가 붙은 것만이다(성향, #987). 막은 제작자와 태그(#988)의 것은 뺀다.
     """
     query = (
         select(Banner, World, WorldVersion)
         .join(World, World.id == Banner.world_id)
         .join(WorldVersion, worlds.latest_join())
         .where(in_period(now), worlds.listed(ratings))
+        .where(not_excluded(excluded, World.owner_id, WorldVersion.document))
     )
     if orientation_tag is not None:
         query = query.where(WorldVersion.document['tags'].contains([orientation_tag]))

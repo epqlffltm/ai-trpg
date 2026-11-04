@@ -264,6 +264,7 @@ export interface paths {
          * @description 지금 걸린 배너. 차례대로다. 공개를 내렸거나 지운 시나리오, 링크로만 여는 것, 볼 수 없는 등급은 빠진다.
          *
          *     공개 목록처럼 성인 작품을 숨기거나(hide_adult) 성향(orientation)의 태그가 붙은 것만 낸다.
+         *     막은 제작자와 태그(#988)의 것은 뺀다.
          */
         get: operations["list_banners_api_v1_game_banners_get"];
         put?: never;
@@ -12523,6 +12524,8 @@ export interface operations {
             query?: {
                 hide_adult?: boolean;
                 orientation?: components["schemas"]["Orientation"] | null;
+                exclude_creators?: string | null;
+                exclude_tag?: string[];
             };
             header?: never;
             path?: never;
@@ -13372,6 +13375,8 @@ export interface operations {
                 hide_adult?: boolean;
                 orientation?: components["schemas"]["Orientation"] | null;
                 creator?: string | null;
+                exclude_creators?: string | null;
+                exclude_tag?: string[];
             };
             header?: never;
             path?: never;
@@ -14088,6 +14093,8 @@ export interface operations {
                 limit?: number;
                 hide_adult?: boolean;
                 orientation?: components["schemas"]["Orientation"] | null;
+                exclude_creators?: string | null;
+                exclude_tag?: string[];
             };
             header?: never;
             path?: never;

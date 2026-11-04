@@ -13,6 +13,7 @@ from server_core.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.exclusions import ExcludedCreators, ExcludedTags, build_exclusions
 from app.popularity import ListingOrder
 from app.preferences import Orientation, Preferences
 from app.search import SEARCH_MAX_LENGTH, SEARCH_PATTERN, SearchTerms, parse_search
@@ -62,14 +63,19 @@ Search = Annotated[SearchTerms | None, Depends(get_search)]
 
 
 def get_preferences(
-    hide_adult: Annotated[bool, Query()] = False, orientation: Annotated[Orientation | None, Query()] = None
+    hide_adult: Annotated[bool, Query()] = False,
+    orientation: Annotated[Orientation | None, Query()] = None,
+    exclude_creators: ExcludedCreators = None,
+    exclude_tag: ExcludedTags = [],  # noqa: B006  FastAPI 가 요청마다 새 목록을 만든다
 ) -> Preferences:
     """
     공개 목록을 거르는 보는 사람의 설정(#986, #987). 주소의 ?hide_adult=..&orientation=.. 에서 읽는다.
+    막은 제작자와 태그(#988)는 ?exclude_creators=..&exclude_tag=.. 다(app/exclusions.py).
 
     설정은 인증 서버의 내 정보에 있다. 화면이 읽어 싣는다(app/preferences.py).
     """
-    return Preferences(hide_adult=hide_adult, orientation=orientation)
+    excluded = build_exclusions(exclude_creators, exclude_tag)
+    return Preferences(hide_adult=hide_adult, orientation=orientation, excluded=excluded)
 
 
 # 공개 목록 API 가 인자의 형식으로 쓴다

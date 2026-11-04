@@ -19,6 +19,7 @@ from app.assets.routing import Session
 from app.banners import service
 from app.banners.schemas import BannerCreate, BannerOut, BannerUpdate, PublicBanner, PublicBannerList
 from app.banners.service import BannerNotFoundError, BannerView, ScenarioNotPublishedError
+from app.listings.exclusions import ExclusionsParam
 from app.listings.repository import ListingFilter
 from app.listings.router import HideAdultFilter, OrientationFilter, public_items
 from app.operators.router import Operator
@@ -54,14 +55,19 @@ def not_found() -> HTTPException:
 
 @public_router.get('', response_model=PublicBannerList, status_code=status.HTTP_200_OK)
 async def list_banners(
-    user: OptionalUser, session: Session, hide_adult: HideAdultFilter = False, orientation: OrientationFilter = None
+    user: OptionalUser,
+    session: Session,
+    excluded: ExclusionsParam,
+    hide_adult: HideAdultFilter = False,
+    orientation: OrientationFilter = None,
 ) -> PublicBannerList:
     """
     지금 걸린 배너. 차례대로다. 공개를 내렸거나 지운 시나리오, 링크로만 여는 것, 볼 수 없는 등급은 빠진다.
 
     공개 목록처럼 성인 작품을 숨기거나(hide_adult) 성향(orientation)의 태그가 붙은 것만 낸다.
+    막은 제작자와 태그(#988)의 것은 뺀다.
     """
-    where = ListingFilter(hide_adult=hide_adult, orientation=orientation)
+    where = ListingFilter(hide_adult=hide_adult, orientation=orientation, excluded=excluded)
     rows = await service.list_shown(session, user, where, utc_now())
     listings = await public_items(session, [row for _, row in rows])
     return PublicBannerList(

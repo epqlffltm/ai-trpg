@@ -9,6 +9,10 @@
 # (upstream 블록에 이름을 적으면 nginx 가 뜰 때 한 번만 찾는다. 그 서버가 아직 없으면 nginx 가 뜨지 못한다)
 resolver 127.0.0.11 valid=10s ipv6=off;
 
+# 요청의 줄과 머리말 한 줄의 상한. 기본(8KB)보다 크게 둔다. 공개 목록의 주소에 막은 제작자(100명)와 태그(30개)를 싣는다(#988).
+# 가장 길면 9.5KB 쯤이다(docs/architecture/blocks.md 의 "주소의 길이"). 서버(uvicorn)는 요청의 줄과 머리말을 합쳐 16KB 까지 받는다
+large_client_header_buffers 4 16k;
+
 # --- 요청 수 제한. IP 마다 센다 ---
 # 인증의 민감한 요청(로그인, 인증 코드, 가입, 비밀번호)과 쿠폰 넣기(#979), 카드 등록(#980). 1분에 10번
 limit_req_zone $binary_remote_addr zone=auth_sensitive:10m rate=10r/m;

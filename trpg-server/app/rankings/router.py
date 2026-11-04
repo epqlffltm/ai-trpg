@@ -6,6 +6,7 @@
     GET /api/v1/game/rankings/scenarios   최근 7일에 테이블을 많이 연 시나리오
 
   - 공개 목록에 나오는 것만이다. 볼 수 있는 등급만이고, 보는 사람의 설정(hide_adult, orientation)으로 거른다
+  - 보는 사람이 막은 제작자와 태그(#988, app/listings/exclusions.py)의 것은 뺀다
   - 테이블이 이 서버에 있어 읽을 때 바로 센다(chat 과 story 의 수는 asset 서버가 몇 분마다 받아 온다)
   - limit 은 1~20, 기본 10 이다
 """
@@ -18,6 +19,7 @@ from server_core.auth.dependencies import OptionalUser
 
 from app.assets.ratings import allowed_ratings
 from app.assets.routing import Session
+from app.listings.exclusions import ExclusionsParam
 from app.listings.repository import ListingFilter
 from app.listings.router import HideAdultFilter, OrientationFilter, public_items
 from app.rankings.repository import ranked_scenarios
@@ -37,12 +39,13 @@ RankingSize = Annotated[int, Query(ge=1, le=MAX_RANKING_SIZE)]
 async def rank_scenarios(
     user: OptionalUser,
     session: Session,
+    excluded: ExclusionsParam,
     limit: RankingSize = DEFAULT_RANKING_SIZE,
     hide_adult: HideAdultFilter = False,
     orientation: OrientationFilter = None,
 ) -> ScenarioRanking:
     """최근 7일에 테이블을 많이 연 시나리오. 1위부터다."""
-    where = ListingFilter(hide_adult=hide_adult, orientation=orientation)
+    where = ListingFilter(hide_adult=hide_adult, orientation=orientation, excluded=excluded)
     since = datetime.now(UTC) - timedelta(days=RECENT_DAYS)
     rows = await ranked_scenarios(session, allowed_ratings(user), where, since, limit)
     return ScenarioRanking(

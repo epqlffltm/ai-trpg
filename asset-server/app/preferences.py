@@ -1,7 +1,7 @@
 # asset-server/app/preferences.py
 
 """
-보는 사람이 공개 목록을 거르는 설정(#986, #987). 성인 작품 숨김과 성향이다. DB 를 모르는 순수한 모양이다.
+보는 사람이 공개 목록을 거르는 설정(#986, #987, #988). 성인 작품 숨김과 성향, 막은 제작자와 태그다.
 
 설정은 인증 서버의 내 정보에 있다. 이 서버는 인증 서버를 부르지 않는다(공용 코드 규칙의 원칙 2).
 화면이 읽어 공개 목록의 주소에 싣는다(?hide_adult=true&orientation=male). 소개 하나를 여는 주소에는 쓰지 않는다(목록만).
@@ -12,6 +12,7 @@ import enum
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from app.exclusions import NO_EXCLUSIONS, Exclusions
 from app.ratings import Rating
 
 
@@ -33,10 +34,12 @@ class Preferences:
 
     hide_adult 는 성인 작품을 숨길지다. 볼 수 있는 사람이 숨기는 설정이다. 볼 수 없는 사람에게는 이미 없다.
     orientation 을 고르면 그 태그가 붙은 것만 나온다("그것만", 먼저 보이기가 아니다).
+    excluded 는 보는 사람이 막은 제작자와 태그다(#988, app/exclusions.py). 그것의 작품을 뺀다.
     """
 
     hide_adult: bool = False
     orientation: Orientation | None = None
+    excluded: Exclusions = NO_EXCLUSIONS
 
     @property
     def orientation_tag(self) -> str | None:
