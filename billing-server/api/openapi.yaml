@@ -22,6 +22,7 @@ tags:
   - name: orders
   - name: attendance
   - name: coupons
+  - name: auto-charge
   - name: webhooks
   - name: service
 
@@ -427,6 +428,145 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/ServerError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/billing/auto-charge:
+    get:
+      tags: [auto-charge]
+      summary: 자동 충전의 설정과 등록한 카드(#980)
+      operationId: getAutoCharge
+      security: [{ bearer: [] }]
+      responses:
+        "200":
+          description: 자동 충전
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AutoCharge" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/ServerError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+    put:
+      tags: [auto-charge]
+      summary: 자동 충전의 설정을 적는다. 켜려면 카드가 있고 지금 결제할 수 있어야 한다(#980)
+      operationId: putAutoCharge
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled, threshold, product_id, monthly_limit]
+              properties:
+                enabled: { type: boolean }
+                threshold:
+                  allOf: [{ $ref: "#/components/schemas/Amount" }]
+                  description: 골드가 이 값 아래로 떨어지면 산다. 0 에서 100000
+                product_id: { type: string, example: credits-5000 }
+                monthly_limit:
+                  type: integer
+                  format: int64
+                  description: 한 달(한국 날짜의 달)에 자동으로 결제하는 돈의 상한(원). 고른 상품의 값에서 500000 사이
+      responses:
+        "200":
+          description: 적은 뒤의 자동 충전
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AutoCharge" }
+        "400":
+          description: 본문이나 값이 틀렸다(autocharge.invalid_settings)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: 지금 결제할 수 없다(payment.verification_required, payment.guardian_consent_required)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: 카드 없이 켜려 했다(autocharge.no_card)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/ServerError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/billing/cards/customer-key:
+    post:
+      tags: [auto-charge]
+      summary: 카드 등록 창에 넣을 고객 키. 없으면 만든다. 몇 번을 불러도 같다(#980)
+      operationId: createCustomerKey
+      security: [{ bearer: [] }]
+      responses:
+        "200":
+          description: 고객 키
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [customer_key]
+                properties:
+                  customer_key: { type: string, format: uuid }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/ServerError" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+
+  /api/v1/billing/cards:
+    post:
+      tags: [auto-charge]
+      summary: 카드 등록 창이 준 인증 키로 카드를 등록한다. 이미 있으면 바꾼다(#980)
+      operationId: registerCard
+      security: [{ bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [auth_key, customer_key]
+              properties:
+                auth_key: { type: string, description: 카드 등록 창이 성공 주소에 붙여 준 인증 키 }
+                customer_key: { type: string, format: uuid }
+      responses:
+        "201":
+          description: 등록한 카드
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Card" }
+        "400":
+          description: 본문이 틀렸다(card.invalid_request)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409":
+          description: 고객 키가 이 사람의 것이 아니다(card.customer_key_mismatch). 처음부터 다시 한다
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: 결제 대행사가 거절했다(card.refused). 다른 카드로 한다
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/ServerError" }
+        "503":
+          description: 결제 대행사가 답하지 않았다(card.issuer_unavailable) 또는 DB 에 닿지 않는다. 다시 등록하면 된다
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      tags: [auto-charge]
+      summary: 카드를 지우고 자동 충전을 끈다. 카드가 없어도 204 다(#980)
+      operationId: removeCard
+      security: [{ bearer: [] }]
+      responses:
+        "204":
+          description: 지웠다
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "500": { $ref: "#/components/responses/ServerError" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
@@ -1015,6 +1155,43 @@ components:
           type: string
           format: date-time
           description: 받은 실버가 사라지는 때
+    AutoCharge:
+      type: object
+      additionalProperties: false
+      required: [settings, consecutive_failures, card]
+      properties:
+        settings:
+          type: object
+          nullable: true
+          description: 적은 적이 없으면 null
+          additionalProperties: false
+          required: [enabled, threshold, product_id, monthly_limit]
+          properties:
+            enabled: { type: boolean }
+            threshold: { $ref: "#/components/schemas/Amount" }
+            product_id: { type: string }
+            monthly_limit: { type: integer, format: int64 }
+        consecutive_failures:
+          type: integer
+          description: 이어서 실패한 자동 결제의 수. 다시 켜면 0 이다
+        card:
+          type: object
+          nullable: true
+          description: 등록한 카드가 없으면 null
+          additionalProperties: false
+          required: [issuer_code, number, registered_at]
+          properties:
+            issuer_code: { type: string }
+            number: { type: string }
+            registered_at: { type: string, format: date-time }
+    Card:
+      type: object
+      additionalProperties: false
+      required: [issuer_code, number, registered_at]
+      properties:
+        issuer_code: { type: string, description: 카드를 낸 곳의 코드(결제 대행사의 issuerCode) }
+        number: { type: string, description: 결제 대행사가 가린 카드 번호, example: "43301234****123*" }
+        registered_at: { type: string, format: date-time }
     CouponRedemption:
       type: object
       additionalProperties: false

@@ -10,7 +10,7 @@
 resolver 127.0.0.11 valid=10s ipv6=off;
 
 # --- 요청 수 제한. IP 마다 센다 ---
-# 인증의 민감한 요청(로그인, 인증 코드, 가입, 비밀번호)과 쿠폰 넣기(#979). 1분에 10번
+# 인증의 민감한 요청(로그인, 인증 코드, 가입, 비밀번호)과 쿠폰 넣기(#979), 카드 등록(#980). 1분에 10번
 limit_req_zone $binary_remote_addr zone=auth_sensitive:10m rate=10r/m;
 # 게시판 검색. 가장 무거운 읽기다. 1초에 2번
 limit_req_zone $binary_remote_addr zone=search:10m rate=2r/s;

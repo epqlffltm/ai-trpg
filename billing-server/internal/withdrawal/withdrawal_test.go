@@ -12,9 +12,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/autocharge"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/eligibility"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/payment"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/pricing"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/testenv"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/usernotice"
@@ -38,6 +40,7 @@ type fixture struct {
 	eligibility *eligibility.Service
 	notices     *usernotice.Service
 	service     *withdrawal.Service
+	cards       *autocharge.Service
 	// user 는 이 테스트만 쓰는 새 사용자다.
 	user uuid.UUID
 }
@@ -62,7 +65,8 @@ func setUp(t *testing.T) fixture {
 		eligibility: eligibility.NewService(pool, now), notices: usernotice.NewService(pool, now, nil),
 		user: uuid.New(),
 	}
-	f.service = withdrawal.NewService(pool, wallets, holds, f.eligibility, f.notices)
+	f.cards = autocharge.NewService(pool, now, payment.Fake{}, f.eligibility)
+	f.service = withdrawal.NewService(pool, wallets, holds, f.eligibility, f.notices).WithCards(f.cards)
 	return f
 }
 
@@ -142,6 +146,27 @@ func TestWithdrawalClosesTheWalletAndErasesTheRest(t *testing.T) {
 	f.scalar("SELECT last_error FROM user_notices WHERE user_id = $1", &lastError)
 	if status != "expired" || lastError != "withdrawn" {
 		t.Errorf("알림 = (%s, %s). 보내지 않기로 하고 줄은 남긴다", status, lastError)
+	}
+}
+
+func TestTheCardAndAutoChargeAreErased(t *testing.T) {
+	// 자동 충전의 카드(빌링키)와 설정도 지운다(#980). 남기면 탈퇴한 사람의 카드로 결제할 길이 남는다
+	f := setUp(t)
+	f.seed()
+	key, err := f.cards.CustomerKey(ctx(t), f.user)
+	if err != nil {
+		t.Fatalf("고객 키를 만들지 못했다: %v", err)
+	}
+	if _, err := f.cards.RegisterCard(ctx(t), f.user, payment.FakeCardApproved+"w", key); err != nil {
+		t.Fatalf("카드를 등록하지 못했다: %v", err)
+	}
+
+	got := f.process()
+
+	var cards int
+	f.scalar("SELECT COUNT(*) FROM payment_cards WHERE user_id = $1", &cards)
+	if !got.ErasedCards || cards != 0 {
+		t.Errorf("결과 = %+v, 남은 카드 %d", got, cards)
 	}
 }
 

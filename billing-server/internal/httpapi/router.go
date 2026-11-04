@@ -41,6 +41,8 @@ type Dependencies struct {
 	Attendance AttendanceService
 	// Coupons 는 쿠폰을 받게 한다(#979). 넣지 않으면 그 주소를 열지 않는다.
 	Coupons CouponRedeemer
+	// AutoCharge 는 자동 충전의 카드와 설정을 다룬다(#980). 넣지 않으면 그 주소를 열지 않는다.
+	AutoCharge AutoChargeService
 	// Orders 는 주문을 만들고 치른다. 서버는 결제 자격으로 감싼 것(eligibility.Guard)을 넣는다.
 	Orders OrderService
 	// Notifier 는 결제 대행사의 알림을 처리한다.
@@ -140,6 +142,13 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		api.POST("/attendance", claimAttendance(deps.Attendance))
 		// 하루 양과 보물 상자의 확률을 공개한다. 로그인 묶음 밖에 둔다. 가입하기 전에도 볼 수 있다
 		router.GET(APIPrefix+"/attendance/rewards", attendanceRewards(deps.Attendance))
+	}
+	if deps.AutoCharge != nil {
+		api.GET("/auto-charge", getAutoCharge(deps.AutoCharge))
+		api.PUT("/auto-charge", putAutoCharge(deps.AutoCharge))
+		api.POST("/cards/customer-key", createCustomerKey(deps.AutoCharge))
+		api.POST("/cards", registerCard(deps.AutoCharge))
+		api.DELETE("/cards", removeCard(deps.AutoCharge))
 	}
 	if deps.Coupons != nil {
 		api.POST("/coupons/redeem", redeemCoupon(deps.Coupons))

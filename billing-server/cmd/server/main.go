@@ -24,6 +24,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/app"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/attendance"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/auth"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/autocharge"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/coupon"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/database"
@@ -121,6 +122,7 @@ func run() error {
 		Withdrawals:       services.Withdrawals,
 		Attendance:        attendances,
 		Coupons:           coupon.NewService(pool, time.Now, services.Wallet, services.Eligibility),
+		AutoCharge:        autocharge.NewService(pool, time.Now, app.NewCardIssuer(settings.Payment), services.Eligibility),
 		Orders:            eligibility.Guard(services.Orders, services.Eligibility),
 		Notifier:          services.Orders,
 		WebhookSecret:     settings.WebhookSecret,

@@ -280,6 +280,95 @@
         ],
         "type": "object"
       },
+      "AutoCharge": {
+        "additionalProperties": false,
+        "properties": {
+          "card": {
+            "additionalProperties": false,
+            "description": "등록한 카드가 없으면 null",
+            "nullable": true,
+            "properties": {
+              "issuer_code": {
+                "type": "string"
+              },
+              "number": {
+                "type": "string"
+              },
+              "registered_at": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "issuer_code",
+              "number",
+              "registered_at"
+            ],
+            "type": "object"
+          },
+          "consecutive_failures": {
+            "description": "이어서 실패한 자동 결제의 수. 다시 켜면 0 이다",
+            "type": "integer"
+          },
+          "settings": {
+            "additionalProperties": false,
+            "description": "적은 적이 없으면 null",
+            "nullable": true,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "monthly_limit": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "product_id": {
+                "type": "string"
+              },
+              "threshold": {
+                "$ref": "#/components/schemas/Amount"
+              }
+            },
+            "required": [
+              "enabled",
+              "threshold",
+              "product_id",
+              "monthly_limit"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "settings",
+          "consecutive_failures",
+          "card"
+        ],
+        "type": "object"
+      },
+      "Card": {
+        "additionalProperties": false,
+        "properties": {
+          "issuer_code": {
+            "description": "카드를 낸 곳의 코드(결제 대행사의 issuerCode)",
+            "type": "string"
+          },
+          "number": {
+            "description": "결제 대행사가 가린 카드 번호",
+            "example": "43301234****123*",
+            "type": "string"
+          },
+          "registered_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issuer_code",
+          "number",
+          "registered_at"
+        ],
+        "type": "object"
+      },
       "CouponRedemption": {
         "additionalProperties": false,
         "properties": {
@@ -1025,6 +1114,314 @@
         "summary": "하루 양과 보물 상자의 확률. 로그인 없이 누구나 본다",
         "tags": [
           "attendance"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/billing/auto-charge": {
+      "get": {
+        "operationId": "getAutoCharge",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoCharge"
+                }
+              }
+            },
+            "description": "자동 충전"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "자동 충전의 설정과 등록한 카드(#980)",
+        "tags": [
+          "auto-charge"
+        ],
+        "x-audience": "user"
+      },
+      "put": {
+        "operationId": "putAutoCharge",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "monthly_limit": {
+                    "description": "한 달(한국 날짜의 달)에 자동으로 결제하는 돈의 상한(원). 고른 상품의 값에서 500000 사이",
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "product_id": {
+                    "example": "credits-5000",
+                    "type": "string"
+                  },
+                  "threshold": {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/Amount"
+                      }
+                    ],
+                    "description": "골드가 이 값 아래로 떨어지면 산다. 0 에서 100000"
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "threshold",
+                  "product_id",
+                  "monthly_limit"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoCharge"
+                }
+              }
+            },
+            "description": "적은 뒤의 자동 충전"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "본문이나 값이 틀렸다(autocharge.invalid_settings)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "지금 결제할 수 없다(payment.verification_required, payment.guardian_consent_required)"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "카드 없이 켜려 했다(autocharge.no_card)"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "자동 충전의 설정을 적는다. 켜려면 카드가 있고 지금 결제할 수 있어야 한다(#980)",
+        "tags": [
+          "auto-charge"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/billing/cards": {
+      "delete": {
+        "operationId": "removeCard",
+        "responses": {
+          "204": {
+            "description": "지웠다"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "카드를 지우고 자동 충전을 끈다. 카드가 없어도 204 다(#980)",
+        "tags": [
+          "auto-charge"
+        ],
+        "x-audience": "user"
+      },
+      "post": {
+        "operationId": "registerCard",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "auth_key": {
+                    "description": "카드 등록 창이 성공 주소에 붙여 준 인증 키",
+                    "type": "string"
+                  },
+                  "customer_key": {
+                    "format": "uuid",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "auth_key",
+                  "customer_key"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Card"
+                }
+              }
+            },
+            "description": "등록한 카드"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "본문이 틀렸다(card.invalid_request)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "고객 키가 이 사람의 것이 아니다(card.customer_key_mismatch). 처음부터 다시 한다"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "결제 대행사가 거절했다(card.refused). 다른 카드로 한다"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "결제 대행사가 답하지 않았다(card.issuer_unavailable) 또는 DB 에 닿지 않는다. 다시 등록하면 된다"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "카드 등록 창이 준 인증 키로 카드를 등록한다. 이미 있으면 바꾼다(#980)",
+        "tags": [
+          "auto-charge"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/billing/cards/customer-key": {
+      "post": {
+        "operationId": "createCustomerKey",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "customer_key": {
+                      "format": "uuid",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "customer_key"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "고객 키"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "카드 등록 창에 넣을 고객 키. 없으면 만든다. 몇 번을 불러도 같다(#980)",
+        "tags": [
+          "auto-charge"
         ],
         "x-audience": "user"
       }
@@ -2546,6 +2943,9 @@
     },
     {
       "name": "coupons"
+    },
+    {
+      "name": "auto-charge"
     },
     {
       "name": "webhooks"

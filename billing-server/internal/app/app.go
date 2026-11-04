@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/metric"
 
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/autocharge"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/config"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/eligibility"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/hold"
@@ -75,7 +76,9 @@ func NewServices(pool *pgxpool.Pool, rules config.Rules, providers order.Provide
 	return Services{
 		Wallet: wallets, Orders: orders, Holds: holds, Prices: prices,
 		Eligibility: eligibilities, UserNotices: notices,
-		Withdrawals: withdrawal.NewService(pool, wallets, holds, eligibilities, notices),
+		// 탈퇴하면 자동 충전의 카드와 설정도 지운다. 지우기만 하므로 결제 대행사를 붙이지 않는다
+		Withdrawals: withdrawal.NewService(pool, wallets, holds, eligibilities, notices).
+			WithCards(autocharge.NewService(pool, now, payment.None{}, eligibilities)),
 	}, nil
 }
 
@@ -120,6 +123,15 @@ func MeasureServices(services Services, meter metric.Meter) error {
 // NoProviders 는 결제 대행사를 부르지 않는 정리 작업의 것이다. 웹 자리에 부르면 오류를 내는 것(payment.None)을 둔다.
 func NoProviders() order.Providers {
 	return order.Providers{order.ChannelWeb: payment.None{}}
+}
+
+// NewCardIssuer 는 설정이 고른 결제 대행사의 카드 등록(빌링키 발급, #980)을 만든다. 웹의 결제 대행사와 같은 것이다.
+func NewCardIssuer(settings config.Payment) payment.CardIssuer {
+	if settings.Provider == config.ProviderToss {
+		client := &http.Client{Transport: tracing.Transport(nil, false)}
+		return payment.NewToss(settings.TossSecretKey, payment.TossAPIURL, client)
+	}
+	return payment.Fake{}
 }
 
 // NewProvider 는 설정이 고른 웹의 결제 대행사를 만든다.
