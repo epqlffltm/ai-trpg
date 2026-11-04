@@ -281,6 +281,9 @@ function defaultRoomRoutes(tableId: string, base: string, overrides: Record<stri
     'GET /api/v1/auth/public-names': () => json(200, { names: [] }),
     // 일어난 일의 글이 모델의 이름을 찾는다(events/useEventContext). 모델을 보는 시험은 overrides 로 바꾼다
     'GET /api/v1/game/tables/narration-models': () => json(200, { free: false, models: [] }),
+    // 장면 그림(#983). 그림이 없고 그릴 수 없는 서버로 둔다(단추가 숨는다). 그림을 보는 시험은 overrides 로 바꾼다
+    [`GET ${base}/snapshots`]: () => json(200, []),
+    'GET /api/v1/game/snapshots/price': () => json(200, { available: false, credits: null, tier: null, promo: false }),
     ...overrides,
   };
 }
