@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/gallery/SnapshotGallery.test.tsx
 // 갤러리(C7)의 "내 장면 그림"(#983). 탭마다 그 서비스의 다 그린 그림을 칸으로 보이고, 누르면 크게 보는 창에서 그 대화로 간다.
-// 쪽으로 더 읽고, 비었을 때와 읽지 못했을 때를 알린다. 글과 주소를 짓는 순수한 함수.
+// 창에서 지우면 목록을 다시 읽는다. 쪽으로 더 읽고, 비었을 때와 읽지 못했을 때를 알린다. 글과 주소를 짓는 순수한 함수.
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -59,6 +59,28 @@ describe('갤러리의 내 장면 그림', () => {
 
     expect(dialog.getByRole('link', { name: '그 대화로' })).toHaveAttribute('href', `/chat/conversations/${CONVERSATION}`);
     expect(dialog.getByRole('button', { name: '이 기기에 저장' })).toBeInTheDocument();
+  });
+
+  it('크게 보는 창에서 지우면 목록을 다시 읽는다', async () => {
+    let items = [kept(1)];
+    signedIn({
+      'GET /api/v1/story/snapshots': () => json(200, { items, total: items.length }),
+      [`DELETE /api/v1/story/snapshots/${kept(1).id}`]: () => {
+        items = [];
+        return new Response(null, { status: 204 });
+      },
+    });
+    renderApp('/gallery?tab=story');
+
+    const list = within(await screen.findByRole('list', { name: '내 장면 그림' }));
+    const open = await list.findByRole('button', { name: '루나 · 비 오는 오후 장면 그림 크게 보기' });
+    await waitFor(() => expect(open).toBeEnabled());
+    await userEvent.click(open);
+    const dialog = within(await screen.findByRole('dialog', { name: '장면 그림' }));
+    await userEvent.click(dialog.getByRole('button', { name: '지우기' }));
+    await userEvent.click(dialog.getByRole('button', { name: '지우기 확인' }));
+
+    expect(await screen.findByText(/아직 그린 장면 그림이 없습니다/)).toBeInTheDocument();
   });
 
   it('쪽으로 더 읽는다(한 쪽에 24장)', async () => {

@@ -63,7 +63,7 @@ export function MessageItem({ message, detail, streaming, busy, onBranch, onEdit
           ))}
         </ul>
       ) : null}
-      <MessageSnapshots snapshots={snapshots} />
+      <MessageSnapshots service="chat" snapshots={snapshots} />
       <div className="chat-message__tools">
         {streaming ? null : <Alternatives message={message} busy={busy} onBranch={onBranch} />}
         {editable && !editing ? (
