@@ -71,6 +71,18 @@ class SnapshotBusyError(Exception):
     """그 세션에서 다른 그림을 그리는 중이다."""
 
 
+class SnapshotNotFoundError(Exception):
+    """그림이 없다(남의 것, 지운 세션의 것)."""
+
+
+class SnapshotSettlingError(Exception):
+    """청구를 정리하는 중이라 지우지 못한다(정리 작업이 곧 끝낸다)."""
+
+
+class SnapshotDiscardError(Exception):
+    """asset 서버의 그림을 지우지 못했다. 기록은 그대로 두어 다시 지울 수 있다."""
+
+
 class SnapshotDeclinedError(Exception):
     """홀드가 걸리지 않았다. code 는 까닭이다(credit_short, gold_required, model_unavailable, billing_unavailable)."""
 
@@ -337,6 +349,53 @@ async def list_kept(session: AsyncSession, viewer: Viewer, limit: int, offset: i
     owner_id = viewer.claims.user_id
     rows, total = await repository.list_kept(session, owner_id, allowed_ratings(viewer.claims), limit, offset)
     return KeptSnapshotPage(items=[kept_out(*row) for row in rows], total=total)
+
+
+# 청구가 끝난 상태. 이 상태의 그림만 지운다(끝나지 않은 청구의 기록을 지우면 정리 작업이 맡기지 못한다)
+SETTLED_STATUSES = frozenset(
+    {BillingStatus.CAPTURED, BillingStatus.RELEASED, BillingStatus.DECLINED, BillingStatus.FAILED}
+)
+
+
+def require_removable(snapshot: Snapshot) -> None:
+    """지울 수 있는 그림인지 본다. 그리는 중이면 SnapshotBusyError, 청구를 정리하는 중이면 SnapshotSettlingError."""
+    if snapshot.outcome is None:
+        raise SnapshotBusyError
+    if snapshot.billing_status not in SETTLED_STATUSES:
+        raise SnapshotSettlingError
+
+
+async def find_removable(
+    session_factory: async_sessionmaker[AsyncSession], viewer: Viewer, snapshot_id: uuid.UUID
+) -> Snapshot:
+    """지울 그림 한 장. 없으면 SnapshotNotFoundError. 지울 수 없으면 require_removable 의 오류."""
+    async with session_factory() as session:
+        snapshot = await repository.find_mine(
+            session, viewer.claims.user_id, allowed_ratings(viewer.claims), snapshot_id
+        )
+    if snapshot is None:
+        raise SnapshotNotFoundError
+    require_removable(snapshot)
+    return snapshot
+
+
+async def delete_snapshot(
+    session_factory: async_sessionmaker[AsyncSession], asset: AssetClient, viewer: Viewer, snapshot_id: uuid.UUID
+) -> None:
+    """
+    내 그림 한 장을 지운다. asset 의 그림을 먼저 지우고 기록을 지운다. 돈은 돌려주지 않는다(이미 그린 그림이다).
+    asset 을 부르는 동안 DB 의 연결을 쥐지 않는다. asset 이 안 되면 SnapshotDiscardError 이고 기록은 남는다
+    (다시 지우면 asset 은 없는 그림도 204 로 답한다).
+    """
+    snapshot = await find_removable(session_factory, viewer, snapshot_id)
+    if snapshot.image_id is not None:
+        try:
+            await asset.discard_image(viewer.token, snapshot.image_id)
+        except AssetUnavailableError as error:
+            raise SnapshotDiscardError from error
+    async with session_factory() as session:
+        await repository.remove_settled(session, snapshot.id, SETTLED_STATUSES)
+        await session.commit()
 
 
 async def snapshot_by_id(session_factory: async_sessionmaker[AsyncSession], snapshot_id: uuid.UUID) -> SnapshotOut:

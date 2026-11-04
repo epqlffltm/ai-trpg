@@ -660,6 +660,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/snapshots/{snapshot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Snapshot
+         * @description 내 그림 한 장을 지운다. 그리는 중이면 409 snapshot_in_progress, 청구를 정리하는 중이면 409 snapshot_settling.
+         */
+        delete: operations["delete_snapshot_api_v1_chat_snapshots__snapshot_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -3172,6 +3192,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SnapshotPriceOut"];
+                };
+            };
+        };
+    };
+    delete_snapshot_api_v1_chat_snapshots__snapshot_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                snapshot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };

@@ -5,6 +5,7 @@
 
     POST /api/v1/chat/messages/{id}/snapshot          그 답의 장면 그림을 그린다. 홀드를 건 뒤 202(그리는 중)
     GET  /api/v1/chat/snapshots                       내 다 그린 그림들(갤러리). ?limit=&offset=. 최근에 만든 것부터
+    DELETE /api/v1/chat/snapshots/{id}                내 그림 한 장을 지운다(asset 의 그림까지). 204. 돌려주지 않는다
     GET  /api/v1/chat/snapshots/price                 장면 그림 한 장의 값과 그릴 수 있는지
     GET  /api/v1/chat/conversations/{id}/snapshots    그 대화의 그림들(만든 차례). 그리는 중이면 다시 읽는다
 
@@ -36,6 +37,9 @@ from app.snapshots.service import (
     NotDrawableError,
     SnapshotBusyError,
     SnapshotDeclinedError,
+    SnapshotDiscardError,
+    SnapshotNotFoundError,
+    SnapshotSettlingError,
     SnapshotStart,
     SnapshotUnavailableError,
 )
@@ -109,6 +113,13 @@ async def list_kept(viewer: CurrentViewer, session: Session, paging: Paging) -> 
     return await service.list_kept(session, viewer, paging.limit, paging.offset)
 
 
+@own_router.delete('/{snapshot_id}', status_code=status.HTTP_204_NO_CONTENT)
+async def delete_snapshot(snapshot_id: uuid.UUID, viewer: CurrentViewer, request: Request) -> None:
+    """내 그림 한 장을 지운다. 그리는 중이면 409 snapshot_in_progress, 청구를 정리하는 중이면 409 snapshot_settling."""
+    state = request.app.state
+    await service.delete_snapshot(state.session_factory, state.asset, viewer, snapshot_id)
+
+
 @own_router.get('/price', response_model=SnapshotPriceOut, status_code=status.HTTP_200_OK)
 async def read_price(viewer: CurrentViewer, request: Request, prices: Prices, now: Now) -> SnapshotPriceOut:
     """장면 그림 한 장의 값. 가격 목록을 받지 못했고 받아 둔 것도 없으면 503 prices_unavailable 이다."""
@@ -155,3 +166,29 @@ async def handle_declined(request: Request, error: SnapshotDeclinedError) -> JSO
     detail = DECLINED_DETAIL.get(error.code, '지금은 장면 그림을 만들 수 없습니다. 잠시 후 다시 시도해 주세요.')
     headers = {'Retry-After': str(RETRY_AFTER_SECONDS)} if status_code == status.HTTP_503_SERVICE_UNAVAILABLE else None
     return JSONResponse(status_code=status_code, content={'detail': detail, 'code': error.code}, headers=headers)
+
+
+async def handle_not_found(request: Request, error: SnapshotNotFoundError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={'detail': '장면 그림을 찾을 수 없습니다.', 'code': 'snapshot_not_found'},
+    )
+
+
+async def handle_settling(request: Request, error: SnapshotSettlingError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            'detail': '이 그림의 청구를 정리하는 중입니다. 잠시 후 다시 시도해 주세요.',
+            'code': 'snapshot_settling',
+        },
+        headers={'Retry-After': str(RETRY_AFTER_SECONDS)},
+    )
+
+
+async def handle_discard_failed(request: Request, error: SnapshotDiscardError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={'detail': '지금은 그림을 지울 수 없습니다. 잠시 후 다시 시도해 주세요.', 'code': 'asset_unavailable'},
+        headers={'Retry-After': str(RETRY_AFTER_SECONDS)},
+    )

@@ -4689,6 +4689,49 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/chat/snapshots/{snapshot_id}": {
+      "delete": {
+        "description": "내 그림 한 장을 지운다. 그리는 중이면 409 snapshot_in_progress, 청구를 정리하는 중이면 409 snapshot_settling.",
+        "operationId": "delete_snapshot_api_v1_chat_snapshots__snapshot_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Snapshot",
+        "tags": [
+          "snapshots"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/health": {
       "get": {
         "description": "서버 프로세스가 요청을 받을 수 있으면 200 을 돌려준다.\n\nDB 나 다른 서버의 상태는 보지 않는다. 그것까지 보면, DB 가 잠깐 느려졌을 때\n관리 도구가 멀쩡한 서버를 죽은 것으로 보고 재시작한다.",

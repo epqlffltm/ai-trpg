@@ -134,6 +134,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | GET | `/api/v1/chat/conversations/{id}/shortcuts` | 그 대화에서 고를 수 있는 [단축어](#단축어)(`{name, description, source}`, 캐릭터의 것(`work`) 다음 내 것(`mine`)). 본문은 싣지 않는다 | access 토큰 |
 | POST | `/api/v1/chat/messages/{id}/snapshot` | 그 답의 [장면 그림](#장면-그림)을 그린다. 홀드를 건 뒤 202(`drawing`). 사람의 말은 422 `not_drawable`, 그리는 중이면 409 `snapshot_in_progress`, 크레딧이 모자라면 402, 만들지 않는 서버·팔지 않는 가격표면 503 `snapshot_unavailable` | access 토큰 |
 | GET | `/api/v1/chat/snapshots` | 내 다 그린 [장면 그림](#장면-그림)들(갤러리, `?limit=&offset=`, 최근에 만든 것부터). 한 장마다 `{id, image_id, conversation_id, conversation_title, work_name, message_id, created_at}`(`work_name` 은 캐릭터의 이름). 지운 대화와 볼 수 없는 등급의 것은 뺀다 | access 토큰 |
+| DELETE | `/api/v1/chat/snapshots/{id}` | 내 [장면 그림](#장면-그림) 한 장을 지운다. asset 의 그림을 먼저 지우고 기록을 지운다(204). 돈은 돌려주지 않는다. 그리는 중이면 409 `snapshot_in_progress`, 청구를 정리하는 중이면 409 `snapshot_settling`, 남의 것·지운 대화의 것은 404 `snapshot_not_found`, asset 이 안 되면 503 `asset_unavailable`(기록은 남아 다시 지울 수 있다) | access 토큰 |
 | GET | `/api/v1/chat/snapshots/price` | [장면 그림](#장면-그림) 한 장의 값(`{available, credits, tier, promo}`). 그림 provider 가 없거나 가격표가 팔지 않으면 `available` 이 거짓이다(단추를 숨긴다). 결제 서버 없이 돌면 값이 null 이다. 가격 목록을 받지 못하면 503 `prices_unavailable` | access 토큰 |
 | GET | `/api/v1/chat/conversations/{id}/snapshots` | 그 대화의 장면 그림들(`{id, message_id, status, image_id, code, created_at}`, 만든 차례). `drawing` 이면 다시 읽는다 | access 토큰 |
 | PATCH | `/api/v1/chat/messages/{id}` | [상대의 말 고치기](#고치기). `{content}`. 고친 말을 돌려준다. 사람의 말이면 422 `not_editable` | access 토큰 |

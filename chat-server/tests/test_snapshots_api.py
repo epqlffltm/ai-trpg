@@ -15,6 +15,8 @@
   - 대화를 지우면 맡긴 그림을 asset 에서 지운다
   - 그리는 도중에 서버가 꺼진 것은 정리 작업이 실패로 적고 돌려준다
   - 내 그림들(갤러리)은 다 그린 것만 최근 것부터다. 남의 것, 지운 대화의 것은 보이지 않는다
+  - 내 그림 한 장을 지우면 asset 의 그림까지 지운다. 그리는 중이나 청구를 정리하는 중이면 409, 남의 것은 404.
+    asset 이 안 되면 503 이고 기록은 남는다
 """
 
 import asyncio
@@ -36,6 +38,7 @@ from app.snapshots.models import Snapshot
 from app.snapshots.prompt import REFERENCE_RULE, RULES
 from app.snapshots.providers import price_code_of
 from app.snapshots.settler import SnapshotSettler
+from app.turns.models import BillingStatus
 from tests.assets import FakeAsset
 from tests.billing import FakeBillingServer
 from tests.models import FakeRouter, ScriptedProvider
@@ -359,3 +362,95 @@ async def test_my_gallery_lists_the_ready_ones_newest_first(
     assert (first['conversation_title'], first['work_name']) == (conversation['title'], '세라')
     assert [item['id'] for item in second.json()['items']] == [ready[0]['id']]
     assert theirs.json() == after_delete.json() == {'items': [], 'total': 0}
+
+
+async def remove(client: AsyncClient, headers: dict, snapshot_id: str):
+    return await client.delete(f'{KEPT_URL}/{snapshot_id}', headers=headers)
+
+
+async def test_deleting_a_snapshot_discards_its_image(
+    client: AsyncClient,
+    app: FastAPI,
+    answered: tuple,
+    painter: FakeImageProvider,
+    asset: FakeAsset,
+    billing: FakeBillingServer,
+    mine: dict,
+    signing_key: SigningKey,
+):
+    conversation, _, answer_id = answered
+    await draw(client, mine, answer_id)
+    await finished(app)
+    (snapshot,) = await listed(client, mine, conversation)
+
+    theirs = await remove(client, bearer(signing_key, SOMEONE_ELSE), snapshot['id'])
+    missing = await remove(client, mine, str(uuid.uuid4()))
+    response = await remove(client, mine, snapshot['id'])
+    again = await remove(client, mine, snapshot['id'])
+
+    assert theirs.status_code == missing.status_code == again.status_code == status.HTTP_404_NOT_FOUND
+    assert again.json()['code'] == 'snapshot_not_found'
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    assert asset.discarded == [uuid.UUID(snapshot['image_id'])]
+    assert await listed(client, mine, conversation) == []
+    assert (await client.get(KEPT_URL, headers=mine)).json()['total'] == 0
+    assert billing.holds[f'chat:img:{snapshot["id"]}'].status == 'captured'
+
+
+async def test_a_drawing_or_settling_snapshot_is_not_deleted(
+    client: AsyncClient, app: FastAPI, session: AsyncSession, answered: tuple, mine: dict
+):
+    conversation, _, answer_id = answered
+    slow = SlowImageProvider()
+    app.state.image_provider = slow
+    await draw(client, mine, answer_id)
+    (drawing,) = await listed(client, mine, conversation)
+
+    busy = await remove(client, mine, drawing['id'])
+    slow.hold.set()
+    await finished(app)
+    await session.execute(update(Snapshot).values(billing_status=BillingStatus.CAPTURE_DUE))
+    await session.commit()
+    settling = await remove(client, mine, drawing['id'])
+
+    assert (busy.status_code, busy.json()['code']) == (409, 'snapshot_in_progress')
+    assert (settling.status_code, settling.json()['code']) == (409, 'snapshot_settling')
+    assert len(await listed(client, mine, conversation)) == 1
+
+
+async def test_when_asset_is_down_the_record_stays_for_another_try(
+    client: AsyncClient, app: FastAPI, answered: tuple, painter: FakeImageProvider, asset: FakeAsset, mine: dict
+):
+    conversation, _, answer_id = answered
+    await draw(client, mine, answer_id)
+    await finished(app)
+    (snapshot,) = await listed(client, mine, conversation)
+
+    asset.down = True
+    down = await remove(client, mine, snapshot['id'])
+    kept = await listed(client, mine, conversation)
+    asset.down = False
+    retried = await remove(client, mine, snapshot['id'])
+
+    assert (down.status_code, down.json()['code']) == (503, 'asset_unavailable')
+    assert [item['id'] for item in kept] == [snapshot['id']]
+    assert retried.status_code == status.HTTP_204_NO_CONTENT
+
+
+async def test_a_failed_snapshot_is_deleted_without_asset(
+    client: AsyncClient,
+    answered: tuple,
+    painter: FakeImageProvider,
+    asset: FakeAsset,
+    billing: FakeBillingServer,
+    mine: dict,
+):
+    conversation, _, answer_id = answered
+    billing.balances[ME] = 10
+    await draw(client, mine, answer_id)
+    (failed,) = await listed(client, mine, conversation)
+
+    response = await remove(client, mine, failed['id'])
+
+    assert (failed['status'], response.status_code) == ('failed', status.HTTP_204_NO_CONTENT)
+    assert asset.discarded == [] and await listed(client, mine, conversation) == []
