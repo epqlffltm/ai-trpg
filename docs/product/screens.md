@@ -859,6 +859,9 @@ E4 에서 정한 것(2026-10-24, #678).
   | `character_report.handled` | `asset` | 캐릭터를 신고한 사람. 운영자가 처리했다 | `name`(캐릭터의 이름) |
   | `message_report.handled` | `chat` | 대화 속 답을 신고한 사람. 운영자가 처리했다 | `name`(캐릭터의 이름) |
   | `story_report.handled` | `story` | 세션 속 답을 신고한 사람. 운영자가 처리했다 | `name`(세계관의 이름) |
+  | `scenario.published` | `game` | 만든 사람의 팔로워. 팔로우한 제작자가 시나리오를 처음 목록에 올렸다(#989) | `scenario_id`, `title`, `creator_id` |
+  | `character.published` | `asset` | 만든 사람의 팔로워. 캐릭터를 처음 목록에 올렸다 | `character_id`, `name`, `creator_id` |
+  | `world.published` | `asset` | 만든 사람의 팔로워. 세계관을 처음 목록에 올렸다 | `world_id`, `name`, `creator_id` |
 
   크레딧의 양(`credits`, `amount`)은 정확한 값을 지키려고 글자로 온다(A6 과 같다). `expires_at`, `first_expires_at` 은 UTC 의 ISO 8601 시각이다.
   자기 글에 자기가 단 댓글, 자기 댓글에 자기가 단 답글은 알리지 않는다. 답글은 그 댓글의 글쓴이에게만 가고 글쓴이에게 또 가지 않는다. 댓글의 내용은 싣지 않는다(지운 댓글도 알림함에는 남아서). 눌렀을 때 글로 가서 댓글을 본다.
@@ -868,8 +871,11 @@ E4 에서 정한 것(2026-10-24, #678).
   제재 알림에는 사유와 운영자를 싣지 않는다(신고한 사람이 드러날 수 있어서). 화면도 사유를 보이지 않는다.
   신고 처리의 알림(`character_report.handled`, `message_report.handled`, `story_report.handled`)은 처리했다는 것만 알린다. 결과(숨겼는지, 받아들이지 않았는지)는 싣지 않는다(2026-10-23 유저 결정, #678).
   숨김의 알림을 누르면 내 캐릭터의 만드는 화면(C6)으로 간다. 세계관의 숨김 알림은 내 세계관의 만드는 화면(D7)으로 간다. 신고 처리의 알림은 가는 곳이 없다.
+  새 작품의 알림(`*.published`)은 작품마다 처음 한 번만 온다(공개를 내렸다가 다시 올려도 다시 오지 않는다, 2026-11-04 유저 결정). 누르면 그 작품의 소개로 간다.
+  제작자의 이름은 싣지 않는다(알림함은 이름을 묻지 않고 그린다). 링크 공개(#993)로 올린 것은 알리지 않는다.
 - 알림을 눌렀을 때 어디로 가는지(`payload` 의 ID 로 가는 화면 주소)는 `kind` 마다 정한다.
-- **알림 끄기(#525).** 끌 수 있는 종류는 `narration_model.retiring`, `credit.expiring`, `credit.short`, `post.commented`, `comment.replied` 다섯이다(`GET .../mutes` 가 준다).
+- **알림 끄기(#525).** 끌 수 있는 종류는 `narration_model.retiring`, `credit.expiring`, `credit.short`, `post.commented`, `comment.replied`,
+  팔로우한 제작자의 새 작품(`scenario.published`, `character.published`, `world.published`, #989) 여덟이다(`GET .../mutes` 가 준다).
   결제와 청약철회, 제재, 내 테이블의 모델이 이미 바뀐 일은 끌 수 없다. 화면은 받은 목록으로 단추를 그리고 종류의 이름을 사람의 말로 바꾼다.
   끈 종류는 서버가 넣을 때 거른다. 다시 켜도 꺼 둔 동안의 알림은 없다. 끄기 전에 받은 것은 그대로 남는다. 설정 화면(A12)에 둘지 알림 패널에 둘지는 화면이 정한다.
 - 시나리오 제작자에게 추천 모델의 은퇴를 알릴지, 제재의 까닭을 당사자에게 어떻게 알릴지는 정하지 않았다. (이슈 #385)

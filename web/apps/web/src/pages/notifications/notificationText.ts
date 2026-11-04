@@ -2,6 +2,7 @@
 // 알림 하나를 화면의 한 줄과 누르면 갈 곳으로 바꾼다. 순수한 함수다. 서버는 문구를 주지 않는다(screens.md 의 A10).
 // source 와 kind 를 함께 보고 고른다. 표에 없는 짝은 일반 문구다. payload 의 칸이 빠져도 깨지지 않는다.
 // 제재와 신고 처리의 알림에는 사유가 없다(서버가 싣지 않는다). 게시판의 댓글과 답글은 그 글(A11)로 간다.
+// 팔로우한 제작자의 새 작품(#989)은 그 작품의 소개로 간다. 제작자의 이름은 싣지 않는다(알림은 이름을 묻지 않고 그린다).
 
 import type { AppNotification } from '../../api/types';
 import { formatDate } from '../../format/dateTime';
@@ -115,6 +116,9 @@ const LINES: Record<string, Describe> = {
   'asset character.hidden': (p) => ({ text: `운영자가 캐릭터를 숨겼습니다: ${text(p, 'name') ?? '?'}. 공개 목록과 남의 새 대화에서 빠지고, 나는 계속 씁니다`, to: path('/chat/studio/characters', p, 'character_id') }),
   'asset character.unhidden': (p) => ({ text: `운영자가 캐릭터의 숨김을 풀었습니다: ${text(p, 'name') ?? '?'}`, to: path('/chat/studio/characters', p, 'character_id') }),
   'asset character_report.handled': (p) => ({ text: `신고한 캐릭터를 운영자가 처리했습니다: ${text(p, 'name') ?? '?'}`, to: null }),
+  'game scenario.published': (p) => ({ text: `팔로우한 제작자가 새 시나리오를 공개했습니다: ${quoted(p, 'title') || '?'}`, to: path('/trpg/scenarios', p, 'scenario_id') }),
+  'asset character.published': (p) => ({ text: `팔로우한 제작자가 새 캐릭터를 공개했습니다: ${text(p, 'name') ?? '?'}`, to: path('/chat/characters', p, 'character_id') }),
+  'asset world.published': (p) => ({ text: `팔로우한 제작자가 새 세계관을 공개했습니다: ${text(p, 'name') ?? '?'}`, to: path('/story/worlds', p, 'world_id') }),
   'chat message_report.handled': (p) => ({ text: `신고한 대화 속 답을 운영자가 처리했습니다: ${text(p, 'name') ?? '?'}`, to: null }),
 };
 
@@ -140,6 +144,9 @@ const MUTE_LABELS: Record<string, string> = {
   'credit.short': '크레딧이 모자라 서술 값을 걸지 못함',
   'post.commented': '내 글에 달린 댓글',
   'comment.replied': '내 댓글에 달린 답글',
+  'scenario.published': '팔로우한 제작자의 새 시나리오',
+  'character.published': '팔로우한 제작자의 새 캐릭터',
+  'world.published': '팔로우한 제작자의 새 세계관',
 };
 
 /** 끌 수 있는 종류의 이름. 모르는 종류는 받은 그대로 */
