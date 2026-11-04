@@ -55,6 +55,7 @@ export function MessageList({ detail, turn, busy, onBranch, onRegenerate, onCont
             marked={marked.has(item.message.id)}
             onBookmark={onBookmark}
             snapshots={snapshotsOf(snapshots.list, item.message.id)}
+            drawPrice={snapshots.price}
             drawBlocked={snapshots.blocked}
             onDraw={(messageId) => snapshots.draw.mutate(messageId)}
           />

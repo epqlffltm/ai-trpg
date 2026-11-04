@@ -1,18 +1,20 @@
 // web/apps/web/src/pages/chat/conversation/ConversationSnapshots.test.tsx
 // 장면 그림(#983). 상대의 답 아래의 "장면 그림"으로 그리기를 시작하고, 그리는 동안 목록을 다시 읽어 다 그린 그림을 띄운다.
-// 그리는 중이면 새로 그리지 못한다. 실패로 남은 것과 시작하지 못한 까닭을 알린다. 순수한 함수.
+// 그리는 중이면 새로 그리지 못한다. 실패로 남은 것과 시작하지 못한 까닭을 알린다.
+// 단추에 한 장의 값을 싣고, 그 서버에서 그릴 수 없으면 단추를 숨긴다. 순수한 함수.
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../api/errors';
-import type { Snapshot } from '../../../api/snapshots';
+import type { Snapshot, SnapshotPrice } from '../../../api/snapshots';
 import { AT, ID, M, PATH, signedIn } from '../../../test/chatFixtures';
 import { json, type SeenRequest } from '../../../test/fakeFetch';
 import { renderApp } from '../../../test/renderApp';
-import { isDrawing, snapshotFailureText, snapshotProblemText, snapshotsOf } from './snapshotsView';
+import { canOfferSnapshot, isDrawing, snapshotButtonHint, snapshotButtonLabel, snapshotFailureText, snapshotProblemText, snapshotsOf } from './snapshotsView';
 
 const SNAPSHOTS = `${PATH}/snapshots`;
+const PRICE = '/api/v1/chat/snapshots/price';
 const DRAW = `/api/v1/chat/messages/${M(3)}/snapshot`;
 const IMAGE = '00000000-0000-4000-8000-00000000a983';
 const S = (n: number) => `00000000-0000-4000-8000-0000000b983${n}`;
@@ -63,6 +65,26 @@ describe('장면 그림', () => {
     expect(seen.filter((request) => request.method === 'POST' && request.url === DRAW)).toHaveLength(1);
   });
 
+  it('단추에 한 장의 값을 싣는다', async () => {
+    snapshotsServer(() => [], { [`GET ${PRICE}`]: () => json(200, { available: true, credits: '160', tier: 'standard', promo: false }) });
+    renderApp(`/chat/conversations/${ID}`);
+
+    await screen.findByText('비가 오네요.');
+
+    const button = await answerItem('비가 오네요.').findByRole('button', { name: '장면 그림 · 160' });
+    expect(button).toHaveAttribute('title', '160 크레딧을 씁니다. 그리지 못하면 돌려받습니다.');
+  });
+
+  it('그 서버에서 그릴 수 없으면 단추를 숨긴다', async () => {
+    const { seen } = snapshotsServer(() => [], { [`GET ${PRICE}`]: () => json(200, { available: false, credits: null, tier: null, promo: false }) });
+    renderApp(`/chat/conversations/${ID}`);
+
+    await screen.findByText('비가 오네요.');
+    await waitFor(() => expect(seen.some((request) => request.url === PRICE)).toBe(true));
+
+    await waitFor(() => expect(answerItem('비가 오네요.').queryByRole('button', { name: /장면 그림/ })).not.toBeInTheDocument());
+  });
+
   it('내 말에는 단추가 없다', async () => {
     snapshotsServer(() => []);
     renderApp(`/chat/conversations/${ID}`);
@@ -90,6 +112,16 @@ describe('장면 그림의 글과 고르기', () => {
     const list = [shot(1, 'failed', { code: 'refused' }), shot(2, 'ready', { image_id: IMAGE }), shot(3, 'ready', { message_id: M(1) })];
     expect(snapshotsOf(list, M(3)).map((item) => item.id)).toEqual([S(2)]);
     expect(snapshotsOf([...list, shot(4, 'failed')], M(3)).map((item) => item.id)).toEqual([S(2), S(4)]);
+  });
+
+  it('값과 판매 상태로 단추의 글과 설명을 만든다', () => {
+    const price = (extra: Partial<SnapshotPrice>) => ({ available: true, credits: '160', tier: 'standard', promo: false, ...extra }) as SnapshotPrice;
+    expect(snapshotButtonLabel(undefined)).toBe('장면 그림');
+    expect(snapshotButtonLabel(price({ credits: null }))).toBe('장면 그림');
+    expect(snapshotButtonLabel(price({}))).toBe('장면 그림 · 160');
+    expect(snapshotButtonHint(price({ tier: 'premium', promo: true }))).toBe('160 크레딧을 씁니다 · 골드로만 · 행사가. 그리지 못하면 돌려받습니다.');
+    expect(snapshotButtonHint(undefined)).toBe('크레딧을 씁니다. 그리지 못하면 돌려받습니다.');
+    expect([canOfferSnapshot(undefined), canOfferSnapshot(price({})), canOfferSnapshot(price({ available: false }))]).toEqual([true, true, false]);
   });
 
   it('그리는 중인 것이 있는가', () => {

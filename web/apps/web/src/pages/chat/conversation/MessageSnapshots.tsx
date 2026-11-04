@@ -3,9 +3,9 @@
 // chat 의 말과 story 의 말이 함께 쓴다. 그림은 토큰을 실어 받는다(useImageUrl).
 
 import { Button } from '@ai-trpg/ui';
-import type { Snapshot } from '../../../api/snapshots';
+import type { Snapshot, SnapshotPrice } from '../../../api/snapshots';
 import { useImageUrl } from '../../../hooks/useImageUrl';
-import { snapshotFailureText } from './snapshotsView';
+import { snapshotButtonHint, snapshotButtonLabel, snapshotFailureText } from './snapshotsView';
 
 /** 그 말의 그림들. 없으면 아무것도 그리지 않는다 */
 export function MessageSnapshots({ snapshots }: { snapshots: Snapshot[] }) {
@@ -32,13 +32,13 @@ function SnapshotImage({ imageId }: { imageId: string | null }) {
   return <img src={image.url} alt="장면 그림" className="chat-snapshots__image" />;
 }
 
-type ButtonProps = { disabled: boolean; onDraw: () => void };
+type ButtonProps = { price: SnapshotPrice | undefined; disabled: boolean; onDraw: () => void };
 
-/** 그 답을 장면 그림으로 그리는 단추. 크레딧을 쓴다 */
-export function SnapshotButton({ disabled, onDraw }: ButtonProps) {
+/** 그 답을 장면 그림으로 그리는 단추. 값을 알면 글에 싣는다("장면 그림 · 160") */
+export function SnapshotButton({ price, disabled, onDraw }: ButtonProps) {
   return (
-    <Button variant="quiet" disabled={disabled} title="크레딧을 씁니다. 그리지 못하면 돌려받습니다." onClick={onDraw}>
-      장면 그림
+    <Button variant="quiet" disabled={disabled} title={snapshotButtonHint(price)} onClick={onDraw}>
+      {snapshotButtonLabel(price)}
     </Button>
   );
 }
