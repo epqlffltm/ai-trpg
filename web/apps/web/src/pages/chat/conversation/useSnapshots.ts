@@ -1,0 +1,35 @@
+// web/apps/web/src/pages/chat/conversation/useSnapshots.ts
+// 장면 그림(#983)을 읽고 그리기를 시작한다. chat 의 대화와 story 의 장면이 함께 쓴다.
+// 그리는 중인 것이 있으면 목록을 몇 초마다 다시 읽는다(서버가 그림을 다 그리면 ready 와 image_id 가 온다).
+// 시작한 뒤에는 성공이든 실패든 목록을 다시 읽는다(크레딧이 모자란 것도 실패로 남는다).
+
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { drawSnapshot, fetchSnapshots, type SnapshotService } from '../../../api/snapshots';
+import { isDrawing, SNAPSHOT_POLL_MS } from './snapshotsView';
+
+function snapshotsKey(service: SnapshotService, conversationId: string) {
+  return [service, 'conversation', conversationId, 'snapshots'] as const;
+}
+
+export function snapshotsQuery(service: SnapshotService, conversationId: string) {
+  return queryOptions({
+    queryKey: snapshotsKey(service, conversationId),
+    queryFn: ({ signal }) => fetchSnapshots(service, conversationId, signal),
+    refetchInterval: (query) => (isDrawing(query.state.data ?? []) ? SNAPSHOT_POLL_MS : false),
+  });
+}
+
+export function useSnapshots(service: SnapshotService, conversationId: string) {
+  const queryClient = useQueryClient();
+  const snapshots = useQuery(snapshotsQuery(service, conversationId));
+  const draw = useMutation({
+    mutationFn: (messageId: string) => drawSnapshot(service, messageId),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: snapshotsKey(service, conversationId) }),
+  });
+  const list = snapshots.data ?? [];
+  // 그리는 중이거나 시작을 기다리는 동안은 새로 그리지 못한다
+  const blocked = draw.isPending || isDrawing(list);
+  return { list, draw, blocked };
+}
+
+export type SnapshotsSource = ReturnType<typeof useSnapshots>;

@@ -7,6 +7,7 @@
 // 내 말 고치기는 새 가지로 답을 다시 받고(모델이 있어야 한다), 답 고치기는 조각마다 글만 그 자리에서 고친다(청구 없음). 끊긴 답은 이어 쓴다.
 // 책갈피(#982)는 말마다 달고 떼며 받는 중에도 된다. 책갈피의 자리로 갈 때 지금 가지에 없는 말이면 가지를 바꾼다.
 // 그림으로 저장(#982)은 지금 가지의 말들로 이 기기에서 그림을 만든다.
+// 장면 그림(#983)은 답과 따로 돈다. 받는 중에도 지난 답을 그릴 수 있다. 시작하지 못한 까닭은 대사창 아래에 띄운다.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -22,10 +23,12 @@ import {
   type StorySession,
 } from '../../api/story';
 import { bookmarkProblemText, isOnBranch, messageAnchor } from '../chat/conversation/bookmarksView';
+import { snapshotProblemText } from '../chat/conversation/snapshotsView';
 import { Composer } from '../chat/conversation/Composer';
 import { describeChangeProblem } from '../chat/conversation/turnProblem';
 import { TurnNotice } from '../chat/conversation/TurnNotice';
 import { useBookmarks } from '../chat/conversation/useBookmarks';
+import { useSnapshots } from '../chat/conversation/useSnapshots';
 import { useConversationShortcuts } from '../chat/conversation/useConversationShortcuts';
 import { freshEnding, pendingChoices } from './storyActions';
 import { StoryActionBar } from './StoryActionBar';
@@ -54,6 +57,7 @@ export function StoryRoom({ session, turns }: Props) {
   const branching = useBranch(session.id);
   const editing = useAnswerEdit(session.id);
   const bookmarks = useBookmarks('story', session.id);
+  const snapshots = useSnapshots('story', session.id);
   const [draft, setDraft] = useState('');
   const shortcuts = useConversationShortcuts('story', session.id, draft);
   const [choosingModel, setChoosingModel] = useState(false);
@@ -150,10 +154,12 @@ export function StoryRoom({ session, turns }: Props) {
         onSaveSegments={saveSegments}
         marked={bookmarks.marked}
         onBookmark={toggleBookmark}
+        snapshots={snapshots}
       />
       {branching.error ? <p className="ui-field__error">{describeChangeProblem(branching.error)}</p> : null}
       {editing.error ? <p className="ui-field__error">{describeStoryEditProblem(editing.error)}</p> : null}
       {bookmarks.change.error ? <p className="ui-field__error">{bookmarkProblemText(bookmarks.change.error)}</p> : null}
+      {snapshots.draw.error ? <p className="ui-field__error">{snapshotProblemText(snapshots.draw.error)}</p> : null}
       {showEnding ? (
         <StoryEnding
           worldId={session.world.id}

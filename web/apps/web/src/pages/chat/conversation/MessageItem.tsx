@@ -4,14 +4,17 @@
 // 고치기: 내 말은 새 가지로 고쳐 보내고(답을 다시 받는다, 청구), 상대의 말은 그 자리에서 고친다(청구 없음, "고침" 표시).
 // 행동 말은 서버가 쓴 글이라 고치지 않는다. 받는 중에는 고치지 못한다.
 // 책갈피(#982)는 어느 말에나 달고 뗀다. 받는 중에도 된다(흘러 들어오는 답에는 없다).
+// 장면 그림(#983)은 상대의 답에만 그린다. 그 대화에서 그리는 중이면 막는다. 그린 그림은 말 아래에 보인다.
 
 import { Button } from '@ai-trpg/ui';
 import { useState } from 'react';
+import type { Snapshot } from '../../../api/snapshots';
 import type { ConversationDetail, ConversationMessage } from '../../../api/types';
 import { messageAnchor } from './bookmarksView';
 import { BookmarkToggle } from './BookmarkToggle';
 import { alternativeView, changeLines, speakerName } from './conversationView';
 import { MessageEditor } from './MessageEditor';
+import { MessageSnapshots, SnapshotButton } from './MessageSnapshots';
 
 type Props = {
   message: ConversationMessage;
@@ -24,13 +27,18 @@ type Props = {
   /** 이 말에 책갈피가 있는가와 달고 떼기 */
   marked: boolean;
   onBookmark: (message: ConversationMessage) => void;
+  /** 이 말의 장면 그림들, 새로 그리지 못하는가(그리는 중), 그리기 */
+  snapshots: Snapshot[];
+  drawBlocked: boolean;
+  onDraw: (messageId: string) => void;
 };
 
-export function MessageItem({ message, detail, streaming, busy, onBranch, onEdit, marked, onBookmark }: Props) {
+export function MessageItem({ message, detail, streaming, busy, onBranch, onEdit, marked, onBookmark, snapshots, drawBlocked, onDraw }: Props) {
   const [editing, setEditing] = useState(false);
   const speaker = speakerName(message.role, detail);
   const changes = changeLines(message.changes ?? [], detail.character.document);
   const editable = message.role !== 'action' && !streaming;
+  const drawable = message.role === 'assistant' && !streaming && message.content.trim() !== '';
 
   async function submit(content: string) {
     if (await onEdit(message, content)) setEditing(false);
@@ -52,6 +60,7 @@ export function MessageItem({ message, detail, streaming, busy, onBranch, onEdit
           ))}
         </ul>
       ) : null}
+      <MessageSnapshots snapshots={snapshots} />
       <div className="chat-message__tools">
         {streaming ? null : <Alternatives message={message} busy={busy} onBranch={onBranch} />}
         {editable && !editing ? (
@@ -60,6 +69,7 @@ export function MessageItem({ message, detail, streaming, busy, onBranch, onEdit
           </Button>
         ) : null}
         {streaming ? null : <BookmarkToggle marked={marked} disabled={false} onToggle={() => onBookmark(message)} />}
+        {drawable ? <SnapshotButton disabled={drawBlocked} onDraw={() => onDraw(message.id)} /> : null}
       </div>
     </li>
   );

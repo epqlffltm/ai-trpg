@@ -4,6 +4,7 @@
 // 답을 받는 일(말 보내기, 행동, 내 말 고치기)은 모델이 있어야 한다. 없으면 보내기 전에 고르게 한다(서버의 409 model_required 를 기다리지 않는다).
 // 상대의 말 고치기는 모델을 부르지 않아 모델이 없어도 된다.
 // 책갈피(#982)는 말마다 달고 떼며 받는 중에도 된다. 책갈피의 자리로 갈 때 지금 가지에 없는 말이면 가지를 바꾼다(바꾸는 것은 받는 중이 아닐 때만).
+// 장면 그림(#983)은 답과 따로 돈다. 받는 중에도 지난 답을 그릴 수 있다. 시작하지 못한 까닭은 대사창 아래에 띄운다.
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -18,6 +19,7 @@ import {
 } from '../../../api/chatConversation';
 import type { ConversationAction, ConversationDetail, ConversationMessage } from '../../../api/types';
 import { bookmarkProblemText, isOnBranch, messageAnchor } from './bookmarksView';
+import { snapshotProblemText } from './snapshotsView';
 import { Composer } from './Composer';
 import { ConversationHeader } from './ConversationHeader';
 import { conversationKey } from './conversationQueries';
@@ -29,6 +31,7 @@ import { describeChangeProblem } from './turnProblem';
 import { TurnNotice } from './TurnNotice';
 import { useBookmarks } from './useBookmarks';
 import { useConversationShortcuts } from './useConversationShortcuts';
+import { useSnapshots } from './useSnapshots';
 import type { TurnOpener, useConversationTurn } from './useConversationTurn';
 import { WorldToolbar } from './WorldToolbar';
 import { putQueryData } from '../../../queryClient';
@@ -39,6 +42,7 @@ export function ConversationRoom({ detail, turns }: Props) {
   const branching = useBranch(detail.id);
   const editing = useAssistantEdit(detail.id);
   const bookmarks = useBookmarks('chat', detail.id);
+  const snapshots = useSnapshots('chat', detail.id);
   const [draft, setDraft] = useState('');
   const shortcuts = useConversationShortcuts('chat', detail.id, draft);
   const [choosingModel, setChoosingModel] = useState(false);
@@ -111,11 +115,13 @@ export function ConversationRoom({ detail, turns }: Props) {
         onEdit={edit}
         marked={bookmarks.marked}
         onBookmark={toggleBookmark}
+        snapshots={snapshots}
       />
       {detail.generating && !streaming ? <p className="hint">답을 쓰는 중입니다. 끝나면 보입니다.</p> : null}
       {branching.error ? <p className="ui-field__error">{describeChangeProblem(branching.error)}</p> : null}
       {editing.error ? <p className="ui-field__error">{describeChangeProblem(editing.error)}</p> : null}
       {bookmarks.change.error ? <p className="ui-field__error">{bookmarkProblemText(bookmarks.change.error)}</p> : null}
+      {snapshots.draw.error ? <p className="ui-field__error">{snapshotProblemText(snapshots.draw.error)}</p> : null}
       <TurnNotice problem={turns.problem} failure={turns.failure} onChooseModel={() => setChoosingModel(true)} onClose={turns.clearNotice} />
       <Composer
         draft={draft}

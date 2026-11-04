@@ -4,12 +4,17 @@
 // 새 글이 오면 끝으로 내린다.
 // 끝의 말에 할 수 있는 일(답 받기, 다시 생성, 이어서)과 대안 넘기기, 고치기(내 말은 새 가지로, 답은 조각마다 그 자리에서)는 여기 둔다.
 // 행동 말은 엔진의 결과라 고치지 않는다. 받는 중에는 모두 막는다. 책갈피(#982)는 받는 중에도 달고 뗀다.
+// 장면 그림(#983)은 조각이 있는 답에만 그리고, 그린 그림은 말 아래에 보인다.
 
 import { Button } from '@ai-trpg/ui';
 import { useEffect, useRef, useState } from 'react';
+import type { Snapshot } from '../../api/snapshots';
 import type { StoryMessage, StorySegment, StorySession, StoryView } from '../../api/story';
 import { messageAnchor } from '../chat/conversation/bookmarksView';
 import { BookmarkToggle } from '../chat/conversation/BookmarkToggle';
+import { MessageSnapshots, SnapshotButton } from '../chat/conversation/MessageSnapshots';
+import { snapshotsOf } from '../chat/conversation/snapshotsView';
+import type { SnapshotsSource } from '../chat/conversation/useSnapshots';
 import { StoryMessageEditor } from './StoryMessageEditor';
 import { storyAlternatives, storyTail, visibleStoryMessages } from './storyView';
 import { chapterTitle, speakerName } from './storyWorld';
@@ -29,9 +34,11 @@ type Props = {
   /** 책갈피를 단 말들과 달고 떼기 */
   marked: ReadonlySet<string>;
   onBookmark: (message: StoryMessage) => void;
+  /** 장면 그림들과 그리기(#983) */
+  snapshots: SnapshotsSource;
 };
 
-export function StoryMessageList({ session, turn, busy, onBranch, onRegenerate, onContinue, onSendEdit, onSaveSegments, marked, onBookmark }: Props) {
+export function StoryMessageList({ session, turn, busy, onBranch, onRegenerate, onContinue, onSendEdit, onSaveSegments, marked, onBookmark, snapshots }: Props) {
   const { items, pending, streamingId } = visibleStoryMessages(session.messages, turn);
   const end = useRef<HTMLDivElement>(null);
   const growth = items.length + (pending?.reduce((sum, segment) => sum + segment.text.length + 1, 0) ?? 0);
@@ -56,6 +63,9 @@ export function StoryMessageList({ session, turn, busy, onBranch, onRegenerate, 
             onSaveSegments={(segments) => onSaveSegments(message, segments)}
             marked={marked.has(message.id)}
             onBookmark={() => onBookmark(message)}
+            snapshots={snapshotsOf(snapshots.list, message.id)}
+            drawBlocked={snapshots.blocked}
+            onDraw={() => snapshots.draw.mutate(message.id)}
           />
         ))}
         {pending !== null ? (
@@ -82,12 +92,16 @@ type ItemProps = {
   onSaveSegments: (segments: string[]) => Promise<boolean>;
   marked: boolean;
   onBookmark: () => void;
+  snapshots: Snapshot[];
+  drawBlocked: boolean;
+  onDraw: () => void;
 };
 
-function StoryMessageItem({ message, view, streaming, busy, onBranch, onSendEdit, onSaveSegments, marked, onBookmark }: ItemProps) {
+function StoryMessageItem({ message, view, streaming, busy, onBranch, onSendEdit, onSaveSegments, marked, onBookmark, snapshots, drawBlocked, onDraw }: ItemProps) {
   const [editing, setEditing] = useState(false);
   const marks = [streaming ? '쓰는 중' : null, !streaming && message.status === 'partial' ? '끊긴 답' : null, message.edited ? '고침' : null].filter(Boolean);
   const editable = message.role !== 'action' && !streaming;
+  const drawable = message.role === 'assistant' && !streaming && message.segments.length > 0;
 
   async function finish(done: Promise<boolean>) {
     if (await done) setEditing(false);
@@ -120,6 +134,7 @@ function StoryMessageItem({ message, view, streaming, busy, onBranch, onSendEdit
         </>
       )}
       {marks.length > 0 ? <p className="hint chat-message__marks">{marks.join(' · ')}</p> : null}
+      <MessageSnapshots snapshots={snapshots} />
       <div className="chat-message__tools">
         {streaming ? null : <Alternatives message={message} busy={busy} onBranch={onBranch} />}
         {editable ? (
@@ -128,6 +143,7 @@ function StoryMessageItem({ message, view, streaming, busy, onBranch, onSendEdit
           </Button>
         ) : null}
         {streaming ? null : <BookmarkToggle marked={marked} disabled={false} onToggle={onBookmark} />}
+        {drawable ? <SnapshotButton disabled={drawBlocked} onDraw={onDraw} /> : null}
       </div>
     </li>
   );

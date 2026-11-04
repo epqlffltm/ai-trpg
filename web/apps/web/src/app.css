@@ -2661,6 +2661,22 @@ a.ui-button {
   display: none;
 }
 
+.chat-snapshots {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chat-snapshots__image {
+  width: 100%;
+  max-width: 480px;
+  border-radius: var(--ui-radius);
+}
+
+.chat-snapshots__note {
+  margin: 0;
+}
+
 .chat-message__editor {
   display: grid;
   gap: 6px;
