@@ -564,6 +564,135 @@
           "instant": false
         }
       ]
+    },
+    {
+      "type": "row",
+      "id": 14,
+      "title": "작업",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 15,
+      "title": "끝난 작업(1시간)",
+      "description": "정리 작업의 바퀴. 말 한 번의 청구 정리(charge.settle)와 장면 그림의 청구 정리(snapshot.settle)다. 5초마다 한 바퀴다. server_error 가 늘면 바퀴가 통째로 실패한 것이다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (operation, result) (increase(background_jobs_finished_total{service=\"chat-server\"}[1h]))",
+          "legendFormat": "{{operation}} {{result}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "id": 16,
+      "title": "작업이 걸린 시간(평균)",
+      "description": "작업 하나가 걸린 시간의 평균",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (operation) (rate(background_job_duration_seconds_sum{service=\"chat-server\"}[$__rate_interval])) / (sum by (operation) (rate(background_job_duration_seconds_count{service=\"chat-server\"}[$__rate_interval])) > 0)",
+          "legendFormat": "{{operation}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ]
     }
   ]
 }
