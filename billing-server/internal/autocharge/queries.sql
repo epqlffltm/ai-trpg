@@ -145,3 +145,16 @@ SELECT * FROM auto_charge_requests
 WHERE status IN ('pending', 'charging') AND created_at <= sqlc.arg(before)::TIMESTAMPTZ
 ORDER BY created_at, id
 LIMIT sqlc.arg(row_limit);
+
+-- name: InsertConsent :exec
+-- 자동 결제 동의를 한 줄 더한다. 켜는 설정을 적는 트랜잭션 안에서 한다.
+INSERT INTO auto_charge_consents (user_id, terms_version, threshold, product_id, price, monthly_limit, agreed_at)
+VALUES (sqlc.arg(user_id), sqlc.arg(terms_version), sqlc.arg(threshold), sqlc.arg(product_id), sqlc.arg(price),
+        sqlc.arg(monthly_limit), sqlc.arg(now));
+
+-- name: LatestConsentVersion :one
+-- 그 사람이 마지막으로 동의한 판. 동의한 적이 없으면 줄이 없다.
+SELECT terms_version FROM auto_charge_consents
+WHERE user_id = sqlc.arg(user_id)
+ORDER BY agreed_at DESC, id DESC
+LIMIT 1;

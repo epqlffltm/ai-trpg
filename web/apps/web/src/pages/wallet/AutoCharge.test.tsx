@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/wallet/AutoCharge.test.tsx
 // 지갑(A6)의 자동 충전(#980). 카드 등록(시험용 등록 창, 두 걸음), 카드 지우기, 설정 저장과 화면의 검사, 서버의 거절(카드 없음, 결제 자격)을 본다.
 
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
@@ -16,7 +16,7 @@ const PRODUCTS = [
   { id: 'credits-5000', name: '크레딧 5,000', price: 5000, credits: '5000' },
 ];
 const CARD = { issuer_code: '61', number: '43301234****123*', registered_at: '2026-11-04T01:00:00Z' };
-const NOTHING = { settings: null, consecutive_failures: 0, card: null };
+const NOTHING = { settings: null, consecutive_failures: 0, card: null, terms: { version: 1, agreed_version: null } };
 
 function signedIn(routes: Record<string, (request: SeenRequest) => Response> = {}) {
   return installFakeFetch({
@@ -105,6 +105,7 @@ describe('자동 충전', () => {
       settings: { enabled: true, threshold: '300', product_id: 'credits-5000', monthly_limit: 20000 },
       consecutive_failures: 0,
       card: CARD,
+      terms: { version: 1, agreed_version: 1 },
     };
     const { seen } = signedIn({
       [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, card: CARD }),
@@ -119,6 +120,10 @@ describe('자동 충전', () => {
     await userEvent.selectOptions(auto.getByRole('combobox', { name: '살 상품' }), 'credits-5000');
     await userEvent.clear(auto.getByRole('textbox', { name: '한 달 상한(원)' }));
     await userEvent.type(auto.getByRole('textbox', { name: '한 달 상한(원)' }), '20000');
+    // 동의하는 칸 위에 고른 조건이 그대로 보인다
+    expect(auto.getByText('골드가 300 아래로 떨어지면 등록한 카드로 크레딧 5,000(5,000원)을 한 번 결제합니다.')).toBeInTheDocument();
+    expect(auto.getByText('한 달(한국 날짜)에 자동으로 결제하는 돈은 20,000원을 넘지 않습니다.')).toBeInTheDocument();
+    await userEvent.click(auto.getByRole('checkbox', { name: /자동 결제하는 것에 동의합니다/ }));
     await userEvent.click(auto.getByRole('button', { name: '저장' }));
 
     expect(await auto.findByText('자동 충전을 켰습니다.')).toBeInTheDocument();
@@ -127,6 +132,7 @@ describe('자동 충전', () => {
       threshold: '300',
       product_id: 'credits-5000',
       monthly_limit: 20000,
+      terms_version: 1,
     });
     expect(auto.getByRole('checkbox', { name: '자동 충전 켜기' })).toBeChecked();
     expect(auto.getByRole('textbox', { name: '기준 골드' })).toHaveValue('300');
@@ -135,8 +141,8 @@ describe('자동 충전', () => {
   it('끄고 적으면 끈 설정을 보이고, 돌려받은 것으로 끝낸다(다시 읽지 않는다)', async () => {
     const on = { enabled: true, threshold: '500', product_id: 'credits-1000', monthly_limit: 30000 };
     const { seen } = signedIn({
-      [`GET ${BILLING}/auto-charge`]: () => json(200, { settings: on, consecutive_failures: 0, card: CARD }),
-      [`PUT ${BILLING}/auto-charge`]: () => json(200, { settings: { ...on, enabled: false }, consecutive_failures: 0, card: CARD }),
+      [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, settings: on, card: CARD }),
+      [`PUT ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, settings: { ...on, enabled: false }, card: CARD }),
     });
     renderApp('/wallet');
     const auto = await section();
@@ -146,6 +152,8 @@ describe('자동 충전', () => {
 
     expect(await auto.findByText('자동 충전 설정을 저장했습니다.')).toBeInTheDocument();
     expect(auto.getByRole('checkbox', { name: '자동 충전 켜기' })).not.toBeChecked();
+    // 끄는 것은 동의가 필요 없다
+    expect(seen.find((request) => request.method === 'PUT')?.body).not.toHaveProperty('terms_version');
     await new Promise((resolve) => setTimeout(resolve, 50));
     const reads = seen.filter((request) => request.method === 'GET' && request.url.endsWith('/auto-charge'));
     expect(reads).toHaveLength(1);
@@ -179,11 +187,78 @@ describe('자동 충전', () => {
     const auto = await section();
 
     await userEvent.click(await auto.findByRole('checkbox', { name: '자동 충전 켜기' }));
+    await userEvent.click(auto.getByRole('checkbox', { name: /자동 결제하는 것에 동의합니다/ }));
     await userEvent.click(auto.getByRole('button', { name: '저장' }));
     expect(await auto.findByText('자동 충전을 켜려면 먼저 카드를 등록해 주세요.')).toBeInTheDocument();
     await userEvent.click(auto.getByRole('button', { name: '저장' }));
 
     expect(await auto.findByText(/보호자가 동의해야 자동 충전을 켤 수 있습니다/)).toBeInTheDocument();
     expect(auto.getByRole('link', { name: '보호자 동의 부탁하기' })).toHaveAttribute('href', '/me/guardian');
+  });
+
+  it('동의하지 않으면 켜지 않고 보내지 않는다. 동의 칸은 미리 체크하지 않고, 조건을 바꾸면 다시 비운다', async () => {
+    const { seen } = signedIn({ [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, card: CARD }) });
+    renderApp('/wallet');
+    const auto = await section();
+
+    await userEvent.click(await auto.findByRole('checkbox', { name: '자동 충전 켜기' }));
+    const agree = auto.getByRole('checkbox', { name: /자동 결제하는 것에 동의합니다/ });
+    expect(agree).not.toBeChecked();
+    await userEvent.click(agree);
+    await userEvent.clear(auto.getByRole('textbox', { name: '기준 골드' }));
+    await userEvent.type(auto.getByRole('textbox', { name: '기준 골드' }), '900');
+    expect(auto.getByRole('checkbox', { name: /자동 결제하는 것에 동의합니다/ })).not.toBeChecked();
+    await userEvent.click(auto.getByRole('button', { name: '저장' }));
+
+    expect(await auto.findByText('자동 충전을 켜려면 자동 결제에 동의해 주세요.')).toBeInTheDocument();
+    expect(seen.some((request) => request.method === 'PUT')).toBe(false);
+  });
+
+  it('동의 내용을 창으로 본다', async () => {
+    signedIn({ [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, card: CARD }) });
+    renderApp('/wallet');
+    const auto = await section();
+
+    await userEvent.click(await auto.findByRole('checkbox', { name: '자동 충전 켜기' }));
+    await userEvent.click(auto.getByRole('button', { name: '동의 내용 보기' }));
+
+    const dialog = await screen.findByRole('dialog', { name: '자동 충전 이용 동의' });
+    expect(await within(dialog).findByRole('heading', { name: '1. 무엇에 동의하는지' })).toBeInTheDocument();
+  });
+
+  it('서버가 판이 바뀌었다고 막으면(409) 다시 읽어 바뀐 판을 보이고 동의 칸을 비운다', async () => {
+    let reads = 0;
+    const on = { enabled: true, threshold: '500', product_id: 'credits-1000', monthly_limit: 30000 };
+    const { seen } = signedIn({
+      [`GET ${BILLING}/auto-charge`]: () => {
+        reads += 1;
+        return json(200, { ...NOTHING, settings: on, card: CARD, terms: { version: reads === 1 ? 1 : 2, agreed_version: 1 } });
+      },
+      [`PUT ${BILLING}/auto-charge`]: () => json(409, { detail: 'x', code: 'autocharge.terms_outdated' }),
+    });
+    renderApp('/wallet');
+    const auto = await section();
+
+    await userEvent.click(await auto.findByRole('checkbox', { name: /자동 결제하는 것에 동의합니다/ }));
+    await userEvent.click(auto.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(reads).toBe(2));
+    expect(seen.find((request) => request.method === 'PUT')?.body).toMatchObject({ terms_version: 1 });
+    const agree = await auto.findByRole('checkbox', { name: /자동 결제하는 것에 동의합니다/ });
+    expect(agree).not.toBeChecked();
+    // 화면이 아직 갖지 않은 판(2)이라 동의할 수 없다. 새로 고치면 받는다
+    expect(agree).toBeDisabled();
+    expect(auto.getAllByText('자동 결제 동의의 내용이 바뀌었습니다. 바뀐 내용을 읽고 다시 동의해 주세요.').length).toBeGreaterThan(0);
+  });
+
+  it('전에 동의한 판이 옛 판이면 켜 둔 화면에서 다시 동의하라고 알린다', async () => {
+    const on = { enabled: true, threshold: '500', product_id: 'credits-1000', monthly_limit: 30000 };
+    signedIn({
+      [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, settings: on, card: CARD, terms: { version: 1, agreed_version: 0 } }),
+    });
+    renderApp('/wallet');
+    const auto = await section();
+
+    expect(await auto.findByText('자동 결제 동의의 내용이 바뀌었습니다. 바뀐 내용을 읽고 다시 동의해 주세요.')).toBeInTheDocument();
   });
 });

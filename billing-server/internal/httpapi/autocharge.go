@@ -30,18 +30,26 @@ import (
 // AutoChargeService 는 자동 충전의 카드와 설정을 다루는 것의 모양이다. *autocharge.Service 가 이 모양이다.
 type AutoChargeService interface {
 	Get(ctx context.Context, userID uuid.UUID) (autocharge.View, error)
-	Update(ctx context.Context, userID uuid.UUID, settings autocharge.Settings) (autocharge.View, error)
+	Update(ctx context.Context, userID uuid.UUID, settings autocharge.Settings, agreedTerms int) (autocharge.View, error)
 	CustomerKey(ctx context.Context, userID uuid.UUID) (uuid.UUID, error)
 	RegisterCard(ctx context.Context, userID uuid.UUID, authKey string, customerKey uuid.UUID) (autocharge.Card, error)
 	RemoveCard(ctx context.Context, userID uuid.UUID) error
 }
 
 // autoChargeRequest 는 설정을 적는 요청의 본문이다. 기준 골드는 다른 양처럼 글자다.
+// 켤 때는 동의한 자동 결제 동의의 판(terms_version)을 함께 보낸다. 끌 때는 보지 않는다.
 type autoChargeRequest struct {
 	Enabled      bool   `json:"enabled"`
 	Threshold    string `json:"threshold"`
 	ProductID    string `json:"product_id"`
 	MonthlyLimit int64  `json:"monthly_limit"`
+	TermsVersion int    `json:"terms_version"`
+}
+
+// termsBody 는 자동 결제 동의의 판이다. 지금의 판과 마지막으로 동의한 판(없으면 null)이다.
+type termsBody struct {
+	Version       int  `json:"version"`
+	AgreedVersion *int `json:"agreed_version"`
 }
 
 // settingsBody 는 설정의 응답 모양이다.
@@ -64,6 +72,7 @@ type autoChargeBody struct {
 	Settings            *settingsBody `json:"settings"`
 	ConsecutiveFailures int           `json:"consecutive_failures"`
 	Card                *cardBody     `json:"card"`
+	Terms               termsBody     `json:"terms"`
 }
 
 // customerKeyBody 는 고객 키의 응답 모양이다.
@@ -92,6 +101,8 @@ func getAutoCharge(service AutoChargeService) gin.HandlerFunc {
 // putAutoCharge 는 설정을 적는 핸들러를 만든다.
 //   - 적었다 -> 200
 //   - 본문이 틀렸거나 값이 틀렸다 -> 400 autocharge.invalid_settings
+//   - 켜는데 자동 결제에 동의하지 않았다 -> 400 autocharge.terms_required
+//   - 켜는데 옛 판에 동의했다 -> 409 autocharge.terms_outdated
 //   - 카드 없이 켜려 했다 -> 409 autocharge.no_card
 //   - 지금 결제할 수 없다 -> 403 payment.verification_required, payment.guardian_consent_required
 func putAutoCharge(service AutoChargeService) gin.HandlerFunc {
@@ -107,7 +118,7 @@ func putAutoCharge(service AutoChargeService) gin.HandlerFunc {
 		}
 		updated, err := service.Update(c.Request.Context(), currentUser(c).UserID, autocharge.Settings{
 			Enabled: request.Enabled, Threshold: threshold, ProductID: request.ProductID, MonthlyLimit: request.MonthlyLimit,
-		})
+		}, request.TermsVersion)
 		if err != nil {
 			autoChargeError(c, err)
 			return
@@ -170,6 +181,10 @@ func autoChargeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, autocharge.ErrInvalidSettings):
 		abort(c, http.StatusBadRequest, codeAutoChargeInvalidSettings, err.Error()+".")
+	case errors.Is(err, autocharge.ErrTermsRequired):
+		abort(c, http.StatusBadRequest, codeAutoChargeTermsRequired, err.Error()+".")
+	case errors.Is(err, autocharge.ErrTermsOutdated):
+		abort(c, http.StatusConflict, codeAutoChargeTermsOutdated, err.Error()+".")
 	case errors.Is(err, autocharge.ErrNoCard):
 		abort(c, http.StatusConflict, codeAutoChargeNoCard, err.Error()+".")
 	case errors.Is(err, eligibility.ErrVerificationRequired):
@@ -200,7 +215,11 @@ func cardError(c *gin.Context, err error) {
 
 // toAutoChargeBody 는 자동 충전을 응답의 모양으로 바꾼다.
 func toAutoChargeBody(view autocharge.View) autoChargeBody {
-	body := autoChargeBody{ConsecutiveFailures: view.ConsecutiveFailures}
+	body := autoChargeBody{ConsecutiveFailures: view.ConsecutiveFailures, Terms: termsBody{Version: autocharge.TermsVersion}}
+	if view.AgreedTermsVersion > 0 {
+		agreed := view.AgreedTermsVersion
+		body.Terms.AgreedVersion = &agreed
+	}
 	if view.Settings != nil {
 		body.Settings = &settingsBody{
 			Enabled: view.Settings.Enabled, Threshold: view.Settings.Threshold,

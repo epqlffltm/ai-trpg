@@ -273,6 +273,36 @@ func (q *Queries) GetTrigger(ctx context.Context, userID uuid.UUID) (GetTriggerR
 	return i, err
 }
 
+const insertConsent = `-- name: InsertConsent :exec
+INSERT INTO auto_charge_consents (user_id, terms_version, threshold, product_id, price, monthly_limit, agreed_at)
+VALUES ($1, $2, $3, $4, $5,
+        $6, $7)
+`
+
+type InsertConsentParams struct {
+	UserID       uuid.UUID
+	TermsVersion int32
+	Threshold    int64
+	ProductID    string
+	Price        int64
+	MonthlyLimit int64
+	Now          time.Time
+}
+
+// 자동 결제 동의를 한 줄 더한다. 켜는 설정을 적는 트랜잭션 안에서 한다.
+func (q *Queries) InsertConsent(ctx context.Context, arg InsertConsentParams) error {
+	_, err := q.db.Exec(ctx, insertConsent,
+		arg.UserID,
+		arg.TermsVersion,
+		arg.Threshold,
+		arg.ProductID,
+		arg.Price,
+		arg.MonthlyLimit,
+		arg.Now,
+	)
+	return err
+}
+
 const insertCustomer = `-- name: InsertCustomer :exec
 
 INSERT INTO billing_customers (user_id, customer_key, created_at)
@@ -324,6 +354,21 @@ func (q *Queries) InsertRequest(ctx context.Context, arg InsertRequestParams) (i
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const latestConsentVersion = `-- name: LatestConsentVersion :one
+SELECT terms_version FROM auto_charge_consents
+WHERE user_id = $1
+ORDER BY agreed_at DESC, id DESC
+LIMIT 1
+`
+
+// 그 사람이 마지막으로 동의한 판. 동의한 적이 없으면 줄이 없다.
+func (q *Queries) LatestConsentVersion(ctx context.Context, userID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, latestConsentVersion, userID)
+	var terms_version int32
+	err := row.Scan(&terms_version)
+	return terms_version, err
 }
 
 const leaseRequest = `-- name: LeaseRequest :exec

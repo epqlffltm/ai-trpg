@@ -57,3 +57,21 @@ func TestAuthKeyShape(t *testing.T) {
 		}
 	}
 }
+
+func TestTurningOnNeedsTheCurrentTermsButTurningOffDoesNot(t *testing.T) {
+	for name, tc := range map[string]struct {
+		enabled bool
+		agreed  int
+		want    error
+	}{
+		"끄기는 동의가 필요 없다":   {false, 0, nil},
+		"켜기는 지금의 판":       {true, autocharge.TermsVersion, nil},
+		"켜는데 동의하지 않았다":    {true, 0, autocharge.ErrTermsRequired},
+		"켜는데 틀린 판을 보냈다":   {true, -1, autocharge.ErrTermsOutdated},
+		"켜는데 모르는 판에 동의했다": {true, autocharge.TermsVersion + 1, autocharge.ErrTermsOutdated},
+	} {
+		if got := autocharge.CheckTerms(tc.enabled, tc.agreed); !errors.Is(got, tc.want) || (tc.want == nil && got != nil) {
+			t.Errorf("%s: %v, 기대 = %v", name, got, tc.want)
+		}
+	}
+}

@@ -31,13 +31,14 @@ var registeredAt = time.Date(2026, 11, 10, 3, 0, 0, 0, time.UTC)
 
 // fakeAutoCharge 는 정해 둔 대로 답하는 가짜 자동 충전이다. 받은 것을 적어 둔다.
 type fakeAutoCharge struct {
-	view     autocharge.View
-	err      error
-	user     uuid.UUID
-	settings autocharge.Settings
-	authKey  string
-	key      uuid.UUID
-	removed  bool
+	view        autocharge.View
+	err         error
+	user        uuid.UUID
+	settings    autocharge.Settings
+	agreedTerms int
+	authKey     string
+	key         uuid.UUID
+	removed     bool
 }
 
 func (f *fakeAutoCharge) Get(_ context.Context, userID uuid.UUID) (autocharge.View, error) {
@@ -45,8 +46,8 @@ func (f *fakeAutoCharge) Get(_ context.Context, userID uuid.UUID) (autocharge.Vi
 	return f.view, f.err
 }
 
-func (f *fakeAutoCharge) Update(_ context.Context, userID uuid.UUID, settings autocharge.Settings) (autocharge.View, error) {
-	f.user, f.settings = userID, settings
+func (f *fakeAutoCharge) Update(_ context.Context, userID uuid.UUID, settings autocharge.Settings, agreedTerms int) (autocharge.View, error) {
+	f.user, f.settings, f.agreedTerms = userID, settings, agreedTerms
 	return f.view, f.err
 }
 
@@ -76,19 +77,21 @@ func autoChargeCall(t *testing.T, service httpapi.AutoChargeService, method, url
 	return serve(t, router, request)
 }
 
-const goodSettings = `{"enabled":true,"threshold":"500","product_id":"credits-5000","monthly_limit":30000}`
+const goodSettings = `{"enabled":true,"threshold":"500","product_id":"credits-5000","monthly_limit":30000,"terms_version":1}`
 
 func TestAutoChargeShowsSettingsAndCardWithoutTheBillingKey(t *testing.T) {
 	service := &fakeAutoCharge{view: autocharge.View{
 		Settings:            &autocharge.Settings{Enabled: true, Threshold: 500, ProductID: "credits-5000", MonthlyLimit: 30_000},
 		ConsecutiveFailures: 1,
 		Card:                &autocharge.Card{IssuerCode: "61", Number: "43301234****123*", RegisteredAt: registeredAt},
+		AgreedTermsVersion:  1,
 	}}
 
 	response := autoChargeCall(t, service, http.MethodGet, autoChargeURL, "")
 
 	want := `{"settings":{"enabled":true,"threshold":"500","product_id":"credits-5000","monthly_limit":30000},` +
-		`"consecutive_failures":1,"card":{"issuer_code":"61","number":"43301234****123*","registered_at":"2026-11-10T03:00:00Z"}}`
+		`"consecutive_failures":1,"card":{"issuer_code":"61","number":"43301234****123*","registered_at":"2026-11-10T03:00:00Z"},` +
+		`"terms":{"version":1,"agreed_version":1}}`
 	if response.Code != http.StatusOK || response.Body.String() != want || service.user.String() != testenv.UserID {
 		t.Errorf("%d %s", response.Code, response.Body.String())
 	}
@@ -97,7 +100,7 @@ func TestAutoChargeShowsSettingsAndCardWithoutTheBillingKey(t *testing.T) {
 func TestNothingYetIsNulls(t *testing.T) {
 	response := autoChargeCall(t, &fakeAutoCharge{}, http.MethodGet, autoChargeURL, "")
 
-	if response.Body.String() != `{"settings":null,"consecutive_failures":0,"card":null}` {
+	if response.Body.String() != `{"settings":null,"consecutive_failures":0,"card":null,"terms":{"version":1,"agreed_version":null}}` {
 		t.Errorf("%d %s", response.Code, response.Body.String())
 	}
 }
@@ -108,8 +111,8 @@ func TestSettingsArePassedOn(t *testing.T) {
 	response := autoChargeCall(t, service, http.MethodPut, autoChargeURL, goodSettings)
 
 	want := autocharge.Settings{Enabled: true, Threshold: 500, ProductID: "credits-5000", MonthlyLimit: 30_000}
-	if response.Code != http.StatusOK || service.settings != want {
-		t.Errorf("%d, 받은 설정 = %+v", response.Code, service.settings)
+	if response.Code != http.StatusOK || service.settings != want || service.agreedTerms != 1 {
+		t.Errorf("%d, 받은 설정 = %+v, 동의한 판 = %d", response.Code, service.settings, service.agreedTerms)
 	}
 }
 
@@ -124,6 +127,8 @@ func TestSettingErrorsHaveCodes(t *testing.T) {
 		"기준이 양이 아니다":   {`{"enabled":true,"threshold":"1e3","product_id":"credits-5000","monthly_limit":30000}`, nil, http.StatusBadRequest, "autocharge.invalid_settings"},
 		"값이 틀렸다":       {goodSettings, autocharge.ErrInvalidSettings, http.StatusBadRequest, "autocharge.invalid_settings"},
 		"카드가 없다":       {goodSettings, autocharge.ErrNoCard, http.StatusConflict, "autocharge.no_card"},
+		"동의하지 않았다":     {goodSettings, autocharge.ErrTermsRequired, http.StatusBadRequest, "autocharge.terms_required"},
+		"옛 판에 동의했다":    {goodSettings, autocharge.ErrTermsOutdated, http.StatusConflict, "autocharge.terms_outdated"},
 		"본인인증 전":       {goodSettings, eligibility.ErrVerificationRequired, http.StatusForbidden, "payment.verification_required"},
 		"보호자 동의가 없다":   {goodSettings, eligibility.ErrGuardianConsentRequired, http.StatusForbidden, "payment.guardian_consent_required"},
 		"DB 가 답하지 않는다": {goodSettings, errors.New("boom"), http.StatusInternalServerError, ""},
