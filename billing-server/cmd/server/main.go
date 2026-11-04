@@ -111,6 +111,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	autoCharges := autocharge.NewService(pool, time.Now, app.NewCardIssuer(settings.Payment), services.Eligibility)
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		DB:                pool,
 		Verifier:          newVerifier(ctx, settings),
@@ -122,7 +123,8 @@ func run() error {
 		Withdrawals:       services.Withdrawals,
 		Attendance:        attendances,
 		Coupons:           coupon.NewService(pool, time.Now, services.Wallet, services.Eligibility),
-		AutoCharge:        autocharge.NewService(pool, time.Now, app.NewCardIssuer(settings.Payment), services.Eligibility),
+		AutoCharge:        autoCharges,
+		AutoChargeHistory: autoCharges,
 		Orders:            eligibility.Guard(services.Orders, services.Eligibility),
 		Notifier:          services.Orders,
 		WebhookSecret:     settings.WebhookSecret,

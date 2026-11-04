@@ -436,6 +436,62 @@ func (q *Queries) ListOpenRequests(ctx context.Context, arg ListOpenRequestsPara
 	return items, nil
 }
 
+const listRecentRequests = `-- name: ListRecentRequests :many
+SELECT id, product_id, price, credits, status, skip_reason, turned_off, created_at, finished_at
+FROM auto_charge_requests
+WHERE user_id = $1
+ORDER BY created_at DESC, id DESC
+LIMIT $2
+`
+
+type ListRecentRequestsParams struct {
+	UserID   uuid.UUID
+	RowLimit int32
+}
+
+type ListRecentRequestsRow struct {
+	ID         uuid.UUID
+	ProductID  string
+	Price      int64
+	Credits    credit.Amount
+	Status     string
+	SkipReason string
+	TurnedOff  bool
+	CreatedAt  time.Time
+	FinishedAt pgtype.Timestamptz
+}
+
+// 그 사람의 충전할 일을 늦게 적힌 것부터. 지갑의 최근 자동 결제 내역이다. 카드와 결제 대행사의 답은 읽지 않는다.
+func (q *Queries) ListRecentRequests(ctx context.Context, arg ListRecentRequestsParams) ([]ListRecentRequestsRow, error) {
+	rows, err := q.db.Query(ctx, listRecentRequests, arg.UserID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecentRequestsRow
+	for rows.Next() {
+		var i ListRecentRequestsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProductID,
+			&i.Price,
+			&i.Credits,
+			&i.Status,
+			&i.SkipReason,
+			&i.TurnedOff,
+			&i.CreatedAt,
+			&i.FinishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockCard = `-- name: LockCard :one
 SELECT user_id FROM payment_cards WHERE user_id = $1 FOR UPDATE
 `

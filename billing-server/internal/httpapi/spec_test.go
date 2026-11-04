@@ -123,7 +123,8 @@ func TestEveryRouteIsInTheSpecAndEveryPathIsARoute(t *testing.T) {
 	doc, _ := loadSpec(t)
 	// 모든 주소를 여는 설정이다. 넣지 않으면 열지 않는 주소가 있다(출석, 쿠폰, 토스의 알림, 개발용 결제 화면)
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		Attendance: &fakeAttendance{}, Coupons: &fakeCoupons{}, AutoCharge: &fakeAutoCharge{}, TossWebhook: true, CheckoutClientKey: "test_ck",
+		Attendance: &fakeAttendance{}, Coupons: &fakeCoupons{}, AutoCharge: &fakeAutoCharge{}, AutoChargeHistory: &fakeAutoChargeHistory{},
+		TossWebhook: true, CheckoutClientKey: "test_ck",
 	})
 
 	fromRouter := map[string]bool{}

@@ -43,6 +43,8 @@ type Dependencies struct {
 	Coupons CouponRedeemer
 	// AutoCharge 는 자동 충전의 카드와 설정을 다룬다(#980). 넣지 않으면 그 주소를 열지 않는다.
 	AutoCharge AutoChargeService
+	// AutoChargeHistory 는 최근 자동 결제 내역을 읽는다(#980). 넣지 않으면 그 주소를 열지 않는다.
+	AutoChargeHistory AutoChargeHistory
 	// Orders 는 주문을 만들고 치른다. 서버는 결제 자격으로 감싼 것(eligibility.Guard)을 넣는다.
 	Orders OrderService
 	// Notifier 는 결제 대행사의 알림을 처리한다.
@@ -149,6 +151,9 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		api.POST("/cards/customer-key", createCustomerKey(deps.AutoCharge))
 		api.POST("/cards", registerCard(deps.AutoCharge))
 		api.DELETE("/cards", removeCard(deps.AutoCharge))
+	}
+	if deps.AutoChargeHistory != nil {
+		api.GET("/auto-charge/history", getAutoChargeHistory(deps.AutoChargeHistory))
 	}
 	if deps.Coupons != nil {
 		api.POST("/coupons/redeem", redeemCoupon(deps.Coupons))
