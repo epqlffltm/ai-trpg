@@ -1454,7 +1454,7 @@ DB 의 칸과 API 의 모양은 그대로다. 그래서 API 는 처음부터 양
 - 켜는 설정(`enabled` 가 `true`)을 적을 때마다 `terms_version` 이 지금의 판이어야 한다. 없으면 400 `autocharge.terms_required`, 다른 판이면 409 `autocharge.terms_outdated` 다. 끄는 것은 동의 없이 된다
 - 켜는 설정을 적을 때마다 판, 조건(기준 골드, 상품과 그때의 값, 한 달 상한), 시각을 한 줄 더한다. 설정을 적는 것과 한 트랜잭션이다. 조건이 바뀌면 그 조건에 다시 동의한 것이다
 - 덮어쓰지 않고 지우지 않는다. 탈퇴해도 남긴다(결제의 근거). 응답의 `terms` 는 지금의 판(`version`)과 그 사람이 마지막으로 동의한 판(`agreed_version`, 없으면 `null`)이다
-- 판이 오르면 화면이 바뀐 글을 보이고 다시 동의받는다. 이미 켠 사람의 결제를 멈추지는 않는다(정하지 않은 것)
+- 판이 오르면 화면이 바뀐 글을 보이고 다시 동의받는다. 이미 켠 사람도 지금의 판에 다시 동의할 때까지 결제하지 않는다(아래 "결제"의 2, 까닭 `terms_outdated`, 2026-11-04 결정). 동의를 받기 전에 켠 사람도 같다
 - 이 서버가 받는다. 동의 문서(#450)는 인증 서버의 것이지만, 조건이 결제 서버의 데이터이고 서버끼리 부르지 않으려고 따로 둔다
 
 | 상태 | `code` | 언제 |
@@ -1483,6 +1483,8 @@ DB 의 칸과 API 의 모양은 그대로다. 그래서 API 는 처음부터 양
 1. 차지하기: 일 하나를 잠그고(`SKIP LOCKED`) 60초 임대를 건다. 결제 대행사를 부르는 동안 잠금을 쥐지 않는다
 2. 보내기 전(`pending`): 아직 켜져 있는지, 지금 결제할 수 있는지, 이번 달(한국 날짜)에 자동으로 치른 돈과 이번 값의 합이 한 달 상한 안인지, 카드가 있는지 본다.
    아니면 그만둔다(`skipped`, 까닭 `disabled`, `not_eligible`, `monthly_limit`, `no_card`). 실패로 세지 않는다. 맞으면 카드를 일에 옮겨 적고 `charging` 으로 바꾼다.
+   켜져 있어도 그 사람의 마지막 자동 결제 동의가 지금의 판(`autocharge.TermsVersion`)이 아니면 그만둔다(까닭 `terms_outdated`). 판이 올랐거나 동의를 받기 전에 켰다.
+   실패로 세지 않고 알림함에 알린다. 켠 채로 두므로, 다시 동의해 저장하면(`armed` 가 켜진다) 다음에 골드가 떨어질 때 산다
    적힌 지 하루(`autocharge.PendingFor`)가 지난 일은 보내지 않고 그만둔다(까닭 `stale`, 2026-11-04 결정). 결제 작업이 멈춰 있었던 것이다.
    며칠 전의 잔액으로 사지 않는다. 실패로 세지 않고 알리지 않는다(사용자가 할 일이 없다). 같은 트랜잭션에서 `armed` 를 다시 켜, 다음에 골드가 떨어질 때 그때의 설정으로 산다
 3. 보내기(`charging`): 일의 번호를 주문 번호이자 멱등키로 빌링키 결제를 보낸다(토스페이먼츠 `POST /v1/billing/{billingKey}`)
@@ -1537,7 +1539,7 @@ go run ./cmd/autocharges decide <일 번호> declined -reason "상점관리자�
 - 결제 번호가 다른 주문에 이미 쓰였으면 거절한다(잘못 옮겨 적은 것이다). 아무것도 적지 않는다
 - 결정은 로그(`operation` 이 `autocharge.resolve`)에 근거와 정한 사람과 함께 남는다. `-by` 를 적지 않으면 `cli:<이 PC 의 계정 이름>` 이다
 
-**정하지 않은 것.** 자동 결제 동의의 확정된 글(변호사 검토, `docs/legal/auto-charge.md` 의 "검토할 것"), 판이 오른 뒤 이미 켠 사람의 결제를 멈출지, 실제 계약(라이브 키)에서의 자동결제 심사.
+**정하지 않은 것.** 자동 결제 동의의 확정된 글(변호사 검토, `docs/legal/auto-charge.md` 의 "검토할 것"), 실제 계약(라이브 키)에서의 자동결제 심사.
 
 ## 탈퇴
 
@@ -1642,7 +1644,7 @@ POST /api/v1/auth/service/receipt-notices         (인증 서버의 주소. AUTH
 | `credit.welcome` | 환영 크레딧을 받았다 | `amount`(글자), `expires_at` | `credit.welcome:<지급 묶음>` |
 | `credit.expiring` | 7일 안에 사라질 무료 크레딧이 남았다 | `amount`(그 크레딧을 모두 더한 양), `first_expires_at`(가장 먼저 사라지는 시각) | `credit.expiring:<사람>:<한국 날짜>` |
 | `credit.short` | 크레딧이 모자라 홀드를 걸지 못했다(402, #525) | `price_code`(걸려던 가격표의 이름), `amount`(그 값, 글자), `gold_required`(골드로만 낼 수 있었다) | `credit.short:<사람>:<한국 날짜>` |
-| `autocharge.failed` | 자동 충전(#980)이 되지 않았다. 거절, 또는 보내기 전에 그만둠(한 달 상한, 결제 자격, 카드 없음). 사용자가 끈 것과 탈퇴는 알리지 않는다 | `product_id`, `price`(원, 숫자), `reason`(`declined`, `monthly_limit`, `not_eligible`, `no_card`), `turned_off`(이 거절로 자동 충전을 껐다). 결제 대행사의 거절 코드는 싣지 않는다 | `autocharge.failed:<충전할 일>` |
+| `autocharge.failed` | 자동 충전(#980)이 되지 않았다. 거절, 또는 보내기 전에 그만둠(한 달 상한, 결제 자격, 카드 없음, 지금의 자동 결제 동의가 없음). 사용자가 끈 것과 탈퇴는 알리지 않는다 | `product_id`, `price`(원, 숫자), `reason`(`declined`, `monthly_limit`, `not_eligible`, `no_card`, `terms_outdated`), `turned_off`(이 거절로 자동 충전을 껐다). 결제 대행사의 거절 코드는 싣지 않는다 | `autocharge.failed:<충전할 일>` |
 
 - 알릴 일은 주문과 지급 묶음에서 찾는다(`user_notices`). 바퀴마다 지난 사흘(`LookBack`)의 결제, 청약철회, 환영 크레딧을 적는다.
   보호자 알림(30일)보다 짧다. 사흘 지난 결제의 알림은 늦어서 쓸모가 적고, 이 기능을 처음 켤 때 지난 결제를 몰아 보내지 않는다

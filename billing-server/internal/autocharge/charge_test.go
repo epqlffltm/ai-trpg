@@ -570,3 +570,43 @@ func TestAChargeQueuedADayAgoIsNotSentAndBuysOnTheNextDrop(t *testing.T) {
 		t.Errorf("다음 = %+v, 일 = %v, 골드 = %s", next, f.requests(), f.gold())
 	}
 }
+
+// 켜 둔 채 지금의 판에 동의하지 않았으면(판이 올랐거나 동의를 받기 전에 켰다) 보내지 않는다.
+// 실패로 세지 않고, 다시 동의해 저장하면 다음에 떨어질 때 산다. 판을 올리는 것은 상수라, 마지막 동의를 지우거나 다른 판으로 바꿔 본다.
+func TestWithoutAgreeingToTheCurrentTermsItIsNotSentUntilAgreedAgain(t *testing.T) {
+	ctx := context.Background()
+	for name, outdate := range map[string]func(f chargeFixture){
+		"동의를 받기 전에 켰다": func(f chargeFixture) {
+			f.pool.Exec(ctx, "DELETE FROM auto_charge_consents WHERE user_id = $1", f.user)
+		},
+		"마지막 동의가 지금의 판이 아니다": func(f chargeFixture) {
+			f.pool.Exec(ctx, `INSERT INTO auto_charge_consents (user_id, terms_version, threshold, product_id, price, monthly_limit, agreed_at)
+				VALUES ($1, $2, 100, 'credits-1000', 1000, 30000, $3)`, f.user, autocharge.TermsVersion+1, f.clock.Now().Add(time.Second))
+		},
+	} {
+		f := setUpCharging(t)
+		f.enable("")
+		outdate(f)
+		f.deposit(60)
+		f.spend()
+
+		skipped := f.round()
+
+		if skipped.Skipped != 1 || !equal(f.requests(), "skipped:"+autocharge.SkipTermsOutdated+":") || f.charger.count() != 0 {
+			t.Fatalf("%s: 결과 = %+v, 일 = %v, 보낸 수 = %d. 보내지 않아야 한다", name, skipped, f.requests(), f.charger.count())
+		}
+		if view := f.view(); view.ConsecutiveFailures != 0 || view.Settings == nil || !view.Settings.Enabled {
+			t.Errorf("%s: 설정 = %+v. 실패로 세지 않고 켜진 채여야 한다", name, view)
+		}
+
+		f.clock.advance(2 * time.Second)
+		f.settings(true, 30_000) // 지금의 판에 다시 동의한다
+		f.deposit(50)
+		f.spend()
+		resumed := f.round()
+
+		if resumed.Paid != 1 || !equal(f.requests(), "skipped:"+autocharge.SkipTermsOutdated+":", "paid::") {
+			t.Errorf("%s: 다시 동의한 뒤 = %+v, 일 = %v. 사야 한다", name, resumed, f.requests())
+		}
+	}
+}

@@ -408,6 +408,7 @@
                     "monthly_limit",
                     "withdrawn",
                     "stale",
+                    "terms_outdated",
                     null
                   ],
                   "nullable": true,

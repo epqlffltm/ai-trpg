@@ -159,7 +159,7 @@ SELECT 'autocharge.failed:' || r.id::text, r.user_id, 'autocharge.failed',
        $1, $1
 FROM auto_charge_requests r
 WHERE r.finished_at >= $2::timestamptz
-  AND (r.status = 'declined' OR (r.status = 'skipped' AND r.skip_reason IN ('monthly_limit', 'not_eligible', 'no_card')))
+  AND (r.status = 'declined' OR (r.status = 'skipped' AND r.skip_reason IN ('monthly_limit', 'not_eligible', 'no_card', 'terms_outdated')))
 ON CONFLICT (source_key) DO NOTHING
 `
 
@@ -169,8 +169,8 @@ type QueueAutoChargeFailuresParams struct {
 }
 
 // since 뒤에 끝난 자동 충전(#980) 가운데 되지 않은 것을 적는다. 거절(declined)과, 보내기 전에 그만둔 것 가운데
-// 사용자가 알아야 하는 것(한 달 상한, 결제 자격, 카드 없음)이다. 사용자가 끈 것과 탈퇴는 적지 않는다.
-// reason 은 declined, monthly_limit, not_eligible, no_card 가운데 하나다. 결제 대행사의 거절 코드는 싣지 않는다.
+// 사용자가 알아야 하는 것(한 달 상한, 결제 자격, 카드 없음, 자동 결제 동의의 판)이다. 사용자가 끈 것과 탈퇴는 적지 않는다.
+// reason 은 declined, monthly_limit, not_eligible, no_card, terms_outdated 가운데 하나다. 결제 대행사의 거절 코드는 싣지 않는다.
 func (q *Queries) QueueAutoChargeFailures(ctx context.Context, arg QueueAutoChargeFailuresParams) (int64, error) {
 	result, err := q.db.Exec(ctx, queueAutoChargeFailures, arg.Now, arg.Since)
 	if err != nil {

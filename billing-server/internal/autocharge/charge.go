@@ -75,6 +75,9 @@ const (
 	SkipMonthlyCap  = "monthly_limit"
 	// SkipStale 은 적힌 지 PendingFor 가 지나도록 보내지 못한 것이다. 실패로 세지 않고 알리지 않는다(사용자가 할 일이 없다)
 	SkipStale = "stale"
+	// SkipTermsOutdated 는 그 사람이 지금의 판(TermsVersion)에 동의하지 않은 것이다. 판이 올랐거나, 동의를 받기 전에 켰다.
+	// 다시 동의할 때까지 결제하지 않는다(2026-11-04 결정). 실패로 세지 않고(동의하면 바로 다시 산다) 알린다
+	SkipTermsOutdated = "terms_outdated"
 )
 
 // korea 는 한 달의 시작을 셀 때의 시간대다. 한국은 일광 절약 시간이 없어 고정이다.
@@ -246,12 +249,16 @@ func (s *Service) skipStale(ctx context.Context, request autochargedb.AutoCharge
 
 // refusal 은 보내지 않을 까닭이다. 보내도 되면 빈 글자다. 결제 자격의 오류가 아닌 오류(DB)는 오류로 돌려준다.
 func (s *Service) refusal(ctx context.Context, request autochargedb.AutoChargeRequest, now time.Time) (string, error) {
-	settings, err := autochargedb.New(s.pool).GetSettings(ctx, request.UserID)
+	queries := autochargedb.New(s.pool)
+	settings, err := queries.GetSettings(ctx, request.UserID)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && !settings.Enabled) {
 		return SkipDisabled, nil
 	}
 	if err != nil {
 		return "", err
+	}
+	if agreed, err := agreedTerms(ctx, queries, request.UserID); err != nil || agreed != TermsVersion {
+		return SkipTermsOutdated, err
 	}
 	if reason, err := s.eligibilityRefusal(ctx, request.UserID); reason != "" || err != nil {
 		return reason, err

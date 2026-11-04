@@ -240,14 +240,21 @@ func view(ctx context.Context, queries *autochargedb.Queries, userID uuid.UUID) 
 	case !errors.Is(err, pgx.ErrNoRows):
 		return View{}, err
 	}
-	agreed, err := queries.LatestConsentVersion(ctx, userID)
-	switch {
-	case err == nil:
-		result.AgreedTermsVersion = int(agreed)
-	case !errors.Is(err, pgx.ErrNoRows):
+	agreed, err := agreedTerms(ctx, queries, userID)
+	if err != nil {
 		return View{}, err
 	}
+	result.AgreedTermsVersion = agreed
 	return result, nil
+}
+
+// agreedTerms 는 그 사람이 마지막으로 동의한 자동 결제 동의의 판이다. 동의한 적이 없으면 0 이다.
+func agreedTerms(ctx context.Context, queries *autochargedb.Queries, userID uuid.UUID) (int, error) {
+	agreed, err := queries.LatestConsentVersion(ctx, userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	return int(agreed), err
 }
 
 // pgtextOf 는 빈 칸이 아닌 글을 DB 의 글로 바꾼다.

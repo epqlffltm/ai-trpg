@@ -88,3 +88,17 @@ func TestWhatTheUserDidIsNotTold(t *testing.T) {
 		t.Errorf("보낸 것 = %+v", got)
 	}
 }
+
+func TestAChargeHeldForTheTermsIsTold(t *testing.T) {
+	// 자동 결제 동의의 판에 동의하지 않아 멈춘 것은 알린다. 사용자가 다시 동의해야 다시 산다
+	f := setUp(t)
+	user := f.user()
+	held := f.finished(user, "skipped", "terms_outdated", false, f.clock.now)
+
+	f.round()
+
+	got := f.sender.of(user)
+	if len(got) != 1 || got[0].Key != "autocharge.failed:"+held.String() || payload(t, got[0])["reason"] != "terms_outdated" {
+		t.Fatalf("보낸 것 = %+v. 판에 동의하지 않은 것 하나여야 한다", got)
+	}
+}
