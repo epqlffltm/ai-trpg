@@ -482,6 +482,8 @@ async def test_others_see_a_public_scenario(
         'version_note': '',
         # 관심(하트)의 수(#989). 아무도 두지 않았다
         'heart_count': 0,
+        # 이 시나리오로 연 테이블의 수(#985). 아직 없다
+        'start_count': 0,
         # 테이블을 만들기 전에 고를 것들(#428). 공개 중인 판의 것이다
         'openings': [OPENING],
         # 시나리오의 기본값이다. 프리젠은 적지 않았다

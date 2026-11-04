@@ -1,8 +1,9 @@
 // web/apps/web/src/pages/trpg/browse/filters.ts
-// 탐색(B1)의 거르는 조건을 주소의 쿼리(?genre=&tag=&players=)와 오간다. 순수한 함수다.
+// 탐색(B1)의 거르는 조건과 차례를 주소의 쿼리(?genre=&tag=&players=&sort=)와 오간다. 순수한 함수다.
 // 조건을 주소에 두어 뒤로 가기, 새로 고침, 링크(B2 의 태그를 누르면 /trpg?tag=...)가 같은 목록을 연다.
 // 모르는 값(없는 장르, 1~4 밖의 인원, 긴 태그)은 버린다. 서버에 보내면 422 다.
 
+import { parseOrder } from '../../../api/listingOrder';
 import type { ListingFilters } from '../../../api/listings';
 import type { Genre } from '../../../api/types';
 import { isGenre, PLAYER_COUNTS } from '../labels';
@@ -15,6 +16,7 @@ export function parseFilters(params: URLSearchParams): ListingFilters {
     genre: parseGenre(params.get('genre')),
     tag: parseTag(params.get('tag')),
     players: parsePlayers(params.get('players')),
+    sort: parseOrder(params.get('sort')) === 'popular' ? 'popular' : undefined,
   };
 }
 
@@ -23,9 +25,11 @@ export function toSearchParams(filters: ListingFilters): URLSearchParams {
   if (filters.genre) params.set('genre', filters.genre);
   if (filters.tag) params.set('tag', filters.tag);
   if (filters.players) params.set('players', String(filters.players));
+  if (filters.sort === 'popular') params.set('sort', 'popular');
   return params;
 }
 
+/** 거르는 조건이 있는가. 차례는 조건이 아니다 */
 export function hasFilters(filters: ListingFilters): boolean {
   return Boolean(filters.genre || filters.tag || filters.players);
 }

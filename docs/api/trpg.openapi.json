@@ -7585,6 +7585,15 @@
         "title": "ListingDetail",
         "type": "object"
       },
+      "ListingOrder": {
+        "description": "공개 목록의 차례. recent 는 최근에 공개한 것부터, popular 는 최근 7일에 많이 연 것부터다.",
+        "enum": [
+          "recent",
+          "popular"
+        ],
+        "title": "ListingOrder",
+        "type": "string"
+      },
       "ListingPregen": {
         "description": "공개된 판의 프리젠 하나. 테이블을 만들기 전에 고를 거리를 보는 값이다. 함께 받는 소지품은 싣지 않는다.",
         "properties": {
@@ -11998,6 +12007,10 @@
             "title": "Scenario Id",
             "type": "string"
           },
+          "start_count": {
+            "title": "Start Count",
+            "type": "integer"
+          },
           "tagline": {
             "title": "Tagline",
             "type": "string"
@@ -12035,7 +12048,8 @@
           "version",
           "version_note",
           "published_at",
-          "heart_count"
+          "heart_count",
+          "start_count"
         ],
         "title": "PublicListing",
         "type": "object"
@@ -12118,6 +12132,10 @@
             "title": "Scenario Id",
             "type": "string"
           },
+          "start_count": {
+            "title": "Start Count",
+            "type": "integer"
+          },
           "tagline": {
             "title": "Tagline",
             "type": "string"
@@ -12156,6 +12174,7 @@
           "version_note",
           "published_at",
           "heart_count",
+          "start_count",
           "openings",
           "character_modes",
           "pregens",
@@ -23664,9 +23683,18 @@
     },
     "/api/v1/game/listings": {
       "get": {
-        "description": "공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르, 태그, 함께 할 인원, 검색어(q)로 거를 수 있다.\n\n검색어가 \"#\"로 시작하면 그 태그가 붙은 것, 아니면 제목이나 한 줄 소개에 그 글이 들어 있는 것이다(#984).\nhide_adult 가 참이면 성인용을 뺀다(#986). orientation 을 주면 그 성향의 태그가 붙은 것만이다(#987).\n둘 다 보는 사람의 설정이고 화면이 싣는다. creator 를 주면 그 사람이 만든 것만이다(제작자 페이지, #992).\n\n로그인하지 않아도 읽는다(#530). 그때는 전체 이용가만 나온다. 토큰을 보냈는데 틀렸으면 401 이다.",
+        "description": "공개된 시나리오를 최근에 공개한 것부터 돌려준다. 장르, 태그, 함께 할 인원, 검색어(q)로 거를 수 있다.\n\n검색어가 \"#\"로 시작하면 그 태그가 붙은 것, 아니면 제목이나 한 줄 소개에 그 글이 들어 있는 것이다(#984).\nhide_adult 가 참이면 성인용을 뺀다(#986). orientation 을 주면 그 성향의 태그가 붙은 것만이다(#987).\n둘 다 보는 사람의 설정이고 화면이 싣는다. creator 를 주면 그 사람이 만든 것만이다(제작자 페이지, #992).\n\nsort 가 popular 면 최근 7일에 테이블을 많이 연 것부터다(#985). 줄마다 연 테이블의 수(start_count)가 실린다.\n\n로그인하지 않아도 읽는다(#530). 그때는 전체 이용가만 나온다. 토큰을 보냈는데 틀렸으면 401 이다.",
         "operationId": "list_listings_api_v1_game_listings_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ListingOrder",
+              "default": "recent"
+            }
+          },
           {
             "in": "query",
             "name": "limit",

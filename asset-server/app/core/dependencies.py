@@ -13,6 +13,7 @@ from server_core.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.popularity import ListingOrder
 from app.preferences import Orientation, Preferences
 from app.search import SEARCH_MAX_LENGTH, SEARCH_PATTERN, SearchTerms, parse_search
 
@@ -76,3 +77,6 @@ ListingPreferences = Annotated[Preferences, Depends(get_preferences)]
 
 # 만든 사람의 공개 ID(#992). 제작자 페이지가 그 사람의 공개 작품만 부른다. 비워 두면 거르지 않는다
 Creator = Annotated[uuid.UUID | None, Query()]
+
+# 공개 목록의 차례(#985). recent(최근에 게시한 것부터, 기본) 또는 popular(최근 7일에 많이 시작한 것부터)
+Order = Annotated[ListingOrder, Query()]

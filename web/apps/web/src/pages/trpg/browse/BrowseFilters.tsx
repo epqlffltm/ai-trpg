@@ -1,9 +1,10 @@
 // web/apps/web/src/pages/trpg/browse/BrowseFilters.tsx
-// 탐색(B1)의 거르기. 장르 하나, 함께 할 인원 하나, 태그 하나. 태그는 소개(B2)의 태그를 눌러 걸리고 여기서는 풀기만 한다.
+// 탐색(B1)의 차례(최신순, 인기순, #985)와 거르기. 장르 하나, 함께 할 인원 하나, 태그 하나. 태그는 소개(B2)의 태그를 눌러 걸리고 여기서는 풀기만 한다.
 // 조건을 바꾸면 onChange 로 새 조건 전체를 넘긴다. 주소에 두는 것은 쓰는 쪽(ScenarioBrowsePage)이다.
 
 import { Button, ChipGroup } from '@ai-trpg/ui';
 import type { ListingFilters } from '../../../api/listings';
+import { OrderChips } from '../../../components/OrderChips';
 import type { Genre } from '../../../api/types';
 import { GENRE_VALUES, genreLabel, PLAYER_COUNTS } from '../labels';
 import { hasFilters } from './filters';
@@ -16,6 +17,7 @@ type Props = { filters: ListingFilters; onChange: (next: ListingFilters) => void
 export function BrowseFilters({ filters, onChange }: Props) {
   return (
     <div className="browse-filters">
+      <OrderChips order={filters.sort ?? 'recent'} onChange={(order) => onChange({ ...filters, sort: order === 'popular' ? order : undefined })} />
       <ChipGroup<Genre>
         label="장르"
         chips={GENRE_CHIPS}
@@ -37,7 +39,7 @@ export function BrowseFilters({ filters, onChange }: Props) {
         </p>
       ) : null}
       {hasFilters(filters) ? (
-        <Button variant="quiet" onClick={() => onChange({})}>
+        <Button variant="quiet" onClick={() => onChange({ sort: filters.sort })}>
           조건 모두 풀기
         </Button>
       ) : null}

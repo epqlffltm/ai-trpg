@@ -597,6 +597,8 @@ class PublicCharacterSummary(BaseModel):
     published_at: datetime
     # 관심(하트)을 둔 사람의 수(#989)
     heart_count: int
+    # 대화(캐릭터)나 세션(세계관)을 시작한 모든 수(#985). 한 시간마다 받아 온다
+    start_count: int
 
 
 class PublicCharacterPage(BaseModel):
@@ -617,6 +619,8 @@ class PublicCharacterDetail(BaseModel):
     document: CharacterDocument
     # 관심(하트)을 둔 사람의 수(#989)
     heart_count: int
+    # 대화(캐릭터)나 세션(세계관)을 시작한 모든 수(#985). 한 시간마다 받아 온다
+    start_count: int
 
 
 class CharacterCopy(BaseModel):

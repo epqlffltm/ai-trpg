@@ -1,15 +1,18 @@
 // web/apps/web/src/pages/story/StoryHomePage.tsx
 // story 의 첫 화면(/story). 로그인하지 않아도 열린다. 위에 공개 세계관(20 개씩 "더 보기", 누르면 소개 D1).
+// 공개 세계관은 최신순과 인기순(?sort=popular, #985)으로 줄 세운다.
 // 로그인했으면 내 세션(최근 것부터, 20 개씩 "더 보기")과 게시한 내 세계관으로 새로 시작. 운영자에게는 "세계관 만들기"(D7)와 "JSON 으로 세계관 넣기"로 가는 길이 있다.
 // 시작하면 세계관의 마지막 판을 고정한 새 세션이 생기고 장면(D2)으로 간다. 모델은 지난번 세션의 것이다.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useSearchParams } from 'react-router';
+import { parseOrder, type ListingOrder } from '../../api/listingOrder';
 import type { StorySessionSummary } from '../../api/story';
 import type { StoryWorldSummary } from '../../api/storyWorlds';
 import { isOperator } from '../../auth/roles';
 import { useSession } from '../../auth/useSession';
+import { OrderChips } from '../../components/OrderChips';
 import { formatDateTime } from '../../format/dateTime';
 import { myStoryWorldsQuery, publicWorldsQuery, storySessionsQuery } from './storyQueries';
 import { describeStartProblem } from './storyTurnProblem';
@@ -37,11 +40,14 @@ export function StoryHomePage() {
 }
 
 function PublicWorlds({ signedIn }: { signedIn: boolean }) {
-  const worlds = useInfiniteQuery(publicWorldsQuery(signedIn));
+  const [params, setParams] = useSearchParams();
+  const order = parseOrder(params.get('sort'));
+  const worlds = useInfiniteQuery(publicWorldsQuery(signedIn, order));
   const items = worlds.data?.pages.flatMap((page) => page.items) ?? [];
   return (
     <section className="page-section" aria-labelledby="story-public">
       <h2 id="story-public">공개 세계관</h2>
+      <OrderChips order={order} onChange={(next: ListingOrder) => setParams(next === 'popular' ? { sort: next } : {})} />
       {worlds.isPending ? <p aria-busy="true">불러오는 중</p> : null}
       {worlds.isError ? (
         <Notice tone="error">

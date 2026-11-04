@@ -3,6 +3,7 @@
 // 공개 목록과 소개는 로그인하지 않아도 부른다. 그때는 토큰이 없어 전체이용가만 온다(#530). 성인용은 없는 것(목록에서 빠지고 소개는 404)이다.
 
 import { apiRequest } from './http';
+import { orderQuery, type ListingOrder } from './listingOrder';
 import { listingPreferences } from './listingPreferences';
 import type { Genre, NarrationModels, PublicListingDetail, PublicListingPage } from './types';
 
@@ -13,16 +14,18 @@ export type ListingFilters = {
   genre?: Genre | undefined;
   tag?: string | undefined;
   players?: number | undefined;
+  /** 차례(#985). 비우면 최근에 공개한 것부터다 */
+  sort?: ListingOrder | undefined;
 };
 
-/** 공개 시나리오의 한 쪽. 최근 공개한 것부터(순서는 고를 수 없다) */
+/** 공개 시나리오의 한 쪽. 최근 공개한 것부터, sort 가 popular 면 최근 7일에 많이 연 것부터(#985) */
 export function fetchListings(
   filters: ListingFilters,
   page: { limit: number; offset: number },
   signal?: AbortSignal,
 ): Promise<PublicListingPage> {
   return apiRequest<PublicListingPage>(`${GAME}/listings`, {
-    query: { ...page, genre: filters.genre, tag: filters.tag, players: filters.players, ...listingPreferences() },
+    query: { ...page, genre: filters.genre, tag: filters.tag, players: filters.players, ...orderQuery(filters.sort), ...listingPreferences() },
     ...(signal ? { signal } : {}),
   });
 }

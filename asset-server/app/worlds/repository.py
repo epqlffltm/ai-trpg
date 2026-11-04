@@ -15,8 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
 
 from app.characters.models import OPEN_VISIBILITIES, Visibility
+from app.popularity import ListingOrder, by_popularity
 from app.ratings import Rating
 from app.search import LIKE_ESCAPE, SearchTerms, contains_pattern, name_of
+from app.stats.models import WorkKind
 from app.worlds.models import World, WorldVersion
 
 
@@ -130,6 +132,7 @@ async def list_public(
     creator: uuid.UUID | None,
     limit: int,
     offset: int,
+    order: ListingOrder = ListingOrder.RECENT,
 ) -> tuple[list[tuple[World, WorldVersion]], int]:
     """공개 목록의 한 쪽(최근에 게시한 것부터)과 전체 개수. 세계관마다 마지막 판과 함께다."""
     condition = listed(ratings) if search is None else listed(ratings) & searched(search)
@@ -139,14 +142,13 @@ async def list_public(
     if creator is not None:
         # 만든 사람(#992). 제작자 페이지가 그 사람의 것만 고른다
         condition = condition & (World.owner_id == creator)
-    query = (
-        select(World, WorldVersion)
-        .join(WorldVersion, latest_join())
-        .where(condition)
-        .order_by(World.published_at.desc(), World.id)
-        .limit(limit)
-        .offset(offset)
-    )
+    query = select(World, WorldVersion).join(WorldVersion, latest_join()).where(condition)
+    if order == ListingOrder.POPULAR:
+        # 최근 7일에 많이 시작한 것부터(#985). 수는 받아 쌓아 둔 것이다
+        query = by_popularity(query, WorkKind.WORLD, World)
+    else:
+        query = query.order_by(World.published_at.desc(), World.id)
+    query = query.limit(limit).offset(offset)
     count = select(func.count()).select_from(World).join(WorldVersion, latest_join()).where(condition)
     rows = await session.execute(query)
     return [(world, version) for world, version in rows.all()], await session.scalar(count) or 0

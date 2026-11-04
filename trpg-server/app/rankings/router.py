@@ -19,7 +19,7 @@ from server_core.auth.dependencies import OptionalUser
 from app.assets.ratings import allowed_ratings
 from app.assets.routing import Session
 from app.listings.repository import ListingFilter
-from app.listings.router import HideAdultFilter, OrientationFilter, to_public
+from app.listings.router import HideAdultFilter, OrientationFilter, public_items
 from app.rankings.repository import ranked_scenarios
 from app.rankings.schemas import RankedScenario, ScenarioRanking
 
@@ -48,7 +48,9 @@ async def rank_scenarios(
     return ScenarioRanking(
         recent_days=RECENT_DAYS,
         items=[
-            RankedScenario(rank=index, starts=starts, listing=to_public(*row))
-            for index, (row, starts) in enumerate(rows, start=1)
+            RankedScenario(rank=index, starts=starts, listing=listing)
+            for index, ((_, starts), listing) in enumerate(
+                zip(rows, await public_items(session, [row for row, _ in rows]), strict=True), start=1
+            )
         ],
     )

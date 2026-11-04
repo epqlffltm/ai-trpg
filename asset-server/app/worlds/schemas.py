@@ -848,6 +848,8 @@ class PublicWorldSummary(BaseModel):
     published_at: datetime
     # 관심(하트)을 둔 사람의 수(#989)
     heart_count: int
+    # 대화(캐릭터)나 세션(세계관)을 시작한 모든 수(#985). 한 시간마다 받아 온다
+    start_count: int
 
 
 class PublicWorldPage(BaseModel):
@@ -894,3 +896,5 @@ class PublicWorldDetail(BaseModel):
     ending_count: int
     # 관심(하트)을 둔 사람의 수(#989)
     heart_count: int
+    # 대화(캐릭터)나 세션(세계관)을 시작한 모든 수(#985). 한 시간마다 받아 온다
+    start_count: int

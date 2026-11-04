@@ -6,6 +6,7 @@ import { ListSection } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
 import { ItemCard } from '../../components/ItemCard';
+import { usageTags } from '../../format/usage';
 import { genreLabel } from '../trpg/labels';
 import { ratingBadge } from './labels';
 import { listStatus } from './listStatus';
@@ -41,7 +42,7 @@ function PublicScenariosRow({ signedIn }: { signedIn: boolean }) {
             to={`/trpg/scenarios/${listing.scenario_id}`}
             title={listing.title}
             description={listing.tagline}
-            meta={[ratingBadge(listing.rating), listing.genre ? genreLabel(listing.genre) : null]}
+            meta={[ratingBadge(listing.rating), listing.genre ? genreLabel(listing.genre) : null, ...usageTags('테이블', listing.start_count, listing.heart_count)]}
           />
         ))}
       </ul>

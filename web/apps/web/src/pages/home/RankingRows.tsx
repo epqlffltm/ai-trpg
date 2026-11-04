@@ -7,6 +7,7 @@ import { ListSection } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
 import { CharacterCard } from '../chat/browse/CharacterCard';
 import { ItemCard } from '../../components/ItemCard';
+import { usageTags } from '../../format/usage';
 import { StoryWorldCard } from '../story/StoryWorldCard';
 import { genreLabel } from '../trpg/labels';
 import { ratingBadge } from './labels';
@@ -41,7 +42,7 @@ function ScenarioRankingRow({ signedIn }: { signedIn: boolean }) {
             to={`/trpg/scenarios/${listing.scenario_id}`}
             title={listing.title}
             description={listing.tagline}
-            meta={[...rankBadges(rank, starts), ratingBadge(listing.rating), listing.genre ? genreLabel(listing.genre) : null]}
+            meta={[...rankBadges(rank, starts), ratingBadge(listing.rating), listing.genre ? genreLabel(listing.genre) : null, ...usageTags('테이블', listing.start_count, listing.heart_count)]}
           />
         ))}
       </ol>

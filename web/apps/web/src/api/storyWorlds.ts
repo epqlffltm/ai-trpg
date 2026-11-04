@@ -9,6 +9,7 @@
 
 import type { components } from './generated/asset';
 import { apiRequest } from './http';
+import { orderQuery, type ListingOrder } from './listingOrder';
 import { listingPreferences } from './listingPreferences';
 
 type Schemas = components['schemas'];
@@ -92,8 +93,12 @@ export function publishStoryWorld(worldId: string, note: string): Promise<StoryW
 }
 
 /** 공개 세계관. 최근에 게시한 것부터 */
-export function fetchPublicWorlds(paging: { limit: number; offset: number }, signal?: AbortSignal): Promise<PublicWorldPage> {
-  return apiRequest<PublicWorldPage>('/api/v1/asset/listings/worlds', { query: { ...paging, ...listingPreferences() }, ...(signal ? { signal } : {}) });
+/** 공개 세계관의 한 쪽. 최근에 게시한 것부터, order 가 popular 면 최근 7일에 많이 시작한 것부터(#985) */
+export function fetchPublicWorlds(paging: { limit: number; offset: number }, signal?: AbortSignal, order?: ListingOrder): Promise<PublicWorldPage> {
+  return apiRequest<PublicWorldPage>('/api/v1/asset/listings/worlds', {
+    query: { ...paging, ...orderQuery(order), ...listingPreferences() },
+    ...(signal ? { signal } : {}),
+  });
 }
 
 export function fetchPublicWorld(worldId: string, signal?: AbortSignal): Promise<PublicWorldDetail> {

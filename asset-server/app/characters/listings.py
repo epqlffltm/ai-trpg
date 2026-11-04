@@ -19,10 +19,11 @@ from app.characters.documents import CharacterDocument
 from app.characters.models import Character, CharacterVersion
 from app.characters.schemas import PublicCharacterDetail, PublicCharacterPage, PublicCharacterSummary
 from app.characters.service import CharacterNotFoundError
-from app.core.dependencies import Creator, ListingPreferences, Paging, Search, Session
+from app.core.dependencies import Creator, ListingPreferences, Order, Paging, Search, Session
 from app.hearts import service as hearts
 from app.hearts.kinds import CHARACTER_HEARTS
 from app.hearts.schemas import HeartState
+from app.popularity import ListingOrder
 
 router = APIRouter(prefix='/listings/characters', tags=['listings'])
 
@@ -41,6 +42,7 @@ def to_public_summary(character: Character, version: CharacterVersion) -> Public
         image_id=document.image_id,
         published_at=version.created_at,
         heart_count=character.heart_count,
+        start_count=character.start_count,
     )
 
 
@@ -52,6 +54,7 @@ async def list_public(
     search: Search,
     preferences: ListingPreferences,
     creator: Creator = None,
+    sort: Order = ListingOrder.RECENT,
 ) -> PublicCharacterPage:
     """
     공개 캐릭터의 목록. 최근에 게시한 것부터다.
@@ -59,8 +62,11 @@ async def list_public(
     검색어(q)가 "#"로 시작하면 그 태그가 붙은 것, 아니면 이름에 그 글이 들어 있는 것이다(#984).
     hide_adult, orientation 은 보는 사람의 설정이다(#986, #987, app/preferences.py). 화면이 싣는다.
     creator 를 주면 그 사람이 만든 것만이다(제작자 페이지, #992).
+    sort 가 popular 면 최근 7일에 많이 시작한 것부터다(#985). 줄마다 시작한 모든 수(start_count)가 실린다.
     """
-    rows, total = await service.list_public(session, user, search, preferences, creator, paging.limit, paging.offset)
+    rows, total = await service.list_public(
+        session, user, search, preferences, creator, paging.limit, paging.offset, sort
+    )
     return PublicCharacterPage(
         items=[to_public_summary(character, version) for character, version in rows], total=total
     )
@@ -108,4 +114,5 @@ async def read_public(character_id: uuid.UUID, user: OptionalUser, session: Sess
         published_at=version.created_at,
         document=CharacterDocument.model_validate(version.document),
         heart_count=character.heart_count,
+        start_count=character.start_count,
     )

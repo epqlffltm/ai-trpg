@@ -117,6 +117,8 @@ class PublicListing(BaseModel):
     published_at: datetime
     # 관심(하트)을 둔 사람의 수(#989)
     heart_count: int
+    # 이 시나리오로 연 테이블의 모든 수(#985). 끝난 테이블도 센다
+    start_count: int
 
 
 class HeartState(BaseModel):

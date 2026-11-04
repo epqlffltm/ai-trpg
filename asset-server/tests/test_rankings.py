@@ -8,6 +8,7 @@
   - 랭킹: 최근의 수가 많은 것부터다. 0 인 것, 공개 목록에 나오지 않는 것(비공개), 볼 수 없는 등급은 빠진다.
     보는 사람의 설정(hide_adult, orientation)으로 거른다. 받은 적이 없으면 비어 있고 refreshed_at 이 null 이다
   - 주소를 적었는데 비밀이 없으면 뜨지 않는다
+  - 받은 모든 수를 작품의 카드(start_count)에 옮겨 적고, 공개 목록은 sort=popular 면 랭킹과 같은 차례다
 """
 
 import asyncio
@@ -40,6 +41,8 @@ operator = character_tests.operator
 adult = character_tests.adult
 
 RANKINGS_URL = f'{API_PREFIX}/rankings'
+CHARACTER_LISTINGS = f'{API_PREFIX}/listings/characters'
+WORLD_LISTINGS = f'{API_PREFIX}/listings/worlds'
 NOW = datetime(2026, 11, 4, 3, 0, tzinfo=UTC)
 
 
@@ -200,3 +203,54 @@ async def test_rejects_a_bad_query(client: AsyncClient, params: dict):
     response = await client.get(f'{RANKINGS_URL}/characters', params=params)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+# --- 카드의 수와 인기순(#985) ---
+
+
+async def test_refresh_copies_totals_to_the_cards(app: FastAPI, client: AsyncClient, operator: dict):
+    busy = await make_public(client, operator, name='바쁜 세라')
+    quiet = await make_public(client, operator, name='조용한 세라')
+    answers = [starts_body((busy['id'], 12_345, 3), (quiet['id'], 2, 0)), starts_body((busy['id'], 12_346, 4))]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=answers.pop(0))
+
+    refresher = refresher_for(app, handler, chat_url='http://chat:8005')
+
+    async def counts() -> dict[str, int]:
+        return {item['name']: item['start_count'] for item in (await client.get(CHARACTER_LISTINGS)).json()['items']}
+
+    assert await counts() == {'바쁜 세라': 0, '조용한 세라': 0}
+    await refresher.refresh()
+    assert await counts() == {'바쁜 세라': 12_345, '조용한 세라': 2}
+    # 다음에 받은 것에 없으면 0 으로 돌아간다. 소개에도 실린다
+    await refresher.refresh()
+    assert await counts() == {'바쁜 세라': 12_346, '조용한 세라': 0}
+    assert (await client.get(f'{CHARACTER_LISTINGS}/{busy["id"]}')).json()['start_count'] == 12_346
+
+
+async def test_listings_sort_by_popularity(
+    client: AsyncClient, session: AsyncSession, operator: dict, signing_key: SigningKey
+):
+    await make_public(client, operator, name='새것')
+    week = await make_public(client, operator, name='이번 주')
+    old = await make_public(client, operator, name='지난 일')
+    await seed(session, WorkKind.CHARACTER, (week['id'], 2, 2), (old['id'], 50, 0))
+    owner = bearer(signing_key, OWNER)
+    first = await published(client, owner, name='첫 여름')
+    await published(client, owner, name='둘째 여름')
+    await seed(session, WorkKind.WORLD, (first['id'], 1, 1))
+
+    async def names(url: str, **params) -> list[str]:
+        response = await client.get(url, params=params)
+        assert response.status_code == status.HTTP_200_OK, response.text
+        return [item['name'] for item in response.json()['items']]
+
+    # 기본은 최근에 게시한 것부터다. 인기순은 최근 7일의 수, 같으면 모든 수, 그것도 같으면 최근에 게시한 것이다
+    assert await names(CHARACTER_LISTINGS) == ['지난 일', '이번 주', '새것']
+    assert await names(CHARACTER_LISTINGS, sort='popular') == ['이번 주', '지난 일', '새것']
+    assert await names(CHARACTER_LISTINGS, sort='popular', limit=1, offset=1) == ['지난 일']
+    assert await names(WORLD_LISTINGS, sort='popular') == ['첫 여름', '둘째 여름']
+    bad = await client.get(CHARACTER_LISTINGS, params={'sort': 'best'})
+    assert bad.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
