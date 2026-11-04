@@ -2616,6 +2616,12 @@ a.ui-button {
   white-space: normal;
 }
 
+/* 입력칸의 단축어 목록에서 화살표로 고른 것(#981) */
+.chat-suggestions .ui-button[aria-current='true'] {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: -2px;
+}
+
 .conversation__send {
   display: flex;
   justify-content: flex-end;

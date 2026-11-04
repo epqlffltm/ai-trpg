@@ -4,6 +4,7 @@
 //   - 입력칸이 "/"로 시작하고 아직 이름만 적는 중(빈칸 전)이면 고를 수 있는 목록을 보인다
 //   - 적은 만큼으로 시작하는 이름만 보인다. 작품의 것이 먼저다(서버의 차례 그대로)
 //   - 고르면 입력칸이 "/이름 "이 된다. 뒤에 하고 싶은 말을 잇는다. 부르는 규칙(맨 앞의 "/이름")은 서버가 본다
+//   - 입력칸에서 위아래 화살표로 고를 것을 옮기고(끝에서 처음으로 돈다) Enter 로 고르고 Esc 로 목록을 닫는다
 
 import type { ConversationShortcut } from '../../../api/conversationShortcuts';
 
@@ -21,6 +22,12 @@ export function picksFor(draft: string, shortcuts: readonly ConversationShortcut
   const typed = typedName(draft);
   if (typed === null) return [];
   return shortcuts.filter((shortcut) => shortcut.name.startsWith(typed)).slice(0, PICKS_SHOWN);
+}
+
+/** 화살표로 옮긴 자리. step 은 1(아래)이나 -1(위)이고 끝에서 처음으로 돈다. 목록이 비면 0 */
+export function movedPick(current: number, count: number, step: 1 | -1): number {
+  if (count <= 0) return 0;
+  return (((current + step) % count) + count) % count;
 }
 
 /** 고른 단축어를 부르는 입력칸의 글 */

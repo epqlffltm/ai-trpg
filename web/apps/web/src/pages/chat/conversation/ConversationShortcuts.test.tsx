@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/chat/conversation/ConversationShortcuts.test.tsx
 // 입력칸의 단축어 고르기(#981). "/"를 치면 처음 목록을 읽고, 적은 만큼으로 거르고, 고르면 "/이름 "이 되어 입력칸으로 돌아간다.
-// 보통의 말에는 목록을 읽지 않는다. 목록을 읽지 못해도 입력은 그대로다. story 의 장면도 같은 입력칸을 쓴다. 순수한 함수.
+// 화살표로 옮기고 Enter 로 고르며(보내지 않는다) Esc 로 닫는다. 보통의 말에는 목록을 읽지 않는다. 목록을 읽지 못해도 입력은 그대로다.
+// story 의 장면도 같은 입력칸을 쓴다. 순수한 함수.
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -8,11 +9,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationShortcut } from '../../../api/conversationShortcuts';
 import { REFRESH_PATH } from '../../../api/refresh';
 import type { StorySession } from '../../../api/story';
-import { ID, PATH, signedIn } from '../../../test/chatFixtures';
+import { ID, PATH, posts, signedIn } from '../../../test/chatFixtures';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../../test/fakeFetch';
 import { renderApp } from '../../../test/renderApp';
 import { castOut, storyView } from '../../../test/storyFixtures';
-import { pickedDraft, pickLabel, PICKS_SHOWN, picksFor, typedName } from './shortcutPicks';
+import { movedPick, pickedDraft, pickLabel, PICKS_SHOWN, picksFor, typedName } from './shortcutPicks';
 
 const SHORTCUTS: ConversationShortcut[] = [
   { name: '일기', description: '오늘의 일기', source: 'work' },
@@ -49,6 +50,32 @@ describe('입력칸의 단축어', () => {
     expect(input).toHaveFocus();
     expect(screen.queryByRole('list', { name: '단축어' })).not.toBeInTheDocument();
     expect(reads(seen, `${PATH}/shortcuts`)).toHaveLength(1);
+  });
+
+  it('화살표로 옮기고 Enter 로 고르며 보내지 않는다. Esc 로 닫고 글을 고치면 다시 보인다', async () => {
+    const { seen } = signedIn({ [`GET ${PATH}/shortcuts`]: () => json(200, SHORTCUTS) });
+    renderApp(`/chat/conversations/${ID}`);
+
+    const input = await screen.findByLabelText('보낼 말');
+    await userEvent.type(input, '/');
+    const list = within(await screen.findByRole('list', { name: '단축어' }));
+    expect(list.getByRole('button', { name: '/일기 · 오늘의 일기' })).toHaveAttribute('aria-current', 'true');
+    await userEvent.keyboard('{ArrowUp}');
+    expect(list.getByRole('button', { name: '/일과 (내 단축어)' })).toHaveAttribute('aria-current', 'true');
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+    expect(list.getByRole('button', { name: '/회상' })).toHaveAttribute('aria-current', 'true');
+    await userEvent.keyboard('{Enter}');
+
+    expect(input).toHaveValue('/회상 ');
+    expect(posts(seen, `${PATH}/messages`)).toHaveLength(0);
+
+    await userEvent.clear(input);
+    await userEvent.type(input, '/일');
+    expect(await screen.findByRole('list', { name: '단축어' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('list', { name: '단축어' })).not.toBeInTheDocument();
+    await userEvent.type(input, '기');
+    expect(await screen.findByRole('list', { name: '단축어' })).toBeInTheDocument();
   });
 
   it('목록을 읽지 못해도 적은 그대로 둔다', async () => {
@@ -113,6 +140,7 @@ describe('단축어 고르기의 계산', () => {
     expect(picksFor('/a', many)).toHaveLength(PICKS_SHOWN);
     expect(picksFor('안녕', SHORTCUTS)).toEqual([]);
     expect(pickedDraft(SHORTCUTS[1] as ConversationShortcut)).toBe('/회상 ');
+    expect([movedPick(0, 3, 1), movedPick(2, 3, 1), movedPick(0, 3, -1), movedPick(0, 0, 1)]).toEqual([1, 0, 2, 0]);
     expect(pickLabel({ name: '독백', description: '  ', source: 'mine' })).toBe('/독백 (내 단축어)');
   });
 });
