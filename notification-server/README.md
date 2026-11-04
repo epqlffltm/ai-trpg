@@ -212,6 +212,7 @@ Content-Type: application/json
 | `credit.welcome` | `billing` | `amount`, `expires_at` |
 | `credit.expiring` | `billing` | `amount`, `first_expires_at` |
 | `credit.short` | `billing` | `price_code`, `amount`, `gold_required` |
+| `autocharge.failed` | `billing` | `product_id`, `price`, `reason`, `turned_off` |
 | `post.commented` | `board` | `board_slug`, `post_id`, `post_title`, `comment_id` |
 | `comment.replied` | `board` | `board_slug`, `post_id`, `post_title`, `comment_id`, `parent_id` |
 | `character.hidden` | `asset` | `character_id`, `name` |

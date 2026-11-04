@@ -130,3 +130,7 @@ RETURNING consecutive_failures, enabled;
 UPDATE auto_charge_requests SET status = 'skipped', skip_reason = 'withdrawn', finished_at = sqlc.arg(now)::TIMESTAMPTZ
 WHERE user_id = sqlc.arg(user_id) AND status = 'pending';
 
+-- name: MarkTurnedOff :exec
+-- 이 거절로 자동 충전을 껐다고 적는다. 알림에 함께 싣는다(#980).
+UPDATE auto_charge_requests SET turned_off = true WHERE id = sqlc.arg(id);
+

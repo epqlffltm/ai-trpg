@@ -75,6 +75,8 @@ KINDS: Mapping[str, KindRule] = MappingProxyType(
         'credit.welcome': rule(BILLING, 'amount', 'expires_at'),
         'credit.expiring': rule(BILLING, 'amount', 'first_expires_at', mutable=True),
         'credit.short': rule(BILLING, 'price_code', 'amount', 'gold_required', mutable=True),
+        # 결제: 자동 충전(#980)이 되지 않았다(거절, 한 달 상한, 결제 자격, 카드 없음). 돈에 관한 일이라 끌 수 없다
+        'autocharge.failed': rule(BILLING, 'product_id', 'price', 'reason', 'turned_off'),
         # 게시판: 댓글과 답글
         'post.commented': rule(BOARD, 'board_slug', 'post_id', 'post_title', 'comment_id', mutable=True),
         'comment.replied': rule(BOARD, 'board_slug', 'post_id', 'post_title', 'comment_id', 'parent_id', mutable=True),

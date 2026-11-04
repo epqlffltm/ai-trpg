@@ -325,7 +325,7 @@ func (q *Queries) LockCard(ctx context.Context, userID uuid.UUID) (uuid.UUID, er
 }
 
 const lockDueRequest = `-- name: LockDueRequest :one
-SELECT id, user_id, product_id, price, credits, status, skip_reason, failure_code, billing_key, customer_key, attempts, last_error, next_attempt_at, created_at, finished_at FROM auto_charge_requests
+SELECT id, user_id, product_id, price, credits, status, skip_reason, failure_code, billing_key, customer_key, attempts, last_error, next_attempt_at, created_at, finished_at, turned_off FROM auto_charge_requests
 WHERE status IN ('pending', 'charging') AND next_attempt_at <= $1
 ORDER BY next_attempt_at, id
 LIMIT 1
@@ -352,8 +352,19 @@ func (q *Queries) LockDueRequest(ctx context.Context, now time.Time) (AutoCharge
 		&i.NextAttemptAt,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.TurnedOff,
 	)
 	return i, err
+}
+
+const markTurnedOff = `-- name: MarkTurnedOff :exec
+UPDATE auto_charge_requests SET turned_off = true WHERE id = $1
+`
+
+// 이 거절로 자동 충전을 껐다고 적는다. 알림에 함께 싣는다(#980).
+func (q *Queries) MarkTurnedOff(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markTurnedOff, id)
+	return err
 }
 
 const setArmed = `-- name: SetArmed :exec

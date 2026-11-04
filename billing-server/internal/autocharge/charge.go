@@ -288,13 +288,22 @@ func (s *Service) settleDeclined(ctx context.Context, request autochargedb.AutoC
 		if err != nil || finished == 0 {
 			return err
 		}
-		_, err = queries.CountFailed(ctx, autochargedb.CountFailedParams{UserID: request.UserID, MaxFailures: MaxFailures, Now: s.clock()})
+		counted, err := queries.CountFailed(ctx, autochargedb.CountFailedParams{UserID: request.UserID, MaxFailures: MaxFailures, Now: s.clock()})
 		if errors.Is(err, pgx.ErrNoRows) {
 			// 설정을 지웠다(탈퇴). 셀 곳이 없다
 			return nil
 		}
-		return err
+		if err != nil || !turnedOff(counted.ConsecutiveFailures) {
+			return err
+		}
+		return queries.MarkTurnedOff(ctx, request.ID)
 	})
+}
+
+// turnedOff 는 이번 거절로 자동 충전을 껐는지다. 이어서 실패한 수가 처음 MaxFailures 에 닿은 때다.
+// 그 뒤로는 꺼져 있어 이 일이 적히지 않는다(보내기 전에 그만둔다).
+func turnedOff(failures int32) bool {
+	return failures == MaxFailures
 }
 
 // delay 는 답을 받지 못했다고 적고 다음 시도 시각을 정한다.

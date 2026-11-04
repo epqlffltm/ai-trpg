@@ -833,6 +833,7 @@ E4 에서 정한 것(2026-10-24, #678).
   | `credit.welcome` | `billing` | 환영 크레딧을 받은 사람 | `amount`(글자), `expires_at` |
   | `credit.expiring` | `billing` | 무료 크레딧이 7일 안에 사라지는 사람. 한 사람에게 7일에 한 번 | `amount`(사라질 양의 합, 글자), `first_expires_at`(가장 먼저 사라지는 때) |
   | `credit.short` | `billing` | 크레딧이 모자라 홀드(서술 값)를 걸지 못한 사람. 한 사람에게 하루(한국 날짜)에 한 번 | `price_code`(걸려던 가격표의 이름), `amount`(그 값, 글자), `gold_required`(프리미엄이라 골드로만 낼 수 있었다) |
+  | `autocharge.failed` | `billing` | 자동 충전(#980)이 되지 않은 사람. 카드사의 거절, 이번 달 상한, 지금 결제할 수 없음(본인인증·보호자 동의), 등록한 카드 없음. 사용자가 끈 것은 알리지 않는다. 끌 수 없다 | `product_id`, `price`(원, 숫자), `reason`(`declined`, `monthly_limit`, `not_eligible`, `no_card`), `turned_off`(이어서 실패해 자동 충전을 껐다) |
   | `post.commented` | `board` | 글쓴이 | `board_slug`, `post_id`, `post_title`, `comment_id` |
   | `comment.replied` | `board` | 그 댓글의 글쓴이 | `board_slug`, `post_id`, `post_title`, `comment_id`, `parent_id` |
   | `character.hidden` | `asset` | 캐릭터의 주인. 운영자가 숨겼다(공개 목록과 남의 새 대화에서 빠진다, 주인은 계속 쓴다) | `character_id`, `name` |

@@ -311,6 +311,23 @@ func TestThreeDeclinesTurnItOff(t *testing.T) {
 	if got.Settings == nil || got.Settings.Enabled || got.ConsecutiveFailures != autocharge.MaxFailures {
 		t.Errorf("세 번 뒤 = %+v, 실패 %d", got.Settings, got.ConsecutiveFailures)
 	}
+	// 끈 거절에만 껐다고 적는다. 알림에 함께 싣는다
+	rows, err := f.pool.Query(ctx, "SELECT turned_off FROM auto_charge_requests WHERE user_id = $1 ORDER BY created_at", f.user)
+	if err != nil {
+		t.Fatalf("읽지 못했다: %v", err)
+	}
+	defer rows.Close()
+	var turnedOff []bool
+	for rows.Next() {
+		var value bool
+		if err := rows.Scan(&value); err != nil {
+			t.Fatalf("읽지 못했다: %v", err)
+		}
+		turnedOff = append(turnedOff, value)
+	}
+	if len(turnedOff) != 3 || turnedOff[0] || turnedOff[1] || !turnedOff[2] {
+		t.Errorf("껐다고 적은 것 = %v", turnedOff)
+	}
 }
 
 func TestAnUnknownAnswerIsSentAgainWithTheSameOrderAndPaidOnce(t *testing.T) {
