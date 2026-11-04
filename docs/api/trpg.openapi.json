@@ -18360,6 +18360,103 @@
         "title": "Snapshot",
         "type": "object"
       },
+      "SnapshotOut": {
+        "description": "테이블의 장면 그림 한 장. round_number 는 그린 라운드다. by_me 면 내가 그렸다(내가 냈다).\n실패했으면 code 에 까닭이 있다(refused, credit_short …). 다 그렸으면(ready) 그림의 주소로 받는다.",
+        "properties": {
+          "by_me": {
+            "title": "By Me",
+            "type": "boolean"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "round_number": {
+            "title": "Round Number",
+            "type": "integer"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SnapshotStatus"
+          }
+        },
+        "required": [
+          "id",
+          "round_number",
+          "status",
+          "by_me",
+          "code",
+          "created_at"
+        ],
+        "title": "SnapshotOut",
+        "type": "object"
+      },
+      "SnapshotPriceOut": {
+        "description": "장면 그림 한 장의 값. available 이 거짓이면 지금은 그릴 수 없다(단추를 숨긴다).\ncredits 는 결제 서버가 정한 값(글자, \"160\")이다. 결제 서버 없이 도는 서버면 credits 와 tier 가 null 이다.\ntier 가 premium 이면 골드(유료 크레딧)로만 낸다. promo 면 행사가다. chat·story 서버와 같은 모양이다.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "credits": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credits"
+          },
+          "promo": {
+            "default": false,
+            "title": "Promo",
+            "type": "boolean"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Tier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "available"
+        ],
+        "title": "SnapshotPriceOut",
+        "type": "object"
+      },
+      "SnapshotStatus": {
+        "description": "화면에 보이는 상태. drawing 이면 그리는 중이다(다시 읽는다).",
+        "enum": [
+          "drawing",
+          "ready",
+          "failed"
+        ],
+        "title": "SnapshotStatus",
+        "type": "string"
+      },
       "Steal": {
         "additionalProperties": false,
         "description": "훔치기(app/rounds/steals.py). 어느 능력으로 판정하고, 무엇이 목표값을 올리고 내리는가.\n\n목표값은 difficulty 의 목표값에서 시작한다. 더하는 것과 빼는 것은 걸리는 만큼 모두 더한다. 1 보다 낮아지지 않는다.\n  - 대상의 눈치(awareness): 대상의 그 능력치의 보정만큼 더한다(둔하면 음수라 내려간다). None 이면 보지 않는다.\n  - 장비(equipped): 걸치거나 쥔 것을 훔치면 더한다.\n  - 등급(rarity_step): 물건의 등급이 노말에서 한 단계 오를 때마다 더한다.\n  - 둔한 타입(dull_kinds): 대상의 타입이 그것이면 뺀다. 둔함 표시(dull): 판에 둔하다고 적은 대상이면 뺀다.\n  - 싸움 전(unwary): 대상이 아직 아무와도 싸우지 않았으면(쓰러져 있어도) 뺀다.\n  - 정신이 팔림(distracted): 이번 라운드에 도둑의 차례 전에 대상이 다른 사람과 싸웠으면 뺀다.",
@@ -26258,6 +26355,34 @@
         "x-audience": "service"
       }
     },
+    "/api/v1/game/snapshots/price": {
+      "get": {
+        "description": "장면 그림 한 장의 값. 가격 목록을 받지 못했고 받아 둔 것도 없으면 503 prices_unavailable 이다.",
+        "operationId": "read_price_api_v1_game_snapshots_price_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotPriceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Price",
+        "tags": [
+          "snapshots"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/game/tables": {
       "get": {
         "description": "내가 앉아 있는 테이블을 최근에 만든 것부터 돌려준다.",
@@ -28709,6 +28834,178 @@
         "summary": "Read Round Charges",
         "tags": [
           "rounds"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/tables/{table_id}/rounds/{number}/snapshot": {
+      "post": {
+        "description": "그 라운드의 장면 그림을 그리기 시작한다. 홀드가 걸리면 202 이고 그림은 목록에서 받는다.",
+        "operationId": "draw_api_v1_game_tables__table_id__rounds__number__snapshot_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Number",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Draw",
+        "tags": [
+          "snapshots"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/tables/{table_id}/snapshots": {
+      "get": {
+        "description": "그 테이블의 그림들. 만든 차례다. 누가 그렸든 앉은 사람 모두가 본다.",
+        "operationId": "list_snapshots_api_v1_game_tables__table_id__snapshots_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SnapshotOut"
+                  },
+                  "title": "Response List Snapshots Api V1 Game Tables  Table Id  Snapshots Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Snapshots",
+        "tags": [
+          "snapshots"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/tables/{table_id}/snapshots/{snapshot_id}/image": {
+      "get": {
+        "description": "그림의 바이트. 앉은 사람만 받는다.",
+        "operationId": "read_image_api_v1_game_tables__table_id__snapshots__snapshot_id__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {},
+              "image/png": {},
+              "image/webp": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Image",
+        "tags": [
+          "snapshots"
         ],
         "x-audience": "user"
       }

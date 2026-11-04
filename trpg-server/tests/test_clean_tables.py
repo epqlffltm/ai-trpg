@@ -39,6 +39,7 @@ from app.operators.service import build_read
 from app.references.indexing import index_references
 from app.references.loading import load_document
 from app.references.records import ReferenceDocument, ReferenceOrigin, ReferenceRecord, ReferenceSource
+from app.snapshots.service import new_snapshot
 from app.tables.models import (
     DepartureKind,
     GameTable,
@@ -258,6 +259,8 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         run_table = uuid.UUID(run.json()['episodes'][0]['table_id'])
         session.add(CampaignSeat(table_id=run_table, user_id=ME, carry_id=carry.id))
         session.add(CampaignQuestResult(run_id=run_id, position=0, entry_id=uuid.uuid4(), result='succeeded'))
+        # 장면 그림(#983)
+        session.add(new_snapshot(uuid.UUID(table['id']), 1, ME, 'fake-image'))
         await session.commit()
 
     async with app.state.session_factory() as session:

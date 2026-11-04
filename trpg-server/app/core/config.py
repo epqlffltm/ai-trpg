@@ -196,6 +196,29 @@ class Settings(CoreSettings, NotificationSettings):
     # 결제 서버를 한 번 부르는 시간의 상한(초)
     billing_timeout_seconds: float = Field(default=5.0, gt=0, le=BILLING_BUDGET_SECONDS)
 
+    # asset 서버의 주소. 장면 그림(app/snapshots/, #983)을 맡기고 테이블의 사람들에게 대신 내줄 때 부른다
+    # (asset-server 의 /api/v1/asset/service/trpg/images, app/asset_server/client.py). 비우면 장면 그림을 만들지 않는다.
+    # 예: http://127.0.0.1:8006
+    asset_url: str = ''
+    # asset 서버에 보내는 요청에 서명하는 비밀. asset 서버의 TRPG_SERVER_SECRET 과 같은 값이어야 한다. 32자 이상.
+    # 비밀값이다. 로그와 오류에 싣지 않는다
+    asset_secret: SecretStr = SecretStr('')
+    # asset 서버를 한 번 부르는 시간의 상한(초). 그림을 맡기고 받는 일이라 조금 길게 둔다
+    asset_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+
+    # 장면 그림(app/snapshots/, #983). off 면 만들지 않는다(503 snapshot_unavailable).
+    # gemini 는 Nano Banana(GEMINI_API_KEY 를 쓴다), comfyui 는 곁의 ComfyUI(개발·시험용), fake 는 테스트용이다.
+    # chat·story 서버와 같은 칸이다
+    snapshot_provider: Literal['off', 'fake', 'gemini', 'comfyui'] = 'off'
+    # 그림 모델의 이름. 가격표 이름은 narration.image. 뒤에 이것에서 점을 붙임표로 바꾼 것이다
+    # (narration.image.gemini-nano-banana-2-1). 결제 서버는 게임 서버에 narration 머리의 가격표만 허락한다
+    snapshot_model: str = 'gemini-nano-banana-2.1'
+    # 그림 한 장의 시간 상한(초)
+    snapshot_timeout_seconds: float = Field(default=120.0, gt=0, le=600)
+    # 곁의 ComfyUI 의 주소와 체크포인트(models/checkpoints 안의 파일 이름). comfyui 일 때만 쓴다
+    comfyui_url: str = 'http://127.0.0.1:8188'
+    comfyui_checkpoint: str = ''
+
     # 인증 서버가 탈퇴를 알리는 요청(app/withdrawal/)의 서명 비밀. 인증 서버의 GAME_SECRET 과 같은 값이어야 한다.
     # 비우면 탈퇴 알림을 받지 않는다(401). 인증 서버는 받을 때까지 다시 보낸다. 적으면 32자 이상.
     # 비밀값이다. 로그와 오류에 싣지 않는다
@@ -239,6 +262,13 @@ class Settings(CoreSettings, NotificationSettings):
         """임베딩 모델로 벡터를 만들겠다면서 모델 이름이 없으면 뜨지 않는다."""
         if self.embedder == 'llm' and not self.embedding_model.strip():
             raise ValueError('EMBEDDER=llm 이면 EMBEDDING_MODEL 을 적어야 합니다')
+        return self
+
+    @model_validator(mode='after')
+    def require_an_asset_secret(self) -> Self:
+        """asset 서버를 부르겠다면서 비밀이 없거나 짧으면 뜨지 않는다. asset 서버가 모든 요청을 401 로 거절한다."""
+        if self.asset_url.strip() and len(self.asset_secret.get_secret_value()) < BILLING_SECRET_MIN_LENGTH:
+            raise ValueError(f'ASSET_URL 을 적었으면 ASSET_SECRET 을 {BILLING_SECRET_MIN_LENGTH}자 이상 적어야 합니다')
         return self
 
     @model_validator(mode='after')

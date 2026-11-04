@@ -549,7 +549,7 @@ services:
     command: ["alembic", "upgrade", "heads"]
     env_file: ./trpg-server/.env
     # 마이그레이션은 DB 만 쓴다. 모델의 키와 서버끼리의 비밀을 비운다.
-    # 결제 서버와 알림 서버의 주소도 비운다. 주소가 있으면 설정이 그 비밀을 요구한다
+    # 결제 서버, 알림 서버, asset 서버의 주소도 비운다. 주소가 있으면 설정이 그 비밀을 요구한다
     environment:
       <<: *game-environment
       BILLING_URL: ""
@@ -564,6 +564,8 @@ services:
       SIGNAL_SECRET: ""
       AI_LOG_HMAC_KEY: ""
       AUTH_SERVER_SECRET: ""
+      ASSET_URL: ""
+      ASSET_SECRET: ""
     # host.docker.internal 이 이 PC 를 가리키게 한다. Docker Desktop 에는 원래 있고, 리눅스에는 이 줄이 있어야 한다
     extra_hosts: &host-gateway
       - "host.docker.internal:host-gateway"
@@ -579,6 +581,9 @@ services:
     env_file: ./trpg-server/.env
     environment:
       <<: [*game-environment, *telemetry-environment]
+      # 장면 그림(#983)을 asset 서버에 맡기고 테이블의 사람들에게 대신 내준다.
+      # trpg-server/.env 에 ASSET_SECRET 이 있어야 뜬다(asset 서버의 TRPG_SERVER_SECRET 과 같은 값)
+      ASSET_URL: http://asset-server:8006
     # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와 AI 모델의 창구에는 default 로 닿는다
     networks: [default, telemetry]
     extra_hosts: *host-gateway

@@ -1257,6 +1257,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/snapshots/price": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Price
+         * @description 장면 그림 한 장의 값. 가격 목록을 받지 못했고 받아 둔 것도 없으면 503 prices_unavailable 이다.
+         */
+        get: operations["read_price_api_v1_game_snapshots_price_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/tables": {
         parameters: {
             query?: never;
@@ -2118,6 +2138,66 @@ export interface paths {
          *     이 기록이 생기기 전에 연 라운드나 결제 서버 없이 도는 서버면 빈 목록이다.
          */
         get: operations["read_round_charges_api_v1_game_tables__table_id__rounds__number__charges_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/tables/{table_id}/rounds/{number}/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Draw
+         * @description 그 라운드의 장면 그림을 그리기 시작한다. 홀드가 걸리면 202 이고 그림은 목록에서 받는다.
+         */
+        post: operations["draw_api_v1_game_tables__table_id__rounds__number__snapshot_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/tables/{table_id}/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Snapshots
+         * @description 그 테이블의 그림들. 만든 차례다. 누가 그렸든 앉은 사람 모두가 본다.
+         */
+        get: operations["list_snapshots_api_v1_game_tables__table_id__snapshots_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/tables/{table_id}/snapshots/{snapshot_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Image
+         * @description 그림의 바이트. 앉은 사람만 받는다.
+         */
+        get: operations["read_image_api_v1_game_tables__table_id__snapshots__snapshot_id__image_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10601,6 +10681,54 @@ export interface components {
             xp_split: components["schemas"]["XpSplit"];
         };
         /**
+         * SnapshotOut
+         * @description 테이블의 장면 그림 한 장. round_number 는 그린 라운드다. by_me 면 내가 그렸다(내가 냈다).
+         *     실패했으면 code 에 까닭이 있다(refused, credit_short …). 다 그렸으면(ready) 그림의 주소로 받는다.
+         */
+        SnapshotOut: {
+            /** By Me */
+            by_me: boolean;
+            /** Code */
+            code: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Round Number */
+            round_number: number;
+            status: components["schemas"]["SnapshotStatus"];
+        };
+        /**
+         * SnapshotPriceOut
+         * @description 장면 그림 한 장의 값. available 이 거짓이면 지금은 그릴 수 없다(단추를 숨긴다).
+         *     credits 는 결제 서버가 정한 값(글자, "160")이다. 결제 서버 없이 도는 서버면 credits 와 tier 가 null 이다.
+         *     tier 가 premium 이면 골드(유료 크레딧)로만 낸다. promo 면 행사가다. chat·story 서버와 같은 모양이다.
+         */
+        SnapshotPriceOut: {
+            /** Available */
+            available: boolean;
+            /** Credits */
+            credits?: string | null;
+            /**
+             * Promo
+             * @default false
+             */
+            promo: boolean;
+            tier?: components["schemas"]["Tier"] | null;
+        };
+        /**
+         * SnapshotStatus
+         * @description 화면에 보이는 상태. drawing 이면 그리는 중이다(다시 읽는다).
+         * @enum {string}
+         */
+        SnapshotStatus: "drawing" | "ready" | "failed";
+        /**
          * Steal
          * @description 훔치기(app/rounds/steals.py). 어느 능력으로 판정하고, 무엇이 목표값을 올리고 내리는가.
          *
@@ -14782,6 +14910,26 @@ export interface operations {
             };
         };
     };
+    read_price_api_v1_game_snapshots_price_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnapshotPriceOut"];
+                };
+            };
+        };
+    };
     list_tables_api_v1_game_tables_get: {
         parameters: {
             query?: {
@@ -16172,6 +16320,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChargeOut"][];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    draw_api_v1_game_tables__table_id__rounds__number__snapshot_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnapshotOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_snapshots_api_v1_game_tables__table_id__snapshots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SnapshotOut"][];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_image_api_v1_game_tables__table_id__snapshots__snapshot_id__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+                snapshot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                    "image/png": unknown;
+                    "image/webp": unknown;
                 };
             };
             /** @description 입력이 틀렸다 */

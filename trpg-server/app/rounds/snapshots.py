@@ -62,6 +62,7 @@ EXCLUDED: dict[str, str] = {
     'round_declarations': '선언. 되돌린 라운드의 것은 남기고, 다시 여는 라운드에 글과 행동을 옮겨 적는다',
     'round_snapshots': '이 사진 자체다',
     'narration_charges': '서술 값의 청구. 되돌려도 돌려주지 않는다(2026-11-03 결정). 다시 닫으면 다시 받는다',
+    'table_snapshots': '장면 그림(#983). 누른 사람이 낸 그림이다. 되돌려도 지우거나 돌려주지 않는다',
     'round_memories': '지난 라운드의 벡터. 되돌린 번호부터 지운다(다시 만든다)',
     'campaign_tables': '캠페인의 편. 시작할 때 정한다',
     'campaign_seats': '캠페인의 자리. 시작할 때 정한다',

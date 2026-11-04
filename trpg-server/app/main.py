@@ -34,6 +34,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.ai_log import retention
 from app.api import health, me, readiness
+from app.asset_server.client import AssetClient
+from app.asset_server.client import AssetUnavailableError as AssetServerUnavailableError
 from app.assets.bestiaries import router as bestiaries
 from app.assets.bestiaries.service import BestiaryFullError
 from app.assets.campaigns import router as campaigns
@@ -103,6 +105,16 @@ from app.rounds import router as rounds
 from app.rounds.closing import closer_of
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, RoundConflictError, RoundNotFoundError
 from app.rounds.narrator_setup import build_narrator, build_router
+from app.snapshots import router as snapshots
+from app.snapshots import settler as snapshot_settler
+from app.snapshots.providers import build_image_provider
+from app.snapshots.service import (
+    NotDrawableError,
+    SnapshotBusyError,
+    SnapshotDeclinedError,
+    SnapshotNotFoundError,
+    SnapshotUnavailableError,
+)
 from app.tables import past_router as past_tables
 from app.tables import retirement_watch
 from app.tables import router as tables
@@ -134,7 +146,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     (app/realtime/shutdown.py). 닫는 일은 신호 처리기가 아니라 이벤트 루프가 한다.
     꺼질 때 신호를 듣는 연결, DB 연결, 인증 서버로 가는 연결, Redis 연결을 전부 닫는다.
     닫지 않으면 상대 쪽에 끊긴 연결이 한동안 남는다.
-    라운드의 시계(마감이 지난 라운드를 닫는 것), 청구 정리(서술 값을 결제 서버에 맡기는 것),
+    라운드의 시계(마감이 지난 라운드를 닫는 것), 청구 정리(서술 값과 장면 그림의 값을 결제 서버에 맡기는 것),
     AI 호출 기록의 원문 정리(보관 기간이 지난 원문을 비우는 것), 서술 모델의 은퇴 지켜보기,
     알림 보내기(발송함의 알림을 알림 서버에 넣는 것), 끊긴 세션 목록 받기는 뜰 때 돌기 시작하고,
     꺼질 때 가장 먼저 멈춘다. 시계가 맡긴 서술이 뒤의 작업 마무리에 들어가도록 순서를 지킨다.
@@ -143,6 +155,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     loop = asyncio.get_running_loop()
     running = clock.start(app.state.round_clock)
     settling = settler.start(app.state.charge_settler)
+    snapshot_settling = snapshot_settler.start(app.state.snapshot_settler)
     pruning = retention.start(app.state.ai_log_pruner)
     watching = retirement_watch.start(app.state.retirement_watch)
     dispatching = dispatcher.start(app.state.notification_dispatcher)
@@ -151,6 +164,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         yield
     await running.halt()
     await settling.halt()
+    await snapshot_settling.halt()
     await pruning.halt()
     await watching.halt()
     await dispatching.halt()
@@ -304,6 +318,22 @@ def create_app(
         billing=lambda: app.state.billing,
     )
 
+    # 장면 그림(app/snapshots/, #983). 그림을 그리는 provider(SNAPSHOT_PROVIDER, 끄면 None)와, 그린 그림을 맡기고
+    # 테이블의 사람들에게 대신 내주려고 부르는 asset 서버(ASSET_URL, ASSET_SECRET 으로 서명한다)
+    app.state.image_provider = build_image_provider(settings, app.state.http_client)
+    app.state.asset = AssetClient(
+        app.state.http_client,
+        settings.asset_url,
+        settings.asset_secret.get_secret_value(),
+        settings.asset_timeout_seconds,
+    )
+    # 끝나지 않은 장면 그림의 청구를 몇 초마다 마저 맡기는 정리 작업(app/snapshots/settler.py).
+    # lifespan 이 돌리고 멈춘다
+    app.state.snapshot_settler = snapshot_settler.SnapshotSettler(
+        session_factory=app.state.session_factory,
+        billing=lambda: app.state.billing,
+    )
+
     # 서술 모델의 은퇴를 알리고, 은퇴하면 같은 회사의 다른 모델로 바꾸는 작업(app/tables/retirement_watch.py).
     # 한 시간마다 돈다. lifespan 이 돌리고 멈춘다. 라운드가 열린 뒤에도 그 테이블을 본다(closer_of, 테이블 시작)
     app.state.retirement_watch = retirement_watch.RetirementWatch(
@@ -367,6 +397,9 @@ def create_app(
     app.include_router(transcripts.router, prefix=API_PREFIX)
     app.include_router(tables.router, prefix=API_PREFIX)
     app.include_router(rounds.router, prefix=API_PREFIX)
+    # 테이블의 장면 그림(#983)과 그 값
+    app.include_router(snapshots.router, prefix=API_PREFIX)
+    app.include_router(snapshots.price_router, prefix=API_PREFIX)
     app.include_router(calendar.router, prefix=API_PREFIX)
     app.include_router(campaign_runs.router, prefix=API_PREFIX)
     app.include_router(events.router, prefix=API_PREFIX)
@@ -408,6 +441,12 @@ def create_app(
     app.add_exception_handler(RoundConflictError, rounds.handle_round_conflict)
     app.add_exception_handler(ActionNotInRulesError, rounds.handle_action_not_in_rules)
     app.add_exception_handler(ActionTargetError, rounds.handle_action_target)
+    app.add_exception_handler(SnapshotUnavailableError, snapshots.handle_unavailable)
+    app.add_exception_handler(NotDrawableError, snapshots.handle_not_drawable)
+    app.add_exception_handler(SnapshotBusyError, snapshots.handle_busy)
+    app.add_exception_handler(SnapshotDeclinedError, snapshots.handle_declined)
+    app.add_exception_handler(SnapshotNotFoundError, snapshots.handle_not_found)
+    app.add_exception_handler(AssetServerUnavailableError, snapshots.handle_asset_unavailable)
     app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
     app.add_exception_handler(LimitsUnavailable, handle_limits_unavailable)
 
