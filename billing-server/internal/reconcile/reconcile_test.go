@@ -538,6 +538,75 @@ func stuckIn(report reconcile.Report, id uuid.UUID) bool {
 	return false
 }
 
+// openAutoCharge 는 끝나지 않은 자동 충전의 일을 DB 에 바로 적는다. 적힌 때는 지금이다.
+// 다음 시도 시각은 아주 먼 뒤로 둔다. 2026년의 시계로 도는 결제 작업의 테스트가 이 일을 가져가지 않는다.
+// 테스트가 끝나면 끝난 일(skipped)로 바꾼다. 남겨 두면 다음 대사의 테스트에도 끝나지 않은 일로 남는다.
+func (f fixture) openAutoCharge(status string) uuid.UUID {
+	f.t.Helper()
+	id, user := uuid.New(), uuid.New()
+	var billingKey, customerKey any
+	if status == "charging" {
+		billingKey, customerKey = "fake_card_ok_reconcile", uuid.New()
+	}
+	f.exec(`INSERT INTO auto_charge_requests
+		(id, user_id, product_id, price, credits, status, billing_key, customer_key, attempts, next_attempt_at, created_at)
+		VALUES ($1, $2, 'credits-1000', 1000, 1000, $3, $4, $5, 2, '2999-01-01T00:00:00Z', $6)`,
+		id, user, status, billingKey, customerKey, f.now())
+	f.t.Cleanup(func() {
+		_, _ = f.pool.Exec(context.Background(), `UPDATE auto_charge_requests
+			SET status = 'skipped', skip_reason = 'disabled', billing_key = NULL, customer_key = NULL, finished_at = created_at
+			WHERE id = $1`, id)
+	})
+	return id
+}
+
+// autoChargeIn 은 대사가 그 일을 사람이 볼 자동 충전으로 셌는지다. 셌으면 그 줄을 돌려준다.
+func autoChargeIn(report reconcile.Report, id uuid.UUID) (reconcile.StuckAutoCharge, bool) {
+	for _, s := range report.AutoCharges {
+		if s.ID == id {
+			return s, true
+		}
+	}
+	return reconcile.StuckAutoCharge{}, false
+}
+
+func TestAutoChargesStillOpenAfterADayAreForAPerson(t *testing.T) {
+	f := setUp(t)
+	*f.elapsed = 3*time.Hour + 11*time.Minute
+	created := f.now()
+	pending := f.openAutoCharge("pending")
+	charging := f.openAutoCharge("charging")
+	finished := f.openAutoCharge("pending")
+	f.exec(`UPDATE auto_charge_requests SET status = 'declined', failure_code = 'x', finished_at = created_at WHERE id = $1`, finished)
+
+	*f.elapsed += order.StuckAfter - time.Second
+	early := f.run()
+	*f.elapsed += time.Second
+	late := f.run()
+
+	if _, found := autoChargeIn(early, pending); found {
+		t.Error("하루가 되기 전인데 사람이 볼 자동 충전으로 셌다")
+	}
+	got, found := autoChargeIn(late, charging)
+	if !found || got.Status != "charging" || got.Attempts != 2 || !got.CreatedAt.Equal(created) {
+		t.Errorf("보낸 일 = %+v, %v", got, found)
+	}
+	if got, found := autoChargeIn(late, pending); !found || got.Status != "pending" {
+		t.Errorf("보내지 않은 일 = %+v, %v", got, found)
+	}
+	if _, found := autoChargeIn(late, finished); found {
+		t.Error("끝난 일을 사람이 볼 자동 충전으로 셌다")
+	}
+	if !late.NeedsPerson() {
+		t.Error("사람이 할 일이 있다고 하지 않았다")
+	}
+	// 상태는 바꾸지 않는다. 보낸 일은 돈이 나갔을 수 있다
+	var status string
+	if err := f.pool.QueryRow(ctx(t), "SELECT status FROM auto_charge_requests WHERE id = $1", charging).Scan(&status); err != nil || status != "charging" {
+		t.Errorf("대사 뒤의 상태 = %q, %v", status, err)
+	}
+}
+
 func TestOverdueWorkIsCountedOnlyAfterTheGrace(t *testing.T) {
 	f := setUp(t)
 	if err := f.services.Wallet.Deposit(ctx(t), f.user, 100); err != nil {

@@ -337,3 +337,51 @@ func (q *Queries) PaidOrdersWithoutLot(ctx context.Context, rowLimit int32) ([]u
 	}
 	return items, nil
 }
+
+const stuckAutoCharges = `-- name: StuckAutoCharges :many
+SELECT id, status, attempts, created_at
+FROM auto_charge_requests
+WHERE status IN ('pending', 'charging') AND created_at <= $1::TIMESTAMPTZ
+ORDER BY created_at, id
+LIMIT $2
+`
+
+type StuckAutoChargesParams struct {
+	Before   time.Time
+	RowLimit int32
+}
+
+type StuckAutoChargesRow struct {
+	ID        uuid.UUID
+	Status    string
+	Attempts  int32
+	CreatedAt time.Time
+}
+
+// 끝나지 않은 채(pending, charging) before 보다 먼저 적힌 자동 충전의 일(#980). 사람이 볼 일이다.
+// pending 이 오래 남았으면 결제 작업(cmd/autocharge)이 돌지 않는 것이다. charging 이 오래 남았으면 결제 대행사가 끝내 답하지 않는 것이다.
+// 끝나지 않은 일은 사람마다 하나라 적다(auto_charge_requests_one_open).
+func (q *Queries) StuckAutoCharges(ctx context.Context, arg StuckAutoChargesParams) ([]StuckAutoChargesRow, error) {
+	rows, err := q.db.Query(ctx, stuckAutoCharges, arg.Before, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []StuckAutoChargesRow
+	for rows.Next() {
+		var i StuckAutoChargesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.Attempts,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

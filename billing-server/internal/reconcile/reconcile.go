@@ -8,8 +8,10 @@
 //  3. 정리 작업이 밀려 있지 않은지 센다(만료 시각이 한참 지났는데 아직 끝나지 않은 것).
 //  4. 1 을 하고도 하루(order.StuckAfter) 넘게 결과를 모르는 주문을 찾는다. 사람이 결제 대행사의 상점관리자에서 확인할 주문이다.
 //  5. 공급사 가격 변경의 할 일 가운데 때가 되었는데 끝내지 않은 것을 찾는다(internal/pricereview). 사람이 공지하고 값을 넣을 일이다.
+//  6. 하루(4 와 같은 기준) 넘게 끝나지 않은 자동 충전의 일을 찾는다(#980). 결제 작업이 돌지 않거나 결제 대행사가 끝내 답하지 않는 것이다.
+//     상태는 바꾸지 않는다. 보낸 일(charging)은 돈이 나갔을 수 있다. 사람이 상점관리자에서 일의 번호(주문 번호)로 본다.
 //
-// 2 의 검사는 한 트랜잭션(REPEATABLE READ, READ ONLY)에서 한다. 검사들이 같은 순간의 장부를 보고, DB 가 쓰기를 막는다.
+// 2, 3, 6 은 한 트랜잭션(REPEATABLE READ, READ ONLY)에서 한다. 검사들이 같은 순간의 장부를 보고, DB 가 쓰기를 막는다.
 package reconcile
 
 import (
@@ -83,6 +85,18 @@ func (o Overdue) Any() bool {
 	return o.Holds > 0 || o.Orders > 0 || o.FreeGrants > 0
 }
 
+// StuckAutoCharge 는 오래 끝나지 않은 자동 충전의 일 하나다.
+type StuckAutoCharge struct {
+	// ID 는 일의 번호다. 결제 대행사의 주문 번호이자 멱등키다. 상점관리자에서 이것으로 찾는다.
+	ID uuid.UUID
+	// Status 는 pending(아직 보내지 않았다)이나 charging(보냈다. 답을 받지 못했다)이다.
+	Status string
+	// Attempts 는 결제 작업이 차지한 수다. pending 인데 0 이면 결제 작업이 한 번도 손대지 않은 것이다.
+	Attempts int32
+	// CreatedAt 은 골드가 떨어져 일이 적힌 때다.
+	CreatedAt time.Time
+}
+
 // Report 는 대사 한 번의 결과다.
 type Report struct {
 	Stale      order.StaleReport
@@ -92,11 +106,13 @@ type Report struct {
 	Stuck []order.Order
 	// Reviews 는 때가 되었는데 끝내지 않은 가격 변경의 할 일들이다. 사람이 공지하고 값을 넣은 뒤 끝냈다고 적는다(cmd/pricereviews).
 	Reviews []pricereview.Due
+	// AutoCharges 는 오래 끝나지 않은 자동 충전의 일들이다. 사람이 상점관리자에서 확인한다.
+	AutoCharges []StuckAutoCharge
 }
 
-// NeedsPerson 은 사람이 할 일이 있는지다. 결과를 정할 주문이나, 때가 된 가격 변경의 할 일이다.
+// NeedsPerson 은 사람이 할 일이 있는지다. 결과를 정할 주문, 때가 된 가격 변경의 할 일, 오래 끝나지 않은 자동 충전의 일이다.
 func (r Report) NeedsPerson() bool {
-	return len(r.Stuck) > 0 || len(r.Reviews) > 0
+	return len(r.Stuck) > 0 || len(r.Reviews) > 0 || len(r.AutoCharges) > 0
 }
 
 // Clean 은 장부에 맞지 않는 줄이 없는지다.
@@ -111,6 +127,7 @@ type Options struct {
 	// Limit 은 검사마다, 그리고 결제 대행사에 물을 주문의 가장 많은 수다. 0 이하면 DefaultLimit 이다.
 	Limit int
 	// StuckAfter 는 결과를 모르는 채로 이만큼 지난 주문을 사람이 볼 주문으로 센다. 0 이하면 order.StuckAfter 다.
+	// 끝나지 않은 채 이만큼 지난 자동 충전의 일도 사람이 볼 일로 센다.
 	StuckAfter time.Duration
 }
 
@@ -149,7 +166,10 @@ func (r *Reconciler) Run(ctx context.Context, options Options) (Report, error) {
 		if report.Mismatches, err = runChecks(ctx, queries, int32(limit)); err != nil {
 			return err
 		}
-		report.Overdue, err = countOverdue(ctx, queries, r.now().Add(-options.StaleAfter))
+		if report.Overdue, err = countOverdue(ctx, queries, r.now().Add(-options.StaleAfter)); err != nil {
+			return err
+		}
+		report.AutoCharges, err = stuckAutoCharges(ctx, queries, r.now().Add(-stuckAfter), int32(limit))
 		return err
 	})
 	return report, errors.Join(staleErr, stuckErr, reviewErr, checkErr)
@@ -222,6 +242,19 @@ func countOverdue(ctx context.Context, queries *reconciledb.Queries, before time
 		return Overdue{}, err
 	}
 	return Overdue{Holds: row.HeldHolds, Orders: row.PendingOrders, FreeGrants: row.FreeGrants}, nil
+}
+
+// stuckAutoCharges 는 before 보다 먼저 적혔는데 끝나지 않은 자동 충전의 일을 찾는다.
+func stuckAutoCharges(ctx context.Context, queries *reconciledb.Queries, before time.Time, limit int32) ([]StuckAutoCharge, error) {
+	rows, err := queries.StuckAutoCharges(ctx, reconciledb.StuckAutoChargesParams{Before: before.UTC(), RowLimit: limit})
+	if err != nil {
+		return nil, err
+	}
+	stuck := make([]StuckAutoCharge, len(rows))
+	for i, row := range rows {
+		stuck[i] = StuckAutoCharge{ID: row.ID, Status: row.Status, Attempts: row.Attempts, CreatedAt: row.CreatedAt}
+	}
+	return stuck, nil
 }
 
 // uuidStrings 는 UUID 들을 글자로 바꾼다. 앞의 오류를 그대로 넘긴다.

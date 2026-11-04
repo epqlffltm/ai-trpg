@@ -79,6 +79,8 @@ func TestExitCodes(t *testing.T) {
 	dirtyAndStuck := reconcile.Report{Mismatches: dirty.Mismatches, Stuck: stuck.Stuck}
 	review := reconcile.Report{Reviews: []pricereview.Due{{ReviewID: 1, Step: pricereview.StepNotice}}}
 	dirtyAndReview := reconcile.Report{Mismatches: dirty.Mismatches, Reviews: review.Reviews}
+	auto := reconcile.Report{AutoCharges: []reconcile.StuckAutoCharge{{Status: "charging"}}}
+	dirtyAndAuto := reconcile.Report{Mismatches: dirty.Mismatches, AutoCharges: auto.AutoCharges}
 	cases := map[string]struct {
 		report reconcile.Report
 		err    error
@@ -95,6 +97,9 @@ func TestExitCodes(t *testing.T) {
 		"가격 변경 할 일이 있다":         {review, nil, 3},
 		"어긋난 줄도 가격 변경 할 일도 있다":  {dirtyAndReview, nil, 1},
 		"끝내지 못했고 가격 변경 할 일이 있다": {review, errors.New("db"), 2},
+		"오래 끝나지 않은 자동 충전이 있다":   {auto, nil, 3},
+		"어긋난 줄도 자동 충전도 있다":      {dirtyAndAuto, nil, 1},
+		"끝내지 못했고 자동 충전이 있다":     {auto, errors.New("db"), 2},
 	}
 	for name, tc := range cases {
 		if got := exitCode(tc.report, tc.err); got != tc.want {
@@ -274,6 +279,59 @@ func TestPrintReportListsDueReviews(t *testing.T) {
 	out.Reset()
 	printReport(&out, reconcile.Report{}, nil)
 	if !strings.Contains(out.String(), "가격 변경 할 일: 0") || strings.Contains(out.String(), "cmd/pricereviews") {
+		t.Errorf("없을 때의 화면 = %s", out.String())
+	}
+}
+
+func TestOnceLogsEachStuckAutoCharge(t *testing.T) {
+	lines := captureLogs(t)
+	since := time.Date(2026, 11, 1, 3, 0, 0, 0, time.UTC)
+	id := uuid.MustParse("5a7e0000-0000-4000-8000-0000000000bb")
+	fake := &fakeRunner{report: reconcile.Report{AutoCharges: []reconcile.StuckAutoCharge{
+		{ID: id, Status: "charging", Attempts: 17, CreatedAt: since},
+	}}}
+
+	if _, err := once(context.Background(), fake, options{staleAfter: time.Minute, stuckAfter: time.Hour, limit: 1}); err != nil {
+		t.Fatalf("오류 = %v", err)
+	}
+
+	got := lines()
+	// 자동 충전 하나(warning), 작업이 끝났다(debug)
+	if len(got) != 2 || got[0]["level"] != "warning" || got[0]["error_code"] != "autocharge.stuck" ||
+		got[0]["auto_charge_id"] != id.String() || got[0]["status"] != "charging" || got[0]["attempts"] != float64(17) ||
+		got[0]["since"] != "2026-11-01T03:00:00.000Z" {
+		t.Fatalf("줄 = %v", got)
+	}
+}
+
+func TestPrintReportCountsStuckAutoChargesByKind(t *testing.T) {
+	var out bytes.Buffer
+	report := reconcile.Report{AutoCharges: []reconcile.StuckAutoCharge{
+		{ID: uuid.New(), Status: "pending"},
+		{ID: uuid.New(), Status: "charging"},
+		{ID: uuid.New(), Status: "charging"},
+	}}
+
+	printReport(&out, report, nil)
+
+	text := out.String()
+	if !strings.Contains(text, "사람이 볼 자동 충전: 3 (보내지 않음 1, 답을 모름 2)") ||
+		!strings.Contains(text, "cmd/autocharge") || !strings.Contains(text, "상점관리자") {
+		t.Errorf("화면 = %s", text)
+	}
+	if strings.Contains(text, report.AutoCharges[0].ID.String()) {
+		t.Errorf("화면에 번호가 찍혔다: %s", text)
+	}
+
+	out.Reset()
+	printReport(&out, reconcile.Report{AutoCharges: report.AutoCharges[1:]}, nil)
+	if strings.Contains(out.String(), "cmd/autocharge") || !strings.Contains(out.String(), "상점관리자") {
+		t.Errorf("답을 모르는 것만 있을 때의 화면 = %s", out.String())
+	}
+
+	out.Reset()
+	printReport(&out, reconcile.Report{}, nil)
+	if !strings.Contains(out.String(), "사람이 볼 자동 충전: 0") || strings.Contains(out.String(), "상점관리자") {
 		t.Errorf("없을 때의 화면 = %s", out.String())
 	}
 }
