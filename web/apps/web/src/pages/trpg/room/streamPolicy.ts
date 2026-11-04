@@ -66,6 +66,7 @@ export type Routed =
   | { kind: 'chat'; message: ChatMessage }
   | { kind: 'typing'; userId: string }
   | { kind: 'preview'; chunk: PreviewChunk }
+  | { kind: 'snapshot' }
   | { kind: 'ignore' };
 
 export function routeMessage(message: SseMessage): Routed {
@@ -80,6 +81,9 @@ export function routeMessage(message: SseMessage): Routed {
       return typeof data.user_id === 'string' ? { kind: 'typing', userId: data.user_id } : { kind: 'ignore' };
     case 'narration_preview':
       return toPreview(data);
+    case 'scene_snapshot':
+      // 장면 그림이 바뀌었다(#983). 내용이 없다. 받은 쪽이 목록을 다시 읽는다
+      return { kind: 'snapshot' };
     default:
       return { kind: 'ignore' };
   }

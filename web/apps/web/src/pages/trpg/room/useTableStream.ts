@@ -25,6 +25,8 @@ export type StreamHandlers = {
   onChat: (message: ChatMessage) => void;
   onTyping: (userId: string) => void;
   onPreview: (chunk: PreviewChunk) => void;
+  /** 장면 그림이 바뀌었다(scene_snapshot, #983). 그림 목록을 다시 읽는다 */
+  onSnapshot: () => void;
   onStop: (reason: StopReason) => void;
 };
 
@@ -127,6 +129,7 @@ function deliver(message: Parameters<typeof routeMessage>[0], handlers: StreamHa
   else if (routed.kind === 'chat') handlers.onChat(routed.message);
   else if (routed.kind === 'typing') handlers.onTyping(routed.userId);
   else if (routed.kind === 'preview') handlers.onPreview(routed.chunk);
+  else if (routed.kind === 'snapshot') handlers.onSnapshot();
 }
 
 function stop(reason: StopReason, setStatus: (status: StreamStatus) => void, handlers: () => StreamHandlers): void {

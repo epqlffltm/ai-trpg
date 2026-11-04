@@ -47,6 +47,7 @@ describe('routeMessage', () => {
     expect(routeMessage({ id: '1-1-0', event: 'chat_message', data: JSON.stringify(chat(1)) })).toMatchObject({ kind: 'chat' });
     expect(routeMessage({ id: '2-1-0', event: 'table_event', data: '{"sequence": 2}' })).toMatchObject({ kind: 'event' });
     expect(routeMessage({ event: 'narration_preview', data: '{"round": 1}' })).toEqual({ kind: 'ignore' });
+    expect(routeMessage({ event: 'scene_snapshot', data: '{}' })).toEqual({ kind: 'snapshot' });
     expect(routeMessage({ event: 'chat_message', data: '깨진 글' })).toEqual({ kind: 'ignore' });
   });
 });
