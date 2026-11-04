@@ -346,6 +346,15 @@ ssh -i $HOME\.ssh\LightsailDefaultKey-ap-northeast-2.pem -L 18000:127.0.0.1:8000
 cd /srv/ai-trpg && git pull && docker compose up -d --build
 ```
 
+**토스페이먼츠의 테스트 결제로 바꾼다(#980).** 처음에는 가짜 결제 대행사다(`PAYMENT_PROVIDER=fake`). 토스페이먼츠의 상점관리자에서 **API 개별 연동 키**(결제위젯 키가 아니다)의 테스트 키 한 쌍을 받는다.
+자동결제(빌링)는 계약에서 따로 열어야 카드 등록 창이 뜬다. 클라이언트 키는 두 곳에 같은 값을 적는다. 화면은 빌드할 때 키를 싣고, 결제 서버는 같은 상점의 짝인지 본다.
+
+1. [VM] `billing-server/.env` 에 `PAYMENT_PROVIDER=toss`, `TOSS_SECRET_KEY=test_sk_…`, `TOSS_CLIENT_KEY=test_ck_…`
+2. [VM] 루트 `.env` 에 `WEB_PAYMENT_GATEWAY=toss`, `TOSS_CLIENT_KEY=test_ck_…`(1 과 같은 값)
+3. [VM] `docker compose up -d --build proxy billing-server billing-autocharge billing-cron`. 화면은 다시 빌드해야 키가 실린다
+4. [브라우저] 충전에서 결제창을 열고, 지갑에서 카드 등록 창을 연다. 개발자 도구의 콘솔에 CSP 위반(`Refused to load`)이 없는지 본다.
+   있으면 그 도메인을 `docker/nginx/templates/web-headers.inc.template` 에 더한다(토스페이먼츠의 문서에 CSP 의 목록이 없어 SDK 의 코드에서 찾았다)
+
 **허용 주소를 바꾼다.** `docker/nginx/allowlist/allow.conf` 를 고치면 1분 안에 다시 읽는다. 바로 읽히려면 `docker compose exec proxy nginx -s reload`. 집의 주소가 바뀌었으면 Lightsail 방화벽의 22 도 고친다.
 
 **로그를 본다.** Grafana(4번의 사설망 주소) 또는 `docker compose logs --tail 100 <서비스>`.

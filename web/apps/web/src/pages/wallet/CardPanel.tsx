@@ -1,7 +1,9 @@
 // web/apps/web/src/pages/wallet/CardPanel.tsx
 // 자동 충전(#980)에 쓸 카드. 등록한 카드(카드사 코드, 가린 번호)를 보이고, 등록하거나 바꾸거나 지운다.
-// 등록 창은 결제 대행사의 것이다. 지금은 시험용(VITE_PAYMENT_GATEWAY=fake)만 있다. 결과를 고르면 그 앞머리로 인증 키를 지어 보낸다.
-// 실제 등록 창(토스페이먼츠)도 마지막에 인증 키 하나를 넘긴다. 받는 쪽(onRegister)은 같다.
+// 등록 창은 결제 대행사의 것이다(VITE_PAYMENT_GATEWAY).
+//   - fake: 시험용 등록 창. 결과를 고르면 그 앞머리로 인증 키를 지어 넘긴다(onRegister)
+//   - toss: 토스페이먼츠의 등록 창을 현재 창에서 연다(onOpenToss). 마치면 돌아오는 화면(CardReturnPage)이 등록한다
+//   - none: 준비 중이라 알린다
 // 지우면 자동 충전도 꺼진다(서버가 함께 끈다).
 
 import { Button, SelectField } from '@ai-trpg/ui';
@@ -16,10 +18,11 @@ type Props = {
   gateway: GatewayKind;
   busy: boolean;
   onRegister: (authKey: string) => void;
+  onOpenToss: () => void;
   onRemove: () => void;
 };
 
-export function CardPanel({ card, gateway, busy, onRegister, onRemove }: Props) {
+export function CardPanel({ card, gateway, busy, onRegister, onOpenToss, onRemove }: Props) {
   const [opened, setOpened] = useState(false);
   const [mark, setMark] = useState<string>('');
   const [confirming, setConfirming] = useState(false);
@@ -39,7 +42,15 @@ export function CardPanel({ card, gateway, busy, onRegister, onRemove }: Props) 
       ) : (
         <p>등록한 카드가 없습니다.</p>
       )}
-      {gateway !== 'fake' ? <p className="hint">카드 등록은 준비 중입니다.</p> : null}
+      {gateway === 'none' ? <p className="hint">카드 등록은 준비 중입니다.</p> : null}
+      {gateway === 'toss' ? (
+        <>
+          <p className="hint">토스페이먼츠의 카드 등록 창으로 갑니다. 마치면 돌아옵니다.</p>
+          <Button variant="secondary" busy={busy} onClick={onOpenToss}>
+            {card ? '카드 바꾸기' : '카드 등록'}
+          </Button>
+        </>
+      ) : null}
       {gateway === 'fake' && !opened ? (
         <Button variant="secondary" disabled={busy} onClick={() => setOpened(true)}>
           {card ? '카드 바꾸기' : '카드 등록'}

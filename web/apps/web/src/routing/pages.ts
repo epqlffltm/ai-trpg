@@ -22,6 +22,8 @@ export const PersonaEditPage = lazyPage(() => import('../pages/personas/PersonaE
 export const GalleryPage = lazyPage(() => import('../pages/gallery/GalleryPage'), 'GalleryPage');
 export const SettingsPage = lazyPage(() => import('../pages/settings/SettingsPage'), 'SettingsPage');
 export const WalletPage = lazyPage(() => import('../pages/wallet/WalletPage'), 'WalletPage');
+// 토스페이먼츠의 카드 등록 창이 돌아오는 화면(자동 충전)
+export const CardReturnPage = lazyPage(() => import('../pages/wallet/CardReturnPage'), 'CardReturnPage');
 export const ChargePage = lazyPage(() => import('../pages/charge/ChargePage'), 'ChargePage');
 // 토스페이먼츠의 결제창이 돌아오는 화면(A7)
 export const ChargeReturnPage = lazyPage(() => import('../pages/charge/ChargeReturnPage'), 'ChargeReturnPage');

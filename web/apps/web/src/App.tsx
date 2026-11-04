@@ -25,6 +25,7 @@ import {
   BoardListPage,
   BannersPage,
   BoardSearchPage,
+  CardReturnPage,
   CharacterBrowsePage,
   CharacterEditPage,
   CharacterNewPage,
@@ -187,6 +188,14 @@ export function App() {
           element={
             <RequireSession>
               <ChargePage />
+            </RequireSession>
+          }
+        />
+        <Route
+          path="wallet/card/return"
+          element={
+            <RequireSession>
+              <CardReturnPage />
             </RequireSession>
           }
         />
