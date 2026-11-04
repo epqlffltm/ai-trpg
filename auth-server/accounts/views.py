@@ -33,6 +33,7 @@ from accounts.api_schema import (
     IdentityAnswerSerializer,
     JwksSerializer,
     MeSerializer,
+    ReceiptNoticeAnswerSerializer,
     RetryLaterSerializer,
     RevocationDocumentSerializer,
     WithdrawalStateSerializer,
@@ -96,6 +97,7 @@ from accounts.models import User
 from accounts.network_blocks import find_block, log_blocked_request
 from accounts.origin_check import is_allowed_origin, log_refused_origin, read_origin
 from accounts.public_names import InvalidPublicIdsError, find_names, parse_ids
+from accounts.receipt_notices import OrderReceipt, record_receipt_notice
 from accounts.serializers import (
     ConsentAgreeSerializer,
     ConsentDocumentSerializer,
@@ -116,6 +118,7 @@ from accounts.serializers import (
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PublicNameSerializer,
+    ReceiptNoticeSerializer,
     SignupCompleteSerializer,
     SignupSerializer,
     SignupVerifiedSerializer,
@@ -1098,6 +1101,49 @@ class ServiceGuardianNoticeView(APIView):
         )
         # queued(메일을 적었다), skipped(알릴 보호자가 없다), duplicate(이미 받았다). 셋 다 결제 서버에는 끝난 일이다
         return Response({'status': outcome}, status=status.HTTP_200_OK)
+
+
+class ServiceReceiptNoticeView(APIView):
+    """POST /api/v1/auth/service/receipt-notices. 결제 서버가 결제와 청약철회를 알린다. 본인에게 메일로 알린다(#553)."""
+
+    # 사용자의 토큰이 아니라 결제 서버의 서명으로 확인한다. 프록시는 이 주소를 바깥에 열지 않는다
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    @extend_schema(
+        summary='결제 서버가 결제와 청약철회를 알린다. 결제한 본인에게 메일로 알린다(서버끼리)',
+        request=ReceiptNoticeSerializer,
+        responses={
+            200: ReceiptNoticeAnswerSerializer,
+            400: bad_request(),
+            401: coded('결제 서버의 서명이 맞지 않다(service_bad_signature)'),
+        },
+    )
+    def post(self, request: Request) -> Response:
+        if not has_billing_signature(request):
+            return build_coded_error_response(
+                '서명이 맞지 않습니다.', 'service_bad_signature', status.HTTP_401_UNAUTHORIZED
+            )
+        serializer = ReceiptNoticeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        outcome = record_receipt_notice(_order_receipt(serializer.validated_data))
+        # queued(메일을 적었다), skipped(알릴 계정이 없다), duplicate(이미 받았다). 셋 다 결제 서버에는 끝난 일이다
+        return Response({'status': outcome}, status=status.HTTP_200_OK)
+
+
+def _order_receipt(fields: dict) -> OrderReceipt:
+    """검사를 마친 본문을 알릴 일로 바꾼다."""
+    return OrderReceipt(
+        order_id=fields['order_id'],
+        kind=fields['kind'],
+        user_public_id=fields['user_id'],
+        product_id=fields['product_id'],
+        price=fields['price'],
+        credits=fields['credits'],
+        paid_at=fields['paid_at'],
+        occurred_at=fields['occurred_at'],
+        refundable_until=fields['refundable_until'],
+    )
 
 
 class MeView(APIView):

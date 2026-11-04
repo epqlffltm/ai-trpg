@@ -142,6 +142,20 @@ class GuardianNoticeSerializer(serializers.Serializer):
     occurred_at = serializers.DateTimeField()
 
 
+class ReceiptNoticeSerializer(serializers.Serializer):
+    """결제 서버가 보낸 본인 결제 알림(#553). 본문의 모양만 본다. 서명은 뷰가 먼저 본다."""
+
+    order_id = serializers.UUIDField()
+    kind = serializers.ChoiceField(choices=GuardianNoticeKind.choices)
+    user_id = serializers.UUIDField()
+    product_id = serializers.CharField(max_length=100)
+    price = serializers.IntegerField(min_value=1)
+    credits = serializers.IntegerField(min_value=1)
+    paid_at = serializers.DateTimeField()
+    occurred_at = serializers.DateTimeField()
+    refundable_until = serializers.DateTimeField()
+
+
 class IdentityStatusSerializer(serializers.Serializer):
     """본인인증 상태(identity_status.IdentityStatus). 내 정보와 본인인증의 응답에 실린다."""
 

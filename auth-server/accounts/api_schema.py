@@ -21,7 +21,7 @@ from drf_spectacular.contrib.rest_framework_simplejwt import SimpleJWTScheme
 from drf_spectacular.utils import OpenApiResponse
 from rest_framework import serializers
 
-from accounts.models import GuardianConsentStatus, GuardianNoticeOutcome
+from accounts.models import GuardianConsentStatus, GuardianNoticeOutcome, ReceiptNoticeOutcome
 from accounts.serializers import IdentityStatusSerializer, UserSerializer
 
 
@@ -88,6 +88,12 @@ class GuardianNoticeAnswerSerializer(serializers.Serializer):
     """결제 서버에 주는 답. queued(메일을 적었다), skipped(알릴 보호자가 없다), duplicate(이미 받았다)."""
 
     status = serializers.ChoiceField(choices=[*GuardianNoticeOutcome.values, 'duplicate'])
+
+
+class ReceiptNoticeAnswerSerializer(serializers.Serializer):
+    """결제 서버에 주는 답. queued(메일을 적었다), skipped(알릴 계정이 없다), duplicate(이미 받았다)."""
+
+    status = serializers.ChoiceField(choices=[*ReceiptNoticeOutcome.values, 'duplicate'])
 
 
 class IdentityAnswerSerializer(serializers.Serializer):

@@ -485,6 +485,10 @@ PASSWORD_RESET_URL = env('PASSWORD_RESET_URL', default='http://localhost:5173/re
 GUARDIAN_CONSENT_URL = env('GUARDIAN_CONSENT_URL', default='http://localhost:5173/guardian/consent')
 GUARDIAN_REVOKE_URL = env('GUARDIAN_REVOKE_URL', default='http://localhost:5173/guardian/revoke')
 
+# 결제한 본인에게 보내는 결제·청약철회 메일(#553)의 주문 내역 화면. 끝에 /<주문 번호> 를 붙인다.
+# 그 화면에서 청약철회를 한다. 로그인해야 열린다
+ORDERS_URL = env('ORDERS_URL', default='http://localhost:5173/wallet/orders')
+
 
 # 결제 서버
 # 본인인증을 마친 사용자에게 환영 크레딧을 주라고 결제 서버에 맡긴다(accounts/welcome_credit.py).

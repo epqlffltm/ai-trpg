@@ -37,6 +37,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/guardiannotice"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jobs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/receiptnotice"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/sweep"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/usernotice"
 )
@@ -126,7 +127,8 @@ func run(args []string, out io.Writer) error {
 	}
 	sweeper := sweep.New(services.Holds, services.Wallet, services.Orders, opts.limit).
 		WithNotices(guardiannotice.NewService(pool, time.Now, noticeSender(settings.GuardianNotices))).
-		WithUserNotices(userNotices)
+		WithUserNotices(userNotices).
+		WithReceipts(receiptnotice.NewService(pool, time.Now, receiptSender(settings.ReceiptNotices)))
 
 	if opts.once {
 		result, err := round(ctx, sweeper)
@@ -150,6 +152,17 @@ func noticeSender(settings config.GuardianNotices) guardiannotice.Sender {
 		return nil
 	}
 	return guardiannotice.NewHTTPSender(settings.URL, settings.Secret, time.Now)
+}
+
+// receiptSender 는 결제한 본인에게 알릴 결제를 인증 서버에 보내는 것을 만든다. 보낼 곳이나 비밀이 없으면 nil 이다(적기만 한다).
+func receiptSender(settings config.ReceiptNotices) receiptnotice.Sender {
+	if !settings.Enabled() {
+		slog.Warn("인증 서버의 알림 주소나 AUTH_SERVER_SECRET 이 없습니다. 결제한 본인에게 알릴 결제를 적기만 하고 보내지 않습니다",
+			slog.String(obs.FieldOperation, operation),
+		)
+		return nil
+	}
+	return receiptnotice.NewHTTPSender(settings.URL, settings.Secret, time.Now)
 }
 
 // userNoticeSender 는 사용자의 알림을 알림 서버에 보내는 것을 만든다. 보낼 곳이나 비밀이 없으면 nil 이다(적기만 한다).
@@ -224,6 +237,9 @@ func round(ctx context.Context, sweeper rounder) (sweep.Result, error) {
 				slog.Int("user_notices_rejected", result.UserNotices.Rejected),
 				slog.Int("user_notices_expired", result.UserNotices.Expired),
 				slog.Int("user_notices_purged", result.UserNotices.Purged),
+				slog.Int("receipt_notices_queued", result.Receipts.Queued),
+				slog.Int("receipt_notices_sent", result.Receipts.Sent),
+				slog.Int("receipt_notices_retried", result.Receipts.Retried),
 			)
 		}
 		return err
@@ -249,6 +265,8 @@ func printResult(out io.Writer, result sweep.Result) {
 	users := result.UserNotices
 	fmt.Fprintf(out, "사용자 알림: 적음 %d, 보냄 %d, 다시 보낼 것 %d, 받지 않음 %d, 보내지 않기로 함 %d, 지움 %d\n",
 		users.Queued, users.Sent, users.Retried, users.Rejected, users.Expired, users.Purged)
+	fmt.Fprintf(out, "결제한 본인에게 알림: 적음 %d, 보냄 %d, 다시 보낼 것 %d\n",
+		result.Receipts.Queued, result.Receipts.Sent, result.Receipts.Retried)
 }
 
 // loadDotEnv 는 현재 폴더의 .env 를 환경 변수로 올린다. 파일이 없으면 아무것도 하지 않는다.

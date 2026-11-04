@@ -5,9 +5,11 @@ package sweep_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/guardiannotice"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/receiptnotice"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/sweep"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/usernotice"
 )
@@ -142,6 +144,42 @@ func TestWithoutNoticesTheRoundIsAsBefore(t *testing.T) {
 
 	if err != nil || result.Notices != (guardiannotice.Result{}) {
 		t.Errorf("결과 = %+v, %v", result, err)
+	}
+}
+
+// fakeReceipts 는 정해 둔 대로 답하는 본인 결제 알림이다.
+type fakeReceipts struct {
+	result receiptnotice.Result
+	err    error
+	limit  int
+}
+
+func (f *fakeReceipts) Round(_ context.Context, limit int) (receiptnotice.Result, error) {
+	f.limit = limit
+	return f.result, f.err
+}
+
+func TestReceiptsRunWhenAttached(t *testing.T) {
+	var order []string
+	holds, wallets, orders := steps(&order)
+	receipts := &fakeReceipts{result: receiptnotice.Result{Sent: 1}}
+
+	result, err := sweep.New(holds, wallets, orders, 7).WithReceipts(receipts).Round(context.Background())
+
+	if err != nil || result.Receipts != receipts.result || receipts.limit != 7 || !result.Any() {
+		t.Errorf("결과 = %+v, %v, limit = %d", result, err, receipts.limit)
+	}
+}
+
+func TestAFailingReceiptStepDoesNotStopTheOthers(t *testing.T) {
+	var order []string
+	holds, wallets, orders := steps(&order)
+	receipts := &fakeReceipts{err: errors.New("DB 가 끊겼다")}
+
+	_, err := sweep.New(holds, wallets, orders, 7).WithReceipts(receipts).Round(context.Background())
+
+	if err == nil || !strings.Contains(err.Error(), "결제한 본인에게") || len(order) != 3 {
+		t.Errorf("오류 = %v, 돈 차례 = %v", err, order)
 	}
 }
 

@@ -719,6 +719,73 @@
         ],
         "type": "object"
       },
+      "ReceiptNoticeAnswer": {
+        "additionalProperties": false,
+        "description": "결제 서버에 주는 답. queued(메일을 적었다), skipped(알릴 계정이 없다), duplicate(이미 받았다).",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/StatusEnum"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "ReceiptNoticeRequest": {
+        "additionalProperties": false,
+        "description": "결제 서버가 보낸 본인 결제 알림(#553). 본문의 모양만 본다. 서명은 뷰가 먼저 본다.",
+        "properties": {
+          "credits": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/KindEnum"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "order_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "paid_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "price": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "product_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "refundable_until": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "credits",
+          "kind",
+          "occurred_at",
+          "order_id",
+          "paid_at",
+          "price",
+          "product_id",
+          "refundable_until",
+          "user_id"
+        ],
+        "type": "object"
+      },
       "RetryLater": {
         "additionalProperties": false,
         "description": "시도가 너무 많거나 메일을 지금은 보낼 수 없을 때(429). retry_after 초 뒤에는 된다. Retry-After 머리말도 같다.",
@@ -2847,6 +2914,108 @@
           {}
         ],
         "summary": "결제 서버가 미성년자의 결제와 청약철회를 알린다(서버끼리)",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
+    "/api/v1/auth/service/receipt-notices": {
+      "post": {
+        "description": "POST /api/v1/auth/service/receipt-notices. 결제 서버가 결제와 청약철회를 알린다. 본인에게 메일로 알린다(#553).",
+        "operationId": "service_receipt_notices_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiptNoticeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptNoticeAnswer"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "요청을 받을 수 없다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "결제 서버의 서명이 맞지 않다(service_bad_signature)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "결제 서버가 결제와 청약철회를 알린다. 결제한 본인에게 메일로 알린다(서버끼리)",
         "tags": [
           "service"
         ],
