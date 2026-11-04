@@ -37,3 +37,5 @@ class Erased:
 
     notifications: int
     mutes: int
+    # 그 사람이 한 팔로우와 받은 팔로우(#989)
+    follows: int

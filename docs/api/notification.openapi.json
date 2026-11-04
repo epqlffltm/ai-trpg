@@ -1,6 +1,82 @@
 {
   "components": {
     "schemas": {
+      "FollowState": {
+        "description": "내가 그 제작자를 팔로우하는지와 그 제작자의 팔로워 수. 팔로우하고 끊은 뒤의 값이다.",
+        "properties": {
+          "follower_count": {
+            "title": "Follower Count",
+            "type": "integer"
+          },
+          "following": {
+            "title": "Following",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "following",
+          "follower_count"
+        ],
+        "title": "FollowState",
+        "type": "object"
+      },
+      "Followed": {
+        "description": "내가 팔로우한 제작자 하나. 이름은 화면이 인증 서버에 묻는다.",
+        "properties": {
+          "creator_id": {
+            "format": "uuid",
+            "title": "Creator Id",
+            "type": "string"
+          },
+          "followed_at": {
+            "format": "date-time",
+            "title": "Followed At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "creator_id",
+          "followed_at"
+        ],
+        "title": "Followed",
+        "type": "object"
+      },
+      "FollowerCount": {
+        "description": "그 제작자의 팔로워 수. 누구나 본다.",
+        "properties": {
+          "follower_count": {
+            "title": "Follower Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "follower_count"
+        ],
+        "title": "FollowerCount",
+        "type": "object"
+      },
+      "FollowingPage": {
+        "description": "내 팔로잉의 한 쪽과 전체 수. 최근에 팔로우한 것부터다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Followed"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "FollowingPage",
+        "type": "object"
+      },
       "HealthResponse": {
         "properties": {
           "status": {
@@ -266,6 +342,256 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/notification/creators/{creator_id}/followers": {
+      "get": {
+        "description": "그 제작자의 팔로워 수. 로그인하지 않아도 본다. 누가 팔로우하는지는 싣지 않는다.",
+        "operationId": "count_followers_api_v1_notification_creators__creator_id__followers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "creator_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Creator Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowerCount"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "summary": "Count Followers",
+        "tags": [
+          "follows"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/notification/me/follows": {
+      "get": {
+        "description": "내가 팔로우한 제작자들. 최근에 팔로우한 것부터다. 이름은 화면이 인증 서버에 묻는다.",
+        "operationId": "list_following_api_v1_notification_me_follows_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowingPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Following",
+        "tags": [
+          "follows"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/notification/me/follows/{creator_id}": {
+      "delete": {
+        "description": "팔로우를 끊는다. 하고 있지 않아도 200 이다.",
+        "operationId": "unfollow_api_v1_notification_me_follows__creator_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "creator_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Creator Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Unfollow",
+        "tags": [
+          "follows"
+        ],
+        "x-audience": "user"
+      },
+      "get": {
+        "description": "내가 그 제작자를 팔로우하는지와 그 제작자의 팔로워 수.",
+        "operationId": "read_follow_api_v1_notification_me_follows__creator_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "creator_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Creator Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Follow",
+        "tags": [
+          "follows"
+        ],
+        "x-audience": "user"
+      },
+      "put": {
+        "description": "그 제작자를 팔로우한다. 이미 하고 있어도 200 이다.",
+        "operationId": "follow_api_v1_notification_me_follows__creator_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "creator_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Creator Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "팔로우할 수 있는 제작자의 수를 넘었다(follow_limit)"
+          },
+          "422": {
+            "description": "자기 자신이다(follow_self)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Follow",
+        "tags": [
+          "follows"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/notification/me/notifications": {
       "get": {
         "description": "내 알림을 최근 것부터 읽는다. 다음 쪽은 받은 next_before 를 before 로 넘긴다.",

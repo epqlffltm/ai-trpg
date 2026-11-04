@@ -10,6 +10,7 @@ import uuid
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.follows.models import CreatorFollow
 from app.notifications.models import Notification, NotificationMute
 
 
@@ -22,4 +23,12 @@ async def delete_notifications(session: AsyncSession, user_id: uuid.UUID) -> int
 async def delete_mutes(session: AsyncSession, user_id: uuid.UUID) -> int:
     """그 사람이 끈 알림의 종류를 모두 지운다. 지운 줄의 수를 돌려준다. 기본 키(user_id, kind)의 앞쪽으로 찾는다."""
     result = await session.execute(delete(NotificationMute).where(NotificationMute.user_id == user_id))
+    return result.rowcount
+
+
+async def delete_follows(session: AsyncSession, user_id: uuid.UUID) -> int:
+    """그 사람이 한 팔로우와 그 사람을 팔로우한 것을 모두 지운다(#989). 지운 줄의 수를 돌려준다."""
+    result = await session.execute(
+        delete(CreatorFollow).where((CreatorFollow.follower_id == user_id) | (CreatorFollow.creator_id == user_id))
+    )
     return result.rowcount

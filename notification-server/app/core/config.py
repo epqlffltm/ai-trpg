@@ -39,6 +39,10 @@ class Settings(CoreSettings):
     # 알림을 지우기 전까지 두는 날 수. 받은 시각부터 센다(app/notifications/retention.py)
     notification_retention_days: int = Field(default=30, ge=1)
 
+    # 한 사람이 팔로우할 수 있는 제작자의 수(#989, app/follows/). 팔로워가 많은 제작자의 알림을 나눠 넣는 일이
+    # 끝없이 커지지 않게 하는 것이 아니라(그것은 팔로워 수다), 한 사람이 표를 끝없이 채우지 못하게 한다
+    follow_max_per_user: int = Field(default=1000, ge=1, le=100_000)
+
     # 알림을 넣는 서버마다의 서명 비밀(server_core/service_auth/signing.py). 그 서버의 설정에 같은 값을 적는다.
     # 서버마다 따로 둔다. 하나가 새도 그 비밀로 다른 서버인 척 알림을 넣을 수 없다.
     # 비워 두면 그 서버의 알림은 하나도 받지 않는다(401). 적으면 32자 이상이고 서로 달라야 한다
