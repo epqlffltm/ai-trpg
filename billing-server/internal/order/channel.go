@@ -23,6 +23,10 @@ type Channel string
 // ChannelWeb 은 웹에서 결제창을 열어 결제 대행사가 승인하는 길이다.
 const ChannelWeb Channel = "web"
 
+// ChannelAuto 는 자동 충전(#980)이 등록한 카드(빌링키)로 치른 길이다. 결제는 자동 충전이 하고 승인된 뒤에 주문을 적는다(auto.go).
+// 결제 대행사는 웹과 같다. 청약철회(취소)와 조회를 이 길의 결제 대행사로 한다.
+const ChannelAuto Channel = "auto"
+
 // Providers 는 길마다 부를 결제 대행사다.
 type Providers map[Channel]payment.Provider
 

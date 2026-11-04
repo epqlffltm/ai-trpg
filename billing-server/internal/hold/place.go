@@ -76,7 +76,12 @@ func (s *Service) take(ctx context.Context, source string, userID uuid.UUID, ref
 		}
 		placed, created = toHold(row), true
 		// 크레딧을 빼지 못하면 오류가 올라가고, 방금 만든 홀드의 줄도 함께 되돌려진다
-		return s.wallet.TakeForHold(ctx, tx, userID, price.Credits, row.ID, fundsFor(price.Tier))
+		if err := s.wallet.TakeForHold(ctx, tx, userID, price.Credits, row.ID, fundsFor(price.Tier)); err != nil {
+			return err
+		}
+		// 지갑이 잠긴 채로 골드가 떨어졌는지 본다(자동 충전, #980). 실패해도 홀드는 걸린다
+		s.noteBalance(ctx, tx, userID)
+		return nil
 	})
 	if err != nil {
 		return Hold{}, false, err

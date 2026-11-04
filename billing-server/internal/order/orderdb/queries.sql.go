@@ -11,6 +11,7 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const expireDueOrders = `-- name: ExpireDueOrders :execrows
@@ -178,6 +179,50 @@ func (q *Queries) GetOrderOfUser(ctx context.Context, arg GetOrderOfUserParams) 
 		&i.Channel,
 	)
 	return i, err
+}
+
+const insertAutoPaidOrder = `-- name: InsertAutoPaidOrder :execrows
+INSERT INTO orders (
+    id, user_id, product_id, channel, price, credits, status, idempotency_key, payment_key,
+    created_at, updated_at, paid_at, expires_at
+)
+VALUES (
+    $1, $2, $3, 'auto', $4, $5, 'paid',
+    $6, $7, $8, $8, $8, $9
+)
+ON CONFLICT (id) DO NOTHING
+`
+
+type InsertAutoPaidOrderParams struct {
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	ProductID      string
+	Price          int64
+	Credits        credit.Amount
+	IdempotencyKey string
+	PaymentKey     pgtype.Text
+	Now            time.Time
+	ExpiresAt      time.Time
+}
+
+// 자동 충전(#980)이 승인된 결제를 주문으로 적는다. 승인된 뒤에 적으므로 처음부터 paid 다.
+// 번호는 충전할 일의 번호(결제 대행사의 주문 번호)다. 같은 번호로 다시 적으면 아무것도 하지 않는다(바뀐 줄이 0 이다).
+func (q *Queries) InsertAutoPaidOrder(ctx context.Context, arg InsertAutoPaidOrderParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertAutoPaidOrder,
+		arg.ID,
+		arg.UserID,
+		arg.ProductID,
+		arg.Price,
+		arg.Credits,
+		arg.IdempotencyKey,
+		arg.PaymentKey,
+		arg.Now,
+		arg.ExpiresAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertOrder = `-- name: InsertOrder :one
@@ -678,4 +723,22 @@ func (q *Queries) StartRefunding(ctx context.Context, arg StartRefundingParams) 
 		&i.Channel,
 	)
 	return i, err
+}
+
+const sumAutoPaidSince = `-- name: SumAutoPaidSince :one
+SELECT COALESCE(SUM(price), 0)::BIGINT FROM orders
+WHERE user_id = $1 AND channel = 'auto' AND paid_at >= $2::timestamptz
+`
+
+type SumAutoPaidSinceParams struct {
+	UserID uuid.UUID
+	Since  time.Time
+}
+
+// 그 사람이 since 뒤에 자동 충전으로 치른 돈의 합(원). 한 달 상한을 볼 때 쓴다. 청약철회한 것도 센다(한 번은 나갔다).
+func (q *Queries) SumAutoPaidSince(ctx context.Context, arg SumAutoPaidSinceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, sumAutoPaidSince, arg.UserID, arg.Since)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }

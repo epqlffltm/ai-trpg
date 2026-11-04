@@ -153,16 +153,17 @@ func TestNewServicesRefusesMissingWebProvider(t *testing.T) {
 	}
 }
 
-func TestNewProvidersPutsTheConfiguredOneOnTheWeb(t *testing.T) {
+func TestNewProvidersPutsTheConfiguredOneOnTheWebAndAuto(t *testing.T) {
+	// 자동 충전의 길(auto, #980)도 같은 결제 대행사다. 그 길의 주문을 청약철회할 때 쓴다
 	providers := app.NewProviders(config.Payment{Provider: config.ProviderFake})
-	if len(providers) != 1 || providers[order.ChannelWeb] != (payment.Fake{}) {
+	if len(providers) != 2 || providers[order.ChannelWeb] != (payment.Fake{}) || providers[order.ChannelAuto] != (payment.Fake{}) {
 		t.Errorf("길마다의 결제 대행사 = %v", providers)
 	}
 }
 
-func TestNoProvidersPutsTheRefusingOneOnTheWeb(t *testing.T) {
+func TestNoProvidersPutsTheRefusingOneOnTheWebAndAuto(t *testing.T) {
 	providers := app.NoProviders()
-	if len(providers) != 1 || providers[order.ChannelWeb] != (payment.None{}) {
+	if len(providers) != 2 || providers[order.ChannelWeb] != (payment.None{}) || providers[order.ChannelAuto] != (payment.None{}) {
 		t.Errorf("길마다의 결제 대행사 = %v", providers)
 	}
 }

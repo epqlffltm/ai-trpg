@@ -9,7 +9,26 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type AutoChargeRequest struct {
+	ID            uuid.UUID
+	UserID        uuid.UUID
+	ProductID     string
+	Price         int64
+	Credits       credit.Amount
+	Status        string
+	SkipReason    string
+	FailureCode   string
+	BillingKey    pgtype.Text
+	CustomerKey   pgtype.UUID
+	Attempts      int32
+	LastError     string
+	NextAttemptAt time.Time
+	CreatedAt     time.Time
+	FinishedAt    pgtype.Timestamptz
+}
 
 type AutoChargeSetting struct {
 	UserID              uuid.UUID
@@ -19,4 +38,5 @@ type AutoChargeSetting struct {
 	MonthlyLimit        int64
 	ConsecutiveFailures int32
 	UpdatedAt           time.Time
+	Armed               bool
 }
