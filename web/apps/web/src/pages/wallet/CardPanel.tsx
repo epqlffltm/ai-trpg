@@ -39,7 +39,7 @@ export function CardPanel({ card, gateway, busy, onRegister, onRemove }: Props) 
       ) : (
         <p>등록한 카드가 없습니다.</p>
       )}
-      {gateway === 'none' ? <p className="hint">카드 등록은 준비 중입니다.</p> : null}
+      {gateway !== 'fake' ? <p className="hint">카드 등록은 준비 중입니다.</p> : null}
       {gateway === 'fake' && !opened ? (
         <Button variant="secondary" disabled={busy} onClick={() => setOpened(true)}>
           {card ? '카드 바꾸기' : '카드 등록'}

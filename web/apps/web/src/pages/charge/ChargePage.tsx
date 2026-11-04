@@ -2,14 +2,16 @@
 // 충전(A7, /wallet/charge). 상품을 고르고 → 결제창에서 결제하고 → 결과를 본다. 지금은 테스트 모드다(돈이 나가지 않는다).
 // 로그인해야 열린다(App.tsx 의 RequireSession). 결제할 수 있는지(본인인증, 보호자 동의)는 서버가 본다(403 을 알린다).
 // 흐름과 다시 보내기는 useCharge 가, 결제창의 갈래는 paymentGateway 가 맡는다.
+// 토스페이먼츠의 결제창(toss)은 현재 창에서 열리고, 결제를 마치면 돌아오는 화면(ChargeReturnPage)이 승인을 요청한다.
 
 import { Button } from '@ai-trpg/ui';
 import { Link } from 'react-router';
 import { ProblemNotice } from '../../components/ProblemNotice';
 import { ChargeResult } from './ChargeResult';
 import { FakeCheckout } from './FakeCheckout';
-import { gatewayKind } from './paymentGateway';
+import { gatewayKind, tossClientKey } from './paymentGateway';
 import { ProductChoice } from './ProductChoice';
+import { TossCheckout } from './TossCheckout';
 import { useCharge, type Charge } from './useCharge';
 
 export function ChargePage() {
@@ -18,7 +20,8 @@ export function ChargePage() {
     <main className="page page--medium">
       <h1>충전</h1>
       <p className="hint">
-        골드를 충전합니다. 지금은 테스트 모드라 실제 돈이 나가지 않습니다. <Link to="/wallet">지갑으로</Link>
+        골드를 충전합니다. 지금은 테스트 모드라 실제 돈이 나가지 않습니다(토스페이먼츠의 결제창도 테스트 키로 엽니다).{' '}
+        <Link to="/wallet">지갑으로</Link>
       </p>
       <ProblemNotice problem={charge.problem} />
       {charge.problem?.retry ? (
@@ -45,11 +48,11 @@ function ChargeStep({ charge }: { charge: Charge }) {
   if (order.status === 'pending') {
     // 결제 번호를 한 번 보냈으면 결제창을 막는다. 답을 받지 못했어도 같은 번호로만 다시 보낸다(두 번 결제하지 않게)
     const locked = charge.busy || charge.paymentKey !== null;
-    return gatewayKind() === 'fake' ? (
-      <FakeCheckout order={order} busy={locked} onPaid={charge.pay} onCancel={charge.restart} />
-    ) : (
-      <p className="hint">결제창을 준비 중입니다.</p>
-    );
+    const gateway = gatewayKind();
+    const clientKey = tossClientKey();
+    if (gateway === 'fake') return <FakeCheckout order={order} busy={locked} onPaid={charge.pay} onCancel={charge.restart} />;
+    if (gateway === 'toss' && clientKey !== null) return <TossCheckout order={order} clientKey={clientKey} onCancel={charge.restart} />;
+    return <p className="hint">결제창을 준비 중입니다.</p>;
   }
   return <ChargeResult order={order} busy={charge.busy} onRecheck={charge.retry} onRestart={charge.restart} />;
 }

@@ -15,6 +15,7 @@
   "dependencies": {
     "@ai-trpg/ui": "*",
     "@tanstack/react-query": "^5.104.5",
+    "@tosspayments/tosspayments-sdk": "^2.10.0",
     "dompurify": "^3.4.17",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

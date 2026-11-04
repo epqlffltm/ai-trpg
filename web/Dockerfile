@@ -17,9 +17,11 @@ COPY packages/ui/package.json packages/ui/
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --no-audit --no-fund
 COPY . .
-# 충전의 결제창(A7). 결제 서버에 꽂힌 결제 대행사(PAYMENT_PROVIDER)에 맞춘다. 지금은 fake(시험용 결제창)뿐이다.
-# 토스페이먼츠를 꽂은 결제 서버 앞에 둘 화면은 toss 결제창을 더한 뒤 빌드할 때 바꾼다(apps/web/src/pages/charge/paymentGateway.ts)
+# 충전의 결제창(A7). 결제 서버에 꽂힌 결제 대행사(PAYMENT_PROVIDER)에 맞춘다. fake(시험용 결제창)나 toss(토스페이먼츠)다.
+# toss 는 클라이언트 키(API 개별 연동 키의 테스트 키 test_ck_)가 함께 있어야 한다. 비밀이 아니다(화면에 실린다)
+# (apps/web/src/pages/charge/paymentGateway.ts)
 ARG VITE_PAYMENT_GATEWAY=fake
+ARG VITE_TOSS_CLIENT_KEY=
 # 본인인증(A3)과 보호자 동의(A4)의 본인확인 창. 인증 서버에 꽂힌 업체(IDENTITY_PROVIDER)에 맞춘다. 지금은 fake(시험용 창)뿐이고, 그 밖의 값이면 창을 띄우지 않는다
 # (apps/web/src/pages/identity/identityProvider.ts)
 ARG VITE_IDENTITY_PROVIDER=fake

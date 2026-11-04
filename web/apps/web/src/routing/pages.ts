@@ -23,6 +23,8 @@ export const GalleryPage = lazyPage(() => import('../pages/gallery/GalleryPage')
 export const SettingsPage = lazyPage(() => import('../pages/settings/SettingsPage'), 'SettingsPage');
 export const WalletPage = lazyPage(() => import('../pages/wallet/WalletPage'), 'WalletPage');
 export const ChargePage = lazyPage(() => import('../pages/charge/ChargePage'), 'ChargePage');
+// 토스페이먼츠의 결제창이 돌아오는 화면(A7)
+export const ChargeReturnPage = lazyPage(() => import('../pages/charge/ChargeReturnPage'), 'ChargeReturnPage');
 export const AttendancePage = lazyPage(() => import('../pages/attendance/AttendancePage'), 'AttendancePage');
 export const IdentityPage = lazyPage(() => import('../pages/identity/IdentityPage'), 'IdentityPage');
 export const GuardianRequestPage = lazyPage(() => import('../pages/guardian/GuardianRequestPage'), 'GuardianRequestPage');

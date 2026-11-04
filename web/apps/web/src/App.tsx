@@ -31,6 +31,7 @@ import {
   CharacterPage,
   CharactersPage,
   ChargePage,
+  ChargeReturnPage,
   ChatLorebookEditPage,
   ChatLorebookNewPage,
   ChatLorebooksPage,
@@ -186,6 +187,14 @@ export function App() {
           element={
             <RequireSession>
               <ChargePage />
+            </RequireSession>
+          }
+        />
+        <Route
+          path="wallet/charge/return"
+          element={
+            <RequireSession>
+              <ChargeReturnPage />
             </RequireSession>
           }
         />
