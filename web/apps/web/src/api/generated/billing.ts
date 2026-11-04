@@ -592,7 +592,7 @@ export interface components {
                  * @description 보내기 전에 그만둔 까닭. skipped 일 때만 있다
                  * @enum {string|null}
                  */
-                reason: "disabled" | "no_card" | "not_eligible" | "monthly_limit" | "withdrawn" | "stale" | null;
+                reason: "disabled" | "no_card" | "not_eligible" | "monthly_limit" | "withdrawn" | "stale" | "terms_outdated" | null;
                 /**
                  * @description processing 은 아직 보내지 않았거나 답을 기다리는 것이다
                  * @enum {string}

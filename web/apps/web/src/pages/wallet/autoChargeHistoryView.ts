@@ -18,6 +18,7 @@ const REASON: Record<NonNullable<AutoChargeHistoryItem['reason']>, string> = {
   monthly_limit: '이번 달 자동 충전 상한에 닿아 결제하지 않았습니다.',
   withdrawn: '탈퇴해 결제하지 않았습니다.',
   stale: '처리가 하루 넘게 늦어져 결제하지 않았습니다. 다음에 골드가 떨어지면 다시 삽니다.',
+  terms_outdated: '자동 결제 동의가 필요해 결제하지 않았습니다. 지갑에서 동의하고 저장하면 다시 삽니다.',
 };
 
 export function historyStatusLabel(status: AutoChargeHistoryItem['status']): string {

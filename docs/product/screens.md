@@ -544,6 +544,7 @@ E4 에서 정한 것(2026-10-24, #678).
 인증 키는 한 번 쓰면 끝이라 다시 보내지 않는다. 되지 않았으면 등록을 처음부터 다시 한다. 실패(`?code=`)면 code 만 읽는다.
 켤 때마다 자동 결제에 동의받는다(2026-11-04). 동의하는 칸 바로 위에 고른 조건(기준 골드, 상품과 값, 한 달 상한)을 글로 보이고, "동의 내용 보기"로 자동 충전 이용 동의(`docs/legal/auto-charge.md`)를 창으로 보인다.
 칸은 미리 체크하지 않고, 조건을 바꾸면 다시 비운다. 끌 때는 묻지 않는다. 판이 바뀌어 서버가 막으면(409 `autocharge.terms_outdated`) 설정을 다시 읽어 바뀐 판에 동의받는다.
+켜 둔 채 지금의 판에 동의하지 않았으면(판이 올랐거나 동의를 받기 전에 켰다) 서버가 결제를 멈춘다. 설정 맨 위에 멈췄다고 알리고, 다시 동의해 저장하면 다시 산다.
 
 **3. 할 수 있는 행동**
 
@@ -848,7 +849,7 @@ E4 에서 정한 것(2026-10-24, #678).
   | `credit.welcome` | `billing` | 환영 크레딧을 받은 사람 | `amount`(글자), `expires_at` |
   | `credit.expiring` | `billing` | 무료 크레딧이 7일 안에 사라지는 사람. 한 사람에게 7일에 한 번 | `amount`(사라질 양의 합, 글자), `first_expires_at`(가장 먼저 사라지는 때) |
   | `credit.short` | `billing` | 크레딧이 모자라 홀드(서술 값)를 걸지 못한 사람. 한 사람에게 하루(한국 날짜)에 한 번 | `price_code`(걸려던 가격표의 이름), `amount`(그 값, 글자), `gold_required`(프리미엄이라 골드로만 낼 수 있었다) |
-  | `autocharge.failed` | `billing` | 자동 충전(#980)이 되지 않은 사람. 카드사의 거절, 이번 달 상한, 지금 결제할 수 없음(본인인증·보호자 동의), 등록한 카드 없음. 사용자가 끈 것은 알리지 않는다. 끌 수 없다 | `product_id`, `price`(원, 숫자), `reason`(`declined`, `monthly_limit`, `not_eligible`, `no_card`), `turned_off`(이어서 실패해 자동 충전을 껐다) |
+  | `autocharge.failed` | `billing` | 자동 충전(#980)이 되지 않은 사람. 카드사의 거절, 이번 달 상한, 지금 결제할 수 없음(본인인증·보호자 동의), 등록한 카드 없음, 지금의 자동 결제 동의가 없음. 사용자가 끈 것은 알리지 않는다. 끌 수 없다 | `product_id`, `price`(원, 숫자), `reason`(`declined`, `monthly_limit`, `not_eligible`, `no_card`, `terms_outdated`), `turned_off`(이어서 실패해 자동 충전을 껐다) |
   | `post.commented` | `board` | 글쓴이 | `board_slug`, `post_id`, `post_title`, `comment_id` |
   | `comment.replied` | `board` | 그 댓글의 글쓴이 | `board_slug`, `post_id`, `post_title`, `comment_id`, `parent_id` |
   | `character.hidden` | `asset` | 캐릭터의 주인. 운영자가 숨겼다(공개 목록과 남의 새 대화에서 빠진다, 주인은 계속 쓴다) | `character_id`, `name` |

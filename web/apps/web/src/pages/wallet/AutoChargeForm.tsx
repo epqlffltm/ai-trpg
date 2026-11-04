@@ -5,6 +5,7 @@
 // 켜는 설정을 적을 때마다 자동 결제에 동의한다(가입 때가 아니라 켤 때, 2026-11-04 결정).
 // 동의하는 칸 바로 위에 고른 조건을 글로 보이고(agreementLines), 동의 문서의 그 판을 창으로 볼 수 있다.
 // 동의하는 칸은 미리 체크하지 않는다. 서버가 판과 조건과 시각을 적는다. 판이 바뀌었으면 서버가 409 로 알린다.
+// 켜 둔 채 판이 올랐으면(또는 동의 없이 켰으면) 서버가 결제를 멈춘다. 맨 위에 그것을 알린다(pausedText).
 
 import { Button, Checkbox, Notice, SelectField, TextField } from '@ai-trpg/ui';
 import { useState, type FormEvent } from 'react';
@@ -13,7 +14,7 @@ import type { AutoCharge, Product } from '../../api/types';
 import { autoChargeDocumentName } from '../../legal/autoChargeTerms';
 import { ConsentDocumentDialog, type ViewingDocument } from '../../legal/ConsentDocumentDialog';
 import { wonLabel } from '../charge/chargeView';
-import { agreementLines, initialDraft, toSettings, type AutoChargeDraft } from './autoChargeView';
+import { agreementLines, initialDraft, pausedText, toSettings, type AutoChargeDraft } from './autoChargeView';
 
 type Props = {
   current: AutoCharge;
@@ -27,6 +28,7 @@ export function AutoChargeForm({ current, products, busy, onSave }: Props) {
   const [problem, setProblem] = useState<string | null>(null);
   const [viewing, setViewing] = useState<ViewingDocument | null>(null);
   const documentName = autoChargeDocumentName(current.terms.version);
+  const paused = pausedText(current);
 
   function change(patch: Partial<AutoChargeDraft>) {
     // 조건이 바뀌면 그 조건에 다시 동의한다
@@ -46,6 +48,7 @@ export function AutoChargeForm({ current, products, busy, onSave }: Props) {
 
   return (
     <form onSubmit={submit} aria-label="자동 충전 설정" noValidate>
+      {paused ? <Notice tone="error">{paused}</Notice> : null}
       <Checkbox
         label="자동 충전 켜기"
         description="골드가 기준 아래로 떨어지면 등록한 카드로 고른 상품을 한 번 삽니다. 세 번 이어서 실패하면 꺼집니다."
@@ -107,7 +110,7 @@ function Agreement({ current, draft, products, documentName, onView, onAgree }: 
   const { version, agreed_version: agreedVersion } = current.terms;
   return (
     <section className="auto-charge__agreement" aria-label="자동 결제 동의">
-      {agreedVersion !== null && agreedVersion !== version ? (
+      {agreedVersion !== null && agreedVersion !== version && !current.settings?.enabled ? (
         <Notice>자동 결제 동의의 내용이 바뀌었습니다. 바뀐 내용을 읽고 다시 동의해 주세요.</Notice>
       ) : null}
       {lines ? (

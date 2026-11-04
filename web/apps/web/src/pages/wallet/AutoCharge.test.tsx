@@ -248,17 +248,32 @@ describe('자동 충전', () => {
     expect(agree).not.toBeChecked();
     // 화면이 아직 갖지 않은 판(2)이라 동의할 수 없다. 새로 고치면 받는다
     expect(agree).toBeDisabled();
-    expect(auto.getAllByText('자동 결제 동의의 내용이 바뀌었습니다. 바뀐 내용을 읽고 다시 동의해 주세요.').length).toBeGreaterThan(0);
+    expect(auto.getByText(/자동 결제 동의의 내용이 바뀌어 자동 충전을 멈췄습니다/)).toBeInTheDocument();
   });
 
-  it('전에 동의한 판이 옛 판이면 켜 둔 화면에서 다시 동의하라고 알린다', async () => {
+  it('켜 둔 채 지금의 판에 동의하지 않았으면 자동 충전을 멈췄다고 알린다', async () => {
     const on = { enabled: true, threshold: '500', product_id: 'credits-1000', monthly_limit: 30000 };
     signedIn({
-      [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, settings: on, card: CARD, terms: { version: 1, agreed_version: 0 } }),
+      [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, settings: on, card: CARD, terms: { version: 1, agreed_version: null } }),
     });
     renderApp('/wallet');
     const auto = await section();
 
-    expect(await auto.findByText('자동 결제 동의의 내용이 바뀌었습니다. 바뀐 내용을 읽고 다시 동의해 주세요.')).toBeInTheDocument();
+    expect(await auto.findByText(/자동 결제 동의가 없어 자동 충전을 멈췄습니다/)).toBeInTheDocument();
+    expect(auto.queryByText(/자동 결제 동의의 내용이 바뀌었습니다/)).toBeNull();
+  });
+
+  it('꺼 둔 사람이 옛 판에 동의했으면 다시 켤 때 바뀌었다고 알린다. 멈췄다고 하지 않는다', async () => {
+    const off = { enabled: false, threshold: '500', product_id: 'credits-1000', monthly_limit: 30000 };
+    signedIn({
+      [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, settings: off, card: CARD, terms: { version: 2, agreed_version: 1 } }),
+    });
+    renderApp('/wallet');
+    const auto = await section();
+
+    await userEvent.click(await auto.findByRole('checkbox', { name: '자동 충전 켜기' }));
+
+    expect(auto.getByText('자동 결제 동의의 내용이 바뀌었습니다. 바뀐 내용을 읽고 다시 동의해 주세요.')).toBeInTheDocument();
+    expect(auto.queryByText(/자동 충전을 멈췄습니다/)).toBeNull();
   });
 });

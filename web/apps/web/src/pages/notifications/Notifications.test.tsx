@@ -134,6 +134,10 @@ describe('알림의 순수한 함수', () => {
     expect(describeNotification(notice(1, 'billing', 'autocharge.failed', { reason: 'monthly_limit', turned_off: false }), CTX).text).toBe(
       '이번 달 자동 충전 상한에 닿아 충전하지 않았습니다',
     );
+    expect(describeNotification(notice(1, 'billing', 'autocharge.failed', { reason: 'terms_outdated', turned_off: false }), CTX)).toEqual({
+      text: '자동 결제 동의가 필요해 자동 충전하지 않았습니다. 지갑에서 동의 내용을 읽고 다시 동의해 주세요',
+      to: '/wallet',
+    });
     expect(describeNotification(notice(1, 'billing', 'autocharge.failed', { reason: 'something_new' }), CTX).text).toBe('자동 충전하지 못했습니다');
     expect(describeNotification(notice(1, 'game', 'scenario.sanctioned', { scenario_id: 's1', title: '수도원', version_number: 3, publishing_banned: true }), CTX)).toEqual({
       text: '운영자가 시나리오 "수도원"(판 3)에 조치했습니다. 지금은 시나리오를 공개할 수 없습니다',

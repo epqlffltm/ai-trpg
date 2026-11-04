@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/wallet/autoChargeView.ts
-// 자동 충전(#980)의 순수한 함수. 설정의 입력 칸, 보낼 값과 그 검사, 자동 결제 동의의 조건 글, 시험용 카드 등록의 인증 키.
+// 자동 충전(#980)의 순수한 함수. 설정의 입력 칸, 보낼 값과 그 검사, 자동 결제 동의의 조건 글, 동의가 없어 멈춘 것, 시험용 카드 등록의 인증 키.
 
 import type { AutoChargeSettings } from '../../api/autoCharge';
 import type { AutoCharge, Product } from '../../api/types';
@@ -66,6 +66,18 @@ export function agreementLines(draft: AutoChargeDraft, products: Product[]): str
     '결제할 때마다 알림함과 메일로 알립니다. 세 번 이어서 되지 않으면 자동 충전을 끕니다.',
     '지갑에서 언제든 끄거나 카드를 지울 수 있습니다.',
   ];
+}
+
+/**
+ * 켜 두었지만 지금의 판에 동의하지 않아 결제 서버가 자동 결제를 멈춘 것. 멈추지 않았으면 null 이다.
+ * 판이 올랐거나, 동의를 받기 전에 켰다. 다시 동의해 저장하면 다시 산다(서버의 terms_outdated).
+ */
+export function pausedText(current: AutoCharge): string | null {
+  const { version, agreed_version: agreed } = current.terms;
+  if (!current.settings?.enabled || agreed === version) return null;
+  return agreed === null
+    ? '자동 결제 동의가 없어 자동 충전을 멈췄습니다. 아래에서 동의하고 저장하면 다시 삽니다.'
+    : '자동 결제 동의의 내용이 바뀌어 자동 충전을 멈췄습니다. 바뀐 내용을 읽고 다시 동의해 저장하면 다시 삽니다.';
 }
 
 /** 시험용 카드 등록 창에서 고를 결과. prefix 는 인증 키의 앞머리다(결제 서버의 가짜 결제 대행사) */

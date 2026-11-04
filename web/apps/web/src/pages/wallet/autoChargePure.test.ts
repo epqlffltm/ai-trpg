@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError, NetworkError } from '../../api/errors';
 import type { Product } from '../../api/types';
 import { describeAutoChargeProblem } from './autoChargeProblem';
-import { agreementLines, fakeAuthKey, initialDraft, toSettings, type AutoChargeDraft } from './autoChargeView';
+import { agreementLines, fakeAuthKey, initialDraft, pausedText, toSettings, type AutoChargeDraft } from './autoChargeView';
 
 const PRODUCTS = [
   { id: 'credits-1000', name: '크레딧 1,000', price: 1000, credits: '1000' },
@@ -78,6 +78,18 @@ describe('입력 칸', () => {
 
     expect(problems.every((problem) => typeof problem === 'string' && problem.length > 0)).toBe(true);
     expect(toSettings({ ...GOOD, threshold: '100000', monthlyLimit: '500000' }, PRODUCTS, 1).problem).toBeNull();
+  });
+});
+
+describe('동의가 없어 멈춘 것', () => {
+  const on = { enabled: true, threshold: '500', product_id: 'credits-1000', monthly_limit: 30000 };
+
+  it('켜 둔 채 지금의 판에 동의하지 않았을 때만 알린다', () => {
+    expect(pausedText({ settings: on, consecutive_failures: 0, card: null, terms: { version: 1, agreed_version: 1 } })).toBeNull();
+    expect(pausedText({ settings: { ...on, enabled: false }, consecutive_failures: 0, card: null, terms: { version: 2, agreed_version: 1 } })).toBeNull();
+    expect(pausedText({ settings: null, consecutive_failures: 0, card: null, terms: { version: 1, agreed_version: null } })).toBeNull();
+    expect(pausedText({ settings: on, consecutive_failures: 0, card: null, terms: { version: 2, agreed_version: 1 } })).toMatch(/내용이 바뀌어 자동 충전을 멈췄습니다/);
+    expect(pausedText({ settings: on, consecutive_failures: 0, card: null, terms: { version: 1, agreed_version: null } })).toMatch(/동의가 없어 자동 충전을 멈췄습니다/);
   });
 });
 

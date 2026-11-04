@@ -81,6 +81,7 @@ const AUTO_CHARGE_REASONS: Record<string, string> = {
   monthly_limit: '이번 달 자동 충전 상한에 닿아 충전하지 않았습니다',
   not_eligible: '지금은 결제할 수 없어 자동 충전하지 않았습니다. 본인인증이나 보호자 동의를 확인하세요',
   no_card: '등록한 카드가 없어 자동 충전하지 않았습니다',
+  terms_outdated: '자동 결제 동의가 필요해 자동 충전하지 않았습니다. 지갑에서 동의 내용을 읽고 다시 동의해 주세요',
 };
 
 function autoChargeFailed(payload: Payload): NotificationLine {

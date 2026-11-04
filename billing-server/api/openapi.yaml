@@ -1246,7 +1246,7 @@ components:
               reason:
                 type: string
                 nullable: true
-                enum: [disabled, no_card, not_eligible, monthly_limit, withdrawn, stale, null]
+                enum: [disabled, no_card, not_eligible, monthly_limit, withdrawn, stale, terms_outdated, null]
                 description: 보내기 전에 그만둔 까닭. skipped 일 때만 있다
               turned_off: { type: boolean, description: 이 일이 실패해 자동 충전을 껐다 }
               created_at: { type: string, format: date-time }
