@@ -168,6 +168,15 @@ location = /api/v1/billing/coupons/redeem {
     proxy_pass http://$billing_server;
 }
 
+# 카드 등록(#980). 훔친 카드를 등록해 보며 맞는 번호를 찾는 것을 IP 마다 막는다. 지우기(DELETE)도 같은 주소다
+location = /api/v1/billing/cards {
+    set $proxy_upstream billing;
+    set $billing_server billing-server:8003;
+    set $retry_after 6;
+    limit_req zone=auth_sensitive burst=10 nodelay;
+    proxy_pass http://$billing_server;
+}
+
 # 게임 서버와 인증 서버만 부르는 주소. 그 서버들은 프록시를 거치지 않고 컨테이너끼리 부른다
 location ^~ /api/v1/billing/service/ {
     # 주소의 확장자(.css 등)로 형식을 고르지 않는다. 본문은 늘 JSON 이다

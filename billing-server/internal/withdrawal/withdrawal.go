@@ -8,9 +8,10 @@
 //  2. 남은 골드와 실버를 소멸로 적는다(원장의 이유 forfeit). 정한 것: "알리고 소멸". 탈퇴 화면이 먼저 알린다
 //  3. 결제 자격을 지운다. 본인인증에서 온 값(성년이 되는 날, 보호자 동의)이다
 //  4. 아직 보내지 않은 사용자의 알림을 보내지 않기로 한다
+//  5. 자동 충전의 설정, 등록한 카드(빌링키), 고객 키를 지운다(#980). 붙였을 때만 한다(WithCards)
 //
 // 1 과 2 는 한 트랜잭션이다. 지갑을 먼저 잠근다. 그 뒤로는 새 홀드가 걸리지 않아 돌려준 홀드와 없앤 크레딧 사이에 틈이 없다.
-// 3 과 4 는 따로 한다. 돈이 아니다. 하나가 실패하면 인증 서버가 다시 보내고, 이미 한 일은 다시 해도 같다.
+// 3, 4, 5 는 따로 한다. 돈이 아니다. 하나가 실패하면 인증 서버가 다시 보내고, 이미 한 일은 다시 해도 같다.
 //
 // 남기는 것: 원장, 주문, 홀드, 출석의 기록, 보호자 알림의 기록. 원장과 주문은 법정 보존이고, 공개 ID 만 있어 사람을 알아볼 수 없다.
 // 결과를 모르는 주문(confirming, refunding)은 대사가 그대로 끝낸다.
@@ -49,6 +50,11 @@ type Notices interface {
 	CancelFor(ctx context.Context, userID uuid.UUID) (int64, error)
 }
 
+// Cards 는 자동 충전의 카드와 설정을 지우는 것의 모양이다. *autocharge.Service 가 이 모양이다.
+type Cards interface {
+	Erase(ctx context.Context, userID uuid.UUID) (bool, error)
+}
+
 // Outcome 은 탈퇴 하나를 반영한 결과다. 이미 반영한 사용자를 다시 받으면 모두 0 이다.
 type Outcome struct {
 	// ReleasedHolds 는 돌려준 홀드의 수다.
@@ -59,6 +65,8 @@ type Outcome struct {
 	ErasedEligibility bool
 	// CancelledNotices 는 보내지 않기로 한 사용자의 알림의 수다.
 	CancelledNotices int64
+	// ErasedCards 는 자동 충전의 카드나 설정을 지웠는지다.
+	ErasedCards bool
 }
 
 // Service 는 탈퇴를 반영한다. 서버가 뜰 때 하나 만들어 쓴다.
@@ -68,11 +76,19 @@ type Service struct {
 	holds       Holds
 	eligibility Eligibility
 	notices     Notices
+	cards       Cards
 }
 
 // NewService 는 Service 를 만든다. db 는 홀드와 지갑을 한 트랜잭션으로 묶을 곳이다(*pgxpool.Pool).
 func NewService(db txn.Beginner, wallet Wallet, holds Holds, eligibility Eligibility, notices Notices) *Service {
 	return &Service{db: db, wallet: wallet, holds: holds, eligibility: eligibility, notices: notices}
+}
+
+// WithCards 는 자동 충전의 카드와 설정도 지우는 Service 를 돌려준다.
+func (s *Service) WithCards(cards Cards) *Service {
+	changed := *s
+	changed.cards = cards
+	return &changed
 }
 
 // Process 는 그 사용자의 탈퇴를 반영한다. 몇 번을 불러도 결과가 같다. 오류면 부르는 쪽(인증 서버)이 다시 보낸다.
@@ -86,6 +102,11 @@ func (s *Service) Process(ctx context.Context, userID uuid.UUID) (Outcome, error
 	}
 	if outcome.CancelledNotices, err = s.notices.CancelFor(ctx, userID); err != nil {
 		return Outcome{}, err
+	}
+	if s.cards != nil {
+		if outcome.ErasedCards, err = s.cards.Erase(ctx, userID); err != nil {
+			return Outcome{}, err
+		}
 	}
 	return outcome, nil
 }

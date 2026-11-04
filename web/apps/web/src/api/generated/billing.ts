@@ -37,6 +37,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/auto-charge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 자동 충전의 설정과 등록한 카드(#980) */
+        get: operations["getAutoCharge"];
+        /** 자동 충전의 설정을 적는다. 켜려면 카드가 있고 지금 결제할 수 있어야 한다(#980) */
+        put: operations["putAutoCharge"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/cards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 카드 등록 창이 준 인증 키로 카드를 등록한다. 이미 있으면 바꾼다(#980) */
+        post: operations["registerCard"];
+        /** 카드를 지우고 자동 충전을 끈다. 카드가 없어도 204 다(#980) */
+        delete: operations["removeCard"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/billing/cards/customer-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 카드 등록 창에 넣을 고객 키. 없으면 만든다. 몇 번을 불러도 같다(#980) */
+        post: operations["createCustomerKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/coupons/redeem": {
         parameters: {
             query?: never;
@@ -468,6 +521,36 @@ export interface components {
             /** @description 본인인증을 마쳤는가. 아니면 받을 수 없다 */
             verified: boolean;
         };
+        AutoCharge: {
+            /** @description 등록한 카드가 없으면 null */
+            card: {
+                issuer_code: string;
+                number: string;
+                /** Format: date-time */
+                registered_at: string;
+            } | null;
+            /** @description 이어서 실패한 자동 결제의 수. 다시 켜면 0 이다 */
+            consecutive_failures: number;
+            /** @description 적은 적이 없으면 null */
+            settings: {
+                enabled: boolean;
+                /** Format: int64 */
+                monthly_limit: number;
+                product_id: string;
+                threshold: components["schemas"]["Amount"];
+            } | null;
+        };
+        Card: {
+            /** @description 카드를 낸 곳의 코드(결제 대행사의 issuerCode) */
+            issuer_code: string;
+            /**
+             * @description 결제 대행사가 가린 카드 번호
+             * @example 43301234****123*
+             */
+            number: string;
+            /** Format: date-time */
+            registered_at: string;
+        };
         CouponRedemption: {
             /** @description 받은 쿠폰의 코드(대문자) */
             code: string;
@@ -866,6 +949,208 @@ export interface operations {
                     "application/json": components["schemas"]["Rewards"];
                 };
             };
+            500: components["responses"]["ServerError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getAutoCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 자동 충전 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoCharge"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["ServerError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    putAutoCharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enabled: boolean;
+                    /**
+                     * Format: int64
+                     * @description 한 달(한국 날짜의 달)에 자동으로 결제하는 돈의 상한(원). 고른 상품의 값에서 500000 사이
+                     */
+                    monthly_limit: number;
+                    /** @example credits-5000 */
+                    product_id: string;
+                    /** @description 골드가 이 값 아래로 떨어지면 산다. 0 에서 100000 */
+                    threshold: components["schemas"]["Amount"];
+                };
+            };
+        };
+        responses: {
+            /** @description 적은 뒤의 자동 충전 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoCharge"];
+                };
+            };
+            /** @description 본문이나 값이 틀렸다(autocharge.invalid_settings) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description 지금 결제할 수 없다(payment.verification_required, payment.guardian_consent_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description 카드 없이 켜려 했다(autocharge.no_card) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["ServerError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    registerCard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 카드 등록 창이 성공 주소에 붙여 준 인증 키 */
+                    auth_key: string;
+                    /** Format: uuid */
+                    customer_key: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 등록한 카드 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Card"];
+                };
+            };
+            /** @description 본문이 틀렸다(card.invalid_request) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description 고객 키가 이 사람의 것이 아니다(card.customer_key_mismatch). 처음부터 다시 한다 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description 결제 대행사가 거절했다(card.refused). 다른 카드로 한다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            500: components["responses"]["ServerError"];
+            /** @description 결제 대행사가 답하지 않았다(card.issuer_unavailable) 또는 DB 에 닿지 않는다. 다시 등록하면 된다 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    removeCard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 지웠다 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            500: components["responses"]["ServerError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    createCustomerKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 고객 키 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        customer_key: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
             500: components["responses"]["ServerError"];
             503: components["responses"]["Unavailable"];
         };

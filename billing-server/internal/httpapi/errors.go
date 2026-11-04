@@ -69,6 +69,19 @@ const (
 	codeCouponNotStarted = "coupon.not_started"
 	// codeCouponTooManyAttempts 는 틀린 코드를 너무 자주 넣었다는 것이다(429). Retry-After 의 초 뒤에 다시 넣는다.
 	codeCouponTooManyAttempts = "coupon.too_many_attempts"
+	// 자동 충전(#980).
+	// codeAutoChargeInvalidSettings 는 설정의 본문이나 값이 틀렸다는 것이다(400).
+	codeAutoChargeInvalidSettings = "autocharge.invalid_settings"
+	// codeAutoChargeNoCard 는 카드를 등록하지 않고 켜려 했다는 것이다(409). 화면은 카드 등록으로 보낸다.
+	codeAutoChargeNoCard = "autocharge.no_card"
+	// codeCardInvalidRequest 는 카드 등록의 본문이 틀렸다는 것이다(400).
+	codeCardInvalidRequest = "card.invalid_request"
+	// codeCardCustomerKeyMismatch 는 카드 등록 창에 쓴 고객 키가 이 사람의 것이 아니라는 것이다(409). 처음부터 다시 한다.
+	codeCardCustomerKeyMismatch = "card.customer_key_mismatch"
+	// codeCardRefused 는 결제 대행사가 카드 등록을 거절했다는 것이다(422). 다른 카드로 한다.
+	codeCardRefused = "card.refused"
+	// codeCardIssuerUnavailable 은 결제 대행사의 답을 받지 못해 등록했는지 모른다는 것이다(503). 다시 등록하면 된다.
+	codeCardIssuerUnavailable = "card.issuer_unavailable"
 	// 청약철회를 할 수 없는 까닭(409, #430). 화면이 "왜 환불할 수 없는지"를 보인다.
 	// codeRefundWindowClosed 는 치른 지 7일이 지났다는 것이다.
 	codeRefundWindowClosed = "refund.window_closed"
