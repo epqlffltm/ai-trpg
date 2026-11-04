@@ -78,6 +78,17 @@ describe('결제창', () => {
     expect(gatewayKind('toss')).toBe('none');
   });
 
+  it('토스는 API 개별 연동 키의 테스트 키가 함께 있을 때만이다', () => {
+    expect(gatewayKind('toss', 'test_ck_AbC123')).toBe('toss');
+    expect(gatewayKind('toss', '')).toBe('none');
+    // 결제위젯 키, 라이브 키, 시크릿 키는 받지 않는다
+    expect(gatewayKind('toss', 'test_gck_AbC123')).toBe('none');
+    expect(gatewayKind('toss', 'live_ck_AbC123')).toBe('none');
+    expect(gatewayKind('toss', 'test_sk_AbC123')).toBe('none');
+    expect(gatewayKind('toss', 'test_ck_Ab C')).toBe('none');
+    expect(gatewayKind('paypal', 'test_ck_AbC123')).toBe('none');
+  });
+
   it('가짜 결제 번호는 앞머리에 서버가 받는 글자만 붙인다', () => {
     expect(fakePaymentKey('fake_ok_', 'ab12-cd34!')).toBe('fake_ok_ab12-cd34');
   });

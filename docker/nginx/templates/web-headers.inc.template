@@ -9,6 +9,12 @@
 #   img-src 'self' blob:   그림은 같은 출처와 blob: 주소. 주인만 보는 그림(초안의 그림)은 img 가 토큰을 싣지 못해 화면이
 #                          토큰을 실어 받은 바이트로 blob: 주소를 만들어 보인다(asset-server/README.md 의 "그림", 2026-10-24).
 #                          blob: 주소는 이 페이지의 스크립트만 만든다. 바깥의 그림을 여는 것이 아니다
+#   script-src, connect-src, frame-src 의 tosspayments.com
+#                          토스페이먼츠의 결제창(A7, 2026-11-04). SDK(@tosspayments/tosspayments-sdk)가 js.tosspayments.com 에서
+#                          스크립트를 받는다. 결제창은 현재 창에서 열어(windowTarget 'self') 이 페이지에 토스의 iframe 이 생기지 않지만,
+#                          SDK 가 쓰는 연결과 창을 위해 *.tosspayments.com 을 함께 연다. 토스페이먼츠의 문서에 CSP 의 목록이 없어
+#                          SDK 의 코드에서 찾았다. staging 에서 결제창을 열어 브라우저 콘솔의 CSP 위반이 없는지 본다.
+#                          결제창을 쓰지 않는 갈래(fake)에서는 SDK 를 받지 않는다. 열려 있어도 부르는 것이 없다
 #   object-src 'none'      플러그인을 막는다
 #   base-uri 'self'        <base> 로 상대 주소를 다른 곳으로 돌리지 못한다
 #   frame-ancestors 'none' 다른 사이트의 iframe 에 들어가지 못한다(클릭재킹)
@@ -16,6 +22,6 @@
 # 제작자가 꾸민 소개(HTML)는 iframe 없이 그린다(#290). 화면이 DOMPurify 로 한 번 더 거르고(introHtmlFilter.ts),
 # 넘치면 잘리는 상자에만 넣는다. 인라인 CSS 는 style 속성이 아니라 CSSOM 으로 입혀(IntroHtml.tsx) 이 CSP 를 그대로 둔다.
 add_header X-Content-Type-Options "nosniff" always;
-add_header Content-Security-Policy "default-src 'self'; img-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://js.tosspayments.com; connect-src 'self' https://*.tosspayments.com; frame-src https://*.tosspayments.com; img-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
 add_header Referrer-Policy "no-referrer" always;
 add_header Strict-Transport-Security $hsts always;
