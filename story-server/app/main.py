@@ -80,7 +80,15 @@ from app.shortcuts import router as shortcuts
 from app.snapshots import router as snapshots
 from app.snapshots import settler as snapshot_settler
 from app.snapshots.providers import build_image_provider
-from app.snapshots.service import NotDrawableError, SnapshotBusyError, SnapshotDeclinedError, SnapshotUnavailableError
+from app.snapshots.service import (
+    NotDrawableError,
+    SnapshotBusyError,
+    SnapshotDeclinedError,
+    SnapshotDiscardError,
+    SnapshotNotFoundError,
+    SnapshotSettlingError,
+    SnapshotUnavailableError,
+)
 from app.stats import router as stats
 from app.transcripts import router as transcripts
 from app.turns import router as messages
@@ -326,6 +334,9 @@ def create_app(
     app.add_exception_handler(NotDrawableError, snapshots.handle_not_drawable)
     app.add_exception_handler(SnapshotBusyError, snapshots.handle_busy)
     app.add_exception_handler(SnapshotDeclinedError, snapshots.handle_declined)
+    app.add_exception_handler(SnapshotNotFoundError, snapshots.handle_not_found)
+    app.add_exception_handler(SnapshotSettlingError, snapshots.handle_settling)
+    app.add_exception_handler(SnapshotDiscardError, snapshots.handle_discard_failed)
     app.add_exception_handler(BookmarksFullError, bookmarks.handle_bookmarks_full)
     app.add_exception_handler(NotReportableError, reports.handle_not_reportable)
     app.add_exception_handler(AlreadyReportedError, reports.handle_already_reported)

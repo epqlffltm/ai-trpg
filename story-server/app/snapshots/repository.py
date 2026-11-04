@@ -10,7 +10,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
-from sqlalchemy import Select, func, or_, select, update
+from sqlalchemy import Select, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.conversations.models import Conversation, ImportedWorld
@@ -65,6 +65,31 @@ async def list_kept(
     page = query.order_by(Snapshot.created_at.desc(), Snapshot.id.desc()).limit(limit).offset(offset)
     rows = await session.execute(page)
     return [(row[2], row[0], row[1]) for row in rows], total or 0
+
+
+async def find_mine(
+    session: AsyncSession, owner_id: uuid.UUID, ratings: Sequence[Rating], snapshot_id: uuid.UUID
+) -> Snapshot | None:
+    """이 사람의 그림 한 장. 남의 것, 없는 것, 지운 세션나 볼 수 없는 등급의 세션의 것이면 None."""
+    query = (
+        visible(owner_id, ratings)
+        .add_columns(Snapshot)
+        .join(Snapshot, Snapshot.conversation_id == Conversation.id)
+        .where(Snapshot.owner_id == owner_id, Snapshot.id == snapshot_id)
+    )
+    row = (await session.execute(query)).first()
+    return None if row is None else row[2]
+
+
+async def remove_settled(session: AsyncSession, snapshot_id: uuid.UUID, settled: frozenset[BillingStatus]) -> bool:
+    """청구가 끝난(settled 중 하나인) 그림 한 장의 기록을 지운다. 지웠으면 True."""
+    statement = (
+        delete(Snapshot)
+        .where(Snapshot.id == snapshot_id, Snapshot.billing_status.in_([status.value for status in settled]))
+        .returning(Snapshot.id)
+        .execution_options(synchronize_session=False)
+    )
+    return (await session.execute(statement)).first() is not None
 
 
 async def drawing(session: AsyncSession, conversation_id: uuid.UUID) -> Snapshot | None:
