@@ -139,6 +139,14 @@ UPDATE auto_charge_requests SET turned_off = true WHERE id = sqlc.arg(id);
 -- 충전할 일 하나. 사람이 결과를 정할 때 읽는다.
 SELECT * FROM auto_charge_requests WHERE id = sqlc.arg(id);
 
+-- name: ListRecentRequests :many
+-- 그 사람의 충전할 일을 늦게 적힌 것부터. 지갑의 최근 자동 결제 내역이다. 카드와 결제 대행사의 답은 읽지 않는다.
+SELECT id, product_id, price, credits, status, skip_reason, turned_off, created_at, finished_at
+FROM auto_charge_requests
+WHERE user_id = sqlc.arg(user_id)
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(row_limit);
+
 -- name: ListOpenRequests :many
 -- 끝나지 않은 채(pending, charging) before 보다 먼저 적힌 일. 사람이 볼 일의 목록이다(cmd/autocharges stuck).
 SELECT * FROM auto_charge_requests

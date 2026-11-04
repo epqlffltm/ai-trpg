@@ -222,6 +222,8 @@ export type AttendanceRewards = Billing['schemas']['Rewards'];
 export type CouponRedemption = Billing['schemas']['CouponRedemption'];
 export type AutoCharge = Billing['schemas']['AutoCharge'];
 export type PaymentCard = Billing['schemas']['Card'];
+export type AutoChargeHistory = Billing['schemas']['AutoChargeHistory'];
+export type AutoChargeHistoryItem = AutoChargeHistory['items'][number];
 // 주문 목록과 상품 목록은 이름 붙은 스키마가 없어 응답의 모양을 그대로 쓴다
 export type OrderPage = BillingOperations['listOrders']['responses'][200]['content']['application/json'];
 

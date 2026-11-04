@@ -55,6 +55,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/auto-charge/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 최근 자동 결제 내역. 충전할 일을 늦게 적힌 것부터 20개(#980)
+         * @description 결제된 것, 거절된 것, 보내기 전에 그만둔 것, 끝나지 않은 것을 모두 싣는다. 카드와 결제 대행사의 거절 코드는 싣지 않는다
+         */
+        get: operations["getAutoChargeHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/cards": {
         parameters: {
             query?: never;
@@ -546,6 +566,41 @@ export interface components {
                 /** @description 지금의 판 */
                 version: number;
             };
+        };
+        AutoChargeHistory: {
+            items: {
+                /** Format: date-time */
+                created_at: string;
+                credits: components["schemas"]["Amount"];
+                /**
+                 * Format: date-time
+                 * @description 끝나지 않았으면 null
+                 */
+                finished_at: string | null;
+                /**
+                 * Format: uuid
+                 * @description 충전할 일의 번호. 결제되었으면 같은 번호의 주문이 있다
+                 */
+                id: string;
+                /**
+                 * Format: int64
+                 * @description 적을 때의 상품의 값(원)
+                 */
+                price: number;
+                product_id: string;
+                /**
+                 * @description 보내기 전에 그만둔 까닭. skipped 일 때만 있다
+                 * @enum {string|null}
+                 */
+                reason: "disabled" | "no_card" | "not_eligible" | "monthly_limit" | "withdrawn" | "stale" | null;
+                /**
+                 * @description processing 은 아직 보내지 않았거나 답을 기다리는 것이다
+                 * @enum {string}
+                 */
+                status: "processing" | "paid" | "declined" | "skipped";
+                /** @description 이 일이 실패해 자동 충전을 껐다 */
+                turned_off: boolean;
+            }[];
         };
         Card: {
             /** @description 카드를 낸 곳의 코드(결제 대행사의 issuerCode) */
@@ -1046,6 +1101,29 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            500: components["responses"]["ServerError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    getAutoChargeHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 최근 내역. 없으면 빈 목록이다 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutoChargeHistory"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
             500: components["responses"]["ServerError"];
             503: components["responses"]["Unavailable"];
         };

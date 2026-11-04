@@ -296,6 +296,7 @@ uv run --no-project python tools/export_openapi.py billing
 | `POST /api/v1/billing/coupons/redeem` | 201, 받은 실버 | 쿠폰 코드를 넣어 실버를 받는다(#979). 아래 [크레딧](#크레딧)의 "쿠폰" |
 | `GET /api/v1/billing/auto-charge` | 200, 설정과 등록한 카드 | 자동 충전(#980). 아래 [자동 충전](#자동-충전) |
 | `PUT /api/v1/billing/auto-charge` | 200, 적은 뒤의 것 | 자동 충전을 켜고 끄고, 기준 골드·상품·한 달 상한을 정한다 |
+| `GET /api/v1/billing/auto-charge/history` | 200, 최근 내역 | 최근 자동 결제(충전할 일) 20개. 늦게 적힌 것부터 |
 | `POST /api/v1/billing/cards/customer-key` | 200, 고객 키 | 카드 등록 창에 넣을 고객 키. 없으면 만든다 |
 | `POST /api/v1/billing/cards` | 201, 등록한 카드 | 카드 등록 창이 준 인증 키로 카드를 등록한다(빌링키). 이미 있으면 바꾼다 |
 | `DELETE /api/v1/billing/cards` | 204 | 카드를 지우고 자동 충전을 끈다 |
@@ -1514,6 +1515,13 @@ go run ./cmd/autocharge -interval 30s -limit 20  간격(1초 이상)과 한 바�
 compose 는 `billing-autocharge` 로 띄우고 `TOSS_SECRET_KEY` 와 DB 의 비밀번호만 남긴다(요청을 받지 않고 인증 서버·알림 서버를 부르지 않는다).
 정리 작업처럼 성공한 바퀴마다 심장박동(`HEARTBEAT_FILE`)을 남기고 healthcheck 가 본다. 10분 넘게 성공하지 않으면 `BillingAutoChargeStalled` 가 울린다.
 
+**최근 내역**(`GET /auto-charge/history`, `internal/autocharge/history.go`). 지갑(A6)이 보이는 최근 자동 결제다. 그 사람의 충전할 일을 늦게 적힌 것부터 20개(`autocharge.HistorySize`) 돌려준다.
+
+- 결제된 것, 거절된 것, 보내기 전에 그만둔 것, 끝나지 않은 것을 모두 싣는다. 주문 내역(A8)에는 결제된 것만 있다(일 번호 = 주문 번호)
+- 상태는 `processing`(아직 보내지 않았거나 답을 기다린다. `pending` 과 `charging` 은 사용자에게 같다), `paid`, `declined`, `skipped` 다
+- 그만둔 까닭(`reason`)은 `skipped` 일 때만 싣는다. 결제 대행사의 거절 코드와 카드는 싣지 않는다(알림함과 같다). 이 실패로 자동 충전을 껐으면 `turned_off` 다
+- 쪽 넘기기는 없다. 지난 결제는 주문 내역에서 본다
+
 **사람이 정하기**(`internal/autocharge/resolve.go`, `cmd/autocharges`). 조회로도 모르는 일은 사람이 상점관리자에서 일 번호(= 주문 번호)로 결제를 찾아 정한다.
 하루가 넘도록 끝나지 않은 일은 대사가 찾는다(`autocharge.stuck`, [정리 작업과 대사](#정리-작업과-대사)의 6).
 
@@ -1810,6 +1818,7 @@ go run ./cmd/migrate down     마지막으로 적용한 것 하나를 되돌린�
 `00025_auto_charge_notices.sql` 도 서버를 켠 채로 적용해도 된다. 칸 하나와 색인을 더하고 알림의 종류를 늘린다. 새 정리 작업과 결제 작업은 이것을 적용한 뒤에 띄운다. 알림 서버를 먼저 배포한다(모르는 종류는 422 로 버려진다).
 `00026_auto_charge_consents.sql` 도 서버를 켠 채로 적용해도 된다. 새 표를 만들 뿐이다. 새 서버는 이것을 적용한 뒤에 띄운다(켜는 설정을 적을 때 그 표에 적는다). 새 서버를 띄우면 동의를 싣지 않은 옛 화면으로는 켤 수 없다(400). 웹을 함께 배포한다.
 조건을 다시 거는 동안 원장과 홀드의 쓰기가 잠시 멈춘다(있는 줄을 모두 다시 본다).
+`00027_auto_charge_history.sql` 도 서버를 켠 채로 적용해도 된다. 색인 하나뿐이다. 새 서버는 이것을 적용한 뒤에 띄운다(최근 내역이 그 색인으로 읽는다). 언제든 되돌려진다. 되돌리면 최근 내역이 느려질 뿐이다.
 
 서버와 같은 설정(`.env` 의 `DATABASE_URL`, `DB_SCHEMA`)을 읽는다. 접속 주소를 명령 줄에 적지 않는다.
 어느 스키마를 바꾸는지 첫 줄에 찍는다. 테스트용 스키마는 손으로 맞추지 않는다. 테스트가 스스로 적용한다([테스트](#테스트)).
@@ -2065,6 +2074,8 @@ Windows 에서는 C 컴파일러(gcc)를 따로 깔아야 `-race` 가 돈다. �
   사람은 3일이 지난 `charging` 만 정할 수 있는 것, 결제됨·거절이 결제 작업과 같은 길로 적히는 것, 빠진 근거·사람·결제 번호와 이미 쓰인 결제 번호의 거절,
   결제 작업이 먼저 끝낸 일은 정할 수 없는 것, 목록이 정할 수 있는지를 보이는 것, 명령 줄을 읽는 것.
   토스페이먼츠의 조회: 주소와 멱등키 없음, 없음은 404 `NOT_FOUND_PAYMENT` 일 때만이고 다른 404·5xx·다른 주문·다른 금액은 모름인 것
+- 자동 충전의 최근 내역(`internal/autocharge/history_test.go`, `internal/httpapi/autocharge_history_test.go`): 결제 작업이 끝낸 일이 같은 번호의 주문과 함께 보이는 것,
+  늦게 적힌 것부터 그 사람의 것만 20개까지인 것, `pending`·`charging` 이 `processing` 인 것, 까닭은 그만둔 것에만 있는 것, 없으면 빈 목록인 것
 - 가격 변경의 할 일(`internal/pricereview`, `cmd/pricereviews`): 할 일마다 시작하는 날(D-30, D-14, D-1)의 경계(1초 전에는 없고 그 순간부터 있다),
   구간(`d30`, `d14`, `d1`, `overdue`)과 남은 날의 수, 끝낸 할 일과 닫은 할 일은 나오지 않는 것, 셋을 다 끝내면 열린 목록에서 빠지는 것,
   표시는 한 번만 되고 처음 표시가 남는 것, 닫은 뒤의 표시와 이유 없는 닫기의 거절, 틀린 이름·글·적은 사람·지난 시각의 거절(한글은 글자 수로 센다),
@@ -2265,6 +2276,7 @@ billing-server/
       trigger.go            홀드의 트랜잭션 안에서 떨어진 것을 보고 충전할 일을 적기(armed)
       charge.go             결제 작업의 한 바퀴. 차지하기, 보내기 전에 보기, 빌링키 결제(3일 뒤로는 조회), 답 적기
       resolve.go            끝나지 않은 일의 목록과 사람이 결과를 정하기
+      history.go            최근 자동 결제 내역(사용자에게 보일 상태와 까닭)
       queries.sql           이 패키지가 쓰는 SQL 전부
       autochargedb/         sqlc 가 queries.sql 에서 만든 코드
     signature/            비밀로 글자에 서명하고 확인한다(HMAC, 시각 포함). 아래 둘이 함께 쓴다
