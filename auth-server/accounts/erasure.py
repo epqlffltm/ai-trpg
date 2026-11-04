@@ -10,6 +10,7 @@
 
 from django.contrib.auth.hashers import make_password
 
+from accounts.blocks import erase_blocks
 from accounts.models import (
     EmailCode,
     GuardianConsent,
@@ -34,7 +35,7 @@ def is_removed_account(user: User) -> bool:
 
 
 def blank_account(user: User) -> None:
-    """계정을 막고 아이디, 닉네임, 이메일, 비밀번호, 제작자의 소개를 비운다."""
+    """계정을 막고 아이디, 닉네임, 이메일, 비밀번호, 제작자의 소개를 비운다. 막은 제작자와 태그(#988)도 지운다."""
     user.is_active = False
     user.username = REMOVED_NAME.format(pk=user.pk)
     user.nickname = REMOVED_NAME.format(pk=user.pk)
@@ -44,6 +45,8 @@ def blank_account(user: User) -> None:
     # 소개는 그 사람이 쓴 글이다
     user.bio = ''
     user.save(update_fields=['is_active', 'username', 'nickname', 'email', 'password', 'bio'])
+    # 그 사람이 막은 것과, 남이 그 사람을 막은 것(#988)
+    erase_blocks(user)
 
 
 def erase_mail_records(user: User, email: str) -> None:

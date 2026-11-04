@@ -207,6 +207,8 @@ Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 �
 | POST | `/api/v1/auth/me/withdrawal` | 탈퇴를 요청한다. 본문 `{"password": "..."}`. 모든 세션이 끊기고 7일 뒤에 계정을 비운다 | 필요 |
 | DELETE | `/api/v1/auth/me/withdrawal` | 유예 중인 탈퇴를 취소한다 | 필요 |
 | PATCH | `/api/v1/auth/me/profile` | 제작자로서의 내 소개를 고친다. 본문 `{"bio": "..."}`(200자까지, 비우면 소개가 없다, 앞뒤 공백은 지운다, #992) | 필요 |
+| PUT, DELETE | `/api/v1/auth/me/blocks/creators/{public_id}` | 제작자를 막고 푼다(#988). 답은 바뀐 뒤의 `{"creators": [...], "tags": [...]}`. 자기 자신이면 400 `block_self`, 상한을 넘으면 409 `block_limit` | 필요 |
+| PUT, DELETE | `/api/v1/auth/me/blocks/tags/{tag}` | 태그를 막고 푼다(#988). 태그는 주소에 인코딩한다(쉼표, `/` 도 된다). 앞뒤 공백을 떼고 1~20자가 아니면 400 `invalid_tag`, 상한을 넘으면 409 `block_limit` | 필요 |
 | PATCH | `/api/v1/auth/me/content-settings` | 목록 거르기의 설정을 고친다. 본문 `{"show_adult_content"?: bool, "orientation"?: "all" \| "male" \| "female"}`, 보낸 칸만 바뀐다. 성인 확인 전에 성인 작품 표시를 켜면 403 `adult_content_required`(#986, #987) | 필요 |
 | GET | `/api/v1/auth/me/invite` | 내 초대 코드(없으면 만든다), 초대한 사람으로서 받은 보상의 수와 상한(#990) | 필요 |
 | POST | `/api/v1/auth/identity/verify` | 휴대폰 본인인증. 본인확인 업체에서 받은 `token` 을 낸다 | 필요 |
@@ -309,6 +311,11 @@ API 밖에 상태 확인 주소가 둘 있다. 다른 세 서버와 같은 뜻�
 `/me` 의 `content_settings` 는 공개 목록을 거르는 설정이다(`accounts/content_settings.py`). `show_adult_content`(처음은 `true`)와 `orientation`(`all`, `male`, `female`, 처음은 `all`)이다.
 목록을 내는 서버(게임, asset)는 인증 서버를 부르지 않는다. 화면이 이 값을 읽어 공개 목록의 주소에 싣는다(`hide_adult`, `orientation`).
 성인 확인을 하지 않은 사람에게는 서버들이 이미 성인용을 빼서, `show_adult_content` 는 성인 확인을 한 사람이 숨길 때만 뜻이 있다.
+
+`/me` 의 `blocks` 는 막은 제작자(공개 ID)와 태그다(#988, `accounts/blocks.py`, [차단](../docs/architecture/blocks.md)). 최근에 막은 것부터다.
+화면이 공개 목록의 주소에 싣는다(`exclude_creators` 는 쉼표로, `exclude_tag` 는 되풀이). 제작자 100명, 태그 30개까지다(목록의 주소에 싣기 때문이다).
+같은 사람의 막기는 계정의 줄을 잠그고 해서 동시에 눌러도 상한을 넘지 않는다. 막기와 풀기는 몇 번 해도 같다. 그런 공개 ID 가 있는지는 보지 않는다.
+계정을 비우면(탈퇴, 만 14세 미만) 그 사람이 막은 것과 남이 그 사람을 막은 것을 지운다(`accounts/erasure.py`).
 다시 동의를 받아야 하는 필수 항목(`consents_pending`, 예: `["terms"]`)도 실린다. 아래 [동의](#동의)
 
 미성년자(성년 전)는 보호자가 동의해야 결제할 수 있다(#336). 결제를 막는 것은 결제 서버다(#337). 보호자는 계정을 만들지 않는다.

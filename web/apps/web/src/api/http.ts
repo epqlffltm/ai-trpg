@@ -23,8 +23,8 @@ export type RequestOptions = {
   file?: Blob;
   /** 받을 형식. 없으면 JSON. apiBlob 이 정한다 */
   accept?: string;
-  /** 쿼리 문자열. 값이 undefined 면 넣지 않는다 */
-  query?: Record<string, string | number | undefined>;
+  /** 쿼리 문자열. 값이 undefined 면 넣지 않는다. 목록이면 같은 이름을 되풀이한다(?tag=a&tag=b) */
+  query?: Record<string, string | number | readonly string[] | undefined>;
   /** 더 붙일 머리말(결제 서버의 Idempotency-Key 같은 것). 인증과 본문의 머리말은 여기서 덮지 못한다 */
   headers?: Record<string, string>;
   /** 401 에서 갱신하지 않는다(로그인 단계처럼 토큰과 상관없는 요청) */
@@ -113,7 +113,12 @@ function withQuery(path: string, query: RequestOptions['query']): string {
   if (!query) return path;
   const params = new URLSearchParams();
   for (const [name, value] of Object.entries(query)) {
-    if (value !== undefined) params.set(name, String(value));
+    if (value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) params.append(name, item);
+    } else {
+      params.set(name, String(value));
+    }
   }
   const text = params.toString();
   return text ? `${path}?${text}` : path;

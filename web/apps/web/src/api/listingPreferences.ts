@@ -1,5 +1,6 @@
 // web/apps/web/src/api/listingPreferences.ts
-// 공개 목록을 부를 때 싣는 보는 사람의 설정(#986, #987). 성인 작품 숨김과 성향이다.
+// 공개 목록을 부를 때 싣는 보는 사람의 설정(#986, #987). 성인 작품 숨김과 성향, 막은 제작자와 태그(#988)다.
+// 막은 것은 /me 의 blocks 에 있다. 제작자는 쉼표로 잇고(exclude_creators), 태그는 이름을 되풀이한다(exclude_tag).
 // 설정은 인증 서버의 내 정보(/me 의 content_settings)에 있다. 목록을 내는 서버(게임, asset)는 인증 서버를 부르지 않으므로
 // 화면이 읽어 목록의 주소에 싣는다(?hide_adult=true&orientation=male). 소개 하나를 여는 주소에는 싣지 않는다.
 // 지금 값은 이 모듈이 쥐고, 내 정보를 읽거나 설정을 바꾸면 layout/ListingPreferencesSync.tsx 가 고친다.
@@ -7,7 +8,7 @@
 import type { Me } from './types';
 
 /** 목록의 주소에 더할 값. 거르지 않는 것은 싣지 않는다 */
-export type ListingPreferenceQuery = { hide_adult?: string; orientation?: string };
+export type ListingPreferenceQuery = { hide_adult?: string; orientation?: string; exclude_creators?: string; exclude_tag?: string[] };
 
 let current: ListingPreferenceQuery = {};
 
@@ -34,5 +35,9 @@ export function preferencesFor(me: Me | undefined): ListingPreferenceQuery {
   const query: ListingPreferenceQuery = {};
   if (me.identity?.adult_content && settings.show_adult_content === false) query.hide_adult = 'true';
   if (settings.orientation && settings.orientation !== 'all') query.orientation = settings.orientation;
+  // 막은 제작자와 태그(#988). 인증 서버가 아직 주지 않으면 거르지 않는다
+  const blocks = me.blocks ?? { creators: [], tags: [] };
+  if (blocks.creators.length > 0) query.exclude_creators = blocks.creators.join(',');
+  if (blocks.tags.length > 0) query.exclude_tag = [...blocks.tags];
   return query;
 }

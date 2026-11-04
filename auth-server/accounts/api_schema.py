@@ -102,6 +102,13 @@ class IdentityAnswerSerializer(serializers.Serializer):
     identity = IdentityStatusSerializer()
 
 
+class BlocksSerializer(serializers.Serializer):
+    """막은 제작자(공개 ID)와 태그(#988). 최근에 막은 것부터다."""
+
+    creators = serializers.ListField(child=serializers.UUIDField())
+    tags = serializers.ListField(child=serializers.CharField())
+
+
 class MeSerializer(UserSerializer):
     """
     GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태, 목록을 거르는 설정,
@@ -116,6 +123,8 @@ class MeSerializer(UserSerializer):
     content_settings = ContentSettingsSerializer()
     # 제작자로서의 내 소개(#992). 제작자 페이지에 보인다
     bio = serializers.CharField()
+    # 막은 제작자와 태그(#988). 화면이 공개 목록을 부를 때 싣는다
+    blocks = BlocksSerializer()
 
     class Meta(UserSerializer.Meta):
         fields = (
@@ -126,6 +135,7 @@ class MeSerializer(UserSerializer):
             'withdrawal_scheduled_at',
             'content_settings',
             'bio',
+            'blocks',
         )
         read_only_fields = fields
 

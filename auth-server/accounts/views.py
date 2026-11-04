@@ -28,6 +28,7 @@ from accounts.api_schema import (
     NETWORK_BLOCKED,
     ORIGIN_REFUSED,
     TOO_MANY_ATTEMPTS,
+    BlocksSerializer,
     GuardianNoticeAnswerSerializer,
     GuardianRequestedSerializer,
     GuardianRevokedSerializer,
@@ -51,6 +52,18 @@ from accounts.attempt_policies import (
     count_login_attempt,
     count_password_change_attempt,
     is_login_blocked_ip,
+)
+from accounts.blocks import (
+    MAX_CREATORS,
+    MAX_TAGS,
+    BlockLimitError,
+    BlockSelfError,
+    InvalidTagError,
+    block_creator,
+    block_tag,
+    blocks_of,
+    unblock_creator,
+    unblock_tag,
 )
 from accounts.client_ip import get_attempt_subject, get_client_ip
 from accounts.consents import (
@@ -1172,8 +1185,81 @@ class MeView(APIView):
             'content_settings': content_settings_of(request.user),
             # 제작자로서의 내 소개(#992)
             'bio': request.user.bio,
+            # 막은 제작자와 태그(#988)
+            'blocks': blocks_of(request.user),
         }
         return Response(body, status=status.HTTP_200_OK)
+
+
+BLOCK_RESPONSES = {
+    200: OpenApiResponse(response=BlocksSerializer, description='바뀐 뒤의 막은 것 전체'),
+    401: unauthenticated(),
+}
+
+
+def block_limit_response() -> Response:
+    """상한을 넘은 막기의 응답(409)."""
+    return build_coded_error_response(
+        f'제작자는 {MAX_CREATORS}명, 태그는 {MAX_TAGS}개까지 막을 수 있습니다.', 'block_limit', status.HTTP_409_CONFLICT
+    )
+
+
+class MyCreatorBlockView(APIView):
+    """PUT, DELETE /api/v1/auth/me/blocks/creators/{public_id}. 제작자를 막고 푼다(#988)."""
+
+    # 로그인한 본인만. 기본 권한(IsAuthenticated)을 쓴다
+
+    @extend_schema(
+        summary='제작자를 막는다. 그 제작자의 작품이 공개 목록에서 빠진다. 다시 해도 같다',
+        request=None,
+        responses={
+            **BLOCK_RESPONSES,
+            400: bad_request('자기 자신을 막으려 했다(block_self)'),
+            409: OpenApiResponse(response=BAD_REQUEST_BODY, description='상한을 넘는다(block_limit)'),
+        },
+    )
+    def put(self, request: Request, public_id: uuid.UUID) -> Response:
+        try:
+            blocks = block_creator(request.user, public_id)
+        except BlockSelfError:
+            return build_coded_error_response(
+                '자기 자신은 막을 수 없습니다.', 'block_self', status.HTTP_400_BAD_REQUEST
+            )
+        except BlockLimitError:
+            return block_limit_response()
+        return Response(BlocksSerializer(blocks).data, status=status.HTTP_200_OK)
+
+    @extend_schema(summary='제작자의 막기를 푼다. 막지 않았어도 된다', request=None, responses=BLOCK_RESPONSES)
+    def delete(self, request: Request, public_id: uuid.UUID) -> Response:
+        return Response(BlocksSerializer(unblock_creator(request.user, public_id)).data, status=status.HTTP_200_OK)
+
+
+class MyTagBlockView(APIView):
+    """PUT, DELETE /api/v1/auth/me/blocks/tags/{tag}. 태그를 막고 푼다(#988). 태그는 주소에 인코딩해 싣는다."""
+
+    # 로그인한 본인만. 기본 권한(IsAuthenticated)을 쓴다
+
+    @extend_schema(
+        summary='태그를 막는다. 그 태그가 붙은 작품이 공개 목록에서 빠진다. 다시 해도 같다',
+        request=None,
+        responses={
+            **BLOCK_RESPONSES,
+            400: bad_request('태그가 비었거나 20자를 넘는다(invalid_tag)'),
+            409: OpenApiResponse(response=BAD_REQUEST_BODY, description='상한을 넘는다(block_limit)'),
+        },
+    )
+    def put(self, request: Request, tag: str) -> Response:
+        try:
+            blocks = block_tag(request.user, tag)
+        except InvalidTagError:
+            return build_coded_error_response('태그는 1~20자여야 합니다.', 'invalid_tag', status.HTTP_400_BAD_REQUEST)
+        except BlockLimitError:
+            return block_limit_response()
+        return Response(BlocksSerializer(blocks).data, status=status.HTTP_200_OK)
+
+    @extend_schema(summary='태그의 막기를 푼다. 막지 않았어도 된다', request=None, responses=BLOCK_RESPONSES)
+    def delete(self, request: Request, tag: str) -> Response:
+        return Response(BlocksSerializer(unblock_tag(request.user, tag)).data, status=status.HTTP_200_OK)
 
 
 class MyContentSettingsView(APIView):
