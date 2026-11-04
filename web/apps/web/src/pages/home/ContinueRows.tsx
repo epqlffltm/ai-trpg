@@ -41,7 +41,7 @@ function MyTablesRow() {
       }
       onRetry={() => void query.refetch()}
     >
-      <ul className="item-grid">
+      <ul className="item-grid item-grid--row">
         {items.map((table) => (
           <ItemCard
             key={table.id}
@@ -70,7 +70,7 @@ function MyConversationsRow() {
       }
       onRetry={() => void query.refetch()}
     >
-      <ul className="item-grid">
+      <ul className="item-grid item-grid--row">
         {items.map((conversation) => (
           <ItemCard
             key={conversation.id}
@@ -99,7 +99,7 @@ function MyStorySessionsRow() {
       }
       onRetry={() => void query.refetch()}
     >
-      <ul className="item-grid">
+      <ul className="item-grid item-grid--row">
         {items.map((session) => (
           <ItemCard key={session.id} to={`/story/sessions/${session.id}`} title={session.title} description={session.world.name} meta={[progressLine(session.progress)]} />
         ))}

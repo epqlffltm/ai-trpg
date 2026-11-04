@@ -31,11 +31,11 @@ function PublicScenariosRow({ signedIn }: { signedIn: boolean }) {
     <ListSection
       title="새로 공개된 시나리오"
       status={listStatus(query, items.length)}
-      action={<Link to="/trpg">더 보기</Link>}
+      action={<Link to="/trpg">전체 보기</Link>}
       emptyText="아직 공개된 시나리오가 없습니다."
       onRetry={() => void query.refetch()}
     >
-      <ul className="item-grid">
+      <ul className="item-grid item-grid--row">
         {items.map((listing) => (
           <ItemCard
             key={listing.scenario_id}
@@ -57,11 +57,11 @@ function PublicCharactersRow({ signedIn }: { signedIn: boolean }) {
     <ListSection
       title="새로 공개된 캐릭터"
       status={listStatus(query, items.length)}
-      action={<Link to="/chat">더 보기</Link>}
+      action={<Link to="/chat">전체 보기</Link>}
       emptyText="아직 공개된 캐릭터가 없습니다."
       onRetry={() => void query.refetch()}
     >
-      <ul className="item-grid">
+      <ul className="item-grid item-grid--row">
         {items.map((character) => (
           <CharacterCard key={character.id} character={character} />
         ))}
@@ -77,11 +77,11 @@ function PublicWorldsRow({ signedIn }: { signedIn: boolean }) {
     <ListSection
       title="새로 공개된 세계관"
       status={listStatus(query, items.length)}
-      action={<Link to="/story">더 보기</Link>}
+      action={<Link to="/story">전체 보기</Link>}
       emptyText="아직 공개된 세계관이 없습니다."
       onRetry={() => void query.refetch()}
     >
-      <ul className="item-grid">
+      <ul className="item-grid item-grid--row">
         {items.map((world) => (
           <StoryWorldCard key={world.id} world={world} />
         ))}
