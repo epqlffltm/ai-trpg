@@ -2,6 +2,7 @@
 // 테이블 방(B6)의 장면 그림(#983). 라운드의 장면 아래의 "장면 그림 · 160"으로 그 라운드를 그리고,
 // 다 그린 그림을 게임 서버의 주소로 받아 그 라운드 아래에 띄운다. 남이 그린 것도 보이고, 내 것에는 "내가 그림"을 적는다.
 // 남의 실패는 보이지 않는다. 그리는 중이면 단추를 막는다. 그릴 수 없는 서버면 단추를 숨긴다. 시작하지 못한 까닭을 알린다.
+// 스트림의 scene_snapshot 이 오면 목록을 다시 읽는다(남이 그린 것이 곧 보인다).
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -10,7 +11,7 @@ import { REFRESH_PATH } from '../../../../api/refresh';
 import type { TableSnapshot } from '../../../../api/tableSnapshots';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../test/fakeFetch';
 import { renderApp } from '../../../../test/renderApp';
-import { ME, member, OTHER, round, roomRoutes, sheet, tableDetail } from '../../../../test/tableFixtures';
+import { ME, member, OTHER, round, roomRoutes, sheet, sse, tableDetail } from '../../../../test/tableFixtures';
 import { snapshotsOfRound } from './tableSnapshotsView';
 
 const TABLE_ID = '00000000-0000-4000-8000-0000000009b3';
@@ -48,6 +49,23 @@ function open(routes: Record<string, (request: SeenRequest) => Response> = {}) {
 /** 그 라운드의 글이 든 칸(라운드 하나의 article) */
 async function roundOf(n: number) {
   return within((await screen.findByText(`${n}번째 장면`)).closest('article') as HTMLElement);
+}
+
+/** 붙은 뒤 LATER_MS 가 지나서 글 하나를 보내는 스트림. 요청이 끊길 때까지 닫지 않는다 */
+const LATER_MS = 800;
+function laterStream(request: SeenRequest, chunk: () => string): Response {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(': connected\n\n'));
+      const timer = setTimeout(() => controller.enqueue(encoder.encode(chunk())), LATER_MS);
+      request.signal?.addEventListener('abort', () => {
+        clearTimeout(timer);
+        controller.error(new DOMException('aborted', 'AbortError'));
+      });
+    },
+  });
+  return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
 }
 
 beforeEach(() => {
@@ -120,6 +138,24 @@ describe('테이블의 장면 그림', () => {
 
     expect(await second.findByText('이 테이블에서 다른 그림을 그리는 중입니다. 끝나면 다시 해 주세요.')).toBeInTheDocument();
     expect((await roundOf(1)).queryByText(/다른 그림을 그리는 중/)).not.toBeInTheDocument();
+  });
+
+  it('스트림의 scene_snapshot 이 오면 목록을 다시 읽어 남이 그린 그림을 띄운다', async () => {
+    let announced = false;
+    open({
+      [`GET ${BASE}/snapshots`]: () => json(200, announced ? [snapshot(1)] : []),
+      [`GET ${BASE}/snapshots/${S(1)}/image`]: () => new Response('png', { status: 200 }),
+      // 방이 붙고 처음 읽기를 마친 뒤에 알림이 온다. 붙을 때의 다시 읽기와 섞이지 않게 늦게 보낸다
+      [`GET ${BASE}/stream`]: (request) => laterStream(request, () => {
+        announced = true;
+        return sse('scene_snapshot', {});
+      }),
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    const first = await roundOf(1);
+
+    expect(await first.findByText('AI 가 만든 그림', {}, { timeout: 3000 })).toBeInTheDocument();
   });
 
   it('그릴 수 없는 서버면 단추를 숨긴다', async () => {

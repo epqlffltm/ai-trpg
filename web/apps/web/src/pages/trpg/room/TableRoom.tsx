@@ -8,6 +8,7 @@
 //   - 채팅: 읽어 둔 채팅에 번호 차례로 합친다. 그 사람의 "입력 중"을 지운다
 //   - 입력 중: 5초 동안 보인다
 //   - 서술의 미리 보기: 조각을 이어 둔다(round/preview.ts). 서술이 끝났다는 이벤트가 오면 지운다
+//   - 장면 그림이 바뀜(scene_snapshot, #983): 그림 목록을 다시 읽는다(snapshots/)
 //   - 멈춤: 끝났으면 테이블을 다시 읽고(끝난 판의 화면), 앉아 있지 않으면 다시 읽어 404 의 화면으로 간다
 // 스트림이 열릴 때마다 테이블을 한 번 다시 읽는다. 처음 읽은 때와 붙은 때 사이, 끊겼던 동안의 변화를 놓치지 않게.
 
@@ -24,6 +25,7 @@ import { HostPanel } from './host/HostPanel';
 import { RoomHeader } from './RoomHeader';
 import { ActionRequestProvider } from './round/action/actionRequest';
 import { applyPreview, ENDS_PREVIEW, type NarrationPreview } from './round/preview';
+import { tableSnapshotsKey } from './snapshots/useTableSnapshots';
 import { chatQuery, eventsQuery, tableQuery } from './roomQueries';
 import { mergeEvents, mergeMessages } from './streamPolicy';
 import { useBatchedRefetch } from './useBatchedRefetch';
@@ -79,6 +81,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
     },
     onTyping: typing.add,
     onPreview: (chunk) => setPreview((current) => applyPreview(current, chunk)),
+    onSnapshot: () => void queryClient.invalidateQueries({ queryKey: tableSnapshotsKey(table.id) }),
     onStop: () => void queryClient.invalidateQueries({ queryKey: tableQuery(table.id).queryKey }),
   });
 
