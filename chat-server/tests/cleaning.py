@@ -18,6 +18,7 @@ import app.memory.models  # noqa: F401
 import app.notifications.models  # noqa: F401
 import app.operators.models  # noqa: F401
 import app.reports.models  # noqa: F401
+import app.snapshots.models  # noqa: F401
 import app.turns.models  # noqa: F401
 import app.world.models  # noqa: F401
 from app.core.database import Base
