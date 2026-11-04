@@ -2673,6 +2673,29 @@ a.ui-button {
   border-radius: var(--ui-radius);
 }
 
+.chat-snapshots__figure {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.chat-snapshots__open {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+.chat-snapshots__large {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: var(--ui-radius);
+}
+
 .chat-snapshots__note {
   margin: 0;
 }
