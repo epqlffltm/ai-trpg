@@ -318,3 +318,5 @@ sql:
           # 골드의 양
           - column: auto_charge_settings.threshold
             go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount
+          - column: auto_charge_requests.credits
+            go_type: github.com/epqlffltm/ai-trpg/billing-server/internal/credit.Amount

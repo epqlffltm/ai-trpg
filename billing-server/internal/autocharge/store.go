@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/autocharge/autochargedb"
@@ -30,6 +31,9 @@ type Service struct {
 	clock       func() time.Time
 	issuer      payment.CardIssuer
 	eligibility Eligibility
+	// charger 와 orders 는 결제하는 작업만 붙인다(WithCharging, charge.go). 처음에는 없다
+	charger payment.CardCharger
+	orders  Orders
 }
 
 // NewService 는 Service 를 만든다.
@@ -167,11 +171,17 @@ func requireCard(ctx context.Context, queries *autochargedb.Queries, userID uuid
 
 // --- 탈퇴 ---
 
-// Erase 는 그 사람의 설정, 카드, 고객 키를 지운다. 지운 것이 있으면 true 다. 몇 번을 불러도 같다.
+// Erase 는 그 사람의 설정, 카드, 고객 키를 지우고, 아직 보내지 않은 충전할 일을 그만둔다. 지운 것이 있으면 true 다.
+// 몇 번을 불러도 같다. 이미 보낸 일(charging)은 옮겨 적은 카드로 답을 받을 때까지 둔다. 돈이 나갔을 수 있다.
 func (s *Service) Erase(ctx context.Context, userID uuid.UUID) (bool, error) {
 	var erased int64
 	err := txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
 		queries := autochargedb.New(tx)
+		skipped, err := queries.SkipOpenRequests(ctx, autochargedb.SkipOpenRequestsParams{UserID: userID, Now: s.clock()})
+		if err != nil {
+			return err
+		}
+		erased += skipped
 		for _, remove := range []func(context.Context, uuid.UUID) (int64, error){
 			queries.DeleteSettings, queries.DeleteCard, queries.DeleteCustomer,
 		} {
@@ -209,4 +219,14 @@ func view(ctx context.Context, queries *autochargedb.Queries, userID uuid.UUID) 
 		return View{}, err
 	}
 	return result, nil
+}
+
+// pgtextOf 는 빈 칸이 아닌 글을 DB 의 글로 바꾼다.
+func pgtextOf(text string) pgtype.Text {
+	return pgtype.Text{String: text, Valid: true}
+}
+
+// pguuidOf 는 번호를 DB 의 빈 칸이 될 수 있는 번호로 바꾼다.
+func pguuidOf(id uuid.UUID) pgtype.UUID {
+	return pgtype.UUID{Bytes: id, Valid: true}
 }

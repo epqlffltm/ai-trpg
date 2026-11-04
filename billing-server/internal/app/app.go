@@ -73,19 +73,23 @@ func NewServices(pool *pgxpool.Pool, rules config.Rules, providers order.Provide
 	notices := usernotice.NewService(pool, now, nil)
 	holds.WithShortfalls(notices)
 	eligibilities := eligibility.NewService(pool, now)
+	// 자동 충전(#980). 홀드가 골드를 뺄 때 떨어졌는지 보고 충전할 일을 적는다. 탈퇴하면 카드와 설정을 지운다.
+	// 적기와 지우기만 하므로 결제 대행사를 붙이지 않는다. 결제는 따로 도는 작업(cmd/autocharge)이 한다
+	autoCharges := autocharge.NewService(pool, now, payment.None{}, eligibilities)
+	holds.WithLowBalance(autoCharges)
 	return Services{
 		Wallet: wallets, Orders: orders, Holds: holds, Prices: prices,
 		Eligibility: eligibilities, UserNotices: notices,
-		// 탈퇴하면 자동 충전의 카드와 설정도 지운다. 지우기만 하므로 결제 대행사를 붙이지 않는다
-		Withdrawals: withdrawal.NewService(pool, wallets, holds, eligibilities, notices).
-			WithCards(autocharge.NewService(pool, now, payment.None{}, eligibilities)),
+		Withdrawals: withdrawal.NewService(pool, wallets, holds, eligibilities, notices).WithCards(autoCharges),
 	}, nil
 }
 
 // NewProviders 는 주문의 길마다 부를 결제 대행사를 만든다. 서버와 작업 명령이 이것으로 만들어 같은 결제 대행사에 묻는다.
 // 지금은 웹 하나다.
+// 자동 충전의 길(auto)도 웹과 같은 결제 대행사다. 그 길의 주문을 청약철회(취소)할 때 쓴다.
 func NewProviders(settings config.Payment) order.Providers {
-	return order.Providers{order.ChannelWeb: NewProvider(settings)}
+	provider := NewProvider(settings)
+	return order.Providers{order.ChannelWeb: provider, order.ChannelAuto: provider}
 }
 
 // MeasureProviders 는 길마다의 결제 대행사를 부를 때마다 meter 로 세게 감싼다. name 은 label provider 다(PAYMENT_PROVIDER).
@@ -122,11 +126,16 @@ func MeasureServices(services Services, meter metric.Meter) error {
 
 // NoProviders 는 결제 대행사를 부르지 않는 정리 작업의 것이다. 웹 자리에 부르면 오류를 내는 것(payment.None)을 둔다.
 func NoProviders() order.Providers {
-	return order.Providers{order.ChannelWeb: payment.None{}}
+	return order.Providers{order.ChannelWeb: payment.None{}, order.ChannelAuto: payment.None{}}
 }
 
 // NewCardIssuer 는 설정이 고른 결제 대행사의 카드 등록(빌링키 발급, #980)을 만든다. 웹의 결제 대행사와 같은 것이다.
 func NewCardIssuer(settings config.Payment) payment.CardIssuer {
+	return NewCards(settings)
+}
+
+// NewCards 는 설정이 고른 결제 대행사의 카드 등록과 빌링키 결제(#980)를 만든다. 웹의 결제 대행사와 같은 것이다.
+func NewCards(settings config.Payment) payment.Cards {
 	if settings.Provider == config.ProviderToss {
 		client := &http.Client{Transport: tracing.Transport(nil, false)}
 		return payment.NewToss(settings.TossSecretKey, payment.TossAPIURL, client)

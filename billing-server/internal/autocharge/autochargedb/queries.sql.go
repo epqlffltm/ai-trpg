@@ -11,7 +11,62 @@ import (
 
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/credit"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const countFailed = `-- name: CountFailed :one
+UPDATE auto_charge_settings
+SET consecutive_failures = consecutive_failures + 1,
+    enabled = enabled AND consecutive_failures + 1 < $1::INTEGER,
+    armed = false, updated_at = $2
+WHERE user_id = $3
+RETURNING consecutive_failures, enabled
+`
+
+type CountFailedParams struct {
+	MaxFailures int32
+	Now         time.Time
+	UserID      uuid.UUID
+}
+
+type CountFailedRow struct {
+	ConsecutiveFailures int32
+	Enabled             bool
+}
+
+// 이어서 실패한 수를 늘린다. 정한 수가 되면 끈다. 늘린 뒤의 수와 켜져 있는지를 돌려준다.
+func (q *Queries) CountFailed(ctx context.Context, arg CountFailedParams) (CountFailedRow, error) {
+	row := q.db.QueryRow(ctx, countFailed, arg.MaxFailures, arg.Now, arg.UserID)
+	var i CountFailedRow
+	err := row.Scan(&i.ConsecutiveFailures, &i.Enabled)
+	return i, err
+}
+
+const countSucceeded = `-- name: CountSucceeded :exec
+UPDATE auto_charge_settings SET consecutive_failures = 0 WHERE user_id = $1
+`
+
+func (q *Queries) CountSucceeded(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, countSucceeded, userID)
+	return err
+}
+
+const delayRequest = `-- name: DelayRequest :exec
+UPDATE auto_charge_requests SET next_attempt_at = $1, last_error = $2
+WHERE id = $3 AND status IN ('pending', 'charging')
+`
+
+type DelayRequestParams struct {
+	NextAttemptAt time.Time
+	LastError     string
+	ID            uuid.UUID
+}
+
+// 답을 받지 못했다고 적고 다음 시도 시각을 정한다. 버리지 않는다.
+func (q *Queries) DelayRequest(ctx context.Context, arg DelayRequestParams) error {
+	_, err := q.db.Exec(ctx, delayRequest, arg.NextAttemptAt, arg.LastError, arg.ID)
+	return err
+}
 
 const deleteCard = `-- name: DeleteCard :execrows
 DELETE FROM payment_cards WHERE user_id = $1
@@ -64,6 +119,34 @@ func (q *Queries) DisableSettings(ctx context.Context, arg DisableSettingsParams
 	return err
 }
 
+const finishRequest = `-- name: FinishRequest :execrows
+UPDATE auto_charge_requests
+SET status = $1, failure_code = $2, finished_at = $3::TIMESTAMPTZ,
+    billing_key = NULL, customer_key = NULL, last_error = ''
+WHERE id = $4 AND status = 'charging'
+`
+
+type FinishRequestParams struct {
+	Status      string
+	FailureCode string
+	Now         time.Time
+	ID          uuid.UUID
+}
+
+// 결제 대행사의 답(승인, 거절)을 적는다. 카드를 지운다. 보낸 일(charging)만 끝낸다.
+func (q *Queries) FinishRequest(ctx context.Context, arg FinishRequestParams) (int64, error) {
+	result, err := q.db.Exec(ctx, finishRequest,
+		arg.Status,
+		arg.FailureCode,
+		arg.Now,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getCard = `-- name: GetCard :one
 SELECT issuer_code, card_number, registered_at FROM payment_cards WHERE user_id = $1
 `
@@ -82,6 +165,24 @@ func (q *Queries) GetCard(ctx context.Context, userID uuid.UUID) (GetCardRow, er
 	return i, err
 }
 
+const getChargeCard = `-- name: GetChargeCard :one
+SELECT c.billing_key, b.customer_key FROM payment_cards c JOIN billing_customers b ON b.user_id = c.user_id
+WHERE c.user_id = $1
+`
+
+type GetChargeCardRow struct {
+	BillingKey  string
+	CustomerKey uuid.UUID
+}
+
+// 보낼 카드. 빌링키와 고객 키를 함께 읽는다.
+func (q *Queries) GetChargeCard(ctx context.Context, userID uuid.UUID) (GetChargeCardRow, error) {
+	row := q.db.QueryRow(ctx, getChargeCard, userID)
+	var i GetChargeCardRow
+	err := row.Scan(&i.BillingKey, &i.CustomerKey)
+	return i, err
+}
+
 const getCustomerKey = `-- name: GetCustomerKey :one
 SELECT customer_key FROM billing_customers WHERE user_id = $1
 `
@@ -94,7 +195,7 @@ func (q *Queries) GetCustomerKey(ctx context.Context, userID uuid.UUID) (uuid.UU
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, updated_at FROM auto_charge_settings WHERE user_id = $1
+SELECT user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, updated_at, armed FROM auto_charge_settings WHERE user_id = $1
 `
 
 func (q *Queries) GetSettings(ctx context.Context, userID uuid.UUID) (AutoChargeSetting, error) {
@@ -108,6 +209,37 @@ func (q *Queries) GetSettings(ctx context.Context, userID uuid.UUID) (AutoCharge
 		&i.MonthlyLimit,
 		&i.ConsecutiveFailures,
 		&i.UpdatedAt,
+		&i.Armed,
+	)
+	return i, err
+}
+
+const getTrigger = `-- name: GetTrigger :one
+
+SELECT s.enabled, s.threshold, s.armed, s.product_id,
+    COALESCE((SELECT w.paid_balance FROM wallets w WHERE w.user_id = s.user_id), 0)::BIGINT AS paid
+FROM auto_charge_settings s WHERE s.user_id = $1
+`
+
+type GetTriggerRow struct {
+	Enabled   bool
+	Threshold credit.Amount
+	Armed     bool
+	ProductID string
+	Paid      int64
+}
+
+// --- 충전할 일(#980 의 둘째 단계) ---
+// 홀드를 건 트랜잭션 안에서 그 사람의 설정과 지금의 골드를 읽는다. 지갑은 이미 잠겨 있다.
+func (q *Queries) GetTrigger(ctx context.Context, userID uuid.UUID) (GetTriggerRow, error) {
+	row := q.db.QueryRow(ctx, getTrigger, userID)
+	var i GetTriggerRow
+	err := row.Scan(
+		&i.Enabled,
+		&i.Threshold,
+		&i.Armed,
+		&i.ProductID,
+		&i.Paid,
 	)
 	return i, err
 }
@@ -134,6 +266,52 @@ func (q *Queries) InsertCustomer(ctx context.Context, arg InsertCustomerParams) 
 	return err
 }
 
+const insertRequest = `-- name: InsertRequest :execrows
+INSERT INTO auto_charge_requests (id, user_id, product_id, price, credits, next_attempt_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $6)
+ON CONFLICT (user_id) WHERE status IN ('pending', 'charging') DO NOTHING
+`
+
+type InsertRequestParams struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	ProductID string
+	Price     int64
+	Credits   credit.Amount
+	Now       time.Time
+}
+
+// 충전할 일을 적는다. 그 사람에게 끝나지 않은 일이 있으면 적지 않는다(바뀐 줄이 0 이다).
+func (q *Queries) InsertRequest(ctx context.Context, arg InsertRequestParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertRequest,
+		arg.ID,
+		arg.UserID,
+		arg.ProductID,
+		arg.Price,
+		arg.Credits,
+		arg.Now,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const leaseRequest = `-- name: LeaseRequest :exec
+UPDATE auto_charge_requests SET next_attempt_at = $1, attempts = attempts + 1 WHERE id = $2
+`
+
+type LeaseRequestParams struct {
+	Until time.Time
+	ID    uuid.UUID
+}
+
+// 차지했다고 적는다. 보내는 동안 다른 작업이 가져가지 않게 다음 시도 시각을 임대가 끝나는 때로 민다.
+func (q *Queries) LeaseRequest(ctx context.Context, arg LeaseRequestParams) error {
+	_, err := q.db.Exec(ctx, leaseRequest, arg.Until, arg.ID)
+	return err
+}
+
 const lockCard = `-- name: LockCard :one
 SELECT user_id FROM payment_cards WHERE user_id = $1 FOR UPDATE
 `
@@ -144,6 +322,110 @@ func (q *Queries) LockCard(ctx context.Context, userID uuid.UUID) (uuid.UUID, er
 	var user_id uuid.UUID
 	err := row.Scan(&user_id)
 	return user_id, err
+}
+
+const lockDueRequest = `-- name: LockDueRequest :one
+SELECT id, user_id, product_id, price, credits, status, skip_reason, failure_code, billing_key, customer_key, attempts, last_error, next_attempt_at, created_at, finished_at FROM auto_charge_requests
+WHERE status IN ('pending', 'charging') AND next_attempt_at <= $1
+ORDER BY next_attempt_at, id
+LIMIT 1
+FOR UPDATE SKIP LOCKED
+`
+
+// 보낼 때가 된 일 하나를 잠근다. 다른 작업이 잠근 줄은 건너뛴다.
+func (q *Queries) LockDueRequest(ctx context.Context, now time.Time) (AutoChargeRequest, error) {
+	row := q.db.QueryRow(ctx, lockDueRequest, now)
+	var i AutoChargeRequest
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ProductID,
+		&i.Price,
+		&i.Credits,
+		&i.Status,
+		&i.SkipReason,
+		&i.FailureCode,
+		&i.BillingKey,
+		&i.CustomerKey,
+		&i.Attempts,
+		&i.LastError,
+		&i.NextAttemptAt,
+		&i.CreatedAt,
+		&i.FinishedAt,
+	)
+	return i, err
+}
+
+const setArmed = `-- name: SetArmed :exec
+UPDATE auto_charge_settings SET armed = $1 WHERE user_id = $2
+`
+
+type SetArmedParams struct {
+	Armed  bool
+	UserID uuid.UUID
+}
+
+func (q *Queries) SetArmed(ctx context.Context, arg SetArmedParams) error {
+	_, err := q.db.Exec(ctx, setArmed, arg.Armed, arg.UserID)
+	return err
+}
+
+const skipOpenRequests = `-- name: SkipOpenRequests :execrows
+UPDATE auto_charge_requests SET status = 'skipped', skip_reason = 'withdrawn', finished_at = $1::TIMESTAMPTZ
+WHERE user_id = $2 AND status = 'pending'
+`
+
+type SkipOpenRequestsParams struct {
+	Now    time.Time
+	UserID uuid.UUID
+}
+
+// 아직 보내지 않은 일을 그만둔다. 탈퇴할 때 쓴다. 보낸 일(charging)은 답을 받을 때까지 둔다.
+func (q *Queries) SkipOpenRequests(ctx context.Context, arg SkipOpenRequestsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, skipOpenRequests, arg.Now, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const skipRequest = `-- name: SkipRequest :execrows
+UPDATE auto_charge_requests SET status = 'skipped', skip_reason = $1, finished_at = $2::TIMESTAMPTZ
+WHERE id = $3 AND status = 'pending'
+`
+
+type SkipRequestParams struct {
+	Reason string
+	Now    time.Time
+	ID     uuid.UUID
+}
+
+func (q *Queries) SkipRequest(ctx context.Context, arg SkipRequestParams) (int64, error) {
+	result, err := q.db.Exec(ctx, skipRequest, arg.Reason, arg.Now, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const startCharging = `-- name: StartCharging :execrows
+UPDATE auto_charge_requests SET status = 'charging', billing_key = $1, customer_key = $2
+WHERE id = $3 AND status = 'pending'
+`
+
+type StartChargingParams struct {
+	BillingKey  pgtype.Text
+	CustomerKey pgtype.UUID
+	ID          uuid.UUID
+}
+
+// 보내기 전에 적는다. 그 뒤로 이 일은 그만두지 않고 답을 받을 때까지 같은 카드로 다시 보낸다.
+func (q *Queries) StartCharging(ctx context.Context, arg StartChargingParams) (int64, error) {
+	result, err := q.db.Exec(ctx, startCharging, arg.BillingKey, arg.CustomerKey, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const upsertCard = `-- name: UpsertCard :exec
@@ -175,13 +457,18 @@ func (q *Queries) UpsertCard(ctx context.Context, arg UpsertCardParams) error {
 }
 
 const upsertSettings = `-- name: UpsertSettings :one
-INSERT INTO auto_charge_settings (user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, updated_at)
-VALUES ($1, $2, $3, $4, $5, 0, $6)
+INSERT INTO auto_charge_settings (user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, armed, updated_at)
+VALUES (
+    $1, $2, $3, $4, $5, 0,
+    $2, $6
+)
 ON CONFLICT (user_id) DO UPDATE SET
     enabled = EXCLUDED.enabled, threshold = EXCLUDED.threshold, product_id = EXCLUDED.product_id,
     monthly_limit = EXCLUDED.monthly_limit, updated_at = EXCLUDED.updated_at,
-    consecutive_failures = CASE WHEN EXCLUDED.enabled THEN 0 ELSE auto_charge_settings.consecutive_failures END
-RETURNING user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, updated_at
+    consecutive_failures = CASE WHEN EXCLUDED.enabled THEN 0 ELSE auto_charge_settings.consecutive_failures END,
+    -- 켤 때마다 다음에 떨어지면 산다(#980 의 둘째 단계). 이미 기준 아래여도 다음 홀드에서 산다
+    armed = EXCLUDED.enabled
+RETURNING user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, updated_at, armed
 `
 
 type UpsertSettingsParams struct {
@@ -212,6 +499,7 @@ func (q *Queries) UpsertSettings(ctx context.Context, arg UpsertSettingsParams) 
 		&i.MonthlyLimit,
 		&i.ConsecutiveFailures,
 		&i.UpdatedAt,
+		&i.Armed,
 	)
 	return i, err
 }

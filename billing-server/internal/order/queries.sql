@@ -18,6 +18,24 @@ VALUES (
 ON CONFLICT (user_id, idempotency_key) DO NOTHING
 RETURNING *;
 
+-- name: InsertAutoPaidOrder :execrows
+-- 자동 충전(#980)이 승인된 결제를 주문으로 적는다. 승인된 뒤에 적으므로 처음부터 paid 다.
+-- 번호는 충전할 일의 번호(결제 대행사의 주문 번호)다. 같은 번호로 다시 적으면 아무것도 하지 않는다(바뀐 줄이 0 이다).
+INSERT INTO orders (
+    id, user_id, product_id, channel, price, credits, status, idempotency_key, payment_key,
+    created_at, updated_at, paid_at, expires_at
+)
+VALUES (
+    sqlc.arg(id), sqlc.arg(user_id), sqlc.arg(product_id), 'auto', sqlc.arg(price), sqlc.arg(credits), 'paid',
+    sqlc.arg(idempotency_key), sqlc.arg(payment_key), sqlc.arg(now), sqlc.arg(now), sqlc.arg(now), sqlc.arg(expires_at)
+)
+ON CONFLICT (id) DO NOTHING;
+
+-- name: SumAutoPaidSince :one
+-- 그 사람이 since 뒤에 자동 충전으로 치른 돈의 합(원). 한 달 상한을 볼 때 쓴다. 청약철회한 것도 센다(한 번은 나갔다).
+SELECT COALESCE(SUM(price), 0)::BIGINT FROM orders
+WHERE user_id = sqlc.arg(user_id) AND channel = 'auto' AND paid_at >= sqlc.arg(since)::timestamptz;
+
 -- name: GetOrderByKey :one
 -- 사용자가 그 키로 만든 주문을 읽는다.
 SELECT * FROM orders
