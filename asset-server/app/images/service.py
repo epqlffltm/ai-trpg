@@ -167,6 +167,20 @@ async def discard_image(
     await session.commit()
 
 
+async def image_content(
+    session: AsyncSession, store: ImageStore, viewer: AccessClaims, image_id: uuid.UUID, now: datetime
+) -> tuple[bytes, str]:
+    """
+    볼 수 있는 그림의 바이트와 형식(다른 서버의 참고 그림, #983). 볼 수 있는 사람은 GET /images/{id} 와 같다.
+    없거나 볼 수 없으면 ImageNotFoundError, 저장소에서 받지 못하면 ImageStoreUnavailableError.
+    저장소를 부르는 동안 DB 연결을 잡지 않는다(찾은 뒤 트랜잭션을 끝낸다).
+    """
+    image = await viewable_image(session, viewer, image_id)
+    await session.commit()
+    data, _ = await store.get(str(image.id), now)
+    return data, CONTENT_TYPES[ImageFormat(image.format)]
+
+
 def accel_headers(store: ImageStore, image: Image, now: datetime) -> dict[str, str]:
     """nginx 에 넘기는 머리말. 내부 위치와 저장소의 서명한 주소다. 저장소가 없으면 ImageStoreUnavailableError."""
     return {

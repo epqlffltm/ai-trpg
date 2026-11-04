@@ -5,6 +5,7 @@
 
   - put: 그림을 그림의 id 로 넣는다. 형식(Content-Type)을 객체에 적는다. nginx 는 저장소가 준 형식을 내보낸다.
   - delete: 그림을 지운다(탈퇴). 없는 것을 지워도 된다(S3 는 204 다).
+  - get: 그림의 바이트와 형식을 받는다. 다른 서버에 참고 그림으로 내줄 때 쓴다(#983, app/images/supply.py).
   - presigned_get: 그림을 60초 동안 받을 수 있는 주소. nginx 가 그 주소로 받아 캐시하고 내준다
     (docs/architecture/asset-server.md 의 "그림"). 키는 이 서버만 갖는다.
 
@@ -58,6 +59,10 @@ class ImageStore(Protocol):
         """그림을 지운다. 없어도 된다. 실패하면 ImageStoreUnavailableError."""
         ...
 
+    async def get(self, key: str, now: datetime) -> tuple[bytes, str]:
+        """그림의 바이트와 형식(Content-Type). 없거나 실패하면 ImageStoreUnavailableError."""
+        ...
+
     def presigned_get(self, key: str, now: datetime) -> str:
         """그림을 잠깐 받을 수 있는 주소. 저장소가 없으면 ImageStoreUnavailableError."""
         ...
@@ -87,7 +92,7 @@ class S3ImageStore:
     location: StoreLocation
     timeout: float
 
-    async def send(self, method: str, key: str, data: bytes, headers: dict[str, str]) -> None:
+    async def send(self, method: str, key: str, data: bytes, headers: dict[str, str]) -> httpx.Response:
         """서명한 요청을 보낸다. 닿지 못하거나 2xx 가 아니면 ImageStoreUnavailableError."""
         url = self.location.origin + self.location.path(key)
         try:
@@ -96,6 +101,7 @@ class S3ImageStore:
             raise ImageStoreUnavailableError from error
         if not response.is_success:
             raise ImageStoreUnavailableError(f'저장소가 {response.status_code} 로 답했다')
+        return response
 
     async def put(self, key: str, data: bytes, content_type: str, now: datetime) -> None:
         """그림을 넣는다."""
@@ -108,6 +114,12 @@ class S3ImageStore:
         """그림을 지운다. 없는 것도 2xx(204)다."""
         headers = signed_headers(self.credentials, self.location, 'DELETE', key, b'', now)
         await self.send('DELETE', key, b'', headers)
+
+    async def get(self, key: str, now: datetime) -> tuple[bytes, str]:
+        """그림의 바이트와 형식. 저장소가 형식을 주지 않으면 application/octet-stream 이다."""
+        headers = signed_headers(self.credentials, self.location, 'GET', key, b'', now)
+        response = await self.send('GET', key, b'', headers)
+        return response.content, response.headers.get('content-type', 'application/octet-stream')
 
     def presigned_get(self, key: str, now: datetime) -> str:
         """그림을 60초 동안 받을 수 있는 주소."""
@@ -127,6 +139,10 @@ class UnconfiguredImageStore:
 
     async def delete(self, key: str, now: datetime) -> None:
         """지울 곳이 없다."""
+        raise ImageStoreUnavailableError('저장소가 설정되지 않았다')
+
+    async def get(self, key: str, now: datetime) -> tuple[bytes, str]:
+        """받을 곳이 없다."""
         raise ImageStoreUnavailableError('저장소가 설정되지 않았다')
 
     def presigned_get(self, key: str, now: datetime) -> str:

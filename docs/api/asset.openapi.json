@@ -9458,6 +9458,59 @@
         "x-audience": "service"
       }
     },
+    "/api/v1/asset/service/{caller}/images/{image_id}/content": {
+      "get": {
+        "description": "토큰의 주인이 볼 수 있는 그림의 바이트. 볼 수 없거나 없으면 404 다.",
+        "operationId": "image_content_api_v1_asset_service__caller__images__image_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "caller",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$",
+              "title": "Caller",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "그림의 바이트(image/png, image/jpeg, image/webp)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Image Content",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
     "/api/v1/asset/service/{caller}/personas/{persona_id}": {
       "get": {
         "description": "토큰의 주인의 페르소나 하나의 사본.",

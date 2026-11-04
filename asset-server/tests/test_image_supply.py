@@ -9,6 +9,8 @@
   - 서명은 그림의 바이트까지 본다(바꾼 바이트는 401). 서명이 없으면 토큰이 있어도 401
   - 받지 않는 형식은 415, 상한을 넘으면 413. 거절되면 행이 남지 않는다
   - 지우기: 내 그림은 저장소와 행에서 지운다. 남의 것, 없는 것, 판에 쓰인 것은 그대로 두고 204
+  - 바이트 내주기: 볼 수 있는 그림(내 것, 공개된 판에 쓰인 것)의 바이트와 형식. 남의 비공개 그림과 없는 그림은 404,
+    저장소를 쓸 수 없으면 503
 """
 
 import time
@@ -129,11 +131,32 @@ async def test_discarding_removes_only_my_unused_image(
     assert used in store.objects and await session.get(Image, uuid.UUID(used)) is not None
 
 
-async def publish_with_image(client: AsyncClient, headers: dict, image_id: str) -> None:
+async def publish_with_image(client: AsyncClient, headers: dict, image_id: str, visibility: str = 'private') -> None:
     """그 그림을 대표 그림으로 단 캐릭터를 게시한다(그림이 판에 쓰인다)."""
     start = [{'title': '비 오는 밤', 'situation': '문을 두드리는 소리가 난다.'}]
     body = {'genre': 'romance', 'name': '세라', 'starts': start, 'image_id': image_id}
     made = await client.post(f'{API_PREFIX}/characters', json=body, headers=headers)
     assert made.status_code == status.HTTP_201_CREATED, made.text
+    url = f'{API_PREFIX}/characters/{made.json()["id"]}'
+    assert (await client.patch(url, json={'visibility': visibility}, headers=headers)).status_code == 200
     published = await client.post(f'{API_PREFIX}/characters/{made.json()["id"]}/versions', json={}, headers=headers)
     assert published.status_code == status.HTTP_201_CREATED, published.text
+
+
+async def test_the_bytes_of_a_viewable_image(client: AsyncClient, store: FakeImageStore, mine: dict, theirs: dict):
+    private = (await signed(client, 'POST', '/images', mine, png_bytes((5, 5)))).json()['id']
+    public = (await signed(client, 'POST', '/images', mine, png_bytes((4, 4)))).json()['id']
+    await publish_with_image(client, mine, public, visibility='public')
+
+    own = await signed(client, 'GET', f'/images/{private}/content', mine)
+    shared = await signed(client, 'GET', f'/images/{public}/content', theirs)
+    hidden = await signed(client, 'GET', f'/images/{private}/content', theirs)
+    missing = await signed(client, 'GET', f'/images/{uuid.uuid4()}/content', mine)
+    store.broken = True
+    broken = await signed(client, 'GET', f'/images/{private}/content', mine)
+
+    assert (own.status_code, own.headers['content-type']) == (status.HTTP_200_OK, 'image/png')
+    assert own.content == store.objects[private].data and opened(own.content).size == (5, 5)
+    assert shared.status_code == status.HTTP_200_OK and opened(shared.content).size == (4, 4)
+    assert hidden.status_code == missing.status_code == status.HTTP_404_NOT_FOUND
+    assert broken.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
