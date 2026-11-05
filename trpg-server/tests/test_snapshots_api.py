@@ -20,6 +20,7 @@
     그리는 중이거나 청구를 정리하는 중이면 409, asset 이 죽었으면 503 이고 기록은 남는다. 지우면 테이블에 알린다
   - 갤러리는 내가 다 그린 그림만 테이블을 넘어 최근 것부터 보인다. 지운 테이블의 그림도 남는다.
     갤러리에서는 테이블 없이도 내 그림을 지운다
+  - 한 사람이 짧은 시간에 그리기 시작할 수 있는 수가 있다(429). 사람마다 세고, 그리지 않는 서버의 요청은 세지 않는다
 """
 
 import asyncio
@@ -35,6 +36,7 @@ from server_core.testing.tokens import SigningKey
 from sqlalchemy import update
 
 from app.billing.routing import utc_now
+from app.limits.setup import build_limiting
 from app.main import API_PREFIX
 from app.realtime.service import SNAPSHOT_FRAME, Cursor
 from app.realtime.sse import Frame
@@ -44,6 +46,7 @@ from app.snapshots.providers import price_code_of
 from app.snapshots.settler import SnapshotSettler
 from tests.asset_server import FakeAsset
 from tests.billing import PRICES, FakeBillingServer
+from tests.conftest import make_test_settings
 from tests.streaming import Reader
 from tests.test_round_closing import FRIEND, ME, OPENINGS, bearer, start_duo, table_url
 
@@ -678,3 +681,36 @@ async def test_the_gallery_needs_a_login(client: AsyncClient):
     response = await client.get(KEPT_URL)
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# --- 받는 수 ---
+
+
+@pytest.mark.usefixtures('provider', 'asset')
+async def test_too_many_drawings_are_refused_per_person(app: FastAPI, client: AsyncClient, me, friend, billing):
+    app.state.limiting = build_limiting(make_test_settings(limits_enabled=True, snapshots_per_window=2), None)
+    table = await start_duo(client, me, friend)
+    tries = []
+    for _ in range(3):
+        tries.append(await client.post(snapshot_url(table), headers=me))
+        await drawn(app)
+    others = await client.post(snapshot_url(table), headers=friend)
+    await drawn(app)
+
+    assert [response.status_code for response in tries[:2]] == [status.HTTP_202_ACCEPTED] * 2
+    assert (tries[2].status_code, tries[2].json()['code']) == (status.HTTP_429_TOO_MANY_REQUESTS, 'too_many_attempts')
+    assert 'retry-after' in tries[2].headers
+    # 사람마다 센다
+    assert others.status_code == status.HTTP_202_ACCEPTED
+    # 막힌 것은 기록도 홀드도 남기지 않는다
+    assert len(holds_of(billing, ME)) == 2
+
+
+async def test_a_server_that_does_not_draw_does_not_count(app: FastAPI, client: AsyncClient, me, friend):
+    app.state.limiting = build_limiting(make_test_settings(limits_enabled=True, snapshots_per_window=1), None)
+    app.state.image_provider = None
+    table = await start_duo(client, me, friend)
+
+    tried = [await client.post(snapshot_url(table), headers=me) for _ in range(2)]
+
+    assert [response.json()['code'] for response in tried] == ['snapshot_unavailable'] * 2

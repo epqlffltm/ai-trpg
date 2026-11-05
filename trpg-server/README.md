@@ -2808,6 +2808,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 테이블에 앉은 사람이 라운드의 장면을 그림 한 장으로 만든다(`app/snapshots/`, #983). chat·story 서버의 장면 그림과 같은 길이다.
 
 - **누가 내나.** 누른 사람이 낸다. 앉은 사람 누구나 누를 수 있다. 가격표는 `narration.image.<모델의 이름에서 점을 붙임표로 바꾼 것>`(`narration.image.gemini-nano-banana-2-1`)이고 홀드의 이름표는 `game:img:<기록의 id>` 다. 결제 서버는 게임 서버에 `narration` 머리의 가격표만 허락한다.
+- **받는 수.** 한 사람이 구간(`SNAPSHOT_WINDOW_SECONDS`, 기본 600초) 안에 `SNAPSHOTS_PER_WINDOW`(기본 10)번까지 그리기 시작한다. 테이블을 가리지 않고 사람마다 센다. 넘으면 429(`too_many_attempts`, `Retry-After`)다. 그리지 않는 서버(503 `snapshot_unavailable`)의 요청은 세지 않는다. 세는 곳에 닿지 못하면 통과시킨다(값과 한 테이블 한 장이 남아 막는다).
 - **차례.** 기록을 저장하고(한 테이블에 그리는 중인 것은 하나다. 둘째는 409 `snapshot_in_progress`), 홀드를 건 뒤 202 로 답한다. 그림은 작업 관리자(`app/core/jobs.py`, 종류 `snapshot.draw`)가 그리고, 누른 사람의 토큰으로 asset 서버에 그 사람의 그림으로 맡긴 뒤 확정한다. 그리지 못하면(공급자의 거절, asset 이 죽었다) 실패로 적고 돌려준다. 같은 실패를 저절로 되풀이하지 않는다.
 - **지시.** 그 라운드의 장면(앉은 사람 모두에게 보이는 GM 의 서술, 앞의 800자)과 테이블의 제목, 캐릭터의 이름으로 만든다. GM 만 보는 판의 글은 넣지 않는다. 등급과 상관없이 전체이용가로 그린다. 그림 모델은 상태를 바꾸지 못한다.
 - **알림.** 그리기 시작(홀드가 걸림)과 끝(다 그림, 실패, 정리 작업이 돌려준 것)을 앉은 사람 모두의 스트림에 `scene_snapshot` 으로 알린다. 내용을 싣지 않아 놓쳐도 다시 읽으면 된다. 청구의 확정·반환은 알리지 않는다.
@@ -3473,6 +3474,7 @@ Redis 가 느리면 요청이 그만큼 기다리므로 연결과 명령에 짧�
 | `PASSWORD_ATTEMPTS_PER_USER`, `PASSWORD_ATTEMPTS_PER_TABLE`, `PASSWORD_ATTEMPT_WINDOW_SECONDS` | `5`, `30`, `600` | 로비의 비밀번호를 틀릴 수 있는 수와 구간 |
 | `CHAT_MESSAGES_PER_WINDOW`, `CHAT_WINDOW_SECONDS` | `5`, `10` | 채팅을 쓸 수 있는 수와 구간 |
 | `TRANSCRIPTS_PER_WINDOW`, `TRANSCRIPT_WINDOW_SECONDS` | `10`, `600` | 한 사람이 기록을 내려받을 수 있는 수와 구간(#617) |
+| `SNAPSHOTS_PER_WINDOW`, `SNAPSHOT_WINDOW_SECONDS` | `10`, `600` | 한 사람이 장면 그림을 그리기 시작할 수 있는 수와 구간(#983) |
 
 테스트는 제한을 끄고(`tests/conftest.py`) 제한을 보는 테스트만 켠다(`tests/test_attempt_limits.py`). Redis 로 세는 테스트는 실제 Redis(`TEST_REDIS_URL`, 기본 `redis://127.0.0.1:6379/15`)에서 돈다. `docker compose up -d` 가 띄우는 Redis 다.
 
