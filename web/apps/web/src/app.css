@@ -3997,12 +3997,24 @@ details.room-panel[open] > summary {
   border-radius: var(--ui-radius);
 }
 
+/* 답의 조각(Stitch 22번). 인물의 조각은 이름표와 글, 서술 조각은 이름표 없이 옅은 면 위의 기울인 글 */
 .story-segment + .story-segment {
-  margin-top: 6px;
+  margin-top: 10px;
+}
+
+.story-segment .chat-message__speaker {
+  margin-bottom: 4px;
+}
+
+.story-segment--narration {
+  padding: 10px 14px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-subtle);
 }
 
 .story-segment--narration .chat-message__content {
   font-style: italic;
+  color: var(--ui-text-muted);
 }
 
 .story-sessions__row,

@@ -155,6 +155,11 @@ describe('장면', () => {
     expect(log.getByText('노을이 졌다.')).toBeInTheDocument();
     expect(log.getByText('미나')).toBeInTheDocument();
     expect(log.getByText('기다렸어.')).toBeInTheDocument();
+    // 말의 머리 줄에 "나" 이름표와 단추가 함께 있고(Stitch 22번), 서술 조각은 이름표가 없다
+    const head = log.getByText('나').closest('.chat-message__head') as HTMLElement;
+    expect(within(head).getByRole('button', { name: '내 말 고치기' })).toBeInTheDocument();
+    expect(log.getByText('노을이 졌다.').closest('.story-segment')).toHaveClass('story-segment--narration');
+    expect(log.getByText('미나').closest('.story-segment')).not.toHaveClass('story-segment--narration');
   });
 
   it('말을 보내면 조각이 이름표와 함께 흘러 들어오고, 끝나면 저장한 세션을 다시 읽는다', async () => {
