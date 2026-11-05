@@ -78,7 +78,7 @@ from accounts.consents import (
 )
 from accounts.content_settings import AdultContentRequiredError, content_settings_of, update_content_settings
 from accounts.cookies import clear_refresh_cookie, read_refresh_cookie, set_refresh_cookie
-from accounts.creator_profiles import find_creator, update_bio
+from accounts.creator_profiles import find_creator, search_creators, update_bio
 from accounts.email_codes import InvalidEmailCodeError
 from accounts.exception_handlers import input_error_body
 from accounts.guardian import (
@@ -119,6 +119,8 @@ from accounts.serializers import (
     ConsentDocumentSerializer,
     ConsentStateSerializer,
     ContentSettingsSerializer,
+    CreatorSearchQuerySerializer,
+    CreatorSearchResultSerializer,
     CreatorSerializer,
     EmailSerializer,
     GuardianConsentSerializer,
@@ -1500,6 +1502,33 @@ class PublicNamesView(APIView):
             return build_coded_error_response(str(exc), 'public_ids_invalid', status.HTTP_400_BAD_REQUEST)
         names = PublicNameSerializer(find_names(ids), many=True).data
         response = Response({'names': names}, status=status.HTTP_200_OK)
+        response['Cache-Control'] = f'public, max-age={PUBLIC_NAMES_CACHE_SECONDS}'
+        return response
+
+
+class CreatorSearchView(APIView):
+    """
+    GET /api/v1/auth/creators?q=<이름>&limit=<수>. 제작자를 닉네임으로 찾는다(#984). 검색 결과 화면이 부른다.
+
+    로그인 없이 연다. 소개를 쓴 사람만 나온다(accounts/creator_profiles.py). 닉네임과 소개만 나간다.
+    작품은 목록 서버들이 따로 준다. 이 서버는 누가 작품을 공개했는지 모른다.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    @extend_schema(
+        summary='제작자를 닉네임으로 찾는다. 소개를 쓴 사람만이다. 로그인 없이 읽는다',
+        # 한 사람의 프로필(creators/{public_id})과 이름이 겹치지 않게 정한다
+        operation_id='creators_search',
+        parameters=[CreatorSearchQuerySerializer],
+        responses={200: CreatorSearchResultSerializer, 400: bad_request('검색어가 비었거나 20자를 넘는다')},
+    )
+    def get(self, request: Request) -> Response:
+        query = CreatorSearchQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        creators = search_creators(query.validated_data['q'], query.validated_data['limit'])
+        response = Response(CreatorSearchResultSerializer({'items': creators}).data, status=status.HTTP_200_OK)
         response['Cache-Control'] = f'public, max-age={PUBLIC_NAMES_CACHE_SECONDS}'
         return response
 

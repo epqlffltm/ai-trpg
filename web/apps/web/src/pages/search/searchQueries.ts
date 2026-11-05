@@ -3,6 +3,7 @@
 // 공개 목록은 로그인했는지에 따라 내용이 다르다(로그인 전에는 전체이용가만). 그래서 열쇠에 그것을 넣는다.
 
 import { queryOptions } from '@tanstack/react-query';
+import { searchCreators } from '../../api/creators';
 import { searchCharacters, searchScenarios, searchWorlds } from '../../api/search';
 
 export function scenarioSearchQuery(q: string, signedIn: boolean) {
@@ -23,5 +24,13 @@ export function worldSearchQuery(q: string, signedIn: boolean) {
   return queryOptions({
     queryKey: ['story', 'public-worlds', 'search', { q, signedIn }],
     queryFn: ({ signal }) => searchWorlds(q, signal),
+  });
+}
+
+/** 제작자(#984). 인증 서버가 준다. 로그인과 상관없이 같은 답이다 */
+export function creatorSearchQuery(q: string) {
+  return queryOptions({
+    queryKey: ['auth', 'creators', 'search', { q }],
+    queryFn: ({ signal }) => searchCreators(q, signal),
   });
 }

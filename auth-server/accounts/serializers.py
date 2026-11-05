@@ -9,11 +9,12 @@ Serializer 는 검증과 변환만 한다. 계정을 만드는 일은 services.p
 from rest_framework import serializers
 
 from accounts.consents import signup_consent_problems
-from accounts.creator_profiles import BIO_MAX_LENGTH
+from accounts.creator_profiles import BIO_MAX_LENGTH, SEARCH_DEFAULT_LIMIT, SEARCH_MAX_LIMIT
 from accounts.email_codes import CODE_LENGTH
 from accounts.invites import INVITE_CODE_INPUT_MAX_LENGTH
 from accounts.models import GuardianNoticeKind, Orientation, User
 from accounts.validators import (
+    NICKNAME_MAX_LENGTH,
     validate_nickname_format,
     validate_nickname_not_reserved,
     validate_username_format,
@@ -333,9 +334,22 @@ class MyProfileSerializer(serializers.Serializer):
     bio = serializers.CharField(max_length=BIO_MAX_LENGTH, allow_blank=True)
 
 
+class CreatorSearchQuerySerializer(serializers.Serializer):
+    """제작자를 이름으로 찾는 주소의 값(#984). q 는 앞뒤 공백을 뗀 1~20자(닉네임의 상한)다."""
+
+    q = serializers.CharField(max_length=NICKNAME_MAX_LENGTH, trim_whitespace=True)
+    limit = serializers.IntegerField(min_value=1, max_value=SEARCH_MAX_LIMIT, default=SEARCH_DEFAULT_LIMIT)
+
+
 class CreatorSerializer(serializers.Serializer):
     """남에게 보이는 제작자(#992). 표시 이름은 닉네임이다."""
 
     public_id = serializers.UUIDField()
     nickname = serializers.CharField()
     bio = serializers.CharField()
+
+
+class CreatorSearchResultSerializer(serializers.Serializer):
+    """제작자를 이름으로 찾은 결과(#984). 닉네임이 같은 것, 그것으로 시작하는 것, 나머지 차례다."""
+
+    items = CreatorSerializer(many=True)
