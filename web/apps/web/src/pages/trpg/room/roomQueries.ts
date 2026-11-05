@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/room/roomQueries.ts
-// 테이블 방(B6)이 읽는 것의 열쇠와 부르는 함수. 테이블 하나, 채팅, 일어난 일(이벤트).
-// 채팅과 일어난 일은 처음에 끝부분만 읽고 그 뒤는 스트림이 더한다. 그래서 스스로 다시 읽지 않는다(staleTime 무한).
+// 테이블 방(B6)이 읽는 것의 열쇠와 부르는 함수. 테이블 하나, 채팅, 일어난 일(이벤트), 내 쪽지함.
+// 채팅, 일어난 일, 쪽지는 처음에 끝부분만 읽고 그 뒤는 스트림이 더한다. 그래서 스스로 다시 읽지 않는다(staleTime 무한).
 // 테이블은 스트림의 이벤트가 오면 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다(화면 명세 B7 의 "다시 읽기").
 // 모집 중에는 RECRUITING_POLL_MS 마다도 읽는다. 남이 캐릭터를 정한 것(PUT .../character)은 아직 이벤트가 없어서다.
 // 게임 서버가 그 이벤트를 내면 이 읽기를 뺀다.
@@ -8,7 +8,7 @@
 // 방금 넣은 것을 덮지 못하게 한다(queryClient.ts 의 putQueryData). 그냥 setQueryData 하면 느린 망에서 고친 것이 잠깐 되돌아간다.
 
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
-import { fetchChatTail, fetchEventsTail, fetchTable } from '../../../api/tableRoom';
+import { fetchChatTail, fetchEventsTail, fetchTable, fetchWhisperTail } from '../../../api/tableRoom';
 import type { TableDetail } from '../../../api/types';
 import { putQueryData } from '../../../queryClient';
 
@@ -44,6 +44,15 @@ export function eventsQuery(tableId: string) {
   return queryOptions({
     queryKey: ['trpg', 'tables', tableId, 'events'],
     queryFn: ({ signal }) => fetchEventsTail(tableId, signal),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function whispersQuery(tableId: string) {
+  return queryOptions({
+    queryKey: ['trpg', 'tables', tableId, 'whispers'],
+    queryFn: ({ signal }) => fetchWhisperTail(tableId, signal),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
