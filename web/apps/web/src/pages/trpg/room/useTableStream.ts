@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/trpg/room/useTableStream.ts
 // 테이블 방에 있는 동안 스트림을 붙잡고 있는다. 끊기면 다시 붙고(streamPolicy.ts), 화면을 떠나면 끊는다.
 //
-// 붙는 순서: 채팅과 일어난 일의 끝부분을 읽은 뒤(둘의 마지막 번호), 쪽지의 마지막 번호를 읽고 그 뒤부터 붙는다.
+// 붙는 순서: 채팅, 일어난 일, 쪽지의 끝부분을 읽은 뒤(셋의 마지막 번호) 그 뒤부터 붙는다.
 // 다시 붙을 때는 마지막으로 받은 id 를 Last-Event-ID 로 보낸다. 같은 것이 두 번 오지 않는다.
 // 받은 것은 handlers 로 넘긴다. 열릴 때마다 onOpen 을 부른다(그사이 놓친 테이블의 변화를 다시 읽게).
 
@@ -10,7 +10,7 @@ import { ApiError } from '../../../api/errors';
 import { refreshSession } from '../../../api/refresh';
 import { fetchStreamCursor } from '../../../api/tableRoom';
 import { readTableStream, type StreamCursor, type StreamEnd } from '../../../api/tableStream';
-import type { ChatMessage, TableEvent } from '../../../api/types';
+import type { ChatMessage, TableEvent, Whisper } from '../../../api/types';
 import { nextStep, routeMessage, type PreviewChunk, type StopReason } from './streamPolicy';
 
 export type StreamStatus =
@@ -23,6 +23,8 @@ export type StreamHandlers = {
   onOpen: () => void;
   onEvent: (event: TableEvent) => void;
   onChat: (message: ChatMessage) => void;
+  /** 내 쪽지함에 쪽지가 적혔다(보낸 것과 받은 것) */
+  onWhisper: (whisper: Whisper) => void;
   onTyping: (userId: string) => void;
   onPreview: (chunk: PreviewChunk) => void;
   /** 장면 그림이 바뀌었다(scene_snapshot, #983). 그림 목록을 다시 읽는다 */
@@ -31,10 +33,10 @@ export type StreamHandlers = {
 };
 
 /**
- * 처음 붙을 번호. 화면이 읽은 채팅과 일어난 일의 마지막 번호. 통째로 null 이면 아직 읽는 중이라 붙지 않는다.
- * 일어난 일을 읽지 못했으면 events 가 null 이다(그래도 붙는다. 지금부터 받는다)
+ * 처음 붙을 번호. 화면이 읽은 채팅, 일어난 일, 쪽지의 마지막 번호. 통째로 null 이면 아직 읽는 중이라 붙지 않는다.
+ * 일어난 일이나 쪽지를 읽지 못했으면 그것이 null 이다(그래도 붙는다. 지금부터 받는다)
  */
-export type StreamStart = { messages: number; events: number | null };
+export type StreamStart = { messages: number; events: number | null; whispers: number | null };
 
 export function useTableStream(tableId: string, start: StreamStart | null, handlers: StreamHandlers): StreamStatus {
   const [status, setStatus] = useState<StreamStatus>({ state: 'connecting' });
@@ -127,6 +129,7 @@ function deliver(message: Parameters<typeof routeMessage>[0], handlers: StreamHa
   const routed = routeMessage(message);
   if (routed.kind === 'event') handlers.onEvent(routed.event);
   else if (routed.kind === 'chat') handlers.onChat(routed.message);
+  else if (routed.kind === 'whisper') handlers.onWhisper(routed.whisper);
   else if (routed.kind === 'typing') handlers.onTyping(routed.userId);
   else if (routed.kind === 'preview') handlers.onPreview(routed.chunk);
   else if (routed.kind === 'snapshot') handlers.onSnapshot();

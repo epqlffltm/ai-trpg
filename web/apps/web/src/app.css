@@ -1127,10 +1127,75 @@ a.ui-button {
   align-items: baseline;
 }
 
+/* 대화창의 탭 둘(채팅, 쪽지). 고른 탭은 강조색, 안 읽은 쪽지의 수는 인주색 동그라미. 칸의 제목은 탭이 대신한다 */
+.room-talk__tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: -1px;
+}
+
+.room-talk__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius) var(--ui-radius) 0 0;
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.room-talk__tab[aria-selected='true'] {
+  border-bottom-color: var(--ui-surface);
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+
+.room-talk__count {
+  min-width: 1.4em;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--ui-seal);
+  color: var(--ui-seal-text);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.room-talk .room-panel {
+  border-top-left-radius: 0;
+}
+
+.room-talk .room-panel > h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* 내가 보낸 쪽지는 이름 칸을 흐리게 */
+.whisper--sent .chat__name {
+  color: var(--ui-text-muted);
+}
+
 @media (min-width: 900px) {
   .room__chat .chat__form {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: end;
+  }
+
+  .room__chat .whisper__form {
+    grid-template-columns: 180px minmax(0, 1fr) auto;
+  }
+
+  /* 보내지 못한 까닭은 칸 위에 한 줄 전체로 */
+  .room__chat .chat__form > .ui-notice {
+    grid-column: 1 / -1;
   }
 }
 

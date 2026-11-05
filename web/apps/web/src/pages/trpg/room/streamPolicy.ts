@@ -10,7 +10,7 @@
 
 import type { SseMessage } from '../../../api/sse';
 import type { StreamEnd } from '../../../api/tableStream';
-import type { ChatMessage, TableEvent } from '../../../api/types';
+import type { ChatMessage, TableEvent, Whisper } from '../../../api/types';
 
 /** aborted: 화면을 떠나 쓰는 쪽이 끊었다 */
 export type StopReason = 'table_ended' | 'not_seated' | 'signed_out' | 'aborted';
@@ -64,6 +64,7 @@ export type PreviewChunk = { round: number; attempt: number; seq: number; text: 
 export type Routed =
   | { kind: 'event'; event: TableEvent }
   | { kind: 'chat'; message: ChatMessage }
+  | { kind: 'whisper'; whisper: Whisper }
   | { kind: 'typing'; userId: string }
   | { kind: 'preview'; chunk: PreviewChunk }
   | { kind: 'snapshot' }
@@ -77,6 +78,9 @@ export function routeMessage(message: SseMessage): Routed {
       return { kind: 'event', event: data as TableEvent };
     case 'chat_message':
       return { kind: 'chat', message: data as ChatMessage };
+    case 'whisper':
+      // 내 쪽지함에 적힌 쪽지(보낸 것과 받은 것). 번호는 쪽지함마다 센다
+      return { kind: 'whisper', whisper: data as Whisper };
     case 'typing':
       return typeof data.user_id === 'string' ? { kind: 'typing', userId: data.user_id } : { kind: 'ignore' };
     case 'narration_preview':
@@ -118,4 +122,20 @@ export function mergeEvents(current: TableEvent[], incoming: TableEvent[]): Tabl
   const bySequence = new Map(current.map((event) => [event.sequence, event]));
   for (const event of incoming) bySequence.set(event.sequence, event);
   return [...bySequence.values()].sort((a, b) => a.sequence - b.sequence);
+}
+
+/** 쪽지를 번호 차례로 합친다. 같은 번호는 한 번만(보낸 사람이 받은 응답과 스트림이 같은 것을 준다) */
+export function mergeWhispers(current: Whisper[], incoming: Whisper[]): Whisper[] {
+  const bySequence = new Map(current.map((whisper) => [whisper.sequence, whisper]));
+  for (const whisper of incoming) bySequence.set(whisper.sequence, whisper);
+  return [...bySequence.values()].sort((a, b) => a.sequence - b.sequence);
+}
+
+/**
+ * 쪽지 탭의 안 읽은 수. 쪽지 탭을 보고 있지 않을 때 스트림으로 나에게 온 쪽지만 센다.
+ * 서버는 읽음을 적지 않는다. 그래서 방에 들어오기 전에 온 쪽지는 세지 않는다(이 화면을 연 동안만 센다)
+ */
+export function nextUnreadWhispers(current: number, whisper: Whisper, myId: string | undefined, viewing: boolean): number {
+  if (viewing || myId === undefined || whisper.recipient_id !== myId || whisper.sender_id === myId) return current;
+  return current + 1;
 }

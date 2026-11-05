@@ -3,13 +3,14 @@
 //   - 가운데(가장 넓게): 테이블의 상태에 따라(모집 중, 진행 중, 끝남) 대기실이나 라운드
 //   - 머리(테이블 줄) 바로 아래: 방장이 "테이블 관리"를 펼쳤을 때 방장의 운영(host/HostPanel)
 //   - 왼쪽 열: 앉은 사람(모집 중) 또는 창 넷(B7, 진행 중과 끝남), 그 아래 캠페인의 편(캠페인의 테이블에만, #481 B), 동료 피해
-//   - 맨 아래(가로로 긴 칸): 판 채팅
+//   - 맨 아래(가로로 긴 칸): 대화창. 탭 둘 "채팅"(판 채팅)과 "쪽지"(내 쪽지함, 안 읽은 수)
 // 좁은 화면에서는 가운데, 왼쪽 열, 채팅의 차례로 위아래다. 차례는 CSS 의 grid 자리가 정하고 문서의 차례는 가운데가 먼저다.
 //
 // 스트림에서 받은 것:
 //   - 이벤트: 일어난 일에 더하고, 테이블과 라운드를 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다.
 //     서술 값이 걸리거나 잡히거나 풀리는 일이면 머리의 잔액(A6)도 다시 읽는다(wallet/walletView.ts 의 WALLET_EVENTS)
 //   - 채팅: 읽어 둔 채팅에 번호 차례로 합친다. 그 사람의 "입력 중"을 지운다
+//   - 쪽지: 읽어 둔 쪽지함에 번호 차례로 합친다. 쪽지 탭을 보고 있지 않으면 나에게 온 것을 안 읽은 수로 센다
 //   - 입력 중: 5초 동안 보인다
 //   - 서술의 미리 보기: 조각을 이어 둔다(round/preview.ts). 서술이 끝났다는 이벤트가 오면 지운다
 //   - 장면 그림이 바뀜(scene_snapshot, #983): 그림 목록을 다시 읽는다(snapshots/)
@@ -18,7 +19,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
-import type { ChatMessage, EventPage, MessagePage, TableDetail, TableEvent } from '../../../api/types';
+import type { ChatMessage, EventPage, MessagePage, TableDetail, TableEvent, Whisper, WhisperPage } from '../../../api/types';
 import { meQuery } from '../../../auth/queries';
 import { CampaignPanel } from '../campaigns/CampaignPanel';
 import { usePublicNames } from '../../../hooks/usePublicNames';
@@ -27,11 +28,12 @@ import { displayName, MemberList } from './MemberList';
 import { FriendlyFirePanel } from './FriendlyFirePanel';
 import { canManageTable, HostPanel } from './host/HostPanel';
 import { RoomHeader } from './RoomHeader';
+import { RoomTalk, type TalkTab } from './RoomTalk';
 import { ActionRequestProvider } from './round/action/actionRequest';
 import { applyPreview, ENDS_PREVIEW, type NarrationPreview } from './round/preview';
 import { tableSnapshotsKey } from './snapshots/useTableSnapshots';
-import { chatQuery, eventsQuery, tableQuery } from './roomQueries';
-import { mergeEvents, mergeMessages } from './streamPolicy';
+import { chatQuery, eventsQuery, tableQuery, whispersQuery } from './roomQueries';
+import { mergeEvents, mergeMessages, mergeWhispers, nextUnreadWhispers } from './streamPolicy';
 import { useBatchedRefetch } from './useBatchedRefetch';
 import { useTableStream } from './useTableStream';
 import { useTypingPeople } from './useTypingPeople';
@@ -40,16 +42,20 @@ import { changesWallet } from '../../wallet/walletView';
 import { RoomStage } from './RoomStage';
 import { MyHpStrip } from './status/MyHpStrip';
 import { StatusPanel } from './status/StatusPanel';
+import { WhisperPanel } from './WhisperPanel';
 
 export function TableRoom({ table }: { table: TableDetail }) {
   const queryClient = useQueryClient();
   const chat = useQuery(chatQuery(table.id));
   const events = useQuery(eventsQuery(table.id));
+  const whispers = useQuery(whispersQuery(table.id));
   const me = useQuery(meQuery());
   const typing = useTypingPeople();
   const refetchSoon = useBatchedRefetch(table.id);
   const [preview, setPreview] = useState<NarrationPreview | null>(null);
   const [managing, setManaging] = useState(false);
+  const [talkTab, setTalkTab] = useState<TalkTab>('chat');
+  const [unreadWhispers, setUnreadWhispers] = useState(0);
   const messages = chat.data?.items ?? [];
   const nameOf = usePublicNames([table.members.map((member) => member.user_id), messages.map((message) => message.user_id)]);
 
@@ -57,6 +63,15 @@ export function TableRoom({ table }: { table: TableDetail }) {
     (incoming: ChatMessage[]) => {
       queryClient.setQueryData<MessagePage>(chatQuery(table.id).queryKey, (current) =>
         current ? { ...current, items: mergeMessages(current.items, incoming) } : current,
+      );
+    },
+    [queryClient, table.id],
+  );
+
+  const appendWhisper = useCallback(
+    (incoming: Whisper[]) => {
+      queryClient.setQueryData<WhisperPage>(whispersQuery(table.id).queryKey, (current) =>
+        current ? { ...current, items: mergeWhispers(current.items, incoming) } : current,
       );
     },
     [queryClient, table.id],
@@ -71,7 +86,11 @@ export function TableRoom({ table }: { table: TableDetail }) {
     [queryClient, table.id],
   );
 
-  const start = chat.isSuccess && !events.isPending ? { messages: chat.data.last_sequence, events: events.data?.last_sequence ?? null } : null;
+  const myId = me.data?.public_id;
+  const start =
+    chat.isSuccess && !events.isPending && !whispers.isPending
+      ? { messages: chat.data.last_sequence, events: events.data?.last_sequence ?? null, whispers: whispers.data?.last_sequence ?? null }
+      : null;
   const stream = useTableStream(table.id, start, {
     onOpen: refetchSoon,
     onEvent: (event: TableEvent) => {
@@ -84,13 +103,21 @@ export function TableRoom({ table }: { table: TableDetail }) {
       typing.remove(message.user_id);
       appendChat([message]);
     },
+    onWhisper: (whisper) => {
+      appendWhisper([whisper]);
+      setUnreadWhispers((count) => nextUnreadWhispers(count, whisper, myId, talkTab === 'whisper'));
+    },
     onTyping: typing.add,
     onPreview: (chunk) => setPreview((current) => applyPreview(current, chunk)),
     onSnapshot: () => void queryClient.invalidateQueries({ queryKey: tableSnapshotsKey(table.id) }),
     onStop: () => void queryClient.invalidateQueries({ queryKey: tableQuery(table.id).queryKey }),
   });
 
-  const myId = me.data?.public_id;
+  function chooseTalkTab(tab: TalkTab) {
+    setTalkTab(tab);
+    if (tab === 'whisper') setUnreadWhispers(0);
+  }
+
   return (
     <ActionRequestProvider>
       <main className="page room">
@@ -124,13 +151,23 @@ export function TableRoom({ table }: { table: TableDetail }) {
             />
           </div>
           <div className="room__chat">
-            <ChatPanel
-              table={table}
-              chat={chat}
-              members={table.members}
-              nameOf={nameOf}
-              typingIds={typing.userIds}
-              onSent={(message) => appendChat([message])}
+            <RoomTalk
+              tab={talkTab}
+              onTab={chooseTalkTab}
+              unreadWhispers={unreadWhispers}
+              chat={
+                <ChatPanel
+                  table={table}
+                  chat={chat}
+                  members={table.members}
+                  nameOf={nameOf}
+                  typingIds={typing.userIds}
+                  onSent={(message) => appendChat([message])}
+                />
+              }
+              whisper={
+                <WhisperPanel table={table} whispers={whispers} myId={myId} nameOf={nameOf} onSent={(whisper) => appendWhisper([whisper])} />
+              }
             />
           </div>
         </div>

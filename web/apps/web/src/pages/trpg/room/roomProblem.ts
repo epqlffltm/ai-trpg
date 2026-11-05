@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/room/roomProblem.ts
-// 테이블 방의 실패(시작, 채팅, 나가기)를 화면에 보일 것으로 바꾼다. 순수한 함수다.
+// 테이블 방의 실패(시작, 채팅, 쪽지, 나가기)를 화면에 보일 것으로 바꾼다. 순수한 함수다.
 // 409 의 까닭은 reason 이다(ApiError.code 로 읽는다. trpg-server/app/tables/errors.py 의 Conflict).
 
 import { ApiError } from '../../../api/errors';
@@ -29,6 +29,15 @@ export function describeChatProblem(error: unknown): FormProblem {
   if (common || !(error instanceof ApiError)) return common ?? { message: FAILED };
   if (error.status === 409) return { message: '끝난 테이블에는 채팅을 쓸 수 없습니다.' };
   if (error.status === 404) return { message: '이 테이블에 앉아 있지 않습니다.' };
+  return unknownProblem(error, FAILED);
+}
+
+/** 쪽지 보내기. 끝난 테이블이면 409, 받는 사람이 떠났거나 내가 앉아 있지 않으면 404, 너무 빨리 쓰면 429(채팅과 함께 센다) */
+export function describeWhisperProblem(error: unknown): FormProblem {
+  const common = commonProblem(error);
+  if (common || !(error instanceof ApiError)) return common ?? { message: FAILED };
+  if (error.status === 409) return { message: '끝난 테이블에는 쪽지를 보낼 수 없습니다.' };
+  if (error.status === 404) return { message: '받는 사람이 테이블을 떠났거나, 내가 이 테이블에 앉아 있지 않습니다.' };
   return unknownProblem(error, FAILED);
 }
 
