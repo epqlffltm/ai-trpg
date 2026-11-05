@@ -22,6 +22,7 @@
     - snapshot_image: 그림의 바이트. asset 서버에서 서명만으로 받아 대신 내준다(앉은 사람만)
 
   - 그림의 지시는 서버의 상태로 만든다(app/snapshots/prompt.py). 그림 모델은 상태를 바꾸지 못한다(그림만 돌려준다)
+  - 앉은 캐릭터가 고른 프리젠의 그림을 참고 그림으로 넘겨 얼굴을 맞춘다(app/snapshots/references.py)
   - 바깥(공급자, asset, 결제 서버)을 부르는 동안 DB 의 연결을 쥐지 않는다
   - 같은 실패를 저절로 되풀이하지 않는다(사람이 다시 누른다). 실패하면 돈은 돌려준다
   - 누른 사람의 토큰은 그 요청이 맡긴 작업 안에서 asset 에 맡길 때만 쓰고 저장하지 않는다
@@ -52,8 +53,9 @@ from app.rounds.service import get_round
 from app.snapshots import charging, repository
 from app.snapshots.charging import HoldDeclined, Settled
 from app.snapshots.models import DUE_STATUSES, SnapshotBilling, SnapshotOutcome, TableSnapshot
-from app.snapshots.prompt import snapshot_prompt
+from app.snapshots.prompt import snapshot_prompt, with_references
 from app.snapshots.providers import price_code_of
+from app.snapshots.references import ReferenceTarget, character_targets, fetch_references
 from app.snapshots.schemas import KeptSnapshotOut, KeptSnapshotPage, SnapshotOut, SnapshotStatus
 from app.tables.models import GameTable
 from app.tables.service import get_table
@@ -110,6 +112,8 @@ class SnapshotStart:
     reference: str
     price_code: str
     prompt: str
+    # 넘길 참고 그림(캐릭터 그림, #983). 기록을 저장할 때 골라 두고, 그릴 때 asset 에서 받는다
+    references: tuple[ReferenceTarget, ...] = ()
 
 
 def hold_reference(snapshot_id: uuid.UUID) -> str:
@@ -165,6 +169,7 @@ async def begin_snapshot(
         table, round_ = await get_round(session, user_id, table_id, number)
         require_drawable(round_)
         prompt = snapshot_prompt(table.title, round_.number, character_names(table), round_.scene)
+        references = character_targets(table)
         snapshot = new_snapshot(table.id, round_.number, user_id, model)
         await saved(session, snapshot)
     return SnapshotStart(
@@ -174,6 +179,7 @@ async def begin_snapshot(
         reference=snapshot.reference,
         price_code=snapshot.price_code,
         prompt=prompt,
+        references=references,
     )
 
 
@@ -247,9 +253,16 @@ def failed_values(code: str, now: datetime) -> dict:
 
 
 async def draw_and_keep(provider: ImageProvider, asset: AssetClient, token: str, start: SnapshotStart, now: datetime):
-    """그림을 만들고 누른 사람의 그림으로 asset 에 맡긴다. 적을 것을 돌려준다(실패해도 올리지 않는다. 멈춤은 올린다)."""
+    """
+    참고 그림을 받아 그림을 만들고 누른 사람의 그림으로 asset 에 맡긴다.
+
+    적을 것을 돌려준다(실패해도 올리지 않는다. 멈춤은 올린다).
+    """
     try:
-        image = await provider.generate(ImageRequest(prompt=start.prompt))
+        fetched = await fetch_references(provider, asset, start.references)
+        prompt = with_references(start.prompt, [target.name for target, _ in fetched])
+        references = tuple(image for _, image in fetched)
+        image = await provider.generate(ImageRequest(prompt=prompt, references=references))
         image_id = await asset.keep_image(token, image.data)
     except ProviderError as error:
         return failed_values(str(error), now)

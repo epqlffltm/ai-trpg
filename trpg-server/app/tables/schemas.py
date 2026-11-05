@@ -706,6 +706,9 @@ class MemberOut(BaseModel):
     character_mode: CharacterMode | None
     # 프리젠에서 가져왔으면 몇 번째 프리젠인가
     pregen_index: int | None
+    # 캐릭터 그림(#983). 고른 프리젠에 제작자가 붙인 그림이다. 바이트는 GET /tables/{id}/portraits/{portrait_id}/image.
+    # 직접 만든 캐릭터나 그림이 없는 프리젠이면 None 이다
+    portrait_id: uuid.UUID | None = None
     # 주사위로 굴린 점수들. 이 테이블에서 굴린 적이 있으면 있다. 다른 방식으로 캐릭터를 만들었어도 남아 있다
     roll: RollOut | None
     # 플레이어가 정한 능력치의 점수. 그런 방식(manual, point_buy, rolled)으로 만들었을 때만 있다.

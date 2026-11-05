@@ -45,6 +45,7 @@ from app.limits.routing import Limited
 from app.personas import saving
 from app.personas.router import to_persona
 from app.personas.schemas import PersonaOut
+from app.portraits.seats import member_portrait
 from app.rounds import service as round_service
 from app.rounds.router import Closing
 from app.tables import (
@@ -496,6 +497,7 @@ def to_member(
         character=character,
         character_mode=member.character_mode,
         pregen_index=member.pregen_index,
+        portrait_id=member_portrait(table, member),
         roll=to_roll(sheets.find_roll(table, member.user_id)),
         abilities=member.abilities,
         sheet=to_sheet(member.sheet, catalog, ruleset, member.user_id == viewer_id),
