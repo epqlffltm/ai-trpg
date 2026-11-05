@@ -9,6 +9,7 @@
 #                  Loki 가 준비될 때까지 기다린다.
 #                  이미지를 받고 만드는 것은 저장소가 잠깐 답하지 않으면 쉬었다가 다시 한다(with_retries, 3번까지).
 #                  한 이미지를 여러 서비스가 함께 쓰므로 이미지마다 서비스 하나만 만든다(build_targets).
+#                  staging 에만 있는 바깥 백업의 이미지도 그동안 뒤에서 만들어 둔다(start_offsite_image, 실패해도 멈추지 않는다).
 #                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다.
 #                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다.
 #                  DB 의 백업은 최근 백업 파일이 있으면 healthy 다
@@ -413,13 +414,36 @@ for name, service in json.load(sys.stdin)["services"].items():
 print(*first.values())'
 }
 
+# staging 에만 있는 바깥 백업의 이미지(backup-offsite)를 서버들의 이미지와 함께 뒤에서 만들어 둔다.
+# check-staging 이 처음 만들면 CI 에서 20초쯤 그것만 기다린다. 여기서 만들어 두면 거기서는 캐시로 곧 끝난다.
+# 실패해도 up 을 멈추지 않는다. check-staging 이 다시 만들고 그 결과를 확인으로 찍는다
+OFFSITE_BUILD_LOG=""
+OFFSITE_BUILD_PID=""
+start_offsite_image() {
+  OFFSITE_BUILD_LOG="$(mktemp)"
+  with_retries staging_compose build backup-offsite </dev/null >"$OFFSITE_BUILD_LOG" 2>&1 &
+  OFFSITE_BUILD_PID=$!
+}
+
+wait_offsite_image() {
+  if wait "$OFFSITE_BUILD_PID"; then
+    echo "바깥 백업의 이미지를 미리 만들었다"
+  else
+    echo "바깥 백업의 이미지를 미리 만들지 못했다. check-staging 이 다시 만든다:"
+    sed 's/^/     /' "$OFFSITE_BUILD_LOG"
+  fi
+  rm -f "$OFFSITE_BUILD_LOG"
+}
+
 up() {
   local listed targets
   listed="$(build_targets)"
   read -ra targets <<<"$listed"
   echo "만들 서비스(이미지마다 하나): ${targets[*]}"
   with_retries pull_images
+  start_offsite_image
   with_retries compose build "${targets[@]}"
+  wait_offsite_image
   compose up -d
   wait_healthy
   wait_loki_ready
