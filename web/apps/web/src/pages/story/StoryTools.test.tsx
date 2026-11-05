@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/story/StoryTools.test.tsx
 // 장면(D2)의 왼쪽 열 창(Stitch 22번)과 좁은 화면의 아래 단추 줄. 창의 차례와 처음 펼친 창, 행동 줄이 왼쪽 열에 있는 것,
-// 단추 줄이 같은 창을 펼쳐 시트로 여는 것, 지도·이동을 두는 때를 본다. 숨기고 띄우는 것은 CSS 라 상태만 본다.
+// 단추 줄이 같은 창을 펼쳐 시트로 여는 것, 지도·이동을 두는 때, 인물 창(목록, 만나지 않은 인물, 고른 인물의 칸)을 본다.
+// 숨기고 띄우는 것은 CSS 라 상태만 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -10,7 +11,7 @@ import type { StoryMessage, StorySession, StoryState } from '../../api/story';
 import { sse } from '../../test/chatFixtures';
 import { installFakeFetch, json, tokens } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
-import { storyView } from '../../test/storyFixtures';
+import { castOut, storyView } from '../../test/storyFixtures';
 import { storyHasMap, storyTools } from './StoryTools';
 
 const SESSION = '00000000-0000-4000-8000-00000000ae11';
@@ -34,6 +35,7 @@ const VIEW = storyView({
     { a: 'school', b: 'park', minutes: 30 },
     { a: 'school', b: 'hill', minutes: 180 },
   ],
+  cast: [castOut('mina', '미나', { age: '17', gender: '여' }), castOut('ghost', null)],
 });
 
 /** 3일째(마지막 날) 22시 */
@@ -81,7 +83,7 @@ describe('장면의 왼쪽 열', () => {
 
     const column = within(await screen.findByRole('region', { name: '창' }));
     const toggles = column.getAllByRole('button').filter((button) => button.hasAttribute('aria-expanded'));
-    expect(toggles.map((button) => button.textContent)).toEqual(['지도·이동', '소지품·건네기', '기록', '기억']);
+    expect(toggles.map((button) => button.textContent)).toEqual(['지도·이동', '소지품·건네기', '인물', '기록', '기억']);
     expect(column.getByRole('button', { name: '지도·이동' })).toHaveAttribute('aria-expanded', 'true');
     expect(column.getByText('지금 있는 곳: 학교')).toBeInTheDocument();
 
@@ -106,10 +108,32 @@ describe('장면의 왼쪽 열', () => {
   });
 });
 
+describe('인물 창', () => {
+  it('세계관의 인물 목록에서 고르면 그 인물의 칸을 보이고, 만나지 않은 인물은 ??? 와 안내만 보인다', async () => {
+    signedIn();
+    renderApp(`/story/sessions/${SESSION}`);
+
+    const column = within(await screen.findByRole('region', { name: '창' }));
+    await userEvent.click(column.getByRole('button', { name: '인물' }));
+    const panel = within(column.getByRole('region', { name: '인물' }));
+    const list = within(panel.getByRole('list', { name: '인물 목록' }));
+    expect(list.getAllByRole('button').map((button) => button.textContent)).toEqual(['미나', '???']);
+    expect(panel.getByText('인물을 고르면 소개와 호감도를 봅니다.')).toBeInTheDocument();
+
+    await userEvent.click(list.getByRole('button', { name: '미나' }));
+    const detail = within(panel.getByRole('region', { name: '미나의 정보' }));
+    expect(detail.getByText('17 · 여')).toBeInTheDocument();
+    expect(list.getByRole('button', { name: '미나' })).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.click(list.getByRole('button', { name: '???' }));
+    expect(within(panel.getByRole('region', { name: '???의 정보' })).getByText('아직 만나지 않은 인물입니다.')).toBeInTheDocument();
+  });
+});
+
 describe('창의 순수한 함수', () => {
   it('지도·이동은 시간이 흐르는 판이고 끝나지 않았을 때만 둔다', () => {
-    expect(storyTools(true)).toEqual(['map', 'items', 'records', 'notes']);
-    expect(storyTools(false)).toEqual(['items', 'records', 'notes']);
+    expect(storyTools(true)).toEqual(['map', 'items', 'cast', 'records', 'notes']);
+    expect(storyTools(false)).toEqual(['items', 'cast', 'records', 'notes']);
     expect(storyHasMap(VIEW, state(), false)).toBe(true);
     expect(storyHasMap(VIEW, state(), true)).toBe(false);
   });

@@ -3,22 +3,25 @@
 // 창은 하나만 펼친다. 펼친 단추를 다시 누르면 접는다. 펼친 창은 StoryRoom 이 쥔다(좁은 화면의 아래 단추 줄도 같은 창을 펼친다).
 //   - 지도·이동: 지금 있는 곳과 갈 수 있는 곳(시간이 흐르는 판에만, 끝난 세션에는 없다)
 //   - 소지품·건네기: 가진 물건(건네기는 인물 메뉴에서)
+//   - 인물: 세계관의 인물 목록과 고른 인물의 그림, 이름, 인물 창(D5)
 //   - 기록: 엔딩과 열린 이벤트(펼친 동안만 읽는다)
 //   - 기억: 기억 메모와 앞부분의 요약(펼친 동안만 읽는다)
-// 인물과 페르소나·모델은 아직 장면의 인물 줄과 머리에 있다.
+// 페르소나·모델은 아직 머리에 있다. 건네기와 고백은 장면의 인물을 눌러 연다.
 
 import type { StoryAction, StoryState, StoryView } from '../../api/story';
 import { canPassTime } from './storyActions';
+import { StoryCastPanel } from './StoryCastPanel';
 import { StoryItemsPanel } from './StoryItemsPanel';
 import { StoryMapPanel } from './StoryMapPanel';
 import { StoryNotesPanel } from './StoryNotesPanel';
 import { StoryRecordsPanel } from './StoryRecordsPanel';
 
-export type StoryTool = 'map' | 'items' | 'records' | 'notes';
+export type StoryTool = 'map' | 'items' | 'cast' | 'records' | 'notes';
 
 const TOOL_LABELS: Record<StoryTool, string> = {
   map: '지도·이동',
   items: '소지품·건네기',
+  cast: '인물',
   records: '기록',
   notes: '기억',
 };
@@ -30,7 +33,7 @@ export function storyToolLabel(tool: StoryTool): string {
 
 /** 이 장면에 있는 창. 지도·이동은 시간이 흐르는 판이고 끝나지 않았을 때만 */
 export function storyTools(withMap: boolean): StoryTool[] {
-  return withMap ? ['map', 'items', 'records', 'notes'] : ['items', 'records', 'notes'];
+  return withMap ? ['map', 'items', 'cast', 'records', 'notes'] : ['items', 'cast', 'records', 'notes'];
 }
 
 /** 지도·이동을 둘지. 시간이 흐르는 판이고 끝나지 않은 세션 */
@@ -84,6 +87,7 @@ type ContentProps = Omit<Props, 'tools' | 'open' | 'onOpenChange'> & { tool: Sto
 function ToolContent({ tool, sessionId, worldId, view, state, disabled, onAct }: ContentProps) {
   if (tool === 'map') return <StoryMapPanel view={view} state={state} disabled={disabled} onAct={onAct} />;
   if (tool === 'items') return <StoryItemsPanel view={view} state={state} />;
+  if (tool === 'cast') return <StoryCastPanel view={view} state={state} />;
   if (tool === 'records') return <StoryRecordsPanel worldId={worldId} view={view} />;
   return <StoryNotesPanel sessionId={sessionId} />;
 }

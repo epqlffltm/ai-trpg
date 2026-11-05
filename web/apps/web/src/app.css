@@ -3938,6 +3938,65 @@ details.room-panel[open] > summary {
   border-radius: 999px;
 }
 
+/* 왼쪽 열의 인물 창(Stitch 22번). 인물 목록은 작은 그림과 이름의 칸, 고른 인물은 큰 그림과 이름, 인물 창의 칸 */
+.story-cast-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.story-cast-panel__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5em, 1fr));
+  gap: 6px;
+}
+
+.story-cast-panel__member {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 4px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  color: inherit;
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.story-cast-panel__member[aria-pressed='true'] {
+  border-color: var(--ui-accent);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+
+.story-cast-panel__detail {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-border);
+  text-align: center;
+}
+
+.story-cast-panel__detail .story-profile {
+  justify-self: stretch;
+  text-align: left;
+}
+
+.story-cast-panel__name {
+  margin: 0;
+  font-family: var(--ui-font-serif);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.story-cast__portrait.story-cast__portrait--large {
+  width: 120px;
+  height: 160px;
+  border-radius: var(--ui-radius);
+}
+
 .story-segment + .story-segment {
   margin-top: 6px;
 }
