@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/board/PostActions.tsx
-// 글 아래의 단추(A11). 고치기(글쓴이), 지우기(글쓴이와 운영자, 한 번 더 묻는다), 고정과 풀기(운영자), 신고(로그인한 사람이 남의 글을).
+// 글 머리 오른쪽의 단추(A11, Stitch 11번). 고치기(글쓴이), 지우기(글쓴이와 운영자, 한 번 더 묻는다), 고정과 풀기(운영자), 신고(로그인한 사람이 남의 글을).
 // 누구에게 보일지는 boardPermissions.ts 가 정한다. 나를 모르면(로그인 전, 읽는 중) 아무것도 보이지 않는다.
 
 import type { Board, BoardMe, Post } from '../../api/types';

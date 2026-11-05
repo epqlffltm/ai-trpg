@@ -85,7 +85,9 @@ describe('게시판 읽기', () => {
     expect(await screen.findByRole('heading', { name: '11월 점검' })).toBeInTheDocument();
     expect(screen.getByText(/탈퇴한 사용자/)).toBeInTheDocument();
     expect(screen.getByText(/첫 줄/)).toHaveTextContent('첫 줄 둘째 줄');
-    expect(within(screen.getByRole('article', { name: '11월 점검' })).getByRole('link', { name: '공지사항' })).toHaveAttribute('href', '/board/notice');
+    const article = within(screen.getByRole('article', { name: '11월 점검' }));
+    expect(article.getByRole('link', { name: '공지사항' })).toHaveAttribute('href', '/board/notice');
+    expect(article.getByText(/· 댓글 3$/)).toBeInTheDocument();
     expect(await screen.findByText('삭제된 댓글입니다')).toBeInTheDocument();
     expect(within(screen.getByRole('list', { name: '답글' })).getByText('답글이다')).toBeInTheDocument();
 

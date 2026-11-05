@@ -204,6 +204,7 @@ describe('내 글과 남의 글', () => {
     renderApp('/board/posts/7');
 
     const report = await screen.findByRole('button', { name: '글 신고' });
+    expect(report.closest('header')).toHaveClass('post__head');
     expect(screen.queryByRole('link', { name: '고치기' })).toBeNull();
     expect(screen.queryByRole('button', { name: '글 지우기' })).toBeNull();
 

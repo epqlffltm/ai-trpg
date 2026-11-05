@@ -2916,37 +2916,122 @@ details.room-panel[open] > summary {
   font-weight: 700;
 }
 
+/* 글 읽기(Stitch 11번). 글과 댓글은 각각 한 장의 종이 */
+.board-card {
+  margin-bottom: var(--ui-gap);
+  padding: 20px 24px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+.post__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-bottom: var(--ui-gap);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.post__heading {
+  flex: 1 1 20em;
+  min-width: 0;
+}
+
+.post__heading h1 {
+  margin: 6px 0;
+  font-family: var(--ui-font-serif);
+  overflow-wrap: anywhere;
+}
+
+.post__board {
+  display: inline-block;
+  padding: 0 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  color: var(--ui-text-muted);
+  font-size: 0.8em;
+  text-decoration: none;
+}
+
+.post__board:hover {
+  color: var(--ui-accent);
+}
+
+.post__meta {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 0.9em;
+}
+
+.post__meta strong {
+  color: var(--ui-text);
+}
+
+.post__content {
+  max-width: 44em;
+  margin: 0 auto;
+  padding: 24px 0 8px;
+  line-height: 1.8;
+}
+
 .post__content,
 .comment__text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
+.board-comments h2 {
+  margin: 0 0 var(--ui-gap);
+  font-size: 1.1rem;
+}
+
 .comments {
   display: grid;
-  gap: 8px;
+}
+
+.comments > li + li {
+  border-top: 1px solid var(--ui-border);
+}
+
+.comment {
+  padding: 12px 0;
 }
 
 .comments--replies {
-  margin: 8px 0 0 16px;
+  margin: 0 0 12px 16px;
   padding-left: 12px;
   border-left: 2px solid var(--ui-border);
 }
 
+.comment__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
 .comment__meta {
   margin: 0;
+}
+
+.comment__meta .hint {
   font-size: 0.85em;
 }
 
 .comment__text {
-  margin: 2px 0 0;
+  margin: 4px 0 0;
 }
 
 .comment--deleted .comment__text {
   color: var(--ui-text-muted);
 }
 
-/* 게시판 쓰기(A11). 글과 댓글 아래의 단추 줄 */
+/* 게시판 쓰기(A11). 글 머리와 댓글 머리의 단추 줄 */
 .post-actions,
 .comment__actions {
   display: flex;
@@ -2955,16 +3040,18 @@ details.room-panel[open] > summary {
   gap: 4px 12px;
 }
 
-.post-actions {
-  margin: var(--ui-gap) 0;
-}
-
 .comment__actions {
   font-size: 0.9em;
 }
 
 .comment-form {
   margin: 8px 0;
+}
+
+@media (max-width: 767px) {
+  .board-card {
+    padding: 16px;
+  }
 }
 
 /* 떠난 테이블(B10). 선언 한 줄 */
