@@ -1,14 +1,14 @@
-// web/apps/web/src/pages/chat/conversation/OutfitDialog.tsx
-// 상대의 차림 창(C3). 상대가 지금 입은 옷(내가 건넨 옷)을 입은 차례대로 보인다. 없으면 처음 차림 그대로다.
+// web/apps/web/src/pages/chat/conversation/OutfitPanel.tsx
+// 상대의 차림(C3, Stitch 21번의 왼쪽 열 "상대의 차림·기억" 창의 위). 상대가 지금 입은 옷(내가 건넨 옷)을 입은 차례대로 보인다. 없으면 처음 차림 그대로다.
 
-import { Dialog } from '@ai-trpg/ui';
 import type { ConversationDetail } from '../../../api/types';
 import { outfitNames } from './worldView';
 
-export function OutfitDialog({ detail, open, onClose }: { detail: ConversationDetail; open: boolean; onClose: () => void }) {
+export function OutfitPanel({ detail }: { detail: ConversationDetail }) {
   const names = outfitNames(detail.state.outfit, detail.character.document);
   return (
-    <Dialog title={`${detail.character.document.name}의 차림`} open={open} onClose={onClose}>
+    <section aria-label={`${detail.character.document.name}의 차림`}>
+      <h3 className="chat-map__heading">지금 차림</h3>
       {names.length === 0 ? (
         <p className="empty-state">처음 차림 그대로입니다. 옷을 건네면 입습니다.</p>
       ) : (
@@ -18,6 +18,6 @@ export function OutfitDialog({ detail, open, onClose }: { detail: ConversationDe
           ))}
         </ul>
       )}
-    </Dialog>
+    </section>
   );
 }

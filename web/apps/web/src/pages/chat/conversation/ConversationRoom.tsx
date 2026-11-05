@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/chat/conversation/ConversationRoom.tsx
-// 대화(C3)의 화면. 위에 머리와 그림 창, 창과 행동의 단추, 아래에 대사창과 말 쓰기. 모델 고르기와 창들은 겹쳐 연다.
+// 대화(C3)의 화면(Stitch 21번). 위에 머리(대화 줄), 넓으면 왼쪽 열의 창 넷(ChatTools)과 오른쪽의 그림 창, 단추 줄, 대사창, 말 쓰기.
+// 좁으면 머리, 그림, 대사창, 말 쓰기, 창 넷의 차례로 위아래다. 모델 고르기, 책갈피, 그림으로 저장은 겹쳐 연다.
 // 한 대화에 한 생성이다. 이 화면이 받는 중이거나(turn) 다른 곳에서 쓰는 중이면(generating) 보내기, 다시 생성, 이어서, 대안, 행동, 고치기를 막는다.
 // 답을 받는 일(말 보내기, 행동, 내 말 고치기)은 모델이 있어야 한다. 없으면 보내기 전에 고르게 한다(서버의 409 model_required 를 기다리지 않는다).
 // 상대의 말 고치기는 모델을 부르지 않아 모델이 없어도 된다.
@@ -21,6 +22,7 @@ import type { ConversationAction, ConversationDetail, ConversationMessage } from
 import { bookmarkProblemText, isOnBranch, messageAnchor } from './bookmarksView';
 import { snapshotProblemText } from './snapshotsView';
 import { Composer } from './Composer';
+import { ChatTools } from './ChatTools';
 import { ConversationHeader } from './ConversationHeader';
 import { conversationKey } from './conversationQueries';
 import { pictureOf, tailSuggestions } from './conversationView';
@@ -101,39 +103,46 @@ export function ConversationRoom({ detail, turns }: Props) {
   }
 
   return (
-    <main className="page conversation">
-      <ConversationHeader detail={detail} busy={busy} onChooseModel={() => setChoosingModel(true)} />
-      <PicturePane picture={picture} name={detail.character.document.name} />
-      <WorldToolbar detail={detail} busy={busy} onAction={act} bookmarks={bookmarks} onGoTo={(messageId) => void goTo(messageId)} />
-      <MessageList
-        detail={detail}
-        turn={turns.turn}
-        busy={busy}
-        onBranch={(messageId) => branching.mutate(messageId)}
-        onRegenerate={(messageId) => void answer((signal) => openRegenerateTurn(messageId, signal))}
-        onContinue={(messageId) => void answer((signal) => openContinueTurn(messageId, signal))}
-        onEdit={edit}
-        marked={bookmarks.marked}
-        onBookmark={toggleBookmark}
-        snapshots={snapshots}
-      />
-      {detail.generating && !streaming ? <p className="hint">답을 쓰는 중입니다. 끝나면 보입니다.</p> : null}
-      {branching.error ? <p className="ui-field__error">{describeChangeProblem(branching.error)}</p> : null}
-      {editing.error ? <p className="ui-field__error">{describeChangeProblem(editing.error)}</p> : null}
-      {bookmarks.change.error ? <p className="ui-field__error">{bookmarkProblemText(bookmarks.change.error)}</p> : null}
-      {snapshots.draw.error ? <p className="ui-field__error">{snapshotProblemText(snapshots.draw.error)}</p> : null}
-      <TurnNotice problem={turns.problem} failure={turns.failure} onChooseModel={() => setChoosingModel(true)} onClose={turns.clearNotice} />
-      <Composer
-        draft={draft}
-        onDraft={setDraft}
-        suggestions={tailSuggestions(detail.messages)}
-        streaming={streaming}
-        disabled={busy}
-        canStop={Boolean(turns.turn?.generationId)}
-        onSend={() => void send()}
-        onStop={() => void turns.stop()}
-        shortcuts={shortcuts}
-      />
+    <main className="page conversation chat-room">
+      <ConversationHeader detail={detail} />
+      <div className="chat-room__body">
+        <div className="chat-room__main">
+          <PicturePane picture={picture} name={detail.character.document.name} />
+          <WorldToolbar detail={detail} busy={busy} onAction={act} bookmarks={bookmarks} onGoTo={(messageId) => void goTo(messageId)} />
+          <MessageList
+            detail={detail}
+            turn={turns.turn}
+            busy={busy}
+            onBranch={(messageId) => branching.mutate(messageId)}
+            onRegenerate={(messageId) => void answer((signal) => openRegenerateTurn(messageId, signal))}
+            onContinue={(messageId) => void answer((signal) => openContinueTurn(messageId, signal))}
+            onEdit={edit}
+            marked={bookmarks.marked}
+            onBookmark={toggleBookmark}
+            snapshots={snapshots}
+          />
+          {detail.generating && !streaming ? <p className="hint">답을 쓰는 중입니다. 끝나면 보입니다.</p> : null}
+          {branching.error ? <p className="ui-field__error">{describeChangeProblem(branching.error)}</p> : null}
+          {editing.error ? <p className="ui-field__error">{describeChangeProblem(editing.error)}</p> : null}
+          {bookmarks.change.error ? <p className="ui-field__error">{bookmarkProblemText(bookmarks.change.error)}</p> : null}
+          {snapshots.draw.error ? <p className="ui-field__error">{snapshotProblemText(snapshots.draw.error)}</p> : null}
+          <TurnNotice problem={turns.problem} failure={turns.failure} onChooseModel={() => setChoosingModel(true)} onClose={turns.clearNotice} />
+          <Composer
+            draft={draft}
+            onDraft={setDraft}
+            suggestions={tailSuggestions(detail.messages)}
+            streaming={streaming}
+            disabled={busy}
+            canStop={Boolean(turns.turn?.generationId)}
+            onSend={() => void send()}
+            onStop={() => void turns.stop()}
+            shortcuts={shortcuts}
+          />
+        </div>
+        <div className="chat-room__tools">
+          <ChatTools detail={detail} busy={busy} onAction={act} onChooseModel={() => setChoosingModel(true)} />
+        </div>
+      </div>
       <ModelDialog detail={detail} open={choosingModel} onClose={closeModel} />
     </main>
   );

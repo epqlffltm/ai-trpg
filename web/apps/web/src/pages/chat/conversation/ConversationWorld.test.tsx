@@ -64,6 +64,13 @@ function reacting(user: unknown, action: unknown = null) {
     });
 }
 
+/** 왼쪽 열의 창 하나를 펼친다(이미 펼쳐져 있으면 그대로). 그 창을 돌려준다 */
+async function openTool(name: string) {
+  const button = await screen.findByRole('button', { name });
+  if (button.getAttribute('aria-expanded') !== 'true') await userEvent.click(button);
+  return within(await screen.findByRole('region', { name }));
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -78,22 +85,19 @@ describe('대화의 행동', () => {
     const { seen } = signedIn({ [`POST ${ACTIONS}`]: () => answer() }, talk.conversation);
     renderApp(`/chat/conversations/${ID}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '소지품(2)' }));
-    const dialog = within(await screen.findByRole('dialog', { name: '소지품' }));
+    const dialog = await openTool('소지품·건네기');
     expect(dialog.getByText('따뜻한 홍차')).toBeInTheDocument();
     expect(dialog.getByText('2개 · 쓰면 없어짐')).toBeInTheDocument();
     await userEvent.click(dialog.getByRole('button', { name: '홍차 쓰기' }));
     expect(await screen.findByText('홍차를 마셨다.')).toBeInTheDocument();
     expect(await screen.findByText('고마워요.')).toBeInTheDocument();
-    expect(screen.queryByRole('dialog')).toBeNull();
 
     answer = () => {
       talk.add(['action', '목도리를 건넸다.'], ['user', '추우니까 둘러요.'], ['assistant', '따뜻해요.']);
       return reacting({ ...saved(7, 'user', '추우니까 둘러요.'), parent_id: M(6) }, { ...saved(6, 'action', '목도리를 건넸다.'), parent_id: M(5) })();
     };
-    await vi.waitFor(() => expect(screen.getByRole('button', { name: '소지품(2)' })).toBeEnabled());
-    await userEvent.click(screen.getByRole('button', { name: '소지품(2)' }));
-    const again = within(await screen.findByRole('dialog', { name: '소지품' }));
+    const again = await openTool('소지품·건네기');
+    await vi.waitFor(() => expect(again.getByRole('button', { name: '목도리 건네기' })).toBeEnabled());
     await userEvent.click(again.getByRole('button', { name: '목도리 건네기' }));
     await userEvent.type(again.getByRole('textbox', { name: '목도리을(를) 건네며 할 말(비우면 건네기만)' }), '추우니까 둘러요.');
     await userEvent.click(again.getByRole('button', { name: '건네기' }));
@@ -109,8 +113,7 @@ describe('대화의 행동', () => {
     const { seen } = signedIn({ [`POST ${ACTIONS}`]: () => json(422, { detail: 'x', code: 'not_connected' }) }, world);
     renderApp(`/chat/conversations/${ID}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '지도' }));
-    const dialog = within(await screen.findByRole('dialog', { name: '지도' }));
+    const dialog = await openTool('지도·이동');
     expect(dialog.getByText('지금 있는 곳: 카페')).toBeInTheDocument();
     const ways = within(dialog.getByRole('list', { name: '갈 수 있는 곳' }));
     expect(ways.getAllByRole('button').map((button) => button.textContent)).toEqual(['옥상에 가기', '공원에 가기']);
@@ -135,9 +138,8 @@ describe('대화의 행동', () => {
     );
     renderApp(`/chat/conversations/${ID}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '차림' }));
-    expect(within(await screen.findByRole('dialog', { name: '루나의 차림' })).getByText('목도리')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: '닫기' }));
+    const partner = await openTool('상대의 차림·기억');
+    expect(within(partner.getByRole('region', { name: '루나의 차림' })).getByText('목도리')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '시간 보내기' }));
     expect(await screen.findByText('시간을 보냈다. 저녁이 되었다.')).toBeInTheDocument();
     expect(posts(seen, ACTIONS).map((request) => request.body)).toEqual([{ kind: 'wait' }]);

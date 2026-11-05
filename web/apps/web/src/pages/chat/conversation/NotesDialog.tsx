@@ -1,26 +1,18 @@
 // web/apps/web/src/pages/chat/conversation/NotesDialog.tsx
-// 기억 창(C5). 상대가 기억하는 것(기억 메모)을 보고 더하고 고치고 지운다. 요약이 제안한 메모는 따로 보이고 받아들이거나 버린다.
+// 기억(C5, chat 은 왼쪽 열의 "상대의 차림·기억" 창, story 는 기억 창). 상대가 기억하는 것(기억 메모)을 보고 더하고 고치고 지운다. 요약이 제안한 메모는 따로 보이고 받아들이거나 버린다.
 // 앞부분의 요약은 읽기만 한다. 메모는 다음 말부터 모델에 간다. 청구하지 않고, 답을 받는 중에도 고칠 수 있다.
-// 창의 몸(NotesPanel)은 읽기와 보내기를 받아 그린다. story 의 기억 창(StoryNotesDialog)도 이것을 쓴다.
+// 몸(NotesPanel)은 읽기와 보내기를 받아 그린다. story 의 기억 창(StoryNotesDialog)도 이것을 쓴다.
+// chat 은 펼친 동안만 읽는다(ChatNotes 가 그려질 때만 useNotes 가 돈다).
 
-import { Button, Dialog, Notice } from '@ai-trpg/ui';
+import { Button, Notice } from '@ai-trpg/ui';
 import { useState, type FormEvent } from 'react';
 import { NOTE_MAX } from '../../../api/chatNotes';
 import { TextAreaField } from '../../../components/TextAreaField';
 import { noteHint, noteProblemText, notesCountLabel, notesFull, sourceLabel, splitNotes, type NoteLike } from './notesView';
 import { useNotes, type NoteChange } from './useNotes';
 
-type Props = { conversationId: string; name: string; open: boolean; onClose: () => void };
-
-export function NotesDialog({ conversationId, name, open, onClose }: Props) {
-  return (
-    <Dialog title="기억" open={open} onClose={onClose}>
-      {open ? <NotesBody conversationId={conversationId} name={name} /> : null}
-    </Dialog>
-  );
-}
-
-function NotesBody({ conversationId, name }: { conversationId: string; name: string }) {
+/** chat 의 기억. 그려지는 동안 메모와 요약을 읽는다 */
+export function ChatNotes({ conversationId, name }: { conversationId: string; name: string }) {
   const { notes, summary, change } = useNotes(conversationId, true);
   return <NotesPanel name={name} notes={notes} summary={summary} change={change} />;
 }
