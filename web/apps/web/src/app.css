@@ -1747,34 +1747,120 @@ a.ui-button {
   white-space: nowrap;
 }
 
+/* 지갑(A6, Stitch 10·34번). 잔액은 골드·실버의 큰 카드 둘과 작은 합. 넓으면 자동 충전(왼쪽)과 쿠폰(오른쪽)의 두 칸 */
 .balance {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 12px;
   margin: 0 0 10px;
 }
 
 .balance__item {
-  padding: 12px 14px;
+  padding: 16px 20px;
   border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
+  border-radius: var(--ui-radius-lg);
   background: var(--ui-surface);
 }
 
 .balance__item dt {
-  color: var(--ui-text-muted);
-  font-size: 0.85em;
+  font-family: var(--ui-font-serif);
+  font-weight: 700;
 }
 
 .balance__item dd {
-  margin: 2px 0 0;
-  font-size: 1.4em;
-  font-weight: 600;
+  margin: 6px 0 0;
+  font-family: var(--ui-font-serif);
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
 
-.balance__item--total dd {
+.balance__item--total {
+  align-self: end;
+  padding: 10px 14px;
+  border-color: transparent;
+  background: none;
+}
+
+.balance__item--total dt {
+  font-family: inherit;
+  font-weight: 400;
   color: var(--ui-text-muted);
+}
+
+.balance__item--total dd {
+  font-size: 1.2rem;
+  color: var(--ui-text-muted);
+}
+
+@media (max-width: 480px) {
+  .balance {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .balance__item--total {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    padding: 0 4px;
+  }
+
+  .balance__item--total dd {
+    margin: 0;
+  }
+}
+
+/* 지갑의 칸은 종이 카드다. 칸 사이의 괘선 대신 카드 사이의 틈으로 나눈다 */
+.wallet .page-section {
+  margin-top: var(--ui-gap);
+  padding: 16px 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+
+/* 잔액은 카드 둘이 곧 칸이라 바깥 카드를 두지 않는다 */
+.wallet .wallet-balance {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.wallet__columns {
+  display: grid;
+  gap: 0 var(--ui-gap);
+}
+
+@media (min-width: 900px) {
+  .wallet__columns {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-areas: 'main side';
+    align-items: start;
+  }
+
+  .wallet__main {
+    grid-area: main;
+  }
+
+  .wallet__side {
+    grid-area: side;
+  }
+}
+
+/* 좁은 오른쪽 칸(쿠폰)의 입력칸은 칸의 너비에 맞춘다 */
+.wallet__side .ui-field__input {
+  width: 100%;
+  min-width: 0;
+}
+
+/* 자동 충전의 등록한 카드는 옅은 면 위에 둔다 */
+.auto-charge__card {
+  margin-bottom: var(--ui-gap);
+  padding: 12px 14px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-subtle);
 }
 
 .ledger {

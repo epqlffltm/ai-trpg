@@ -16,7 +16,7 @@ export function WalletBalance() {
   const wallet = useQuery(walletQuery());
   const now = useNow(MINUTE_MS);
   return (
-    <section className="page-section" aria-labelledby="balance-heading">
+    <section className="page-section wallet-balance" aria-labelledby="balance-heading">
       <h2 id="balance-heading">잔액</h2>
       {wallet.isPending ? <p aria-busy="true">불러오는 중</p> : null}
       {wallet.isError ? (
