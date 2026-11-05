@@ -266,6 +266,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | POST | `/api/v1/game/portraits` | 프리젠에 붙일 캐릭터 그림 올리기(#983). 본문은 그림 파일의 바이트. 201(`{"id", "created_at"}`). 413·415·422 는 그림을 받지 않은 까닭, 409 `portrait_limit`([캐릭터 그림](#캐릭터-그림)) | access 토큰 |
 | GET | `/api/v1/game/portraits` | 내가 올린 캐릭터 그림들. `limit`, `offset`. 최근 것부터 | access 토큰 |
 | GET | `/api/v1/game/portraits/{id}/image` | 내가 올린 캐릭터 그림의 바이트. 남의 것은 404 | access 토큰 |
+| DELETE | `/api/v1/game/portraits/{id}` | 쓰이지 않는 내 캐릭터 그림 지우기. 204. 초안이나 게시한 판의 프리젠에 붙어 있으면 409 `portrait_in_use`(`scenarios`: 쓰는 시나리오의 `id`, `title`). 남의 것은 404 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/portraits/{portrait_id}/image` | 앉은 테이블의 캐릭터 그림(그 판의 프리젠에 붙은 그림)의 바이트. 앉은 사람 모두가 받는다. 판에 없는 그림은 404 `portrait_not_found`. 자리와 고를 수 있는 프리젠의 `portrait_id` 가 이 id 다 | access 토큰 |
 | GET | `/api/v1/game/listings/{scenario_id}/portraits/{portrait_id}/image` | 공개된 시나리오의 공개 중인 판의 프리젠 그림의 바이트. 그 시나리오를 볼 수 있는 사람(로그인하지 않으면 전체 이용가만). 판에 없는 그림은 404 `portrait_not_found`, 볼 수 없는 시나리오는 404 | 없음(성인용은 access 토큰) |
 | PUT | `/api/v1/game/tables/{id}/rounds/current/declaration` | 선언 내기. 다시 내면 바뀐다. `action` 으로 행동(판정)을 하나 붙일 수 있다. 모두 냈으면 라운드가 닫기 시작한다(`closing`). 다음 라운드는 스트림으로 온다 | access 토큰 |
@@ -2855,13 +2856,15 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **프리젠에 붙이기.** 시나리오의 `pregens[].image_id` 에 그림의 id 를 적는다. 만들고 고칠 때 모두 자기가 올린 그림인지 본다. 남의 그림, 없는 그림, 기록이 없는 그림이면 422(`pregens.image_id`)이고 아무것도 저장하지 않는다. 게시한 판에도 그대로 실린다(비워도 되는 칸이라 판의 형식은 68 그대로다).
 - **테이블에서.** 프리젠을 고른 자리(`members[]`)에는 그 프리젠의 그림 id(`portrait_id`)가 실린다. 직접 만든 캐릭터와 그림이 없는 프리젠은 `null` 이다. 앉은 사람 모두가 `GET /tables/{id}/portraits/{portrait_id}/image` 로 받는다. 그 테이블의 판(사본)에 붙은 그림만 내준다. 장면 그림을 그릴 때 참고 그림으로 넘긴다([장면 그림](#장면-그림)).
 - **고르기 전에.** 테이블의 고를 수 있는 프리젠(`pregens[]`)에도 `portrait_id` 가 실린다(바이트는 테이블의 주소). 공개된 시나리오의 소개(`GET /listings/{scenario_id}` 의 `pregens[].portrait_id`)에도 실리고, 바이트는 `GET /listings/{scenario_id}/portraits/{portrait_id}/image` 다. 그 시나리오를 볼 수 있는 사람만 받는다. 로그인하지 않아도 전체 이용가는 받아서 브라우저의 img 로 바로 쓸 수 있다. 공개 중인 판에 붙은 그림만 내준다.
+- **지우기.** `DELETE /portraits/{id}` 는 어느 초안이나 판에도 붙지 않은 그림만 지운다(2026-11-05 결정). 지우지 않은 초안의 프리젠, 게시한 판의 프리젠(초안에서 뗐거나 시나리오를 지웠어도 판은 남는다)에 붙어 있으면 409 `portrait_in_use` 이고 쓰는 시나리오들(`scenarios[].id`, `title`)을 싣는다. 진행 중인 테이블은 판의 사본으로 돌기 때문에 판을 보면 테이블이 쓰는 그림도 찾는다. 기록을 지워 저장한 뒤 올린 사람의 토큰으로 asset 의 그림을 지운다.
+  - 그림을 붙이는 저장과 지우기가 겹치면, 붙이는 저장은 기록의 행을 나눠 잠그고(FOR SHARE) 지우기는 혼자 잠근다(FOR UPDATE). 지우기는 그 저장이 끝날 때까지 기다린 뒤 붙었는지 본다. 지우는 동안에는 새로 붙이지 못한다(저장이 기다렸다가 422).
 
 | 환경 변수 | 기본값 | 설명 |
 | --- | --- | --- |
 | `PORTRAIT_MAX_BYTES` | `10485760` | 캐릭터 그림 한 장의 크기 상한(바이트). asset 서버의 `IMAGE_MAX_BYTES` 와 같게 둔다 |
 
 **알려진 한계**
-- 지우는 주소는 아직 없다. 판에 쓰인 그림을 어떻게 남길지와 함께 정한다.
+- asset 에서 지우지 못하면(asset 이 잠시 안 된다) 기록만 지우고 asset 에 그림이 남는다. 다시 지울 길은 없다(로그 `portrait.discard_failed`).
 - asset 에 맡긴 뒤 기록하지 못하면 asset 에 그림이 하나 남는다. 기록이 없으니 아무도 붙이지 못한다.
 
 ## 모델 목록

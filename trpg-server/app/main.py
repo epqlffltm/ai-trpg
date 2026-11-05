@@ -90,7 +90,7 @@ from app.personas import router as personas
 from app.personas.service import PersonaConflictError, PersonaNotFoundError
 from app.portraits import router as portraits
 from app.portraits.router import BodyTooLargeError
-from app.portraits.service import PortraitLimitError, PortraitNotFoundError
+from app.portraits.service import PortraitInUseError, PortraitLimitError, PortraitNotFoundError
 from app.rankings import router as rankings
 from app.realtime import router as realtime
 from app.realtime.hub import Hub
@@ -460,6 +460,7 @@ def create_app(
     app.add_exception_handler(ImageRejectedError, portraits.handle_rejected)
     app.add_exception_handler(BodyTooLargeError, portraits.handle_too_large)
     app.add_exception_handler(PortraitLimitError, portraits.handle_limit)
+    app.add_exception_handler(PortraitInUseError, portraits.handle_in_use)
     app.add_exception_handler(PortraitNotFoundError, portraits.handle_not_found)
     app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
     app.add_exception_handler(LimitsUnavailable, handle_limits_unavailable)

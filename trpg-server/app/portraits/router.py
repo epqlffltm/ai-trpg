@@ -9,6 +9,8 @@
         내가 올린 그림들. ?limit=&offset=. 최근 것부터
     GET  /api/v1/game/portraits/{id}/image
         내가 올린 그림의 바이트. 이 서버가 asset 서버에서 받아 대신 내준다
+    DELETE /api/v1/game/portraits/{id}
+        쓰이지 않는 내 그림을 지운다(asset 의 그림까지). 204
     GET  /api/v1/game/tables/{table_id}/portraits/{id}/image
         앉은 테이블의 캐릭터 그림(그 판의 프리젠에 붙은 그림)의 바이트. 앉은 사람 모두가 받는다
     GET  /api/v1/game/listings/{scenario_id}/portraits/{id}/image
@@ -18,6 +20,7 @@
   - 413 image_too_large: 본문이 상한(PORTRAIT_MAX_BYTES)을 넘는다. asset 의 상한을 넘어도 같다
   - 415 image_format: PNG, JPEG, WebP 가 아니다. 422 image_unreadable: 열 수 없는 그림이다
   - 409 portrait_limit: 올릴 수 있는 수를 다 채웠다
+  - 409 portrait_in_use: 초안이나 게시한 판의 프리젠에 붙은 그림이라 지우지 못한다. scenarios 에 쓰는 시나리오들
   - 404 portrait_not_found: 내가 올린 그림이 아니다(테이블의 주소에서는 그 테이블의 판에 붙은 그림이 아니다).
     앉지 않은 테이블, 볼 수 없는 공개 시나리오는 없는 것과 같은 404 다
   - 503 asset_unavailable: asset 서버를 쓸 수 없다(설정이 없는 서버 포함)
@@ -33,7 +36,7 @@ from app.asset_server.client import ImageRejectedError
 from app.assets.routing import Paging, Session
 from app.portraits import service
 from app.portraits.schemas import PortraitOut, PortraitPage
-from app.portraits.service import PortraitLimitError, PortraitNotFoundError
+from app.portraits.service import PortraitInUseError, PortraitLimitError, PortraitNotFoundError
 from app.snapshots.router import Token
 
 router = APIRouter(prefix='/portraits', tags=['portraits'])
@@ -105,6 +108,18 @@ async def handle_limit(request: Request, error: PortraitLimitError) -> JSONRespo
     )
 
 
+async def handle_in_use(request: Request, error: PortraitInUseError) -> JSONResponse:
+    """쓰이고 있는 그림이다. 쓰는 시나리오들(내 시나리오다)을 싣는다. 화면이 그 시나리오로 가는 길을 둔다."""
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            'detail': '시나리오의 프리젠에 붙은 그림이라 지울 수 없습니다.',
+            'code': 'portrait_in_use',
+            'scenarios': [{'id': str(scenario_id), 'title': title} for scenario_id, title in error.scenarios],
+        },
+    )
+
+
 async def handle_not_found(request: Request, error: PortraitNotFoundError) -> JSONResponse:
     """남의 그림도 404 다. 403 을 주면 그 id 의 그림이 있다는 것이 드러난다."""
     return JSONResponse(
@@ -121,6 +136,13 @@ async def upload(user: CurrentUser, token: Token, request: Request) -> PortraitO
     state = request.app.state
     data = await read_limited(request, state.settings.portrait_max_bytes)
     return await service.upload_portrait(state.session_factory, state.asset, token, user.user_id, data)
+
+
+@router.delete('/{portrait_id}', status_code=status.HTTP_204_NO_CONTENT)
+async def delete(portrait_id: uuid.UUID, user: CurrentUser, token: Token, request: Request) -> None:
+    """쓰이지 않는 내 그림을 지운다. 남의 것은 404, 프리젠에 붙어 있으면 409 다."""
+    state = request.app.state
+    await service.delete_portrait(state.session_factory, state.asset, user.user_id, token, portrait_id)
 
 
 @router.get('', response_model=PortraitPage, status_code=status.HTTP_200_OK)

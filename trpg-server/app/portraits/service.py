@@ -7,6 +7,9 @@
     asset 에 맡긴 뒤 기록하지 못하면 asset 에 주인 없는 그림이 하나 남는다(기록이 없으니 아무도 붙이지 못한다)
   - 보기: 올린 사람은 자기 그림을 본다. 테이블에 앉은 사람은 그 테이블의 판(프리젠)에 붙은 그림을 본다.
     공개된 시나리오를 볼 수 있는 사람은 공개 중인 판의 프리젠에 붙은 그림을 본다(로그인하지 않아도 전체 이용가는 본다)
+  - 지우기: 어느 초안이나 판에도 붙지 않은 그림만 지운다(2026-11-05 결정). 쓰이고 있으면 쓰는 시나리오들을 알린다.
+    진행 중인 테이블의 그림이 사라지지 않게 하려는 것이다. 기록을 지워 저장한 뒤 asset 의 그림을 지운다.
+    asset 에서 지우지 못하면 asset 에 그림이 남는다(기록이 없으니 아무도 붙이거나 받지 못한다)
   - asset 을 부르는 동안 DB 의 트랜잭션을 열어 두지 않는다. 세션을 나눠 쓴다
 """
 
@@ -16,7 +19,7 @@ import uuid
 from server_core.auth.tokens import AccessClaims
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.asset_server.client import AssetClient, AssetNotFoundError, ImageContent
+from app.asset_server.client import AssetClient, AssetNotFoundError, AssetUnavailableError, ImageContent
 from app.assets.scenarios.snapshot import read_snapshot
 from app.listings.service import get_public
 from app.portraits import repository
@@ -37,6 +40,14 @@ class PortraitLimitError(Exception):
 
 class PortraitNotFoundError(Exception):
     """그런 그림이 없다(남의 것, asset 에서 사라진 것 포함)."""
+
+
+class PortraitInUseError(Exception):
+    """초안이나 판의 프리젠에 붙은 그림이라 지우지 못한다. scenarios 는 쓰는 시나리오들의 (id, 제목)이다."""
+
+    def __init__(self, scenarios: list[tuple[uuid.UUID, str]]) -> None:
+        super().__init__(len(scenarios))
+        self.scenarios = scenarios
 
 
 def to_out(portrait: Portrait) -> PortraitOut:
@@ -164,3 +175,45 @@ async def listing_portrait_image(
     """공개된 시나리오의 프리젠 그림의 바이트."""
     await require_listing_portrait(session_factory, viewer, scenario_id, image_id)
     return await fetch_image(asset, image_id)
+
+
+async def forget_portrait(
+    session_factory: async_sessionmaker[AsyncSession], owner_id: uuid.UUID, image_id: uuid.UUID
+) -> None:
+    """
+    쓰이지 않는 내 그림의 기록을 지우고 저장한다.
+
+    남의 것이나 없는 것이면 PortraitNotFoundError, 초안이나 판에 붙어 있으면 PortraitInUseError.
+    행을 혼자 잠그고 보므로, 지우는 동안 다른 저장이 이 그림을 새로 붙이지 못한다.
+    """
+    async with session_factory() as session:
+        if await repository.lock_owned(session, owner_id, image_id) is None:
+            raise PortraitNotFoundError
+        scenarios = await repository.using_scenarios(session, image_id)
+        if scenarios:
+            raise PortraitInUseError(scenarios)
+        await repository.delete_portrait(session, image_id)
+        await session.commit()
+
+
+async def discard_image(asset: AssetClient, token: str, image_id: uuid.UUID) -> None:
+    """asset 의 그림을 지운다. 지우지 못하면 로그만 남긴다(기록은 이미 지웠다)."""
+    try:
+        await asset.discard_image(token, image_id)
+    except AssetUnavailableError:
+        logger.warning(
+            '기록은 지웠지만 asset 의 그림을 지우지 못했습니다',
+            extra={'image_id': str(image_id), 'error_code': 'portrait.discard_failed'},
+        )
+
+
+async def delete_portrait(
+    session_factory: async_sessionmaker[AsyncSession],
+    asset: AssetClient,
+    owner_id: uuid.UUID,
+    token: str,
+    image_id: uuid.UUID,
+) -> None:
+    """쓰이지 않는 내 그림을 지운다. 기록을 먼저, asset 의 그림을 나중에 지운다."""
+    await forget_portrait(session_factory, owner_id, image_id)
+    await discard_image(asset, token, image_id)
