@@ -1,6 +1,10 @@
 // web/apps/web/src/pages/trpg/room/TableRoom.tsx
-// 테이블 방(B6)의 틀. 스트림을 붙잡고, 받은 것을 나눠 준다. 가운데는 테이블의 상태에 따라(모집 중, 진행 중, 끝남),
-// 옆에는 방장의 운영(방장에게만), 캠페인의 편(캠페인의 테이블에만, #481 B), 앉은 사람(모집 중) 또는 상태 패널(B7, 진행 중과 끝남), 채팅.
+// 테이블 방(B6)의 틀. 스트림을 붙잡고, 받은 것을 나눠 준다. 배치는 Stitch 20번을 따른다(넓은 화면).
+//   - 가운데(가장 넓게): 테이블의 상태에 따라(모집 중, 진행 중, 끝남) 대기실이나 라운드
+//   - 왼쪽 열: 앉은 사람(모집 중) 또는 창 넷(B7, 진행 중과 끝남), 그 아래 방장의 운영(방장에게만),
+//     캠페인의 편(캠페인의 테이블에만, #481 B), 아군 공격의 허락
+//   - 맨 아래(가로로 긴 칸): 판 채팅
+// 좁은 화면에서는 가운데, 왼쪽 열, 채팅의 차례로 위아래다. 차례는 CSS 의 grid 자리가 정하고 문서의 차례는 가운데가 먼저다.
 //
 // 스트림에서 받은 것:
 //   - 이벤트: 일어난 일에 더하고, 테이블과 라운드를 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다.
@@ -101,6 +105,11 @@ export function TableRoom({ table }: { table: TableDetail }) {
             />
           </div>
           <div className="room__side">
+            {table.status === 'recruiting' ? (
+              <MemberList members={table.members} myId={myId} nameOf={nameOf} />
+            ) : (
+              <StatusPanel table={table} myId={myId} nameOf={nameOf} />
+            )}
             <HostPanel table={table} myId={myId} nameOfMember={(userId) => displayName(userId, table.members, nameOf)} />
             <CampaignPanel table={table} myId={myId} />
             <FriendlyFirePanel
@@ -108,11 +117,8 @@ export function TableRoom({ table }: { table: TableDetail }) {
               myId={myId}
               nameOfMember={(userId) => displayName(userId, table.members, nameOf)}
             />
-            {table.status === 'recruiting' ? (
-              <MemberList members={table.members} myId={myId} nameOf={nameOf} />
-            ) : (
-              <StatusPanel table={table} myId={myId} nameOf={nameOf} />
-            )}
+          </div>
+          <div className="room__chat">
             <ChatPanel
               table={table}
               chat={chat}

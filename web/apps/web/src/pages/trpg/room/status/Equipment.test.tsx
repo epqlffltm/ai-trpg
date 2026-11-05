@@ -61,7 +61,7 @@ function open(routes: Record<string, (request: SeenRequest) => Response> = {}) {
 
 async function myGear() {
   const status = within(await screen.findByRole('region', { name: '상태' }));
-  await userEvent.click(status.getByRole('tab', { name: /소지품/ }));
+  await userEvent.click(status.getByRole('button', { name: /소지품·돈/ }));
   return within(await status.findByRole('group', { name: '렌의 장비' }));
 }
 

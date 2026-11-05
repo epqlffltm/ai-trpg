@@ -48,7 +48,7 @@ function open(routes: Record<string, (request: SeenRequest) => Response> = {}) {
 
 async function logTab() {
   const status = within(await screen.findByRole('region', { name: '상태' }));
-  await userEvent.click(status.getByRole('tab', { name: /일어난 일/ }));
+  await userEvent.click(status.getByRole('button', { name: /일행·기록/ }));
   return within(await status.findByRole('list', { name: /일어난 일/ }));
 }
 
@@ -113,7 +113,7 @@ describe('일어난 일', () => {
 
     const status = within(await screen.findByRole('region', { name: '상태' }));
     await userEvent.keyboard('l');
-    expect(status.getByRole('tab', { name: /일어난 일/ })).toHaveAttribute('aria-selected', 'true');
+    expect(status.getByRole('button', { name: /일행·기록/ })).toHaveAttribute('aria-expanded', 'true');
     expect(await status.findByText('테이블을 시작했습니다.')).toBeInTheDocument();
   });
 

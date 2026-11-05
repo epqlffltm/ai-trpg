@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Sheet, SheetInjury, TableDetail, TableMap, TableMember } from '../../../../api/types';
 import { ME, member, OTHER, RULES, sheet, tableDetail } from '../../../../test/tableFixtures';
-import { tabForKey } from './statusTabs';
+import { nextOpenTab, tabForKey } from './statusTabs';
 import {
   clockLabel,
   conditionOf,
@@ -120,5 +120,19 @@ describe('tabForKey', () => {
     expect(tabForKey({ ...press, key: 'c', targetEditable: true })).toBeNull();
     expect(tabForKey({ ...press, key: 'c', ctrlKey: true })).toBeNull();
     expect(tabForKey({ ...press, key: 'x' })).toBeNull();
+  });
+});
+
+describe('nextOpenTab', () => {
+  it('누른 창을 펼치고 앞의 창은 접는다. 펼친 창을 다시 누르면 모두 접는다', () => {
+    expect(nextOpenTab('mine', 'items')).toBe('items');
+    expect(nextOpenTab(null, 'party')).toBe('party');
+    expect(nextOpenTab('world', 'world')).toBeNull();
+  });
+
+  it('C 는 상태·장비, L 은 일행·기록을 펼친다', () => {
+    const press = { key: 'c', ctrlKey: false, altKey: false, metaKey: false, targetTag: 'BODY', targetEditable: false };
+    expect(tabForKey(press)).toBe('mine');
+    expect(tabForKey({ ...press, key: 'L' })).toBe('party');
   });
 });

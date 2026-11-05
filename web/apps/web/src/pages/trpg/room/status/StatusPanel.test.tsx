@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/trpg/room/status/StatusPanel.test.tsx
-// 진행 중인 테이블의 상태 패널(B7). 내 HP, 앉은 사람의 부상과 쓰러짐, 소지품, 퀘스트와 장소, 단축키, 이벤트가 오면 다시 읽기를 본다.
+// 진행 중인 테이블의 왼쪽 열 창 넷(B7, Stitch 20번). 처음 펼친 상태·장비의 내 HP, 일행·기록의 부상과 쓰러짐, 소지품, 퀘스트와 지도,
+// 창이 하나만 펼쳐지는 것과 다시 누르면 접히는 것, 단축키, 이벤트가 오면 다시 읽기를 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -64,23 +65,40 @@ afterEach(() => {
 });
 
 describe('StatusPanel', () => {
-  it('내 HP 를 늘 보이고, 앉은 사람의 쓰러짐과 부상을 보인다. 나를 맨 앞에 둔다', async () => {
+  it('처음에는 상태·장비가 펼쳐져 내 캐릭터만 보인다. 일행·기록은 앉은 사람의 쓰러짐과 부상을 나부터 보인다', async () => {
     open();
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
     const status = await panel();
-    expect(status.getAllByText('HP 12 / 12')).toHaveLength(2);
+    expect(status.getByRole('button', { name: /상태·장비/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(status.getAllByText('HP 12 / 12')).toHaveLength(1);
+    expect(status.queryByText('미아')).toBeNull();
+
+    await userEvent.click(status.getByRole('button', { name: /일행·기록/ }));
+
+    expect(status.getByRole('button', { name: /상태·장비/ })).toHaveAttribute('aria-expanded', 'false');
     expect(status.getByText(/쓰러짐 · 죽음의 굴림 성공 1\/3 · 실패 0\/3/)).toBeInTheDocument();
     expect(status.getByText('(라운드 3까지)')).toBeInTheDocument();
     const names = status.getAllByText(/^(렌|미아)$/).map((node) => node.textContent);
-    expect(names).toEqual(['렌', '렌', '미아']);
+    expect(names).toEqual(['렌', '미아']);
   });
 
-  it('소지품 탭은 물건과 개수, 회복량을 보인다', async () => {
+  it('펼친 창의 단추를 다시 누르면 접혀 아무 창도 펼쳐져 있지 않다', async () => {
     open();
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
-    await userEvent.click((await panel()).getByRole('tab', { name: /소지품/ }));
+    const status = await panel();
+    await userEvent.click(status.getByRole('button', { name: /상태·장비/ }));
+
+    expect(status.getAllByRole('button', { expanded: false })).toHaveLength(4);
+    expect(status.queryByText('HP 12 / 12')).toBeNull();
+  });
+
+  it('소지품·돈은 물건과 개수, 회복량을 보인다', async () => {
+    open();
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    await userEvent.click((await panel()).getByRole('button', { name: /소지품·돈/ }));
 
     const mine = within(screen.getByRole('region', { name: '렌의 소지품' }));
     expect(mine.getByText('×2')).toBeInTheDocument();
@@ -88,18 +106,18 @@ describe('StatusPanel', () => {
     expect(within(screen.getByRole('region', { name: '미아의 소지품' })).getByText('지닌 물건이 없습니다.')).toBeInTheDocument();
   });
 
-  it('J 를 누르면 퀘스트와 장소를 보인다. 글을 쓰는 중에는 단축키가 아니다', async () => {
+  it('J 를 누르면 퀘스트·지도를 펼친다. 글을 쓰는 중에는 단축키가 아니다', async () => {
     open();
     renderApp(`/trpg/tables/${TABLE_ID}`);
     const status = await panel();
 
     await userEvent.type(screen.getByLabelText('채팅 쓰기'), 'j');
-    expect(status.getByRole('tab', { name: /캐릭터/ })).toHaveAttribute('aria-selected', 'true');
+    expect(status.getByRole('button', { name: /상태·장비/ })).toHaveAttribute('aria-expanded', 'true');
 
     screen.getByLabelText('채팅 쓰기').blur();
     await userEvent.keyboard('j');
 
-    expect(status.getByRole('tab', { name: /퀘스트·장소/ })).toHaveAttribute('aria-selected', 'true');
+    expect(status.getByRole('button', { name: /퀘스트·지도/ })).toHaveAttribute('aria-expanded', 'true');
     expect(status.getByText('1일째 08:00 · 아침')).toBeInTheDocument();
     expect(status.getByText('진행 중 · 기한 2일째 06:00')).toBeInTheDocument();
     expect(status.getByText(/지금 있는 곳: 수도원 문/)).toBeInTheDocument();
@@ -120,14 +138,14 @@ describe('StatusPanel', () => {
     });
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
-    expect(await (await panel()).findAllByText('HP 5 / 12', {}, { timeout: 3000 })).toHaveLength(2);
+    expect(await (await panel()).findAllByText('HP 5 / 12', {}, { timeout: 3000 })).toHaveLength(1);
   });
 
   it('맵이 없는 판이면 장소를 숨긴다', async () => {
     open({ [`GET ${BASE}`]: () => json(200, playing({}, { map: null })) });
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
-    await userEvent.click((await panel()).getByRole('tab', { name: /퀘스트·장소/ }));
+    await userEvent.click((await panel()).getByRole('button', { name: /퀘스트·지도/ }));
     expect(screen.queryByRole('heading', { name: '장소' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '퀘스트' })).toBeInTheDocument();
   });

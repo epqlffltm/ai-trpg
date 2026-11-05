@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/room/status/Growth.test.tsx
-// 성장(#286)을 화면으로 본다. 상태 패널의 레벨과 경험치, 쌓인 점수를 능력치에 놓기(POST abilities), 409 의 알림,
+// 성장(#286)을 화면으로 본다. 왼쪽 열(상태·장비, 일행·기록)의 레벨과 경험치, 쌓인 점수를 능력치에 놓기(POST abilities), 409 의 알림,
 // 라운드가 닫는 중이면 막힘, 성장이 없는 규칙이면 그리지 않음.
 
 import { screen, within } from '@testing-library/react';
@@ -52,13 +52,15 @@ afterEach(() => {
 });
 
 describe('성장', () => {
-  it('내 레벨과 경험치, 놓지 않은 점수를 위에, 앉은 사람마다의 레벨을 캐릭터 탭에 보인다', async () => {
+  it('내 레벨과 경험치, 놓지 않은 점수를 상태·장비에, 앉은 사람마다의 레벨을 일행·기록에 보인다', async () => {
     open();
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
     const status = await statusPanel();
-    expect(await status.findAllByText('레벨 2 · 경험치 150 / 300')).toHaveLength(2);
+    expect(await status.findAllByText('레벨 2 · 경험치 150 / 300')).toHaveLength(1);
     expect(status.getAllByText('놓지 않은 능력치 점수 2').length).toBeGreaterThan(0);
+    await userEvent.click(status.getByRole('button', { name: /일행·기록/ }));
+    expect(status.getByText('레벨 2 · 경험치 150 / 300')).toBeInTheDocument();
     expect(status.getByText('레벨 1 · 경험치 40 / 100')).toBeInTheDocument();
   });
 

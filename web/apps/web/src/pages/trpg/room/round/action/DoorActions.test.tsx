@@ -169,7 +169,7 @@ describe('문을 다루는 선언', () => {
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
     const status = within(await screen.findByRole('region', { name: '상태' }));
-    await userEvent.click(status.getByRole('tab', { name: /퀘스트·장소/ }));
+    await userEvent.click(status.getByRole('button', { name: /퀘스트·지도/ }));
     const ways = within(await status.findByRole('list', { name: '갈 수 있는 곳' }));
     expect(ways.getByText('(걸리는 시간 모름 · 자물쇠 잠김 · 빗장 걸림(이쪽))')).toBeInTheDocument();
     const doors = within(await status.findByRole('list', { name: '문' }));
