@@ -435,7 +435,10 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'rating': 'all',
         'openings': [OPENING],
         'recommended_players': {'min': 2, 'max': 3},
-        'pregens': [{**pregen, 'sheet': as_character(pregen['sheet']), 'items': [], 'money': 0} for pregen in PREGENS],
+        'pregens': [
+            {**pregen, 'sheet': as_character(pregen['sheet']), 'items': [], 'money': 0, 'image_id': None}
+            for pregen in PREGENS
+        ],
         'character_modes': ['pregen', 'custom'],
         'default_sheet': as_character(SHEET),
         # 인물 항목이 모두 시트를 가졌다. 기본 NPC 시트는 없어도 된다
