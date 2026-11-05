@@ -1,8 +1,9 @@
 // web/apps/web/src/pages/gallery/GalleryPage.tsx
-// 갤러리(C7, /gallery?tab=chat|story). 내가 연 일러스트(이벤트 씬)를 다시 본다. 로그인해야 열린다.
+// 갤러리(C7, /gallery?tab=chat|story|trpg). 내가 연 일러스트(이벤트 씬)를 다시 본다. 로그인해야 열린다.
 // 서비스마다 탭이고 탭마다 그 서버만 부른다(#593). chat 은 캐릭터마다, 최근에 연 캐릭터부터. 연 것은 그림과 연 날, 열지 않은 것은 흐린 그림이다.
 // story 는 내 세션의 세계관마다, 인물마다 묶는다(StoryGallery).
 // 탭마다 맨 위에 그 서비스에서 내가 그린 장면 그림(#983, SnapshotGallery)을 둔다. 일러스트와 따로 읽고 따로 실패한다.
+// TRPG 탭에는 일러스트가 없고 내가 그린 테이블의 장면 그림만 있다(TableSnapshotGallery).
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -11,16 +12,25 @@ import { CharacterGallery } from './CharacterGallery';
 import { SnapshotGallery } from './SnapshotGallery';
 import { chatUnlocksQuery } from './galleryQueries';
 import { StoryGallery } from './StoryGallery';
+import { TableSnapshotGallery } from './TableSnapshotGallery';
 import { groupUnlocks } from './galleryView';
 
 const TABS = [
   { key: 'chat', label: 'chat' },
   { key: 'story', label: 'story' },
+  { key: 'trpg', label: 'TRPG' },
 ] as const;
+
+type Tab = (typeof TABS)[number]['key'];
+
+/** 주소의 tab 을 탭으로 읽는다. 모르는 값이면 chat 이다 */
+function tabOf(value: string | null): Tab {
+  return TABS.find((item) => item.key === value)?.key ?? 'chat';
+}
 
 export function GalleryPage() {
   const [params] = useSearchParams();
-  const tab = params.get('tab') === 'story' ? 'story' : 'chat';
+  const tab = tabOf(params.get('tab'));
   return (
     <main className="page page--medium">
       <h1>갤러리</h1>
@@ -31,9 +41,18 @@ export function GalleryPage() {
           </Link>
         ))}
       </nav>
+      {tab === 'trpg' ? <TableSnapshotGallery /> : <ServiceGallery tab={tab} />}
+    </main>
+  );
+}
+
+/** chat·story 탭. 내가 그린 장면 그림과 연 일러스트 */
+function ServiceGallery({ tab }: { tab: 'chat' | 'story' }) {
+  return (
+    <>
       <SnapshotGallery key={tab} service={tab} />
       {tab === 'chat' ? <ChatGallery /> : <StoryGallery />}
-    </main>
+    </>
   );
 }
 

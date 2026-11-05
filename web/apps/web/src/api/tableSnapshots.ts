@@ -6,6 +6,8 @@
 //   - 한 장의 값은 GET /snapshots/price. available 이 거짓이면 그 서버에서는 그릴 수 없다(단추를 숨긴다)
 //   - 내가 그린 그림 한 장은 DELETE .../snapshots/{id}(204)로 지운다. asset 의 그림까지 지우고 돈은 돌려주지 않는다.
 //     404 snapshot_not_found(남의 것, 없는 것), 409 snapshot_in_progress·snapshot_settling, 503 asset_unavailable(기록은 남는다)
+//   - 내가 다 그린 그림들(갤러리)은 GET /snapshots 로 쪽마다 받는다. 테이블을 넘어 최근 것부터, 지운 테이블의 것도 있다(제목 null).
+//     그림의 바이트는 asset 의 주소로 받는다(그린 사람만). 갤러리에서는 DELETE /snapshots/{id} 로 테이블 없이 지운다
 // 실패: 402 credit_short·gold_required, 409 snapshot_in_progress(그 테이블에서 그리는 중), 422 not_drawable(장면이 없다),
 //       503 snapshot_unavailable·billing_unavailable·asset_unavailable, 404(앉지 않은 테이블, 없는 라운드, snapshot_not_found)
 
@@ -14,6 +16,11 @@ import { apiBlob, apiRequest } from './http';
 
 export type TableSnapshot = Trpg['schemas']['SnapshotOut'];
 export type TableSnapshotPrice = Trpg['schemas']['SnapshotPriceOut'];
+export type KeptTableSnapshot = Trpg['schemas']['KeptSnapshotOut'];
+export type KeptTableSnapshotPage = Trpg['schemas']['KeptSnapshotPage'];
+
+/** 갤러리가 한 번에 읽는 그림 수. chat·story 의 것과 같다 */
+export const KEPT_TABLE_PAGE_SIZE = 24;
 
 function tablePath(tableId: string, rest: string): string {
   return `/api/v1/game/tables/${encodeURIComponent(tableId)}${rest}`;
@@ -42,4 +49,14 @@ export function fetchTableSnapshotPrice(signal?: AbortSignal): Promise<TableSnap
 /** 내가 그린 그림 한 장을 지운다 */
 export function deleteTableSnapshot(tableId: string, snapshotId: string): Promise<void> {
   return apiRequest<void>(tablePath(tableId, `/snapshots/${encodeURIComponent(snapshotId)}`), { method: 'DELETE' });
+}
+
+/** 내가 다 그린 그림들의 한 쪽. offset 부터 KEPT_TABLE_PAGE_SIZE 장 */
+export function fetchKeptTableSnapshots(offset: number, signal?: AbortSignal): Promise<KeptTableSnapshotPage> {
+  return apiRequest<KeptTableSnapshotPage>('/api/v1/game/snapshots', { query: { limit: KEPT_TABLE_PAGE_SIZE, offset }, ...(signal ? { signal } : {}) });
+}
+
+/** 갤러리에서 내 그림 한 장을 지운다(테이블을 나갔거나 지웠어도 된다) */
+export function deleteKeptTableSnapshot(snapshotId: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/game/snapshots/${encodeURIComponent(snapshotId)}`, { method: 'DELETE' });
 }

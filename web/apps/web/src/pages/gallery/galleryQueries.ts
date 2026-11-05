@@ -5,6 +5,7 @@ import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import { fetchChatUnlocks, fetchPublicCharacter, UNLOCK_PAGE_SIZE } from '../../api/gallery';
 import { isClientError } from '../../api/http';
 import { fetchKeptSnapshots, KEPT_PAGE_SIZE, type SnapshotService } from '../../api/snapshots';
+import { fetchKeptTableSnapshots, KEPT_TABLE_PAGE_SIZE } from '../../api/tableSnapshots';
 
 export function chatUnlocksQuery() {
   return infiniteQueryOptions({
@@ -26,6 +27,23 @@ export function keptSnapshotsQuery(service: SnapshotService) {
     initialPageParam: 0,
     getNextPageParam: (lastPage, pages) => {
       const read = pages.length * KEPT_PAGE_SIZE;
+      return read < lastPage.total ? read : undefined;
+    },
+  });
+}
+
+/** 내가 다 그린 TRPG 의 장면 그림들. 쪽으로 이어 읽는다 */
+export function keptTableSnapshotsKey() {
+  return ['trpg', 'snapshots', 'kept'] as const;
+}
+
+export function keptTableSnapshotsQuery() {
+  return infiniteQueryOptions({
+    queryKey: keptTableSnapshotsKey(),
+    queryFn: ({ pageParam, signal }) => fetchKeptTableSnapshots(pageParam, signal),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) => {
+      const read = pages.length * KEPT_TABLE_PAGE_SIZE;
       return read < lastPage.total ? read : undefined;
     },
   });
