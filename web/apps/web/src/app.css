@@ -3616,56 +3616,83 @@ details.room-panel[open] > summary {
   gap: 14px;
 }
 
-.chat-message__speaker {
-  margin: 0 0 4px;
-  font-weight: 700;
-  font-size: 0.88em;
+/* 말의 머리 줄(Stitch 21번). 왼쪽에 이름표와 표시(쓰는 중, 끊긴 답, 고침), 오른쪽 끝에 단추 */
+.chat-message__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-bottom: 6px;
 }
 
+.chat-message__head:empty {
+  display: none;
+}
+
+/* 이름표. 상대는 인주색, 나는 감청 */
+.chat-message__speaker {
+  display: inline-block;
+  margin: 0 0 4px;
+  padding: 1px 10px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-seal);
+  color: var(--ui-seal-text);
+  font-weight: 700;
+  font-size: 0.85em;
+}
+
+.chat-message__head .chat-message__speaker {
+  margin: 0;
+}
+
+.chat-message--user .chat-message__speaker {
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+}
+
+/* 말의 글. 비주얼 노벨처럼 명조를 조금 크게 */
 .chat-message__content {
   margin: 0;
-  line-height: 1.7;
+  font-family: var(--ui-font-serif);
+  font-size: 1.05rem;
+  line-height: 1.8;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-/* 상대(모델)의 말. 유리처럼 옅은 면, 보낸 쪽(왼쪽 아래) 모서리만 덜 둥글게 */
+/* 상대(모델)의 말. 대사창 폭 그대로의 종이 한 장 */
 .chat-message--assistant {
-  justify-self: start;
-  max-width: min(88%, 720px);
-  padding: 10px 14px;
-  border: 1px solid color-mix(in srgb, var(--ui-border) 80%, transparent);
-  border-radius: 16px 16px 16px 4px;
-  background: color-mix(in srgb, var(--ui-border) 30%, var(--ui-surface));
-  box-shadow: 0 6px 18px -12px rgb(0 0 0 / 30%);
+  padding: 12px 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
 }
 
-/* 내 말. 강조색이 옅게 도는 면, 오른쪽 아래 모서리만 덜 둥글게 */
+/* 내 말. 같은 폭에 강조색이 옅게 도는 면 */
 .chat-message--user {
-  justify-self: end;
-  max-width: min(85%, 640px);
-  padding: 10px 14px;
-  border: 1px solid color-mix(in srgb, var(--ui-accent) 35%, transparent);
-  border-radius: 16px 16px 4px 16px;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--ui-accent) 20%, var(--ui-surface)),
-    color-mix(in srgb, var(--ui-accent) 9%, var(--ui-surface))
-  );
+  padding: 12px 18px;
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 30%, var(--ui-border));
+  border-radius: var(--ui-radius-lg);
+  background: color-mix(in srgb, var(--ui-accent) 6%, var(--ui-surface));
 }
 
-/* 행동 말. 내 쪽에 두되 말풍선 없이 점선 테두리와 기울인 글자로 말과 가른다 */
+/* 행동 줄("선물을 건넸다", "카페로 이동"). 이름표 없이 옅은 띠, 앞에 마름모 */
 .chat-message--action {
-  justify-self: end;
-  max-width: min(85%, 640px);
   padding: 8px 14px;
-  border: 1px dashed color-mix(in srgb, var(--ui-accent) 40%, var(--ui-border));
-  border-radius: 16px 16px 4px 16px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-subtle);
 }
 
 .chat-message--action .chat-message__content {
-  font-style: italic;
+  font-family: var(--ui-font);
+  font-size: 0.95rem;
   color: var(--ui-text-muted);
+}
+
+.chat-message--action .chat-message__content::before {
+  content: '◆ ';
+  color: var(--ui-accent);
 }
 
 /* 장이 넘어간 행동 말 위의 장 제목("2장: 축제") */
@@ -3679,6 +3706,10 @@ details.room-panel[open] > summary {
 .chat-message__changes {
   margin: 4px 0 0;
   font-size: 0.85em;
+}
+
+.chat-message__head .chat-message__marks {
+  margin: 0;
 }
 
 .chat-message__changes {
@@ -3755,6 +3786,10 @@ details.room-panel[open] > summary {
   gap: 4px;
   margin-top: 2px;
   font-size: 0.9em;
+}
+
+.chat-message__head .chat-message__tools {
+  margin: 0 0 0 auto;
 }
 
 .chat-message__tools:empty {

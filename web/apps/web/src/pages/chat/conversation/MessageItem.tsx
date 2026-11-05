@@ -6,6 +6,7 @@
 // 책갈피(#982)는 어느 말에나 달고 뗀다. 받는 중에도 된다(흘러 들어오는 답에는 없다).
 // 장면 그림(#983)은 상대의 답에만 그린다. 그 대화에서 그리는 중이면 막는다. 그린 그림은 말 아래에 보인다.
 // 단추에는 한 장의 값을 싣고, 그 서버에서 그릴 수 없으면(available 이 거짓) 단추를 숨긴다.
+// 모양은 Stitch 21번: 말마다 머리 줄(왼쪽에 이름표와 표시, 오른쪽에 대안 넘기기·고치기·책갈피·그림), 그 아래 글과 바뀐 것.
 
 import { Button } from '@ai-trpg/ui';
 import { useState } from 'react';
@@ -49,13 +50,25 @@ export function MessageItem({ message, detail, streaming, busy, onBranch, onEdit
 
   return (
     <li id={messageAnchor(message.id)} className={`chat-message chat-message--${message.role}`} aria-busy={streaming || undefined}>
-      {speaker ? <p className="chat-message__speaker">{speaker}</p> : null}
+      <div className="chat-message__head">
+        {speaker ? <p className="chat-message__speaker">{speaker}</p> : null}
+        <MessageMarks message={message} streaming={streaming} />
+        <div className="chat-message__tools">
+          {streaming ? null : <Alternatives message={message} busy={busy} onBranch={onBranch} />}
+          {editable && !editing ? (
+            <Button variant="quiet" disabled={busy} aria-label={`${speaker ?? ''}의 말 고치기`} onClick={() => setEditing(true)}>
+              고치기
+            </Button>
+          ) : null}
+          {streaming ? null : <BookmarkToggle marked={marked} disabled={false} onToggle={() => onBookmark(message)} />}
+          {drawable ? <SnapshotButton price={drawPrice} disabled={drawBlocked} onDraw={() => onDraw(message.id)} /> : null}
+        </div>
+      </div>
       {editing ? (
         <MessageEditor message={message} busy={busy} onSubmit={(content) => void submit(content)} onCancel={() => setEditing(false)} />
       ) : (
         <p className="chat-message__content">{message.content}</p>
       )}
-      <MessageMarks message={message} streaming={streaming} />
       {changes.length > 0 ? (
         <ul className="chat-message__changes" aria-label="바뀐 것">
           {changes.map((line, index) => (
@@ -64,16 +77,6 @@ export function MessageItem({ message, detail, streaming, busy, onBranch, onEdit
         </ul>
       ) : null}
       <MessageSnapshots service="chat" snapshots={snapshots} />
-      <div className="chat-message__tools">
-        {streaming ? null : <Alternatives message={message} busy={busy} onBranch={onBranch} />}
-        {editable && !editing ? (
-          <Button variant="quiet" disabled={busy} aria-label={`${speaker ?? ''}의 말 고치기`} onClick={() => setEditing(true)}>
-            고치기
-          </Button>
-        ) : null}
-        {streaming ? null : <BookmarkToggle marked={marked} disabled={false} onToggle={() => onBookmark(message)} />}
-        {drawable ? <SnapshotButton price={drawPrice} disabled={drawBlocked} onDraw={() => onDraw(message.id)} /> : null}
-      </div>
     </li>
   );
 }
