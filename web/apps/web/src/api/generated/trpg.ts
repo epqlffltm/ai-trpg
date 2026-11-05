@@ -934,6 +934,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/portraits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Mine
+         * @description 내가 올린 그림들. 최근 것부터다.
+         */
+        get: operations["list_mine_api_v1_game_portraits_get"];
+        put?: never;
+        /**
+         * Upload
+         * @description 그림을 올린다. 로그인을 먼저 보고, 그다음 본문을 읽는다.
+         */
+        post: operations["upload_api_v1_game_portraits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/portraits/{portrait_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Image
+         * @description 내가 올린 그림의 바이트.
+         */
+        get: operations["read_image_api_v1_game_portraits__portrait_id__image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/rankings/scenarios": {
         parameters: {
             query?: never;
@@ -7878,6 +7922,32 @@ export interface components {
             score: number;
         };
         /**
+         * PortraitOut
+         * @description 올린 그림 하나. 바이트는 GET /portraits/{id}/image 로 받는다.
+         */
+        PortraitOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /**
+         * PortraitPage
+         * @description 올린 그림들의 한 쪽. 최근 것부터다.
+         */
+        PortraitPage: {
+            /** Items */
+            items: components["schemas"]["PortraitOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
          * Pregen
          * @description 프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다.
          *
@@ -14301,6 +14371,91 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_mine_api_v1_game_portraits_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortraitPage"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    upload_api_v1_game_portraits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortraitOut"];
+                };
+            };
+        };
+    };
+    read_image_api_v1_game_portraits__portrait_id__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portrait_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                    "image/png": unknown;
+                    "image/webp": unknown;
+                };
             };
             /** @description 입력이 틀렸다 */
             422: {

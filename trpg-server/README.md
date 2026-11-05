@@ -32,6 +32,7 @@
 - [라운드](#라운드)
 - [서술 값](#서술-값)
 - [장면 그림](#장면-그림)
+- [캐릭터 그림](#캐릭터-그림)
 - [모델 목록](#모델-목록)
 - [알림 보내기](#알림-보내기)
 - [탈퇴](#탈퇴)
@@ -262,6 +263,9 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/snapshots` | 내가 다 그린 장면 그림들(갤러리). `limit`, `offset`. 테이블을 넘어 최근에 만든 것부터. 지운 테이블의 그림은 `table_id`·`table_title` 이 null 이다. 그림은 asset 의 주소로 받는다 | access 토큰 |
 | DELETE | `/api/v1/game/snapshots/{snapshot_id}` | 갤러리에서 내 그림 한 장 지우기. 204. 테이블을 나갔거나 지웠어도 된다. 409 규칙은 테이블에서 지우기와 같다 | access 토큰 |
 | GET | `/api/v1/game/snapshots/price` | 장면 그림 한 장의 값과 그릴 수 있는지(`available`, `credits`, `tier`, `promo`) | access 토큰 |
+| POST | `/api/v1/game/portraits` | 프리젠에 붙일 캐릭터 그림 올리기(#983). 본문은 그림 파일의 바이트. 201(`{"id", "created_at"}`). 413·415·422 는 그림을 받지 않은 까닭, 409 `portrait_limit`([캐릭터 그림](#캐릭터-그림)) | access 토큰 |
+| GET | `/api/v1/game/portraits` | 내가 올린 캐릭터 그림들. `limit`, `offset`. 최근 것부터 | access 토큰 |
+| GET | `/api/v1/game/portraits/{id}/image` | 내가 올린 캐릭터 그림의 바이트. 남의 것은 404 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/rounds/current/declaration` | 선언 내기. 다시 내면 바뀐다. `action` 으로 행동(판정)을 하나 붙일 수 있다. 모두 냈으면 라운드가 닫기 시작한다(`closing`). 다음 라운드는 스트림으로 온다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/rounds/current/close` | 라운드 닫기. 202. 방장만. 선언을 기다리지 않고 넘어간다. 오래 멈춘 라운드에 다시 부르면 서술을 다시 맡긴다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/rounds/current/revert` | 바로 앞 라운드 되돌리기(#288). 방장만. 닫기 직전의 상태로 돌아가 같은 번호의 라운드가 다시 열린다. 아래의 "되돌리기" | access 토큰 |
@@ -2832,6 +2836,27 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - 테이블을 지우면 기록의 테이블 칸만 비고 asset 서버의 그림은 남는다(그린 사람의 그림이다). 갤러리(`/snapshots`)에는 남고 거기서 지울 수 있다.
 - 테이블을 나간 사람은 그 테이블의 주소에는 닿지 못한다. 자기 그림은 갤러리에서 보고 지운다.
 - 그리는 일은 이 서버 프로세스 안에서 돈다. 그리는 도중에 서버가 꺼지면 그 한 장은 실패로 돌려준다.
+
+## 캐릭터 그림
+
+시나리오 제작자가 프리젠에 붙일 그림을 올린다(`app/portraits/`, #983). 장면 그림을 그릴 때 그 프리젠을 고른 캐릭터의 얼굴을 맞추는 참고 그림으로 넘기려는 것이다. chat 서버가 제작자의 캐릭터 그림을 참고 그림으로 넘기는 것과 같은 기준이다.
+
+- **누구의 그림인가.** 제작자가 올린 그림만 받는다. 플레이어가 직접 만든 캐릭터에는 그림을 받지 않는다(2026-11-05 결정). 실제 사람의 사진이 그림 모델에 들어갈 수 있어서다.
+- **올리기.** `POST /portraits` 의 본문은 그림 파일의 바이트 그대로다(multipart 가 아니다). 이 서버가 올린 사람의 토큰으로 asset 서버에 맡긴다. 주인은 올린 사람이고, 맡긴 서버는 이 서버라서 이 서버가 서명만으로 바이트를 받는다(장면 그림과 같은 길). 기록(`portraits`)의 id 는 asset 의 그림 id 그대로다.
+  - 본문이 `PORTRAIT_MAX_BYTES`(기본 10MB)를 넘으면 asset 을 부르지 않고 413 `image_too_large` 다.
+  - asset 이 다시 인코딩하다 받지 않으면 그 까닭이다(415 `image_format`, 422 `image_unreadable`, 413 `image_too_large`).
+  - 한 사람이 100장까지 올린다. 넘으면 409 `portrait_limit` 이다.
+  - asset 서버를 쓸 수 없으면(설정이 없는 서버 포함) 503 `asset_unavailable` 이고 기록하지 않는다.
+- **보기.** `GET /portraits` 는 내가 올린 그림들(최근 것부터), `GET /portraits/{id}/image` 는 그 바이트다. 지금은 올린 사람만 본다. 남의 그림과 asset 에서 사라진 그림은 404 `portrait_not_found` 다.
+- **기록이 있어야 이 서버의 그림이다.** asset 의 다른 그림(장면 그림, chat 의 그림)은 기록이 없어 프리젠에 붙이지 못한다.
+
+| 환경 변수 | 기본값 | 설명 |
+| --- | --- | --- |
+| `PORTRAIT_MAX_BYTES` | `10485760` | 캐릭터 그림 한 장의 크기 상한(바이트). asset 서버의 `IMAGE_MAX_BYTES` 와 같게 둔다 |
+
+**알려진 한계**
+- 지우는 주소는 아직 없다. 프리젠에 붙인 뒤(다음 단계) 판에 쓰인 그림을 어떻게 남길지와 함께 정한다.
+- asset 에 맡긴 뒤 기록하지 못하면 asset 에 그림이 하나 남는다. 기록이 없으니 아무도 붙이지 못한다.
 
 ## 모델 목록
 

@@ -33,7 +33,7 @@ CATCH_ALL = 'platform'
 # 묶음의 이름과 그 묶음에 드는 파일 이름의 머리(test_ 뒤). 위에서부터 보고 처음 맞는 묶음에 든다.
 # 이름은 CI 의 작업 이름에 그대로 나온다
 GROUPS: dict[str, tuple[str, ...]] = {
-    # 제작자의 자산: 세계관, 룰북, 로어북, 몬스터 모음, 시나리오와 판, 추천 모델, 페르소나, 공개 목록
+    # 제작자의 자산: 세계관, 룰북, 로어북, 몬스터 모음, 시나리오와 판, 추천 모델, 페르소나, 캐릭터 그림, 공개 목록
     'assets': (
         'world',
         'rulebook',
@@ -44,6 +44,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'asset_',
         'recommended_model',
         'persona',
+        'portrait',
         'listings',
         'lobby',
     ),

@@ -1,15 +1,18 @@
 # trpg-server/app/asset_server/client.py
 
 """
-asset 서버를 부른다(asset-server/README.md 의 "다른 서버에 내주기"). 장면 그림(#983)만 맡기고 받고 지운다.
+asset 서버를 부른다(asset-server/README.md 의 "다른 서버에 내주기"). 장면 그림과 제작자의 캐릭터 그림(#983)을
+맡기고 받고 지운다.
 
-    POST   {ASSET_URL}/api/v1/asset/service/trpg/images              그린 사람의 토큰으로 맡긴다. 201 과 그림의 id
+    POST   {ASSET_URL}/api/v1/asset/service/trpg/images              그린(올린) 사람의 토큰으로 맡긴다. 201 과 그림의 id
     GET    {ASSET_URL}/api/v1/asset/service/trpg/images/{id}/kept    이 서버가 맡긴 그림의 바이트. 서명만으로 받는다
     DELETE {ASSET_URL}/api/v1/asset/service/trpg/images/{id}         그린 사람의 토큰으로 지운다. 204
     X-Service-Signature: 이 서버의 비밀(ASSET_SECRET)로 한 서명(server_core/service_auth/signing.py). 본문까지 서명한다
 
   - 받기(kept)는 사용자의 토큰을 보내지 않는다. 테이블의 사람 누구에게 보일지는 이 서버가 정한다(테이블에 앉았는가)
   - 404 는 AssetNotFoundError, 그 밖(닿지 못함, 시간 초과, 401, 5xx, 모양이 틀린 답)은 AssetUnavailableError 다
+  - 맡길 때 asset 이 그림을 받지 않으면(너무 크다 413, 받지 않는 형식 415, 열 수 없다 422) ImageRejectedError 다.
+    AssetUnavailableError 의 한 갈래라, 까닭을 나누지 않는 쪽(장면 그림)은 그대로 실패로 다룬다
 다시 시도하지 않는다. 이 모듈은 HTTP 를 부르고 답을 읽기만 한다. DB 를 모른다.
 """
 
@@ -31,6 +34,22 @@ class AssetNotFoundError(Exception):
 
 class AssetUnavailableError(Exception):
     """asset 서버를 쓸 수 없다. 설정이 없거나, 닿지 못했거나, 알 수 없는 답이다."""
+
+
+class ImageRejectedError(AssetUnavailableError):
+    """asset 서버가 그림을 받지 않았다. code 는 까닭이다(image_too_large, image_format, image_unreadable)."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+# asset 서버가 그림을 받지 않은 답과 그 까닭
+REJECTED_CODES = {
+    httpx.codes.REQUEST_ENTITY_TOO_LARGE: 'image_too_large',
+    httpx.codes.UNSUPPORTED_MEDIA_TYPE: 'image_format',
+    httpx.codes.UNPROCESSABLE_ENTITY: 'image_unreadable',
+}
 
 
 class KeptImage(BaseModel):
@@ -103,8 +122,14 @@ class AssetClient:
             raise AssetUnavailableError(f'asset 서버에 닿지 못했다({type(error).__name__})') from error
 
     async def keep_image(self, token: str, data: bytes) -> uuid.UUID:
-        """그린 그림을 그 사람의 그림으로 맡기고 그림의 id 를 받는다. 201 이 아니면 AssetUnavailableError."""
+        """
+        그림을 그 사람의 그림으로 맡기고 그림의 id 를 받는다.
+
+        그림을 받지 않으면 ImageRejectedError, 그 밖에 201 이 아니면 AssetUnavailableError.
+        """
         response = await self.send('POST', images_path(), token, data)
+        if response.status_code in REJECTED_CODES:
+            raise ImageRejectedError(REJECTED_CODES[response.status_code])
         if response.status_code != httpx.codes.CREATED:
             raise AssetUnavailableError(f'asset 서버가 그림을 받지 않았다({response.status_code})')
         try:
