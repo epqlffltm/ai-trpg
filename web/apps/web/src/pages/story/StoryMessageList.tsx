@@ -5,6 +5,8 @@
 // 끝의 말에 할 수 있는 일(답 받기, 다시 생성, 이어서)과 대안 넘기기, 고치기(내 말은 새 가지로, 답은 조각마다 그 자리에서)는 여기 둔다.
 // 행동 말은 엔진의 결과라 고치지 않는다. 받는 중에는 모두 막는다. 책갈피(#982)는 받는 중에도 달고 뗀다.
 // 장면 그림(#983)은 조각이 있는 답에만 그리고, 그린 그림은 말 아래에 보인다. 그 서버에서 그릴 수 없으면 단추를 숨긴다.
+// 모양은 Stitch 22번: 말마다 머리 줄(내 말이면 "나" 이름표, 표시, 오른쪽 끝에 단추), 그 아래 글. 답의 조각은 인물마다 이름표를 붙이고,
+// 서술 조각은 이름표 없이 옅은 면 위에 기울인 글로 둔다.
 
 import { Button } from '@ai-trpg/ui';
 import { useEffect, useRef, useState } from 'react';
@@ -127,26 +129,22 @@ function StoryMessageItem({ message, view, streaming, busy, onBranch, onSendEdit
   return (
     <li id={messageAnchor(message.id)} className={`chat-message chat-message--${message.role}`} aria-busy={streaming || undefined}>
       {chapter ? <p className="chat-message__chapter">{chapter}</p> : null}
-      {message.role === 'assistant' ? (
-        <Segments segments={message.segments} view={view} />
-      ) : (
-        <>
-          {message.role === 'user' ? <p className="chat-message__speaker">나</p> : null}
-          <p className="chat-message__content">{message.content}</p>
-        </>
-      )}
-      {marks.length > 0 ? <p className="hint chat-message__marks">{marks.join(' · ')}</p> : null}
-      <MessageSnapshots service="story" snapshots={snapshots} />
-      <div className="chat-message__tools">
-        {streaming ? null : <Alternatives message={message} busy={busy} onBranch={onBranch} />}
-        {editable ? (
-          <Button variant="quiet" disabled={busy} aria-label={message.role === 'user' ? '내 말 고치기' : '이 답 고치기'} onClick={() => setEditing(true)}>
-            고치기
-          </Button>
-        ) : null}
-        {streaming ? null : <BookmarkToggle marked={marked} disabled={false} onToggle={onBookmark} />}
-        {drawable ? <SnapshotButton price={drawPrice} disabled={drawBlocked} onDraw={onDraw} /> : null}
+      <div className="chat-message__head">
+        {message.role === 'user' ? <p className="chat-message__speaker">나</p> : null}
+        {marks.length > 0 ? <p className="hint chat-message__marks">{marks.join(' · ')}</p> : null}
+        <div className="chat-message__tools">
+          {streaming ? null : <Alternatives message={message} busy={busy} onBranch={onBranch} />}
+          {editable ? (
+            <Button variant="quiet" disabled={busy} aria-label={message.role === 'user' ? '내 말 고치기' : '이 답 고치기'} onClick={() => setEditing(true)}>
+              고치기
+            </Button>
+          ) : null}
+          {streaming ? null : <BookmarkToggle marked={marked} disabled={false} onToggle={onBookmark} />}
+          {drawable ? <SnapshotButton price={drawPrice} disabled={drawBlocked} onDraw={onDraw} /> : null}
+        </div>
       </div>
+      {message.role === 'assistant' ? <Segments segments={message.segments} view={view} /> : <p className="chat-message__content">{message.content}</p>}
+      <MessageSnapshots service="story" snapshots={snapshots} />
     </li>
   );
 }
