@@ -1135,3 +1135,37 @@ class TagBlock(models.Model):
 
     def __str__(self) -> str:
         return f'{self.user} / {self.tag}'
+
+
+class TokenClient(models.TextChoices):
+    """refresh 토큰을 어느 쪽에 어떻게 줬는가(#429)."""
+
+    WEB = 'web', '웹(httpOnly 쿠키)'
+    APP = 'app', '앱(응답 본문)'
+
+
+class IssuedTokenClient(models.Model):
+    """
+    발급한 refresh 토큰 하나를 웹과 앱 가운데 어디에 줬는지(#429, docs/product/app-refresh.md).
+
+    발급 기록(OutstandingToken)은 simplejwt 의 모델이라 칸을 더할 수 없어 옆에 둔다.
+    갱신은 같은 쪽의 길로만 된다. 앱의 토큰을 웹의 쿠키 길로, 웹의 토큰을 앱의 길로 갱신하지 못한다.
+    이 기록이 없는 토큰은 이 표를 만들기 전에 발급된 웹의 것이다.
+    만료된 발급 기록을 지우면(flushexpiredtokens) 함께 지워진다.
+    """
+
+    token = models.OneToOneField(
+        'token_blacklist.OutstandingToken',
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='client_record',
+        verbose_name='발급한 refresh 토큰',
+    )
+    client = models.CharField('준 곳', max_length=8, choices=TokenClient.choices)
+
+    class Meta:
+        verbose_name = '토큰을 준 곳'
+        verbose_name_plural = '토큰을 준 곳'
+
+    def __str__(self) -> str:
+        return f'{self.token_id} / {self.get_client_display()}'

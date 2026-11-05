@@ -24,6 +24,8 @@ from accounts.validators import (
 # Django 는 비밀번호를 해싱하기 전에 길이를 제한하지 않는다.
 # 아주 긴 입력으로 해싱 비용을 키우는 요청을 막는다
 PASSWORD_MAX_LENGTH = 128
+# 앱이 본문으로 보내는 refresh 토큰의 길이 상한. 서명한 JWT 는 1천 자 안팎이다. 터무니없이 긴 값을 디코딩하지 않는다
+APP_REFRESH_TOKEN_MAX_LENGTH = 4096
 
 
 class EmailSerializer(serializers.Serializer):
@@ -263,6 +265,33 @@ class LoginResponseSerializer(serializers.Serializer):
     withdrawal_scheduled_at = serializers.DateTimeField(
         allow_null=True,
         help_text='탈퇴를 요청했으면 계정을 비울 시각(#603). 있으면 access 토큰이 인증 서버에만 통한다. 취소하면 null',
+    )
+
+
+class AppTokenResponseSerializer(LoginResponseSerializer):
+    """
+    앱(#429)에 토큰을 주는 응답. 웹의 응답에 refresh 토큰을 본문으로 더한다. 쿠키는 주지 않는다.
+
+    앱은 refresh 토큰을 기기의 안전한 저장소에 두고, 화면의 스크립트에는 넘기지 않는다(docs/product/app-refresh.md).
+    """
+
+    refresh_token = serializers.CharField(
+        help_text='refresh 토큰. 갱신과 로그아웃에 본문으로 보낸다. 쓸 때마다 새것으로 바뀐다'
+    )
+    refresh_expires_in = serializers.IntegerField(help_text='refresh 토큰이 끝나기까지의 초')
+
+
+class AppRefreshTokenSerializer(serializers.Serializer):
+    """앱이 갱신에 보내는 refresh 토큰."""
+
+    refresh_token = serializers.CharField(max_length=APP_REFRESH_TOKEN_MAX_LENGTH, trim_whitespace=False)
+
+
+class AppLogoutSerializer(serializers.Serializer):
+    """앱이 로그아웃에 보내는 refresh 토큰. 없어도 로그아웃은 성공한다(웹의 로그아웃과 같다)."""
+
+    refresh_token = serializers.CharField(
+        max_length=APP_REFRESH_TOKEN_MAX_LENGTH, trim_whitespace=False, required=False
     )
 
 

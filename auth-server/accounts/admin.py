@@ -5,7 +5,7 @@
 
 User 는 Django 의 UserAdmin 을 상속해 비밀번호 해싱과 변경 화면을 그대로 쓰고,
 화면에 보이는 필드 구성만 이 프로젝트의 User 모델에 맞춘다.
-인증 코드, 보낼 메일, 보안 이벤트, 환영 크레딧, 동의 기록은 조회만 한다.
+인증 코드, 보낼 메일, 보안 이벤트, 환영 크레딧, 동의 기록, 토큰을 준 곳은 조회만 한다.
 """
 
 from django.contrib import admin
@@ -17,6 +17,7 @@ from accounts.models import (
     GuardianConsent,
     GuardianNotice,
     IdentityVerification,
+    IssuedTokenClient,
     MailReceipt,
     NetworkBlock,
     OutgoingMail,
@@ -173,6 +174,41 @@ class SecurityEventAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
     # 목록을 그릴 때 행마다 계정을 따로 조회하지 않게 한다
     list_select_related = ('user',)
+
+    def has_add_permission(self, request) -> bool:
+        return False
+
+    def has_change_permission(self, request, obj=None) -> bool:
+        return False
+
+    def has_delete_permission(self, request, obj=None) -> bool:
+        return False
+
+
+@admin.register(IssuedTokenClient)
+class IssuedTokenClientAdmin(admin.ModelAdmin):
+    """
+    발급한 refresh 토큰을 웹과 앱 가운데 어디에 줬는지 조회만 한다(#429). 계정마다 앱의 세션이 있는지 본다.
+
+    기록이다. 만들거나 고치거나 지우지 않는다. 만료된 발급 기록을 지우면 함께 지워진다.
+    """
+
+    list_display = ('token', 'client', 'user', 'created_at', 'expires_at')
+    list_filter = ('client',)
+    search_fields = ('token__user__username',)
+    list_select_related = ('token__user',)
+
+    @admin.display(description='계정')
+    def user(self, obj: IssuedTokenClient):
+        return obj.token.user
+
+    @admin.display(description='발급한 시각')
+    def created_at(self, obj: IssuedTokenClient):
+        return obj.token.created_at
+
+    @admin.display(description='끝나는 시각')
+    def expires_at(self, obj: IssuedTokenClient):
+        return obj.token.expires_at
 
     def has_add_permission(self, request) -> bool:
         return False

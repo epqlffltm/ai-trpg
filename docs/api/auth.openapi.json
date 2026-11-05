@@ -1,6 +1,79 @@
 {
   "components": {
     "schemas": {
+      "AppLogoutRequest": {
+        "additionalProperties": false,
+        "description": "앱이 로그아웃에 보내는 refresh 토큰. 없어도 로그아웃은 성공한다(웹의 로그아웃과 같다).",
+        "properties": {
+          "refresh_token": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AppRefreshTokenRequest": {
+        "additionalProperties": false,
+        "description": "앱이 갱신에 보내는 refresh 토큰.",
+        "properties": {
+          "refresh_token": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ],
+        "type": "object"
+      },
+      "AppTokenResponse": {
+        "additionalProperties": false,
+        "description": "앱(#429)에 토큰을 주는 응답. 웹의 응답에 refresh 토큰을 본문으로 더한다. 쿠키는 주지 않는다.\n\n앱은 refresh 토큰을 기기의 안전한 저장소에 두고, 화면의 스크립트에는 넘기지 않는다(docs/product/app-refresh.md).",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "consents_pending": {
+            "description": "다시 동의할 필수 항목. 비어 있지 않으면 access 토큰이 인증 서버에만 통한다",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "expires_in": {
+            "type": "integer"
+          },
+          "refresh_expires_in": {
+            "description": "refresh 토큰이 끝나기까지의 초",
+            "type": "integer"
+          },
+          "refresh_token": {
+            "description": "refresh 토큰. 갱신과 로그아웃에 본문으로 보낸다. 쓸 때마다 새것으로 바뀐다",
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string"
+          },
+          "withdrawal_scheduled_at": {
+            "description": "탈퇴를 요청했으면 계정을 비울 시각(#603). 있으면 access 토큰이 인증 서버에만 통한다. 취소하면 null",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "consents_pending",
+          "expires_in",
+          "refresh_expires_in",
+          "refresh_token",
+          "token_type",
+          "withdrawal_scheduled_at"
+        ],
+        "type": "object"
+      },
       "AuthError": {
         "additionalProperties": false,
         "description": "access 토큰이 없거나 받아들일 수 없을 때(401). DRF 와 simplejwt 가 만든다.\n\n토큰이 틀렸으면 code(token_not_valid)와 messages 가 붙는다. 화면은 이유를 가르지 않고 갱신하거나 다시 로그인한다.",
@@ -1137,6 +1210,448 @@
   },
   "openapi": "3.0.3",
   "paths": {
+    "/api/v1/auth/app/login/verify": {
+      "post": {
+        "description": "POST /api/v1/auth/app/login/verify",
+        "operationId": "app_login_verify_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppTokenResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "형식이 틀렸거나 코드가 맞지 않거나 만료됐다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "로그인 티켓을 쓸 수 없다(login_ticket_invalid). 처음부터 다시 한다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "브라우저에서 온 요청(browser_not_allowed) 또는 막은 IP 다(network_blocked)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "앱의 로그인 2단계: 코드를 맞히면 토큰을 준다. refresh 토큰은 본문이다",
+        "tags": [
+          "app"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/app/logout": {
+      "post": {
+        "description": "POST /api/v1/auth/app/logout",
+        "operationId": "app_logout_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppLogoutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "로그아웃했다. 토큰이 없었거나 쓸 수 없었어도 같다"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "요청을 받을 수 없다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "브라우저에서 온 요청(browser_not_allowed). 앱의 네이티브 쪽만 부른다"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "앱의 이 기기에서 로그아웃한다. 본문의 refresh 토큰을 폐기한다",
+        "tags": [
+          "app"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/app/password/change": {
+      "post": {
+        "description": "POST /api/v1/auth/app/password/change",
+        "operationId": "app_password_change_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppTokenResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "현재 비밀번호가 틀렸거나(current_password) 새 비밀번호가 규칙에 어긋났다(new_password)"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "브라우저에서 온 요청(browser_not_allowed). 앱의 네이티브 쪽만 부른다"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryLater"
+                }
+              }
+            },
+            "description": "시도가 너무 많다(too_many_attempts)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "앱에서 비밀번호를 바꾼다. 다른 기기는 로그아웃되고 이 기기는 새 토큰을 받는다(refresh 토큰은 본문)",
+        "tags": [
+          "app"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/app/refresh": {
+      "post": {
+        "description": "POST /api/v1/auth/app/refresh",
+        "operationId": "app_refresh_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppRefreshTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppTokenResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "요청을 받을 수 없다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description": "refresh 토큰을 쓸 수 없다(위조, 만료, 폐기, 웹에 준 토큰). 다시 로그인한다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "브라우저에서 온 요청(browser_not_allowed) 또는 막은 IP 다(network_blocked)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "앱의 refresh 토큰으로 새 access 토큰을 받는다. refresh 토큰도 새것으로 바뀐다",
+        "tags": [
+          "app"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/auth/consents": {
       "get": {
         "description": "GET /api/v1/auth/consents. 동의를 받는 항목마다 지금의 판(#450). 가입 화면이 쓰므로 로그인 없이 읽는다.",
