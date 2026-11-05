@@ -8,6 +8,7 @@
 #     up           이미지를 만들고 띄운 뒤, 서버들과 프록시, 그림 저장소, Prometheus, Alertmanager, Tempo, Grafana, 상태 확인이 있는 워커가 healthy 가 되고
 #                  Loki 가 준비될 때까지 기다린다.
 #                  이미지를 받고 만드는 것은 저장소가 잠깐 답하지 않으면 쉬었다가 다시 한다(with_retries, 3번까지).
+#                  한 이미지를 여러 서비스가 함께 쓰므로 이미지마다 서비스 하나만 만든다(build_targets).
 #                  서버의 healthcheck 는 /health/ready 라서, healthy 는 그 서버가 DB 에 닿는다는 뜻이다.
 #                  워커의 healthcheck 는 심장박동 파일이라서, healthy 는 그 워커가 DB 에 닿으며 돈다는 뜻이다.
 #                  DB 의 백업은 최근 백업 파일이 있으면 healthy 다
@@ -30,7 +31,7 @@
 #                  Tempo 가 root 가 아닌가, 서버가 Tempo 에 닿지 않는가.
 #                  span 을 내보내는 서버(TRACE_SERVERS)의 span 도 본다: 부른 쪽의 추적 아래에 요청의 span 이 놓이는가,
 #                  그 줄의 trace_id 가 같은가, 정리 작업의 span 아래에 쿼리의 span 이 놓이는가.
-#                  경보도 본다: 규칙의 시험(promtool)이 통과하는가, Prometheus 가 규칙을 읽고 Alertmanager 를 찾았는가,
+#                  경보도 본다: 규칙의 시험(promtool, check 의 처음에 뒤에서 돌려 둔다)이 통과하는가, Prometheus 가 규칙을 읽고 Alertmanager 를 찾았는가,
 #                  건강한 스택에서 울리는 경보가 없는가, 받는 곳 넷을 모두 적은 설정이 맞는가, 반쯤 적으면 뜨지 않는가,
 #                  비밀이 설정 파일에 없는가. 받는 곳의 흉내(alert_sink.py)를 띄워 시험 경보가 Discord, Slack, Telegram 의
 #                  모양으로 넘어가는지 본다(메일은 보내 보지 않는다). 늘 울리는 Watchdog 이 바깥 감시로만 가는지도 본다
@@ -392,9 +393,33 @@ pull_images() {
     docker pull --quiet "$STAGING_S3_IMAGE" >/dev/null
 }
 
+# 이미지마다 만들 서비스 하나씩. 한 이미지를 여러 서비스가 함께 쓴다(auth-server 와 auth-migrate 등, x-*-image).
+# compose build 는 서비스마다 이미지를 따로 내보내고 풀어(exporting, unpacking) 같은 이미지를 몇 번씩 쓰므로
+# 이미지마다 하나만 만든다. 나머지 서비스는 up 이 이미 있는 이미지를 쓴다.
+# 같은 이미지를 서로 다르게 만드는 서비스가 있으면(build 가 다르면) 하나만 만들면 틀리므로 멈춘다
+build_targets() {
+  compose config --format json | python3 -c '
+import json, sys
+first, builds = {}, {}
+for name, service in json.load(sys.stdin)["services"].items():
+    if "build" not in service:
+        continue
+    image = service.get("image", name)
+    if image in builds and builds[image] != service["build"]:
+        print(f"{image} 를 서로 다르게 만드는 서비스가 있다: {first[image]}, {name}", file=sys.stderr)
+        sys.exit(1)
+    builds.setdefault(image, service["build"])
+    first.setdefault(image, name)
+print(*first.values())'
+}
+
 up() {
+  local listed targets
+  listed="$(build_targets)"
+  read -ra targets <<<"$listed"
+  echo "만들 서비스(이미지마다 하나): ${targets[*]}"
   with_retries pull_images
-  with_retries compose build
+  with_retries compose build "${targets[@]}"
   compose up -d
   wait_healthy
   wait_loki_ready
@@ -1349,6 +1374,30 @@ alert_rules_pass() {
   compose exec -T prometheus sh -c 'promtool test rules /etc/prometheus/rules/tests/*.test.yml'
 }
 
+# 규칙의 시험은 CI 에서 50초쯤 걸리고 스택의 다른 것에 기대지 않는다(파일의 시계로 돈다).
+# 그래서 check 의 처음에 뒤에서 돌려 두고, 경보를 볼 때 결과를 받는다
+ALERT_RULES_LOG=""
+ALERT_RULES_PID=""
+ALERT_RULES_STATUS=""
+start_alert_rules() {
+  ALERT_RULES_LOG="$(mktemp)"
+  alert_rules_pass </dev/null >"$ALERT_RULES_LOG" 2>&1 &
+  ALERT_RULES_PID=$!
+}
+
+# 뒤에서 돌린 규칙의 시험이 끝나기를 기다려 결과를 적어 둔다.
+# wait 는 돌린 셸에서만 되므로 report_problems(서브셸에서 부른다) 밖에서 부른다
+wait_alert_rules() {
+  ALERT_RULES_STATUS=0
+  wait "$ALERT_RULES_PID" || ALERT_RULES_STATUS=$?
+}
+
+# 기다려 둔 규칙의 시험의 출력을 찍고 그 결과로 끝난다
+alert_rules_result() {
+  cat "$ALERT_RULES_LOG"
+  [[ "$ALERT_RULES_STATUS" == "0" ]]
+}
+
 # 규칙 파일의 묶음(groups 의 name)이 모두 Prometheus 에 올라왔는가. 파일의 YAML 이 틀리면 Prometheus 는 옛 규칙을 쥔다
 prometheus_loaded_rules() {
   local expected
@@ -1450,7 +1499,9 @@ check_alerts() {
   run="$(openssl rand -hex 8)"
   report "alertmanager 가 root 가 아니다" not_root alertmanager
   report "Alertmanager 가 다시 뜨지 않고 돈다" stays_up alertmanager
-  report_problems "경보 규칙의 시험이 통과한다(promtool test rules)" alert_rules_pass
+  wait_alert_rules
+  report_problems "경보 규칙의 시험이 통과한다(promtool test rules)" alert_rules_result
+  rm -f "$ALERT_RULES_LOG"
   report_problems "Prometheus 가 규칙 파일의 묶음을 모두 읽었다" prometheus_loaded_rules
   report "Prometheus 가 Alertmanager 를 찾았다" prometheus_finds_alertmanager
   report "늘 울리는 경보(Watchdog)가 울린다" eventually prometheus_finds 'ALERTS{alertname="Watchdog", alertstate="firing"}'
@@ -1512,6 +1563,7 @@ check_config() {
 
 check() {
   local server jwks=http://auth-server:8000/api/v1/auth/jwks
+  start_alert_rules
   for server in "${SERVERS[@]}"; do
     report "${server}-migrate 가 성공했다" migrated "$server"
     report "${server}-server 가 준비됐다(/health/ready 가 200, DB 에 닿는다)" ready_inside "$server"
