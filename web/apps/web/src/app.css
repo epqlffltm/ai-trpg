@@ -2984,6 +2984,60 @@ details.room-panel[open] > summary {
   font-size: 0.85em;
 }
 
+/* chat 의 대화(C3, Stitch 21번). 넓으면 왼쪽 열의 창 넷과 오른쪽(그림 창, 대사창, 말 쓰기). 좁으면 오른쪽의 것이 먼저, 창 넷이 아래.
+ * 창 넷은 테이블 방의 창 넷과 같은 모양(room-tools)이다. 플레이 화면이라 본문의 너비보다 넓게 쓴다 */
+.page.chat-room {
+  max-width: 1440px;
+}
+
+.chat-room__body {
+  display: grid;
+  gap: calc(var(--ui-gap) * 1.5);
+}
+
+.chat-room__main {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .chat-room__body {
+    grid-template-columns: 340px minmax(0, 1fr);
+    grid-template-areas: 'tools main';
+    align-items: start;
+  }
+
+  .chat-room__main {
+    grid-area: main;
+  }
+
+  .chat-room__tools {
+    grid-area: tools;
+  }
+}
+
+.chat-persona {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.chat-persona dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.chat-persona dt {
+  color: var(--ui-text-muted);
+  font-size: 0.85em;
+}
+
+.chat-persona dd {
+  margin: 0;
+}
+
 /* chat 의 대화(C3). 위에 머리와 그림 창, 아래에 대사창과 말 쓰기 */
 .conversation {
   display: grid;

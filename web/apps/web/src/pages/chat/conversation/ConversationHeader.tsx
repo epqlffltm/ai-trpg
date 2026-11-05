@@ -1,16 +1,16 @@
 // web/apps/web/src/pages/chat/conversation/ConversationHeader.tsx
-// 대화(C3)의 머리. 캐릭터 이름(소개 C2 로 가는 길), 호감도(제작자가 고른 방식), 지금 장소와 시각, 모델과 "바꾸기".
+// 대화(C3)의 머리(Stitch 21번의 대화 줄). 캐릭터 이름(소개 C2 로 가는 길), 호감도(제작자가 고른 방식), 지금 장소와 시각, 모델.
+// 모델을 바꾸는 단추는 왼쪽 열의 "페르소나·모델" 창에 있다(ChatTools).
 // 모델이 없거나 쓸 수 없게 됐으면 몰래 바꾸지 않고 알린다. 고르는 것은 사람이다.
 
-import { Button } from '@ai-trpg/ui';
 import { Link } from 'react-router';
 import type { ConversationDetail } from '../../../api/types';
 import { retireText } from '../../trpg/models/modelChoice';
 import { affectionView, clockLabel, placeName } from './conversationView';
 
-type Props = { detail: ConversationDetail; busy: boolean; onChooseModel: () => void };
+type Props = { detail: ConversationDetail };
 
-export function ConversationHeader({ detail, busy, onChooseModel }: Props) {
+export function ConversationHeader({ detail }: Props) {
   const document = detail.character.document;
   const affection = affectionView(detail.state.affection);
   const where = [detail.state.place ? placeName(document, detail.state.place) : null, clockLabel(detail.state.clock)].filter(Boolean).join(' · ');
@@ -34,9 +34,6 @@ export function ConversationHeader({ detail, busy, onChooseModel }: Props) {
           {detail.model?.retires_on ? ` · ${retireText(detail.model.retires_on)}` : null}
         </p>
         {detail.model && !detail.model.usable ? <p className="ui-field__error">지금 쓸 수 없는 모델입니다. 다른 모델을 골라 주세요.</p> : null}
-        <Button variant="secondary" disabled={busy} onClick={onChooseModel}>
-          {detail.model ? '모델 바꾸기' : '모델 고르기'}
-        </Button>
       </div>
     </header>
   );

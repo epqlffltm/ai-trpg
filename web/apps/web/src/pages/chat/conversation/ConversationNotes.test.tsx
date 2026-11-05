@@ -53,6 +53,13 @@ function bodies(seen: SeenRequest[], method: string, url: string): unknown[] {
   return seen.filter((request) => request.method === method && request.url === url).map((request) => request.body ?? null);
 }
 
+/** 왼쪽 열의 창 하나를 펼친다(이미 펼쳐져 있으면 그대로). 그 창을 돌려준다 */
+async function openTool(name: string) {
+  const button = await screen.findByRole('button', { name });
+  if (button.getAttribute('aria-expanded') !== 'true') await userEvent.click(button);
+  return within(await screen.findByRole('region', { name }));
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -66,8 +73,7 @@ describe('기억 창', () => {
     ]);
     renderApp(`/chat/conversations/${ID}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '기억' }));
-    const dialog = within(await screen.findByRole('dialog', { name: '기억' }));
+    const dialog = await openTool('상대의 차림·기억');
     const kept = within(await dialog.findByRole('list', { name: '기억 메모' }));
     expect(kept.getByText('우산을 빌려줬다')).toBeInTheDocument();
     expect(dialog.getByText('1 / 20')).toBeInTheDocument();
@@ -105,8 +111,7 @@ describe('기억 창', () => {
     });
     renderApp(`/chat/conversations/${ID}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '기억' }));
-    const dialog = within(await screen.findByRole('dialog', { name: '기억' }));
+    const dialog = await openTool('상대의 차림·기억');
     expect(await dialog.findByText('메모가 가득 찼습니다. 지운 뒤에 더합니다.')).toBeInTheDocument();
     expect(dialog.queryByRole('textbox', { name: '새 메모' })).toBeNull();
     expect(dialog.getByRole('button', { name: '받아들이기' })).toBeDisabled();
