@@ -38,6 +38,10 @@ describe('대화', () => {
     expect(log.getByText('비가 오네요.')).toBeInTheDocument();
     expect(log.getByText('호감이 올랐다')).toBeInTheDocument();
     expect(log.getByText('1/2')).toBeInTheDocument();
+    // 말의 머리 줄에 이름표와 단추(대안 넘기기, 고치기)가 함께 있다(Stitch 21번)
+    const head = log.getByText('1/2').closest('.chat-message__head') as HTMLElement;
+    expect(within(head).getByText('루나')).toHaveClass('chat-message__speaker');
+    expect(within(head).getByRole('button', { name: '루나의 말 고치기' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '우산 있어?' })).toBeInTheDocument();
 
     await userEvent.click(log.getByRole('button', { name: '뒤의 대안' }));
