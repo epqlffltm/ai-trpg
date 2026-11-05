@@ -6,6 +6,7 @@
 규칙의 대부분은 모든 자산에 공통이라 app/assets/service.py 에 있다.
 여기에는 시나리오만의 것이 있다. 시나리오는 다른 자산(룰북, 세계관, 로어북, 몬스터 도감)을 가리킨다.
 가리키는 자산은 자기 것이어야 하고, 지운 것이면 안 된다.
+프리젠의 캐릭터 그림(#983)도 자기가 올린 것이어야 한다.
 """
 
 import uuid
@@ -19,7 +20,11 @@ from app.assets.bestiaries.models import Bestiary
 from app.assets.models import AssetContent, AssetType, Lorebook, Rating, Rulebook, Scenario, World
 from app.assets.ratings import ALL_AGES_ONLY, require_rating
 from app.assets.scenarios.recommended_model import require_recommendable
-from app.assets.scenarios.schemas import ScenarioCreate, ScenarioUpdate
+from app.assets.scenarios.schemas import Pregen, ScenarioCreate, ScenarioUpdate
+from app.portraits import repository as portraits
+
+# 프리젠의 캐릭터 그림이 틀렸을 때 AssetReferenceError 에 싣는 칸의 이름
+PREGEN_IMAGE_FIELD = 'pregens.image_id'
 
 # 다른 자산을 하나 가리키는 칸과, 그 칸이 가리킬 수 있는 종류.
 # 적힌 순서대로 잠근다. 순서가 늘 같아야 두 요청이 서로를 기다리며 멈추는 일(교착)이 없다.
@@ -87,6 +92,22 @@ async def hold_references(session: AsyncSession, owner_id: uuid.UUID, data: Scen
         await assets.hold_reference(session, Bestiary, owner_id, bestiary_id, 'bestiary_ids')
 
 
+def pregen_images(pregens: Sequence[Pregen] | None) -> set[uuid.UUID]:
+    """프리젠들이 붙인 캐릭터 그림의 id 들. 보내지 않았으면 비어 있다."""
+    return {pregen.image_id for pregen in pregens or [] if pregen.image_id is not None}
+
+
+async def require_own_portraits(session: AsyncSession, owner_id: uuid.UUID, pregens: Sequence[Pregen] | None) -> None:
+    """
+    프리젠의 캐릭터 그림이 모두 자기가 올린 것인지 본다. 아니면 AssetReferenceError.
+
+    남의 그림, 없는 그림, 이 서버에 올리지 않은 asset 의 그림(장면 그림 등)은 모두 같다.
+    """
+    wanted = pregen_images(pregens)
+    if wanted - await portraits.owned_ids(session, owner_id, wanted):
+        raise assets.AssetReferenceError(PREGEN_IMAGE_FIELD)
+
+
 async def create_scenario(
     session: AsyncSession,
     owner_id: uuid.UUID,
@@ -103,6 +124,7 @@ async def create_scenario(
     require_rating(data.rating, allowed)
     await require_recommendable(session, data.narration_model, today)
     await hold_references(session, owner_id, data)
+    await require_own_portraits(session, owner_id, data.pregens)
     return await assets.create(session, build_scenario(owner_id, data))
 
 
@@ -155,6 +177,7 @@ async def update_scenario(
         require_rating(data.rating, allowed)
     await require_model_change(session, scenario, data, today)
     await hold_references(session, owner_id, data)
+    await require_own_portraits(session, owner_id, data.pregens)
     return await assets.save_changes(session, scenario, data)
 
 

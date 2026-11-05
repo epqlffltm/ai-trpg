@@ -596,8 +596,11 @@ PREGENS = [
 
 
 def read_back(pregens: list[dict]) -> list[dict]:
-    """보낸 프리젠을 읽어 돌려받을 때의 모양. 시트가 있으면 아는 기술(#805)의 빈 목록이 붙는다."""
-    return [{**pregen, 'sheet': pregen['sheet'] and as_character(pregen['sheet'])} for pregen in pregens]
+    """보낸 프리젠을 읽어 돌려받을 때의 모양. 시트가 있으면 아는 기술(#805)의 빈 목록이 붙고, 그림은 비면 null 이다."""
+    return [
+        {**pregen, 'sheet': pregen['sheet'] and as_character(pregen['sheet']), 'image_id': pregen.get('image_id')}
+        for pregen in pregens
+    ]
 
 
 async def test_saves_the_recommended_players_and_the_pregens(client: AsyncClient, my_headers: dict[str, str]):
@@ -616,7 +619,9 @@ async def test_a_pregen_needs_only_a_name(client: AsyncClient, my_headers: dict[
     scenario = await create(client, SCENARIOS_URL, my_headers, pregens=[{'name': '  이름뿐인 사람  '}])
 
     # 이름의 앞뒤 공백은 뗀다. 설명과 시트는 비워도 된다
-    assert scenario['pregens'] == [{'name': '이름뿐인 사람', 'description': '', 'sheet': None, 'items': [], 'money': 0}]
+    assert scenario['pregens'] == [
+        {'name': '이름뿐인 사람', 'description': '', 'sheet': None, 'items': [], 'money': 0, 'image_id': None}
+    ]
 
 
 async def test_accepts_the_most_pregens_allowed(client: AsyncClient, my_headers: dict[str, str]):
@@ -683,8 +688,8 @@ async def test_replaces_the_pregens_as_a_whole(client: AsyncClient, my_headers: 
     not_sent = await client.patch(url, json={'pregens': None, 'recommended_players': None}, headers=my_headers)
     cleared = await client.patch(url, json={'pregens': []}, headers=my_headers)
 
-    assert replaced.json()['pregens'] == last_only
-    assert not_sent.json()['pregens'] == last_only
+    assert replaced.json()['pregens'] == read_back(last_only)
+    assert not_sent.json()['pregens'] == read_back(last_only)
     assert not_sent.json()['recommended_players'] == {'min': 2, 'max': 3}
     assert cleared.json()['pregens'] == []
 

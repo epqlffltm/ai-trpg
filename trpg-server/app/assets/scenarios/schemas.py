@@ -254,6 +254,9 @@ class Pregen(BaseModel):
     """
     프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다.
 
+    image_id 는 제작자가 올린 캐릭터 그림(app/portraits/, #983)이다. 비워도 된다.
+    자기가 올린 그림만 붙인다(서비스가 본다).
+
     이름과 설명은 플레이어가 만드는 캐릭터와 칸이 같다. 그래서 골라서 그대로 자기 캐릭터로 가져갈 수 있다.
     시트는 그 캐릭터의 숫자다. 초안일 때는 비워 둘 수 있다. 게시할 때 있는지, 룰북의 규칙에 맞는지 검사한다.
     여기서는 시트의 모양만 본다. 룰북은 나중에 붙이거나 바꿀 수 있어서, 규칙에 맞는지는 지금 정할 수 없다.
@@ -268,6 +271,13 @@ class Pregen(BaseModel):
     items: StartingItems = []
     # 이 프리젠을 고른 사람이 시작할 때 더 받는 돈(#278). 시나리오의 시작 돈(currency.starting)은 따로 받는다
     money: Money = 0
+    # 캐릭터 그림(#983). 장면 그림을 그릴 때 이 프리젠을 고른 캐릭터의 얼굴을 맞추는 참고 그림이 된다
+    image_id: uuid.UUID | None = None
+
+    @field_serializer('image_id')
+    def image_id_as_text(self, image_id: uuid.UUID | None) -> str | None:
+        """그림의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return None if image_id is None else str(image_id)
 
 
 def reject_duplicate_names(pregens: list[Pregen]) -> list[Pregen]:

@@ -31,6 +31,14 @@ async def list_owned(session: AsyncSession, owner_id: uuid.UUID, limit: int, off
     return list(rows), await count_owned(session, owner_id)
 
 
+async def owned_ids(session: AsyncSession, owner_id: uuid.UUID, image_ids: set[uuid.UUID]) -> set[uuid.UUID]:
+    """그 id 들 가운데 이 사람이 올린 그림의 id 들."""
+    if not image_ids:
+        return set()
+    query = select(Portrait.id).where(Portrait.owner_id == owner_id, Portrait.id.in_(image_ids))
+    return set(await session.scalars(query))
+
+
 async def find_owned(session: AsyncSession, owner_id: uuid.UUID, image_id: uuid.UUID) -> Portrait | None:
     """이 사람이 올린 그림 하나. 남의 것이나 없는 것이면 None."""
     query = select(Portrait).where(Portrait.id == image_id, Portrait.owner_id == owner_id)

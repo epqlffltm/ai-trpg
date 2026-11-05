@@ -7951,6 +7951,9 @@ export interface components {
          * Pregen
          * @description 프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다.
          *
+         *     image_id 는 제작자가 올린 캐릭터 그림(app/portraits/, #983)이다. 비워도 된다.
+         *     자기가 올린 그림만 붙인다(서비스가 본다).
+         *
          *     이름과 설명은 플레이어가 만드는 캐릭터와 칸이 같다. 그래서 골라서 그대로 자기 캐릭터로 가져갈 수 있다.
          *     시트는 그 캐릭터의 숫자다. 초안일 때는 비워 둘 수 있다. 게시할 때 있는지, 룰북의 규칙에 맞는지 검사한다.
          *     여기서는 시트의 모양만 본다. 룰북은 나중에 붙이거나 바꿀 수 있어서, 규칙에 맞는지는 지금 정할 수 없다.
@@ -7961,6 +7964,8 @@ export interface components {
              * @default
              */
             description: string;
+            /** Image Id */
+            image_id?: string | null;
             /**
              * Items
              * @default []
@@ -7979,6 +7984,9 @@ export interface components {
          * Pregen
          * @description 프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다.
          *
+         *     image_id 는 제작자가 올린 캐릭터 그림(app/portraits/, #983)이다. 비워도 된다.
+         *     자기가 올린 그림만 붙인다(서비스가 본다).
+         *
          *     이름과 설명은 플레이어가 만드는 캐릭터와 칸이 같다. 그래서 골라서 그대로 자기 캐릭터로 가져갈 수 있다.
          *     시트는 그 캐릭터의 숫자다. 초안일 때는 비워 둘 수 있다. 게시할 때 있는지, 룰북의 규칙에 맞는지 검사한다.
          *     여기서는 시트의 모양만 본다. 룰북은 나중에 붙이거나 바꿀 수 있어서, 규칙에 맞는지는 지금 정할 수 없다.
@@ -7989,6 +7997,8 @@ export interface components {
              * @default
              */
             description: string;
+            /** Image Id */
+            image_id?: string | null;
             /**
              * Items
              * @default []
@@ -8023,10 +8033,13 @@ export interface components {
          * @description 프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다. 판 안의 프리젠은 모두 시트가 있다.
          *
          *     items 와 money 는 이 프리젠을 고른 사람이 시작할 때 더 받는 소지품과 돈이다.
+         *     image_id 는 제작자가 올린 캐릭터 그림(#983)이다. 없을 수 있다.
          */
         PregenSnapshot: {
             /** Description */
             description: string;
+            /** Image Id */
+            image_id?: string | null;
             /**
              * Items
              * @default []

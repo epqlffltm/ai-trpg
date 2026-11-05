@@ -163,7 +163,8 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      몬스터가 주는 경험치(monsters[].xp), 사건의 경험치 주기(happenings[].effects[] 의 give_xp: amount, from_place),
 #      받는 사람들이 나누는 법(xp_split, #286 ②)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다.
 #      캠페인의 앞 편의 퀘스트 결과(campaign_quests, #481 B)도 뒤에 더했다. 판에는 늘 비어 있고, 캠페인의 편의 테이블을
-#      열 때 테이블의 복사본에만 채운다. 조건 campaign_quest_succeeded, campaign_quest_failed 의 target 도 같다
+#      열 때 테이블의 복사본에만 채운다. 조건 campaign_quest_succeeded, campaign_quest_failed 의 target 도 같다.
+#      프리젠의 캐릭터 그림(pregens[].image_id, #983)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 68
 
 
@@ -519,6 +520,7 @@ class PregenSnapshot(BaseModel):
     프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다. 판 안의 프리젠은 모두 시트가 있다.
 
     items 와 money 는 이 프리젠을 고른 사람이 시작할 때 더 받는 소지품과 돈이다.
+    image_id 는 제작자가 올린 캐릭터 그림(#983)이다. 없을 수 있다.
     """
 
     name: str
@@ -526,6 +528,7 @@ class PregenSnapshot(BaseModel):
     sheet: CharacterSheet
     items: list[ItemStackSnapshot] = []
     money: int = 0
+    image_id: uuid.UUID | None = None
 
 
 class CarriedItemSnapshot(BaseModel):
