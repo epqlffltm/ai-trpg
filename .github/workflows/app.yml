@@ -1,0 +1,73 @@
+# .github/workflows/app.yml
+# 앱 껍데기(app/, Capacitor, Android, #429)의 CI. 화면을 앱의 길로 빌드해 Android 프로젝트에 넣고, 디버그 APK 를 만든다.
+# AppAuth 플러그인(자바)이 실제 Android SDK 와 Capacitor 로 컴파일되는지 여기서 처음 본다.
+#
+# PR 에서는 관문(.github/workflows/ci.yml)이 바뀐 파일을 보고 이 워크플로를 부른다(changed-servers.sh 의 app).
+# 에뮬레이터에서 띄우는 것, 로그인과 갱신은 보지 않는다(app/README.md 의 "PC 의 compose 에 붙이기"를 사람이 한다).
+# 서명한 릴리스(AAB)는 스토어에 올릴 때 따로 만든다.
+
+name: app
+
+on:
+  workflow_call:
+  # main 에 들어간 뒤에는 앱이 바뀐 경우에만 스스로 돈다
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/app.yml"
+
+# 이 워크플로는 저장소를 읽기만 한다. 필요한 권한만 준다
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # 화면과 같은 Node.js(web/.nvmrc). Capacitor 의 CLI 는 Node 22 이상이다
+      - name: Node.js 설치
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            app/package-lock.json
+
+      # Capacitor 8 의 Android 는 Java 21 로 컴파일한다(app/android/app/capacitor.build.gradle).
+      # Android SDK 는 GitHub 의 러너에 들어 있다(ANDROID_HOME). 없는 플랫폼은 Gradle 이 받는다
+      - name: Java 설치
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: 화면의 의존성 설치
+        working-directory: web
+        run: npm ci
+
+      - name: 앱의 의존성 설치
+        working-directory: app
+        run: npm ci
+
+      # 화면을 앱의 길(VITE_AUTH_TRANSPORT=app)로 빌드해 Android 프로젝트에 넣는다. 출처는 시험용이고 닿지 않는다
+      - name: 화면을 넣기(cap sync)
+        working-directory: app
+        env:
+          APP_API_ORIGIN: https://ci.example.invalid
+        run: npm run sync
+
+      # gradlew 는 저장소에서 실행 표시가 없을 수 있어(Windows 에서 올린 파일) bash 로 부른다
+      - name: 디버그 APK 만들기
+        working-directory: app/android
+        run: bash ./gradlew assembleDebug --no-daemon --stacktrace
+
+      # 자바의 단위 시험(지금은 Capacitor 의 틀에 있는 예시 하나다)
+      - name: 단위 시험
+        working-directory: app/android
+        run: bash ./gradlew testDebugUnitTest --no-daemon

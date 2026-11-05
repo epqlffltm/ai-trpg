@@ -40,6 +40,7 @@ jobs:
       story: ${{ steps.pick.outputs.story }}
       shared: ${{ steps.pick.outputs.shared }}
       web: ${{ steps.pick.outputs.web }}
+      app: ${{ steps.pick.outputs.app }}
     steps:
       # PR 이 갈라져 나온 곳을 찾으려면 기록이 있어야 한다
       - uses: actions/checkout@v7
@@ -109,6 +110,12 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     uses: ./.github/workflows/web.yml
+
+  # 앱 껍데기(app/, #429). 화면을 앱의 길로 넣고 디버그 APK 를 만든다(AppAuth 플러그인이 컴파일되는가)
+  app:
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
+    uses: ./.github/workflows/app.yml
 
   # 서버 폴더 밖의 파이썬(tools/, .github/scripts/, docker/ 의 검사 스크립트)을 ruff 로 본다. 규칙은 저장소 루트의 ruff.toml 이다.
   # 서버의 CI 는 제 폴더만 보므로 이 파일들은 여기서만 본다. 몇 초면 끝나서 PR 마다 늘 돈다(도구만 고친 PR 은 서버를 고르지 않는다).
@@ -251,6 +258,7 @@ jobs:
       - story-server
       - shared
       - web
+      - app
       - stack
     runs-on: ubuntu-latest
     timeout-minutes: 2

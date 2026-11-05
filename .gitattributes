@@ -1,1 +1,5 @@
 * text=auto eol=lf
+# Windows 의 배치 파일(app/android/gradlew.bat)은 CRLF 로 둔다. LF 면 cmd 가 레이블(goto)을 잘못 찾는 일이 있다
+*.bat text eol=crlf
+# 바이너리(Gradle 의 래퍼)는 줄바꿈을 건드리지 않는다
+*.jar binary
