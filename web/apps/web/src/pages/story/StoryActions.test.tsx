@@ -99,6 +99,14 @@ function actions(seen: SeenRequest[]): unknown[] {
   return seen.filter((request) => request.method === 'POST' && request.url === ACTIONS).map((request) => request.body);
 }
 
+/** 왼쪽 열의 창 하나를 펼친다(이미 펼쳐져 있으면 그대로). 그 창을 돌려준다. 아래 단추 줄에도 같은 이름이 있어 왼쪽 열 안에서 찾는다 */
+async function openTool(name: string) {
+  const column = within(await screen.findByRole('region', { name: '창' }));
+  const button = column.getByRole('button', { name });
+  if (button.getAttribute('aria-expanded') !== 'true') await userEvent.click(button);
+  return within(await screen.findByRole('region', { name }));
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -125,8 +133,7 @@ describe('장면의 행동', () => {
     const { seen } = signedIn();
     renderApp(`/story/sessions/${SESSION}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '지도' }));
-    const map = within(screen.getByRole('dialog', { name: '지도' }));
+    const map = await openTool('지도·이동');
     expect(map.getByText('지금 있는 곳: 학교')).toBeInTheDocument();
     const places = within(map.getByRole('list', { name: '갈 수 있는 곳' }));
     expect(places.getByText('공원')).toBeInTheDocument();

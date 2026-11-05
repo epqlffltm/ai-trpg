@@ -2993,7 +2993,8 @@ details.room-panel[open] > summary {
   font-size: 0.85em;
 }
 
-/* chat 의 대화(C3, Stitch 21번). 넓으면 왼쪽 열의 창 넷과 오른쪽(그림 창, 대사창, 말 쓰기). 좁으면 오른쪽의 것이 먼저, 창 넷이 아래.
+/* chat 의 대화(C3, Stitch 21번)와 story 의 장면(D2, 22번)이 함께 쓰는 배치(chat-room). 넓으면 왼쪽 열의 창과 오른쪽(그림 창, 대사창, 말 쓰기).
+ * 좁으면 오른쪽의 것이 위아래고 왼쪽 열은 아래 단추 줄의 시트로 연다.
  * 창 넷은 테이블 방의 창 넷과 같은 모양(room-tools)이다. 플레이 화면이라 본문의 너비보다 넓게 쓴다 */
 .page.chat-room {
   max-width: 1440px;

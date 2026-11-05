@@ -1,10 +1,8 @@
-// web/apps/web/src/pages/story/StoryRecordsButton.tsx
-// 기록 창(D6, 장면의 창). 이 세계관의 엔딩(본 것은 이름·일러스트·처음 본 때, 못 본 것은 "???" 와 힌트)과
-// 이 가지에서 열린 이벤트(이름과 일러스트). 계정에 남은 엔딩은 창을 열 때 받는다.
+// web/apps/web/src/pages/story/StoryRecordsPanel.tsx
+// 기록(D6, Stitch 22번의 왼쪽 열 창). 이 세계관의 엔딩(본 것은 이름·일러스트·처음 본 때, 못 본 것은 "???" 와 힌트)과
+// 이 가지에서 열린 이벤트(이름과 일러스트). 계정에 남은 엔딩은 창을 펼칠 때 받는다.
 
-import { Button, Dialog } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
 import type { StoryView } from '../../api/story';
 import { formatDateTime } from '../../format/dateTime';
 import { useImageUrl } from '../../hooks/useImageUrl';
@@ -13,22 +11,7 @@ import { endingCount, endingRows, eventRows, type EndingRow } from './storyRecor
 
 type Props = { worldId: string; view: StoryView };
 
-export function StoryRecordsButton({ worldId, view }: Props) {
-  const [open, setOpen] = useState(false);
-  const close = useCallback(() => setOpen(false), []);
-  return (
-    <>
-      <Button variant="secondary" onClick={() => setOpen(true)}>
-        기록
-      </Button>
-      <Dialog title="기록" open={open} onClose={close}>
-        {open ? <Records worldId={worldId} view={view} /> : null}
-      </Dialog>
-    </>
-  );
-}
-
-function Records({ worldId, view }: Props) {
+export function StoryRecordsPanel({ worldId, view }: Props) {
   const records = useQuery(storyEndingsQuery(worldId));
   const endings = endingRows(view, records.data);
   const events = eventRows(view);

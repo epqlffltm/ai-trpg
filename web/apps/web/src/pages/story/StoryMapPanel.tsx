@@ -1,11 +1,12 @@
-// web/apps/web/src/pages/story/StoryMapButton.tsx
-// 지도(D3, 장면의 창). 지금 있는 곳과 함께 다니는 인물, 길로 바로 이어진 곳(걸리는 분, 닿는 시각, 거기 보이는 인물, "가기"),
+// web/apps/web/src/pages/story/StoryMapPanel.tsx
+// 지도·이동(D3, Stitch 22번의 왼쪽 열 창). 지금 있는 곳과 함께 다니는 인물, 길로 바로 이어진 곳(걸리는 분, 닿는 시각, 거기 보이는 인물, "가기"),
 // 그 밖에 아는 곳(가 본 곳, 거기 보이는 인물). 고르면 이동의 행동을 붙이고 반응을 받는다(한 번 청구).
 // 거기 있는 인물은 서버가 보이기를 정해 보낸다. 받는 중이거나 끝난 세션이면 "가기"를 막는다.
 // 기한의 마지막 날을 넘기는 이동이면 창 안에서 한 번 더 묻는다(넘기면 기한의 엔딩이다).
+// 시간이 흐르지 않는 판(시간대가 없는 세계관)에는 이 창을 두지 않는다(StoryTools).
 
-import { Button, Dialog } from '@ai-trpg/ui';
-import { useCallback, useState } from 'react';
+import { Button } from '@ai-trpg/ui';
+import { useState } from 'react';
 import type { StoryAction, StoryState, StoryView } from '../../api/story';
 import { destinations } from './storyActions';
 import { arrivalText, companionNames, crossesDeadline, knownPlaces } from './storyMapView';
@@ -13,13 +14,8 @@ import { placeName } from './storyWorld';
 
 type Props = { view: StoryView; state: StoryState; disabled: boolean; onAct: (action: StoryAction) => Promise<boolean> };
 
-export function StoryMapButton({ view, state, disabled, onAct }: Props) {
-  const [open, setOpen] = useState(false);
+export function StoryMapPanel({ view, state, disabled, onAct }: Props) {
   const [confirming, setConfirming] = useState<{ id: string; name: string } | null>(null);
-  const close = useCallback(() => {
-    setOpen(false);
-    setConfirming(null);
-  }, []);
   const reachable = destinations(view, state.place);
   const known = knownPlaces(view, state);
   const others = known.filter((place) => !place.here && !reachable.some((entry) => entry.id === place.id));
@@ -27,16 +23,12 @@ export function StoryMapButton({ view, state, disabled, onAct }: Props) {
   const companions = companionNames(view, state);
 
   function go(place: string) {
-    close();
+    setConfirming(null);
     void onAct({ kind: 'move', place });
   }
 
   return (
     <>
-      <Button variant="secondary" disabled={disabled} onClick={() => setOpen(true)}>
-        지도
-      </Button>
-      <Dialog title="지도" open={open} onClose={close}>
         {confirming ? (
           <div className="story-places__confirm" role="alert">
             <p>
@@ -98,7 +90,6 @@ export function StoryMapButton({ view, state, disabled, onAct }: Props) {
             </ul>
           </>
         ) : null}
-      </Dialog>
     </>
   );
 }

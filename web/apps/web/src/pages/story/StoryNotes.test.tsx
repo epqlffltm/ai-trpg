@@ -62,6 +62,14 @@ function signedIn(routes: Record<string, (request: SeenRequest) => Response> = {
   });
 }
 
+/** 왼쪽 열의 창 하나를 펼친다(이미 펼쳐져 있으면 그대로). 그 창을 돌려준다. 아래 단추 줄에도 같은 이름이 있어 왼쪽 열 안에서 찾는다 */
+async function openTool(name: string) {
+  const column = within(await screen.findByRole('region', { name: '창' }));
+  const button = column.getByRole('button', { name });
+  if (button.getAttribute('aria-expanded') !== 'true') await userEvent.click(button);
+  return within(await screen.findByRole('region', { name }));
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -82,8 +90,7 @@ describe('기억 창', () => {
     });
     renderApp(`/story/sessions/${SESSION}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '기억' }));
-    const dialog = within(screen.getByRole('dialog', { name: '기억' }));
+    const dialog = await openTool('기억');
     const suggested = within(await dialog.findByRole('list', { name: '요약이 제안한 메모' }));
     expect(dialog.getByText('1 / 20')).toBeInTheDocument();
     await userEvent.click(within(suggested.getByText('불꽃놀이는 30일째다').closest('li') as HTMLElement).getByRole('button', { name: '받아들이기' }));
@@ -97,8 +104,7 @@ describe('기억 창', () => {
     const { seen } = signedIn();
     renderApp(`/story/sessions/${SESSION}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '기억' }));
-    const dialog = within(screen.getByRole('dialog', { name: '기억' }));
+    const dialog = await openTool('기억');
     const list = within(await dialog.findByRole('list', { name: '기억 메모' }));
     expect(list.getByText('미나는 고양이를 무서워한다')).toBeInTheDocument();
     expect(dialog.getByText('1 / 20')).toBeInTheDocument();
@@ -132,8 +138,7 @@ describe('기억 창', () => {
     });
     renderApp(`/story/sessions/${SESSION}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '기억' }));
-    const dialog = within(screen.getByRole('dialog', { name: '기억' }));
+    const dialog = await openTool('기억');
     expect(await dialog.findByText('여름이 시작됐다.')).toBeInTheDocument();
     await userEvent.type(await dialog.findByLabelText('새 메모'), '하나 더');
     await userEvent.click(dialog.getByRole('button', { name: '더하기' }));

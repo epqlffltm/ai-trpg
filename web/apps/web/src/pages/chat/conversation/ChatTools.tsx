@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/chat/conversation/ChatTools.tsx
 // 대화(C3)의 왼쪽 열 창 넷(Stitch 21번). 단추가 세로로 서고, 누른 단추 바로 아래로 그 창이 펼쳐진다(테이블 방의 창 넷과 같은 모양).
 // 창은 하나만 펼친다. 펼친 단추를 다시 누르면 접는다. 처음에는 맨 앞의 창이 펼쳐져 있다.
-// 펼친 창은 ConversationRoom 이 쥔다(open, onOpenChange). 좁은 화면의 아래 단추 줄(ChatDock)도 같은 창을 펼치기 때문이다.
+// 펼친 창은 ConversationRoom 이 쥔다(open, onOpenChange). 좁은 화면의 아래 단추 줄(ToolDock)도 같은 창을 펼치기 때문이다.
 //   - 지도·이동: 지금 있는 곳, 갈 수 있는 곳과 "가기"(판에 지도가 있을 때만)
 //   - 소지품·건네기: 가진 물건, 쓰기와 건네기
 //   - 상대의 차림·기억: 지금 입은 옷, 기억 메모(펼친 동안만 읽는다)와 앞부분의 요약

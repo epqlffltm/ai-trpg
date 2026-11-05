@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/chat/conversation/ConversationRoom.tsx
 // 대화(C3)의 화면(Stitch 21번). 위에 머리(대화 줄), 넓으면 왼쪽 열의 창 넷(ChatTools)과 오른쪽의 그림 창, 단추 줄, 대사창, 말 쓰기.
-// 좁으면 머리, 그림, 대사창, 말 쓰기가 위아래고, 창 넷은 맨 아래 단추 줄(ChatDock)이 아래에서 올라오는 시트로 연다.
+// 좁으면 머리, 그림, 대사창, 말 쓰기가 위아래고, 창 넷은 맨 아래 단추 줄(ToolDock)이 아래에서 올라오는 시트로 연다.
 // 모델 고르기, 책갈피, 그림으로 저장은 겹쳐 연다.
 // 한 대화에 한 생성이다. 이 화면이 받는 중이거나(turn) 다른 곳에서 쓰는 중이면(generating) 보내기, 다시 생성, 이어서, 대안, 행동, 고치기를 막는다.
 // 답을 받는 일(말 보내기, 행동, 내 말 고치기)은 모델이 있어야 한다. 없으면 보내기 전에 고르게 한다(서버의 409 model_required 를 기다리지 않는다).
@@ -23,8 +23,8 @@ import type { ConversationAction, ConversationDetail, ConversationMessage } from
 import { bookmarkProblemText, isOnBranch, messageAnchor } from './bookmarksView';
 import { snapshotProblemText } from './snapshotsView';
 import { Composer } from './Composer';
-import { ChatDock, useChatDock } from './ChatDock';
-import { chatTools, ChatTools } from './ChatTools';
+import { ToolDock, useToolDock } from '../../../components/ToolDock';
+import { chatToolLabel, chatTools, ChatTools } from './ChatTools';
 import { SheetClose } from '../../../components/SheetClose';
 import { ConversationHeader } from './ConversationHeader';
 import { conversationKey } from './conversationQueries';
@@ -54,7 +54,7 @@ export function ConversationRoom({ detail, turns }: Props) {
   const [choosingModel, setChoosingModel] = useState(false);
   const closeModel = useCallback(() => setChoosingModel(false), []);
   const tools = chatTools(hasMap(detail.character.document));
-  const dock = useChatDock(tools[0] ?? null);
+  const dock = useToolDock(tools[0] ?? null);
   const streaming = turns.turn !== null;
   const busy = streaming || detail.generating || branching.isPending || editing.isPending;
   const picture = pictureOf(detail, turns.turn ? { answering: turns.turn.userMessage, sprite: turns.turn.sprite } : null);
@@ -157,7 +157,7 @@ export function ConversationRoom({ detail, turns }: Props) {
           />
         </div>
       </div>
-      <ChatDock tools={tools} dock={dock} />
+      <ToolDock label="대화의 단추 줄" tools={tools.map((tool) => ({ id: tool, label: chatToolLabel(tool) }))} dock={dock} />
       <ModelDialog detail={detail} open={choosingModel} onClose={closeModel} />
     </main>
   );
