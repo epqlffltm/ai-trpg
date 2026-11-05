@@ -4,6 +4,8 @@
 //   - 그림의 바이트는 asset 이 아니라 게임 서버가 대신 내준다(앉은 사람만). 토큰을 실어 받는다
 //   - 누가 그렸든 앉은 사람 모두가 본다. 내가 그린 것만 by_me 가 참이고, 실패의 까닭(code)도 내 것에만 온다
 //   - 한 장의 값은 GET /snapshots/price. available 이 거짓이면 그 서버에서는 그릴 수 없다(단추를 숨긴다)
+//   - 내가 그린 그림 한 장은 DELETE .../snapshots/{id}(204)로 지운다. asset 의 그림까지 지우고 돈은 돌려주지 않는다.
+//     404 snapshot_not_found(남의 것, 없는 것), 409 snapshot_in_progress·snapshot_settling, 503 asset_unavailable(기록은 남는다)
 // 실패: 402 credit_short·gold_required, 409 snapshot_in_progress(그 테이블에서 그리는 중), 422 not_drawable(장면이 없다),
 //       503 snapshot_unavailable·billing_unavailable·asset_unavailable, 404(앉지 않은 테이블, 없는 라운드, snapshot_not_found)
 
@@ -35,4 +37,9 @@ export function fetchTableSnapshotImage(tableId: string, snapshotId: string, sig
 /** 장면 그림 한 장의 값과 그릴 수 있는지. 가격 목록을 받지 못하면 503 prices_unavailable */
 export function fetchTableSnapshotPrice(signal?: AbortSignal): Promise<TableSnapshotPrice> {
   return apiRequest<TableSnapshotPrice>('/api/v1/game/snapshots/price', signal ? { signal } : {});
+}
+
+/** 내가 그린 그림 한 장을 지운다 */
+export function deleteTableSnapshot(tableId: string, snapshotId: string): Promise<void> {
+  return apiRequest<void>(tablePath(tableId, `/snapshots/${encodeURIComponent(snapshotId)}`), { method: 'DELETE' });
 }
