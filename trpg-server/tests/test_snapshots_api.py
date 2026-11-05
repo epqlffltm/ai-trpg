@@ -144,7 +144,9 @@ async def test_anyone_seated_draws_and_pays_and_everyone_sees_it(
     started = await draw(client, friend, table)
     await drawn(app)
 
-    assert (started['status'], started['round_number'], started['by_me']) == ('drawing', 1, True)
+    # 그리는 일은 응답과 따로 돈다. 가짜 그림 provider 는 바로 끝나서, 답을 읽기 전에 다 그렸을 수도 있다
+    assert (started['round_number'], started['by_me']) == (1, True)
+    assert started['status'] in ('drawing', 'ready')
     (seen,) = await listed(client, me, table)
     assert (seen['id'], seen['status'], seen['by_me'], seen['code']) == (started['id'], 'ready', False, None)
     assert holds_of(billing, FRIEND) == ['captured']
