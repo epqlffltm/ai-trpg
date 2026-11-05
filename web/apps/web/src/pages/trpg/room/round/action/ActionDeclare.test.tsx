@@ -121,12 +121,15 @@ describe('행동을 붙인 선언', () => {
     open({ [`GET ${BASE}/rounds/current`]: () => json(200, round(2, { waiting_for: [OTHER], declarations: [mine] })) });
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
-    expect(await screen.findByRole('button', { name: '고치기' })).toBeInTheDocument();
+    const box = within(await screen.findByRole('region', { name: '행동 선언' }));
+    expect(box.getByText('둘러본다')).toBeInTheDocument();
+    expect(box.getByRole('button', { name: '고치기' })).toBeInTheDocument();
     const status = within(screen.getByRole('region', { name: '상태' }));
     await userEvent.click(status.getByRole('button', { name: /퀘스트·지도/ }));
     await userEvent.click(await status.findByRole('button', { name: '부엌 가기' }));
 
     const form = await declarationForm();
+    expect(screen.getByRole('region', { name: '행동 선언' })).toContainElement(screen.getByRole('form', { name: '선언' }));
     expect(form.getByLabelText('행동')).toHaveValue('move');
     expect(form.getByLabelText('갈 곳')).toHaveValue('p2');
     expect(form.getByLabelText('무엇을 하나요')).toHaveValue('둘러본다');
