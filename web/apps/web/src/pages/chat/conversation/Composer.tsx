@@ -4,6 +4,8 @@
 // 답을 받는 중이면 멈추기만 누를 수 있다. 4000자까지, 빈칸만 있는 말은 보내지 않는다(서버의 규칙과 같다).
 // "/"로 시작해 이름을 적는 중이면 고를 수 있는 단축어를 보인다(#981, shortcutPicks.ts). 고르면 "/이름 "이 되고 입력칸으로 돌아간다.
 // 목록이 보이는 동안 입력칸의 위아래 화살표는 고를 것을 옮기고, Enter 는 보내지 않고 고르며, Esc 는 목록을 닫는다(글을 고치면 다시 보인다).
+// 모양은 Stitch 21번: 추천은 번호가 붙은 세로 줄(오른쪽 끝에 화살표), 입력칸과 보내기는 한 장의 칸. chat 과 story 가 함께 쓴다.
+// 번호와 화살표는 꾸밈이라 읽는 프로그램에는 숨긴다(단추의 이름은 추천의 글이다).
 
 import { Button } from '@ai-trpg/ui';
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
@@ -73,15 +75,26 @@ export function Composer({ draft, onDraft, suggestions, streaming, disabled, can
   return (
     <form className="conversation__composer" onSubmit={submit}>
       {suggestions.length > 0 && !streaming ? (
-        <ul className="plain-list chat-suggestions" aria-label="다음 답 추천">
-          {suggestions.map((suggestion) => (
-            <li key={suggestion}>
-              <Button variant="secondary" disabled={disabled} onClick={() => write(suggestion)}>
-                {suggestion}
-              </Button>
-            </li>
-          ))}
-        </ul>
+        <div className="chat-suggestions-box">
+          <p className="chat-suggestions-box__title" aria-hidden="true">
+            다음 답 추천 <span className="hint">· 누르면 입력칸에 채웁니다</span>
+          </p>
+          <ul className="plain-list chat-suggestions chat-suggestions--numbered" aria-label="다음 답 추천">
+            {suggestions.map((suggestion, index) => (
+              <li key={suggestion}>
+                <button type="button" className="chat-suggestion" disabled={disabled} onClick={() => write(suggestion)}>
+                  <span className="chat-suggestion__number" aria-hidden="true">
+                    {index + 1}
+                  </span>
+                  <span className="chat-suggestion__text">{suggestion}</span>
+                  <span className="chat-suggestion__arrow" aria-hidden="true">
+                    →
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       {picks.length > 0 ? (
         <ul className="plain-list chat-suggestions" aria-label="단축어">
