@@ -7,6 +7,7 @@
     판의 GM 전용 글(테이블의 content)은 넣지 않는다. 그림을 보는 사람은 앉은 사람 모두다
   - 장면은 앞의 몇 글자만 쓴다
   - 맨 앞에 지킬 것을 둔다. 모든 등급에서 전체이용가로 그린다(성인 그림은 따로 정할 때까지 만들지 않는다)
+  - 참고 그림(캐릭터 그림)을 넘기면 끝에 [참고 그림] 블록으로 어느 그림이 누구인지 적는다(chat 서버와 같다)
 """
 
 from collections.abc import Sequence
@@ -21,6 +22,8 @@ RULES = (
 SCENE_CHARS = 800
 # 이름을 넣는 캐릭터의 수
 MAX_NAMES = 6
+# 참고 그림을 어떻게 쓸지
+REFERENCE_RULE = '그림 속 인물의 얼굴, 머리 모양, 체형을 참고 그림에 맞춘다. 참고 그림의 배경과 구도는 따르지 않는다.'
 
 
 def clipped(text: str, limit: int) -> str:
@@ -45,3 +48,14 @@ def scene_block(scene: str) -> str:
 def snapshot_prompt(title: str, round_number: int, names: Sequence[str], scene: str) -> str:
     """그림의 지시 전부. 지킬 것, 이야기, 장면의 차례다."""
     return '\n\n'.join(['\n'.join(RULES), story_block(title, round_number, names), scene_block(scene)])
+
+
+def reference_block(names: Sequence[str]) -> str:
+    """[참고 그림] 블록. 넘긴 차례대로 그 그림의 캐릭터를 적는다."""
+    lines = [f'{index}번째 그림: {name}' for index, name in enumerate(names, start=1)]
+    return '\n'.join(['[참고 그림]', *lines, REFERENCE_RULE])
+
+
+def with_references(prompt: str, names: Sequence[str]) -> str:
+    """참고 그림이 있으면 지시 끝에 [참고 그림] 블록을 붙인다. 없으면 그대로."""
+    return prompt if not names else f'{prompt}\n\n{reference_block(names)}'

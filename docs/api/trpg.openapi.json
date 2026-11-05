@@ -8291,6 +8291,18 @@
             "title": "Joined At",
             "type": "string"
           },
+          "portrait_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portrait Id"
+          },
           "pregen_index": {
             "anyOf": [
               {
@@ -28757,6 +28769,64 @@
         "summary": "Change Narration Style",
         "tags": [
           "tables"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/tables/{table_id}/portraits/{portrait_id}/image": {
+      "get": {
+        "description": "앉은 테이블의 캐릭터 그림의 바이트.",
+        "operationId": "read_table_image_api_v1_game_tables__table_id__portraits__portrait_id__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "portrait_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portrait Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {},
+              "image/png": {},
+              "image/webp": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Table Image",
+        "tags": [
+          "portraits"
         ],
         "x-audience": "user"
       }

@@ -268,7 +268,11 @@ async def test_a_kept_image_behind_a_dead_asset_server_is_503(
 
 
 class GatedProvider:
-    """문이 열릴 때까지 그리지 않는 provider."""
+    """문이 열릴 때까지 그리지 않는 provider. ImageProvider 의 모양을 갖춘다(참고 그림은 받지 않는다)."""
+
+    kind = 'gated'
+    model = 'fake'
+    supports_references = False
 
     def __init__(self) -> None:
         self.gate = asyncio.Event()

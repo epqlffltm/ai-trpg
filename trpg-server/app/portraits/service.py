@@ -5,7 +5,8 @@
 
   - 올리기: 한 사람이 올릴 수 있는 수(PORTRAIT_MAX_PER_OWNER)를 보고, asset 에 올린 사람의 토큰으로 맡긴 뒤 기록한다.
     asset 에 맡긴 뒤 기록하지 못하면 asset 에 주인 없는 그림이 하나 남는다(기록이 없으니 아무도 붙이지 못한다)
-  - 보기: 지금은 올린 사람만 본다. 테이블의 사람과 공개 시나리오를 보는 사람에게는 다음 단계에서 연다
+  - 보기: 올린 사람은 자기 그림을 본다. 테이블에 앉은 사람은 그 테이블의 판(프리젠)에 붙은 그림을 본다.
+    공개 시나리오를 보는 사람에게는 아직 열지 않았다
   - asset 을 부르는 동안 DB 의 트랜잭션을 열어 두지 않는다. 세션을 나눠 쓴다
 """
 
@@ -18,6 +19,8 @@ from app.asset_server.client import AssetClient, AssetNotFoundError, ImageConten
 from app.portraits import repository
 from app.portraits.models import Portrait
 from app.portraits.schemas import PortraitOut, PortraitPage
+from app.portraits.seats import table_portraits
+from app.tables.service import get_table
 
 logger = logging.getLogger(__name__)
 
@@ -86,13 +89,44 @@ async def find_mine(
     return portrait
 
 
+async def fetch_image(asset: AssetClient, image_id: uuid.UUID) -> ImageContent:
+    """이 서버가 맡긴 그림의 바이트. asset 에서 사라졌으면 PortraitNotFoundError."""
+    try:
+        return await asset.fetch_kept(image_id)
+    except AssetNotFoundError as error:
+        logger.warning('기록은 있는데 asset 에 그림이 없습니다', extra={'image_id': str(image_id)})
+        raise PortraitNotFoundError from error
+
+
 async def portrait_image(
     session_factory: async_sessionmaker[AsyncSession], asset: AssetClient, owner_id: uuid.UUID, image_id: uuid.UUID
 ) -> ImageContent:
     """내가 올린 그림의 바이트. 남의 것이나 asset 에서 사라진 것은 PortraitNotFoundError."""
     portrait = await find_mine(session_factory, owner_id, image_id)
-    try:
-        return await asset.fetch_kept(portrait.id)
-    except AssetNotFoundError as error:
-        logger.warning('기록은 있는데 asset 에 그림이 없습니다', extra={'image_id': str(portrait.id)})
-        raise PortraitNotFoundError from error
+    return await fetch_image(asset, portrait.id)
+
+
+async def require_table_portrait(
+    session_factory: async_sessionmaker[AsyncSession], user_id: uuid.UUID, table_id: uuid.UUID, image_id: uuid.UUID
+) -> None:
+    """
+    앉은 테이블의 판에 붙은 그림인지 본다.
+
+    앉지 않은 테이블이면 TableNotFoundError(404), 그 판의 그림이 아니면 PortraitNotFoundError.
+    """
+    async with session_factory() as session:
+        table = await get_table(session, user_id, table_id)
+        if image_id not in table_portraits(table.content):
+            raise PortraitNotFoundError
+
+
+async def table_portrait_image(
+    session_factory: async_sessionmaker[AsyncSession],
+    asset: AssetClient,
+    user_id: uuid.UUID,
+    table_id: uuid.UUID,
+    image_id: uuid.UUID,
+) -> ImageContent:
+    """앉은 테이블의 캐릭터 그림의 바이트."""
+    await require_table_portrait(session_factory, user_id, table_id, image_id)
+    return await fetch_image(asset, image_id)
