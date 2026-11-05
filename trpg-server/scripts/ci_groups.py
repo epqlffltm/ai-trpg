@@ -141,47 +141,53 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'typing',
         'transcript',
     ),
-    # 싸움: 공격의 비용과 효과, 장비, 세이브와 저항, 성질, 기술, 동료 피해, 성장
+    # 아래 셋은 나머지(platform)가 다른 묶음의 서너 배로 오래 걸려(CI 에서 12분 안팎) 떼어 낸 것이다.
+    # 묶음마다 CI 에서 3분 안팎이 되게 나눴다(파일마다 걸린 시간을 재서 골랐다)
+    # 전투와 성장: 공격의 값과 효과, 아군 사격, 피해의 성질과 저항, 세이브, 장비, 쓰러진 상대, 기술, 엄폐, 성장
     'combat': (
+        'friendly_fire',
         'attack_',
+        'damage_natures',
+        'resistances',
+        'natures',
+        'saves',
         'combat_gear',
         'equipment',
-        'saves',
-        'resistances',
-        'damage_natures',
-        'natures',
-        'covers',
         'downed_strikes',
-        'friendly_fire',
         'skill',
+        'covers',
+        'npc_attack_sheets',
         'growth',
     ),
-    # 물건과 NPC: 물건의 효과와 던지기, 거들기, 치료에 붙여 쓰기, 사고팔기, 드롭, 수치, NPC 의 차례와 행동
+    # 물건과 자원: 던지기, 효과, 치료와 회복, 사고팔기, 전리품, 들기, 돈, 자원, 도둑맞음과 훔치기, 거짓 주장
     'items': (
         'item_',
         'treat_aids',
         'trades',
-        'money',
         'loots',
         'carry',
+        'money',
         'resource',
-        'npc_',
+        'robbed_wake',
+        'npc_steals',
+        'npc_items',
+        'false_claims',
     ),
-    # 맵의 위험: 함정, 길과 문, 사건, 떠돌이, 장의 잠금, 기다리기, 맵의 서술
+    # 장소의 위험과 길: 함정과 찾기, 길의 문과 조건, 떠도는 조우, 일어나는 일, NPC 의 차례와 자리, 장의 잠금
     'hazards': (
         'trap',
         'foe_traps',
         'preset_traps',
-        'happening',
         'route_',
-        'robbed_wake',
         'wander',
+        'happening',
+        'npc_turns',
+        'npc_places',
+        'npc_attitude',
         'chapter_locks',
-        'waits',
         'map_narration',
     ),
-    # 기반과 나머지: 앱, 설정, DB, 인증, 관측, 작업, 알림, 운영자, 캠페인과 공개 목록의 화면 쪽 기능, 장면 그림.
-    # 어느 머리에도 맞지 않는 파일도 여기다
+    # 기반과 나머지: 앱, 설정, DB, 인증, 관측, 작업, 알림, 운영자. 어느 머리에도 맞지 않는 파일도 여기다
     CATCH_ALL: (),
 }
 
