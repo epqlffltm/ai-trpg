@@ -47,3 +47,24 @@ class SnapshotPriceOut(BaseModel):
     credits: str | None = None
     tier: Tier | None = None
     promo: bool = False
+
+
+class KeptSnapshotOut(BaseModel):
+    """
+    내가 다 그린 테이블의 장면 그림 한 장(갤러리). table_title 은 그 테이블의 제목이다.
+    테이블을 지웠으면 table_id 와 table_title 이 null 이다. 그림은 asset 서버의 주소로 받는다(그린 사람만).
+    """
+
+    id: uuid.UUID
+    image_id: uuid.UUID
+    table_id: uuid.UUID | None
+    table_title: str | None
+    round_number: int
+    created_at: datetime
+
+
+class KeptSnapshotPage(BaseModel):
+    """목록의 한 쪽과 전체 개수."""
+
+    items: list[KeptSnapshotOut]
+    total: int

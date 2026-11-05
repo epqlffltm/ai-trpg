@@ -12,8 +12,11 @@
        됐으면 확정할 것, 아니면 돌려줄 것으로 적는다
     4. settle_snapshot: 결제 서버에 확정이나 반환을 맡긴다. 못 했으면 정리 작업(app/snapshots/settler.py)이 마저 한다
   지우기
-    - delete_snapshot: 그린 사람이 자기 그림 한 장을 지운다. asset 의 그림을 먼저, 기록을 나중에 지운다.
+    - delete_snapshot: 그린 사람이 테이블에서 자기 그림 한 장을 지운다. asset 의 그림을 먼저, 기록을 나중에 지운다.
       돈은 돌려주지 않는다
+    - delete_mine: 같은 일을 갤러리에서 한다. 테이블을 나갔거나 지웠어도 자기 그림이면 지운다
+  갤러리
+    - list_kept: 내가 다 그린 그림들. 테이블을 넘어 최근에 만든 것부터다
   보기
     - list_snapshots: 테이블의 그림들. 앉은 사람 모두가 본다(누가 그렸든)
     - snapshot_image: 그림의 바이트. asset 서버에서 서명만으로 받아 대신 내준다(앉은 사람만)
@@ -50,7 +53,7 @@ from app.snapshots.charging import HoldDeclined, Settled
 from app.snapshots.models import DUE_STATUSES, SnapshotBilling, SnapshotOutcome, TableSnapshot
 from app.snapshots.prompt import snapshot_prompt
 from app.snapshots.providers import price_code_of
-from app.snapshots.schemas import SnapshotOut, SnapshotStatus
+from app.snapshots.schemas import KeptSnapshotOut, KeptSnapshotPage, SnapshotOut, SnapshotStatus
 from app.tables.models import GameTable
 from app.tables.service import get_table
 
@@ -435,9 +438,57 @@ async def delete_snapshot(
     asset 이 안 되면 AssetUnavailableError 이고 기록은 남는다(다시 지우면 asset 은 없는 그림도 204 로 답한다).
     """
     snapshot = await find_removable(session_factory, user_id, table_id, snapshot_id)
+    await remove(session_factory, asset, token, snapshot)
+
+
+async def remove(
+    session_factory: async_sessionmaker[AsyncSession], asset: AssetClient, token: str, snapshot: TableSnapshot
+) -> None:
+    """
+    지울 수 있다고 본 그림 한 장을 지운다. asset 의 그림을 먼저(그린 사람의 토큰으로), 기록을 나중에 지우고
+    테이블에 알린다.
+    asset 을 부르는 동안 DB 의 연결을 쥐지 않는다. asset 이 안 되면 AssetUnavailableError 이고 기록은 남는다.
+    """
     if snapshot.image_id is not None:
         await asset.discard_image(token, snapshot.image_id)
     async with session_factory() as session:
         if await repository.remove_settled(session, snapshot.id, SETTLED_STATUSES):
             await announce(session, snapshot.table_id)
         await session.commit()
+
+
+async def delete_mine(
+    session_factory: async_sessionmaker[AsyncSession],
+    asset: AssetClient,
+    user_id: uuid.UUID,
+    token: str,
+    snapshot_id: uuid.UUID,
+) -> None:
+    """
+    갤러리에서 내 그림 한 장을 지운다. 테이블을 보지 않는다(나갔거나 지운 테이블의 그림도 내 그림이다).
+    남의 것이나 없는 것이면 SnapshotNotFoundError, 지울 수 없으면 require_removable 의 오류.
+    """
+    async with session_factory() as session:
+        snapshot = await repository.find_mine(session, user_id, snapshot_id)
+    if snapshot is None:
+        raise SnapshotNotFoundError
+    require_removable(snapshot)
+    await remove(session_factory, asset, token, snapshot)
+
+
+def kept_out(snapshot: TableSnapshot, table_title: str | None) -> KeptSnapshotOut:
+    """갤러리의 한 장의 응답."""
+    return KeptSnapshotOut(
+        id=snapshot.id,
+        image_id=snapshot.image_id,
+        table_id=snapshot.table_id,
+        table_title=table_title,
+        round_number=snapshot.round_number,
+        created_at=snapshot.created_at,
+    )
+
+
+async def list_kept(session: AsyncSession, user_id: uuid.UUID, limit: int, offset: int) -> KeptSnapshotPage:
+    """내가 다 그린 그림들(갤러리). 테이블을 넘어 최근에 만든 것부터다."""
+    rows, total = await repository.list_kept(session, user_id, limit, offset)
+    return KeptSnapshotPage(items=[kept_out(*row) for row in rows], total=total)

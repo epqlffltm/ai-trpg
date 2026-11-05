@@ -11,6 +11,10 @@
         그림의 바이트. 이 서버가 asset 서버에서 받아 대신 내준다
     DELETE /api/v1/game/tables/{table_id}/snapshots/{id}
         내 그림 한 장을 지운다(asset 의 그림까지). 204. 돈은 돌려주지 않는다
+    GET  /api/v1/game/snapshots
+        내가 다 그린 그림들(갤러리). ?limit=&offset=. 테이블을 넘어 최근에 만든 것부터
+    DELETE /api/v1/game/snapshots/{id}
+        갤러리에서 내 그림 한 장을 지운다. 테이블을 나갔거나 지웠어도 된다. 204
     GET  /api/v1/game/snapshots/price
         장면 그림 한 장의 값과 그릴 수 있는지
 
@@ -35,13 +39,13 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from server_core.auth.dependencies import CurrentUser, bearer_scheme, unauthorized
 
-from app.assets.routing import Session
+from app.assets.routing import Paging, Session
 from app.billing.routing import Now, Prices, utc_now
 from app.snapshots import service
 from app.snapshots.charging import CREDIT_SHORT, GOLD_REQUIRED, NOT_FOR_SALE
 from app.snapshots.pricing import snapshot_price
 from app.snapshots.providers import price_code_of
-from app.snapshots.schemas import SnapshotOut, SnapshotPriceOut
+from app.snapshots.schemas import KeptSnapshotPage, SnapshotOut, SnapshotPriceOut
 from app.snapshots.service import (
     NotDrawableError,
     SnapshotBusyError,
@@ -55,7 +59,7 @@ from app.snapshots.service import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix='/tables/{table_id}', tags=['snapshots'])
-price_router = APIRouter(prefix='/snapshots', tags=['snapshots'])
+own_router = APIRouter(prefix='/snapshots', tags=['snapshots'])
 
 # 그리는 작업의 종류(app/core/jobs.py). 기본 한도를 쓴다
 DRAW_OPERATION = 'snapshot.draw'
@@ -146,7 +150,20 @@ async def delete_snapshot(
     await service.delete_snapshot(state.session_factory, state.asset, user.user_id, token, table_id, snapshot_id)
 
 
-@price_router.get('/price', response_model=SnapshotPriceOut, status_code=status.HTTP_200_OK)
+@own_router.get('', response_model=KeptSnapshotPage, status_code=status.HTTP_200_OK)
+async def list_kept(user: CurrentUser, session: Session, paging: Paging) -> KeptSnapshotPage:
+    """내가 다 그린 그림들. 테이블을 넘어 최근에 만든 것부터다."""
+    return await service.list_kept(session, user.user_id, paging.limit, paging.offset)
+
+
+@own_router.delete('/{snapshot_id}', status_code=status.HTTP_204_NO_CONTENT)
+async def delete_mine(snapshot_id: uuid.UUID, user: CurrentUser, token: Token, request: Request) -> None:
+    """갤러리에서 내 그림 한 장을 지운다. 남의 그림은 404 다. 그리는 중이거나 청구를 정리하는 중이면 409 다."""
+    state = request.app.state
+    await service.delete_mine(state.session_factory, state.asset, user.user_id, token, snapshot_id)
+
+
+@own_router.get('/price', response_model=SnapshotPriceOut, status_code=status.HTTP_200_OK)
 async def read_price(user: CurrentUser, request: Request, prices: Prices, now: Now) -> SnapshotPriceOut:
     """장면 그림 한 장의 값. 가격 목록을 받지 못했고 받아 둔 것도 없으면 503 prices_unavailable 이다."""
     state = request.app.state

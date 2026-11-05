@@ -60,6 +60,8 @@ class TableSnapshot(Base):
         Index('uq_table_snapshots_one_drawing', 'table_id', unique=True, postgresql_where=text('outcome IS NULL')),
         # 테이블의 그림들을 만든 차례로 찾는다
         Index('ix_table_snapshots_table_created', 'table_id', 'created_at'),
+        # 그린 사람의 그림들(갤러리)을 최근에 만든 것부터 찾는다
+        Index('ix_table_snapshots_owner_created', 'owner_id', 'created_at'),
         # 정리 작업이 맡길 차례가 된 청구를 찾는다
         Index('ix_table_snapshots_billing_status_next_settle_at', 'billing_status', 'next_settle_at'),
     )

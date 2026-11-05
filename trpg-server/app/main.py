@@ -398,9 +398,9 @@ def create_app(
     app.include_router(transcripts.router, prefix=API_PREFIX)
     app.include_router(tables.router, prefix=API_PREFIX)
     app.include_router(rounds.router, prefix=API_PREFIX)
-    # 테이블의 장면 그림(#983)과 그 값
+    # 테이블의 장면 그림(#983), 내 그림들(갤러리)과 그 값
     app.include_router(snapshots.router, prefix=API_PREFIX)
-    app.include_router(snapshots.price_router, prefix=API_PREFIX)
+    app.include_router(snapshots.own_router, prefix=API_PREFIX)
     app.include_router(calendar.router, prefix=API_PREFIX)
     app.include_router(campaign_runs.router, prefix=API_PREFIX)
     app.include_router(events.router, prefix=API_PREFIX)
