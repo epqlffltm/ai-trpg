@@ -110,7 +110,7 @@ declare -A TRACE_PROBES=(
 # 인증 서버의 것은 주기 명령(send_security_digest)이다. 워커와 주기 명령의 검사(check_workers)가 먼저 한 번 돌린다.
 # 인증 서버의 워커는 할 일이 없던 바퀴를 보내지 않아 쓸 수 없다. TRPG 서버의 5초 바퀴(시계, 청구 정리, 알림 보내기)도 같다.
 # TRPG 서버의 것은 서버가 뜨면 바로 한 바퀴 도는 AI 호출 기록의 정리(ai_log.prune)다. 맡은 수를 싣지 않아 늘 남는다.
-# 게시판 서버의 알림 보내기도 보낼 것이 없던 바퀴는 보내지 않는다. 추적을 보기 전에 발송함에 알림 하나를 적는다(queue_board_notification)
+# 게시판 서버의 알림 보내기도 보낼 것이 없던 바퀴는 보내지 않는다. check 의 처음에 발송함에 알림 하나를 적는다(queue_board_notification, start_waits)
 # asset, chat, story 서버는 아직 DB 를 쓰는 작업이 없어 적지 않는다(끊긴 세션 목록 받기는 HTTP 만 쓴다). 적지 않은 서버는 작업의 검사를 건너뛴다
 declare -A TRACE_JOBS=(
   [auth]=security.send_digest
@@ -1235,7 +1235,6 @@ check_traces() {
   report "Grafana 가 Tempo 에 닿는다(데이터 소스 tempo)" grafana_reaches tempo
   report "시험 span 을 OTLP 로 Alloy 에 민다(telemetry 망)" push_probe_span "$trace"
   report "민 span 이 Alloy 를 거쳐 Tempo 에 들어온다(추적 번호로 찾는다)" eventually tempo_finds_trace "$trace"
-  report "게시판 서버의 발송함에 알림 하나를 적는다(보내는 작업의 span 을 남기게 한다)" queue_board_notification
   check_server_spans
 }
 
@@ -1295,8 +1294,7 @@ check_server_metrics() {
     eventually prometheus_finds 'background_jobs_finished_total{service="billing-server", operation="autocharge.run", result="success", instance=~"autocharge-.+"}'
   report "결제 서버의 대사가 끝날 때 작업 메트릭을 민다(reconcile.run)" \
     eventually prometheus_finds 'background_jobs_finished_total{service="billing-server", operation="reconcile.run"}'
-  # 업무 메트릭. 주문과 결제 대행사는 CI 에 결제가 없어 값이 생기지 않는다. 알림은 서명 없는 것을 하나 보내 만든다
-  send_unsigned_webhook
+  # 업무 메트릭. 주문과 결제 대행사는 CI 에 결제가 없어 값이 생기지 않는다. 알림은 서명 없는 것을 check 의 처음에 하나 보냈다(start_waits)
   report "결제 서버가 서명 없는 알림을 센다(payment_webhooks_total, result=bad_signature)" \
     eventually prometheus_finds 'payment_webhooks_total{service="billing-server", provider="fake", result="bad_signature"}'
   # 알림 서버. 정리 작업은 뜨면 바로 한 바퀴 돈다. 알림은 check 의 앞에서 게임 서버와 게시판 서버가 하나씩 넣었다
@@ -1495,8 +1493,7 @@ grafana_reaches_alertmanager() {
 
 # 경보를 본다. 메트릭이 들어온 뒤에 부른다. 첫 알림은 30초를 모아 보낸다(group_wait)
 check_alerts() {
-  local run path
-  run="$(openssl rand -hex 8)"
+  local path
   report "alertmanager 가 root 가 아니다" not_root alertmanager
   report "Alertmanager 가 다시 뜨지 않고 돈다" stays_up alertmanager
   wait_alert_rules
@@ -1513,11 +1510,7 @@ check_alerts() {
   report "Grafana 가 Alertmanager 에 닿는다(데이터 소스 alertmanager)" grafana_reaches_alertmanager
   report "결제 서버가 Alertmanager 에 닿지 않는다(경보를 꾸며 넣거나 끄지 못한다)" \
     unreachable_from billing-server http://alertmanager:9093/-/ready
-  report "받는 곳의 흉내를 띄운다" alert_sink_up
-  report "흉내가 준비됐다" eventually alert_sink_ready
-  report "Watchdog 이 바깥 감시로 간다($HEARTBEAT_PATH)" eventually_within "$HEARTBEAT_WAIT_SECONDS" sink_received "$HEARTBEAT_PATH"
-  report "Watchdog 은 운영자의 받는 곳(Discord, Slack, Telegram)에 가지 않는다" operator_got_nothing
-  report "시험 경보를 Alertmanager 에 넣는다" post_test_alert "$run"
+  # 시험 경보는 check 의 처음에 넣었다(start_waits)
   for path in "${ALERT_PATHS[@]}"; do
     report "Alertmanager 가 시험 경보를 보냈다($path)" eventually sink_received "$path"
   done
@@ -1561,9 +1554,25 @@ check_config() {
   fi
 }
 
+# 결과가 늦게 들어오는 것을 check 의 처음에 걸어 둔다. 기다리는 동안 다른 확인이 돈다.
+#   - 시험 경보: Alertmanager 가 첫 알림을 30초 모아 보낸다(group_wait). 받았는지는 check_alerts 가 본다
+#   - 게시판 서버의 발송함의 알림: 보내는 작업의 span 이 Tempo 에 들어오기까지 10~20초. check_traces 가 본다
+#   - 서명 없는 결제 알림: 센 값이 Prometheus 에 들어오기까지 10초쯤. check_metrics 가 본다
+# 운영자의 받는 곳이 아무것도 받지 않았는지는 시험 경보를 넣기 전에 봐야 하므로 여기서 본다
+start_waits() {
+  report "받는 곳의 흉내를 띄운다" alert_sink_up
+  report "흉내가 준비됐다" eventually alert_sink_ready
+  report "Watchdog 이 바깥 감시로 간다($HEARTBEAT_PATH)" eventually_within "$HEARTBEAT_WAIT_SECONDS" sink_received "$HEARTBEAT_PATH"
+  report "Watchdog 은 운영자의 받는 곳(Discord, Slack, Telegram)에 가지 않는다" operator_got_nothing
+  report "시험 경보를 Alertmanager 에 넣는다" post_test_alert "$(openssl rand -hex 8)"
+  report "게시판 서버의 발송함에 알림 하나를 적는다(보내는 작업의 span 을 남기게 한다)" queue_board_notification
+  send_unsigned_webhook
+}
+
 check() {
   local server jwks=http://auth-server:8000/api/v1/auth/jwks
   start_alert_rules
+  start_waits
   for server in "${SERVERS[@]}"; do
     report "${server}-migrate 가 성공했다" migrated "$server"
     report "${server}-server 가 준비됐다(/health/ready 가 200, DB 에 닿는다)" ready_inside "$server"
