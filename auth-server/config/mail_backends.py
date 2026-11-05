@@ -29,6 +29,28 @@ def require_real_mailer_in_production(smtp_host: str, environment: str) -> None:
         raise ImproperlyConfigured('운영 환경(APP_ENVIRONMENT=production)에서는 SMTP_HOST 를 적어야 합니다.')
 
 
+def require_usable_smtp_login(user: str, password: str) -> None:
+    """
+    메일 서버에 로그인할 계정과 비밀번호가 쓸 수 있는 모양인지 본다. 아니면 서버와 메일 워커가 뜨지 않게 한다.
+    SMTP_HOST 가 있을 때 설정을 읽으며 부른다(config/settings.py).
+
+    SMTP 의 로그인(AUTH PLAIN, LOGIN)은 계정과 비밀번호를 ASCII 로만 보낸다(smtplib). 한글이 섞이면
+    메일을 보내는 순간 UnicodeEncodeError 가 나고, 메일 워커는 그 메일을 다시 집을 때마다 죽는다.
+    그 뒤의 메일이 모두 멈춘다.
+    .env.example 의 보기(SMTP_USER=내주소@gmail.com)를 그대로 옮기면 이렇게 된다.
+    비어 있어도 막는다. 메일 서버가 매번 거절해 메일이 다시 보내기만 되풀이한다.
+    값은 오류에 싣지 않는다. 비밀번호가 로그에 남는다.
+    """
+    for name, value in (('SMTP_USER', user), ('SMTP_PASSWORD', password)):
+        if not value:
+            raise ImproperlyConfigured(f'SMTP_HOST 를 적었으면 {name} 도 적어야 합니다.')
+        if not value.isascii():
+            raise ImproperlyConfigured(
+                f'{name} 에 영문, 숫자, 기호가 아닌 글자(한글 등)가 있습니다. 메일 서버에 로그인하지 못합니다. '
+                '.env.example 의 보기를 그대로 두지 않았는지 봅니다.'
+            )
+
+
 def forbid_debug_when_deployed(debug: bool, environment: str) -> None:
     """
     바깥에 연 환경(staging, production)인데 DEBUG 가 켜져 있으면 서버가 뜨지 않게 한다.

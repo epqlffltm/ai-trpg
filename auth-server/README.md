@@ -640,6 +640,9 @@ uv run python manage.py runserver 2>&1 | jq -rR 'fromjson? | [.timestamp, .level
 
 - 워커와 예약 명령(`send_outgoing_mail`, `send_welcome_credits`, `delete_unverified_users`, `send_security_digest`)은 요청이 아니라 작업이다. 탈퇴를 하루 전에 다시 알리는 일(`withdrawal.remind`), 마치는 일(`withdrawal.complete`), 알리는 일(`withdrawal.deliver`)도 `send_welcome_credits` 의 작업이다. 로그에 `request_id` 대신 `job_id` 가 붙는다.
   메일 워커는 1초마다 돌아서, 잘 끝난 것은 `debug` 로 남긴다. 실패만 `error`(`error_code: job.failed`)로 남는다.
+- **`SMTP_HOST` 를 적었으면 `SMTP_USER` 와 `SMTP_PASSWORD` 도 적고, 둘 다 영문·숫자·기호(ASCII)여야 한다.** 아니면 서버와 메일 워커가 뜨지 않는다.
+  SMTP 의 로그인은 ASCII 로만 보낸다. `.env.example` 의 보기(`내주소@gmail.com`)를 그대로 두면 메일을 보낼 때마다 워커가 죽고 그 뒤의 메일이 모두 멈췄다.
+  Gmail 의 앱 비밀번호는 띄어 쓴 채로 넣어도 된다.
 - **`APP_ENVIRONMENT=production` 이면 `SMTP_HOST` 를 꼭 적어야 한다.** 적지 않으면 서버가 뜨지 않는다.
   `SMTP_HOST` 가 없으면 메일을 보내지 않고 터미널에 찍는데, 거기에는 받는 사람의 주소와 인증 코드가 그대로 나온다. 운영에서는 그것이 로그에 남는다.
   `staging` 은 메일 서버 없이 뜬다. 인증 코드가 찍힌 줄이 로그 모으기(Loki)에 14일 남으니 메일 서버를 붙이기 전까지 그렇다는 것을 안다.

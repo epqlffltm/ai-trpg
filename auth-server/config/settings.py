@@ -24,7 +24,11 @@ from django.core.exceptions import ImproperlyConfigured
 from config.billing import validate_billing_url, validate_service_secret
 from config.identity import default_identity_provider, validate_identity_provider
 from config.jwt_keys import load_key_material, private_key_path
-from config.mail_backends import forbid_debug_when_deployed, require_real_mailer_in_production
+from config.mail_backends import (
+    forbid_debug_when_deployed,
+    require_real_mailer_in_production,
+    require_usable_smtp_login,
+)
 from config.security import (
     SILENCED_DEPLOY_CHECKS,
     default_cookie_origins,
@@ -433,6 +437,9 @@ smtp_host = env('SMTP_HOST', default='')
 require_real_mailer_in_production(smtp_host, APP_ENVIRONMENT)
 
 if smtp_host:
+    smtp_user = env('SMTP_USER')
+    smtp_password = env('SMTP_PASSWORD')
+    require_usable_smtp_login(smtp_user, smtp_password)
     MAILERS = {
         'default': {
             'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
@@ -440,8 +447,8 @@ if smtp_host:
                 'host': smtp_host,
                 # 587 은 STARTTLS 로 암호화하는 제출용 포트다
                 'port': env.int('SMTP_PORT', default=587),
-                'username': env('SMTP_USER'),
-                'password': env('SMTP_PASSWORD'),
+                'username': smtp_user,
+                'password': smtp_password,
                 'use_tls': True,
                 # 메일 서버가 응답하지 않을 때 워커가 무한정 기다리지 않게 한다(초)
                 'timeout': env.int('SMTP_TIMEOUT', default=10),
