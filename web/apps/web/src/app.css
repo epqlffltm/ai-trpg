@@ -3731,9 +3731,104 @@ details.room-panel[open] > summary {
   margin-top: 12px;
 }
 
+/* 말 쓰기(Stitch 21번). 추천 상자 아래에 입력칸과 보내기가 한 장의 칸 */
 .conversation__composer {
   display: grid;
   gap: 8px;
+}
+
+.conversation__composer > .ui-field {
+  margin-bottom: 0;
+  padding: 12px 14px 0;
+  border: 1px solid var(--ui-border);
+  border-bottom: 0;
+  border-radius: var(--ui-radius-lg) var(--ui-radius-lg) 0 0;
+  background: var(--ui-surface);
+}
+
+.conversation__composer > .conversation__send {
+  margin-top: -8px;
+  padding: 8px 14px 12px;
+  border: 1px solid var(--ui-border);
+  border-top: 0;
+  border-radius: 0 0 var(--ui-radius-lg) var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+
+/* 다음 답 추천. 번호가 붙은 세로 줄, 오른쪽 끝에 화살표 */
+.chat-suggestions-box {
+  display: grid;
+  gap: 6px;
+}
+
+.chat-suggestions-box__title {
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 0.85em;
+  font-weight: 700;
+}
+
+.chat-suggestions-box__title .hint {
+  font-weight: 400;
+}
+
+.chat-suggestions.chat-suggestions--numbered {
+  display: grid;
+  gap: 6px;
+}
+
+.chat-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-suggestion:hover:not(:disabled) {
+  border-color: var(--ui-accent);
+}
+
+.chat-suggestion:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 1px;
+}
+
+.chat-suggestion:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.chat-suggestion__number {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ui-accent) 15%, var(--ui-surface));
+  color: var(--ui-accent);
+  font-size: 0.8em;
+  font-weight: 700;
+}
+
+.chat-suggestion__text {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--ui-font-serif);
+  overflow-wrap: anywhere;
+}
+
+.chat-suggestion__arrow {
+  flex: none;
+  color: var(--ui-text-muted);
 }
 
 .chat-suggestions {
