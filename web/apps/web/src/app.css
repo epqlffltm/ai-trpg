@@ -1675,8 +1675,53 @@ a.ui-button {
   margin: 0;
 }
 
+/* 선언 칸(Stitch 20번). 머리에 "행동 선언"(명조)과 오른쪽에 고칠 수 있다는 말, 그 아래 입력. 보내기 단추는 오른쪽 끝 */
+.declare-box {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+
+.declare-box__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.declare-box__head h4 {
+  margin: 0;
+  font-family: var(--ui-font-serif);
+  font-size: 1.1rem;
+}
+
+.declare-box__head .hint {
+  margin: 0;
+  font-size: 0.85em;
+}
+
+.declaration-form {
+  display: grid;
+  gap: 8px;
+}
+
+.declaration-form .ui-field {
+  margin-bottom: 0;
+}
+
 .declaration-form__content {
   resize: vertical;
+  min-height: 5.5em;
+}
+
+.declaration-form .form-actions {
+  justify-content: flex-end;
 }
 
 .narration-preview__text {
