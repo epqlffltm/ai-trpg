@@ -135,6 +135,8 @@ class ListingPregen(BaseModel):
     description: str
     # 이 프리젠을 고르면 받는 숫자. 능력치의 이름은 PublicListingDetail.abilities 에서 찾는다
     sheet: CharacterSheet
+    # 제작자가 붙인 캐릭터 그림(#983). 바이트는 GET /listings/{scenario_id}/portraits/{portrait_id}/image. 없으면 None
+    portrait_id: uuid.UUID | None = None
 
 
 class PublicListingDetail(PublicListing):

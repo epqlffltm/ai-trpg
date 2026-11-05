@@ -49,7 +49,7 @@ async def test_the_choices_for_a_new_table_are_shown(client: AsyncClient, my_hea
     public = await public_detail(client, their_headers, scenario)
 
     assert public['character_modes'] == ['pregen']
-    assert public['pregens'] == [{**KNIGHT, 'sheet': as_character(KNIGHT['sheet'])}]
+    assert public['pregens'] == [{**KNIGHT, 'sheet': as_character(KNIGHT['sheet']), 'portrait_id': None}]
     assert [ability['key'] for ability in public['abilities']] == ['str', 'dex', 'con', 'int', 'wis', 'cha']
 
 
@@ -58,7 +58,8 @@ async def test_the_pregens_items_are_not_shown(client: AsyncClient, my_headers: 
 
     public = await public_detail(client, their_headers, scenario)
 
-    assert set(public['pregens'][0]) == {'name', 'description', 'sheet'}
+    # 소지품과 돈은 싣지 않는다. 캐릭터 그림(#983)은 싣는다
+    assert set(public['pregens'][0]) == {'name', 'description', 'sheet', 'portrait_id'}
 
 
 async def test_it_shows_the_listed_version_not_the_draft(client: AsyncClient, my_headers: dict, their_headers: dict):

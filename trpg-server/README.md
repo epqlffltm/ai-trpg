@@ -266,7 +266,8 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | POST | `/api/v1/game/portraits` | 프리젠에 붙일 캐릭터 그림 올리기(#983). 본문은 그림 파일의 바이트. 201(`{"id", "created_at"}`). 413·415·422 는 그림을 받지 않은 까닭, 409 `portrait_limit`([캐릭터 그림](#캐릭터-그림)) | access 토큰 |
 | GET | `/api/v1/game/portraits` | 내가 올린 캐릭터 그림들. `limit`, `offset`. 최근 것부터 | access 토큰 |
 | GET | `/api/v1/game/portraits/{id}/image` | 내가 올린 캐릭터 그림의 바이트. 남의 것은 404 | access 토큰 |
-| GET | `/api/v1/game/tables/{id}/portraits/{portrait_id}/image` | 앉은 테이블의 캐릭터 그림(그 판의 프리젠에 붙은 그림)의 바이트. 앉은 사람 모두가 받는다. 판에 없는 그림은 404 `portrait_not_found`. 자리의 `portrait_id` 가 이 id 다 | access 토큰 |
+| GET | `/api/v1/game/tables/{id}/portraits/{portrait_id}/image` | 앉은 테이블의 캐릭터 그림(그 판의 프리젠에 붙은 그림)의 바이트. 앉은 사람 모두가 받는다. 판에 없는 그림은 404 `portrait_not_found`. 자리와 고를 수 있는 프리젠의 `portrait_id` 가 이 id 다 | access 토큰 |
+| GET | `/api/v1/game/listings/{scenario_id}/portraits/{portrait_id}/image` | 공개된 시나리오의 공개 중인 판의 프리젠 그림의 바이트. 그 시나리오를 볼 수 있는 사람(로그인하지 않으면 전체 이용가만). 판에 없는 그림은 404 `portrait_not_found`, 볼 수 없는 시나리오는 404 | 없음(성인용은 access 토큰) |
 | PUT | `/api/v1/game/tables/{id}/rounds/current/declaration` | 선언 내기. 다시 내면 바뀐다. `action` 으로 행동(판정)을 하나 붙일 수 있다. 모두 냈으면 라운드가 닫기 시작한다(`closing`). 다음 라운드는 스트림으로 온다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/rounds/current/close` | 라운드 닫기. 202. 방장만. 선언을 기다리지 않고 넘어간다. 오래 멈춘 라운드에 다시 부르면 서술을 다시 맡긴다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/rounds/current/revert` | 바로 앞 라운드 되돌리기(#288). 방장만. 닫기 직전의 상태로 돌아가 같은 번호의 라운드가 다시 열린다. 아래의 "되돌리기" | access 토큰 |
@@ -2852,7 +2853,8 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **보기.** `GET /portraits` 는 내가 올린 그림들(최근 것부터), `GET /portraits/{id}/image` 는 그 바이트다. 올린 사람만 본다. 남의 그림과 asset 에서 사라진 그림은 404 `portrait_not_found` 다.
 - **기록이 있어야 이 서버의 그림이다.** asset 의 다른 그림(장면 그림, chat 의 그림)은 기록이 없어 프리젠에 붙이지 못한다.
 - **프리젠에 붙이기.** 시나리오의 `pregens[].image_id` 에 그림의 id 를 적는다. 만들고 고칠 때 모두 자기가 올린 그림인지 본다. 남의 그림, 없는 그림, 기록이 없는 그림이면 422(`pregens.image_id`)이고 아무것도 저장하지 않는다. 게시한 판에도 그대로 실린다(비워도 되는 칸이라 판의 형식은 68 그대로다).
-- **테이블에서.** 프리젠을 고른 자리(`members[]`)에는 그 프리젠의 그림 id(`portrait_id`)가 실린다. 직접 만든 캐릭터와 그림이 없는 프리젠은 `null` 이다. 앉은 사람 모두가 `GET /tables/{id}/portraits/{portrait_id}/image` 로 받는다. 그 테이블의 판(사본)에 붙은 그림만 내준다. 장면 그림을 그릴 때 참고 그림으로 넘긴다([장면 그림](#장면-그림)). 공개 시나리오의 소개에서 보여 주는 것은 아직 없다.
+- **테이블에서.** 프리젠을 고른 자리(`members[]`)에는 그 프리젠의 그림 id(`portrait_id`)가 실린다. 직접 만든 캐릭터와 그림이 없는 프리젠은 `null` 이다. 앉은 사람 모두가 `GET /tables/{id}/portraits/{portrait_id}/image` 로 받는다. 그 테이블의 판(사본)에 붙은 그림만 내준다. 장면 그림을 그릴 때 참고 그림으로 넘긴다([장면 그림](#장면-그림)).
+- **고르기 전에.** 테이블의 고를 수 있는 프리젠(`pregens[]`)에도 `portrait_id` 가 실린다(바이트는 테이블의 주소). 공개된 시나리오의 소개(`GET /listings/{scenario_id}` 의 `pregens[].portrait_id`)에도 실리고, 바이트는 `GET /listings/{scenario_id}/portraits/{portrait_id}/image` 다. 그 시나리오를 볼 수 있는 사람만 받는다. 로그인하지 않아도 전체 이용가는 받아서 브라우저의 img 로 바로 쓸 수 있다. 공개 중인 판에 붙은 그림만 내준다.
 
 | 환경 변수 | 기본값 | 설명 |
 | --- | --- | --- |

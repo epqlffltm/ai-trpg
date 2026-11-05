@@ -7684,6 +7684,18 @@
             "title": "Name",
             "type": "string"
           },
+          "portrait_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portrait Id"
+          },
           "sheet": {
             "$ref": "#/components/schemas/CharacterSheet"
           }
@@ -12011,6 +12023,18 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "portrait_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portrait Id"
           },
           "sheet": {
             "$ref": "#/components/schemas/CharacterSheet"
@@ -24516,6 +24540,64 @@
         "summary": "Put Heart",
         "tags": [
           "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/listings/{scenario_id}/portraits/{portrait_id}/image": {
+      "get": {
+        "description": "공개된 시나리오의 프리젠 그림의 바이트. 볼 수 있는 등급만이다.",
+        "operationId": "read_listing_image_api_v1_game_listings__scenario_id__portraits__portrait_id__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "portrait_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portrait Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {},
+              "image/png": {},
+              "image/webp": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Listing Image",
+        "tags": [
+          "portraits"
         ],
         "x-audience": "user"
       }

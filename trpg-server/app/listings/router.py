@@ -63,9 +63,9 @@ def to_detail(listing: Listing, version: ScenarioVersion | None) -> ListingDetai
 
 
 def to_listing_pregens(snapshot: Snapshot) -> list[ListingPregen]:
-    """판의 프리젠들을 공개 응답으로. 이름, 설명, 숫자만이다. 판의 순서다."""
+    """판의 프리젠들을 공개 응답으로. 이름, 설명, 숫자, 캐릭터 그림(#983)만이다. 판의 순서다."""
     return [
-        ListingPregen(name=pregen.name, description=pregen.description, sheet=pregen.sheet)
+        ListingPregen(name=pregen.name, description=pregen.description, sheet=pregen.sheet, portrait_id=pregen.image_id)
         for pregen in snapshot.pregens
     ]
 

@@ -6,16 +6,19 @@
   - 올리기: 한 사람이 올릴 수 있는 수(PORTRAIT_MAX_PER_OWNER)를 보고, asset 에 올린 사람의 토큰으로 맡긴 뒤 기록한다.
     asset 에 맡긴 뒤 기록하지 못하면 asset 에 주인 없는 그림이 하나 남는다(기록이 없으니 아무도 붙이지 못한다)
   - 보기: 올린 사람은 자기 그림을 본다. 테이블에 앉은 사람은 그 테이블의 판(프리젠)에 붙은 그림을 본다.
-    공개 시나리오를 보는 사람에게는 아직 열지 않았다
+    공개된 시나리오를 볼 수 있는 사람은 공개 중인 판의 프리젠에 붙은 그림을 본다(로그인하지 않아도 전체 이용가는 본다)
   - asset 을 부르는 동안 DB 의 트랜잭션을 열어 두지 않는다. 세션을 나눠 쓴다
 """
 
 import logging
 import uuid
 
+from server_core.auth.tokens import AccessClaims
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.asset_server.client import AssetClient, AssetNotFoundError, ImageContent
+from app.assets.scenarios.snapshot import read_snapshot
+from app.listings.service import get_public
 from app.portraits import repository
 from app.portraits.models import Portrait
 from app.portraits.schemas import PortraitOut, PortraitPage
@@ -129,4 +132,35 @@ async def table_portrait_image(
 ) -> ImageContent:
     """앉은 테이블의 캐릭터 그림의 바이트."""
     await require_table_portrait(session_factory, user_id, table_id, image_id)
+    return await fetch_image(asset, image_id)
+
+
+async def require_listing_portrait(
+    session_factory: async_sessionmaker[AsyncSession],
+    viewer: AccessClaims | None,
+    scenario_id: uuid.UUID,
+    image_id: uuid.UUID,
+) -> None:
+    """
+    볼 수 있는 공개 시나리오의 공개 중인 판에 붙은 그림인지 본다.
+
+    볼 수 없는 시나리오(공개하지 않음, 볼 수 없는 등급)면 AssetNotFoundError(404), 그 판의 그림이 아니면
+    PortraitNotFoundError.
+    """
+    async with session_factory() as session:
+        _, _, version = await get_public(session, viewer, scenario_id)
+    pregens = read_snapshot(version.snapshot).pregens
+    if image_id not in {pregen.image_id for pregen in pregens if pregen.image_id is not None}:
+        raise PortraitNotFoundError
+
+
+async def listing_portrait_image(
+    session_factory: async_sessionmaker[AsyncSession],
+    asset: AssetClient,
+    viewer: AccessClaims | None,
+    scenario_id: uuid.UUID,
+    image_id: uuid.UUID,
+) -> ImageContent:
+    """공개된 시나리오의 프리젠 그림의 바이트."""
+    await require_listing_portrait(session_factory, viewer, scenario_id, image_id)
     return await fetch_image(asset, image_id)

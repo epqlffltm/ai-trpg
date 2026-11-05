@@ -1335,7 +1335,7 @@ E4 에서 정한 것(2026-10-24, #678).
 | 영역 | 보이는 것 | 출처(게임 서버) |
 | --- | --- | --- |
 | 쓸 수 있는 방식 | 프리젠, 직접 쓰기, 능력치를 직접 적기, 점수 사기, 주사위 | `TableDetail.character_modes` |
-| 프리젠 | 이름, 설명, 시트, 가져간 사람, 죽었는가 | `TableDetail.pregens[]`(`taken_by`, `dead`) |
+| 프리젠 | 이름, 설명, 시트, 가져간 사람, 죽었는가, 캐릭터 그림(#983) | `TableDetail.pregens[]`(`taken_by`, `dead`, `portrait_id`) |
 | 내 캐릭터의 그림(#983) | 고른 프리젠에 제작자가 붙인 그림. 직접 만든 캐릭터에는 없다 | `members[].portrait_id`, 바이트는 `GET /tables/{id}/portraits/{portrait_id}/image` |
 | 기본 시트 | 직접 쓰기에서 받는 숫자 | `TableDetail.default_sheet` |
 | 규칙 | 능력치의 이름, 점수 사기의 총점과 값표, 주사위 굴리는 법, 점수의 범위 | `TableDetail.rules` |
@@ -1590,7 +1590,7 @@ E4 에서 정한 것(2026-10-24, #678).
 - 그림은 `GET /tables/{id}/portraits/{portrait_id}/image` 를 토큰을 실어 받는다(앉은 사람 모두). 같은 그림은 한 번만 받는다(서버가 `private, max-age=3600` 을 준다). 받지 못하면 첫 글자를 둔다.
 - 누르면 크게 보는 창을 연다. 저장, 지우기는 두지 않는다(제작자의 그림이다).
 - 장면 그림을 그리면 그림이 있는 캐릭터의 얼굴을 서버가 맞춘다. 화면이 따로 할 것은 없다. 장면 그림 단추의 설명에 "캐릭터 그림이 있으면 얼굴을 맞춥니다."를 더한다.
-- B5 에서 프리젠을 고르기 전에는 그림을 보여 주지 않는다. 서버가 고를 수 있는 프리젠(`TableDetail.pregens[]`)에 그림을 아직 싣지 않는다(아래 "확인할 것").
+- B5 의 프리젠 목록에도 그림을 이름 앞에 보인다(`TableDetail.pregens[].portrait_id`, 받는 주소는 같다). 공개된 시나리오의 소개(B3·B4 에서 보는 것)에서는 `GET /listings/{scenario_id}/portraits/{portrait_id}/image` 로 받는다. 이 주소는 로그인하지 않아도 전체 이용가를 내주므로 img 로 바로 쓴다(성인용은 토큰을 실어 받는다).
 
 **7. 첫 출시**
 
@@ -1602,7 +1602,6 @@ E4 에서 정한 것(2026-10-24, #678).
 - 서술이 만들어지는 동안의 조각은 스트림으로 나간다(`narration_preview`, `id` 없음. trpg-server README 의 "서술의 미리 보기"). 완성된 서술은 이벤트로 다시 온다. (2026-10-20 확인)
 - `table_event` 의 종류 전체는 trpg-server README 의 이벤트 기록 절에 있다. 화면은 모르는 종류를 받으면 건너뛴다(서버가 종류를 더해도 화면이 깨지지 않게)
 - 선언 글의 길이 한도(`DECLARATION_MAX_LENGTH`)의 값
-- 고를 수 있는 프리젠(`TableDetail.pregens[]`)과 공개 시나리오의 소개에 프리젠의 그림을 실을지. 지금은 고른 뒤의 자리(`members[].portrait_id`)에만 있다(#983)
 
 ### B7 상태 패널
 
