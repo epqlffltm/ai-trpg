@@ -220,7 +220,8 @@ async def test_opens_a_table_from_my_own_version(client: AsyncClient, me: dict[s
     # 고르지 않으면 첫 번째 스타팅이다
     assert table['opening'] == OPENINGS[0]
     assert table['pregens'] == [
-        {**pregen, 'sheet': as_character(SHEET), 'taken_by': None, 'dead': False} for pregen in PREGENS
+        {**pregen, 'sheet': as_character(SHEET), 'taken_by': None, 'dead': False, 'portrait_id': None}
+        for pregen in PREGENS
     ]
     # 만든 사람이 방장이 되어 앉는다. 캐릭터는 아직 없다
     assert table['host_id'] == str(ME)

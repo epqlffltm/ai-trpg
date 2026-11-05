@@ -407,6 +407,7 @@ def create_app(
     # 제작자의 캐릭터 그림(#983)
     app.include_router(portraits.router, prefix=API_PREFIX)
     app.include_router(portraits.table_router, prefix=API_PREFIX)
+    app.include_router(portraits.listing_router, prefix=API_PREFIX)
     app.include_router(calendar.router, prefix=API_PREFIX)
     app.include_router(campaign_runs.router, prefix=API_PREFIX)
     app.include_router(events.router, prefix=API_PREFIX)

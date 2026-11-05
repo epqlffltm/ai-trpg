@@ -719,6 +719,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/listings/{scenario_id}/portraits/{portrait_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Listing Image
+         * @description 공개된 시나리오의 프리젠 그림의 바이트. 볼 수 있는 등급만이다.
+         */
+        get: operations["read_listing_image_api_v1_game_listings__scenario_id__portraits__portrait_id__image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/lorebooks": {
         parameters: {
             query?: never;
@@ -5910,6 +5930,8 @@ export interface components {
             description: string;
             /** Name */
             name: string;
+            /** Portrait Id */
+            portrait_id?: string | null;
             sheet: components["schemas"]["CharacterSheet"];
         };
         /**
@@ -8046,6 +8068,8 @@ export interface components {
             description: string;
             /** Name */
             name: string;
+            /** Portrait Id */
+            portrait_id?: string | null;
             sheet: components["schemas"]["CharacterSheet"];
             /** Taken By */
             taken_by: string | null;
@@ -13878,6 +13902,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HeartState"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_listing_image_api_v1_game_listings__scenario_id__portraits__portrait_id__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+                portrait_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
+                    "image/png": unknown;
+                    "image/webp": unknown;
                 };
             };
             /** @description 입력이 틀렸다 */

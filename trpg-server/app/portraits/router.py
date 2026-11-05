@@ -11,12 +11,15 @@
         내가 올린 그림의 바이트. 이 서버가 asset 서버에서 받아 대신 내준다
     GET  /api/v1/game/tables/{table_id}/portraits/{id}/image
         앉은 테이블의 캐릭터 그림(그 판의 프리젠에 붙은 그림)의 바이트. 앉은 사람 모두가 받는다
+    GET  /api/v1/game/listings/{scenario_id}/portraits/{id}/image
+        공개된 시나리오의 공개 중인 판의 프리젠 그림의 바이트. 그 시나리오를 볼 수 있는 사람이 받는다.
+        로그인하지 않아도 전체 이용가는 받는다(브라우저의 img 로 바로 쓸 수 있다)
 
   - 413 image_too_large: 본문이 상한(PORTRAIT_MAX_BYTES)을 넘는다. asset 의 상한을 넘어도 같다
   - 415 image_format: PNG, JPEG, WebP 가 아니다. 422 image_unreadable: 열 수 없는 그림이다
   - 409 portrait_limit: 올릴 수 있는 수를 다 채웠다
   - 404 portrait_not_found: 내가 올린 그림이 아니다(테이블의 주소에서는 그 테이블의 판에 붙은 그림이 아니다).
-    앉지 않은 테이블은 테이블이 없는 것과 같은 404 다
+    앉지 않은 테이블, 볼 수 없는 공개 시나리오는 없는 것과 같은 404 다
   - 503 asset_unavailable: asset 서버를 쓸 수 없다(설정이 없는 서버 포함)
 """
 
@@ -24,7 +27,7 @@ import uuid
 
 from fastapi import APIRouter, Request, Response, status
 from fastapi.responses import JSONResponse
-from server_core.auth.dependencies import CurrentUser
+from server_core.auth.dependencies import CurrentUser, OptionalUser
 
 from app.asset_server.client import ImageRejectedError
 from app.assets.routing import Paging, Session
@@ -35,6 +38,7 @@ from app.snapshots.router import Token
 
 router = APIRouter(prefix='/portraits', tags=['portraits'])
 table_router = APIRouter(prefix='/tables/{table_id}/portraits', tags=['portraits'])
+listing_router = APIRouter(prefix='/listings/{scenario_id}/portraits', tags=['portraits'])
 
 # 그림을 받은 화면이 들고 있어도 되는 시간(초). 그림은 바뀌지 않는다. 올린 사람만 받으므로 private 다
 IMAGE_MAX_AGE_SECONDS = 3600
@@ -151,5 +155,21 @@ async def read_table_image(
     """앉은 테이블의 캐릭터 그림의 바이트."""
     state = request.app.state
     image = await service.table_portrait_image(state.session_factory, state.asset, user.user_id, table_id, portrait_id)
+    headers = {'Cache-Control': f'private, max-age={IMAGE_MAX_AGE_SECONDS}'}
+    return Response(content=image.data, media_type=image.mime_type, headers=headers)
+
+
+@listing_router.get(
+    '/{portrait_id}/image',
+    status_code=status.HTTP_200_OK,
+    response_class=Response,
+    responses={200: {'content': {'image/png': {}, 'image/jpeg': {}, 'image/webp': {}}}},
+)
+async def read_listing_image(
+    scenario_id: uuid.UUID, portrait_id: uuid.UUID, viewer: OptionalUser, request: Request
+) -> Response:
+    """공개된 시나리오의 프리젠 그림의 바이트. 볼 수 있는 등급만이다."""
+    state = request.app.state
+    image = await service.listing_portrait_image(state.session_factory, state.asset, viewer, scenario_id, portrait_id)
     headers = {'Cache-Control': f'private, max-age={IMAGE_MAX_AGE_SECONDS}'}
     return Response(content=image.data, media_type=image.mime_type, headers=headers)

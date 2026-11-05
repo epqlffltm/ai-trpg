@@ -735,6 +735,8 @@ class PregenChoice(BaseModel):
     taken_by: uuid.UUID | None
     # 이 프리젠의 캐릭터가 이 테이블에서 죽었는가. 죽은 캐릭터의 프리젠은 아무도 다시 고를 수 없다
     dead: bool
+    # 제작자가 붙인 캐릭터 그림(#983). 바이트는 GET /tables/{id}/portraits/{portrait_id}/image. 없으면 None
+    portrait_id: uuid.UUID | None = None
 
 
 class TableSummary(BaseModel):

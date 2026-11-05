@@ -531,7 +531,12 @@ def to_pregen_choices(table: GameTable, snapshot: Snapshot) -> list[PregenChoice
         taken_by, dead = holders.get(index, (None, False))
         choices.append(
             PregenChoice(
-                name=pregen.name, description=pregen.description, sheet=pregen.sheet, taken_by=taken_by, dead=dead
+                name=pregen.name,
+                description=pregen.description,
+                sheet=pregen.sheet,
+                taken_by=taken_by,
+                dead=dead,
+                portrait_id=pregen.image_id,
             )
         )
     return choices
