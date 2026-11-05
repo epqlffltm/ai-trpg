@@ -333,6 +333,14 @@ IP 를 쓰는 것은 인증 서버(시도 횟수)와 프록시(요청 수 제한
 - 이 CSP 는 API 의 것이다. 화면(#290)을 이 프록시로 내주게 되면 화면에는 화면에 맞는 값을 따로 둔다
 - HSTS 의 값은 연결이 HTTPS 일 때만 채워진다(`docker/nginx/templates/http.inc.template` 의 `map`). 로컬의 HTTP 응답에는 없다. 인증 서버는 HSTS 를 내지 않는다(`auth-server/config/security.py`)
 
+**프록시는 앱의 출처에만 CORS 를 연다(#429).** 앱(Capacitor 로 감싼 화면)은 페이지의 출처가 우리 사이트와 달라, CORS 없이는 API 를 부르지 못한다([앱에서의 로그인 유지](docs/product/app-refresh.md)). 웹은 같은 출처라 CORS 가 필요 없다.
+
+- 여는 출처는 Capacitor 의 기본값 둘(`https://localhost`, `capacitor://localhost`)뿐이다. 목록은 `docker/nginx/templates/http.inc.template` 의 `map` 한 곳이다. 서버가 CORS 머리말을 보내도 프록시가 지운다
+- 쿠키를 싣는 것은 열지 않는다(`Access-Control-Allow-Credentials` 가 없다). 앱은 access 토큰을 `Authorization` 에 싣는다. 그래서 앱의 출처에서는 refresh 쿠키가 실리지 않는다
+- 앱의 미리 묻는 요청(OPTIONS)은 서버에 넘기지 않고 프록시가 204 로 답한다. 허용 방식은 GET, POST, PUT, PATCH, DELETE, 머리말은 `Authorization`, `Content-Type`, `Idempotency-Key`, `Last-Event-ID` 다. 앱의 스크립트는 `X-Request-ID`, `Retry-After`, `Content-Disposition` 을 읽을 수 있다
+- 머리말은 `docker/nginx/templates/cors.inc.template` 에 있고 보안 머리말과 같은 곳에서 `include` 한다(같은 함정). 화면의 응답에는 붙지 않는다. CI(`stack`)가 서버의 응답, 막은 주소의 404, 미리 묻는 요청, 다른 출처, 화면에서 본다
+- staging 의 허용 주소(`deny all`)보다 미리 묻는 요청의 답이 앞선다(nginx 의 rewrite 단계). 허용 주소 밖에서도 앱의 출처로 OPTIONS 를 보내면 본문 없는 204 를 받는다. 그 밖의 요청은 그대로 막힌다
+
 **컨테이너의 로그는 서비스마다 상한이 있다(#358).** Docker 의 기본은 로그 파일을 끝없이 키운다. VM 에서 오래 띄우면 디스크가 차고, 그러면 DB 가 쓰지 못해 멈춘다.
 
 - `docker-compose.yml` 의 `x-logging`(json-file, 파일 하나 10MB, 5개까지)을 모든 서비스가 `logging: *logging` 으로 쓴다. 서비스마다 최대 50MB, 17개면 850MB 쯤이다
@@ -468,7 +476,7 @@ story-server/             FastAPI 세계관 기반 스토리 서버 (독립된 u
 shared/                   FastAPI 서버들이 함께 쓰는 코드(server-core, ai-core, conversation-core). 서버의 이미지에 빌드할 때 넣는다
 web/                      화면(Vite, React, TypeScript, npm workspaces). 빌드한 것을 프록시의 이미지에 담는다(web/Dockerfile)
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
-docker/nginx/templates/   프록시(nginx)의 설정. 로컬과 staging 이 함께 쓰는 몸통(api.inc), 화면(web.inc), http 단계(http.inc), 보안 머리말
+docker/nginx/templates/   프록시(nginx)의 설정. 로컬과 staging 이 함께 쓰는 몸통(api.inc), 화면(web.inc), http 단계(http.inc), 보안 머리말, 앱의 CORS(cors.inc)
 docker/nginx/staging/     staging 의 프록시: 듣는 포트와 TLS, 허용 주소, 인증서를 지켜보다 다시 읽히는 시작 스크립트
 docker/nginx/allowlist/   staging 의 허용 주소. 보기(allow.conf.example)만 올리고 실제 파일(*.conf)은 VM 에만 둔다
 docker/certbot/           staging 의 인증서(Let's Encrypt)를 받고 갱신하는 스크립트, 인증서의 남은 날짜 검사

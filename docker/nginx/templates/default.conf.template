@@ -10,6 +10,7 @@
 #   http.inc              주소 찾기, 요청 수 제한의 구역, 로그의 모양, HSTS 의 값(http 단계)
 #   api.inc               API 를 받는 server 의 몸통. 어느 주소를 어느 서버로 보내고 무엇을 막는지
 #   security-headers.inc  모든 응답에 붙이는 보안 머리말
+#   cors.inc              앱의 출처에만 붙이는 CORS 머리말(#429)
 
 include /etc/nginx/conf.d/http.inc;
 

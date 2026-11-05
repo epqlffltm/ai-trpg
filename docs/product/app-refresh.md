@@ -95,7 +95,8 @@ C 다. 네이티브 앱이 흔히 하는 방식이고(OAuth 의 네이티브 앱
 
 - refresh 토큰은 네이티브 플러그인만 쥔다. 로그인 2단계와 갱신과 로그아웃을 네이티브 쪽이 부르고, 화면의 스크립트에는 access 토큰만 넘긴다. 스크립트가 refresh 토큰을 꺼낼 수 있으면 앱 안의 XSS 가 14일짜리 토큰을 가져간다
 - 플러그인은 `Origin` 을 붙이지 않는 네이티브의 HTTP 로 부른다(붙으면 `403`)
-- 그 밖의 API 는 access 토큰을 `Authorization` 에 싣는다. 앱의 출처에서 부르려면 프록시의 CORS 가 필요하다(쿠키가 아니라 `Allow-Credentials` 는 없어도 된다)
+- 그 밖의 API 는 access 토큰을 `Authorization` 에 싣는다. 프록시가 앱의 출처(`https://localhost`, `capacitor://localhost`)에만 CORS 를 연다(루트 README 의 "프록시는 앱의 출처에만 CORS 를 연다"). `Allow-Credentials` 는 없다. Capacitor 의 출처를 바꾸면(`server.hostname` 등) 프록시의 목록도 고친다
+- 화면은 지금 같은 출처의 상대 주소로 부른다(`web/apps/web/src/api/http.ts`). 앱으로 빌드할 때는 API 의 주소를 절대 주소로 바꾸는 길이 필요하다
 
 ## 정하지 않은 것
 
