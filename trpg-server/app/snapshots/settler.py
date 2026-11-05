@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.billing.client import Billing
 from app.billing.routing import utc_now
 from app.core.jobs import JOB_FAILED_ERROR_CODE, elapsed_ms
-from app.observability.metrics import record_snapshot_charges
+from app.observability.metrics import record_snapshot_charges, record_snapshot_draw
 from app.snapshots import counting, repository, service
 from app.snapshots.models import DUE_STATUSES, OPEN_STATUSES, SnapshotBilling, SnapshotOutcome, TableSnapshot
 
@@ -76,6 +76,8 @@ class SnapshotSettler:
             if moved:
                 await service.announce(session, snapshot.table_id)
             await session.commit()
+            if moved:
+                record_snapshot_draw(SnapshotOutcome.FAILED, ABANDONED)
             return await repository.get(session, snapshot.id) if moved else None
 
     async def count_unfinished(self) -> dict[str, int]:

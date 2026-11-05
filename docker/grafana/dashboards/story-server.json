@@ -751,6 +751,64 @@
           "instant": false
         }
       ]
+    },
+    {
+      "type": "timeseries",
+      "id": 18,
+      "title": "끝난 장면 그림(1시간)",
+      "description": "한 시간 동안 끝난 장면 그림의 수. ready 는 다 그린 것, failed 는 그리지 못하고 돌려준 것(refused 는 공급자의 안전 규칙, asset_unavailable 은 그림을 맡기지 못한 것, abandoned 는 정리 작업이 돌려준 것), declined 는 홀드가 걸리지 않은 것(credit_short, gold_required)이다",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (outcome, code) (increase(snapshot_draws_total{service=\"story-server\"}[1h]))",
+          "legendFormat": "{{outcome}} {{code}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ]
     }
   ]
 }

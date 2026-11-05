@@ -42,6 +42,7 @@ class GameInstruments:
     billing_calls: Counter
     narration_charges: _Gauge
     snapshot_charges: _Gauge
+    snapshot_draws: Counter
 
 
 def build_instruments(meter: Meter) -> GameInstruments:
@@ -70,6 +71,7 @@ def build_instruments(meter: Meter) -> GameInstruments:
         billing_calls=meter.create_counter('billing_calls', description='결제 서버를 부른 수'),
         narration_charges=meter.create_gauge('narration_charges', description='끝나지 않은 청구의 수'),
         snapshot_charges=meter.create_gauge('snapshot_charges', description='끝나지 않은 장면 그림의 청구의 수'),
+        snapshot_draws=meter.create_counter('snapshot_draws', description='끝난 장면 그림의 수'),
     )
 
 
@@ -165,3 +167,11 @@ def record_snapshot_charges(counts: Mapping[str, int]) -> None:
     measured = game_instruments()
     for status, count in counts.items():
         measured.snapshot_charges.set(count, {'status': status})
+
+
+def record_snapshot_draw(outcome: str, code: str | None) -> None:
+    """
+    끝난 장면 그림 한 장을 센다. outcome 은 ready(다 그림), failed(그리지 못함), declined(홀드가 걸리지 않음)다.
+    code 는 실패의 까닭(refused, no_image, asset_unavailable, credit_short …)이고, 다 그렸으면 none 이다.
+    """
+    game_instruments().snapshot_draws.add(1, {'outcome': outcome, 'code': code or 'none'})

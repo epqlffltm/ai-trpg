@@ -38,6 +38,7 @@ from app.conversations.service import MessageNotFoundError, get_conversation
 from app.core.dependencies import Viewer
 from app.ratings import allowed_ratings
 from app.snapshots import repository
+from app.snapshots.metrics import record_snapshot_draw
 from app.snapshots.models import Snapshot, SnapshotOutcome
 from app.snapshots.prompt import snapshot_prompt, with_references
 from app.snapshots.providers import price_code_of
@@ -56,6 +57,8 @@ SNAPSHOT_STALE = timedelta(minutes=10)
 ASSET_UNAVAILABLE = 'asset_unavailable'
 CANCELLED = 'cancelled'
 SERVER_ERROR = 'server_error'
+# 홀드가 걸리지 않아 그리지 않은 것의 메트릭 이름표(snapshot_draws 의 outcome)
+DECLINED_OUTCOME = 'declined'
 
 
 class SnapshotUnavailableError(Exception):
@@ -205,6 +208,7 @@ async def hold_snapshot(
             'finished_at': now,
         }
         await mark(session_factory, start.snapshot_id, frozenset({BillingStatus.PENDING}), values)
+        record_snapshot_draw(DECLINED_OUTCOME, declined.code)
         raise SnapshotDeclinedError(declined.code) from declined
     await mark(
         session_factory, start.snapshot_id, frozenset({BillingStatus.PENDING}), {'billing_status': BillingStatus.HELD}
@@ -263,14 +267,15 @@ async def draw_snapshot(
     try:
         values = await draw_and_keep(provider, asset, token, start, clock())
     except asyncio.CancelledError:
-        await mark(
-            session_factory, start.snapshot_id, frozenset({BillingStatus.HELD}), failed_values(CANCELLED, clock())
-        )
+        cancelled = failed_values(CANCELLED, clock())
+        if await mark(session_factory, start.snapshot_id, frozenset({BillingStatus.HELD}), cancelled):
+            record_snapshot_draw(SnapshotOutcome.FAILED, CANCELLED)
         raise
     except Exception:
         logger.exception('장면 그림을 만들지 못했습니다', extra={'snapshot_id': str(start.snapshot_id)})
         values = failed_values(SERVER_ERROR, clock())
-    await mark(session_factory, start.snapshot_id, frozenset({BillingStatus.HELD}), values)
+    if await mark(session_factory, start.snapshot_id, frozenset({BillingStatus.HELD}), values):
+        record_snapshot_draw(values['outcome'], values.get('error_code'))
     async with session_factory() as session:
         snapshot = await repository.get(session, start.snapshot_id)
     if snapshot is not None and snapshot.billing_status in DUE_STATUSES:

@@ -44,6 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.asset_server.client import AssetClient, AssetNotFoundError, AssetUnavailableError, ImageContent
 from app.billing.client import Billing
+from app.observability.metrics import record_snapshot_draw
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.rounds.models import Round
@@ -67,6 +68,8 @@ CANCELLED = 'cancelled'
 SERVER_ERROR = 'server_error'
 # 작업 관리자의 자리가 다 차서 그리지 못했다
 JOBS_FULL = 'jobs_full'
+# 홀드가 걸리지 않아 그리지 않은 것의 메트릭 이름표(snapshot_draws 의 outcome)
+DECLINED_OUTCOME = 'declined'
 
 
 class SnapshotUnavailableError(Exception):
@@ -210,6 +213,7 @@ async def hold_snapshot(
             'finished_at': now,
         }
         await mark(session_factory, start.snapshot_id, frozenset({SnapshotBilling.PENDING}), values)
+        record_snapshot_draw(DECLINED_OUTCOME, declined.code)
         raise SnapshotDeclinedError(declined.code) from declined
     await mark(
         session_factory,
@@ -261,9 +265,10 @@ async def finish(
     values: dict,
     now: datetime,
 ) -> None:
-    """그린 결과를 적고 테이블에 알린다. 확정이나 반환할 차례가 됐으면 바로 맡긴다."""
+    """그린 결과를 적고 세고 테이블에 알린다. 확정이나 반환할 차례가 됐으면 바로 맡긴다."""
     snapshot_id = start.snapshot_id
-    await mark(session_factory, snapshot_id, frozenset({SnapshotBilling.HELD}), values, start.table_id)
+    if await mark(session_factory, snapshot_id, frozenset({SnapshotBilling.HELD}), values, start.table_id):
+        record_snapshot_draw(values['outcome'], values.get('error_code'))
     async with session_factory() as session:
         snapshot = await repository.get(session, snapshot_id)
     if snapshot is not None and snapshot.billing_status in DUE_STATUSES:
@@ -287,7 +292,8 @@ async def draw_snapshot(
         values = await draw_and_keep(provider, asset, token, start, clock())
     except asyncio.CancelledError:
         values = failed_values(CANCELLED, clock())
-        await mark(session_factory, start.snapshot_id, frozenset({SnapshotBilling.HELD}), values, start.table_id)
+        if await mark(session_factory, start.snapshot_id, frozenset({SnapshotBilling.HELD}), values, start.table_id):
+            record_snapshot_draw(SnapshotOutcome.FAILED, CANCELLED)
         raise
     except Exception:
         logger.exception('장면 그림을 만들지 못했습니다', extra={'snapshot_id': str(start.snapshot_id)})
