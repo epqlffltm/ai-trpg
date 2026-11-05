@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/chat/conversation/ConversationRoom.tsx
 // 대화(C3)의 화면(Stitch 21번). 위에 머리(대화 줄), 넓으면 왼쪽 열의 창 넷(ChatTools)과 오른쪽의 그림 창, 단추 줄, 대사창, 말 쓰기.
-// 좁으면 머리, 그림, 대사창, 말 쓰기, 창 넷의 차례로 위아래다. 모델 고르기, 책갈피, 그림으로 저장은 겹쳐 연다.
+// 좁으면 머리, 그림, 대사창, 말 쓰기가 위아래고, 창 넷은 맨 아래 단추 줄(ChatDock)이 아래에서 올라오는 시트로 연다.
+// 모델 고르기, 책갈피, 그림으로 저장은 겹쳐 연다.
 // 한 대화에 한 생성이다. 이 화면이 받는 중이거나(turn) 다른 곳에서 쓰는 중이면(generating) 보내기, 다시 생성, 이어서, 대안, 행동, 고치기를 막는다.
 // 답을 받는 일(말 보내기, 행동, 내 말 고치기)은 모델이 있어야 한다. 없으면 보내기 전에 고르게 한다(서버의 409 model_required 를 기다리지 않는다).
 // 상대의 말 고치기는 모델을 부르지 않아 모델이 없어도 된다.
@@ -22,7 +23,9 @@ import type { ConversationAction, ConversationDetail, ConversationMessage } from
 import { bookmarkProblemText, isOnBranch, messageAnchor } from './bookmarksView';
 import { snapshotProblemText } from './snapshotsView';
 import { Composer } from './Composer';
-import { ChatTools } from './ChatTools';
+import { ChatDock, useChatDock } from './ChatDock';
+import { chatTools, ChatTools } from './ChatTools';
+import { SheetClose } from '../../../components/SheetClose';
 import { ConversationHeader } from './ConversationHeader';
 import { conversationKey } from './conversationQueries';
 import { pictureOf, tailSuggestions } from './conversationView';
@@ -36,6 +39,7 @@ import { useConversationShortcuts } from './useConversationShortcuts';
 import { useSnapshots } from './useSnapshots';
 import type { TurnOpener, useConversationTurn } from './useConversationTurn';
 import { WorldToolbar } from './WorldToolbar';
+import { hasMap } from './worldView';
 import { putQueryData } from '../../../queryClient';
 
 type Props = { detail: ConversationDetail; turns: ReturnType<typeof useConversationTurn> };
@@ -49,6 +53,8 @@ export function ConversationRoom({ detail, turns }: Props) {
   const shortcuts = useConversationShortcuts('chat', detail.id, draft);
   const [choosingModel, setChoosingModel] = useState(false);
   const closeModel = useCallback(() => setChoosingModel(false), []);
+  const tools = chatTools(hasMap(detail.character.document));
+  const dock = useChatDock(tools[0] ?? null);
   const streaming = turns.turn !== null;
   const busy = streaming || detail.generating || branching.isPending || editing.isPending;
   const picture = pictureOf(detail, turns.turn ? { answering: turns.turn.userMessage, sprite: turns.turn.sprite } : null);
@@ -103,7 +109,7 @@ export function ConversationRoom({ detail, turns }: Props) {
   }
 
   return (
-    <main className="page conversation chat-room">
+    <main className="page conversation chat-room" data-sheet={dock.sheet ? 'tools' : undefined}>
       <ConversationHeader detail={detail} />
       <div className="chat-room__body">
         <div className="chat-room__main">
@@ -140,9 +146,18 @@ export function ConversationRoom({ detail, turns }: Props) {
           />
         </div>
         <div className="chat-room__tools">
-          <ChatTools detail={detail} busy={busy} onAction={act} onChooseModel={() => setChoosingModel(true)} />
+          <SheetClose onClose={dock.closeSheet} />
+          <ChatTools
+            detail={detail}
+            busy={busy}
+            onAction={act}
+            onChooseModel={() => setChoosingModel(true)}
+            open={dock.open}
+            onOpenChange={dock.setOpen}
+          />
         </div>
       </div>
+      <ChatDock tools={tools} dock={dock} />
       <ModelDialog detail={detail} open={choosingModel} onClose={closeModel} />
     </main>
   );

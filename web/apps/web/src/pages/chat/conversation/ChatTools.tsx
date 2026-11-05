@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/chat/conversation/ChatTools.tsx
 // 대화(C3)의 왼쪽 열 창 넷(Stitch 21번). 단추가 세로로 서고, 누른 단추 바로 아래로 그 창이 펼쳐진다(테이블 방의 창 넷과 같은 모양).
 // 창은 하나만 펼친다. 펼친 단추를 다시 누르면 접는다. 처음에는 맨 앞의 창이 펼쳐져 있다.
+// 펼친 창은 ConversationRoom 이 쥔다(open, onOpenChange). 좁은 화면의 아래 단추 줄(ChatDock)도 같은 창을 펼치기 때문이다.
 //   - 지도·이동: 지금 있는 곳, 갈 수 있는 곳과 "가기"(판에 지도가 있을 때만)
 //   - 소지품·건네기: 가진 물건, 쓰기와 건네기
 //   - 상대의 차림·기억: 지금 입은 옷, 기억 메모(펼친 동안만 읽는다)와 앞부분의 요약
@@ -8,7 +9,6 @@
 // 행동(가기, 쓰기, 건네기)은 반응을 받으므로 받는 중이면 막는다(busy). 창을 펼치는 것과 기억 고치기는 막지 않는다.
 
 import { Button } from '@ai-trpg/ui';
-import { useState } from 'react';
 import type { ConversationAction, ConversationDetail } from '../../../api/types';
 import { retireText } from '../../trpg/models/modelChoice';
 import { InventoryPanel } from './InventoryPanel';
@@ -38,9 +38,19 @@ type Props = {
   onChooseModel: () => void;
 };
 
-export function ChatTools({ detail, busy, onAction, onChooseModel }: Props) {
+type PanelProps = Props & {
+  /** 펼친 창. null 이면 모두 접혀 있다 */
+  open: ChatTool | null;
+  onOpenChange: (next: ChatTool | null) => void;
+};
+
+/** 창의 이름(단추의 글) */
+export function chatToolLabel(tool: ChatTool): string {
+  return TOOL_LABELS[tool];
+}
+
+export function ChatTools({ detail, busy, onAction, onChooseModel, open, onOpenChange }: PanelProps) {
   const tools = chatTools(hasMap(detail.character.document));
-  const [open, setOpen] = useState<ChatTool | null>(tools[0] ?? null);
   return (
     <section className="room-tools" aria-labelledby="chat-tools-heading">
       <h2 id="chat-tools-heading" className="visually-hidden">
@@ -54,7 +64,7 @@ export function ChatTools({ detail, busy, onAction, onChooseModel }: Props) {
             className="room-tools__button"
             aria-expanded={open === tool}
             aria-controls={`chat-tool-panel-${tool}`}
-            onClick={() => setOpen((current) => (current === tool ? null : tool))}
+            onClick={() => onOpenChange(open === tool ? null : tool)}
           >
             {TOOL_LABELS[tool]}
           </button>

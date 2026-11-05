@@ -1067,8 +1067,9 @@ a.ui-button {
   }
 }
 
-/* 좁은 화면의 테이블 방(Stitch 20번의 모바일). 맨 아래 단추 줄(창 넷과 채팅)이 사이트의 탭 바를 대신하고,
- * 왼쪽 열과 대화창은 숨겼다가 단추를 누르면 아래에서 올라오는 시트로 띄운다. 넓은 화면에서는 단추 줄과 시트의 닫기를 숨긴다 */
+/* 좁은 화면의 플레이 화면(Stitch 20·21번의 모바일). 맨 아래 단추 줄이 사이트의 탭 바를 대신하고, 왼쪽 열(과 테이블 방의 대화창)은
+ * 숨겼다가 단추를 누르면 아래에서 올라오는 시트로 띄운다. 넓은 화면에서는 단추 줄과 시트의 닫기를 숨긴다.
+ * 단추의 수는 화면마다 다르다(테이블 방 다섯, chat 셋이나 넷) */
 .room-dock,
 .room-sheet__head {
   display: none;
@@ -1079,8 +1080,13 @@ a.ui-button {
     display: none;
   }
 
-  .room--docked {
+  .room--docked,
+  .chat-room {
     padding-bottom: 72px;
+  }
+
+  .chat-room .chat-room__tools {
+    display: none;
   }
 
   .room-dock {
@@ -1090,7 +1096,8 @@ a.ui-button {
     left: 0;
     z-index: 20;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
     border-top: 1px solid var(--ui-border);
     background: var(--ui-surface);
   }
@@ -1124,7 +1131,8 @@ a.ui-button {
   }
 
   .room--docked[data-sheet='tools'] .room__side,
-  .room--docked[data-sheet='chat'] .room__chat {
+  .room--docked[data-sheet='chat'] .room__chat,
+  .chat-room[data-sheet='tools'] .chat-room__tools {
     position: fixed;
     right: 0;
     bottom: 56px;
@@ -1141,7 +1149,8 @@ a.ui-button {
     box-shadow: var(--ui-shadow);
   }
 
-  .room--docked .room-sheet__head {
+  .room--docked .room-sheet__head,
+  .chat-room .room-sheet__head {
     position: sticky;
     top: 0;
     z-index: 1;
