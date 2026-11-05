@@ -94,9 +94,10 @@ C 다. 네이티브 앱이 흔히 하는 방식이고(OAuth 의 네이티브 앱
 앱 껍데기를 만들 때 할 것
 
 - refresh 토큰은 네이티브 플러그인만 쥔다. 로그인 2단계와 갱신과 로그아웃을 네이티브 쪽이 부르고, 화면의 스크립트에는 access 토큰만 넘긴다. 스크립트가 refresh 토큰을 꺼낼 수 있으면 앱 안의 XSS 가 14일짜리 토큰을 가져간다
+- 화면 쪽은 준비됐다. `VITE_AUTH_TRANSPORT=app` 으로 빌드하면 로그인 2단계, 갱신, 로그아웃, 비밀번호 변경이 플러그인(`AppAuth`)을 부른다. 플러그인이 지킬 약속(메서드, 답의 모양, refresh 토큰을 빼고 넘기기, 망이 없을 때 reject)은 `web/apps/web/src/api/appAuth.ts` 의 머리에 있다. 남은 것은 플러그인 자신(Android 의 안전한 저장소와 네이티브의 HTTP)이다
 - 플러그인은 `Origin` 을 붙이지 않는 네이티브의 HTTP 로 부른다(붙으면 `403`)
 - 그 밖의 API 는 access 토큰을 `Authorization` 에 싣는다. 프록시가 앱의 출처(`https://localhost`, `capacitor://localhost`)에만 CORS 를 연다(루트 README 의 "프록시는 앱의 출처에만 CORS 를 연다"). `Allow-Credentials` 는 없다. Capacitor 의 출처를 바꾸면(`server.hostname` 등) 프록시의 목록도 고친다
-- 화면은 지금 같은 출처의 상대 주소로 부른다(`web/apps/web/src/api/http.ts`). 앱으로 빌드할 때는 API 의 주소를 절대 주소로 바꾸는 길이 필요하다
+- 앱으로 빌드할 때는 API 의 출처를 적는다(`VITE_API_ORIGIN`, web README). 비우면 웹처럼 같은 출처의 상대 주소다
 
 ## 정하지 않은 것
 

@@ -6,8 +6,9 @@
 // 모든 서버에 통하는 토큰은 그 뒤의 /refresh 가 준다(refresh.ts). 동의와 취소의 화면이 마지막에 부른다.
 
 import type { components } from './generated/auth';
+import { appChangePassword, usesAppAuth } from './appAuth';
 import { apiRequest } from './http';
-import { clearSession, storeTokens, type Session } from './session';
+import { clearSession, getSession, storeTokens, type Session } from './session';
 import type { ConsentState, ConsentStates, LoginResponse, WithdrawalState } from './types';
 
 const AUTH = '/api/v1/auth';
@@ -35,8 +36,12 @@ export async function withdrawConsent(item: string): Promise<ConsentState[]> {
   return response.items;
 }
 
-/** 비밀번호를 바꾼다. 다른 기기는 로그아웃되고 이 기기는 새 토큰을 받는다 */
+/** 비밀번호를 바꾼다. 다른 기기는 로그아웃되고 이 기기는 새 토큰을 받는다(앱의 길이면 refresh 토큰은 플러그인이 쥔다) */
 export async function changePassword(currentPassword: string, newPassword: string): Promise<Session> {
+  if (usesAppAuth()) {
+    const accessToken = getSession()?.accessToken ?? '';
+    return storeTokens(await appChangePassword(accessToken, currentPassword, newPassword));
+  }
   const response = await apiRequest<LoginResponse>(`${AUTH}/password/change`, {
     method: 'POST',
     body: { current_password: currentPassword, new_password: newPassword },
