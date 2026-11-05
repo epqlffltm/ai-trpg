@@ -426,6 +426,59 @@
   max-width: 640px;
 }
 
+/* 찾을 수 없음(Stitch 8번). 가운데에 펼친 빈 책, 큰 404(명조, 감청), 제목, 한 줄, 단추 */
+.not-found {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding-top: 48px;
+  text-align: center;
+}
+
+.not-found__art {
+  max-width: 100%;
+  height: auto;
+  margin-bottom: 8px;
+}
+
+.not-found__page {
+  fill: var(--ui-surface);
+  stroke: var(--ui-accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.not-found__rule {
+  fill: none;
+  stroke: var(--ui-border);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.not-found__shelf {
+  fill: none;
+  stroke: var(--ui-border-strong);
+  stroke-width: 2;
+}
+
+.not-found__code {
+  margin: 0;
+  color: var(--ui-accent);
+  font-family: var(--ui-font-serif);
+  font-size: 3.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.not-found h1 {
+  margin: 0;
+}
+
+.not-found p:not(.not-found__code) {
+  margin: 0 0 16px;
+  color: var(--ui-text-muted);
+}
+
 /* 한 화면 안의 칸(마이페이지의 계정, 비밀번호, 동의) */
 .page-section {
   margin-top: calc(var(--ui-gap) * 2);
