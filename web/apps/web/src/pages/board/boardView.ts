@@ -34,6 +34,13 @@ export function pageCount(total: number, size: number): number {
   return Math.max(1, Math.ceil(total / Math.max(1, size)));
 }
 
+/** 쪽 넘기기에 보일 쪽 번호. 지금 쪽을 가운데에 두고 width 개까지(처음과 끝에 닿으면 반대쪽으로 민다) */
+export function pageWindow(page: number, pages: number, width = 5): number[] {
+  const count = Math.min(width, pages);
+  const start = Math.min(Math.max(1, page - Math.floor(count / 2)), pages - count + 1);
+  return Array.from({ length: count }, (_, index) => start + index);
+}
+
 /** 서버처럼 낱말로 나눈 검색어. 이어진 빈칸은 하나로, 같은 낱말은 한 번 */
 export function normalizeQuery(q: string): string {
   return [...new Set(q.split(/\s+/).filter((term) => term !== ''))].join(' ');

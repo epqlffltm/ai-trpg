@@ -10,7 +10,7 @@ import { REFRESH_PATH } from '../../api/refresh';
 import { installFakeFetch, json, type SeenRequest } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
 import { boardProblemText } from './boardProblem';
-import { authorName, commentText, normalizeQuery, pageCount, parsePage, searchHint, searchPath } from './boardView';
+import { authorName, commentText, normalizeQuery, pageCount, pageWindow, parsePage, searchHint, searchPath } from './boardView';
 
 const BOARD = '/api/v1/board';
 const AT = '2026-10-24T03:00:00.000Z';
@@ -59,9 +59,11 @@ describe('게시판 읽기', () => {
     expect(pinned.getByText('고정')).toBeInTheDocument();
     expect(pinned.getByRole('link', { name: '이용 안내' })).toHaveAttribute('href', '/board/posts/9');
     expect(screen.getByLabelText('댓글 3개')).toBeInTheDocument();
-    expect(screen.getByText('1 / 2쪽')).toBeInTheDocument();
+    const pager = within(screen.getByRole('navigation', { name: '쪽' }));
+    expect(pager.getByText('1', { exact: false })).toHaveAttribute('aria-current', 'page');
+    expect(pager.getByRole('link', { name: '2쪽' })).toHaveAttribute('href', '/board/notice?page=2');
 
-    await userEvent.click(screen.getByRole('link', { name: '다음' }));
+    await userEvent.click(pager.getByRole('link', { name: '다음' }));
     expect(await screen.findByRole('link', { name: '지난 점검' })).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: '고정한 글' })).toBeNull();
     expect(seen.some((request) => request.url.endsWith('/boards/notice/posts?page=2&size=20'))).toBe(true);
@@ -127,7 +129,7 @@ describe('글 검색', () => {
 
     await userEvent.click(screen.getByRole('link', { name: '모든 게시판에서 찾기' }));
     expect(await screen.findByText(/찾는 곳: 모든 게시판/)).toBeInTheDocument();
-    expect(await screen.findByText('[자유 게시판]')).toBeInTheDocument();
+    expect(within(await screen.findByRole('list', { name: '찾은 글' })).getByText('자유 게시판')).toBeInTheDocument();
 
     slow = true;
     await userEvent.clear(screen.getByRole('textbox', { name: '검색어' }));
@@ -148,6 +150,11 @@ describe('게시판의 순수한 함수', () => {
     expect(parsePage('99999')).toBe(10000);
     expect(pageCount(0, 20)).toBe(1);
     expect(pageCount(41, 20)).toBe(3);
+    expect(pageWindow(1, 1)).toEqual([1]);
+    expect(pageWindow(1, 12)).toEqual([1, 2, 3, 4, 5]);
+    expect(pageWindow(7, 12)).toEqual([5, 6, 7, 8, 9]);
+    expect(pageWindow(12, 12)).toEqual([8, 9, 10, 11, 12]);
+    expect(pageWindow(2, 3)).toEqual([1, 2, 3]);
     expect(normalizeQuery(' 고정  버그 고정 ')).toBe('고정 버그');
     expect(searchHint('')).toBeNull();
     expect(searchHint('가나 다라 마바 사아 자차 카타')).toBe('낱말은 5개까지입니다.');

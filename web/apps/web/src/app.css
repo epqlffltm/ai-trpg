@@ -2697,18 +2697,52 @@ details.room-panel[open] > summary {
   gap: 8px;
 }
 
-/* 공지·게시판(A11). 게시판 고르기, 검색, 글 목록, 쪽 넘기기, 글과 댓글. 본문과 댓글은 글자 그대로(줄바꿈만 살린다) */
-.board-tabs {
+/* 공지·게시판(A11, Stitch 11번). 제목 줄, 게시판 탭, 검색, 칸 넷의 글 목록, 쪽 번호, 글과 댓글. 본문과 댓글은 글자 그대로(줄바꿈만 살린다) */
+.board-page__head {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 8px 16px;
   margin-bottom: var(--ui-gap);
 }
 
-.board-tabs [aria-current='page'] {
-  font-weight: 700;
+.board-page__head h1 {
+  margin: 0;
+}
+
+.board-page__head .hint {
+  margin: 4px 0 0;
+}
+
+/* 게시판 탭. 지금 게시판은 밑줄. 좁으면 가로로 밀어 본다 */
+.board-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: var(--ui-gap);
+  border-bottom: 1px solid var(--ui-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.board-tabs a {
+  flex: none;
+  padding: 8px 12px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--ui-text-muted);
   text-decoration: none;
+  white-space: nowrap;
+}
+
+.board-tabs a:hover {
   color: var(--ui-text);
+}
+
+.board-tabs [aria-current='page'] {
+  border-bottom-color: var(--ui-accent);
+  color: var(--ui-accent);
+  font-weight: 700;
 }
 
 .board-search {
@@ -2730,16 +2764,53 @@ details.room-panel[open] > summary {
   margin-top: calc(1.5em + 6px);
 }
 
+/* 글 목록. 넓으면 칸 넷(제목, 글쓴이, 쓴 때, 댓글), 좁으면 제목 아래 한 줄 */
+.post-head,
+.post-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 9em 13em 4.5em;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 10px 12px;
+}
+
+.post-head {
+  border-top: 2px solid var(--ui-border-strong);
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text-muted);
+  font-size: 0.85em;
+  font-weight: 700;
+}
+
+.post-head span:not(:first-child),
+.post-row__author,
+.post-row__time,
+.post-row__comments {
+  text-align: center;
+}
+
 .posts {
   display: grid;
   margin-bottom: var(--ui-gap);
-  border-top: 1px solid var(--ui-border);
+}
+
+/* 고정한 글의 목록은 그 아래 글 목록과 붙인다 */
+.posts--pinned {
+  margin-bottom: 0;
 }
 
 .post-row {
-  padding: 10px 4px;
   border-bottom: 1px solid var(--ui-border);
   overflow-wrap: anywhere;
+}
+
+.post-row--pinned {
+  background: var(--ui-surface-subtle);
+}
+
+.post-row--pinned .post-row__title a {
+  font-weight: 700;
 }
 
 .post-row__title {
@@ -2747,6 +2818,16 @@ details.room-panel[open] > summary {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 6px;
+}
+
+.post-row__title a {
+  color: var(--ui-text);
+  text-decoration: none;
+}
+
+.post-row__title a:hover {
+  color: var(--ui-accent);
+  text-decoration: underline;
 }
 
 .post-row__pin {
@@ -2757,16 +2838,82 @@ details.room-panel[open] > summary {
   font-size: 0.75em;
 }
 
-.post-row__meta {
-  margin: 2px 0 0;
-  font-size: 0.85em;
+.post-row__board {
+  padding: 0 6px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  color: var(--ui-text-muted);
+  font-size: 0.75em;
 }
 
+.post-row__author,
+.post-row__time,
+.post-row__comments {
+  color: var(--ui-text-muted);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
+.post-row__comments > [aria-hidden='true'] {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .post-head {
+    display: none;
+  }
+
+  .posts {
+    border-top: 1px solid var(--ui-border);
+  }
+
+  .posts--pinned + .posts {
+    border-top: 0;
+  }
+
+  .post-row {
+    grid-template-columns: auto auto 1fr;
+    padding: 10px 4px;
+  }
+
+  .post-row__title {
+    grid-column: 1 / -1;
+  }
+
+  .post-row__author,
+  .post-row__time,
+  .post-row__comments {
+    text-align: left;
+  }
+
+  .post-row__comments > [aria-hidden='true'] {
+    display: inline;
+  }
+}
+
+/* 쪽 번호. 지금 쪽은 감청 바탕 */
 .pager {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 16px;
+  align-items: center;
+  gap: 4px 8px;
   margin: var(--ui-gap) 0;
+}
+
+.pager__page {
+  min-width: 2em;
+  padding: 4px 6px;
+  border-radius: var(--ui-radius);
+  text-align: center;
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.pager__page[aria-current='page'] {
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+  font-weight: 700;
 }
 
 .post__content,

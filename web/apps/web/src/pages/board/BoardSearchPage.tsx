@@ -2,6 +2,7 @@
 // 글 검색(A11, /board/search?q=&board=&page=). 로그인하지 않아도 열린다. 제목과 본문에서 모든 낱말이 들어 있는 글, 새 글부터.
 // board 가 있으면 그 게시판에서만, 없으면 모든 게시판에서. 검색어가 규칙에 맞지 않으면 부르지 않고 까닭을 적는다.
 // 3초를 넘기면 서버가 멈춘다(503). 낱말을 줄이거나 게시판을 고르라고 알린다.
+// 찾은 글은 게시판의 글 목록과 같은 칸 넷이다(PostRow). 모든 게시판에서 찾으면 제목 앞에 게시판 이름.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -12,7 +13,7 @@ import { boardsQuery, searchQuery } from './boardQueries';
 import { boardProblemText } from './boardProblem';
 import { normalizeQuery, pageCount, parsePage, searchHint, searchPath } from './boardView';
 import { Pager } from './Pager';
-import { PostRow } from './PostRow';
+import { PostListHead, PostRow } from './PostRow';
 import { SearchForm } from './SearchForm';
 
 export function BoardSearchPage() {
@@ -29,7 +30,7 @@ export function BoardSearchPage() {
   const data = ready ? results.data : undefined;
 
   return (
-    <main className="page page--medium">
+    <main className="page board-page">
       <h1>글 검색</h1>
       <BoardTabs current={undefined} />
       <SearchForm key={`${q}:${board ?? ''}`} initial={q} board={board} />
@@ -54,6 +55,7 @@ export function BoardSearchPage() {
       ) : null}
       {data ? <p className="hint">찾은 글 {data.total}개</p> : null}
       {data && data.items.length === 0 ? <p className="empty-state">찾은 글이 없습니다. 다른 낱말로 찾아 보세요.</p> : null}
+      {data && data.items.length > 0 ? <PostListHead /> : null}
       {data ? (
         <ul className="plain-list posts" aria-label="찾은 글">
           {data.items.map((post) => (
