@@ -141,7 +141,47 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'typing',
         'transcript',
     ),
-    # 기반과 나머지: 앱, 설정, DB, 인증, 관측, 작업, 알림, 운영자. 어느 머리에도 맞지 않는 파일도 여기다
+    # 싸움: 공격의 비용과 효과, 장비, 세이브와 저항, 성질, 기술, 동료 피해, 성장
+    'combat': (
+        'attack_',
+        'combat_gear',
+        'equipment',
+        'saves',
+        'resistances',
+        'damage_natures',
+        'natures',
+        'covers',
+        'downed_strikes',
+        'friendly_fire',
+        'skill',
+        'growth',
+    ),
+    # 물건과 NPC: 물건의 효과와 던지기, 거들기, 치료에 붙여 쓰기, 사고팔기, 드롭, 수치, NPC 의 차례와 행동
+    'items': (
+        'item_',
+        'treat_aids',
+        'trades',
+        'money',
+        'loots',
+        'carry',
+        'resource',
+        'npc_',
+    ),
+    # 맵의 위험: 함정, 길과 문, 사건, 떠돌이, 장의 잠금, 기다리기, 맵의 서술
+    'hazards': (
+        'trap',
+        'foe_traps',
+        'preset_traps',
+        'happening',
+        'route_',
+        'robbed_wake',
+        'wander',
+        'chapter_locks',
+        'waits',
+        'map_narration',
+    ),
+    # 기반과 나머지: 앱, 설정, DB, 인증, 관측, 작업, 알림, 운영자, 캠페인과 공개 목록의 화면 쪽 기능, 장면 그림.
+    # 어느 머리에도 맞지 않는 파일도 여기다
     CATCH_ALL: (),
 }
 

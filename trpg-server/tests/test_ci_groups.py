@@ -50,6 +50,10 @@ def test_every_head_matches_a_file_in_its_group(group, head):
         ('test_lore_retrieval.py', 'narration'),
         ('test_stream_api.py', 'realtime'),
         ('test_table_map.py', 'tables'),
+        ('test_friendly_fire.py', 'combat'),
+        ('test_item_throws.py', 'items'),
+        ('test_npc_turns.py', 'items'),
+        ('test_route_doors.py', 'hazards'),
         ('test_health.py', CATCH_ALL),
     ],
 )
