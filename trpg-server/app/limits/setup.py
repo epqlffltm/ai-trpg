@@ -29,6 +29,8 @@ class Limits:
     chat: AttemptLimit
     # 기록 내려받기(#617). 한 사람이 받은 수. 판 하나를 통째로 읽어 글로 바꾸므로 비싸다
     transcript: AttemptLimit
+    # 장면 그림(#983). 한 사람이 그리기 시작한 수. 그림 모델을 부르므로 비싸다
+    snapshot: AttemptLimit
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,9 @@ def limits_from(settings: Settings) -> Limits:
         chat=AttemptLimit('chat', settings.chat_messages_per_window, timedelta(seconds=settings.chat_window_seconds)),
         transcript=AttemptLimit(
             'transcript', settings.transcripts_per_window, timedelta(seconds=settings.transcript_window_seconds)
+        ),
+        snapshot=AttemptLimit(
+            'snapshot', settings.snapshots_per_window, timedelta(seconds=settings.snapshot_window_seconds)
         ),
     )
 

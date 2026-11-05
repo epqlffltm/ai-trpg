@@ -26,6 +26,7 @@
   - 409 snapshot_in_progress: 그 테이블에서 다른 그림을 그리는 중이다(지울 때는 그 그림을 아직 그리는 중이다).
     snapshot_settling: 청구를 정리하는 중이라 아직 지우지 못한다
   - 402 credit_short, gold_required: 크레딧이 모자란다
+  - 429 too_many_attempts: 한 사람이 짧은 시간에 너무 많이 그리기 시작했다(테이블을 가리지 않고 센다)
   - 503 snapshot_unavailable: 장면 그림을 만들지 않는 서버이거나 가격표에 없다.
     billing_unavailable·asset_unavailable: 잠시 뒤에 다시
 """
@@ -41,6 +42,8 @@ from server_core.auth.dependencies import CurrentUser, bearer_scheme, unauthoriz
 
 from app.assets.routing import Paging, Session
 from app.billing.routing import Now, Prices, utc_now
+from app.limits.routing import Limited
+from app.limits.setup import Limiting
 from app.snapshots import service
 from app.snapshots.charging import CREDIT_SHORT, GOLD_REQUIRED, NOT_FOR_SALE
 from app.snapshots.pricing import snapshot_price
@@ -101,18 +104,28 @@ def keep_drawing(request: Request, start: SnapshotStart, token: str) -> str | No
     return state.jobs.spawn(job, f'snapshot:{start.snapshot_id}', DRAW_OPERATION)
 
 
+async def count_drawing(limiting: Limiting, user_id: uuid.UUID) -> None:
+    """
+    그리기 시작 한 번을 센다. 넘으면 TooManyAttempts(429).
+
+    세는 곳에 닿지 못하면 통과시킨다. 값과 한 테이블 한 장이 남아 막는다.
+    """
+    await limiting.limiter.count_attempt(limiting.limits.snapshot, str(user_id))
+
+
 @router.post(
     '/rounds/{number}/snapshot',
     response_model=SnapshotOut,
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def draw(
-    table_id: uuid.UUID, number: RoundNumber, user: CurrentUser, token: Token, request: Request
+    table_id: uuid.UUID, number: RoundNumber, user: CurrentUser, token: Token, limiting: Limited, request: Request
 ) -> SnapshotOut:
     """그 라운드의 장면 그림을 그리기 시작한다. 홀드가 걸리면 202 이고 그림은 목록에서 받는다."""
     state = request.app.state
     if state.image_provider is None or state.jobs.is_full(DRAW_OPERATION):
         raise SnapshotUnavailableError
+    await count_drawing(limiting, user.user_id)
     model = state.settings.snapshot_model
     start = await service.begin_snapshot(state.session_factory, user.user_id, table_id, number, model)
     await service.hold_snapshot(state.session_factory, state.billing, start, utc_now())
