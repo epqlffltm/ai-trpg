@@ -92,6 +92,14 @@ beforeEach(() => {
   Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:image'), revokeObjectURL: vi.fn() });
 });
 
+/** 왼쪽 열의 창 하나를 펼친다(이미 펼쳐져 있으면 그대로). 그 창을 돌려준다. 아래 단추 줄에도 같은 이름이 있어 왼쪽 열 안에서 찾는다 */
+async function openTool(name: string) {
+  const column = within(await screen.findByRole('region', { name: '창' }));
+  const button = column.getByRole('button', { name });
+  if (button.getAttribute('aria-expanded') !== 'true') await userEvent.click(button);
+  return within(await screen.findByRole('region', { name }));
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -101,8 +109,7 @@ describe('지도와 기록', () => {
     signedIn();
     renderApp(`/story/sessions/${SESSION}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '지도' }));
-    const map = within(screen.getByRole('dialog', { name: '지도' }));
+    const map = await openTool('지도·이동');
     expect(map.getByText('함께: 준')).toBeInTheDocument();
     const reachable = within(map.getByRole('list', { name: '갈 수 있는 곳' }));
     expect(reachable.getByText('저녁 그대로 · 있음: 미나')).toBeInTheDocument();
@@ -117,8 +124,7 @@ describe('지도와 기록', () => {
     const { seen } = signedIn();
     renderApp(`/story/sessions/${SESSION}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '기록' }));
-    const records = within(screen.getByRole('dialog', { name: '기록' }));
+    const records = await openTool('기록');
     expect(await records.findByText(/엔딩 1\/2/)).toBeInTheDocument();
     const endings = within(records.getByRole('list', { name: '엔딩' }));
     expect(endings.getByText('봄의 약속')).toBeInTheDocument();

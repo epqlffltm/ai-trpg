@@ -1,5 +1,7 @@
 // web/apps/web/src/pages/story/StoryRoom.tsx
-// 장면(D2)의 화면. 위에 머리(세계관, 날짜·시간대·장소, 모델)와 장면의 인물, 아래에 대사창과 말 쓰기.
+// 장면(D2)의 화면(Stitch 22번). 위에 머리(세계관, 날짜·시간대·장소, 모델). 넓으면 오른쪽에 그림 창, 장면의 인물, 대사창, 말 쓰기,
+// 왼쪽 열에 창(StoryTools: 지도·이동, 소지품·건네기, 기록, 기억)과 그 아래 행동 줄(StoryActionBar). chat 대화와 같은 배치(chat-room)다.
+// 좁으면 오른쪽의 것이 위아래고, 왼쪽 열은 맨 아래 단추 줄(ToolDock)이 아래에서 올라오는 시트로 연다.
 // 한 세션에 한 생성이다. 받는 중이면 보내기, 다시 생성, 대안, 모델 바꾸기를 막는다. 모델이 없으면 보내기 전에 고르게 한다.
 // 끝난 세션(엔딩을 봤고 후일담이 없다)은 말 쓰기와 행동을 숨긴다. 가지와 다시 생성(엔딩 장면을 다시 쓰기)은 된다.
 // 행동(시간 보내기, 하루 마치기, 이동, 선택지, 건네기, 고백)은 엔진이 판정하고 반응을 받는다. 말과 같이 모델이 있어야 한다.
@@ -32,9 +34,11 @@ import { useSnapshots } from '../chat/conversation/useSnapshots';
 import { useConversationShortcuts } from '../chat/conversation/useConversationShortcuts';
 import { freshEnding, pendingChoices } from './storyActions';
 import { StoryActionBar } from './StoryActionBar';
+import { storyHasMap, storyToolLabel, storyTools, StoryTools } from './StoryTools';
+import { SheetClose } from '../../components/SheetClose';
+import { ToolDock, useToolDock } from '../../components/ToolDock';
 import { StoryBookmarksButton } from './StoryBookmarksButton';
 import { StoryScreenshotButton } from './StoryScreenshotButton';
-import { StoryRecordsButton } from './StoryRecordsButton';
 import { backgroundOf, expressionsOf, sceneOf as pictureSceneOf } from './storyCastView';
 import { StoryCastRow } from './StoryCastRow';
 import { StoryChoices } from './StoryChoices';
@@ -73,6 +77,8 @@ export function StoryRoom({ session, turns }: Props) {
   const ending = streaming ? null : freshEnding(session.messages);
   const showEnding = ending !== null && ending.messageId !== closedEnding;
   const choices = streaming || ended ? null : pendingChoices(view, scene.state.choosing);
+  const tools = storyTools(storyHasMap(view, scene.state, ended));
+  const dock = useToolDock(tools[0] ?? null);
 
   /** 답을 받는다. 모델이 없으면 고르기를 열고 보내지 않는다. 서버가 받아들였으면 true */
   async function answer(open: StoryTurnOpener): Promise<boolean> {
@@ -135,66 +141,83 @@ export function StoryRoom({ session, turns }: Props) {
   );
 
   return (
-    <main className="page conversation story">
+    <main className="page conversation story chat-room" data-sheet={dock.sheet ? 'tools' : undefined}>
       <StoryHeader session={session} state={scene.state} busy={busy} onChooseModel={() => setChoosingModel(true)} />
-      <StoryPicture
-        scene={pictureSceneOf(view, session.messages, turns.turn?.userMessage ?? null)}
-        background={backgroundOf(view, scene.state)}
-        placeName={placeName(view, scene.state.place)}
-      />
-      <StoryCastRow view={view} state={scene.state} cast={scene.cast} expressions={expressions} disabled={busy || ended} onAct={act} />
-      <StoryMessageList
-        session={session}
-        turn={turns.turn}
-        busy={busy}
-        onBranch={(messageId) => branching.mutate(messageId)}
-        onRegenerate={(messageId) => void answer((signal) => openStoryRegenerateTurn(messageId, signal))}
-        onContinue={(messageId) => void answer((signal) => openStoryContinueTurn(messageId, signal))}
-        onSendEdit={sendEdit}
-        onSaveSegments={saveSegments}
-        marked={bookmarks.marked}
-        onBookmark={toggleBookmark}
-        snapshots={snapshots}
-      />
-      {branching.error ? <p className="ui-field__error">{describeChangeProblem(branching.error)}</p> : null}
-      {editing.error ? <p className="ui-field__error">{describeStoryEditProblem(editing.error)}</p> : null}
-      {bookmarks.change.error ? <p className="ui-field__error">{bookmarkProblemText(bookmarks.change.error)}</p> : null}
-      {snapshots.draw.error ? <p className="ui-field__error">{snapshotProblemText(snapshots.draw.error)}</p> : null}
-      {showEnding ? (
-        <StoryEnding
-          worldId={session.world.id}
-          view={view}
-          endingId={ending.endingId}
-          starting={restarting.isPending}
-          onRestart={() => restarting.mutate({ worldId: session.world.id })}
-          onClose={() => setClosedEnding(ending.messageId)}
-        />
-      ) : null}
-      {restarting.error ? <p className="ui-field__error">{describeStartProblem(restarting.error)}</p> : null}
-      {choices ? <StoryChoices pending={choices} disabled={busy} onAct={act} /> : null}
-      <TurnNotice problem={turns.problem} failure={turns.failure} onChooseModel={() => setChoosingModel(true)} onClose={turns.clearNotice} />
-      {ended ? (
-        <div className="story-actions">
-          <p className="hint story-ended">이야기가 끝났습니다. 대안을 넘겨 보거나 끝의 장면을 다시 쓸 수 있습니다.</p>
-          <StoryRecordsButton worldId={session.world.id} view={view} />
-          {sessionTools}
+      <div className="chat-room__body">
+        <div className="chat-room__main">
+          <StoryPicture
+            scene={pictureSceneOf(view, session.messages, turns.turn?.userMessage ?? null)}
+            background={backgroundOf(view, scene.state)}
+            placeName={placeName(view, scene.state.place)}
+          />
+          <StoryCastRow view={view} state={scene.state} cast={scene.cast} expressions={expressions} disabled={busy || ended} onAct={act} />
+          <StoryMessageList
+            session={session}
+            turn={turns.turn}
+            busy={busy}
+            onBranch={(messageId) => branching.mutate(messageId)}
+            onRegenerate={(messageId) => void answer((signal) => openStoryRegenerateTurn(messageId, signal))}
+            onContinue={(messageId) => void answer((signal) => openStoryContinueTurn(messageId, signal))}
+            onSendEdit={sendEdit}
+            onSaveSegments={saveSegments}
+            marked={bookmarks.marked}
+            onBookmark={toggleBookmark}
+            snapshots={snapshots}
+          />
+          {branching.error ? <p className="ui-field__error">{describeChangeProblem(branching.error)}</p> : null}
+          {editing.error ? <p className="ui-field__error">{describeStoryEditProblem(editing.error)}</p> : null}
+          {bookmarks.change.error ? <p className="ui-field__error">{bookmarkProblemText(bookmarks.change.error)}</p> : null}
+          {snapshots.draw.error ? <p className="ui-field__error">{snapshotProblemText(snapshots.draw.error)}</p> : null}
+          {showEnding ? (
+            <StoryEnding
+              worldId={session.world.id}
+              view={view}
+              endingId={ending.endingId}
+              starting={restarting.isPending}
+              onRestart={() => restarting.mutate({ worldId: session.world.id })}
+              onClose={() => setClosedEnding(ending.messageId)}
+            />
+          ) : null}
+          {restarting.error ? <p className="ui-field__error">{describeStartProblem(restarting.error)}</p> : null}
+          {choices ? <StoryChoices pending={choices} disabled={busy} onAct={act} /> : null}
+          <TurnNotice problem={turns.problem} failure={turns.failure} onChooseModel={() => setChoosingModel(true)} onClose={turns.clearNotice} />
+          {ended ? (
+            <div className="story-actions">
+              <p className="hint story-ended">이야기가 끝났습니다. 대안을 넘겨 보거나 끝의 장면을 다시 쓸 수 있습니다.</p>
+              {sessionTools}
+            </div>
+          ) : null}
+          {ended ? null : (
+            <Composer
+              draft={draft}
+              onDraft={setDraft}
+              suggestions={storySuggestions(session.messages, choices !== null)}
+              streaming={streaming}
+              disabled={busy}
+              canStop={Boolean(turns.turn?.generationId)}
+              onSend={() => void send()}
+              onStop={() => void turns.stop()}
+              shortcuts={shortcuts}
+            />
+          )}
         </div>
-      ) : (
-        <StoryActionBar sessionId={session.id} worldId={session.world.id} view={view} state={scene.state} disabled={busy} onAct={act} tools={sessionTools} />
-      )}
-      {ended ? null : (
-        <Composer
-          draft={draft}
-          onDraft={setDraft}
-          suggestions={storySuggestions(session.messages, choices !== null)}
-          streaming={streaming}
-          disabled={busy}
-          canStop={Boolean(turns.turn?.generationId)}
-          onSend={() => void send()}
-          onStop={() => void turns.stop()}
-          shortcuts={shortcuts}
-        />
-      )}
+        <div className="chat-room__tools">
+          <SheetClose onClose={dock.closeSheet} />
+          <StoryTools
+            sessionId={session.id}
+            worldId={session.world.id}
+            view={view}
+            state={scene.state}
+            tools={tools}
+            disabled={busy}
+            onAct={act}
+            open={dock.open}
+            onOpenChange={dock.setOpen}
+          />
+          {ended ? null : <StoryActionBar view={view} state={scene.state} disabled={busy} onAct={act} tools={sessionTools} />}
+        </div>
+      </div>
+      <ToolDock label="장면의 단추 줄" tools={tools.map((tool) => ({ id: tool, label: storyToolLabel(tool) }))} dock={dock} />
       <StoryModelDialog session={session} open={choosingModel} onClose={closeModel} />
     </main>
   );

@@ -74,6 +74,14 @@ function moves(seen: SeenRequest[]): unknown[] {
   return seen.filter((request) => request.method === 'POST' && request.url === ACTIONS).map((request) => request.body);
 }
 
+/** 왼쪽 열의 창 하나를 펼친다(이미 펼쳐져 있으면 그대로). 그 창을 돌려준다. 아래 단추 줄에도 같은 이름이 있어 왼쪽 열 안에서 찾는다 */
+async function openTool(name: string) {
+  const column = within(await screen.findByRole('region', { name: '창' }));
+  const button = column.getByRole('button', { name });
+  if (button.getAttribute('aria-expanded') !== 'true') await userEvent.click(button);
+  return within(await screen.findByRole('region', { name }));
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -83,8 +91,7 @@ describe('기한을 넘기는 이동', () => {
     const { seen } = signedIn();
     renderApp(`/story/sessions/${SESSION}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '지도' }));
-    const map = within(screen.getByRole('dialog', { name: '지도' }));
+    const map = await openTool('지도·이동');
     const places = within(map.getByRole('list', { name: '갈 수 있는 곳' }));
     expect(places.getByText(/기한을 넘김/)).toBeInTheDocument();
 
@@ -103,8 +110,8 @@ describe('기한을 넘기는 이동', () => {
     const { seen } = signedIn();
     renderApp(`/story/sessions/${SESSION}`);
 
-    await userEvent.click(await screen.findByRole('button', { name: '지도' }));
-    await userEvent.click(within(screen.getByRole('list', { name: '갈 수 있는 곳' })).getByRole('button', { name: '공원(으)로 가기' }));
+    const map = await openTool('지도·이동');
+    await userEvent.click(within(map.getByRole('list', { name: '갈 수 있는 곳' })).getByRole('button', { name: '공원(으)로 가기' }));
     await waitFor(() => expect(moves(seen)).toEqual([{ kind: 'move', place: 'park' }]));
   });
 });
