@@ -113,6 +113,7 @@ from app.snapshots.service import (
     SnapshotBusyError,
     SnapshotDeclinedError,
     SnapshotNotFoundError,
+    SnapshotSettlingError,
     SnapshotUnavailableError,
 )
 from app.tables import past_router as past_tables
@@ -446,6 +447,7 @@ def create_app(
     app.add_exception_handler(SnapshotBusyError, snapshots.handle_busy)
     app.add_exception_handler(SnapshotDeclinedError, snapshots.handle_declined)
     app.add_exception_handler(SnapshotNotFoundError, snapshots.handle_not_found)
+    app.add_exception_handler(SnapshotSettlingError, snapshots.handle_settling)
     app.add_exception_handler(AssetServerUnavailableError, snapshots.handle_asset_unavailable)
     app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
     app.add_exception_handler(LimitsUnavailable, handle_limits_unavailable)

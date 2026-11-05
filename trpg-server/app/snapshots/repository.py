@@ -9,7 +9,7 @@
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.snapshots.models import DUE_STATUSES, OPEN_STATUSES, SnapshotBilling, TableSnapshot
@@ -68,3 +68,14 @@ async def find_due(session: AsyncSession, now: datetime, stale: timedelta, limit
     )
     query = select(TableSnapshot).where(or_(due, abandoned)).order_by(TableSnapshot.created_at).limit(limit)
     return list(await session.scalars(query))
+
+
+async def remove_settled(session: AsyncSession, snapshot_id: uuid.UUID, settled: frozenset[SnapshotBilling]) -> bool:
+    """청구가 끝난(settled 중 하나인) 그림 한 장의 기록을 지운다. 지웠으면 True."""
+    statement = (
+        delete(TableSnapshot)
+        .where(TableSnapshot.id == snapshot_id, TableSnapshot.billing_status.in_([status.value for status in settled]))
+        .returning(TableSnapshot.id)
+        .execution_options(synchronize_session=False)
+    )
+    return (await session.execute(statement)).first() is not None

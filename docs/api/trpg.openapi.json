@@ -29051,6 +29051,59 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/game/tables/{table_id}/snapshots/{snapshot_id}": {
+      "delete": {
+        "description": "내 그림 한 장을 지운다. 남의 그림은 404 다. 그리는 중이거나 청구를 정리하는 중이면 409 다.",
+        "operationId": "delete_snapshot_api_v1_game_tables__table_id__snapshots__snapshot_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Snapshot",
+        "tags": [
+          "snapshots"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/game/tables/{table_id}/snapshots/{snapshot_id}/image": {
       "get": {
         "description": "그림의 바이트. 앉은 사람만 받는다.",
