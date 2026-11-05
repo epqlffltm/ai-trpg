@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/notifications/Notifications.test.tsx
 // 알림(A10). 머리의 "알림"과 읽지 않은 수, 알림 화면의 글과 갈 곳(모르는 종류는 일반 문구), 하나 읽기, 모두 읽기(받은 가장 새 번호까지),
-// 더 보기, 받을 알림 끄고 켜기. 글을 짓는 순수한 함수.
+// 더 보기, 설정(A12)에서 받을 알림 끄고 켜기. 글을 짓는 순수한 함수와 종류 아이콘.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -12,6 +12,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fak
 import { renderApp } from '../../test/renderApp';
 import { ME } from '../../test/tableFixtures';
 import { notificationProblemText } from './notificationProblem';
+import { notificationGroup } from './NotificationIcon';
 import { badgeText, describeNotification, muteLabel, needsModelNames, newestId } from './notificationText';
 
 const BOX = '/api/v1/notification/me/notifications';
@@ -107,9 +108,25 @@ describe('알림', () => {
     expect(screen.queryByRole('button', { name: '더 보기' })).toBeNull();
   });
 
-  it('받을 알림을 끄고 다시 켠다', async () => {
-    const { seen } = signedIn();
+  it('알림 화면에는 받을 알림이 없고 설정으로 가는 길만 있다. 알림이 없으면 없다고 한다', async () => {
+    installFakeFetch({
+      [`POST ${REFRESH_PATH}`]: () => json(200, tokens('a1')),
+      'GET /api/v1/auth/me': () => json(200, { nickname: '모험가', public_id: ME }),
+      'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: '0', total: '0', next_expiry: null }),
+      [`GET ${BOX}/unread-count`]: () => json(200, { unread: 0 }),
+      [`GET ${BOX}`]: () => json(200, { items: [], next_before: null }),
+    });
     renderApp('/notifications');
+
+    expect(await screen.findByText('새 알림이 없습니다.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '설정' })).toHaveAttribute('href', '/settings');
+    expect(screen.queryByRole('heading', { name: '받을 알림' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '모두 읽음' })).toBeNull();
+  });
+
+  it('설정에서 받을 알림을 끄고 다시 켠다', async () => {
+    const { seen } = signedIn();
+    renderApp('/settings');
 
     const short = await screen.findByRole('checkbox', { name: '크레딧이 모자라 서술 값을 걸지 못함' });
     expect(short).toBeChecked();
@@ -123,6 +140,18 @@ describe('알림', () => {
 });
 
 describe('알림의 순수한 함수', () => {
+  it('종류 아이콘: 운영자의 조치와 신고 처리, 팔로우한 제작자의 새 작품, 결제, 게시판, 테이블, 그 밖', () => {
+    expect(notificationGroup({ source: 'game', kind: 'scenario.sanctioned' })).toBe('operator');
+    expect(notificationGroup({ source: 'asset', kind: 'character.hidden' })).toBe('operator');
+    expect(notificationGroup({ source: 'chat', kind: 'message_report.handled' })).toBe('operator');
+    expect(notificationGroup({ source: 'game', kind: 'scenario.published' })).toBe('follow');
+    expect(notificationGroup({ source: 'asset', kind: 'world.published' })).toBe('follow');
+    expect(notificationGroup({ source: 'billing', kind: 'credit.short' })).toBe('wallet');
+    expect(notificationGroup({ source: 'board', kind: 'post.commented' })).toBe('board');
+    expect(notificationGroup({ source: 'game', kind: 'narration_model.retiring' })).toBe('table');
+    expect(notificationGroup({ source: 'somewhere', kind: 'new.thing' })).toBe('other');
+  });
+
   it('종류마다의 글과 갈 곳, 빠진 칸', () => {
     expect(describeNotification(notice(1, 'billing', 'credit.short', { amount: '120', gold_required: true }), CTX)).toEqual({
       text: '크레딧이 모자라 서술 값을 걸지 못했습니다(120). 프리미엄 모델은 골드로만 냅니다',
