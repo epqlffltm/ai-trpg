@@ -13,7 +13,7 @@ import { declarationHints, initialDeclarationDraft, toDeclarationUpdate } from '
 import { applyPreview, type NarrationPreview } from './preview';
 import { describeCloseProblem, describeDeclarationProblem } from './roundProblem';
 import { currentRoundQuery, replaceCurrentRound } from './roundQueries';
-import { actionLabel, deathSaveLine, myDeclaration, outcomeLine, pastRounds, remainingSeconds } from './roundView';
+import { actionLabel, deathSaveLine, myDeclaration, outcomeLine, outcomeTone, pastRounds, remainingSeconds } from './roundView';
 
 const rules = RULES as unknown as Ruleset;
 const TABLE = tableDetail('t', {
@@ -183,5 +183,15 @@ describe('replaceCurrentRound', () => {
 
     expect(arrivals).toHaveLength(1);
     expect(queryClient.getQueryData<Round>(key)?.number).toBe(3);
+  });
+});
+
+describe('outcomeTone', () => {
+  it('판정한 결과만 성공·실패의 색을 받는다. 굴리지 않은 결과와 없는 결과는 색이 없다', () => {
+    const check = { roll: 13, modifier: 2, total: 15, target: 15, success: true, hindrance: null };
+    expect(outcomeTone(check as Parameters<typeof outcomeTone>[0])).toBe('success');
+    expect(outcomeTone({ ...check, success: false } as Parameters<typeof outcomeTone>[0])).toBe('failure');
+    expect(outcomeTone({ turn_lost: 'downed' } as Parameters<typeof outcomeTone>[0])).toBeNull();
+    expect(outcomeTone(null)).toBeNull();
   });
 });
