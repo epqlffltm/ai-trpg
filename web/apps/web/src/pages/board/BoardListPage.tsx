@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/board/BoardListPage.tsx
-// 게시판의 글 목록(A11, /board/:slug?page=). 로그인하지 않아도 열린다. 쪽 번호로 넘긴다(20 개씩).
-// 첫 쪽에는 고정한 글을 맨 위에 따로 둔다(기간이 끝나면 서버가 저절로 내린다). 위에 게시판 고르기와 이 게시판에서 찾기.
+// 게시판의 글 목록(A11, /board/:slug?page=, Stitch 11번). 로그인하지 않아도 열린다. 쪽 번호로 넘긴다(20 개씩).
+// 제목 줄(게시판 이름과 설명, 오른쪽에 글쓰기), 게시판 탭, 이 게시판에서 찾기, 칸 넷의 글 목록(제목, 글쓴이, 쓴 때, 댓글 수), 쪽 번호.
+// 첫 쪽에는 고정한 글을 맨 위에 따로 둔다(기간이 끝나면 서버가 저절로 내린다).
 // 글쓰기는 누구나 쓰는 게시판이면 늘 보인다(로그인 전이면 누르면 로그인으로). 운영자만 쓰는 게시판은 운영자에게만 보인다.
 
 import { Button, Notice } from '@ai-trpg/ui';
@@ -13,7 +14,7 @@ import { boardProblemText } from './boardProblem';
 import { canWritePost } from './boardPermissions';
 import { pageCount, parsePage } from './boardView';
 import { Pager } from './Pager';
-import { PostRow } from './PostRow';
+import { PostListHead, PostRow } from './PostRow';
 import { SearchForm } from './SearchForm';
 import { useBoardMe } from './useBoardMe';
 
@@ -31,17 +32,19 @@ export function BoardListPage() {
   const hrefFor = (next: number) => `/board/${encodeURIComponent(slug)}${next > 1 ? `?page=${next}` : ''}`;
 
   return (
-    <main className="page page--medium">
-      <h1>{board?.name ?? '게시판'}</h1>
-      <BoardTabs current={slug} />
-      {board?.description ? <p className="hint">{board.description}</p> : null}
-      {writable ? (
-        <p className="board-write">
+    <main className="page board-page">
+      <div className="board-page__head">
+        <div>
+          <h1>{board?.name ?? '게시판'}</h1>
+          {board?.description ? <p className="hint">{board.description}</p> : null}
+        </div>
+        {writable ? (
           <Link className="ui-button ui-button--primary" to={newPath}>
             글쓰기
           </Link>
-        </p>
-      ) : null}
+        ) : null}
+      </div>
+      <BoardTabs current={slug} />
       <SearchForm key={slug} board={slug} />
       {posts.isPending ? <p aria-busy="true">불러오는 중</p> : null}
       {posts.isError ? (
@@ -52,8 +55,9 @@ export function BoardListPage() {
           </Button>
         </Notice>
       ) : null}
+      {data && (data.items.length > 0 || data.pinned.length > 0) ? <PostListHead /> : null}
       {data && data.pinned.length > 0 ? (
-        <ul className="plain-list posts" aria-label="고정한 글">
+        <ul className="plain-list posts posts--pinned" aria-label="고정한 글">
           {data.pinned.map((post) => (
             <PostRow key={post.id} post={post} />
           ))}
