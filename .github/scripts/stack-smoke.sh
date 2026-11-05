@@ -491,6 +491,27 @@ one_header() {
 
 # 프록시를 거친 응답에 보안 머리말 셋이 하나씩, 정한 값으로 붙었는가(#361). 둘째 인자부터는 curl 에 넘긴다.
 # 서버가 같은 머리말을 보내도(인증 서버의 nosniff 등) 하나만 있어야 한다
+# 앱의 출처(#429)에서 부른 응답에 CORS 머리말이 하나씩 붙는가. 쿠키를 싣는 것(Allow-Credentials)은 열지 않는다
+app_cors_headers() {
+  local origin="$1" url="$2" headers; shift 2
+  headers="$(curl -s -D - -o /dev/null --max-time 5 -H "Origin: $origin" "$@" "$url" | tr -d '\r')"
+  one_header "$headers" Access-Control-Allow-Origin "$origin" &&
+    one_header "$headers" Access-Control-Expose-Headers "X-Request-ID, Retry-After, Content-Disposition" &&
+    ! grep -qi '^Access-Control-Allow-Credentials:' <<<"$headers"
+}
+
+# 앱의 출처에서 온 미리 묻는 요청에 nginx 가 204 와 허용할 방식과 머리말로 답하는가
+app_cors_preflight() {
+  local url="$1" headers
+  headers="$(curl -s -D - -o /dev/null --max-time 5 -X OPTIONS -H 'Origin: https://localhost' \
+    -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: authorization, content-type' "$url" |
+    tr -d '\r')"
+  grep -q '^HTTP/[0-9.]* 204' <<<"$headers" &&
+    one_header "$headers" Access-Control-Allow-Origin https://localhost &&
+    one_header "$headers" Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE" &&
+    one_header "$headers" Access-Control-Allow-Headers "Authorization, Content-Type, Idempotency-Key, Last-Event-ID"
+}
+
 security_headers() {
   local url="$1" headers; shift
   headers="$(curl -s -D - -o /dev/null --max-time 5 "$@" "$url" | tr -d '\r')"
@@ -1746,6 +1767,14 @@ check_proxy() {
   report "서버의 응답에 보안 머리말이 하나씩 붙는다" security_headers "$PROXY/api/v1/auth/jwks"
   report "막은 주소의 404 에도 보안 머리말이 붙는다" security_headers "$PROXY/api/v1/ci-nothing/here"
   report "HTTP 의 응답에는 HSTS 가 없다" no_header Strict-Transport-Security "$PROXY/api/v1/auth/jwks"
+  # 앱의 CORS(#429). 앱의 출처(Capacitor 의 기본값)에만 연다. 서버의 응답, nginx 가 답한 404 에도 붙는다
+  report "앱의 출처(Android)에서 부른 서버의 응답에 CORS 가 붙는다" app_cors_headers https://localhost "$PROXY/api/v1/auth/jwks"
+  report "앱의 출처(iOS)에서 부른 서버의 응답에 CORS 가 붙는다" app_cors_headers capacitor://localhost "$PROXY/api/v1/auth/jwks"
+  report "앱의 출처에서 부른 막은 주소의 404 에도 CORS 가 붙는다" app_cors_headers https://localhost "$PROXY/api/v1/ci-nothing/here"
+  report "앱의 미리 묻는 요청에는 프록시가 204 로 답한다" app_cors_preflight "$PROXY/api/v1/auth/app/refresh"
+  report "다른 출처에는 CORS 가 붙지 않는다" no_header Access-Control-Allow-Origin "$PROXY/api/v1/auth/jwks" \
+    -H 'Origin: https://evil.example'
+  report "화면의 응답에는 CORS 가 붙지 않는다" no_header Access-Control-Allow-Origin "$PROXY/" -H 'Origin: https://localhost'
   report "서버끼리만 부르는 주소의 404 에도 보안 머리말이 붙는다" security_headers "$PROXY/api/v1/billing/service/holds" -X POST
   report "인증의 민감한 요청을 IP 마다 막는다" limited_after 12 "$PROXY/api/v1/auth/login" 6 \
     -X POST -H 'Content-Type: application/json' -d '{}'
