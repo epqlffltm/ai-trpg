@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/room/host/HostPanel.test.tsx
-// 방장의 운영(B6 의 ⑤). 방장에게만 보이기, 내보내기와 새 초대 코드, 방장 넘기기, 설정 바꾸기, 한 번 더 굴리기, 끝내기, 실패를 본다.
+// 방장의 운영(B6 의 ⑤, 테이블 줄의 "테이블 관리"). 방장에게만 보이기, 누르면 펼치고 다시 누르면 접기, 내보내기와 새 초대 코드, 방장 넘기기, 설정 바꾸기, 한 번 더 굴리기, 끝내기, 실패를 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -68,9 +68,9 @@ function open(routes: Record<string, (request: SeenRequest) => Response> = {}, m
 }
 
 async function hostPanel() {
-  const summary = await screen.findByText('방장', { selector: 'h2' });
-  await userEvent.click(summary);
-  return within(summary.closest('details') as HTMLElement);
+  const button = await screen.findByRole('button', { name: '테이블 관리' });
+  await userEvent.click(button);
+  return within(await screen.findByRole('region', { name: '테이블 관리' }));
 }
 
 function sent(seen: SeenRequest[], method: string, path: string): SeenRequest[] {
@@ -87,7 +87,23 @@ describe('HostPanel', () => {
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
     expect(await screen.findByRole('heading', { name: '목요일 모임', level: 1 })).toBeInTheDocument();
-    expect(screen.queryByText('방장', { selector: 'h2' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '테이블 관리' })).not.toBeInTheDocument();
+  });
+
+  it('테이블 관리를 누르면 테이블 줄 아래에 펼치고, 다시 누르면 접는다', async () => {
+    open();
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    const button = await screen.findByRole('button', { name: '테이블 관리' });
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('region', { name: '테이블 관리' })).toBeNull();
+
+    await userEvent.click(button);
+    expect(button).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('region', { name: '테이블 관리' })).toBeInTheDocument();
+
+    await userEvent.click(button);
+    expect(screen.queryByRole('region', { name: '테이블 관리' })).toBeNull();
   });
 
   it('내보내면 한 번 더 묻고, 새 초대 코드를 알린다', async () => {
@@ -118,7 +134,7 @@ describe('HostPanel', () => {
     await userEvent.click(panel.getByRole('button', { name: '미아에게 방장 넘기기' }));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '넘기기' }));
 
-    await vi.waitFor(() => expect(screen.queryByText('방장', { selector: 'h2' })).not.toBeInTheDocument());
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: '테이블 관리' })).not.toBeInTheDocument());
     expect(sent(seen, 'PUT', '/host')[0]?.body).toEqual({ user_id: OTHER });
   });
 
@@ -166,7 +182,7 @@ describe('HostPanel', () => {
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '끝내기' }));
 
     expect(await screen.findByText(/끝난 테이블입니다/)).toBeInTheDocument();
-    expect(screen.queryByText('방장', { selector: 'h2' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '테이블 관리' })).not.toBeInTheDocument();
   });
 
   it('그 사이 방장이 바뀌었으면 알리고 다시 읽는다', async () => {
@@ -183,7 +199,7 @@ describe('HostPanel', () => {
     const panel = await hostPanel();
     await userEvent.click(panel.getByRole('checkbox', { name: '쪽지 알림' }));
 
-    await vi.waitFor(() => expect(screen.queryByText('방장', { selector: 'h2' })).not.toBeInTheDocument());
+    await vi.waitFor(() => expect(screen.queryByRole('button', { name: '테이블 관리' })).not.toBeInTheDocument());
     expect(reads).toBeGreaterThanOrEqual(2);
   });
 

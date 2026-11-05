@@ -1,8 +1,8 @@
 // web/apps/web/src/pages/trpg/room/TableRoom.tsx
 // 테이블 방(B6)의 틀. 스트림을 붙잡고, 받은 것을 나눠 준다. 배치는 Stitch 20번을 따른다(넓은 화면).
 //   - 가운데(가장 넓게): 테이블의 상태에 따라(모집 중, 진행 중, 끝남) 대기실이나 라운드
-//   - 왼쪽 열: 앉은 사람(모집 중) 또는 창 넷(B7, 진행 중과 끝남), 그 아래 방장의 운영(방장에게만),
-//     캠페인의 편(캠페인의 테이블에만, #481 B), 아군 공격의 허락
+//   - 머리(테이블 줄) 바로 아래: 방장이 "테이블 관리"를 펼쳤을 때 방장의 운영(host/HostPanel)
+//   - 왼쪽 열: 앉은 사람(모집 중) 또는 창 넷(B7, 진행 중과 끝남), 그 아래 캠페인의 편(캠페인의 테이블에만, #481 B), 동료 피해
 //   - 맨 아래(가로로 긴 칸): 판 채팅
 // 좁은 화면에서는 가운데, 왼쪽 열, 채팅의 차례로 위아래다. 차례는 CSS 의 grid 자리가 정하고 문서의 차례는 가운데가 먼저다.
 //
@@ -25,7 +25,7 @@ import { usePublicNames } from '../../../hooks/usePublicNames';
 import { ChatPanel } from './ChatPanel';
 import { displayName, MemberList } from './MemberList';
 import { FriendlyFirePanel } from './FriendlyFirePanel';
-import { HostPanel } from './host/HostPanel';
+import { canManageTable, HostPanel } from './host/HostPanel';
 import { RoomHeader } from './RoomHeader';
 import { ActionRequestProvider } from './round/action/actionRequest';
 import { applyPreview, ENDS_PREVIEW, type NarrationPreview } from './round/preview';
@@ -49,6 +49,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
   const typing = useTypingPeople();
   const refetchSoon = useBatchedRefetch(table.id);
   const [preview, setPreview] = useState<NarrationPreview | null>(null);
+  const [managing, setManaging] = useState(false);
   const messages = chat.data?.items ?? [];
   const nameOf = usePublicNames([table.members.map((member) => member.user_id), messages.map((message) => message.user_id)]);
 
@@ -93,7 +94,12 @@ export function TableRoom({ table }: { table: TableDetail }) {
   return (
     <ActionRequestProvider>
       <main className="page room">
-        <RoomHeader table={table} stream={stream} />
+        <RoomHeader
+          table={table}
+          stream={stream}
+          manage={canManageTable(table, myId) ? { open: managing, toggle: () => setManaging((open) => !open) } : null}
+        />
+        {managing ? <HostPanel table={table} myId={myId} nameOfMember={(userId) => displayName(userId, table.members, nameOf)} /> : null}
         <div className="room__body">
           <div className="room__main">
             {table.status === 'playing' ? <MyHpStrip table={table} myId={myId} /> : null}
@@ -110,7 +116,6 @@ export function TableRoom({ table }: { table: TableDetail }) {
             ) : (
               <StatusPanel table={table} myId={myId} nameOf={nameOf} />
             )}
-            <HostPanel table={table} myId={myId} nameOfMember={(userId) => displayName(userId, table.members, nameOf)} />
             <CampaignPanel table={table} myId={myId} />
             <FriendlyFirePanel
               table={table}
