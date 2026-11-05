@@ -2592,19 +2592,56 @@ details.room-panel[open] > summary {
   margin-bottom: var(--ui-gap);
 }
 
+/* 알림 한 줄(Stitch 9번). 점, 종류 아이콘, 글과 때, 읽음 단추. 읽은 줄은 바탕을 가라앉히고 글을 가늘게 */
 .notification {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 12px;
   border: 1px solid var(--ui-border);
-  border-left-width: 4px;
   border-radius: var(--ui-radius);
-  background: var(--ui-surface);
+  background: var(--ui-surface-subtle);
 }
 
 .notification--unread {
-  border-left-color: var(--ui-accent);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+.notification__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 12px;
+  border-radius: 50%;
+  background: var(--ui-border);
+}
+
+.notification--unread .notification__dot {
+  background: var(--ui-accent);
+}
+
+.notification__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-accent);
+}
+
+.notification--unread .notification__icon {
+  background: var(--ui-bg);
+}
+
+.notification__icon svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .notification__body {
@@ -2615,14 +2652,30 @@ details.room-panel[open] > summary {
   overflow-wrap: anywhere;
 }
 
-.notification__new {
-  color: var(--ui-accent);
-  font-size: 0.8em;
+.notification--unread .notification__text {
   font-weight: 700;
 }
 
 .notification__time {
   font-size: 0.85em;
+}
+
+/* 알림 화면(A10). 제목 줄 오른쪽에 모두 읽음 */
+.notifications-page__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: var(--ui-gap);
+}
+
+.notifications-page__head h1 {
+  margin: 0;
+}
+
+.notifications-page__foot {
+  text-align: center;
 }
 
 /* 라운드 기록(B10). 최근의 라운드 위에 앞의 라운드 수와 더 보기 */
