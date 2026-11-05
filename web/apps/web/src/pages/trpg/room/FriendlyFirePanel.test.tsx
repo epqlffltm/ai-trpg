@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/room/FriendlyFirePanel.test.tsx
-// 동료 피해(#803). 앉은 사람 모두가 자기 동의를 바꾸고 동료마다 드는 정도를 보며, 방장은 테이블의 정도를 바꾼다.
+// 동료 피해(#803). 앉은 사람 모두가 자기 동의를 바꾸고 동료마다 드는 정도를 보며, 방장은 테이블 관리에서 테이블의 정도를 바꾼다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -77,7 +77,8 @@ describe('FriendlyFirePanel', () => {
     });
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
-    const host = await panel('방장');
+    await userEvent.click(await screen.findByRole('button', { name: '테이블 관리' }));
+    const host = within(await screen.findByRole('region', { name: '테이블 관리' }));
     await userEvent.selectOptions(host.getByLabelText('동료 피해'), 'prank');
 
     await vi.waitFor(() =>
