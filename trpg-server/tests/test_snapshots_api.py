@@ -18,6 +18,8 @@
     다른 테이블에는 가지 않는다
   - 그린 사람만 자기 그림을 지운다(asset 의 그림까지). 돈은 돌려주지 않는다. 남의 그림은 404 다.
     그리는 중이거나 청구를 정리하는 중이면 409, asset 이 죽었으면 503 이고 기록은 남는다. 지우면 테이블에 알린다
+  - 갤러리는 내가 다 그린 그림만 테이블을 넘어 최근 것부터 보인다. 지운 테이블의 그림도 남는다.
+    갤러리에서는 테이블 없이도 내 그림을 지운다
 """
 
 import asyncio
@@ -30,6 +32,7 @@ from ai_core.image_provider import GeneratedImage, ImageRequest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey
+from sqlalchemy import update
 
 from app.billing.routing import utc_now
 from app.main import API_PREFIX
@@ -543,3 +546,133 @@ async def test_deleting_is_announced_to_the_table(app: FastAPI, client: AsyncCli
     await client.delete(delete_url(table, started['id']), headers=me)
 
     assert len(await snapshot_frames_of(friends)) == 1
+
+
+# --- 갤러리 ---
+
+KEPT_URL = f'{API_PREFIX}/snapshots'
+
+
+async def kept(client: AsyncClient, headers: dict[str, str], **query) -> dict:
+    response = await client.get(KEPT_URL, headers=headers, params=query)
+    assert response.status_code == status.HTTP_200_OK, response.text
+    return response.json()
+
+
+async def detach(app: FastAPI, snapshot_id: str) -> None:
+    """테이블을 지운 것처럼 기록의 테이블 칸을 비운다(외래 키의 SET NULL)."""
+    async with app.state.session_factory() as session:
+        await session.execute(
+            update(TableSnapshot).where(TableSnapshot.id == uuid.UUID(snapshot_id)).values(table_id=None)
+        )
+        await session.commit()
+
+
+@pytest.mark.usefixtures('provider', 'asset', 'billing')
+async def test_the_gallery_lists_my_drawings_across_tables(
+    app: FastAPI, client: AsyncClient, me, friend, stranger, outsider
+):
+    first = await start_duo(client, me, friend)
+    second = await start_duo(client, stranger, outsider)
+    mine = await drawn_by(app, client, me, first)
+    friends = await drawn_by(app, client, friend, first)
+    await client.post(snapshot_url(second), headers=stranger)
+    await drawn(app)
+
+    page = await kept(client, me)
+    theirs = await kept(client, friend)
+
+    assert page['total'] == 1
+    (item,) = page['items']
+    assert (item['id'], item['table_id'], item['table_title'], item['round_number']) == (
+        mine['id'],
+        first['id'],
+        '추격전',
+        1,
+    )
+    assert item['image_id'] is not None
+    assert [item['id'] for item in theirs['items']] == [friends['id']]
+
+
+@pytest.mark.usefixtures('provider', 'asset', 'billing')
+async def test_the_gallery_is_newest_first_and_paged(app: FastAPI, client: AsyncClient, me, friend):
+    table = await start_duo(client, me, friend)
+    older = await drawn_by(app, client, me, table)
+    newer = await drawn_by(app, client, me, table)
+
+    first_page = await kept(client, me, limit=1)
+    second_page = await kept(client, me, limit=1, offset=1)
+
+    assert (first_page['total'], second_page['total']) == (2, 2)
+    assert [item['id'] for item in first_page['items'] + second_page['items']] == [newer['id'], older['id']]
+
+
+@pytest.mark.usefixtures('provider', 'asset')
+async def test_the_gallery_leaves_out_failures_and_drawings_in_progress(
+    app: FastAPI, client: AsyncClient, me, friend, billing: FakeBillingServer
+):
+    billing.balances[ME] = PRICE - 1
+    table = await start_duo(client, me, friend)
+    await client.post(snapshot_url(table), headers=me)
+
+    assert await kept(client, me) == {'items': [], 'total': 0}
+
+
+@pytest.mark.usefixtures('provider', 'asset', 'billing')
+async def test_a_drawing_of_a_deleted_table_stays_in_the_gallery(app: FastAPI, client: AsyncClient, me, friend):
+    table = await start_duo(client, me, friend)
+    started = await drawn_by(app, client, me, table)
+    await detach(app, started['id'])
+
+    (item,) = (await kept(client, me))['items']
+
+    assert (item['id'], item['table_id'], item['table_title']) == (started['id'], None, None)
+
+
+@pytest.mark.usefixtures('provider', 'billing')
+async def test_my_drawing_is_deleted_from_the_gallery_even_without_the_table(
+    app: FastAPI, client: AsyncClient, me, friend, asset: FakeAsset
+):
+    table = await start_duo(client, me, friend)
+    started = await drawn_by(app, client, me, table)
+    await detach(app, started['id'])
+
+    response = await client.delete(f'{KEPT_URL}/{started["id"]}', headers=me)
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT, response.text
+    assert len(asset.discarded) == 1
+    assert await kept(client, me) == {'items': [], 'total': 0}
+
+
+@pytest.mark.usefixtures('provider', 'asset', 'billing')
+async def test_someone_elses_drawing_cannot_be_deleted_from_the_gallery(app: FastAPI, client: AsyncClient, me, friend):
+    table = await start_duo(client, me, friend)
+    started = await drawn_by(app, client, friend, table)
+
+    response = await client.delete(f'{KEPT_URL}/{started["id"]}', headers=me)
+
+    assert (response.status_code, response.json()['code']) == (status.HTTP_404_NOT_FOUND, 'snapshot_not_found')
+    assert await stored(app, started['id']) is not None
+
+
+async def test_a_drawing_still_settling_cannot_be_deleted_from_the_gallery(
+    app: FastAPI, client: AsyncClient, me, friend
+):
+    table = await start_duo(client, me, friend)
+    snapshot = service.new_snapshot(uuid.UUID(table['id']), 1, ME, app.state.settings.snapshot_model)
+    snapshot.billing_status = SnapshotBilling.CAPTURE_DUE
+    snapshot.outcome = SnapshotOutcome.READY
+    snapshot.image_id = uuid.uuid4()
+    async with app.state.session_factory() as session:
+        session.add(snapshot)
+        await session.commit()
+
+    response = await client.delete(f'{KEPT_URL}/{snapshot.id}', headers=me)
+
+    assert (response.status_code, response.json()['code']) == (status.HTTP_409_CONFLICT, 'snapshot_settling')
+
+
+async def test_the_gallery_needs_a_login(client: AsyncClient):
+    response = await client.get(KEPT_URL)
+
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED

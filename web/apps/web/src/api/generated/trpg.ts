@@ -1258,6 +1258,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Kept
+         * @description 내가 다 그린 그림들. 테이블을 넘어 최근에 만든 것부터다.
+         */
+        get: operations["list_kept_api_v1_game_snapshots_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/snapshots/price": {
         parameters: {
             query?: never;
@@ -1273,6 +1293,26 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/game/snapshots/{snapshot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Mine
+         * @description 갤러리에서 내 그림 한 장을 지운다. 남의 그림은 404 다. 그리는 중이거나 청구를 정리하는 중이면 409 다.
+         */
+        delete: operations["delete_mine_api_v1_game_snapshots__snapshot_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5674,6 +5714,44 @@ export interface components {
         JoinRequest: {
             /** Invite Code */
             invite_code: string;
+        };
+        /**
+         * KeptSnapshotOut
+         * @description 내가 다 그린 테이블의 장면 그림 한 장(갤러리). table_title 은 그 테이블의 제목이다.
+         *     테이블을 지웠으면 table_id 와 table_title 이 null 이다. 그림은 asset 서버의 주소로 받는다(그린 사람만).
+         */
+        KeptSnapshotOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+            /** Round Number */
+            round_number: number;
+            /** Table Id */
+            table_id: string | null;
+            /** Table Title */
+            table_title: string | null;
+        };
+        /**
+         * KeptSnapshotPage
+         * @description 목록의 한 쪽과 전체 개수.
+         */
+        KeptSnapshotPage: {
+            /** Items */
+            items: components["schemas"]["KeptSnapshotOut"][];
+            /** Total */
+            total: number;
         };
         /**
          * KindImmunity
@@ -14937,6 +15015,38 @@ export interface operations {
             };
         };
     };
+    list_kept_api_v1_game_snapshots_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeptSnapshotPage"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     read_price_api_v1_game_snapshots_price_get: {
         parameters: {
             query?: never;
@@ -14953,6 +15063,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SnapshotPriceOut"];
+                };
+            };
+        };
+    };
+    delete_mine_api_v1_game_snapshots__snapshot_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                snapshot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };

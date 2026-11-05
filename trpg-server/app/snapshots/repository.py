@@ -9,10 +9,11 @@
 import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import Select, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.snapshots.models import DUE_STATUSES, OPEN_STATUSES, SnapshotBilling, TableSnapshot
+from app.snapshots.models import DUE_STATUSES, OPEN_STATUSES, SnapshotBilling, SnapshotOutcome, TableSnapshot
+from app.tables.models import GameTable
 
 
 def add(session: AsyncSession, snapshot: TableSnapshot) -> None:
@@ -79,3 +80,33 @@ async def remove_settled(session: AsyncSession, snapshot_id: uuid.UUID, settled:
         .execution_options(synchronize_session=False)
     )
     return (await session.execute(statement)).first() is not None
+
+
+def kept_of(owner_id: uuid.UUID) -> Select:
+    """이 사람의 다 그린 그림들과 그 테이블의 제목(테이블을 지웠으면 None)."""
+    return (
+        select(TableSnapshot, GameTable.title)
+        .outerjoin(GameTable, GameTable.id == TableSnapshot.table_id)
+        .where(
+            TableSnapshot.owner_id == owner_id,
+            TableSnapshot.outcome == SnapshotOutcome.READY,
+            TableSnapshot.image_id.is_not(None),
+        )
+    )
+
+
+async def list_kept(
+    session: AsyncSession, owner_id: uuid.UUID, limit: int, offset: int
+) -> tuple[list[tuple[TableSnapshot, str | None]], int]:
+    """이 사람의 다 그린 그림들의 한 쪽과 전체 개수. 최근에 만든 것부터다."""
+    query = kept_of(owner_id)
+    total = await session.scalar(select(func.count()).select_from(query.subquery()))
+    page = query.order_by(TableSnapshot.created_at.desc(), TableSnapshot.id.desc()).limit(limit).offset(offset)
+    rows = await session.execute(page)
+    return [(row[0], row[1]) for row in rows], total or 0
+
+
+async def find_mine(session: AsyncSession, owner_id: uuid.UUID, snapshot_id: uuid.UUID) -> TableSnapshot | None:
+    """이 사람이 그린 그림 한 장. 남의 것이나 없는 것이면 None. 테이블을 지웠거나 나갔어도 찾는다."""
+    query = select(TableSnapshot).where(TableSnapshot.id == snapshot_id, TableSnapshot.owner_id == owner_id)
+    return await session.scalar(query)
