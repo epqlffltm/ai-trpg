@@ -12,6 +12,7 @@
 // 그 밖의 실패(503, 연결 끊김)는 로그아웃시키지 않는다. 오류를 던지고 상태는 그대로 둔다(화면 명세의 공통 상태).
 
 import { isNetworkBlocked, NetworkError, toApiError } from './errors';
+import { apiUrl } from './origin';
 import { clearSession, storeTokens, type Session } from './session';
 import type { LoginResponse } from './types';
 
@@ -44,7 +45,7 @@ async function requestRefresh(): Promise<Session | null> {
 
 async function postRefresh(): Promise<Response> {
   try {
-    return await fetch(REFRESH_PATH, {
+    return await fetch(apiUrl(REFRESH_PATH), {
       method: 'POST',
       credentials: 'same-origin',
       headers: { Accept: 'application/json' },
