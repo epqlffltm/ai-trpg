@@ -1,5 +1,6 @@
 // web/apps/web/src/api/refresh.ts
 // refresh 쿠키로 새 access 토큰을 받는다. 한 번에 하나만 보낸다(#30).
+// 앱의 길로 빌드했으면(appAuth.ts) 쿠키 대신 네이티브 플러그인이 갱신한다. 상태 코드를 다루는 것은 같다.
 //
 // 같은 refresh 토큰으로 두 요청이 동시에 가면 인증 서버는 폐기된 토큰의 재사용으로 보고 모든 세션을 끊는다.
 //   - 한 창 안: 진행 중인 갱신이 있으면 새로 보내지 않고 그 결과를 함께 기다린다(inflight).
@@ -11,6 +12,7 @@
 // 서버는 쿠키를 지우지 않으므로, 다른 네트워크로 옮기거나 막기가 풀리면 새로 열 때 되살아난다.
 // 그 밖의 실패(503, 연결 끊김)는 로그아웃시키지 않는다. 오류를 던지고 상태는 그대로 둔다(화면 명세의 공통 상태).
 
+import { appRefresh, usesAppAuth } from './appAuth';
 import { isNetworkBlocked, NetworkError, toApiError } from './errors';
 import { apiUrl } from './origin';
 import { clearSession, storeTokens, type Session } from './session';
@@ -44,6 +46,7 @@ async function requestRefresh(): Promise<Session | null> {
 }
 
 async function postRefresh(): Promise<Response> {
+  if (usesAppAuth()) return appRefresh();
   try {
     return await fetch(apiUrl(REFRESH_PATH), {
       method: 'POST',
