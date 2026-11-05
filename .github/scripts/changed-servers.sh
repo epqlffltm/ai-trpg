@@ -6,7 +6,7 @@
 #   사용: changed-servers.sh <기준 커밋> <PR 의 커밋>
 #   출력: GITHUB_OUTPUT 의 모양으로 서버마다 한 줄. auth=true, trpg=false, board=false, billing=true, notification=false, asset=false,
 #         chat=false, story=false.
-#         공용 코드(shared/)의 검사는 shared=true, 화면(web/)의 검사는 web=true 다
+#         공용 코드(shared/)의 검사는 shared=true, 화면(web/)의 검사는 web=true, 앱 껍데기(app/)의 검사는 app=true 다
 #
 # 고르는 규칙:
 #   - 서버의 폴더(auth-server/ 등)나 그 서버의 워크플로(.github/workflows/auth-server.yml)가 바뀌면 그 서버
@@ -24,6 +24,8 @@
 #   - 공통 규격의 시험 파일(shared/contracts/, #786)이 바뀌면 그 파일을 읽는 테스트가 있는 곳: 공용 코드, 인증, 게시판, 결제
 #   - 화면의 폴더(web/)나 그 워크플로(.github/workflows/web.yml)가 바뀌면 화면(web). 화면은 서버의 API 목록에서 타입을 만들고
 #     동의 문서(docs/legal/*.md)의 사본을 가지므로 둘이 바뀌어도 화면이다. 모두를 고르는 경로(docker/ 등)도 화면을 고른다(프록시의 이미지가 화면을 담는다)
+#   - 앱 껍데기의 폴더(app/)나 그 워크플로(.github/workflows/app.yml)가 바뀌면 앱(app). 모두를 고르는 경로도 앱을 고른다.
+#     화면을 고쳐도 앱은 고르지 않는다. 앱의 빌드는 화면의 내용과 상관없이 같고, 화면은 web 이 본다
 #   - 그 밖(문서, 루트 README 등)은 아무것도 고르지 않는다
 #   - 바뀐 파일을 알 수 없으면(커밋을 찾지 못함) 모두. 모르면 검사하는 쪽으로 기운다
 #
@@ -33,8 +35,9 @@ set -euo pipefail
 
 # 검사하는 서버들. 출력의 이름과 폴더의 이름
 SERVERS=(auth trpg board billing notification asset chat story)
-# 출력하는 것 모두. 서버들과 공용 코드의 검사(shared, .github/workflows/shared.yml), 화면의 검사(web, .github/workflows/web.yml)
-OUTPUTS=("${SERVERS[@]}" shared web)
+# 출력하는 것 모두. 서버들과 공용 코드의 검사(shared, .github/workflows/shared.yml), 화면의 검사(web, .github/workflows/web.yml),
+# 앱 껍데기의 검사(app, .github/workflows/app.yml)
+OUTPUTS=("${SERVERS[@]}" shared web app)
 # 서버의 폴더들이 있는 곳. 테스트가 가짜 pyproject.toml 을 둔 곳으로 바꾼다
 SERVER_ROOT="${SERVER_ROOT:-.}"
 
@@ -53,6 +56,11 @@ shared_path() {
 # 화면의 경로인가. 화면의 폴더, 그 워크플로, 화면이 타입을 만드는 서버의 API 목록, 화면이 사본을 갖는 동의 문서다.
 web_path() {
   [[ "$1" == web/* || "$1" == ".github/workflows/web.yml" || "$1" == docs/api/*.openapi.json || "$1" == docs/legal/*.md ]]
+}
+
+# 앱 껍데기의 경로인가. 앱의 폴더나 그 워크플로다.
+app_path() {
+  [[ "$1" == app/* || "$1" == ".github/workflows/app.yml" ]]
 }
 
 # 공통 규격의 시험 파일인가. 공용 코드(server-core), 인증 서버(Django), 게시판, 결제 서버(Go)의 테스트가 함께 읽는다(#786).
@@ -127,6 +135,9 @@ select_servers() {
     fi
     if web_path "$path"; then
       picked[web]=1
+    fi
+    if app_path "$path"; then
+      picked[app]=1
     fi
     if contracts_path "$path"; then
       picked[auth]=1

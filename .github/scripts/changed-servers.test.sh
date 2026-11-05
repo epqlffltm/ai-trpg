@@ -27,19 +27,19 @@ expect() {
 expect "한 서버만 바뀌면 그 서버" "board" "board-server/app/main.py"
 expect "두 서버가 바뀌면 둘" "auth board" "auth-server/accounts/tokens.py" "board-server/README.md"
 expect "서버의 워크플로가 바뀌면 그 서버" "trpg" ".github/workflows/trpg-server.yml"
-expect "DB 초기화 스크립트는 모두" "auth trpg board billing notification asset chat story shared web" "docker/postgres/init/06-x.sql"
-expect "compose 파일은 모두" "auth trpg board billing notification asset chat story shared web" "docker-compose.yml"
-expect "staging 의 compose 파일도 모두" "auth trpg board billing notification asset chat story shared web" "docker-compose.staging.yml"
-expect "staging 의 .env 를 만드는 도구도 모두" "auth trpg board billing notification asset chat story shared web" "tools/staging_env.py"
-expect ".env 의 비밀을 채우는 도구도 모두" "auth trpg board billing notification asset chat story shared web" "tools/fill_env.py"
+expect "DB 초기화 스크립트는 모두" "auth trpg board billing notification asset chat story shared web app" "docker/postgres/init/06-x.sql"
+expect "compose 파일은 모두" "auth trpg board billing notification asset chat story shared web app" "docker-compose.yml"
+expect "staging 의 compose 파일도 모두" "auth trpg board billing notification asset chat story shared web app" "docker-compose.staging.yml"
+expect "staging 의 .env 를 만드는 도구도 모두" "auth trpg board billing notification asset chat story shared web app" "tools/staging_env.py"
+expect ".env 의 비밀을 채우는 도구도 모두" "auth trpg board billing notification asset chat story shared web app" "tools/fill_env.py"
 expect "패치를 적용하는 도구는 고르지 않는다" "" "tools/apply_ai_update.py"
-expect "프록시의 설정은 모두" "auth trpg board billing notification asset chat story shared web" "docker/nginx/templates/default.conf.template"
-expect "crontab 은 모두" "auth trpg board billing notification asset chat story shared web" "docker/cron/auth.crontab"
+expect "프록시의 설정은 모두" "auth trpg board billing notification asset chat story shared web app" "docker/nginx/templates/default.conf.template"
+expect "crontab 은 모두" "auth trpg board billing notification asset chat story shared web app" "docker/cron/auth.crontab"
 expect "서버의 Dockerfile 은 그 서버" "billing" "billing-server/Dockerfile"
 expect "알림 서버가 바뀌면 알림 서버" "notification" "notification-server/app/main.py"
 expect "알림 서버의 워크플로가 바뀌면 알림 서버" "notification" ".github/workflows/notification-server.yml"
-expect "관문 워크플로는 모두" "auth trpg board billing notification asset chat story shared web" ".github/workflows/ci.yml"
-expect "관문의 스크립트는 모두" "auth trpg board billing notification asset chat story shared web" ".github/scripts/changed-servers.sh"
+expect "관문 워크플로는 모두" "auth trpg board billing notification asset chat story shared web app" ".github/workflows/ci.yml"
+expect "관문의 스크립트는 모두" "auth trpg board billing notification asset chat story shared web app" ".github/scripts/changed-servers.sh"
 expect "함께 쓰는 ruff 규칙은 파이썬 서버들과 공용 코드" "auth trpg board notification asset chat story shared" "ruff.toml"
 expect "서버 안의 ruff.toml 같은 이름은 그 서버만" "billing" "billing-server/ruff.toml"
 expect "문서만 바뀌면 아무것도" "" "README.md" "docs/observability.md"
@@ -55,6 +55,10 @@ expect "화면이 바뀌면 화면" "web" "web/apps/web/src/main.tsx"
 expect "화면의 워크플로가 바뀌면 화면" "web" ".github/workflows/web.yml"
 expect "동의 문서가 바뀌면 화면" "web" "docs/legal/terms.md"
 expect "web 이라는 이름의 다른 폴더는 고르지 않는다" "" "docs/web/x.md" "web-old/x"
+expect "앱 껍데기가 바뀌면 앱" "app" "app/android/app/src/main/java/dev/aitrpg/app/AppAuthPlugin.java"
+expect "앱의 워크플로가 바뀌면 앱" "app" ".github/workflows/app.yml"
+expect "화면을 고쳐도 앱은 고르지 않는다" "web" "web/apps/web/src/api/appAuth.ts"
+expect "app 이라는 이름의 다른 폴더는 고르지 않는다" "" "docs/app/x.md" "apps/x" "app-old/x"
 expect "chat 서버가 바뀌면 chat 서버" "chat" "chat-server/app/main.py"
 expect "chat 서버의 워크플로가 바뀌면 chat 서버" "chat" ".github/workflows/chat-server.yml"
 expect "chat 서버의 API 목록은 chat 서버과 화면" "chat web" "docs/api/chat.openapi.json"
@@ -93,7 +97,7 @@ expect "shared 라는 이름의 다른 폴더는 고르지 않는다" "" "docs/s
 SERVER_ROOT=.
 
 all="$(select_all | tr '\n' ' ')"
-if [[ "$all" == "auth=true trpg=true board=true billing=true notification=true asset=true chat=true story=true shared=true web=true " ]]; then
+if [[ "$all" == "auth=true trpg=true board=true billing=true notification=true asset=true chat=true story=true shared=true web=true app=true " ]]; then
   echo "ok   모를 때는 모두"
 else
   echo "FAIL 모를 때는 모두: [$all]"
@@ -101,7 +105,7 @@ else
 fi
 
 unknown="$(main 0000000000000000000000000000000000000000 HEAD 2>/dev/null | tr '\n' ' ')"
-if [[ "$unknown" == "auth=true trpg=true board=true billing=true notification=true asset=true chat=true story=true shared=true web=true " ]]; then
+if [[ "$unknown" == "auth=true trpg=true board=true billing=true notification=true asset=true chat=true story=true shared=true web=true app=true " ]]; then
   echo "ok   기준 커밋을 찾지 못하면 모두"
 else
   echo "FAIL 기준 커밋을 찾지 못하면 모두: [$unknown]"
