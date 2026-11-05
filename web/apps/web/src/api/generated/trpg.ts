@@ -978,6 +978,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/portraits/{portrait_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete
+         * @description 쓰이지 않는 내 그림을 지운다. 남의 것은 404, 프리젠에 붙어 있으면 409 다.
+         */
+        delete: operations["delete_api_v1_game_portraits__portrait_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/portraits/{portrait_id}/image": {
         parameters: {
             query?: never;
@@ -14524,6 +14544,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PortraitOut"];
+                };
+            };
+        };
+    };
+    delete_api_v1_game_portraits__portrait_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portrait_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
                 };
             };
         };

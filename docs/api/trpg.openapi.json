@@ -25556,6 +25556,49 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/game/portraits/{portrait_id}": {
+      "delete": {
+        "description": "쓰이지 않는 내 그림을 지운다. 남의 것은 404, 프리젠에 붙어 있으면 409 다.",
+        "operationId": "delete_api_v1_game_portraits__portrait_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portrait_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portrait Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete",
+        "tags": [
+          "portraits"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/game/portraits/{portrait_id}/image": {
       "get": {
         "description": "내가 올린 그림의 바이트.",
