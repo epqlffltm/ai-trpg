@@ -1,17 +1,16 @@
 // web/apps/web/src/pages/story/StoryHeader.tsx
-// 장면(D2)의 머리. 세계관 이름, "2장: 축제 · 3일째 · 저녁 · 학교 · D-97"(장이 없는 판은 장을 쓰지 않는다. 엔딩을 봤으면 엔딩의 이름, 후일담이면 "후일담"), 모델과 "바꾸기".
-// 그 아래에 "나"(페르소나)와 바꾸기(StoryPersonaButton). 상태는 서버의 값이다. 모델이 없거나 쓸 수 없게 됐으면 몰래 바꾸지 않고 알린다.
+// 장면(D2)의 머리(Stitch 22번의 장면 줄). 세계관 이름, "2장: 축제 · 3일째 · 저녁 · 학교 · D-97"(장이 없는 판은 장을 쓰지 않는다.
+// 엔딩을 봤으면 엔딩의 이름, 후일담이면 "후일담"), 모델의 이름. 상태는 서버의 값이다.
+// 모델과 페르소나를 바꾸는 것은 왼쪽 열의 페르소나·모델 창(StoryPersonaPanel)이다. 모델을 쓸 수 없게 됐으면 여기서도 알린다(창을 접어 두어도 보이게).
 
-import { Button } from '@ai-trpg/ui';
 import { Link } from 'react-router';
 import type { StorySession, StoryState } from '../../api/story';
 import { retireText } from '../trpg/models/modelChoice';
-import { StoryPersonaButton } from './StoryPersonaButton';
 import { hasEpilogue, stateLine } from './storyWorld';
 
-type Props = { session: StorySession; state: StoryState; busy: boolean; onChooseModel: () => void };
+type Props = { session: StorySession; state: StoryState };
 
-export function StoryHeader({ session, state, busy, onChooseModel }: Props) {
+export function StoryHeader({ session, state }: Props) {
   const epilogue = state.ending !== null && hasEpilogue(session.view);
   return (
     <header className="conversation__head">
@@ -30,11 +29,7 @@ export function StoryHeader({ session, state, busy, onChooseModel }: Props) {
           모델: {session.model ? session.model.display_name : '고르지 않음'}
           {session.model?.retires_on ? ` · ${retireText(session.model.retires_on)}` : null}
         </p>
-        {session.model && !session.model.usable ? <p className="ui-field__error">지금 쓸 수 없는 모델입니다. 다른 모델을 골라 주세요.</p> : null}
-        <Button variant="secondary" disabled={busy} onClick={onChooseModel}>
-          {session.model ? '모델 바꾸기' : '모델 고르기'}
-        </Button>
-        <StoryPersonaButton session={session} disabled={busy} />
+        {session.model && !session.model.usable ? <p className="ui-field__error">지금 쓸 수 없는 모델입니다. 페르소나·모델 창에서 다른 모델을 골라 주세요.</p> : null}
       </div>
     </header>
   );

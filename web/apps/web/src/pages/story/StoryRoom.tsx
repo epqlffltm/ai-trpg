@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/story/StoryRoom.tsx
 // 장면(D2)의 화면(Stitch 22번). 위에 머리(세계관, 날짜·시간대·장소, 모델). 넓으면 오른쪽에 그림 창, 장면의 인물, 대사창, 말 쓰기,
-// 왼쪽 열에 창(StoryTools: 지도·이동, 소지품·건네기, 기록, 기억)과 그 아래 행동 줄(StoryActionBar). chat 대화와 같은 배치(chat-room)다.
+// 왼쪽 열에 창(StoryTools: 지도·이동, 소지품·건네기, 인물, 기록, 기억, 페르소나·모델)과 그 아래 행동 줄(StoryActionBar). chat 대화와 같은 배치(chat-room)다.
 // 좁으면 오른쪽의 것이 위아래고, 왼쪽 열은 맨 아래 단추 줄(ToolDock)이 아래에서 올라오는 시트로 연다.
 // 한 세션에 한 생성이다. 받는 중이면 보내기, 다시 생성, 대안, 모델 바꾸기를 막는다. 모델이 없으면 보내기 전에 고르게 한다.
 // 끝난 세션(엔딩을 봤고 후일담이 없다)은 말 쓰기와 행동을 숨긴다. 가지와 다시 생성(엔딩 장면을 다시 쓰기)은 된다.
@@ -142,7 +142,7 @@ export function StoryRoom({ session, turns }: Props) {
 
   return (
     <main className="page conversation story chat-room" data-sheet={dock.sheet ? 'tools' : undefined}>
-      <StoryHeader session={session} state={scene.state} busy={busy} onChooseModel={() => setChoosingModel(true)} />
+      <StoryHeader session={session} state={scene.state} />
       <div className="chat-room__body">
         <div className="chat-room__main">
           <StoryPicture
@@ -204,13 +204,12 @@ export function StoryRoom({ session, turns }: Props) {
         <div className="chat-room__tools">
           <SheetClose onClose={dock.closeSheet} />
           <StoryTools
-            sessionId={session.id}
-            worldId={session.world.id}
-            view={view}
+            session={session}
             state={scene.state}
             tools={tools}
             disabled={busy}
             onAct={act}
+            onChooseModel={() => setChoosingModel(true)}
             open={dock.open}
             onOpenChange={dock.setOpen}
           />

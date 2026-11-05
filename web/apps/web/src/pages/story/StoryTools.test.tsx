@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/story/StoryTools.test.tsx
 // 장면(D2)의 왼쪽 열 창(Stitch 22번)과 좁은 화면의 아래 단추 줄. 창의 차례와 처음 펼친 창, 행동 줄이 왼쪽 열에 있는 것,
-// 단추 줄이 같은 창을 펼쳐 시트로 여는 것, 지도·이동을 두는 때, 인물 창(목록, 만나지 않은 인물, 고른 인물의 칸)을 본다.
+// 단추 줄이 같은 창을 펼쳐 시트로 여는 것, 지도·이동을 두는 때, 인물 창(목록, 만나지 않은 인물, 고른 인물의 칸),
+// 페르소나·모델 창(지금의 모델과 모델 바꾸기가 고르는 창을 여는 것)을 본다.
 // 숨기고 띄우는 것은 CSS 라 상태만 본다.
 
 import { screen, within } from '@testing-library/react';
@@ -68,6 +69,7 @@ function signedIn() {
     'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: '0', total: '0', next_expiry: null }),
     'GET /api/v1/notification/me/notifications/unread-count': () => json(200, { unread: 0 }),
     [`GET /api/v1/story/conversations/${SESSION}`]: () => json(200, session()),
+    'GET /api/v1/story/models': () => json(200, { free: false, items: [] }),
     [`POST ${ACTIONS}`]: () => new Response(sse(['failed', { code: 'stopped' }]), { headers: { 'Content-Type': 'text/event-stream' } }),
   });
 }
@@ -83,7 +85,7 @@ describe('장면의 왼쪽 열', () => {
 
     const column = within(await screen.findByRole('region', { name: '창' }));
     const toggles = column.getAllByRole('button').filter((button) => button.hasAttribute('aria-expanded'));
-    expect(toggles.map((button) => button.textContent)).toEqual(['지도·이동', '소지품·건네기', '인물', '기록', '기억']);
+    expect(toggles.map((button) => button.textContent)).toEqual(['지도·이동', '소지품·건네기', '인물', '기록', '기억', '페르소나·모델']);
     expect(column.getByRole('button', { name: '지도·이동' })).toHaveAttribute('aria-expanded', 'true');
     expect(column.getByText('지금 있는 곳: 학교')).toBeInTheDocument();
 
@@ -130,10 +132,26 @@ describe('인물 창', () => {
   });
 });
 
+describe('페르소나·모델 창', () => {
+  it('지금의 페르소나와 모델을 보이고, 모델 바꾸기가 고르는 창을 연다', async () => {
+    signedIn();
+    renderApp(`/story/sessions/${SESSION}`);
+
+    const column = within(await screen.findByRole('region', { name: '창' }));
+    await userEvent.click(column.getByRole('button', { name: '페르소나·모델' }));
+    const panel = within(column.getByRole('region', { name: '페르소나·모델' }));
+    expect(panel.getByText('페르소나 없음')).toBeInTheDocument();
+    expect(panel.getByText('Luna')).toBeInTheDocument();
+    expect(panel.getByRole('button', { name: '페르소나 바꾸기' })).toBeInTheDocument();
+    await userEvent.click(panel.getByRole('button', { name: '모델 바꾸기' }));
+    expect(await screen.findByRole('dialog', { name: '모델 고르기' })).toBeInTheDocument();
+  });
+});
+
 describe('창의 순수한 함수', () => {
   it('지도·이동은 시간이 흐르는 판이고 끝나지 않았을 때만 둔다', () => {
-    expect(storyTools(true)).toEqual(['map', 'items', 'cast', 'records', 'notes']);
-    expect(storyTools(false)).toEqual(['items', 'cast', 'records', 'notes']);
+    expect(storyTools(true)).toEqual(['map', 'items', 'cast', 'records', 'notes', 'persona']);
+    expect(storyTools(false)).toEqual(['items', 'cast', 'records', 'notes', 'persona']);
     expect(storyHasMap(VIEW, state(), false)).toBe(true);
     expect(storyHasMap(VIEW, state(), true)).toBe(false);
   });

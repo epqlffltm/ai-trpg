@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/story/StoryPersona.test.tsx
 // story 의 페르소나. 세계관 소개(D1)의 새로 시작에서 "나"를 고르고(기본이 골라져 있다, "페르소나 없이"는 null),
-// 장면(D2)의 머리에서 지금 페르소나를 보고 바꾼다(PUT /persona). 내 목록의 판이 더 크면 "새 설정으로 바꾸기"(같은 id).
+// 장면(D2)의 왼쪽 열 페르소나·모델 창에서 지금 페르소나를 보고 바꾼다(PUT /persona). 내 목록의 판이 더 크면 "새 설정으로 바꾸기"(같은 id).
 // 404 persona_not_found 는 세션이 그대로라고 알린다. 순수한 함수.
 
 import { screen, waitFor, within } from '@testing-library/react';
@@ -59,6 +59,13 @@ function signedIn(routes: Record<string, (request: SeenRequest) => Response> = {
   });
 }
 
+/** 왼쪽 열의 페르소나·모델 창을 펼친다. 창 안에서 찾는 within 을 돌려준다 */
+async function personaPanel() {
+  const column = within(await screen.findByRole('region', { name: '창' }));
+  await userEvent.click(column.getByRole('button', { name: '페르소나·모델' }));
+  return within(column.getByRole('region', { name: '페르소나·모델' }));
+}
+
 function sent(seen: SeenRequest[], method: string, url: string): unknown[] {
   return seen.filter((request) => request.method === method && request.url === url).map((request) => request.body);
 }
@@ -93,20 +100,22 @@ describe('story 의 페르소나', () => {
     });
     renderApp(`/story/sessions/${SESSION}`);
 
-    expect(await screen.findByText('나: 한여름')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: '페르소나 바꾸기' }));
+    const panel = await personaPanel();
+    expect(panel.getByText('한여름')).toBeInTheDocument();
+    expect(panel.getByText('나(페르소나)')).toBeInTheDocument();
+    await userEvent.click(panel.getByRole('button', { name: '페르소나 바꾸기' }));
     const dialog = within(screen.getByRole('dialog', { name: '나(페르소나)' }));
     await userEvent.click(await dialog.findByRole('button', { name: '새 설정으로 바꾸기' }));
     await waitFor(() => expect(sent(seen, 'PUT', PERSONA_PATH)).toEqual([{ persona_id: SUMMER }]));
 
-    await userEvent.click(screen.getByRole('button', { name: '페르소나 바꾸기' }));
+    await userEvent.click(panel.getByRole('button', { name: '페르소나 바꾸기' }));
     const again = within(screen.getByRole('dialog', { name: '나(페르소나)' }));
     expect(again.queryByRole('button', { name: '새 설정으로 바꾸기' })).toBeNull();
     const select = again.getByLabelText('나(페르소나)');
     await within(select).findByRole('option', { name: '한겨울' });
     await userEvent.selectOptions(select, WINTER);
     await userEvent.click(again.getByRole('button', { name: '이 페르소나로 바꾸기' }));
-    expect(await screen.findByText('나: 한겨울')).toBeInTheDocument();
+    expect(await panel.findByText('한겨울')).toBeInTheDocument();
     expect(sent(seen, 'PUT', PERSONA_PATH)).toEqual([{ persona_id: SUMMER }, { persona_id: WINTER }]);
   });
 
@@ -117,15 +126,16 @@ describe('story 의 페르소나', () => {
     });
     renderApp(`/story/sessions/${SESSION}`);
 
-    expect(await screen.findByText('나: 페르소나 없음')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: '페르소나 바꾸기' }));
+    const panel = await personaPanel();
+    expect(panel.getByText('페르소나 없음')).toBeInTheDocument();
+    await userEvent.click(panel.getByRole('button', { name: '페르소나 바꾸기' }));
     const dialog = within(screen.getByRole('dialog', { name: '나(페르소나)' }));
     const select = dialog.getByLabelText('나(페르소나)');
     await within(select).findByRole('option', { name: '한겨울' });
     await userEvent.selectOptions(select, WINTER);
     await userEvent.click(dialog.getByRole('button', { name: '이 페르소나로 바꾸기' }));
     expect(await dialog.findByText(/세션의 페르소나는 그대로입니다/)).toBeInTheDocument();
-    expect(screen.getByText('나: 페르소나 없음')).toBeInTheDocument();
+    expect(panel.getByText('페르소나 없음')).toBeInTheDocument();
   });
 });
 
