@@ -1,5 +1,6 @@
 // web/apps/web/src/api/http.ts
 // 서버를 부르는 얇은 fetch 래퍼 하나. 모든 서버를 같은 출처(/api/v1/<서버>/)로 부른다.
+// 앱으로 빌드할 때는 우리 사이트의 출처를 앞에 붙인다(origin.ts 의 VITE_API_ORIGIN, #429).
 //
 //   - 토큰이 있으면 Authorization 을 붙이고, 없으면 머리말을 아예 보내지 않는다.
 //     빈 토큰이나 지난 토큰을 실어 보내면 공개 목록까지 401 이 된다(화면 명세의 A1).
@@ -12,6 +13,7 @@
 
 import { filenameFromDisposition } from './disposition';
 import { ApiError, NetworkError, toApiError } from './errors';
+import { apiUrl } from './origin';
 import { refreshSession } from './refresh';
 import { getSession } from './session';
 
@@ -82,7 +84,7 @@ async function tokenAfter401(usedToken: string): Promise<string | null> {
 
 async function send(url: string, options: RequestOptions, token: string | undefined): Promise<Response> {
   try {
-    return await fetch(url, {
+    return await fetch(apiUrl(url), {
       method: options.method ?? 'GET',
       headers: headersFor(options, token),
       body: bodyOf(options),

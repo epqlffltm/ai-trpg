@@ -6,6 +6,7 @@
 // 마지막으로 받은 메시지의 id 를 Last-Event-ID 로 보낸다. 서버는 그 뒤의 것부터 보낸다.
 // 이 함수는 401 에서 토큰을 갱신하지 않는다. 끝난 까닭(unauthorized)만 돌려준다. 갱신은 한 번에 하나라 쓰는 쪽이 refresh.ts 로 한다.
 
+import { apiUrl } from './origin';
 import { getSession } from './session';
 import { splitSse, type SseMessage } from './sse';
 
@@ -54,7 +55,7 @@ function streamUrl(tableId: string, cursor: StreamCursor): string {
     messages_after: String(cursor.messages),
     whispers_after: String(cursor.whispers),
   });
-  return `/api/v1/game/tables/${encodeURIComponent(tableId)}/stream?${query}`;
+  return apiUrl(`/api/v1/game/tables/${encodeURIComponent(tableId)}/stream?${query}`);
 }
 
 function streamHeaders(lastEventId: string | null): Headers {

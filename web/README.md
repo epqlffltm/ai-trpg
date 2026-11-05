@@ -52,13 +52,14 @@ nginx 의 설정은 이미지에 담지 않고 compose 가 붙인다(`docker/ngi
 빌드는 화면마다 조각을 나눈다. 첫 화면, 로그인, 가입, 비밀번호는 첫 묶음에 있고, 나머지 화면은 처음 갈 때 받는다(`src/routing/pages.ts`).
 React, React Router, TanStack Query 는 `vendor` 조각 하나로 묶는다(`vite.config.ts`). 화면만 고쳐 올리면 이 조각의 이름이 그대로라 캐시가 남는다.
 
-빌드할 때 고르는 것은 셋이다. compose 는 결제창의 둘을 루트 `.env` 의 `WEB_PAYMENT_GATEWAY`, `TOSS_CLIENT_KEY` 에서 넘긴다(적지 않으면 `fake`).
+빌드할 때 고르는 것은 넷이다. compose 는 결제창의 둘을 루트 `.env` 의 `WEB_PAYMENT_GATEWAY`, `TOSS_CLIENT_KEY` 에서 넘긴다(적지 않으면 `fake`).
 
 | 이름 | 기본 | 뜻 |
 | --- | --- | --- |
 | `VITE_PAYMENT_GATEWAY` | `fake` | 충전(A7)의 결제창과 자동 충전의 카드 등록 창. `fake` 는 결제 서버의 가짜 결제 대행사에 맞춘 시험용 결제창이다(결과를 골라 결제 번호의 앞머리를 정한다). `toss` 는 토스페이먼츠의 결제창이다(`VITE_TOSS_CLIENT_KEY` 가 함께 있어야 한다). 그 밖의 값이면 결제창을 띄우지 않고 준비 중이라 알린다 |
 | `VITE_TOSS_CLIENT_KEY` | 없음 | 토스페이먼츠의 클라이언트 키. API 개별 연동 키의 테스트 키(`test_ck_`)만 받는다(결제위젯 키 `test_gck_` 와 라이브 키는 받지 않는다). 결제 서버의 시크릿 키(`test_sk_`)와 같은 상점의 짝이어야 한다. 비밀이 아니다(화면에 실린다) |
 | `VITE_IDENTITY_PROVIDER` | `fake` | 본인인증(A3)과 보호자 동의(A4)의 본인확인 창. `fake` 는 인증 서버의 가짜 업체에 맞춘 시험용 창이다(생일과 사람 식별값을 골라 `fake:<DI>:<생일>` 을 낸다). 그 밖의 값이면 창을 띄우지 않고 지금은 할 수 없다고 알린다. 실제 업체의 창은 계약한 뒤에 더한다 |
+| `VITE_API_ORIGIN` | 없음 | API 를 부를 출처(#429). 비우면 화면과 같은 출처의 상대 주소(`/api/v1/...`)로 부른다(웹은 늘 비운다). 앱(Capacitor)으로 빌드할 때 우리 사이트의 출처(`https://play.example.com` 처럼 경로 없이)를 적는다. 모양이 틀리면 화면이 뜨지 않는다. 프록시가 앱의 출처에만 CORS 를 연다. 쿠키는 다른 출처로 실리지 않아, 앱의 갱신은 인증 서버의 앱의 길(`/app/refresh`)을 네이티브 쪽이 부른다 |
 
 ## 구조
 
