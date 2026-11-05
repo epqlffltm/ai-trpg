@@ -653,6 +653,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | --- | --- | --- | --- |
 | `billing_calls_total` | counter | `operation`(`hold`, `capture`, `release`, `extend`), `outcome`(`held`, `short`, `gold_required`, `done`, `missing`, `ended`, `unavailable`, `rejected`) | 게임 서버와 chat 서버가 결제 서버를 부른 수(서버마다 `service` 로 나뉜다). 걸기는 `held`·`short`·`gold_required`, 나머지 셋이 된 것은 `done` 이다. 연장의 `missing`·`ended` 는 정리 작업이 새 이름표로 다시 건다. `unavailable` 은 답을 받지 못한 것(다시 부른다), `rejected` 는 받아들이지 않은 것(그 청구는 `failed`, 사람이 본다) |
 | `narration_charges` | gauge | `status`(`pending`, `held`, `short`, `capture_due`, `release_due`) | 끝나지 않은 청구의 수. 청구 정리(5초마다)가 바퀴의 끝에 센다. 없는 상태도 0 이다. 서버들이 같은 수를 내므로 `max` 로 본다. `capture_due` 가 쌓이면 결제 서버가 죽어 있다. `failed` 는 세지 않는다(한 번 되면 남아 쌓이고 색인이 없다). `failed` 가 되는 것은 `billing_calls_total` 의 `rejected` 로 본다 |
+| `snapshot_charges` | gauge | `status`(`pending`, `held`, `capture_due`, `release_due`) | 끝나지 않은 장면 그림(#983)의 청구의 수. 장면 그림의 청구 정리(5초마다)가 바퀴의 끝에 센다. 없는 상태도 0 이다. 서버들이 같은 수를 내므로 `max` 로 본다. `capture_due` 가 쌓이면 결제 서버가 죽어 있다. `held` 가 오래 남으면 그리는 일이 멈춘 것이다(10분이 지나면 정리 작업이 실패로 적고 돌려준다). 끝난 것(`captured`, `released`, `declined`, `failed`)은 세지 않는다 |
 
 **메일과 인증 (auth)**
 
@@ -896,7 +897,7 @@ Grafana 가 뜰 때 `docker/grafana/dashboards/` 의 JSON 을 읽어 폴더 `ai-
 | 경보는 대시보드에 걸지 않는다(Grafana 의 경보를 쓰지 않는다) | 규칙은 Prometheus 의 규칙 파일이다([아래](#경보)). 대시보드의 패널과 경보의 조건이 같을 필요가 없다 |
 
 `notification-server` 는 한눈에(DB, 5xx 비율, 넣은 알림, 받지 않은 알림), 요청, DB 연결, 알림, 정리 작업의 다섯 줄이다.
-`trpg-server` 는 한눈에(DB, 5xx 비율, 열린 스트림, 서술 실패), 요청, DB 연결, 실시간 스트림, 라운드와 서술, AI 호출, 서술 값, 뒤에서 도는 작업의 여덟 줄이다.
+`trpg-server` 는 한눈에(DB, 5xx 비율, 열린 스트림, 서술 실패), 요청, DB 연결, 실시간 스트림, 라운드와 서술, AI 호출, 서술 값, 뒤에서 도는 작업, 장면 그림(끝나지 않은 청구, `snapshot_charges`)의 아홉 줄이다.
 `auth-server` 는 한눈에(DB, 5xx 비율, 버린 메일, 세지 못한 시도 제한), 요청, 메일, 시도 횟수 제한, 워커와 예약 명령의 다섯 줄이다. 연결 풀이 없어 DB 연결의 줄이 없다.
 `board-server` 는 한눈에(DB, 5xx 비율, 횟수 제한에 걸린 쓰기, 멈춘 검색), 요청, DB 연결, 쓰기와 신고, 검색, 알림 보내기의 여섯 줄이다.
 `billing-server` 의 대시보드는 한눈에(DB, 5xx 비율, 결과를 모르는 결제 대행사 호출, 되돌린 원장의 일), 요청, DB 연결, 결제, 원장, 정리 작업과 대사의 여섯 줄이다.
