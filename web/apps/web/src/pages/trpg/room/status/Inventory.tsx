@@ -4,16 +4,16 @@
 // 내 물건에는 쓰기(소모품), 건네기, 내려놓기(맵에 서 있을 때), 팔기(장면에 사 주는 상인이 있고 값이 있을 때) 단추가,
 // 내 돈에는 돈 건네기 단추가 있다. 누르면 선언 입력의 행동 칸이 채워진다.
 // 돈은 판 안의 돈이다. 결제의 크레딧과 섞이지 않게 "돈"이라 부른다(#278).
-// 장비(#276)는 소지품 위에 칸마다 보인다(EquipmentList). 내 것은 칸마다 벗기, 물건 줄에서 착용한다(선언이 아니라 바로 바꾼다).
+// 착용은 물건 줄에서 한다(WearButton, 선언이 아니라 바로 바꾼다). 착용한 장비(#276)는 상태·장비(내 것, 벗기)와 일행·기록(모두)에 보인다.
 
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import type { HeldItem, TableDetail, TableMember } from '../../../../api/types';
+import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { amountLabel, itemPrice, merchantsBuy, moneyLabel, type Currency } from '../money';
 import { openMerchants } from '../round/action/actionOptions';
 import { sceneCastQuery } from '../round/roundQueries';
 import { ActionButton, type ActionShortcuts } from './ActionButton';
-import { EquipmentList } from './EquipmentList';
 import { isWearable, isWorn, slotsLabel, wornOf } from './equipmentView';
 import { effectsLabel, itemLabel, meFirst } from './statusView';
 import { useEquipment, type Equipment } from './useEquipment';
@@ -32,19 +32,13 @@ export function Inventory({ table, myId, shortcuts }: Props) {
   if (holders.length === 0) return <p className="hint">아직 물건을 가진 캐릭터가 없습니다.</p>;
   return (
     <div className="inventory">
+      {/* 물건 줄에서 바로 착용하다 막힌 까닭(칸을 고르는 착용은 그 창 안에 보인다) */}
+      <ProblemNotice problem={equipment.problem} />
       {holders.map((member) => (
         <section key={member.user_id} aria-label={`${member.character?.name}의 소지품`}>
           <h3 className="waiting-room__label">{member.character?.name}</h3>
           {table.currency ? (
             <Money member={member} currency={table.currency} shortcuts={member.user_id === myId ? shortcuts : null} />
-          ) : null}
-          {member.sheet ? (
-            <EquipmentList
-              table={table}
-              sheet={member.sheet}
-              name={member.character?.name ?? ''}
-              equipment={member.user_id === myId && playing ? equipment : null}
-            />
           ) : null}
           {member.sheet && member.sheet.items.length > 0 ? (
             <ul className="plain-list items">

@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/room/status/Equipment.test.tsx
-// 장비(#276)를 화면으로 본다. 소지품 탭의 칸별 착용, 벗기(DELETE), 정해진 칸의 착용(PUT), 칸을 고르는 착용,
+// 장비(#276)를 화면으로 본다. 상태·장비의 칸별 착용과 벗기(DELETE), 일행·기록의 남의 장비(읽기만), 소지품·돈의 정해진 칸의 착용(PUT), 칸을 고르는 착용,
 // 라운드가 닫는 중이면 막힘, 409 의 알림, 공격에 무기와 부위를 붙여 선언하기.
 
 import { screen, within } from '@testing-library/react';
@@ -59,10 +59,18 @@ function open(routes: Record<string, (request: SeenRequest) => Response> = {}) {
   });
 }
 
+async function status() {
+  return within(await screen.findByRole('region', { name: '상태' }));
+}
+
+/** 내 장비. 처음 펼쳐진 상태·장비에 있다 */
 async function myGear() {
-  const status = within(await screen.findByRole('region', { name: '상태' }));
-  await userEvent.click(status.getByRole('button', { name: /소지품·돈/ }));
-  return within(await status.findByRole('group', { name: '렌의 장비' }));
+  return within(await (await status()).findByRole('group', { name: '렌의 장비' }));
+}
+
+/** 소지품·돈을 펼친다(물건 줄의 착용 단추가 있다) */
+async function openItems() {
+  await userEvent.click((await status()).getByRole('button', { name: /소지품·돈/ }));
 }
 
 function sent(seen: SeenRequest[], method: string, path: string): SeenRequest[] {
@@ -86,6 +94,9 @@ describe('장비', () => {
 
     expect(await gear.findAllByText('비어 있음')).toHaveLength(3);
     expect(sent(seen, 'DELETE', '/equipment/main_hand')).toHaveLength(1);
+    expect(screen.queryByRole('group', { name: '미아의 장비' })).toBeNull();
+
+    await userEvent.click((await status()).getByRole('button', { name: /일행·기록/ }));
     expect(screen.getByRole('group', { name: '미아의 장비' })).toBeInTheDocument();
     expect(within(screen.getByRole('group', { name: '미아의 장비' })).queryByRole('button')).toBeNull();
   });
@@ -99,7 +110,7 @@ describe('장비', () => {
     });
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
-    await myGear();
+    await openItems();
     await userEvent.click(await screen.findByRole('button', { name: '사슬 갑옷 착용' }));
     expect(await screen.findByText(/착용\(몸\)/)).toBeInTheDocument();
     expect(sent(seen, 'PUT', '/equipment')[0]?.body).toEqual({ entry_id: 'mail', slots: ['body'] });
@@ -120,7 +131,8 @@ describe('장비', () => {
 
     const gear = await myGear();
     expect(await gear.findByRole('button', { name: '장검 벗기' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '사슬 갑옷 착용' })).toBeDisabled();
+    await openItems();
+    expect(await screen.findByRole('button', { name: '사슬 갑옷 착용' })).toBeDisabled();
   });
 
   it('그 사이 닫기 시작했으면 409 를 알린다', async () => {
