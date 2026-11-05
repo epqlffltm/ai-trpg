@@ -1358,7 +1358,8 @@ a.ui-button {
   align-items: center;
 }
 
-/* 라운드(B6 의 ③). 지나간 라운드를 차례로, 맨 아래에 지금 라운드 */
+/* 라운드(B6 의 ③, Stitch 20번). 지나간 라운드를 차례로, 맨 아래에 지금 라운드.
+ * 라운드 번호는 가운데 괘선 사이에, 장면은 옅은 면 위의 명조, 판정은 성공(감청)·실패(인주)의 띠가 붙은 줄 */
 .story {
   display: grid;
   gap: var(--ui-gap);
@@ -1366,26 +1367,40 @@ a.ui-button {
 
 .round {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   padding-bottom: var(--ui-gap);
-  border-bottom: 1px solid var(--ui-border);
 }
 
 .round--current {
-  padding: 12px 14px;
+  padding: 16px 18px;
   border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
+  border-radius: var(--ui-radius-lg);
   background: var(--ui-surface);
 }
 
 .round__number {
-  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin: 0;
+  font-size: 1rem;
+}
+
+.round__number::before,
+.round__number::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--ui-border);
 }
 
 .scene {
   margin: 0;
-  line-height: 1.7;
+  padding: 14px 18px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-subtle);
+  font-family: var(--ui-font-serif);
+  font-size: 1.08rem;
+  line-height: 1.8;
 }
 
 .declarations {
@@ -1399,28 +1414,64 @@ a.ui-button {
 .declaration {
   display: grid;
   gap: 2px;
-  padding-left: 10px;
-  border-left: 3px solid var(--ui-border);
+  padding: 8px 12px;
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.declaration--success {
+  border-left-color: var(--ui-accent);
+}
+
+.declaration--failure {
+  border-left-color: var(--ui-seal);
 }
 
 .declaration__name {
-  font-weight: 600;
-  font-size: 0.92em;
+  font-family: var(--ui-font-serif);
+  font-weight: 700;
 }
 
 .declaration__outcome {
-  font-size: 0.92em;
+  font-family: var(--ui-font-mono);
+  font-size: 0.88em;
   font-variant-numeric: tabular-nums;
 }
 
 .declaration--system {
+  border-style: dashed;
+  border-left-width: 1px;
+  background: none;
   color: var(--ui-text-muted);
   font-size: 0.9em;
 }
 
+/* 지금 라운드의 줄. 마감까지 남은 시간과 아직 선언하지 않은 사람 */
+.round__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--ui-seal);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-subtle);
+}
+
+.round__bar:empty {
+  display: none;
+}
+
+.round__bar p {
+  margin: 0;
+}
+
 .round__deadline {
   margin: 0;
-  font-weight: 600;
+  font-family: var(--ui-font-mono);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 

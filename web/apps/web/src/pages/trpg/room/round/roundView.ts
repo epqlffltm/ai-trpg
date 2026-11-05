@@ -176,6 +176,12 @@ function moneyLine(outcome: Outcome, currency: Currency | null): string | null {
 
 type CheckResult = Extract<Outcome, { roll: number; total: number }>;
 
+/** 판정의 결과가 성공인지 실패인지(줄의 색). 굴리지 않은 결과(사고팔기, 이동 같은 것)는 null */
+export function outcomeTone(outcome: Outcome | null): 'success' | 'failure' | null {
+  if (!outcome || !('roll' in outcome && 'total' in outcome && 'success' in outcome)) return null;
+  return outcome.success ? 'success' : 'failure';
+}
+
 function checkLine(outcome: CheckResult, rules: Ruleset): string {
   const modifier = outcome.modifier >= 0 ? `+${outcome.modifier}` : String(outcome.modifier);
   const parts = [`눈 ${outcome.roll}, 보정 ${modifier}, 합 ${outcome.total} / 목표 ${outcome.target}`];
