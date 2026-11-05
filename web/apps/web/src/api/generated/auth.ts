@@ -2,6 +2,86 @@
 // docs/api/auth.openapi.json 에서 만든 타입. 손으로 고치지 않는다(npm run gen:api).
 
 export interface paths {
+    "/api/v1/auth/app/login/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 앱의 로그인 2단계: 코드를 맞히면 토큰을 준다. refresh 토큰은 본문이다
+         * @description POST /api/v1/auth/app/login/verify
+         */
+        post: operations["app_login_verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/app/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 앱의 이 기기에서 로그아웃한다. 본문의 refresh 토큰을 폐기한다
+         * @description POST /api/v1/auth/app/logout
+         */
+        post: operations["app_logout_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/app/password/change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 앱에서 비밀번호를 바꾼다. 다른 기기는 로그아웃되고 이 기기는 새 토큰을 받는다(refresh 토큰은 본문)
+         * @description POST /api/v1/auth/app/password/change
+         */
+        post: operations["app_password_change_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/app/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 앱의 refresh 토큰으로 새 access 토큰을 받는다. refresh 토큰도 새것으로 바뀐다
+         * @description POST /api/v1/auth/app/refresh
+         */
+        post: operations["app_refresh_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/consents": {
         parameters: {
             query?: never;
@@ -726,6 +806,35 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description 앱이 로그아웃에 보내는 refresh 토큰. 없어도 로그아웃은 성공한다(웹의 로그아웃과 같다). */
+        AppLogoutRequest: {
+            refresh_token?: string;
+        };
+        /** @description 앱이 갱신에 보내는 refresh 토큰. */
+        AppRefreshTokenRequest: {
+            refresh_token: string;
+        };
+        /**
+         * @description 앱(#429)에 토큰을 주는 응답. 웹의 응답에 refresh 토큰을 본문으로 더한다. 쿠키는 주지 않는다.
+         *
+         *     앱은 refresh 토큰을 기기의 안전한 저장소에 두고, 화면의 스크립트에는 넘기지 않는다(docs/product/app-refresh.md).
+         */
+        AppTokenResponse: {
+            access_token: string;
+            /** @description 다시 동의할 필수 항목. 비어 있지 않으면 access 토큰이 인증 서버에만 통한다 */
+            consents_pending: string[];
+            expires_in: number;
+            /** @description refresh 토큰이 끝나기까지의 초 */
+            refresh_expires_in: number;
+            /** @description refresh 토큰. 갱신과 로그아웃에 본문으로 보낸다. 쓸 때마다 새것으로 바뀐다 */
+            refresh_token: string;
+            token_type: string;
+            /**
+             * Format: date-time
+             * @description 탈퇴를 요청했으면 계정을 비울 시각(#603). 있으면 access 토큰이 인증 서버에만 통한다. 취소하면 null
+             */
+            withdrawal_scheduled_at: string | null;
+        };
         /**
          * @description access 토큰이 없거나 받아들일 수 없을 때(401). DRF 와 simplejwt 가 만든다.
          *
@@ -1118,6 +1227,241 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    app_login_verify_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginVerifyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppTokenResponse"];
+                };
+            };
+            /** @description 형식이 틀렸거나 코드가 맞지 않거나 만료됐다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description 로그인 티켓을 쓸 수 없다(login_ticket_invalid). 처음부터 다시 한다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+            /** @description 브라우저에서 온 요청(browser_not_allowed) 또는 막은 IP 다(network_blocked) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
+    app_logout_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AppLogoutRequest"];
+            };
+        };
+        responses: {
+            /** @description 로그아웃했다. 토큰이 없었거나 쓸 수 없었어도 같다 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 요청을 받을 수 없다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description 브라우저에서 온 요청(browser_not_allowed). 앱의 네이티브 쪽만 부른다 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
+    app_password_change_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChangeRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppTokenResponse"];
+                };
+            };
+            /** @description 현재 비밀번호가 틀렸거나(current_password) 새 비밀번호가 규칙에 어긋났다(new_password) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 브라우저에서 온 요청(browser_not_allowed). 앱의 네이티브 쪽만 부른다 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+            /** @description 시도가 너무 많다(too_many_attempts) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetryLater"];
+                };
+            };
+        };
+    };
+    app_refresh_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppRefreshTokenRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppTokenResponse"];
+                };
+            };
+            /** @description 요청을 받을 수 없다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description refresh 토큰을 쓸 수 없다(위조, 만료, 폐기, 웹에 준 토큰). 다시 로그인한다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Detail"];
+                };
+            };
+            /** @description 브라우저에서 온 요청(browser_not_allowed) 또는 막은 IP 다(network_blocked) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
     consents_retrieve: {
         parameters: {
             query?: never;

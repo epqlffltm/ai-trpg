@@ -14,6 +14,7 @@ JWT 발급, 갱신, 폐기.
       인증 서버에서 동의를 마친 뒤 갱신하면 모든 서버의 이름이 다시 실린다.
       탈퇴를 요청해 유예 중인 사람도 같다(#603). 취소한 뒤 갱신하면 다시 실린다.
     - refresh 토큰은 쓸 때마다 새것으로 바꾸고, 이미 폐기된 토큰이 다시 쓰이면 탈취로 본다.
+    - refresh 토큰마다 웹(쿠키)과 앱(본문) 가운데 어디에 줬는지 적고, 같은 쪽의 길로만 갱신한다(#429).
 """
 
 from dataclasses import dataclass
@@ -36,7 +37,7 @@ from accounts.age import korean_today
 from accounts.consents import pending_items
 from accounts.identity_status import identity_status_of
 from accounts.key_ring import current_key_ring
-from accounts.models import User
+from accounts.models import IssuedTokenClient, TokenClient, User
 from accounts.roles import roles_of
 from accounts.withdrawal_schedule import withdrawal_scheduled_at
 
@@ -153,17 +154,18 @@ class RefreshToken(SimpleJWTRefreshToken):
         return access
 
 
-def issue_token_pair(user: User) -> TokenPair:
+def issue_token_pair(user: User, client: TokenClient = TokenClient.WEB) -> TokenPair:
     """
     사용자의 access 토큰과 refresh 토큰을 발급한다.
 
     로그인과 갱신이 모두 이 함수를 부른다.
     나중에 로그인이 2단계로 바뀌어도 마지막 단계에서 같은 함수를 부르면 된다.
+    client 는 refresh 토큰을 줄 곳이다. 웹은 쿠키, 앱은 응답 본문이다(#429). 토큰의 모양은 같다.
     """
     refresh = RefreshToken()
     refresh[api_settings.USER_ID_CLAIM] = str(user.public_id)
     refresh[VERSION_CLAIM] = user.token_version
-    _record_issued_refresh_token(refresh, user)
+    _record_issued_refresh_token(refresh, user, client)
     pending = tuple(pending_items(user))
     scheduled = withdrawal_scheduled_at(user)
     access = _access_token_for(refresh, user)
@@ -215,25 +217,28 @@ def _access_token_for(refresh: RefreshToken, user: User) -> AccessToken:
     return access
 
 
-def _record_issued_refresh_token(refresh: RefreshToken, user: User) -> None:
+def _record_issued_refresh_token(refresh: RefreshToken, user: User, client: TokenClient) -> None:
     """
-    발급한 refresh 토큰을 기록한다. 폐기는 이 기록에 표시를 붙이는 방식으로 한다.
+    발급한 refresh 토큰과 그것을 준 곳을 기록한다. 폐기는 이 기록에 표시를 붙이는 방식으로 한다.
 
     토큰 원문은 저장하지 않는다. 폐기 여부는 토큰 ID(jti)만으로 판단할 수 있고,
     원문을 저장하면 DB 를 읽을 수 있는 사람이 남의 세션을 그대로 쓸 수 있다.
     """
-    OutstandingToken.objects.create(
+    issued = OutstandingToken.objects.create(
         user=user,
         jti=refresh[api_settings.JTI_CLAIM],
         token='',
         created_at=refresh.current_time,
         expires_at=datetime_from_epoch(refresh['exp']),
     )
+    IssuedTokenClient.objects.create(token=issued, client=client)
 
 
-def rotate_refresh_token(raw_refresh_token: str) -> TokenPair:
+def rotate_refresh_token(raw_refresh_token: str, client: TokenClient = TokenClient.WEB) -> TokenPair:
     """
-    refresh 토큰을 폐기하고 새 토큰 쌍을 발급한다.
+    refresh 토큰을 폐기하고 새 토큰 쌍을 발급한다. 새 토큰도 같은 곳(client)에 준다.
+
+    다른 곳에 준 토큰이면(앱의 토큰을 웹의 길로) 거부만 한다. 폐기하지도, 탈취로 보지도 않는다.
 
     이미 폐기된 토큰이 들어오면 탈취로 본다. 정상 사용자와 공격자 중 한쪽이
     옛 토큰을 쓴 것이므로, 누가 진짜인지 가리지 않고 그 사용자의 모든 세션을 끊는다.
@@ -246,6 +251,7 @@ def rotate_refresh_token(raw_refresh_token: str) -> TokenPair:
 
     with transaction.atomic():
         issued = _lock_issued_token(claims)
+        _ensure_same_client(issued, client)
         user = issued.user
         reused = _is_revoked(issued)
         if reused:
@@ -256,22 +262,24 @@ def rotate_refresh_token(raw_refresh_token: str) -> TokenPair:
         else:
             _ensure_session_is_current(user, claims)
             _revoke(issued)
-            token_pair = issue_token_pair(user)
+            token_pair = issue_token_pair(user, client)
 
     if reused:
         raise InvalidRefreshTokenError
     return token_pair
 
 
-def revoke_refresh_token(raw_refresh_token: str) -> None:
+def revoke_refresh_token(raw_refresh_token: str, client: TokenClient = TokenClient.WEB) -> None:
     """
     refresh 토큰 하나를 폐기한다. 로그아웃에 쓴다.
 
-    유효하지 않은 토큰이면 InvalidRefreshTokenError 를 낸다.
+    유효하지 않거나 다른 곳(client)에 준 토큰이면 InvalidRefreshTokenError 를 낸다.
     """
     claims = _decode_refresh_claims(raw_refresh_token)
     with transaction.atomic():
-        _revoke(_lock_issued_token(claims))
+        issued = _lock_issued_token(claims)
+        _ensure_same_client(issued, client)
+        _revoke(issued)
 
 
 def revoke_all_sessions(user: User) -> None:
@@ -314,6 +322,18 @@ def _lock_issued_token(claims: dict) -> OutstandingToken:
         )
     except OutstandingToken.DoesNotExist as exc:
         raise InvalidRefreshTokenError from exc
+
+
+def client_of(issued: OutstandingToken) -> TokenClient:
+    """그 refresh 토큰을 준 곳. 기록이 없으면 이 기록을 만들기 전에 발급된 웹의 토큰이다."""
+    recorded = IssuedTokenClient.objects.filter(token=issued).values_list('client', flat=True).first()
+    return TokenClient(recorded) if recorded is not None else TokenClient.WEB
+
+
+def _ensure_same_client(issued: OutstandingToken, client: TokenClient) -> None:
+    """다른 곳에 준 refresh 토큰이면 거부한다."""
+    if client_of(issued) != client:
+        raise InvalidRefreshTokenError
 
 
 def _is_revoked(issued: OutstandingToken) -> bool:

@@ -8,6 +8,7 @@ config/urls.py 가 이 파일을 /api/v1/auth/ 아래에 연결한다.
 
 from django.urls import path
 
+from accounts.app_views import AppLoginVerifyView, AppLogoutView, AppPasswordChangeView, AppRefreshView
 from accounts.views import (
     ConsentDocumentsView,
     CreatorSearchView,
@@ -57,6 +58,11 @@ urlpatterns = [
     path('password/reset', PasswordResetRequestView.as_view(), name='password-reset'),
     path('password/reset/confirm', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
     path('refresh', RefreshView.as_view(), name='refresh'),
+    # 앱(#429). refresh 토큰을 쿠키 대신 본문으로 주고받는다(accounts/app_views.py)
+    path('app/login/verify', AppLoginVerifyView.as_view(), name='app-login-verify'),
+    path('app/refresh', AppRefreshView.as_view(), name='app-refresh'),
+    path('app/logout', AppLogoutView.as_view(), name='app-logout'),
+    path('app/password/change', AppPasswordChangeView.as_view(), name='app-password-change'),
     path('logout', LogoutView.as_view(), name='logout'),
     path('logout-all', LogoutAllView.as_view(), name='logout-all'),
     path('jwks', JwksView.as_view(), name='jwks'),
