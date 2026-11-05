@@ -475,6 +475,7 @@ chat-server/              FastAPI 캐릭터 1:1 대화 서버 (독립된 uv 프�
 story-server/             FastAPI 세계관 기반 스토리 서버 (독립된 uv 프로젝트)
 shared/                   FastAPI 서버들이 함께 쓰는 코드(server-core, ai-core, conversation-core). 서버의 이미지에 빌드할 때 넣는다
 web/                      화면(Vite, React, TypeScript, npm workspaces). 빌드한 것을 프록시의 이미지에 담는다(web/Dockerfile)
+app/                      앱 껍데기(Capacitor, Android, #429). 화면의 빌드를 담고 refresh 토큰을 쥐는 플러그인(AppAuth)이 있다. 시험 단계다(app/README.md)
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트
 docker/nginx/templates/   프록시(nginx)의 설정. 로컬과 staging 이 함께 쓰는 몸통(api.inc), 화면(web.inc), http 단계(http.inc), 보안 머리말, 앱의 CORS(cors.inc)
 docker/nginx/staging/     staging 의 프록시: 듣는 포트와 TLS, 허용 주소, 인증서를 지켜보다 다시 읽히는 시작 스크립트
