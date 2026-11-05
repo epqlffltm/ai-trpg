@@ -3,6 +3,7 @@
 // 지운 댓글에 답글이 있으면 "삭제된 댓글입니다"로 자리만 남는다.
 // 로그인했으면 위에 댓글 쓰기, 댓글마다 답글(답글에는 달지 못한다), 고치기(글쓴이), 지우기(글쓴이와 운영자), 신고(남의 것).
 // 로그인하지 않았으면 쓰기 대신 로그인으로 가는 길(마치면 이 글로 돌아온다).
+// 모양은 Stitch 11번: 글 아래 한 장의 종이. 댓글마다 머리 줄(굵은 글쓴이, 때, 오른쪽에 단추), 그 아래 글. 줄 사이에 가는 선.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -26,7 +27,7 @@ export function CommentList({ postId, count }: { postId: string; count: number }
   const { signedIn, me } = useBoardMe();
   const threads = comments.data?.pages.flatMap((page) => page.items) ?? [];
   return (
-    <section className="page-section" aria-labelledby="comments-heading">
+    <section className="board-card board-comments" aria-labelledby="comments-heading">
       <h2 id="comments-heading">댓글 {count}개</h2>
       {signedIn ? <NewComment postId={postId} /> : <SignInToComment />}
       {comments.isError ? (
@@ -99,14 +100,19 @@ function CommentItem({ postId, comment, me }: ItemProps) {
   const read = () => setMode('read');
   return (
     <article className={comment.deleted ? 'comment comment--deleted' : 'comment'}>
-      {comment.deleted ? null : (
-        <p className="hint comment__meta">
-          {authorName(comment)} · <time dateTime={comment.created_at}>{formatDateTime(comment.created_at)}</time>
-          {isEdited(comment) ? ' · 고침' : ''}
-        </p>
-      )}
+      <div className="comment__head">
+        {comment.deleted ? null : (
+          <p className="comment__meta">
+            <strong>{authorName(comment)}</strong>{' '}
+            <span className="hint">
+              <time dateTime={comment.created_at}>{formatDateTime(comment.created_at)}</time>
+              {isEdited(comment) ? ' · 고침' : ''}
+            </span>
+          </p>
+        )}
+        {mode === 'read' && me !== undefined ? <CommentActions postId={postId} comment={comment} me={me} onMode={setMode} /> : null}
+      </div>
       {mode === 'edit' ? <EditComment postId={postId} comment={comment} onDone={read} /> : <p className="comment__text">{commentText(comment)}</p>}
-      {mode === 'read' && me !== undefined ? <CommentActions postId={postId} comment={comment} me={me} onMode={setMode} /> : null}
       {mode === 'reply' ? <ReplyComment postId={postId} parentId={comment.id} onDone={read} /> : null}
     </article>
   );
