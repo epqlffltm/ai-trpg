@@ -183,12 +183,27 @@ export function outcomeTone(outcome: Outcome | null): 'success' | 'failure' | nu
 }
 
 function checkLine(outcome: CheckResult, rules: Ruleset): string {
+  const view = checkView(outcome, rules);
+  return [view.dice, view.success ? '성공' : '실패', ...view.effects].join(' · ');
+}
+
+/** 판정 결과 줄을 나눈 것(Stitch 20번). 눈·보정·합·목표의 한 줄, 성공인지, 판정이 바꾼 것(공격의 줄이 맨 앞) */
+export type CheckView = { dice: string; success: boolean; effects: string[] };
+
+function checkView(outcome: CheckResult, rules: Ruleset): CheckView {
   const modifier = outcome.modifier >= 0 ? `+${outcome.modifier}` : String(outcome.modifier);
-  const parts = [`눈 ${outcome.roll}, 보정 ${modifier}, 합 ${outcome.total} / 목표 ${outcome.target}`];
-  if (outcome.hindrance?.disadvantage) parts.push('불리함');
-  if (outcome.called_shot) parts.push('노려 치기');
-  parts.push(outcome.success ? '성공' : '실패');
-  return [...parts, ...checkEffects(outcome, rules)].join(' · ');
+  const dice = [`눈 ${outcome.roll}, 보정 ${modifier}, 합 ${outcome.total} / 목표 ${outcome.target}`];
+  if (outcome.hindrance?.disadvantage) dice.push('불리함');
+  if (outcome.called_shot) dice.push('노려 치기');
+  return { dice: dice.join(' · '), success: outcome.success, effects: checkEffects(outcome, rules) };
+}
+
+/** 판정한 선언이면 나눈 결과, 아니면 null(그때는 outcomeLine 의 한 줄을 쓴다) */
+export function checkOutcome(outcome: Outcome | null, rules: Ruleset): CheckView | null {
+  if (!outcome || 'turn_lost' in outcome || 'target_gone' in outcome) return null;
+  if ('item_throw' in outcome && !outcome.item_throw?.thrown) return null;
+  if (!('roll' in outcome && 'total' in outcome && 'success' in outcome)) return null;
+  return checkView(outcome, rules);
 }
 
 /** 판정이 바꾼 것. 사람의 HP, 인물과 몬스터의 피해나 회복, 치료, 떨어진 물건 */

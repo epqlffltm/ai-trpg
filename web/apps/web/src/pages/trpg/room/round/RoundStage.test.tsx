@@ -53,6 +53,15 @@ describe('RoundStage', () => {
     expect(screen.getByRole('button', { name: '라운드 닫기' })).toBeInTheDocument();
   });
 
+  it('마감이 있으면 라운드 줄에 마감 시각과 남은 시간을 보인다', async () => {
+    const deadline = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    open({ [`GET ${BASE}/rounds/current`]: () => json(200, round(2, { deadline_at: deadline })) });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    expect(await screen.findByText(/^마감 (오전|오후) \d{1,2}:\d{2}$/)).toBeInTheDocument();
+    expect(screen.getByText(/^남은 시간 \d+분( \d+초)?$/)).toBeInTheDocument();
+  });
+
   it('판정을 붙여 선언하면 낸 것이 보이고, 고칠 수 있다', async () => {
     const mine = declaration(ME, {
       content: '문을 밀어 연다',
@@ -151,7 +160,8 @@ describe('RoundStage', () => {
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
     expect(await screen.findByText('판정 · 민첩, 보통')).toBeInTheDocument();
-    expect(screen.getByText('눈 9, 보정 +1, 합 10 / 목표 15 · 실패')).toBeInTheDocument();
+    expect(screen.getByText('눈 9, 보정 +1, 합 10 / 목표 15')).toBeInTheDocument();
+    expect(screen.getByText('판정 실패')).toBeInTheDocument();
     expect(await screen.findByText('창틀이 삐걱인다.')).toBeInTheDocument();
   });
 
