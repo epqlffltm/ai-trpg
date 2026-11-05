@@ -1,26 +1,23 @@
 // web/apps/web/src/pages/trpg/room/status/StatusPanel.tsx
-// 상태 패널(B7). 진행 중과 끝난 테이블의 옆에 둔다. 위에 내 HP 한 줄(과 성장이 있는 규칙이면 레벨, 쌓인 점수를 놓는 단추 #286)을
-// 늘 보이고, 아래는 탭으로 나눈다.
-//   - 캐릭터(C): 앉은 사람마다 HP, 레벨, 부상, 능력치, 떠난 캐릭터
-//   - 소지품(I): 캐릭터마다 지닌 물건
-//   - 퀘스트·장소(J): 게임 안의 시각, 퀘스트, 장소와 길
-//   - 일어난 일(L): 이벤트를 한 줄씩(events/EventLog)
+// 테이블 방 왼쪽 열의 창 넷(B7, Stitch 20번). 단추 넷이 세로로 서고, 누른 단추 바로 아래로 그 창이 펼쳐진다.
+// 창은 하나만 펼친다(다른 단추를 누르면 앞의 창은 접힌다). 펼친 단추를 다시 누르면 접는다. 처음에는 상태·장비가 펼쳐져 있다.
+//   - 상태·장비(C): 내 캐릭터의 HP, 자원, 레벨과 점수 놓기(#286), 부상, 능력치
+//   - 소지품·돈(I): 캐릭터마다 돈, 장비, 지닌 물건(Inventory)
+//   - 퀘스트·지도(J): 게임 안의 시각, 퀘스트, 장소와 길(WorldInfo)
+//   - 일행·기록(L): 앉은 사람마다의 캐릭터(CharacterCards)와 일어난 일(EventLog)
 // 상태를 바꾸지 않는다. 값은 이벤트가 오면 테이블을 다시 읽어 바뀐다(useBatchedRefetch).
 // 물건과 장소의 단추는 선언 입력의 행동 칸을 채울 뿐이다(useActionShortcuts). 보내는 것은 선언이다.
 // 점수 놓기는 선언이 아니라 바로 바꾼다(useRaise).
 
-import { useState } from 'react';
-import type { TableDetail } from '../../../../api/types';
+import { useCallback, useState, type ReactNode } from 'react';
+import type { TableDetail, TableMember } from '../../../../api/types';
 import type { NameLookup } from '../../../../hooks/usePublicNames';
 import { EventLog } from '../events/EventLog';
 import { displayName } from '../MemberList';
 import { CharacterCards } from './CharacterCards';
-import { HpBar } from './HpBar';
-import { LevelBar } from './LevelBar';
-import { RaiseButton } from './RaiseButton';
-import { ResourceBars } from './ResourceBars';
 import { Inventory } from './Inventory';
-import { STATUS_TABS, type StatusTab } from './statusTabs';
+import { RaiseButton } from './RaiseButton';
+import { nextOpenTab, STATUS_TABS, type StatusTab } from './statusTabs';
 import { useActionShortcuts } from './useActionShortcuts';
 import { useRaise } from './useRaise';
 import { useStatusShortcuts } from './useStatusShortcuts';
@@ -29,46 +26,73 @@ import { WorldInfo } from './WorldInfo';
 type Props = { table: TableDetail; myId: string | undefined; nameOf: NameLookup };
 
 export function StatusPanel({ table, myId, nameOf }: Props) {
-  const [tab, setTab] = useState<StatusTab>('characters');
-  useStatusShortcuts(setTab);
-  const shortcuts = useActionShortcuts(table, myId);
-  const raising = useRaise(table, myId);
-  const mine = table.members.find((member) => member.user_id === myId);
+  const [open, setOpen] = useState<StatusTab | null>('mine');
+  const openOnly = useCallback((tab: StatusTab) => setOpen(tab), []);
+  useStatusShortcuts(openOnly);
   return (
-    <section className="room-panel status" aria-labelledby="status-heading">
-      <h2 id="status-heading">상태</h2>
-      {mine?.sheet ? (
-        <div className="status__mine">
-          <span className="status-card__name">{mine.character?.name}</span>
-          <HpBar sheet={mine.sheet} rules={table.rules} />
-          <ResourceBars sheet={mine.sheet} />
-          <LevelBar sheet={mine.sheet} rules={table.rules} />
-          {table.rules.progression ? <RaiseButton sheet={mine.sheet} rules={table.rules} raising={raising} /> : null}
-        </div>
-      ) : null}
-      <div className="status__tabs" role="tablist" aria-label="상태 패널">
-        {STATUS_TABS.map((entry) => (
+    <section className="room-tools" aria-labelledby="status-heading">
+      <h2 id="status-heading" className="visually-hidden">
+        상태
+      </h2>
+      {STATUS_TABS.map((entry) => (
+        <div key={entry.tab} className="room-tools__item">
           <button
-            key={entry.tab}
             type="button"
-            role="tab"
-            id={`status-tab-${entry.tab}`}
-            aria-selected={tab === entry.tab}
-            aria-controls="status-tabpanel"
+            id={`status-button-${entry.tab}`}
+            className="room-tools__button"
+            aria-expanded={open === entry.tab}
+            aria-controls={`status-panel-${entry.tab}`}
             aria-keyshortcuts={entry.key.toUpperCase()}
-            className="status__tab"
-            onClick={() => setTab(entry.tab)}
+            onClick={() => setOpen((current) => nextOpenTab(current, entry.tab))}
           >
-            {entry.label} <kbd>{entry.key.toUpperCase()}</kbd>
+            <span>{entry.label}</span> <kbd>{entry.key.toUpperCase()}</kbd>
           </button>
-        ))}
-      </div>
-      <div id="status-tabpanel" role="tabpanel" aria-labelledby={`status-tab-${tab}`} className="status__body">
-        {tab === 'characters' ? <CharacterCards members={table.members} rules={table.rules} myId={myId} nameOf={nameOf} /> : null}
-        {tab === 'items' ? <Inventory table={table} myId={myId} shortcuts={shortcuts} /> : null}
-        {tab === 'world' ? <WorldInfo table={table} mine={mine} shortcuts={shortcuts} /> : null}
-        {tab === 'log' ? <EventLog table={table} nameOfMember={(userId) => displayName(userId, table.members, nameOf)} /> : null}
-      </div>
+          {open === entry.tab ? (
+            <div id={`status-panel-${entry.tab}`} role="region" aria-labelledby={`status-button-${entry.tab}`} className="room-tools__panel">
+              <StatusContent tab={entry.tab} table={table} myId={myId} nameOf={nameOf} />
+            </div>
+          ) : null}
+        </div>
+      ))}
     </section>
   );
+}
+
+function StatusContent({ tab, table, myId, nameOf }: Props & { tab: StatusTab }): ReactNode {
+  if (tab === 'mine') return <MineContent table={table} myId={myId} nameOf={nameOf} />;
+  if (tab === 'items') return <ItemsContent table={table} myId={myId} />;
+  if (tab === 'world') return <WorldContent table={table} myId={myId} />;
+  return (
+    <>
+      <CharacterCards members={table.members} rules={table.rules} myId={myId} nameOf={nameOf} />
+      <EventLog table={table} nameOfMember={(userId) => displayName(userId, table.members, nameOf)} />
+    </>
+  );
+}
+
+/** 상태·장비. 앉아 있지 않거나 캐릭터를 아직 정하지 않았으면 그렇다고만 적는다 */
+function MineContent({ table, myId, nameOf }: Props) {
+  const raising = useRaise(table, myId);
+  const mine = findMine(table, myId);
+  if (!mine?.sheet) return <p className="hint">내 캐릭터가 없습니다.</p>;
+  return (
+    <>
+      <CharacterCards members={[mine]} rules={table.rules} myId={myId} nameOf={nameOf} />
+      {table.rules.progression ? <RaiseButton sheet={mine.sheet} rules={table.rules} raising={raising} /> : null}
+    </>
+  );
+}
+
+function ItemsContent({ table, myId }: { table: TableDetail; myId: string | undefined }) {
+  const shortcuts = useActionShortcuts(table, myId);
+  return <Inventory table={table} myId={myId} shortcuts={shortcuts} />;
+}
+
+function WorldContent({ table, myId }: { table: TableDetail; myId: string | undefined }) {
+  const shortcuts = useActionShortcuts(table, myId);
+  return <WorldInfo table={table} mine={findMine(table, myId)} shortcuts={shortcuts} />;
+}
+
+function findMine(table: TableDetail, myId: string | undefined): TableMember | undefined {
+  return table.members.find((member) => member.user_id === myId);
 }

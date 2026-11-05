@@ -74,7 +74,7 @@ function puts(seen: SeenRequest[]): SeenRequest[] {
 
 async function inventory() {
   const status = within(await screen.findByRole('region', { name: '상태' }));
-  await userEvent.click(status.getByRole('tab', { name: /소지품/ }));
+  await userEvent.click(status.getByRole('button', { name: /소지품·돈/ }));
   return status;
 }
 

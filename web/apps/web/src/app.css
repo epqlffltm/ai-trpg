@@ -1023,7 +1023,7 @@ a.ui-button {
   margin-bottom: var(--ui-gap);
 }
 
-/* 테이블 방(B6). 넓으면 가운데와 오른쪽(앉은 사람, 채팅), 좁으면 위아래 */
+/* 테이블 방(B6, Stitch 20번). 넓으면 왼쪽 열(창 넷과 운영) + 가운데(라운드), 맨 아래에 가로로 긴 채팅. 좁으면 가운데, 왼쪽 열, 채팅의 차례로 위아래 */
 .room__head-actions {
   display: flex;
   align-items: center;
@@ -1034,6 +1034,11 @@ a.ui-button {
   margin: -8px 0 0;
 }
 
+/* 플레이 화면이라 본문의 너비(1080px)보다 넓게 쓴다 */
+.page.room {
+  max-width: 1440px;
+}
+
 .room__body {
   display: grid;
   gap: calc(var(--ui-gap) * 1.5);
@@ -1042,8 +1047,90 @@ a.ui-button {
 
 @media (min-width: 900px) {
   .room__body {
-    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-areas:
+      'side main'
+      'chat chat';
     align-items: start;
+  }
+
+  .room__main {
+    grid-area: main;
+  }
+
+  .room__side {
+    grid-area: side;
+  }
+
+  .room__chat {
+    grid-area: chat;
+  }
+}
+
+/* 왼쪽 열의 창 넷. 단추가 세로로 서고, 누른 단추 바로 아래로 그 창이 펼쳐진다(하나만) */
+.room-tools {
+  display: grid;
+  gap: 8px;
+}
+
+.room-tools__item {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.room-tools__button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text);
+  font: inherit;
+  font-family: var(--ui-font-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.room-tools__button[aria-expanded='true'] {
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+}
+
+.room-tools__button kbd {
+  font-family: var(--ui-font-mono);
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ui-text-muted);
+}
+
+.room-tools__panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+/* 맨 아래 채팅. 이름과 말을 한 줄에, 쓰는 칸과 보내기를 한 줄에 */
+.room__chat .chat__messages {
+  max-height: 240px;
+}
+
+.room__chat .chat__message {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  align-items: baseline;
+}
+
+@media (min-width: 900px) {
+  .room__chat .chat__form {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
   }
 }
 
@@ -1298,49 +1385,7 @@ a.ui-button {
   border-top: 1px dashed var(--ui-border);
 }
 
-/* 상태 패널(B7). 위에 내 HP, 아래는 탭(캐릭터, 소지품, 퀘스트·장소) */
-.status__mine {
-  display: grid;
-  gap: 4px;
-  padding-bottom: 10px;
-  margin-bottom: 10px;
-  border-bottom: 1px solid var(--ui-border);
-}
-
-.status__tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 10px;
-}
-
-.status__tab {
-  font: inherit;
-  font-size: 0.9em;
-  padding: 4px 10px;
-  border: 1px solid var(--ui-border);
-  border-radius: 999px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.status__tab[aria-selected='true'] {
-  border-color: currentColor;
-  font-weight: 600;
-}
-
-.status__tab kbd {
-  font-size: 0.8em;
-  color: var(--ui-text-muted);
-}
-
-.status__body {
-  display: grid;
-  gap: 10px;
-}
-
-/* 일어난 일(④-2). 상태 패널의 탭. 최근 것이 위. 서술을 막는 일은 두드러진다 */
+/* 일어난 일(④-2). 왼쪽 열의 일행·기록 창. 최근 것이 위. 서술을 막는 일은 두드러진다 */
 .event-log__list {
   display: grid;
   gap: 6px;
@@ -1490,7 +1535,7 @@ a.ui-button {
   padding-left: 1.2em;
 }
 
-/* 좁은 화면의 내 HP 한 줄. 넓으면 상태 패널이 옆에 있어 숨긴다 */
+/* 좁은 화면의 내 HP 한 줄. 넓으면 왼쪽 열의 상태·장비가 있어 숨긴다 */
 .hp-strip {
   position: sticky;
   top: 0;
@@ -1590,7 +1635,7 @@ a.ui-button {
   border-top: 1px dashed var(--ui-border);
 }
 
-/* 옆 칸(340px)의 방장 패널. 고르기 칸이 긴 글로 칸을 넘지 않게 한 줄에 하나씩, 칸의 너비에 맞춘다 */
+/* 왼쪽 열(320px)의 방장 패널. 고르기 칸이 긴 글로 칸을 넘지 않게 한 줄에 하나씩, 칸의 너비에 맞춘다 */
 .room__side,
 .room-panel {
   min-width: 0;

@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/room/status/useStatusShortcuts.ts
-// 상태 패널의 단축키(C, I, J, L)를 문서 전체에서 듣는다. 고를 탭은 statusTabs.ts 의 tabForKey 가 정한다.
+// 왼쪽 열의 단축키(C, I, J, L)를 문서 전체에서 듣는다. 펼칠 창은 statusTabs.ts 의 tabForKey 가 정한다.
 // 설정(A12)에서 단축키를 끄면 듣지 않는다.
 
 import { useEffect } from 'react';

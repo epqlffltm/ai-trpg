@@ -86,7 +86,7 @@ describe('엄폐하기', () => {
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
     const status = within(await screen.findByRole('region', { name: '상태' }));
-    await userEvent.click(status.getByRole('tab', { name: /퀘스트·장소/ }));
+    await userEvent.click(status.getByRole('button', { name: /퀘스트·지도/ }));
     expect(await status.findByText(/숨을 곳: 커버 7/)).toBeInTheDocument();
     await userEvent.click(status.getByRole('button', { name: /엄폐/ }));
 

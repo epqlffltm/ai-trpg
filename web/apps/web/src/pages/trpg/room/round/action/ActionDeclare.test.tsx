@@ -101,7 +101,7 @@ describe('행동을 붙인 선언', () => {
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
     const status = within(await screen.findByRole('region', { name: '상태' }));
-    await userEvent.click(status.getByRole('tab', { name: /소지품/ }));
+    await userEvent.click(status.getByRole('button', { name: /소지품·돈/ }));
     await userEvent.click(await status.findByRole('button', { name: '약초 건네기' }));
 
     const form = await declarationForm();
@@ -123,7 +123,7 @@ describe('행동을 붙인 선언', () => {
 
     expect(await screen.findByRole('button', { name: '고치기' })).toBeInTheDocument();
     const status = within(screen.getByRole('region', { name: '상태' }));
-    await userEvent.click(status.getByRole('tab', { name: /퀘스트·장소/ }));
+    await userEvent.click(status.getByRole('button', { name: /퀘스트·지도/ }));
     await userEvent.click(await status.findByRole('button', { name: '부엌 가기' }));
 
     const form = await declarationForm();
@@ -141,7 +141,7 @@ describe('행동을 붙인 선언', () => {
     expect(form.getByText(/행동을 붙일 수 없습니다/)).toBeInTheDocument();
     expect(form.queryByLabelText('행동')).not.toBeInTheDocument();
     const status = within(screen.getByRole('region', { name: '상태' }));
-    await userEvent.click(status.getByRole('tab', { name: /소지품/ }));
+    await userEvent.click(status.getByRole('button', { name: /소지품·돈/ }));
     expect(status.getByRole('button', { name: '약초 쓰기' })).toBeDisabled();
   });
 });

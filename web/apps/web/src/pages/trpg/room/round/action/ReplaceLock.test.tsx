@@ -98,7 +98,7 @@ describe('자물쇠 바꾸기의 선언', () => {
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
     const status = within(await screen.findByRole('region', { name: '상태' }));
-    await userEvent.click(status.getByRole('tab', { name: /퀘스트·장소/ }));
+    await userEvent.click(status.getByRole('button', { name: /퀘스트·지도/ }));
     const doors = within(await status.findByRole('list', { name: '문' }));
     await userEvent.click(doors.getByRole('button', { name: '종탑 쪽 문 자물쇠 바꾸기' }));
 
