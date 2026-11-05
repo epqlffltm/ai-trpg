@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/story/StoryPersonaButton.tsx
-// 장면(D2)의 "나"(페르소나). 머리에 지금 페르소나의 이름과 "바꾸기". 창에서 내 페르소나 가운데 하나나 "페르소나 없이"를 골라 바꾼다(다음 말부터).
+// 장면(D2)의 "나"(페르소나) 바꾸기. 왼쪽 열의 페르소나·모델 창(StoryPersonaPanel)에 단추가 있다.
+// 창에서 내 페르소나 가운데 하나나 "페르소나 없이"를 골라 바꾼다(다음 말부터).
 // 같은 페르소나여도 내 목록의 판(revision)이 세션에 가져온 판보다 크면 "새 설정으로 바꾸기"를 보인다(같은 id 를 다시 보낸다).
 // 바꾸면 세션의 페르소나 칸만 바꾼다. 404 persona_not_found 면 세션은 그대로라고 알린다. 받는 중에는 막는다.
 
@@ -20,7 +21,6 @@ export function StoryPersonaButton({ session, disabled }: Props) {
   const close = useCallback(() => setOpen(false), []);
   return (
     <>
-      <p className="hint">나: {personaLabel(session.persona)}</p>
       <Button variant="quiet" disabled={disabled} onClick={() => setOpen(true)}>
         페르소나 바꾸기
       </Button>
