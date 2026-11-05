@@ -51,9 +51,12 @@ def test_every_head_matches_a_file_in_its_group(group, head):
         ('test_stream_api.py', 'realtime'),
         ('test_table_map.py', 'tables'),
         ('test_friendly_fire.py', 'combat'),
+        ('test_growth_sources.py', 'combat'),
         ('test_item_throws.py', 'items'),
-        ('test_npc_turns.py', 'items'),
+        ('test_resource_rounds.py', 'items'),
+        ('test_trap_finding.py', 'hazards'),
         ('test_route_doors.py', 'hazards'),
+        ('test_item_actions.py', 'adventure'),
         ('test_health.py', CATCH_ALL),
     ],
 )
