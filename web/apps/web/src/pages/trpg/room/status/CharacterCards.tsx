@@ -1,7 +1,8 @@
 // web/apps/web/src/pages/trpg/room/status/CharacterCards.tsx
-// 앉은 사람마다의 캐릭터(C). 이름, 사람, HP, 레벨(#286), 부상, 능력치, 떠난 캐릭터. 나를 맨 앞에 둔다.
+// 앉은 사람마다의 캐릭터(C). 이름, 사람, HP, 레벨(#286), 부상, 능력치, 장비(쓰는 쪽이 gearOf 로 넘긴다), 떠난 캐릭터. 나를 맨 앞에 둔다.
 // 앉은 사람은 서로의 시트를 본다(서버가 모두에게 준다).
 
+import type { ReactNode } from 'react';
 import type { Ruleset, TableMember } from '../../../../api/types';
 import type { NameLookup } from '../../../../hooks/usePublicNames';
 import { SheetStats } from '../character/SheetStats';
@@ -10,9 +11,16 @@ import { LevelBar } from './LevelBar';
 import { ResourceBars } from './ResourceBars';
 import { injuryName, injuryTiming, meFirst } from './statusView';
 
-type Props = { members: TableMember[]; rules: Ruleset; myId: string | undefined; nameOf: NameLookup };
+type Props = {
+  members: TableMember[];
+  rules: Ruleset;
+  myId: string | undefined;
+  nameOf: NameLookup;
+  /** 카드 안 능력치 아래에 둘 장비(#276). 상태·장비는 내 것에 벗기를, 일행·기록은 모두의 것을 읽기만 한다 */
+  gearOf?: (member: TableMember) => ReactNode;
+};
 
-export function CharacterCards({ members, rules, myId, nameOf }: Props) {
+export function CharacterCards({ members, rules, myId, nameOf, gearOf }: Props) {
   return (
     <ul className="plain-list status-cards">
       {meFirst(members, myId).map((member) => (
@@ -24,6 +32,7 @@ export function CharacterCards({ members, rules, myId, nameOf }: Props) {
             {member.user_id === myId ? ' · 나' : ''}
           </p>
           {member.sheet ? <SheetDetails member={member} rules={rules} /> : null}
+          {member.sheet && gearOf ? gearOf(member) : null}
           {member.fallen.length > 0 ? (
             <p className="hint">떠난 캐릭터: {member.fallen.map((fallen) => fallen.character_name).join(', ')}</p>
           ) : null}
