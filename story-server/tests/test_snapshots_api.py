@@ -158,7 +158,9 @@ async def test_an_answer_is_drawn_kept_and_charged(
     await finished(app)
     (snapshot,) = await listed(client, mine, conversation)
 
-    assert (response.status_code, first['status'], first['message_id']) == (202, 'drawing', answer_id)
+    # 그리는 일은 응답과 따로 돈다. 가짜 그림 provider 는 바로 끝나서, 답을 읽기 전에 다 그렸을 수도 있다
+    assert (response.status_code, first['message_id']) == (202, answer_id)
+    assert first['status'] in ('drawing', 'ready')
     assert (snapshot['status'], snapshot['code']) == ('ready', None)
     assert uuid.UUID(snapshot['image_id']) in asset.kept
     assert billing.holds[f'story:img:{snapshot["id"]}'].status == 'captured'

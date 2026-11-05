@@ -1342,6 +1342,11 @@ check_server_metrics() {
     eventually prometheus_finds 'background_jobs_finished_total{service="trpg-server", operation="charge.settle", result="success"}'
   report "TRPG 서버가 끝나지 않은 청구를 센다(narration_charges, status=capture_due)" \
     eventually prometheus_finds 'narration_charges{service="trpg-server", status="capture_due"}'
+  # 장면 그림의 청구 정리(#983)도 5초마다 돌고 바퀴마다 끝나지 않은 청구를 센다(그림이 없어도 0 을 낸다)
+  for service in trpg-server chat-server story-server; do
+    report "$service 가 끝나지 않은 장면 그림의 청구를 센다(snapshot_charges, status=capture_due)" \
+      eventually prometheus_finds "snapshot_charges{service=\"$service\", status=\"capture_due\"}"
+  done
 }
 
 # --- 대시보드(observability 프로필) ---

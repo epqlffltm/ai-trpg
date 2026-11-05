@@ -29,7 +29,7 @@
 | 공통 모양의 JSON 로그 | 여덟 서버에 구현 |
 | 민감정보를 가리는 마지막 방어선 | 여덟 서버에 구현 |
 | 백그라운드 작업의 식별자(`job_id`) | 여덟 서버 모두 구현 |
-| 메트릭 | billing-server(HTTP 셋, DB 넷, 작업 넷, 업무 다섯. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)), notification-server(Python 의 본보기, [아래](#붙인-것-알림-서버의-메트릭-python-의-본보기)), trpg-server(실시간 스트림, AI 호출, 라운드와 서술, 서술 값, [아래](#붙인-것-trpg-서버의-메트릭)), auth-server(메일, 시도 횟수 제한, 워커와 예약 명령, [아래](#붙인-것-인증-서버의-메트릭)), board-server(쓰기와 신고, 검색, [아래](#붙인-것-게시판-서버의-메트릭))에 구현. asset-server, chat-server, story-server 는 HTTP 와 DB 만 낸다(`shared/server-core`). 여덟 서버가 모두 내보낸다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
+| 메트릭 | billing-server(HTTP 셋, DB 넷, 작업 넷, 업무 다섯. 본보기, [아래](#붙인-것-결제-서버의-메트릭-본보기)), notification-server(Python 의 본보기, [아래](#붙인-것-알림-서버의-메트릭-python-의-본보기)), trpg-server(실시간 스트림, AI 호출, 라운드와 서술, 서술 값, [아래](#붙인-것-trpg-서버의-메트릭)), auth-server(메일, 시도 횟수 제한, 워커와 예약 명령, [아래](#붙인-것-인증-서버의-메트릭)), board-server(쓰기와 신고, 검색, [아래](#붙인-것-게시판-서버의-메트릭))에 구현. asset-server 는 HTTP 와 DB 만 낸다(`shared/server-core`). chat-server, story-server 는 그에 더해 결제 서버를 부른 수(`billing_calls_total`)와 끝나지 않은 장면 그림의 청구(`snapshot_charges`)를 낸다. 여덟 서버가 모두 내보낸다. 보내는 길과 저장소는 [아래](#2-메트릭--서버는-otlp-로-밀고-인프라는-alloy-가-긁는다) |
 | DB 와 Redis 의 메트릭 | Alloy 안의 exporter 가 긁는다([아래](#붙인-것-db-와-redis)). DB 에는 통계만 읽는 계정(`monitor`)으로 붙는다 |
 | 대시보드 | 여덟 서버, postgres, redis(`docker/grafana/dashboards/`, [아래](#대시보드)). 서버에 메트릭을 붙이는 PR 이 그 서버의 대시보드를 함께 더한다 |
 | 경보 | 수집 쪽, DB 와 Redis, 여덟 서버의 규칙(`docker/prometheus/rules/`)과 Alertmanager(Discord, Slack, Telegram, 메일, [아래](#경보)). 서버에 메트릭을 붙이는 PR 이 그 서버의 규칙을 함께 더한다 |
@@ -653,7 +653,7 @@ label 의 값의 종류는 **정해져 있고 적어야** 한다. label 값의 �
 | --- | --- | --- | --- |
 | `billing_calls_total` | counter | `operation`(`hold`, `capture`, `release`, `extend`), `outcome`(`held`, `short`, `gold_required`, `done`, `missing`, `ended`, `unavailable`, `rejected`) | 게임 서버와 chat 서버가 결제 서버를 부른 수(서버마다 `service` 로 나뉜다). 걸기는 `held`·`short`·`gold_required`, 나머지 셋이 된 것은 `done` 이다. 연장의 `missing`·`ended` 는 정리 작업이 새 이름표로 다시 건다. `unavailable` 은 답을 받지 못한 것(다시 부른다), `rejected` 는 받아들이지 않은 것(그 청구는 `failed`, 사람이 본다) |
 | `narration_charges` | gauge | `status`(`pending`, `held`, `short`, `capture_due`, `release_due`) | 끝나지 않은 청구의 수. 청구 정리(5초마다)가 바퀴의 끝에 센다. 없는 상태도 0 이다. 서버들이 같은 수를 내므로 `max` 로 본다. `capture_due` 가 쌓이면 결제 서버가 죽어 있다. `failed` 는 세지 않는다(한 번 되면 남아 쌓이고 색인이 없다). `failed` 가 되는 것은 `billing_calls_total` 의 `rejected` 로 본다 |
-| `snapshot_charges` | gauge | `status`(`pending`, `held`, `capture_due`, `release_due`) | 끝나지 않은 장면 그림(#983)의 청구의 수. 장면 그림의 청구 정리(5초마다)가 바퀴의 끝에 센다. 없는 상태도 0 이다. 서버들이 같은 수를 내므로 `max` 로 본다. `capture_due` 가 쌓이면 결제 서버가 죽어 있다. `held` 가 오래 남으면 그리는 일이 멈춘 것이다(10분이 지나면 정리 작업이 실패로 적고 돌려준다). 끝난 것(`captured`, `released`, `declined`, `failed`)은 세지 않는다 |
+| `snapshot_charges` | gauge | `status`(`pending`, `held`, `capture_due`, `release_due`) | 끝나지 않은 장면 그림(#983)의 청구의 수. 게임 서버와 chat·story 서버가 같은 이름으로 낸다(서버마다 `service` 로 나뉜다). 장면 그림의 청구 정리(5초마다)가 바퀴의 끝에 센다. 없는 상태도 0 이다. 서버들이 같은 수를 내므로 `max` 로 본다. `capture_due` 가 쌓이면 결제 서버가 죽어 있다. `held` 가 오래 남으면 그리는 일이 멈춘 것이다(10분이 지나면 정리 작업이 실패로 적고 돌려준다). 끝난 것(`captured`, `released`, `declined`, `failed`)은 세지 않는다 |
 
 **메일과 인증 (auth)**
 
@@ -902,7 +902,7 @@ Grafana 가 뜰 때 `docker/grafana/dashboards/` 의 JSON 을 읽어 폴더 `ai-
 `board-server` 는 한눈에(DB, 5xx 비율, 횟수 제한에 걸린 쓰기, 멈춘 검색), 요청, DB 연결, 쓰기와 신고, 검색, 알림 보내기의 여섯 줄이다.
 `billing-server` 의 대시보드는 한눈에(DB, 5xx 비율, 결과를 모르는 결제 대행사 호출, 되돌린 원장의 일), 요청, DB 연결, 결제, 원장, 정리 작업과 대사의 여섯 줄이다.
 `postgres` 는 한눈에(DB, 연결 / 최대, DB 의 크기, 교착), 연결과 트랜잭션, 읽기와 쓰기(캐시 적중률, 행, 임시 파일, 스키마마다의 크기), 표(큰 표, 죽은 행이 많은 표)다.
-`asset-server`, `chat-server`, `story-server` 는 한눈에(DB, 5xx 비율), 요청, DB 연결의 세 줄이다. 업무의 메트릭이 붙으면 그 줄을 더한다.
+`asset-server` 는 한눈에(DB, 5xx 비율), 요청, DB 연결의 세 줄이다. 업무의 메트릭이 붙으면 그 줄을 더한다. `chat-server`, `story-server` 는 그 셋에 작업(끝난 작업, 걸린 시간, 끝나지 않은 장면 그림의 청구)의 줄이 더 있다.
 `redis` 는 한눈에(Redis, 메모리, 연결된 클라이언트, AOF 의 마지막 쓰기), 명령(명령마다, 키 적중률, 오류와 거절), 메모리와 키(사라진 키, 내쫓긴 키)다.
 대시보드의 규칙은 `.github/scripts/dashboard_scope.py` 가 보고, 그 규칙 자체는 `test_dashboard_scope.py` 가 본다.
 CI(`stack`)는 거기에 더해 Grafana 가 파일의 대시보드를 모두 읽었는지, 모든 Prometheus 쿼리가 Grafana 의 데이터 소스 프록시를 거쳐 오류 없이 도는지 본다.
@@ -1099,7 +1099,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 - **끝나지 않은 청구를 세는 쿼리는 두 부분 색인만 읽는다.** 조건을 색인의 조건 둘(`DUE_STATUSES` 또는 `OPEN_STATUSES`)로 나눠 적어야 PostgreSQL 이 둘을 합쳐 읽는다(BitmapOr). 다섯 상태를 `IN` 하나로 적으면 표 전체를 읽는다. 끝난 청구는 쌓이기만 하므로 5초마다 표 전체를 읽게 둘 수 없다. 테스트가 계획을 본다.
 - **서버가 여럿이면 `narration_charges` 를 모두 같은 수로 낸다.** 대시보드와 경보는 `max` 로 본다. 더하면(`sum`) 서버의 수만큼 부풀려진다.
 - **라운드는 커밋한 뒤에 센다.** 결제 서버의 규칙과 같다. 서술은 작업 안에서 끝난 모양(마무리, 실패를 적음)으로 센다.
-- **CI.** `METRIC_SERVERS` 에 trpg 를 더했다. 청구 정리의 작업 메트릭(`charge.settle`)과 끝나지 않은 청구(`narration_charges`, 청구가 없어 0)가 Prometheus 에 있는지도 본다. 서술과 AI 호출은 CI 에 모델이 없어 값이 생기지 않는다(대시보드의 쿼리는 오류 없이 도는지만 본다).
+- **CI.** `METRIC_SERVERS` 에 trpg 를 더했다. 청구 정리의 작업 메트릭(`charge.settle`)과 끝나지 않은 청구(`narration_charges`, 청구가 없어 0)가 Prometheus 에 있는지도 본다. 장면 그림의 끝나지 않은 청구(`snapshot_charges`)는 게임·chat·story 서버 셋 모두 본다(그림이 없어 0). 서술과 AI 호출은 CI 에 모델이 없어 값이 생기지 않는다(대시보드의 쿼리는 오류 없이 도는지만 본다).
 
 #### 붙인 것 (인증 서버의 메트릭)
 
