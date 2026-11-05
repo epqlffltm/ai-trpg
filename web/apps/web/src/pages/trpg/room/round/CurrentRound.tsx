@@ -1,12 +1,13 @@
 // web/apps/web/src/pages/trpg/room/round/CurrentRound.tsx
 // 지금 라운드. 장면(GM 의 서술)을 보이고, 상태에 따라 아래가 다르다.
-//   - 선언을 받는 중: 라운드 줄(마감까지 남은 시간, 아직 내지 않은 사람), 내 선언, 방장의 닫기와 바로 앞 라운드 되돌리기(#288)
+//   - 선언을 받는 중: 라운드 줄(Stitch 20번: 마감 시각과 남은 시간, 아직 내지 않은 사람), 내 선언, 방장의 닫기와 바로 앞 라운드 되돌리기(#288)
 //   - 결과를 서술하는 중: 모두의 선언과 판정 결과를 먼저 보이고, 쓰이는 서술을 미리 보인다. 실패하면 방장이 다시 맡긴다
 //   - 끝난 테이블의 마지막 라운드: 선언과 결과만
 // 장면 아래에 그 라운드의 장면 그림(#983)을 둔다.
 // 다음 라운드가 열린 것은 스트림의 이벤트로 알고 다시 읽는다.
 
 import type { Round, TableDetail } from '../../../../api/types';
+import { formatTime } from '../../../../format/dateTime';
 import { formatRemaining } from '../../../../hooks/useCountdown';
 import { useNow } from '../../../../hooks/useNow';
 import { RoundSnapshots } from '../snapshots/RoundSnapshots';
@@ -61,15 +62,20 @@ export function CurrentRound({ table, round, myId, preview, nameOfMember, snapsh
   );
 }
 
-/** 마감까지 남은 시간. 마감이 없으면 보이지 않는다. 지나면 서버가 곧 닫는다 */
+/** 마감 시각과 남은 시간. 마감이 없으면 보이지 않는다. 지나면 서버가 곧 닫는다 */
 function RoundDeadline({ deadlineAt }: { deadlineAt: string | null }) {
   const now = useNow(1000, deadlineAt !== null);
   const left = remainingSeconds(deadlineAt, now);
-  if (left === null) return null;
-  return <p className="round__deadline">{left > 0 ? `마감까지 ${formatRemaining(left)}` : '마감 시각이 지났습니다. 곧 닫힙니다.'}</p>;
+  if (left === null || deadlineAt === null) return null;
+  return (
+    <p className="round__deadline">
+      <span className="round__deadline-at">마감 {formatTime(deadlineAt)}</span>{' '}
+      <span className="round__left">{left > 0 ? `남은 시간 ${formatRemaining(left)}` : '마감 시각이 지났습니다. 곧 닫힙니다.'}</span>
+    </p>
+  );
 }
 
 function WaitingFor({ ids, nameOfMember }: { ids: string[]; nameOfMember: (userId: string) => string }) {
   if (ids.length === 0) return null;
-  return <p className="hint">아직 선언하지 않은 사람: {ids.map(nameOfMember).join(', ')}</p>;
+  return <p className="round__waiting">아직 선언하지 않은 사람: {ids.map(nameOfMember).join(', ')}</p>;
 }

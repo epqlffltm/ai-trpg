@@ -13,7 +13,7 @@ import { declarationHints, initialDeclarationDraft, toDeclarationUpdate } from '
 import { applyPreview, type NarrationPreview } from './preview';
 import { describeCloseProblem, describeDeclarationProblem } from './roundProblem';
 import { currentRoundQuery, replaceCurrentRound } from './roundQueries';
-import { actionLabel, deathSaveLine, myDeclaration, outcomeLine, outcomeTone, pastRounds, remainingSeconds } from './roundView';
+import { actionLabel, checkOutcome, deathSaveLine, myDeclaration, outcomeLine, outcomeTone, pastRounds, remainingSeconds } from './roundView';
 
 const rules = RULES as unknown as Ruleset;
 const TABLE = tableDetail('t', {
@@ -89,6 +89,18 @@ describe('roundView', () => {
     const thrown = { ...hit, item_throw: { name: '화염병', thrown: true, reason: null, remaining: 1 } };
     expect(outcomeLine(thrown as unknown as Declaration['outcome'], rules)).toBe('눈 13, 보정 +2, 합 15 / 목표 15 · 성공 · 문지기 피해 4');
     expect(outcomeLine(null, rules)).toBeNull();
+  });
+
+  it('판정 결과 줄은 눈의 줄, 성공, 바뀐 것으로 나눈다. 판정하지 않은 결과는 나누지 않는다', () => {
+    const hit = { roll: 13, modifier: -1, total: 12, target: 15, success: false, hindrance: { disadvantage: true, injuries: [], penalty: 1, rolls: [13, 4] }, npc_effect: { name: '문지기', kind: 'damage', amount: 4 } };
+    expect(checkOutcome(hit as unknown as Declaration['outcome'], rules)).toEqual({ dice: '눈 13, 보정 -1, 합 12 / 목표 15 · 불리함', success: false, effects: ['문지기 피해 4'] });
+    const thrown = { ...hit, item_throw: { name: '화염병', thrown: true, reason: null, remaining: 1 } };
+    expect(checkOutcome(thrown as unknown as Declaration['outcome'], rules)?.dice).toBe('눈 13, 보정 -1, 합 12 / 목표 15 · 불리함');
+    const notThrown = { item_throw: { name: '화염병', thrown: false, reason: 'not_held', remaining: 0 } };
+    expect(checkOutcome(notThrown as unknown as Declaration['outcome'], rules)).toBeNull();
+    expect(checkOutcome({ turn_lost: 'downed' } as unknown as Declaration['outcome'], rules)).toBeNull();
+    expect(checkOutcome({ ...hit, target_gone: { name: '쥐', reason: 'dead' } } as unknown as Declaration['outcome'], rules)).toBeNull();
+    expect(checkOutcome(null, rules)).toBeNull();
   });
 
   it('판정이 아닌 행동의 결과도 한 줄로', () => {

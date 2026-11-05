@@ -1532,8 +1532,8 @@ a.ui-button {
 
 .declaration {
   display: grid;
-  gap: 2px;
-  padding: 8px 12px;
+  gap: 6px;
+  padding: 10px 14px;
   border: 1px solid var(--ui-border);
   border-left: 3px solid var(--ui-border-strong);
   border-radius: var(--ui-radius);
@@ -1548,15 +1548,63 @@ a.ui-button {
   border-left-color: var(--ui-seal);
 }
 
+/* 판정 결과 줄의 머리. 이름과 행동, 오른쪽 끝에 판정 성공·실패의 작은 표 */
+.declaration__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+
 .declaration__name {
   font-family: var(--ui-font-serif);
+  font-size: 1.05rem;
   font-weight: 700;
 }
 
+.declaration__verdict {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-border-strong);
+  color: var(--ui-surface);
+  font-size: 0.78em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.declaration--success .declaration__verdict {
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+}
+
+.declaration--failure .declaration__verdict {
+  background: var(--ui-seal);
+  color: var(--ui-seal-text);
+}
+
+/* 눈·보정·합·목표의 한 줄. 고정폭 숫자를 옅은 면 위에 */
 .declaration__outcome {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-subtle);
   font-family: var(--ui-font-mono);
   font-size: 0.88em;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* 판정이 바꾼 것(공격의 줄이 맨 앞). 왼쪽에 가는 띠 */
+.declaration__effect {
+  padding-left: 8px;
+  border-left: 2px solid var(--ui-accent);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+.declaration--failure .declaration__effect {
+  border-left-color: var(--ui-seal);
 }
 
 .declaration--system {
@@ -1567,7 +1615,7 @@ a.ui-button {
   font-size: 0.9em;
 }
 
-/* 지금 라운드의 줄. 마감까지 남은 시간과 아직 선언하지 않은 사람 */
+/* 지금 라운드의 줄(Stitch 20번). 마감 시각(인주색)과 남은 시간(고정폭 상자), 오른쪽에 아직 선언하지 않은 사람 */
 .round__bar {
   display: flex;
   flex-wrap: wrap;
@@ -1588,10 +1636,33 @@ a.ui-button {
 }
 
 .round__deadline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
   margin: 0;
+}
+
+.round__deadline-at {
+  color: var(--ui-seal);
+  font-family: var(--ui-font-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.round__left {
+  padding: 1px 8px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
   font-family: var(--ui-font-mono);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.round__bar .round__waiting {
+  margin-left: auto;
+  color: var(--ui-text-muted);
+  font-size: 0.92em;
 }
 
 .my-declaration {
