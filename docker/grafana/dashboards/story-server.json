@@ -693,6 +693,64 @@
           "instant": false
         }
       ]
+    },
+    {
+      "type": "timeseries",
+      "id": 17,
+      "title": "끝나지 않은 장면 그림의 청구",
+      "description": "상태마다 장면 그림(#983)의 청구의 수. 서버들이 같은 수를 내므로 큰 값을 쓴다. capture_due 가 쌓이면 결제 서버가 죽어 있고, held 가 오래 남으면 그리는 일이 멈춘 것이다(10분이 지나면 정리 작업이 돌려준다)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (status) (snapshot_charges{service=\"story-server\"})",
+          "legendFormat": "{{status}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ]
     }
   ]
 }
