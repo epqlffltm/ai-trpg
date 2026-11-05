@@ -7,16 +7,21 @@
 
 import type { CapacitorConfig } from '@capacitor/cli';
 
+const apiOrigin = process.env.APP_API_ORIGIN ?? '';
+
 const config: CapacitorConfig = {
   appId: 'dev.aitrpg.app',
   appName: '이매망량의 서재',
   webDir: '../web/apps/web/dist',
   android: {
-    // 페이지의 출처는 https://localhost 다(프록시가 이 출처에만 CORS 를 연다, 루트 README)
+    // 페이지의 출처는 https://localhost 다(프록시가 이 출처에만 CORS 를 연다, 루트 README).
+    // PC 의 compose 에 붙일 때(http://localhost:8080)만 HTTPS 의 페이지가 HTTP 를 부르는 것을 연다.
+    // 평문 자체는 디버그 빌드만 localhost 에 열려 있다(src/debug/res/xml/network_security_config.xml)
+    allowMixedContent: apiOrigin.startsWith('http://'),
   },
   plugins: {
     AppAuth: {
-      apiOrigin: process.env.APP_API_ORIGIN ?? '',
+      apiOrigin,
     },
   },
 };
