@@ -11,6 +11,9 @@
     3. draw_snapshot: 그림을 만들고 누른 사람의 그림으로 asset 서버에 맡긴다.
        됐으면 확정할 것, 아니면 돌려줄 것으로 적는다
     4. settle_snapshot: 결제 서버에 확정이나 반환을 맡긴다. 못 했으면 정리 작업(app/snapshots/settler.py)이 마저 한다
+  지우기
+    - delete_snapshot: 그린 사람이 자기 그림 한 장을 지운다. asset 의 그림을 먼저, 기록을 나중에 지운다.
+      돈은 돌려주지 않는다
   보기
     - list_snapshots: 테이블의 그림들. 앉은 사람 모두가 본다(누가 그렸든)
     - snapshot_image: 그림의 바이트. asset 서버에서 서명만으로 받아 대신 내준다(앉은 사람만)
@@ -77,6 +80,10 @@ class SnapshotBusyError(Exception):
 
 class SnapshotNotFoundError(Exception):
     """그림이 없다(다른 테이블의 것, 아직 다 그리지 않은 것, asset 에서 지운 것)."""
+
+
+class SnapshotSettlingError(Exception):
+    """청구를 정리하는 중이라 지우지 못한다(정리 작업이 곧 끝낸다)."""
 
 
 class SnapshotDeclinedError(Exception):
@@ -381,3 +388,56 @@ async def snapshot_image(
         return await asset.fetch_kept(image_id)
     except AssetNotFoundError as error:
         raise SnapshotNotFoundError from error
+
+
+# 청구가 끝난 상태. 이 상태의 그림만 지운다(끝나지 않은 청구의 기록을 지우면 정리 작업이 맡기지 못한다)
+SETTLED_STATUSES = frozenset(
+    {SnapshotBilling.CAPTURED, SnapshotBilling.RELEASED, SnapshotBilling.DECLINED, SnapshotBilling.FAILED}
+)
+
+
+def require_removable(snapshot: TableSnapshot) -> None:
+    """지울 수 있는 그림인지 본다. 그리는 중이면 SnapshotBusyError, 청구를 정리하는 중이면 SnapshotSettlingError."""
+    if snapshot.outcome is None:
+        raise SnapshotBusyError
+    if snapshot.billing_status not in SETTLED_STATUSES:
+        raise SnapshotSettlingError
+
+
+async def find_removable(
+    session_factory: async_sessionmaker[AsyncSession], user_id: uuid.UUID, table_id: uuid.UUID, snapshot_id: uuid.UUID
+) -> TableSnapshot:
+    """
+    지울 그림 한 장. 앉지 않은 테이블이면 TableNotFoundError.
+    그 테이블의 그림이 아니거나 남이 그린 것이면 SnapshotNotFoundError(남의 그림은 지우지 못한다).
+    지울 수 없으면 require_removable 의 오류.
+    """
+    async with session_factory() as session:
+        table = await get_table(session, user_id, table_id)
+        snapshot = await repository.find_in_table(session, table.id, snapshot_id)
+    if snapshot is None or snapshot.owner_id != user_id:
+        raise SnapshotNotFoundError
+    require_removable(snapshot)
+    return snapshot
+
+
+async def delete_snapshot(
+    session_factory: async_sessionmaker[AsyncSession],
+    asset: AssetClient,
+    user_id: uuid.UUID,
+    token: str,
+    table_id: uuid.UUID,
+    snapshot_id: uuid.UUID,
+) -> None:
+    """
+    내 그림 한 장을 지운다. asset 의 그림을 먼저 지우고(그린 사람의 토큰으로) 기록을 지운 뒤 테이블에 알린다.
+    돈은 돌려주지 않는다(이미 그린 그림이다). asset 을 부르는 동안 DB 의 연결을 쥐지 않는다.
+    asset 이 안 되면 AssetUnavailableError 이고 기록은 남는다(다시 지우면 asset 은 없는 그림도 204 로 답한다).
+    """
+    snapshot = await find_removable(session_factory, user_id, table_id, snapshot_id)
+    if snapshot.image_id is not None:
+        await asset.discard_image(token, snapshot.image_id)
+    async with session_factory() as session:
+        if await repository.remove_settled(session, snapshot.id, SETTLED_STATUSES):
+            await announce(session, snapshot.table_id)
+        await session.commit()

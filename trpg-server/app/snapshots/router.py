@@ -9,6 +9,8 @@
         그 테이블의 그림들(만든 차례). 그리는 중이면 다시 읽는다
     GET  /api/v1/game/tables/{table_id}/snapshots/{id}/image
         그림의 바이트. 이 서버가 asset 서버에서 받아 대신 내준다
+    DELETE /api/v1/game/tables/{table_id}/snapshots/{id}
+        내 그림 한 장을 지운다(asset 의 그림까지). 204. 돈은 돌려주지 않는다
     GET  /api/v1/game/snapshots/price
         장면 그림 한 장의 값과 그릴 수 있는지
 
@@ -17,7 +19,8 @@
 
   - 404: 앉지 않은 테이블이다, 라운드가 없다. snapshot_not_found: 그림이 없다(다른 테이블의 것, 다 그리지 않은 것)
   - 422 not_drawable: 장면의 글자가 없는 라운드다
-  - 409 snapshot_in_progress: 그 테이블에서 다른 그림을 그리는 중이다
+  - 409 snapshot_in_progress: 그 테이블에서 다른 그림을 그리는 중이다(지울 때는 그 그림을 아직 그리는 중이다).
+    snapshot_settling: 청구를 정리하는 중이라 아직 지우지 못한다
   - 402 credit_short, gold_required: 크레딧이 모자란다
   - 503 snapshot_unavailable: 장면 그림을 만들지 않는 서버이거나 가격표에 없다.
     billing_unavailable·asset_unavailable: 잠시 뒤에 다시
@@ -44,6 +47,7 @@ from app.snapshots.service import (
     SnapshotBusyError,
     SnapshotDeclinedError,
     SnapshotNotFoundError,
+    SnapshotSettlingError,
     SnapshotStart,
     SnapshotUnavailableError,
 )
@@ -133,6 +137,15 @@ async def read_image(table_id: uuid.UUID, snapshot_id: uuid.UUID, user: CurrentU
     return Response(content=image.data, media_type=image.mime_type, headers=headers)
 
 
+@router.delete('/snapshots/{snapshot_id}', status_code=status.HTTP_204_NO_CONTENT)
+async def delete_snapshot(
+    table_id: uuid.UUID, snapshot_id: uuid.UUID, user: CurrentUser, token: Token, request: Request
+) -> None:
+    """내 그림 한 장을 지운다. 남의 그림은 404 다. 그리는 중이거나 청구를 정리하는 중이면 409 다."""
+    state = request.app.state
+    await service.delete_snapshot(state.session_factory, state.asset, user.user_id, token, table_id, snapshot_id)
+
+
 @price_router.get('/price', response_model=SnapshotPriceOut, status_code=status.HTTP_200_OK)
 async def read_price(user: CurrentUser, request: Request, prices: Prices, now: Now) -> SnapshotPriceOut:
     """장면 그림 한 장의 값. 가격 목록을 받지 못했고 받아 둔 것도 없으면 503 prices_unavailable 이다."""
@@ -193,5 +206,16 @@ async def handle_asset_unavailable(request: Request, error: Exception) -> JSONRe
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content={'detail': '지금은 그림을 받을 수 없습니다. 잠시 후 다시 시도해 주세요.', 'code': 'asset_unavailable'},
+        headers={'Retry-After': str(RETRY_AFTER_SECONDS)},
+    )
+
+
+async def handle_settling(request: Request, error: SnapshotSettlingError) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={
+            'detail': '이 그림의 청구를 정리하는 중입니다. 잠시 후 다시 시도해 주세요.',
+            'code': 'snapshot_settling',
+        },
         headers={'Retry-After': str(RETRY_AFTER_SECONDS)},
     )

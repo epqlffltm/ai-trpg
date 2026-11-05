@@ -258,6 +258,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | POST | `/api/v1/game/tables/{id}/rounds/{number}/snapshot` | 그 라운드의 장면을 그림 한 장으로 그리기 시작한다(#983). 202. 앉은 사람 누구나. 누른 사람이 낸다([장면 그림](#장면-그림)) | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/snapshots` | 그 테이블의 장면 그림들(`[{"id", "round_number", "status", "by_me", "code", "created_at"}]`). 만든 차례. 앉은 사람만 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/snapshots/{snapshot_id}/image` | 장면 그림의 바이트. 이 서버가 asset 서버에서 받아 대신 내준다. 앉은 사람만 | access 토큰 |
+| DELETE | `/api/v1/game/tables/{id}/snapshots/{snapshot_id}` | 내가 그린 장면 그림 한 장 지우기. 204. asset 의 그림까지 지운다. 돈은 돌려주지 않는다. 남의 그림은 404, 그리는 중이거나 청구를 정리하는 중이면 409 | access 토큰 |
 | GET | `/api/v1/game/snapshots/price` | 장면 그림 한 장의 값과 그릴 수 있는지(`available`, `credits`, `tier`, `promo`) | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/rounds/current/declaration` | 선언 내기. 다시 내면 바뀐다. `action` 으로 행동(판정)을 하나 붙일 수 있다. 모두 냈으면 라운드가 닫기 시작한다(`closing`). 다음 라운드는 스트림으로 온다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/rounds/current/close` | 라운드 닫기. 202. 방장만. 선언을 기다리지 않고 넘어간다. 오래 멈춘 라운드에 다시 부르면 서술을 다시 맡긴다 | access 토큰 |
@@ -2810,6 +2811,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **알림.** 그리기 시작(홀드가 걸림)과 끝(다 그림, 실패, 정리 작업이 돌려준 것)을 앉은 사람 모두의 스트림에 `scene_snapshot` 으로 알린다. 내용을 싣지 않아 놓쳐도 다시 읽으면 된다. 청구의 확정·반환은 알리지 않는다.
 - **보기.** 앉은 사람 모두가 목록에서 보고, 그림의 바이트는 이 서버가 asset 서버에서 서명만으로 받아 대신 내준다(`GET /api/v1/asset/service/trpg/images/{id}/kept`). asset 서버는 이 서버가 맡긴 그림만 내준다. 실패의 까닭(`code`)은 누른 사람에게만 싣는다.
 - **남은 것.** 서버가 꺼져 그리다 만 것은 정리 작업(`app/snapshots/settler.py`)이 실패로 적고 돌려준다(10분이 지나면 `abandoned`). 확정이나 반환을 못 했으면 같은 작업이 5초, 10초 … 5분마다 다시 맡긴다.
+- **지우기.** 그린 사람만 자기 그림을 지운다(`DELETE .../snapshots/{snapshot_id}`, 204). asset 의 그림을 먼저(그린 사람의 토큰으로), 기록을 나중에 지우고 테이블에 `scene_snapshot` 을 알린다. 돈은 돌려주지 않는다. 남의 그림은 404 `snapshot_not_found` 다. 그리는 중이면 409 `snapshot_in_progress`, 청구를 정리하는 중(확정·반환할 차례)이면 409 `snapshot_settling` 이다. asset 이 안 되면 503 `asset_unavailable` 이고 기록은 남아 다시 지울 수 있다.
 - **실패.** 402 `credit_short`·`gold_required`, 422 `not_drawable`(장면의 글자가 없다), 503 `snapshot_unavailable`(그리지 않는 서버이거나 팔지 않는다)·`billing_unavailable`·`asset_unavailable`, 404(앉지 않은 테이블, 없는 라운드, `snapshot_not_found`).
 
 | 환경 변수 | 기본값 | 설명 |
@@ -2823,7 +2825,8 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 | `ASSET_TIMEOUT_SECONDS` | `10` | asset 서버를 한 번 부르는 시간의 상한(초, 60 까지) |
 
 **알려진 한계**
-- 그림을 지우는 길은 아직 없다. 테이블을 지우면 기록의 테이블 칸만 비고 asset 서버의 그림은 남는다(그린 사람의 그림이다).
+- 테이블을 지우면 기록의 테이블 칸만 비고 asset 서버의 그림은 남는다(그린 사람의 그림이다). 그 뒤로는 테이블이 없어 지우는 주소로 닿지 못한다.
+- 테이블을 나간 사람은 그 테이블의 주소에 닿지 못해 자기 그림도 지우지 못한다.
 - 그리는 일은 이 서버 프로세스 안에서 돈다. 그리는 도중에 서버가 꺼지면 그 한 장은 실패로 돌려준다.
 
 ## 모델 목록

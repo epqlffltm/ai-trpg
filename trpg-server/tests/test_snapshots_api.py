@@ -16,6 +16,8 @@
   - 정리 작업은 그리는 도중에 오래 남은 것을 실패로 적고 돌려준다
   - 그리기 시작과 끝은 앉은 사람 모두의 스트림에 scene_snapshot 으로 알린다(그린 사람에게도).
     다른 테이블에는 가지 않는다
+  - 그린 사람만 자기 그림을 지운다(asset 의 그림까지). 돈은 돌려주지 않는다. 남의 그림은 404 다.
+    그리는 중이거나 청구를 정리하는 중이면 409, asset 이 죽었으면 503 이고 기록은 남는다. 지우면 테이블에 알린다
 """
 
 import asyncio
@@ -410,5 +412,134 @@ async def test_the_settler_announces_a_drawing_it_gives_back(app: FastAPI, clien
     settler = SnapshotSettler(app.state.session_factory, lambda: app.state.billing, clock=lambda: later)
 
     await settler.tick()
+
+    assert len(await snapshot_frames_of(friends)) == 1
+
+
+# --- 지우기 ---
+
+
+def delete_url(table: dict, snapshot_id: str) -> str:
+    return table_url(table, f'/snapshots/{snapshot_id}')
+
+
+async def drawn_by(app: FastAPI, client: AsyncClient, headers: dict[str, str], table: dict) -> dict:
+    """다 그린 그림 한 장."""
+    started = await draw(client, headers, table)
+    await drawn(app)
+    return started
+
+
+async def stored(app: FastAPI, snapshot_id: str) -> TableSnapshot | None:
+    async with app.state.session_factory() as session:
+        return await session.get(TableSnapshot, uuid.UUID(snapshot_id))
+
+
+@pytest.mark.usefixtures('provider')
+async def test_the_drawer_deletes_a_drawing_with_its_image(
+    app: FastAPI, client: AsyncClient, me, friend, asset: FakeAsset, billing: FakeBillingServer
+):
+    table = await start_duo(client, me, friend)
+    started = await drawn_by(app, client, friend, table)
+    (image_id,) = asset.kept
+
+    response = await client.delete(delete_url(table, started['id']), headers=friend)
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT, response.text
+    assert asset.discarded == [image_id]
+    assert await listed(client, me, table) == []
+    # 이미 그린 그림이다. 돌려주지 않는다
+    assert holds_of(billing, FRIEND) == ['captured']
+    assert billing.balance(FRIEND) == CREDITS - PRICE
+
+
+@pytest.mark.usefixtures('provider', 'billing')
+async def test_someone_elses_drawing_cannot_be_deleted(
+    app: FastAPI, client: AsyncClient, me, friend, stranger, asset: FakeAsset
+):
+    table = await start_duo(client, me, friend)
+    started = await drawn_by(app, client, friend, table)
+
+    by_me = await client.delete(delete_url(table, started['id']), headers=me)
+    by_stranger = await client.delete(delete_url(table, started['id']), headers=stranger)
+
+    assert (by_me.status_code, by_me.json()['code']) == (status.HTTP_404_NOT_FOUND, 'snapshot_not_found')
+    assert by_stranger.status_code == status.HTTP_404_NOT_FOUND
+    assert asset.discarded == []
+    assert [s['id'] for s in await listed(client, me, table)] == [started['id']]
+
+
+@pytest.mark.usefixtures('asset', 'billing')
+async def test_a_drawing_in_progress_cannot_be_deleted(app: FastAPI, client: AsyncClient, me, friend):
+    gated = GatedProvider()
+    app.state.image_provider = gated
+    table = await start_duo(client, me, friend)
+    started = await draw(client, me, table)
+
+    response = await client.delete(delete_url(table, started['id']), headers=me)
+    gated.gate.set()
+    await drawn(app)
+
+    assert (response.status_code, response.json()['code']) == (status.HTTP_409_CONFLICT, 'snapshot_in_progress')
+    assert await stored(app, started['id']) is not None
+
+
+async def test_a_drawing_still_settling_cannot_be_deleted(app: FastAPI, client: AsyncClient, me, friend):
+    table = await start_duo(client, me, friend)
+    snapshot = service.new_snapshot(uuid.UUID(table['id']), 1, ME, app.state.settings.snapshot_model)
+    snapshot.billing_status = SnapshotBilling.CAPTURE_DUE
+    snapshot.outcome = SnapshotOutcome.READY
+    snapshot.image_id = uuid.uuid4()
+    async with app.state.session_factory() as session:
+        session.add(snapshot)
+        await session.commit()
+
+    response = await client.delete(delete_url(table, str(snapshot.id)), headers=me)
+
+    assert (response.status_code, response.json()['code']) == (status.HTTP_409_CONFLICT, 'snapshot_settling')
+    assert await stored(app, str(snapshot.id)) is not None
+
+
+@pytest.mark.usefixtures('provider', 'billing')
+async def test_a_dead_asset_server_keeps_the_record_to_try_again(
+    app: FastAPI, client: AsyncClient, me, friend, asset: FakeAsset
+):
+    table = await start_duo(client, me, friend)
+    started = await drawn_by(app, client, me, table)
+    asset.down = True
+
+    failed = await client.delete(delete_url(table, started['id']), headers=me)
+    asset.down = False
+    retried = await client.delete(delete_url(table, started['id']), headers=me)
+
+    assert (failed.status_code, failed.json()['code']) == (status.HTTP_503_SERVICE_UNAVAILABLE, 'asset_unavailable')
+    assert retried.status_code == status.HTTP_204_NO_CONTENT
+    assert await stored(app, started['id']) is None
+
+
+@pytest.mark.usefixtures('provider', 'asset')
+async def test_a_failure_without_an_image_is_deleted_without_asking_the_asset_server(
+    app: FastAPI, client: AsyncClient, me, friend, asset: FakeAsset, billing: FakeBillingServer
+):
+    billing.balances[ME] = PRICE - 1
+    table = await start_duo(client, me, friend)
+    await client.post(snapshot_url(table), headers=me)
+    (failed,) = await listed(client, me, table)
+
+    response = await client.delete(delete_url(table, failed['id']), headers=me)
+
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    assert asset.discarded == []
+    assert await listed(client, me, table) == []
+
+
+@pytest.mark.usefixtures('provider', 'asset', 'billing')
+async def test_deleting_is_announced_to_the_table(app: FastAPI, client: AsyncClient, me, friend, connect):
+    table = await start_duo(client, me, friend)
+    started = await drawn_by(app, client, me, table)
+    friends = connect(table, FRIEND, Cursor(events=1000))
+    await friends.settle()
+
+    await client.delete(delete_url(table, started['id']), headers=me)
 
     assert len(await snapshot_frames_of(friends)) == 1
