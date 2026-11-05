@@ -530,3 +530,49 @@ async def test_a_settler_round_is_a_job_with_its_own_id(
     labels = {'operation': SETTLE_OPERATION}
     assert metrics.value('background_jobs_started', **labels) == 2
     assert metrics.value('background_jobs_finished', **labels, result='success') == 2
+
+
+# --- 끝난 장면 그림의 수(snapshot_draws_total) ---
+
+
+def draws(metrics: MetricsRecorder) -> dict[tuple[str, str], float]:
+    return {(point.labels['outcome'], point.labels['code']): point.value for point in metrics.points('snapshot_draws')}
+
+
+async def test_a_ready_drawing_is_counted(
+    client: AsyncClient, app: FastAPI, answered: tuple, painter: FakeImageProvider, mine: dict, metrics: MetricsRecorder
+):
+    _, _, answer_id = answered
+
+    await draw(client, mine, answer_id)
+    await finished(app)
+
+    assert draws(metrics) == {('ready', 'none'): 1}
+
+
+async def test_a_refused_drawing_is_counted_with_its_reason(
+    client: AsyncClient, app: FastAPI, answered: tuple, painter: FakeImageProvider, mine: dict, metrics: MetricsRecorder
+):
+    _, _, answer_id = answered
+    painter.error = 'refused'
+
+    await draw(client, mine, answer_id)
+    await finished(app)
+
+    assert draws(metrics) == {('failed', 'refused'): 1}
+
+
+async def test_a_declined_hold_is_counted(
+    client: AsyncClient,
+    answered: tuple,
+    painter: FakeImageProvider,
+    billing: FakeBillingServer,
+    mine: dict,
+    metrics: MetricsRecorder,
+):
+    _, _, answer_id = answered
+    billing.balances[ME] = 10
+
+    await draw(client, mine, answer_id)
+
+    assert draws(metrics) == {('declined', 'credit_short'): 1}

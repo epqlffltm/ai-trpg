@@ -33,7 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.billing.client import Billing
 from app.core.dependencies import utc_now
 from app.snapshots import counting, repository, service
-from app.snapshots.metrics import record_snapshot_charges
+from app.snapshots.metrics import record_snapshot_charges, record_snapshot_draw
 from app.snapshots.models import Snapshot, SnapshotOutcome
 from app.turns.models import DUE_STATUSES, OPEN_STATUSES, BillingStatus
 from app.turns.settler import elapsed_ms
@@ -75,7 +75,10 @@ class SnapshotSettler:
         async with self.session_factory() as session:
             moved = await repository.move_billing(session, snapshot.id, OPEN_STATUSES, values)
             await session.commit()
-            return await repository.get(session, snapshot.id) if moved else None
+            if not moved:
+                return None
+            record_snapshot_draw(SnapshotOutcome.FAILED, ABANDONED)
+            return await repository.get(session, snapshot.id)
 
     async def count_unfinished(self) -> dict[str, int]:
         """끝나지 않은 청구의 수. 상태마다다."""
