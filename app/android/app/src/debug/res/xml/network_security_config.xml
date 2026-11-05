@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  app/android/app/src/debug/res/xml/network_security_config.xml
+  디버그 빌드의 평문 HTTP 는 localhost 하나에만 연다. 에뮬레이터에서 adb reverse tcp:8080 tcp:8080 으로 PC 의 프록시에 붙는다(app/README.md).
+  그 밖의 주소는 릴리스와 같이 HTTPS 만 된다.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

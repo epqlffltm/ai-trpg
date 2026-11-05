@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 백업을 끈다(#429). 백업에 든 refresh 토큰의 암호문은 Keystore 의 키 없이 풀리지 않아 되살려도 쓸모가 없다 -->
+    <!-- 백업을 끈다(#429). 백업에 든 refresh 토큰의 암호문은 Keystore 의 키 없이 풀리지 않아 되살려도 쓸모가 없다.
+         평문 HTTP 를 막는다. Android 9 전(API 24~27)의 기본은 허용이라 적어 둔다. 디버그 빌드만 localhost 를 연다(src/debug) -->
 
     <application
         android:allowBackup="false"
+        android:usesCleartextTraffic="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

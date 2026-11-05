@@ -7,9 +7,15 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+// HTTPS 의 출처이거나, PC 의 compose 에 붙이는 http://localhost:포트(디버그 빌드만 평문을 연다)
 const origin = process.env.APP_API_ORIGIN ?? '';
-if (!/^https?:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?$/.test(origin)) {
-  console.error('APP_API_ORIGIN 에 우리 사이트의 출처를 적는다(예: https://play.example.com). 지금 값:', JSON.stringify(origin));
+const https = /^https:\/\/[A-Za-z0-9.-]+(?::\d{1,5})?$/;
+const localHttp = /^http:\/\/localhost(?::\d{1,5})?$/;
+if (!https.test(origin) && !localHttp.test(origin)) {
+  console.error(
+    'APP_API_ORIGIN 에 우리 사이트의 출처(예: https://play.example.com)나 PC 의 compose(http://localhost:8080)를 적는다. 지금 값:',
+    JSON.stringify(origin),
+  );
   process.exit(1);
 }
 
