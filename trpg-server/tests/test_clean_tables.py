@@ -36,6 +36,7 @@ from app.notifications import outbox
 from app.operators.models import ActionKind, PublishingBan, ReadKind, ScenarioSanction
 from app.operators.sanctions import build_action
 from app.operators.service import build_read
+from app.portraits.models import Portrait
 from app.references.indexing import index_references
 from app.references.loading import load_document
 from app.references.records import ReferenceDocument, ReferenceOrigin, ReferenceRecord, ReferenceSource
@@ -261,6 +262,8 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         session.add(CampaignQuestResult(run_id=run_id, position=0, entry_id=uuid.uuid4(), result='succeeded'))
         # 장면 그림(#983)
         session.add(new_snapshot(uuid.UUID(table['id']), 1, ME, 'fake-image'))
+        # 제작자의 캐릭터 그림(#983)
+        session.add(Portrait(id=uuid.uuid4(), owner_id=ME))
         await session.commit()
 
     async with app.state.session_factory() as session:

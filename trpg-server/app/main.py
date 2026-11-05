@@ -34,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.ai_log import retention
 from app.api import health, me, readiness
-from app.asset_server.client import AssetClient
+from app.asset_server.client import AssetClient, ImageRejectedError
 from app.asset_server.client import AssetUnavailableError as AssetServerUnavailableError
 from app.assets.bestiaries import router as bestiaries
 from app.assets.bestiaries.service import BestiaryFullError
@@ -88,6 +88,9 @@ from app.operators.publishing import PublicationRefusedError
 from app.operators.sanctions import SanctionConflictError
 from app.personas import router as personas
 from app.personas.service import PersonaConflictError, PersonaNotFoundError
+from app.portraits import router as portraits
+from app.portraits.router import BodyTooLargeError
+from app.portraits.service import PortraitLimitError, PortraitNotFoundError
 from app.rankings import router as rankings
 from app.realtime import router as realtime
 from app.realtime.hub import Hub
@@ -401,6 +404,8 @@ def create_app(
     # 테이블의 장면 그림(#983), 내 그림들(갤러리)과 그 값
     app.include_router(snapshots.router, prefix=API_PREFIX)
     app.include_router(snapshots.own_router, prefix=API_PREFIX)
+    # 제작자의 캐릭터 그림(#983)
+    app.include_router(portraits.router, prefix=API_PREFIX)
     app.include_router(calendar.router, prefix=API_PREFIX)
     app.include_router(campaign_runs.router, prefix=API_PREFIX)
     app.include_router(events.router, prefix=API_PREFIX)
@@ -449,6 +454,11 @@ def create_app(
     app.add_exception_handler(SnapshotNotFoundError, snapshots.handle_not_found)
     app.add_exception_handler(SnapshotSettlingError, snapshots.handle_settling)
     app.add_exception_handler(AssetServerUnavailableError, snapshots.handle_asset_unavailable)
+    # asset 이 그림을 받지 않은 것은 AssetServerUnavailableError 의 한 갈래다. 더 좁은 것이 먼저 맞는다
+    app.add_exception_handler(ImageRejectedError, portraits.handle_rejected)
+    app.add_exception_handler(BodyTooLargeError, portraits.handle_too_large)
+    app.add_exception_handler(PortraitLimitError, portraits.handle_limit)
+    app.add_exception_handler(PortraitNotFoundError, portraits.handle_not_found)
     app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
     app.add_exception_handler(LimitsUnavailable, handle_limits_unavailable)
 

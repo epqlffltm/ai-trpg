@@ -11820,6 +11820,50 @@
         "title": "PointCost",
         "type": "object"
       },
+      "PortraitOut": {
+        "description": "올린 그림 하나. 바이트는 GET /portraits/{id}/image 로 받는다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at"
+        ],
+        "title": "PortraitOut",
+        "type": "object"
+      },
+      "PortraitPage": {
+        "description": "올린 그림들의 한 쪽. 최근 것부터다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PortraitOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "PortraitPage",
+        "type": "object"
+      },
       "Pregen-Input": {
         "additionalProperties": false,
         "description": "프리젠 하나. 제작자가 미리 만들어 둔 캐릭터다.\n\n이름과 설명은 플레이어가 만드는 캐릭터와 칸이 같다. 그래서 골라서 그대로 자기 캐릭터로 가져갈 수 있다.\n시트는 그 캐릭터의 숫자다. 초안일 때는 비워 둘 수 있다. 게시할 때 있는지, 룰북의 규칙에 맞는지 검사한다.\n여기서는 시트의 모양만 본다. 룰북은 나중에 붙이거나 바꿀 수 있어서, 규칙에 맞는지는 지금 정할 수 없다.",
@@ -25290,6 +25334,143 @@
         "summary": "Update Persona",
         "tags": [
           "personas"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/portraits": {
+      "get": {
+        "description": "내가 올린 그림들. 최근 것부터다.",
+        "operationId": "list_mine_api_v1_game_portraits_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortraitPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Mine",
+        "tags": [
+          "portraits"
+        ],
+        "x-audience": "user"
+      },
+      "post": {
+        "description": "그림을 올린다. 로그인을 먼저 보고, 그다음 본문을 읽는다.",
+        "operationId": "upload_api_v1_game_portraits_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortraitOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload",
+        "tags": [
+          "portraits"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/portraits/{portrait_id}/image": {
+      "get": {
+        "description": "내가 올린 그림의 바이트.",
+        "operationId": "read_image_api_v1_game_portraits__portrait_id__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portrait_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Portrait Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {},
+              "image/png": {},
+              "image/webp": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Image",
+        "tags": [
+          "portraits"
         ],
         "x-audience": "user"
       }

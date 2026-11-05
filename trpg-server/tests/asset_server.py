@@ -5,12 +5,13 @@
 
 맡긴 그림은 kept 에(그림의 id → 바이트), 그 그림을 맡긴 토큰은 owners 에 남는다. 지운 것은 discarded 에 남는다.
 down 이면 모든 요청이 AssetUnavailableError 다. kept 에 없는 그림은 404(AssetNotFoundError)다.
+rejecting 에 까닭을 적으면 맡기기가 그 까닭의 ImageRejectedError 다(asset 이 그림을 받지 않았다).
 """
 
 import uuid
 from dataclasses import dataclass, field
 
-from app.asset_server.client import AssetNotFoundError, AssetUnavailableError, ImageContent
+from app.asset_server.client import AssetNotFoundError, AssetUnavailableError, ImageContent, ImageRejectedError
 
 MIME_TYPE = 'image/png'
 
@@ -23,6 +24,7 @@ class FakeAsset:
     owners: dict[uuid.UUID, str] = field(default_factory=dict)
     discarded: list[uuid.UUID] = field(default_factory=list)
     down: bool = False
+    rejecting: str | None = None
 
     def require_up(self) -> None:
         if self.down:
@@ -30,6 +32,8 @@ class FakeAsset:
 
     async def keep_image(self, token: str, data: bytes) -> uuid.UUID:
         self.require_up()
+        if self.rejecting is not None:
+            raise ImageRejectedError(self.rejecting)
         image_id = uuid.uuid4()
         self.kept[image_id] = data
         self.owners[image_id] = token

@@ -218,6 +218,8 @@ class Settings(CoreSettings, NotificationSettings):
     # 곁의 ComfyUI 의 주소와 체크포인트(models/checkpoints 안의 파일 이름). comfyui 일 때만 쓴다
     comfyui_url: str = 'http://127.0.0.1:8188'
     comfyui_checkpoint: str = ''
+    # 제작자가 올리는 캐릭터 그림(app/portraits/, #983)의 크기 상한(바이트). asset 서버의 IMAGE_MAX_BYTES 와 같게 둔다
+    portrait_max_bytes: int = Field(default=10 * 1024 * 1024, ge=1)
 
     # 인증 서버가 탈퇴를 알리는 요청(app/withdrawal/)의 서명 비밀. 인증 서버의 GAME_SECRET 과 같은 값이어야 한다.
     # 비우면 탈퇴 알림을 받지 않는다(401). 인증 서버는 받을 때까지 다시 보낸다. 적으면 32자 이상.

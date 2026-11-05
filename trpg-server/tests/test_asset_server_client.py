@@ -8,6 +8,7 @@ asset 서버를 부르는 것(app/asset_server/client.py)을 검증한다. 가�
   - 맡기기와 지우기는 그린 사람의 토큰을 함께 넘긴다. 받기(kept)는 토큰을 넘기지 않는다
   - 답: 201 은 그림의 id 로, 200 은 바이트와 형식으로 읽는다. 404 는 AssetNotFoundError,
     그 밖의 답, 그림이 아닌 답, 모양이 틀린 답, 닿지 못함, 주소가 없음은 모두 AssetUnavailableError 다
+  - 맡길 때 그림을 받지 않은 답(413, 415, 422)은 그 까닭을 단 ImageRejectedError 다(AssetUnavailableError 의 한 갈래)
   - 설정: ASSET_URL 을 적었으면 32자 이상의 ASSET_SECRET 이 있어야 뜬다
 """
 
@@ -25,6 +26,7 @@ from app.asset_server.client import (
     AssetNotFoundError,
     AssetUnavailableError,
     ImageContent,
+    ImageRejectedError,
     images_path,
     kept_path,
 )
@@ -128,6 +130,19 @@ async def test_an_unusable_keep_answer_is_unavailable(response: httpx.Response):
 
     with pytest.raises(AssetUnavailableError):
         await client.keep_image(TOKEN, PNG)
+
+
+@pytest.mark.parametrize(
+    ('status_code', 'code'), [(413, 'image_too_large'), (415, 'image_format'), (422, 'image_unreadable')]
+)
+async def test_a_refused_image_says_why(status_code: int, code: str):
+    client = client_answering(lambda request: answer(status_code, {'detail': '받지 않는다'}))
+
+    with pytest.raises(ImageRejectedError) as raised:
+        await client.keep_image(TOKEN, PNG)
+
+    assert raised.value.code == code
+    assert isinstance(raised.value, AssetUnavailableError)
 
 
 async def test_an_unreachable_server_is_unavailable():
