@@ -199,6 +199,7 @@ Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 �
 | GET | `/api/v1/auth/session-revocations` | 끊긴 세션의 목록. 다른 서버가 만료 전의 토큰을 거부하는 데 쓴다 | 불필요 |
 | GET | `/api/v1/auth/me` | 내 계정 정보와 본인인증 상태 | 필요 |
 | GET | `/api/v1/auth/public-names?ids=` | 다른 사람의 닉네임을 공개 ID 로 한꺼번에 찾음(100개까지) | 불필요 |
+| GET | `/api/v1/auth/creators?q=` | 제작자를 닉네임으로 찾는다(#984). 소개를 쓴 사람만이다. `q` 1~20자, `limit` 1~20(기본 10). 답은 `{"items": [{public_id, nickname, bio}]}` | 불필요 |
 | GET | `/api/v1/auth/creators/{공개 ID}` | 제작자 한 사람의 프로필(닉네임, 소개, #992). 없거나 비운 계정은 404 `creator_not_found` | 불필요 |
 | GET | `/api/v1/auth/consents` | 동의를 받는 항목마다 지금의 판(이용약관, 개인정보 수집·이용, 선택 동의) | 불필요 |
 | GET | `/api/v1/auth/me/consents` | 내 동의 상태(항목마다) | 필요 |
@@ -366,6 +367,8 @@ GET /api/v1/auth/creators/<공개 ID>
 - 로그인 없이 읽고 60초 기억한다(`public-names` 와 같다). 닉네임과 소개만 나간다
 - 없는 공개 ID 와 비운 계정(만 14세 미만, 탈퇴)은 같은 404 `creator_not_found` 다. 계정을 비우면 소개도 지운다(`erasure.py`). 정지된 계정은 그대로 보인다
 - 내 소개는 `/me` 의 `bio` 로 읽고 `PATCH /me/profile` 로 고친다
+- **닉네임으로 찾기(#984).** `GET /api/v1/auth/creators?q=` 는 소개를 쓴 사람만 준다(2026-11-05). 작품이 없는 사람의 닉네임이 검색으로 드러나지 않게 한다.
+  인증 서버는 누가 작품을 공개했는지 모른다. 닉네임이 같은 것, 그것으로 시작하는 것, 나머지 차례이고 대소문자를 가리지 않는다. 로그인 없이 읽고 60초 기억한다
 
 ### 동의
 

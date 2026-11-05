@@ -22,6 +22,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/creators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 제작자를 닉네임으로 찾는다. 소개를 쓴 사람만이다. 로그인 없이 읽는다
+         * @description GET /api/v1/auth/creators?q=<이름>&limit=<수>. 제작자를 닉네임으로 찾는다(#984). 검색 결과 화면이 부른다.
+         *
+         *     로그인 없이 연다. 소개를 쓴 사람만 나온다(accounts/creator_profiles.py). 닉네임과 소개만 나간다.
+         *     작품은 목록 서버들이 따로 준다. 이 서버는 누가 작품을 공개했는지 모른다.
+         */
+        get: operations["creators_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/creators/{public_id}": {
         parameters: {
             query?: never;
@@ -770,6 +793,10 @@ export interface components {
             /** Format: uuid */
             public_id: string;
         };
+        /** @description 제작자를 이름으로 찾은 결과(#984). 닉네임이 같은 것, 그것으로 시작하는 것, 나머지 차례다. */
+        CreatorSearchResult: {
+            items: components["schemas"]["Creator"][];
+        };
         /** @description 글 하나만 싣는 응답. 성공의 안내도, 이유를 가르지 않는 거절도 이 모양이다. */
         Detail: {
             detail: string;
@@ -1106,6 +1133,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConsentDocuments"];
+                };
+            };
+        };
+    };
+    creators_search: {
+        parameters: {
+            query: {
+                limit?: number;
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatorSearchResult"];
+                };
+            };
+            /** @description 검색어가 비었거나 20자를 넘는다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
                 };
             };
         };

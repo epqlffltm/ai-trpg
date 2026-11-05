@@ -10,6 +10,7 @@ from django.urls import path
 
 from accounts.views import (
     ConsentDocumentsView,
+    CreatorSearchView,
     CreatorView,
     GuardianConsentView,
     GuardianRequestView,
@@ -63,6 +64,7 @@ urlpatterns = [
     path('me', MeView.as_view(), name='me'),
     path('consents', ConsentDocumentsView.as_view(), name='consents'),
     path('public-names', PublicNamesView.as_view(), name='public-names'),
+    path('creators', CreatorSearchView.as_view(), name='creator-search'),
     path('creators/<uuid:public_id>', CreatorView.as_view(), name='creator'),
     path('me/consents', MyConsentsView.as_view(), name='my-consents'),
     path('me/consents/<str:item>', MyConsentView.as_view(), name='my-consent'),

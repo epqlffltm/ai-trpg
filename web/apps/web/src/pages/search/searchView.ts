@@ -34,3 +34,9 @@ export function isSearchable(q: string): boolean {
 export function searchPath(q: string): string {
   return `/search?${new URLSearchParams({ q: normalizeSearch(q) }).toString()}`;
 }
+
+/** 제작자를 찾을 검색어인가(#984). 태그 검색이 아니고 닉네임의 상한(maxLength) 안이어야 한다 */
+export function searchesCreators(q: string, maxLength: number): boolean {
+  const query = normalizeSearch(q);
+  return isSearchable(query) && searchTag(query) === null && [...query].length <= maxLength;
+}

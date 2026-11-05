@@ -206,6 +206,22 @@
         ],
         "type": "object"
       },
+      "CreatorSearchResult": {
+        "additionalProperties": false,
+        "description": "제작자를 이름으로 찾은 결과(#984). 닉네임이 같은 것, 그것으로 시작하는 것, 나머지 차례다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Creator"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "Detail": {
         "additionalProperties": false,
         "description": "글 하나만 싣는 응답. 성공의 안내도, 이유를 가르지 않는 거절도 이 모양이다.",
@@ -1143,6 +1159,110 @@
         "summary": "동의를 받는 항목마다 지금의 판. 로그인 없이 읽는다",
         "tags": [
           "consents"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/creators": {
+      "get": {
+        "description": "GET /api/v1/auth/creators?q=<이름>&limit=<수>. 제작자를 닉네임으로 찾는다(#984). 검색 결과 화면이 부른다.\n\n로그인 없이 연다. 소개를 쓴 사람만 나온다(accounts/creator_profiles.py). 닉네임과 소개만 나간다.\n작품은 목록 서버들이 따로 준다. 이 서버는 누가 작품을 공개했는지 모른다.",
+        "operationId": "creators_search",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 10,
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorSearchResult"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "검색어가 비었거나 20자를 넘는다"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "제작자를 닉네임으로 찾는다. 소개를 쓴 사람만이다. 로그인 없이 읽는다",
+        "tags": [
+          "creators"
         ],
         "x-audience": "user"
       }
