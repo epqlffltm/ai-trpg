@@ -10,6 +10,8 @@
 서버가 여럿이면 모두 같은 일을 한다. 결제 서버는 같은 이름표를 한 번만 처리하고, 기록은 "지금 이 상태일 때만" 옮긴다.
 바퀴마다 job_id 를 걸고 작업의 메트릭(background_jobs_*)을 센다. 한 일이 없으면 debug, 있으면 info 로 한 줄을 남긴다
 (서술 값의 청구 정리와 같다).
+바퀴의 끝에 끝나지 않은 청구의 수를 상태마다 센다(snapshot_charges). capture_due 가 쌓이면 결제 서버가 죽어 있고,
+held 가 오래 남으면 그리는 일이 멈춘 것이다. 서버가 여럿이면 모두 같은 수를 낸다(대시보드는 max 로 본다).
 """
 
 import asyncio
@@ -31,7 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.billing.client import Billing
 from app.billing.routing import utc_now
 from app.core.jobs import JOB_FAILED_ERROR_CODE, elapsed_ms
-from app.snapshots import repository, service
+from app.observability.metrics import record_snapshot_charges
+from app.snapshots import counting, repository, service
 from app.snapshots.models import DUE_STATUSES, OPEN_STATUSES, SnapshotBilling, SnapshotOutcome, TableSnapshot
 
 logger = logging.getLogger(__name__)
@@ -75,6 +78,11 @@ class SnapshotSettler:
             await session.commit()
             return await repository.get(session, snapshot.id) if moved else None
 
+    async def count_unfinished(self) -> dict[str, int]:
+        """끝나지 않은 청구의 수. 상태마다다."""
+        async with self.session_factory() as session:
+            return await counting.count_unfinished(session)
+
     async def settle_one(self, snapshot: TableSnapshot, now: datetime) -> bool:
         """하나를 맡긴다. 맡겼으면 True. 예외가 나면 로그에 남기고 False."""
         try:
@@ -107,11 +115,15 @@ class SnapshotSettler:
         return settled
 
     async def tick(self) -> int:
-        """한 바퀴. 제 job_id 를 걸고 쓸어 담은 뒤 한 줄을 남긴다. 찾는 일이 통째로 실패하면 그대로 올린다."""
+        """
+        한 바퀴. 제 job_id 를 걸고 쓸어 담은 뒤, 끝나지 않은 청구의 수를 세고 한 줄을 남긴다.
+        찾는 일이 통째로 실패하면 그대로 올린다.
+        """
         job_id = new_job_id()
         with job_span(SETTLE_OPERATION, job_id), job_scope(job_id), measured_job(SETTLE_OPERATION):
             started = time.perf_counter()
             settled = await self.sweep()
+            record_snapshot_charges(await self.count_unfinished())
             logger.log(
                 logging.INFO if settled else logging.DEBUG,
                 '장면 그림의 청구 정리가 한 바퀴를 돌았습니다',

@@ -1429,7 +1429,7 @@
       "type": "timeseries",
       "id": 30,
       "title": "끝난 작업(1시간)",
-      "description": "맡긴 작업(round.narrate, lore.index, memory.index)과 몇 초마다 도는 바퀴(round.close_overdue, charge.settle, notification.send, ai_log.prune, model.retirement)",
+      "description": "맡긴 작업(round.narrate, lore.index, memory.index, snapshot.draw)과 몇 초마다 도는 바퀴(round.close_overdue, charge.settle, snapshot.settle, notification.send, ai_log.prune, model.retirement)",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -1535,6 +1535,77 @@
           },
           "expr": "sum by (operation) (rate(background_job_duration_seconds_sum{service=\"trpg-server\"}[$__rate_interval])) / (sum by (operation) (rate(background_job_duration_seconds_count{service=\"trpg-server\"}[$__rate_interval])) > 0)",
           "legendFormat": "{{operation}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "id": 32,
+      "title": "장면 그림",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 92
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "id": 33,
+      "title": "끝나지 않은 장면 그림의 청구",
+      "description": "상태마다 장면 그림(#983)의 청구의 수. 서버들이 같은 수를 내므로 큰 값을 쓴다. capture_due 가 쌓이면 결제 서버가 죽어 있고, held 가 오래 남으면 그리는 일이 멈춘 것이다(10분이 지나면 정리 작업이 돌려준다)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 93
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (status) (snapshot_charges{service=\"trpg-server\"})",
+          "legendFormat": "{{status}}",
           "refId": "A",
           "range": true,
           "instant": false

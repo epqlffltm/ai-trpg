@@ -41,6 +41,7 @@ class GameInstruments:
     rounds_closed: Counter
     billing_calls: Counter
     narration_charges: _Gauge
+    snapshot_charges: _Gauge
 
 
 def build_instruments(meter: Meter) -> GameInstruments:
@@ -68,6 +69,7 @@ def build_instruments(meter: Meter) -> GameInstruments:
         rounds_closed=meter.create_counter('rounds_closed', description='닫기 시작한 라운드의 수'),
         billing_calls=meter.create_counter('billing_calls', description='결제 서버를 부른 수'),
         narration_charges=meter.create_gauge('narration_charges', description='끝나지 않은 청구의 수'),
+        snapshot_charges=meter.create_gauge('snapshot_charges', description='끝나지 않은 장면 그림의 청구의 수'),
     )
 
 
@@ -153,3 +155,13 @@ def record_charges(counts: Mapping[str, int]) -> None:
     measured = game_instruments()
     for status, count in counts.items():
         measured.narration_charges.set(count, {'status': status})
+
+
+# --- 장면 그림(#983) ---
+
+
+def record_snapshot_charges(counts: Mapping[str, int]) -> None:
+    """끝나지 않은 장면 그림의 청구의 수를 상태마다 적는다. 없는 상태는 0 으로 준다(부르는 쪽이 모든 상태를 넣는다)."""
+    measured = game_instruments()
+    for status, count in counts.items():
+        measured.snapshot_charges.set(count, {'status': status})
