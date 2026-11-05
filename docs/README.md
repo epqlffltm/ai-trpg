@@ -19,6 +19,7 @@
 | [architecture/shared-code.md](architecture/shared-code.md) | 공용 코드 규칙. 형식과 코드는 공유하고 데이터는 공유하지 않는다. `shared/` 의 패키지(`server-core`, `ai-core`, `conversation-core`), 재정의하는 법, 언제 누가 뽑는지, 버전과 CI, `app/ai` 를 뽑는 방식의 결정(#380) |
 | [api/README.md](api/README.md) | 서버마다의 API 목록(OpenAPI). 파일, 뽑는 법, 누가 부르는가(`x-audience`), CI |
 | [product/platform.md](product/platform.md) | 플랫폼과 제품 방향. 제품 셋(TRPG, chat, story), 원칙, 화면과 모바일의 방향, 정하지 않은 것 |
+| [product/app-refresh.md](product/app-refresh.md) | 앱(WebView)에서의 로그인 유지(#429). 리프레시 쿠키가 앱의 출처에서 실리는지 본 시험, 고칠 길 셋(사이트를 연다, 하위 도메인 출처, 본문의 토큰)과 확인 못 한 것 |
 | [product/screens.md](product/screens.md) | 화면 명세. 흐름, 화면 목록, 화면별 명세(A1~A12, B1~B10, C1~C7, D1~D7), 공통 상태, 프런트 구조, 첫 출시의 범위(세 단계) |
 | [legal/terms.md](legal/terms.md), [legal/privacy.md](legal/privacy.md) | 이용약관과 개인정보 처리방침의 초안(#450). 변호사 검토 전이다. 정할 것과 검토할 것, 본문의 근거(저장소의 어디인지) |
 | [product/market-research.md](product/market-research.md) | 다른 AI 캐릭터 챗 서비스를 본 조사. 만드는 구조, 돈을 받는 방식, 반복되는 문제 |
