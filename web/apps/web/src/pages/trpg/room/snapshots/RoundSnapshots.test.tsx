@@ -3,6 +3,7 @@
 // 다 그린 그림을 게임 서버의 주소로 받아 그 라운드 아래에 띄운다. 남이 그린 것도 보이고, 내 것에는 "내가 그림"을 적는다.
 // 남의 실패는 보이지 않는다. 그리는 중이면 단추를 막는다. 그릴 수 없는 서버면 단추를 숨긴다. 시작하지 못한 까닭을 알린다.
 // 스트림의 scene_snapshot 이 오면 목록을 다시 읽는다(남이 그린 것이 곧 보인다).
+// 내가 그린 그림만 크게 보는 창에서 한 번 더 확인한 뒤 지운다. 지우지 못하면 창 안에 까닭을 알린다.
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -164,6 +165,63 @@ describe('테이블의 장면 그림', () => {
 
     await roundOf(2);
     await waitFor(() => expect(screen.queryByRole('button', { name: /장면 그림/ })).not.toBeInTheDocument());
+  });
+});
+
+describe('테이블의 장면 그림 지우기', () => {
+  it('내 그림은 창에서 확인한 뒤 지우고, 창을 닫고 목록을 다시 읽는다', async () => {
+    let list: TableSnapshot[] = [snapshot(1, { by_me: true })];
+    const { seen } = open({
+      [`GET ${BASE}/snapshots`]: () => json(200, list),
+      [`GET ${BASE}/snapshots/${S(1)}/image`]: () => new Response('png', { status: 200 }),
+      [`DELETE ${BASE}/snapshots/${S(1)}`]: () => {
+        list = [];
+        return new Response(null, { status: 204 });
+      },
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    const first = await roundOf(1);
+    await userEvent.click(await first.findByRole('button', { name: '장면 그림 크게 보기' }));
+    const dialog = within(await screen.findByRole('dialog', { name: '장면 그림' }));
+    await userEvent.click(dialog.getByRole('button', { name: '지우기' }));
+    expect(dialog.getByText(/낸 크레딧은 돌려받지 못하고/)).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole('button', { name: '지우기 확인' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(first.queryByAltText('장면 그림')).not.toBeInTheDocument());
+    expect(seen.filter((request) => request.method === 'DELETE')).toHaveLength(1);
+  });
+
+  it('남이 그린 그림에는 지우기가 없다', async () => {
+    open({
+      [`GET ${BASE}/snapshots`]: () => json(200, [snapshot(1)]),
+      [`GET ${BASE}/snapshots/${S(1)}/image`]: () => new Response('png', { status: 200 }),
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    await userEvent.click(await (await roundOf(1)).findByRole('button', { name: '장면 그림 크게 보기' }));
+    const dialog = within(await screen.findByRole('dialog', { name: '장면 그림' }));
+
+    expect(dialog.getByRole('button', { name: '이 기기에 저장' })).toBeInTheDocument();
+    expect(dialog.queryByRole('button', { name: '지우기' })).not.toBeInTheDocument();
+  });
+
+  it('지우지 못하면 창 안에 까닭을 알리고 그림은 남는다', async () => {
+    open({
+      [`GET ${BASE}/snapshots`]: () => json(200, [snapshot(1, { by_me: true })]),
+      [`GET ${BASE}/snapshots/${S(1)}/image`]: () => new Response('png', { status: 200 }),
+      [`DELETE ${BASE}/snapshots/${S(1)}`]: () => json(409, { detail: '정리 중', code: 'snapshot_settling' }),
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    await userEvent.click(await (await roundOf(1)).findByRole('button', { name: '장면 그림 크게 보기' }));
+    const dialog = within(await screen.findByRole('dialog', { name: '장면 그림' }));
+    await userEvent.click(dialog.getByRole('button', { name: '지우기' }));
+    await userEvent.click(dialog.getByRole('button', { name: '지우기 확인' }));
+
+    expect(await dialog.findByText('청구를 정리하는 중입니다. 잠시 뒤에 다시 해 주세요.')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '장면 그림' })).toBeInTheDocument();
   });
 });
 

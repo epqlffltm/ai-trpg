@@ -47,3 +47,15 @@ export function tableSnapshotProblemText(error: unknown): string {
   }
   return '장면 그림을 시작하지 못했습니다. 잠시 뒤에 다시 해 주세요.';
 }
+
+/** 그림을 지우지 못한 까닭 */
+export function tableSnapshotDeleteProblemText(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'snapshot_not_found') return '이미 지웠거나 찾을 수 없는 그림입니다.';
+    if (error.code === 'snapshot_in_progress') return '아직 그리는 중이라 지울 수 없습니다.';
+    if (error.code === 'snapshot_settling') return '청구를 정리하는 중입니다. 잠시 뒤에 다시 해 주세요.';
+    if (error.code === 'asset_unavailable') return '지금은 그림을 지울 수 없습니다. 잠시 뒤에 다시 해 주세요.';
+    if (error.status === 429) return '너무 자주 요청했습니다. 잠시 뒤에 다시 해 주세요.';
+  }
+  return '그림을 지우지 못했습니다. 잠시 뒤에 다시 해 주세요.';
+}
