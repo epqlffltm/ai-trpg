@@ -4,7 +4,9 @@
 //   - 머리(테이블 줄) 바로 아래: 방장이 "테이블 관리"를 펼쳤을 때 방장의 운영(host/HostPanel)
 //   - 왼쪽 열: 앉은 사람(모집 중) 또는 창 넷(B7, 진행 중과 끝남), 그 아래 캠페인의 편(캠페인의 테이블에만, #481 B), 동료 피해
 //   - 맨 아래(가로로 긴 칸): 대화창. 탭 둘 "채팅"(판 채팅)과 "쪽지"(내 쪽지함, 안 읽은 수)
-// 좁은 화면에서는 가운데, 왼쪽 열, 채팅의 차례로 위아래다. 차례는 CSS 의 grid 자리가 정하고 문서의 차례는 가운데가 먼저다.
+// 좁은 화면에서는 가운데가 화면을 채운다. 진행 중과 끝난 테이블은 맨 아래 단추 줄(RoomDock)로 왼쪽 열과 대화창을
+// 아래에서 올라오는 시트로 연다(useRoomDock). 모집 중에는 가운데, 왼쪽 열, 채팅의 차례로 위아래다.
+// 차례와 시트는 CSS 가 정하고 문서의 차례는 가운데가 먼저다.
 //
 // 스트림에서 받은 것:
 //   - 이벤트: 일어난 일에 더하고, 테이블과 라운드를 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다.
@@ -27,6 +29,7 @@ import { ChatPanel } from './ChatPanel';
 import { displayName, MemberList } from './MemberList';
 import { FriendlyFirePanel } from './FriendlyFirePanel';
 import { canManageTable, HostPanel } from './host/HostPanel';
+import { RoomDock, SheetClose } from './RoomDock';
 import { RoomHeader } from './RoomHeader';
 import { RoomTalk, type TalkTab } from './RoomTalk';
 import { ActionRequestProvider } from './round/action/actionRequest';
@@ -35,6 +38,7 @@ import { tableSnapshotsKey } from './snapshots/useTableSnapshots';
 import { chatQuery, eventsQuery, tableQuery, whispersQuery } from './roomQueries';
 import { mergeEvents, mergeMessages, mergeWhispers, nextUnreadWhispers } from './streamPolicy';
 import { useBatchedRefetch } from './useBatchedRefetch';
+import { useRoomDock } from './useRoomDock';
 import { useTableStream } from './useTableStream';
 import { useTypingPeople } from './useTypingPeople';
 import { WALLET_KEY } from '../../wallet/walletQueries';
@@ -56,6 +60,8 @@ export function TableRoom({ table }: { table: TableDetail }) {
   const [managing, setManaging] = useState(false);
   const [talkTab, setTalkTab] = useState<TalkTab>('chat');
   const [unreadWhispers, setUnreadWhispers] = useState(0);
+  const dock = useRoomDock();
+  const docked = table.status !== 'recruiting';
   const messages = chat.data?.items ?? [];
   const nameOf = usePublicNames([table.members.map((member) => member.user_id), messages.map((message) => message.user_id)]);
 
@@ -102,6 +108,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
     onChat: (message) => {
       typing.remove(message.user_id);
       appendChat([message]);
+      dock.countChat(message, myId);
     },
     onWhisper: (whisper) => {
       appendWhisper([whisper]);
@@ -120,7 +127,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
 
   return (
     <ActionRequestProvider>
-      <main className="page room">
+      <main className={docked ? 'page room room--docked' : 'page room'} data-sheet={dock.sheet ?? undefined}>
         <RoomHeader
           table={table}
           stream={stream}
@@ -138,10 +145,11 @@ export function TableRoom({ table }: { table: TableDetail }) {
             />
           </div>
           <div className="room__side">
+            {docked ? <SheetClose onClose={dock.closeSheet} /> : null}
             {table.status === 'recruiting' ? (
               <MemberList members={table.members} myId={myId} nameOf={nameOf} />
             ) : (
-              <StatusPanel table={table} myId={myId} nameOf={nameOf} />
+              <StatusPanel table={table} myId={myId} nameOf={nameOf} open={dock.statusOpen} onOpenChange={dock.setStatusOpen} />
             )}
             <CampaignPanel table={table} myId={myId} />
             <FriendlyFirePanel
@@ -151,6 +159,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
             />
           </div>
           <div className="room__chat">
+            {docked ? <SheetClose onClose={dock.closeSheet} /> : null}
             <RoomTalk
               tab={talkTab}
               onTab={chooseTalkTab}
@@ -171,6 +180,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
             />
           </div>
         </div>
+        {docked ? <RoomDock dock={dock} /> : null}
       </main>
     </ActionRequestProvider>
   );

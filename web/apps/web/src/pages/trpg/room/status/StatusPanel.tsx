@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/trpg/room/status/StatusPanel.tsx
 // 테이블 방 왼쪽 열의 창 넷(B7, Stitch 20번). 단추 넷이 세로로 서고, 누른 단추 바로 아래로 그 창이 펼쳐진다.
 // 창은 하나만 펼친다(다른 단추를 누르면 앞의 창은 접힌다). 펼친 단추를 다시 누르면 접는다. 처음에는 상태·장비가 펼쳐져 있다.
+// 펼친 창은 TableRoom 이 쥔다(open, onOpenChange). 좁은 화면의 아래 단추 줄(RoomDock)도 같은 창을 펼치기 때문이다.
 //   - 상태·장비(C): 내 캐릭터의 HP, 자원, 레벨과 점수 놓기(#286), 부상, 능력치, 착용한 장비와 칸마다 벗기(#276)
 //   - 소지품·돈(I): 캐릭터마다 돈, 지닌 물건, 내 물건의 착용(Inventory)
 //   - 퀘스트·지도(J): 게임 안의 시각, 퀘스트, 장소와 길(WorldInfo)
@@ -9,7 +10,7 @@
 // 물건과 장소의 단추는 선언 입력의 행동 칸을 채울 뿐이다(useActionShortcuts). 보내는 것은 선언이다.
 // 점수 놓기는 선언이 아니라 바로 바꾼다(useRaise).
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import type { TableDetail, TableMember } from '../../../../api/types';
 import type { NameLookup } from '../../../../hooks/usePublicNames';
 import { EventLog } from '../events/EventLog';
@@ -27,9 +28,14 @@ import { WorldInfo } from './WorldInfo';
 
 type Props = { table: TableDetail; myId: string | undefined; nameOf: NameLookup };
 
-export function StatusPanel({ table, myId, nameOf }: Props) {
-  const [open, setOpen] = useState<StatusTab | null>('mine');
-  const openOnly = useCallback((tab: StatusTab) => setOpen(tab), []);
+type PanelProps = Props & {
+  /** 펼친 창. null 이면 모두 접혀 있다 */
+  open: StatusTab | null;
+  onOpenChange: (next: StatusTab | null) => void;
+};
+
+export function StatusPanel({ table, myId, nameOf, open, onOpenChange }: PanelProps) {
+  const openOnly = useCallback((tab: StatusTab) => onOpenChange(tab), [onOpenChange]);
   useStatusShortcuts(openOnly);
   return (
     <section className="room-tools" aria-labelledby="status-heading">
@@ -45,7 +51,7 @@ export function StatusPanel({ table, myId, nameOf }: Props) {
             aria-expanded={open === entry.tab}
             aria-controls={`status-panel-${entry.tab}`}
             aria-keyshortcuts={entry.key.toUpperCase()}
-            onClick={() => setOpen((current) => nextOpenTab(current, entry.tab))}
+            onClick={() => onOpenChange(nextOpenTab(open, entry.tab))}
           >
             <span>{entry.label}</span> <kbd>{entry.key.toUpperCase()}</kbd>
           </button>
