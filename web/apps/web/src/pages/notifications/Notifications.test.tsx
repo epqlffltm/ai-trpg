@@ -147,6 +147,15 @@ describe('알림의 순수한 함수', () => {
     expect(describeNotification(notice(1, 'game', 'narration_model.replaced', {}), CTX).text).toBe('내 테이블의 서술 모델을 바꿨습니다: 서버의 기본 모델 → 서버의 기본 모델(앞의 모델이 끝남)');
     expect(describeNotification(notice(1, 'board', 'post.commented', { post_title: '첫 글', post_id: '7' }), CTX)).toEqual({ text: '내 글 "첫 글"에 댓글이 달렸습니다', to: '/board/posts/7' });
     expect(describeNotification(notice(1, 'asset', 'character.hidden', { character_id: 'c1', name: '렌' }), CTX).to).toBe('/chat/studio/characters/c1');
+    expect(describeNotification(notice(1, 'game', 'scenario.published', { scenario_id: 's1', title: '수도원', creator_id: 'u1' }), CTX)).toEqual({
+      text: '팔로우한 제작자가 새 시나리오를 공개했습니다: "수도원"',
+      to: '/trpg/scenarios/s1',
+    });
+    expect(describeNotification(notice(1, 'asset', 'character.published', { character_id: 'c1', name: '렌', creator_id: 'u1' }), CTX).to).toBe('/chat/characters/c1');
+    expect(describeNotification(notice(1, 'asset', 'world.published', { world_id: 'w1', name: '여름', creator_id: 'u1' }), CTX)).toEqual({
+      text: '팔로우한 제작자가 새 세계관을 공개했습니다: 여름',
+      to: '/story/worlds/w1',
+    });
     expect(describeNotification(notice(1, 'game', 'order.paid', {}), CTX).text).toBe('새 알림입니다');
   });
 
@@ -155,6 +164,7 @@ describe('알림의 순수한 함수', () => {
     expect(badgeText(7)).toBe('7');
     expect(badgeText(100)).toBe('99+');
     expect(muteLabel('post.commented')).toBe('내 글에 달린 댓글');
+    expect(muteLabel('scenario.published')).toBe('팔로우한 제작자의 새 시나리오');
     expect(muteLabel('new.kind')).toBe('new.kind');
     expect(newestId([OLD, PAID, ODD])).toBe(12);
     expect(newestId([])).toBeNull();
