@@ -41,14 +41,3 @@ export function RoomDock({ dock }: { dock: Dock }) {
     </nav>
   );
 }
-
-/** 시트 맨 위의 닫기. 넓은 화면에서는 CSS 가 숨긴다 */
-export function SheetClose({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="room-sheet__head">
-      <button type="button" className="room-sheet__close" onClick={onClose}>
-        시트 닫기
-      </button>
-    </div>
-  );
-}

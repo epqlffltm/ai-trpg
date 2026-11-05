@@ -64,9 +64,10 @@ function reacting(user: unknown, action: unknown = null) {
     });
 }
 
-/** 왼쪽 열의 창 하나를 펼친다(이미 펼쳐져 있으면 그대로). 그 창을 돌려준다 */
+/** 왼쪽 열의 창 하나를 펼친다(이미 펼쳐져 있으면 그대로). 그 창을 돌려준다. 아래 단추 줄에도 같은 이름이 있어 왼쪽 열 안에서 찾는다 */
 async function openTool(name: string) {
-  const button = await screen.findByRole('button', { name });
+  const column = within(await screen.findByRole('region', { name: '창' }));
+  const button = column.getByRole('button', { name });
   if (button.getAttribute('aria-expanded') !== 'true') await userEvent.click(button);
   return within(await screen.findByRole('region', { name }));
 }
