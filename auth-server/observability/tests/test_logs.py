@@ -13,7 +13,11 @@ from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
-from config.mail_backends import forbid_debug_when_deployed, require_real_mailer_in_production
+from config.mail_backends import (
+    forbid_debug_when_deployed,
+    require_real_mailer_in_production,
+    require_usable_smtp_login,
+)
 from observability.context import job_scope, request_scope
 from observability.formatter import JsonFormatter
 from observability.identifiers import new_trace
@@ -310,6 +314,30 @@ class ConsoleMailInProductionTests(SimpleTestCase):
         for environment in ('development', 'test'):
             with self.subTest(environment=environment):
                 forbid_debug_when_deployed(True, environment)
+
+    def test_smtp_login_with_korean_refuses_to_start(self):
+        # smtplib 는 로그인을 ASCII 로만 보낸다. .env.example 의 보기를 그대로 두면 메일 워커가 보낼 때마다 죽는다
+        cases = (
+            ('SMTP_USER', '내주소@gmail.com', 'abcdabcdabcdabcd'),
+            ('SMTP_PASSWORD', 'me@gmail.com', '앱비밀번호16자리'),
+        )
+        for name, user, password in cases:
+            with self.subTest(name=name), self.assertRaisesMessage(ImproperlyConfigured, name):
+                require_usable_smtp_login(user, password)
+
+    def test_empty_smtp_login_refuses_to_start(self):
+        for name, user, password in (('SMTP_USER', '', 'abcdabcdabcdabcd'), ('SMTP_PASSWORD', 'me@gmail.com', '')):
+            with self.subTest(name=name), self.assertRaisesMessage(ImproperlyConfigured, name):
+                require_usable_smtp_login(user, password)
+
+    def test_smtp_login_error_does_not_show_the_password(self):
+        with self.assertRaises(ImproperlyConfigured) as raised:
+            require_usable_smtp_login('me@gmail.com', '시크릿값-zx81')
+        self.assertNotIn('시크릿값-zx81', str(raised.exception))
+
+    def test_ascii_smtp_login_starts(self):
+        # Gmail 의 앱 비밀번호는 넷씩 띄어 보인다. 띄어 쓴 채로 넣어도 ASCII 다
+        require_usable_smtp_login('me@gmail.com', 'abcd efgh ijkl mnop')
 
     def test_other_environments_may_print_mail_to_the_terminal(self):
         for environment in ('development', 'test', 'staging'):
