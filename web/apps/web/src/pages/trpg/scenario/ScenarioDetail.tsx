@@ -87,7 +87,7 @@ function CharacterModes({ listing }: { listing: PublicListingDetail }) {
       <p>
         이 시나리오에서 캐릭터를 얻는 방식: {listing.character_modes.map(characterModeLabel).join(', ') || '정해지지 않음'}
       </p>
-      {listing.pregens.length > 0 ? <PregenList pregens={listing.pregens} abilities={listing.abilities} /> : null}
+      {listing.pregens.length > 0 ? <PregenList scenarioId={listing.scenario_id} pregens={listing.pregens} abilities={listing.abilities} /> : null}
     </section>
   );
 }

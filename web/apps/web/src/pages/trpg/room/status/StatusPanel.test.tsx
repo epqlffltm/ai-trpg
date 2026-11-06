@@ -79,7 +79,11 @@ describe('StatusPanel', () => {
     expect(status.getByRole('button', { name: /상태·장비/ })).toHaveAttribute('aria-expanded', 'false');
     expect(status.getByText(/쓰러짐 · 죽음의 굴림 성공 1\/3 · 실패 0\/3/)).toBeInTheDocument();
     expect(status.getByText('(라운드 3까지)')).toBeInTheDocument();
-    const names = status.getAllByText(/^(렌|미아)$/).map((node) => node.textContent);
+    const names = status
+      .getAllByText(/^(렌|미아)$/)
+      // 그림이 없는 캐릭터의 첫 글자(#983)는 이름이 아니다
+      .filter((node) => node.getAttribute('aria-hidden') !== 'true')
+      .map((node) => node.textContent);
     expect(names).toEqual(['렌', '미아']);
   });
 

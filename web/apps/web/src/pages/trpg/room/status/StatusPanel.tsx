@@ -72,7 +72,7 @@ function StatusContent({ tab, table, myId, nameOf }: Props & { tab: StatusTab })
   if (tab === 'world') return <WorldContent table={table} myId={myId} />;
   return (
     <>
-      <CharacterCards members={table.members} rules={table.rules} myId={myId} nameOf={nameOf} gearOf={(member) => readOnlyGear(table, member)} />
+      <CharacterCards tableId={table.id} members={table.members} rules={table.rules} myId={myId} nameOf={nameOf} gearOf={(member) => readOnlyGear(table, member)} />
       <EventLog table={table} nameOfMember={(userId) => displayName(userId, table.members, nameOf)} />
     </>
   );
@@ -88,6 +88,7 @@ function MineContent({ table, myId, nameOf }: Props) {
   return (
     <>
       <CharacterCards
+        tableId={table.id}
         members={[mine]}
         rules={table.rules}
         myId={myId}

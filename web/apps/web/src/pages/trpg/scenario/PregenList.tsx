@@ -1,17 +1,23 @@
 // web/apps/web/src/pages/trpg/scenario/PregenList.tsx
 // 프리젠(제작자가 만든 캐릭터)의 이름, 설명, 숫자. 숫자의 열쇠(str …)는 시나리오의 능력치 이름(근력 …)으로 읽는다.
-// 함께 받는 소지품은 서버가 싣지 않는다.
+// 함께 받는 소지품은 서버가 싣지 않는다. 제작자가 붙인 캐릭터 그림(#983)이 있으면 이름 앞에 보인다.
 
 import type { ListingPregen, PublicListingDetail } from '../../../api/types';
+import { ListingAvatar } from '../portraits/CharacterAvatar';
 
 type Ability = PublicListingDetail['abilities'][number];
 
-export function PregenList({ pregens, abilities }: { pregens: ListingPregen[]; abilities: Ability[] }) {
+type Props = { scenarioId: string; pregens: ListingPregen[]; abilities: Ability[] };
+
+export function PregenList({ scenarioId, pregens, abilities }: Props) {
   return (
     <ul className="pregens">
       {pregens.map((pregen) => (
         <li key={pregen.name} className="pregen">
-          <p className="pregen__name">{pregen.name}</p>
+          <div className="pregen__head">
+            {pregen.portrait_id ? <ListingAvatar scenarioId={scenarioId} portraitId={pregen.portrait_id} name={pregen.name} /> : null}
+            <p className="pregen__name">{pregen.name}</p>
+          </div>
           {pregen.description ? <p className="pregen__description">{pregen.description}</p> : null}
           <dl className="pregen__stats">
             <div className="pregen__stat">
