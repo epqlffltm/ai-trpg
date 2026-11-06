@@ -2703,6 +2703,48 @@ details.room-panel[open] > summary {
   border-radius: var(--ui-radius);
 }
 
+/* 캐릭터 이름 앞의 동그란 그림(#983). 테이블 방의 캐릭터 카드, 프리젠 고르기, 공개 소개. 없으면 첫 글자 */
+.portrait-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface-subtle);
+}
+
+.portrait-avatar--initial {
+  font-weight: 600;
+}
+
+.portrait-avatar__button {
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.portrait-large {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  margin: 0 auto 8px;
+  border-radius: var(--ui-radius);
+}
+
+.status-card__head,
+.pregen__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 /* 캐릭터 그림(#983)의 작은 칸. 프리젠 목록의 줄 앞, 그림을 고르는 칸의 격자 */
 .portrait-thumb {
   display: inline-block;

@@ -1,9 +1,11 @@
 // web/apps/web/src/pages/trpg/room/character/PregenPicker.tsx
 // 프리젠 고르기. 이름, 설명, 받는 숫자를 보이고, 남이 가져간 것과 이 테이블에서 죽은 것은 막는다.
 // 막는 것은 안내다. 그 사이 남이 가져가면 서버가 409 pregen_taken 으로 거절한다.
+// 제작자가 붙인 캐릭터 그림(#983)이 있으면 설명 앞에 작게 보인다.
 
 import { Radio } from '@ai-trpg/ui';
 import type { TableDetail } from '../../../../api/types';
+import { TableAvatar } from '../../portraits/CharacterAvatar';
 import { pregenAvailable } from './characterDraft';
 import { SheetStats } from './SheetStats';
 
@@ -27,6 +29,7 @@ export function PregenPicker({ table, myId, selected, onSelect, error }: Props) 
           label={pregen.name}
           description={
             <div className="pregen-choice">
+              {pregen.portrait_id ? <TableAvatar tableId={table.id} portraitId={pregen.portrait_id} name={pregen.name} /> : null}
               {pregen.description ? <span className="prose">{pregen.description}</span> : null}
               <SheetStats rules={table.rules} abilities={pregen.sheet.abilities} maxHp={pregen.sheet.max_hp} />
               <PregenState pregen={pregen} myId={myId} />
