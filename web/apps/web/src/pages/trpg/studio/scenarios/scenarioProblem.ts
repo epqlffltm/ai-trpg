@@ -5,6 +5,7 @@
 //   - 403 code adult_content_required: 성인 확인을 하지 않고 성인용으로 저장했다
 //   - 422 {field: narration_model, reason}: 추천 서술 모델이 없거나(missing) 서비스 중이 아니다(not_offered)
 //   - 409 {problems}(게시): 게시할 조건을 갖추지 못했다. 무엇인지는 점검 패널이 보인다
+//   - 422 detail 이 pregens.image_id 로 시작: 프리젠의 캐릭터 그림이 내가 올린 그림이 아니다(지웠거나 남의 것, #983)
 
 import { ApiError } from '../../../../api/errors';
 import { commonProblem, type FormProblem } from '../../../../auth/problem';
@@ -12,10 +13,15 @@ import { describeSaveProblem } from '../studioProblem';
 
 const ADULT_ONLY = '성인용은 본인인증으로 성인 확인을 한 사람만 고를 수 있습니다.';
 const MODEL_NOT_OFFERED = '지금 서비스하지 않는 모델입니다. 추천 서술 모델을 다시 골라 주세요.';
+const PREGEN_IMAGE = '그림을 다시 골라 주세요. 지웠거나 내가 올리지 않은 그림입니다.';
 const NOT_READY = '게시할 조건을 갖추지 못했습니다. 게시 점검의 문제를 고친 뒤 다시 게시하세요.';
 
 function isAdultOnly(error: ApiError): boolean {
   return error.status === 403 && error.code === 'adult_content_required';
+}
+
+function isPregenImageProblem(error: ApiError): boolean {
+  return error.status === 422 && error.message.startsWith('pregens.image_id');
 }
 
 function isModelProblem(error: ApiError): boolean {
@@ -27,6 +33,7 @@ export function describeScenarioSaveProblem(error: unknown): FormProblem {
   if (commonProblem(error) || !(error instanceof ApiError)) return describeSaveProblem(error, 'scenarios');
   if (isAdultOnly(error)) return { message: ADULT_ONLY, fields: { rating: ADULT_ONLY } };
   if (isModelProblem(error)) return { message: MODEL_NOT_OFFERED, fields: { narration_model: MODEL_NOT_OFFERED } };
+  if (isPregenImageProblem(error)) return { message: PREGEN_IMAGE };
   return describeSaveProblem(error, 'scenarios');
 }
 

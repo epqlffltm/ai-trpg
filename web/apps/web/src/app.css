@@ -2703,6 +2703,61 @@ details.room-panel[open] > summary {
   border-radius: var(--ui-radius);
 }
 
+/* 캐릭터 그림(#983)의 작은 칸. 프리젠 목록의 줄 앞, 그림을 고르는 칸의 격자 */
+.portrait-thumb {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-subtle);
+}
+
+.portrait-thumb--empty {
+  font-size: 0.7em;
+  overflow: hidden;
+}
+
+/* 프리젠 목록의 한 줄: 그림, 이름과 시트 */
+.studio-pregen {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.studio-pregen > div {
+  min-width: 0;
+}
+
+.portrait-chooser {
+  margin-bottom: var(--ui-gap);
+}
+
+/* 그림을 고르는 칸. 창 안에서 펼친다 */
+.portrait-shelf {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+.portrait-shelf__heading {
+  font-size: 1em;
+  margin: 12px 0 6px;
+}
+
+.portrait-shelf__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 12px;
+}
+
+.portrait-shelf__item {
+  min-width: 0;
+}
+
 /* 둘을 나란히(추천 인원의 최소와 최대, 최대 HP 의 기준값과 상한). 좁으면 줄을 바꾼다 */
 .scenario-players__row {
   display: grid;

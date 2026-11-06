@@ -128,7 +128,7 @@ describe('캐릭터 탭', () => {
     await userEvent.type(adding.getByRole('textbox', { name: '이름' }), '사제');
     await userEvent.click(adding.getByRole('button', { name: '더하기' }));
     expect(await list.findByText('사제')).toBeInTheDocument();
-    expect(patches(seen)[0]).toEqual({ pregens: [KNIGHT, { name: '사제', description: '', sheet: null, items: [], money: 0 }] });
+    expect(patches(seen)[0]).toEqual({ pregens: [KNIGHT, { name: '사제', description: '', sheet: null, items: [], money: 0, image_id: null }] });
 
     await userEvent.click(list.getByRole('button', { name: '기사 고치기' }));
     const editing = within(await screen.findByRole('dialog'));
@@ -137,7 +137,11 @@ describe('캐릭터 탭', () => {
     await userEvent.type(editing.getByRole('textbox', { name: '근력' }), '17');
     await userEvent.click(editing.getByRole('button', { name: '저장' }));
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(2));
-    expect((patches(seen)[1] as { pregens: unknown[] }).pregens[0]).toEqual({ ...KNIGHT, sheet: { abilities: { str: 17, dex: 10, con: 14 }, max_hp: 14, skills: ['healing_touch'], resistances: [] } });
+    expect((patches(seen)[1] as { pregens: unknown[] }).pregens[0]).toEqual({
+      ...KNIGHT,
+      sheet: { abilities: { str: 17, dex: 10, con: 14 }, max_hp: 14, skills: ['healing_touch'], resistances: [] },
+      image_id: null,
+    });
 
     await userEvent.click(list.getByRole('button', { name: '사제 지우기' }));
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '지우기' }));
@@ -193,9 +197,9 @@ describe('캐릭터 입력', () => {
   });
 
   it('프리젠: 대소문자만 다른 이름도 겹침, 룰북이 없으면 원래 시트를 둔다. 최대 HP 의 식', () => {
-    expect(pregenHints({ name: 'Knight', description: '', sheet: null }, null, ['knight']).name).toBe('같은 이름의 프리젠이 있습니다.');
+    expect(pregenHints({ name: 'Knight', description: '', sheet: null, imageId: null }, null, ['knight']).name).toBe('같은 이름의 프리젠이 있습니다.');
     const draft = pregenDraft(KNIGHT as never, null);
-    expect(toPregen({ ...draft, name: ' 기사 ' }, null, KNIGHT as never)).toEqual(KNIGHT);
+    expect(toPregen({ ...draft, name: ' 기사 ' }, null, KNIGHT as never)).toEqual({ ...KNIGHT, image_id: null });
     expect(hpFormulaText({ ...rules, hp_ability: null })).toContain('기준값이 그대로 최대 HP');
   });
 });
