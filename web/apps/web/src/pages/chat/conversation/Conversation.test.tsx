@@ -34,6 +34,10 @@ describe('대화', () => {
     expect(screen.getByText('호감: 친구(2/4)')).toBeInTheDocument();
     expect(screen.getByText(/모델: GLM/)).toBeInTheDocument();
     expect(screen.getByText('비를 피해 카페에 들어온다.')).toBeInTheDocument();
+    // 그림 창의 왼쪽 아래에 캐릭터의 이름표(Stitch 21번). 꾸밈이라 읽는 프로그램에는 숨긴다
+    const nameplate = within(screen.getByRole('region', { name: '그림' })).getByText('루나');
+    expect(nameplate).toHaveClass('conversation__nameplate');
+    expect(nameplate).toHaveAttribute('aria-hidden', 'true');
     const log = within(screen.getByRole('list', { name: '말' }));
     expect(log.getByText('비가 오네요.')).toBeInTheDocument();
     expect(log.getByText('호감이 올랐다')).toBeInTheDocument();
