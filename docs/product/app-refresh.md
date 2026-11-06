@@ -2,8 +2,9 @@
 
 앱은 웹을 Capacitor 로 감싸서 낸다([화면 명세](screens.md)의 "앱 껍데기에서 확인할 것" 1). 앱의 WebView 에서 리프레시 쿠키로 갱신이 되는지, 안 되면 어느 길로 고칠지를 적는다. 이슈 #429.
 
-- 기준일: 2026-11-05
-- 앱 껍데기를 만들기 전이다. 2026-11-05 에 C(앱만 본문의 토큰)를 골랐다. 인증 서버의 길은 만들었다([인증 서버](../../auth-server/README.md)의 "앱의 토큰").
+- 기준일: 2026-11-06
+- 2026-11-05 에 C(앱만 본문의 토큰)를 골랐다. 인증 서버의 길([인증 서버](../../auth-server/README.md)의 "앱의 토큰")과 앱 껍데기([앱](../../app/README.md))를 만들었다.
+- 2026-11-06 에 Android 에뮬레이터에서 로그인, 갱신, 로그아웃을 봤다(아래 "기기에서 확인한 것").
 
 ## 지금의 모양
 
@@ -77,6 +78,8 @@ Capacitor 의 `server.url` 을 우리 사이트로 둔다. WebView 가 웹과 �
 
 ## 확인 못 한 것
 
+C 를 골라 A, B 의 것은 더 보지 않는다. 고르기 전에 남긴 것이다.
+
 - 실제 Android WebView. 위 시험은 데스크톱 Chromium 이다. WebView 의 서드 파티 쿠키 설정은 B 에 걸리지 않을 것으로 보지만(같은 사이트) 기기에서 보지 않았다.
 - Capacitor 가 `server.hostname` 의 이름을 가로챌 때 그 출처의 쿠키와 CORS 가 브라우저와 같게 도는지.
 - A 에서 Capacitor 플러그인이 원격 출처의 페이지에서 도는지.
@@ -98,6 +101,21 @@ C 다. 네이티브 앱이 흔히 하는 방식이고(OAuth 의 네이티브 앱
 - 플러그인은 `Origin` 을 붙이지 않는 네이티브의 HTTP 로 부른다(붙으면 `403`)
 - 그 밖의 API 는 access 토큰을 `Authorization` 에 싣는다. 프록시가 앱의 출처(`https://localhost`, `capacitor://localhost`)에만 CORS 를 연다(루트 README 의 "프록시는 앱의 출처에만 CORS 를 연다"). `Allow-Credentials` 는 없다. Capacitor 의 출처를 바꾸면(`server.hostname` 등) 프록시의 목록도 고친다
 - 앱으로 빌드할 때는 API 의 출처를 적는다(`VITE_API_ORIGIN`, web README). 비우면 웹처럼 같은 출처의 상대 주소다
+
+## 기기에서 확인한 것 (2026-11-06)
+
+에뮬레이터(Android Studio)의 디버그 빌드를 PC 의 compose 에 붙였다(`APP_API_ORIGIN=http://localhost:8080`, `adb reverse`). 방법은 [앱](../../app/README.md)의 "PC 의 compose 에 붙이기"다.
+인증 서버의 로그(`route`)와 기기의 저장 파일(`run-as` 로 읽은 `shared_prefs/app_auth.xml`)로 봤다.
+
+| 한 것 | 서버 | 기기 |
+| --- | --- | --- |
+| 로그인(2단계) | `/api/v1/auth/app/login/verify` 200 | refresh 토큰의 암호문과 IV 가 남는다 |
+| 앱을 강제로 끄고(`am force-stop`) 다시 열기 | `/api/v1/auth/app/refresh` 200 | 로그인이 이어진다 |
+| 로그아웃 | `/api/v1/auth/app/logout` 204 | 저장 파일이 빈다(`<map />`) |
+
+- 로그인의 1단계(비밀번호)는 웹과 같은 `/api/v1/auth/login` 이다. 토큰을 주지 않아 앱의 길을 따로 두지 않았다
+- 화면은 access 토큰을 메모리에만 둔다. 강제로 끈 뒤에 로그인이 이어진 것은 플러그인이 기기의 refresh 토큰으로 갱신했기 때문이다
+- 보지 않은 것: 실기기, 릴리스 빌드(HTTPS 의 출처), 비밀번호 변경(`/api/v1/auth/app/password/change`), refresh 토큰이 만료된 뒤(14일), iOS
 
 ## 정하지 않은 것
 
