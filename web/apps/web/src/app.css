@@ -3641,6 +3641,21 @@ details.room-panel[open] > summary {
   font-size: 0.85em;
 }
 
+/* 캐릭터의 이름표(Stitch 21번). 그림 창의 왼쪽 아래, 명조의 굵은 글 */
+.conversation__nameplate {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  margin: 0;
+  padding: 4px 14px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+  font-family: var(--ui-font-serif);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
 /* 대화 기록(chat C3, story D2 가 함께 쓴다). Stitch 시안의 말풍선. 바탕은 면보다 조금 어둡게 해 말풍선이 떠 보이게 */
 .conversation__log {
   max-height: 55vh;
@@ -4285,6 +4300,15 @@ details.room-panel[open] > summary {
   position: relative;
 }
 
+/* 일러스트 모드: 그림(캡션을 왼쪽 아래에 겹친 틀) 아래에 인물 줄이 흐른다 */
+.story-picture__frame {
+  position: relative;
+}
+
+.story-picture--scene .story-cast {
+  margin-top: 8px;
+}
+
 .story-picture__image {
   width: 100%;
   max-height: 320px;
@@ -4296,9 +4320,115 @@ details.room-panel[open] > summary {
   position: absolute;
   left: 8px;
   bottom: 8px;
+  margin: 0;
   padding: 2px 8px;
   border-radius: var(--ui-radius);
   background: var(--ui-surface);
+}
+
+/* 무대(Stitch 22번). 배경 위에 장면의 인물을 나란히 세운다. 말하는 인물만 밝고, 이름표는 인주색 */
+.story-picture--stage {
+  height: 320px;
+  overflow: hidden;
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-border);
+  box-shadow: var(--ui-shadow);
+}
+
+.story-picture--stage .story-picture__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+}
+
+.story-picture--stage .story-cast {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 0 12px 10px;
+}
+
+.story-picture--stage .story-cast > .hint {
+  display: inline-block;
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.story-picture--stage .story-cast__list {
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
+}
+
+.story-picture--stage .story-cast__member {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.story-picture--stage img.story-cast__portrait {
+  width: auto;
+  height: 240px;
+  max-width: 28vw;
+  border-radius: 0;
+  background: none;
+  object-fit: contain;
+  transition: filter 0.2s;
+}
+
+.story-picture--stage span.story-cast__portrait {
+  width: 96px;
+  height: 96px;
+}
+
+.story-picture--stage .story-cast__member[data-speaking='false'] .story-cast__portrait {
+  filter: brightness(0.55) saturate(0.7);
+}
+
+.story-picture--stage .story-cast__name {
+  padding: 1px 10px;
+  border-radius: var(--ui-radius);
+  background: var(--ui-seal);
+  color: var(--ui-seal-text);
+  font-size: 0.85em;
+  font-weight: 700;
+}
+
+.story-picture--stage .story-cast__member[data-speaking='false'] .story-cast__name {
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+
+.story-picture--stage .story-cast__member:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 767px) {
+  .story-picture--stage {
+    height: 200px;
+  }
+
+  .story-picture--stage img.story-cast__portrait {
+    height: 150px;
+  }
+
+  .story-picture--stage span.story-cast__portrait {
+    width: 64px;
+    height: 64px;
+  }
 }
 
 .story-cast__member {

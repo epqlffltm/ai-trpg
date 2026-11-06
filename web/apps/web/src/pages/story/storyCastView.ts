@@ -55,6 +55,15 @@ export function expressionsOf(segments: Pick<StorySegment, 'speaker' | 'expressi
   return faces;
 }
 
+/** 지금 말하는 인물. 조각들 가운데 인물이 말한 마지막 조각의 인물이다. 서술만 있으면 null */
+export function speakingOf(segments: Pick<StorySegment, 'speaker'>[]): string | null {
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    const speaker = segments[index]?.speaker;
+    if (speaker) return speaker;
+  }
+  return null;
+}
+
 /** 호감도의 단계. 그 값 이하에서 가장 높은 단계 */
 export function stageOf(stages: { name: string; at: number }[], value: number): string | null {
   return [...stages].sort((a, b) => b.at - a.at).find((stage) => value >= stage.at)?.name ?? null;

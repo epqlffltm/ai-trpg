@@ -39,7 +39,7 @@ import { SheetClose } from '../../components/SheetClose';
 import { ToolDock, useToolDock } from '../../components/ToolDock';
 import { StoryBookmarksButton } from './StoryBookmarksButton';
 import { StoryScreenshotButton } from './StoryScreenshotButton';
-import { backgroundOf, expressionsOf, sceneOf as pictureSceneOf } from './storyCastView';
+import { backgroundOf, expressionsOf, sceneOf as pictureSceneOf, speakingOf } from './storyCastView';
 import { StoryCastRow } from './StoryCastRow';
 import { StoryChoices } from './StoryChoices';
 import { StoryEnding } from './StoryEnding';
@@ -69,7 +69,9 @@ export function StoryRoom({ session, turns }: Props) {
   const streaming = turns.turn !== null;
   const busy = streaming || branching.isPending || editing.isPending;
   const scene = sceneOf(session.state, turns.turn);
-  const expressions = expressionsOf(sceneSegments(visibleStoryMessages(session.messages, turns.turn)));
+  const segments = sceneSegments(visibleStoryMessages(session.messages, turns.turn));
+  const expressions = expressionsOf(segments);
+  const speaking = speakingOf(segments);
   const view = session.view;
   const ended = isEnded(view, scene.state);
   const restarting = useStartStorySession();
@@ -149,8 +151,9 @@ export function StoryRoom({ session, turns }: Props) {
             scene={pictureSceneOf(view, session.messages, turns.turn?.userMessage ?? null)}
             background={backgroundOf(view, scene.state)}
             placeName={placeName(view, scene.state.place)}
-          />
-          <StoryCastRow view={view} state={scene.state} cast={scene.cast} expressions={expressions} disabled={busy || ended} onAct={act} />
+          >
+            <StoryCastRow view={view} state={scene.state} cast={scene.cast} expressions={expressions} speaking={speaking} disabled={busy || ended} onAct={act} />
+          </StoryPicture>
           <StoryMessageList
             session={session}
             turn={turns.turn}

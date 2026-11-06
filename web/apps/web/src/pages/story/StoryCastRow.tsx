@@ -3,6 +3,8 @@
 // 창의 위는 인물 창(D5, StoryCastProfile). 왼쪽 열의 인물 창(StoryCastPanel)도 같은 칸을 쓴다.
 // 아래는 행동: 건네기(가진 물건 하나), 고백(고백할 수 있는 인물에게만, 엔딩 전에만, 한 번 더 묻는다. 대기 중이면 막고 그때를 알린다).
 // 인물의 그림은 끝의 답에서 그 인물이 마지막으로 지은 표정의 스프라이트다(없으면 기본 표정). 실루엣 인물은 "???" 와 검은 칸이다. 받는 중이거나 끝난 세션이면 행동을 막는다.
+// 배경 그림이 있으면 그림 창(StoryPicture) 위에 겹쳐 인물을 나란히 세운다(Stitch 22번). 그때 말하는 인물(speaking)만 밝고 나머지는 어둡다.
+// 누가 말하는지는 data-speaking 으로 CSS 에 알린다. 말하는 인물이 없으면(서술만) 모두 밝다.
 
 import { Button, Dialog, Radio } from '@ai-trpg/ui';
 import { useCallback, useState } from 'react';
@@ -12,9 +14,18 @@ import { CastPortrait, CastProfile } from './StoryCastProfile';
 import { coolingText } from './storyCastView';
 import { castName, castOf } from './storyWorld';
 
-type Props = { view: StoryView; state: StoryState; cast: string[]; expressions: Record<string, string | null>; disabled: boolean; onAct: (action: StoryAction) => Promise<boolean> };
+type Props = {
+  view: StoryView;
+  state: StoryState;
+  cast: string[];
+  expressions: Record<string, string | null>;
+  /** 지금 말하는 인물(없으면 null) */
+  speaking: string | null;
+  disabled: boolean;
+  onAct: (action: StoryAction) => Promise<boolean>;
+};
 
-export function StoryCastRow({ view, state, cast, expressions, disabled, onAct }: Props) {
+export function StoryCastRow({ view, state, cast, expressions, speaking, disabled, onAct }: Props) {
   const [chosen, setChosen] = useState<string | null>(null);
   const close = useCallback(() => setChosen(null), []);
   return (
@@ -23,9 +34,14 @@ export function StoryCastRow({ view, state, cast, expressions, disabled, onAct }
       <ul className="plain-list story-cast__list">
         {cast.map((id) => (
           <li key={id}>
-            <button type="button" className="story-cast__member" onClick={() => setChosen(id)}>
+            <button
+              type="button"
+              className="story-cast__member"
+              data-speaking={speaking === null ? undefined : String(speaking === id)}
+              onClick={() => setChosen(id)}
+            >
               <CastPortrait cast={castOf(view, id)} expression={expressions[id] ?? null} />
-              <span>{castName(view, id)}</span>
+              <span className="story-cast__name">{castName(view, id)}</span>
             </button>
           </li>
         ))}
