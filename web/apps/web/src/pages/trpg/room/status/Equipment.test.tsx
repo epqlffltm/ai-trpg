@@ -157,7 +157,7 @@ describe('장비', () => {
     await userEvent.selectOptions(form.getByLabelText('무기(선택)'), '장검(+2)');
     await userEvent.selectOptions(form.getByLabelText('노릴 부위(선택)'), '몸');
     expect(form.getByLabelText('노려 치기(선택)')).toHaveValue('');
-    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    await userEvent.click(form.getByRole('button', { name: '선언 보내기' }));
 
     expect(await screen.findByText(/장검, 몸 노림/)).toBeInTheDocument();
     expect(sent(seen, 'PUT', '/rounds/current/declaration')[0]?.body).toMatchObject({

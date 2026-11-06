@@ -84,7 +84,7 @@ describe('RoundStage', () => {
     await userEvent.type(form.getByLabelText('무엇을 하나요'), '문을 밀어 연다');
     await userEvent.selectOptions(form.getByLabelText('행동'), '판정');
     await userEvent.selectOptions(form.getByLabelText('난이도'), '쉬움(10)');
-    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    await userEvent.click(form.getByRole('button', { name: '선언 보내기' }));
 
     expect(await screen.findByText('판정 · 근력, 쉬움')).toBeInTheDocument();
     expect(sent(seen, 'PUT', '/rounds/current/declaration')[0]?.body).toEqual({
@@ -124,7 +124,7 @@ describe('RoundStage', () => {
     const form = within(await screen.findByRole('form', { name: '선언' }));
     await vi.waitFor(() => expect(reads).toBe(2));
     await userEvent.type(form.getByLabelText('무엇을 하나요'), '기다린다');
-    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    await userEvent.click(form.getByRole('button', { name: '선언 보내기' }));
     expect(await screen.findByRole('button', { name: '고치기' })).toBeInTheDocument();
 
     releaseStale?.();
@@ -222,7 +222,7 @@ describe('RoundStage', () => {
 
     const form = within(await screen.findByRole('form', { name: '선언' }));
     await userEvent.type(form.getByLabelText('무엇을 하나요'), '기다린다');
-    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    await userEvent.click(form.getByRole('button', { name: '선언 보내기' }));
 
     expect(await screen.findByText(/결과를 서술하는 중입니다/)).toBeInTheDocument();
     expect(reads).toBeGreaterThanOrEqual(2);

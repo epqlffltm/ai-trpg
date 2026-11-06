@@ -4,6 +4,7 @@
 // 보내면 서버가 라운드를 돌려준다. 하던 라운드 읽기를 멈추고 그 값으로 바로 바꾼다(roundQueries 의 replaceCurrentRound).
 // 모두가 냈으면 닫기 시작한 라운드가 온다.
 // 마감 전에는 남의 선언이 보이지 않는다. 맞출 것은 채팅으로 맞춘다.
+// 보내기 단추는 "선언 보내기"(Stitch 20번), 낸 것을 고칠 때는 "고쳐 내기"다.
 
 import { Button } from '@ai-trpg/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -96,7 +97,7 @@ export function DeclarationForm({ table, me, mine, onDone, onCancel, onRequest }
       {cast.isError ? <p className="hint">장면의 인물을 불러오지 못해 대상을 고르는 행동이 줄었습니다.</p> : null}
       <div className="form-actions">
         <Button type="submit" busy={busy} disabled={Object.keys(hints).length > 0}>
-          {mine ? '고쳐 내기' : '선언하기'}
+          {mine ? '고쳐 내기' : '선언 보내기'}
         </Button>
         {onCancel ? (
           <Button variant="quiet" onClick={onCancel}>
