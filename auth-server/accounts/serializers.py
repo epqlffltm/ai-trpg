@@ -357,6 +357,23 @@ class ContentSettingsSerializer(serializers.Serializer):
     orientation = serializers.ChoiceField(choices=Orientation.choices, required=False)
 
 
+class NicknameChangeSerializer(serializers.Serializer):
+    """
+    본인의 닉네임 바꾸기(nicknames.py). 가입과 같은 형식과 예약어 검사를 한다.
+    열린 채 둔 기기에서 남이 바꾸지 못하게 비밀번호를 다시 받는다.
+    """
+
+    nickname = serializers.CharField(validators=[validate_nickname_format, validate_nickname_not_reserved])
+    password = serializers.CharField(max_length=PASSWORD_MAX_LENGTH, write_only=True, trim_whitespace=False)
+
+
+class MyNicknameSerializer(serializers.Serializer):
+    """바꾼 뒤의 닉네임과 다음에 바꿀 수 있는 시각. 다른 서버에는 새 access 토큰을 받은 뒤부터 새 이름이 보인다."""
+
+    nickname = serializers.CharField()
+    nickname_change_available_at = serializers.DateTimeField(allow_null=True)
+
+
 class MyProfileSerializer(serializers.Serializer):
     """제작자로서의 내 소개(#992). 200자까지, 비워 둘 수 있다. 앞뒤 공백은 지운다."""
 

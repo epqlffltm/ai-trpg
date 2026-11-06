@@ -1,5 +1,5 @@
 // web/apps/web/src/api/account.ts
-// 로그인한 본인의 계정(인증 서버). 동의의 상태와 바꾸기, 비밀번호 바꾸기, 모든 기기 로그아웃, 탈퇴 요청과 취소,
+// 로그인한 본인의 계정(인증 서버). 동의의 상태와 바꾸기, 비밀번호 바꾸기, 닉네임 바꾸기, 모든 기기 로그아웃, 탈퇴 요청과 취소,
 // 목록을 거르는 설정(성인 작품 표시, 성향, #986, #987).
 //
 // 다시 동의하거나 탈퇴를 취소해도 지금의 토큰은 그대로 인증 서버에만 통한다.
@@ -9,7 +9,7 @@ import type { components } from './generated/auth';
 import { appChangePassword, usesAppAuth } from './appAuth';
 import { apiRequest } from './http';
 import { clearSession, getSession, storeTokens, type Session } from './session';
-import type { ConsentState, ConsentStates, LoginResponse, WithdrawalState } from './types';
+import type { ConsentState, ConsentStates, LoginResponse, MyNickname, WithdrawalState } from './types';
 
 const AUTH = '/api/v1/auth';
 
@@ -47,6 +47,15 @@ export async function changePassword(currentPassword: string, newPassword: strin
     body: { current_password: currentPassword, new_password: newPassword },
   });
   return storeTokens(response);
+}
+
+/**
+ * 닉네임을 바꾼다(비밀번호를 확인한다). 30일에 한 번이고, 다음에 바꿀 수 있는 시각을 돌려준다.
+ * 비밀번호가 틀리면 400 password, 이름이 규칙에 어긋나거나 쓰이고 있으면 400 nickname, 30일 안이면 409 nickname_change_too_soon.
+ * 다른 서버는 access 토큰의 닉네임을 본다. 새 이름이 실린 토큰은 그 뒤의 갱신(refresh.ts)이 준다
+ */
+export function changeNickname(nickname: string, password: string): Promise<MyNickname> {
+  return apiRequest<MyNickname>(`${AUTH}/me/nickname`, { method: 'POST', body: { nickname, password } });
 }
 
 /** 모든 기기에서 로그아웃한다. 이 기기도 끊기므로(세션 버전이 오른다) 화면의 상태도 비운다 */

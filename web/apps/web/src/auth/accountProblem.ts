@@ -1,5 +1,5 @@
 // web/apps/web/src/auth/accountProblem.ts
-// 계정 화면(마이페이지, 다시 동의, 탈퇴 요청과 취소)의 실패를 화면에 보일 것으로 바꾼다. 순수한 함수다.
+// 계정 화면(마이페이지의 비밀번호와 닉네임 바꾸기, 다시 동의, 탈퇴 요청과 취소)의 실패를 화면에 보일 것으로 바꾼다. 순수한 함수다.
 
 import { ApiError } from '../api/errors';
 import { commonProblem, fieldProblem, unknownProblem, type FormProblem } from './problem';
@@ -12,12 +12,22 @@ export type ConsentProblem = FormProblem & {
 const FAILED = '처리하지 못했습니다. 잠시 뒤에 다시 시도하세요.';
 const CONSENTS_CHANGED = '문서의 판이 바뀌었습니다. 새 판을 읽고 다시 동의해 주세요.';
 const REQUIRED_ITEM = '필수 항목은 끌 수 없습니다. 철회하려면 탈퇴해야 합니다.';
+const NICKNAME_TOO_SOON = '닉네임은 30일에 한 번 바꿀 수 있습니다.';
 
 /** 비밀번호 바꾸기. 현재 비밀번호가 틀렸거나 새 비밀번호가 규칙에 어긋나면 그 칸에 서버의 글을 보인다 */
 export function describePasswordChangeProblem(error: unknown): FormProblem {
   const common = commonProblem(error);
   if (common || !(error instanceof ApiError)) return common ?? { message: FAILED };
   if (error.status === 400) return fieldProblem(error, '입력을 확인해 주세요.');
+  return unknownProblem(error, FAILED);
+}
+
+/** 닉네임 바꾸기. 비밀번호나 이름이 틀리면 그 칸에 서버의 글을 보인다. 30일 안이면 언제부터인지는 화면이 /me 로 보인다 */
+export function describeNicknameChangeProblem(error: unknown): FormProblem {
+  const common = commonProblem(error);
+  if (common || !(error instanceof ApiError)) return common ?? { message: FAILED };
+  if (error.status === 400) return fieldProblem(error, '입력을 확인해 주세요.');
+  if (error.status === 409 && error.code === 'nickname_change_too_soon') return { message: NICKNAME_TOO_SOON };
   return unknownProblem(error, FAILED);
 }
 

@@ -695,7 +695,7 @@
       },
       "Me": {
         "additionalProperties": false,
-        "description": "GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태, 목록을 거르는 설정,\n제작자로서의 소개를 더한다.",
+        "description": "GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태, 목록을 거르는 설정,\n제작자로서의 소개, 막은 것, 닉네임을 다시 바꿀 수 있는 시각을 더한다.",
         "properties": {
           "bio": {
             "type": "string"
@@ -729,6 +729,11 @@
             "title": "닉네임",
             "type": "string"
           },
+          "nickname_change_available_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
           "public_id": {
             "format": "uuid",
             "readOnly": true,
@@ -755,6 +760,7 @@
           "guardian_consent",
           "identity",
           "nickname",
+          "nickname_change_available_at",
           "public_id",
           "username",
           "withdrawal_scheduled_at"
@@ -794,6 +800,25 @@
         ],
         "type": "object"
       },
+      "MyNickname": {
+        "additionalProperties": false,
+        "description": "바꾼 뒤의 닉네임과 다음에 바꿀 수 있는 시각. 다른 서버에는 새 access 토큰을 받은 뒤부터 새 이름이 보인다.",
+        "properties": {
+          "nickname": {
+            "type": "string"
+          },
+          "nickname_change_available_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "nickname",
+          "nickname_change_available_at"
+        ],
+        "type": "object"
+      },
       "MyProfile": {
         "additionalProperties": false,
         "description": "제작자로서의 내 소개(#992). 200자까지, 비워 둘 수 있다. 앞뒤 공백은 지운다.",
@@ -805,6 +830,28 @@
         },
         "required": [
           "bio"
+        ],
+        "type": "object"
+      },
+      "NicknameChangeRequest": {
+        "additionalProperties": false,
+        "description": "본인의 닉네임 바꾸기(nicknames.py). 가입과 같은 형식과 예약어 검사를 한다.\n열린 채 둔 기기에서 남이 바꾸지 못하게 비밀번호를 다시 받는다.",
+        "properties": {
+          "nickname": {
+            "minLength": 1,
+            "pattern": "^[\\uac00-\\ud7a3a-zA-Z0-9_]{2,20}$",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "nickname",
+          "password"
         ],
         "type": "object"
       },
@@ -3634,6 +3681,130 @@
           }
         ],
         "summary": "내 초대 코드와 받은 초대 보상의 수. 코드가 없으면 만든다",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/me/nickname": {
+      "post": {
+        "description": "POST /api/v1/auth/me/nickname. 본인의 닉네임을 바꾼다(nicknames.py). 30일에 한 번, 비밀번호를 다시 받는다.",
+        "operationId": "me_nickname_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NicknameChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyNickname"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "비밀번호가 틀렸거나(password), 닉네임이 규칙에 어긋나거나 쓰이고 있거나 지금과 같다(nickname)"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "마지막으로 바꾼 뒤 30일이 지나지 않았다(nickname_change_too_soon). 언제부터인지는 /me 에 있다"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryLater"
+                }
+              }
+            },
+            "description": "시도가 너무 많다(too_many_attempts)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "본인의 닉네임을 바꾼다. 30일에 한 번, 비밀번호를 다시 받는다. 버린 이름은 30일 동안 묶인다",
         "tags": [
           "me"
         ],

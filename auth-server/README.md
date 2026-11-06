@@ -212,6 +212,7 @@ Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 �
 | POST | `/api/v1/auth/me/withdrawal` | 탈퇴를 요청한다. 본문 `{"password": "..."}`. 모든 세션이 끊기고 7일 뒤에 계정을 비운다 | 필요 |
 | DELETE | `/api/v1/auth/me/withdrawal` | 유예 중인 탈퇴를 취소한다 | 필요 |
 | PATCH | `/api/v1/auth/me/profile` | 제작자로서의 내 소개를 고친다. 본문 `{"bio": "..."}`(200자까지, 비우면 소개가 없다, 앞뒤 공백은 지운다, #992) | 필요 |
+| POST | `/api/v1/auth/me/nickname` | 내 닉네임을 바꾼다. 본문 `{"nickname": "...", "password": "..."}`. 30일에 한 번, 버린 이름은 30일 묶인다(아래 "닉네임 바꾸기") | 필요 |
 | PUT, DELETE | `/api/v1/auth/me/blocks/creators/{public_id}` | 제작자를 막고 푼다(#988). 답은 바뀐 뒤의 `{"creators": [...], "tags": [...]}`. 자기 자신이면 400 `block_self`, 상한을 넘으면 409 `block_limit` | 필요 |
 | PUT, DELETE | `/api/v1/auth/me/blocks/tags/{tag}` | 태그를 막고 푼다(#988). 태그는 주소에 인코딩한다(쉼표, `/` 도 된다). 앞뒤 공백을 떼고 1~20자가 아니면 400 `invalid_tag`, 상한을 넘으면 409 `block_limit` | 필요 |
 | PATCH | `/api/v1/auth/me/content-settings` | 목록 거르기의 설정을 고친다. 본문 `{"show_adult_content"?: bool, "orientation"?: "all" \| "male" \| "female"}`, 보낸 칸만 바뀐다. 성인 확인 전에 성인 작품 표시를 켜면 403 `adult_content_required`(#986, #987) | 필요 |
@@ -495,7 +496,7 @@ GET /api/v1/auth/creators/<공개 ID>
 | `/login` | 계정과 IP의 쌍 | 틀린 시도 | 15분에 5번 |
 | `/signup` | IP | 모든 시도(다시 보내기 포함) | 1시간에 10번 |
 | `/password/reset` | IP | 모든 시도 | 1시간에 5번 |
-| `/password/change` | 사용자 | 현재 비밀번호를 틀린 시도 | 15분에 5번 |
+| `/password/change` | 사용자 | 현재 비밀번호를 틀린 시도. 탈퇴 요청과 닉네임 바꾸기의 틀린 비밀번호도 함께 센다 | 15분에 5번 |
 
 IPv6는 주소 하나가 아니라 앞 64비트가 같은 묶음을 한 곳으로 센다.
 
@@ -726,6 +727,22 @@ CI도 로컬과 같은 초기화 스크립트로 `auth` 계정을 만들어 그 
 
 **외부에는 정수 PK 대신 UUID(`public_id`)를 내보낸다.** 정수 PK는 가입자 수와
 가입 순서를 추측하게 해 준다. 정수 PK는 내부 조인용으로 남긴다.
+
+### 닉네임 바꾸기
+
+본인이 `POST /me/nickname` 으로 바꾼다(`accounts/nicknames.py`). 관리자 화면에서 고친 것은 아래 규칙을 거치지 않는다.
+
+- **비밀번호를 다시 받는다.** 열린 채 둔 기기에서 남이 바꾸지 못하게 한다. 틀린 횟수는 비밀번호 변경과 같은 한도로 센다
+- **30일에 한 번이다.** 이름을 자꾸 바꿔 남을 흉내 내거나 신고를 피하지 못하게 한다. 바꾼 시각은 `nickname_changed_at` 이고,
+  다음에 바꿀 수 있는 시각은 `/me` 와 바꾼 답의 `nickname_change_available_at` 이다(지금 바꿀 수 있으면 `null`). 30일 안이면 `409` `code: nickname_change_too_soon`
+- **버린 이름은 30일 동안 묶인다(`ReleasedNickname`).** 옛 이름을 남이 바로 가져가 그 사람인 척하지 못하게 한다.
+  다른 사람은 그 이름으로 가입하거나 바꾸지 못한다. 쓰이고 있는 이름과 같은 글(`이미 사용 중인 닉네임입니다.`)이라 누가 버렸는지 드러나지 않는다.
+  버린 사람은 그 안에 되찾을 수 있다
+- 형식과 예약어는 가입과 같다. 지금과 같은 이름이면 `400` 이다. 거절된 요청은 30일을 쓰지 않는다
+- **세션은 끊지 않는다.** 이름은 비밀이 아니다
+- **다른 서버에는 새 access 토큰부터 보인다.** 다른 서버는 토큰의 `nickname` 을 본다(게시판은 사람마다 마지막 이름을 적어 둔다). 화면은 바꾼 직후에 갱신을 한 번 한다.
+  `public-names` 와 제작자 페이지는 이 서버가 답하므로 바로 바뀐다
+- 계정의 줄을 잠그고(`select_for_update`) 바꾼다. 같은 사람이 두 번 동시에 보내도 30일 한도를 두 번 쓰지 못한다. 겹친 이름은 마지막에 DB 의 유일 제약이 막는다
 
 ### 토큰
 

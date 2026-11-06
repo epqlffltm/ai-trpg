@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/me/AccountSummary.tsx
-// 마이페이지의 "계정". GET /me 를 그대로 보인다. 닉네임과 이메일 바꾸기는 서버에 없다.
+// 마이페이지의 "계정". GET /me 를 그대로 보인다. 닉네임은 아래의 "닉네임 바꾸기"(NicknameChangeForm)에서 바꾼다. 이메일 바꾸기는 서버에 없다.
 // 본인인증(A3)과 보호자 동의(A4)는 상태와 그 화면으로 가는 길을 보인다.
 
 import { Button, Notice } from '@ai-trpg/ui';
