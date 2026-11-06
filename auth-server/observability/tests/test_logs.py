@@ -325,9 +325,10 @@ class ConsoleMailInProductionTests(SimpleTestCase):
             with self.subTest(name=name), self.assertRaisesMessage(ImproperlyConfigured, name):
                 require_usable_smtp_login(user, password)
 
-    def test_empty_smtp_login_refuses_to_start(self):
-        for name, user, password in (('SMTP_USER', '', 'abcdabcdabcdabcd'), ('SMTP_PASSWORD', 'me@gmail.com', '')):
-            with self.subTest(name=name), self.assertRaisesMessage(ImproperlyConfigured, name):
+    def test_empty_smtp_login_starts(self):
+        # compose 는 메일을 보내지 않는 서비스(auth-migrate 등)에서 SMTP_PASSWORD 를 비운다. 그래도 떠야 한다
+        for user, password in (('me@gmail.com', ''), ('', ''), ('', 'abcdabcdabcdabcd')):
+            with self.subTest(user=user, password=password):
                 require_usable_smtp_login(user, password)
 
     def test_smtp_login_error_does_not_show_the_password(self):

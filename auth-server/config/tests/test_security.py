@@ -37,7 +37,7 @@ PRODUCTION_ENVIRONMENT = {
     'DEBUG': 'false',
     # check --deploy 는 50자가 안 되거나 글자 종류가 적은 비밀키를 경고한다
     'SECRET_KEY': 'test-only-production-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz',
-    # 운영에서는 메일 서버가 있어야 뜬다(config/mail_backends.py). 메일 서버를 적으면 계정도 적어야 한다
+    # 운영에서는 메일 서버가 있어야 뜬다(config/mail_backends.py)
     'SMTP_HOST': 'smtp.example.com',
     'SMTP_USER': 'test-only@example.com',
     'SMTP_PASSWORD': 'test-only-password',
@@ -150,6 +150,19 @@ class ProductionSettingsTests(SimpleTestCase):
         result = run_manage('check', '--deploy', '--fail-level', 'WARNING', **PRODUCTION_ENVIRONMENT)
 
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_production_starts_without_the_smtp_password(self):
+        # compose 의 auth-migrate 와 auth-welcome-credits 는 메일을 보내지 않아 SMTP_PASSWORD 를 비운다.
+        # 빈 값을 막았을 때 마이그레이션이 멈춰 인증 서버가 뜨지 못했다
+        result = run_manage('check', **{**PRODUCTION_ENVIRONMENT, 'SMTP_PASSWORD': ''})
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_production_refuses_to_start_with_a_korean_smtp_user(self):
+        result = run_manage('check', **{**PRODUCTION_ENVIRONMENT, 'SMTP_USER': '내주소@gmail.com'})
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('SMTP_USER', result.stderr)
 
     def test_production_refuses_to_start_with_an_insecure_refresh_cookie(self):
         result = run_manage('check', **{**PRODUCTION_ENVIRONMENT, 'REFRESH_COOKIE_SECURE': 'false'})
