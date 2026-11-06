@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/story/StoryStage.test.tsx
 // 그림 창의 무대(D2, Stitch 22번). 배경이 있으면 장면의 인물 줄을 배경 위에 겹치고, 말하는 인물만 밝힌다(data-speaking).
-// 그림이 늦게 와도 인물 줄이 새로 그려지지 않아 열어 둔 인물 창이 닫히지 않는다. 일러스트가 열리면 인물 줄은 그림 아래다. 순수한 함수.
+// 그림이 늦게 와도 인물 줄이 새로 그려지지 않아 열어 둔 인물 창이 닫히지 않는다. 일러스트가 열리면 인물 줄은 그림 아래다.
+// 열린 이벤트의 선택지는 그림 위에 겹친다(무대면 그림 창에, 일러스트면 일러스트의 틀에). 순수한 함수.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -23,19 +24,19 @@ const AT = '2026-10-27T03:00:00Z';
 const VIEW = storyView({
   slots: [{ id: 'evening', name: '저녁', start_hour: 18 }],
   places: [{ id: 'park', name: '공원', description: '', image_id: PARK, backgrounds: {} }],
-  events: [{ id: 'rain', name: '소나기', image_id: RAIN }] as never,
+  events: [{ id: 'rain', name: '소나기', image_id: RAIN, cast: [], choices: [{ id: 'share', text: '우산을 함께 쓴다' }, { id: 'run', text: '뛰어간다' }] }] as never,
   cast: [castOut('mina', '미나'), castOut('jun', '준')],
 });
 
-function state(): StoryState {
-  return { minutes: 18 * 60, day: 1, slot: 'evening', place: 'park', items: {}, affection: {}, companions: [], choosing: null, ending: null, cast: ['mina', 'jun'] };
+function state(choosing: string | null = null): StoryState {
+  return { minutes: 18 * 60, day: 1, slot: 'evening', place: 'park', items: {}, affection: {}, companions: [], choosing, ending: null, cast: ['mina', 'jun'] };
 }
 
 function message(n: number, role: string, extra: Partial<StoryMessage> = {}): StoryMessage {
   return { id: M(n), parent_id: n === 1 ? null : M(n - 1), role, content: '', status: 'complete', segments: [], cast: [], created_at: AT, edited: false, alternatives: [M(n)], ...extra };
 }
 
-function session(messages: StoryMessage[]): StorySession {
+function session(messages: StoryMessage[], choosing: string | null = null): StorySession {
   return {
     id: SESSION,
     title: '여름 학교',
@@ -43,7 +44,7 @@ function session(messages: StoryMessage[]): StorySession {
     view: VIEW,
     model: { slug: 'luna', display_name: 'Luna', vendor: 'openai', grade: 'standard', retires_on: null, usable: true },
     messages,
-    state: state(),
+    state: state(choosing),
     created_at: AT,
     updated_at: AT,
   } as StorySession;
@@ -61,7 +62,7 @@ const TALK = [
 ];
 
 /** 그림은 늦게 온다(release 를 부를 때까지). 인물 줄이 다시 그려지는지 보려고 */
-function signedIn(messages: StoryMessage[]) {
+function signedIn(messages: StoryMessage[], choosing: string | null = null) {
   let release: () => void = () => undefined;
   const late = new Promise<void>((resolve) => {
     release = resolve;
@@ -75,7 +76,7 @@ function signedIn(messages: StoryMessage[]) {
     'GET /api/v1/auth/me': () => json(200, { nickname: '모험가' }),
     'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: '0', total: '0', next_expiry: null }),
     'GET /api/v1/notification/me/notifications/unread-count': () => json(200, { unread: 0 }),
-    [`GET /api/v1/story/conversations/${SESSION}`]: () => json(200, session(messages)),
+    [`GET /api/v1/story/conversations/${SESSION}`]: () => json(200, session(messages, choosing)),
     [`GET /api/v1/asset/images/${PARK}`]: image,
     [`GET /api/v1/asset/images/${RAIN}`]: image,
   });
@@ -116,6 +117,31 @@ describe('그림 창의 무대', () => {
     expect(within(picture).getByRole('img', { name: '소나기' })).toBeInTheDocument();
     expect(picture).toHaveClass('story-picture--scene');
     expect(screen.getByRole('button', { name: '미나' })).not.toHaveAttribute('data-speaking');
+  });
+});
+
+describe('그림 위의 선택지', () => {
+  it('무대면 그림 창 위에 선택지를 겹치고, 번호는 단추의 이름에 들지 않는다', async () => {
+    const images = signedIn(TALK, 'rain');
+    renderApp(`/story/sessions/${SESSION}`);
+
+    images.release();
+    const picture = await screen.findByRole('figure', { name: '그림 창' });
+    const choices = within(within(picture).getByRole('region', { name: '선택지' }));
+    expect(choices.getByText('소나기')).toBeInTheDocument();
+    const share = choices.getByRole('button', { name: '우산을 함께 쓴다' });
+    expect(share.querySelector('.story-choice__number')).toHaveTextContent('1');
+    expect(share.closest('.story-picture__overlay')).not.toBeNull();
+  });
+
+  it('일러스트가 열려 있으면 일러스트의 틀 안에 겹친다', async () => {
+    const images = signedIn([message(1, 'action', { content: '[행동] 공원으로 갔다.', event_id: 'rain' }), message(2, 'assistant', { segments: [{ speaker: null, text: '비가 온다.' }] })], 'rain');
+    renderApp(`/story/sessions/${SESSION}`);
+
+    images.release();
+    const picture = await screen.findByRole('figure', { name: '그림 창' });
+    const region = within(picture).getByRole('region', { name: '선택지' });
+    expect(region.closest('.story-picture__frame')).not.toBeNull();
   });
 });
 

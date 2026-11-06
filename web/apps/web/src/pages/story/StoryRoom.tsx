@@ -151,6 +151,7 @@ export function StoryRoom({ session, turns }: Props) {
             scene={pictureSceneOf(view, session.messages, turns.turn?.userMessage ?? null)}
             background={backgroundOf(view, scene.state)}
             placeName={placeName(view, scene.state.place)}
+            overlay={choices ? <StoryChoices pending={choices} disabled={busy} onAct={act} /> : null}
           >
             <StoryCastRow view={view} state={scene.state} cast={scene.cast} expressions={expressions} speaking={speaking} disabled={busy || ended} onAct={act} />
           </StoryPicture>
@@ -182,7 +183,6 @@ export function StoryRoom({ session, turns }: Props) {
             />
           ) : null}
           {restarting.error ? <p className="ui-field__error">{describeStartProblem(restarting.error)}</p> : null}
-          {choices ? <StoryChoices pending={choices} disabled={busy} onAct={act} /> : null}
           <TurnNotice problem={turns.problem} failure={turns.failure} onChooseModel={() => setChoosingModel(true)} onClose={turns.clearNotice} />
           {ended ? (
             <div className="story-actions">
