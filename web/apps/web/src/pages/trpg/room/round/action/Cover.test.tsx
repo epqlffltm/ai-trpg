@@ -94,7 +94,7 @@ describe('엄폐하기', () => {
     expect(form.getByLabelText('행동')).toHaveValue('cover');
     expect(form.getByText(/지금 있는 곳의 커버\(7\)로 커버 세이브를 받습니다/)).toBeInTheDocument();
     await userEvent.type(form.getByLabelText('무엇을 하나요'), '무너진 담 뒤로 숨는다');
-    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    await userEvent.click(form.getByRole('button', { name: '선언 보내기' }));
 
     await vi.waitFor(() => {
       const sent = seen.filter((request) => request.method === 'PUT' && request.url === `${BASE}/rounds/current/declaration`);

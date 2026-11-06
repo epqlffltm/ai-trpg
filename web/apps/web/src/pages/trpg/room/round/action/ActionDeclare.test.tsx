@@ -83,11 +83,11 @@ describe('행동을 붙인 선언', () => {
     await userEvent.type(form.getByLabelText('무엇을 하나요'), '문지기를 벤다');
     await userEvent.selectOptions(form.getByLabelText('행동'), '판정');
     await userEvent.click(form.getByRole('radio', { name: '공격' }));
-    expect(form.getByRole('button', { name: '선언하기' })).toBeDisabled();
+    expect(form.getByRole('button', { name: '선언 보내기' })).toBeDisabled();
     await userEvent.selectOptions(await form.findByLabelText('대상'), '문지기');
     await userEvent.selectOptions(form.getByLabelText('피해'), '무거움(2d6)');
     await userEvent.click(form.getByRole('checkbox', { name: '죽이려 한다' }));
-    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    await userEvent.click(form.getByRole('button', { name: '선언 보내기' }));
 
     expect(await screen.findByText('판정 · 근력, 보통, 죽이려는 공격')).toBeInTheDocument();
     expect(puts(seen)[0]?.body).toEqual({
@@ -110,7 +110,7 @@ describe('행동을 붙인 선언', () => {
     expect(form.getByLabelText('무엇을 하나요')).toHaveFocus();
     await userEvent.type(form.getByLabelText('무엇을 하나요'), '미아에게 약초를 준다');
     await userEvent.selectOptions(form.getByLabelText('받을 사람'), '미아');
-    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    await userEvent.click(form.getByRole('button', { name: '선언 보내기' }));
 
     expect(await screen.findByText('건네기 · 약초 ×1 → 미아')).toBeInTheDocument();
     expect(puts(seen)[0]?.body).toMatchObject({ action: { kind: 'give', item: 'i1', count: 1, target: OTHER } });

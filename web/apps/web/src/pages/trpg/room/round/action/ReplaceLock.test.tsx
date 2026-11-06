@@ -108,7 +108,7 @@ describe('자물쇠 바꾸기의 선언', () => {
     expect(form.getByText('다룰 문과 달 자물쇠를 골라 주세요.')).toBeInTheDocument();
     await userEvent.selectOptions(form.getByLabelText('달 자물쇠'), PADLOCK);
     await userEvent.type(form.getByLabelText('무엇을 하나요'), '새 자물쇠를 단다');
-    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    await userEvent.click(form.getByRole('button', { name: '선언 보내기' }));
 
     await vi.waitFor(() => expect(declared(seen)[0]).toMatchObject({ action: { kind: 'replace', place: TOWER, item: PADLOCK } }));
   });

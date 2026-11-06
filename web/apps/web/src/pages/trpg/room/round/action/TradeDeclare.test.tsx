@@ -105,7 +105,7 @@ describe('돈과 사고팔기', () => {
     await userEvent.clear(form.getByLabelText('개수'));
     await userEvent.type(form.getByLabelText('개수'), '2');
     expect(form.getByText('낼 돈 10닢 · 가진 돈 30닢')).toBeInTheDocument();
-    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    await userEvent.click(form.getByRole('button', { name: '선언 보내기' }));
 
     expect(await screen.findByText('사기 · 횃불 ×2')).toBeInTheDocument();
     expect(puts(seen)[0]?.body).toEqual({ content: '횃불을 산다', action: { kind: 'buy', npc: SHOP, item: 'i4', count: 2 } });
@@ -141,7 +141,7 @@ describe('돈과 사고팔기', () => {
     await userEvent.selectOptions(form.getByLabelText('행동'), '돈 건네기');
     await userEvent.selectOptions(form.getByLabelText('받을 사람'), '미아');
     const before = tableReads;
-    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    await userEvent.click(form.getByRole('button', { name: '선언 보내기' }));
 
     expect(await form.findByText('돈이 모자랍니다.')).toBeInTheDocument();
     await vi.waitFor(() => expect(tableReads).toBeGreaterThan(before));

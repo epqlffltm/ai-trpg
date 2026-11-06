@@ -183,7 +183,7 @@ describe('문을 다루는 선언', () => {
     expect(form.getByLabelText('문')).toHaveValue(TOWER);
     expect(form.getByText(/판정: 민첩, 보통/)).toBeInTheDocument();
     await userEvent.type(form.getByLabelText('무엇을 하나요'), '쇠꼬챙이로 자물쇠를 쑤신다');
-    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    await userEvent.click(form.getByRole('button', { name: '선언 보내기' }));
 
     await vi.waitFor(() => expect(declared(seen)[0]).toMatchObject({ action: { kind: 'pick', place: TOWER } }));
   });
@@ -200,7 +200,7 @@ describe('문을 다루는 선언', () => {
     await userEvent.selectOptions(form.getByLabelText('문'), TOWER);
     await userEvent.selectOptions(form.getByLabelText('장치'), 'bar');
     await userEvent.type(form.getByLabelText('무엇을 하나요'), '빗장을 들어 올린다');
-    await userEvent.click(form.getByRole('button', { name: '선언하기' }));
+    await userEvent.click(form.getByRole('button', { name: '선언 보내기' }));
 
     await vi.waitFor(() => expect(declared(seen)[0]).toMatchObject({ action: { kind: 'unlock', place: TOWER, device: 'bar' } }));
   });
