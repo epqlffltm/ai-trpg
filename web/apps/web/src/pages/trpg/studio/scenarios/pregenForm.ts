@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/pregenForm.ts
-// 프리젠 하나의 입력(이름, 설명, 시트)과 프리젠 목록을 바꾸는 것. 순수한 함수다.
+// 프리젠 하나의 입력(이름, 설명, 시트, 캐릭터 그림)과 프리젠 목록을 바꾸는 것. 순수한 함수다.
 // 프리젠은 창에서 저장하면 목록을 통째로 보낸다(PATCH pregens). 소지품과 더 받는 돈은 물건·돈의 탭이 고치므로 그대로 둔다.
 // 이름은 앞뒤 공백을 떼고 1~50자, 대소문자만 달라도 같은 이름이다(서버의 reject_duplicate_names).
 
@@ -10,7 +10,7 @@ export const MAX_PREGENS = 8;
 export const PREGEN_NAME_MAX = 50;
 export const PREGEN_DESCRIPTION_MAX = 1000;
 
-export type PregenDraft = { name: string; description: string; sheet: SheetDraft | null };
+export type PregenDraft = { name: string; description: string; sheet: SheetDraft | null; imageId: string | null };
 
 /** 창의 처음 값. 룰북이 없으면 시트의 칸이 없다(sheet null, 저장할 때 원래 시트를 둔다) */
 export function pregenDraft(pregen: ScenarioPregen | null, rules: Ruleset | null): PregenDraft {
@@ -18,6 +18,7 @@ export function pregenDraft(pregen: ScenarioPregen | null, rules: Ruleset | null
     name: pregen?.name ?? '',
     description: pregen?.description ?? '',
     sheet: rules ? sheetDraft(pregen?.sheet, rules) : null,
+    imageId: pregen?.image_id ?? null,
   };
 }
 
@@ -35,7 +36,7 @@ export function pregenHints(draft: PregenDraft, rules: Ruleset | null, others: s
   return hints;
 }
 
-/** 보낼 프리젠. 원래 프리젠의 소지품과 돈은 그대로 둔다. 룰북이 없어 시트의 칸이 없으면 원래 시트를 둔다 */
+/** 보낼 프리젠. 원래 프리젠의 소지품과 돈은 그대로 둔다. 룰북이 없어 시트의 칸이 없으면 원래 시트를 둔다. 그림은 창에서 고른 것(#983) */
 export function toPregen(draft: PregenDraft, rules: Ruleset | null, original: ScenarioPregen | null): PregenBody {
   // 아는 기술(#805)과 저항(#886 ②)은 고치는 칸이 아직 없어 원래 시트의 것을 붙인다
   const kept = original?.sheet;
@@ -46,6 +47,7 @@ export function toPregen(draft: PregenDraft, rules: Ruleset | null, original: Sc
     sheet,
     items: original?.items ?? [],
     money: original?.money ?? 0,
+    image_id: draft.imageId,
   };
 }
 

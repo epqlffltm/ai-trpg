@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/PregensSection.tsx
 // 시나리오의 프리젠(B9, 캐릭터 탭의 아래). 8 개까지. 더하기와 고치기는 창에서, 지우기는 한 번 더 묻는다.
 // 창에서 저장하면 프리젠 목록을 통째로 바로 보낸다(탭의 저장과 따로다). 소지품과 돈은 물건·돈의 탭이 고친다.
+// 창에서 캐릭터 그림(#983)을 붙인다. 목록의 줄 앞에 작게 보인다.
 
 import { Button, Dialog, TextField } from '@ai-trpg/ui';
 import { useCallback, useState, type FormEvent } from 'react';
@@ -8,6 +9,8 @@ import type { Ruleset, ScenarioDetail, ScenarioPregen } from '../../../../api/ty
 import { ConfirmButton } from '../../../../components/ConfirmButton';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { TextAreaField } from '../../../../components/TextAreaField';
+import { MyPortrait } from '../../portraits/MyPortrait';
+import { PortraitChooser } from '../../portraits/PortraitChooser';
 import {
   MAX_PREGENS,
   otherNames,
@@ -57,11 +60,18 @@ export function PregensSection({ scenario, rules }: Props) {
       <ul className="plain-list studio-list" aria-label="프리젠">
         {pregens.map((pregen, at) => (
           <li key={pregen.name} className="studio-list__item studio-item">
-            <div>
-              <strong>{pregen.name}</strong>
-              <div className="studio-list__description">
-                <span className="hint">{sheetLine(pregen.sheet, rules) ?? '시트 없음'}</span>
-                {pregenExtras(pregen) ? <span className="hint"> · {pregenExtras(pregen)}</span> : null}
+            <div className="studio-pregen">
+              {pregen.image_id ? (
+                <MyPortrait portraitId={pregen.image_id} alt={`${pregen.name}의 그림`} />
+              ) : (
+                <span className="portrait-thumb portrait-thumb--empty" aria-hidden="true" />
+              )}
+              <div>
+                <strong>{pregen.name}</strong>
+                <div className="studio-list__description">
+                  <span className="hint">{sheetLine(pregen.sheet, rules) ?? '시트 없음'}</span>
+                  {pregenExtras(pregen) ? <span className="hint"> · {pregenExtras(pregen)}</span> : null}
+                </div>
               </div>
             </div>
             <span className="action-chips">
@@ -141,6 +151,7 @@ function PregenForm({ scenario, rules, at, done }: FormProps) {
       ) : (
         <p className="hint">룰북을 고르면 시트(능력치와 최대 HP)를 적을 수 있습니다.</p>
       )}
+      <PortraitChooser imageId={draft.imageId} onChange={(imageId) => setDraft((current) => ({ ...current, imageId }))} />
       <div className="actions">
         <Button type="submit" busy={saving.busy} disabled={blocked}>
           {at === null ? '더하기' : '저장'}
