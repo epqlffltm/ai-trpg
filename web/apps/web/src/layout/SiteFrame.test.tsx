@@ -6,7 +6,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../api/refresh';
-import { CREATE_TARGETS, createTargetPath } from '../pages/create/createTargets';
+import { CREATE_TARGETS, createPath } from '../pages/create/createTargets';
 import { installFakeFetch, json, tokens } from '../test/fakeFetch';
 import { renderApp } from '../test/renderApp';
 import { ME } from '../test/tableFixtures';
@@ -105,6 +105,6 @@ describe('틀의 순수한 함수', () => {
 
   it('만들기의 갈래는 셋이고 저마다 제작 화면이 있다', () => {
     expect(CREATE_TARGETS.map((one) => one.value)).toEqual(['trpg', 'chat', 'story']);
-    expect(CREATE_TARGETS.map((one) => createTargetPath(one.value))).toEqual(['/trpg/studio', '/chat/studio/characters', '/story/studio/worlds']);
+    expect(CREATE_TARGETS.map((one) => createPath(one.value, 'scenarios'))).toEqual(['/trpg/studio/scenarios/new', '/chat/studio/characters/new', '/story/studio/worlds/new']);
   });
 });
