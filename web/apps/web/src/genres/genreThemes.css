@@ -4,7 +4,9 @@
  * 값은 장르마다 Stitch 시안의 DESIGN.md 색 표에서 왔다. 시안은 장르마다 밝기 하나(라이트 또는 다크)만 주므로,
  * 다른 밝기는 그 표의 반전 값(inverse-surface, inverse-on-surface, inverse-primary)을 바탕·글자·강조로 삼고 면과 선은 그 둘을 섞어 지었다.
  * 글자와 면은 7:1, 흐린 글자·강조와 면은 4.5:1 이상인지 확인했다.
- * 무늬(돌, 한지, 철판 등)와 구성요소의 모양은 아직 없다. 여기는 색만이다.
+ * 맨 아래의 "모양"은 장르마다 무늬(바탕), 모서리, 제목 글꼴, 칸의 테, 주 단추, 서술의 표시를 정한다(밝기와 상관없이 하나).
+ * 무늬는 바탕(칸의 뒤)에만 깔고 CSS 의 그라데이션으로 그린다(바깥 그림 없음). 글이 놓이는 칸과 말풍선은 불투명한 면 그대로다.
+ * 움직이는 효과는 없다.
  */
 
 /* 테마를 단 칸은 제 바탕과 글자색을 갖는다(사이트의 바탕 위에 장르의 종이를 깐다) */
@@ -521,4 +523,181 @@
   --ui-accent-text: #231b00;
   --ui-danger: #ffb4ab;
   --ui-focus: #eec200;
+}
+
+/* ── 모양(Stitch 23~33번의 2단계) ──────────────────────────────────────────
+ * 장르마다 아래 변수를 정하고, 공통 규칙이 그것을 쓴다. 정하지 않은 변수는 공통 디자인의 모양이다.
+ *   --genre-pattern       바탕의 무늬(background-image). 칸 뒤에만 보인다
+ *   --genre-pattern-size  무늬 한 칸의 크기
+ *   --genre-ink           무늬의 선 색(바탕 위에 아주 옅게)
+ *   --genre-card-border   큰 칸(라운드, 상대의 말, 선언 칸, 소개의 칸)의 테
+ *   --genre-button-bg     주 단추의 면. --genre-button-shadow 는 주 단추의 그림자
+ *   --genre-mark          서술과 행동 줄의 왼쪽 표시
+ * 모서리(--ui-radius, --ui-radius-lg)와 제목 글꼴(--ui-font-serif)은 공통 변수를 그대로 덮어쓴다 */
+
+[data-genre] {
+  --genre-ink: color-mix(in srgb, var(--ui-border) 45%, transparent);
+  background-image: var(--genre-pattern, none);
+  background-size: var(--genre-pattern-size, auto);
+}
+
+[data-genre] :is(.chat-message--assistant, .round--current, .declare-box, .scenario__head, .character-page__head, .story-world__head, .scenario__main > section, .character-page__main > section, .story-world > section) {
+  border: var(--genre-card-border, 1px solid var(--ui-border));
+}
+
+[data-genre] .ui-button--primary {
+  background: var(--genre-button-bg, var(--ui-accent));
+  box-shadow: var(--genre-button-shadow, none);
+}
+
+[data-genre] .ui-button--primary:hover:not(:disabled) {
+  background: var(--ui-accent-hover);
+}
+
+[data-genre] :is(.story-segment--narration, .chat-message--action) {
+  border-left: var(--genre-mark, 0 solid transparent);
+}
+
+/* 판타지: 돌을 쌓은 성벽의 줄눈, 쇠 테의 두 줄 칸, 깎은 마법석의 주 단추 */
+[data-genre='fantasy'] {
+  --ui-radius: 3px;
+  --ui-radius-lg: 6px;
+  --genre-pattern:
+    repeating-linear-gradient(0deg, transparent 0 46px, var(--genre-ink) 46px 48px),
+    repeating-linear-gradient(90deg, transparent 0 94px, var(--genre-ink) 94px 96px);
+  --genre-pattern-size: 96px 96px;
+  --genre-card-border: 3px double var(--ui-border-strong);
+  --genre-button-bg: linear-gradient(135deg, var(--ui-accent), var(--ui-accent-hover));
+  --genre-button-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent-text) 35%, transparent);
+  --genre-mark: 3px solid var(--ui-border-strong);
+}
+
+/* 무협: 문창호의 살, 모서리 없는 한지 칸, 먹선 */
+[data-genre='wuxia'] {
+  --ui-radius: 0;
+  --ui-radius-lg: 0;
+  --genre-pattern:
+    repeating-linear-gradient(0deg, transparent 0 55px, var(--genre-ink) 55px 56px),
+    repeating-linear-gradient(90deg, transparent 0 39px, var(--genre-ink) 39px 40px);
+  --genre-card-border: 1px solid var(--ui-border-strong);
+  --genre-mark: 2px solid var(--ui-accent);
+}
+
+/* 현대 판타지: 헌터의 상태창. 잔 격자, 고정폭 제목, 강조색의 얇은 테 */
+[data-genre='urban_fantasy'] {
+  --ui-radius: 2px;
+  --ui-radius-lg: 4px;
+  --ui-font-serif: var(--ui-font-mono);
+  --genre-ink: color-mix(in srgb, var(--ui-accent) 14%, transparent);
+  --genre-pattern:
+    repeating-linear-gradient(0deg, transparent 0 23px, var(--genre-ink) 23px 24px),
+    repeating-linear-gradient(90deg, transparent 0 23px, var(--genre-ink) 23px 24px);
+  --genre-card-border: 1px solid color-mix(in srgb, var(--ui-accent) 55%, var(--ui-border));
+  --genre-button-shadow: inset 0 0 0 1px var(--ui-accent-hover);
+  --genre-mark: 2px solid var(--ui-accent);
+}
+
+/* SF: 사이버펑크 거리. 주사선, 각진 칸, 고정폭 제목 */
+[data-genre='sf'] {
+  --ui-radius: 0;
+  --ui-radius-lg: 0;
+  --ui-font-serif: var(--ui-font-mono);
+  --genre-ink: color-mix(in srgb, var(--ui-accent) 10%, transparent);
+  --genre-pattern: repeating-linear-gradient(0deg, transparent 0 3px, var(--genre-ink) 3px 4px);
+  --genre-card-border: 1px solid var(--ui-accent);
+  --genre-button-shadow: 3px 3px 0 var(--ui-border-strong);
+  --genre-mark: 3px solid var(--ui-accent);
+}
+
+/* 아포칼립스: 녹슨 철판과 경고 테이프. 옅은 빗금, 점선 테, 아래에 경고띠를 단 주 단추 */
+[data-genre='apocalypse'] {
+  --ui-radius: 0;
+  --ui-radius-lg: 2px;
+  --genre-pattern: repeating-linear-gradient(45deg, transparent 0 18px, var(--genre-ink) 18px 22px);
+  --genre-card-border: 2px dashed var(--ui-border-strong);
+  --genre-button-shadow: inset 0 -4px 0 var(--ui-border-strong);
+  --genre-mark: 4px solid var(--ui-accent);
+}
+
+/* 호러: 혈흔과 육벽. 번진 얼룩, 고르지 않은 모서리 */
+[data-genre='horror'] {
+  --ui-radius: 2px 6px 3px 8px;
+  --ui-radius-lg: 4px 14px 6px 12px;
+  --genre-ink: color-mix(in srgb, var(--ui-accent) 12%, transparent);
+  --genre-pattern:
+    radial-gradient(circle at 20% 30%, var(--genre-ink) 0 14px, transparent 15px),
+    radial-gradient(circle at 70% 75%, var(--genre-ink) 0 9px, transparent 10px);
+  --genre-pattern-size: 160px 160px;
+  --genre-card-border: 1px solid color-mix(in srgb, var(--ui-accent) 40%, var(--ui-border));
+  --genre-mark: 3px solid var(--ui-accent);
+}
+
+/* 미스터리: 고택의 서재. 마름모 벽지, 안쪽에 한 줄 더 그은 액자 칸 */
+[data-genre='mystery'] {
+  --ui-radius: 2px;
+  --ui-radius-lg: 4px;
+  --genre-pattern:
+    repeating-linear-gradient(45deg, transparent 0 27px, var(--genre-ink) 27px 28px),
+    repeating-linear-gradient(-45deg, transparent 0 27px, var(--genre-ink) 27px 28px);
+  --genre-card-border: 1px solid var(--ui-border-strong);
+  --genre-button-shadow: inset 0 0 0 2px var(--ui-accent), inset 0 0 0 3px var(--ui-accent-text);
+  --genre-mark: 2px double var(--ui-accent);
+}
+
+/* 로맨스: 편지지와 꽃잎. 흩어진 꽃잎 점, 둥근 칸, 알약 모양의 주 단추 */
+[data-genre='romance'] {
+  --ui-radius: 12px;
+  --ui-radius-lg: 20px;
+  --genre-ink: color-mix(in srgb, var(--ui-accent) 12%, transparent);
+  --genre-pattern:
+    radial-gradient(ellipse 6px 9px at 25% 25%, var(--genre-ink) 98%, transparent),
+    radial-gradient(ellipse 9px 6px at 75% 70%, var(--genre-ink) 98%, transparent);
+  --genre-pattern-size: 72px 72px;
+  --genre-card-border: 1px solid color-mix(in srgb, var(--ui-accent) 25%, var(--ui-border));
+  --genre-mark: 3px solid color-mix(in srgb, var(--ui-accent) 40%, transparent);
+}
+
+[data-genre='romance'] .ui-button--primary {
+  border-radius: 999px;
+}
+
+/* 일상: 공책의 괘선과 여백선, 고딕 제목, 둥근 칸 */
+[data-genre='slice_of_life'] {
+  --ui-radius: 8px;
+  --ui-radius-lg: 14px;
+  --ui-font-serif: var(--ui-font);
+  --genre-pattern:
+    linear-gradient(90deg, transparent 0 47px, color-mix(in srgb, var(--ui-danger) 25%, transparent) 47px 49px, transparent 49px),
+    repeating-linear-gradient(0deg, transparent 0 27px, var(--genre-ink) 27px 28px);
+  --genre-pattern-size: 100% 28px;
+  --genre-card-border: 1px solid var(--ui-border);
+  --genre-mark: 3px solid color-mix(in srgb, var(--ui-accent) 50%, transparent);
+}
+
+[data-genre='slice_of_life'] .ui-button--primary {
+  border-radius: 999px;
+}
+
+/* 대체역사: 옛 지도의 경위선, 두 줄 괘선의 칸, 각진 모서리 */
+[data-genre='alt_history'] {
+  --ui-radius: 0;
+  --ui-radius-lg: 2px;
+  --genre-pattern:
+    repeating-linear-gradient(0deg, transparent 0 63px, var(--genre-ink) 63px 64px),
+    repeating-linear-gradient(90deg, transparent 0 63px, var(--genre-ink) 63px 64px);
+  --genre-card-border: 3px double var(--ui-border);
+  --genre-mark: 3px double var(--ui-accent);
+}
+
+/* 코미디: 예능 자막. 큰 망점, 굵은 테, 딱딱한 그림자의 주 단추, 고딕 제목 */
+[data-genre='comedy'] {
+  --ui-radius: 10px;
+  --ui-radius-lg: 16px;
+  --ui-font-serif: var(--ui-font);
+  --genre-ink: color-mix(in srgb, var(--ui-accent) 14%, transparent);
+  --genre-pattern: radial-gradient(circle, var(--genre-ink) 0 3px, transparent 4px);
+  --genre-pattern-size: 22px 22px;
+  --genre-card-border: 3px solid var(--ui-text);
+  --genre-button-shadow: 3px 3px 0 var(--ui-text);
+  --genre-mark: 4px solid var(--ui-accent);
 }

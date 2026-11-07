@@ -1,5 +1,5 @@
 // web/apps/web/src/genres/genreTheme.test.tsx
-// 장르 테마(Stitch 23~33번): 아는 장르만 data-genre 로 달고, 장르마다 라이트·다크(기기 설정과 고정) 색이 모두 있으며, 소개 화면의 main 이 단다.
+// 장르 테마(Stitch 23~33번): 아는 장르만 data-genre 로 달고, 장르마다 라이트·다크(기기 설정과 고정) 색과 모양이 모두 있으며, 소개 화면의 main 이 단다.
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -25,9 +25,11 @@ describe('장르 테마', () => {
     expect(genreTheme(undefined)).toBeUndefined();
   });
 
-  it('장르마다 라이트, 기기의 다크, 고정한 다크의 색이 있다', () => {
+  it('장르마다 라이트, 기기의 다크, 고정한 다크의 색과 모양(무늬, 칸의 테) 한 벌이 있다', () => {
     for (const genre of GENRE_VALUES) {
-      expect(themes.match(new RegExp(`\\[data-genre='${genre}'\\] \\{`, 'g'))?.length, genre).toBe(3);
+      expect(themes.match(new RegExp(`\\[data-genre='${genre}'\\] \\{`, 'g'))?.length, genre).toBe(4);
+      const shape = themes.slice(themes.lastIndexOf(`[data-genre='${genre}'] {`));
+      expect(shape.slice(0, shape.indexOf('}')), genre).toMatch(/--genre-pattern:[\s\S]*--genre-card-border:/);
     }
   });
 
