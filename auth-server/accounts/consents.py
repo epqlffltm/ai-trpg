@@ -32,11 +32,12 @@ class Policy:
     required: bool
 
 
-# 항목마다 지금의 판. 1판은 변호사 검토 전 초안의 판이다(#450). 문서가 확정되면 판을 올린다
+# 항목마다 지금의 판. 1판은 변호사 검토 전 초안의 판이다(#450). 문서가 확정되면 판을 올린다.
+# privacy 2판(2026-11-07, 아직 초안): 쓰지 않게 된 닉네임을 30일 남기는 것을 보유 기간에 더했다(accounts/nicknames.py)
 POLICIES: Mapping[str, Policy] = MappingProxyType(
     {
         ConsentItem.TERMS: Policy(ConsentItem.TERMS, 1, date(2026, 10, 20), required=True),
-        ConsentItem.PRIVACY: Policy(ConsentItem.PRIVACY, 1, date(2026, 10, 20), required=True),
+        ConsentItem.PRIVACY: Policy(ConsentItem.PRIVACY, 2, date(2026, 11, 7), required=True),
         ConsentItem.MARKETING: Policy(ConsentItem.MARKETING, 1, date(2026, 10, 20), required=False),
         ConsentItem.AI_TRAINING: Policy(ConsentItem.AI_TRAINING, 1, date(2026, 10, 20), required=False),
     }
