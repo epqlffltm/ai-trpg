@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/home/RankingRows.tsx
 // 첫 화면의 이번 주 인기(#985). TRPG 의 시나리오, chat 의 캐릭터, story 의 세계관을 서비스마다 한 줄씩, 1위부터.
 // 최근 7일에 시작한 수(테이블, 대화, 세션)로 늘어놓는다. 서버마다 따로 부르고 따로 실패한다(#593). 로그인하지 않아도 보인다.
-// 카드마다 순위와 수("1위", "이번 주 12회")를 태그 앞에 붙인다.
+// 카드마다 순위와 수("1위", "이번 주 12회")를 태그 앞에 붙인다. 줄 하나씩은 탐색 화면(Stitch 12·16·17번)도 쓴다.
 
 import { ListSection } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -25,7 +25,7 @@ export function RankingRows({ signedIn }: { signedIn: boolean }) {
   );
 }
 
-function ScenarioRankingRow({ signedIn }: { signedIn: boolean }) {
+export function ScenarioRankingRow({ signedIn }: { signedIn: boolean }) {
   const query = useQuery(scenarioRankingQuery(signedIn));
   const items = query.data?.items ?? [];
   return (
@@ -50,7 +50,7 @@ function ScenarioRankingRow({ signedIn }: { signedIn: boolean }) {
   );
 }
 
-function CharacterRankingRow({ signedIn }: { signedIn: boolean }) {
+export function CharacterRankingRow({ signedIn }: { signedIn: boolean }) {
   const query = useQuery(characterRankingQuery(signedIn));
   const items = query.data?.items ?? [];
   return (
@@ -69,7 +69,7 @@ function CharacterRankingRow({ signedIn }: { signedIn: boolean }) {
   );
 }
 
-function WorldRankingRow({ signedIn }: { signedIn: boolean }) {
+export function WorldRankingRow({ signedIn }: { signedIn: boolean }) {
   const query = useQuery(worldRankingQuery(signedIn));
   const items = query.data?.items ?? [];
   return (

@@ -939,6 +939,19 @@ a.ui-button {
   gap: 8px var(--ui-gap);
 }
 
+/* 머리 줄 오른쪽의 길 여럿(시나리오 찾기의 테이블 로비·지나간 테이블) */
+.page-head__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+/* 탐색 화면(Stitch 12·16·17번)의 "전체 …" 제목. 위의 줄들과 띄운다 */
+.explore-all {
+  margin: calc(var(--ui-gap) * 1.5) 0 var(--ui-gap);
+  font-size: 1.15rem;
+}
+
 .section-head {
   display: flex;
   align-items: baseline;
