@@ -2,6 +2,7 @@
 // 홍보 배너 관리(#994, /operator/banners). 운영자만 열린다(RequireOperator).
 // 공개된 작품을 골라 첫 화면의 배너에 걸고 내린다. 시나리오는 게임 서버, 캐릭터와 세계관은 asset 서버에 건다.
 // 배너의 그림과 글은 작품의 것 그대로다. 공개를 내리거나 숨긴 작품은 걸린 채로 남지만 보이지 않는다("지금 안 보임").
+// 모양은 Stitch 44번: 큰 명조 제목, 칸마다 종이 한 장.
 
 import { Button, Notice, SelectField, TextField } from '@ai-trpg/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,7 +18,7 @@ const ASSET_KEY = ['asset', 'admin', 'banners'];
 
 export function BannersPage() {
   return (
-    <main className="page page--medium">
+    <main className="page page--medium operator-page">
       <h1>홍보 배너</h1>
       <p className="hint">첫 화면 위쪽의 넘기는 배너입니다. 서비스마다 차례가 작은 것부터 보입니다(TRPG, chat, story 차례).</p>
       <HangForm />

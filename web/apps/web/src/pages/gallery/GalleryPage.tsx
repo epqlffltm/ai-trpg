@@ -4,6 +4,7 @@
 // story 는 내 세션의 세계관마다, 인물마다 묶는다(StoryGallery).
 // 탭마다 맨 위에 그 서비스에서 내가 그린 장면 그림(#983, SnapshotGallery)을 둔다. 일러스트와 따로 읽고 따로 실패한다.
 // TRPG 탭에는 일러스트가 없고 내가 그린 테이블의 장면 그림만 있다(TableSnapshotGallery).
+// 모양은 Stitch 42번: 큰 명조 제목, 묶음마다 종이 한 장, 장면의 칸은 작은 종이.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -32,7 +33,7 @@ export function GalleryPage() {
   const [params] = useSearchParams();
   const tab = tabOf(params.get('tab'));
   return (
-    <main className="page page--medium">
+    <main className="page page--medium gallery-page">
       <h1>갤러리</h1>
       <nav className="board-tabs" aria-label="서비스">
         {TABS.map((item) => (
