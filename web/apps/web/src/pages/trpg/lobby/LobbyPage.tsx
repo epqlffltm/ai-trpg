@@ -2,9 +2,11 @@
 // 테이블 로비(B3, /trpg/lobby). 들어갈 테이블을 찾는다. 공개 테이블에 들어가거나, 초대 코드로 들어가거나, 내 테이블로 돌아간다.
 // 로그인해야 열린다. ?scenario_id= 가 있으면 그 시나리오의 테이블만 보인다(B2 의 "열린 테이블 보기").
 // 넓으면 오른쪽에 내 테이블, 좁으면 아래에 둔다.
+// 모양은 Stitch 13번: 위쪽에 로비·지나간 테이블 탭 줄(TableTabs), 카드마다 왼쪽 띠와 표, 오른쪽 아래 "앉기".
 
 import { Link, useSearchParams } from 'react-router';
 import { InviteJoinForm } from './InviteJoinForm';
+import { TableTabs } from './TableTabs';
 import { LobbyList } from './LobbyList';
 import { MyTablesAside } from './MyTablesAside';
 import { ScenarioFilterNote } from './ScenarioFilterNote';
@@ -17,6 +19,7 @@ export function LobbyPage() {
     <main className="page">
       <div className="page-head">
         <h1>테이블 로비</h1>
+        <TableTabs />
         <Link className="ui-button ui-button--primary" to={createPath}>
           {scenarioId ? '이 시나리오로 테이블 만들기' : '시나리오를 골라 테이블 만들기'}
         </Link>

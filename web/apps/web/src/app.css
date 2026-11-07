@@ -1015,31 +1015,42 @@ a.ui-button {
   padding: 0;
 }
 
+/* 로비의 테이블 카드(Stitch 13번). 왼쪽 띠(성인 테이블은 인주색), 큰 명조 제목, 설정 줄, 아래에 인원과 앉기 */
 .lobby-card {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px var(--ui-gap);
-  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
   border: 1px solid var(--ui-border);
+  border-left: 4px solid var(--ui-accent);
   border-radius: var(--ui-radius);
   background: var(--ui-surface);
 }
 
-.lobby-card__body {
-  flex: 1 1 260px;
+.lobby-card--adult {
+  border-left-color: var(--ui-seal);
 }
 
 .lobby-card__title {
   margin: 0 0 6px;
-  font-weight: 600;
+  font-family: var(--ui-font-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.lobby-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-border);
 }
 
 .lobby-card__seats {
-  margin-left: 8px;
   color: var(--ui-text-muted);
-  font-weight: 400;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .lobby-card__facts {
@@ -4684,5 +4695,142 @@ details.room-panel[open] > summary {
 
   .promo-banner__image {
     width: 100%;
+  }
+}
+
+/* 테이블 로비와 지나간 테이블의 탭 줄(Stitch 13번). 지금 화면은 감청 밑줄 */
+.table-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.table-tabs a {
+  padding: 6px 12px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--ui-text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.table-tabs a[aria-current='page'] {
+  border-bottom-color: var(--ui-accent);
+  color: var(--ui-accent);
+  font-weight: 700;
+}
+
+/* 캐릭터를 만드는 방식(Stitch 15번). 방식마다 한 장의 카드, 고른 것은 감청 테 */
+.choice-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12em, 1fr));
+  gap: 8px;
+}
+
+.choice-cards > legend {
+  grid-column: 1 / -1;
+}
+
+.choice-cards > .ui-checkbox {
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.choice-cards > .ui-checkbox:has(input:checked) {
+  border-color: var(--ui-accent);
+  box-shadow: inset 0 0 0 1px var(--ui-accent);
+}
+
+/* 테이블 만들기(Stitch 14번). 번호가 붙은 칸들, 넓으면 오른쪽에 따라오는 요약과 만들기 */
+.table-create__form {
+  display: grid;
+  gap: var(--ui-gap);
+}
+
+.table-create__main {
+  display: grid;
+  gap: var(--ui-gap);
+  min-width: 0;
+}
+
+.table-create__step {
+  padding: 16px 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+
+.table-create__step > h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-family: var(--ui-font-serif);
+  font-size: 1.15rem;
+}
+
+.table-create__number {
+  display: grid;
+  place-items: center;
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: var(--ui-radius);
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+  font-family: var(--ui-font);
+  font-size: 0.85em;
+}
+
+.table-create__summary {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 16px 18px;
+  border: 1px solid var(--ui-border);
+  border-top: 3px solid var(--ui-accent);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+.table-create__summary h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.table-create__facts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.table-create__facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.table-create__facts dt {
+  color: var(--ui-text-muted);
+}
+
+.table-create__facts dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 1000px) {
+  .table-create__form {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    align-items: start;
+  }
+
+  .table-create__summary {
+    position: sticky;
+    top: 16px;
   }
 }

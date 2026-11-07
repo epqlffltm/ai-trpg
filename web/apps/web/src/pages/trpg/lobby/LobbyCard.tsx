@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/trpg/lobby/LobbyCard.tsx
 // 로비의 테이블 하나. 들어가기 전에 알아야 할 설정을 모두 보인다(화면 명세 B3): 등급, 인원, 비밀번호, 문체,
 // 라운드 시간 제한, 서술 모델(이름), 크레딧 기다리기, 쪽지 알림, 참고 자료.
+// 모양은 Stitch 13번: 왼쪽 띠(성인 테이블은 인주색), 위에 등급과 비밀번호의 표, 큰 제목, 설정 줄, 아래에 인원과 "앉기".
 
 import { Button } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -16,23 +17,23 @@ export function LobbyCard({ table, busy, disabled, onJoin }: Props) {
   const modelName = useModelName(table.narration_model);
   const facts = tableFacts(table, modelName);
   return (
-    <li className="lobby-card">
+    <li className={table.rating === 'adult' ? 'lobby-card lobby-card--adult' : 'lobby-card'}>
       <div className="lobby-card__body">
-        <p className="lobby-card__title">
-          {table.title}
-          <span className="lobby-card__seats">
-            {table.member_count}/{table.capacity}명
-          </span>
-        </p>
+        <p className="lobby-card__title">{table.title}</p>
         <ul className="lobby-card__facts">
           {facts.map((fact) => (
             <li key={fact}>{fact}</li>
           ))}
         </ul>
       </div>
-      <Button busy={busy} disabled={disabled && !busy} onClick={onJoin} aria-label={`${table.title}에 들어가기`}>
-        들어가기
-      </Button>
+      <div className="lobby-card__foot">
+        <span className="lobby-card__seats">
+          {table.member_count}/{table.capacity}명
+        </span>
+        <Button busy={busy} disabled={disabled && !busy} onClick={onJoin} aria-label={`${table.title}에 앉기`}>
+          앉기
+        </Button>
+      </div>
     </li>
   );
 }

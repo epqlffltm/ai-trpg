@@ -162,7 +162,7 @@ describe('LobbyPage', () => {
     expect(within(card).getByText('문체 정통')).toBeInTheDocument();
     expect(await within(card).findByText('모델 Gemini Flash')).toBeInTheDocument();
 
-    await userEvent.click(within(card).getByRole('button', { name: '테이블 b1에 들어가기' }));
+    await userEvent.click(within(card).getByRole('button', { name: '테이블 b1에 앉기' }));
 
     expect(await screen.findByRole('heading', { name: '목요일 모임', level: 1 })).toBeInTheDocument();
     expect(seen.find((request) => request.url.endsWith('/join'))?.body).toEqual({ password: null });
@@ -179,15 +179,15 @@ describe('LobbyPage', () => {
     });
     renderApp('/trpg/lobby');
 
-    await userEvent.click(await screen.findByRole('button', { name: '테이블 b1에 들어가기' }));
+    await userEvent.click(await screen.findByRole('button', { name: '테이블 b1에 앉기' }));
     const dialog = screen.getByRole('dialog');
     await userEvent.type(within(dialog).getByLabelText('테이블의 비밀번호'), 'wrong');
-    await userEvent.click(within(dialog).getByRole('button', { name: '들어가기' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: '앉기' }));
     expect(await within(dialog).findByText('비밀번호가 맞지 않습니다.')).toBeInTheDocument();
 
     await userEvent.clear(within(dialog).getByLabelText('테이블의 비밀번호'));
     await userEvent.type(within(dialog).getByLabelText('테이블의 비밀번호'), 'right');
-    await userEvent.click(within(dialog).getByRole('button', { name: '들어가기' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: '앉기' }));
     expect(await screen.findByRole('heading', { name: '목요일 모임', level: 1 })).toBeInTheDocument();
   });
 
@@ -202,7 +202,7 @@ describe('LobbyPage', () => {
     });
     renderApp('/trpg/lobby');
 
-    await userEvent.click(await screen.findByRole('button', { name: '테이블 b1에 들어가기' }));
+    await userEvent.click(await screen.findByRole('button', { name: '테이블 b1에 앉기' }));
 
     expect(await screen.findByText('그 사이에 자리가 찼습니다.')).toBeInTheDocument();
     expect(await screen.findByText('지금 모집 중인 테이블이 없습니다.')).toBeInTheDocument();
