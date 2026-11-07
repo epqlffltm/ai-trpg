@@ -7,6 +7,7 @@
 // 상대의 말 고치기는 모델을 부르지 않아 모델이 없어도 된다.
 // 책갈피(#982)는 말마다 달고 떼며 받는 중에도 된다. 책갈피의 자리로 갈 때 지금 가지에 없는 말이면 가지를 바꾼다(바꾸는 것은 받는 중이 아닐 때만).
 // 장면 그림(#983)은 답과 따로 돈다. 받는 중에도 지난 답을 그릴 수 있다. 시작하지 못한 까닭은 대사창 아래에 띄운다.
+// 장르 테마(Stitch 23~33번): main 에 data-genre 를 단다(genres/genreTheme.ts).
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -41,6 +42,7 @@ import type { TurnOpener, useConversationTurn } from './useConversationTurn';
 import { WorldToolbar } from './WorldToolbar';
 import { hasMap } from './worldView';
 import { putQueryData } from '../../../queryClient';
+import { genreTheme } from '../../../genres/genreTheme';
 
 type Props = { detail: ConversationDetail; turns: ReturnType<typeof useConversationTurn> };
 
@@ -109,7 +111,7 @@ export function ConversationRoom({ detail, turns }: Props) {
   }
 
   return (
-    <main className="page conversation chat-room" data-sheet={dock.sheet ? 'tools' : undefined}>
+    <main className="page conversation chat-room" data-sheet={dock.sheet ? 'tools' : undefined} data-genre={genreTheme(detail.character.document.genre)}>
       <ConversationHeader detail={detail} />
       <div className="chat-room__body">
         <div className="chat-room__main">

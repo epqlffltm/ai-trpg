@@ -3,6 +3,7 @@
 // 아래에 해금 대상 일러스트의 칸. 보이는 것은 마지막으로 공개한 판이다. 신고는 2단계(E4)다.
 // 머리의 "만든 사람"을 누르면 제작자 페이지(#992)로 간다. 머리의 관심(하트, #989) 단추로 관심을 두고 거둔다.
 // 모양은 Stitch 18번(소개 화면 셋의 같은 모양): 머리는 한 장의 종이(왼쪽에 세로로 긴 그림), 칸마다 종이 한 장(CSS).
+// 장르 테마(Stitch 23~33번): main 에 data-genre 를 단다(genres/genreTheme.ts).
 
 import type { PublicCharacterDetail } from '../../../api/types';
 import { useSession } from '../../../auth/useSession';
@@ -16,12 +17,13 @@ import { CharacterScenes } from './CharacterScenes';
 import { profileLine, stageNames } from './characterView';
 import { IntroHtml } from './IntroHtml';
 import { StartPicker } from './StartPicker';
+import { genreTheme } from '../../../genres/genreTheme';
 
 export function CharacterDetail({ character }: { character: PublicCharacterDetail }) {
   const document = character.document;
   const signedIn = useSession() !== null;
   return (
-    <main className="page character-page">
+    <main className="page character-page" data-genre={genreTheme(document.genre)}>
       <CharacterHead character={character} />
       <div className="character-page__body">
         <div className="character-page__main">
