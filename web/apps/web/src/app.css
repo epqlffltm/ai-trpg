@@ -491,6 +491,147 @@
   margin: 0 0 var(--ui-gap);
 }
 
+/* 마이페이지(Stitch 10번). 맨 위 프로필은 종이 한 장(왼쪽 그림 자리, 큰 명조 닉네임, 오른쪽 단추 둘).
+ * 그 아래 탭 넷은 넓은 칸으로 나눈 줄(좁으면 가로로 밀어 본다), 지금 탭은 면을 깐다 */
+.my-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-gap);
+  padding: 20px 24px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+.my-head__avatar {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-accent);
+  font-family: var(--ui-font-serif);
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+.my-head__info {
+  flex: 1 1 12em;
+  min-width: 0;
+}
+
+.my-head__info h1 {
+  margin: 0;
+  color: var(--ui-accent);
+  font-family: var(--ui-font-serif);
+  font-size: clamp(1.5rem, 3vw, 2rem);
+}
+
+.my-head__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+}
+
+.my-head__handle {
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font-mono);
+  font-size: 0.9em;
+}
+
+.my-head__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.my-tabs {
+  display: flex;
+  overflow-x: auto;
+  gap: 4px;
+  margin: var(--ui-gap) 0 0;
+  padding: 4px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+
+.my-tab {
+  flex: 1 0 auto;
+  padding: 10px 16px;
+  border-radius: var(--ui-radius);
+  color: var(--ui-text-muted);
+  font-family: var(--ui-font-serif);
+  font-size: 1.05rem;
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.my-tab:hover {
+  color: var(--ui-text);
+}
+
+.my-tab[aria-current='page'] {
+  background: var(--ui-surface-subtle);
+  color: var(--ui-accent);
+  font-weight: 700;
+}
+
+.my-page__panel > .page-section {
+  margin-top: var(--ui-gap);
+  padding: 16px 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+
+.my-page__panel > .page-section h2 {
+  padding-left: 10px;
+  border-left: 3px solid var(--ui-accent);
+  font-family: var(--ui-font-serif);
+}
+
+/* 내 포인트의 카드 둘(골드, 실버) */
+.my-points {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--ui-gap);
+  margin-bottom: var(--ui-gap);
+}
+
+.my-points__card {
+  padding: 14px 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-subtle);
+}
+
+.my-points__card--gold {
+  border-top: 3px solid var(--ui-brass);
+}
+
+.my-points__card p {
+  margin: 0 0 4px;
+}
+
+.my-points__label {
+  color: var(--ui-text-muted);
+}
+
+.my-points__amount {
+  font-family: var(--ui-font-serif);
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
 .page--loading {
   color: var(--ui-text-muted);
 }

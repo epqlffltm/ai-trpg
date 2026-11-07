@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/me/MyPage.test.tsx
-// 마이페이지(A5). 로그인해야 열리는지, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의를 켜고 끄는 것, 탈퇴 요청, 친구 초대(#990)를 본다.
+// 마이페이지(A5, Stitch 10번). 로그인해야 열리는지, 프로필 머리와 탭 넷, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의를 켜고 끄는 것, 탈퇴 요청, 친구 초대(#990)를 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -51,6 +51,29 @@ describe('MyPage', () => {
     renderApp('/me');
 
     expect(await screen.findByRole('heading', { name: '로그인' })).toBeInTheDocument();
+  });
+
+  it('맨 위에 닉네임과 아이디, 탭 넷이 있고 처음은 내 계정이다. 탭을 고르면 그 칸만 보인다', async () => {
+    signedIn({
+      'GET /api/v1/billing/wallet': () => json(200, { paid: '80', free: '10', total: '90', next_expiry: null }),
+    });
+    renderApp('/me');
+
+    expect(await screen.findByRole('heading', { level: 1, name: '모험가' })).toBeInTheDocument();
+    expect(screen.getByText('@player_one')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '회원정보 수정' })).toHaveAttribute('href', '/me');
+    expect(screen.getByRole('link', { name: '제작자 페이지' })).toHaveAttribute('href', '/me?tab=creator');
+    const tabs = within(screen.getByRole('navigation', { name: '마이페이지' }));
+    expect(tabs.getAllByRole('link').map((link) => link.textContent)).toEqual(['내 계정', '내 포인트', '설정', '제작자']);
+    expect(tabs.getByRole('link', { name: '내 계정' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('heading', { name: '비밀번호 바꾸기' })).toBeInTheDocument();
+
+    await userEvent.click(tabs.getByRole('link', { name: '내 포인트' }));
+    const gold = within(await screen.findByRole('region', { name: '골드' }));
+    expect(await gold.findByText('80')).toBeInTheDocument();
+    expect(gold.getByRole('link', { name: '충전' })).toHaveAttribute('href', '/wallet/charge');
+    expect(screen.getByRole('link', { name: '내 포인트' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('heading', { name: '비밀번호 바꾸기' })).toBeNull();
   });
 
   it('계정을 보이고, 미성년자가 아니면 보호자 동의 줄을 숨긴다', async () => {
@@ -215,7 +238,7 @@ describe('requestedNotice', () => {
     signedIn();
     const writeText = vi.fn(() => Promise.resolve());
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    renderApp('/me');
+    renderApp('/me?tab=settings');
 
     const invite = (await screen.findByRole('heading', { name: '친구 초대' })).closest('section') as HTMLElement;
     expect(await within(invite).findByText('ABCD2345')).toBeInTheDocument();

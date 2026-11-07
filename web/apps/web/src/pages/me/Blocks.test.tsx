@@ -96,7 +96,7 @@ describe('차단', () => {
 
   it('마이페이지에서 풀고 태그를 더한다', async () => {
     const { seen } = signedIn({ creators: [CREATOR], tags: ['공포'] });
-    renderApp('/me');
+    renderApp('/me?tab=settings');
 
     const section = (await screen.findByRole('heading', { name: '차단' })).closest('section') as HTMLElement;
     expect(await within(section).findByRole('link', { name: '이야기꾼' })).toHaveAttribute('href', `/creators/${CREATOR}`);

@@ -78,7 +78,7 @@ describe('룰북', () => {
     const { seen } = signedIn({
       [`POST ${BASE}`]: (request) => json(201, detail({ title: '사십천', rules: rules('srd5', (request.body as { armor: unknown }).armor) })),
     });
-    renderApp('/me');
+    renderApp('/me?tab=creator');
 
     await userEvent.click(await screen.findByRole('link', { name: /재료와 시나리오 만들기/ }));
     await userEvent.click(await screen.findByRole('link', { name: '내 룰북' }));

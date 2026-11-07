@@ -144,7 +144,7 @@ describe('마이페이지의 팔로잉', () => {
           : json(200, { items: [{ creator_id: CREATOR, followed_at: '2026-11-01T00:00:00Z' }], total: 21 });
       },
     });
-    renderApp('/me');
+    renderApp('/me?tab=settings');
 
     const section = (await screen.findByRole('heading', { name: '팔로잉' })).closest('section') as HTMLElement;
     expect(seen.some((request) => request.url.startsWith('/api/v1/notification/me/follows'))).toBe(false);

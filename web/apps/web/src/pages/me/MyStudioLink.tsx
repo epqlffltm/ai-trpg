@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/me/MyStudioLink.tsx
 // 마이페이지의 "만들기". TRPG 의 제작 도구(B9)의 허브와 chat 의 캐릭터 만들기(C6), 캐릭터와 세계관이 붙이는 로어북, story 의 세계관 만들기(D7)로 가는 길.
-// 아래에 내 작품의 숫자(#991, MyCreatorStats)를 둔다. 펼쳐야 부른다.
+// 맨 앞에 "새로 만들기"(만들기의 입구, Stitch 19번). 아래에 내 작품의 숫자(#991, MyCreatorStats)를 둔다. 펼쳐야 부른다.
 
 import { Link } from 'react-router';
 import { MyCreatorStats } from './MyCreatorStats';
@@ -9,6 +9,11 @@ export function MyStudioLink() {
   return (
     <section className="page-section" aria-labelledby="my-studio-heading">
       <h2 id="my-studio-heading">만들기</h2>
+      <p>
+        <Link className="ui-button ui-button--primary" to="/create">
+          새로 만들기
+        </Link>
+      </p>
       <p>
         <Link to="/trpg/studio">재료와 시나리오 만들기(룰북, 세계관, 로어북, 몬스터 모음, 시나리오)</Link>
       </p>

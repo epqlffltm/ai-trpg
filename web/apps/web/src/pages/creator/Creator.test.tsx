@@ -163,7 +163,7 @@ describe('제작자 소개', () => {
       'GET /api/v1/notification/me/notifications/unread-count': () => json(200, { count: 0 }),
       'PATCH /api/v1/auth/me/profile': (request) => json(200, { bio: String((request.body as { bio: string }).bio).trim() }),
     });
-    renderApp('/me');
+    renderApp('/me?tab=creator');
 
     const form = await section('제작자 소개');
     expect(within(form).getByRole('link', { name: '내 제작자 페이지' })).toHaveAttribute('href', PATH);

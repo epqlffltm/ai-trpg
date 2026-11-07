@@ -507,7 +507,7 @@ describe('캐릭터 만들기', () => {
       'GET /api/v1/auth/me/consents': () => json(200, { items: [] }),
       'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: '0', total: '0', next_expiry: null }),
     });
-    renderApp('/me');
+    renderApp('/me?tab=creator');
 
     expect(await screen.findByRole('link', { name: 'chat 캐릭터 만들기' })).toHaveAttribute('href', '/chat/studio/characters');
   });
