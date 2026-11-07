@@ -644,6 +644,7 @@ uv run python manage.py runserver 2>&1 | jq -rR 'fromjson? | [.timestamp, .level
   메일 워커는 1초마다 돌아서, 잘 끝난 것은 `debug` 로 남긴다. 실패만 `error`(`error_code: job.failed`)로 남는다.
 - **`SMTP_USER` 와 `SMTP_PASSWORD` 는 영문·숫자·기호(ASCII)여야 한다.** `SMTP_HOST` 가 있는데 한글 등이 섞여 있으면 서버와 메일 워커가 뜨지 않는다.
   빈 값은 막지 않는다. compose 는 메일을 보내지 않는 서비스(`auth-migrate`, `auth-welcome-credits`)에서 `SMTP_PASSWORD` 를 비운다.
+  CI(`stack`)가 `.env` 에 메일 서버를 적은 채로 인증의 서비스 모두가 설정을 읽는지 본다(`stack-smoke.sh` 의 `check_auth_mail_settings`). 띄운 스택은 메일 서버 없이 돈다.
   SMTP 의 로그인은 ASCII 로만 보낸다. `.env.example` 의 보기(`내주소@gmail.com`)를 그대로 두면 메일을 보낼 때마다 워커가 죽고 그 뒤의 메일이 모두 멈췄다.
   Gmail 의 앱 비밀번호는 띄어 쓴 채로 넣어도 된다.
 - **`APP_ENVIRONMENT=production` 이면 `SMTP_HOST` 를 꼭 적어야 한다.** 적지 않으면 서버가 뜨지 않는다.

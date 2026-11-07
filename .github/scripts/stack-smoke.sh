@@ -18,6 +18,8 @@
 #                  바깥에 여는 포트가 정해 둔 것뿐이고 127.0.0.1 에 묶였는지(port_scope.py),
 #                  모든 서비스의 로그에 상한이 있는지도 본다(logging_scope.py, 띄운 컨테이너의 설정).
 #                  워커와 cron 이 다시 뜨기를 되풀이하지 않고 돌고 있는지, crontab 의 명령이 한 번씩 성공하는지도 본다.
+#                  인증 서버의 .env 에 메일 서버(SMTP_HOST 와 계정)를 적어도 인증의 서비스 모두가 설정을 읽는지,
+#                  계정에 한글이 있으면 읽지 않는지 본다(check_auth_mail_settings). 띄운 스택은 메일 서버 없이 돈다.
 #                  그림 저장소(object-store, #540)도 본다: root 가 아닌가, 서명 없는 요청과 틀린 키를 막는가,
 #                  서명해 올린 것을 그대로 받는가, 없는 버킷에는 올리지 못하는가.
 #                  로그 모으기(observability 프로필, #25)도 본다: 서버의 줄이 Loki 에 label 과 줄의 값으로 들어오는가,
@@ -66,6 +68,8 @@ WORKERS=(auth-mail auth-welcome-credits auth-cron billing-sweeper billing-autoch
 HEARTBEAT_WORKERS=(auth-mail auth-welcome-credits billing-sweeper billing-autocharge db-backup)
 # 서명 개인키를 받지 않는 인증의 프로세스(#274). 키 폴더는 auth-server 에만 붙는다
 KEYLESS=(auth-migrate auth-mail auth-welcome-credits auth-cron)
+# 인증 서버의 설정(auth-server/.env)을 읽는 서비스 모두. 메일 서버를 적어도 모두 설정을 읽는지 본다(check_auth_mail_settings)
+AUTH_SERVICES=(auth-migrate auth-server auth-mail auth-cron auth-welcome-credits)
 # 주기 명령의 컨테이너와 그 crontab
 CRONTABS=(auth-cron:docker/cron/auth.crontab billing-cron:docker/cron/billing.crontab)
 # 프록시의 주소와, 관리자 화면 때문에 따로 연 인증 서버의 주소
@@ -1575,6 +1579,49 @@ stays_up_all() {
 }
 
 # 컨테이너에 서명 개인키의 폴더가 붙지 않았는가. 끝난 컨테이너(마이그레이션)도 본다
+# 인증 서버의 .env 에 메일 서버의 설정을 더한 채로 명령을 돌리고, 끝나면 .env 를 되돌린다. 명령의 끝 코드를 돌려준다.
+# 사용자의 PC 처럼 .env 에 적는다. compose run -e 로 주면 compose 가 서비스마다 비운 값(SMTP_PASSWORD: "")까지 덮어 그 어긋남을 보지 못한다.
+# 띄워 둔 컨테이너는 만들 때의 .env 를 읽었으므로 이것을 보지 않는다. 메일은 보내지 않는다(설정만 읽는다)
+with_auth_mail_settings() {
+  local user="$1"; shift
+  local env_file=auth-server/.env saved code=0
+  saved="$(mktemp)"
+  cp "$env_file" "$saved"
+  printf 'SMTP_HOST=smtp.example.com\nSMTP_USER=%s\nSMTP_PASSWORD=%s\n' "$user" "$(throwaway)" >>"$env_file"
+  "$@" || code=$?
+  cp "$saved" "$env_file"
+  rm -f "$saved"
+  return "$code"
+}
+
+# 그 서비스가 설정을 끝까지 읽는가. 새 컨테이너를 하나 띄워 settings.py 를 읽힌다. DB 와 Redis 에는 닿지 않는다.
+# 설정의 값을 찍는 명령이라 출력은 컨테이너 안에서 버린다. 실패의 까닭(stderr)은 남는다
+auth_loads_settings() {
+  compose run --rm --no-deps -T "$1" sh -c 'python manage.py diffsettings >/dev/null'
+}
+
+# 메일 서버를 적은 .env 로 인증의 서비스 모두가 설정을 읽는가.
+# compose 는 메일을 보내지 않는 서비스에서 SMTP_PASSWORD 를 비운다. 인증 서버가 빈 비밀번호를 막자 auth-migrate 가 멈춰
+# 인증 서버가 뜨지 못한 일이 있었다(2026-11-06). CI 의 스택은 메일 서버 없이 돌아 그것을 보지 못했다
+auth_services_load_mail_settings() {
+  local service
+  for service in "${AUTH_SERVICES[@]}"; do
+    auth_loads_settings "$service" || { echo "$service 가 메일 서버를 적은 설정을 읽지 못했다" >&2; return 1; }
+  done
+}
+
+check_auth_mail_settings() {
+  report "인증 서버의 .env 에 메일 서버를 적어도 인증의 서비스 모두가 설정을 읽는다(${AUTH_SERVICES[*]})" \
+    with_auth_mail_settings ci@example.com auth_services_load_mail_settings
+  report "메일 서버의 계정에 한글이 있으면 인증 서버가 설정을 읽지 않는다(보낼 때마다 워커가 죽는 것을 막는다)" \
+    with_auth_mail_settings '내주소@gmail.com' refuses auth_loads_settings auth-server
+}
+
+# 명령이 실패하는가
+refuses() {
+  ! "$@"
+}
+
 no_signing_key_mounted() {
   ! docker inspect -f '{{range .Mounts}}{{println .Destination}}{{end}}' "$(container_of "$1")" | grep -qx /app/keys
 }
@@ -1676,6 +1723,7 @@ check() {
   for service in "${KEYLESS[@]}"; do
     report "$service 에 서명 개인키가 붙지 않았다" no_signing_key_mounted "$service"
   done
+  check_auth_mail_settings
   report "백업을 빈 DB 에 풀면 원본과 같다" backup_restores
   report "백업 파일을 주인만 읽는다" backup_private
   check_object_store
