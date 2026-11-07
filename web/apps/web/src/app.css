@@ -4791,7 +4791,11 @@ details.room-panel[open] > summary {
 }
 
 .story-world__member--silhouette .story-world__portrait {
-  background: var(--ui-text);
+  /* 아직 만나지 않은 인물. 옅은 면에 머리와 어깨의 그림자(밝기와 상관없이 가운데 톤이라 어두운 화면에서도 하얗게 뜨지 않는다) */
+  background:
+    radial-gradient(circle at 50% 38%, var(--ui-border-strong) 0 20%, transparent 21%),
+    radial-gradient(ellipse 44% 34% at 50% 100%, var(--ui-border-strong) 0 97%, transparent 100%),
+    var(--ui-surface-subtle);
 }
 
 /* story 그림 창과 인물의 그림(D2, D5) */
@@ -4902,23 +4906,42 @@ details.room-panel[open] > summary {
   }
 }
 
-/* 좁은 화면: 일러스트면 그림 아래에 놓고, 무대(낮은 배경)면 배경 위를 덮고 넘치면 밀어 본다 */
+/* 좁은 화면: 일러스트면 그림 아래에, 무대(낮은 배경)여도 무대 아래에 놓는다 */
 @media (max-width: 767px) {
   .story-picture__overlay {
     margin-top: 8px;
   }
 
-  .story-picture--stage .story-picture__overlay {
-    position: absolute;
-    inset: 8px;
-    z-index: 2;
-    margin: 0;
-    overflow-y: auto;
+  /* 무대는 선택지를 띄워도 높이(200px)를 그대로 두고, 선택지는 무대 바로 아래 줄에 놓는다(무대를 덮거나 늘리지 않는다).
+   * 틀은 두 줄의 격자: 첫 줄에 배경과 인물 줄을 겹치고, 둘째 줄에 선택지 */
+  .story-picture--stage:has(.story-picture__overlay) {
+    display: grid;
+    grid-template-rows: 200px auto;
+    height: auto;
+    overflow: visible;
+    background: none;
+    box-shadow: none;
   }
 
-  /* 선택지를 겹친 동안은 무대를 높여 선택지를 한눈에 읽게 한다 */
-  .story-picture--stage:has(.story-picture__overlay) {
-    height: 360px;
+  .story-picture--stage:has(.story-picture__overlay) > .story-picture__image,
+  .story-picture--stage:has(.story-picture__overlay) > .story-cast {
+    grid-area: 1 / 1;
+    position: relative;
+    inset: auto;
+  }
+
+  .story-picture--stage:has(.story-picture__overlay) > .story-picture__image {
+    height: 200px;
+    border-radius: var(--ui-radius-lg);
+  }
+
+  .story-picture--stage:has(.story-picture__overlay) > .story-cast {
+    align-self: end;
+    overflow: hidden;
+  }
+
+  .story-picture--stage .story-picture__overlay {
+    grid-area: 2 / 1;
   }
 }
 
@@ -5059,7 +5082,11 @@ details.room-panel[open] > summary {
 }
 
 .story-cast__portrait--silhouette {
-  background: var(--ui-text);
+  /* 아직 만나지 않은 인물. 옅은 면에 머리와 어깨의 그림자(밝기와 상관없이 가운데 톤이라 어두운 화면에서도 하얗게 뜨지 않는다) */
+  background:
+    radial-gradient(circle at 50% 38%, var(--ui-border-strong) 0 20%, transparent 21%),
+    radial-gradient(ellipse 44% 34% at 50% 100%, var(--ui-border-strong) 0 97%, transparent 100%),
+    var(--ui-surface-subtle);
 }
 
 .story-profile {
