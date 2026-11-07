@@ -502,6 +502,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/nickname": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 본인의 닉네임을 바꾼다. 30일에 한 번, 비밀번호를 다시 받는다. 버린 이름은 30일 동안 묶인다
+         * @description POST /api/v1/auth/me/nickname. 본인의 닉네임을 바꾼다(nicknames.py). 30일에 한 번, 비밀번호를 다시 받는다.
+         */
+        post: operations["me_nickname_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me/profile": {
         parameters: {
             query?: never;
@@ -1039,7 +1059,7 @@ export interface components {
         };
         /**
          * @description GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태, 목록을 거르는 설정,
-         *     제작자로서의 소개를 더한다.
+         *     제작자로서의 소개, 막은 것, 닉네임을 다시 바꿀 수 있는 시각을 더한다.
          */
         Me: {
             bio: string;
@@ -1055,6 +1075,8 @@ export interface components {
             identity: components["schemas"]["IdentityStatus"];
             /** 닉네임 */
             readonly nickname: string;
+            /** Format: date-time */
+            nickname_change_available_at: string | null;
             /**
              * 공개 ID
              * Format: uuid
@@ -1081,9 +1103,23 @@ export interface components {
             /** @description 초대한 사람으로서 받은 보상의 수 */
             rewarded: number;
         };
+        /** @description 바꾼 뒤의 닉네임과 다음에 바꿀 수 있는 시각. 다른 서버에는 새 access 토큰을 받은 뒤부터 새 이름이 보인다. */
+        MyNickname: {
+            nickname: string;
+            /** Format: date-time */
+            nickname_change_available_at: string | null;
+        };
         /** @description 제작자로서의 내 소개(#992). 200자까지, 비워 둘 수 있다. 앞뒤 공백은 지운다. */
         MyProfile: {
             bio: string;
+        };
+        /**
+         * @description 본인의 닉네임 바꾸기(nicknames.py). 가입과 같은 형식과 예약어 검사를 한다.
+         *     열린 채 둔 기기에서 남이 바꾸지 못하게 비밀번호를 다시 받는다.
+         */
+        NicknameChangeRequest: {
+            nickname: string;
+            password: string;
         };
         /**
          * @description * `all` - 전체
@@ -2547,6 +2583,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    me_nickname_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NicknameChangeRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyNickname"];
+                };
+            };
+            /** @description 비밀번호가 틀렸거나(password), 닉네임이 규칙에 어긋나거나 쓰이고 있거나 지금과 같다(nickname) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 마지막으로 바꾼 뒤 30일이 지나지 않았다(nickname_change_too_soon). 언제부터인지는 /me 에 있다 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+            /** @description 시도가 너무 많다(too_many_attempts) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetryLater"];
                 };
             };
         };

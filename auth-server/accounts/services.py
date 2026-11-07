@@ -44,6 +44,7 @@ from accounts.mail import (
     send_signup_refused_notice,
 )
 from accounts.models import EmailCodePurpose, ReturnBlockKind, SecurityEventKind, SignupCode, User
+from accounts.nicknames import is_nickname_held
 from accounts.return_blocks import active_block, email_key
 from accounts.security_events import record_security_event
 from accounts.signup_tickets import issue_signup_ticket, read_signup_ticket
@@ -396,7 +397,8 @@ def _ensure_not_taken(*, username: str, nickname: str) -> None:
     """아이디와 닉네임을 다른 계정이 쓰고 있는지 본다."""
     if User.objects.filter(username=username).exists():
         raise FieldTakenError('username')
-    if User.objects.filter(nickname=nickname).exists():
+    # 다른 사람이 바꾸며 버린 이름은 묶인 동안 쓰이고 있는 것과 같다(nicknames.py). 가입하는 쪽에는 가리지 않는다
+    if User.objects.filter(nickname=nickname).exists() or is_nickname_held(nickname):
         raise FieldTakenError('nickname')
 
 

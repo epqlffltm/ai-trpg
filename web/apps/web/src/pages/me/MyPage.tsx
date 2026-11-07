@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/me/MyPage.tsx
-// 마이페이지(A5). 계정, 지갑으로 가는 길(A6), 친구 초대(#990), 제작자 소개(#992), 관심 작품과 팔로잉(#989), 차단(#988), 만들기(B9 제작 도구)와 페르소나(C4), 내 단축어(#981), 갤러리(C7), 화면 설정(A12)으로 가는 길, 비밀번호 바꾸기, 모든 기기 로그아웃, 동의, 탈퇴.
+// 마이페이지(A5). 계정, 지갑으로 가는 길(A6), 친구 초대(#990), 제작자 소개(#992), 관심 작품과 팔로잉(#989), 차단(#988), 만들기(B9 제작 도구)와 페르소나(C4), 내 단축어(#981), 갤러리(C7), 화면 설정(A12)으로 가는 길, 닉네임 바꾸기, 비밀번호 바꾸기, 모든 기기 로그아웃, 동의, 탈퇴.
 // 지갑 말고는 인증 서버만 부른다(팔로잉은 펼쳤을 때 알림 서버를 부른다).
 // 로그인해야 열린다(App.tsx 의 RequireSession). 이 기기의 로그아웃은 머리에 있다.
 // 본인인증(A3)과 보호자 동의(A4)는 계정의 그 줄에서 간다.
@@ -18,6 +18,7 @@ import { MySettingsLink } from './MySettingsLink';
 import { MyShortcutsLink } from './MyShortcutsLink';
 import { MyStudioLink } from './MyStudioLink';
 import { MyWalletLink } from './MyWalletLink';
+import { NicknameChangeForm } from './NicknameChangeForm';
 import { PasswordChangeForm } from './PasswordChangeForm';
 import { WithdrawalSection } from './WithdrawalSection';
 
@@ -37,6 +38,7 @@ export function MyPage() {
       <MyShortcutsLink />
       <MyGalleryLink />
       <MySettingsLink />
+      <NicknameChangeForm />
       <PasswordChangeForm />
       <LogoutAllSection />
       <MyConsents />

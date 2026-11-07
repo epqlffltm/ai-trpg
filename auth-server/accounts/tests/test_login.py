@@ -530,6 +530,7 @@ class MeTests(APITestCase):
                 'content_settings',
                 'bio',
                 'blocks',
+                'nickname_change_available_at',
             },
         )
 

@@ -111,6 +111,15 @@ from accounts.jwks import build_jwks
 from accounts.login_tickets import InvalidLoginTicketError
 from accounts.models import User
 from accounts.network_blocks import find_block, log_blocked_request
+from accounts.nicknames import (
+    NicknameChangeTooSoonError,
+    NicknameTakenError,
+    NicknameUnchangedError,
+    WrongNicknamePasswordError,
+    change_nickname,
+    check_nickname_password,
+    nickname_change_available_at,
+)
 from accounts.origin_check import is_allowed_origin, log_refused_origin, read_origin
 from accounts.public_names import InvalidPublicIdsError, find_names, parse_ids
 from accounts.receipt_notices import OrderReceipt, record_receipt_notice
@@ -135,7 +144,9 @@ from accounts.serializers import (
     LoginTicketSerializer,
     LoginVerifySerializer,
     MyInviteSerializer,
+    MyNicknameSerializer,
     MyProfileSerializer,
+    NicknameChangeSerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PublicNameSerializer,
@@ -1210,6 +1221,8 @@ class MeView(APIView):
             'bio': request.user.bio,
             # 막은 제작자와 태그(#988)
             'blocks': blocks_of(request.user),
+            # 다음에 닉네임을 바꿀 수 있는 시각. 지금 바꿀 수 있으면 null(nicknames.py)
+            'nickname_change_available_at': nickname_change_available_at(request.user),
         }
         return Response(body, status=status.HTTP_200_OK)
 
@@ -1334,6 +1347,63 @@ class MyProfileView(APIView):
         serializer.is_valid(raise_exception=True)
         user = update_bio(request.user, serializer.validated_data['bio'])
         return Response(MyProfileSerializer({'bio': user.bio}).data, status=status.HTTP_200_OK)
+
+
+class MyNicknameView(APIView):
+    """POST /api/v1/auth/me/nickname. 본인의 닉네임을 바꾼다(nicknames.py). 30일에 한 번, 비밀번호를 다시 받는다."""
+
+    # 로그인한 본인만. 기본 권한(IsAuthenticated)을 쓴다
+
+    @extend_schema(
+        summary='본인의 닉네임을 바꾼다. 30일에 한 번, 비밀번호를 다시 받는다. 버린 이름은 30일 동안 묶인다',
+        request=NicknameChangeSerializer,
+        responses={
+            200: MyNicknameSerializer,
+            400: bad_request(
+                '비밀번호가 틀렸거나(password), 닉네임이 규칙에 어긋나거나 쓰이고 있거나 지금과 같다(nickname)'
+            ),
+            401: unauthenticated(),
+            409: coded('마지막으로 바꾼 뒤 30일이 지나지 않았다(nickname_change_too_soon). 언제부터인지는 /me 에 있다'),
+            429: TOO_MANY_ATTEMPTS,
+        },
+    )
+    def post(self, request: Request) -> Response:
+        serializer = NicknameChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        refused = check_nickname_password_of(request, serializer.validated_data['password'])
+        if refused is not None:
+            return refused
+        try:
+            user = change_nickname(request.user, serializer.validated_data['nickname'])
+        except NicknameChangeTooSoonError:
+            return build_coded_error_response(
+                '닉네임은 30일에 한 번 바꿀 수 있습니다.', 'nickname_change_too_soon', status.HTTP_409_CONFLICT
+            )
+        except NicknameUnchangedError:
+            return build_field_error_response('nickname', ['지금의 닉네임과 같습니다.'])
+        except NicknameTakenError:
+            return build_field_error_response('nickname', ['이미 사용 중인 닉네임입니다.'])
+
+        body = MyNicknameSerializer(
+            {'nickname': user.nickname, 'nickname_change_available_at': nickname_change_available_at(user)}
+        )
+        return Response(body.data, status=status.HTTP_200_OK)
+
+
+def check_nickname_password_of(request: Request, password: str) -> Response | None:
+    """
+    닉네임을 바꾸며 적은 비밀번호를 확인한다. 맞으면 None, 틀리면 거절의 응답이다.
+
+    확인하기 전에 먼저 센다. 비밀번호 변경, 탈퇴와 같은 한도다. 빼앗긴 토큰으로 비밀번호를 맞혀 보지 못한다.
+    """
+    count_password_change_attempt(user=request.user, ip=get_attempt_subject(request))
+    try:
+        check_nickname_password(request.user, password)
+    except WrongNicknamePasswordError:
+        return build_field_error_response('password', ['비밀번호가 올바르지 않습니다.'])
+    clear_password_change_attempts(user=request.user)
+    return None
 
 
 class MyInviteView(APIView):

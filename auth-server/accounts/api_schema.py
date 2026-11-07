@@ -112,7 +112,7 @@ class BlocksSerializer(serializers.Serializer):
 class MeSerializer(UserSerializer):
     """
     GET /me 의 응답. 계정 정보에 본인인증, 보호자 동의, 다시 받을 동의, 탈퇴의 상태, 목록을 거르는 설정,
-    제작자로서의 소개를 더한다.
+    제작자로서의 소개, 막은 것, 닉네임을 다시 바꿀 수 있는 시각을 더한다.
     """
 
     identity = IdentityStatusSerializer()
@@ -125,6 +125,8 @@ class MeSerializer(UserSerializer):
     bio = serializers.CharField()
     # 막은 제작자와 태그(#988). 화면이 공개 목록을 부를 때 싣는다
     blocks = BlocksSerializer()
+    # 다음에 닉네임을 바꿀 수 있는 시각(nicknames.py). 지금 바꿀 수 있으면 null 이다
+    nickname_change_available_at = serializers.DateTimeField(allow_null=True)
 
     class Meta(UserSerializer.Meta):
         fields = (
@@ -136,6 +138,7 @@ class MeSerializer(UserSerializer):
             'content_settings',
             'bio',
             'blocks',
+            'nickname_change_available_at',
         )
         read_only_fields = fields
 

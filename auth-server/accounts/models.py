@@ -115,6 +115,10 @@ class User(AbstractUser):
     # 제작자의 소개(#992, creator_profiles.py). 제작자 페이지에서 누구나 본다. 표시 이름은 닉네임이다
     bio = models.CharField('소개', max_length=200, blank=True, default='')
 
+    # 본인이 닉네임을 마지막으로 바꾼 시각(nicknames.py). 비어 있으면 가입한 뒤로 바꾼 적이 없다.
+    # 이 시각에서 NICKNAME_CHANGE_INTERVAL 이 지나야 다시 바꾼다. 관리자 화면에서 고친 것은 적지 않는다
+    nickname_changed_at = models.DateTimeField('닉네임을 바꾼 시각', null=True, blank=True)
+
     # AbstractUser 가 가진 실명 필드를 없앤다. 수집하지 않는 정보의 컬럼은 두지 않는다
     first_name = None
     last_name = None
@@ -1169,3 +1173,25 @@ class IssuedTokenClient(models.Model):
 
     def __str__(self) -> str:
         return f'{self.token_id} / {self.get_client_display()}'
+
+
+class ReleasedNickname(models.Model):
+    """
+    본인이 바꾸면서 버린 닉네임 하나(nicknames.py). held_until 까지 다른 사람이 가입하거나 바꾸며 가져가지 못한다.
+
+    옛 이름을 남이 바로 가져가 그 사람인 척하지 못하게 한다. 버린 사람은 그 안에 다시 가져갈 수 있다.
+    닉네임마다 한 줄이다. 같은 이름을 다시 버리면 그 줄을 새로 덮는다. 지난 줄은 검사에서 빠질 뿐 지우지 않는다.
+    """
+
+    nickname = models.CharField('닉네임', max_length=NICKNAME_MAX_LENGTH, unique=True)
+    released_by = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='released_nicknames', verbose_name='버린 사람'
+    )
+    held_until = models.DateTimeField('묶어 두는 끝', db_index=True)
+
+    class Meta:
+        verbose_name = '버린 닉네임'
+        verbose_name_plural = '버린 닉네임'
+
+    def __str__(self) -> str:
+        return self.nickname

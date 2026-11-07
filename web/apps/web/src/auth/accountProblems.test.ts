@@ -5,7 +5,12 @@ import { describe, expect, it } from 'vitest';
 import { ApiError, NetworkError } from '../api/errors';
 import { guardianLabel, identityLabel, showsGuardian } from '../pages/me/accountLabels';
 import { allChecked, pendingItems } from '../pages/limited/reconsent';
-import { describeAccountProblem, describeConsentProblem, describePasswordChangeProblem } from './accountProblem';
+import {
+  describeAccountProblem,
+  describeConsentProblem,
+  describeNicknameChangeProblem,
+  describePasswordChangeProblem,
+} from './accountProblem';
 
 function apiError(status: number, extra: Partial<ConstructorParameters<typeof ApiError>[0]> = {}) {
   return new ApiError({ status, detail: '서버의 글', ...extra });
@@ -20,6 +25,22 @@ describe('describePasswordChangeProblem', () => {
 
   it('너무 많이 틀리면 기다리게 한다', () => {
     expect(describePasswordChangeProblem(apiError(429, { retryAfter: 30 }))).toMatchObject({ waitSeconds: 30 });
+  });
+});
+
+describe('describeNicknameChangeProblem', () => {
+  it('칸마다의 오류를 그 칸에 둔다', () => {
+    expect(describeNicknameChangeProblem(apiError(400, { fields: { nickname: ['쓰이고 있다'] } }))).toMatchObject({
+      fields: { nickname: '쓰이고 있다' },
+    });
+  });
+
+  it('30일 안이면 그렇다고 알린다', () => {
+    expect(describeNicknameChangeProblem(apiError(409, { code: 'nickname_change_too_soon' })).message).toMatch(/30일/);
+  });
+
+  it('너무 많이 틀리면 기다리게 한다', () => {
+    expect(describeNicknameChangeProblem(apiError(429, { retryAfter: 30 }))).toMatchObject({ waitSeconds: 30 });
   });
 });
 

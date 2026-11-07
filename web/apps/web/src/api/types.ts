@@ -13,6 +13,7 @@ import type { components as Trpg } from './generated/trpg';
 export type LoginChallenge = Auth['schemas']['LoginChallenge'];
 export type LoginResponse = Auth['schemas']['LoginResponse'];
 export type Me = Auth['schemas']['Me'];
+export type MyNickname = Auth['schemas']['MyNickname'];
 export type WithdrawalState = Auth['schemas']['WithdrawalState'];
 export type IdentityAnswer = Auth['schemas']['IdentityAnswer'];
 export type GuardianRequested = Auth['schemas']['GuardianRequested'];
