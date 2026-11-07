@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/chat/conversation/ConversationScreenshot.test.tsx
-// 그림으로 저장(#982). 처음과 끝을 고르면 그 사이의 말만 들어가고, 이름·장르·성인 표시와 사이트 이름을 담아 그린다.
+// 그림으로 저장(#982, Stitch 43번). 처음 말과 끝 말을 고르면 그 사이의 말만 들어가고(미리 보기에도 보인다), 이름·장르·성인 표시와 사이트 이름을 담아 그린다.
 // 그리기(canvas)는 시험 환경에 없어 가짜로 바꾸고 무엇을 넘겼는지 본다. 줄 나누기와 자리 정하기는 순수한 함수로 본다.
 
 import { screen, waitFor, within } from '@testing-library/react';
@@ -42,32 +42,35 @@ describe('그림으로 저장', () => {
     const toolbar = within(await screen.findByRole('toolbar', { name: '창과 행동' }));
     await userEvent.click(toolbar.getByRole('button', { name: '그림으로 저장' }));
     const dialog = within(await screen.findByRole('dialog', { name: '그림으로 저장' }));
-    const list = within(dialog.getByRole('list', { name: '넣을 말' }));
-    // 처음에는 끝의 두 말이 골라져 있다. 첫 말도 고르면 셋이 다 들어간다
+    const start = dialog.getByRole('combobox', { name: '처음 말' });
+    // 처음에는 끝의 두 말이 들어간다. 처음 말을 첫 말로 고르면 셋이 다 들어가고, 미리 보기에도 보인다
     expect(dialog.getByText('2개의 말이 들어갑니다.')).toBeInTheDocument();
-    await userEvent.click(list.getByRole('checkbox', { name: /어서 와요/ }));
+    await userEvent.selectOptions(start, within(start).getByRole('option', { name: /어서 와요/ }));
     expect(dialog.getByText('3개의 말이 들어갑니다.')).toBeInTheDocument();
-    // 가운데를 빼도 사이라서 들어간다
-    await userEvent.click(list.getByRole('checkbox', { name: /안녕/ }));
-    expect(dialog.getByText('3개의 말이 들어갑니다.')).toBeInTheDocument();
-    await userEvent.click(dialog.getByRole('button', { name: '그림 만들기' }));
-
+    const preview = within(dialog.getByRole('figure', { name: '미리 보기' }));
+    expect(preview.getByText('어서 와요.')).toBeInTheDocument();
+    expect(preview.getByText('로맨스 · 성인')).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(drawn.downloads).toEqual(['루나.png']));
     const [title, subtitle, items] = drawn.calls[0] as [string, string, ShotItem[]];
     expect([title, subtitle]).toEqual(['루나', '로맨스 · 성인']);
     expect(items.map((entry) => entry.lines[0]?.text)).toEqual(['어서 와요.', '안녕', '비가 오네요.']);
   });
 
-  it('아무것도 고르지 않으면 만들지 않는다', async () => {
+  it('처음과 끝을 거꾸로 골라도 그 사이가 들어가고, 미리 보기의 아래에 사이트 이름이 있다', async () => {
     signedIn();
     renderApp(`/chat/conversations/${ID}`);
-
     const toolbar = within(await screen.findByRole('toolbar', { name: '창과 행동' }));
     await userEvent.click(toolbar.getByRole('button', { name: '그림으로 저장' }));
     const dialog = within(await screen.findByRole('dialog', { name: '그림으로 저장' }));
-    for (const box of dialog.getAllByRole('checkbox', { checked: true })) await userEvent.click(box);
+    const start = dialog.getByRole('combobox', { name: '처음 말' });
+    const end = dialog.getByRole('combobox', { name: '끝 말' });
+    await userEvent.selectOptions(start, within(start).getByRole('option', { name: /비가 오네요/ }));
+    await userEvent.selectOptions(end, within(end).getByRole('option', { name: /어서 와요/ }));
 
-    expect(dialog.getByRole('button', { name: '그림 만들기' })).toBeDisabled();
+    expect(dialog.getByText('3개의 말이 들어갑니다.')).toBeInTheDocument();
+    expect(within(dialog.getByRole('figure', { name: '미리 보기' })).getByText(SITE_NAME)).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: '저장' })).toBeEnabled();
   });
 });
 

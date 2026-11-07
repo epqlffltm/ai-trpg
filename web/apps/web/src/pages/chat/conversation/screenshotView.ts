@@ -18,7 +18,7 @@ export const SHOT_WIDTH = 720;
 export const SHOT_PADDING = 32;
 export const LINE_HEIGHT: Record<ShotRow['kind'], number> = { title: 40, subtitle: 26, speaker: 28, text: 28, footer: 24 };
 /** 그림의 아래에 작게 넣는 사이트 이름 */
-export const SITE_NAME = 'AI TRPG';
+export const SITE_NAME = '이매망량의 서재';
 /** 한 번에 고를 수 있는 말의 수. 그림이 너무 길어지지 않게 한다 */
 export const SHOT_MAX_ITEMS = 30;
 
