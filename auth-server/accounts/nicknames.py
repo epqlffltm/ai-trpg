@@ -1,11 +1,13 @@
 # auth-server/accounts/nicknames.py
 
 """
-본인이 닉네임을 바꾸는 것.
+본인이 닉네임을 바꾸는 것과, 버린 닉네임을 묶어 두는 것.
 
   - 30일에 한 번 바꾼다(NICKNAME_CHANGE_INTERVAL). 이름을 자꾸 바꿔 남을 흉내 내거나 신고를 피하지 못하게 한다
   - 버린 이름은 30일 동안 다른 사람이 가져가지 못한다(RELEASED_NICKNAME_HOLD, ReleasedNickname).
-    버린 사람은 그 안에 다시 가져갈 수 있다
+    버린 사람은 그 안에 다시 가져갈 수 있다. 계정을 비울 때(탈퇴, 만 14세 미만, erasure.py)의 이름도 같이 묶는다
+  - 묶는 기간이 지난 줄은 정리 명령(manage.py delete_released_nicknames, 하루 한 번)이 지운다.
+    탈퇴한 사람의 옛 이름이 기간 뒤에도 남지 않게 한다
   - 비밀번호는 부르는 쪽(views.MyNicknameView)이 먼저 확인한다. 비밀번호 변경과 같은 횟수 한도를 쓴다
 
 다른 서버는 access 토큰의 닉네임을 본다(tokens.py). 바꾼 뒤 새 access 토큰을 받을 때까지 그 서버에는 옛 이름이 보인다.
@@ -86,7 +88,7 @@ def change_nickname(user: User, new_nickname: str) -> User:
         _ensure_change_allowed(locked, new_nickname, now)
         old_nickname = locked.nickname
         _save_new_nickname(locked, new_nickname, now)
-        _hold_released_nickname(old_nickname, locked, now)
+        hold_released_nickname(old_nickname, locked, now)
         # 제가 버렸던 이름을 되찾았으면 묶어 둔 줄은 더 필요 없다
         ReleasedNickname.objects.filter(nickname=new_nickname, released_by=locked).delete()
     return locked
@@ -117,9 +119,19 @@ def _save_new_nickname(user: User, new_nickname: str, now: datetime) -> None:
         raise NicknameTakenError from exc
 
 
-def _hold_released_nickname(nickname: str, user: User, now: datetime) -> None:
-    """버린 이름을 묶어 둔다. 같은 이름의 지난 줄이 있으면 새로 덮는다."""
+def hold_released_nickname(nickname: str, user: User, now: datetime) -> None:
+    """
+    버린 이름을 묶어 둔다. 같은 이름의 지난 줄이 있으면 새로 덮는다.
+
+    바꾸기(change_nickname)와 계정 비우기(erasure.blank_account)가 부른다. 부르는 쪽이 계정의 줄을 잠근 트랜잭션 안이다.
+    """
     ReleasedNickname.objects.update_or_create(
         nickname=nickname,
         defaults={'released_by': user, 'held_until': now + RELEASED_NICKNAME_HOLD},
     )
+
+
+def delete_expired_released_nicknames(now: datetime | None = None) -> int:
+    """묶는 기간이 지난 줄을 지우고, 지운 개수를 돌려준다. 정리 명령이 하루 한 번 부른다."""
+    deleted_count, _ = ReleasedNickname.objects.filter(held_until__lte=now or timezone.now()).delete()
+    return deleted_count

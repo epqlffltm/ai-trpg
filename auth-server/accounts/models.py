@@ -1177,10 +1177,12 @@ class IssuedTokenClient(models.Model):
 
 class ReleasedNickname(models.Model):
     """
-    본인이 바꾸면서 버린 닉네임 하나(nicknames.py). held_until 까지 다른 사람이 가입하거나 바꾸며 가져가지 못한다.
+    본인이 바꾸면서 버린 닉네임 하나(nicknames.py). 계정을 비울 때(탈퇴, 만 14세 미만)의 이름도 여기 묶는다.
+    held_until 까지 다른 사람이 가입하거나 바꾸며 가져가지 못한다.
 
     옛 이름을 남이 바로 가져가 그 사람인 척하지 못하게 한다. 버린 사람은 그 안에 다시 가져갈 수 있다.
-    닉네임마다 한 줄이다. 같은 이름을 다시 버리면 그 줄을 새로 덮는다. 지난 줄은 검사에서 빠질 뿐 지우지 않는다.
+    닉네임마다 한 줄이다. 같은 이름을 다시 버리면 그 줄을 새로 덮는다.
+    기간이 지난 줄은 정리 명령(delete_released_nicknames)이 하루 한 번 지운다. 탈퇴한 사람의 옛 이름이 남지 않게 한다.
     """
 
     nickname = models.CharField('닉네임', max_length=NICKNAME_MAX_LENGTH, unique=True)

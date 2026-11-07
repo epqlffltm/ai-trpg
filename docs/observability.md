@@ -194,6 +194,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | billing-server | 만료된 홀드·주문, 사라진 무료 크레딧 닫기, 보호자와 사용자에게 알릴 일 보내기(정리 작업이 30초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `user_notices_queued`, `_sent`, `_retried`, `_rejected`, `_expired`, `_purged`) | `sweep.run` |
 | billing-server | 장부 맞춰 보기와 오래된 결제 끝내기(하루 한 번 돌리는 명령) | `reconcile.run` |
 | auth-server | 가입을 끝내지 않은 이메일의 오래된 가입 코드 지우기 | `account.delete_unverified` |
+| auth-server | 묶는 기간(30일)이 지난 버린 닉네임 지우기(하루 한 번 돌리는 명령) | `account.delete_released_nicknames` |
 | board-server | 발송함의 알림을 알림 서버에 보내기(5초마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `sent`, `retried`, `rejected`, `failed`, `dropped`) | `notification.send` |
 | notification-server | 보관 기간(기본 30일)이 지난 알림 지우기(정리 작업이 한 시간마다 한 바퀴. 바퀴마다 새 `job_id`. 줄에 `deleted`, `retention_days`) | `notification.prune` |
 | auth-server | 보안 이벤트 요약 메일 | `security.send_digest` |
@@ -369,6 +370,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `withdrawal.complete` | auth | 유예가 지난 탈퇴를 마치기(계정을 비우고 알릴 줄을 적는다) |
 | `withdrawal.deliver` | auth | 탈퇴를 다른 서버에 알리기 |
 | `account.delete_unverified` | auth | 가입을 끝내지 않은 이메일의 오래된 가입 코드 지우기(옛 이름 그대로) |
+| `account.delete_released_nicknames` | auth | 묶는 기간이 지난 버린 닉네임 지우기 |
 | `security.send_digest` | auth | 보안 이벤트 요약 메일 |
 | `auth.jwks_fetch` | billing | 인증 서버에서 공개키 받기 |
 | `auth.revocations_fetch` | game, billing, notification | 인증 서버에서 끊긴 세션의 목록 받기(30초마다) |
