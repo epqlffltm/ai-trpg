@@ -19,7 +19,7 @@ type Props = {
 
 export function PasswordDialog({ table, busy, waitSeconds, problem, onClose, onSubmit }: Props) {
   return (
-    <Dialog title={table ? `${table.title}에 들어가기` : ''} open={table !== null} onClose={onClose}>
+    <Dialog title={table ? `${table.title}에 앉기` : ''} open={table !== null} onClose={onClose}>
       {table ? (
         <PasswordForm key={table.id} busy={busy} waitSeconds={waitSeconds} problem={problem} onSubmit={onSubmit} />
       ) : null}
@@ -51,7 +51,7 @@ function PasswordForm({ busy, waitSeconds, problem, onSubmit }: FormProps) {
         error={problem?.fields?.password}
       />
       <Button type="submit" busy={busy} disabled={!password || waitSeconds > 0}>
-        {waitSeconds > 0 ? `${waitSeconds}초 뒤에 다시` : '들어가기'}
+        {waitSeconds > 0 ? `${waitSeconds}초 뒤에 다시` : '앉기'}
       </Button>
     </form>
   );

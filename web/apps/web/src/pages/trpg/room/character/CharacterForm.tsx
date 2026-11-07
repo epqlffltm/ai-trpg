@@ -82,7 +82,7 @@ export function CharacterForm({ table, member, onDone, onCancel }: Props) {
     <form className="character-form" onSubmit={submit} noValidate aria-label="캐릭터 정하기">
       <ProblemNotice problem={problem} />
       {table.character_modes.length > 1 ? (
-        <fieldset className="choice-list">
+        <fieldset className="choice-list choice-cards">
           <legend>만드는 방식</legend>
           {table.character_modes.map((mode) => (
             <Radio
