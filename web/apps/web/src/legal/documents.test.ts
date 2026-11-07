@@ -7,7 +7,7 @@ import { loadLegalDocument } from './documents';
 
 const SERVER_ITEMS = [
   { item: 'terms', version: 1 },
-  { item: 'privacy', version: 1 },
+  { item: 'privacy', version: 2 },
   { item: 'marketing', version: 1 },
   { item: 'ai_training', version: 1 },
 ];
@@ -20,6 +20,16 @@ describe('동의 문서', () => {
     expect(text.startsWith('# ')).toBe(true);
     expect(text).not.toContain('## 검토할 것');
     expect(text).not.toContain('## 근거');
+  });
+
+  it('옛 판의 문서도 남긴다(그 판에 동의한 기록이 가리킨다)', async () => {
+    const text = await loadLegalDocument(consentDocumentName('privacy', 1) as string);
+    expect(text.startsWith('# ')).toBe(true);
+    expect(text).not.toContain('쓰지 않게 된 닉네임');
+  });
+
+  it('새 판의 처리방침에 닉네임을 남기는 기간이 있다', async () => {
+    expect(await loadLegalDocument(consentDocumentName('privacy', 2) as string)).toContain('쓰지 않게 된 닉네임');
   });
 
   it('화면이 갖지 않은 판을 가려낸다', () => {
