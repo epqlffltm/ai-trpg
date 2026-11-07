@@ -92,7 +92,7 @@ afterEach(() => {
 describe('세계관 만들기', () => {
   it('마이페이지에서 가서 빈 목록에서 만들고, 고치기에서 게시 점검의 막는 것과 알리는 것을 보고 그 탭으로 간다', async () => {
     const { seen } = signedIn(null);
-    renderApp('/me');
+    renderApp('/me?tab=creator');
 
     await userEvent.click(await screen.findByRole('link', { name: 'story 세계관 만들기' }));
     expect(await screen.findByText('아직 만든 세계관이 없습니다.')).toBeInTheDocument();

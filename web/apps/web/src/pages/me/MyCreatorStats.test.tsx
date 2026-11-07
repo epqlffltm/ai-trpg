@@ -48,7 +48,7 @@ function signedIn(routes: Record<string, () => Response>, accessToken = 'a1') {
 }
 
 async function openStats() {
-  renderApp('/me');
+  renderApp('/me?tab=creator');
   await userEvent.click(await screen.findByRole('button', { name: '내 작품 숫자 보기' }));
 }
 
@@ -59,7 +59,7 @@ describe('내 작품 숫자', () => {
       'GET /api/v1/asset/me/stats/characters': () => json(200, { ...WORLDS, refreshed_at: null, items: [] }),
       'GET /api/v1/asset/me/stats/worlds': () => json(200, WORLDS),
     });
-    renderApp('/me');
+    renderApp('/me?tab=creator');
     await screen.findByRole('button', { name: '내 작품 숫자 보기' });
     expect(seen.some((request) => request.url.includes('/me/stats/'))).toBe(false);
     await userEvent.click(screen.getByRole('button', { name: '내 작품 숫자 보기' }));

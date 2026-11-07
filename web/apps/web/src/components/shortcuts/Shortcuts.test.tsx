@@ -130,7 +130,7 @@ afterEach(() => {
 describe('내 단축어', () => {
   it('마이페이지에서 가서 하나를 더해 저장하면 목록을 통째로 보낸다', async () => {
     const { seen } = base(remembering(MINE, 'PUT', { items: [{ name: '독백', description: '혼잣말', body: '혼잣말을 한다.' }] }));
-    renderApp('/me');
+    renderApp('/me?tab=settings');
 
     await userEvent.click(await screen.findByRole('link', { name: '내 단축어' }));
     const form = within(await screen.findByRole('form', { name: '내 단축어' }));
