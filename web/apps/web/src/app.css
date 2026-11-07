@@ -2562,7 +2562,23 @@ details.room-panel[open] > summary {
   margin-bottom: 6px;
 }
 
-/* 시나리오 고치기(B9). 넓은 화면에서는 탭이 왼쪽, 게시 점검이 오른쪽. 좁으면 점검이 위 */
+/* 만들기의 입구(Stitch 19번의 맨 앞 칸). 고르는 칸을 종이 한 장에 담는다 */
+.create-page h1 {
+  font-family: var(--ui-font-serif);
+  color: var(--ui-accent);
+}
+
+.create-page__form {
+  padding: 20px 24px;
+  border: 1px solid var(--ui-border);
+  border-top: 3px solid var(--ui-accent);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+/* 고치기 화면 셋(시나리오 B9, 캐릭터 C6, 세계관 D7, Stitch 19번의 조합 화면). 넓은 화면에서는 탭이 왼쪽, 게시 점검이 오른쪽. 좁으면 점검이 위.
+ * 탭 줄은 밑줄로 지금 탭을 보이고 좁으면 가로로 밀어 본다. 탭의 칸은 종이 한 장, 점검은 위에 감청 띠를 단 종이 */
 .scenario-editor {
   display: grid;
   gap: calc(var(--ui-gap) * 1.5);
@@ -2572,15 +2588,34 @@ details.room-panel[open] > summary {
   min-width: 0;
 }
 
-.scenario-check {
-  padding: 12px 14px;
+.scenario-editor__main > [role='tabpanel'] {
+  padding: 20px 24px;
   border: 1px solid var(--ui-border);
-  border-radius: 8px;
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+.scenario-editor__main > [role='tabpanel'] h2 {
+  padding-left: 10px;
+  border-left: 3px solid var(--ui-accent);
+  font-family: var(--ui-font-serif);
+  font-size: 1.2rem;
+}
+
+.scenario-check {
+  padding: 16px 18px;
+  border: 1px solid var(--ui-border);
+  border-top: 3px solid var(--ui-accent);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
   align-self: start;
 }
 
 .scenario-check h2 {
-  font-size: 1rem;
+  font-family: var(--ui-font-serif);
+  font-size: 1.1rem;
   margin: 0 0 8px;
 }
 
@@ -2604,23 +2639,31 @@ details.room-panel[open] > summary {
 
 .scenario-tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  overflow-x: auto;
   margin-bottom: var(--ui-gap);
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .scenario-tab {
+  flex-shrink: 0;
   font: inherit;
-  padding: 6px 14px;
-  border: 1px solid var(--ui-border);
-  border-radius: 999px;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
   background: transparent;
-  color: inherit;
+  color: var(--ui-text-muted);
+  white-space: nowrap;
   cursor: pointer;
 }
 
+.scenario-tab:hover {
+  color: var(--ui-text);
+}
+
 .scenario-tab[aria-selected='true'] {
-  border-color: currentColor;
+  border-bottom-color: var(--ui-accent);
+  color: var(--ui-accent);
   font-weight: 600;
 }
 
