@@ -2,6 +2,7 @@
 // 본인인증(A3, /me/identity). 휴대폰 본인인증으로 나이를 확인하고 환영 실버를 한 번 받는다. 로그인해야 열린다(RequireSession).
 // 인증 전이면 무엇이 열리는지와 업체의 창(지금은 시험용 창, identityProvider.ts), 인증 뒤면 상태와 지갑·출석으로 가는 길.
 // 결과의 처리(토큰 갱신, 만 14세 미만의 로그아웃)는 useVerifyIdentity 가 맡는다.
+// 모양은 계정 화면과 같은 가운데 카드(Stitch 40번).
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -16,7 +17,7 @@ import { useVerifyIdentity } from './useVerifyIdentity';
 export function IdentityPage() {
   const me = useQuery(meQuery());
   return (
-    <main className="page page--medium">
+    <main className="page page--medium auth-card">
       <p>
         <Link to="/me">내 정보</Link>
       </p>
