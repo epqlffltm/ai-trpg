@@ -10,6 +10,7 @@
 // 책갈피(#982)는 말마다 달고 떼며 받는 중에도 된다. 책갈피의 자리로 갈 때 지금 가지에 없는 말이면 가지를 바꾼다.
 // 그림으로 저장(#982)은 지금 가지의 말들로 이 기기에서 그림을 만든다.
 // 장면 그림(#983)은 답과 따로 돈다. 받는 중에도 지난 답을 그릴 수 있다. 시작하지 못한 까닭은 대사창 아래에 띄운다.
+// 장르 테마(Stitch 23~33번): main 에 data-genre 를 단다(genres/genreTheme.ts).
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -54,6 +55,7 @@ import { isEnded, placeName } from './storyWorld';
 import { useStartStorySession } from './useStartStorySession';
 import type { StoryTurnOpener, useStoryTurn } from './useStoryTurn';
 import { putQueryData } from '../../queryClient';
+import { genreTheme } from '../../genres/genreTheme';
 
 type Props = { session: StorySession; turns: ReturnType<typeof useStoryTurn> };
 
@@ -143,7 +145,7 @@ export function StoryRoom({ session, turns }: Props) {
   );
 
   return (
-    <main className="page conversation story chat-room" data-sheet={dock.sheet ? 'tools' : undefined}>
+    <main className="page conversation story chat-room" data-sheet={dock.sheet ? 'tools' : undefined} data-genre={genreTheme(session.world.genre)}>
       <StoryHeader session={session} state={scene.state} />
       <div className="chat-room__body">
         <div className="chat-room__main">

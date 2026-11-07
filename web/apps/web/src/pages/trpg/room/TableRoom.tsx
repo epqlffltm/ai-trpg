@@ -18,6 +18,7 @@
 //   - 장면 그림이 바뀜(scene_snapshot, #983): 그림 목록을 다시 읽는다(snapshots/)
 //   - 멈춤: 끝났으면 테이블을 다시 읽고(끝난 판의 화면), 앉아 있지 않으면 다시 읽어 404 의 화면으로 간다
 // 스트림이 열릴 때마다 테이블을 한 번 다시 읽는다. 처음 읽은 때와 붙은 때 사이, 끊겼던 동안의 변화를 놓치지 않게.
+// 장르 테마(Stitch 23~33번): main 에 data-genre 를 단다. 장르는 시나리오의 소개에서 읽는다(useTableGenre).
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -41,6 +42,7 @@ import { mergeEvents, mergeMessages, mergeWhispers, nextUnreadWhispers } from '.
 import { useBatchedRefetch } from './useBatchedRefetch';
 import { useRoomDock } from './useRoomDock';
 import { useTableStream } from './useTableStream';
+import { useTableGenre } from './useTableGenre';
 import { useTypingPeople } from './useTypingPeople';
 import { WALLET_KEY } from '../../wallet/walletQueries';
 import { changesWallet } from '../../wallet/walletView';
@@ -56,6 +58,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
   const whispers = useQuery(whispersQuery(table.id));
   const me = useQuery(meQuery());
   const typing = useTypingPeople();
+  const genre = useTableGenre(table.scenario_id);
   const refetchSoon = useBatchedRefetch(table.id);
   const [preview, setPreview] = useState<NarrationPreview | null>(null);
   const [managing, setManaging] = useState(false);
@@ -128,7 +131,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
 
   return (
     <ActionRequestProvider>
-      <main className={docked ? 'page room room--docked' : 'page room'} data-sheet={dock.sheet ?? undefined}>
+      <main className={docked ? 'page room room--docked' : 'page room'} data-sheet={dock.sheet ?? undefined} data-genre={genre}>
         <RoomHeader
           table={table}
           stream={stream}

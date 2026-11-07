@@ -3,6 +3,7 @@
 // 소개글은 글 그대로 보인다(줄바꿈만 살린다). HTML 로 꾸미는 소개는 asset-server 로 옮길 때 바꾼다(화면 명세 B2).
 // 머리에 관심(하트, #989) 단추가 있다. 운영자에게는 맨 아래에 제재 칸(E4)이 있다.
 // 모양은 Stitch 18번(소개 화면 셋의 같은 모양): 머리는 한 장의 종이와 감청의 큰 명조 제목, 칸마다 종이 한 장(CSS).
+// 장르 테마(Stitch 23~33번): main 에 data-genre 를 단다(genres/genreTheme.ts).
 
 import { Link } from 'react-router';
 import type { PublicListingDetail } from '../../../api/types';
@@ -16,13 +17,14 @@ import { tagSearchPath } from '../browse/filters';
 import { characterModeLabel } from '../labels';
 import { PregenList } from './PregenList';
 import { ScenarioSidePanel } from './ScenarioSidePanel';
+import { genreTheme } from '../../../genres/genreTheme';
 
 export function ScenarioDetail({ listing }: { listing: PublicListingDetail }) {
   // 운영자의 제재 칸이 이름을 함께 보인다. 머리의 "만든 사람"과 같은 읽기라 한 번만 묻는다
   const creator = usePublicNames([[listing.creator_id]])(listing.creator_id);
   const operator = isOperator(useSession());
   return (
-    <main className="page scenario">
+    <main className="page scenario" data-genre={genreTheme(listing.genre)}>
       <header className="scenario__head">
         <h1>{listing.title}</h1>
         {listing.tagline ? <p className="scenario__tagline">{listing.tagline}</p> : null}

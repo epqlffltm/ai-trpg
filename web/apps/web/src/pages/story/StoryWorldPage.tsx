@@ -4,6 +4,7 @@
 // 엔딩("엔딩 2/5", 본 수는 로그인했을 때), 내 세션(이 세계관의 것), 새로 시작(로그인하지 않았으면 로그인으로).
 // 새로 시작할 때 페르소나가 있으면 "나"를 고른다(기본이 골라져 있고 "페르소나 없이"도 있다).
 // 모양은 Stitch 18번(소개 화면 셋의 같은 모양): 머리는 한 장의 종이(넓으면 왼쪽에 세로로 긴 대표 그림), 칸마다 종이 한 장, 인물은 그림 칸의 격자.
+// 장르 테마(Stitch 23~33번): main 에 data-genre 를 단다(genres/genreTheme.ts).
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -23,6 +24,7 @@ import { describeStartProblem } from './storyTurnProblem';
 import { castLabel, endingLine, worldTags } from './storyWorldView';
 import { progressLine } from './storyCastView';
 import { useStartStorySession } from './useStartStorySession';
+import { genreTheme } from '../../genres/genreTheme';
 
 export function StoryWorldPage() {
   const { worldId = '' } = useParams();
@@ -39,7 +41,7 @@ function WorldDetail({ world, signedIn }: { world: PublicWorldDetail; signedIn: 
   const endings = useQuery(storyEndingsQuery(world.id, signedIn));
   const line = endingLine(world.ending_count, signedIn ? (endings.data?.items.length ?? null) : null);
   return (
-    <main className="page story-world">
+    <main className="page story-world" data-genre={genreTheme(world.genre)}>
       <p>
         <Link to="/story">story</Link>
       </p>

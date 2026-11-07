@@ -1,0 +1,524 @@
+/* web/apps/web/src/genres/genreThemes.css
+ * 장르 테마의 색(Stitch 23~33번). 플레이 화면 셋과 소개 화면 셋의 main 이 data-genre 를 달면(genreTheme.ts) 그 안의 색 변수를 덮어쓴다.
+ * 배치는 바꾸지 않는다. 사이트의 틀(왼쪽 메뉴 열, 위쪽 줄)은 공통 디자인 그대로다.
+ * 값은 장르마다 Stitch 시안의 DESIGN.md 색 표에서 왔다. 시안은 장르마다 밝기 하나(라이트 또는 다크)만 주므로,
+ * 다른 밝기는 그 표의 반전 값(inverse-surface, inverse-on-surface, inverse-primary)을 바탕·글자·강조로 삼고 면과 선은 그 둘을 섞어 지었다.
+ * 글자와 면은 7:1, 흐린 글자·강조와 면은 4.5:1 이상인지 확인했다.
+ * 무늬(돌, 한지, 철판 등)와 구성요소의 모양은 아직 없다. 여기는 색만이다.
+ */
+
+/* 테마를 단 칸은 제 바탕과 글자색을 갖는다(사이트의 바탕 위에 장르의 종이를 깐다) */
+[data-genre] {
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  accent-color: var(--ui-accent);
+}
+
+/* 판타지: 나무와 돌, 마법석 (Stitch 시안의 aethelgard_citadel) */
+[data-genre='fantasy'] {
+  --ui-bg: #dee2f0;
+  --ui-surface: #f5f6fa;
+  --ui-surface-subtle: #d5d9e6;
+  --ui-text: #2b303b;
+  --ui-text-muted: #5d626e;
+  --ui-border: #acb0bd;
+  --ui-border-strong: #7c808c;
+  --ui-accent: #0053db;
+  --ui-accent-hover: #003ea8;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #ba1a1a;
+  --ui-focus: #0053db;
+}
+
+/* 무협: 한지와 문창호 (Stitch 시안의 library_of_spirits_swords) */
+[data-genre='wuxia'] {
+  --ui-bg: #e9e1dd;
+  --ui-surface: #f8f6f5;
+  --ui-surface-subtle: #e0d8d4;
+  --ui-text: #33302d;
+  --ui-text-muted: #66625e;
+  --ui-border: #b6afac;
+  --ui-border-strong: #85807c;
+  --ui-accent: #b91c1c;
+  --ui-accent-hover: #93000b;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #ba1a1a;
+  --ui-focus: #b91c1c;
+}
+
+/* 현대 판타지: 헌터의 상태창 (Stitch 시안의 hunter_system_interface) */
+[data-genre='urban_fantasy'] {
+  --ui-bg: #dde2f5;
+  --ui-surface: #f5f6fc;
+  --ui-surface-subtle: #d4d9eb;
+  --ui-text: #2a303f;
+  --ui-text-muted: #5c6272;
+  --ui-border: #abb0c2;
+  --ui-border-strong: #7b8091;
+  --ui-accent: #00668a;
+  --ui-accent-hover: #004c69;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #ba1a1a;
+  --ui-focus: #00668a;
+}
+
+/* SF: 사이버펑크 거리 (Stitch 시안의 neon_alley_cyberpunk_terminal) */
+[data-genre='sf'] {
+  --ui-bg: #e9dff2;
+  --ui-surface: #f8f5fb;
+  --ui-surface-subtle: #e0d6e8;
+  --ui-text: #342e3c;
+  --ui-text-muted: #67606f;
+  --ui-border: #b6adbf;
+  --ui-border-strong: #857e8e;
+  --ui-accent: #ba005b;
+  --ui-accent-hover: #8f0044;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #ba1a1a;
+  --ui-focus: #ba005b;
+}
+
+/* 아포칼립스: 녹슨 철판과 경고 테이프 (Stitch 시안의 rust_hazard) */
+[data-genre='apocalypse'] {
+  --ui-bg: #eae1db;
+  --ui-surface: #f9f6f4;
+  --ui-surface-subtle: #e1d8d2;
+  --ui-text: #342f2c;
+  --ui-text-muted: #67615d;
+  --ui-border: #b7afaa;
+  --ui-border-strong: #867f7b;
+  --ui-accent: #a73a00;
+  --ui-accent-hover: #7f2b00;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #ba1a1a;
+  --ui-focus: #a73a00;
+}
+
+/* 호러: 혈흔과 육벽 (Stitch 시안의 fleshwall_sanguine_horror) */
+[data-genre='horror'] {
+  --ui-bg: #ffdadb;
+  --ui-surface: #fff4f4;
+  --ui-surface-subtle: #f5d1d2;
+  --ui-text: #45282b;
+  --ui-text-muted: #795a5c;
+  --ui-border: #cba8aa;
+  --ui-border-strong: #99787a;
+  --ui-accent: #b02d29;
+  --ui-accent-hover: #8e1214;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #ba1a1a;
+  --ui-focus: #b02d29;
+}
+
+/* 미스터리: 고택의 서재 (Stitch 시안의 manor_library) */
+[data-genre='mystery'] {
+  --ui-bg: #d2e7dc;
+  --ui-surface: #f2f8f4;
+  --ui-surface-subtle: #caded3;
+  --ui-text: #22342c;
+  --ui-text-muted: #53665d;
+  --ui-border: #a1b5ab;
+  --ui-border-strong: #71857b;
+  --ui-accent: #755b00;
+  --ui-accent-hover: #584400;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #ba1a1a;
+  --ui-focus: #755b00;
+}
+
+/* 로맨스: 편지지와 꽃잎 (Stitch 시안의 romance_letter_and_watercolor_petals) */
+[data-genre='romance'] {
+  --ui-bg: #fff8f8;
+  --ui-surface: #ffffff;
+  --ui-surface-subtle: #ffe8ee;
+  --ui-text: #25181d;
+  --ui-text-muted: #594047;
+  --ui-border: #e1bec6;
+  --ui-border-strong: #8d6f77;
+  --ui-accent: #b7005e;
+  --ui-accent-hover: #db2777;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #ba1a1a;
+  --ui-focus: #b7005e;
+}
+
+/* 일상: 공책과 동네 카페 (Stitch 시안의 sunny_cafe_lined_notebook) */
+[data-genre='slice_of_life'] {
+  --ui-bg: #fff8f6;
+  --ui-surface: #ffffff;
+  --ui-surface-subtle: #f5ecea;
+  --ui-text: #1e1b1a;
+  --ui-text-muted: #4f4633;
+  --ui-border: #d3c5ac;
+  --ui-border-strong: #817660;
+  --ui-accent: #785a00;
+  --ui-accent-hover: #5a4300;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #ba1a1a;
+  --ui-focus: #785a00;
+}
+
+/* 대체역사: 고문서와 옛 지도 (Stitch 시안의 chronicle_cartography) */
+[data-genre='alt_history'] {
+  --ui-bg: #fff8f6;
+  --ui-surface: #ffffff;
+  --ui-surface-subtle: #fdeae3;
+  --ui-text: #231916;
+  --ui-text-muted: #59413e;
+  --ui-border: #e1bfbb;
+  --ui-border-strong: #8d706d;
+  --ui-accent: #760009;
+  --ui-accent-hover: #991b1b;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #ba1a1a;
+  --ui-focus: #760009;
+}
+
+/* 코미디: 예능 자막 (Stitch 시안의 variety_show_subtitle_studio) */
+[data-genre='comedy'] {
+  --ui-bg: #fbf8fc;
+  --ui-surface: #ffffff;
+  --ui-surface-subtle: #f0edf1;
+  --ui-text: #1b1b1e;
+  --ui-text-muted: #4d4632;
+  --ui-border: #d1c6ab;
+  --ui-border-strong: #7f7660;
+  --ui-accent: #735c00;
+  --ui-accent-hover: #574500;
+  --ui-accent-text: #ffffff;
+  --ui-danger: #ba1a1a;
+  --ui-focus: #735c00;
+}
+
+/* 어두운 밝기. 사이트의 밝기와 같은 규칙으로 고른다(기기가 어둡고 밝게로 고정하지 않았을 때, 또는 어둡게로 고정했을 때) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) [data-genre='fantasy'] {
+    --ui-bg: #0e131d;
+    --ui-surface: #1b2029;
+    --ui-surface-subtle: #252a34;
+    --ui-text: #dee2f0;
+    --ui-text-muted: #c3c6d7;
+    --ui-border: #434655;
+    --ui-border-strong: #8d90a0;
+    --ui-accent: #b4c5ff;
+    --ui-accent-hover: #dbe1ff;
+    --ui-accent-text: #002a78;
+    --ui-danger: #ffb4ab;
+    --ui-focus: #b4c5ff;
+  }
+
+  :root:not([data-theme='light']) [data-genre='wuxia'] {
+    --ui-bg: #161311;
+    --ui-surface: #221f1d;
+    --ui-surface-subtle: #2d2927;
+    --ui-text: #e9e1dd;
+    --ui-text-muted: #e4beb9;
+    --ui-border: #5b403d;
+    --ui-border-strong: #ab8985;
+    --ui-accent: #ffb4ab;
+    --ui-accent-hover: #ffdad6;
+    --ui-accent-text: #690005;
+    --ui-danger: #ffb4ab;
+    --ui-focus: #ffb4ab;
+  }
+
+  :root:not([data-theme='light']) [data-genre='urban_fantasy'] {
+    --ui-bg: #0d1320;
+    --ui-surface: #1a1f2d;
+    --ui-surface-subtle: #242a38;
+    --ui-text: #dde2f5;
+    --ui-text-muted: #bdc8d1;
+    --ui-border: #3e484f;
+    --ui-border-strong: #87929a;
+    --ui-accent: #8ed5ff;
+    --ui-accent-hover: #c4e7ff;
+    --ui-accent-text: #00354a;
+    --ui-danger: #ffb4ab;
+    --ui-focus: #8ed5ff;
+  }
+
+  :root:not([data-theme='light']) [data-genre='sf'] {
+    --ui-bg: #16111e;
+    --ui-surface: #221d2b;
+    --ui-surface-subtle: #2d2836;
+    --ui-text: #e9dff2;
+    --ui-text-muted: #e5bcc5;
+    --ui-border: #5c3f46;
+    --ui-border-strong: #ac878f;
+    --ui-accent: #ffb1c4;
+    --ui-accent-hover: #ffd9e1;
+    --ui-accent-text: #65002e;
+    --ui-danger: #ffb4ab;
+    --ui-focus: #ffb1c4;
+  }
+
+  :root:not([data-theme='light']) [data-genre='apocalypse'] {
+    --ui-bg: #161310;
+    --ui-surface: #231f1c;
+    --ui-surface-subtle: #2e2926;
+    --ui-text: #eae1db;
+    --ui-text-muted: #e2bfb2;
+    --ui-border: #5a4138;
+    --ui-border-strong: #a98a7e;
+    --ui-accent: #ffb599;
+    --ui-accent-hover: #ffdbce;
+    --ui-accent-text: #5a1c00;
+    --ui-danger: #ffb4ab;
+    --ui-focus: #ffb599;
+  }
+
+  :root:not([data-theme='light']) [data-genre='horror'] {
+    --ui-bg: #240c0e;
+    --ui-surface: #32181a;
+    --ui-surface-subtle: #3e2224;
+    --ui-text: #ffdadb;
+    --ui-text-muted: #e1bfbb;
+    --ui-border: #59413e;
+    --ui-border-strong: #a88a86;
+    --ui-accent: #ffb4ac;
+    --ui-accent-hover: #ffdad6;
+    --ui-accent-text: #690007;
+    --ui-danger: #ffb4ab;
+    --ui-focus: #ffb4ac;
+  }
+
+  :root:not([data-theme='light']) [data-genre='mystery'] {
+    --ui-bg: #051710;
+    --ui-surface: #11231c;
+    --ui-surface-subtle: #1c2e26;
+    --ui-text: #d2e7dc;
+    --ui-text-muted: #d0c5af;
+    --ui-border: #4d4635;
+    --ui-border-strong: #99907c;
+    --ui-accent: #fdd35b;
+    --ui-accent-hover: #ffe08f;
+    --ui-accent-text: #3d2e00;
+    --ui-danger: #ffb4ab;
+    --ui-focus: #fdd35b;
+  }
+
+  :root:not([data-theme='light']) [data-genre='romance'] {
+    --ui-bg: #3b2c31;
+    --ui-surface: #47393d;
+    --ui-surface-subtle: #53454a;
+    --ui-text: #ffecf1;
+    --ui-text-muted: #c4b2b7;
+    --ui-border: #726267;
+    --ui-border-strong: #9d8c91;
+    --ui-accent: #ffb1c7;
+    --ui-accent-hover: #ffd9e2;
+    --ui-accent-text: #3f001c;
+    --ui-danger: #ffb4ab;
+    --ui-focus: #ffb1c7;
+  }
+
+  :root:not([data-theme='light']) [data-genre='slice_of_life'] {
+    --ui-bg: #342f2e;
+    --ui-surface: #403b3b;
+    --ui-surface-subtle: #4c4847;
+    --ui-text: #f8efed;
+    --ui-text-muted: #bdb5b4;
+    --ui-border: #6b6563;
+    --ui-border-strong: #968f8e;
+    --ui-accent: #f7be1d;
+    --ui-accent-hover: #ffdf9a;
+    --ui-accent-text: #251a00;
+    --ui-danger: #ffb4ab;
+    --ui-focus: #f7be1d;
+  }
+
+  :root:not([data-theme='light']) [data-genre='alt_history'] {
+    --ui-bg: #392e2a;
+    --ui-surface: #453b37;
+    --ui-surface-subtle: #514744;
+    --ui-text: #ffede7;
+    --ui-text-muted: #c4b4ae;
+    --ui-border: #70635f;
+    --ui-border-strong: #9c8e88;
+    --ui-accent: #ffb4ac;
+    --ui-accent-hover: #ffdad6;
+    --ui-accent-text: #410002;
+    --ui-danger: #ffb4ab;
+    --ui-focus: #ffb4ac;
+  }
+
+  :root:not([data-theme='light']) [data-genre='comedy'] {
+    --ui-bg: #303033;
+    --ui-surface: #3c3c3f;
+    --ui-surface-subtle: #49494b;
+    --ui-text: #f3f0f4;
+    --ui-text-muted: #b8b6ba;
+    --ui-border: #676669;
+    --ui-border-strong: #929094;
+    --ui-accent: #eec200;
+    --ui-accent-hover: #ffe083;
+    --ui-accent-text: #231b00;
+    --ui-danger: #ffb4ab;
+    --ui-focus: #eec200;
+  }
+}
+
+:root[data-theme='dark'] [data-genre='fantasy'] {
+  --ui-bg: #0e131d;
+  --ui-surface: #1b2029;
+  --ui-surface-subtle: #252a34;
+  --ui-text: #dee2f0;
+  --ui-text-muted: #c3c6d7;
+  --ui-border: #434655;
+  --ui-border-strong: #8d90a0;
+  --ui-accent: #b4c5ff;
+  --ui-accent-hover: #dbe1ff;
+  --ui-accent-text: #002a78;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #b4c5ff;
+}
+
+:root[data-theme='dark'] [data-genre='wuxia'] {
+  --ui-bg: #161311;
+  --ui-surface: #221f1d;
+  --ui-surface-subtle: #2d2927;
+  --ui-text: #e9e1dd;
+  --ui-text-muted: #e4beb9;
+  --ui-border: #5b403d;
+  --ui-border-strong: #ab8985;
+  --ui-accent: #ffb4ab;
+  --ui-accent-hover: #ffdad6;
+  --ui-accent-text: #690005;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #ffb4ab;
+}
+
+:root[data-theme='dark'] [data-genre='urban_fantasy'] {
+  --ui-bg: #0d1320;
+  --ui-surface: #1a1f2d;
+  --ui-surface-subtle: #242a38;
+  --ui-text: #dde2f5;
+  --ui-text-muted: #bdc8d1;
+  --ui-border: #3e484f;
+  --ui-border-strong: #87929a;
+  --ui-accent: #8ed5ff;
+  --ui-accent-hover: #c4e7ff;
+  --ui-accent-text: #00354a;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #8ed5ff;
+}
+
+:root[data-theme='dark'] [data-genre='sf'] {
+  --ui-bg: #16111e;
+  --ui-surface: #221d2b;
+  --ui-surface-subtle: #2d2836;
+  --ui-text: #e9dff2;
+  --ui-text-muted: #e5bcc5;
+  --ui-border: #5c3f46;
+  --ui-border-strong: #ac878f;
+  --ui-accent: #ffb1c4;
+  --ui-accent-hover: #ffd9e1;
+  --ui-accent-text: #65002e;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #ffb1c4;
+}
+
+:root[data-theme='dark'] [data-genre='apocalypse'] {
+  --ui-bg: #161310;
+  --ui-surface: #231f1c;
+  --ui-surface-subtle: #2e2926;
+  --ui-text: #eae1db;
+  --ui-text-muted: #e2bfb2;
+  --ui-border: #5a4138;
+  --ui-border-strong: #a98a7e;
+  --ui-accent: #ffb599;
+  --ui-accent-hover: #ffdbce;
+  --ui-accent-text: #5a1c00;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #ffb599;
+}
+
+:root[data-theme='dark'] [data-genre='horror'] {
+  --ui-bg: #240c0e;
+  --ui-surface: #32181a;
+  --ui-surface-subtle: #3e2224;
+  --ui-text: #ffdadb;
+  --ui-text-muted: #e1bfbb;
+  --ui-border: #59413e;
+  --ui-border-strong: #a88a86;
+  --ui-accent: #ffb4ac;
+  --ui-accent-hover: #ffdad6;
+  --ui-accent-text: #690007;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #ffb4ac;
+}
+
+:root[data-theme='dark'] [data-genre='mystery'] {
+  --ui-bg: #051710;
+  --ui-surface: #11231c;
+  --ui-surface-subtle: #1c2e26;
+  --ui-text: #d2e7dc;
+  --ui-text-muted: #d0c5af;
+  --ui-border: #4d4635;
+  --ui-border-strong: #99907c;
+  --ui-accent: #fdd35b;
+  --ui-accent-hover: #ffe08f;
+  --ui-accent-text: #3d2e00;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #fdd35b;
+}
+
+:root[data-theme='dark'] [data-genre='romance'] {
+  --ui-bg: #3b2c31;
+  --ui-surface: #47393d;
+  --ui-surface-subtle: #53454a;
+  --ui-text: #ffecf1;
+  --ui-text-muted: #c4b2b7;
+  --ui-border: #726267;
+  --ui-border-strong: #9d8c91;
+  --ui-accent: #ffb1c7;
+  --ui-accent-hover: #ffd9e2;
+  --ui-accent-text: #3f001c;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #ffb1c7;
+}
+
+:root[data-theme='dark'] [data-genre='slice_of_life'] {
+  --ui-bg: #342f2e;
+  --ui-surface: #403b3b;
+  --ui-surface-subtle: #4c4847;
+  --ui-text: #f8efed;
+  --ui-text-muted: #bdb5b4;
+  --ui-border: #6b6563;
+  --ui-border-strong: #968f8e;
+  --ui-accent: #f7be1d;
+  --ui-accent-hover: #ffdf9a;
+  --ui-accent-text: #251a00;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #f7be1d;
+}
+
+:root[data-theme='dark'] [data-genre='alt_history'] {
+  --ui-bg: #392e2a;
+  --ui-surface: #453b37;
+  --ui-surface-subtle: #514744;
+  --ui-text: #ffede7;
+  --ui-text-muted: #c4b4ae;
+  --ui-border: #70635f;
+  --ui-border-strong: #9c8e88;
+  --ui-accent: #ffb4ac;
+  --ui-accent-hover: #ffdad6;
+  --ui-accent-text: #410002;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #ffb4ac;
+}
+
+:root[data-theme='dark'] [data-genre='comedy'] {
+  --ui-bg: #303033;
+  --ui-surface: #3c3c3f;
+  --ui-surface-subtle: #49494b;
+  --ui-text: #f3f0f4;
+  --ui-text-muted: #b8b6ba;
+  --ui-border: #676669;
+  --ui-border-strong: #929094;
+  --ui-accent: #eec200;
+  --ui-accent-hover: #ffe083;
+  --ui-accent-text: #231b00;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #eec200;
+}
