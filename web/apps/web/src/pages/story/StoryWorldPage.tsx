@@ -3,6 +3,7 @@
 // 머리(대표 그림, 이름, 만든 사람(누르면 제작자 페이지, #992), 관심 단추(#989), 등급·기한·태그), 제작자가 꾸민 소개(거른 HTML), 인물(보임: 이름과 그림, 실루엣: "???", 숨김은 오지 않는다),
 // 엔딩("엔딩 2/5", 본 수는 로그인했을 때), 내 세션(이 세계관의 것), 새로 시작(로그인하지 않았으면 로그인으로).
 // 새로 시작할 때 페르소나가 있으면 "나"를 고른다(기본이 골라져 있고 "페르소나 없이"도 있다).
+// 모양은 Stitch 18번(소개 화면 셋의 같은 모양): 머리는 한 장의 종이(넓으면 왼쪽에 세로로 긴 대표 그림), 칸마다 종이 한 장, 인물은 그림 칸의 격자.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -38,19 +39,21 @@ function WorldDetail({ world, signedIn }: { world: PublicWorldDetail; signedIn: 
   const endings = useQuery(storyEndingsQuery(world.id, signedIn));
   const line = endingLine(world.ending_count, signedIn ? (endings.data?.items.length ?? null) : null);
   return (
-    <main className="page page--medium story-world">
+    <main className="page story-world">
       <p>
         <Link to="/story">story</Link>
       </p>
       <header className="story-world__head">
         {image.url ? <img src={image.url} alt="" className="story-world__image" /> : null}
-        <h1>{world.name}</h1>
-        <CreatorByline creatorId={world.creator_id} />
-        <HeartButton kind="world" id={world.id} count={world.heart_count} />
-        <p className="hint">
-          {[...worldTags(world), `${world.version}판`, world.after_ending === 'epilogue' ? '엔딩 뒤 후일담' : null].filter(Boolean).join(' · ')}
-        </p>
-        {line ? <p>{line}</p> : null}
+        <div className="story-world__info">
+          <h1>{world.name}</h1>
+          <CreatorByline creatorId={world.creator_id} />
+          <HeartButton kind="world" id={world.id} count={world.heart_count} />
+          <p className="hint">
+            {[...worldTags(world), `${world.version}판`, world.after_ending === 'epilogue' ? '엔딩 뒤 후일담' : null].filter(Boolean).join(' · ')}
+          </p>
+          {line ? <p>{line}</p> : null}
+        </div>
       </header>
       <section aria-labelledby="world-intro">
         <h2 id="world-intro">소개</h2>
