@@ -36,7 +36,7 @@ export function EmailStep({ initialProblem, onSent }: Props) {
 
   return (
     <form onSubmit={submit} noValidate>
-      <ProblemNotice problem={problem} />
+      <ProblemNotice problem={problem} reveal />
       <TextField
         label="이메일"
         name="email"

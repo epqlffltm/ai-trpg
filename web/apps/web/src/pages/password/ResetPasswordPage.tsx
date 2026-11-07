@@ -61,7 +61,7 @@ export function ResetPasswordPage() {
       <h1>비밀번호 새로 정하기</h1>
       <form onSubmit={submit} noValidate>
         <p>{link.email} 의 비밀번호를 새로 정합니다.</p>
-        <ProblemNotice problem={problem} />
+        <ProblemNotice problem={problem} reveal />
         <TextField
           label="새 비밀번호"
           name="new_password"

@@ -48,7 +48,7 @@ export function ForgotPasswordPage() {
       ) : (
         <form onSubmit={submit} noValidate>
           <p>가입한 이메일을 적으면 비밀번호를 새로 정하는 링크를 보냅니다.</p>
-          <ProblemNotice problem={problem} />
+          <ProblemNotice problem={problem} reveal />
           <TextField
             label="이메일"
             name="email"

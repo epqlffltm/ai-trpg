@@ -40,7 +40,7 @@ export function CredentialsStep({ initialProblem, initialUsername, onTicket }: P
 
   return (
     <form onSubmit={submit} noValidate>
-      <ProblemNotice problem={problem} />
+      <ProblemNotice problem={problem} reveal />
       <TextField
         label="아이디"
         name="username"

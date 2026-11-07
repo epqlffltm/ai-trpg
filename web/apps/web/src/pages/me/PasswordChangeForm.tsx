@@ -47,7 +47,7 @@ export function PasswordChangeForm() {
       <h2 id="password-heading">비밀번호 바꾸기</h2>
       <form onSubmit={submit} noValidate>
         {done ? <Notice>비밀번호를 바꿨습니다. 다른 기기에서는 로그아웃됐습니다.</Notice> : null}
-        <ProblemNotice problem={problem} />
+        <ProblemNotice problem={problem} reveal />
         <TextField
           label="현재 비밀번호"
           name="current_password"

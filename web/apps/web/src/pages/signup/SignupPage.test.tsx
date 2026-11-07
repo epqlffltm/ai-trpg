@@ -126,6 +126,34 @@ describe('SignupPage', () => {
     expect(screen.getByText(/이미 가입을 마친 이메일/)).toBeInTheDocument();
   });
 
+  it('서버가 칸을 거절하면 그 칸으로 커서를 옮긴다(휴대폰에서 글이 화면 밖에 남지 않게)', async () => {
+    routes(() =>
+      json(400, { detail: '입력이 올바르지 않습니다.', errors: { username: ['아이디는 이메일의 @ 앞부분과 달라야 합니다.'] } }),
+    );
+    renderApp('/signup');
+    await reachProfileStep();
+    await fillProfile();
+    await userEvent.click(await screen.findByLabelText('[필수] 이용약관'));
+    await userEvent.click(screen.getByLabelText('[필수] 개인정보 수집·이용'));
+    await userEvent.click(screen.getByRole('button', { name: '가입하기' }));
+
+    expect(await screen.findByText('아이디는 이메일의 @ 앞부분과 달라야 합니다.')).toBeInTheDocument();
+    expect(screen.getByLabelText('아이디')).toHaveFocus();
+  });
+
+  it('칸을 가르지 않는 실패면 실패의 한 줄로 초점을 옮긴다', async () => {
+    routes(() => json(503, { detail: '잠시 뒤에' }));
+    renderApp('/signup');
+    await reachProfileStep();
+    await fillProfile();
+    await userEvent.click(await screen.findByLabelText('[필수] 이용약관'));
+    await userEvent.click(screen.getByLabelText('[필수] 개인정보 수집·이용'));
+    await userEvent.click(screen.getByRole('button', { name: '가입하기' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.closest('.problem-notice')).toHaveFocus();
+  });
+
   it('형식이 틀린 아이디는 보내기 전에 알린다', async () => {
     routes(() => json(201, { detail: '가입했다' }));
     renderApp('/signup');
