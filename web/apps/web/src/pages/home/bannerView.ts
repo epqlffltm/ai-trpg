@@ -4,6 +4,9 @@
 
 import type { AssetBanner, ScenarioBanner } from '../../api/banners';
 
+/** 배너가 걸린 서비스 */
+export type BannerService = 'TRPG' | 'chat' | 'story';
+
 export type BannerSlide = {
   id: string;
   /** 서비스의 이름(TRPG, chat, story) */
@@ -46,6 +49,11 @@ export function assetSlide(banner: AssetBanner): BannerSlide | null {
 export function bannerSlides(scenarios: ScenarioBanner[], assets: AssetBanner[]): BannerSlide[] {
   const slides = assets.map(assetSlide).filter((slide): slide is BannerSlide => slide !== null);
   return [...scenarios.map(scenarioSlide), ...slides.filter((slide) => slide.service === 'chat'), ...slides.filter((slide) => slide.service === 'story')];
+}
+
+/** 서비스 하나의 배너만(탐색 화면의 배너, Stitch 12·16·17번). service 가 없으면 모두 */
+export function slidesOf(slides: BannerSlide[], service: BannerService | undefined): BannerSlide[] {
+  return service ? slides.filter((slide) => slide.service === service) : slides;
 }
 
 /** 넘겼을 때의 자리. 끝에서 넘기면 처음으로, 처음에서 앞으로 가면 끝으로 돈다 */

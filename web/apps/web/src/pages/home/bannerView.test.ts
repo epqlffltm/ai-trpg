@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { AssetBanner, ScenarioBanner } from '../../api/banners';
-import { bannerSlides, turned } from './bannerView';
+import { bannerSlides, slidesOf, turned } from './bannerView';
 
 const SCENARIO = {
   id: 'b-1',
@@ -23,6 +23,13 @@ describe('bannerSlides', () => {
     ]);
     expect(slides[1]?.line).toBe('#사서 #조용함');
     expect(slides[2]?.imageId).toBe('i-1');
+  });
+
+  it('탐색 화면은 그 서비스의 배너만, 서비스가 없으면 모두', () => {
+    const slides = bannerSlides([SCENARIO], [WORLD, CHARACTER]);
+    expect(slidesOf(slides, 'chat').map((slide) => slide.title)).toEqual(['세라']);
+    expect(slidesOf(slides, 'TRPG').map((slide) => slide.title)).toEqual(['잿빛 수도원']);
+    expect(slidesOf(slides, undefined)).toHaveLength(3);
   });
 
   it('넘기기는 끝에서 처음으로, 처음에서 끝으로 돈다', () => {

@@ -3,6 +3,7 @@
 // 공개 세계관은 최신순과 인기순(?sort=popular, #985)으로 줄 세운다.
 // 로그인했으면 내 세션(최근 것부터, 20 개씩 "더 보기")과 게시한 내 세계관으로 새로 시작. 운영자에게는 "세계관 만들기"(D7)와 "JSON 으로 세계관 넣기"로 가는 길이 있다.
 // 시작하면 세계관의 마지막 판을 고정한 새 세션이 생기고 장면(D2)으로 간다. 모델은 지난번 세션의 것이다.
+// 모양은 Stitch 17번(12번과 같은 틀): 맨 위에 내 세션(로그인했을 때), story 배너(#994), 최신순이면 이번 주 인기 줄(#985), "전체 세계관"의 격자.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
@@ -14,6 +15,8 @@ import { isOperator } from '../../auth/roles';
 import { useSession } from '../../auth/useSession';
 import { OrderChips } from '../../components/OrderChips';
 import { formatDateTime } from '../../format/dateTime';
+import { PromoBanner } from '../home/PromoBanner';
+import { WorldRankingRow } from '../home/RankingRows';
 import { myStoryWorldsQuery, publicWorldsQuery, storySessionsQuery } from './storyQueries';
 import { describeStartProblem } from './storyTurnProblem';
 import { StoryWorldCard } from './StoryWorldCard';
@@ -23,18 +26,14 @@ import { useStartStorySession } from './useStartStorySession';
 export function StoryHomePage() {
   const signedIn = useSession() !== null;
   return (
-    <main className="page page--medium">
+    <main className="page">
       <h1>story</h1>
       <p className="hint">세계관 하나를 걸으며 여러 인물을 만나는 이야기입니다. 세션마다 그때의 판으로 돕니다.</p>
+      {signedIn ? <MySessions /> : <SignInNotice />}
+      <PromoBanner signedIn={signedIn} service="story" />
+      <PopularWorlds signedIn={signedIn} />
       <PublicWorlds signedIn={signedIn} />
-      {signedIn ? (
-        <>
-          <MySessions />
-          <StartFromMyWorlds />
-        </>
-      ) : (
-        <SignInNotice />
-      )}
+      {signedIn ? <StartFromMyWorlds /> : null}
     </main>
   );
 }
@@ -46,7 +45,7 @@ function PublicWorlds({ signedIn }: { signedIn: boolean }) {
   const items = worlds.data?.pages.flatMap((page) => page.items) ?? [];
   return (
     <section className="page-section" aria-labelledby="story-public">
-      <h2 id="story-public">공개 세계관</h2>
+      <h2 id="story-public">전체 세계관</h2>
       <OrderChips order={order} onChange={(next: ListingOrder) => setParams(next === 'popular' ? { sort: next } : {})} />
       {worlds.isPending ? <p aria-busy="true">불러오는 중</p> : null}
       {worlds.isError ? (
@@ -72,6 +71,13 @@ function PublicWorlds({ signedIn }: { signedIn: boolean }) {
       ) : null}
     </section>
   );
+}
+
+/** 이번 주 인기 줄. 인기순으로 보는 중이면 아래 격자와 같아 두지 않는다 */
+function PopularWorlds({ signedIn }: { signedIn: boolean }) {
+  const [params] = useSearchParams();
+  if (parseOrder(params.get('sort')) === 'popular') return null;
+  return <WorldRankingRow signedIn={signedIn} />;
 }
 
 function SignInNotice() {

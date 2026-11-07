@@ -49,7 +49,12 @@ function query(request: SeenRequest): URLSearchParams {
 }
 
 const NAMES = () => json(200, { names: [{ public_id: CREATOR, nickname: '이야기꾼' }] });
-const SIGNED_OUT = { [`POST ${REFRESH_PATH}`]: () => json(401, { detail: 'no cookie' }) };
+// 탐색 화면의 위(Stitch 12번)는 TRPG 배너와 이번 주 인기 줄을 읽는다. 걸린 것이 없는 서버로 둔다
+const SIGNED_OUT = {
+  [`POST ${REFRESH_PATH}`]: () => json(401, { detail: 'no cookie' }),
+  'GET /api/v1/game/banners': () => json(200, { items: [] }),
+  'GET /api/v1/game/rankings/scenarios': () => json(200, { items: [] }),
+};
 
 describe('ScenarioBrowsePage', () => {
   it('로그인 전에는 토큰 없이 읽고, 장르를 화면의 말로, 만든 사람을 이름으로 보인다', async () => {
