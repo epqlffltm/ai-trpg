@@ -2,6 +2,7 @@
 // 토스페이먼츠의 카드 등록 창이 돌아오는 화면(#980, /wallet/card/return). 로그인해야 열린다(App.tsx 의 RequireSession).
 // 성공으로 돌아왔으면 카드를 등록하고 결과를 보인다. 실패로 돌아왔으면 까닭을 보인다. 어느 쪽이든 지갑으로 돌아간다.
 // 주소를 읽지 못했으면 서버에 아무것도 보내지 않는다(tossCard.ts 의 readCardReturn).
+// 모양은 계정 화면과 같은 가운데 카드(Stitch 35번).
 
 import { Notice } from '@ai-trpg/ui';
 import { Link, useSearchParams } from 'react-router';
@@ -14,7 +15,7 @@ export function CardReturnPage() {
   const [search] = useSearchParams();
   const result = readCardReturn(search);
   return (
-    <main className="page page--medium">
+    <main className="page page--medium auth-card">
       <h1>카드 등록</h1>
       {result.kind === 'registered' ? (
         <Registering authKey={result.authKey} customerKey={result.customerKey} />
