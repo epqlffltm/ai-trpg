@@ -2877,8 +2877,33 @@ details.room-panel[open] > summary {
 
 /* 신고 처리(E4). 운영자의 화면은 표와 폼이 중심이다(docs/product/screens.md 의 "E. 관리자") */
 .moderation-list__item {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--ui-border);
+  margin-bottom: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+
+/* 운영자의 화면(신고 처리, 홍보 배너, Stitch 44번)과 갤러리(Stitch 42번). 큰 명조 제목은 감청, 칸마다 종이 한 장 */
+.operator-page > h1,
+.gallery-page > h1 {
+  color: var(--ui-accent);
+  font-family: var(--ui-font-serif);
+}
+
+.operator-page .page-section,
+.gallery-page .page-section {
+  padding: 16px 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-subtle);
+}
+
+.operator-page .page-section h2,
+.gallery-page .page-section h2 {
+  padding-left: 10px;
+  border-left: 3px solid var(--ui-accent);
+  font-family: var(--ui-font-serif);
 }
 
 .moderation-list__item p {
@@ -3614,6 +3639,10 @@ details.room-panel[open] > summary {
 .scene-tile {
   display: grid;
   gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
   overflow-wrap: anywhere;
 }
 
@@ -4271,10 +4300,17 @@ details.room-panel[open] > summary {
   border-radius: var(--ui-radius);
 }
 
+/* 장면 그림(Stitch 42번). 그림 한 장마다 작은 종이, 아래에 작은 글("AI 가 만든 그림") */
 .chat-snapshots__figure {
   display: grid;
-  gap: 2px;
+  gap: 4px;
+  max-width: 496px;
   margin: 0;
+  padding: 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
 }
 
 .chat-snapshots__open {
@@ -4303,6 +4339,7 @@ details.room-panel[open] > summary {
 
 .chat-snapshots__note {
   margin: 0;
+  font-size: 0.85em;
 }
 
 .chat-message__editor {

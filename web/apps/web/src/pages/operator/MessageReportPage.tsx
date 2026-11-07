@@ -4,6 +4,7 @@
 // 보려면 까닭을 적는다. 서버는 볼 때마다 까닭과 함께 감사 기록(operator_reads)을 남긴다.
 // 그래서 TanStack Query 로 읽지 않는다. 창을 다시 보거나 다시 붙을 때 저절로 다시 읽으면 기록이 쌓인다. 누를 때 한 번만 부른다.
 // 처리는 신고 하나다. 캐릭터를 숨기는 것은 캐릭터의 신고(asset)에서 한다.
+// 모양은 Stitch 44번: 큰 명조 제목, 칸마다 종이 한 장.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useState, type FormEvent } from 'react';
@@ -21,7 +22,7 @@ export function MessageReportPage() {
   const { reportId = '' } = useParams();
   const [detail, setDetail] = useState<MessageReportDetail | null>(null);
   return (
-    <main className="page page--medium">
+    <main className="page page--medium operator-page">
       <p>
         <Link to="/operator/reports">신고 처리</Link>
       </p>
