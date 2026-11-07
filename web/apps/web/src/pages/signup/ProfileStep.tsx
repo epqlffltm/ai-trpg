@@ -74,7 +74,7 @@ export function ProfileStep({ ticket, initialInviteCode = '', ticketEndsAt, onDo
   return (
     <form onSubmit={submit} noValidate>
       <p>{formatRemaining(ticketClock.remaining)} 안에 마쳐 주세요.</p>
-      <ProblemNotice problem={problem} />
+      <ProblemNotice problem={problem} reveal />
       <TextField
         label="아이디"
         name="username"

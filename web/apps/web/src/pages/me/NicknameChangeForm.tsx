@@ -76,7 +76,7 @@ function NicknameForm({ me, onChanged }: { me: Me; onChanged: () => void }) {
 
   return (
     <form onSubmit={submit} noValidate>
-      <ProblemNotice problem={problem} />
+      <ProblemNotice problem={problem} reveal />
       <TextField
         label="새 닉네임"
         name="nickname"

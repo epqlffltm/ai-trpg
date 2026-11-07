@@ -81,7 +81,7 @@ export function CodeStep({ ticket, ticketEndsAt, onDone, onRestart }: Props) {
       <p>
         가입한 메일로 6자리 코드를 보냈습니다. {formatRemaining(ticketSeconds)} 안에 입력해 주세요.
       </p>
-      <ProblemNotice problem={problem} />
+      <ProblemNotice problem={problem} reveal />
       {sent ? <Notice>{sent}</Notice> : null}
       <TextField
         label="인증 코드"

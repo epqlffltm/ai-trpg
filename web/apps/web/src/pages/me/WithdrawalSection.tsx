@@ -78,7 +78,7 @@ function WithdrawalForm() {
   return (
     <form onSubmit={submit} noValidate>
       <p>정말 탈퇴하려면 비밀번호를 입력하세요. 남은 크레딧은 탈퇴를 마치면 사라집니다.</p>
-      <ProblemNotice problem={problem} />
+      <ProblemNotice problem={problem} reveal />
       <TextField
         label="비밀번호"
         name="password"

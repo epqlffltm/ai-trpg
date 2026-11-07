@@ -92,6 +92,7 @@ describe('NicknameChangeForm', () => {
     await fillAndSend('남의이름', 'my-pass-1234');
 
     expect(await screen.findByText('이미 사용 중인 닉네임입니다.')).toBeInTheDocument();
+    expect(screen.getByLabelText('새 닉네임')).toHaveFocus();
   });
 
   it('30일 안이면 언제부터 바꿀 수 있는지만 보인다', async () => {

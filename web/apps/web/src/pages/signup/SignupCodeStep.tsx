@@ -62,7 +62,7 @@ export function SignupCodeStep({ email, onVerified, onChangeEmail }: Props) {
         <strong>{email}</strong> 로 6자리 코드를 보냈습니다.{' '}
         {codeClock.remaining > 0 ? `${formatRemaining(codeClock.remaining)} 안에 입력해 주세요.` : '코드가 만료됐습니다. 다시 받아 주세요.'}
       </p>
-      <ProblemNotice problem={problem} />
+      <ProblemNotice problem={problem} reveal />
       {sent ? <Notice>{sent}</Notice> : null}
       <TextField
         label="인증 코드"
