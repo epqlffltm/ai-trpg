@@ -2,6 +2,7 @@
 // 토스페이먼츠의 결제창이 돌아오는 화면(A7, /wallet/charge/return). 로그인해야 열린다(App.tsx 의 RequireSession).
 // 성공으로 돌아왔으면 승인을 요청하고 결과를 보인다. 실패로 돌아왔으면 까닭을 보이고 충전으로 돌려보낸다.
 // 주소를 읽지 못했으면 서버에 아무것도 보내지 않는다(tossPayment.ts 의 readChargeReturn).
+// 모양은 계정 화면과 같은 가운데 카드(Stitch 35번).
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { Link, useNavigate, useSearchParams } from 'react-router';
@@ -14,7 +15,7 @@ export function ChargeReturnPage() {
   const [search] = useSearchParams();
   const result = readChargeReturn(search);
   return (
-    <main className="page page--medium">
+    <main className="page page--medium auth-card">
       <h1>충전</h1>
       {result.kind === 'paid' ? (
         <Confirming orderId={result.orderId} paymentKey={result.paymentKey} />

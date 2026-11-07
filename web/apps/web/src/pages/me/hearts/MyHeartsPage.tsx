@@ -2,6 +2,7 @@
 // 내 관심 작품(#989, /me/hearts). 로그인해야 열린다. 마이페이지의 "관심 작품"에서 온다.
 // TRPG 시나리오, chat 캐릭터, story 세계관을 서버마다 따로 부르고 서비스마다 묶는다(#593). 최근에 둔 것부터다.
 // 지금 볼 수 있는 것만 나온다(공개를 내렸거나 볼 수 없게 된 것은 빠진다). 관심을 거두는 것은 작품의 소개에서 한다.
+// 모양은 Stitch 38번: 큰 명조 제목, 묶음 제목은 명조.
 
 import { ListSection } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -16,7 +17,7 @@ import { genreLabel } from '../../trpg/labels';
 
 export function MyHeartsPage() {
   return (
-    <main className="page">
+    <main className="page works-page">
       <h1>관심 작품</h1>
       <p className="hint">작품의 소개에서 ♡ 관심을 누르면 여기에 모입니다. 다시 누르면 빠집니다.</p>
       <HeartedScenarios />

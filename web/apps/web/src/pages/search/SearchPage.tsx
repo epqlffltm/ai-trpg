@@ -3,6 +3,7 @@
 // TRPG 의 시나리오, chat 의 캐릭터, story 의 세계관을 서비스마다 묶는다. 서버마다 따로 부르고 섞어 정렬하지 않는다(#593).
 // 묶음마다 최근에 공개한 것부터 앞의 SEARCH_LIMIT 개와 찾은 수다. 검색어가 규칙에 맞지 않으면 부르지 않고 까닭을 적는다.
 // 태그가 아닌 검색어(20자까지)면 맨 앞에 제작자(인증 서버, 닉네임으로 찾음)를 묶는다. 내가 막은 제작자는 뺀다(#988).
+// 모양은 Stitch 36번: 큰 명조 제목, 묶음 제목은 명조.
 
 import { ListSection, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -27,7 +28,7 @@ export function SearchPage() {
   const signedIn = useSession() !== null;
 
   return (
-    <main className="page">
+    <main className="page works-page">
       <h1>{q === '' ? '작품 검색' : `"${q}" 검색 결과`}</h1>
       <p className="hint">이름이나 한 줄 소개, 만든 사람의 닉네임으로 찾습니다. #으로 시작하면 그 태그가 붙은 작품을 찾습니다.</p>
       {problem ? <Notice tone="error">{problem}</Notice> : null}

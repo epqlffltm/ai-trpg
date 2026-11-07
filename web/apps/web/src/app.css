@@ -1153,6 +1153,45 @@ a.ui-button {
 }
 
 /* 제목 줄(제목과 오른쪽의 할 일) */
+/* 작품 묶음의 화면(검색 결과, 제작자 페이지, 관심 작품, Stitch 36·37·38번). 큰 명조 제목은 감청, 묶음 제목도 명조(앞의 감청 막대는 ListSection 이 그린다).
+ * 제작자 페이지의 머리는 종이 한 장(이름, 소개, 팔로우·차단) */
+.works-page > h1,
+.creator-head h1 {
+  color: var(--ui-accent);
+  font-family: var(--ui-font-serif);
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+}
+
+.works-page .ui-list-section__title {
+  font-family: var(--ui-font-serif);
+}
+
+.creator-head {
+  margin-bottom: calc(var(--ui-gap) * 1.5);
+  padding: 20px 24px;
+  border: 1px solid var(--ui-border);
+  border-top: 3px solid var(--ui-accent);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+.creator-head h1 {
+  margin: 0 0 8px;
+}
+
+.creator-head__bio {
+  margin: 0 0 12px;
+}
+
+.creator-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
 .page-head {
   display: flex;
   flex-wrap: wrap;
