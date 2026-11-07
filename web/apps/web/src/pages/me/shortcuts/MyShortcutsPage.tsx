@@ -2,6 +2,7 @@
 // 내 단축어(/me/shortcuts, #981). 계정의 것이고 chat 과 story 의 어느 대화에서든 "/이름"으로 부른다.
 // 목록을 통째로 읽고 저장한다. 작품(캐릭터, 세계관)에 같은 이름의 단축어가 있으면 그 작품에서는 작품의 것이 쓰인다.
 // 로그인해야 열린다(App.tsx 의 RequireSession).
+// 모양은 Stitch 39번: 큰 명조 제목, 단축어마다 종이 한 장(넓으면 이름과 설명을 한 줄에).
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,7 +20,7 @@ import { myShortcutsKey, myShortcutsQuery } from './shortcutsQueries';
 export function MyShortcutsPage() {
   const query = useQuery(myShortcutsQuery());
   return (
-    <main className="page page--medium">
+    <main className="page page--medium shortcuts-page">
       <p>
         <Link to="/me">내 정보</Link>
       </p>

@@ -2,6 +2,7 @@
 // 보호자 동의(A4, /me/guardian). 미성년자(성년 전)가 보호자에게 결제(충전) 동의를 부탁한다. 로그인해야 열린다(RequireSession).
 // 단계(guardianView.ts)마다: 본인인증 전이면 A3 으로, 성년이면 필요 없음, 동의 전·요청함·철회됨이면 보호자 이메일의 창,
 // 보호자가 동의했으면 철회는 보호자의 메일 링크로만 한다는 안내. 보내기와 실패의 처리는 useGuardianRequest 가 맡는다.
+// 모양은 계정 화면과 같은 가운데 카드(Stitch 41번).
 
 import { Button, Notice, TextField } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -15,7 +16,7 @@ import { useGuardianRequest } from './useGuardianRequest';
 export function GuardianRequestPage() {
   const me = useQuery(meQuery());
   return (
-    <main className="page page--medium">
+    <main className="page page--medium auth-card">
       <p>
         <Link to="/me">내 정보</Link>
       </p>

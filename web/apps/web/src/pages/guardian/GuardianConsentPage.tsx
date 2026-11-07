@@ -2,6 +2,7 @@
 // 보호자 동의 메일의 링크가 여는 화면(A4, 인증 서버의 GUARDIAN_CONSENT_URL, /guardian/consent#token=). 로그인하지 않는다.
 // 보호자가 휴대폰 본인인증을 하면 링크의 글자와 함께 동의를 낸다. 업체의 창은 회원의 본인인증(A3)과 같은 갈래다(identityProvider.ts).
 // 메일을 모바일에서 여는 일이 많아 좁은 화면을 먼저 본다. 링크의 글자는 useLinkToken 이 읽고 주소에서 지운다.
+// 모양은 계정 화면과 같은 가운데 카드(Stitch 41번). 좁은 화면에서는 테두리 없이 화면 가득이다.
 
 import { Notice } from '@ai-trpg/ui';
 import { FakeIdentityForm } from '../identity/FakeIdentityForm';
@@ -13,7 +14,7 @@ import { useLinkToken } from './useLinkToken';
 export function GuardianConsentPage() {
   const token = useLinkToken();
   return (
-    <main className="page page--narrow">
+    <main className="page page--narrow auth-card">
       <h1>보호자 동의</h1>
       {token ? <ConsentBody token={token} /> : <Notice tone="error">링크가 올바르지 않습니다. 메일에 온 링크를 그대로 열어 주세요.</Notice>}
     </main>

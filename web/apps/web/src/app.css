@@ -748,6 +748,38 @@
   margin-top: -8px;
 }
 
+/* 내 단축어(Stitch 39번). 단축어마다 종이 한 장, 넓으면 이름과 설명을 한 줄에, 본문과 단추는 그 아래 */
+.shortcuts-page > h1 {
+  color: var(--ui-accent);
+  font-family: var(--ui-font-serif);
+}
+
+.shortcuts-page .scenario-opening {
+  margin-bottom: var(--ui-gap);
+  padding: 16px 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+@media (min-width: 640px) {
+  .shortcuts-page .scenario-opening {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    column-gap: var(--ui-gap);
+  }
+
+  .shortcuts-page .scenario-opening > :nth-child(n + 3) {
+    grid-column: 1 / -1;
+  }
+
+  /* 입력칸의 기본 폭(글자 스무 개쯤)이 좁은 칸을 넘지 않게 */
+  .shortcuts-page .scenario-opening .ui-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* 계정 화면의 카드(Stitch 4~7: 가입, 로그인, 비밀번호, 다시 동의, 탈퇴 유예). 가운데 종이 한 장, 위에 감청 띠.
  * 제목은 가운데, 단계 표시는 고정폭 숫자, 보내는 단추는 카드 폭. 좁은 화면에서는 테두리 없이 화면 가득이다 */
 .auth-card {
