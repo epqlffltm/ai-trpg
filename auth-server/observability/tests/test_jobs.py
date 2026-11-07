@@ -88,6 +88,7 @@ class CommandTests(TestCase):
         commands = {
             ('send_outgoing_mail', '--once'): 'mail.deliver_outgoing',
             ('delete_unverified_users',): 'account.delete_unverified',
+            ('delete_released_nicknames',): 'account.delete_released_nicknames',
             ('send_security_digest',): 'security.send_digest',
         }
         for command, operation in commands.items():

@@ -14,3 +14,6 @@
 
 # 만료된 토큰의 기록 지우기. 매일 19:20(한국 04:20)
 20 19 * * * python manage.py flushexpiredtokens
+
+# 묶는 기간(30일)이 지난 버린 닉네임 지우기. 매일 19:30(한국 04:30)
+30 19 * * * python manage.py delete_released_nicknames

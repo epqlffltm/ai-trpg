@@ -36,6 +36,7 @@ from accounts.models import (
     MailKind,
     OutgoingMail,
     PaymentEligibility,
+    ReleasedNickname,
     SecurityEvent,
     SecurityEventKind,
     Suspension,
@@ -261,6 +262,15 @@ class CompleteTests(TestCase):
         self.assertFalse(ConsentRecord.objects.filter(user=self.user).exists())
         # 같은 사람이 계정을 바꿔 환영 크레딧을 다시 받지 못하게 남긴다
         self.assertTrue(WelcomeCredit.objects.filter(user_public_id=self.user.public_id).exists())
+
+    def test_holds_the_old_nickname_so_no_one_takes_it_right_away(self):
+        # 탈퇴한 사람의 이름을 남이 바로 가져가 그 사람인 척하지 못하게 30일 묶는다(nicknames.py)
+        self.complete_at(self.due)
+
+        held = ReleasedNickname.objects.get(nickname='플레이어')
+        self.assertEqual(held.released_by, self.user)
+        self.assertGreater(held.held_until, timezone.now() + timedelta(days=29))
+        self.assertFalse(ReleasedNickname.objects.filter(nickname__startswith='removed-').exists())
 
     def test_tells_the_old_address_and_queues_a_notice_for_every_server(self):
         self.complete_at(self.due)

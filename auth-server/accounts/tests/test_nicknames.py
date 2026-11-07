@@ -7,11 +7,15 @@
   - 30일에 한 번 바꾼다. 다음에 바꿀 수 있는 시각은 /me 와 바꾼 답에 있다
   - 버린 이름은 30일 동안 다른 사람이 가입하거나 바꾸며 가져가지 못한다. 버린 사람은 되찾을 수 있다
   - 바꾼 뒤에 받는 access 토큰에 새 이름이 실린다(다른 서버가 그것을 본다)
+  - 계정을 비울 때(탈퇴, 만 14세 미만)의 이름도 30일 묶는다. 기간이 지난 줄은 정리 명령이 지운다
 """
 
 from datetime import timedelta
+from io import StringIO
 
-from django.test import override_settings
+from django.core.management import call_command
+from django.db import transaction
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -19,8 +23,14 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
 from accounts.attempt_policies import PASSWORD_CHANGE_FAILURES_PER_USER
+from accounts.erasure import blank_account
 from accounts.models import ReleasedNickname, User
-from accounts.nicknames import NICKNAME_CHANGE_INTERVAL, RELEASED_NICKNAME_HOLD
+from accounts.nicknames import (
+    NICKNAME_CHANGE_INTERVAL,
+    RELEASED_NICKNAME_HOLD,
+    delete_expired_released_nicknames,
+    is_nickname_held,
+)
 from accounts.tests.helpers import (
     authorize,
     delete_attempt_keys,
@@ -278,3 +288,54 @@ class AttemptLimitTests(NicknameTestCase):
         self.change('또새이름', password='wrong-password')
 
         self.assertEqual(self.change('또새이름').status_code, status.HTTP_200_OK)
+
+
+class BlankedAccountTests(TestCase):
+    """계정을 비우면(탈퇴, 만 14세 미만, erasure.py) 쓰던 이름을 30일 묶는다."""
+
+    def setUp(self):
+        self.user = make_user(1, '떠난사람')
+
+    def blank(self):
+        with transaction.atomic():
+            blank_account(User.objects.select_for_update().get(pk=self.user.pk))
+        self.user.refresh_from_db()
+
+    def test_holds_the_name_of_a_blanked_account(self):
+        self.blank()
+
+        held = ReleasedNickname.objects.get(nickname='떠난사람')
+        self.assertEqual(held.released_by, self.user)
+        self.assertGreater(held.held_until, timezone.now() + RELEASED_NICKNAME_HOLD - timedelta(minutes=1))
+        self.assertTrue(is_nickname_held('떠난사람'))
+
+    def test_blanking_again_does_not_hold_the_removed_name(self):
+        self.blank()
+        self.blank()
+
+        self.assertEqual(list(ReleasedNickname.objects.values_list('nickname', flat=True)), ['떠난사람'])
+
+
+class CleanupTests(TestCase):
+    """묶는 기간이 지난 줄은 지운다. 탈퇴한 사람의 옛 이름이 기간 뒤에 남지 않는다."""
+
+    def setUp(self):
+        self.user = make_user(1, '지금이름')
+        now = timezone.now()
+        ReleasedNickname.objects.create(
+            nickname='지난이름', released_by=self.user, held_until=now - timedelta(seconds=1)
+        )
+        ReleasedNickname.objects.create(nickname='묶인이름', released_by=self.user, held_until=now + timedelta(days=1))
+
+    def test_deletes_only_the_expired(self):
+        self.assertEqual(delete_expired_released_nicknames(), 1)
+
+        self.assertEqual(list(ReleasedNickname.objects.values_list('nickname', flat=True)), ['묶인이름'])
+
+    def test_the_command_deletes_and_reports(self):
+        out = StringIO()
+
+        call_command('delete_released_nicknames', stdout=out)
+
+        self.assertIn('1건', out.getvalue())
+        self.assertFalse(ReleasedNickname.objects.filter(nickname='지난이름').exists())
