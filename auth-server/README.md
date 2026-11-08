@@ -1086,7 +1086,7 @@ PostgreSQL에 둔 이유와 어긋난다. 테이블에 적는 방식은 PostgreS
 | 주소 | 하는 일 |
 |---|---|
 | `GET /api/v1/auth/attendance` | 오늘의 출석. 받았는지, 주기의 며칠째인지, 오늘의 하루 양, 상자를 여는 날인지, 본인인증을 마쳤는지 |
-| `POST /api/v1/auth/attendance` | 오늘의 보상을 받는다. 본인인증 전이면 403 `attendance.verification_required`, 오늘 이미 받았으면 409 `attendance.already_claimed` |
+| `POST /api/v1/auth/attendance` | 오늘의 보상을 받는다. 이 출석으로 새로 받은 활동 배지(`badges`)가 함께 온다. 본인인증 전이면 403 `attendance.verification_required`, 오늘 이미 받았으면 409 `attendance.already_claimed` |
 | `GET /api/v1/auth/attendance/rewards` | 하루 양과 보물 상자의 확률표. 로그인 없이 누구나 본다. 5분 동안 기억해도 된다 |
 
 규칙은 결제 서버의 출석과 같다(`accounts/attendance_rules.py`).

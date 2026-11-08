@@ -428,6 +428,9 @@ const DESCRIBE: Record<EventType, Describe> = {
   injury_ended: (p, ctx, e) => `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} 풀림`,
   // 상태(짧은 부상)가 라운드가 닫힐 때 입힌 피해(#254). 깎인 HP 는 그 뒤의 변화에 있다
   injury_hurt: (p, ctx, e) => `${subject(p, ctx, e)}: ${injuryOf(p, ctx)}(으)로 피해`,
+  // 상태에서 벗어나는 판정(#254). 벗어났으면 그 뒤에 injury_ended 가 온다
+  injury_escape_rolled: (p, ctx, e) =>
+    `${subject(p, ctx, e)}: ${injuryOf(p, ctx)}에서 벗어나기 ${count(p, 'total') ?? '?'}(목표 ${count(p, 'target') ?? '?'}) ${flag(p, 'success') ? '성공' : '실패'}`,
   injury_treated: (p, ctx, e) => {
     if (flag(p, 'died')) return `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} 치료에 실패해 죽었습니다.`;
     return `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} ${flag(p, 'treated') ? '치료함' : '치료하지 못함'}${aidText(p)}`;

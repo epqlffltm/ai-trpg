@@ -74,8 +74,12 @@ def ruleset_with(*extra: dict) -> Ruleset:
     return Ruleset.model_validate({**SRD5.model_dump(mode='json'), 'injuries': injuries_of(*extra)})
 
 
-async def start(client: AsyncClient, me: dict) -> dict:
-    """출혈과 독 안개를 단 룰북으로 지하 수로를 혼자 시작한다. 수로 입구에 쥐 두 마리가 있다."""
+async def start(client: AsyncClient, me: dict, extra: tuple[dict, ...] = (BLEEDING, POISON_FOG)) -> dict:
+    """
+    srd5 의 부상들에 extra(기본은 출혈과 독 안개)를 단 룰북으로 지하 수로를 혼자 시작한다.
+
+    수로 입구에 쥐 한 마리가 있다.
+    """
     lorebook = await post(client, combat.LOREBOOKS_URL, me, title='지하 수로')
     entries = f'{combat.LOREBOOKS_URL}/{lorebook["id"]}/entries'
     gate = await post(client, entries, me, name='수로 입구', kind='place')
@@ -87,7 +91,7 @@ async def start(client: AsyncClient, me: dict) -> dict:
         me,
         title='피 흘리는 룰북',
         template='srd5',
-        injuries=injuries_of(BLEEDING, POISON_FOG),
+        injuries=injuries_of(*extra),
     )
     scenario = await post(
         client,

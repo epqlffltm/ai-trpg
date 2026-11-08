@@ -57,6 +57,8 @@ BADGES: tuple[Badge, ...] = (
 )
 
 BADGE_IDS = frozenset(badge.id for badge in BADGES)
+# 이름으로 배지를 찾는다
+BADGES_BY_ID = {badge.id: badge for badge in BADGES}
 
 
 @dataclass(frozen=True)

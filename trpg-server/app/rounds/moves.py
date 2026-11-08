@@ -76,6 +76,15 @@ def hurt_notes(ticks: list[dict], user_id: uuid.UUID) -> list[HurtNote]:
     return notes
 
 
+def escaped_names(escapes: list[dict], user_id: uuid.UUID) -> list[str]:
+    """이 라운드가 닫힐 때 이 사람이 판정으로 벗어난 상태들의 이름(#254). 입은 순서다."""
+    return [
+        one['injury_name']
+        for one in escapes
+        if one['check']['success'] and one['holder'].get('user_id') == str(user_id)
+    ]
+
+
 def healed_notes(ruleset: Ruleset | None, ended: list[round_injuries.Ended], user_id: uuid.UUID) -> list[HealNote]:
     """
     이 라운드가 닫힐 때 시간이 지나 나은 이 사람의 오래 가는 부상들을 서술자에게 줄 모양으로. 생긴 순서다.
@@ -104,6 +113,7 @@ def build_moves(
     quest_changes: list[dict] | None = None,
     met: list[dict] | None = None,
     ticks: list[dict] | None = None,
+    escapes: list[dict] | None = None,
 ) -> list[Move]:
     """
     닫히는 라운드에서 각자 한 일을 서술자에게 줄 모양으로 만든다. 닫기 시작할 때 한 번 만들어 라운드에 굳힌다.
@@ -117,12 +127,14 @@ def build_moves(
     quest_changes 는 이 라운드가 닫힐 때 엔진이 바꾼 퀘스트들이다(app/rounds/quest_goals.py). 가져간 물건을 함께 준다.
     met 은 이 라운드가 닫힐 때 무작위 조우로 나온 무리들이다(app/rounds/wanders.py, #283). 그 장소에 선 사람에게 준다.
     ticks 는 이 라운드가 닫힐 때 상태가 입힌 피해들이다(app/rounds/injury_ticks.py, #254). 입은 사람에게 준다.
+    escapes 는 이 라운드가 닫힐 때 굴린 벗어나기다(app/rounds/injury_escapes.py, #254). 벗어난 것만 그 사람에게 준다.
     쉬는 행동의 결과는 선언에 적혀 있다.
     """
     ended = ended or []
     quest_changes = quest_changes or []
     met = met or []
     ticks = ticks or []
+    escapes = escapes or []
     declarations = [find_declaration(round_, member.user_id) for member in table.members]
     wounded = any(member.sheet is not None and injuries.active(member.sheet.injuries) for member in table.members)
     needs_rules = wounded or bool(ended) or any(has_outcome(declaration) for declaration in declarations)
@@ -156,6 +168,7 @@ def build_moves(
                 injuries=worn_notes(ruleset, member),
                 healed=healed_notes(ruleset, ended, member.user_id),
                 hurt_by=hurt_notes(ticks, member.user_id),
+                escaped=escaped_names(escapes, member.user_id),
                 naming=narration_request.to_naming(naming_of(declaration)),
                 item_action=narration_request.to_item_action(declaration),
                 skill=narration_request.to_skill(declaration),
