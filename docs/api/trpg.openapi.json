@@ -5015,6 +5015,7 @@
           "character_moved",
           "happening_occurred",
           "chapter_changed",
+          "achievement_earned",
           "character_leveled",
           "experience_gained",
           "abilities_raised",

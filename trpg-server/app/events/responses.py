@@ -249,6 +249,9 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.HAPPENING_OCCURRED: ('round', 'entry_id', 'name', 'moves', 'image_id'),
     # 넘어간 장은 공개다. 넘어온 장과 이름, 몇째 장인가만 적는다. 다음 장의 조건은 적지 않는다(#481)
     EventType.CHAPTER_CHANGED: ('round', 'from', 'to', 'number'),
+    # 받은 업적은 공개다. 테이블의 모두가 함께 받았다. 숨긴 업적이어도 받은 뒤라 이름과 그림을 싣는다.
+    # 조건은 적지 않는다(아직 받지 않은 업적이 드러나지 않게)
+    EventType.ACHIEVEMENT_EARNED: ('round', 'achievement_id', 'name', 'description', 'image_id', 'users'),
     # 레벨은 공개다. 앉은 사람은 서로의 시트를 본다(#286)
     EventType.CHARACTER_LEVELED: ('user_id', 'character_name', 'previous_level', 'level', 'xp', 'max_hp', 'points'),
     # 받은 경험치는 공개다. 무엇이 줬는지(쓰러진 마리, 일어난 사건)도 모두가 안다(#286 ②)

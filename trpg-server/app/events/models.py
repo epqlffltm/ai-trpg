@@ -188,6 +188,11 @@ class EventType(enum.StrEnum):
     # 테이블이 다음 장으로 넘어갔다(app/rounds/chapters.py, #481). 장의 조건이 채워져 엔진이 넘겼다. 행한 사람이 없다.
     # 몇째 라운드에 어느 장(id, 이름)에서 어느 장으로, 몇째 장인가. 조건은 적지 않는다
     CHAPTER_CHANGED = 'chapter_changed'
+    # 판의 업적을 받았다(app/rounds/achievements.py). 제작자가 작품에 단 업적의 조건이 채워져 엔진이 줬다.
+    # 행한 사람이 없다.
+    # 몇째 라운드에 어느 업적(id, 이름, 받는 법, 그림)을 누가(그때 캐릭터를 갖고 앉아 있던 사람 모두) 받았는가.
+    # 조건은 적지 않는다(아직 받지 않은 업적이 드러나지 않게)
+    ACHIEVEMENT_EARNED = 'achievement_earned'
     # 캐릭터의 레벨이 올랐다(app/tables/growth.py, #286). 받은 경험치(퀘스트의 보상 …)가 레벨표의 다음 줄에 닿았다.
     # 행한 사람이 없다. 경험치를 준 것(quest_changed 의 rewards[].xp)에 이어진다.
     # 누구(user_id, character_name)가 몇에서 몇 레벨로, 그 뒤의 경험치와 최대 HP 와 쌓인 능력치 점수

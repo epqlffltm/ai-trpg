@@ -32,7 +32,7 @@ const ALL: EventType[] = [
   'round_opened', 'player_action', 'check_rolled', 'hp_changed', 'resource_changed', 'npc_changed', 'npc_attitude_changed', 'monster_changed',
   'monster_attacked', 'monster_chased', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_hurt', 'injury_escape_rolled', 'injury_treated', 'naming_resolved', 'death_save_rolled',
   'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'trap_set', 'trap_sprung', 'trap_disarmed', 'steal_attempted',
-  'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'chapter_changed', 'character_leveled', 'experience_gained', 'abilities_raised', 'place_searched', 'character_rested',
+  'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'chapter_changed', 'achievement_earned', 'character_leveled', 'experience_gained', 'abilities_raised', 'place_searched', 'character_rested',
   'character_revived', 'round_closed', 'round_reverted', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
   'narration_model_not_for_sale', 'narration_model_retiring', 'narration_model_replaced', 'narration_model_unavailable',
   'member_dropped', 'narration_credits_released', 'table_ended', 'item_traded', 'money_paid',
@@ -93,6 +93,10 @@ describe('eventLine', () => {
   it('다음 장으로 넘어간 것은 몇째 장과 이름이다(#481)', () => {
     const payload = { round: 2, from: { id: 'a', name: '도착' }, to: { id: 'b', name: '지하' }, number: 2 };
     expect(line('chapter_changed', payload)?.text).toBe('2장: 지하');
+  });
+
+  it('받은 판의 업적은 그 이름이다', () => {
+    expect(line('achievement_earned', { round: 3, achievement_id: 'dragon', name: '용을 깨운 자' })?.text).toBe('업적: 용을 깨운 자');
   });
 
   it('받은 경험치는 무엇이 줬는지와 받은 사람마다의 양이다(#286 ②)', () => {

@@ -404,6 +404,11 @@ def chapter_changed(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'{text_of(payload.get("number"))}장: {text_of(to.get("name"))}')]
 
 
+def achievement_earned(payload: dict, labels: Labels) -> list[Block]:
+    """판의 업적을 받았다. "업적: 용을 깨운 자"다."""
+    return [Note(f'업적: {text_of(payload.get("name"))}')]
+
+
 def character_leveled(payload: dict, labels: Labels) -> list[Block]:
     """레벨이 올랐다(#286). "레벨: 기사 · 2 → 3 (최대 HP 14, 능력치 점수 1)"다."""
     levels = f'{text_of(payload.get("previous_level"))} → {text_of(payload.get("level"))}'
@@ -582,6 +587,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.CHARACTER_MOVED: character_moved,
     EventType.HAPPENING_OCCURRED: happening_occurred,
     EventType.CHAPTER_CHANGED: chapter_changed,
+    EventType.ACHIEVEMENT_EARNED: achievement_earned,
     EventType.CHARACTER_LEVELED: character_leveled,
     EventType.EXPERIENCE_GAINED: experience_gained,
     EventType.ABILITIES_RAISED: abilities_raised,

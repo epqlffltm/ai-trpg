@@ -31,6 +31,7 @@ STATE_TABLES: tuple[str, ...] = (
     'table_clocks',
     'table_quests',
     'table_happenings',
+    'table_achievements',
     'table_visits',
     'table_found_routes',
     'table_route_locks',

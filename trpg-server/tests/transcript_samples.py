@@ -488,6 +488,14 @@ SAMPLES = {
         'to': {'id': 'below', 'name': '지하'},
         'number': 2,
     },
+    'achievement_earned': {
+        'round': 3,
+        'achievement_id': 'dragon-awake',
+        'name': '용을 깨운 자',
+        'description': '잠든 용을 깨웠다',
+        'image_id': None,
+        'users': [{'user_id': '11111111-2222-4333-8444-555555555555', 'character_name': '기사'}],
+    },
     'happening_occurred': {
         'round': 1,
         'entry_id': '6b0e1c3a-5d2f-4a8e-9c71-2f4d8e6a1b90',
