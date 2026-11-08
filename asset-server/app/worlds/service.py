@@ -32,7 +32,7 @@ from app.content.html import Removed
 from app.images import service as images
 from app.lorebooks import repository as lorebooks
 from app.notifications.outbox import announce_if_listed, is_listed
-from app.popularity import ListingOrder
+from app.popularity import ListingOrder, MineOrder
 from app.preferences import Preferences, shown_ratings
 from app.ratings import AdultContentRequiredError, allowed_ratings, require_rating
 from app.search import SearchTerms
@@ -107,9 +107,11 @@ async def get_mine(session: AsyncSession, owner_id: uuid.UUID, world_id: uuid.UU
     return world
 
 
-async def list_mine(session: AsyncSession, owner_id: uuid.UUID, limit: int, offset: int) -> tuple[list[World], int]:
-    """자기 세계관의 한 쪽과 전체 개수."""
-    return await repository.list_owned(session, owner_id, limit, offset)
+async def list_mine(
+    session: AsyncSession, owner_id: uuid.UUID, limit: int, offset: int, order: MineOrder = MineOrder.UPDATED
+) -> tuple[list[World], int]:
+    """자기 세계관의 한 쪽과 전체 개수. order 는 차례다(#1165)."""
+    return await repository.list_owned(session, owner_id, limit, offset, order)
 
 
 async def create_world(session: AsyncSession, viewer: AccessClaims, data: WorldCreate, for_everyone: bool) -> World:

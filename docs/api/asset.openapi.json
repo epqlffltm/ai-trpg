@@ -1526,6 +1526,10 @@
       "CharacterSummary": {
         "description": "내 캐릭터 목록의 한 줄.",
         "properties": {
+          "heart_count": {
+            "title": "Heart Count",
+            "type": "integer"
+          },
           "hidden_at": {
             "anyOf": [
               {
@@ -1561,6 +1565,10 @@
           "rating": {
             "$ref": "#/components/schemas/Rating"
           },
+          "start_count": {
+            "title": "Start Count",
+            "type": "integer"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -1577,7 +1585,9 @@
           "visibility",
           "latest_version",
           "hidden_at",
-          "updated_at"
+          "updated_at",
+          "start_count",
+          "heart_count"
         ],
         "title": "CharacterSummary",
         "type": "object"
@@ -3436,6 +3446,15 @@
         ],
         "title": "MeResponse",
         "type": "object"
+      },
+      "MineOrder": {
+        "description": "내 작품 목록의 차례(#1165). updated 는 최근에 고친 것부터, started 는 쓰인 수(모든 기간)가 많은 것부터다.\n\n쓰인 수가 같으면 최근에 고친 것부터다. 공개 목록의 인기순(최근 7일)과 다르다. 제작자가 자기 작품을 보는 자리라서다.",
+        "enum": [
+          "updated",
+          "started"
+        ],
+        "title": "MineOrder",
+        "type": "string"
       },
       "OpenReportGroupOut": {
         "description": "열린 신고를 캐릭터마다 묶은 한 줄. reasons 는 사유마다의 수다. hidden 은 이미 숨긴 캐릭터인가.",
@@ -6586,6 +6605,10 @@
       "WorldSummary": {
         "description": "내 세계관 목록의 한 줄.",
         "properties": {
+          "heart_count": {
+            "title": "Heart Count",
+            "type": "integer"
+          },
           "hidden_at": {
             "anyOf": [
               {
@@ -6621,6 +6644,10 @@
           "rating": {
             "$ref": "#/components/schemas/Rating"
           },
+          "start_count": {
+            "title": "Start Count",
+            "type": "integer"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -6636,7 +6663,9 @@
           "rating",
           "visibility",
           "latest_version",
-          "updated_at"
+          "updated_at",
+          "start_count",
+          "heart_count"
         ],
         "title": "WorldSummary",
         "type": "object"
@@ -7789,9 +7818,18 @@
     },
     "/api/v1/asset/characters": {
       "get": {
-        "description": "자기 캐릭터의 목록. 최근에 고친 것부터다.",
+        "description": "자기 캐릭터의 목록. 기본은 최근에 고친 것부터, sort=started 면 쓰인 수(모든 기간)가 많은 것부터다(#1165).\n\n줄마다 쓰인 수(start_count)와 관심 수(heart_count)가 실린다. 쓰인 수는 한 시간까지 늦다(app/popularity.py).",
         "operationId": "list_characters_api_v1_asset_characters_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/MineOrder",
+              "default": "updated"
+            }
+          },
           {
             "in": "query",
             "name": "limit",
@@ -10997,9 +11035,18 @@
     },
     "/api/v1/asset/worlds": {
       "get": {
-        "description": "자기 세계관의 목록. 최근에 고친 것부터다.",
+        "description": "자기 세계관의 목록. 기본은 최근에 고친 것부터, sort=started 면 쓰인 수(모든 기간)가 많은 것부터다(#1165).\n\n줄마다 쓰인 수(start_count)와 관심 수(heart_count)가 실린다. 쓰인 수는 한 시간까지 늦다(app/popularity.py).",
         "operationId": "list_worlds_api_v1_asset_worlds_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/MineOrder",
+              "default": "updated"
+            }
+          },
           {
             "in": "query",
             "name": "limit",

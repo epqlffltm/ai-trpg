@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.exclusions import ExcludedCreators, ExcludedTags, build_exclusions
-from app.popularity import ListingOrder
+from app.popularity import ListingOrder, MineOrder
 from app.preferences import Orientation, Preferences
 from app.search import SEARCH_MAX_LENGTH, SEARCH_PATTERN, SearchTerms, parse_search
 
@@ -86,3 +86,6 @@ Creator = Annotated[uuid.UUID | None, Query()]
 
 # 공개 목록의 차례(#985). recent(최근에 게시한 것부터, 기본) 또는 popular(최근 7일에 많이 시작한 것부터)
 Order = Annotated[ListingOrder, Query()]
+
+# 내 작품 목록의 차례(#1165). updated(최근에 고친 것부터, 기본) 또는 started(쓰인 수가 많은 것부터)
+MineSort = Annotated[MineOrder, Query()]

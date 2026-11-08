@@ -30,7 +30,8 @@ from app.characters.schemas import (
 )
 from app.characters.service import CharacterNotFoundError, LorebookNotOwnedError, OperatorOnlyError
 from app.content.html import Removed
-from app.core.dependencies import AppSettings, Paging, Session
+from app.core.dependencies import AppSettings, MineSort, Paging, Session
+from app.popularity import MineOrder
 
 router = APIRouter(prefix='/characters', tags=['characters'])
 
@@ -94,9 +95,15 @@ async def create_character(
 
 
 @router.get('', response_model=CharacterPage, status_code=status.HTTP_200_OK)
-async def list_characters(user: CurrentUser, session: Session, paging: Paging) -> CharacterPage:
-    """자기 캐릭터의 목록. 최근에 고친 것부터다."""
-    characters, total = await service.list_mine(session, user.user_id, paging.limit, paging.offset)
+async def list_characters(
+    user: CurrentUser, session: Session, paging: Paging, sort: MineSort = MineOrder.UPDATED
+) -> CharacterPage:
+    """
+    자기 캐릭터의 목록. 기본은 최근에 고친 것부터, sort=started 면 쓰인 수(모든 기간)가 많은 것부터다(#1165).
+
+    줄마다 쓰인 수(start_count)와 관심 수(heart_count)가 실린다. 쓰인 수는 한 시간까지 늦다(app/popularity.py).
+    """
+    characters, total = await service.list_mine(session, user.user_id, paging.limit, paging.offset, sort)
     return CharacterPage(items=[to_summary(character) for character in characters], total=total)
 
 
