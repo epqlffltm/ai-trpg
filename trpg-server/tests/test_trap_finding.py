@@ -240,7 +240,8 @@ async def test_a_disarmed_trap_is_kept(
         'name': '올가미',
         'done': True,
         'reason': None,
-        'check': disarm['check'],
+        # 이벤트에는 굳힌 판정의 문서가 그대로 든다. 굴린 눈들과 방식(#404)까지다
+        'check': {**disarm['check'], 'faces': [SUCCESS], 'style': 'over'},
         'sprung': False,
         'kept': 1,
     }

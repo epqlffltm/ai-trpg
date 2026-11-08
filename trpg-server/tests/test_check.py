@@ -111,7 +111,7 @@ def test_the_modifier_follows_the_rules(score: int):
 def test_a_check_adds_the_modifier_to_the_roll():
     check = resolve(SRD5, score=14, difficulty=MEDIUM, dice=ScriptedDice([11]))
 
-    assert check == Check(roll=11, modifier=2, total=13, target=15, success=False)
+    assert check == Check(roll=11, modifier=2, total=13, target=15, success=False, style='over', faces=(11,))
 
 
 @pytest.mark.parametrize(
@@ -170,7 +170,7 @@ def test_a_check_works_under_other_rules():
     check = resolve(PLAIN_RULES, score=1, difficulty=find_difficulty(PLAIN_RULES, None), dice=ScriptedDice([6]))
 
     # 6면 주사위, 점수가 곧 보정, 목표값 7. 계산하는 코드는 같다
-    assert check == Check(roll=6, modifier=1, total=7, target=7, success=True)
+    assert check == Check(roll=6, modifier=1, total=7, target=7, success=True, style='over', faces=(6,))
 
 
 def test_the_same_roll_gives_the_same_result():

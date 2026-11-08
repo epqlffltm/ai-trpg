@@ -111,6 +111,8 @@ async def test_a_fighting_hostile_npc_strikes_on_its_turn(
                 'user_id': str(ME),
                 'character_name': '엘프',
                 'roll': HIT,
+                'faces': [HIT],
+                'style': 'over',
                 'modifier': 0,
                 'total': HIT,
                 'target': 15,

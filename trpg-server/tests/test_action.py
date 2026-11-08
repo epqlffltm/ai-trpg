@@ -140,8 +140,8 @@ def test_attempting_uses_the_score_of_the_ability_named():
     rude = attempt(SRD5, check('cha', 'medium'), ABILITIES, ScriptedDice([12]))
 
     # 같은 눈, 같은 난이도다. 어느 능력으로 하느냐가 성패를 가른다
-    assert strong == Check(roll=12, modifier=3, total=15, target=15, success=True)
-    assert rude == Check(roll=12, modifier=-1, total=11, target=15, success=False)
+    assert strong == Check(roll=12, modifier=3, total=15, target=15, success=True, style='over', faces=(12,))
+    assert rude == Check(roll=12, modifier=-1, total=11, target=15, success=False, style='over', faces=(12,))
 
 
 def test_attempting_aims_at_the_difficulty_named():
@@ -163,15 +163,15 @@ def test_attempting_rolls_once():
 def test_attempting_works_under_other_rules():
     result = attempt(SMALL_RULES, check('body', 'normal'), {'body': 14, 'mind': 10}, ScriptedDice([5]))
 
-    assert result == Check(roll=5, modifier=2, total=7, target=7, success=True)
+    assert result == Check(roll=5, modifier=2, total=7, target=7, success=True, style='over', faces=(5,))
 
 
 # --- 판정의 결과에 따라 일어나는 일 ---
 
 SOMEONE = uuid.UUID('22222222-2222-4333-8444-555555555555')
 
-SUCCESS = Check(roll=15, modifier=0, total=15, target=15, success=True)
-FAILURE = Check(roll=14, modifier=0, total=14, target=15, success=False)
+SUCCESS = Check(roll=15, modifier=0, total=15, target=15, success=True, style='over', faces=(15,))
+FAILURE = Check(roll=14, modifier=0, total=14, target=15, success=False, style='over', faces=(14,))
 
 
 def risky(**fields) -> CheckAction:

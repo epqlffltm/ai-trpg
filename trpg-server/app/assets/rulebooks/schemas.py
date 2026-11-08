@@ -12,10 +12,12 @@ from app.assets.models import RULEBOOK_GM_GUIDE_MAX_LENGTH
 from app.assets.schemas import AssetCreate, AssetSummary, AssetUpdate
 from app.engine.monster_kinds import MonsterKind
 from app.engine.ruleset import (
+    RULESET_MAX_DIE,
     RULESET_MAX_INJURIES,
     RULESET_MAX_NATURES,
     RULESET_MAX_RESOURCES,
     RULESET_MAX_SKILLS,
+    RULESET_MIN_DIE,
     Armor,
     Injury,
     InjuryTable,
@@ -24,6 +26,7 @@ from app.engine.ruleset import (
     Nature,
     Progression,
     Resource,
+    Roll,
     Ruleset,
     Skill,
 )
@@ -41,6 +44,8 @@ MonsterImmunities = Annotated[list[KindImmunity], Field(max_length=len(MonsterKi
 # 룰북의 부상들(#886). 보내면 통째로 바뀐다. 부상 표, 후유증 표, 수치의 문턱, 기술이 가리키는 것은 규칙 전체로 본다
 # (422 injuries). 시나리오의 물건과 공격이 가리키는 부상은 게시할 때 본다
 Injuries = Annotated[list[Injury], Field(max_length=RULESET_MAX_INJURIES)]
+# 판정에 굴리는 주사위의 면 수(#404). 죽음의 굴림과 되살아나기의 목표에 닿는지는 규칙 전체로 본다(422 die)
+Die = Annotated[int, Field(ge=RULESET_MIN_DIE, le=RULESET_MAX_DIE)]
 
 
 class RulebookCreate(AssetCreate):
@@ -53,10 +58,14 @@ class RulebookCreate(AssetCreate):
     성질(natures)과 타입마다의 면역(monster_immunities, #886)도 같다. 부상(injuries)과 부상 표(injury_table, #886)도
     같다. 부상 표에 null 을 보내면 부상 표가 없는 규칙이다(그때는 굴리는 때 injury_triggers 를 모두 꺼야 한다).
     성장(progression, #286)도 같다. null 을 보내면 캐릭터가 성장하지 않는 규칙이다.
+    주사위의 면 수(die)와 굴림(roll: 개수, over 나 under, 난이도마다 기량에 더하는 값, #404)도 같다.
+    under 는 방어 규칙과 함께 쓰지 못한다. 방어 규칙이 있는 템플릿이면 armor 에 null 을 함께 보낸다(422 roll).
     """
 
     gm_guide: GmGuide = ''
     template: Template = DEFAULT_TEMPLATE
+    die: Die | None = None
+    roll: Roll | None = None
     armor: Armor | None = None
     resources: Resources | None = None
     skills: Skills | None = None
@@ -77,11 +86,14 @@ class RulebookUpdate(AssetUpdate):
     고칠 수 있다.
     부상 표에 null 을 보내면 부상 표가 없는 규칙이 된다(굴리는 때를 모두 함께 꺼야 한다).
     성장(progression, #286)도 고칠 수 있다. null 을 보내면 캐릭터가 성장하지 않는 규칙이 된다.
+    주사위의 면 수(die)와 굴림(roll, #404)도 고칠 수 있다. under 로 바꾸려면 방어 규칙에 null 을 함께 보낸다.
     방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.
     이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
     """
 
     gm_guide: GmGuide | None = None
+    die: Die | None = None
+    roll: Roll | None = None
     armor: Armor | None = None
     resources: Resources | None = None
     skills: Skills | None = None

@@ -26,7 +26,7 @@ import uuid
 
 from app.assets.scenarios.snapshot import ItemTrapSnapshot, TrapCheckSnapshot
 from app.engine.action import DisarmAction, SetTrapAction
-from app.engine.check import Check
+from app.engine.check import Check, miss_by
 from app.engine.injury import Trigger
 from app.rounds.effects import Judging
 from app.rounds.item_actions import apply_to_member
@@ -191,7 +191,7 @@ def disarm_blocker(trap: TableTrap | None, here: uuid.UUID | None) -> str | None
 
 def is_big_miss(check: Check) -> bool:
     """해제에 크게 실패했는가. 목표보다 BIG_MISS 이상 모자랐다."""
-    return not check.success and check.target - check.total >= BIG_MISS
+    return not check.success and miss_by(check) >= BIG_MISS
 
 
 def effects_on(judging: Judging, member: TableMember, rule: ItemTrapSnapshot) -> dict:

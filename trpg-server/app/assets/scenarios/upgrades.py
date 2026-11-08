@@ -1188,6 +1188,20 @@ def upgrade_from_67(document: dict) -> dict:
     return upgraded
 
 
+def upgrade_from_68(document: dict) -> dict:
+    """
+    형식 68 의 문서를 형식 69 로 올린다(#404). 룰북의 규칙에 굴림(roll)이 생겼다.
+
+    그때는 주사위 하나를 굴려 눈 + 보정 ≥ 목표로 갈랐다. 그 굴림으로 읽는다.
+    """
+    upgraded = dict(document)
+    rulebook = document['rulebook']
+    roll = {'count': 1, 'style': 'over', 'shifts': {}}
+    upgraded['rulebook'] = {**rulebook, 'rules': {**rulebook['rules'], 'roll': roll}}
+    upgraded['format'] = 69
+    return upgraded
+
+
 # 형식 번호와, 그 형식을 바로 다음 형식으로 올리는 함수.
 # 형식을 올릴 때마다 한 줄씩 더한다. 옛 문서는 이 함수들을 차례로 거쳐 지금의 모양이 된다
 UPGRADES: dict[int, Callable[[dict], dict]] = {
@@ -1258,4 +1272,5 @@ UPGRADES: dict[int, Callable[[dict], dict]] = {
     65: upgrade_from_65,
     66: upgrade_from_66,
     67: upgrade_from_67,
+    68: upgrade_from_68,
 }

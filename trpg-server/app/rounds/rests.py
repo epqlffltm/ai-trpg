@@ -32,6 +32,7 @@ from app.engine import death, health
 from app.engine.action import RestAction, RestLength
 from app.engine.dice import Dice
 from app.engine.health import ChangeKind
+from app.engine.rolls import passes, roll_pool
 from app.engine.ruleset import NaturalRecovery, Rest, Revive, Ruleset
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError
@@ -202,11 +203,11 @@ def revive(ruleset: Ruleset, revival: Revive, member: TableMember, round_number:
     """
     되살아나기를 한 번 굴린다. 성공이면 HP 1 로 일어나고 죽음의 굴림에서 센 것을 지운다. 이벤트의 모양을 돌려준다.
 
-    규칙의 주사위를 굴린다. 능력치의 보정은 더하지 않는다(죽음의 굴림과 같다).
+    규칙의 주사위를 굴린다. 능력치의 보정은 더하지 않는다(죽음의 굴림과 같다). 성공은 규칙의 굴림 방식을 따른다(#404).
     """
     sheet = member.sheet
-    roll = dice.roll(ruleset.die)
-    success = roll >= revival.target
+    roll = sum(roll_pool(ruleset, dice))
+    success = passes(ruleset, roll, revival.target)
     if success:
         sheet.hp = 1
         sheets.clear_death_saves(sheet)

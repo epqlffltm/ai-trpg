@@ -246,7 +246,7 @@ def build_turns(
     turns = [initiative.member_turn(ruleset, member, ambushed) for member, _ in rolling]
     turns += [initiative.monster_turn(ruleset, snapshot, monster, judging.round_number) for monster in acting]
     turns += [initiative.npc_turn(ruleset, person) for person in fighting]
-    return initiative.order_turns(turns, ruleset.die, judging.dice)
+    return initiative.order_turns(turns, ruleset, judging.dice)
 
 
 def take_turn(judging: Judging, turn: Turn, declarations: dict[uuid.UUID, Declaration]) -> dict:
