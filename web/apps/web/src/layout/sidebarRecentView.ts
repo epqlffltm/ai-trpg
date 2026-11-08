@@ -1,10 +1,13 @@
 // web/apps/web/src/layout/sidebarRecentView.ts
-// 왼쪽 메뉴 열의 최근 대화(Stitch 설계서의 [모든 화면의 틀])를 보이기 전의 순수한 함수. 묶음마다의 줄 수와 "14분 전" 같은 때의 글.
+// 왼쪽 메뉴 열과 최근 대화 화면의 최근 대화(Stitch 설계서의 [모든 화면의 틀])를 보이기 전의 순수한 함수. 묶음마다의 줄 수와 "14분 전" 같은 때의 글.
 
 import { formatDate } from '../format/dateTime';
 
 /** 묶음마다 보이는 줄의 수(설계서의 "서너 줄") */
 export const RECENT_ROWS = 3;
+
+/** 최근 대화 화면(모바일 탭 바의 "대화")에서 묶음마다 보이는 줄의 수 */
+export const RECENT_PAGE_ROWS = 10;
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;

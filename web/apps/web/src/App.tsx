@@ -37,6 +37,7 @@ import {
   ChatLorebookNewPage,
   ChatLorebooksPage,
   ConversationPage,
+  ConversationsPage,
   CreatePage,
   CreatorPage,
   GalleryPage,
@@ -177,6 +178,14 @@ export function App() {
         {/* 인증 서버의 GUARDIAN_CONSENT_URL, GUARDIAN_REVOKE_URL 이 가리키는 곳. 보호자는 로그인하지 않는다. 바꾸면 그 설정도 바꾼다 */}
         <Route path="guardian/consent" element={<GuardianConsentPage />} />
         <Route path="guardian/revoke" element={<GuardianRevokePage />} />
+        <Route
+          path="conversations"
+          element={
+            <RequireSession>
+              <ConversationsPage />
+            </RequireSession>
+          }
+        />
         <Route
           path="notifications"
           element={
