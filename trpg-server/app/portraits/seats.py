@@ -34,8 +34,29 @@ def pregen_portrait(content: dict, pregen_index: int | None) -> uuid.UUID | None
 
 
 def entry_pictures(content: dict) -> dict[uuid.UUID, uuid.UUID]:
-    """판의 로어 항목마다의 그림(#1163). 항목 → 그림. 옛 판이면 비어 있다."""
+    """판의 로어 항목마다의 기본 그림(#1163). 항목 → 그림. 옛 판이면 비어 있다."""
     return {uuid.UUID(str(one['entry_id'])): uuid.UUID(str(one['image_id'])) for one in content.get('pictures') or []}
+
+
+def timed_pictures(content: dict) -> dict[uuid.UUID, dict[str, uuid.UUID]]:
+    """판의 장소마다 하루의 때마다의 그림(#1163). 장소 → (때 → 그림). 때마다의 그림이 없는 장소는 없다."""
+    return {
+        uuid.UUID(str(one['entry_id'])): {part: uuid.UUID(str(image)) for part, image in one['by_time'].items()}
+        for one in content.get('pictures') or []
+        if one.get('by_time')
+    }
+
+
+def place_picture(content: dict, entry_id: uuid.UUID, time_of_day: str | None) -> uuid.UUID | None:
+    """
+    그 장소의 지금 배경. 하루의 때(time_of_day)의 그림이 있으면 그것, 없으면 기본 그림이다. 그림이 없으면 None.
+
+    시계가 없는 테이블이면 time_of_day 가 None 이라 기본 그림이다.
+    """
+    timed = timed_pictures(content).get(entry_id, {})
+    if time_of_day is not None and time_of_day in timed:
+        return timed[time_of_day]
+    return picture_of(content, entry_id)
 
 
 def picture_of(content: dict, entry_id: uuid.UUID | str | None) -> uuid.UUID | None:
@@ -58,7 +79,8 @@ def with_cutscene(content: dict, payload: dict) -> dict:
 def table_portraits(content: dict) -> set[uuid.UUID]:
     """그 테이블의 판에 붙은 그림들. 프리젠의 그림과 로어 항목마다의 그림이다."""
     pregens = {image for image in (image_of(pregen) for pregen in content.get('pregens') or []) if image is not None}
-    return pregens | set(entry_pictures(content).values())
+    timed = {image for parts in timed_pictures(content).values() for image in parts.values()}
+    return pregens | set(entry_pictures(content).values()) | timed
 
 
 def member_portrait(table: GameTable, member: TableMember) -> uuid.UUID | None:

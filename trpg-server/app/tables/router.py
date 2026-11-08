@@ -45,7 +45,7 @@ from app.limits.routing import Limited
 from app.personas import saving
 from app.personas.router import to_persona
 from app.personas.schemas import PersonaOut
-from app.portraits.seats import member_portrait, picture_of
+from app.portraits.seats import member_portrait, place_picture
 from app.rounds import service as round_service
 from app.rounds.router import Closing
 from app.tables import (
@@ -388,6 +388,11 @@ def to_known_traps(table: GameTable, place_id: uuid.UUID, catalog: dict[uuid.UUI
     ]
 
 
+def time_of_day_now(table: GameTable) -> str | None:
+    """테이블의 시계의 지금 하루의 때(#1163, 장소의 배경을 고른다). 시계가 없는 테이블이면 None."""
+    return None if table.clock is None else clock.read_time(table.clock.minutes).time_of_day.value
+
+
 def to_map(table: GameTable, snapshot: Snapshot, catalog: dict[uuid.UUID, CatalogItem]) -> MapOut | None:
     """
     테이블이 아는 맵을 응답으로 바꾼다. 맵이 없는 판이면 None. 아는 것만 싣는다(app/tables/places.py).
@@ -405,7 +410,7 @@ def to_map(table: GameTable, snapshot: Snapshot, catalog: dict[uuid.UUID, Catalo
                 items=to_place_items(table, place.id, catalog),
                 cover=cover_at(snapshot, place.id),
                 traps=to_known_traps(table, place.id, catalog),
-                image_id=picture_of(table.content, place.id),
+                image_id=place_picture(table.content, place.id, time_of_day_now(table)),
             )
             for place in known.places
         ],

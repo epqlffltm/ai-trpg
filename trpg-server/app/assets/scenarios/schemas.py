@@ -1341,6 +1341,9 @@ class EntryPicture(BaseModel):
 
     장소 항목이면 테이블 방의 그림 창의 배경이고, 인물 항목이면 그 인물의 그림이고,
     사건 항목이면 일어난 라운드의 컷신이다.
+    장소의 배경은 하루의 때(TimeOfDay)마다 따로 둘 수 있다(by_time). 테이블의 시계가 그때면 그 그림을,
+    없으면 image_id 를 쓴다.
+    때마다의 그림은 장소 항목에만 적는다(게시할 때 본다).
     그림이 자기가 올린 것인지는 저장할 때, 항목이 붙인 로어북의 장소, 인물, 사건인지는 게시할 때 본다.
     """
 
@@ -1348,11 +1351,21 @@ class EntryPicture(BaseModel):
 
     entry_id: uuid.UUID
     image_id: uuid.UUID
+    by_time: dict[TimeOfDay, uuid.UUID] = {}
 
     @field_serializer('entry_id', 'image_id')
     def id_as_text(self, value: uuid.UUID) -> str:
         """ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
         return str(value)
+
+    @field_serializer('by_time')
+    def times_as_text(self, value: dict[TimeOfDay, uuid.UUID]) -> dict[str, str]:
+        """때마다의 그림을 글자로 꺼낸다. 하루의 때의 차례로 적는다."""
+        return {str(part): str(value[part]) for part in TimeOfDay if part in value}
+
+    def images(self) -> set[uuid.UUID]:
+        """이 줄이 쓰는 그림들. 기본 그림과 때마다의 그림이다."""
+        return {self.image_id, *self.by_time.values()}
 
 
 def reject_duplicate_pictures(pictures: list[EntryPicture]) -> list[EntryPicture]:

@@ -94,7 +94,11 @@ async def test_pictures_are_saved_and_published(client: AsyncClient, me: dict, m
     response = await happenings.publish(client, me, scenario)
 
     assert response.status_code == status.HTTP_201_CREATED, response.text
-    assert scenario['pictures'] == [picture(more['gate'], image_id), picture(more['trap'], image_id)]
+    # 하루의 때마다의 배경을 적지 않았다
+    assert scenario['pictures'] == [
+        {**picture(more['gate'], image_id), 'by_time': {}},
+        {**picture(more['trap'], image_id), 'by_time': {}},
+    ]
     published = read_snapshot(response.json()['snapshot']).pictures
     assert [(one.entry_id, one.image_id) for one in published] == [
         (uuid.UUID(more['gate']['id']), uuid.UUID(image_id)),

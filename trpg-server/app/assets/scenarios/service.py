@@ -119,7 +119,7 @@ async def require_own_pictures(
     session: AsyncSession, owner_id: uuid.UUID, pictures: Sequence[EntryPicture] | None
 ) -> None:
     """로어 항목마다의 그림(#1163)이 모두 자기가 올린 것인지 본다. 아니면 AssetReferenceError(pictures.image_id)."""
-    wanted = {picture.image_id for picture in pictures or []}
+    wanted = {image for picture in pictures or [] for image in picture.images()}
     await require_owned(session, owner_id, wanted, PICTURE_IMAGE_FIELD)
 
 
