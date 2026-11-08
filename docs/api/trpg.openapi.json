@@ -4738,6 +4738,7 @@
           "friendly_fire_consent_changed",
           "ledger_drafts_changed",
           "whisper_sent",
+          "dice_rolled",
           "table_started",
           "gm_narration",
           "round_opened",
@@ -5081,6 +5082,77 @@
           "name"
         ],
         "title": "FoundTrapOut",
+        "type": "object"
+      },
+      "FreeRollCreate": {
+        "additionalProperties": false,
+        "description": "자유 굴림을 할 때 받는 값. 굴리는 사람은 토큰에서 읽는다. 눈은 서버가 굴린다. 받지 않는다.",
+        "properties": {
+          "dice": {
+            "maxLength": 16,
+            "title": "Dice",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dice"
+        ],
+        "title": "FreeRollCreate",
+        "type": "object"
+      },
+      "FreeRollOut": {
+        "description": "자유 굴림 한 번. 같은 내용이 이벤트(dice_rolled)로 모두에게 간다.\n\n게임의 상태와 무관하다. 판정도 피해도 아니고, 서술하는 AI 도 받지 않는다.",
+        "properties": {
+          "bonus": {
+            "title": "Bonus",
+            "type": "integer"
+          },
+          "character_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Name"
+          },
+          "dice": {
+            "title": "Dice",
+            "type": "string"
+          },
+          "faces": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Faces",
+            "type": "array"
+          },
+          "sequence": {
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sequence",
+          "user_id",
+          "character_name",
+          "dice",
+          "faces",
+          "bonus",
+          "total"
+        ],
+        "title": "FreeRollOut",
         "type": "object"
       },
       "FriendlyFire": {
@@ -28090,6 +28162,66 @@
         "summary": "Change Credit Wait",
         "tags": [
           "tables"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/tables/{table_id}/dice": {
+      "post": {
+        "description": "앉은 사람이 주사위를 굴린다. 눈은 서버가 굴리고, 같은 내용이 이벤트(dice_rolled)로 모두에게 간다.\n\n게임의 상태와 무관하다. 판정도 피해도 아니고, 서술하는 AI 도 받지 않는다.\n주사위 설명이 받는 모양이 아니면 422, 굴리는 수를 넘으면 429 다.",
+        "operationId": "roll_dice_api_v1_game_tables__table_id__dice_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreeRollCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FreeRollOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Roll Dice",
+        "tags": [
+          "free-rolls"
         ],
         "x-audience": "user"
       }

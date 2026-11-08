@@ -69,6 +69,7 @@ from app.core.job_setup import build_jobs
 from app.creator_stats import router as creator_stats
 from app.engine.dice import RandomDice
 from app.events import router as events
+from app.free_rolls import router as free_rolls
 from app.limits.attempts import LimitsUnavailable, TooManyAttempts
 from app.limits.responses import handle_limits_unavailable, handle_too_many_attempts
 from app.limits.setup import build_limiting, build_redis
@@ -413,6 +414,7 @@ def create_app(
     app.include_router(events.router, prefix=API_PREFIX)
     app.include_router(chat.router, prefix=API_PREFIX)
     app.include_router(whispers.router, prefix=API_PREFIX)
+    app.include_router(free_rolls.router, prefix=API_PREFIX)
     app.include_router(realtime.router, prefix=API_PREFIX)
     app.include_router(operators.router, prefix=API_PREFIX)
     # 인증 서버가 탈퇴를 알리는 주소(docs/architecture/withdrawal.md). 인증 서버의 서명만 본다

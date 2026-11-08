@@ -31,6 +31,8 @@ class Limits:
     transcript: AttemptLimit
     # 장면 그림(#983). 한 사람이 그리기 시작한 수. 그림 모델을 부르므로 비싸다
     snapshot: AttemptLimit
+    # 자유 굴림(#404). 한 사람이 한 테이블에서 굴린 수. 이벤트로 남아 모두의 흐름을 채우므로 센다
+    free_roll: AttemptLimit
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,9 @@ def limits_from(settings: Settings) -> Limits:
         ),
         snapshot=AttemptLimit(
             'snapshot', settings.snapshots_per_window, timedelta(seconds=settings.snapshot_window_seconds)
+        ),
+        free_roll=AttemptLimit(
+            'free_roll', settings.free_rolls_per_window, timedelta(seconds=settings.free_roll_window_seconds)
         ),
     )
 

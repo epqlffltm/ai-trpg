@@ -252,6 +252,9 @@ class Settings(CoreSettings, NotificationSettings):
     # 여러 테이블을 오가며 그림 모델을 연달아 부르는 것을 막지 못한다
     snapshots_per_window: int = Field(default=10, ge=1)
     snapshot_window_seconds: int = Field(default=600, ge=1)
+    # 자유 굴림(#404). 한 사람이 한 테이블에서 이 시간(초) 동안 굴릴 수 있는 수
+    free_rolls_per_window: int = Field(default=20, ge=1)
+    free_roll_window_seconds: int = Field(default=60, ge=1)
 
     # 공개 금지(블랙리스트, #392). 한 사람의 시나리오가 운영자에게 이만큼 제재되면 저절로 공개를 막는다.
     # 운영자가 풀면 그 뒤의 제재부터 다시 센다. 자기 시나리오와 남의 시나리오로 플레이하는 것은 막지 않는다

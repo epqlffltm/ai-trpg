@@ -49,6 +49,14 @@ SAMPLES = {
             'aim': 'lost_eye',
         },
     },
+    'dice_rolled': {
+        'user_id': '4a9cecbe-2c18-4a1a-b16e-bd8681d66185',
+        'character_name': '엘프',
+        'dice': '2d6+1',
+        'faces': [3, 4],
+        'bonus': 1,
+        'total': 8,
+    },
     'check_rolled': {
         'round': 1,
         'character_name': '엘프',
