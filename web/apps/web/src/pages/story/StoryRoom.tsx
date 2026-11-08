@@ -47,7 +47,6 @@ import { StoryEnding } from './StoryEnding';
 import { StoryHeader } from './StoryHeader';
 import { StoryMessageList } from './StoryMessageList';
 import { StoryModelDialog } from './StoryModelDialog';
-import { StoryPicture } from './StoryPicture';
 import { storySessionKey } from './storyQueries';
 import { describeStartProblem, describeStoryEditProblem } from './storyTurnProblem';
 import { sceneOf, sceneSegments, storySuggestions, visibleStoryMessages } from './storyView';
@@ -56,6 +55,7 @@ import { useStartStorySession } from './useStartStorySession';
 import type { StoryTurnOpener, useStoryTurn } from './useStoryTurn';
 import { putQueryData } from '../../queryClient';
 import { genreTheme } from '../../genres/genreTheme';
+import { StagePicture } from '../../components/stage/StagePicture';
 
 type Props = { session: StorySession; turns: ReturnType<typeof useStoryTurn> };
 
@@ -149,14 +149,14 @@ export function StoryRoom({ session, turns }: Props) {
       <StoryHeader session={session} state={scene.state} />
       <div className="chat-room__body">
         <div className="chat-room__main">
-          <StoryPicture
+          <StagePicture
             scene={pictureSceneOf(view, session.messages, turns.turn?.userMessage ?? null)}
             background={backgroundOf(view, scene.state)}
             placeName={placeName(view, scene.state.place)}
             overlay={choices ? <StoryChoices pending={choices} disabled={busy} onAct={act} /> : null}
           >
             <StoryCastRow view={view} state={scene.state} cast={scene.cast} expressions={expressions} speaking={speaking} disabled={busy || ended} onAct={act} />
-          </StoryPicture>
+          </StagePicture>
           <StoryMessageList
             session={session}
             turn={turns.turn}

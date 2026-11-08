@@ -23,6 +23,21 @@ afterEach(() => {
 });
 
 describe('대화', () => {
+  it('이벤트 씬이 붙은 답이면 그림 창이 배경과 캐릭터 대신 이벤트 씬을 띄운다(통짜 그림)', async () => {
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:scene'), revokeObjectURL: vi.fn() });
+    const withScene = detail({
+      messages: [message(1, 'assistant', '어서 와요.'), message(2, 'action', '공원에 갔다.', { event_scene: 'rain' }), message(3, 'assistant', '비가 와요.')],
+      character: { ...detail().character, document: { ...detail().character.document, event_scenes: [{ id: 'rain', title: '비 오는 공원', image_id: 'img-rain', when: { kind: 'reach_place', target: 'park' } }] } } as never,
+    });
+    signedIn({ 'GET /api/v1/asset/images/img-rain': () => new Response('png', { status: 200 }) }, () => withScene);
+    renderApp(`/chat/conversations/${ID}`);
+
+    const picture = within(await screen.findByRole('figure', { name: '그림 창' }));
+    expect(await picture.findByRole('img', { name: '비 오는 공원' })).toHaveAttribute('src', 'blob:scene');
+    expect(picture.getByText('비 오는 공원')).toHaveClass('stage-picture__caption');
+    expect(picture.queryByText('루나')).toBeNull();
+  });
+
   it('머리와 시작 상황, 말들을 보이고, 대안을 넘기면 바뀐 가지를 그린다', async () => {
     const { seen } = signedIn({
       [`PUT ${PATH}/branch`]: () => json(200, detail({ messages: [...MESSAGES.slice(0, 2), message(3, 'assistant', '다른 답이에요.', { id: M(9), alternatives: [M(3), M(9)] })] })),
@@ -35,7 +50,7 @@ describe('대화', () => {
     expect(screen.getByText(/모델: GLM/)).toBeInTheDocument();
     expect(screen.getByText('비를 피해 카페에 들어온다.')).toBeInTheDocument();
     // 그림 창의 왼쪽 아래에 캐릭터의 이름표(Stitch 21번). 꾸밈이라 읽는 프로그램에는 숨긴다
-    const nameplate = within(screen.getByRole('region', { name: '그림' })).getByText('루나');
+    const nameplate = within(screen.getByRole('figure', { name: '그림 창' })).getByText('루나');
     expect(nameplate).toHaveClass('conversation__nameplate');
     expect(nameplate).toHaveAttribute('aria-hidden', 'true');
     const log = within(screen.getByRole('list', { name: '말' }));
