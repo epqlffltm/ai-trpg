@@ -43,7 +43,8 @@ describe('다시 동의', () => {
     expect(await screen.findByRole('heading', { name: 'chat' })).toBeInTheDocument();
     expect(getSession()?.accessToken).toBe('full');
     expect(seen.find((request) => request.method === 'PUT')?.body).toEqual({ version: 1 });
-    expect(seen.some((request) => request.url.startsWith('/api/v1/game/'))).toBe(false);
+    // 인증 서버에만 통하는 토큰으로는 다른 서버를 부르지 않는다(동의한 뒤의 화면은 새 토큰으로 부른다)
+    expect(seen.some((request) => request.url.startsWith('/api/v1/game/') && request.headers.get('Authorization') === 'Bearer limited')).toBe(false);
   });
 
   it('판이 또 바뀌었으면 다시 읽고 체크를 비운다', async () => {

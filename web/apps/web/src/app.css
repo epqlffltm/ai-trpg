@@ -79,6 +79,70 @@
   color: var(--ui-accent);
 }
 
+/* 최근 대화(SidebarRecent). 서비스마다 묶음, 줄은 이름과 둘째 줄. 길면 이 칸만 스크롤한다 */
+.sidebar-recent {
+  display: grid;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.sidebar-recent__title {
+  margin: 0;
+  padding: 0 12px;
+  color: var(--ui-text-muted);
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+}
+
+.sidebar-recent > .hint,
+.sidebar-recent__group > .hint {
+  margin: 0;
+  padding: 0 12px;
+  font-size: 0.85em;
+}
+
+.sidebar-recent__head {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 2px;
+  padding: 0 12px;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.sidebar-recent__head a {
+  color: var(--ui-text-muted);
+  font-weight: 400;
+}
+
+.sidebar-recent__row {
+  display: grid;
+  padding: 4px 12px;
+  border-radius: var(--ui-radius);
+  color: var(--ui-text);
+}
+
+.sidebar-recent__row:hover {
+  background: var(--ui-surface-subtle);
+}
+
+.sidebar-recent__name,
+.sidebar-recent__detail {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sidebar-recent__name {
+  font-size: 0.9em;
+}
+
+.sidebar-recent__detail {
+  color: var(--ui-text-muted);
+  font-size: 0.78em;
+}
+
 .app-sidebar__footer {
   margin-top: auto;
   padding-top: 12px;
