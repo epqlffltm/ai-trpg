@@ -661,15 +661,23 @@
   border-radius: 999px;
 }
 
-/* 일상: 공책의 괘선과 여백선, 고딕 제목, 둥근 칸 */
+/* 일상: 햇살 드는 카페의 밝은 나무 테이블(판자의 이음매와 옅은 결, 비스듬한 창틀 그림자), 고딕 제목, 둥근 칸.
+ * 공책은 바탕이 아니라 칸의 몫이다(설계서 31번). 바탕에 공책 줄을 깔면 글줄과 칸의 테두리가 겹쳐 격자처럼 보였다 */
 [data-genre='slice_of_life'] {
   --ui-radius: 8px;
   --ui-radius-lg: 14px;
   --ui-font-serif: var(--ui-font);
   --genre-pattern:
-    linear-gradient(90deg, transparent 0 47px, color-mix(in srgb, var(--ui-danger) 25%, transparent) 47px 49px, transparent 49px),
-    repeating-linear-gradient(0deg, transparent 0 27px, var(--genre-ink) 27px 28px);
-  --genre-pattern-size: 100% 28px;
+    linear-gradient(115deg, transparent 0 58%, color-mix(in srgb, var(--ui-text) 3%, transparent) 58% 70%, transparent 70%),
+    repeating-linear-gradient(90deg, transparent 0 179px, var(--genre-ink) 179px 180px),
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--ui-border) 7%, transparent) 0 46px,
+      transparent 46px 98px,
+      color-mix(in srgb, var(--ui-border) 4%, transparent) 98px 141px,
+      transparent 141px 180px
+    );
+  --genre-pattern-size: auto;
   --genre-card-border: 1px solid var(--ui-border);
   --genre-mark: 3px solid color-mix(in srgb, var(--ui-accent) 50%, transparent);
 }
