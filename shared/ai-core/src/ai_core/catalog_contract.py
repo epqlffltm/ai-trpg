@@ -40,6 +40,9 @@ class Provider(enum.StrEnum):
     # DeepInfra 의 API(#398). 공개 가중치 모델(DeepSeek)을 미국에서 띄운 호스팅이다. OpenAI 와 같은 모양이다.
     # 출력 상한의 칸은 max_tokens 로 정해져 있고, 생각은 OpenAI 처럼 reasoning_effort 로 켜고 끈다(none 이면 꺼진다)
     DEEPINFRA = 'deepinfra'
+    # xAI 의 API(Grok). OpenAI 와 같은 모양이다. 출력 상한의 칸은 OpenAI 처럼 모델마다 적는다.
+    # 생각은 reasoning_effort 로 켜고 끈다(none 이면 꺼진다). 끌 수 없는 모델(Grok 4.5 부터)은 always 다
+    XAI = 'xai'
 
 
 class TokenLimitField(enum.StrEnum):
@@ -64,7 +67,7 @@ class ReasoningStyle(enum.StrEnum):
     budget 은 두 창구가 함께 쓴다.
     서버 곁의 모델과 DeepInfra 는 이 칸을 쓰지 않는다(reasoning_effort 하나로 된다).
     OpenAI 는 생각을 끌 수 없는 모델(reasoning_effort 가 low 부터인 GPT-6 Astra, GPT-6.1 Sol)만 always 를 적는다.
-    나머지 OpenAI 모델은 적지 않는다(none 으로 끈다).
+    나머지 OpenAI 모델은 적지 않는다(none 으로 끈다). xAI(Grok)도 같다.
     끌 수 없는 방식(always, level_minimal, level_low, budget_min)의 모델은 판매가를 생각의 몫까지 넣어 매긴다.
     OpenAI 모양이어도 생각의 칸이 다른 창구(Z.ai)는 이 칸을 쓴다. 끌 수 있으면 thinking_type, 끌 수 없으면 always 다.
     """
@@ -72,7 +75,7 @@ class ReasoningStyle(enum.StrEnum):
     # 끌 수 있다(disabled). 켜면 스스로 깊이를 정한다(adaptive + effort). Opus 5, Sonnet 5, Haiku 5.5, Opus 4.6~4.8
     ADAPTIVE = 'adaptive'
     # 끌 수 없다. 끄라고 하면 effort 를 low 로 주고 출력 상한에 생각의 몫을 더한다. Opus 5.5, Fable 5.1·5,
-    # GPT-6 Astra, GPT-6.1 Sol(reasoning_effort 가 low 부터다), GLM-5.3 계열
+    # GPT-6 Astra, GPT-6.1 Sol(reasoning_effort 가 low 부터다), GLM-5.3 계열, Grok 4.7
     ALWAYS = 'always'
     # disabled 를 받지 않는다. 미리 생각하지 않게 하는 between_tools 로 끈다. Sonnet 5.5
     BETWEEN_TOOLS = 'between_tools'
@@ -168,7 +171,7 @@ def is_offered(model: Switchable, today: date) -> bool:
 
 
 # 출력 상한의 칸을 적어야 하는 창구. OpenAI 모양의 API 다. 나머지 창구는 칸이 정해져 있어 적지 않는다
-TOKEN_FIELD_PROVIDERS = frozenset({Provider.OPENAI, Provider.LOCAL})
+TOKEN_FIELD_PROVIDERS = frozenset({Provider.OPENAI, Provider.LOCAL, Provider.XAI})
 
 # 생각을 켜고 끄는 방식을 적어야 하는 창구와, 그 창구가 받는 방식들. 모델마다 방식이 다르다
 STYLES_BY_PROVIDER = {
@@ -182,10 +185,12 @@ STYLES_BY_PROVIDER = {
     Provider.ZAI: frozenset({ReasoningStyle.THINKING_TYPE, ReasoningStyle.ALWAYS}),
     # 끌 수 없는 모델만 적는다(GPT-6 Astra, GPT-6.1 Sol). 적지 않은 모델은 reasoning_effort none 으로 끈다
     Provider.OPENAI: frozenset({ReasoningStyle.ALWAYS}),
+    # OpenAI 와 같다. 끌 수 없는 모델(Grok 4.7·4.6·4.5)만 적는다. 적지 않은 모델은 reasoning_effort none 으로 끈다
+    Provider.XAI: frozenset({ReasoningStyle.ALWAYS}),
 }
 
 # 생각의 방식을 적지 않아도 되는 창구. 적지 않으면 그 창구의 기본 방식(OpenAI 는 none 으로 끄기)이다
-STYLE_OPTIONAL_PROVIDERS = frozenset({Provider.OPENAI})
+STYLE_OPTIONAL_PROVIDERS = frozenset({Provider.OPENAI, Provider.XAI})
 
 
 def token_field_problem(provider: Provider, field: TokenLimitField | None) -> str | None:

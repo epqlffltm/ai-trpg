@@ -79,6 +79,8 @@ class Settings(CoreSettings, NotificationSettings):
     zai_base_url: str = 'https://api.z.ai/api/paas/v4'
     deepinfra_api_key: SecretStr = SecretStr('')
     deepinfra_base_url: str = 'https://api.deepinfra.com/v1/openai'
+    xai_api_key: SecretStr = SecretStr('')
+    xai_base_url: str = 'https://api.x.ai/v1'
     # 서버 곁의 모델(Ollama)의 주소. 모델 목록의 local 창구 모델에만 쓴다. 지금 목록에는 없다
     llm_base_url: str = 'http://127.0.0.1:11434/v1'
 

@@ -19,6 +19,7 @@ from app.ratings import Rating
 
 # 약관이 성적인 콘텐츠를 막는다고 확인된 창구(2026-10-21 의 조사). 창구의 약관을 따른다.
 # DeepSeek 은 그 회사의 창구를 쓰지 않아(deepinfra) 여기 없다. 켜기 전에 운영자가 deepinfra 의 약관을 본다
+# xAI(Grok)는 약관을 아직 확인하지 않아 여기 없다. allows_adult 를 켜기 전에 운영자가 xAI 의 약관을 본다
 ADULT_REFUSING_PROVIDERS = frozenset({Provider.ANTHROPIC, Provider.GEMINI})
 
 

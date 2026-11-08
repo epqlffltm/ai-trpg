@@ -561,6 +561,7 @@ services:
       GEMINI_API_KEY: ""
       ZAI_API_KEY: ""
       DEEPINFRA_API_KEY: ""
+      XAI_API_KEY: ""
       SIGNAL_SECRET: ""
       AI_LOG_HMAC_KEY: ""
       AUTH_SERVER_SECRET: ""
@@ -853,6 +854,7 @@ services:
       GEMINI_API_KEY: ""
       ZAI_API_KEY: ""
       DEEPINFRA_API_KEY: ""
+      XAI_API_KEY: ""
     depends_on:
       db:
         condition: service_healthy
@@ -914,6 +916,7 @@ services:
       GEMINI_API_KEY: ""
       ZAI_API_KEY: ""
       DEEPINFRA_API_KEY: ""
+      XAI_API_KEY: ""
     depends_on:
       db:
         condition: service_healthy

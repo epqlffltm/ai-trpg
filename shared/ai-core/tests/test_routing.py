@@ -26,7 +26,7 @@ from ai_core.anthropic import AnthropicProvider
 from ai_core.catalog_contract import CatalogModel, Provider, ReasoningStyle, TokenLimitField
 from ai_core.gemini import GeminiProvider
 from ai_core.openai_compat import WireOptions
-from ai_core.provider import ProviderError
+from ai_core.provider import GenerationParams, ProviderError
 from ai_core.routing import (
     MODEL_UNAVAILABLE,
     PROVIDER_NOT_CONFIGURED,
@@ -93,6 +93,9 @@ GEMINI_URL = 'https://generativelanguage.googleapis.com'
 ANTHROPIC_URL = 'https://api.anthropic.com'
 ZAI_URL = 'https://api.z.ai/api/paas/v4'
 DEEPINFRA_URL = 'https://api.deepinfra.com/v1/openai'
+XAI_URL = 'https://api.x.ai/v1'
+GROK = replace(LUNA, slug='grok-4-3', provider=Provider.XAI, api_model_id='grok-4.3', supports_temperature=True)
+GROK_ALWAYS = replace(GROK, slug='grok-4-7', api_model_id='grok-4.7', reasoning_style=ReasoningStyle.ALWAYS)
 
 
 @dataclass
@@ -143,6 +146,7 @@ def make_router(
     gemini = Endpoint(GEMINI_URL, SecretStr(KEY), 'gemini') if with_key else None
     zai = Endpoint(ZAI_URL, SecretStr(KEY), 'zai') if with_key else None
     deepinfra = Endpoint(DEEPINFRA_URL, SecretStr(KEY), 'deepinfra') if with_key else None
+    xai = Endpoint(XAI_URL, SecretStr(KEY), 'xai') if with_key else None
     return ModelRouter(
         lookup=lookup or FakeLookup({model.slug: model for model in models}),
         client=client,
@@ -155,6 +159,7 @@ def make_router(
         gemini=gemini,
         zai=zai,
         deepinfra=deepinfra,
+        xai=xai,
     )
 
 
@@ -267,6 +272,37 @@ async def test_a_claude_model_is_called_through_the_anthropic_endpoint():
 
 async def test_a_claude_model_without_a_key_is_not_configured():
     assert await refused(make_router(OPUS, with_key=False), 'claude-opus-5-5') == PROVIDER_NOT_CONFIGURED
+
+
+async def test_a_grok_model_is_called_through_the_xai_endpoint():
+    transport = Transport()
+    provider = await make_router(GROK, transport=transport).provider_for('grok-4-3')
+
+    await provider.complete([], GenerationParams(max_tokens=600, temperature=0.8))
+
+    assert (provider.base_url, provider.model, provider.kind) == (XAI_URL, 'grok-4.3', 'xai')
+    (request,) = transport.requests
+    assert str(request.url) == f'{XAI_URL}/chat/completions'
+    assert request.headers['authorization'] == f'Bearer {KEY}'
+    # OpenAI 와 같은 모양이다. 생각은 none 으로 끄고, 출력 상한은 목록의 칸에 싣는다
+    body = transport.body()
+    assert (body['model'], body['reasoning_effort'], body['max_completion_tokens']) == ('grok-4.3', 'none', 600)
+    assert 'temperature' in body
+
+
+async def test_a_grok_model_that_always_thinks_is_asked_to_think_least():
+    transport = Transport()
+    provider = await make_router(GROK_ALWAYS, transport=transport).provider_for('grok-4-7')
+
+    await provider.complete([], GenerationParams(max_tokens=600, temperature=0.8))
+
+    # 끌 수 없어 none 을 받지 않는다. 가장 낮은 low 로 부르고, 그 생각의 몫을 상한에 더한다
+    body = transport.body()
+    assert (body['reasoning_effort'], body['max_completion_tokens']) == ('low', 600 + 1024)
+
+
+async def test_a_grok_model_without_a_key_is_not_configured():
+    assert await refused(make_router(GROK, with_key=False), 'grok-4-3') == PROVIDER_NOT_CONFIGURED
 
 
 async def test_a_refusal_leaves_a_warning(caplog: pytest.LogCaptureFixture):

@@ -149,6 +149,7 @@ def test_an_adult_model_suits_every_rating_and_others_only_all():
         (Provider.OPENAI, True),
         (Provider.ZAI, True),
         (Provider.DEEPINFRA, True),
+        (Provider.XAI, True),
         (Provider.LOCAL, True),
     ],
 )
