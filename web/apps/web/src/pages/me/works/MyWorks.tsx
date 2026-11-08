@@ -1,13 +1,15 @@
 // web/apps/web/src/pages/me/works/MyWorks.tsx
 // 마이페이지 제작자 탭의 "내 작품"(Stitch 10번). 아래 탭 넷(캐릭터, 세계관, 시나리오·캠페인, 재료)과 탭마다의 목록.
-// 캐릭터와 세계관은 공개 상태 칩(초안, 공개 중, 링크 공개, 숨겨짐)으로 거르고, 줄마다 상태와 마지막으로 고친 때, "고치기"를 단다.
-// 시나리오·캠페인은 공개 상태를 서버가 주지 않아 칩 없이 목록만, 재료는 저마다의 목록으로 가는 길이다.
-// 목록은 저마다의 제작 화면이 쓰는 읽기를 그대로 쓴다(앞의 한 쪽). 정렬과 쓰인 수는 아직 서버에 없다.
+// 캐릭터와 세계관은 공개 상태 칩(초안, 공개 중, 링크 공개, 숨겨짐)으로 거르고 정렬(최근 고친 순, 쓰인 수 순, #1165)을 고른다.
+// 카드마다 상태, 쓰인 수와 관심 수(모든 기간, 쓰인 수는 한 시간까지 늦다), 마지막으로 고친 때, "고치기"를 단다.
+// 시나리오·캠페인은 공개 상태와 쓰인 수를 게임 서버가 아직 주지 않아 칩과 정렬 없이 목록만, 재료는 저마다의 목록으로 가는 길이다.
+// 목록은 저마다의 제작 화면이 쓰는 읽기에 차례만 더해 쓴다(앞의 한 쪽).
 
-import { Button, ChipGroup, Notice } from '@ai-trpg/ui';
+import { Button, ChipGroup, Notice, SelectField } from '@ai-trpg/ui';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
+import type { MineOrder } from '../../../api/types';
 import { formatDate } from '../../../format/dateTime';
 import { CHARACTERS_PATH, characterPath } from '../../chat/studio/characters/characterPaths';
 import { myCharactersQuery } from '../../chat/studio/characters/characterQueries';
@@ -15,7 +17,17 @@ import { WORLDS_PATH, worldPath } from '../../story/studio/worldPaths';
 import { myWorldsQuery } from '../../story/studio/worldQueries';
 import { kindText, studioPath } from '../../trpg/studio/studioKinds';
 import { assetsQuery } from '../../trpg/studio/studioQueries';
-import { filterByStatus, STATUS_CHIPS, statusLabel, workStatus, type StatusSource, type WorkStatus } from './myWorksView';
+import {
+  countsText,
+  filterByStatus,
+  SORT_OPTIONS,
+  sortOf,
+  STATUS_CHIPS,
+  statusLabel,
+  workStatus,
+  type StatusSource,
+  type WorkStatus,
+} from './myWorksView';
 
 type WorksTab = 'characters' | 'worlds' | 'scenarios' | 'materials';
 
@@ -46,37 +58,95 @@ export function MyWorks() {
   );
 }
 
-type Work = StatusSource & { id: string; name: string; updated_at: string };
+type Work = StatusSource & { id: string; name: string; updated_at: string; start_count: number; heart_count: number };
 
 function MyCharacters() {
-  const query = useInfiniteQuery(myCharactersQuery());
+  const [sort, setSort] = useState<MineOrder>('updated');
+  const query = useInfiniteQuery(myCharactersQuery(sort));
   const works: Work[] = query.data?.pages[0]?.items ?? [];
   return (
-    <StatusWorks label="캐릭터" works={works} pathOf={(id) => characterPath(id)} allPath={CHARACTERS_PATH} pending={query.isPending} failed={query.isError} retry={() => void query.refetch()} />
+    <StatusWorks
+      label="캐릭터"
+      usedLabel="대화"
+      works={works}
+      sort={sort}
+      onSort={setSort}
+      pathOf={(id) => characterPath(id)}
+      allPath={CHARACTERS_PATH}
+      pending={query.isPending}
+      failed={query.isError}
+      retry={() => void query.refetch()}
+    />
   );
 }
 
 function MyStoryWorlds() {
-  const query = useQuery(myWorldsQuery());
+  const [sort, setSort] = useState<MineOrder>('updated');
+  const query = useQuery(myWorldsQuery(sort));
   const works: Work[] = query.data?.items ?? [];
-  return <StatusWorks label="세계관" works={works} pathOf={(id) => worldPath(id)} allPath={WORLDS_PATH} pending={query.isPending} failed={query.isError} retry={() => void query.refetch()} />;
+  return (
+    <StatusWorks
+      label="세계관"
+      usedLabel="시작"
+      works={works}
+      sort={sort}
+      onSort={setSort}
+      pathOf={(id) => worldPath(id)}
+      allPath={WORLDS_PATH}
+      pending={query.isPending}
+      failed={query.isError}
+      retry={() => void query.refetch()}
+    />
+  );
 }
 
-type StatusWorksProps = { label: string; works: Work[]; pathOf: (id: string) => string; allPath: string; pending: boolean; failed: boolean; retry: () => void };
+type StatusWorksProps = {
+  label: string;
+  /** 쓰인 것의 이름(캐릭터는 대화, 세계관은 시작) */
+  usedLabel: string;
+  works: Work[];
+  sort: MineOrder;
+  onSort: (sort: MineOrder) => void;
+  pathOf: (id: string) => string;
+  allPath: string;
+  pending: boolean;
+  failed: boolean;
+  retry: () => void;
+};
 
-/** 공개 상태 칩과 그것으로 거른 목록 */
-function StatusWorks({ label, works, pathOf, allPath, pending, failed, retry }: StatusWorksProps) {
+/** 공개 상태 칩, 정렬과 그것으로 거른 목록 */
+function StatusWorks({ label, usedLabel, works, sort, onSort, pathOf, allPath, pending, failed, retry }: StatusWorksProps) {
   const [status, setStatus] = useState<WorkStatus | undefined>(undefined);
   const shown = filterByStatus(works, status);
   return (
     <>
       <ChipGroup label="공개 상태" chips={STATUS_CHIPS} selected={status} onChange={setStatus} />
+      <SelectField
+        label="정렬"
+        name="my-works-sort"
+        value={sort}
+        onChange={(event) => onSort(sortOf(event.target.value))}
+        hint="쓰인 수는 모든 기간의 수이고 한 시간까지 늦게 바뀝니다."
+      >
+        {SORT_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </SelectField>
       <LoadState pending={pending} failed={failed} retry={retry} />
       {!pending && !failed && works.length === 0 ? <EmptyWorks /> : null}
       {works.length > 0 && shown.length === 0 ? <p className="empty-state">이 상태의 {label}가 없습니다.</p> : null}
       <ul className="plain-list my-works__list" aria-label={`내 ${label}`}>
         {shown.map((work) => (
-          <WorkCard key={work.id} name={work.name} updatedAt={work.updated_at} to={pathOf(work.id)} badge={statusLabel(workStatus(work))} />
+          <WorkCard
+            key={work.id}
+            name={work.name}
+            updatedAt={work.updated_at}
+            to={pathOf(work.id)}
+            badge={statusLabel(workStatus(work))}
+            counts={countsText(work, usedLabel)}
+          />
         ))}
       </ul>
       <p>
@@ -130,13 +200,16 @@ function MyMaterials() {
   );
 }
 
-/** 작품 하나의 카드. 이름, 상태(또는 종류), 마지막으로 고친 때, "고치기" */
-function WorkCard({ name, updatedAt, to, badge }: { name: string; updatedAt: string; to: string; badge: ReactNode }) {
+type CardProps = { name: string; updatedAt: string; to: string; badge: ReactNode; counts?: string };
+
+/** 작품 하나의 카드. 이름, 상태(또는 종류), 쓰인 수와 관심 수(있으면), 마지막으로 고친 때, "고치기" */
+function WorkCard({ name, updatedAt, to, badge, counts }: CardProps) {
   return (
     <li className="my-works__card">
       <p className="my-works__name">{name}</p>
       <p className="my-works__meta">
         <span className="ui-chip my-works__badge">{badge}</span>
+        {counts ? <span className="hint my-works__counts">{counts}</span> : null}
         <span className="hint">
           <time dateTime={updatedAt}>{formatDate(updatedAt)}</time> 고침
         </span>

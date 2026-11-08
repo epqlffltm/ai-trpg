@@ -5,6 +5,7 @@
 
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import { fetchCharacter, fetchCharacterCheck, fetchCharacterVersions, fetchMyCharacters } from '../../../../api/characters';
+import type { MineOrder } from '../../../../api/types';
 
 export const PAGE_SIZE = 20;
 
@@ -32,10 +33,11 @@ export function nextOffset(total: number, pagesRead: number): number | undefined
   return read < total ? read : undefined;
 }
 
-export function myCharactersQuery() {
+/** 내 캐릭터. 차례(#1165)마다 따로 읽는다. 목록을 무르면(characterListKey) 모든 차례가 함께 물러진다 */
+export function myCharactersQuery(sort: MineOrder = 'updated') {
   return infiniteQueryOptions({
-    queryKey: characterListKey(),
-    queryFn: ({ pageParam, signal }) => fetchMyCharacters({ limit: PAGE_SIZE, offset: pageParam }, signal),
+    queryKey: [...characterListKey(), sort],
+    queryFn: ({ pageParam, signal }) => fetchMyCharacters({ limit: PAGE_SIZE, offset: pageParam, sort }, signal),
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => nextOffset(lastPage.total, allPages.length),
   });

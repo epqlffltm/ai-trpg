@@ -200,6 +200,8 @@ export type PersonaCreate = Asset['schemas']['PersonaCreate'];
 export type PersonaUpdate = Asset['schemas']['PersonaUpdate'];
 
 export type PublicCharacterPage = Asset['schemas']['PublicCharacterPage'];
+/** 내 작품 목록(캐릭터, 세계관)의 차례(#1165). updated 는 최근에 고친 것부터, started 는 쓰인 수(모든 기간)가 많은 것부터 */
+export type MineOrder = Asset['schemas']['MineOrder'];
 export type PublicCharacterSummary = Asset['schemas']['PublicCharacterSummary'];
 export type PublicCharacterDetail = Asset['schemas']['PublicCharacterDetail'];
 export type EventSceneDocument = Asset['schemas']['EventSceneDocument'];

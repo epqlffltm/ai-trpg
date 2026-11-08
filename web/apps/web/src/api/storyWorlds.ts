@@ -44,8 +44,9 @@ export type PublicCastMember = Schemas['PublicCastMember'];
 /** 한 번에 읽는 내 세계관의 수(서버는 100 까지) */
 export const MY_WORLDS_LIMIT = 100;
 
-export function fetchMyStoryWorlds(signal?: AbortSignal): Promise<StoryWorldPage> {
-  return apiRequest<StoryWorldPage>('/api/v1/asset/worlds', { query: { limit: MY_WORLDS_LIMIT, offset: 0 }, ...(signal ? { signal } : {}) });
+/** 내 세계관. 기본은 최근에 고친 것부터, sort=started 면 쓰인 수가 많은 것부터(#1165) */
+export function fetchMyStoryWorlds(signal?: AbortSignal, sort?: Schemas['MineOrder']): Promise<StoryWorldPage> {
+  return apiRequest<StoryWorldPage>('/api/v1/asset/worlds', { query: { limit: MY_WORLDS_LIMIT, offset: 0, sort }, ...(signal ? { signal } : {}) });
 }
 
 /** 만들 때 보내는 값. 이름과 장르(반드시 하나)가 필수이고 나머지는 서버의 기본값이다 */
