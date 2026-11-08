@@ -7,6 +7,7 @@
 // 그림은 늦게 오므로, 인물은 그림이 오기 전과 뒤에 늘 같은 자리(같은 틀의 마지막)에 둔다.
 // 자리가 바뀌면 인물 줄이 새로 그려져 열어 둔 창(story 의 인물 창)이 닫히기 때문이다. 모드는 틀의 class 로만 바꾼다.
 // 겹칠 것(overlay, story 의 이벤트 선택지)은 컷신이면 그림의 틀 안에, 아니면 인물 바로 앞에 둔다(넓으면 그림 위, 좁으면 그림 아래. CSS).
+// 그림을 받는 곳이 다르면(TRPG 는 테이블의 그림 주소) StageFrame 에 받은 주소를 준다. StagePicture 는 asset 의 그림을 받아 StageFrame 을 그린다.
 
 import type { ReactNode } from 'react';
 import { useImageUrl } from '../../hooks/useImageUrl';
@@ -34,20 +35,32 @@ export function pictureMode(hasImage: boolean, hasScene: boolean, framed = false
   return 'none';
 }
 
-export function StagePicture({ scene, background, placeName, framed = false, overlay = null, children }: Props) {
+export function StagePicture({ scene, background, ...rest }: Props) {
   const image = useImageUrl(scene?.imageId ?? background);
-  const mode = pictureMode(Boolean(image.url), scene !== null, framed);
+  return <StageFrame scene={scene} imageUrl={image.url} {...rest} />;
+}
+
+type FrameProps = Omit<Props, 'scene' | 'background'> & {
+  /** 열린 통짜 그림의 제목. 없으면 null */
+  scene: { title: string } | null;
+  /** 받은 그림(컷신이 있으면 컷신, 없으면 배경)의 주소. 받기 전이거나 없으면 null */
+  imageUrl: string | null;
+};
+
+/** 받은 그림의 주소로 그림 창을 그린다 */
+export function StageFrame({ scene, imageUrl, placeName, framed = false, overlay = null, children }: FrameProps) {
+  const mode = pictureMode(Boolean(imageUrl), scene !== null, framed);
   const pictured = mode !== 'none';
   return (
     <div className={`stage-picture stage-picture--${mode}`} role={pictured ? 'figure' : undefined} aria-label={pictured ? '그림 창' : undefined}>
       {mode === 'scene' && scene ? (
         <div className="stage-picture__frame">
-          <img src={image.url ?? undefined} alt={scene.title} className="stage-picture__image" />
+          <img src={imageUrl ?? undefined} alt={scene.title} className="stage-picture__image" />
           <p className="stage-picture__caption">{scene.title}</p>
           {overlay ? <div className="stage-picture__overlay">{overlay}</div> : null}
         </div>
-      ) : mode === 'stage' && image.url ? (
-        <img src={image.url} alt={placeName} className="stage-picture__image" />
+      ) : mode === 'stage' && imageUrl ? (
+        <img src={imageUrl} alt={placeName} className="stage-picture__image" />
       ) : null}
       {overlay && mode !== 'scene' ? <div className="stage-picture__overlay">{overlay}</div> : null}
       {children}
