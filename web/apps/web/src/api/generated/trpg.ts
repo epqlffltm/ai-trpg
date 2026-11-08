@@ -5990,6 +5990,8 @@ export interface components {
          * @description 제작자가 자기 시나리오의 공개 정보를 볼 때의 값.
          */
         ListingDetail: {
+            /** Cover Image Id */
+            cover_image_id: string | null;
             /** Description */
             description: string;
             genre: components["schemas"]["Genre"] | null;
@@ -6040,6 +6042,8 @@ export interface components {
          *     어느 판을 공개할지는 여기서 받지 않는다. 공개는 따로 하는 일이다(PublicationUpdate).
          */
         ListingUpdate: {
+            /** Cover Image Id */
+            cover_image_id?: string | null;
             /** Description */
             description?: string | null;
             genre?: components["schemas"]["Genre"] | null;
@@ -8235,6 +8239,8 @@ export interface components {
          *     여기 적힌 칸만 나간다. 초안의 내용, 판의 굳힌 내용, 공개하지 않은 판의 정보는 나가지 않는다.
          */
         PublicListing: {
+            /** Cover Image Id */
+            cover_image_id: string | null;
             /**
              * Creator Id
              * Format: uuid
@@ -8284,6 +8290,8 @@ export interface components {
             abilities: components["schemas"]["Ability"][];
             /** Character Modes */
             character_modes: components["schemas"]["CharacterMode"][];
+            /** Cover Image Id */
+            cover_image_id: string | null;
             /**
              * Creator Id
              * Format: uuid

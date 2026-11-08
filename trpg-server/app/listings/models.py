@@ -141,6 +141,13 @@ class Listing(Base):
     # 태그. 제작자가 자유롭게 적는다
     tags: Mapped[list[str]] = mapped_column(ARRAY(String(TAG_MAX_LENGTH)), default=list)
 
+    # 표지 그림(#1164). 제작자가 올린 그림(app/portraits)의 id 다. 비어 있으면 표지가 없다.
+    # 그림을 지우려 해도 표지로 쓰는 동안은 지우지 못한다(RESTRICT, app/portraits/repository.py 의 using_scenarios).
+    # 판에 굳히지 않는다. 한줄소개처럼 판을 새로 내지 않고 바꾼다
+    cover_image_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('portraits.id', ondelete='RESTRICT'), index=True
+    )
+
     # 링크 공개(#993). 참이면 공개해도 목록과 검색에 나오지 않는다.
     # 주소(시나리오 ID)를 아는 사람만 소개를 열고 테이블을 만든다.
     # 시나리오 ID 는 추측할 수 없는 UUID 다. 링크를 바꾸는 길은 없다. 막으려면 공개를 내린다

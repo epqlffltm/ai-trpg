@@ -7,6 +7,7 @@
 // 다음 쪽을 읽지 못해도 이미 읽은 쪽은 남기고 그 자리에서 다시 시도한다. 만든 사람의 이름은 쪽마다 한 번에 묻는다(#532).
 // 모양은 Stitch 12번: 위에 TRPG 배너(#994), 거르지 않았으면 이번 주 인기 줄(#985), 그 아래 "전체 시나리오"의 거르기와 격자.
 // 위쪽 오른편에 테이블 로비와 지나간 테이블. 공식·장르마다의 줄은 서버에 그 목록이 없어 두지 않는다.
+// 카드의 맨 위에 표지(#1164)를 둔다(ScenarioCover). 표지가 없으면 빈 칸이다.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -25,6 +26,7 @@ import { genreLabel, playersLabel } from '../labels';
 import { listingsQuery } from '../queries';
 import { BrowseFilters } from './BrowseFilters';
 import { hasFilters, parseFilters, toSearchParams } from './filters';
+import { ScenarioCover } from '../portraits/ScenarioCover';
 
 export function ScenarioBrowsePage() {
   const [params, setParams] = useSearchParams();
@@ -81,6 +83,7 @@ function ScenarioGrid({ items, nameOf }: { items: PublicListing[]; nameOf: NameL
         <ItemCard
           key={listing.scenario_id}
           to={`/trpg/scenarios/${listing.scenario_id}`}
+          image={<ScenarioCover scenarioId={listing.scenario_id} coverImageId={listing.cover_image_id} className="item-card__image" />}
           title={listing.title}
           description={listing.tagline}
           byline={nameOf(listing.creator_id)}

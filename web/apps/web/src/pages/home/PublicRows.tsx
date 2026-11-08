@@ -13,6 +13,7 @@ import { listStatus } from './listStatus';
 import { StoryWorldCard } from '../story/StoryWorldCard';
 import { CharacterCard } from '../chat/browse/CharacterCard';
 import { publicCharactersQuery, publicScenariosQuery, publicWorldsQuery } from './queries';
+import { ScenarioCover } from '../trpg/portraits/ScenarioCover';
 
 export function PublicRows({ signedIn }: { signedIn: boolean }) {
   return (
@@ -40,6 +41,7 @@ function PublicScenariosRow({ signedIn }: { signedIn: boolean }) {
           <ItemCard
             key={listing.scenario_id}
             to={`/trpg/scenarios/${listing.scenario_id}`}
+            image={<ScenarioCover scenarioId={listing.scenario_id} coverImageId={listing.cover_image_id} className="item-card__image" />}
             title={listing.title}
             description={listing.tagline}
             meta={[ratingBadge(listing.rating), listing.genre ? genreLabel(listing.genre) : null, ...usageTags('테이블', listing.start_count, listing.heart_count)]}

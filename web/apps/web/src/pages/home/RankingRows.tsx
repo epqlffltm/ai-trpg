@@ -14,6 +14,7 @@ import { ratingBadge } from './labels';
 import { listStatus } from './listStatus';
 import { characterRankingQuery, scenarioRankingQuery, worldRankingQuery } from './queries';
 import { rankBadges } from './rankingView';
+import { ScenarioCover } from '../trpg/portraits/ScenarioCover';
 
 export function RankingRows({ signedIn }: { signedIn: boolean }) {
   return (
@@ -40,6 +41,7 @@ export function ScenarioRankingRow({ signedIn }: { signedIn: boolean }) {
           <ItemCard
             key={listing.scenario_id}
             to={`/trpg/scenarios/${listing.scenario_id}`}
+            image={<ScenarioCover scenarioId={listing.scenario_id} coverImageId={listing.cover_image_id} className="item-card__image" />}
             title={listing.title}
             description={listing.tagline}
             meta={[...rankBadges(rank, starts), ratingBadge(listing.rating), listing.genre ? genreLabel(listing.genre) : null, ...usageTags('테이블', listing.start_count, listing.heart_count)]}

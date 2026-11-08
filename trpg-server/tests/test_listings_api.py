@@ -163,6 +163,8 @@ async def test_a_scenario_starts_with_an_empty_page(client: AsyncClient, my_head
         'genre': None,
         'tags': [],
         'unlisted': False,
+        # 표지 그림(#1164). 붙이지 않았다
+        'cover_image_id': None,
         'version': None,
         'rating': None,
         'published_at': None,
@@ -476,6 +478,8 @@ async def test_others_see_a_public_scenario(
         'description': DESCRIPTION,
         'genre': GENRE,
         'tags': TAGS,
+        # 표지 그림(#1164). 붙이지 않았다
+        'cover_image_id': None,
         'rating': 'all',
         'recommended_players': {'min': 1, 'max': 4},
         'version': 1,
