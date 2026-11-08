@@ -4120,28 +4120,7 @@ details.room-panel[open] > summary {
   justify-items: end;
 }
 
-.conversation__picture {
-  position: relative;
-  height: 320px;
-  overflow: hidden;
-  border-radius: var(--ui-radius);
-  background: var(--ui-border);
-}
-
-.conversation__stage,
-.conversation__scene {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-}
-
-.conversation__background,
-.conversation__scene img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
+/* chat 의 캐릭터(CharacterFigure). 그림 창(.stage-picture, 무대)의 배경 위 가운데에 세운다 */
 .conversation__sprite {
   position: absolute;
   left: 50%;
@@ -4150,16 +4129,6 @@ details.room-panel[open] > summary {
   max-width: 80%;
   object-fit: contain;
   transform: translateX(-50%);
-}
-
-.conversation__scene figcaption {
-  position: absolute;
-  left: 8px;
-  bottom: 8px;
-  padding: 2px 8px;
-  border-radius: var(--ui-radius);
-  background: var(--ui-surface);
-  font-size: 0.85em;
 }
 
 /* 캐릭터의 이름표(Stitch 21번). 그림 창의 왼쪽 아래, 명조의 굵은 글 */
@@ -4643,10 +4612,6 @@ details.room-panel[open] > summary {
 }
 
 @media (max-width: 640px) {
-  .conversation__picture {
-    height: 180px;
-  }
-
   .conversation__model {
     justify-items: start;
   }
@@ -4921,23 +4886,23 @@ details.room-panel[open] > summary {
     var(--ui-surface-subtle);
 }
 
-/* story 그림 창과 인물의 그림(D2, D5) */
-.story-picture {
+/* 그림 창(components/stage/StagePicture, chat C3·story D2·TRPG 가 함께 쓴다)과 story 인물의 그림(D5) */
+.stage-picture {
   margin: 0 0 8px;
   position: relative;
 }
 
 /* 일러스트 모드: 그림(캡션을 왼쪽 아래에 겹친 틀) 아래에 인물 줄이 흐른다 */
-.story-picture__frame {
+.stage-picture__frame {
   position: relative;
 }
 
-.story-picture--scene .story-cast {
+.stage-picture--scene .story-cast {
   margin-top: 8px;
 }
 
 /* 열린 이벤트의 선택지(Stitch 22번). 넓은 화면에서는 그림 위 가운데에 겹친 한 장, 선택지는 번호가 붙은 줄 */
-.story-picture__overlay .story-choices {
+.stage-picture__overlay .story-choices {
   margin: 0;
   padding: 14px 16px;
   border-radius: var(--ui-radius-lg);
@@ -5008,8 +4973,8 @@ details.room-panel[open] > summary {
 }
 
 @media (min-width: 768px) {
-  .story-picture--stage .story-picture__overlay,
-  .story-picture--scene .story-picture__overlay {
+  .stage-picture--stage .stage-picture__overlay,
+  .stage-picture--scene .stage-picture__overlay {
     position: absolute;
     inset: 16px 16px auto;
     z-index: 2;
@@ -5019,25 +4984,25 @@ details.room-panel[open] > summary {
     overflow-y: auto;
   }
 
-  .story-picture--stage .story-picture__overlay .story-choices,
-  .story-picture--scene .story-picture__overlay .story-choices {
+  .stage-picture--stage .stage-picture__overlay .story-choices,
+  .stage-picture--scene .stage-picture__overlay .story-choices {
     width: min(100%, 560px);
   }
 
-  .story-picture--scene .story-picture__frame {
+  .stage-picture--scene .stage-picture__frame {
     min-height: 240px;
   }
 }
 
 /* 좁은 화면: 일러스트면 그림 아래에, 무대(낮은 배경)여도 무대 아래에 놓는다 */
 @media (max-width: 767px) {
-  .story-picture__overlay {
+  .stage-picture__overlay {
     margin-top: 8px;
   }
 
   /* 무대는 선택지를 띄워도 높이(200px)를 그대로 두고, 선택지는 무대 바로 아래 줄에 놓는다(무대를 덮거나 늘리지 않는다).
    * 틀은 두 줄의 격자: 첫 줄에 배경과 인물 줄을 겹치고, 둘째 줄에 선택지 */
-  .story-picture--stage:has(.story-picture__overlay) {
+  .stage-picture--stage:has(.stage-picture__overlay) {
     display: grid;
     grid-template-rows: 200px auto;
     height: auto;
@@ -5046,36 +5011,36 @@ details.room-panel[open] > summary {
     box-shadow: none;
   }
 
-  .story-picture--stage:has(.story-picture__overlay) > .story-picture__image,
-  .story-picture--stage:has(.story-picture__overlay) > .story-cast {
+  .stage-picture--stage:has(.stage-picture__overlay) > .stage-picture__image,
+  .stage-picture--stage:has(.stage-picture__overlay) > .story-cast {
     grid-area: 1 / 1;
     position: relative;
     inset: auto;
   }
 
-  .story-picture--stage:has(.story-picture__overlay) > .story-picture__image {
+  .stage-picture--stage:has(.stage-picture__overlay) > .stage-picture__image {
     height: 200px;
     border-radius: var(--ui-radius-lg);
   }
 
-  .story-picture--stage:has(.story-picture__overlay) > .story-cast {
+  .stage-picture--stage:has(.stage-picture__overlay) > .story-cast {
     align-self: end;
     overflow: hidden;
   }
 
-  .story-picture--stage .story-picture__overlay {
+  .stage-picture--stage .stage-picture__overlay {
     grid-area: 2 / 1;
   }
 }
 
-.story-picture__image {
+.stage-picture__image {
   width: 100%;
   max-height: 320px;
   object-fit: cover;
   border-radius: var(--ui-radius);
 }
 
-.story-picture__caption {
+.stage-picture__caption {
   position: absolute;
   left: 8px;
   bottom: 8px;
@@ -5086,7 +5051,7 @@ details.room-panel[open] > summary {
 }
 
 /* 무대(Stitch 22번). 배경 위에 장면의 인물을 나란히 세운다. 말하는 인물만 밝고, 이름표는 인주색 */
-.story-picture--stage {
+.stage-picture--stage {
   height: 320px;
   overflow: hidden;
   border-radius: var(--ui-radius-lg);
@@ -5094,7 +5059,7 @@ details.room-panel[open] > summary {
   box-shadow: var(--ui-shadow);
 }
 
-.story-picture--stage .story-picture__image {
+.stage-picture--stage .stage-picture__image {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -5103,13 +5068,13 @@ details.room-panel[open] > summary {
   border-radius: 0;
 }
 
-.story-picture--stage .story-cast {
+.stage-picture--stage .story-cast {
   position: absolute;
   inset: auto 0 0;
   padding: 0 12px 10px;
 }
 
-.story-picture--stage .story-cast > .hint {
+.stage-picture--stage .story-cast > .hint {
   display: inline-block;
   margin: 0;
   padding: 2px 8px;
@@ -5117,14 +5082,14 @@ details.room-panel[open] > summary {
   background: var(--ui-surface);
 }
 
-.story-picture--stage .story-cast__list {
+.stage-picture--stage .story-cast__list {
   flex-wrap: nowrap;
   align-items: flex-end;
   justify-content: center;
   gap: 16px;
 }
 
-.story-picture--stage .story-cast__member {
+.stage-picture--stage .story-cast__member {
   display: grid;
   justify-items: center;
   gap: 4px;
@@ -5137,7 +5102,7 @@ details.room-panel[open] > summary {
   cursor: pointer;
 }
 
-.story-picture--stage img.story-cast__portrait {
+.stage-picture--stage img.story-cast__portrait {
   width: auto;
   height: 240px;
   max-width: 28vw;
@@ -5147,16 +5112,16 @@ details.room-panel[open] > summary {
   transition: filter 0.2s;
 }
 
-.story-picture--stage span.story-cast__portrait {
+.stage-picture--stage span.story-cast__portrait {
   width: 96px;
   height: 96px;
 }
 
-.story-picture--stage .story-cast__member[data-speaking='false'] .story-cast__portrait {
+.stage-picture--stage .story-cast__member[data-speaking='false'] .story-cast__portrait {
   filter: brightness(0.55) saturate(0.7);
 }
 
-.story-picture--stage .story-cast__name {
+.stage-picture--stage .story-cast__name {
   padding: 1px 10px;
   border-radius: var(--ui-radius);
   background: var(--ui-seal);
@@ -5165,26 +5130,26 @@ details.room-panel[open] > summary {
   font-weight: 700;
 }
 
-.story-picture--stage .story-cast__member[data-speaking='false'] .story-cast__name {
+.stage-picture--stage .story-cast__member[data-speaking='false'] .story-cast__name {
   background: var(--ui-surface);
   color: var(--ui-text-muted);
 }
 
-.story-picture--stage .story-cast__member:focus-visible {
+.stage-picture--stage .story-cast__member:focus-visible {
   outline: 2px solid var(--ui-focus);
   outline-offset: 2px;
 }
 
 @media (max-width: 767px) {
-  .story-picture--stage {
+  .stage-picture--stage {
     height: 200px;
   }
 
-  .story-picture--stage img.story-cast__portrait {
+  .stage-picture--stage img.story-cast__portrait {
     height: 150px;
   }
 
-  .story-picture--stage span.story-cast__portrait {
+  .stage-picture--stage span.story-cast__portrait {
     width: 64px;
     height: 64px;
   }

@@ -32,7 +32,6 @@ import { conversationKey } from './conversationQueries';
 import { pictureOf, tailSuggestions } from './conversationView';
 import { MessageList } from './MessageList';
 import { ModelDialog } from './ModelDialog';
-import { PicturePane } from './PicturePane';
 import { describeChangeProblem } from './turnProblem';
 import { TurnNotice } from './TurnNotice';
 import { useBookmarks } from './useBookmarks';
@@ -43,6 +42,8 @@ import { WorldToolbar } from './WorldToolbar';
 import { hasMap } from './worldView';
 import { putQueryData } from '../../../queryClient';
 import { genreTheme } from '../../../genres/genreTheme';
+import { StagePicture } from '../../../components/stage/StagePicture';
+import { CharacterFigure } from './CharacterFigure';
 
 type Props = { detail: ConversationDetail; turns: ReturnType<typeof useConversationTurn> };
 
@@ -115,7 +116,9 @@ export function ConversationRoom({ detail, turns }: Props) {
       <ConversationHeader detail={detail} />
       <div className="chat-room__body">
         <div className="chat-room__main">
-          <PicturePane picture={picture} name={detail.character.document.name} />
+          <StagePicture scene={picture.scene} background={picture.background} placeName={detail.character.document.name} framed>
+            {picture.scene ? null : <CharacterFigure sprite={picture.sprite} name={detail.character.document.name} />}
+          </StagePicture>
           <WorldToolbar detail={detail} busy={busy} onAction={act} bookmarks={bookmarks} onGoTo={(messageId) => void goTo(messageId)} />
           <MessageList
             detail={detail}

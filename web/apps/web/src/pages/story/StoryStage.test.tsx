@@ -12,7 +12,7 @@ import { installFakeFetch, json, tokens } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
 import { castOut, storyView } from '../../test/storyFixtures';
 import { speakingOf } from './storyCastView';
-import { pictureMode } from './StoryPicture';
+import { pictureMode } from '../../components/stage/StagePicture';
 
 const SESSION = '00000000-0000-4000-8000-00000000ad21';
 const WORLD = '00000000-0000-4000-8000-00000000bd21';
@@ -115,7 +115,7 @@ describe('그림 창의 무대', () => {
     images.release();
     const picture = await screen.findByRole('figure', { name: '그림 창' });
     expect(within(picture).getByRole('img', { name: '소나기' })).toBeInTheDocument();
-    expect(picture).toHaveClass('story-picture--scene');
+    expect(picture).toHaveClass('stage-picture--scene');
     expect(screen.getByRole('button', { name: '미나' })).not.toHaveAttribute('data-speaking');
   });
 });
@@ -131,7 +131,7 @@ describe('그림 위의 선택지', () => {
     expect(choices.getByText('소나기')).toBeInTheDocument();
     const share = choices.getByRole('button', { name: '우산을 함께 쓴다' });
     expect(share.querySelector('.story-choice__number')).toHaveTextContent('1');
-    expect(share.closest('.story-picture__overlay')).not.toBeNull();
+    expect(share.closest('.stage-picture__overlay')).not.toBeNull();
   });
 
   it('일러스트가 열려 있으면 일러스트의 틀 안에 겹친다', async () => {
@@ -141,7 +141,7 @@ describe('그림 위의 선택지', () => {
     images.release();
     const picture = await screen.findByRole('figure', { name: '그림 창' });
     const region = within(picture).getByRole('region', { name: '선택지' });
-    expect(region.closest('.story-picture__frame')).not.toBeNull();
+    expect(region.closest('.stage-picture__frame')).not.toBeNull();
   });
 });
 
@@ -151,6 +151,9 @@ describe('순수한 함수', () => {
     expect(pictureMode(false, true)).toBe('none');
     expect(pictureMode(true, false)).toBe('stage');
     expect(pictureMode(true, true)).toBe('scene');
+    // chat 처럼 늘 무대를 두면(framed) 배경이 없어도 무대다. 컷신은 그림이 와야 컷신이다
+    expect(pictureMode(false, false, true)).toBe('stage');
+    expect(pictureMode(false, true, true)).toBe('stage');
     expect(speakingOf([{ speaker: 'jun' }, { speaker: 'mina' }, { speaker: null }])).toBe('mina');
     expect(speakingOf([{ speaker: null }])).toBeNull();
     expect(speakingOf([])).toBeNull();
