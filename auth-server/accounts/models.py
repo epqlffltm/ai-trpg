@@ -1169,6 +1169,29 @@ class AttendanceClaim(models.Model):
         return f'{self.user_id} / {self.day} / {self.cycle_day}일째 / {self.get_status_display()}'
 
 
+class UserBadge(models.Model):
+    """
+    받은 활동 배지 하나(#193, accounts/badges.py). 사용자와 배지마다 한 줄이다.
+
+    배지는 일이 생기는 자리(출석, 본인인증, 초대 보상)의 트랜잭션에서 함께 적는다. 일이 되돌려지면 배지도 없다.
+    같은 배지를 두 번 주는 것은 유일 제약이 막는다. 탈퇴해도 남긴다(계정의 줄은 비울 뿐 지우지 않는다).
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='badges', verbose_name='받은 사람')
+    badge = models.CharField('배지', max_length=40)
+    earned_at = models.DateTimeField('받은 시각')
+
+    class Meta:
+        verbose_name = '활동 배지'
+        verbose_name_plural = '활동 배지'
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'badge'], name='accounts_badge_once'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.user_id} / {self.badge}'
+
+
 class CreatorBlock(models.Model):
     """
     한 사람이 막은 제작자 하나(#988). 막은 제작자의 작품은 그 사람의 공개 목록에서 빠진다.

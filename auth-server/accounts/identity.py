@@ -21,6 +21,8 @@ from django.utils import timezone
 from django.utils.crypto import salted_hmac
 
 from accounts.age import adult_content_from, has_reached, is_under_min_age, korean_today, legal_adult_from
+from accounts.badge_rules import IDENTITY_VERIFIED
+from accounts.badges import award
 from accounts.consents import erase_consents
 from accounts.erasure import blank_account, erase_mail_records
 from accounts.identity_providers import IdentityResult, get_identity_provider
@@ -145,6 +147,8 @@ def _record_verification(
     request_invite_reward(invitee=locked, invitee_key=key)
     # 결제 서버가 이 사용자의 나이(성년이 되는 날)를 알게 한다. 결제는 그것으로 가른다(#337)
     mark_changed(locked)
+    # 활동 배지(#193)
+    award(locked, IDENTITY_VERIFIED, verification.verified_at)
     return verification
 
 

@@ -1,9 +1,10 @@
 // web/apps/web/src/layout/AccountMenu.tsx
 // 위쪽 줄의 프로필 단추와 펼쳐지는 메뉴(Stitch 설계서의 [모든 화면의 틀]). 로그인했을 때만 둔다(AppHeader).
-// 단추에는 닉네임. 펼치면 위에 프로필(닉네임, 잔액과 "출석", "충전"), 그 아래 MY(마이페이지, 관심 작품, 페르소나, 갤러리, 설정),
+// 단추에는 닉네임. 펼치면 위에 프로필(닉네임, 잔액과 "출석", "충전"), 그 아래 MY(마이페이지, 활동 배지, 관심 작품, 페르소나, 갤러리, 설정),
 // 운영자에게는 신고 처리(E4)와 홍보 배너(#994), 맨 아래 로그아웃. 길을 누르면 창을 닫는다.
 // 로그아웃하면 읽어 둔 것(내 테이블, 내 대화)을 모두 버린다.
-// 설계서의 팔로워·팔로잉 수, 성향 필터, 차단, 초대 코드, 활동 배지는 마이페이지와 설정에 있다(이 창에는 아직 두지 않는다).
+// 설계서의 팔로워·팔로잉 수, 성향 필터, 차단, 초대 코드는 마이페이지와 설정에 있다(이 창에는 아직 두지 않는다).
+// 활동 배지(#193)는 마이페이지 설정 탭의 맨 위에 있고, 이 창의 MY 에서 그 탭으로 간다.
 
 import { Button } from '@ai-trpg/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -19,6 +20,7 @@ import { usePopover } from './usePopover';
 /** MY 묶음의 길 */
 const MY_LINKS: { to: string; label: string }[] = [
   { to: '/me', label: '마이페이지' },
+  { to: '/me?tab=settings', label: '활동 배지' },
   { to: '/me/hearts', label: '관심 작품' },
   { to: '/me/personas', label: '페르소나' },
   { to: '/gallery', label: '갤러리' },

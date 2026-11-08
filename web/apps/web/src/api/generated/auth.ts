@@ -412,6 +412,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/badges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내 활동 배지. 모든 배지를 차례대로, 받았으면 받은 시각과 함께
+         * @description GET /api/v1/auth/me/badges. 내 활동 배지.
+         */
+        get: operations["me_badges_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me/blocks/creators/{public_id}": {
         parameters: {
             query?: never;
@@ -953,6 +973,20 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** @description 배지 하나와 내가 받았는지. */
+        Badge: {
+            /** @description 어떻게 받는지 */
+            description: string;
+            /**
+             * Format: date-time
+             * @description 받은 시각. 아직이면 null 이다
+             */
+            earned_at: string | null;
+            /** @description 배지의 이름. 바뀌지 않는다 */
+            id: string;
+            /** @description 화면에 보이는 이름 */
+            name: string;
+        };
         /** @description 막은 제작자(공개 ID)와 태그(#988). 최근에 막은 것부터다. */
         Blocks: {
             creators: string[];
@@ -1181,6 +1215,13 @@ export interface components {
          * @enum {string}
          */
         MeGuardianConsentEnum: "none" | "requested" | "consented" | "revoked";
+        /** @description 내 활동 배지. */
+        MyBadges: {
+            /** @description 모든 배지. 화면에 보일 차례다 */
+            badges: components["schemas"]["Badge"][];
+            /** @description 받은 배지의 수 */
+            earned: number;
+        };
         /** @description 내 초대 코드와 받은 보상(#990). 상한은 서버의 설정이다. 보상은 내가 본인인증을 마친 뒤부터 센다. */
         MyInvite: {
             code: string;
@@ -2346,6 +2387,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    me_badges_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyBadges"];
                 };
             };
             /** @description access 토큰이 없거나 받아들일 수 없다 */

@@ -22,6 +22,8 @@
 from django.conf import settings
 from django.utils import timezone
 
+from accounts.badge_rules import FIRST_INVITE
+from accounts.badges import award
 from accounts.models import (
     IdentityVerification,
     Invitation,
@@ -90,4 +92,6 @@ def _record(invitee: User, inviter: User, *, invitee_key: str, inviter_key: str)
             ),
         ]
     )
+    # 초대한 사람의 활동 배지(#193). 초대한 계정에 준다
+    award(inviter, FIRST_INVITE, now)
     return reward

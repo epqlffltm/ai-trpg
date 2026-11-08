@@ -197,6 +197,37 @@
         ],
         "type": "object"
       },
+      "Badge": {
+        "additionalProperties": false,
+        "description": "배지 하나와 내가 받았는지.",
+        "properties": {
+          "description": {
+            "description": "어떻게 받는지",
+            "type": "string"
+          },
+          "earned_at": {
+            "description": "받은 시각. 아직이면 null 이다",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "description": "배지의 이름. 바뀌지 않는다",
+            "type": "string"
+          },
+          "name": {
+            "description": "화면에 보이는 이름",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "earned_at",
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
       "Blocks": {
         "additionalProperties": false,
         "description": "막은 제작자(공개 ID)와 태그(#988). 최근에 막은 것부터다.",
@@ -876,6 +907,28 @@
           "revoked"
         ],
         "type": "string"
+      },
+      "MyBadges": {
+        "additionalProperties": false,
+        "description": "내 활동 배지.",
+        "properties": {
+          "badges": {
+            "description": "모든 배지. 화면에 보일 차례다",
+            "items": {
+              "$ref": "#/components/schemas/Badge"
+            },
+            "type": "array"
+          },
+          "earned": {
+            "description": "받은 배지의 수",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "badges",
+          "earned"
+        ],
+        "type": "object"
       },
       "MyInvite": {
         "additionalProperties": false,
@@ -3154,6 +3207,44 @@
           }
         ],
         "summary": "로그인한 본인의 계정",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/me/badges": {
+      "get": {
+        "description": "GET /api/v1/auth/me/badges. 내 활동 배지.",
+        "operationId": "me_badges_retrieve",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyBadges"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "내 활동 배지. 모든 배지를 차례대로, 받았으면 받은 시각과 함께",
         "tags": [
           "me"
         ],
