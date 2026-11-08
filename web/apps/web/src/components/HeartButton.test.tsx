@@ -47,6 +47,7 @@ const WORLD = {
 };
 const HEART = `/api/v1/game/listings/${SCENARIO_ID}/heart`;
 const COMMON = {
+  [`GET /api/v1/game/listings/${SCENARIO_ID}/achievements`]: () => json(200, { items: [], players: 0 }),
   [`GET /api/v1/game/listings/${SCENARIO_ID}`]: () => json(200, DETAIL),
   'GET /api/v1/auth/public-names': () => json(200, { names: [{ public_id: CREATOR, nickname: '이야기꾼' }] }),
   'GET /api/v1/game/tables/narration-models': () => json(200, { free: false, models: [] }),

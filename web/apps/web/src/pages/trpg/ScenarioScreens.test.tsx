@@ -1,12 +1,14 @@
 // web/apps/web/src/pages/trpg/ScenarioScreens.test.tsx
 // 시나리오 탐색(B1)과 소개(B2). 로그인 전에는 토큰 없이 읽는지, 거르기와 더 보기, 이름 묻기, 소개의 고를 거리와 할 일을 본다.
 
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
+import { formatDate } from '../../format/dateTime';
+import { achievementRate } from './scenario/achievementView';
 
 const CREATOR = '00000000-0000-4000-8000-0000000000c1';
 const SCENARIO_ID = '00000000-0000-4000-8000-0000000000a1';
@@ -47,6 +49,14 @@ const DETAIL = {
 function query(request: SeenRequest): URLSearchParams {
   return new URLSearchParams(request.url.split('?')[1] ?? '');
 }
+
+const ACHIEVEMENTS = {
+  players: 8,
+  items: [
+    { id: 'gate', hidden: false, name: '성문 앞', description: '성문에 섰다', image_id: null, earned_at: null, earned_count: 2 },
+    { id: 'secret', hidden: true, name: null, description: null, image_id: null, earned_at: null, earned_count: 0 },
+  ],
+};
 
 const NAMES = () => json(200, { names: [{ public_id: CREATOR, nickname: '이야기꾼' }] });
 // 탐색 화면의 위(Stitch 12번)는 TRPG 배너와 이번 주 인기 줄을 읽는다. 걸린 것이 없는 서버로 둔다
@@ -144,6 +154,7 @@ describe('ScenarioPage', () => {
   it('소개글, 시작하는 장면, 프리젠을 능력치의 이름으로 보이고, 로그인 전에는 로그인하고 만들게 한다', async () => {
     const { seen } = installFakeFetch({
       ...SIGNED_OUT,
+      [`GET /api/v1/game/listings/${SCENARIO_ID}/achievements`]: () => json(200, { items: [], players: 0 }),
       [`GET /api/v1/game/listings/${SCENARIO_ID}`]: () => json(200, DETAIL),
       'GET /api/v1/auth/public-names': NAMES,
     });
@@ -168,6 +179,7 @@ describe('ScenarioPage', () => {
     installFakeFetch({
       [`POST ${REFRESH_PATH}`]: () => json(200, tokens('a1')),
       'GET /api/v1/auth/me': () => json(200, { nickname: '모험가', identity: { adult_content: true } }),
+      [`GET /api/v1/game/listings/${SCENARIO_ID}/achievements`]: () => json(200, { items: [], players: 0 }),
       [`GET /api/v1/game/listings/${SCENARIO_ID}`]: () => json(200, DETAIL),
       'GET /api/v1/auth/public-names': NAMES,
       'GET /api/v1/game/tables/narration-models': () =>
@@ -186,6 +198,64 @@ describe('ScenarioPage', () => {
     );
   });
 
+  it('업적을 판의 차례로 그림, 이름, 받는 법, 달성률과 함께 보인다. 숨긴 업적은 받기 전에 가린다', async () => {
+    installFakeFetch({
+      ...SIGNED_OUT,
+      [`GET /api/v1/game/listings/${SCENARIO_ID}`]: () => json(200, DETAIL),
+      [`GET /api/v1/game/listings/${SCENARIO_ID}/achievements`]: () => json(200, ACHIEVEMENTS),
+      'GET /api/v1/auth/public-names': NAMES,
+    });
+    renderApp(`/trpg/scenarios/${SCENARIO_ID}`);
+
+    const section = (await screen.findByRole('heading', { name: '업적' })).closest('section') as HTMLElement;
+    const items = within(within(section).getByRole('list', { name: '업적' })).getAllByRole('listitem');
+    const [gate, hidden] = items as [HTMLElement, HTMLElement];
+    expect(within(gate).getByText('성문 앞')).toBeInTheDocument();
+    expect(within(gate).getByText('성문에 섰다')).toBeInTheDocument();
+    expect(within(gate).getByText('플레이한 8명 중 2명(25%)')).toBeInTheDocument();
+    expect(within(hidden).getByText('숨긴 업적')).toBeInTheDocument();
+    expect(within(hidden).getByText('받으면 이름과 받는 법이 보입니다.')).toBeInTheDocument();
+    // 로그인하지 않았으면 내가 받은 수를 적지 않고 흐리게 하지 않는다
+    expect(within(section).queryByText(/내가 받은 업적/)).toBeNull();
+    expect(gate).not.toHaveClass('achievement-item--locked');
+  });
+
+  it('로그인했으면 내가 받은 업적은 받은 날을, 아직인 것은 흐리게 보인다', async () => {
+    const mine = { ...ACHIEVEMENTS, items: [{ ...ACHIEVEMENTS.items[0], earned_at: '2026-11-09T03:00:00Z' }, ACHIEVEMENTS.items[1]] };
+    installFakeFetch({
+      [`POST ${REFRESH_PATH}`]: () => json(200, tokens('a1')),
+      'GET /api/v1/auth/me': () => json(200, { nickname: '모험가', identity: { adult_content: true } }),
+      [`GET /api/v1/game/listings/${SCENARIO_ID}`]: () => json(200, DETAIL),
+      [`GET /api/v1/game/listings/${SCENARIO_ID}/achievements`]: () => json(200, mine),
+      'GET /api/v1/auth/public-names': NAMES,
+      'GET /api/v1/game/tables/narration-models': () => json(200, { free: false, models: [] }),
+    });
+    renderApp(`/trpg/scenarios/${SCENARIO_ID}`);
+
+    const section = (await screen.findByRole('heading', { name: '업적' })).closest('section') as HTMLElement;
+    expect(within(section).getByText('내가 받은 업적 1 / 2개')).toBeInTheDocument();
+    const [gate, hidden] = within(section).getAllByRole('listitem') as [HTMLElement, HTMLElement];
+    expect(within(gate).getByText(`${formatDate('2026-11-09T03:00:00Z')}에 받음`)).toBeInTheDocument();
+    expect(gate).not.toHaveClass('achievement-item--locked');
+    expect(hidden).toHaveClass('achievement-item--locked');
+  });
+
+  it('업적이 없는 시나리오는 칸이 없다', async () => {
+    const { seen } = installFakeFetch({
+      ...SIGNED_OUT,
+      [`GET /api/v1/game/listings/${SCENARIO_ID}`]: () => json(200, DETAIL),
+      [`GET /api/v1/game/listings/${SCENARIO_ID}/achievements`]: () => json(200, { items: [], players: 0 }),
+      'GET /api/v1/auth/public-names': NAMES,
+    });
+    renderApp(`/trpg/scenarios/${SCENARIO_ID}`);
+
+    expect(await screen.findByRole('heading', { name: '잿빛 수도원', level: 1 })).toBeInTheDocument();
+    // 업적의 답을 받고 그린 뒤에 본다
+    await vi.waitFor(() => expect(seen.some((entry) => entry.url.endsWith('/achievements'))).toBe(true));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+    expect(screen.queryByRole('heading', { name: '업적' })).toBeNull();
+  });
+
   it('볼 수 없는 시나리오면 까닭을 가르지 않고 탐색으로 돌아가는 길을 둔다', async () => {
     installFakeFetch({
       ...SIGNED_OUT,
@@ -195,5 +265,14 @@ describe('ScenarioPage', () => {
 
     expect(await screen.findByText('볼 수 없는 시나리오입니다.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '다른 시나리오 찾기' })).toHaveAttribute('href', '/trpg');
+  });
+});
+
+describe('achievementView', () => {
+  it('달성률은 반올림한 백분율이고, 1% 보다 작으면 "1% 미만", 플레이한 사람이 없으면 그렇다고 적는다', () => {
+    expect(achievementRate(2, 8)).toBe('플레이한 8명 중 2명(25%)');
+    expect(achievementRate(1, 300)).toBe('플레이한 300명 중 1명(1% 미만)');
+    expect(achievementRate(0, 5)).toBe('플레이한 5명 중 0명(0%)');
+    expect(achievementRate(0, 0)).toBe('아직 플레이한 사람이 없습니다');
   });
 });

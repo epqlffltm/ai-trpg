@@ -1914,6 +1914,27 @@ a.ui-button {
   opacity: 0.55;
 }
 
+.achievement-list {
+  display: grid;
+  gap: var(--ui-gap);
+}
+
+.achievement-item {
+  display: flex;
+  gap: var(--ui-gap);
+  align-items: flex-start;
+}
+
+.achievement-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.achievement-item--locked {
+  opacity: 0.6;
+}
+
 .start {
   margin-top: calc(var(--ui-gap) * 1.5);
   padding-top: var(--ui-gap);

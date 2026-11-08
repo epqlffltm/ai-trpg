@@ -53,6 +53,7 @@ function signedInAs(roles: string[], routes: Record<string, (request: SeenReques
     [`POST ${REFRESH_PATH}`]: () => json(200, tokens(accessToken(roles))),
     'GET /api/v1/auth/me': () => json(200, { nickname: '운영자', identity: { adult_content: false } }),
     'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: '0', total: '0', next_expiry: null }),
+    [`GET /api/v1/game/listings/${SCENARIO_ID}/achievements`]: () => json(200, { items: [], players: 0 }),
     [`GET /api/v1/game/listings/${SCENARIO_ID}`]: () => json(200, DETAIL),
     'GET /api/v1/auth/public-names': () => json(200, { names: [{ public_id: CREATOR, nickname: '이야기꾼' }] }),
     'GET /api/v1/game/tables/narration-models': () => json(200, { free: false, models: [] }),
