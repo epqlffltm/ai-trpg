@@ -107,7 +107,10 @@ describe('글쓰기', () => {
     renderApp('/board/free');
 
     await userEvent.click(await screen.findByRole('link', { name: '글쓰기' }));
-    expect(await screen.findByRole('heading', { name: '글쓰기' })).toBeInTheDocument();
+    const card = (await screen.findByRole('heading', { name: '글쓰기' })).closest('section') as HTMLElement;
+    // 글 화면과 같은 모양: 위에 게시판 고르기, 카드의 머리에 게시판 표시
+    expect(screen.getByRole('navigation', { name: '게시판' })).toBeInTheDocument();
+    expect(within(card).getByRole('link', { name: '자유 게시판' })).toHaveAttribute('href', '/board/free');
     await userEvent.click(screen.getByRole('button', { name: '올리기' }));
     expect(screen.getByText('제목을 적어 주세요.')).toBeInTheDocument();
     expect(screen.getByText('본문을 적어 주세요.')).toBeInTheDocument();
@@ -168,6 +171,8 @@ describe('내 글과 남의 글', () => {
     expect(screen.queryByRole('button', { name: '고정' })).toBeNull();
 
     await userEvent.click(screen.getByRole('link', { name: '고치기' }));
+    const editCard = (await screen.findByRole('heading', { name: '글 고치기' })).closest('section') as HTMLElement;
+    expect(within(editCard).getByRole('link', { name: '글로 돌아가기' })).toHaveAttribute('href', '/board/posts/7');
     const title = await screen.findByLabelText('제목');
     expect(title).toHaveValue('글 7');
     await userEvent.clear(title);
