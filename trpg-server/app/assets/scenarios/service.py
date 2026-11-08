@@ -23,13 +23,15 @@ from app.assets.ratings import ALL_AGES_ONLY, require_rating
 from app.assets.scenarios import mine
 from app.assets.scenarios.mine import MineOrder, MyScenario
 from app.assets.scenarios.recommended_model import require_recommendable
-from app.assets.scenarios.schemas import EntryPicture, Pregen, ScenarioCreate, ScenarioUpdate
+from app.assets.scenarios.schemas import Achievement, EntryPicture, Pregen, ScenarioCreate, ScenarioUpdate
 from app.portraits import repository as portraits
 
 # 프리젠의 캐릭터 그림이 틀렸을 때 AssetReferenceError 에 싣는 칸의 이름
 PREGEN_IMAGE_FIELD = 'pregens.image_id'
 # 로어 항목마다의 그림(#1163)이 틀렸을 때의 칸의 이름
 PICTURE_IMAGE_FIELD = 'pictures.image_id'
+# 업적의 그림이 틀렸을 때의 칸의 이름
+ACHIEVEMENT_IMAGE_FIELD = 'achievements.image_id'
 
 # 다른 자산을 하나 가리키는 칸과, 그 칸이 가리킬 수 있는 종류.
 # 적힌 순서대로 잠근다. 순서가 늘 같아야 두 요청이 서로를 기다리며 멈추는 일(교착)이 없다.
@@ -71,6 +73,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         wanders=[table.model_dump() for table in data.wanders],
         happenings=[rule.model_dump() for rule in data.happenings],
         chapters=[chapter.model_dump() for chapter in data.chapters],
+        achievements=[achievement.model_dump() for achievement in data.achievements],
         npc_places=[place.model_dump() for place in data.npc_places],
         player_made_hp=data.player_made_hp.model_dump() if data.player_made_hp else None,
         reroll_allowed=data.reroll_allowed,
@@ -127,6 +130,14 @@ async def require_own_pictures(
     await require_owned(session, owner_id, wanted, PICTURE_IMAGE_FIELD)
 
 
+async def require_own_achievement_images(
+    session: AsyncSession, owner_id: uuid.UUID, achievements: Sequence[Achievement] | None
+) -> None:
+    """업적의 그림이 모두 자기가 올린 것인지 본다. 아니면 AssetReferenceError(achievements.image_id)."""
+    wanted = {achievement.image_id for achievement in achievements or [] if achievement.image_id is not None}
+    await require_owned(session, owner_id, wanted, ACHIEVEMENT_IMAGE_FIELD)
+
+
 async def create_scenario(
     session: AsyncSession,
     owner_id: uuid.UUID,
@@ -145,6 +156,7 @@ async def create_scenario(
     await hold_references(session, owner_id, data)
     await require_own_portraits(session, owner_id, data.pregens)
     await require_own_pictures(session, owner_id, data.pictures)
+    await require_own_achievement_images(session, owner_id, data.achievements)
     return await assets.create(session, build_scenario(owner_id, data))
 
 
@@ -204,6 +216,7 @@ async def update_scenario(
     await hold_references(session, owner_id, data)
     await require_own_portraits(session, owner_id, data.pregens)
     await require_own_pictures(session, owner_id, data.pictures)
+    await require_own_achievement_images(session, owner_id, data.achievements)
     return await assets.save_changes(session, scenario, data)
 
 

@@ -38,6 +38,7 @@ from app.assets.models import (
 from app.assets.ratings import ALL_AGES_ONLY, require_rating
 from app.assets.scenarios import repository
 from app.assets.scenarios.schemas import (
+    Achievement,
     Chapter,
     CoverRule,
     CrossCheck,
@@ -237,6 +238,12 @@ class Problem(enum.StrEnum):
     SUBMAP_NOT_PLACE = 'submap_not_place'
     # 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)를 품거나 담은 하위 맵이 있다(#284). 아무도 그곳에 서지 못한다
     SUBMAP_OFF_MAP = 'submap_off_map'
+    # 업적의 조건이 가리키는 것이 없다. 퀘스트의 조건과 같은 까닭이다(quest_condition_missing)
+    ACHIEVEMENT_CONDITION_MISSING = 'achievement_condition_missing'
+    # 업적의 조건이 맞지 않는 종류를 가리킨다
+    ACHIEVEMENT_CONDITION_INVALID = 'achievement_condition_invalid'
+    # 업적의 조건을 채울 수 없다. 퀘스트의 조건과 같은 까닭이다(quest_condition_impossible). 아무도 받지 못한다
+    ACHIEVEMENT_CONDITION_IMPOSSIBLE = 'achievement_condition_impossible'
     # 붙인 도감에 없는 몬스터를 가리키는 몬스터 시트가 있다. 몬스터를 지웠거나 도감을 뗐다
     MONSTER_SHEET_MISSING = 'monster_sheet_missing'
     # 룰북의 규칙에 맞지 않는 몬스터 시트가 있다
@@ -1332,6 +1339,39 @@ def find_picture_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     return problems
 
 
+ACHIEVEMENT_CONDITION_PROBLEMS = {
+    Problem.QUEST_CONDITION_MISSING: Problem.ACHIEVEMENT_CONDITION_MISSING,
+    Problem.QUEST_CONDITION_INVALID: Problem.ACHIEVEMENT_CONDITION_INVALID,
+    Problem.QUEST_CONDITION_IMPOSSIBLE: Problem.ACHIEVEMENT_CONDITION_IMPOSSIBLE,
+}
+
+
+def read_achievements(scenario: Scenario) -> list[Achievement]:
+    """업적을 읽는다."""
+    return [Achievement.model_validate(document) for document in scenario.achievements]
+
+
+def find_achievement_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
+    """
+    업적에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만, 정한 순서로 적는다.
+
+    조건은 퀘스트의 조건과 같이 본다(condition_problem). 그림이 자기가 올린 것인지는 저장할 때 봤다
+    (app/assets/scenarios/service.py 의 require_own_achievement_images).
+    """
+    found = set()
+    for achievement in read_achievements(scenario):
+        for condition in achievement.when:
+            problem = condition_problem(condition, scenario, parts)
+            if problem is not None:
+                found.add(ACHIEVEMENT_CONDITION_PROBLEMS[problem])
+    order = [
+        Problem.ACHIEVEMENT_CONDITION_MISSING,
+        Problem.ACHIEVEMENT_CONDITION_INVALID,
+        Problem.ACHIEVEMENT_CONDITION_IMPOSSIBLE,
+    ]
+    return [problem for problem in order if problem in found]
+
+
 def read_covers(scenario: Scenario) -> list[CoverRule]:
     """장소마다의 커버를 읽는다."""
     return [CoverRule.model_validate(document) for document in scenario.covers]
@@ -1513,6 +1553,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_npc_place_problems(scenario, parts))
     problems.extend(find_picture_problems(scenario, parts))
     problems.extend(find_submap_problems(scenario, parts))
+    problems.extend(find_achievement_problems(scenario, parts))
     problems.extend(find_seating_problems(scenario))
     return problems
 

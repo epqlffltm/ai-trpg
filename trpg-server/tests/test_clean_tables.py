@@ -24,6 +24,7 @@ from server_core.testing.tokens import SigningKey, make_access_claims, make_toke
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.achievements.models import PlayerAchievement, ScenarioPlayer
 from app.ai_log.call_log import DbCallLog
 from app.banners.models import Banner
 from app.campaigns.models import CampaignCarry, CampaignQuestResult, CampaignSeat
@@ -233,6 +234,9 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         trap = {'place_id': uuid.uuid4(), 'entry_id': uuid.uuid4(), 'set_by': ME, 'round_number': 1}
         session.add(TableTrap(table_id=uuid.UUID(table['id']), **trap))
         session.add(TableHappening(table_id=uuid.UUID(table['id']), entry_id=uuid.uuid4(), round_number=1, moves=[]))
+        # 판의 업적. 계정의 기록과 플레이한 사람이다
+        session.add(PlayerAchievement(user_id=OTHER, scenario_id=uuid.UUID(scenario['id']), achievement_id='gate'))
+        session.add(ScenarioPlayer(scenario_id=uuid.UUID(scenario['id']), user_id=OTHER))
         monster = {'monster_id': uuid.uuid4(), 'number': 1, 'place_id': uuid.uuid4(), 'abilities': {}, 'max_hp': 1}
         held = TableMonster(table_id=uuid.UUID(table['id']), hp=1, status='alive', **monster)
         held.items = [TableMonsterItem(slot=0, count=0)]

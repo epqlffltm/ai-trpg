@@ -155,7 +155,7 @@ async def require_listing_portrait(
     image_id: uuid.UUID,
 ) -> None:
     """
-    볼 수 있는 공개 시나리오의 공개 중인 판에 붙은 그림이거나 그 시나리오의 표지(#1164)인지 본다.
+    볼 수 있는 공개 시나리오의 공개 중인 판에 붙은 그림(프리젠, 업적)이거나 그 시나리오의 표지(#1164)인지 본다.
 
     볼 수 없는 시나리오(공개하지 않음, 볼 수 없는 등급)면 AssetNotFoundError(404), 그 판의 그림도 표지도 아니면
     PortraitNotFoundError.
@@ -164,8 +164,9 @@ async def require_listing_portrait(
         listing, _, version = await get_public(session, viewer, scenario_id)
     if image_id == listing.cover_image_id:
         return
-    pregens = read_snapshot(version.snapshot).pregens
-    if image_id not in {pregen.image_id for pregen in pregens if pregen.image_id is not None}:
+    snapshot = read_snapshot(version.snapshot)
+    shown = [*(pregen.image_id for pregen in snapshot.pregens), *(one.image_id for one in snapshot.achievements)]
+    if image_id not in {image for image in shown if image is not None}:
         raise PortraitNotFoundError
 
 
@@ -176,7 +177,7 @@ async def listing_portrait_image(
     scenario_id: uuid.UUID,
     image_id: uuid.UUID,
 ) -> ImageContent:
-    """공개된 시나리오의 프리젠 그림이나 표지의 바이트."""
+    """공개된 시나리오의 프리젠 그림, 업적의 그림, 표지의 바이트."""
     await require_listing_portrait(session_factory, viewer, scenario_id, image_id)
     return await fetch_image(asset, image_id)
 

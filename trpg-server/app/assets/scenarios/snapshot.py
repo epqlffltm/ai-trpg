@@ -453,6 +453,23 @@ class ChapterSnapshot(BaseModel):
     opens: ChapterOpensSnapshot = ChapterOpensSnapshot()
 
 
+class AchievementSnapshot(BaseModel):
+    """
+    업적 하나. 제작자가 작품에 단 것이다. 조건(when)이 채워지면 엔진이 앉아 있는 플레이어 모두에게 준다.
+
+    id 는 판이 바뀌어도 그대로 두는 이름표다. hidden 이면 받기 전에는 이름과 설명과 그림을 가린다.
+    비워도 되는 칸이라 형식이 그대로다.
+    """
+
+    id: str
+    name: str
+    description: str = ''
+    hidden: bool = False
+    image_id: uuid.UUID | None = None
+    when: list[QuestConditionSnapshot]
+    match: QuestMatch = QuestMatch.ALL
+
+
 class FindSnapshot(BaseModel):
     """숨긴 길을 찾는 판정. 판 안의 룰북의 능력치와 난이도의 이름이다. 난이도가 없으면 규칙의 기본 난이도다."""
 
@@ -801,6 +818,8 @@ class Snapshot(BaseModel):
     happenings: list[HappeningSnapshot] = []
     # 장들(#481). 비면 장이 없는 판이다. 여는 장소는 판의 맵의 장소, 여는 퀘스트는 판 안의 사건 항목이다
     chapters: list[ChapterSnapshot] = []
+    # 업적들. 제작자가 작품에 단 것이다. 비워도 되는 칸이라 형식이 그대로다
+    achievements: list[AchievementSnapshot] = []
     # 인물의 자리들(#282). 인물 하나에 많아야 하나다. 인물은 판 안의 인물 항목, 장소는 판 안의 장소 항목이다.
     # 있으면 시작 장소도 있다. 자리가 없는 인물은 장면의 글로 나온다
     npc_places: list[NpcPlaceSnapshot] = []
@@ -1432,6 +1451,7 @@ def build_snapshot(
         wanders=[WanderTableSnapshot(**table) for table in scenario.wanders],
         happenings=[HappeningSnapshot(**rule) for rule in scenario.happenings],
         chapters=[ChapterSnapshot(**chapter) for chapter in scenario.chapters],
+        achievements=[AchievementSnapshot(**achievement) for achievement in scenario.achievements],
         npc_places=[NpcPlaceSnapshot(**place) for place in scenario.npc_places],
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
@@ -1445,19 +1465,21 @@ def build_snapshot(
 
 
 def every_condition(snapshot: Snapshot) -> list[QuestConditionSnapshot]:
-    """판의 조건 모두. 퀘스트(이루기, 드러나기, 실패하기), 사건, 장으로 넘어오는 조건이다."""
+    """판의 조건 모두. 퀘스트(이루기, 드러나기, 실패하기), 사건, 장으로 넘어오는 조건, 업적의 조건이다."""
     return [
         *(condition for rule in snapshot.quests for condition in [*rule.conditions, *rule.reveal, *rule.fail]),
         *(condition for rule in snapshot.happenings for condition in rule.when),
         *(condition for chapter in snapshot.chapters for condition in chapter.when),
+        *(condition for achievement in snapshot.achievements for condition in achievement.when),
     ]
 
 
 def chapter_conditions(snapshot: Snapshot) -> list[QuestConditionSnapshot]:
-    """장을 기다리는 조건들(chapter_at_least, #481). 퀘스트(이루기, 드러나기, 실패하기)와 사건의 조건에 있다."""
+    """장을 기다리는 조건들(chapter_at_least, #481). 퀘스트(이루기, 드러나기, 실패하기), 사건, 업적의 조건에 있다."""
     conditions = [
         *(condition for rule in snapshot.quests for condition in [*rule.conditions, *rule.reveal, *rule.fail]),
         *(condition for rule in snapshot.happenings for condition in rule.when),
+        *(condition for achievement in snapshot.achievements for condition in achievement.when),
     ]
     return [condition for condition in conditions if condition.kind == QuestConditionKind.CHAPTER_AT_LEAST]
 

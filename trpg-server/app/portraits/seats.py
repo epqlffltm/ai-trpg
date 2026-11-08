@@ -8,6 +8,7 @@
   - 테이블에서 내줄 수 있는 그림은 그 테이블의 판에 붙은 그림뿐이다. 다른 그림의 id 를 적어도 내주지 않는다
   - 판에는 로어 항목마다의 그림(pictures, #1163)도 붙는다. 장소의 배경, 인물의 그림, 사건의 컷신이다.
     응답에는 보일 때만 그 id 를 싣는다(아는 장소, 장면의 인물, 일어난 사건). 모르는 것의 그림은 id 를 알 길이 없다
+  - 판의 업적에도 그림이 붙는다. 받은 업적의 이벤트에 그 id 가 실린다
 """
 
 import uuid
@@ -76,11 +77,16 @@ def with_cutscene(content: dict, payload: dict) -> dict:
     return {**payload, 'image_id': str(image) if image is not None else None}
 
 
+def achievement_images(content: dict) -> set[uuid.UUID]:
+    """판의 업적에 붙은 그림들. 옛 판이면 비어 있다."""
+    return {image for image in (image_of(one) for one in content.get('achievements') or []) if image is not None}
+
+
 def table_portraits(content: dict) -> set[uuid.UUID]:
-    """그 테이블의 판에 붙은 그림들. 프리젠의 그림과 로어 항목마다의 그림이다."""
+    """그 테이블의 판에 붙은 그림들. 프리젠의 그림, 로어 항목마다의 그림, 업적의 그림이다."""
     pregens = {image for image in (image_of(pregen) for pregen in content.get('pregens') or []) if image is not None}
     timed = {image for parts in timed_pictures(content).values() for image in parts.values()}
-    return pregens | set(entry_pictures(content).values()) | timed
+    return pregens | set(entry_pictures(content).values()) | timed | achievement_images(content)
 
 
 def member_portrait(table: GameTable, member: TableMember) -> uuid.UUID | None:
