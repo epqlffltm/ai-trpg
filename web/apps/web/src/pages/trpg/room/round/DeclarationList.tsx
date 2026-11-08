@@ -17,7 +17,7 @@ export function DeclarationList({ round, table }: { round: Round; table: TableDe
       ))}
       {round.death_saves.map((save) => (
         <li key={`death-${save.user_id}`} className="declaration declaration--system">
-          {deathSaveLine(save)}
+          {deathSaveLine(save, table.rules.roll.style)}
         </li>
       ))}
       {round.arrivals.map((arrival) => (

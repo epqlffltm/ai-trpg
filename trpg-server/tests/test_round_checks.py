@@ -532,7 +532,9 @@ async def test_narrating_again_does_not_roll_again(
     closed = await read_round(client, me, table, 1)
     assert (closed['status'], outcomes(closed)['엘프']['roll']) == ('closed', 12)
     # 서술자는 두 번 다 같은 결과를 받았다
-    expected = Verdict(ability='근력', difficulty='보통', roll=12, modifier=3, total=15, target=15, success=True)
+    expected = Verdict(
+        ability='근력', difficulty='보통', roll=12, modifier=3, total=15, target=15, success=True, faces=(12,)
+    )
     assert [request.moves[0].verdict for request in narrator.requests] == [expected, expected]
     # 판정의 이벤트는 하나뿐이다
     assert types(await read_events(client, me, table)).count('check_rolled') == 1

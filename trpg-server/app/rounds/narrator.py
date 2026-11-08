@@ -212,12 +212,16 @@ class Verdict:
 
     ability: str
     difficulty: str
-    # 주사위의 눈, 능력치의 보정, 둘을 더한 값, 넘어야 하는 값
+    # 주사위의 눈, 능력치의 보정, 둘을 더한 값, 넘어야 하는 값.
+    # under(#404)면 보정이 기량에 더해진다. total 은 눈 그대로, target 은 기량이고 total ≤ target 이면 성공이다
     roll: int
     modifier: int
     total: int
     target: int
     success: bool
+    # 성공을 가른 방식(over, under)과 굴린 눈들(#404). #404 전에 굳힌 결과는 over 와 빈 눈들이다
+    style: str = 'over'
+    faces: tuple[int, ...] = ()
     # 이 판정으로 HP 가 바뀌었으면 그 내용. 없으면 None 이다
     impact: Impact | None = None
     # 이 판정으로 NPC 의 HP 가 바뀌었으면 그 내용. 없으면 None 이다. impact 와 함께 있지 않다
@@ -267,6 +271,8 @@ class DeathSaveNote:
     failures: int
     # dying(죽어 가는 중), stable(고비를 넘김), dead(죽음)
     fate: str
+    # 규칙의 굴림 방식(#404). under 면 눈이 target 이하일 때 성공이다
+    style: str = 'over'
 
 
 @dataclass(frozen=True)

@@ -24,6 +24,8 @@ class Labels:
     currency_unit: str = ''
     # 장비의 칸의 이름(#276). 이름표(main_hand)에서 이름(주손)으로 간다
     slots: Mapping[str, str] = field(default_factory=dict)
+    # 규칙의 굴림 방식(#404). 죽음의 굴림은 기록에 방식이 없어 이것으로 적는다
+    roll_style: str = 'over'
 
 
 def labels_of(snapshot: Snapshot) -> Labels:
@@ -36,4 +38,5 @@ def labels_of(snapshot: Snapshot) -> Labels:
         currency_name=snapshot.currency.name if snapshot.currency else '',
         currency_unit=snapshot.currency.unit if snapshot.currency else '',
         slots={slot.key: slot.name for slot in rules.equipment_slots},
+        roll_style=rules.roll.style.value,
     )

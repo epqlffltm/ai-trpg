@@ -50,6 +50,14 @@ describe('eventLine', () => {
     }
   });
 
+  it('죽음의 굴림은 판의 규칙이 눈 ≤ 기량이면 목표 이하가 성공이라고 적는다(#404)', () => {
+    const payload = { character_name: '렌', roll: 34, target: 50, success: true };
+    expect(line('death_save_rolled', payload)?.text).toBe('렌: 죽음의 굴림 34(목표 50) 성공');
+    const rules = { ...(CTX.table.rules as object), roll: { count: 1, style: 'under', shifts: {} } } as unknown as TableDetail['rules'];
+    const under = eventLine(ev(1, 'death_save_rolled', payload), { ...CTX, table: { ...CTX.table, rules } });
+    expect(under?.text).toBe('렌: 죽음의 굴림 34(목표 50 이하) 성공');
+  });
+
   it('자유 굴림은 누가 무엇을 굴려 어떤 눈이 나왔는지 보인다(#404)', () => {
     expect(line('dice_rolled', { character_name: '렌', dice: '2d6+1', faces: [3, 4], bonus: 1, total: 8 })?.text).toBe('렌: 2d6+1 굴림 → 3+4+1 = 8');
     expect(line('dice_rolled', { character_name: '렌', dice: '3d8-2', faces: [1, 2, 3], bonus: -2, total: 4 })?.text).toBe('렌: 3d8-2 굴림 → 1+2+3-2 = 4');
