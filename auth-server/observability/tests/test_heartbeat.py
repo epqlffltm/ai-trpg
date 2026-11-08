@@ -13,7 +13,7 @@ from unittest.mock import patch
 from django.db import OperationalError
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from accounts import invite_grants, payment_eligibility, withdrawal
+from accounts import attendance, invite_grants, payment_eligibility, withdrawal
 from accounts.management.commands import send_outgoing_mail, send_welcome_credits
 from observability.heartbeat import beat
 
@@ -85,6 +85,7 @@ class WorkerHeartbeatTests(TestCase):
                 payment_eligibility, 'deliver_due_eligibility', return_value=payment_eligibility.DeliveryReport()
             ),
             patch.object(invite_grants, 'deliver_due_invite_grants', return_value=invite_grants.DeliveryReport()),
+            patch.object(attendance, 'deliver_due_attendance', return_value=invite_grants.DeliveryReport()),
             patch.object(send_outgoing_mail, 'count_waiting_mail', return_value=0),
             patch.object(withdrawal, 'remind_due_withdrawals', return_value=0),
             patch.object(withdrawal, 'complete_due_withdrawals', return_value=0),

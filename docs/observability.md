@@ -188,6 +188,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 | auth-server | 발송함의 메일 보내기(워커가 한 번 훑는 것) | `mail.deliver_outgoing` |
 | auth-server | 환영 크레딧을 결제 서버에 맡기기(워커가 한 번 훑는 것) | `welcome_credit.deliver` |
 | auth-server | 결제 자격(성년이 되는 날, 보호자 동의)을 결제 서버에 알리기(같은 워커가 한 번 훑는 것) | `payment_eligibility.deliver` |
+| auth-server | 출석의 실버를 결제 서버에 맡기기(같은 워커가 한 번 훑는 것) | `attendance.deliver` |
 | auth-server | 마치기 하루 전의 탈퇴에 메일을 한 통 더 보내기(같은 워커가 한 번 훑는 것, #624) | `withdrawal.remind` |
 | auth-server | 유예가 지난 탈퇴를 마치기(같은 워커가 한 번 훑는 것, #603) | `withdrawal.complete` |
 | auth-server | 탈퇴를 다른 서버에 알리기(같은 워커가 한 번 훑는 것, #603) | `withdrawal.deliver` |
@@ -366,6 +367,7 @@ DB 가 죽으면 10초마다 `error` 가 난다. `route` 가 둘 중 하나면 �
 | `mail.deliver_outgoing` | auth | 발송함의 메일 보내기 |
 | `welcome_credit.deliver` | auth | 환영 크레딧을 결제 서버에 맡기기 |
 | `payment_eligibility.deliver` | auth | 결제 자격을 결제 서버에 알리기 |
+| `attendance.deliver` | auth | 출석의 실버를 결제 서버에 맡기기 |
 | `withdrawal.remind` | auth | 마치기 하루 전의 탈퇴에 메일을 한 통 더 보내기(요청마다 한 통) |
 | `withdrawal.complete` | auth | 유예가 지난 탈퇴를 마치기(계정을 비우고 알릴 줄을 적는다) |
 | `withdrawal.deliver` | auth | 탈퇴를 다른 서버에 알리기 |

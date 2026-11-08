@@ -1,10 +1,11 @@
 # auth-server/accounts/billing_client.py
 
 """
-결제 서버를 부른다. 부르는 일은 셋이다.
+결제 서버를 부른다. 부르는 일은 넷이다.
   - 본인인증을 마친 사용자에게 환영 크레딧을 주라고 맡긴다(welcome_credit.py)
   - 초대 보상의 실버를 주라고 맡긴다(invite_grants.py, #990)
   - 사용자의 결제 자격(성년이 되는 날, 보호자 동의)을 알린다(payment_eligibility.py, #336)
+  - 출석의 하루 양과 보물 상자의 실버를 주라고 맡긴다(attendance.py). 양은 이 서버가 정해 보낸다
 
 요청마다 서명을 붙인다(service_client.py). 결제 서버가 그것으로 인증 서버임을 확인한다.
 탈퇴를 결제 서버에 알리는 것은 다른 서버들과 같은 모양이라 withdrawal_client.py 가 한다.
@@ -30,12 +31,17 @@ INVITE_PATH = '/api/v1/billing/service/grants/invite'
 # 결제 자격을 알리는 주소(결제 서버의 #337)
 ELIGIBILITY_PATH = '/api/v1/billing/service/eligibility'
 
+# 출석의 실버를 주라고 맡기는 주소(출석을 이 서버로 옮기며 결제 서버에 더했다)
+ATTENDANCE_PATH = '/api/v1/billing/service/grants/attendance'
+
 
 # 결제 서버가 돌려주는 결과. 응답의 status 에 이 글자가 온다
 GRANTED = 'granted'
 ALREADY_GRANTED = 'already_granted'
 DISABLED = 'disabled'
 WELCOME_OUTCOMES = (GRANTED, ALREADY_GRANTED, DISABLED)
+# 출석의 실버는 끄는 설정이 없다. 양은 이 서버가 보낸다
+ATTENDANCE_OUTCOMES = (GRANTED, ALREADY_GRANTED)
 
 # 결제 자격에 결제 서버가 돌려주는 결과. 둘 다 "알릴 일이 끝났다"는 뜻이다
 APPLIED = 'applied'
@@ -80,6 +86,29 @@ def grant_invite_credit(*, user_public_id: UUID, reward_id: UUID, role: str) -> 
     if status_code not in (200, 201):
         raise BillingUnavailableError(f'결제 서버가 {status_code} 로 답했다')
     return _read_outcome(text, WELCOME_OUTCOMES)
+
+
+def grant_attendance_silver(*, user_public_id: UUID, day: date, silver: int, chest_silver: int) -> str:
+    """
+    결제 서버에 그날의 출석 실버(하루 양과 보물 상자)를 주라고 맡기고, 결과를 돌려준다.
+
+    결과는 GRANTED(하나라도 이번에 줬다)나 ALREADY_GRANTED(모두 전에 이미 줬다)다. 둘 다 "맡길 일이 끝났다"는 뜻이다.
+    그 밖의 모든 경우(결제 서버가 이 주소를 모르는 옛 판이라 404 인 것을 포함한다)는 BillingUnavailableError 다.
+    같은 날로 여러 번 불러도 한 번만 들어간다. 결제 서버가 지급의 이름(attendance-날짜, chest-날짜)으로 지킨다.
+    양은 다른 크레딧의 양처럼 글자로 보낸다. day 는 한국 날짜다.
+    """
+    body = json.dumps(
+        {
+            'user_id': str(user_public_id),
+            'day': day.isoformat(),
+            'silver': str(silver),
+            'chest_silver': str(chest_silver),
+        }
+    ).encode()
+    status_code, text = _post(ATTENDANCE_PATH, body)
+    if status_code not in (200, 201):
+        raise BillingUnavailableError(f'결제 서버가 {status_code} 로 답했다')
+    return _read_outcome(text, ATTENDANCE_OUTCOMES)
 
 
 def report_payment_eligibility(

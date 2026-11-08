@@ -1,16 +1,22 @@
 // web/apps/web/src/api/attendance.ts
-// 출석과 보물 상자(결제 서버, A9). 오늘의 출석, 받기, 보상표.
+// 출석과 보물 상자(인증 서버, A9). 오늘의 출석, 받기, 보상표. 결제 서버에서 옮겼다(2026-11-08).
+// 받은 실버는 인증 서버의 워커가 결제 서버에 맡긴다. 몇 초 뒤 지갑에 들어간다.
 //
-// 실패(billing-server/README.md 의 "출석"):
+// 실패(auth-server/README.md 의 "출석과 보물 상자"):
 //   - 403 attendance.verification_required: 본인인증 전이다
 //   - 409 attendance.already_claimed: 오늘 이미 받았다. 한국 자정에 다시 받는다
 //   - 503: 잠시 뒤 다시 부를 것이다(로그아웃시키지 않는다)
 // 받기는 하루에 한 번이라 다시 보내도 두 번 받지 않는다(두 번째는 409). 그래서 열쇠(Idempotency-Key)를 붙이지 않는다.
 
+import type { components as Auth } from './generated/auth';
 import { apiRequest } from './http';
-import type { AttendanceClaim, AttendanceRewards, AttendanceStatus } from './types';
 
-const ATTENDANCE = '/api/v1/billing/attendance';
+// 인증 서버의 출석의 모양. types.ts 의 같은 이름(결제 서버의 것)은 결제 서버의 출석을 지울 때 함께 지운다
+export type AttendanceStatus = Auth['schemas']['AttendanceStatus'];
+export type AttendanceClaim = Auth['schemas']['AttendanceClaim'];
+export type AttendanceRewards = Auth['schemas']['Rewards'];
+
+const ATTENDANCE = '/api/v1/auth/attendance';
 
 /** 오늘 받았는지, 주기의 며칠째인지, 오늘의 양, 상자를 여는 날인지, 본인인증을 마쳤는지 */
 export function fetchAttendance(signal?: AbortSignal): Promise<AttendanceStatus> {
