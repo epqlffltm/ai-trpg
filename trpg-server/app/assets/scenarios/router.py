@@ -97,6 +97,7 @@ def to_detail(scenario: Scenario, found: ModelStatus | None) -> ScenarioDetail:
         covers=scenario.covers,
         traps=scenario.traps,
         pictures=scenario.pictures,
+        submaps=scenario.submaps,
         wanders=scenario.wanders,
         happenings=scenario.happenings,
         chapters=scenario.chapters,

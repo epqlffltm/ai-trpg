@@ -74,9 +74,12 @@ from app.assets.models import (
     SCENARIO_MAX_QUEST_RULES,
     SCENARIO_MAX_ROUTES,
     SCENARIO_MAX_STARTING_ITEMS,
+    SCENARIO_MAX_SUBMAPS,
     SCENARIO_MAX_TRAPS,
     SCENARIO_MAX_WANDERS,
     SCENARIO_OPENING_MAX_LENGTH,
+    SUBMAP_MAX_DEPTH,
+    SUBMAP_MAX_PLACES,
     TABLE_MAX_PLAYERS,
     VERSION_NOTE_MAX_LENGTH,
     WANDER_MAX_MONSTERS,
@@ -1384,6 +1387,78 @@ Pictures = Annotated[
 ]
 
 
+class Submap(BaseModel):
+    """
+    장소 하나(place_id)가 품은 하위 맵(#284). 그 안의 장소들(places)이다. 마을 안의 건물, 건물의 층, 던전의 층이다.
+
+    들어가고 나오는 것은 보통의 길(routes)로 적는다(문, 자물쇠, 숨긴 입구가 그대로 통한다). 층이 다른 장소끼리도 잇는다.
+    품은 장소는 자기 하위 맵에 들지 않는다. 장소들이 붙인 로어북의 맵의 장소인지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    place_id: uuid.UUID
+    places: list[uuid.UUID] = Field(min_length=1, max_length=SUBMAP_MAX_PLACES)
+
+    @field_serializer('place_id')
+    def id_as_text(self, value: uuid.UUID) -> str:
+        """ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(value)
+
+    @field_serializer('places')
+    def ids_as_text(self, value: list[uuid.UUID]) -> list[str]:
+        """장소들을 글자로 꺼낸다."""
+        return [str(place) for place in value]
+
+    @model_validator(mode='after')
+    def holds_others(self) -> 'Submap':
+        """같은 장소가 두 번 들거나, 품은 장소가 자기 안에 들면 거부한다."""
+        if len(set(self.places)) != len(self.places):
+            raise ValueError('하위 맵에 같은 장소가 두 번 있습니다.')
+        if self.place_id in self.places:
+            raise ValueError('장소는 자기가 품은 하위 맵에 들지 못합니다.')
+        return self
+
+
+def submap_depth(container: uuid.UUID, parents: dict[uuid.UUID, uuid.UUID]) -> int | None:
+    """
+    그 장소가 품은 하위 맵의 깊이. 바깥 맵의 장소가 품은 것이 1 이다. 품은 장소들이 돌아 제자리로 오면 None.
+
+    parents 는 장소 → 그 장소가 든 하위 맵을 품은 장소다.
+    """
+    depth, seen, place = 1, {container}, container
+    while place in parents:
+        place = parents[place]
+        if place in seen:
+            return None
+        seen.add(place)
+        depth += 1
+    return depth
+
+
+def check_submaps(submaps: list[Submap]) -> list[Submap]:
+    """
+    하위 맵들을 함께 본다. 장소 하나는 하위 맵 하나만 품고, 한 하위 맵에만 든다.
+    품은 장소들이 돌면(여관 안에 마을, 마을 안에 여관) 거부한다. 깊이는 SUBMAP_MAX_DEPTH 까지다.
+    """
+    containers = [submap.place_id for submap in submaps]
+    if len(set(containers)) != len(containers):
+        raise ValueError('한 장소가 하위 맵을 둘 품었습니다. 한 하위 맵에 모아 적습니다.')
+    inside = [place for submap in submaps for place in submap.places]
+    if len(set(inside)) != len(inside):
+        raise ValueError('한 장소가 두 하위 맵에 들었습니다.')
+    parents = {place: submap.place_id for submap in submaps for place in submap.places}
+    depths = [submap_depth(container, parents) for container in containers]
+    if any(depth is None for depth in depths):
+        raise ValueError('하위 맵이 서로를 품습니다.')
+    if any(depth > SUBMAP_MAX_DEPTH for depth in depths if depth is not None):
+        raise ValueError(f'하위 맵은 {SUBMAP_MAX_DEPTH} 겹까지 품습니다.')
+    return submaps
+
+
+Submaps = Annotated[list[Submap], Field(max_length=SCENARIO_MAX_SUBMAPS), AfterValidator(check_submaps)]
+
+
 class PlacedTrap(BaseModel):
     """
     미리 놓인 덫 하나(#806 ②). 그 장소(place_id)에 덫 물건(entry_id) 하나가 놓여 있다.
@@ -1836,6 +1911,8 @@ class ScenarioCreate(AssetCreate):
     traps: PlacedTraps = []
     # 로어 항목마다의 그림(#1163). 장소의 배경, 인물의 그림, 사건의 컷신
     pictures: Pictures = []
+    # 장소가 품은 하위 맵(#284). 마을 안의 건물, 건물의 층
+    submaps: Submaps = []
     # 무작위 조우 표(#283). 길을 오거나 길게 쉬면 엔진이 굴린다
     wanders: Wanders = []
     happenings: Happenings = []
@@ -1864,8 +1941,8 @@ class ScenarioUpdate(AssetUpdate):
     null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-    quests, routes, landmarks, place_items, covers, traps, pictures, wanders, happenings, chapters, npc_places,
-    character_modes 는
+    quests, routes, landmarks, place_items, covers, traps, pictures, submaps, wanders, happenings, chapters,
+    npc_places, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -1900,6 +1977,7 @@ class ScenarioUpdate(AssetUpdate):
     covers: Covers | None = None
     traps: PlacedTraps | None = None
     pictures: Pictures | None = None
+    submaps: Submaps | None = None
     wanders: Wanders | None = None
     happenings: Happenings | None = None
     chapters: Chapters | None = None
@@ -1983,6 +2061,7 @@ class ScenarioDetail(ScenarioSummary):
     covers: list[CoverRule]
     traps: list[PlacedTrap]
     pictures: list[EntryPicture]
+    submaps: list[Submap]
     wanders: list[WanderTable]
     happenings: list[HappeningRule]
     chapters: list[Chapter]

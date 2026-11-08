@@ -67,6 +67,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         covers=[rule.model_dump() for rule in data.covers],
         traps=[trap.model_dump() for trap in data.traps],
         pictures=[picture.model_dump() for picture in data.pictures],
+        submaps=[submap.model_dump() for submap in data.submaps],
         wanders=[table.model_dump() for table in data.wanders],
         happenings=[rule.model_dump() for rule in data.happenings],
         chapters=[chapter.model_dump() for chapter in data.chapters],

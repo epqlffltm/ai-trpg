@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from app.assets.bestiaries.models import MonsterKind
 from app.assets.models import NarrationStyle
-from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, place_entries, read_snapshot
+from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, containers_of, place_entries, read_snapshot
 from app.engine.check import find_ability
 from app.engine.injury import find_injury
 from app.engine.resources import Level, band_of, holds, is_open
@@ -223,6 +223,18 @@ def exit_name(mapping: MapView, here: uuid.UUID, there: uuid.UUID) -> str:
     return f'{mapping.names[there]}({", ".join(marks)})' if marks else mapping.names[there]
 
 
+def known_containers(mapping: MapView, here: uuid.UUID) -> list[str]:
+    """
+    그 장소를 품은 장소들의 이름(#284). 가장 바깥부터(마을, 여관)이고 테이블이 아는 곳만이다.
+
+    숨긴 통로로 안쪽부터 닿았으면 바깥을 모를 수 있다. 모르는 장소의 이름을 서술에 흘리지 않는다.
+    """
+    if mapping.known is None:
+        return []
+    known = mapping.known
+    return [mapping.names[place] for place in containers_of(mapping.snapshot, here) if known.has(place)]
+
+
 def place_note(mapping: MapView | None, member: TableMember) -> PlaceNote | None:
     """
     이 사람의 지금 캐릭터가 서 있는 곳을 서술자에게 줄 모양으로. 맵에 서 있지 않으면 None.
@@ -230,6 +242,7 @@ def place_note(mapping: MapView | None, member: TableMember) -> PlaceNote | None
     아는 길로 갈 수 있는 곳(exits)과, 그곳에 닿은 아직 찾지 않은 숨긴 길의 다른 끝(hidden)을 함께 준다.
     그곳에 보이게 놓인 물건(items)과 아직 찾지 않은 숨긴 물건(hidden_items)도 준다.
     hidden 과 hidden_items 는 GM 만 안다. 언어 모델의 맵 절에만 들어간다(app/rounds/prompt.py).
+    그곳을 품은 아는 장소들(path, #284)도 준다.
     """
     if mapping is None or member.sheet is None or member.sheet.place_id is None:
         return None
@@ -242,6 +255,7 @@ def place_note(mapping: MapView | None, member: TableMember) -> PlaceNote | None
         hidden=[mapping.names[route.to_place if route.from_place == here else route.from_place] for route in hidden],
         items=item_notes_at(mapping, here),
         hidden_items=hidden_item_names(mapping, here),
+        path=known_containers(mapping, here),
     )
 
 

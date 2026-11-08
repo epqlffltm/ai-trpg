@@ -124,6 +124,11 @@ SCENARIO_MAX_COVERS = 100
 SCENARIO_MAX_TRAPS = 50
 # 시나리오 하나의 그림(#1163, 로어 항목마다 하나: 장소의 배경, 인물의 그림, 사건의 컷신)의 상한
 SCENARIO_MAX_PICTURES = 200
+# 장소가 품은 하위 맵(#284)의 수, 하위 맵 하나에 든 장소의 수(층마다의 상한), 하위 맵이 겹칠 수 있는 깊이.
+# 깊이 3 은 바깥 맵 > 마을 > 건물 > 층이다. 장소 전부의 상한은 따로 없다(붙인 로어북의 장소 항목이다)
+SCENARIO_MAX_SUBMAPS = 50
+SUBMAP_MAX_PLACES = 100
+SUBMAP_MAX_DEPTH = 3
 # 시나리오 하나의 무작위 조우 표(#283)의 수, 표 하나의 몬스터 줄의 수, 줄 하나가 뽑힐 몫의 상한.
 # 마리 수의 상한은 조우와 같다(ENCOUNTER_MAX_COUNT)
 SCENARIO_MAX_WANDERS = 50
@@ -677,6 +682,7 @@ class Scenario(AssetContent):
         CheckConstraint(f'jsonb_array_length(covers) <= {SCENARIO_MAX_COVERS}', name='covers_count'),
         CheckConstraint(f'jsonb_array_length(traps) <= {SCENARIO_MAX_TRAPS}', name='traps_count'),
         CheckConstraint(f'jsonb_array_length(pictures) <= {SCENARIO_MAX_PICTURES}', name='pictures_count'),
+        CheckConstraint(f'jsonb_array_length(submaps) <= {SCENARIO_MAX_SUBMAPS}', name='submaps_count'),
         CheckConstraint(f'jsonb_array_length(wanders) <= {SCENARIO_MAX_WANDERS}', name='wanders_count'),
         CheckConstraint(f'jsonb_array_length(happenings) <= {SCENARIO_MAX_HAPPENINGS}', name='happenings_count'),
         CheckConstraint(f'jsonb_array_length(chapters) <= {SCENARIO_MAX_CHAPTERS}', name='chapters_count'),
@@ -821,6 +827,13 @@ class Scenario(AssetContent):
     # 장소 항목이면 테이블 방의 그림 창의 배경, 인물 항목이면 그 인물의 그림, 사건 항목이면 일어났을 때의 컷신이다.
     # 그림은 제작자가 올린 그림(app/portraits/)이다. 항목이 붙인 로어북의 장소, 인물, 사건인지는 게시할 때 본다
     pictures: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 장소가 품은 하위 맵들(#284). 하나하나가 {place_id, places} 다. "이 장소 안에 이 장소들이 있다"는 뜻이다.
+    # 마을 안의 건물, 건물의 층, 던전의 층을 적는다. 들어가고 나오는 것은 보통의 길(routes)이다.
+    # 층이 달라도 길을 잇는다.
+    # 하위 맵은 겹칠 수 있다(SUBMAP_MAX_DEPTH 까지). 장소 하나는 한 하위 맵에만 든다. 맵은 여전히 길의 그래프 하나라
+    # 아는 것의 계산과 이동은 그대로이고, 하위 맵은 지도를 층으로 묶어 보이고 서술에 위치(마을 > 여관 > 2층)를 준다
+    submaps: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 미리 놓인 덫들(#806 ②). 하나하나가 {place_id, entry_id, known} 다. "이 장소에 이 덫 물건이 놓여 있다"는 뜻이다.
     # 장소는 맵의 장소, 물건은 아이템 규칙에 덫(trap)을 적은 물건이다. known 이면 처음부터 테이블이 아는 덫이다.

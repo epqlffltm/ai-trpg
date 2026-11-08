@@ -66,6 +66,7 @@ from app.assets.scenarios.schemas import (
     RepairRouteEffect,
     RouteDoorEffect,
     RouteRule,
+    Submap,
     TrapCheck,
     VersionCreate,
     WanderTable,
@@ -230,6 +231,12 @@ class Problem(enum.StrEnum):
     PICTURE_TIME_NOT_PLACE = 'picture_time_not_place'
     # 인물의 자리가 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)다. 아무도 그 인물을 만날 수 없다
     NPC_PLACE_OFF_MAP = 'npc_place_off_map'
+    # 붙인 로어북에 없는 장소를 품거나 담은 하위 맵이 있다(#284). 장소를 지웠거나 로어북을 뗐다
+    SUBMAP_PLACE_MISSING = 'submap_place_missing'
+    # 장소가 아닌 항목(물건, 인물 …)을 품거나 담은 하위 맵이 있다(#284)
+    SUBMAP_NOT_PLACE = 'submap_not_place'
+    # 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)를 품거나 담은 하위 맵이 있다(#284). 아무도 그곳에 서지 못한다
+    SUBMAP_OFF_MAP = 'submap_off_map'
     # 붙인 도감에 없는 몬스터를 가리키는 몬스터 시트가 있다. 몬스터를 지웠거나 도감을 뗐다
     MONSTER_SHEET_MISSING = 'monster_sheet_missing'
     # 룰북의 규칙에 맞지 않는 몬스터 시트가 있다
@@ -1432,6 +1439,31 @@ def find_map_problems(scenario: Scenario, parts: Parts, ruleset: Ruleset | None)
     return problems
 
 
+def read_submaps(scenario: Scenario) -> list[Submap]:
+    """하위 맵들을 읽는다."""
+    return [Submap.model_validate(document) for document in scenario.submaps]
+
+
+def find_submap_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
+    """
+    하위 맵(#284)에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
+
+    품은 장소와 든 장소는 붙인 로어북의 장소 항목이고 맵의 장소(시작 장소, 길의 끝, 명소)여야 한다.
+    겹침, 돌기, 깊이는 저장할 때 봤다(schemas.py 의 check_submaps).
+    """
+    entries = lore_entries(parts)
+    pointed = [place for submap in read_submaps(scenario) for place in [submap.place_id, *submap.places]]
+    on_map = set(map_places(scenario, read_routes(scenario)))
+    problems = []
+    if any(place not in entries for place in pointed):
+        problems.append(Problem.SUBMAP_PLACE_MISSING)
+    if any(place in entries and entries[place].kind != LoreKind.PLACE for place in pointed):
+        problems.append(Problem.SUBMAP_NOT_PLACE)
+    if any(place not in on_map for place in pointed):
+        problems.append(Problem.SUBMAP_OFF_MAP)
+    return problems
+
+
 def find_seating_problems(scenario: Scenario) -> list[Problem]:
     """
     허용한 방식으로 사람이 앉을 수 있는지 본다.
@@ -1480,6 +1512,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_chapter_problems(scenario, parts))
     problems.extend(find_npc_place_problems(scenario, parts))
     problems.extend(find_picture_problems(scenario, parts))
+    problems.extend(find_submap_problems(scenario, parts))
     problems.extend(find_seating_problems(scenario))
     return problems
 

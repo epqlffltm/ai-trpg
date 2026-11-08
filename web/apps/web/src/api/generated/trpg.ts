@@ -8060,6 +8060,8 @@ export interface components {
             entry_id: string;
             /** Image Id */
             image_id?: string | null;
+            /** Inside */
+            inside?: string | null;
             /**
              * Items
              * @default []
@@ -10430,6 +10432,11 @@ export interface components {
              * @default []
              */
             starting_items: components["schemas"]["ItemStack-Input"][];
+            /**
+             * Submaps
+             * @default []
+             */
+            submaps: components["schemas"]["Submap-Input"][];
             /** Title */
             title: string;
             /**
@@ -10519,6 +10526,8 @@ export interface components {
             start_place: string | null;
             /** Starting Items */
             starting_items: components["schemas"]["ItemStack-Output"][];
+            /** Submaps */
+            submaps: components["schemas"]["Submap-Output"][];
             /** Title */
             title: string;
             /** Traps */
@@ -10580,8 +10589,8 @@ export interface components {
          *     null 을 보내면 비운다.
          *     보내지 않으면 그대로 둔다.
          *     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-         *     quests, routes, landmarks, place_items, covers, traps, pictures, wanders, happenings, chapters, npc_places,
-         *     character_modes 는
+         *     quests, routes, landmarks, place_items, covers, traps, pictures, submaps, wanders, happenings, chapters,
+         *     npc_places, character_modes 는
          *     보낸 목록으로 통째로 바꾼다.
          *     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
          *     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -10643,6 +10652,8 @@ export interface components {
             start_place?: string | null;
             /** Starting Items */
             starting_items?: components["schemas"]["ItemStack-Input"][] | null;
+            /** Submaps */
+            submaps?: components["schemas"]["Submap-Input"][] | null;
             /** Title */
             title?: string | null;
             /** Traps */
@@ -11171,6 +11182,11 @@ export interface components {
              * @default []
              */
             starting_items: components["schemas"]["ItemStackSnapshot"][];
+            /**
+             * Submaps
+             * @default []
+             */
+            submaps: components["schemas"]["SubmapSnapshot"][];
             /** Title */
             title: string;
             /**
@@ -11377,6 +11393,50 @@ export interface components {
             /** Promo */
             promo: boolean;
             tier: components["schemas"]["Tier"] | null;
+        };
+        /**
+         * Submap
+         * @description 장소 하나(place_id)가 품은 하위 맵(#284). 그 안의 장소들(places)이다. 마을 안의 건물, 건물의 층, 던전의 층이다.
+         *
+         *     들어가고 나오는 것은 보통의 길(routes)로 적는다(문, 자물쇠, 숨긴 입구가 그대로 통한다). 층이 다른 장소끼리도 잇는다.
+         *     품은 장소는 자기 하위 맵에 들지 않는다. 장소들이 붙인 로어북의 맵의 장소인지는 게시할 때 본다.
+         */
+        "Submap-Input": {
+            /**
+             * Place Id
+             * Format: uuid
+             */
+            place_id: string;
+            /** Places */
+            places: string[];
+        };
+        /**
+         * Submap
+         * @description 장소 하나(place_id)가 품은 하위 맵(#284). 그 안의 장소들(places)이다. 마을 안의 건물, 건물의 층, 던전의 층이다.
+         *
+         *     들어가고 나오는 것은 보통의 길(routes)로 적는다(문, 자물쇠, 숨긴 입구가 그대로 통한다). 층이 다른 장소끼리도 잇는다.
+         *     품은 장소는 자기 하위 맵에 들지 않는다. 장소들이 붙인 로어북의 맵의 장소인지는 게시할 때 본다.
+         */
+        "Submap-Output": {
+            /** Place Id */
+            place_id: string;
+            /** Places */
+            places: string[];
+        };
+        /**
+         * SubmapSnapshot
+         * @description 장소 하나(place_id)가 품은 하위 맵(#284). 그 안의 장소들(places)이다. 모두 판 안의 맵의 장소 항목이다.
+         *
+         *     들어가고 나오는 것은 판의 길이다. 하위 맵은 지도를 층으로 묶어 보이고 서술에 위치를 준다(엔진의 이동은 그대로다).
+         */
+        SubmapSnapshot: {
+            /**
+             * Place Id
+             * Format: uuid
+             */
+            place_id: string;
+            /** Places */
+            places: string[];
         };
         /**
          * Surprise
