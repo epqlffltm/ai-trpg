@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/studio/rulebooks/ArmorFields.tsx
 // 방어 규칙(#276) 고르기. 방식 넷 중 하나, 세이브면 목표값, 막는 방식이면 관통의 기준값.
-// 주사위의 면 수(die)는 템플릿의 규칙에서 와서 목표값의 설명에 쓴다.
+// 굴리는 주사위(판정 방식의 칸, #404)는 목표값의 설명에 쓴다.
 // 숫자 칸이 비어 있으면 오류 글 대신 설명만 둔다(아직 적지 않았다). 그동안 저장 단추는 꺼져 있다.
 
 import { Radio, TextField } from '@ai-trpg/ui';
@@ -9,13 +9,14 @@ import { ARMOR_CHOICES, armorText } from './rulebookView';
 
 type Props = {
   draft: ArmorDraft;
-  die: number | null;
+  /** 굴리는 주사위의 이름("d20", "2d6"). 판정 방식의 칸이 아직 틀렸으면 null */
+  dice: string | null;
   hints: Record<string, string>;
   onChange: (changes: Partial<ArmorDraft>) => void;
 };
 
-export function ArmorFields({ draft, die, hints, onChange }: Props) {
-  const dieName = die ? `d${die}` : '판정의 주사위';
+export function ArmorFields({ draft, dice, hints, onChange }: Props) {
+  const dieName = dice ?? '판정의 주사위';
   return (
     <fieldset className="choice-list">
       <legend>방어 규칙</legend>

@@ -107,16 +107,29 @@ def player_action(payload: dict, labels: Labels) -> list[Block]:
 
 
 def check_rolled(payload: dict, labels: Labels) -> list[Block]:
-    """판정. 능력치(난이도), 눈 + 보정 = 합, 목표, 성패."""
+    """판정. 능력치(난이도), 눈과 견준 값(check_numbers), 성패."""
     ability = labels.abilities.get(payload.get('ability'), text_of(payload.get('ability')))
     difficulty = labels.difficulties.get(payload.get('difficulty'), text_of(payload.get('difficulty')))
-    numbers = f'{payload.get("roll")} + {payload.get("modifier")} = {payload.get("total")}'
     return [
         Note(
-            f'판정: {who(payload)} · {ability}({difficulty}) {numbers}, 목표 {payload.get("target")}'
+            f'판정: {who(payload)} · {ability}({difficulty}) {check_numbers(payload)}'
             f' → {outcome(payload.get("success"))}{blow_text(payload.get("blow"))}'
         )
     ]
+
+
+def check_numbers(payload: dict) -> str:
+    """
+    판정의 숫자. over 면 "눈 + 보정 = 합, 목표 15", under(#404)면 "눈 34 ≤ 기량 45" 다.
+
+    주사위를 여럿 굴렸으면 눈 앞에 눈들을 붙인다(3+4=7). 방식이 없는 옛 이벤트는 over 다.
+    """
+    faces = payload.get('faces') or []
+    roll = f'{"+".join(str(face) for face in faces)}={payload.get("roll")}' if len(faces) > 1 else payload.get('roll')
+    if payload.get('style') == 'under':
+        sign = '≤' if payload.get('success') else '>'
+        return f'눈 {roll} {sign} 기량 {payload.get("target")}'
+    return f'{roll} + {payload.get("modifier")} = {payload.get("total")}, 목표 {payload.get("target")}'
 
 
 def blow_text(blow: object) -> str:

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.engine import death
 from app.engine.injury import Trigger
+from app.engine.ruleset import RollStyle
 from app.events import recorder
 from app.events.models import EventType, TableEvent
 from app.rounds import injuries as round_injuries
@@ -71,6 +72,8 @@ def record_check(session: AsyncSession, table: GameTable, declaration: Declarati
         'total': outcome['total'],
         'target': outcome['target'],
         'success': outcome['success'],
+        'style': outcome.get('style', RollStyle.OVER.value),
+        'faces': outcome.get('faces', []),
         'hindrance': outcome.get('hindrance'),
         'called_shot': outcome.get('called_shot'),
         'blow': outcome.get('blow'),
@@ -554,6 +557,8 @@ def record_terms(
         'round': cause.payload['round'],
         'character_name': character_name,
         **{key: check[key] for key in ('ability', 'difficulty', 'roll', 'modifier', 'total', 'target', 'success')},
+        'style': check.get('style', RollStyle.OVER.value),
+        'faces': check.get('faces', []),
         'hindrance': check['hindrance'],
         'called_shot': None,
         'blow': None,

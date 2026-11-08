@@ -11,7 +11,7 @@ const ME = '00000000-0000-4000-8000-0000000000e1';
 const GATE = { entry_id: 'g', name: '수도원 문' };
 const TOWER = { entry_id: 't', name: '종탑' };
 const MOVE = { user_id: ME, character_name: '렌', from: GATE, to: TOWER, moved: true, reason: null, unlocked: false, unbarred: false, traps: [] };
-const ROLL = { ability: 'str', difficulty: 'normal', modifier: -1, roll: 8, total: 7, target: 15, success: false };
+const ROLL = { ability: 'str', difficulty: 'normal', modifier: -1, roll: 8, total: 7, target: 15, success: false, style: 'over' as const, faces: [8] };
 
 describe('가기의 결과', () => {
   it('닿은 곳, 열쇠로 연 자물쇠, 푼 빗장, 걸린 시간, 업고 간 사람', () => {

@@ -3733,12 +3733,20 @@ export interface components {
         /**
          * CheckOutcome
          * @description 판정의 결과. 엔진이 정한 것이다(app/engine/check.py 의 Check). 받는 값이 아니라 내보내는 값이다.
+         *
+         *     style 이 under(#404)면 보정이 기량에 더해진다. total 은 눈 그대로, target 은 기량이고 total ≤ target 이면 성공이다.
          */
         CheckOutcome: {
             blow?: components["schemas"]["BlowOut"] | null;
             called_shot?: components["schemas"]["CalledShotOut"] | null;
             drop?: components["schemas"]["DropOut"] | null;
             effect?: components["schemas"]["EffectOut"] | null;
+            /**
+             * Faces
+             * @description 쓴 굴림의 눈들. 더하면 roll 이다. #404 전의 결과는 비어 있다
+             * @default []
+             */
+            faces: number[];
             hindrance?: components["schemas"]["HindranceOut"] | null;
             item_throw?: components["schemas"]["app__rounds__schemas__ItemThrowOut"] | null;
             item_use?: components["schemas"]["ItemUseOut"] | null;
@@ -3749,6 +3757,8 @@ export interface components {
             /** Roll */
             roll: number;
             skill_use?: components["schemas"]["SkillUseOut"] | null;
+            /** @default over */
+            style: components["schemas"]["RollStyle"];
             /** Success */
             success: boolean;
             /** Target */
@@ -3954,11 +3964,19 @@ export interface components {
             ability: string;
             /** Difficulty */
             difficulty: string;
+            /**
+             * Faces
+             * @description 쓴 굴림의 눈들. 더하면 roll 이다. #404 전의 결과는 비어 있다
+             * @default []
+             */
+            faces: number[];
             hindrance?: components["schemas"]["HindranceOut"] | null;
             /** Modifier */
             modifier: number;
             /** Roll */
             roll: number;
+            /** @default over */
+            style: components["schemas"]["RollStyle"];
             /** Success */
             success: boolean;
             /** Target */
@@ -9237,10 +9255,18 @@ export interface components {
          * @description 굴린 판정 하나. 엔진이 정했다(app/engine/check.py 의 Check).
          */
         RolledOut: {
+            /**
+             * Faces
+             * @description 쓴 굴림의 눈들. 더하면 roll 이다. #404 전의 결과는 비어 있다
+             * @default []
+             */
+            faces: number[];
             /** Modifier */
             modifier: number;
             /** Roll */
             roll: number;
+            /** @default over */
+            style: components["schemas"]["RollStyle"];
             /** Success */
             success: boolean;
             /** Target */

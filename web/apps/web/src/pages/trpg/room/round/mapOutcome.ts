@@ -5,6 +5,7 @@
 
 import type { Declaration } from '../../../../api/types';
 import { because } from './outcomeReason';
+import { checkDice } from './checkDice';
 
 type Outcome = NonNullable<Declaration['outcome']>;
 type Move = Extract<Outcome, { move: unknown }>['move'];
@@ -51,10 +52,9 @@ const DOOR_REASONS: Record<string, string> = {
   used: '이 테이블에서 이미 단 자물쇠입니다',
 };
 
-/** 판의 판정 하나. "눈 8, 보정 +1, 합 9 / 목표 15" */
+/** 판의 판정 하나. "눈 8, 보정 +1, 합 9 / 목표 15", under 면 "눈 34 ≤ 기량 45"(checkDice.ts) */
 export function rollText(roll: Roll): string {
-  const modifier = roll.modifier >= 0 ? `+${roll.modifier}` : String(roll.modifier);
-  return `눈 ${roll.roll}, 보정 ${modifier}, 합 ${roll.total} / 목표 ${roll.target}`;
+  return checkDice(roll);
 }
 
 /** 업은 결과. 업으려 하지 않았으면 null */

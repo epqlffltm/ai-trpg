@@ -102,7 +102,7 @@ describe('문을 다루는 행동의 고를 거리', () => {
     const to = { entry_id: TOWER, name: '종탑' };
     const base = { user_id: ME, character_name: '렌', from: { entry_id: GATE, name: '수도원 문' }, to, check: null };
     expect(outcomeLine({ door: { ...base, act: 'unlock', device: 'bar', done: true, reason: null } }, rules)).toBe('종탑 쪽 빗장: 열었습니다');
-    const check = { ability: 'dex', difficulty: 'normal', modifier: 1, roll: 8, total: 9, target: 15, success: false };
+    const check = { ability: 'dex', difficulty: 'normal', modifier: 1, roll: 8, total: 9, target: 15, success: false, style: 'over' as const, faces: [8] };
     expect(outcomeLine({ door: { ...base, act: 'pick', device: null, done: false, reason: 'failed', check } }, rules)).toBe(
       '종탑 쪽 문: 따지 못했습니다(판정에 실패했습니다) · 눈 8, 보정 +1, 합 9 / 목표 15',
     );
@@ -152,7 +152,7 @@ describe('문에 붙여 쓰는 도구(#802)', () => {
   it('결과에 쓴 도구와 부러진 것을 보인다', () => {
     const rules = playing().rules;
     const to = { entry_id: TOWER, name: '종탑' };
-    const check = { ability: 'dex', difficulty: 'normal', modifier: 2, roll: 8, total: 10, target: 15, success: false };
+    const check = { ability: 'dex', difficulty: 'normal', modifier: 2, roll: 8, total: 10, target: 15, success: false, style: 'over' as const, faces: [8] };
     const aid = { entry_id: 'i5', name: '락픽', act: 'pick', bonus: 2, used: true, lost: true, broken: true, reason: null, remaining: 0 };
     const door = { user_id: ME, character_name: '렌', from: { entry_id: GATE, name: '수도원 문' }, to, act: 'pick', device: null, done: false, reason: 'failed', check, aid };
     expect(outcomeLine({ door }, rules)).toBe('종탑 쪽 문: 따지 못했습니다(판정에 실패했습니다) · 눈 8, 보정 +2, 합 10 / 목표 15 · 락픽 +2 씀, 부러짐');

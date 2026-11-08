@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/trpg/studio/rulebooks/rulebookView.ts
 // 룰북 화면(B9)이 보일 글. 순수한 함수다. 방어 규칙의 이름과 하는 일은 서버의 app/engine/armor.py 와 같은 말로 적는다.
 
-import type { Ability, Armor, RulebookTemplate, RulebookTemplates } from '../../../../api/types';
+import type { Ability, Armor, RollStyle, RulebookTemplate, RulebookTemplates } from '../../../../api/types';
 import type { ArmorChoice } from './rulebookForm';
 
 type ArmorText = { label: string; description: string };
@@ -17,6 +17,16 @@ const ARMOR_TEXTS: Record<ArmorChoice, ArmorText> = {
 
 export function armorText(choice: ArmorChoice): ArmorText {
   return ARMOR_TEXTS[choice];
+}
+
+// 판정 방식(#404). 서버의 app/engine/ruleset.py 의 RollStyle 과 같은 말로 적는다
+const ROLL_STYLE_TEXTS: Record<RollStyle, ArmorText> = {
+  over: { label: '눈 + 보정이 목표 이상', description: '능력치의 보정을 눈에 더해 난이도의 목표값과 견줍니다(D&D 5판).' },
+  under: { label: '눈이 기량 이하', description: '능력치의 점수에 난이도의 값을 더한 기량 이하가 나오면 성공입니다(d100 계열). 불리하면 큰 눈을 씁니다.' },
+};
+
+export function rollStyleText(style: RollStyle): ArmorText {
+  return ROLL_STYLE_TEXTS[style];
 }
 
 /** 한 줄 요약. "세이브로 막음 · 목표 7 · 관통 기준 10", 막지 않으면 "방어구가 막지 않음" */
@@ -36,12 +46,7 @@ export function templateTone(template: RulebookTemplate): string | null {
   return template.rules.narration?.tone || null;
 }
 
-/** 그 템플릿의 판정의 주사위의 면 수. 없으면 null */
 /** 그 템플릿의 능력치들(#804, 수치의 최대에 쓴다). 모르는 템플릿이면 빈 목록 */
 export function templateAbilities(templates: RulebookTemplates, key: string): Ability[] {
   return templates.items.find((template) => template.key === key)?.rules.abilities ?? [];
-}
-
-export function templateDie(templates: RulebookTemplates, key: string): number | null {
-  return templates.items.find((template) => template.key === key)?.rules.die ?? null;
 }

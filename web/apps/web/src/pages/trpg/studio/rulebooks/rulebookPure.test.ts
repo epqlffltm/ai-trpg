@@ -7,10 +7,13 @@ import type { RulebookDetail, RulebookTemplates, TemplateKey } from '../../../..
 import { LEVEL_XP_MAX, levelOf, MAX_LEVEL_ROWS, newLevelDraft, progressionDraft, progressionHints, toProgression, turnedOn } from './progressionForm';
 import { newRulebookDraft, rulebookDraft, rulebookHints, toRulebookCreate, toRulebookUpdate, wholeNumber, withTemplate } from './rulebookForm';
 import { describeDeleteProblem, describeSaveProblem, usedByTitles } from '../studioProblem';
-import { armorSummary, templateDie, templateName } from './rulebookView';
+import { armorSummary, templateName } from './rulebookView';
+
+const DIFFICULTIES = [{ key: 'easy', name: '쉬움', target: 10 }, { key: 'hard', name: '어려움', target: 20 }];
+const ONE_OVER = { count: 1, style: 'over', shifts: {} };
 
 function rules(template: string, armor: unknown, die = 20) {
-  return { template, die, armor, abilities: [], resources: [], narration: { tone: `${template}의 분위기`, outcomes: [], avoid: [] } };
+  return { template, die, roll: ONE_OVER, difficulties: DIFFICULTIES, armor, abilities: [], resources: [], narration: { tone: `${template}의 분위기`, outcomes: [], avoid: [] } };
 }
 
 const TEMPLATES = {
@@ -50,9 +53,9 @@ describe('룰북의 입력', () => {
 
   it('보내는 본문. 세이브 목표값은 save 일 때만, 막지 않음이면 armor 가 null', () => {
     const draft = { ...newRulebookDraft(TEMPLATES), title: '  내 규칙 ', gmGuide: '지침' };
-    expect(toRulebookCreate(draft)).toEqual({ title: '내 규칙', description: '', gm_guide: '지침', template: 'srd5', armor: { mode: 'ac', pierce_base: 10 }, resources: [], progression: null });
+    expect(toRulebookCreate(draft)).toEqual({ title: '내 규칙', description: '', gm_guide: '지침', template: 'srd5', die: 20, roll: ONE_OVER, armor: { mode: 'ac', pierce_base: 10 }, resources: [], progression: null });
     expect(toRulebookUpdate({ ...draft, armor: 'save', saveTarget: '7', pierceBase: '12' }).armor).toEqual({ mode: 'save', pierce_base: 12, save_target: 7 });
-    expect(toRulebookUpdate({ ...draft, armor: 'none' })).toEqual({ title: '내 규칙', description: '', gm_guide: '지침', armor: null, resources: [], progression: null });
+    expect(toRulebookUpdate({ ...draft, armor: 'none' })).toEqual({ title: '내 규칙', description: '', gm_guide: '지침', die: 20, roll: ONE_OVER, armor: null, resources: [], progression: null });
   });
 });
 
@@ -107,13 +110,12 @@ describe('성장의 입력', () => {
 });
 
 describe('룰북의 글', () => {
-  it('방어 규칙의 요약, 템플릿의 이름과 주사위', () => {
+  it('방어 규칙의 요약, 템플릿의 이름', () => {
     expect(armorSummary({ mode: 'save', save_target: 7, pierce_base: 10 })).toBe('세이브로 막음 · 목표 7 · 관통 기준 10');
     expect(armorSummary({ mode: 'ac', pierce_base: 10 })).toBe('맞히기 어렵게 · 관통 기준 10');
     expect(armorSummary(null)).toBe('방어구가 막지 않음');
     expect(templateName(TEMPLATES, 'horror')).toBe('공포');
     expect(templateName(undefined, 'srd5')).toBe('srd5');
-    expect(templateDie(TEMPLATES, 'horror')).toBe(10);
   });
 
   it('지우지 못하면 쓰는 시나리오의 제목을 함께 적는다', () => {

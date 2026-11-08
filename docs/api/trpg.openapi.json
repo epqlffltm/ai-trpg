@@ -2332,7 +2332,7 @@
         "type": "object"
       },
       "CheckOutcome": {
-        "description": "판정의 결과. 엔진이 정한 것이다(app/engine/check.py 의 Check). 받는 값이 아니라 내보내는 값이다.",
+        "description": "판정의 결과. 엔진이 정한 것이다(app/engine/check.py 의 Check). 받는 값이 아니라 내보내는 값이다.\n\nstyle 이 under(#404)면 보정이 기량에 더해진다. total 은 눈 그대로, target 은 기량이고 total ≤ target 이면 성공이다.",
         "properties": {
           "blow": {
             "anyOf": [
@@ -2373,6 +2373,15 @@
                 "type": "null"
               }
             ]
+          },
+          "faces": {
+            "default": [],
+            "description": "쓴 굴림의 눈들. 더하면 roll 이다. #404 전의 결과는 비어 있다",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Faces",
+            "type": "array"
           },
           "hindrance": {
             "anyOf": [
@@ -2441,6 +2450,10 @@
                 "type": "null"
               }
             ]
+          },
+          "style": {
+            "$ref": "#/components/schemas/RollStyle",
+            "default": "over"
           },
           "success": {
             "title": "Success",
@@ -2823,6 +2836,15 @@
             "title": "Difficulty",
             "type": "string"
           },
+          "faces": {
+            "default": [],
+            "description": "쓴 굴림의 눈들. 더하면 roll 이다. #404 전의 결과는 비어 있다",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Faces",
+            "type": "array"
+          },
           "hindrance": {
             "anyOf": [
               {
@@ -2840,6 +2862,10 @@
           "roll": {
             "title": "Roll",
             "type": "integer"
+          },
+          "style": {
+            "$ref": "#/components/schemas/RollStyle",
+            "default": "over"
           },
           "success": {
             "title": "Success",
@@ -14148,6 +14174,15 @@
       "RolledOut": {
         "description": "굴린 판정 하나. 엔진이 정했다(app/engine/check.py 의 Check).",
         "properties": {
+          "faces": {
+            "default": [],
+            "description": "쓴 굴림의 눈들. 더하면 roll 이다. #404 전의 결과는 비어 있다",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Faces",
+            "type": "array"
+          },
           "modifier": {
             "title": "Modifier",
             "type": "integer"
@@ -14155,6 +14190,10 @@
           "roll": {
             "title": "Roll",
             "type": "integer"
+          },
+          "style": {
+            "$ref": "#/components/schemas/RollStyle",
+            "default": "over"
           },
           "success": {
             "title": "Success",

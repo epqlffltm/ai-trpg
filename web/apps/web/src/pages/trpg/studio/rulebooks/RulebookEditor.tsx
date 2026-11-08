@@ -11,16 +11,16 @@ import { TextAreaField } from '../../../../components/TextAreaField';
 import { ArmorFields } from './ArmorFields';
 import { ProgressionFields } from './ProgressionFields';
 import { ResourceFields } from './ResourceFields';
+import { RollFields } from './RollFields';
+import { diceName } from './rollForm';
 import { DESCRIPTION_MAX, GM_GUIDE_MAX, rulebookHints, TITLE_MAX, withTemplate, type RulebookDraft } from './rulebookForm';
-import { templateAbilities, templateDie } from './rulebookView';
+import { templateAbilities } from './rulebookView';
 import { TemplateChoice } from './TemplateChoice';
 
 type Props = {
   initial: RulebookDraft;
   /** 만들 때만. 있으면 템플릿을 고른다 */
   templates: RulebookTemplates | null;
-  /** 판정의 주사위의 면 수(세이브의 설명에 쓴다). 만들 때는 고른 템플릿의 것을 쓴다 */
-  die: number | null;
   /** 수치의 최대에 쓸 능력치(#804). 만들 때는 고른 템플릿의 것을 쓴다 */
   abilities: Ability[];
   submitLabel: string;
@@ -31,7 +31,7 @@ type Props = {
   actions?: ReactNode;
 };
 
-export function RulebookEditor({ initial, templates, die, abilities, submitLabel, busy, problem, onSubmit, actions }: Props) {
+export function RulebookEditor({ initial, templates, abilities, submitLabel, busy, problem, onSubmit, actions }: Props) {
   const [draft, setDraft] = useState<RulebookDraft>(initial);
   const hints = rulebookHints(draft);
 
@@ -79,7 +79,8 @@ export function RulebookEditor({ initial, templates, die, abilities, submitLabel
         hint="서술하는 AI 만 읽는 글입니다. 앉은 사람에게는 보이지 않습니다."
       />
       {templates ? <TemplateChoice templates={templates} selected={draft.template} onChange={chooseTemplate} /> : null}
-      <ArmorFields draft={draft} die={templates ? templateDie(templates, draft.template) : die} hints={hints} onChange={update} />
+      <RollFields draft={draft.roll} hints={hints} onChange={(roll) => update({ roll })} />
+      <ArmorFields draft={draft} dice={diceName(draft.roll)} hints={hints} onChange={update} />
       <ResourceFields
         resources={draft.resources}
         abilities={templates ? templateAbilities(templates, draft.template) : abilities}

@@ -54,6 +54,10 @@ export type RulebookTemplate = Trpg['schemas']['TemplateSummary'];
 export type TemplateKey = Trpg['schemas']['Template'];
 export type Armor = Trpg['schemas']['Armor'];
 export type ArmorMode = Trpg['schemas']['ArmorMode'];
+// 판정의 굴림(#404). 주사위의 개수, 성공을 가르는 쪽(over, under), 난이도마다 기량에 더하는 값
+export type Roll = Trpg['schemas']['Roll'];
+export type RollStyle = Trpg['schemas']['RollStyle'];
+export type Difficulty = Ruleset['difficulties'][number];
 // HP 말고 다른 수치(#804). 룰북의 규칙(rules.resources)과 시트의 지금 값(sheet.resources), 바뀐 것(쉬기, 물건의 맞추기)
 export type Resource = Trpg['schemas']['Resource'];
 export type ResourceShift = Trpg['schemas']['ResourceShift'];
