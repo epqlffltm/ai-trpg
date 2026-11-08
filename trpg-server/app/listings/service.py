@@ -25,7 +25,7 @@ from app.assets.models import Rating, Scenario, ScenarioVersion
 from app.assets.ratings import ALL_AGES_ONLY, allowed_ratings, require_rating
 from app.assets.scenarios import repository as versions
 from app.assets.scenarios.snapshot import read_snapshot
-from app.assets.service import AssetNotFoundError
+from app.assets.service import AssetNotFoundError, AssetReferenceError
 from app.listings import repository
 from app.listings.models import Listing
 from app.listings.popularity import ListingOrder
@@ -33,6 +33,10 @@ from app.listings.repository import ListingFilter, PublicRow
 from app.listings.schemas import ListingUpdate, PublicationUpdate
 from app.notifications.outbox import announce_scenario
 from app.operators.publishing import require_publishable
+from app.portraits import repository as portraits
+
+# 표지 그림(#1164)의 입력 칸. 다른 칸과 달리 null 이 "떼라"는 뜻이라 따로 다룬다
+COVER_FIELD = 'cover_image_id'
 
 
 class Problem(enum.StrEnum):
@@ -67,10 +71,29 @@ def find_problems(listing: Listing) -> list[Problem]:
 
 
 def apply_changes(listing: Listing, data: ListingUpdate) -> None:
-    """보낸 칸만 소개 페이지에 반영한다."""
-    changes = data.model_dump(exclude_unset=True, exclude_none=True)
+    """보낸 칸만 소개 페이지에 반영한다. 표지는 apply_cover 가 따로 한다."""
+    changes = data.model_dump(exclude_unset=True, exclude_none=True, exclude={COVER_FIELD})
     for field, value in changes.items():
         setattr(listing, field, value)
+
+
+async def require_own_cover(session: AsyncSession, owner_id: uuid.UUID, image_id: uuid.UUID) -> None:
+    """
+    표지가 자기가 올린 그림인지 본다. 아니면 AssetReferenceError(cover_image_id).
+
+    남의 그림, 없는 그림, 이 서버에 올리지 않은 asset 의 그림은 모두 같다. 찾은 행은 나눠 잠근다(그동안 지우지 못한다).
+    """
+    if not await portraits.owned_ids(session, owner_id, {image_id}):
+        raise AssetReferenceError(COVER_FIELD)
+
+
+async def apply_cover(session: AsyncSession, owner_id: uuid.UUID, listing: Listing, data: ListingUpdate) -> None:
+    """표지를 보냈으면 바꾼다. null 이면 뗀다. 보내지 않았으면 그대로다."""
+    if COVER_FIELD not in data.model_fields_set:
+        return
+    if data.cover_image_id is not None:
+        await require_own_cover(session, owner_id, data.cover_image_id)
+    listing.cover_image_id = data.cover_image_id
 
 
 def publish_version(listing: Listing, version: ScenarioVersion) -> None:
@@ -150,6 +173,7 @@ async def update_listing(
     자기 시나리오의 소개 페이지를 고친다. 시나리오가 없으면 AssetNotFoundError.
 
     처음 쓰는데 장르가 없거나, 공개 중인 페이지를 고쳐서 조건을 못 갖추게 되면 ListingNotReadyError.
+    표지가 자기가 올린 그림이 아니면 AssetReferenceError(cover_image_id).
     공개 중인 페이지를 비우려면 공개를 먼저 내린다.
     시나리오나 공개 중인 판이 성인용인데 allowed 에 성인용이 없으면 AdultContentRequiredError(#390).
     시나리오를 잠그고 한다. 공개 정보가 없을 때 두 요청이 동시에 만들면 부딪힌다.
@@ -163,6 +187,7 @@ async def update_listing(
     else:
         require_rating(listing.rating, allowed)
         apply_changes(listing, data)
+    await apply_cover(session, owner_id, listing, data)
 
     if listing.version_id is not None:
         problems = find_problems(listing)

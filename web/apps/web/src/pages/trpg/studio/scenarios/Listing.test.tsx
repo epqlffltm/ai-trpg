@@ -1,11 +1,11 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/Listing.test.tsx
 // 시나리오의 소개 탭과 공개(B9). 소개(한줄소개, 소개글, 장르 셋까지, 쉼표로 나눈 태그)를 탭의 저장으로 보내기,
 // 공개 중에 비우기 막기, 낸 판의 공개와 바꾸기와 내리기(한 번 더 묻기), 소개가 비면 공개를 끄고 소개 탭으로 보내기,
-// 운영자의 제재로 막힌 공개. 입력과 실패의 순수한 함수.
+// 운영자의 제재로 막힌 공개, 표지(#1164)를 내가 올린 그림에서 고르고 떼기. 입력과 실패의 순수한 함수.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../../api/errors';
 import { REFRESH_PATH } from '../../../../api/refresh';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../test/fakeFetch';
@@ -20,8 +20,9 @@ const ID = '00000000-0000-4000-8000-0000000000d1';
 const SCENARIO = `${GAME}/scenarios/${ID}`;
 const LISTING = `${SCENARIO}/listing`;
 const PUBLICATION = `${LISTING}/publication`;
+const COVER = '00000000-0000-4000-8000-0000000000c1';
 
-type Listing = { tagline: string; description: string; genre: string | null; tags: string[]; unlisted: boolean; version: number | null };
+type Listing = { tagline: string; description: string; genre: string | null; tags: string[]; unlisted: boolean; version: number | null; cover_image_id?: string | null };
 
 const EMPTY: Listing = { tagline: '', description: '', genre: null, tags: [], unlisted: false, version: null };
 const READY: Listing = { tagline: '비 내리는 밤의 수도원', description: '', genre: 'horror', tags: ['수도원'], unlisted: false, version: 1 };
@@ -53,6 +54,8 @@ function signedIn(start: Listing, refuse?: string) {
       current = { ...current, version: (request.body as { version: number | null }).version };
       return json(200, detail(current));
     },
+    [`GET ${GAME}/portraits`]: () => json(200, { items: [{ id: COVER, created_at: '2026-11-05T00:00:00Z' }], total: 1 }),
+    [`GET ${GAME}/portraits/${COVER}/image`]: () => new Response('png', { status: 200 }),
   });
 }
 
@@ -63,6 +66,11 @@ function sent(seen: SeenRequest[], method: string, url: string): unknown[] {
 async function panel(name: string) {
   return within(await screen.findByRole('tabpanel', { name }));
 }
+
+beforeEach(() => {
+  // jsdom 에는 blob: 주소를 만드는 함수가 없다
+  Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:cover'), revokeObjectURL: vi.fn() });
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -92,9 +100,29 @@ describe('소개 탭', () => {
 
     expect(await form.findByText('저장했습니다.')).toBeInTheDocument();
     expect(sent(seen, 'PATCH', LISTING)).toEqual([
-      { tagline: '비 내리는 밤의 수도원', description: '종이 열 번 울린다.', genre: 'mystery', tags: ['수도원', '언데드'], unlisted: false },
+      { tagline: '비 내리는 밤의 수도원', description: '종이 열 번 울린다.', genre: 'mystery', tags: ['수도원', '언데드'], unlisted: false, cover_image_id: null },
     ]);
     expect(form.getByRole('textbox', { name: '한줄소개' })).toHaveValue('비 내리는 밤의 수도원');
+  });
+
+  it('표지를 내가 올린 그림에서 골라 탭의 저장으로 보내고, 떼면 null 을 보낸다', async () => {
+    const { seen } = signedIn(READY);
+    renderApp(`/trpg/studio/scenarios/${ID}?tab=listing`);
+
+    const form = within(await (await panel('소개')).findByRole('form', { name: '소개' }));
+    const cover = within(form.getByRole('group', { name: '표지' }));
+    expect(cover.getByText('붙인 그림이 없습니다.')).toBeInTheDocument();
+    await userEvent.click(cover.getByRole('button', { name: '그림 붙이기' }));
+    const shelf = within(await cover.findByRole('region', { name: '표지 고르기' }));
+    await userEvent.click(await shelf.findByRole('button', { name: '그림 1 고르기' }));
+    await userEvent.click(form.getByRole('button', { name: '저장' }));
+    expect(await form.findByText('저장했습니다.')).toBeInTheDocument();
+
+    await userEvent.click(cover.getByRole('button', { name: '떼기' }));
+    await userEvent.click(form.getByRole('button', { name: '저장' }));
+
+    await vi.waitFor(() => expect(sent(seen, 'PATCH', LISTING)).toHaveLength(2));
+    expect(sent(seen, 'PATCH', LISTING).map((body) => (body as { cover_image_id: string | null }).cover_image_id)).toEqual([COVER, null]);
   });
 
   it('링크 공개를 고르면 보내고, 공개 중인 링크 공개면 나눌 주소를 보인다', async () => {
@@ -180,13 +208,13 @@ describe('공개', () => {
 
 describe('소개와 공개의 입력', () => {
   it('태그는 개수·길이·대소문자만 다른 겹침을 막고, 보낼 때 나누고 다듬는다. 장르는 하나를 그대로 보낸다', () => {
-    const draft = { tagline: '한 줄', description: '', genre: 'horror' as const, tags: 'Moon, moon', unlisted: false };
+    const draft = { tagline: '한 줄', description: '', genre: 'horror' as const, tags: 'Moon, moon', unlisted: false, coverImageId: null };
     expect(listingHints(draft, false).tags).toBe('같은 태그가 두 번 있습니다.');
     expect(listingHints({ ...draft, tags: 'a'.repeat(21) }, false).tags).toBe('태그 하나는 20자까지입니다.');
     expect(listingHints({ ...draft, tagline: '', tags: '' }, false)).toEqual({});
     expect(listingHints({ ...draft, genre: null }, false).genre).toBe('장르를 골라 주세요. 장르는 반드시 하나입니다.');
     expect(listingHints({ ...draft, tagline: ' ', tags: '' }, true).tagline).toContain('공개 중에는 비울 수 없습니다');
-    expect(toListingBody({ ...draft, tagline: ' 한 줄 ', tags: ' 달, , 별 ', unlisted: true })).toEqual({ tagline: '한 줄', description: '', genre: 'horror', tags: ['달', '별'], unlisted: true });
+    expect(toListingBody({ ...draft, tagline: ' 한 줄 ', tags: ' 달, , 별 ', unlisted: true })).toEqual({ tagline: '한 줄', description: '', genre: 'horror', tags: ['달', '별'], unlisted: true, cover_image_id: null });
   });
 
   it('실패: 409 의 까닭, 공개 금지, 성인 확인, 없는 판', () => {

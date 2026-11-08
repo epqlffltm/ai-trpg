@@ -59,6 +59,9 @@ class ListingUpdate(BaseModel):
     tags: Tags | None = None
     # 링크 공개(#993). 참이면 목록과 검색에 나오지 않고 주소로만 연다
     unlisted: bool | None = None
+    # 표지 그림(#1164). 내가 올린 그림(POST /portraits)의 id 다. 다른 칸과 달리 null 을 보내면 표지를 뗀다.
+    # 보내지 않으면 그대로다. 남의 그림이나 없는 그림이면 422 다
+    cover_image_id: uuid.UUID | None = None
 
 
 class PublicationUpdate(BaseModel):
@@ -84,6 +87,8 @@ class ListingDetail(BaseModel):
     tags: list[str]
     # 링크 공개(#993). 참이면 공개해도 목록과 검색에 나오지 않는다
     unlisted: bool
+    # 표지 그림(#1164). 내가 올린 그림의 id 다. 바이트는 GET /portraits/{id}/image. 없으면 None
+    cover_image_id: uuid.UUID | None
     # 공개 중인 판의 번호. 공개하지 않았으면 None 이다
     version: int | None
     # 공개 중인 판의 등급. 공개하지 않았으면 None 이다
@@ -108,6 +113,8 @@ class PublicListing(BaseModel):
     # 장르. 플레이 화면과 소개 화면의 테마를 정한다
     genre: Genre
     tags: list[str]
+    # 표지 그림(#1164). 바이트는 GET /listings/{scenario_id}/portraits/{cover_image_id}/image. 없으면 None
+    cover_image_id: uuid.UUID | None
     rating: Rating
     # 제작자가 추천하는 인원. 강제하지 않는다
     recommended_players: RecommendedPlayers

@@ -6,8 +6,10 @@
   - 올리기: 한 사람이 올릴 수 있는 수(PORTRAIT_MAX_PER_OWNER)를 보고, asset 에 올린 사람의 토큰으로 맡긴 뒤 기록한다.
     asset 에 맡긴 뒤 기록하지 못하면 asset 에 주인 없는 그림이 하나 남는다(기록이 없으니 아무도 붙이지 못한다)
   - 보기: 올린 사람은 자기 그림을 본다. 테이블에 앉은 사람은 그 테이블의 판(프리젠)에 붙은 그림을 본다.
-    공개된 시나리오를 볼 수 있는 사람은 공개 중인 판의 프리젠에 붙은 그림을 본다(로그인하지 않아도 전체 이용가는 본다)
-  - 지우기: 어느 초안이나 판에도 붙지 않은 그림만 지운다(2026-11-05 결정). 쓰이고 있으면 쓰는 시나리오들을 알린다.
+    공개된 시나리오를 볼 수 있는 사람은 공개 중인 판의 프리젠에 붙은 그림과 그 시나리오의 표지(#1164)를 본다
+    (로그인하지 않아도 전체 이용가는 본다)
+  - 지우기: 어느 초안이나 판에도 붙지 않고 표지도 아닌 그림만 지운다(2026-11-05 결정).
+    쓰이고 있으면 쓰는 시나리오들을 알린다.
     진행 중인 테이블의 그림이 사라지지 않게 하려는 것이다. 기록을 지워 저장한 뒤 asset 의 그림을 지운다.
     asset 에서 지우지 못하면 asset 에 그림이 남는다(기록이 없으니 아무도 붙이거나 받지 못한다)
   - asset 을 부르는 동안 DB 의 트랜잭션을 열어 두지 않는다. 세션을 나눠 쓴다
@@ -43,7 +45,7 @@ class PortraitNotFoundError(Exception):
 
 
 class PortraitInUseError(Exception):
-    """초안이나 판의 프리젠에 붙은 그림이라 지우지 못한다. scenarios 는 쓰는 시나리오들의 (id, 제목)이다."""
+    """초안이나 판의 프리젠에 붙었거나 표지인 그림이라 지우지 못한다. scenarios 는 쓰는 시나리오들의 (id, 제목)이다."""
 
     def __init__(self, scenarios: list[tuple[uuid.UUID, str]]) -> None:
         super().__init__(len(scenarios))
@@ -153,13 +155,15 @@ async def require_listing_portrait(
     image_id: uuid.UUID,
 ) -> None:
     """
-    볼 수 있는 공개 시나리오의 공개 중인 판에 붙은 그림인지 본다.
+    볼 수 있는 공개 시나리오의 공개 중인 판에 붙은 그림이거나 그 시나리오의 표지(#1164)인지 본다.
 
-    볼 수 없는 시나리오(공개하지 않음, 볼 수 없는 등급)면 AssetNotFoundError(404), 그 판의 그림이 아니면
+    볼 수 없는 시나리오(공개하지 않음, 볼 수 없는 등급)면 AssetNotFoundError(404), 그 판의 그림도 표지도 아니면
     PortraitNotFoundError.
     """
     async with session_factory() as session:
-        _, _, version = await get_public(session, viewer, scenario_id)
+        listing, _, version = await get_public(session, viewer, scenario_id)
+    if image_id == listing.cover_image_id:
+        return
     pregens = read_snapshot(version.snapshot).pregens
     if image_id not in {pregen.image_id for pregen in pregens if pregen.image_id is not None}:
         raise PortraitNotFoundError
@@ -172,7 +176,7 @@ async def listing_portrait_image(
     scenario_id: uuid.UUID,
     image_id: uuid.UUID,
 ) -> ImageContent:
-    """공개된 시나리오의 프리젠 그림의 바이트."""
+    """공개된 시나리오의 프리젠 그림이나 표지의 바이트."""
     await require_listing_portrait(session_factory, viewer, scenario_id, image_id)
     return await fetch_image(asset, image_id)
 
@@ -183,7 +187,7 @@ async def forget_portrait(
     """
     쓰이지 않는 내 그림의 기록을 지우고 저장한다.
 
-    남의 것이나 없는 것이면 PortraitNotFoundError, 초안이나 판에 붙어 있으면 PortraitInUseError.
+    남의 것이나 없는 것이면 PortraitNotFoundError, 초안이나 판에 붙어 있거나 표지면 PortraitInUseError.
     행을 혼자 잠그고 보므로, 지우는 동안 다른 저장이 이 그림을 새로 붙이지 못한다.
     """
     async with session_factory() as session:

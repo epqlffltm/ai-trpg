@@ -2,7 +2,8 @@
 // 프리젠의 캐릭터 그림(#983) 칸. 붙인 그림을 보이고 "그림 붙이기"·"바꾸기"·"떼기"를 둔다.
 // 고르기는 창 안에서 펼치는 칸이다(프리젠 창 안이라 창을 겹치지 않는다): 새 그림 올리기와 내가 올린 그림(최근 것부터, 더 보기).
 // 내가 올린 그림마다 지우기(한 번 더 묻는다)가 있다. 프리젠에 붙은 그림은 서버가 막고(409) 쓰는 시나리오들을 알려 준다.
-// 저장은 쓰는 쪽(프리젠 창)이 한다. 고른 그림은 저장해야 붙는다.
+// 저장은 쓰는 쪽(프리젠 창, 시나리오의 소개 탭)이 한다. 고른 그림은 저장해야 붙는다.
+// 이름표와 도움말은 쓰는 쪽이 바꿀 수 있다(소개 탭의 표지, #1164). 기본은 프리젠의 캐릭터 그림이다.
 
 import { Button } from '@ai-trpg/ui';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
@@ -16,9 +17,18 @@ import { MyPortrait } from './MyPortrait';
 import { describePortraitDeleteProblem, describePortraitUploadProblem, portraitUsers, type PortraitUser } from './portraitProblem';
 import { portraitsKey, portraitsQuery } from './portraitQueries';
 
-type Props = { imageId: string | null; onChange: (imageId: string | null) => void };
+type Props = {
+  imageId: string | null;
+  onChange: (imageId: string | null) => void;
+  /** 칸의 이름(읽는 프로그램)과 이름표, 도움말. 기본은 프리젠의 캐릭터 그림이다 */
+  name?: string;
+  label?: string;
+  hint?: string;
+};
 
-export function PortraitChooser({ imageId, onChange }: Props) {
+const PREGEN_HINT = '장면 그림을 그릴 때 이 캐릭터의 얼굴을 맞추는 데 씁니다. 저장해야 붙습니다.';
+
+export function PortraitChooser({ imageId, onChange, name = '캐릭터 그림', label = '그림(선택)', hint = PREGEN_HINT }: Props) {
   const [open, setOpen] = useState(false);
 
   function choose(chosen: string) {
@@ -27,10 +37,10 @@ export function PortraitChooser({ imageId, onChange }: Props) {
   }
 
   return (
-    <div className="portrait-chooser" role="group" aria-label="캐릭터 그림">
-      <span className="ui-field__label">그림(선택)</span>
-      {imageId ? <MyPortrait portraitId={imageId} alt="붙인 캐릭터 그림" /> : <p className="hint">붙인 그림이 없습니다.</p>}
-      <p className="hint">장면 그림을 그릴 때 이 캐릭터의 얼굴을 맞추는 데 씁니다. 저장해야 붙습니다.</p>
+    <div className="portrait-chooser" role="group" aria-label={name}>
+      <span className="ui-field__label">{label}</span>
+      {imageId ? <MyPortrait portraitId={imageId} alt={`붙인 ${name}`} /> : <p className="hint">붙인 그림이 없습니다.</p>}
+      <p className="hint">{hint}</p>
       <span className="action-chips">
         <Button variant="secondary" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
           {imageId ? '바꾸기' : '그림 붙이기'}
@@ -41,20 +51,20 @@ export function PortraitChooser({ imageId, onChange }: Props) {
           </Button>
         ) : null}
       </span>
-      {open ? <PortraitShelf chosen={imageId} onChoose={choose} onForget={(gone) => gone === imageId && onChange(null)} /> : null}
+      {open ? <PortraitShelf name={name} chosen={imageId} onChoose={choose} onForget={(gone) => gone === imageId && onChange(null)} /> : null}
     </div>
   );
 }
 
-type ShelfProps = { chosen: string | null; onChoose: (imageId: string) => void; onForget: (imageId: string) => void };
+type ShelfProps = { name: string; chosen: string | null; onChoose: (imageId: string) => void; onForget: (imageId: string) => void };
 
 /** 새 그림 올리기와 내가 올린 그림들 */
-function PortraitShelf({ chosen, onChoose, onForget }: ShelfProps) {
+function PortraitShelf({ name, chosen, onChoose, onForget }: ShelfProps) {
   const portraits = useInfiniteQuery(portraitsQuery());
   const items = portraits.data?.pages.flatMap((page) => page.items) ?? [];
 
   return (
-    <section className="portrait-shelf" aria-label="캐릭터 그림 고르기">
+    <section className="portrait-shelf" aria-label={`${name} 고르기`}>
       <PortraitUpload onUploaded={onChoose} />
       <h3 className="portrait-shelf__heading">내가 올린 그림</h3>
       {portraits.isPending ? <p className="hint">불러오는 중…</p> : null}

@@ -20,6 +20,7 @@ import { StoryWorldCard } from '../story/StoryWorldCard';
 import { genreLabel } from '../trpg/labels';
 import { characterSearchQuery, creatorSearchQuery, scenarioSearchQuery, worldSearchQuery } from './searchQueries';
 import { isSearchable, normalizeSearch, searchesCreators, searchProblem } from './searchView';
+import { ScenarioCover } from '../trpg/portraits/ScenarioCover';
 
 export function SearchPage() {
   const [params] = useSearchParams();
@@ -83,6 +84,7 @@ function ScenarioResults({ q, signedIn }: ResultsProps) {
           <ItemCard
             key={listing.scenario_id}
             to={`/trpg/scenarios/${listing.scenario_id}`}
+            image={<ScenarioCover scenarioId={listing.scenario_id} coverImageId={listing.cover_image_id} className="item-card__image" />}
             title={listing.title}
             description={listing.tagline}
             meta={[ratingBadge(listing.rating), listing.genre ? genreLabel(listing.genre) : null, ...usageTags('테이블', listing.start_count, listing.heart_count)]}

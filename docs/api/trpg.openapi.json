@@ -7667,6 +7667,18 @@
       "ListingDetail": {
         "description": "제작자가 자기 시나리오의 공개 정보를 볼 때의 값.",
         "properties": {
+          "cover_image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Image Id"
+          },
           "description": {
             "title": "Description",
             "type": "string"
@@ -7754,6 +7766,7 @@
           "genre",
           "tags",
           "unlisted",
+          "cover_image_id",
           "version",
           "rating",
           "published_at",
@@ -7810,6 +7823,18 @@
         "additionalProperties": false,
         "description": "소개 페이지를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nNone 은 \"보내지 않았다\"는 뜻이다. 태그를 전부 없애려면 빈 목록을 보낸다.\n장르는 반드시 하나다. 처음 쓸 때 함께 보내야 하고(없으면 409 genre_missing), 그 뒤에는 다른 것으로 바꿀 수만 있다.\n어느 판을 공개할지는 여기서 받지 않는다. 공개는 따로 하는 일이다(PublicationUpdate).",
         "properties": {
+          "cover_image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Image Id"
+          },
           "description": {
             "anyOf": [
               {
@@ -12267,6 +12292,18 @@
       "PublicListing": {
         "description": "다른 사용자가 공개된 시나리오를 볼 때의 값. 목록과 상세가 같은 모양이다.\n\n여기 적힌 칸만 나간다. 초안의 내용, 판의 굳힌 내용, 공개하지 않은 판의 정보는 나가지 않는다.",
         "properties": {
+          "cover_image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Image Id"
+          },
           "creator_id": {
             "format": "uuid",
             "title": "Creator Id",
@@ -12335,6 +12372,7 @@
           "description",
           "genre",
           "tags",
+          "cover_image_id",
           "rating",
           "recommended_players",
           "version",
@@ -12362,6 +12400,18 @@
             },
             "title": "Character Modes",
             "type": "array"
+          },
+          "cover_image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Image Id"
           },
           "creator_id": {
             "format": "uuid",
@@ -12460,6 +12510,7 @@
           "description",
           "genre",
           "tags",
+          "cover_image_id",
           "rating",
           "recommended_players",
           "version",

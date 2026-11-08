@@ -773,6 +773,20 @@
   border-color: var(--ui-border-strong);
 }
 
+/* 그림이 있는 칸(시나리오의 표지, #1164). 그림은 칸의 위를 가득 채우는 세로로 긴 그림, 없으면 강조색이 옅게 도는 빈 칸 */
+.item-card__image {
+  display: block;
+  width: calc(100% + 28px);
+  margin: -14px -14px 6px;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-bottom: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius) var(--ui-radius) 0 0;
+  background:
+    radial-gradient(120% 80% at 70% 10%, color-mix(in srgb, var(--ui-accent) 22%, transparent), transparent 70%),
+    var(--ui-surface-subtle);
+}
+
 .item-card__title {
   font-family: var(--ui-font-serif);
   font-size: 1.05rem;
@@ -1072,6 +1086,27 @@ a.ui-button {
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-lg);
   background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+/* 시나리오 소개의 표지(#1164). 있으면 머리의 왼쪽(좁으면 위)에 세로로 긴 그림, 글은 그 옆으로 흐른다 */
+.scenario__head:has(.scenario__cover) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: calc(var(--ui-gap) * 1.5);
+}
+
+.scenario__info {
+  flex: 1 1 18em;
+  min-width: 0;
+}
+
+.scenario__cover {
+  width: min(100%, 280px);
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: var(--ui-radius-lg);
   box-shadow: var(--ui-shadow);
 }
 

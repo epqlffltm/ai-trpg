@@ -4,6 +4,7 @@
 // 머리에 관심(하트, #989) 단추가 있다. 운영자에게는 맨 아래에 제재 칸(E4)이 있다.
 // 모양은 Stitch 18번(소개 화면 셋의 같은 모양): 머리는 한 장의 종이와 감청의 큰 명조 제목, 칸마다 종이 한 장(CSS).
 // 장르 테마(Stitch 23~33번): main 에 data-genre 를 단다(genres/genreTheme.ts).
+// 표지(#1164)가 있으면 머리의 왼쪽(좁으면 위)에 세로로 긴 그림으로 둔다.
 
 import { Link } from 'react-router';
 import type { PublicListingDetail } from '../../../api/types';
@@ -18,6 +19,7 @@ import { characterModeLabel } from '../labels';
 import { PregenList } from './PregenList';
 import { ScenarioSidePanel } from './ScenarioSidePanel';
 import { genreTheme } from '../../../genres/genreTheme';
+import { ScenarioCover } from '../portraits/ScenarioCover';
 
 export function ScenarioDetail({ listing }: { listing: PublicListingDetail }) {
   // 운영자의 제재 칸이 이름을 함께 보인다. 머리의 "만든 사람"과 같은 읽기라 한 번만 묻는다
@@ -26,10 +28,13 @@ export function ScenarioDetail({ listing }: { listing: PublicListingDetail }) {
   return (
     <main className="page scenario" data-genre={genreTheme(listing.genre)}>
       <header className="scenario__head">
-        <h1>{listing.title}</h1>
-        {listing.tagline ? <p className="scenario__tagline">{listing.tagline}</p> : null}
-        <CreatorByline creatorId={listing.creator_id} className="scenario__byline" />
-        <HeartButton kind="scenario" id={listing.scenario_id} count={listing.heart_count} />
+        {listing.cover_image_id ? <ScenarioCover scenarioId={listing.scenario_id} coverImageId={listing.cover_image_id} className="scenario__cover" /> : null}
+        <div className="scenario__info">
+          <h1>{listing.title}</h1>
+          {listing.tagline ? <p className="scenario__tagline">{listing.tagline}</p> : null}
+          <CreatorByline creatorId={listing.creator_id} className="scenario__byline" />
+          <HeartButton kind="scenario" id={listing.scenario_id} count={listing.heart_count} />
+        </div>
       </header>
       <div className="scenario__body">
         <div className="scenario__main">

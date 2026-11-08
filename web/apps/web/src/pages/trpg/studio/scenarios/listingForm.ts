@@ -6,6 +6,7 @@
 // - 장르는 반드시 하나다. 플레이 화면과 소개 화면의 테마를 정한다. 고르기 전에는 저장하지 않는다(서버도 409 genre_missing)
 // - 태그는 쉼표로 나눈 한 칸이다(로어북 항목의 키워드와 같다)
 // - 공개 범위(#993): 목록에 공개하거나, 링크 공개(목록과 검색에 없고 주소를 아는 사람만 연다)
+// - 표지(#1164): 내가 올린 그림 하나. null 이면 표지가 없다(보내면 뗀다)
 
 import type { Genre, ListingDetail, ListingUpdate } from '../../../../api/types';
 import { splitWords, wordsHint } from '../collection/collectionForm';
@@ -24,6 +25,8 @@ export type ListingDraft = {
   tags: string;
   /** 링크 공개(#993). 참이면 공개해도 목록과 검색에 나오지 않고 주소를 아는 사람만 연다 */
   unlisted: boolean;
+  /** 표지 그림(#1164). 내가 올린 그림(portraits)의 id. 없으면 null */
+  coverImageId: string | null;
 };
 
 /** 공개하지 못하는 까닭(서버의 Problem) */
@@ -41,6 +44,7 @@ export function listingDraft(listing: ListingDetail): ListingDraft {
     genre: listing.genre,
     tags: listing.tags.join(', '),
     unlisted: listing.unlisted,
+    coverImageId: listing.cover_image_id ?? null,
   };
 }
 
@@ -80,7 +84,7 @@ function addPublishedHints(hints: Record<string, string>, draft: ListingDraft): 
   if (draft.tagline.trim() === '') hints.tagline = `한줄소개가 비어 있습니다.${emptied}`;
 }
 
-/** 보낼 본문. 칸 다섯을 모두 보낸다(빈 태그 목록은 "모두 없앤다", 장르 null 은 "보내지 않았다") */
+/** 보낼 본문. 칸 여섯을 모두 보낸다(빈 태그 목록은 "모두 없앤다", 장르 null 은 "보내지 않았다", 표지 null 은 "뗀다") */
 export function toListingBody(draft: ListingDraft): ListingUpdate {
   return {
     tagline: draft.tagline.trim(),
@@ -88,5 +92,6 @@ export function toListingBody(draft: ListingDraft): ListingUpdate {
     genre: draft.genre,
     tags: splitWords(draft.tags),
     unlisted: draft.unlisted,
+    cover_image_id: draft.coverImageId,
   };
 }

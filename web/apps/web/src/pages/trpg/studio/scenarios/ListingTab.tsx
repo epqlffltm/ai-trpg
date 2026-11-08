@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/ListingTab.tsx
-// 시나리오의 소개 탭(B9). 공개 목록(B1)과 소개(B2)에 보일 한줄소개, 소개글, 장르, 태그, 공개 범위(#993)를 탭의 저장으로 보낸다.
+// 시나리오의 소개 탭(B9). 공개 목록(B1)과 소개(B2)에 보일 표지(#1164), 한줄소개, 소개글, 장르, 태그, 공개 범위(#993)를 탭의 저장으로 보낸다.
 // 판에 굳지 않는다. 공개 중이면 저장하자마자 공개된 소개가 바뀐다. 공개할 판은 게시 탭에서 고른다.
 
 import { Button, Notice, SelectField, TextField } from '@ai-trpg/ui';
@@ -10,6 +10,7 @@ import type { Genre, ListingDetail, ScenarioDetail } from '../../../../api/types
 import { ShareAddress } from '../../../../components/ShareAddress';
 import { TextAreaField } from '../../../../components/TextAreaField';
 import { GENRE_VALUES, genreLabel, isGenre } from '../../labels';
+import { PortraitChooser } from '../../portraits/PortraitChooser';
 import { LISTING_DESCRIPTION_MAX, listingDraft, listingHints, TAGLINE_MAX, TAG_MAX, TAGS_MAX, toListingBody, type ListingDraft } from './listingForm';
 import { listingQuery } from './scenarioQueries';
 import { ScenarioForm } from './ScenarioForm';
@@ -49,6 +50,13 @@ function ListingForm({ scenarioId, listing }: { scenarioId: string; listing: Lis
   return (
     <ScenarioForm label="소개" busy={saving.busy} problem={saving.problem} saved={saving.saved} blocked={Object.keys(hints).length > 0} onSubmit={() => void submit()}>
       <PublicationStatus scenarioId={scenarioId} listing={listing} />
+      <PortraitChooser
+        name="표지"
+        label="표지(선택)"
+        hint="공개 목록의 카드와 소개 화면, 홍보 배너에 보이는 그림입니다. 세로로 긴 그림이 잘 맞습니다. 저장해야 붙습니다."
+        imageId={draft.coverImageId}
+        onChange={(coverImageId) => update({ coverImageId })}
+      />
       <div className="field-with-hint">
         <TextField
           label="한줄소개"

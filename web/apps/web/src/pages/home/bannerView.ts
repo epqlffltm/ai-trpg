@@ -16,8 +16,10 @@ export type BannerSlide = {
   line: string;
   /** 소개 화면의 주소 */
   to: string;
-  /** 대표 그림. 시나리오는 없다 */
+  /** 캐릭터와 세계관의 대표 그림(asset 의 그림). 시나리오는 null 이다 */
   imageId: string | null;
+  /** 시나리오의 표지(#1164). 게임 서버가 공개 소개의 그림으로 내준다. 캐릭터와 세계관, 표지 없는 시나리오는 null 이다 */
+  scenarioCover: { scenarioId: string; imageId: string } | null;
 };
 
 export function scenarioSlide(banner: ScenarioBanner): BannerSlide {
@@ -29,6 +31,7 @@ export function scenarioSlide(banner: ScenarioBanner): BannerSlide {
     line: listing.tagline,
     to: `/trpg/scenarios/${listing.scenario_id}`,
     imageId: null,
+    scenarioCover: listing.cover_image_id ? { scenarioId: listing.scenario_id, imageId: listing.cover_image_id } : null,
   };
 }
 
@@ -36,11 +39,11 @@ export function scenarioSlide(banner: ScenarioBanner): BannerSlide {
 export function assetSlide(banner: AssetBanner): BannerSlide | null {
   if (banner.character) {
     const character = banner.character;
-    return { id: banner.id, service: 'chat', title: character.name, line: tagLine(character.tags), to: `/chat/characters/${character.id}`, imageId: character.image_id ?? null };
+    return { id: banner.id, service: 'chat', title: character.name, line: tagLine(character.tags), to: `/chat/characters/${character.id}`, imageId: character.image_id ?? null, scenarioCover: null };
   }
   if (banner.world) {
     const world = banner.world;
-    return { id: banner.id, service: 'story', title: world.name, line: tagLine(world.tags), to: `/story/worlds/${world.id}`, imageId: world.image_id ?? null };
+    return { id: banner.id, service: 'story', title: world.name, line: tagLine(world.tags), to: `/story/worlds/${world.id}`, imageId: world.image_id ?? null, scenarioCover: null };
   }
   return null;
 }

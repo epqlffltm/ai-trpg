@@ -14,6 +14,7 @@ from sqlalchemy import delete, func, select, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import Asset, Scenario, ScenarioVersion
+from app.listings.models import Listing
 from app.portraits.models import Portrait
 
 
@@ -69,6 +70,8 @@ async def using_scenarios(session: AsyncSession, image_id: uuid.UUID) -> list[tu
 
     판은 시나리오를 지워도 남는다(테이블이 그 판으로 돈다). 그래서 지운 시나리오라도 판이 쓰면 넣는다.
     테이블은 판의 사본을 들고 있고 판은 지우지 않으므로, 판을 보면 테이블이 쓰는 그림도 찾는다.
+    공개 정보의 표지(#1164)로 쓰는 것도 넣는다. 공개 정보는 시나리오의 행을 지울 때만 함께 지워지므로
+    지운 시나리오의 것이라도 넣는다(넣지 않으면 기록을 지울 때 FK 가 막는다).
     """
     wanted = pregens_with(image_id)
     drafts = (
@@ -79,7 +82,8 @@ async def using_scenarios(session: AsyncSession, image_id: uuid.UUID) -> list[tu
     versions = select(ScenarioVersion.scenario_id.label('scenario_id')).where(
         ScenarioVersion.snapshot['pregens'].contains(wanted)
     )
-    used = union(drafts, versions).subquery()
+    covers = select(Listing.scenario_id.label('scenario_id')).where(Listing.cover_image_id == image_id)
+    used = union(drafts, versions, covers).subquery()
     query = select(Asset.id, Asset.title).join(used, used.c.scenario_id == Asset.id).order_by(Asset.title, Asset.id)
     return [(row.id, row.title) for row in await session.execute(query)]
 
