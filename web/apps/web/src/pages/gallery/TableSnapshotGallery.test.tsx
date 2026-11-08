@@ -112,7 +112,8 @@ describe('갤러리의 TRPG 장면 그림', () => {
     renderApp('/gallery?tab=trpg');
 
     expect(await screen.findByText(/아직 그린 장면 그림이 없습니다/)).toBeInTheDocument();
-    expect(seen.some((request) => request.url.startsWith('/api/v1/chat/'))).toBe(false);
+    // 왼쪽 메뉴 열의 최근 대화는 chat 대화의 목록을 읽는다. 일러스트의 목록만 보지 않는다
+    expect(seen.some((request) => request.url.startsWith('/api/v1/chat/') && !request.url.startsWith('/api/v1/chat/conversations'))).toBe(false);
   });
 });
 
