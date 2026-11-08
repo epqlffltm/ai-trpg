@@ -519,7 +519,7 @@ def names(turns: list[Turn]) -> list[str]:
 def test_order_puts_the_ambushers_then_the_quick_first():
     turns = [turn_of(pc('느림', 8)), turn_of(pc('빠름', 16)), turn_of(mob('쥐', 12), first=True)]
 
-    ordered = initiative.order_turns(turns, 20, ScriptedDice([]))
+    ordered = initiative.order_turns(turns, SRD5, ScriptedDice([]))
 
     assert names(ordered) == ['쥐', '빠름', '느림']
 
@@ -527,7 +527,7 @@ def test_order_puts_the_ambushers_then_the_quick_first():
 def test_only_tied_turns_roll():
     turns = [turn_of(pc('하나', 10)), turn_of(pc('둘', 10)), turn_of(pc('셋', 12))]
 
-    ordered = initiative.order_turns(turns, 20, ScriptedDice([3, 9]))
+    ordered = initiative.order_turns(turns, SRD5, ScriptedDice([3, 9]))
 
     assert names(ordered) == ['셋', '둘', '하나']
     assert [turn.tiebreak for turn in ordered] == [None, 9, 3]
@@ -536,7 +536,7 @@ def test_only_tied_turns_roll():
 def test_the_same_tiebreak_keeps_the_given_order():
     turns = [turn_of(pc('먼저 앉음', 10)), turn_of(mob('쥐', 10))]
 
-    ordered = initiative.order_turns(turns, 20, ScriptedDice([7, 7]))
+    ordered = initiative.order_turns(turns, SRD5, ScriptedDice([7, 7]))
 
     assert names(ordered) == ['먼저 앉음', '쥐']
 

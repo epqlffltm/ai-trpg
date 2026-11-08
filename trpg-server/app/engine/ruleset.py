@@ -104,12 +104,51 @@ class Ability(Part):
 
 
 class Difficulty(Part):
-    """난이도 한 단계. 예: 보통(15)."""
+    """
+    난이도 한 단계. 예: 보통(15).
+
+    target 은 눈 + 보정 ≥ 목표(over)의 목표값이다. 눈 ≤ 기량(under)에서는 쓰지 않고, 규칙의 굴림(Roll.shifts)이
+    난이도마다 기량에 더하는 값을 정한다(#404).
+    """
 
     key: Key
     name: Name
     # 주사위와 보정을 더한 값이 이 값 이상이면 성공이다
     target: Annotated[int, Field(ge=1, le=RULESET_MAX_NUMBER)]
+
+
+class RollStyle(enum.StrEnum):
+    """판정을 어떻게 가르나(#404). 규칙의 모든 굴림(판정, 죽음의 굴림, 되살아나기)이 같은 쪽을 따른다."""
+
+    # 눈 + 보정이 목표값 이상이면 성공이다(d20 계열)
+    OVER = 'over'
+    # 눈이 기량(능력치의 점수 + 난이도의 값) 이하이면 성공이다(d100 계열)
+    UNDER = 'under'
+
+
+# 난이도마다 기량에 더하는 값의 범위(under). 빼는 값이 흔하다(어려움 -20)
+Shift = Annotated[int, Field(ge=-RULESET_MAX_NUMBER, le=RULESET_MAX_NUMBER)]
+
+
+class Roll(Part):
+    """
+    규칙의 굴림(#404). 주사위 몇 개를 굴려 더하는지와, 성공을 어느 쪽으로 가르는지다.
+
+    count 는 굴리는 주사위의 개수다. 면 수는 Ruleset.die 다. 2 와 6 이면 2d6 을 굴려 더한다.
+    판정, 죽음의 굴림, 되살아나기, 관통과 세이브, 선공을 가르는 굴림이 모두 이것을 굴린다.
+    style 이 under 면 shifts 에 난이도(이름표)마다 기량에 더하는 값을 빠짐없이 적는다. over 에는 적지 않는다.
+    """
+
+    count: Annotated[int, Field(ge=1, le=RULESET_MAX_DICE)]
+    style: RollStyle
+    shifts: Annotated[dict[Key, Shift], Field(max_length=RULESET_MAX_DIFFICULTIES)] = {}
+
+    @model_validator(mode='after')
+    def shifts_only_for_under(self) -> Self:
+        """기량에 더하는 값은 under 에만 있다."""
+        if self.style == RollStyle.OVER and self.shifts:
+            raise ValueError('shifts 는 style 이 under 일 때만 적습니다.')
+        return self
 
 
 class Modifier(Part):
@@ -1060,6 +1099,8 @@ class Ruleset(Part):
     modifier: Modifier
     # 판정에 굴리는 주사위의 면 수. 20 이면 d20 이다
     die: Annotated[int, Field(ge=RULESET_MIN_DIE, le=RULESET_MAX_DIE)]
+    # 굴리는 주사위의 개수와 성공을 가르는 쪽(#404). 칸 자체는 늘 있어야 한다
+    roll: Roll
     # 난이도의 단계들. 행동은 숫자가 아니라 이 중 하나를 고른다
     difficulties: Annotated[tuple[Difficulty, ...], Field(min_length=1, max_length=RULESET_MAX_DIFFICULTIES)]
     # 행동이 난이도를 고르지 않았을 때 쓰는 단계
@@ -1316,15 +1357,39 @@ class Ruleset(Part):
         used = {self.rest.short.heal, *([self.rest.natural.heal] if self.rest.natural is not None else [])}
         if used - magnitudes:
             raise ValueError(f'쉬기의 회복 등급이 등급에 없습니다: {", ".join(sorted(used - magnitudes))}')
-        if self.rest.revive is not None and self.rest.revive.target > self.die:
-            raise ValueError('되살아나기의 목표값이 주사위의 가장 큰 눈보다 큽니다.')
+        if self.rest.revive is not None and not self.reachable(self.rest.revive.target):
+            raise ValueError('되살아나기의 목표값에 주사위가 닿지 못합니다.')
         return self
+
+    def reachable(self, target: int) -> bool:
+        """
+        보정 없이 굴려서 목표값에 닿을 수 있는가. over 면 가장 큰 합이 목표 이상, under 면 가장 작은 합이 목표 이하다.
+        """
+        if self.roll.style == RollStyle.UNDER:
+            return self.roll.count <= target
+        return target <= self.roll.count * self.die
 
     @model_validator(mode='after')
     def require_survivable_death_save(self) -> Self:
-        """죽음의 굴림은 성공할 수 있어야 한다. 목표값이 주사위의 가장 큰 눈보다 크면 쓰러진 캐릭터는 반드시 죽는다."""
-        if self.death_save is not None and self.death_save.target > self.die:
-            raise ValueError('죽음의 굴림의 목표값이 주사위의 가장 큰 눈보다 큽니다.')
+        """죽음의 굴림은 성공할 수 있어야 한다. 목표값에 주사위가 닿지 못하면 쓰러진 캐릭터는 반드시 죽는다."""
+        if self.death_save is not None and not self.reachable(self.death_save.target):
+            raise ValueError('죽음의 굴림의 목표값에 주사위가 닿지 못합니다.')
+        return self
+
+    @model_validator(mode='after')
+    def require_roll_shifts(self) -> Self:
+        """
+        under 의 기량에 더하는 값은 난이도마다 하나씩 있어야 한다(#404). 없는 난이도의 값은 받지 않는다.
+
+        under 와 방어 방식은 함께 쓰지 못한다(2026-11-08 결정). 관통, 세이브, AC 는 눈 + 보정 ≥ 목표에 맞춰 정했다.
+        """
+        if self.roll.style == RollStyle.OVER:
+            return self
+        keys = {difficulty.key for difficulty in self.difficulties}
+        if set(self.roll.shifts) != keys:
+            raise ValueError('under 의 shifts 에 난이도마다 하나씩, 규칙에 있는 난이도만 적습니다.')
+        if self.armor is not None:
+            raise ValueError('under 규칙은 아직 방어 방식(armor)을 쓰지 못합니다.')
         return self
 
     @model_validator(mode='after')

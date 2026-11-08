@@ -35,6 +35,7 @@
       "step": 1
     },
     "die": 10,
+    "roll": {"count": 1, "style": "over", "shifts": {}},
     "difficulties": [
       {
         "key": "easy",

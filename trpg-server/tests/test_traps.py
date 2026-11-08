@@ -331,7 +331,8 @@ async def test_the_setter_is_caught_too(
         'entry_id': snares['snare']['id'],
         'name': '올가미',
         'set_by': str(ME),
-        'avoid': sprung['avoid'],
+        # 이벤트에는 굳힌 판정의 문서가 그대로 든다. 굴린 눈들과 방식(#404)까지다
+        'avoid': {**sprung['avoid'], 'faces': [CAUGHT], 'style': 'over'},
         'avoided': False,
     }
 

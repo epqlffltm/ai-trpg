@@ -165,7 +165,9 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      캠페인의 앞 편의 퀘스트 결과(campaign_quests, #481 B)도 뒤에 더했다. 판에는 늘 비어 있고, 캠페인의 편의 테이블을
 #      열 때 테이블의 복사본에만 채운다. 조건 campaign_quest_succeeded, campaign_quest_failed 의 target 도 같다.
 #      프리젠의 캐릭터 그림(pregens[].image_id, #983)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
-SNAPSHOT_FORMAT = 68
+#  69: 룰북의 규칙에 굴림이 있다(#404). rulebook.rules.roll: 주사위의 개수(count), 성공을 가르는 쪽(style: over, under),
+#      under 에서 난이도마다 기량에 더하는 값(shifts). 그 전의 판은 주사위 하나의 over 다
+SNAPSHOT_FORMAT = 69
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다

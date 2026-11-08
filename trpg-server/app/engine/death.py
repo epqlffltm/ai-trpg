@@ -17,6 +17,7 @@ import enum
 from dataclasses import dataclass
 
 from app.engine.dice import Dice
+from app.engine.rolls import passes, roll_pool
 from app.engine.ruleset import DeathSave, Ruleset
 
 
@@ -107,13 +108,13 @@ def roll_death_save(ruleset: Ruleset, successes: int, failures: int, dice: Dice)
 
     규칙에 죽음의 굴림이 없거나, 이미 갈림길이 정해졌으면(고비를 넘겼거나 죽었으면) 굴리지 않고 None.
     그때는 주사위를 건드리지 않는다.
-    능력치의 보정을 더하지 않는다. 눈이 그대로 결과다.
+    능력치의 보정을 더하지 않는다. 눈(여럿을 굴리면 합)이 그대로 결과다. 성공은 규칙의 굴림 방식을 따른다(#404).
     """
     death_save = ruleset.death_save
     if death_save is None or not is_rolling(death_save, successes, failures):
         return None
-    roll = dice.roll(ruleset.die)
-    success = roll >= death_save.target
+    roll = sum(roll_pool(ruleset, dice))
+    success = passes(ruleset, roll, death_save.target)
     successes += 1 if success else 0
     failures += 0 if success else 1
     return DeathSaveRoll(

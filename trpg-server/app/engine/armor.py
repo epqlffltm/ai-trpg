@@ -26,6 +26,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 
 from app.engine.dice import Dice
+from app.engine.rolls import roll_pool
 from app.engine.ruleset import ArmorMode, EquipmentSlot, Ruleset
 
 
@@ -161,11 +162,12 @@ def roll_pierce(ruleset: Ruleset, dice: Dice, ap: int, defense: int) -> Pierce |
     관통 굴림. 관통력이 있는 무기로 막는 것(방어, 커버 중 단단한 것, barrier)이 있는 곳을 칠 때만 굴린다.
     아니면 굴리지 않고 None.
 
-    방어 방식이 없는 규칙이면 막을 것이 없어 굴리지 않는다.
+    방어 방식이 없는 규칙이면 막을 것이 없어 굴리지 않는다. 방어 방식은 over 규칙에만 있다(#404).
+    눈은 규칙의 개수만큼 굴린 합이다.
     """
     if ruleset.armor is None or ap <= 0 or defense <= 0:
         return None
-    roll = dice.roll(ruleset.die)
+    roll = sum(roll_pool(ruleset, dice))
     target = defense + ruleset.armor.pierce_base
     return Pierce(roll=roll, ap=ap, target=target, pierced=roll + ap >= target)
 
@@ -199,7 +201,7 @@ def roll_save(ruleset: Ruleset, dice: Dice, defense: int, ward: int, cover: int 
     if terms is None:
         return None
     kind, value = terms
-    roll = dice.roll(ruleset.die)
+    roll = sum(roll_pool(ruleset, dice))
     target = ruleset.armor.save_target
     return Save(kind=kind, value=value, roll=roll, target=target, saved=roll + value >= target)
 

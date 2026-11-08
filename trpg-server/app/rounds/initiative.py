@@ -26,6 +26,7 @@ from itertools import groupby
 from app.assets.models import Surprise
 from app.assets.scenarios.snapshot import EncounterSnapshot, Snapshot
 from app.engine.dice import Dice
+from app.engine.rolls import better_first, roll_pool
 from app.engine.ruleset import Ruleset
 from app.rounds.cast import CastMember
 from app.rounds.monster_scene import SceneMonster
@@ -148,9 +149,10 @@ def rank_of(turn: Turn) -> tuple[bool, int]:
     return (not turn.first, -(turn.score or 0))
 
 
-def break_ties(turns: list[Turn], die: int, dice: Dice) -> list[Turn]:
+def break_ties(turns: list[Turn], ruleset: Ruleset, dice: Dice) -> list[Turn]:
     """
-    자리가 같은 무리마다 주사위를 굴려 높은 눈이 먼저 오게 한다. 혼자인 무리는 굴리지 않는다.
+    자리가 같은 무리마다 규칙의 주사위를 굴려 좋은 눈이 먼저 오게 한다. 혼자인 무리는 굴리지 않는다.
+    좋은 눈은 over 면 큰 합, under 면 작은 합이다(#404, better_first).
 
     turns 는 자리(rank_of) 순서로 정렬되어 있어야 한다. 같은 눈은 받은 순서를 그대로 둔다.
     """
@@ -160,19 +162,19 @@ def break_ties(turns: list[Turn], die: int, dice: Dice) -> list[Turn]:
         if len(members) == 1:
             ordered.extend(members)
             continue
-        rolled = [replace(turn, tiebreak=dice.roll(die)) for turn in members]
-        ordered.extend(sorted(rolled, key=lambda turn: -turn.tiebreak))
+        rolled = [replace(turn, tiebreak=sum(roll_pool(ruleset, dice))) for turn in members]
+        ordered.extend(sorted(rolled, key=lambda turn: better_first(ruleset, turn.tiebreak)))
     return ordered
 
 
-def order_turns(turns: list[Turn], die: int, dice: Dice) -> list[Turn]:
+def order_turns(turns: list[Turn], ruleset: Ruleset, dice: Dice) -> list[Turn]:
     """
     차례들을 판정할 순서로 늘어놓는다. 기습 → 점수 → 주사위다.
 
     turns 는 앉은 사람(앉은 순서), 그다음 몬스터(장면의 순서), 그다음 인물(장면의 순서)로 받는다.
     모든 것이 같으면 그 순서를 지킨다.
     """
-    return break_ties(sorted(turns, key=rank_of), die, dice)
+    return break_ties(sorted(turns, key=rank_of), ruleset, dice)
 
 
 def turn_document(turn: Turn) -> dict:

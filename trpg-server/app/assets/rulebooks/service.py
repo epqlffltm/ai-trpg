@@ -65,8 +65,10 @@ def problem_of(rules: dict) -> str | None:
 
 
 # 한꺼번에 바꿀 수 있는 규칙의 칸들. 앞의 것을 가리키는 것이 뒤에 온다
-# (부상과 면역이 성질을, 부상 표가 부상을, 수치의 문턱과 기술이 부상과 수치를 가리킨다)
+# (굴림이 주사위의 면 수를, 부상과 면역이 성질을, 부상 표가 부상을, 수치의 문턱과 기술이 부상과 수치를 가리킨다)
 PART_FIELDS = (
+    'die',
+    'roll',
     'natures',
     'injuries',
     'injury_table',
@@ -93,9 +95,9 @@ def was_sent(data: RulebookCreate | RulebookUpdate, field: str) -> bool:
 
 
 def dump_part(value: object) -> object:
-    """규칙의 칸 하나를 DB 에 넣을 문서로. 목록이면 하나씩, 조각이면 그대로, null 은 null 이다."""
-    if value is None:
-        return None
+    """규칙의 칸 하나를 DB 에 넣을 문서로. 목록이면 하나씩, 조각이면 그대로, 수와 null 은 그대로다."""
+    if value is None or isinstance(value, int):
+        return value
     if isinstance(value, list):
         return dump_all(value)
     return value.model_dump(mode='json')
@@ -103,7 +105,8 @@ def dump_part(value: object) -> object:
 
 def with_parts(rules: dict, parts: dict[str, object]) -> dict:
     """
-    규칙의 성질과 면역과 부상과 부상 표와 굴리는 때(#886), 수치(#804), 기술(#805), 성장(#286) 중 보낸 것만 바꾼 문서.
+    규칙의 주사위와 굴림(#404), 성질과 면역과 부상과 부상 표와 굴리는 때(#886), 수치(#804), 기술(#805), 성장(#286) 중
+    보낸 것만 바꾼 문서.
     받은 문서는 고치지 않는다. 아무것도 안 보냈으면 그대로다.
 
     칸끼리 가리키는 것(기술의 비용이 수치를, 부상과 면역이 성질을)은 규칙의 다른 칸과 견주어야 알 수 있다.
