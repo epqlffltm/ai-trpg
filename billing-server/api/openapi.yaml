@@ -460,9 +460,19 @@ paths:
               required: [enabled, threshold, product_id, monthly_limit]
               properties:
                 enabled: { type: boolean }
+                mode:
+                  type: string
+                  enum: [balance, date]
+                  description: 언제 사는지. balance 는 골드가 threshold 아래로 떨어지면, date 는 매달 charge_day(한국 날짜)에(#1167). 없으면 balance 다
                 threshold:
                   allOf: [{ $ref: "#/components/schemas/Amount" }]
-                  description: 골드가 이 값 아래로 떨어지면 산다. 0 에서 100000
+                  description: 골드가 이 값 아래로 떨어지면 산다. 0 에서 100000. 날짜 기준이어도 적는다(남겨 둔다)
+                charge_day:
+                  type: integer
+                  nullable: true
+                  minimum: 1
+                  maximum: 28
+                  description: 날짜 기준에서 사는 날(한국 날짜). date 면 있어야 한다. balance 여도 적으면 남겨 둔다
                 product_id: { type: string, example: credits-5000 }
                 monthly_limit:
                   type: integer
@@ -1185,10 +1195,18 @@ components:
           nullable: true
           description: 적은 적이 없으면 null
           additionalProperties: false
-          required: [enabled, threshold, product_id, monthly_limit]
+          required: [enabled, mode, threshold, charge_day, product_id, monthly_limit]
           properties:
             enabled: { type: boolean }
+            mode:
+              type: string
+              enum: [balance, date]
+              description: 언제 사는지. balance 는 골드가 threshold 아래로 떨어지면, date 는 매달 charge_day(한국 날짜)에(#1167)
             threshold: { $ref: "#/components/schemas/Amount" }
+            charge_day:
+              type: integer
+              nullable: true
+              description: 날짜 기준에서 사는 날(1~28). 고른 적이 없으면 null
             product_id: { type: string }
             monthly_limit: { type: integer, format: int64 }
         consecutive_failures:

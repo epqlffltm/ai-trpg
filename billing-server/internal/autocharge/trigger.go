@@ -23,6 +23,7 @@ import (
 //   - 그 밖에는 아무것도 하지 않는다. 결제가 실패한 뒤 골드가 그대로 기준 아래면 다시 적지 않는다(다시 하지 않고 알린다)
 //
 // 결제 대행사는 부르지 않는다. 적어 둔 일은 따로 도는 작업(cmd/autocharge)이 결제한다.
+// 날짜 기준(ModeDate, #1167)으로 켠 사람은 꺼진 것으로 본다. 그 일은 결제 작업이 그날 적는다(schedule.go).
 
 // Decision 은 떨어진 것을 본 뒤에 할 일이다. 규칙만이다. DB 를 보지 않는다.
 type Decision int
@@ -54,7 +55,7 @@ func Decide(enabled bool, armed bool, threshold credit.Amount, paid credit.Amoun
 }
 
 // NoteBalanceInTx 는 골드를 뺀 뒤의 잔액을 보고, 정한 대로 충전할 일을 적거나 armed 를 켠다. 부르는 쪽의 트랜잭션 안에서 한다.
-// 설정이 없으면 아무것도 하지 않는다. 일을 적었으면 true 다.
+// 설정이 없거나 날짜 기준이면 아무것도 하지 않는다. 일을 적었으면 true 다.
 func (s *Service) NoteBalanceInTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (bool, error) {
 	queries := autochargedb.New(tx)
 	row, err := queries.GetTrigger(ctx, userID)
@@ -64,7 +65,7 @@ func (s *Service) NoteBalanceInTx(ctx context.Context, tx pgx.Tx, userID uuid.UU
 	if err != nil {
 		return false, err
 	}
-	switch Decide(row.Enabled, row.Armed, row.Threshold, credit.Amount(row.Paid)) {
+	switch Decide(row.Enabled && Mode(row.Mode) == ModeBalance, row.Armed, row.Threshold, credit.Amount(row.Paid)) {
 	case DecideArm:
 		return false, queries.SetArmed(ctx, autochargedb.SetArmedParams{UserID: userID, Armed: true})
 	case DecideCharge:

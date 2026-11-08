@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/wallet/AutoChargeForm.tsx
-// 자동 충전(#980)의 설정. 켜기, 기준 골드, 살 상품, 한 달 상한(원). 적으면 서버가 돌려준 설정을 보인다.
+// 자동 충전(#980)의 설정. 켜기, 언제 살지(잔액 기준의 기준 골드, 또는 날짜 기준의 매달의 날, #1167), 살 상품, 한 달 상한(원).
+// 적으면 서버가 돌려준 설정을 보인다. 고르지 않은 방식의 칸은 숨기지만 값은 남긴다(다시 고르면 보인다).
 // 값은 화면이 먼저 보고(autoChargeView 의 toSettings) 서버가 다시 본다. 켜려면 카드가 있고 지금 결제할 수 있어야 한다(서버가 본다).
 //
 // 켜는 설정을 적을 때마다 자동 결제에 동의한다(가입 때가 아니라 켤 때, 2026-11-04 결정).
@@ -7,14 +8,14 @@
 // 동의하는 칸은 미리 체크하지 않는다. 서버가 판과 조건과 시각을 적는다. 판이 바뀌었으면 서버가 409 로 알린다.
 // 켜 둔 채 판이 올랐으면(또는 동의 없이 켰으면) 서버가 결제를 멈춘다. 맨 위에 그것을 알린다(pausedText).
 
-import { Button, Checkbox, Notice, SelectField, TextField } from '@ai-trpg/ui';
+import { Button, Checkbox, Notice, Radio, SelectField, TextField } from '@ai-trpg/ui';
 import { useState, type FormEvent } from 'react';
 import type { AutoChargeSettings } from '../../api/autoCharge';
 import type { AutoCharge, Product } from '../../api/types';
 import { autoChargeDocumentName } from '../../legal/autoChargeTerms';
 import { ConsentDocumentDialog, type ViewingDocument } from '../../legal/ConsentDocumentDialog';
 import { wonLabel } from '../charge/chargeView';
-import { agreementLines, initialDraft, pausedText, toSettings, type AutoChargeDraft } from './autoChargeView';
+import { agreementLines, CHARGE_DAYS, initialDraft, pausedText, toSettings, type AutoChargeDraft } from './autoChargeView';
 
 type Props = {
   current: AutoCharge;
@@ -51,16 +52,47 @@ export function AutoChargeForm({ current, products, busy, onSave }: Props) {
       {paused ? <Notice tone="error">{paused}</Notice> : null}
       <Checkbox
         label="자동 충전 켜기"
-        description="골드가 기준 아래로 떨어지면 등록한 카드로 고른 상품을 한 번 삽니다. 세 번 이어서 실패하면 꺼집니다."
+        description="고른 때에 등록한 카드로 고른 상품을 한 번 삽니다. 세 번 이어서 실패하면 꺼집니다."
         checked={draft.enabled}
         onChange={(event) => change({ enabled: event.target.checked })}
       />
-      <TextField
-        label="기준 골드"
-        inputMode="numeric"
-        value={draft.threshold}
-        onChange={(event) => change({ threshold: event.target.value })}
-      />
+      <fieldset>
+        <legend>언제 살지</legend>
+        <Radio
+          name="auto-charge-mode"
+          label="골드가 기준 아래로 떨어지면"
+          checked={draft.mode === 'balance'}
+          onChange={() => change({ mode: 'balance' })}
+        />
+        <Radio
+          name="auto-charge-mode"
+          label="매달 정한 날에"
+          description="골드가 남아 있어도 삽니다."
+          checked={draft.mode === 'date'}
+          onChange={() => change({ mode: 'date' })}
+        />
+      </fieldset>
+      {draft.mode === 'balance' ? (
+        <TextField
+          label="기준 골드"
+          inputMode="numeric"
+          value={draft.threshold}
+          onChange={(event) => change({ threshold: event.target.value })}
+        />
+      ) : (
+        <>
+          <SelectField label="매달 사는 날" value={draft.chargeDay} onChange={(event) => change({ chargeDay: event.target.value })}>
+            {CHARGE_DAYS.map((day) => (
+              <option key={day} value={String(day)}>
+                {day}일
+              </option>
+            ))}
+          </SelectField>
+          <p className="hint">
+            한국 날짜입니다. 모든 달에 있는 1일에서 28일까지 고릅니다. 오늘이 그날이면 오늘 삽니다. 그날 사지 못하면 그달은 건너뜁니다.
+          </p>
+        </>
+      )}
       <SelectField label="살 상품" value={draft.productId} onChange={(event) => change({ productId: event.target.value })}>
         {products.map((product) => (
           <option key={product.id} value={product.id}>
@@ -120,7 +152,7 @@ function Agreement({ current, draft, products, documentName, onView, onAgree }: 
           ))}
         </ul>
       ) : (
-        <p className="hint">기준 골드, 상품, 한 달 상한을 맞게 적으면 동의할 조건이 보입니다.</p>
+        <p className="hint">언제 살지, 상품, 한 달 상한을 맞게 적으면 동의할 조건이 보입니다.</p>
       )}
       {documentName ? (
         <Button variant="quiet" onClick={() => onView({ label: '자동 충전 이용 동의', name: documentName })}>

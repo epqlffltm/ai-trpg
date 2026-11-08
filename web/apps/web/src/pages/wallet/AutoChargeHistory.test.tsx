@@ -116,7 +116,7 @@ describe('최근 자동 결제의 글', () => {
 
   it('결제된 것에는 덧붙일 말이 없고, 모르는 까닭은 한 말이다', () => {
     expect(historyNote(item())).toBeNull();
-    expect(historyNote(item({ status: 'skipped', reason: 'stale' }))).toMatch(/다음에 골드가 떨어지면 다시 삽니다/);
+    expect(historyNote(item({ status: 'skipped', reason: 'stale' }))).toMatch(/골드가 떨어질 때나 다음 달의 그날/);
     expect(historyNote(item({ status: 'skipped', reason: 'terms_outdated' }))).toMatch(/동의하고 저장하면 다시 삽니다/);
     expect(historyNote(item({ status: 'skipped', reason: 'something_new' as AutoChargeHistoryItem['reason'] }))).toBe('결제하지 않았습니다.');
     expect(historyNote(item({ status: 'skipped', reason: 'no_card', turned_off: true }))).toBe(

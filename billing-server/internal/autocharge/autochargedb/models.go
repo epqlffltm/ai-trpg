@@ -29,6 +29,7 @@ type AutoChargeRequest struct {
 	CreatedAt     time.Time
 	FinishedAt    pgtype.Timestamptz
 	TurnedOff     bool
+	ChargeDate    pgtype.Date
 }
 
 type AutoChargeSetting struct {
@@ -40,4 +41,6 @@ type AutoChargeSetting struct {
 	ConsecutiveFailures int32
 	UpdatedAt           time.Time
 	Armed               bool
+	Mode                string
+	ChargeDay           pgtype.Int2
 }

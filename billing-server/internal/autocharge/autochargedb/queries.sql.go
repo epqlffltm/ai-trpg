@@ -195,7 +195,7 @@ func (q *Queries) GetCustomerKey(ctx context.Context, userID uuid.UUID) (uuid.UU
 }
 
 const getRequest = `-- name: GetRequest :one
-SELECT id, user_id, product_id, price, credits, status, skip_reason, failure_code, billing_key, customer_key, attempts, last_error, next_attempt_at, created_at, finished_at, turned_off FROM auto_charge_requests WHERE id = $1
+SELECT id, user_id, product_id, price, credits, status, skip_reason, failure_code, billing_key, customer_key, attempts, last_error, next_attempt_at, created_at, finished_at, turned_off, charge_date FROM auto_charge_requests WHERE id = $1
 `
 
 // 충전할 일 하나. 사람이 결과를 정할 때 읽는다.
@@ -219,12 +219,13 @@ func (q *Queries) GetRequest(ctx context.Context, id uuid.UUID) (AutoChargeReque
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.TurnedOff,
+		&i.ChargeDate,
 	)
 	return i, err
 }
 
 const getSettings = `-- name: GetSettings :one
-SELECT user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, updated_at, armed FROM auto_charge_settings WHERE user_id = $1
+SELECT user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, updated_at, armed, mode, charge_day FROM auto_charge_settings WHERE user_id = $1
 `
 
 func (q *Queries) GetSettings(ctx context.Context, userID uuid.UUID) (AutoChargeSetting, error) {
@@ -239,13 +240,15 @@ func (q *Queries) GetSettings(ctx context.Context, userID uuid.UUID) (AutoCharge
 		&i.ConsecutiveFailures,
 		&i.UpdatedAt,
 		&i.Armed,
+		&i.Mode,
+		&i.ChargeDay,
 	)
 	return i, err
 }
 
 const getTrigger = `-- name: GetTrigger :one
 
-SELECT s.enabled, s.threshold, s.armed, s.product_id,
+SELECT s.enabled, s.threshold, s.armed, s.product_id, s.mode,
     COALESCE((SELECT w.paid_balance FROM wallets w WHERE w.user_id = s.user_id), 0)::BIGINT AS paid
 FROM auto_charge_settings s WHERE s.user_id = $1
 `
@@ -255,6 +258,7 @@ type GetTriggerRow struct {
 	Threshold credit.Amount
 	Armed     bool
 	ProductID string
+	Mode      string
 	Paid      int64
 }
 
@@ -268,15 +272,16 @@ func (q *Queries) GetTrigger(ctx context.Context, userID uuid.UUID) (GetTriggerR
 		&i.Threshold,
 		&i.Armed,
 		&i.ProductID,
+		&i.Mode,
 		&i.Paid,
 	)
 	return i, err
 }
 
 const insertConsent = `-- name: InsertConsent :exec
-INSERT INTO auto_charge_consents (user_id, terms_version, threshold, product_id, price, monthly_limit, agreed_at)
+INSERT INTO auto_charge_consents (user_id, terms_version, threshold, product_id, price, monthly_limit, mode, charge_day, agreed_at)
 VALUES ($1, $2, $3, $4, $5,
-        $6, $7)
+        $6, $7, $8, $9)
 `
 
 type InsertConsentParams struct {
@@ -286,10 +291,13 @@ type InsertConsentParams struct {
 	ProductID    string
 	Price        int64
 	MonthlyLimit int64
+	Mode         string
+	ChargeDay    pgtype.Int2
 	Now          time.Time
 }
 
 // 자동 결제 동의를 한 줄 더한다. 켜는 설정을 적는 트랜잭션 안에서 한다.
+// 방식과 날(#1167)도 조건이다. 잔액 기준이면 날을 적지 않는다.
 func (q *Queries) InsertConsent(ctx context.Context, arg InsertConsentParams) error {
 	_, err := q.db.Exec(ctx, insertConsent,
 		arg.UserID,
@@ -298,6 +306,8 @@ func (q *Queries) InsertConsent(ctx context.Context, arg InsertConsentParams) er
 		arg.ProductID,
 		arg.Price,
 		arg.MonthlyLimit,
+		arg.Mode,
+		arg.ChargeDay,
 		arg.Now,
 	)
 	return err
@@ -356,6 +366,43 @@ func (q *Queries) InsertRequest(ctx context.Context, arg InsertRequestParams) (i
 	return result.RowsAffected(), nil
 }
 
+const insertScheduledRequest = `-- name: InsertScheduledRequest :execrows
+INSERT INTO auto_charge_requests (id, user_id, product_id, price, credits, charge_date, next_attempt_at, created_at)
+VALUES (
+    $1, $2, $3, $4, $5, $6::DATE,
+    $7, $7
+)
+ON CONFLICT DO NOTHING
+`
+
+type InsertScheduledRequestParams struct {
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	ProductID  string
+	Price      int64
+	Credits    credit.Amount
+	ChargeDate pgtype.Date
+	Now        time.Time
+}
+
+// 날짜 기준의 충전할 일을 적는다. 그날의 일이나 끝나지 않은 일이 이미 있으면 적지 않는다(바뀐 줄이 0 이다).
+// 두 색인(auto_charge_requests_one_per_day, auto_charge_requests_one_open)이 함께 막는다. 결제 작업이 둘이어도 한 번이다.
+func (q *Queries) InsertScheduledRequest(ctx context.Context, arg InsertScheduledRequestParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertScheduledRequest,
+		arg.ID,
+		arg.UserID,
+		arg.ProductID,
+		arg.Price,
+		arg.Credits,
+		arg.ChargeDate,
+		arg.Now,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const latestConsentVersion = `-- name: LatestConsentVersion :one
 SELECT terms_version FROM auto_charge_consents
 WHERE user_id = $1
@@ -387,7 +434,7 @@ func (q *Queries) LeaseRequest(ctx context.Context, arg LeaseRequestParams) erro
 }
 
 const listOpenRequests = `-- name: ListOpenRequests :many
-SELECT id, user_id, product_id, price, credits, status, skip_reason, failure_code, billing_key, customer_key, attempts, last_error, next_attempt_at, created_at, finished_at, turned_off FROM auto_charge_requests
+SELECT id, user_id, product_id, price, credits, status, skip_reason, failure_code, billing_key, customer_key, attempts, last_error, next_attempt_at, created_at, finished_at, turned_off, charge_date FROM auto_charge_requests
 WHERE status IN ('pending', 'charging') AND created_at <= $1::TIMESTAMPTZ
 ORDER BY created_at, id
 LIMIT $2
@@ -425,6 +472,7 @@ func (q *Queries) ListOpenRequests(ctx context.Context, arg ListOpenRequestsPara
 			&i.CreatedAt,
 			&i.FinishedAt,
 			&i.TurnedOff,
+			&i.ChargeDate,
 		); err != nil {
 			return nil, err
 		}
@@ -492,6 +540,50 @@ func (q *Queries) ListRecentRequests(ctx context.Context, arg ListRecentRequests
 	return items, nil
 }
 
+const listScheduledDue = `-- name: ListScheduledDue :many
+SELECT s.user_id, s.product_id FROM auto_charge_settings s
+WHERE s.enabled AND s.mode = 'date' AND s.charge_day = $1::SMALLINT
+  AND NOT EXISTS (
+      SELECT 1 FROM auto_charge_requests r
+      WHERE r.user_id = s.user_id AND (r.charge_date = $2::DATE OR r.status IN ('pending', 'charging'))
+  )
+ORDER BY s.user_id
+LIMIT $3
+`
+
+type ListScheduledDueParams struct {
+	Day        int16
+	ChargeDate pgtype.Date
+	RowLimit   int32
+}
+
+type ListScheduledDueRow struct {
+	UserID    uuid.UUID
+	ProductID string
+}
+
+// 날짜 기준(#1167)으로 켜 두었고 오늘(한국 날짜의 날 day, 날짜 charge_date)이 그날인데, 오늘의 일도 끝나지 않은 일도 없는 사람.
+// 끝나지 않은 일(잔액 기준에서 바꾸기 전의 것)이 있으면 그 일이 끝난 뒤의 바퀴에서 적는다.
+func (q *Queries) ListScheduledDue(ctx context.Context, arg ListScheduledDueParams) ([]ListScheduledDueRow, error) {
+	rows, err := q.db.Query(ctx, listScheduledDue, arg.Day, arg.ChargeDate, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListScheduledDueRow
+	for rows.Next() {
+		var i ListScheduledDueRow
+		if err := rows.Scan(&i.UserID, &i.ProductID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockCard = `-- name: LockCard :one
 SELECT user_id FROM payment_cards WHERE user_id = $1 FOR UPDATE
 `
@@ -505,7 +597,7 @@ func (q *Queries) LockCard(ctx context.Context, userID uuid.UUID) (uuid.UUID, er
 }
 
 const lockDueRequest = `-- name: LockDueRequest :one
-SELECT id, user_id, product_id, price, credits, status, skip_reason, failure_code, billing_key, customer_key, attempts, last_error, next_attempt_at, created_at, finished_at, turned_off FROM auto_charge_requests
+SELECT id, user_id, product_id, price, credits, status, skip_reason, failure_code, billing_key, customer_key, attempts, last_error, next_attempt_at, created_at, finished_at, turned_off, charge_date FROM auto_charge_requests
 WHERE status IN ('pending', 'charging') AND next_attempt_at <= $1
 ORDER BY next_attempt_at, id
 LIMIT 1
@@ -533,6 +625,7 @@ func (q *Queries) LockDueRequest(ctx context.Context, now time.Time) (AutoCharge
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.TurnedOff,
+		&i.ChargeDate,
 	)
 	return i, err
 }
@@ -648,18 +741,21 @@ func (q *Queries) UpsertCard(ctx context.Context, arg UpsertCardParams) error {
 }
 
 const upsertSettings = `-- name: UpsertSettings :one
-INSERT INTO auto_charge_settings (user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, armed, updated_at)
+INSERT INTO auto_charge_settings (
+    user_id, enabled, threshold, product_id, monthly_limit, mode, charge_day, consecutive_failures, armed, updated_at
+)
 VALUES (
-    $1, $2, $3, $4, $5, 0,
-    $2, $6
+    $1, $2, $3, $4, $5,
+    $6, $7, 0, $2, $8
 )
 ON CONFLICT (user_id) DO UPDATE SET
     enabled = EXCLUDED.enabled, threshold = EXCLUDED.threshold, product_id = EXCLUDED.product_id,
-    monthly_limit = EXCLUDED.monthly_limit, updated_at = EXCLUDED.updated_at,
+    monthly_limit = EXCLUDED.monthly_limit, mode = EXCLUDED.mode, charge_day = EXCLUDED.charge_day,
+    updated_at = EXCLUDED.updated_at,
     consecutive_failures = CASE WHEN EXCLUDED.enabled THEN 0 ELSE auto_charge_settings.consecutive_failures END,
     -- 켤 때마다 다음에 떨어지면 산다(#980 의 둘째 단계). 이미 기준 아래여도 다음 홀드에서 산다
     armed = EXCLUDED.enabled
-RETURNING user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, updated_at, armed
+RETURNING user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, updated_at, armed, mode, charge_day
 `
 
 type UpsertSettingsParams struct {
@@ -668,10 +764,13 @@ type UpsertSettingsParams struct {
 	Threshold    credit.Amount
 	ProductID    string
 	MonthlyLimit int64
+	Mode         string
+	ChargeDay    pgtype.Int2
 	Now          time.Time
 }
 
 // 설정을 적는다. 켜면 이어서 실패한 수를 0 으로 되돌린다(사용자가 다시 켰다). 끄면 그대로 둔다.
+// 방식(mode)과 날(charge_day)은 날짜 기준(#1167)이다. 잔액 기준이어도 날을 남긴다(비어 있을 수 있다).
 func (q *Queries) UpsertSettings(ctx context.Context, arg UpsertSettingsParams) (AutoChargeSetting, error) {
 	row := q.db.QueryRow(ctx, upsertSettings,
 		arg.UserID,
@@ -679,6 +778,8 @@ func (q *Queries) UpsertSettings(ctx context.Context, arg UpsertSettingsParams) 
 		arg.Threshold,
 		arg.ProductID,
 		arg.MonthlyLimit,
+		arg.Mode,
+		arg.ChargeDay,
 		arg.Now,
 	)
 	var i AutoChargeSetting
@@ -691,6 +792,8 @@ func (q *Queries) UpsertSettings(ctx context.Context, arg UpsertSettingsParams) 
 		&i.ConsecutiveFailures,
 		&i.UpdatedAt,
 		&i.Armed,
+		&i.Mode,
+		&i.ChargeDay,
 	)
 	return i, err
 }

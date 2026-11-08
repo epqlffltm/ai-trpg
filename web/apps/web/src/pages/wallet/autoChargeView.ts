@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/wallet/autoChargeView.ts
 // 자동 충전(#980)의 순수한 함수. 설정의 입력 칸, 보낼 값과 그 검사, 자동 결제 동의의 조건 글, 동의가 없어 멈춘 것, 시험용 카드 등록의 인증 키.
+// 언제 살지는 둘 중 하나다(mode). 잔액 기준은 골드가 기준 아래로 떨어지면, 날짜 기준(#1167)은 매달 고른 날(한국 날짜의 1~28일)에 산다.
 
 import type { AutoChargeSettings } from '../../api/autoCharge';
 import type { AutoCharge, Product } from '../../api/types';
@@ -8,23 +9,50 @@ import type { AutoCharge, Product } from '../../api/types';
 export const MAX_THRESHOLD = 100_000;
 /** 한 달 상한의 가장 큰 값(원). 서버와 같다 */
 export const MAX_MONTHLY_LIMIT = 500_000;
+/** 날짜 기준에서 고를 수 있는 가장 늦은 날. 모든 달에 그날이 있게 28일까지다. 서버와 같다 */
+export const MAX_CHARGE_DAY = 28;
+/** 날짜 기준에서 고를 수 있는 날(1~28일) */
+export const CHARGE_DAYS = Array.from({ length: MAX_CHARGE_DAY }, (_, index) => index + 1);
 
-/** agreed 는 이번에 적을 조건으로 자동 결제에 동의한다는 칸이다. 늘 비운 채 시작한다(미리 체크하지 않는다) */
-export type AutoChargeDraft = { enabled: boolean; threshold: string; productId: string; monthlyLimit: string; agreed: boolean };
+export type AutoChargeMode = 'balance' | 'date';
 
-/** 입력 칸의 처음 값. 적은 적이 없으면 꺼 둔 채 기준 500, 첫 상품, 한 달 30,000 원이다 */
+/**
+ * agreed 는 이번에 적을 조건으로 자동 결제에 동의한다는 칸이다. 늘 비운 채 시작한다(미리 체크하지 않는다).
+ * threshold 는 잔액 기준만, chargeDay 는 날짜 기준만 쓴다. 다른 방식으로 바꿔도 값은 남긴다
+ */
+export type AutoChargeDraft = {
+  enabled: boolean;
+  mode: AutoChargeMode;
+  threshold: string;
+  chargeDay: string;
+  productId: string;
+  monthlyLimit: string;
+  agreed: boolean;
+};
+
+/** 입력 칸의 처음 값. 적은 적이 없으면 꺼 둔 채 잔액 기준, 기준 500, 1일, 첫 상품, 한 달 30,000 원이다 */
 export function initialDraft(current: AutoCharge, products: Product[]): AutoChargeDraft {
   const settings = current.settings;
   if (settings) {
     return {
       enabled: settings.enabled,
+      mode: settings.mode,
       threshold: settings.threshold,
+      chargeDay: String(settings.charge_day ?? 1),
       productId: settings.product_id,
       monthlyLimit: String(settings.monthly_limit),
       agreed: false,
     };
   }
-  return { enabled: false, threshold: '500', productId: products[0]?.id ?? '', monthlyLimit: '30000', agreed: false };
+  return {
+    enabled: false,
+    mode: 'balance',
+    threshold: '500',
+    chargeDay: '1',
+    productId: products[0]?.id ?? '',
+    monthlyLimit: '30000',
+    agreed: false,
+  };
 }
 
 export type DraftCheck = { settings: AutoChargeSettings; problem: null } | { settings: null; problem: string };
@@ -33,13 +61,40 @@ function wholeNumber(text: string): number | null {
   return /^\d{1,7}$/.test(text.trim()) ? Number(text.trim()) : null;
 }
 
+/** 기준 골드. 범위 밖이면 null 이다 */
+function thresholdOf(draft: AutoChargeDraft): number | null {
+  const threshold = wholeNumber(draft.threshold);
+  return threshold === null || threshold > MAX_THRESHOLD ? null : threshold;
+}
+
+/** 날짜 기준의 날. 1~28일이 아니면 null 이다 */
+function chargeDayOf(draft: AutoChargeDraft): number | null {
+  const day = wholeNumber(draft.chargeDay);
+  return day === null || day < 1 || day > MAX_CHARGE_DAY ? null : day;
+}
+
+/**
+ * 언제 살지의 값. 잔액 기준은 기준 골드가 맞아야 하고, 날짜 기준은 날이 맞아야 한다.
+ * 쓰지 않는 쪽의 칸은 보이지 않으므로 고칠 수 없다. 날짜 기준에서 기준 골드가 틀렸으면 0 을 보낸다(서버가 남겨 둘 값이다)
+ */
+function timingOf(draft: AutoChargeDraft): { threshold: string; charge_day: number | null } | { problem: string } {
+  const threshold = thresholdOf(draft);
+  const day = chargeDayOf(draft);
+  if (draft.mode === 'balance') {
+    if (threshold === null) {
+      return { problem: `기준 골드는 0 에서 ${MAX_THRESHOLD.toLocaleString('ko-KR')} 사이의 정수로 적어 주세요.` };
+    }
+    return { threshold: String(threshold), charge_day: day };
+  }
+  if (day === null) return { problem: `사는 날은 1일에서 ${MAX_CHARGE_DAY}일 사이로 골라 주세요.` };
+  return { threshold: String(threshold ?? 0), charge_day: day };
+}
+
 /** 입력 칸을 보낼 값으로 바꾼다. 틀렸으면 그 까닭이다. 서버도 같은 것을 다시 본다.
  * 켜는 설정은 자동 결제 동의의 지금의 판(termsVersion)에 동의해야 하고 그 판을 함께 보낸다. 끄는 설정은 동의가 필요 없다 */
 export function toSettings(draft: AutoChargeDraft, products: Product[], termsVersion: number): DraftCheck {
-  const threshold = wholeNumber(draft.threshold);
-  if (threshold === null || threshold > MAX_THRESHOLD) {
-    return { settings: null, problem: `기준 골드는 0 에서 ${MAX_THRESHOLD.toLocaleString('ko-KR')} 사이의 정수로 적어 주세요.` };
-  }
+  const timing = timingOf(draft);
+  if ('problem' in timing) return { settings: null, problem: timing.problem };
   const product = products.find((one) => one.id === draft.productId);
   if (!product) return { settings: null, problem: '살 상품을 골라 주세요.' };
   const limit = wholeNumber(draft.monthlyLimit);
@@ -47,7 +102,7 @@ export function toSettings(draft: AutoChargeDraft, products: Product[], termsVer
     return { settings: null, problem: `한 달 상한은 1 에서 ${MAX_MONTHLY_LIMIT.toLocaleString('ko-KR')} 원 사이로 적어 주세요.` };
   }
   if (limit < product.price) return { settings: null, problem: '한 달 상한은 고른 상품의 값보다 작을 수 없습니다.' };
-  const settings = { enabled: draft.enabled, threshold: String(threshold), product_id: product.id, monthly_limit: limit };
+  const settings = { enabled: draft.enabled, mode: draft.mode, ...timing, product_id: product.id, monthly_limit: limit };
   if (!draft.enabled) return { settings, problem: null };
   if (!draft.agreed) return { settings: null, problem: '자동 충전을 켜려면 자동 결제에 동의해 주세요.' };
   return { settings: { ...settings, terms_version: termsVersion }, problem: null };
@@ -55,17 +110,34 @@ export function toSettings(draft: AutoChargeDraft, products: Product[], termsVer
 
 /** 동의하는 칸 위에 보일 조건. 고른 값을 그대로 적는다. 값이 틀렸으면 null 이다(저장할 때 까닭을 보인다) */
 export function agreementLines(draft: AutoChargeDraft, products: Product[]): string[] | null {
-  const threshold = wholeNumber(draft.threshold);
   const product = products.find((one) => one.id === draft.productId);
   const limit = wholeNumber(draft.monthlyLimit);
-  if (threshold === null || !product || limit === null) return null;
+  const when = whenLines(draft, product);
+  if (!product || limit === null || when === null) return null;
   const won = (value: number) => `${value.toLocaleString('ko-KR')}원`;
   return [
-    `골드가 ${threshold.toLocaleString('ko-KR')} 아래로 떨어지면 등록한 카드로 ${product.name}(${won(product.price)})을 한 번 결제합니다.`,
+    ...when,
     `한 달(한국 날짜)에 자동으로 결제하는 돈은 ${won(limit)}을 넘지 않습니다.`,
     '결제할 때마다 알림함과 메일로 알립니다. 세 번 이어서 되지 않으면 자동 충전을 끕니다.',
     '지갑에서 언제든 끄거나 카드를 지울 수 있습니다.',
   ];
+}
+
+/** 언제 무엇을 결제하는지의 조건. 고른 방식의 값이 틀렸거나 상품이 없으면 null 이다 */
+function whenLines(draft: AutoChargeDraft, product: Product | undefined): string[] | null {
+  if (!product) return null;
+  const item = `${product.name}(${product.price.toLocaleString('ko-KR')}원)`;
+  if (draft.mode === 'date') {
+    const day = chargeDayOf(draft);
+    if (day === null) return null;
+    return [
+      `매달 ${day}일(한국 날짜)에 등록한 카드로 ${item}을 한 번 결제합니다. 골드가 남아 있어도 결제합니다.`,
+      '오늘이 그날이면 오늘 결제합니다. 그날 결제하지 못하면 그달에는 결제하지 않습니다.',
+    ];
+  }
+  const threshold = wholeNumber(draft.threshold);
+  if (threshold === null) return null;
+  return [`골드가 ${threshold.toLocaleString('ko-KR')} 아래로 떨어지면 등록한 카드로 ${item}을 한 번 결제합니다.`];
 }
 
 /**

@@ -35,14 +35,18 @@ SELECT * FROM auto_charge_settings WHERE user_id = sqlc.arg(user_id);
 
 -- name: UpsertSettings :one
 -- 설정을 적는다. 켜면 이어서 실패한 수를 0 으로 되돌린다(사용자가 다시 켰다). 끄면 그대로 둔다.
-INSERT INTO auto_charge_settings (user_id, enabled, threshold, product_id, monthly_limit, consecutive_failures, armed, updated_at)
+-- 방식(mode)과 날(charge_day)은 날짜 기준(#1167)이다. 잔액 기준이어도 날을 남긴다(비어 있을 수 있다).
+INSERT INTO auto_charge_settings (
+    user_id, enabled, threshold, product_id, monthly_limit, mode, charge_day, consecutive_failures, armed, updated_at
+)
 VALUES (
-    sqlc.arg(user_id), sqlc.arg(enabled), sqlc.arg(threshold), sqlc.arg(product_id), sqlc.arg(monthly_limit), 0,
-    sqlc.arg(enabled), sqlc.arg(now)
+    sqlc.arg(user_id), sqlc.arg(enabled), sqlc.arg(threshold), sqlc.arg(product_id), sqlc.arg(monthly_limit),
+    sqlc.arg(mode), sqlc.narg(charge_day), 0, sqlc.arg(enabled), sqlc.arg(now)
 )
 ON CONFLICT (user_id) DO UPDATE SET
     enabled = EXCLUDED.enabled, threshold = EXCLUDED.threshold, product_id = EXCLUDED.product_id,
-    monthly_limit = EXCLUDED.monthly_limit, updated_at = EXCLUDED.updated_at,
+    monthly_limit = EXCLUDED.monthly_limit, mode = EXCLUDED.mode, charge_day = EXCLUDED.charge_day,
+    updated_at = EXCLUDED.updated_at,
     consecutive_failures = CASE WHEN EXCLUDED.enabled THEN 0 ELSE auto_charge_settings.consecutive_failures END,
     -- 켤 때마다 다음에 떨어지면 산다(#980 의 둘째 단계). 이미 기준 아래여도 다음 홀드에서 산다
     armed = EXCLUDED.enabled
@@ -62,7 +66,7 @@ DELETE FROM billing_customers WHERE user_id = sqlc.arg(user_id);
 
 -- name: GetTrigger :one
 -- 홀드를 건 트랜잭션 안에서 그 사람의 설정과 지금의 골드를 읽는다. 지갑은 이미 잠겨 있다.
-SELECT s.enabled, s.threshold, s.armed, s.product_id,
+SELECT s.enabled, s.threshold, s.armed, s.product_id, s.mode,
     COALESCE((SELECT w.paid_balance FROM wallets w WHERE w.user_id = s.user_id), 0)::BIGINT AS paid
 FROM auto_charge_settings s WHERE s.user_id = sqlc.arg(user_id);
 
@@ -74,6 +78,28 @@ UPDATE auto_charge_settings SET armed = sqlc.arg(armed) WHERE user_id = sqlc.arg
 INSERT INTO auto_charge_requests (id, user_id, product_id, price, credits, next_attempt_at, created_at)
 VALUES (sqlc.arg(id), sqlc.arg(user_id), sqlc.arg(product_id), sqlc.arg(price), sqlc.arg(credits), sqlc.arg(now), sqlc.arg(now))
 ON CONFLICT (user_id) WHERE status IN ('pending', 'charging') DO NOTHING;
+
+-- name: ListScheduledDue :many
+-- 날짜 기준(#1167)으로 켜 두었고 오늘(한국 날짜의 날 day, 날짜 charge_date)이 그날인데, 오늘의 일도 끝나지 않은 일도 없는 사람.
+-- 끝나지 않은 일(잔액 기준에서 바꾸기 전의 것)이 있으면 그 일이 끝난 뒤의 바퀴에서 적는다.
+SELECT s.user_id, s.product_id FROM auto_charge_settings s
+WHERE s.enabled AND s.mode = 'date' AND s.charge_day = sqlc.arg(day)::SMALLINT
+  AND NOT EXISTS (
+      SELECT 1 FROM auto_charge_requests r
+      WHERE r.user_id = s.user_id AND (r.charge_date = sqlc.arg(charge_date)::DATE OR r.status IN ('pending', 'charging'))
+  )
+ORDER BY s.user_id
+LIMIT sqlc.arg(row_limit);
+
+-- name: InsertScheduledRequest :execrows
+-- 날짜 기준의 충전할 일을 적는다. 그날의 일이나 끝나지 않은 일이 이미 있으면 적지 않는다(바뀐 줄이 0 이다).
+-- 두 색인(auto_charge_requests_one_per_day, auto_charge_requests_one_open)이 함께 막는다. 결제 작업이 둘이어도 한 번이다.
+INSERT INTO auto_charge_requests (id, user_id, product_id, price, credits, charge_date, next_attempt_at, created_at)
+VALUES (
+    sqlc.arg(id), sqlc.arg(user_id), sqlc.arg(product_id), sqlc.arg(price), sqlc.arg(credits), sqlc.arg(charge_date)::DATE,
+    sqlc.arg(now), sqlc.arg(now)
+)
+ON CONFLICT DO NOTHING;
 
 -- name: LockDueRequest :one
 -- 보낼 때가 된 일 하나를 잠근다. 다른 작업이 잠근 줄은 건너뛴다.
@@ -156,9 +182,10 @@ LIMIT sqlc.arg(row_limit);
 
 -- name: InsertConsent :exec
 -- 자동 결제 동의를 한 줄 더한다. 켜는 설정을 적는 트랜잭션 안에서 한다.
-INSERT INTO auto_charge_consents (user_id, terms_version, threshold, product_id, price, monthly_limit, agreed_at)
+-- 방식과 날(#1167)도 조건이다. 잔액 기준이면 날을 적지 않는다.
+INSERT INTO auto_charge_consents (user_id, terms_version, threshold, product_id, price, monthly_limit, mode, charge_day, agreed_at)
 VALUES (sqlc.arg(user_id), sqlc.arg(terms_version), sqlc.arg(threshold), sqlc.arg(product_id), sqlc.arg(price),
-        sqlc.arg(monthly_limit), sqlc.arg(now));
+        sqlc.arg(monthly_limit), sqlc.arg(mode), sqlc.narg(charge_day), sqlc.arg(now));
 
 -- name: LatestConsentVersion :one
 -- 그 사람이 마지막으로 동의한 판. 동의한 적이 없으면 줄이 없다.

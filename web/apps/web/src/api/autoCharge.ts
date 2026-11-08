@@ -1,5 +1,6 @@
 // web/apps/web/src/api/autoCharge.ts
-// 자동 충전(결제 서버, #980). 카드를 등록하고 설정을 적는다. 골드가 기준 아래로 떨어지면 결제 서버가 그 카드로 산다.
+// 자동 충전(결제 서버, #980). 카드를 등록하고 설정을 적는다. 정한 때에 결제 서버가 그 카드로 산다.
+// 정한 때는 잔액 기준(골드가 기준 아래로 떨어지면)이나 날짜 기준(매달 정한 날, #1167) 중 하나다(mode).
 //
 // 카드 등록은 두 걸음이다(billing-server/README.md 의 "자동 충전").
 //   1. 고객 키를 받는다(createCustomerKey). 결제 대행사의 카드 등록 창에 넣는다
@@ -15,10 +16,13 @@ import type { AutoCharge, PaymentCard } from './types';
 
 const BILLING = '/api/v1/billing';
 
-/** 적어 둔 대로 사는 설정. 기준 골드는 다른 양처럼 글자다. 켤 때는 동의한 자동 결제 동의의 판(terms_version)을 함께 보낸다 */
+/** 적어 둔 대로 사는 설정. 기준 골드는 다른 양처럼 글자다. 켤 때는 동의한 자동 결제 동의의 판(terms_version)을 함께 보낸다.
+ * charge_day 는 날짜 기준의 날(1~28)이다. 잔액 기준이어도 보내면 서버가 남겨 둔다 */
 export type AutoChargeSettings = {
   enabled: boolean;
+  mode: 'balance' | 'date';
   threshold: string;
+  charge_day: number | null;
   product_id: string;
   monthly_limit: number;
   terms_version?: number;

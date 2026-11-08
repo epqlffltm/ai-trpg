@@ -553,7 +553,14 @@ export interface components {
             consecutive_failures: number;
             /** @description 적은 적이 없으면 null */
             settings: {
+                /** @description 날짜 기준에서 사는 날(1~28). 고른 적이 없으면 null */
+                charge_day: number | null;
                 enabled: boolean;
+                /**
+                 * @description 언제 사는지. balance 는 골드가 threshold 아래로 떨어지면, date 는 매달 charge_day(한국 날짜)에(#1167)
+                 * @enum {string}
+                 */
+                mode: "balance" | "date";
                 /** Format: int64 */
                 monthly_limit: number;
                 product_id: string;
@@ -1048,7 +1055,14 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description 날짜 기준에서 사는 날(한국 날짜). date 면 있어야 한다. balance 여도 적으면 남겨 둔다 */
+                    charge_day?: number | null;
                     enabled: boolean;
+                    /**
+                     * @description 언제 사는지. balance 는 골드가 threshold 아래로 떨어지면, date 는 매달 charge_day(한국 날짜)에(#1167). 없으면 balance 다
+                     * @enum {string}
+                     */
+                    mode?: "balance" | "date";
                     /**
                      * Format: int64
                      * @description 한 달(한국 날짜의 달)에 자동으로 결제하는 돈의 상한(원). 고른 상품의 값에서 500000 사이
@@ -1058,7 +1072,7 @@ export interface operations {
                     product_id: string;
                     /** @description 동의한 자동 결제 동의의 판. 켤 때는 지금의 판(AutoCharge 의 terms.version)이어야 한다. 끌 때는 보지 않는다 */
                     terms_version?: number;
-                    /** @description 골드가 이 값 아래로 떨어지면 산다. 0 에서 100000 */
+                    /** @description 골드가 이 값 아래로 떨어지면 산다. 0 에서 100000. 날짜 기준이어도 적는다(남겨 둔다) */
                     threshold: components["schemas"]["Amount"];
                 };
             };
