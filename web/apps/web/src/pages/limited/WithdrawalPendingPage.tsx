@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/limited/WithdrawalPendingPage.tsx
 // 탈퇴 유예 중(#603). 어느 화면으로 와도 이것만 보인다(LimitedSessionGate). 지울 시각과 취소를 보인다.
 // 취소하면(DELETE /me/withdrawal) /refresh 로 모든 서버에 통하는 토큰을 받는다. 그러면 원래 화면이 그 자리에 뜬다.
-// 취소하지 않으려면 그대로 두면 된다. 머리의 로그아웃은 그대로 있다.
+// 취소하지 않으려면 그대로 두면 된다. 로그아웃은 위쪽 줄과 카드의 글 단추에 있다(LimitedLayout, Stitch 7번).
 
 import { Button } from '@ai-trpg/ui';
 import { useState } from 'react';
@@ -11,6 +11,7 @@ import { describeAccountProblem } from '../../auth/accountProblem';
 import type { FormProblem } from '../../auth/problem';
 import { ProblemNotice } from '../../components/ProblemNotice';
 import { formatDateTime } from '../../format/dateTime';
+import { SignOutButton } from '../../layout/SignOutButton';
 
 export function WithdrawalPendingPage({ scheduledAt }: { scheduledAt: string }) {
   const [busy, setBusy] = useState(false);
@@ -39,6 +40,9 @@ export function WithdrawalPendingPage({ scheduledAt }: { scheduledAt: string }) 
       <Button busy={busy} onClick={cancel}>
         탈퇴 취소하기
       </Button>
+      <p className="auth-links">
+        <SignOutButton />
+      </p>
     </main>
   );
 }

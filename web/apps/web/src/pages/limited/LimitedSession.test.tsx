@@ -1,7 +1,8 @@
 // web/apps/web/src/pages/limited/LimitedSession.test.tsx
 // 토큰이 인증 서버에만 통하는 동안의 화면. 어느 경로든 다시 동의나 탈퇴 취소만 보이고, 마치면 새 토큰으로 원래 화면이 뜨는지 본다.
+// 그동안의 틀(Stitch 7번)은 위쪽 줄에 이름과 로그아웃만 있고, 카드 아래에도 로그아웃이 있다.
 
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
@@ -122,5 +123,44 @@ describe('탈퇴 유예', () => {
     expect(await screen.findByText(/처리하지 못했습니다/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '탈퇴를 기다리는 중입니다' })).toBeInTheDocument();
     expect(getSession()?.accessToken).toBe('limited');
+  });
+});
+
+describe('다시 동의·탈퇴 유예의 틀', () => {
+  it('왼쪽 메뉴 열, 검색칸, 아래 메뉴 없이 위쪽 줄에 이름과 로그아웃만 있고, 카드의 로그아웃으로 나간다', async () => {
+    const { seen } = installFakeFetch({
+      [`POST ${REFRESH_PATH}`]: refreshes({ withdrawal_scheduled_at: '2026-10-29T06:00:00Z' }),
+      'GET /api/v1/auth/me': () => json(200, { nickname: '모험가' }),
+      'POST /api/v1/auth/logout': () => new Response(null, { status: 204 }),
+    });
+    renderApp('/me');
+
+    const card = (await screen.findByRole('heading', { name: '탈퇴를 기다리는 중입니다' })).closest('main') as HTMLElement;
+    expect(screen.queryByRole('complementary', { name: '사이트 메뉴' })).toBeNull();
+    expect(screen.queryByRole('search', { name: '작품 검색' })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: '아래 메뉴' })).toBeNull();
+    const header = document.querySelector('.app-header') as HTMLElement;
+    expect(within(header).getByRole('link', { name: /이매망량의 서재/ })).toHaveAttribute('href', '/');
+    expect(within(header).getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
+    expect(within(header).queryByRole('button', { name: /알림/ })).toBeNull();
+
+    await userEvent.click(within(card).getByRole('button', { name: '로그아웃' }));
+
+    expect(await screen.findAllByRole('link', { name: '로그인' })).not.toHaveLength(0);
+    expect(screen.queryByRole('heading', { name: '탈퇴를 기다리는 중입니다' })).toBeNull();
+    expect(seen.some((request) => request.method === 'POST' && request.url === '/api/v1/auth/logout')).toBe(true);
+  });
+
+  it('다시 동의의 카드 아래에도 로그아웃이 있다', async () => {
+    installFakeFetch({
+      [`POST ${REFRESH_PATH}`]: refreshes({ consents_pending: ['terms'] }),
+      'GET /api/v1/auth/me': () => json(200, { nickname: '모험가' }),
+      'GET /api/v1/auth/me/consents': () => json(200, { items: [termsState()] }),
+    });
+    renderApp('/');
+
+    const card = (await screen.findByRole('heading', { name: '바뀐 약관에 동의해 주세요' })).closest('main') as HTMLElement;
+    expect(within(card).getByRole('button', { name: '로그아웃' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '로그아웃' })).toHaveLength(2);
   });
 });
