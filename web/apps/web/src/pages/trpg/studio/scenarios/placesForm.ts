@@ -5,11 +5,13 @@
 // 미리 놓인 덫: 덫 물건(아이템 규칙에 덫을 적은 것)과 처음부터 아는 덫인가. 한 장소에 여럿을 놓을 수 있다.
 // 놓인 물건: 물건, 개수(1~99), 보이는가(보임, 숨김). 숨긴 물건만 찾는 판정이 있다. 같은 물건은 같은 보이기로 한 줄이다.
 // 인물 하나는 한 곳에만 있다. 다른 장소에 있던 인물을 고르면 이 장소로 옮긴다(서버의 reject_duplicate_npc_places).
+// 어느 장소 안에 있나(#284, 하위 맵)도 고친다. 저장하면 하위 맵 목록을 통째로 보낸다(submapsForm.ts).
 
 import type { PlaceItemVisibility, ScenarioDetail, ScenarioUpdate } from '../../../../api/types';
 import { wholeNumber } from '../rulebooks/rulebookForm';
 import { COMBAT_NUMBER_MAX } from './itemRuleForm';
 import { STACK_MAX } from './stacksForm';
+import { containerOf, heldCount, submapsOf, withContainer } from './submapsForm';
 import type { EntryChoice } from './useLoreEntries';
 
 /** 맵의 장소들(시작 장소, 길의 끝, 명소) */
@@ -23,9 +25,14 @@ export function mapPlaces(scenario: Pick<ScenarioDetail, 'start_place' | 'routes
   return places;
 }
 
-/** 장소 목록의 한 줄. "시작 · 길 3 · 명소 · 커버 5 · 인물 2", 맵에 없으면 "맵 밖" */
-export function placeLine(scenario: ScenarioDetail, placeId: string): string {
+/**
+ * 장소 목록의 한 줄. "여관 안 · 시작 · 길 3 · 명소 · 커버 5 · 인물 2 · 품은 곳 3", 맵에 없으면 "맵 밖".
+ * nameOf 를 주면 품은 장소(#284)의 이름을 맨 앞에 적는다
+ */
+export function placeLine(scenario: ScenarioDetail, placeId: string, nameOf?: (placeId: string) => string): string {
   const parts: string[] = [];
+  const container = containerOf(submapsOf(scenario), placeId);
+  if (container && nameOf) parts.push(`${nameOf(container)} 안`);
   if (scenario.start_place === placeId) parts.push('시작');
   const routes = scenario.routes.filter((route) => route.from_place === placeId || route.to_place === placeId).length;
   if (routes > 0) parts.push(`길 ${routes}`);
@@ -45,6 +52,8 @@ export function placeLine(scenario: ScenarioDetail, placeId: string): string {
     const known = traps.filter((trap) => trap.known).length;
     parts.push(known > 0 ? `덫 ${traps.length}(알림 ${known})` : `덫 ${traps.length}`);
   }
+  const held = heldCount(submapsOf(scenario), placeId);
+  if (held > 0) parts.push(`품은 곳 ${held}`);
   return parts.join(' · ');
 }
 
@@ -57,7 +66,15 @@ export const MAX_TRAPS = 50;
 
 export type PlaceTrapDraft = { entryId: string; known: boolean };
 
-export type PlaceDraft = { landmark: boolean; cover: string; people: string[]; items: PlaceItemDraft[]; traps: PlaceTrapDraft[] };
+export type PlaceDraft = {
+  landmark: boolean;
+  cover: string;
+  people: string[];
+  items: PlaceItemDraft[];
+  traps: PlaceTrapDraft[];
+  /** 이 장소를 품은 장소(#284). 빈 값이면 바깥 맵 */
+  container: string;
+};
 
 /** 미리 놓인 덫들(#806 ②). 덫이 생기기 전의 응답에는 칸이 없다 */
 export function presetTraps(scenario: ScenarioDetail): ScenarioDetail['traps'] {
@@ -92,6 +109,7 @@ export function placeDraft(scenario: ScenarioDetail, placeId: string): PlaceDraf
     traps: presetTraps(scenario)
       .filter((trap) => trap.place_id === placeId)
       .map((trap) => ({ entryId: trap.entry_id, known: trap.known })),
+    container: containerOf(submapsOf(scenario), placeId),
   };
 }
 
@@ -124,8 +142,8 @@ export function togglePerson(people: string[], personId: string): string[] {
 }
 
 /**
- * 이 장소를 고친 명소, 커버, 인물의 자리, 놓인 물건. 다른 장소의 것은 그대로 두고, 고른 인물이 다른 장소에 있었으면 이 장소로 옮긴다.
- * 힌트가 없을 때만 부른다
+ * 이 장소를 고친 명소, 커버, 인물의 자리, 놓인 물건, 덫, 하위 맵. 다른 장소의 것은 그대로 두고, 고른 인물이 다른 장소에 있었으면
+ * 이 장소로 옮긴다. 힌트가 없을 때만 부른다
  */
 export function applyPlace(scenario: ScenarioDetail, placeId: string, draft: PlaceDraft): ScenarioUpdate {
   const landmarks = scenario.landmarks.filter((one) => one !== placeId);
@@ -148,6 +166,7 @@ export function applyPlace(scenario: ScenarioDetail, placeId: string, draft: Pla
       })),
     ],
     traps: [...traps, ...draft.traps.map((trap) => ({ place_id: placeId, entry_id: trap.entryId, known: trap.known }))],
+    submaps: withContainer(submapsOf(scenario), placeId, draft.container),
   };
 }
 

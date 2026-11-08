@@ -1,10 +1,10 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/PlacesSection.tsx
 // 지도 탭의 장소(B9). 붙인 로어북의 장소 항목을 모두 늘어놓고 줄마다 "시작 · 길 3 · 커버 5 · 인물 2"를 보인다.
-// 줄을 고치면 창이 열리고 명소인지, 커버, 처음 있는 인물, 놓인 물건, 미리 놓인 덫(#806 ②)을 고친다.
+// 줄을 고치면 창이 열리고 어느 장소 안에 있나(#284, 하위 맵), 명소인지, 커버, 처음 있는 인물, 놓인 물건, 미리 놓인 덫(#806 ②)을 고친다.
 // 창의 저장이 모두를 함께 바로 보낸다.
 // 지도가 가리키지만 붙인 로어북에 없는 장소도 줄로 남겨 비울 수 있게 한다.
 
-import { Button, Checkbox, Dialog, TextField } from '@ai-trpg/ui';
+import { Button, Checkbox, Dialog, SelectField, TextField } from '@ai-trpg/ui';
 import { useCallback, useState, type FormEvent } from 'react';
 import type { Ruleset, ScenarioDetail } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
@@ -22,6 +22,7 @@ import {
   trapEntries,
   type PlaceDraft,
 } from './placesForm';
+import { insideOf, submapsOf, submapsProblem, withContainer } from './submapsForm';
 import type { EntryChoice } from './useLoreEntries';
 import { useScenarioSave } from './useScenarioSave';
 
@@ -63,7 +64,7 @@ export function PlacesSection({ scenario, rules, places, people, items, nameOf }
           <li key={id} className="studio-list__item studio-item">
             <div>
               <strong>{nameOf(id)}</strong>
-              <div className="studio-list__description hint">{placeLine(scenario, id) || '아무것도 없음'}</div>
+              <div className="studio-list__description hint">{placeLine(scenario, id, nameOf) || '아무것도 없음'}</div>
             </div>
             <Button variant="quiet" aria-label={`${nameOf(id)} 고치기`} onClick={() => setEditing(id)}>
               고치기
@@ -72,19 +73,22 @@ export function PlacesSection({ scenario, rules, places, people, items, nameOf }
         ))}
       </ul>
       <Dialog title={editing ? `장소: ${nameOf(editing)}` : '장소'} open={editing !== null} onClose={close}>
-        {editing ? <PlaceForm scenario={scenario} rules={rules} placeId={editing} people={people} items={items} nameOf={nameOf} done={close} /> : null}
+        {editing ? (
+          <PlaceForm scenario={scenario} rules={rules} placeId={editing} places={ids} people={people} items={items} nameOf={nameOf} done={close} />
+        ) : null}
       </Dialog>
     </section>
   );
 }
 
-type FormProps = Omit<Props, 'places'> & { placeId: string; done: () => void };
+type FormProps = Omit<Props, 'places'> & { placeId: string; places: string[]; done: () => void };
 
-function PlaceForm({ scenario, rules, placeId, people, items, nameOf, done }: FormProps) {
+function PlaceForm({ scenario, rules, placeId, places, people, items, nameOf, done }: FormProps) {
   const [draft, setDraft] = useState<PlaceDraft>(() => placeDraft(scenario, placeId));
   const saving = useScenarioSave(scenario.id);
   const hints = placeHints(draft);
-  const blocked = Object.keys(hints).length > 0;
+  const containerProblem = submapsProblem(withContainer(submapsOf(scenario), placeId, draft.container));
+  const blocked = Object.keys(hints).length > 0 || containerProblem !== null;
   const routes = scenario.routes.some((route) => route.from_place === placeId || route.to_place === placeId);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -96,6 +100,7 @@ function PlaceForm({ scenario, rules, placeId, people, items, nameOf, done }: Fo
   return (
     <form onSubmit={(event) => void submit(event)} noValidate aria-label="장소">
       <ProblemNotice problem={saving.problem} />
+      <ContainerSelect scenario={scenario} placeId={placeId} places={places} nameOf={nameOf} value={draft.container} error={containerProblem} onChange={(container) => setDraft((current) => ({ ...current, container }))} />
       <Checkbox
         label="명소로 둔다"
         description={routes || scenario.start_place === placeId ? '길이나 시작 장소라 이미 맵에 있습니다. 명소로 두어도 같습니다.' : '길이 없어도 맵에 둡니다. 사건으로 옮겨 가는 곳에 씁니다.'}
@@ -159,5 +164,37 @@ function PlaceForm({ scenario, rules, placeId, people, items, nameOf, done }: Fo
         </Button>
       </div>
     </form>
+  );
+}
+
+type ContainerProps = {
+  scenario: ScenarioDetail;
+  placeId: string;
+  places: string[];
+  nameOf: (placeId: string) => string;
+  value: string;
+  error: string | null;
+  onChange: (container: string) => void;
+};
+
+/** 어느 장소 안에 있나(#284). 자기 자신과 자기 안의 장소는 고를 거리에서 뺀다(서로를 품지 못한다) */
+function ContainerSelect({ scenario, placeId, places, nameOf, value, error, onChange }: ContainerProps) {
+  const inside = insideOf(submapsOf(scenario), placeId);
+  const choices = places.filter((id) => id !== placeId && !inside.has(id));
+  return (
+    <SelectField
+      label="어느 장소 안에 있나"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      error={error ?? undefined}
+      hint="마을 안의 건물, 건물의 층처럼 장소 안의 장소면 품은 장소를 고릅니다. 들고 나는 것은 길로 잇습니다(층이 달라도 잇습니다). 3 겹까지 품습니다."
+    >
+      <option value="">바깥 맵</option>
+      {choices.map((id) => (
+        <option key={id} value={id}>
+          {nameOf(id)}
+        </option>
+      ))}
+    </SelectField>
   );
 }
