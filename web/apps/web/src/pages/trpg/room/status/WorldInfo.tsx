@@ -5,6 +5,7 @@
 // 갈 수 있는 곳에는 "가기", 지금 있는 곳에는 "찾기", 놓인 물건에는 "줍기" 단추가 있다. 누르면 선언 입력의 행동 칸이 채워진다.
 // 갈 수 있는 곳에는 걸리는 시간과 길을 막거나 굴리게 하는 것(잠긴 자물쇠, 걸린 빗장, 넘기 판정)을 적는다.
 // 지금 있는 곳에 닿은 길의 문(#281)은 상태(자물쇠, 빗장, 부서짐)와 지금 할 수 있어 보이는 행동의 단추를 보인다.
+// 지금 있는 곳의 인물과 몬스터(#254)는 몸 상태, 부상, 지닌 것과 "치기" 단추를 보인다(SceneHere).
 
 import { useQuery } from '@tanstack/react-query';
 import type { TableDetail, TableMember } from '../../../../api/types';
@@ -14,6 +15,7 @@ import { narrationModelsQuery } from '../../queries';
 import { ACTION_LABELS } from '../round/action/actionLabels';
 import { canHandleDoor, DOOR_KINDS, doorsHere, doorState, lockItems } from '../round/action/doorOptions';
 import { ActionButton, type ActionShortcuts } from './ActionButton';
+import { SceneHere } from './SceneHere';
 import {
   clockLabel,
   clockTimeLabel,
@@ -134,6 +136,7 @@ function Places({ table, map, mine, shortcuts }: PlacesProps) {
         {cover > 0 ? <ActionButton shortcuts={shortcuts} patch={{ kind: 'cover' }} label="엄폐" what="지금 있는 곳" /> : null}
       </p>
       {cover > 0 ? <p className="hint">숨을 곳: 커버 {cover}. 엄폐하면 그 라운드 동안 이 값으로 커버 세이브를 받습니다.</p> : null}
+      <SceneHere table={table} here={here} shortcuts={shortcuts} />
       {place && place.items.length > 0 ? (
         <>
           <p className="hint">여기 놓인 것</p>
