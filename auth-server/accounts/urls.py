@@ -9,6 +9,7 @@ config/urls.py 가 이 파일을 /api/v1/auth/ 아래에 연결한다.
 from django.urls import path
 
 from accounts.app_views import AppLoginVerifyView, AppLogoutView, AppPasswordChangeView, AppRefreshView
+from accounts.attendance_views import AttendanceRewardsView, AttendanceView
 from accounts.views import (
     ConsentDocumentsView,
     CreatorSearchView,
@@ -80,6 +81,8 @@ urlpatterns = [
     path('me/content-settings', MyContentSettingsView.as_view(), name='my-content-settings'),
     path('me/profile', MyProfileView.as_view(), name='my-profile'),
     path('me/nickname', MyNicknameView.as_view(), name='my-nickname'),
+    path('attendance', AttendanceView.as_view(), name='attendance'),
+    path('attendance/rewards', AttendanceRewardsView.as_view(), name='attendance-rewards'),
     path('me/blocks/creators/<uuid:public_id>', MyCreatorBlockView.as_view(), name='my-creator-block'),
     path('me/blocks/tags/<path:tag>', MyTagBlockView.as_view(), name='my-tag-block'),
     path('identity/verify', IdentityVerifyView.as_view(), name='identity-verify'),

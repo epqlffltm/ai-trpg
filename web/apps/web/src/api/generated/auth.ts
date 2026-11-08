@@ -82,6 +82,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/attendance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 오늘의 출석. 받았는지, 주기의 며칠째인지, 오늘의 하루 양, 상자를 여는 날인지, 본인인증을 마쳤는지
+         * @description GET, POST /api/v1/auth/attendance. 오늘의 출석과 받기.
+         */
+        get: operations["attendance_retrieve"];
+        put?: never;
+        /**
+         * 오늘의 출석 보상을 받는다. 주기의 마지막 날이면 보물 상자를 연다. 실버는 몇 초 뒤 지갑에 들어간다
+         * @description GET, POST /api/v1/auth/attendance. 오늘의 출석과 받기.
+         */
+        post: operations["attendance_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/attendance/rewards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 출석의 하루 양과 보물 상자의 확률표. 로그인 없이 누구나 본다
+         * @description GET /api/v1/auth/attendance/rewards. 하루 양과 보물 상자의 확률. 로그인 없이 누구나 본다.
+         */
+        get: operations["attendance_rewards_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/consents": {
         parameters: {
             query?: never;
@@ -855,6 +899,48 @@ export interface components {
              */
             withdrawal_scheduled_at: string | null;
         };
+        /** @description 받은 출석 보상. 실버는 몇 초 뒤 지갑에 들어간다. */
+        AttendanceClaim: {
+            /** @description 연 보물 상자. 연 날이 아니면 null 이다 */
+            chest: {
+                /** @description 화면에 보이는 이름 */
+                name: string;
+                /** @description 결과의 이름 */
+                outcome: string;
+                /** @description 받은 실버(글자). 0 이면 꽝이다 */
+                silver: string;
+                /** @description 연 때의 확률표의 버전 */
+                table: string;
+            } | null;
+            cycle_day: number;
+            /**
+             * Format: date
+             * @description 출석한 한국 날짜
+             */
+            day: string;
+            /** @description 하루 양(실버, 글자) */
+            silver: string;
+        };
+        /** @description 오늘의 출석. */
+        AttendanceStatus: {
+            /** @description 오늘 보물 상자를 여는 날인지 */
+            chest: boolean;
+            /** @description 오늘 이미 받았는지 */
+            claimed: boolean;
+            /** @description 오늘이 주기의 며칠째인지. 받았으면 받은 날의 값이다 */
+            cycle_day: number;
+            /** @description 주기의 날 수 */
+            cycle_length: number;
+            /** @description 오늘의 하루 양(실버, 글자) */
+            silver: string;
+            /**
+             * Format: date
+             * @description 오늘의 한국 날짜
+             */
+            today: string;
+            /** @description false 면 본인인증 전이다. 받을 수 없다 */
+            verified: boolean;
+        };
         /**
          * @description access 토큰이 없거나 받아들일 수 없을 때(401). DRF 와 simplejwt 가 만든다.
          *
@@ -1204,6 +1290,36 @@ export interface components {
             refresh_interval_seconds: number;
             revocations: components["schemas"]["Revocation"][];
         };
+        /** @description 보물 상자의 확률표. */
+        RewardChest: {
+            /** @description 상자 하나의 평균 실버(내림, 글자) */
+            expected_silver: string;
+            outcomes: components["schemas"]["RewardOutcome"][];
+            /** @description 확률의 단위(10000). 결과의 chance 를 모두 더하면 이 값이다 */
+            scale: number;
+            table: string;
+        };
+        /** @description 주기의 하루. */
+        RewardDay: {
+            chest: boolean;
+            day: number;
+            silver: string;
+        };
+        /** @description 보물 상자의 결과 하나와 그 확률. */
+        RewardOutcome: {
+            /** @description 만분율의 확률(1000 은 10%) */
+            chance: number;
+            name: string;
+            outcome: string;
+            /** @description 같은 값을 사람이 읽는 글자로 쓴 것("10%") */
+            percent: string;
+            silver: string;
+        };
+        /** @description 공개하는 보상표. */
+        Rewards: {
+            chest: components["schemas"]["RewardChest"];
+            cycle: components["schemas"]["RewardDay"][];
+        };
         /**
          * @description 가입의 3단계. 가입 티켓과 가입 내용의 형식을 검증한다.
          *
@@ -1494,6 +1610,100 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
+    attendance_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceStatus"];
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+        };
+    };
+    attendance_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendanceClaim"];
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 본인인증 전이다(attendance.verification_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+            /** @description 오늘 이미 받았다(attendance.already_claimed). 한국 자정에 다시 받는다 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
+    attendance_rewards_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 보상표 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rewards"];
                 };
             };
         };

@@ -6,8 +6,7 @@
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import type { AttendanceClaim, AttendanceRewards, AttendanceStatus } from '../../api/types';
-import { formatDateTime } from '../../format/dateTime';
+import type { AttendanceClaim, AttendanceRewards, AttendanceStatus } from '../../api/attendance';
 import { AttendanceCycle } from './AttendanceCycle';
 import { attendanceProblemText, VERIFY_FIRST } from './attendanceProblem';
 import { attendanceQuery, rewardsQuery } from './attendanceQueries';
@@ -78,7 +77,7 @@ function ClaimResult({ claim }: { claim: AttendanceClaim }) {
     <div className="attendance-result" role="status">
       <p>{claimLine(claim)}</p>
       {chest ? <p className="attendance-result__chest">{chest}</p> : null}
-      <p className="hint">{formatDateTime(claim.expires_at)}에 사라집니다.</p>
+      <p className="hint">실버는 몇 초 뒤 지갑에 들어갑니다. 지갑에 보이지 않으면 잠시 뒤 다시 열어 보세요.</p>
     </div>
   );
 }

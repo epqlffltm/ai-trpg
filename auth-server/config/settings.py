@@ -21,6 +21,7 @@ from pathlib import Path
 import environ
 from django.core.exceptions import ImproperlyConfigured
 
+from accounts.attendance_rules import InvalidScheduleError, parse_schedule
 from config.billing import validate_billing_url, validate_service_secret
 from config.identity import default_identity_provider, validate_identity_provider
 from config.jwt_keys import load_key_material, private_key_path
@@ -513,6 +514,14 @@ BILLING_SECRET = validate_service_secret(env('BILLING_SECRET', default=''))
 INVITE_REWARD_LIMIT = env.int('INVITE_REWARD_LIMIT', default=5)
 if INVITE_REWARD_LIMIT < 0:
     raise ImproperlyConfigured('INVITE_REWARD_LIMIT 은 0 이상이어야 합니다.')
+
+# 출석의 하루 양(실버). 쉼표로 나눈 목록이고 첫째가 1일째다. 길이가 주기의 날 수이고(1~14일),
+# 마지막 날에 보물 상자를 연다.
+# 출석은 결제 서버에서 옮겨 왔다(accounts/attendance_rules.py). 결제 서버의 ATTENDANCE_SILVER 와 같은 뜻이다
+try:
+    ATTENDANCE_SILVER = parse_schedule(env('ATTENDANCE_SILVER', default=''))
+except InvalidScheduleError as exc:
+    raise ImproperlyConfigured(f'ATTENDANCE_SILVER: {exc}') from exc
 
 # 탈퇴를 알릴 다른 서버(#603, docs/architecture/withdrawal.md 의 "알리는 길").
 # 서버마다 주소와 비밀이다. 비밀은 받는 서버의 AUTH_SERVER_SECRET 과 같은 값이다.

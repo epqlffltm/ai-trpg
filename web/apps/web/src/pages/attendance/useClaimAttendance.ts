@@ -5,7 +5,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { claimAttendance } from '../../api/attendance';
-import type { AttendanceClaim } from '../../api/types';
+import type { AttendanceClaim } from '../../api/attendance';
 import { WALLET_KEY } from '../wallet/walletQueries';
 import { describeClaimProblem } from './attendanceProblem';
 import { ATTENDANCE_KEY } from './attendanceQueries';

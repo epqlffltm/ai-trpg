@@ -7,7 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/errors';
 import { REFRESH_PATH } from '../../api/refresh';
-import type { AttendanceStatus } from '../../api/types';
+import type { AttendanceStatus } from '../../api/attendance';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
 import { openAccountMenu } from '../../test/accountMenu';
 import { renderApp } from '../../test/renderApp';
@@ -16,7 +16,7 @@ import { describeClaimProblem } from './attendanceProblem';
 import { cellLabel, chestLine, cycleCells, todayLine } from './attendanceView';
 
 const BILLING = '/api/v1/billing';
-const ATTENDANCE = `${BILLING}/attendance`;
+const ATTENDANCE = '/api/v1/auth/attendance';
 const SILVER = ['140', '160', '180', '200', '220', '240', '260'];
 
 const REWARDS = {
@@ -26,9 +26,9 @@ const REWARDS = {
     scale: 1000,
     expected_silver: '617',
     outcomes: [
-      { outcome: 'mimic_bite', name: '미믹 — 물렸다', silver: '0', chance: 100, percent: '10.0' },
-      { outcome: 'goblin_pouch', name: '고블린의 주머니', silver: '300', chance: 300, percent: '30.0' },
-      { outcome: 'dragon_hoard', name: '용의 보물', silver: '5000', chance: 30, percent: '3.0' },
+      { outcome: 'mimic_bite', name: '미믹 — 물렸다', silver: '0', chance: 100, percent: '10%' },
+      { outcome: 'goblin_pouch', name: '고블린의 주머니', silver: '300', chance: 300, percent: '30%' },
+      { outcome: 'dragon_hoard', name: '용의 보물', silver: '5000', chance: 30, percent: '3%' },
     ],
   },
 };
@@ -64,7 +64,7 @@ afterEach(() => {
 
 describe('출석', () => {
   it('지갑에서 출석으로 간다. 주기의 칸과 오늘의 양을 보이고, 받으면 결과를 남기고 잔액을 다시 읽는다', async () => {
-    const claimed = { day: '2026-10-24', cycle_day: 3, silver: '180', chest: null, expires_at: '2026-11-23T00:00:00+09:00' };
+    const claimed = { day: '2026-10-24', cycle_day: 3, silver: '180', chest: null };
     const { seen } = signedIn(today(), () => json(201, claimed));
     renderApp('/wallet');
 
@@ -89,14 +89,14 @@ describe('출석', () => {
 
   it('마지막 날에는 출석하고 상자를 열어 그 결과와 확률표의 판을 보인다. 확률표를 공개한다', async () => {
     const chest = { table: 'v1', outcome: 'goblin_pouch', name: '고블린의 주머니', silver: '300' };
-    signedIn(today({ cycle_day: 7, silver: '260', chest: true }), () => json(201, { day: '2026-10-24', cycle_day: 7, silver: '260', chest, expires_at: '2026-11-23T00:00:00+09:00' }));
+    signedIn(today({ cycle_day: 7, silver: '260', chest: true }), () => json(201, { day: '2026-10-24', cycle_day: 7, silver: '260', chest }));
     renderApp('/wallet/attendance');
 
     await userEvent.click(await screen.findByRole('button', { name: '출석하고 상자 열기' }));
     expect(await screen.findByText('보물 상자: 고블린의 주머니 · 실버 300 (확률표 v1)')).toBeInTheDocument();
     const odds = within(screen.getByRole('region', { name: '보물 상자의 확률' }));
     expect(odds.getByText(/확률표 v1 · 평균 실버 617/)).toBeInTheDocument();
-    expect(odds.getByRole('row', { name: '용의 보물 5000 3.0%' })).toBeInTheDocument();
+    expect(odds.getByRole('row', { name: '용의 보물 5000 3%' })).toBeInTheDocument();
   });
 
   it('본인인증 전이면 받기를 막고 까닭을 적는다', async () => {
@@ -140,7 +140,7 @@ describe('출석의 순수한 함수', () => {
     expect(states(today({ cycle_day: 1 }))[0]).toBe('today');
     expect(cellLabel({ day: 7, silver: '260', chest: true, state: 'claimed' })).toBe('7일째, 실버 260, 보물 상자, 오늘 받음');
     expect(todayLine(today({ cycle_day: 7, silver: '260', chest: true }))).toBe('오늘은 7일째 · 실버 260 · 보물 상자를 엽니다');
-    expect(chestLine({ day: '', cycle_day: 3, silver: '180', chest: null, expires_at: '' })).toBeNull();
+    expect(chestLine({ day: '', cycle_day: 3, silver: '180', chest: null })).toBeNull();
   });
 
   it('받기의 실패: 409 는 이미 받음, 403 은 본인인증, 503 은 잠시 뒤', () => {

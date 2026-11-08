@@ -19,7 +19,7 @@ export function attendanceProblemText(error: unknown): string {
   if (error instanceof NetworkError) return '서버에 닿지 못했습니다. 연결을 확인하고 다시 시도하세요. 다시 받아도 두 번 받지 않습니다.';
   if (error instanceof ApiError && error.status === 503) {
     const after = error.retryAfter ? ` ${error.retryAfter}초 뒤에` : ' 잠시 뒤에';
-    return `결제 서버가 지금 답하지 못합니다.${after} 다시 시도하세요.`;
+    return `서버가 지금 답하지 못합니다.${after} 다시 시도하세요.`;
   }
   return '출석을 처리하지 못했습니다. 잠시 뒤에 다시 시도하세요.';
 }

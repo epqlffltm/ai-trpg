@@ -4,6 +4,7 @@
 결제 서버에 맡길 일을 보내는 워커. 한 바퀴에 차례로 한다.
   - 환영 크레딧과 결제 자격(#336)을 보낸다
   - 초대 보상(#990)을 보낸다
+  - 출석의 실버(하루 양과 보물 상자)를 보낸다(accounts/attendance.py)
   - 마치기 하루 전의 탈퇴에 메일을 한 통 더 보낸다(#624)
   - 유예가 지난 탈퇴를 마치고(계정을 비운다), 다른 서버에 탈퇴를 알린다(#603). 비밀을 적은 서버에만 보낸다
 
@@ -24,7 +25,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import OperationalError, close_old_connections
 
-from accounts import invite_grants, payment_eligibility, withdrawal
+from accounts import attendance, invite_grants, payment_eligibility, withdrawal
 from accounts.welcome_credit import DELIVER_OPERATION, DeliveryReport, deliver_due_welcome_credits
 from observability.heartbeat import beat
 from observability.jobs import run_as_job
@@ -51,7 +52,7 @@ class WithdrawalRound:
 
 class Command(BaseCommand):
     help = (
-        '환영 크레딧, 초대 보상, 결제 자격을 결제 서버에 맡기고, 탈퇴를 하루 전에 다시 알리고, '
+        '환영 크레딧, 초대 보상, 출석의 실버, 결제 자격을 결제 서버에 맡기고, 탈퇴를 하루 전에 다시 알리고, '
         '유예가 지난 탈퇴를 마치고 알린다.'
     )
 
@@ -75,9 +76,10 @@ class Command(BaseCommand):
             )
 
         if options['once']:
-            report, invites, eligibility, withdrawals = self._deliver_round()
+            report, invites, attended, eligibility, withdrawals = self._deliver_round()
             self._report(report)
             self._report_invites(invites)
+            self._report_attendance(attended)
             self._report_eligibility(eligibility)
             self._report_withdrawals(withdrawals)
             return
@@ -90,20 +92,28 @@ class Command(BaseCommand):
 
     def _run_forever(self, interval: float) -> None:
         while True:
-            report, invites, eligibility, withdrawals = self._deliver_safely()
+            report, invites, attended, eligibility, withdrawals = self._deliver_safely()
             self._report(report)
             self._report_invites(invites)
+            self._report_attendance(attended)
             self._report_eligibility(eligibility)
             self._report_withdrawals(withdrawals)
             # 줄 것이 더 있을 수 있으면 쉬지 않고 바로 다음 묶음을 본다.
             # 맡기지 못한 것만 있었으면 쉰다. 그 줄들은 다음 시도 시각이 뒤로 밀려 있다
-            done = report.granted + report.skipped + invites.granted + invites.skipped
+            done = (
+                report.granted
+                + report.skipped
+                + invites.granted
+                + invites.skipped
+                + attended.granted
+                + attended.skipped
+            )
             if done + eligibility.sent + withdrawals.done == 0:
                 time.sleep(interval)
 
     def _deliver_round(
         self,
-    ) -> tuple[DeliveryReport, DeliveryReport, payment_eligibility.DeliveryReport, WithdrawalRound]:
+    ) -> tuple[DeliveryReport, DeliveryReport, DeliveryReport, payment_eligibility.DeliveryReport, WithdrawalRound]:
         """
         일마다 한 묶음씩 처리한다. 일마다 작업의 식별자(job_id)를 걸어, 그 일이 남긴 로그를 그 식별자로 묶는다.
 
@@ -118,6 +128,9 @@ class Command(BaseCommand):
         with run_as_job(invite_grants.DELIVER_OPERATION):
             invites = invite_grants.deliver_due_invite_grants()
             record_handled(invites.handled)
+        with run_as_job(attendance.DELIVER_OPERATION):
+            attended = attendance.deliver_due_attendance()
+            record_handled(attended.handled)
         with run_as_job(payment_eligibility.DELIVER_OPERATION):
             eligibility = payment_eligibility.deliver_due_eligibility()
             record_handled(eligibility.handled)
@@ -132,11 +145,12 @@ class Command(BaseCommand):
             notices = withdrawal.deliver_due_withdrawal_notices()
             record_handled(notices.handled)
             record_queued(withdrawal.DELIVER_OPERATION, withdrawal.count_waiting_notices())
-        return report, invites, eligibility, WithdrawalRound(reminded=reminded, completed=completed, notices=notices)
+        withdrawals = WithdrawalRound(reminded=reminded, completed=completed, notices=notices)
+        return report, invites, attended, eligibility, withdrawals
 
     def _deliver_safely(
         self,
-    ) -> tuple[DeliveryReport, DeliveryReport, payment_eligibility.DeliveryReport, WithdrawalRound]:
+    ) -> tuple[DeliveryReport, DeliveryReport, DeliveryReport, payment_eligibility.DeliveryReport, WithdrawalRound]:
         """
         일마다 한 묶음씩을 처리한다. DB 에 잠깐 접속할 수 없어도 워커가 죽지 않게 한다.
 
@@ -149,7 +163,13 @@ class Command(BaseCommand):
         except OperationalError as exc:
             # 오류의 종류만 적는다. 오류의 글에는 DB 의 주소와 계정 이름이 들어 있다. 자세한 것은 로그에 남았다
             self.stderr.write(f'DB 에 접속하지 못했습니다. 잠시 뒤 다시 시도합니다: {type(exc).__name__}')
-            return DeliveryReport(), DeliveryReport(), payment_eligibility.DeliveryReport(), WithdrawalRound()
+            return (
+                DeliveryReport(),
+                DeliveryReport(),
+                DeliveryReport(),
+                payment_eligibility.DeliveryReport(),
+                WithdrawalRound(),
+            )
         # DB 에 닿아 한 바퀴를 끝냈다. 닿지 못한 바퀴는 심장박동을 바꾸지 않는다(observability/heartbeat.py)
         beat(settings.HEARTBEAT_FILE)
         return result
@@ -166,6 +186,14 @@ class Command(BaseCommand):
             return
         self.stdout.write(
             f'초대 보상 지급 {report.granted}건, 주지 않음 {report.skipped}건, 다시 시도 예정 {report.retried}건'
+        )
+
+    def _report_attendance(self, report: DeliveryReport) -> None:
+        """출석의 실버의 한 일. 한 일이 있을 때만 출력한다."""
+        if report.handled == 0:
+            return
+        self.stdout.write(
+            f'출석 실버 지급 {report.granted}건, 이미 받음 {report.skipped}건, 다시 시도 예정 {report.retried}건'
         )
 
     def _report_eligibility(self, report: payment_eligibility.DeliveryReport) -> None:

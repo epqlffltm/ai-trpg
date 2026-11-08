@@ -1104,6 +1104,71 @@ class InviteGrant(models.Model):
         return f'{self.user_public_id} / {self.get_role_display()} / {self.get_status_display()}'
 
 
+class AttendanceClaim(models.Model):
+    """
+    출석한 날 하나(attendance.py). 출석은 결제 서버에서 옮겨 왔다(2026-11-08 결정).
+
+    두 가지 일을 한다. 하나는 출석의 기록이다. 사용자와 날짜마다 한 줄이고, "며칠째"는 어제의 줄로 센다.
+    연속 일수를 따로 적지 않는다. 따로 두면 기록과 어긋날 수 있다.
+    다른 하나는 결제 서버에 실버를 맡길 일(outbox)이다. 환영 크레딧(WelcomeCredit)과 같다.
+    출석과 같은 트랜잭션에서 적고, 워커(manage.py send_welcome_credits)가 꺼내 맡기고,
+    실패하면 간격을 늘려 다시 맡긴다. 버리지 않는다.
+    같은 줄을 몇 번 맡겨도 한 번만 들어간다. 결제 서버가 지급의 이름(attendance-날짜, chest-날짜)으로 지킨다.
+    끝난 줄도 지우지 않는다. 탈퇴해도 남긴다(계정의 줄은 비울 뿐 지우지 않는다).
+    """
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name='attendance_claims', verbose_name='출석한 사람'
+    )
+    # 출석한 한국 날짜
+    day = models.DateField('출석한 날')
+    # 주기의 며칠째였는지. 1 부터다
+    cycle_day = models.PositiveSmallIntegerField('주기의 며칠째')
+    # 그날의 하루 양(실버). 받을 때의 설정(ATTENDANCE_SILVER)으로 정했다
+    silver = models.PositiveIntegerField('하루 양')
+    # 연 보물 상자. 연 날이 아니면 비어 있다. 표의 버전과 결과의 이름이다(attendance_rules.py)
+    chest_table = models.CharField('상자의 확률표', max_length=20, null=True, blank=True)
+    chest_outcome = models.CharField('상자의 결과', max_length=40, null=True, blank=True)
+    # 상자에서 나온 실버. 열지 않았거나 꽝이면 0 이다
+    chest_silver = models.PositiveIntegerField('상자의 실버', default=0)
+
+    status = models.CharField(
+        '상태',
+        max_length=20,
+        choices=WelcomeCreditStatus.choices,
+        default=WelcomeCreditStatus.PENDING,
+    )
+    attempts = models.PositiveIntegerField('시도 횟수', default=0)
+    last_error = models.CharField('마지막 오류', max_length=200, blank=True)
+
+    created_at = models.DateTimeField('출석한 시각', auto_now_add=True)
+    next_attempt_at = models.DateTimeField('다음 시도 시각')
+    finished_at = models.DateTimeField('끝난 시각', null=True, blank=True)
+
+    class Meta:
+        verbose_name = '출석'
+        verbose_name_plural = '출석'
+        constraints = [
+            # 같은 날 두 번은 두 겹으로 막는다. 이 제약과 결제 서버의 지급의 이름이다
+            models.UniqueConstraint(fields=['user', 'day'], name='accounts_attendance_once_a_day'),
+            models.CheckConstraint(condition=models.Q(cycle_day__gte=1), name='accounts_attendance_cycle_day_positive'),
+            models.CheckConstraint(
+                condition=models.Q(chest_table__isnull=True, chest_outcome__isnull=True, chest_silver=0)
+                | models.Q(chest_table__isnull=False, chest_outcome__isnull=False),
+                name='accounts_attendance_chest_complete',
+            ),
+        ]
+        indexes = [
+            # 워커가 "지금 맡길 수 있는 줄" 을 찾을 때 쓴다
+            models.Index(fields=['status', 'next_attempt_at'], name='accounts_attendance_due_idx'),
+            # 그 사람의 가장 최근 출석을 찾을 때 쓴다
+            models.Index(fields=['user', '-day'], name='accounts_attendance_last_idx'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.user_id} / {self.day} / {self.cycle_day}일째 / {self.get_status_display()}'
+
+
 class CreatorBlock(models.Model):
     """
     한 사람이 막은 제작자 하나(#988). 막은 제작자의 작품은 그 사람의 공개 목록에서 빠진다.

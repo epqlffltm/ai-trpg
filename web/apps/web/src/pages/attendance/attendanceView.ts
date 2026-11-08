@@ -2,7 +2,7 @@
 // 출석(A9)이 보일 글과 칸. 순수한 함수다. 양은 결제 서버가 준 글자("140")를 그대로 쓰고, 하루 양은 보상표에서 읽는다(숫자를 박지 않는다).
 // cycle_day 는 받았으면 받은 날의 차례, 아직이면 지금 받으면 될 차례다. 하루라도 빠지면 서버가 1 로 준다.
 
-import type { AttendanceClaim, AttendanceRewards, AttendanceStatus } from '../../api/types';
+import type { AttendanceClaim, AttendanceRewards, AttendanceStatus } from '../../api/attendance';
 
 /** 칸의 상태. 받음(이번 주기에 지난날), 오늘 받음, 오늘(아직), 앞으로 */
 export type CellState = 'done' | 'claimed' | 'today' | 'later';
