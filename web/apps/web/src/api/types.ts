@@ -84,6 +84,9 @@ export type MonsterUpdate = Trpg['schemas']['MonsterUpdate'];
 export type MonsterKind = Trpg['schemas']['MonsterKind'];
 export type Rating = Trpg['schemas']['Rating'];
 export type ScenarioDetail = Trpg['schemas']['ScenarioDetail'];
+/** 내 시나리오 목록의 한 줄(#1165). 등급, 쓰인 수, 관심 수, 공개 상태가 있다 */
+export type MyScenarioSummary = Trpg['schemas']['MyScenarioSummary'];
+export type MyScenarioPage = Trpg['schemas']['ScenarioPage'];
 export type ScenarioCreate = Trpg['schemas']['ScenarioCreate'];
 export type ScenarioUpdate = Trpg['schemas']['ScenarioUpdate'];
 export type ScenarioClock = Trpg['schemas']['Clock'];

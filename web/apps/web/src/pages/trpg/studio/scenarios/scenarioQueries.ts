@@ -5,12 +5,24 @@
 // 재료를 고르는 칸은 종류마다 내 재료를 한 번에 100 개까지 읽는다(목록 열쇠 아래라 재료를 만들면 함께 무른다).
 
 import { queryOptions } from '@tanstack/react-query';
-import { fetchOwnListing, fetchPublishCheck, fetchScenario, fetchVersions } from '../../../../api/scenarios';
+import { fetchMyScenarios, fetchOwnListing, fetchPublishCheck, fetchScenario, fetchVersions } from '../../../../api/scenarios';
 import { fetchAssets, type StudioKind } from '../../../../api/studio';
+import type { MineOrder } from '../../../../api/types';
 import { assetDetailKey, assetListKey } from '../studioQueries';
 
 /** 재료를 고르는 칸이 한 번에 읽는 수. 서버의 한 쪽의 최대다 */
 export const CHOICES_LIMIT = 100;
+
+/** 마이페이지가 한 번에 읽는 내 시나리오의 수 */
+export const MY_SCENARIOS_LIMIT = 20;
+
+/** 내 시나리오(#1165, 앞의 한 쪽). 차례마다 따로 읽는다. 시나리오의 목록을 무르면 함께 물러진다 */
+export function myScenariosQuery(sort: MineOrder) {
+  return queryOptions({
+    queryKey: [...assetListKey('scenarios'), 'mine', sort],
+    queryFn: ({ signal }) => fetchMyScenarios({ limit: MY_SCENARIOS_LIMIT, offset: 0, sort }, signal),
+  });
+}
 
 export function scenarioQuery(scenarioId: string) {
   return queryOptions({
