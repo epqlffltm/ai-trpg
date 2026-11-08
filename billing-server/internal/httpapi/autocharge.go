@@ -25,7 +25,8 @@ import (
 //	POST   /cards                   카드 등록 창이 준 인증 키로 카드를 등록한다
 //	DELETE /cards                   카드를 지우고 자동 충전을 끈다
 //
-// 이 단계는 등록과 설정뿐이다. 골드가 떨어졌을 때 결제하는 일은 다음 단계다.
+// 설정은 언제 사는지(mode)를 고른다. 잔액 기준(balance, 골드가 threshold 아래로 떨어지면)이나
+// 날짜 기준(date, 매달 charge_day 에, #1167)이다. 결제는 따로 도는 작업(cmd/autocharge)이 한다.
 
 // AutoChargeService 는 자동 충전의 카드와 설정을 다루는 것의 모양이다. *autocharge.Service 가 이 모양이다.
 type AutoChargeService interface {
@@ -38,9 +39,12 @@ type AutoChargeService interface {
 
 // autoChargeRequest 는 설정을 적는 요청의 본문이다. 기준 골드는 다른 양처럼 글자다.
 // 켤 때는 동의한 자동 결제 동의의 판(terms_version)을 함께 보낸다. 끌 때는 보지 않는다.
+// mode 가 없으면 잔액 기준이다(날짜 기준 전의 화면). charge_day 는 날짜 기준의 날이다. 없거나 null 이면 고르지 않은 것이다.
 type autoChargeRequest struct {
 	Enabled      bool   `json:"enabled"`
+	Mode         string `json:"mode"`
 	Threshold    string `json:"threshold"`
+	ChargeDay    *int   `json:"charge_day"`
 	ProductID    string `json:"product_id"`
 	MonthlyLimit int64  `json:"monthly_limit"`
 	TermsVersion int    `json:"terms_version"`
@@ -52,10 +56,12 @@ type termsBody struct {
 	AgreedVersion *int `json:"agreed_version"`
 }
 
-// settingsBody 는 설정의 응답 모양이다.
+// settingsBody 는 설정의 응답 모양이다. 날을 고른 적이 없으면 charge_day 가 null 이다.
 type settingsBody struct {
 	Enabled      bool          `json:"enabled"`
+	Mode         string        `json:"mode"`
 	Threshold    credit.Amount `json:"threshold"`
+	ChargeDay    *int          `json:"charge_day"`
 	ProductID    string        `json:"product_id"`
 	MonthlyLimit int64         `json:"monthly_limit"`
 }
@@ -116,9 +122,7 @@ func putAutoCharge(service AutoChargeService) gin.HandlerFunc {
 			abort(c, http.StatusBadRequest, codeAutoChargeInvalidSettings, "threshold 는 골드의 양(글자)이어야 합니다.")
 			return
 		}
-		updated, err := service.Update(c.Request.Context(), currentUser(c).UserID, autocharge.Settings{
-			Enabled: request.Enabled, Threshold: threshold, ProductID: request.ProductID, MonthlyLimit: request.MonthlyLimit,
-		}, request.TermsVersion)
+		updated, err := service.Update(c.Request.Context(), currentUser(c).UserID, toSettings(request, threshold), request.TermsVersion)
 		if err != nil {
 			autoChargeError(c, err)
 			return
@@ -213,6 +217,25 @@ func cardError(c *gin.Context, err error) {
 	}
 }
 
+// toSettings 는 요청의 본문을 설정으로 바꾼다. 값이 맞는지는 서비스가 본다(autocharge.Settings.Validate).
+func toSettings(request autoChargeRequest, threshold credit.Amount) autocharge.Settings {
+	settings := autocharge.Settings{
+		Enabled: request.Enabled, Mode: autocharge.Mode(request.Mode), Threshold: threshold,
+		ProductID: request.ProductID, MonthlyLimit: request.MonthlyLimit,
+	}
+	if settings.Mode == "" {
+		settings.Mode = autocharge.ModeBalance
+	}
+	if request.ChargeDay != nil {
+		settings.ChargeDay = *request.ChargeDay
+		if settings.ChargeDay == 0 {
+			// 0 은 "고르지 않음" 과 같아지므로 틀린 값으로 보낸다
+			settings.ChargeDay = -1
+		}
+	}
+	return settings
+}
+
 // toAutoChargeBody 는 자동 충전을 응답의 모양으로 바꾼다.
 func toAutoChargeBody(view autocharge.View) autoChargeBody {
 	body := autoChargeBody{ConsecutiveFailures: view.ConsecutiveFailures, Terms: termsBody{Version: autocharge.TermsVersion}}
@@ -222,8 +245,12 @@ func toAutoChargeBody(view autocharge.View) autoChargeBody {
 	}
 	if view.Settings != nil {
 		body.Settings = &settingsBody{
-			Enabled: view.Settings.Enabled, Threshold: view.Settings.Threshold,
+			Enabled: view.Settings.Enabled, Mode: string(view.Settings.Mode), Threshold: view.Settings.Threshold,
 			ProductID: view.Settings.ProductID, MonthlyLimit: view.Settings.MonthlyLimit,
+		}
+		if view.Settings.ChargeDay > 0 {
+			day := view.Settings.ChargeDay
+			body.Settings.ChargeDay = &day
 		}
 	}
 	if view.Card != nil {

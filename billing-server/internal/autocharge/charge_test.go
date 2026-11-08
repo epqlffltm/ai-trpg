@@ -134,7 +134,7 @@ func (f chargeFixture) enable(marks string) {
 func (f chargeFixture) settings(enabled bool, monthlyLimit int64) {
 	f.t.Helper()
 	if _, err := f.service.Update(context.Background(), f.user, autocharge.Settings{
-		Enabled: enabled, Threshold: threshold, ProductID: "credits-1000", MonthlyLimit: monthlyLimit,
+		Enabled: enabled, Mode: autocharge.ModeBalance, Threshold: threshold, ProductID: "credits-1000", MonthlyLimit: monthlyLimit,
 	}, autocharge.TermsVersion); err != nil {
 		f.t.Fatalf("설정을 적지 못했다: %v", err)
 	}
@@ -494,7 +494,7 @@ func TestAPurchaseThatLeavesItBelowTheThresholdIsNotRepeated(t *testing.T) {
 	f := setUpCharging(t)
 	f.enable("")
 	if _, err := f.service.Update(context.Background(), f.user, autocharge.Settings{
-		Enabled: true, Threshold: 5_000, ProductID: "credits-1000", MonthlyLimit: 30_000,
+		Enabled: true, Mode: autocharge.ModeBalance, Threshold: 5_000, ProductID: "credits-1000", MonthlyLimit: 30_000,
 	}, autocharge.TermsVersion); err != nil {
 		t.Fatalf("설정을 적지 못했다: %v", err)
 	}

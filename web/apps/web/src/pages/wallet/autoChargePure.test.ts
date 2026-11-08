@@ -12,23 +12,36 @@ const PRODUCTS = [
   { id: 'credits-5000', name: '크레딧 5,000', price: 5000, credits: '5000' },
 ] as Product[];
 
-const GOOD: AutoChargeDraft = { enabled: true, threshold: '500', productId: 'credits-5000', monthlyLimit: '30000', agreed: true };
+const GOOD: AutoChargeDraft = {
+  enabled: true,
+  mode: 'balance',
+  threshold: '500',
+  chargeDay: '1',
+  productId: 'credits-5000',
+  monthlyLimit: '30000',
+  agreed: true,
+};
+const DATE: AutoChargeDraft = { ...GOOD, mode: 'date', chargeDay: '15' };
 const TERMS = { version: 1, agreed_version: null };
 
 describe('입력 칸', () => {
   it('적은 적이 없으면 꺼 둔 채 첫 상품이고, 적었으면 그 값이다', () => {
     expect(initialDraft({ settings: null, consecutive_failures: 0, card: null, terms: TERMS }, PRODUCTS)).toEqual({
       enabled: false,
+      mode: 'balance',
       threshold: '500',
+      chargeDay: '1',
       productId: 'credits-1000',
       monthlyLimit: '30000',
       agreed: false,
     });
-    const saved = { enabled: true, threshold: '42', product_id: 'credits-5000', monthly_limit: 9000 };
+    const saved = { enabled: true, mode: 'date' as const, threshold: '42', charge_day: 9, product_id: 'credits-5000', monthly_limit: 9000 };
     // 전에 동의했어도 동의하는 칸은 비운 채 시작한다
     expect(initialDraft({ settings: saved, consecutive_failures: 2, card: null, terms: { version: 1, agreed_version: 1 } }, PRODUCTS)).toEqual({
       enabled: true,
+      mode: 'date',
       threshold: '42',
+      chargeDay: '9',
       productId: 'credits-5000',
       monthlyLimit: '9000',
       agreed: false,
@@ -37,7 +50,7 @@ describe('입력 칸', () => {
 
   it('맞는 값을 서버의 모양으로 바꾼다. 빈칸은 지운다', () => {
     expect(toSettings({ ...GOOD, threshold: ' 0 ', monthlyLimit: '5000' }, PRODUCTS, 3)).toEqual({
-      settings: { enabled: true, threshold: '0', product_id: 'credits-5000', monthly_limit: 5000, terms_version: 3 },
+      settings: { enabled: true, mode: 'balance', threshold: '0', charge_day: 1, product_id: 'credits-5000', monthly_limit: 5000, terms_version: 3 },
       problem: null,
     });
   });
@@ -48,7 +61,7 @@ describe('입력 칸', () => {
       problem: '자동 충전을 켜려면 자동 결제에 동의해 주세요.',
     });
     expect(toSettings({ ...GOOD, enabled: false, agreed: false }, PRODUCTS, 1)).toEqual({
-      settings: { enabled: false, threshold: '500', product_id: 'credits-5000', monthly_limit: 30000 },
+      settings: { enabled: false, mode: 'balance', threshold: '500', charge_day: 1, product_id: 'credits-5000', monthly_limit: 30000 },
       problem: null,
     });
   });
@@ -63,6 +76,30 @@ describe('입력 칸', () => {
     expect(agreementLines({ ...GOOD, threshold: 'x' }, PRODUCTS)).toBeNull();
     expect(agreementLines({ ...GOOD, productId: 'credits-7' }, PRODUCTS)).toBeNull();
     expect(agreementLines({ ...GOOD, monthlyLimit: '' }, PRODUCTS)).toBeNull();
+  });
+
+  it('날짜 기준은 날을 보내고, 숨긴 기준 골드가 틀렸어도 막지 않는다', () => {
+    expect(toSettings({ ...DATE, threshold: 'x' }, PRODUCTS, 2)).toEqual({
+      settings: { enabled: true, mode: 'date', threshold: '0', charge_day: 15, product_id: 'credits-5000', monthly_limit: 30000, terms_version: 2 },
+      problem: null,
+    });
+    expect(toSettings({ ...DATE, chargeDay: '29' }, PRODUCTS, 2).problem).toMatch(/1일에서 28일/);
+    expect(toSettings({ ...DATE, chargeDay: '0' }, PRODUCTS, 2).problem).toMatch(/1일에서 28일/);
+    // 잔액 기준은 날이 틀렸어도 막지 않는다(보내지 않는 칸이다)
+    expect(toSettings({ ...GOOD, chargeDay: '' }, PRODUCTS, 2).settings).toMatchObject({ mode: 'balance', charge_day: null });
+  });
+
+  it('날짜 기준의 동의할 조건은 그날과 건너뛰는 것을 적는다', () => {
+    expect(agreementLines(DATE, PRODUCTS)).toEqual([
+      '매달 15일(한국 날짜)에 등록한 카드로 크레딧 5,000(5,000원)을 한 번 결제합니다. 골드가 남아 있어도 결제합니다.',
+      '오늘이 그날이면 오늘 결제합니다. 그날 결제하지 못하면 그달에는 결제하지 않습니다.',
+      '한 달(한국 날짜)에 자동으로 결제하는 돈은 30,000원을 넘지 않습니다.',
+      '결제할 때마다 알림함과 메일로 알립니다. 세 번 이어서 되지 않으면 자동 충전을 끕니다.',
+      '지갑에서 언제든 끄거나 카드를 지울 수 있습니다.',
+    ]);
+    // 날짜 기준은 기준 골드를 보지 않는다
+    expect(agreementLines({ ...DATE, threshold: 'x' }, PRODUCTS)).not.toBeNull();
+    expect(agreementLines({ ...DATE, chargeDay: '31' }, PRODUCTS)).toBeNull();
   });
 
   it('틀린 값은 까닭을 준다', () => {
@@ -82,7 +119,7 @@ describe('입력 칸', () => {
 });
 
 describe('동의가 없어 멈춘 것', () => {
-  const on = { enabled: true, threshold: '500', product_id: 'credits-1000', monthly_limit: 30000 };
+  const on = { enabled: true, mode: 'balance' as const, threshold: '500', charge_day: null, product_id: 'credits-1000', monthly_limit: 30000 };
 
   it('켜 둔 채 지금의 판에 동의하지 않았을 때만 알린다', () => {
     expect(pausedText({ settings: on, consecutive_failures: 0, card: null, terms: { version: 1, agreed_version: 1 } })).toBeNull();

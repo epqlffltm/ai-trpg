@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/wallet/autoChargeHistoryView.ts
 // 최근 자동 결제(#980)의 한 줄이 보일 글. 순수한 함수다. 상태와 까닭은 서버가 정한 것만 본다.
+// 까닭의 글은 잔액 기준과 날짜 기준(#1167)에 함께 맞게 쓴다. 한 줄에는 어느 방식으로 적은 일인지가 없다.
 
 import type { AutoChargeHistoryItem } from '../../api/types';
 
@@ -12,12 +13,12 @@ const STATUS: Record<AutoChargeHistoryItem['status'], string> = {
 
 /** 하지 않은 까닭. 서버가 새 까닭을 먼저 보내면 한 말이다(historyNote) */
 const REASON: Record<NonNullable<AutoChargeHistoryItem['reason']>, string> = {
-  disabled: '결제하기 전에 자동 충전을 껐습니다.',
+  disabled: '결제하기 전에 자동 충전을 껐거나 언제 살지를 바꿨습니다.',
   no_card: '등록한 카드가 없어 결제하지 않았습니다.',
   not_eligible: '지금은 결제할 수 없어 결제하지 않았습니다. 본인인증이나 보호자 동의를 확인하세요.',
   monthly_limit: '이번 달 자동 충전 상한에 닿아 결제하지 않았습니다.',
   withdrawn: '탈퇴해 결제하지 않았습니다.',
-  stale: '처리가 하루 넘게 늦어져 결제하지 않았습니다. 다음에 골드가 떨어지면 다시 삽니다.',
+  stale: '처리가 늦어져 결제하지 않았습니다. 다음에 살 때(골드가 떨어질 때나 다음 달의 그날) 다시 삽니다.',
   terms_outdated: '자동 결제 동의가 필요해 결제하지 않았습니다. 지갑에서 동의하고 저장하면 다시 삽니다.',
 };
 

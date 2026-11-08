@@ -11,15 +11,15 @@ import (
 )
 
 func validSettings() autocharge.Settings {
-	return autocharge.Settings{Enabled: true, Threshold: 500, ProductID: "credits-5000", MonthlyLimit: 30_000}
+	return autocharge.Settings{Enabled: true, Mode: autocharge.ModeBalance, Threshold: 500, ProductID: "credits-5000", MonthlyLimit: 30_000}
 }
 
 func TestValidSettingsPass(t *testing.T) {
 	for name, settings := range map[string]autocharge.Settings{
 		"보통":               validSettings(),
-		"기준 0(다 써야 산다)":    {ProductID: "credits-1000", MonthlyLimit: 1_000},
-		"가장 큰 값들":          {Threshold: autocharge.MaxThreshold, ProductID: "credits-30000", MonthlyLimit: autocharge.MaxMonthlyLimit},
-		"한 달 상한이 상품 값과 같다": {Threshold: 1, ProductID: "credits-10000", MonthlyLimit: 10_000},
+		"기준 0(다 써야 산다)":    {Mode: autocharge.ModeBalance, ProductID: "credits-1000", MonthlyLimit: 1_000},
+		"가장 큰 값들":          {Mode: autocharge.ModeBalance, Threshold: autocharge.MaxThreshold, ProductID: "credits-30000", MonthlyLimit: autocharge.MaxMonthlyLimit},
+		"한 달 상한이 상품 값과 같다": {Mode: autocharge.ModeBalance, Threshold: 1, ProductID: "credits-10000", MonthlyLimit: 10_000},
 	} {
 		if err := settings.Validate(); err != nil {
 			t.Errorf("%s: %v", name, err)

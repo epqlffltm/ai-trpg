@@ -20,12 +20,15 @@ import (
 )
 
 // 결제하기(#980 의 둘째 단계). 따로 도는 작업(cmd/autocharge)이 한 바퀴마다 적어 둔 일을 결제한다(ChargeRound).
+// 바퀴의 처음에 날짜 기준(#1167)의 오늘의 일을 적는다(QueueScheduled, schedule.go).
 //
 //  1. 차지하기: 때가 된 일 하나를 잠그고 임대를 건다. 결제 대행사를 부르는 동안에는 잠금을 쥐지 않는다
 //  2. 보내기 전(pending): 아직 켜져 있는지, 카드가 있는지, 지금 결제할 수 있는지, 한 달 상한을 넘지 않는지 본다.
 //     하나라도 아니면 그만둔다(skipped). 실패로 세지 않는다. 모두 맞으면 카드를 일에 옮겨 적고 charging 으로 바꾼다.
 //     적힌 지 PendingFor(하루)가 지난 일은 보내지 않고 그만둔다(stale). 결제 작업이 멈춰 있었던 것이다.
 //     며칠 전의 잔액으로 사지 않고, armed 를 다시 켜 다음에 골드가 떨어질 때 그때의 설정으로 산다(2026-11-04 결정)
+//     날짜 기준의 일은 그날(한국 날짜)이 지나면 보내지 않는다(같은 stale). 그 달은 건너뛴다(2026-11-08 결정)
+//     적은 뒤 방식을 바꿨으면 보내지 않는다(disabled). 바꾼 방식이 제 때에 다시 적는다
 //  3. 보내기(charging): 일의 번호를 주문 번호이자 멱등키로 빌링키 결제를 보낸다
 //     - 승인: 한 트랜잭션에서 일을 끝내고, paid 인 주문을 적고, 골드를 넣고, 이어서 실패한 수를 0 으로 한다
 //     - 거절: 일을 끝내고 이어서 실패한 수를 늘린다. MaxFailures 가 되면 끈다. 다시 보내지 않는다
@@ -99,11 +102,13 @@ type ChargeResult struct {
 	Retried int
 	// LookedUp 은 다시 보내는 기한이 지나 보내지 않고 조회한 수다. 조회의 결과도 Paid, Declined, Retried 에 함께 센다.
 	LookedUp int
+	// Queued 는 바퀴의 처음에 적은 날짜 기준의 일의 수다(#1167). 그 결과도 Paid, Declined, Skipped, Retried 에 함께 센다.
+	Queued int
 }
 
 // Any 는 한 일이 있는지다.
 func (r ChargeResult) Any() bool {
-	return r.Paid > 0 || r.Declined > 0 || r.Skipped > 0 || r.Retried > 0 || r.LookedUp > 0
+	return r.Paid > 0 || r.Declined > 0 || r.Skipped > 0 || r.Retried > 0 || r.LookedUp > 0 || r.Queued > 0
 }
 
 // WithCharging 은 결제하는 일을 붙인 Service 를 돌려준다. 결제하는 작업(cmd/autocharge)만 붙인다.
@@ -113,9 +118,15 @@ func (s *Service) WithCharging(charger payment.CardCharger, orders Orders) *Serv
 	return &changed
 }
 
-// ChargeRound 는 때가 된 일을 limit 개까지 결제한다. 하나를 끝내지 못해도 나머지를 한다. DB 의 오류만 돌려준다.
+// ChargeRound 는 날짜 기준의 오늘의 일을 적고, 때가 된 일을 limit 개까지 결제한다. 하나를 끝내지 못해도 나머지를 한다.
+// DB 의 오류만 돌려준다. 적는 것도 limit 개까지다. 남은 사람은 다음 바퀴에 적는다.
 func (s *Service) ChargeRound(ctx context.Context, limit int) (ChargeResult, error) {
 	var result ChargeResult
+	queued, err := s.QueueScheduled(ctx, s.clock(), limit)
+	result.Queued = queued
+	if err != nil {
+		return result, err
+	}
 	for range limit {
 		outcome, lookedUp, err := s.chargeNext(ctx)
 		if lookedUp {
@@ -199,7 +210,7 @@ func (s *Service) claim(ctx context.Context, now time.Time) (autochargedb.AutoCh
 
 // prepare 는 보내기 전의 일을 살펴 그만두거나, 카드를 옮겨 적고 charging 으로 바꾼다. 그만뒀으면 두 번째 값이 true 다.
 func (s *Service) prepare(ctx context.Context, request autochargedb.AutoChargeRequest, now time.Time) (autochargedb.AutoChargeRequest, bool, error) {
-	if PastPending(request.CreatedAt, now) {
+	if PastPending(request.CreatedAt, now) || pastScheduledDay(request, now) {
 		return request, true, s.skipStale(ctx, request, now)
 	}
 	reason, err := s.refusal(ctx, request, now)
@@ -239,6 +250,7 @@ func PastPending(createdAt time.Time, now time.Time) bool {
 
 // skipStale 은 늦은 일을 그만두고 armed 를 다시 켠다. 한 트랜잭션이다. 다른 쪽이 먼저 끝냈으면 켜지 않는다.
 // 일을 적을 때 armed 를 껐다. 다시 켜지 않으면 잔액이 기준 아래에 있는 동안 다시 사지 않는다(기준 이상을 봐야 켜진다).
+// 날짜 기준의 일은 armed 를 쓰지 않아 켜지 않는다. 다음 달의 그날에 산다.
 func (s *Service) skipStale(ctx context.Context, request autochargedb.AutoChargeRequest, now time.Time) error {
 	ended := false
 	err := txn.Run(ctx, s.pool, func(tx pgx.Tx) error {
@@ -248,6 +260,9 @@ func (s *Service) skipStale(ctx context.Context, request autochargedb.AutoCharge
 			return err
 		}
 		ended = true
+		if requestMode(request) == ModeDate {
+			return nil
+		}
 		return queries.SetArmed(ctx, autochargedb.SetArmedParams{UserID: request.UserID, Armed: true})
 	})
 	if err == nil && ended {
@@ -265,6 +280,9 @@ func (s *Service) refusal(ctx context.Context, request autochargedb.AutoChargeRe
 	}
 	if err != nil {
 		return "", err
+	}
+	if Mode(settings.Mode) != requestMode(request) {
+		return SkipDisabled, nil
 	}
 	if agreed, err := agreedTerms(ctx, queries, request.UserID); err != nil || agreed != TermsVersion {
 		return SkipTermsOutdated, err

@@ -102,7 +102,7 @@ describe('자동 충전', () => {
 
   it('설정을 적으면 서버가 돌려준 설정을 보인다', async () => {
     const saved = {
-      settings: { enabled: true, threshold: '300', product_id: 'credits-5000', monthly_limit: 20000 },
+      settings: { enabled: true, mode: 'balance', threshold: '300', charge_day: null, product_id: 'credits-5000', monthly_limit: 20000 },
       consecutive_failures: 0,
       card: CARD,
       terms: { version: 1, agreed_version: 1 },
@@ -129,7 +129,9 @@ describe('자동 충전', () => {
     expect(await auto.findByText('자동 충전을 켰습니다.')).toBeInTheDocument();
     expect(seen.find((request) => request.method === 'PUT')?.body).toEqual({
       enabled: true,
+      mode: 'balance',
       threshold: '300',
+      charge_day: 1,
       product_id: 'credits-5000',
       monthly_limit: 20000,
       terms_version: 1,
@@ -138,8 +140,59 @@ describe('자동 충전', () => {
     expect(auto.getByRole('textbox', { name: '기준 골드' })).toHaveValue('300');
   });
 
+  it('매달 정한 날을 고르면 기준 골드 대신 날을 보이고, 그날의 조건에 동의해 적는다', async () => {
+    const saved = {
+      settings: { enabled: true, mode: 'date', threshold: '500', charge_day: 15, product_id: 'credits-1000', monthly_limit: 30000 },
+      consecutive_failures: 0,
+      card: CARD,
+      terms: { version: 2, agreed_version: 2 },
+    };
+    const { seen } = signedIn({
+      [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, card: CARD, terms: { version: 2, agreed_version: null } }),
+      [`PUT ${BILLING}/auto-charge`]: () => json(200, saved),
+    });
+    renderApp('/wallet');
+    const auto = await section();
+
+    await userEvent.click(await auto.findByRole('checkbox', { name: '자동 충전 켜기' }));
+    await userEvent.click(auto.getByRole('radio', { name: '매달 정한 날에' }));
+    expect(auto.queryByRole('textbox', { name: '기준 골드' })).toBeNull();
+    await userEvent.selectOptions(auto.getByRole('combobox', { name: '매달 사는 날' }), '15');
+    expect(auto.queryByRole('option', { name: '29일' })).toBeNull();
+    expect(
+      auto.getByText('매달 15일(한국 날짜)에 등록한 카드로 크레딧 1,000(1,000원)을 한 번 결제합니다. 골드가 남아 있어도 결제합니다.'),
+    ).toBeInTheDocument();
+    await userEvent.click(auto.getByRole('checkbox', { name: /자동 결제하는 것에 동의합니다/ }));
+    await userEvent.click(auto.getByRole('button', { name: '저장' }));
+
+    expect(await auto.findByText('자동 충전을 켰습니다.')).toBeInTheDocument();
+    expect(seen.find((request) => request.method === 'PUT')?.body).toEqual({
+      enabled: true,
+      mode: 'date',
+      threshold: '500',
+      charge_day: 15,
+      product_id: 'credits-1000',
+      monthly_limit: 30000,
+      terms_version: 2,
+    });
+    expect(auto.getByRole('radio', { name: '매달 정한 날에' })).toBeChecked();
+    expect(auto.getByRole('combobox', { name: '매달 사는 날' })).toHaveValue('15');
+  });
+
+  it('2판의 동의 내용에 날짜 기준이 있다', async () => {
+    signedIn({ [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, card: CARD, terms: { version: 2, agreed_version: null } }) });
+    renderApp('/wallet');
+    const auto = await section();
+
+    await userEvent.click(await auto.findByRole('checkbox', { name: '자동 충전 켜기' }));
+    await userEvent.click(auto.getByRole('button', { name: '동의 내용 보기' }));
+
+    const dialog = await screen.findByRole('dialog', { name: '자동 충전 이용 동의' });
+    expect(await within(dialog).findByText('날짜 기준: 매달 회원이 정한 날(한국 날짜의 1일부터 28일 중 하루)')).toBeInTheDocument();
+  });
+
   it('끄고 적으면 끈 설정을 보이고, 돌려받은 것으로 끝낸다(다시 읽지 않는다)', async () => {
-    const on = { enabled: true, threshold: '500', product_id: 'credits-1000', monthly_limit: 30000 };
+    const on = { enabled: true, mode: 'balance', threshold: '500', charge_day: null, product_id: 'credits-1000', monthly_limit: 30000 };
     const { seen } = signedIn({
       [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, settings: on, card: CARD }),
       [`PUT ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, settings: { ...on, enabled: false }, card: CARD }),
@@ -228,11 +281,11 @@ describe('자동 충전', () => {
 
   it('서버가 판이 바뀌었다고 막으면(409) 다시 읽어 바뀐 판을 보이고 동의 칸을 비운다', async () => {
     let reads = 0;
-    const on = { enabled: true, threshold: '500', product_id: 'credits-1000', monthly_limit: 30000 };
+    const on = { enabled: true, mode: 'balance', threshold: '500', charge_day: null, product_id: 'credits-1000', monthly_limit: 30000 };
     const { seen } = signedIn({
       [`GET ${BILLING}/auto-charge`]: () => {
         reads += 1;
-        return json(200, { ...NOTHING, settings: on, card: CARD, terms: { version: reads === 1 ? 1 : 2, agreed_version: 1 } });
+        return json(200, { ...NOTHING, settings: on, card: CARD, terms: { version: reads === 1 ? 1 : 3, agreed_version: 1 } });
       },
       [`PUT ${BILLING}/auto-charge`]: () => json(409, { detail: 'x', code: 'autocharge.terms_outdated' }),
     });
@@ -246,13 +299,13 @@ describe('자동 충전', () => {
     expect(seen.find((request) => request.method === 'PUT')?.body).toMatchObject({ terms_version: 1 });
     const agree = await auto.findByRole('checkbox', { name: /자동 결제하는 것에 동의합니다/ });
     expect(agree).not.toBeChecked();
-    // 화면이 아직 갖지 않은 판(2)이라 동의할 수 없다. 새로 고치면 받는다
+    // 화면이 아직 갖지 않은 판(3)이라 동의할 수 없다. 새로 고치면 받는다
     expect(agree).toBeDisabled();
     expect(auto.getByText(/자동 결제 동의의 내용이 바뀌어 자동 충전을 멈췄습니다/)).toBeInTheDocument();
   });
 
   it('켜 둔 채 지금의 판에 동의하지 않았으면 자동 충전을 멈췄다고 알린다', async () => {
-    const on = { enabled: true, threshold: '500', product_id: 'credits-1000', monthly_limit: 30000 };
+    const on = { enabled: true, mode: 'balance', threshold: '500', charge_day: null, product_id: 'credits-1000', monthly_limit: 30000 };
     signedIn({
       [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, settings: on, card: CARD, terms: { version: 1, agreed_version: null } }),
     });
@@ -264,7 +317,7 @@ describe('자동 충전', () => {
   });
 
   it('꺼 둔 사람이 옛 판에 동의했으면 다시 켤 때 바뀌었다고 알린다. 멈췄다고 하지 않는다', async () => {
-    const off = { enabled: false, threshold: '500', product_id: 'credits-1000', monthly_limit: 30000 };
+    const off = { enabled: false, mode: 'balance', threshold: '500', charge_day: null, product_id: 'credits-1000', monthly_limit: 30000 };
     signedIn({
       [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, settings: off, card: CARD, terms: { version: 2, agreed_version: 1 } }),
     });

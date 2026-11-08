@@ -382,8 +382,8 @@ func TestTurningOnRecordsTheConsentWithItsConditions(t *testing.T) {
 		got = append(got, fmt.Sprintf("%d:%d:%s:%d:%d", version, threshold, product, price, limit))
 	}
 	want := []string{
-		fmt.Sprintf("1:%d:%s:5000:%d", first.Threshold, first.ProductID, first.MonthlyLimit),
-		"1:300:credits-1000:1000:10000",
+		fmt.Sprintf("%d:%d:%s:5000:%d", autocharge.TermsVersion, first.Threshold, first.ProductID, first.MonthlyLimit),
+		fmt.Sprintf("%d:300:credits-1000:1000:10000", autocharge.TermsVersion),
 	}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("동의의 줄 = %v, 기대 = %v", got, want)

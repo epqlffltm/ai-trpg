@@ -81,7 +81,7 @@ const goodSettings = `{"enabled":true,"threshold":"500","product_id":"credits-50
 
 func TestAutoChargeShowsSettingsAndCardWithoutTheBillingKey(t *testing.T) {
 	service := &fakeAutoCharge{view: autocharge.View{
-		Settings:            &autocharge.Settings{Enabled: true, Threshold: 500, ProductID: "credits-5000", MonthlyLimit: 30_000},
+		Settings:            &autocharge.Settings{Enabled: true, Mode: autocharge.ModeBalance, Threshold: 500, ProductID: "credits-5000", MonthlyLimit: 30_000},
 		ConsecutiveFailures: 1,
 		Card:                &autocharge.Card{IssuerCode: "61", Number: "43301234****123*", RegisteredAt: registeredAt},
 		AgreedTermsVersion:  1,
@@ -89,9 +89,9 @@ func TestAutoChargeShowsSettingsAndCardWithoutTheBillingKey(t *testing.T) {
 
 	response := autoChargeCall(t, service, http.MethodGet, autoChargeURL, "")
 
-	want := `{"settings":{"enabled":true,"threshold":"500","product_id":"credits-5000","monthly_limit":30000},` +
+	want := `{"settings":{"enabled":true,"mode":"balance","threshold":"500","charge_day":null,"product_id":"credits-5000","monthly_limit":30000},` +
 		`"consecutive_failures":1,"card":{"issuer_code":"61","number":"43301234****123*","registered_at":"2026-11-10T03:00:00Z"},` +
-		`"terms":{"version":1,"agreed_version":1}}`
+		`"terms":{"version":2,"agreed_version":1}}`
 	if response.Code != http.StatusOK || response.Body.String() != want || service.user.String() != testenv.UserID {
 		t.Errorf("%d %s", response.Code, response.Body.String())
 	}
@@ -100,7 +100,7 @@ func TestAutoChargeShowsSettingsAndCardWithoutTheBillingKey(t *testing.T) {
 func TestNothingYetIsNulls(t *testing.T) {
 	response := autoChargeCall(t, &fakeAutoCharge{}, http.MethodGet, autoChargeURL, "")
 
-	if response.Body.String() != `{"settings":null,"consecutive_failures":0,"card":null,"terms":{"version":1,"agreed_version":null}}` {
+	if response.Body.String() != `{"settings":null,"consecutive_failures":0,"card":null,"terms":{"version":2,"agreed_version":null}}` {
 		t.Errorf("%d %s", response.Code, response.Body.String())
 	}
 }
@@ -110,9 +110,38 @@ func TestSettingsArePassedOn(t *testing.T) {
 
 	response := autoChargeCall(t, service, http.MethodPut, autoChargeURL, goodSettings)
 
-	want := autocharge.Settings{Enabled: true, Threshold: 500, ProductID: "credits-5000", MonthlyLimit: 30_000}
+	want := autocharge.Settings{Enabled: true, Mode: autocharge.ModeBalance, Threshold: 500, ProductID: "credits-5000", MonthlyLimit: 30_000}
 	if response.Code != http.StatusOK || service.settings != want || service.agreedTerms != 1 {
 		t.Errorf("%d, 받은 설정 = %+v, 동의한 판 = %d", response.Code, service.settings, service.agreedTerms)
+	}
+}
+
+func TestDateSettingsArePassedOnAndShown(t *testing.T) {
+	service := &fakeAutoCharge{}
+	payload := `{"enabled":true,"mode":"date","threshold":"500","charge_day":5,"product_id":"credits-5000","monthly_limit":30000,"terms_version":2}`
+
+	response := autoChargeCall(t, service, http.MethodPut, autoChargeURL, payload)
+
+	want := autocharge.Settings{Enabled: true, Mode: autocharge.ModeDate, Threshold: 500, ChargeDay: 5, ProductID: "credits-5000", MonthlyLimit: 30_000}
+	if response.Code != http.StatusOK || service.settings != want || service.agreedTerms != 2 {
+		t.Errorf("%d, 받은 설정 = %+v, 동의한 판 = %d", response.Code, service.settings, service.agreedTerms)
+	}
+
+	shown := autoChargeCall(t, &fakeAutoCharge{view: autocharge.View{Settings: &want}}, http.MethodGet, autoChargeURL, "")
+	if !strings.Contains(shown.Body.String(), `"mode":"date","threshold":"500","charge_day":5,`) {
+		t.Errorf("%d %s", shown.Code, shown.Body.String())
+	}
+}
+
+func TestChargeDayZeroIsNotNone(t *testing.T) {
+	service := &fakeAutoCharge{}
+	payload := `{"enabled":false,"mode":"date","threshold":"500","charge_day":0,"product_id":"credits-5000","monthly_limit":30000}`
+
+	autoChargeCall(t, service, http.MethodPut, autoChargeURL, payload)
+
+	// 0 일을 "고르지 않음" 으로 바꾸지 않는다. 서비스가 틀린 날로 거절한다
+	if service.settings.ChargeDay != -1 {
+		t.Errorf("받은 날 = %d", service.settings.ChargeDay)
 	}
 }
 

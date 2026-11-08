@@ -3,7 +3,8 @@
 // 문서의 글은 화면이 갖는다(documents/, npm run sync:legal). 판을 올리면 여기에 새 판을 더한다.
 // 화면이 갖지 않은 판이면 켜지 못한다(옛 문서로 동의를 받지 않는다).
 
-const DOCUMENTS: Record<number, string> = { 1: 'auto-charge-v1' };
+// 2판은 날짜 기준을 더했다(#1167). 1판은 그 판에 동의한 기록이 가리켜 남긴다
+const DOCUMENTS: Record<number, string> = { 1: 'auto-charge-v1', 2: 'auto-charge-v2' };
 
 /** 그 판을 보일 문서의 이름. 화면이 갖지 않은 판이면 null */
 export function autoChargeDocumentName(version: number): string | null {

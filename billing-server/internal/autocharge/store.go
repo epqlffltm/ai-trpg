@@ -155,7 +155,8 @@ func (s *Service) Update(ctx context.Context, userID uuid.UUID, settings Setting
 		now := s.clock()
 		if _, err := queries.UpsertSettings(ctx, autochargedb.UpsertSettingsParams{
 			UserID: userID, Enabled: settings.Enabled, Threshold: settings.Threshold,
-			ProductID: settings.ProductID, MonthlyLimit: settings.MonthlyLimit, Now: now,
+			ProductID: settings.ProductID, MonthlyLimit: settings.MonthlyLimit,
+			Mode: string(settings.Mode), ChargeDay: pgint2Of(settings.ChargeDay), Now: now,
 		}); err != nil {
 			return err
 		}
@@ -175,11 +176,17 @@ func (s *Service) Update(ctx context.Context, userID uuid.UUID, settings Setting
 }
 
 // recordConsent 는 지금의 판과 그 조건으로 자동 결제에 동의했다고 적는다. 상품의 값은 지금의 목록에서 옮겨 적는다(Validate 가 봤다).
+// 방식과 날도 조건이다. 잔액 기준이면 날을 적지 않는다(고른 날이 남아 있어도 동의한 조건이 아니다).
 func recordConsent(ctx context.Context, queries *autochargedb.Queries, userID uuid.UUID, settings Settings, now time.Time) error {
 	product, _ := catalog.Find(settings.ProductID)
+	chargeDay := pgtype.Int2{}
+	if settings.Mode == ModeDate {
+		chargeDay = pgint2Of(settings.ChargeDay)
+	}
 	return queries.InsertConsent(ctx, autochargedb.InsertConsentParams{
 		UserID: userID, TermsVersion: TermsVersion, Threshold: int64(settings.Threshold),
-		ProductID: settings.ProductID, Price: product.Price, MonthlyLimit: settings.MonthlyLimit, Now: now,
+		ProductID: settings.ProductID, Price: product.Price, MonthlyLimit: settings.MonthlyLimit,
+		Mode: string(settings.Mode), ChargeDay: chargeDay, Now: now,
 	})
 }
 
@@ -229,7 +236,8 @@ func view(ctx context.Context, queries *autochargedb.Queries, userID uuid.UUID) 
 	switch {
 	case err == nil:
 		result.Settings = &Settings{
-			Enabled: settings.Enabled, Threshold: settings.Threshold, ProductID: settings.ProductID, MonthlyLimit: settings.MonthlyLimit,
+			Enabled: settings.Enabled, Mode: Mode(settings.Mode), Threshold: settings.Threshold, ChargeDay: int(settings.ChargeDay.Int16),
+			ProductID: settings.ProductID, MonthlyLimit: settings.MonthlyLimit,
 		}
 		result.ConsecutiveFailures = int(settings.ConsecutiveFailures)
 	case !errors.Is(err, pgx.ErrNoRows):
@@ -262,6 +270,14 @@ func agreedTerms(ctx context.Context, queries *autochargedb.Queries, userID uuid
 // pgtextOf 는 빈 칸이 아닌 글을 DB 의 글로 바꾼다.
 func pgtextOf(text string) pgtype.Text {
 	return pgtype.Text{String: text, Valid: true}
+}
+
+// pgint2Of 는 날을 DB 의 빈 칸이 될 수 있는 작은 정수로 바꾼다. 0 은 빈 칸이다(고르지 않았다).
+func pgint2Of(day int) pgtype.Int2 {
+	if day == 0 {
+		return pgtype.Int2{}
+	}
+	return pgtype.Int2{Int16: int16(day), Valid: true}
 }
 
 // pguuidOf 는 번호를 DB 의 빈 칸이 될 수 있는 번호로 바꾼다.

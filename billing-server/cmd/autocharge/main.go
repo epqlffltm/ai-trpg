@@ -188,6 +188,7 @@ func round(ctx context.Context, charger rounder, limit int) (autocharge.ChargeRe
 				slog.Int("skipped", result.Skipped),
 				slog.Int("retried", result.Retried),
 				slog.Int("looked_up", result.LookedUp),
+				slog.Int("queued", result.Queued),
 			)
 		}
 		return err
