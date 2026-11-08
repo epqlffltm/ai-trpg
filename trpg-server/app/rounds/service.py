@@ -71,6 +71,7 @@ from app.rounds import (
     deadlines,
     happening_traps,
     happenings,
+    improvised,
     injury_escapes,
     injury_ticks,
     monster_xp,
@@ -669,6 +670,7 @@ async def load_closing_request(
         clock=narration_request.to_clock_note(table),
         secrets=narration_request.to_secret_names(snapshot, scene.npcs, round_.scene),
         steps=steps,
+        encounters=improvised.to_notes(improvised.options(table, snapshot, scene.all_monsters)),
     )
 
 
@@ -774,6 +776,25 @@ async def abandon_narration(
     await close_and_open(session, table, round_, scene, paid=False, cause=abandoned, prices=prices)
 
 
+async def take_encounter(
+    session: AsyncSession, table: GameTable, round_: Round, scene: str, closed: TableEvent | None
+) -> str:
+    """
+    서술의 즉흥 조우(#254)의 표식을 떼고, 고른 것을 엔진이 받아들이면 몬스터를 놓는다. 표식을 뗀 장면을 돌려준다.
+
+    고를 거리는 서술을 부탁할 때와 같은 상태로 다시 정한다(app/rounds/improvised.py). 받아들인 것은 닫힘에 잇는다.
+    """
+    text, number = improvised.split_tag(scene)
+    if number is None:
+        return text
+    monsters = (await load_scene(session, table, round_)).all_monsters
+    accepted = improvised.accept(table, read_snapshot(table.content), monsters, number, round_.number)
+    if accepted is not None:
+        session.add_all(accepted.made)
+        improvised.record(session, table, accepted, closed)
+    return text
+
+
 async def finish_closing(
     session: AsyncSession,
     table_id: uuid.UUID,
@@ -803,4 +824,5 @@ async def finish_closing(
         return
 
     closed = await event_repository.find_latest(session, table_id, EventType.ROUND_CLOSED)
+    scene = await take_encounter(session, table, round_, scene, closed)
     await close_and_open(session, table, round_, scene, paid=True, cause=closed, prices=prices)

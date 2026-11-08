@@ -993,6 +993,20 @@ class ChapterNote:
 
 
 @dataclass(frozen=True)
+class EncounterNote:
+    """
+    즉흥 조우(#254)의 고를 거리 하나. 엔진이 판의 조우 표에서 고른 것이다(app/rounds/improvised.py).
+
+    서술자는 이야기의 흐름상 자연스러울 때만 이 중 하나를 골라 장면의 끝에 표식으로 적는다. 엔진이 받아들일지 정한다.
+    """
+
+    number: int
+    place: str
+    monster: str
+    count: int
+
+
+@dataclass(frozen=True)
 class HappeningNote:
     """
     이번 라운드가 닫힐 때 일어난 판의 사건 하나(app/rounds/happenings.py, #367). 엔진이 정한 것이다.
@@ -1173,6 +1187,8 @@ class NarrationRequest:
     quests: list[QuestNote] = field(default_factory=list)
     # 이번 라운드가 닫힐 때 일어난 판의 사건들. 판의 순서다. 서술을 맡길 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
     happenings: list[HappeningNote] = field(default_factory=list)
+    # 즉흥 조우(#254)의 고를 거리. 판이 켰고 고를 것이 있을 때만 있다(app/rounds/improvised.py)
+    encounters: list[EncounterNote] = field(default_factory=list)
     # 테이블의 지금 장(#481). 장이 없는 판이면 None. 서술을 맡길 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다
     chapter: ChapterNote | None = None
     # 이번 장면의 몬스터들. 판의 몬스터 순서다. 서술을 맡길 때 DB 에서 채운다. 가짜 서술자는 읽지 않는다

@@ -78,6 +78,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         player_made_hp=data.player_made_hp.model_dump() if data.player_made_hp else None,
         reroll_allowed=data.reroll_allowed,
         xp_split=data.xp_split,
+        improvised_encounters=data.improvised_encounters,
         narration_style=data.narration_style,
         narration_model=data.narration_model,
         clock=data.clock.model_dump(),

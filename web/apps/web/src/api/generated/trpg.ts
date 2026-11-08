@@ -10532,6 +10532,11 @@ export interface components {
              */
             happenings: components["schemas"]["HappeningRule-Input"][];
             /**
+             * Improvised Encounters
+             * @default 0
+             */
+            improvised_encounters: number;
+            /**
              * Items
              * @default []
              */
@@ -10676,6 +10681,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Improvised Encounters */
+            improvised_encounters: number;
             /** Items */
             items: components["schemas"]["ItemRule-Output"][];
             /** Landmarks */
@@ -10805,6 +10812,8 @@ export interface components {
             encounters?: components["schemas"]["Encounter-Input"][] | null;
             /** Happenings */
             happenings?: components["schemas"]["HappeningRule-Input"][] | null;
+            /** Improvised Encounters */
+            improvised_encounters?: number | null;
             /** Items */
             items?: components["schemas"]["ItemRule-Input"][] | null;
             /** Landmarks */
@@ -11316,6 +11325,11 @@ export interface components {
              * @default []
              */
             happenings: components["schemas"]["HappeningSnapshot"][];
+            /**
+             * Improvised Encounters
+             * @default 0
+             */
+            improvised_encounters: number;
             /**
              * Items
              * @default []

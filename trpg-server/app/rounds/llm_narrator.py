@@ -33,6 +33,7 @@ from ai_core.provider import ChatMessage, Completion, GenerationParams, LLMProvi
 
 from app.catalog.steps import ROUND_OUTPUT_TOKENS, NarrationSteps, output_tokens
 from app.rounds.budget import estimate_messages, fit_request, input_budget
+from app.rounds.improvised import TaglessPreview
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
 from app.rounds.prompt import PROMPT_VERSION, build_messages
 from app.rounds.secret_names import SecretNames, guarded, leaked, redact
@@ -268,7 +269,8 @@ class LLMNarrator:
         digest = input_digest(messages, self.digest_key)
         chars = chars_of(messages)
         # 미리 보기도 숨길 이름을 가려서 넘긴다. 장면을 받기 전의 글이라 검사보다 먼저 사람에게 간다
-        shown = guarded(preview, sent.secrets)
+        # 즉흥 조우(#254)의 표식도 가린다. 고를 거리가 있을 때만 쓴다
+        shown = guarded(TaglessPreview(preview) if sent.encounters else preview, sent.secrets)
         shown.begin()
         started = time.perf_counter()
         try:

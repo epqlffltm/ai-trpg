@@ -17162,6 +17162,13 @@
             "title": "Happenings",
             "type": "array"
           },
+          "improvised_encounters": {
+            "default": 0,
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Improvised Encounters",
+            "type": "integer"
+          },
           "items": {
             "default": [],
             "items": {
@@ -17500,6 +17507,10 @@
             "title": "Id",
             "type": "string"
           },
+          "improvised_encounters": {
+            "title": "Improvised Encounters",
+            "type": "integer"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/ItemRule-Output"
@@ -17751,6 +17762,7 @@
           "player_made_hp",
           "reroll_allowed",
           "xp_split",
+          "improvised_encounters",
           "narration_style",
           "narration_model",
           "narration_model_status",
@@ -17997,6 +18009,19 @@
               }
             ],
             "title": "Happenings"
+          },
+          "improvised_encounters": {
+            "anyOf": [
+              {
+                "maximum": 20.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Improvised Encounters"
           },
           "items": {
             "anyOf": [
@@ -19267,6 +19292,11 @@
             },
             "title": "Happenings",
             "type": "array"
+          },
+          "improvised_encounters": {
+            "default": 0,
+            "title": "Improvised Encounters",
+            "type": "integer"
           },
           "items": {
             "default": [],

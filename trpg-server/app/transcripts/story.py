@@ -464,11 +464,11 @@ def door_changed(payload: dict, labels: Labels) -> list[Block]:
 
 
 # 무작위 조우를 부른 것의 말(#283)
-WANDER_CAUSES = {'arrive': '길에서', 'rest': '쉬는 중에'}
+WANDER_CAUSES = {'arrive': '길에서', 'rest': '쉬는 중에', 'improvised': '이야기 속에서'}
 
 
 def monsters_appeared(payload: dict, labels: Labels) -> list[Block]:
-    """무작위 조우(#283). 어디에, 무엇이 몇 마리, 길에서인지 쉬는 중인지."""
+    """무작위 조우(#283)와 즉흥 조우(#254). 어디에, 무엇이 몇 마리, 길에서인지 쉬는 중인지 이야기 속에서인지."""
     monster = payload.get('monster')
     name = text_of(monster.get('name')) if isinstance(monster, dict) else ''
     cause = WANDER_CAUSES.get(payload.get('cause'), '')

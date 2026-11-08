@@ -829,6 +829,8 @@ class Snapshot(BaseModel):
     reroll_allowed: bool
     # 몬스터와 사건이 준 경험치를 받는 사람들이 나누는가(#286 ②). 그 전의 판은 나눈다(share)
     xp_split: XpSplit = DEFAULT_XP_SPLIT
+    # 즉흥 조우(#254)의 테이블 하나의 횟수. 0 이면 꺼짐. 그 전의 판은 꺼져 있다(비워도 되는 칸이라 형식이 그대로다)
+    improvised_encounters: int = 0
     # 추천 문체. 테이블의 방장이 문체를 고르지 않으면 이것으로 서술한다
     narration_style: NarrationStyle
     # 게임 안의 시계. 테이블의 시계가 여기서 시작한다(app/calendar)
@@ -1456,6 +1458,7 @@ def build_snapshot(
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,
         xp_split=scenario.xp_split,
+        improvised_encounters=scenario.improvised_encounters,
         narration_style=scenario.narration_style,
         clock=ClockSnapshot(**scenario.clock),
         rulebook=snapshot_rulebook(rulebook),

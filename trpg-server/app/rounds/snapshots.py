@@ -47,8 +47,8 @@ STATE_TABLES: tuple[str, ...] = (
     'table_injuries',
 )
 
-# 테이블의 행에서 찍는 칸. 닫기가 장을 넘긴다(app/rounds/chapters.py)
-STATE_COLUMNS: tuple[str, ...] = ('chapter_id', 'chapter_round')
+# 테이블의 행에서 찍는 칸. 닫기가 장을 넘긴다(app/rounds/chapters.py). 서술을 받아들일 때 즉흥 조우를 센다(#254)
+STATE_COLUMNS: tuple[str, ...] = ('chapter_id', 'chapter_round', 'improvised_encounters')
 
 # 테이블에 딸렸지만 찍지 않는 표와 그 까닭
 EXCLUDED: dict[str, str] = {
@@ -136,11 +136,16 @@ def make_state(rows: Mapping[str, Iterable[Mapping[str, object]]], table_values:
 
 
 def fits(state: Mapping) -> bool:
-    """찍은 상태가 지금의 표 모양과 맞는가. 표가 빠졌거나 칸이 다르면 False 다(그때 찍은 것으로 덮을 수 없다)."""
+    """
+    찍은 상태가 지금의 표 모양과 맞는가. 표가 빠졌거나 칸이 다르면 False 다(그때 찍은 것으로 덮을 수 없다).
+
+    테이블의 행에서 찍는 칸(STATE_COLUMNS)이 늘었으면 그 전의 사진도 맞지 않는다(즉흥 조우의 수, #254).
+    """
     tables = state.get('tables', {})
-    return all(
+    shaped = all(
         table.name in tables and tables[table.name].get('columns') == column_names(table) for table in state_tables()
     )
+    return shaped and set(STATE_COLUMNS) <= set(state.get('table', {}))
 
 
 def rows_of(state: Mapping, table: Table) -> list[dict]:
