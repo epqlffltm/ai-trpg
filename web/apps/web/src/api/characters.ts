@@ -12,6 +12,7 @@ import type {
   AssetPublishCheck,
   AssetPublishResult,
   AssetVersionSummary,
+  MineOrder,
 } from './types';
 
 const CHARACTERS = '/api/v1/asset/characters';
@@ -24,8 +25,8 @@ function withSignal(signal?: AbortSignal) {
   return signal ? { signal } : {};
 }
 
-/** 내 캐릭터 한 쪽. 최근에 고친 것부터 */
-export function fetchMyCharacters(paging: { limit: number; offset: number }, signal?: AbortSignal): Promise<AssetCharacterPage> {
+/** 내 캐릭터 한 쪽. 기본은 최근에 고친 것부터, sort=started 면 쓰인 수가 많은 것부터(#1165) */
+export function fetchMyCharacters(paging: { limit: number; offset: number; sort?: MineOrder }, signal?: AbortSignal): Promise<AssetCharacterPage> {
   return apiRequest<AssetCharacterPage>(CHARACTERS, { query: paging, ...withSignal(signal) });
 }
 

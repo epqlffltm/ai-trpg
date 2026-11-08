@@ -1,18 +1,19 @@
 // web/apps/web/src/pages/me/works/MyWorks.test.tsx
-// 마이페이지(Stitch 10번)의 내 작품과 최근 사용 내역: 캐릭터를 공개 상태 칩으로 거르고, 종류를 바꾸면 그 목록을, 내 포인트에는 최근 다섯 줄의 표를 본다.
+// 마이페이지(Stitch 10번)의 내 작품과 최근 사용 내역: 캐릭터를 공개 상태 칩으로 거르고, 정렬을 바꾸면 그 차례로 다시 읽고(#1165),
+// 카드에 쓰인 수와 관심 수가 보이고, 종류를 바꾸면 그 목록을, 내 포인트에는 최근 다섯 줄의 표를 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../../api/refresh';
-import { installFakeFetch, json, tokens } from '../../../test/fakeFetch';
+import { installFakeFetch, json, tokens, type SeenRequest } from '../../../test/fakeFetch';
 import { renderApp } from '../../../test/renderApp';
-import { filterByStatus, workStatus } from './myWorksView';
+import { countsText, filterByStatus, sortOf, workStatus } from './myWorksView';
 
 const AT = '2026-11-01T00:00:00Z';
 
 function character(id: string, name: string, extra: Record<string, unknown> = {}) {
-  return { id, name, visibility: 'private', latest_version: null, hidden_at: null, rating: 'all', updated_at: AT, ...extra };
+  return { id, name, visibility: 'private', latest_version: null, hidden_at: null, rating: 'all', updated_at: AT, start_count: 0, heart_count: 0, ...extra };
 }
 
 function entry(id: string, reason: string, amount: string) {
@@ -20,22 +21,23 @@ function entry(id: string, reason: string, amount: string) {
 }
 
 function signedIn() {
-  installFakeFetch({
+  return installFakeFetch({
     [`POST ${REFRESH_PATH}`]: () => json(200, tokens('a1')),
     'GET /api/v1/auth/me': () => json(200, { nickname: '모험가', username: 'one', identity: { verified: false, legal_adult: false, adult_content: false } }),
     'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: '0', total: '0', next_expiry: null }),
     'GET /api/v1/notification/me/notifications/unread-count': () => json(200, { unread: 0 }),
     'GET /api/v1/billing/wallet/entries': () =>
       json(200, { entries: ['1', '2', '3', '4', '5', '6'].map((id) => entry(id, 'spend', '-3')).concat([entry('r', 'regroup', '0')]), next_before: 'x' }),
-    'GET /api/v1/asset/characters': () =>
-      json(200, {
-        items: [
-          character('c1', '초안 캐릭터'),
-          character('c2', '공개 캐릭터', { visibility: 'public', latest_version: 2 }),
-          character('c3', '숨긴 캐릭터', { visibility: 'public', latest_version: 1, hidden_at: AT }),
-        ],
-        total: 3,
-      }),
+    'GET /api/v1/asset/characters': (request) => {
+      const items = [
+        character('c1', '초안 캐릭터'),
+        character('c2', '공개 캐릭터', { visibility: 'public', latest_version: 2, start_count: 1200, heart_count: 7 }),
+        character('c3', '숨긴 캐릭터', { visibility: 'public', latest_version: 1, hidden_at: AT }),
+      ];
+      // 서버처럼 쓰인 수 순이면 쓰인 수가 많은 것부터
+      const started = new URL(request.url, 'http://x').searchParams.get('sort') === 'started';
+      return json(200, { items: started ? [items[1], items[0], items[2]] : items, total: 3 });
+    },
     'GET /api/v1/asset/worlds': () => json(200, { items: [character('w1', '여름 학교', { visibility: 'unlisted', latest_version: 1 })], total: 1 }),
     'GET /api/v1/game/scenarios': () => json(200, { items: [{ id: 's1', title: '잿빛 수도원', description: '', created_at: AT, updated_at: AT, visibility: 'private', rating: 'all' }], total: 1 }),
     'GET /api/v1/game/campaigns': () => json(200, { items: [], total: 0 }),
@@ -57,6 +59,18 @@ describe('내 작품', () => {
     expect(list.getAllByRole('listitem').map((item) => item.querySelector('.my-works__name')?.textContent)).toEqual(['공개 캐릭터']);
     await userEvent.click(chips.getByRole('button', { name: '숨겨짐' }));
     expect(list.getByText('숨긴 캐릭터')).toBeInTheDocument();
+  });
+
+  it('카드에 쓰인 수와 관심 수가 있고, 정렬을 쓰인 수 순으로 바꾸면 sort=started 로 다시 읽어 그 차례로 보인다', async () => {
+    const { seen } = signedIn();
+    renderApp('/me?tab=creator');
+
+    const list = within(await screen.findByRole('list', { name: '내 캐릭터' }));
+    expect(await list.findByText('대화 1,200 · 관심 7')).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: '정렬' }), 'started');
+
+    await vi.waitFor(() => expect(sortsAsked(seen)).toContain('started'));
+    await vi.waitFor(() => expect(list.getAllByRole('listitem')[0]?.querySelector('.my-works__name')?.textContent).toBe('공개 캐릭터'));
   });
 
   it('종류를 바꾸면 그 목록이 보인다(세계관은 칩, 시나리오는 칩 없이)', async () => {
@@ -83,7 +97,18 @@ describe('내 작품', () => {
     expect(filterByStatus(works, undefined)).toHaveLength(2);
     expect(filterByStatus(works, 'draft')).toEqual([works[1]]);
   });
+
+  it('정렬의 값과 수의 글', () => {
+    expect(sortOf('started')).toBe('started');
+    expect(sortOf('popular')).toBe('updated');
+    expect(countsText({ start_count: 0, heart_count: 3 }, '시작')).toBe('시작 0 · 관심 3');
+  });
 });
+
+/** 내 캐릭터 목록을 읽을 때 보낸 차례들 */
+function sortsAsked(seen: SeenRequest[]): (string | null)[] {
+  return seen.filter((request) => request.url.startsWith('/api/v1/asset/characters')).map((request) => new URL(request.url, 'http://x').searchParams.get('sort'));
+}
 
 describe('최근 사용 내역', () => {
   it('내 포인트에 최근 다섯 줄을 표로 보이고 정리 줄은 숨긴다', async () => {

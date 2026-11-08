@@ -6,6 +6,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import { fetchMyCharacters } from '../../../api/characters';
 import { fetchMyStoryWorlds, fetchStoryWorld, fetchStoryWorldCheck, fetchStoryWorldVersions } from '../../../api/storyWorlds';
+import type { MineOrder } from '../../../api/types';
 
 export const WORLDS_KEY = ['story', 'studio', 'worlds'] as const;
 /** story 첫 화면의 "내 세계관으로 시작"이 읽는 열쇠(storyQueries.ts 의 myStoryWorldsQuery) */
@@ -27,9 +28,9 @@ export function worldVersionsKey(worldId: string) {
   return [...worldKey(worldId), 'versions'] as const;
 }
 
-/** 내 세계관(최근에 고친 것부터, 100 개까지) */
-export function myWorldsQuery() {
-  return queryOptions({ queryKey: worldListKey(), queryFn: ({ signal }) => fetchMyStoryWorlds(signal) });
+/** 내 세계관(100 개까지). 차례(#1165)마다 따로 읽는다. 목록을 무르면(worldListKey) 모든 차례가 함께 물러진다 */
+export function myWorldsQuery(sort: MineOrder = 'updated') {
+  return queryOptions({ queryKey: [...worldListKey(), sort], queryFn: ({ signal }) => fetchMyStoryWorlds(signal, sort) });
 }
 
 export function worldQuery(worldId: string) {
