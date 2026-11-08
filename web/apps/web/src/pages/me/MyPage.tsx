@@ -5,9 +5,11 @@
 //   - 설정: 활동 배지(#193), 화면 설정(A12), 차단(#988), 관심 작품과 팔로잉(#989), 친구 초대(#990), 내 단축어(#981)
 //   - 제작자: 제작자 소개(#992), 만들기(B9 제작 도구 등)와 내 작품의 숫자(#991), 내 작품(종류마다의 목록, 공개 상태 칩)
 // 로그인해야 열린다(App.tsx 의 RequireSession). 이 기기의 로그아웃은 머리에 있다.
+// 주소에 #(칸의 제목 id)가 있으면 그 칸까지 내린다. 프로필 메뉴의 차단 관리, 팔로잉 제작자, 내 초대 코드, 활동 배지가 그렇게 온다.
 
 import type { ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { useHashScroll } from '../../hooks/useHashScroll';
 import { AccountSummary } from './AccountSummary';
 import { LogoutAllSection } from './LogoutAllSection';
 import { MyAttendance } from './MyAttendance';
@@ -35,6 +37,7 @@ import { MyWorks } from './works/MyWorks';
 export function MyPage() {
   const [params] = useSearchParams();
   const tab = myTabOf(params.get('tab'));
+  useHashScroll();
   return (
     <main className="page page--medium my-page">
       <MyProfileHead />

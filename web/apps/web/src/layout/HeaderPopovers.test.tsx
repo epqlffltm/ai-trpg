@@ -13,6 +13,9 @@ import { ME } from '../test/tableFixtures';
 import { PANEL_SIZE } from './NotificationPanel';
 
 const BOX = '/api/v1/notification/me/notifications';
+// 출석의 오늘(한국 날짜). 받았는지만 바꿔 쓴다
+const KOREA_TODAY = new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
+const ATTENDANCE_OPEN = { today: KOREA_TODAY, verified: true, claimed: false, cycle_day: 3, cycle_length: 7, silver: '180', chest: false };
 const AT = '2026-11-04T01:00:00Z';
 
 function notice(id: number, read = false) {
@@ -100,8 +103,8 @@ describe('알림 종', () => {
 });
 
 describe('프로필 메뉴', () => {
-  it('닉네임, 잔액, 출석·충전, MY 의 길을 펼친다. 길을 누르면 닫힌다', async () => {
-    signedIn([]);
+  it('닉네임, 잔액, 출석·충전, 맞춤 설정, MY, 제작자의 길을 펼친다. 길을 누르면 닫힌다', async () => {
+    signedIn([], { 'GET /api/v1/auth/attendance': () => json(200, ATTENDANCE_OPEN) });
     renderApp('/settings');
 
     const menu = await openAccountMenu();
@@ -109,12 +112,39 @@ describe('프로필 메뉴', () => {
     expect(await menu.findByRole('link', { name: '지갑: 골드 80 · 실버 10' })).toHaveAttribute('href', '/wallet');
     expect(menu.getByRole('link', { name: '출석' })).toHaveAttribute('href', '/wallet/attendance');
     expect(menu.getByRole('link', { name: '충전' })).toHaveAttribute('href', '/wallet/charge');
+    const tune = within(menu.getByRole('list', { name: '맞춤 설정' }));
+    expect(tune.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      ['성향 필터', '/settings#listing-filter-heading'],
+      ['차단 관리', '/me?tab=settings#my-blocks-heading'],
+    ]);
     const my = within(menu.getByRole('list', { name: 'MY' }));
-    expect(my.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/me', '/me?tab=settings', '/me/hearts', '/me/personas', '/gallery', '/settings']);
+    expect(my.getAllByRole('link').map((link) => link.textContent)).toEqual([
+      '마이페이지',
+      '내 작품',
+      '관심 작품',
+      '팔로잉 제작자',
+      '페르소나',
+      '갤러리',
+      '내 초대 코드',
+      '활동 배지',
+      '설정',
+    ]);
+    expect(my.getByRole('link', { name: '활동 배지' })).toHaveAttribute('href', '/me?tab=settings#my-badges-heading');
+    expect(within(menu.getByRole('list', { name: '제작자' })).getByRole('link', { name: '제작자 대시보드' })).toHaveAttribute('href', '/me?tab=creator');
     expect(menu.queryByRole('list', { name: '운영' })).toBeNull();
+    // 오늘 출석을 아직 받지 않았으면 남은 때는 없다
+    expect(menu.queryByText(/다음 출석까지/)).toBeNull();
 
     await userEvent.click(my.getByRole('link', { name: '설정' }));
     expect(screen.queryByRole('navigation', { name: '내 메뉴' })).toBeNull();
+  });
+
+  it('오늘 출석을 받았으면 다음 출석까지 남은 때가 있다', async () => {
+    signedIn([], { 'GET /api/v1/auth/attendance': () => json(200, { ...ATTENDANCE_OPEN, claimed: true }) });
+    renderApp('/settings');
+
+    const menu = await openAccountMenu();
+    expect(await menu.findByText(/^다음 출석까지 \d{2}:\d{2}:\d{2}$/)).toBeInTheDocument();
   });
 
   it('로그아웃하면 첫 화면으로 가고 로그인 전의 위쪽 줄이다', async () => {

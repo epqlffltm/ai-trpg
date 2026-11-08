@@ -260,6 +260,21 @@ describe('requestedNotice', () => {
   });
 });
 
+describe('칸까지 내리기', () => {
+  it('주소의 #가 가리키는 칸(프로필 메뉴의 차단 관리)까지 내린다', async () => {
+    const original = Element.prototype.scrollIntoView;
+    const scrolled = vi.fn();
+    Element.prototype.scrollIntoView = scrolled;
+    signedIn();
+    renderApp('/me?tab=settings#my-blocks-heading');
+
+    const heading = await screen.findByRole('heading', { name: '차단' });
+    await vi.waitFor(() => expect(scrolled).toHaveBeenCalled());
+    expect(scrolled.mock.contexts[0]).toBe(heading);
+    Element.prototype.scrollIntoView = original;
+  });
+});
+
 describe('활동 배지', () => {
   it('설정 탭에 모든 배지를 보이고, 받은 것은 받은 날, 아직인 것은 흐리게 보인다', async () => {
     signedIn();
