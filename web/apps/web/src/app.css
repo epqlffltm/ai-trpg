@@ -251,7 +251,39 @@
   white-space: nowrap;
 }
 
-/* 좁은 화면(768px 미만): 왼쪽 메뉴 열과 ☰ 를 숨기고 위쪽 줄에 이름을 둔다. 검색칸은 둘째 줄 전체다.
+/* 위쪽 줄의 아이콘(검색 아이콘, 알림 종). 좁은 화면에서만 보인다. 선은 글자 색이다 */
+.app-header__search-toggle,
+.app-header__icon {
+  display: none;
+}
+
+.app-header__icon-button {
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ui-text-muted);
+  cursor: pointer;
+}
+
+.app-header__icon-button[aria-expanded='true'] {
+  color: var(--ui-accent);
+}
+
+.app-header__search-toggle path,
+.app-header__icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* 좁은 화면(768px 미만): 왼쪽 메뉴 열과 ☰ 를 숨기고 위쪽 줄에 이름을 둔다. 위쪽 줄은 한 줄이고(설계서),
+ * 검색칸은 접어 두었다가 검색 아이콘으로 둘째 줄 전체에 펼친다. 알림은 글자 대신 종 아이콘이다.
  * 맨 아래 탭 바가 본문을 가리지 않게 본문 아래에 그만큼 띄운다 */
 @media (max-width: 767px) {
   .app-shell,
@@ -269,9 +301,48 @@
     display: inline-flex;
   }
 
+  .app-header {
+    flex-wrap: nowrap;
+  }
+
+  .app-header[data-searching='true'] {
+    flex-wrap: wrap;
+  }
+
   .app-header__search {
+    display: none;
     order: 4;
     flex-basis: 100%;
+  }
+
+  .app-header[data-searching='true'] .app-header__search {
+    display: flex;
+  }
+
+  .app-header__account {
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  .app-header__search-toggle,
+  .app-header__icon {
+    display: inline-flex;
+  }
+
+  .app-header__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .app-header__profile {
+    display: inline-block;
+    max-width: 8em;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
