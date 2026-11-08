@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/Wanders.test.tsx
 // 무작위 조우 표(B9 몬스터 탭, #283). 표 더하기(장소, 때, 확률, 몬스터 줄의 마리 수·몫·기습)를 창에서 바로 보내기,
 // 같은 장소의 겹치는 때 막기, 확률 0 이면 몬스터를 보내지 않기(안전한 곳), 지우기. 입력의 순수한 함수.
+// 즉흥 조우(#254)의 횟수를 바로 저장하기와 틀린 횟수 막기.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -11,6 +12,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
+import { improvisedHint, improvisedLine, toImprovised } from './improvisedForm';
 import { timesOverlap, toggleTime, toWander, wanderDraft, wanderHints, wanderLine, weightShare } from './wandersForm';
 
 const GAME = '/api/v1/game';
@@ -141,6 +143,33 @@ describe('무작위 조우 표', () => {
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '지우기' }));
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(2));
     expect(patches(seen)[1]?.wanders).toEqual([{ place_id: VILLAGE, times: [], chance: 0, monsters: [] }]);
+  });
+});
+
+describe('즉흥 조우', () => {
+  it('횟수를 고쳐 바로 보낸다. 0~20 이 아니면 보내기 전에 알린다', async () => {
+    const { seen } = signedIn();
+    renderApp(`/trpg/studio/scenarios/${ID}?tab=monsters`);
+
+    const form = within(await screen.findByRole('form', { name: '즉흥 조우' }));
+    const field = form.getByRole('textbox', { name: '테이블 하나의 횟수(0~20)' });
+    expect(form.getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.clear(field);
+    await userEvent.type(field, '21');
+    expect(form.getByText('0~20 사이의 정수로 적어 주세요. 0 이면 꺼집니다.')).toBeInTheDocument();
+    expect(form.getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.clear(field);
+    await userEvent.type(field, '3');
+    await userEvent.click(form.getByRole('button', { name: '저장' }));
+
+    await vi.waitFor(() => expect(patches(seen)).toEqual([{ improvised_encounters: 3 }]));
+    expect(await screen.findByText('(테이블 하나에 3번까지)')).toBeInTheDocument();
+  });
+
+  it('입력: 0~20 의 정수만 보낸다. 0 이면 꺼짐', () => {
+    expect([toImprovised('0'), toImprovised('20'), toImprovised('21'), toImprovised('2.5'), toImprovised('')]).toEqual([0, 20, null, null, null]);
+    expect(improvisedHint('5')).toBeNull();
+    expect([improvisedLine(0), improvisedLine(2)]).toEqual(['꺼짐', '테이블 하나에 2번까지']);
   });
 });
 

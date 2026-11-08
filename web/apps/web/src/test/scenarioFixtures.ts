@@ -44,6 +44,7 @@ export function scenarioDetail(extra: Record<string, unknown> = {}) {
     player_made_hp: null,
     reroll_allowed: false,
     xp_split: 'share',
+    improvised_encounters: 0,
     narration_style: 'classic',
     narration_model: 'glm-air',
     narration_model_status: { state: 'ok', retires_on: null, replacement: null },
