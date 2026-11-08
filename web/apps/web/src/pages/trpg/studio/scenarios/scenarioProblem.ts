@@ -7,6 +7,7 @@
 //   - 409 {problems}(게시): 게시할 조건을 갖추지 못했다. 무엇인지는 점검 패널이 보인다
 //   - 422 detail 이 pregens.image_id 로 시작: 프리젠의 캐릭터 그림이 내가 올린 그림이 아니다(지웠거나 남의 것, #983)
 //   - 422 detail 이 pictures.image_id 로 시작: 그림 탭(로어 항목마다의 그림, #1163)의 그림이 내가 올린 그림이 아니다
+//   - 422 detail 이 achievements.image_id 로 시작: 업적 탭의 그림이 내가 올린 그림이 아니다
 
 import { ApiError } from '../../../../api/errors';
 import { commonProblem, type FormProblem } from '../../../../auth/problem';
@@ -29,6 +30,10 @@ function isPictureImageProblem(error: ApiError): boolean {
   return error.status === 422 && error.message.startsWith('pictures.image_id');
 }
 
+function isAchievementImageProblem(error: ApiError): boolean {
+  return error.status === 422 && error.message.startsWith('achievements.image_id');
+}
+
 function isModelProblem(error: ApiError): boolean {
   return error.status === 422 && error.body.field === 'narration_model';
 }
@@ -38,7 +43,7 @@ export function describeScenarioSaveProblem(error: unknown): FormProblem {
   if (commonProblem(error) || !(error instanceof ApiError)) return describeSaveProblem(error, 'scenarios');
   if (isAdultOnly(error)) return { message: ADULT_ONLY, fields: { rating: ADULT_ONLY } };
   if (isModelProblem(error)) return { message: MODEL_NOT_OFFERED, fields: { narration_model: MODEL_NOT_OFFERED } };
-  if (isPregenImageProblem(error) || isPictureImageProblem(error)) return { message: PREGEN_IMAGE };
+  if (isPregenImageProblem(error) || isPictureImageProblem(error) || isAchievementImageProblem(error)) return { message: PREGEN_IMAGE };
   return describeSaveProblem(error, 'scenarios');
 }
 
