@@ -66,6 +66,7 @@ const PROBLEMS: Record<string, ProblemText> = {
   npc_place_off_map: { text: '맵에 없는 장소에 인물의 자리가 있습니다.', section: 'map' },
   picture_entry_missing: { text: '붙인 로어북에 없는 항목의 그림이 있습니다.', section: 'pictures' },
   picture_wrong_kind: { text: '장소, 인물, 사건이 아닌 항목의 그림이 있습니다.', section: 'pictures' },
+  picture_time_not_place: { text: '장소가 아닌 항목(인물, 사건)에 때마다의 그림이 있습니다. 때마다 바뀌는 것은 장소의 배경뿐입니다.', section: 'pictures' },
   monster_sheet_missing: { text: '붙인 몬스터 모음에 없는 몬스터의 시트가 있습니다.', section: 'monsters' },
   monster_sheet_invalid: { text: '룰북의 규칙에 맞지 않는 몬스터 시트가 있습니다.', section: 'monsters' },
   monster_attack_invalid: { text: '몬스터의 공격이 룰북에 없는 능력치나 난이도, 양을 씁니다.', section: 'monsters' },
