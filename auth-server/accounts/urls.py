@@ -10,6 +10,7 @@ from django.urls import path
 
 from accounts.app_views import AppLoginVerifyView, AppLogoutView, AppPasswordChangeView, AppRefreshView
 from accounts.attendance_views import AttendanceRewardsView, AttendanceView
+from accounts.badge_views import MyBadgesView
 from accounts.views import (
     ConsentDocumentsView,
     CreatorSearchView,
@@ -78,6 +79,7 @@ urlpatterns = [
     path('me/consents/<str:item>', MyConsentView.as_view(), name='my-consent'),
     path('me/withdrawal', MyWithdrawalView.as_view(), name='my-withdrawal'),
     path('me/invite', MyInviteView.as_view(), name='my-invite'),
+    path('me/badges', MyBadgesView.as_view(), name='my-badges'),
     path('me/content-settings', MyContentSettingsView.as_view(), name='my-content-settings'),
     path('me/profile', MyProfileView.as_view(), name='my-profile'),
     path('me/nickname', MyNicknameView.as_view(), name='my-nickname'),

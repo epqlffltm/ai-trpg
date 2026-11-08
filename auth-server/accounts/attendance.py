@@ -24,6 +24,7 @@ from django.utils import timezone
 
 from accounts import attendance_rules as rules
 from accounts.backoff import retry_delay
+from accounts.badges import award_attendance
 from accounts.billing_client import GRANTED, BillingUnavailableError, grant_attendance_silver
 from accounts.identity_status import identity_status_of
 from accounts.models import AttendanceClaim, User, WelcomeCreditStatus
@@ -184,6 +185,13 @@ def claim_attendance(user: User, now: datetime | None = None, roll: rules.Roll =
         locked = User.objects.select_for_update().get(pk=user.pk)
         claim = _decide(locked, today, roll)
         _record(locked, claim, now)
+        # 출석으로 받는 활동 배지(#193). 같은 트랜잭션이다
+        award_attendance(
+            locked,
+            opened_chest=claim.chest is not None,
+            chest_outcome=claim.chest.outcome.id if claim.chest else None,
+            now=now,
+        )
     return claim
 
 

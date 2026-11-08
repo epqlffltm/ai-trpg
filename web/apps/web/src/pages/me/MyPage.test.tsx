@@ -1,14 +1,15 @@
 // web/apps/web/src/pages/me/MyPage.test.tsx
-// 마이페이지(A5, Stitch 10번). 로그인해야 열리는지, 프로필 머리와 탭 넷, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의를 켜고 끄는 것, 탈퇴 요청, 친구 초대(#990)를 본다.
+// 마이페이지(A5, Stitch 10번). 로그인해야 열리는지, 프로필 머리와 탭 넷, 비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의를 켜고 끄는 것, 탈퇴 요청, 친구 초대(#990), 활동 배지(#193)를 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { getSession } from '../../api/session';
-import { formatDateTime } from '../../format/dateTime';
+import { formatDate, formatDateTime } from '../../format/dateTime';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
+import { earnedLine } from './badgeView';
 import { requestedNotice } from './WithdrawalSection';
 
 const ME = {
@@ -33,6 +34,14 @@ function consent(item: string, required: boolean, agreedVersion: number | null) 
   };
 }
 
+const BADGES = {
+  earned: 1,
+  badges: [
+    { id: 'first_attendance', name: '첫 출석', description: '처음으로 출석 보상을 받았다', earned_at: '2026-11-08T03:00:00Z' },
+    { id: 'identity_verified', name: '본인인증', description: '휴대폰 본인인증을 마쳤다', earned_at: null },
+  ],
+};
+
 const CONSENTS = [consent('terms', true, 1), consent('privacy', true, 1), consent('marketing', false, null)];
 
 function signedIn(extra: Record<string, (request: SeenRequest) => Response> = {}) {
@@ -41,6 +50,7 @@ function signedIn(extra: Record<string, (request: SeenRequest) => Response> = {}
     'GET /api/v1/auth/me': () => json(200, ME),
     'GET /api/v1/auth/me/consents': () => json(200, { items: CONSENTS }),
     'GET /api/v1/auth/me/invite': () => json(200, { code: 'ABCD2345', rewarded: 1, limit: 5 }),
+    'GET /api/v1/auth/me/badges': () => json(200, BADGES),
     ...extra,
   });
 }
@@ -247,5 +257,42 @@ describe('requestedNotice', () => {
 
     expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/signup?invite=ABCD2345`);
     expect(await within(invite).findByRole('button', { name: '복사했습니다' })).toBeInTheDocument();
+  });
+});
+
+describe('활동 배지', () => {
+  it('설정 탭에 모든 배지를 보이고, 받은 것은 받은 날, 아직인 것은 흐리게 보인다', async () => {
+    signedIn();
+    renderApp('/me?tab=settings');
+
+    const section = (await screen.findByRole('heading', { name: '활동 배지' })).closest('section') as HTMLElement;
+    expect(await within(section).findByText('받은 배지 1 / 2개')).toBeInTheDocument();
+    const items = within(within(section).getByRole('list', { name: '활동 배지' })).getAllByRole('listitem');
+    const [earned, locked] = items as [HTMLElement, HTMLElement];
+    expect(items).toHaveLength(2);
+    expect(within(earned).getByText('첫 출석')).toBeInTheDocument();
+    expect(within(earned).getByText(`${formatDate('2026-11-08T03:00:00Z')}에 받음`)).toBeInTheDocument();
+    expect(earned).not.toHaveClass('badge-item--locked');
+    expect(within(locked).getByText('아직 받지 않음')).toBeInTheDocument();
+    expect(locked).toHaveClass('badge-item--locked');
+  });
+
+  it('읽지 못하면 다시 시도한다', async () => {
+    let calls = 0;
+    signedIn({
+      'GET /api/v1/auth/me/badges': () => {
+        calls += 1;
+        return calls === 1 ? json(500, { detail: 'boom' }) : json(200, BADGES);
+      },
+    });
+    renderApp('/me?tab=settings');
+
+    const section = (await screen.findByRole('heading', { name: '활동 배지' })).closest('section') as HTMLElement;
+    await userEvent.click(await within(section).findByRole('button', { name: '다시 시도' }));
+    expect(await within(section).findByText('받은 배지 1 / 2개')).toBeInTheDocument();
+  });
+
+  it('받은 수의 줄', () => {
+    expect(earnedLine(0, 6)).toBe('받은 배지 0 / 6개');
   });
 });

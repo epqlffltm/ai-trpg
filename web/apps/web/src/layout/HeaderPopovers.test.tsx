@@ -110,7 +110,7 @@ describe('프로필 메뉴', () => {
     expect(menu.getByRole('link', { name: '출석' })).toHaveAttribute('href', '/wallet/attendance');
     expect(menu.getByRole('link', { name: '충전' })).toHaveAttribute('href', '/wallet/charge');
     const my = within(menu.getByRole('list', { name: 'MY' }));
-    expect(my.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/me', '/me/hearts', '/me/personas', '/gallery', '/settings']);
+    expect(my.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/me', '/me?tab=settings', '/me/hearts', '/me/personas', '/gallery', '/settings']);
     expect(menu.queryByRole('list', { name: '운영' })).toBeNull();
 
     await userEvent.click(my.getByRole('link', { name: '설정' }));

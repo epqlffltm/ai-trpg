@@ -1830,6 +1830,26 @@ a.ui-button {
   background: var(--ui-surface);
 }
 
+.badge-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--ui-gap);
+}
+
+.badge-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--ui-gap);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-surface);
+}
+
+.badge-item--locked {
+  opacity: 0.55;
+}
+
 .start {
   margin-top: calc(var(--ui-gap) * 1.5);
   padding-top: var(--ui-gap);
