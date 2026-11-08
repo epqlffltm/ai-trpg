@@ -16,7 +16,7 @@ from sqlalchemy.sql import ColumnElement
 
 from app.characters.models import OPEN_VISIBILITIES, Visibility
 from app.exclusions import NO_EXCLUSIONS, Exclusions, not_excluded
-from app.popularity import ListingOrder, by_popularity
+from app.popularity import ListingOrder, MineOrder, by_popularity, mine_order
 from app.ratings import Rating
 from app.search import LIKE_ESCAPE, SearchTerms, contains_pattern, name_of
 from app.stats.models import WorkKind
@@ -42,10 +42,12 @@ async def find_owned(
     return await session.scalar(query)
 
 
-async def list_owned(session: AsyncSession, owner_id: uuid.UUID, limit: int, offset: int) -> tuple[list[World], int]:
-    """이 사람의 세계관의 한 쪽(최근에 고친 것부터)과 전체 개수."""
+async def list_owned(
+    session: AsyncSession, owner_id: uuid.UUID, limit: int, offset: int, order: MineOrder = MineOrder.UPDATED
+) -> tuple[list[World], int]:
+    """이 사람의 세계관의 한 쪽(order 의 차례, 기본은 최근에 고친 것부터)과 전체 개수."""
     condition = World.owner_id == owner_id
-    query = select(World).where(condition).order_by(World.updated_at.desc(), World.id).limit(limit).offset(offset)
+    query = select(World).where(condition).order_by(*mine_order(World, order)).limit(limit).offset(offset)
     total = await session.scalar(select(func.count()).select_from(World).where(condition))
     return list(await session.scalars(query)), total or 0
 
