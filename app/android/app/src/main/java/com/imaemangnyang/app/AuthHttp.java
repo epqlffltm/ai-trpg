@@ -1,9 +1,9 @@
-// app/android/app/src/main/java/dev/aitrpg/app/AuthHttp.java
+// app/android/app/src/main/java/com/imaemangnyang/app/AuthHttp.java
 // 인증 서버의 앱의 길(/api/v1/auth/app/...)을 부르는 네이티브의 HTTP(#429).
 // WebView 를 거치지 않아 Origin 머리말이 붙지 않는다. 인증 서버는 Origin 이 붙은 요청을 브라우저로 보고 거절한다.
 // 서버에 닿지 못하면 IOException 을 던진다. 상태 코드가 있는 답(4xx, 5xx 포함)은 그대로 돌려준다.
 
-package dev.aitrpg.app;
+package com.imaemangnyang.app;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
