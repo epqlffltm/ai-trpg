@@ -9,6 +9,7 @@ import { ACTION_LABELS } from '../room/round/action/actionLabels';
 import type { ActionKind } from '../room/round/action/actionOptions';
 import { eventLine, type EventContext } from '../room/events/eventLines';
 import { withoutReverted } from '../room/events/revertedEvents';
+import { checkDice } from '../room/round/checkDice';
 
 export type StoryBlock =
   | { kind: 'round'; key: number; number: number | null; scene: string | null }
@@ -37,10 +38,18 @@ function num(payload: Payload, key: string): number | null {
 
 /** 판정의 굴림. 라운드 화면이 선언 옆에 보이는 것을 여기서는 한 줄로 쓴다("렌: 눈 13, 보정 +2, 합 15 / 목표 15 · 성공") */
 export function checkLine(payload: Payload): string {
-  const modifier = num(payload, 'modifier') ?? 0;
-  const sign = modifier >= 0 ? `+${modifier}` : String(modifier);
   const result = payload.success === true ? '성공' : '실패';
-  return `${text(payload, 'character_name') ?? '누군가'}: 눈 ${num(payload, 'roll') ?? '?'}, 보정 ${sign}, 합 ${num(payload, 'total') ?? '?'} / 목표 ${num(payload, 'target') ?? '?'} · ${result}`;
+  const faces = Array.isArray(payload.faces) ? payload.faces.filter((face): face is number => typeof face === 'number') : [];
+  const numbers = checkDice({
+    roll: num(payload, 'roll') ?? 0,
+    modifier: num(payload, 'modifier') ?? 0,
+    total: num(payload, 'total') ?? 0,
+    target: num(payload, 'target') ?? 0,
+    success: payload.success === true,
+    style: text(payload, 'style'),
+    faces,
+  });
+  return `${text(payload, 'character_name') ?? '누군가'}: ${numbers} · ${result}`;
 }
 
 function roundNumber(event: TableEvent): number | null {

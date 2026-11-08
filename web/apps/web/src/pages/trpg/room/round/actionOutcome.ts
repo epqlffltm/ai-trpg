@@ -5,6 +5,7 @@
 
 import type { Declaration, ResourceChange } from '../../../../api/types';
 import { because } from './outcomeReason';
+import { checkShort } from './checkDice';
 
 type Outcome = NonNullable<Declaration['outcome']>;
 type Part<K extends string> = Extract<Outcome, Record<K, unknown>>[K & keyof Extract<Outcome, Record<K, unknown>>];
@@ -97,7 +98,7 @@ const DISARM_REASONS: Record<string, string> = {
 /** 덫 해제(#806 ①-b). "올가미 거둠(판정 20 / 20)", "올가미 해제 실패 · 덫이 터짐 · 렌 HP 9 → 7" */
 export function disarmLine(disarm: Part<'disarm'>): string {
   if (!disarm.check) return `해제하지 못했습니다${because(DISARM_REASONS, disarm.reason)}`;
-  const roll = `판정 ${disarm.check.total} / ${disarm.check.target}`;
+  const roll = checkShort(disarm.check);
   if (disarm.done) return `${disarm.name} 거둠(${roll})${disarm.kept ? '' : ' · 더 가질 수 없어 그 자리에 둠'}`;
   const sprung = disarm.sprung ? ' · 덫이 터짐' : '';
   const hurt = disarm.effect ? ` · ${disarm.effect.character_name} HP ${disarm.effect.before} → ${disarm.effect.after}` : '';

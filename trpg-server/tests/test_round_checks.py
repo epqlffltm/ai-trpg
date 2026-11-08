@@ -202,9 +202,17 @@ async def test_closing_a_round_judges_the_actions(
     assert closing['status'] == 'closing'
     assert outcomes(closing) == {
         # 근력 16 의 보정은 +3 이다. 12 + 3 = 15 는 보통(15) 이상이라 성공이다
-        '엘프': {'roll': 12, 'modifier': 3, 'total': 15, 'target': 15, 'success': True},
+        '엘프': {'roll': 12, 'modifier': 3, 'total': 15, 'target': 15, 'success': True, 'style': 'over', 'faces': [12]},
         # 매력 8 의 보정은 -1 이다. 10 - 1 = 9 는 쉬움(10)에 못 미쳐 실패다
-        '영애': {'roll': 10, 'modifier': -1, 'total': 9, 'target': 10, 'success': False},
+        '영애': {
+            'roll': 10,
+            'modifier': -1,
+            'total': 9,
+            'target': 10,
+            'success': False,
+            'style': 'over',
+            'faces': [10],
+        },
     }
     # 응답이 아니라 저장된 것을 본다
     stored = await session.scalars(text('SELECT outcome FROM round_declarations ORDER BY character_name'))
@@ -218,7 +226,15 @@ async def test_one_short_of_the_target_fails(client: AsyncClient, app: FastAPI, 
     await declare(client, me, table, KICK, KICK_ACTION)
     closing = await declare(client, friend, table, LAUGH)
 
-    assert outcomes(closing)['엘프'] == {'roll': 11, 'modifier': 3, 'total': 14, 'target': 15, 'success': False}
+    assert outcomes(closing)['엘프'] == {
+        'roll': 11,
+        'modifier': 3,
+        'total': 14,
+        'target': 15,
+        'success': False,
+        'style': 'over',
+        'faces': [11],
+    }
 
 
 async def test_an_action_without_a_difficulty_is_judged_at_the_default(
@@ -231,7 +247,15 @@ async def test_an_action_without_a_difficulty_is_judged_at_the_default(
     closing = await declare(client, friend, table, LAUGH)
 
     # SRD5 의 기본 난이도는 보통(15)이다. 민첩 10 의 보정은 0 이다
-    assert outcomes(closing)['엘프'] == {'roll': 20, 'modifier': 0, 'total': 20, 'target': 15, 'success': True}
+    assert outcomes(closing)['엘프'] == {
+        'roll': 20,
+        'modifier': 0,
+        'total': 20,
+        'target': 15,
+        'success': True,
+        'style': 'over',
+        'faces': [20],
+    }
 
 
 async def test_the_die_comes_from_the_rules_of_the_table(
@@ -280,7 +304,7 @@ async def test_everyone_sees_the_numbers(
 
     assert seen['status'] == 'closed'
     assert outcomes(seen) == {
-        '엘프': {'roll': 12, 'modifier': 3, 'total': 15, 'target': 15, 'success': True},
+        '엘프': {'roll': 12, 'modifier': 3, 'total': 15, 'target': 15, 'success': True, 'style': 'over', 'faces': [12]},
         '영애': None,
     }
 
@@ -302,7 +326,17 @@ async def test_there_is_no_outcome_while_the_round_is_open(
 @pytest.mark.parametrize(
     'smuggled',
     [
-        {'outcome': {'roll': 20, 'modifier': 3, 'total': 23, 'target': 15, 'success': True}},
+        {
+            'outcome': {
+                'roll': 20,
+                'modifier': 3,
+                'total': 23,
+                'target': 15,
+                'success': True,
+                'style': 'over',
+                'faces': [20],
+            }
+        },
         {'check': {'roll': 20}},
         {'roll': 20},
     ],
@@ -346,7 +380,9 @@ async def test_someone_who_did_not_declare_rolls_nothing(
     # 방장이 친구를 기다리지 않고 닫는다
     closing = (await client.post(table_url(table, '/rounds/current/close'), headers=me)).json()
 
-    assert outcomes(closing) == {'엘프': {'roll': 12, 'modifier': 3, 'total': 15, 'target': 15, 'success': True}}
+    assert outcomes(closing) == {
+        '엘프': {'roll': 12, 'modifier': 3, 'total': 15, 'target': 15, 'success': True, 'style': 'over', 'faces': [12]}
+    }
     assert dice.remaining == 1
 
 
@@ -413,6 +449,9 @@ async def test_a_check_is_recorded_right_after_the_action_that_called_for_it(
         'total': 15,
         'target': 15,
         'success': True,
+        # 주사위 하나의 over 다(#404)
+        'style': 'over',
+        'faces': [12],
         # 부상이 없어 판정에 준 영향이 없다. 노려 치지 않았다
         'hindrance': None,
         'called_shot': None,

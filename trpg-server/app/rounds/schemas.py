@@ -15,7 +15,7 @@ from app.calendar.schemas import ClockTimeOut
 from app.engine.action import Action
 from app.engine.death import Fate
 from app.engine.health import ChangeKind
-from app.engine.ruleset import ResistLevel
+from app.engine.ruleset import ResistLevel, RollStyle
 from app.rounds.models import DECLARATION_MAX_LENGTH, RoundStatus
 from app.tables.models import NpcStatus
 from app.tables.schemas import ResourceOut
@@ -392,18 +392,28 @@ class ItemThrowOut(BaseModel):
     resources: list['ResourceShiftOut'] = []
 
 
-class CheckOutcome(BaseModel):
-    """판정의 결과. 엔진이 정한 것이다(app/engine/check.py 의 Check). 받는 값이 아니라 내보내는 값이다."""
+# 굴린 눈들과 방식(#404). 그 전에 굳힌 결과에는 없다. 그때는 주사위 하나의 over 라 눈들을 비워 둔다
+Faces = Annotated[list[int], Field(description='쓴 굴림의 눈들. 더하면 roll 이다. #404 전의 결과는 비어 있다')]
 
-    # 주사위의 눈
+
+class CheckOutcome(BaseModel):
+    """
+    판정의 결과. 엔진이 정한 것이다(app/engine/check.py 의 Check). 받는 값이 아니라 내보내는 값이다.
+
+    style 이 under(#404)면 보정이 기량에 더해진다. total 은 눈 그대로, target 은 기량이고 total ≤ target 이면 성공이다.
+    """
+
+    # 주사위의 눈(여럿을 굴리면 그 합)
     roll: int
-    # 능력치의 점수에서 나온 보정
+    # over: 능력치의 점수에서 나온 보정. under: 점수에 더한 값
     modifier: int
-    # 눈에 보정을 더한 값
+    # over: 눈에 보정을 더한 값. under: 눈
     total: int
-    # 난이도의 목표값. total 이 이 값 이상이면 성공이다
+    # over: 난이도의 목표값. total 이 이 값 이상이면 성공이다. under: 기량. total 이 이 값 이하이면 성공이다
     target: int
     success: bool
+    style: RollStyle = RollStyle.OVER
+    faces: Faces = []
     # 입은 부상이 이 판정에 준 것. 아무 영향도 없었으면 None 이다
     hindrance: HindranceOut | None = None
     # 노려 쳤으면 그 내용. target 은 이미 오른 값이다. 노려 치지 않았으면 None 이다
@@ -621,6 +631,9 @@ class CrossOut(BaseModel):
     total: int
     target: int
     success: bool
+    # 성공을 가른 방식과 굴린 눈들(#404). 판정의 결과(CheckOutcome)와 같다
+    style: RollStyle = RollStyle.OVER
+    faces: Faces = []
     # 입은 부상이 이 판정에 준 것. 없었으면 None 이다
     hindrance: HindranceOut | None = None
 
@@ -899,9 +912,12 @@ class RolledOut(BaseModel):
     roll: int
     modifier: int
     total: int
-    # 목표값. 훔치기면 물건과 대상에 따라 오르내린 뒤의 값이다
+    # 목표값. 훔치기면 물건과 대상에 따라 오르내린 뒤의 값이다. under(#404)면 기량이다
     target: int
     success: bool
+    # 성공을 가른 방식과 굴린 눈들(#404). 판정의 결과(CheckOutcome)와 같다
+    style: RollStyle = RollStyle.OVER
+    faces: Faces = []
 
 
 class StealOut(BaseModel):

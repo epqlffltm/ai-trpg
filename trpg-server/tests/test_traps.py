@@ -307,6 +307,8 @@ async def test_the_setter_is_caught_too(
         'ability': 'dex',
         'difficulty': 'medium',
         'roll': CAUGHT,
+        'faces': [CAUGHT],
+        'style': 'over',
         'modifier': 0,
         'total': CAUGHT,
         'target': 15,

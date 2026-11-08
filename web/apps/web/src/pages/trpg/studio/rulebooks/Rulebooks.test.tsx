@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/trpg/studio/rulebooks/Rulebooks.test.tsx
 // 룰북 화면(B9). 마이페이지에서 빈 목록으로, 세이브 방식으로 만들기(본문), 고치기에서 방어 규칙 바꾸기(PATCH 본문),
-// 고치기에서 성장(레벨표, #286)을 켜고 줄을 더하기(PATCH 본문), 쓰는 시나리오가 있어 지우지 못함(409), 지우고 목록으로, 없는 룰북을 본다.
+// 고치기에서 성장(레벨표, #286)을 켜고 줄을 더하기(PATCH 본문), 판정 방식을 d100 의 눈 ≤ 기량으로 바꾸기(#404),
+// 쓰는 시나리오가 있어 지우지 못함(409), 지우고 목록으로, 없는 룰북을 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -13,8 +14,11 @@ import { ME } from '../../../../test/tableFixtures';
 const BASE = '/api/v1/game/rulebooks';
 const ID = '00000000-0000-4000-8000-0000000000c1';
 
+const ONE_OVER = { count: 1, style: 'over', shifts: {} };
+const DIFFICULTIES = [{ key: 'medium', name: '보통', target: 15 }, { key: 'hard', name: '어려움', target: 20 }];
+
 function rules(template: string, armor: unknown) {
-  return { template, die: 20, armor, abilities: [{ key: 'heart', name: '마음' }], resources: [], narration: { tone: '영웅담', outcomes: [], avoid: [] } };
+  return { template, die: 20, roll: ONE_OVER, difficulties: DIFFICULTIES, armor, abilities: [{ key: 'heart', name: '마음' }], resources: [], narration: { tone: '영웅담', outcomes: [], avoid: [] } };
 }
 
 const TEMPLATES = {
@@ -101,6 +105,8 @@ describe('룰북', () => {
       description: '',
       gm_guide: '',
       template: 'srd5',
+      die: 20,
+      roll: ONE_OVER,
       armor: { mode: 'save', pierce_base: 10, save_target: 7 },
       resources: [],
       progression: null,
@@ -131,8 +137,30 @@ describe('룰북', () => {
     await userEvent.click(form.getByRole('button', { name: '저장' }));
 
     expect(await screen.findByText('저장했습니다.')).toBeInTheDocument();
-    expect(sent(seen, 'PATCH', `/${ID}`)[0]?.body).toEqual({ title: '내 규칙', description: '', gm_guide: '', armor: null, resources: [], progression: null });
+    expect(sent(seen, 'PATCH', `/${ID}`)[0]?.body).toEqual({ title: '내 규칙', description: '', gm_guide: '', die: 20, roll: ONE_OVER, armor: null, resources: [], progression: null });
     expect(within(screen.getByRole('form', { name: '룰북' })).getByRole('radio', { name: '방어구가 막지 않음' })).toBeChecked();
+  });
+
+  it('고치기에서 d100 의 눈 ≤ 기량으로 바꾸면 난이도마다 기량에 더하는 값을 보낸다. 방어 규칙이 있으면 보내기 전에 알린다', async () => {
+    const { seen } = signedIn({
+      [`PATCH ${BASE}/${ID}`]: (request) => json(200, detail({ rules: { ...rules('srd5', null), ...(request.body as object) } })),
+    });
+    renderApp(`/trpg/studio/rulebooks/${ID}`);
+
+    const form = within(await screen.findByRole('form', { name: '룰북' }));
+    await userEvent.clear(form.getByLabelText('주사위의 면 수'));
+    await userEvent.type(form.getByLabelText('주사위의 면 수'), '100');
+    await userEvent.click(form.getByRole('radio', { name: '눈이 기량 이하' }));
+    expect(form.getByRole('alert')).toHaveTextContent('방어 규칙과 함께 쓰지 못합니다');
+    expect(form.getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.click(form.getByRole('radio', { name: '방어구가 막지 않음' }));
+    await userEvent.clear(form.getByLabelText('어려움에서 기량에 더하는 값'));
+    await userEvent.type(form.getByLabelText('어려움에서 기량에 더하는 값'), '-20');
+    await userEvent.click(form.getByRole('button', { name: '저장' }));
+
+    expect(await screen.findByText('저장했습니다.')).toBeInTheDocument();
+    const body = sent(seen, 'PATCH', `/${ID}`)[0]?.body as { die: unknown; roll: unknown; armor: unknown };
+    expect([body.die, body.roll, body.armor]).toEqual([100, { count: 1, style: 'under', shifts: { medium: 0, hard: -20 } }, null]);
   });
 
   it('고치기에서 수치를 더하고 채우면 PATCH 로 보낸다. 틀린 칸은 보내기 전에 알린다', async () => {

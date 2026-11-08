@@ -309,6 +309,9 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'total',
         'target',
         'success',
+        # 성공을 가른 방식과 굴린 눈들(#404). 그 전의 이벤트에는 없다
+        'style',
+        'faces',
         'hindrance',
         'called_shot',
         # 타격에 장비가 든 것(#276). 무기, 맞은 부위, 그 부위의 방어다. 착용은 모두에게 보인다

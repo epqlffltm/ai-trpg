@@ -53,7 +53,6 @@ function EditRulebook({ rulebook }: { rulebook: RulebookDetail }) {
         key={rulebook.updated_at}
         initial={rulebookDraft(rulebook)}
         templates={null}
-        die={rulebook.rules.die}
         abilities={rulebook.rules.abilities}
         submitLabel="저장"
         busy={updating.busy}

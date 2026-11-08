@@ -210,6 +210,8 @@ async def test_a_disarmed_trap_is_kept(
             'ability': 'dex',
             'difficulty': 'hard',
             'roll': SUCCESS,
+            'faces': [SUCCESS],
+            'style': 'over',
             'modifier': 0,
             'total': SUCCESS,
             'target': 20,

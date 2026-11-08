@@ -308,6 +308,8 @@ async def test_a_good_climb_gets_across(
         'total': 15,
         'target': 15,
         'success': True,
+        'style': 'over',
+        'faces': [15],
         'hindrance': None,
     }
     (rolled,) = await events_of(client, me, table, 'check_rolled')
