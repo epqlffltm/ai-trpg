@@ -767,7 +767,7 @@ E4 에서 정한 것(2026-10-24, #678).
 
 | 행동 | 호출 | 동작 |
 | --- | --- | --- |
-| 출석 | `POST /attendance` | 201 `{day, cycle_day, silver, chest}`. `chest` 는 마지막 날에만 `{table, outcome, name, silver}` 이고 아니면 `null` 이다. 사라지는 때(`expires_at`)는 없다. 실버가 지갑에 들어가기 전이다 |
+| 출석 | `POST /attendance` | 201 `{day, cycle_day, silver, chest, badges}`. `chest` 는 마지막 날에만 `{table, outcome, name, silver}` 이고 아니면 `null` 이다. `badges` 는 이 출석으로 새로 받은 활동 배지 `[{id, name}]` 다(#193). 있으면 "배지를 받았습니다"와 마이페이지의 배지로 가는 길을 보인다. 사라지는 때(`expires_at`)는 없다. 실버가 지갑에 들어가기 전이다 |
 
 **4. 버튼이 비활성인 조건**
 

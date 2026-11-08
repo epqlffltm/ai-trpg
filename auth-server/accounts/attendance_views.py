@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts import attendance_rules as rules
+from accounts import badge_rules
 from accounts.api_schema import coded, unauthenticated
 from accounts.attendance import (
     AttendanceAlreadyClaimedError,
@@ -81,6 +82,13 @@ class ChestField(serializers.Field):
         return ChestSerializer(value).data
 
 
+class EarnedBadgeSerializer(serializers.Serializer):
+    """이 출석으로 새로 받은 활동 배지 하나(#193). 받는 법은 마이페이지의 배지 목록(GET /me/badges)에 있다."""
+
+    id = serializers.CharField(help_text='배지의 이름. 바뀌지 않는다')
+    name = serializers.CharField(help_text='화면에 보이는 이름')
+
+
 class AttendanceClaimSerializer(serializers.Serializer):
     """받은 출석 보상. 실버는 몇 초 뒤 지갑에 들어간다."""
 
@@ -88,6 +96,7 @@ class AttendanceClaimSerializer(serializers.Serializer):
     cycle_day = serializers.IntegerField()
     silver = serializers.CharField(help_text='하루 양(실버, 글자)')
     chest = ChestField(allow_null=True)
+    badges = EarnedBadgeSerializer(many=True, help_text='이 출석으로 새로 받은 활동 배지. 받은 차례다')
 
 
 class RewardDaySerializer(serializers.Serializer):
@@ -143,7 +152,18 @@ def claim_body(claim: Claim) -> dict:
     if claim.chest is not None:
         outcome = claim.chest.outcome
         chest = {'table': claim.chest.table, 'outcome': outcome.id, 'name': outcome.name, 'silver': str(outcome.silver)}
-    return {'day': claim.day, 'cycle_day': claim.cycle_day, 'silver': str(claim.silver), 'chest': chest}
+    return {
+        'day': claim.day,
+        'cycle_day': claim.cycle_day,
+        'silver': str(claim.silver),
+        'chest': chest,
+        'badges': [earned_badge_body(badge_id) for badge_id in claim.badges],
+    }
+
+
+def earned_badge_body(badge_id: str) -> dict:
+    """새로 받은 배지 하나를 응답의 모양으로."""
+    return {'id': badge_id, 'name': badge_rules.BADGES_BY_ID[badge_id].name}
 
 
 def rewards_body() -> dict:

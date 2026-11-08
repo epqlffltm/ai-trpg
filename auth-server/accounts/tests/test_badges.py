@@ -132,14 +132,19 @@ class AttendanceBadgeTests(TestCase):
         return claim_attendance(self.user, now=NOON + timedelta(days=day), roll=always(roll))
 
     def test_the_first_claim_gives_the_first_attendance(self):
-        self.claim_on(0)
+        claim = self.claim_on(0)
+
+        self.assertEqual(claim.badges, (rules.FIRST_ATTENDANCE,))
 
         self.assertEqual(badges_of(self.user), {rules.FIRST_ATTENDANCE})
         self.assertEqual(UserBadge.objects.get(user=self.user).earned_at, NOON)
 
     def test_a_full_week_gives_the_cycle_and_a_dragon_its_badge(self):
-        for day in range(7):
-            self.claim_on(day, roll=9_800)
+        claims = [self.claim_on(day, roll=9_800) for day in range(7)]
+
+        # 그날 새로 받은 것만 실린다
+        self.assertEqual([claim.badges for claim in claims[1:6]], [()] * 5)
+        self.assertEqual(claims[6].badges, (rules.ATTENDANCE_CYCLE, rules.DRAGON_HOARD))
 
         self.assertEqual(badges_of(self.user), {rules.FIRST_ATTENDANCE, rules.ATTENDANCE_CYCLE, rules.DRAGON_HOARD})
 

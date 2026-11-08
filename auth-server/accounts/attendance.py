@@ -15,7 +15,7 @@
 """
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 
 from django.conf import settings
@@ -67,6 +67,8 @@ class Claim:
     silver: int
     # 연 날이 아니면 None 이다
     chest: ChestResult | None
+    # 이 출석으로 새로 받은 활동 배지의 이름들(#193). 받은 차례다. 없으면 비어 있다
+    badges: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -176,6 +178,7 @@ def claim_attendance(user: User, now: datetime | None = None, roll: rules.Roll =
     오늘의 출석 보상을 정하고 적는다. 실버는 워커가 결제 서버에 맡긴다(deliver_due_attendance).
 
     본인인증 전이면 AttendanceVerificationRequiredError, 오늘 이미 받았으면 AttendanceAlreadyClaimedError 다.
+    돌려주는 것에 이 출석으로 새로 받은 활동 배지가 있다(전에 받은 것은 없다).
     """
     now = now or timezone.now()
     today = rules.korean_date(now)
@@ -185,14 +188,14 @@ def claim_attendance(user: User, now: datetime | None = None, roll: rules.Roll =
         locked = User.objects.select_for_update().get(pk=user.pk)
         claim = _decide(locked, today, roll)
         _record(locked, claim, now)
-        # 출석으로 받는 활동 배지(#193). 같은 트랜잭션이다
-        award_attendance(
+        # 출석으로 받는 활동 배지(#193). 같은 트랜잭션이다. 새로 받은 것을 응답에 싣는다
+        badges = award_attendance(
             locked,
             opened_chest=claim.chest is not None,
             chest_outcome=claim.chest.outcome.id if claim.chest else None,
             now=now,
         )
-    return claim
+    return replace(claim, badges=badges)
 
 
 # --- 맡기기(워커) ---

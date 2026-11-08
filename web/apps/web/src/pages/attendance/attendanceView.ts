@@ -48,6 +48,12 @@ export function claimLine(claim: AttendanceClaim): string {
   return `받음: 실버 ${claim.silver} (${claim.cycle_day}일째)`;
 }
 
+/** 새로 받은 활동 배지의 한 줄(#193). "배지를 받았습니다: 첫 출석, 한 주기 완주". 없으면 null */
+export function badgesLine(claim: AttendanceClaim): string | null {
+  if (claim.badges.length === 0) return null;
+  return `배지를 받았습니다: ${claim.badges.map((badge) => badge.name).join(', ')}`;
+}
+
 /** 보물 상자의 한 줄. "보물 상자: 고블린의 주머니 · 실버 300 (확률표 v1)". 상자가 없으면 null */
 export function chestLine(claim: AttendanceClaim): string | null {
   if (!claim.chest) return null;

@@ -13,7 +13,7 @@ import { openAccountMenu } from '../../test/accountMenu';
 import { renderApp } from '../../test/renderApp';
 import { ME } from '../../test/tableFixtures';
 import { describeClaimProblem } from './attendanceProblem';
-import { cellLabel, chestLine, cycleCells, todayLine } from './attendanceView';
+import { badgesLine, cellLabel, chestLine, cycleCells, todayLine } from './attendanceView';
 
 const BILLING = '/api/v1/billing';
 const ATTENDANCE = '/api/v1/auth/attendance';
@@ -64,7 +64,7 @@ afterEach(() => {
 
 describe('출석', () => {
   it('지갑에서 출석으로 간다. 주기의 칸과 오늘의 양을 보이고, 받으면 결과를 남기고 잔액을 다시 읽는다', async () => {
-    const claimed = { day: '2026-10-24', cycle_day: 3, silver: '180', chest: null };
+    const claimed = { day: '2026-10-24', cycle_day: 3, silver: '180', chest: null, badges: [] };
     const { seen } = signedIn(today(), () => json(201, claimed));
     renderApp('/wallet');
 
@@ -79,6 +79,7 @@ describe('출석', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '출석하기' }));
     expect(await screen.findByText('받음: 실버 180 (3일째)')).toBeInTheDocument();
+    expect(screen.queryByText(/배지를 받았습니다/)).toBeNull();
     expect(await screen.findByRole('button', { name: '오늘은 받았습니다' })).toBeDisabled();
     expect(screen.getByText('오늘은 3일째 · 실버 180 · 받았습니다. 내일 다시 오세요.')).toBeInTheDocument();
     // 잔액은 내 메뉴에 있다. 펼치면 새로 읽는다
@@ -89,11 +90,14 @@ describe('출석', () => {
 
   it('마지막 날에는 출석하고 상자를 열어 그 결과와 확률표의 판을 보인다. 확률표를 공개한다', async () => {
     const chest = { table: 'v1', outcome: 'goblin_pouch', name: '고블린의 주머니', silver: '300' };
-    signedIn(today({ cycle_day: 7, silver: '260', chest: true }), () => json(201, { day: '2026-10-24', cycle_day: 7, silver: '260', chest }));
+    signedIn(today({ cycle_day: 7, silver: '260', chest: true }), () => json(201, { day: '2026-10-24', cycle_day: 7, silver: '260', chest, badges: [{ id: 'attendance_cycle', name: '한 주기 완주' }] }));
     renderApp('/wallet/attendance');
 
     await userEvent.click(await screen.findByRole('button', { name: '출석하고 상자 열기' }));
     expect(await screen.findByText('보물 상자: 고블린의 주머니 · 실버 300 (확률표 v1)')).toBeInTheDocument();
+    // 새로 받은 배지(#193)와 마이페이지의 배지로 가는 길
+    expect(screen.getByText(/배지를 받았습니다: 한 주기 완주/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '활동 배지 보기' })).toHaveAttribute('href', '/me?tab=settings');
     const odds = within(screen.getByRole('region', { name: '보물 상자의 확률' }));
     expect(odds.getByText(/확률표 v1 · 평균 실버 617/)).toBeInTheDocument();
     expect(odds.getByRole('row', { name: '용의 보물 5000 3%' })).toBeInTheDocument();
@@ -140,7 +144,10 @@ describe('출석의 순수한 함수', () => {
     expect(states(today({ cycle_day: 1 }))[0]).toBe('today');
     expect(cellLabel({ day: 7, silver: '260', chest: true, state: 'claimed' })).toBe('7일째, 실버 260, 보물 상자, 오늘 받음');
     expect(todayLine(today({ cycle_day: 7, silver: '260', chest: true }))).toBe('오늘은 7일째 · 실버 260 · 보물 상자를 엽니다');
-    expect(chestLine({ day: '', cycle_day: 3, silver: '180', chest: null })).toBeNull();
+    expect(chestLine({ day: '', cycle_day: 3, silver: '180', chest: null, badges: [] })).toBeNull();
+    expect(badgesLine({ day: '', cycle_day: 3, silver: '180', chest: null, badges: [] })).toBeNull();
+    const two = [{ id: 'first_attendance', name: '첫 출석' }, { id: 'attendance_cycle', name: '한 주기 완주' }];
+    expect(badgesLine({ day: '', cycle_day: 7, silver: '260', chest: null, badges: two })).toBe('배지를 받았습니다: 첫 출석, 한 주기 완주');
   });
 
   it('받기의 실패: 409 는 이미 받음, 403 은 본인인증, 503 은 잠시 뒤', () => {

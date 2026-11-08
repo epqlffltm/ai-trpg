@@ -921,6 +921,8 @@ export interface components {
         };
         /** @description 받은 출석 보상. 실버는 몇 초 뒤 지갑에 들어간다. */
         AttendanceClaim: {
+            /** @description 이 출석으로 새로 받은 활동 배지. 받은 차례다 */
+            badges: components["schemas"]["EarnedBadge"][];
             /** @description 연 보물 상자. 연 날이 아니면 null 이다 */
             chest: {
                 /** @description 화면에 보이는 이름 */
@@ -1049,6 +1051,13 @@ export interface components {
         /** @description 글 하나만 싣는 응답. 성공의 안내도, 이유를 가르지 않는 거절도 이 모양이다. */
         Detail: {
             detail: string;
+        };
+        /** @description 이 출석으로 새로 받은 활동 배지 하나(#193). 받는 법은 마이페이지의 배지 목록(GET /me/badges)에 있다. */
+        EarnedBadge: {
+            /** @description 배지의 이름. 바뀌지 않는다 */
+            id: string;
+            /** @description 화면에 보이는 이름 */
+            name: string;
         };
         /** @description 이메일 주소 하나만 받는 요청. 가입의 1단계(코드 보내기와 다시 보내기)와 비밀번호 재설정 요청에 쓴다. */
         EmailRequest: {

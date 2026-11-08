@@ -342,6 +342,8 @@ class AttendanceApiTests(APITestCase):
         self.assertEqual(response.data['cycle_day'], 1)
         self.assertEqual(response.data['silver'], '140')
         self.assertIsNone(response.data['chest'])
+        # 처음 받은 출석이라 활동 배지를 새로 받았다(#193)
+        self.assertEqual(response.data['badges'], [{'id': 'first_attendance', 'name': '첫 출석'}])
         self.assertIs(self.client.get(ATTENDANCE_URL).data['claimed'], True)
 
     def test_the_chest_day_answers_the_chest(self):
@@ -358,6 +360,8 @@ class AttendanceApiTests(APITestCase):
             response.data['chest'],
             {'table': 'v1', 'outcome': 'goblin_pouch', 'name': '고블린의 주머니', 'silver': '300'},
         )
+        # 첫 출석은 앞에서 받았다. 이번에 새로 받은 것만 싣는다
+        self.assertEqual(response.data['badges'], [{'id': 'attendance_cycle', 'name': '한 주기 완주'}])
 
     def test_claiming_twice_is_a_conflict_with_its_code(self):
         self.client.post(ATTENDANCE_URL)
