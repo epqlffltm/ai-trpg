@@ -38,8 +38,6 @@ type Dependencies struct {
 	WelcomeCredits credit.Amount
 	// InviteCredits 는 초대 보상 한 번에 두 사람이 각각 받는 양이다(#990). 0 이면 주지 않는다. 주는 것은 Welcome 이 한다.
 	InviteCredits credit.Amount
-	// Attendance 는 출석과 보물 상자다(#339). 넣지 않으면 그 주소들을 열지 않는다.
-	Attendance AttendanceService
 	// Coupons 는 쿠폰을 받게 한다(#979). 넣지 않으면 그 주소를 열지 않는다.
 	Coupons CouponRedeemer
 	// AutoCharge 는 자동 충전의 카드와 설정을 다룬다(#980). 넣지 않으면 그 주소를 열지 않는다.
@@ -140,12 +138,6 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	api.GET("/orders/:id", getOrder(deps.Orders))
 	api.POST("/orders/:id/confirm", confirmOrder(deps.Orders))
 	api.POST("/orders/:id/refund", refundOrder(deps.Orders))
-	if deps.Attendance != nil {
-		api.GET("/attendance", getAttendance(deps.Attendance))
-		api.POST("/attendance", claimAttendance(deps.Attendance))
-		// 하루 양과 보물 상자의 확률을 공개한다. 로그인 묶음 밖에 둔다. 가입하기 전에도 볼 수 있다
-		router.GET(APIPrefix+"/attendance/rewards", attendanceRewards(deps.Attendance))
-	}
 	if deps.AutoCharge != nil {
 		api.GET("/auto-charge", getAutoCharge(deps.AutoCharge))
 		api.PUT("/auto-charge", putAutoCharge(deps.AutoCharge))

@@ -68,7 +68,7 @@ func (s *Service) GrantFreeOnce(ctx context.Context, userID uuid.UUID, amount cr
 }
 
 // GrantFreeOnceInTx 는 GrantFreeOnce 와 같지만 부르는 쪽이 연 트랜잭션(tx) 안에서 한다.
-// 출석처럼 "받았다는 기록"과 크레딧이 함께 되거나 함께 안 되어야 할 때 쓴다.
+// 쿠폰처럼 "받았다는 기록"과 크레딧이 함께 되거나 함께 안 되어야 할 때 쓴다.
 // ErrAlreadyGranted 를 돌려주면 부르는 쪽이 트랜잭션을 되돌린다.
 func (s *Service) GrantFreeOnceInTx(ctx context.Context, tx pgx.Tx, userID uuid.UUID, amount credit.Amount, key string) (Grant, error) {
 	return s.GrantFreeOnceForInTx(ctx, tx, userID, amount, key, 0)

@@ -58,7 +58,7 @@ func (s *Service) Check(ctx context.Context, userID uuid.UUID) error {
 }
 
 // Verified 는 그 사용자가 본인인증을 했는지 본다. 인증 서버는 본인인증을 한 사용자만 알려 준다.
-// 나이와 보호자 동의는 보지 않는다. 출석(#339)처럼 결제가 아닌 일이 쓴다.
+// 나이와 보호자 동의는 보지 않는다. 쿠폰(#979)처럼 결제가 아닌 일이 쓴다.
 func (s *Service) Verified(ctx context.Context, userID uuid.UUID) (bool, error) {
 	record, err := s.find(ctx, userID)
 	if err != nil {

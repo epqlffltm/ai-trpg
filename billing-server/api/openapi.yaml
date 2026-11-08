@@ -20,7 +20,6 @@ tags:
   - name: health
   - name: wallet
   - name: orders
-  - name: attendance
   - name: coupons
   - name: auto-charge
   - name: webhooks
@@ -321,62 +320,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "500": { $ref: "#/components/responses/ServerError" }
-        "503": { $ref: "#/components/responses/Unavailable" }
-
-  /api/v1/billing/attendance:
-    get:
-      tags: [attendance]
-      summary: 오늘의 출석. 본인인증 전이면 verified 가 false
-      operationId: getAttendance
-      security: [{ bearer: [] }]
-      responses:
-        "200":
-          description: 오늘 받았는지, 주기의 며칠째인지, 오늘의 양, 상자를 여는 날인지
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AttendanceStatus" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "500": { $ref: "#/components/responses/ServerError" }
-        "503": { $ref: "#/components/responses/Unavailable" }
-    post:
-      tags: [attendance]
-      summary: 오늘의 출석 보상을 받는다
-      operationId: claimAttendance
-      security: [{ bearer: [] }]
-      responses:
-        "201":
-          description: 받은 보상
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AttendanceClaim" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403":
-          description: 본인인증 전이다(attendance.verification_required)
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-        "409":
-          description: 오늘 이미 받았다(attendance.already_claimed). 한국 자정에 다시 받는다
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-        "500": { $ref: "#/components/responses/ServerError" }
-        "503": { $ref: "#/components/responses/Unavailable" }
-
-  /api/v1/billing/attendance/rewards:
-    get:
-      tags: [attendance]
-      summary: 하루 양과 보물 상자의 확률. 로그인 없이 누구나 본다
-      operationId: getAttendanceRewards
-      responses:
-        "200":
-          description: 보상표
-          headers:
-            Cache-Control: { schema: { type: string } }
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Rewards" }
         "500": { $ref: "#/components/responses/ServerError" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
@@ -1191,41 +1134,6 @@ components:
           nullable: true
           description: 치른 주문인데 청약철회할 수 없는 까닭. 할 수 있거나 치른 주문이 아니면 null
 
-    AttendanceStatus:
-      type: object
-      additionalProperties: false
-      required: [today, verified, claimed, cycle_day, cycle_length, silver, chest]
-      properties:
-        today: { type: string, format: date, description: 한국 날짜 }
-        verified: { type: boolean, description: 본인인증을 마쳤는가. 아니면 받을 수 없다 }
-        claimed: { type: boolean }
-        cycle_day: { type: integer, description: 오늘 받으면 주기의 며칠째인가(1부터) }
-        cycle_length: { type: integer }
-        silver: { $ref: "#/components/schemas/Amount" }
-        chest: { type: boolean, description: 오늘 보물 상자를 여는 날인가 }
-    AttendanceClaim:
-      type: object
-      additionalProperties: false
-      required: [day, cycle_day, silver, chest, expires_at]
-      properties:
-        day: { type: string, format: date }
-        cycle_day: { type: integer }
-        silver: { $ref: "#/components/schemas/Amount" }
-        chest:
-          type: object
-          nullable: true
-          description: 상자를 연 날이면 그 결과. 아니면 null
-          additionalProperties: false
-          required: [table, outcome, name, silver]
-          properties:
-            table: { type: string, description: 확률표의 판 }
-            outcome: { type: string }
-            name: { type: string }
-            silver: { $ref: "#/components/schemas/Amount" }
-        expires_at:
-          type: string
-          format: date-time
-          description: 받은 실버가 사라지는 때
     AutoCharge:
       type: object
       additionalProperties: false
@@ -1321,41 +1229,6 @@ components:
           type: string
           format: date-time
           description: 받은 실버가 사라지는 때
-    Rewards:
-      type: object
-      additionalProperties: false
-      required: [cycle, chest]
-      properties:
-        cycle:
-          type: array
-          items:
-            type: object
-            additionalProperties: false
-            required: [day, silver, chest]
-            properties:
-              day: { type: integer }
-              silver: { $ref: "#/components/schemas/Amount" }
-              chest: { type: boolean }
-        chest:
-          type: object
-          additionalProperties: false
-          required: [table, scale, outcomes, expected_silver]
-          properties:
-            table: { type: string }
-            scale: { type: integer, description: 확률의 분모 }
-            outcomes:
-              type: array
-              items:
-                type: object
-                additionalProperties: false
-                required: [outcome, name, silver, chance, percent]
-                properties:
-                  outcome: { type: string }
-                  name: { type: string }
-                  silver: { $ref: "#/components/schemas/Amount" }
-                  chance: { type: integer, description: scale 가운데 몇 }
-                  percent: { type: string, example: "5.0" }
-            expected_silver: { $ref: "#/components/schemas/Amount" }
 
     Hold:
       type: object

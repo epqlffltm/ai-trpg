@@ -8,7 +8,7 @@
 //
 // 보지 않는 응답이 있다.
 //   - 목록에 없는 주소(테스트가 따로 붙인 주소)의 것. 그런 주소가 라우터에 있으면 위의 둘째가 잡는다
-//   - 라우터가 열지 않은 주소의 404(설정이 없어 닫은 출석과 토스의 알림). 목록에는 열었을 때의 모양만 둔다
+//   - 라우터가 열지 않은 주소의 404(설정이 없어 닫은 쿠폰과 토스의 알림). 목록에는 열었을 때의 모양만 둔다
 //   - 응답을 받기 전에 떠난 요청의 499. 로그에만 적고 받는 쪽이 없다
 package httpapi_test
 
@@ -121,9 +121,9 @@ func TestTheSpecIsValidOpenAPI(t *testing.T) {
 
 func TestEveryRouteIsInTheSpecAndEveryPathIsARoute(t *testing.T) {
 	doc, _ := loadSpec(t)
-	// 모든 주소를 여는 설정이다. 넣지 않으면 열지 않는 주소가 있다(출석, 쿠폰, 토스의 알림, 개발용 결제 화면)
+	// 모든 주소를 여는 설정이다. 넣지 않으면 열지 않는 주소가 있다(쿠폰, 토스의 알림, 개발용 결제 화면)
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		Attendance: &fakeAttendance{}, Coupons: &fakeCoupons{}, AutoCharge: &fakeAutoCharge{}, AutoChargeHistory: &fakeAutoChargeHistory{},
+		Coupons: &fakeCoupons{}, AutoCharge: &fakeAutoCharge{}, AutoChargeHistory: &fakeAutoChargeHistory{},
 		TossWebhook: true, CheckoutClientKey: "test_ck",
 	})
 
