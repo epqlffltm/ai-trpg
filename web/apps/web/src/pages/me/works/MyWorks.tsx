@@ -2,7 +2,8 @@
 // 마이페이지 제작자 탭의 "내 작품"(Stitch 10번). 아래 탭 넷(캐릭터, 세계관, 시나리오·캠페인, 재료)과 탭마다의 목록.
 // 캐릭터와 세계관은 공개 상태 칩(초안, 공개 중, 링크 공개, 숨겨짐)으로 거르고 정렬(최근 고친 순, 쓰인 수 순, #1165)을 고른다.
 // 카드마다 상태, 쓰인 수와 관심 수(모든 기간, 쓰인 수는 한 시간까지 늦다), 마지막으로 고친 때, "고치기"를 단다.
-// 시나리오·캠페인은 공개 상태와 쓰인 수를 게임 서버가 아직 주지 않아 칩과 정렬 없이 목록만, 재료는 저마다의 목록으로 가는 길이다.
+// 시나리오도 같은 칩(숨겨짐 없이)과 정렬, 수를 단다(#1165). 캠페인은 수와 공개 상태가 없어 그 아래에 목록만 둔다.
+// 재료는 저마다의 목록으로 가는 길이다.
 // 목록은 저마다의 제작 화면이 쓰는 읽기에 차례만 더해 쓴다(앞의 한 쪽).
 
 import { Button, ChipGroup, Notice, SelectField } from '@ai-trpg/ui';
@@ -16,10 +17,13 @@ import { myCharactersQuery } from '../../chat/studio/characters/characterQueries
 import { WORLDS_PATH, worldPath } from '../../story/studio/worldPaths';
 import { myWorldsQuery } from '../../story/studio/worldQueries';
 import { kindText, studioPath } from '../../trpg/studio/studioKinds';
+import { myScenariosQuery } from '../../trpg/studio/scenarios/scenarioQueries';
 import { assetsQuery } from '../../trpg/studio/studioQueries';
 import {
   countsText,
   filterByStatus,
+  SCENARIO_CHIPS,
+  scenarioWork,
   SORT_OPTIONS,
   sortOf,
   STATUS_CHIPS,
@@ -102,6 +106,8 @@ function MyStoryWorlds() {
 
 type StatusWorksProps = {
   label: string;
+  /** 공개 상태 칩. 기본은 넷(초안, 공개 중, 링크 공개, 숨겨짐) */
+  chips?: typeof STATUS_CHIPS;
   /** 쓰인 것의 이름(캐릭터는 대화, 세계관은 시작) */
   usedLabel: string;
   works: Work[];
@@ -115,12 +121,12 @@ type StatusWorksProps = {
 };
 
 /** 공개 상태 칩, 정렬과 그것으로 거른 목록 */
-function StatusWorks({ label, usedLabel, works, sort, onSort, pathOf, allPath, pending, failed, retry }: StatusWorksProps) {
+function StatusWorks({ label, chips = STATUS_CHIPS, usedLabel, works, sort, onSort, pathOf, allPath, pending, failed, retry }: StatusWorksProps) {
   const [status, setStatus] = useState<WorkStatus | undefined>(undefined);
   const shown = filterByStatus(works, status);
   return (
     <>
-      <ChipGroup label="공개 상태" chips={STATUS_CHIPS} selected={status} onChange={setStatus} />
+      <ChipGroup label="공개 상태" chips={chips} selected={status} onChange={setStatus} />
       <SelectField
         label="정렬"
         name="my-works-sort"
@@ -157,34 +163,47 @@ function StatusWorks({ label, usedLabel, works, sort, onSort, pathOf, allPath, p
 }
 
 function MyScenarios() {
-  const scenarios = useInfiniteQuery(assetsQuery('scenarios'));
-  const campaigns = useInfiniteQuery(assetsQuery('campaigns'));
-  const items = [
-    ...(scenarios.data?.pages[0]?.items ?? []).map((item) => ({ ...item, kind: 'scenarios' as const })),
-    ...(campaigns.data?.pages[0]?.items ?? []).map((item) => ({ ...item, kind: 'campaigns' as const })),
-  ].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-  const pending = scenarios.isPending || campaigns.isPending;
-  const failed = scenarios.isError || campaigns.isError;
+  const [sort, setSort] = useState<MineOrder>('updated');
+  const query = useQuery(myScenariosQuery(sort));
+  const works: Work[] = (query.data?.items ?? []).map(scenarioWork);
   return (
     <>
-      <LoadState
-        pending={pending}
-        failed={failed}
-        retry={() => {
-          void scenarios.refetch();
-          void campaigns.refetch();
-        }}
+      <StatusWorks
+        label="시나리오"
+        chips={SCENARIO_CHIPS}
+        usedLabel="테이블"
+        works={works}
+        sort={sort}
+        onSort={setSort}
+        pathOf={(id) => studioPath('scenarios', id)}
+        allPath={studioPath('scenarios')}
+        pending={query.isPending}
+        failed={query.isError}
+        retry={() => void query.refetch()}
       />
-      {!pending && !failed && items.length === 0 ? <EmptyWorks /> : null}
-      <ul className="plain-list my-works__list" aria-label="내 시나리오와 캠페인">
+      <MyCampaigns />
+    </>
+  );
+}
+
+/** 내 캠페인. 수와 공개 상태가 없어 최근에 고친 것부터 목록만 */
+function MyCampaigns() {
+  const campaigns = useInfiniteQuery(assetsQuery('campaigns'));
+  const items = [...(campaigns.data?.pages[0]?.items ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  return (
+    <section aria-labelledby="my-campaigns-heading">
+      <h3 id="my-campaigns-heading">캠페인</h3>
+      <LoadState pending={campaigns.isPending} failed={campaigns.isError} retry={() => void campaigns.refetch()} />
+      {campaigns.isSuccess && items.length === 0 ? <p className="empty-state">아직 만든 캠페인이 없습니다.</p> : null}
+      <ul className="plain-list my-works__list" aria-label="내 캠페인">
         {items.map((item) => (
-          <WorkCard key={`${item.kind}-${item.id}`} name={item.title} updatedAt={item.updated_at} to={studioPath(item.kind, item.id)} badge={kindText(item.kind).label} />
+          <WorkCard key={item.id} name={item.title} updatedAt={item.updated_at} to={studioPath('campaigns', item.id)} badge={kindText('campaigns').label} />
         ))}
       </ul>
       <p>
-        <Link to={studioPath('scenarios')}>시나리오 모두 보기</Link> · <Link to={studioPath('campaigns')}>캠페인 모두 보기</Link>
+        <Link to={studioPath('campaigns')}>캠페인 모두 보기</Link>
       </p>
-    </>
+    </section>
   );
 }
 

@@ -14,10 +14,26 @@
 
 import { apiRequest } from './http';
 import { assetPath, assetsPath } from './studio';
-import type { ListingDetail, ListingUpdate, PublishCheck, ScenarioCreate, ScenarioDetail, ScenarioUpdate, VersionDetail, VersionSummary } from './types';
+import type {
+  ListingDetail,
+  ListingUpdate,
+  MineOrder,
+  MyScenarioPage,
+  PublishCheck,
+  ScenarioCreate,
+  ScenarioDetail,
+  ScenarioUpdate,
+  VersionDetail,
+  VersionSummary,
+} from './types';
 
 function scenarioPath(scenarioId: string, rest = ''): string {
   return `${assetPath('scenarios', scenarioId)}${rest}`;
+}
+
+/** 내 시나리오 한 쪽(#1165). 줄마다 쓰인 수, 관심 수, 공개 상태가 있다. sort 를 비우면 서버의 기본(최근에 만든 것부터)이다 */
+export function fetchMyScenarios(page: { limit: number; offset: number; sort?: MineOrder }, signal?: AbortSignal): Promise<MyScenarioPage> {
+  return apiRequest<MyScenarioPage>(assetsPath('scenarios'), { query: page, ...(signal ? { signal } : {}) });
 }
 
 export function fetchScenario(scenarioId: string, signal?: AbortSignal): Promise<ScenarioDetail> {
