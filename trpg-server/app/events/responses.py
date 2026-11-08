@@ -284,6 +284,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.CHARACTER_REVIVED: ('round', 'user_id', 'character_name', 'roll', 'target', 'success', 'hp'),
     # 누가 누구에게 보냈는지만 보인다. 쪽지의 글은 처음부터 적지 않는다
     EventType.WHISPER_SENT: ('user_id', 'character_name', 'recipient_id', 'recipient_character_name'),
+    # 자유 굴림(#404)은 공개다. 무엇을 굴려 어떤 눈이 나왔는가
+    EventType.DICE_ROLLED: ('user_id', 'character_name', 'dice', 'faces', 'bonus', 'total'),
     EventType.TABLE_STARTED: ('members',),
     EventType.GM_NARRATION: ('text',),
     # 게임 안의 시각은 공개다. 모두 같은 때에 있다

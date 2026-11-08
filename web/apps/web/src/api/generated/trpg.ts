@@ -1720,6 +1720,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/tables/{table_id}/dice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Roll Dice
+         * @description 앉은 사람이 주사위를 굴린다. 눈은 서버가 굴리고, 같은 내용이 이벤트(dice_rolled)로 모두에게 간다.
+         *
+         *     게임의 상태와 무관하다. 판정도 피해도 아니고, 서술하는 AI 도 받지 않는다.
+         *     주사위 설명이 받는 모양이 아니면 422, 굴리는 수를 넘으면 429 다.
+         */
+        post: operations["roll_dice_api_v1_game_tables__table_id__dice_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/tables/{table_id}/end": {
         parameters: {
             query?: never;
@@ -4713,7 +4736,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "character_leveled" | "experience_gained" | "abilities_raised" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "round_reverted" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended" | "carried_items_left";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "dice_rolled" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "character_leveled" | "experience_gained" | "abilities_raised" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "round_reverted" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended" | "carried_items_left";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -4849,6 +4872,39 @@ export interface components {
              * Format: uuid
              */
             trap_id: string;
+        };
+        /**
+         * FreeRollCreate
+         * @description 자유 굴림을 할 때 받는 값. 굴리는 사람은 토큰에서 읽는다. 눈은 서버가 굴린다. 받지 않는다.
+         */
+        FreeRollCreate: {
+            /** Dice */
+            dice: string;
+        };
+        /**
+         * FreeRollOut
+         * @description 자유 굴림 한 번. 같은 내용이 이벤트(dice_rolled)로 모두에게 간다.
+         *
+         *     게임의 상태와 무관하다. 판정도 피해도 아니고, 서술하는 AI 도 받지 않는다.
+         */
+        FreeRollOut: {
+            /** Bonus */
+            bonus: number;
+            /** Character Name */
+            character_name: string | null;
+            /** Dice */
+            dice: string;
+            /** Faces */
+            faces: number[];
+            /** Sequence */
+            sequence: number;
+            /** Total */
+            total: number;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
         };
         /**
          * FriendlyFire
@@ -15988,6 +16044,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TableDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    roll_dice_api_v1_game_tables__table_id__dice_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FreeRollCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FreeRollOut"];
                 };
             };
             /** @description 입력이 틀렸다 */

@@ -37,6 +37,7 @@ from app.rounds.snapshots import fits
 AFTER_OPENED: frozenset[str] = frozenset(
     {
         EventType.WHISPER_SENT,
+        EventType.DICE_ROLLED,
         EventType.HOST_CHANGED,
         EventType.NARRATION_STYLE_CHANGED,
         EventType.ROUND_TIME_LIMIT_CHANGED,

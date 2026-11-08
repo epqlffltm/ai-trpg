@@ -279,6 +279,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | POST | `/api/v1/game/tables/{id}/messages/typing` | "입력 중"이라고 알리기. 204. 저장하지 않는다. 다른 사람들의 스트림에 `typing` 이 간다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/whispers` | 같은 테이블의 한 사람에게 쪽지 보내기. 201. 보낸 사람과 받은 사람만 본다. `gm_visible` 이면 GM 도 본다 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/whispers` | 자기 쪽지함. 보낸 것과 받은 것. `after`(이 번호 뒤의 것만), `limit` | access 토큰 |
+| POST | `/api/v1/game/tables/{id}/dice` | 자유 굴림(#404). 201. 앉은 사람 누구나. `dice` 는 `[개수]d면수[+보정]`(면 수 4, 6, 8, 10, 12, 20, 100, 개수 10 까지, 보정 ±100 까지, 예: `d20`, `2d6+1`). 눈은 서버가 굴린다. 응답은 `sequence`, `user_id`, `character_name`, `dice`(다시 쓴 설명), `faces`, `bonus`, `total` 이고 같은 내용이 이벤트 `dice_rolled` 로 모두에게 간다. 게임의 상태와 무관하다. 판정도 피해도 아니고 서술하는 AI 도 받지 않는다. 받는 모양이 아니면 422, 한 사람이 한 테이블에서 `FREE_ROLLS_PER_WINDOW`(기본 20)번을 `FREE_ROLL_WINDOW_SECONDS`(기본 60)초 안에 넘기면 429, 끝난 테이블이면 409 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/stream` | 테이블의 스트림(SSE). 새 이벤트와 새 채팅, 자기 쪽지함의 새 쪽지, 쓰이는 중인 서술이 생기는 대로 온다. 응답이 끝나지 않는다. `events_after`, `messages_after`, `whispers_after`, `Last-Event-ID` 머리말 | access 토큰 |
 | POST | `/api/v1/game/lorebooks` | 로어북 만들기. 201. 항목은 만든 뒤에 더한다 | access 토큰 |
 | GET | `/api/v1/game/lorebooks` | 내 로어북 목록. `limit`, `offset` | access 토큰 |
@@ -3140,6 +3141,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `references_changed` | 방장이 참고 자료를 서술에 넣을지 바꿨다(모집 중에만, #482) | `references_enabled` |
 | `ledger_drafts_changed` | 방장이 장부 초안을 쓸지 바꿨다. 장부 초안을 걷어내 이제 생기지 않는다(#371). 그 전의 이벤트에만 있다 | `ledger_drafts` |
 | `whisper_sent` | 누가 누구에게 쪽지를 보냈다. 알리기로 한 테이블에만 적힌다. 쪽지의 글은 적지 않는다 | `user_id`, `character_name`, `recipient_id`, `recipient_character_name` |
+| `dice_rolled` | 앉은 사람이 자유 굴림을 했다(#404). 게임의 상태와 무관하다. 라운드를 되돌리는 것을 막지 않는다 | `user_id`, `character_name`, `dice`, `faces`, `bonus`, `total` |
 | `table_started` | 방장이 시작했다 | `members`: 그때 앉은 사람과 캐릭터 이름 |
 | `gm_narration` | GM 이 장면을 서술했다. 첫 서술은 스타팅이다 | `text` |
 | `round_opened` | 라운드가 열렸다 | `number`, `deadline_at`(선언의 마감. 시간 제한이 없으면 `null`), `narration_model`(이 라운드의 서술 모델. 모델을 고르는 규칙 전의 테이블이면 `null`), `price`(1인 1라운드의 값 `{"credits", "tier"}`. 알릴 수 없으면 `null`), `clock`(게임 안의 시각: `day`, `hour`, `minute`, `time_of_day`), `passed_minutes`(앞 라운드부터 흐른 분. 첫 라운드는 0) |

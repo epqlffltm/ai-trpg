@@ -28,7 +28,7 @@ function line(type: EventType, payload: Record<string, unknown> = {}, extra: Rec
 const ALL: EventType[] = [
   'table_created', 'member_joined', 'member_left', 'member_kicked', 'host_changed', 'abilities_rolled', 'reroll_granted',
   'narration_style_changed', 'round_time_limit_changed', 'narration_tier_changed', 'narration_model_changed', 'credit_wait_changed',
-  'whisper_notice_changed', 'friendly_fire_changed', 'friendly_fire_consent_changed', 'references_changed', 'ledger_drafts_changed', 'whisper_sent', 'table_started', 'gm_narration',
+  'whisper_notice_changed', 'friendly_fire_changed', 'friendly_fire_consent_changed', 'references_changed', 'ledger_drafts_changed', 'whisper_sent', 'dice_rolled', 'table_started', 'gm_narration',
   'round_opened', 'player_action', 'check_rolled', 'hp_changed', 'resource_changed', 'npc_changed', 'npc_attitude_changed', 'monster_changed',
   'monster_attacked', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_treated', 'naming_resolved', 'death_save_rolled',
   'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'trap_set', 'trap_sprung', 'trap_disarmed', 'steal_attempted',
@@ -48,6 +48,12 @@ describe('eventLine', () => {
       if (IN_ROUNDS.includes(type)) expect(result, type).toBeNull();
       else expect(result?.text, type).toBeTruthy();
     }
+  });
+
+  it('자유 굴림은 누가 무엇을 굴려 어떤 눈이 나왔는지 보인다(#404)', () => {
+    expect(line('dice_rolled', { character_name: '렌', dice: '2d6+1', faces: [3, 4], bonus: 1, total: 8 })?.text).toBe('렌: 2d6+1 굴림 → 3+4+1 = 8');
+    expect(line('dice_rolled', { character_name: '렌', dice: '3d8-2', faces: [1, 2, 3], bonus: -2, total: 4 })?.text).toBe('렌: 3d8-2 굴림 → 1+2+3-2 = 4');
+    expect(line('dice_rolled', { character_name: '렌', dice: 'd20', faces: [17], bonus: 0, total: 17 })?.text).toBe('렌: d20 굴림 → 17 = 17');
   });
 
   it('무작위 조우는 어디에 무엇이 몇 마리 나왔는지, 쉬는 중이었는지 보인다(#283)', () => {

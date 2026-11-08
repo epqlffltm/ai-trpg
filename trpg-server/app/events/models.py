@@ -73,6 +73,8 @@ class EventType(enum.StrEnum):
     LEDGER_DRAFTS_CHANGED = 'ledger_drafts_changed'
     # 누가 누구에게 쪽지를 보냈다. 테이블이 알리기로 했을 때만 적는다. 쪽지의 글은 싣지 않는다(app/whispers/)
     WHISPER_SENT = 'whisper_sent'
+    # 앉은 사람이 자유 굴림을 했다(#404, app/free_rolls/). 게임의 상태와 무관하다. 판정도 피해도 아니다
+    DICE_ROLLED = 'dice_rolled'
 
     # --- 진행 ---
     # 방장이 테이블을 시작했다

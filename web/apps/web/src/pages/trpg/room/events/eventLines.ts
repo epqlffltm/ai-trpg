@@ -64,6 +64,14 @@ function placeOf(payload: Payload, key: string): string | null {
   return place ? text(place, 'name') : null;
 }
 
+/** 자유 굴림(#404). "2d6+1 → 3+4+1 = 8". 게임의 상태와 무관하다 */
+export function diceRollText(payload: Payload): string {
+  const faces = Array.isArray(payload.faces) ? payload.faces.filter((face): face is number => typeof face === 'number') : [];
+  const bonus = count(payload, 'bonus') ?? 0;
+  const parts = [faces.join('+'), bonus === 0 ? '' : bonus > 0 ? `+${bonus}` : String(bonus)].join('');
+  return `${text(payload, 'dice') ?? '주사위'} 굴림 → ${parts || '?'} = ${count(payload, 'total') ?? '?'}`;
+}
+
 /** 캐릭터의 이름이 있으면 그것, 없으면 사람(user_id, 없으면 행한 사람)의 이름 */
 function who(payload: Payload, ctx: EventContext, event: TableEvent): string {
   const named = text(payload, 'character_name');
@@ -361,6 +369,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   },
   reroll_granted: (p, ctx) => `${member(p, ctx)}: 한 번 더 굴릴 수 있습니다.`,
   whisper_sent: (p, ctx, e) => `${who(p, ctx, e)} → ${text(p, 'recipient_character_name') ?? member(p, ctx, 'recipient_id')}: 쪽지`,
+  dice_rolled: (p, ctx, e) => `${who(p, ctx, e)}: ${diceRollText(p)}`,
   table_started: () => '테이블을 시작했습니다.',
   carried_items_left: (p, ctx, e) => leftText(p, ctx, e),
   table_ended: (p) => `테이블이 끝났습니다${text(p, 'by') === 'operator' ? '(운영자)' : ''}.`,

@@ -510,6 +510,14 @@ def round_reverted(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'방장이 {payload.get("number")} 라운드를 되돌림. 같은 라운드를 다시 진행한다')]
 
 
+def dice_rolled(payload: dict, labels: Labels) -> list[Block]:
+    """자유 굴림(#404). 무엇을 굴려 어떤 눈이 나왔는가. 게임의 상태와 무관하다."""
+    faces = '+'.join(str(face) for face in payload.get('faces') or [])
+    bonus = payload.get('bonus') or 0
+    numbers = f'{faces}{bonus:+d}' if bonus else faces
+    return [Note(f'굴림: {who(payload)} · {text_of(payload.get("dice"))} → {numbers} = {payload.get("total")}')]
+
+
 def table_ended(payload: dict, labels: Labels) -> list[Block]:
     """테이블이 끝남."""
     return [Heading('끝')]
@@ -524,6 +532,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.GM_NARRATION: gm_narration,
     EventType.PLAYER_ACTION: player_action,
     EventType.CHECK_ROLLED: check_rolled,
+    EventType.DICE_ROLLED: dice_rolled,
     EventType.HP_CHANGED: hp_changed,
     EventType.DEATH_SAVE_ROLLED: death_save_rolled,
     EventType.CHARACTER_DIED: character_died,
