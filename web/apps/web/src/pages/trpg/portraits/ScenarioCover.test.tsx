@@ -63,7 +63,7 @@ describe('시나리오의 표지', () => {
   });
 
   it('소개의 머리에 표지를 두고, 표지가 없으면 그림을 받지 않는다', async () => {
-    const { seen } = signedOut({ [`GET /api/v1/game/listings/${SCENARIO_ID}`]: () => json(200, DETAIL) });
+    const { seen } = signedOut({ [`GET /api/v1/game/listings/${SCENARIO_ID}`]: () => json(200, DETAIL), [`GET /api/v1/game/listings/${SCENARIO_ID}/achievements`]: () => json(200, { items: [], players: 0 }) });
     renderApp(`/trpg/scenarios/${SCENARIO_ID}`);
 
     const head = (await screen.findByRole('heading', { level: 1, name: '잿빛 수도원' })).closest('header') as HTMLElement;

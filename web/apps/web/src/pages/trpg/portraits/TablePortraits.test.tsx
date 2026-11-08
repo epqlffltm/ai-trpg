@@ -64,6 +64,7 @@ describe('공개 소개의 프리젠 그림', () => {
   it('로그인하지 않아도 프리젠의 그림을 받아 이름 앞에 보인다', async () => {
     installFakeFetch({
       [`POST ${REFRESH_PATH}`]: () => json(401, { detail: 'no cookie' }),
+      [`GET /api/v1/game/listings/${SCENARIO_ID}/achievements`]: () => json(200, { items: [], players: 0 }),
       [`GET /api/v1/game/listings/${SCENARIO_ID}`]: () =>
         json(200, {
           scenario_id: SCENARIO_ID,
