@@ -122,6 +122,7 @@ describe('지도 탭', () => {
       npc_places: [{ entry_id: KEEPER, place_id: CRYPT }],
       place_items: [],
       traps: [],
+      submaps: [],
     });
     expect(await list.findByText('명소 · 커버 5 · 인물 1')).toBeInTheDocument();
   });
@@ -180,12 +181,13 @@ describe('지도 입력', () => {
     const detail = scenario({ landmarks: [CRYPT], covers: [{ place_id: CRYPT, cover: 3 }] }) as unknown as ScenarioDetail;
     expect([...mapPlaces(detail)].sort()).toEqual([GATE, TOWER, CRYPT].sort());
     expect(placeLine(detail, CRYPT)).toBe('명소 · 커버 3');
-    expect(applyPlace(detail, CRYPT, { landmark: false, cover: '', people: [], items: [], traps: [] })).toEqual({
+    expect(applyPlace(detail, CRYPT, { landmark: false, cover: '', people: [], items: [], traps: [], container: '' })).toEqual({
       landmarks: [],
       covers: [],
       npc_places: [{ entry_id: KEEPER, place_id: GATE }],
       place_items: [],
       traps: [],
+      submaps: [],
     });
   });
 

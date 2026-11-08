@@ -133,6 +133,31 @@ export function placeName(map: TableMap, placeId: string | null | undefined): st
   return map.places.find((place) => place.entry_id === placeId)?.name ?? null;
 }
 
+/**
+ * 그 장소의 위치(#284). 품은 장소들을 바깥부터 붙인다("마을 > 여관 > 2층"). 품은 장소는 서버가 아는 곳만 준다(inside).
+ * 모르는 장소면 null
+ */
+export function placePath(map: TableMap, placeId: string | null | undefined): string | null {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  let current = placeId ? map.places.find((place) => place.entry_id === placeId) : undefined;
+  while (current && !seen.has(current.entry_id)) {
+    seen.add(current.entry_id);
+    names.unshift(current.name);
+    const inside = current.inside;
+    current = inside ? map.places.find((place) => place.entry_id === inside) : undefined;
+  }
+  return names.length > 0 ? names.join(' > ') : null;
+}
+
+/** 하위 맵으로 들고 나는 길인가(#284). 그곳이 여기가 품은 곳이면 들어가기, 여기를 품은 곳이면 나오기 */
+export function wayStep(map: TableMap, here: string, to: string): 'in' | 'out' | null {
+  const insideOf = (placeId: string) => map.places.find((place) => place.entry_id === placeId)?.inside ?? null;
+  if (insideOf(to) === here) return 'in';
+  if (insideOf(here) === to) return 'out';
+  return null;
+}
+
 /** 갈 수 있는 곳 하나. route 는 그리로 가는 길(문의 상태와 넘기 판정, #281) */
 export type Way = { placeId: string; name: string; minutes: number | null; route: TableMap['routes'][number] };
 
@@ -160,11 +185,14 @@ export function waysFrom(map: TableMap, placeId: string | null | undefined): Way
 /**
  * 길을 막거나 굴리게 하는 것(#281). 가기 전에 알 것만 적는다. 없으면 빈 목록.
  * "자물쇠 잠김"(열쇠가 있으면 지나며 연다), "빗장 걸림(이쪽)"(지나며 푼다) 또는 "빗장 걸림(저쪽)"(부수기로만 연다),
- * "넘기 판정: 근력, 보통"(지날 때마다 굴린다). 열린 문, 부서진 문은 막지 않으니 적지 않는다
+ * "넘기 판정: 근력, 보통"(지날 때마다 굴린다). 열린 문, 부서진 문은 막지 않으니 적지 않는다.
+ * 맵을 주면 하위 맵으로 들고 나는 길(#284)에 "들어가기", "나오기"를 맨 앞에 붙인다
  */
-export function wayNotes(way: Way, here: string, rules: Ruleset): string[] {
+export function wayNotes(way: Way, here: string, rules: Ruleset, map?: TableMap): string[] {
   const { route } = way;
   const notes: string[] = [];
+  const step = map ? wayStep(map, here, way.placeId) : null;
+  if (step) notes.push(step === 'in' ? '들어가기' : '나오기');
   if (route.locked === true) notes.push('자물쇠 잠김');
   if (route.barred === true) notes.push(route.bar_side === here ? '빗장 걸림(이쪽)' : '빗장 걸림(저쪽)');
   if (route.cross) {
@@ -179,7 +207,7 @@ export function wayNotes(way: Way, here: string, rules: Ruleset): string[] {
 export function whoIsWhere(map: TableMap, members: TableMember[]): { name: string; characters: string[] }[] {
   return map.places
     .map((place) => ({
-      name: place.name,
+      name: placePath(map, place.entry_id) ?? place.name,
       characters: members
         .filter((member) => member.sheet?.place_id === place.entry_id && member.character)
         .map((member) => member.character?.name ?? ''),

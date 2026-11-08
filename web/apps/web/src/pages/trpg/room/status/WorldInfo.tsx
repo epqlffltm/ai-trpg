@@ -6,6 +6,7 @@
 // 갈 수 있는 곳에는 걸리는 시간과 길을 막거나 굴리게 하는 것(잠긴 자물쇠, 걸린 빗장, 넘기 판정)을 적는다.
 // 지금 있는 곳에 닿은 길의 문(#281)은 상태(자물쇠, 빗장, 부서짐)와 지금 할 수 있어 보이는 행동의 단추를 보인다.
 // 지금 있는 곳의 인물과 몬스터(#254)는 몸 상태, 부상, 지닌 것과 "치기" 단추를 보인다(SceneHere).
+// 하위 맵(#284)의 장소는 품은 장소들을 붙여 보이고("마을 > 여관 > 2층"), 들고 나는 길에 "들어가기", "나오기"를 단다.
 
 import { useQuery } from '@tanstack/react-query';
 import type { TableDetail, TableMember } from '../../../../api/types';
@@ -21,7 +22,7 @@ import {
   clockTimeLabel,
   minutesLabel,
   placeCover,
-  placeName,
+  placePath,
   questStatusLabel,
   waysFrom,
   wayNotes,
@@ -131,7 +132,7 @@ function Places({ table, map, mine, shortcuts }: PlacesProps) {
         장소
       </h3>
       <p>
-        지금 있는 곳: {placeName(map, here) ?? '맵에 서 있지 않음'}{' '}
+        지금 있는 곳: {placePath(map, here) ?? '맵에 서 있지 않음'}{' '}
         {here ? <ActionButton shortcuts={shortcuts} patch={{ kind: 'search' }} label="찾기" what="지금 있는 곳" /> : null}
         {cover > 0 ? <ActionButton shortcuts={shortcuts} patch={{ kind: 'cover' }} label="엄폐" what="지금 있는 곳" /> : null}
       </p>
@@ -169,7 +170,7 @@ function Places({ table, map, mine, shortcuts }: PlacesProps) {
             <li key={way.placeId}>
               {way.name}{' '}
               <span className="hint">
-                ({[way.minutes === null ? '걸리는 시간 모름' : minutesLabel(way.minutes), ...(here ? wayNotes(way, here, table.rules) : [])].join(' · ')})
+                ({[way.minutes === null ? '걸리는 시간 모름' : minutesLabel(way.minutes), ...(here ? wayNotes(way, here, table.rules, map) : [])].join(' · ')})
               </span>{' '}
               <ActionButton shortcuts={shortcuts} patch={{ kind: 'move', place: way.placeId, carry: '' }} label="가기" what={way.name} />
             </li>
