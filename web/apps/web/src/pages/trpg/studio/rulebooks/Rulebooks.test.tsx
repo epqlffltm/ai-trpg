@@ -1,7 +1,8 @@
 // web/apps/web/src/pages/trpg/studio/rulebooks/Rulebooks.test.tsx
 // 룰북 화면(B9). 마이페이지에서 빈 목록으로, 세이브 방식으로 만들기(본문), 고치기에서 방어 규칙 바꾸기(PATCH 본문),
 // 고치기에서 성장(레벨표, #286)을 켜고 줄을 더하기(PATCH 본문), 판정 방식을 d100 의 눈 ≤ 기량으로 바꾸기(#404),
-// 쓰는 시나리오가 있어 지우지 못함(409), 지우고 목록으로, 없는 룰북을 본다.
+// 짧은 부상(상태 이상)의 라운드마다의 피해와 벗어나기를 고르기(#254), 쓰는 시나리오가 있어 지우지 못함(409),
+// 지우고 목록으로, 없는 룰북을 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -18,7 +19,7 @@ const ONE_OVER = { count: 1, style: 'over', shifts: {} };
 const DIFFICULTIES = [{ key: 'medium', name: '보통', target: 15 }, { key: 'hard', name: '어려움', target: 20 }];
 
 function rules(template: string, armor: unknown) {
-  return { template, die: 20, roll: ONE_OVER, difficulties: DIFFICULTIES, armor, abilities: [{ key: 'heart', name: '마음' }], resources: [], narration: { tone: '영웅담', outcomes: [], avoid: [] } };
+  return { template, die: 20, roll: ONE_OVER, difficulties: DIFFICULTIES, armor, abilities: [{ key: 'heart', name: '마음' }], resources: [], injuries: [], magnitudes: [], natures: [], narration: { tone: '영웅담', outcomes: [], avoid: [] } };
 }
 
 const TEMPLATES = {
@@ -73,6 +74,15 @@ function sent(seen: SeenRequest[], method: string, path: string): SeenRequest[] 
   return seen.filter((request) => request.method === method && request.url.split('?')[0] === `${BASE}${path}`);
 }
 
+// 상태 이상(#254)을 고칠 판. 중독은 짧은 것, 팔 골절은 오래 가는 것이라 고를 칸이 없다
+const POISONED = { key: 'poisoned', name: '중독', fact: '속이 뒤집힌다.', effects: [], healing: 'rounds', rounds: 3, damage: null, escape: null };
+const BROKEN_ARM = { key: 'broken_arm', name: '팔 골절', fact: '팔이 부러졌다.', effects: [], healing: 'heals', heal_minutes: 600, damage: null, escape: null };
+const STATUS_RULES = {
+  injuries: [POISONED, BROKEN_ARM],
+  magnitudes: [{ key: 'light', name: '가벼운 피해', count: 1, sides: 4 }],
+  natures: [{ key: 'poison', name: '독', category: null }],
+};
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -110,6 +120,7 @@ describe('룰북', () => {
       armor: { mode: 'save', pierce_base: 10, save_target: 7 },
       resources: [],
       progression: null,
+      injuries: [],
     });
   });
 
@@ -137,7 +148,7 @@ describe('룰북', () => {
     await userEvent.click(form.getByRole('button', { name: '저장' }));
 
     expect(await screen.findByText('저장했습니다.')).toBeInTheDocument();
-    expect(sent(seen, 'PATCH', `/${ID}`)[0]?.body).toEqual({ title: '내 규칙', description: '', gm_guide: '', die: 20, roll: ONE_OVER, armor: null, resources: [], progression: null });
+    expect(sent(seen, 'PATCH', `/${ID}`)[0]?.body).toEqual({ title: '내 규칙', description: '', gm_guide: '', die: 20, roll: ONE_OVER, armor: null, resources: [], progression: null, injuries: [] });
     expect(within(screen.getByRole('form', { name: '룰북' })).getByRole('radio', { name: '방어구가 막지 않음' })).toBeChecked();
   });
 
@@ -239,5 +250,31 @@ describe('룰북', () => {
     signedIn({ [`GET ${BASE}/${ID}`]: () => json(404, { detail: 'x' }) });
     renderApp(`/trpg/studio/rulebooks/${ID}`);
     expect(await screen.findByText('룰북을 찾을 수 없습니다. 지워졌을 수 있습니다.')).toBeInTheDocument();
+  });
+
+  it('고치기에서 짧은 부상의 라운드마다의 피해와 벗어나기를 골라 PATCH 로 보낸다. 오래 가는 부상은 그대로다(#254)', async () => {
+    const statuses = detail({ rules: { ...rules('srd5', null), ...STATUS_RULES } });
+    const { seen } = signedIn({
+      [`GET ${BASE}/${ID}`]: () => json(200, statuses),
+      [`PATCH ${BASE}/${ID}`]: () => json(200, statuses),
+    });
+    renderApp(`/trpg/studio/rulebooks/${ID}`);
+
+    const status = within(await screen.findByRole('group', { name: '상태 중독' }));
+    expect(screen.queryByRole('group', { name: '상태 팔 골절' })).toBeNull();
+    // 피해를 고르기 전에는 성질을 고를 수 없다. 벗어나기의 능력치를 고르기 전에는 난이도도 그렇다
+    expect(status.getByLabelText('피해의 성질')).toBeDisabled();
+    expect(status.getByLabelText('벗어나는 판정의 난이도')).toBeDisabled();
+    await userEvent.selectOptions(status.getByLabelText('라운드마다의 피해'), 'light');
+    await userEvent.selectOptions(status.getByLabelText('피해의 성질'), 'poison');
+    await userEvent.selectOptions(status.getByLabelText('벗어나는 판정의 능력치'), 'heart');
+    await userEvent.selectOptions(status.getByLabelText('벗어나는 판정의 난이도'), 'hard');
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(await screen.findByText('저장했습니다.')).toBeInTheDocument();
+    expect((sent(seen, 'PATCH', `/${ID}`)[0]?.body as { injuries: unknown }).injuries).toEqual([
+      { ...POISONED, damage: { magnitude: 'light', nature: 'poison' }, escape: { ability: 'heart', difficulty: 'hard' } },
+      BROKEN_ARM,
+    ]);
   });
 });

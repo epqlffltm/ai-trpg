@@ -58,6 +58,8 @@ export type ArmorMode = Trpg['schemas']['ArmorMode'];
 export type Roll = Trpg['schemas']['Roll'];
 export type RollStyle = Trpg['schemas']['RollStyle'];
 export type Difficulty = Ruleset['difficulties'][number];
+// 룰북의 부상 하나. 짧은 것(상태 이상)은 라운드마다의 피해(damage)와 벗어나기(escape)를 가질 수 있다(#254)
+export type Injury = Ruleset['injuries'][number];
 // HP 말고 다른 수치(#804). 룰북의 규칙(rules.resources)과 시트의 지금 값(sheet.resources), 바뀐 것(쉬기, 물건의 맞추기)
 export type Resource = Trpg['schemas']['Resource'];
 export type ResourceShift = Trpg['schemas']['ResourceShift'];

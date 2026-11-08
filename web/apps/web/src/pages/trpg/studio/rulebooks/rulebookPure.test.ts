@@ -13,7 +13,7 @@ const DIFFICULTIES = [{ key: 'easy', name: '쉬움', target: 10 }, { key: 'hard'
 const ONE_OVER = { count: 1, style: 'over', shifts: {} };
 
 function rules(template: string, armor: unknown, die = 20) {
-  return { template, die, roll: ONE_OVER, difficulties: DIFFICULTIES, armor, abilities: [], resources: [], narration: { tone: `${template}의 분위기`, outcomes: [], avoid: [] } };
+  return { template, die, roll: ONE_OVER, difficulties: DIFFICULTIES, armor, abilities: [], resources: [], injuries: [], magnitudes: [], natures: [], narration: { tone: `${template}의 분위기`, outcomes: [], avoid: [] } };
 }
 
 const TEMPLATES = {
@@ -53,9 +53,9 @@ describe('룰북의 입력', () => {
 
   it('보내는 본문. 세이브 목표값은 save 일 때만, 막지 않음이면 armor 가 null', () => {
     const draft = { ...newRulebookDraft(TEMPLATES), title: '  내 규칙 ', gmGuide: '지침' };
-    expect(toRulebookCreate(draft)).toEqual({ title: '내 규칙', description: '', gm_guide: '지침', template: 'srd5', die: 20, roll: ONE_OVER, armor: { mode: 'ac', pierce_base: 10 }, resources: [], progression: null });
+    expect(toRulebookCreate(draft)).toEqual({ title: '내 규칙', description: '', gm_guide: '지침', template: 'srd5', die: 20, roll: ONE_OVER, armor: { mode: 'ac', pierce_base: 10 }, resources: [], progression: null, injuries: [] });
     expect(toRulebookUpdate({ ...draft, armor: 'save', saveTarget: '7', pierceBase: '12' }).armor).toEqual({ mode: 'save', pierce_base: 12, save_target: 7 });
-    expect(toRulebookUpdate({ ...draft, armor: 'none' })).toEqual({ title: '내 규칙', description: '', gm_guide: '지침', die: 20, roll: ONE_OVER, armor: null, resources: [], progression: null });
+    expect(toRulebookUpdate({ ...draft, armor: 'none' })).toEqual({ title: '내 규칙', description: '', gm_guide: '지침', die: 20, roll: ONE_OVER, armor: null, resources: [], progression: null, injuries: [] });
   });
 });
 
