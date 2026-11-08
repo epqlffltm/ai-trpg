@@ -23,6 +23,24 @@ class ListingOrder(enum.StrEnum):
     POPULAR = 'popular'
 
 
+class MineOrder(enum.StrEnum):
+    """
+    내 작품 목록의 차례(#1165). updated 는 최근에 고친 것부터, started 는 쓰인 수(모든 기간)가 많은 것부터다.
+
+    쓰인 수가 같으면 최근에 고친 것부터다. 공개 목록의 인기순(최근 7일)과 다르다. 제작자가 자기 작품을 보는 자리라서다.
+    """
+
+    UPDATED = 'updated'
+    STARTED = 'started'
+
+
+def mine_order(work: Any, order: 'MineOrder') -> tuple:
+    """내 작품 목록을 줄 세우는 열들. 끝은 늘 id 라 같은 값끼리도 쪽이 흔들리지 않는다."""
+    if order == MineOrder.STARTED:
+        return (work.start_count.desc(), work.updated_at.desc(), work.id)
+    return (work.updated_at.desc(), work.id)
+
+
 def by_popularity(query: Select, kind: WorkKind, work: Any) -> Select:
     """목록을 인기순으로 줄 세운다. 받은 수가 없는 것은 0 으로 보고 뒤에 둔다."""
     return query.outerjoin(WorkStarts, (WorkStarts.kind == kind) & (WorkStarts.work_id == work.id)).order_by(

@@ -521,6 +521,9 @@ class CharacterSummary(BaseModel):
     latest_version: int | None
     hidden_at: datetime | None
     updated_at: datetime
+    # 쓰인 수(모든 기간, 한 시간까지 늦다)와 관심 수(#1165). 공개를 내려도 남는다
+    start_count: int
+    heart_count: int
 
 
 class CharacterPage(BaseModel):

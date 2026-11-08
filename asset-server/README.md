@@ -125,7 +125,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | DELETE | `/api/v1/asset/personas/{id}` | 지우기. 204. 기본이었으면 가장 먼저 만든 것이 기본이 된다 | access 토큰 |
 | GET, PUT | `/api/v1/asset/shortcuts` | [내 단축어](#단축어) 읽기(`{items}`, 없으면 빈 목록), 통째로 바꾸기. 같은 이름, 20개 넘음, 길이 넘음은 422 | access 토큰 |
 | POST | `/api/v1/asset/characters` | [캐릭터](#캐릭터와-게시) 만들기. 201. 처음에는 비공개. 1~2단계에는 운영자만(403 `operator_only`). 성인 등급은 성인 확인이 필요하다(403 `adult_content_required`) | access 토큰 |
-| GET | `/api/v1/asset/characters` | 자기 캐릭터의 목록(`{items, total}`). 최근에 고친 것부터. `limit`, `offset` | access 토큰 |
+| GET | `/api/v1/asset/characters` | 자기 캐릭터의 목록(`{items, total}`). 최근에 고친 것부터. `sort=started` 면 쓰인 수가 많은 것부터, 같으면 최근에 고친 것부터(#1165). 줄마다 쓰인 수(`start_count`, 모든 기간, 한 시간까지 늦다)와 관심 수(`heart_count`)가 있다. 공개를 내려도 남는다. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/asset/characters/{id}` | 자기 캐릭터의 초안 하나. 남의 것과 없는 것은 404 | access 토큰 |
 | PATCH | `/api/v1/asset/characters/{id}` | 초안 고치기. 보낸 칸만 바뀐다. 게시한 판은 그대로다. 공개나 링크 공개로 두는 것(`visibility`)은 운영자만 | access 토큰 |
 | DELETE | `/api/v1/asset/characters/{id}` | 지우기. 204. 판도 함께 지워진다 | access 토큰 |
@@ -139,7 +139,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | POST | `/api/v1/asset/lorebooks/{id}/versions` | 로어북 게시 `{note?}`. 201. 막는 것은 없다 | access 토큰 |
 | GET | `/api/v1/asset/lorebooks/{id}/versions`, `/versions/{number}` | 로어북의 판의 목록(최근 것부터), 판 하나(굳힌 문서까지) | access 토큰 |
 | POST | `/api/v1/asset/worlds` | story 의 [세계관](#세계관) 만들기. 201. 처음에는 비공개. 1~2단계에는 운영자만(403 `operator_only`). 인물은 자기 캐릭터만(422 `character_not_owned`) | access 토큰 |
-| GET | `/api/v1/asset/worlds` | 자기 세계관의 목록(`{items, total}`). 최근에 고친 것부터. `limit`, `offset` | access 토큰 |
+| GET | `/api/v1/asset/worlds` | 자기 세계관의 목록(`{items, total}`). 최근에 고친 것부터. `sort=started` 면 쓰인 수가 많은 것부터, 같으면 최근에 고친 것부터(#1165). 줄마다 쓰인 수(`start_count`, 모든 기간, 한 시간까지 늦다)와 관심 수(`heart_count`)가 있다. 공개를 내려도 남는다. `limit`, `offset` | access 토큰 |
 | GET, PATCH, DELETE | `/api/v1/asset/worlds/{id}` | 자기 세계관의 초안 하나, 고치기(보낸 칸만), 지우기(204, 판도 함께). 남의 것과 없는 것은 404 | access 토큰 |
 | GET | `/api/v1/asset/worlds/{id}/publish-check` | 게시해 보기(`{ready, problems, warnings, removed}`). 판은 생기지 않는다 | access 토큰 |
 | POST | `/api/v1/asset/worlds/{id}/versions` | 세계관 게시 `{note?}`. 201. 새 판과 `removed`, `warnings`. 막는 것이 있으면 409 `{problems}` | access 토큰 |

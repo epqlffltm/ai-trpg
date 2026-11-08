@@ -181,7 +181,9 @@ export interface paths {
         };
         /**
          * List Characters
-         * @description 자기 캐릭터의 목록. 최근에 고친 것부터다.
+         * @description 자기 캐릭터의 목록. 기본은 최근에 고친 것부터, sort=started 면 쓰인 수(모든 기간)가 많은 것부터다(#1165).
+         *
+         *     줄마다 쓰인 수(start_count)와 관심 수(heart_count)가 실린다. 쓰인 수는 한 시간까지 늦다(app/popularity.py).
          */
         get: operations["list_characters_api_v1_asset_characters_get"];
         put?: never;
@@ -1079,7 +1081,9 @@ export interface paths {
         };
         /**
          * List Worlds
-         * @description 자기 세계관의 목록. 최근에 고친 것부터다.
+         * @description 자기 세계관의 목록. 기본은 최근에 고친 것부터, sort=started 면 쓰인 수(모든 기간)가 많은 것부터다(#1165).
+         *
+         *     줄마다 쓰인 수(start_count)와 관심 수(heart_count)가 실린다. 쓰인 수는 한 시간까지 늦다(app/popularity.py).
          */
         get: operations["list_worlds_api_v1_asset_worlds_get"];
         put?: never;
@@ -1900,6 +1904,8 @@ export interface components {
          * @description 내 캐릭터 목록의 한 줄.
          */
         CharacterSummary: {
+            /** Heart Count */
+            heart_count: number;
             /** Hidden At */
             hidden_at: string | null;
             /**
@@ -1912,6 +1918,8 @@ export interface components {
             /** Name */
             name: string;
             rating: components["schemas"]["Rating"];
+            /** Start Count */
+            start_count: number;
             /**
              * Updated At
              * Format: date-time
@@ -2751,6 +2759,14 @@ export interface components {
              */
             user_id: string;
         };
+        /**
+         * MineOrder
+         * @description 내 작품 목록의 차례(#1165). updated 는 최근에 고친 것부터, started 는 쓰인 수(모든 기간)가 많은 것부터다.
+         *
+         *     쓰인 수가 같으면 최근에 고친 것부터다. 공개 목록의 인기순(최근 7일)과 다르다. 제작자가 자기 작품을 보는 자리라서다.
+         * @enum {string}
+         */
+        MineOrder: "updated" | "started";
         /**
          * OpenReportGroupOut
          * @description 열린 신고를 캐릭터마다 묶은 한 줄. reasons 는 사유마다의 수다. hidden 은 이미 숨긴 캐릭터인가.
@@ -4219,6 +4235,8 @@ export interface components {
          * @description 내 세계관 목록의 한 줄.
          */
         WorldSummary: {
+            /** Heart Count */
+            heart_count: number;
             /** Hidden At */
             hidden_at?: string | null;
             /**
@@ -4231,6 +4249,8 @@ export interface components {
             /** Name */
             name: string;
             rating: components["schemas"]["Rating"];
+            /** Start Count */
+            start_count: number;
             /**
              * Updated At
              * Format: date-time
@@ -4746,6 +4766,7 @@ export interface operations {
     list_characters_api_v1_asset_characters_get: {
         parameters: {
             query?: {
+                sort?: components["schemas"]["MineOrder"];
                 limit?: number;
                 offset?: number;
             };
@@ -6511,6 +6532,7 @@ export interface operations {
     list_worlds_api_v1_asset_worlds_get: {
         parameters: {
             query?: {
+                sort?: components["schemas"]["MineOrder"];
                 limit?: number;
                 offset?: number;
             };

@@ -14,7 +14,8 @@ from fastapi.responses import JSONResponse
 from server_core.auth.dependencies import CurrentUser
 
 from app.characters.router import to_removed
-from app.core.dependencies import AppSettings, Paging, Session
+from app.core.dependencies import AppSettings, MineSort, Paging, Session
+from app.popularity import MineOrder
 from app.worlds import service
 from app.worlds.models import World, WorldVersion
 from app.worlds.publishing import WorldNotReadyError
@@ -78,9 +79,15 @@ async def create_world(data: WorldCreate, user: CurrentUser, session: Session, s
 
 
 @router.get('', response_model=WorldPage, status_code=status.HTTP_200_OK)
-async def list_worlds(user: CurrentUser, session: Session, paging: Paging) -> WorldPage:
-    """자기 세계관의 목록. 최근에 고친 것부터다."""
-    worlds, total = await service.list_mine(session, user.user_id, paging.limit, paging.offset)
+async def list_worlds(
+    user: CurrentUser, session: Session, paging: Paging, sort: MineSort = MineOrder.UPDATED
+) -> WorldPage:
+    """
+    자기 세계관의 목록. 기본은 최근에 고친 것부터, sort=started 면 쓰인 수(모든 기간)가 많은 것부터다(#1165).
+
+    줄마다 쓰인 수(start_count)와 관심 수(heart_count)가 실린다. 쓰인 수는 한 시간까지 늦다(app/popularity.py).
+    """
+    worlds, total = await service.list_mine(session, user.user_id, paging.limit, paging.offset, sort)
     return WorldPage(items=[to_summary(world) for world in worlds], total=total)
 
 
