@@ -4,6 +4,7 @@
 // 받을 항목과 판은 GET /me/consents 의 pending 이다. 항목마다 새 판의 문서를 볼 수 있고, 미리 체크하지 않는다.
 // 다 체크하고 누르면 항목마다 PUT /me/consents/{item} 을 보내고 /refresh 로 모든 서버에 통하는 토큰을 받는다.
 // 그러면 상태가 바뀌어 원래 화면이 그 자리에 뜬다. 다른 화면으로 보내지 않는다(화면 명세의 A2).
+// 동의하지 않으려면 로그아웃한다. 위쪽 줄과 카드 아래의 글 단추에 있다(LimitedLayout, Stitch 7번).
 // 판이 또 바뀌었으면(409) 다시 읽고 체크를 비운다. 화면이 갖지 않은 판이면 받지 않는다(옛 문서로 동의를 받지 않는다).
 
 import { Button, Checkbox, Notice } from '@ai-trpg/ui';
@@ -15,6 +16,7 @@ import type { ConsentState } from '../../api/types';
 import { describeConsentProblem, type ConsentProblem } from '../../auth/accountProblem';
 import { myConsentsQuery } from '../../auth/queries';
 import { ProblemNotice } from '../../components/ProblemNotice';
+import { SignOutButton } from '../../layout/SignOutButton';
 import { ConsentDocumentDialog, type ViewingDocument } from '../../legal/ConsentDocumentDialog';
 import { consentDocumentName, consentItemInfo, itemsWithoutDocument } from '../../legal/consentItems';
 import { allChecked, pendingItems } from './reconsent';
@@ -85,6 +87,9 @@ export function ReconsentPage() {
           </Button>
         </form>
       ) : null}
+      <p className="auth-links">
+        <SignOutButton />
+      </p>
       <ConsentDocumentDialog viewing={viewing} onClose={close} />
     </main>
   );

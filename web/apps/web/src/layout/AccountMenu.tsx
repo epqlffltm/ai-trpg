@@ -6,15 +6,13 @@
 // 설계서의 팔로워·팔로잉 수, 성향 필터, 차단, 초대 코드는 마이페이지와 설정에 있다(이 창에는 아직 두지 않는다).
 // 활동 배지(#193)는 마이페이지 설정 탭의 맨 위에 있고, 이 창의 MY 에서 그 탭으로 간다.
 
-import { Button } from '@ai-trpg/ui';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
-import { logout } from '../api/auth';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router';
 import { meQuery } from '../auth/queries';
 import { isOperator } from '../auth/roles';
 import { useSession } from '../auth/useSession';
 import { HeaderBalance } from './HeaderBalance';
+import { SignOutButton } from './SignOutButton';
 import { usePopover } from './usePopover';
 
 /** MY 묶음의 길 */
@@ -84,26 +82,5 @@ function ProfilePanel({ nickname, onClose }: { nickname: string; onClose: () => 
       ) : null}
       <SignOutButton />
     </nav>
-  );
-}
-
-/** 로그아웃. 서버가 거절해도(출처가 맞지 않음 등) 이 화면의 상태는 logout 이 이미 비웠다. 화면은 로그아웃한 것으로 돌아간다 */
-function SignOutButton() {
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const [busy, setBusy] = useState(false);
-
-  async function signOut() {
-    setBusy(true);
-    await logout().catch(() => undefined);
-    queryClient.clear();
-    setBusy(false);
-    void navigate('/', { replace: true });
-  }
-
-  return (
-    <Button variant="quiet" busy={busy} onClick={() => void signOut()}>
-      로그아웃
-    </Button>
   );
 }
