@@ -50,6 +50,7 @@ import { RoomStage } from './RoomStage';
 import { MyHpStrip } from './status/MyHpStrip';
 import { StatusPanel } from './status/StatusPanel';
 import { WhisperPanel } from './WhisperPanel';
+import { DicePanel } from './DicePanel';
 
 export function TableRoom({ table }: { table: TableDetail }) {
   const queryClient = useQueryClient();
@@ -180,6 +181,9 @@ export function TableRoom({ table }: { table: TableDetail }) {
               }
               whisper={
                 <WhisperPanel table={table} whispers={whispers} myId={myId} nameOf={nameOf} onSent={(whisper) => appendWhisper([whisper])} />
+              }
+              dice={
+                <DicePanel table={table} events={events} myId={myId} nameOfMember={(userId) => displayName(userId, table.members, nameOf)} />
               }
             />
           </div>
