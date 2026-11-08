@@ -2625,6 +2625,13 @@ details.room-panel[open] > summary {
   opacity: 1;
 }
 
+/* 마이페이지 내 포인트 탭의 출석(MyAttendance). 보물 상자의 확률표는 접어 둔다 */
+.my-attendance__odds > summary {
+  margin-top: var(--ui-gap);
+  cursor: pointer;
+  color: var(--ui-text-muted);
+}
+
 .attendance-result {
   margin: var(--ui-gap) 0;
   padding: 12px;
