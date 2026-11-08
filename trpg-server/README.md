@@ -756,7 +756,13 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 - 굴림은 1~100 이 확률 이하면 조우다. 그다음 몬스터의 줄을 몫(`weight`)대로 1~몫의 합을 굴려 뽑는다. 그 마리 수만큼 그 장소에 놓는다. 번호는 테이블의 같은 몬스터 뒤로 잇는다(죽은 것도 센다).
 - 쉬는 중에 나왔으면 쉬기가 깨지고(`reason: ambushed`) 몬스터가 기습한다(줄에 적은 것과 상관없이). 아니면 줄의 기습이다. 나온 마리는 그 기습을 스스로 갖는다(`table_monsters.surprise`). 일행이 만나는 것은 다음 라운드다. 그 라운드가 만난 첫 라운드다.
 - 이벤트 `monsters_appeared` 가 남는다. 서술의 한 일의 줄에도 붙는다(`narration-61`).
-같은 몬스터는 테이블 전체에서 조우의 순서대로 1 부터 번호를 받는다(수로 쥐 1, 수로 쥐 2). 몬스터는 아직 움직이지 않는다.
+같은 몬스터는 테이블 전체에서 조우의 순서대로 1 부터 번호를 받는다(수로 쥐 1, 수로 쥐 2). 몬스터는 조우의 자리에 있다. 시트에 쫓아온다고 적은 몬스터만 옮긴다(아래).
+**쫓아오는 몬스터(#254, `app/rounds/monster_chase.py`).** 몬스터 시트에 `chases: true` 를 적으면(기본은 `false`, 옛 판과 시나리오는 그대로다) 도망친 캐릭터를 따라간다.
+- 몬스터의 차례에 그 장소에 칠 캐릭터가 없을 때 본다. 쫓을 사람은 라운드를 닫기 시작할 때 그 마리와 같은 장소에 있었고 그 뒤 차례에서 떠난, 죽지 않은 캐릭터다. 차례가 그 사람보다 먼저 왔으면 그 자리에서 치고 따라가지 않는다
+- 길 한 칸만 따라간다. 마리의 장소에서 그 사람이 선 곳으로 한 칸에 가는, 테이블이 아는 길이어야 한다. 잠긴 길, 빗장이 걸린 길, 넘기 판정이 있는 길은 따라가지 못한다(도망친 사람이 연 문은 열린 채라 따라간다). 놓치면 그 자리에 멈추고 돌아가지 않는다
+- 쫓을 사람이 여럿이면 마지막으로 싸운 사람(`table_monsters.last_foe`, 쳤거나 맞았거나 훔치다 들킨 사람)이다. 그 사람이 없으면 서버의 주사위다
+- 따라간 차례에는 치지 않는다. 다음 라운드에 같은 장소라 친다. 덫은 밟지 않는다(싸울 때만 밟는다)
+- 차례의 `outcome` 은 `{"chased": {user_id, character_name, from_place, to_place}}` 다. 이벤트 `monster_chased` 가 남고, 서술의 차례의 줄에 붙는다(`narration-85`)
 몬스터의 상태는 테이블의 응답에도 이벤트에도 싣지 않는다. 아직 가 보지 않은 장소에 무엇이 있는지 드러나면 안 된다.
 앉은 사람은 장면의 몬스터 목록에서 자기가 선 장소의 마리를 골라 판정으로 칠 수 있다([라운드](#라운드)의 "이번 장면의 몬스터", "몬스터의 변화"). 아직 몬스터가 먼저 공격하지 않고 서술자도 몬스터를 읽지 않는다.
 
@@ -2085,7 +2091,7 @@ reverting.py    바로 앞 라운드를 되돌리는 규칙(#288)
 
   `turn_lost` 는 `downed`(앞 차례에 쓰러졌다) 또는 `dead`(앞 차례에 죽었다, 앞사람의 치료가 실패한 즉사도)다.
 - 차례가 오기 전에 쓰러지거나 죽은 마리는 공격하지 않는다. 행동을 막는 부상(기절)을 입었거나 칠 캐릭터가 없어도 그렇다(`skipped`: `downed`, `dead`, `incapacitated`, `no_target`). 고른 공격에 비용(`cost`, #805 ③-a)이 있으면 굴리기 전에 그 마리의 수치에서 낸다. 빗나가도 낸다. 모자라면 굴리지 않고 아무것도 내지 않는다(`skipped`: `cost_short`, 치려던 `attack` 과 대상이 함께 적힌다. 낼 수 있는 공격을 골라 주지 않는다). 낸 것은 `outcome.cost` 에 적힌다(비용이 있는 공격만). 공격에 효과(`effects`, #805 ③-b)가 있으면 판정에 맞혔을 때 맞은 캐릭터에게 든다. 세이브는 피해만 막고 효과는 막지 않는다. 그 타격으로 죽었으면 들지 않는다. 입힌 부상과 맞춘 수치는 `outcome.injured`, `outcome.resources` 에 적힌다(효과가 있는 공격만). 피해 등급이 없는 공격은 세이브를 굴리지 않고 HP 도 죽음의 굴림도 건드리지 않는다. 입은 부상은 공격의 판정에 영향을 준다(#799, 앉은 사람의 판정과 같다). 그 영향은 `outcome` 의 `hindrance` 에 적힌다.
-- 차례와 몬스터의 결과는 라운드의 `turns` 에 적힌다. 하나하나가 `{kind, first, score, tiebreak}` 에 캐릭터면 `user_id`, `character_name`, 몬스터면 `monster_id`, `name`, `outcome` 이다. 몬스터의 `outcome` 은 `{"skipped": …}` 이거나 `{attack, user_id, character_name, roll, modifier, total, target, success, effect}` 다. 쓰러진 캐릭터를 쳤으면 `effect` 는 `null` 이고 `downed_strike` 가 더 있다. 몬스터의 점수와 HP 의 숫자가 들어 있어 응답으로 내보내지 않는다. 앉은 사람은 이벤트(`monster_attacked`, `hp_changed`)로 본다.
+- 차례와 몬스터의 결과는 라운드의 `turns` 에 적힌다. 하나하나가 `{kind, first, score, tiebreak}` 에 캐릭터면 `user_id`, `character_name`, 몬스터면 `monster_id`, `name`, `outcome` 이다. 몬스터의 `outcome` 은 `{"skipped": …}`, `{"chased": …}`(쫓아온 몬스터, #254) 이거나 `{attack, user_id, character_name, roll, modifier, total, target, success, effect}` 다. 쓰러진 캐릭터를 쳤으면 `effect` 는 `null` 이고 `downed_strike` 가 더 있다. 몬스터의 점수와 HP 의 숫자가 들어 있어 응답으로 내보내지 않는다. 앉은 사람은 이벤트(`monster_attacked`, `hp_changed`)로 본다.
 - 판정과 같이 닫기 시작할 때 한 번만 굴린다. 서술을 다시 맡겨도 다시 굴리지 않는다.
 - 이벤트도 차례 순서로 적힌다. 행동이 없는 선언은 차례들 뒤에 앉은 순서로 적힌다.
 
@@ -3153,6 +3159,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `npc_attitude_changed` | 엔진이 NPC 의 태도를 바꿨다. 그렇게 만든 일 바로 뒤에 적힌다 | `round`, `entry_id`, `name`(장면의 호칭), `previous`, `attitude`(`friendly`, `neutral`, `wary`, `hostile`), `reason`(`caught_stealing` 훔치다 들킴, `robbed_while_down` 쓰러진 동안 빼앗기고 깨어남) |
 | `npc_changed` | 엔진이 NPC 의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `entry_id`, `name`(장면의 호칭), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`, `injury_roll`. HP 의 숫자는 내보내지 않는다 |
 | `monster_changed` | 엔진이 몬스터 한 마리의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `monster_id`, `name`(부르는 이름), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`, `injury_roll`(#799). HP 의 숫자는 내보내지 않는다 |
+| `monster_chased` | 엔진이 쫓아오는 몬스터(#254) 한 마리를 도망친 캐릭터를 따라 길 한 칸 옮겼다. 차례 순서의 자리에 적힌다. 그 차례에는 치지 않았다 | `round`, `monster_id`, `name`(부르는 이름), `user_id`, `character_name`(쫓은 캐릭터), `from_place`, `to_place`(`entry_id`, `name`) |
 | `monster_attacked` | 엔진이 몬스터 한 마리의 차례에 캐릭터 하나를 쳤다. 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트), 공격의 효과(#805 ③-b)가 있으면 입힌 부상(`injury_gained`, `source: attack`)과 맞춘 수치(`resource_changed`, `source: attack`)가 이 이벤트를 원인으로 잇는다 | `round`, `monster_id`, `name`(부르는 이름), `attack`(`name`, `ability`, `difficulty`, `harm`), `user_id`, `character_name`, `success`, `downed_strike`(쓰러진 캐릭터를 쳤을 때만), `blow`(공격에 장비가 들었으면, #276). 굴림의 보정과 합은 몬스터의 능력치를 드러내서 내보내지 않는다 |
 | `npc_attacked` | 엔진이 싸우는 NPC 의 차례에 캐릭터 하나를 쳤다(#487). 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트) | `round`, `entry_id`, `name`(장면의 호칭), `attack`, `user_id`, `character_name`, `success`, `downed_strike`(쓰러진 캐릭터를 쳤을 때만), `blow`(#276). 굴림과 부상의 영향은 내보내지 않는다 |
 | `injury_gained` | 캐릭터나 NPC 나 몬스터가 부상을 입었다. 그 HP 의 변화 바로 뒤에 적힌다 | `round`, 캐릭터면 `user_id`, `character_name`, NPC 면 `entry_id`, `name`, 몬스터면 `monster_id`, `name`(부르는 이름, #799), 그리고 `injury`, `source`, `ends_after_round`(짧은 것), `heals_at`(오래 가는 것의 나을 시각: `day`, `hour`, `minute`, `time_of_day`) |

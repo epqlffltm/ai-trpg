@@ -557,6 +557,9 @@ class MonsterSheet(BaseModel):
     # 쓰러뜨리면 주는 경험치(#286 ②). 한 마리마다 한 번, 그 장소에 있던 일행이 받는다(나누는 법은 시나리오의 xp_split).
     # 0 이면 주지 않는다. 룰북에 성장이 없으면 게시하지 못한다(progression_missing)
     xp: int = Field(default=0, ge=0, le=GRANT_MAX_XP)
+    # 도망치면 쫓아오는가(#254). 쫓아오면 이번 라운드에 같은 장소에 있다 떠난 캐릭터를 길 한 칸만큼 따라간다.
+    # 따라간 차례에는 치지 않는다. 비우면 조우 자리를 떠나지 않는다(app/rounds/monster_chase.py)
+    chases: bool = False
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'MonsterSheet':

@@ -503,7 +503,7 @@ def mob(
         surprise=None,
         injuries=injuries or [],
     )
-    return SimpleNamespace(state=state, name=name, definition=SimpleNamespace(attacks=[BITE]))
+    return SimpleNamespace(state=state, name=name, definition=SimpleNamespace(attacks=[BITE], chases=False))
 
 
 def turn_of(owner: SimpleNamespace, first: bool = False) -> Turn:

@@ -126,6 +126,15 @@ SAMPLES = {
         'character_name': '엘프',
         'success': True,
     },
+    'monster_chased': {
+        'round': 2,
+        'monster_id': 'd8d87996-dba5-49b8-91ac-e333f887b212',
+        'name': '수로 쥐 1',
+        'user_id': '11111111-2222-4333-8444-555555555555',
+        'character_name': '엘프',
+        'from_place': {'entry_id': '6f0e3b8a-1c2d-4e5f-8a9b-0c1d2e3f4a5b', 'name': '수로 입구'},
+        'to_place': {'entry_id': '7a1f4c9b-2d3e-4f60-9bac-1d2e3f4a5b6c', 'name': '배수로'},
+    },
     'npc_attacked': {
         'round': 2,
         'entry_id': '3b9c47a7-b1cd-4fd2-9ffc-f117aa511bfe',

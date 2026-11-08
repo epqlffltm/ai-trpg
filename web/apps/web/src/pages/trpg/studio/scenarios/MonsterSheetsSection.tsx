@@ -159,6 +159,12 @@ function MonsterFields({ scenario, rules, items, monsterId, sheet, used, saving,
       />
       {hints.sheet.sheet ? <p className="ui-field__error">{hints.sheet.sheet}</p> : null}
       <Checkbox label="둔하다" description="훔치기가 쉬워집니다(룰북의 훔치기 규칙)." checked={draft.dull} onChange={(event) => update({ dull: event.target.checked })} />
+      <Checkbox
+        label="도망치면 쫓아온다"
+        description="같은 곳에서 떠난 캐릭터를 길 한 칸씩 따라갑니다. 따라온 차례에는 치지 않습니다. 잠긴 문, 빗장, 넘기 판정이 있는 길은 따라가지 못합니다."
+        checked={draft.chases}
+        onChange={(event) => update({ chases: event.target.checked })}
+      />
       <fieldset className="scenario-choices">
         <legend>타고난 방어(선택, 1~10)</legend>
         <p className="ui-field__hint">가죽, 비늘, 껍데기. 부위마다 착용한 방어구의 방어에 더합니다. 불굴 세이브는 세이브 방식에서 관통을 무시하고 막습니다.</p>

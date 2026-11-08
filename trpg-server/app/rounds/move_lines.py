@@ -1055,8 +1055,11 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
         흑마법사: 엘프에게 화염구 (비용이 모자라 하지 못함)
         독거미: 엘프에게 독니 (맞음) → 엘프 피해 2 (HP 8/10) [입힌 부상: 중독] [수치: 마나 5 → 3/7]   효과(#805 ③-b)
         수로 쥐 2: 엘프에게 물기 (빗나감) [덫: 올가미에 걸림]   공격한 뒤 밟은 덫(#806 ②-b)
+        들개: 엘프을(를) 쫓아 부엌까지 따라옴 (치지 않음)   도망친 캐릭터를 쫓아왔다(#254)
     도감의 글(생김새, 약점)은 싣지 않는다. 가짜 서술자는 이 줄을 장면으로 그대로 내보낸다.
     """
+    if note.chased is not None:
+        return f'{note.name}: {note.target}을(를) 쫓아 {note.chased}까지 따라옴 (치지 않음)'
     if note.short:
         return f'{note.name}: {note.target}에게 {note.attack} (비용이 모자라 하지 못함)'
     result = '맞음' if note.hit else '빗나감'

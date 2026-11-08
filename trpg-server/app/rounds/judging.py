@@ -226,8 +226,14 @@ def build_judging(
         snapshot=snapshot,
         monsters=scene.monsters,
         downed_at_start=downed,
+        places_at_start=places_at_start(table),
         covers=covers_of(snapshot, rolling or []),
     )
+
+
+def places_at_start(table: GameTable) -> dict[uuid.UUID, uuid.UUID | None]:
+    """판정을 시작할 때 앉은 사람마다 서 있는 장소. 시트가 없는 사람은 넣지 않는다(쫓을 사람이 아니다, #254)."""
+    return {member.user_id: member.sheet.place_id for member in table.members if member.sheet is not None}
 
 
 def build_turns(

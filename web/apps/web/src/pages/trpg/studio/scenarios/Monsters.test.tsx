@@ -120,6 +120,7 @@ describe('몬스터 탭', () => {
     expect(dialog.getByRole('button', { name: '저장' })).toBeDisabled();
     await userEvent.clear(dialog.getByRole('textbox', { name: '쓰러뜨리면 주는 경험치' }));
     await userEvent.type(dialog.getByRole('textbox', { name: '쓰러뜨리면 주는 경험치' }), '50');
+    await userEvent.click(dialog.getByRole('checkbox', { name: '도망치면 쫓아온다' }));
     await userEvent.click(dialog.getByRole('button', { name: '장비 더하기' }));
     await userEvent.click(dialog.getByRole('button', { name: '공격 더하기' }));
     const attack = within(dialog.getByRole('group', { name: '공격 1' }));
@@ -134,6 +135,7 @@ describe('몬스터 탭', () => {
       monster_id: RAT,
       sheet: { abilities: { str: 4, dex: 16, con: 6 }, max_hp: 3 },
       dull: false,
+      chases: true,
       natural_armor: [{ slot: 'main_hand', defense: 1 }],
       ward: 4,
       equipment: [{ entry_id: CLAW, count: 1, chance: 100, wear: [] }],

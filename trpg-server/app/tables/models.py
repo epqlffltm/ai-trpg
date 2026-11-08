@@ -855,7 +855,8 @@ class TableMonster(Base):
     monster_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     # 같은 몬스터 사이의 번호. 1 부터다. 부를 때 쓴다(수로 쥐 1, 수로 쥐 2)
     number: Mapped[int] = mapped_column(SmallInteger)
-    # 있는 곳. 판의 로어북 장소 항목의 ID 다. 지금은 움직이지 않는다
+    # 있는 곳. 판의 로어북 장소 항목의 ID 다.
+    # 쫓아오는 몬스터(#254)만 차례에 길 한 칸을 옮긴다(app/rounds/monster_chase.py)
     place_id: Mapped[uuid.UUID] = mapped_column(Uuid)
 
     # 능력치의 점수. 모양은 캐릭터 시트와 같다(TableSheet.abilities)
@@ -869,6 +870,11 @@ class TableMonster(Base):
     # 처음 싸운 라운드. 누구를 쳤거나, 누가 쳤거나, 훔치다 들킨 라운드다. 아직 싸우지 않았으면 비어 있다.
     # 싸우기 전인 마리에게서는 훔치기가 쉽다(app/rounds/steals.py). 적는 것은 라운드 닫기다
     fought_round: Mapped[int | None] = mapped_column(Integer)
+    # 마지막으로 싸운 앉은 사람(#254). 쳤거나 맞았거나 훔치다 들킨 사람이다. 라운드가 바뀌어도 남는다.
+    # 같은 장소에서 여럿이 흩어져 도망치면 이 사람을 쫓는다(app/rounds/monster_chase.py).
+    # 아직 싸우지 않았으면 비어 있다.
+    # 앉은 사람의 행에 외래 키를 걸지 않는다. 나간 사람이어도 쫓을 사람에 들지 않을 뿐이다
+    last_foe: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, default=None)
     # 무작위 조우(#283)로 나온 마리의 기습. 만난 첫 라운드에만 쓴다(app/rounds/initiative.py).
     # 판의 조우로 놓인 마리는 비어 있고 그 조우의 기습을 쓴다
     surprise: Mapped[str | None] = mapped_column(String(20), nullable=True, default=None)

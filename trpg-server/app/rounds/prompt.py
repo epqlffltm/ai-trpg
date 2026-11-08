@@ -238,7 +238,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 ([덫: 올가미에 걸림], [덫: 올가미을(를) 피함])
 #   narration-83: 사건이 옮긴 쪽이 밟은 덫(#806 ②-c). 사건의 줄에 붙인다(- 함정: 약사 → 숲, 약사: 덫 올가미에 걸림)
 #   narration-84: 지금 장(#481). [장] 아래에 "2장: 지하"와, 이번 라운드에 넘어왔으면 그것을 그리라는 말을 적는다
-PROMPT_VERSION = 'narration-84'
+#   narration-85: 쫓아온 몬스터(#254). 차례의 줄에 도망친 캐릭터를 쫓아 따라온 것을 적는다
+#                 (들개: 엘프을(를) 쫓아 부엌까지 따라옴 (치지 않음))
+PROMPT_VERSION = 'narration-85'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

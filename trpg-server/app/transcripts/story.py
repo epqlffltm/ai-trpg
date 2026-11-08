@@ -194,6 +194,12 @@ def attacked(payload: dict, labels: Labels) -> list[Block]:
     return [Note(line + blow_text(payload.get('blow')))]
 
 
+def chased(payload: dict, labels: Labels) -> list[Block]:
+    """쫓아온 몬스터(#254). 누구를 쫓아 어디에서 어디로 왔는가."""
+    route = f'{place_name(payload.get("from_place"))} → {place_name(payload.get("to_place"))}'
+    return [Note(f'{text_of(payload.get("name"))}: {who(payload)}을(를) 쫓아옴 · {route}')]
+
+
 def body_changed(payload: dict, labels: Labels) -> list[Block]:
     """몬스터나 NPC 의 몸. 양과 바뀐 생사만이다. HP 의 숫자는 GM 만 안다."""
     kind = HP_KINDS.get(payload.get('kind'), '변화')
@@ -537,6 +543,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.CHARACTER_DIED: character_died,
     EventType.CHARACTER_REVIVED: character_revived,
     EventType.MONSTER_ATTACKED: attacked,
+    EventType.MONSTER_CHASED: chased,
     EventType.NPC_ATTACKED: attacked,
     EventType.MONSTER_CHANGED: body_changed,
     EventType.NPC_CHANGED: body_changed,

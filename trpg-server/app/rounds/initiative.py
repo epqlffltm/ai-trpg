@@ -71,7 +71,11 @@ def mark_engaged(monsters: list[SceneMonster], round_number: int) -> None:
 
 
 def encounter_of(snapshot: Snapshot, monster: SceneMonster) -> EncounterSnapshot | None:
-    """이 마리가 나온 조우. 마리는 조우의 장소에 놓였고 지금은 움직이지 않는다. 찾지 못하면 None."""
+    """
+    이 마리가 나온 조우. 마리는 조우의 장소에 놓였다. 찾지 못하면 None.
+
+    쫓아오는 몬스터(#254)는 옮겨졌으면 찾지 못한다. 기습은 만난 첫 라운드에만 쓰고, 옮겨지는 것은 그 뒤라 상관없다.
+    """
     return next(
         (
             encounter

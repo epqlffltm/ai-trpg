@@ -4810,6 +4810,7 @@
           "npc_attitude_changed",
           "monster_changed",
           "monster_attacked",
+          "monster_chased",
           "npc_attacked",
           "injury_gained",
           "injury_ended",
@@ -9254,6 +9255,11 @@
             "title": "Attacks",
             "type": "array"
           },
+          "chases": {
+            "default": false,
+            "title": "Chases",
+            "type": "boolean"
+          },
           "dull": {
             "default": false,
             "title": "Dull",
@@ -9378,6 +9384,11 @@
             "maxItems": 5,
             "title": "Attacks",
             "type": "array"
+          },
+          "chases": {
+            "default": false,
+            "title": "Chases",
+            "type": "boolean"
           },
           "dull": {
             "default": false,
@@ -9525,6 +9536,11 @@
             },
             "title": "Attacks",
             "type": "array"
+          },
+          "chases": {
+            "default": false,
+            "title": "Chases",
+            "type": "boolean"
           },
           "content": {
             "title": "Content",

@@ -1036,6 +1036,15 @@ def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
         return MonsterTurnNote(name=turn['name'], attack=attack, target=target, hit=False, short=True)
     if 'skipped' in outcome:
         return None
+    if 'chased' in outcome:
+        followed = outcome['chased']
+        return MonsterTurnNote(
+            name=turn['name'],
+            attack='',
+            target=followed['character_name'],
+            hit=False,
+            chased=followed['to_place']['name'],
+        )
     return MonsterTurnNote(
         name=turn['name'],
         attack=outcome['attack']['name'],

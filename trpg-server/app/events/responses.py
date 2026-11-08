@@ -396,6 +396,9 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         # 공격에 장비가 든 것(#276). 무기와 그 공격 보정, 맞은 부위, 그 부위의 방어다
         'blow',
     ),
+    # 쫓아온 몬스터(#254)는 누구를 쫓아 어디에서 어디로 왔는지 보인다.
+    # 몬스터가 선 곳은 쫓긴 사람이 선 곳이라 숨길 것이 없다
+    EventType.MONSTER_CHASED: ('round', 'monster_id', 'name', 'user_id', 'character_name', 'from_place', 'to_place'),
     # NPC 의 공격도 몬스터와 같다. 무엇으로 누구를 쳤고 맞혔는지만 보인다. 굴림과 부상의 영향은 싣지 않는다.
     # 이름은 장면에서 부르는 이름이다
     EventType.NPC_ATTACKED: (
