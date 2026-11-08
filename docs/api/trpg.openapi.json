@@ -4815,6 +4815,7 @@
           "injury_gained",
           "injury_ended",
           "injury_hurt",
+          "injury_escape_rolled",
           "injury_treated",
           "naming_resolved",
           "death_save_rolled",
@@ -5824,7 +5825,7 @@
       },
       "Injury": {
         "additionalProperties": false,
-        "description": "부상 하나. 예: 팔 골절.\n\n효과(effects)는 엔진이 판정에 적용하고, 사실(fact)은 서술자가 지킨다. 둘을 함께 적는다.\nrounds 는 짧은 것이 풀리기까지의 라운드 수다. 짧은 것에만 있다.\nheal_minutes 는 오래 가는 것이 저절로 낫기까지의 게임 안의 시간(분)이다. 오래 가는 것에만 있다.\n짧은 것은 \"한 장면 동안\"이라 라운드로, 오래 가는 것은 \"며칠\"이라 시간으로 센다(판 형식 25). 결손은 둘 다 없다.\naftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.\naimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.\ntreat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).\nnatures 는 부상의 성질이다(#799). 규칙의 성질(natures, #886)의 이름표다. 그 성질에 면역이면 이 부상을 입지 않는다.\nresistances 는 이 부상을 입고 있는 동안 생기는 저항이다(#886 ②).\ndamage 는 짧은 것이 라운드마다 입히는 피해다(#254, app/rounds/injury_ticks.py). 짧은 것에만 있다.",
+        "description": "부상 하나. 예: 팔 골절.\n\n효과(effects)는 엔진이 판정에 적용하고, 사실(fact)은 서술자가 지킨다. 둘을 함께 적는다.\nrounds 는 짧은 것이 풀리기까지의 라운드 수다. 짧은 것에만 있다.\nheal_minutes 는 오래 가는 것이 저절로 낫기까지의 게임 안의 시간(분)이다. 오래 가는 것에만 있다.\n짧은 것은 \"한 장면 동안\"이라 라운드로, 오래 가는 것은 \"며칠\"이라 시간으로 센다(판 형식 25). 결손은 둘 다 없다.\naftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.\naimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.\ntreat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).\nnatures 는 부상의 성질이다(#799). 규칙의 성질(natures, #886)의 이름표다. 그 성질에 면역이면 이 부상을 입지 않는다.\nresistances 는 이 부상을 입고 있는 동안 생기는 저항이다(#886 ②).\ndamage 는 짧은 것이 라운드마다 입히는 피해다(#254, app/rounds/injury_ticks.py). 짧은 것에만 있다.\nescape 는 짧은 것에서 판정으로 벗어나는 법이다(#254, app/rounds/injury_escapes.py). 짧은 것에만 있다.",
         "properties": {
           "aftermath": {
             "anyOf": [
@@ -5859,6 +5860,16 @@
             "maxItems": 5,
             "title": "Effects",
             "type": "array"
+          },
+          "escape": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InjuryEscape"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "fact": {
             "maxLength": 200,
@@ -5991,6 +6002,36 @@
           "magnitude"
         ],
         "title": "InjuryDamage",
+        "type": "object"
+      },
+      "InjuryEscape": {
+        "additionalProperties": false,
+        "description": "짧은 부상(상태 이상)에서 판정으로 벗어나기(#254). 라운드가 닫힐 때마다 입은 쪽이 굴리고, 성공하면 바로 풀린다.\n\nability 는 굴리는 능력치(규칙의 Ability.key), difficulty 는 난이도의 단계(규칙의 Difficulty.key)다.\n난이도를 비우면 규칙의 기본 난이도다. 입은 부상의 영향(보정 깎기, 불리함)을 받는다.",
+        "properties": {
+          "ability": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Ability",
+            "type": "string"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty"
+          }
+        },
+        "required": [
+          "ability"
+        ],
+        "title": "InjuryEscape",
         "type": "object"
       },
       "InjuryOut": {

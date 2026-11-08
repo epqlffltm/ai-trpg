@@ -70,6 +70,8 @@ def srd5_without_natures() -> dict:
     rules = SRD5.model_dump(mode='json')
     later = ('natures', 'resistances', 'damage')
     injuries = [{key: value for key, value in injury.items() if key not in later} for injury in rules['injuries']]
+    # 벗어나기(escape, #254)도 이 형식보다 뒤에 생겼다
+    injuries = [{key: value for key, value in injury.items() if key != 'escape'} for injury in injuries]
     return {**rules, 'injuries': injuries}
 
 

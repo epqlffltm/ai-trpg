@@ -4789,7 +4789,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "dice_rolled" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "monster_chased" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_hurt" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "character_leveled" | "experience_gained" | "abilities_raised" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "round_reverted" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended" | "carried_items_left";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "dice_rolled" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "monster_chased" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_hurt" | "injury_escape_rolled" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "character_leveled" | "experience_gained" | "abilities_raised" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "round_reverted" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended" | "carried_items_left";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -5266,6 +5266,7 @@ export interface components {
          *     natures 는 부상의 성질이다(#799). 규칙의 성질(natures, #886)의 이름표다. 그 성질에 면역이면 이 부상을 입지 않는다.
          *     resistances 는 이 부상을 입고 있는 동안 생기는 저항이다(#886 ②).
          *     damage 는 짧은 것이 라운드마다 입히는 피해다(#254, app/rounds/injury_ticks.py). 짧은 것에만 있다.
+         *     escape 는 짧은 것에서 판정으로 벗어나는 법이다(#254, app/rounds/injury_escapes.py). 짧은 것에만 있다.
          */
         Injury: {
             aftermath?: components["schemas"]["InjuryTable"] | null;
@@ -5280,6 +5281,7 @@ export interface components {
              * @default []
              */
             effects: components["schemas"]["Effect"][];
+            escape?: components["schemas"]["InjuryEscape"] | null;
             /** Fact */
             fact: string;
             /** Heal Minutes */
@@ -5318,6 +5320,19 @@ export interface components {
             magnitude: string;
             /** Nature */
             nature?: string | null;
+        };
+        /**
+         * InjuryEscape
+         * @description 짧은 부상(상태 이상)에서 판정으로 벗어나기(#254). 라운드가 닫힐 때마다 입은 쪽이 굴리고, 성공하면 바로 풀린다.
+         *
+         *     ability 는 굴리는 능력치(규칙의 Ability.key), difficulty 는 난이도의 단계(규칙의 Difficulty.key)다.
+         *     난이도를 비우면 규칙의 기본 난이도다. 입은 부상의 영향(보정 깎기, 불리함)을 받는다.
+         */
+        InjuryEscape: {
+            /** Ability */
+            ability: string;
+            /** Difficulty */
+            difficulty?: string | null;
         };
         /**
          * InjuryOut
