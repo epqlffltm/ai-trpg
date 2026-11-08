@@ -194,7 +194,7 @@ func TestTheIdleSweepCountsTheExpiryItWrote(t *testing.T) {
 
 func TestAChangeInATransactionNotOpenedByTxnIsNotCounted(t *testing.T) {
 	// 세는 것의 한계를 적어 둔다. 부르는 쪽이 txn.Run 으로 열지 않으면 커밋을 알 수 없어 세지 않는다.
-	// 서버의 부르는 쪽(주문, 홀드, 출석)은 모두 txn.Run 으로 연다. 그 패키지의 테스트가 센 것을 본다
+	// 서버의 부르는 쪽(주문, 홀드, 쿠폰)은 모두 txn.Run 으로 연다. 그 패키지의 테스트가 센 것을 본다
 	f := setUp(t, freeFirst)
 	recorder := f.measure()
 

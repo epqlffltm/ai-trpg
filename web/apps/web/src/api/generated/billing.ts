@@ -2,41 +2,6 @@
 // docs/api/billing.openapi.json 에서 만든 타입. 손으로 고치지 않는다(npm run gen:api).
 
 export interface paths {
-    "/api/v1/billing/attendance": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 오늘의 출석. 본인인증 전이면 verified 가 false */
-        get: operations["getAttendance"];
-        put?: never;
-        /** 오늘의 출석 보상을 받는다 */
-        post: operations["claimAttendance"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/billing/attendance/rewards": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 하루 양과 보물 상자의 확률. 로그인 없이 누구나 본다 */
-        get: operations["getAttendanceRewards"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/billing/auto-charge": {
         parameters: {
             query?: never;
@@ -523,41 +488,6 @@ export interface components {
          * @example 80
          */
         Amount: string;
-        AttendanceClaim: {
-            /** @description 상자를 연 날이면 그 결과. 아니면 null */
-            chest: {
-                name: string;
-                outcome: string;
-                silver: components["schemas"]["Amount"];
-                /** @description 확률표의 판 */
-                table: string;
-            } | null;
-            cycle_day: number;
-            /** Format: date */
-            day: string;
-            /**
-             * Format: date-time
-             * @description 받은 실버가 사라지는 때
-             */
-            expires_at: string;
-            silver: components["schemas"]["Amount"];
-        };
-        AttendanceStatus: {
-            /** @description 오늘 보물 상자를 여는 날인가 */
-            chest: boolean;
-            claimed: boolean;
-            /** @description 오늘 받으면 주기의 며칠째인가(1부터) */
-            cycle_day: number;
-            cycle_length: number;
-            silver: components["schemas"]["Amount"];
-            /**
-             * Format: date
-             * @description 한국 날짜
-             */
-            today: string;
-            /** @description 본인인증을 마쳤는가. 아니면 받을 수 없다 */
-            verified: boolean;
-        };
         AutoCharge: {
             /** @description 등록한 카드가 없으면 null */
             card: {
@@ -771,28 +701,6 @@ export interface components {
              */
             price: number;
         };
-        Rewards: {
-            chest: {
-                expected_silver: components["schemas"]["Amount"];
-                outcomes: {
-                    /** @description scale 가운데 몇 */
-                    chance: number;
-                    name: string;
-                    outcome: string;
-                    /** @example 5.0 */
-                    percent: string;
-                    silver: components["schemas"]["Amount"];
-                }[];
-                /** @description 확률의 분모 */
-                scale: number;
-                table: string;
-            };
-            cycle: {
-                chest: boolean;
-                day: number;
-                silver: components["schemas"]["Amount"];
-            }[];
-        };
         Status: {
             /** @enum {string} */
             status: "ok" | "unavailable";
@@ -952,93 +860,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    getAttendance: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 오늘 받았는지, 주기의 며칠째인지, 오늘의 양, 상자를 여는 날인지 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AttendanceStatus"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            500: components["responses"]["ServerError"];
-            503: components["responses"]["Unavailable"];
-        };
-    };
-    claimAttendance: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 받은 보상 */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AttendanceClaim"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            /** @description 본인인증 전이다(attendance.verification_required) */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description 오늘 이미 받았다(attendance.already_claimed). 한국 자정에 다시 받는다 */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            500: components["responses"]["ServerError"];
-            503: components["responses"]["Unavailable"];
-        };
-    };
-    getAttendanceRewards: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 보상표 */
-            200: {
-                headers: {
-                    "Cache-Control"?: string;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Rewards"];
-                };
-            };
-            500: components["responses"]["ServerError"];
-            503: components["responses"]["Unavailable"];
-        };
-    };
     getAutoCharge: {
         parameters: {
             query?: never;

@@ -11,7 +11,7 @@
 import type { components as Auth } from './generated/auth';
 import { apiRequest } from './http';
 
-// 인증 서버의 출석의 모양. types.ts 의 같은 이름(결제 서버의 것)은 결제 서버의 출석을 지울 때 함께 지운다
+// 인증 서버의 출석의 모양
 export type AttendanceStatus = Auth['schemas']['AttendanceStatus'];
 export type AttendanceClaim = Auth['schemas']['AttendanceClaim'];
 export type AttendanceRewards = Auth['schemas']['Rewards'];
