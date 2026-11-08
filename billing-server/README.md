@@ -270,7 +270,7 @@ uv run --no-project python tools/export_openapi.py billing
 | 게임 서버 | `/service/holds...`, `/service/prices` | 요청(메서드, 주소, 본문)의 서명(`GAME_SERVER_SECRET`) |
 | chat 서버 | `/service/holds...`, `/service/prices` | 요청의 서명(`CHAT_SERVER_SECRET`). 게임 서버와 같은 주소다. 쓸 수 있는 가격표는 다르다([홀드](#홀드)의 "서버마다의 가격표") |
 | story 서버 | `/service/holds...`, `/service/prices` | 요청의 서명(`STORY_SERVER_SECRET`). chat 서버와 같다. 가격표는 `story` 머리의 것만 쓴다 |
-| 인증 서버 | `/service/grants/welcome`, `/service/grants/invite`, `/service/eligibility`, `/service/users/{id}/withdrawal` | 요청(메서드, 주소, 본문)의 서명(`AUTH_SERVER_SECRET`) |
+| 인증 서버 | `/service/grants/welcome`, `/service/grants/invite`, `/service/grants/attendance`, `/service/eligibility`, `/service/users/{id}/withdrawal` | 요청(메서드, 주소, 본문)의 서명(`AUTH_SERVER_SECRET`) |
 
 사용자가 부르는 주소는 모두 로그인이 필요하다. `Authorization: Bearer <access 토큰>` 머리말을 싣는다.
 하나 다른 것이 출석의 보상표(`GET /attendance/rewards`)다. 보물 상자의 확률을 공개하는 주소라 로그인 없이 누구나 본다.
@@ -324,6 +324,7 @@ uv run --no-project python tools/export_openapi.py billing
 | --- | --- | --- |
 | `POST /api/v1/billing/service/grants/welcome` | 201 또는 200 `{"status":"granted","granted":"1000","expires_at":"..."}` | 본인인증을 마친 사용자에게 환영 크레딧을 준다. 한 사용자에 한 번 |
 | `POST /api/v1/billing/service/grants/invite` | 201 또는 200(환영 크레딧과 같은 모양) | 초대 보상을 준다(#990). 아래 "초대 보상" |
+| `POST /api/v1/billing/service/grants/attendance` | 201 또는 200(환영 크레딧과 같은 모양) | 인증 서버가 정한 출석의 하루 양과 상자의 실버를 준다. 아래 "인증 서버의 출석" |
 | `POST /api/v1/billing/service/eligibility` | 200 `{"status":"applied"}` 또는 `{"status":"stale"}` | 사용자의 결제 자격(성년이 되는 날, 보호자 동의)을 받아 적는다(아래 "결제할 수 있는 사람") |
 | `POST /api/v1/billing/service/users/{id}/withdrawal` | 200 `{"status":"processed"}` | 사용자의 탈퇴를 반영한다. 걸린 홀드를 돌려주고 남은 크레딧을 없앤다([탈퇴](#탈퇴)) |
 
@@ -1240,6 +1241,20 @@ POST /api/v1/billing/service/grants/invite
 - 답은 환영 크레딧과 같다(201 `granted`, 200 `already_granted`, 200 `disabled`, 400, 401). 양은 받지 않는다
 - 지급의 이름: 초대받은 사람은 `invited` 하나다(한 사용자 번호가 한 번). 초대한 사람은 보상마다 `invite-<reward_id>` 다
   (같은 보상을 두 번 맡겨도 한 번). 상한을 세는 것은 이 서버가 아니라 인증 서버다. 이 서버는 사람을 모른다
+- 다른 무료 크레딧처럼 `FREE_CREDIT_TTL` 뒤에 사라진다
+
+**인증 서버의 출석(2026-11-08 결정).** 출석은 인증 서버로 옮긴다. 누가 언제 출석했는지, 주기의 며칠째인지, 하루 양과 보물 상자에서 나온 실버는
+인증 서버가 정한다. 이 서버는 받은 양을 지갑에 넣기만 한다. 아래의 "출석과 보물 상자"(이 서버의 출석)는 인증 서버의 출석이 화면에 붙은 뒤 걷어낸다.
+
+```
+POST /api/v1/billing/service/grants/attendance
+{ "user_id": "...", "day": "2026-11-08", "silver": "140", "chest_silver": "300" }
+```
+
+- 답은 환영 크레딧과 같은 모양이다. 하나라도 새로 줬으면 201 `granted`(`granted` 는 새로 준 실버의 합), 모두 이미 줬으면 200 `already_granted`, 400, 401
+- 지급의 이름은 이 서버의 출석과 같다. 하루 양은 `attendance-<YYYYMMDD>`, 상자는 `chest-<YYYYMMDD>` 다. 옮기는 동안 두 길로 같은 날을 두 번 받지 못한다
+- 하루 양과 상자는 따로 준다. 상자를 주다 실패해도 같은 것을 다시 보내면 상자만 들어간다. 상자가 `0`(꽝, 열지 않음)이면 상자는 주지 않는다
+- 양은 각각 1~100000(상자는 0~100000) 실버다. 본인인증은 보지 않는다. 받을 사람은 인증 서버가 정한다
 - 다른 무료 크레딧처럼 `FREE_CREDIT_TTL` 뒤에 사라진다
 
 **이벤트 실버.** 기념일 이벤트, 장애 보상, 당첨자처럼 정해진 사람들에게 같은 양의 실버를 한 번씩 준다. 운영자의 명령이다(`cmd/grants`).
