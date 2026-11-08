@@ -3253,6 +3253,18 @@ details.room-panel[open] > summary {
   margin-bottom: var(--ui-gap);
 }
 
+/* 장소의 때마다의 배경(시나리오의 그림 탭). 기본 그림 아래에 들여 펼친다 */
+.scenario-picture-times {
+  margin: 0 0 var(--ui-gap) 12px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ui-border);
+}
+
+.scenario-picture-times > summary {
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
 /* 그림을 고르는 칸. 창 안에서 펼친다 */
 .portrait-shelf {
   margin-top: 8px;
