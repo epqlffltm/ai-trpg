@@ -15,10 +15,13 @@ from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.assets import repository as asset_rows
 from app.assets import service as assets
 from app.assets.bestiaries.models import Bestiary
 from app.assets.models import AssetContent, AssetType, Lorebook, Rating, Rulebook, Scenario, World
 from app.assets.ratings import ALL_AGES_ONLY, require_rating
+from app.assets.scenarios import mine
+from app.assets.scenarios.mine import MineOrder, MyScenario
 from app.assets.scenarios.recommended_model import require_recommendable
 from app.assets.scenarios.schemas import EntryPicture, Pregen, ScenarioCreate, ScenarioUpdate
 from app.portraits import repository as portraits
@@ -150,10 +153,15 @@ async def get_scenario(session: AsyncSession, owner_id: uuid.UUID, scenario_id: 
 
 
 async def list_scenarios(
-    session: AsyncSession, owner_id: uuid.UUID, limit: int, offset: int
-) -> tuple[list[Scenario], int]:
-    """자기 시나리오의 한 쪽과 전체 개수를 돌려준다."""
-    return await assets.list_owned(session, Scenario, owner_id, limit, offset)
+    session: AsyncSession, owner_id: uuid.UUID, limit: int, offset: int, order: MineOrder = MineOrder.CREATED
+) -> tuple[list[MyScenario], int]:
+    """
+    자기 시나리오의 한 쪽과 전체 개수를 돌려준다. 줄마다 쓰인 수와 관심 수, 공개 상태가 있다(#1165).
+
+    order 는 차례다(app/assets/scenarios/mine.py). 기본은 최근에 만든 것부터다.
+    """
+    rows = await mine.list_mine(session, owner_id, limit, offset, order)
+    return rows, await asset_rows.count_owned(session, Scenario, owner_id)
 
 
 async def require_model_change(session: AsyncSession, scenario: Scenario, data: ScenarioUpdate, today: date) -> None:

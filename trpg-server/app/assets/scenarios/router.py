@@ -15,7 +15,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 from server_core.auth.dependencies import CurrentUser
 
@@ -23,10 +23,12 @@ from app.assets.models import Scenario, ScenarioVersion
 from app.assets.ratings import allowed_ratings
 from app.assets.routing import Paging, Session, to_summary
 from app.assets.scenarios import publishing, service
+from app.assets.scenarios.mine import MineOrder, MyScenario
 from app.assets.scenarios.publishing import ScenarioNotReadyError
 from app.assets.scenarios.recommended_model import MISSING, ModelStatus, RecommendedModelError, model_status
 from app.assets.scenarios.schemas import (
     ModelStatusOut,
+    MyScenarioSummary,
     PublishCheck,
     ScenarioCreate,
     ScenarioDetail,
@@ -47,6 +49,17 @@ router = APIRouter(prefix='/scenarios', tags=['scenarios'])
 def to_scenario_summary(scenario: Scenario) -> ScenarioSummary:
     """시나리오를 목록용 응답으로 바꾼다. 공통 값에 등급을 더한다."""
     return ScenarioSummary(**to_summary(scenario.asset).model_dump(), rating=scenario.asset.rating)
+
+
+def to_my_summary(row: MyScenario) -> MyScenarioSummary:
+    """내 시나리오 목록의 한 줄로 바꾼다. 목록용 값에 수와 공개 상태를 더한다."""
+    return MyScenarioSummary(
+        **to_scenario_summary(row.scenario).model_dump(),
+        start_count=row.start_count,
+        heart_count=row.heart_count,
+        published_at=row.published_at,
+        unlisted=row.unlisted,
+    )
 
 
 def to_status_out(found: ModelStatus | None) -> ModelStatusOut | None:
@@ -148,10 +161,16 @@ async def create_scenario(
 
 
 @router.get('', response_model=ScenarioPage, status_code=status.HTTP_200_OK)
-async def list_scenarios(user: CurrentUser, session: Session, paging: Paging) -> ScenarioPage:
-    """자기 시나리오의 목록을 최근에 만든 것부터 돌려준다. 등급을 함께 싣는다."""
-    scenarios, total = await service.list_scenarios(session, user.user_id, paging.limit, paging.offset)
-    return ScenarioPage(items=[to_scenario_summary(scenario) for scenario in scenarios], total=total)
+async def list_scenarios(
+    user: CurrentUser, session: Session, paging: Paging, sort: Annotated[MineOrder, Query()] = MineOrder.CREATED
+) -> ScenarioPage:
+    """
+    자기 시나리오의 목록을 돌려준다. 등급, 쓰인 수, 관심 수, 공개 상태를 함께 싣는다(#1165).
+
+    sort: created(최근에 만든 것부터, 기본), updated(최근에 고친 것부터), started(쓰인 수가 많은 것부터).
+    """
+    rows, total = await service.list_scenarios(session, user.user_id, paging.limit, paging.offset, sort)
+    return ScenarioPage(items=[to_my_summary(row) for row in rows], total=total)
 
 
 @router.get('/{scenario_id}', response_model=ScenarioDetail, status_code=status.HTTP_200_OK)

@@ -1932,10 +1932,26 @@ class ScenarioSummary(AssetSummary):
     rating: Rating
 
 
+class MyScenarioSummary(ScenarioSummary):
+    """
+    내 시나리오 목록의 한 줄(#1165). 등급에 쓰인 수와 관심 수, 공개 상태를 더한다.
+
+    쓰인 수는 그 시나리오로 연 테이블의 모든 수다(끝난 테이블과 자기만 연 테이블도 센다).
+    관심 수는 공개 정보의 것이다. 공개 정보를 쓰지 않았으면 0 이고, 공개를 내려도 남는다.
+    """
+
+    start_count: int = Field(ge=0)
+    heart_count: int = Field(ge=0)
+    # 공개한 시각. 공개하지 않았으면 null 이다
+    published_at: datetime | None
+    # 링크 공개(#993). 참이면 공개해도 목록과 검색에 나오지 않는다
+    unlisted: bool
+
+
 class ScenarioPage(BaseModel):
     """시나리오 목록의 한 쪽."""
 
-    items: list[ScenarioSummary]
+    items: list[MyScenarioSummary]
     # 조건에 맞는 전체 개수. 다음 쪽이 있는지 알 수 있다
     total: int = Field(ge=0)
 
