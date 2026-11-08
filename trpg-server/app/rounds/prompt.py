@@ -240,7 +240,9 @@ from app.rounds.time_words import duration_text, time_text
 #   narration-84: 지금 장(#481). [장] 아래에 "2장: 지하"와, 이번 라운드에 넘어왔으면 그것을 그리라는 말을 적는다
 #   narration-85: 쫓아온 몬스터(#254). 차례의 줄에 도망친 캐릭터를 쫓아 따라온 것을 적는다
 #                 (들개: 엘프을(를) 쫓아 부엌까지 따라옴 (치지 않음))
-PROMPT_VERSION = 'narration-85'
+#   narration-86: 하위 맵(#284). [맵]의 장소 줄의 이름 앞에 그 장소를 품은 아는 장소들이 붙는다
+#                 (- 마을 > 여관 > 2층(기사): 나가는 길: …). 하위 맵이 없는 판의 글은 그대로다
+PROMPT_VERSION = 'narration-86'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3
@@ -971,11 +973,14 @@ def clock_lines(clock: ClockNote | None) -> list[str]:
 def map_line(name: str, characters: list[str], place: PlaceNote) -> str:
     """
     장소 한 줄. 누가 서 있는지, 아는 출구, 숨은 길, 놓인 물건, 숨은 물건.
+    하위 맵의 장소면 이름 앞에 품은 장소들을 붙인다(#284).
 
     예: - 광장(기사, 약사): 나가는 길: 성문, 숲. 숨은 길(플레이어는 모름, 실마리로만): 지하실.
         놓인 물건: 치유 물약 2개. 숨은 물건(플레이어는 모름, 실마리로만): 은열쇠
+        - 마을 > 여관 > 2층(기사): 나가는 길: 여관 1층
     """
-    line = f'- {name}({", ".join(characters)}): 나가는 길: {", ".join(place.exits) or NO_EXITS}'
+    label = ' > '.join([*place.path, name])
+    line = f'- {label}({", ".join(characters)}): 나가는 길: {", ".join(place.exits) or NO_EXITS}'
     if place.hidden:
         line += f'. 숨은 길(플레이어는 모름, 실마리로만): {", ".join(place.hidden)}'
     if place.items:

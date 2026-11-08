@@ -26,6 +26,7 @@ from app.assets.scenarios.snapshot import (
     RepairSnapshot,
     RouteSnapshot,
     Snapshot,
+    container_of,
     cover_at,
     read_snapshot,
 )
@@ -393,6 +394,12 @@ def time_of_day_now(table: GameTable) -> str | None:
     return None if table.clock is None else clock.read_time(table.clock.minutes).time_of_day.value
 
 
+def known_container(snapshot: Snapshot, known: places.KnownMap, place_id: uuid.UUID) -> uuid.UUID | None:
+    """그 장소를 품은 장소(#284). 테이블이 그 장소를 모르거나 바깥 맵의 장소면 None."""
+    container = container_of(snapshot, place_id)
+    return container if container is not None and known.has(container) else None
+
+
 def to_map(table: GameTable, snapshot: Snapshot, catalog: dict[uuid.UUID, CatalogItem]) -> MapOut | None:
     """
     테이블이 아는 맵을 응답으로 바꾼다. 맵이 없는 판이면 None. 아는 것만 싣는다(app/tables/places.py).
@@ -411,6 +418,7 @@ def to_map(table: GameTable, snapshot: Snapshot, catalog: dict[uuid.UUID, Catalo
                 cover=cover_at(snapshot, place.id),
                 traps=to_known_traps(table, place.id, catalog),
                 image_id=place_picture(table.content, place.id, time_of_day_now(table)),
+                inside=known_container(snapshot, known, place.id),
             )
             for place in known.places
         ],

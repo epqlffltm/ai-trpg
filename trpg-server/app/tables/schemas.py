@@ -554,6 +554,10 @@ class PlaceOut(BaseModel):
     # 그 장소의 배경 그림(#1163). 판의 로어 항목마다의 그림이다. 테이블의 그림 주소(.../portraits/{image_id}/image)로
     # 받는다. 붙이지 않았으면 null 이다
     image_id: uuid.UUID | None = None
+    # 그 장소를 품은 장소(#284). 하위 맵의 장소면 그 하위 맵을 품은 장소(여관 1층이면 여관)이고,
+    # 바깥 맵의 장소면 null 이다.
+    # 품은 장소를 테이블이 모르면 null 이다(숨긴 통로로 안쪽부터 닿았다). 모르는 장소의 id 를 내주지 않는다
+    inside: uuid.UUID | None = None
 
 
 class RouteCrossOut(BaseModel):

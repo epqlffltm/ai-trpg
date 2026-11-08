@@ -472,6 +472,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
         'covers': [],
         'traps': [],
         'pictures': [],
+        'submaps': [],
         'wanders': [],
         'happenings': [],
         'chapters': [],

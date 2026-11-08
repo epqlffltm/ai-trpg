@@ -11947,6 +11947,18 @@
             ],
             "title": "Image Id"
           },
+          "inside": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inside"
+          },
           "items": {
             "default": [],
             "items": {
@@ -16969,6 +16981,15 @@
             "title": "Starting Items",
             "type": "array"
           },
+          "submaps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Submap-Input"
+            },
+            "maxItems": 50,
+            "title": "Submaps",
+            "type": "array"
+          },
           "title": {
             "maxLength": 100,
             "minLength": 1,
@@ -17271,6 +17292,13 @@
             "title": "Starting Items",
             "type": "array"
           },
+          "submaps": {
+            "items": {
+              "$ref": "#/components/schemas/Submap-Output"
+            },
+            "title": "Submaps",
+            "type": "array"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -17345,6 +17373,7 @@
           "covers",
           "traps",
           "pictures",
+          "submaps",
           "wanders",
           "happenings",
           "chapters",
@@ -17439,7 +17468,7 @@
       },
       "ScenarioUpdate": {
         "additionalProperties": false,
-        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는\nnull 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, covers, traps, pictures, wanders, happenings, chapters, npc_places,\ncharacter_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
+        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는\nnull 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, covers, traps, pictures, submaps, wanders, happenings, chapters,\nnpc_places, character_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
         "properties": {
           "bestiary_ids": {
             "anyOf": [
@@ -17870,6 +17899,21 @@
               }
             ],
             "title": "Starting Items"
+          },
+          "submaps": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Submap-Input"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submaps"
           },
           "title": {
             "anyOf": [
@@ -18970,6 +19014,14 @@
             "title": "Starting Items",
             "type": "array"
           },
+          "submaps": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SubmapSnapshot"
+            },
+            "title": "Submaps",
+            "type": "array"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -19484,6 +19536,80 @@
           "next"
         ],
         "title": "StepPriceOut",
+        "type": "object"
+      },
+      "Submap-Input": {
+        "additionalProperties": false,
+        "description": "장소 하나(place_id)가 품은 하위 맵(#284). 그 안의 장소들(places)이다. 마을 안의 건물, 건물의 층, 던전의 층이다.\n\n들어가고 나오는 것은 보통의 길(routes)로 적는다(문, 자물쇠, 숨긴 입구가 그대로 통한다). 층이 다른 장소끼리도 잇는다.\n품은 장소는 자기 하위 맵에 들지 않는다. 장소들이 붙인 로어북의 맵의 장소인지는 게시할 때 본다.",
+        "properties": {
+          "place_id": {
+            "format": "uuid",
+            "title": "Place Id",
+            "type": "string"
+          },
+          "places": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Places",
+            "type": "array"
+          }
+        },
+        "required": [
+          "place_id",
+          "places"
+        ],
+        "title": "Submap",
+        "type": "object"
+      },
+      "Submap-Output": {
+        "additionalProperties": false,
+        "description": "장소 하나(place_id)가 품은 하위 맵(#284). 그 안의 장소들(places)이다. 마을 안의 건물, 건물의 층, 던전의 층이다.\n\n들어가고 나오는 것은 보통의 길(routes)로 적는다(문, 자물쇠, 숨긴 입구가 그대로 통한다). 층이 다른 장소끼리도 잇는다.\n품은 장소는 자기 하위 맵에 들지 않는다. 장소들이 붙인 로어북의 맵의 장소인지는 게시할 때 본다.",
+        "properties": {
+          "place_id": {
+            "title": "Place Id",
+            "type": "string"
+          },
+          "places": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Places",
+            "type": "array"
+          }
+        },
+        "required": [
+          "place_id",
+          "places"
+        ],
+        "title": "Submap",
+        "type": "object"
+      },
+      "SubmapSnapshot": {
+        "description": "장소 하나(place_id)가 품은 하위 맵(#284). 그 안의 장소들(places)이다. 모두 판 안의 맵의 장소 항목이다.\n\n들어가고 나오는 것은 판의 길이다. 하위 맵은 지도를 층으로 묶어 보이고 서술에 위치를 준다(엔진의 이동은 그대로다).",
+        "properties": {
+          "place_id": {
+            "format": "uuid",
+            "title": "Place Id",
+            "type": "string"
+          },
+          "places": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Places",
+            "type": "array"
+          }
+        },
+        "required": [
+          "place_id",
+          "places"
+        ],
+        "title": "SubmapSnapshot",
         "type": "object"
       },
       "Surprise": {

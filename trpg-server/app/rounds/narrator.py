@@ -390,6 +390,7 @@ class PlaceNote:
     가짜 서술자는 그 줄을 장면으로 내보내므로, 거기 실으면 숨긴 길이 모두에게 새어 나간다.
     items 는 그 장소에 보이게 놓인 물건들(이름과 개수), hidden_items 는 아직 찾지 않은
     숨긴 물건의 이름이다. hidden_items 도 GM 만 안다. hidden 과 같이 맵 절에만 싣는다(#279).
+    path 는 그 장소를 품은 장소들의 이름이다(#284, 가장 바깥부터: 마을, 여관). 테이블이 아는 곳만이다.
     """
 
     name: str
@@ -397,6 +398,7 @@ class PlaceNote:
     hidden: list[str] = field(default_factory=list)
     items: list[ItemNote] = field(default_factory=list)
     hidden_items: list[str] = field(default_factory=list)
+    path: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

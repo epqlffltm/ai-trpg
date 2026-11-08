@@ -167,7 +167,8 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      프리젠의 캐릭터 그림(pregens[].image_id, #983)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 #  69: 룰북의 규칙에 굴림이 있다(#404). rulebook.rules.roll: 주사위의 개수(count), 성공을 가르는 쪽(style: over, under),
 #      under 에서 난이도마다 기량에 더하는 값(shifts). 그 전의 판은 주사위 하나의 over 다
-#      로어 항목마다의 그림(pictures: entry_id, image_id, #1163)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
+#      로어 항목마다의 그림(pictures: entry_id, image_id, #1163)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다.
+#      장소가 품은 하위 맵(submaps: place_id, places, #284)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 69
 
 
@@ -686,6 +687,17 @@ class PictureSnapshot(BaseModel):
     by_time: dict[TimeOfDay, uuid.UUID] = {}
 
 
+class SubmapSnapshot(BaseModel):
+    """
+    장소 하나(place_id)가 품은 하위 맵(#284). 그 안의 장소들(places)이다. 모두 판 안의 맵의 장소 항목이다.
+
+    들어가고 나오는 것은 판의 길이다. 하위 맵은 지도를 층으로 묶어 보이고 서술에 위치를 준다(엔진의 이동은 그대로다).
+    """
+
+    place_id: uuid.UUID
+    places: list[uuid.UUID]
+
+
 class PlacedTrapSnapshot(BaseModel):
     """
     미리 놓인 덫 하나(#806 ②). 판 안의 장소 항목(place_id)에 덫 물건(entry_id, 아이템 규칙에 trap 이 있다)이 놓였다.
@@ -780,6 +792,8 @@ class Snapshot(BaseModel):
     traps: list[PlacedTrapSnapshot] = []
     # 로어 항목마다의 그림(#1163). 항목은 판 안의 장소, 인물, 사건 항목이다. 비워도 되는 칸이라 형식이 그대로다
     pictures: list[PictureSnapshot] = []
+    # 장소가 품은 하위 맵들(#284). 품은 장소와 든 장소는 판 안의 장소 항목이다. 비워도 되는 칸이라 형식이 그대로다
+    submaps: list[SubmapSnapshot] = []
     # 무작위 조우 표들(#283). 장소는 판 안의 장소 항목이고 몬스터는 판의 몬스터다. 있으면 시작 장소도 있다.
     # 형식 57 보다 옛 판에는 없다
     wanders: list[WanderTableSnapshot] = []
@@ -1110,6 +1124,20 @@ class Snapshot(BaseModel):
             raise ValueError('인물의 자리가 있는데 시작 장소가 없습니다.')
         return self
 
+    @model_validator(mode='after')
+    def require_submap_places(self) -> 'Snapshot':
+        """
+        하위 맵(#284)의 품은 장소와 든 장소가 모두 판 안의 장소 항목인지 본다. 아니면 거부한다.
+
+        게시할 때 이미 막는다(scenarios/publishing.py).
+        판을 읽는 쪽(지도와 서술)은 하위 맵의 장소마다 항목이 있다고 믿는다.
+        """
+        places = {entry.id for entry in place_entries(self)}
+        pointed = [place for submap in self.submaps for place in [submap.place_id, *submap.places]]
+        if any(place not in places for place in pointed):
+            raise ValueError('장소 항목이 아닌 것을 가리키는 하위 맵이 있습니다.')
+        return self
+
 
 class WornStack(Protocol):
     """시작할 때 착용을 적은 줄. 시나리오의 입력(ItemStack)과 판(ItemStackSnapshot)이 이 모양이다."""
@@ -1200,6 +1228,25 @@ def door_effect_fits(snapshot: Snapshot, effect: HappeningEffectSnapshot) -> boo
     if route is None or not door_devices(route):
         return False
     return effect.device is None or effect.device in door_devices(route)
+
+
+def container_of(snapshot: Snapshot, place_id: uuid.UUID) -> uuid.UUID | None:
+    """그 장소를 품은 장소(#284). 바깥 맵의 장소면 None 이다."""
+    return next((submap.place_id for submap in snapshot.submaps if place_id in submap.places), None)
+
+
+def containers_of(snapshot: Snapshot, place_id: uuid.UUID) -> list[uuid.UUID]:
+    """
+    그 장소를 품은 장소들(#284). 가장 바깥부터다(마을, 여관). 바깥 맵의 장소면 빈 목록이다.
+
+    판의 하위 맵은 서로를 품지 않는다(게시할 때 본다). 그래도 돌면 한 바퀴에서 멈춘다.
+    """
+    found: list[uuid.UUID] = []
+    container = container_of(snapshot, place_id)
+    while container is not None and container not in found and container != place_id:
+        found.append(container)
+        container = container_of(snapshot, container)
+    return list(reversed(found))
 
 
 def has_map(snapshot: Snapshot) -> bool:
@@ -1381,6 +1428,7 @@ def build_snapshot(
         covers=[CoverSnapshot(**rule) for rule in scenario.covers],
         traps=[PlacedTrapSnapshot(**trap) for trap in scenario.traps],
         pictures=[PictureSnapshot(**picture) for picture in scenario.pictures],
+        submaps=[SubmapSnapshot(**submap) for submap in scenario.submaps],
         wanders=[WanderTableSnapshot(**table) for table in scenario.wanders],
         happenings=[HappeningSnapshot(**rule) for rule in scenario.happenings],
         chapters=[ChapterSnapshot(**chapter) for chapter in scenario.chapters],
