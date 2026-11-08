@@ -503,6 +503,8 @@ PLAYER_MADE_MODES = frozenset(CharacterMode) - frozenset(CREATOR_MADE_MODES)
 # 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구할 때 쓰는 기준값과 상한이 가질 수 있는 가장 큰 값.
 # 시트의 최대 HP 의 한도(app/engine/sheet.py 의 SHEET_MAX_HP)와 같다
 PLAYER_MADE_HP_MAX = 999
+# 즉흥 조우(#254)의 테이블 하나의 횟수의 상한
+IMPROVISED_ENCOUNTERS_MAX = 20
 
 
 def one_of(column: str, values: type[enum.StrEnum]) -> str:
@@ -710,6 +712,9 @@ class Scenario(AssetContent):
         ),
         CheckConstraint(one_of('narration_style', NarrationStyle), name='narration_style_allowed'),
         CheckConstraint(one_of('xp_split', XpSplit), name='xp_split_allowed'),
+        CheckConstraint(
+            f'improvised_encounters BETWEEN 0 AND {IMPROVISED_ENCOUNTERS_MAX}', name='improvised_encounters_range'
+        ),
     )
 
     # 가리키는 대상이 assets 가 아니라 rulebooks 다. 룰북 자리에 세계관을 넣는 일을 DB 가 막는다.
@@ -751,6 +756,10 @@ class Scenario(AssetContent):
 
     # 몬스터와 판의 사건이 준 경험치를 받는 사람들이 나누는가(#286 ②). 제작자가 정한다. 기본은 나눈다
     xp_split: Mapped[str] = mapped_column(String(10), default=DEFAULT_XP_SPLIT, server_default=text("'share'"))
+
+    # 즉흥 조우(#254). 서술(AI)이 그 장소의 조우표에서 몬스터의 등장을 고를 수 있는 횟수다. 테이블 하나에 이만큼까지다.
+    # 0 이면 꺼져 있다(기본). 제작자가 정한다. 고른 것을 받아들일지는 엔진이 본다(app/rounds/improvised.py)
+    improvised_encounters: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
 
     # 추천 문체. 제작자가 이 시나리오에 어울린다고 고른 GM 의 문체다. 기본은 정통이다.
     # 테이블의 방장이 문체를 고르지 않으면 이것을 쓴다. 판에 굳히므로 나중에 바꿔도 진행 중인 테이블은 그대로다

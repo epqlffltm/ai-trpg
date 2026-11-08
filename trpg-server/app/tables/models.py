@@ -238,6 +238,9 @@ class GameTable(Base):
     # chapter_round 는 지금 장으로 넘어온 라운드다. 첫 장이면 비어 있다. 그 라운드의 서술이 장이 바뀐 것을 받는다
     chapter_id: Mapped[str | None] = mapped_column(String(CHAPTER_ID_MAX_LENGTH))
     chapter_round: Mapped[int | None] = mapped_column(Integer)
+    # 이 테이블에서 받아들인 즉흥 조우(#254)의 수. 판의 improvised_encounters 까지다.
+    # 엔진만 늘린다(app/rounds/improvised.py)
+    improvised_encounters: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
 
     # 정원. 방장을 포함해 몇 명까지 앉는가
     capacity: Mapped[int] = mapped_column(SmallInteger)

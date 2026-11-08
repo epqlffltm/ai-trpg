@@ -51,6 +51,7 @@ from app.rounds.move_lines import (
 from app.rounds.narrator import (
     ChapterNote,
     ClockNote,
+    EncounterNote,
     HappeningNote,
     LoreNote,
     MemoryNote,
@@ -242,7 +243,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 (들개: 엘프을(를) 쫓아 부엌까지 따라옴 (치지 않음))
 #   narration-86: 하위 맵(#284). [맵]의 장소 줄의 이름 앞에 그 장소를 품은 아는 장소들이 붙는다
 #                 (- 마을 > 여관 > 2층(기사): 나가는 길: …). 하위 맵이 없는 판의 글은 그대로다
-PROMPT_VERSION = 'narration-86'
+#   narration-87: 즉흥 조우(#254). 판이 켰고 고를 것이 있으면 [즉흥 조우] 아래에 고를 거리와, 고르면 장면의 맨 끝에
+#                 [[조우 번호]] 한 줄을 적으라는 말을 적는다. 상태의 피해와 벗어난 상태(#254)도 캐릭터의 줄에 붙는다
+PROMPT_VERSION = 'narration-87'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3
@@ -581,6 +584,14 @@ NO_EXITS = '없음'
 # 밤 장면에 햇빛을 쓰거나, 하룻밤을 건너뛴 장면을 여전히 밤으로 쓰면 장면과 시계가 어긋난다
 # 이번 라운드가 닫힐 때 일어난 판의 사건(#367). 엔진이 판의 규칙으로 일으켰다. 서술은 그 까닭을 장면으로 그린다.
 # 옮겨진 인물을 다른 곳에 두거나 사건을 없던 일로 쓰면 장면과 장부(위치)가 어긋난다
+ENCOUNTER_TITLE = '[즉흥 조우]'
+ENCOUNTER_NOTE = (
+    '이야기의 흐름상 지금 몬스터가 나타나는 것이 자연스러우면 아래에서 하나를 고를 수 있다. 고르지 않아도 된다. '
+    '대개는 고르지 않는다. 고르면 그 몬스터가 나타나는 기척이나 모습까지만 그리고, 장면의 맨 끝에 따로 한 줄로 '
+    '[[조우 번호]] 만 적어라. 싸움이나 그 결과는 쓰지 마라. 게임이 다음 라운드에 그 몬스터를 놓는다. '
+    '고르지 않으면 표식을 적지 말고, 아래의 몬스터를 장면에 등장시키지 마라.'
+)
+
 HAPPENING_TITLE = '[일어난 사건]'
 HAPPENING_NOTE = (
     '이번 라운드가 끝날 때 게임이 일으킨 사건이다. 정해진 일이니 그대로 따른다. '
@@ -911,6 +922,19 @@ def quest_lines(quests: list[QuestNote]) -> list[str]:
     return [QUEST_TITLE, QUEST_NOTE, *(quest_line(quest) for quest in quests), '']
 
 
+def encounter_lines(encounters: list[EncounterNote]) -> list[str]:
+    """
+    즉흥 조우(#254)의 고를 거리를 적는 줄들. 다루는 법 한 줄과 고를 거리마다 한 줄.
+
+    예: - 1: 수로 입구에 수로 쥐 2마리
+    끝에 빈 줄이 붙는다. 고를 거리가 없으면 빈 목록이다.
+    """
+    if not encounters:
+        return []
+    lines = [f'- {one.number}: {one.place}에 {one.monster} {one.count}마리' for one in encounters]
+    return [ENCOUNTER_TITLE, ENCOUNTER_NOTE, *lines, '']
+
+
 def happening_lines(happenings: list[HappeningNote]) -> list[str]:
     """
     이번 라운드가 닫힐 때 일어난 판의 사건을 적는 줄들. 다루는 법 한 줄과 사건마다 한 줄(narration-47).
@@ -1095,6 +1119,7 @@ def round_text(request: NarrationRequest) -> str:
     if any(move.rest is not None or move.revival is not None for move in request.moves):
         lines.append(REST_NOTE)
     lines.append(THIS_ROUND_ONLY)
+    lines.extend(encounter_lines(request.encounters))
     lines.extend(deadline_reminders(request.quests))
     reminder = style_reminder(request.style)
     if reminder is not None:

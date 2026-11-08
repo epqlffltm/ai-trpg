@@ -49,6 +49,7 @@ from app.assets.models import (
     FAIL_ONLY_CONDITIONS,
     GRANT_MAX_XP,
     HAPPENING_MAX_EFFECTS,
+    IMPROVISED_ENCOUNTERS_MAX,
     ITEM_STACK_MAX,
     MONEY_MAX,
     MONSTER_MAX_ATTACKS,
@@ -1582,6 +1583,9 @@ Wanders = Annotated[
     list[WanderTable], Field(max_length=SCENARIO_MAX_WANDERS), AfterValidator(reject_overlapping_wanders)
 ]
 
+# 즉흥 조우(#254)의 테이블 하나의 횟수. 0 이면 꺼짐. 고를 거리는 조우 표(wanders)다. 표가 없으면 켜도 고를 것이 없다
+ImprovisedEncounters = Annotated[int, Field(ge=0, le=IMPROVISED_ENCOUNTERS_MAX)]
+
 
 QuestRules = Annotated[
     list[QuestRule], Field(max_length=SCENARIO_MAX_QUEST_RULES), AfterValidator(reject_duplicate_quests)
@@ -1992,6 +1996,9 @@ class ScenarioCreate(AssetCreate):
     # 몬스터와 판의 사건이 준 경험치를 받는 사람들이 나누는가(#286 ②). each 는 각자 다, share 는 사람 수로 나눈다.
     # 안 보내면 나눈다. 퀘스트의 경험치는 이것과 상관없이 각자 다 받는다
     xp_split: XpSplit = DEFAULT_XP_SPLIT
+    # 즉흥 조우(#254). 서술(AI)이 그 장소의 조우표에서 몬스터의 등장을 고를 수 있는 테이블 하나의 횟수.
+    # 0 이면 꺼짐(기본)
+    improvised_encounters: ImprovisedEncounters = 0
     # 추천 문체. 테이블의 방장이 고르지 않으면 이것으로 서술한다. 안 보내면 정통이다
     narration_style: NarrationStyle = DEFAULT_NARRATION_STYLE
     # 추천 서술 모델의 이름표. 반드시 보낸다. 서비스 중인 모델이어야 한다(app/assets/scenarios/recommended_model.py)
@@ -2053,6 +2060,7 @@ class ScenarioUpdate(AssetUpdate):
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
     xp_split: XpSplit | None = None
+    improvised_encounters: ImprovisedEncounters | None = None
     narration_style: NarrationStyle | None = None
     # 비울 수 없다. 보내면 서비스 중인 모델이어야 한다
     narration_model: Slug | None = None
@@ -2138,6 +2146,7 @@ class ScenarioDetail(ScenarioSummary):
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
     xp_split: XpSplit
+    improvised_encounters: int
     narration_style: NarrationStyle
     # 이 규칙 전에 만든 시나리오만 비어 있다
     narration_model: str | None

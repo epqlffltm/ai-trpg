@@ -402,7 +402,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | `assets` | 모든 자산의 공통 부분. 소유자, 종류, 제목, 메모, 공개 범위, 등급(시나리오만 쓴다), 만든 시각과 고친 시각, 지운 시각 |
 | `worlds` | 세계관의 내용. `setting`, `gm_notes` |
 | `rulebooks` | 룰북의 내용. `gm_guide`, `rules`(규칙, JSON) |
-| `scenarios` | 시나리오의 내용. `rulebook_id`, `world_id`, `openings`, `min_players`, `max_players`, `pregens`, `character_modes`, `default_sheet`, `npc_sheets`, `default_npc_sheet`, `monster_sheets`, `encounters`, `wanders`, `items`, `starting_items`, `currency`, `quests`, `start_place`, `routes`, `landmarks`, `npc_places`, `hp_base`, `hp_cap` |
+| `scenarios` | 시나리오의 내용. `rulebook_id`, `world_id`, `openings`, `min_players`, `max_players`, `pregens`, `character_modes`, `default_sheet`, `npc_sheets`, `default_npc_sheet`, `monster_sheets`, `encounters`, `wanders`, `items`, `starting_items`, `currency`, `quests`, `start_place`, `routes`, `landmarks`, `npc_places`, `hp_base`, `hp_cap`, `improvised_encounters` |
 | `lorebooks` | 로어북. 자신의 칸은 없다 |
 | `lore_entries` | 로어북의 항목. `name`, `keywords`, `content`, `kind`, `true_names`(지목의 정답). 자산이 아니다 |
 | `scenario_lorebooks` | 시나리오와 로어북의 연결. 행 하나가 "이 시나리오에 이 로어북이 붙어 있다"는 뜻이다 |
@@ -593,6 +593,7 @@ HP 는 0 아래로 내려가지 않고 최대를 넘지 않는다. HP 가 0 이�
 | `npc_places` (인물의 자리, 100개) | 인물이 처음 있는 맵의 장소(#282). 하나하나가 `{"entry_id", "place_id"}` 이다. 인물은 붙인 로어북의 인물 항목(NPC 시트가 없어도 된다), 장소는 맵의 장소다. 같은 인물이 두 번 있으면 거부한다. 자리를 적은 인물은 장면의 글이 아니라 장소로 장면에 들고, 같은 장소에서만 겨눈다([이번 장면의 인물](#라운드)). 적지 않은 인물은 지금처럼 장면의 글에 나왔는지로 든다 |
 | `player_made_hp` | 플레이어가 능력치를 정한 캐릭터의 최대 HP 를 구하는 값. 기준값(`base`)과 상한(`cap`)을 함께 적는다. 초안일 때는 비워 둘 수 있다 |
 | `reroll_allowed` | 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 적지 않으면 안 된다(`false`) |
+| `improvised_encounters` | 즉흥 조우(#254)의 테이블 하나의 횟수(0~20, 기본 0 은 꺼짐). 서술(AI)이 무작위 조우 표에서 몬스터의 등장을 고를 수 있다. 아래 "즉흥 조우" |
 | `xp_split` | 쓰러뜨린 몬스터와 판의 사건이 준 경험치를 받는 사람들이 나누는 법(#286 ②). `each`(각자 다 받는다)나 `share`(받는 사람 수로 나누고 나머지는 버린다, 기본)다. 퀘스트의 경험치는 이것과 상관없이 각자 다 받는다. 제작자가 정한다(마이그레이션 `a4b6c8d0e2f4`) |
 | `narration_style` | 추천 문체. 테이블의 방장이 고르지 않으면 GM 이 이 문체로 서술한다. 적지 않으면 정통(`classic`) |
 | `narration_model` (필수) | 추천 서술 모델. 모델 목록의 이름표다. 서비스 중인 모델만 된다(premium 도). 판에 굳히지 않는다([추천 모델](#추천-모델)) |
@@ -759,6 +760,11 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 - 굴림은 1~100 이 확률 이하면 조우다. 그다음 몬스터의 줄을 몫(`weight`)대로 1~몫의 합을 굴려 뽑는다. 그 마리 수만큼 그 장소에 놓는다. 번호는 테이블의 같은 몬스터 뒤로 잇는다(죽은 것도 센다).
 - 쉬는 중에 나왔으면 쉬기가 깨지고(`reason: ambushed`) 몬스터가 기습한다(줄에 적은 것과 상관없이). 아니면 줄의 기습이다. 나온 마리는 그 기습을 스스로 갖는다(`table_monsters.surprise`). 일행이 만나는 것은 다음 라운드다. 그 라운드가 만난 첫 라운드다.
 - 이벤트 `monsters_appeared` 가 남는다. 서술의 한 일의 줄에도 붙는다(`narration-61`).
+**즉흥 조우(#254, `app/rounds/improvised.py`).** 시나리오의 `improvised_encounters` 가 1 이상이면 서술(AI)이 몬스터의 등장을 고를 수 있다. AI 는 고르기만 하고, 무엇이 나올 수 있는지와 받아들일지는 엔진이 정한다.
+- 고를 거리: 살아 있는 캐릭터가 선 장소마다, 그 장소에서 지금 때에 쓰는 무작위 조우 표의 몬스터 줄들이다(마리 수는 표의 것). 그 장소에 살아 있는 몬스터가 있거나 안전한 곳(확률 0)이면 빼고, 테이블의 횟수를 다 썼으면 없다. 테이블의 지금 상태로만 정해서, 서술을 부탁할 때와 받아들일 때와 다시 맡길 때 같은 목록이다.
+- 고를 거리가 있으면 서술 요청의 `[즉흥 조우]` 에 번호와 함께 실린다(`narration-87`). 고르면 장면의 맨 끝에 따로 한 줄 `[[조우 번호]]` 를 적는다. 고르지 않아도 된다.
+- 서술을 받아들일 때 장면에서 표식을 뗀다(미리 보기에서도 가린다). 번호가 고를 거리에 있으면 그 장소에 그 줄의 마리 수만큼 놓고(무작위 조우와 같이 번호를 잇고 기습은 그 줄의 것) 테이블의 수(`game_tables.improvised_encounters`)를 늘린다. 없는 번호나 다 쓴 횟수면 표식만 뗀다. 한 라운드에 하나다(마지막 표식만 본다). 일행이 만나는 것은 다음 라운드다.
+- 이벤트 `monsters_appeared`(`cause`: `improvised`)가 그 라운드의 닫힘에 잇는다. 라운드를 되돌리면 놓은 몬스터와 수도 함께 돌아간다(테이블의 행에서 찍는 칸이다). 그 칸이 생기기 전에 찍은 사진으로는 되돌리지 못한다.
 같은 몬스터는 테이블 전체에서 조우의 순서대로 1 부터 번호를 받는다(수로 쥐 1, 수로 쥐 2). 몬스터는 조우의 자리에 있다. 시트에 쫓아온다고 적은 몬스터만 옮긴다(아래).
 **쫓아오는 몬스터(#254, `app/rounds/monster_chase.py`).** 몬스터 시트에 `chases: true` 를 적으면(기본은 `false`, 옛 판과 시나리오는 그대로다) 도망친 캐릭터를 따라간다.
 - 몬스터의 차례에 그 장소에 칠 캐릭터가 없을 때 본다. 쫓을 사람은 라운드를 닫기 시작할 때 그 마리와 같은 장소에 있었고 그 뒤 차례에서 떠난, 죽지 않은 캐릭터다. 차례가 그 사람보다 먼저 왔으면 그 자리에서 치고 따라가지 않는다
@@ -3245,7 +3251,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `place_searched` | 캐릭터가 서 있는 곳에서 숨긴 길과 숨긴 물건과 숨긴 덫을 찾았다. 그 행동 바로 뒤에 적힌다 | `round`, `character_name`, `place`, `found`: 찾은 길마다 `from_place`, `to_place`, `two_way`. `items`: 찾아서 가진 물건마다 `entry_id`, `name`, `count`, `left`, `total`. `traps`: 찾아낸 덫마다 `trap_id`, `entry_id`, `name`(#806 ①-b). 못 찾았으면 빈 목록. 굴린 판정은 없다 |
 | `character_rested` | 캐릭터가 쉬었다. 쉬는 행동이면 그 행동 바로 뒤에(`cause: rest`), 저절로 회복이면 닫힘 앞에(`cause: natural`) 적힌다 | `round`, `user_id`, `character_name`, `cause`, `length`(`short`, `long`. 저절로 회복이면 `null`), `rested`(깨졌으면 `false`), `reason`(`hurt`, `downed`, `dead`, `ambushed` 또는 `null`), `rolls`, `before`, `after`, `max_hp` |
 | `resource_changed` | 엔진이 캐릭터나 NPC 나 몬스터의 수치(#804) 하나를 바꿨다. NPC 와 몬스터는 장면에 나온 것만 적는다. 쉬었으면 그 쉼의 바로 뒤에(`source: rest`), 물건의 맞추기면 그 물건을 쓰거나 던진 것의 뒤에(`source: item`), 라운드마다의 변화(`each_round`)면 그 라운드의 되살아나기와 저절로 회복 뒤에(`source: round`), 몬스터나 인물이 공격의 비용을 냈거나 공격의 효과가 맞은 캐릭터의 수치를 맞췄으면 그 공격(`monster_attacked`, `npc_attacked`)의 뒤에(`source: attack`, #805 ③-a, ③-b), 덫의 효과면 그 덫(`trap_sprung`)의 뒤에(`source: trap`, #806) 적힌다. 그 뒤에 문턱의 부상이 풀리면 `injury_ended`(`reason: resource`), 생기면 `injury_gained`(`source: resource`)가 잇는다 | `round`, 누구인지(캐릭터면 `user_id`, NPC 면 `entry_id`, 몬스터면 `monster_id`, 그리고 그 이름 `character_name`), `resource`, `name`(수치의 이름), `before`, `after`, `max`, `source`, `visibility`(가진 사람만 보는 수치면 `owner` 이고 `before`, `after`, `max` 가 없다. 엔진만 보는 수치는 적지 않는다) |
-| `monsters_appeared` | 무작위 조우(#283). 길을 오거나 길게 쉰 장소에서 엔진이 굴려 몬스터가 나왔다. 행한 사람이 없다. 일행이 서 있는 곳에만 나오므로 공개다 | `round`, `place`(`entry_id`, `name`), `monster`(`id`, `name`), `count`, `cause`(`arrive`, `rest`), `surprise`(`none`, `monsters`, `party`). 마리의 숫자는 싣지 않는다 |
+| `monsters_appeared` | 무작위 조우(#283). 길을 오거나 길게 쉰 장소에서 엔진이 굴려 몬스터가 나왔다. 즉흥 조우(#254)면 서술이 고른 것을 엔진이 받아들였다(`cause`: `improvised`, 그 라운드의 닫힘에 잇는다). 행한 사람이 없다. 일행이 서 있는 곳에만 나오므로 공개다 | `round`, `place`(`entry_id`, `name`), `monster`(`id`, `name`), `count`, `cause`(`arrive`, `rest`, `improvised`), `surprise`(`none`, `monsters`, `party`). 마리의 숫자는 싣지 않는다 |
 | `character_revived` | 고비를 넘기고 쓰러져 있던 캐릭터가 오래 쉬어 되살아나기를 굴렸다. 끝난 부상들 뒤, 닫힘 앞에 적힌다 | `round`, `user_id`, `character_name`, `roll`, `target`, `success`, `hp`(성공이면 1) |
 | `character_joined` | 캐릭터가 죽은 플레이어가 새 캐릭터를 들였다 | `round`, `user_id`, `character_name`, `replaces`: 죽은 캐릭터의 이름, `mode`, `pregen_index`, `number`: 그 사람의 몇 번째 캐릭터인지, `sheet`: 받은 시트, `place`: 들어온 장소(`entry_id`, `name`, 맵이 없으면 `null`) |
 | `round_closed` | 라운드가 닫기 시작했다. 선언을 마감했다 | `number`, `reason`(`all_declared`, `host`, `timeout`), `idle`: 선언을 내지 않은 사람. 쓰러진 사람과 그 라운드에 새 캐릭터를 들인 사람은 들어가지 않는다 |
