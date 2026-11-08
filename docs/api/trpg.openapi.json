@@ -8636,6 +8636,16 @@
         "title": "MessagePage",
         "type": "object"
       },
+      "MineOrder": {
+        "description": "내 시나리오 목록의 차례(#1165).",
+        "enum": [
+          "created",
+          "updated",
+          "started"
+        ],
+        "title": "MineOrder",
+        "type": "string"
+      },
       "Mishap": {
         "description": "치료에 실패했을 때 일어나는 일의 종류. 치료 실패 표의 한 줄이 이 중 하나다.",
         "enum": [
@@ -10017,6 +10027,81 @@
           "move"
         ],
         "title": "MoveOutcome",
+        "type": "object"
+      },
+      "MyScenarioSummary": {
+        "description": "내 시나리오 목록의 한 줄(#1165). 등급에 쓰인 수와 관심 수, 공개 상태를 더한다.\n\n쓰인 수는 그 시나리오로 연 테이블의 모든 수다(끝난 테이블과 자기만 연 테이블도 센다).\n관심 수는 공개 정보의 것이다. 공개 정보를 쓰지 않았으면 0 이고, 공개를 내려도 남는다.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "heart_count": {
+            "minimum": 0.0,
+            "title": "Heart Count",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "rating": {
+            "$ref": "#/components/schemas/Rating"
+          },
+          "start_count": {
+            "minimum": 0.0,
+            "title": "Start Count",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "unlisted": {
+            "title": "Unlisted",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/Visibility"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "visibility",
+          "created_at",
+          "updated_at",
+          "rating",
+          "start_count",
+          "heart_count",
+          "published_at",
+          "unlisted"
+        ],
+        "title": "MyScenarioSummary",
         "type": "object"
       },
       "NameAction": {
@@ -17280,7 +17365,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/ScenarioSummary"
+              "$ref": "#/components/schemas/MyScenarioSummary"
             },
             "title": "Items",
             "type": "array"
@@ -17350,51 +17435,6 @@
           "items"
         ],
         "title": "ScenarioStats",
-        "type": "object"
-      },
-      "ScenarioSummary": {
-        "description": "시나리오의 목록에 싣는 값. 공통 값에 등급을 더한다. 목록에서 등급으로 가려 보여 줄 수 있어야 한다.",
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "rating": {
-            "$ref": "#/components/schemas/Rating"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "visibility": {
-            "$ref": "#/components/schemas/Visibility"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "description",
-          "visibility",
-          "created_at",
-          "updated_at",
-          "rating"
-        ],
-        "title": "ScenarioSummary",
         "type": "object"
       },
       "ScenarioUpdate": {
@@ -26568,9 +26608,18 @@
     },
     "/api/v1/game/scenarios": {
       "get": {
-        "description": "자기 시나리오의 목록을 최근에 만든 것부터 돌려준다. 등급을 함께 싣는다.",
+        "description": "자기 시나리오의 목록을 돌려준다. 등급, 쓰인 수, 관심 수, 공개 상태를 함께 싣는다(#1165).\n\nsort: created(최근에 만든 것부터, 기본), updated(최근에 고친 것부터), started(쓰인 수가 많은 것부터).",
         "operationId": "list_scenarios_api_v1_game_scenarios_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/MineOrder",
+              "default": "created"
+            }
+          },
           {
             "in": "query",
             "name": "limit",

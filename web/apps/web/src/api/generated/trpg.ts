@@ -1143,7 +1143,9 @@ export interface paths {
         };
         /**
          * List Scenarios
-         * @description 자기 시나리오의 목록을 최근에 만든 것부터 돌려준다. 등급을 함께 싣는다.
+         * @description 자기 시나리오의 목록을 돌려준다. 등급, 쓰인 수, 관심 수, 공개 상태를 함께 싣는다(#1165).
+         *
+         *     sort: created(최근에 만든 것부터, 기본), updated(최근에 고친 것부터), started(쓰인 수가 많은 것부터).
          */
         get: operations["list_scenarios_api_v1_game_scenarios_get"];
         put?: never;
@@ -6406,6 +6408,12 @@ export interface components {
             last_sequence: number;
         };
         /**
+         * MineOrder
+         * @description 내 시나리오 목록의 차례(#1165).
+         * @enum {string}
+         */
+        MineOrder: "created" | "updated" | "started";
+        /**
          * Mishap
          * @description 치료에 실패했을 때 일어나는 일의 종류. 치료 실패 표의 한 줄이 이 중 하나다.
          * @enum {string}
@@ -7040,6 +7048,44 @@ export interface components {
          */
         MoveOutcome: {
             move: components["schemas"]["MoveOut"];
+        };
+        /**
+         * MyScenarioSummary
+         * @description 내 시나리오 목록의 한 줄(#1165). 등급에 쓰인 수와 관심 수, 공개 상태를 더한다.
+         *
+         *     쓰인 수는 그 시나리오로 연 테이블의 모든 수다(끝난 테이블과 자기만 연 테이블도 센다).
+         *     관심 수는 공개 정보의 것이다. 공개 정보를 쓰지 않았으면 0 이고, 공개를 내려도 남는다.
+         */
+        MyScenarioSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Heart Count */
+            heart_count: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Published At */
+            published_at: string | null;
+            rating: components["schemas"]["Rating"];
+            /** Start Count */
+            start_count: number;
+            /** Title */
+            title: string;
+            /** Unlisted */
+            unlisted: boolean;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            visibility: components["schemas"]["Visibility"];
         };
         /**
          * NameAction
@@ -10495,7 +10541,7 @@ export interface components {
          */
         ScenarioPage: {
             /** Items */
-            items: components["schemas"]["ScenarioSummary"][];
+            items: components["schemas"]["MyScenarioSummary"][];
             /** Total */
             total: number;
         };
@@ -10525,33 +10571,6 @@ export interface components {
             recent_days: number;
             /** Total */
             total: number;
-        };
-        /**
-         * ScenarioSummary
-         * @description 시나리오의 목록에 싣는 값. 공통 값에 등급을 더한다. 목록에서 등급으로 가려 보여 줄 수 있어야 한다.
-         */
-        ScenarioSummary: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Description */
-            description: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            rating: components["schemas"]["Rating"];
-            /** Title */
-            title: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            visibility: components["schemas"]["Visibility"];
         };
         /**
          * ScenarioUpdate
@@ -15102,6 +15121,7 @@ export interface operations {
     list_scenarios_api_v1_game_scenarios_get: {
         parameters: {
             query?: {
+                sort?: components["schemas"]["MineOrder"];
                 limit?: number;
                 offset?: number;
             };
