@@ -551,6 +551,9 @@ class PlaceOut(BaseModel):
     cover: int = 0
     # 이 테이블이 찾아낸, 아직 놓여 있는 덫들(#806 ①-b). 놓은 순서다. 찾지 못한 덫은 싣지 않는다
     traps: list[KnownTrapOut] = []
+    # 그 장소의 배경 그림(#1163). 판의 로어 항목마다의 그림이다. 테이블의 그림 주소(.../portraits/{image_id}/image)로
+    # 받는다. 붙이지 않았으면 null 이다
+    image_id: uuid.UUID | None = None
 
 
 class RouteCrossOut(BaseModel):

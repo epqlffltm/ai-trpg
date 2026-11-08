@@ -20,11 +20,13 @@ from app.assets.bestiaries.models import Bestiary
 from app.assets.models import AssetContent, AssetType, Lorebook, Rating, Rulebook, Scenario, World
 from app.assets.ratings import ALL_AGES_ONLY, require_rating
 from app.assets.scenarios.recommended_model import require_recommendable
-from app.assets.scenarios.schemas import Pregen, ScenarioCreate, ScenarioUpdate
+from app.assets.scenarios.schemas import EntryPicture, Pregen, ScenarioCreate, ScenarioUpdate
 from app.portraits import repository as portraits
 
 # 프리젠의 캐릭터 그림이 틀렸을 때 AssetReferenceError 에 싣는 칸의 이름
 PREGEN_IMAGE_FIELD = 'pregens.image_id'
+# 로어 항목마다의 그림(#1163)이 틀렸을 때의 칸의 이름
+PICTURE_IMAGE_FIELD = 'pictures.image_id'
 
 # 다른 자산을 하나 가리키는 칸과, 그 칸이 가리킬 수 있는 종류.
 # 적힌 순서대로 잠근다. 순서가 늘 같아야 두 요청이 서로를 기다리며 멈추는 일(교착)이 없다.
@@ -61,6 +63,7 @@ def build_scenario(owner_id: uuid.UUID, data: ScenarioCreate) -> Scenario:
         place_items=[rule.model_dump() for rule in data.place_items],
         covers=[rule.model_dump() for rule in data.covers],
         traps=[trap.model_dump() for trap in data.traps],
+        pictures=[picture.model_dump() for picture in data.pictures],
         wanders=[table.model_dump() for table in data.wanders],
         happenings=[rule.model_dump() for rule in data.happenings],
         chapters=[chapter.model_dump() for chapter in data.chapters],
@@ -97,15 +100,27 @@ def pregen_images(pregens: Sequence[Pregen] | None) -> set[uuid.UUID]:
     return {pregen.image_id for pregen in pregens or [] if pregen.image_id is not None}
 
 
-async def require_own_portraits(session: AsyncSession, owner_id: uuid.UUID, pregens: Sequence[Pregen] | None) -> None:
+async def require_owned(session: AsyncSession, owner_id: uuid.UUID, wanted: set[uuid.UUID], field: str) -> None:
     """
-    프리젠의 캐릭터 그림이 모두 자기가 올린 것인지 본다. 아니면 AssetReferenceError.
+    그림이 모두 자기가 올린 것인지 본다. 아니면 field 를 실은 AssetReferenceError.
 
     남의 그림, 없는 그림, 이 서버에 올리지 않은 asset 의 그림(장면 그림 등)은 모두 같다.
     """
-    wanted = pregen_images(pregens)
     if wanted - await portraits.owned_ids(session, owner_id, wanted):
-        raise assets.AssetReferenceError(PREGEN_IMAGE_FIELD)
+        raise assets.AssetReferenceError(field)
+
+
+async def require_own_portraits(session: AsyncSession, owner_id: uuid.UUID, pregens: Sequence[Pregen] | None) -> None:
+    """프리젠의 캐릭터 그림이 모두 자기가 올린 것인지 본다. 아니면 AssetReferenceError(pregens.image_id)."""
+    await require_owned(session, owner_id, pregen_images(pregens), PREGEN_IMAGE_FIELD)
+
+
+async def require_own_pictures(
+    session: AsyncSession, owner_id: uuid.UUID, pictures: Sequence[EntryPicture] | None
+) -> None:
+    """로어 항목마다의 그림(#1163)이 모두 자기가 올린 것인지 본다. 아니면 AssetReferenceError(pictures.image_id)."""
+    wanted = {picture.image_id for picture in pictures or []}
+    await require_owned(session, owner_id, wanted, PICTURE_IMAGE_FIELD)
 
 
 async def create_scenario(
@@ -125,6 +140,7 @@ async def create_scenario(
     await require_recommendable(session, data.narration_model, today)
     await hold_references(session, owner_id, data)
     await require_own_portraits(session, owner_id, data.pregens)
+    await require_own_pictures(session, owner_id, data.pictures)
     return await assets.create(session, build_scenario(owner_id, data))
 
 
@@ -178,6 +194,7 @@ async def update_scenario(
     await require_model_change(session, scenario, data, today)
     await hold_references(session, owner_id, data)
     await require_own_portraits(session, owner_id, data.pregens)
+    await require_own_pictures(session, owner_id, data.pictures)
     return await assets.save_changes(session, scenario, data)
 
 

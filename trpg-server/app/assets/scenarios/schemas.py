@@ -68,6 +68,7 @@ from app.assets.models import (
     SCENARIO_MAX_NPC_PLACES,
     SCENARIO_MAX_NPC_SHEETS,
     SCENARIO_MAX_OPENINGS,
+    SCENARIO_MAX_PICTURES,
     SCENARIO_MAX_PLACE_ITEMS,
     SCENARIO_MAX_PREGENS,
     SCENARIO_MAX_QUEST_RULES,
@@ -1334,6 +1335,39 @@ def reject_duplicate_covers(rules: list[CoverRule]) -> list[CoverRule]:
 Covers = Annotated[list[CoverRule], Field(max_length=SCENARIO_MAX_COVERS), AfterValidator(reject_duplicate_covers)]
 
 
+class EntryPicture(BaseModel):
+    """
+    로어 항목 하나의 그림(#1163). 붙인 로어북의 항목(entry_id)에 제작자가 올린 그림(image_id, app/portraits/)을 단다.
+
+    장소 항목이면 테이블 방의 그림 창의 배경이고, 인물 항목이면 그 인물의 그림이고,
+    사건 항목이면 일어난 라운드의 컷신이다.
+    그림이 자기가 올린 것인지는 저장할 때, 항목이 붙인 로어북의 장소, 인물, 사건인지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    entry_id: uuid.UUID
+    image_id: uuid.UUID
+
+    @field_serializer('entry_id', 'image_id')
+    def id_as_text(self, value: uuid.UUID) -> str:
+        """ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return str(value)
+
+
+def reject_duplicate_pictures(pictures: list[EntryPicture]) -> list[EntryPicture]:
+    """같은 항목의 그림이 둘이면 거부한다. 항목 하나에 그림 하나다."""
+    entry_ids = [picture.entry_id for picture in pictures]
+    if len(set(entry_ids)) != len(entry_ids):
+        raise ValueError('같은 항목의 그림이 두 번 있습니다.')
+    return pictures
+
+
+Pictures = Annotated[
+    list[EntryPicture], Field(max_length=SCENARIO_MAX_PICTURES), AfterValidator(reject_duplicate_pictures)
+]
+
+
 class PlacedTrap(BaseModel):
     """
     미리 놓인 덫 하나(#806 ②). 그 장소(place_id)에 덫 물건(entry_id) 하나가 놓여 있다.
@@ -1784,6 +1818,8 @@ class ScenarioCreate(AssetCreate):
     covers: Covers = []
     # 미리 놓인 덫(#806 ②)
     traps: PlacedTraps = []
+    # 로어 항목마다의 그림(#1163). 장소의 배경, 인물의 그림, 사건의 컷신
+    pictures: Pictures = []
     # 무작위 조우 표(#283). 길을 오거나 길게 쉬면 엔진이 굴린다
     wanders: Wanders = []
     happenings: Happenings = []
@@ -1812,7 +1848,8 @@ class ScenarioUpdate(AssetUpdate):
     null 을 보내면 비운다.
     보내지 않으면 그대로 둔다.
     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-    quests, routes, landmarks, place_items, covers, traps, wanders, happenings, chapters, npc_places, character_modes 는
+    quests, routes, landmarks, place_items, covers, traps, pictures, wanders, happenings, chapters, npc_places,
+    character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -1846,6 +1883,7 @@ class ScenarioUpdate(AssetUpdate):
     place_items: PlaceItems | None = None
     covers: Covers | None = None
     traps: PlacedTraps | None = None
+    pictures: Pictures | None = None
     wanders: Wanders | None = None
     happenings: Happenings | None = None
     chapters: Chapters | None = None
@@ -1912,6 +1950,7 @@ class ScenarioDetail(ScenarioSummary):
     place_items: list[PlaceItem]
     covers: list[CoverRule]
     traps: list[PlacedTrap]
+    pictures: list[EntryPicture]
     wanders: list[WanderTable]
     happenings: list[HappeningRule]
     chapters: list[Chapter]

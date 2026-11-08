@@ -167,6 +167,7 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      프리젠의 캐릭터 그림(pregens[].image_id, #983)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 #  69: 룰북의 규칙에 굴림이 있다(#404). rulebook.rules.roll: 주사위의 개수(count), 성공을 가르는 쪽(style: over, under),
 #      under 에서 난이도마다 기량에 더하는 값(shifts). 그 전의 판은 주사위 하나의 over 다
+#      로어 항목마다의 그림(pictures: entry_id, image_id, #1163)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 69
 
 
@@ -670,6 +671,17 @@ class CoverSnapshot(BaseModel):
     cover: int
 
 
+class PictureSnapshot(BaseModel):
+    """
+    로어 항목 하나의 그림(#1163). 판 안의 장소, 인물, 사건 항목 하나(entry_id)에 제작자가 올린 그림(image_id)이다.
+
+    장소면 테이블 방의 배경, 인물이면 그 인물의 그림, 사건이면 일어난 라운드의 컷신이다.
+    """
+
+    entry_id: uuid.UUID
+    image_id: uuid.UUID
+
+
 class PlacedTrapSnapshot(BaseModel):
     """
     미리 놓인 덫 하나(#806 ②). 판 안의 장소 항목(place_id)에 덫 물건(entry_id, 아이템 규칙에 trap 이 있다)이 놓였다.
@@ -762,6 +774,8 @@ class Snapshot(BaseModel):
     covers: list[CoverSnapshot] = []
     # 미리 놓인 덫들(#806 ②). 장소는 판 안의 장소 항목, 물건은 덫을 적은 물건이다. 있으면 시작 장소도 있다
     traps: list[PlacedTrapSnapshot] = []
+    # 로어 항목마다의 그림(#1163). 항목은 판 안의 장소, 인물, 사건 항목이다. 비워도 되는 칸이라 형식이 그대로다
+    pictures: list[PictureSnapshot] = []
     # 무작위 조우 표들(#283). 장소는 판 안의 장소 항목이고 몬스터는 판의 몬스터다. 있으면 시작 장소도 있다.
     # 형식 57 보다 옛 판에는 없다
     wanders: list[WanderTableSnapshot] = []
@@ -1360,6 +1374,7 @@ def build_snapshot(
         place_items=[PlaceItemSnapshot(**rule) for rule in scenario.place_items],
         covers=[CoverSnapshot(**rule) for rule in scenario.covers],
         traps=[PlacedTrapSnapshot(**trap) for trap in scenario.traps],
+        pictures=[PictureSnapshot(**picture) for picture in scenario.pictures],
         wanders=[WanderTableSnapshot(**table) for table in scenario.wanders],
         happenings=[HappeningSnapshot(**rule) for rule in scenario.happenings],
         chapters=[ChapterSnapshot(**chapter) for chapter in scenario.chapters],

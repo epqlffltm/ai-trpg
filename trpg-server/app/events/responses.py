@@ -214,7 +214,18 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     ),
     # 퀘스트의 이름과 상태, 보상, 기한, 서버가 바꾼 까닭(기한을 넘김)은 공개다. 사건의 글(로어북)은 적지 않는다.
     # 숨긴 퀘스트에는 기한을 적지 않는다(드러날 때 정한다). 숨김에서 바로 끝낸 것도 기한이 비어 있다
-    EventType.QUEST_CHANGED: ('entry_id', 'name', 'previous', 'status', 'rewards', 'consumed', 'due_at', 'reason'),
+    # 이룬 퀘스트에는 그 사건의 컷신(image_id, #1163)이 있다. 그림을 붙이지 않았으면 null 이다
+    EventType.QUEST_CHANGED: (
+        'entry_id',
+        'name',
+        'previous',
+        'status',
+        'rewards',
+        'consumed',
+        'due_at',
+        'reason',
+        'image_id',
+    ),
     EventType.CLOCK_STEP_CHANGED: ('previous', 'next_step_minutes', 'default'),
     # 캐릭터의 위치는 공개다. 아는 장소만 적히므로 숨긴 장소는 새지 않는다
     # 업혀 갔으면 업은 사람(carried_by)이 더 있다(#367)
@@ -234,7 +245,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'unbarred',
     ),
     # 판의 사건은 공개다. 일어난 것과 옮긴 것만 적는다. 조건은 적지 않는다(아직 일어나지 않은 사건이 드러나지 않게)
-    EventType.HAPPENING_OCCURRED: ('round', 'entry_id', 'name', 'moves'),
+    # 일어난 사건의 컷신(image_id, #1163)도 공개다. 그림을 붙이지 않았으면 null 이다
+    EventType.HAPPENING_OCCURRED: ('round', 'entry_id', 'name', 'moves', 'image_id'),
     # 넘어간 장은 공개다. 넘어온 장과 이름, 몇째 장인가만 적는다. 다음 장의 조건은 적지 않는다(#481)
     EventType.CHAPTER_CHANGED: ('round', 'from', 'to', 'number'),
     # 레벨은 공개다. 앉은 사람은 서로의 시트를 본다(#286)

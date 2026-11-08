@@ -4581,6 +4581,40 @@ export interface components {
             updated_at: string;
         };
         /**
+         * EntryPicture
+         * @description 로어 항목 하나의 그림(#1163). 붙인 로어북의 항목(entry_id)에 제작자가 올린 그림(image_id, app/portraits/)을 단다.
+         *
+         *     장소 항목이면 테이블 방의 그림 창의 배경이고, 인물 항목이면 그 인물의 그림이고,
+         *     사건 항목이면 일어난 라운드의 컷신이다.
+         *     그림이 자기가 올린 것인지는 저장할 때, 항목이 붙인 로어북의 장소, 인물, 사건인지는 게시할 때 본다.
+         */
+        "EntryPicture-Input": {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+        };
+        /**
+         * EntryPicture
+         * @description 로어 항목 하나의 그림(#1163). 붙인 로어북의 항목(entry_id)에 제작자가 올린 그림(image_id, app/portraits/)을 단다.
+         *
+         *     장소 항목이면 테이블 방의 그림 창의 배경이고, 인물 항목이면 그 인물의 그림이고,
+         *     사건 항목이면 일어난 라운드의 컷신이다.
+         *     그림이 자기가 올린 것인지는 저장할 때, 항목이 붙인 로어북의 장소, 인물, 사건인지는 게시할 때 본다.
+         */
+        "EntryPicture-Output": {
+            /** Entry Id */
+            entry_id: string;
+            /** Image Id */
+            image_id: string;
+        };
+        /**
          * EntrySnapshot
          * @description 로어북의 항목 하나. 종류를 적지 않은 것(평가 데이터, 테스트)은 기타다.
          *
@@ -7644,6 +7678,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Image Id */
+            image_id?: string | null;
             /** Injuries */
             injuries: string[];
             /**
@@ -7788,6 +7824,24 @@ export interface components {
             needs_tool: boolean;
         };
         /**
+         * PictureSnapshot
+         * @description 로어 항목 하나의 그림(#1163). 판 안의 장소, 인물, 사건 항목 하나(entry_id)에 제작자가 올린 그림(image_id)이다.
+         *
+         *     장소면 테이블 방의 배경, 인물이면 그 인물의 그림, 사건이면 일어난 라운드의 컷신이다.
+         */
+        PictureSnapshot: {
+            /**
+             * Entry Id
+             * Format: uuid
+             */
+            entry_id: string;
+            /**
+             * Image Id
+             * Format: uuid
+             */
+            image_id: string;
+        };
+        /**
          * PierceOut
          * @description 관통 굴림(#276). 눈 + 관통력(ap)이 target(그 부위의 방어 + 룰북의 기준값) 이상이면 관통이다.
          */
@@ -7918,6 +7972,8 @@ export interface components {
              * Format: uuid
              */
             entry_id: string;
+            /** Image Id */
+            image_id?: string | null;
             /**
              * Items
              * @default []
@@ -10240,6 +10296,11 @@ export interface components {
              */
             openings: string[];
             /**
+             * Pictures
+             * @default []
+             */
+            pictures: components["schemas"]["EntryPicture-Input"][];
+            /**
              * Place Items
              * @default []
              */
@@ -10351,6 +10412,8 @@ export interface components {
             npc_sheets: components["schemas"]["NpcSheet-Output"][];
             /** Openings */
             openings: string[];
+            /** Pictures */
+            pictures: components["schemas"]["EntryPicture-Output"][];
             /** Place Items */
             place_items: components["schemas"]["PlaceItem-Output"][];
             player_made_hp: components["schemas"]["PlayerMadeHp"] | null;
@@ -10458,7 +10521,8 @@ export interface components {
          *     null 을 보내면 비운다.
          *     보내지 않으면 그대로 둔다.
          *     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
-         *     quests, routes, landmarks, place_items, covers, traps, wanders, happenings, chapters, npc_places, character_modes 는
+         *     quests, routes, landmarks, place_items, covers, traps, pictures, wanders, happenings, chapters, npc_places,
+         *     character_modes 는
          *     보낸 목록으로 통째로 바꾼다.
          *     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
          *     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -10499,6 +10563,8 @@ export interface components {
             npc_sheets?: components["schemas"]["NpcSheet-Input"][] | null;
             /** Openings */
             openings?: string[] | null;
+            /** Pictures */
+            pictures?: components["schemas"]["EntryPicture-Input"][] | null;
             /** Place Items */
             place_items?: components["schemas"]["PlaceItem-Input"][] | null;
             player_made_hp?: components["schemas"]["PlayerMadeHp"] | null;
@@ -11011,6 +11077,11 @@ export interface components {
             npc_sheets: components["schemas"]["NpcSheetSnapshot"][];
             /** Openings */
             openings: string[];
+            /**
+             * Pictures
+             * @default []
+             */
+            pictures: components["schemas"]["PictureSnapshot"][];
             /**
              * Place Items
              * @default []

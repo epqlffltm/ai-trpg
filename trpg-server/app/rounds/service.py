@@ -64,6 +64,7 @@ from app.events import repository as event_repository
 from app.events.models import EventType, TableEvent
 from app.memory import repository as memory_repository
 from app.observability.metrics import record_round_closed
+from app.portraits.seats import entry_pictures
 from app.rounds import (
     chapters,
     deadlines,
@@ -199,13 +200,13 @@ async def get_current_round(session: AsyncSession, user_id: uuid.UUID, table_id:
 
 async def get_scene_cast(
     session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID
-) -> tuple[Round, Scene, dict[uuid.UUID, CatalogItem], Ruleset | None]:
+) -> tuple[Round, Scene, dict[uuid.UUID, CatalogItem], Ruleset | None, dict[uuid.UUID, uuid.UUID]]:
     """
     자기가 앉아 있는 테이블의 가장 최근 라운드와, 그 장면을 돌려준다. 행동으로 겨눌 수 있는 NPC 와 몬스터들이다.
 
     판의 물건들(이름)도 돌려준다. 몬스터와 인물이 지닌 것의 이름이다. 지닐 수 있는 것이 없으면 비운다.
     판의 규칙에 수치(#804)가 있으면 그 규칙도 돌려준다(인물과 몬스터의 수치). 없으면 None 이다.
-    둘 다 필요 없으면 판을 읽지 않는다.
+    둘 다 필요 없으면 판을 읽지 않는다. 로어 항목마다의 그림(#1163, 항목 → 그림)도 돌려준다. 인물의 그림이다.
     앉지 않았으면 TableNotFoundError, 아직 시작하지 않았으면 RoundConflictError.
     """
     table, round_ = await get_current_round(session, user_id, table_id)
@@ -215,7 +216,7 @@ async def get_scene_cast(
     snapshot = read_snapshot(table.content) if carrying or measured else None
     things = items.catalog(snapshot) if carrying else {}
     ruleset = snapshot.rulebook.rules if measured else None
-    return round_, scene, things, ruleset
+    return round_, scene, things, ruleset, entry_pictures(table.content)
 
 
 def may_carry(scene: Scene) -> bool:

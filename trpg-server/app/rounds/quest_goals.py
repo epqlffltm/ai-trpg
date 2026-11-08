@@ -47,6 +47,7 @@ from app.assets.scenarios.snapshot import QuestConditionSnapshot, read_snapshot
 from app.engine.ruleset import Progression
 from app.events import recorder
 from app.events.models import EventType
+from app.portraits.seats import with_cutscene
 from app.rounds.experience import record_leveled
 from app.rounds.quest_handover import hand_over
 from app.tables import chapters, items, quests, sheets
@@ -328,7 +329,9 @@ def record_changes(session: AsyncSession, table: GameTable, changes: list[dict],
     엔진이 바꾼 퀘스트마다 이벤트를 적는다. 닫힘의 묶음(group)에 넣는다. 행한 사람은 없다.
 
     보상의 경험치로 레벨이 오른 캐릭터마다 그 퀘스트의 이벤트 뒤에 character_leveled 를 잇는다(#286).
+    이룬 퀘스트(succeeded)의 이벤트에는 그 사건 항목의 컷신(image_id, #1163)을 붙인다.
     """
     for payload in changes:
-        recorder.record(session, table, EventType.QUEST_CHANGED, payload=payload, group=group)
+        shown = with_cutscene(table.content, payload) if payload.get('status') == QuestStatus.SUCCEEDED else payload
+        recorder.record(session, table, EventType.QUEST_CHANGED, payload=shown, group=group)
         record_leveled(session, table, payload['rewards'], group=group)

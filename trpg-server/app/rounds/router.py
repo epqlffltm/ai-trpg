@@ -198,14 +198,20 @@ def open_resources(ruleset: Ruleset | None, bearer: Bearer, holder: ResourceHold
 
 
 def to_cast(
-    round_: Round, scene: Scene, things: dict[uuid.UUID, CatalogItem], ruleset: Ruleset | None = None
+    round_: Round,
+    scene: Scene,
+    things: dict[uuid.UUID, CatalogItem],
+    ruleset: Ruleset | None = None,
+    pictures: dict[uuid.UUID, uuid.UUID] | None = None,
 ) -> SceneCastOut:
     """
     이번 장면의 인물과 몬스터들을 앉은 사람에게 보여 주는 응답으로 바꾼다. 이름과 생사(와 몸 상태)를 싣는다.
 
     인물과 몬스터 모두 지닌 물건도 싣는다. things 는 판의 물건들이다(이름).
     판의 규칙(ruleset)이 있으면 모두가 보는 수치(#804)도 싣는다.
+    pictures 는 판의 로어 항목마다의 그림이다(#1163). 장면에 나온 인물의 그림만 싣는다.
     """
+    pictures = pictures or {}
     people = [
         PersonOut(
             id=member.entry_id,
@@ -218,6 +224,7 @@ def to_cast(
             merchant=trades.is_merchant(member),
             place_id=member.npc.place_id,
             resources=open_resources(ruleset, member.npc, ResourceHolder.NPCS),
+            image_id=pictures.get(member.entry_id),
         )
         for member in scene.cast
     ]
@@ -308,8 +315,8 @@ async def read_scene_cast(table_id: uuid.UUID, user: CurrentUser, session: Sessi
     자리가 있는 인물은 살아 있는 캐릭터가 서 있는 장소들의 인물, 없는 인물은 장면에 이름이나 호칭이 나온 인물만
     들어간다(#282). 테이블의 인물 전부가 아니다.
     """
-    round_, scene, things, ruleset = await service.get_scene_cast(session, user.user_id, table_id)
-    return to_cast(round_, scene, things, ruleset)
+    round_, scene, things, ruleset, pictures = await service.get_scene_cast(session, user.user_id, table_id)
+    return to_cast(round_, scene, things, ruleset, pictures)
 
 
 @router.get('/{number}/charges', response_model=list[ChargeOut], status_code=status.HTTP_200_OK)
