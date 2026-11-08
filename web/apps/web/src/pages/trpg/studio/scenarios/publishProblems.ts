@@ -87,6 +87,9 @@ const PROBLEMS: Record<string, ProblemText> = {
   chapter_condition_missing: { text: '장으로 넘어오는 조건이 가리키는 것이 없습니다.', section: 'chapters' },
   chapter_condition_invalid: { text: '장으로 넘어오는 조건이 맞지 않는 종류를 가리킵니다.', section: 'chapters' },
   chapter_condition_impossible: { text: '채울 수 없는 장의 넘어오는 조건이 있습니다.', section: 'chapters' },
+  achievement_condition_missing: { text: '업적의 받는 조건이 가리키는 것이 없습니다.', section: 'achievements' },
+  achievement_condition_invalid: { text: '업적의 받는 조건이 맞지 않는 종류를 가리킵니다.', section: 'achievements' },
+  achievement_condition_impossible: { text: '채울 수 없는 업적의 받는 조건이 있습니다. 아무도 받지 못합니다.', section: 'achievements' },
   chapter_start_locked: { text: '시작 장소를 첫 장 뒤의 장이 엽니다. 시작 장소는 처음부터 열려 있어야 합니다.', section: 'chapters' },
 };
 

@@ -17,12 +17,13 @@ export function earlierQuestChoices(lorebooks: AssetSummary[], entryLists: (Lore
   );
 }
 
-/** 저장된 시나리오가 캠페인의 앞 편의 퀘스트를 보는 조건을 쓰는가(퀘스트, 사건, 장) */
+/** 저장된 시나리오가 캠페인의 앞 편의 퀘스트를 보는 조건을 쓰는가(퀘스트, 사건, 장, 업적) */
 export function usesEarlierQuests(scenario: ScenarioDetail): boolean {
   const conditions = [
     ...scenario.quests.flatMap((rule) => [...rule.reveal, ...rule.fail]),
     ...scenario.happenings.flatMap((rule) => rule.when),
     ...scenario.chapters.flatMap((chapter) => chapter.when),
+    ...scenario.achievements.flatMap((achievement) => achievement.when),
   ];
   return conditions.some((condition) => isEarlierQuest(condition.kind));
 }

@@ -40,6 +40,7 @@ export function scenarioDetail(extra: Record<string, unknown> = {}) {
     submaps: [],
     happenings: [],
     chapters: [],
+    achievements: [],
     npc_places: [],
     player_made_hp: null,
     reroll_allowed: false,

@@ -11,6 +11,7 @@ import type { ScenarioDetail } from '../../../../api/types';
 import { AssetLoad } from '../AssetLoad';
 import { kindText, studioPath } from '../studioKinds';
 import { useSavedNotice } from '../useSavedNotice';
+import { AchievementsTab } from './AchievementsTab';
 import { BasicsTab } from './BasicsTab';
 import { ChaptersTab } from './ChaptersTab';
 import { CharactersTab } from './CharactersTab';
@@ -85,6 +86,7 @@ function panelOf(tab: ScenarioTab, scenario: ScenarioDetail, goTo: (tab: Scenari
   if (tab === 'monsters') return <MonstersTab scenario={scenario} goTo={goTo} />;
   if (tab === 'quests') return <QuestsTab scenario={scenario} goTo={goTo} />;
   if (tab === 'chapters') return <ChaptersTab scenario={scenario} />;
+  if (tab === 'achievements') return <AchievementsTab scenario={scenario} />;
   if (tab === 'pictures') return <PicturesTab scenario={scenario} />;
   if (tab === 'listing') return <ListingTab scenario={scenario} />;
   return <PublishTab scenario={scenario} goTo={goTo} />;
