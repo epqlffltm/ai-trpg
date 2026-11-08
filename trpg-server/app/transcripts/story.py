@@ -227,6 +227,11 @@ def injury_ended(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'부상이 끝남: {injured_name(payload)} · {injury_name(payload, labels)}')]
 
 
+def injury_hurt(payload: dict, labels: Labels) -> list[Block]:
+    """상태가 피해를 입힘(#254). 얼마나 깎였는지는 그 뒤의 변화에 있다."""
+    return [Note(f'상태의 피해: {injured_name(payload)} · {injury_name(payload, labels)}')]
+
+
 def injury_treated(payload: dict, labels: Labels) -> list[Block]:
     """치료."""
     result = '나음' if payload.get('healed') else outcome(payload.get('treated'))
@@ -549,6 +554,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.NPC_CHANGED: body_changed,
     EventType.INJURY_GAINED: injury_gained,
     EventType.INJURY_ENDED: injury_ended,
+    EventType.INJURY_HURT: injury_hurt,
     EventType.INJURY_TREATED: injury_treated,
     EventType.ITEMS_GAINED: items_gained,
     EventType.ITEMS_LOST: items_lost,

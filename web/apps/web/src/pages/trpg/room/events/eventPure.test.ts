@@ -30,7 +30,7 @@ const ALL: EventType[] = [
   'narration_style_changed', 'round_time_limit_changed', 'narration_tier_changed', 'narration_model_changed', 'credit_wait_changed',
   'whisper_notice_changed', 'friendly_fire_changed', 'friendly_fire_consent_changed', 'references_changed', 'ledger_drafts_changed', 'whisper_sent', 'dice_rolled', 'table_started', 'gm_narration',
   'round_opened', 'player_action', 'check_rolled', 'hp_changed', 'resource_changed', 'npc_changed', 'npc_attitude_changed', 'monster_changed',
-  'monster_attacked', 'monster_chased', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_treated', 'naming_resolved', 'death_save_rolled',
+  'monster_attacked', 'monster_chased', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_hurt', 'injury_treated', 'naming_resolved', 'death_save_rolled',
   'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'trap_set', 'trap_sprung', 'trap_disarmed', 'steal_attempted',
   'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'chapter_changed', 'character_leveled', 'experience_gained', 'abilities_raised', 'place_searched', 'character_rested',
   'character_revived', 'round_closed', 'round_reverted', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
@@ -48,6 +48,10 @@ describe('eventLine', () => {
       if (IN_ROUNDS.includes(type)) expect(result, type).toBeNull();
       else expect(result?.text, type).toBeTruthy();
     }
+  });
+
+  it('상태의 피해는 누가 무슨 부상으로 다쳤는지 적는다(#254)', () => {
+    expect(line('injury_hurt', { character_name: '렌', injury: 'poisoned' })?.text).toContain('(으)로 피해');
   });
 
   it('죽음의 굴림은 판의 규칙이 눈 ≤ 기량이면 목표 이하가 성공이라고 적는다(#404)', () => {

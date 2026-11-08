@@ -69,6 +69,24 @@ def inflict(
     return injury
 
 
+def find_counting(injuries: list[TableInjury], key: str) -> TableInjury | None:
+    """
+    아직 입고 있는 이 부상 가운데 라운드로 세는 것(풀릴 라운드가 적힌 것). 없으면 None.
+
+    수치의 문턱에서 생긴 것(#804)은 라운드로 풀리지 않아 풀릴 라운드가 없다. 그런 것은 다시 걸려도 새로 세지 않는다.
+    """
+    return next((one for one in active(injuries) if one.injury == key and one.ends_after_round is not None), None)
+
+
+def recount(injury: TableInjury, ends_after_round: int) -> None:
+    """
+    짧은 부상이 다시 걸렸다(#254). 하나로 남기고 풀릴 라운드를 새로 센다. 효과가 둘로 겹치지 않는다.
+
+    더 일찍 풀리게 하지는 않는다. 이미 더 늦게 풀릴 것이면 그대로 둔다.
+    """
+    injury.ends_after_round = max(injury.ends_after_round or 0, ends_after_round)
+
+
 def find_active(injuries: list[TableInjury], key: str) -> TableInjury | None:
     """아직 입고 있는 이 부상. 같은 부상을 둘 입었으면 먼저 생긴 것이다. 입고 있지 않으면 None."""
     return next((injury for injury in active(injuries) if injury.injury == key), None)

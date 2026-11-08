@@ -28,6 +28,7 @@ from app.rounds.narrator import (
     DropNote,
     HandOverNote,
     HealNote,
+    HurtNote,
     Impact,
     InjuryNote,
     ItemActionNote,
@@ -195,6 +196,12 @@ def describe_healed(healed: list[HealNote]) -> str:
     """시간이 지나 나은 부상들. 예: [나은 부상: 팔 골절(후유증: 굽은 팔), 다리 부상]"""
     names = [note.name + (f'(후유증: {note.aftermath})' if note.aftermath else '') for note in healed]
     return f'[나은 부상: {", ".join(names)}]'
+
+
+def describe_hurt_by(hurt_by: list[HurtNote]) -> str:
+    """상태가 입힌 피해들(#254). 예: [상태의 피해: 중독(독) 3, 출혈 2]"""
+    parts = [note.name + (f'({note.nature})' if note.nature else '') + f' {note.amount}' for note in hurt_by]
+    return f'[상태의 피해: {", ".join(parts)}]'
 
 
 def describe_impact(impact: Impact) -> str:
@@ -1004,6 +1011,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_recovery(move.recovery))
     if move.healed:
         parts.append(describe_healed(move.healed))
+    if move.hurt_by:
+        parts.append(describe_hurt_by(move.hurt_by))
     if move.injuries:
         parts.append(f'[입은 부상: {describe_injuries(move.injuries)}]')
     if move.items:

@@ -437,6 +437,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'injury',
         'reason',
     ),
+    # 상태의 피해(#254)도 공개다. 누가 무슨 부상으로 깎였는지. 얼마나 깎였는지는 그 뒤의 변화에 있다
+    EventType.INJURY_HURT: ('round', 'user_id', 'character_name', 'entry_id', 'monster_id', 'name', 'injury'),
     # 치료의 결과도 공개다. 나을 시각과 치료 실패 표의 눈까지 보인다. HP 의 변화는 따로 적힌다
     EventType.INJURY_TREATED: (
         'round',

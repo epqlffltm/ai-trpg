@@ -170,8 +170,14 @@ def dumped(
     맞추기의 성질(#886 ②)을 뺀다. damage_natures 가 거짓이면 기술의 효과의 피해의 성질(#886 ③)을 뺀다.
     progression 이 거짓이면 성장(#286)을, roll 이 거짓이면 가장 나중에 더한 굴림(#404)을 뺀다.
     지금의 값(RELEASED)과 견줄 때만 모두 참으로 준다.
+    부상의 라운드마다의 피해(damage, #254)는 어느 템플릿에도 없다. 비어 있는 칸(null)만 뺀다.
+    템플릿에 적으면 해시가 바뀐다.
     """
     values = rules.model_dump(mode='json')
+    values['injuries'] = [
+        {key: value for key, value in injury.items() if not (key == 'damage' and value is None)}
+        for injury in values['injuries']
+    ]
     if not roll:
         values.pop('roll')
     if not progression:
