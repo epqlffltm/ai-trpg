@@ -615,6 +615,7 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             monster_sheet.resistances,
             monster_sheet.nature,
             monster_sheet.xp,
+            monster_sheet.chases,
         )
         for monster_sheet in read_monster_sheets(scenario)
     ]

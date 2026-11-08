@@ -420,6 +420,9 @@ const DESCRIBE: Record<EventType, Describe> = {
   monster_changed: (p) => changeText(p, '몬스터'),
   npc_attitude_changed: (p) => `${text(p, 'name') ?? '인물'}: 태도 ${attitudeLabel(text(p, 'attitude') ?? '') ?? '?'}`,
   monster_attacked: (p, ctx, e) => attackText(p, ctx, e),
+  // 쫓아온 몬스터(#254). 그 차례에는 치지 않았다
+  monster_chased: (p, ctx, e) =>
+    `${text(p, 'name') ?? '몬스터'}: ${who(p, ctx, e)}을(를) 쫓아 ${placeOf(p, 'to_place') ?? '?'}까지 따라옴`,
   npc_attacked: (p, ctx, e) => attackText(p, ctx, e),
   injury_gained: (p, ctx, e) => `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} 입음`,
   injury_ended: (p, ctx, e) => `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} 풀림`,

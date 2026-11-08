@@ -632,6 +632,8 @@ class MonsterSnapshot(BaseModel):
     nature: str | None = None
     # 쓰러뜨리면 주는 경험치(#286 ②). 그 전의 판의 몬스터는 주지 않는다
     xp: int = 0
+    # 도망치면 쫓아오는가(#254, app/rounds/monster_chase.py). 그 전의 판의 몬스터는 쫓아오지 않는다
+    chases: bool = False
 
 
 class EncounterSnapshot(BaseModel):
@@ -1285,10 +1287,11 @@ def snapshot_monster(
     resistances: Resistances = (),
     nature: str | None = None,
     xp: int = 0,
+    chases: bool = False,
 ) -> MonsterSnapshot:
     """
     몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어와 불굴 세이브, 면역에 더하고 빼는 성질, 저항과
-    타고난 피해의 성질(#886 ③), 쓰러뜨리면 주는 경험치(#286 ②)를 굳힌다.
+    타고난 피해의 성질(#886 ③), 쓰러뜨리면 주는 경험치(#286 ②), 쫓아오는지(#254)를 굳힌다.
     """
     return MonsterSnapshot(
         id=monster.id,
@@ -1308,6 +1311,7 @@ def snapshot_monster(
         resistances=resistances,
         nature=nature,
         xp=xp,
+        chases=chases,
     )
 
 

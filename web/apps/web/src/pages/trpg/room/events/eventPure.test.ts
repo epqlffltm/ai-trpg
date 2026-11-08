@@ -30,7 +30,7 @@ const ALL: EventType[] = [
   'narration_style_changed', 'round_time_limit_changed', 'narration_tier_changed', 'narration_model_changed', 'credit_wait_changed',
   'whisper_notice_changed', 'friendly_fire_changed', 'friendly_fire_consent_changed', 'references_changed', 'ledger_drafts_changed', 'whisper_sent', 'dice_rolled', 'table_started', 'gm_narration',
   'round_opened', 'player_action', 'check_rolled', 'hp_changed', 'resource_changed', 'npc_changed', 'npc_attitude_changed', 'monster_changed',
-  'monster_attacked', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_treated', 'naming_resolved', 'death_save_rolled',
+  'monster_attacked', 'monster_chased', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_treated', 'naming_resolved', 'death_save_rolled',
   'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'trap_set', 'trap_sprung', 'trap_disarmed', 'steal_attempted',
   'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'chapter_changed', 'character_leveled', 'experience_gained', 'abilities_raised', 'place_searched', 'character_rested',
   'character_revived', 'round_closed', 'round_reverted', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
@@ -148,6 +148,8 @@ describe('eventLine', () => {
     expect(line('aid_used', { character_name: '렌', act: 'pick', name: '락픽', bonus: 2, lost: true, broken: true })?.text).toBe('렌: 락픽 +2 씀, 부러짐');
     expect(line('aid_used', { character_name: '렌', act: 'cross', name: '밧줄', bonus: 0, lost: false, broken: false })?.text).toBe('렌: 밧줄 씀');
     expect(line('monster_attacked', { name: '수로 쥐', attack: '물기', character_name: '렌', success: true })?.text).toBe('수로 쥐: 물기 → 렌 맞힘');
+    const chase = { name: '들개', character_name: '렌', from_place: { entry_id: 'p1', name: '수로 입구' }, to_place: { entry_id: 'p2', name: '배수로' } };
+    expect(line('monster_chased', chase)?.text).toBe('들개: 렌을(를) 쫓아 배수로까지 따라옴');
     const attack = { name: '할퀴기', ability: 'str', difficulty: 'normal', harm: 'light' };
     expect(line('monster_attacked', { name: '고블린', attack, character_name: '렌', success: false })?.text).toBe('고블린: 할퀴기 → 렌 빗나감');
     const blow = {

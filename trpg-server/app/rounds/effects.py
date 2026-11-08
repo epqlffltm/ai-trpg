@@ -61,14 +61,22 @@ class Judging:
     # 라운드를 닫기 시작할 때 이미 쓰러져 있던(죽지 않은) 앉은 사람들(user_id).
     # 몬스터와 NPC 는 이들도 칠 수 있다. 이번 라운드에 쓰러진 사람은 들지 않는다(app/rounds/downed_strikes.py)
     downed_at_start: frozenset[uuid.UUID] = frozenset()
+    # 라운드를 닫기 시작할 때 앉은 사람마다 서 있던 장소(user_id → 장소, 맵에 서 있지 않으면 None).
+    # 그 뒤 차례에서 떠난 사람이 도망친 사람이다. 쫓아오는 몬스터가 본다(#254, app/rounds/monster_chase.py)
+    places_at_start: dict[uuid.UUID, uuid.UUID | None] = field(default_factory=dict)
     # 이번 라운드에 엄폐한 앉은 사람들과 그 장소의 커버(user_id → 커버, #276). 판정을 시작하기 전에 정한다.
     # 그 라운드 동안 그 사람의 세이브에 든다(app/rounds/covers.py, app/rounds/blows.py)
     covers: dict[uuid.UUID, int] = field(default_factory=dict)
 
 
 def mark_fight(judging: Judging, monster: TableMonster, member: TableMember) -> None:
-    """몬스터 한 마리와 앉은 사람 하나가 이번 라운드에 싸웠다고 적는다. 처음 싸운 라운드도 적는다."""
+    """
+    몬스터 한 마리와 앉은 사람 하나가 이번 라운드에 싸웠다고 적는다. 처음 싸운 라운드와 마지막으로 싸운 사람도 적는다.
+
+    마지막으로 싸운 사람은 흩어져 도망쳤을 때 쫓을 사람이다(#254, app/rounds/monster_chase.py).
+    """
     judging.fights.setdefault(monster.id, set()).add(member.user_id)
+    monster.last_foe = member.user_id
     if monster.fought_round is None:
         monster.fought_round = judging.round_number
 

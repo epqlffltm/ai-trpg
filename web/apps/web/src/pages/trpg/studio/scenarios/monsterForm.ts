@@ -4,6 +4,7 @@
 // 부위마다 타고난 방어(1~10, 룰북의 장비 칸), 타고난 불굴 세이브(1~10)를 준다. 시트를 적은 몬스터만 판에 들어간다.
 // 부상의 성질 가운데 면역과 약함도 준다(#799). 면역은 타입의 성질표에 더하고, 약함은 거기서 뺀다. 둘에 같은 성질은 없다.
 // 쓰러뜨리면 주는 경험치(#286 ②)도 준다. 받는 사람들이 나누는지는 시나리오의 xp_split 이다(캐릭터 탭).
+// 도망치면 쫓아오는지(#254)도 준다. 쫓아오면 같은 장소에서 떠난 캐릭터를 길 한 칸씩 따라간다(서버가 정한다).
 // 지닌 물건과 공격의 검사는 인물 시트와 같다(stacksForm, attacksForm).
 
 import type { ItemRule, MonsterSheet, MonsterSheetBody, Ruleset } from '../../../../api/types';
@@ -32,6 +33,8 @@ export const INJURY_NATURES: Record<InjuryNature, string> = {
 export type MonsterDraft = {
   sheet: SheetDraft;
   dull: boolean;
+  /** 도망치면 쫓아오는가(#254) */
+  chases: boolean;
   /** 칸(룰북의 장비 칸) → 방어. 빈 글은 타고난 방어가 없다 */
   natural: Record<string, string>;
   ward: string;
@@ -57,6 +60,7 @@ export function monsterDraft(monster: MonsterSheet | undefined, rules: Ruleset):
   return {
     sheet: sheetDraft(monster?.sheet, rules),
     dull: monster?.dull ?? false,
+    chases: monster?.chases ?? false,
     natural,
     ward: monster?.ward ? String(monster.ward) : '',
     equipment: carriedDrafts(monster?.equipment ?? []),
@@ -138,6 +142,7 @@ export function toMonsterSheet(monsterId: string, draft: MonsterDraft, rules: Ru
     monster_id: monsterId,
     sheet,
     dull: draft.dull,
+    chases: draft.chases,
     natural_armor: Object.entries(draft.natural)
       .filter(([, text]) => text.trim() !== '')
       .map(([slot, text]) => ({ slot, defense: Number(text.trim()) })),
@@ -167,6 +172,7 @@ export function withoutMonsterSheet(sheets: MonsterSheet[], monsterId: string): 
 export function monsterLine(monster: MonsterSheet, rules: Ruleset | null): string {
   const parts = [sheetLine(monster.sheet, rules)];
   if (monster.dull) parts.push('둔함');
+  if (monster.chases) parts.push('쫓아옴');
   if (monster.attacks.length > 0) parts.push(`공격 ${monster.attacks.length}`);
   if (monster.equipment.length > 0) parts.push(`장비 ${monster.equipment.length}`);
   if (monster.inventory.length > 0) parts.push(`소지품 ${monster.inventory.length}`);

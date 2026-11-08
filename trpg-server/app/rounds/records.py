@@ -904,6 +904,9 @@ def record_attack_turn(
     outcome = turn['outcome']
     if 'skipped' in outcome:
         return
+    if 'chased' in outcome:
+        record_chase(session, table, round_number, turn, group)
+        return
     event_type, attacker = ATTACK_EVENTS[turn['kind']]
     payload = {
         'round': round_number,
@@ -928,6 +931,21 @@ def record_attack_turn(
         record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)
     record_attack_effects(session, table, outcome, cause=attacked)
     record_foe_trap(session, table, round_number, turn, cause=attacked)
+
+
+def record_chase(session: AsyncSession, table: GameTable, round_number: int, turn: dict, group: uuid.UUID) -> None:
+    """
+    쫓아오는 몬스터(#254)가 도망친 캐릭터를 길 한 칸 따라간 것을 이벤트로 적는다(monster_chased).
+
+    누구를 쫓아 어디에서 어디로 왔는지다. 원인은 없다(엔진의 차례다). 치지 않았으므로 뒤따르는 것이 없다.
+    """
+    payload = {
+        'round': round_number,
+        'monster_id': turn['monster_id'],
+        'name': turn['name'],
+        **turn['outcome']['chased'],
+    }
+    recorder.record(session, table, EventType.MONSTER_CHASED, payload=payload, group=group)
 
 
 # 덫을 밟은 쪽(#806 ②-b). 차례의 kind 로 찾는다. 이벤트에 적는 칸과, 그 쪽의 변화의 칸이다

@@ -36,7 +36,7 @@ from app.engine.dice import choose
 from app.engine.health import ChangeKind
 from app.engine.injury import Trigger
 from app.engine.ruleset import Difficulty, ResourceHolder
-from app.rounds import blows, foe_traps
+from app.rounds import blows, foe_traps, monster_chase
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import NO_BLOW, Blow, Weapon
 from app.rounds.checks import change_sheet
@@ -250,13 +250,15 @@ def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
     쓰러진 대상을 쳤으면 피해의 주사위가 없고 downed_strike 가 있다(hit_outcome).
     고른 공격의 비용이 모자라면 굴리지 않는다(short_outcome). 비용이 있는 공격이면 낸 비용(cost)을 적는다(#805 ③-a).
     공격을 굴렸으면 그 뒤에 그 장소의 덫 하나를 밟는다(trap, #806 ②-b, app/rounds/foe_traps.py).
+    칠 캐릭터가 없을 때 쫓아오는 몬스터면 도망친 사람을 길 한 칸 따라간다({'chased': …}, #254).
+    따라간 차례에는 치지 않는다(app/rounds/monster_chase.py).
     """
     stopped = stopped_by(judging, monster)
     if stopped is not None:
         return {'skipped': stopped}
     victims = victims_of(judging, monster)
     if not victims:
-        return {'skipped': Skipped.NO_TARGET}
+        return monster_chase.chase(judging, monster) or {'skipped': Skipped.NO_TARGET}
     victim = pick_victim(judging, monster, victims)
     mark_fight(judging, monster.state, victim)
     attack = choose(monster.definition.attacks, judging.dice)
