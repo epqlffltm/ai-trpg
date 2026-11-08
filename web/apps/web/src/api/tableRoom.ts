@@ -7,7 +7,7 @@
 
 import { apiRequest } from './http';
 import type { StreamCursor } from './tableStream';
-import type { CharacterUpdate, ChatMessage, EventPage, FriendlyFire, MessagePage, TableDetail, Whisper, WhisperPage } from './types';
+import type { CharacterUpdate, ChatMessage, EventPage, FreeRoll, FriendlyFire, MessagePage, TableDetail, Whisper, WhisperPage } from './types';
 
 const TABLES = '/api/v1/game/tables';
 
@@ -132,6 +132,11 @@ function fetchWhispers(tableId: string, after: number, limit: number, signal?: A
 /** 같은 테이블에 앉은 한 사람에게 쪽지를 보낸다(채팅과 같은 길이와 빠르기의 한도). 내 쪽지함에 적힌 것이 돌아온다 */
 export function postWhisper(tableId: string, recipientId: string, content: string): Promise<Whisper> {
   return apiRequest<Whisper>(tablePath(tableId, '/whispers'), { method: 'POST', body: { recipient_id: recipientId, content } });
+}
+
+/** 자유 굴림(#404). 눈은 서버가 굴린다. dice 는 "2d6+1" 같은 설명이다 */
+export function postFreeRoll(tableId: string, dice: string): Promise<FreeRoll> {
+  return apiRequest<FreeRoll>(tablePath(tableId, '/dice'), { method: 'POST', body: { dice } });
 }
 
 /**

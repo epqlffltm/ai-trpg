@@ -184,6 +184,8 @@ export type SceneMonster = Trpg['schemas']['SceneMonsterOut'];
 export type DeclaredAction = NonNullable<Trpg['schemas']['DeclarationOut']['action']>;
 export type TableEvent = Trpg['schemas']['EventOut'];
 export type EventPage = Trpg['schemas']['EventPage'];
+// 자유 굴림(#404). 같은 내용이 이벤트 dice_rolled 로도 온다
+export type FreeRoll = Trpg['schemas']['FreeRollOut'];
 export type PastTablePage = Trpg['schemas']['PastTablePage'];
 export type PastTable = Trpg['schemas']['PastTableOut'];
 export type DepartureKind = Trpg['schemas']['DepartureKind'];

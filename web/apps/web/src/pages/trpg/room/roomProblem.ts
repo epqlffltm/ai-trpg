@@ -41,6 +41,16 @@ export function describeWhisperProblem(error: unknown): FormProblem {
   return unknownProblem(error, FAILED);
 }
 
+/** 자유 굴림(#404)을 하지 못한 까닭 */
+export function describeDiceProblem(error: unknown): FormProblem {
+  const common = commonProblem(error);
+  if (common || !(error instanceof ApiError)) return common ?? { message: FAILED };
+  if (error.status === 422) return { message: '주사위 설명을 읽지 못했습니다. 예: d20, 2d6+1' };
+  if (error.status === 409) return { message: '끝난 테이블에서는 굴릴 수 없습니다.' };
+  if (error.status === 404) return { message: '내가 이 테이블에 앉아 있지 않습니다.' };
+  return unknownProblem(error, FAILED);
+}
+
 /** 그 밖의 동작(나가기) */
 export function describeRoomProblem(error: unknown): FormProblem {
   const common = commonProblem(error);

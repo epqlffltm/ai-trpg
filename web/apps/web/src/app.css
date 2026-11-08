@@ -1584,7 +1584,7 @@ a.ui-button {
   align-items: baseline;
 }
 
-/* 대화창의 탭 둘(채팅, 쪽지). 고른 탭은 강조색, 안 읽은 쪽지의 수는 인주색 동그라미. 칸의 제목은 탭이 대신한다 */
+/* 대화창의 탭 셋(채팅, 쪽지, 주사위). 고른 탭은 강조색, 안 읽은 쪽지의 수는 인주색 동그라미. 칸의 제목은 탭이 대신한다 */
 .room-talk__tabs {
   display: flex;
   gap: 4px;
@@ -1640,6 +1640,13 @@ a.ui-button {
   color: var(--ui-text-muted);
 }
 
+/* 주사위 탭(#404). 빠른 단추는 한 줄에 흘려 놓고 좁으면 접는다 */
+.dice__shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 @media (min-width: 900px) {
   .room__chat .chat__form {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1648,6 +1655,12 @@ a.ui-button {
 
   .room__chat .whisper__form {
     grid-template-columns: 180px minmax(0, 1fr) auto;
+  }
+
+  /* 빠른 단추와 설명은 한 줄 전체, 직접 적는 칸과 굴리기 단추가 그 사이에 나란히 */
+  .room__chat .dice__form > .dice__shortcuts,
+  .room__chat .dice__form > .ui-field__hint {
+    grid-column: 1 / -1;
   }
 
   /* 보내지 못한 까닭은 칸 위에 한 줄 전체로 */
