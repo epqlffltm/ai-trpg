@@ -22,6 +22,7 @@ import { MonstersTab } from './MonstersTab';
 import { NpcsTab } from './NpcsTab';
 import { MaterialsTab } from './MaterialsTab';
 import { OpeningsTab } from './OpeningsTab';
+import { PicturesTab } from './PicturesTab';
 import { PublishTab } from './PublishTab';
 import { QuestsTab } from './QuestsTab';
 import { scenarioQuery } from './scenarioQueries';
@@ -84,6 +85,7 @@ function panelOf(tab: ScenarioTab, scenario: ScenarioDetail, goTo: (tab: Scenari
   if (tab === 'monsters') return <MonstersTab scenario={scenario} goTo={goTo} />;
   if (tab === 'quests') return <QuestsTab scenario={scenario} goTo={goTo} />;
   if (tab === 'chapters') return <ChaptersTab scenario={scenario} />;
+  if (tab === 'pictures') return <PicturesTab scenario={scenario} />;
   if (tab === 'listing') return <ListingTab scenario={scenario} />;
   return <PublishTab scenario={scenario} goTo={goTo} />;
 }
