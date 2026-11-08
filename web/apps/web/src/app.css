@@ -632,6 +632,81 @@
   font-weight: 700;
 }
 
+/* 내 포인트의 최근 사용 내역(표). 얼마는 오른쪽 정렬, 고정폭 숫자 */
+.my-entries {
+  width: 100%;
+  margin-bottom: 8px;
+  border-collapse: collapse;
+}
+
+.my-entries th,
+.my-entries td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ui-border);
+  text-align: left;
+}
+
+.my-entries th {
+  color: var(--ui-text-muted);
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.my-entries th:last-child,
+.my-entries__amount {
+  text-align: right;
+  font-family: var(--ui-font-mono);
+}
+
+/* 제작자 탭의 내 작품. 종류의 칩 줄, 공개 상태 칩, 2열 카드(이름, 상태, 고친 때, "고치기") */
+.my-works__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.my-works__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.my-works__card {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
+}
+
+.my-works__card p {
+  margin: 0;
+}
+
+.my-works__name {
+  font-family: var(--ui-font-serif);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.my-works__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.my-works__badge {
+  cursor: default;
+}
+
+.my-works__edit {
+  justify-self: start;
+}
+
 .page--loading {
   color: var(--ui-text-muted);
 }
