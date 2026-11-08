@@ -44,6 +44,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.assets.models import (
+    ACHIEVEMENT_ID_MAX_LENGTH,
     CHAPTER_ID_MAX_LENGTH,
     CHARACTER_DESCRIPTION_MAX_LENGTH,
     CHARACTER_NAME_MAX_LENGTH,
@@ -373,6 +374,10 @@ class GameTable(Base):
     # 이 테이블에서 일어난 판의 사건들(#367). 사건 규칙마다 많아야 하나다(많아야 50 개). 라운드가 닫힐 때마다
     # 일어나지 않은 것만 보므로 테이블을 읽을 때 함께 읽는다(app/rounds/happenings.py)
     happenings: Mapped[list['TableHappening']] = relationship(lazy='selectin', cascade='all, delete-orphan')
+
+    # 이 테이블에서 받은 판의 업적들. 업적마다 많아야 하나다(많아야 50 개). 라운드가 닫힐 때마다
+    # 받지 않은 것만 보므로 테이블을 읽을 때 함께 읽는다(app/rounds/achievements.py)
+    achievements: Mapped[list['TableAchievement']] = relationship(lazy='selectin', cascade='all, delete-orphan')
 
     # 이 테이블의 장소에 놓인 덫들(#806). 놓은 순서다. 터지거나 거둔 것도 남는다(ended_at). 들어오는 쪽마다
     # 그 장소의 덫을 봐야 해서 테이블을 읽을 때 함께 읽는다(app/tables/traps.py)
@@ -986,6 +991,29 @@ class TableHappening(Base):
     # character_name, 인물이면 entry_id, name 이다(trap 은 터진 덫의 결과, app/rounds/happening_traps.py).
     # 사건의 이벤트에는 싣지 않는다(맞춘 수치의 보이기가 있다). trap_sprung 이벤트로 따로 적는다
     traps: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TableAchievement(Base):
+    """
+    테이블 하나에서 받은 판의 업적 하나. 제작자가 작품에 단 업적이다(인증 서버의 활동 배지와는 다른 것이다).
+
+    업적의 조건이 채워지면 엔진이 그때 앉아 있던 플레이어 모두에게 준다(app/rounds/achievements.py).
+    여기 적어 이 테이블에서 다시 보지 않게 한다. 받은 라운드(round_number)와 받은 사람들(user_ids)도 적는다.
+    계정마다의 기록은 player_achievements 다(app/achievements/models.py). 바꾸는 것은 엔진뿐이다. 지우지 않는다.
+    """
+
+    __tablename__ = 'table_achievements'
+    __table_args__ = (CheckConstraint('round_number >= 1', name='round_number_positive'),)
+
+    # 두 칸을 합쳐 기본 키로 삼는다. 한 테이블에서 업적 하나는 한 번만 받는다. 테이블의 행이 지워지면 함께 지워진다
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), primary_key=True)
+    # 판(content)의 업적의 id
+    achievement_id: Mapped[str] = mapped_column(String(ACHIEVEMENT_ID_MAX_LENGTH), primary_key=True)
+    round_number: Mapped[int] = mapped_column(Integer)
+    # 받은 사람들(인증 서버의 public_id 의 글자). 그때 캐릭터를 갖고 앉아 있던 사람들, 앉은 차례다.
+    # 라운드를 되돌리는 사진(app/rounds/snapshots.py)에 그대로 넣을 수 있게 JSON 의 목록으로 둔다
+    user_ids: Mapped[list[str]] = mapped_column(JSONB, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -31,6 +31,7 @@
 - [테이블](#테이블)
 - [라운드](#라운드)
 - [서술 값](#서술-값)
+- [시나리오 업적](#시나리오-업적)
 - [장면 그림](#장면-그림)
 - [캐릭터 그림](#캐릭터-그림)
 - [모델 목록](#모델-목록)
@@ -214,6 +215,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/listings/hearted` | 내 관심(하트) 시나리오(#989). 최근에 둔 것부터 `{items, total}`, `limit`, `offset`. 지금 볼 수 있는 것만이다(링크 공개도 든다) | access 토큰 |
 | GET, PUT, DELETE | `/api/v1/game/listings/{scenario_id}/heart` | 관심을 읽고, 두고, 거둔다(#989). `{hearted, heart_count}`. 두 번 해도 같다. 볼 수 없는 시나리오에 두거나 읽으면 404, 거두는 것은 공개를 내린 뒤에도 된다. 공개 목록과 소개의 줄마다 `heart_count` 가 실린다(`listings.heart_count`, 두고 거둘 때 같은 트랜잭션에서 고친다) | access 토큰 |
 | GET | `/api/v1/game/listings/{scenario_id}` | 공개된 시나리오 하나. 남의 것도 본다. 목록의 칸에 테이블을 만들기 전에 고를 것들(스타팅, 캐릭터 방식, 프리젠, 능력치의 이름, 추천 서술 모델, 참고 자료를 켤 수 있는지 `references_allowed`)이 더 있다(#428) | 없어도 된다(전체 이용가만, #530) |
+| GET | `/api/v1/game/listings/{scenario_id}/achievements` | 공개된 시나리오의 업적들(아래 "시나리오 업적"). 업적마다 받은 사람의 수(`earned_count`)와 플레이한 사람의 수(`players`), 로그인했으면 내가 받은 때(`earned_at`). 숨긴 업적은 받기 전에 이름, 설명, 그림이 null 이다. 조건은 싣지 않는다 | 없어도 된다(전체 이용가만, #530) |
 | POST | `/api/v1/game/personas` | 보관함에 캐릭터 만들기. 201. 이름, 설명, 참고로 적어 두는 능력치(없어도 된다) | access 토큰 |
 | GET | `/api/v1/game/personas` | 내 보관함. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/game/personas/{id}` | 보관한 캐릭터 하나 | access 토큰 |
@@ -268,7 +270,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/portraits/{id}/image` | 내가 올린 캐릭터 그림의 바이트. 남의 것은 404 | access 토큰 |
 | DELETE | `/api/v1/game/portraits/{id}` | 쓰이지 않는 내 캐릭터 그림 지우기. 204. 초안이나 게시한 판의 프리젠에 붙어 있으면 409 `portrait_in_use`(`scenarios`: 쓰는 시나리오의 `id`, `title`). 남의 것은 404 | access 토큰 |
 | GET | `/api/v1/game/tables/{id}/portraits/{portrait_id}/image` | 앉은 테이블의 캐릭터 그림(그 판의 프리젠에 붙은 그림)의 바이트. 앉은 사람 모두가 받는다. 판에 없는 그림은 404 `portrait_not_found`. 자리와 고를 수 있는 프리젠의 `portrait_id` 가 이 id 다 | access 토큰 |
-| GET | `/api/v1/game/listings/{scenario_id}/portraits/{portrait_id}/image` | 공개된 시나리오의 공개 중인 판의 프리젠 그림의 바이트. 그 시나리오를 볼 수 있는 사람(로그인하지 않으면 전체 이용가만). 판에 없는 그림은 404 `portrait_not_found`, 볼 수 없는 시나리오는 404 | 없음(성인용은 access 토큰) |
+| GET | `/api/v1/game/listings/{scenario_id}/portraits/{portrait_id}/image` | 공개된 시나리오의 공개 중인 판의 프리젠 그림과 업적의 그림의 바이트. 그 시나리오를 볼 수 있는 사람(로그인하지 않으면 전체 이용가만). 판에 없는 그림은 404 `portrait_not_found`, 볼 수 없는 시나리오는 404 | 없음(성인용은 access 토큰) |
 | PUT | `/api/v1/game/tables/{id}/rounds/current/declaration` | 선언 내기. 다시 내면 바뀐다. `action` 으로 행동(판정)을 하나 붙일 수 있다. 모두 냈으면 라운드가 닫기 시작한다(`closing`). 다음 라운드는 스트림으로 온다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/rounds/current/close` | 라운드 닫기. 202. 방장만. 선언을 기다리지 않고 넘어간다. 오래 멈춘 라운드에 다시 부르면 서술을 다시 맡긴다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/rounds/current/revert` | 바로 앞 라운드 되돌리기(#288). 방장만. 닫기 직전의 상태로 돌아가 같은 번호의 라운드가 다시 열린다. 아래의 "되돌리기" | access 토큰 |
@@ -352,7 +354,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 
 그래서 인증 서버가 잠깐(30분 안) 죽어도, 키를 가져온 게임 서버는 이미 로그인한 사용자의 요청을 계속 처리한다.
 
-**로그인 없이 읽는 길(#530).** 공개 목록(`GET /listings`)과 시나리오 소개(`GET /listings/{id}`)만 토큰 없이 받는다(server-core 의 `server_core/auth/dependencies.py` 의 `OptionalUser`).
+**로그인 없이 읽는 길(#530).** 공개 목록(`GET /listings`)과 시나리오 소개(`GET /listings/{id}`), 그 업적(`GET /listings/{id}/achievements`)만 토큰 없이 받는다(server-core 의 `server_core/auth/dependencies.py` 의 `OptionalUser`).
 - `Authorization` 머리말이 없으면 로그인하지 않은 사람이다. 등급은 전체 이용가만이다(`app/assets/ratings.py` 의 `allowed_ratings(None)`).
 - 머리말이 있으면 다른 길과 똑같이 검증한다. 틀렸거나 만료됐으면 401, 키가 없으면 503 이다. 로그인하지 않은 것으로 넘기지 않는다.
   넘기면 만료된 토큰을 가진 화면이 갱신할 때를 모르고, 성인 등급이 말없이 빠진 목록을 받는다. `Basic` 처럼 Bearer 가 아닌 값도 401 이다.
@@ -2841,6 +2843,30 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **모델을 바꾸면** 아직 서술하지 않은 지금 라운드의 알린 값도 새 모델의 것으로 바뀌고(`narration_model_changed`, `narration_model_replaced` 의 `price`), 홀드한 값은 새 가격표로 다시 걸 때(서술 전)까지 비운다.
 - **알릴 수 없으면** 비운다(`null`). 결제 서버 없이 도는 서버, 모델이 없는 옛 테이블, 지금 팔지 않는 모델, 가격 목록을 받지 못한 때다. 라운드를 여는 것은 막지 않는다.
 - 실버와 골드 중 무엇으로 냈는지는 아직 싣지 않는다. 결제 서버의 홀드의 답이 나눠 주는지 확인한 뒤 더한다.
+
+## 시나리오 업적
+
+**제작자가 자기 작품에 다는 업적이다(스팀의 업적과 같다).** 인증 서버의 활동 배지(출석, 본인인증 같은 일반 도전과제)와는 다른 것이다.
+정한 것과 그 까닭은 [시나리오 업적 설계](../docs/architecture/achievements.md)에 있다.
+시나리오의 `achievements` 에 적는다. 하나하나가 `{id, name, description, hidden, image_id, when, match}` 다.
+
+| 칸 | 뜻 |
+|---|---|
+| `id` | 판이 바뀌어도 그대로 두는 이름표(1~40자). 받은 기록이 이것을 가리킨다. 바꾸면 다른 업적이다 |
+| `name`, `description` | 이름(1~40자)과 받는 법(200자까지) |
+| `hidden` | 받기 전에는 이름, 설명, 그림을 가린다. 받은 수는 보인다 |
+| `image_id` | 내가 올린 그림(`/portraits`). 남의 그림이나 없는 그림은 422 `achievements.image_id` |
+| `when`, `match` | 받는 조건. 퀘스트의 조건과 같은 모양과 종류다. 하나 이상, 가져가기(`consume`)는 쓰지 않는다 |
+
+- **주는 것은 엔진뿐이다.** 라운드가 닫힐 때 퀘스트, 사건, 장, 기한을 모두 본 뒤에 조건을 본다(`app/rounds/achievements.py`). 방장도 AI 도 주지 못한다
+- **앉은 플레이어 모두가 받는다.** 그때 캐릭터를 갖고 앉아 있는 사람 모두다(쓰러지거나 죽은 캐릭터의 사람도). 협동 게임의 업적과 같다
+- **테이블에서 한 번, 계정마다 시나리오마다 한 번이다.** 테이블의 기록은 `table_achievements`, 계정의 기록은 `player_achievements` 다. 다른 테이블에서 또 받아도 처음 받은 때와 테이블이 남는다
+- 받으면 이벤트 `achievement_earned`(라운드, 업적의 id·이름·받는 법·그림, 받은 사람들)가 테이블의 모두에게 간다. 조건은 싣지 않는다
+- **달성률의 분모는 플레이한 사람이다(`scenario_players`).** 캐릭터를 갖고 앉은 테이블에서 라운드가 한 번이라도 닫힌 사람이다. 업적이 없는 판에서도 센다. 이 기능 전의 플레이는 세지 않는다
+- 게시할 때 조건을 퀘스트의 조건과 같이 본다. 문제는 `achievement_condition_missing`, `achievement_condition_invalid`, `achievement_condition_impossible` 이다
+- 업적의 그림은 테이블(`/tables/{id}/portraits/{id}/image`)과 공개된 시나리오(`/listings/{id}/portraits/{id}/image`)의 주소로 받는다. 업적에 붙은 그림은 지우지 못한다(409)
+- 판에서 업적을 빼도 받은 기록은 남는다(목록에는 보이지 않는다). 탈퇴하면 그 사람의 업적과 플레이의 기록을 지운다
+- 판의 `achievements` 는 비워도 되는 칸이라 형식(69)이 그대로다. 없던 판은 업적이 없는 것으로 읽는다
 
 ## 장면 그림
 

@@ -9,10 +9,13 @@
 보는 것.
   - 시나리오: 업적을 저장하고 판에 굳힌다. 잘못 둔 것은 422, 게시할 수 없는 것은 409 의 문제다.
     남의 그림은 422(achievements.image_id)다. 업적이 없던 판은 업적이 없는 것으로 읽는다
+  - 라운드: 조건이 채워지면 앉은 플레이어 모두가 받는다(죽은 캐릭터의 사람도). 테이블에서 한 번이다.
+    퀘스트를 본 뒤라 같은 라운드의 성공으로 받는다. 이벤트는 achievement_earned 다. 플레이한 사람이 적힌다
+  - 되돌리기: 테이블의 기록은 되돌아가고 계정의 기록은 남는다
   - 기록: 같은 사람이 같은 업적을 다시 받거나 같은 시나리오를 다시 플레이해도 줄은 하나다(처음 것이 남는다)
   - 공개: 업적 목록과 받은 수, 플레이한 사람의 수. 숨긴 업적은 받기 전에 가린다. 로그인하지 않아도 본다
   - 탈퇴: 받은 업적과 플레이의 기록을 지운다
-엔진이 업적을 주는 것(라운드가 닫힐 때)은 아직 없다. 여기서는 기록을 직접 적는다.
+기록과 공개의 시험은 기록을 직접 적는다(엔진을 돌리지 않고 수를 정하려고).
 """
 
 import uuid
@@ -32,9 +35,11 @@ from tests import test_happenings as happenings
 from tests import test_table_map as map_tables
 from tests.asset_server import FakeAsset
 from tests.narration_model import asset_body
-from tests.test_happenings import draft, publish, reach
+from tests.test_happenings import draft, publish, reach, start
 from tests.test_listings_api import listing_url, write_page
-from tests.test_table_items import FRIEND, ME, SCENARIOS_URL
+from tests.test_map_actions import going, play
+from tests.test_table_items import FRIEND, ME, SCENARIOS_URL, events_of, kill
+from tests.test_table_map import put_at
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -211,6 +216,89 @@ async def test_a_snapshot_without_achievements_reads_as_none(client: AsyncClient
     assert read_snapshot(document).achievements == []
 
 
+async def started(client: AsyncClient, me: dict, friend: dict, more: dict, achievements: list[dict], **fields):
+    """그 업적들로 둘이 앉아 시작한 테이블. 맵은 the_map 이다."""
+    return await start(client, me, friend, more, [], achievements=achievements, **fields)
+
+
+# --- 라운드 ---
+
+
+async def test_everyone_seated_earns_it_when_the_condition_is_met(
+    client: AsyncClient, me: dict, friend: dict, more: dict, narrated
+):
+    table = await started(client, me, friend, more, [square_badge(more)])
+
+    await play(client, me, friend, table, narrated, mine=going(more['square']))
+
+    # 광장에 선 것은 기사뿐이지만 앉은 사람 모두가 받는다(협동의 업적)
+    (earned,) = await events_of(client, friend, table, 'achievement_earned')
+    assert earned['actor_id'] is None
+    assert earned['payload'] == {
+        'round': 1,
+        'achievement_id': 'square',
+        'name': '광장에 서다',
+        'description': '광장에 닿았다',
+        'image_id': None,
+        'users': [
+            {'user_id': str(ME), 'character_name': '기사'},
+            {'user_id': str(FRIEND), 'character_name': '약사'},
+        ],
+    }
+
+
+async def test_an_achievement_is_earned_once_per_table(
+    client: AsyncClient, me: dict, friend: dict, more: dict, session: AsyncSession, narrated
+):
+    table = await started(client, me, friend, more, [square_badge(more)])
+    await play(client, me, friend, table, narrated, mine=going(more['square']))
+
+    await put_at(session, table, ME, more['square'])
+    await play(client, me, friend, table, narrated)
+
+    assert len(await events_of(client, me, table, 'achievement_earned')) == 1
+
+
+async def test_nothing_is_earned_until_the_condition_is_met(
+    client: AsyncClient, me: dict, friend: dict, more: dict, session: AsyncSession, narrated
+):
+    table = await started(client, me, friend, more, [square_badge(more)])
+
+    await play(client, me, friend, table, narrated)
+
+    assert await events_of(client, me, table, 'achievement_earned') == []
+    # 플레이한 것은 적힌다(달성률의 분모)
+    assert await player_rows(session, ME) == (0, 1)
+
+
+async def test_the_dead_are_still_at_the_table(
+    client: AsyncClient, me: dict, friend: dict, more: dict, session: AsyncSession, narrated
+):
+    gate = achievement('gate', [reach(more['gate'])])
+    table = await started(client, me, friend, more, [gate])
+    await kill(session, FRIEND)
+
+    await happenings.play_alone(client, me, table, narrated)
+
+    (earned,) = await events_of(client, me, table, 'achievement_earned')
+    assert [user['character_name'] for user in earned['payload']['users']] == ['기사', '약사']
+
+
+async def test_a_quest_success_earns_it_in_the_same_round(
+    client: AsyncClient, me: dict, friend: dict, more: dict, narrated
+):
+    rescue = {'entry_id': more['rescue']['id'], 'start': 'active', 'conditions': [reach(more['square'])]}
+    hero = achievement('hero', [{'kind': 'quest_succeeded', 'target': more['rescue']['id']}])
+    table = await started(client, me, friend, more, [hero], quests=[rescue])
+
+    await play(client, me, friend, table, narrated, mine=going(more['square']))
+
+    (changed,) = await events_of(client, me, table, 'quest_changed')
+    (earned,) = await events_of(client, me, table, 'achievement_earned')
+    (closed,) = await events_of(client, me, table, 'round_closed')
+    assert changed['sequence'] < earned['sequence'] < closed['sequence']
+
+
 # --- 기록 ---
 
 
@@ -302,4 +390,22 @@ async def test_withdrawal_erases_the_achievements(client: AsyncClient, me: dict,
     await erase_belongings(session, FRIEND)
 
     assert await player_rows(session, FRIEND) == (0, 0)
+    assert await player_rows(session, ME) == (1, 1)
+
+
+# --- 되돌리기 ---
+
+
+async def test_reverting_the_round_takes_it_back_from_the_table_but_not_the_account(
+    client: AsyncClient, me: dict, friend: dict, more: dict, session: AsyncSession, narrated
+):
+    table = await started(client, me, friend, more, [achievement('gate', [reach(more['gate'])])])
+    await play(client, me, friend, table, narrated)
+
+    reverted = await client.post(f'{API_PREFIX}/tables/{table["id"]}/rounds/current/revert', headers=me)
+
+    assert reverted.status_code == status.HTTP_200_OK, reverted.text
+    rows = await session.scalar(text('SELECT count(*) FROM table_achievements WHERE table_id = :t'), {'t': table['id']})
+    assert rows == 0
+    # 계정에 남은 업적은 되돌리지 않는다
     assert await player_rows(session, ME) == (1, 1)

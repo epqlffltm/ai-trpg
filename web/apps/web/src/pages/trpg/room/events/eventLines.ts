@@ -406,6 +406,8 @@ const DESCRIBE: Record<EventType, Describe> = {
   narration_model_unavailable: (p, ctx) => `서술 모델 ${model(p, ctx)}: 쓸 수 없습니다. 방장이 모델을 고를 때까지 서술하지 못합니다.`,
   happening_occurred: (p) => `일어난 일: ${text(p, 'name') ?? '?'}`,
   chapter_changed: (p) => `${count(p, 'number') ?? '?'}장: ${placeOf(p, 'to') ?? '?'}`,
+  // 판의 업적. 앉은 사람 모두가 함께 받는다
+  achievement_earned: (p) => `업적: ${text(p, 'name') ?? '?'}`,
   experience_gained: (p) => experienceText(p),
   abilities_raised: (p, ctx, e) => raisedText(p, ctx, e),
   character_leveled: (p, ctx, e) => `${who(p, ctx, e)}: 레벨 ${count(p, 'previous_level') ?? '?'} → ${count(p, 'level') ?? '?'}`,

@@ -66,6 +66,7 @@ from app.memory import repository as memory_repository
 from app.observability.metrics import record_round_closed
 from app.portraits.seats import entry_pictures
 from app.rounds import (
+    achievements,
     chapters,
     deadlines,
     happening_traps,
@@ -266,9 +267,10 @@ def begin_closing(
     scene: Scene,
     reason: CloseReason,
     closer_id: uuid.UUID | None = None,
-) -> None:
+) -> list[dict]:
     """
     열려 있는 라운드를 닫기 시작한다. 선언을 마감하고 행동을 판정한다. 저장하지는 않는다.
+    이번 라운드에 받은 판의 업적들을 돌려준다(app/rounds/achievements.py). 계정마다의 기록은 부르는 쪽이 적는다.
 
     reason 은 닫는 까닭이다(모두 냄, 방장, 마감). 닫힘의 이벤트에 적는다.
     closer_id 는 라운드를 닫은 방장이다. 저절로 닫혔으면(모두 냄, 마감) 주지 않는다.
@@ -288,11 +290,12 @@ def begin_closing(
     (app/rounds/quest_goals.py), 조건이 채워진 판의 사건을 일으키고(app/rounds/happenings.py),
     기한을 넘긴 퀘스트를 실패로 바꾼다(app/rounds/deadlines.py). 이룬 것을 먼저 본다.
     기한 전 마지막 라운드에 이루었으면 성공이다. 기한의 실패로 드러날 퀘스트(잇기)가 있으면 실패 뒤에 한 번 더 본다.
+    맨 끝에 조건이 채워진 판의 업적을 앉은 플레이어 모두에게 준다(app/rounds/achievements.py).
     이벤트는 행동(과 그 판정, 치료, 변화, 부상, 휴식)들 → 죽음의 굴림들 → 상태의 피해들 → 벗어나기 → 끝난 부상들 →
     나온 무리들 →
     되살아나기와 저절로 회복 → 수치의 변화와 문턱의 부상 → 몬스터의 경험치(와 오른 레벨) → 드러나고 이룬 퀘스트들 →
     일어난 사건들(과 옮긴 사람들, 준 경험치) →
-    기한을 넘긴 퀘스트들 → 그 뒤에 드러나고 이룬 퀘스트들 → 닫힘 순서로 적는다. 한 묶음이다.
+    기한을 넘긴 퀘스트들 → 그 뒤에 드러나고 이룬 퀘스트들 → 받은 업적들 → 닫힘 순서로 적는다. 한 묶음이다.
     맞붙은 몬스터가 있던 라운드는 행동과 몬스터의 공격을 차례 순서로 적는다(round_.turns, app/rounds/initiative.py).
     나중에 적히는 서술과 열림도 이 묶음에 들어간다.
 
@@ -323,6 +326,7 @@ def begin_closing(
     overdue = deadlines.expire_quests(table)
     round_.expired_quests = [failure['entry_id'] for failure in overdue]
     after_overdue = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs) if overdue else []
+    earned = achievements.settle_achievements(table, round_.number, scene.all_monsters, scene.npcs)
     moves = build_moves(table, round_, ended, recovered, [*settled, *after_overdue], met, ticks.ticks, escapes)
     round_.moves = narration_request.dump_moves(moves)
     round_.narration_style = table.narration_style
@@ -340,10 +344,12 @@ def begin_closing(
     chapters.record(session, table, chapter, group)
     deadlines.record_failures(session, table, overdue, group)
     quest_goals.record_changes(session, table, after_overdue, group)
+    achievements.record_achievements(session, table, earned, group)
     idle = [str(user_id) for user_id in waiting_for(table, round_)]
     payload = {'number': round_.number, 'idle': idle, 'reason': reason}
     recorder.record(session, table, EventType.ROUND_CLOSED, actor_id=closer_id, payload=payload, group=group)
     round_.closing_at = datetime.now(UTC)
+    return earned
 
 
 async def take_snapshot(session: AsyncSession, table: GameTable, round_: Round) -> None:
@@ -365,9 +371,14 @@ async def start_closing(
     reason: CloseReason,
     closer_id: uuid.UUID | None = None,
 ) -> None:
-    """닫기 직전의 상태를 찍고(take_snapshot) 닫기 시작한다(begin_closing). 라운드를 닫는 길은 모두 이것을 쓴다."""
+    """
+    닫기 직전의 상태를 찍고(take_snapshot) 닫기 시작한다(begin_closing). 라운드를 닫는 길은 모두 이것을 쓴다.
+
+    그 뒤에 플레이한 사람들과 받은 업적을 계정마다 적는다(app/rounds/achievements.py 의 save). 같은 트랜잭션이다.
+    """
     await take_snapshot(session, table, round_)
-    begin_closing(session, table, round_, dice, scene, reason, closer_id)
+    earned = begin_closing(session, table, round_, dice, scene, reason, closer_id)
+    await achievements.save(session, table, earned)
 
 
 async def lock_current_round(

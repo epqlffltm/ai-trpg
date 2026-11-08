@@ -46,6 +46,7 @@ from app.tables.models import (
     DepartureKind,
     GameTable,
     QuestStatus,
+    TableAchievement,
     TableDeparture,
     TableFoundRoute,
     TableHappening,
@@ -234,7 +235,14 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         trap = {'place_id': uuid.uuid4(), 'entry_id': uuid.uuid4(), 'set_by': ME, 'round_number': 1}
         session.add(TableTrap(table_id=uuid.UUID(table['id']), **trap))
         session.add(TableHappening(table_id=uuid.UUID(table['id']), entry_id=uuid.uuid4(), round_number=1, moves=[]))
-        # 판의 업적. 계정의 기록과 플레이한 사람이다
+        # 판의 업적. 테이블에서 받은 것과 계정의 기록, 플레이한 사람이다
+        played = {
+            'table_id': uuid.UUID(table['id']),
+            'achievement_id': 'gate',
+            'round_number': 1,
+            'user_ids': [str(ME)],
+        }
+        session.add(TableAchievement(**played))
         session.add(PlayerAchievement(user_id=OTHER, scenario_id=uuid.UUID(scenario['id']), achievement_id='gate'))
         session.add(ScenarioPlayer(scenario_id=uuid.UUID(scenario['id']), user_id=OTHER))
         monster = {'monster_id': uuid.uuid4(), 'number': 1, 'place_id': uuid.uuid4(), 'abilities': {}, 'max_hp': 1}
