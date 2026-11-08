@@ -4586,9 +4586,19 @@ export interface components {
          *
          *     장소 항목이면 테이블 방의 그림 창의 배경이고, 인물 항목이면 그 인물의 그림이고,
          *     사건 항목이면 일어난 라운드의 컷신이다.
+         *     장소의 배경은 하루의 때(TimeOfDay)마다 따로 둘 수 있다(by_time). 테이블의 시계가 그때면 그 그림을,
+         *     없으면 image_id 를 쓴다.
+         *     때마다의 그림은 장소 항목에만 적는다(게시할 때 본다).
          *     그림이 자기가 올린 것인지는 저장할 때, 항목이 붙인 로어북의 장소, 인물, 사건인지는 게시할 때 본다.
          */
         "EntryPicture-Input": {
+            /**
+             * By Time
+             * @default {}
+             */
+            by_time: {
+                [key: string]: string;
+            };
             /**
              * Entry Id
              * Format: uuid
@@ -4606,9 +4616,16 @@ export interface components {
          *
          *     장소 항목이면 테이블 방의 그림 창의 배경이고, 인물 항목이면 그 인물의 그림이고,
          *     사건 항목이면 일어난 라운드의 컷신이다.
+         *     장소의 배경은 하루의 때(TimeOfDay)마다 따로 둘 수 있다(by_time). 테이블의 시계가 그때면 그 그림을,
+         *     없으면 image_id 를 쓴다.
+         *     때마다의 그림은 장소 항목에만 적는다(게시할 때 본다).
          *     그림이 자기가 올린 것인지는 저장할 때, 항목이 붙인 로어북의 장소, 인물, 사건인지는 게시할 때 본다.
          */
         "EntryPicture-Output": {
+            /** By Time */
+            by_time?: {
+                [key: string]: string;
+            };
             /** Entry Id */
             entry_id: string;
             /** Image Id */
@@ -7828,8 +7845,16 @@ export interface components {
          * @description 로어 항목 하나의 그림(#1163). 판 안의 장소, 인물, 사건 항목 하나(entry_id)에 제작자가 올린 그림(image_id)이다.
          *
          *     장소면 테이블 방의 배경, 인물이면 그 인물의 그림, 사건이면 일어난 라운드의 컷신이다.
+         *     장소의 배경은 하루의 때마다 따로 있을 수 있다(by_time). 없는 때는 image_id 다. 비워도 되는 칸이라 형식이 그대로다.
          */
         PictureSnapshot: {
+            /**
+             * By Time
+             * @default {}
+             */
+            by_time: {
+                [key: string]: string;
+            };
             /**
              * Entry Id
              * Format: uuid

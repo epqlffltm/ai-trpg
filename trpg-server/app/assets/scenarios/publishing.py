@@ -226,6 +226,8 @@ class Problem(enum.StrEnum):
     PICTURE_ENTRY_MISSING = 'picture_entry_missing'
     # 장소, 인물, 사건이 아닌 항목(물건, 전설 …)의 그림이 있다(#1163). 그림 창에 띄울 곳이 없다
     PICTURE_WRONG_KIND = 'picture_wrong_kind'
+    # 장소가 아닌 항목(인물, 사건)에 하루의 때마다의 그림이 있다(#1163). 때마다 바뀌는 것은 장소의 배경뿐이다
+    PICTURE_TIME_NOT_PLACE = 'picture_time_not_place'
     # 인물의 자리가 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)다. 아무도 그 인물을 만날 수 없다
     NPC_PLACE_OFF_MAP = 'npc_place_off_map'
     # 붙인 도감에 없는 몬스터를 가리키는 몬스터 시트가 있다. 몬스터를 지웠거나 도감을 뗐다
@@ -1306,15 +1308,19 @@ def find_picture_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     """
     로어 항목마다의 그림에서 문제를 찾는다(#1163). 항목은 붙인 로어북의 장소, 인물, 사건 항목이어야 한다.
 
+    하루의 때마다의 그림(by_time)은 장소 항목에만 적는다.
     그림이 자기가 올린 것인지는 저장할 때 봤다(app/assets/scenarios/service.py 의 require_own_pictures).
     """
     entries = lore_entries(parts)
     pointed = [uuid.UUID(str(picture['entry_id'])) for picture in scenario.pictures]
+    timed = [uuid.UUID(str(picture['entry_id'])) for picture in scenario.pictures if picture.get('by_time')]
     problems = []
     if any(entry_id not in entries for entry_id in pointed):
         problems.append(Problem.PICTURE_ENTRY_MISSING)
     if any(entry_id in entries and entries[entry_id].kind not in PICTURED_KINDS for entry_id in pointed):
         problems.append(Problem.PICTURE_WRONG_KIND)
+    if any(entry_id in entries and entries[entry_id].kind != LoreKind.PLACE for entry_id in timed):
+        problems.append(Problem.PICTURE_TIME_NOT_PLACE)
     return problems
 
 

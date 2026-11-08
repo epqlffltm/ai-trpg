@@ -14,6 +14,7 @@ from sqlalchemy import delete, func, or_, select, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import Asset, Scenario, ScenarioVersion
+from app.calendar.clock import TimeOfDay
 from app.listings.models import Listing
 from app.portraits.models import Portrait
 
@@ -64,6 +65,16 @@ def pregens_with(image_id: uuid.UUID) -> list[dict]:
     return [{'image_id': str(image_id)}]
 
 
+def timed_with(image_id: uuid.UUID) -> list[list[dict]]:
+    """JSONB 의 포함으로 찾을 모양들. 로어 항목마다의 그림에 하루의 때 하나의 그림으로 그 그림을 붙인 줄이 있다."""
+    return [[{'by_time': {part.value: str(image_id)}}] for part in TimeOfDay]
+
+
+def pictures_use(column, image_id: uuid.UUID):
+    """그림들의 JSONB 칸(시나리오의 pictures, 판의 pictures)이 그 그림을 쓰는가. 기본 그림이거나 때마다의 그림이다."""
+    return or_(column.contains(pregens_with(image_id)), *(column.contains(one) for one in timed_with(image_id)))
+
+
 async def using_scenarios(session: AsyncSession, image_id: uuid.UUID) -> list[tuple[uuid.UUID, str]]:
     """
     그 그림을 쓰는 시나리오들의 (id, 제목). 지우지 않은 초안의 프리젠이나 게시한 판의 프리젠에 붙어 있으면 쓴다.
@@ -78,10 +89,16 @@ async def using_scenarios(session: AsyncSession, image_id: uuid.UUID) -> list[tu
     drafts = (
         select(Scenario.asset_id.label('scenario_id'))
         .join(Asset, Asset.id == Scenario.asset_id)
-        .where(Asset.deleted_at.is_(None), or_(Scenario.pregens.contains(wanted), Scenario.pictures.contains(wanted)))
+        .where(
+            Asset.deleted_at.is_(None),
+            or_(Scenario.pregens.contains(wanted), pictures_use(Scenario.pictures, image_id)),
+        )
     )
     versions = select(ScenarioVersion.scenario_id.label('scenario_id')).where(
-        or_(ScenarioVersion.snapshot['pregens'].contains(wanted), ScenarioVersion.snapshot['pictures'].contains(wanted))
+        or_(
+            ScenarioVersion.snapshot['pregens'].contains(wanted),
+            pictures_use(ScenarioVersion.snapshot['pictures'], image_id),
+        )
     )
     covers = select(Listing.scenario_id.label('scenario_id')).where(Listing.cover_image_id == image_id)
     used = union(drafts, versions, covers).subquery()

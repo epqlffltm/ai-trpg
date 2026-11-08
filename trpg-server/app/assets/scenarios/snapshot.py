@@ -676,10 +676,12 @@ class PictureSnapshot(BaseModel):
     로어 항목 하나의 그림(#1163). 판 안의 장소, 인물, 사건 항목 하나(entry_id)에 제작자가 올린 그림(image_id)이다.
 
     장소면 테이블 방의 배경, 인물이면 그 인물의 그림, 사건이면 일어난 라운드의 컷신이다.
+    장소의 배경은 하루의 때마다 따로 있을 수 있다(by_time). 없는 때는 image_id 다. 비워도 되는 칸이라 형식이 그대로다.
     """
 
     entry_id: uuid.UUID
     image_id: uuid.UUID
+    by_time: dict[TimeOfDay, uuid.UUID] = {}
 
 
 class PlacedTrapSnapshot(BaseModel):
