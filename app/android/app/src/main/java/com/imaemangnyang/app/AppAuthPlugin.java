@@ -1,4 +1,4 @@
-// app/android/app/src/main/java/dev/aitrpg/app/AppAuthPlugin.java
+// app/android/app/src/main/java/com/imaemangnyang/app/AppAuthPlugin.java
 // 화면이 부르는 AppAuth 플러그인(#429). refresh 토큰은 이 플러그인만 쥐고, 화면에는 access 토큰만 넘긴다.
 // 화면 쪽의 약속은 web/apps/web/src/api/appAuth.ts 의 머리에 있다. 이 파일이 그 약속을 지킨다.
 //
@@ -10,7 +10,7 @@
 //
 // API 의 출처는 capacitor.config.ts 의 plugins.AppAuth.apiOrigin 이다(APP_API_ORIGIN).
 
-package dev.aitrpg.app;
+package com.imaemangnyang.app;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;

@@ -1,11 +1,11 @@
-// app/android/app/src/main/java/dev/aitrpg/app/RefreshTokenStore.java
+// app/android/app/src/main/java/com/imaemangnyang/app/RefreshTokenStore.java
 // refresh 토큰을 기기에 두는 곳(#429). 화면의 스크립트는 이 값을 보지 못한다(AppAuthPlugin 만 쓴다).
 //
 // Android Keystore 의 AES 키(기기 밖으로 꺼낼 수 없다)로 암호화해 SharedPreferences 에 둔다(AES-GCM).
 // Jetpack Security 의 EncryptedSharedPreferences 는 쓰지 않는다. 더 손보지 않는 라이브러리라 의존을 늘리지 않는다.
 // 풀지 못하면(키가 바뀌었거나 다른 기기에서 백업을 되살렸다) 토큰이 없는 것으로 보고 지운다. 사용자는 다시 로그인한다.
 
-package dev.aitrpg.app;
+package com.imaemangnyang.app;
 
 import android.content.Context;
 import android.content.SharedPreferences;

@@ -5,17 +5,18 @@
 
 - 기준일: 2026-11-06
 - 시험 단계다. 스토어에 올리지 않았다. CI(`.github/workflows/app.yml`)는 디버그 APK 를 빌드만 한다. 띄우고 로그인하는 것은 PC 의 Android Studio 에서 사람이 본다
-- 패키지 이름(`appId`)은 임시다(`dev.aitrpg.app`). 구글 플레이에 올리기 전에 우리 도메인으로 바꾼다. 한 번 올리면 바꾸지 못한다
+- 패키지 이름(`appId`)은 `com.imaemangnyang.app` 이다. 우리 도메인(`imaemangnyang.com`)을 뒤집은 것이다(2026-11-08). 구글 플레이에 한 번 올리면 바꾸지 못한다
+  - 임시 이름(`dev.aitrpg.app`)으로 깐 앱은 다른 앱이다. 기기에서 지운다: `adb uninstall dev.aitrpg.app`
 - Capacitor 8.5.3, Android 의 최소 판은 7.0(API 24), 대상은 API 36 이다(`android/variables.gradle`)
 
 ## 실행
 
 필요한 것: Node 22 이상, Android Studio(그 안의 Android SDK 와 JDK 21).
 
-PowerShell 에서(출처는 우리 사이트의 주소로 바꾼다):
+PowerShell 에서(출처는 우리 사이트의 주소다. 서버를 띄우기 전에는 아래 "PC 의 compose 에 붙이기"로 본다):
 
 ```powershell
-cd D:\Programming\ai-trpg-board\web; npm ci; npm run gen:api; cd D:\Programming\ai-trpg-board\app; npm ci; $env:APP_API_ORIGIN="https://play.example.com"; npm run sync; npm run open
+cd D:\Programming\ai-trpg-board\web; npm ci; npm run gen:api; cd D:\Programming\ai-trpg-board\app; npm ci; $env:APP_API_ORIGIN="https://imaemangnyang.com"; npm run sync; npm run open
 ```
 
 - 화면의 의존성과 API 타입(`web` 의 `npm ci`, `npm run gen:api`)이 먼저 있어야 한다
@@ -49,7 +50,7 @@ cd D:\Programming\ai-trpg-board\web; npm ci; npm run gen:api; cd D:\Programming\
 
 ## 플러그인(AppAuth)
 
-`android/app/src/main/java/dev/aitrpg/app/` 에 있다.
+`android/app/src/main/java/com/imaemangnyang/app/` 에 있다.
 
 | 파일 | 하는 일 |
 | --- | --- |
@@ -71,12 +72,12 @@ cd D:\Programming\ai-trpg-board\web; npm ci; npm run gen:api; cd D:\Programming\
 최근 앱 목록에서 밀어 닫는 것만으로는 앱이 남아 있을 수 있다. 메모리의 access 토큰이 살아 있으면 갱신 없이 로그인이 이어져 보인다. 명령으로 끄고 켠다.
 
 ```powershell
-cd D:\Programming\ai-trpg-board; $adb="$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"; & $adb shell am force-stop com.android.chrome; & $adb shell am force-stop dev.aitrpg.app; & $adb shell monkey -p dev.aitrpg.app -c android.intent.category.LAUNCHER 1; Start-Sleep -Seconds 8; docker compose --profile app logs --no-color --since 1m auth-server | Select-String -Pattern 'auth/(app/)?(login|refresh|logout)'
+cd D:\Programming\ai-trpg-board; $adb="$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"; & $adb shell am force-stop com.android.chrome; & $adb shell am force-stop com.imaemangnyang.app; & $adb shell monkey -p com.imaemangnyang.app -c android.intent.category.LAUNCHER 1; Start-Sleep -Seconds 8; docker compose --profile app logs --no-color --since 1m auth-server | Select-String -Pattern 'auth/(app/)?(login|refresh|logout)'
 ```
 
 - 기기에 refresh 토큰이 있는지는 저장 파일로 본다(디버그 빌드만 된다). 값은 암호문이다. 로그아웃하면 `<map />` 이다
   ```powershell
-  cd D:\Programming\ai-trpg-board; & "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" shell run-as dev.aitrpg.app cat shared_prefs/app_auth.xml
+  cd D:\Programming\ai-trpg-board; & "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" shell run-as com.imaemangnyang.app cat shared_prefs/app_auth.xml
   ```
 - 로그인 화면의 "서버에 닿지 못했습니다"는 대개 `adb reverse` 가 빠진 것이다. 에뮬레이터를 다시 켜면 다시 한다
 - 502 와 요청 번호가 뜨면 인증 서버가 뜨지 않은 것이다. `docker compose --profile app ps -a` 에서 `auth-migrate` 가 `Exited (0)` 인지 본다

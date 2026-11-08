@@ -3,14 +3,14 @@
 //
 // API 를 부를 출처는 APP_API_ORIGIN 으로 준다(예: https://play.example.com). 화면의 VITE_API_ORIGIN(scripts/build-web.mjs)과
 // AppAuth 플러그인의 apiOrigin 이 같은 값을 쓴다. 비우면 플러그인이 서버를 부르지 못한다(로그인이 실패한다).
-// appId 는 임시다(dev.aitrpg.app). 구글 플레이에 올리기 전에 우리 도메인으로 바꾼다. 한 번 올리면 바꾸지 못한다.
+// appId 는 우리 도메인(imaemangnyang.com)을 뒤집은 것이다(2026-11-08). 구글 플레이에 한 번 올리면 바꾸지 못한다.
 
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const apiOrigin = process.env.APP_API_ORIGIN ?? '';
 
 const config: CapacitorConfig = {
-  appId: 'dev.aitrpg.app',
+  appId: 'com.imaemangnyang.app',
   appName: '이매망량의 서재',
   webDir: '../web/apps/web/dist',
   android: {
