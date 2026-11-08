@@ -165,14 +165,13 @@ def hp_changed(payload: dict, labels: Labels) -> list[Block]:
 
 
 def death_save_rolled(payload: dict, labels: Labels) -> list[Block]:
-    """죽음의 굴림. 눈, 목표, 성패, 쌓인 수."""
+    """죽음의 굴림. 눈, 목표, 성패, 쌓인 수. under(#404)면 "34 ≤ 50" 처럼 견준다."""
     tally = f'성공 {payload.get("successes")}, 실패 {payload.get("failures")}'
-    return [
-        Note(
-            f'죽음의 굴림: {who(payload)} {payload.get("roll")} / {payload.get("target")}'
-            f' → {outcome(payload.get("success"))} ({tally})'
-        )
-    ]
+    if labels.roll_style == 'under':
+        compared = f'{payload.get("roll")} {"≤" if payload.get("success") else ">"} {payload.get("target")}'
+    else:
+        compared = f'{payload.get("roll")} / {payload.get("target")}'
+    return [Note(f'죽음의 굴림: {who(payload)} {compared} → {outcome(payload.get("success"))} ({tally})')]
 
 
 def character_died(payload: dict, labels: Labels) -> list[Block]:

@@ -78,15 +78,29 @@ def describe_verdict(verdict: Verdict) -> str:
 
     부상이 영향을 줬으면 그 이름을 붙인다. 예: (근력 판정 실패: 5 - 1 = 4, 목표 15. 전부터 입은 부상의 영향: 팔 골절)
     노려 쳤으면 노린 것을 붙인다. 예: (민첩 판정 성공: 18 + 2 = 20, 목표 20. 노려 치기: 한쪽 눈 잃음)
+    under(#404)면 눈과 기량을 견준다. 예: (근력 판정 성공: 눈 34, 기량 45 이하)
+    주사위를 여럿 굴렸으면 눈들을 붙인다. 예: (근력 판정 성공: 3+4=7 + 2 = 9, 목표 8)
     """
     result = OUTCOME_WORDS[outcome_of(verdict.success)]
-    # 보정이 음수면 "13 - 1" 로 적는다
-    sign = '-' if verdict.modifier < 0 else '+'
-    sum_ = f'{verdict.roll} {sign} {abs(verdict.modifier)} = {verdict.total}'
     hindered = f'. 전부터 입은 부상의 영향: {", ".join(verdict.hindrances)}' if verdict.hindrances else ''
     aimed = f'. 노려 치기: {verdict.aimed}' if verdict.aimed else ''
     blow = f'. {describe_blow(verdict.blow)}' if verdict.blow is not None else ''
-    return f'({verdict.ability} 판정 {result}: {sum_}, 목표 {verdict.target}{hindered}{aimed}{blow})'
+    return f'({verdict.ability} 판정 {result}: {verdict_numbers(verdict)}{hindered}{aimed}{blow})'
+
+
+def rolled_text(roll: int, faces: tuple[int, ...]) -> str:
+    """굴린 눈. 여럿이면 "3+4=7", 하나면 그 눈이다."""
+    return f'{"+".join(str(face) for face in faces)}={roll}' if len(faces) > 1 else str(roll)
+
+
+def verdict_numbers(verdict: Verdict) -> str:
+    """판정의 숫자. over 면 "13 + 2 = 15, 목표 15", under(#404)면 "눈 34, 기량 45 이하"."""
+    roll = rolled_text(verdict.roll, verdict.faces)
+    if verdict.style == 'under':
+        return f'눈 {roll}, 기량 {verdict.target} 이하'
+    # 보정이 음수면 "13 - 1" 로 적는다
+    sign = '-' if verdict.modifier < 0 else '+'
+    return f'{roll} {sign} {abs(verdict.modifier)} = {verdict.total}, 목표 {verdict.target}'
 
 
 # 방어가 한 일(#276). 규칙의 방어 방식마다다
@@ -304,10 +318,15 @@ FATES = {'dying': '죽어 가는 중', 'stable': '고비를 넘김', 'dead': '�
 
 
 def describe_death_save(note: DeathSaveNote) -> str:
-    """죽음의 굴림을 한 줄로 적는다. 예: (죽음의 굴림 실패: 7, 목표 10. 성공 1, 실패 2, 죽어 가는 중)"""
+    """
+    죽음의 굴림을 한 줄로 적는다. 예: (죽음의 굴림 실패: 7, 목표 10. 성공 1, 실패 2, 죽어 가는 중)
+
+    under(#404)면 목표 이하가 성공이다. 예: (죽음의 굴림 성공: 34, 목표 50 이하. 성공 1, 실패 0, 죽어 가는 중)
+    """
     result = '성공' if note.success else '실패'
     counts = f'성공 {note.successes}, 실패 {note.failures}'
-    return f'(죽음의 굴림 {result}: {note.roll}, 목표 {note.target}. {counts}, {FATES[note.fate]})'
+    below = ' 이하' if note.style == 'under' else ''
+    return f'(죽음의 굴림 {result}: {note.roll}, 목표 {note.target}{below}. {counts}, {FATES[note.fate]})'
 
 
 # 휴식의 길이와, 휴식이 깨진 까닭을 서술자에게 주는 말

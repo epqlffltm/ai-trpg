@@ -125,7 +125,7 @@ def build_moves(
                 content=content,
                 verdict=verdict,
                 downed=is_down(member),
-                death_save=narration_request.find_death_save(round_, member.user_id),
+                death_save=narration_request.find_death_save(round_, member.user_id, resource_rules.roll.style.value),
                 dead=sheets.is_dead(member),
                 lost_turn=declaration.outcome.get('turn_lost') if declaration and declaration.outcome else None,
                 replaces=arrival['replaces'] if arrival else None,

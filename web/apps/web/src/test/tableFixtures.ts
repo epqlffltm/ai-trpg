@@ -18,6 +18,9 @@ export const RULES = {
   score_min: 3,
   score_max: 18,
   modifier: { base: 10, step: 2 },
+  // 주사위 하나의 over(#404)
+  die: 20,
+  roll: { count: 1, style: 'over', shifts: {} },
   hp_ability: 'con',
   default_difficulty: 'normal',
   difficulties: [

@@ -427,8 +427,11 @@ const DESCRIBE: Record<EventType, Describe> = {
     if (flag(p, 'died')) return `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} 치료에 실패해 죽었습니다.`;
     return `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} ${flag(p, 'treated') ? '치료함' : '치료하지 못함'}${aidText(p)}`;
   },
-  death_save_rolled: (p, ctx, e) =>
-    `${who(p, ctx, e)}: 죽음의 굴림 ${count(p, 'roll') ?? '?'}(목표 ${count(p, 'target') ?? '?'}) ${flag(p, 'success') ? '성공' : '실패'}`,
+  death_save_rolled: (p, ctx, e) => {
+    // 눈 ≤ 기량 방식(under, #404)이면 목표 이하가 성공이다. 기록에는 방식이 없어 판의 규칙에서 읽는다
+    const below = ctx.table.rules?.roll.style === 'under' ? ' 이하' : '';
+    return `${who(p, ctx, e)}: 죽음의 굴림 ${count(p, 'roll') ?? '?'}(목표 ${count(p, 'target') ?? '?'}${below}) ${flag(p, 'success') ? '성공' : '실패'}`;
+  },
   character_died: (p, ctx, e) => `${who(p, ctx, e)}: 죽었습니다.`,
   character_revived: (p, ctx, e) =>
     flag(p, 'success') ? `${who(p, ctx, e)}: 일어났습니다(HP ${count(p, 'hp') ?? '?'}).` : `${who(p, ctx, e)}: 일어나지 못했습니다.`,

@@ -123,6 +123,8 @@ describe('roundView', () => {
   it('죽음의 굴림을 한 줄로', () => {
     const save = { user_id: ME, character_name: '렌', roll: 12, target: 10, success: true, successes: 2, failures: 1, fate: 'dying' } as const;
     expect(deathSaveLine(save)).toBe('렌: 죽음의 굴림 12 / 10 성공 (성공 2, 실패 1) · 아직 위태롭다');
+    // 눈 ≤ 기량 방식(#404)이면 목표 이하가 성공이다
+    expect(deathSaveLine({ ...save, roll: 34, target: 50 }, 'under')).toBe('렌: 죽음의 굴림 34 ≤ 50 성공 (성공 2, 실패 1) · 아직 위태롭다');
   });
 
   it('지나간 라운드는 지금 라운드를 뺀다. 내 선언은 글이 있는 내 것이다', () => {

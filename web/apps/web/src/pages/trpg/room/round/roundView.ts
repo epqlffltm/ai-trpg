@@ -2,7 +2,7 @@
 // 라운드를 화면에 보일 글로 바꾼다. 순수한 함수다. 값은 모두 서버가 준 것이다. 화면이 판정을 계산하지 않는다.
 // 행동은 "종류 · 무엇을, 누구에게"로, 결과는 서버가 적어 준 것(눈, 합, 물건, 장소, 회복)을 한 줄로 적는다.
 
-import type { Declaration, DeclaredAction, Round, Ruleset, TableDetail } from '../../../../api/types';
+import type { Declaration, DeclaredAction, RollStyle, Round, Ruleset, TableDetail } from '../../../../api/types';
 import { amountLabel, type Currency } from '../money';
 import { ACTION_LABELS } from './action/actionLabels';
 import { disarmLine, giveLine, itemUseLine, lootLine, putDownLine, restLine, stealLine, takeLine, throwLine, trapSetLine, waitLine } from './actionOutcome';
@@ -315,10 +315,14 @@ function searchLine(search: Extract<Outcome, { search: unknown }>['search']): st
   return found.length > 0 ? `찾았습니다: ${found.join(', ')}` : '찾은 것이 없습니다.';
 }
 
-/** 죽음의 굴림 한 줄. "렌: 죽음의 굴림 12 / 10 성공 (성공 2, 실패 1) · 아직 위태롭다" */
-export function deathSaveLine(save: Round['death_saves'][number]): string {
+/**
+ * 죽음의 굴림 한 줄. "렌: 죽음의 굴림 12 / 10 성공 (성공 2, 실패 1) · 아직 위태롭다".
+ * 규칙이 눈 ≤ 기량 방식(under, #404)이면 "34 ≤ 50" 처럼 견준다. 기록에는 방식이 없어 판의 규칙에서 받는다
+ */
+export function deathSaveLine(save: Round['death_saves'][number], style: RollStyle = 'over'): string {
   const result = save.success ? '성공' : '실패';
-  return `${save.character_name}: 죽음의 굴림 ${save.roll} / ${save.target} ${result} (성공 ${save.successes}, 실패 ${save.failures}) · ${FATES[save.fate]}`;
+  const compared = style === 'under' ? `${save.roll} ${save.success ? '≤' : '>'} ${save.target}` : `${save.roll} / ${save.target}`;
+  return `${save.character_name}: 죽음의 굴림 ${compared} ${result} (성공 ${save.successes}, 실패 ${save.failures}) · ${FATES[save.fate]}`;
 }
 
 /** 지금 라운드를 뺀 최근의 라운드들. 오래된 것부터 */

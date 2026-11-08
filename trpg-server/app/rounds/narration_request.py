@@ -109,8 +109,12 @@ from app.whispers.models import Whisper
 MOVES = TypeAdapter(list[Move])
 
 
-def find_death_save(round_: Round, user_id: uuid.UUID) -> DeathSaveNote | None:
-    """라운드에 적힌 죽음의 굴림 중에서 이 사람의 것을 서술자에게 줄 모양으로 찾는다. 없으면 None."""
+def find_death_save(round_: Round, user_id: uuid.UUID, style: str = 'over') -> DeathSaveNote | None:
+    """
+    라운드에 적힌 죽음의 굴림 중에서 이 사람의 것을 서술자에게 줄 모양으로 찾는다. 없으면 None.
+
+    style 은 판의 규칙의 굴림 방식이다(#404). 죽음의 굴림의 기록에는 적히지 않아 부르는 쪽이 준다.
+    """
     found = next((save for save in round_.death_saves if save['user_id'] == str(user_id)), None)
     if found is None:
         return None
@@ -121,6 +125,7 @@ def find_death_save(round_: Round, user_id: uuid.UUID) -> DeathSaveNote | None:
         successes=found['successes'],
         failures=found['failures'],
         fate=found['fate'],
+        style=style,
     )
 
 
@@ -684,6 +689,8 @@ def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
         total=outcome['total'],
         target=outcome['target'],
         success=outcome['success'],
+        style=outcome.get('style', 'over'),
+        faces=tuple(outcome.get('faces') or ()),
         impact=to_impact(outcome.get('effect')),
         npc_impact=to_npc_impact(outcome.get('npc_effect')),
         monster_impact=to_npc_impact(outcome.get('monster_effect')),
