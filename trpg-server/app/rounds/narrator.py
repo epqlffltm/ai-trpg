@@ -776,6 +776,8 @@ class Move:
     healed: list[HealNote] = field(default_factory=list)
     # 이 라운드가 닫힐 때 상태(독, 출혈)가 입힌 피해들(#254). 입은 순서다. 이 칸이 생기기 전에 굳힌 것은 비어 있다
     hurt_by: list[HurtNote] = field(default_factory=list)
+    # 이 라운드가 닫힐 때 판정으로 벗어난 상태들의 이름(#254). 입은 순서다. 이 칸이 생기기 전에 굳힌 것은 비어 있다
+    escaped: list[str] = field(default_factory=list)
     # 지목하는 행동이면 그 결과. 지목은 판정이 아니라 verdict 와 함께 있지 않다
     naming: NamingNote | None = None
     # 물건을 쓰거나 건네는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다

@@ -348,6 +348,8 @@ class EndReason(enum.StrEnum):
     CURED = 'cured'
     # 수치가 문턱을 벗어나 풀렸다(#804)
     RESOURCE = 'resource'
+    # 라운드가 닫힐 때 판정으로 벗어났다(#254)
+    ESCAPED = 'escaped'
 
 
 @dataclass(frozen=True)

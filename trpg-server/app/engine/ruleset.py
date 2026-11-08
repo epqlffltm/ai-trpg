@@ -615,6 +615,18 @@ class InjuryDamage(Part):
     nature: Key | None = None
 
 
+class InjuryEscape(Part):
+    """
+    짧은 부상(상태 이상)에서 판정으로 벗어나기(#254). 라운드가 닫힐 때마다 입은 쪽이 굴리고, 성공하면 바로 풀린다.
+
+    ability 는 굴리는 능력치(규칙의 Ability.key), difficulty 는 난이도의 단계(규칙의 Difficulty.key)다.
+    난이도를 비우면 규칙의 기본 난이도다. 입은 부상의 영향(보정 깎기, 불리함)을 받는다.
+    """
+
+    ability: Key
+    difficulty: Key | None = None
+
+
 class Injury(Part):
     """
     부상 하나. 예: 팔 골절.
@@ -629,6 +641,7 @@ class Injury(Part):
     natures 는 부상의 성질이다(#799). 규칙의 성질(natures, #886)의 이름표다. 그 성질에 면역이면 이 부상을 입지 않는다.
     resistances 는 이 부상을 입고 있는 동안 생기는 저항이다(#886 ②).
     damage 는 짧은 것이 라운드마다 입히는 피해다(#254, app/rounds/injury_ticks.py). 짧은 것에만 있다.
+    escape 는 짧은 것에서 판정으로 벗어나는 법이다(#254, app/rounds/injury_escapes.py). 짧은 것에만 있다.
     """
 
     key: Key
@@ -650,6 +663,8 @@ class Injury(Part):
     resistances: Resistances = ()
     # 라운드마다 입히는 피해(#254). 짧은 것에만 적는다. 비우면 피해가 없다
     damage: InjuryDamage | None = None
+    # 라운드마다 판정으로 벗어나기(#254). 짧은 것에만 적는다. 비우면 정한 라운드가 지나야 풀린다
+    escape: InjuryEscape | None = None
 
     @model_validator(mode='after')
     def require_treatment_pair_on_healing(self) -> Self:
@@ -683,6 +698,13 @@ class Injury(Part):
         """라운드마다의 피해는 짧은 것에만 있다. 라운드로 세는 것만 라운드마다 깎을 수 있다."""
         if self.damage is not None and self.healing != Healing.ROUNDS:
             raise ValueError('damage 는 짧은 부상(rounds)에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def allow_escape_only_when_short(self) -> Self:
+        """판정으로 벗어나기는 짧은 것에만 있다. 오래 가는 것은 치료로, 결손은 낫지 않는다."""
+        if self.escape is not None and self.healing != Healing.ROUNDS:
+            raise ValueError('escape 는 짧은 부상(rounds)에만 적습니다.')
         return self
 
     @model_validator(mode='after')
@@ -1278,6 +1300,26 @@ class Ruleset(Part):
         strangers = [i.key for i in self.injuries if i.damage is not None and i.damage.magnitude not in known]
         if strangers:
             raise ValueError(f'부상의 라운드마다의 피해가 규칙에 없는 등급을 가리킵니다: {", ".join(strangers)}')
+        return self
+
+    @model_validator(mode='after')
+    def reject_unknown_injury_escape(self) -> Self:
+        """부상에서 벗어나는 판정(#254)의 능력치와 난이도는 이 규칙에 있어야 한다."""
+        abilities = {ability.key for ability in self.abilities}
+        difficulties = {difficulty.key for difficulty in self.difficulties}
+        strangers = [
+            injury.key
+            for injury in self.injuries
+            if injury.escape is not None
+            and (
+                injury.escape.ability not in abilities
+                or (injury.escape.difficulty is not None and injury.escape.difficulty not in difficulties)
+            )
+        ]
+        if strangers:
+            raise ValueError(
+                f'부상에서 벗어나는 판정이 규칙에 없는 능력치나 난이도를 가리킵니다: {", ".join(strangers)}'
+            )
         return self
 
     @model_validator(mode='after')

@@ -1013,6 +1013,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_healed(move.healed))
     if move.hurt_by:
         parts.append(describe_hurt_by(move.hurt_by))
+    if move.escaped:
+        parts.append(f'[벗어난 상태: {", ".join(move.escaped)}]')
     if move.injuries:
         parts.append(f'[입은 부상: {describe_injuries(move.injuries)}]')
     if move.items:

@@ -112,6 +112,8 @@ class EventType(enum.StrEnum):
     INJURY_ENDED = 'injury_ended'
     # 짧은 부상(상태 이상)이 라운드가 닫힐 때 피해를 입혔다(#254, 독, 출혈). 바뀐 것은 그 뒤의 HP, NPC, 몬스터의 변화다
     INJURY_HURT = 'injury_hurt'
+    # 짧은 부상(상태 이상)에서 벗어나는 판정을 굴렸다(#254). 벗어났으면 그 뒤에 injury_ended(reason escaped)가 잇는다
+    INJURY_ESCAPE_ROLLED = 'injury_escape_rolled'
     # 엔진이 치료의 결과를 정했다. 나을 라운드의 변화, 치료 실패 표의 결과가 적힌다. 원인은 그 판정의 이벤트다
     INJURY_TREATED = 'injury_treated'
     # 엔진이 지목의 결과를 정했다. 짚은 이름이 맞았는지와, 맞았으면 진짜 이름이 적힌다. 원인은 그 행동의 이벤트다
