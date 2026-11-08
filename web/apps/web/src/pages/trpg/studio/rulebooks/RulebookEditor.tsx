@@ -9,6 +9,7 @@ import type { FormProblem } from '../../../../auth/problem';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { TextAreaField } from '../../../../components/TextAreaField';
 import { ArmorFields } from './ArmorFields';
+import { InjuryStatusFields } from './InjuryStatusFields';
 import { ProgressionFields } from './ProgressionFields';
 import { ResourceFields } from './ResourceFields';
 import { RollFields } from './RollFields';
@@ -87,6 +88,7 @@ export function RulebookEditor({ initial, templates, abilities, submitLabel, bus
         hints={hints}
         onChange={(resources) => update({ resources })}
       />
+      <InjuryStatusFields statuses={draft.statuses} onChange={(statuses) => update({ statuses })} />
       <ProgressionFields progression={draft.progression} hints={hints} onChange={(progression) => update({ progression })} />
       <div className="form-actions">
         <Button type="submit" busy={busy} disabled={Object.keys(hints).length > 0}>

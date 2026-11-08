@@ -6,10 +6,12 @@
 //   - 만들 때 템플릿을 바꾸면 판정 방식과 수치와 성장도 그 템플릿의 것으로 돌아간다
 //   - 성장은 늘 보낸다. 끄면 null 이다(서버는 보낸 null 을 "성장하지 않음"으로 읽는다)
 //   - 만들 때는 고른 템플릿의 방어 규칙을 채워 보인다. 템플릿을 바꾸면 방어 규칙도 그 템플릿의 것으로 돌아간다
+//   - 짧은 부상(상태 이상)의 라운드마다의 피해와 벗어나기(#254, injuryStatusForm.ts)도 고친다. 부상 목록을 통째로 보낸다
 //   - 숫자 칸은 고치는 동안 글로 둔다(비워 두거나 지우는 중일 수 있다). 보낼 때 정수로 바꾼다
 //   - 세이브의 목표값은 save 방식에만 있고 반드시 있다. 다른 방식에 보내면 서버가 422 다. 그래서 save 일 때만 싣는다
 
 import type { Armor, ArmorMode, RulebookCreate, RulebookDetail, RulebookTemplate, RulebookTemplates, RulebookUpdate, TemplateKey } from '../../../../api/types';
+import { statusDraft, toInjuries, type StatusDraft, type StatusRules } from './injuryStatusForm';
 import { progressionDraft, progressionHints, toProgression, type ProgressionDraft } from './progressionForm';
 import { rollDraft, rollHints, toDie, toRoll, type RollDraft } from './rollForm';
 import { resourceDraft, resourceHints, toResource, type ResourceDraft } from './resourcesForm';
@@ -31,6 +33,8 @@ export type RulebookDraft = ArmorDraft & {
   progression: ProgressionDraft;
   /** 판정 방식(#404). 주사위의 면 수와 개수, 성공을 가르는 쪽 */
   roll: RollDraft;
+  /** 짧은 부상(상태 이상)의 라운드마다의 피해와 벗어나기(#254) */
+  statuses: StatusDraft;
 };
 
 // 서버의 한도(trpg-server/app/assets/models.py, app/engine/ruleset.py 의 RULESET_MAX_NUMBER)
@@ -62,7 +66,15 @@ export function newRulebookDraft(templates: RulebookTemplates): RulebookDraft {
     resources: (template?.rules.resources ?? []).map(resourceDraft),
     progression: progressionDraft(template?.rules.progression),
     roll: templateRoll(template),
+    statuses: templateStatuses(template),
   };
+}
+
+const NO_RULES: StatusRules = { injuries: [], magnitudes: [], natures: [], abilities: [], difficulties: [] };
+
+/** 그 템플릿의 부상들. 템플릿이 없으면 빈 것 */
+function templateStatuses(template: RulebookTemplate | undefined): StatusDraft {
+  return statusDraft(template?.rules ?? NO_RULES);
 }
 
 /** 그 템플릿의 판정 방식. 템플릿이 없으면 d20 하나의 over */
@@ -81,6 +93,7 @@ export function withTemplate(draft: RulebookDraft, templates: RulebookTemplates,
     resources: (template?.rules.resources ?? []).map(resourceDraft),
     progression: progressionDraft(template?.rules.progression),
     roll: templateRoll(template),
+    statuses: templateStatuses(template),
   };
 }
 
@@ -95,6 +108,7 @@ export function rulebookDraft(rulebook: RulebookDetail): RulebookDraft {
     resources: rulebook.rules.resources.map(resourceDraft),
     progression: progressionDraft(rulebook.rules.progression),
     roll: rollDraft(rulebook.rules),
+    statuses: statusDraft(rulebook.rules),
   };
 }
 
@@ -147,6 +161,7 @@ export function toRulebookCreate(draft: RulebookDraft): RulebookCreate {
     armor: toArmor(draft),
     resources: draft.resources.map(toResource),
     progression: toProgression(draft.progression),
+    injuries: toInjuries(draft.statuses),
   };
 }
 
@@ -161,5 +176,6 @@ export function toRulebookUpdate(draft: RulebookDraft): RulebookUpdate {
     armor: toArmor(draft),
     resources: draft.resources.map(toResource),
     progression: toProgression(draft.progression),
+    injuries: toInjuries(draft.statuses),
   };
 }
