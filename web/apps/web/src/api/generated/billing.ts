@@ -247,6 +247,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/billing/service/grants/attendance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** (인증 서버) 출석의 하루 양과 보물 상자의 실버를 준다. 양과 날은 인증 서버가 정한다. 한 날짜에 하루 양 한 번, 상자 한 번 */
+        post: operations["grantAttendance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/billing/service/grants/invite": {
         parameters: {
             query?: never;
@@ -1617,6 +1634,55 @@ export interface operations {
                         /** @enum {string} */
                         status: "applied" | "stale";
                     };
+                };
+            };
+            400: components["responses"]["ServiceBadRequest"];
+            401: components["responses"]["ServiceUnauthorized"];
+            500: components["responses"]["ServerError"];
+            503: components["responses"]["Unavailable"];
+        };
+    };
+    grantAttendance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description 그날 연 보물 상자에서 나온 실버. 열지 않았거나 꽝이면 0 이다(비워도 0). 0 에서 100000 */
+                    chest_silver?: components["schemas"]["Amount"];
+                    /**
+                     * Format: date
+                     * @description 출석한 날(한국 날짜). 지급의 이름(attendance-YYYYMMDD 와 chest-YYYYMMDD)에 들어간다
+                     */
+                    day: string;
+                    /** @description 그날의 하루 양. 1 에서 100000 */
+                    silver: components["schemas"]["Amount"];
+                    /** Format: uuid */
+                    user_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 모두 이미 줬다(already_granted) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Welcome"];
+                };
+            };
+            /** @description 하나라도 새로 줬다(granted). granted 는 새로 준 실버의 합이다 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Welcome"];
                 };
             };
             400: components["responses"]["ServiceBadRequest"];
