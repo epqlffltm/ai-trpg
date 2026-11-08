@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/Pictures.test.tsx
 // 시나리오의 그림 탭(#1163). 붙인 로어북의 장소, 인물, 사건 항목마다 그림 칸이 있고, 붙이고 떼어 저장하면 pictures 를 통째로 보낸다.
-// 붙일 수 없는 항목의 그림은 따로 모아 뗀다. 저장과 게시 점검의 실패 글, 입력의 순수한 함수.
+// 장소에는 때마다의 배경을 붙인다. 붙일 수 없는 항목의 그림은 따로 모아 뗀다. 저장과 게시 점검의 실패 글, 입력의 순수한 함수.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -11,7 +11,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME } from '../../../../test/tableFixtures';
-import { MAX_PICTURES, strayPictures, withPicture } from './picturesForm';
+import { MAX_PICTURES, strayPictures, toPicturesBody, withoutTimes, withPicture, withTimePicture } from './picturesForm';
 import { problemLine } from './publishProblems';
 import { describeScenarioSaveProblem } from './scenarioProblem';
 
@@ -31,7 +31,9 @@ function entry(id: string, name: string, kind: string) {
   return { id, lorebook_id: LOREBOOK, kind, name, aliases: [], content: '', created_at: '', updated_at: '' };
 }
 
-function signedIn(pictures: { entry_id: string; image_id: string }[]) {
+type Picture = { entry_id: string; image_id: string; by_time?: Record<string, string> };
+
+function signedIn(pictures: Picture[]) {
   let current = scenarioDetail({ lorebook_ids: [LOREBOOK], pictures });
   return installFakeFetch({
     [`POST ${REFRESH_PATH}`]: () => json(200, tokens('a1')),
@@ -51,7 +53,7 @@ function signedIn(pictures: { entry_id: string; image_id: string }[]) {
   });
 }
 
-function patches(seen: SeenRequest[]): { pictures: { entry_id: string; image_id: string }[] }[] {
+function patches(seen: SeenRequest[]): { pictures: Picture[] }[] {
   return seen.filter((request) => request.method === 'PATCH' && request.url === SCENARIO).map((request) => request.body as never);
 }
 
@@ -87,8 +89,8 @@ describe('시나리오의 그림 탭', () => {
 
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
     expect(patches(seen)[0]?.pictures).toEqual([
-      { entry_id: HALL, image_id: OLD },
-      { entry_id: FIRE, image_id: NEW },
+      { entry_id: HALL, image_id: OLD, by_time: {} },
+      { entry_id: FIRE, image_id: NEW, by_time: {} },
     ]);
   });
 
@@ -107,25 +109,63 @@ describe('시나리오의 그림 탭', () => {
     await userEvent.click(form.getByRole('button', { name: '저장' }));
 
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
-    expect(patches(seen)[0]?.pictures).toEqual([{ entry_id: SWORD, image_id: NEW }]);
+    expect(patches(seen)[0]?.pictures).toEqual([{ entry_id: SWORD, image_id: NEW, by_time: {} }]);
+  });
+
+  it('장소에 기본 그림이 있으면 때마다의 배경을 펼쳐 붙이고, 저장하면 by_time 으로 간다. 기본 그림이 없으면 칸이 없다', async () => {
+    const { seen } = signedIn([{ entry_id: HALL, image_id: OLD, by_time: { night: OLD } }]);
+    const form = await openForm();
+
+    const times = within((await form.findByText(/대회당의 때마다의 배경/)).closest('details') as HTMLElement);
+    expect(times.getByText('대회당의 때마다의 배경 (1 / 5)')).toBeInTheDocument();
+    const dawn = within(times.getByRole('group', { name: '대회당의 새벽 배경' }));
+    await userEvent.click(dawn.getByRole('button', { name: '그림 붙이기' }));
+    await userEvent.click(await dawn.findByRole('button', { name: '그림 2 고르기' }));
+    // 인물과 사건에는 때마다의 칸이 없다
+    expect(form.queryByText(/늙은 문지기의 때마다의 배경/)).toBeNull();
+    await userEvent.click(form.getByRole('button', { name: '저장' }));
+
+    await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
+    expect(patches(seen)[0]?.pictures).toEqual([{ entry_id: HALL, image_id: OLD, by_time: { dawn: NEW, night: OLD } }]);
+  });
+
+  it('장소가 아닌 항목의 때마다의 그림은 떼게 한다', async () => {
+    const { seen } = signedIn([{ entry_id: GUARD, image_id: OLD, by_time: { day: NEW } }]);
+    const form = await openForm();
+
+    await userEvent.click(await form.findByRole('button', { name: '늙은 문지기의 때마다의 그림 떼기' }));
+    await userEvent.click(form.getByRole('button', { name: '저장' }));
+
+    await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
+    expect(patches(seen)[0]?.pictures).toEqual([{ entry_id: GUARD, image_id: OLD, by_time: {} }]);
   });
 });
 
 describe('그림 탭의 입력과 실패', () => {
-  it('바꾸면 자리를 지키고, 새 항목은 끝에, 가득 차면 붙이지 않는다', () => {
+  it('바꾸면 자리와 때마다의 그림을 지키고, 새 항목은 끝에, 가득 차면 붙이지 않는다', () => {
     const rows = [
-      { entryId: 'a', imageId: '1' },
-      { entryId: 'b', imageId: '2' },
+      { entryId: 'a', imageId: '1', byTime: { night: '5' } },
+      { entryId: 'b', imageId: '2', byTime: {} },
     ];
     expect(withPicture(rows, 'a', '9')).toEqual([
-      { entryId: 'a', imageId: '9' },
-      { entryId: 'b', imageId: '2' },
+      { entryId: 'a', imageId: '9', byTime: { night: '5' } },
+      { entryId: 'b', imageId: '2', byTime: {} },
     ]);
-    expect(withPicture(rows, 'c', '3').at(-1)).toEqual({ entryId: 'c', imageId: '3' });
-    expect(withPicture(rows, 'a', null)).toEqual([{ entryId: 'b', imageId: '2' }]);
-    const full = Array.from({ length: MAX_PICTURES }, (_, index) => ({ entryId: `e${index}`, imageId: 'x' }));
+    expect(withPicture(rows, 'c', '3').at(-1)).toEqual({ entryId: 'c', imageId: '3', byTime: {} });
+    expect(withPicture(rows, 'a', null)).toEqual([{ entryId: 'b', imageId: '2', byTime: {} }]);
+    const full = Array.from({ length: MAX_PICTURES }, (_, index) => ({ entryId: `e${index}`, imageId: 'x', byTime: {} }));
     expect(withPicture(full, 'new', 'x')).toHaveLength(MAX_PICTURES);
-    expect(strayPictures(rows, ['a'])).toEqual([{ entryId: 'b', imageId: '2' }]);
+    expect(strayPictures(rows, ['a'])).toEqual([{ entryId: 'b', imageId: '2', byTime: {} }]);
+  });
+
+  it('때마다의 그림: 붙이고 떼고, 줄이 없으면 그대로, 보낼 때는 하루의 차례', () => {
+    const rows = [{ entryId: 'a', imageId: '1', byTime: {} }];
+    const timed = withTimePicture(withTimePicture(rows, 'a', 'night', '7'), 'a', 'dawn', '6');
+    expect(toPicturesBody(timed).pictures?.[0]?.by_time).toEqual({ dawn: '6', night: '7' });
+    expect(Object.keys(toPicturesBody(timed).pictures?.[0]?.by_time ?? {})).toEqual(['dawn', 'night']);
+    expect(withTimePicture(timed, 'a', 'night', null)[0]?.byTime).toEqual({ dawn: '6' });
+    expect(withTimePicture(rows, 'zz', 'day', '1')).toEqual(rows);
+    expect(withoutTimes(timed, 'a')[0]?.byTime).toEqual({});
   });
 
   it('저장: 그림이 내 그림이 아니면 다시 고르게 하고, 게시 점검의 문제는 그림 탭을 가리킨다', () => {
@@ -133,5 +173,6 @@ describe('그림 탭의 입력과 실패', () => {
     expect(describeScenarioSaveProblem(error).message).toContain('그림을 다시 골라 주세요');
     expect(problemLine('picture_entry_missing').section).toBe('pictures');
     expect(problemLine('picture_wrong_kind').section).toBe('pictures');
+    expect(problemLine('picture_time_not_place').section).toBe('pictures');
   });
 });
