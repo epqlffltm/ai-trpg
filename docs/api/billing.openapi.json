@@ -2246,6 +2246,97 @@
         "x-audience": "service"
       }
     },
+    "/api/v1/billing/service/grants/attendance": {
+      "post": {
+        "operationId": "grantAttendance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "chest_silver": {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/Amount"
+                      }
+                    ],
+                    "description": "그날 연 보물 상자에서 나온 실버. 열지 않았거나 꽝이면 0 이다(비워도 0). 0 에서 100000"
+                  },
+                  "day": {
+                    "description": "출석한 날(한국 날짜). 지급의 이름(attendance-YYYYMMDD 와 chest-YYYYMMDD)에 들어간다",
+                    "format": "date",
+                    "type": "string"
+                  },
+                  "silver": {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/Amount"
+                      }
+                    ],
+                    "description": "그날의 하루 양. 1 에서 100000"
+                  },
+                  "user_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "user_id",
+                  "day",
+                  "silver"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Welcome"
+                }
+              }
+            },
+            "description": "모두 이미 줬다(already_granted)"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Welcome"
+                }
+              }
+            },
+            "description": "하나라도 새로 줬다(granted). granted 는 새로 준 실버의 합이다"
+          },
+          "400": {
+            "$ref": "#/components/responses/ServiceBadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/ServiceUnauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        },
+        "security": [
+          {
+            "serviceSignature": []
+          }
+        ],
+        "summary": "(인증 서버) 출석의 하루 양과 보물 상자의 실버를 준다. 양과 날은 인증 서버가 정한다. 한 날짜에 하루 양 한 번, 상자 한 번",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
     "/api/v1/billing/service/grants/invite": {
       "post": {
         "operationId": "grantInvite",

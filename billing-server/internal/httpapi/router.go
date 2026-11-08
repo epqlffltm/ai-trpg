@@ -33,6 +33,7 @@ type Dependencies struct {
 	// Withdrawals 는 인증 서버가 알린 탈퇴를 반영한다(#603).
 	Withdrawals WithdrawalProcessor
 	// Welcome 은 환영 크레딧을 준다. WelcomeCredits 는 그 양이다. 0 이면 주지 않는다.
+	// 초대 보상과 인증 서버가 정한 출석의 실버(/service/grants/attendance)도 이것으로 준다.
 	Welcome        WelcomeGranter
 	WelcomeCredits credit.Amount
 	// InviteCredits 는 초대 보상 한 번에 두 사람이 각각 받는 양이다(#990). 0 이면 주지 않는다. 주는 것은 Welcome 이 한다.
@@ -183,6 +184,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	authServer := service.Group("", requireService(AuthServer, deps.AuthServerSecret, deps.Now))
 	authServer.POST("/grants/welcome", grantWelcome(deps.Welcome, deps.WelcomeCredits))
 	authServer.POST("/grants/invite", grantInvite(deps.Welcome, deps.InviteCredits))
+	authServer.POST("/grants/attendance", grantAttendance(deps.Welcome))
 	authServer.POST("/eligibility", recordEligibility(deps.Eligibility))
 	authServer.POST("/users/:id/withdrawal", processWithdrawal(deps.Withdrawals))
 
