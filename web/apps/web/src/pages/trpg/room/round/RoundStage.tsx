@@ -3,13 +3,14 @@
 // 더 앞의 라운드는 "앞의 라운드 더 보기"로 위에 잇는다(B10). 처음 누르면 그때의 첫 번호(anchor)에 최근의 라운드를 고정하고
 // 그 앞을 쪽으로 읽는다. 고정하지 않으면 라운드가 늘 때 창이 밀려 사이가 빈다.
 // 상태 패널(B7)은 옆에 있고(status/), 일어난 일은 그 탭이다(events/).
-// 지금 라운드 바로 위에 서술을 막는 일의 알림을 둔다(events/RoomNotices).
+// 지금 라운드 바로 위에 서술을 막는 일의 알림을 둔다(events/RoomNotices). 방금 닫힌 라운드에 얻은 업적의 알림도 둔다(events/AchievementNotices).
 // 장면 그림(#983)은 여기서 한 번 읽고 라운드마다 나눠 준다(snapshots/).
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import type { TableDetail } from '../../../../api/types';
+import { AchievementNotices } from '../events/AchievementNotices';
 import { RoomNotices } from '../events/RoomNotices';
 import { useTableSnapshots } from '../snapshots/useTableSnapshots';
 import { CurrentRound } from './CurrentRound';
@@ -62,6 +63,7 @@ export function RoundStage({ table, myId, preview, nameOfMember }: Props) {
       {past.map((round) => (
         <RoundEntry key={round.number} round={round} table={table} snapshots={snapshots} />
       ))}
+      <AchievementNotices table={table} currentRound={current.data.number} nameOfMember={nameOfMember} />
       <RoomNotices table={table} currentRound={current.data.number} myId={myId} nameOfMember={nameOfMember} />
       <CurrentRound table={table} round={current.data} myId={myId} preview={preview} nameOfMember={nameOfMember} snapshots={snapshots} />
     </section>
