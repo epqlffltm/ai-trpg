@@ -4395,6 +4395,48 @@
         "title": "EntryDetail",
         "type": "object"
       },
+      "EntryPicture-Input": {
+        "additionalProperties": false,
+        "description": "로어 항목 하나의 그림(#1163). 붙인 로어북의 항목(entry_id)에 제작자가 올린 그림(image_id, app/portraits/)을 단다.\n\n장소 항목이면 테이블 방의 그림 창의 배경이고, 인물 항목이면 그 인물의 그림이고,\n사건 항목이면 일어난 라운드의 컷신이다.\n그림이 자기가 올린 것인지는 저장할 때, 항목이 붙인 로어북의 장소, 인물, 사건인지는 게시할 때 본다.",
+        "properties": {
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "image_id": {
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entry_id",
+          "image_id"
+        ],
+        "title": "EntryPicture",
+        "type": "object"
+      },
+      "EntryPicture-Output": {
+        "additionalProperties": false,
+        "description": "로어 항목 하나의 그림(#1163). 붙인 로어북의 항목(entry_id)에 제작자가 올린 그림(image_id, app/portraits/)을 단다.\n\n장소 항목이면 테이블 방의 그림 창의 배경이고, 인물 항목이면 그 인물의 그림이고,\n사건 항목이면 일어난 라운드의 컷신이다.\n그림이 자기가 올린 것인지는 저장할 때, 항목이 붙인 로어북의 장소, 인물, 사건인지는 게시할 때 본다.",
+        "properties": {
+          "entry_id": {
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "image_id": {
+            "title": "Image Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entry_id",
+          "image_id"
+        ],
+        "title": "EntryPicture",
+        "type": "object"
+      },
       "EntrySnapshot": {
         "description": "로어북의 항목 하나. 종류를 적지 않은 것(평가 데이터, 테스트)은 기타다.\n\ntrue_names 는 인물을 지목할 때 맞다고 받는 이름들이다(app/rounds/naming.py). 비어 있으면 항목의 이름 하나다.\n적지 않은 것(평가 데이터, 테스트)은 비어 있다.",
         "properties": {
@@ -11234,6 +11276,18 @@
             "title": "Id",
             "type": "string"
           },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
           "injuries": {
             "items": {
               "type": "string"
@@ -11528,6 +11582,27 @@
         "title": "PickSnapshot",
         "type": "object"
       },
+      "PictureSnapshot": {
+        "description": "로어 항목 하나의 그림(#1163). 판 안의 장소, 인물, 사건 항목 하나(entry_id)에 제작자가 올린 그림(image_id)이다.\n\n장소면 테이블 방의 배경, 인물이면 그 인물의 그림, 사건이면 일어난 라운드의 컷신이다.",
+        "properties": {
+          "entry_id": {
+            "format": "uuid",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "image_id": {
+            "format": "uuid",
+            "title": "Image Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entry_id",
+          "image_id"
+        ],
+        "title": "PictureSnapshot",
+        "type": "object"
+      },
       "PierceOut": {
         "description": "관통 굴림(#276). 눈 + 관통력(ap)이 target(그 부위의 방어 + 룰북의 기준값) 이상이면 관통이다.",
         "properties": {
@@ -11727,6 +11802,18 @@
             "format": "uuid",
             "title": "Entry Id",
             "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
           },
           "items": {
             "default": [],
@@ -16646,6 +16733,15 @@
             "title": "Openings",
             "type": "array"
           },
+          "pictures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EntryPicture-Input"
+            },
+            "maxItems": 200,
+            "title": "Pictures",
+            "type": "array"
+          },
           "place_items": {
             "default": [],
             "items": {
@@ -16957,6 +17053,13 @@
             "title": "Openings",
             "type": "array"
           },
+          "pictures": {
+            "items": {
+              "$ref": "#/components/schemas/EntryPicture-Output"
+            },
+            "title": "Pictures",
+            "type": "array"
+          },
           "place_items": {
             "items": {
               "$ref": "#/components/schemas/PlaceItem-Output"
@@ -17109,6 +17212,7 @@
           "place_items",
           "covers",
           "traps",
+          "pictures",
           "wanders",
           "happenings",
           "chapters",
@@ -17248,7 +17352,7 @@
       },
       "ScenarioUpdate": {
         "additionalProperties": false,
-        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는\nnull 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, covers, traps, wanders, happenings, chapters, npc_places, character_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
+        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는\nnull 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, covers, traps, pictures, wanders, happenings, chapters, npc_places,\ncharacter_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
         "properties": {
           "bestiary_ids": {
             "anyOf": [
@@ -17524,6 +17628,21 @@
               }
             ],
             "title": "Openings"
+          },
+          "pictures": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EntryPicture-Input"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pictures"
           },
           "place_items": {
             "anyOf": [
@@ -18680,6 +18799,14 @@
               "type": "string"
             },
             "title": "Openings",
+            "type": "array"
+          },
+          "pictures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PictureSnapshot"
+            },
+            "title": "Pictures",
             "type": "array"
           },
           "place_items": {

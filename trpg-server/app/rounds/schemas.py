@@ -1333,6 +1333,9 @@ class PersonOut(BaseModel):
     # 상인인가(#278). 상인은 소지품 중 값이 있는 것을 팔고(buy), 값이 있는 물건을 사 준다(sell).
     # 살아 있고 적대하지 않을 때만 거래한다
     merchant: bool = False
+    # 그 인물의 그림(#1163). 판의 로어 항목마다의 그림이다. 테이블의 그림 주소(.../portraits/{image_id}/image)로 받는다.
+    # 붙이지 않았으면 null 이다
+    image_id: uuid.UUID | None = None
     # 있는 장소(#282). 판의 로어북 장소 항목의 id 다. 자기가 선 장소와 같아야 겨눈다.
     # null 이면 자리가 없는 인물이다. 장면의 글에 나와 장면에 들었고, 누구나 겨눈다
     place_id: uuid.UUID | None = None

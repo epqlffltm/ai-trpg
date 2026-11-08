@@ -319,6 +319,8 @@ async def test_the_named_person_is_listed_by_the_true_name(
             'injuries': [],
             'named': True,
             'resources': [],
+            # 판에 인물의 그림을 붙이지 않았다(#1163)
+            'image_id': None,
             **NEUTRAL,
         }
     ]

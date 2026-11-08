@@ -54,6 +54,7 @@ from app.assets.scenarios.snapshot import (
 from app.engine.action import DoorDevice
 from app.events import recorder
 from app.events.models import EventType, TableEvent
+from app.portraits.seats import with_cutscene
 from app.rounds.experience import record_leveled
 from app.rounds.quest_goals import all_met
 from app.tables import chapters, growth, places, route_locks, sheets
@@ -334,7 +335,7 @@ def record_happenings(
     """
     recorded = []
     for payload in occurred:
-        shown = {key: value for key, value in payload.items() if key != 'experience'}
+        shown = with_cutscene(table.content, {key: value for key, value in payload.items() if key != 'experience'})
         event = recorder.record(session, table, EventType.HAPPENING_OCCURRED, payload=shown, group=group)
         recorded.append((payload, event))
         for move in payload['moves']:

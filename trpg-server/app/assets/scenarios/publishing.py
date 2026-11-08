@@ -222,6 +222,10 @@ class Problem(enum.StrEnum):
     CHAPTER_START_LOCKED = 'chapter_start_locked'
     # 붙인 로어북의 인물 항목이 아닌 것(없는 항목, 장소, 물건 …)의 자리가 있다(#282)
     NPC_PLACE_NOT_PERSON = 'npc_place_not_person'
+    # 붙인 로어북에 없는 항목의 그림이 있다(#1163). 항목을 지웠거나 로어북을 뗐다
+    PICTURE_ENTRY_MISSING = 'picture_entry_missing'
+    # 장소, 인물, 사건이 아닌 항목(물건, 전설 …)의 그림이 있다(#1163). 그림 창에 띄울 곳이 없다
+    PICTURE_WRONG_KIND = 'picture_wrong_kind'
     # 인물의 자리가 맵에 없는 장소(시작 장소, 길의 끝, 명소가 아닌 곳)다. 아무도 그 인물을 만날 수 없다
     NPC_PLACE_OFF_MAP = 'npc_place_off_map'
     # 붙인 도감에 없는 몬스터를 가리키는 몬스터 시트가 있다. 몬스터를 지웠거나 도감을 뗐다
@@ -1294,6 +1298,26 @@ def find_npc_place_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     return problems
 
 
+# 그림(#1163)을 붙일 수 있는 항목의 종류. 장소는 배경, 인물은 인물의 그림, 사건은 컷신이다
+PICTURED_KINDS = frozenset({LoreKind.PLACE, LoreKind.PERSON, LoreKind.EVENT})
+
+
+def find_picture_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
+    """
+    로어 항목마다의 그림에서 문제를 찾는다(#1163). 항목은 붙인 로어북의 장소, 인물, 사건 항목이어야 한다.
+
+    그림이 자기가 올린 것인지는 저장할 때 봤다(app/assets/scenarios/service.py 의 require_own_pictures).
+    """
+    entries = lore_entries(parts)
+    pointed = [uuid.UUID(str(picture['entry_id'])) for picture in scenario.pictures]
+    problems = []
+    if any(entry_id not in entries for entry_id in pointed):
+        problems.append(Problem.PICTURE_ENTRY_MISSING)
+    if any(entry_id in entries and entries[entry_id].kind not in PICTURED_KINDS for entry_id in pointed):
+        problems.append(Problem.PICTURE_WRONG_KIND)
+    return problems
+
+
 def read_covers(scenario: Scenario) -> list[CoverRule]:
     """장소마다의 커버를 읽는다."""
     return [CoverRule.model_validate(document) for document in scenario.covers]
@@ -1448,6 +1472,7 @@ def find_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     problems.extend(find_happening_problems(scenario, parts))
     problems.extend(find_chapter_problems(scenario, parts))
     problems.extend(find_npc_place_problems(scenario, parts))
+    problems.extend(find_picture_problems(scenario, parts))
     problems.extend(find_seating_problems(scenario))
     return problems
 

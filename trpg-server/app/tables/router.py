@@ -45,7 +45,7 @@ from app.limits.routing import Limited
 from app.personas import saving
 from app.personas.router import to_persona
 from app.personas.schemas import PersonaOut
-from app.portraits.seats import member_portrait
+from app.portraits.seats import member_portrait, picture_of
 from app.rounds import service as round_service
 from app.rounds.router import Closing
 from app.tables import (
@@ -405,6 +405,7 @@ def to_map(table: GameTable, snapshot: Snapshot, catalog: dict[uuid.UUID, Catalo
                 items=to_place_items(table, place.id, catalog),
                 cover=cover_at(snapshot, place.id),
                 traps=to_known_traps(table, place.id, catalog),
+                image_id=picture_of(table.content, place.id),
             )
             for place in known.places
         ],

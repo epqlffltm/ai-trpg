@@ -215,6 +215,8 @@ async def test_stepping_on_the_trap_drops_those_standing_there(
                 'to': {'entry_id': more['cellar']['id'], 'name': '지하실'},
             }
         ],
+        # 사건 항목에 그림(컷신, #1163)을 붙이지 않았다
+        'image_id': None,
     }
     walked, dropped = await events_of(client, friend, table, 'character_moved')
     assert walked['payload']['to']['name'] == '광장'
