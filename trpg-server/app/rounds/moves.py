@@ -28,6 +28,7 @@ from app.rounds.monster_scene import condition as monster_condition
 from app.rounds.move_lines import describe_resource
 from app.rounds.narrator import (
     HealNote,
+    HurtNote,
     InjuryNote,
     ItemNote,
     MonsterNote,
@@ -53,6 +54,26 @@ from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember
 from app.tables.npc_attitudes import attitude_word
 from app.tables.resources import Bearer
+
+
+def hurt_notes(ticks: list[dict], user_id: uuid.UUID) -> list[HurtNote]:
+    """
+    이 라운드가 닫힐 때 상태가 이 사람에게 입힌 피해들(#254, app/rounds/injury_ticks.py)을 서술자에게 줄 모양으로.
+
+    깎인 양은 실제로 바뀐 HP 다(저항과 HP 의 바닥까지 든 뒤). 입은 순서다.
+    """
+    notes = []
+    for tick in ticks:
+        effect = tick['effect']
+        if tick['kind'] != 'pc' or tick['user_id'] != str(user_id) or effect is None:
+            continue
+        nature = effect.get('nature')
+        notes.append(
+            HurtNote(
+                name=tick['injury_name'], amount=effect['before'] - effect['after'], nature=nature and nature['name']
+            )
+        )
+    return notes
 
 
 def healed_notes(ruleset: Ruleset | None, ended: list[round_injuries.Ended], user_id: uuid.UUID) -> list[HealNote]:
@@ -82,6 +103,7 @@ def build_moves(
     recovered: Recovered = NOTHING,
     quest_changes: list[dict] | None = None,
     met: list[dict] | None = None,
+    ticks: list[dict] | None = None,
 ) -> list[Move]:
     """
     닫히는 라운드에서 각자 한 일을 서술자에게 줄 모양으로 만든다. 닫기 시작할 때 한 번 만들어 라운드에 굳힌다.
@@ -94,11 +116,13 @@ def build_moves(
     recovered 는 이 라운드가 닫힐 때의 되살아나기와 저절로 회복이다(app/rounds/rests.py 의 settle).
     quest_changes 는 이 라운드가 닫힐 때 엔진이 바꾼 퀘스트들이다(app/rounds/quest_goals.py). 가져간 물건을 함께 준다.
     met 은 이 라운드가 닫힐 때 무작위 조우로 나온 무리들이다(app/rounds/wanders.py, #283). 그 장소에 선 사람에게 준다.
+    ticks 는 이 라운드가 닫힐 때 상태가 입힌 피해들이다(app/rounds/injury_ticks.py, #254). 입은 사람에게 준다.
     쉬는 행동의 결과는 선언에 적혀 있다.
     """
     ended = ended or []
     quest_changes = quest_changes or []
     met = met or []
+    ticks = ticks or []
     declarations = [find_declaration(round_, member.user_id) for member in table.members]
     wounded = any(member.sheet is not None and injuries.active(member.sheet.injuries) for member in table.members)
     needs_rules = wounded or bool(ended) or any(has_outcome(declaration) for declaration in declarations)
@@ -131,6 +155,7 @@ def build_moves(
                 replaces=arrival['replaces'] if arrival else None,
                 injuries=worn_notes(ruleset, member),
                 healed=healed_notes(ruleset, ended, member.user_id),
+                hurt_by=hurt_notes(ticks, member.user_id),
                 naming=narration_request.to_naming(naming_of(declaration)),
                 item_action=narration_request.to_item_action(declaration),
                 skill=narration_request.to_skill(declaration),

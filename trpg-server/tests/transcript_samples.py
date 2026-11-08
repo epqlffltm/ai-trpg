@@ -190,6 +190,12 @@ SAMPLES = {
         'injury': 'stunned',
         'reason': 'expired',
     },
+    'injury_hurt': {
+        'round': 2,
+        'user_id': '11111111-2222-4333-8444-555555555555',
+        'character_name': '엘프',
+        'injury': 'poisoned',
+    },
     'injury_treated': {
         'round': 1,
         'user_id': '11111111-2222-4333-8444-555555555555',

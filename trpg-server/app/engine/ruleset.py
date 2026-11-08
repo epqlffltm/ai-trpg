@@ -603,6 +603,18 @@ class InjuryTable(Part):
         return {row.injury for row in self.rows if row.injury is not None}
 
 
+class InjuryDamage(Part):
+    """
+    짧은 부상(상태 이상)이 라운드마다 입히는 피해(#254). 독, 출혈, 화상 같은 것이다.
+
+    magnitude 는 피해의 양의 등급(규칙의 Magnitude.key)이다. 다른 피해처럼 그 등급의 주사위를 굴려 정한다.
+    nature 는 피해의 성질(규칙의 Nature.key)이다. 입은 쪽의 저항과 면역을 따른다(#886 ③). 비우면 성질이 없는 피해다.
+    """
+
+    magnitude: Key
+    nature: Key | None = None
+
+
 class Injury(Part):
     """
     부상 하나. 예: 팔 골절.
@@ -616,6 +628,7 @@ class Injury(Part):
     treat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).
     natures 는 부상의 성질이다(#799). 규칙의 성질(natures, #886)의 이름표다. 그 성질에 면역이면 이 부상을 입지 않는다.
     resistances 는 이 부상을 입고 있는 동안 생기는 저항이다(#886 ②).
+    damage 는 짧은 것이 라운드마다 입히는 피해다(#254, app/rounds/injury_ticks.py). 짧은 것에만 있다.
     """
 
     key: Key
@@ -635,6 +648,8 @@ class Injury(Part):
     natures: NatureKeys = ()
     # 이 부상(상태)을 입고 있는 동안 생기는 저항(#886 ②). 예: 돌 피부(몸에 저항), 화염 약점
     resistances: Resistances = ()
+    # 라운드마다 입히는 피해(#254). 짧은 것에만 적는다. 비우면 피해가 없다
+    damage: InjuryDamage | None = None
 
     @model_validator(mode='after')
     def require_treatment_pair_on_healing(self) -> Self:
@@ -661,6 +676,13 @@ class Injury(Part):
         """오래 가는 것에는 낫기까지의 시간이 있어야 하고, 다른 것에는 없다."""
         if (self.healing == Healing.HEALS) != (self.heal_minutes is not None):
             raise ValueError('heal_minutes 는 오래 가는 부상(heals)에만 적습니다.')
+        return self
+
+    @model_validator(mode='after')
+    def allow_damage_only_when_short(self) -> Self:
+        """라운드마다의 피해는 짧은 것에만 있다. 라운드로 세는 것만 라운드마다 깎을 수 있다."""
+        if self.damage is not None and self.healing != Healing.ROUNDS:
+            raise ValueError('damage 는 짧은 부상(rounds)에만 적습니다.')
         return self
 
     @model_validator(mode='after')
@@ -1171,7 +1193,9 @@ class Ruleset(Part):
         strangers = [
             injury.key
             for injury in self.injuries
-            if not set(injury.natures) <= known or not {one.nature for one in injury.resistances} <= known
+            if not set(injury.natures) <= known
+            or not {one.nature for one in injury.resistances} <= known
+            or (injury.damage is not None and injury.damage.nature is not None and injury.damage.nature not in known)
         ]
         if strangers:
             raise ValueError(f'부상의 성질이 규칙에 없습니다: {", ".join(strangers)}')
@@ -1245,6 +1269,15 @@ class Ruleset(Part):
         ]
         if strangers:
             raise ValueError(f'수치의 문턱에 입히는 부상이 규칙에 없습니다: {", ".join(strangers)}')
+        return self
+
+    @model_validator(mode='after')
+    def reject_unknown_injury_damage(self) -> Self:
+        """부상이 라운드마다 입히는 피해(#254)의 등급은 이 규칙의 등급에 있어야 한다."""
+        known = {magnitude.key for magnitude in self.magnitudes}
+        strangers = [i.key for i in self.injuries if i.damage is not None and i.damage.magnitude not in known]
+        if strangers:
+            raise ValueError(f'부상의 라운드마다의 피해가 규칙에 없는 등급을 가리킵니다: {", ".join(strangers)}')
         return self
 
     @model_validator(mode='after')

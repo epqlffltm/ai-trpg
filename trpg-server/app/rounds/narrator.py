@@ -171,6 +171,19 @@ class TreatmentNote:
 
 
 @dataclass(frozen=True)
+class HurtNote:
+    """
+    이번 라운드가 닫힐 때 상태(짧은 부상)가 입힌 피해 하나(#254). 부상의 이름과 깎인 HP 다. 엔진이 정했다.
+
+    nature 는 피해의 성질의 이름이다. 없으면 None. 서술자는 그 상태로 다친 장면을 쓴다. 숫자를 지어내지 않는다.
+    """
+
+    name: str
+    amount: int
+    nature: str | None = None
+
+
+@dataclass(frozen=True)
 class HealNote:
     """이번 라운드에 시간이 지나 나은 오래 가는 부상 하나. 나으면서 남은 후유증이 있으면 그 이름이다."""
 
@@ -761,6 +774,8 @@ class Move:
     injuries: list[InjuryNote] = field(default_factory=list)
     # 이 라운드가 닫힐 때 시간이 지나 나은 오래 가는 부상들. 치료로 나은 것은 verdict 의 treatment 에 있다
     healed: list[HealNote] = field(default_factory=list)
+    # 이 라운드가 닫힐 때 상태(독, 출혈)가 입힌 피해들(#254). 입은 순서다. 이 칸이 생기기 전에 굳힌 것은 비어 있다
+    hurt_by: list[HurtNote] = field(default_factory=list)
     # 지목하는 행동이면 그 결과. 지목은 판정이 아니라 verdict 와 함께 있지 않다
     naming: NamingNote | None = None
     # 물건을 쓰거나 건네는 행동이면 그 결과. 판정이 아니라 verdict 와 함께 있지 않다

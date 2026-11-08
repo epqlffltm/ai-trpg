@@ -109,6 +109,17 @@ def wears(rows: list[TableInjury], key: str) -> bool:
     return key in injuries.active_keys(rows)
 
 
+def wears_for_good(ruleset: Ruleset, rows: list[TableInjury], key: str) -> bool:
+    """
+    이 부상을 입고 있고, 다시 걸려도 새로 세지 않는가. 그러면 또 입히지 않는다.
+
+    라운드로 세는 짧은 것(풀릴 라운드가 적힌 것)은 다시 걸리면 새로 센다(#254, wound). 그것은 아니다.
+    """
+    definition = injury_rules.find_injury(ruleset, key)
+    short = definition is not None and definition.healing == Healing.ROUNDS
+    return wears(rows, key) and not (short and injuries.find_counting(rows, key) is not None)
+
+
 def injury_document(trigger: Trigger, roll: int | None) -> dict:
     """
     부상이 생긴 일을 HP 의 변화를 적은 문서 안에 넣을 모양. 아직 부상은 비어 있다.
@@ -143,6 +154,7 @@ def wound(
     입는 쪽이 그 성질을 막으면(#799 면역, #886 ② 저항) 입히지 않는다. 문서의 injury 는 비워 두고,
     막아 입지 않은 부상의 이름표(immune)와 이름(name)을 적는다.
     장난(#803)이면 짧은 것만 입힌다. 오래 가는 것과 결손은 입히지 않고 그 이름표(spared)와 이름(name)을 적는다.
+    짧은 것을 이미 입고 있으면(#254) 하나로 남기고 풀릴 라운드를 새로 센다(recount). 문서의 recounted 가 참이다.
     """
     definition = injury_rules.find_injury(ruleset, key)
     if definition is None:
@@ -153,6 +165,17 @@ def wound(
         return {**document, 'spared': definition.key, 'name': definition.name}
     ends = injury_rules.ends_after(definition, moment.round_number)
     heals = injury_rules.heals_at(definition, moment.now)
+    counting = injuries.find_counting(rows, definition.key) if ends is not None else None
+    if counting is not None:
+        injuries.recount(counting, ends)
+        return {
+            **document,
+            'injury': definition.key,
+            'name': definition.name,
+            'ends_after_round': counting.ends_after_round,
+            'heals_at': None,
+            'recounted': True,
+        }
     injuries.inflict(rows, table_id, definition.key, source, moment.round_number, ends, heals)
     return {
         **document,
@@ -198,10 +221,11 @@ def take_aimed(
     노려 친 부상을 입힌다. 문서로 돌려준다. 표를 굴리지 않는다.
 
     이미 그 부상을 입고 있으면 또 입히지 않는다(같은 라운드에 둘이 같은 눈을 노렸다). 문서의 부상이 비어 있다.
+    짧은 것이면 하나로 남기고 풀릴 라운드를 새로 센다(#254).
     면역이면(#799) 선언을 받을 때 막았다. 여기서도 입히지 않는다.
     """
     document = injury_document(Trigger.CALLED_SHOT, None)
-    if wears(rows, key):
+    if wears_for_good(ruleset, rows, key):
         return document
     return wound(ruleset, key, InjurySource.CALLED_SHOT, document, rows, table_id, moment, immune, prank)
 
@@ -229,10 +253,11 @@ def take_from_item(
     물건의 효과(injure)가 입히는 부상(#800). 문서로 돌려준다. 표를 굴리지 않는다.
     기술의 효과(#805)도 이 길을 쓴다. 그때 trigger 는 skill 이고 부상의 출처도 skill 이다.
 
-    이미 그 부상을 입고 있으면 또 입히지 않는다(문서의 부상이 비어 있다). 몬스터가 그 성질에 면역이면 입히지 않는다.
+    이미 그 부상을 입고 있으면 또 입히지 않는다(문서의 부상이 비어 있다). 짧은 것이면 하나로 남기고 풀릴 라운드를
+    새로 센다(#254). 몬스터가 그 성질에 면역이면 입히지 않는다.
     """
     document = injury_document(trigger, None)
-    if wears(rows, key):
+    if wears_for_good(ruleset, rows, key):
         return document
     return wound(ruleset, key, EFFECT_SOURCES[trigger], document, rows, table_id, moment, immune, prank)
 

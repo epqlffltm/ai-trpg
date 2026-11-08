@@ -4814,6 +4814,7 @@
           "npc_attacked",
           "injury_gained",
           "injury_ended",
+          "injury_hurt",
           "injury_treated",
           "naming_resolved",
           "death_save_rolled",
@@ -5823,7 +5824,7 @@
       },
       "Injury": {
         "additionalProperties": false,
-        "description": "부상 하나. 예: 팔 골절.\n\n효과(effects)는 엔진이 판정에 적용하고, 사실(fact)은 서술자가 지킨다. 둘을 함께 적는다.\nrounds 는 짧은 것이 풀리기까지의 라운드 수다. 짧은 것에만 있다.\nheal_minutes 는 오래 가는 것이 저절로 낫기까지의 게임 안의 시간(분)이다. 오래 가는 것에만 있다.\n짧은 것은 \"한 장면 동안\"이라 라운드로, 오래 가는 것은 \"며칠\"이라 시간으로 센다(판 형식 25). 결손은 둘 다 없다.\naftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.\naimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.\ntreat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).\nnatures 는 부상의 성질이다(#799). 규칙의 성질(natures, #886)의 이름표다. 그 성질에 면역이면 이 부상을 입지 않는다.\nresistances 는 이 부상을 입고 있는 동안 생기는 저항이다(#886 ②).",
+        "description": "부상 하나. 예: 팔 골절.\n\n효과(effects)는 엔진이 판정에 적용하고, 사실(fact)은 서술자가 지킨다. 둘을 함께 적는다.\nrounds 는 짧은 것이 풀리기까지의 라운드 수다. 짧은 것에만 있다.\nheal_minutes 는 오래 가는 것이 저절로 낫기까지의 게임 안의 시간(분)이다. 오래 가는 것에만 있다.\n짧은 것은 \"한 장면 동안\"이라 라운드로, 오래 가는 것은 \"며칠\"이라 시간으로 센다(판 형식 25). 결손은 둘 다 없다.\naftermath 는 오래 가는 것이 나을 때 굴리는 후유증 표다. 없으면 깨끗이 낫는다.\naimable 은 노려 쳐서 일부러 입힐 수 있는 부상인가다.\ntreat_difficulty 와 treat_minutes 는 치료다. 치료에 성공하면 나을 시각이 treat_minutes 만큼 앞당겨진다(#114 다).\nnatures 는 부상의 성질이다(#799). 규칙의 성질(natures, #886)의 이름표다. 그 성질에 면역이면 이 부상을 입지 않는다.\nresistances 는 이 부상을 입고 있는 동안 생기는 저항이다(#886 ②).\ndamage 는 짧은 것이 라운드마다 입히는 피해다(#254, app/rounds/injury_ticks.py). 짧은 것에만 있다.",
         "properties": {
           "aftermath": {
             "anyOf": [
@@ -5839,6 +5840,16 @@
             "default": false,
             "title": "Aimable",
             "type": "boolean"
+          },
+          "damage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InjuryDamage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "effects": {
             "default": [],
@@ -5950,6 +5961,36 @@
           "healing"
         ],
         "title": "Injury",
+        "type": "object"
+      },
+      "InjuryDamage": {
+        "additionalProperties": false,
+        "description": "짧은 부상(상태 이상)이 라운드마다 입히는 피해(#254). 독, 출혈, 화상 같은 것이다.\n\nmagnitude 는 피해의 양의 등급(규칙의 Magnitude.key)이다. 다른 피해처럼 그 등급의 주사위를 굴려 정한다.\nnature 는 피해의 성질(규칙의 Nature.key)이다. 입은 쪽의 저항과 면역을 따른다(#886 ③). 비우면 성질이 없는 피해다.",
+        "properties": {
+          "magnitude": {
+            "maxLength": 20,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Magnitude",
+            "type": "string"
+          },
+          "nature": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "pattern": "^[a-z][a-z0-9_]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nature"
+          }
+        },
+        "required": [
+          "magnitude"
+        ],
+        "title": "InjuryDamage",
         "type": "object"
       },
       "InjuryOut": {
