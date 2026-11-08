@@ -12,7 +12,7 @@ import uuid
 
 import httpx
 import pytest
-from ai_core.routing import DEEPINFRA_KIND, OPENAI_KIND
+from ai_core.routing import DEEPINFRA_KIND, OPENAI_KIND, XAI_KIND
 
 from app.billing.client import BillingRejected, HoldOutcome, HoldResult
 from app.turns import charging
@@ -67,12 +67,13 @@ async def test_a_hold_that_takes_returns_quietly():
 
 
 def test_only_providers_with_a_key_are_opened():
-    settings = make_test_settings(openai_api_key='sk-test', deepinfra_api_key='di-test')
+    settings = make_test_settings(openai_api_key='sk-test', deepinfra_api_key='di-test', xai_api_key='xai-test')
 
     router = build_router(settings, httpx.AsyncClient(), session_factory=None)
 
     assert (router.openai.kind, router.openai.base_url) == (OPENAI_KIND, settings.openai_base_url)
     assert router.deepinfra.kind == DEEPINFRA_KIND
+    assert (router.xai.kind, router.xai.base_url) == (XAI_KIND, 'https://api.x.ai/v1')
     assert (router.anthropic, router.gemini, router.zai) == (None, None, None)
     assert router.timeout == settings.llm_timeout_seconds
 

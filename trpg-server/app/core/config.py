@@ -121,6 +121,13 @@ class Settings(CoreSettings, NotificationSettings):
     # DeepInfra 의 OpenAI 모양 주소. /chat/completions 앞까지다
     deepinfra_base_url: str = 'https://api.deepinfra.com/v1/openai'
 
+    # xAI(Grok)의 API 키. 비우면 모델 목록의 xai 창구 모델을 부르지 않는다(provider_not_configured).
+    # 비밀값이다. .env 에만 적는다. 로그, 오류, 호출 기록에 싣지 않는다.
+    # 사용자의 글이 국외(미국)에서 처리된다. 파는 모델로 열기 전에 국외 이전을 안내한다
+    xai_api_key: SecretStr = SecretStr('')
+    # xAI 의 OpenAI 모양 주소. /chat/completions 앞까지다
+    xai_base_url: str = 'https://api.x.ai/v1'
+
     # 서술을 동시에 몇 개까지 돌리나(app/core/jobs.py, #275). 넘는 것은 차례를 기다린다.
     # 모델이 한 번에 받는 수(Ollama 의 OLLAMA_NUM_PARALLEL, 외부 API 의 속도 제한)에 맞춘다.
     # 기다리는 시간도 서술 하나의 시간(닫기 시작한 때부터)에 들어간다. 너무 작으면 몰릴 때 시간 초과가 난다

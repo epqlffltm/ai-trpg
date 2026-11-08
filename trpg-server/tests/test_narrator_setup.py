@@ -10,7 +10,7 @@
 import httpx
 import pytest
 from ai_core.retry_budget import RetryBudget
-from ai_core.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, ZAI_KIND, ModelRouter
+from ai_core.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, XAI_KIND, ZAI_KIND, ModelRouter
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -137,6 +137,15 @@ def test_the_zai_endpoint_carries_the_key_of_the_settings():
     assert router_of(make_test_settings(**LLM)).zai is None
 
 
+def test_the_xai_endpoint_carries_the_key_of_the_settings():
+    router = router_of(make_test_settings(**LLM, xai_api_key='xai-test'))
+
+    assert (router.xai.base_url, router.xai.kind) == ('https://api.x.ai/v1', XAI_KIND)
+    assert router.xai.api_key.get_secret_value() == 'xai-test'
+    assert 'xai-test' not in repr(router)
+    assert router_of(make_test_settings(**LLM)).xai is None
+
+
 def test_the_key_is_a_secret_in_the_settings():
     settings = make_test_settings(openai_api_key='sk-test')
 
@@ -219,6 +228,7 @@ def test_tests_never_hold_the_key_of_the_env_file(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv('GEMINI_API_KEY', 'g-real')
     monkeypatch.setenv('ZAI_API_KEY', 'z-real')
     monkeypatch.setenv('DEEPINFRA_API_KEY', 'di-real')
+    monkeypatch.setenv('XAI_API_KEY', 'xai-real')
 
     # 개발자의 .env 에 진짜 키가 있어도 테스트는 실제 API 를 부르지 않는다
     settings = make_test_settings()
@@ -228,8 +238,9 @@ def test_tests_never_hold_the_key_of_the_env_file(monkeypatch: pytest.MonkeyPatc
         settings.gemini_api_key,
         settings.zai_api_key,
         settings.deepinfra_api_key,
+        settings.xai_api_key,
     )
-    assert [key.get_secret_value() for key in keys] == ['', '', '', '', '']
+    assert [key.get_secret_value() for key in keys] == ['', '', '', '', '', '']
 
 
 def test_every_chain_shares_one_retry_budget():

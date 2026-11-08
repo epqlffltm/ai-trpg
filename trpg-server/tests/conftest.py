@@ -89,6 +89,8 @@ def make_test_settings(**overrides) -> Settings:
         'zai_base_url': 'https://api.z.ai/api/paas/v4',
         'deepinfra_api_key': '',
         'deepinfra_base_url': 'https://api.deepinfra.com/v1/openai',
+        'xai_api_key': '',
+        'xai_base_url': 'https://api.x.ai/v1',
         'redis_url': '',
         'limits_enabled': False,
         # span 을 내보내지 않는다. 개발자의 .env 에 수집기의 주소가 있어도 테스트는 보내지 않는다.

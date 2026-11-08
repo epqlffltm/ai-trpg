@@ -99,7 +99,7 @@ asset 서버의 주소를 주므로 `story-server/.env` 에 `ASSET_SECRET` 이 �
 | `NOTIFICATION_TIMEOUT_SECONDS` | `5` | 알림 서버를 부를 때 기다리는 시간. 넘기면 다시 보낸다 |
 | `BILLING_SECRET` | 비어 있음 | 결제 서버에 보내는 요청에 서명하는 비밀. `billing-server/.env` 의 `STORY_SERVER_SECRET` 과 같은 값. `BILLING_URL` 을 적었으면 32자 이상이어야 뜬다. 비밀값이다 |
 | `BILLING_TIMEOUT_SECONDS` | `5` | 결제 서버를 한 번 부르는 시간의 상한(초, 10 까지). chat 서버와 같다 |
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `ZAI_API_KEY`, `DEEPINFRA_API_KEY` | 비어 있음 | 모델 목록의 창구마다 키. 비우면 그 창구의 모델로 말을 보내면 503 `provider_unavailable` 이다. 공급자가 내주는 값이라 `tools/fill_env.py` 가 만들지 않는다. 비밀값이다 |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `ZAI_API_KEY`, `DEEPINFRA_API_KEY`, `XAI_API_KEY` | 비어 있음 | 모델 목록의 창구마다 키. 비우면 그 창구의 모델로 말을 보내면 503 `provider_unavailable` 이다. 공급자가 내주는 값이라 `tools/fill_env.py` 가 만들지 않는다. 비밀값이다 |
 | `LLM_TIMEOUT_SECONDS` | `120` | 모델을 한 번 부르는 시간의 상한(초, 600 까지) |
 | `STORY_OUTPUT_LIMIT` | `1024` | 말 한 번의 답의 길이의 상한(토큰). 가격표의 출력 단계(`o0`)가 약속하는 길이다 |
 | `STORY_CONTEXT_CHARS` | `12000` | 모델에 보내는 지난 말의 양의 상한(글자). 가격표의 입력 단계(`i0`)가 약속하는 양이다 |

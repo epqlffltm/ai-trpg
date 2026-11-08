@@ -18,6 +18,7 @@ from ai_core.routing import (
     GEMINI_KIND,
     LOCAL_KIND,
     OPENAI_KIND,
+    XAI_KIND,
     ZAI_KIND,
     Endpoint,
     ModelRouter,
@@ -58,5 +59,6 @@ def build_router(
         gemini=endpoint(settings.gemini_base_url, settings.gemini_api_key, GEMINI_KIND),
         zai=endpoint(settings.zai_base_url, settings.zai_api_key, ZAI_KIND),
         deepinfra=endpoint(settings.deepinfra_base_url, settings.deepinfra_api_key, DEEPINFRA_KIND),
+        xai=endpoint(settings.xai_base_url, settings.xai_api_key, XAI_KIND),
         timeout=settings.llm_timeout_seconds,
     )

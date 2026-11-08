@@ -2398,7 +2398,7 @@ LM Studio 면 `LLM_BASE_URL=http://127.0.0.1:1234/v1` 이다. `NARRATOR=llm` 인
 **기본 모델.** 라운드는 테이블의 서술 모델로 서술한다([모델 고르기](#모델-고르기)). `LLM_MODEL` 과 `LLM_FALLBACK_MODELS` 는 서술 모델이 없는 옛 라운드(모델을 고르는 규칙 전에 연 라운드)의 기본이다.
 - 적은 이름이 [모델 목록](#모델-목록)의 이름표면 목록의 창구로 부른다(아래 "외부 API 모델"). 아니면 `LLM_BASE_URL` 의 그 모델이다. 창구가 다른 모델을 섞어 적지 않는다. 넘어가기 규칙은 모델들이 같은 서버에 있다고 본다.
 
-**외부 API 모델(OpenAI, Claude, Gemini, Z.ai, DeepInfra).** [모델 목록](#모델-목록)에 넣은 모델은 설정에 이름표를 적어 부른다(`ai_core/routing.py`).
+**외부 API 모델(OpenAI, Claude, Gemini, Z.ai, DeepInfra, xAI).** [모델 목록](#모델-목록)에 넣은 모델은 설정에 이름표를 적어 부른다(`ai_core/routing.py`).
 
 ```
 NARRATOR=llm
@@ -2413,18 +2413,21 @@ GEMINI_API_KEY=
 ZAI_API_KEY=
 # 비밀값이다. 비우면 deepinfra 창구(DeepSeek)의 모델을 부르지 않는다
 DEEPINFRA_API_KEY=
+# 비밀값이다. 비우면 xai 창구(Grok)의 모델을 부르지 않는다
+XAI_API_KEY=
 # 기본값이 있다
 OPENAI_BASE_URL=https://api.openai.com/v1
 ANTHROPIC_BASE_URL=https://api.anthropic.com
 GEMINI_BASE_URL=https://generativelanguage.googleapis.com
 ZAI_BASE_URL=https://api.z.ai/api/paas/v4
 DEEPINFRA_BASE_URL=https://api.deepinfra.com/v1/openai
+XAI_BASE_URL=https://api.x.ai/v1
 ```
 
 - 서술할 때마다 모델 목록을 DB 에서 한 줄 읽는다. 관리 명령으로 끄거나 날짜판을 바꾸면 서버를 다시 띄우지 않아도 다음 서술부터 맞는다. 읽는 것은 모양(`app/catalog/lookup.py` 의 `ModelLookup`)을 거친다. 서술이 잦아지면 같은 모양의 캐시로 바꿔 꽂는다.
 - 목록의 창구, 날짜판(API 모델 이름), 받는 칸(출력 상한의 칸, 온도, 생각의 깊이)대로 보낸다. 키는 머리(`Authorization`, Gemini 는 `x-goog-api-key`)에만 싣고 주소, 로그, 오류, 기록에 싣지 않는다.
 - 부를 수 없으면 다른 모델로 바꿔 부르지 않고 그 서술이 실패한다: 꺼졌거나 은퇴함(`model_unavailable`), 키가 없음(`provider_not_configured`), 그 창구의 코드가 아직 없음(`provider_unsupported`, 지금은 없다. 새 창구를 더할 때).
-- 기록(`ai_invocations.provider`)에는 서버 곁의 모델이면 `openai_compat`, OpenAI 면 `openai`, Claude 면 `anthropic`, Gemini 면 `gemini`, Z.ai 면 `zai`, DeepInfra 면 `deepinfra` 가 남는다.
+- 기록(`ai_invocations.provider`)에는 서버 곁의 모델이면 `openai_compat`, OpenAI 면 `openai`, Claude 면 `anthropic`, Gemini 면 `gemini`, Z.ai 면 `zai`, DeepInfra 면 `deepinfra`, xAI 면 `xai` 가 남는다.
 - **Claude**(`ai_core/anthropic.py`, Anthropic Messages API 를 SDK 없이 부른다). 시스템 지시는 맨 위의 `system` 칸에 이어 붙여 싣는다. 머리는 `Authorization: Bearer`, `anthropic-version: 2023-06-01`.
   - 생각을 켜고 끄는 법이 모델마다 달라 모델 목록의 `reasoning_style` 대로 보낸다. 서술은 생각을 꺼서 부른다.
 
@@ -2474,7 +2477,19 @@ DEEPINFRA_BASE_URL=https://api.deepinfra.com/v1/openai
   - 이름표는 상품 이름이다(`deepseek-v4-pro`, `deepseek-v4-flash`). 같은 이름표에 다른 호스팅을 섞지 않는다(이름표의 창구는 바꾸지 못한다). 호스팅을 바꾸게 되면 새 모델로 넣고 평가 장면(말투 검사 포함)을 통과한 뒤 켜며, 옛 것은 은퇴시킨다. 가격표의 이름도 새 이름표를 따른다.
   - 원가는 DeepInfra 의 모델 페이지의 값으로 적는다(정식 API 의 비혼잡 시간 반값은 없다). 값은 바뀌므로 켜기 전에 페이지에서 다시 본다.
   - 사용자의 글이 국외(미국)에서 처리된다. 파는 모델로 열기 전에 국외 이전을 안내한다.
-- 키를 만들 때 OpenAI 의 Limits 화면에서 월 사용 한도를 낮게 걸어 둔다. Anthropic, Google, Z.ai, DeepInfra 도 같다.
+- **xAI**(Grok). OpenAI 와 같은 모양이라 OpenAI 의 provider(`ai_core/openai_compat.py`)로 부른다. 주소는 `https://api.x.ai/v1`, 키는 `Authorization: Bearer`.
+  - 출력 상한의 칸은 OpenAI 처럼 모델 목록에 적는다(`max_completion_tokens`). 생각은 `reasoning_effort` 로 켜고 끈다. 모델 목록의 `reasoning_style`:
+
+    | 방식 | 모델(2026-11 문서) | 끌 때 | 켤 때 |
+    | --- | --- | --- | --- |
+    | 적지 않음 | Grok 4.3 | `reasoning_effort: none` | `reasoning_effort` low/medium/high |
+    | `always` | Grok 4.7 | 끌 수 없다. `reasoning_effort: low`, 출력 상한에 생각의 몫(1,024)을 더한다 | `reasoning_effort` low/medium/high |
+    | 생각을 모름(`supports_reasoning` 거짓) | Grok 4.20 Non-Reasoning | 보내지 않는다 | 보내지 않는다 |
+
+  - 날짜판이 없는 모델(4.7, 4.3)은 공식 이름 하나를 적는다(`grok-4.3-latest` 같은 별칭은 적지 않는다). 4.20 은 날짜판(`grok-4.20-0309-non-reasoning`)이다.
+  - 원가는 입력이 20만 토큰 아래일 때의 값이다. 넘으면 그 요청의 모든 토큰이 두 배다. 미국 지역 주소(`us.api.x.ai`)는 1.1 배라 쓰지 않는다.
+  - 사용자의 글이 국외(미국)에서 처리된다. 파는 모델로 열기 전에 국외 이전을 안내한다.
+- 키를 만들 때 OpenAI 의 Limits 화면에서 월 사용 한도를 낮게 걸어 둔다. Anthropic, Google, Z.ai, DeepInfra, xAI 도 같다.
 
 **모델 하나 불러 보기.** 목록에 넣은 모델이 키와 날짜판으로 정말 불리는지 켜기 전에 본다. 짧은 장면 하나를 쓰게 하고 글, 토큰 수(캐시, 생각), 그날의 단가로 센 원가, 첫 글까지의 시간, 보낸 글자 수와 글자당 입력 토큰 수를 찍는다. 꺼진 모델도 부른다. 은퇴한 모델은 부르지 않는다. 실제로 부르므로 값이 든다.
 글자당 토큰 수는 입력 예산의 비율을 고칠 근거다. 짧은 예시는 역할의 머리 같은 고정 토큰이 커서 부풀어 보이니, 긴 한국어 글(UTF-8 파일)을 `--text-file` 로 보내 잰다. 그 파일은 저장소에 두지 않는다.
@@ -2896,9 +2911,9 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **이름표**는 영어 소문자, 숫자, 붙임표다(`gpt-6-luna`). 점은 쓰지 않는다. 결제 서버의 가격 코드(`narration.<이름표>.i0.o0`)에서 점이 칸을 나눈다. 48자까지다.
 - **이름표는 상품 이름이다**(API 모델 이름에서 날짜를 빼고 점을 붙임표로: `gpt-6-1-sol`, `claude-opus-5-5`). 이름표와 창구는 바꾸지 않는다.
 - **API 모델 이름에는 날짜가 붙은 이름(날짜판)을 적는다.** 별칭은 공급자가 말없이 다른 모델로 돌려 서술의 목소리가 바뀐다. 날짜판을 주지 않는 공급자(Gemini 의 정식판, 중국 모델들)는 공식 이름 하나를 적고 평가 장면으로 자주 본다. 공급자가 새 날짜판을 내면 이름표와 값은 그대로 두고 파일의 `api_model_id` 만 바꿔 들여온다. 들여오기가 바꾼 기록을 남기고 모델을 끈다. 평가 장면(말투 검사 포함)을 다시 통과한 뒤에 켠다. 둘이 동시에 들여와도 기록이 끊기지 않게 모델의 줄을 잠그고 바꾼다.
-- **창구**는 `openai`, `anthropic`, `gemini`, `zai`(GLM), `deepinfra`(DeepSeek), `local`(서버 곁의 Ollama, LM Studio)이다. 새 창구는 부르는 코드와 마이그레이션이 함께 있어야 한다.
+- **창구**는 `openai`, `anthropic`, `gemini`, `zai`(GLM), `deepinfra`(DeepSeek), `xai`(Grok), `local`(서버 곁의 Ollama, LM Studio)이다. 새 창구는 부르는 코드와 마이그레이션이 함께 있어야 한다.
 - **분류**(`basic`, `standard`, `premium`)는 목록을 묶어 보이는 데만 쓴다. 값은 모델마다 정한다. 회사(`vendor`)가 그 안의 소분류다.
-- **받는 것**: 생각의 깊이를 고를 수 있나, 온도를 받나, 출력 상한을 어느 칸(`max_tokens`, `max_completion_tokens`)으로 받나, 생각을 켜고 끄는 방식(`reasoning_style`). 칸은 `openai`, `local` 창구만, 방식은 `anthropic`, `gemini`, `zai` 창구는 늘, `openai` 창구는 생각을 끌 수 없는 모델(`always`, GPT-6 Astra, GPT-6.1 Sol)만 적는다. 창구마다 받는 방식이 다르다. 끌 수 없는 모델이 추론 수준을 알면(`supports_reasoning`) 끄라고 할 때 `reasoning_effort: low` 를 보낸다(OpenAI 의 기본값 medium, GLM-5.3 의 max 로 생각하지 않게). 파일을 읽을 때 본다(`ai_core/catalog_file.py`).
+- **받는 것**: 생각의 깊이를 고를 수 있나, 온도를 받나, 출력 상한을 어느 칸(`max_tokens`, `max_completion_tokens`)으로 받나, 생각을 켜고 끄는 방식(`reasoning_style`). 칸은 `openai`, `xai`, `local` 창구만, 방식은 `anthropic`, `gemini`, `zai` 창구는 늘, `openai`, `xai` 창구는 생각을 끌 수 없는 모델(`always`, GPT-6 Astra, GPT-6.1 Sol, Grok 4.7)만 적는다. 창구마다 받는 방식이 다르다. 끌 수 없는 모델이 추론 수준을 알면(`supports_reasoning`) 끄라고 할 때 `reasoning_effort: low` 를 보낸다(OpenAI 의 기본값 medium, GLM-5.3 의 max 로 생각하지 않게). 파일을 읽을 때 본다(`ai_core/catalog_file.py`).
 - **켜기**: 새로 들여온 모델은 꺼져 있다. 그날의 원가가 있고 은퇴하지 않았어야 켤 수 있다. 원가를 보고 평가 장면을 통과한 뒤에 켠다.
 - **그날의 단가**는 그날 이전에 시작한 것 중 가장 늦은 것이다. 같은 날이면 나중에 적은 것이다. 행사가가 끝나는 날의 값을 파일에 미리 적어 둘 수 있고, 잘못 적은 값은 파일에서 고쳐 다시 들여오면 같은 날의 줄이 더해져 이긴다. 표의 줄은 고치지도 지우지도 않는다. 파일에서 줄을 빼도 표에는 남는다. 확인한 날(`checked_on`)만 바뀐 것은 더하지 않는다.
 - **이름표와 결제 서버의 가격 코드**: 판매가 파일(`docs/model-prices-*.csv`)의 가격 코드가 가리키는 이름표는 모두 파일에 있어야 한다(`tools/model_slugs.py`, PR 마다 CI 가 본다). 판매가가 없는 모델은 된다(혼자 쓰는 시험용).

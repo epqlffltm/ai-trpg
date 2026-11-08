@@ -168,6 +168,18 @@ def test_a_deepinfra_model_takes_neither_a_style_nor_a_token_field():
         with_fields(OPUS, **deepseek, reasoning_style=ReasoningStyle.THINKING_TYPE)
 
 
+def test_an_xai_model_needs_its_token_field_and_takes_only_always_or_nothing():
+    grok = {'slug': 'grok-4-3', 'provider': Provider.XAI, 'api_model_id': 'grok-4.3', 'vendor': 'xai'}
+
+    # OpenAI 와 같다. 적지 않으면 reasoning_effort none 으로 끄는 모델이고, 끌 수 없는 모델(Grok 4.7)만 always 다
+    assert with_fields(LUNA, **grok).reasoning_style is None
+    assert with_fields(LUNA, **grok, reasoning_style=ReasoningStyle.ALWAYS).reasoning_style == 'always'
+    with pytest.raises(ValidationError, match='받는 생각의 방식이 아니다'):
+        with_fields(LUNA, **grok, reasoning_style=ReasoningStyle.THINKING_TYPE)
+    with pytest.raises(ValidationError, match='출력 상한의 칸'):
+        with_fields(LUNA, **grok, token_limit_field=None)
+
+
 @pytest.mark.parametrize('field', ['api_model_id', 'provider', 'grade', 'vendor'])
 def test_odd_values_are_refused(field: str):
     odd = {'api_model_id': 'gpt 6', 'provider': 'bedrock', 'grade': 'gold', 'vendor': 'Open AI'}

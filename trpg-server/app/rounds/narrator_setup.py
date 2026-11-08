@@ -23,6 +23,7 @@ from ai_core.routing import (
     GEMINI_KIND,
     LOCAL_KIND,
     OPENAI_KIND,
+    XAI_KIND,
     ZAI_KIND,
     Endpoint,
     ModelRouter,
@@ -80,6 +81,13 @@ def deepinfra_endpoint(settings: Settings) -> Endpoint | None:
     return Endpoint(base_url=settings.deepinfra_base_url, api_key=settings.deepinfra_api_key, kind=DEEPINFRA_KIND)
 
 
+def xai_endpoint(settings: Settings) -> Endpoint | None:
+    """xAI(Grok)의 창구. OpenAI 와 같은 모양이다. 키를 적지 않았으면 None 이다."""
+    if not settings.xai_api_key.get_secret_value():
+        return None
+    return Endpoint(base_url=settings.xai_base_url, api_key=settings.xai_api_key, kind=XAI_KIND)
+
+
 def build_router(
     settings: Settings, client: httpx.AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> ModelRouter:
@@ -93,6 +101,7 @@ def build_router(
         gemini=gemini_endpoint(settings),
         zai=zai_endpoint(settings),
         deepinfra=deepinfra_endpoint(settings),
+        xai=xai_endpoint(settings),
         timeout=settings.llm_timeout_seconds,
         local_options=WireOptions(supports_reasoning=settings.llm_supports_reasoning),
     )
