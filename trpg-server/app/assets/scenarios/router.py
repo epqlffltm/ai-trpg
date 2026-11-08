@@ -101,6 +101,7 @@ def to_detail(scenario: Scenario, found: ModelStatus | None) -> ScenarioDetail:
         wanders=scenario.wanders,
         happenings=scenario.happenings,
         chapters=scenario.chapters,
+        achievements=scenario.achievements,
         npc_places=scenario.npc_places,
         player_made_hp=scenario.player_made_hp,
         reroll_allowed=scenario.reroll_allowed,

@@ -691,6 +691,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/listings/{scenario_id}/achievements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Achievements
+         * @description 공개된 시나리오의 업적들. 판의 차례다. 업적마다 받은 사람의 수와, 로그인했으면 내가 받은 때가 있다.
+         *
+         *     숨긴 업적은 내가 받기 전에는 이름, 설명, 그림이 null 이다. 조건은 싣지 않는다.
+         *     볼 수 없는 시나리오(공개하지 않음, 볼 수 없는 등급)면 404 다. 토큰을 보냈는데 틀렸으면 401 이다.
+         */
+        get: operations["read_achievements_api_v1_game_listings__scenario_id__achievements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/listings/{scenario_id}/heart": {
         parameters: {
             query?: never;
@@ -2628,6 +2651,105 @@ export interface components {
             key: string;
             /** Name */
             name: string;
+        };
+        /**
+         * Achievement
+         * @description 업적 하나. 제작자가 작품에 다는 것이다(스팀의 업적과 같다). 인증 서버의 활동 배지와는 다른 것이다.
+         *
+         *     id 는 판이 바뀌어도 그대로 두는 이름표다. 받은 기록이 이것을 가리킨다. 바꾸면 다른 업적이 된다.
+         *     name 과 description 은 화면에 보이는 이름과 받는 법이다. hidden 이면 받기 전에는 이름과 설명과 그림을 가린다.
+         *     image_id 는 제작자가 올린 그림이다(app/portraits/). 자기가 올린 것인지는 저장할 때 본다.
+         *     when 은 받는 조건이다. 모양과 종류는 퀘스트의 조건과 같고(QuestCondition), match 는 그것을 맞추는 법이다.
+         *     하나 이상 적는다. 가져가기(consume)는 쓰지 않는다. 업적은 물건을 받지 않는다.
+         *     라운드가 닫힐 때 엔진이 보고, 채워졌으면 그때 앉아 있는 플레이어 모두가 받는다(docs/architecture/achievements.md).
+         *     사람(방장, 장부 초안)과 AI 는 업적을 주지 못한다.
+         *     가리키는 것이 붙인 로어북에 있는지는 게시할 때 본다.
+         */
+        "Achievement-Input": {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id?: string | null;
+            /** @default all */
+            match: components["schemas"]["QuestMatch"];
+            /** Name */
+            name: string;
+            /** When */
+            when: components["schemas"]["QuestCondition-Input"][];
+        };
+        /**
+         * Achievement
+         * @description 업적 하나. 제작자가 작품에 다는 것이다(스팀의 업적과 같다). 인증 서버의 활동 배지와는 다른 것이다.
+         *
+         *     id 는 판이 바뀌어도 그대로 두는 이름표다. 받은 기록이 이것을 가리킨다. 바꾸면 다른 업적이 된다.
+         *     name 과 description 은 화면에 보이는 이름과 받는 법이다. hidden 이면 받기 전에는 이름과 설명과 그림을 가린다.
+         *     image_id 는 제작자가 올린 그림이다(app/portraits/). 자기가 올린 것인지는 저장할 때 본다.
+         *     when 은 받는 조건이다. 모양과 종류는 퀘스트의 조건과 같고(QuestCondition), match 는 그것을 맞추는 법이다.
+         *     하나 이상 적는다. 가져가기(consume)는 쓰지 않는다. 업적은 물건을 받지 않는다.
+         *     라운드가 닫힐 때 엔진이 보고, 채워졌으면 그때 앉아 있는 플레이어 모두가 받는다(docs/architecture/achievements.md).
+         *     사람(방장, 장부 초안)과 AI 는 업적을 주지 못한다.
+         *     가리키는 것이 붙인 로어북에 있는지는 게시할 때 본다.
+         */
+        "Achievement-Output": {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id?: string | null;
+            /** @default all */
+            match: components["schemas"]["QuestMatch"];
+            /** Name */
+            name: string;
+            /** When */
+            when: components["schemas"]["QuestCondition-Output"][];
+        };
+        /**
+         * AchievementSnapshot
+         * @description 업적 하나. 제작자가 작품에 단 것이다. 조건(when)이 채워지면 엔진이 앉아 있는 플레이어 모두에게 준다.
+         *
+         *     id 는 판이 바뀌어도 그대로 두는 이름표다. hidden 이면 받기 전에는 이름과 설명과 그림을 가린다.
+         *     비워도 되는 칸이라 형식이 그대로다.
+         */
+        AchievementSnapshot: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id?: string | null;
+            /** @default all */
+            match: components["schemas"]["QuestMatch"];
+            /** Name */
+            name: string;
+            /** When */
+            when: components["schemas"]["QuestConditionSnapshot"][];
         };
         /**
          * ActionRequest
@@ -10288,6 +10410,36 @@ export interface components {
             value: number;
         };
         /**
+         * ScenarioAchievementOut
+         * @description 업적 하나와 보는 사람이 받았는지, 받은 사람의 수.
+         */
+        ScenarioAchievementOut: {
+            /** Description */
+            description: string | null;
+            /** Earned At */
+            earned_at: string | null;
+            /** Earned Count */
+            earned_count: number;
+            /** Hidden */
+            hidden: boolean;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string | null;
+        };
+        /**
+         * ScenarioAchievements
+         * @description 공개된 시나리오의 업적들. 판의 차례다. 공개 중인 판의 것이다.
+         */
+        ScenarioAchievements: {
+            /** Items */
+            items: components["schemas"]["ScenarioAchievementOut"][];
+            /** Players */
+            players: number;
+        };
+        /**
          * ScenarioCreate
          * @description 시나리오를 만들 때 받는 값. 제목만 필수다.
          *
@@ -10295,6 +10447,11 @@ export interface components {
          *     시트도 비워 둘 수 있다. 게시할 때 룰북의 규칙과 견주어 검사한다.
          */
         ScenarioCreate: {
+            /**
+             * Achievements
+             * @default []
+             */
+            achievements: components["schemas"]["Achievement-Input"][];
             /**
              * Bestiary Ids
              * @default []
@@ -10459,6 +10616,8 @@ export interface components {
          * @description 만든 사람이 자기 시나리오를 볼 때의 값. 가리키는 자산은 ID 만 싣는다. 내용은 그 자산의 주소에서 읽는다.
          */
         ScenarioDetail: {
+            /** Achievements */
+            achievements: components["schemas"]["Achievement-Output"][];
             /** Bestiary Ids */
             bestiary_ids: string[];
             /** Chapters */
@@ -10590,12 +10749,14 @@ export interface components {
          *     보내지 않으면 그대로 둔다.
          *     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
          *     quests, routes, landmarks, place_items, covers, traps, pictures, submaps, wanders, happenings, chapters,
-         *     npc_places, character_modes 는
+         *     achievements, npc_places, character_modes 는
          *     보낸 목록으로 통째로 바꾼다.
          *     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
          *     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
          */
         ScenarioUpdate: {
+            /** Achievements */
+            achievements?: components["schemas"]["Achievement-Input"][] | null;
             /** Bestiary Ids */
             bestiary_ids?: string[] | null;
             /** Chapters */
@@ -11075,6 +11236,11 @@ export interface components {
          *     gm_guide 와 gm_notes 가 들어 있다. 만든 사람이 아닌 사람에게 이 문서를 그대로 내주면 안 된다.
          */
         Snapshot: {
+            /**
+             * Achievements
+             * @default []
+             */
+            achievements: components["schemas"]["AchievementSnapshot"][];
             /**
              * Campaign Quests
              * @default []
@@ -14148,6 +14314,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicListingDetail"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_achievements_api_v1_game_listings__scenario_id__achievements_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioAchievements"];
                 };
             };
             /** @description 입력이 틀렸다 */

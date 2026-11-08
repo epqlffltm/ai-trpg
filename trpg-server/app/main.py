@@ -32,6 +32,7 @@ from server_core.observability.streams import StreamRoutes
 from server_core.observability.tracing import FASTAPI_TELEMETRY, build_resource, configure_tracing, shutdown_tracing
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.achievements import router as achievements
 from app.ai_log import retention
 from app.api import health, me, readiness
 from app.asset_server.client import AssetClient, ImageRejectedError
@@ -388,6 +389,7 @@ def create_app(
     app.include_router(references.router, prefix=API_PREFIX)
     app.include_router(listings.owner_router, prefix=API_PREFIX)
     app.include_router(listings.public_router, prefix=API_PREFIX)
+    app.include_router(achievements.router, prefix=API_PREFIX)
     # 첫 화면의 홍보 배너(#994). 보는 주소와 운영자의 주소
     app.include_router(banners.public_router, prefix=API_PREFIX)
     app.include_router(banners.admin_router, prefix=API_PREFIX)

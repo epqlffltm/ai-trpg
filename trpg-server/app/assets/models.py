@@ -144,6 +144,12 @@ SCENARIO_MAX_CHAPTERS = 20
 CHAPTER_ID_MAX_LENGTH = 40
 CHAPTER_NAME_MAX_LENGTH = 40
 CHAPTER_MAX_OPENS = 100
+# 시나리오 하나의 업적(제작자가 작품에 다는 것, 스팀의 업적과 같다)의 수, 업적의 id 와 이름과 설명의 길이.
+# 조건의 수는 퀘스트와 같다(QUEST_MAX_CONDITIONS). 인증 서버의 활동 배지와는 다른 것이다
+SCENARIO_MAX_ACHIEVEMENTS = 50
+ACHIEVEMENT_ID_MAX_LENGTH = 40
+ACHIEVEMENT_NAME_MAX_LENGTH = 40
+ACHIEVEMENT_DESCRIPTION_MAX_LENGTH = 200
 # 몬스터 하나의 공격(스킬)의 수와 이름의 길이. 공격이 여럿이면 차례마다 서버의 주사위로 하나를 고른다
 MONSTER_MAX_ATTACKS = 5
 ATTACK_NAME_MAX_LENGTH = 30
@@ -686,6 +692,7 @@ class Scenario(AssetContent):
         CheckConstraint(f'jsonb_array_length(wanders) <= {SCENARIO_MAX_WANDERS}', name='wanders_count'),
         CheckConstraint(f'jsonb_array_length(happenings) <= {SCENARIO_MAX_HAPPENINGS}', name='happenings_count'),
         CheckConstraint(f'jsonb_array_length(chapters) <= {SCENARIO_MAX_CHAPTERS}', name='chapters_count'),
+        CheckConstraint(f'jsonb_array_length(achievements) <= {SCENARIO_MAX_ACHIEVEMENTS}', name='achievements_count'),
         CheckConstraint(f'jsonb_array_length(npc_places) <= {SCENARIO_MAX_NPC_PLACES}', name='npc_places_count'),
         # 방식이 하나는 있어야 한다. 하나도 없으면 아무도 앉을 수 없다
         CheckConstraint(
@@ -856,6 +863,11 @@ class Scenario(AssetContent):
     # when 은 그 장으로 넘어오는 조건(퀘스트의 조건과 같은 모양), opens 는 그 장부터 열리는 장소와 퀘스트다.
     # 어느 장에도 적지 않은 것은 처음부터 열려 있다. 비면 장이 없는 판이다
     chapters: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+
+    # 업적들. 하나하나가 {id, name, description, hidden, image_id, when, match} 다. 제작자가 작품에 다는 것이다.
+    # 조건(when)이 채워지면 엔진이 그때 앉아 있는 플레이어 모두에게 준다(docs/architecture/achievements.md).
+    # 업적은 계정마다, 시나리오마다 한 번이다. id 는 판이 바뀌어도 그대로 두는 이름표다. 받은 기록이 이것을 가리킨다
+    achievements: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 인물의 자리들(#282). 하나하나가 {entry_id, place_id} 다. "이 인물은 처음에 이 장소에 있다"는 뜻이다.
     # 인물은 붙인 로어북의 인물 항목, 장소는 맵의 장소다. 자리가 있는 인물은 장면의 글이 아니라 장소로 나온다.

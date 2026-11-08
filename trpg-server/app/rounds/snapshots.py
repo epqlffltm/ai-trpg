@@ -66,6 +66,7 @@ EXCLUDED: dict[str, str] = {
     'round_memories': '지난 라운드의 벡터. 되돌린 번호부터 지운다(다시 만든다)',
     'campaign_tables': '캠페인의 편. 시작할 때 정한다',
     'campaign_seats': '캠페인의 자리. 시작할 때 정한다',
+    'player_achievements': '계정의 업적. 되돌려도 지우지 않는다. 한 번 받은 업적은 계정에 남는다',
 }
 
 # 몬스터의 물건은 테이블의 id 가 없다. 그 테이블의 몬스터로 고른다

@@ -25,6 +25,180 @@
         "title": "Ability",
         "type": "object"
       },
+      "Achievement-Input": {
+        "additionalProperties": false,
+        "description": "업적 하나. 제작자가 작품에 다는 것이다(스팀의 업적과 같다). 인증 서버의 활동 배지와는 다른 것이다.\n\nid 는 판이 바뀌어도 그대로 두는 이름표다. 받은 기록이 이것을 가리킨다. 바꾸면 다른 업적이 된다.\nname 과 description 은 화면에 보이는 이름과 받는 법이다. hidden 이면 받기 전에는 이름과 설명과 그림을 가린다.\nimage_id 는 제작자가 올린 그림이다(app/portraits/). 자기가 올린 것인지는 저장할 때 본다.\nwhen 은 받는 조건이다. 모양과 종류는 퀘스트의 조건과 같고(QuestCondition), match 는 그것을 맞추는 법이다.\n하나 이상 적는다. 가져가기(consume)는 쓰지 않는다. 업적은 물건을 받지 않는다.\n라운드가 닫힐 때 엔진이 보고, 채워졌으면 그때 앉아 있는 플레이어 모두가 받는다(docs/architecture/achievements.md).\n사람(방장, 장부 초안)과 AI 는 업적을 주지 못한다.\n가리키는 것이 붙인 로어북에 있는지는 게시할 때 본다.",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Description",
+            "type": "string"
+          },
+          "hidden": {
+            "default": false,
+            "title": "Hidden",
+            "type": "boolean"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "match": {
+            "$ref": "#/components/schemas/QuestMatch",
+            "default": "all"
+          },
+          "name": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "when": {
+            "items": {
+              "$ref": "#/components/schemas/QuestCondition-Input"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "When",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "when"
+        ],
+        "title": "Achievement",
+        "type": "object"
+      },
+      "Achievement-Output": {
+        "additionalProperties": false,
+        "description": "업적 하나. 제작자가 작품에 다는 것이다(스팀의 업적과 같다). 인증 서버의 활동 배지와는 다른 것이다.\n\nid 는 판이 바뀌어도 그대로 두는 이름표다. 받은 기록이 이것을 가리킨다. 바꾸면 다른 업적이 된다.\nname 과 description 은 화면에 보이는 이름과 받는 법이다. hidden 이면 받기 전에는 이름과 설명과 그림을 가린다.\nimage_id 는 제작자가 올린 그림이다(app/portraits/). 자기가 올린 것인지는 저장할 때 본다.\nwhen 은 받는 조건이다. 모양과 종류는 퀘스트의 조건과 같고(QuestCondition), match 는 그것을 맞추는 법이다.\n하나 이상 적는다. 가져가기(consume)는 쓰지 않는다. 업적은 물건을 받지 않는다.\n라운드가 닫힐 때 엔진이 보고, 채워졌으면 그때 앉아 있는 플레이어 모두가 받는다(docs/architecture/achievements.md).\n사람(방장, 장부 초안)과 AI 는 업적을 주지 못한다.\n가리키는 것이 붙인 로어북에 있는지는 게시할 때 본다.",
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Description",
+            "type": "string"
+          },
+          "hidden": {
+            "default": false,
+            "title": "Hidden",
+            "type": "boolean"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "match": {
+            "$ref": "#/components/schemas/QuestMatch",
+            "default": "all"
+          },
+          "name": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "when": {
+            "items": {
+              "$ref": "#/components/schemas/QuestCondition-Output"
+            },
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "When",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "when"
+        ],
+        "title": "Achievement",
+        "type": "object"
+      },
+      "AchievementSnapshot": {
+        "description": "업적 하나. 제작자가 작품에 단 것이다. 조건(when)이 채워지면 엔진이 앉아 있는 플레이어 모두에게 준다.\n\nid 는 판이 바뀌어도 그대로 두는 이름표다. hidden 이면 받기 전에는 이름과 설명과 그림을 가린다.\n비워도 되는 칸이라 형식이 그대로다.",
+        "properties": {
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "hidden": {
+            "default": false,
+            "title": "Hidden",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "match": {
+            "$ref": "#/components/schemas/QuestMatch",
+            "default": "all"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "when": {
+            "items": {
+              "$ref": "#/components/schemas/QuestConditionSnapshot"
+            },
+            "title": "When",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "when"
+        ],
+        "title": "AchievementSnapshot",
+        "type": "object"
+      },
       "ActionRequest": {
         "additionalProperties": false,
         "description": "제재를 할 때 받는 값(#392). 사유만 받는다. 누가 했는지는 토큰에서 읽는다.",
@@ -16694,10 +16868,115 @@
         "title": "SaveOut",
         "type": "object"
       },
+      "ScenarioAchievementOut": {
+        "description": "업적 하나와 보는 사람이 받았는지, 받은 사람의 수.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "earned_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earned At"
+          },
+          "earned_count": {
+            "title": "Earned Count",
+            "type": "integer"
+          },
+          "hidden": {
+            "title": "Hidden",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "id",
+          "hidden",
+          "name",
+          "description",
+          "image_id",
+          "earned_at",
+          "earned_count"
+        ],
+        "title": "ScenarioAchievementOut",
+        "type": "object"
+      },
+      "ScenarioAchievements": {
+        "description": "공개된 시나리오의 업적들. 판의 차례다. 공개 중인 판의 것이다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioAchievementOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "players": {
+            "title": "Players",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "players"
+        ],
+        "title": "ScenarioAchievements",
+        "type": "object"
+      },
       "ScenarioCreate": {
         "additionalProperties": false,
         "description": "시나리오를 만들 때 받는 값. 제목만 필수다.\n\n룰북과 스타팅 없이도 만들 수 있다(임시 저장). 게시할 때 둘 다 있는지 검사한다.\n시트도 비워 둘 수 있다. 게시할 때 룰북의 규칙과 견주어 검사한다.",
         "properties": {
+          "achievements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Achievement-Input"
+            },
+            "maxItems": 50,
+            "title": "Achievements",
+            "type": "array"
+          },
           "bestiary_ids": {
             "default": [],
             "items": {
@@ -17041,6 +17320,13 @@
       "ScenarioDetail": {
         "description": "만든 사람이 자기 시나리오를 볼 때의 값. 가리키는 자산은 ID 만 싣는다. 내용은 그 자산의 주소에서 읽는다.",
         "properties": {
+          "achievements": {
+            "items": {
+              "$ref": "#/components/schemas/Achievement-Output"
+            },
+            "title": "Achievements",
+            "type": "array"
+          },
           "bestiary_ids": {
             "items": {
               "format": "uuid",
@@ -17377,6 +17663,7 @@
           "wanders",
           "happenings",
           "chapters",
+          "achievements",
           "npc_places",
           "player_made_hp",
           "reroll_allowed",
@@ -17468,8 +17755,23 @@
       },
       "ScenarioUpdate": {
         "additionalProperties": false,
-        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는\nnull 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, covers, traps, pictures, submaps, wanders, happenings, chapters,\nnpc_places, character_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
+        "description": "시나리오를 고칠 때 받는 값. 보낸 칸만 바꾼다.\n\nrulebook_id, world_id, default_sheet, default_npc_sheet, player_made_hp, start_place, currency 는\nnull 을 보내면 비운다.\n보내지 않으면 그대로 둔다.\nlorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,\nquests, routes, landmarks, place_items, covers, traps, pictures, submaps, wanders, happenings, chapters,\nachievements, npc_places, character_modes 는\n보낸 목록으로 통째로 바꾼다.\ncharacter_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.\nrecommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.",
         "properties": {
+          "achievements": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Achievement-Input"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Achievements"
+          },
           "bestiary_ids": {
             "anyOf": [
               {
@@ -18781,6 +19083,14 @@
       "Snapshot": {
         "description": "판 하나의 내용 전부. 플레이에 필요한 것이 이 안에 다 있다.\n\n각 자산의 id 는 굳힐 때의 초안을 가리킨다. 어디서 왔는지 알려 줄 뿐이고, 판을 읽을 때 초안을 다시 보지 않는다.\ngm_guide 와 gm_notes 가 들어 있다. 만든 사람이 아닌 사람에게 이 문서를 그대로 내주면 안 된다.",
         "properties": {
+          "achievements": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AchievementSnapshot"
+            },
+            "title": "Achievements",
+            "type": "array"
+          },
           "campaign_quests": {
             "default": [],
             "items": {
@@ -24992,6 +25302,56 @@
         "summary": "Read Public Listing",
         "tags": [
           "listings"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/listings/{scenario_id}/achievements": {
+      "get": {
+        "description": "공개된 시나리오의 업적들. 판의 차례다. 업적마다 받은 사람의 수와, 로그인했으면 내가 받은 때가 있다.\n\n숨긴 업적은 내가 받기 전에는 이름, 설명, 그림이 null 이다. 조건은 싣지 않는다.\n볼 수 없는 시나리오(공개하지 않음, 볼 수 없는 등급)면 404 다. 토큰을 보냈는데 틀렸으면 401 이다.",
+        "operationId": "read_achievements_api_v1_game_listings__scenario_id__achievements_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Scenario Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioAchievements"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read Achievements",
+        "tags": [
+          "achievements"
         ],
         "x-audience": "user"
       }

@@ -20,6 +20,9 @@ from pydantic import (
 )
 
 from app.assets.models import (
+    ACHIEVEMENT_DESCRIPTION_MAX_LENGTH,
+    ACHIEVEMENT_ID_MAX_LENGTH,
+    ACHIEVEMENT_NAME_MAX_LENGTH,
     ATTACK_NAME_MAX_LENGTH,
     CAMPAIGN_CONDITIONS,
     CARRIED_MAX_EQUIPMENT,
@@ -56,6 +59,7 @@ from app.assets.models import (
     QUEST_MAX_REWARD_XP,
     QUEST_MAX_TIME_LIMIT_MINUTES,
     ROUND_MAX_MINUTES,
+    SCENARIO_MAX_ACHIEVEMENTS,
     SCENARIO_MAX_BESTIARIES,
     SCENARIO_MAX_CHAPTERS,
     SCENARIO_MAX_COVERS,
@@ -1836,6 +1840,67 @@ def check_chapters(chapters: list[Chapter]) -> list[Chapter]:
 Chapters = Annotated[list[Chapter], Field(max_length=SCENARIO_MAX_CHAPTERS), AfterValidator(check_chapters)]
 
 
+AchievementId = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=ACHIEVEMENT_ID_MAX_LENGTH)
+]
+AchievementName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=ACHIEVEMENT_NAME_MAX_LENGTH)
+]
+AchievementDescription = Annotated[
+    str, StringConstraints(strip_whitespace=True, max_length=ACHIEVEMENT_DESCRIPTION_MAX_LENGTH)
+]
+
+
+class Achievement(BaseModel):
+    """
+    업적 하나. 제작자가 작품에 다는 것이다(스팀의 업적과 같다). 인증 서버의 활동 배지와는 다른 것이다.
+
+    id 는 판이 바뀌어도 그대로 두는 이름표다. 받은 기록이 이것을 가리킨다. 바꾸면 다른 업적이 된다.
+    name 과 description 은 화면에 보이는 이름과 받는 법이다. hidden 이면 받기 전에는 이름과 설명과 그림을 가린다.
+    image_id 는 제작자가 올린 그림이다(app/portraits/). 자기가 올린 것인지는 저장할 때 본다.
+    when 은 받는 조건이다. 모양과 종류는 퀘스트의 조건과 같고(QuestCondition), match 는 그것을 맞추는 법이다.
+    하나 이상 적는다. 가져가기(consume)는 쓰지 않는다. 업적은 물건을 받지 않는다.
+    라운드가 닫힐 때 엔진이 보고, 채워졌으면 그때 앉아 있는 플레이어 모두가 받는다(docs/architecture/achievements.md).
+    사람(방장, 장부 초안)과 AI 는 업적을 주지 못한다.
+    가리키는 것이 붙인 로어북에 있는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: AchievementId
+    name: AchievementName
+    description: AchievementDescription = ''
+    hidden: bool = False
+    image_id: uuid.UUID | None = None
+    when: Annotated[QuestConditions, Field(min_length=1)]
+    match: QuestMatch = QuestMatch.ALL
+
+    @model_validator(mode='after')
+    def nothing_consumed(self) -> 'Achievement':
+        """업적은 물건을 가져가지 않는다. 가져가는 것은 퀘스트를 이룰 때다."""
+        if any(condition.consume for condition in self.when):
+            raise ValueError('consume 은 퀘스트의 이루는 조건(conditions)에만 적습니다.')
+        return self
+
+    @field_serializer('image_id')
+    def image_as_text(self, image_id: uuid.UUID | None) -> str | None:
+        """그림의 ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
+        return None if image_id is None else str(image_id)
+
+
+def reject_duplicate_achievements(achievements: list[Achievement]) -> list[Achievement]:
+    """같은 id 의 업적이 두 번 있으면 거부한다. 받은 기록이 id 로 업적을 가리킨다."""
+    ids = [achievement.id for achievement in achievements]
+    if len(set(ids)) != len(ids):
+        raise ValueError('같은 id 의 업적이 두 번 있습니다.')
+    return achievements
+
+
+Achievements = Annotated[
+    list[Achievement], Field(max_length=SCENARIO_MAX_ACHIEVEMENTS), AfterValidator(reject_duplicate_achievements)
+]
+
+
 def in_fixed_order(modes: list[CharacterMode]) -> list[CharacterMode]:
     """
     방식의 목록을 정해진 순서로 놓는다. 같은 것이 두 번 있으면 거부한다.
@@ -1918,6 +1983,8 @@ class ScenarioCreate(AssetCreate):
     happenings: Happenings = []
     # 장(#481). 장마다 넘어오는 조건과 여는 장소·퀘스트다
     chapters: Chapters = []
+    # 업적. 제작자가 작품에 다는 것이다. 조건이 채워지면 엔진이 앉아 있는 플레이어 모두에게 준다
+    achievements: Achievements = []
     npc_places: NpcPlaces = []
     player_made_hp: PlayerMadeHp | None = None
     # 주사위로 정한 점수를 방장이 다시 굴리게 해 줄 수 있는가. 안 보내면 안 된다
@@ -1942,7 +2009,7 @@ class ScenarioUpdate(AssetUpdate):
     보내지 않으면 그대로 둔다.
     lorebook_ids, bestiary_ids, openings, pregens, npc_sheets, monster_sheets, encounters, items, starting_items,
     quests, routes, landmarks, place_items, covers, traps, pictures, submaps, wanders, happenings, chapters,
-    npc_places, character_modes 는
+    achievements, npc_places, character_modes 는
     보낸 목록으로 통째로 바꾼다.
     character_modes 말고는 전부 없애려면 빈 목록을 보낸다. character_modes 는 비울 수 없다.
     recommended_players 는 최소와 최대를 함께 보낸다. clock 은 셋을 함께 보낸다.
@@ -1981,6 +2048,7 @@ class ScenarioUpdate(AssetUpdate):
     wanders: Wanders | None = None
     happenings: Happenings | None = None
     chapters: Chapters | None = None
+    achievements: Achievements | None = None
     npc_places: NpcPlaces | None = None
     player_made_hp: PlayerMadeHp | None = None
     reroll_allowed: bool | None = None
@@ -2065,6 +2133,7 @@ class ScenarioDetail(ScenarioSummary):
     wanders: list[WanderTable]
     happenings: list[HappeningRule]
     chapters: list[Chapter]
+    achievements: list[Achievement]
     npc_places: list[NpcPlace]
     player_made_hp: PlayerMadeHp | None
     reroll_allowed: bool
