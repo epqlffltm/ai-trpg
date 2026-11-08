@@ -35,7 +35,7 @@ function ConsentBody({ token }: { token: string }) {
   return (
     <section className="page-section" aria-labelledby="consent-heading">
       <h2 id="consent-heading">결제(충전)에 동의하기</h2>
-      <p>만 19세 미만의 회원이 AI TRPG 에서 충전하려고 보호자의 동의를 부탁했습니다.</p>
+      <p>만 19세 미만의 회원이 이매망량의 서재에서 충전하려고 보호자의 동의를 부탁했습니다.</p>
       <ul>
         <li>보호자 본인의 휴대폰으로 본인인증을 합니다. 보호자는 성년(만 19세 이상)이어야 합니다</li>
         <li>계정을 만들지 않습니다. 이름이나 전화번호는 받지 않습니다</li>

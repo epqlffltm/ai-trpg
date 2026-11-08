@@ -118,6 +118,8 @@ describe('보호자의 링크', () => {
     const { seen } = guardian({ [`POST ${GUARDIAN}/consent`]: () => answer });
     renderApp('/guardian/consent#token=c-1');
 
+    // 사이트 이름은 "이매망량의 서재"(Stitch 41번)
+    expect(await screen.findByText('만 19세 미만의 회원이 이매망량의 서재에서 충전하려고 보호자의 동의를 부탁했습니다.')).toBeInTheDocument();
     await userEvent.click(await screen.findByRole('button', { name: '성년 전(만 18세, 막힘)' }));
     await userEvent.click(screen.getByRole('button', { name: '이 사람으로 동의하기' }));
     expect(await screen.findByText(/보호자 본인의 휴대폰으로 인증해 주세요/)).toBeInTheDocument();
