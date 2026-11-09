@@ -38,6 +38,7 @@ from server_core.observability.streams import StreamRoutes
 from server_core.observability.tracing import FASTAPI_TELEMETRY, build_resource, configure_tracing, shutdown_tracing
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.achievements import router as achievements
 from app.api import health, me, readiness
 from app.assets.client import AssetClient, AssetUnavailableError
 from app.billing import router as billing
@@ -301,6 +302,7 @@ def create_app(
     app.include_router(transcripts.router, prefix=API_PREFIX)
     # 내가 연 이벤트 씬(#669). 소개의 이벤트 씬 칸과 갤러리가 읽는다
     app.include_router(gallery.router, prefix=API_PREFIX)
+    app.include_router(achievements.router, prefix=API_PREFIX)
     # 대화 속 답의 신고와 운영자 API(#678)
     app.include_router(reports.router, prefix=API_PREFIX)
     app.include_router(operators.router, prefix=API_PREFIX)

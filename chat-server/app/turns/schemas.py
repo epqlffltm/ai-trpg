@@ -25,6 +25,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.achievements.schemas import EarnedAchievementOut
 from app.conversations.schemas import MessageOut
 
 # 사람의 말 하나의 길이의 상한(글자). 넘으면 422 다. 입력의 가격 단계(i0)가 약속하는 양을 한 말이 다 쓰지 않게 한다
@@ -69,9 +70,10 @@ class DeltaEvent(BaseModel):
 
 
 class DoneEvent(BaseModel):
-    """done 메시지."""
+    """done 메시지. achievements 는 이 답으로 처음 받은 업적들이다(판의 차례, 없으면 빈 목록)."""
 
     message: MessageOut
+    achievements: list[EarnedAchievementOut] = []
 
 
 class FailedEvent(BaseModel):
