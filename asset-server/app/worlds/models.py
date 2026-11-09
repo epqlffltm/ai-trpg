@@ -95,6 +95,11 @@ ENDING_HINT_MAX_LENGTH = 100
 # 장(docs/architecture/chapters.md, 판의 형식 6). 개수와 이름의 길이. id 는 다른 id 와 같은 열쇠(40자)다
 WORLD_MAX_CHAPTERS = 20
 CHAPTER_NAME_MAX_LENGTH = 40
+# 업적(판의 형식 9, docs/architecture/achievements.md 의 "story"). 개수와 이름, 받는 법의 길이.
+# id 는 다른 id 와 같은 열쇠(40자)다
+WORLD_MAX_ACHIEVEMENTS = 50
+ACHIEVEMENT_NAME_MAX_LENGTH = 40
+ACHIEVEMENT_DESCRIPTION_MAX_LENGTH = 200
 # 장 하나가 여는 로어북 항목의 수(판의 형식 7)
 CHAPTER_MAX_LORE = 100
 
@@ -282,6 +287,9 @@ class World(Base):
     lorebooks: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(Uuid), default=list, server_default='{}')
     # 제작자 단축어들 [{"name", "description", "body"}](#981, 판의 형식 8). 모양은 app/shortcuts/schemas.py 가 정한다
     shortcuts: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    # 업적들 [{"id", "name", "description", "hidden", "image_id", "when"}](판의 형식 9). 적은 차례가 보이는 차례다.
+    # 제작자가 작품에 다는 것이다(스팀의 업적과 같다). 주는 것은 story 의 엔진이다
+    achievements: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
 
     rating: Mapped[str] = mapped_column(String(10), default=Rating.ALL, server_default=Rating.ALL.value)
     visibility: Mapped[str] = mapped_column(

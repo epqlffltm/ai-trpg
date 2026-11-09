@@ -46,6 +46,7 @@ function world(): StoryWorldDetail {
     endings: [],
     chapters: [],
     shortcuts: [],
+    achievements: [],
     lorebooks: [BOOK],
     latest_version: null,
     published_at: null,
