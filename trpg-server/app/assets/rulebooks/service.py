@@ -69,6 +69,7 @@ def problem_of(rules: dict) -> str | None:
 PART_FIELDS = (
     'die',
     'roll',
+    'defense',
     'natures',
     'injuries',
     'injury_table',
@@ -105,8 +106,8 @@ def dump_part(value: object) -> object:
 
 def with_parts(rules: dict, parts: dict[str, object]) -> dict:
     """
-    규칙의 주사위와 굴림(#404), 성질과 면역과 부상과 부상 표와 굴리는 때(#886), 수치(#804), 기술(#805), 성장(#286) 중
-    보낸 것만 바꾼 문서.
+    규칙의 주사위와 굴림(#404), 막는 규칙(#254), 성질과 면역과 부상과 부상 표와 굴리는 때(#886), 수치(#804), 기술(#805),
+    성장(#286) 중 보낸 것만 바꾼 문서.
     받은 문서는 고치지 않는다. 아무것도 안 보냈으면 그대로다.
 
     칸끼리 가리키는 것(기술의 비용이 수치를, 부상과 면역이 성질을)은 규칙의 다른 칸과 견주어야 알 수 있다.

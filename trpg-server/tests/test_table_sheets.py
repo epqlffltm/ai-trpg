@@ -151,6 +151,8 @@ async def test_a_table_allows_what_the_version_allows_unless_the_host_narrows_it
     assert [pregen['sheet'] for pregen in table['pregens']] == [as_character(ELF_SHEET), as_character(LADY_SHEET)]
 
 
+# 템플릿을 그대로 옮기는지 본다. 막는 규칙(#254)을 빼지 않은 룰북이다(tests/conftest.py)
+@pytest.mark.opposed
 async def test_the_table_shows_the_rules_but_not_the_gm_guide(client: AsyncClient, me: dict[str, str]):
     table = await open_table(client, me)
 

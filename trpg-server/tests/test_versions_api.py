@@ -75,7 +75,14 @@ PREGENS = [{'name': '폭주족 엘프', 'description': '귀가 길어서 헬멧�
 # 부상의 성질(#799)과 물건을 쓰는 판정(#800)도 없다. 게시한 판은 그때의 규칙으로 굳어 있다
 OLD_INJURIES = tuple(injury.model_copy(update={'natures': ()}) for injury in SRD5.injuries)
 OLD_SRD5 = SRD5.model_copy(
-    update={'narration': None, 'equipment_slots': (), 'armor': None, 'injuries': OLD_INJURIES, 'item_check': None}
+    update={
+        'narration': None,
+        'equipment_slots': (),
+        'armor': None,
+        'injuries': OLD_INJURIES,
+        'item_check': None,
+        'defense': None,
+    }
 )
 
 

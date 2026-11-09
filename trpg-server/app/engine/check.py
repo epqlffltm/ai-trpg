@@ -7,6 +7,7 @@
   - over: 주사위의 합에 보정을 더한 값이 난이도의 목표값 이상이면 성공이다
   - under: 주사위의 합이 기량(능력치의 점수 + 난이도의 값 + 무기 - 부상) 이하이면 성공이다
 부상이 있으면 보정이 깎이거나, 주사위를 두 번 굴려 나쁜 합을 쓴다(불리함, app/engine/injury.py).
+공격은 맞서는 굴림(#254, resolve_opposed)으로 가를 수 있다. 받는 쪽도 굴려, 공격하는 쪽이 더 잘 굴려야 맞는다.
 숫자(주사위의 면 수와 개수, 보정을 구하는 값, 목표값)는 모두 규칙에서 온다. 규칙이 달라져도 이 코드는 그대로다.
 
 여기의 함수는 DB 도 HTTP 도 모른다. 주사위만 밖에서 받는다. 같은 눈을 주면 같은 결과가 나온다.
@@ -167,3 +168,109 @@ def resolve_hindered(
     used = pools[rolls.index(worse(ruleset, rolls))]
     check = judge(ruleset, score, difficulty, used, bonus - hindrance.penalty)
     return HinderedCheck(check=check, rolls=rolls, hindrance=hindrance)
+
+
+@dataclass(frozen=True)
+class Side:
+    """
+    맞서는 굴림(#254)의 한쪽. 능력치의 점수, 능력치 말고 더하는 것(무기, 난이도의 보정, 방어구), 부상의 영향,
+    다른 까닭의 불리함(방어하기, 노려 치기)이다.
+    """
+
+    score: int
+    adjust: int = 0
+    hindrance: Hindrance = NO_HINDRANCE
+    disadvantage: bool = False
+
+
+@dataclass(frozen=True)
+class Opposed:
+    """
+    맞서는 굴림 한 번. 공격하는 쪽의 판정(attack)과 받는 쪽의 판정(defense)이다.
+
+    attack.check.success 가 맞았는지다. over 면 공격의 합이 막는 합보다 높아야 맞는다(목표값은 막는 합 + 1).
+    under 면 공격이 제 기량 안이고, 막는 쪽이 실패했거나 공격의 여유가 더 커야 맞는다(같으면 막는다).
+    defense.check.success 는 막는 쪽이 제 굴림에 성공했는지다(under 의 기량 안, over 는 공격을 막았는지).
+    """
+
+    attack: HinderedCheck
+    defense: HinderedCheck
+
+
+def difficulty_shift(ruleset: Ruleset, difficulty: Difficulty) -> int:
+    """
+    맞서는 굴림에서 공격의 난이도가 공격하는 쪽에 더하는 값. 기본 난이도를 0 으로, 목표값의 차이만큼이다.
+
+    쉬우면 더하고(보통 15 → 쉬움 10 이면 +5), 어려우면 뺀다. under 면 규칙의 shifts 를 쓴다(기량에 더하는 값).
+    """
+    if ruleset.roll.style == RollStyle.UNDER:
+        return skill_shift(ruleset, difficulty)
+    base = find_difficulty(ruleset, None)
+    return 0 if base is None else base.target - difficulty.target
+
+
+def roll_side(ruleset: Ruleset, dice: Dice, side: Side) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """한쪽의 주사위를 굴린다. 불리하면 두 번 굴려 나쁜 것을 쓴다. (쓴 눈들, 굴린 합들)이다."""
+    pools = roll_for_check(ruleset, dice, side.hindrance.disadvantage or side.disadvantage)
+    rolls = tuple(sum(pool) for pool in pools)
+    return pools[rolls.index(worse(ruleset, rolls))], rolls
+
+
+def side_numbers(ruleset: Ruleset, side: Side, faces: tuple[int, ...]) -> tuple[int, int, int]:
+    """한쪽의 (보정, 합, 기량). over 의 합은 눈 + 점수의 보정 + 더하는 것이고, under 의 기량은 점수 + 더하는 것이다."""
+    adjust = side.adjust - side.hindrance.penalty
+    if ruleset.roll.style == RollStyle.UNDER:
+        return adjust, sum(faces), side.score + adjust
+    modifier = modifier_of(ruleset, side.score) + adjust
+    return modifier, sum(faces) + modifier, 0
+
+
+def attack_lands(ruleset: Ruleset, attack: tuple[int, int, int], defense: tuple[int, int, int]) -> bool:
+    """
+    공격이 맞았는가. 모양은 side_numbers 의 (보정, 합, 기량)이다.
+
+    over 는 공격의 합 > 막는 합. under 는 공격이 기량 안이고, 막는 쪽이 기량 밖이거나 공격의 여유가 더 크다.
+    """
+    if ruleset.roll.style != RollStyle.UNDER:
+        return attack[1] > defense[1]
+    attack_margin, defense_margin = attack[2] - attack[1], defense[2] - defense[1]
+    # 막는 쪽이 기량 밖이면 여유가 음수라, 기량 안의 공격은 늘 더 크다
+    return attack_margin >= 0 and attack_margin > defense_margin
+
+
+def opposed_check(
+    ruleset: Ruleset, numbers: tuple[int, int, int], faces: tuple[int, ...], target: int, success: bool
+) -> Check:
+    """맞서는 굴림의 한쪽을 판정의 모양(Check)으로 적는다. 목표값은 부르는 쪽이 정한다."""
+    modifier, total, skill = numbers
+    style = ruleset.roll.style
+    return Check(
+        roll=sum(faces),
+        modifier=modifier,
+        total=total,
+        target=skill if style == RollStyle.UNDER else target,
+        success=success,
+        style=style.value,
+        faces=faces,
+    )
+
+
+def resolve_opposed(ruleset: Ruleset, attack: Side, defense: Side, dice: Dice) -> Opposed:
+    """
+    맞서는 굴림을 한다(#254). 공격하는 쪽을 먼저, 받는 쪽을 그다음에 굴린다.
+
+    over 에서 공격의 목표값은 막는 합 + 1 이고, 막는 쪽의 목표값은 공격의 합이다(같으면 막는다).
+    under 에서 목표값은 각자의 기량이다. 맞았는지는 attack_lands 가 정한다.
+    """
+    attack_faces, attack_rolls = roll_side(ruleset, dice, attack)
+    defense_faces, defense_rolls = roll_side(ruleset, dice, defense)
+    attack_numbers = side_numbers(ruleset, attack, attack_faces)
+    defense_numbers = side_numbers(ruleset, defense, defense_faces)
+    hit = attack_lands(ruleset, attack_numbers, defense_numbers)
+    held = defense_numbers[2] - defense_numbers[1] >= 0 if ruleset.roll.style == RollStyle.UNDER else not hit
+    attack_check = opposed_check(ruleset, attack_numbers, attack_faces, defense_numbers[1] + 1, hit)
+    defense_check = opposed_check(ruleset, defense_numbers, defense_faces, attack_numbers[1], held)
+    return Opposed(
+        attack=HinderedCheck(check=attack_check, rolls=attack_rolls, hindrance=attack.hindrance),
+        defense=HinderedCheck(check=defense_check, rolls=defense_rolls, hindrance=defense.hindrance),
+    )

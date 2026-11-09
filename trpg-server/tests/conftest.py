@@ -7,6 +7,11 @@ pytest 는 이 파일의 fixture 를 모든 테스트 파일에서 이름만으�
 
 테스트는 실제 PostgreSQL 에서 돈다. 개발용과 같은 DB 를 쓰되 스키마를 나눈다.
 개발용 데이터는 game 스키마에, 테스트는 game_test 스키마에 있다.
+
+맞서는 굴림(#254). 템플릿에는 막는 규칙이 있지만, 테스트가 API 로 만드는 룰북은 기본으로 막는 규칙을 뺀다
+(fixed_difficulty_rulebooks). 그 전에 굳힌 판과 같은 고정 난이도로 돈다. 공격마다 받는 쪽의 주사위가 하나 더 들지 않아
+주사위를 적어 둔 테스트가 그대로 돈다. 맞서는 굴림을 보는 테스트는 @pytest.mark.opposed 로 템플릿 그대로의 룰북을 쓴다
+(tests/test_opposed_attacks.py).
 """
 
 import uuid
@@ -22,6 +27,7 @@ from server_core.testing.spans import SpanRecorder, recording
 from server_core.testing.tokens import FakeAuthServer, SigningKey, make_signing_key
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.assets.rulebooks import service as rulebook_service
 from app.core.config import Settings
 from app.core.database import create_engine
 from app.limits.setup import Limiting, build_limiting
@@ -34,6 +40,22 @@ from tests.streaming import LONG_HEARTBEAT, Reader
 from tests.viewers import make_viewer
 
 TEST_SCHEMA = 'game_test'
+
+
+@pytest.fixture(autouse=True)
+def fixed_difficulty_rulebooks(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    API 로 만드는 룰북에서 막는 규칙(#254)을 뺀다. 고정 난이도로 돈다(그 전에 굳힌 판의 길).
+
+    @pytest.mark.opposed 를 단 테스트는 빼지 않는다. 템플릿의 막는 규칙 그대로다.
+    """
+    if request.node.get_closest_marker('opposed') is not None:
+        return
+    original = rulebook_service.from_template
+    monkeypatch.setattr(
+        rulebook_service, 'from_template', lambda template: original(template).model_copy(update={'defense': None})
+    )
+
 
 # 존재하지 않는 주소. 테스트는 실제 인증 서버에 요청을 보내지 않는다
 TEST_JWKS_URL = 'http://auth.test/api/v1/auth/jwks'

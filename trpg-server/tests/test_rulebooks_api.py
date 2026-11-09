@@ -109,6 +109,8 @@ async def test_the_response_carries_only_the_listed_fields(client: AsyncClient, 
     }
 
 
+# 템플릿을 그대로 옮기는지 본다. 막는 규칙(#254)을 빼지 않은 룰북이다(tests/conftest.py)
+@pytest.mark.opposed
 async def test_a_new_rulebook_carries_the_rules_of_the_default_template(
     client: AsyncClient, my_headers: dict[str, str]
 ):
@@ -123,6 +125,8 @@ async def test_a_rulebook_can_name_its_template(client: AsyncClient, my_headers:
     assert body['rules']['template'] == 'srd5'
 
 
+# 템플릿을 그대로 옮기는지 본다. 막는 규칙(#254)을 빼지 않은 룰북이다(tests/conftest.py)
+@pytest.mark.opposed
 async def test_the_rules_are_stored_in_the_rulebook(
     client: AsyncClient, my_headers: dict[str, str], session: AsyncSession
 ):

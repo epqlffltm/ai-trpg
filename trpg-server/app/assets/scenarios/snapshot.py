@@ -170,7 +170,10 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      로어 항목마다의 그림(pictures: entry_id, image_id, #1163)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다.
 #      장소가 품은 하위 맵(submaps: place_id, places, #284)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다.
 #      NPC 시트의 한편인 몬스터(npc_sheets[].allied_monsters, #254)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
-SNAPSHOT_FORMAT = 69
+#  70: 룰북의 규칙에 막는 규칙이 있다(#254). rulebook.rules.defense: 받는 쪽이 굴리는 능력치(ability).
+#      있으면 공격은 맞서는 굴림이다. 그 전의 판은 null 이고 고정 난이도로 돈다.
+#      몬스터와 NPC 의 공격마다 막는 능력치(monsters[].attacks[].defense, npc_sheets[].attacks[].defense)도 더했다
+SNAPSHOT_FORMAT = 70
 
 
 # 길의 문을 다루는 사건의 효과(#281). 두 끝(from_place, to_place)이 판의 길 하나를 가리킨다
@@ -583,6 +586,8 @@ class AttackSnapshot(BaseModel):
     effects: AttackEffects = []
     # 피해의 성질(#886 ③). 비우면 무기의 성질이고, 그것도 없으면 성질이 없는 피해다
     nature: str | None = None
+    # 맞서는 굴림에서 받는 쪽이 막는 능력치(#254). 비우면 규칙의 것(rules.defense)이다. 그 전의 판의 공격은 없다
+    defense: str | None = None
 
 
 class NpcSheetSnapshot(BaseModel):

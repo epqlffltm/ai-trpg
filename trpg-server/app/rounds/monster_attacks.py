@@ -9,6 +9,7 @@
 칠 수 있으면 대상과 공격을 서버의 주사위로 고른다. 고를 것이 하나뿐이면 굴리지 않는다.
 제작자가 공격의 순서를 신경 쓸 필요가 없고, 대상을 고르는 데 AI 가 끼지 않는다.
 판정은 앉은 사람의 판정과 같은 계산이다(app/engine/check.py). 몬스터의 점수와 공격의 난이도로 굴린다.
+판의 규칙에 막는 규칙이 있으면 맞서는 굴림이다(#254, app/rounds/defenses.py). 받는 쪽도 굴리고, 난이도는 보정이 된다.
 맞히면 그 공격의 양의 등급만큼 피해를 준다. 피해, 쓰러짐, 부상 표는 앉은 사람의 것과 같다(change_sheet).
 장비가 든다(#276, app/rounds/blows.py). 공격에 적은 무기의 공격 보정이 판정에 더해지고, 대상의 맞은 부위의 방어가
 목표값을 올리거나(ac) 피해를 깎는다(reduce). 부위는 공격을 고른 뒤, 판정보다 먼저 굴린다.
@@ -33,12 +34,12 @@ from app.assets.scenarios.snapshot import AttackSnapshot
 from app.engine import check as checks
 from app.engine import resources as resource_rules
 from app.engine.armor import Save
-from app.engine.check import Check, HinderedCheck
+from app.engine.check import Check, HinderedCheck, Side
 from app.engine.dice import choose
 from app.engine.health import ChangeKind
 from app.engine.injury import Trigger
 from app.engine.ruleset import Difficulty, ResourceHolder
-from app.rounds import blows, drops, foe_traps, monster_chase, npc_victims
+from app.rounds import blows, defenses, drops, foe_traps, monster_chase, npc_victims
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import NO_BLOW, Blow, Weapon
 from app.rounds.cast import CastMember
@@ -218,9 +219,10 @@ def short_outcome(attack: AttackSnapshot, victim: TableMember) -> dict:
 def attack_document(attack: AttackSnapshot) -> dict:
     """
     결과에 적을 공격. 무기는 장비가 든 것(blow)에, 비용은 낸 것(cost)에, 효과는 든 것(injured, resources)에,
-    피해의 성질(#886 ③)은 HP 의 변화(effect 의 nature)에 적는다. 공격은 그 전의 모양 그대로다.
+    피해의 성질(#886 ③)은 HP 의 변화(effect 의 nature)에 적는다. 막는 능력치(#254)는 받는 쪽의 굴림(defense)에 적는다.
+    공격은 그 전의 모양 그대로다.
     """
-    return attack.model_dump(exclude={'weapon', 'cost', 'effects', 'nature'})
+    return attack.model_dump(exclude={'weapon', 'cost', 'effects', 'nature', 'defense'})
 
 
 def attack_outcome(attack: AttackSnapshot, victim: TableMember, rolled: Check, effect: dict | None) -> dict:
@@ -254,6 +256,23 @@ def pick_victim(
     return choose(candidates, judging.dice)
 
 
+def roll_strike(
+    judging: Judging, monster: SceneMonster, attack: AttackSnapshot, blow: Blow, defense: Side | None
+) -> tuple[HinderedCheck, dict]:
+    """
+    공격 하나를 굴린다. 판의 규칙에 막는 규칙이 있으면 맞서는 굴림이고(#254, app/rounds/defenses.py),
+    없으면 고정 난이도다.
+
+    돌려주는 것은 공격하는 쪽의 판정과, 차례의 outcome 에 더할 것(맞서는 굴림이면 받는 쪽의 굴림 defense)이다.
+    """
+    if defense is None:
+        return roll_attack(judging, monster, attack, blow), {}
+    ruleset = judging.ruleset
+    side = defenses.attacker_side(ruleset, monster.state.abilities, monster.state.injuries, attack, blow)
+    opposed = checks.resolve_opposed(ruleset, side, defense, judging.dice)
+    return opposed.attack, {'defense': defenses.defense_document(ruleset, attack, opposed.defense)}
+
+
 def strike_member(judging: Judging, monster: SceneMonster, victim: TableMember) -> dict:
     """캐릭터 하나를 친다. 공격, 비용, 판정, 피해의 차례로 굴린다. 차례의 outcome 이다(덫은 부른 쪽이 붙인다)."""
     mark_fight(judging, monster.state, victim)
@@ -262,9 +281,10 @@ def strike_member(judging: Judging, monster: SceneMonster, victim: TableMember) 
         return short_outcome(attack, victim)
     cost = pay(judging, monster.state, attack, ResourceHolder.MONSTERS)
     blow = plan_attack_blow(judging, blows.monster_weapon(judging, monster, attack), victim)
-    rolled = roll_attack(judging, monster, attack, blow)
+    defense = defenses.member_defense(judging.ruleset, victim, attack, blow)
+    rolled, defended = roll_strike(judging, monster, attack, blow, defense)
     outcome = hit_outcome(judging, attack, victim, rolled.check, blow, monster.definition.nature)
-    return {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
+    return {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled), **defended}
 
 
 def npc_hit_outcome(
@@ -311,9 +331,10 @@ def strike_npc(judging: Judging, monster: SceneMonster, person: CastMember) -> d
         return {'skipped': Skipped.COST_SHORT, 'attack': attack_document(attack), **head}
     cost = pay(judging, monster.state, attack, ResourceHolder.MONSTERS)
     blow = npc_victims.plan_npc_blow(judging, blows.monster_weapon(judging, monster, attack), person)
-    rolled = roll_attack(judging, monster, attack, blow)
+    defense = defenses.npc_defense(judging.ruleset, person, attack, blow)
+    rolled, defended = roll_strike(judging, monster, attack, blow, defense)
     outcome = npc_hit_outcome(judging, attack, person, rolled.check, blow, head, monster.definition.nature)
-    turn = {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
+    turn = {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled), **defended}
     drop = drops.npc_drop_at(judging, person.npc.place_id, outcome['npc_effect'])
     return turn if drop is None else {**turn, 'drop': drop}
 

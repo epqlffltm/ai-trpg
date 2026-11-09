@@ -36,6 +36,7 @@
     },
     "die": 10,
     "roll": {"count": 1, "style": "over", "shifts": {}},
+    "defense": {"ability": "wits"},
     "difficulties": [
       {
         "key": "easy",
