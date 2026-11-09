@@ -6,6 +6,8 @@
     GET /api/v1/chat/achievements?character_id=        그 캐릭터에서 내가 받은 업적들(받은 차례)
     GET /api/v1/chat/achievements/rates?character_id=  그 캐릭터의 업적마다 받은 사람의 수와 대화한 사람의 수.
                                                        로그인하지 않아도 본다
+    GET /api/v1/chat/achievements/mine                 내가 받은 업적 전부(모든 캐릭터, 받은 때가 늦은 것부터, 쪽).
+                                                       마이페이지의 "내 업적"이 읽는다
 
 달성률 말고는 로그인을 요구한다. 내 기록만 읽는다.
 기록이 없거나 없는 캐릭터면 빈 목록이다(캐릭터가 있는지 알리지 않는다).
@@ -19,8 +21,15 @@ from fastapi import APIRouter, Query, status
 
 from app.achievements import repository
 from app.achievements.models import AchievementRecord
-from app.achievements.schemas import AchievementRate, AchievementRates, AchievementRecordList, AchievementRecordOut
-from app.core.dependencies import CurrentViewer, Session
+from app.achievements.schemas import (
+    AchievementRate,
+    AchievementRates,
+    AchievementRecordList,
+    AchievementRecordOut,
+    MyAchievementOut,
+    MyAchievementPage,
+)
+from app.core.dependencies import CurrentViewer, Paging, Session
 
 router = APIRouter(prefix='/achievements', tags=['achievements'])
 
@@ -31,6 +40,20 @@ CharacterId = Annotated[uuid.UUID, Query(description='asset 서버의 캐릭터 
 def to_record(record: AchievementRecord) -> AchievementRecordOut:
     """받은 업적 하나를 응답의 모양으로."""
     return AchievementRecordOut(
+        achievement_id=record.achievement_id,
+        name=record.name,
+        description=record.description,
+        image_id=record.image_id,
+        earned_at=record.earned_at,
+        conversation_id=record.conversation_id,
+    )
+
+
+def to_mine(record: AchievementRecord, character_name: str | None) -> MyAchievementOut:
+    """내가 받은 업적 하나와 그 캐릭터의 이름을 응답의 모양으로."""
+    return MyAchievementOut(
+        character_id=record.character_source,
+        character_name=character_name,
         achievement_id=record.achievement_id,
         name=record.name,
         description=record.description,
@@ -57,3 +80,11 @@ async def read_rates(session: Session, character_id: CharacterId) -> Achievement
     return AchievementRates(
         players=players, items=[AchievementRate(achievement_id=name, earned_count=count) for name, count in earned]
     )
+
+
+@router.get('/mine', response_model=MyAchievementPage, status_code=status.HTTP_200_OK)
+async def list_mine(viewer: CurrentViewer, session: Session, paging: Paging) -> MyAchievementPage:
+    """내가 받은 업적 전부. 모든 캐릭터의 것이고 받은 때가 늦은 것부터다(?limit=&offset=)."""
+    rows = await repository.achievement_page(session, viewer.claims.user_id, paging.limit, paging.offset)
+    total = await repository.count_achievements_of(session, viewer.claims.user_id)
+    return MyAchievementPage(items=[to_mine(record, name) for record, name in rows], total=total)

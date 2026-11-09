@@ -58,3 +58,27 @@ class EarnedAchievementOut(BaseModel):
     name: str
     description: str
     image_id: uuid.UUID | None
+
+
+class MyAchievementOut(BaseModel):
+    """
+    내가 받은 업적 하나(GET /achievements/mine). 이름, 받는 법, 그림은 받은 때의 판의 것이다(숨긴 업적도 보인다).
+    character_name 은 내가 가져온 그 캐릭터의 마지막 판의 이름이다. 가져온 판이 없으면 null 이다.
+    """
+
+    character_id: uuid.UUID
+    character_name: str | None
+    achievement_id: str
+    name: str
+    description: str
+    image_id: uuid.UUID | None
+    earned_at: datetime
+    # 처음 받은 대화. 그 대화가 지워졌으면 null 이다
+    conversation_id: uuid.UUID | None
+
+
+class MyAchievementPage(BaseModel):
+    """내가 받은 업적의 한 쪽. 받은 때가 늦은 것부터다. total 은 모든 캐릭터에서 받은 수다."""
+
+    items: list[MyAchievementOut]
+    total: int

@@ -1683,6 +1683,102 @@
         "title": "MoveChangeOut",
         "type": "object"
       },
+      "MyAchievementOut": {
+        "description": "내가 받은 업적 하나(GET /achievements/mine). 이름, 받는 법, 그림은 받은 때의 판의 것이다(숨긴 업적도 보인다).\ncharacter_name 은 내가 가져온 그 캐릭터의 마지막 판의 이름이다. 가져온 판이 없으면 null 이다.",
+        "properties": {
+          "achievement_id": {
+            "title": "Achievement Id",
+            "type": "string"
+          },
+          "character_id": {
+            "format": "uuid",
+            "title": "Character Id",
+            "type": "string"
+          },
+          "character_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Name"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "earned_at": {
+            "format": "date-time",
+            "title": "Earned At",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "character_id",
+          "character_name",
+          "achievement_id",
+          "name",
+          "description",
+          "image_id",
+          "earned_at",
+          "conversation_id"
+        ],
+        "title": "MyAchievementOut",
+        "type": "object"
+      },
+      "MyAchievementPage": {
+        "description": "내가 받은 업적의 한 쪽. 받은 때가 늦은 것부터다. total 은 모든 캐릭터에서 받은 수다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MyAchievementOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "MyAchievementPage",
+        "type": "object"
+      },
       "NextPriceOut": {
         "description": "예약된 값의 바뀜. credits 가 null 이면 effective_at 부터 팔지 않는다.",
         "properties": {
@@ -3022,6 +3118,69 @@
           }
         ],
         "summary": "List Achievements",
+        "tags": [
+          "achievements"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/chat/achievements/mine": {
+      "get": {
+        "description": "내가 받은 업적 전부. 모든 캐릭터의 것이고 받은 때가 늦은 것부터다(?limit=&offset=).",
+        "operationId": "list_mine_api_v1_chat_achievements_mine_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyAchievementPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Mine",
         "tags": [
           "achievements"
         ],
