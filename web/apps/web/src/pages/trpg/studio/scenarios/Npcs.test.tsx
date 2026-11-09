@@ -128,6 +128,8 @@ describe('인물 탭', () => {
     }
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '처음 태도' }), 'wary');
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '훔치다 들키면' }), 'fight');
+    // 방어하는 때(#254). 라운드마다 25% 로 방어한다
+    await userEvent.type(dialog.getByRole('textbox', { name: '라운드마다의 확률 %(1~100)' }), '25');
 
     await userEvent.click(dialog.getByRole('button', { name: '장비 더하기' }));
     const gear = within(dialog.getByRole('group', { name: '장비 1' }));
@@ -164,7 +166,7 @@ describe('인물 탭', () => {
       resistances: [],
       nature: null,
       allied_monsters: [],
-      defends: null,
+      defends: { below: null, chance: 25 },
     });
   });
 

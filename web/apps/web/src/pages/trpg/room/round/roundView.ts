@@ -188,12 +188,14 @@ function checkLine(outcome: CheckResult, rules: Ruleset): string {
   return [view.dice, view.success ? '성공' : '실패', ...view.effects].join(' · ');
 }
 
-/** 판정 결과 줄을 나눈 것(Stitch 20번). 눈·보정·합·목표의 한 줄(under 면 눈과 기량, checkDice.ts), 성공인지, 판정이 바꾼 것(공격의 줄이 맨 앞) */
+/** 판정 결과 줄을 나눈 것(Stitch 20번). 눈·보정·합·목표의 한 줄(under 면 눈과 기량, checkDice.ts), 성공인지, 판정이 바꾼 것(공격의 줄이 맨 앞).
+ * 방어 태세인 몬스터나 인물을 쳤으면(#254, guarded) 눈의 줄에 "상대가 방어 태세(불리함)"가 붙는다(불리하게 굴렸다) */
 export type CheckView = { dice: string; success: boolean; effects: string[] };
 
 function checkView(outcome: CheckResult, rules: Ruleset): CheckView {
   const dice = [checkDice(outcome)];
   if (outcome.hindrance?.disadvantage) dice.push('불리함');
+  if (outcome.guarded) dice.push('상대가 방어 태세(불리함)');
   if (outcome.called_shot) dice.push('노려 치기');
   return { dice: dice.join(' · '), success: outcome.success, effects: checkEffects(outcome, rules) };
 }

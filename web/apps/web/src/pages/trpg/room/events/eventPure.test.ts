@@ -169,6 +169,9 @@ describe('eventLine', () => {
     const healer = { name: '고블린', attack, target_entry_id: 'n1', target_name: '약사', success: true };
     expect(line('monster_attacked', { ...healer, finishing: false })?.text).toBe('고블린: 할퀴기 → 약사 맞힘');
     expect(line('monster_attacked', { ...healer, finishing: true })?.text).toBe('고블린: 할퀴기 → 쓰러진 약사 맞힘');
+    // 방어 태세인 쪽을 쳤으면(#254, guarded) 불리하게 굴렸다고 붙인다
+    expect(line('monster_attacked', { name: '고블린', attack, character_name: '렌', success: false, guarded: true })?.text).toBe('고블린: 할퀴기 → 렌 빗나감 [방어 태세: 불리]');
+    expect(line('npc_attacked', { ...healer, guarded: true })?.text).toBe('고블린: 할퀴기 → 약사 맞힘 [방어 태세: 불리]');
     const blow = {
       weapon: null,
       location: 'body',
