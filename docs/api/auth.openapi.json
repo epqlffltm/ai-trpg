@@ -679,6 +679,75 @@
         ],
         "type": "object"
       },
+      "InquiryCategoryEnum": {
+        "description": "* `account` - 계정·로그인\n* `payment` - 결제·환불\n* `report` - 신고\n* `bug` - 오류\n* `other` - 그 밖",
+        "enum": [
+          "account",
+          "payment",
+          "report",
+          "bug",
+          "other"
+        ],
+        "type": "string"
+      },
+      "InquiryCreated": {
+        "additionalProperties": false,
+        "description": "받은 문의.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "id"
+        ],
+        "type": "object"
+      },
+      "InquiryRequestRequest": {
+        "additionalProperties": false,
+        "description": "보낼 문의. 로그인했으면 email 은 보지 않는다(계정의 주소로 답한다).",
+        "properties": {
+          "body": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/InquiryCategoryEnum"
+          },
+          "email": {
+            "description": "답 받을 주소. 로그인하지 않았으면 꼭 적는다",
+            "format": "email",
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "category",
+          "title"
+        ],
+        "type": "object"
+      },
+      "InquiryStatusEnum": {
+        "description": "* `open` - 답을 기다림\n* `answered` - 답함",
+        "enum": [
+          "open",
+          "answered"
+        ],
+        "type": "string"
+      },
       "Jwk": {
         "additionalProperties": false,
         "description": "공개키 하나(RFC 7517). 토큰 머리말의 kid 로 고른다.",
@@ -957,6 +1026,73 @@
         ],
         "type": "object"
       },
+      "MyInquiry": {
+        "additionalProperties": false,
+        "description": "내 문의 하나. 답하지 않았으면 reply 가 빈 글이고 answered_at 이 null 이다.",
+        "properties": {
+          "answered_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/InquiryCategoryEnum"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reply": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InquiryStatusEnum"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "answered_at",
+          "body",
+          "category",
+          "created_at",
+          "id",
+          "reply",
+          "status",
+          "title"
+        ],
+        "type": "object"
+      },
+      "MyInquiryPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MyInquiry"
+            },
+            "type": "array"
+          },
+          "next_before": {
+            "description": "다음 쪽을 부를 before. 마지막 쪽이면 null",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "next_before"
+        ],
+        "type": "object"
+      },
       "MyInvite": {
         "additionalProperties": false,
         "description": "내 초대 코드와 받은 보상(#990). 상한은 서버의 설정이다. 보상은 내가 본인인증을 마친 뒤부터 센다.",
@@ -1032,6 +1168,112 @@
         "required": [
           "nickname",
           "password"
+        ],
+        "type": "object"
+      },
+      "OperatorInquiry": {
+        "additionalProperties": false,
+        "description": "운영자가 보는 문의 하나. 보낸 계정(로그인하지 않고 보냈으면 null), 답 받을 주소, 답 메일의 결과를 더한다.",
+        "properties": {
+          "answered_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/InquiryCategoryEnum"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "reply": {
+            "type": "string"
+          },
+          "reply_discarded_at": {
+            "description": "답 메일을 끝내 보내지 못하고 버린 시각. 그러면 다른 길로 알려야 한다",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "reply_sent_at": {
+            "description": "메일 서버가 답 메일을 받은 시각",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "sender": {
+            "additionalProperties": false,
+            "description": "문의를 보낸 계정. 로그인하지 않고 보냈으면 null 이다",
+            "nullable": true,
+            "properties": {
+              "nickname": {
+                "type": "string"
+              },
+              "public_id": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "public_id",
+              "nickname"
+            ],
+            "type": "object"
+          },
+          "status": {
+            "$ref": "#/components/schemas/InquiryStatusEnum"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "answered_at",
+          "body",
+          "category",
+          "created_at",
+          "email",
+          "id",
+          "reply",
+          "reply_discarded_at",
+          "reply_sent_at",
+          "sender",
+          "status",
+          "title"
+        ],
+        "type": "object"
+      },
+      "OperatorInquiryPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OperatorInquiry"
+            },
+            "type": "array"
+          },
+          "next_before": {
+            "description": "다음 쪽을 부를 before. 마지막 쪽이면 null",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "next_before"
         ],
         "type": "object"
       },
@@ -1217,6 +1459,20 @@
           "product_id",
           "refundable_until",
           "user_id"
+        ],
+        "type": "object"
+      },
+      "ReplyRequestRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reply": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "reply"
         ],
         "type": "object"
       },
@@ -1539,6 +1795,291 @@
   },
   "openapi": "3.0.3",
   "paths": {
+    "/api/v1/auth/admin/inquiries": {
+      "get": {
+        "description": "GET /api/v1/auth/admin/inquiries. 운영자의 문의 목록.",
+        "operationId": "admin_inquiries_retrieve",
+        "parameters": [
+          {
+            "description": "이 시각보다 앞에 보낸 것부터. 앞 쪽의 next_before 를 싣는다",
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "이 상태의 것만. 없으면 모두",
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "enum": [
+                "answered",
+                "open"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorInquiryPage"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "status 나 before 가 틀렸다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "운영자가 아니다. 답하기에서는 그런 문의가 없을 때도다(inquiry.not_found)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "문의 목록(운영자). 상태로 고르고, 최근 것부터 한 쪽씩",
+        "tags": [
+          "admin"
+        ],
+        "x-audience": "operator"
+      }
+    },
+    "/api/v1/auth/admin/inquiries/{inquiry_id}/reply": {
+      "post": {
+        "description": "POST /api/v1/auth/admin/inquiries/{id}/reply. 답을 적고 메일로 보낸다.",
+        "operationId": "admin_inquiries_reply_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "inquiry_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplyRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorInquiry"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "요청을 받을 수 없다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "운영자가 아니다. 답하기에서는 그런 문의가 없을 때도다(inquiry.not_found)"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "이미 답한 문의다(inquiry.already_answered)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "문의에 답한다(운영자). 답은 한 번만 쓰고, 문의의 주소로 메일을 보낸다",
+        "tags": [
+          "admin"
+        ],
+        "x-audience": "operator"
+      }
+    },
     "/api/v1/auth/app/login/verify": {
       "post": {
         "description": "POST /api/v1/auth/app/login/verify",
@@ -2756,6 +3297,121 @@
         "summary": "휴대폰 본인인증을 적는다",
         "tags": [
           "identity"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/inquiries": {
+      "post": {
+        "description": "POST /api/v1/auth/inquiries. 로그인하지 못하는 사람도 보낸다.",
+        "operationId": "inquiries_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InquiryRequestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InquiryCreated"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "칸이 틀렸거나, 로그인하지 않았는데 답 받을 주소(email)가 없다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryLater"
+                }
+              }
+            },
+            "description": "시도가 너무 많다(too_many_attempts)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          },
+          {}
+        ],
+        "summary": "문의를 보낸다. 로그인했으면 계정의 주소로, 아니면 적은 주소로 답한다",
+        "tags": [
+          "inquiries"
         ],
         "x-audience": "user"
       }
@@ -4083,6 +4739,110 @@
           }
         ],
         "summary": "목록을 거르는 내 설정(성인 작품 표시, 성향)을 고친다. 보낸 칸만 바뀐다",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/me/inquiries": {
+      "get": {
+        "description": "GET /api/v1/auth/me/inquiries. 내 문의와 답.",
+        "operationId": "me_inquiries_retrieve",
+        "parameters": [
+          {
+            "description": "이 시각보다 앞에 보낸 것부터. 앞 쪽의 next_before 를 싣는다",
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyInquiryPage"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "before 가 시각이 아니다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "내 문의와 답. 최근 것부터 한 쪽씩",
         "tags": [
           "me"
         ],

@@ -136,6 +136,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     # 이 프로젝트의 앱
     'accounts',
+    # 문의(고객센터). 관리 서버가 생기면 옮기려고 accounts 와 나눴다
+    'support',
     # 관측. 뜰 때 span 을 보내는 것과 쿼리의 span 을 건다(observability/apps.py)
     'observability.apps.ObservabilityConfig',
 ]
@@ -236,6 +238,13 @@ SPECTACULAR_SETTINGS = {
     'COMPONENT_SPLIT_REQUEST': True,
     # 묶음(tag)을 /api/v1/auth 다음 칸으로 정한다(signup, login, me ...)
     'SCHEMA_PATH_PREFIX': r'/api/v1/auth',
+    # 같은 이름(status)의 고르는 값이 여럿이라 이름을 정해 준다. 서버끼리의 알림(보호자, 결제 확인)의 결과는
+    # 문의(support 앱)가 생기기 전의 이름(StatusEnum)을 그대로 둔다. 웹의 생성 타입이 그 이름을 쓴다
+    'ENUM_NAME_OVERRIDES': {
+        'StatusEnum': ['queued', 'skipped', 'duplicate'],
+        'InquiryStatusEnum': 'support.models.InquiryStatus.choices',
+        'InquiryCategoryEnum': 'support.models.InquiryCategory.choices',
+    },
     # 기본 처리(고르는 값을 enum 으로) 뒤에 이 서버의 것을 더한다: 상태 확인 주소, 닫힌 객체
     'POSTPROCESSING_HOOKS': [
         'drf_spectacular.hooks.postprocess_schema_enums',

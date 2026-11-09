@@ -23,6 +23,7 @@ from accounts.models import (
     User,
 )
 from accounts.nicknames import hold_released_nickname
+from support.inquiries import erase_inquiries
 
 # 비운 계정의 이름과 주소. 줄 번호를 붙여 겹치지 않게 한다.
 # 붙임표(-)는 아이디와 닉네임의 규칙(validators.py)이 받지 않는 글자다. 사용자가 먼저 가져갈 수 없다.
@@ -39,6 +40,7 @@ def is_removed_account(user: User) -> bool:
 def blank_account(user: User) -> None:
     """
     계정을 막고 아이디, 닉네임, 이메일, 비밀번호, 제작자의 소개를 비운다. 막은 제작자와 태그(#988)도 지운다.
+    보낸 문의(support 앱)도 지운다. 그 사람이 쓴 글과 주소가 있다.
 
     쓰던 닉네임은 바꿔서 버린 이름처럼 30일 묶는다(nicknames.py). 남이 바로 가져가 그 사람인 척하지 못하게 한다.
     묶는 기간이 지나면 정리 명령이 그 줄을 지운다. 이미 비운 계정이면 묶지 않는다.
@@ -57,6 +59,8 @@ def blank_account(user: User) -> None:
         hold_released_nickname(released, user, timezone.now())
     # 그 사람이 막은 것과, 남이 그 사람을 막은 것(#988)
     erase_blocks(user)
+    # 보낸 문의
+    erase_inquiries(user)
 
 
 def erase_mail_records(user: User, email: str) -> None:

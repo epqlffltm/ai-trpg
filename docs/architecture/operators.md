@@ -109,6 +109,7 @@
 
 - 결제: 지금 운영 작업은 명령(`cmd/prices`, `cmd/pricereviews`, `cmd/orders`, `cmd/grants`)이다. 관리 서버가 생기면 관리자용 주소로 연다([services.md](services.md)).
 - 인증: 운영자를 넣고 빼는 것은 인증 서버의 관리자 화면이다.
+- 문의(고객센터): 인증 서버의 운영자 API(`GET /api/v1/auth/admin/inquiries`, `POST .../admin/inquiries/{id}/reply`)로 보고 답한다. 답은 메일로 간다. 관리 서버가 생기면 그리로 옮긴다(2026-11-09 결정).
 
 ## 제재
 
