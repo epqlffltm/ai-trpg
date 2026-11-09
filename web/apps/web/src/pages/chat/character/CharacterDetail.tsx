@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/chat/character/CharacterDetail.tsx
 // 캐릭터 소개(C2)를 그린다. 왼쪽(모바일은 위)에 그림과 소개, 호감도의 단계, 오른쪽(모바일은 아래)에 시작 상황과 내 대화.
-// 아래에 해금 대상 일러스트의 칸. 보이는 것은 마지막으로 공개한 판이다. 신고는 2단계(E4)다.
+// 아래에 해금 대상 일러스트의 칸과 업적(CharacterAchievements, 달성률과 내가 받은 것). 보이는 것은 마지막으로 공개한 판이다. 신고는 2단계(E4)다.
 // 머리의 "만든 사람"을 누르면 제작자 페이지(#992)로 간다. 머리의 관심(하트, #989) 단추로 관심을 두고 거둔다.
 // 모양은 Stitch 18번(소개 화면 셋의 같은 모양): 머리는 한 장의 종이(왼쪽에 세로로 긴 그림), 칸마다 종이 한 장(CSS).
 // 장르 테마(Stitch 23~33번): main 에 data-genre 를 단다(genres/genreTheme.ts).
@@ -12,6 +12,7 @@ import { HeartButton } from '../../../components/HeartButton';
 import { formatDate } from '../../../format/dateTime';
 import { genreName } from '../../../genres/genres';
 import { useImageUrl } from '../../../hooks/useImageUrl';
+import { CharacterAchievements } from './CharacterAchievements';
 import { CharacterConversations } from './CharacterConversations';
 import { CharacterScenes } from './CharacterScenes';
 import { profileLine, stageNames } from './characterView';
@@ -39,6 +40,7 @@ export function CharacterDetail({ character }: { character: PublicCharacterDetai
         </aside>
       </div>
       <CharacterScenes characterId={character.id} scenes={document.event_scenes} />
+      <CharacterAchievements characterId={character.id} achievements={character.achievements ?? []} signedIn={signedIn} />
     </main>
   );
 }

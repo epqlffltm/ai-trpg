@@ -21,12 +21,13 @@ export function achievementDescription(achievement: ScenarioAchievement): string
 /**
  * 달성률의 글. "플레이한 12명 중 3명(25%)". 플레이한 사람이 없으면 그렇다고 적는다.
  * 0 보다 크고 1% 보다 작으면 "1% 미만"이다(0% 로 보이면 아무도 받지 않은 것처럼 읽힌다).
+ * who 는 모수가 한 일이다. 캐릭터의 업적은 "대화한"이다
  */
-export function achievementRate(earnedCount: number, players: number): string {
-  if (players <= 0) return '아직 플레이한 사람이 없습니다';
+export function achievementRate(earnedCount: number, players: number, who = '플레이한'): string {
+  if (players <= 0) return `아직 ${who} 사람이 없습니다`;
   const ratio = (earnedCount / players) * 100;
   const percent = ratio > 0 && ratio < 1 ? '1% 미만' : `${Math.round(ratio)}%`;
-  return `플레이한 ${players}명 중 ${earnedCount}명(${percent})`;
+  return `${who} ${players}명 중 ${earnedCount}명(${percent})`;
 }
 
 /** 내가 받은 때의 글. 받지 않았으면 null */

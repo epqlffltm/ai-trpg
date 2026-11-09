@@ -2,6 +2,7 @@
 // chat 의 캐릭터 탐색(C1)과 소개(C2)가 부르는 것. 공개 캐릭터는 asset 서버, 내 대화와 연 장면은 chat 서버가 준다(#593).
 //
 // 공개 목록은 최근에 게시한 것부터, 마지막 판의 값이다. 로그인하지 않으면 전체이용가만 오고, 성인 등급은 성인 확인을 한 사람에게만 온다.
+// 캐릭터의 업적(docs/architecture/achievements.md 의 "chat")은 내가 받은 것과 달성률을 chat 서버가 준다. 주는 것은 답의 done 이다.
 // 대화를 시작하면(POST /chat/conversations) chat 서버가 asset 서버에서 그 캐릭터의 마지막 판을 가져와 고정한다.
 // 시작의 실패(chat-server/README.md 의 "대화"):
 //   - 404 character_not_found: 없다, 공개가 내려갔다, 볼 수 없는 등급
@@ -12,7 +13,7 @@
 import { apiRequest } from './http';
 import { orderQuery, type ListingOrder } from './listingOrder';
 import { listingPreferences } from './listingPreferences';
-import type { ChatUnlockPage, ConversationCreate, ConversationDetail, ConversationPage, PublicCharacterPage } from './types';
+import type { ChatAchievementRates, ChatAchievementRecords, ChatUnlockPage, ConversationCreate, ConversationDetail, ConversationPage, PublicCharacterPage } from './types';
 
 /** 탐색의 한 쪽 */
 export const CHARACTER_PAGE_SIZE = 20;
@@ -40,6 +41,16 @@ export function fetchConversationsWith(characterId: string, offset: number, sign
 /** 이 캐릭터에서 내가 연 장면 */
 export function fetchUnlocksOf(characterId: string, signal?: AbortSignal): Promise<ChatUnlockPage> {
   return apiRequest<ChatUnlockPage>('/api/v1/chat/gallery', { query: { character_id: characterId, limit: UNLOCK_LIMIT }, ...withSignal(signal) });
+}
+
+/** 이 캐릭터에서 내가 받은 업적(받은 차례). 로그인해야 한다 */
+export function fetchChatAchievements(characterId: string, signal?: AbortSignal): Promise<ChatAchievementRecords> {
+  return apiRequest<ChatAchievementRecords>('/api/v1/chat/achievements', { query: { character_id: characterId }, ...withSignal(signal) });
+}
+
+/** 이 캐릭터의 업적마다 받은 사람의 수와 대화한 사람의 수. 로그인하지 않아도 읽는다 */
+export function fetchChatAchievementRates(characterId: string, signal?: AbortSignal): Promise<ChatAchievementRates> {
+  return apiRequest<ChatAchievementRates>('/api/v1/chat/achievements/rates', { query: { character_id: characterId }, ...withSignal(signal) });
 }
 
 /**
