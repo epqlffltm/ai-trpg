@@ -104,7 +104,7 @@ def sheet_for(monster: dict, sheet: dict, attacks: list | None = None) -> dict:
 
 
 def encounter(place: dict, monster: dict, count: int, surprise: str = 'none') -> dict:
-    return {'place_id': place['id'], 'monster_id': monster['id'], 'count': count, 'surprise': surprise}
+    return {'place_id': place['id'], 'monster_id': monster['id'], 'count': count, 'surprise': surprise, 'patrol': []}
 
 
 async def create_scenario(client: AsyncClient, headers: dict[str, str], world: dict, **fields) -> dict:

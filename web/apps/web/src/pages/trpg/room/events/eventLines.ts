@@ -168,10 +168,13 @@ function attackText(payload: Payload, ctx: EventContext, event: TableEvent): str
   return `${text(payload, 'name') ?? '누군가'}: ${attackName(payload)} → ${struckOf(payload, ctx, event)} ${hit}${gear ? ` (${gear})` : ''}${guard}`;
 }
 
-/** 사냥하거나 배회해 들어온 몬스터(#254). "들개: 배수로에서 냄새를 맡고 수로 입구로 다가옴" */
+/** 들어온 까닭(#254). 사냥, 순찰, 배회다 */
+const ROAM_WAYS: Record<string, string> = { hunt: '냄새를 맡고', patrol: '순찰하다', roam: '어슬렁거리다' };
+
+/** 사냥하거나 순찰하거나 배회해 들어온 몬스터(#254). "들개: 배수로에서 냄새를 맡고 수로 입구로 다가옴" */
 function roamText(payload: Payload): string {
   const origin = placeOf(payload, 'from_place');
-  const how = text(payload, 'way') === 'hunt' ? '냄새를 맡고' : '어슬렁거리다';
+  const how = ROAM_WAYS[text(payload, 'way') ?? ''] ?? '어슬렁거리다';
   return `${text(payload, 'name') ?? '몬스터'}: ${origin ? `${origin}에서 ` : ''}${how} ${placeOf(payload, 'to_place') ?? '?'}(으)로 들어옴`;
 }
 

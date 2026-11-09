@@ -116,6 +116,8 @@ SCENARIO_MAX_MONSTER_SHEETS = 100
 # 테이블을 시작할 때 마리마다 상태가 하나 생긴다. 둘을 곱한 것이 테이블 하나의 몬스터 수의 상한이다
 SCENARIO_MAX_ENCOUNTERS = 50
 ENCOUNTER_MAX_COUNT = 10
+# 조우 하나의 순찰 경로에 적는 장소의 수(#254). 처음 자리는 세지 않는다
+PATROL_MAX_PLACES = 10
 # 시나리오 하나에 둘 수 있는 놓인 물건의 줄 수(장소, 물건, 보이는지의 짝). 한 줄의 개수는 한 가지의 상한(99)까지다
 SCENARIO_MAX_PLACE_ITEMS = 100
 # 시나리오 하나의 커버(장소마다 숨을 곳, #276 의 커버 세이브)의 상한. 장소마다 하나다

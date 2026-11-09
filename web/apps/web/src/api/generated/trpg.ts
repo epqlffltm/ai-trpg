@@ -4694,6 +4694,8 @@ export interface components {
              * Format: uuid
              */
             monster_id: string;
+            /** Patrol */
+            patrol?: string[];
             /**
              * Place Id
              * Format: uuid
@@ -4714,6 +4716,8 @@ export interface components {
             count: number;
             /** Monster Id */
             monster_id: string;
+            /** Patrol */
+            patrol?: string[];
             /** Place Id */
             place_id: string;
             /** @default none */
@@ -4731,6 +4735,11 @@ export interface components {
              * Format: uuid
              */
             monster_id: string;
+            /**
+             * Patrol
+             * @default []
+             */
+            patrol: string[];
             /**
              * Place Id
              * Format: uuid

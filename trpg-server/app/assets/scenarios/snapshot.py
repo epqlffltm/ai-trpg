@@ -177,6 +177,7 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      비워도 되는 칸이라 형식이 그대로다
 #      몬스터가 사냥하는 거리와 배회하는 것(monsters[].hunts, monsters[].roams: chance, reach)도 뒤에 더했다.
 #      비워도 되는 칸이라 형식이 그대로다
+#      조우의 순찰 경로(encounters[].patrol: 장소 항목의 ID 들)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 70
 
 
@@ -694,6 +695,8 @@ class EncounterSnapshot(BaseModel):
     monster_id: uuid.UUID
     count: int
     surprise: Surprise = Surprise.NONE
+    # 순찰 경로(#254, app/rounds/monster_roams.py). 처음 자리에서 이 장소들을 돌고 돌아온다. 그 전의 판은 비어 있다
+    patrol: list[uuid.UUID] = []
 
 
 class PlaceItemSnapshot(BaseModel):

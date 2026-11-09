@@ -409,8 +409,8 @@ def describe_wander(note: WanderNote) -> str:
     return f'(조우: {note.monster} {note.count}마리가 나타났다)'
 
 
-# 들어온 몬스터의 까닭(#254). 사냥은 캐릭터를 찾아 다가왔고, 배회는 어슬렁거리다 들어왔다
-ROAM_LINES = {'hunt': '냄새를 맡고 다가왔다', 'roam': '어슬렁거리다 들어왔다'}
+# 들어온 몬스터의 까닭(#254). 사냥은 캐릭터를 찾아 다가왔고, 순찰은 돌던 길에, 배회는 어슬렁거리다 들어왔다
+ROAM_LINES = {'hunt': '냄새를 맡고 다가왔다', 'patrol': '순찰하다 들어왔다', 'roam': '어슬렁거리다 들어왔다'}
 
 
 def describe_roam(note: RoamNote) -> str:

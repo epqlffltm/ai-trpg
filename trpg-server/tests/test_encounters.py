@@ -77,7 +77,7 @@ async def world(client: AsyncClient, me: dict[str, str]) -> dict:
 
 
 def encounter(place: dict, monster: dict, count: int, surprise: str = 'none') -> dict:
-    return {'place_id': place['id'], 'monster_id': monster['id'], 'count': count, 'surprise': surprise}
+    return {'place_id': place['id'], 'monster_id': monster['id'], 'count': count, 'surprise': surprise, 'patrol': []}
 
 
 def with_map(world: dict, **fields) -> dict:

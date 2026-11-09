@@ -11,7 +11,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
-import { encounterDraft, encounterHints, encounterLine } from './encountersForm';
+import { encounterDraft, encounterHints, encounterLine, toEncounter } from './encountersForm';
 import { hasMonsterHints, monsterDraft, monsterHints, monsterLine, toggledNature, toMonsterSheet } from './monsterForm';
 
 const GAME = '/api/v1/game';
@@ -185,7 +185,7 @@ describe('몬스터 탭', () => {
     await userEvent.click(dialog.getByRole('button', { name: '더하기' }));
 
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
-    expect((patches(seen)[0]?.encounters as Encounter[])[1]).toEqual({ place_id: HALL, monster_id: GHOUL, count: 3, surprise: 'monsters' });
+    expect((patches(seen)[0]?.encounters as Encounter[])[1]).toEqual({ place_id: HALL, monster_id: GHOUL, count: 3, surprise: 'monsters', patrol: [] });
     expect(await encounters.findByText('회랑 · 구울 ×3 · 몬스터가 매복')).toBeInTheDocument();
 
     await userEvent.click(encounters.getByRole('button', { name: '지하 묘지의 리치 조우 지우기' }));
@@ -242,5 +242,9 @@ describe('몬스터 입력', () => {
     expect(encounterHints({ ...encounterDraft(null), place: HALL, monster: LICH, count: '2' }, existing, null, choices).count).toContain('한 마리');
     expect(encounterHints({ ...encounterDraft(null), place: HALL, monster: GHOUL, count: '11' }, existing, null, choices).count).toBeDefined();
     expect(encounterLine(existing[0] as Encounter, () => '묘지', () => '구울')).toBe('묘지 · 구울 ×2');
+    // 순찰 경로(#254)는 고치는 칸이 없어도 받은 대로 보낸다
+    const patrolling = { ...existing[0], patrol: [HALL] } as Encounter;
+    expect(toEncounter(encounterDraft(patrolling)).patrol).toEqual([HALL]);
+    expect(encounterLine(patrolling, () => '묘지', () => '구울')).toBe('묘지 · 구울 ×2 · 순찰 1곳');
   });
 });

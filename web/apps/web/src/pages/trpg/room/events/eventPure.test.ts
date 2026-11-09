@@ -167,6 +167,7 @@ describe('eventLine', () => {
     const roam = { name: '들개', way: 'hunt', from_place: { entry_id: 'p2', name: '배수로' }, to_place: { entry_id: 'p1', name: '수로 입구' } };
     expect(line('monster_roamed', roam)?.text).toBe('들개: 배수로에서 냄새를 맡고 수로 입구(으)로 들어옴');
     expect(line('monster_roamed', { ...roam, way: 'roam', from_place: null })?.text).toBe('들개: 어슬렁거리다 수로 입구(으)로 들어옴');
+    expect(line('monster_roamed', { ...roam, way: 'patrol' })?.text).toBe('들개: 배수로에서 순찰하다 수로 입구(으)로 들어옴');
     const attack = { name: '할퀴기', ability: 'str', difficulty: 'normal', harm: 'light' };
     expect(line('monster_attacked', { name: '고블린', attack, character_name: '렌', success: false })?.text).toBe('고블린: 할퀴기 → 렌 빗나감');
     // 몬스터가 같은 장소의 인물을 쳤다(#254). 쓰러진 인물을 쳤으면 "쓰러진" 이 붙는다

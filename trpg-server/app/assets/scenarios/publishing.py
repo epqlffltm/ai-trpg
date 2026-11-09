@@ -659,13 +659,14 @@ def find_encounter_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     조우에서 문제를 찾는다. 여럿 틀려도 같은 문제는 한 번만 적는다.
 
     장소는 붙인 로어북의 장소 항목이어야 하고, 몬스터는 시트를 적은 몬스터여야 한다(판에 들어가는 몬스터).
+    순찰 경로(#254)의 장소도 조우의 장소와 같이 본다.
     시트를 적은 몬스터가 도감에서 지워졌으면 그것은 몬스터 시트의 문제로 따로 적는다(find_monster_sheet_problems).
     조우는 맵의 장소에 두므로 시작 장소가 있어야 한다.
     """
     encounters = read_encounters(scenario)
     entries = lore_entries(parts)
     sheeted = {monster_sheet.monster_id for monster_sheet in read_monster_sheets(scenario)}
-    places = [encounter.place_id for encounter in encounters]
+    places = [place for encounter in encounters for place in [encounter.place_id, *encounter.patrol]]
     problems = []
     if any(place not in entries for place in places):
         problems.append(Problem.ENCOUNTER_PLACE_MISSING)

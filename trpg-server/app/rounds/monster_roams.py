@@ -1,16 +1,20 @@
 # trpg-server/app/rounds/monster_roams.py
 
 """
-싸우지 않는 몬스터의 움직임(#254). 사냥하기와 배회하기다. 라운드를 닫을 때 상태의 피해와 부상의 끝 다음에 본다
+싸우지 않는 몬스터의 움직임(#254). 사냥하기, 순찰하기, 배회하기다. 라운드를 닫을 때 상태의 피해와 부상의 끝 다음에 본다
 (app/rounds/service.py). 엔진이 정한다. 서술(AI)이 정하지 않는다.
 
   - 움직이는 마리: 살아 있고 움직일 수 있고(기절 같은 부상이 없다), 이번 라운드에 싸우지 않은 마리다.
     라운드를 닫기 시작할 때 장면에 없었고(살아 있는 캐릭터가 선 곳에 없었다), 지금도 그 자리에 캐릭터가 없다.
     장면에 있던 마리는 차례를 받았다(치거나 쫓는다, app/rounds/monster_chase.py)
   - 사냥(시트의 hunts): 길의 칸 수가 hunts 안인 곳에 살아 있는 캐릭터가 서 있으면 가장 가까운 그곳으로 한 칸 간다
-  - 배회(시트의 roams): 사냥할 것이 없으면 백분율의 주사위(d100)를 굴려 chance 이하이면 이웃한 장소 하나로 간다.
-    처음 놓인 곳(home_place_id)에서 reach 칸 안인 곳만 고른다. 여럿이면 서버의 주사위다
-  - 한 라운드에 한 칸만 간다. 사냥이 배회보다 먼저다(2026-11-09 결정)
+  - 순찰(조우의 patrol): 사냥할 것이 없으면 처음 자리와 순찰 경로의 장소들을 차례로 돈다. 지금 향하는 곳
+    (patrol_leg)에 닿아 있으면 다음 곳으로 넘기고, 그곳으로 가장 짧은 길의 한 칸 간다. 마지막 곳 다음은 처음 자리다.
+    마리의 처음 자리와 몬스터가 같은 조우의 경로를 쓴다(무작위 조우로 그 자리에 나온 같은 몬스터도 돈다).
+    길이 막혀 갈 수 없으면 배회로 넘어간다
+  - 배회(시트의 roams): 사냥도 순찰도 하지 않으면 백분율의 주사위(d100)를 굴려 chance 이하이면 이웃한 장소 하나로
+    간다. 처음 놓인 곳(home_place_id)에서 reach 칸 안인 곳만 고른다. 여럿이면 서버의 주사위다
+  - 한 라운드에 한 칸만 간다. 사냥 > 순찰 > 배회 순서다(2026-11-09 결정)
   - 길은 판의 길 전부다(몬스터는 자기 던전을 안다). 한쪽으로만 가는 길은 그쪽으로만 간다. 쫓기와 같이
     잠긴 길, 빗장이 걸린 길, 넘기 판정이 있는 길은 지나지 못한다. 아직 열리지 않은 장(#481)의 장소로도 가지 않는다
   - 같으면 판의 길 순서가 앞인 쪽이다(가장 가까운 곳이 여럿이거나, 한 칸의 길이 여럿일 때). 주사위를 쓰지 않는다
@@ -48,6 +52,7 @@ class Way(enum.StrEnum):
     """움직인 까닭."""
 
     HUNT = 'hunt'
+    PATROL = 'patrol'
     ROAM = 'roam'
 
 
@@ -128,6 +133,33 @@ def hunt_step(
     return first_step(before, here, goal) if goal is not None else None
 
 
+def patrol_loop(snapshot: Snapshot, monster: SceneMonster) -> list[uuid.UUID] | None:
+    """
+    이 마리가 도는 곳들. 처음 자리, 그다음 조우의 순찰 경로의 장소들이다. 순찰하지 않으면 None.
+
+    마리의 처음 자리와 몬스터가 같은 조우를 찾는다(같은 장소의 같은 몬스터는 조우 한 줄이다).
+    """
+    state = monster.state
+    for encounter in snapshot.encounters:
+        if encounter.patrol and (encounter.place_id, encounter.monster_id) == (state.home_place_id, state.monster_id):
+            return [encounter.place_id, *encounter.patrol]
+    return None
+
+
+def current_leg(loop: list[uuid.UUID], leg: int, here: uuid.UUID) -> int:
+    """지금 향할 곳의 차례. 향하던 곳에 닿아 있으면 다음 곳이다. 마지막 곳 다음은 처음 자리(0)다."""
+    leg %= len(loop)
+    return (leg + 1) % len(loop) if loop[leg] == here else leg
+
+
+def patrol_step(routes: list[RouteSnapshot], here: uuid.UUID, goal: uuid.UUID) -> uuid.UUID | None:
+    """순찰하는 한 칸. goal 로 가는 가장 짧은 길의 첫 칸이다. 이미 그곳이거나 갈 길이 없으면 None."""
+    before = walk(routes, here, len(routes))
+    if goal == here or goal not in before:
+        return None
+    return first_step(before, here, goal)
+
+
 def roam_step(routes: list[RouteSnapshot], monster: SceneMonster, dice: Dice) -> uuid.UUID | None:
     """
     배회하는 한 칸. 확률을 굴려 들면 처음 자리에서 reach 칸 안인 이웃 하나로 간다. 배회하지 않거나 안 들면 None.
@@ -150,18 +182,30 @@ def is_idle(ruleset: Ruleset, monster: SceneMonster, fought: set[uuid.UUID], occ
     return not round_injuries.is_incapacitated(ruleset, state.injuries)
 
 
-def moves(monster: SceneMonster) -> bool:
-    """사냥하거나 배회하는 몬스터인가. 시트에 적었어야 한다."""
-    return monster.definition.hunts is not None or monster.definition.roams is not None
+def moves(monster: SceneMonster, loop: list[uuid.UUID] | None) -> bool:
+    """사냥하거나 순찰하거나 배회하는 몬스터인가. 시트나 조우에 적었어야 한다."""
+    return monster.definition.hunts is not None or monster.definition.roams is not None or loop is not None
 
 
 def step_of(
-    routes: list[RouteSnapshot], monster: SceneMonster, occupied: set[uuid.UUID], dice: Dice
+    routes: list[RouteSnapshot],
+    monster: SceneMonster,
+    occupied: set[uuid.UUID],
+    dice: Dice,
+    loop: list[uuid.UUID] | None = None,
 ) -> tuple[uuid.UUID, Way] | None:
-    """이 마리가 갈 한 칸과 그 까닭. 사냥을 먼저 보고, 없으면 배회한다. 가지 않으면 None."""
-    hunted = hunt_step(routes, monster.state.place_id, monster.definition.hunts, occupied)
+    """
+    이 마리가 갈 한 칸과 그 까닭. 사냥, 순찰, 배회의 차례로 본다. 가지 않으면 None.
+
+    순찰은 지금 향하는 곳(patrol_leg)으로 간다. 그 차례는 부르는 쪽이 먼저 맞춘다(current_leg).
+    """
+    here = monster.state.place_id
+    hunted = hunt_step(routes, here, monster.definition.hunts, occupied)
     if hunted is not None:
         return hunted, Way.HUNT
+    patrolled = patrol_step(routes, here, loop[monster.state.patrol_leg % len(loop)]) if loop else None
+    if patrolled is not None:
+        return patrolled, Way.PATROL
     roamed = roam_step(routes, monster, dice)
     return (roamed, Way.ROAM) if roamed is not None else None
 
@@ -189,9 +233,12 @@ def settle(table: GameTable, scene: Scene, dice: Dice) -> list[Roamed]:
     routes = walkable_routes(snapshot, table)
     roamed: list[Roamed] = []
     for monster in every_monster(snapshot, scene.all_monsters):
-        if not moves(monster) or not is_idle(ruleset, monster, fought, occupied):
+        loop = patrol_loop(snapshot, monster)
+        if not moves(monster, loop) or not is_idle(ruleset, monster, fought, occupied):
             continue
-        step = step_of(routes, monster, occupied, dice)
+        if loop is not None:
+            monster.state.patrol_leg = current_leg(loop, monster.state.patrol_leg, monster.state.place_id)
+        step = step_of(routes, monster, occupied, dice, loop)
         if step is None:
             continue
         origin = monster.state.place_id

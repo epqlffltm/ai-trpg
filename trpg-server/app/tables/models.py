@@ -849,6 +849,7 @@ class TableMonster(Base):
         CheckConstraint('engaged_round IS NULL OR engaged_round >= 1', name='engaged_round_positive'),
         CheckConstraint("jsonb_typeof(resources) = 'object'", name='resources_is_object'),
         CheckConstraint('fought_round IS NULL OR fought_round >= 1', name='fought_round_positive'),
+        CheckConstraint('patrol_leg >= 0', name='patrol_leg_not_negative'),
         # 무작위 조우의 기습은 정해진 값이다. 비어 있으면 판의 조우의 것을 쓴다(NULL 은 이 조건을 지난다)
         CheckConstraint(one_of('surprise', Surprise), name='surprise_allowed'),
         # 한 테이블에서 같은 몬스터의 번호는 겹치지 않는다. "수로 쥐 2"가 둘일 수 없다
@@ -869,6 +870,8 @@ class TableMonster(Base):
     place_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     # 처음 놓인 곳(#254). 판의 조우나 무작위 조우로 놓인 장소다. 배회는 여기에서 길의 칸 수의 한도 안에서만 간다
     home_place_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    # 순찰(#254)에서 지금 향하는 곳의 차례. 0 은 처음 자리, 1 부터는 조우의 순찰 경로의 장소다. 닿으면 다음으로 넘어간다
+    patrol_leg: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))
 
     # 능력치의 점수. 모양은 캐릭터 시트와 같다(TableSheet.abilities)
     abilities: Mapped[dict] = mapped_column(JSONB)
