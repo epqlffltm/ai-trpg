@@ -20,6 +20,8 @@ PersonaCopy). 받은 것을 이 모양으로 검사한 뒤에만 쓴다. 모양�
   - 8: 로어북(lorebooks, 캐릭터가 가리킨 로어북의 게시할 때의 마지막 판, #672). 7 까지의 판은 로어북이 없다
   - 9: 장르(genre, asset 의 app/genres.py 의 값 하나). 대화 화면의 테마다. 그 전의 판과 사본에는 없다
   - 10: 제작자 단축어(shortcuts, #981). "/이름"으로 부르면 그 턴에 본문이 붙는다(app/shortcuts). 그 전의 판에는 없다
+  - 11: 업적(achievements, docs/architecture/achievements.md 의 "chat"). 답을 저장한 뒤 엔진이 준다(app/achievements).
+        그 전의 판에는 없다
 """
 
 import uuid
@@ -169,6 +171,52 @@ class EventSceneDocument(BaseModel):
     when: SceneConditionDocument
 
 
+class AchievementConditionDocument(BaseModel):
+    """
+    업적의 받는 조건 하나(docs/architecture/achievements.md 의 "chat"). 종류(kind)마다 쓰는 칸이 다르다.
+
+      visited_place    target: 장소       그 장소에 가 본 적이 있다(이 가지에서)
+      hold_item        target: 물건, count 그 물건을 count 개 이상 가졌다
+      received_item    target: 물건       상대에게 그 물건을 받은 적이 있다(이 가지에서)
+      affection_stage  value: 단계의 이름  호감도가 그 단계 이상이다
+      scene_seen       target: 이벤트 씬   그 이벤트 씬이 나온 적이 있다(이 가지에서)
+      messages_at_least count            이 가지에서 보낸 말(사람의 말)이 count 개 이상이다
+    모르는 종류는 맞지 않는 것으로 본다(app/world/achievements.py).
+    """
+
+    model_config = ConfigDict(extra='ignore')
+
+    kind: str
+    target: str | None = None
+    value: str | None = None
+    count: int = 1
+
+
+class AchievementConditionsDocument(BaseModel):
+    """받는 조건 목록과 맞추는 법(all 은 모두, any 는 하나라도)."""
+
+    model_config = ConfigDict(extra='ignore')
+
+    match: str = 'all'
+    items: list[AchievementConditionDocument] = []
+
+
+class AchievementDocument(BaseModel):
+    """
+    업적 하나. 제작자가 작품에 단 것이다(스팀의 업적과 같다). 인증 서버의 활동 배지와는 다른 것이다.
+    판의 차례가 보이는 차례다. hidden 이면 받기 전에는 이름, 받는 법, 그림을 가린다(가리는 것은 보이는 쪽의 일이다).
+    """
+
+    model_config = ConfigDict(extra='ignore')
+
+    id: str
+    name: str = ''
+    description: str = ''
+    hidden: bool = False
+    image_id: uuid.UUID | None = None
+    when: AchievementConditionsDocument = AchievementConditionsDocument()
+
+
 class SpriteDocument(BaseModel):
     """
     캐릭터 그림 하나(배경이 투명한 서 있는 그림). expression 은 표정(빈 글이면 기본),
@@ -280,6 +328,8 @@ class CharacterDocument(BaseModel):
     genre: str | None = None
     # 제작자 단축어(형식 10, #981). 이 캐릭터와의 대화에서만 쓴다
     shortcuts: list[ShortcutDocument] = []
+    # 업적(형식 11, docs/architecture/achievements.md 의 "chat"). 없던 판은 업적이 없다
+    achievements: list[AchievementDocument] = []
 
     @model_validator(mode='before')
     @classmethod

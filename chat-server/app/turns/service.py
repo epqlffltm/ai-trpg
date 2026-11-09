@@ -14,6 +14,7 @@
     4. call_model: 모델을 부르고 글을 흘려보낸다(conversation_core/relay.py)
     5. save_result: 받은 만큼 답을 저장하고 차례를 놓는다.
        다 받았으면 complete, 길이에서 잘렸거나 도중에 끊겼으면 partial. 글자 없이 실패했으면 답을 저장하지 않는다
+       답이 있으면 award_safely 가 업적을 주고 done 메시지에 싣는다(app/achievements/service.py).
     6. settle_turn: 답이 있으면 확정, 없으면 반환한다.
        결제 서버가 받지 못하면 정리 작업이 마저 한다(app/turns/settler.py)
 
@@ -43,6 +44,8 @@ from conversation_core.window import Turn, select_window
 from server_core import stop_signals
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.achievements import service as achievements
+from app.achievements.schemas import EarnedAchievementOut
 from app.assets.schemas import CharacterDocument, ShortcutDocument
 from app.billing.client import Billing
 from app.billing.prices import chat_code
@@ -1081,5 +1084,21 @@ async def run_generation(
         logger.exception('답을 저장하지 못했습니다', extra={'generation_id': str(start.generation_id)})
         relay.close(failed_frame(SERVER_ERROR))
         return
-    relay.close(done_frame(answer) if answer is not None else failed_frame(result.error_code or SERVER_ERROR))
+    if answer is None:
+        relay.close(failed_frame(result.error_code or SERVER_ERROR))
+    else:
+        relay.close(done_frame(answer, await award_safely(session_factory, start, answer.id, clock())))
     await settle_turn(session_factory, billing, start.generation_id, clock())
+
+
+async def award_safely(
+    session_factory: async_sessionmaker[AsyncSession], start: TurnStart, answer_id: uuid.UUID, now: datetime
+) -> tuple[EarnedAchievementOut, ...]:
+    """
+    답을 저장한 뒤 업적을 준다(app/achievements/service.py). 실패해도 답은 그대로 끝낸다(업적은 다음 답에서 다시 본다).
+    """
+    try:
+        return await achievements.award(session_factory, start.owner_id, start.conversation_id, answer_id, now)
+    except Exception:
+        logger.exception('업적을 보지 못했습니다', extra={'generation_id': str(start.generation_id)})
+        return ()

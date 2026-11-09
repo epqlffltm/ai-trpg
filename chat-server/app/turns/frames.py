@@ -5,10 +5,12 @@
 """
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import asdict
 
 from conversation_core.sse import Frame
 
+from app.achievements.schemas import EarnedAchievementOut
 from app.conversations.schemas import MessageOut
 from app.turns.schemas import DeltaEvent, DoneEvent, ExpressionEvent, FailedEvent, TurnEvent
 from app.turns.values import SavedMessage, TurnStart
@@ -42,9 +44,10 @@ def delta_frame(text: str) -> Frame:
     return Frame(event='delta', data=DeltaEvent(text=text).model_dump_json())
 
 
-def done_frame(message: SavedMessage) -> Frame:
-    """저장한 답. 마지막이다."""
-    return Frame(event='done', data=DoneEvent(message=message_out(message)).model_dump_json())
+def done_frame(message: SavedMessage, achievements: Sequence[EarnedAchievementOut] = ()) -> Frame:
+    """저장한 답과 그 답으로 처음 받은 업적. 마지막이다."""
+    body = DoneEvent(message=message_out(message), achievements=list(achievements))
+    return Frame(event='done', data=body.model_dump_json())
 
 
 def failed_frame(code: str) -> Frame:

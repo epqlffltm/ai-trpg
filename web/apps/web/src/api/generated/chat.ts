@@ -2,6 +2,46 @@
 // docs/api/chat.openapi.json 에서 만든 타입. 손으로 고치지 않는다(npm run gen:api).
 
 export interface paths {
+    "/api/v1/chat/achievements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Achievements
+         * @description 그 캐릭터에서 내가 받은 업적들.
+         */
+        get: operations["list_achievements_api_v1_chat_achievements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/achievements/rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Rates
+         * @description 그 캐릭터의 업적마다 받은 사람의 수와 대화한 사람의 수. 로그인하지 않아도 본다.
+         */
+        get: operations["read_rates_api_v1_chat_achievements_rates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/admin/message-reports": {
         parameters: {
             query?: never;
@@ -731,6 +771,131 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AchievementConditionDocument
+         * @description 업적의 받는 조건 하나(docs/architecture/achievements.md 의 "chat"). 종류(kind)마다 쓰는 칸이 다르다.
+         *
+         *       visited_place    target: 장소       그 장소에 가 본 적이 있다(이 가지에서)
+         *       hold_item        target: 물건, count 그 물건을 count 개 이상 가졌다
+         *       received_item    target: 물건       상대에게 그 물건을 받은 적이 있다(이 가지에서)
+         *       affection_stage  value: 단계의 이름  호감도가 그 단계 이상이다
+         *       scene_seen       target: 이벤트 씬   그 이벤트 씬이 나온 적이 있다(이 가지에서)
+         *       messages_at_least count            이 가지에서 보낸 말(사람의 말)이 count 개 이상이다
+         *     모르는 종류는 맞지 않는 것으로 본다(app/world/achievements.py).
+         */
+        AchievementConditionDocument: {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            /** Kind */
+            kind: string;
+            /** Target */
+            target?: string | null;
+            /** Value */
+            value?: string | null;
+        };
+        /**
+         * AchievementConditionsDocument
+         * @description 받는 조건 목록과 맞추는 법(all 은 모두, any 는 하나라도).
+         */
+        AchievementConditionsDocument: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["AchievementConditionDocument"][];
+            /**
+             * Match
+             * @default all
+             */
+            match: string;
+        };
+        /**
+         * AchievementDocument
+         * @description 업적 하나. 제작자가 작품에 단 것이다(스팀의 업적과 같다). 인증 서버의 활동 배지와는 다른 것이다.
+         *     판의 차례가 보이는 차례다. hidden 이면 받기 전에는 이름, 받는 법, 그림을 가린다(가리는 것은 보이는 쪽의 일이다).
+         */
+        AchievementDocument: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id?: string | null;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * @default {
+             *       "items": [],
+             *       "match": "all"
+             *     }
+             */
+            when: components["schemas"]["AchievementConditionsDocument"];
+        };
+        /**
+         * AchievementRate
+         * @description 업적 하나를 받은 사람의 수.
+         */
+        AchievementRate: {
+            /** Achievement Id */
+            achievement_id: string;
+            /** Earned Count */
+            earned_count: number;
+        };
+        /**
+         * AchievementRates
+         * @description 한 캐릭터의 업적마다 받은 사람의 수와, 그 캐릭터와 대화한 사람의 수. 달성률은 화면이 나눈다.
+         *     아무도 받지 않은 업적은 items 에 없다. 업적의 이름과 차례는 캐릭터의 소개(asset 서버)에 있다.
+         */
+        AchievementRates: {
+            /** Items */
+            items: components["schemas"]["AchievementRate"][];
+            /** Players */
+            players: number;
+        };
+        /**
+         * AchievementRecordList
+         * @description 한 캐릭터에서 받은 업적들. 받은 차례다.
+         */
+        AchievementRecordList: {
+            /** Items */
+            items: components["schemas"]["AchievementRecordOut"][];
+        };
+        /**
+         * AchievementRecordOut
+         * @description 받은 업적 하나. achievement_id 는 판의 업적의 id 다. 이름, 받는 법, 그림은 받은 때의 판의 것이다
+         *     (숨긴 업적도 받은 사람에게는 보인다).
+         */
+        AchievementRecordOut: {
+            /** Achievement Id */
+            achievement_id: string;
+            /** Conversation Id */
+            conversation_id: string | null;
+            /** Description */
+            description: string;
+            /**
+             * Earned At
+             * Format: date-time
+             */
+            earned_at: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
          * AffectionChangeOut
          * @description 모델의 제안으로 바뀐 호감도(#676). rising 은 올랐는가다. delta 는 바뀐 크기인데,
          *     단계 이름으로 보이는 캐릭터면 null 이다(숫자를 내려보내지 않는다).
@@ -851,6 +1016,11 @@ export interface components {
          *     제작자 단축어(shortcuts)는 싣지 않는다. 본문은 모델에만 가고, 고르는 목록은 GET /conversations/{id}/shortcuts 다.
          */
         CharacterDocumentOut: {
+            /**
+             * Achievements
+             * @default []
+             */
+            achievements: components["schemas"]["AchievementDocument"][];
             affection?: components["schemas"]["AffectionDocument"] | null;
             /** Age */
             age: string;
@@ -2073,6 +2243,70 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_achievements_api_v1_chat_achievements_get: {
+        parameters: {
+            query: {
+                /** @description asset 서버의 캐릭터 id */
+                character_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AchievementRecordList"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_rates_api_v1_chat_achievements_rates_get: {
+        parameters: {
+            query: {
+                /** @description asset 서버의 캐릭터 id */
+                character_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AchievementRates"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     list_reports_api_v1_chat_admin_message_reports_get: {
         parameters: {
             query?: {

@@ -12,6 +12,7 @@ asset 서버, 결제 서버, 모델은 가짜다.
   - 인증 서버의 서명이 아니면(없음, 틀림, 다른 주소의 서명, 비밀이 빔) 401 이고 아무것도 지우지 않는다
   - 본문의 모양이 틀리면 422 이고 아무것도 지우지 않는다. 모르는 칸은 버린다
   - 연 이벤트 씬의 기록(#669)도 지운다. 남의 것은 남는다
+  - 받은 업적과 대화한 기록도 지운다(달성률에서 빠진다). 남의 것은 남는다
   - 짧은 비밀은 설정이 받지 않는다
 """
 
@@ -19,6 +20,7 @@ import asyncio
 import time
 import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import FastAPI, status
@@ -29,6 +31,7 @@ from server_core.testing.tokens import FakeAuthServer, SigningKey
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from app.achievements.models import AchievementRecord, CharacterPlayer
 from app.conversations.models import Conversation, ConversationPersona, ImportedCharacter, Message
 from app.gallery.models import SceneUnlock
 from app.main import API_PREFIX, create_app
@@ -312,3 +315,22 @@ async def test_the_leavers_unlocked_event_scenes_are_erased(client: AsyncClient,
     assert response.status_code == status.HTTP_200_OK
     owners = (await session.scalars(select(SceneUnlock.owner_id))).all()
     assert owners == [STAYER]
+
+
+async def test_the_leavers_achievements_and_plays_are_erased(client: AsyncClient, session: AsyncSession):
+    character = uuid.uuid4()
+    now = datetime.now(UTC)
+    for owner in (LEAVER, STAYER):
+        session.add(
+            AchievementRecord(
+                owner_id=owner, character_source=character, achievement_id='chatty', name='수다', earned_at=now
+            )
+        )
+        session.add(CharacterPlayer(owner_id=owner, character_source=character, first_played_at=now))
+    await session.commit()
+
+    response = await notify(client, LEAVER)
+
+    assert response.status_code == status.HTTP_200_OK
+    assert (await session.scalars(select(AchievementRecord.owner_id))).all() == [STAYER]
+    assert (await session.scalars(select(CharacterPlayer.owner_id))).all() == [STAYER]

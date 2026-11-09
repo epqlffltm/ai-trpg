@@ -150,6 +150,8 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | GET | `/api/v1/chat/conversations/{id}/transcript` | [기록 내려받기](#기록-내려받기). `?format=md`(기본), `html`, `txt`. 지금 가지의 말들을 파일 하나로. 없거나 볼 수 없는 대화면 404 | access 토큰 |
 | DELETE | `/api/v1/chat/conversations/{id}` | 지우기. 204. 지운 시각만 적는다 | access 토큰 |
 | GET | `/api/v1/chat/gallery` | 내가 연 [이벤트 씬](#이벤트-씬)(`{items: [{character_id, scene_id, unlocked_at}], total}`). 최근에 연 것부터. `character_id`(asset 서버의 캐릭터 id), `limit`, `offset` | access 토큰 |
+| GET | `/api/v1/chat/achievements` | 그 캐릭터에서 내가 받은 [업적](#업적)들(`?character_id=`, 받은 차례. `{achievement_id, name, description, image_id, earned_at, conversation_id}`) | access 토큰 |
+| GET | `/api/v1/chat/achievements/rates` | 그 캐릭터의 [업적](#업적)마다 받은 사람의 수와 대화한 사람의 수(`?character_id=`, `{players, items: [{achievement_id, earned_count}]}`) | 없음 |
 | GET | `/api/v1/chat/service/stats/character-starts` | 캐릭터(asset 의 id)마다 대화를 시작한 수 `{recent_days: 7, items: [{work_id, total, recent}]}`(#985). asset 서버가 한 시간마다 받아 가 랭킹을 만든다. 지운 대화도 센다. 프록시는 밖에서 받지 않는다(404) | asset 서버의 서명(`ASSET_SECRET`) |
 | POST | `/api/v1/chat/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴) 알림 받기. `{withdrawn_at}`. 200 `{"status": "processed"}`. 프록시는 밖에서 받지 않는다(404) | 인증 서버의 서명 |
 
@@ -497,6 +499,32 @@ uv run python -m scripts.models adult glm-5-3 --forbid
   그 말에 다시 쓰기, 이어 쓰기를 하면 다시 붙는다. 다음 턴부터는 부른 이름을 뗀 글만 간다.
 - 청구는 보통 턴과 같다(붙은 본문도 입력이다).
 
+### 업적
+
+제작자가 캐릭터에 다는 업적이다(판의 형식 11, [시나리오 업적 설계](../docs/architecture/achievements.md)의 "chat"). 스팀의 업적과 같다.
+인증 서버의 활동 배지(출석, 본인인증, 초대)와는 다른 것이다. 업적을 적고 게시할 때 검사하는 것은 asset 서버의 일이다.
+
+- **모양.** `{"id", "name", "description", "hidden", "image_id", "when": {"match", "items"}}` 의 목록이다. 조건 하나는 `{"kind", "target", "value", "count"}` 다.
+
+  | 종류 | 칸 | 맞는 때 |
+  | --- | --- | --- |
+  | `visited_place` | `target`(장소) | 이 가지에서 그 장소에 가 본 적이 있다 |
+  | `hold_item` | `target`(물건), `count` | 그 물건을 count 개 이상 가졌다 |
+  | `received_item` | `target`(물건) | 이 가지에서 상대에게 그 물건을 받은 적이 있다 |
+  | `affection_stage` | `value`(단계의 이름) | 호감도가 그 단계 이상이다 |
+  | `scene_seen` | `target`(이벤트 씬) | 이 가지에서 그 이벤트 씬이 나왔다 |
+  | `messages_at_least` | `count` | 이 가지에서 보낸 말(사람의 말)이 count 개 이상이다. 행동 말은 세지 않는다 |
+
+  모르는 종류는 맞지 않는다. 형식 10 까지의 판은 업적이 없다.
+- **받기.** 답을 저장한 뒤 엔진이 그 답이 끝인 가지로 본다(`app/world/achievements.py`, `app/achievements/service.py`). 행동, 모델이 제안해 받아들인 상태의 변화, 보낸 말의 수가 모두 들어 있다.
+  조건이 빈 업적은 주지 않는다. 다시 생성과 이어서 출력도 본다. 답의 저장과 따로인 트랜잭션이라 여기서 실패해도 답은 그대로 끝난다(다음 답에서 다시 본다).
+- **한 번.** 사람마다, 캐릭터마다, 업적마다 처음 받은 것 하나다. 다른 대화에서 다시 채워도, 가지를 바꿔도 그대로다.
+  받은 때의 이름, 받는 법, 그림을 함께 적는다(숨긴 업적도 받은 사람에게는 보인다). 두 대화가 함께 줘도 하나만 적히고 하나만 알린다.
+- **알리기.** 처음 받은 업적은 그 답의 `done` 메시지의 `achievements`(`[{id, name, description, image_id}]`, 판의 차례)에 실린다.
+- **달성률.** 대화한 사람은 그 캐릭터와의 대화에서 답을 한 번이라도 받은 사람이다(`character_players`). 이 표가 생긴 뒤부터 센다.
+  `GET /achievements/rates` 는 수만 준다(로그인하지 않아도 본다). 업적의 이름과 차례, 숨긴 업적을 가리는 것은 캐릭터의 소개(asset 서버)가 한다.
+- 탈퇴하면 그 사람의 받은 업적과 대화한 기록을 지운다(달성률에서 빠진다). 대화를 지우면 받은 대화만 비운다.
+
 ### 장면 그림
 
 캐릭터의 답 하나를 골라 그 장면을 그림 한 장으로 만든다(#983, `app/snapshots/`). 한 장마다 청구한다.
@@ -722,6 +750,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. ch
 테이블은 `app/conversations/models.py`(`characters`, `conversations`, `conversation_personas`, `messages`),
 `app/catalog/models.py`(`ai_models`, `ai_model_costs`, `ai_model_snapshots`), `app/turns/models.py`(`generations`),
 `app/memory/models.py`(`memory_notes`, `summaries`), `app/world/models.py`(`message_states`), `app/gallery/models.py`(`scene_unlocks`),
+`app/achievements/models.py`(`achievement_records`, `character_players`),
 `app/lore/models.py`(`lore_embeddings`, pgvector)에 있다. 연결의 search_path 는 `chat`(또는 `chat_test`), `extensions` 다.
 모델 파일을 새로 만들면 `migrations/env.py` 와 `tests/cleaning.py` 에서 그 모듈을 불러온다.
 
