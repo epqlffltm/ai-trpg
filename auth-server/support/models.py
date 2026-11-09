@@ -8,9 +8,14 @@
 받는 사람의 주소를 기록에 적지 않는 것은 그 기록의 규칙과 같다.
 
 탈퇴하면 그 사람의 문의를 지운다(accounts/erasure.py). 계정의 줄은 남지만 문의는 그 사람이 쓴 글이다.
+문의는 보낸 지 1년(RETENTION) 동안 둔다. 지난 것은 정리 명령이 하루 한 번 지운다(delete_old_inquiries).
+운영자는 그 전에도 하나씩, 고른 것만, 상자 하나(상태)를 통째로 지운다.
+
+운영자 화면은 메일함처럼 본다. 운영자가 처음 연 시각(read_at)으로 읽지 않은 문의를 가른다.
 """
 
 import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
@@ -19,6 +24,9 @@ from django.db import models
 TITLE_MAX_LENGTH = 100
 BODY_MAX_LENGTH = 5000
 REPLY_MAX_LENGTH = 5000
+
+# 문의를 두는 기간(2026-11-09 유저 결정). 보낸 시각부터 센다. 답했는지와 상관없다
+RETENTION = timedelta(days=365)
 
 
 class InquiryCategory(models.TextChoices):
@@ -55,6 +63,8 @@ class Inquiry(models.Model):
     email = models.EmailField('답 받을 주소')
     status = models.CharField('상태', max_length=20, choices=InquiryStatus.choices, default=InquiryStatus.OPEN)
     created_at = models.DateTimeField('보낸 시각', auto_now_add=True)
+    # 운영자가 처음 연 시각. 비어 있으면 아직 읽지 않았다(메일함의 굵은 줄)
+    read_at = models.DateTimeField('운영자가 읽은 시각', null=True, blank=True)
     reply = models.TextField('답', blank=True)
     answered_at = models.DateTimeField('답한 시각', null=True, blank=True)
     # 답한 운영자. 운영자의 계정이 비워져도 답은 남는다

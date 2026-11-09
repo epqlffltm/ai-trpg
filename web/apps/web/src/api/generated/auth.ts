@@ -13,10 +13,54 @@ export interface paths {
          * 문의 목록(운영자). 상태로 고르고, 최근 것부터 한 쪽씩
          * @description GET /api/v1/auth/admin/inquiries. 운영자의 문의 목록.
          */
-        get: operations["admin_inquiries_retrieve"];
+        get: operations["admin_inquiries_list"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/admin/inquiries/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 고른 문의들(ids) 또는 상자 하나(folder: all, open, answered)를 지운다(운영자)
+         * @description POST /api/v1/auth/admin/inquiries/delete. 고른 것 또는 상자 하나를 통째로 지운다.
+         */
+        post: operations["admin_inquiries_delete_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/admin/inquiries/{inquiry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 문의 하나를 연다(운영자). 처음 열면 읽음으로 적는다
+         * @description GET, DELETE /api/v1/auth/admin/inquiries/{id}. 문의 하나를 열고 지운다.
+         */
+        get: operations["admin_inquiry_retrieve"];
+        put?: never;
+        post?: never;
+        /**
+         * 문의 하나를 지운다(운영자)
+         * @description GET, DELETE /api/v1/auth/admin/inquiries/{id}. 문의 하나를 열고 지운다.
+         */
+        delete: operations["admin_inquiries_destroy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1128,6 +1172,23 @@ export interface components {
         CreatorSearchResult: {
             items: components["schemas"]["Creator"][];
         };
+        /** @description 지울 것. 고른 문의들(ids)과 상자 하나(folder) 가운데 하나만 싣는다. */
+        DeleteRequestRequest: {
+            /**
+             * @description 통째로 비울 상자. all 은 모든 문의다
+             *
+             *     * `all` - all
+             *     * `open` - open
+             *     * `answered` - answered
+             */
+            folder?: components["schemas"]["FolderEnum"];
+            /** @description 고른 문의들. 100개까지 */
+            ids?: string[];
+        };
+        Deleted: {
+            /** @description 지운 문의의 수 */
+            deleted: number;
+        };
         /** @description 글 하나만 싣는 응답. 성공의 안내도, 이유를 가르지 않는 거절도 이 모양이다. */
         Detail: {
             detail: string;
@@ -1144,6 +1205,20 @@ export interface components {
             /** Format: email */
             email: string;
         };
+        /** @description 상자마다의 수. unread 는 운영자가 아직 열지 않은 것이다. */
+        FolderCounts: {
+            all: number;
+            answered: number;
+            open: number;
+            unread: number;
+        };
+        /**
+         * @description * `all` - all
+         *     * `open` - open
+         *     * `answered` - answered
+         * @enum {string}
+         */
+        FolderEnum: "all" | "open" | "answered";
         /** @description 보호자의 동의. 메일의 동의 링크에서 꺼낸 글자와, 보호자가 본인확인 업체에서 받은 글자를 받는다. */
         GuardianConsentRequest: {
             consent_token: string;
@@ -1404,6 +1479,11 @@ export interface components {
             email: string;
             /** Format: uuid */
             id: string;
+            /**
+             * Format: date-time
+             * @description 운영자가 처음 연 시각. null 이면 아직 읽지 않았다
+             */
+            read_at: string | null;
             reply: string;
             /**
              * Format: date-time
@@ -1425,6 +1505,7 @@ export interface components {
             title: string;
         };
         OperatorInquiryPage: {
+            counts: components["schemas"]["FolderCounts"];
             items: components["schemas"]["OperatorInquiry"][];
             /**
              * Format: date-time
@@ -1607,7 +1688,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    admin_inquiries_retrieve: {
+    admin_inquiries_list: {
         parameters: {
             query?: {
                 /** @description 이 시각보다 앞에 보낸 것부터. 앞 쪽의 next_before 를 싣는다 */
@@ -1646,6 +1727,151 @@ export interface operations {
                         detail: string;
                     };
                 };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 운영자가 아니다. 답하기에서는 그런 문의가 없을 때도다(inquiry.not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+        };
+    };
+    admin_inquiries_delete_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DeleteRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Deleted"];
+                };
+            };
+            /** @description ids 와 folder 를 함께 적었거나 둘 다 없다, 또는 칸이 틀렸다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 운영자가 아니다. 답하기에서는 그런 문의가 없을 때도다(inquiry.not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+        };
+    };
+    admin_inquiry_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inquiry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorInquiry"];
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 운영자가 아니다. 답하기에서는 그런 문의가 없을 때도다(inquiry.not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+        };
+    };
+    admin_inquiries_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inquiry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description access 토큰이 없거나 받아들일 수 없다 */
             401: {

@@ -434,6 +434,44 @@
         ],
         "type": "object"
       },
+      "DeleteRequestRequest": {
+        "additionalProperties": false,
+        "description": "지울 것. 고른 문의들(ids)과 상자 하나(folder) 가운데 하나만 싣는다.",
+        "properties": {
+          "folder": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FolderEnum"
+              }
+            ],
+            "description": "통째로 비울 상자. all 은 모든 문의다\n\n* `all` - all\n* `open` - open\n* `answered` - answered"
+          },
+          "ids": {
+            "description": "고른 문의들. 100개까지",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "Deleted": {
+        "additionalProperties": false,
+        "properties": {
+          "deleted": {
+            "description": "지운 문의의 수",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "type": "object"
+      },
       "Detail": {
         "additionalProperties": false,
         "description": "글 하나만 싣는 응답. 성공의 안내도, 이유를 가르지 않는 거절도 이 모양이다.",
@@ -480,6 +518,40 @@
           "email"
         ],
         "type": "object"
+      },
+      "FolderCounts": {
+        "additionalProperties": false,
+        "description": "상자마다의 수. unread 는 운영자가 아직 열지 않은 것이다.",
+        "properties": {
+          "all": {
+            "type": "integer"
+          },
+          "answered": {
+            "type": "integer"
+          },
+          "open": {
+            "type": "integer"
+          },
+          "unread": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "answered",
+          "open",
+          "unread"
+        ],
+        "type": "object"
+      },
+      "FolderEnum": {
+        "description": "* `all` - all\n* `open` - open\n* `answered` - answered",
+        "enum": [
+          "all",
+          "open",
+          "answered"
+        ],
+        "type": "string"
       },
       "GuardianConsentRequest": {
         "additionalProperties": false,
@@ -1198,6 +1270,12 @@
             "format": "uuid",
             "type": "string"
           },
+          "read_at": {
+            "description": "운영자가 처음 연 시각. null 이면 아직 읽지 않았다",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
           "reply": {
             "type": "string"
           },
@@ -1246,6 +1324,7 @@
           "created_at",
           "email",
           "id",
+          "read_at",
           "reply",
           "reply_discarded_at",
           "reply_sent_at",
@@ -1258,6 +1337,9 @@
       "OperatorInquiryPage": {
         "additionalProperties": false,
         "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/FolderCounts"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/OperatorInquiry"
@@ -1272,6 +1354,7 @@
           }
         },
         "required": [
+          "counts",
           "items",
           "next_before"
         ],
@@ -1798,7 +1881,7 @@
     "/api/v1/auth/admin/inquiries": {
       "get": {
         "description": "GET /api/v1/auth/admin/inquiries. 운영자의 문의 목록.",
-        "operationId": "admin_inquiries_retrieve",
+        "operationId": "admin_inquiries_list",
         "parameters": [
           {
             "description": "이 시각보다 앞에 보낸 것부터. 앞 쪽의 next_before 를 싣는다",
@@ -1927,6 +2010,264 @@
           }
         ],
         "summary": "문의 목록(운영자). 상태로 고르고, 최근 것부터 한 쪽씩",
+        "tags": [
+          "admin"
+        ],
+        "x-audience": "operator"
+      }
+    },
+    "/api/v1/auth/admin/inquiries/delete": {
+      "post": {
+        "description": "POST /api/v1/auth/admin/inquiries/delete. 고른 것 또는 상자 하나를 통째로 지운다.",
+        "operationId": "admin_inquiries_delete_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteRequestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Deleted"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "ids 와 folder 를 함께 적었거나 둘 다 없다, 또는 칸이 틀렸다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "운영자가 아니다. 답하기에서는 그런 문의가 없을 때도다(inquiry.not_found)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "고른 문의들(ids) 또는 상자 하나(folder: all, open, answered)를 지운다(운영자)",
+        "tags": [
+          "admin"
+        ],
+        "x-audience": "operator"
+      }
+    },
+    "/api/v1/auth/admin/inquiries/{inquiry_id}": {
+      "delete": {
+        "description": "GET, DELETE /api/v1/auth/admin/inquiries/{id}. 문의 하나를 열고 지운다.",
+        "operationId": "admin_inquiries_destroy",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "inquiry_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No response body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "운영자가 아니다. 답하기에서는 그런 문의가 없을 때도다(inquiry.not_found)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "문의 하나를 지운다(운영자)",
+        "tags": [
+          "admin"
+        ],
+        "x-audience": "operator"
+      },
+      "get": {
+        "description": "GET, DELETE /api/v1/auth/admin/inquiries/{id}. 문의 하나를 열고 지운다.",
+        "operationId": "admin_inquiry_retrieve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "inquiry_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorInquiry"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "운영자가 아니다. 답하기에서는 그런 문의가 없을 때도다(inquiry.not_found)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "문의 하나를 연다(운영자). 처음 열면 읽음으로 적는다",
         "tags": [
           "admin"
         ],

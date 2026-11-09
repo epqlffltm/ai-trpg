@@ -17,3 +17,6 @@
 
 # 묶는 기간(30일)이 지난 버린 닉네임 지우기. 매일 19:30(한국 04:30)
 30 19 * * * python manage.py delete_released_nicknames
+
+# 보관 기간(1년)이 지난 문의 지우기. 매일 19:40(한국 04:40)
+40 19 * * * python manage.py delete_old_inquiries

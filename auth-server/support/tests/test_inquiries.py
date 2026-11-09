@@ -10,13 +10,17 @@
     상태로 고르고 보낸 계정과 주소가 보인다
   - 답: 한 번만 쓰고 문의의 주소로 메일을 보내며 보낸 기록이 남는다. 없는 문의는 404, 이미 답했으면 409
   - 계정을 비우면(탈퇴) 그 사람의 문의를 지운다
+  - 메일함처럼: 상자마다의 수, 하나를 열면 읽음(처음 한 번만 적는다)
+  - 지우기: 하나, 고른 것, 상자 하나를 통째로. 운영자만. 보관 기간(1년)이 지난 것은 정리 명령이 지운다
 """
 
+import io
 import uuid
 from datetime import timedelta
 
 from django.contrib.auth.models import Group
 from django.core import mail
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -30,10 +34,15 @@ from accounts.tests.helpers import authorize, delete_attempt_keys, reset_redis_b
 from support.inquiries import PAGE_SIZE
 from support.models import Inquiry, InquiryStatus
 
+DELETE_URL = reverse('support:operator-inquiries-delete')
 INQUIRIES_URL = reverse('support:inquiries')
 MY_INQUIRIES_URL = reverse('support:my-inquiries')
 OPERATOR_INQUIRIES_URL = reverse('support:operator-inquiries')
 PASSWORD = 'correct-horse-battery'
+
+
+def inquiry_url(inquiry_id) -> str:
+    return reverse('support:operator-inquiry', args=[inquiry_id])
 
 
 def reply_url(inquiry_id) -> str:
@@ -199,6 +208,8 @@ class OperatorListTests(TestCase):
         self.assertEqual(item['email'], 'player1@example.com')
         self.assertIsNone(item['reply_sent_at'])
         self.assertEqual(len(self.client.get(OPERATOR_INQUIRIES_URL).data['items']), 2)
+        self.assertEqual(response.data['counts'], {'all': 2, 'open': 1, 'answered': 1, 'unread': 2})
+        self.assertIsNone(item['read_at'])
 
     def test_a_wrong_status_is_refused(self):
         authorize(self.client, make_user(9, operator=True))
@@ -286,3 +297,116 @@ class ErasureTests(TestCase):
         blank_account(user)
 
         self.assertEqual(list(Inquiry.objects.all()), [guest])
+
+
+class ReadTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        authorize(self.client, make_user(9, operator=True))
+
+    def test_opening_marks_it_read_once(self):
+        inquiry = make_inquiry(None)
+
+        first = self.client.get(inquiry_url(inquiry.id))
+        second = self.client.get(inquiry_url(inquiry.id))
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertIsNotNone(first.data['read_at'])
+        self.assertEqual(second.data['read_at'], first.data['read_at'])
+        self.assertEqual(self.client.get(OPERATOR_INQUIRIES_URL).data['counts']['unread'], 0)
+
+    def test_a_missing_one_and_non_operators_get_404(self):
+        missing = self.client.get(inquiry_url(uuid.uuid4()))
+        inquiry = make_inquiry(None)
+        player = APIClient()
+        authorize(player, make_user(1))
+
+        self.assertEqual(missing.data['code'], 'inquiry.not_found')
+        self.assertEqual(player.get(inquiry_url(inquiry.id)).status_code, status.HTTP_404_NOT_FOUND)
+        inquiry.refresh_from_db()
+        self.assertIsNone(inquiry.read_at)
+
+
+class DeleteTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        authorize(self.client, make_user(9, operator=True))
+
+    def test_one_is_deleted(self):
+        inquiry = make_inquiry(None)
+        kept = make_inquiry(None)
+
+        response = self.client.delete(inquiry_url(inquiry.id))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(list(Inquiry.objects.all()), [kept])
+        self.assertEqual(self.client.delete(inquiry_url(inquiry.id)).data['code'], 'inquiry.not_found')
+
+    def test_the_selected_are_deleted_and_missing_ones_skipped(self):
+        first, second, kept = make_inquiry(None), make_inquiry(None), make_inquiry(None)
+
+        response = self.client.post(
+            DELETE_URL, {'ids': [str(first.id), str(second.id), str(uuid.uuid4())]}, format='json'
+        )
+
+        self.assertEqual((response.status_code, response.data), (status.HTTP_200_OK, {'deleted': 2}))
+        self.assertEqual(list(Inquiry.objects.all()), [kept])
+
+    def test_a_folder_is_emptied(self):
+        answered = make_inquiry(None, status=InquiryStatus.ANSWERED, reply='답')
+        waiting = make_inquiry(None)
+
+        open_folder = self.client.post(DELETE_URL, {'folder': 'open'}, format='json')
+
+        self.assertEqual(open_folder.data, {'deleted': 1})
+        self.assertEqual(list(Inquiry.objects.all()), [answered])
+        self.assertFalse(Inquiry.objects.filter(pk=waiting.pk).exists())
+
+        make_inquiry(None)
+        everything = self.client.post(DELETE_URL, {'folder': 'all'}, format='json')
+
+        self.assertEqual(everything.data, {'deleted': 2})
+        self.assertFalse(Inquiry.objects.exists())
+
+    def test_ids_or_folder_but_not_both_nor_neither(self):
+        inquiry = make_inquiry(None)
+        for body in (
+            {},
+            {'ids': [str(inquiry.id)], 'folder': 'all'},
+            {'ids': []},
+            {'ids': [str(uuid.uuid4()) for _ in range(101)]},
+            {'folder': 'trash'},
+        ):
+            with self.subTest(body=list(body)):
+                self.assertEqual(
+                    self.client.post(DELETE_URL, body, format='json').status_code, status.HTTP_400_BAD_REQUEST
+                )
+        self.assertTrue(Inquiry.objects.exists())
+
+    def test_only_operators_delete(self):
+        inquiry = make_inquiry(None)
+        player = APIClient()
+        authorize(player, make_user(1))
+
+        self.assertEqual(player.delete(inquiry_url(inquiry.id)).status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            player.post(DELETE_URL, {'folder': 'all'}, format='json').status_code, status.HTTP_404_NOT_FOUND
+        )
+        self.assertEqual(
+            APIClient().post(DELETE_URL, {'folder': 'all'}, format='json').status_code, status.HTTP_401_UNAUTHORIZED
+        )
+        self.assertTrue(Inquiry.objects.exists())
+
+
+class RetentionTests(TestCase):
+    def test_the_command_deletes_what_is_older_than_a_year(self):
+        old = make_inquiry(None, title='오래된 것')
+        young = make_inquiry(None, title='남는 것')
+        Inquiry.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(days=366))
+        Inquiry.objects.filter(pk=young.pk).update(created_at=timezone.now() - timedelta(days=364))
+        out = io.StringIO()
+
+        call_command('delete_old_inquiries', stdout=out)
+
+        self.assertEqual(list(Inquiry.objects.all()), [young])
+        self.assertIn('1건', out.getvalue())
