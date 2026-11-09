@@ -5619,3 +5619,62 @@ details.room-panel[open] > summary {
     top: 16px;
   }
 }
+
+/* 고객센터의 내 문의(/support). 한 줄에 종류, 제목, 상태, 날. 펼치면 보낸 내용과 답 */
+.my-inquiries {
+  display: grid;
+  gap: 8px;
+}
+
+.my-inquiry {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.my-inquiry summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.my-inquiry__category,
+.my-inquiry__date {
+  color: var(--ui-text-muted);
+  font-size: 0.85em;
+}
+
+.my-inquiry__title {
+  flex: 1;
+  min-width: 10em;
+  font-weight: 600;
+}
+
+.my-inquiry__status {
+  font-size: 0.85em;
+}
+
+.my-inquiry__status--answered {
+  color: var(--ui-accent);
+  font-weight: 600;
+}
+
+.my-inquiry__body,
+.my-inquiry__reply,
+.my-inquiry details > .hint {
+  margin: 0;
+  padding: 0 12px 12px;
+  white-space: pre-wrap;
+}
+
+.my-inquiry__reply {
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.my-inquiry__reply > p {
+  margin: 0 0 4px;
+}
