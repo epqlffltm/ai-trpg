@@ -2,6 +2,46 @@
 // docs/api/story.openapi.json 에서 만든 타입. 손으로 고치지 않는다(npm run gen:api).
 
 export interface paths {
+    "/api/v1/story/achievements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Achievements
+         * @description 그 세계관에서 내가 받은 업적들.
+         */
+        get: operations["list_achievements_api_v1_story_achievements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/story/achievements/rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Achievement Rates
+         * @description 그 세계관의 업적마다 받은 사람의 수와 플레이한 사람의 수. 로그인하지 않아도 본다.
+         */
+        get: operations["read_achievement_rates_api_v1_story_achievements_rates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/admin/message-reports": {
         parameters: {
             query?: never;
@@ -797,6 +837,57 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AchievementRate
+         * @description 업적 하나를 받은 사람의 수.
+         */
+        AchievementRate: {
+            /** Achievement Id */
+            achievement_id: string;
+            /** Earned Count */
+            earned_count: number;
+        };
+        /**
+         * AchievementRates
+         * @description 한 세계관의 업적마다 받은 사람의 수와, 그 세계관을 플레이한 사람의 수. 달성률은 화면이 나눈다.
+         *     아무도 받지 않은 업적은 items 에 없다. 업적의 이름과 차례는 세계관의 소개(asset 서버)에 있다.
+         */
+        AchievementRates: {
+            /** Items */
+            items: components["schemas"]["AchievementRate"][];
+            /** Players */
+            players: number;
+        };
+        /**
+         * AchievementRecordList
+         * @description 한 세계관에서 받은 업적들. 받은 차례다.
+         */
+        AchievementRecordList: {
+            /** Items */
+            items: components["schemas"]["AchievementRecordOut"][];
+        };
+        /**
+         * AchievementRecordOut
+         * @description 받은 업적 하나. achievement_id 는 판의 업적의 id 다. 이름, 받는 법, 그림은 받은 때의 판의 것이다
+         *     (숨긴 업적도 받은 사람에게는 보인다).
+         */
+        AchievementRecordOut: {
+            /** Achievement Id */
+            achievement_id: string;
+            /** Conversation Id */
+            conversation_id: string | null;
+            /** Description */
+            description: string;
+            /**
+             * Earned At
+             * Format: date-time
+             */
+            earned_at: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+        };
         /**
          * BookmarkOut
          * @description 책갈피 하나. 그 말의 역할(user, assistant, action)과 앞부분(excerpt)을 함께 싣는다(목록에서 어느 말인지 알아보게).
@@ -2044,6 +2135,70 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_achievements_api_v1_story_achievements_get: {
+        parameters: {
+            query: {
+                /** @description asset 서버의 세계관 id */
+                world_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AchievementRecordList"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    read_achievement_rates_api_v1_story_achievements_rates_get: {
+        parameters: {
+            query: {
+                /** @description asset 서버의 세계관 id */
+                world_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AchievementRates"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     list_reports_api_v1_story_admin_message_reports_get: {
         parameters: {
             query?: {

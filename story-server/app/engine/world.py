@@ -7,6 +7,7 @@
 읽는 모양으로 바꾼다. 모르는 칸은 버린다(extra='ignore'). 쓰는 칸이 늘면 그 칸을 여기에 더한다.
 판의 형식 1 에는 이벤트가 없다. 그 판은 이벤트가 빈 것으로 읽는다. 형식 5 까지는 장이 없다(장이 빈 것으로 읽는다).
 형식 6 의 장은 로어북 항목을 열지 않는다(장이 여는 로어북 항목이 빈 것으로 읽는다).
+형식 8 까지는 업적이 없다(업적이 빈 것으로 읽는다).
 시간대는 시작 시각이 이른 것부터 적혀 있다(asset 서버가 게시할 때 검사한다).
 """
 
@@ -255,6 +256,21 @@ class Chapter(Part):
     opens: ChapterOpens = ChapterOpens()
 
 
+class Achievement(Part):
+    """
+    업적 하나(판의 형식 9, docs/architecture/achievements.md 의 "story"). 제작자가 작품에 단 것이다(스팀의 업적과 같다).
+    판의 차례가 보이는 차례다. when 이 맞으면 엔진이 행동 뒤에 준다. 계정마다 한 번이다.
+    hidden 이면 받기 전에는 이름, 받는 법, 그림을 가린다(가리는 것은 보이는 쪽의 일이다).
+    """
+
+    id: str
+    name: str = ''
+    description: str = ''
+    hidden: bool = False
+    image_id: uuid.UUID | None = None
+    when: Conditions = Conditions()
+
+
 class StartItem(Part):
     """사용자가 처음에 가진 물건과 그 수."""
 
@@ -279,6 +295,8 @@ class World(Part):
     after_ending: AfterEnding = AfterEnding.END
     # 판의 형식 5 까지는 장이 없다. 비면 모든 장소와 이벤트가 처음부터 열려 있다
     chapters: tuple[Chapter, ...] = ()
+    # 판의 형식 8 까지는 업적이 없다
+    achievements: tuple[Achievement, ...] = ()
 
     def member(self, cast_id: str) -> CastMember | None:
         """그 id 의 인물. 없으면 None."""

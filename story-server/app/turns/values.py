@@ -15,6 +15,7 @@ from ai_core.provider import ChatMessage
 from app.conversations.schemas import StateOut
 from app.turns.briefing import LoreText
 from app.turns.models import Outcome
+from app.turns.schemas import EarnedAchievementOut
 from app.turns.segments import Segment
 
 
@@ -90,6 +91,8 @@ class TurnStart:
     continued: SavedMessage | None = None
     # 로어북을 뜻으로 찾아 더할 바탕. 로어북의 항목이 없으면 None(app/lore/recall.py)
     lore: LorePlan | None = None
+    # 이번 행동으로 처음 받은 업적들. turn 메시지에 싣는다(app/turns/service.py 의 record_achievements)
+    achievements: tuple[EarnedAchievementOut, ...] = ()
 
 
 @dataclass(frozen=True)

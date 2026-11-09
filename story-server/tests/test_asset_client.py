@@ -83,6 +83,16 @@ async def test_a_format_eight_world_keeps_its_shortcuts():
     assert (fetched.document.format, fetched.document.model_dump()['shortcuts']) == (8, [shortcut])
 
 
+async def test_a_format_nine_world_keeps_its_achievements():
+    when = {'match': 'all', 'items': [{'kind': 'reach_place', 'target': 'home', 'value': None, 'count': 1}]}
+    achievement = {'id': 'home', 'name': '집', 'description': '', 'hidden': False, 'image_id': None, 'when': when}
+    body = copy_body(fmt=9, achievements=[achievement])
+
+    fetched = await client_answering(lambda request: answer(200, body)).fetch_world(TOKEN, WORLD_ID)
+
+    assert (fetched.document.format, fetched.document.model_dump()['achievements']) == (9, [achievement])
+
+
 def test_the_path_carries_this_servers_name():
     assert world_path(WORLD_ID) == f'/api/v1/asset/service/story/worlds/{WORLD_ID}/latest'
     assert persona_path(WORLD_ID) == f'/api/v1/asset/service/story/personas/{WORLD_ID}'
