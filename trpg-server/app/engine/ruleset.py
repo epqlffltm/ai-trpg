@@ -151,6 +151,17 @@ class Roll(Part):
         return self
 
 
+class Defense(Part):
+    """
+    맞서는 굴림(#254). 공격을 받는 쪽이 이 능력치로 굴리고, 공격하는 쪽의 합이 그보다 높아야 맞는다(같으면 막는다).
+
+    공격마다 받는 쪽의 능력치를 따로 적을 수 있다(AttackSnapshot.defense). 적지 않은 공격은 이 능력치로 막는다.
+    공격의 난이도는 보정이 된다. 기본 난이도를 0 으로, 쉬울수록 공격하는 쪽에 더하고 어려울수록 뺀다.
+    """
+
+    ability: Key
+
+
 class Modifier(Part):
     """
     능력치의 점수를 판정에 더하는 값(보정)으로 바꾸는 방법.
@@ -1199,6 +1210,8 @@ class Ruleset(Part):
     monster_immunities: Annotated[tuple[KindImmunity, ...], Field(max_length=len(MonsterKind))]
     # 성장(#286). 경험치와 레벨표다. None 이면 이 규칙에서는 캐릭터가 성장하지 않는다. 칸 자체는 늘 있어야 한다
     progression: Progression | None
+    # 맞서는 굴림(#254). None 이면 공격은 고정 난이도로 가른다(그 전에 굳힌 판). 칸 자체는 늘 있어야 한다
+    defense: Defense | None
 
     @model_validator(mode='after')
     def reject_unknown_natures(self) -> Self:
@@ -1359,6 +1372,14 @@ class Ruleset(Part):
         """최대 HP 에 닿는 능력치는 능력치 중 하나여야 한다."""
         if self.hp_ability is not None and self.hp_ability not in [ability.key for ability in self.abilities]:
             raise ValueError(f'최대 HP 에 닿는 능력치가 능력치에 없습니다: {self.hp_ability}')
+        return self
+
+    @model_validator(mode='after')
+    def require_known_defense_ability(self) -> Self:
+        """막는 능력치는 능력치 중 하나여야 한다(#254)."""
+        known = [ability.key for ability in self.abilities]
+        if self.defense is not None and self.defense.ability not in known:
+            raise ValueError(f'막는 능력치가 능력치에 없습니다: {self.defense.ability}')
         return self
 
     @model_validator(mode='after')

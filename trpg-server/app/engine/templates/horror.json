@@ -43,6 +43,7 @@
     },
     "die": 20,
     "roll": {"count": 1, "style": "over", "shifts": {}},
+    "defense": {"ability": "agility"},
     "difficulties": [
       {
         "key": "easy",

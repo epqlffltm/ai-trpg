@@ -19,6 +19,7 @@ from app.engine.ruleset import (
     RULESET_MAX_SKILLS,
     RULESET_MIN_DIE,
     Armor,
+    Defense,
     Injury,
     InjuryTable,
     InjuryTriggers,
@@ -60,12 +61,14 @@ class RulebookCreate(AssetCreate):
     성장(progression, #286)도 같다. null 을 보내면 캐릭터가 성장하지 않는 규칙이다.
     주사위의 면 수(die)와 굴림(roll: 개수, over 나 under, 난이도마다 기량에 더하는 값, #404)도 같다.
     under 는 방어 규칙과 함께 쓰지 못한다. 방어 규칙이 있는 템플릿이면 armor 에 null 을 함께 보낸다(422 roll).
+    막는 규칙(defense: 받는 쪽이 굴리는 능력치, #254)도 같다. 비울 수는 없다. 공격은 늘 맞서는 굴림이다.
     """
 
     gm_guide: GmGuide = ''
     template: Template = DEFAULT_TEMPLATE
     die: Die | None = None
     roll: Roll | None = None
+    defense: Defense | None = None
     armor: Armor | None = None
     resources: Resources | None = None
     skills: Skills | None = None
@@ -87,6 +90,7 @@ class RulebookUpdate(AssetUpdate):
     부상 표에 null 을 보내면 부상 표가 없는 규칙이 된다(굴리는 때를 모두 함께 꺼야 한다).
     성장(progression, #286)도 고칠 수 있다. null 을 보내면 캐릭터가 성장하지 않는 규칙이 된다.
     주사위의 면 수(die)와 굴림(roll, #404)도 고칠 수 있다. under 로 바꾸려면 방어 규칙에 null 을 함께 보낸다.
+    막는 규칙(defense, #254)도 고칠 수 있다. null 은 보내지 않은 것이다(비울 수 없다).
     방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.
     이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
     """
@@ -94,6 +98,7 @@ class RulebookUpdate(AssetUpdate):
     gm_guide: GmGuide | None = None
     die: Die | None = None
     roll: Roll | None = None
+    defense: Defense | None = None
     armor: Armor | None = None
     resources: Resources | None = None
     skills: Skills | None = None

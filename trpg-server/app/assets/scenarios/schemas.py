@@ -374,6 +374,7 @@ class MonsterAttack(BaseModel):
     cost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.
     비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.
     nature 는 피해의 성질이다(#886 ③). 맞은 쪽의 저항(반), 면역(0), 약점(두 배)을 따른다. 비우면 무기의 성질이다.
+    defense 는 맞서는 굴림(#254)에서 받는 쪽이 굴리는 능력치다(독안개는 건강, 칼은 민첩). 비우면 룰북의 것이다.
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -393,6 +394,8 @@ class MonsterAttack(BaseModel):
     effects: AttackEffects = []
     # 피해의 성질(#886 ③, 룰북의 natures 의 이름표). 비우면 무기의 성질이고, 그것도 없으면 성질이 없는 피해다
     nature: Key | None = None
+    # 맞서는 굴림에서 받는 쪽이 막는 능력치(#254, 룰북의 abilities 의 이름표). 비우면 룰북의 막는 규칙의 것이다
+    defense: Key | None = None
 
     @model_validator(mode='after')
     def require_something(self) -> 'MonsterAttack':

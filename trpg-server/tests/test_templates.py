@@ -37,6 +37,12 @@ from app.engine.templates import (
 # 이미 내놓은 템플릿의 값은 고치지 않는다. 고치고 싶으면 새 이름으로 하나 더 낸다.
 # 규칙의 모양에 칸이 새로 생겨 템플릿에 그 칸을 더한 것이면(있던 값은 그대로) 해시를 새로 적는다.
 RELEASED = {
+    Template.SRD5: '19075f56e007e21b398470b8d7e15a6f9790459481fe6e221c6205cff0e580d3',
+    Template.HORROR: 'c6be7f169b5b16bb011540cf20e08d22dff5a559c5e26ce29d9ea34986e4a7b3',
+    Template.LIGHT: '68068f97ceb3eeea3805ba58f2b62531f15f39d8d282ba7d06a0842f7cc51e76',
+}
+# 막는 규칙(defense, #254)을 더하기 전의 해시. 그 칸을 뺀 규칙은 그때와 같아야 한다
+BEFORE_DEFENSE = {
     Template.SRD5: '90fe0e09a5d9cbb5a0601e2b7b45f418d095f6e7517f7f996d205741aabf5f53',
     Template.HORROR: '923a64c6afe30a73c89e82719b4dca5af79a15c43727af7ee23ad81f93ff2103',
     Template.LIGHT: '4389527ffeb0db732abf15c9142e85b4cecb2d742371a6e1669b02973fa9c76a',
@@ -161,6 +167,7 @@ def dumped(
     damage_natures: bool = False,
     progression: bool = False,
     roll: bool = False,
+    defense: bool = False,
 ) -> dict:
     """
     규칙의 값. natures 가 거짓이면 부상의 성질(#799)과 그 뒤에 더한 물건을 쓰는 판정(item_check, #800)을 뺀다.
@@ -168,7 +175,8 @@ def dumped(
     skills 가 거짓이면 기술(#805)을 뺀다. nature_data 가 거짓이면 가장 나중에 더한 규칙의 성질의 목록과
     타입마다의 면역(natures, monster_immunities, #886)을 뺀다. resistances 가 거짓이면 부상의 저항과 기술의 효과의
     맞추기의 성질(#886 ②)을 뺀다. damage_natures 가 거짓이면 기술의 효과의 피해의 성질(#886 ③)을 뺀다.
-    progression 이 거짓이면 성장(#286)을, roll 이 거짓이면 가장 나중에 더한 굴림(#404)을 뺀다.
+    progression 이 거짓이면 성장(#286)을, roll 이 거짓이면 굴림(#404)을, defense 가 거짓이면 가장 나중에 더한
+    막는 규칙(#254)을 뺀다.
     지금의 값(RELEASED)과 견줄 때만 모두 참으로 준다.
     부상의 라운드마다의 피해와 벗어나기(damage, escape, #254)는 어느 템플릿에도 없다. 비어 있는 칸(null)만 뺀다.
     템플릿에 적으면 해시가 바뀐다.
@@ -178,6 +186,8 @@ def dumped(
         {key: value for key, value in injury.items() if not (key in ('damage', 'escape') and value is None)}
         for injury in values['injuries']
     ]
+    if not defense:
+        values.pop('defense')
     if not roll:
         values.pop('roll')
     if not progression:
@@ -230,9 +240,12 @@ def fingerprint(
     damage_natures: bool = False,
     progression: bool = False,
     roll: bool = False,
+    defense: bool = False,
 ) -> str:
     """규칙의 값을 정해진 차례의 JSON 으로 적어 해시를 낸다. without 의 칸은 빼고 낸다."""
-    values = dumped(rules, natures, resources, skills, nature_data, resistances, damage_natures, progression, roll)
+    values = dumped(
+        rules, natures, resources, skills, nature_data, resistances, damage_natures, progression, roll, defense
+    )
     values = {key: value for key, value in values.items() if key not in without}
     canonical = json.dumps(values, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
     return hashlib.sha256(canonical.encode()).hexdigest()
@@ -312,10 +325,26 @@ def test_released_templates_keep_their_values():
             damage_natures=True,
             progression=True,
             roll=True,
+            defense=True,
         )
         assert current == expected, (
             f'{template.value} 의 값이 바뀌었다. 이미 내놓은 템플릿의 값은 고치지 않는다. 새 이름으로 하나 더 낸다'
         )
+
+
+def test_adding_the_defense_kept_the_other_values():
+    for template, expected in BEFORE_DEFENSE.items():
+        current = fingerprint(
+            TEMPLATES[template].rules,
+            resources=True,
+            skills=True,
+            nature_data=True,
+            resistances=True,
+            damage_natures=True,
+            progression=True,
+            roll=True,
+        )
+        assert current == expected
 
 
 def test_adding_the_roll_kept_the_other_values():

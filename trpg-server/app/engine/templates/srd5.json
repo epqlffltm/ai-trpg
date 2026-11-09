@@ -57,6 +57,7 @@
     },
     "die": 20,
     "roll": {"count": 1, "style": "over", "shifts": {}},
+    "defense": {"ability": "dex"},
     "difficulties": [
       {
         "key": "very_easy",

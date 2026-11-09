@@ -164,9 +164,10 @@ def test_the_migration_filled_old_rulebooks_with_the_same_rules():
     # 성질과 타입마다의 면역(#886)도 그 뒤의 마이그레이션이 그때 엔진의 값으로 채운다.
     # 부상의 저항(#886 ②)은 비워도 되는 칸이라 채우지 않는다(읽으면 빈 목록이다). 라운드마다의 피해와 벗어나기(#254)도
     # 비워도 되는 칸이라 채우지 않는다(읽으면 없다).
-    # 성장(#286)도 그 뒤의 마이그레이션이 성장 없음(null)으로 채운다. 굴림(#404)도 주사위 하나의 over 로 채운다
+    # 성장(#286)도 그 뒤의 마이그레이션이 성장 없음(null)으로 채운다. 굴림(#404)도 주사위 하나의 over 로 채운다.
+    # 막는 규칙(#254)도 그 뒤의 마이그레이션이 템플릿의 능력치로 채운다
     template = SRD5.model_dump(mode='json')
-    later = ('resources', 'skills', 'natures', 'monster_immunities', 'progression', 'roll')
+    later = ('resources', 'skills', 'natures', 'monster_immunities', 'progression', 'roll', 'defense')
     old = {key: value for key, value in template.items() if key not in later}
     unfilled = ('resistances', 'damage', 'escape')
     injuries = [{key: value for key, value in injury.items() if key not in unfilled} for injury in old['injuries']]

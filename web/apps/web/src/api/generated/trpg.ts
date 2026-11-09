@@ -2911,6 +2911,8 @@ export interface components {
             /** Ability */
             ability: string;
             cost?: components["schemas"]["SkillCost"] | null;
+            /** Defense */
+            defense?: string | null;
             /** Difficulty */
             difficulty: string;
             /**
@@ -4331,6 +4333,17 @@ export interface components {
             action?: (components["schemas"]["CheckAction"] | components["schemas"]["TreatAction"] | components["schemas"]["NameAction"] | components["schemas"]["UseAction"] | components["schemas"]["GiveAction"] | components["schemas"]["MoveAction"] | components["schemas"]["SearchAction"] | components["schemas"]["RestAction"] | components["schemas"]["TakeAction"] | components["schemas"]["PutDownAction"] | components["schemas"]["StealAction"] | components["schemas"]["LootAction"] | components["schemas"]["WaitAction"] | components["schemas"]["BuyAction"] | components["schemas"]["SellAction"] | components["schemas"]["PayAction"] | components["schemas"]["CoverAction"] | components["schemas"]["LockAction"] | components["schemas"]["UnlockAction"] | components["schemas"]["PickAction"] | components["schemas"]["ForceAction"] | components["schemas"]["RepairAction"] | components["schemas"]["ReplaceAction"] | components["schemas"]["ThrowAction"] | components["schemas"]["SkillAction"] | components["schemas"]["SetTrapAction"] | components["schemas"]["DisarmAction"]) | null;
             /** Content */
             content: string;
+        };
+        /**
+         * Defense
+         * @description 맞서는 굴림(#254). 공격을 받는 쪽이 이 능력치로 굴리고, 공격하는 쪽의 합이 그보다 높아야 맞는다(같으면 막는다).
+         *
+         *     공격마다 받는 쪽의 능력치를 따로 적을 수 있다(AttackSnapshot.defense). 적지 않은 공격은 이 능력치로 막는다.
+         *     공격의 난이도는 보정이 된다. 기본 난이도를 0 으로, 쉬울수록 공격하는 쪽에 더하고 어려울수록 뺀다.
+         */
+        Defense: {
+            /** Ability */
+            ability: string;
         };
         /**
          * DepartureKind
@@ -6656,11 +6669,14 @@ export interface components {
          *     cost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.
          *     비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.
          *     nature 는 피해의 성질이다(#886 ③). 맞은 쪽의 저항(반), 면역(0), 약점(두 배)을 따른다. 비우면 무기의 성질이다.
+         *     defense 는 맞서는 굴림(#254)에서 받는 쪽이 굴리는 능력치다(독안개는 건강, 칼은 민첩). 비우면 룰북의 것이다.
          */
         "MonsterAttack-Input": {
             /** Ability */
             ability: string;
             cost?: components["schemas"]["SkillCost"] | null;
+            /** Defense */
+            defense?: string | null;
             /** Difficulty */
             difficulty: string;
             /**
@@ -6689,11 +6705,14 @@ export interface components {
          *     cost 는 쓸 때 내는 비용이다(#805 ③-a). 그 몬스터나 인물이 가진 수치(rules.resources 의 holders) 하나를 그만큼 낸다.
          *     비우면 공짜다. 차례에 이 공격을 골랐는데 모자라면 그 차례에 아무것도 하지 못한다. 빗나가도 낸다.
          *     nature 는 피해의 성질이다(#886 ③). 맞은 쪽의 저항(반), 면역(0), 약점(두 배)을 따른다. 비우면 무기의 성질이다.
+         *     defense 는 맞서는 굴림(#254)에서 받는 쪽이 굴리는 능력치다(독안개는 건강, 칼은 민첩). 비우면 룰북의 것이다.
          */
         "MonsterAttack-Output": {
             /** Ability */
             ability: string;
             cost?: components["schemas"]["SkillCost"] | null;
+            /** Defense */
+            defense?: string | null;
             /** Difficulty */
             difficulty: string;
             /**
@@ -10048,9 +10067,11 @@ export interface components {
          *     성장(progression, #286)도 같다. null 을 보내면 캐릭터가 성장하지 않는 규칙이다.
          *     주사위의 면 수(die)와 굴림(roll: 개수, over 나 under, 난이도마다 기량에 더하는 값, #404)도 같다.
          *     under 는 방어 규칙과 함께 쓰지 못한다. 방어 규칙이 있는 템플릿이면 armor 에 null 을 함께 보낸다(422 roll).
+         *     막는 규칙(defense: 받는 쪽이 굴리는 능력치, #254)도 같다. 비울 수는 없다. 공격은 늘 맞서는 굴림이다.
          */
         RulebookCreate: {
             armor?: components["schemas"]["Armor"] | null;
+            defense?: components["schemas"]["Defense"] | null;
             /**
              * Description
              * @default
@@ -10140,11 +10161,13 @@ export interface components {
          *     부상 표에 null 을 보내면 부상 표가 없는 규칙이 된다(굴리는 때를 모두 함께 꺼야 한다).
          *     성장(progression, #286)도 고칠 수 있다. null 을 보내면 캐릭터가 성장하지 않는 규칙이 된다.
          *     주사위의 면 수(die)와 굴림(roll, #404)도 고칠 수 있다. under 로 바꾸려면 방어 규칙에 null 을 함께 보낸다.
+         *     막는 규칙(defense, #254)도 고칠 수 있다. null 은 보내지 않은 것이다(비울 수 없다).
          *     방어 규칙에 null 을 보내면 방어구가 막지 않는 규칙이, 수치에 빈 목록을 보내면 HP 뿐인 규칙이 된다.
          *     이미 게시한 판은 그때의 규칙으로 굳어 있어 바뀌지 않는다. template 이나 rules 를 보내면 모르는 칸이라 거절한다.
          */
         RulebookUpdate: {
             armor?: components["schemas"]["Armor"] | null;
+            defense?: components["schemas"]["Defense"] | null;
             /** Description */
             description?: string | null;
             /** Die */
@@ -10183,6 +10206,7 @@ export interface components {
             death_save: components["schemas"]["DeathSave"] | null;
             /** Default Difficulty */
             default_difficulty: string;
+            defense: components["schemas"]["Defense"] | null;
             /** Die */
             die: number;
             /** Difficulties */
@@ -11334,7 +11358,7 @@ export interface components {
             encounters: components["schemas"]["EncounterSnapshot"][];
             /**
              * Format
-             * @default 69
+             * @default 70
              */
             format: number;
             /**

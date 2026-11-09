@@ -192,11 +192,11 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/worlds/{id}` | 내 세계관 하나 | access 토큰 |
 | PATCH | `/api/v1/game/worlds/{id}` | 내 세계관 고치기. 보낸 칸만 바뀐다 | access 토큰 |
 | DELETE | `/api/v1/game/worlds/{id}` | 내 세계관 지우기. 204 | access 토큰 |
-| POST | `/api/v1/game/rulebooks` | 룰북 만들기. 201. `template` 으로 규칙의 템플릿을 고른다(`srd5`, `horror`, `light`. 안 보내면 `srd5`). `armor` 를 보내면 템플릿의 방어 규칙 대신 쓴다(#276, `null` 이면 방어구가 막지 않는다). 성장(`progression`, #286)도 같다(`null` 이면 성장하지 않는다). 주사위의 면 수(`die`)와 굴림(`roll`, #404)도 같다(`under` 면 `armor` 에 `null` 을 함께 보낸다) | access 토큰 |
+| POST | `/api/v1/game/rulebooks` | 룰북 만들기. 201. `template` 으로 규칙의 템플릿을 고른다(`srd5`, `horror`, `light`. 안 보내면 `srd5`). `armor` 를 보내면 템플릿의 방어 규칙 대신 쓴다(#276, `null` 이면 방어구가 막지 않는다). 성장(`progression`, #286)도 같다(`null` 이면 성장하지 않는다). 주사위의 면 수(`die`)와 굴림(`roll`, #404)도 같다(`under` 면 `armor` 에 `null` 을 함께 보낸다). 막는 규칙(`defense`, #254)도 같다(비울 수는 없다) | access 토큰 |
 | GET | `/api/v1/game/rulebooks` | 내 룰북 목록. `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/game/rulebooks/templates` | 고를 수 있는 템플릿들(`key`, `name`, `summary`, `attribution`, `notes`, `rules`)과 기본(`default`)(#615) | access 토큰 |
 | GET | `/api/v1/game/rulebooks/{id}` | 내 룰북 하나 | access 토큰 |
-| PATCH | `/api/v1/game/rulebooks/{id}` | 내 룰북 고치기. 보낸 칸만 바뀐다. 규칙은 방어 규칙(`armor`, #276), 수치(`resources`, #804, 통째로 바뀐다. 능력치나 문턱의 부상이 규칙에 없거나 같은 수치가 두 번이면 422 `field: resources`), 기술(`skills`, #805, 통째로 바뀐다. 비용의 수치나 효과가 가리키는 것이 규칙에 없거나 같은 기술이 두 번이면 422 `field: skills`. 수치를 지우며 그것을 쓰던 기술을 함께 고치려면 둘을 함께 보낸다), 성질(`natures`)과 타입마다의 면역(`monster_immunities`, #886, 통째로 바뀐다. 부상이나 면역이 가리키는 성질이 없거나 겹치면 422), 부상(`injuries`)과 부상 표(`injury_table`, `null` 이면 표가 없다)와 굴리는 때(`injury_triggers`, #886, 부상 표의 줄·노려 치기·치료·수치의 문턱·기술이 가리키는 부상이 없으면 422. 시나리오의 물건과 공격이 가리키는 부상은 게시할 때 본다), 성장(`progression`, #286, `null` 이면 성장하지 않는다. 레벨표의 경험치가 줄마다 커지지 않으면 422 `field: progression`), 주사위의 면 수(`die`)와 굴림(`roll`, #404. 죽음의 굴림이나 되살아나기의 목표에 닿지 못하면 422 `field: die` 또는 `roll`. `under` 로 바꾸려면 `armor` 에 `null` 을 함께 보낸다)만 고칠 수 있다. 어느 칸이 틀렸는지는 주사위, 굴림, 성질, 부상, 부상 표, 굴리는 때, 면역, 수치, 기술, 성장의 차례로 하나씩 더해 가며 처음 틀린 칸을 `field` 로 알려 준다. 이미 게시한 판은 그때의 규칙으로 굳어 있다 | access 토큰 |
+| PATCH | `/api/v1/game/rulebooks/{id}` | 내 룰북 고치기. 보낸 칸만 바뀐다. 규칙은 방어 규칙(`armor`, #276), 수치(`resources`, #804, 통째로 바뀐다. 능력치나 문턱의 부상이 규칙에 없거나 같은 수치가 두 번이면 422 `field: resources`), 기술(`skills`, #805, 통째로 바뀐다. 비용의 수치나 효과가 가리키는 것이 규칙에 없거나 같은 기술이 두 번이면 422 `field: skills`. 수치를 지우며 그것을 쓰던 기술을 함께 고치려면 둘을 함께 보낸다), 성질(`natures`)과 타입마다의 면역(`monster_immunities`, #886, 통째로 바뀐다. 부상이나 면역이 가리키는 성질이 없거나 겹치면 422), 부상(`injuries`)과 부상 표(`injury_table`, `null` 이면 표가 없다)와 굴리는 때(`injury_triggers`, #886, 부상 표의 줄·노려 치기·치료·수치의 문턱·기술이 가리키는 부상이 없으면 422. 시나리오의 물건과 공격이 가리키는 부상은 게시할 때 본다), 성장(`progression`, #286, `null` 이면 성장하지 않는다. 레벨표의 경험치가 줄마다 커지지 않으면 422 `field: progression`), 주사위의 면 수(`die`)와 굴림(`roll`, #404. 죽음의 굴림이나 되살아나기의 목표에 닿지 못하면 422 `field: die` 또는 `roll`. `under` 로 바꾸려면 `armor` 에 `null` 을 함께 보낸다), 막는 규칙(`defense`, #254. 규칙에 없는 능력치면 422 `field: defense`. `null` 은 보내지 않은 것이다)만 고칠 수 있다. 어느 칸이 틀렸는지는 주사위, 굴림, 성질, 부상, 부상 표, 굴리는 때, 면역, 수치, 기술, 성장의 차례로 하나씩 더해 가며 처음 틀린 칸을 `field` 로 알려 준다. 이미 게시한 판은 그때의 규칙으로 굳어 있다 | access 토큰 |
 | DELETE | `/api/v1/game/rulebooks/{id}` | 내 룰북 지우기. 204 | access 토큰 |
 | POST | `/api/v1/game/scenarios` | 시나리오 만들기. 201. 제목만 있어도 된다(임시 저장) | access 토큰 |
 | GET | `/api/v1/game/scenarios` | 내 시나리오 목록. 줄마다 등급, 쓰인 수(`start_count`: 그 시나리오로 연 테이블의 모든 수, 끝난 테이블과 자기만 연 테이블도 센다), 관심 수(`heart_count`: 공개 정보의 것, 공개를 내려도 남는다), 공개한 시각(`published_at`, 공개하지 않았으면 `null`), 링크 공개(`unlisted`)가 있다(#1165). `sort`: `created`(최근에 만든 것부터, 기본), `updated`(최근에 고친 것부터), `started`(쓰인 수가 많은 것부터, 같으면 최근에 고친 것). `limit`, `offset` | access 토큰 |
@@ -473,6 +473,7 @@ app/engine/
 | `modifier` | 점수를 보정으로 바꾸는 방법. 보정 = (점수 - `base`) // `step` |
 | `die` | 판정에 굴리는 주사위의 면 수 |
 | `roll` | 굴림(#404). 주사위의 개수(`count`, 1~10. 2 와 `die` 6 이면 2d6 을 굴려 더한다), 성공을 가르는 쪽(`style`), 난이도마다 기량에 더하는 값(`shifts`). `over` 는 합 + 보정이 난이도의 `target` 이상이면, `under` 는 합이 기량(점수 + `shifts` 의 그 난이도의 값 + 무기의 보정 - 부상) 이하이면 성공이다. `under` 는 `shifts` 에 난이도마다 하나씩 적고, `over` 는 비운다. 죽음의 굴림, 되살아나기, 관통과 세이브, 선공을 가르는 굴림도 같은 개수를 굴려 더하고 같은 쪽으로 가른다(`under` 의 선공은 작은 눈이 먼저다). 불리하면 두 번 굴려 나쁜 합(`over` 는 작은, `under` 는 큰 합)을 쓴다. 목표값을 올리는 것(노려 치기, 방어의 `ac`, 훔치기의 까닭들)은 `under` 에서 그만큼 기량을 깎는다. `under` 는 아직 방어 규칙(`armor`)과 함께 쓰지 못한다. 템플릿은 모두 주사위 하나의 `over` 다 |
+| `defense` | 맞서는 굴림(#254). 받는 쪽이 굴리는 능력치(`ability`)다. 공격마다 따로 적을 수 있고(`attacks[].defense`), 적지 않으면 이것이다. 공격하는 쪽은 공격의 능력치에 무기의 보정과 난이도의 보정(기본 난이도를 0 으로, `over` 면 목표값의 차이, `under` 면 `shifts`)을 더해, 받는 쪽은 막는 능력치에 맞은 부위의 방어(`ac`)를 더해 굴린다. 둘 다 입은 부상의 영향을 받는다. `over` 는 공격의 합이 받는 쪽의 합보다 높아야, `under` 는 공격이 기량 안이고 여유(기량 - 눈)가 더 커야 맞는다. 같으면 막는다. 템플릿은 `srd5` 가 민첩, `horror` 가 날램, `light` 가 재치다. 그 전에 게시한 판(형식 69 까지)은 `null` 이고 공격을 고정 난이도로 가른다. 지금은 몬스터와 NPC 의 공격에 든다(캐릭터의 공격은 고정 난이도) |
 | `difficulties` | 난이도의 단계들(`key`, `name`, `target`). 1~10개. 행동은 숫자가 아니라 단계를 고른다 |
 | `default_difficulty` | 행동이 난이도를 고르지 않았을 때의 단계 |
 | `magnitudes` | 피해와 회복의 양을 나타내는 등급들(`key`, `name`, `count`, `sides`). 1~10개. `count` 개의 `sides` 면 주사위를 굴려 더한다 |
@@ -907,7 +908,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 | `npc_sheet_entry_missing` | 붙인 로어북에 없는 항목을 가리키는 NPC 시트가 있다. 항목을 지웠거나 로어북을 뗐다 |
 | `npc_sheet_not_person` | 인물이 아닌 항목(장소, 물건 …)을 가리키는 NPC 시트가 있다 |
 | `npc_sheet_invalid` | 룰북의 규칙에 맞지 않는 NPC 시트가 있다 |
-| `npc_attack_invalid` | NPC 시트의 공격의 능력치, 난이도, 양의 등급이 룰북의 규칙에 없다. 또는 비용의 수치가 규칙에 없거나 인물이 가지지 않는 수치다(#805 ③-a). 또는 효과의 부상이 규칙에 없거나 맞추는 수치가 캐릭터가 가지지 않는 수치다(#805 ③-b) |
+| `npc_attack_invalid` | NPC 시트의 공격의 능력치, 난이도, 양의 등급이 룰북의 규칙에 없다. 또는 비용의 수치가 규칙에 없거나 인물이 가지지 않는 수치다(#805 ③-a). 또는 효과의 부상이 규칙에 없거나 맞추는 수치가 캐릭터가 가지지 않는 수치다(#805 ③-b). 또는 막는 능력치(`defense`, #254)가 규칙에 없다 |
 | `npc_ally_missing` | NPC 시트의 한편인 몬스터(`allied_monsters`, #254)가 시트를 적은 몬스터가 아니다 |
 | `default_npc_sheet_missing` | 시트가 없는 인물 항목이 있는데 기본 NPC 시트가 없다. 모든 인물에게 시트가 있거나 인물이 없으면 없어도 된다 |
 | `default_npc_sheet_invalid` | 기본 NPC 시트가 룰북의 규칙에 맞지 않는다. 쓰지 않아도 판에 들어가므로 본다 |
@@ -971,7 +972,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 | `wander_monster_missing` | 시트를 적지 않은 몬스터를 적은 무작위 조우 표가 있다(#283) |
 | `monster_nature_invalid` | 몬스터 시트의 면역이나 약함(`immune`, `vulnerable`)의 성질이 룰북의 성질(`rules.natures`)에 없다(#886) |
 | `nature_invalid` | 기본 시트, 프리젠의 시트, NPC 시트, 아이템 규칙의 저항(`resistances`)이나 소모품의 수치를 내리는 맞추기의 성질(`nature`)이 룰북의 성질(`rules.natures`)에 없다(#886 ②). 공격의 효과의 성질은 `monster_attack_invalid`, `npc_attack_invalid` 다 |
-| `monster_attack_invalid` | 몬스터의 공격의 능력치, 난이도, 양의 등급이 룰북의 규칙에 없다. 또는 비용의 수치가 규칙에 없거나 몬스터가 가지지 않는 수치다(#805 ③-a). 또는 효과의 부상이 규칙에 없거나 맞추는 수치가 캐릭터가 가지지 않는 수치다(#805 ③-b) |
+| `monster_attack_invalid` | 몬스터의 공격의 능력치, 난이도, 양의 등급이 룰북의 규칙에 없다. 또는 비용의 수치가 규칙에 없거나 몬스터가 가지지 않는 수치다(#805 ③-a). 또는 효과의 부상이 규칙에 없거나 맞추는 수치가 캐릭터가 가지지 않는 수치다(#805 ③-b). 또는 막는 능력치(`defense`, #254)가 규칙에 없다 |
 | `unique_monster_repeated` | 네임드 몹이 두 마리 이상 놓인다. 조우 한 줄에 둘 이상이거나, 두 줄 이상에 나온다 |
 
 ```json
@@ -2105,7 +2106,7 @@ reverting.py    바로 앞 라운드를 되돌리는 규칙(#288)
 
   `turn_lost` 는 `downed`(앞 차례에 쓰러졌다) 또는 `dead`(앞 차례에 죽었다, 앞사람의 치료가 실패한 즉사도)다.
 - 차례가 오기 전에 쓰러지거나 죽은 마리는 공격하지 않는다. 행동을 막는 부상(기절)을 입었거나 칠 캐릭터가 없어도 그렇다(`skipped`: `downed`, `dead`, `incapacitated`, `no_target`). 고른 공격에 비용(`cost`, #805 ③-a)이 있으면 굴리기 전에 그 마리의 수치에서 낸다. 빗나가도 낸다. 모자라면 굴리지 않고 아무것도 내지 않는다(`skipped`: `cost_short`, 치려던 `attack` 과 대상이 함께 적힌다. 낼 수 있는 공격을 골라 주지 않는다). 낸 것은 `outcome.cost` 에 적힌다(비용이 있는 공격만). 공격에 효과(`effects`, #805 ③-b)가 있으면 판정에 맞혔을 때 맞은 캐릭터에게 든다. 세이브는 피해만 막고 효과는 막지 않는다. 그 타격으로 죽었으면 들지 않는다. 입힌 부상과 맞춘 수치는 `outcome.injured`, `outcome.resources` 에 적힌다(효과가 있는 공격만). 피해 등급이 없는 공격은 세이브를 굴리지 않고 HP 도 죽음의 굴림도 건드리지 않는다. 입은 부상은 공격의 판정에 영향을 준다(#799, 앉은 사람의 판정과 같다). 그 영향은 `outcome` 의 `hindrance` 에 적힌다.
-- 차례와 몬스터의 결과는 라운드의 `turns` 에 적힌다. 하나하나가 `{kind, first, score, tiebreak}` 에 캐릭터면 `user_id`, `character_name`, 몬스터면 `monster_id`, `name`, `outcome` 이다. 몬스터의 `outcome` 은 `{"skipped": …}`, `{"chased": …}`(쫓아온 몬스터, #254) 이거나 `{attack, user_id, character_name, roll, modifier, total, target, success, effect}` 다. 쓰러진 캐릭터를 쳤으면 `effect` 는 `null` 이고 `downed_strike` 가 더 있다. 몬스터의 점수와 HP 의 숫자가 들어 있어 응답으로 내보내지 않는다. 앉은 사람은 이벤트(`monster_attacked`, `hp_changed`)로 본다.
+- 차례와 몬스터의 결과는 라운드의 `turns` 에 적힌다. 하나하나가 `{kind, first, score, tiebreak}` 에 캐릭터면 `user_id`, `character_name`, 몬스터면 `monster_id`, `name`, `outcome` 이다. 몬스터의 `outcome` 은 `{"skipped": …}`, `{"chased": …}`(쫓아온 몬스터, #254) 이거나 `{attack, user_id, character_name, roll, modifier, total, target, success, effect}` 다. 쓰러진 캐릭터를 쳤으면 `effect` 는 `null` 이고 `downed_strike` 가 더 있다. 맞서는 굴림의 판(#254)이면 받는 쪽의 굴림 `defense`(`ability`, `roll`, `modifier`, `total`, `target`, `success`, `style`, `faces`, `rolls`, `hindrance`)가 더 있고, 공격의 `target` 은 받는 쪽의 합 + 1 이다(`under` 면 공격의 기량). 몬스터의 점수와 HP 의 숫자가 들어 있어 응답으로 내보내지 않는다. 앉은 사람은 이벤트(`monster_attacked`, `hp_changed`)로 본다.
 - 판정과 같이 닫기 시작할 때 한 번만 굴린다. 서술을 다시 맡겨도 다시 굴리지 않는다.
 - 이벤트도 차례 순서로 적힌다. 행동이 없는 선언은 차례들 뒤에 앉은 순서로 적힌다.
 

@@ -50,6 +50,8 @@ asyncio_default_test_loop_scope = "session"
 # 실패한 테스트의 기록을 짧게 찍는다. 기본(long)은 실패한 함수가 받은 인자의 값까지 찍는다.
 # DB 에 연결하다 실패하면 그 인자가 비밀번호가 든 접속 주소다
 addopts = "--tb=short"
+# 맞서는 굴림(#254)을 템플릿 그대로의 룰북으로 보는 테스트. 나머지는 고정 난이도의 룰북을 쓴다(tests/conftest.py)
+markers = ["opposed: 막는 규칙을 빼지 않은 룰북을 쓴다"]
 
 [tool.coverage.run]
 # 서버의 코드만 잰다. 테스트, 평가 도구(evals), 손으로 돌리는 스크립트는 뺀다

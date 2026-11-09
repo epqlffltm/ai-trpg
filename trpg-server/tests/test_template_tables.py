@@ -166,6 +166,8 @@ async def test_the_list_carries_every_template_and_its_rules(client: AsyncClient
 # --- 고른 템플릿이 룰북에 ---
 
 
+# 템플릿을 그대로 옮기는지 본다. 막는 규칙(#254)을 빼지 않은 룰북이다(tests/conftest.py)
+@pytest.mark.opposed
 @pytest.mark.parametrize('template', list(Template))
 async def test_a_rulebook_copies_the_rules_of_its_template(client: AsyncClient, me: dict[str, str], template: Template):
     rulebook = await make_rulebook(client, me, template)

@@ -1067,6 +1067,8 @@ async def test_the_migration_reads_tables_without_injuries_in_their_rules_as_srd
     assert leg.ends_after_round == 21
 
 
+# 템플릿을 그대로 옮기는지 본다. 막는 규칙(#254)을 빼지 않은 룰북이다(tests/conftest.py)
+@pytest.mark.opposed
 async def test_the_migration_fills_old_rulebooks_with_the_template_treatment(
     client: AsyncClient, me: dict[str, str], session: AsyncSession
 ):
