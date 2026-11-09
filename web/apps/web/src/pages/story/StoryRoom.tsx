@@ -5,6 +5,7 @@
 // 한 세션에 한 생성이다. 받는 중이면 보내기, 다시 생성, 대안, 모델 바꾸기를 막는다. 모델이 없으면 보내기 전에 고르게 한다.
 // 끝난 세션(엔딩을 봤고 후일담이 없다)은 말 쓰기와 행동을 숨긴다. 가지와 다시 생성(엔딩 장면을 다시 쓰기)은 된다.
 // 행동(시간 보내기, 하루 마치기, 이동, 선택지, 건네기, 고백)은 엔진이 판정하고 반응을 받는다. 말과 같이 모델이 있어야 한다.
+// 행동으로 처음 받은 업적은 대사창 아래에 "업적을 얻었습니다"로 띄운다(StoryAchievementNotices). 닫을 때까지 남는다.
 // 엔딩 장면의 답이 끝나면 엔딩 화면을 띄운다. 위의 그림 창은 장면의 일러스트나 지금 장소·시간대의 배경이다.
 // 내 말 고치기는 새 가지로 답을 다시 받고(모델이 있어야 한다), 답 고치기는 조각마다 글만 그 자리에서 고친다(청구 없음). 끊긴 답은 이어 쓴다.
 // 책갈피(#982)는 말마다 달고 떼며 받는 중에도 된다. 책갈피의 자리로 갈 때 지금 가지에 없는 말이면 가지를 바꾼다.
@@ -33,6 +34,7 @@ import { TurnNotice } from '../chat/conversation/TurnNotice';
 import { useBookmarks } from '../chat/conversation/useBookmarks';
 import { useSnapshots } from '../chat/conversation/useSnapshots';
 import { useConversationShortcuts } from '../chat/conversation/useConversationShortcuts';
+import { StoryAchievementNotices } from './StoryAchievementNotices';
 import { freshEnding, pendingChoices } from './storyActions';
 import { StoryActionBar } from './StoryActionBar';
 import { storyHasMap, storyToolLabel, storyTools, StoryTools } from './StoryTools';
@@ -185,6 +187,7 @@ export function StoryRoom({ session, turns }: Props) {
             />
           ) : null}
           {restarting.error ? <p className="ui-field__error">{describeStartProblem(restarting.error)}</p> : null}
+          <StoryAchievementNotices earned={turns.earned} onClose={turns.closeEarned} />
           <TurnNotice problem={turns.problem} failure={turns.failure} onChooseModel={() => setChoosingModel(true)} onClose={turns.clearNotice} />
           {ended ? (
             <div className="story-actions">

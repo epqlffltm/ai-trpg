@@ -5,7 +5,8 @@
 // 세션 읽기에는 보여도 되는 세계관의 칸(view), 지금 가지의 말(말마다 대안 alternatives), 그 끝의 상태(state)가 실린다.
 // world 는 목록과 같은 요약이다(판의 문서는 싣지 않는다). 화면은 view 만 쓴다. state.affection 에는 호감도를 보이는 인물의 값만 실린다.
 // 목록의 줄에는 진행(progress: 날짜, 엔딩, 후일담)이 실린다. 다 쓴 답에는 다음 답 추천(suggestions, 최대 셋)이 실린다.
-// 답의 SSE: turn{generation_id, user_message, cast, state}, segment{speaker}, delta{text}, done{message}, failed{code}. 읽기는 chatTurns.ts.
+// 답의 SSE: turn{generation_id, user_message, cast, state, achievements}, segment{speaker}, delta{text}, done{message}, failed{code}. 읽기는 chatTurns.ts.
+// turn 의 achievements 는 그 행동으로 처음 받은 업적이다(docs/architecture/achievements.md 의 "story"). 말과 다시 생성에는 비어 있다.
 // 답을 시작하기 전의 거절(story-server/app/turns/router.py):
 //   - 409 model_required, generation_in_progress, session_ended(끝을 고른 세계관의 엔딩 뒤). 422 model_unavailable, not_regenerable,
 //     not_continuable(이어 쓸 수 없는 답), not_editable(사람의 말이 아닌 것을 edit_of 로 고침, 답이 아닌 것을 PATCH)
@@ -34,6 +35,9 @@ export type StoryState = Schemas['StateOut'];
 export type StoryEndingRecords = Schemas['EndingRecordList'];
 export type StoryIllustrations = Schemas['IllustrationList'];
 export type StoryIllustration = Schemas['IllustrationOut'];
+export type StoryAchievementRecords = Schemas['AchievementRecordList'];
+export type StoryAchievementRecord = Schemas['AchievementRecordOut'];
+export type StoryAchievementRates = Schemas['AchievementRates'];
 /** 세션에서 화면이 쓰는 세계관의 칸(보여도 되는 것만, 이 가지에 맞춘 것) */
 export type StoryView = Schemas['WorldView'];
 export type StoryViewCast = Schemas['CastOut'];
@@ -129,4 +133,14 @@ export function fetchStoryEndings(worldId: string, signal?: AbortSignal): Promis
 /** 그 세계관에서 내가 연 일러스트들(처음 연 차례). 갤러리(C7)의 story 탭이 읽는다 */
 export function fetchStoryGallery(worldId: string, signal?: AbortSignal): Promise<StoryIllustrations> {
   return apiRequest<StoryIllustrations>(`${STORY}/gallery`, { query: { world_id: worldId }, ...withSignal(signal) });
+}
+
+/** 그 세계관에서 내가 받은 업적들(받은 차례). 이름, 받는 법, 그림은 받은 때의 것이다(숨긴 업적도 보인다) */
+export function fetchStoryAchievements(worldId: string, signal?: AbortSignal): Promise<StoryAchievementRecords> {
+  return apiRequest<StoryAchievementRecords>(`${STORY}/achievements`, { query: { world_id: worldId }, ...withSignal(signal) });
+}
+
+/** 그 세계관의 업적마다 받은 사람의 수와 플레이한 사람의 수. 로그인하지 않아도 읽는다 */
+export function fetchStoryAchievementRates(worldId: string, signal?: AbortSignal): Promise<StoryAchievementRates> {
+  return apiRequest<StoryAchievementRates>(`${STORY}/achievements/rates`, { query: { world_id: worldId }, ...withSignal(signal) });
 }

@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/story/StoryWorldPage.tsx
 // 세계관 소개(D1, /story/worlds/:worldId). 로그인하지 않아도 전체이용가면 보인다. 볼 수 없으면(내렸다, 등급, 없다) 서버는 모두 404 다.
 // 머리(대표 그림, 이름, 만든 사람(누르면 제작자 페이지, #992), 관심 단추(#989), 등급·기한·태그), 제작자가 꾸민 소개(거른 HTML), 인물(보임: 이름과 그림, 실루엣: "???", 숨김은 오지 않는다),
-// 엔딩("엔딩 2/5", 본 수는 로그인했을 때), 내 세션(이 세계관의 것), 새로 시작(로그인하지 않았으면 로그인으로).
+// 엔딩("엔딩 2/5", 본 수는 로그인했을 때), 업적(StoryWorldAchievements, 달성률과 내가 받은 것), 내 세션(이 세계관의 것), 새로 시작(로그인하지 않았으면 로그인으로).
 // 새로 시작할 때 페르소나가 있으면 "나"를 고른다(기본이 골라져 있고 "페르소나 없이"도 있다).
 // 모양은 Stitch 18번(소개 화면 셋의 같은 모양): 머리는 한 장의 종이(넓으면 왼쪽에 세로로 긴 대표 그림), 칸마다 종이 한 장, 인물은 그림 칸의 격자.
 // 장르 테마(Stitch 23~33번): main 에 data-genre 를 단다(genres/genreTheme.ts).
@@ -23,6 +23,7 @@ import { publicWorldQuery, storyEndingsQuery, worldSessionsQuery } from './story
 import { describeStartProblem } from './storyTurnProblem';
 import { castLabel, endingLine, worldTags } from './storyWorldView';
 import { progressLine } from './storyCastView';
+import { StoryWorldAchievements } from './StoryWorldAchievements';
 import { useStartStorySession } from './useStartStorySession';
 import { genreTheme } from '../../genres/genreTheme';
 
@@ -71,6 +72,7 @@ function WorldDetail({ world, signedIn }: { world: PublicWorldDetail; signedIn: 
           </ul>
         </section>
       ) : null}
+      <StoryWorldAchievements worldId={world.id} achievements={world.achievements ?? []} signedIn={signedIn} />
       <StartSection worldId={world.id} signedIn={signedIn} />
     </main>
   );

@@ -2,6 +2,7 @@
 // story 의 세계관(asset 서버). 내 세계관(/asset/worlds)과 공개 세계관의 목록과 소개(/asset/listings/worlds, D1).
 // 공개 목록과 소개는 로그인하지 않아도 읽는다(그때는 전체이용가만). 볼 수 없으면 404 다.
 // 소개는 판의 문서를 통째로 주지 않는다. 인물은 보임이면 이름과 그림, 실루엣이면 둘 다 null, 숨김이면 빠진다. 엔딩은 기록에 남는 수만.
+// 업적은 판의 차례로 오고 숨긴 업적은 이름, 받는 법, 그림이 null 이다. 받은 기록과 달성률은 story 서버(api/story.ts)가 준다.
 // 세션은 게시한 판(latest_version)이 있는 세계관으로만 시작한다. 판의 문서(WorldDocument)는 세션 읽기에도 실린다.
 // 만들기와 게시는 1~2단계에 운영자만이다(403 operator_only). 인물은 자기 캐릭터만(422 character_not_owned).
 // 게시는 막는 것이 있으면 409 {problems} 다. 성공하면 새 판과 알리는 것(warnings), 소개에서 걸러 낸 것(removed)이 온다.
@@ -36,10 +37,12 @@ export type StoryWorldScene = Schemas['Scene'];
 export type StoryWorldEvent = Schemas['Event'];
 export type StoryWorldEnding = Schemas['Ending'];
 export type StoryWorldChapter = Schemas['Chapter'];
+export type StoryWorldAchievement = Schemas['Achievement'];
 export type PublicWorldPage = Schemas['PublicWorldPage'];
 export type PublicWorldSummary = Schemas['PublicWorldSummary'];
 export type PublicWorldDetail = Schemas['PublicWorldDetail'];
 export type PublicCastMember = Schemas['PublicCastMember'];
+export type PublicWorldAchievement = Schemas['PublicAchievement'];
 
 /** 한 번에 읽는 내 세계관의 수(서버는 100 까지) */
 export const MY_WORLDS_LIMIT = 100;
