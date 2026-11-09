@@ -121,6 +121,12 @@ describe('몬스터 탭', () => {
     await userEvent.clear(dialog.getByRole('textbox', { name: '쓰러뜨리면 주는 경험치' }));
     await userEvent.type(dialog.getByRole('textbox', { name: '쓰러뜨리면 주는 경험치' }), '50');
     await userEvent.click(dialog.getByRole('checkbox', { name: '도망치면 쫓아온다' }));
+    // 방어하는 때(#254). 문턱은 1~99 다. 확률은 비워 둔다
+    await userEvent.type(dialog.getByRole('textbox', { name: 'HP 가 최대의 몇 % 이하일 때(1~99)' }), '100');
+    expect(dialog.getByText('1~99 사이의 정수입니다.')).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.clear(dialog.getByRole('textbox', { name: 'HP 가 최대의 몇 % 이하일 때(1~99)' }));
+    await userEvent.type(dialog.getByRole('textbox', { name: 'HP 가 최대의 몇 % 이하일 때(1~99)' }), '30');
     await userEvent.click(dialog.getByRole('button', { name: '장비 더하기' }));
     await userEvent.click(dialog.getByRole('button', { name: '공격 더하기' }));
     const attack = within(dialog.getByRole('group', { name: '공격 1' }));
@@ -149,7 +155,7 @@ describe('몬스터 탭', () => {
       vulnerable: ['poison'],
       resistances: [],
       nature: null,
-      defends: null,
+      defends: { below: 30, chance: null },
       xp: 50,
     });
     // 고치지 않은 시트의 면역은 그대로 간다
@@ -215,6 +221,7 @@ describe('몬스터 입력', () => {
     expect(toggledNature(['poison', 'mind'], 'poison', false)).toEqual(['mind']);
     expect(monsterHints({ ...draft, vulnerable: ['poison'] }, rules, []).natures).toBe('독은(는) 면역과 약함에 함께 둘 수 없습니다.');
     expect(monsterLine({ ...GHOUL_SHEET, vulnerable: ['mind'] } as unknown as MonsterSheet, rules)).toContain('면역 독 · 약함 정신');
+    expect(monsterLine({ ...GHOUL_SHEET, defends: { below: 30, chance: 25 } } as unknown as MonsterSheet, rules)).toContain('방어 HP 30% 이하, 25%');
   });
 
   it('조우: 같은 장소의 같은 몬스터, 네임드 두 마리, 마리 수', () => {

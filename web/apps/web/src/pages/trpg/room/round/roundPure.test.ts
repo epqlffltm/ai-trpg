@@ -75,6 +75,9 @@ describe('roundView', () => {
     expect(outcomeLine(outcome as unknown as Declaration['outcome'], rules)).toBe('눈 13, 보정 +2, 합 15 / 목표 15 · 성공');
     const hindered = { ...outcome, modifier: -1, total: 12, success: false, hindrance: { disadvantage: true, injuries: [], penalty: 1, rolls: [13, 4] } };
     expect(outcomeLine(hindered as unknown as Declaration['outcome'], rules)).toBe('눈 13, 보정 -1, 합 12 / 목표 15 · 불리함 · 실패');
+    // 방어 태세인 몬스터나 인물을 쳤다(#254). 부상의 불리함과 따로 적는다
+    const guarded = { ...outcome, success: false, guarded: true };
+    expect(outcomeLine(guarded as unknown as Declaration['outcome'], rules)).toBe('눈 13, 보정 +2, 합 15 / 목표 15 · 상대가 방어 태세(불리함) · 실패');
     const hit = { ...outcome, npc_effect: { name: '문지기', kind: 'damage', amount: 4 } };
     expect(outcomeLine(hit as unknown as Declaration['outcome'], rules)).toBe('눈 13, 보정 +2, 합 15 / 목표 15 · 성공 · 문지기 피해 4');
     expect(outcomeLine({ turn_lost: 'downed' } as unknown as Declaration['outcome'], rules)).toBe('행동하지 못했습니다.');

@@ -10,6 +10,7 @@ import type { NpcAttitude, NpcCaught, NpcSheet, Ruleset, ScenarioDetail } from '
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { ATTITUDE_VALUES, attitudeLabel } from '../../labels';
 import { AttacksEditor } from './AttacksEditor';
+import { DefendsFields } from './DefendsFields';
 import {
   allyChoices,
   CAUGHT_LABELS,
@@ -170,6 +171,7 @@ function NpcFields({ scenario, rules, items, monsters, entryId, npc, saving, don
         checked={draft.merchant}
         onChange={(event) => update({ merchant: event.target.checked })}
       />
+      <DefendsFields draft={draft.defends} hints={hints.defends} onChange={(defends) => update({ defends })} />
       <fieldset className="scenario-choices">
         <legend>장비(착용한 물건)</legend>
         <StacksEditor

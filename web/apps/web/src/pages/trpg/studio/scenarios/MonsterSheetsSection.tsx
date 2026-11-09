@@ -9,6 +9,7 @@ import { useCallback, useState, type FormEvent, type ReactNode } from 'react';
 import type { MonsterSheet, Ruleset, ScenarioDetail } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { AttacksEditor } from './AttacksEditor';
+import { DefendsFields } from './DefendsFields';
 import {
   hasMonsterHints,
   INJURY_NATURES,
@@ -183,6 +184,7 @@ function MonsterFields({ scenario, rules, items, monsterId, sheet, used, saving,
         </div>
       </fieldset>
       <NatureFields draft={draft} error={hints.natures} onChange={update} />
+      <DefendsFields draft={draft.defends} hints={hints.defends} onChange={(defends) => update({ defends })} />
       <TextField
         label="쓰러뜨리면 주는 경험치"
         inputMode="numeric"
