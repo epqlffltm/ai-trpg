@@ -79,6 +79,7 @@ describe('대화의 업적 알림', () => {
     expect(screen.queryByRole('list', { name: '얻은 업적' })).toBeNull();
     await vi.waitFor(() => expect(invalidated(spy)).toContain(JSON.stringify(['chat', 'conversations'])));
     expect(invalidated(spy)).not.toContain(ACHIEVEMENTS_KEY);
+    expect(invalidated(spy)).not.toContain(JSON.stringify(['me', 'work-achievements', 'chat']));
   });
 
   it('받았으면 그 캐릭터의 내 업적과 달성률을 다시 읽는다', async () => {
@@ -87,6 +88,8 @@ describe('대화의 업적 알림', () => {
     await send();
 
     await vi.waitFor(() => expect(invalidated(spy)).toContain(ACHIEVEMENTS_KEY));
+    // 마이페이지의 작품 업적도 다시 읽게 한다
+    expect(invalidated(spy)).toContain(JSON.stringify(['me', 'work-achievements', 'chat']));
   });
 });
 
