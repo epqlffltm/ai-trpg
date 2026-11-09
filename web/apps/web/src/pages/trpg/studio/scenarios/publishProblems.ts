@@ -21,6 +21,7 @@ const PROBLEMS: Record<string, ProblemText> = {
   npc_sheet_not_person: { text: '인물이 아닌 항목의 인물 시트가 있습니다.', section: 'npcs' },
   npc_sheet_invalid: { text: '룰북의 규칙에 맞지 않는 인물 시트가 있습니다.', section: 'npcs' },
   npc_attack_invalid: { text: '인물의 공격이 룰북에 없는 능력치나 난이도, 양을 씁니다.', section: 'npcs' },
+  npc_ally_missing: { text: '인물의 한편인 몬스터 가운데 시트를 적지 않은 몬스터가 있습니다.', section: 'npcs' },
   default_npc_sheet_missing: { text: '시트가 없는 인물이 있는데 기본 인물 시트가 없습니다.', section: 'npcs' },
   default_npc_sheet_invalid: { text: '기본 인물 시트가 룰북의 규칙에 맞지 않습니다.', section: 'npcs' },
   item_entry_missing: { text: '붙인 로어북에 없는 물건을 가리키는 규칙이나 소지품이 있습니다.', section: 'items' },

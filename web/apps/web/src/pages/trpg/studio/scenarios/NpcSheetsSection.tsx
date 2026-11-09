@@ -2,6 +2,7 @@
 // 인물 시트(B9 인물 탭). 붙인 로어북의 인물 항목을 모두 늘어놓고, 줄마다 시트(없으면 "기본 인물 시트")를 한 줄로 보인다.
 // 줄을 고치면 창이 열리고, 창의 저장이 인물 시트 목록을 통째로 바로 보낸다. 시트 지우기는 기본 인물 시트로 돌린다.
 // 붙인 로어북의 인물이 아닌 것의 시트(로어북을 뗐거나 항목을 지웠다)도 줄로 남겨 지울 수 있게 한다.
+// 한편인 몬스터(#254)는 시트를 적은 몬스터 가운데서 고른다. 그 몬스터들은 이 인물을 치지 않는다.
 
 import { Button, Checkbox, Dialog, Notice, SelectField } from '@ai-trpg/ui';
 import { useCallback, useState, type FormEvent, type ReactNode } from 'react';
@@ -9,14 +10,27 @@ import type { NpcAttitude, NpcCaught, NpcSheet, Ruleset, ScenarioDetail } from '
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { ATTITUDE_VALUES, attitudeLabel } from '../../labels';
 import { AttacksEditor } from './AttacksEditor';
-import { CAUGHT_LABELS, hasNpcHints, npcDraft, npcHints, npcLine, toNpcSheet, withNpcSheet, withoutNpcSheet, type NpcDraft } from './npcForm';
+import {
+  allyChoices,
+  CAUGHT_LABELS,
+  hasNpcHints,
+  npcDraft,
+  npcHints,
+  npcLine,
+  toNpcSheet,
+  withAlly,
+  withNpcSheet,
+  withoutNpcSheet,
+  type NpcDraft,
+} from './npcForm';
 import { SheetFields } from './SheetFields';
 import { MAX_CARRIED_EQUIPMENT, MAX_CARRIED_INVENTORY } from './stacksForm';
 import { StacksEditor } from './StacksEditor';
+import { monsterNameOf, type MonsterChoice } from './useBestiaryMonsters';
 import type { EntryChoice } from './useLoreEntries';
 import { useScenarioSave } from './useScenarioSave';
 
-type Props = { scenario: ScenarioDetail; rules: Ruleset | null; people: EntryChoice[]; items: EntryChoice[] };
+type Props = { scenario: ScenarioDetail; rules: Ruleset | null; people: EntryChoice[]; items: EntryChoice[]; monsters: MonsterChoice[] };
 
 type Row = { id: string; name: string; listed: boolean };
 
@@ -28,7 +42,7 @@ function rowsOf(people: EntryChoice[], npcSheets: NpcSheet[]): Row[] {
   return [...listed, ...orphans];
 }
 
-export function NpcSheetsSection({ scenario, rules, people, items }: Props) {
+export function NpcSheetsSection({ scenario, rules, people, items, monsters }: Props) {
   const [editing, setEditing] = useState<Row | null>(null);
   const close = useCallback(() => setEditing(null), []);
   const rows = rowsOf(people, scenario.npc_sheets);
@@ -54,15 +68,15 @@ export function NpcSheetsSection({ scenario, rules, people, items }: Props) {
         })}
       </ul>
       <Dialog title={editing ? `인물 시트: ${editing.name}` : '인물 시트'} open={editing !== null} onClose={close}>
-        {editing ? <NpcForm scenario={scenario} rules={rules} items={items} row={editing} done={close} /> : null}
+        {editing ? <NpcForm scenario={scenario} rules={rules} items={items} monsters={monsters} row={editing} done={close} /> : null}
       </Dialog>
     </section>
   );
 }
 
-type FormProps = { scenario: ScenarioDetail; rules: Ruleset | null; items: EntryChoice[]; row: Row; done: () => void };
+type FormProps = { scenario: ScenarioDetail; rules: Ruleset | null; items: EntryChoice[]; monsters: MonsterChoice[]; row: Row; done: () => void };
 
-function NpcForm({ scenario, rules, items, row, done }: FormProps) {
+function NpcForm({ scenario, rules, items, monsters, row, done }: FormProps) {
   const npc = scenario.npc_sheets.find((one) => one.entry_id === row.id);
   const saving = useScenarioSave(scenario.id);
 
@@ -89,13 +103,16 @@ function NpcForm({ scenario, rules, items, row, done }: FormProps) {
       </div>
     );
   }
-  return <NpcFields scenario={scenario} rules={rules} items={items} entryId={row.id} npc={npc} saving={saving} done={done} clearButton={clearButton} />;
+  return (
+    <NpcFields scenario={scenario} rules={rules} items={items} monsters={monsters} entryId={row.id} npc={npc} saving={saving} done={done} clearButton={clearButton} />
+  );
 }
 
 type FieldsProps = {
   scenario: ScenarioDetail;
   rules: Ruleset;
   items: EntryChoice[];
+  monsters: MonsterChoice[];
   entryId: string;
   npc: NpcSheet | undefined;
   saving: ReturnType<typeof useScenarioSave>;
@@ -103,7 +120,7 @@ type FieldsProps = {
   clearButton: ReactNode;
 };
 
-function NpcFields({ scenario, rules, items, entryId, npc, saving, done, clearButton }: FieldsProps) {
+function NpcFields({ scenario, rules, items, monsters, entryId, npc, saving, done, clearButton }: FieldsProps) {
   const [draft, setDraft] = useState<NpcDraft>(() => npcDraft(npc, rules));
   const hints = npcHints(draft, rules, scenario.items);
   const blocked = hasNpcHints(hints);
@@ -196,6 +213,12 @@ function NpcFields({ scenario, rules, items, entryId, npc, saving, done, clearBu
           hints={hints.attacks}
         />
       </fieldset>
+      <AlliesField
+        sheeted={scenario.monster_sheets.map((sheet) => sheet.monster_id)}
+        chosen={draft.alliedMonsters}
+        monsterName={monsterNameOf(monsters)}
+        onChange={(alliedMonsters) => update({ alliedMonsters })}
+      />
       {blocked ? <Notice tone="error">고칠 칸이 있어 저장하지 않습니다.</Notice> : null}
       <div className="actions">
         <Button type="submit" busy={saving.busy} disabled={blocked}>
@@ -204,5 +227,33 @@ function NpcFields({ scenario, rules, items, entryId, npc, saving, done, clearBu
         {clearButton}
       </div>
     </form>
+  );
+}
+
+type AlliesProps = {
+  sheeted: string[];
+  chosen: string[];
+  monsterName: (monsterId: string) => string;
+  onChange: (chosen: string[]) => void;
+};
+
+/** 한편인 몬스터(#254). 시트를 적은 몬스터마다 고른다. 시트를 지운 몬스터가 남아 있으면 빼라고 알린다(게시 점검도 막는다) */
+function AlliesField({ sheeted, chosen, monsterName, onChange }: AlliesProps) {
+  const choices = allyChoices(sheeted, chosen);
+  return (
+    <fieldset className="scenario-choices">
+      <legend>한편인 몬스터</legend>
+      <p className="ui-field__hint">고른 몬스터는 이 인물을 치지 않습니다. 고르지 않은 몬스터는 같은 장소의 이 인물도 칩니다.</p>
+      {choices.length === 0 ? <p className="hint">시트를 적은 몬스터가 없습니다. 몬스터 탭에서 시트를 적으면 고를 수 있습니다.</p> : null}
+      {choices.map((choice) => (
+        <Checkbox
+          key={choice.id}
+          label={choice.sheeted ? monsterName(choice.id) : `${monsterName(choice.id)}(시트 없음)`}
+          description={choice.sheeted ? undefined : '시트가 없는 몬스터는 판에 들지 않습니다. 빼야 게시할 수 있습니다.'}
+          checked={chosen.includes(choice.id)}
+          onChange={(event) => onChange(withAlly(chosen, choice.id, event.target.checked))}
+        />
+      ))}
+    </fieldset>
   );
 }

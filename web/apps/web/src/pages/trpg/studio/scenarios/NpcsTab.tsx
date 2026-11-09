@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/NpcsTab.tsx
 // 시나리오의 인물 탭(B9). 탭의 저장: 기본 인물 시트(시트가 없는 인물이 받는 숫자). 창에서 바로 저장: 인물 시트(NpcSheetsSection).
 // 인물은 저장된 로어북들의 인물 항목이고, 지닌 물건은 물건 항목이다. 로어북이나 룰북이 없으면 재료 탭으로 가는 길을 둔다.
+// 한편인 몬스터(#254)의 이름은 붙인 몬스터 모음에서 읽는다.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useState } from 'react';
@@ -10,6 +11,7 @@ import { ScenarioForm } from './ScenarioForm';
 import type { ScenarioTab } from './scenarioTabs';
 import { sheetDraft, sheetHints, toSheet, type SheetDraft } from './sheetForm';
 import { SheetFields } from './SheetFields';
+import { useBestiaryMonsters } from './useBestiaryMonsters';
 import { useLoreEntries } from './useLoreEntries';
 import { useScenarioRules } from './useScenarioRules';
 import { useScenarioSave } from './useScenarioSave';
@@ -20,6 +22,7 @@ export function NpcsTab({ scenario, goTo }: Props) {
   const { rules, pending } = useScenarioRules(scenario);
   const people = useLoreEntries(scenario.lorebook_ids, 'person');
   const items = useLoreEntries(scenario.lorebook_ids, 'item');
+  const monsters = useBestiaryMonsters(scenario.bestiary_ids);
   if (pending || people.pending) return <p aria-busy="true">불러오는 중</p>;
   const missing = scenario.lorebook_ids.length === 0 || !rules;
   return (
@@ -34,7 +37,7 @@ export function NpcsTab({ scenario, goTo }: Props) {
       ) : null}
       {people.failed ? <Notice tone="error">로어북의 항목을 불러오지 못했습니다. 인물의 이름이 보이지 않을 수 있습니다.</Notice> : null}
       {rules ? <DefaultNpcForm key={scenario.rulebook_id ?? 'none'} scenario={scenario} rules={rules} /> : null}
-      <NpcSheetsSection scenario={scenario} rules={rules} people={people.entries} items={items.entries} />
+      <NpcSheetsSection scenario={scenario} rules={rules} people={people.entries} items={items.entries} monsters={monsters.monsters} />
     </>
   );
 }
