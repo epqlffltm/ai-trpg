@@ -969,6 +969,11 @@ services:
     # 설정의 틀. 이미지가 뜰 때 ${APP_ENVIRONMENT} 같은 자리를 아래의 environment 로 채워 conf.d 에 쓴다
     volumes:
       - ./docker/nginx/templates:/etc/nginx/templates:ro
+      # 점검 파일의 폴더(docker/nginx/maintenance/README.md). 폴더를 붙인다. 파일을 만들고 지우는 것이 컨테이너에 바로 보인다
+      - type: bind
+        source: ./docker/nginx/maintenance
+        target: /etc/nginx/maintenance
+        read_only: true
     environment:
       APP_ENVIRONMENT: ${APP_ENVIRONMENT:-development}
       APP_VERSION: ${APP_VERSION:-dev}

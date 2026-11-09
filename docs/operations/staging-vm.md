@@ -357,6 +357,13 @@ cd /srv/ai-trpg && git pull && docker compose up -d --build
 
 **허용 주소를 바꾼다.** `docker/nginx/allowlist/allow.conf` 를 고치면 1분 안에 다시 읽는다. 바로 읽히려면 `docker compose exec proxy nginx -s reload`. 집의 주소가 바뀌었으면 Lightsail 방화벽의 22 도 고친다.
 
+**점검으로 막는다.** `docker/nginx/maintenance/maintenance.json` 을 두면 프록시가 `/api/` 의 모든 요청에 503 과 그 파일을 답하고, 화면은 점검 화면을 띄운다. 지우면 바로 풀린다. 프록시를 다시 띄울 필요가 없다. 파일의 모양과 명령은 `docker/nginx/maintenance/README.md`. 점검 중에는 프록시의 5xx 가 늘어 경보가 울릴 수 있다.
+
+```bash
+cd /srv/ai-trpg && cp docker/nginx/maintenance/maintenance.json.example docker/nginx/maintenance/maintenance.json && nano docker/nginx/maintenance/maintenance.json
+rm docker/nginx/maintenance/maintenance.json
+```
+
 **로그를 본다.** Grafana(4번의 사설망 주소) 또는 `docker compose logs --tail 100 <서비스>`.
 
 **볼륨마다의 크기를 본다.** 대시보드 `disks` 는 디스크마다의 합만 보인다. 무엇이 큰지는 한 번씩 손으로 본다. Prometheus 는 제 크기를 지표로도 낸다(Explore 에서 `prometheus_tsdb_storage_blocks_bytes`). Loki 와 Tempo 는 내지 않는다.

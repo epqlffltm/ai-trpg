@@ -480,6 +480,20 @@ status_is() {
   [[ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$@" "$url")" == "$expected" ]]
 }
 
+# 점검 파일(docker/nginx/maintenance)을 두면 /api/ 는 503 과 그 파일이고 화면은 그대로인가. 지우면 바로 풀리는가.
+# 폴더는 컨테이너에 붙어 있어 이 PC 에서 만들고 지우는 것이 바로 보인다
+MAINTENANCE_FILE=docker/nginx/maintenance/maintenance.json
+maintenance_switch() {
+  local body
+  cp docker/nginx/maintenance/maintenance.json.example "$MAINTENANCE_FILE"
+  body="$(curl -s --max-time 5 "$PROXY/api/v1/auth/jwks")"
+  status_is 503 "$PROXY/api/v1/auth/jwks" && grep -q '"code": "maintenance"' <<<"$body" &&
+    serves_web "$PROXY/trpg/tables/ci" && status_is 404 "$PROXY/_maintenance"
+  local on=$?
+  rm -f "$MAINTENANCE_FILE"
+  [[ "$on" == "0" ]] && status_is 200 "$PROXY/api/v1/auth/jwks"
+}
+
 # 프록시를 거친 응답에 X-Request-ID 가 하나만 있고, 클라이언트가 보낸 값이 아닌가
 one_request_id_from_proxy() {
   local headers
@@ -1812,6 +1826,7 @@ check_proxy() {
   report "화면의 해시가 붙은 파일은 오래 캐시하고 없는 파일은 404 다" web_assets_cached
   report "화면에는 화면의 CSP 가 붙는다" web_security_headers "$PROXY/"
   report "프록시가 요청 식별자를 하나 정해 돌려준다" one_request_id_from_proxy
+  report "점검 파일을 두면 API 는 503 과 그 파일, 화면은 그대로이고 지우면 풀린다" maintenance_switch
   report "서버의 응답에 보안 머리말이 하나씩 붙는다" security_headers "$PROXY/api/v1/auth/jwks"
   report "막은 주소의 404 에도 보안 머리말이 붙는다" security_headers "$PROXY/api/v1/ci-nothing/here"
   report "HTTP 의 응답에는 HSTS 가 없다" no_header Strict-Transport-Security "$PROXY/api/v1/auth/jwks"
