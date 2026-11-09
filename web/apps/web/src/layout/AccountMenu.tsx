@@ -6,6 +6,7 @@
 // 성향 필터와 차단은 이 창에서 바꾸지 않고 그 칸(설정의 목록 거르기, 마이페이지의 차단)으로 간다.
 // 로그아웃하면 읽어 둔 것(내 테이블, 내 대화)을 모두 버린다.
 // 설계서의 팔로워·팔로잉 수는 서버가 내 수를 주지 않아 두지 않는다.
+// 넓은 화면의 단추는 닉네임 글자, 좁은 화면은 닉네임의 첫 글자를 담은 동그라미다(설계서의 모바일 한 줄. 둘 가운데 하나를 app.css 가 숨긴다).
 
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router';
@@ -26,7 +27,10 @@ export function AccountMenu() {
   return (
     <div className="header-popover" ref={ref}>
       <button type="button" className="app-header__profile" aria-expanded={open} aria-label={`내 메뉴: ${nickname}`} onClick={toggle}>
-        {nickname}
+        <span className="app-header__avatar" aria-hidden="true">
+          {Array.from(nickname)[0]}
+        </span>
+        <span className="app-header__label">{nickname}</span>
       </button>
       {open ? <ProfilePanel nickname={nickname} onClose={close} /> : null}
     </div>

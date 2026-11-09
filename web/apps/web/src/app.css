@@ -251,10 +251,22 @@
   white-space: nowrap;
 }
 
-/* 위쪽 줄의 아이콘(검색 아이콘, 알림 종). 좁은 화면에서만 보인다. 선은 글자 색이다 */
+/* 위쪽 줄의 아이콘(검색 아이콘, 알림 종, 프로필 동그라미). 좁은 화면에서만 보인다. 선은 글자 색이다 */
 .app-header__search-toggle,
-.app-header__icon {
+.app-header__icon,
+.app-header__avatar {
   display: none;
+}
+
+.app-header__avatar {
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: var(--ui-accent);
+  color: var(--ui-accent-text);
+  font-weight: 700;
 }
 
 .app-header__icon-button {
@@ -338,11 +350,8 @@
     white-space: nowrap;
   }
 
-  .app-header__profile {
-    display: inline-block;
-    max-width: 8em;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .app-header__avatar {
+    display: inline-flex;
   }
 }
 
@@ -437,10 +446,39 @@
   background: var(--ui-surface-subtle);
 }
 
-/* 좁은 화면의 위쪽 줄: 밝기와 성인 작품 표시는 숨긴다(설정 화면에 있다). 펼침 창은 화면 폭에 맞춘다 */
+/* 좁은 화면의 위쪽 줄: 밝기와 성인 작품 표시는 숨긴다(설정 화면에 있다). 펼침 창은 화면 폭에 맞춘다.
+ * 알림 종과 프로필 동그라미는 테두리 없는 아이콘이다(설계서의 모바일 한 줄) */
 @media (max-width: 767px) {
   .app-header .theme-switch {
     display: none;
+  }
+
+  .app-header__notifications,
+  .app-header__profile {
+    border-color: transparent;
+    background: none;
+  }
+
+  .app-header__notifications {
+    color: var(--ui-text-muted);
+  }
+
+  .app-header__notifications[aria-expanded='true'] {
+    border-color: transparent;
+    color: var(--ui-accent);
+  }
+
+  .app-header__profile {
+    padding: 0 2px;
+  }
+
+  .app-header__profile[aria-expanded='true'] {
+    border-color: transparent;
+  }
+
+  .app-header__profile[aria-expanded='true'] .app-header__avatar {
+    outline: 2px solid var(--ui-accent);
+    outline-offset: 2px;
   }
 
   .header-popover {
