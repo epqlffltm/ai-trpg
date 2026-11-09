@@ -3,7 +3,7 @@
 
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import { isClientError } from '../../api/http';
-import { fetchStoryEndings, fetchStoryGallery, fetchStoryModels, fetchStorySession, fetchStorySessions, SESSION_PAGE_SIZE } from '../../api/story';
+import { fetchStoryAchievementRates, fetchStoryAchievements, fetchStoryEndings, fetchStoryGallery, fetchStoryModels, fetchStorySession, fetchStorySessions, SESSION_PAGE_SIZE } from '../../api/story';
 import type { ListingOrder } from '../../api/listingOrder';
 import { fetchMyStoryWorlds, fetchPublicWorld, fetchPublicWorlds } from '../../api/storyWorlds';
 
@@ -88,6 +88,23 @@ export function storyEndingsQuery(worldId: string, signedIn = true) {
     queryKey: [...STORY_KEY, 'endings', worldId],
     queryFn: ({ signal }) => fetchStoryEndings(worldId, signal),
     enabled: signedIn,
+  });
+}
+
+/** 그 세계관에서 내가 받은 업적. 로그인했을 때만 읽는다. 행동으로 받으면 다시 읽는다 */
+export function storyAchievementsQuery(worldId: string, signedIn = true) {
+  return queryOptions({
+    queryKey: [...STORY_KEY, 'achievements', worldId],
+    queryFn: ({ signal }) => fetchStoryAchievements(worldId, signal),
+    enabled: signedIn,
+  });
+}
+
+/** 그 세계관의 업적마다 받은 사람의 수와 플레이한 사람의 수. 로그인하지 않아도 읽는다 */
+export function storyAchievementRatesQuery(worldId: string) {
+  return queryOptions({
+    queryKey: [...STORY_KEY, 'achievement-rates', worldId],
+    queryFn: ({ signal }) => fetchStoryAchievementRates(worldId, signal),
   });
 }
 

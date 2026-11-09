@@ -2,7 +2,8 @@
 // 답을 받는 동안의 화면 상태. SSE 메시지를 하나씩 넣어 다음 상태를 만든다. 순수한 함수다.
 //
 //   turn     → 답할 말(사람의 말이나 행동 말), 멈출 때 쓰는 generation_id, 장면의 인물(cast), 그 뒤의 상태(state),
-//              이어 쓰면 그 답의 id(continues). 이어 쓸 때 첫 segment 앞의 글은 그 답의 마지막 조각에 붙는다(lead)
+//              이어 쓰면 그 답의 id(continues). 이어 쓸 때 첫 segment 앞의 글은 그 답의 마지막 조각에 붙는다(lead).
+//              그 행동으로 처음 받은 업적(achievements). 모양이 틀린 업적은 버린다
 //   segment  → 새 말 조각. 뒤의 delta 는 이 사람의 것이다(서술은 speaker 가 null). 그 줄의 표정(expression, 기본이면 null)
 //   delta    → 지금 조각에 글을 잇는다
 //   done     → 저장한 답. 끝
@@ -11,6 +12,9 @@
 
 import type { SseMessage } from '../../api/sse';
 import type { StorySavedMessage, StorySegment, StoryState } from '../../api/story';
+
+/** 행동으로 처음 받은 업적 하나(turn 의 achievements). 숨긴 업적도 받았으므로 이름이 있다 */
+export type EarnedAchievement = { id: string; name: string; description: string; image_id: string | null };
 
 export type StoryTurnState = {
   generationId: string | null;
@@ -22,10 +26,12 @@ export type StoryTurnState = {
   continues: string | null;
   /** 이어 쓸 때 첫 segment 앞에 온 글. 끊긴 답의 마지막 조각에 붙인다 */
   lead: string;
+  /** 이 행동으로 처음 받은 업적. 말과 다시 생성에는 비어 있다 */
+  achievements: EarnedAchievement[];
   end: { kind: 'done'; message: StorySavedMessage } | { kind: 'failed'; code: string } | null;
 };
 
-export const EMPTY_STORY_TURN: StoryTurnState = { generationId: null, userMessage: null, cast: [], state: null, segments: [], continues: null, lead: '', end: null };
+export const EMPTY_STORY_TURN: StoryTurnState = { generationId: null, userMessage: null, cast: [], state: null, segments: [], continues: null, lead: '', achievements: [], end: null };
 
 export function applyStoryTurnMessage(turn: StoryTurnState, message: SseMessage): StoryTurnState {
   const data = parseObject(message.data);
@@ -46,7 +52,20 @@ function applyStart(turn: StoryTurnState, data: Record<string, unknown>): StoryT
     cast: Array.isArray(data.cast) ? data.cast.filter((id): id is string => typeof id === 'string') : [],
     state: isState(data.state) ? data.state : null,
     continues: typeof data.continues === 'string' ? data.continues : null,
+    achievements: Array.isArray(data.achievements) ? data.achievements.filter(isEarned) : [],
   };
+}
+
+function isEarned(value: unknown): value is EarnedAchievement {
+  const candidate = value as Partial<EarnedAchievement> | null;
+  return (
+    candidate !== null &&
+    typeof candidate === 'object' &&
+    typeof candidate.id === 'string' &&
+    typeof candidate.name === 'string' &&
+    typeof candidate.description === 'string' &&
+    (candidate.image_id === null || typeof candidate.image_id === 'string')
+  );
 }
 
 /** 새 조각. 말하는 사람과 표정이 글자가 아니면 서술, 기본 표정으로 둔다 */

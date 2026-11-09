@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/story/StoryActions.test.tsx
 // 장면(D2)의 행동. 시간 보내기(반응을 받고 다시 읽음), 지도에서 이동, 인물 메뉴의 건네기와 고백(한 번 더 묻기),
-// 선택지, 기한의 마지막 날(한 번 더 묻기), 할 수 없는 행동(422), 엔딩 화면(엔딩 수, 새로 시작, 끝난 세션). 순수한 함수.
+// 선택지, 기한의 마지막 날(한 번 더 묻기), 할 수 없는 행동(422), 엔딩 화면(엔딩 수, 새로 시작, 끝난 세션),
+// 행동으로 받은 업적의 알림(답이 끝나도 남고 닫으면 감춘다). 순수한 함수.
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -12,6 +13,8 @@ import { castOut, storyView } from '../../test/storyFixtures';
 import { installFakeFetch, json, tokens, type SeenRequest } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
 import { canConfess, canPassTime, destinations, freshEnding, heldItems, isLastDay, pendingChoices } from './storyActions';
+import { applyStoryTurnMessage, EMPTY_STORY_TURN } from './storyTurnState';
+import { withEarned } from './useStoryTurn';
 
 const STORY = '/api/v1/story';
 const SESSION = '00000000-0000-4000-8000-00000000a601';
@@ -268,5 +271,51 @@ describe('순수한 함수', () => {
     expect(canPassTime({ after_ending: 'epilogue' }, state({ ending: 'spring' }))).toBe(true);
     expect(freshEnding([message(1, 'action', { ending_id: 'spring' }), message(2, 'assistant')])).toEqual({ messageId: M(1), endingId: 'spring' });
     expect(freshEnding(MESSAGES)).toBeNull();
+  });
+});
+
+const EARNED = { id: 'night', name: '밤의 산책', description: '밤까지 머물렀다', image_id: null };
+
+describe('행동으로 받은 업적', () => {
+  it('행동의 turn 에 실린 업적을 답이 끝난 뒤에도 띄우고, 닫으면 감춘다', async () => {
+    const earnedReaction = () =>
+      new Response(
+        sse(
+          ['turn', { generation_id: GEN, user_message: { ...message(3, 'action', { content: '[행동] 시간이 흘렀다.' }), alternatives: undefined }, cast: ['mina'], state: state({ cast: ['mina'] }), achievements: [EARNED] }],
+          ['segment', { speaker: 'mina' }],
+          ['delta', { text: '벌써 밤이네.' }],
+          ['done', { message: message(4, 'assistant', { segments: [{ speaker: 'mina', text: '벌써 밤이네.' }] }) }],
+        ),
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      );
+    const { seen } = signedIn({ [`POST ${ACTIONS}`]: () => earnedReaction() });
+    renderApp(`/story/sessions/${SESSION}`);
+
+    await userEvent.click(await screen.findByRole('button', { name: '시간 보내기' }));
+    const list = within(await screen.findByRole('list', { name: '얻은 업적' }));
+    expect(list.getByText('업적을 얻었습니다: 밤의 산책')).toBeInTheDocument();
+    expect(list.getByText('밤까지 머물렀다')).toBeInTheDocument();
+    // 답이 끝나고 세션을 다시 읽어도 남는다
+    await waitFor(() => expect(seen.filter((request) => request.url === `${STORY}/conversations/${SESSION}`).length).toBeGreaterThan(1));
+    expect(screen.getByRole('list', { name: '얻은 업적' })).toBeInTheDocument();
+    await userEvent.click(list.getByRole('button', { name: '밤의 산책 알림 닫기' }));
+    expect(screen.queryByRole('list', { name: '얻은 업적' })).toBeNull();
+  });
+
+  it('업적이 없는 행동에는 알림이 없다', async () => {
+    const { seen } = signedIn();
+    renderApp(`/story/sessions/${SESSION}`);
+
+    await userEvent.click(await screen.findByRole('button', { name: '시간 보내기' }));
+    await waitFor(() => expect(seen.filter((request) => request.url === `${STORY}/conversations/${SESSION}`).length).toBeGreaterThan(1));
+    expect(screen.queryByRole('list', { name: '얻은 업적' })).toBeNull();
+  });
+
+  it('turn 의 업적을 읽고 모양이 틀린 것은 버리며, 같은 업적은 한 번만 남긴다', () => {
+    const turn = applyStoryTurnMessage(EMPTY_STORY_TURN, { event: 'turn', data: JSON.stringify({ generation_id: GEN, achievements: [EARNED, { id: 'bad' }, 'x'] }) });
+    expect(turn.achievements).toEqual([EARNED]);
+    expect(applyStoryTurnMessage(EMPTY_STORY_TURN, { event: 'turn', data: JSON.stringify({ generation_id: GEN }) }).achievements).toEqual([]);
+    const other = { ...EARNED, id: 'day' };
+    expect(withEarned([EARNED], [EARNED, other]).map((one) => one.id)).toEqual(['night', 'day']);
   });
 });

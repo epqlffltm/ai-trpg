@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import type { StoryWorldDetail } from '../../../api/storyWorlds';
+import { WorldAchievementsTab } from './WorldAchievementsTab';
 import { WorldBasicsTab } from './WorldBasicsTab';
 import { WorldCastTab } from './WorldCastTab';
 import { WorldChaptersTab } from './WorldChaptersTab';
@@ -88,6 +89,7 @@ function panelOf(tab: WorldTab, world: StoryWorldDetail): ReactNode {
   if (tab === 'events') return <WorldEventsTab world={world} />;
   if (tab === 'endings') return <WorldEndingsTab world={world} />;
   if (tab === 'chapters') return <WorldChaptersTab world={world} />;
+  if (tab === 'achievements') return <WorldAchievementsTab world={world} />;
   if (tab === 'lorebooks') return <WorldLorebooksTab world={world} />;
   if (tab === 'shortcuts') return <WorldShortcutsTab world={world} />;
   return <WorldPublishTab world={world} />;
