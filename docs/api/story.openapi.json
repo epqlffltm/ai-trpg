@@ -1,6 +1,120 @@
 {
   "components": {
     "schemas": {
+      "AchievementRate": {
+        "description": "업적 하나를 받은 사람의 수.",
+        "properties": {
+          "achievement_id": {
+            "title": "Achievement Id",
+            "type": "string"
+          },
+          "earned_count": {
+            "title": "Earned Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "achievement_id",
+          "earned_count"
+        ],
+        "title": "AchievementRate",
+        "type": "object"
+      },
+      "AchievementRates": {
+        "description": "한 세계관의 업적마다 받은 사람의 수와, 그 세계관을 플레이한 사람의 수. 달성률은 화면이 나눈다.\n아무도 받지 않은 업적은 items 에 없다. 업적의 이름과 차례는 세계관의 소개(asset 서버)에 있다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AchievementRate"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "players": {
+            "title": "Players",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "players",
+          "items"
+        ],
+        "title": "AchievementRates",
+        "type": "object"
+      },
+      "AchievementRecordList": {
+        "description": "한 세계관에서 받은 업적들. 받은 차례다.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AchievementRecordOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "AchievementRecordList",
+        "type": "object"
+      },
+      "AchievementRecordOut": {
+        "description": "받은 업적 하나. achievement_id 는 판의 업적의 id 다. 이름, 받는 법, 그림은 받은 때의 판의 것이다\n(숨긴 업적도 받은 사람에게는 보인다).",
+        "properties": {
+          "achievement_id": {
+            "title": "Achievement Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "earned_at": {
+            "format": "date-time",
+            "title": "Earned At",
+            "type": "string"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "achievement_id",
+          "name",
+          "description",
+          "image_id",
+          "earned_at",
+          "conversation_id"
+        ],
+        "title": "AchievementRecordOut",
+        "type": "object"
+      },
       "BookmarkOut": {
         "description": "책갈피 하나. 그 말의 역할(user, assistant, action)과 앞부분(excerpt)을 함께 싣는다(목록에서 어느 말인지 알아보게).\n그 자리로 가려면 가지 고르기(PUT /conversations/{id}/branch, message_id)를 부른다.\n다른 가지의 말이면 그 가지가 보인다.",
         "properties": {
@@ -2803,6 +2917,105 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/story/achievements": {
+      "get": {
+        "description": "그 세계관에서 내가 받은 업적들.",
+        "operationId": "list_achievements_api_v1_story_achievements_get",
+        "parameters": [
+          {
+            "description": "asset 서버의 세계관 id",
+            "in": "query",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "description": "asset 서버의 세계관 id",
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AchievementRecordList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Achievements",
+        "tags": [
+          "records"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/story/achievements/rates": {
+      "get": {
+        "description": "그 세계관의 업적마다 받은 사람의 수와 플레이한 사람의 수. 로그인하지 않아도 본다.",
+        "operationId": "read_achievement_rates_api_v1_story_achievements_rates_get",
+        "parameters": [
+          {
+            "description": "asset 서버의 세계관 id",
+            "in": "query",
+            "name": "world_id",
+            "required": true,
+            "schema": {
+              "description": "asset 서버의 세계관 id",
+              "format": "uuid",
+              "title": "World Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AchievementRates"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "summary": "Read Achievement Rates",
+        "tags": [
+          "records"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/story/admin/message-reports": {
       "get": {
         "description": "열린 신고의 목록. minor 가 먼저, 그다음 오래된 것부터. 세션의 글은 싣지 않는다.",

@@ -96,6 +96,19 @@ ActionCreate = Annotated[
 ]
 
 
+class EarnedAchievementOut(BaseModel):
+    """
+    이번 행동으로 처음 받은 업적 하나(docs/architecture/achievements.md 의 "story").
+    판의 업적의 이름, 받는 법, 그림이다.
+    숨긴 업적도 받았으므로 보인다. 받은 기록은 GET /achievements 가 다시 준다.
+    """
+
+    id: str
+    name: str
+    description: str
+    image_id: uuid.UUID | None
+
+
 class TurnEvent(BaseModel):
     """turn 메시지. cast 는 이 답을 쓰는 장면의 인물, state 는 사람의 말이나 행동 뒤의 상태다."""
 
@@ -105,6 +118,8 @@ class TurnEvent(BaseModel):
     state: StateOut
     # 이어서 출력이면 이어 쓰는 끊긴 답의 id. 첫 segment 앞의 delta 는 그 답의 마지막 조각에 붙는다. 아니면 null
     continues: uuid.UUID | None = None
+    # 이번 행동으로 처음 받은 업적들(판의 차례). 말, 다시 생성, 이어서 출력과 이미 받은 업적이면 비어 있다
+    achievements: list[EarnedAchievementOut] = []
 
 
 class SegmentEvent(BaseModel):

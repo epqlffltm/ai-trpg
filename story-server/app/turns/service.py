@@ -70,11 +70,12 @@ from app.conversations.service import (
 from app.conversations.views import affection_shown, met_on
 from app.core.dependencies import Viewer
 from app.engine import play
+from app.engine.achievements import newly_earned
 from app.engine.endings import is_over
 from app.engine.events import drop_choice
 from app.engine.play import Played
 from app.engine.state import StoryState
-from app.engine.world import AfterEnding, World, read_world
+from app.engine.world import Achievement, AfterEnding, World, read_world
 from app.lore.recall import LoreRecall
 from app.memory import repository as memory_store
 from app.memory.service import notes_for_prompt, render_memory
@@ -92,6 +93,7 @@ from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
 from app.turns.prompt import PersonaCard, build_messages, render_card, scene_card, with_lore
 from app.turns.providers import Router
 from app.turns.scenes import Staging, replayed, staging
+from app.turns.schemas import EarnedAchievementOut
 from app.turns.segments import (
     Segment,
     SegmentStart,
@@ -751,6 +753,7 @@ async def record_turn(
     body = body_for(content, shortcuts_of(imported.document), mine)
     message = user_message(conversation, parent_id, content, now, shortcut_body=body)
     await attach(session, conversation, message, changed)
+    await records.mark_played(session, viewer.claims.user_id, imported.source_id, now)
     generation = add_generation(session, conversation, viewer.claims.user_id, message, slug)
     return turn_start(viewer.claims.user_id, generation, message, branch, state, staging(branch.world, state), options)
 
@@ -796,6 +799,35 @@ async def record_illustrations(
     await records.add_illustrations(session, owner_id, imported.source_id, unlocks, conversation.id, now)
 
 
+def earned_out(achievement: Achievement) -> EarnedAchievementOut:
+    """받은 업적 하나를 turn 메시지의 모양으로."""
+    return EarnedAchievementOut(
+        id=achievement.id, name=achievement.name, description=achievement.description, image_id=achievement.image_id
+    )
+
+
+async def record_achievements(
+    session: AsyncSession,
+    owner_id: uuid.UUID,
+    imported: ImportedWorld,
+    conversation: Conversation,
+    world: World,
+    played: Played,
+    now: datetime,
+) -> tuple[EarnedAchievementOut, ...]:
+    """
+    행동 뒤의 상태로 업적을 보고, 처음 받은 것을 계정의 기록에 적어 돌려준다(app/engine/achievements.py).
+    플레이한 사람으로도 적는다(달성률의 분모). 후일담에서도 받는다. 이미 받은 업적은 그대로다.
+    """
+    await records.mark_played(session, owner_id, imported.source_id, now)
+    if not world.achievements:
+        return ()
+    owned = await records.achievement_ids_of(session, owner_id, imported.source_id)
+    candidates = newly_earned(world, played.state, owned)
+    added = await records.add_achievements(session, owner_id, imported.source_id, candidates, conversation.id, now)
+    return tuple(earned_out(achievement) for achievement in candidates if achievement.id in added)
+
+
 async def record_action(
     session: AsyncSession,
     viewer: Viewer,
@@ -809,7 +841,7 @@ async def record_action(
     """
     차례를 쥔 채로 행동을 판정하고 행동 말, 그 뒤의 상태, 기록을 세션에 올린다(커밋하지 않는다).
     끝난 세션이면 SessionEndedError, 할 수 없는 행동이면 ActionRefusedError.
-    답은 열린 이벤트나 본 엔딩의 장면을 쓴다(app/turns/scenes.py).
+    답은 열린 이벤트나 본 엔딩의 장면을 쓴다(app/turns/scenes.py). 처음 받은 업적은 turn 메시지에 싣는다.
     """
     branch = await branch_of(session, conversation, imported)
     require_open(branch.world, branch.state)
@@ -818,9 +850,13 @@ async def record_action(
     await attach(session, conversation, message, played.state)
     await record_ending(session, viewer.claims.user_id, imported, conversation, played, now)
     await record_illustrations(session, viewer.claims.user_id, imported, conversation, played, now)
+    earned = await record_achievements(
+        session, viewer.claims.user_id, imported, conversation, branch.world, played, now
+    )
     generation = add_generation(session, conversation, viewer.claims.user_id, message, slug)
     stage = staging(branch.world, played.state, played.event, played.ending)
-    return turn_start(viewer.claims.user_id, generation, message, branch, played.state, stage, options)
+    start = turn_start(viewer.claims.user_id, generation, message, branch, played.state, stage, options)
+    return replace(start, achievements=earned)
 
 
 async def record_regenerate(

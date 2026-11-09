@@ -6,7 +6,7 @@ asset 서버, 결제 서버, 모델은 가짜다.
 
 보는 것.
   - 그 사람의 세션과 딸린 것(말, 상태, 요약, 기억 메모, 페르소나의 사본), 세계관의 판의 사본과 로어북의 벡터,
-    계정의 기록(본 엔딩, 연 일러스트)을 지운다. 남의 것은 남는다
+    계정의 기록(본 엔딩, 연 일러스트, 받은 업적, 플레이한 세계관)을 지운다. 남의 것은 남는다
   - 청구 기록은 남는다. 세션과 말을 가리키는 칸만 비고, 공개 ID 와 모델, 홀드의 이름표, 청구 상태는 그대로다
   - 같은 알림이 다시 와도, 이 서버에 그 사람의 것이 없어도 200 processed 다
   - 인증 서버의 서명이 아니면(없음, 틀림, 다른 주소의 서명, 비밀이 빔) 401 이고 아무것도 지우지 않는다
@@ -34,7 +34,7 @@ from app.core.config import Settings
 from app.lore.models import LoreEmbedding
 from app.main import API_PREFIX, create_app
 from app.memory.models import MemoryNote, Summary
-from app.records.models import EndingRecord, IllustrationUnlock
+from app.records.models import AchievementRecord, EndingRecord, IllustrationUnlock, WorldPlayer
 from app.turns.models import Generation
 from tests.assets import FakeAsset, make_persona, make_world
 from tests.conftest import TEST_AUTH_SECRET, make_client, make_test_settings
@@ -94,7 +94,7 @@ async def play(client: AsyncClient, app: FastAPI, asset: FakeAsset, world_id: st
 
 
 async def attach_records(session: AsyncSession, owner_id: uuid.UUID, conversation_id: str, world_id: str) -> None:
-    """세션의 첫 말에 상태와 요약을, 사본에 벡터를, 계정에 본 엔딩과 연 일러스트를 둔다(행만 만든다)."""
+    """세션의 첫 말에 상태와 요약을, 사본에 벡터를, 계정에 본 엔딩과 연 일러스트와 받은 업적을 둔다(행만 만든다)."""
     conversation = uuid.UUID(conversation_id)
     first = await session.scalar(
         select(Message.id).where(Message.conversation_id == conversation).order_by(Message.created_at)
@@ -114,6 +114,16 @@ async def attach_records(session: AsyncSession, owner_id: uuid.UUID, conversatio
             scene_id='solo',
             image_id=PICTURE,
             first_seen_at=now,
+        )
+    )
+    session.add(
+        AchievementRecord(
+            owner_id=owner_id,
+            world_source=source,
+            achievement_id='beach',
+            name='해변',
+            conversation_id=conversation,
+            earned_at=now,
         )
     )
     await session.commit()
@@ -150,6 +160,8 @@ async def counts(session: AsyncSession) -> dict[str, int]:
         'vectors': LoreEmbedding,
         'endings': EndingRecord,
         'unlocks': IllustrationUnlock,
+        'achievements': AchievementRecord,
+        'players': WorldPlayer,
         'generations': Generation,
     }
     return {name: await count(session, model) for name, model in tables.items()}
@@ -164,13 +176,13 @@ async def test_the_leavers_sessions_copies_and_records_are_erased(
     response = await notify(client, LEAVER)
 
     assert (response.status_code, response.json()) == (status.HTTP_200_OK, PROCESSED)
-    for model in (Conversation, ImportedWorld, EndingRecord, IllustrationUnlock):
+    for model in (Conversation, ImportedWorld, EndingRecord, IllustrationUnlock, AchievementRecord, WorldPlayer):
         assert await count(session, model, model.owner_id == LEAVER) == 0
     # 남는 사람의 세션 하나와 그 위의 것만 남는다
     staying = uuid.UUID(sessions['staying']['id'])
     remaining = await counts(session)
     expected = {'conversations': 1, 'states': 1, 'summaries': 1, 'notes': 1, 'personas': 1, 'worlds': 1, 'vectors': 1}
-    assert remaining == {**remaining, **expected, 'endings': 1, 'unlocks': 1}
+    assert remaining == {**remaining, **expected, 'endings': 1, 'unlocks': 1, 'achievements': 1, 'players': 1}
     assert await count(session, Message, Message.conversation_id != staying) == 0
 
 
