@@ -223,7 +223,9 @@ Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 �
 | GET | `/api/v1/auth/me/badges` | 내 활동 배지. 모든 배지와 받은 시각(아래 "활동 배지") | 필요 |
 | POST | `/api/v1/auth/inquiries` | 문의를 보낸다(아래 "문의"). 로그인하지 않았으면 답 받을 주소 `email` 을 적는다. 한 IP 에 한 시간 다섯 번 | 불필요 |
 | GET | `/api/v1/auth/me/inquiries` | 내 문의와 답. 최근 것부터 20개씩, 다음 쪽은 `before` | 필요 |
-| GET | `/api/v1/auth/admin/inquiries` | 문의 목록(운영자). `status`(open, answered)로 고른다. 운영자가 아니면 404 | 필요, 운영자 |
+| GET | `/api/v1/auth/admin/inquiries` | 문의 목록과 상자마다의 수(`counts`: all, open, answered, unread, 운영자). `status`(open, answered)로 고른다. 운영자가 아니면 404 | 필요, 운영자 |
+| GET, DELETE | `/api/v1/auth/admin/inquiries/{id}` | 문의 하나를 연다(처음이면 읽음 `read_at` 을 적는다), 지운다(204, 운영자) | 필요, 운영자 |
+| POST | `/api/v1/auth/admin/inquiries/delete` | 고른 문의들(`{"ids": [...]}`, 100개까지) 또는 상자 하나(`{"folder": "all" \| "open" \| "answered"}`)를 지운다. 답은 `{"deleted": 수}`(운영자) | 필요, 운영자 |
 | POST | `/api/v1/auth/admin/inquiries/{id}/reply` | 문의에 답한다(운영자). 한 번만, 답은 메일로 간다. 이미 답했으면 409 `inquiry.already_answered` | 필요, 운영자 |
 | POST | `/api/v1/auth/identity/verify` | 휴대폰 본인인증. 본인확인 업체에서 받은 `token` 을 낸다 | 필요 |
 | POST | `/api/v1/auth/guardian/request` | 미성년자가 보호자에게 결제 동의를 부탁한다. 보호자의 메일로 동의 링크가 간다 | 필요 |
@@ -1119,7 +1121,10 @@ PostgreSQL에 둔 이유와 어긋난다. 테이블에 적는 방식은 PostgreS
 - 답 메일(종류 `inquiry_reply`)은 하루 동안 다시 시도한다. 보냈는지는 보낸 메일의 기록에 남고, 운영자의 목록에 `reply_sent_at`, `reply_discarded_at` 으로 보인다. 버렸으면 다른 길로 알려야 한다.
 - 로그인한 사람은 마이페이지에서 답을 본다(`GET /me/inquiries`).
 - 운영자인지는 토큰이 아니라 지금의 그룹(`operators`)으로 본다. 운영자에서 빼면 바로 막힌다.
-- 계정을 비우면(탈퇴, 만 14세 미만) 그 사람의 문의를 지운다(`accounts/erasure.py`). 로그인하지 않고 보낸 문의의 보관 기간은 아직 정하지 않았다.
+- 계정을 비우면(탈퇴, 만 14세 미만) 그 사람의 문의를 지운다(`accounts/erasure.py`).
+- **보관은 보낸 지 1년이다**(2026-11-09 결정, 답했는지와 상관없다). 지난 것은 정리 명령(`manage.py delete_old_inquiries`, `docker/cron/auth.crontab` 의 매일 19:40 UTC)이 지운다.
+- 그 전에도 운영자가 지운다. 하나씩(`DELETE /admin/inquiries/{id}`), 고른 것만(`ids`), 상자 하나를 통째로(`folder`). 이미 맡긴 답 메일은 지워도 그대로 간다.
+- 운영자 화면은 메일함처럼 본다. 상자(모두, 답 기다림, 답함)와 수, 읽지 않은 줄. 문의를 처음 열면 `read_at` 이 적힌다(운영자 모두에게 함께다).
 
 ### 활동 배지
 
