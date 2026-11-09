@@ -3,6 +3,9 @@
 // 오류의 본문은 서버마다 {"detail"} 에 code, reason(게임의 409), retry_after 가 붙는다(docs/api/README.md 의 "오류의 모양").
 // 칸이 틀린 입력 오류는 {"detail", "errors": {칸: [글]}} 이다(결제 서버는 칸을 가르지 않아 errors 가 없다).
 // 상태 코드는 서버마다 다르다(400 이나 422). 화면은 상태 코드가 아니라 errors 로 알아본다(isInputError).
+// 프록시의 점검 답(503 maintenance)은 여기서 알린다(maintenance.ts). 실패한 응답은 모두 이 함수를 거친다.
+
+import { noteMaintenance } from './maintenance';
 
 export type FieldErrors = Record<string, string[]>;
 
@@ -48,7 +51,7 @@ const FALLBACK_DETAIL = '요청을 처리하지 못했습니다.';
 /** 실패한 응답을 ApiError 로. 본문이 JSON 이 아니어도(프록시의 오류 등) 상태 코드는 남는다 */
 export async function toApiError(response: Response): Promise<ApiError> {
   const body = await readJsonObject(response);
-  return new ApiError({
+  const error = new ApiError({
     status: response.status,
     detail: typeof body.detail === 'string' ? body.detail : FALLBACK_DETAIL,
     code: codeOf(body),
@@ -57,6 +60,8 @@ export async function toApiError(response: Response): Promise<ApiError> {
     requestId: response.headers.get('X-Request-ID') ?? undefined,
     body,
   });
+  noteMaintenance(error);
+  return error;
 }
 
 /** 실패의 까닭. 대개 code 이고, 게임 서버의 409 는 reason 에 싣는다(테이블의 table_full 같은 것) */

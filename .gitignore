@@ -21,6 +21,8 @@ coverage.out
 
 # staging 의 허용 주소(docker/nginx/allowlist/allow.conf.example). 운영자 집의 공인 IP 가 들어 있다
 /docker/nginx/allowlist/*.conf
+# 점검 파일(docker/nginx/maintenance/README.md). 운영 중에만 잠깐 만든다
+/docker/nginx/maintenance/maintenance.json
 
 # 바깥 백업의 확인 열쇠(docker-compose.staging.yml 의 backup-offsite). 이 열쇠로 버킷의 백업이 풀린다
 /backup-keys/

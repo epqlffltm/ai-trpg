@@ -5857,3 +5857,29 @@ details.room-panel[open] > summary {
   color: var(--ui-text-muted);
   font-size: 0.85em;
 }
+
+/* 점검과 장애(Stitch 8번의 둘째, 셋째). 틀 없이 위에 로고, 가운데에 알림 */
+.service-screen {
+  min-height: 100vh;
+  background: var(--ui-bg);
+}
+
+.service-screen__head {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+
+.service-screen__body {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding-top: 64px;
+  text-align: center;
+}
+
+.service-screen__window {
+  margin: 0;
+  color: var(--ui-accent);
+  font-weight: 600;
+}
