@@ -63,7 +63,7 @@ uv run python manage.py runserver
 SMTP_HOST=smtp.gmail.com
 SMTP_USER=내주소@gmail.com
 SMTP_PASSWORD=앱비밀번호16자리
-DEFAULT_FROM_EMAIL=AI TRPG <내주소@gmail.com>
+DEFAULT_FROM_EMAIL=이매망량의 서재 <내주소@gmail.com>
 ```
 
 메일 서버 설정이 있으면 서버는 메일을 직접 보내지 않고 발송함(DB)에 적기만 한다.

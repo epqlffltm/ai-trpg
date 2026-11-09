@@ -106,7 +106,7 @@ class NoticeTests(NoticeTestCase):
         self.assertEqual(MailReceipt.objects.count(), 1)
         message = mail.outbox[0]
         self.assertEqual(message.to, [BUYER_EMAIL])
-        self.assertEqual(message.subject, '[AI TRPG] 결제를 확인했습니다')
+        self.assertEqual(message.subject, '[이매망량의 서재] 결제를 확인했습니다')
         for text in (
             '플레이어1',
             ORDER_ID,
@@ -126,7 +126,7 @@ class NoticeTests(NoticeTestCase):
 
         self.assertEqual(response.data['status'], 'queued')
         message = mail.outbox[-1]
-        self.assertEqual(message.subject, '[AI TRPG] 청약철회를 마쳤습니다')
+        self.assertEqual(message.subject, '[이매망량의 서재] 청약철회를 마쳤습니다')
         for text in (
             '돌려 드리는 금액: 1,000원',
             '거둬들인 골드: 1,000',

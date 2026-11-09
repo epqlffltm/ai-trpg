@@ -138,7 +138,7 @@ class NoticeTests(NoticeTestCase):
         self.assertEqual(len(mail.outbox), 1)
         message = mail.outbox[0]
         self.assertEqual(message.to, [GUARDIAN_EMAIL])
-        self.assertEqual(message.subject, '[AI TRPG] 결제 알림')
+        self.assertEqual(message.subject, '[이매망량의 서재] 결제 알림')
         for text in ('플레이어1', 'credits-1000', '1,000원', '2026-03-02 18:30 (한국 시각)', '/guardian/revoke#token='):
             self.assertIn(text, message.body)
         # 아이디와 이메일은 보호자에게 보이지 않는다
@@ -150,7 +150,7 @@ class NoticeTests(NoticeTestCase):
         response = self.post(notice_body(self.minor, kind='refunded', occurred_at='2026-03-03T01:00:00Z'))
 
         self.assertEqual(response.data['status'], 'queued')
-        self.assertEqual(mail.outbox[-1].subject, '[AI TRPG] 청약철회 알림')
+        self.assertEqual(mail.outbox[-1].subject, '[이매망량의 서재] 청약철회 알림')
         self.assertEqual(GuardianNotice.objects.count(), 2)
 
     def test_without_a_consenting_guardian_it_is_only_recorded(self):

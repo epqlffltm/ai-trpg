@@ -19,6 +19,9 @@ from accounts.guardian_links import CONSENT_LINK_LIFETIME
 from accounts.models import EmailCodePurpose, GuardianNoticeKind, MailKind, MailReceipt, SecurityEvent, User
 from accounts.outbox import enqueue_mail
 
+# 메일 제목의 머리와 본문에 쓰는 사이트 이름. 웹의 이름(이매망량의 서재)과 같다
+SITE_NAME = '이매망량의 서재'
+
 # 보안 이벤트 요약 메일에 한 줄씩 적는 사건의 최대 수. 넘는 만큼은 건수만 알린다.
 # 공격이 크면 사건이 수백 건이 된다. 전부 적으면 메일이 읽을 수 없게 길어진다
 DIGEST_MAX_LISTED_EVENTS = 50
@@ -44,7 +47,7 @@ def build_email_code_message(*, purpose: str, code: str) -> tuple[str, str]:
         f'이 코드는 {minutes}분 동안만 쓸 수 있습니다.\n'
         '요청한 적이 없다면 이 메일을 무시해 주세요. 코드를 다른 사람에게 알려 주지 마세요.'
     )
-    return f'[AI TRPG] {title}', body
+    return f'[{SITE_NAME}] {title}', body
 
 
 def send_email_code(*, user: User, purpose: str, code: str) -> None:
@@ -76,7 +79,7 @@ def send_already_registered_notice(*, user: User) -> None:
     """
     enqueue_mail(
         to_email=user.email,
-        subject='[AI TRPG] 이미 가입된 이메일입니다',
+        subject=f'[{SITE_NAME}] 이미 가입된 이메일입니다',
         body=(
             '이 이메일 주소로 회원가입 요청이 들어왔습니다.\n'
             '이 주소는 이미 가입되어 있어 새 계정을 만들지 않았습니다.\n\n'
@@ -95,7 +98,7 @@ def send_signup_refused_notice(*, email: str) -> None:
     """
     enqueue_mail(
         to_email=email,
-        subject='[AI TRPG] 이 이메일로는 가입할 수 없습니다',
+        subject=f'[{SITE_NAME}] 이 이메일로는 가입할 수 없습니다',
         body=(
             '이 이메일 주소로 회원가입 요청이 들어왔습니다.\n'
             '이 주소로는 가입을 받지 않아 인증 코드를 보내지 않았습니다.\n\n'
@@ -127,7 +130,7 @@ def send_password_reset_link(*, user: User, token: str) -> None:
     link = build_password_reset_link(email=user.email, token=token)
     enqueue_mail(
         to_email=user.email,
-        subject='[AI TRPG] 비밀번호 재설정',
+        subject=f'[{SITE_NAME}] 비밀번호 재설정',
         body=(
             f'아이디 {user.username} 의 비밀번호를 다시 설정하려면 아래 링크를 열어 주세요.\n\n'
             f'{link}\n\n'
@@ -146,7 +149,7 @@ def send_password_changed_notice(*, user: User) -> None:
     """
     enqueue_mail(
         to_email=user.email,
-        subject='[AI TRPG] 비밀번호가 변경되었습니다',
+        subject=f'[{SITE_NAME}] 비밀번호가 변경되었습니다',
         body=(
             f'아이디 {user.username} 의 비밀번호가 변경되었습니다.\n\n'
             '본인이 변경했다면 이 메일을 무시해 주세요.\n'
@@ -186,7 +189,7 @@ def build_security_digest_message(*, events: list[SecurityEvent]) -> tuple[str, 
             '전체 기록은 관리자 화면의 "보안 이벤트" 에 있습니다.',
         ]
     )
-    return f'[AI TRPG] 보안 이벤트 {len(events)}건', body
+    return f'[{SITE_NAME}] 보안 이벤트 {len(events)}건', body
 
 
 def send_security_digest(*, recipients: list[str], events: list[SecurityEvent]) -> None:
@@ -224,9 +227,9 @@ def send_guardian_consent_request(*, minor: User, guardian_email: str, token: st
     link = build_guardian_link(base_url=settings.GUARDIAN_CONSENT_URL, token=token)
     enqueue_mail(
         to_email=guardian_email,
-        subject='[AI TRPG] 보호자 동의 요청',
+        subject=f'[{SITE_NAME}] 보호자 동의 요청',
         body=(
-            f'AI TRPG 의 회원 {minor.nickname} 님(만 19세 미만)이 이 주소를 보호자로 적고\n'
+            f'{SITE_NAME}의 회원 {minor.nickname} 님(만 19세 미만)이 이 주소를 보호자로 적고\n'
             '결제에 대한 동의를 부탁했습니다.\n\n'
             '동의하면 그 회원이 크레딧을 살 수 있습니다. 결제할 때마다 이 주소로 알림을 보내고,\n'
             '언제든 그 메일의 링크로 동의를 철회할 수 있습니다. 동의는 회원이 만 19세가 되는 날까지입니다.\n'
@@ -245,7 +248,7 @@ def send_guardian_consented_notice(*, minor: User, guardian_email: str, revoke_t
     link = build_guardian_link(base_url=settings.GUARDIAN_REVOKE_URL, token=revoke_token)
     enqueue_mail(
         to_email=guardian_email,
-        subject='[AI TRPG] 보호자 동의가 적혔습니다',
+        subject=f'[{SITE_NAME}] 보호자 동의가 적혔습니다',
         body=(
             f'회원 {minor.nickname} 님의 결제에 동의하셨습니다. 이제 그 회원이 크레딧을 살 수 있습니다.\n'
             '결제할 때마다 이 주소로 알림을 보냅니다.\n'
@@ -262,7 +265,7 @@ def send_guardian_revoked_notice(*, minor: User, guardian_email: str) -> None:
     """보호자에게 철회가 적혔음을 알린다."""
     enqueue_mail(
         to_email=guardian_email,
-        subject='[AI TRPG] 보호자 동의를 철회했습니다',
+        subject=f'[{SITE_NAME}] 보호자 동의를 철회했습니다',
         body=(
             f'회원 {minor.nickname} 님의 결제에 대한 동의를 철회하셨습니다. 이제 그 회원은 결제할 수 없습니다.\n'
             '이 주소로 더 메일을 보내지 않습니다.'
@@ -274,10 +277,10 @@ def send_guardian_revoked_notice(*, minor: User, guardian_email: str) -> None:
 def send_minor_guardian_notice(*, minor: User, consented: bool) -> None:
     """미성년자에게 보호자가 동의했거나 철회했음을 알린다."""
     if consented:
-        subject = '[AI TRPG] 보호자가 결제에 동의했습니다'
+        subject = f'[{SITE_NAME}] 보호자가 결제에 동의했습니다'
         body = '보호자가 결제에 동의했습니다. 이제 크레딧을 살 수 있습니다.\n결제할 때마다 보호자에게 알림이 갑니다.'
     else:
-        subject = '[AI TRPG] 보호자가 결제 동의를 철회했습니다'
+        subject = f'[{SITE_NAME}] 보호자가 결제 동의를 철회했습니다'
         body = (
             '보호자가 결제에 대한 동의를 철회했습니다. 이제 결제할 수 없습니다.\n'
             '다시 결제하려면 보호자에게 다시 동의를 받아 주세요.'
@@ -317,7 +320,7 @@ def send_guardian_payment_notice(
     link = build_guardian_link(base_url=settings.GUARDIAN_REVOKE_URL, token=revoke_token)
     enqueue_mail(
         to_email=guardian_email,
-        subject=f'[AI TRPG] {title}',
+        subject=f'[{SITE_NAME}] {title}',
         body=(
             f'회원 {minor.nickname} 님이 {verb}.\n\n'
             f'상품: {product_id}\n'
@@ -365,7 +368,7 @@ def send_payment_receipt(
     """
     enqueue_mail(
         to_email=user.email,
-        subject='[AI TRPG] 결제를 확인했습니다',
+        subject=f'[{SITE_NAME}] 결제를 확인했습니다',
         body=(
             f'{user.nickname} 님, 결제가 끝났습니다.\n\n'
             f'주문 번호: {order_id}\n'
@@ -400,7 +403,7 @@ def send_refund_receipt(
     """결제한 본인에게 청약철회(환불)가 끝났음을 알린다(#553). 돌려준 금액과 거둬들인 골드를 싣는다."""
     enqueue_mail(
         to_email=user.email,
-        subject='[AI TRPG] 청약철회를 마쳤습니다',
+        subject=f'[{SITE_NAME}] 청약철회를 마쳤습니다',
         body=(
             f'{user.nickname} 님, 청약철회(환불)를 마쳤습니다.\n\n'
             f'주문 번호: {order_id}\n'
@@ -428,7 +431,7 @@ def send_withdrawal_requested_notice(*, user: User, scheduled_at: datetime) -> N
     when = scheduled_at.astimezone(_KOREA).strftime('%Y-%m-%d %H:%M')
     enqueue_mail(
         to_email=user.email,
-        subject='[AI TRPG] 탈퇴 요청을 받았습니다',
+        subject=f'[{SITE_NAME}] 탈퇴 요청을 받았습니다',
         body=(
             f'{user.nickname} 님의 탈퇴 요청을 받았습니다. {when}(한국 시각)에 계정과 개인정보를 지웁니다.\n\n'
             '그 전에 다시 로그인하면 탈퇴를 취소할 수 있습니다. 그동안은 다른 기능을 쓸 수 없습니다.\n'
@@ -449,7 +452,7 @@ def send_withdrawal_reminder_notice(*, user: User, scheduled_at: datetime) -> No
     when = scheduled_at.astimezone(_KOREA).strftime('%Y-%m-%d %H:%M')
     enqueue_mail(
         to_email=user.email,
-        subject=f'[AI TRPG] {when}(한국 시각)에 계정을 지웁니다',
+        subject=f'[{SITE_NAME}] {when}(한국 시각)에 계정을 지웁니다',
         body=(
             f'{user.nickname} 님이 요청한 탈퇴를 {when}(한국 시각)에 마칩니다. 계정과 개인정보를 지웁니다.\n'
             '남은 골드와 실버가 사라지고 되돌릴 수 없습니다.\n\n'
@@ -464,7 +467,7 @@ def send_withdrawal_completed_notice(*, email: str) -> None:
     """탈퇴를 마쳤다고 알린다(#603). 계정의 주소는 이미 지웠으므로 지우기 전의 주소를 받는다."""
     enqueue_mail(
         to_email=email,
-        subject='[AI TRPG] 탈퇴를 마쳤습니다',
+        subject=f'[{SITE_NAME}] 탈퇴를 마쳤습니다',
         body='계정과 개인정보를 지웠습니다. 그동안 이용해 주셔서 감사합니다.\n이 주소로 더 메일을 보내지 않습니다.',
         kind=MailKind.WITHDRAWAL_COMPLETED,
     )
