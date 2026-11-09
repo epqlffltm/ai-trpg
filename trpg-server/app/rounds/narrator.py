@@ -828,6 +828,8 @@ class Move:
     wait: WaitNote | None = None
     # 엄폐하는 행동이면 그 결과(#276). 판정이 아니라 verdict 와 함께 있지 않다. 이 칸이 생기기 전에 굳힌 것은 None 이다
     cover: CoverNote | None = None
+    # 방어 태세를 잡았는가(#254). 그 라운드 동안 이 캐릭터를 노린 공격은 불리했다(차례의 줄의 guarded)
+    defending: bool = False
     # 이 라운드가 닫힐 때 굴린 되살아나기와 저절로 회복. 없었으면 None 이다(app/rounds/rests.py)
     revival: RevivalNote | None = None
     recovery: RecoveryNote | None = None
@@ -1108,6 +1110,8 @@ class MonsterTurnNote:
     npc_impact: NpcImpact | None = None
     # 쓰러진 인물을 쳤는가(#254). 맞혔으면 마무리했다(npc_impact 의 몸 상태가 죽음이다)
     finishing: bool = False
+    # 방어 태세를 잡은 캐릭터를 쳤는가(#254). 그러면 공격이 불리했다
+    guarded: bool = False
     # 공격에 장비가 든 것(#276). 무기도 방어 방식도 없었거나 이 칸이 생기기 전에 굳힌 것은 None 이다
     blow: BlowNote | None = None
     cost: list[ResourceNote] = field(default_factory=list)

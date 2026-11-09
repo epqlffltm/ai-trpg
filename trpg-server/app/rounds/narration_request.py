@@ -83,6 +83,7 @@ from app.rounds.narrator import (
 from app.rounds.secret_names import secret_names
 from app.rounds.state import (
     cover_of,
+    defend_of,
     disarm_of,
     door_of,
     has_outcome,
@@ -399,6 +400,11 @@ def to_wait(declaration: Declaration | None) -> WaitNote | None:
     if wait is None:
         return None
     return WaitNote(minutes=wait['minutes'], waited=wait['waited'], reason=wait['reason'])
+
+
+def to_defending(declaration: Declaration | None) -> bool:
+    """선언에 적힌 방어하기(#254)가 있는가. 방어하는 행동이 아니면 거짓이다."""
+    return defend_of(declaration) is not None
 
 
 def to_cover(declaration: Declaration | None) -> CoverNote | None:
@@ -1056,6 +1062,7 @@ def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
         downed=to_downed_strike(outcome.get('downed_strike')),
         npc_impact=to_npc_impact(outcome.get('npc_effect')),
         finishing=bool(outcome.get('finishing')),
+        guarded=bool(outcome.get('guarded')),
         blow=to_blow(outcome.get('blow')),
         cost=to_cost_words(outcome.get('cost')),
         injured=[one['name'] for one in outcome.get('injured') or [] if one['injury'] is not None],

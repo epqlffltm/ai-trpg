@@ -98,6 +98,8 @@ class ActionKind(enum.StrEnum):
     PAY = 'pay'
     # 지금 장소의 숨을 곳에 엄폐한다. 그 라운드 동안 그 장소의 커버로 커버 세이브를 받는다(#276). 세이브 방식에서만
     COVER = 'cover'
+    # 방어 태세를 잡는다(#254). 그 라운드 동안 이 캐릭터를 노린 몬스터와 NPC 의 공격은 불리하다
+    DEFEND = 'defend'
     # 지금 장소에 닿은 길의 문을 잠근다. 자물쇠는 그 열쇠로, 빗장은 빗장 쪽에서 건다(#281)
     LOCK = 'lock'
     # 지금 장소에 닿은 길의 문을 연다. 자물쇠는 그 열쇠로, 빗장은 빗장 쪽에서 푼다(#281)
@@ -720,6 +722,20 @@ class CoverAction(BaseModel):
     kind: Literal[ActionKind.COVER]
 
 
+class DefendAction(BaseModel):
+    """
+    방어 태세를 잡는 행동(#254, app/rounds/guards.py). 받는 값이 없다. 판정이 없다.
+
+    그 라운드 동안 이 캐릭터를 노린 몬스터와 NPC 의 공격은 불리하다(두 번 굴려 나쁜 것). 차례를 기다리지 않는다.
+    막는 것은 공격에 앞선다. 몬스터가 먼저 쳐도 든다. 그 라운드의 행동을 쓰므로 공격하지 못한다. 그것이 대가다.
+    서술이 "방패를 들었다"고 써도 방어 태세가 아니다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: Literal[ActionKind.DEFEND]
+
+
 class SetTrapAction(BaseModel):
     """
     가진 덫 물건(item) 하나를 지금 서 있는 장소에 숨겨 놓는 행동(#806, app/rounds/trap_actions.py). 판정이 없다.
@@ -768,6 +784,7 @@ AnyAction = (
     | SellAction
     | PayAction
     | CoverAction
+    | DefendAction
     | LockAction
     | UnlockAction
     | PickAction

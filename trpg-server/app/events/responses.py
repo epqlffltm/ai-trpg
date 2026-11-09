@@ -401,6 +401,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'finishing',
         'success',
         'downed_strike',
+        # 방어 태세를 잡은 캐릭터를 쳤는가(#254). 그때만 있다. 공격이 불리했다
+        'guarded',
         # 공격에 장비가 든 것(#276). 무기와 그 공격 보정, 맞은 부위, 그 부위의 방어다
         'blow',
     ),
@@ -418,6 +420,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'character_name',
         'success',
         'downed_strike',
+        # 방어 태세를 잡은 캐릭터를 쳤는가(#254). 그때만 있다. 공격이 불리했다
+        'guarded',
         'blow',
     ),
     # 부상은 공개다. 누가 무엇을 입었고 언제 풀리는지(짧은 것은 라운드, 오래 가는 것은 게임 안의 시각).

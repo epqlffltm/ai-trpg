@@ -34,13 +34,22 @@ def defending_ability(ruleset: Ruleset, attack: AttackSnapshot) -> str | None:
 
 
 def attacker_side(
-    ruleset: Ruleset, abilities: Mapping[str, int], injuries: Sequence, attack: AttackSnapshot, blow: Blow
+    ruleset: Ruleset,
+    abilities: Mapping[str, int],
+    injuries: Sequence,
+    attack: AttackSnapshot,
+    blow: Blow,
+    guarded: bool = False,
 ) -> Side:
-    """공격하는 쪽. 공격의 능력치의 점수에 무기의 보정과 난이도의 보정을 더한다. 입은 부상의 영향을 받는다."""
+    """
+    공격하는 쪽. 공격의 능력치의 점수에 무기의 보정과 난이도의 보정을 더한다. 입은 부상의 영향을 받는다.
+
+    받는 쪽이 방어 태세면(guarded, #254, app/rounds/guards.py) 불리하다.
+    """
     difficulty = checks.find_difficulty(ruleset, attack.difficulty)
     shift = checks.difficulty_shift(ruleset, difficulty)
     hindrance = round_injuries.hindrance_for(ruleset, injuries, attack.ability)
-    return Side(score=abilities[attack.ability], adjust=blow.bonus + shift, hindrance=hindrance)
+    return Side(score=abilities[attack.ability], adjust=blow.bonus + shift, hindrance=hindrance, disadvantage=guarded)
 
 
 def defender_side(ruleset: Ruleset, abilities: Mapping[str, int], injuries: Sequence, ability: str, blow: Blow) -> Side:

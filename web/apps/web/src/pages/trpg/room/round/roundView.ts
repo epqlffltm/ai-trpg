@@ -296,6 +296,8 @@ function otherLine(outcome: Outcome): string | null {
   if ('rest' in outcome) return restLine(outcome.rest);
   if ('wait' in outcome) return waitLine(outcome.wait);
   if ('cover' in outcome) return coverLine(outcome.cover);
+  // 방어하기(#254). 그 라운드 동안 나를 노린 공격이 불리했다
+  if ('defend' in outcome) return '방어 태세: 이 라운드에 나를 노린 공격이 불리했습니다.';
   if ('door' in outcome) return doorLine(outcome.door);
   return null;
 }

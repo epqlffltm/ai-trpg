@@ -21,6 +21,7 @@ NPC 의 차례(#487). 싸움이 붙은 적대 인물이 캐릭터 하나를 공�
   앞의 것이 칠 수 있는 대상이 아니면(쓰러졌다) 다음 것으로 간다. 고를 것이 하나뿐이면 굴리지 않는다.
 판정은 인물의 점수와 공격의 난이도로 굴린다. 몬스터와 달리 인물은 부상을 입으므로 그 영향을 받는다.
 판의 규칙에 막는 규칙이 있으면 맞서는 굴림이다(#254, app/rounds/defenses.py). 몬스터와 같다.
+방어 태세를 잡은 캐릭터를 치면 공격이 불리하다(#254, app/rounds/guards.py). 몬스터와 같다.
 맞히면 그 공격의 양의 등급만큼 피해를 준다. 피해, 쓰러짐, 부상 표는 앉은 사람의 것과 같다(change_sheet).
 쓰러진 대상을 맞히면 피해 대신 죽음의 굴림 실패가 쌓인다(몬스터의 hit_outcome).
 친 대상과는 싸운 것으로 적는다(mark_npc_fight).
@@ -33,7 +34,7 @@ from app.engine import check as checks
 from app.engine.check import HinderedCheck, Side
 from app.engine.dice import choose
 from app.engine.ruleset import ResourceHolder
-from app.rounds import blows, defenses, foe_traps
+from app.rounds import blows, defenses, foe_traps, guards
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import NO_BLOW, Blow
 from app.rounds.cast import CastMember, reaches
@@ -98,7 +99,9 @@ def pick_victim(judging: Judging, person: CastMember, victims: list[TableMember]
     return choose(opponents or victims, judging.dice)
 
 
-def roll_attack(judging: Judging, person: CastMember, attack: AttackSnapshot, blow: Blow = NO_BLOW) -> HinderedCheck:
+def roll_attack(
+    judging: Judging, person: CastMember, attack: AttackSnapshot, blow: Blow = NO_BLOW, guarded: bool = False
+) -> HinderedCheck:
     """
     공격 하나의 판정. 인물의 그 능력치 점수와 공격의 난이도로 굴린다. 인물이 입은 부상의 영향을 받는다.
 
@@ -109,17 +112,24 @@ def roll_attack(judging: Judging, person: CastMember, attack: AttackSnapshot, bl
     difficulty = raised_difficulty(judging, attack, blow)
     hindrance = round_injuries.hindrance_for(ruleset, person.npc.injuries, attack.ability)
     score = person.npc.abilities[attack.ability]
-    return checks.resolve_hindered(ruleset, score, difficulty, judging.dice, hindrance, bonus=blow.bonus)
+    return checks.resolve_hindered(
+        ruleset, score, difficulty, judging.dice, hindrance, forced_disadvantage=guarded, bonus=blow.bonus
+    )
 
 
 def roll_strike(
-    judging: Judging, person: CastMember, attack: AttackSnapshot, blow: Blow, defense: Side | None
+    judging: Judging,
+    person: CastMember,
+    attack: AttackSnapshot,
+    blow: Blow,
+    defense: Side | None,
+    guarded: bool = False,
 ) -> tuple[HinderedCheck, dict]:
     """공격 하나를 굴린다. 몬스터의 것과 같다(app/rounds/monster_attacks.py 의 roll_strike). 인물의 점수와 부상이다."""
     if defense is None:
-        return roll_attack(judging, person, attack, blow), {}
+        return roll_attack(judging, person, attack, blow, guarded), {}
     ruleset = judging.ruleset
-    side = defenses.attacker_side(ruleset, person.npc.abilities, person.npc.injuries, attack, blow)
+    side = defenses.attacker_side(ruleset, person.npc.abilities, person.npc.injuries, attack, blow, guarded)
     opposed = checks.resolve_opposed(ruleset, side, defense, judging.dice)
     return opposed.attack, {'defense': defenses.defense_document(ruleset, attack, opposed.defense)}
 
@@ -146,10 +156,12 @@ def take_npc_turn(judging: Judging, person: CastMember) -> dict:
         return short_outcome(attack, victim)
     cost = pay(judging, person.npc, attack, ResourceHolder.NPCS)
     blow = plan_attack_blow(judging, blows.npc_weapon(judging, person, attack), victim)
-    rolled, defended = roll_strike(
-        judging, person, attack, blow, defenses.member_defense(judging.ruleset, victim, attack, blow)
-    )
+    defense = defenses.member_defense(judging.ruleset, victim, attack, blow)
+    guarded = guards.is_guarded(judging, victim)
+    rolled, defended = roll_strike(judging, person, attack, blow, defense, guarded)
     innate = person.definition.nature if person.definition is not None else None
     outcome = hit_outcome(judging, attack, victim, rolled.check, blow, innate)
-    turn = {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled), **defended}
+    turn = guards.with_guard(
+        {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled), **defended}, guarded
+    )
     return foe_traps.with_trap(turn, foe_traps.npc_steps(judging, person))

@@ -85,6 +85,8 @@ function KindFields({ draft, ctx, onChange }: Omit<Props, 'error'>) {
       return <p className="hint">지금 있는 곳에서 숨긴 길과 물건을 찾습니다. 무엇으로 굴리는지는 판이 정합니다.</p>;
     case 'cover':
       return <CoverHint ctx={ctx} />;
+    case 'defend':
+      return <p className="hint">이 라운드 동안 나를 노린 몬스터와 인물의 공격이 불리해집니다. 몬스터가 먼저 쳐도 듭니다. 이 라운드에는 공격하지 못합니다.</p>;
     case 'rest':
       return <RestFields draft={draft} ctx={ctx} onChange={onChange} />;
     case 'wait':

@@ -217,6 +217,13 @@ def rest_of(declaration: Declaration | None) -> dict | None:
     return declaration.outcome.get('rest')
 
 
+def defend_of(declaration: Declaration | None) -> dict | None:
+    """이 선언에 적힌 방어하기의 결과(app/rounds/guards.py, #254). 방어하는 행동이 아니었거나 결과가 없으면 None."""
+    if declaration is None or declaration.outcome is None:
+        return None
+    return declaration.outcome.get('defend')
+
+
 def cover_of(declaration: Declaration | None) -> dict | None:
     """이 선언에 적힌 엄폐하기의 결과(app/rounds/covers.py). 엄폐하는 행동이 아니었거나 결과가 없으면 None."""
     if declaration is None or declaration.outcome is None:
