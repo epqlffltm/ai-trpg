@@ -164,7 +164,14 @@ function attackText(payload: Payload, ctx: EventContext, event: TableEvent): str
   const hit = flag(payload, 'success') ? '맞힘' : '빗나감';
   const blow = blowOf(payload);
   const gear = blow ? blowLine(blow) : null;
-  return `${text(payload, 'name') ?? '누군가'}: ${attackName(payload)} → ${who(payload, ctx, event)} ${hit}${gear ? ` (${gear})` : ''}`;
+  return `${text(payload, 'name') ?? '누군가'}: ${attackName(payload)} → ${struckOf(payload, ctx, event)} ${hit}${gear ? ` (${gear})` : ''}`;
+}
+
+/** 공격을 받은 쪽. 몬스터가 인물을 쳤으면(#254) 그 인물의 장면의 이름이고, 쓰러진 인물을 쳤으면 "쓰러진" 이 붙는다 */
+function struckOf(payload: Payload, ctx: EventContext, event: TableEvent): string {
+  const npc = text(payload, 'target_name');
+  if (!npc) return who(payload, ctx, event);
+  return flag(payload, 'finishing') ? `쓰러진 ${npc}` : npc;
 }
 
 /** 공격의 이름. 서버는 공격을 {name, ability, difficulty, harm} 로 싣는다. 글 하나로 와도 읽는다 */

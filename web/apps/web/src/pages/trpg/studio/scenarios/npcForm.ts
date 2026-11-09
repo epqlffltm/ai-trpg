@@ -1,7 +1,8 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/npcForm.ts
 // 인물 시트 하나의 입력과 인물 시트 목록을 바꾸는 것(B9 인물 탭). 순수한 함수다.
 // 인물 시트는 붙인 로어북의 인물 항목 하나에 숫자(시트), 처음 태도, 둔한지, 훔치다 들켰을 때, 상인인지,
-// 지닌 장비(착용, 떨어질 확률)와 소지품(떨어질 확률), 공격을 준다. 시트는 비울 수 없다. 숫자를 주지 않으려면 시트를 지운다(기본 인물 시트).
+// 지닌 장비(착용, 떨어질 확률)와 소지품(떨어질 확률), 공격, 한편인 몬스터(#254)를 준다.
+// 시트는 비울 수 없다. 숫자를 주지 않으려면 시트를 지운다(기본 인물 시트).
 
 import type { NpcAttitude, NpcCaught, NpcSheet, NpcSheetBody, ItemRule, Ruleset } from '../../../../api/types';
 import { attitudeLabel } from '../../labels';
@@ -26,7 +27,7 @@ export type NpcDraft = {
   resistances: NpcSheet['resistances'];
   /** 타고난 피해의 성질(#886 ③). 고르는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
   nature: string | null;
-  /** 한편인 몬스터(#254). 고르는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
+  /** 한편인 몬스터(#254). 도감의 몬스터 id 들이다. 이 몬스터들은 이 인물을 치지 않는다 */
   alliedMonsters: NpcSheet['allied_monsters'];
 };
 
@@ -108,7 +109,19 @@ export function withoutNpcSheet(npcSheets: NpcSheet[], entryId: string): NpcShee
   return npcSheets.filter((one) => one.entry_id !== entryId);
 }
 
-/** 목록의 한 줄. "근력 12 · HP 10 · 적대 · 상인 · 공격 2 · 장비 1 · 소지품 3" */
+/** 한편으로 고를 수 있는 몬스터. 시트를 적은 몬스터의 차례이고, 고른 것 중 시트가 없는 것(시트를 지웠다)은 뒤에 남긴다 */
+export function allyChoices(sheeted: string[], chosen: string[]): { id: string; sheeted: boolean }[] {
+  const missing = chosen.filter((id) => !sheeted.includes(id));
+  return [...sheeted.map((id) => ({ id, sheeted: true })), ...missing.map((id) => ({ id, sheeted: false }))];
+}
+
+/** 한편인 몬스터 하나를 넣거나 뺀다. 넣으면 끝에 붙는다(두 번 넣지 않는다) */
+export function withAlly(chosen: string[], monsterId: string, allied: boolean): string[] {
+  const rest = chosen.filter((id) => id !== monsterId);
+  return allied ? [...rest, monsterId] : rest;
+}
+
+/** 목록의 한 줄. "근력 12 · HP 10 · 적대 · 상인 · 공격 2 · 장비 1 · 소지품 3 · 한편 몬스터 1" */
 export function npcLine(npc: NpcSheet, rules: Ruleset | null): string {
   const parts = [sheetLine(npc.sheet, rules), attitudeLabel(npc.attitude)];
   if (npc.merchant) parts.push('상인');
@@ -116,5 +129,6 @@ export function npcLine(npc: NpcSheet, rules: Ruleset | null): string {
   if (npc.attacks.length > 0) parts.push(`공격 ${npc.attacks.length}`);
   if (npc.equipment.length > 0) parts.push(`장비 ${npc.equipment.length}`);
   if (npc.inventory.length > 0) parts.push(`소지품 ${npc.inventory.length}`);
+  if (npc.allied_monsters.length > 0) parts.push(`한편 몬스터 ${npc.allied_monsters.length}`);
   return parts.filter(Boolean).join(' · ');
 }

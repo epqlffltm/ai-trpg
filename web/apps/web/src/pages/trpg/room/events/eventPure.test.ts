@@ -165,6 +165,10 @@ describe('eventLine', () => {
     expect(line('monster_chased', chase)?.text).toBe('들개: 렌을(를) 쫓아 배수로까지 따라옴');
     const attack = { name: '할퀴기', ability: 'str', difficulty: 'normal', harm: 'light' };
     expect(line('monster_attacked', { name: '고블린', attack, character_name: '렌', success: false })?.text).toBe('고블린: 할퀴기 → 렌 빗나감');
+    // 몬스터가 같은 장소의 인물을 쳤다(#254). 쓰러진 인물을 쳤으면 "쓰러진" 이 붙는다
+    const healer = { name: '고블린', attack, target_entry_id: 'n1', target_name: '약사', success: true };
+    expect(line('monster_attacked', { ...healer, finishing: false })?.text).toBe('고블린: 할퀴기 → 약사 맞힘');
+    expect(line('monster_attacked', { ...healer, finishing: true })?.text).toBe('고블린: 할퀴기 → 쓰러진 약사 맞힘');
     const blow = {
       weapon: null,
       location: 'body',
