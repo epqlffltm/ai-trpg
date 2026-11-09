@@ -409,7 +409,8 @@ class CheckOutcome(BaseModel):
     modifier: int
     # over: 눈에 보정을 더한 값. under: 눈
     total: int
-    # over: 난이도의 목표값. total 이 이 값 이상이면 성공이다. under: 기량. total 이 이 값 이하이면 성공이다
+    # over: 난이도의 목표값. total 이 이 값 이상이면 성공이다. under: 기량. total 이 이 값 이하이면 성공이다.
+    # 맞서는 굴림의 타격(#254)이면 over 의 목표값은 받는 쪽의 합 + 1 이다(받는 쪽의 굴림은 내보내지 않는다)
     target: int
     success: bool
     style: RollStyle = RollStyle.OVER
