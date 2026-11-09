@@ -4,7 +4,18 @@
 
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import type { ListingOrder } from '../../api/listingOrder';
-import { CHARACTER_PAGE_SIZE, CONVERSATION_PAGE_SIZE, fetchConversationsWith, fetchPublicCharacterPage, fetchUnlocksOf } from '../../api/chatCharacters';
+import {
+  CHARACTER_PAGE_SIZE,
+  CONVERSATION_PAGE_SIZE,
+  fetchChatAchievementRates,
+  fetchChatAchievements,
+  fetchConversationsWith,
+  fetchPublicCharacterPage,
+  fetchUnlocksOf,
+} from '../../api/chatCharacters';
+
+/** 캐릭터의 업적(내 기록과 달성률)의 열쇠. 답으로 업적을 받으면 이 아래를 다시 읽는다 */
+export const CHAT_ACHIEVEMENTS_KEY = ['chat', 'achievements'] as const;
 
 export function characterBrowseQuery(signedIn: boolean, order: ListingOrder = 'recent') {
   return infiniteQueryOptions({
@@ -30,6 +41,23 @@ export function unlocksOfQuery(characterId: string) {
   return queryOptions({
     queryKey: ['chat', 'gallery', 'character', characterId],
     queryFn: ({ signal }) => fetchUnlocksOf(characterId, signal),
+  });
+}
+
+/** 이 캐릭터에서 내가 받은 업적. 로그인했을 때만 읽는다 */
+export function chatAchievementsQuery(characterId: string, signedIn = true) {
+  return queryOptions({
+    queryKey: [...CHAT_ACHIEVEMENTS_KEY, 'mine', characterId],
+    queryFn: ({ signal }) => fetchChatAchievements(characterId, signal),
+    enabled: signedIn,
+  });
+}
+
+/** 이 캐릭터의 업적마다 받은 사람의 수와 대화한 사람의 수. 로그인하지 않아도 읽는다 */
+export function chatAchievementRatesQuery(characterId: string) {
+  return queryOptions({
+    queryKey: [...CHAT_ACHIEVEMENTS_KEY, 'rates', characterId],
+    queryFn: ({ signal }) => fetchChatAchievementRates(characterId, signal),
   });
 }
 

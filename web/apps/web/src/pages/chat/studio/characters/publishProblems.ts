@@ -17,6 +17,7 @@ const PROBLEMS: Record<string, ProblemText> = {
   image_not_owned: { text: '내가 올리지 않은 그림을 가리킵니다(소개 글의 그림 포함).', section: 'images' },
   lorebook_missing: { text: '붙인 로어북 가운데 지워진 것이 있습니다.', section: 'lorebooks' },
   lorebook_unpublished: { text: '붙인 로어북 가운데 아직 게시하지 않은 것이 있습니다.', section: 'lorebooks' },
+  achievement_target_missing: { text: '업적의 조건이 없는 장소, 물건, 이벤트 씬, 호감도 단계를 가리킵니다.', section: 'achievements' },
 };
 
 /** 문제 하나의 글과 탭. 모르는 이름이면 이름 그대로, 탭은 없다 */

@@ -286,6 +286,15 @@ export type TimeOfDay = Asset['schemas']['TimeOfDay'];
 export type AssetSprite = Asset['schemas']['Sprite'];
 export type AssetEventScene = Asset['schemas']['EventScene'];
 export type AssetSceneWhen = Asset['schemas']['SceneWhen'];
+// 캐릭터의 업적(판의 형식 11, docs/architecture/achievements.md 의 "chat"). 세계관의 업적과 섞이지 않게 앞에 Asset 을 붙인다
+export type AssetCharacterAchievement = Asset['schemas']['CharacterAchievement'];
+export type AssetAchievementCondition = Asset['schemas']['CharacterAchievementCondition'];
+export type AssetAchievementKind = Asset['schemas']['AchievementKind'];
+export type AssetAchievementMatch = Asset['schemas']['AchievementMatch'];
+export type PublicCharacterAchievement = Asset['schemas']['PublicCharacterAchievement'];
+// 캐릭터의 업적에서 내가 받은 것과 달성률(chat 서버)
+export type ChatAchievementRecords = Chat['schemas']['AchievementRecordList'];
+export type ChatAchievementRates = Chat['schemas']['AchievementRates'];
 // chat 의 로어북(C6 의 로어북 붙이기). TRPG 의 LoreEntry, LoreKind 와 섞이지 않게 앞에 Asset 을 붙인다
 export type AssetLorebookPage = Asset['schemas']['LorebookPage'];
 export type AssetLorebookSummary = Asset['schemas']['LorebookSummary'];

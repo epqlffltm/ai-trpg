@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import type { AssetCharacterDetail } from '../../../../api/types';
+import { AchievementsTab } from './AchievementsTab';
 import { AffectionTab } from './AffectionTab';
 import { BasicsTab } from './BasicsTab';
 import { CHARACTERS_PATH } from './characterPaths';
@@ -102,6 +103,7 @@ function panelOf(tab: CharacterTab, character: AssetCharacterDetail): ReactNode 
   if (tab === 'scenes') return <ScenesTab character={character} />;
   if (tab === 'lorebooks') return <LorebooksTab character={character} />;
   if (tab === 'shortcuts') return <ShortcutsTab character={character} />;
+  if (tab === 'achievements') return <AchievementsTab character={character} />;
   return <PublishTab character={character} />;
 }
 
