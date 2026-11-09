@@ -14,7 +14,9 @@ from server_core.auth.tokens import AccessClaims
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.achievements import repository
-from app.achievements.schemas import ScenarioAchievementOut, ScenarioAchievements
+from app.achievements.repository import EarnedRow
+from app.achievements.schemas import MyAchievementOut, MyAchievementPage, ScenarioAchievementOut, ScenarioAchievements
+from app.assets.ratings import allowed_ratings
 from app.assets.scenarios.snapshot import AchievementSnapshot, read_snapshot
 from app.listings.service import get_public
 
@@ -50,3 +52,39 @@ async def scenario_achievements(
     earned = await mine(session, viewer, scenario_id)
     items = [shown(one, earned.get(one.id), counts.get(one.id, 0)) for one in achievements]
     return ScenarioAchievements(items=items, players=await repository.count_players(session, scenario_id))
+
+
+def find_definition(achievements: list[dict] | None, achievement_id: str) -> AchievementSnapshot | None:
+    """판의 업적들(문서의 칸 그대로)에서 그 업적. 판이 없거나 그 업적을 뺐으면 None."""
+    for entry in achievements or []:
+        if isinstance(entry, dict) and entry.get('id') == achievement_id:
+            return AchievementSnapshot.model_validate(entry)
+    return None
+
+
+def to_mine(row: EarnedRow, viewer: AccessClaims) -> MyAchievementOut:
+    """받은 업적 하나를 응답의 모양으로. 받은 테이블의 판을 먼저, 없으면 지금 공개 중인 판의 정의를 쓴다."""
+    found = find_definition(row.played, row.achievement_id) or find_definition(row.listed, row.achievement_id)
+    listed = (
+        not row.deleted
+        and row.listed is not None
+        and row.listing_rating is not None
+        and row.listing_rating in allowed_ratings(viewer)
+    )
+    return MyAchievementOut(
+        scenario_id=row.scenario_id,
+        scenario_title=row.title,
+        listed=listed,
+        achievement_id=row.achievement_id,
+        name=found.name if found else None,
+        description=found.description if found else None,
+        image_id=found.image_id if found else None,
+        earned_at=row.earned_at,
+    )
+
+
+async def my_achievements(session: AsyncSession, viewer: AccessClaims, limit: int, offset: int) -> MyAchievementPage:
+    """보는 사람이 받은 업적의 한 쪽. 모든 시나리오의 것이다."""
+    rows = await repository.earned_page(session, viewer.user_id, limit, offset)
+    total = await repository.count_earned_by(session, viewer.user_id)
+    return MyAchievementPage(items=[to_mine(row, viewer) for row in rows], total=total)

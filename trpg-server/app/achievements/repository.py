@@ -9,13 +9,18 @@
 
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.achievements.models import PlayerAchievement, ScenarioPlayer
+from app.assets.models import Asset, ScenarioVersion
+from app.listings.models import Listing
+from app.tables.models import GameTable
 
 
 async def mark_played(session: AsyncSession, scenario_id: uuid.UUID, user_ids: Sequence[uuid.UUID]) -> None:
@@ -69,6 +74,68 @@ async def earned_by(session: AsyncSession, user_id: uuid.UUID, scenario_id: uuid
         PlayerAchievement.user_id == user_id, PlayerAchievement.scenario_id == scenario_id
     )
     return {achievement_id: earned_at for achievement_id, earned_at in await session.execute(query)}
+
+
+@dataclass(frozen=True)
+class EarnedRow:
+    """
+    내가 받은 업적 하나와 그것을 알아볼 거리(GET /achievements/mine).
+
+    played 는 받은 테이블의 판의 업적들, listed 는 지금 공개 중인 판의 업적들이다(판 문서의 achievements 만 읽는다).
+    테이블이 지워졌거나 공개하지 않았으면 None 이다. listing_rating 은 공개 정보의 등급이다(공개 정보가 없으면 None).
+    공개 중인지는 listed 로 본다(공개를 내려도 공개 정보와 등급은 남는다).
+    """
+
+    scenario_id: uuid.UUID
+    achievement_id: str
+    earned_at: datetime
+    title: str
+    deleted: bool
+    played: list[dict] | None
+    listed: list[dict] | None
+    listing_rating: str | None
+
+
+async def earned_page(session: AsyncSession, user_id: uuid.UUID, limit: int, offset: int) -> list[EarnedRow]:
+    """
+    그 사람이 받은 업적의 한 쪽. 받은 때가 늦은 것부터다. 같은 때끼리는 시나리오, 업적의 차례다(쪽이 흔들리지 않게).
+
+    판의 큰 문서(snapshot)는 통째로 읽지 않고 업적의 칸(achievements)만 읽는다.
+    """
+    played_version = aliased(ScenarioVersion)
+    listed_version = aliased(ScenarioVersion)
+    query = (
+        select(
+            PlayerAchievement.scenario_id,
+            PlayerAchievement.achievement_id,
+            PlayerAchievement.earned_at,
+            Asset.title,
+            Asset.deleted_at.is_not(None),
+            played_version.snapshot['achievements'],
+            listed_version.snapshot['achievements'],
+            Listing.rating,
+        )
+        .join(Asset, Asset.id == PlayerAchievement.scenario_id)
+        .outerjoin(GameTable, GameTable.id == PlayerAchievement.table_id)
+        .outerjoin(played_version, played_version.id == GameTable.version_id)
+        .outerjoin(Listing, Listing.scenario_id == PlayerAchievement.scenario_id)
+        .outerjoin(listed_version, listed_version.id == Listing.version_id)
+        .where(PlayerAchievement.user_id == user_id)
+        .order_by(PlayerAchievement.earned_at.desc(), PlayerAchievement.scenario_id, PlayerAchievement.achievement_id)
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = await session.execute(query)
+    return [
+        EarnedRow(scenario_id, achievement_id, earned_at, title, deleted, played, listed, rating)
+        for scenario_id, achievement_id, earned_at, title, deleted, played, listed, rating in rows
+    ]
+
+
+async def count_earned_by(session: AsyncSession, user_id: uuid.UUID) -> int:
+    """그 사람이 받은 업적의 수(모든 시나리오)."""
+    query = select(func.count()).select_from(PlayerAchievement).where(PlayerAchievement.user_id == user_id)
+    return await session.scalar(query) or 0
 
 
 async def delete_all_of(session: AsyncSession, user_id: uuid.UUID) -> None:
