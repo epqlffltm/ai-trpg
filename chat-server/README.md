@@ -151,6 +151,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | DELETE | `/api/v1/chat/conversations/{id}` | 지우기. 204. 지운 시각만 적는다 | access 토큰 |
 | GET | `/api/v1/chat/gallery` | 내가 연 [이벤트 씬](#이벤트-씬)(`{items: [{character_id, scene_id, unlocked_at}], total}`). 최근에 연 것부터. `character_id`(asset 서버의 캐릭터 id), `limit`, `offset` | access 토큰 |
 | GET | `/api/v1/chat/achievements` | 그 캐릭터에서 내가 받은 [업적](#업적)들(`?character_id=`, 받은 차례. `{achievement_id, name, description, image_id, earned_at, conversation_id}`) | access 토큰 |
+| GET | `/api/v1/chat/achievements/mine` | 내가 받은 [업적](#업적) 전부(`?limit=`(1~100, 기본 20)`&offset=`). 모든 캐릭터의 것을 받은 때가 늦은 것부터, `{items: [{character_id, character_name, achievement_id, name, description, image_id, earned_at, conversation_id}], total}`. 캐릭터의 이름은 내가 가져온 마지막 판의 것이고 없으면 null | access 토큰 |
 | GET | `/api/v1/chat/achievements/rates` | 그 캐릭터의 [업적](#업적)마다 받은 사람의 수와 대화한 사람의 수(`?character_id=`, `{players, items: [{achievement_id, earned_count}]}`) | 없음 |
 | GET | `/api/v1/chat/service/stats/character-starts` | 캐릭터(asset 의 id)마다 대화를 시작한 수 `{recent_days: 7, items: [{work_id, total, recent}]}`(#985). asset 서버가 한 시간마다 받아 가 랭킹을 만든다. 지운 대화도 센다. 프록시는 밖에서 받지 않는다(404) | asset 서버의 서명(`ASSET_SECRET`) |
 | POST | `/api/v1/chat/service/users/{public_id}/withdrawal` | [탈퇴](#탈퇴) 알림 받기. `{withdrawn_at}`. 200 `{"status": "processed"}`. 프록시는 밖에서 받지 않는다(404) | 인증 서버의 서명 |
@@ -523,6 +524,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - **알리기.** 처음 받은 업적은 그 답의 `done` 메시지의 `achievements`(`[{id, name, description, image_id}]`, 판의 차례)에 실린다.
 - **달성률.** 대화한 사람은 그 캐릭터와의 대화에서 답을 한 번이라도 받은 사람이다(`character_players`). 이 표가 생긴 뒤부터 센다.
   `GET /achievements/rates` 는 수만 준다(로그인하지 않아도 본다). 업적의 이름과 차례, 숨긴 업적을 가리는 것은 캐릭터의 소개(asset 서버)가 한다.
+  `GET /achievements/mine` 은 마이페이지의 "내 업적"이 읽는다. 모든 캐릭터의 내 기록을 받은 때가 늦은 것부터 주고, 캐릭터의 이름은 내가 가져온 그 캐릭터의 마지막 판에서 꺼낸다.
 - 탈퇴하면 그 사람의 받은 업적과 대화한 기록을 지운다(달성률에서 빠진다). 대화를 지우면 받은 대화만 비운다.
 
 ### 장면 그림

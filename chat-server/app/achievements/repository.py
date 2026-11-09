@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.achievements.models import AchievementRecord, CharacterPlayer
 from app.assets.schemas import AchievementDocument
+from app.conversations.models import ImportedCharacter
 
 
 async def mark_played(session: AsyncSession, owner_id: uuid.UUID, character_source: uuid.UUID, now: datetime) -> None:
@@ -84,6 +85,42 @@ async def achievements_of(
         .order_by(AchievementRecord.earned_at, AchievementRecord.achievement_id)
     )
     return list(await session.scalars(query))
+
+
+async def achievement_page(
+    session: AsyncSession, owner_id: uuid.UUID, limit: int, offset: int
+) -> list[tuple[AchievementRecord, str | None]]:
+    """
+    그 사람이 받은 업적의 한 쪽과 그 캐릭터의 이름. 모든 캐릭터의 것이고 받은 때가 늦은 것부터다.
+
+    같은 때끼리는 캐릭터, 업적의 차례다(쪽이 흔들리지 않게). 이름은 그 사람이 가져온 그 캐릭터의 마지막 판의 것이다.
+    가져온 판이 없으면 None 이다.
+    """
+    name = (
+        select(ImportedCharacter.name)
+        .where(
+            ImportedCharacter.owner_id == owner_id, ImportedCharacter.source_id == AchievementRecord.character_source
+        )
+        .order_by(ImportedCharacter.version.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    query = (
+        select(AchievementRecord, name)
+        .where(AchievementRecord.owner_id == owner_id)
+        .order_by(
+            AchievementRecord.earned_at.desc(), AchievementRecord.character_source, AchievementRecord.achievement_id
+        )
+        .limit(limit)
+        .offset(offset)
+    )
+    return [(record, character_name) for record, character_name in await session.execute(query)]
+
+
+async def count_achievements_of(session: AsyncSession, owner_id: uuid.UUID) -> int:
+    """그 사람이 받은 업적의 수(모든 캐릭터)."""
+    query = select(func.count()).select_from(AchievementRecord).where(AchievementRecord.owner_id == owner_id)
+    return await session.scalar(query) or 0
 
 
 async def count_players(session: AsyncSession, character_source: uuid.UUID) -> int:
