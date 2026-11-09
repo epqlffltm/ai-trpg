@@ -28,6 +28,8 @@ export const RULES = {
     { key: 'normal', name: '보통', target: 15 },
   ],
   death_save: { target: 10, successes: 3, failures: 3 },
+  // 맞서는 굴림(#254)에서 공격을 받는 쪽이 굴리는 능력치
+  defense: { ability: 'dex' },
   injuries: [
     { key: 'sprain', name: '삔 발목', healing: 'rounds', aimable: false },
     { key: 'broken_arm', name: '부러진 팔', healing: 'heals', aimable: true },

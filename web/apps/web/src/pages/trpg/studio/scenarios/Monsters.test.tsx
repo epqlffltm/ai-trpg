@@ -126,6 +126,10 @@ describe('몬스터 탭', () => {
     const attack = within(dialog.getByRole('group', { name: '공격 1' }));
     await userEvent.type(attack.getByRole('textbox', { name: '이름' }), '물기');
     await userEvent.selectOptions(attack.getByRole('combobox', { name: '무기' }), CLAW);
+    // 막는 능력치(#254)를 비우면 룰북의 것이다. 공격마다 따로 고른다
+    expect(attack.getByRole('combobox', { name: '막는 능력치' })).toHaveValue('');
+    expect(attack.getByRole('option', { name: '룰북의 것(민첩)' })).toBeInTheDocument();
+    await userEvent.selectOptions(attack.getByRole('combobox', { name: '막는 능력치' }), '건강');
     await userEvent.click(dialog.getByRole('button', { name: '저장' }));
 
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
@@ -140,7 +144,7 @@ describe('몬스터 탭', () => {
       ward: 4,
       equipment: [{ entry_id: CLAW, count: 1, chance: 100, wear: [] }],
       inventory: [],
-      attacks: [{ name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: CLAW, cost: null, effects: [], nature: null }],
+      attacks: [{ name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: CLAW, cost: null, effects: [], nature: null, defense: 'con' }],
       immune: ['mind'],
       vulnerable: ['poison'],
       resistances: [],

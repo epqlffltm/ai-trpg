@@ -9,6 +9,7 @@ import type { FormProblem } from '../../../../auth/problem';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { TextAreaField } from '../../../../components/TextAreaField';
 import { ArmorFields } from './ArmorFields';
+import { DefenseFields } from './DefenseFields';
 import { InjuryStatusFields } from './InjuryStatusFields';
 import { ProgressionFields } from './ProgressionFields';
 import { ResourceFields } from './ResourceFields';
@@ -35,6 +36,7 @@ type Props = {
 export function RulebookEditor({ initial, templates, abilities, submitLabel, busy, problem, onSubmit, actions }: Props) {
   const [draft, setDraft] = useState<RulebookDraft>(initial);
   const hints = rulebookHints(draft);
+  const choices = templates ? templateAbilities(templates, draft.template) : abilities;
 
   function update(changes: Partial<RulebookDraft>) {
     setDraft((current) => ({ ...current, ...changes }));
@@ -82,9 +84,10 @@ export function RulebookEditor({ initial, templates, abilities, submitLabel, bus
       {templates ? <TemplateChoice templates={templates} selected={draft.template} onChange={chooseTemplate} /> : null}
       <RollFields draft={draft.roll} hints={hints} onChange={(roll) => update({ roll })} />
       <ArmorFields draft={draft} dice={diceName(draft.roll)} hints={hints} onChange={update} />
+      <DefenseFields defense={draft.defense} abilities={choices} hint={hints.defense} onChange={(defense) => update({ defense })} />
       <ResourceFields
         resources={draft.resources}
-        abilities={templates ? templateAbilities(templates, draft.template) : abilities}
+        abilities={choices}
         hints={hints}
         onChange={(resources) => update({ resources })}
       />
