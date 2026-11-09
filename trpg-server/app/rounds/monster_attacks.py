@@ -38,7 +38,7 @@ from app.engine.dice import choose
 from app.engine.health import ChangeKind
 from app.engine.injury import Trigger
 from app.engine.ruleset import Difficulty, ResourceHolder
-from app.rounds import blows, foe_traps, monster_chase, npc_victims
+from app.rounds import blows, drops, foe_traps, monster_chase, npc_victims
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import NO_BLOW, Blow, Weapon
 from app.rounds.cast import CastMember
@@ -303,6 +303,7 @@ def strike_npc(judging: Judging, monster: SceneMonster, person: CastMember) -> d
     인물 하나를 친다(#254). 캐릭터를 칠 때와 같은 차례로 굴린다. 차례의 outcome 이다(덫은 부른 쪽이 붙인다).
 
     비용이 모자라면 무엇으로 누구를 치려 했는지만 적는다(skipped cost_short). 싸운 것으로 적지 않는다(캐릭터가 아니다).
+    처음 쓰러뜨렸으면 드롭을 굴린다(drop). 덫에 쓰러진 인물과 같다. 받는 곳은 그 인물이 선 장소다(app/rounds/drops.py).
     """
     head = npc_victims.target_document(person)
     attack = choose(monster.definition.attacks, judging.dice)
@@ -312,7 +313,9 @@ def strike_npc(judging: Judging, monster: SceneMonster, person: CastMember) -> d
     blow = npc_victims.plan_npc_blow(judging, blows.monster_weapon(judging, monster, attack), person)
     rolled = roll_attack(judging, monster, attack, blow)
     outcome = npc_hit_outcome(judging, attack, person, rolled.check, blow, head, monster.definition.nature)
-    return {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
+    turn = {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
+    drop = drops.npc_drop_at(judging, person.npc.place_id, outcome['npc_effect'])
+    return turn if drop is None else {**turn, 'drop': drop}
 
 
 def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:

@@ -898,7 +898,8 @@ def record_attack_turn(
     맞혔으면 그 뒤에 HP 의 변화와 부상이다. 공격의 효과(#805 ③-b)로 입힌 부상(injury_gained, source attack)과
     맞춘 수치(resource_changed, source attack)가 그 뒤에 잇는다. 비용이 모자라 하지 못한 차례도 skipped 라 적지 않는다.
     쓰러진 캐릭터를 맞혀 죽었으면 그 뒤에 character_died(cause struck_down)다(#369).
-    몬스터가 인물을 쳤으면(#254) HP 의 변화 대신 인물의 변화(npc_changed)와 그 부상이다. 마무리해 죽였으면
+    몬스터가 인물을 쳤으면(#254) HP 의 변화 대신 인물의 변화(npc_changed)와 그 부상, 처음 쓰러뜨렸으면 드롭
+    (items_gained)이다. 마무리해 죽였으면
     npc_changed 의 status 가 dead 다.
     움직이지 못한 차례(skipped)는 적지 않는다. 굴린 것도 바뀐 것도 없다. 까닭은 라운드의 turns 에 있다.
     행한 사람(actor_id)을 적지 않는다. 몬스터와 인물을 움직인 것은 엔진이다.
@@ -917,7 +918,7 @@ def record_attack_turn(
         **{
             key: value
             for key, value in outcome.items()
-            if key not in ('effect', 'npc_effect', 'cost', 'injured', 'resources', 'trap')
+            if key not in ('effect', 'npc_effect', 'cost', 'injured', 'resources', 'trap', 'drop')
         },
     }
     attacked = recorder.record(session, table, event_type, payload=payload, group=group)
@@ -936,6 +937,7 @@ def record_attack_turn(
         changed = record_npc_change(session, table, npc_effect_, cause=attacked)
         holder = {'entry_id': npc_effect_['entry_id'], 'name': npc_effect_['name']}
         record_injury(session, table, npc_effect_.get('injury_roll'), holder, cause=changed)
+        record_drop(session, table, outcome.get('drop'), cause=changed)
     record_attack_effects(session, table, outcome, cause=attacked)
     record_foe_trap(session, table, round_number, turn, cause=attacked)
 
