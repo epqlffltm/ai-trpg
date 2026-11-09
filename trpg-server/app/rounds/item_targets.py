@@ -33,7 +33,7 @@ from app.engine.item_effects import AdjustEffect, EffectKind, first_of, is_harmf
 from app.engine.ruleset import ResourceHolder
 from app.rounds import resisting
 from app.rounds.cast import CastMember, find_cast_member
-from app.rounds.checks import judge_check, monster_gone
+from app.rounds.checks import Targeted, judge_check, monster_gone
 from app.rounds.effects import Judging, mark_fight, mark_npc_fight
 from app.rounds.item_actions import Reason, cure, injure, use_document
 from app.rounds.monster_scene import SceneMonster, find_scene_monster
@@ -122,6 +122,18 @@ def mark_harm(judging: Judging, member: TableMember, effects: list, action: Aime
     person = find_cast_member(judging.cast, action.npc)
     if person is not None and not npcs.is_dead(person.npc):
         mark_npc_fight(judging, person.npc, member)
+
+
+def effect_target(effects: list, action: Aimed, check: CheckAction) -> Targeted | None:
+    """
+    피해 없이 해로운 효과(부상, 수치를 내리는 맞추기)로 맞히는 판정이면 맞을 쪽(#254). 아니면 None.
+
+    이 판정은 행동(CheckAction)에 겨눈 칸이 없다(to_check). 맞서는 굴림의 판이면 이 쪽이 막는 능력치로 굴리고,
+    방어 태세면 판정이 불리하다(app/rounds/checks.py). 피해나 회복을 겨눈 판정은 행동의 칸이 정해서 None 이다.
+    """
+    if check.harm is not None or check.recover is not None or not is_harmful(effects):
+        return None
+    return Targeted(target=ally_of(action), npc=action.npc, monster=action.monster)
 
 
 def landed(outcome: dict, check: CheckAction) -> bool:
@@ -248,7 +260,9 @@ def judge_use_on(judging: Judging, member: TableMember, action: UseAction) -> di
         return {'item_use': {**use_document(item, member, Reason.TARGET_GONE, target), **terms}, 'target_gone': gone}
     mark_harm(judging, member, item.effects, action, check)
     items.remove_items(member.sheet, action.item, 1)
-    outcome = judge_check(judging, member, check, damage_nature(item.effects))
+    outcome = judge_check(
+        judging, member, check, damage_nature(item.effects), effect_target(item.effects, action, check)
+    )
     applied = (
         apply_after_hit(judging, item.effects, action)
         if landed(outcome, check)

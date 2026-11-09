@@ -15,11 +15,13 @@ HP 도 그때 한 번만 바뀐다. 판정의 결과에 따라 피해를 입거�
 큰 타격이나 쓰러짐이면 부상 표를 굴린다. 노려 친 타격은 그 부상이 확정으로 생긴다.
 타격에는 장비가 든다(#276, app/rounds/blows.py). 무기의 공격 보정이 판정에 더해지고, 맞은 부위의 방어가
 목표값을 올리거나(ac) 피해를 깎는다(reduce). 부위는 판정보다 먼저 굴린다.
+맞서는 굴림의 판이면(#254) 받는 쪽도 굴린다. 피해를 겨눈 타격과, 피해 없이 해로운 효과로 맞히는 판정(물건과 기술,
+부르는 쪽이 맞을 쪽을 준다. effect_target)이 그렇다.
 DB 를 모른다. 시트와 NPC 의 상태를 고친다. 저장하지는 않는다.
 """
 
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 
 from app.engine import action as actions
 from app.engine import armor, health
@@ -49,6 +51,20 @@ from app.tables import monsters as table_monsters
 from app.tables import npcs, sheets
 from app.tables import state as table_state
 from app.tables.models import GameTable, TableMember
+
+
+@dataclass(frozen=True)
+class Targeted:
+    """
+    맞서는 굴림에서 받는 쪽(#254). 동료(user_id), 인물(항목 id), 몬스터(마리 id) 가운데 겨눈 것이다.
+
+    피해를 겨눈 타격이면 행동의 칸에서 온다(struck_of). 피해 없이 해로운 효과로 맞히는 판정은 행동에 겨눈 칸이 없어
+    부르는 쪽(물건, 던지기, 기술)이 준다(app/rounds/item_targets.py 의 effect_target).
+    """
+
+    target: uuid.UUID | None = None
+    npc: uuid.UUID | None = None
+    monster: uuid.UUID | None = None
 
 
 def find_affected(
@@ -383,67 +399,91 @@ def roll_check_save(judging: Judging, blow: Blow | None, check: Check) -> Save |
     return blows.roll_blow_save(judging, blow)
 
 
-def struck_bearer(judging: Judging, action: CheckAction):
+def struck_of(action: CheckAction, effect_target: Targeted | None = None) -> Targeted | None:
     """
-    타격을 받는 쪽의 상태(능력치와 부상을 가진 것). 몬스터면 그 마리의 상태, 인물이면 그 인물의 상태, 동료면 시트다.
+    이 판정을 받는 쪽(#254). 피해를 겨눈 타격이면 행동이 겨눈 쪽이고, 아니면 부르는 쪽이 준 것(effect_target)이다.
 
-    겨눈 것이 없거나 찾지 못하면 None 이다. 판정하기 전에 칠 수 있는지 봤다(target_gone).
+    둘 다 아니면(맞힐 쪽이 없는 판정) None 이다.
     """
-    if action.monster is not None:
-        monster = find_scene_monster(judging.monsters, action.monster)
+    if action.harm is not None:
+        return Targeted(target=action.target, npc=action.npc, monster=action.monster)
+    return effect_target
+
+
+def struck_bearer(judging: Judging, targeted: Targeted):
+    """
+    받는 쪽의 상태(능력치와 부상을 가진 것). 몬스터면 그 마리의 상태, 인물이면 그 인물의 상태, 동료면 시트다.
+
+    겨눈 것이 없거나 찾지 못하면 None 이다. 판정하기 전에 칠 수 있는지 봤다(target_gone, monster_gone).
+    """
+    if targeted.monster is not None:
+        monster = find_scene_monster(judging.monsters, targeted.monster)
         return monster.state if monster is not None else None
-    if action.npc is not None:
-        person = find_cast_member(judging.cast, action.npc)
+    if targeted.npc is not None:
+        person = find_cast_member(judging.cast, targeted.npc)
         return person.npc if person is not None else None
-    if action.target is not None:
-        ally = table_state.find_member(judging.table, action.target)
+    if targeted.target is not None:
+        ally = table_state.find_member(judging.table, targeted.target)
         return ally.sheet if ally is not None and ally.sheet is not None else None
     return None
 
 
-def strike_defense(judging: Judging, action: CheckAction, blow: Blow | None) -> Side | None:
+def strike_defense(judging: Judging, targeted: Targeted | None, blow: Blow | None) -> Side | None:
     """
-    캐릭터의 타격을 받는 쪽(#254). 맞서는 굴림의 판에서 피해를 겨눈 타격이면 그 쪽이 규칙의 막는 능력치로 굴린다.
+    캐릭터의 판정을 받는 쪽(#254). 맞서는 굴림의 판이면 그 쪽이 규칙의 막는 능력치로 굴린다.
 
-    고정 난이도의 판이거나, 타격이 아니거나(피해가 없다), 받는 쪽을 찾지 못하면 None 이다(고정 난이도로 굴린다).
+    고정 난이도의 판이거나, 받는 쪽이 없거나(struck_of) 찾지 못하면 None 이다(고정 난이도로 굴린다).
+    맞은 부위의 방어(ac)는 타격(blow)에만 있다. 피해 없는 효과는 부위를 굴리지 않아 더하지 않는다.
     """
     ability = defenses.struck_ability(judging.ruleset)
-    if ability is None or action.harm is None or blow is None:
+    if ability is None or targeted is None:
         return None
-    bearer = struck_bearer(judging, action)
+    bearer = struck_bearer(judging, targeted)
     if bearer is None:
         return None
     return defenses.defender_side(judging.ruleset, bearer.abilities, bearer.injuries, ability, blow)
 
 
-def target_guarded(judging: Judging, action: CheckAction) -> bool:
+def guarded_target(judging: Judging, targeted: Targeted | None) -> bool:
     """
-    겨눈 쪽이 이번 라운드에 방어 태세인가(#254). 그러면 그 타격이 불리하다. 피해를 겨눈 타격만 본다.
+    받는 쪽이 이번 라운드에 방어 태세인가(#254). 그러면 그 판정이 불리하다.
 
     동료(target)는 방어하기를 선언한 사람들(judging.defending), 몬스터와 인물은 엔진이 정한 쪽
-    (judging.foes_guarding)이다.
+    (judging.foes_guarding)이다. 받는 쪽이 없으면 거짓이다.
     """
-    if action.harm is None:
+    if targeted is None:
         return False
-    if action.target is not None:
-        return action.target in judging.defending
-    foe = action.monster if action.monster is not None else action.npc
+    if targeted.target is not None:
+        return targeted.target in judging.defending
+    foe = targeted.monster if targeted.monster is not None else targeted.npc
     return foe is not None and foe in judging.foes_guarding
 
 
+def target_guarded(judging: Judging, action: CheckAction, effect_target: Targeted | None = None) -> bool:
+    """겨눈 쪽이 방어 태세인가. 피해를 겨눈 타격이거나, 부르는 쪽이 받는 쪽을 준 판정만 본다(struck_of)."""
+    return guarded_target(judging, struck_of(action, effect_target))
+
+
 def roll_strike(
-    judging: Judging, member: TableMember, action: CheckAction, hindrance: Hindrance, blow: Blow | None
+    judging: Judging,
+    member: TableMember,
+    action: CheckAction,
+    hindrance: Hindrance,
+    blow: Blow | None,
+    effect_target: Targeted | None = None,
 ) -> tuple[HinderedCheck, dict]:
     """
-    판정하는 행동을 굴린다. 맞서는 굴림의 타격이면 받는 쪽도 굴리고(strike_defense), 아니면 고정 난이도다.
+    판정하는 행동을 굴린다. 받는 쪽이 있으면 맞서는 굴림이고(strike_defense), 아니면 고정 난이도다.
+    받는 쪽은 피해를 겨눈 타격이면 행동이 겨눈 쪽, 피해 없는 해로운 효과면 effect_target 이다(struck_of).
 
     돌려주는 것은 행동한 사람의 판정과, outcome 에 더할 것(맞서는 굴림이면 받는 쪽의 굴림 defense, 방어 태세의 쪽을
     쳤으면 guarded)이다.
     """
     ruleset = judging.ruleset
     sheet = member.sheet
-    defense = strike_defense(judging, action, blow)
-    guarded = target_guarded(judging, action)
+    targeted = struck_of(action, effect_target)
+    defense = strike_defense(judging, targeted, blow)
+    guarded = guarded_target(judging, targeted)
     if defense is None:
         bonus, raise_by = (blow.bonus, blow.raise_by) if blow is not None else (0, 0)
         hindered = actions.attempt_hindered(
@@ -456,7 +496,13 @@ def roll_strike(
     return opposed.attack, guards.with_guard(defended, guarded)
 
 
-def judge_check(judging: Judging, member: TableMember, action: CheckAction, nature: str | None = None) -> dict:
+def judge_check(
+    judging: Judging,
+    member: TableMember,
+    action: CheckAction,
+    nature: str | None = None,
+    effect_target: Targeted | None = None,
+) -> dict:
     """
     한 사람의 판정하는 행동을 판정하고 그 결과를 정한다. 선언의 outcome 에 적을 문서를 돌려준다.
 
@@ -467,6 +513,8 @@ def judge_check(judging: Judging, member: TableMember, action: CheckAction, natu
     nature 는 타격의 피해의 성질이다(#886 ③, 물건과 기술의 피해 효과). 없으면 무기의 성질이다(blows.blow_nature).
     맞서는 굴림의 판에서 피해를 겨눈 타격이면 받는 쪽도 굴린다(#254, roll_strike). 그 굴림을 defense 에 적는다.
     방어 태세의 동료를 친 타격은 불리하다.
+    effect_target 은 피해 없이 해로운 효과로 맞히는 판정의 받는 쪽이다(물건과 기술이 준다). 맞서는 굴림의 판이면
+    그 쪽도 굴리고, 방어 태세면 불리하다.
     """
     gone = target_gone(judging, member, action)
     if gone is not None:
@@ -478,7 +526,7 @@ def judge_check(judging: Judging, member: TableMember, action: CheckAction, natu
     hindrance = round_injuries.hindrance_for(judging.ruleset, sheet.injuries, action.ability)
     blow = plan_check_blow(judging, member, action)
     cut = blow.cut if blow is not None else 0
-    hindered, defended = roll_strike(judging, member, action, hindrance, blow)
+    hindered, defended = roll_strike(judging, member, action, hindrance, blow, effect_target)
     save = roll_check_save(judging, blow, hindered.check)
     consequence_ = (
         saved_consequence(action)

@@ -58,10 +58,17 @@ def attacker_side(
     return Side(score=abilities[attack.ability], adjust=blow.bonus + shift, hindrance=hindrance, disadvantage=guarded)
 
 
-def defender_side(ruleset: Ruleset, abilities: Mapping[str, int], injuries: Sequence, ability: str, blow: Blow) -> Side:
-    """받는 쪽. 막는 능력치의 점수에, 맞은 부위의 방어가 올리는 양(ac)을 더한다. 입은 부상의 영향을 받는다."""
+def defender_side(
+    ruleset: Ruleset, abilities: Mapping[str, int], injuries: Sequence, ability: str, blow: Blow | None
+) -> Side:
+    """
+    받는 쪽. 막는 능력치의 점수에, 맞은 부위의 방어가 올리는 양(ac)을 더한다. 입은 부상의 영향을 받는다.
+
+    타격이 아니면(blow 가 None, 피해 없는 효과로 맞히기) 부위가 없어 더하지 않는다.
+    """
     hindrance = round_injuries.hindrance_for(ruleset, injuries, ability)
-    return Side(score=abilities[ability], adjust=blow.raise_by, hindrance=hindrance)
+    raise_by = blow.raise_by if blow is not None else 0
+    return Side(score=abilities[ability], adjust=raise_by, hindrance=hindrance)
 
 
 def member_defense(ruleset: Ruleset, member: TableMember, attack: AttackSnapshot, blow: Blow) -> Side | None:
@@ -86,11 +93,12 @@ def strike_side(
     abilities: Mapping[str, int],
     injuries: Sequence,
     action: CheckAction,
-    blow: Blow,
+    blow: Blow | None,
     guarded: bool = False,
 ) -> Side:
     """
-    캐릭터의 타격에서 공격하는 쪽. 행동의 능력치의 점수에 무기의 보정과 난이도의 보정을 더한다.
+    캐릭터의 판정에서 공격하는 쪽. 행동의 능력치의 점수에 무기의 보정과 난이도의 보정을 더한다.
+    타격이 아니면(blow 가 None, 피해 없는 효과로 맞히기) 무기의 보정이 없다.
 
     노려 치기(app/engine/action.py 의 called_shot_terms)는 목표값을 올리는 만큼 빼거나, 불리하게 한다.
     받는 쪽이 방어 태세면(guarded) 불리하다. 입은 부상의 영향을 받는다.
@@ -101,7 +109,7 @@ def strike_side(
     hindrance = round_injuries.hindrance_for(ruleset, injuries, action.ability)
     return Side(
         score=abilities[action.ability],
-        adjust=blow.bonus + shift,
+        adjust=(blow.bonus if blow is not None else 0) + shift,
         hindrance=hindrance,
         disadvantage=aim_disadvantage or guarded,
     )

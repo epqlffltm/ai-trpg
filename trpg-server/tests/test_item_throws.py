@@ -167,6 +167,11 @@ async def start_table(client: AsyncClient, me: dict, *others: dict) -> dict:
     """수로의 시나리오로 테이블을 시작한다. 나(엘프)와 others(드워프 기사)가 앉는다. 모두 수로 입구에 선다."""
     world = await make_world(client, me)
     scenario = await make_scenario(client, me, world, the_items(world))
+    return {**world, 'table': await start_from(client, me, world, scenario, *others)}
+
+
+async def start_from(client: AsyncClient, me: dict, world: dict, scenario: dict, *others: dict) -> dict:
+    """그 시나리오를 게시해 테이블을 시작한다. 나(엘프)와 others(드워프 기사)가 앉는다. 시작한 테이블을 돌려준다."""
     await post(client, f'{SCENARIOS_URL}/{scenario["id"]}/versions', me)
     table = await post(client, TABLES_URL, me, scenario_id=scenario['id'], version=1, capacity=1 + len(others))
     for headers, name in zip([me, *others], ['엘프', '드워프 기사'], strict=False):
@@ -175,7 +180,7 @@ async def start_table(client: AsyncClient, me: dict, *others: dict) -> dict:
         await client.put(table_url(table, '/character'), json={'name': name}, headers=headers)
     started = await client.post(table_url(table, '/start'), headers=me)
     assert started.status_code == status.HTTP_200_OK, started.text
-    return {**world, 'table': started.json()}
+    return started.json()
 
 
 async def read_table(client: AsyncClient, headers: dict, table: dict) -> dict:
