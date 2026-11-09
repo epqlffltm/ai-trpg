@@ -5,11 +5,13 @@
 // 부상의 성질 가운데 면역과 약함도 준다(#799). 면역은 타입의 성질표에 더하고, 약함은 거기서 뺀다. 둘에 같은 성질은 없다.
 // 쓰러뜨리면 주는 경험치(#286 ②)도 준다. 받는 사람들이 나누는지는 시나리오의 xp_split 이다(캐릭터 탭).
 // 도망치면 쫓아오는지(#254)도 준다. 쫓아오면 같은 장소에서 떠난 캐릭터를 길 한 칸씩 따라간다(서버가 정한다).
+// 방어하는 때(#254, defendsForm)도 준다. HP 의 문턱이나 라운드마다의 확률이다.
 // 지닌 물건과 공격의 검사는 인물 시트와 같다(stacksForm, attacksForm).
 
 import type { ItemRule, MonsterSheet, MonsterSheetBody, Ruleset } from '../../../../api/types';
 import { wholeNumber } from '../rulebooks/rulebookForm';
 import { attackDrafts, attacksHints, toAttacks, type AttackDraft } from './attacksForm';
+import { defendsDraft, defendsHints, defendsLine, hasDefendsHints, toDefends, type DefendsDraft, type DefendsHints } from './defendsForm';
 import { COMBAT_NUMBER_MAX } from './itemRuleForm';
 import { isBlankSheet, sheetDraft, sheetHints, sheetLine, toSheet, type SheetDraft } from './sheetForm';
 import { carriedDrafts, carriedHints, toCarried, type StackDraft } from './stacksForm';
@@ -47,8 +49,8 @@ export type MonsterDraft = {
   resistances: MonsterSheet['resistances'];
   /** 타고난 피해의 성질(#886 ③). 고르는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
   nature: string | null;
-  /** 방어 태세를 잡는 때(#254). 고치는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
-  defends: MonsterSheet['defends'];
+  /** 방어 태세를 잡는 때(#254). 둘 다 비우면 방어하지 않는다 */
+  defends: DefendsDraft;
   /** 쓰러뜨리면 주는 경험치(#286 ②). 한 마리마다 한 번이다. 0 이면 없다 */
   xp: string;
 };
@@ -72,7 +74,7 @@ export function monsterDraft(monster: MonsterSheet | undefined, rules: Ruleset):
     vulnerable: monster?.vulnerable ?? [],
     resistances: monster?.resistances ?? [],
     nature: monster?.nature ?? null,
-    defends: monster?.defends ?? null,
+    defends: defendsDraft(monster?.defends),
     xp: String(monster?.xp ?? 0),
   };
 }
@@ -94,6 +96,7 @@ export type MonsterHints = {
   attacks: Record<number, string>;
   /** 면역과 약함에 같은 성질을 적었으면 글이 있다 */
   natures: string | null;
+  defends: DefendsHints;
   /** 경험치가 정수가 아니거나 범위 밖이면 글이 있다 */
   xp: string | null;
 };
@@ -129,12 +132,13 @@ export function monsterHints(draft: MonsterDraft, rules: Ruleset, itemRules: Ite
       draft.equipment.map((line) => line.entryId),
     ),
     natures: natureHint(draft),
+    defends: defendsHints(draft.defends),
     xp: wholeNumber(draft.xp, 0, MONSTER_MAX_XP) === null ? `0~${MONSTER_MAX_XP.toLocaleString('ko-KR')} 사이의 정수입니다.` : null,
   };
 }
 
 export function hasMonsterHints(hints: MonsterHints): boolean {
-  return hints.natures !== null || hints.xp !== null || [hints.sheet, hints.armor, hints.equipment, hints.inventory, hints.attacks].some((part) => Object.keys(part).length > 0);
+  return hints.natures !== null || hints.xp !== null || hasDefendsHints(hints.defends) || [hints.sheet, hints.armor, hints.equipment, hints.inventory, hints.attacks].some((part) => Object.keys(part).length > 0);
 }
 
 /** 보낼 몬스터 시트. 힌트가 없을 때만 부른다. 빈 방어 칸은 보내지 않는다 */
@@ -157,7 +161,7 @@ export function toMonsterSheet(monsterId: string, draft: MonsterDraft, rules: Ru
     vulnerable: draft.vulnerable,
     resistances: draft.resistances,
     nature: draft.nature,
-    defends: draft.defends,
+    defends: toDefends(draft.defends),
     xp: Number(draft.xp.trim()),
   };
 }
@@ -172,9 +176,9 @@ export function withoutMonsterSheet(sheets: MonsterSheet[], monsterId: string): 
   return sheets.filter((one) => one.monster_id !== monsterId);
 }
 
-/** 목록의 한 줄. "근력 14 · … · HP 9 · 공격 2 · 장비 1 · 타고난 방어 2 · 불굴 3 · 면역 독, 기절 · 약함 정신 · 경험치 50" */
+/** 목록의 한 줄. "근력 14 · … · HP 9 · 공격 2 · 장비 1 · 타고난 방어 2 · 불굴 3 · 면역 독, 기절 · 약함 정신 · 방어 HP 30% 이하 · 경험치 50" */
 export function monsterLine(monster: MonsterSheet, rules: Ruleset | null): string {
-  const parts = [sheetLine(monster.sheet, rules)];
+  const parts: (string | null)[] = [sheetLine(monster.sheet, rules)];
   if (monster.dull) parts.push('둔함');
   if (monster.chases) parts.push('쫓아옴');
   if (monster.attacks.length > 0) parts.push(`공격 ${monster.attacks.length}`);
@@ -184,6 +188,7 @@ export function monsterLine(monster: MonsterSheet, rules: Ruleset | null): strin
   if (monster.ward) parts.push(`불굴 ${monster.ward}`);
   if (monster.immune.length > 0) parts.push(`면역 ${monster.immune.map((nature) => INJURY_NATURES[nature]).join(', ')}`);
   if (monster.vulnerable.length > 0) parts.push(`약함 ${monster.vulnerable.map((nature) => INJURY_NATURES[nature]).join(', ')}`);
+  parts.push(defendsLine(monster.defends));
   if (monster.xp > 0) parts.push(`경험치 ${monster.xp}`);
   return parts.filter(Boolean).join(' · ');
 }

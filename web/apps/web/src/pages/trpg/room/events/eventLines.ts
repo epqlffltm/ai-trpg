@@ -164,7 +164,8 @@ function attackText(payload: Payload, ctx: EventContext, event: TableEvent): str
   const hit = flag(payload, 'success') ? '맞힘' : '빗나감';
   const blow = blowOf(payload);
   const gear = blow ? blowLine(blow) : null;
-  return `${text(payload, 'name') ?? '누군가'}: ${attackName(payload)} → ${struckOf(payload, ctx, event)} ${hit}${gear ? ` (${gear})` : ''}`;
+  const guard = flag(payload, 'guarded') ? ' [방어 태세: 불리]' : '';
+  return `${text(payload, 'name') ?? '누군가'}: ${attackName(payload)} → ${struckOf(payload, ctx, event)} ${hit}${gear ? ` (${gear})` : ''}${guard}`;
 }
 
 /** 공격을 받은 쪽. 몬스터가 인물을 쳤으면(#254) 그 인물의 장면의 이름이고, 쓰러진 인물을 쳤으면 "쓰러진" 이 붙는다 */
