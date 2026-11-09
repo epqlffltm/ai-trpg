@@ -350,5 +350,5 @@ def test_a_strike_on_a_guarding_ally_is_hindered():
     strike = CheckAction(kind='check', ability='str', harm='light', target=ally)
     help_up = CheckAction(kind='check', ability='wis', recover='light', target=ally)
 
-    assert checks_module.ally_guarded(judging, strike) is True
-    assert checks_module.ally_guarded(judging, help_up) is False
+    assert checks_module.target_guarded(judging, strike) is True
+    assert checks_module.target_guarded(judging, help_up) is False

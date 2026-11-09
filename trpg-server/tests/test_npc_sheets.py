@@ -124,6 +124,7 @@ def npc(entry: dict, sheet: dict) -> dict:
         'resistances': [],
         'nature': None,
         'allied_monsters': [],
+        'defends': None,
     }
 
 

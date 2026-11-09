@@ -164,6 +164,7 @@ describe('인물 탭', () => {
       resistances: [],
       nature: null,
       allied_monsters: [],
+      defends: null,
     });
   });
 

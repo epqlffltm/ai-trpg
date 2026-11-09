@@ -47,6 +47,8 @@ export type MonsterDraft = {
   resistances: MonsterSheet['resistances'];
   /** 타고난 피해의 성질(#886 ③). 고르는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
   nature: string | null;
+  /** 방어 태세를 잡는 때(#254). 고치는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
+  defends: MonsterSheet['defends'];
   /** 쓰러뜨리면 주는 경험치(#286 ②). 한 마리마다 한 번이다. 0 이면 없다 */
   xp: string;
 };
@@ -70,6 +72,7 @@ export function monsterDraft(monster: MonsterSheet | undefined, rules: Ruleset):
     vulnerable: monster?.vulnerable ?? [],
     resistances: monster?.resistances ?? [],
     nature: monster?.nature ?? null,
+    defends: monster?.defends ?? null,
     xp: String(monster?.xp ?? 0),
   };
 }
@@ -154,6 +157,7 @@ export function toMonsterSheet(monsterId: string, draft: MonsterDraft, rules: Ru
     vulnerable: draft.vulnerable,
     resistances: draft.resistances,
     nature: draft.nature,
+    defends: draft.defends,
     xp: Number(draft.xp.trim()),
   };
 }

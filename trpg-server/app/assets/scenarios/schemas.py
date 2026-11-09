@@ -430,6 +430,28 @@ MonsterAttacks = Annotated[
 ]
 
 
+class Defends(BaseModel):
+    """
+    몬스터와 NPC 가 방어 태세를 잡는 때(#254, app/rounds/foe_guards.py). 둘 중 하나 이상을 적는다.
+
+    below 는 HP 가 최대 HP 의 이 백분율 이하이면 방어한다는 것이다(30 이면 30% 이하). chance 는 라운드마다 이 백분율로
+    방어한다는 것이다. 둘 다 적으면 HP 를 먼저 보고, 아니면 주사위를 굴린다. 방어하는 라운드에는 치지 않고,
+    그를 노린 공격은 불리하다(캐릭터의 방어하기와 같다). 엔진이 정한다. 서술(AI)이 정하지 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    below: int | None = Field(default=None, ge=1, le=99)
+    chance: int | None = Field(default=None, ge=1, le=100)
+
+    @model_validator(mode='after')
+    def require_one(self) -> 'Defends':
+        """문턱도 확률도 없으면 방어하지 않는 것이다. 그때는 이 칸을 비운다(null)."""
+        if self.below is None and self.chance is None:
+            raise ValueError('방어하는 때는 below 나 chance 중 하나 이상을 적습니다.')
+        return self
+
+
 def reject_duplicate_allies(allied_monsters: list[uuid.UUID]) -> list[uuid.UUID]:
     """한편인 몬스터를 두 번 적으면 거부한다. 같은 몬스터는 한 번이면 된다."""
     if len(set(allied_monsters)) != len(allied_monsters):
@@ -486,6 +508,8 @@ class NpcSheet(BaseModel):
     # 한편인 몬스터들(#254). 도감의 몬스터 ID 다. 이 몬스터들은 이 인물을 치지 않는다(네크로맨서와 해골).
     # 비우면 어느 몬스터와도 한편이 아니다. 시트를 적은 몬스터인지는 게시할 때 본다(npc_ally_missing)
     allied_monsters: AlliedMonsters = []
+    # 방어 태세를 잡는 때(#254). 몬스터 시트와 같다. 싸우는 인물만 방어한다(차례를 받는 인물). 비우면 방어하지 않는다
+    defends: Defends | None = None
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'NpcSheet':
@@ -592,6 +616,8 @@ class MonsterSheet(BaseModel):
     # 도망치면 쫓아오는가(#254). 쫓아오면 이번 라운드에 같은 장소에 있다 떠난 캐릭터를 길 한 칸만큼 따라간다.
     # 따라간 차례에는 치지 않는다. 비우면 조우 자리를 떠나지 않는다(app/rounds/monster_chase.py)
     chases: bool = False
+    # 방어 태세를 잡는 때(#254). HP 의 문턱과 라운드마다의 확률이다. 비우면 방어하지 않는다
+    defends: Defends | None = None
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'MonsterSheet':

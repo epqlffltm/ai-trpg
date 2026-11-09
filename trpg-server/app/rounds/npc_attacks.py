@@ -22,6 +22,7 @@ NPC 의 차례(#487). 싸움이 붙은 적대 인물이 캐릭터 하나를 공�
 판정은 인물의 점수와 공격의 난이도로 굴린다. 몬스터와 달리 인물은 부상을 입으므로 그 영향을 받는다.
 판의 규칙에 막는 규칙이 있으면 맞서는 굴림이다(#254, app/rounds/defenses.py). 몬스터와 같다.
 방어 태세를 잡은 캐릭터를 치면 공격이 불리하다(#254, app/rounds/guards.py). 몬스터와 같다.
+이 인물이 방어 태세를 잡았으면 치지 않는다(skipped defending, app/rounds/foe_guards.py). 몬스터와 같다.
 맞히면 그 공격의 양의 등급만큼 피해를 준다. 피해, 쓰러짐, 부상 표는 앉은 사람의 것과 같다(change_sheet).
 쓰러진 대상을 맞히면 피해 대신 죽음의 굴림 실패가 쌓인다(몬스터의 hit_outcome).
 친 대상과는 싸운 것으로 적는다(mark_npc_fight).
@@ -147,6 +148,8 @@ def take_npc_turn(judging: Judging, person: CastMember) -> dict:
     stopped = stopped_by(judging, person)
     if stopped is not None:
         return {'skipped': stopped}
+    if person.entry_id in judging.foes_guarding:
+        return {'skipped': Skipped.DEFENDING}
     victims = targets_of(judging, person)
     if not victims:
         return {'skipped': Skipped.NO_TARGET}

@@ -11,6 +11,8 @@
 판정은 앉은 사람의 판정과 같은 계산이다(app/engine/check.py). 몬스터의 점수와 공격의 난이도로 굴린다.
 판의 규칙에 막는 규칙이 있으면 맞서는 굴림이다(#254, app/rounds/defenses.py). 받는 쪽도 굴리고, 난이도는 보정이 된다.
 방어 태세를 잡은 캐릭터를 치면 공격이 불리하다(#254, app/rounds/guards.py). 결과에 guarded 가 참으로 붙는다.
+방어 태세를 잡은 인물을 쳐도 같다. 이 마리가 방어 태세를 잡았으면 치지 않는다
+(skipped defending, app/rounds/foe_guards.py).
 맞히면 그 공격의 양의 등급만큼 피해를 준다. 피해, 쓰러짐, 부상 표는 앉은 사람의 것과 같다(change_sheet).
 장비가 든다(#276, app/rounds/blows.py). 공격에 적은 무기의 공격 보정이 판정에 더해지고, 대상의 맞은 부위의 방어가
 목표값을 올리거나(ac) 피해를 깎는다(reduce). 부위는 공격을 고른 뒤, 판정보다 먼저 굴린다.
@@ -67,6 +69,8 @@ class Skipped:
     INCAPACITATED = 'incapacitated'
     # 고른 공격의 비용이 모자랐다(#805 ③-a). 무엇으로 누구를 치려 했는지도 적는다
     COST_SHORT = 'cost_short'
+    # 방어 태세를 잡았다(#254, app/rounds/foe_guards.py). 이 라운드에는 치지 않는다. NPC 의 차례도 같은 까닭을 쓴다
+    DEFENDING = 'defending'
 
 
 def can_act(monster: SceneMonster) -> bool:
@@ -345,9 +349,12 @@ def strike_npc(judging: Judging, monster: SceneMonster, person: CastMember) -> d
     cost = pay(judging, monster.state, attack, ResourceHolder.MONSTERS)
     blow = npc_victims.plan_npc_blow(judging, blows.monster_weapon(judging, monster, attack), person)
     defense = defenses.npc_defense(judging.ruleset, person, attack, blow)
-    rolled, defended = roll_strike(judging, monster, attack, blow, defense)
+    guarded = person.entry_id in judging.foes_guarding
+    rolled, defended = roll_strike(judging, monster, attack, blow, defense, guarded)
     outcome = npc_hit_outcome(judging, attack, person, rolled.check, blow, head, monster.definition.nature)
-    turn = {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled), **defended}
+    turn = guards.with_guard(
+        {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled), **defended}, guarded
+    )
     drop = drops.npc_drop_at(judging, person.npc.place_id, outcome['npc_effect'])
     return turn if drop is None else {**turn, 'drop': drop}
 
@@ -369,6 +376,8 @@ def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
     stopped = stopped_by(judging, monster)
     if stopped is not None:
         return {'skipped': stopped}
+    if monster.state.id in judging.foes_guarding:
+        return {'skipped': Skipped.DEFENDING}
     victims = victims_of(judging, monster)
     people = npc_victims.victims_of(judging, monster)
     if not victims and not people:

@@ -73,6 +73,9 @@ class Judging:
     # 이번 라운드에 방어 태세를 잡은 앉은 사람들(user_id, #254). 판정을 시작하기 전에 정한다.
     # 그들을 노린 몬스터와 NPC 의 공격은 불리하다(app/rounds/guards.py)
     defending: frozenset[uuid.UUID] = frozenset()
+    # 이번 라운드에 방어 태세를 잡은 몬스터(마리의 id)와 인물(항목의 id)(#254). 판정을 시작하기 전에 엔진이 정한다.
+    # 그 라운드에 치지 않고, 그들을 노린 공격은 불리하다(app/rounds/foe_guards.py)
+    foes_guarding: frozenset[uuid.UUID] = frozenset()
 
 
 def mark_fight(judging: Judging, monster: TableMonster, member: TableMember) -> None:

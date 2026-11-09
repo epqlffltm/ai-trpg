@@ -23,7 +23,7 @@ DB 를 모른다. 이미 읽어 온 테이블과 이번 장면을 고친다. 저
 """
 
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 from app.assets.scenarios.snapshot import person_entries, read_snapshot
 from app.engine import action as actions
@@ -54,7 +54,7 @@ from app.engine.action import (
     WaitAction,
 )
 from app.engine.dice import Dice
-from app.rounds import initiative, npc_attacks
+from app.rounds import foe_guards, initiative, npc_attacks
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, Scene
 from app.rounds.checks import judge_check
@@ -216,7 +216,8 @@ def build_judging(
     판의 복사본(규칙, 인물 항목, 물건, 맵)을 통째로 읽는다. 싸지 않아서 판정할 것이 있을 때만 부른다.
     downed 는 판정을 시작하기 전에 쓰러져 있던 사람들이다(몬스터와 NPC 가 칠 수 있다).
     rolling 은 행동을 판정할 사람과 그 선언이다. 엄폐한 사람의 커버를 여기서 정한다(app/rounds/covers.py).
-    방어 태세를 잡은 사람도 여기서 정한다(#254, app/rounds/guards.py).
+    방어 태세를 잡은 사람도 여기서 정한다(#254, app/rounds/guards.py). 방어 태세를 잡은 몬스터와 인물은
+    부르는 쪽이 따로 정한다(주사위를 굴린다, app/rounds/foe_guards.py).
     """
     snapshot = read_snapshot(table.content)
     return Judging(
@@ -312,6 +313,8 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> se
 
     장면의 마리 중 아직 만나지 않은 것에는 이번 라운드를 만난 첫 라운드로 적는다(mark_engaged).
     기습은 그 라운드에만 쓴다.
+    차례를 받는 몬스터와 싸우는 인물 중 방어 태세를 잡는 쪽을 판정을 시작하기 전에 정한다(#254, foe_guards.decide).
+    시트에 확률을 적은 쪽마다 주사위를 굴린다. 차례의 주사위보다 먼저다.
 
     이번 라운드에 피해를 입은 앉은 사람들(user_id)을 돌려준다. 쉬는 사람의 휴식이 깨졌는지 이것으로 본다.
     """
@@ -324,6 +327,7 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> se
 
     downed = frozenset(member.user_id for member in find_dying(table))
     judging = build_judging(table, round_, dice, scene, downed, rolling)
+    judging = replace(judging, foes_guarding=foe_guards.decide(judging.ruleset, acting, fighting, dice))
     if not acting and not fighting:
         for member, declaration in rolling:
             take_member_turn(judging, member, declaration)

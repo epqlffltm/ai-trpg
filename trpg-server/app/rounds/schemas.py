@@ -421,6 +421,8 @@ class CheckOutcome(BaseModel):
     called_shot: CalledShotOut | None = None
     # 타격에 장비가 든 것(#276). 무기의 공격 보정은 modifier 에 이미 들었다. 장비가 들지 않았으면 None 이다
     blow: BlowOut | None = None
+    # 방어 태세를 잡은 쪽(동료, 몬스터, 인물)을 친 타격이면 참이다(#254). 그래서 불리했다. 아니면 None 이다
+    guarded: bool | None = None
     # 이 판정으로 HP 가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다
     effect: EffectOut | None = None
     # 이 판정으로 NPC 의 상태가 바뀌었으면 그 내용. 바뀌지 않았으면 None 이다. effect 와 함께 있지 않다
