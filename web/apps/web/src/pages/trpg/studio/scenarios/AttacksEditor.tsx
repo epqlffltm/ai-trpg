@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/AttacksEditor.tsx
 // 시트의 공격들을 고치는 칸(B9). 인물 시트(와 몬스터 시트)가 쓴다. 공격마다 이름, 능력치, 난이도, 피해의 양, 무기.
+// 막는 능력치(#254)는 받는 쪽이 맞서 굴리는 능력치다. 비우면 룰북의 것이다.
 // 이름표는 룰북에서 고르고, 무기는 지금 장비 줄의 물건에서 고른다(공격 보정이 없는 물건은 그렇다고 적는다). 검사는 attacksForm.ts.
 
 import { Button, SelectField, TextField } from '@ai-trpg/ui';
@@ -38,6 +39,15 @@ export function AttacksEditor({ drafts, onChange, rules, equipment, entries, ite
             <SelectField label="피해의 양" value={draft.harm} onChange={(event) => change(index, { ...draft, harm: event.target.value })}>
               <KeyOptions value={draft.harm} choices={rules.magnitudes} />
             </SelectField>
+            <SelectField label="막는 능력치" value={draft.defense} onChange={(event) => change(index, { ...draft, defense: event.target.value })}>
+              <option value="">{defaultDefense(rules)}</option>
+              {draft.defense !== '' && !rules.abilities.some((ability) => ability.key === draft.defense) ? <option value={draft.defense}>{draft.defense}(룰북에 없음)</option> : null}
+              {rules.abilities.map((ability) => (
+                <option key={ability.key} value={ability.key}>
+                  {ability.name}
+                </option>
+              ))}
+            </SelectField>
             <SelectField label="무기" value={draft.weapon} onChange={(event) => change(index, { ...draft, weapon: event.target.value })}>
               <option value="">맨몸</option>
               {draft.weapon !== '' && !equipment.includes(draft.weapon) ? <option value={draft.weapon}>(장비에 없는 물건)</option> : null}
@@ -65,6 +75,13 @@ export function AttacksEditor({ drafts, onChange, rules, equipment, entries, ite
       </p>
     </div>
   );
+}
+
+/** 비워 둔 막는 능력치의 글. 룰북의 막는 능력치를 이름으로 보인다. 룰북에 막는 규칙이 없으면(옛 판) 고정 난이도다 */
+export function defaultDefense(rules: Ruleset): string {
+  const key = rules.defense?.ability;
+  if (!key) return '룰북의 것(맞서 굴리지 않음)';
+  return `룰북의 것(${rules.abilities.find((ability) => ability.key === key)?.name ?? key})`;
 }
 
 /** 룰북의 이름표 고르기. 지금 값이 룰북에 없으면(룰북을 바꿨다) 그 값을 남겨 둔다 */

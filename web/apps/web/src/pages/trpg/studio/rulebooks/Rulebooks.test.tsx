@@ -19,7 +19,7 @@ const ONE_OVER = { count: 1, style: 'over', shifts: {} };
 const DIFFICULTIES = [{ key: 'medium', name: '보통', target: 15 }, { key: 'hard', name: '어려움', target: 20 }];
 
 function rules(template: string, armor: unknown) {
-  return { template, die: 20, roll: ONE_OVER, difficulties: DIFFICULTIES, armor, abilities: [{ key: 'heart', name: '마음' }], resources: [], injuries: [], magnitudes: [], natures: [], narration: { tone: '영웅담', outcomes: [], avoid: [] } };
+  return { template, die: 20, roll: ONE_OVER, difficulties: DIFFICULTIES, armor, defense: { ability: 'heart' }, abilities: [{ key: 'heart', name: '마음' }, { key: 'nerve', name: '배짱' }], resources: [], injuries: [], magnitudes: [], natures: [], narration: { tone: '영웅담', outcomes: [], avoid: [] } };
 }
 
 const TEMPLATES = {
@@ -121,6 +121,7 @@ describe('룰북', () => {
       resources: [],
       progression: null,
       injuries: [],
+      defense: { ability: 'heart' },
     });
   });
 
@@ -145,11 +146,31 @@ describe('룰북', () => {
     const form = within(screen.getByRole('form', { name: '룰북' }));
     expect(form.queryByRole('radio', { name: '공포' })).toBeNull();
     await userEvent.click(form.getByRole('radio', { name: '방어구가 막지 않음' }));
+    expect(form.getByLabelText('막는 능력치')).toHaveValue('heart');
+    await userEvent.selectOptions(form.getByLabelText('막는 능력치'), '배짱');
     await userEvent.click(form.getByRole('button', { name: '저장' }));
 
     expect(await screen.findByText('저장했습니다.')).toBeInTheDocument();
-    expect(sent(seen, 'PATCH', `/${ID}`)[0]?.body).toEqual({ title: '내 규칙', description: '', gm_guide: '', die: 20, roll: ONE_OVER, armor: null, resources: [], progression: null, injuries: [] });
+    expect(sent(seen, 'PATCH', `/${ID}`)[0]?.body).toEqual({ title: '내 규칙', description: '', gm_guide: '', die: 20, roll: ONE_OVER, armor: null, resources: [], progression: null, injuries: [], defense: { ability: 'nerve' } });
     expect(within(screen.getByRole('form', { name: '룰북' })).getByRole('radio', { name: '방어구가 막지 않음' })).toBeChecked();
+  });
+
+  it('막는 규칙이 없는 옛 룰북은 막는 능력치를 골라야 저장한다(#254)', async () => {
+    const { seen } = signedIn({
+      [`GET ${BASE}/${ID}`]: () => json(200, detail({ rules: { ...rules('srd5', null), defense: null } })),
+      [`PATCH ${BASE}/${ID}`]: (request) => json(200, detail({ rules: { ...rules('srd5', null), ...(request.body as object) } })),
+    });
+    renderApp(`/trpg/studio/rulebooks/${ID}`);
+
+    const form = within(await screen.findByRole('form', { name: '룰북' }));
+    expect(form.getByLabelText('막는 능력치')).toHaveValue('');
+    expect(form.getByText('막는 능력치를 골라 주세요.')).toBeInTheDocument();
+    expect(form.getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.selectOptions(form.getByLabelText('막는 능력치'), '마음');
+    await userEvent.click(form.getByRole('button', { name: '저장' }));
+
+    expect(await screen.findByText('저장했습니다.')).toBeInTheDocument();
+    expect((sent(seen, 'PATCH', `/${ID}`)[0]?.body as { defense: unknown }).defense).toEqual({ ability: 'heart' });
   });
 
   it('고치기에서 d100 의 눈 ≤ 기량으로 바꾸면 난이도마다 기량에 더하는 값을 보낸다. 방어 규칙이 있으면 보내기 전에 알린다', async () => {

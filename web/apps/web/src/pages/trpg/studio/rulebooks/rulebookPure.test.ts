@@ -12,8 +12,10 @@ import { armorSummary, templateName } from './rulebookView';
 const DIFFICULTIES = [{ key: 'easy', name: '쉬움', target: 10 }, { key: 'hard', name: '어려움', target: 20 }];
 const ONE_OVER = { count: 1, style: 'over', shifts: {} };
 
+const DEFENSES: Record<string, string> = { srd5: 'dex', horror: 'nimble', light: 'wit' };
+
 function rules(template: string, armor: unknown, die = 20) {
-  return { template, die, roll: ONE_OVER, difficulties: DIFFICULTIES, armor, abilities: [], resources: [], injuries: [], magnitudes: [], natures: [], narration: { tone: `${template}의 분위기`, outcomes: [], avoid: [] } };
+  return { template, die, roll: ONE_OVER, difficulties: DIFFICULTIES, armor, defense: { ability: DEFENSES[template] }, abilities: [], resources: [], injuries: [], magnitudes: [], natures: [], narration: { tone: `${template}의 분위기`, outcomes: [], avoid: [] } };
 }
 
 const TEMPLATES = {
@@ -53,9 +55,29 @@ describe('룰북의 입력', () => {
 
   it('보내는 본문. 세이브 목표값은 save 일 때만, 막지 않음이면 armor 가 null', () => {
     const draft = { ...newRulebookDraft(TEMPLATES), title: '  내 규칙 ', gmGuide: '지침' };
-    expect(toRulebookCreate(draft)).toEqual({ title: '내 규칙', description: '', gm_guide: '지침', template: 'srd5', die: 20, roll: ONE_OVER, armor: { mode: 'ac', pierce_base: 10 }, resources: [], progression: null, injuries: [] });
+    expect(toRulebookCreate(draft)).toEqual({ title: '내 규칙', description: '', gm_guide: '지침', template: 'srd5', die: 20, roll: ONE_OVER, armor: { mode: 'ac', pierce_base: 10 }, resources: [], progression: null, injuries: [], defense: { ability: 'dex' } });
     expect(toRulebookUpdate({ ...draft, armor: 'save', saveTarget: '7', pierceBase: '12' }).armor).toEqual({ mode: 'save', pierce_base: 12, save_target: 7 });
-    expect(toRulebookUpdate({ ...draft, armor: 'none' })).toEqual({ title: '내 규칙', description: '', gm_guide: '지침', die: 20, roll: ONE_OVER, armor: null, resources: [], progression: null, injuries: [] });
+    expect(toRulebookUpdate({ ...draft, armor: 'none' })).toEqual({ title: '내 규칙', description: '', gm_guide: '지침', die: 20, roll: ONE_OVER, armor: null, resources: [], progression: null, injuries: [], defense: { ability: 'dex' } });
+  });
+});
+
+describe('막는 능력치의 입력(#254)', () => {
+  it('템플릿의 것으로 채우고, 템플릿을 바꾸면 그 템플릿의 것, 고칠 때는 그 룰북의 것이다', () => {
+    const draft = newRulebookDraft(TEMPLATES);
+    expect(draft.defense).toBe('dex');
+    expect(withTemplate({ ...draft, defense: 'str' }, TEMPLATES, 'horror').defense).toBe('nimble');
+    const rulebook = { title: '룰', description: '', gm_guide: '', rules: { ...rules('srd5', null), defense: { ability: 'con' } } } as unknown as RulebookDetail;
+    expect(toRulebookUpdate(rulebookDraft(rulebook)).defense).toEqual({ ability: 'con' });
+  });
+
+  it('막는 규칙이 없는 옛 룰북은 빈 칸이고, 고르기 전에는 보내지 않는다', () => {
+    const old = { title: '룰', description: '', gm_guide: '', rules: { ...rules('srd5', null), defense: null } } as unknown as RulebookDetail;
+    const draft = rulebookDraft(old);
+    expect(draft.defense).toBe('');
+    expect(rulebookHints(draft)).toEqual({ defense: '막는 능력치를 골라 주세요.' });
+    expect(rulebookHints({ ...draft, defense: 'dex' })).toEqual({});
+    const noDefense = { ...TEMPLATES, items: [{ ...TEMPLATES.items[0], rules: { ...rules('srd5', null), defense: undefined } }] } as unknown as RulebookTemplates;
+    expect(newRulebookDraft(noDefense).defense).toBe('');
   });
 });
 

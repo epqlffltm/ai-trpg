@@ -12,6 +12,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
+import { defaultDefense } from './AttacksEditor';
 import { attackDrafts, attacksHints, toAttacks } from './attacksForm';
 import { allyChoices, hasNpcHints, npcDraft, npcHints, npcLine, withAlly } from './npcForm';
 import { problemLine } from './publishProblems';
@@ -159,7 +160,7 @@ describe('인물 탭', () => {
       merchant: false,
       equipment: [{ entry_id: SWORD, count: 1, chance: 50, wear: ['main_hand'] }],
       inventory: [{ entry_id: BREAD, count: 1, chance: 100, wear: [] }],
-      attacks: [{ name: '검 휘두르기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: SWORD, cost: null, effects: [], nature: null }],
+      attacks: [{ name: '검 휘두르기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: SWORD, cost: null, effects: [], nature: null, defense: null }],
       resistances: [],
       nature: null,
       allied_monsters: [],
@@ -219,11 +220,21 @@ describe('인물 탭', () => {
 
 describe('인물 입력', () => {
   it('공격: 이름은 꼭, 겹치지 않게, 무기는 장비에 있는 물건', () => {
-    const attack = { name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: '', cost: null, effects: [], nature: null };
+    const attack = { name: '물기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: '', cost: null, effects: [], nature: null, defense: '' };
     expect(attacksHints([{ ...attack, name: ' ' }], [])[0]).toContain('이름');
     expect(attacksHints([attack, attack], [])[1]).toBe('같은 이름의 공격이 위에 있습니다.');
     expect(attacksHints([{ ...attack, weapon: SWORD }], [])[0]).toBe('무기는 장비에 적은 물건이어야 합니다.');
     expect(attacksHints([{ ...attack, weapon: SWORD }], [SWORD])).toEqual({});
+  });
+
+  it('막는 능력치(#254)는 받은 그대로 두고, 비우면 룰북의 것(null)으로 보낸다', () => {
+    const attack = { name: '독안개', ability: 'con', difficulty: 'normal', harm: 'light', weapon: null, cost: null, effects: [], defense: 'con' };
+    const drafts = attackDrafts([attack, { ...attack, name: '칼', defense: null }]);
+    expect(drafts.map((draft) => draft.defense)).toEqual(['con', '']);
+    expect(toAttacks(drafts).map((one) => one.defense)).toEqual(['con', null]);
+    expect(defaultDefense(RULES as unknown as Ruleset)).toBe('룰북의 것(민첩)');
+    expect(defaultDefense({ ...RULES, defense: { ability: 'luck' } } as unknown as Ruleset)).toBe('룰북의 것(luck)');
+    expect(defaultDefense({ ...RULES, defense: null } as unknown as Ruleset)).toBe('룰북의 것(맞서 굴리지 않음)');
   });
 
   it('공격의 비용(#805)은 고르는 칸이 없어도 저장할 때 그대로 간다', () => {

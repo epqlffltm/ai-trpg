@@ -7,10 +7,12 @@
 //   - 성장은 늘 보낸다. 끄면 null 이다(서버는 보낸 null 을 "성장하지 않음"으로 읽는다)
 //   - 만들 때는 고른 템플릿의 방어 규칙을 채워 보인다. 템플릿을 바꾸면 방어 규칙도 그 템플릿의 것으로 돌아간다
 //   - 짧은 부상(상태 이상)의 라운드마다의 피해와 벗어나기(#254, injuryStatusForm.ts)도 고친다. 부상 목록을 통째로 보낸다
+//   - 막는 능력치(defense, #254): 몬스터와 NPC 의 공격을 받는 쪽이 이 능력치로 맞서 굴린다. 템플릿에서 오고 비울 수 없다.
+//     템플릿을 바꾸면 그 템플릿의 것으로 돌아간다. 옛 룰북이라 없으면(null) 빈 칸이고, 골라야 저장한다
 //   - 숫자 칸은 고치는 동안 글로 둔다(비워 두거나 지우는 중일 수 있다). 보낼 때 정수로 바꾼다
 //   - 세이브의 목표값은 save 방식에만 있고 반드시 있다. 다른 방식에 보내면 서버가 422 다. 그래서 save 일 때만 싣는다
 
-import type { Armor, ArmorMode, RulebookCreate, RulebookDetail, RulebookTemplate, RulebookTemplates, RulebookUpdate, TemplateKey } from '../../../../api/types';
+import type { Armor, ArmorMode, RulebookCreate, RulebookDetail, RulebookTemplate, RulebookTemplates, RulebookUpdate, Ruleset, TemplateKey } from '../../../../api/types';
 import { statusDraft, toInjuries, type StatusDraft, type StatusRules } from './injuryStatusForm';
 import { progressionDraft, progressionHints, toProgression, type ProgressionDraft } from './progressionForm';
 import { rollDraft, rollHints, toDie, toRoll, type RollDraft } from './rollForm';
@@ -35,6 +37,8 @@ export type RulebookDraft = ArmorDraft & {
   roll: RollDraft;
   /** 짧은 부상(상태 이상)의 라운드마다의 피해와 벗어나기(#254) */
   statuses: StatusDraft;
+  /** 막는 능력치(#254)의 키. 고르지 않았으면 빈 글 */
+  defense: string;
 };
 
 // 서버의 한도(trpg-server/app/assets/models.py, app/engine/ruleset.py 의 RULESET_MAX_NUMBER)
@@ -67,7 +71,13 @@ export function newRulebookDraft(templates: RulebookTemplates): RulebookDraft {
     progression: progressionDraft(template?.rules.progression),
     roll: templateRoll(template),
     statuses: templateStatuses(template),
+    defense: defenseDraft(template?.rules.defense),
   };
+}
+
+/** 막는 규칙을 고칠 거리로. 없으면 빈 글 */
+export function defenseDraft(defense: Ruleset['defense'] | undefined): string {
+  return defense?.ability ?? '';
 }
 
 const NO_RULES: StatusRules = { injuries: [], magnitudes: [], natures: [], abilities: [], difficulties: [] };
@@ -94,6 +104,7 @@ export function withTemplate(draft: RulebookDraft, templates: RulebookTemplates,
     progression: progressionDraft(template?.rules.progression),
     roll: templateRoll(template),
     statuses: templateStatuses(template),
+    defense: defenseDraft(template?.rules.defense),
   };
 }
 
@@ -109,6 +120,7 @@ export function rulebookDraft(rulebook: RulebookDetail): RulebookDraft {
     progression: progressionDraft(rulebook.rules.progression),
     roll: rollDraft(rulebook.rules),
     statuses: statusDraft(rulebook.rules),
+    defense: defenseDraft(rulebook.rules.defense),
   };
 }
 
@@ -133,6 +145,7 @@ export function rulebookHints(draft: RulebookDraft): Record<string, string> {
   if (draft.armor !== 'none' && wholeNumber(draft.pierceBase, 0, NUMBER_MAX) === null) {
     hints.pierce_base = `관통의 기준값을 0~${NUMBER_MAX} 사이의 정수로 적어 주세요.`;
   }
+  if (draft.defense === '') hints.defense = '막는 능력치를 골라 주세요.';
   return {
     ...hints,
     ...rollHints(draft.roll, draft.armor !== 'none'),
@@ -162,6 +175,7 @@ export function toRulebookCreate(draft: RulebookDraft): RulebookCreate {
     resources: draft.resources.map(toResource),
     progression: toProgression(draft.progression),
     injuries: toInjuries(draft.statuses),
+    defense: { ability: draft.defense },
   };
 }
 
@@ -177,5 +191,6 @@ export function toRulebookUpdate(draft: RulebookDraft): RulebookUpdate {
     resources: draft.resources.map(toResource),
     progression: toProgression(draft.progression),
     injuries: toInjuries(draft.statuses),
+    defense: { ability: draft.defense },
   };
 }
