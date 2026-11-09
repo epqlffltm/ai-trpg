@@ -61,6 +61,9 @@ class Judging:
     # 라운드를 닫기 시작할 때 이미 쓰러져 있던(죽지 않은) 앉은 사람들(user_id).
     # 몬스터와 NPC 는 이들도 칠 수 있다. 이번 라운드에 쓰러진 사람은 들지 않는다(app/rounds/downed_strikes.py)
     downed_at_start: frozenset[uuid.UUID] = frozenset()
+    # 라운드를 닫기 시작할 때 이미 쓰러져 있던(죽지 않은) 인물들(항목의 id). 몬스터는 이들을 마무리할 수 있다.
+    # 이번 라운드에 쓰러진 인물은 들지 않는다(#254, app/rounds/npc_victims.py)
+    npcs_downed_at_start: frozenset[uuid.UUID] = frozenset()
     # 라운드를 닫기 시작할 때 앉은 사람마다 서 있던 장소(user_id → 장소, 맵에 서 있지 않으면 None).
     # 그 뒤 차례에서 떠난 사람이 도망친 사람이다. 쫓아오는 몬스터가 본다(#254, app/rounds/monster_chase.py)
     places_at_start: dict[uuid.UUID, uuid.UUID | None] = field(default_factory=dict)

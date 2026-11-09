@@ -1067,6 +1067,8 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
         독거미: 엘프에게 독니 (맞음) → 엘프 피해 2 (HP 8/10) [입힌 부상: 중독] [수치: 마나 5 → 3/7]   효과(#805 ③-b)
         수로 쥐 2: 엘프에게 물기 (빗나감) [덫: 올가미에 걸림]   공격한 뒤 밟은 덫(#806 ②-b)
         들개: 엘프을(를) 쫓아 부엌까지 따라옴 (치지 않음)   도망친 캐릭터를 쫓아왔다(#254)
+        해골 병사: 약사에게 할퀴기 (맞음) → 약사 피해 3 (쓰러짐(의식 없음))   인물을 쳤다(#254)
+        해골 병사: 쓰러진 약사에게 할퀴기 (맞음) → 약사 피해 2 (죽음)   쓰러진 인물을 마무리했다(#254)
     도감의 글(생김새, 약점)은 싣지 않는다. 가짜 서술자는 이 줄을 장면으로 그대로 내보낸다.
     """
     if note.chased is not None:
@@ -1074,7 +1076,7 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
     if note.short:
         return f'{note.name}: {note.target}에게 {note.attack} (비용이 모자라 하지 못함)'
     result = '맞음' if note.hit else '빗나감'
-    target = note.target if note.downed is None else f'쓰러진 {note.target}'
+    target = note.target if note.downed is None and not note.finishing else f'쓰러진 {note.target}'
     line = f'{note.name}: {target}에게 {note.attack} ({result})'
     if note.cost:
         line += f' [{", ".join(describe_resource(one) for one in note.cost)}]'
@@ -1084,6 +1086,8 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
         line += f' {describe_impact(note.impact)}'
     if note.downed is not None and note.downed.added:
         line += f' {describe_downed_strike(note.target, note.downed)}'
+    if note.npc_impact is not None:
+        line += f' {describe_npc_impact(note.npc_impact)}'
     trap = [f'[덫: {note.trap}{"에 걸림" if note.trapped else "을(를) 피함"}]'] if note.trap else []
     return ' '.join([line, *effect_tags([], note.injured, note.resisted), *resource_tags(note.resources), *trap])
 

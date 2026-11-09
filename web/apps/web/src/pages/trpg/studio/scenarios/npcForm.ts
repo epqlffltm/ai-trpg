@@ -26,6 +26,8 @@ export type NpcDraft = {
   resistances: NpcSheet['resistances'];
   /** 타고난 피해의 성질(#886 ③). 고르는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
   nature: string | null;
+  /** 한편인 몬스터(#254). 고르는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
+  alliedMonsters: NpcSheet['allied_monsters'];
 };
 
 export function npcDraft(npc: NpcSheet | undefined, rules: Ruleset): NpcDraft {
@@ -40,6 +42,7 @@ export function npcDraft(npc: NpcSheet | undefined, rules: Ruleset): NpcDraft {
     attacks: attackDrafts(npc?.attacks ?? []),
     resistances: npc?.resistances ?? [],
     nature: npc?.nature ?? null,
+    alliedMonsters: npc?.allied_monsters ?? [],
   };
 }
 
@@ -90,6 +93,7 @@ export function toNpcSheet(entryId: string, draft: NpcDraft, rules: Ruleset): Np
     attacks: toAttacks(draft.attacks),
     resistances: draft.resistances,
     nature: draft.nature,
+    allied_monsters: draft.alliedMonsters,
   };
 }
 

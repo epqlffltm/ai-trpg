@@ -1092,6 +1092,7 @@ class MonsterTurnNote:
     고른 공격의 비용이 모자라 하지 못했으면 short 가 참이다. 그때는 굴리지 않았다(hit 는 거짓).
     공격의 효과(#805 ③-b)로 맞은 캐릭터가 입은 부상의 이름들(injured)과 바뀐 수치(resources)도 준다.
     캐릭터의 수치라 보이기를 따른다(숨긴 것은 말로만). 저항으로 막아 낸 부상(resisted, #886 ②)도 준다.
+    몬스터는 같은 장소의 인물도 친다(#254). 그때 target 은 인물의 장면의 이름이고, 몸은 npc_impact 에 말로 있다.
     """
 
     # 부르는 이름(수로 쥐 2)
@@ -1103,6 +1104,10 @@ class MonsterTurnNote:
     impact: Impact | None = None
     # 쓰러진 캐릭터를 쳤으면 그 결과(#369). 서 있는 캐릭터를 쳤으면 None 이다
     downed: DownedStrikeNote | None = None
+    # 몬스터가 인물을 쳤으면(#254) 맞은 인물의 몸이 바뀐 것. 빗나갔거나 캐릭터를 쳤으면 None 이다
+    npc_impact: NpcImpact | None = None
+    # 쓰러진 인물을 쳤는가(#254). 맞혔으면 마무리했다(npc_impact 의 몸 상태가 죽음이다)
+    finishing: bool = False
     # 공격에 장비가 든 것(#276). 무기도 방어 방식도 없었거나 이 칸이 생기기 전에 굳힌 것은 None 이다
     blow: BlowNote | None = None
     cost: list[ResourceNote] = field(default_factory=list)

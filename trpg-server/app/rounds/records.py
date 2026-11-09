@@ -898,6 +898,8 @@ def record_attack_turn(
     맞혔으면 그 뒤에 HP 의 변화와 부상이다. 공격의 효과(#805 ③-b)로 입힌 부상(injury_gained, source attack)과
     맞춘 수치(resource_changed, source attack)가 그 뒤에 잇는다. 비용이 모자라 하지 못한 차례도 skipped 라 적지 않는다.
     쓰러진 캐릭터를 맞혀 죽었으면 그 뒤에 character_died(cause struck_down)다(#369).
+    몬스터가 인물을 쳤으면(#254) HP 의 변화 대신 인물의 변화(npc_changed)와 그 부상이다. 마무리해 죽였으면
+    npc_changed 의 status 가 dead 다.
     움직이지 못한 차례(skipped)는 적지 않는다. 굴린 것도 바뀐 것도 없다. 까닭은 라운드의 turns 에 있다.
     행한 사람(actor_id)을 적지 않는다. 몬스터와 인물을 움직인 것은 엔진이다.
     """
@@ -915,7 +917,7 @@ def record_attack_turn(
         **{
             key: value
             for key, value in outcome.items()
-            if key not in ('effect', 'cost', 'injured', 'resources', 'trap')
+            if key not in ('effect', 'npc_effect', 'cost', 'injured', 'resources', 'trap')
         },
     }
     attacked = recorder.record(session, table, event_type, payload=payload, group=group)
@@ -929,6 +931,11 @@ def record_attack_turn(
         changed = record_hp_change(session, table, effect, cause=attacked)
         holder = {'user_id': effect['user_id'], 'character_name': effect['character_name']}
         record_injury(session, table, effect.get('injury_roll'), holder, cause=changed)
+    npc_effect_ = outcome.get('npc_effect')
+    if npc_effect_ is not None:
+        changed = record_npc_change(session, table, npc_effect_, cause=attacked)
+        holder = {'entry_id': npc_effect_['entry_id'], 'name': npc_effect_['name']}
+        record_injury(session, table, npc_effect_.get('injury_roll'), holder, cause=changed)
     record_attack_effects(session, table, outcome, cause=attacked)
     record_foe_trap(session, table, round_number, turn, cause=attacked)
 
@@ -999,9 +1006,20 @@ def record_stepped(
     record_resource_shifts(session, table, stepped['resources'], holder, ResourceSource.TRAP, fired)
 
 
+def struck_holder(outcome: dict) -> dict:
+    """차례에서 맞은 쪽. 캐릭터면 user_id 와 character_name, 인물(#254)이면 entry_id 와 장면의 이름(name)이다."""
+    if 'target_entry_id' in outcome:
+        return {'entry_id': outcome['target_entry_id'], 'name': outcome['target_name']}
+    return {'user_id': outcome['user_id'], 'character_name': outcome['character_name']}
+
+
 def record_attack_effects(session: AsyncSession, table: GameTable, outcome: dict, cause: TableEvent) -> None:
-    """공격의 효과(#805 ③-b)로 맞은 캐릭터에게 입힌 부상과 맞춘 수치를 적는다. 그 공격의 이벤트(cause)에 잇는다."""
-    victim = {'user_id': outcome['user_id'], 'character_name': outcome['character_name']}
+    """
+    공격의 효과(#805 ③-b)로 맞은 쪽에게 입힌 부상과 맞춘 수치를 적는다. 그 공격의 이벤트(cause)에 잇는다.
+
+    맞은 쪽은 캐릭터나 인물(#254)이다(struck_holder).
+    """
+    victim = struck_holder(outcome)
     for one in outcome.get('injured') or []:
         if one['injury'] is not None:
             record_injury(session, table, one, victim, cause=cause)

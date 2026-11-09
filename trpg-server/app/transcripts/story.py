@@ -187,10 +187,11 @@ def character_revived(payload: dict, labels: Labels) -> list[Block]:
 
 
 def attacked(payload: dict, labels: Labels) -> list[Block]:
-    """몬스터나 NPC 의 공격. 누가 무엇으로 누구를 쳤고 맞혔는가."""
+    """몬스터나 NPC 의 공격. 누가 무엇으로 누구를 쳤고 맞혔는가. 몬스터가 인물을 쳤으면(#254) 그 인물의 이름이다."""
     attack = payload.get('attack') or {}
     hit = '맞음' if payload.get('success') else '빗나감'
-    line = f'{text_of(payload.get("name"))} → {who(payload)}: {text_of(attack.get("name"))} → {hit}'
+    target = text_of(payload.get('target_name')) or who(payload)
+    line = f'{text_of(payload.get("name"))} → {target}: {text_of(attack.get("name"))} → {hit}'
     return [Note(line + blow_text(payload.get('blow')))]
 
 

@@ -908,6 +908,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 | `npc_sheet_not_person` | 인물이 아닌 항목(장소, 물건 …)을 가리키는 NPC 시트가 있다 |
 | `npc_sheet_invalid` | 룰북의 규칙에 맞지 않는 NPC 시트가 있다 |
 | `npc_attack_invalid` | NPC 시트의 공격의 능력치, 난이도, 양의 등급이 룰북의 규칙에 없다. 또는 비용의 수치가 규칙에 없거나 인물이 가지지 않는 수치다(#805 ③-a). 또는 효과의 부상이 규칙에 없거나 맞추는 수치가 캐릭터가 가지지 않는 수치다(#805 ③-b) |
+| `npc_ally_missing` | NPC 시트의 한편인 몬스터(`allied_monsters`, #254)가 시트를 적은 몬스터가 아니다 |
 | `default_npc_sheet_missing` | 시트가 없는 인물 항목이 있는데 기본 NPC 시트가 없다. 모든 인물에게 시트가 있거나 인물이 없으면 없어도 된다 |
 | `default_npc_sheet_invalid` | 기본 NPC 시트가 룰북의 규칙에 맞지 않는다. 쓰지 않아도 판에 들어가므로 본다 |
 | `item_entry_missing` | 붙인 로어북에 없는 항목을 가리키는 아이템 규칙이나 소지품(시작 소지품, 프리젠의 소지품, 퀘스트의 보상)이 있다 |
@@ -2095,6 +2096,7 @@ reverting.py    바로 앞 라운드를 되돌리는 규칙(#288)
 - 만난 첫 라운드는 마리가 처음 장면에 든(살아 있는 캐릭터와 같은 장소에 있는) 라운드다. 선언을 마감할 때 `table_monsters.engaged_round` 에 적고 고치지 않는다.
 - 행동이 없는 선언은 차례가 없다. 몬스터는 그래도 그 캐릭터를 칠 수 있다.
 - 몬스터의 차례에는 같은 장소의 캐릭터 하나를 공격 하나로 친다. 서 있는 캐릭터와, 선언을 마감할 때 이미 쓰러져 있던 캐릭터가 대상이다([쓰러진 캐릭터를 치기](#라운드)). 대상과 공격은 서버의 주사위로 고른다(하나뿐이면 굴리지 않는다). 판정은 앉은 사람의 것과 같은 계산이다(몬스터의 그 능력치 점수, 공격의 난이도). 맞히면 공격의 양의 등급만큼 피해를 주고, 쓰러짐과 부상 표도 앉은 사람의 것과 같다.
+- **몬스터가 치는 인물(#254, `app/rounds/npc_victims.py`).** 같은 장소의 인물(NPC)도 대상이다. 적대인 인물도, 적대가 아닌 인물도 친다. 자리가 있는 인물만이다. 살아 있는 인물과, 라운드를 닫기 시작할 때 이미 쓰러져 있던 인물이다(이번 라운드에 쓰러진 인물은 다음 라운드부터다). NPC 시트의 `allied_monsters`(도감의 몬스터 ID 들)에 그 몬스터를 적은 인물은 그 몬스터와 한편이라 치지 않는다(네크로맨서와 해골). 비우면 어느 몬스터와도 한편이 아니다. 대상은 칠 수 있는 캐릭터(앉은 순서)와 인물(장면의 순서)을 섞어 서버의 주사위로 고른다. 들킨 도둑이 있으면 먼저다. 칠 인물이 남아 있으면 쫓아가지 않는다. 피해는 일행이 인물을 칠 때와 같다(장비의 방어, 세이브, 성질과 저항, 부상 표). 몬스터의 공격은 제압이라 HP 0 이면 쓰러지고, 쓰러진 인물을 맞히면 마무리한다(죽는다, 인물에게는 죽음의 굴림이 없다). 공격의 효과도 든다. 몬스터가 쓰러뜨린 인물은 드롭을 굴리지 않는다(지닌 것은 그대로다). 차례의 `outcome` 에는 캐릭터의 칸 대신 `target_entry_id`, `target_name`, `finishing`(쓰러진 인물을 쳤나)이 있고 바뀐 것은 `npc_effect` 다. 이벤트는 `monster_attacked` 뒤에 `npc_changed` 가 잇는다. 서술자는 차례의 줄에서 `해골 병사: 쓰러진 약사에게 할퀴기 (맞음) → 약사 피해 2 (죽음)` 을 받는다.
 - 차례가 오기 전에 쓰러지거나 죽은 캐릭터는 행동하지 못한다. 굴리지 않고 그 까닭을 적는다.
 
 ```json
@@ -3214,7 +3216,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `npc_changed` | 엔진이 NPC 의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `entry_id`, `name`(장면의 호칭), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`, `injury_roll`. HP 의 숫자는 내보내지 않는다 |
 | `monster_changed` | 엔진이 몬스터 한 마리의 HP 와 생사를 바꿨다. 그 판정 바로 뒤에 적힌다 | `round`, `monster_id`, `name`(부르는 이름), `kind`, `magnitude`, `rolls`, `amount`, `lethal`, `status`, `injury_roll`(#799). HP 의 숫자는 내보내지 않는다 |
 | `monster_chased` | 엔진이 쫓아오는 몬스터(#254) 한 마리를 도망친 캐릭터를 따라 길 한 칸 옮겼다. 차례 순서의 자리에 적힌다. 그 차례에는 치지 않았다 | `round`, `monster_id`, `name`(부르는 이름), `user_id`, `character_name`(쫓은 캐릭터), `from_place`, `to_place`(`entry_id`, `name`) |
-| `monster_attacked` | 엔진이 몬스터 한 마리의 차례에 캐릭터 하나를 쳤다. 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트), 공격의 효과(#805 ③-b)가 있으면 입힌 부상(`injury_gained`, `source: attack`)과 맞춘 수치(`resource_changed`, `source: attack`)가 이 이벤트를 원인으로 잇는다 | `round`, `monster_id`, `name`(부르는 이름), `attack`(`name`, `ability`, `difficulty`, `harm`), `user_id`, `character_name`, `success`, `downed_strike`(쓰러진 캐릭터를 쳤을 때만), `blow`(공격에 장비가 들었으면, #276). 굴림의 보정과 합은 몬스터의 능력치를 드러내서 내보내지 않는다 |
+| `monster_attacked` | 엔진이 몬스터 한 마리의 차례에 캐릭터 하나를 쳤다. 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트), 공격의 효과(#805 ③-b)가 있으면 입힌 부상(`injury_gained`, `source: attack`)과 맞춘 수치(`resource_changed`, `source: attack`)가 이 이벤트를 원인으로 잇는다 | `round`, `monster_id`, `name`(부르는 이름), `attack`(`name`, `ability`, `difficulty`, `harm`), `user_id`, `character_name`(인물을 쳤으면 대신 `target_entry_id`, `target_name`, `finishing`, #254. 그 인물의 몸은 뒤따르는 `npc_changed` 에 있다), `success`, `downed_strike`(쓰러진 캐릭터를 쳤을 때만), `blow`(공격에 장비가 들었으면, #276). 굴림의 보정과 합은 몬스터의 능력치를 드러내서 내보내지 않는다 |
 | `npc_attacked` | 엔진이 싸우는 NPC 의 차례에 캐릭터 하나를 쳤다(#487). 차례 순서의 자리에 적힌다. 맞혔으면 바로 뒤에 그 캐릭터의 `hp_changed`(원인이 이 이벤트) | `round`, `entry_id`, `name`(장면의 호칭), `attack`, `user_id`, `character_name`, `success`, `downed_strike`(쓰러진 캐릭터를 쳤을 때만), `blow`(#276). 굴림과 부상의 영향은 내보내지 않는다 |
 | `injury_gained` | 캐릭터나 NPC 나 몬스터가 부상을 입었다. 그 HP 의 변화 바로 뒤에 적힌다 | `round`, 캐릭터면 `user_id`, `character_name`, NPC 면 `entry_id`, `name`, 몬스터면 `monster_id`, `name`(부르는 이름, #799), 그리고 `injury`, `source`, `ends_after_round`(짧은 것), `heals_at`(오래 가는 것의 나을 시각: `day`, `hour`, `minute`, `time_of_day`) |
 | `injury_hurt` | 짧은 부상(상태)이 라운드가 닫힐 때 피해를 입혔다(#254). 그 라운드의 죽음의 굴림들 뒤에 적힌다. 깎인 양은 바로 뒤의 `hp_changed`(캐릭터), `npc_changed`, `monster_changed` 에 있고, 그 뒤에 부상 표로 생긴 `injury_gained` 와 드롭이 온다 | `round`, 누구인지(`injury_gained` 와 같다), `injury` |
