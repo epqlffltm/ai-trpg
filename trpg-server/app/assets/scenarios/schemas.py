@@ -14,6 +14,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PlainSerializer,
     StringConstraints,
     field_serializer,
     model_validator,
@@ -426,6 +427,22 @@ MonsterAttacks = Annotated[
 ]
 
 
+def reject_duplicate_allies(allied_monsters: list[uuid.UUID]) -> list[uuid.UUID]:
+    """한편인 몬스터를 두 번 적으면 거부한다. 같은 몬스터는 한 번이면 된다."""
+    if len(set(allied_monsters)) != len(allied_monsters):
+        raise ValueError('같은 몬스터를 한편으로 두 번 적었습니다.')
+    return allied_monsters
+
+
+# 글자로 꺼내는 ID. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다. 기본값이 있는 목록의 칸에 쓴다.
+# 칸의 직렬화 함수(field_serializer)는 API 문서에서 그 칸의 기본값을 지워, 웹의 타입이 받는 쪽과 보내는 쪽에서 뒤바뀐다
+TextId = Annotated[uuid.UUID, PlainSerializer(str, return_type=str)]
+
+AlliedMonsters = Annotated[
+    list[TextId], Field(max_length=SCENARIO_MAX_MONSTER_SHEETS), AfterValidator(reject_duplicate_allies)
+]
+
+
 class NpcSheet(BaseModel):
     """
     NPC 시트 하나. 붙인 로어북의 인물 항목 하나(entry_id)에 숫자와 처음 태도와 지닌 물건을 준다.
@@ -436,6 +453,7 @@ class NpcSheet(BaseModel):
     attacks 는 공격들이다. 몬스터 시트와 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다(#487 2/2).
     merchant 는 상인인지다(#278). 상인은 소지품(inventory) 중 값이 있는 물건을 팔고, 값이 있는 물건을 사 준다.
     소지품의 개수가 곧 재고다. 장비는 팔지 않는다.
+    allied_monsters 는 한편인 몬스터들이다(#254). 몬스터는 같은 장소의 인물도 치는데, 한편인 인물은 치지 않는다.
 
     프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).
     가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.
@@ -462,6 +480,9 @@ class NpcSheet(BaseModel):
     resistances: Resistances = ()
     # 타고난 피해의 성질(#886 ③). 공격과 무기에 성질이 없을 때 그 인물의 피해의 성질이다(불의 정령). 비우면 없다
     nature: Key | None = None
+    # 한편인 몬스터들(#254). 도감의 몬스터 ID 다. 이 몬스터들은 이 인물을 치지 않는다(네크로맨서와 해골).
+    # 비우면 어느 몬스터와도 한편이 아니다. 시트를 적은 몬스터인지는 게시할 때 본다(npc_ally_missing)
+    allied_monsters: AlliedMonsters = []
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'NpcSheet':

@@ -1029,10 +1029,11 @@ def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
 
     둘의 outcome 은 같은 모양이다. 굴림의 숫자와 부상의 영향은 옮기지 않는다. 그 능력치를 드러낸다.
     고른 공격의 비용이 모자라 하지 못한 차례(#805 ③-a)는 무엇을 하려다 못 했는지를 준다.
+    몬스터가 인물을 쳤으면(#254) 인물의 몸(npc_impact)을 말로 주고, 인물의 수치도 말로만 준다(#804).
     """
     outcome = turn['outcome']
     if outcome.get('skipped') == 'cost_short':
-        attack, target = outcome['attack']['name'], outcome['character_name']
+        attack, target = outcome['attack']['name'], target_name_of(outcome)
         return MonsterTurnNote(name=turn['name'], attack=attack, target=target, hit=False, short=True)
     if 'skipped' in outcome:
         return None
@@ -1045,21 +1046,29 @@ def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
             hit=False,
             chased=followed['to_place']['name'],
         )
+    on_npc = 'target_entry_id' in outcome
     return MonsterTurnNote(
         name=turn['name'],
         attack=outcome['attack']['name'],
-        target=outcome['character_name'],
+        target=target_name_of(outcome),
         hit=outcome['success'],
         impact=to_impact(outcome['effect']),
         downed=to_downed_strike(outcome.get('downed_strike')),
+        npc_impact=to_npc_impact(outcome.get('npc_effect')),
+        finishing=bool(outcome.get('finishing')),
         blow=to_blow(outcome.get('blow')),
         cost=to_cost_words(outcome.get('cost')),
         injured=[one['name'] for one in outcome.get('injured') or [] if one['injury'] is not None],
-        resources=to_shift_notes(outcome.get('resources')),
+        resources=to_cost_words(outcome.get('resources')) if on_npc else to_shift_notes(outcome.get('resources')),
         resisted=[one['name'] for one in outcome.get('injured') or [] if one.get('immune')],
         trap=(outcome.get('trap') or {}).get('name'),
         trapped=bool(outcome.get('trap')) and not outcome['trap']['avoided'],
     )
+
+
+def target_name_of(outcome: dict) -> str:
+    """차례에서 친 쪽의 이름. 캐릭터면 캐릭터의 이름, 몬스터가 인물을 쳤으면(#254) 장면에서 부르는 이름이다."""
+    return outcome['target_name'] if 'target_entry_id' in outcome else outcome['character_name']
 
 
 def to_downed_strike(struck: dict | None) -> DownedStrikeNote | None:

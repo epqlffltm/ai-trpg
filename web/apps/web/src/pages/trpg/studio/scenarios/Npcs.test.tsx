@@ -151,6 +151,7 @@ describe('인물 탭', () => {
       attacks: [{ name: '검 휘두르기', ability: 'str', difficulty: 'normal', harm: 'light', weapon: SWORD, cost: null, effects: [], nature: null }],
       resistances: [],
       nature: null,
+      allied_monsters: [],
     });
   });
 

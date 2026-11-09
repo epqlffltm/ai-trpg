@@ -168,7 +168,8 @@ from app.engine.sheet import CharacterSheet, Sheet
 #  69: 룰북의 규칙에 굴림이 있다(#404). rulebook.rules.roll: 주사위의 개수(count), 성공을 가르는 쪽(style: over, under),
 #      under 에서 난이도마다 기량에 더하는 값(shifts). 그 전의 판은 주사위 하나의 over 다
 #      로어 항목마다의 그림(pictures: entry_id, image_id, #1163)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다.
-#      장소가 품은 하위 맵(submaps: place_id, places, #284)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
+#      장소가 품은 하위 맵(submaps: place_id, places, #284)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다.
+#      NPC 시트의 한편인 몬스터(npc_sheets[].allied_monsters, #254)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 69
 
 
@@ -606,6 +607,8 @@ class NpcSheetSnapshot(BaseModel):
     resistances: Resistances = ()
     # 타고난 피해의 성질(#886 ③). 공격과 무기에 성질이 없을 때 쓴다. 그 전의 판의 인물은 없다
     nature: str | None = None
+    # 한편인 몬스터들(#254). 판의 몬스터 ID 다. 이 몬스터들은 이 인물을 치지 않는다. 그 전의 판의 인물은 한편이 없다
+    allied_monsters: list[uuid.UUID] = []
 
 
 class NaturalArmorSnapshot(BaseModel):

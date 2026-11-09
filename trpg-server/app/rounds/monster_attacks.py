@@ -1,10 +1,10 @@
 # trpg-server/app/rounds/monster_attacks.py
 
 """
-몬스터의 차례. 한 마리가 자기 장소의 캐릭터 하나를 공격 하나로 친다.
+몬스터의 차례. 한 마리가 자기 장소의 캐릭터나 인물 하나를 공격 하나로 친다.
 
 차례가 오면 먼저 칠 수 있는지 본다. 앞 차례에 쓰러지거나 죽었으면, 입은 부상 때문에 움직이지 못하면(기절, #799),
-또는 같은 장소에 칠 캐릭터가 없으면 굴리지 않고 그 까닭을 적는다(skipped).
+또는 같은 장소에 칠 캐릭터도 인물도 없으면 굴리지 않고 그 까닭을 적는다(skipped).
 마리가 입은 부상은 판정에 든다(보정 깎기, 불리함). 결과에 그 영향(hindrance)을 적는다. NPC 의 차례와 같다.
 칠 수 있으면 대상과 공격을 서버의 주사위로 고른다. 고를 것이 하나뿐이면 굴리지 않는다.
 제작자가 공격의 순서를 신경 쓸 필요가 없고, 대상을 고르는 데 AI 가 끼지 않는다.
@@ -14,6 +14,8 @@
 목표값을 올리거나(ac) 피해를 깎는다(reduce). 부위는 공격을 고른 뒤, 판정보다 먼저 굴린다.
 
 대상은 그 장소의 서 있는 캐릭터와, 라운드를 닫기 시작할 때부터 쓰러져 있던 캐릭터다(#369, app/rounds/downed_strikes.py).
+같은 장소의 인물(NPC)도 대상이다(#254, app/rounds/npc_victims.py). 그 마리와 한편인 인물은 치지 않는다.
+쓰러진 인물을 맞히면 마무리한다(죽는다). 캐릭터와 인물을 섞어 주사위로 고른다.
 이번 라운드에 쓰러진 캐릭터는 동료가 일으킬 틈이 있어야 해서 다음 라운드부터 대상이다.
 쓰러진 캐릭터를 맞히면 피해 대신 죽음의 굴림 실패가 쌓인다(strike_downed). 이 함수는 어느 쪽인지 가르기만 한다.
 이번 라운드에 이 마리에게서 훔치다 들킨 도둑이 있으면 대상을 고르지 않고 도둑을 친다(app/rounds/steals.py).
@@ -36,9 +38,10 @@ from app.engine.dice import choose
 from app.engine.health import ChangeKind
 from app.engine.injury import Trigger
 from app.engine.ruleset import Difficulty, ResourceHolder
-from app.rounds import blows, foe_traps, monster_chase
+from app.rounds import blows, foe_traps, monster_chase, npc_victims
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import NO_BLOW, Blow, Weapon
+from app.rounds.cast import CastMember
 from app.rounds.checks import change_sheet
 from app.rounds.downed_strikes import can_be_struck, strike_downed
 from app.rounds.effects import Judging, mark_fight
@@ -235,11 +238,81 @@ def attack_outcome(attack: AttackSnapshot, victim: TableMember, rolled: Check, e
     }
 
 
-def pick_victim(judging: Judging, monster: SceneMonster, victims: list[TableMember]) -> TableMember:
-    """칠 대상. 이 마리에게서 훔치다 들킨 도둑이 칠 수 있는 대상이면 그 사람, 아니면 서버의 주사위로 고른다."""
+def pick_victim(
+    judging: Judging, monster: SceneMonster, victims: list[TableMember], people: list[CastMember] | None = None
+) -> TableMember | CastMember:
+    """
+    칠 대상. 이 마리에게서 훔치다 들킨 도둑이 칠 수 있는 대상이면 그 사람, 아니면 서버의 주사위로 고른다.
+
+    주사위는 칠 수 있는 캐릭터(앉은 순서)와 인물(people, 장면의 순서, #254)을 섞은 것에서 고른다. 가중치는 없다.
+    """
     thief = judging.provoked.get(monster.state.id)
     caught = next((victim for victim in victims if victim.user_id == thief), None)
-    return caught if caught is not None else choose(victims, judging.dice)
+    if caught is not None:
+        return caught
+    candidates: list[TableMember | CastMember] = [*victims, *(people or [])]
+    return choose(candidates, judging.dice)
+
+
+def strike_member(judging: Judging, monster: SceneMonster, victim: TableMember) -> dict:
+    """캐릭터 하나를 친다. 공격, 비용, 판정, 피해의 차례로 굴린다. 차례의 outcome 이다(덫은 부른 쪽이 붙인다)."""
+    mark_fight(judging, monster.state, victim)
+    attack = choose(monster.definition.attacks, judging.dice)
+    if not affordable(judging, monster.state, attack, ResourceHolder.MONSTERS):
+        return short_outcome(attack, victim)
+    cost = pay(judging, monster.state, attack, ResourceHolder.MONSTERS)
+    blow = plan_attack_blow(judging, blows.monster_weapon(judging, monster, attack), victim)
+    rolled = roll_attack(judging, monster, attack, blow)
+    outcome = hit_outcome(judging, attack, victim, rolled.check, blow, monster.definition.nature)
+    return {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
+
+
+def npc_hit_outcome(
+    judging: Judging,
+    attack: AttackSnapshot,
+    person: CastMember,
+    rolled: Check,
+    blow: Blow,
+    head: dict,
+    innate: str | None,
+) -> dict:
+    """
+    인물을 친 판정 뒤의 일(#254). 맞혔고 세이브로 막지 않았으면 피해를 준다(npc_effect). 쓰러진 인물이면 마무리한다.
+
+    head 는 맞은 인물(app/rounds/npc_victims.py 의 target_document)이다. 치기 전에 떴다(마무리인지가 든다).
+    effect(캐릭터의 HP 변화)는 늘 None 이다. 캐릭터를 친 차례와 같은 칸을 둔다.
+    피해의 성질은 캐릭터를 칠 때와 같다(공격, 무기, 타고난 것의 차례). 효과는 판정에 맞혔으면 든다.
+    """
+    save = blows.roll_blow_save(judging, blow) if rolled.success and attack.harm is not None else None
+    landed = rolled.success and not blows.is_saved(save)
+    nature = blows.blow_nature(blow, attack.nature) or innate
+    effect = npc_victims.wound(judging, attack, person, blow, nature) if landed else None
+    outcome = {
+        'attack': attack_document(attack),
+        **head,
+        **asdict(rolled),
+        'effect': None,
+        'npc_effect': effect,
+        **npc_victims.effects_on(judging, attack, person, rolled.success),
+    }
+    return with_blow(judging, outcome, blow, save)
+
+
+def strike_npc(judging: Judging, monster: SceneMonster, person: CastMember) -> dict:
+    """
+    인물 하나를 친다(#254). 캐릭터를 칠 때와 같은 차례로 굴린다. 차례의 outcome 이다(덫은 부른 쪽이 붙인다).
+
+    비용이 모자라면 무엇으로 누구를 치려 했는지만 적는다(skipped cost_short). 싸운 것으로 적지 않는다(캐릭터가 아니다).
+    """
+    head = npc_victims.target_document(person)
+    attack = choose(monster.definition.attacks, judging.dice)
+    if not affordable(judging, monster.state, attack, ResourceHolder.MONSTERS):
+        return {'skipped': Skipped.COST_SHORT, 'attack': attack_document(attack), **head}
+    cost = pay(judging, monster.state, attack, ResourceHolder.MONSTERS)
+    blow = npc_victims.plan_npc_blow(judging, blows.monster_weapon(judging, monster, attack), person)
+    rolled = roll_attack(judging, monster, attack, blow)
+    outcome = npc_hit_outcome(judging, attack, person, rolled.check, blow, head, monster.definition.nature)
+    return {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
 
 
 def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
@@ -250,23 +323,24 @@ def take_monster_turn(judging: Judging, monster: SceneMonster) -> dict:
     쓰러진 대상을 쳤으면 피해의 주사위가 없고 downed_strike 가 있다(hit_outcome).
     고른 공격의 비용이 모자라면 굴리지 않는다(short_outcome). 비용이 있는 공격이면 낸 비용(cost)을 적는다(#805 ③-a).
     공격을 굴렸으면 그 뒤에 그 장소의 덫 하나를 밟는다(trap, #806 ②-b, app/rounds/foe_traps.py).
-    칠 캐릭터가 없을 때 쫓아오는 몬스터면 도망친 사람을 길 한 칸 따라간다({'chased': …}, #254).
-    따라간 차례에는 치지 않는다(app/rounds/monster_chase.py).
+    칠 캐릭터도 인물도 없을 때 쫓아오는 몬스터면 도망친 사람을 길 한 칸 따라간다({'chased': …}, #254).
+    따라간 차례에는 치지 않는다(app/rounds/monster_chase.py). 같은 장소에 칠 인물이 남아 있으면 쫓지 않고
+    그 인물을 친다.
+    인물을 쳤으면(#254) 캐릭터의 칸(user_id, character_name) 대신 맞은 인물의 칸(target_entry_id, target_name,
+    finishing)이 있고, 바뀐 것은 npc_effect 에 있다(strike_npc).
     """
     stopped = stopped_by(judging, monster)
     if stopped is not None:
         return {'skipped': stopped}
     victims = victims_of(judging, monster)
-    if not victims:
+    people = npc_victims.victims_of(judging, monster)
+    if not victims and not people:
         return monster_chase.chase(judging, monster) or {'skipped': Skipped.NO_TARGET}
-    victim = pick_victim(judging, monster, victims)
-    mark_fight(judging, monster.state, victim)
-    attack = choose(monster.definition.attacks, judging.dice)
-    if not affordable(judging, monster.state, attack, ResourceHolder.MONSTERS):
-        return short_outcome(attack, victim)
-    cost = pay(judging, monster.state, attack, ResourceHolder.MONSTERS)
-    blow = plan_attack_blow(judging, blows.monster_weapon(judging, monster, attack), victim)
-    rolled = roll_attack(judging, monster, attack, blow)
-    outcome = hit_outcome(judging, attack, victim, rolled.check, blow, monster.definition.nature)
-    turn = {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled)}
+    victim = pick_victim(judging, monster, victims, people)
+    if isinstance(victim, CastMember):
+        turn = strike_npc(judging, monster, victim)
+    else:
+        turn = strike_member(judging, monster, victim)
+    if 'skipped' in turn:
+        return turn
     return foe_traps.with_trap(turn, foe_traps.monster_steps(judging, monster))

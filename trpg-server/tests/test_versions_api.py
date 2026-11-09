@@ -455,6 +455,7 @@ async def test_the_snapshot_carries_everything_needed_to_play(client: AsyncClien
                 'merchant': False,
                 'resistances': [],
                 'nature': None,
+                'allied_monsters': [],
             }
         ],
         'default_npc_sheet': None,

@@ -80,7 +80,7 @@ from app.rounds.trap_actions import judge_disarm, judge_set_trap, search_traps, 
 from app.rounds.treatments import judge_treatment
 from app.rounds.waits import judge_wait
 from app.tables import items, resistances, sheets
-from app.tables.models import GameTable, TableMember
+from app.tables.models import GameTable, NpcStatus, TableMember
 
 
 def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
@@ -226,9 +226,15 @@ def build_judging(
         snapshot=snapshot,
         monsters=scene.monsters,
         downed_at_start=downed,
+        npcs_downed_at_start=downed_npcs(scene),
         places_at_start=places_at_start(table),
         covers=covers_of(snapshot, rolling or []),
     )
+
+
+def downed_npcs(scene: Scene) -> frozenset[uuid.UUID]:
+    """판정을 시작할 때 쓰러져 있는(죽지 않은) 인물들의 항목 id. 몬스터가 마무리할 수 있다(#254)."""
+    return frozenset(npc.entry_id for npc in scene.npcs if npc.status == NpcStatus.DOWNED)
 
 
 def places_at_start(table: GameTable) -> dict[uuid.UUID, uuid.UUID | None]:

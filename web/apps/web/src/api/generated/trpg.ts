@@ -7535,12 +7535,18 @@ export interface components {
          *     attacks 는 공격들이다. 몬스터 시트와 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다(#487 2/2).
          *     merchant 는 상인인지다(#278). 상인은 소지품(inventory) 중 값이 있는 물건을 팔고, 값이 있는 물건을 사 준다.
          *     소지품의 개수가 곧 재고다. 장비는 팔지 않는다.
+         *     allied_monsters 는 한편인 몬스터들이다(#254). 몬스터는 같은 장소의 인물도 치는데, 한편인 인물은 치지 않는다.
          *
          *     프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).
          *     가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.
          *     로어북도 룰북도 나중에 바꿀 수 있어서 지금 정할 수 없다.
          */
         "NpcSheet-Input": {
+            /**
+             * Allied Monsters
+             * @default []
+             */
+            allied_monsters: string[];
             /**
              * Attacks
              * @default []
@@ -7594,12 +7600,18 @@ export interface components {
          *     attacks 는 공격들이다. 몬스터 시트와 같은 모양이다(#487). 싸움이 붙은 적대 인물이 라운드의 차례에 쓴다(#487 2/2).
          *     merchant 는 상인인지다(#278). 상인은 소지품(inventory) 중 값이 있는 물건을 팔고, 값이 있는 물건을 사 준다.
          *     소지품의 개수가 곧 재고다. 장비는 팔지 않는다.
+         *     allied_monsters 는 한편인 몬스터들이다(#254). 몬스터는 같은 장소의 인물도 치는데, 한편인 인물은 치지 않는다.
          *
          *     프리젠과 달리 시트를 비워 둘 수 없다. 숫자를 줄 생각이 없으면 이 칸을 만들지 않으면 된다(기본 NPC 시트를 쓴다).
          *     가리키는 항목이 붙인 로어북에 있는지, 인물인지, 시트가 규칙에 맞는지는 게시할 때 본다.
          *     로어북도 룰북도 나중에 바꿀 수 있어서 지금 정할 수 없다.
          */
         "NpcSheet-Output": {
+            /**
+             * Allied Monsters
+             * @default []
+             */
+            allied_monsters: string[];
             /**
              * Attacks
              * @default []
@@ -7645,6 +7657,11 @@ export interface components {
          * @description NPC 시트 하나. 판 안의 로어북 인물 항목 하나(entry_id)의 숫자와 처음 태도와 지닌 물건이다.
          */
         NpcSheetSnapshot: {
+            /**
+             * Allied Monsters
+             * @default []
+             */
+            allied_monsters: string[];
             /**
              * Attacks
              * @default []

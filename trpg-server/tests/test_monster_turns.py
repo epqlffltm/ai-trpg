@@ -581,7 +581,11 @@ def test_a_monster_with_nobody_standing_by_skips():
     downed = pc('드워프 기사', 10, place=rat.state.place_id)
     downed.sheet.died_at, downed.sheet.hp = None, 0
     judging = SimpleNamespace(
-        table=SimpleNamespace(members=[away, downed]), dice=ScriptedDice([]), ruleset=SRD5, downed_at_start=frozenset()
+        table=SimpleNamespace(members=[away, downed]),
+        dice=ScriptedDice([]),
+        ruleset=SRD5,
+        downed_at_start=frozenset(),
+        cast=[],
     )
 
     assert take_monster_turn(judging, rat) == {'skipped': Skipped.NO_TARGET}
