@@ -7,6 +7,8 @@
   - 로그인하지 않은 사람과 성인 확인을 하지 않은 사람은 전체 이용가만 본다.
   - 볼 수 없는 캐릭터는 없는 것과 같다(404). 403 이면 그런 캐릭터가 있다는 것이 드러난다.
 토큰을 보냈는데 틀렸으면 401 이다(로그인하지 않은 것으로 넘기지 않는다, server_core 의 OptionalUser).
+소개의 문서에는 업적을 싣지 않는다(조건과 숨긴 업적의 이름이 들었다). 보여도 되는 것만 따로 싣는다.
+대화를 여는 chat 서버는 서비스 경로(supply.py)로 업적까지 받는다.
 """
 
 import uuid
@@ -15,9 +17,14 @@ from fastapi import APIRouter, status
 from server_core.auth.dependencies import CurrentUser, OptionalUser
 
 from app.characters import service
-from app.characters.documents import CharacterDocument
+from app.characters.documents import CharacterAchievementDocument, CharacterDocument
 from app.characters.models import Character, CharacterVersion
-from app.characters.schemas import PublicCharacterDetail, PublicCharacterPage, PublicCharacterSummary
+from app.characters.schemas import (
+    PublicCharacterAchievement,
+    PublicCharacterDetail,
+    PublicCharacterPage,
+    PublicCharacterSummary,
+)
 from app.characters.service import CharacterNotFoundError
 from app.core.dependencies import Creator, ListingPreferences, Order, Paging, Search, Session
 from app.hearts import service as hearts
@@ -103,16 +110,35 @@ async def take_heart(character_id: uuid.UUID, user: CurrentUser, session: Sessio
     return await hearts.take_heart(session, CHARACTER_HEARTS, user, character_id)
 
 
-@router.get('/{character_id}', response_model=PublicCharacterDetail, status_code=status.HTTP_200_OK)
-async def read_public(character_id: uuid.UUID, user: OptionalUser, session: Session) -> PublicCharacterDetail:
-    """공개 캐릭터 하나. 마지막 판의 문서다."""
-    character, version = await service.get_public(session, user, character_id)
+def public_achievement(achievement: CharacterAchievementDocument) -> PublicCharacterAchievement:
+    """소개에 보이는 업적. 숨긴 업적은 이름, 받는 법, 그림을 가린다. 조건은 싣지 않는다."""
+    shown = not achievement.hidden
+    return PublicCharacterAchievement(
+        id=achievement.id,
+        hidden=achievement.hidden,
+        name=achievement.name if shown else None,
+        description=achievement.description if shown else None,
+        image_id=achievement.image_id if shown else None,
+    )
+
+
+def to_public_detail(character: Character, version: CharacterVersion) -> PublicCharacterDetail:
+    """공개 캐릭터의 소개. 마지막 판의 문서에서 업적만 빼고, 보여도 되는 업적을 따로 싣는다."""
+    document = CharacterDocument.model_validate(version.document)
     return PublicCharacterDetail(
         id=character.id,
         creator_id=character.owner_id,
         version=version.number,
         published_at=version.created_at,
-        document=CharacterDocument.model_validate(version.document),
+        document=document.model_copy(update={'achievements': []}),
         heart_count=character.heart_count,
         start_count=character.start_count,
+        achievements=[public_achievement(achievement) for achievement in document.achievements],
     )
+
+
+@router.get('/{character_id}', response_model=PublicCharacterDetail, status_code=status.HTTP_200_OK)
+async def read_public(character_id: uuid.UUID, user: OptionalUser, session: Session) -> PublicCharacterDetail:
+    """공개 캐릭터 하나. 마지막 판의 문서다."""
+    character, version = await service.get_public(session, user, character_id)
+    return to_public_detail(character, version)

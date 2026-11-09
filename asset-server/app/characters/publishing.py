@@ -17,7 +17,7 @@ import uuid
 from collections.abc import Mapping, Sequence
 
 from app.characters.documents import LorebookCopyDocument, lorebook_copy
-from app.characters.models import Character, ItemKind, SceneWhen, TriggerKind
+from app.characters.models import AchievementKind, Character, ItemKind, SceneWhen, TriggerKind
 from app.content.html import Cleaned, clean_intro, image_ids
 
 
@@ -44,6 +44,8 @@ class Problem(enum.StrEnum):
     LOREBOOK_MISSING = 'lorebook_missing'
     # 가리킨 로어북을 게시한 적이 없다. 판에 복사할 것이 없다
     LOREBOOK_UNPUBLISHED = 'lorebook_unpublished'
+    # 업적의 조건이 없는 장소나 물건, 이벤트 씬, 호감도의 단계를 가리킨다(호감도가 없는데 단계를 가리키는 것도)
+    ACHIEVEMENT_TARGET_MISSING = 'achievement_target_missing'
 
 
 class CharacterNotReadyError(Exception):
@@ -115,11 +117,40 @@ def sprite_problems(character: Character) -> list[Problem]:
     return [Problem.SPRITE_OUTFIT_MISSING] if any(outfit not in clothes for outfit in outfits) else []
 
 
+def achievement_targets(character: Character) -> dict[str, set[str]]:
+    """
+    업적의 조건이 가리킬 수 있는 것들. 조건의 종류마다 장소의 id, 물건의 id, 이벤트 씬의 id, 호감도 단계의 이름이다.
+    보낸 말의 수(messages_at_least)는 가리키는 것이 없어 여기 없다.
+    """
+    places = {place['id'] for place in character.places}
+    items = {item['id'] for item in character.items}
+    stages = {stage['name'] for stage in character.affection['stages']} if character.affection else set()
+    return {
+        AchievementKind.VISITED_PLACE: places,
+        AchievementKind.HOLD_ITEM: items,
+        AchievementKind.RECEIVED_ITEM: items,
+        AchievementKind.AFFECTION_STAGE: stages,
+        AchievementKind.SCENE_SEEN: {scene['id'] for scene in character.event_scenes},
+    }
+
+
+def achievement_problems(character: Character) -> list[Problem]:
+    """업적이 맞지 않는 것들. 조건은 있는 장소, 물건, 이벤트 씬, 호감도의 단계를 가리켜야 한다."""
+    known = achievement_targets(character)
+    for achievement in character.achievements:
+        for item in achievement['when']['items']:
+            pointed = item['value'] if item['kind'] == AchievementKind.AFFECTION_STAGE else item['target']
+            if item['kind'] in known and pointed not in known[item['kind']]:
+                return [Problem.ACHIEVEMENT_TARGET_MISSING]
+    return []
+
+
 def find_problems(character: Character) -> list[Problem]:
     """게시를 막는 것들. 없으면 빈 목록이다."""
     problems = [] if character.starts else [Problem.START_MISSING]
     problems += place_problems(character) + item_problems(character)
-    return problems + affection_problems(character) + scene_problems(character) + sprite_problems(character)
+    problems += affection_problems(character) + scene_problems(character) + sprite_problems(character)
+    return problems + achievement_problems(character)
 
 
 def lorebook_copies(
@@ -148,8 +179,14 @@ def cleaned_intro(character: Character) -> Cleaned:
 
 
 def world_image_ids(character: Character) -> list[uuid.UUID]:
-    """장소의 배경(기본과 시간대마다), 물건의 그림, 이벤트 씬, 캐릭터 그림. 초안에는 글로 적혀 있다."""
-    entries = [*character.places, *character.items, *character.event_scenes, *character.sprites]
+    """장소의 배경(기본과 시간대마다), 물건의 그림, 이벤트 씬, 캐릭터 그림, 업적의 그림. 초안에는 글로 적혀 있다."""
+    entries = [
+        *character.places,
+        *character.items,
+        *character.event_scenes,
+        *character.sprites,
+        *character.achievements,
+    ]
     found = [uuid.UUID(entry['image_id']) for entry in entries if entry.get('image_id')]
     backgrounds = [image for place in character.places for image in place.get('backgrounds', {}).values()]
     return found + [uuid.UUID(image) for image in backgrounds]

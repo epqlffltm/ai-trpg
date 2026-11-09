@@ -14,6 +14,10 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstra
 
 from app.characters.documents import CharacterDocument
 from app.characters.models import (
+    ACHIEVEMENT_DESCRIPTION_MAX_LENGTH,
+    ACHIEVEMENT_MAX_CONDITIONS,
+    ACHIEVEMENT_MAX_COUNT,
+    ACHIEVEMENT_NAME_MAX_LENGTH,
     AFFECTION_MAX,
     AFFECTION_MAX_CHANGE,
     AFFECTION_MAX_RULES,
@@ -22,6 +26,7 @@ from app.characters.models import (
     CHARACTER_AGE_MAX_LENGTH,
     CHARACTER_GENDER_MAX_LENGTH,
     CHARACTER_GREETING_MAX_LENGTH,
+    CHARACTER_MAX_ACHIEVEMENTS,
     CHARACTER_MAX_EVENT_SCENES,
     CHARACTER_MAX_ITEMS,
     CHARACTER_MAX_LOREBOOKS,
@@ -51,6 +56,8 @@ from app.characters.models import (
     START_SITUATION_MAX_LENGTH,
     START_TITLE_MAX_LENGTH,
     VERSION_NOTE_MAX_LENGTH,
+    AchievementKind,
+    AchievementMatch,
     AffectionDisplay,
     ItemKind,
     SceneWhen,
@@ -345,6 +352,87 @@ def unique_sprites(sprites: list[Sprite]) -> list[Sprite]:
 Sprites = Annotated[list[Sprite], Field(max_length=CHARACTER_MAX_SPRITES), AfterValidator(unique_sprites)]
 
 
+# 업적의 조건의 종류마다 쓰는 칸(AchievementKind 의 설명과 같다). target, value, count 가운데 이것만 적는다
+ACHIEVEMENT_FIELDS: dict[AchievementKind, frozenset[str]] = {
+    AchievementKind.VISITED_PLACE: frozenset({'target'}),
+    AchievementKind.HOLD_ITEM: frozenset({'target', 'count'}),
+    AchievementKind.RECEIVED_ITEM: frozenset({'target'}),
+    AchievementKind.AFFECTION_STAGE: frozenset({'value'}),
+    AchievementKind.SCENE_SEEN: frozenset({'target'}),
+    AchievementKind.MESSAGES_AT_LEAST: frozenset({'count'}),
+}
+# count 를 쓰지 않는 종류의 count. 세지 않는다
+UNCOUNTED = 1
+
+
+class CharacterAchievementCondition(BaseModel):
+    """
+    업적의 받는 조건 하나(docs/architecture/achievements.md 의 "chat").
+    종류(kind)마다 쓰는 칸이 다르다(ACHIEVEMENT_FIELDS).
+    target 은 장소, 물건, 이벤트 씬의 id 다. value 는 호감도 단계의 이름이다. count 는 물건의 수나 보낸 말의 수다.
+    쓰지 않는 칸은 적지 않는다. 가리키는 것이 있는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    kind: AchievementKind
+    target: Key | None = None
+    value: Annotated[str, StringConstraints(min_length=1, max_length=STAGE_NAME_MAX_LENGTH)] | None = None
+    count: Annotated[int, Field(ge=1, le=ACHIEVEMENT_MAX_COUNT)] = UNCOUNTED
+
+    @model_validator(mode='after')
+    def fields_for_the_kind(self) -> Self:
+        """그 종류가 쓰는 칸은 채우고, 쓰지 않는 칸은 비운다."""
+        wanted = ACHIEVEMENT_FIELDS[self.kind]
+        missing = [name for name in ('target', 'value') if name in wanted and getattr(self, name) is None]
+        extra = [name for name in ('target', 'value') if name not in wanted and getattr(self, name) is not None]
+        if 'count' not in wanted and self.count != UNCOUNTED:
+            extra.append('count')
+        if missing or extra:
+            raise ValueError(f'{self.kind} 의 칸이 맞지 않습니다(채울 것: {missing}, 비울 것: {extra}).')
+        return self
+
+
+class CharacterAchievementConditions(BaseModel):
+    """받는 조건 목록과 맞추는 법. 하나 이상 적는다(비면 늘 맞아 첫 답에 그냥 받는다)."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    match: AchievementMatch = AchievementMatch.ALL
+    items: Annotated[list[CharacterAchievementCondition], Field(min_length=1, max_length=ACHIEVEMENT_MAX_CONDITIONS)]
+
+
+class CharacterAchievement(BaseModel):
+    """
+    업적 하나(판의 형식 11, docs/architecture/achievements.md 의 "chat"). 제작자가 작품에 단 것이다(스팀의 업적과 같다).
+    인증 서버의 활동 배지와는 다른 것이다. 주는 것은 chat 의 엔진이다(답을 저장한 뒤 when 이 맞으면).
+    계정마다 한 번이다.
+    id 는 판이 바뀌어도 그대로 둔다. 받은 기록이 이것을 가리킨다. 바꾸면 다른 업적이다.
+    hidden 이면 받기 전에는 이름, 받는 법(description), 그림을 가린다(공개 소개에 싣지 않는다).
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: Key
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=ACHIEVEMENT_NAME_MAX_LENGTH)]
+    description: Annotated[
+        str, StringConstraints(strip_whitespace=True, max_length=ACHIEVEMENT_DESCRIPTION_MAX_LENGTH)
+    ] = ''
+    hidden: bool = False
+    image_id: uuid.UUID | None = None
+    when: CharacterAchievementConditions
+
+
+def unique_achievements(achievements: list[CharacterAchievement]) -> list[CharacterAchievement]:
+    reject_repeated_keys([achievement.id for achievement in achievements])
+    return achievements
+
+
+CharacterAchievements = Annotated[
+    list[CharacterAchievement], Field(max_length=CHARACTER_MAX_ACHIEVEMENTS), AfterValidator(unique_achievements)
+]
+
+
 # 지도와 물건, 이벤트 씬, 캐릭터 그림의 칸. DB 에 적을 때 dict 의 목록으로 바꾼다
 def reject_repeated_ids(ids: list[uuid.UUID]) -> list[uuid.UUID]:
     """같은 로어북을 두 번 가리키면 거부한다."""
@@ -355,7 +443,7 @@ def reject_repeated_ids(ids: list[uuid.UUID]) -> list[uuid.UUID]:
 
 Lorebooks = Annotated[list[uuid.UUID], Field(max_length=CHARACTER_MAX_LOREBOOKS), AfterValidator(reject_repeated_ids)]
 
-WORLD_LISTS = ('places', 'paths', 'items', 'start_items', 'event_scenes', 'sprites', 'shortcuts')
+WORLD_LISTS = ('places', 'paths', 'items', 'start_items', 'event_scenes', 'sprites', 'shortcuts', 'achievements')
 
 
 def attached_images(
@@ -364,10 +452,14 @@ def attached_images(
     items: list[Item],
     event_scenes: list[EventScene],
     sprites: list[Sprite],
+    achievements: list[CharacterAchievement] | None = None,
 ) -> list[uuid.UUID]:
-    """붙인 그림들. 대표 그림, 장소의 배경(기본, 시간대마다), 물건의 그림, 이벤트 씬, 캐릭터 그림. 없는 것은 뺀다."""
+    """
+    붙인 그림들. 대표 그림, 장소의 배경(기본, 시간대마다), 물건의 그림, 이벤트 씬, 캐릭터 그림, 업적의 그림.
+    없는 것은 뺀다.
+    """
     found = [image_id] if image_id is not None else []
-    found += [entry.image_id for entry in [*places, *items] if entry.image_id is not None]
+    found += [entry.image_id for entry in [*places, *items, *(achievements or [])] if entry.image_id is not None]
     found += [background for place in places for background in place.backgrounds.values()]
     return found + [scene.image_id for scene in event_scenes] + [sprite.image_id for sprite in sprites]
 
@@ -404,10 +496,14 @@ class CharacterCreate(BaseModel):
     lorebooks: Lorebooks = []
     # 제작자 단축어(#981). 대화 중에 "/이름"으로 부른다
     shortcuts: Shortcuts = []
+    # 업적(판의 형식 11). 적은 차례가 보이는 차례다
+    achievements: CharacterAchievements = []
 
     def image_ids(self) -> list[uuid.UUID]:
         """붙인 그림들. 자기 그림인지 볼 것들이다."""
-        return attached_images(self.image_id, self.places, self.items, self.event_scenes, self.sprites)
+        return attached_images(
+            self.image_id, self.places, self.items, self.event_scenes, self.sprites, self.achievements
+        )
 
     def values(self) -> dict:
         """DB 에 적을 칸과 값. 시작 상황, 지도, 물건은 dict 의 목록이다(그림의 id 는 글이다)."""
@@ -449,6 +545,7 @@ class CharacterUpdate(BaseModel):
     sprites: Sprites | None = None
     lorebooks: Lorebooks | None = None
     shortcuts: Shortcuts | None = None
+    achievements: CharacterAchievements | None = None
 
     @model_validator(mode='after')
     def null_only_for_the_image(self) -> Self:
@@ -471,7 +568,12 @@ class CharacterUpdate(BaseModel):
     def image_ids(self) -> list[uuid.UUID]:
         """보낸 칸에 붙인 그림들. 자기 그림인지 볼 것들이다."""
         return attached_images(
-            self.image_id, self.places or [], self.items or [], self.event_scenes or [], self.sprites or []
+            self.image_id,
+            self.places or [],
+            self.items or [],
+            self.event_scenes or [],
+            self.sprites or [],
+            self.achievements,
         )
 
 
@@ -503,6 +605,8 @@ class CharacterDetail(BaseModel):
     lorebooks: list[uuid.UUID]
     # 제작자 단축어(#981). 기본값이 있어 웹의 생성 타입에서는 고르는 칸이다
     shortcuts: list[Shortcut] = []
+    # 업적(판의 형식 11). 기본값이 있어 웹의 생성 타입에서는 고르는 칸이다
+    achievements: list[CharacterAchievement] = []
     latest_version: int | None
     published_at: datetime | None
     # 운영자가 숨긴 시각(#678). 숨긴 동안은 공개여도 남에게 보이지 않는다
@@ -611,8 +715,25 @@ class PublicCharacterPage(BaseModel):
     total: int
 
 
+class PublicCharacterAchievement(BaseModel):
+    """
+    소개에 보이는 업적 하나. hidden 이면 name, description, image_id 가 null 이다(받기 전에는 가린다).
+    받은 사람의 기록과 달성률은 chat 서버가 준다(GET /api/v1/chat/achievements, /achievements/rates).
+    조건은 싣지 않는다(대화의 내용이다).
+    """
+
+    id: str
+    hidden: bool
+    name: str | None
+    description: str | None
+    image_id: uuid.UUID | None
+
+
 class PublicCharacterDetail(BaseModel):
-    """공개 캐릭터 하나. 마지막 판의 문서다."""
+    """
+    공개 캐릭터 하나. 마지막 판의 문서다. 다만 문서의 업적은 비우고(조건과 숨긴 업적의 이름이 들었다)
+    보여도 되는 것만 achievements 에 따로 싣는다.
+    """
 
     id: uuid.UUID
     # 만든 사람의 공개 ID(#992). 이름은 화면이 인증 서버에 묻는다
@@ -624,6 +745,9 @@ class PublicCharacterDetail(BaseModel):
     heart_count: int
     # 대화(캐릭터)나 세션(세계관)을 시작한 모든 수(#985). 한 시간마다 받아 온다
     start_count: int
+    # 업적(판의 형식 11). 판의 차례다. 숨긴 업적은 이름, 받는 법, 그림이 null 이다.
+    # 기본값이 있어 생성 타입에서는 고르는 칸이다
+    achievements: list[PublicCharacterAchievement] = []
 
 
 class CharacterCopy(BaseModel):
