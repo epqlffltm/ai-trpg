@@ -3,6 +3,7 @@
 // 로그인하지 않아도 열린다(#530, 전체이용가만). 카드를 누르면 소개(C2)로 간다.
 // 거르기(장르, 태그)는 asset 서버의 목록에 조건이 아직 없어 두지 않는다. 다음 쪽을 읽지 못해도 읽은 쪽은 남긴다.
 // 모양은 Stitch 16번(12번과 같은 틀): 위에 chat 배너(#994), 최신순이면 이번 주 인기 줄(#985), 그 아래 "전체 캐릭터"의 격자.
+// 머리 줄 오른쪽에 "내 대화"(최근 대화 화면 /conversations)와 "캐릭터 만들기". 둘 다 로그인했을 때만 둔다.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -28,7 +29,12 @@ export function CharacterBrowsePage() {
     <main className="page">
       <div className="page-head">
         <h1>캐릭터 찾기</h1>
-        {signedIn ? <Link to="/chat/studio/characters">캐릭터 만들기</Link> : null}
+        {signedIn ? (
+          <nav className="page-head__links" aria-label="내 chat">
+            <Link to="/conversations">내 대화</Link>
+            <Link to="/chat/studio/characters">캐릭터 만들기</Link>
+          </nav>
+        ) : null}
       </div>
       <PromoBanner signedIn={signedIn} service="chat" />
       {order === 'popular' ? null : <CharacterRankingRow signedIn={signedIn} />}

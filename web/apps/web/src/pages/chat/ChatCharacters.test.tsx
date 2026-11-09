@@ -108,6 +108,21 @@ describe('캐릭터 탐색', () => {
     await userEvent.click(grid.getByRole('link', { name: /루나/ }));
     expect(await screen.findByRole('heading', { name: '루나', level: 1 })).toBeInTheDocument();
   });
+
+  it('로그인했으면 머리 줄에 내 대화(최근 대화 화면)와 캐릭터 만들기가 있다. 로그인 전에는 없다', async () => {
+    signedIn();
+    const { unmount } = renderApp('/chat');
+
+    const links = within(await screen.findByRole('navigation', { name: '내 chat' }));
+    expect(links.getByRole('link', { name: '내 대화' })).toHaveAttribute('href', '/conversations');
+    expect(links.getByRole('link', { name: '캐릭터 만들기' })).toHaveAttribute('href', '/chat/studio/characters');
+    unmount();
+
+    signedOut();
+    renderApp('/chat');
+    expect(await screen.findByRole('heading', { name: '캐릭터 찾기', level: 1 })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: '내 chat' })).toBeNull();
+  });
 });
 
 describe('캐릭터 소개', () => {
