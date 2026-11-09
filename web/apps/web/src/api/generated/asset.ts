@@ -1241,6 +1241,51 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * Achievement
+         * @description 업적 하나(판의 형식 9, docs/architecture/achievements.md 의 "story"). 제작자가 작품에 단 것이다(스팀의 업적과 같다).
+         *     인증 서버의 활동 배지와는 다른 것이다. 주는 것은 story 의 엔진이다(행동 뒤에 when 이 맞으면). 계정마다 한 번이다.
+         *     id 는 판이 바뀌어도 그대로 둔다. 받은 기록이 이것을 가리킨다. 바꾸면 다른 업적이다.
+         *     hidden 이면 받기 전에는 이름, 받는 법(description), 그림을 가린다(공개 소개에 싣지 않는다).
+         *     when 은 이벤트의 조건과 같은 모양이고 하나 이상 적는다(비면 늘 맞아 첫 행동에 그냥 받는다).
+         *     가리키는 것이 맞는지는 게시할 때 본다.
+         */
+        Achievement: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id?: string | null;
+            /** Name */
+            name: string;
+            when: components["schemas"]["Conditions"];
+        };
+        /**
+         * AchievementDocument
+         * @description 업적 하나. 판의 차례가 보이는 차례다. when 은 받는 조건이다(하나 이상).
+         */
+        AchievementDocument: {
+            /** Description */
+            description: string;
+            /** Hidden */
+            hidden: boolean;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+            when: components["schemas"]["ConditionsDocument"];
+        };
+        /**
          * Affection
          * @description 캐릭터의 호감도. 값 하나(0~100)와 단계들이다. display 는 사람에게 보이는 방식이다
          *     (number: 숫자와 게이지, stage: 단계 이름과 게이지. 숫자는 chat 이 내려보내지 않는다).
@@ -3064,6 +3109,24 @@ export interface components {
             name: string;
         };
         /**
+         * PublicAchievement
+         * @description 소개에 보이는 업적 하나. hidden 이면 name, description, image_id 가 null 이다(받기 전에는 가린다).
+         *     받은 사람의 기록과 달성률은 story 서버가 준다(GET /api/v1/story/achievements, /achievements/rates).
+         *     조건은 싣지 않는다(플레이의 내용이다).
+         */
+        PublicAchievement: {
+            /** Description */
+            description: string | null;
+            /** Hidden */
+            hidden: boolean;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string | null;
+        };
+        /**
          * PublicBanner
          * @description 첫 화면에 보이는 배너 하나. 둘 가운데 kind 의 것 하나만 찬다. 공개 목록의 한 줄과 같은 모양이다.
          */
@@ -3179,6 +3242,11 @@ export interface components {
          *     intro_html 은 게시할 때 거른 소개다. ending_count 는 계정에 남는 엔딩(unlock)의 수다.
          */
         PublicWorldDetail: {
+            /**
+             * Achievements
+             * @default []
+             */
+            achievements: components["schemas"]["PublicAchievement"][];
             after_ending: components["schemas"]["AfterEnding"];
             /** Cast */
             cast: components["schemas"]["PublicCastMember"][];
@@ -3832,6 +3900,11 @@ export interface components {
          * @description 세계관을 만들 때 받는 값. 이름과 장르가 필수다. 시간대는 아침, 낮, 저녁, 밤에서 시작한다. 처음에는 비공개다.
          */
         WorldCreate: {
+            /**
+             * Achievements
+             * @default []
+             */
+            achievements: components["schemas"]["Achievement"][];
             /** @default end */
             after_ending: components["schemas"]["AfterEnding"];
             /**
@@ -3952,6 +4025,11 @@ export interface components {
          * @description 세계관의 초안 하나. 만든 사람만 본다. latest_version 은 마지막으로 게시한 판의 번호다(없으면 null).
          */
         WorldDetail: {
+            /**
+             * Achievements
+             * @default []
+             */
+            achievements: components["schemas"]["Achievement"][];
             after_ending: components["schemas"]["AfterEnding"];
             /** Cast */
             cast: components["schemas"]["CastMember"][];
@@ -4026,6 +4104,11 @@ export interface components {
          * @description 판에 굳힌 세계관. intro_html 은 허용 목록으로 거른 소개다.
          */
         WorldDocument: {
+            /**
+             * Achievements
+             * @default []
+             */
+            achievements: components["schemas"]["AchievementDocument"][];
             after_ending: components["schemas"]["AfterEnding"];
             /** Cast */
             cast: components["schemas"]["CastDocument"][];
@@ -4265,6 +4348,8 @@ export interface components {
          *     null 은 그림, 시작 장소와 시간대, 기한만 받는다. 공개 범위(visibility)도 여기서 바꾼다(공개는 운영자만, 1~2단계).
          */
         WorldUpdate: {
+            /** Achievements */
+            achievements?: components["schemas"]["Achievement"][] | null;
             after_ending?: components["schemas"]["AfterEnding"] | null;
             /** Cast */
             cast?: components["schemas"]["CastMember"][] | null;

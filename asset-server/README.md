@@ -149,7 +149,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET, PUT, DELETE | `/api/v1/asset/listings/characters/{id}/heart`, `/api/v1/asset/listings/worlds/{id}/heart` | 관심을 읽고, 두고, 거둔다(#989, `app/hearts/`). `{hearted, heart_count}`. 두 번 해도 같다. 열 수 없는 작품에 두거나 읽으면 404, 거두는 것은 비공개로 돌린 뒤에도 된다. 목록과 소개의 줄마다 `heart_count` 가 실린다(작품의 `heart_count`, 두고 거둘 때 같은 트랜잭션에서 고친다). 작품을 지우면 관심도 지워진다 | access 토큰 |
 | GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서와 만든 사람의 공개 ID `creator_id`). 볼 수 없으면 404 | 없어도 된다 |
 | GET | `/api/v1/asset/listings/worlds` | 공개 세계관의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`, `hide_adult`, `orientation`, `exclude_creators`, `exclude_tag`, `creator`(캐릭터와 같다). 줄마다 `creator_id` 가 실린다 `sort`, `start_count` 도 캐릭터와 같다(세션의 수) | 없어도 된다 |
-| GET | `/api/v1/asset/listings/worlds/{id}` | 공개 세계관의 소개(마지막 판에서 보여도 되는 것만: 만든 사람의 공개 ID, 이름, 거른 소개, 태그, 장르, 등급, 대표 그림, 기한, 엔딩 뒤, 공개한 인물, 계정에 남는 엔딩의 수). 볼 수 없으면 404 | 없어도 된다 |
+| GET | `/api/v1/asset/listings/worlds/{id}` | 공개 세계관의 소개(마지막 판에서 보여도 되는 것만: 만든 사람의 공개 ID, 이름, 거른 소개, 태그, 장르, 등급, 대표 그림, 기한, 엔딩 뒤, 공개한 인물, 계정에 남는 엔딩의 수, 업적(판의 차례, 숨긴 업적은 이름·받는 법·그림이 null, 조건은 싣지 않는다)). 볼 수 없으면 404 | 없어도 된다 |
 | POST | `/api/v1/asset/listings/characters/{id}/reports` | [신고](#신고와-숨김) `{reason, description?}`. 201. 볼 수 없으면 404, 자기 것은 403 `own_character`, 두 번째는 409 `already_reported` | access 토큰 |
 | GET | `/api/v1/asset/admin/character-reports` | [운영자](#신고와-숨김): 열린 신고를 캐릭터마다 묶은 목록(`minor` 가 먼저). 운영자가 아니면 404 | access 토큰(운영자) |
 | GET | `/api/v1/asset/admin/characters/{id}/reports` | 운영자: 그 캐릭터의 신고 전부(처리한 것까지) | access 토큰(운영자) |
@@ -484,6 +484,12 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
   비면 장이 없다(모든 장소와 이벤트가 처음부터 열려 있다). `when` 은 그 장으로 넘어오는 조건이다(story 의 엔진이 행동의 맨 끝에 보고 한 장씩 넘긴다).
   `opens` 는 그 장부터 열리는 장소와 이벤트이고, 어느 장에도 적지 않은 것은 처음부터 열려 있다. 장의 `id` 는 판이 바뀌어도 그대로 둔다.
   모양만으로 아는 것은 저장할 때 422 다: `id` 가 겹친다, 첫 장에 조건이 있다, 첫 장 뒤의 장에 조건이 없다, 장소나 이벤트나 로어북 항목 하나를 두 장에 적었다.
+- **업적**(`achievements`, 50개까지, 판의 형식 9, [시나리오 업적 설계](../docs/architecture/achievements.md)의 "story"). 제작자가 작품에 다는 업적이다(스팀의 업적과 같다). 인증 서버의 활동 배지와는 다르다.
+  `{"id", "name"(40자), "description"(받는 법, 200자), "hidden", "image_id", "when"}` 의 목록이고 적은 차례가 보이는 차례다. `when` 은 이벤트의 조건과 같은 모양이고 하나 이상 적는다.
+  주는 것은 story 의 엔진이다(행동 뒤에 `when` 이 맞으면, 계정마다 한 번). 업적의 `id` 는 판이 바뀌어도 그대로 둔다(받은 기록이 가리킨다).
+  모양만으로 아는 것은 저장할 때 422 다: `id` 가 겹친다, 받는 조건이 없다, 이름이 비었다, 길이가 넘는다. 그림은 내 그림만(422 `image_not_owned`).
+  받는 조건이 가리키는 것은 다른 조건과 같이 게시할 때 본다(`place_missing`, `cast_target_missing`, `ending_target_missing`, `chapter_target_missing` …).
+  공개 소개에는 판의 차례로 싣고 숨긴 업적은 이름, 받는 법, 그림을 가린다. 받은 기록과 달성률은 story 서버가 준다.
 - **효과**(목록 하나에 10개). 종류마다 `amount` 를 맞게 적는다(아니면 422).
 
   | 종류 | 칸 | 뜻 |
@@ -509,9 +515,9 @@ story 의 세계관이다(#591, [story 서버 설계](../docs/architecture/story
     모두 맞아야 하는 "며칠째 이하"가 앞의 장에 닿을 수 있는 가장 이른 날보다 앞이어도 그렇다),
     `chapter_content_late`(장에 닿을 때는 이미 지난 날을 기다리는 이벤트와 엔딩: 여는 장이나 "그 장 이상"의 장에 닿을 수 있는 가장 이른 날보다
     모두 맞아야 하는 "며칠째 이하"가 앞이다. 가장 이른 날은 그 장까지의 장들이 모두 맞아야 하는 "며칠째 이상"의 가장 큰 것이다)
-- **판**(형식 8. 1 의 판은 이벤트가, 2 까지의 판은 고백과 엔딩이, 5 까지의 판은 장이, 6 의 판은 장이 여는 로어북 항목이, 7 까지의 판은 단축어가 없는 것으로 읽는다). 인물마다 캐릭터의 마지막 판에서 story 에 쓰는 칸 `{id, version, name, intro_html, speech_examples, age, gender, image_id, sprites}` 만 복사한다.
+- **판**(형식 9. 1 의 판은 이벤트가, 2 까지의 판은 고백과 엔딩이, 5 까지의 판은 장이, 6 의 판은 장이 여는 로어북 항목이, 7 까지의 판은 단축어가, 8 까지의 판은 업적이 없는 것으로 읽는다). story 서버가 형식의 상한을 먼저 9 로 올린다. 인물마다 캐릭터의 마지막 판에서 story 에 쓰는 칸 `{id, version, name, intro_html, speech_examples, age, gender, image_id, sprites}` 만 복사한다.
   chat 에만 쓰는 칸(지도, 시작 상황, 물건, 호감도, 이벤트 씬)은 넣지 않는다. 보이기는 기본을 채운 정해진 값으로 굳힌다. 로어북은 캐릭터처럼 마지막 판을 복사한다.
-  캐릭터나 로어북을 고쳐도 이미 게시한 세계관의 판은 그대로다. 판에 쓰인 그림(대표, 소개, 장소, 물건, 인물의 그림, 이벤트와 엔딩의 일러스트)을 적어 두고, 공개 세계관이면 남도 그 그림을 본다.
+  캐릭터나 로어북을 고쳐도 이미 게시한 세계관의 판은 그대로다. 판에 쓰인 그림(대표, 소개, 장소, 물건, 인물의 그림, 이벤트와 엔딩의 일러스트, 업적의 그림)을 적어 두고, 공개 세계관이면 남도 그 그림을 본다.
 - **story 에 내주기.** [다른 서버에 내주기](#다른-서버에-내주기)의 `/worlds/{id}/latest` 와 `/latest/number` 다. 캐릭터의 판과 같은 규칙이다
   (주인이거나, 공개이고 판의 등급을 볼 수 있는 사람. 주인인데 등급을 쓸 수 없으면 403). story 서버는 `STORY_SERVER_SECRET` 으로 서명한다.
 - **공개 목록과 소개**(`/listings/worlds`, story 의 D1 과 첫 화면의 story 카드). 캐릭터의 공개 목록과 같은 규칙이다

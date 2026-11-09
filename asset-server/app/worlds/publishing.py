@@ -146,7 +146,7 @@ def event_ids(world: World) -> set[str]:
 
 
 def all_conditions(world: World) -> Iterator[dict]:
-    """초안의 조건 전부. 인물의 일정, 이벤트, 고백, 엔딩, 장으로 넘어오는 조건이다."""
+    """초안의 조건 전부. 인물의 일정, 이벤트, 고백, 엔딩, 장으로 넘어오는 조건, 업적의 받는 조건이다."""
     for member in world.cast:
         for line in member.get('schedule', []):
             yield from line['when']['items']
@@ -159,6 +159,8 @@ def all_conditions(world: World) -> Iterator[dict]:
         yield from ending['when']['items']
     for chapter in world.chapters:
         yield from chapter['when']['items']
+    for achievement in world.achievements:
+        yield from achievement['when']['items']
 
 
 def all_effects(world: World) -> Iterator[dict]:
@@ -619,9 +621,10 @@ def cleaned_intro(world: World) -> Cleaned:
 
 
 def world_image_ids(world: World) -> list[uuid.UUID]:
-    """장소의 배경(기본과 시간대마다), 물건의 그림, 이벤트의 일러스트. 초안에는 글로 적혀 있다."""
+    """장소의 배경(기본과 시간대마다), 물건의 그림, 이벤트와 엔딩의 일러스트, 업적의 그림. 초안에는 글로 적혀 있다."""
     scenes = [event['scene'] for event in world.events] + [ending['scene'] for ending in world.endings]
-    found = [uuid.UUID(entry['image_id']) for entry in [*world.places, *world.items, *scenes] if entry.get('image_id')]
+    entries = [*world.places, *world.items, *scenes, *world.achievements]
+    found = [uuid.UUID(entry['image_id']) for entry in entries if entry.get('image_id')]
     backgrounds = [image for place in world.places for image in place.get('backgrounds', {}).values()]
     return found + [uuid.UUID(image) for image in backgrounds]
 

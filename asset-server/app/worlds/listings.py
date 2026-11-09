@@ -12,6 +12,7 @@
 캐릭터와 달리 판의 문서를 통째로 내주지 않는다. 판에는 이벤트와 엔딩의 조건, 숨긴 인물이 들어 있다.
 소개에 보여도 되는 것만 골라 싣는다(to_public_detail). 인물은 제작자가 고른 공개를 따른다:
 보임은 이름과 그림, 실루엣은 둘 다 가리고, 숨김은 목록에서 뺀다.
+업적은 판의 차례로 싣되 조건은 싣지 않고, 숨긴 업적은 이름, 받는 법, 그림을 가린다.
 """
 
 import uuid
@@ -25,9 +26,15 @@ from app.hearts.kinds import WORLD_HEARTS
 from app.hearts.schemas import HeartState
 from app.popularity import ListingOrder
 from app.worlds import service
-from app.worlds.documents import CastDocument, WorldDocument
+from app.worlds.documents import AchievementDocument, CastDocument, WorldDocument
 from app.worlds.models import Reveal, World, WorldVersion
-from app.worlds.schemas import PublicCastMember, PublicWorldDetail, PublicWorldPage, PublicWorldSummary
+from app.worlds.schemas import (
+    PublicAchievement,
+    PublicCastMember,
+    PublicWorldDetail,
+    PublicWorldPage,
+    PublicWorldSummary,
+)
 from app.worlds.service import WorldNotFoundError
 
 router = APIRouter(prefix='/listings/worlds', tags=['listings'])
@@ -65,6 +72,18 @@ def public_member(member: CastDocument) -> PublicCastMember | None:
     )
 
 
+def public_achievement(achievement: AchievementDocument) -> PublicAchievement:
+    """소개에 보이는 업적. 숨긴 업적은 이름, 받는 법, 그림을 가린다. 조건은 싣지 않는다."""
+    shown = not achievement.hidden
+    return PublicAchievement(
+        id=achievement.id,
+        hidden=achievement.hidden,
+        name=achievement.name if shown else None,
+        description=achievement.description if shown else None,
+        image_id=achievement.image_id if shown else None,
+    )
+
+
 def public_cast(document: WorldDocument) -> list[PublicCastMember]:
     """소개에 보이는 인물들. 판에 적힌 차례다."""
     members = (public_member(member) for member in document.cast)
@@ -89,6 +108,7 @@ def to_public_detail(world: World, version: WorldVersion) -> PublicWorldDetail:
         after_ending=document.after_ending,
         cast=public_cast(document),
         ending_count=sum(1 for ending in document.endings if ending.unlock),
+        achievements=[public_achievement(achievement) for achievement in document.achievements],
         heart_count=world.heart_count,
         start_count=world.start_count,
     )

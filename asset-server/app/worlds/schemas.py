@@ -45,6 +45,8 @@ from app.ratings import Rating
 from app.shortcuts.schemas import Shortcut, Shortcuts
 from app.worlds.documents import WorldDocument
 from app.worlds.models import (
+    ACHIEVEMENT_DESCRIPTION_MAX_LENGTH,
+    ACHIEVEMENT_NAME_MAX_LENGTH,
     CAST_MAX_GIFTS,
     CAST_MAX_SCHEDULE,
     CHAPTER_MAX_LORE,
@@ -68,6 +70,7 @@ from app.worlds.models import (
     SCENE_TEXT_MAX_LENGTH,
     SLOT_NAME_MAX_LENGTH,
     VERSION_NOTE_MAX_LENGTH,
+    WORLD_MAX_ACHIEVEMENTS,
     WORLD_MAX_CAST,
     WORLD_MAX_CHAPTERS,
     WORLD_MAX_ENDINGS,
@@ -559,6 +562,45 @@ def ordered_chapters(chapters: list[Chapter]) -> list[Chapter]:
 
 Chapters = Annotated[list[Chapter], Field(max_length=WORLD_MAX_CHAPTERS), AfterValidator(ordered_chapters)]
 
+
+class Achievement(BaseModel):
+    """
+    업적 하나(판의 형식 9, docs/architecture/achievements.md 의 "story"). 제작자가 작품에 단 것이다(스팀의 업적과 같다).
+    인증 서버의 활동 배지와는 다른 것이다. 주는 것은 story 의 엔진이다(행동 뒤에 when 이 맞으면). 계정마다 한 번이다.
+    id 는 판이 바뀌어도 그대로 둔다. 받은 기록이 이것을 가리킨다. 바꾸면 다른 업적이다.
+    hidden 이면 받기 전에는 이름, 받는 법(description), 그림을 가린다(공개 소개에 싣지 않는다).
+    when 은 이벤트의 조건과 같은 모양이고 하나 이상 적는다(비면 늘 맞아 첫 행동에 그냥 받는다).
+    가리키는 것이 맞는지는 게시할 때 본다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    id: Key
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=ACHIEVEMENT_NAME_MAX_LENGTH)]
+    description: Annotated[
+        str, StringConstraints(strip_whitespace=True, max_length=ACHIEVEMENT_DESCRIPTION_MAX_LENGTH)
+    ] = ''
+    hidden: bool = False
+    image_id: uuid.UUID | None = None
+    when: Conditions
+
+    @model_validator(mode='after')
+    def some_condition(self) -> Self:
+        """받는 조건을 하나는 적는다."""
+        if not self.when.items:
+            raise ValueError('업적에는 받는 조건을 하나 이상 적습니다.')
+        return self
+
+
+def unique_achievements(achievements: list[Achievement]) -> list[Achievement]:
+    reject_repeated_keys([achievement.id for achievement in achievements])
+    return achievements
+
+
+Achievements = Annotated[
+    list[Achievement], Field(max_length=WORLD_MAX_ACHIEVEMENTS), AfterValidator(unique_achievements)
+]
+
 # DB 에 dict(의 목록)로 적는 칸
 DOCUMENT_LISTS = (
     'slots',
@@ -571,17 +613,25 @@ DOCUMENT_LISTS = (
     'endings',
     'chapters',
     'shortcuts',
+    'achievements',
 )
 # 고칠 때 null 로 비울 수 있는 칸. 그림, 시작 장소와 시간대, 기한은 "없음"이 null 이다
 NULLABLE_FIELDS = frozenset({'image_id', 'start_place', 'start_slot', 'deadline_days'})
 
 
 def attached_images(
-    image_id: uuid.UUID | None, places: list[WorldPlace], items: list[WorldItem], scenes: list[Scene]
+    image_id: uuid.UUID | None,
+    places: list[WorldPlace],
+    items: list[WorldItem],
+    scenes: list[Scene],
+    achievements: list[Achievement] | None = None,
 ) -> list[uuid.UUID]:
-    """붙인 그림들. 대표 그림, 장소의 배경(기본, 시간대마다), 물건의 그림, 이벤트와 엔딩의 일러스트. 없는 것은 뺀다."""
+    """
+    붙인 그림들. 대표 그림, 장소의 배경(기본, 시간대마다), 물건의 그림, 이벤트와 엔딩의 일러스트, 업적의 그림.
+    없는 것은 뺀다.
+    """
     found = [image_id] if image_id is not None else []
-    found += [entry.image_id for entry in [*places, *items] if entry.image_id is not None]
+    found += [entry.image_id for entry in [*places, *items, *(achievements or [])] if entry.image_id is not None]
     found += [scene.image_id for scene in scenes if scene.image_id is not None]
     return found + [background for place in places for background in place.backgrounds.values()]
 
@@ -636,10 +686,13 @@ class WorldCreate(BaseModel):
     lorebooks: Lorebooks = []
     # 제작자 단축어(#981). 세션 중에 "/이름"으로 부른다
     shortcuts: Shortcuts = []
+    # 업적(판의 형식 9). 적은 차례가 보이는 차례다
+    achievements: Achievements = []
 
     def image_ids(self) -> list[uuid.UUID]:
         """붙인 그림들. 자기 그림인지 볼 것들이다."""
-        return attached_images(self.image_id, self.places, self.items, scenes_of(self.events, self.endings))
+        scenes = scenes_of(self.events, self.endings)
+        return attached_images(self.image_id, self.places, self.items, scenes, self.achievements)
 
     def character_ids(self) -> list[uuid.UUID]:
         """인물들이 가리키는 캐릭터들."""
@@ -684,6 +737,7 @@ class WorldUpdate(BaseModel):
     chapters: Chapters | None = None
     lorebooks: Lorebooks | None = None
     shortcuts: Shortcuts | None = None
+    achievements: Achievements | None = None
 
     @model_validator(mode='after')
     def null_only_where_allowed(self) -> Self:
@@ -700,7 +754,7 @@ class WorldUpdate(BaseModel):
     def image_ids(self) -> list[uuid.UUID]:
         """보낸 칸에 붙인 그림들. 자기 그림인지 볼 것들이다."""
         scenes = scenes_of(self.events or [], self.endings or [])
-        return attached_images(self.image_id, self.places or [], self.items or [], scenes)
+        return attached_images(self.image_id, self.places or [], self.items or [], scenes, self.achievements)
 
     def character_ids(self) -> list[uuid.UUID]:
         """보낸 인물들이 가리키는 캐릭터들."""
@@ -737,6 +791,8 @@ class WorldDetail(BaseModel):
     lorebooks: list[uuid.UUID]
     # 제작자 단축어(#981, 판의 형식 8). 기본값이 있어 웹의 생성 타입에서는 고르는 칸이다
     shortcuts: list[Shortcut] = []
+    # 업적(판의 형식 9). 기본값이 있어 웹의 생성 타입에서는 고르는 칸이다
+    achievements: list[Achievement] = []
     latest_version: int | None
     published_at: datetime | None
     # 운영자가 숨긴 시각. 숨긴 동안은 공개여도 남에게 보이지 않는다(캐릭터와 같다)
@@ -874,6 +930,20 @@ class PublicCastMember(BaseModel):
     image_id: uuid.UUID | None
 
 
+class PublicAchievement(BaseModel):
+    """
+    소개에 보이는 업적 하나. hidden 이면 name, description, image_id 가 null 이다(받기 전에는 가린다).
+    받은 사람의 기록과 달성률은 story 서버가 준다(GET /api/v1/story/achievements, /achievements/rates).
+    조건은 싣지 않는다(플레이의 내용이다).
+    """
+
+    id: str
+    hidden: bool
+    name: str | None
+    description: str | None
+    image_id: uuid.UUID | None
+
+
 class PublicWorldDetail(BaseModel):
     """
     공개 세계관의 소개(D1). 마지막 판에서 보여도 되는 것만 골라 싣는다.
@@ -897,6 +967,9 @@ class PublicWorldDetail(BaseModel):
     after_ending: AfterEnding
     cast: list[PublicCastMember]
     ending_count: int
+    # 업적(판의 형식 9). 판의 차례다. 숨긴 업적은 이름, 받는 법, 그림이 null 이다.
+    # 기본값이 있어 생성 타입에서는 고르는 칸이다
+    achievements: list[PublicAchievement] = []
     # 관심(하트)을 둔 사람의 수(#989)
     heart_count: int
     # 대화(캐릭터)나 세션(세계관)을 시작한 모든 수(#985). 한 시간마다 받아 온다

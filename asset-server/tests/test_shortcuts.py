@@ -134,8 +134,9 @@ async def test_world_shortcuts_are_frozen_in_the_version(client: AsyncClient, mi
 
     assert refused.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.status_code == status.HTTP_201_CREATED, response.text
-    assert (frozen['format'], frozen['shortcuts']) == (8, [{**FLASHBACK, 'description': ''}])
-    assert WORLD_FORMAT == 8
+    # 단축어는 형식 8 부터다. 뒤의 형식(9 의 업적)에도 그대로 실린다
+    assert frozen['shortcuts'] == [{**FLASHBACK, 'description': ''}]
+    assert frozen['format'] == WORLD_FORMAT >= 8
 
 
 async def test_withdrawal_erases_my_shortcuts(client: AsyncClient, session: AsyncSession, mine: dict, theirs: dict):

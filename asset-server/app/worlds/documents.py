@@ -21,6 +21,9 @@
        6 의 판은 장이 로어북 항목을 열지 않는 것으로 읽는다. 받는 쪽(story)은 닫힌 항목을 모델에 보내지 않는다
   - 8: 제작자 단축어(shortcuts: [{"name", "description", "body"}])를 더했다(2026-11-03, #981).
        7 까지의 판은 단축어가 없다. 받는 쪽(story)이 형식의 상한(WORLD_FORMAT_MAX)을 먼저 8 로 올린다
+  - 9: 업적(achievements: [{"id", "name", "description", "hidden", "image_id", "when"}])을 더했다(2026-11-09,
+       docs/architecture/achievements.md 의 "story"). 8 까지의 판은 업적이 없다.
+       받는 쪽(story)이 형식의 상한을 먼저 9 로 올린다(그 전에 게시하면 story 가 그 판으로 세션을 시작하지 못한다)
 
 인물의 보이기는 판에서는 정해진 값이다. 초안의 덮어쓰기가 비어 있으면 세계관의 기본을 채워 넣는다.
 받는 쪽(story)이 기본과 덮어쓰기를 다시 합치지 않아도 된다.
@@ -51,7 +54,7 @@ from app.worlds.models import (
 )
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 8
+DOCUMENT_FORMAT = 9
 
 
 class SlotDocument(BaseModel):
@@ -295,6 +298,19 @@ class ChapterDocument(BaseModel):
     opens: ChapterOpensDocument
 
 
+class AchievementDocument(BaseModel):
+    """업적 하나. 판의 차례가 보이는 차례다. when 은 받는 조건이다(하나 이상)."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    id: str
+    name: str
+    description: str
+    hidden: bool
+    image_id: uuid.UUID | None
+    when: ConditionsDocument
+
+
 class WorldDocument(BaseModel):
     """판에 굳힌 세계관. intro_html 은 허용 목록으로 거른 소개다."""
 
@@ -322,6 +338,7 @@ class WorldDocument(BaseModel):
     genre: Genre
     chapters: list[ChapterDocument] = []
     shortcuts: list[Shortcut] = []
+    achievements: list[AchievementDocument] = []
 
 
 def character_copy(character_id: uuid.UUID, number: int, document: Mapping) -> CastCharacterDocument:
@@ -389,6 +406,7 @@ def build_document(
         genre=Genre(world.genre),
         chapters=world.chapters,
         shortcuts=world.shortcuts,
+        achievements=world.achievements,
     )
 
 
