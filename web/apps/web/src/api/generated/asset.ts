@@ -1286,6 +1286,25 @@ export interface components {
             when: components["schemas"]["ConditionsDocument"];
         };
         /**
+         * AchievementKind
+         * @description 업적의 받는 조건의 종류(docs/architecture/achievements.md 의 "chat"). 맞추는 것은 chat 의 엔진이다(답을 저장한 뒤).
+         *
+         *       visited_place     target: 장소        그 장소에 가 본 적이 있다
+         *       hold_item         target: 물건, count 그 물건을 count 개 이상 가졌다
+         *       received_item     target: 물건        상대에게 그 물건을 받은 적이 있다
+         *       affection_stage   value: 단계의 이름   호감도가 그 단계 이상이다
+         *       scene_seen        target: 이벤트 씬    그 이벤트 씬이 나왔다
+         *       messages_at_least count              보낸 말(사람의 말)이 count 개 이상이다
+         * @enum {string}
+         */
+        AchievementKind: "visited_place" | "hold_item" | "received_item" | "affection_stage" | "scene_seen" | "messages_at_least";
+        /**
+         * AchievementMatch
+         * @description 업적의 받는 조건을 맞추는 법. 모두, 또는 하나라도.
+         * @enum {string}
+         */
+        AchievementMatch: "all" | "any";
+        /**
          * Affection
          * @description 캐릭터의 호감도. 값 하나(0~100)와 단계들이다. display 는 사람에게 보이는 방식이다
          *     (number: 숫자와 게이지, stage: 단계 이름과 게이지. 숫자는 chat 이 내려보내지 않는다).
@@ -1667,6 +1686,101 @@ export interface components {
             places: string[];
         };
         /**
+         * CharacterAchievement
+         * @description 업적 하나(판의 형식 11, docs/architecture/achievements.md 의 "chat"). 제작자가 작품에 단 것이다(스팀의 업적과 같다).
+         *     인증 서버의 활동 배지와는 다른 것이다. 주는 것은 chat 의 엔진이다(답을 저장한 뒤 when 이 맞으면).
+         *     계정마다 한 번이다.
+         *     id 는 판이 바뀌어도 그대로 둔다. 받은 기록이 이것을 가리킨다. 바꾸면 다른 업적이다.
+         *     hidden 이면 받기 전에는 이름, 받는 법(description), 그림을 가린다(공개 소개에 싣지 않는다).
+         */
+        CharacterAchievement: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id?: string | null;
+            /** Name */
+            name: string;
+            when: components["schemas"]["CharacterAchievementConditions"];
+        };
+        /**
+         * CharacterAchievementCondition
+         * @description 업적의 받는 조건 하나(docs/architecture/achievements.md 의 "chat").
+         *     종류(kind)마다 쓰는 칸이 다르다(ACHIEVEMENT_FIELDS).
+         *     target 은 장소, 물건, 이벤트 씬의 id 다. value 는 호감도 단계의 이름이다. count 는 물건의 수나 보낸 말의 수다.
+         *     쓰지 않는 칸은 적지 않는다. 가리키는 것이 있는지는 게시할 때 본다.
+         */
+        CharacterAchievementCondition: {
+            /**
+             * Count
+             * @default 1
+             */
+            count: number;
+            kind: components["schemas"]["AchievementKind"];
+            /** Target */
+            target?: string | null;
+            /** Value */
+            value?: string | null;
+        };
+        /**
+         * CharacterAchievementConditionDocument
+         * @description 업적의 받는 조건 하나. 쓰지 않는 칸은 null 이다(count 는 1).
+         */
+        CharacterAchievementConditionDocument: {
+            /** Count */
+            count: number;
+            kind: components["schemas"]["AchievementKind"];
+            /** Target */
+            target: string | null;
+            /** Value */
+            value: string | null;
+        };
+        /**
+         * CharacterAchievementConditions
+         * @description 받는 조건 목록과 맞추는 법. 하나 이상 적는다(비면 늘 맞아 첫 답에 그냥 받는다).
+         */
+        CharacterAchievementConditions: {
+            /** Items */
+            items: components["schemas"]["CharacterAchievementCondition"][];
+            /** @default all */
+            match: components["schemas"]["AchievementMatch"];
+        };
+        /**
+         * CharacterAchievementConditionsDocument
+         * @description 받는 조건 목록과 맞추는 법.
+         */
+        CharacterAchievementConditionsDocument: {
+            /** Items */
+            items: components["schemas"]["CharacterAchievementConditionDocument"][];
+            match: components["schemas"]["AchievementMatch"];
+        };
+        /**
+         * CharacterAchievementDocument
+         * @description 업적 하나. hidden 이면 공개 소개에서 가린다(listings.py).
+         */
+        CharacterAchievementDocument: {
+            /** Description */
+            description: string;
+            /** Hidden */
+            hidden: boolean;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+            when: components["schemas"]["CharacterAchievementConditionsDocument"];
+        };
+        /**
          * CharacterCopy
          * @description 다른 서버(chat, story)에 내주는 판. 대화를 시작할 때 가져가 고정한다.
          *
@@ -1694,6 +1808,11 @@ export interface components {
          * @description 캐릭터를 만들 때 받는 값. 이름과 장르가 필수다. 처음에는 비공개다.
          */
         CharacterCreate: {
+            /**
+             * Achievements
+             * @default []
+             */
+            achievements: components["schemas"]["CharacterAchievement"][];
             affection?: components["schemas"]["Affection"] | null;
             /**
              * Age
@@ -1785,6 +1904,11 @@ export interface components {
          * @description 캐릭터의 초안 하나. 만든 사람만 본다. latest_version 은 마지막으로 게시한 판의 번호다(없으면 null).
          */
         CharacterDetail: {
+            /**
+             * Achievements
+             * @default []
+             */
+            achievements: components["schemas"]["CharacterAchievement"][];
             affection: components["schemas"]["Affection"] | null;
             /** Age */
             age: string;
@@ -1856,6 +1980,11 @@ export interface components {
          *     지도와 물건의 칸은 형식 2 에서 더했다. 형식 1 의 판을 읽을 수 있게 비어 있는 것이 기본이다.
          */
         CharacterDocument: {
+            /**
+             * Achievements
+             * @default []
+             */
+            achievements: components["schemas"]["CharacterAchievementDocument"][];
             affection?: components["schemas"]["AffectionDocument"] | null;
             /** Age */
             age: string;
@@ -1979,6 +2108,8 @@ export interface components {
          *     null 은 그림(image_id)만 받는다. 공개 범위(visibility)도 여기서 바꾼다(공개는 운영자만, 1~2단계).
          */
         CharacterUpdate: {
+            /** Achievements */
+            achievements?: components["schemas"]["CharacterAchievement"][] | null;
             affection?: components["schemas"]["Affection"] | null;
             /** Age */
             age?: string | null;
@@ -3163,10 +3294,34 @@ export interface components {
             reveal: components["schemas"]["Reveal"];
         };
         /**
+         * PublicCharacterAchievement
+         * @description 소개에 보이는 업적 하나. hidden 이면 name, description, image_id 가 null 이다(받기 전에는 가린다).
+         *     받은 사람의 기록과 달성률은 chat 서버가 준다(GET /api/v1/chat/achievements, /achievements/rates).
+         *     조건은 싣지 않는다(대화의 내용이다).
+         */
+        PublicCharacterAchievement: {
+            /** Description */
+            description: string | null;
+            /** Hidden */
+            hidden: boolean;
+            /** Id */
+            id: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string | null;
+        };
+        /**
          * PublicCharacterDetail
-         * @description 공개 캐릭터 하나. 마지막 판의 문서다.
+         * @description 공개 캐릭터 하나. 마지막 판의 문서다. 다만 문서의 업적은 비우고(조건과 숨긴 업적의 이름이 들었다)
+         *     보여도 되는 것만 achievements 에 따로 싣는다.
          */
         PublicCharacterDetail: {
+            /**
+             * Achievements
+             * @default []
+             */
+            achievements: components["schemas"]["PublicCharacterAchievement"][];
             /**
              * Creator Id
              * Format: uuid

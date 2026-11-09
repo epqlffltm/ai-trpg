@@ -118,8 +118,8 @@ async def test_character_shortcuts_are_kept_in_the_draft_and_frozen_in_the_versi
     assert [shortcut['name'] for shortcut in changed.json()['shortcuts']] == ['일기', '플래시백']
     assert published.status_code == status.HTTP_201_CREATED, published.text
     # 판에 굳은 단축어는 초안을 고쳐도 그대로다
-    assert (frozen['format'], [shortcut['name'] for shortcut in frozen['shortcuts']]) == (10, ['일기', '플래시백'])
-    assert CHARACTER_FORMAT == 10
+    assert frozen['format'] == CHARACTER_FORMAT >= 10
+    assert [shortcut['name'] for shortcut in frozen['shortcuts']] == ['일기', '플래시백']
 
 
 async def test_world_shortcuts_are_frozen_in_the_version(client: AsyncClient, mine: dict):

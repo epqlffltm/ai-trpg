@@ -98,6 +98,12 @@ CHARACTER_MAX_SPRITES = 30
 # 캐릭터가 가리키는 로어북의 수(#672). 판에 로어북의 마지막 판이 복사되므로 묶어 둔다
 CHARACTER_MAX_LOREBOOKS = 3
 SPRITE_EXPRESSION_MAX_LENGTH = 20
+# 업적(판의 형식 11, docs/architecture/achievements.md 의 "chat"). 개수, 이름과 받는 법의 길이, 조건의 개수와 수의 상한
+CHARACTER_MAX_ACHIEVEMENTS = 50
+ACHIEVEMENT_NAME_MAX_LENGTH = 40
+ACHIEVEMENT_DESCRIPTION_MAX_LENGTH = 200
+ACHIEVEMENT_MAX_CONDITIONS = 5
+ACHIEVEMENT_MAX_COUNT = 9999
 
 
 class TimeOfDay(enum.StrEnum):
@@ -141,6 +147,33 @@ class SceneWhen(enum.StrEnum):
     REACH_PLACE = 'reach_place'
     GIVE_ITEM = 'give_item'
     AFFECTION_STAGE = 'affection_stage'
+
+
+class AchievementKind(enum.StrEnum):
+    """
+    업적의 받는 조건의 종류(docs/architecture/achievements.md 의 "chat"). 맞추는 것은 chat 의 엔진이다(답을 저장한 뒤).
+
+      visited_place     target: 장소        그 장소에 가 본 적이 있다
+      hold_item         target: 물건, count 그 물건을 count 개 이상 가졌다
+      received_item     target: 물건        상대에게 그 물건을 받은 적이 있다
+      affection_stage   value: 단계의 이름   호감도가 그 단계 이상이다
+      scene_seen        target: 이벤트 씬    그 이벤트 씬이 나왔다
+      messages_at_least count              보낸 말(사람의 말)이 count 개 이상이다
+    """
+
+    VISITED_PLACE = 'visited_place'
+    HOLD_ITEM = 'hold_item'
+    RECEIVED_ITEM = 'received_item'
+    AFFECTION_STAGE = 'affection_stage'
+    SCENE_SEEN = 'scene_seen'
+    MESSAGES_AT_LEAST = 'messages_at_least'
+
+
+class AchievementMatch(enum.StrEnum):
+    """업적의 받는 조건을 맞추는 법. 모두, 또는 하나라도."""
+
+    ALL = 'all'
+    ANY = 'any'
 
 
 class ItemKind(enum.StrEnum):
@@ -236,6 +269,9 @@ class Character(Base):
     # 제작자 단축어들 [{"name", "description", "body"}](#981). 게시하면 판에 굳는다.
     # 모양은 app/shortcuts/schemas.py 가 정한다
     shortcuts: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    # 업적들 [{"id", "name", "description", "hidden", "image_id", "when": {"match", "items"}}](판의 형식 11).
+    # 제작자가 작품에 다는 것이다(스팀의 업적과 같다). 주는 것은 chat 의 엔진이다. 모양은 schemas.Achievement 가 정한다
+    achievements: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
 
     rating: Mapped[str] = mapped_column(String(10), default=Rating.ALL, server_default=Rating.ALL.value)
     visibility: Mapped[str] = mapped_column(

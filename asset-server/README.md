@@ -147,7 +147,7 @@ compose 로 함께 띄울 때(인프라 세션의 PR 뒤)도 같은 `asset-serve
 | GET | `/api/v1/asset/listings/characters` | 공개 캐릭터의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`([공개 목록의 검색](#캐릭터와-게시)). `hide_adult=true` 면 성인용을 빼고(#986), `orientation`(`male`, `female`)을 주면 마지막 판에 그 태그(`남성향`, `여성향`)가 붙은 것만이다(#987, `app/preferences.py`). `exclude_creators`, `exclude_tag` 는 보는 사람이 막은 제작자와 태그이고 그것의 것을 뺀다([차단](../docs/architecture/blocks.md), #988, `app/exclusions.py`). `creator`(만든 사람의 공개 ID)를 주면 그 사람의 것만이다(제작자 페이지, #992). 줄마다 `creator_id` 가 실린다 `sort=popular` 면 최근 7일에 대화를 많이 시작한 것부터다(#985, [랭킹](../docs/architecture/rankings.md)과 같은 차례). 줄마다 대화를 시작한 모든 수(`start_count`, 한 시간마다 받아 온 것)가 실린다 | 없어도 된다 |
 | GET | `/api/v1/asset/listings/characters/hearted`, `/api/v1/asset/listings/worlds/hearted` | 내 관심(하트) 캐릭터와 세계관(#989). 최근에 둔 것부터 `{items, total}`, `limit`, `offset`. 지금 열 수 있는 것만이다(링크 공개도 든다) | access 토큰 |
 | GET, PUT, DELETE | `/api/v1/asset/listings/characters/{id}/heart`, `/api/v1/asset/listings/worlds/{id}/heart` | 관심을 읽고, 두고, 거둔다(#989, `app/hearts/`). `{hearted, heart_count}`. 두 번 해도 같다. 열 수 없는 작품에 두거나 읽으면 404, 거두는 것은 비공개로 돌린 뒤에도 된다. 목록과 소개의 줄마다 `heart_count` 가 실린다(작품의 `heart_count`, 두고 거둘 때 같은 트랜잭션에서 고친다). 작품을 지우면 관심도 지워진다 | access 토큰 |
-| GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서와 만든 사람의 공개 ID `creator_id`). 볼 수 없으면 404 | 없어도 된다 |
+| GET | `/api/v1/asset/listings/characters/{id}` | 공개 캐릭터 하나(마지막 판의 문서와 만든 사람의 공개 ID `creator_id`). 문서의 업적은 비우고 보여도 되는 업적만 `achievements` 에 싣는다(판의 차례, 숨긴 업적은 이름·받는 법·그림이 null, 조건은 싣지 않는다). 볼 수 없으면 404 | 없어도 된다 |
 | GET | `/api/v1/asset/listings/worlds` | 공개 세계관의 목록. 최근에 게시한 것부터. 볼 수 있는 등급만. 검색어 `q`, `hide_adult`, `orientation`, `exclude_creators`, `exclude_tag`, `creator`(캐릭터와 같다). 줄마다 `creator_id` 가 실린다 `sort`, `start_count` 도 캐릭터와 같다(세션의 수) | 없어도 된다 |
 | GET | `/api/v1/asset/listings/worlds/{id}` | 공개 세계관의 소개(마지막 판에서 보여도 되는 것만: 만든 사람의 공개 ID, 이름, 거른 소개, 태그, 장르, 등급, 대표 그림, 기한, 엔딩 뒤, 공개한 인물, 계정에 남는 엔딩의 수, 업적(판의 차례, 숨긴 업적은 이름·받는 법·그림이 null, 조건은 싣지 않는다)). 볼 수 없으면 404 | 없어도 된다 |
 | POST | `/api/v1/asset/listings/characters/{id}/reports` | [신고](#신고와-숨김) `{reason, description?}`. 201. 볼 수 없으면 404, 자기 것은 403 `own_character`, 두 번째는 409 `already_reported` | access 토큰 |
@@ -244,12 +244,13 @@ chat 의 상대가 되는 캐릭터다(#567, [설계](../docs/architecture/asset
 | `affection` | 객체 또는 `null` | [호감도](#호감도). 없으면 호감도가 없는 캐릭터다 |
 | `event_scenes` | 30개 | [이벤트 씬](#이벤트-씬) `{id, title(30자), image_id, description(300자), collectible, when: {kind, target}}` |
 | `sprites` | 30개 | [캐릭터 그림](#캐릭터-그림) `{id, image_id, expression(20자), outfit(옷의 id 또는 null)}` |
+| `achievements` | 50개 | [업적](#캐릭터의-업적) `{id, name(40자), description(200자), hidden, image_id, when: {match, items}}` |
 | `lorebooks` | 3개 | 가리키는 [로어북](#로어북)의 id. 자기 로어북만(아니면 422 `lorebook_not_owned`). 게시할 때 그 마지막 판이 판에 복사된다 |
 | `visibility` | `private`, `public`, `unlisted` | 공개 범위. 처음에는 비공개. 고칠 때만 바꾼다. `unlisted` 는 링크 공개(#993) |
 | `latest_version`, `published_at` | 응답에만 | 마지막으로 게시한 판의 번호와 시각 |
 
 첫 칸은 대화에 필요한 핵심만이었다(2026-10-21 유저 결정). 지도와 물건은 chat 의 만드는 순서 4 에서 캐릭터에 넣었다(2026-10-22 유저 결정, 판의 형식 2).
-호감도는 판의 형식 3, 시작 시각과 시간대 배경은 형식 4, 이벤트 씬은 형식 5, 캐릭터 그림은 형식 6, 줄 수 있는 물건과 모델이 바꾸는 호감도의 크기는 형식 7, 로어북은 형식 8, 장르는 형식 9, 제작자 단축어는 형식 10 에서 더했다. 상대의 시작 차림은 chat 이 그 단계에 갈 때 판의 형식을 올려 더한다.
+호감도는 판의 형식 3, 시작 시각과 시간대 배경은 형식 4, 이벤트 씬은 형식 5, 캐릭터 그림은 형식 6, 줄 수 있는 물건과 모델이 바꾸는 호감도의 크기는 형식 7, 로어북은 형식 8, 장르는 형식 9, 제작자 단축어는 형식 10, 업적은 형식 11 에서 더했다. 상대의 시작 차림은 chat 이 그 단계에 갈 때 판의 형식을 올려 더한다.
 
 **장르**(`genre`, 2026-10-31 유저 결정). 캐릭터와 세계관이 `app/genres.py` 의 목록에서 **반드시 하나**를 고른다. 만들 때 없으면 422 이고, null 로 비울 수 없다(다른 장르로 바꿀 수는 있다).
 TRPG 시나리오의 장르와 같은 목록이고(판타지, 무협, 현대 판타지, SF, 아포칼립스, 공포, 추리, 로맨스, 일상, 대체역사, 개그), 남성향·여성향과 성인용은 장르가 아니다.
@@ -374,6 +375,29 @@ chat 의 대화는 1일째의 시작 시각에서 시작해 이동(길의 시간
 - **표정**(`expression`, 20자). 빈 글이면 기본 표정이다. 대소문자만 다른 것도 같은 표정이다.
 - **차림**(`outfit`). 이 그림의 차림인 옷(물건의 id)이다. 비어 있으면 처음 차림이다. 사용자가 그 옷을 건네 상대가 입으면 chat 이 그 차림의 그림을 쓴다.
 - 같은 표정과 차림의 그림은 하나다(422). 차림이 없는 물건이나 옷(`kind` 가 `clothing`)이 아닌 물건을 가리키면 게시가 막힌다(`sprite_outfit_missing`).
+
+#### 캐릭터의 업적
+
+제작자가 캐릭터에 다는 업적이다(판의 형식 11, [시나리오 업적 설계](../docs/architecture/achievements.md)의 "chat"). 스팀의 업적과 같고, 인증 서버의 활동 배지와는 다르다.
+
+- `{"id", "name"(40자), "description"(받는 법, 200자), "hidden", "image_id", "when"}` 의 목록이고(50개) 적은 차례가 보이는 차례다.
+  `when` 은 `{"match": "all"|"any", "items": [...]}` 이고 조건은 1~5개다.
+- 조건의 종류는 chat 의 엔진이 이미 아는 것뿐이다. 종류마다 쓰는 칸만 적는다(아니면 422).
+
+  | `kind` | 칸 | 뜻 |
+  | --- | --- | --- |
+  | `visited_place` | `target`(장소) | 그 장소에 가 본 적이 있다 |
+  | `hold_item` | `target`(물건), `count`(1~9,999) | 그 물건을 count 개 이상 가졌다 |
+  | `received_item` | `target`(물건) | 상대에게 그 물건을 받은 적이 있다 |
+  | `affection_stage` | `value`(단계의 이름) | 호감도가 그 단계 이상이다 |
+  | `scene_seen` | `target`(이벤트 씬) | 그 이벤트 씬이 나온 적이 있다 |
+  | `messages_at_least` | `count`(1~9,999) | 그 대화에서 보낸 말이 count 개 이상이다 |
+
+- 주는 것은 chat 의 엔진이다(답을 저장한 뒤 `when` 이 맞으면, 계정마다 한 번). 업적의 `id` 는 판이 바뀌어도 그대로 둔다(받은 기록이 가리킨다).
+- 모양만으로 아는 것은 저장할 때 422 다: `id` 가 겹친다, 조건이 없다, 칸이 종류와 맞지 않는다, 길이가 넘는다. 그림은 내 그림만(422 `image_not_owned`).
+- 조건이 없는 장소, 물건, 이벤트 씬, 호감도의 단계(호감도가 없는데 단계)를 가리키면 게시가 막힌다(`achievement_target_missing`).
+- 공개 소개에는 판의 차례로 싣고 숨긴 업적은 이름, 받는 법, 그림을 가린다. 판의 문서 쪽 업적은 비운다(조건이 들었다).
+  대화를 여는 chat 은 서비스 경로로 업적까지 받는다. 받은 기록과 달성률은 chat 서버가 준다.
 - 그림은 자기가 올린 그림만 붙인다(422 `image_not_owned`). 게시하면 판에 쓰인 그림으로 적힌다.
 - 투명한지는 서버가 보지 않는다(2026-10-23 유저 결정). 올리기는 PNG, JPEG, WebP 를 받는다. 만드는 화면이 미리 보기로 보인다.
 - 표정은 chat 에서 모델이 답의 맨 앞의 표식으로 고르고 서버가 검증한다(chat-server README 의 "표정 고르기").

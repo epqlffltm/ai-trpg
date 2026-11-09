@@ -26,6 +26,10 @@ TRPG 의 판 형식과 같은 방식이다.
        8 까지의 판에도 장르를 적었다(마이그레이션 genre required 가 초안의 장르를 판의 문서에 넣었다)
   - 10: 제작자 단축어(shortcuts: [{"name", "description", "body"}])를 더했다(2026-11-03, #981).
        9 까지의 판은 단축어가 없다
+  - 11: 업적(achievements: [{"id", "name", "description", "hidden", "image_id", "when"}])을 더했다(#193).
+       when 은 {"match": "all"|"any", "items": [{"kind", "target", "value", "count"}]} 다.
+       받는 쪽(chat)이 답을 저장한 뒤 맞으면 준다(docs/architecture/achievements.md 의 "chat").
+       10 까지의 판은 업적이 없다
 DB 를 모르는 순수한 함수다. 초안(Character)과 거른 소개에서 문서를 만든다.
 """
 
@@ -37,6 +41,8 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from app.characters.models import (
     AFFECTION_MODEL_STEP_DEFAULT,
     START_HOUR_DEFAULT,
+    AchievementKind,
+    AchievementMatch,
     AffectionDisplay,
     Character,
     ItemKind,
@@ -50,7 +56,7 @@ from app.ratings import Rating
 from app.shortcuts.schemas import Shortcut
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 10
+DOCUMENT_FORMAT = 11
 
 
 class StartDocument(BaseModel):
@@ -182,6 +188,39 @@ class SpriteDocument(BaseModel):
     outfit: str | None
 
 
+class CharacterAchievementConditionDocument(BaseModel):
+    """업적의 받는 조건 하나. 쓰지 않는 칸은 null 이다(count 는 1)."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    kind: AchievementKind
+    target: str | None
+    value: str | None
+    count: int
+
+
+class CharacterAchievementConditionsDocument(BaseModel):
+    """받는 조건 목록과 맞추는 법."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    match: AchievementMatch
+    items: list[CharacterAchievementConditionDocument]
+
+
+class CharacterAchievementDocument(BaseModel):
+    """업적 하나. hidden 이면 공개 소개에서 가린다(listings.py)."""
+
+    model_config = ConfigDict(extra='forbid', frozen=True)
+
+    id: str
+    name: str
+    description: str
+    hidden: bool
+    image_id: uuid.UUID | None
+    when: CharacterAchievementConditionsDocument
+
+
 class LorebookCopyDocument(BaseModel):
     """
     캐릭터의 판에 복사한 로어북 하나(#672). id 와 version 은 로어북과 그 판의 번호다(어디서 왔는지 적어 둔다).
@@ -242,6 +281,7 @@ class CharacterDocument(BaseModel):
     lorebooks: list[LorebookCopyDocument] = []
     genre: Genre
     shortcuts: list[Shortcut] = []
+    achievements: list[CharacterAchievementDocument] = []
 
     @model_validator(mode='before')
     @classmethod
@@ -277,4 +317,7 @@ def build_document(
         lorebooks=list(lorebooks),
         genre=Genre(character.genre),
         shortcuts=[Shortcut.model_validate(shortcut) for shortcut in character.shortcuts],
+        achievements=[
+            CharacterAchievementDocument.model_validate(achievement) for achievement in character.achievements
+        ],
     )
