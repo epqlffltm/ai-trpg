@@ -139,6 +139,15 @@ describe('프로필 메뉴', () => {
     expect(screen.queryByRole('navigation', { name: '내 메뉴' })).toBeNull();
   });
 
+  it('프로필 단추에는 닉네임과, 좁은 화면에서 보일 첫 글자의 동그라미가 있다', async () => {
+    signedIn([]);
+    renderApp('/settings');
+
+    const button = await screen.findByRole('button', { name: '내 메뉴: 모험가' });
+    expect(button.querySelector('.app-header__avatar')?.textContent).toBe('모');
+    expect(button.querySelector('.app-header__label')?.textContent).toBe('모험가');
+  });
+
   it('오늘 출석을 받았으면 다음 출석까지 남은 때가 있다', async () => {
     signedIn([], { 'GET /api/v1/auth/attendance': () => json(200, { ...ATTENDANCE_OPEN, claimed: true }) });
     renderApp('/settings');
