@@ -68,13 +68,16 @@ def immunities(ruleset: Ruleset, monster: MonsterSnapshot) -> frozenset[str]:
 
 
 def new_monster(table_id: uuid.UUID, monster: MonsterSnapshot, place_id: uuid.UUID, number: int) -> TableMonster:
-    """한 마리의 상태를 만든다. 시트의 숫자를 복사하고, HP 를 가득 채우고, 살아 있는 것으로 둔다."""
+    """
+    한 마리의 상태를 만든다. 시트의 숫자를 복사하고, HP 를 가득 채우고, 살아 있는 것으로 둔다. 놓인 곳이 처음 자리다.
+    """
     return TableMonster(
         id=uuid.uuid4(),
         table_id=table_id,
         monster_id=monster.id,
         number=number,
         place_id=place_id,
+        home_place_id=place_id,
         abilities=dict(monster.sheet.abilities),
         max_hp=monster.sheet.max_hp,
         hp=monster.sheet.max_hp,

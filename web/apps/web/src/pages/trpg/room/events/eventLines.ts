@@ -168,6 +168,13 @@ function attackText(payload: Payload, ctx: EventContext, event: TableEvent): str
   return `${text(payload, 'name') ?? '누군가'}: ${attackName(payload)} → ${struckOf(payload, ctx, event)} ${hit}${gear ? ` (${gear})` : ''}${guard}`;
 }
 
+/** 사냥하거나 배회해 들어온 몬스터(#254). "들개: 배수로에서 냄새를 맡고 수로 입구로 다가옴" */
+function roamText(payload: Payload): string {
+  const origin = placeOf(payload, 'from_place');
+  const how = text(payload, 'way') === 'hunt' ? '냄새를 맡고' : '어슬렁거리다';
+  return `${text(payload, 'name') ?? '몬스터'}: ${origin ? `${origin}에서 ` : ''}${how} ${placeOf(payload, 'to_place') ?? '?'}(으)로 들어옴`;
+}
+
 /** 공격을 받은 쪽. 몬스터가 인물을 쳤으면(#254) 그 인물의 장면의 이름이고, 쓰러진 인물을 쳤으면 "쓰러진" 이 붙는다 */
 function struckOf(payload: Payload, ctx: EventContext, event: TableEvent): string {
   const npc = text(payload, 'target_name');
@@ -433,6 +440,8 @@ const DESCRIBE: Record<EventType, Describe> = {
   // 쫓아온 몬스터(#254). 그 차례에는 치지 않았다
   monster_chased: (p, ctx, e) =>
     `${text(p, 'name') ?? '몬스터'}: ${who(p, ctx, e)}을(를) 쫓아 ${placeOf(p, 'to_place') ?? '?'}까지 따라옴`,
+  // 싸우지 않던 몬스터가 사냥하거나 배회해 들어왔다(#254). 들어온 라운드에는 치지 않았다. 온 곳은 알 때만 있다
+  monster_roamed: (p) => roamText(p),
   npc_attacked: (p, ctx, e) => attackText(p, ctx, e),
   injury_gained: (p, ctx, e) => `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} 입음`,
   injury_ended: (p, ctx, e) => `${subject(p, ctx, e)}: ${injuryOf(p, ctx)} 풀림`,

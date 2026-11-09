@@ -864,8 +864,11 @@ class TableMonster(Base):
     # 같은 몬스터 사이의 번호. 1 부터다. 부를 때 쓴다(수로 쥐 1, 수로 쥐 2)
     number: Mapped[int] = mapped_column(SmallInteger)
     # 있는 곳. 판의 로어북 장소 항목의 ID 다.
-    # 쫓아오는 몬스터(#254)만 차례에 길 한 칸을 옮긴다(app/rounds/monster_chase.py)
+    # 쫓아오는 몬스터(#254)는 차례에 길 한 칸을 옮긴다(app/rounds/monster_chase.py).
+    # 사냥하고 배회하는 몬스터는 싸우지 않는 라운드의 끝에 옮긴다(app/rounds/monster_roams.py)
     place_id: Mapped[uuid.UUID] = mapped_column(Uuid)
+    # 처음 놓인 곳(#254). 판의 조우나 무작위 조우로 놓인 장소다. 배회는 여기에서 길의 칸 수의 한도 안에서만 간다
+    home_place_id: Mapped[uuid.UUID] = mapped_column(Uuid)
 
     # 능력치의 점수. 모양은 캐릭터 시트와 같다(TableSheet.abilities)
     abilities: Mapped[dict] = mapped_column(JSONB)

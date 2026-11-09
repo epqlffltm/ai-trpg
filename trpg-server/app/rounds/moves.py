@@ -114,6 +114,7 @@ def build_moves(
     met: list[dict] | None = None,
     ticks: list[dict] | None = None,
     escapes: list[dict] | None = None,
+    roams: list[dict] | None = None,
 ) -> list[Move]:
     """
     닫히는 라운드에서 각자 한 일을 서술자에게 줄 모양으로 만든다. 닫기 시작할 때 한 번 만들어 라운드에 굳힌다.
@@ -128,6 +129,8 @@ def build_moves(
     met 은 이 라운드가 닫힐 때 무작위 조우로 나온 무리들이다(app/rounds/wanders.py, #283). 그 장소에 선 사람에게 준다.
     ticks 는 이 라운드가 닫힐 때 상태가 입힌 피해들이다(app/rounds/injury_ticks.py, #254). 입은 사람에게 준다.
     escapes 는 이 라운드가 닫힐 때 굴린 벗어나기다(app/rounds/injury_escapes.py, #254). 벗어난 것만 그 사람에게 준다.
+    roams 는 이 라운드가 닫힐 때 캐릭터가 선 곳에 들어온 몬스터들이다(app/rounds/monster_roams.py, #254). 그곳에 선
+    사람에게 준다.
     쉬는 행동의 결과는 선언에 적혀 있다.
     """
     ended = ended or []
@@ -135,6 +138,7 @@ def build_moves(
     met = met or []
     ticks = ticks or []
     escapes = escapes or []
+    roams = roams or []
     declarations = [find_declaration(round_, member.user_id) for member in table.members]
     wounded = any(member.sheet is not None and injuries.active(member.sheet.injuries) for member in table.members)
     needs_rules = wounded or bool(ended) or any(has_outcome(declaration) for declaration in declarations)
@@ -198,6 +202,7 @@ def build_moves(
                 recovery=narration_request.find_recovery(recovered.natural, member.user_id),
                 place=place_note(mapping, member),
                 wander=narration_request.find_wander(met, member.sheet.place_id if member.sheet else None),
+                roamed=narration_request.find_roamed(roams, member.sheet.place_id if member.sheet else None),
             )
         )
     return moves

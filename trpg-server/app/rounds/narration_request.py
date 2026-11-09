@@ -61,6 +61,7 @@ from app.rounds.narrator import (
     ResourceNote,
     RestNote,
     RevivalNote,
+    RoamNote,
     SearchNote,
     SkillNote,
     StealNote,
@@ -426,6 +427,21 @@ def find_wander(met: list[dict], place_id: uuid.UUID | None) -> WanderNote | Non
     if one is None:
         return None
     return WanderNote(monster=one['monster']['name'], count=one['count'], cause=one['cause'])
+
+
+def find_roamed(roams: list[dict], place_id: uuid.UUID | None) -> list[RoamNote]:
+    """
+    이 라운드가 닫힐 때 그 장소에 사냥하거나 배회해 들어온 몬스터들(app/rounds/monster_roams.py, #254). 들어온 차례다.
+
+    맵에 서 있지 않으면(place_id 가 None) 없다.
+    """
+    if place_id is None:
+        return []
+    here = [one for one in roams if one['to_place'] and one['to_place']['entry_id'] == str(place_id)]
+    return [
+        RoamNote(monster=one['name'], way=one['way'], origin=one['from_place']['name'] if one['from_place'] else None)
+        for one in here
+    ]
 
 
 def find_revival(revivals: list[dict], user_id: uuid.UUID) -> RevivalNote | None:

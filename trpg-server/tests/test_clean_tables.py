@@ -245,7 +245,9 @@ async def fill_every_table(client: AsyncClient, app: FastAPI, me: dict[str, str]
         session.add(TableAchievement(**played))
         session.add(PlayerAchievement(user_id=OTHER, scenario_id=uuid.UUID(scenario['id']), achievement_id='gate'))
         session.add(ScenarioPlayer(scenario_id=uuid.UUID(scenario['id']), user_id=OTHER))
-        monster = {'monster_id': uuid.uuid4(), 'number': 1, 'place_id': uuid.uuid4(), 'abilities': {}, 'max_hp': 1}
+        place = uuid.uuid4()
+        monster = {'monster_id': uuid.uuid4(), 'number': 1, 'place_id': place, 'home_place_id': place}
+        monster |= {'abilities': {}, 'max_hp': 1}
         held = TableMonster(table_id=uuid.UUID(table['id']), hp=1, status='alive', **monster)
         held.items = [TableMonsterItem(slot=0, count=0)]
         session.add(held)

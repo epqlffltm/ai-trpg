@@ -175,6 +175,8 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      몬스터와 NPC 의 공격마다 막는 능력치(monsters[].attacks[].defense, npc_sheets[].attacks[].defense)도 더했다
 #      몬스터와 NPC 가 방어 태세를 잡는 때(monsters[].defends, npc_sheets[].defends: below, chance)도 뒤에 더했다.
 #      비워도 되는 칸이라 형식이 그대로다
+#      몬스터가 사냥하는 거리와 배회하는 것(monsters[].hunts, monsters[].roams: chance, reach)도 뒤에 더했다.
+#      비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 70
 
 
@@ -599,6 +601,13 @@ class DefendsSnapshot(BaseModel):
     chance: int | None = None
 
 
+class RoamsSnapshot(BaseModel):
+    """배회하는 것(#254). 라운드마다의 확률(백분율)과 처음 자리에서 벗어나는 길의 칸 수의 한도다."""
+
+    chance: int
+    reach: int
+
+
 class NpcSheetSnapshot(BaseModel):
     """NPC 시트 하나. 판 안의 로어북 인물 항목 하나(entry_id)의 숫자와 처음 태도와 지닌 물건이다."""
 
@@ -673,6 +682,9 @@ class MonsterSnapshot(BaseModel):
     chases: bool = False
     # 방어 태세를 잡는 때(#254, app/rounds/foe_guards.py). 그 전의 판의 몬스터는 방어하지 않는다
     defends: DefendsSnapshot | None = None
+    # 사냥하는 거리와 배회하는 것(#254, app/rounds/monster_roams.py). 그 전의 판의 몬스터는 자리를 지킨다
+    hunts: int | None = None
+    roams: RoamsSnapshot | None = None
 
 
 class EncounterSnapshot(BaseModel):
@@ -1380,10 +1392,12 @@ def snapshot_monster(
     xp: int = 0,
     chases: bool = False,
     defends: DefendsSnapshot | None = None,
+    hunts: int | None = None,
+    roams: RoamsSnapshot | None = None,
 ) -> MonsterSnapshot:
     """
     몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어와 불굴 세이브, 면역에 더하고 빼는 성질, 저항과
-    타고난 피해의 성질(#886 ③), 쓰러뜨리면 주는 경험치(#286 ②), 쫓아오는지와 방어하는 때(#254)를 굳힌다.
+    타고난 피해의 성질(#886 ③), 쓰러뜨리면 주는 경험치(#286 ②), 쫓아오는지와 방어하는 때, 사냥과 배회(#254)를 굳힌다.
     """
     return MonsterSnapshot(
         id=monster.id,
@@ -1405,6 +1419,8 @@ def snapshot_monster(
         xp=xp,
         chases=chases,
         defends=defends,
+        hunts=hunts,
+        roams=roams,
     )
 
 

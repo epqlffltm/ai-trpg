@@ -479,6 +479,21 @@ class WanderNote:
 
 
 @dataclass(frozen=True)
+class RoamNote:
+    """
+    싸우지 않던 몬스터가 이 캐릭터가 선 곳에 들어온 것(#254, app/rounds/monster_roams.py). 엔진이 옮겼다.
+
+    monster 는 장면에서 부르는 이름, way 는 까닭(hunt: 냄새를 맡고 다가왔다, roam: 어슬렁거리다 들어왔다),
+    origin 은 온 곳의 이름이다(테이블이 모르는 곳이면 None). 들어온 라운드에는 치지 않았다. 다음 라운드에 장면에 든다.
+    서술자는 나타나는 장면을 그리되 공격하게 하지 않는다.
+    """
+
+    monster: str
+    way: str
+    origin: str | None = None
+
+
+@dataclass(frozen=True)
 class CoverNote:
     """
     엄폐하는 행동의 결과(app/rounds/covers.py, #276). 엔진이 정한 것이다. 굴림이 없다.
@@ -839,6 +854,8 @@ class Move:
     # 이 라운드가 닫힐 때 이 캐릭터가 서 있는 곳에 무작위 조우로 나온 무리(#283). 없었으면 None 이다.
     # 이 칸이 생기기 전에 굳힌 것은 None 이다
     wander: WanderNote | None = None
+    # 이 라운드가 닫힐 때 이 캐릭터가 서 있는 곳에 사냥하거나 배회해 들어온 몬스터들(#254). 들어온 차례다
+    roamed: list[RoamNote] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

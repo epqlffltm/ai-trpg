@@ -5004,7 +5004,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "dice_rolled" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "monster_chased" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_hurt" | "injury_escape_rolled" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "achievement_earned" | "character_leveled" | "experience_gained" | "abilities_raised" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "round_reverted" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended" | "carried_items_left";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "dice_rolled" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "monster_chased" | "monster_roamed" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_hurt" | "injury_escape_rolled" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "achievement_earned" | "character_leveled" | "experience_gained" | "abilities_raised" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "round_reverted" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended" | "carried_items_left";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -6933,6 +6933,8 @@ export interface components {
              * @default []
              */
             equipment: components["schemas"]["CarriedItem-Input"][];
+            /** Hunts */
+            hunts?: number | null;
             /**
              * Immune
              * @default []
@@ -6960,6 +6962,7 @@ export interface components {
              * @default []
              */
             resistances: components["schemas"]["Resistance"][];
+            roams?: components["schemas"]["Roams"] | null;
             sheet: components["schemas"]["Sheet"];
             /**
              * Vulnerable
@@ -7003,6 +7006,8 @@ export interface components {
              * @default []
              */
             equipment: components["schemas"]["CarriedItem-Output"][];
+            /** Hunts */
+            hunts?: number | null;
             /**
              * Immune
              * @default []
@@ -7027,6 +7032,7 @@ export interface components {
              * @default []
              */
             resistances: components["schemas"]["Resistance"][];
+            roams?: components["schemas"]["Roams"] | null;
             sheet: components["schemas"]["Sheet"];
             /**
              * Vulnerable
@@ -7084,6 +7090,8 @@ export interface components {
              * @default []
              */
             equipment: components["schemas"]["CarriedItemSnapshot"][];
+            /** Hunts */
+            hunts?: number | null;
             /**
              * Id
              * Format: uuid
@@ -7114,6 +7122,7 @@ export interface components {
              * @default []
              */
             resistances: components["schemas"]["Resistance"][];
+            roams?: components["schemas"]["RoamsSnapshot"] | null;
             sheet: components["schemas"]["Sheet"];
             /**
              * Unique
@@ -9720,6 +9729,29 @@ export interface components {
             minutes: number;
             /** Target */
             target: number;
+        };
+        /**
+         * Roams
+         * @description 싸우지 않는 몬스터가 배회하는 것(#254, app/rounds/monster_roams.py). 둘 다 적는다.
+         *
+         *     chance 는 라운드마다 움직일 백분율이다. reach 는 처음 놓인 자리에서 벗어나는 길의 칸 수의 한도다.
+         *     움직이면 이웃한 장소 하나로 간다. 엔진이 정한다. 서술(AI)이 정하지 않는다.
+         */
+        Roams: {
+            /** Chance */
+            chance: number;
+            /** Reach */
+            reach: number;
+        };
+        /**
+         * RoamsSnapshot
+         * @description 배회하는 것(#254). 라운드마다의 확률(백분율)과 처음 자리에서 벗어나는 길의 칸 수의 한도다.
+         */
+        RoamsSnapshot: {
+            /** Chance */
+            chance: number;
+            /** Reach */
+            reach: number;
         };
         /**
          * RobbedWake

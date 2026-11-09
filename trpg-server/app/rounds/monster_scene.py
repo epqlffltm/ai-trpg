@@ -71,22 +71,28 @@ def scene_monsters(snapshot: Snapshot, table: GameTable, states: Iterable[TableM
     번호를 붙일지는 테이블 전체의 마릿수로 정한다. 장면에 한 마리만 보여도 다른 곳에 같은 것이 있으면 번호를 붙인다.
     그래야 같은 마리가 장면마다 다른 이름으로 불리지 않는다.
     """
+    here = occupied_places(table)
+    return [monster for monster in every_monster(snapshot, states) if monster.state.place_id in here]
+
+
+def every_monster(snapshot: Snapshot, states: Iterable[TableMonster]) -> list[SceneMonster]:
+    """
+    테이블의 마리 전부를 장면의 몬스터의 모양으로. 판의 몬스터 순서, 그 안의 번호 순서다. 이름은 장면과 같다.
+
+    장면 밖의 마리를 다룰 때 쓴다(싸우지 않는 마리의 움직임, app/rounds/monster_roams.py). 앉은 사람에게 내주지 않는다.
+    """
     states = list(states)
     counts = Counter(state.monster_id for state in states)
-    here = occupied_places(table)
     order = {monster.id: position for position, monster in enumerate(snapshot.monsters)}
     definitions = {monster.id: monster for monster in snapshot.monsters}
-    present = sorted(
-        (state for state in states if state.place_id in here),
-        key=lambda state: (order[state.monster_id], state.number),
-    )
+    ordered = sorted(states, key=lambda state: (order[state.monster_id], state.number))
     return [
         SceneMonster(
             state=state,
             definition=definitions[state.monster_id],
             name=label_of(state, definitions[state.monster_id], counts),
         )
-        for state in present
+        for state in ordered
     ]
 
 

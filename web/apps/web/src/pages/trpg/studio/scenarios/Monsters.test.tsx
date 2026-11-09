@@ -156,6 +156,8 @@ describe('몬스터 탭', () => {
       resistances: [],
       nature: null,
       defends: { below: 30, chance: null },
+      hunts: null,
+      roams: null,
       xp: 50,
     });
     // 고치지 않은 시트의 면역은 그대로 간다
@@ -222,6 +224,12 @@ describe('몬스터 입력', () => {
     expect(monsterHints({ ...draft, vulnerable: ['poison'] }, rules, []).natures).toBe('독은(는) 면역과 약함에 함께 둘 수 없습니다.');
     expect(monsterLine({ ...GHOUL_SHEET, vulnerable: ['mind'] } as unknown as MonsterSheet, rules)).toContain('면역 독 · 약함 정신');
     expect(monsterLine({ ...GHOUL_SHEET, defends: { below: 30, chance: 25 } } as unknown as MonsterSheet, rules)).toContain('방어 HP 30% 이하, 25%');
+  });
+
+  it('사냥과 배회는 고치는 칸이 없어도 받은 대로 보낸다', () => {
+    const roaming = { ...GHOUL_SHEET, hunts: 2, roams: { chance: 30, reach: 1 } } as unknown as MonsterSheet;
+    const sent = toMonsterSheet(GHOUL, monsterDraft(roaming, rules), rules);
+    expect([sent.hunts, sent.roams]).toEqual([2, { chance: 30, reach: 1 }]);
   });
 
   it('조우: 같은 장소의 같은 몬스터, 네임드 두 마리, 마리 수', () => {

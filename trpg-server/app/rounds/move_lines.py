@@ -44,6 +44,7 @@ from app.rounds.narrator import (
     ResourceNote,
     RestNote,
     RevivalNote,
+    RoamNote,
     SearchNote,
     SkillNote,
     StealNote,
@@ -406,6 +407,22 @@ def describe_wander(note: WanderNote) -> str:
     if note.cause == 'rest':
         return f'(조우: 쉬는 중에 {note.monster} {note.count}마리가 덮쳤다)'
     return f'(조우: {note.monster} {note.count}마리가 나타났다)'
+
+
+# 들어온 몬스터의 까닭(#254). 사냥은 캐릭터를 찾아 다가왔고, 배회는 어슬렁거리다 들어왔다
+ROAM_LINES = {'hunt': '냄새를 맡고 다가왔다', 'roam': '어슬렁거리다 들어왔다'}
+
+
+def describe_roam(note: RoamNote) -> str:
+    """
+    싸우지 않던 몬스터가 들어온 것을 한 줄로 적는다(#254). 엔진이 옮겼다. 들어온 라운드에는 치지 않았다.
+
+    예: (다가옴: 수로 쥐 1 — 깊은 수로에서 냄새를 맡고 다가왔다, 아직 치지 않음)
+        (다가옴: 들개 — 어슬렁거리다 들어왔다, 아직 치지 않음)
+    """
+    how = ROAM_LINES.get(note.way, '들어왔다')
+    origin = f'{note.origin}에서 ' if note.origin else ''
+    return f'(다가옴: {note.monster} — {origin}{how}, 아직 치지 않음)'
 
 
 # 방어 태세를 잡은 캐릭터의 줄에 붙는 글(#254). 그 라운드 동안 노린 공격이 불리했다
@@ -1009,6 +1026,7 @@ def describe_move(move: Move) -> str:
         parts.append(DEFENDING)
     if move.wander is not None:
         parts.append(describe_wander(move.wander))
+    parts.extend(describe_roam(note) for note in move.roamed)
     if move.death_save is not None:
         parts.append(describe_death_save(move.death_save))
     if move.revival is not None:

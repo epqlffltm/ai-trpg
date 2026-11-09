@@ -74,6 +74,7 @@ from app.rounds import (
     improvised,
     injury_escapes,
     injury_ticks,
+    monster_roams,
     monster_xp,
     narration_request,
     opener,
@@ -282,6 +283,8 @@ def begin_closing(
     그다음 모두 기다렸으면 시간을 건너뛴다(app/rounds/waits.py). 누가 맞았으면 깨진다.
     그다음 때가 된 부상을 끝낸다. 이번 라운드의 판정에는 아직 효과가 있었다. 늘어난 걸음으로 본다.
     오래 가는 것이 나으면 후유증 표를 굴린다(expire_injuries).
+    그다음 싸우지 않은 몬스터가 사냥하거나 배회해 길 한 칸 움직인다(app/rounds/monster_roams.py, #254).
+    캐릭터가 선 곳에 들어온 것만 적는다. 들어온 마리는 다음 라운드에 장면에 든다.
     그다음 길을 오거나 길게 쉰 장소에서 무작위 조우를 굴려 몬스터를 놓는다(app/rounds/wanders.py, #283).
     쉬는 중에 덮쳤으면 그 쉬기가 깨진다. 일행이 만나는 것은 다음 라운드다.
     그다음 쉰 사람이 회복하고, 고비를 넘긴 사람이 되살아나기를 굴리고, 저절로 회복한다(app/rounds/rests.py).
@@ -293,7 +296,7 @@ def begin_closing(
     기한 전 마지막 라운드에 이루었으면 성공이다. 기한의 실패로 드러날 퀘스트(잇기)가 있으면 실패 뒤에 한 번 더 본다.
     맨 끝에 조건이 채워진 판의 업적을 앉은 플레이어 모두에게 준다(app/rounds/achievements.py).
     이벤트는 행동(과 그 판정, 치료, 변화, 부상, 휴식)들 → 죽음의 굴림들 → 상태의 피해들 → 벗어나기 → 끝난 부상들 →
-    나온 무리들 →
+    나온 무리들 → 들어온 몬스터들 →
     되살아나기와 저절로 회복 → 수치의 변화와 문턱의 부상 → 몬스터의 경험치(와 오른 레벨) → 드러나고 이룬 퀘스트들 →
     일어난 사건들(과 옮긴 사람들, 준 경험치) →
     기한을 넘긴 퀘스트들 → 그 뒤에 드러나고 이룬 퀘스트들 → 받은 업적들 → 닫힘 순서로 적는다. 한 묶음이다.
@@ -315,6 +318,7 @@ def begin_closing(
     hurt = hurt | ticks.hurt
     waits.settle(table, round_, hurt)
     ended = expire_injuries(table, scene, round_.number, dice)
+    roams = monster_roams.documents(table, monster_roams.settle(table, scene, dice), round_.number)
     met, appeared = wanders.settle_wanders(table, round_, scene.all_monsters, dice)
     session.add_all(appeared)
     recovered = rests.settle(table, round_, hurt, dice, frozenset(wanders.ambushed(table, round_, met)))
@@ -328,7 +332,7 @@ def begin_closing(
     round_.expired_quests = [failure['entry_id'] for failure in overdue]
     after_overdue = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs) if overdue else []
     earned = achievements.settle_achievements(table, round_.number, scene.all_monsters, scene.npcs)
-    moves = build_moves(table, round_, ended, recovered, [*settled, *after_overdue], met, ticks.ticks, escapes)
+    moves = build_moves(table, round_, ended, recovered, [*settled, *after_overdue], met, ticks.ticks, escapes, roams)
     round_.moves = narration_request.dump_moves(moves)
     round_.narration_style = table.narration_style
     record_actions(session, table, round_, group)
@@ -337,6 +341,7 @@ def begin_closing(
     injury_escapes.record(session, table, escapes, round_.number, group)
     record_injury_endings(session, table, ended, round_.number, group)
     wanders.record_wanders(session, table, met, group)
+    monster_roams.record(session, table, roams, group)
     record_recoveries(session, table, recovered, group)
     resource_rounds.record(session, table, drifts, round_.number, group)
     monster_xp.record(session, table, defeats, group)
