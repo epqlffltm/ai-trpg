@@ -481,7 +481,7 @@ if MAIL_DELIVERY not in ('outbox', 'inline'):
 HEARTBEAT_FILE = env('HEARTBEAT_FILE', default='')
 
 # 메일의 보내는 사람 주소
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='AI TRPG <no-reply@localhost>')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='이매망량의 서재 <no-reply@localhost>')
 
 # 비밀번호 재설정 메일의 링크가 가리키는 프론트 화면.
 # 인증 서버의 주소가 아니다. 링크는 화면을 열기만 하고, 변경은 그 화면이 API 에 POST 로 요청한다

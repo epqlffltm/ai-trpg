@@ -224,8 +224,8 @@ class ConsentTests(GuardianTestCase):
         self.consent()
 
         subjects = {message.subject: message.to for message in mail.outbox[-2:]}
-        self.assertEqual(subjects['[AI TRPG] 보호자 동의가 적혔습니다'], [GUARDIAN_EMAIL])
-        self.assertEqual(subjects['[AI TRPG] 보호자가 결제에 동의했습니다'], [self.minor.email])
+        self.assertEqual(subjects['[이매망량의 서재] 보호자 동의가 적혔습니다'], [GUARDIAN_EMAIL])
+        self.assertEqual(subjects['[이매망량의 서재] 보호자가 결제에 동의했습니다'], [self.minor.email])
         self.assertTrue(self.revoke_link())
 
     def test_a_minor_cannot_be_the_guardian(self):
@@ -329,7 +329,7 @@ class RevokeTests(GuardianTestCase):
         self.assertEqual(self.eligibility_version(), version + 1)
         self.assertEqual(
             {message.subject for message in mail.outbox[-2:]},
-            {'[AI TRPG] 보호자 동의를 철회했습니다', '[AI TRPG] 보호자가 결제 동의를 철회했습니다'},
+            {'[이매망량의 서재] 보호자 동의를 철회했습니다', '[이매망량의 서재] 보호자가 결제 동의를 철회했습니다'},
         )
 
     def test_revoking_twice_is_the_same(self):

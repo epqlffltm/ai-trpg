@@ -568,7 +568,7 @@ class WorkerTests(TestCase):
         # 마친 계정의 알림이 같은 바퀴에 나간다. 마칠 때가 지났으므로 하루 전 알림은 보내지 않는다
         self.assertIn('탈퇴 하루 전 메일 0건, 탈퇴를 마친 계정 1건, 탈퇴 알림 1건', output.getvalue())
         self.assertIsNotNone(WithdrawalNotice.objects.get(user=user, target=WithdrawalTarget.BILLING).delivered_at)
-        self.assertEqual([message.subject for message in mail.outbox], ['[AI TRPG] 탈퇴를 마쳤습니다'])
+        self.assertEqual([message.subject for message in mail.outbox], ['[이매망량의 서재] 탈퇴를 마쳤습니다'])
 
     def test_a_round_that_reminded_is_not_idle(self):
         # 보낸 것이 있으면 워커가 쉬지 않고 다음 묶음을 본다
