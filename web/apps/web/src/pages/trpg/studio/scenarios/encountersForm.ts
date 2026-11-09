@@ -2,6 +2,7 @@
 // 조우(B9 몬스터 탭). 장소 하나에 몬스터 하나가 1~10 마리, 누가 기습하는가. 순수한 함수다.
 // 같은 장소의 같은 몬스터는 한 줄이다. 시트를 적은 몬스터만 놓을 수 있다(encounter_monster_missing).
 // 네임드 몬스터는 판 전체에 한 마리다: 한 줄에 둘 이상이거나 두 줄 이상에 나오면 막는다(unique_monster_repeated).
+// 순찰 경로(#254)는 고치는 칸이 아직 없어 받은 대로 지녔다가 보낸다.
 
 import type { Encounter, EncounterBody, Surprise } from '../../../../api/types';
 import { wholeNumber } from '../rulebooks/rulebookForm';
@@ -18,7 +19,14 @@ export function surpriseLabel(surprise: Surprise): string {
   return SURPRISES[surprise];
 }
 
-export type EncounterDraft = { place: string; monster: string; count: string; surprise: Surprise };
+export type EncounterDraft = {
+  place: string;
+  monster: string;
+  count: string;
+  surprise: Surprise;
+  /** 순찰 경로(#254). 장소 항목의 id 들이다 */
+  patrol: string[];
+};
 
 export function encounterDraft(encounter: Encounter | null): EncounterDraft {
   return {
@@ -26,6 +34,7 @@ export function encounterDraft(encounter: Encounter | null): EncounterDraft {
     monster: encounter?.monster_id ?? '',
     count: String(encounter?.count ?? 1),
     surprise: encounter?.surprise ?? 'none',
+    patrol: encounter?.patrol ?? [],
   };
 }
 
@@ -47,7 +56,7 @@ export function encounterHints(draft: EncounterDraft, encounters: Encounter[], a
 }
 
 export function toEncounter(draft: EncounterDraft): EncounterBody {
-  return { place_id: draft.place, monster_id: draft.monster, count: Number(draft.count.trim()), surprise: draft.surprise };
+  return { place_id: draft.place, monster_id: draft.monster, count: Number(draft.count.trim()), surprise: draft.surprise, patrol: draft.patrol };
 }
 
 export function withEncounter(encounters: Encounter[], at: number | null, encounter: EncounterBody): EncounterBody[] {
@@ -58,9 +67,11 @@ export function withoutEncounter(encounters: Encounter[], at: number): Encounter
   return encounters.filter((_, index) => index !== at);
 }
 
-/** 목록의 한 줄. "지하 묘지 · 구울 ×3 · 몬스터가 매복" */
+/** 목록의 한 줄. "지하 묘지 · 구울 ×3 · 몬스터가 매복 · 순찰 2곳" */
 export function encounterLine(encounter: Encounter, placeName: (id: string) => string, monsterName: (id: string) => string): string {
   const parts = [placeName(encounter.place_id), `${monsterName(encounter.monster_id)} ×${encounter.count}`];
   if (encounter.surprise !== 'none') parts.push(surpriseLabel(encounter.surprise));
+  const patrol = encounter.patrol ?? [];
+  if (patrol.length > 0) parts.push(`순찰 ${patrol.length}곳`);
   return parts.join(' · ');
 }

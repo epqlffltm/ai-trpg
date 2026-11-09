@@ -54,6 +54,7 @@ from app.assets.models import (
     ITEM_STACK_MAX,
     MONEY_MAX,
     MONSTER_MAX_ATTACKS,
+    PATROL_MAX_PLACES,
     PLAYER_MADE_HP_MAX,
     QUEST_CONDITION_MAX_COUNT,
     QUEST_LINK_CONDITIONS,
@@ -696,11 +697,27 @@ class Encounter(BaseModel):
     count: int = Field(ge=1, le=ENCOUNTER_MAX_COUNT)
     # 누가 기습하는가. 적지 않으면 기습이 없다
     surprise: Surprise = Surprise.NONE
+    # 순찰 경로(#254). 싸우지 않는 라운드에 처음 자리(place_id)에서 이 장소들을 차례로 돌고 처음 자리로 돌아온다.
+    # 장소끼리 이웃하지 않아도 된다(가장 짧은 길로 한 칸씩 간다). 비우면 순찰하지 않는다(app/rounds/monster_roams.py)
+    patrol: list[uuid.UUID] = Field(default_factory=list, max_length=PATROL_MAX_PLACES)
 
     @field_serializer('place_id', 'monster_id')
     def id_as_text(self, value: uuid.UUID) -> str:
         """ID 를 글자로 꺼낸다. 시나리오의 문서 칸(JSONB)에 그대로 적을 수 있어야 한다."""
         return str(value)
+
+    @field_serializer('patrol')
+    def ids_as_text(self, value: list[uuid.UUID]) -> list[str]:
+        """순찰 경로의 ID 들을 글자로 꺼낸다."""
+        return [str(place) for place in value]
+
+    @model_validator(mode='after')
+    def patrol_moves(self) -> 'Encounter':
+        """순찰 경로에서 같은 장소가 잇달아 오지 않는다. 처음 자리에서 돌아 다시 처음 자리로 오므로 앞뒤 끝도 본다."""
+        loop = [self.place_id, *self.patrol]
+        if self.patrol and any(here == there for here, there in zip(loop, [*loop[1:], loop[0]], strict=True)):
+            raise ValueError('순찰 경로에 같은 장소가 잇달아 있습니다(처음 자리에서 시작해 처음 자리로 돌아옵니다).')
+        return self
 
 
 def reject_duplicate_encounters(encounters: list[Encounter]) -> list[Encounter]:

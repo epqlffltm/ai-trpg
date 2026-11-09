@@ -252,7 +252,9 @@ from app.rounds.time_words import duration_text, time_text
 #   narration-91: 사냥하거나 배회해 들어온 몬스터(#254). 그곳에 선 사람의 한 일의 줄에
 #                 (다가옴: 수로 쥐 1 — 깊은 수로에서 냄새를 맡고 다가왔다, 아직 치지 않음)을 붙이고,
 #                 [몬스터]의 다루는 법에 '다가옴'의 몬스터는 끝날 무렵 들어와 아직 치지 않았다는 말이 더해진다
-PROMPT_VERSION = 'narration-91'
+#   narration-92: 순찰하는 몬스터(#254). '다가옴'의 줄에 순찰하다 들어온 것이 더해진다
+#                 (다가옴: 해골 병사 — 깊은 수로에서 순찰하다 들어왔다, 아직 치지 않음)
+PROMPT_VERSION = 'narration-92'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

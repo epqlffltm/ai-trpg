@@ -86,8 +86,11 @@ async def make_world(client: AsyncClient, me: dict) -> dict:
     }
 
 
-async def dog_table(client: AsyncClient, me: dict, at: str = 'deep', **moves) -> dict:
-    """들개 한 마리를 at 에 둔 테이블. moves 는 시트의 hunts, roams 다. 나 혼자 입구에 앉는다."""
+async def dog_table(client: AsyncClient, me: dict, at: str = 'deep', patrol: tuple[str, ...] = (), **moves) -> dict:
+    """
+    들개 한 마리를 at 에 둔 테이블. moves 는 시트의 hunts, roams 다. patrol 은 조우의 순찰 경로(장소의 이름표)다.
+    나 혼자 입구에 앉는다.
+    """
     world = await make_world(client, me)
     gate, drain, deep, pit = (world[name]['id'] for name in ('gate', 'drain', 'deep', 'pit'))
     dog = {'monster_id': world['dog']['id'], 'sheet': make_sheet(max_hp=4), 'attacks': [BITE], **moves}
@@ -106,7 +109,14 @@ async def dog_table(client: AsyncClient, me: dict, at: str = 'deep', **moves) ->
         'start_place': gate,
         'routes': routes,
         'monster_sheets': [dog],
-        'encounters': [{'place_id': world[at]['id'], 'monster_id': world['dog']['id'], 'count': 1}],
+        'encounters': [
+            {
+                'place_id': world[at]['id'],
+                'monster_id': world['dog']['id'],
+                'count': 1,
+                'patrol': [world[name]['id'] for name in patrol],
+            }
+        ],
     }
     scenario = await post(client, SCENARIOS_URL, me, **body)
     await post(client, f'{SCENARIOS_URL}/{scenario["id"]}/versions', me)
@@ -283,6 +293,7 @@ async def test_the_sheet_bounds_the_moves(client: AsyncClient, me: dict, moves: 
     )
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    assert any(field.startswith('monster_sheets.0') for field in response.json()['errors'])
 
 
 async def test_the_moves_are_kept_on_the_sheet(client: AsyncClient, me: dict):

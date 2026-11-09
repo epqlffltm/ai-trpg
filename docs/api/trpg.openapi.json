@@ -4530,6 +4530,15 @@
             "title": "Monster Id",
             "type": "string"
           },
+          "patrol": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Patrol",
+            "type": "array"
+          },
           "place_id": {
             "format": "uuid",
             "title": "Place Id",
@@ -4562,6 +4571,13 @@
             "title": "Monster Id",
             "type": "string"
           },
+          "patrol": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Patrol",
+            "type": "array"
+          },
           "place_id": {
             "title": "Place Id",
             "type": "string"
@@ -4590,6 +4606,15 @@
             "format": "uuid",
             "title": "Monster Id",
             "type": "string"
+          },
+          "patrol": {
+            "default": [],
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Patrol",
+            "type": "array"
           },
           "place_id": {
             "format": "uuid",

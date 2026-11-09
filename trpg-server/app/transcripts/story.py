@@ -202,7 +202,7 @@ def chased(payload: dict, labels: Labels) -> list[Block]:
 
 
 # 사냥하거나 배회해 들어온 몬스터(#254)의 까닭
-ROAM_WAYS = {'hunt': '냄새를 맡고 다가옴', 'roam': '어슬렁거리다 들어옴'}
+ROAM_WAYS = {'hunt': '냄새를 맡고 다가옴', 'patrol': '순찰하다 들어옴', 'roam': '어슬렁거리다 들어옴'}
 
 
 def roamed(payload: dict, labels: Labels) -> list[Block]:

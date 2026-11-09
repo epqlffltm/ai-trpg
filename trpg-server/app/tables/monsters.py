@@ -78,6 +78,7 @@ def new_monster(table_id: uuid.UUID, monster: MonsterSnapshot, place_id: uuid.UU
         number=number,
         place_id=place_id,
         home_place_id=place_id,
+        patrol_leg=0,
         abilities=dict(monster.sheet.abilities),
         max_hp=monster.sheet.max_hp,
         hp=monster.sheet.max_hp,
