@@ -173,6 +173,8 @@ from app.engine.sheet import CharacterSheet, Sheet
 #  70: 룰북의 규칙에 막는 규칙이 있다(#254). rulebook.rules.defense: 받는 쪽이 굴리는 능력치(ability).
 #      있으면 공격은 맞서는 굴림이다. 그 전의 판은 null 이고 고정 난이도로 돈다.
 #      몬스터와 NPC 의 공격마다 막는 능력치(monsters[].attacks[].defense, npc_sheets[].attacks[].defense)도 더했다
+#      몬스터와 NPC 가 방어 태세를 잡는 때(monsters[].defends, npc_sheets[].defends: below, chance)도 뒤에 더했다.
+#      비워도 되는 칸이라 형식이 그대로다
 SNAPSHOT_FORMAT = 70
 
 
@@ -590,6 +592,13 @@ class AttackSnapshot(BaseModel):
     defense: str | None = None
 
 
+class DefendsSnapshot(BaseModel):
+    """방어 태세를 잡는 때(#254). HP 의 문턱(최대 HP 의 백분율)과 라운드마다의 확률(백분율)이다. 하나는 있다."""
+
+    below: int | None = None
+    chance: int | None = None
+
+
 class NpcSheetSnapshot(BaseModel):
     """NPC 시트 하나. 판 안의 로어북 인물 항목 하나(entry_id)의 숫자와 처음 태도와 지닌 물건이다."""
 
@@ -614,6 +623,8 @@ class NpcSheetSnapshot(BaseModel):
     nature: str | None = None
     # 한편인 몬스터들(#254). 판의 몬스터 ID 다. 이 몬스터들은 이 인물을 치지 않는다. 그 전의 판의 인물은 한편이 없다
     allied_monsters: list[uuid.UUID] = []
+    # 방어 태세를 잡는 때(#254). 그 전의 판의 인물은 방어하지 않는다
+    defends: DefendsSnapshot | None = None
 
 
 class NaturalArmorSnapshot(BaseModel):
@@ -660,6 +671,8 @@ class MonsterSnapshot(BaseModel):
     xp: int = 0
     # 도망치면 쫓아오는가(#254, app/rounds/monster_chase.py). 그 전의 판의 몬스터는 쫓아오지 않는다
     chases: bool = False
+    # 방어 태세를 잡는 때(#254, app/rounds/foe_guards.py). 그 전의 판의 몬스터는 방어하지 않는다
+    defends: DefendsSnapshot | None = None
 
 
 class EncounterSnapshot(BaseModel):
@@ -1366,10 +1379,11 @@ def snapshot_monster(
     nature: str | None = None,
     xp: int = 0,
     chases: bool = False,
+    defends: DefendsSnapshot | None = None,
 ) -> MonsterSnapshot:
     """
     몬스터와 그 시트, 공격, 지닌 물건, 둔한지, 타고난 방어와 불굴 세이브, 면역에 더하고 빼는 성질, 저항과
-    타고난 피해의 성질(#886 ③), 쓰러뜨리면 주는 경험치(#286 ②), 쫓아오는지(#254)를 굳힌다.
+    타고난 피해의 성질(#886 ③), 쓰러뜨리면 주는 경험치(#286 ②), 쫓아오는지와 방어하는 때(#254)를 굳힌다.
     """
     return MonsterSnapshot(
         id=monster.id,
@@ -1390,6 +1404,7 @@ def snapshot_monster(
         nature=nature,
         xp=xp,
         chases=chases,
+        defends=defends,
     )
 
 

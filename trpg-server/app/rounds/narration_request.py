@@ -1035,12 +1035,15 @@ def to_monster_turn(turn: dict) -> MonsterTurnNote | None:
 
     둘의 outcome 은 같은 모양이다. 굴림의 숫자와 부상의 영향은 옮기지 않는다. 그 능력치를 드러낸다.
     고른 공격의 비용이 모자라 하지 못한 차례(#805 ③-a)는 무엇을 하려다 못 했는지를 준다.
+    방어 태세를 잡아 치지 않은 차례(#254, skipped defending)도 준다. 그때는 defending 만 있다.
     몬스터가 인물을 쳤으면(#254) 인물의 몸(npc_impact)을 말로 주고, 인물의 수치도 말로만 준다(#804).
     """
     outcome = turn['outcome']
     if outcome.get('skipped') == 'cost_short':
         attack, target = outcome['attack']['name'], target_name_of(outcome)
         return MonsterTurnNote(name=turn['name'], attack=attack, target=target, hit=False, short=True)
+    if outcome.get('skipped') == 'defending':
+        return MonsterTurnNote(name=turn['name'], attack='', target='', hit=False, defending=True)
     if 'skipped' in outcome:
         return None
     if 'chased' in outcome:

@@ -1076,8 +1076,11 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
         해골 병사: 약사에게 할퀴기 (맞음) → 약사 피해 3 (쓰러짐(의식 없음))   인물을 쳤다(#254)
         해골 병사: 쓰러진 약사에게 할퀴기 (맞음) → 약사 피해 2 (죽음)   쓰러진 인물을 마무리했다(#254)
         수로 쥐 2: 엘프에게 물기 (빗나감) [방어 태세: 불리]   방어 태세를 잡은 캐릭터를 쳤다(#254)
+        수로 쥐 2: 방어 태세를 잡음 (치지 않음)   이 마리가 방어 태세를 잡았다(#254)
     도감의 글(생김새, 약점)은 싣지 않는다. 가짜 서술자는 이 줄을 장면으로 그대로 내보낸다.
     """
+    if note.defending:
+        return f'{note.name}: 방어 태세를 잡음 (치지 않음)'
     if note.chased is not None:
         return f'{note.name}: {note.target}을(를) 쫓아 {note.chased}까지 따라옴 (치지 않음)'
     if note.short:

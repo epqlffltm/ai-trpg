@@ -149,6 +149,7 @@ describe('몬스터 탭', () => {
       vulnerable: ['poison'],
       resistances: [],
       nature: null,
+      defends: null,
       xp: 50,
     });
     // 고치지 않은 시트의 면역은 그대로 간다

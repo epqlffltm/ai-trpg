@@ -131,11 +131,12 @@ async def start_table(
     count: int = 1,
     surprise: str = 'none',
     sheet: dict = SHEET,
+    rat_fields: dict | None = None,
 ) -> dict:
     """
     수로 입구에 쥐를 둔 시나리오로 테이블을 시작한다. 나와 others 가 앉는다. 모두 수로 입구에 선다.
 
-    attacks 를 주지 않으면 쥐는 물기 하나를 가진다. 돌려주는 것은 테이블이다.
+    attacks 를 주지 않으면 쥐는 물기 하나를 가진다. rat_fields 는 쥐의 시트에 더할 칸이다. 돌려주는 것은 테이블이다.
     """
     lorebook = await post(client, LOREBOOKS_URL, me, title='지하 수로')
     gate = await post(client, f'{LOREBOOKS_URL}/{lorebook["id"]}/entries', me, name='수로 입구', kind='place')
@@ -153,7 +154,12 @@ async def start_table(
         openings=['물 떨어지는 소리가 난다.'],
         default_sheet=sheet,
         monster_sheets=[
-            {'monster_id': rat['id'], 'sheet': rat_sheet, 'attacks': [BITE] if attacks is None else attacks}
+            {
+                'monster_id': rat['id'],
+                'sheet': rat_sheet,
+                'attacks': [BITE] if attacks is None else attacks,
+                **(rat_fields or {}),
+            }
         ],
         start_place=gate['id'],
         encounters=[{'place_id': gate['id'], 'monster_id': rat['id'], 'count': count, 'surprise': surprise}],
@@ -586,6 +592,7 @@ def test_a_monster_with_nobody_standing_by_skips():
         ruleset=SRD5,
         downed_at_start=frozenset(),
         cast=[],
+        foes_guarding=frozenset(),
     )
 
     assert take_monster_turn(judging, rat) == {'skipped': Skipped.NO_TARGET}

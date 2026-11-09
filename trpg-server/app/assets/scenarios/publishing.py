@@ -75,6 +75,7 @@ from app.assets.scenarios.schemas import (
 from app.assets.scenarios.snapshot import (
     AttackSnapshot,
     CarriedItemSnapshot,
+    DefendsSnapshot,
     MonsterSnapshot,
     NaturalArmorSnapshot,
     build_snapshot,
@@ -639,6 +640,7 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             monster_sheet.nature,
             monster_sheet.xp,
             monster_sheet.chases,
+            DefendsSnapshot(**monster_sheet.defends.model_dump()) if monster_sheet.defends else None,
         )
         for monster_sheet in read_monster_sheets(scenario)
     ]

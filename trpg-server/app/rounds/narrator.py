@@ -1112,6 +1112,8 @@ class MonsterTurnNote:
     finishing: bool = False
     # 방어 태세를 잡은 캐릭터를 쳤는가(#254). 그러면 공격이 불리했다
     guarded: bool = False
+    # 이 마리나 인물이 방어 태세를 잡아 치지 않았는가(#254). 그때는 attack 과 target 이 비어 있다
+    defending: bool = False
     # 공격에 장비가 든 것(#276). 무기도 방어 방식도 없었거나 이 칸이 생기기 전에 굳힌 것은 None 이다
     blow: BlowNote | None = None
     cost: list[ResourceNote] = field(default_factory=list)

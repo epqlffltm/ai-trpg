@@ -29,7 +29,7 @@ from app.engine.armor import Protection, Save
 from app.engine.check import Check, HinderedCheck, Side, resolve_opposed
 from app.engine.health import Change, ChangeKind
 from app.engine.injury import Hindrance
-from app.rounds import blows, defenses, drops, friendly_fire, resisting, wakes
+from app.rounds import blows, defenses, drops, friendly_fire, guards, resisting, wakes
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import Blow
 from app.rounds.cast import CastMember, find_cast_member
@@ -416,9 +416,19 @@ def strike_defense(judging: Judging, action: CheckAction, blow: Blow | None) -> 
     return defenses.defender_side(judging.ruleset, bearer.abilities, bearer.injuries, ability, blow)
 
 
-def ally_guarded(judging: Judging, action: CheckAction) -> bool:
-    """겨눈 동료가 이번 라운드에 방어 태세인가(#254). 그러면 그 타격이 불리하다."""
-    return action.target is not None and action.harm is not None and action.target in judging.defending
+def target_guarded(judging: Judging, action: CheckAction) -> bool:
+    """
+    겨눈 쪽이 이번 라운드에 방어 태세인가(#254). 그러면 그 타격이 불리하다. 피해를 겨눈 타격만 본다.
+
+    동료(target)는 방어하기를 선언한 사람들(judging.defending), 몬스터와 인물은 엔진이 정한 쪽
+    (judging.foes_guarding)이다.
+    """
+    if action.harm is None:
+        return False
+    if action.target is not None:
+        return action.target in judging.defending
+    foe = action.monster if action.monster is not None else action.npc
+    return foe is not None and foe in judging.foes_guarding
 
 
 def roll_strike(
@@ -427,21 +437,23 @@ def roll_strike(
     """
     판정하는 행동을 굴린다. 맞서는 굴림의 타격이면 받는 쪽도 굴리고(strike_defense), 아니면 고정 난이도다.
 
-    돌려주는 것은 행동한 사람의 판정과, outcome 에 더할 것(맞서는 굴림이면 받는 쪽의 굴림 defense)이다.
+    돌려주는 것은 행동한 사람의 판정과, outcome 에 더할 것(맞서는 굴림이면 받는 쪽의 굴림 defense, 방어 태세의 쪽을
+    쳤으면 guarded)이다.
     """
     ruleset = judging.ruleset
     sheet = member.sheet
     defense = strike_defense(judging, action, blow)
-    guarded = ally_guarded(judging, action)
+    guarded = target_guarded(judging, action)
     if defense is None:
         bonus, raise_by = (blow.bonus, blow.raise_by) if blow is not None else (0, 0)
         hindered = actions.attempt_hindered(
             ruleset, action, sheet.abilities, judging.dice, hindrance, bonus=bonus, raise_by=raise_by, guarded=guarded
         )
-        return hindered, {}
+        return hindered, guards.with_guard({}, guarded)
     side = defenses.strike_side(ruleset, sheet.abilities, sheet.injuries, action, blow, guarded)
     opposed = resolve_opposed(ruleset, side, defense, judging.dice)
-    return opposed.attack, {'defense': defenses.defense_document(defenses.struck_ability(ruleset), opposed.defense)}
+    defended = {'defense': defenses.defense_document(defenses.struck_ability(ruleset), opposed.defense)}
+    return opposed.attack, guards.with_guard(defended, guarded)
 
 
 def judge_check(judging: Judging, member: TableMember, action: CheckAction, nature: str | None = None) -> dict:

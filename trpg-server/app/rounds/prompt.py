@@ -248,7 +248,8 @@ from app.rounds.time_words import duration_text, time_text
 #   narration-88: 몬스터가 인물을 친 차례(#254). 차례의 줄에 맞은 인물과 그 몸 상태를 적는다
 #                 (해골 병사: 쓰러진 약사에게 할퀴기 (맞음) → 약사 피해 2 (죽음))
 #   narration-89: 방어 태세(#254). 캐릭터의 줄에 (방어 태세: …)를, 그 캐릭터를 친 차례의 줄에 [방어 태세: 불리]를 붙인다
-PROMPT_VERSION = 'narration-89'
+#   narration-90: 몬스터와 인물의 방어 태세(#254). 차례의 줄에 (수로 쥐 2: 방어 태세를 잡음 (치지 않음))을 적는다
+PROMPT_VERSION = 'narration-90'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3

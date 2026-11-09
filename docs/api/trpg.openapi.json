@@ -2568,6 +2568,17 @@
             "title": "Faces",
             "type": "array"
           },
+          "guarded": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guarded"
+          },
           "hindrance": {
             "anyOf": [
               {
@@ -3822,6 +3833,69 @@
           "defend"
         ],
         "title": "DefendOutcome",
+        "type": "object"
+      },
+      "Defends": {
+        "additionalProperties": false,
+        "description": "몬스터와 NPC 가 방어 태세를 잡는 때(#254, app/rounds/foe_guards.py). 둘 중 하나 이상을 적는다.\n\nbelow 는 HP 가 최대 HP 의 이 백분율 이하이면 방어한다는 것이다(30 이면 30% 이하). chance 는 라운드마다 이 백분율로\n방어한다는 것이다. 둘 다 적으면 HP 를 먼저 보고, 아니면 주사위를 굴린다. 방어하는 라운드에는 치지 않고,\n그를 노린 공격은 불리하다(캐릭터의 방어하기와 같다). 엔진이 정한다. 서술(AI)이 정하지 않는다.",
+        "properties": {
+          "below": {
+            "anyOf": [
+              {
+                "maximum": 99.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Below"
+          },
+          "chance": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chance"
+          }
+        },
+        "title": "Defends",
+        "type": "object"
+      },
+      "DefendsSnapshot": {
+        "description": "방어 태세를 잡는 때(#254). HP 의 문턱(최대 HP 의 백분율)과 라운드마다의 확률(백분율)이다. 하나는 있다.",
+        "properties": {
+          "below": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Below"
+          },
+          "chance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chance"
+          }
+        },
+        "title": "DefendsSnapshot",
         "type": "object"
       },
       "Defense": {
@@ -9635,6 +9709,16 @@
             "title": "Chases",
             "type": "boolean"
           },
+          "defends": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Defends"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "dull": {
             "default": false,
             "title": "Dull",
@@ -9764,6 +9848,16 @@
             "default": false,
             "title": "Chases",
             "type": "boolean"
+          },
+          "defends": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Defends"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "dull": {
             "default": false,
@@ -9920,6 +10014,16 @@
           "content": {
             "title": "Content",
             "type": "string"
+          },
+          "defends": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefendsSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "dull": {
             "default": false,
@@ -11215,6 +11319,16 @@
             "$ref": "#/components/schemas/NpcAttitude",
             "default": "neutral"
           },
+          "defends": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Defends"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "dull": {
             "default": false,
             "title": "Dull",
@@ -11311,6 +11425,16 @@
             "$ref": "#/components/schemas/NpcAttitude",
             "default": "neutral"
           },
+          "defends": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Defends"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "dull": {
             "default": false,
             "title": "Dull",
@@ -11403,6 +11527,16 @@
           "attitude": {
             "$ref": "#/components/schemas/NpcAttitude",
             "default": "neutral"
+          },
+          "defends": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefendsSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "dull": {
             "default": false,

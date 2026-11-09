@@ -3918,6 +3918,8 @@ export interface components {
              * @default []
              */
             faces: number[];
+            /** Guarded */
+            guarded?: boolean | null;
             hindrance?: components["schemas"]["HindranceOut"] | null;
             item_throw?: components["schemas"]["app__rounds__schemas__ItemThrowOut"] | null;
             item_use?: components["schemas"]["ItemUseOut"] | null;
@@ -4387,6 +4389,30 @@ export interface components {
          */
         DefendOutcome: {
             defend: components["schemas"]["DefendOut"];
+        };
+        /**
+         * Defends
+         * @description 몬스터와 NPC 가 방어 태세를 잡는 때(#254, app/rounds/foe_guards.py). 둘 중 하나 이상을 적는다.
+         *
+         *     below 는 HP 가 최대 HP 의 이 백분율 이하이면 방어한다는 것이다(30 이면 30% 이하). chance 는 라운드마다 이 백분율로
+         *     방어한다는 것이다. 둘 다 적으면 HP 를 먼저 보고, 아니면 주사위를 굴린다. 방어하는 라운드에는 치지 않고,
+         *     그를 노린 공격은 불리하다(캐릭터의 방어하기와 같다). 엔진이 정한다. 서술(AI)이 정하지 않는다.
+         */
+        Defends: {
+            /** Below */
+            below?: number | null;
+            /** Chance */
+            chance?: number | null;
+        };
+        /**
+         * DefendsSnapshot
+         * @description 방어 태세를 잡는 때(#254). HP 의 문턱(최대 HP 의 백분율)과 라운드마다의 확률(백분율)이다. 하나는 있다.
+         */
+        DefendsSnapshot: {
+            /** Below */
+            below?: number | null;
+            /** Chance */
+            chance?: number | null;
         };
         /**
          * Defense
@@ -6896,6 +6922,7 @@ export interface components {
              * @default false
              */
             chases: boolean;
+            defends?: components["schemas"]["Defends"] | null;
             /**
              * Dull
              * @default false
@@ -6965,6 +6992,7 @@ export interface components {
              * @default false
              */
             chases: boolean;
+            defends?: components["schemas"]["Defends"] | null;
             /**
              * Dull
              * @default false
@@ -7045,6 +7073,7 @@ export interface components {
             chases: boolean;
             /** Content */
             content: string;
+            defends?: components["schemas"]["DefendsSnapshot"] | null;
             /**
              * Dull
              * @default false
@@ -7670,6 +7699,7 @@ export interface components {
             attacks: components["schemas"]["MonsterAttack-Input"][];
             /** @default neutral */
             attitude: components["schemas"]["NpcAttitude"];
+            defends?: components["schemas"]["Defends"] | null;
             /**
              * Dull
              * @default false
@@ -7735,6 +7765,7 @@ export interface components {
             attacks: components["schemas"]["MonsterAttack-Output"][];
             /** @default neutral */
             attitude: components["schemas"]["NpcAttitude"];
+            defends?: components["schemas"]["Defends"] | null;
             /**
              * Dull
              * @default false
@@ -7785,6 +7816,7 @@ export interface components {
             attacks: components["schemas"]["AttackSnapshot"][];
             /** @default neutral */
             attitude: components["schemas"]["NpcAttitude"];
+            defends?: components["schemas"]["DefendsSnapshot"] | null;
             /**
              * Dull
              * @default false
