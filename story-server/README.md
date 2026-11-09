@@ -168,6 +168,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | GET | `/api/v1/story/conversations/{id}/summary` | 지금 가지의 [굴리는 요약](#기억-메모)(`{text, covered_up_to, created_at}`, 읽기만). 없으면 null | access 토큰 |
 | GET | `/api/v1/story/gallery` | 그 세계관에서 내가 연 일러스트들(`?world_id=`, 처음 연 차례). [계정의 기록](#계정의-기록) | access 토큰 |
 | GET | `/api/v1/story/achievements` | 그 세계관에서 내가 받은 [업적](#업적)들(`?world_id=`, 받은 차례. `{achievement_id, name, description, image_id, earned_at, conversation_id}`) | access 토큰 |
+| GET | `/api/v1/story/achievements/mine` | 내가 받은 [업적](#업적) 전부(`?limit=`(1~100, 기본 20)`&offset=`). 모든 세계관의 것을 받은 때가 늦은 것부터, `{items: [{world_id, world_name, achievement_id, name, description, image_id, earned_at, conversation_id}], total}`. 세계관의 이름은 내가 가져온 마지막 판의 것이고 없으면 null | access 토큰 |
 | GET | `/api/v1/story/achievements/rates` | 그 세계관의 [업적](#업적)마다 받은 사람의 수와 플레이한 사람의 수(`?world_id=`, `{players, items: [{achievement_id, earned_count}]}`) | 없음 |
 
 ### 세션
@@ -417,6 +418,7 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
 - **알리기.** 처음 받은 업적은 그 행동의 `turn` 메시지의 `achievements`(`[{id, name, description, image_id}]`, 판의 차례)에 실린다. 이미 받은 것이면 빈 목록이다.
 - **달성률.** 플레이한 사람은 그 세계관의 세션에서 말이나 행동을 한 번이라도 보낸 사람이다(`world_players`). 이 표가 생긴 뒤부터 센다.
   `GET /achievements/rates` 는 수만 준다(로그인하지 않아도 본다). 업적의 이름과 차례, 숨긴 업적을 가리는 것은 세계관의 소개(asset 서버)가 한다.
+  `GET /achievements/mine` 은 마이페이지의 "내 업적"이 읽는다. 모든 세계관의 내 기록을 받은 때가 늦은 것부터 주고, 세계관의 이름은 내가 가져온 그 세계관의 마지막 판에서 꺼낸다.
 - 탈퇴하면 그 사람의 받은 업적과 플레이한 세계관을 지운다(달성률에서 빠진다). 세션을 지우면 받은 세션만 비운다.
 
 ### 책갈피

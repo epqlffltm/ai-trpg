@@ -22,6 +22,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/achievements/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Achievements
+         * @description 내가 받은 업적 전부. 모든 세계관의 것이고 받은 때가 늦은 것부터다(?limit=&offset=).
+         */
+        get: operations["list_my_achievements_api_v1_story_achievements_mine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/achievements/rates": {
         parameters: {
             query?: never;
@@ -1484,6 +1504,45 @@ export interface components {
             place: string;
         };
         /**
+         * MyAchievementOut
+         * @description 내가 받은 업적 하나(GET /achievements/mine). 이름, 받는 법, 그림은 받은 때의 판의 것이다(숨긴 업적도 보인다).
+         *     world_name 은 내가 가져온 그 세계관의 마지막 판의 이름이다. 가져온 판이 없으면 null 이다.
+         */
+        MyAchievementOut: {
+            /** Achievement Id */
+            achievement_id: string;
+            /** Conversation Id */
+            conversation_id: string | null;
+            /** Description */
+            description: string;
+            /**
+             * Earned At
+             * Format: date-time
+             */
+            earned_at: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Name */
+            name: string;
+            /**
+             * World Id
+             * Format: uuid
+             */
+            world_id: string;
+            /** World Name */
+            world_name: string | null;
+        };
+        /**
+         * MyAchievementPage
+         * @description 내가 받은 업적의 한 쪽. 받은 때가 늦은 것부터다. total 은 모든 세계관에서 받은 수다.
+         */
+        MyAchievementPage: {
+            /** Items */
+            items: components["schemas"]["MyAchievementOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
          * NextPriceOut
          * @description 예약된 값의 바뀜. credits 가 null 이면 effective_at 부터 팔지 않는다.
          */
@@ -2154,6 +2213,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AchievementRecordList"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    list_my_achievements_api_v1_story_achievements_mine_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyAchievementPage"];
                 };
             };
             /** @description 입력이 틀렸다 */
