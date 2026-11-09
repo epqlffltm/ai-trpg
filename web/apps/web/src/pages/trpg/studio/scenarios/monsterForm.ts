@@ -13,6 +13,7 @@ import { wholeNumber } from '../rulebooks/rulebookForm';
 import { attackDrafts, attacksHints, toAttacks, type AttackDraft } from './attacksForm';
 import { defendsDraft, defendsHints, defendsLine, hasDefendsHints, toDefends, type DefendsDraft, type DefendsHints } from './defendsForm';
 import { COMBAT_NUMBER_MAX } from './itemRuleForm';
+import { hasMovesHints, movesDraft, movesHints, movesLine, toHunts, toRoams, type MovesDraft, type MovesHints } from './monsterMovesForm';
 import { isBlankSheet, sheetDraft, sheetHints, sheetLine, toSheet, type SheetDraft } from './sheetForm';
 import { carriedDrafts, carriedHints, toCarried, type StackDraft } from './stacksForm';
 
@@ -51,9 +52,8 @@ export type MonsterDraft = {
   nature: string | null;
   /** 방어 태세를 잡는 때(#254). 둘 다 비우면 방어하지 않는다 */
   defends: DefendsDraft;
-  /** 사냥하는 거리와 배회하는 것(#254). 고치는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
-  hunts: MonsterSheet['hunts'];
-  roams: MonsterSheet['roams'];
+  /** 사냥하는 거리와 배회하는 것(#254). 비우면 자리를 지킨다 */
+  moves: MovesDraft;
   /** 쓰러뜨리면 주는 경험치(#286 ②). 한 마리마다 한 번이다. 0 이면 없다 */
   xp: string;
 };
@@ -78,8 +78,7 @@ export function monsterDraft(monster: MonsterSheet | undefined, rules: Ruleset):
     resistances: monster?.resistances ?? [],
     nature: monster?.nature ?? null,
     defends: defendsDraft(monster?.defends),
-    hunts: monster?.hunts ?? null,
-    roams: monster?.roams ?? null,
+    moves: movesDraft(monster),
     xp: String(monster?.xp ?? 0),
   };
 }
@@ -102,6 +101,7 @@ export type MonsterHints = {
   /** 면역과 약함에 같은 성질을 적었으면 글이 있다 */
   natures: string | null;
   defends: DefendsHints;
+  moves: MovesHints;
   /** 경험치가 정수가 아니거나 범위 밖이면 글이 있다 */
   xp: string | null;
 };
@@ -138,12 +138,13 @@ export function monsterHints(draft: MonsterDraft, rules: Ruleset, itemRules: Ite
     ),
     natures: natureHint(draft),
     defends: defendsHints(draft.defends),
+    moves: movesHints(draft.moves),
     xp: wholeNumber(draft.xp, 0, MONSTER_MAX_XP) === null ? `0~${MONSTER_MAX_XP.toLocaleString('ko-KR')} 사이의 정수입니다.` : null,
   };
 }
 
 export function hasMonsterHints(hints: MonsterHints): boolean {
-  return hints.natures !== null || hints.xp !== null || hasDefendsHints(hints.defends) || [hints.sheet, hints.armor, hints.equipment, hints.inventory, hints.attacks].some((part) => Object.keys(part).length > 0);
+  return hints.natures !== null || hints.xp !== null || hasDefendsHints(hints.defends) || hasMovesHints(hints.moves) || [hints.sheet, hints.armor, hints.equipment, hints.inventory, hints.attacks].some((part) => Object.keys(part).length > 0);
 }
 
 /** 보낼 몬스터 시트. 힌트가 없을 때만 부른다. 빈 방어 칸은 보내지 않는다 */
@@ -167,8 +168,8 @@ export function toMonsterSheet(monsterId: string, draft: MonsterDraft, rules: Ru
     resistances: draft.resistances,
     nature: draft.nature,
     defends: toDefends(draft.defends),
-    hunts: draft.hunts,
-    roams: draft.roams,
+    hunts: toHunts(draft.moves),
+    roams: toRoams(draft.moves),
     xp: Number(draft.xp.trim()),
   };
 }
@@ -196,6 +197,7 @@ export function monsterLine(monster: MonsterSheet, rules: Ruleset | null): strin
   if (monster.immune.length > 0) parts.push(`면역 ${monster.immune.map((nature) => INJURY_NATURES[nature]).join(', ')}`);
   if (monster.vulnerable.length > 0) parts.push(`약함 ${monster.vulnerable.map((nature) => INJURY_NATURES[nature]).join(', ')}`);
   parts.push(defendsLine(monster.defends));
+  parts.push(...movesLine(monster));
   if (monster.xp > 0) parts.push(`경험치 ${monster.xp}`);
   return parts.filter(Boolean).join(' · ');
 }

@@ -10,6 +10,7 @@ import type { MonsterSheet, Ruleset, ScenarioDetail } from '../../../../api/type
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { AttacksEditor } from './AttacksEditor';
 import { DefendsFields } from './DefendsFields';
+import { MovesFields } from './MovesFields';
 import {
   hasMonsterHints,
   INJURY_NATURES,
@@ -185,6 +186,7 @@ function MonsterFields({ scenario, rules, items, monsterId, sheet, used, saving,
       </fieldset>
       <NatureFields draft={draft} error={hints.natures} onChange={update} />
       <DefendsFields draft={draft.defends} hints={hints.defends} onChange={(defends) => update({ defends })} />
+      <MovesFields draft={draft.moves} hints={hints.moves} onChange={(moves) => update({ moves })} />
       <TextField
         label="쓰러뜨리면 주는 경험치"
         inputMode="numeric"
