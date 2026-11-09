@@ -201,6 +201,18 @@ def chased(payload: dict, labels: Labels) -> list[Block]:
     return [Note(f'{text_of(payload.get("name"))}: {who(payload)}을(를) 쫓아옴 · {route}')]
 
 
+# 사냥하거나 배회해 들어온 몬스터(#254)의 까닭
+ROAM_WAYS = {'hunt': '냄새를 맡고 다가옴', 'roam': '어슬렁거리다 들어옴'}
+
+
+def roamed(payload: dict, labels: Labels) -> list[Block]:
+    """사냥하거나 배회해 캐릭터가 선 곳에 들어온 몬스터(#254). 어디로 왔는가. 온 곳은 알 때만 적는다."""
+    way = ROAM_WAYS.get(payload.get('way'), '들어옴')
+    origin = payload.get('from_place')
+    route = f'{place_name(origin)} → ' if origin else ''
+    return [Note(f'{text_of(payload.get("name"))}: {way} · {route}{place_name(payload.get("to_place"))}')]
+
+
 def body_changed(payload: dict, labels: Labels) -> list[Block]:
     """몬스터나 NPC 의 몸. 양과 바뀐 생사만이다. HP 의 숫자는 GM 만 안다."""
     kind = HP_KINDS.get(payload.get('kind'), '변화')
@@ -561,6 +573,7 @@ RENDERERS: dict[EventType, Renderer] = {
     EventType.CHARACTER_REVIVED: character_revived,
     EventType.MONSTER_ATTACKED: attacked,
     EventType.MONSTER_CHASED: chased,
+    EventType.MONSTER_ROAMED: roamed,
     EventType.NPC_ATTACKED: attacked,
     EventType.MONSTER_CHANGED: body_changed,
     EventType.NPC_CHANGED: body_changed,

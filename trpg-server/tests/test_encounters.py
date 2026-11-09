@@ -420,11 +420,13 @@ async def a_started_table(client: AsyncClient, me: dict[str, str], world: dict) 
 
 
 def a_monster(table_id: uuid.UUID, **fields) -> TableMonster:
+    place = uuid.uuid4()
     values = {
         'table_id': table_id,
         'monster_id': uuid.uuid4(),
         'number': 1,
-        'place_id': uuid.uuid4(),
+        'place_id': place,
+        'home_place_id': place,
         'abilities': RAT_SHEET['abilities'],
         'max_hp': 4,
         'hp': 4,

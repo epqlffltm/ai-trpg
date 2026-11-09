@@ -51,6 +51,9 @@ export type MonsterDraft = {
   nature: string | null;
   /** 방어 태세를 잡는 때(#254). 둘 다 비우면 방어하지 않는다 */
   defends: DefendsDraft;
+  /** 사냥하는 거리와 배회하는 것(#254). 고치는 칸이 아직 없어 받은 대로 지녔다가 보낸다 */
+  hunts: MonsterSheet['hunts'];
+  roams: MonsterSheet['roams'];
   /** 쓰러뜨리면 주는 경험치(#286 ②). 한 마리마다 한 번이다. 0 이면 없다 */
   xp: string;
 };
@@ -75,6 +78,8 @@ export function monsterDraft(monster: MonsterSheet | undefined, rules: Ruleset):
     resistances: monster?.resistances ?? [],
     nature: monster?.nature ?? null,
     defends: defendsDraft(monster?.defends),
+    hunts: monster?.hunts ?? null,
+    roams: monster?.roams ?? null,
     xp: String(monster?.xp ?? 0),
   };
 }
@@ -162,6 +167,8 @@ export function toMonsterSheet(monsterId: string, draft: MonsterDraft, rules: Ru
     resistances: draft.resistances,
     nature: draft.nature,
     defends: toDefends(draft.defends),
+    hunts: draft.hunts,
+    roams: draft.roams,
     xp: Number(draft.xp.trim()),
   };
 }

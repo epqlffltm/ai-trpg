@@ -101,6 +101,8 @@ class EventType(enum.StrEnum):
     # 엔진이 쫓아오는 몬스터 한 마리를 도망친 캐릭터를 따라 길 한 칸 옮겼다(#254, app/rounds/monster_chase.py).
     # 누구를 쫓아 어디에서 어디로 왔는지가 적힌다. 그 차례에는 치지 않았다. 원인은 없다(엔진의 차례다)
     MONSTER_CHASED = 'monster_chased'
+    # 싸우지 않던 몬스터가 사냥하거나 배회해 캐릭터가 선 곳에 들어왔다(#254, app/rounds/monster_roams.py)
+    MONSTER_ROAMED = 'monster_roamed'
     # 엔진이 싸우는 NPC 의 차례에 캐릭터 하나를 공격으로 쳤다(#487). 몬스터의 것과 같은 모양이다.
     # 맞혔으면 그 캐릭터의 HP 의 변화가 이 이벤트를 원인으로 뒤따른다. 원인은 없다(엔진의 차례다)
     NPC_ATTACKED = 'npc_attacked'

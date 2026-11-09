@@ -78,6 +78,7 @@ from app.assets.scenarios.snapshot import (
     DefendsSnapshot,
     MonsterSnapshot,
     NaturalArmorSnapshot,
+    RoamsSnapshot,
     build_snapshot,
     snapshot_monster,
     wear_fault,
@@ -641,6 +642,8 @@ def snapshot_monsters(scenario: Scenario, parts: Parts) -> list[MonsterSnapshot]
             monster_sheet.xp,
             monster_sheet.chases,
             DefendsSnapshot(**monster_sheet.defends.model_dump()) if monster_sheet.defends else None,
+            monster_sheet.hunts,
+            RoamsSnapshot(**monster_sheet.roams.model_dump()) if monster_sheet.roams else None,
         )
         for monster_sheet in read_monster_sheets(scenario)
     ]

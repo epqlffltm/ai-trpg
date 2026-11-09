@@ -452,6 +452,24 @@ class Defends(BaseModel):
         return self
 
 
+# 몬스터가 사냥하거나 배회하는 거리의 한도(#254). 길의 칸 수다
+ROAM_MAX_REACH = 5
+
+
+class Roams(BaseModel):
+    """
+    싸우지 않는 몬스터가 배회하는 것(#254, app/rounds/monster_roams.py). 둘 다 적는다.
+
+    chance 는 라운드마다 움직일 백분율이다. reach 는 처음 놓인 자리에서 벗어나는 길의 칸 수의 한도다.
+    움직이면 이웃한 장소 하나로 간다. 엔진이 정한다. 서술(AI)이 정하지 않는다.
+    """
+
+    model_config = ConfigDict(extra='forbid')
+
+    chance: int = Field(ge=1, le=100)
+    reach: int = Field(ge=1, le=ROAM_MAX_REACH)
+
+
 def reject_duplicate_allies(allied_monsters: list[uuid.UUID]) -> list[uuid.UUID]:
     """한편인 몬스터를 두 번 적으면 거부한다. 같은 몬스터는 한 번이면 된다."""
     if len(set(allied_monsters)) != len(allied_monsters):
@@ -618,6 +636,11 @@ class MonsterSheet(BaseModel):
     chases: bool = False
     # 방어 태세를 잡는 때(#254). HP 의 문턱과 라운드마다의 확률이다. 비우면 방어하지 않는다
     defends: Defends | None = None
+    # 사냥하는 거리(#254). 싸우지 않는 라운드에 이 칸 수 안에 캐릭터가 있으면 그쪽으로 길 한 칸 다가간다.
+    # 비우면 사냥하지 않는다(app/rounds/monster_roams.py)
+    hunts: int | None = Field(default=None, ge=1, le=ROAM_MAX_REACH)
+    # 배회하는 것(#254). 싸우지 않는 라운드에 확률로 이웃한 장소로 옮긴다. 비우면 배회하지 않는다
+    roams: Roams | None = None
 
     @model_validator(mode='after')
     def one_line_per_item(self) -> 'MonsterSheet':

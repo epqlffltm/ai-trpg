@@ -474,7 +474,7 @@ def test_the_narration_lines_of_traps():
     assert to_trap({'name': '올가미', 'avoid': {'ability': 'zzz'}, 'avoided': True}, None) == TrapNote(
         name='올가미', check='zzz', avoided=True
     )
-    assert prompt.PROMPT_VERSION == 'narration-90'
+    assert prompt.PROMPT_VERSION == 'narration-91'
 
 
 async def test_the_narrator_hears_the_trap(

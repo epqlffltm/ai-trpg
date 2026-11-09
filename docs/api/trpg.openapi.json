@@ -5141,6 +5141,7 @@
           "monster_changed",
           "monster_attacked",
           "monster_chased",
+          "monster_roamed",
           "npc_attacked",
           "injury_gained",
           "injury_ended",
@@ -9733,6 +9734,19 @@
             "title": "Equipment",
             "type": "array"
           },
+          "hunts": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hunts"
+          },
           "immune": {
             "default": [],
             "items": {
@@ -9788,6 +9802,16 @@
             "maxItems": 50,
             "title": "Resistances",
             "type": "array"
+          },
+          "roams": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Roams"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sheet": {
             "$ref": "#/components/schemas/Sheet"
@@ -9873,6 +9897,19 @@
             "title": "Equipment",
             "type": "array"
           },
+          "hunts": {
+            "anyOf": [
+              {
+                "maximum": 5.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hunts"
+          },
           "immune": {
             "default": [],
             "items": {
@@ -9927,6 +9964,16 @@
             "maxItems": 50,
             "title": "Resistances",
             "type": "array"
+          },
+          "roams": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Roams"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sheet": {
             "$ref": "#/components/schemas/Sheet"
@@ -10038,6 +10085,17 @@
             "title": "Equipment",
             "type": "array"
           },
+          "hunts": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hunts"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -10093,6 +10151,16 @@
             "maxItems": 50,
             "title": "Resistances",
             "type": "array"
+          },
+          "roams": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RoamsSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sheet": {
             "$ref": "#/components/schemas/Sheet"
@@ -15032,6 +15100,49 @@
           "target"
         ],
         "title": "Revive",
+        "type": "object"
+      },
+      "Roams": {
+        "additionalProperties": false,
+        "description": "싸우지 않는 몬스터가 배회하는 것(#254, app/rounds/monster_roams.py). 둘 다 적는다.\n\nchance 는 라운드마다 움직일 백분율이다. reach 는 처음 놓인 자리에서 벗어나는 길의 칸 수의 한도다.\n움직이면 이웃한 장소 하나로 간다. 엔진이 정한다. 서술(AI)이 정하지 않는다.",
+        "properties": {
+          "chance": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Chance",
+            "type": "integer"
+          },
+          "reach": {
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Reach",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chance",
+          "reach"
+        ],
+        "title": "Roams",
+        "type": "object"
+      },
+      "RoamsSnapshot": {
+        "description": "배회하는 것(#254). 라운드마다의 확률(백분율)과 처음 자리에서 벗어나는 길의 칸 수의 한도다.",
+        "properties": {
+          "chance": {
+            "title": "Chance",
+            "type": "integer"
+          },
+          "reach": {
+            "title": "Reach",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "chance",
+          "reach"
+        ],
+        "title": "RoamsSnapshot",
         "type": "object"
       },
       "RobbedWake": {
