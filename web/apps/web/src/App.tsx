@@ -45,6 +45,7 @@ import {
   GuardianRequestPage,
   GuardianRevokePage,
   IdentityPage,
+  InquiriesPage,
   LobbyPage,
   LorebookEditPage,
   LorebookNewPage,
@@ -340,6 +341,7 @@ export function App() {
         >
           <Route path="reports" element={<ReportsPage />} />
           <Route path="banners" element={<BannersPage />} />
+          <Route path="inquiries" element={<InquiriesPage />} />
           <Route path="reports/messages/:reportId" element={<MessageReportPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
