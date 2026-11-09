@@ -38,6 +38,7 @@ describe('createForm', () => {
       remove_short_payers: true,
       whisper_notice: false,
       references_enabled: false,
+      turn_mode: 'together',
     });
   });
 

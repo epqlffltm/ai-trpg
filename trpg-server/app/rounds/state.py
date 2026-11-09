@@ -19,7 +19,7 @@ from app.engine import health
 from app.engine.ruleset import Ruleset
 from app.rounds.errors import Conflict, RoundConflictError
 from app.rounds.models import Declaration, Round, RoundStatus
-from app.tables.models import GameTable, TableMember, TableStatus
+from app.tables.models import GameTable, TableMember, TableStatus, TurnMode
 
 
 def require_playing(table: GameTable) -> None:
@@ -64,14 +64,21 @@ def waiting_for(table: GameTable, round_: Round) -> list[uuid.UUID]:
 
     쓰러진 사람은 기다리지 않는다. 한 사람이 쓰러졌다고 테이블이 멈추지 않게 한다.
     이 라운드에 새 캐릭터를 들인 사람도 기다리지 않는다. 그 캐릭터는 다음 라운드부터 선언을 낸다.
+    차례대로 진행하는 테이블(#287)이면 차례의 주인만 기다린다. 주인이 없는 차례면 아무도 기다리지 않는다.
     """
     return [
         member.user_id
         for member in table.members
-        if find_declaration(round_, member.user_id) is None
+        if is_awaited(table, round_, member)
+        and find_declaration(round_, member.user_id) is None
         and not is_down(member)
         and find_arrival(round_, member.user_id) is None
     ]
+
+
+def is_awaited(table: GameTable, round_: Round, member: TableMember) -> bool:
+    """이 라운드에 이 사람의 선언을 받는가. 한꺼번에 진행하면 모두, 차례대로면 차례의 주인만이다(#287)."""
+    return table.turn_mode != TurnMode.TURNS or member.user_id == round_.actor_id
 
 
 def is_ready(table: GameTable, round_: Round) -> bool:

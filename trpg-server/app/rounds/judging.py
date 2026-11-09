@@ -226,7 +226,7 @@ def build_judging(
         dice=dice,
         cast=scene.cast,
         round_number=round_.number,
-        moment=round_injuries.moment_of(table, round_.number),
+        moment=round_injuries.moment_of(table, round_.cycle),
         npcs=scene.npcs,
         people=person_entries(snapshot),
         items=items.catalog(snapshot),
@@ -290,7 +290,7 @@ def take_turns(judging: Judging, turns: list[Turn], declarations: dict[uuid.UUID
     return [take_turn(judging, turn, declarations) for turn in turns]
 
 
-def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> set[uuid.UUID]:
+def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene, with_foes: bool = True) -> set[uuid.UUID]:
     """
     닫히는 라운드의 행동과 몬스터의 공격을 판정하고, 결과에 따라 HP 를 바꾸고, 결과를 적는다.
 
@@ -317,11 +317,15 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> se
     시트에 확률을 적은 쪽마다 주사위를 굴린다. 차례의 주사위보다 먼저다.
 
     이번 라운드에 피해를 입은 앉은 사람들(user_id)을 돌려준다. 쉬는 사람의 휴식이 깨졌는지 이것으로 본다.
+
+    with_foes 가 거짓이면 몬스터와 싸우는 인물은 차례를 받지 않는다. 차례대로 진행하는 테이블(#287)에서
+    바퀴의 마지막이 아닌 차례다(app/rounds/turn_order.py). 그때는 만난 라운드도 적지 않는다.
     """
-    initiative.mark_engaged(scene.monsters, round_.number)
+    if with_foes:
+        initiative.mark_engaged(scene.monsters, round_.number)
     rolling = rolling_members(table, round_)
-    acting = [monster for monster in scene.monsters if can_act(monster)]
-    fighting = [person for person in scene.cast if npc_attacks.can_act(person)]
+    acting = [monster for monster in scene.monsters if can_act(monster)] if with_foes else []
+    fighting = [person for person in scene.cast if npc_attacks.can_act(person)] if with_foes else []
     if not rolling and not acting and not fighting:
         return set()
 

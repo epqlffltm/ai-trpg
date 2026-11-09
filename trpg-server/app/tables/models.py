@@ -112,6 +112,19 @@ class FriendlyFire(enum.StrEnum):
     FULL = 'full'
 
 
+class TurnMode(enum.StrEnum):
+    """
+    라운드를 진행하는 방식(#287). 방장이 만들 때 고르고, 모집 중에만 바꾼다.
+
+    한꺼번에(together)는 모두가 선언하면 라운드를 한 번에 닫는다. 기본이다.
+    차례대로(turns)는 라운드 하나가 한 사람의 차례다. 차례의 주인만 선언하고, 내면 바로 닫는다.
+    모두의 차례 한 바퀴가 게임 안의 한 라운드다(app/rounds/turn_order.py).
+    """
+
+    TOGETHER = 'together'
+    TURNS = 'turns'
+
+
 class TableStatus(enum.StrEnum):
     """테이블의 상태. 한 방향으로만 나아간다."""
 
@@ -205,6 +218,10 @@ class GameTable(Base):
         CheckConstraint(f'input_step BETWEEN 0 AND {MAX_STEP}', name='input_step_range'),
         CheckConstraint(f'output_step BETWEEN 0 AND {MAX_STEP}', name='output_step_range'),
         CheckConstraint(one_of('friendly_fire', FriendlyFire), name='friendly_fire_allowed'),
+        CheckConstraint(one_of('turn_mode', TurnMode), name='turn_mode_allowed'),
+        CheckConstraint('turn_cycle >= 0', name='turn_cycle_not_negative'),
+        CheckConstraint("jsonb_typeof(turn_queue) = 'array'", name='turn_queue_is_array'),
+        CheckConstraint("jsonb_typeof(turn_waits) = 'array'", name='turn_waits_is_array'),
     )
 
     # API 주소에 드러나는 값이다. 순서대로 늘어나는 정수면 테이블이 몇 개인지 추측할 수 있다
@@ -322,6 +339,18 @@ class GameTable(Base):
     # 앉은 사람끼리 해칠 수 있는 정도(#803). 방장이 진행 중에도 바꾼다. 끔이 기본이다.
     # 앉은 사람마다 받아들이는 정도(TableMember.friendly_fire)와 견주어 낮은 쪽이 든다
     friendly_fire: Mapped[str] = mapped_column(String(20), default=FriendlyFire.OFF, server_default=text("'off'"))
+
+    # 라운드를 진행하는 방식(#287). 한꺼번에가 기본이다. 만들 때 고르고 모집 중에만 바꾼다
+    turn_mode: Mapped[str] = mapped_column(String(20), default=TurnMode.TOGETHER, server_default=text("'together'"))
+    # 차례대로 진행하는 테이블의 지금 바퀴(#287). 시작할 때 1 이 되고 바퀴가 끝날 때마다 하나씩 오른다.
+    # 한꺼번에 진행하는 테이블과 시작 전의 테이블은 0 이다
+    turn_cycle: Mapped[int] = mapped_column(Integer, default=0, server_default=text('0'))
+    # 이번 바퀴에 아직 차례가 오지 않은 사람들(user_id 의 글). 차례의 순서다. 지금 차례의 주인은 빠져 있다.
+    # 바퀴가 끝날 때 다음 바퀴의 순서를 굴려 채운다(app/rounds/turn_order.py)
+    turn_queue: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    # 이번 바퀴에 지난 차례마다 기다리기(app/rounds/waits.py)로 건너뛰려 한 분. 기다리지 않았거나 깨졌으면 null 이다.
+    # 바퀴가 끝날 때 모두가 기다렸으면 그중 가장 짧은 것으로 시간을 건너뛰고 비운다
+    turn_waits: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
 
     # 이 테이블에 적힌 마지막 이벤트의 번호(app/events/models.py). 아직 없으면 0 이다.
     # 이벤트를 적을 때마다 하나씩 올린다. 테이블을 잠근 채로 올리므로 번호가 겹치지 않는다.

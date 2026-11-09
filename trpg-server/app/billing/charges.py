@@ -22,7 +22,7 @@ from app.billing.models import ChargeStatus, NarrationCharge
 from app.billing.prices import PRICE_CODE_PREFIX, narration_code
 from app.catalog.steps import steps_of
 from app.rounds.models import Round
-from app.tables.models import GameTable
+from app.tables.models import GameTable, TurnMode
 
 # 결제 서버의 답을 받지 못했을 때 다시 부르기까지 기다리는 시간(초). 부를 때마다 두 배가 되고, 상한에서 멈춘다
 RETRY_BASE_SECONDS = 5.0
@@ -42,12 +42,16 @@ DEPARTED_ALWAYS = (ChargeStatus.PENDING, ChargeStatus.SHORT)
 DEPARTED_WHILE_OPEN = (ChargeStatus.HELD,)
 
 
-def payers_of(table: GameTable) -> list[uuid.UUID]:
+def payers_of(table: GameTable, round_: Round | None = None) -> list[uuid.UUID]:
     """
     이 테이블의 라운드 서술 값을 내는 사람들. 라운드를 열 때 앉아 있는 사람 모두다(쓰러진 사람도). 앉은 차례다.
 
     각자 그 모델의 값을 낸다. 나눠 내지 않는다(#180). 사람마다 이름표가 달라 결제 서버는 홀드를 따로 받는다.
+    차례대로 진행하는 테이블(#287)의 라운드면 차례의 주인만 낸다(round_.actor_id).
+    주인이 없는 차례면 아무도 내지 않는다.
     """
+    if round_ is not None and table.turn_mode == TurnMode.TURNS:
+        return [round_.actor_id] if round_.actor_id is not None else []
     return [member.user_id for member in table.members]
 
 
@@ -149,7 +153,7 @@ def charge_round(session: AsyncSession, table: GameTable, round_: Round, now: da
             status=ChargeStatus.PENDING,
             next_attempt_at=now,
         )
-        for payer in payers_of(table)
+        for payer in payers_of(table, round_)
     ]
     repository.add_charges(session, charges)
 

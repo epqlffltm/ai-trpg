@@ -29,6 +29,7 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.CREDIT_WAIT_CHANGED: ('credit_wait_seconds', 'remove_short_payers'),
     EventType.WHISPER_NOTICE_CHANGED: ('whisper_notice',),
     EventType.REFERENCES_CHANGED: ('references_enabled',),
+    EventType.TURN_MODE_CHANGED: ('turn_mode',),
     EventType.FRIENDLY_FIRE_CHANGED: ('friendly_fire',),
     EventType.FRIENDLY_FIRE_CONSENT_CHANGED: ('user_id', 'friendly_fire'),
     EventType.LEDGER_DRAFTS_CHANGED: ('ledger_drafts',),
@@ -306,6 +307,9 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     # 게임 안의 시각은 공개다. 모두 같은 때에 있다
     EventType.ROUND_OPENED: (
         'number',
+        # 차례대로 진행하는 테이블(#287)의 바퀴와 차례의 주인. 누구의 차례인지는 모두에게 보인다
+        'cycle',
+        'actor_id',
         'deadline_at',
         'narration_model',
         'input_step',

@@ -323,6 +323,8 @@ async def test_starting_writes_the_roster_the_scene_and_the_round(
         'price',
         'clock',
         'passed_minutes',
+        'cycle',
+        'actor_id',
     }
     # 시작 → 서술 → 열림. 원인으로 이어지고 한 묶음이다
     assert narration['caused_by_sequence'] == started['sequence']

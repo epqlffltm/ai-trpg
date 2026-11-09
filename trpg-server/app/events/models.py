@@ -64,6 +64,8 @@ class EventType(enum.StrEnum):
     WHISPER_NOTICE_CHANGED = 'whisper_notice_changed'
     # 방장이 참고 자료를 서술에 넣을지(references_enabled)를 바꿨다. 모집 중에만 바뀐다(#482)
     REFERENCES_CHANGED = 'references_changed'
+    # 방장이 라운드를 진행하는 방식(turn_mode)을 바꿨다(#287). 모집 중에만 바뀐다
+    TURN_MODE_CHANGED = 'turn_mode_changed'
     # 방장이 앉은 사람끼리 해칠 수 있는 정도(friendly_fire)를 바꿨다(#803). 다음에 받는 선언과 닫히는 라운드부터 든다
     FRIENDLY_FIRE_CHANGED = 'friendly_fire_changed'
     # 앉은 사람이 자기를 겨누는 것을 받아들이는 정도(friendly_fire)를 바꿨다(#803). 행한 사람이 그 사람이다

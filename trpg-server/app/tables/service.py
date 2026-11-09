@@ -42,6 +42,7 @@ from app.calendar import state as calendar
 from app.campaigns import ending as campaign_ending
 from app.campaigns import seating as campaign_seating
 from app.catalog.steps import NarrationSteps, steps_of
+from app.engine.dice import Dice, RandomDice
 from app.events import recorder
 from app.events.models import EventType
 from app.limits.setup import Limiting
@@ -49,7 +50,7 @@ from app.listings import service as listings
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal
 from app.references.policy import references_allowed
-from app.rounds import opener
+from app.rounds import opener, turn_order
 from app.rounds.round_price import price_of
 from app.tables import (
     chapters,
@@ -395,7 +396,11 @@ async def transfer_host(
 
 
 async def start_table(
-    session: AsyncSession, host_id: uuid.UUID, table_id: uuid.UUID, prices: PriceList = FREE_PRICES
+    session: AsyncSession,
+    host_id: uuid.UUID,
+    table_id: uuid.UUID,
+    prices: PriceList = FREE_PRICES,
+    dice: Dice | None = None,
 ) -> GameTable:
     """
     방장이 테이블을 시작한다. 그 뒤로는 새로 들어올 수 없고 캐릭터를 바꿀 수 없다.
@@ -403,6 +408,7 @@ async def start_table(
     조우마다 몬스터의 상태를 만들고, 첫 라운드를 연다.
     맵이 있는 판이면 캐릭터 모두를 시작 장소에 세우고, 자물쇠가 있는 길마다 그 상태를 만든다(#281).
     장면은 테이블을 만들 때 고른 스타팅이다.
+    차례대로 진행하는 테이블(#287)이면 첫 바퀴의 차례를 굴린다(dice, 없으면 서버의 주사위).
 
     방장이 아니면 NotHostError, 모집 중이 아니거나 캐릭터를 만들지 않은 사람이 있거나
     판의 작가 글이 서술의 입력 예산을 넘으면 TableConflictError.
@@ -438,6 +444,8 @@ async def start_table(
     started = recorder.record(session, table, EventType.TABLE_STARTED, actor_id=host_id, payload=payload)
     for left in campaign_seating.left_behind(table, snapshot, carried):
         recorder.record(session, table, EventType.CARRIED_ITEMS_LEFT, payload=left, cause=started)
+    if turn_order.is_turns(table):
+        turn_order.begin_cycle(table, snapshot.rulebook.rules, dice or RandomDice())
     opening = snapshot.openings[table.opening_index]
     price = await price_of(session, prices, table.narration_model, datetime.now(UTC), steps_of(table))
     opener.open_round(session, table, number=1, scene=opening, cause=started, price=price)

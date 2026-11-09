@@ -48,7 +48,14 @@ STATE_TABLES: tuple[str, ...] = (
 )
 
 # 테이블의 행에서 찍는 칸. 닫기가 장을 넘긴다(app/rounds/chapters.py). 서술을 받아들일 때 즉흥 조우를 센다(#254)
-STATE_COLUMNS: tuple[str, ...] = ('chapter_id', 'chapter_round', 'improvised_encounters')
+STATE_COLUMNS: tuple[str, ...] = (
+    'chapter_id',
+    'chapter_round',
+    'improvised_encounters',
+    'turn_cycle',
+    'turn_queue',
+    'turn_waits',
+)
 
 # 테이블에 딸렸지만 찍지 않는 표와 그 까닭
 EXCLUDED: dict[str, str] = {

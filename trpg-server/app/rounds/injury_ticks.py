@@ -136,7 +136,7 @@ def tick_head(row: TableInjury, judging: Judging) -> dict:
 
 def tick_member(judging: Judging, member: TableMember, ticks: Ticks) -> None:
     """앉은 사람 하나의 상태들이 깎는다. 쓰러지면 멈춘다."""
-    for row, damage in ticking_rows(judging.ruleset, member.sheet.injuries, judging.round_number):
+    for row, damage in ticking_rows(judging.ruleset, member.sheet.injuries, judging.moment.round_number):
         if member.sheet.hp <= 0:
             return
         effect = change_sheet(judging, member, ChangeKind.DAMAGE, damage.magnitude, nature=damage.nature)
@@ -147,7 +147,7 @@ def tick_member(judging: Judging, member: TableMember, ticks: Ticks) -> None:
 
 def tick_npc(judging: Judging, person: CastMember, ticks: Ticks) -> None:
     """장면의 인물 하나의 상태들이 깎는다. 쓰러지거나 죽으면 멈춘다. 처음 쓰러지면 그 인물이 선 곳에 드롭을 준다."""
-    for row, damage in ticking_rows(judging.ruleset, person.npc.injuries, judging.round_number):
+    for row, damage in ticking_rows(judging.ruleset, person.npc.injuries, judging.moment.round_number):
         if npcs.is_dead(person.npc) or person.npc.hp <= 0:
             return
         action = harm_action(judging, damage, npc=person.entry_id)
@@ -159,7 +159,7 @@ def tick_npc(judging: Judging, person: CastMember, ticks: Ticks) -> None:
 
 def tick_monster(judging: Judging, monster: SceneMonster, ticks: Ticks) -> None:
     """장면의 몬스터 한 마리의 상태들이 깎는다. 쓰러지거나 부서지면 멈춘다. 처음 쓰러지면 드롭을 굴린다."""
-    for row, damage in ticking_rows(judging.ruleset, monster.state.injuries, judging.round_number):
+    for row, damage in ticking_rows(judging.ruleset, monster.state.injuries, judging.moment.round_number):
         if monsters.is_dead(monster.state) or monster.state.hp <= 0:
             return
         action = harm_action(judging, damage, monster=monster.state.id)
@@ -176,7 +176,7 @@ def settle(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> Ticks:
     깎을지도 모르는 줄이 없으면 판을 읽지 않고 빈 것을 돌려준다.
     """
     ticks = Ticks()
-    if not any_ticking(table, scene, round_.number):
+    if not any_ticking(table, scene, round_.cycle):
         return ticks
     judging = build_judging(table, round_, dice, scene)
     for member in standing_members(table):

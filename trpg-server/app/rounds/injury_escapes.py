@@ -106,12 +106,12 @@ def settle(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> list[di
     한 줄은 누구(holder), 무슨 부상(injury, injury_name), 판정(check)이다. 판정의 success 가 벗어났는가다.
     굴릴지도 모르는 줄이 없으면 판을 읽지 않고 빈 목록을 돌려준다.
     """
-    if not any_escapable(table, scene, round_.number):
+    if not any_escapable(table, scene, round_.cycle):
         return []
     ruleset = rules_of(table)
     rolled = []
     for holder, abilities, rows in holders(table, scene):
-        for row, escape in escapable_rows(ruleset, rows, round_.number):
+        for row, escape in escapable_rows(ruleset, rows, round_.cycle):
             check = roll_escape(ruleset, dice, abilities, rows, escape)
             if check['success']:
                 injuries.end(row)
