@@ -10,6 +10,7 @@
   - 읽기: 운영자가 하나를 열면 처음 연 시각을 적는다(메일함의 읽음). 이미 적혔으면 그대로 둔다.
   - 지우기: 하나, 고른 것(SELECTED_MAX 개까지), 상자 하나를 통째로(답 기다림, 답함, 모두).
     보관 기간(1년)이 지난 것은 정리 명령이 지운다. 이미 맡긴 답 메일은 지워도 그대로 간다.
+  - 누가: 처음 연 운영자와 답한 운영자는 문의에, 지운 일은 처리 기록(InquiryAction)에 남긴다.
 """
 
 import uuid
@@ -23,7 +24,7 @@ from django.utils import timezone
 from accounts.models import MailKind, MailReceipt, User
 from accounts.outbox import enqueue_mail
 from support.mail import REPLY_DEADLINE, REPLY_RECEIPT_PURPOSE, build_reply_message
-from support.models import RETENTION, Inquiry, InquiryStatus
+from support.models import RETENTION, Inquiry, InquiryAction, InquiryActionKind, InquiryStatus
 
 # 목록 한 쪽의 줄 수
 PAGE_SIZE = 20
@@ -33,6 +34,9 @@ SELECTED_MAX = 100
 
 # 상자를 통째로 지울 때 "모두"를 뜻하는 이름. 나머지는 상태의 이름이다
 ALL_FOLDER = 'all'
+
+# 운영자가 보는 문의와 함께 읽는 것: 보낸 계정, 처음 연 운영자, 답한 운영자, 답 메일의 기록
+OPERATOR_RELATED = ('user', 'read_by', 'answered_by', 'reply_receipt')
 
 
 class InquiryNotFoundError(Exception):
@@ -51,6 +55,14 @@ class FolderCounts:
     open: int
     answered: int
     unread: int
+
+
+@dataclass(frozen=True)
+class ActionPage:
+    """처리 기록 한 쪽. next_before 가 None 이면 마지막 쪽이다."""
+
+    items: list[InquiryAction]
+    next_before: datetime | None
 
 
 @dataclass(frozen=True)
@@ -76,7 +88,7 @@ def my_inquiries(user: User, *, before: datetime | None) -> Page:
 
 def operator_inquiries(*, status: str | None, before: datetime | None) -> Page:
     """운영자가 보는 문의. 상태를 고르면 그 상태만. 최근 것부터. 보낸 계정을 함께 읽는다."""
-    found = Inquiry.objects.select_related('user', 'reply_receipt')
+    found = Inquiry.objects.select_related(*OPERATOR_RELATED)
     if status:
         found = found.filter(status=status)
     return _page(found, before)
@@ -93,39 +105,77 @@ def folder_counts() -> FolderCounts:
     return FolderCounts(**counts)
 
 
-def read_inquiry(inquiry_id: uuid.UUID) -> Inquiry:
-    """운영자가 문의 하나를 연다. 처음이면 연 시각을 적는다. 없으면 InquiryNotFoundError."""
-    Inquiry.objects.filter(pk=inquiry_id, read_at__isnull=True).update(read_at=timezone.now())
-    inquiry = Inquiry.objects.select_related('user', 'reply_receipt').filter(pk=inquiry_id).first()
+def read_inquiry(inquiry_id: uuid.UUID, operator: User) -> Inquiry:
+    """운영자가 문의 하나를 연다. 처음이면 연 시각과 연 운영자를 적는다. 없으면 InquiryNotFoundError."""
+    Inquiry.objects.filter(pk=inquiry_id, read_at__isnull=True).update(read_at=timezone.now(), read_by=operator)
+    inquiry = Inquiry.objects.select_related(*OPERATOR_RELATED).filter(pk=inquiry_id).first()
     if inquiry is None:
         raise InquiryNotFoundError
     return inquiry
 
 
-def delete_inquiry(inquiry_id: uuid.UUID) -> None:
-    """문의 하나를 지운다. 없으면 InquiryNotFoundError."""
-    deleted_count, _ = Inquiry.objects.filter(pk=inquiry_id).delete()
-    if deleted_count == 0:
+def delete_inquiry(inquiry_id: uuid.UUID, operator: User) -> None:
+    """문의 하나를 지우고 처리 기록에 남긴다. 없으면 InquiryNotFoundError."""
+    with transaction.atomic():
+        deleted = _delete_and_record(
+            Inquiry.objects.filter(pk=inquiry_id), kind=InquiryActionKind.DELETE_ONE, operator=operator
+        )
+    if deleted == 0:
         raise InquiryNotFoundError
 
 
-def delete_selected_inquiries(inquiry_ids: list[uuid.UUID]) -> int:
+def delete_selected_inquiries(inquiry_ids: list[uuid.UUID], operator: User) -> int:
     """고른 문의들을 지우고 지운 수를 돌려준다. 이미 없는 것은 건너뛴다(다른 운영자가 먼저 지웠을 수 있다)."""
-    deleted_count, _ = Inquiry.objects.filter(pk__in=inquiry_ids).delete()
-    return deleted_count
+    with transaction.atomic():
+        return _delete_and_record(
+            Inquiry.objects.filter(pk__in=inquiry_ids), kind=InquiryActionKind.DELETE_SELECTED, operator=operator
+        )
 
 
-def empty_folder(folder: str) -> int:
+def empty_folder(folder: str, operator: User) -> int:
     """상자 하나(상태, 또는 모두)를 통째로 비우고 지운 수를 돌려준다."""
     found = Inquiry.objects.all() if folder == ALL_FOLDER else Inquiry.objects.filter(status=folder)
-    deleted_count, _ = found.delete()
-    return deleted_count
+    with transaction.atomic():
+        return _delete_and_record(found, kind=InquiryActionKind.EMPTY_FOLDER, operator=operator, folder=folder)
 
 
 def delete_old_inquiries(now: datetime | None = None) -> int:
-    """보관 기간이 지난 문의를 지우고 지운 수를 돌려준다. 정리 명령이 하루 한 번 부른다."""
-    deleted_count, _ = Inquiry.objects.filter(created_at__lt=(now or timezone.now()) - RETENTION).delete()
-    return deleted_count
+    """
+    보관 기간이 지난 문의를 지우고 지운 수를 돌려준다. 정리 명령이 하루 한 번 부른다.
+    처리 기록도 같은 기간이 지난 것을 지운다.
+    """
+    cutoff = (now or timezone.now()) - RETENTION
+    with transaction.atomic():
+        deleted = _delete_and_record(
+            Inquiry.objects.filter(created_at__lt=cutoff), kind=InquiryActionKind.RETENTION, operator=None
+        )
+        InquiryAction.objects.filter(created_at__lt=cutoff).delete()
+    return deleted
+
+
+def inquiry_actions(*, before: datetime | None) -> ActionPage:
+    """처리 기록. 최근 것부터 한 쪽씩."""
+    found = InquiryAction.objects.select_related('operator')
+    if before is not None:
+        found = found.filter(created_at__lt=before)
+    rows = list(found.order_by('-created_at')[: PAGE_SIZE + 1])
+    items = rows[:PAGE_SIZE]
+    return ActionPage(items=items, next_before=items[-1].created_at if len(rows) > PAGE_SIZE else None)
+
+
+def _delete_and_record(found, *, kind: str, operator: User | None, folder: str = '') -> int:
+    """
+    고른 문의들을 지우고, 지운 것이 있으면 처리 기록을 한 줄 남긴다. 부르는 쪽의 트랜잭션 안에서 부른다.
+    지울 줄을 잠그고 번호를 읽은 뒤 지운다. 기록의 번호와 실제로 지운 것이 같다.
+    """
+    inquiry_ids = [str(pk) for pk in found.select_for_update().values_list('pk', flat=True)]
+    if not inquiry_ids:
+        return 0
+    Inquiry.objects.filter(pk__in=inquiry_ids).delete()
+    InquiryAction.objects.create(
+        kind=kind, operator=operator, folder=folder, inquiry_ids=inquiry_ids, deleted_count=len(inquiry_ids)
+    )
+    return len(inquiry_ids)
 
 
 def reply_to_inquiry(*, inquiry_id: uuid.UUID, operator: User, reply: str) -> Inquiry:

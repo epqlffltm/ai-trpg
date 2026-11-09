@@ -751,6 +751,98 @@
         ],
         "type": "object"
       },
+      "InquiryAction": {
+        "additionalProperties": false,
+        "description": "지운 일 하나.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deleted_count": {
+            "type": "integer"
+          },
+          "folder": {
+            "description": "상자를 비웠으면 그 상자(all, open, answered). 아니면 빈 글",
+            "type": "string"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "inquiry_ids": {
+            "description": "지운 문의의 번호들",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/InquiryActionKindEnum"
+          },
+          "operator": {
+            "additionalProperties": false,
+            "description": "지운 운영자. 정리 명령(보관 기간)이 지웠거나 그 운영자의 계정이 비워졌으면 null 이다",
+            "nullable": true,
+            "properties": {
+              "nickname": {
+                "type": "string"
+              },
+              "public_id": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "public_id",
+              "nickname"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "created_at",
+          "deleted_count",
+          "folder",
+          "id",
+          "inquiry_ids",
+          "kind",
+          "operator"
+        ],
+        "type": "object"
+      },
+      "InquiryActionKindEnum": {
+        "description": "* `delete_one` - 하나 지움\n* `delete_selected` - 고른 것 지움\n* `empty_folder` - 상자 비움\n* `retention` - 보관 기간이 지나 지움",
+        "enum": [
+          "delete_one",
+          "delete_selected",
+          "empty_folder",
+          "retention"
+        ],
+        "type": "string"
+      },
+      "InquiryActionPage": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InquiryAction"
+            },
+            "type": "array"
+          },
+          "next_before": {
+            "description": "다음 쪽을 부를 before. 마지막 쪽이면 null",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "next_before"
+        ],
+        "type": "object"
+      },
       "InquiryCategoryEnum": {
         "description": "* `account` - 계정·로그인\n* `payment` - 결제·환불\n* `report` - 신고\n* `bug` - 오류\n* `other` - 그 밖",
         "enum": [
@@ -1252,6 +1344,25 @@
             "nullable": true,
             "type": "string"
           },
+          "answered_by": {
+            "additionalProperties": false,
+            "description": "답한 운영자. 답하지 않았거나 그 운영자의 계정이 비워졌으면 null 이다",
+            "nullable": true,
+            "properties": {
+              "nickname": {
+                "type": "string"
+              },
+              "public_id": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "public_id",
+              "nickname"
+            ],
+            "type": "object"
+          },
           "body": {
             "type": "string"
           },
@@ -1275,6 +1386,25 @@
             "format": "date-time",
             "nullable": true,
             "type": "string"
+          },
+          "read_by": {
+            "additionalProperties": false,
+            "description": "처음 연 운영자. 아직 읽지 않았으면 null 이다",
+            "nullable": true,
+            "properties": {
+              "nickname": {
+                "type": "string"
+              },
+              "public_id": {
+                "format": "uuid",
+                "type": "string"
+              }
+            },
+            "required": [
+              "public_id",
+              "nickname"
+            ],
+            "type": "object"
           },
           "reply": {
             "type": "string"
@@ -1319,12 +1449,14 @@
         },
         "required": [
           "answered_at",
+          "answered_by",
           "body",
           "category",
           "created_at",
           "email",
           "id",
           "read_at",
+          "read_by",
           "reply",
           "reply_discarded_at",
           "reply_sent_at",
@@ -2010,6 +2142,132 @@
           }
         ],
         "summary": "문의 목록(운영자). 상태로 고르고, 최근 것부터 한 쪽씩",
+        "tags": [
+          "admin"
+        ],
+        "x-audience": "operator"
+      }
+    },
+    "/api/v1/auth/admin/inquiries/actions": {
+      "get": {
+        "description": "GET /api/v1/auth/admin/inquiries/actions. 지운 일의 기록.",
+        "operationId": "admin_inquiries_actions_retrieve",
+        "parameters": [
+          {
+            "description": "이 시각보다 앞에 보낸 것부터. 앞 쪽의 next_before 를 싣는다",
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InquiryActionPage"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "before 가 시각이 아니다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "운영자가 아니다. 답하기에서는 그런 문의가 없을 때도다(inquiry.not_found)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "문의를 지운 일의 기록(운영자). 누가, 언제, 어떻게, 몇 개. 최근 것부터 한 쪽씩",
         "tags": [
           "admin"
         ],
