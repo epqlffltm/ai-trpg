@@ -27,6 +27,7 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
   - 사기(BuyAction), 팔기(SellAction), 돈 건네기(PayAction). 화폐가 있는 판이어야 한다. 사고팔기는 이번 장면의
     거래하는 상인과, 값이 있는 물건과, 그만큼의 돈(재고, 소지품)이 있어야 한다(app/rounds/trades.py).
   - 엄폐하기(CoverAction). 세이브 방식의 규칙이고, 맵에 서 있고, 그 장소에 커버가 있어야 한다(app/rounds/covers.py).
+  - 방어하기(DefendAction, #254). 늘 받는다(app/rounds/guards.py).
   - 던지기(ThrowAction, #277). 던지는 판정이 있는 판의 소모품을 가지고 있고, 맞을 쪽이 치기와 같이 닿아야 한다
     (app/rounds/throws.py).
 누구를 겨눌 수 있는지는 선언을 받을 때와 닫기 시작할 때 같다. 장면은 라운드가 열린 뒤로 바뀌지 않는다.
@@ -43,6 +44,7 @@ from app.engine.action import (
     BuyAction,
     CheckAction,
     CoverAction,
+    DefendAction,
     DisarmAction,
     DoorAction,
     GiveAction,
@@ -73,6 +75,7 @@ from app.rounds.cast import CastMember, Scene, find_cast_member, find_reachable,
 from app.rounds.covers import accept_cover
 from app.rounds.door_actions import accept_door
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
+from app.rounds.guards import accept_defend
 from app.rounds.map_actions import accept_move, accept_search, standing_place
 from app.rounds.models import Declaration, Round
 from app.rounds.monster_scene import SceneMonster, find_scene_monster, stands_with
@@ -608,6 +611,8 @@ def accept_action(
         return accept_pay(table, member, action)
     if isinstance(action, CoverAction):
         return accept_cover(table, member, ruleset, action)
+    if isinstance(action, DefendAction):
+        return accept_defend(action)
     if isinstance(action, DoorAction):
         return accept_door(table, member, action)
     return accept_check(table, member, action, scene, ruleset)

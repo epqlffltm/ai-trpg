@@ -3406,6 +3406,7 @@
                     "buy": "#/components/schemas/BuyAction",
                     "check": "#/components/schemas/CheckAction",
                     "cover": "#/components/schemas/CoverAction",
+                    "defend": "#/components/schemas/DefendAction",
                     "disarm": "#/components/schemas/DisarmAction",
                     "force": "#/components/schemas/ForceAction",
                     "give": "#/components/schemas/GiveAction",
@@ -3484,6 +3485,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/CoverAction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefendAction"
                   },
                   {
                     "$ref": "#/components/schemas/LockAction"
@@ -3601,6 +3605,9 @@
                 "$ref": "#/components/schemas/CoverOutcome"
               },
               {
+                "$ref": "#/components/schemas/DefendOutcome"
+              },
+              {
                 "$ref": "#/components/schemas/TargetGoneOutcome"
               },
               {
@@ -3640,6 +3647,7 @@
                     "buy": "#/components/schemas/BuyAction",
                     "check": "#/components/schemas/CheckAction",
                     "cover": "#/components/schemas/CoverAction",
+                    "defend": "#/components/schemas/DefendAction",
                     "disarm": "#/components/schemas/DisarmAction",
                     "force": "#/components/schemas/ForceAction",
                     "give": "#/components/schemas/GiveAction",
@@ -3720,6 +3728,9 @@
                     "$ref": "#/components/schemas/CoverAction"
                   },
                   {
+                    "$ref": "#/components/schemas/DefendAction"
+                  },
+                  {
                     "$ref": "#/components/schemas/LockAction"
                   },
                   {
@@ -3768,6 +3779,49 @@
           "content"
         ],
         "title": "DeclarationUpdate",
+        "type": "object"
+      },
+      "DefendAction": {
+        "additionalProperties": false,
+        "description": "방어 태세를 잡는 행동(#254, app/rounds/guards.py). 받는 값이 없다. 판정이 없다.\n\n그 라운드 동안 이 캐릭터를 노린 몬스터와 NPC 의 공격은 불리하다(두 번 굴려 나쁜 것). 차례를 기다리지 않는다.\n막는 것은 공격에 앞선다. 몬스터가 먼저 쳐도 든다. 그 라운드의 행동을 쓰므로 공격하지 못한다. 그것이 대가다.\n서술이 \"방패를 들었다\"고 써도 방어 태세가 아니다.",
+        "properties": {
+          "kind": {
+            "const": "defend",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "DefendAction",
+        "type": "object"
+      },
+      "DefendOut": {
+        "description": "방어 태세를 잡은 결과(#254). 엔진이 정했다(app/rounds/guards.py). 굴림이 없다.\n\n그 라운드 동안 이 캐릭터를 노린 몬스터와 NPC 의 공격은 불리했다(그 차례의 guarded).",
+        "properties": {
+          "guarded": {
+            "title": "Guarded",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "guarded"
+        ],
+        "title": "DefendOut",
+        "type": "object"
+      },
+      "DefendOutcome": {
+        "description": "방어하는 행동의 결과.",
+        "properties": {
+          "defend": {
+            "$ref": "#/components/schemas/DefendOut"
+          }
+        },
+        "required": [
+          "defend"
+        ],
+        "title": "DefendOutcome",
         "type": "object"
       },
       "Defense": {

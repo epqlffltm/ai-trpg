@@ -10,6 +10,7 @@
 제작자가 공격의 순서를 신경 쓸 필요가 없고, 대상을 고르는 데 AI 가 끼지 않는다.
 판정은 앉은 사람의 판정과 같은 계산이다(app/engine/check.py). 몬스터의 점수와 공격의 난이도로 굴린다.
 판의 규칙에 막는 규칙이 있으면 맞서는 굴림이다(#254, app/rounds/defenses.py). 받는 쪽도 굴리고, 난이도는 보정이 된다.
+방어 태세를 잡은 캐릭터를 치면 공격이 불리하다(#254, app/rounds/guards.py). 결과에 guarded 가 참으로 붙는다.
 맞히면 그 공격의 양의 등급만큼 피해를 준다. 피해, 쓰러짐, 부상 표는 앉은 사람의 것과 같다(change_sheet).
 장비가 든다(#276, app/rounds/blows.py). 공격에 적은 무기의 공격 보정이 판정에 더해지고, 대상의 맞은 부위의 방어가
 목표값을 올리거나(ac) 피해를 깎는다(reduce). 부위는 공격을 고른 뒤, 판정보다 먼저 굴린다.
@@ -39,7 +40,7 @@ from app.engine.dice import choose
 from app.engine.health import ChangeKind
 from app.engine.injury import Trigger
 from app.engine.ruleset import Difficulty, ResourceHolder
-from app.rounds import blows, defenses, drops, foe_traps, monster_chase, npc_victims
+from app.rounds import blows, defenses, drops, foe_traps, guards, monster_chase, npc_victims
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import NO_BLOW, Blow, Weapon
 from app.rounds.cast import CastMember
@@ -105,7 +106,9 @@ def raised_difficulty(judging: Judging, attack: AttackSnapshot, blow: Blow) -> D
     return difficulty.model_copy(update={'target': difficulty.target + blow.raise_by})
 
 
-def roll_attack(judging: Judging, monster: SceneMonster, attack: AttackSnapshot, blow: Blow = NO_BLOW) -> HinderedCheck:
+def roll_attack(
+    judging: Judging, monster: SceneMonster, attack: AttackSnapshot, blow: Blow = NO_BLOW, guarded: bool = False
+) -> HinderedCheck:
     """
     공격 하나의 판정. 몬스터의 그 능력치 점수와 공격의 난이도로 굴린다. 마리가 입은 부상의 영향을 받는다(#799).
 
@@ -116,7 +119,9 @@ def roll_attack(judging: Judging, monster: SceneMonster, attack: AttackSnapshot,
     difficulty = raised_difficulty(judging, attack, blow)
     hindrance = round_injuries.hindrance_for(ruleset, monster.state.injuries, attack.ability)
     score = monster.state.abilities[attack.ability]
-    return checks.resolve_hindered(ruleset, score, difficulty, judging.dice, hindrance, bonus=blow.bonus)
+    return checks.resolve_hindered(
+        ruleset, score, difficulty, judging.dice, hindrance, forced_disadvantage=guarded, bonus=blow.bonus
+    )
 
 
 def hit_outcome(
@@ -257,7 +262,12 @@ def pick_victim(
 
 
 def roll_strike(
-    judging: Judging, monster: SceneMonster, attack: AttackSnapshot, blow: Blow, defense: Side | None
+    judging: Judging,
+    monster: SceneMonster,
+    attack: AttackSnapshot,
+    blow: Blow,
+    defense: Side | None,
+    guarded: bool = False,
 ) -> tuple[HinderedCheck, dict]:
     """
     공격 하나를 굴린다. 판의 규칙에 막는 규칙이 있으면 맞서는 굴림이고(#254, app/rounds/defenses.py),
@@ -266,9 +276,9 @@ def roll_strike(
     돌려주는 것은 공격하는 쪽의 판정과, 차례의 outcome 에 더할 것(맞서는 굴림이면 받는 쪽의 굴림 defense)이다.
     """
     if defense is None:
-        return roll_attack(judging, monster, attack, blow), {}
+        return roll_attack(judging, monster, attack, blow, guarded), {}
     ruleset = judging.ruleset
-    side = defenses.attacker_side(ruleset, monster.state.abilities, monster.state.injuries, attack, blow)
+    side = defenses.attacker_side(ruleset, monster.state.abilities, monster.state.injuries, attack, blow, guarded)
     opposed = checks.resolve_opposed(ruleset, side, defense, judging.dice)
     return opposed.attack, {'defense': defenses.defense_document(ruleset, attack, opposed.defense)}
 
@@ -282,9 +292,11 @@ def strike_member(judging: Judging, monster: SceneMonster, victim: TableMember) 
     cost = pay(judging, monster.state, attack, ResourceHolder.MONSTERS)
     blow = plan_attack_blow(judging, blows.monster_weapon(judging, monster, attack), victim)
     defense = defenses.member_defense(judging.ruleset, victim, attack, blow)
-    rolled, defended = roll_strike(judging, monster, attack, blow, defense)
+    guarded = guards.is_guarded(judging, victim)
+    rolled, defended = roll_strike(judging, monster, attack, blow, defense, guarded)
     outcome = hit_outcome(judging, attack, victim, rolled.check, blow, monster.definition.nature)
-    return {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled), **defended}
+    turn = {**outcome, **cost, 'hindrance': round_injuries.hindrance_document(rolled), **defended}
+    return guards.with_guard(turn, guarded)
 
 
 def npc_hit_outcome(

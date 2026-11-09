@@ -91,7 +91,7 @@ function draft(changes: Partial<ActionDraft>): ActionDraft {
 
 describe('availableKinds', () => {
   it('규칙과 내 시트, 맵, 장면에 따라 고를 수 있는 종류가 달라진다', () => {
-    expect(availableKinds(context())).toEqual(['check', 'name', 'use', 'throw', 'give', 'move', 'search', 'take', 'put_down', 'loot', 'wait']);
+    expect(availableKinds(context())).toEqual(['check', 'name', 'use', 'throw', 'give', 'move', 'search', 'take', 'put_down', 'loot', 'defend', 'wait']);
     const full = context({}, { treatment: { ability: 'wis' }, rest: { short: { minutes: 60 }, long: { minutes: 480 } }, steal: { ability: 'dex' } });
     expect(availableKinds(full)).toEqual(expect.arrayContaining(['treat', 'steal', 'rest']));
   });

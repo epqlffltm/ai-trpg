@@ -70,6 +70,9 @@ class Judging:
     # 이번 라운드에 엄폐한 앉은 사람들과 그 장소의 커버(user_id → 커버, #276). 판정을 시작하기 전에 정한다.
     # 그 라운드 동안 그 사람의 세이브에 든다(app/rounds/covers.py, app/rounds/blows.py)
     covers: dict[uuid.UUID, int] = field(default_factory=dict)
+    # 이번 라운드에 방어 태세를 잡은 앉은 사람들(user_id, #254). 판정을 시작하기 전에 정한다.
+    # 그들을 노린 몬스터와 NPC 의 공격은 불리하다(app/rounds/guards.py)
+    defending: frozenset[uuid.UUID] = frozenset()
 
 
 def mark_fight(judging: Judging, monster: TableMonster, member: TableMember) -> None:

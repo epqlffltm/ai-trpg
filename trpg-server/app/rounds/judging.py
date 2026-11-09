@@ -32,6 +32,7 @@ from app.engine.action import (
     AnyAction,
     BuyAction,
     CoverAction,
+    DefendAction,
     DisarmAction,
     DoorAction,
     GiveAction,
@@ -60,6 +61,7 @@ from app.rounds.checks import judge_check
 from app.rounds.covers import covers_of, judge_cover
 from app.rounds.door_actions import judge_door
 from app.rounds.effects import Judging
+from app.rounds.guards import defenders_of, judge_defend
 from app.rounds.initiative import Turn
 from app.rounds.item_actions import judge_give, judge_use
 from app.rounds.item_targets import judge_use_on
@@ -92,7 +94,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
     내려놓기(judge_put_down), 덫 놓기(judge_set_trap, #806), 덫 해제(judge_disarm, #806 ①-b),
     훔치기(judge_steal), 빼앗기(judge_loot),
     쉬기(judge_rest), 기다리기(judge_wait), 사기(judge_buy), 팔기(judge_sell), 돈 건네기(judge_pay),
-    엄폐하기(judge_cover), 문 다루기(judge_door: 잠그기, 열기, 따기, 부수기, #281), 던지기(judge_throw, #277),
+    엄폐하기(judge_cover), 방어하기(judge_defend, #254), 문 다루기(judge_door: 잠그기, 열기, 따기, 부수기, #281),
+    던지기(judge_throw, #277),
     기술 쓰기(judge_skill, #805)다.
     """
     if isinstance(action, TreatAction):
@@ -137,6 +140,8 @@ def judge(judging: Judging, member: TableMember, action: AnyAction) -> dict:
         return judge_pay(judging, member, action)
     if isinstance(action, CoverAction):
         return judge_cover(judging, member)
+    if isinstance(action, DefendAction):
+        return judge_defend()
     if isinstance(action, DoorAction):
         return judge_door(judging, member, action)
     return judge_check(judging, member, action)
@@ -211,6 +216,7 @@ def build_judging(
     판의 복사본(규칙, 인물 항목, 물건, 맵)을 통째로 읽는다. 싸지 않아서 판정할 것이 있을 때만 부른다.
     downed 는 판정을 시작하기 전에 쓰러져 있던 사람들이다(몬스터와 NPC 가 칠 수 있다).
     rolling 은 행동을 판정할 사람과 그 선언이다. 엄폐한 사람의 커버를 여기서 정한다(app/rounds/covers.py).
+    방어 태세를 잡은 사람도 여기서 정한다(#254, app/rounds/guards.py).
     """
     snapshot = read_snapshot(table.content)
     return Judging(
@@ -229,6 +235,7 @@ def build_judging(
         npcs_downed_at_start=downed_npcs(scene),
         places_at_start=places_at_start(table),
         covers=covers_of(snapshot, rolling or []),
+        defending=defenders_of(rolling or []),
     )
 
 

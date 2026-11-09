@@ -193,6 +193,7 @@ def build_moves(
                 rest=narration_request.to_rest(declaration),
                 wait=narration_request.to_wait(declaration),
                 cover=narration_request.to_cover(declaration),
+                defending=narration_request.to_defending(declaration),
                 revival=narration_request.find_revival(recovered.revivals, member.user_id),
                 recovery=narration_request.find_recovery(recovered.natural, member.user_id),
                 place=place_note(mapping, member),

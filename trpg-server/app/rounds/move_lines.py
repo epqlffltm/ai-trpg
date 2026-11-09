@@ -408,6 +408,10 @@ def describe_wander(note: WanderNote) -> str:
     return f'(조우: {note.monster} {note.count}마리가 나타났다)'
 
 
+# 방어 태세를 잡은 캐릭터의 줄에 붙는 글(#254). 그 라운드 동안 노린 공격이 불리했다
+DEFENDING = '(방어 태세: 이 라운드에 노린 공격이 불리했다)'
+
+
 def describe_cover(note: CoverNote) -> str:
     """
     엄폐하는 행동의 결과를 한 줄로 적는다(#276). 막았는지는 판정과 차례의 줄의 세이브에 있다.
@@ -1001,6 +1005,8 @@ def describe_move(move: Move) -> str:
         parts.append(describe_wait(move.wait))
     if move.cover is not None:
         parts.append(describe_cover(move.cover))
+    if move.defending:
+        parts.append(DEFENDING)
     if move.wander is not None:
         parts.append(describe_wander(move.wander))
     if move.death_save is not None:
@@ -1069,6 +1075,7 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
         들개: 엘프을(를) 쫓아 부엌까지 따라옴 (치지 않음)   도망친 캐릭터를 쫓아왔다(#254)
         해골 병사: 약사에게 할퀴기 (맞음) → 약사 피해 3 (쓰러짐(의식 없음))   인물을 쳤다(#254)
         해골 병사: 쓰러진 약사에게 할퀴기 (맞음) → 약사 피해 2 (죽음)   쓰러진 인물을 마무리했다(#254)
+        수로 쥐 2: 엘프에게 물기 (빗나감) [방어 태세: 불리]   방어 태세를 잡은 캐릭터를 쳤다(#254)
     도감의 글(생김새, 약점)은 싣지 않는다. 가짜 서술자는 이 줄을 장면으로 그대로 내보낸다.
     """
     if note.chased is not None:
@@ -1078,6 +1085,8 @@ def describe_monster_turn(note: MonsterTurnNote) -> str:
     result = '맞음' if note.hit else '빗나감'
     target = note.target if note.downed is None and not note.finishing else f'쓰러진 {note.target}'
     line = f'{note.name}: {target}에게 {note.attack} ({result})'
+    if note.guarded:
+        line += ' [방어 태세: 불리]'
     if note.cost:
         line += f' [{", ".join(describe_resource(one) for one in note.cost)}]'
     if note.blow is not None:

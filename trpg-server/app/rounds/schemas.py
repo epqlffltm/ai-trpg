@@ -1128,6 +1128,22 @@ class CoverOutcome(BaseModel):
     cover: CoverOut
 
 
+class DefendOut(BaseModel):
+    """
+    방어 태세를 잡은 결과(#254). 엔진이 정했다(app/rounds/guards.py). 굴림이 없다.
+
+    그 라운드 동안 이 캐릭터를 노린 몬스터와 NPC 의 공격은 불리했다(그 차례의 guarded).
+    """
+
+    guarded: bool
+
+
+class DefendOutcome(BaseModel):
+    """방어하는 행동의 결과."""
+
+    defend: DefendOut
+
+
 class TargetGoneOut(BaseModel):
     """판정할 때 겨눈 몬스터(나 훔치려던 NPC, 해치려던 동료)를 겨눌 수 없었던 것. 엔진은 굴리지 않았다."""
 
@@ -1181,7 +1197,7 @@ class DeclarationOut(BaseModel):
     # 덫을 해제했으면 DisarmOutcome(#806 ①-b),
     # 훔쳤으면 StealOutcome, 빼앗았으면 LootOutcome,
     # 쉬었으면 RestOutcome, 기다렸으면 WaitOutcome, 사거나 팔았으면 TradeOutcome, 돈을 건넸으면 PayOutcome,
-    # 엄폐했으면 CoverOutcome 이다.
+    # 엄폐했으면 CoverOutcome, 방어 태세를 잡았으면 DefendOutcome(#254) 이다.
     # 겨눈 몬스터를 칠 수 없어 굴리지 못했으면 TargetGoneOutcome,
     # 차례가 오기 전에 쓰러지거나 죽어 행동하지 못했으면 TurnLostOutcome 이다
     outcome: (
@@ -1205,6 +1221,7 @@ class DeclarationOut(BaseModel):
         | TradeOutcome
         | PayOutcome
         | CoverOutcome
+        | DefendOutcome
         | TargetGoneOutcome
         | TurnLostOutcome
         | None

@@ -181,6 +181,7 @@ export function actionHint(draft: ActionDraft, ctx: ActionContext): string | nul
     case 'none':
     case 'search':
     case 'cover':
+    case 'defend':
     case 'skill': // 기술 쓰기(#805)는 아직 고르는 칸이 없다(availableKinds 에 없다)
       return null;
     case 'check':
@@ -310,6 +311,9 @@ export function toAction(draft: ActionDraft, ctx: ActionContext): DeclaredAction
       return { kind: 'search' };
     case 'cover':
       return { kind: 'cover' };
+    // 방어하기(#254). 고를 것이 없다. 이 라운드 동안 나를 노린 공격이 불리하다
+    case 'defend':
+      return { kind: 'defend' };
     case 'take':
       return { kind: 'take', item: draft.item, count: Math.min(draft.count, placeCount(ctx, draft.item)) };
     case 'put_down':

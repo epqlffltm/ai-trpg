@@ -65,6 +65,7 @@ const ACTION_ORDER: ActionKind[] = [
   'sell',
   'pay',
   'cover',
+  'defend',
   'rest',
   'wait',
 ];
