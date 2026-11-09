@@ -5883,3 +5883,33 @@ details.room-panel[open] > summary {
   color: var(--ui-accent);
   font-weight: 600;
 }
+
+/* 이용 가이드(/guide). 위에 묶음의 목차, 묶음마다 물음을 접어 두고 펼치면 답 */
+.guide-page__toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: var(--ui-gap);
+}
+
+.guide-page__items {
+  display: grid;
+  gap: 8px;
+}
+
+.guide-item {
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+}
+
+.guide-item summary {
+  padding: 10px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.guide-item p {
+  margin: 0;
+  padding: 0 12px 10px;
+}

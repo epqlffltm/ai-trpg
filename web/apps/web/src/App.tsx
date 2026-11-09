@@ -44,6 +44,7 @@ import {
   GuardianConsentPage,
   GuardianRequestPage,
   GuardianRevokePage,
+  GuidePage,
   IdentityPage,
   InquiriesPage,
   LobbyPage,
@@ -182,6 +183,8 @@ export function App() {
         <Route path="guardian/revoke" element={<GuardianRevokePage />} />
         {/* 고객센터. 로그인하지 않아도 연다(로그인이 안 되는 문의가 있다) */}
         <Route path="support" element={<SupportPage />} />
+        {/* 이용 가이드. 로그인하지 않아도 연다 */}
+        <Route path="guide" element={<GuidePage />} />
         <Route
           path="conversations"
           element={
