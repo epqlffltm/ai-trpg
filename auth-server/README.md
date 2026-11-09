@@ -225,6 +225,7 @@ Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 �
 | GET | `/api/v1/auth/me/inquiries` | 내 문의와 답. 최근 것부터 20개씩, 다음 쪽은 `before` | 필요 |
 | GET | `/api/v1/auth/admin/inquiries` | 문의 목록과 상자마다의 수(`counts`: all, open, answered, unread, 운영자). `status`(open, answered)로 고른다. 운영자가 아니면 404 | 필요, 운영자 |
 | GET, DELETE | `/api/v1/auth/admin/inquiries/{id}` | 문의 하나를 연다(처음이면 읽음 `read_at` 을 적는다), 지운다(204, 운영자) | 필요, 운영자 |
+| GET | `/api/v1/auth/admin/inquiries/actions` | 문의를 지운 일의 기록(운영자). 누가(`operator`, 정리 명령이면 null), 어떻게(`kind`, `folder`), 몇 개, 어느 문의(`inquiry_ids`). 최근 것부터 20개씩 | 필요, 운영자 |
 | POST | `/api/v1/auth/admin/inquiries/delete` | 고른 문의들(`{"ids": [...]}`, 100개까지) 또는 상자 하나(`{"folder": "all" \| "open" \| "answered"}`)를 지운다. 답은 `{"deleted": 수}`(운영자) | 필요, 운영자 |
 | POST | `/api/v1/auth/admin/inquiries/{id}/reply` | 문의에 답한다(운영자). 한 번만, 답은 메일로 간다. 이미 답했으면 409 `inquiry.already_answered` | 필요, 운영자 |
 | POST | `/api/v1/auth/identity/verify` | 휴대폰 본인인증. 본인확인 업체에서 받은 `token` 을 낸다 | 필요 |
@@ -1125,6 +1126,7 @@ PostgreSQL에 둔 이유와 어긋난다. 테이블에 적는 방식은 PostgreS
 - **보관은 보낸 지 1년이다**(2026-11-09 결정, 답했는지와 상관없다). 지난 것은 정리 명령(`manage.py delete_old_inquiries`, `docker/cron/auth.crontab` 의 매일 19:40 UTC)이 지운다.
 - 그 전에도 운영자가 지운다. 하나씩(`DELETE /admin/inquiries/{id}`), 고른 것만(`ids`), 상자 하나를 통째로(`folder`). 이미 맡긴 답 메일은 지워도 그대로 간다.
 - 운영자 화면은 메일함처럼 본다. 상자(모두, 답 기다림, 답함)와 수, 읽지 않은 줄. 문의를 처음 열면 `read_at` 이 적힌다(운영자 모두에게 함께다).
+- **누가 했는지 남긴다.** 문의마다 처음 연 운영자(`read_by`)와 답한 운영자(`answered_by`). 지운 것은 줄이 사라지므로 처리 기록(`InquiryAction`)에 종류(하나, 고른 것, 상자 비움, 보관 기간), 운영자, 상자, 지운 문의의 번호와 수를 남긴다. 글과 주소는 적지 않는다. 처리 기록도 1년 두고 정리 명령이 함께 지운다.
 
 ### 활동 배지
 

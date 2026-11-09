@@ -10,8 +10,10 @@
     DELETE /api/v1/auth/admin/inquiries/{id}             문의 하나를 지운다(운영자)
     POST /api/v1/auth/admin/inquiries/delete             고른 것(ids) 또는 상자 하나(folder)를 지운다(운영자)
     POST /api/v1/auth/admin/inquiries/{id}/reply         답을 적고 메일로 보낸다(운영자)
+    GET  /api/v1/auth/admin/inquiries/actions            지운 일의 기록. 누가, 언제, 어떻게, 몇 개(운영자)
 
 운영자 화면은 메일함처럼 본다. 상자는 상태(답 기다림, 답함)와 모두, 줄마다 읽었는지(read_at)가 있다.
+누가 했는지: 문의마다 처음 연 운영자(read_by)와 답한 운영자(answered_by), 지운 일은 처리 기록(actions)에 있다.
 
 운영자의 주소는 다른 서버처럼 admin 아래다. 운영자가 아니면 404 다(support/permissions.py).
 
@@ -28,9 +30,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.api_schema import TOO_MANY_ATTEMPTS, bad_request, coded, unauthenticated
+from accounts.models import User
 from support.inquiries import (
     ALL_FOLDER,
+    OPERATOR_RELATED,
     SELECTED_MAX,
+    ActionPage,
     FolderCounts,
     InquiryAlreadyAnsweredError,
     InquiryNotFoundError,
@@ -39,6 +44,7 @@ from support.inquiries import (
     delete_selected_inquiries,
     empty_folder,
     folder_counts,
+    inquiry_actions,
     my_inquiries,
     operator_inquiries,
     read_inquiry,
@@ -50,6 +56,8 @@ from support.models import (
     REPLY_MAX_LENGTH,
     TITLE_MAX_LENGTH,
     Inquiry,
+    InquiryAction,
+    InquiryActionKind,
     InquiryCategory,
     InquiryStatus,
 )
@@ -91,27 +99,51 @@ class MyInquiryPageSerializer(serializers.Serializer):
     next_before = serializers.DateTimeField(allow_null=True, help_text='다음 쪽을 부를 before. 마지막 쪽이면 null')
 
 
-# 문의를 보낸 계정. 로그인하지 않고 보냈으면 null 이다. 객체를 바로 적는다.
-# 참조(allOf)에 nullable 을 붙이면 OpenAPI 3.0 에서 null 이 통하지 않는다(accounts/attendance_views.py 의 상자와 같다)
-SENDER_SCHEMA = {
-    'type': 'object',
-    'nullable': True,
-    'description': '문의를 보낸 계정. 로그인하지 않고 보냈으면 null 이다',
-    'additionalProperties': False,
-    'required': ['public_id', 'nickname'],
-    'properties': {
-        'public_id': {'type': 'string', 'format': 'uuid'},
-        'nickname': {'type': 'string'},
-    },
-}
+def person_schema(description: str) -> dict:
+    """
+    계정 하나({public_id, nickname}) 또는 null 의 모양. 객체를 바로 적는다.
+    참조(allOf)에 nullable 을 붙이면 OpenAPI 3.0 에서 null 이 통하지 않는다(accounts/attendance_views.py 의 상자와 같다)
+    """
+    return {
+        'type': 'object',
+        'nullable': True,
+        'description': description,
+        'additionalProperties': False,
+        'required': ['public_id', 'nickname'],
+        'properties': {
+            'public_id': {'type': 'string', 'format': 'uuid'},
+            'nickname': {'type': 'string'},
+        },
+    }
 
 
-@extend_schema_field(SENDER_SCHEMA)
-class SenderField(serializers.Field):
-    """보낸 계정의 칸. 값을 그대로 낸다({public_id, nickname} 또는 None)."""
+class PersonField(serializers.Field):
+    """계정의 칸. 값은 계정(User) 또는 None 이다. None 이면 응답에 null 로 나간다."""
 
-    def to_representation(self, value: dict) -> dict:
-        return {'public_id': str(value['public_id']), 'nickname': value['nickname']}
+    def to_representation(self, value: User) -> dict:
+        return {'public_id': str(value.public_id), 'nickname': value.nickname}
+
+
+@extend_schema_field(person_schema('문의를 보낸 계정. 로그인하지 않고 보냈으면 null 이다'))
+class SenderField(PersonField):
+    pass
+
+
+@extend_schema_field(person_schema('처음 연 운영자. 아직 읽지 않았으면 null 이다'))
+class ReaderField(PersonField):
+    pass
+
+
+@extend_schema_field(person_schema('답한 운영자. 답하지 않았거나 그 운영자의 계정이 비워졌으면 null 이다'))
+class AnswererField(PersonField):
+    pass
+
+
+@extend_schema_field(
+    person_schema('지운 운영자. 정리 명령(보관 기간)이 지웠거나 그 운영자의 계정이 비워졌으면 null 이다')
+)
+class ActorField(PersonField):
+    pass
 
 
 class OperatorInquirySerializer(MyInquirySerializer):
@@ -120,6 +152,8 @@ class OperatorInquirySerializer(MyInquirySerializer):
     sender = SenderField(allow_null=True)
     email = serializers.EmailField()
     read_at = serializers.DateTimeField(allow_null=True, help_text='운영자가 처음 연 시각. null 이면 아직 읽지 않았다')
+    read_by = ReaderField(allow_null=True)
+    answered_by = AnswererField(allow_null=True)
     reply_sent_at = serializers.DateTimeField(allow_null=True, help_text='메일 서버가 답 메일을 받은 시각')
     reply_discarded_at = serializers.DateTimeField(
         allow_null=True, help_text='답 메일을 끝내 보내지 못하고 버린 시각. 그러면 다른 길로 알려야 한다'
@@ -175,6 +209,25 @@ class DeletedSerializer(serializers.Serializer):
     deleted = serializers.IntegerField(help_text='지운 문의의 수')
 
 
+class InquiryActionSerializer(serializers.Serializer):
+    """지운 일 하나."""
+
+    id = serializers.IntegerField()
+    kind = serializers.ChoiceField(choices=InquiryActionKind.choices)
+    operator = ActorField(allow_null=True)
+    folder = serializers.CharField(
+        allow_blank=True, help_text='상자를 비웠으면 그 상자(all, open, answered). 아니면 빈 글'
+    )
+    inquiry_ids = serializers.ListField(child=serializers.UUIDField(), help_text='지운 문의의 번호들')
+    deleted_count = serializers.IntegerField()
+    created_at = serializers.DateTimeField()
+
+
+class InquiryActionPageSerializer(serializers.Serializer):
+    items = InquiryActionSerializer(many=True)
+    next_before = serializers.DateTimeField(allow_null=True, help_text='다음 쪽을 부를 before. 마지막 쪽이면 null')
+
+
 class ReplyRequestSerializer(serializers.Serializer):
     reply = serializers.CharField(max_length=REPLY_MAX_LENGTH)
 
@@ -214,15 +267,14 @@ def my_inquiry_body(inquiry: Inquiry) -> dict:
 
 def operator_inquiry_body(inquiry: Inquiry) -> dict:
     """운영자가 보는 문의를 응답의 모양으로."""
-    sender = None
-    if inquiry.user is not None:
-        sender = {'public_id': inquiry.user.public_id, 'nickname': inquiry.user.nickname}
     receipt = inquiry.reply_receipt
     return {
         **my_inquiry_body(inquiry),
-        'sender': sender,
+        'sender': inquiry.user,
         'email': inquiry.email,
         'read_at': inquiry.read_at,
+        'read_by': inquiry.read_by,
+        'answered_by': inquiry.answered_by,
         'reply_sent_at': receipt.sent_at if receipt else None,
         'reply_discarded_at': receipt.discarded_at if receipt else None,
     }
@@ -234,6 +286,23 @@ def page_body(page: Page, body_of) -> dict:
 
 def counts_body(counts: FolderCounts) -> dict:
     return {'all': counts.all, 'open': counts.open, 'answered': counts.answered, 'unread': counts.unread}
+
+
+def action_body(action: InquiryAction) -> dict:
+    """지운 일 하나를 응답의 모양으로."""
+    return {
+        'id': action.id,
+        'kind': action.kind,
+        'operator': action.operator,
+        'folder': action.folder,
+        'inquiry_ids': action.inquiry_ids,
+        'deleted_count': action.deleted_count,
+        'created_at': action.created_at,
+    }
+
+
+def action_page_body(page: ActionPage) -> dict:
+    return {'items': [action_body(action) for action in page.items], 'next_before': page.next_before}
 
 
 def not_found() -> Response:
@@ -324,7 +393,7 @@ class OperatorInquiryView(APIView):
     )
     def get(self, request: Request, inquiry_id: uuid.UUID) -> Response:
         try:
-            inquiry = read_inquiry(inquiry_id)
+            inquiry = read_inquiry(inquiry_id, request.user)
         except InquiryNotFoundError:
             return not_found()
         return Response(OperatorInquirySerializer(operator_inquiry_body(inquiry)).data, status=status.HTTP_200_OK)
@@ -335,7 +404,7 @@ class OperatorInquiryView(APIView):
     )
     def delete(self, request: Request, inquiry_id: uuid.UUID) -> Response:
         try:
-            delete_inquiry(inquiry_id)
+            delete_inquiry(inquiry_id, request.user)
         except InquiryNotFoundError:
             return not_found()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -360,10 +429,32 @@ class OperatorInquiryDeleteView(APIView):
         serializer = DeleteRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         if 'ids' in serializer.validated_data:
-            deleted = delete_selected_inquiries(serializer.validated_data['ids'])
+            deleted = delete_selected_inquiries(serializer.validated_data['ids'], request.user)
         else:
-            deleted = empty_folder(serializer.validated_data['folder'])
+            deleted = empty_folder(serializer.validated_data['folder'], request.user)
         return Response(DeletedSerializer({'deleted': deleted}).data, status=status.HTTP_200_OK)
+
+
+class OperatorInquiryActionsView(APIView):
+    """GET /api/v1/auth/admin/inquiries/actions. 지운 일의 기록."""
+
+    permission_classes = [IsOperator]
+
+    @extend_schema(
+        summary='문의를 지운 일의 기록(운영자). 누가, 언제, 어떻게, 몇 개. 최근 것부터 한 쪽씩',
+        parameters=[BEFORE_PARAMETER],
+        responses={
+            200: InquiryActionPageSerializer,
+            400: bad_request('before 가 시각이 아니다'),
+            401: unauthenticated(),
+            404: NOT_FOUND,
+        },
+    )
+    def get(self, request: Request) -> Response:
+        query = PageQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        page = inquiry_actions(before=query.validated_data.get('before'))
+        return Response(InquiryActionPageSerializer(action_page_body(page)).data, status=status.HTTP_200_OK)
 
 
 class OperatorInquiryReplyView(APIView):
@@ -395,5 +486,5 @@ class OperatorInquiryReplyView(APIView):
             return Response(
                 {'detail': '이미 답한 문의입니다.', 'code': 'inquiry.already_answered'}, status=status.HTTP_409_CONFLICT
             )
-        inquiry = Inquiry.objects.select_related('user', 'reply_receipt').get(pk=inquiry.pk)
+        inquiry = Inquiry.objects.select_related(*OPERATOR_RELATED).get(pk=inquiry.pk)
         return Response(OperatorInquirySerializer(operator_inquiry_body(inquiry)).data, status=status.HTTP_200_OK)

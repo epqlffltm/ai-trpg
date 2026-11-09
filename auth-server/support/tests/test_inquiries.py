@@ -12,6 +12,7 @@
   - 계정을 비우면(탈퇴) 그 사람의 문의를 지운다
   - 메일함처럼: 상자마다의 수, 하나를 열면 읽음(처음 한 번만 적는다)
   - 지우기: 하나, 고른 것, 상자 하나를 통째로. 운영자만. 보관 기간(1년)이 지난 것은 정리 명령이 지운다
+  - 누가: 처음 연 운영자, 답한 운영자, 지운 일의 기록(누가, 어떻게, 몇 개, 어느 문의)
 """
 
 import io
@@ -32,8 +33,9 @@ from accounts.models import MailKind, OutgoingMail, SecurityEvent, SecurityEvent
 from accounts.roles import OPERATORS_GROUP
 from accounts.tests.helpers import authorize, delete_attempt_keys, reset_redis_breaker
 from support.inquiries import PAGE_SIZE
-from support.models import Inquiry, InquiryStatus
+from support.models import Inquiry, InquiryAction, InquiryActionKind, InquiryStatus
 
+ACTIONS_URL = reverse('support:operator-inquiry-actions')
 DELETE_URL = reverse('support:operator-inquiries-delete')
 INQUIRIES_URL = reverse('support:inquiries')
 MY_INQUIRIES_URL = reverse('support:my-inquiries')
@@ -233,6 +235,9 @@ class ReplyTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertEqual(response.data['status'], 'answered')
         self.assertIsNotNone(response.data['reply_sent_at'])
+        self.assertEqual(
+            response.data['answered_by'], {'public_id': str(self.operator.public_id), 'nickname': '플레이어9'}
+        )
         inquiry.refresh_from_db()
         self.assertEqual((inquiry.reply, inquiry.answered_by), ('한 번을 취소했습니다.', self.operator))
         [message] = mail.outbox
@@ -302,17 +307,22 @@ class ErasureTests(TestCase):
 class ReadTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        authorize(self.client, make_user(9, operator=True))
+        self.operator = make_user(9, operator=True)
+        authorize(self.client, self.operator)
 
-    def test_opening_marks_it_read_once(self):
+    def test_opening_marks_it_read_once_with_who_opened_it(self):
         inquiry = make_inquiry(None)
+        other = APIClient()
+        authorize(other, make_user(8, operator=True))
 
         first = self.client.get(inquiry_url(inquiry.id))
-        second = self.client.get(inquiry_url(inquiry.id))
+        second = other.get(inquiry_url(inquiry.id))
 
         self.assertEqual(first.status_code, status.HTTP_200_OK)
         self.assertIsNotNone(first.data['read_at'])
+        self.assertIsNone(first.data['answered_by'])
         self.assertEqual(second.data['read_at'], first.data['read_at'])
+        self.assertEqual(second.data['read_by'], {'public_id': str(self.operator.public_id), 'nickname': '플레이어9'})
         self.assertEqual(self.client.get(OPERATOR_INQUIRIES_URL).data['counts']['unread'], 0)
 
     def test_a_missing_one_and_non_operators_get_404(self):
@@ -330,7 +340,36 @@ class ReadTests(TestCase):
 class DeleteTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        authorize(self.client, make_user(9, operator=True))
+        self.operator = make_user(9, operator=True)
+        authorize(self.client, self.operator)
+
+    def test_each_deletion_is_recorded_with_who_how_and_which(self):
+        one, first, second = make_inquiry(None), make_inquiry(None), make_inquiry(None)
+        answered = make_inquiry(None, status=InquiryStatus.ANSWERED, reply='답')
+        self.client.delete(inquiry_url(one.id))
+        self.client.post(DELETE_URL, {'ids': [str(first.id), str(second.id)]}, format='json')
+        self.client.post(DELETE_URL, {'folder': 'answered'}, format='json')
+        self.client.post(DELETE_URL, {'folder': 'open'}, format='json')
+
+        response = self.client.get(ACTIONS_URL)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        items = response.data['items']
+        self.assertEqual(
+            [(item['kind'], item['folder'], item['deleted_count']) for item in reversed(items)],
+            [('delete_one', '', 1), ('delete_selected', '', 2), ('empty_folder', 'answered', 1)],
+        )
+        self.assertEqual(sorted(items[1]['inquiry_ids']), sorted([str(first.id), str(second.id)]))
+        self.assertEqual(items[0]['inquiry_ids'], [str(answered.id)])
+        self.assertEqual(items[0]['operator'], {'public_id': str(self.operator.public_id), 'nickname': '플레이어9'})
+        # 지운 것이 없는 상자 비우기는 남기지 않는다
+        self.assertEqual(InquiryAction.objects.count(), 3)
+
+    def test_only_operators_see_the_record(self):
+        player = APIClient()
+        authorize(player, make_user(1))
+
+        self.assertEqual(player.get(ACTIONS_URL).status_code, status.HTTP_404_NOT_FOUND)
 
     def test_one_is_deleted(self):
         inquiry = make_inquiry(None)
@@ -406,7 +445,13 @@ class RetentionTests(TestCase):
         Inquiry.objects.filter(pk=young.pk).update(created_at=timezone.now() - timedelta(days=364))
         out = io.StringIO()
 
+        old_action = InquiryAction.objects.create(kind=InquiryActionKind.DELETE_ONE, inquiry_ids=[], deleted_count=1)
+        InquiryAction.objects.filter(pk=old_action.pk).update(created_at=timezone.now() - timedelta(days=366))
+
         call_command('delete_old_inquiries', stdout=out)
 
         self.assertEqual(list(Inquiry.objects.all()), [young])
         self.assertIn('1건', out.getvalue())
+        # 정리 명령이 지운 것은 운영자 없이 남고, 보관 기간이 지난 기록은 함께 지운다
+        [action] = InquiryAction.objects.all()
+        self.assertEqual((action.kind, action.operator, action.inquiry_ids), ('retention', None, [str(old.id)]))

@@ -12,6 +12,10 @@
 운영자는 그 전에도 하나씩, 고른 것만, 상자 하나(상태)를 통째로 지운다.
 
 운영자 화면은 메일함처럼 본다. 운영자가 처음 연 시각(read_at)으로 읽지 않은 문의를 가른다.
+
+누가 했는지를 남긴다. 처음 연 운영자(read_by)와 답한 운영자(answered_by)는 문의의 줄에,
+지운 것은 줄이 사라지므로 처리 기록(InquiryAction)에 남긴다.
+처리 기록에는 문의의 번호와 수만 적고 글과 주소는 적지 않는다.
 """
 
 import uuid
@@ -65,6 +69,15 @@ class Inquiry(models.Model):
     created_at = models.DateTimeField('보낸 시각', auto_now_add=True)
     # 운영자가 처음 연 시각. 비어 있으면 아직 읽지 않았다(메일함의 굵은 줄)
     read_at = models.DateTimeField('운영자가 읽은 시각', null=True, blank=True)
+    # 처음 연 운영자. 운영자의 계정이 비워져도 읽은 시각은 남는다
+    read_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='처음 연 운영자',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+    )
     reply = models.TextField('답', blank=True)
     answered_at = models.DateTimeField('답한 시각', null=True, blank=True)
     # 답한 운영자. 운영자의 계정이 비워져도 답은 남는다
@@ -98,3 +111,44 @@ class Inquiry(models.Model):
 
     def __str__(self) -> str:
         return f'{self.get_category_display()} / {self.title}'
+
+
+class InquiryActionKind(models.TextChoices):
+    """지운 일의 종류. 정리 명령이 지운 것은 운영자가 없다."""
+
+    DELETE_ONE = 'delete_one', '하나 지움'
+    DELETE_SELECTED = 'delete_selected', '고른 것 지움'
+    EMPTY_FOLDER = 'empty_folder', '상자 비움'
+    RETENTION = 'retention', '보관 기간이 지나 지움'
+
+
+class InquiryAction(models.Model):
+    """
+    문의를 지운 일의 기록. 누가, 언제, 어떻게, 몇 개를 지웠는지 남긴다. 덧붙이기만 한다.
+    문의와 같은 기간(RETENTION) 동안 두고 정리 명령이 함께 지운다.
+    """
+
+    kind = models.CharField('종류', max_length=20, choices=InquiryActionKind.choices)
+    # 지운 운영자. 정리 명령이면 비어 있다. 운영자의 계정이 비워져도 기록은 남는다
+    operator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name='운영자',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+    )
+    # 상자를 비웠으면 그 상자(all, open, answered)
+    folder = models.CharField('상자', max_length=20, blank=True)
+    # 지운 문의의 번호들(글자). 글과 주소는 적지 않는다
+    inquiry_ids = models.JSONField('지운 문의', default=list)
+    deleted_count = models.PositiveIntegerField('지운 수')
+    created_at = models.DateTimeField('한 시각', auto_now_add=True)
+
+    class Meta:
+        verbose_name = '문의 처리 기록'
+        verbose_name_plural = '문의 처리 기록'
+        indexes = [models.Index(fields=['-created_at'], name='inquiry_action_recent')]
+
+    def __str__(self) -> str:
+        return f'{self.get_kind_display()} / {self.deleted_count}'

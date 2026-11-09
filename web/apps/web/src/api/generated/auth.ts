@@ -22,6 +22,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/admin/inquiries/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 문의를 지운 일의 기록(운영자). 누가, 언제, 어떻게, 몇 개. 최근 것부터 한 쪽씩
+         * @description GET /api/v1/auth/admin/inquiries/actions. 지운 일의 기록.
+         */
+        get: operations["admin_inquiries_actions_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/admin/inquiries/delete": {
         parameters: {
             query?: never;
@@ -1279,6 +1299,40 @@ export interface components {
         IdentityVerifyRequest: {
             token: string;
         };
+        /** @description 지운 일 하나. */
+        InquiryAction: {
+            /** Format: date-time */
+            created_at: string;
+            deleted_count: number;
+            /** @description 상자를 비웠으면 그 상자(all, open, answered). 아니면 빈 글 */
+            folder: string;
+            id: number;
+            /** @description 지운 문의의 번호들 */
+            inquiry_ids: string[];
+            kind: components["schemas"]["InquiryActionKindEnum"];
+            /** @description 지운 운영자. 정리 명령(보관 기간)이 지웠거나 그 운영자의 계정이 비워졌으면 null 이다 */
+            operator: {
+                nickname: string;
+                /** Format: uuid */
+                public_id: string;
+            } | null;
+        };
+        /**
+         * @description * `delete_one` - 하나 지움
+         *     * `delete_selected` - 고른 것 지움
+         *     * `empty_folder` - 상자 비움
+         *     * `retention` - 보관 기간이 지나 지움
+         * @enum {string}
+         */
+        InquiryActionKindEnum: "delete_one" | "delete_selected" | "empty_folder" | "retention";
+        InquiryActionPage: {
+            items: components["schemas"]["InquiryAction"][];
+            /**
+             * Format: date-time
+             * @description 다음 쪽을 부를 before. 마지막 쪽이면 null
+             */
+            next_before: string | null;
+        };
         /**
          * @description * `account` - 계정·로그인
          *     * `payment` - 결제·환불
@@ -1471,6 +1525,12 @@ export interface components {
         OperatorInquiry: {
             /** Format: date-time */
             answered_at: string | null;
+            /** @description 답한 운영자. 답하지 않았거나 그 운영자의 계정이 비워졌으면 null 이다 */
+            answered_by: {
+                nickname: string;
+                /** Format: uuid */
+                public_id: string;
+            } | null;
             body: string;
             category: components["schemas"]["InquiryCategoryEnum"];
             /** Format: date-time */
@@ -1484,6 +1544,12 @@ export interface components {
              * @description 운영자가 처음 연 시각. null 이면 아직 읽지 않았다
              */
             read_at: string | null;
+            /** @description 처음 연 운영자. 아직 읽지 않았으면 null 이다 */
+            read_by: {
+                nickname: string;
+                /** Format: uuid */
+                public_id: string;
+            } | null;
             reply: string;
             /**
              * Format: date-time
@@ -1711,6 +1777,67 @@ export interface operations {
                 };
             };
             /** @description status 나 before 가 틀렸다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 운영자가 아니다. 답하기에서는 그런 문의가 없을 때도다(inquiry.not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+        };
+    };
+    admin_inquiries_actions_retrieve: {
+        parameters: {
+            query?: {
+                /** @description 이 시각보다 앞에 보낸 것부터. 앞 쪽의 next_before 를 싣는다 */
+                before?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InquiryActionPage"];
+                };
+            };
+            /** @description before 가 시각이 아니다 */
             400: {
                 headers: {
                     [name: string]: unknown;

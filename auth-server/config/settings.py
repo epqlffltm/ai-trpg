@@ -244,6 +244,9 @@ SPECTACULAR_SETTINGS = {
         'StatusEnum': ['queued', 'skipped', 'duplicate'],
         'InquiryStatusEnum': 'support.models.InquiryStatus.choices',
         'InquiryCategoryEnum': 'support.models.InquiryCategory.choices',
+        # kind 도 같다. 결제 확인 알림의 종류는 이름을 그대로 둔다
+        'KindEnum': 'accounts.models.GuardianNoticeKind.choices',
+        'InquiryActionKindEnum': 'support.models.InquiryActionKind.choices',
     },
     # 기본 처리(고르는 값을 enum 으로) 뒤에 이 서버의 것을 더한다: 상태 확인 주소, 닫힌 객체
     'POSTPROCESSING_HOOKS': [
