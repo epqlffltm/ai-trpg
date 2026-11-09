@@ -84,6 +84,7 @@ from app.rounds import (
     rests,
     reverting,
     snapshots,
+    turn_order,
     waits,
     wanders,
 )
@@ -102,11 +103,13 @@ from app.rounds.round_price import price_of
 from app.rounds.schemas import DeclarationUpdate
 from app.rounds.state import (
     find_arrival,
+    is_awaited,
     is_overdue,
     is_ready,
     require_open,
     require_playing,
     require_started,
+    rules_of,
     waiting_for,
 )
 from app.tables import items, sheets
@@ -308,21 +311,31 @@ def begin_closing(
     누가 굴릴지는 판정 전에 본다. 이번 라운드에 쓰러진 캐릭터는 다음 라운드부터 굴린다.
     서술자에게 줄 각자 한 일과 그때의 문체를 여기서 라운드에 굳힌다. 서술은 지금의 테이블이 아니라 이것을 읽는다.
     서술자를 부르지 않는다. 저장한 뒤에 따로 맡긴다(NarrationScheduler).
+
+    차례대로 진행하는 테이블(#287)은 라운드 하나가 한 사람의 차례다(app/rounds/turn_order.py). 주인의 행동, 쉬기,
+    기다리기, 무작위 조우, 퀘스트·사건·장·업적은 차례마다 본다. 몬스터와 싸우는 인물의 차례, 죽음의 굴림, 상태의
+    피해와 벗어나기, 부상의 끝, 싸우지 않는 몬스터의 움직임, 되살아나기와 저절로 회복, 수치의 변화는 바퀴의
+    마지막 차례에만 돈다(cycle_end). 그 차례의 끝에 다음 바퀴의 순서를 굴린다.
     """
     group = uuid.uuid4()
-    dying = find_dying(table)
-    hurt = roll_checks(table, round_, dice, scene)
+    cycle_end = turn_order.is_cycle_end(table)
+    dying = find_dying(table) if cycle_end else []
+    hurt = roll_checks(table, round_, dice, scene, with_foes=cycle_end)
+    # 주인의 차례에 남은 차례의 사람이 모두 쓰러졌으면 이 차례로 바퀴가 끝난다(#287)
+    cycle_end = cycle_end or turn_order.is_cycle_end(table)
     round_.death_saves = roll_death_saves(table, dying, dice)
-    ticks = injury_ticks.settle(table, round_, dice, scene)
-    escapes = injury_escapes.settle(table, round_, dice, scene)
+    ticks = injury_ticks.settle(table, round_, dice, scene) if cycle_end else injury_ticks.Ticks()
+    escapes = injury_escapes.settle(table, round_, dice, scene) if cycle_end else []
     hurt = hurt | ticks.hurt
-    waits.settle(table, round_, hurt)
-    ended = expire_injuries(table, scene, round_.number, dice)
-    roams = monster_roams.documents(table, monster_roams.settle(table, scene, dice), round_.number)
+    waits.settle(table, round_, hurt, cycle_end)
+    ended = expire_injuries(table, scene, round_.cycle, dice) if cycle_end else []
+    roamed = monster_roams.settle(table, scene, dice) if cycle_end else []
+    roams = monster_roams.documents(table, roamed, round_.number)
     met, appeared = wanders.settle_wanders(table, round_, scene.all_monsters, dice)
     session.add_all(appeared)
-    recovered = rests.settle(table, round_, hurt, dice, frozenset(wanders.ambushed(table, round_, met)))
-    drifts = resource_rounds.settle(table, round_, scene)
+    ambushed = frozenset(wanders.ambushed(table, round_, met))
+    recovered = rests.settle(table, round_, hurt, dice, ambushed, cycle_end)
+    drifts = resource_rounds.settle(table, round_, scene) if cycle_end else []
     defeats = monster_xp.settle(table, round_.number, scene.monsters)
     settled = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs)
     occurred = happenings.settle_happenings(table, round_.number, scene.all_monsters, scene.npcs)
@@ -332,6 +345,8 @@ def begin_closing(
     round_.expired_quests = [failure['entry_id'] for failure in overdue]
     after_overdue = quest_goals.settle_quests(table, scene.all_monsters, scene.npcs) if overdue else []
     earned = achievements.settle_achievements(table, round_.number, scene.all_monsters, scene.npcs)
+    if cycle_end and turn_order.is_turns(table):
+        turn_order.begin_cycle(table, rules_of(table), dice)
     moves = build_moves(table, round_, ended, recovered, [*settled, *after_overdue], met, ticks.ticks, escapes, roams)
     round_.moves = narration_request.dump_moves(moves)
     round_.narration_style = table.narration_style
@@ -456,6 +471,7 @@ async def declare(
     닫는 중인 라운드에는 낼 수 없다(RoundConflictError). 쓰러진 사람은 행동을 붙일 수 없다(RoundConflictError).
     캐릭터가 죽은 사람은 글도 낼 수 없다(RoundConflictError).
     이 라운드에 새 캐릭터를 들인 사람도 낼 수 없다(RoundConflictError). 다음 라운드부터 낸다.
+    차례대로 진행하는 테이블(#287)에서 차례의 주인이 아니면 낼 수 없다(RoundConflictError, not_your_turn).
     행동이 이 테이블의 규칙에 없는 것을 가리키면 ActionNotInRulesError.
     행동의 대상이 이 테이블에 앉은 사람이나 이번 장면의 인물이 아니면 ActionTargetError.
     겨눈 NPC 가 이미 죽었으면 RoundConflictError.
@@ -467,6 +483,8 @@ async def declare(
         raise RoundConflictError(Conflict.CHARACTER_DEAD)
     if find_arrival(round_, user_id) is not None:
         raise RoundConflictError(Conflict.CHARACTER_ARRIVING)
+    if not is_awaited(table, round_, member):
+        raise RoundConflictError(Conflict.NOT_YOUR_TURN)
     scene = await load_scene(session, table, round_)
     put_declaration(round_, member, data.content, accept_action(table, member, data.action, scene))
 
@@ -541,9 +559,11 @@ async def revert_round(session: AsyncSession, host_id: uuid.UUID, table_id: uuid
     # 앞 라운드의 번호를 먼저 비운다(uq_table_rounds_number). 그다음 지금 라운드가 그 번호를 받는다
     await session.flush()
     deadline = opener.deadline_for(table, now)
+    leaving_actor = current.actor_id
     reverting.reopen(current, previous, deadline)
     table.revert_count += 1
     await session.flush()
+    await recharge_turn(session, table, current, leaving_actor, now)
     group = opened.action_group_id
     await repository.replace_state(session, table_id, snapshot.state)
     await memory_repository.delete_vectors_from(session, table_id, previous.number)
@@ -554,6 +574,21 @@ async def revert_round(session: AsyncSession, host_id: uuid.UUID, table_id: uuid
     payload = reverting.reverted_payload(previous.number, group, deadline, calendar.describe(table))
     recorder.record(session, table, EventType.ROUND_REVERTED, actor_id=host_id, payload=payload)
     return await save(session, table)
+
+
+async def recharge_turn(
+    session: AsyncSession, table: GameTable, round_: Round, leaving_actor: uuid.UUID | None, now: datetime
+) -> None:
+    """
+    차례대로 진행하는 테이블(#287)에서 되돌려 차례의 주인이 바뀌었으면 서술 값을 걸 사람을 바꾼다.
+
+    서술 값은 차례의 주인이 낸다. 다시 연 라운드의 홀드는 다음 차례의 주인의 것이라, 그 사람의 것은 돌려주고
+    되돌아온 주인의 것을 새로 건다(이름표는 되돌린 횟수로 달라진다). 주인이 같거나 한꺼번에 진행하면 그대로다.
+    """
+    if leaving_actor is None or leaving_actor == round_.actor_id:
+        return
+    await charges.release_departed(session, table.id, leaving_actor, now)
+    charges.charge_round(session, table, round_, now)
 
 
 # --- 요청이 아닌 일로 닫기 시작하기. 마감이 지났거나, 안 낸 사람이 떠났다 ---
@@ -760,7 +795,9 @@ async def close_and_open(
     if playing:
         price = await price_of(session, prices, table.narration_model, now, steps_of(table))
         await session.flush()
-        opener.open_round(session, table, number=round_.number + 1, scene=scene, cause=cause, price=price)
+        opener.open_round(
+            session, table, number=round_.number + 1, scene=scene, cause=cause, price=price, previous=round_
+        )
     await charges.settle_round(session, round_.id, paid and playing, now)
     await tables.commit(session, table)
 

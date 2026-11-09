@@ -59,6 +59,7 @@ from app.tables.models import (
     FriendlyFire,
     QuestStatus,
     TableStatus,
+    TurnMode,
 )
 
 # 테이블의 비밀번호. 앞뒤 공백을 떼지 않는다. 적은 그대로가 비밀번호다
@@ -114,6 +115,8 @@ class TableCreate(BaseModel):
     whisper_notice: bool = False
     # 서술에 참고 자료(SRD 같은 바깥 자료)를 넣는가. 판의 세계관이 허용해야 켤 수 있다. 모집 중에만 바꿀 수 있다
     references_enabled: bool = False
+    # 라운드를 진행하는 방식(#287). 적지 않으면 한꺼번에다. 모집 중에만 바꿀 수 있다
+    turn_mode: TurnMode = TurnMode.TOGETHER
 
     @model_validator(mode='after')
     def require_public_for_password(self) -> 'TableCreate':
@@ -254,6 +257,14 @@ class ReferencesUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     references_enabled: bool
+
+
+class TurnModeUpdate(BaseModel):
+    """라운드를 진행하는 방식을 바꿀 때 받는 값(#287). 칸을 빼먹으면 거부한다."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    turn_mode: TurnMode
 
 
 class NarrationModelUpdate(BaseModel):
@@ -781,6 +792,8 @@ class TableSummary(BaseModel):
     references_enabled: bool
     # 앉은 사람끼리 해칠 수 있는 정도(#803). 들어가기 전에 안다. 앉은 사람마다 받아들이는 정도는 members 에 있다
     friendly_fire: FriendlyFire
+    # 라운드를 진행하는 방식(#287). 한꺼번에(together)나 차례대로(turns)다. 들어가기 전에 안다
+    turn_mode: TurnMode
     created_at: datetime
 
 

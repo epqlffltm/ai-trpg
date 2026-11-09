@@ -15,6 +15,8 @@
 결제 서버는 여기서 부르지 않는다. 저장한 뒤에 청구 정리가 건다(app/billing/settler.py).
 
 라운드를 열 때 게임 안의 시간을 흘린다(app/calendar/state.py). 첫 라운드는 판의 시작 시각에 열린다.
+차례대로 진행하는 테이블(#287)은 바퀴가 바뀔 때만 흘리고, 라운드에 바퀴와 차례의 주인을 적는다
+(app/rounds/turn_order.py).
 열린 이벤트에 그때의 시각과 흐른 시간을 싣는다. 시간을 흘리는 것은 엔진이다. 서술(AI)은 시각을 바꾸지 못한다.
 
 파일을 따로 둔 이유: 라운드 서비스는 테이블 서비스를 불러온다.
@@ -30,7 +32,7 @@ from app.calendar import state as calendar
 from app.catalog.offers import OfferedModel
 from app.events import recorder
 from app.events.models import EventType, TableEvent
-from app.rounds import repository
+from app.rounds import repository, turn_order
 from app.rounds.models import Round
 from app.rounds.round_price import announce, price_payload
 from app.tables.models import GameTable
@@ -59,6 +61,7 @@ def open_round(
     scene: str,
     cause: TableEvent,
     price: OfferedModel | None = None,
+    previous: Round | None = None,
 ) -> Round:
     """
     새 라운드를 연다. 연 라운드를 돌려준다. 저장하지는 않는다.
@@ -71,15 +74,19 @@ def open_round(
     price 는 그 모델과 단계의 지금 값이다(app/rounds/round_price.py).
     라운드와 열린 이벤트에 1인 1라운드의 값으로 싣는다.
     첫 라운드가 아니면 게임 안의 시간을 흘린다(calendar.pass_round). 엔진이 늘린 걸음이 있으면 그것으로.
+    previous 는 앞 라운드다(첫 라운드면 None). 차례대로 진행하면 바퀴가 바뀔 때만 흘리고, 남은 차례에서 주인을 꺼낸다.
 
     앞 라운드가 있으면 닫은 것을 먼저 DB 에 보낸 뒤에 부른다(유일 색인 uq_table_rounds_open).
     """
-    passed = calendar.pass_round(table) if number > 1 else 0
+    slot = turn_order.turn_of(table, previous)
+    passed = calendar.pass_round(table) if slot.passes_clock else 0
     opened = now_utc()
     deadline = deadline_for(table, opened)
     round_ = Round(
         table_id=table.id,
         number=number,
+        cycle=slot.cycle,
+        actor_id=slot.actor_id,
         scene=scene,
         deadline_at=deadline,
         narration_model=table.narration_model,
@@ -92,6 +99,8 @@ def open_round(
     narration = recorder.record(session, table, EventType.GM_NARRATION, payload={'text': scene}, cause=cause)
     opened = {
         'number': number,
+        'cycle': slot.cycle,
+        'actor_id': str(slot.actor_id) if slot.actor_id is not None else None,
         'deadline_at': deadline.isoformat() if deadline is not None else None,
         'narration_model': round_.narration_model,
         'input_step': round_.input_step,

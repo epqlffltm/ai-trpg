@@ -51,7 +51,7 @@ from app.rounds.state import (
 )
 from app.tables import equipment, injuries, items, money, place_items, places, resources, route_locks, sheets
 from app.tables.items import CatalogItem
-from app.tables.models import GameTable, TableMember
+from app.tables.models import GameTable, TableMember, TurnMode
 from app.tables.npc_attitudes import attitude_word
 from app.tables.resources import Bearer
 
@@ -105,6 +105,17 @@ def healed_notes(ruleset: Ruleset | None, ended: list[round_injuries.Ended], use
     return notes
 
 
+def movers(table: GameTable, round_: Round) -> list[TableMember]:
+    """
+    서술자에게 한 일을 줄 사람들. 앉은 사람 모두다(들어온 순서).
+
+    차례대로 진행하는 테이블(#287)이면 차례의 주인뿐이다. 나머지는 그 차례에 아무것도 하지 않았다.
+    """
+    if round_.actor_id is None and table.turn_mode != TurnMode.TURNS:
+        return list(table.members)
+    return [member for member in table.members if member.user_id == round_.actor_id]
+
+
 def build_moves(
     table: GameTable,
     round_: Round,
@@ -139,7 +150,8 @@ def build_moves(
     ticks = ticks or []
     escapes = escapes or []
     roams = roams or []
-    declarations = [find_declaration(round_, member.user_id) for member in table.members]
+    members = movers(table, round_)
+    declarations = [find_declaration(round_, member.user_id) for member in members]
     wounded = any(member.sheet is not None and injuries.active(member.sheet.injuries) for member in table.members)
     needs_rules = wounded or bool(ended) or any(has_outcome(declaration) for declaration in declarations)
     ruleset = rules_of(table) if needs_rules else None
@@ -155,7 +167,7 @@ def build_moves(
     resource_rules = ruleset or (snapshot.rulebook.rules if snapshot is not None else rules_of(table))
 
     moves = []
-    for member, declaration in zip(table.members, declarations, strict=True):
+    for member, declaration in zip(members, declarations, strict=True):
         content = declaration.content if declaration else None
         verdict = narration_request.to_verdict(ruleset, declaration) if has_outcome(declaration) else None
         arrival = find_arrival(round_, member.user_id)

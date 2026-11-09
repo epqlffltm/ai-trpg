@@ -404,6 +404,8 @@ const DESCRIBE: Record<EventType, Describe> = {
   friendly_fire_consent_changed: (p, ctx) =>
     `${member(p, ctx)}: 나를 겨누는 것 ${friendlyFireLabel(text(p, 'friendly_fire') ?? '?')}`,
   references_changed: (p) => `참고 자료: ${onOff(flag(p, 'references_enabled'))}`,
+  // 진행 방식(#287). 한꺼번에(together)나 차례대로(turns)다
+  turn_mode_changed: (p) => `진행 방식: ${text(p, 'turn_mode') === 'turns' ? '차례대로' : '한꺼번에'}`,
   ledger_drafts_changed: (p) => `장부 초안: ${onOff(flag(p, 'ledger_drafts'))}`,
   clock_step_changed: (p) => `라운드마다 흐르는 시간: ${count(p, 'next_step_minutes') ?? '?'}분`,
 

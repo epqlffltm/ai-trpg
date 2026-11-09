@@ -222,7 +222,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/personas/{id}` | 보관한 캐릭터 하나 | access 토큰 |
 | PUT | `/api/v1/game/personas/{id}` | 보관한 캐릭터 고치기. 보낸 것으로 통째로 바뀐다 | access 토큰 |
 | DELETE | `/api/v1/game/personas/{id}` | 보관한 캐릭터 지우기. 204 | access 토큰 |
-| POST | `/api/v1/game/tables` | 테이블 만들기. 201. 시나리오, 판, 스타팅, 정원을 고른다. `version` 을 비우면 공개 중인 판이다. `character_modes` 로 캐릭터 방식을 좁힌다. `narration_style` 로 서술 문체를 고른다(비우면 판의 추천). `narration_model` 로 서술 모델을 고른다(비우면 시나리오의 추천 모델, 쓸 수 없으면 같은 회사의 대체 모델. [추천 모델](#추천-모델)). `input_step`, `output_step` 으로 서술의 입력·출력 단계를 고른다(0~2, 비우면 0. 그 모델이 그 단계를 팔아야 한다. 아니면 422 `narration_steps`, [서술의 단계](#서술의-단계)). `credit_wait_seconds`, `remove_short_payers` 로 크레딧이 모자란 사람을 기다리는 규칙을 고른다(비우면 5분, 켬). `references_enabled` 로 서술에 [참고 자료](#참고-자료)를 넣는다(기본 끔, 판의 세계관이 허용해야 한다. 아니면 422). 만든 사람이 방장이 되어 앉는다 | access 토큰 |
+| POST | `/api/v1/game/tables` | 테이블 만들기. 201. 시나리오, 판, 스타팅, 정원을 고른다. `version` 을 비우면 공개 중인 판이다. `character_modes` 로 캐릭터 방식을 좁힌다. `narration_style` 로 서술 문체를 고른다(비우면 판의 추천). `narration_model` 로 서술 모델을 고른다(비우면 시나리오의 추천 모델, 쓸 수 없으면 같은 회사의 대체 모델. [추천 모델](#추천-모델)). `input_step`, `output_step` 으로 서술의 입력·출력 단계를 고른다(0~2, 비우면 0. 그 모델이 그 단계를 팔아야 한다. 아니면 422 `narration_steps`, [서술의 단계](#서술의-단계)). `credit_wait_seconds`, `remove_short_payers` 로 크레딧이 모자란 사람을 기다리는 규칙을 고른다(비우면 5분, 켬). `references_enabled` 로 서술에 [참고 자료](#참고-자료)를 넣는다(기본 끔, 판의 세계관이 허용해야 한다. 아니면 422). `turn_mode` 로 [차례대로 진행](#차례대로-진행)할지 고른다(기본 `together`). 만든 사람이 방장이 되어 앉는다 | access 토큰 |
 | GET | `/api/v1/game/tables` | 내가 앉아 있는 테이블 목록. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
 | POST | `/api/v1/game/tables/join` | 초대 코드로 테이블에 들어가 앉는다 | access 토큰 |
 | GET | `/api/v1/game/tables/narration-models` | 서술 모델로 고를 수 있는 모델들과 1인 1라운드의 값(`{"free": false, "models": [{"slug", "display_name", "vendor", "grade", "credits", "tier", "promo", "next", "retires_on", "options"}]}`). `options` 는 지금 파는 단계들과 그 값이다(`input_step`, `output_step`, `input_tokens`, `output_tokens`, `credits`, `tier`, `promo`, `next`, [서술의 단계](#서술의-단계)). 가격 목록을 받지 못했으면 503 ([고를 수 있는 모델](#고를-수-있는-모델)) | access 토큰 |
@@ -252,6 +252,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PUT | `/api/v1/game/tables/{id}/whisper-notice` | 쪽지를 보낸 사실을 모두에게 알릴지(`whisper_notice`) 바꾸기. 방장만. 바꾼 뒤에 보내는 쪽지부터 따른다 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/friendly-fire` | 앉은 사람끼리 해칠 수 있는 정도(`friendly_fire`: `off`, `prank`, `full`) 바꾸기(#803). 방장만. 진행 중에도 된다 | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/members/me/friendly-fire` | 자기를 겨누는 것을 받아들이는 정도(`friendly_fire`) 바꾸기(#803). 앉은 사람이 자기 것만. 언제든 된다 | access 토큰 |
+| PUT | `/api/v1/game/tables/{id}/turn-mode` | 라운드를 진행하는 방식(`turn_mode`: `together`, `turns`, [차례대로 진행](#차례대로-진행)) 바꾸기. 방장만. 모집 중에만(시작하면 409 `not_recruiting`) | access 토큰 |
 | PUT | `/api/v1/game/tables/{id}/references` | 서술에 [참고 자료](#참고-자료)를 넣을지(`references_enabled`) 바꾸기. 방장만. 모집 중에만(시작하면 409 `not_recruiting`). 켜려면 판의 세계관이 허용해야 한다(아니면 422) | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/start` | 테이블 시작하기. 방장만. 모두 캐릭터가 있어야 한다. 모두가 시트를 받는다 | access 토큰 |
 | POST | `/api/v1/game/tables/{id}/end` | 테이블 끝내기. 방장만. 캠페인의 편이면 넘길 것을 함께 적는다 | access 토큰 |
@@ -1628,6 +1629,17 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 5. 서술이 끝나면 라운드가 닫히고, 그 서술이 다음 라운드의 장면이 된다.
 
 라운드의 상태(`status`)는 셋이다. `open`(선언을 받는 중) → `closing`(선언을 마감했고 GM 이 서술하는 중) → `closed`.
+
+### 차례대로 진행
+
+테이블의 `turn_mode` 가 `turns` 면(#287, `app/rounds/turn_order.py`) 라운드 하나가 한 사람의 차례다. 기본(`together`)은 위처럼 모두가 한 라운드에 낸다.
+- 라운드의 `actor_id` 가 차례의 주인이다. 이 사람만 선언하고(다른 사람은 409 `not_your_turn`), 내면 바로 닫기 시작한다. 마감과 방장의 닫기는 그대로라 자리를 비운 사람의 차례는 건너뛴다(아무것도 하지 않은 것). 서술에는 주인의 한 일만 들어가고, 서술 값도 주인만 낸다
+- 모두의 차례 한 바퀴가 게임 안의 한 라운드다. 라운드의 `cycle` 이 그 번호다(`together` 면 `number` 와 같다). 바퀴가 시작할 때 룰북의 차례 능력치로 순서를 굴린다(같으면 서버의 주사위). 차례를 받는 사람은 그때 앉아 있고 쓰러지지 않은 사람이다. 바퀴 중간에 앉은 사람은 다음 바퀴부터, 떠났거나 쓰러진 사람의 차례는 건너뛴다. 남은 차례는 `game_tables.turn_queue`, 지금 바퀴는 `turn_cycle` 이다(되돌리기가 함께 돌린다)
+- 게임 안의 시간은 바퀴가 바뀔 때만 흐른다. 짧은 부상의 라운드와 상태의 피해·벗어나기는 바퀴로 센다
+- 주인의 행동, 쉬기, 기다리기, 무작위 조우, 퀘스트·사건·장·업적은 차례마다 본다. 기다리기로 시간을 건너뛰는 것은 바퀴의 차례가 모두 기다렸고 아무도 맞지 않았을 때만이다(`turn_waits`)
+- 몬스터와 싸우는 인물의 차례, 죽음의 굴림, 상태의 피해와 벗어나기, 부상의 끝, 싸우지 않는 몬스터의 움직임, 되살아나기와 저절로 회복, 수치의 변화는 바퀴의 마지막 차례를 닫을 때만 돈다. 몬스터를 차례 사이에 끼우는 것은 뒤의 일이다
+- 되돌리면(#288) 앞 차례의 주인과 바퀴가 돌아온다. 주인이 바뀌면 다음 주인의 홀드를 돌려주고 되돌아온 주인의 것을 새로 건다
+- 라운드(`RoundOut`)와 `round_opened` 에 `cycle`, `actor_id` 가 실린다. 마이그레이션 `c9e5a1d3f7b4`
 
 **닫기 시작하는 길은 셋이다.** 닫힘의 이벤트(`round_closed`)에 까닭(`reason`)이 적힌다.
 - `all_declared`: 기다리던 사람이 모두 냈다. 마지막 선언이 들어왔을 때, 또는 안 낸 사람이 떠나거나 내보내져서 남은 사람이 모두 낸 상태가 됐을 때다. 떠난 뒤의 것은 떠나는 일과 따로 트랜잭션을 연다. 그 사이에 서버가 죽으면 라운드는 열린 채로 남고 방장이나 마감이 닫는다. 기다릴 사람이 없어도 아무도 내지 않았으면(모두 쓰러짐) 닫지 않는다.
@@ -3214,6 +3226,7 @@ uv run python -m scripts.models fallback gpt-6-luna --cancel
 | `friendly_fire_changed` | 방장이 앉은 사람끼리 해칠 수 있는 정도를 바꿨다(#803) | `friendly_fire` |
 | `friendly_fire_consent_changed` | 앉은 사람이 자기를 겨누는 것을 받아들이는 정도를 바꿨다(#803). 행한 사람이 그 사람이다 | `user_id`, `friendly_fire` |
 | `references_changed` | 방장이 참고 자료를 서술에 넣을지 바꿨다(모집 중에만, #482) | `references_enabled` |
+| `turn_mode_changed` | 방장이 라운드를 진행하는 방식을 바꿨다(모집 중에만, #287) | `turn_mode` |
 | `ledger_drafts_changed` | 방장이 장부 초안을 쓸지 바꿨다. 장부 초안을 걷어내 이제 생기지 않는다(#371). 그 전의 이벤트에만 있다 | `ledger_drafts` |
 | `whisper_sent` | 누가 누구에게 쪽지를 보냈다. 알리기로 한 테이블에만 적힌다. 쪽지의 글은 적지 않는다 | `user_id`, `character_name`, `recipient_id`, `recipient_character_name` |
 | `dice_rolled` | 앉은 사람이 자유 굴림을 했다(#404). 게임의 상태와 무관하다. 라운드를 되돌리는 것을 막지 않는다 | `user_id`, `character_name`, `dice`, `faces`, `bonus`, `total` |

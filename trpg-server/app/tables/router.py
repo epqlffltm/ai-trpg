@@ -75,6 +75,7 @@ from app.tables import (
     styles,
     time_limits,
     traps,
+    turn_modes,
     wearing,
     whisper_notices,
 )
@@ -141,6 +142,7 @@ from app.tables.schemas import (
     TableDetail,
     TablePage,
     TableSummary,
+    TurnModeUpdate,
     WearRequest,
     WhisperNoticeUpdate,
     WornOut,
@@ -240,6 +242,7 @@ def to_summary(table: GameTable) -> TableSummary:
         whisper_notice=table.whisper_notice,
         references_enabled=table.references_enabled,
         friendly_fire=table.friendly_fire,
+        turn_mode=table.turn_mode,
         created_at=table.created_at,
     )
 
@@ -982,9 +985,22 @@ async def change_references(
     return to_detail(table, user.user_id)
 
 
+@router.put('/{table_id}/turn-mode', response_model=TableDetail, status_code=status.HTTP_200_OK)
+async def change_turn_mode(
+    table_id: uuid.UUID, data: TurnModeUpdate, user: CurrentUser, session: Session
+) -> TableDetail:
+    """
+    라운드를 진행하는 방식(#287)을 바꾼다. 방장만 한다. 모집 중에만 된다(시작하면 고정이다).
+
+    한꺼번에(together)는 모두가 선언하면 라운드를 닫는다. 차례대로(turns)는 라운드 하나가 한 사람의 차례다.
+    """
+    table = await turn_modes.change_turn_mode(session, user.user_id, table_id, data)
+    return to_detail(table, user.user_id)
+
+
 @router.post('/{table_id}/start', response_model=TableDetail, status_code=status.HTTP_200_OK)
 async def start_table(
-    table_id: uuid.UUID, user: CurrentUser, session: Session, watch: Watch, prices: Prices
+    table_id: uuid.UUID, user: CurrentUser, session: Session, watch: Watch, prices: Prices, dice: Rolling
 ) -> TableDetail:
     """
     테이블을 시작한다. 모든 참가자가 캐릭터를 만들어 둬야 한다.
@@ -992,7 +1008,7 @@ async def start_table(
     첫 라운드에 1인 1라운드의 값을 알린다(app/rounds/round_price.py).
     첫 라운드를 연 뒤 서술 모델의 은퇴를 본다(app/tables/retirement_watch.py). 은퇴했으면 바뀐 모델로 답한다.
     """
-    await service.start_table(session, user.user_id, table_id, prices)
+    await service.start_table(session, user.user_id, table_id, prices, dice)
     await watch.after_round_opened(table_id)
     table = await repository.reload_table(session, table_id)
     return to_detail(table, user.user_id)

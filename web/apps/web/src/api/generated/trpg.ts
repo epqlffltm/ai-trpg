@@ -2510,6 +2510,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/game/tables/{table_id}/turn-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change Turn Mode
+         * @description 라운드를 진행하는 방식(#287)을 바꾼다. 방장만 한다. 모집 중에만 된다(시작하면 고정이다).
+         *
+         *     한꺼번에(together)는 모두가 선언하면 라운드를 닫는다. 차례대로(turns)는 라운드 하나가 한 사람의 차례다.
+         */
+        put: operations["change_turn_mode_api_v1_game_tables__table_id__turn_mode_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/tables/{table_id}/whisper-notice": {
         parameters: {
             query?: never;
@@ -5013,7 +5035,7 @@ export interface components {
          *     이벤트를 적는 길은 하나뿐이고(app/events/recorder.py), 그 함수가 이 형식만 받는다.
          * @enum {string}
          */
-        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "dice_rolled" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "monster_chased" | "monster_roamed" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_hurt" | "injury_escape_rolled" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "achievement_earned" | "character_leveled" | "experience_gained" | "abilities_raised" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "round_reverted" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended" | "carried_items_left";
+        EventType: "table_created" | "member_joined" | "member_left" | "member_kicked" | "host_changed" | "abilities_rolled" | "reroll_granted" | "narration_style_changed" | "round_time_limit_changed" | "narration_tier_changed" | "narration_model_changed" | "credit_wait_changed" | "whisper_notice_changed" | "references_changed" | "turn_mode_changed" | "friendly_fire_changed" | "friendly_fire_consent_changed" | "ledger_drafts_changed" | "whisper_sent" | "dice_rolled" | "table_started" | "gm_narration" | "round_opened" | "player_action" | "check_rolled" | "hp_changed" | "npc_changed" | "npc_attitude_changed" | "monster_changed" | "monster_attacked" | "monster_chased" | "monster_roamed" | "npc_attacked" | "injury_gained" | "injury_ended" | "injury_hurt" | "injury_escape_rolled" | "injury_treated" | "naming_resolved" | "death_save_rolled" | "character_died" | "character_joined" | "items_gained" | "items_lost" | "item_used" | "skill_used" | "item_given" | "item_thrown" | "aid_used" | "item_put_down" | "trap_set" | "trap_sprung" | "trap_disarmed" | "equipment_changed" | "item_traded" | "money_paid" | "steal_attempted" | "quest_changed" | "clock_step_changed" | "character_moved" | "happening_occurred" | "chapter_changed" | "achievement_earned" | "character_leveled" | "experience_gained" | "abilities_raised" | "place_searched" | "door_changed" | "monsters_appeared" | "character_rested" | "resource_changed" | "character_revived" | "round_closed" | "round_reverted" | "narration_failed" | "narration_abandoned" | "narration_credits_short" | "narration_model_not_for_sale" | "narration_model_retiring" | "narration_model_replaced" | "narration_model_unavailable" | "member_dropped" | "narration_credits_released" | "table_ended" | "carried_items_left";
         /**
          * FallenOut
          * @description 떠난 캐릭터 하나. 죽었고, 그 플레이어가 새 캐릭터를 들였다. 숫자는 죽을 때의 것이다.
@@ -9845,6 +9867,8 @@ export interface components {
          * @description 앉은 사람이 라운드를 볼 때의 값.
          */
         RoundOut: {
+            /** Actor Id */
+            actor_id: string | null;
             /** Arrivals */
             arrivals: components["schemas"]["ArrivalOut"][];
             /** Closed At */
@@ -9856,6 +9880,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Cycle */
+            cycle: number;
             /** Deadline At */
             deadline_at: string | null;
             /** Death Saves */
@@ -10605,6 +10631,8 @@ export interface components {
             round_time_limit: number | null;
             /** Scenario Id */
             scenario_id?: null;
+            /** @default together */
+            turn_mode: components["schemas"]["TurnMode"];
             /** Version */
             version?: null;
             /**
@@ -11931,6 +11959,8 @@ export interface components {
              * Format: uuid
              */
             scenario_id: string;
+            /** @default together */
+            turn_mode: components["schemas"]["TurnMode"];
             /** Version */
             version?: number | null;
             /**
@@ -12023,6 +12053,7 @@ export interface components {
             status: components["schemas"]["TableStatus"];
             /** Title */
             title: string;
+            turn_mode: components["schemas"]["TurnMode"];
             /** Whisper Notice */
             whisper_notice: boolean;
         };
@@ -12107,6 +12138,7 @@ export interface components {
             status: components["schemas"]["TableStatus"];
             /** Title */
             title: string;
+            turn_mode: components["schemas"]["TurnMode"];
             /** Whisper Notice */
             whisper_notice: boolean;
         };
@@ -12553,6 +12585,23 @@ export interface components {
         TurnLostOutcome: {
             /** Turn Lost */
             turn_lost: string;
+        };
+        /**
+         * TurnMode
+         * @description 라운드를 진행하는 방식(#287). 방장이 만들 때 고르고, 모집 중에만 바꾼다.
+         *
+         *     한꺼번에(together)는 모두가 선언하면 라운드를 한 번에 닫는다. 기본이다.
+         *     차례대로(turns)는 라운드 하나가 한 사람의 차례다. 차례의 주인만 선언하고, 내면 바로 닫는다.
+         *     모두의 차례 한 바퀴가 게임 안의 한 라운드다(app/rounds/turn_order.py).
+         * @enum {string}
+         */
+        TurnMode: "together" | "turns";
+        /**
+         * TurnModeUpdate
+         * @description 라운드를 진행하는 방식을 바꿀 때 받는 값(#287). 칸을 빼먹으면 거부한다.
+         */
+        TurnModeUpdate: {
+            turn_mode: components["schemas"]["TurnMode"];
         };
         /**
          * UnlockAction
@@ -17881,6 +17930,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    change_turn_mode_api_v1_game_tables__table_id__turn_mode_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                table_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TurnModeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableDetail"];
+                };
             };
             /** @description 입력이 틀렸다 */
             422: {

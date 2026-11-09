@@ -132,11 +132,13 @@ async def start_table(
     surprise: str = 'none',
     sheet: dict = SHEET,
     rat_fields: dict | None = None,
+    table_fields: dict | None = None,
 ) -> dict:
     """
     수로 입구에 쥐를 둔 시나리오로 테이블을 시작한다. 나와 others 가 앉는다. 모두 수로 입구에 선다.
 
     attacks 를 주지 않으면 쥐는 물기 하나를 가진다. rat_fields 는 쥐의 시트에 더할 칸이다. 돌려주는 것은 테이블이다.
+    table_fields 는 테이블을 만들 때 더할 칸이다(진행 방식 같은 것).
     """
     lorebook = await post(client, LOREBOOKS_URL, me, title='지하 수로')
     gate = await post(client, f'{LOREBOOKS_URL}/{lorebook["id"]}/entries', me, name='수로 입구', kind='place')
@@ -165,7 +167,9 @@ async def start_table(
         encounters=[{'place_id': gate['id'], 'monster_id': rat['id'], 'count': count, 'surprise': surprise}],
     )
     await post(client, f'{SCENARIOS_URL}/{scenario["id"]}/versions', me)
-    table = await post(client, TABLES_URL, me, scenario_id=scenario['id'], version=1, capacity=1 + len(others))
+    table = await post(
+        client, TABLES_URL, me, scenario_id=scenario['id'], version=1, capacity=1 + len(others), **(table_fields or {})
+    )
     names = ['엘프', '드워프 기사']
     for headers, name in zip([me, *others], names, strict=False):
         if headers is not me:

@@ -87,5 +87,7 @@ export function toTableCreate(draft: CreateDraft, listing: PublicListingDetail):
     remove_short_payers: draft.removeShortPayers,
     whisper_notice: draft.whisperNotice,
     references_enabled: listing.references_allowed && draft.referencesEnabled,
+    // 진행 방식(#287). 고르는 칸이 아직 없어 한꺼번에로 만든다
+    turn_mode: 'together',
   };
 }

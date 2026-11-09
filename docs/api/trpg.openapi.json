@@ -5150,6 +5150,7 @@
           "credit_wait_changed",
           "whisper_notice_changed",
           "references_changed",
+          "turn_mode_changed",
           "friendly_fire_changed",
           "friendly_fire_consent_changed",
           "ledger_drafts_changed",
@@ -15333,6 +15334,18 @@
       "RoundOut": {
         "description": "앉은 사람이 라운드를 볼 때의 값.",
         "properties": {
+          "actor_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
           "arrivals": {
             "items": {
               "$ref": "#/components/schemas/ArrivalOut"
@@ -15368,6 +15381,10 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "cycle": {
+            "title": "Cycle",
+            "type": "integer"
           },
           "deadline_at": {
             "anyOf": [
@@ -15462,6 +15479,8 @@
         },
         "required": [
           "number",
+          "cycle",
+          "actor_id",
           "scene",
           "status",
           "declarations",
@@ -17401,6 +17420,10 @@
           "scenario_id": {
             "title": "Scenario Id",
             "type": "null"
+          },
+          "turn_mode": {
+            "$ref": "#/components/schemas/TurnMode",
+            "default": "together"
           },
           "version": {
             "title": "Version",
@@ -20699,6 +20722,10 @@
             "title": "Scenario Id",
             "type": "string"
           },
+          "turn_mode": {
+            "$ref": "#/components/schemas/TurnMode",
+            "default": "together"
+          },
           "version": {
             "anyOf": [
               {
@@ -20961,6 +20988,9 @@
             "title": "Title",
             "type": "string"
           },
+          "turn_mode": {
+            "$ref": "#/components/schemas/TurnMode"
+          },
           "whisper_notice": {
             "title": "Whisper Notice",
             "type": "boolean"
@@ -20987,6 +21017,7 @@
           "whisper_notice",
           "references_enabled",
           "friendly_fire",
+          "turn_mode",
           "created_at",
           "opening",
           "recommended_players",
@@ -21177,6 +21208,9 @@
             "title": "Title",
             "type": "string"
           },
+          "turn_mode": {
+            "$ref": "#/components/schemas/TurnMode"
+          },
           "whisper_notice": {
             "title": "Whisper Notice",
             "type": "boolean"
@@ -21203,6 +21237,7 @@
           "whisper_notice",
           "references_enabled",
           "friendly_fire",
+          "turn_mode",
           "created_at"
         ],
         "title": "TableSummary",
@@ -22198,6 +22233,29 @@
           "turn_lost"
         ],
         "title": "TurnLostOutcome",
+        "type": "object"
+      },
+      "TurnMode": {
+        "description": "라운드를 진행하는 방식(#287). 방장이 만들 때 고르고, 모집 중에만 바꾼다.\n\n한꺼번에(together)는 모두가 선언하면 라운드를 한 번에 닫는다. 기본이다.\n차례대로(turns)는 라운드 하나가 한 사람의 차례다. 차례의 주인만 선언하고, 내면 바로 닫는다.\n모두의 차례 한 바퀴가 게임 안의 한 라운드다(app/rounds/turn_order.py).",
+        "enum": [
+          "together",
+          "turns"
+        ],
+        "title": "TurnMode",
+        "type": "string"
+      },
+      "TurnModeUpdate": {
+        "additionalProperties": false,
+        "description": "라운드를 진행하는 방식을 바꿀 때 받는 값(#287). 칸을 빼먹으면 거부한다.",
+        "properties": {
+          "turn_mode": {
+            "$ref": "#/components/schemas/TurnMode"
+          }
+        },
+        "required": [
+          "turn_mode"
+        ],
+        "title": "TurnModeUpdate",
         "type": "object"
       },
       "UnlockAction": {
@@ -31683,6 +31741,66 @@
         "summary": "Download Transcript",
         "tags": [
           "transcripts"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/game/tables/{table_id}/turn-mode": {
+      "put": {
+        "description": "라운드를 진행하는 방식(#287)을 바꾼다. 방장만 한다. 모집 중에만 된다(시작하면 고정이다).\n\n한꺼번에(together)는 모두가 선언하면 라운드를 닫는다. 차례대로(turns)는 라운드 하나가 한 사람의 차례다.",
+        "operationId": "change_turn_mode_api_v1_game_tables__table_id__turn_mode_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "table_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Table Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TurnModeUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change Turn Mode",
+        "tags": [
+          "tables"
         ],
         "x-audience": "user"
       }

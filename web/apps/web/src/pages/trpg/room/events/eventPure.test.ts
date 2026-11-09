@@ -28,7 +28,7 @@ function line(type: EventType, payload: Record<string, unknown> = {}, extra: Rec
 const ALL: EventType[] = [
   'table_created', 'member_joined', 'member_left', 'member_kicked', 'host_changed', 'abilities_rolled', 'reroll_granted',
   'narration_style_changed', 'round_time_limit_changed', 'narration_tier_changed', 'narration_model_changed', 'credit_wait_changed',
-  'whisper_notice_changed', 'friendly_fire_changed', 'friendly_fire_consent_changed', 'references_changed', 'ledger_drafts_changed', 'whisper_sent', 'dice_rolled', 'table_started', 'gm_narration',
+  'whisper_notice_changed', 'friendly_fire_changed', 'friendly_fire_consent_changed', 'references_changed', 'turn_mode_changed', 'ledger_drafts_changed', 'whisper_sent', 'dice_rolled', 'table_started', 'gm_narration',
   'round_opened', 'player_action', 'check_rolled', 'hp_changed', 'resource_changed', 'npc_changed', 'npc_attitude_changed', 'monster_changed',
   'monster_attacked', 'monster_chased', 'monster_roamed', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_hurt', 'injury_escape_rolled', 'injury_treated', 'naming_resolved', 'death_save_rolled',
   'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'trap_set', 'trap_sprung', 'trap_disarmed', 'steal_attempted',
@@ -252,6 +252,7 @@ describe('eventLine', () => {
       '라운드 3: 서술하던 작업이 되풀이해 끊겨 서술을 그만두었습니다. 엔진의 결과로 이어 갑니다.',
     );
     expect(line('friendly_fire_changed', { friendly_fire: 'prank' })?.text).toBe('동료 피해: 장난만');
+    expect(line('turn_mode_changed', { turn_mode: 'turns' })?.text).toBe('진행 방식: 차례대로');
     expect(line('friendly_fire_consent_changed', { user_id: OTHER, friendly_fire: 'full' })?.text).toBe('미아: 나를 겨누는 것 다 됨');
     expect(line('hp_changed', { character_name: '렌', before: 9, after: 1, prank: true })?.text).toBe('렌: HP 9 → 1 · 장난');
     expect(line('resource_changed', { character_name: '렌', name: '마나', before: 2, after: 5, max: 7 })?.text).toBe('렌: 마나 2 → 5/7');

@@ -1280,6 +1280,10 @@ class RoundOut(BaseModel):
     """앉은 사람이 라운드를 볼 때의 값."""
 
     number: int
+    # 게임 안의 라운드(#287). 한꺼번에 진행하면 number 와 같고, 차례대로면 모두의 차례 한 바퀴가 하나다
+    cycle: int
+    # 차례대로 진행하는 테이블에서 이 라운드의 차례의 주인(user_id). 이 사람만 선언한다. 한꺼번에면 null 이다
+    actor_id: uuid.UUID | None
     # 이 라운드를 여는 장면. GM 의 서술이다
     scene: str
     # open: 선언을 받는 중. closing: 선언을 마감했고 GM 이 서술하는 중. closed: 끝났다

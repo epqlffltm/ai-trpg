@@ -220,6 +220,7 @@ async def test_the_lobby_lists_the_newest_table_first(client: AsyncClient, me: d
         'whisper_notice',
         'references_enabled',
         'friendly_fire',
+        'turn_mode',
         'created_at',
     }
 

@@ -32,6 +32,8 @@ class Conflict(enum.StrEnum):
     CHARACTER_DEAD = 'character_dead'
     # 이 라운드에 새로 들어온 캐릭터다. 다음 라운드부터 선언을 낸다
     CHARACTER_ARRIVING = 'character_arriving'
+    # 차례대로 진행하는 테이블(#287)에서 내 차례가 아니다. 차례의 주인만 선언한다
+    NOT_YOUR_TURN = 'not_your_turn'
     # 행동이 겨눈 NPC 가 이미 죽었다
     NPC_DEAD = 'npc_dead'
     # 행동이 겨눈 몬스터가 이미 죽었다(부서졌다)

@@ -27,7 +27,7 @@ from app.calendar import state as calendar
 from app.engine.action import WaitAction
 from app.rounds.models import Declaration, Round
 from app.rounds.state import find_declaration, is_down, wait_of, waiting_for
-from app.tables.models import GameTable
+from app.tables.models import GameTable, TurnMode
 
 
 class Broken(enum.StrEnum):
@@ -91,13 +91,16 @@ def finish_wait(declaration: Declaration, broken: Broken | None) -> None:
     declaration.outcome = {**declaration.outcome, 'wait': result}
 
 
-def settle(table: GameTable, round_: Round, hurt: set[uuid.UUID]) -> None:
+def settle(table: GameTable, round_: Round, hurt: set[uuid.UUID], cycle_end: bool = True) -> None:
     """
     라운드가 닫힐 때 기다림을 끝낸다. 모두 기다렸고 아무도 맞지 않았으면 다음 걸음을 가장 짧은 시간까지 늘린다.
 
     hurt 는 이번 라운드에 피해를 입은 사람들이다(app/rounds/judging.py 의 roll_checks).
-    기다린 사람이 없으면 아무것도 하지 않는다.
+    기다린 사람이 없으면 아무것도 하지 않는다. 차례대로 진행하는 테이블(#287)은 settle_turn 이다.
     """
+    if table.turn_mode == TurnMode.TURNS:
+        settle_turn(table, round_, hurt, cycle_end)
+        return
     declarations = waiting(table, round_)
     if not declarations:
         return
@@ -106,3 +109,20 @@ def settle(table: GameTable, round_: Round, hurt: set[uuid.UUID]) -> None:
         finish_wait(declaration, broken)
     if broken is None:
         calendar.stretch_next_step(table, shortest(declarations))
+
+
+def settle_turn(table: GameTable, round_: Round, hurt: set[uuid.UUID], cycle_end: bool) -> None:
+    """
+    차례대로 진행하는 테이블(#287)의 차례 하나의 기다림. 주인이 기다렸고 그 차례에 아무도 맞지 않았으면 부른 분을,
+    아니면 null 을 바퀴의 기다림(turn_waits)에 더한다. 그 차례의 결과(waited)는 그 차례에 깨지지 않았는지다.
+
+    바퀴의 끝(cycle_end)에 바퀴의 차례 모두가 기다렸으면 다음 걸음을 그중 가장 짧은 시간까지 늘린다.
+    """
+    declarations = waiting(table, round_)
+    broken = Broken.HURT if hurt else (None if declarations else Broken.NOT_ALL)
+    for declaration in declarations:
+        finish_wait(declaration, broken)
+    entry = shortest(declarations) if declarations and broken is None else None
+    table.turn_waits = [*table.turn_waits, entry]
+    if cycle_end and all(minutes is not None for minutes in table.turn_waits):
+        calendar.stretch_next_step(table, min(table.turn_waits))

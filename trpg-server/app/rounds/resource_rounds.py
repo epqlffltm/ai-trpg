@@ -205,7 +205,7 @@ def settle(table: GameTable, round_: Round, scene: Scene) -> list[Drift]:
     bearings = [*member_bearings(table, guard), *npc_bearings(scene, guard), *monster_bearings(scene, guard)]
     drifts = []
     for bearing in bearings:
-        one = drift(ruleset, bearing, table.id, round_.number)
+        one = drift(ruleset, bearing, table.id, round_.cycle)
         if one is not None and bearing.seen:
             drifts.append(one)
     return drifts

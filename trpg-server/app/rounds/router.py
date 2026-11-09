@@ -141,6 +141,8 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
     is_waiting = is_open and table.status == TableStatus.PLAYING
     return RoundOut(
         number=round_.number,
+        cycle=round_.cycle,
+        actor_id=round_.actor_id,
         scene=round_.scene,
         status=round_.status,
         declarations=declarations,

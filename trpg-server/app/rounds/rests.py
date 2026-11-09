@@ -322,7 +322,12 @@ def needs_rules(table: GameTable, pairs: list) -> bool:
 
 
 def settle(
-    table: GameTable, round_: Round, hurt: set[uuid.UUID], dice: Dice, ambushed: frozenset[uuid.UUID] = frozenset()
+    table: GameTable,
+    round_: Round,
+    hurt: set[uuid.UUID],
+    dice: Dice,
+    ambushed: frozenset[uuid.UUID] = frozenset(),
+    cycle_end: bool = True,
 ) -> Recovered:
     """
     라운드가 닫힐 때 쉬기로 일어날 일을 모두 정한다. 선언한 휴식 → 되살아나기 → 저절로 회복의 순서다.
@@ -331,6 +336,8 @@ def settle(
     ambushed 는 쉬는 중에 무작위 조우의 몬스터가 덮친 사람들이다(app/rounds/wanders.py, #283). 쉬기가 깨진다.
     선언한 휴식의 결과는 그 선언에 적고, 나머지는 이벤트에 적을 모양으로 돌려준다.
     쉰 사람과 일어난 사람은 저절로 회복하지 않는다.
+    cycle_end 가 거짓이면(차례대로 진행하는 테이블의 바퀴 중간의 차례, #287) 선언한 휴식만 끝낸다.
+    되살아나기와 저절로 회복은 바퀴의 끝에 한 번이다.
     """
     pairs = resting(table, round_)
     if not needs_rules(table, pairs):
@@ -339,6 +346,8 @@ def settle(
     if ruleset.rest is None:
         return NOTHING
     settle_rests(ruleset, pairs, hurt, set(ambushed), dice)
+    if not cycle_end:
+        return NOTHING
     revivals = revive_all(ruleset, table, round_.number, hurt, dice)
     # 쉰 사람과 방금 일어난 사람은 저절로 회복하지 않는다. 이 장면의 회복을 이미 받았다
     rested = {member.user_id for member, _ in pairs}

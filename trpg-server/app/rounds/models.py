@@ -87,6 +87,7 @@ class Round(Base):
     __tablename__ = 'table_rounds'
     __table_args__ = (
         CheckConstraint('number >= 1', name='number_positive'),
+        CheckConstraint('cycle >= 1', name='cycle_positive'),
         CheckConstraint('auto_retries >= 0', name='auto_retries_not_negative'),
         CheckConstraint('narration_failures >= 0', name='narration_failures_not_negative'),
         # 서술의 입력·출력 단계(#387). 0 부터 MAX_STEP 까지다
@@ -117,6 +118,13 @@ class Round(Base):
 
     # 테이블 안에서의 순서. 1 부터 하나씩 올라간다
     number: Mapped[int] = mapped_column(Integer)
+    # 게임 안의 라운드(#287). 한꺼번에 진행하면 number 와 같다. 차례대로 진행하면 모두의 차례 한 바퀴가 하나다.
+    # 시간에 걸린 규칙(시계, 짧은 부상의 라운드, 죽음의 굴림 같은 바퀴 끝의 일)은 이것으로 센다
+    # 적지 않으면 번호와 같다(한꺼번에 진행하는 라운드)
+    cycle: Mapped[int] = mapped_column(Integer, default=lambda context: context.get_current_parameters()['number'])
+    # 차례대로 진행하는 테이블에서 이 라운드의 차례의 주인(user_id, #287). 이 사람만 선언하고 서술 값을 낸다.
+    # 한꺼번에 진행하면 비어 있다. 차례대로인데 비어 있으면 차례를 받을 사람이 없는 라운드다(모두 쓰러짐)
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, default=None)
 
     # 이 라운드를 여는 장면. GM 의 서술이다. 앉은 사람 모두에게 보인다.
     # 첫 라운드는 스타팅이고, 그 뒤로는 앞 라운드의 선언들에 대한 결과다

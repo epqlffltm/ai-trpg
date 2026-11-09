@@ -94,11 +94,14 @@ def copied_declarations(previous: Round) -> list[Declaration]:
 def reopen(current: Round, previous: Round, deadline: datetime | None) -> None:
     """
     지금 라운드를 앞 라운드로 다시 연다. 번호, 장면, 들어온 캐릭터, 선언을 받는다. 마감은 지금부터 다시 센다.
+    차례대로 진행하는 테이블(#287)이면 바퀴와 차례의 주인도 받는다(남은 차례는 찍어 둔 테이블의 것으로 돌아간다).
 
     서술 모델과 단계, 알린 값은 지금 라운드의 것 그대로다. 그 값으로 걸어 둔 홀드로 다시 닫는 서술 값을 받는다.
     앞 라운드를 먼저 되돌렸다고 적고 DB 에 보낸 뒤에 부른다(번호의 유일 조건, uq_table_rounds_number).
     """
     current.number = previous.number
+    current.cycle = previous.cycle
+    current.actor_id = previous.actor_id
     current.scene = previous.scene
     current.arrivals = list(previous.arrivals)
     current.deadline_at = deadline
