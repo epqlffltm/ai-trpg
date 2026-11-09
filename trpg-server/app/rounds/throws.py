@@ -24,7 +24,15 @@ from app.engine.action import CheckAction, ThrowAction
 from app.rounds import friendly_fire
 from app.rounds.checks import judge_check, monster_gone
 from app.rounds.effects import Judging
-from app.rounds.item_targets import apply_after_hit, damage_nature, landed, mark_harm, target_of, to_check
+from app.rounds.item_targets import (
+    apply_after_hit,
+    damage_nature,
+    effect_target,
+    landed,
+    mark_harm,
+    target_of,
+    to_check,
+)
 from app.tables import items, sheets
 from app.tables import state as table_state
 from app.tables.items import CatalogItem
@@ -135,7 +143,8 @@ def judge_throw(judging: Judging, member: TableMember, action: ThrowAction) -> d
     mark_harm(judging, member, item.effects, action, check)
     prank = is_prank_throw(judging, member, action, item)
     items.remove_items(member.sheet, action.item, 1)
-    outcome = judge_check(judging, member, check, damage_nature(item.effects, item.nature))
+    struck = effect_target(item.effects, action, check)
+    outcome = judge_check(judging, member, check, damage_nature(item.effects, item.nature), struck)
     applied = apply_after_hit(judging, item.effects, action, prank) if landed(outcome, check) else NOTHING_APPLIED
     thrown = {**throw_document(judging, member, item, action, check, None), **applied}
     return {**outcome, 'item_throw': thrown}
