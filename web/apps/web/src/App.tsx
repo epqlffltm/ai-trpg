@@ -82,6 +82,7 @@ import {
   StoryWorldPage,
   StoryWorldsStudioPage,
   StudioPage,
+  SupportPage,
   TableCreatePage,
   TableRoomPage,
   WalletPage,
@@ -178,6 +179,8 @@ export function App() {
         {/* 인증 서버의 GUARDIAN_CONSENT_URL, GUARDIAN_REVOKE_URL 이 가리키는 곳. 보호자는 로그인하지 않는다. 바꾸면 그 설정도 바꾼다 */}
         <Route path="guardian/consent" element={<GuardianConsentPage />} />
         <Route path="guardian/revoke" element={<GuardianRevokePage />} />
+        {/* 고객센터. 로그인하지 않아도 연다(로그인이 안 되는 문의가 있다) */}
+        <Route path="support" element={<SupportPage />} />
         <Route
           path="conversations"
           element={
