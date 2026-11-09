@@ -272,6 +272,8 @@ class SecurityEventKind(models.TextChoices):
     # 가입 1단계에서 코드를 주지 않았다(계정이 없다).
     # 사유(note)에 막은 곳과 정지의 사유의 종류를 적는다
     RETURN_BLOCKED = 'return_blocked', '재가입: 정지된 채 탈퇴한 사람을 막음'
+    # 문의(support 앱). 로그인 없이 보내므로 같은 곳에서 쏟아붓는 것을 막는다
+    INQUIRY_IP_LIMITED = 'inquiry_ip_limited', '문의: IP 시도 제한'
 
 
 class SecurityEvent(models.Model):
@@ -480,6 +482,7 @@ class MailKind(models.TextChoices):
     WITHDRAWAL_REMINDER = 'withdrawal_reminder', '탈퇴 하루 전 알림'
     WITHDRAWAL_COMPLETED = 'withdrawal_completed', '탈퇴를 마침'
     SIGNUP_REFUSED = 'signup_refused', '가입을 받지 않는 이메일'
+    INQUIRY_REPLY = 'inquiry_reply', '문의의 답'
     # 종류를 적지 않은 메일. 이 칸이 생기기 전에 적힌 것도 이것이다
     OTHER = 'other', '그 밖'
 

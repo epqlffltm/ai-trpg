@@ -2,6 +2,46 @@
 // docs/api/auth.openapi.json 에서 만든 타입. 손으로 고치지 않는다(npm run gen:api).
 
 export interface paths {
+    "/api/v1/auth/admin/inquiries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 문의 목록(운영자). 상태로 고르고, 최근 것부터 한 쪽씩
+         * @description GET /api/v1/auth/admin/inquiries. 운영자의 문의 목록.
+         */
+        get: operations["admin_inquiries_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/admin/inquiries/{inquiry_id}/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 문의에 답한다(운영자). 답은 한 번만 쓰고, 문의의 주소로 메일을 보낸다
+         * @description POST /api/v1/auth/admin/inquiries/{id}/reply. 답을 적고 메일로 보낸다.
+         */
+        post: operations["admin_inquiries_reply_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/app/login/verify": {
         parameters: {
             query?: never;
@@ -266,6 +306,26 @@ export interface paths {
          * @description POST /api/v1/auth/identity/verify. 휴대폰 본인인증(#336).
          */
         post: operations["identity_verify_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/inquiries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 문의를 보낸다. 로그인했으면 계정의 주소로, 아니면 적은 주소로 답한다
+         * @description POST /api/v1/auth/inquiries. 로그인하지 못하는 사람도 보낸다.
+         */
+        post: operations["inquiries_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -544,6 +604,26 @@ export interface paths {
          * @description PATCH /api/v1/auth/me/content-settings. 목록을 거르는 내 설정을 고친다(#986, #987).
          */
         patch: operations["me_content_settings_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/auth/me/inquiries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 내 문의와 답. 최근 것부터 한 쪽씩
+         * @description GET /api/v1/auth/me/inquiries. 내 문의와 답.
+         */
+        get: operations["me_inquiries_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/auth/me/invite": {
@@ -1124,6 +1204,39 @@ export interface components {
         IdentityVerifyRequest: {
             token: string;
         };
+        /**
+         * @description * `account` - 계정·로그인
+         *     * `payment` - 결제·환불
+         *     * `report` - 신고
+         *     * `bug` - 오류
+         *     * `other` - 그 밖
+         * @enum {string}
+         */
+        InquiryCategoryEnum: "account" | "payment" | "report" | "bug" | "other";
+        /** @description 받은 문의. */
+        InquiryCreated: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+        };
+        /** @description 보낼 문의. 로그인했으면 email 은 보지 않는다(계정의 주소로 답한다). */
+        InquiryRequestRequest: {
+            body: string;
+            category: components["schemas"]["InquiryCategoryEnum"];
+            /**
+             * Format: email
+             * @description 답 받을 주소. 로그인하지 않았으면 꼭 적는다
+             */
+            email?: string;
+            title: string;
+        };
+        /**
+         * @description * `open` - 답을 기다림
+         *     * `answered` - 답함
+         * @enum {string}
+         */
+        InquiryStatusEnum: "open" | "answered";
         /** @description 공개키 하나(RFC 7517). 토큰 머리말의 kid 로 고른다. */
         Jwk: {
             alg: string;
@@ -1231,6 +1344,28 @@ export interface components {
             /** @description 받은 배지의 수 */
             earned: number;
         };
+        /** @description 내 문의 하나. 답하지 않았으면 reply 가 빈 글이고 answered_at 이 null 이다. */
+        MyInquiry: {
+            /** Format: date-time */
+            answered_at: string | null;
+            body: string;
+            category: components["schemas"]["InquiryCategoryEnum"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            reply: string;
+            status: components["schemas"]["InquiryStatusEnum"];
+            title: string;
+        };
+        MyInquiryPage: {
+            items: components["schemas"]["MyInquiry"][];
+            /**
+             * Format: date-time
+             * @description 다음 쪽을 부를 before. 마지막 쪽이면 null
+             */
+            next_before: string | null;
+        };
         /** @description 내 초대 코드와 받은 보상(#990). 상한은 서버의 설정이다. 보상은 내가 본인인증을 마친 뒤부터 센다. */
         MyInvite: {
             code: string;
@@ -1256,6 +1391,46 @@ export interface components {
         NicknameChangeRequest: {
             nickname: string;
             password: string;
+        };
+        /** @description 운영자가 보는 문의 하나. 보낸 계정(로그인하지 않고 보냈으면 null), 답 받을 주소, 답 메일의 결과를 더한다. */
+        OperatorInquiry: {
+            /** Format: date-time */
+            answered_at: string | null;
+            body: string;
+            category: components["schemas"]["InquiryCategoryEnum"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: email */
+            email: string;
+            /** Format: uuid */
+            id: string;
+            reply: string;
+            /**
+             * Format: date-time
+             * @description 답 메일을 끝내 보내지 못하고 버린 시각. 그러면 다른 길로 알려야 한다
+             */
+            reply_discarded_at: string | null;
+            /**
+             * Format: date-time
+             * @description 메일 서버가 답 메일을 받은 시각
+             */
+            reply_sent_at: string | null;
+            /** @description 문의를 보낸 계정. 로그인하지 않고 보냈으면 null 이다 */
+            sender: {
+                nickname: string;
+                /** Format: uuid */
+                public_id: string;
+            } | null;
+            status: components["schemas"]["InquiryStatusEnum"];
+            title: string;
+        };
+        OperatorInquiryPage: {
+            items: components["schemas"]["OperatorInquiry"][];
+            /**
+             * Format: date-time
+             * @description 다음 쪽을 부를 before. 마지막 쪽이면 null
+             */
+            next_before: string | null;
         };
         /**
          * @description * `all` - 전체
@@ -1323,6 +1498,9 @@ export interface components {
             refundable_until: string;
             /** Format: uuid */
             user_id: string;
+        };
+        ReplyRequestRequest: {
+            reply: string;
         };
         /** @description 시도가 너무 많거나 메일을 지금은 보낼 수 없을 때(429). retry_after 초 뒤에는 된다. Retry-After 머리말도 같다. */
         RetryLater: {
@@ -1429,6 +1607,142 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    admin_inquiries_retrieve: {
+        parameters: {
+            query?: {
+                /** @description 이 시각보다 앞에 보낸 것부터. 앞 쪽의 next_before 를 싣는다 */
+                before?: string;
+                /** @description 이 상태의 것만. 없으면 모두 */
+                status?: "answered" | "open";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorInquiryPage"];
+                };
+            };
+            /** @description status 나 before 가 틀렸다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 운영자가 아니다. 답하기에서는 그런 문의가 없을 때도다(inquiry.not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+        };
+    };
+    admin_inquiries_reply_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inquiry_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyRequestRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorInquiry"];
+                };
+            };
+            /** @description 요청을 받을 수 없다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 운영자가 아니다. 답하기에서는 그런 문의가 없을 때도다(inquiry.not_found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description 이미 답한 문의다(inquiry.already_answered) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
     app_login_verify_create: {
         parameters: {
             query?: never;
@@ -2107,6 +2421,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
+    inquiries_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InquiryRequestRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InquiryCreated"];
+                };
+            };
+            /** @description 칸이 틀렸거나, 로그인하지 않았는데 답 받을 주소(email)가 없다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 시도가 너무 많다(too_many_attempts) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetryLater"];
                 };
             };
         };
@@ -2843,6 +3216,55 @@ export interface operations {
                         code?: string;
                         detail: string;
                     };
+                };
+            };
+        };
+    };
+    me_inquiries_retrieve: {
+        parameters: {
+            query?: {
+                /** @description 이 시각보다 앞에 보낸 것부터. 앞 쪽의 next_before 를 싣는다 */
+                before?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyInquiryPage"];
+                };
+            };
+            /** @description before 가 시각이 아니다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
                 };
             };
         };

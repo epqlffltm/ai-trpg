@@ -20,6 +20,8 @@ urlpatterns = [
     path('health/ready', health.ready, name='health-ready'),
     # 버전을 주소에 넣는다. 응답 형식을 바꿔야 할 때 v2 를 따로 열 수 있다
     path('api/v1/auth/', include('accounts.urls')),
+    # 문의(고객센터). 관리 서버가 생기면 그리로 옮긴다(support/apps.py)
+    path('api/v1/auth/', include('support.urls')),
 ]
 
 # API 목록과 그것을 보는 화면(#558). 개발(DEBUG)에서만 연다. 운영 서버는 API 의 구조를 내보이지 않는다.
