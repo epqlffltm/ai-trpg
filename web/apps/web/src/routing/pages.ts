@@ -35,6 +35,7 @@ export const IdentityPage = lazyPage(() => import('../pages/identity/IdentityPag
 export const GuardianRequestPage = lazyPage(() => import('../pages/guardian/GuardianRequestPage'), 'GuardianRequestPage');
 export const GuardianConsentPage = lazyPage(() => import('../pages/guardian/GuardianConsentPage'), 'GuardianConsentPage');
 export const GuardianRevokePage = lazyPage(() => import('../pages/guardian/GuardianRevokePage'), 'GuardianRevokePage');
+export const InquiriesPage = lazyPage(() => import('../pages/operator/inquiries/InquiriesPage'), 'InquiriesPage');
 export const SupportPage = lazyPage(() => import('../pages/support/SupportPage'), 'SupportPage');
 export const ConversationsPage = lazyPage(() => import('../pages/conversations/ConversationsPage'), 'ConversationsPage');
 export const NotificationsPage = lazyPage(() => import('../pages/notifications/NotificationsPage'), 'NotificationsPage');
