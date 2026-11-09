@@ -26,9 +26,10 @@ from app.engine import armor, health
 from app.engine import injury as injury_rules
 from app.engine.action import CheckAction, Consequence, Recipient
 from app.engine.armor import Protection, Save
-from app.engine.check import Check
+from app.engine.check import Check, HinderedCheck, Side, resolve_opposed
 from app.engine.health import Change, ChangeKind
-from app.rounds import blows, drops, friendly_fire, resisting, wakes
+from app.engine.injury import Hindrance
+from app.rounds import blows, defenses, drops, friendly_fire, resisting, wakes
 from app.rounds import injuries as round_injuries
 from app.rounds.blows import Blow
 from app.rounds.cast import CastMember, find_cast_member
@@ -382,6 +383,67 @@ def roll_check_save(judging: Judging, blow: Blow | None, check: Check) -> Save |
     return blows.roll_blow_save(judging, blow)
 
 
+def struck_bearer(judging: Judging, action: CheckAction):
+    """
+    타격을 받는 쪽의 상태(능력치와 부상을 가진 것). 몬스터면 그 마리의 상태, 인물이면 그 인물의 상태, 동료면 시트다.
+
+    겨눈 것이 없거나 찾지 못하면 None 이다. 판정하기 전에 칠 수 있는지 봤다(target_gone).
+    """
+    if action.monster is not None:
+        monster = find_scene_monster(judging.monsters, action.monster)
+        return monster.state if monster is not None else None
+    if action.npc is not None:
+        person = find_cast_member(judging.cast, action.npc)
+        return person.npc if person is not None else None
+    if action.target is not None:
+        ally = table_state.find_member(judging.table, action.target)
+        return ally.sheet if ally is not None and ally.sheet is not None else None
+    return None
+
+
+def strike_defense(judging: Judging, action: CheckAction, blow: Blow | None) -> Side | None:
+    """
+    캐릭터의 타격을 받는 쪽(#254). 맞서는 굴림의 판에서 피해를 겨눈 타격이면 그 쪽이 규칙의 막는 능력치로 굴린다.
+
+    고정 난이도의 판이거나, 타격이 아니거나(피해가 없다), 받는 쪽을 찾지 못하면 None 이다(고정 난이도로 굴린다).
+    """
+    ability = defenses.struck_ability(judging.ruleset)
+    if ability is None or action.harm is None or blow is None:
+        return None
+    bearer = struck_bearer(judging, action)
+    if bearer is None:
+        return None
+    return defenses.defender_side(judging.ruleset, bearer.abilities, bearer.injuries, ability, blow)
+
+
+def ally_guarded(judging: Judging, action: CheckAction) -> bool:
+    """겨눈 동료가 이번 라운드에 방어 태세인가(#254). 그러면 그 타격이 불리하다."""
+    return action.target is not None and action.harm is not None and action.target in judging.defending
+
+
+def roll_strike(
+    judging: Judging, member: TableMember, action: CheckAction, hindrance: Hindrance, blow: Blow | None
+) -> tuple[HinderedCheck, dict]:
+    """
+    판정하는 행동을 굴린다. 맞서는 굴림의 타격이면 받는 쪽도 굴리고(strike_defense), 아니면 고정 난이도다.
+
+    돌려주는 것은 행동한 사람의 판정과, outcome 에 더할 것(맞서는 굴림이면 받는 쪽의 굴림 defense)이다.
+    """
+    ruleset = judging.ruleset
+    sheet = member.sheet
+    defense = strike_defense(judging, action, blow)
+    guarded = ally_guarded(judging, action)
+    if defense is None:
+        bonus, raise_by = (blow.bonus, blow.raise_by) if blow is not None else (0, 0)
+        hindered = actions.attempt_hindered(
+            ruleset, action, sheet.abilities, judging.dice, hindrance, bonus=bonus, raise_by=raise_by, guarded=guarded
+        )
+        return hindered, {}
+    side = defenses.strike_side(ruleset, sheet.abilities, sheet.injuries, action, blow, guarded)
+    opposed = resolve_opposed(ruleset, side, defense, judging.dice)
+    return opposed.attack, {'defense': defenses.defense_document(defenses.struck_ability(ruleset), opposed.defense)}
+
+
 def judge_check(judging: Judging, member: TableMember, action: CheckAction, nature: str | None = None) -> dict:
     """
     한 사람의 판정하는 행동을 판정하고 그 결과를 정한다. 선언의 outcome 에 적을 문서를 돌려준다.
@@ -391,6 +453,8 @@ def judge_check(judging: Judging, member: TableMember, action: CheckAction, natu
     타격이면 장비가 든 것(blow)을 붙인다. 무기도 방어 방식도 없으면 붙이지 않는다(app/rounds/blows.py).
     맞혔고 세이브 방식이면 맞는 쪽이 세이브를 굴린다. 막으면 아무것도 바뀌지 않는다.
     nature 는 타격의 피해의 성질이다(#886 ③, 물건과 기술의 피해 효과). 없으면 무기의 성질이다(blows.blow_nature).
+    맞서는 굴림의 판에서 피해를 겨눈 타격이면 받는 쪽도 굴린다(#254, roll_strike). 그 굴림을 defense 에 적는다.
+    방어 태세의 동료를 친 타격은 불리하다.
     """
     gone = target_gone(judging, member, action)
     if gone is not None:
@@ -401,10 +465,8 @@ def judge_check(judging: Judging, member: TableMember, action: CheckAction, natu
     sheet = member.sheet
     hindrance = round_injuries.hindrance_for(judging.ruleset, sheet.injuries, action.ability)
     blow = plan_check_blow(judging, member, action)
-    bonus, raise_by, cut = (blow.bonus, blow.raise_by, blow.cut) if blow is not None else (0, 0, 0)
-    hindered = actions.attempt_hindered(
-        judging.ruleset, action, sheet.abilities, judging.dice, hindrance, bonus=bonus, raise_by=raise_by
-    )
+    cut = blow.cut if blow is not None else 0
+    hindered, defended = roll_strike(judging, member, action, hindrance, blow)
     save = roll_check_save(judging, blow, hindered.check)
     consequence_ = (
         saved_consequence(action)
@@ -416,6 +478,7 @@ def judge_check(judging: Judging, member: TableMember, action: CheckAction, natu
         'hindrance': round_injuries.hindrance_document(hindered),
         'called_shot': round_injuries.called_shot_document(judging.ruleset, action.aim),
         **consequence_,
+        **defended,
     }
     document = blows.blow_document(judging.ruleset, blow, save) if blow is not None else None
     if document is not None:

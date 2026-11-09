@@ -11,11 +11,13 @@
   - 몬스터의 차례: 받는 캐릭터가 굴리고(차례의 outcome 의 defense), 공격의 막는 능력치를 따르고, 같으면 막는다.
     몬스터가 치는 인물도 굴린다
   - 싸우는 NPC 의 차례: 받는 캐릭터가 굴린다
+  - 캐릭터의 타격: 겨눈 몬스터와 인물이 규칙의 막는 능력치로 굴린다. 같으면 막는다. 노려 치기의 대가는 공격에서 뺀다
 판은 다른 테스트 파일의 것을 빌린다(수로 쥐, 약사, 악역영애). 이 파일의 테스트는 막는 규칙을 빼지 않은 룰북을 쓴다
 (@pytest.mark.opposed, tests/conftest.py).
 """
 
 import importlib.util
+import uuid
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,19 +30,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import AttackSnapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_69
+from app.engine.action import CheckAction
 from app.engine.check import Side, difficulty_shift, find_difficulty, resolve_opposed
 from app.engine.dice import ScriptedDice
 from app.engine.injury import Hindrance
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5, TEMPLATES
 from app.main import API_PREFIX
+from app.rounds import checks as checks_module
 from app.rounds import defenses
 from app.rounds.blows import NO_BLOW
 from tests import test_check_styles as styles
 from tests import test_monster_npc_attacks as bystanders
 from tests import test_monster_turns as turns
+from tests import test_npc_actions as npc_actions
+from tests import test_npc_steals as npc_steals
 from tests import test_npc_turns as npc_fights
 from tests.narration_model import asset_body
+from tests.sheets import make_sheet
 
 pytestmark = [pytest.mark.usefixtures('clean_tables'), pytest.mark.opposed]
 
@@ -201,6 +208,12 @@ LATE, EARLY = 1, 20
 ANY = 10
 
 
+async def my_check(client: AsyncClient, me: dict, table: dict) -> dict:
+    rounds = await client.get(turns.table_url(table, '/rounds/1'), headers=me)
+    (declaration,) = rounds.json()['declarations']
+    return declaration['outcome']
+
+
 async def rat_turn(session: AsyncSession, table: dict) -> dict:
     found = await turns.turns_of(session, table)
     return next(turn for turn in found if turn['kind'] == 'monster')['outcome']
@@ -261,7 +274,11 @@ async def test_a_fighting_npc_meets_the_characters_roll(
     client: AsyncClient, app: FastAPI, signing_key, session: AsyncSession, narrated
 ):
     me = turns.bearer(signing_key, npc_fights.ME)
-    world = await npc_fights.armed_and_fighting(client, app, me, narrated)
+    world = await npc_steals.start(client, me, attitude='hostile', attacks=[npc_fights.SWIPE])
+    # 라운드 1. 엘프의 주먹 1 대 악역영애의 민첩 20 → 막는다. 싸움이 붙는다(캐릭터의 타격도 맞서는 굴림이다)
+    turns.load_dice(app, [1, 20])
+    await npc_steals.send(client, me, world, npc_actions.punch(world['lady']['id']), content=npc_actions.PUNCH)
+    await narrated()
     # 라운드 2. 부채 후리기 12 대 엘프의 민첩 12 → 막는다
     dice = turns.load_dice(app, [12, 12])
 
@@ -272,3 +289,66 @@ async def test_a_fighting_npc_meets_the_characters_roll(
     (turn,) = npc_fights.npc_turns(await turns.turns_of(session, world['table'], 2))
     outcome = turn['outcome']
     assert (outcome['success'], outcome['effect'], outcome['defense']['success']) == (False, None, True)
+
+
+# --- 캐릭터의 타격 ---
+
+
+async def test_the_characters_kick_meets_the_monsters_roll(
+    client: AsyncClient, app: FastAPI, signing_key, session: AsyncSession, narrated
+):
+    me = turns.bearer(signing_key, turns.ME)
+    # 엘프가 먼저(민첩 14). 걷어차기 12 대 쥐의 민첩 11 → 맞는다. 피해 2(쥐 HP 4 → 2). 큰 타격이라 부상 표(1, 없음).
+    # 쥐의 물기 5 대 엘프의 민첩 5 + 2 = 7 → 막는다
+    table = await turns.start_table(client, me, sheet=make_sheet(dex=14))
+    rat = (await turns.monsters_of(client, me, table))[0]
+    dice = turns.load_dice(app, [12, 11, 2, 1, 5, 5])
+
+    await turns.declare(client, me, table, turns.KICK, turns.kick(rat['id']))
+    await narrated()
+
+    assert dice.remaining == 0
+    found = await turns.turns_of(session, table)
+    kick = await my_check(client, me, table)
+    assert (kick['success'], kick['target'], kick['monster_effect']['amount']) == (True, 12, 2)
+    bite = next(turn for turn in found if turn['kind'] == 'monster')['outcome']
+    assert (bite['success'], bite['defense']['total']) == (False, 7)
+
+
+async def test_a_tie_holds_off_the_characters_punch(
+    client: AsyncClient, app: FastAPI, signing_key, session: AsyncSession, narrated
+):
+    me = turns.bearer(signing_key, npc_fights.ME)
+    world = await npc_steals.start(client, me)
+    dice = turns.load_dice(app, [12, 12])
+
+    await npc_steals.send(client, me, world, npc_actions.punch(world['lady']['id']), content=npc_actions.PUNCH)
+    await narrated()
+
+    assert dice.remaining == 0
+    punch = await npc_steals.outcome(client, me, world)
+    assert (punch['success'], punch['npc_effect'], punch['target']) == (False, None, 13)
+
+
+def test_the_characters_side_pays_for_the_called_shot():
+    called = SRD5.model_copy(
+        update={'called_shot': SRD5.called_shot.model_copy(update={'mode': 'target_plus', 'amount': 5})}
+    )
+    aimed = CheckAction(
+        kind='check', ability='str', difficulty='easy', harm='light', monster=uuid.uuid4(), strike='head'
+    )
+
+    sided = defenses.strike_side(called, {'str': 12}, [], aimed, NO_BLOW, guarded=True)
+
+    # 쉬움은 +5, 노려 치기는 -5. 방어 태세의 동료면 불리하다
+    assert (sided.score, sided.adjust, sided.disadvantage) == (12, 0, True)
+
+
+def test_a_strike_on_a_guarding_ally_is_hindered():
+    ally = uuid.uuid4()
+    judging = SimpleNamespace(defending=frozenset({ally}))
+    strike = CheckAction(kind='check', ability='str', harm='light', target=ally)
+    help_up = CheckAction(kind='check', ability='wis', recover='light', target=ally)
+
+    assert checks_module.ally_guarded(judging, strike) is True
+    assert checks_module.ally_guarded(judging, help_up) is False

@@ -280,7 +280,8 @@ def roll_strike(
     ruleset = judging.ruleset
     side = defenses.attacker_side(ruleset, monster.state.abilities, monster.state.injuries, attack, blow, guarded)
     opposed = checks.resolve_opposed(ruleset, side, defense, judging.dice)
-    return opposed.attack, {'defense': defenses.defense_document(ruleset, attack, opposed.defense)}
+    ability = defenses.defending_ability(ruleset, attack)
+    return opposed.attack, {'defense': defenses.defense_document(ability, opposed.defense)}
 
 
 def strike_member(judging: Judging, monster: SceneMonster, victim: TableMember) -> dict:

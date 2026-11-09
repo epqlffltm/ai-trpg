@@ -909,9 +909,11 @@ def attempt_hindered(
     hindrance: Hindrance,
     bonus: int = 0,
     raise_by: int = 0,
+    guarded: bool = False,
 ) -> HinderedCheck:
     """
     부상을 입은 캐릭터가 행동을 한다. 판정을 한 번 하고 그 결과를 돌려준다.
+    guarded 는 겨눈 쪽이 방어 태세인가다(#254). 그러면 불리하다.
 
     hindrance 는 그 캐릭터의 부상이 이 행동의 능력에 주는 것이다(app/engine/injury.py 의 hindrance_of).
     노려 치면 규칙이 정한 만큼 어려워진다. 목표값이 오르거나(판정의 target 이 오른 값이다), 불리하다.
@@ -926,7 +928,7 @@ def attempt_hindered(
         difficulty = difficulty.model_copy(update={'target': difficulty.target + aim_raise + raise_by})
     score = abilities[action.ability]
     return resolve_hindered(
-        ruleset, score, difficulty, dice, hindrance, forced_disadvantage=aim_disadvantage, bonus=bonus
+        ruleset, score, difficulty, dice, hindrance, forced_disadvantage=aim_disadvantage or guarded, bonus=bonus
     )
 
 
