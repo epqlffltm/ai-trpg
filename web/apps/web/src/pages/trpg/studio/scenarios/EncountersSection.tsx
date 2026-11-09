@@ -2,6 +2,7 @@
 // 조우(B9 몬스터 탭). 장소마다 몬스터 몇 마리와 기습. 줄마다 "지하 묘지 · 구울 ×3 · 몬스터가 매복".
 // 더하기와 고치기는 창에서, 지우기는 한 번 더 묻는다. 창의 저장이 조우 목록을 통째로 바로 보낸다.
 // 몬스터는 시트를 적은 것만 고를 수 있다. 장소는 붙인 로어북의 장소 항목이고, 맵의 장소여야 한다(게시 점검이 본다).
+// 순찰 경로(#254)는 처음 자리에서 돌 장소들이다. 줄마다 고르고 뺀다(PatrolFields).
 
 import { Button, Dialog, SelectField, TextField } from '@ai-trpg/ui';
 import { useCallback, useState, type FormEvent } from 'react';
@@ -14,11 +15,13 @@ import {
   encounterHints,
   encounterLine,
   MAX_ENCOUNTERS,
+  PATROL_MAX_PLACES,
   SURPRISE_VALUES,
   surpriseLabel,
   toEncounter,
   withEncounter,
   withoutEncounter,
+  withPatrolPlace,
   type EncounterDraft,
 } from './encountersForm';
 import { mapPlaces } from './placesForm';
@@ -150,11 +153,52 @@ function EncounterForm({ scenario, places, monsters, monsterName, at, done }: Fo
           </option>
         ))}
       </SelectField>
+      <PatrolFields places={places} patrol={draft.patrol} error={hints.patrol} onChange={(patrol) => update({ patrol })} />
       <div className="actions">
         <Button type="submit" busy={saving.busy} disabled={blocked}>
           {at === null ? '더하기' : '저장'}
         </Button>
       </div>
     </form>
+  );
+}
+
+type PatrolProps = {
+  places: EntryChoice[];
+  patrol: string[];
+  error: string | undefined;
+  onChange: (patrol: string[]) => void;
+};
+
+/** 순찰 경로(#254). 처음 자리에서 이 장소들을 차례로 돌고 처음 자리로 돌아온다. 비우면 순찰하지 않는다 */
+function PatrolFields({ places, patrol, error, onChange }: PatrolProps) {
+  return (
+    <fieldset className="scenario-choices">
+      <legend>순찰 경로(선택)</legend>
+      <p className="ui-field__hint">
+        싸우지 않을 때 처음 자리에서 이 장소들을 차례로 돌고 처음 자리로 돌아옵니다. 장소끼리 이웃하지 않아도 가장 짧은 길로 한 칸씩 갑니다. 사냥이 순찰보다
+        먼저입니다.
+      </p>
+      {patrol.map((place, index) => (
+        <div key={index} className="ability-grid">
+          <SelectField label={`순찰 ${index + 1}`} value={place} onChange={(event) => onChange(withPatrolPlace(patrol, index, event.target.value))}>
+            {place === '' ? <option value="">고르기</option> : null}
+            {place !== '' && !places.some((one) => one.id === place) ? <option value={place}>(붙인 로어북에 없는 장소)</option> : null}
+            {places.map((one) => (
+              <option key={one.id} value={one.id}>
+                {one.name}
+              </option>
+            ))}
+          </SelectField>
+          <Button type="button" variant="secondary" onClick={() => onChange(withPatrolPlace(patrol, index, null))}>
+            순찰 {index + 1} 빼기
+          </Button>
+        </div>
+      ))}
+      {error ? <p className="ui-field__error">{error}</p> : null}
+      <Button type="button" variant="secondary" disabled={patrol.length >= PATROL_MAX_PLACES} onClick={() => onChange(withPatrolPlace(patrol, null, null))}>
+        순찰할 곳 더하기
+      </Button>
+    </fieldset>
   );
 }

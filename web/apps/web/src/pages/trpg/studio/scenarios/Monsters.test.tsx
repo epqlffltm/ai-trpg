@@ -121,6 +121,15 @@ describe('몬스터 탭', () => {
     await userEvent.clear(dialog.getByRole('textbox', { name: '쓰러뜨리면 주는 경험치' }));
     await userEvent.type(dialog.getByRole('textbox', { name: '쓰러뜨리면 주는 경험치' }), '50');
     await userEvent.click(dialog.getByRole('checkbox', { name: '도망치면 쫓아온다' }));
+    // 사냥과 배회(#254). 사냥은 1~5칸이고, 배회는 확률과 칸 수를 함께 적는다
+    await userEvent.type(dialog.getByRole('textbox', { name: '사냥하는 거리(1~5칸)' }), '6');
+    expect(dialog.getByText('1~5 사이의 정수입니다.')).toBeInTheDocument();
+    await userEvent.clear(dialog.getByRole('textbox', { name: '사냥하는 거리(1~5칸)' }));
+    await userEvent.type(dialog.getByRole('textbox', { name: '사냥하는 거리(1~5칸)' }), '2');
+    await userEvent.type(dialog.getByRole('textbox', { name: '배회하는 확률 %(1~100)' }), '30');
+    expect(dialog.getByText('배회하려면 칸 수도 적어 주세요.')).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: '저장' })).toBeDisabled();
+    await userEvent.type(dialog.getByRole('textbox', { name: '배회하는 거리(처음 자리에서 1~5칸)' }), '1');
     // 방어하는 때(#254). 문턱은 1~99 다. 확률은 비워 둔다
     await userEvent.type(dialog.getByRole('textbox', { name: 'HP 가 최대의 몇 % 이하일 때(1~99)' }), '100');
     expect(dialog.getByText('1~99 사이의 정수입니다.')).toBeInTheDocument();
@@ -156,8 +165,8 @@ describe('몬스터 탭', () => {
       resistances: [],
       nature: null,
       defends: { below: 30, chance: null },
-      hunts: null,
-      roams: null,
+      hunts: 2,
+      roams: { chance: 30, reach: 1 },
       xp: 50,
     });
     // 고치지 않은 시트의 면역은 그대로 간다
@@ -182,11 +191,18 @@ describe('몬스터 탭', () => {
     await userEvent.clear(dialog.getByRole('textbox', { name: '마리 수(1~10)' }));
     await userEvent.type(dialog.getByRole('textbox', { name: '마리 수(1~10)' }), '3');
     await userEvent.selectOptions(dialog.getByRole('combobox', { name: '기습' }), 'monsters');
+    // 순찰 경로(#254). 처음 자리와 같은 곳이 잇달아 오면 막는다
+    await userEvent.click(dialog.getByRole('button', { name: '순찰할 곳 더하기' }));
+    expect(dialog.getByText('순찰할 장소를 골라 주세요.')).toBeInTheDocument();
+    await userEvent.selectOptions(dialog.getByRole('combobox', { name: '순찰 1' }), HALL);
+    expect(dialog.getByText(/같은 장소가 잇달아 있습니다/)).toBeInTheDocument();
+    expect(dialog.getByRole('button', { name: '더하기' })).toBeDisabled();
+    await userEvent.selectOptions(dialog.getByRole('combobox', { name: '순찰 1' }), CRYPT);
     await userEvent.click(dialog.getByRole('button', { name: '더하기' }));
 
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
-    expect((patches(seen)[0]?.encounters as Encounter[])[1]).toEqual({ place_id: HALL, monster_id: GHOUL, count: 3, surprise: 'monsters', patrol: [] });
-    expect(await encounters.findByText('회랑 · 구울 ×3 · 몬스터가 매복')).toBeInTheDocument();
+    expect((patches(seen)[0]?.encounters as Encounter[])[1]).toEqual({ place_id: HALL, monster_id: GHOUL, count: 3, surprise: 'monsters', patrol: [CRYPT] });
+    expect(await encounters.findByText('회랑 · 구울 ×3 · 몬스터가 매복 · 순찰 1곳')).toBeInTheDocument();
 
     await userEvent.click(encounters.getByRole('button', { name: '지하 묘지의 리치 조우 지우기' }));
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '지우기' }));
@@ -226,7 +242,7 @@ describe('몬스터 입력', () => {
     expect(monsterLine({ ...GHOUL_SHEET, defends: { below: 30, chance: 25 } } as unknown as MonsterSheet, rules)).toContain('방어 HP 30% 이하, 25%');
   });
 
-  it('사냥과 배회는 고치는 칸이 없어도 받은 대로 보낸다', () => {
+  it('사냥과 배회는 받은 대로 고쳐 보낸다', () => {
     const roaming = { ...GHOUL_SHEET, hunts: 2, roams: { chance: 30, reach: 1 } } as unknown as MonsterSheet;
     const sent = toMonsterSheet(GHOUL, monsterDraft(roaming, rules), rules);
     expect([sent.hunts, sent.roams]).toEqual([2, { chance: 30, reach: 1 }]);
