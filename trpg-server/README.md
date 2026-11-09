@@ -215,6 +215,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | GET | `/api/v1/game/listings/hearted` | 내 관심(하트) 시나리오(#989). 최근에 둔 것부터 `{items, total}`, `limit`, `offset`. 지금 볼 수 있는 것만이다(링크 공개도 든다) | access 토큰 |
 | GET, PUT, DELETE | `/api/v1/game/listings/{scenario_id}/heart` | 관심을 읽고, 두고, 거둔다(#989). `{hearted, heart_count}`. 두 번 해도 같다. 볼 수 없는 시나리오에 두거나 읽으면 404, 거두는 것은 공개를 내린 뒤에도 된다. 공개 목록과 소개의 줄마다 `heart_count` 가 실린다(`listings.heart_count`, 두고 거둘 때 같은 트랜잭션에서 고친다) | access 토큰 |
 | GET | `/api/v1/game/listings/{scenario_id}` | 공개된 시나리오 하나. 남의 것도 본다. 목록의 칸에 테이블을 만들기 전에 고를 것들(스타팅, 캐릭터 방식, 프리젠, 능력치의 이름, 추천 서술 모델, 참고 자료를 켤 수 있는지 `references_allowed`)이 더 있다(#428) | 없어도 된다(전체 이용가만, #530) |
+| GET | `/api/v1/game/achievements/mine` | 내가 받은 시나리오의 업적 전부(`?limit=`(1~100, 기본 20)`&offset=`). 받은 때가 늦은 것부터, `{items, total}`. 줄마다 시나리오(id, 지금 제목, 공개 중이고 볼 수 있는지 `listed`), 업적(id, 이름, 받는 법, 그림), 받은 때. 받았으므로 숨긴 업적도 이름이 있다. 판에서 뺀 업적은 이름이 null 이다 | access 토큰 |
 | GET | `/api/v1/game/listings/{scenario_id}/achievements` | 공개된 시나리오의 업적들(아래 "시나리오 업적"). 업적마다 받은 사람의 수(`earned_count`)와 플레이한 사람의 수(`players`), 로그인했으면 내가 받은 때(`earned_at`). 숨긴 업적은 받기 전에 이름, 설명, 그림이 null 이다. 조건은 싣지 않는다 | 없어도 된다(전체 이용가만, #530) |
 | POST | `/api/v1/game/personas` | 보관함에 캐릭터 만들기. 201. 이름, 설명, 참고로 적어 두는 능력치(없어도 된다) | access 토큰 |
 | GET | `/api/v1/game/personas` | 내 보관함. 최근에 만든 것부터. `limit`, `offset` | access 토큰 |
@@ -2876,6 +2877,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - 게시할 때 조건을 퀘스트의 조건과 같이 본다. 문제는 `achievement_condition_missing`, `achievement_condition_invalid`, `achievement_condition_impossible` 이다
 - 업적의 그림은 테이블(`/tables/{id}/portraits/{id}/image`)과 공개된 시나리오(`/listings/{id}/portraits/{id}/image`)의 주소로 받는다. 업적에 붙은 그림은 지우지 못한다(409)
 - 판에서 업적을 빼도 받은 기록은 남는다(목록에는 보이지 않는다). 탈퇴하면 그 사람의 업적과 플레이의 기록을 지운다
+- **내 업적(`GET /achievements/mine`).** 마이페이지가 읽는다. 모든 시나리오의 것을 받은 때가 늦은 것부터 준다. 기록에는 업적의 id 만 있어 이름, 받는 법, 그림은 받은 테이블의 판에서, 그 테이블이 없으면 지금 공개 중인 판에서 찾는다(판 문서의 `achievements` 칸만 읽는다). 둘 다에 없으면 null 이다. `listed` 는 지금 공개 중이고 내 등급으로 볼 수 있는지다(공개를 내렸거나 지운 시나리오, 볼 수 없는 등급은 거짓). 거짓이어도 받은 기록은 보인다
 - 판의 `achievements` 는 비워도 되는 칸이라 형식(69)이 그대로다. 없던 판은 업적이 없는 것으로 읽는다
 
 ## 장면 그림

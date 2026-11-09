@@ -2,6 +2,28 @@
 // docs/api/trpg.openapi.json 에서 만든 타입. 손으로 고치지 않는다(npm run gen:api).
 
 export interface paths {
+    "/api/v1/game/achievements/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Mine
+         * @description 내가 받은 시나리오의 업적들. 모든 시나리오의 것이고 받은 때가 늦은 것부터다(?limit=&offset=).
+         *
+         *     받았으므로 숨긴 업적도 이름과 그림이 있다. 시나리오를 공개하지 않게 됐어도 받은 기록은 보인다(listed 가 거짓).
+         */
+        get: operations["read_mine_api_v1_game_achievements_mine_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/game/admin/banners": {
         parameters: {
             query?: never;
@@ -7253,6 +7275,49 @@ export interface components {
             move: components["schemas"]["MoveOut"];
         };
         /**
+         * MyAchievementOut
+         * @description 내가 받은 업적 하나(GET /achievements/mine). 받았으므로 숨긴 업적도 이름과 그림이 보인다.
+         *
+         *     이름, 설명, 그림은 받은 테이블의 판의 것이고, 그 테이블이 없으면 지금 공개 중인 판의 것이다.
+         *     두 판 모두에 그 업적이 없으면(판에서 뺐다) null 이다. 받은 기록은 남는다.
+         *     listed 면 지금 공개 중이고 내가 볼 수 있다. 소개와 업적의 그림을 연다
+         *     (/listings/{scenario_id}/portraits/{image_id}/image).
+         */
+        MyAchievementOut: {
+            /** Achievement Id */
+            achievement_id: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Earned At
+             * Format: date-time
+             */
+            earned_at: string;
+            /** Image Id */
+            image_id: string | null;
+            /** Listed */
+            listed: boolean;
+            /** Name */
+            name: string | null;
+            /**
+             * Scenario Id
+             * Format: uuid
+             */
+            scenario_id: string;
+            /** Scenario Title */
+            scenario_title: string;
+        };
+        /**
+         * MyAchievementPage
+         * @description 내가 받은 업적의 한 쪽. 받은 때가 늦은 것부터다. total 은 모든 시나리오에서 받은 수다.
+         */
+        MyAchievementPage: {
+            /** Items */
+            items: components["schemas"]["MyAchievementOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
          * MyScenarioSummary
          * @description 내 시나리오 목록의 한 줄(#1165). 등급에 쓰인 수와 관심 수, 공개 상태를 더한다.
          *
@@ -13027,6 +13092,38 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    read_mine_api_v1_game_achievements_mine_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyAchievementPage"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
     list_all_banners_api_v1_game_admin_banners_get: {
         parameters: {
             query?: never;

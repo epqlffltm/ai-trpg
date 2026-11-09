@@ -35,3 +35,31 @@ class ScenarioAchievements(BaseModel):
     items: list[ScenarioAchievementOut]
     # 이 시나리오를 플레이한 사람의 수(캐릭터를 갖고 앉은 테이블에서 라운드가 닫혔다). 달성률의 분모다
     players: int
+
+
+class MyAchievementOut(BaseModel):
+    """
+    내가 받은 업적 하나(GET /achievements/mine). 받았으므로 숨긴 업적도 이름과 그림이 보인다.
+
+    이름, 설명, 그림은 받은 테이블의 판의 것이고, 그 테이블이 없으면 지금 공개 중인 판의 것이다.
+    두 판 모두에 그 업적이 없으면(판에서 뺐다) null 이다. 받은 기록은 남는다.
+    listed 면 지금 공개 중이고 내가 볼 수 있다. 소개와 업적의 그림을 연다
+    (/listings/{scenario_id}/portraits/{image_id}/image).
+    """
+
+    scenario_id: uuid.UUID
+    # 시나리오의 지금 제목이다
+    scenario_title: str
+    listed: bool
+    achievement_id: str
+    name: str | None
+    description: str | None
+    image_id: uuid.UUID | None
+    earned_at: datetime
+
+
+class MyAchievementPage(BaseModel):
+    """내가 받은 업적의 한 쪽. 받은 때가 늦은 것부터다. total 은 모든 시나리오에서 받은 수다."""
+
+    items: list[MyAchievementOut]
+    total: int

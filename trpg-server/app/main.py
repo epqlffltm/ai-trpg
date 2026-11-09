@@ -390,6 +390,7 @@ def create_app(
     app.include_router(listings.owner_router, prefix=API_PREFIX)
     app.include_router(listings.public_router, prefix=API_PREFIX)
     app.include_router(achievements.router, prefix=API_PREFIX)
+    app.include_router(achievements.mine_router, prefix=API_PREFIX)
     # 첫 화면의 홍보 배너(#994). 보는 주소와 운영자의 주소
     app.include_router(banners.public_router, prefix=API_PREFIX)
     app.include_router(banners.admin_router, prefix=API_PREFIX)
