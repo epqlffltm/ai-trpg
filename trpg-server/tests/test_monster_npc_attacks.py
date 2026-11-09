@@ -13,7 +13,7 @@
   - 대상: 같은 장소의 인물도 친다. 캐릭터와 섞어 주사위로 고른다. 한편인 인물(시트의 allied_monsters)은 치지 않는다.
   - 맞으면: 인물이 피해를 입는다(npc_effect). 이벤트는 monster_attacked(맞은 인물) 뒤에 npc_changed 가 잇는다.
   - 쓰러짐과 마무리: 몬스터의 공격은 제압이라 HP 0 이면 쓰러진다. 쓰러진 인물은 다음 라운드부터 대상이고,
-    맞히면 죽는다(finishing). 이번 라운드에 쓰러진 인물은 대상이 아니다. 몬스터가 쓰러뜨려도 드롭은 없다.
+    맞히면 죽는다(finishing). 이번 라운드에 쓰러진 인물은 대상이 아니다. 처음 쓰러뜨리면 드롭이 나온다(덫과 같다).
   - 게시: 한편인 몬스터가 시트를 적은 몬스터가 아니면 npc_ally_missing 이다. 같은 몬스터를 두 번 적으면 422 다.
   - 서술: 차례의 줄에 맞은 인물과 그 몸 상태가 붙는다. 쓰러진 인물을 쳤으면 "쓰러진" 이 붙는다.
 """
@@ -71,7 +71,7 @@ def me(signing_key) -> dict[str, str]:
 
 
 async def make_world(client: AsyncClient, me: dict) -> dict:
-    """수로 입구와 약사가 든 로어북. 수로 쥐와 해골 병사가 든 도감. 룰북."""
+    """수로 입구와 약사와 약초가 든 로어북. 수로 쥐와 해골 병사가 든 도감. 룰북."""
     lorebook = await post(client, LOREBOOKS_URL, me, title='지하 수로')
     url = f'{LOREBOOKS_URL}/{lorebook["id"]}/entries'
     bestiary = await post(client, BESTIARIES_URL, me, title='지하 수로의 것들')
@@ -81,6 +81,7 @@ async def make_world(client: AsyncClient, me: dict) -> dict:
         'bestiary': bestiary,
         'gate': await post(client, url, me, name='수로 입구', kind='place'),
         'healer': await post(client, url, me, name='약사', kind='person'),
+        'herb': await post(client, url, me, name='약초', kind='item'),
         'rat': await post(client, monsters, me, name='수로 쥐', kind='beast'),
         'skeleton': await post(client, monsters, me, name='해골 병사', kind='undead'),
         'rulebook': await post(client, RULEBOOKS_URL, me, title='룰북'),
@@ -88,8 +89,9 @@ async def make_world(client: AsyncClient, me: dict) -> dict:
 
 
 def scenario_body(world: dict, healer_hp: int = 10, allied: list[str] | None = None) -> dict:
-    """입구에 쥐 한 마리와 약사. allied 를 주면 약사의 시트에 한편인 몬스터로 적는다."""
-    healer = {'entry_id': world['healer']['id'], 'sheet': make_sheet(max_hp=healer_hp)}
+    """입구에 쥐 한 마리와 약사(약초 둘을 지녀 쓰러지면 꼭 나온다). allied 는 약사의 한편인 몬스터다."""
+    herbs = [{'entry_id': world['herb']['id'], 'count': 2, 'chance': 100}]
+    healer = {'entry_id': world['healer']['id'], 'sheet': make_sheet(max_hp=healer_hp), 'inventory': herbs}
     if allied is not None:
         healer['allied_monsters'] = allied
     return {
@@ -227,17 +229,21 @@ async def test_a_downed_bystander_is_finished_the_next_round(
     client: AsyncClient, app: FastAPI, me: dict, session: AsyncSession, narrated
 ):
     world = await healer_table(client, me, healer_hp=2)
-    # 피해 2 로 쓰러진다(큰 타격이라 부상 표를 한 번 굴린다). 몬스터가 쓰러뜨려 드롭은 없다
+    # 피해 2 로 쓰러진다(큰 타격이라 부상 표를 한 번 굴린다). 처음 쓰러져 드롭이 나온다(덫과 같다).
+    # 확률이 100 이라 굴리지 않고, 그 장소에 엘프 혼자라 받을 사람도 굴리지 않는다
     load_dice(app, [LATE, EARLY, HEALER, HIT, 2, NO_INJURY, ANY])
     await act(client, me, world, narrated)
     downed = await rat_turn(session, world)
-    assert (downed['npc_effect']['status'], downed['npc_effect']['lethal'], 'drop' in downed) == (
-        'downed',
-        False,
-        False,
-    )
+    assert (downed['npc_effect']['status'], downed['npc_effect']['lethal']) == ('downed', False)
+    assert [(one['name'], one['count']) for one in downed['drop']['items']] == [('약초', 2)]
+    assert downed['drop']['character_name'] == '엘프'
     assert await healer_state(session, world) == ('downed', 0)
-    # 다음 라운드. 쓰러진 약사도 대상이다. 맞히면 죽는다(죽으면 부상 표가 없다)
+    seen = await events_of(client, me, world['table'])
+    changed = next(event for event in seen if event['type'] == 'npc_changed')
+    gained = next(event for event in seen if event['type'] == 'items_gained')
+    assert (gained['payload']['name'], gained['caused_by_sequence']) == ('약초', changed['sequence'])
+    assert 'drop' not in next(event for event in seen if event['type'] == 'monster_attacked')['payload']
+    # 다음 라운드. 쓰러진 약사도 대상이다. 맞히면 죽는다(죽으면 부상 표가 없다). 이미 쓰러진 적이 있어 드롭은 없다
     dice = load_dice(app, [LATE, EARLY, HEALER, HIT, 1, ANY])
 
     await act(client, me, world, narrated)
@@ -249,7 +255,7 @@ async def test_a_downed_bystander_is_finished_the_next_round(
         True,
         'dead',
     )
-    assert await healer_state(session, world) == ('dead', 0)
+    assert ('drop' in finished, await healer_state(session, world)) == (False, ('dead', 0))
     attacked = [event for event in await events_of(client, me, world['table']) if event['type'] == 'monster_attacked']
     assert attacked[-1]['payload']['finishing'] is True
 
