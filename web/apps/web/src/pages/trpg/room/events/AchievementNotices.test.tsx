@@ -4,6 +4,7 @@
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../../../api/refresh';
 import type { TableEvent } from '../../../../api/types';
@@ -75,6 +76,7 @@ describe('업적을 얻었다 알림', () => {
   });
 
   it('스트림으로 온 업적도 뜨고, 닫기를 누르면 감춘다', async () => {
+    const spy = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
     open([], {
       [`GET ${BASE}/stream`]: (request) => sseResponse(request, [sse('table_event', earned(21, 3, '종지기'), '21-0-0')]),
     });
@@ -82,8 +84,25 @@ describe('업적을 얻었다 알림', () => {
 
     const list = await earnedList();
     expect(await list.findByText('업적을 얻었습니다: 종지기')).toBeInTheDocument();
+    // 시나리오 소개의 업적과 마이페이지의 작품 업적을 다시 읽게 한다
+    const keys = spy.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
+    expect(keys).toContain(JSON.stringify(['game', 'listings', PLAYING.scenario_id, 'achievements']));
+    expect(keys).toContain(JSON.stringify(['me', 'work-achievements', 'trpg']));
     await userEvent.click(list.getByRole('button', { name: '종지기 알림 닫기' }));
     expect(screen.queryByRole('list', { name: '얻은 업적' })).toBeNull();
+  });
+
+  it('업적이 아닌 일이 스트림으로 오면 업적을 다시 읽지 않는다', async () => {
+    const spy = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
+    open([], {
+      [`GET ${BASE}/stream`]: (request) => sseResponse(request, [sse('table_event', event(22, 'hp_changed', { round: 3 }), '22-0-0')]),
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    expect(await screen.findByRole('heading', { name: PLAYING.title })).toBeInTheDocument();
+    await vi.waitFor(() => expect(spy).toHaveBeenCalled());
+    const keys = spy.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
+    expect(keys).not.toContain(JSON.stringify(['me', 'work-achievements', 'trpg']));
   });
 
   it('방장이 되돌린 라운드의 업적은 뜨지 않는다', async () => {

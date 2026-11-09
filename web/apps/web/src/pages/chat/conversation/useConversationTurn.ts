@@ -3,7 +3,7 @@
 //   - 흘러 들어오는 글은 turnState 로 쌓고, 끝나면(done, failed, 끊김) 대화를 다시 읽은 뒤 흘린 글을 지운다. 저장한 답을 믿는다
 //   - 시작 전의 거절은 turnProblem 의 한 줄이다. 실패(failed)는 청구하지 않았다는 한 줄이다
 //   - 끊기면 서버는 끝까지 저장한다. 다시 읽은 대화가 아직 쓰는 중이면 쿼리가 끝날 때까지 다시 묻는다
-//   - 답으로 처음 받은 업적(done 의 achievements)은 닫을 때까지 남긴다(earned). 받았으면 내 업적과 달성률을 다시 읽는다
+//   - 답으로 처음 받은 업적(done 의 achievements)은 닫을 때까지 남긴다(earned). 받았으면 내 업적과 달성률, 마이페이지의 작품 업적을 다시 읽는다
 //   - 화면을 떠나면 읽기만 멈춘다(서버의 생성은 멈추지 않는다). 멈추기는 stop 이다
 
 import { useQueryClient } from '@tanstack/react-query';
@@ -14,6 +14,7 @@ import { readTurnStream } from '../../../api/chatTurns';
 import type { EarnedAchievement } from '../../story/storyTurnState';
 import { withEarned } from '../../story/useStoryTurn';
 import { CHAT_ACHIEVEMENTS_KEY } from '../chatQueries';
+import { myWorkAchievementsKey } from '../../me/achievements/myAchievementsKeys';
 import { conversationKey } from './conversationQueries';
 import { describeTurnProblem, type TurnProblem } from './turnProblem';
 import { applyTurnMessage, EMPTY_TURN, failedText, type TurnState } from './turnState';
@@ -63,7 +64,10 @@ export function useConversationTurn(conversationId: string) {
         taken = error instanceof ApiError && typeof error.body.message_id === 'string';
       }
       if (controller.signal.aborted) return taken;
-      if (state.achievements.length > 0) void queryClient.invalidateQueries({ queryKey: CHAT_ACHIEVEMENTS_KEY });
+      if (state.achievements.length > 0) {
+        void queryClient.invalidateQueries({ queryKey: CHAT_ACHIEVEMENTS_KEY });
+        void queryClient.invalidateQueries({ queryKey: myWorkAchievementsKey('chat') });
+      }
       await settle();
       running.current = null;
       setTurn(null);

@@ -5,7 +5,8 @@
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient } from '@tanstack/react-query';
+import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import type { StoryMessage, StorySession, StoryState } from '../../api/story';
 import { sse } from '../../test/chatFixtures';
@@ -276,6 +277,11 @@ describe('순수한 함수', () => {
 
 const EARNED = { id: 'night', name: '밤의 산책', description: '밤까지 머물렀다', image_id: null };
 
+/** 다시 읽게 한 열쇠들(JSON) */
+function invalidatedKeys(spy: MockInstance<QueryClient['invalidateQueries']>): string[] {
+  return spy.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
+}
+
 describe('행동으로 받은 업적', () => {
   it('행동의 turn 에 실린 업적을 답이 끝난 뒤에도 띄우고, 닫으면 감춘다', async () => {
     const earnedReaction = () =>
@@ -288,11 +294,14 @@ describe('행동으로 받은 업적', () => {
         ),
         { headers: { 'Content-Type': 'text/event-stream' } },
       );
+    const spy = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
     const { seen } = signedIn({ [`POST ${ACTIONS}`]: () => earnedReaction() });
     renderApp(`/story/sessions/${SESSION}`);
 
     await userEvent.click(await screen.findByRole('button', { name: '시간 보내기' }));
     const list = within(await screen.findByRole('list', { name: '얻은 업적' }));
+    // 받았으면 마이페이지의 작품 업적도 다시 읽게 한다
+    await waitFor(() => expect(invalidatedKeys(spy)).toContain(JSON.stringify(['me', 'work-achievements', 'story'])));
     expect(list.getByText('업적을 얻었습니다: 밤의 산책')).toBeInTheDocument();
     expect(list.getByText('밤까지 머물렀다')).toBeInTheDocument();
     // 답이 끝나고 세션을 다시 읽어도 남는다
@@ -303,12 +312,14 @@ describe('행동으로 받은 업적', () => {
   });
 
   it('업적이 없는 행동에는 알림이 없다', async () => {
+    const spy = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
     const { seen } = signedIn();
     renderApp(`/story/sessions/${SESSION}`);
 
     await userEvent.click(await screen.findByRole('button', { name: '시간 보내기' }));
     await waitFor(() => expect(seen.filter((request) => request.url === `${STORY}/conversations/${SESSION}`).length).toBeGreaterThan(1));
     expect(screen.queryByRole('list', { name: '얻은 업적' })).toBeNull();
+    expect(invalidatedKeys(spy)).not.toContain(JSON.stringify(['me', 'work-achievements', 'story']));
   });
 
   it('turn 의 업적을 읽고 모양이 틀린 것은 버리며, 같은 업적은 한 번만 남긴다', () => {
