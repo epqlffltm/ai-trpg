@@ -114,13 +114,16 @@
 .sidebar-recent__head a {
   color: var(--ui-text-muted);
   font-weight: 400;
+  text-decoration: none;
 }
 
+/* 왼쪽 메뉴 열과 최근 대화 화면(/conversations)이 함께 쓴다. 본문 안에서도 밑줄 없이 메뉴 열과 같게 보인다 */
 .sidebar-recent__row {
   display: grid;
   padding: 4px 12px;
   border-radius: var(--ui-radius);
   color: var(--ui-text);
+  text-decoration: none;
 }
 
 .sidebar-recent__row:hover {
