@@ -55,6 +55,11 @@ def otlp_endpoint(value: str) -> str:
     return written.rstrip('/')
 
 
+# 서버가 받는 환경의 이름. 인증 서버(config/environments.py 의 KNOWN)와 결제 서버가 받는 것과 같다.
+# 모양만 맞으면 받던 때에는 prod 나 stage 같은 이름으로도 떴다(#1261)
+Environment = Literal['development', 'test', 'staging', 'production']
+
+
 class CoreSettings(BaseSettings):
     """
     설정 값의 목록과 형식.
@@ -77,8 +82,10 @@ class CoreSettings(BaseSettings):
     service_name: ClassVar[str] = 'server'
 
     # 이 서버가 도는 환경의 이름. 로그의 environment 칸에 들어간다(docs/observability.md).
-    # development, test, staging, production 처럼 적는다. 동작을 바꾸지 않는다. 기록을 가를 때만 쓴다
-    app_environment: str = Field(default='development', pattern=r'^[a-z][a-z0-9_-]{0,31}$')
+    # 받는 이름은 넷뿐이다(Environment). 다른 이름(prod, stage)이면 뜨지 않는다(#1261).
+    # 이 서버들의 동작은 바꾸지 않는다. 기록을 가를 때만 쓴다. 그래도 모든 서버가 같은 이름만 받는다.
+    # 인증 서버와 결제 서버는 이 이름으로 운영의 보호를 건다. 서버마다 받는 이름이 다르면 한 곳의 오타가 묻힌다
+    app_environment: Environment = 'development'
 
     # 이 서버의 버전. 로그의 version 칸에 들어간다. 배포할 때 git SHA 나 이미지의 버전을 넣는다.
     # 적지 않으면 dev 다. 어느 코드가 남긴 기록인지 가를 때 쓴다

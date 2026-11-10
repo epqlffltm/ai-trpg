@@ -593,6 +593,30 @@ func TestLoadPaymentFakeIgnoresTossKeys(t *testing.T) {
 	}
 }
 
+func TestLoadTakesOnlyTheKnownEnvironmentNames(t *testing.T) {
+	// #1261: 가짜 결제 대행사는 이름이 정확히 production 일 때만 막힌다. 운영을 prod 라고 적은 설정을 받으면
+	// 기본값인 가짜로 뜬다. 모르는 이름으로는 서버도 작업 명령도 뜨지 않는다
+	for _, environment := range []string{"development", "test", "staging"} {
+		values := required(map[string]string{"APP_ENVIRONMENT": environment})
+		if _, err := config.Load(from(values)); err != nil {
+			t.Errorf("%s 를 받지 않았다: %v", environment, err)
+		}
+		if _, err := config.LoadJobs(from(values)); err != nil {
+			t.Errorf("작업 명령이 %s 를 받지 않았다: %v", environment, err)
+		}
+	}
+	for _, environment := range []string{"prod", "stage", "live", "local", "ci", "Production", "production "} {
+		values := required(map[string]string{"APP_ENVIRONMENT": environment})
+		_, serverErr := config.Load(from(values))
+		_, jobsErr := config.LoadJobs(from(values))
+		for _, err := range []error{serverErr, jobsErr} {
+			if err == nil || !strings.Contains(err.Error(), "APP_ENVIRONMENT") {
+				t.Errorf("APP_ENVIRONMENT=%q 를 받았다: %v", environment, err)
+			}
+		}
+	}
+}
+
 func TestProductionRefusesTheFakeProvider(t *testing.T) {
 	// #153: 가짜는 결제 번호의 앞머리만으로 승인한다. 운영에서 뜨면 누구나 크레딧을 얻는다.
 	// 고르지 않아도 기본값이 가짜라 함께 막힌다. 서버와 작업 명령 모두다
@@ -617,7 +641,7 @@ func TestProductionAcceptsTossAndOtherEnvironmentsAcceptTheFake(t *testing.T) {
 	if _, err := config.Load(from(required(toss))); err != nil {
 		t.Errorf("운영의 토스페이먼츠 테스트 모드 = %v", err)
 	}
-	for _, environment := range []string{"development", "staging", "ci"} {
+	for _, environment := range []string{"development", "staging", "test"} {
 		if _, err := config.Load(from(required(map[string]string{"APP_ENVIRONMENT": environment}))); err != nil {
 			t.Errorf("%s 의 가짜 = %v", environment, err)
 		}

@@ -84,7 +84,7 @@
 
 | 환경 변수 | 기본값 | 받는 모양 | 로그의 칸 |
 | --- | --- | --- | --- |
-| `APP_ENVIRONMENT` | `development` | 소문자로 시작하고 소문자, 숫자, `_`, `-` 로 된 32자 이하 | `environment` |
+| `APP_ENVIRONMENT` | `development` | `development`, `test`, `staging`, `production` 가운데 하나. 다른 이름이면 서버가 뜨지 않는다(#1261) | `environment` |
 | `APP_VERSION` | `dev` | 영문자, 숫자, `.`, `_`, `+`, `-` 로 된 64자 이하 | `version` |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warning`, `error` 가운데 하나 | 남기는 가장 낮은 수준 |
 

@@ -337,6 +337,22 @@ def test_the_defaults_are_safe_for_local_development(monkeypatch: pytest.MonkeyP
     assert settings.log_level == 'info'
 
 
+@pytest.mark.parametrize('name', ['development', 'test', 'staging', 'production'])
+def test_the_four_environment_names_are_taken(name: str):
+    assert make_test_settings(app_environment=name).app_environment == name
+
+
+@pytest.mark.parametrize('name', ['prod', 'stage', 'live', 'local', 'Production', 'production ', ''])
+def test_an_unknown_environment_name_is_refused(name: str):
+    """
+    모르는 이름으로는 뜨지 않는다(#1261). 받으면 그 환경은 조용히 개발 환경처럼 뜬다.
+
+    인증 서버와 결제 서버는 이름이 staging, production 과 정확히 같을 때만 운영의 보호를 건다.
+    """
+    with pytest.raises(ValueError, match='validation error'):
+        make_test_settings(app_environment=name)
+
+
 @pytest.mark.parametrize(
     'overrides',
     [{'app_environment': 'Prod\nuction'}, {'app_version': 'v1\n{"level":"error"}'}, {'log_level': 'verbose'}],
