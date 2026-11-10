@@ -43,7 +43,6 @@ from app.realtime.listener import SignalSource
 from app.realtime.signals import STORED_KINDS, Kind, NarrationPiece, Notice, Signal
 from app.realtime.sse import Comment, Frame
 from app.tables import repository as table_repository
-from app.tables import state as table_state
 from app.tables.models import TableStatus
 from app.whispers import repository as whisper_repository
 from app.whispers.responses import to_whisper
@@ -250,11 +249,12 @@ async def read_new(
     새로 생긴 것을 종류마다 한 묶음씩 읽는다.
 
     읽을 때마다 아직 앉아 있는지부터 본다. 내보내진 사람에게 그 뒤의 채팅이 가면 안 된다.
+    자리는 테이블을 통째로 읽지 않고 쿼리 하나로 본다(#1263). 신호마다, 구독자마다 부르기 때문이다.
     테이블이 끝났으면 남은 것을 다 보낸 뒤에 닫는다. 아직 남은 종류가 있으면 이번에는 닫지 않는다.
     kinds 가 비어 있으면(입력 중 신호만 왔을 때) 앉아 있는지만 본다.
     """
-    table = await table_repository.find_table(session, table_id)
-    if table is None or table_state.find_member(table, user_id) is None:
+    seat = await table_repository.find_seat(session, table_id, user_id)
+    if seat is None:
         return Batch(frames=[], closed=Closed.NOT_SEATED)
 
     frames: list[Frame] = []
@@ -266,7 +266,7 @@ async def read_new(
         frames += read
         if full:
             pending.add(kind)
-    ended = table.status == TableStatus.ENDED and not pending
+    ended = seat.status == TableStatus.ENDED and not pending
     return Batch(frames=frames, closed=Closed.TABLE_ENDED if ended else None, pending=frozenset(pending))
 
 

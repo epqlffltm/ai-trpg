@@ -19,6 +19,7 @@ from app.rounds.narration_request import to_story
 from app.tables import sheets
 from app.tables.errors import Conflict, NotHostError, TableConflictError, TableNotFoundError, TableOptionError
 from app.tables.models import GameTable, TableMember, TableStatus
+from app.tables.repository import Seat
 
 
 def find_member(table: GameTable, user_id: uuid.UUID) -> TableMember | None:
@@ -74,8 +75,8 @@ def require_choosing(table: GameTable, member: TableMember) -> None:
         raise TableConflictError(Conflict.CHARACTER_ALIVE)
 
 
-def require_not_ended(table: GameTable) -> None:
-    """테이블이 끝나지 않았는지 확인한다. 끝났으면 TableConflictError."""
+def require_not_ended(table: GameTable | Seat) -> None:
+    """테이블이 끝나지 않았는지 확인한다. 끝났으면 TableConflictError. 테이블의 칸 몇 개(Seat)로도 본다."""
     if table.status == TableStatus.ENDED:
         raise TableConflictError(Conflict.ALREADY_ENDED)
 

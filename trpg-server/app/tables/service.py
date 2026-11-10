@@ -208,6 +208,35 @@ async def list_lobby(
 # --- 바꾸기. 모두 테이블을 잠그고 한다 ---
 
 
+async def get_seat(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID) -> repository.Seat:
+    """
+    자기가 앉아 있는 테이블의 칸 몇 개(상태, 채팅의 마지막 번호, #1263). 없거나 앉지 않았으면 TableNotFoundError.
+
+    테이블을 통째로 읽지 않는다. 자리만 확인하면 되는 곳이 쓴다.
+    """
+    seat = await repository.find_seat(session, table_id, user_id)
+    if seat is None:
+        raise TableNotFoundError
+    return seat
+
+
+async def lock_seated_row(
+    session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID
+) -> tuple[GameTable, TableMember]:
+    """
+    자기가 앉아 있는 테이블의 행을 잠그고, 그 행과 자기 자리의 행을 돌려준다(#1263).
+    없거나 앉지 않았으면 TableNotFoundError.
+
+    lock_seated 와 같은 행을 잠그지만 관계와 판의 복사본을 읽지 않는다. 테이블의 칸만 바꾸는 일(채팅)이 쓴다.
+    잠근 뒤에 자리를 읽는다. 잠그기 전에 확인하면, 그사이에 내보내졌을 수 있다.
+    """
+    table = await repository.lock_table_row(session, table_id)
+    member = await repository.find_member_row(session, table_id, user_id) if table is not None else None
+    if table is None or member is None:
+        raise TableNotFoundError
+    return table, member
+
+
 async def lock_seated(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID) -> tuple[GameTable, TableMember]:
     """
     자기가 앉아 있는 테이블을 잠그고, 테이블과 자기 자리를 돌려준다. 없거나 앉지 않았으면 TableNotFoundError.

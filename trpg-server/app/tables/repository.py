@@ -8,11 +8,12 @@
 """
 
 import uuid
+from dataclasses import dataclass
 from datetime import date, timedelta
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import defer
+from sqlalchemy.orm import defer, raiseload
 
 from app.assets.models import Rating
 from app.catalog.models import AiModel
@@ -58,6 +59,53 @@ async def list_npcs(session: AsyncSession, table_id: uuid.UUID) -> list[TableNpc
 async def find_table(session: AsyncSession, table_id: uuid.UUID) -> GameTable | None:
     """테이블 하나를 찾는다. 읽기만 할 때 쓴다."""
     return await session.scalar(select(GameTable).where(GameTable.id == table_id))
+
+
+@dataclass(frozen=True)
+class Seat:
+    """
+    앉은 사람이 본 테이블의 칸 몇 개(#1263). 자리만 확인하면 되는 곳(스트림, 입력 중, 채팅 읽기)이 쓴다.
+
+    status 는 테이블의 상태, last_message_sequence 는 채팅의 마지막 번호다.
+    """
+
+    status: TableStatus
+    last_message_sequence: int
+
+
+async def find_seat(session: AsyncSession, table_id: uuid.UUID, user_id: uuid.UUID) -> Seat | None:
+    """
+    그 사람이 그 테이블에 앉아 있으면 테이블의 칸 몇 개. 테이블이 없거나 앉지 않았으면 None. 읽기만 한다.
+
+    테이블을 통째로 읽지 않는다. 앉은 사람, 퀘스트, 맵 같은 관계와 판의 복사본을 읽지 않는 쿼리 하나다.
+    """
+    query = (
+        select(GameTable.status, GameTable.last_message_sequence)
+        .join(TableMember, TableMember.table_id == GameTable.id)
+        .where(GameTable.id == table_id, TableMember.user_id == user_id)
+    )
+    row = (await session.execute(query)).first()
+    return None if row is None else Seat(status=row.status, last_message_sequence=row.last_message_sequence)
+
+
+async def lock_table_row(session: AsyncSession, table_id: uuid.UUID) -> GameTable | None:
+    """
+    테이블의 행만 읽어 잠근다(#1263). 칸만 읽고 관계와 판의 복사본은 읽지 않는다. 읽으려 하면 오류다.
+
+    테이블의 칸 하나(채팅 번호 같은 것)만 바꾸는 일이 쓴다. 잠금은 lock_table 과 같은 행에 걸린다.
+    """
+    query = (
+        select(GameTable)
+        .where(GameTable.id == table_id)
+        .options(raiseload('*'), defer(GameTable.content, raiseload=True))
+    )
+    return await session.scalar(locked(query))
+
+
+async def find_member_row(session: AsyncSession, table_id: uuid.UUID, user_id: uuid.UUID) -> TableMember | None:
+    """앉은 사람의 행만 읽는다(#1263). 시트 같은 관계는 읽지 않는다. 읽으려 하면 오류다. 없으면 None."""
+    query = select(TableMember).where(TableMember.table_id == table_id, TableMember.user_id == user_id)
+    return await session.scalar(query.options(raiseload('*')))
 
 
 async def find_heading(session: AsyncSession, table_id: uuid.UUID) -> tuple[str, dict] | None:

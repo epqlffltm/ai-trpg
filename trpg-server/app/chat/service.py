@@ -27,6 +27,7 @@ from app.realtime.signals import Kind, Signal
 from app.tables import service as tables
 from app.tables import state as table_state
 from app.tables.models import GameTable, TableMember
+from app.tables.repository import Seat
 
 
 def next_sequence(table: GameTable) -> int:
@@ -70,7 +71,7 @@ async def post_message(
     테이블을 잠그고 한다. 두 사람이 동시에 써도 번호가 겹치지 않는다.
     """
     await limiting.limiter.count_attempt(limiting.limits.chat, f'{table_id}:{user_id}')
-    table, member = await tables.lock_seated(session, user_id, table_id)
+    table, member = await tables.lock_seated_row(session, user_id, table_id)
     table_state.require_not_ended(table)
 
     message = build_message(table, member, data.content)
@@ -95,8 +96,8 @@ async def announce_typing(
     테이블을 잠그지 않는다. 번호를 받지 않고, 바꾸는 것이 없다.
     신호는 커밋될 때 나가므로 커밋한다. 저장할 것은 없다.
     """
-    table = await tables.get_table(session, user_id, table_id)
-    table_state.require_not_ended(table)
+    seat = await tables.get_seat(session, user_id, table_id)
+    table_state.require_not_ended(seat)
     if not throttle.allow(table_id, user_id):
         return
 
@@ -106,12 +107,12 @@ async def announce_typing(
 
 async def list_messages(
     session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID, after: int, limit: int
-) -> tuple[GameTable, list[ChatMessage]]:
+) -> tuple[Seat, list[ChatMessage]]:
     """
-    자기가 앉아 있는 테이블의 채팅 중 after 번 뒤의 것을 순서대로 돌려준다. 테이블도 함께 돌려준다.
+    자기가 앉아 있는 테이블의 채팅 중 after 번 뒤의 것을 순서대로 돌려준다. 테이블의 칸 몇 개(자리)도 함께 돌려준다.
 
     앉지 않았으면 TableNotFoundError. 끝난 테이블의 채팅도 읽을 수 있다.
     """
-    table = await tables.get_table(session, user_id, table_id)
+    seat = await tables.get_seat(session, user_id, table_id)
     messages = await repository.list_after(session, table_id, after, limit)
-    return table, messages
+    return seat, messages
