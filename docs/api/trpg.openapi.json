@@ -1929,8 +1929,19 @@
       },
       "Chapter-Input": {
         "additionalProperties": false,
-        "description": "장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.\n\nid 는 판이 바뀌어도 그대로 두는 장의 이름표다. name 은 화면에 보이는 장의 이름이다(\"축제\").\nwhen 은 그 장으로 넘어오는 조건이다. 모양과 종류는 퀘스트의 조건과 같고(QuestCondition),\nmatch 는 그것을 맞추는 법이다.\n첫 장은 처음부터 그 장이라 조건을 적지 않는다. 그 뒤의 장에는 하나 이상 적는다(Chapters 가 본다).\n가져가기(consume)는 쓰지 않는다. 장은 물건을 받지 않는다.\nopens 는 그 장부터 열리는 장소와 퀘스트다. 어느 장에도 적지 않은 것은 처음부터 열려 있다.",
+        "description": "장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.\n\nid 는 판이 바뀌어도 그대로 두는 장의 이름표다. name 은 화면에 보이는 장의 이름이다(\"축제\").\nwhen 은 그 장으로 넘어오는 조건이다. 모양과 종류는 퀘스트의 조건과 같고(QuestCondition),\nmatch 는 그것을 맞추는 법이다.\n첫 장은 처음부터 그 장이라 조건을 적지 않는다. 그 뒤의 장에는 하나 이상 적는다(Chapters 가 본다).\n가져가기(consume)는 쓰지 않는다. 장은 물건을 받지 않는다.\nopens 는 그 장부터 열리는 장소와 퀘스트다. 어느 장에도 적지 않은 것은 처음부터 열려 있다.\nafter 는 이 장이 어느 장 다음에 올 수 있는지다(갈림길, #289). 목록에서 이 장보다 앞의 장만 적는다.\n비우면 목록에서 바로 앞의 장 다음이다(갈림길이 생기기 전의 모양). 첫 장에는 적지 않는다.\n여럿 적으면 그 어느 장에서든 넘어올 수 있다(합류).",
         "properties": {
+          "after": {
+            "default": [],
+            "items": {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "After",
+            "type": "array"
+          },
           "id": {
             "maxLength": 40,
             "minLength": 1,
@@ -1973,8 +1984,19 @@
       },
       "Chapter-Output": {
         "additionalProperties": false,
-        "description": "장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.\n\nid 는 판이 바뀌어도 그대로 두는 장의 이름표다. name 은 화면에 보이는 장의 이름이다(\"축제\").\nwhen 은 그 장으로 넘어오는 조건이다. 모양과 종류는 퀘스트의 조건과 같고(QuestCondition),\nmatch 는 그것을 맞추는 법이다.\n첫 장은 처음부터 그 장이라 조건을 적지 않는다. 그 뒤의 장에는 하나 이상 적는다(Chapters 가 본다).\n가져가기(consume)는 쓰지 않는다. 장은 물건을 받지 않는다.\nopens 는 그 장부터 열리는 장소와 퀘스트다. 어느 장에도 적지 않은 것은 처음부터 열려 있다.",
+        "description": "장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.\n\nid 는 판이 바뀌어도 그대로 두는 장의 이름표다. name 은 화면에 보이는 장의 이름이다(\"축제\").\nwhen 은 그 장으로 넘어오는 조건이다. 모양과 종류는 퀘스트의 조건과 같고(QuestCondition),\nmatch 는 그것을 맞추는 법이다.\n첫 장은 처음부터 그 장이라 조건을 적지 않는다. 그 뒤의 장에는 하나 이상 적는다(Chapters 가 본다).\n가져가기(consume)는 쓰지 않는다. 장은 물건을 받지 않는다.\nopens 는 그 장부터 열리는 장소와 퀘스트다. 어느 장에도 적지 않은 것은 처음부터 열려 있다.\nafter 는 이 장이 어느 장 다음에 올 수 있는지다(갈림길, #289). 목록에서 이 장보다 앞의 장만 적는다.\n비우면 목록에서 바로 앞의 장 다음이다(갈림길이 생기기 전의 모양). 첫 장에는 적지 않는다.\n여럿 적으면 그 어느 장에서든 넘어올 수 있다(합류).",
         "properties": {
+          "after": {
+            "default": [],
+            "items": {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "After",
+            "type": "array"
+          },
           "id": {
             "maxLength": 40,
             "minLength": 1,
@@ -2091,7 +2113,7 @@
         "type": "object"
       },
       "ChapterOut": {
-        "description": "테이블의 지금 장(#481). 몇째 장(number, 1 부터)이고 판의 장 몇 개 중인가(total), 이름, 넘어온 라운드다.\n\n다음 장의 이름과 조건은 싣지 않는다. 아직 오지 않은 이야기가 드러나지 않게 한다.\n첫 장이면 넘어온 라운드(entered_round)가 비어 있다.",
+        "description": "테이블의 지금 장(#481). 몇째 장(number, 1 부터)이고 판의 장 몇 개 중인가(total), 이름, 넘어온 라운드다.\n갈림길(#289)이 있으면 number 는 몇째로 들어선 장(지나온 장의 수), total 은 첫 장에서 가장 많은 장을 지나는\n길의 장의 수다. 갈림길이 없으면 판의 장의 차례와 장의 수다.\n\n다음 장의 이름과 조건은 싣지 않는다. 아직 오지 않은 이야기가 드러나지 않게 한다.\n첫 장이면 넘어온 라운드(entered_round)가 비어 있다.",
         "properties": {
           "entered_round": {
             "anyOf": [
@@ -2132,8 +2154,16 @@
         "type": "object"
       },
       "ChapterSnapshot": {
-        "description": "장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.\n\nwhen 은 그 장으로 넘어오는 조건(퀘스트의 조건과 같은 모양), match 는 그것을 맞추는 법이다. 첫 장은 조건이 없다.\nopens 는 그 장부터 열리는 장소와 퀘스트다.",
+        "description": "장 하나(#481, docs/architecture/chapters.md). 목록의 차례가 장의 차례다.\n\nwhen 은 그 장으로 넘어오는 조건(퀘스트의 조건과 같은 모양), match 는 그것을 맞추는 법이다. 첫 장은 조건이 없다.\nopens 는 그 장부터 열리는 장소와 퀘스트다.\nafter 는 이 장이 어느 장 다음에 올 수 있는지다(#289). 비우면 목록에서 바로 앞의 장 다음이다.",
         "properties": {
+          "after": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "After",
+            "type": "array"
+          },
           "id": {
             "title": "Id",
             "type": "string"

@@ -224,6 +224,7 @@ class GameTable(Base):
         CheckConstraint("jsonb_typeof(turn_waits) = 'array'", name='turn_waits_is_array'),
         CheckConstraint("jsonb_typeof(turn_foes) = 'array'", name='turn_foes_is_array'),
         CheckConstraint("jsonb_typeof(turn_stances) = 'object'", name='turn_stances_is_object'),
+        CheckConstraint("jsonb_typeof(chapter_path) = 'array'", name='chapter_path_is_array'),
     )
 
     # API 주소에 드러나는 값이다. 순서대로 늘어나는 정수면 테이블이 몇 개인지 추측할 수 있다
@@ -257,6 +258,9 @@ class GameTable(Base):
     # chapter_round 는 지금 장으로 넘어온 라운드다. 첫 장이면 비어 있다. 그 라운드의 서술이 장이 바뀐 것을 받는다
     chapter_id: Mapped[str | None] = mapped_column(String(CHAPTER_ID_MAX_LENGTH))
     chapter_round: Mapped[int | None] = mapped_column(Integer)
+    # 지나온 장(#289, 갈림길). 첫 장부터 지금 장까지 들어선 장의 id 들이다. 고르지 않은 가지의 장은 없다.
+    # 이 칸이 생기기 전에 시작한 테이블은 비어 있고, 그때는 판의 첫 장부터 지금 장까지로 본다(app/tables/chapters.py)
+    chapter_path: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
     # 이 테이블에서 받아들인 즉흥 조우(#254)의 수. 판의 improvised_encounters 까지다.
     # 엔진만 늘린다(app/rounds/improvised.py)
     improvised_encounters: Mapped[int] = mapped_column(SmallInteger, default=0, server_default=text('0'))

@@ -6,6 +6,8 @@
 // - 여는 것: 그 장부터 열리는 맵의 장소와 퀘스트(사건 항목). 하나는 한 장에만 적는다. 시작 장소는 첫 장 뒤에 열지 못한다
 // - id 는 판이 바뀌어도 그대로 두는 이름표다. 만들 때 정하고(chapter-1, chapter-2 …) 고치지 않는다.
 //   조건의 장(chapter_at_least)과 테이블의 지금 장이 이것을 가리킨다
+// - 갈림길(after, #289): 그 장이 어느 장 다음에 올 수 있는지. 목록에서 앞의 장만 적는다. 비우면 바로 앞의 장 다음이다.
+//   고르는 칸은 아직 없다. 받은 것을 그대로 보내고, 지우거나 옮겨 앞의 장이 아니게 된 것은 뺀다
 
 import type { Chapter, ChapterBody, QuestMatch } from '../../../../api/types';
 import { conditionDrafts, conditionLine, conditionsHints, toConditions, type ConditionDraft, type Targets } from './conditionsForm';
@@ -14,7 +16,14 @@ export const MAX_CHAPTERS = 20;
 export const CHAPTER_NAME_MAX_LENGTH = 40;
 export const CHAPTER_MAX_OPENS = 100;
 
-export type ChapterDraft = { name: string; when: ConditionDraft[]; match: QuestMatch; places: string[]; quests: string[] };
+export type ChapterDraft = {
+  name: string;
+  when: ConditionDraft[];
+  match: QuestMatch;
+  places: string[];
+  quests: string[];
+  after: string[];
+};
 
 export function chapterDraft(chapter: Chapter | undefined): ChapterDraft {
   return {
@@ -23,6 +32,7 @@ export function chapterDraft(chapter: Chapter | undefined): ChapterDraft {
     match: chapter?.match ?? 'all',
     places: chapter?.opens.places ?? [],
     quests: chapter?.opens.quests ?? [],
+    after: chapter?.after ?? [],
   };
 }
 
@@ -67,7 +77,7 @@ export function hasChapterHints(hints: ChapterHints): boolean {
   return Object.keys(hints.when).length > 0 || Object.keys(hints.fields).length > 0;
 }
 
-/** 보낼 장. 첫 장은 넘어오는 조건을 보내지 않는다 */
+/** 보낼 장. 첫 장은 넘어오는 조건과 앞의 장을 보내지 않는다 */
 export function toChapter(id: string, draft: ChapterDraft, first: boolean): ChapterBody {
   return {
     id,
@@ -75,6 +85,7 @@ export function toChapter(id: string, draft: ChapterDraft, first: boolean): Chap
     when: first ? [] : toConditions(draft.when, false),
     match: draft.match,
     opens: { places: draft.places, quests: draft.quests },
+    after: first ? [] : draft.after,
   };
 }
 
@@ -89,9 +100,17 @@ export function withChapter(chapters: Chapter[], chapter: ChapterBody): ChapterB
   return bodies.some((one) => one.id === chapter.id) ? bodies.map((one) => (one.id === chapter.id ? chapter : one)) : [...bodies, chapter];
 }
 
+/** 장마다 앞의 장(after)에서 목록의 앞에 없는 장을 뺀다. 지우거나 옮긴 뒤에 서버의 모양(앞의 장만)을 지킨다 */
+export function keepEarlierAfter(bodies: ChapterBody[]): ChapterBody[] {
+  return bodies.map((body, index) => {
+    const earlier = new Set(bodies.slice(0, index).map((one) => one.id));
+    return { ...body, after: body.after.filter((one) => earlier.has(one)) };
+  });
+}
+
 /** 그 장을 지운 목록 */
 export function withoutChapter(chapters: Chapter[], chapterId: string): ChapterBody[] {
-  return chapters.map(asBody).filter((one) => one.id !== chapterId);
+  return keepEarlierAfter(chapters.map(asBody).filter((one) => one.id !== chapterId));
 }
 
 /**
@@ -117,7 +136,7 @@ export function moved(chapters: Chapter[], index: number, step: -1 | 1): Chapter
   if (!canMove(chapters.length, index, step)) return bodies;
   const target = index + step;
   [bodies[index], bodies[target]] = [bodies[target]!, bodies[index]!];
-  return bodies;
+  return keepEarlierAfter(bodies);
 }
 
 /** 목록의 한 줄. "처음부터 · 여는 것 없음", "넘어옴: 종탑에 닿는다 · 열림: 장소 2, 퀘스트 1" */

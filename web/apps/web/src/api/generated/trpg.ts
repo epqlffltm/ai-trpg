@@ -3647,8 +3647,16 @@ export interface components {
          *     첫 장은 처음부터 그 장이라 조건을 적지 않는다. 그 뒤의 장에는 하나 이상 적는다(Chapters 가 본다).
          *     가져가기(consume)는 쓰지 않는다. 장은 물건을 받지 않는다.
          *     opens 는 그 장부터 열리는 장소와 퀘스트다. 어느 장에도 적지 않은 것은 처음부터 열려 있다.
+         *     after 는 이 장이 어느 장 다음에 올 수 있는지다(갈림길, #289). 목록에서 이 장보다 앞의 장만 적는다.
+         *     비우면 목록에서 바로 앞의 장 다음이다(갈림길이 생기기 전의 모양). 첫 장에는 적지 않는다.
+         *     여럿 적으면 그 어느 장에서든 넘어올 수 있다(합류).
          */
         "Chapter-Input": {
+            /**
+             * After
+             * @default []
+             */
+            after: string[];
             /** Id */
             id: string;
             /** @default all */
@@ -3678,8 +3686,16 @@ export interface components {
          *     첫 장은 처음부터 그 장이라 조건을 적지 않는다. 그 뒤의 장에는 하나 이상 적는다(Chapters 가 본다).
          *     가져가기(consume)는 쓰지 않는다. 장은 물건을 받지 않는다.
          *     opens 는 그 장부터 열리는 장소와 퀘스트다. 어느 장에도 적지 않은 것은 처음부터 열려 있다.
+         *     after 는 이 장이 어느 장 다음에 올 수 있는지다(갈림길, #289). 목록에서 이 장보다 앞의 장만 적는다.
+         *     비우면 목록에서 바로 앞의 장 다음이다(갈림길이 생기기 전의 모양). 첫 장에는 적지 않는다.
+         *     여럿 적으면 그 어느 장에서든 넘어올 수 있다(합류).
          */
         "Chapter-Output": {
+            /**
+             * After
+             * @default []
+             */
+            after: string[];
             /** Id */
             id: string;
             /** @default all */
@@ -3750,6 +3766,8 @@ export interface components {
         /**
          * ChapterOut
          * @description 테이블의 지금 장(#481). 몇째 장(number, 1 부터)이고 판의 장 몇 개 중인가(total), 이름, 넘어온 라운드다.
+         *     갈림길(#289)이 있으면 number 는 몇째로 들어선 장(지나온 장의 수), total 은 첫 장에서 가장 많은 장을 지나는
+         *     길의 장의 수다. 갈림길이 없으면 판의 장의 차례와 장의 수다.
          *
          *     다음 장의 이름과 조건은 싣지 않는다. 아직 오지 않은 이야기가 드러나지 않게 한다.
          *     첫 장이면 넘어온 라운드(entered_round)가 비어 있다.
@@ -3772,8 +3790,14 @@ export interface components {
          *
          *     when 은 그 장으로 넘어오는 조건(퀘스트의 조건과 같은 모양), match 는 그것을 맞추는 법이다. 첫 장은 조건이 없다.
          *     opens 는 그 장부터 열리는 장소와 퀘스트다.
+         *     after 는 이 장이 어느 장 다음에 올 수 있는지다(#289). 비우면 목록에서 바로 앞의 장 다음이다.
          */
         ChapterSnapshot: {
+            /**
+             * After
+             * @default []
+             */
+            after: string[];
             /** Id */
             id: string;
             /** @default all */

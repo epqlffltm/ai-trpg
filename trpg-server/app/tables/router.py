@@ -577,9 +577,12 @@ def to_chapter(table: GameTable, snapshot: Snapshot) -> ChapterOut | None:
     chapter = chapters.current(table, snapshot)
     if chapter is None:
         return None
-    number = snapshot.chapters.index(chapter) + 1
     return ChapterOut(
-        id=chapter.id, name=chapter.name, number=number, total=len(snapshot.chapters), entered_round=table.chapter_round
+        id=chapter.id,
+        name=chapter.name,
+        number=chapters.number_of(table),
+        total=chapters.longest(snapshot),
+        entered_round=table.chapter_round,
     )
 
 

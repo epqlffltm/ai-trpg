@@ -65,7 +65,14 @@ async def test_chapters_are_saved_with_their_defaults(client: AsyncClient, me: d
     scenario = await draft_with(client, me, more, two_chapters(more))
 
     first, second = scenario['chapters']
-    assert first == {'id': 'arrival', 'name': '도착', 'when': [], 'match': 'all', 'opens': {'places': [], 'quests': []}}
+    assert first == {
+        'id': 'arrival',
+        'name': '도착',
+        'when': [],
+        'match': 'all',
+        'opens': {'places': [], 'quests': []},
+        'after': [],
+    }
     assert second['when'] == [{'kind': 'reach_place', 'target': more['square']['id'], 'count': 1, 'consume': False}]
     assert second['opens'] == {'places': [more['cellar']['id']], 'quests': [more['rescue']['id']]}
 

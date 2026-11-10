@@ -178,6 +178,7 @@ from app.engine.sheet import CharacterSheet, Sheet
 #      몬스터가 사냥하는 거리와 배회하는 것(monsters[].hunts, monsters[].roams: chance, reach)도 뒤에 더했다.
 #      비워도 되는 칸이라 형식이 그대로다
 #      조우의 순찰 경로(encounters[].patrol: 장소 항목의 ID 들)도 뒤에 더했다. 비워도 되는 칸이라 형식이 그대로다
+#      장의 갈림길(chapters[].after: 앞의 장의 id 들, #289)도 뒤에 더했다. 비우면 바로 앞의 장 다음이라 형식이 그대로다
 SNAPSHOT_FORMAT = 70
 
 
@@ -453,6 +454,7 @@ class ChapterSnapshot(BaseModel):
 
     when 은 그 장으로 넘어오는 조건(퀘스트의 조건과 같은 모양), match 는 그것을 맞추는 법이다. 첫 장은 조건이 없다.
     opens 는 그 장부터 열리는 장소와 퀘스트다.
+    after 는 이 장이 어느 장 다음에 올 수 있는지다(#289). 비우면 목록에서 바로 앞의 장 다음이다.
     """
 
     id: str
@@ -460,6 +462,7 @@ class ChapterSnapshot(BaseModel):
     when: list[QuestConditionSnapshot] = []
     match: QuestMatch = QuestMatch.ALL
     opens: ChapterOpensSnapshot = ChapterOpensSnapshot()
+    after: list[str] = []
 
 
 class AchievementSnapshot(BaseModel):
@@ -1143,8 +1146,8 @@ class Snapshot(BaseModel):
     @model_validator(mode='after')
     def require_chapter_targets(self) -> 'Snapshot':
         """
-        장(#481)이 판 안의 장소 항목과 사건 항목만 열고, 첫 장에 조건이 없고, 시작 장소를 첫 장 뒤에 열지 않는지 본다.
-        아니면 거부한다.
+        장(#481)이 판 안의 장소 항목과 사건 항목만 열고, 첫 장에 조건이 없고, 시작 장소를 첫 장 뒤에 열지 않고,
+        갈림길(after, #289)이 앞의 장만 가리키는지 본다. 아니면 거부한다.
 
         게시할 때 이미 막는다(scenarios/publishing.py). 판을 읽는 쪽(테이블)은 장이 맞는 것을 가리킨다고 믿고 쓴다.
         """
@@ -1161,6 +1164,9 @@ class Snapshot(BaseModel):
         known = {chapter.id for chapter in self.chapters}
         if any(condition.chapter not in known for condition in chapter_conditions(self)):
             raise ValueError('판에 없는 장을 기다리는 조건이 있습니다.')
+        for position, chapter in enumerate(self.chapters):
+            if any(one not in {earlier.id for earlier in self.chapters[:position]} for one in chapter.after):
+                raise ValueError('앞의 장이 아닌 것을 after 에 적은 장이 있습니다.')
         return self
 
     @model_validator(mode='after')

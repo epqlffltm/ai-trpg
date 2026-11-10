@@ -971,8 +971,7 @@ def to_chapter_note(table: GameTable, snapshot: Snapshot, round_number: int) -> 
     chapter = chapters.current(table, snapshot)
     if chapter is None:
         return None
-    number = snapshot.chapters.index(chapter) + 1
-    return ChapterNote(number=number, name=chapter.name, entered=table.chapter_round == round_number)
+    return ChapterNote(number=chapters.number_of(table), name=chapter.name, entered=table.chapter_round == round_number)
 
 
 def to_happening_notes(
