@@ -775,6 +775,10 @@ uv run alembic revision --autogenerate -m "설명"       # 모델과 DB 를 비�
 DB 주소와 스키마는 앱과 같은 설정(`.env`)에서 읽는다. `alembic.ini` 에는 적지 않는다.
 어디까지 적용했는지 적는 표(`alembic_version`)도 스키마마다 따로 있다.
 
+첫 배포 전에 쌓인 마이그레이션 28개를 기준선 하나(`baseline`, `515a58e78e7f`)로 합쳤다(#1273). 옛 사슬로 만든 스키마와 같은지는 `tools/compare_schemas.py` 로 견주었다(칸의 차례만 다르다).
+사슬은 뿌리 하나에서 시작해야 한다(`tests/test_migration_graph.py`). 새 마이그레이션은 지금의 끝을 부모로 적는다. 끝은 여럿이어도 된다.
+기준선 전에 만든 DB 는 옛 리비전을 가리켜 멈춘다. 옛 main 에서 끝까지 올려 둔 DB 라면 데이터를 두고 표시만 바꾼다(`uv run alembic stamp --purge 515a58e78e7f`, 테스트용 스키마도 같다). 그 뒤 `uv run alembic check` 가 바뀐 것이 없다고 하면 된다.
+
 ## 테스트
 
 테스트는 실제 PostgreSQL 의 `asset_test` 스키마에서 돈다. `.env`의 `DATABASE_URL`을 그대로 쓴다.
