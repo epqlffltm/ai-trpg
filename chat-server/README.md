@@ -769,6 +769,21 @@ uv run alembic revision --autogenerate -m "설명"       # 모델과 DB 를 비�
 DB 주소와 스키마는 앱과 같은 설정(`.env`)에서 읽는다. `alembic.ini` 에는 적지 않는다.
 어디까지 적용했는지 적는 표(`alembic_version`)도 스키마마다 따로 있다.
 
+첫 배포 전에 쌓인 마이그레이션 27개를 기준선 하나(`baseline`, `dcdffec349ec`)로 합쳤다(#1273). 옛 사슬로 만든 스키마와 같은지는 `tools/compare_schemas.py` 로 견주었다(칸의 차례만 다르다).
+사슬은 뿌리 하나에서 시작해야 한다(`tests/test_migration_graph.py`). 새 마이그레이션은 지금의 끝을 부모로 적는다. 끝은 여럿이어도 된다.
+기준선 전에 만든 DB 는 옛 리비전을 가리켜 멈춘다(`Can't locate revision`). 옛 main 에서 끝까지 올려 둔 DB 라면 데이터를 두고 표시(`alembic_version`)만 바꾼다.
+compose 로 띄웠으면 마이그레이션 컨테이너로 한다. 컨테이너는 compose 의 망에서 `db:5432` 로 붙으므로 PC 의 포트나 `chat-server/.env` 의 주소와 상관없다.
+
+```powershell
+docker compose --profile app build chat-migrate chat-server
+docker compose --profile app run --rm chat-migrate alembic stamp --purge dcdffec349ec
+docker compose --profile app run --rm chat-migrate alembic check     # "No new upgrade operations detected." 면 된다
+docker compose --profile app up -d chat-migrate chat-server
+```
+
+표시를 바꾸지 않으면 새 이미지의 `chat-migrate` 가 멈추고, 그것이 끝나야 뜨는 `chat-server` 도 뜨지 않는다.
+PC 에서 직접 붙는 스키마(테스트용 `chat_test` 등)는 `uv run alembic stamp --purge dcdffec349ec` 로 같게 한다(`$env:DB_SCHEMA` 로 스키마를 고른다).
+
 ## 테스트
 
 테스트는 실제 PostgreSQL 의 `chat_test` 스키마에서 돈다. `.env`의 `DATABASE_URL`을 그대로 쓴다.
