@@ -185,7 +185,8 @@ async def test_the_branch_end_is_looked_for_inside_the_conversation_only(
 ):
     """가지의 끝은 그 대화의 말에서만 찾는다(#1258). 다른 대화의 말이 부모로 가리켜도 따라가지 않는다."""
     other = await start_with_luna(client, asset, mine)
-    root = Message(conversation_id=uuid.UUID(conversation['id']), role='user', content='이 세션의 말', status='complete')
+    session_id = uuid.UUID(conversation['id'])
+    root = Message(conversation_id=session_id, role='user', content='이 세션의 말', status='complete')
     session.add(root)
     await session.flush()
     root_id = root.id

@@ -235,7 +235,8 @@ async def latest_descendant(session: AsyncSession, conversation_id: uuid.UUID, m
     message_id 는 그 대화의 말이어야 한다. 아니면 찾은 것이 없어 NoResultFound 다.
     """
     mine = Message.conversation_id == conversation_id
-    downward = select(Message.id, Message.created_at).where(mine, Message.id == message_id).cte('branch', recursive=True)
+    start = select(Message.id, Message.created_at).where(mine, Message.id == message_id)
+    downward = start.cte('branch', recursive=True)
     child = aliased(Message)
     below = (child.conversation_id == conversation_id) & (child.parent_id == downward.c.id)
     downward = downward.union_all(select(child.id, child.created_at).join(downward, below))
