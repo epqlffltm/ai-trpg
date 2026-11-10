@@ -11,7 +11,7 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
-import { canMove, canRemove, chapterDraft, chapterHints, chapterLine, moved, newChapterId, toChapter, withoutChapter } from './chaptersForm';
+import { canMove, canRemove, chapterDraft, chapterHints, chapterLine, keepEarlierAfter, moved, newChapterId, toChapter, withoutChapter } from './chaptersForm';
 import type { Targets } from './conditionsForm';
 import { problemLine } from './publishProblems';
 
@@ -29,7 +29,7 @@ const COLLAPSE = '00000000-0000-4000-8000-00000000f003';
 const DOOR = { from_place: GATE, to_place: CRYPT, two_way: true, visibility: 'open', find: null, travel_minutes: null, cross: null, lock: null, bar: null, force: null };
 
 function chapter(id: string, name: string, extra: Partial<Chapter> = {}): Chapter {
-  return { id, name, when: [], match: 'all', opens: { places: [], quests: [] }, ...extra };
+  return { id, name, when: [], match: 'all', opens: { places: [], quests: [] }, after: [], ...extra };
 }
 
 const REACH_CRYPT = { kind: 'reach_place' as const, target: CRYPT, count: 1, consume: false };
@@ -101,7 +101,7 @@ describe('장 탭', () => {
     await userEvent.click(dialog.getByRole('button', { name: '저장' }));
 
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
-    expect(patches(seen)[0]?.chapters).toEqual([{ id: 'chapter-1', name: '도착', when: [], match: 'all', opens: { places: [], quests: [] } }]);
+    expect(patches(seen)[0]?.chapters).toEqual([{ id: 'chapter-1', name: '도착', when: [], match: 'all', opens: { places: [], quests: [] }, after: [] }]);
   });
 
   it('다음 장은 넘어오는 조건이 있어야 하고, 맵의 장소와 퀘스트를 연다. 시작 장소는 열지 못한다', async () => {
@@ -132,8 +132,8 @@ describe('장 탭', () => {
 
     await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
     expect(patches(seen)[0]?.chapters).toEqual([
-      { id: 'chapter-1', name: '도착', when: [], match: 'all', opens: { places: [], quests: [] } },
-      { id: 'chapter-2', name: '지하', when: [REACH_CRYPT], match: 'all', opens: { places: [CRYPT], quests: [COLLAPSE] } },
+      { id: 'chapter-1', name: '도착', when: [], match: 'all', opens: { places: [], quests: [] }, after: [] },
+      { id: 'chapter-2', name: '지하', when: [REACH_CRYPT], match: 'all', opens: { places: [CRYPT], quests: [COLLAPSE] }, after: [] },
     ]);
   });
 
@@ -221,11 +221,31 @@ describe('장 입력', () => {
   });
 
   it('첫 장은 조건을 보내지 않고, 첫 자리는 옮기거나 (다른 장이 있으면) 지우지 못한다', () => {
-    expect(toChapter('chapter-1', { ...chapterDraft(chapters[1]), name: ' 도착 ' }, true)).toEqual({ id: 'chapter-1', name: '도착', when: [], match: 'all', opens: { places: [CRYPT], quests: [COLLAPSE] } });
+    expect(toChapter('chapter-1', { ...chapterDraft(chapters[1]), name: ' 도착 ' }, true)).toEqual({ id: 'chapter-1', name: '도착', when: [], match: 'all', opens: { places: [CRYPT], quests: [COLLAPSE] }, after: [] });
     expect([canMove(3, 0, 1), canMove(3, 1, -1), canMove(3, 1, 1), canMove(3, 2, 1)]).toEqual([false, false, true, false]);
     expect(moved(chapters, 0, 1).map((one) => one.id)).toEqual(['chapter-1', 'chapter-3']);
     expect([canRemove(chapters, 0), canRemove(chapters, 1), canRemove(chapters.slice(0, 1), 0)]).toEqual([false, true, true]);
     expect(withoutChapter(chapters, 'chapter-3').map((one) => one.id)).toEqual(['chapter-1']);
+  });
+
+  it('갈림길(after)은 받은 대로 보내고, 지우거나 옮겨 앞의 장이 아니게 된 것은 뺀다(#289)', () => {
+    const forked = [
+      chapter('a', '도착'),
+      chapter('b', '마을', { when: [REACH_CRYPT], after: ['a'] }),
+      chapter('c', '들', { when: [REACH_CRYPT], after: ['a'] }),
+      chapter('d', '끝', { when: [REACH_CRYPT], after: ['b', 'c'] }),
+    ];
+    expect(toChapter('d', chapterDraft(forked[3]), false).after).toEqual(['b', 'c']);
+    expect(toChapter('a', { ...chapterDraft(forked[3]) }, true).after).toEqual([]);
+    expect(withoutChapter(forked, 'b').map((one) => one.after)).toEqual([[], ['a'], ['c']]);
+    // 들(c)을 끝(d) 뒤로 옮기면 끝은 들 다음일 수 없다
+    expect(moved(forked, 2, 1).map((one) => [one.id, one.after])).toEqual([
+      ['a', []],
+      ['b', ['a']],
+      ['d', ['b']],
+      ['c', ['a']],
+    ]);
+    expect(keepEarlierAfter([toChapter('x', { ...chapterDraft(undefined), name: 'x', after: ['y'] }, false)])[0]?.after).toEqual([]);
   });
 
   it('목록의 한 줄과 게시 점검의 장 문제', () => {

@@ -1886,6 +1886,9 @@ class Chapter(BaseModel):
     첫 장은 처음부터 그 장이라 조건을 적지 않는다. 그 뒤의 장에는 하나 이상 적는다(Chapters 가 본다).
     가져가기(consume)는 쓰지 않는다. 장은 물건을 받지 않는다.
     opens 는 그 장부터 열리는 장소와 퀘스트다. 어느 장에도 적지 않은 것은 처음부터 열려 있다.
+    after 는 이 장이 어느 장 다음에 올 수 있는지다(갈림길, #289). 목록에서 이 장보다 앞의 장만 적는다.
+    비우면 목록에서 바로 앞의 장 다음이다(갈림길이 생기기 전의 모양). 첫 장에는 적지 않는다.
+    여럿 적으면 그 어느 장에서든 넘어올 수 있다(합류).
     """
 
     model_config = ConfigDict(extra='forbid')
@@ -1895,6 +1898,7 @@ class Chapter(BaseModel):
     when: QuestConditions = []
     match: QuestMatch = QuestMatch.ALL
     opens: ChapterOpens = ChapterOpens()
+    after: Annotated[list[ChapterId], Field(max_length=SCENARIO_MAX_CHAPTERS)] = []
 
     @model_validator(mode='after')
     def nothing_consumed(self) -> 'Chapter':
@@ -1911,10 +1915,25 @@ class Chapter(BaseModel):
         return self
 
 
+def check_branches(chapters: list[Chapter]) -> None:
+    """
+    갈림길(after, #289)의 모양을 본다. 첫 장에는 적지 않고, 장마다 목록에서 자기보다 앞의 장만 한 번씩 적는다.
+    앞의 장만 가리키므로 장은 늘 앞으로만 가고 돌아오는 고리가 생기지 않는다. 아니면 거부한다.
+    """
+    if chapters and chapters[0].after:
+        raise ValueError('첫 장에는 앞의 장(after)을 적지 않습니다. 처음부터 그 장입니다.')
+    for position, chapter in enumerate(chapters):
+        earlier = {one.id for one in chapters[:position]}
+        if len(set(chapter.after)) != len(chapter.after):
+            raise ValueError('한 장의 after 에 같은 장을 두 번 적었습니다.')
+        if any(one not in earlier for one in chapter.after):
+            raise ValueError('after 에는 목록에서 그 장보다 앞의 장만 적습니다.')
+
+
 def check_chapters(chapters: list[Chapter]) -> list[Chapter]:
     """
     장들의 모양을 본다. id 가 겹치지 않고, 첫 장에는 조건이 없고 그 뒤의 장에는 조건이 있고,
-    장소와 퀘스트 하나는 한 장에만, 한 번만 적는다. 아니면 거부한다.
+    장소와 퀘스트 하나는 한 장에만, 한 번만 적는다. 갈림길(after)은 앞의 장만 가리킨다. 아니면 거부한다.
     """
     ids = [chapter.id for chapter in chapters]
     if len(set(ids)) != len(ids):
@@ -1923,6 +1942,7 @@ def check_chapters(chapters: list[Chapter]) -> list[Chapter]:
         raise ValueError('첫 장에는 넘어오는 조건(when)을 적지 않습니다. 처음부터 그 장입니다.')
     if any(not chapter.when for chapter in chapters[1:]):
         raise ValueError('첫 장 뒤의 장에는 넘어오는 조건(when)을 하나 이상 적습니다.')
+    check_branches(chapters)
     places = [one for chapter in chapters for one in chapter.opens.places]
     quests = [one for chapter in chapters for one in chapter.opens.quests]
     for opened in (places, quests):

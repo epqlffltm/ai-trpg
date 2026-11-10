@@ -51,6 +51,7 @@ STATE_TABLES: tuple[str, ...] = (
 STATE_COLUMNS: tuple[str, ...] = (
     'chapter_id',
     'chapter_round',
+    'chapter_path',
     'improvised_encounters',
     'turn_cycle',
     'turn_queue',
