@@ -203,6 +203,27 @@ describe('HostPanel', () => {
     expect(reads).toBeGreaterThanOrEqual(2);
   });
 
+  it('모집 중에는 진행 방식을 바꾼다', async () => {
+    const { seen } = open({
+      [`PUT ${BASE}/turn-mode`]: () => json(200, waiting({ turn_mode: 'turns' })),
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    const panel = await hostPanel();
+    await userEvent.selectOptions(panel.getByLabelText('진행 방식'), '차례대로');
+
+    await vi.waitFor(() => expect(panel.getByLabelText('진행 방식')).toHaveValue('turns'));
+    expect(sent(seen, 'PUT', '/turn-mode')[0]?.body).toEqual({ turn_mode: 'turns' });
+  });
+
+  it('시작한 테이블에는 진행 방식을 바꾸는 칸이 없다', async () => {
+    open({ [`GET ${BASE}`]: () => json(200, waiting({ status: 'playing' })) });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    const panel = await hostPanel();
+    expect(panel.queryByLabelText('진행 방식')).not.toBeInTheDocument();
+  });
+
   it('모집 중에는 서술 모델을 바꾼다', async () => {
     const { seen } = open({
       [`PUT ${BASE}/narration-model`]: () => json(200, waiting({ narration_model: 'glm-air' })),

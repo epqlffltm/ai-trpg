@@ -6,6 +6,7 @@
 //   - 쪽지 알림: 바꾼 뒤에 보내는 쪽지부터
 //   - 동료 피해(#803): 진행 중에도. 맞는 사람이 받아들이는 정도와 견주어 낮은 쪽이 든다
 //   - 참고 자료: 모집 중에만. 판의 세계관이 허용하지 않으면 서버가 거절한다
+//   - 진행 방식(#287): 모집 중에만. 시작할 때 차례대로면 첫 바퀴의 순서를 굴린다
 // 서술 모델(B8)은 ModelSettings.tsx 다. 고를 거리는 테이블 만들기(B4)와 같다.
 
 import { Checkbox, SelectField } from '@ai-trpg/ui';
@@ -15,9 +16,10 @@ import {
   changeNarrationStyle,
   changeReferences,
   changeRoundTimeLimit,
+  changeTurnMode,
   changeWhisperNotice,
 } from '../../../../api/tableHost';
-import type { FriendlyFire, NarrationStyle, TableDetail } from '../../../../api/types';
+import type { FriendlyFire, NarrationStyle, TableDetail, TurnMode } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import {
   durationLabel,
@@ -25,6 +27,9 @@ import {
   friendlyFireLabel,
   NARRATION_STYLE_VALUES,
   narrationStyleLabel,
+  TURN_MODE_HINT,
+  TURN_MODE_VALUES,
+  turnModeLabel,
 } from '../../labels';
 import { CREDIT_WAITS, ROUND_LIMITS } from '../../tables/createForm';
 import { useHostAction } from './useHostAction';
@@ -110,6 +115,21 @@ export function TableSettings({ table }: { table: TableDetail }) {
           disabled={action.busy}
           onChange={(event) => run(() => changeReferences(table.id, event.target.checked))}
         />
+      ) : null}
+      {table.status === 'recruiting' ? (
+        <SelectField
+          label="진행 방식"
+          hint={`${TURN_MODE_HINT} 시작하면 바꿀 수 없습니다.`}
+          value={table.turn_mode}
+          disabled={action.busy}
+          onChange={(event) => run(() => changeTurnMode(table.id, event.target.value as TurnMode))}
+        >
+          {TURN_MODE_VALUES.map((mode) => (
+            <option key={mode} value={mode}>
+              {turnModeLabel(mode)}
+            </option>
+          ))}
+        </SelectField>
       ) : null}
     </div>
   );

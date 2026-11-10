@@ -8,7 +8,14 @@
 // 글은 "누가: 무엇" 꼴이다. 이름 뒤의 조사를 고르지 않아도 되게.
 
 import type { TableDetail, TableEvent } from '../../../../api/types';
-import { NARRATION_STYLE_VALUES, attitudeLabel, durationLabel, friendlyFireLabel, narrationStyleLabel } from '../../labels';
+import {
+  NARRATION_STYLE_VALUES,
+  attitudeLabel,
+  durationLabel,
+  friendlyFireLabel,
+  narrationStyleLabel,
+  turnModeLabel,
+} from '../../labels';
 import { dayLabel, stepName } from '../../models/modelChoice';
 import { amountLabel } from '../money';
 import { blowLine, type Blow } from '../round/roundView';
@@ -405,7 +412,7 @@ const DESCRIBE: Record<EventType, Describe> = {
     `${member(p, ctx)}: 나를 겨누는 것 ${friendlyFireLabel(text(p, 'friendly_fire') ?? '?')}`,
   references_changed: (p) => `참고 자료: ${onOff(flag(p, 'references_enabled'))}`,
   // 진행 방식(#287). 한꺼번에(together)나 차례대로(turns)다
-  turn_mode_changed: (p) => `진행 방식: ${text(p, 'turn_mode') === 'turns' ? '차례대로' : '한꺼번에'}`,
+  turn_mode_changed: (p) => `진행 방식: ${turnModeLabel(text(p, 'turn_mode') ?? 'together')}`,
   ledger_drafts_changed: (p) => `장부 초안: ${onOff(flag(p, 'ledger_drafts'))}`,
   clock_step_changed: (p) => `라운드마다 흐르는 시간: ${count(p, 'next_step_minutes') ?? '?'}분`,
 

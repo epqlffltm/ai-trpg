@@ -129,6 +129,7 @@ export type Currency = Trpg['schemas']['Currency'];
 export type NpcAttitude = Trpg['schemas']['NpcAttitude'];
 // 앉은 사람끼리 해칠 수 있는 정도(#803). 테이블의 것과 자리의 것(받아들이는 정도)이 같은 값이다
 export type FriendlyFire = Trpg['schemas']['FriendlyFire'];
+export type TurnMode = Trpg['schemas']['TurnMode'];
 export type NpcCaught = Trpg['schemas']['NpcCaught'];
 export type NpcSheet = Trpg['schemas']['NpcSheet-Output'];
 export type NpcSheetBody = Trpg['schemas']['NpcSheet-Input'];

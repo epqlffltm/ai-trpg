@@ -1,9 +1,10 @@
 // web/apps/web/src/pages/trpg/tables/createForm.ts
 // 테이블 만들기(B4)의 입력. 처음 값, 보내기 전의 검사, 서버에 보낼 본문. 화면을 그리지 않는 순수한 함수다.
-// 처음 값은 서버의 기본값을 따른다(로비에 보이지 않음, 라운드 5분, 크레딧 5분 기다리고 모자란 사람은 빼기, 쪽지 알림 끔).
+// 처음 값은 서버의 기본값을 따른다(로비에 보이지 않음, 라운드 5분, 크레딧 5분 기다리고 모자란 사람은 빼기, 쪽지 알림 끔,
+// 한꺼번에 진행).
 // 정원만 시나리오의 추천 인원의 최대로 둔다.
 
-import type { CharacterMode, NarrationStyle, PublicListingDetail, TableCreate } from '../../../api/types';
+import type { CharacterMode, NarrationStyle, PublicListingDetail, TableCreate, TurnMode } from '../../../api/types';
 
 export type CreateDraft = {
   openingIndex: number;
@@ -24,6 +25,8 @@ export type CreateDraft = {
   removeShortPayers: boolean;
   whisperNotice: boolean;
   referencesEnabled: boolean;
+  /** 진행 방식(#287). 한꺼번에 또는 차례대로 */
+  turnMode: TurnMode;
 };
 
 /** 라운드 시간 제한으로 고를 것(서버: 30초~1시간, 또는 제한 없음) */
@@ -50,6 +53,7 @@ export function initialDraft(listing: PublicListingDetail): CreateDraft {
     removeShortPayers: true,
     whisperNotice: false,
     referencesEnabled: false,
+    turnMode: 'together',
   };
 }
 
@@ -87,7 +91,6 @@ export function toTableCreate(draft: CreateDraft, listing: PublicListingDetail):
     remove_short_payers: draft.removeShortPayers,
     whisper_notice: draft.whisperNotice,
     references_enabled: listing.references_allowed && draft.referencesEnabled,
-    // 진행 방식(#287). 고르는 칸이 아직 없어 한꺼번에로 만든다
-    turn_mode: 'together',
+    turn_mode: draft.turnMode,
   };
 }

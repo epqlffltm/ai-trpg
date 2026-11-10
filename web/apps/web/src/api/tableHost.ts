@@ -4,7 +4,7 @@
 // 서술 모델과 단계(B8)도 여기서 바꾼다. 모집 중에만, 시작한 뒤에는 지금 모델이나 단계를 쓸 수 없을 때만 된다.
 
 import { apiRequest } from './http';
-import type { FriendlyFire, NarrationStyle, TableDetail } from './types';
+import type { FriendlyFire, NarrationStyle, TableDetail, TurnMode } from './types';
 
 function tablePath(tableId: string, rest: string): string {
   return `/api/v1/game/tables/${encodeURIComponent(tableId)}${rest}`;
@@ -61,6 +61,11 @@ export function changeFriendlyFire(tableId: string, level: FriendlyFire): Promis
 /** 참고 자료를 서술에 넣는가. 모집 중에만, 판의 세계관이 허용할 때만(아니면 422) */
 export function changeReferences(tableId: string, enabled: boolean): Promise<TableDetail> {
   return apiRequest<TableDetail>(tablePath(tableId, '/references'), { method: 'PUT', body: { references_enabled: enabled } });
+}
+
+/** 진행 방식(#287). 모집 중에만(아니면 409 not_recruiting). 시작할 때 첫 바퀴의 순서를 굴린다 */
+export function changeTurnMode(tableId: string, mode: TurnMode): Promise<TableDetail> {
+  return apiRequest<TableDetail>(tablePath(tableId, '/turn-mode'), { method: 'PUT', body: { turn_mode: mode } });
 }
 
 /**

@@ -50,6 +50,11 @@ describe('createForm', () => {
     expect(toTableCreate({ ...draft, isPublic: true }, LISTING).password).toBe('secret');
   });
 
+  it('진행 방식은 한꺼번에가 처음 값이고, 고른 것을 보낸다', () => {
+    expect(initialDraft(LISTING).turnMode).toBe('together');
+    expect(toTableCreate({ ...initialDraft(LISTING), turnMode: 'turns' }, LISTING).turn_mode).toBe('turns');
+  });
+
   it('허용하지 않은 참고 자료는 켜도 보내지 않는다', () => {
     expect(toTableCreate({ ...initialDraft(LISTING), referencesEnabled: true }, LISTING).references_enabled).toBe(false);
   });

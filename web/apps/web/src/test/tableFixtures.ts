@@ -139,6 +139,7 @@ export function tableDetail(id: string, extra: Record<string, unknown> = {}) {
     whisper_notice: false,
     references_enabled: false,
     friendly_fire: 'off',
+    turn_mode: 'together',
     created_at: '2026-10-22T00:00:00Z',
     opening: '문 앞에서 시작한다.',
     rules: RULES,
@@ -164,6 +165,8 @@ export function tableDetail(id: string, extra: Record<string, unknown> = {}) {
 export function round(number: number, extra: Record<string, unknown> = {}) {
   return {
     number,
+    cycle: number,
+    actor_id: null,
     scene: `${number}번째 장면`,
     status: 'open',
     declarations: [],

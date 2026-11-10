@@ -2337,6 +2337,11 @@ a.ui-button {
   font-variant-numeric: tabular-nums;
 }
 
+.round__turn {
+  font-family: var(--ui-font-serif);
+  font-weight: 700;
+}
+
 .round__bar .round__waiting {
   margin-left: auto;
   color: var(--ui-text-muted);

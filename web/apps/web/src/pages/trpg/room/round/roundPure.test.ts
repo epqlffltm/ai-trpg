@@ -13,7 +13,19 @@ import { declarationHints, initialDeclarationDraft, toDeclarationUpdate } from '
 import { applyPreview, type NarrationPreview } from './preview';
 import { describeCloseProblem, describeDeclarationProblem } from './roundProblem';
 import { currentRoundQuery, replaceCurrentRound } from './roundQueries';
-import { actionLabel, checkOutcome, deathSaveLine, myDeclaration, outcomeLine, outcomeTone, pastRounds, remainingSeconds } from './roundView';
+import {
+  actionLabel,
+  checkOutcome,
+  closeCopy,
+  deathSaveLine,
+  myDeclaration,
+  notDeclaringText,
+  outcomeLine,
+  outcomeTone,
+  pastRounds,
+  remainingSeconds,
+  turnLine,
+} from './roundView';
 
 const rules = RULES as unknown as Ruleset;
 const TABLE = tableDetail('t', {
@@ -143,6 +155,35 @@ describe('roundView', () => {
     expect(remainingSeconds('2026-10-22T00:01:30Z', now)).toBe(90);
     expect(remainingSeconds('2026-10-21T23:59:00Z', now)).toBe(0);
     expect(remainingSeconds(null, now)).toBeNull();
+  });
+});
+
+describe('차례대로 진행(#287)', () => {
+  const nameOf = (userId: string) => (userId === ME ? '렌' : '미아');
+  const turns = { turn_mode: 'turns' as const };
+  const together = { turn_mode: 'together' as const };
+
+  it('차례대로의 라운드 줄은 바퀴와 차례의 주인이다. 한꺼번에면 없다', () => {
+    expect(turnLine(turns, { cycle: 2, actor_id: OTHER }, nameOf)).toBe('2바퀴 · 미아의 차례');
+    expect(turnLine(turns, { cycle: 3, actor_id: null }, nameOf)).toBe('3바퀴 · 차례를 받을 사람이 없습니다');
+    expect(turnLine(together, { cycle: 2, actor_id: null }, nameOf)).toBeNull();
+  });
+
+  it('남의 차례면 누구의 차례인지 말한다', () => {
+    expect(notDeclaringText(turns, { actor_id: OTHER }, ME, nameOf)).toBe('지금은 미아의 차례입니다. 자기 차례에 선언합니다.');
+    expect(notDeclaringText(turns, { actor_id: null }, ME, nameOf)).toBe('이번 라운드에는 선언하지 않습니다.');
+    expect(notDeclaringText(together, { actor_id: OTHER }, ME, nameOf)).toBe('이번 라운드에는 선언하지 않습니다.');
+  });
+
+  it('주인이 있는 차례의 닫기는 건너뛰기다', () => {
+    expect(closeCopy('미아')).toMatchObject({ button: '차례 건너뛰기', confirm: '건너뛰기' });
+    expect(closeCopy('미아').body).toContain('미아의 선언을 기다리지 않고');
+    expect(closeCopy(null)).toMatchObject({ button: '라운드 닫기', confirm: '마감하기' });
+  });
+
+  it('내 차례가 아닌데 내면 다시 읽는다', () => {
+    const problem = describeDeclarationProblem(new ApiError({ status: 409, detail: 'x', code: 'not_your_turn' }));
+    expect(problem).toEqual({ message: '지금은 내 차례가 아닙니다.', refresh: true });
   });
 });
 

@@ -357,3 +357,58 @@ export function remainingSeconds(deadlineAt: string | null, now: number): number
   if (!deadlineAt) return null;
   return Math.max(0, Math.ceil((Date.parse(deadlineAt) - now) / 1000));
 }
+
+/** 차례대로 진행하는 테이블인가(#287) */
+export function isTurnTable(table: Pick<TableDetail, 'turn_mode'>): boolean {
+  return table.turn_mode === 'turns';
+}
+
+/**
+ * 차례대로 진행하는 라운드의 줄. "2바퀴 · 엘프의 차례". 한꺼번에 진행하면 null 이다.
+ * 차례를 받을 사람이 없으면(모두 쓰러졌다) 그렇다고 한다. 방장이 닫거나 마감을 기다린다
+ */
+export function turnLine(
+  table: Pick<TableDetail, 'turn_mode'>,
+  round: Pick<Round, 'cycle' | 'actor_id'>,
+  nameOfMember: (userId: string) => string,
+): string | null {
+  if (!isTurnTable(table)) return null;
+  const whose = round.actor_id === null ? '차례를 받을 사람이 없습니다' : `${nameOfMember(round.actor_id)}의 차례`;
+  return `${round.cycle}바퀴 · ${whose}`;
+}
+
+/** 내 차례가 아닐 때 선언 칸 대신 보일 글. 차례대로의 테이블에서 다른 사람의 차례면 그 사람을 말한다 */
+export function notDeclaringText(
+  table: Pick<TableDetail, 'turn_mode'>,
+  round: Pick<Round, 'actor_id'>,
+  myId: string | undefined,
+  nameOfMember: (userId: string) => string,
+): string {
+  if (isTurnTable(table) && round.actor_id !== null && round.actor_id !== myId) {
+    return `지금은 ${nameOfMember(round.actor_id)}의 차례입니다. 자기 차례에 선언합니다.`;
+  }
+  return '이번 라운드에는 선언하지 않습니다.';
+}
+
+export type CloseCopy = { button: string; title: string; body: string; confirm: string };
+
+/**
+ * 방장의 닫기 단추와 묻는 창의 글. 차례대로의 테이블에서 주인이 있는 차례면 "차례 건너뛰기"다(#287).
+ * 주인이 내지 않은 차례를 닫으면 아무것도 하지 않은 것으로 넘어간다(서버가 같은 닫기로 한다)
+ */
+export function closeCopy(skipping: string | null): CloseCopy {
+  if (skipping !== null) {
+    return {
+      button: '차례 건너뛰기',
+      title: '차례 건너뛰기',
+      body: `${skipping}의 선언을 기다리지 않고 이 차례를 넘깁니다. 아무것도 하지 않은 것으로 서술하고 다음 차례로 갑니다.`,
+      confirm: '건너뛰기',
+    };
+  }
+  return {
+    button: '라운드 닫기',
+    title: '라운드 닫기',
+    body: '선언하지 않은 사람을 기다리지 않고 이 라운드를 마감합니다. 낸 선언의 판정을 하고 결과를 서술합니다.',
+    confirm: '마감하기',
+  };
+}

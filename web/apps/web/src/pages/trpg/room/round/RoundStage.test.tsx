@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/trpg/room/round/RoundStage.test.tsx
 // 진행 중인 테이블의 라운드(B6 의 ③). 지난 라운드와 지금 라운드, 판정을 붙인 선언, 고치기, 마감한 뒤의 결과,
-// 서술의 미리 보기와 끝, 방장의 닫기와 되돌리기(#288), 그 사이 마감했을 때를 본다.
+// 서술의 미리 보기와 끝, 방장의 닫기와 되돌리기(#288), 그 사이 마감했을 때, 차례대로 진행하는 테이블(#287)을 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -196,6 +196,39 @@ describe('RoundStage', () => {
 
     expect(await screen.findByText(/결과를 서술하는 중입니다/)).toBeInTheDocument();
     expect(sent(seen, 'POST', '/rounds/current/close')).toHaveLength(1);
+  });
+
+  it('차례대로의 테이블에서 남의 차례면 누구의 차례인지 보이고, 방장은 그 차례를 건너뛴다', async () => {
+    const turn = round(3, { cycle: 2, actor_id: OTHER, waiting_for: [OTHER] });
+    const { seen } = open({
+      [`GET ${BASE}`]: () => json(200, { ...PLAYING, turn_mode: 'turns' }),
+      [`GET ${BASE}/rounds/current`]: () => json(200, turn),
+      [`POST ${BASE}/rounds/current/close`]: () => json(202, { ...turn, status: 'closing', waiting_for: [] }),
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    expect(await screen.findByText('2바퀴 · 미아의 차례')).toBeInTheDocument();
+    expect(screen.getByText('지금은 미아의 차례입니다. 자기 차례에 선언합니다.')).toBeInTheDocument();
+    expect(screen.queryByText(/아직 선언하지 않은 사람/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '선언 보내기' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '차례 건너뛰기' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/미아의 선언을 기다리지 않고/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: '건너뛰기' }));
+
+    expect(await screen.findByText(/결과를 서술하는 중입니다/)).toBeInTheDocument();
+    expect(sent(seen, 'POST', '/rounds/current/close')).toHaveLength(1);
+  });
+
+  it('차례대로의 테이블에서 내 차례면 선언 칸이 열린다', async () => {
+    open({
+      [`GET ${BASE}`]: () => json(200, { ...PLAYING, turn_mode: 'turns' }),
+      [`GET ${BASE}/rounds/current`]: () => json(200, round(2, { cycle: 1, actor_id: ME, waiting_for: [ME] })),
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    expect(await screen.findByText('1바퀴 · 렌의 차례')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '선언 보내기' })).toBeInTheDocument();
   });
 
   it('서술에 실패한 라운드는 방장에게 다시 맡기기를 보인다', async () => {
