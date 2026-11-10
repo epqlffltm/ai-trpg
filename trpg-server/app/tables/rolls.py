@@ -22,12 +22,12 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import CharacterMode
-from app.assets.scenarios.snapshot import read_snapshot
 from app.engine.dice import Dice
 from app.engine.score_roll import RolledScore, roll_scores
 from app.events import recorder
 from app.events.models import EventType
 from app.tables import sheets
+from app.tables.content import snapshot_of
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError
 from app.tables.models import GameTable, TableMember, TableRoll
 from app.tables.service import lock_seated, save
@@ -95,7 +95,7 @@ async def roll_abilities(session: AsyncSession, user_id: uuid.UUID, table_id: uu
         raise TableConflictError(Conflict.ALREADY_ROLLED)
 
     # 그 방식을 허용한 판의 규칙에는 굴리는 법이 반드시 있다(게시 조건). 없으면 굴릴 수 없는 테이블이다
-    rolled = roll_scores(read_snapshot(table.content).rulebook.rules, dice)
+    rolled = roll_scores(snapshot_of(table).rulebook.rules, dice)
     if rolled is None:
         raise TableConflictError(Conflict.CHARACTER_MODE_NOT_ALLOWED)
 
@@ -130,7 +130,7 @@ async def grant_reroll(session: AsyncSession, host_id: uuid.UUID, table_id: uuid
         raise MemberNotFoundError
     require_choosing(table, member)
     require_rolled_mode(table)
-    if not read_snapshot(table.content).reroll_allowed:
+    if not snapshot_of(table).reroll_allowed:
         raise TableConflictError(Conflict.REROLL_NOT_ALLOWED)
 
     roll = sheets.find_fresh_roll(table, member)

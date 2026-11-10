@@ -37,7 +37,6 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드, 이번 장면�
 import uuid
 
 from app.assets.models import ITEM_STACK_MAX, ItemKind
-from app.assets.scenarios.snapshot import read_snapshot
 from app.engine import action as actions
 from app.engine.action import (
     AnyAction,
@@ -90,6 +89,7 @@ from app.rounds.waits import accept_wait
 from app.tables import items, npcs, sheets, traps
 from app.tables import monsters as table_monsters
 from app.tables import state as table_state
+from app.tables.content import snapshot_of
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, NpcStatus, TableMember
 
@@ -180,7 +180,7 @@ def require_weapon(table: GameTable, member: TableMember, entry_id: uuid.UUID) -
     타격에 쓰겠다는 무기를 본다(#276). 공격 보정이 있는 판의 물건이 아니면 ActionNotInRulesError(weapon),
     착용하고 있지 않으면 RoundConflictError(weapon_not_worn).
     """
-    item = items.catalog(read_snapshot(table.content)).get(entry_id)
+    item = items.catalog(snapshot_of(table)).get(entry_id)
     if item is None or item.attack is None:
         raise ActionNotInRulesError('weapon')
     if member.sheet is None or all(row.entry_id != entry_id for row in member.sheet.worn):
@@ -295,7 +295,7 @@ def accept_naming(action: NameAction, cast: list[CastMember]) -> dict:
 
 def find_item(table: GameTable, entry_id: uuid.UUID) -> CatalogItem:
     """판의 물건을 찾는다. 판에 없으면(인물, 장소, 없는 항목) ActionNotInRulesError(item)."""
-    item = items.catalog(read_snapshot(table.content)).get(entry_id)
+    item = items.catalog(snapshot_of(table)).get(entry_id)
     if item is None:
         raise ActionNotInRulesError('item')
     return item

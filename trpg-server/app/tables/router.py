@@ -28,7 +28,6 @@ from app.assets.scenarios.snapshot import (
     Snapshot,
     container_of,
     cover_at,
-    read_snapshot,
 )
 from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import Change
@@ -79,6 +78,7 @@ from app.tables import (
     wearing,
     whisper_notices,
 )
+from app.tables.content import snapshot_of
 from app.tables.errors import (
     MemberNotFoundError,
     NotHostError,
@@ -592,7 +592,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
 
     viewer_id 는 보는 사람이다. 초대 코드는 방장에게만 싣는다. 숨긴 퀘스트는 아무에게도 싣지 않는다.
     """
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     catalog = items.catalog(snapshot)
     quest_catalog = quests.catalog(snapshot)
     return TableDetail(

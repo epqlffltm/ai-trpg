@@ -31,7 +31,6 @@ from app.assets.scenarios.snapshot import (
     WanderTableSnapshot,
     monster_of,
     place_entries,
-    read_snapshot,
 )
 from app.calendar.clock import TimeOfDay, read_time
 from app.engine.dice import Dice
@@ -40,6 +39,7 @@ from app.events.models import EventType
 from app.rounds.models import Round
 from app.rounds.state import find_declaration, move_of, rest_of
 from app.tables import monsters as table_monsters
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, NpcStatus, TableMonster
 
 
@@ -214,7 +214,7 @@ def settle_wanders(
     triggers = find_triggers(table, round_)
     if not triggers:
         return [], []
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     if not snapshot.wanders:
         return [], []
     met, made = [], []

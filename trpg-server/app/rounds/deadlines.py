@@ -18,10 +18,10 @@ import uuid
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import read_snapshot
 from app.events import recorder
 from app.events.models import EventType
 from app.tables import quests
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, QuestStatus, TableQuest
 from app.tables.quest_changes import describe
 from app.tables.quests import CatalogQuest
@@ -48,7 +48,7 @@ def expire_quests(table: GameTable) -> list[dict]:
     overdue = quests.overdue_quests(table, table.clock.minutes)
     if not overdue:
         return []
-    catalog = quests.catalog(read_snapshot(table.content))
+    catalog = quests.catalog(snapshot_of(table))
     return [fail(row, catalog[row.entry_id]) for row in quests.in_catalog_order(overdue, catalog)]
 
 

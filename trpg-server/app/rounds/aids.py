@@ -16,11 +16,11 @@ DB 를 모른다. 시트의 소지품만 고친다. 저장하지 않는다.
 import uuid
 from dataclasses import dataclass
 
-from app.assets.scenarios.snapshot import read_snapshot
 from app.engine.item_aids import AidAct, AidWear, ItemAid, aid_for, is_lost
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError, Conflict, RoundConflictError
 from app.tables import items
+from app.tables.content import snapshot_of
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember
 
@@ -33,7 +33,7 @@ def require_aid(table: GameTable, member: TableMember, entry_id: uuid.UUID, act:
     행동에 붙인 물건을 받을 때 본다. 판의 물건이 아니거나 그 행동을 거들지 않으면 ActionNotInRulesError(item),
     하나도 가지고 있지 않으면 RoundConflictError(item_not_held).
     """
-    item = items.catalog(read_snapshot(table.content)).get(entry_id)
+    item = items.catalog(snapshot_of(table)).get(entry_id)
     if item is None or aid_for(item.aids, act) is None:
         raise ActionNotInRulesError('item')
     if member.sheet is None or items.count_of(member.sheet, entry_id) < 1:

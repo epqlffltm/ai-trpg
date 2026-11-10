@@ -25,7 +25,7 @@ DB 를 모른다. 이미 읽어 온 테이블과 이번 장면을 고친다. 저
 import uuid
 from dataclasses import asdict, replace
 
-from app.assets.scenarios.snapshot import person_entries, read_snapshot
+from app.assets.scenarios.snapshot import person_entries
 from app.engine import action as actions
 from app.engine import death
 from app.engine.action import (
@@ -82,6 +82,7 @@ from app.rounds.trap_actions import judge_disarm, judge_set_trap, search_traps, 
 from app.rounds.treatments import judge_treatment
 from app.rounds.waits import judge_wait
 from app.tables import items, resistances, sheets
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, NpcStatus, TableMember
 
 
@@ -220,7 +221,7 @@ def build_judging(
     앞 차례들에 엄폐하거나 방어해 아직 드는 사람들도 넣는다(app/rounds/turn_order.py 의 held_covers, held_defenders).
     방어 태세를 잡은 몬스터와 인물은 부르는 쪽이 따로 정한다(주사위를 굴린다, app/rounds/foe_guards.py).
     """
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     return Judging(
         table=table,
         ruleset=snapshot.rulebook.rules,
@@ -394,6 +395,6 @@ def expire_injuries(table: GameTable, scene: Scene, round_number: int, dice: Dic
     moment = round_injuries.moment_of(table, round_number)
     if not round_injuries.any_due(table.members, scene, moment):
         return []
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     guard = resistances.guard_of(snapshot)
     return round_injuries.expire_all(table.members, scene, snapshot.rulebook.rules, dice, table.id, moment, guard)

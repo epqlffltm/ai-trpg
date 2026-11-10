@@ -67,6 +67,7 @@ from app.tables import (
 )
 from app.tables.building import build_table, hash_table_password, new_invite_code, require_rating
 from app.tables.characters import accept_character, roster, write_character
+from app.tables.content import snapshot_of
 from app.tables.errors import Conflict, MemberNotFoundError, TableConflictError, TableNotFoundError, TableOptionError
 from app.tables.model_choice import ModelChoice, choose_model
 from app.tables.model_picker import ModelPicker, require_pickable
@@ -301,7 +302,7 @@ async def set_character(
     table, member = await lock_seated(session, user_id, table_id)
     require_recruiting(table)
     await campaign_seating.require_not_carried(session, table.id, user_id)
-    chosen = accept_character(table, read_snapshot(table.content), member, data)
+    chosen = accept_character(table, snapshot_of(table), member, data)
     write_character(member, chosen)
     return await save(session, table)
 
@@ -420,7 +421,7 @@ async def start_table(
     table, _ = await lock_seated(session, host_id, table_id)
     require_host(table, host_id)
     require_recruiting(table)
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     require_story_fits(table, snapshot)
     # 캐릭터를 정하지 않은 사람이 있으면 그 사람이 받을 시트도 없다. 아무에게도 주지 않고 거절한다.
     # 캠페인에서 넘긴 캐릭터로 앉은 사람은 넘긴 것으로 받는다(app/campaigns/seating.py)

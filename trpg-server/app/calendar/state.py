@@ -12,9 +12,10 @@
 이 파일도 서비스를 불러오지 않는다.
 """
 
-from app.assets.scenarios.snapshot import Snapshot, read_snapshot
+from app.assets.scenarios.snapshot import Snapshot
 from app.calendar import clock
 from app.calendar.models import TableClock
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable
 
 
@@ -26,7 +27,7 @@ def start_clock(table: GameTable, snapshot: Snapshot) -> None:
 
 def default_step(table: GameTable) -> int:
     """이 테이블의 판이 정한 라운드 하나에 흐르는 기본 시간(분)."""
-    return read_snapshot(table.content).clock.round_minutes
+    return snapshot_of(table).clock.round_minutes
 
 
 def next_step(table: GameTable) -> int:

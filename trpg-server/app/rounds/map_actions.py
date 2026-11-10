@@ -33,7 +33,7 @@ import uuid
 from dataclasses import asdict
 from typing import Protocol
 
-from app.assets.scenarios.snapshot import CrossSnapshot, ItemLockSnapshot, LockSnapshot, RouteSnapshot, read_snapshot
+from app.assets.scenarios.snapshot import CrossSnapshot, ItemLockSnapshot, LockSnapshot, RouteSnapshot
 from app.calendar import state as calendar
 from app.engine.action import MoveAction, SearchAction
 from app.engine.check import HinderedCheck, find_difficulty, resolve_hindered
@@ -45,6 +45,7 @@ from app.rounds.checks import change_sheet
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.tables import items, places, route_locks, sheets
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, TableMember
 from app.tables.state import find_member
 
@@ -93,7 +94,7 @@ def accept_move(table: GameTable, member: TableMember, action: MoveAction) -> di
         (item_not_held). 넘기 판정이 없는 길이면 ActionNotInRulesError(item).
     """
     here = standing_place(member)
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     known = places.known_map(snapshot, places.knowledge(table))
     if action.place not in places.exits(known, here):
         raise ActionTargetError('place')

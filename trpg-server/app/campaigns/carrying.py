@@ -17,8 +17,9 @@ import uuid
 
 from pydantic import BaseModel, Field
 
-from app.assets.scenarios.snapshot import item_entries, read_snapshot
+from app.assets.scenarios.snapshot import item_entries
 from app.campaigns.models import QuestResult
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, QuestStatus, TableMember
 from app.tables.sheets import is_dead
 
@@ -78,7 +79,7 @@ def carry_of(member: TableMember, item_names: dict[uuid.UUID, str] | None = None
 
 def carries_of(table: GameTable) -> dict[uuid.UUID, Carry]:
     """앉은 사람마다의 넘길 것. 넘길 것이 없는 사람은 빠진다. 앉은 차례다."""
-    names = {entry.id: entry.name for entry in item_entries(read_snapshot(table.content))}
+    names = {entry.id: entry.name for entry in item_entries(snapshot_of(table))}
     found = {member.user_id: carry_of(member, names) for member in table.members}
     return {user_id: carry for user_id, carry in found.items() if carry is not None}
 

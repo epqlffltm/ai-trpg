@@ -16,10 +16,10 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import read_snapshot
 from app.events import recorder
 from app.events.models import EventType
 from app.tables.building import choose_narration_style
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable
 from app.tables.schemas import NarrationStyleUpdate
 from app.tables.service import lock_seated, save
@@ -39,7 +39,7 @@ async def change_narration_style(
     require_host(table, host_id)
     require_not_ended(table)
 
-    style = choose_narration_style(read_snapshot(table.content), data.narration_style)
+    style = choose_narration_style(snapshot_of(table), data.narration_style)
     if style == table.narration_style:
         return table
 

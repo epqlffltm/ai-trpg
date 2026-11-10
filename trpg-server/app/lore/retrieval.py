@@ -43,13 +43,14 @@ from ai_core.provider import ProviderError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.assets.models import LoreKind
-from app.assets.scenarios.snapshot import EntrySnapshot, read_snapshot
+from app.assets.scenarios.snapshot import EntrySnapshot
 from app.catalog.steps import NarrationSteps, scaled_chars
 from app.lore import repository
 from app.lore.texts import version_entries
 from app.rounds.narrator import LoreNote, NarrationRequest
 from app.tables import chapters
 from app.tables import repository as table_repository
+from app.tables.content import snapshot_of
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +232,7 @@ async def load_candidates(session_factory: async_sessionmaker[AsyncSession], tab
         named = frozenset(npc.entry_id for npc in npcs if npc.named_round is not None)
         # 아직 열리지 않은 장의 장소와 퀘스트는 고르지 않는다(#481). 오지 않은 이야기가 서술에 새지 않게 한다
         locked = chapters.locked_ids(table)
-        entries = [entry for entry in version_entries(read_snapshot(table.content)) if entry.id not in locked]
+        entries = [entry for entry in version_entries(snapshot_of(table)) if entry.id not in locked]
         return Candidates(version_id=table.version_id, entries=entries, named=named)
 
 

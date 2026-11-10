@@ -33,7 +33,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import RouteSnapshot, Snapshot, has_map, place_entries, read_snapshot
+from app.assets.scenarios.snapshot import RouteSnapshot, Snapshot, has_map, place_entries
 from app.engine.dice import Dice, choose
 from app.engine.ruleset import Ruleset
 from app.events import recorder
@@ -42,6 +42,7 @@ from app.rounds import injuries as round_injuries
 from app.rounds.cast import Scene
 from app.rounds.monster_scene import SceneMonster, every_monster, occupied_places
 from app.tables import chapters, places, route_locks
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, NpcStatus
 
 # 배회의 확률을 굴리는 주사위의 면 수. 백분율이다
@@ -224,7 +225,7 @@ def settle(table: GameTable, scene: Scene, dice: Dice) -> list[Roamed]:
     """
     if not any_mover(scene):
         return []
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     if not has_map(snapshot):
         return []
     fought = {monster.state.id for monster in scene.monsters}
@@ -279,7 +280,7 @@ def documents(table: GameTable, roamed: list[Roamed], round_number: int) -> list
     seen = arrivals(table, roamed)
     if not seen:
         return []
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     return [arrival_document(snapshot, table, one, round_number) for one in seen]
 
 

@@ -37,7 +37,7 @@ from ai_core.provider import ProviderError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.assets.models import LoreKind
-from app.assets.scenarios.snapshot import EntrySnapshot, read_snapshot
+from app.assets.scenarios.snapshot import EntrySnapshot
 from app.catalog.steps import NarrationSteps, scaled_chars, scaled_count
 from app.lore.retrieval import mentions, query_text
 from app.lore.texts import version_entries
@@ -47,6 +47,7 @@ from app.rounds.narration_request import to_past
 from app.rounds.narrator import MemoryNote, NarrationRequest
 from app.rounds.prompt import HISTORY_ROUNDS, history_rounds
 from app.tables import repository as table_repository
+from app.tables.content import snapshot_of
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +190,7 @@ async def load_past(
         table = await table_repository.find_table(session, table_id)
         if table is None:
             return None
-        entries = version_entries(read_snapshot(table.content))
+        entries = version_entries(snapshot_of(table))
         rounds = [to_past(round_) for round_ in await repository.list_rounds_until(session, table_id, current)]
     people = [entry for entry in entries if entry.kind == LoreKind.PERSON]
     return Past(memories=memories_of(rounds), people=people)

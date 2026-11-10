@@ -43,7 +43,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import QuestConditionKind, QuestMatch
-from app.assets.scenarios.snapshot import QuestConditionSnapshot, read_snapshot
+from app.assets.scenarios.snapshot import QuestConditionSnapshot
 from app.engine.ruleset import Progression
 from app.events import recorder
 from app.events.models import EventType
@@ -51,6 +51,7 @@ from app.portraits.seats import with_cutscene
 from app.rounds.experience import record_leveled
 from app.rounds.quest_handover import hand_over
 from app.tables import chapters, items, quests, sheets
+from app.tables.content import snapshot_of
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, NpcStatus, QuestStatus, TableMember, TableMonster, TableNpc, TableQuest
 from app.tables.quest_changes import describe
@@ -311,7 +312,7 @@ def settle_quests(table: GameTable, monsters: list[TableMonster], npcs: list[Tab
     """
     if not open_quests(table):
         return []
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     catalog = quests.catalog(snapshot)
     things = items.catalog(snapshot)
     changes: list[dict] = []

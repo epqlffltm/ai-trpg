@@ -19,7 +19,7 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받는다.
 
 import uuid
 
-from app.assets.scenarios.snapshot import Snapshot, cover_at, read_snapshot
+from app.assets.scenarios.snapshot import Snapshot, cover_at
 from app.engine import action as actions
 from app.engine.action import CoverAction
 from app.engine.ruleset import ArmorMode, Ruleset
@@ -28,6 +28,7 @@ from app.rounds.errors import ActionNotInRulesError, Conflict, RoundConflictErro
 from app.rounds.map_actions import standing_place
 from app.rounds.models import Declaration
 from app.tables import places
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, TableMember
 
 
@@ -47,7 +48,7 @@ def accept_cover(table: GameTable, member: TableMember, ruleset: Ruleset, action
     """
     require_save_rules(ruleset)
     here = standing_place(member)
-    if cover_at(read_snapshot(table.content), here) <= 0:
+    if cover_at(snapshot_of(table), here) <= 0:
         raise RoundConflictError(Conflict.NO_COVER)
     return action.model_dump(mode='json')
 

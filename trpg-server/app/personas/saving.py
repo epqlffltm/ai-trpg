@@ -22,13 +22,14 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import CharacterMode
-from app.assets.scenarios.snapshot import Snapshot, read_snapshot
+from app.assets.scenarios.snapshot import Snapshot
 from app.personas import service
 from app.personas.models import Persona
 from app.personas.service import Conflict, PersonaConflictError
 from app.tables import service as tables
 from app.tables import sheets
 from app.tables import state as table_state
+from app.tables.content import snapshot_of
 from app.tables.models import TableMember
 
 
@@ -77,6 +78,6 @@ async def save_character(session: AsyncSession, user_id: uuid.UUID, table_id: uu
     table = await tables.get_table(session, user_id, table_id)
     member = table_state.require_member(table, user_id)
     require_keepable(member)
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     persona = from_member(user_id, member, starting_abilities(snapshot, member), snapshot.rulebook.title)
     return await service.keep(session, persona)
