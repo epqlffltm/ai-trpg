@@ -21,7 +21,7 @@ import asyncio
 
 import httpx
 from ai_core.openai_embedder import OpenAICompatEmbedder
-from server_core.database import create_session_factory
+from server_core.database import NO_LIMITS, create_session_factory
 
 from app.core.config import Settings, get_settings
 from app.core.database import create_engine
@@ -49,7 +49,8 @@ def make_embedder(settings: Settings, client: httpx.AsyncClient, model: str | No
 async def run(model: str | None) -> None:
     """판마다 색인을 돌리고 만든 수를 찍는다. 실패한 판은 로그에 이유가 남고, 다음에 다시 돌리면 남은 것부터 만든다."""
     settings = get_settings()
-    engine = create_engine(settings)
+    # 한꺼번에 많이 넣고 고치는 일이다. 서버의 시간 한도를 걸지 않는다(#1260)
+    engine = create_engine(settings, limits=NO_LIMITS)
     session_factory = create_session_factory(engine)
     try:
         async with httpx.AsyncClient() as client:

@@ -15,15 +15,23 @@ import logging
 from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
 from pydantic import ValidationError
+from sqlalchemy.exc import DBAPIError
 
 from server_core.database import (
+    LOCK_NOT_AVAILABLE,
+    NO_LIMITS,
+    QUERY_CANCELED,
+    Limits,
     create_engine,
     create_session_factory,
     get_session,
+    limit_settings,
+    limits_of,
     search_path,
 )
 from server_core.observability import metrics as metrics_module
@@ -103,6 +111,89 @@ async def test_a_request_gets_a_session_from_the_app():
     session = await anext(sessions)
     assert session.info == {'signer': 'test'}
     await sessions.aclose()
+    await engine.dispose()
+
+
+# --- 시간 한도(#1260) ---
+
+
+def timed_out(code: str) -> DBAPIError:
+    """DB 가 그 코드로 끊은 오류. 드라이버의 오류는 코드(sqlstate)만 흉내 낸다."""
+    return DBAPIError('select 1', {}, SimpleNamespace(sqlstate=code))
+
+
+async def use_session(request: SimpleNamespace, error: Exception) -> None:
+    """요청의 세션을 받은 뒤 그 요청이 error 로 끝나게 한다."""
+    sessions = get_session(request)
+    await anext(sessions)
+    await sessions.athrow(error)
+
+
+def request_with(engine) -> SimpleNamespace:
+    """그 엔진의 세션을 쓰는 요청."""
+    factory = create_session_factory(engine)
+    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(session_factory=factory)))
+
+
+def test_the_server_limits_come_from_the_settings():
+    settings = make_test_settings(
+        db_lock_timeout_ms=1_500, db_statement_timeout_ms=2_500, db_idle_in_transaction_timeout_ms=3_500
+    )
+
+    assert limits_of(settings) == Limits(1_500, 2_500, 3_500)
+
+
+def test_the_server_has_limits_unless_they_are_turned_off():
+    """아무것도 적지 않아도 서버의 연결에는 한도가 있다. 없으면 멈춘 트랜잭션 하나가 풀을 다 잡는다."""
+    limits = limits_of(make_test_settings())
+
+    assert limits.lock_timeout_ms > 0
+    assert limits.statement_timeout_ms > 0
+    assert limits.idle_in_transaction_timeout_ms > 0
+
+
+def test_the_limits_go_to_the_database_in_milliseconds():
+    assert limit_settings(Limits(5_000, 10_000, 60_000)) == {
+        'lock_timeout': '5000',
+        'statement_timeout': '10000',
+        'idle_in_transaction_session_timeout': '60000',
+    }
+
+
+def test_no_limits_turns_every_limit_off():
+    """마이그레이션과 스크립트의 것. 0 을 넘겨 DB 계정에 걸린 한도가 있어도 끈다."""
+    assert set(limit_settings(NO_LIMITS).values()) == {'0'}
+
+
+@pytest.mark.parametrize(
+    'field', ['db_lock_timeout_ms', 'db_statement_timeout_ms', 'db_idle_in_transaction_timeout_ms']
+)
+def test_a_negative_limit_is_refused(field: str):
+    with pytest.raises(ValidationError):
+        make_test_settings(**{field: -1})
+
+
+@pytest.mark.parametrize('code', [LOCK_NOT_AVAILABLE, QUERY_CANCELED])
+async def test_a_request_cut_by_a_limit_is_503_with_retry_after(code: str):
+    engine = create_engine(make_test_settings())
+
+    with pytest.raises(HTTPException) as raised:
+        await use_session(request_with(engine), timed_out(code))
+
+    assert raised.value.status_code == 503
+    assert raised.value.headers == {'Retry-After': '1'}
+    await engine.dispose()
+
+
+async def test_another_database_error_is_not_turned_into_503():
+    """한도가 아닌 오류(유일 제약 등)는 그대로 올라간다. 503 으로 가리면 고칠 버그가 숨는다."""
+    engine = create_engine(make_test_settings())
+    error = timed_out('23505')
+
+    with pytest.raises(DBAPIError) as raised:
+        await use_session(request_with(engine), error)
+
+    assert raised.value is error
     await engine.dispose()
 
 

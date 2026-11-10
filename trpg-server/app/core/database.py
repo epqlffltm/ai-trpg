@@ -32,10 +32,11 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
-def create_engine(settings: Settings) -> AsyncEngine:
+def create_engine(settings: Settings, limits: database.Limits | None = None) -> AsyncEngine:
     """
     설정으로 엔진을 만든다. 공용 코드의 엔진에 확장의 스키마를 search_path 뒤에 더한다.
 
     벡터 타입(vector)과 거리 연산자를 스키마 이름 없이 쓸 수 있다.
+    limits 는 연결마다 거는 시간 한도다. 주지 않으면 서버의 한도다. 마이그레이션과 스크립트는 NO_LIMITS 를 준다(#1260).
     """
-    return database.create_engine(settings, extra_schemas=(EXTENSIONS_SCHEMA,))
+    return database.create_engine(settings, extra_schemas=(EXTENSIONS_SCHEMA,), limits=limits)

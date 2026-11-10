@@ -213,6 +213,7 @@ PostgreSQL 의 `max_connections` 는 기본값 100 이고, superuser 의 몫 3 �
 - **몫은 쓰는 양이 아니라 상한이다.** 붐빌 때만 넘침(overflow)까지 맺고 돌려주면 닫는다. DB 의 CPU 가 둘이라 동시에 도는 쿼리는 이보다 훨씬 적어야 빠르다(결제 서버가 잰 것으로는 연결 8 과 16 이 같은 빠르기다)
 - **FastAPI 서버(server-core)의 몫은 compose 에 적는다.** 다시 빌드하지 않고 값만 바꾼다. 적지 않으면 SQLAlchemy 의 기본(5 + 10)이다. PC 에서 서버를 직접 띄울 때가 그렇다
 - **AI 모델을 기다리는 동안 DB 연결을 쥐지 않는다.** 스트리밍(chat, story, trpg 의 서술)은 길게는 수십 초다. 그동안 연결을 쥐면 몫 10 이 동시에 말하는 10 명에서 막힌다
+- **연결마다 시간 한도를 건다(#1260).** FastAPI 서버(server-core)의 연결은 잠금을 기다리는 시간 5초(`DB_LOCK_TIMEOUT_MS`), 쿼리 하나 10초(`DB_STATEMENT_TIMEOUT_MS`), 트랜잭션을 열어 둔 채 쉬는 시간 60초(`DB_IDLE_IN_TRANSACTION_TIMEOUT_MS`)까지다. 0 이면 끈다. 멈춘 트랜잭션 하나 뒤에 줄을 선 요청이 풀을 다 잡지 않게 한다. 잠금과 쿼리의 한도에 걸린 요청은 503 과 `Retry-After` 로 답한다. 마이그레이션과 한꺼번에 넣는 스크립트는 한도 없이 붙는다. 결제 서버(Go)의 값과 같다
 - 풀이 모자라면 메트릭 `db_pool_wait_seconds` 가 오른다. 전체가 한도에 가까우면 경보 `PostgresConnectionsNearLimit`(80%)가 울린다
 - 서버를 두 대 이상 띄우면 그 서버의 몫이 대수만큼 곱해진다. 그때 이 표를 다시 센다
 - 몫이 모자라면 차례로 본다. 먼저 몫을 다시 나눈다(재 보고). 그래도 모자라면 `max_connections` 를 올린다(연결마다 메모리를 조금 더 쓴다). PgBouncer 는 그다음이다. 컨테이너가 하나 늘고 asyncpg 의 prepared statement 설정을 바꿔야 한다
