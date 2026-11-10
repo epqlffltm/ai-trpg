@@ -21,7 +21,7 @@ DB 를 모른다. 시트의 돈과 소지품, 상인이 지닌 것을 고친다.
 import uuid
 
 from app.assets.models import ITEM_STACK_MAX, NpcAttitude
-from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, read_snapshot
+from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot
 from app.engine.action import BuyAction, PayAction, SellAction
 from app.rounds import item_actions
 from app.rounds.cast import CastMember, Scene, find_cast_member, find_reachable
@@ -30,6 +30,7 @@ from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict
 from app.tables import carried, items, money, npc_items, sheets
 from app.tables import state as table_state
 from app.tables.carried import Carried
+from app.tables.content import snapshot_of
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, NpcStatus, TableMember
 
@@ -137,7 +138,7 @@ def accept_buy(table: GameTable, member: TableMember, scene: Scene, action: BuyA
       - 돈이 모자라면 RoundConflictError(not_enough_money).
       - 그 물건을 더 가질 수 없으면 RoundConflictError(recipient_full).
     """
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     require_currency(snapshot)
     item = require_priced(snapshot, action.item)
     merchant = require_merchant(scene, member, action.npc)
@@ -159,7 +160,7 @@ def accept_sell(table: GameTable, member: TableMember, scene: Scene, action: Sel
       - 그만큼 가지고 있지 않으면 RoundConflictError(item_not_held).
       - 받을 돈을 더 가질 수 없으면 RoundConflictError(too_much_money).
     """
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     currency = require_currency(snapshot)
     if currency.sell_percent == 0:
         raise ActionNotInRulesError('kind')
@@ -180,7 +181,7 @@ def accept_pay(table: GameTable, member: TableMember, action: PayAction) -> dict
       - 돈이 모자라면 RoundConflictError(not_enough_money).
       - 받는 쪽이 더 가질 수 없으면 RoundConflictError(too_much_money).
     """
-    require_currency(read_snapshot(table.content))
+    require_currency(snapshot_of(table))
     if action.target == member.user_id:
         raise ActionTargetError('target')
     recipient = table_state.find_member(table, action.target)

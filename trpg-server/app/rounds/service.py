@@ -49,7 +49,6 @@ from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import read_snapshot
 from app.billing import charges
 from app.billing import repository as billing_repository
 from app.billing.models import NarrationCharge
@@ -116,6 +115,7 @@ from app.tables import items, sheets
 from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables import state as table_state
+from app.tables.content import snapshot_of
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember, TableStatus
 from app.whispers import repository as whisper_repository
@@ -221,7 +221,7 @@ async def get_scene_cast(
     scene = await load_scene(session, table, round_)
     carrying = may_carry(scene)
     measured = resource_rounds.has_resources(table)
-    snapshot = read_snapshot(table.content) if carrying or measured else None
+    snapshot = snapshot_of(table) if carrying or measured else None
     things = items.catalog(snapshot) if carrying else {}
     ruleset = snapshot.rulebook.rules if measured else None
     return round_, scene, things, ruleset, entry_pictures(table.content)
@@ -428,7 +428,7 @@ async def load_scene(session: AsyncSession, table: GameTable, round_: Round) -> 
     테이블을 잠근 요청 안에서 부르면 돌려준 인물과 몬스터의 상태를 그대로 고칠 수 있다.
     조우도 무작위 조우 표(#283)도 없는 판이면 몬스터의 상태를 읽지 않는다. 테이블에 몬스터가 없다.
     """
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     states = await table_repository.list_npcs(session, table.id)
     has_monsters = bool(snapshot.encounters or snapshot.wanders)
     monsters = await table_repository.list_monsters(session, table.id) if has_monsters else []
@@ -688,7 +688,7 @@ async def load_closing_request(
     steps = steps_of(round_)
     history = await repository.list_rounds_before(session, table_id, number, history_rounds(steps))
     whispers = await whisper_repository.list_for_gm(session, table_id, number, GM_WHISPERS_PER_SENDER)
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     scene = await load_scene(session, table, round_)
     return NarrationRequest(
         round_number=round_.number,
@@ -832,7 +832,7 @@ async def take_encounter(
     if number is None:
         return text
     monsters = (await load_scene(session, table, round_)).all_monsters
-    accepted = improvised.accept(table, read_snapshot(table.content), monsters, number, round_.number)
+    accepted = improvised.accept(table, snapshot_of(table), monsters, number, round_.number)
     if accepted is not None:
         session.add_all(accepted.made)
         improvised.record(session, table, accepted, closed)

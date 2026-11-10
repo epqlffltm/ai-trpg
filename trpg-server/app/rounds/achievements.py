@@ -20,10 +20,11 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.achievements import repository
-from app.assets.scenarios.snapshot import AchievementSnapshot, read_snapshot
+from app.assets.scenarios.snapshot import AchievementSnapshot
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds.quest_goals import all_met
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, TableAchievement, TableMember, TableMonster, TableNpc
 
 
@@ -73,7 +74,7 @@ def settle_achievements(
     """
     if not may_earn(table) or not receivers(table):
         return []
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     done = earned_ids(table)
     return [
         earn(table, achievement, round_number)

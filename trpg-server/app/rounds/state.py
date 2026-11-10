@@ -14,11 +14,11 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드를 받아 보�
 import uuid
 from datetime import datetime
 
-from app.assets.scenarios.snapshot import read_snapshot
 from app.engine import health
 from app.engine.ruleset import Ruleset
 from app.rounds.errors import Conflict, RoundConflictError
 from app.rounds.models import Declaration, Round, RoundStatus
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, TableMember, TableStatus, TurnMode
 
 
@@ -104,7 +104,7 @@ def rules_of(table: GameTable) -> Ruleset:
 
     복사본을 통째로 읽는다. 규칙이 없던 때의 복사본이면 그때의 규칙으로 올려 읽어야 하기 때문이다.
     """
-    return read_snapshot(table.content).rulebook.rules
+    return snapshot_of(table).rulebook.rules
 
 
 def has_outcome(declaration: Declaration | None) -> bool:

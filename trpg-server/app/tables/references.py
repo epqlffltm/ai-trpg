@@ -15,10 +15,10 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import read_snapshot
 from app.events import recorder
 from app.events.models import EventType
 from app.references.policy import references_allowed
+from app.tables.content import snapshot_of
 from app.tables.errors import TableOptionError
 from app.tables.models import GameTable
 from app.tables.schemas import ReferencesUpdate
@@ -28,7 +28,7 @@ from app.tables.state import require_host, require_recruiting
 
 def require_allowed(table: GameTable, enabled: bool) -> None:
     """켜려는데 이 테이블의 판(복사본)의 세계관이 허용하지 않으면 TableOptionError(references_enabled)."""
-    if enabled and not references_allowed(read_snapshot(table.content)):
+    if enabled and not references_allowed(snapshot_of(table)):
         raise TableOptionError('references_enabled')
 
 

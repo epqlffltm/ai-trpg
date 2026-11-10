@@ -48,7 +48,6 @@ from app.assets.scenarios.snapshot import (
     Snapshot,
     door_devices,
     quest_entries,
-    read_snapshot,
     route_between,
 )
 from app.engine.action import DoorDevice
@@ -59,6 +58,7 @@ from app.rounds.experience import record_leveled
 from app.rounds.quest_goals import all_met
 from app.tables import chapters, growth, places, route_locks, sheets
 from app.tables import npcs as table_npcs
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, TableHappening, TableMember, TableMonster, TableNpc
 
 
@@ -311,7 +311,7 @@ def settle_happenings(
     """
     if not may_happen(table):
         return []
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     done = happened(table)
     occurred = []
     locked = chapters.locked_ids(table)

@@ -30,6 +30,7 @@ from app.events import repository as events
 from app.events.models import TableEvent
 from app.tables import past, repository
 from app.tables import service as tables
+from app.tables.content import snapshot_of
 from app.tables.errors import TableNotFoundError
 from app.transcripts.labels import Labels, labels_of
 from app.transcripts.story import Item
@@ -67,7 +68,7 @@ async def seated_cut(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.U
         title=table.title,
         until=table.last_sequence,
         departed=False,
-        labels=labels_of(read_snapshot(table.content)),
+        labels=labels_of(snapshot_of(table)),
         owner_id=user_id,
         chat_until=await chats.last_sequence(session, table.id),
         whisper_until=await whispers.last_sequence(session, table.id, user_id),

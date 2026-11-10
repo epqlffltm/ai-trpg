@@ -16,7 +16,6 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import read_snapshot
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds import service as rounds
@@ -24,6 +23,7 @@ from app.rounds import state as round_state
 from app.rounds.errors import Conflict as RoundConflict
 from app.rounds.errors import RoundConflictError
 from app.tables import growth, sheets
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, TableMember, TableSheet
 from app.tables.service import save
 
@@ -69,7 +69,7 @@ async def raise_abilities(
     상한을 넘으면 TableConflictError(ability_at_max).
     """
     table, member, sheet = await lock_raiser(session, user_id, table_id)
-    ruleset = read_snapshot(table.content).rulebook.rules
+    ruleset = snapshot_of(table).rulebook.rules
     raised = growth.raise_abilities(ruleset, sheet, raises)
     payload = describe_raise(member, sheet, raised)
     recorder.record(session, table, EventType.ABILITIES_RAISED, actor_id=user_id, payload=payload)

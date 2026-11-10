@@ -21,13 +21,13 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import XpSplit
-from app.assets.scenarios.snapshot import read_snapshot
 from app.engine.ruleset import Progression
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds.experience import record_leveled
 from app.rounds.monster_scene import SceneMonster
 from app.tables import growth, sheets
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, NpcStatus, TableMember
 
 # 경험치를 준 것의 종류. 이벤트의 source.kind 에 적는다
@@ -75,7 +75,7 @@ def settle(table: GameTable, round_number: int, monsters: list[SceneMonster]) ->
     defeated = [monster for monster in monsters if is_defeated(monster)]
     if not defeated:
         return []
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     progression = snapshot.rulebook.rules.progression
     if progression is None:
         return []

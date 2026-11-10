@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from app.assets.bestiaries.models import MonsterKind
 from app.assets.models import NarrationStyle
-from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, containers_of, place_entries, read_snapshot
+from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, containers_of, place_entries
 from app.engine.check import find_ability
 from app.engine.injury import find_injury
 from app.engine.resources import Level, band_of, holds, is_open
@@ -50,6 +50,7 @@ from app.rounds.state import (
     trade_of,
 )
 from app.tables import equipment, injuries, items, money, place_items, places, resources, route_locks, sheets
+from app.tables.content import snapshot_of
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember, TurnMode
 from app.tables.npc_attitudes import attitude_word
@@ -159,7 +160,7 @@ def build_moves(
     on_map = any(member.sheet is not None and member.sheet.place_id is not None for member in table.members)
     paying = has_money(table) or any(trade_of(one) or pay_of(one) for one in declarations)
     # 판의 복사본은 통째로 읽는 일이라 싸지 않다. 소지품이나 맵이나 돈이 있을 때만 한 번 읽는다
-    snapshot = read_snapshot(table.content) if holding or on_map or paying else None
+    snapshot = snapshot_of(table) if holding or on_map or paying else None
     catalog = items.catalog(snapshot) if snapshot is not None else {}
     mapping = map_view(table, snapshot, catalog) if on_map else None
     currency = snapshot.currency if snapshot is not None else None

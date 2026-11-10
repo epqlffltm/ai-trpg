@@ -24,7 +24,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import Snapshot, read_snapshot
+from app.assets.scenarios.snapshot import Snapshot
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds import service as rounds
@@ -32,6 +32,7 @@ from app.rounds import state as round_state
 from app.rounds.models import Round
 from app.tables import equipment, items, money, places, sheets
 from app.tables.characters import accept_character, describe_sheet, write_character
+from app.tables.content import snapshot_of
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableMember
 from app.tables.schemas import CharacterUpdate
@@ -104,7 +105,7 @@ async def bring_in_character(
     table, member, round_ = await rounds.lock_current_round(session, user_id, table_id)
     require_dead(member)
     round_state.require_open(round_)
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     chosen = accept_character(table, snapshot, member, data)
     # 그 방식을 허용한 판에는 받을 시트가 반드시 있다(게시 조건). 없으면 들일 수 없는 캐릭터다
     source = sheets.source_of(snapshot, chosen.pregen_index, chosen.abilities)

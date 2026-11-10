@@ -18,7 +18,6 @@ from collections.abc import Sequence
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import read_snapshot
 from app.engine.ruleset import Ruleset
 from app.events import recorder
 from app.events.models import EventType
@@ -27,6 +26,7 @@ from app.rounds import state as round_state
 from app.rounds.errors import Conflict as RoundConflict
 from app.rounds.errors import RoundConflictError
 from app.tables import equipment, items, sheets
+from app.tables.content import snapshot_of
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.items import CatalogItem
 from app.tables.models import GameTable, TableMember, TableSheet, TableWorn
@@ -91,7 +91,7 @@ async def wear_item(
     가지고 있지 않으면 TableConflictError(not_enough_items).
     """
     table, member, sheet = await lock_wearer(session, user_id, table_id)
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     catalog = items.catalog(snapshot)
     item = items.require_in_catalog(catalog, entry_id)
     require_wearable(snapshot.rulebook.rules, item, slots)
@@ -114,7 +114,7 @@ async def take_off_slot(session: AsyncSession, user_id: uuid.UUID, table_id: uui
     table, member, sheet = await lock_wearer(session, user_id, table_id)
     row = equipment.take_off(sheet, slot)
     if row is not None:
-        catalog = items.catalog(read_snapshot(table.content))
+        catalog = items.catalog(snapshot_of(table))
         payload = describe_change(member, 'take_off', row, [], catalog)
         recorder.record(session, table, EventType.EQUIPMENT_CHANGED, actor_id=user_id, payload=payload)
     return await save(session, table)

@@ -20,12 +20,13 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import ChapterSnapshot, Snapshot, read_snapshot
+from app.assets.scenarios.snapshot import ChapterSnapshot, Snapshot
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds import quest_goals
 from app.rounds.quest_goals import all_met
 from app.tables import chapters, quests
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, QuestStatus, TableMonster, TableNpc
 
 # 장이 열려 드러난 퀘스트의 까닭(quest_changed 의 reason)
@@ -78,7 +79,7 @@ def settle(
     """
     if table.chapter_id is None:
         return None, []
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     following = next_chapter(table, snapshot, monsters, npcs)
     if following is None:
         return None, []

@@ -37,7 +37,6 @@ from app.assets.scenarios.snapshot import (
     Snapshot,
     door_devices,
     item_rule_of,
-    read_snapshot,
 )
 from app.engine.action import (
     DoorAction,
@@ -65,6 +64,7 @@ from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.rounds.map_actions import holds_key, roll_terms, standing_place, terms_document
 from app.tables import items, places, route_locks
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, TableMember
 
 # 거들기가 있는 문 다루기와 그 거드는 행동(#802)
@@ -98,7 +98,7 @@ class DoorReason:
 
 def joining_route(table: GameTable, here: uuid.UUID, there: uuid.UUID) -> RouteSnapshot | None:
     """지금 장소와 그 장소를 잇는 아는 길. 방향은 보지 않는다. 없으면 None."""
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     known = places.known_map(snapshot, places.knowledge(table))
     return places.route_joining(known, here, there)
 
@@ -168,7 +168,7 @@ def accept_door(table: GameTable, member: TableMember, action: DoorAction) -> di
         raise ActionTargetError('place')
     if isinstance(action, LockAction | UnlockAction):
         action = action.model_copy(update={'device': resolve_device(route, action.device)})
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     lock = route_locks.current_lock(table, snapshot, route)
     require_opening(route, lock, action)
     if isinstance(action, ReplaceAction):

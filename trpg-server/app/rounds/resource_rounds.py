@@ -22,7 +22,6 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import read_snapshot
 from app.engine import injury as injury_rules
 from app.engine.ruleset import ResourceHolder, Ruleset
 from app.events import recorder
@@ -32,6 +31,7 @@ from app.rounds.injuries import EndReason, immune_to
 from app.rounds.models import Round
 from app.rounds.records import ResourceSource, recorded_shifts, resource_payload
 from app.tables import injuries, monsters, npcs, resistances, resources, sheets
+from app.tables.content import snapshot_of
 from app.tables.models import GameTable, InjurySource, TableInjury, TableMember
 from app.tables.resistances import Guard
 from app.tables.resources import Bearer
@@ -199,7 +199,7 @@ def settle(table: GameTable, round_: Round, scene: Scene) -> list[Drift]:
     """
     if not has_resources(table):
         return []
-    snapshot = read_snapshot(table.content)
+    snapshot = snapshot_of(table)
     ruleset = snapshot.rulebook.rules
     guard = resistances.guard_of(snapshot)
     bearings = [*member_bearings(table, guard), *npc_bearings(scene, guard), *monster_bearings(scene, guard)]
