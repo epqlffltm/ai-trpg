@@ -460,7 +460,7 @@ async def choose_branch(
     message = await session.get(Message, message_id)
     if message is None or message.conversation_id != conversation.id:
         raise MessageNotFoundError
-    leaf_id = await repository.latest_descendant(session, message.id)
+    leaf_id = await repository.latest_descendant(session, conversation.id, message.id)
     if not await repository.set_leaf(session, conversation.id, leaf_id, now - GENERATION_STALE):
         raise ConversationBusyError
     await session.commit()

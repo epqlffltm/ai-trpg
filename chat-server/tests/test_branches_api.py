@@ -26,7 +26,8 @@ from server_core.testing.tokens import SigningKey
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.conversations.models import Conversation
+from app.conversations import repository
+from app.conversations.models import Conversation, Message
 from app.main import API_PREFIX, STREAMS
 from app.turns.models import Generation
 from tests.assets import FakeAsset
@@ -437,3 +438,25 @@ async def test_generating_follows_the_turn_lock(
     await lock(session, conversation, datetime.now(UTC) - timedelta(minutes=minutes))
 
     assert (await read(client, mine, conversation))['generating'] is generating
+
+
+async def test_the_branch_end_is_looked_for_inside_the_conversation_only(
+    session: AsyncSession, client: AsyncClient, asset: FakeAsset, conversation: dict, mine: dict
+):
+    """가지의 끝은 그 대화의 말에서만 찾는다(#1258). 다른 대화의 말이 부모로 가리켜도 따라가지 않는다."""
+    other = await start_with_luna(client, asset, mine)
+    root_id = (await session.get(Conversation, uuid.UUID(conversation['id']))).active_leaf_id
+    stray = Message(
+        conversation_id=uuid.UUID(other['id']),
+        parent_id=root_id,
+        role='user',
+        content='다른 대화의 말',
+        status='complete',
+        created_at=datetime(2099, 1, 1, tzinfo=UTC),
+    )
+    session.add(stray)
+    await session.commit()
+
+    leaf_id = await repository.latest_descendant(session, uuid.UUID(conversation['id']), root_id)
+
+    assert leaf_id == root_id
