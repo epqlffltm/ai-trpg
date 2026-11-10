@@ -89,8 +89,11 @@ var ErrFakeInProduction = errors.New("APP_ENVIRONMENT=production 에서는 PAYME
 var schemaPattern = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
 
 var (
-	// environmentPattern 은 APP_ENVIRONMENT 로 받는 모양이다. 소문자로 시작하는 짧은 이름이다.
-	environmentPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
+	// environments 는 APP_ENVIRONMENT 로 받는 이름들이다(#1261). 인증 서버(config/environments.py 의 KNOWN)와
+	// FastAPI 서버(server_core/settings.py 의 Environment)가 받는 것과 같다.
+	// 모양만 맞으면 받던 때에는 prod 나 stage 로도 떴다. 가짜 결제 대행사는 이름이 정확히 production 일 때만
+	// 막히므로(providerAllowed), 그런 이름으로 뜨면 누구나 크레딧을 얻는 가짜로 뜬다. 모르는 이름으로는 뜨지 않는다.
+	environments = []string{DefaultAppEnvironment, "test", "staging", ProductionEnvironment}
 	// versionPattern 은 APP_VERSION 으로 받는 모양이다. git SHA, 태그(v1.2.3), 이미지 태그가 들어간다.
 	// 이 값들은 모든 로그 줄에 실린다. 줄바꿈이나 따옴표가 든 값을 받지 않는다.
 	versionPattern = regexp.MustCompile(`^[A-Za-z0-9._+-]{1,64}$`)
@@ -552,8 +555,7 @@ func readMilliseconds(lookup Lookup, name string, fallback time.Duration, minimu
 
 // loadLogging 은 로그에 관한 설정을 읽는다.
 func loadLogging(lookup Lookup) (Logging, error) {
-	environment, environmentErr := readPattern(lookup, "APP_ENVIRONMENT", DefaultAppEnvironment, environmentPattern,
-		"소문자로 시작하고 소문자, 숫자, 밑줄, 붙임표로 된 32자 이하의 이름이어야 합니다")
+	environment, environmentErr := readChoice(lookup, "APP_ENVIRONMENT", DefaultAppEnvironment, environments)
 	version, versionErr := readPattern(lookup, "APP_VERSION", DefaultAppVersion, versionPattern,
 		"영문자, 숫자, 점, 밑줄, 더하기, 붙임표로 된 64자 이하의 값이어야 합니다")
 	logLevel, logLevelErr := readChoice(lookup, "LOG_LEVEL", DefaultLogLevel, logLevels)

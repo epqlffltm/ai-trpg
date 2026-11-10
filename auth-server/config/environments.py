@@ -12,8 +12,16 @@ staging 은 운영자 혼자 쓰는 서버라 가짜 본인인증과 터미널 �
 남이 들어오는 것은 nginx 의 허용 주소가 막는다.
 """
 
+from django.core.exceptions import ImproperlyConfigured
+
+DEVELOPMENT = 'development'
+TEST = 'test'
 PRODUCTION = 'production'
 STAGING = 'staging'
+# 받는 이름은 이 넷뿐이다(#1261). 보호는 이름이 staging, production 과 정확히 같을 때만 걸린다.
+# 모르는 이름(prod, stage, live)을 받으면 그 환경은 조용히 개발 환경처럼 뜬다. DEBUG 금지, Secure 쿠키,
+# 가짜 본인인증 금지가 모두 꺼진 채다. 그래서 모르는 이름으로는 뜨지 않게 한다
+KNOWN = (DEVELOPMENT, TEST, STAGING, PRODUCTION)
 # 도메인과 HTTPS 뒤에 둔 환경
 DEPLOYED = frozenset({STAGING, PRODUCTION})
 
@@ -26,3 +34,12 @@ def is_production(environment: str) -> bool:
 def is_deployed(environment: str) -> bool:
     """이 환경을 바깥에 열었는가(staging, production)."""
     return environment in DEPLOYED
+
+
+def require_known(environment: str) -> None:
+    """환경의 이름이 받는 이름(KNOWN) 가운데 하나인지 확인한다. 아니면 ImproperlyConfigured(서버가 뜨지 않는다)."""
+    if environment not in KNOWN:
+        raise ImproperlyConfigured(
+            f'APP_ENVIRONMENT 는 {", ".join(KNOWN)} 가운데 하나여야 합니다: {environment!r}. '
+            '다른 이름은 개발 환경처럼 떠서 운영의 보호가 걸리지 않습니다.'
+        )

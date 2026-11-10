@@ -15,7 +15,7 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
-from config.environments import is_deployed, is_production
+from config.environments import KNOWN, is_deployed, is_production, require_known
 from config.security import (
     DEVELOPMENT_COOKIE_ORIGINS,
     FORWARDED_PROTO_HEADER,
@@ -75,6 +75,18 @@ def run_manage(*arguments: str, **environment: str) -> subprocess.CompletedProce
 
 
 class FunctionTests(SimpleTestCase):
+    def test_the_known_names_are_these_four(self):
+        """받는 이름. FastAPI 서버(server_core/settings.py 의 Environment)와 결제 서버가 받는 것과 같다."""
+        self.assertEqual(set(KNOWN), {'development', 'test', 'staging', 'production'})
+        for name in KNOWN:
+            require_known(name)
+
+    def test_an_unknown_name_is_refused(self):
+        """모르는 이름을 받으면 그 환경은 조용히 개발 환경처럼 뜬다(#1261). 보호는 이름이 정확히 같을 때만 걸린다."""
+        for name in ('prod', 'stage', 'live', 'local', 'Production', 'production ', ''):
+            with self.subTest(name=name), self.assertRaises(ImproperlyConfigured):
+                require_known(name)
+
     def test_only_production_is_production(self):
         self.assertTrue(is_production('production'))
         self.assertFalse(is_production('development'))
@@ -146,6 +158,13 @@ class CookieOriginFunctionTests(SimpleTestCase):
 
 
 class ProductionSettingsTests(SimpleTestCase):
+    def test_the_server_does_not_start_under_an_unknown_name(self):
+        """운영을 prod 라고 적은 설정으로는 뜨지 않는다. 뜨면 DEBUG 금지와 Secure 쿠키가 꺼진 채다."""
+        result = run_manage('check', **{**PRODUCTION_ENVIRONMENT, 'APP_ENVIRONMENT': 'prod'})
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('APP_ENVIRONMENT', result.stderr)
+
     def test_production_passes_the_deploy_check_without_warnings(self):
         result = run_manage('check', '--deploy', '--fail-level', 'WARNING', **PRODUCTION_ENVIRONMENT)
 

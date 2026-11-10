@@ -209,7 +209,7 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `PAYMENT_PROVIDER` | `fake` | 꽂을 결제 대행사. `fake`(정해 둔 대로 답하는 가짜) 나 `toss`(토스페이먼츠의 테스트 모드). `APP_ENVIRONMENT=production` 이면 `fake` 로 뜨지 않는다 |
 | `TOSS_SECRET_KEY` | 없음(`toss` 면 필수) | 토스페이먼츠의 시크릿 키. 승인과 조회에 쓴다. `test_gsk_` 나 `test_sk_` 로 시작하는 테스트 키만 받는다. 로그와 오류에 싣지 않는다 |
 | `TOSS_CLIENT_KEY` | 없음(`toss` 면 필수) | 토스페이먼츠의 클라이언트 키. 결제창(브라우저)에 실리는 공개된 값이다. `test_gck_` 나 `test_ck_` 로 시작한다. 시크릿 키와 같은 종류여야 한다 |
-| `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸에 적힌다. 운영에서는 `production` |
+| `APP_ENVIRONMENT` | `development` | 환경의 이름. `development`, `test`, `staging`, `production` 가운데 하나고 다른 이름이면 뜨지 않는다(#1261). 로그의 `environment` 칸에 적힌다. 운영에서는 `production` |
 | `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸에 적힌다. 운영에서는 git SHA 나 이미지 태그 |
 | `LOG_LEVEL` | `info` | 이 수준부터 로그를 남긴다. `debug`, `info`, `warning`, `error` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | 없음(보내지 않음) | 메트릭과 추적을 OTLP(HTTP)로 미는 수집기(Alloy)의 주소. `http://alloy:4318`. 경로(`/v1/metrics`, `/v1/traces`)는 붙이지 않는다. 비우면 내보내지 않는다([메트릭](#메트릭), [추적](#추적)) |
@@ -2099,7 +2099,7 @@ Windows 에서는 C 컴파일러(gcc)를 따로 깔아야 `-race` 가 돈다. �
 
 | 환경 변수 | 기본값 | 뜻 |
 | --- | --- | --- |
-| `APP_ENVIRONMENT` | `development` | 환경의 이름. 로그의 `environment` 칸. 운영에서는 `production` |
+| `APP_ENVIRONMENT` | `development` | 환경의 이름. `development`, `test`, `staging`, `production` 가운데 하나. 로그의 `environment` 칸. 운영에서는 `production` |
 | `APP_VERSION` | `dev` | 배포한 코드의 버전. 로그의 `version` 칸. 운영에서는 git SHA 나 이미지 태그 |
 | `LOG_LEVEL` | `info` | 이 수준부터 남긴다. `debug`, `info`, `warning`, `error` |
 

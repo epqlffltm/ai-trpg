@@ -23,6 +23,7 @@ from django.core.exceptions import ImproperlyConfigured
 
 from accounts.attendance_rules import InvalidScheduleError, parse_schedule
 from config.billing import validate_billing_url, validate_service_secret
+from config.environments import require_known as require_known_environment
 from config.identity import default_identity_provider, validate_identity_provider
 from config.jwt_keys import load_key_material, private_key_path
 from config.mail_backends import (
@@ -76,7 +77,7 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 # 규격은 저장소 루트의 docs/observability.md 에 있다
 
 # 이 서버가 도는 환경의 이름. 로그의 environment 칸에 들어간다.
-# development, test, staging, production 처럼 적는다. 기록을 가를 때 쓴다.
+# development, test, staging, production 가운데 하나다. 다른 이름이면 뜨지 않는다(config/environments.py, #1261).
 # production 이면 DEBUG 와, 터미널에 메일을 출력하는 개발용 방식을 막는다(아래의 Email)
 APP_ENVIRONMENT = env('APP_ENVIRONMENT', default='development')
 
@@ -100,8 +101,7 @@ if OTEL_METRIC_EXPORT_INTERVAL < MIN_METRIC_EXPORT_INTERVAL:
     raise ImproperlyConfigured('OTEL_METRIC_EXPORT_INTERVAL 은 1000(밀리초) 이상이어야 합니다.')
 
 # 이 값들은 로그의 모든 줄에 실린다. 줄바꿈이나 빈칸이 든 값을 받지 않는다
-if not re.fullmatch(r'[a-z][a-z0-9_-]{0,31}', APP_ENVIRONMENT):
-    raise ImproperlyConfigured('APP_ENVIRONMENT 는 영문 소문자로 시작하고 영문 소문자, 숫자, 밑줄, 붙임표만 씁니다.')
+require_known_environment(APP_ENVIRONMENT)
 if not re.fullmatch(r'[A-Za-z0-9._+-]{1,64}', APP_VERSION):
     raise ImproperlyConfigured('APP_VERSION 은 영문, 숫자, 점, 밑줄, 더하기, 붙임표로 64자까지 씁니다.')
 if LOG_LEVEL not in ('debug', 'info', 'warning', 'error'):
