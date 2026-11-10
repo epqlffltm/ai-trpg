@@ -11,6 +11,9 @@
     그 장의 앞에 지날 수 있는 장이 열지 않으면 알린다. 뒤의 장이 열거나, 다른 갈림길이 열거나, 그 장 자신이 열 때다
   - 앞에 지날 수 있는 장이 열거나 어느 장도 열지 않으면 알리지 않는다. 장이 없는 판도 알리지 않는다
   - 알릴 것이 있어도 게시 점검은 ready 이고 게시된다
+  - quest_condition_locked, happening_condition_locked, achievement_condition_locked(#289): 조건이 갈림길 때문에
+    채워질 수 없다. 모두(all)면 함께 채울 것들을 여는 장이 서로 다른 갈림길이거나, 퀘스트를 여는 장과 조건이 기다리는
+    것을 여는 장이 그렇다. 하나라도(any)면 조건마다 그렇다. 퀘스트의 실패하는 조건은 보지 않는다
   - 작은 함수: 조상(ancestors)
 """
 
@@ -22,7 +25,7 @@ from httpx import AsyncClient
 
 from app.assets.scenarios.chapter_graph import ancestors
 from tests import test_happenings as happening_tests
-from tests.test_happenings import publish, reach
+from tests.test_happenings import happening, moving, publish, reach
 from tests.test_scenario_chapters import chapter, draft_with
 from tests.test_table_items import SCENARIOS_URL
 
@@ -111,6 +114,86 @@ async def test_a_scenario_without_chapters_has_no_warnings(client: AsyncClient, 
     scenario = await draft_with(client, me, more, [])
 
     assert (await check(client, me, scenario))['warnings'] == []
+
+
+# --- 퀘스트, 사건, 업적 ---
+
+
+def forked(more: dict) -> list[dict]:
+    """도착, 들(도착 다음, 오두막을 연다), 마을(도착 다음, 탑과 왕녀 구출을 연다). 들과 마을이 갈림길이다."""
+    return [
+        chapter('arrival', '도착'),
+        {**chapter('wild', '들', [reach(more['forest'])], places=[more['hut']]), 'after': ['arrival']},
+        {
+            **chapter('town', '마을', [reach(more['square'])], places=[more['tower']], quests=[more['rescue']]),
+            'after': ['arrival'],
+        },
+    ]
+
+
+def at(key: str) -> dict:
+    return {'kind': 'chapter_at_least', 'chapter': key}
+
+
+async def warnings_with(client: AsyncClient, me: dict, more: dict, **fields) -> list[str]:
+    """갈림길의 판에 그 칸들(quests, happenings, achievements)을 적고 게시 점검의 알림을 본다."""
+    scenario = await draft_with(client, me, more, forked(more))
+    saved = await client.patch(f'{SCENARIOS_URL}/{scenario["id"]}', json=fields, headers=me)
+    assert saved.status_code == status.HTTP_200_OK, saved.text
+    checked = await check(client, me, scenario)
+    assert checked['problems'] == [], checked
+    return checked['warnings']
+
+
+def rescue(more: dict, conditions: list[dict], **fields) -> dict:
+    return {'entry_id': more['rescue']['id'], 'start': 'active', 'conditions': conditions, **fields}
+
+
+@pytest.mark.parametrize(
+    ('case', 'expected'),
+    [
+        # 마을이 여는 퀘스트가 들이 여는 오두막을 기다린다
+        ('opened-by-other-branch', ['quest_condition_locked']),
+        # 마을이 여는 퀘스트가 마을이 여는 탑을 기다린다
+        ('opened-on-the-route', []),
+        # 마을이 여는 퀘스트가 그 앞의 도착을 기다린다(한 길이다)
+        ('waits-for-an-earlier-chapter', []),
+        # 실패하는 조건은 채워지지 않아도 된다
+        ('fail-only', []),
+        # 드러나는 조건이 다른 갈림길의 것을 기다린다
+        ('reveal', ['quest_condition_locked']),
+        # 하나라도: 조건 모두가 다른 갈림길의 것이면 알리고, 하나라도 마을 길에서 채울 수 있으면 알리지 않는다
+        ('any-all-across', ['quest_condition_locked']),
+        ('any-one-on-route', []),
+    ],
+)
+async def test_a_quest_waiting_across_branches_is_warned(client: AsyncClient, me: dict, more: dict, case, expected):
+    rules = {
+        'opened-by-other-branch': rescue(more, [reach(more['hut'])]),
+        'opened-on-the-route': rescue(more, [reach(more['tower'])]),
+        'waits-for-an-earlier-chapter': rescue(more, [reach(more['tower']), at('arrival')]),
+        'fail-only': rescue(more, [reach(more['tower'])], fail=[reach(more['hut'])]),
+        'reveal': rescue(more, [reach(more['tower'])], start='hidden', reveal=[reach(more['hut'])]),
+        'any-all-across': rescue(more, [reach(more['hut']), at('wild')], match='any'),
+        'any-one-on-route': rescue(more, [reach(more['hut']), at('town')], match='any'),
+    }
+
+    assert await warnings_with(client, me, more, quests=[rules[case]]) == expected
+
+
+@pytest.mark.parametrize(('match', 'expected'), [('all', ['happening_condition_locked']), ('any', [])])
+async def test_a_happening_needing_both_branches_is_warned(client: AsyncClient, me: dict, more: dict, match, expected):
+    storm = happening(more['storm'], [at('wild'), at('town')], [moving(more['gate'])], match=match)
+
+    assert await warnings_with(client, me, more, happenings=[storm]) == expected
+
+
+async def test_an_achievement_needing_both_branches_is_warned(client: AsyncClient, me: dict, more: dict):
+    both = {'id': 'both', 'name': '둘 다', 'when': [reach(more['hut']), reach(more['tower'])]}
+    one = {'id': 'one', 'name': '하나', 'when': [reach(more['hut']), at('wild')]}
+
+    assert await warnings_with(client, me, more, achievements=[one]) == []
+    assert await warnings_with(client, me, more, achievements=[one, both]) == ['achievement_condition_locked']
 
 
 # --- 작은 함수 ---

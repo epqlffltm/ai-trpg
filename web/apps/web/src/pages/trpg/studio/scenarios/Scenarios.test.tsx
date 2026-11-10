@@ -13,7 +13,7 @@ import { ME } from '../../../../test/tableFixtures';
 import { basicsHints, modelStatusText, type BasicsDraft } from './basicsForm';
 import { toggleId, toMaterialsBody, withChosen } from './materialsForm';
 import { addOpening, moveOpeningUp, openingsHints, OPENINGS_MAX } from './openingsForm';
-import { problemLine } from './publishProblems';
+import { problemLine, warningLine } from './publishProblems';
 import { tabOf } from './scenarioTabs';
 
 const GAME = '/api/v1/game';
@@ -116,6 +116,14 @@ describe('게시 점검의 알림', () => {
     expect(notes.getByText('new_warning')).toBeInTheDocument();
     await userEvent.click(notes.getByRole('button', { name: '장 탭으로' }));
     expect(screen.getByRole('tab', { name: '장' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('퀘스트·사건·업적의 갈림길 알림은 그 탭으로 간다(#289)', () => {
+    expect(warningLine('quest_condition_locked')).toMatchObject({ section: 'quests' });
+    expect(warningLine('happening_condition_locked')).toMatchObject({ section: 'quests' });
+    expect(warningLine('achievement_condition_locked')).toMatchObject({ section: 'achievements' });
+    expect(warningLine('quest_condition_locked').text).toContain('다른 갈림길');
+    expect(warningLine('unknown')).toEqual({ text: 'unknown', section: null });
   });
 
   it('알림이 없으면 알림 목록을 보이지 않는다', async () => {

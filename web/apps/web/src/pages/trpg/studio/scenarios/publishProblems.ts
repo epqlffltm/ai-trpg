@@ -105,6 +105,18 @@ const WARNINGS: Record<string, ProblemText> = {
     text: '넘어올 수 없는 장이 있습니다. 넘어오는 조건이 그 장에 오기 전에 열리지 않는 장소나 퀘스트를 기다립니다(뒤의 장, 다른 갈림길, 그 장 자신이 엽니다).',
     section: 'chapters',
   },
+  quest_condition_locked: {
+    text: '이룰 수 없거나 드러날 수 없는 퀘스트가 있습니다. 조건이 기다리는 것들이 서로 다른 갈림길에서 열리거나, 퀘스트를 여는 장과 다른 갈림길에서 열립니다.',
+    section: 'quests',
+  },
+  happening_condition_locked: {
+    text: '일어날 수 없는 사건이 있습니다. 조건이 기다리는 것들이 서로 다른 갈림길에서 열립니다.',
+    section: 'quests',
+  },
+  achievement_condition_locked: {
+    text: '아무도 받을 수 없는 업적이 있습니다. 받는 조건이 기다리는 것들이 서로 다른 갈림길에서 열립니다.',
+    section: 'achievements',
+  },
 };
 
 /** 알림 하나의 글과 묶음. 모르는 이름이면 이름 그대로, 묶음은 없다 */
