@@ -1,10 +1,11 @@
 // web/apps/web/src/pages/trpg/studio/scenarios/CheckPanel.tsx
 // 게시 점검(B9, GET /scenarios/{id}/publish-check). 시나리오 고치기의 옆에 늘 둔다. 저장할 때마다 다시 읽는다.
 // 문제마다 글과 그 칸이 있는 탭으로 가는 단추를 둔다. 모르는 문제(서버가 새로 더한 것)는 이름만 적는다.
+// 게시를 막지 않는 알림(warnings)은 문제 아래에 따로 적는다. 있어도 게시할 수 있다.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
-import { problemLine } from './publishProblems';
+import { problemLine, warningLine } from './publishProblems';
 import { publishCheckQuery } from './scenarioQueries';
 import { sectionLabel, type ScenarioTab } from './scenarioTabs';
 
@@ -12,6 +13,8 @@ type Props = { scenarioId: string; goTo: (tab: ScenarioTab) => void };
 
 export function CheckPanel({ scenarioId, goTo }: Props) {
   const check = useQuery(publishCheckQuery(scenarioId));
+  // 알림 칸이 생기기 전의 서버(배포가 엇갈린 때)는 warnings 를 주지 않는다
+  const warnings = check.data?.warnings ?? [];
   return (
     <section className="scenario-check" aria-labelledby="scenario-check-heading">
       <h2 id="scenario-check-heading">게시 점검</h2>
@@ -35,12 +38,23 @@ export function CheckPanel({ scenarioId, goTo }: Props) {
           </ul>
         </>
       ) : null}
+      {warnings.length > 0 ? (
+        <>
+          <p>게시는 되지만 살펴볼 것이 {warnings.length}개 있습니다.</p>
+          <ul className="plain-list scenario-check__list" aria-label="살펴볼 것">
+            {warnings.map((name) => (
+              <ProblemItem key={name} name={name} goTo={goTo} line={warningLine(name)} />
+            ))}
+          </ul>
+        </>
+      ) : null}
     </section>
   );
 }
 
-function ProblemItem({ name, goTo }: { name: string; goTo: (tab: ScenarioTab) => void }) {
-  const line = problemLine(name);
+type ItemProps = { name: string; goTo: (tab: ScenarioTab) => void; line?: ReturnType<typeof problemLine> };
+
+function ProblemItem({ name, goTo, line = problemLine(name) }: ItemProps) {
   const section = line.section;
   return (
     <li className="scenario-check__item">

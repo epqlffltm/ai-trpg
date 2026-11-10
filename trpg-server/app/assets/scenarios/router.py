@@ -234,8 +234,8 @@ async def check_publishable(scenario_id: uuid.UUID, user: CurrentUser, session: 
 
     게시(POST /versions)와 같은 검사다. 게시가 409 의 problems 로 돌려줄 것을 200 으로 돌려준다.
     """
-    problems = await publishing.check_publishable(session, user.user_id, scenario_id, allowed_ratings(user))
-    return PublishCheck(ready=not problems, problems=list(problems))
+    problems, warnings = await publishing.check_publishable(session, user.user_id, scenario_id, allowed_ratings(user))
+    return PublishCheck(ready=not problems, problems=list(problems), warnings=list(warnings))
 
 
 @router.get('/{scenario_id}/versions', response_model=list[VersionSummary], status_code=status.HTTP_200_OK)

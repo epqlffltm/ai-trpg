@@ -204,7 +204,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PATCH | `/api/v1/game/scenarios/{id}` | 내 시나리오 고치기. `rulebook_id`, `world_id`, `default_sheet`, `player_made_hp` 는 `null` 을 보내면 비운다. `lorebook_ids`, `bestiary_ids`, `openings`, `pregens`, `character_modes` 등 목록은 보낸 목록으로 통째로 바꾼다 | access 토큰 |
 | DELETE | `/api/v1/game/scenarios/{id}` | 내 시나리오 지우기. 204 | access 토큰 |
 | POST | `/api/v1/game/scenarios/{id}/versions` | 게시. 지금의 내용을 새 판으로 굳힌다. 201. 조건을 못 갖췄으면 409 | access 토큰 |
-| GET | `/api/v1/game/scenarios/{id}/publish-check` | 게시해 보기. 게시와 같은 검사를 하고 판은 내지 않는다. `{ready, problems}` | access 토큰 |
+| GET | `/api/v1/game/scenarios/{id}/publish-check` | 게시해 보기. 게시와 같은 검사를 하고 판은 내지 않는다. `{ready, problems, warnings}`(`warnings` 는 게시를 막지 않는 알림) | access 토큰 |
 | GET | `/api/v1/game/scenarios/{id}/monsters/{monster_id}/sheet-proposal` | [참고 자료](#몬스터-시트의-제안)에서 복사한 몬스터의 시트 제안. 저장하지 않는다. `{sheet, notes, copied_from}`. 붙인 도감의 몬스터가 아니면 404, 룰북이 없으면 409 `no_rulebook`, 복사한 몬스터가 아니면 422 `not_copied` | access 토큰 |
 | GET | `/api/v1/game/scenarios/{id}/versions` | 내 시나리오의 판 목록. 최근 것부터. 굳힌 내용은 싣지 않는다 | access 토큰 |
 | GET | `/api/v1/game/scenarios/{id}/versions/{number}` | 판 하나. 굳힌 내용까지 | access 토큰 |
@@ -897,6 +897,7 @@ NPC 와 달리 기본 시트가 없다. 시트를 적은 몬스터만 이 시나
 게시의 조건을 못 갖췄으면 409 와 함께 이유를 전부 알려 준다. 같은 이유는 한 번만 적는다.
 
 게시하기 전에 `GET /scenarios/{id}/publish-check` 로 같은 검사만 돌려 볼 수 있다. 판은 생기지 않는다.
+응답의 `warnings` 는 게시를 막지 않는 알림이다(있어도 `ready` 는 그대로고 게시된다). 지금은 하나다. `chapter_condition_locked`(#289): 장으로 넘어오는 조건이 기다리는 장소(`reach_place`)나 퀘스트(`quest_succeeded`, `quest_failed`)를, 그 장에 오기 전에 지날 수 있는 장(앞의 장과 그 앞의 장들)이 열지 않는다(뒤의 장, 다른 갈림길, 그 장 자신이 연다). 그 장으로는 넘어올 수 없다.
 갖추었으면 `{"ready": true, "problems": []}`, 못 갖추었으면 게시가 409 로 줄 `problems` 를 그대로 준다.
 성인용 초안을 볼 수 없는 토큰이면 게시처럼 403, 남의 것이나 없는 것이면 404 다.
 검사는 초안을 잠그지 않는다. 답한 뒤에 초안이 바뀔 수 있어서, 게시는 잠근 뒤에 다시 검사한다.
