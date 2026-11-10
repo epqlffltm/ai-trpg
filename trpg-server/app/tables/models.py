@@ -1201,7 +1201,7 @@ class TableTrap(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     # 테이블의 행이 지워지면 함께 지워진다
-    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'))
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), index=True)
     # 판(content)의 로어북 장소 항목과 덫 물건 항목의 ID
     place_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     entry_id: Mapped[uuid.UUID] = mapped_column(Uuid)
@@ -1249,6 +1249,10 @@ class TableInjury(Base):
         CheckConstraint('heals_at IS NULL OR heals_at >= 0', name='heals_at_not_negative'),
         # 아직 낫지 않은 부상을 찾는 일이 라운드마다 있다
         Index('ix_table_injuries_active', 'table_id', postgresql_where='ended_at IS NULL'),
+        # 가진 쪽을 지우거나 읽을 때 부상을 그 칸으로 찾는다(#1259). 없으면 표 전체를 훑는다
+        Index('ix_table_injuries_sheet_id', 'sheet_id'),
+        Index('ix_table_injuries_npc', 'table_id', 'npc_entry_id'),
+        Index('ix_table_injuries_monster_id', 'monster_id'),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)

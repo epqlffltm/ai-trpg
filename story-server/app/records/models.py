@@ -27,7 +27,7 @@ class EndingRecord(Base):
     world_source: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
     ending_id: Mapped[str] = mapped_column(String(40), primary_key=True)
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey('conversations.id', ondelete='SET NULL'), default=None
+        ForeignKey('conversations.id', ondelete='SET NULL'), default=None, index=True
     )
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -50,7 +50,7 @@ class IllustrationUnlock(Base):
     image_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     cast: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default='{}')
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey('conversations.id', ondelete='SET NULL'), default=None
+        ForeignKey('conversations.id', ondelete='SET NULL'), default=None, index=True
     )
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -73,7 +73,7 @@ class AchievementRecord(Base):
     description: Mapped[str] = mapped_column(Text, default='', server_default='')
     image_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, default=None)
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey('conversations.id', ondelete='SET NULL'), default=None
+        ForeignKey('conversations.id', ondelete='SET NULL'), default=None, index=True
     )
     earned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
