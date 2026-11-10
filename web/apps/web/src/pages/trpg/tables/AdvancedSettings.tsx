@@ -1,13 +1,21 @@
 // web/apps/web/src/pages/trpg/tables/AdvancedSettings.tsx
 // 테이블 만들기(B4)의 "자세한 설정". 접어 둔다. 서버가 모델 칸을 거절했으면 열어 둔다.
-// 만든 뒤에 방장이 바꿀 수 있는 것: 문체, 라운드 시간 제한, 서술 모델, 크레딧 기다리기, 쪽지 알림, 참고 자료(모집 중).
+// 만든 뒤에 방장이 바꿀 수 있는 것: 문체, 라운드 시간 제한, 서술 모델, 크레딧 기다리기, 쪽지 알림, 참고 자료와 진행 방식(모집 중).
 // 바꿀 수 없는 것: 캐릭터 방식(그래서 여기서 좁힌다).
 
 import { Checkbox, SelectField } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
-import type { NarrationStyle, PublicListingDetail } from '../../../api/types';
+import type { NarrationStyle, PublicListingDetail, TurnMode } from '../../../api/types';
 import type { FormProblem } from '../../../auth/problem';
-import { characterModeLabel, durationLabel, NARRATION_STYLE_VALUES, narrationStyleLabel } from '../labels';
+import {
+  characterModeLabel,
+  durationLabel,
+  NARRATION_STYLE_VALUES,
+  narrationStyleLabel,
+  TURN_MODE_HINT,
+  TURN_MODE_VALUES,
+  turnModeLabel,
+} from '../labels';
 import { ModelPicker } from '../models/ModelPicker';
 import { narrationModelsQuery } from '../queries';
 import { CREDIT_WAITS, ROUND_LIMITS, type CreateDraft } from './createForm';
@@ -36,6 +44,18 @@ export function AdvancedSettings({ listing, draft, onChange, hints, problem }: P
         }
         error={problem?.fields?.narration_model}
       />
+      <SelectField
+        label="진행 방식"
+        hint={TURN_MODE_HINT}
+        value={draft.turnMode}
+        onChange={(event) => onChange({ turnMode: event.target.value as TurnMode })}
+      >
+        {TURN_MODE_VALUES.map((mode) => (
+          <option key={mode} value={mode}>
+            {turnModeLabel(mode)}
+          </option>
+        ))}
+      </SelectField>
       <SelectField
         label="서술 문체"
         value={draft.narrationStyle}

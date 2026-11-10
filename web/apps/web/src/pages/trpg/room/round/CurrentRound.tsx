@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/trpg/room/round/CurrentRound.tsx
 // 지금 라운드. 장면(GM 의 서술)을 보이고, 상태에 따라 아래가 다르다.
 //   - 선언을 받는 중: 라운드 줄(Stitch 20번: 마감 시각과 남은 시간, 아직 내지 않은 사람), 내 선언, 방장의 닫기와 바로 앞 라운드 되돌리기(#288)
+//     차례대로 진행하는 테이블(#287)이면 줄에 바퀴와 차례의 주인을 보이고, 방장의 닫기는 "차례 건너뛰기"다
 //   - 결과를 서술하는 중: 모두의 선언과 판정 결과를 먼저 보이고, 쓰이는 서술을 미리 보인다. 실패하면 방장이 다시 맡긴다
 //   - 끝난 테이블의 마지막 라운드: 선언과 결과만
 // 장면 아래에 그 라운드의 장면 그림(#983)을 둔다.
@@ -18,7 +19,7 @@ import { DeclarationPanel } from './DeclarationPanel';
 import { NarrationPreviewText } from './NarrationPreviewText';
 import { canOfferRevert, RevertRoundButton } from './RevertRoundButton';
 import type { NarrationPreview } from './preview';
-import { remainingSeconds, roundStatusLabel } from './roundView';
+import { remainingSeconds, roundStatusLabel, turnLine } from './roundView';
 
 type Props = {
   table: TableDetail;
@@ -32,6 +33,8 @@ type Props = {
 export function CurrentRound({ table, round, myId, preview, nameOfMember, snapshots }: Props) {
   const playing = table.status === 'playing';
   const isHost = myId !== undefined && table.host_id === myId;
+  const turn = turnLine(table, round, nameOfMember);
+  const skipping = turn !== null && round.actor_id !== null ? nameOfMember(round.actor_id) : null;
   return (
     <article className="round round--current" aria-labelledby="current-round">
       <h3 id="current-round" className="round__number">
@@ -42,11 +45,12 @@ export function CurrentRound({ table, round, myId, preview, nameOfMember, snapsh
       {round.status === 'open' && playing ? (
         <>
           <div className="round__bar">
+            {turn ? <p className="round__turn">{turn}</p> : null}
             <RoundDeadline deadlineAt={round.deadline_at} />
-            <WaitingFor ids={round.waiting_for} nameOfMember={nameOfMember} />
+            {turn ? null : <WaitingFor ids={round.waiting_for} nameOfMember={nameOfMember} />}
           </div>
-          <DeclarationPanel table={table} round={round} myId={myId} />
-          {isHost ? <CloseRoundButton tableId={table.id} round={round} /> : null}
+          <DeclarationPanel table={table} round={round} myId={myId} nameOfMember={nameOfMember} />
+          {isHost ? <CloseRoundButton tableId={table.id} round={round} skipping={skipping} /> : null}
           {isHost && canOfferRevert(round) ? <RevertRoundButton tableId={table.id} round={round} /> : null}
         </>
       ) : (

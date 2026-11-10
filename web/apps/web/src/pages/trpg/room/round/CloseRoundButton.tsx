@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/trpg/room/round/CloseRoundButton.tsx
 // 방장의 라운드 닫기(POST .../rounds/current/close, 202). 선언을 기다리지 않고 넘어가므로 한 번 더 묻는다.
+// 차례대로 진행하는 테이블(#287)에서 주인이 있는 차례면 "차례 건너뛰기"로 보인다(skipping 은 그 주인의 이름). 같은 주소다.
 // 서술에 실패해 멈춘 라운드에는 "서술 다시 맡기기"로 보인다(같은 주소, 판정은 다시 하지 않는다). 다른 모델로 몰래 바꾸지 않는다.
 
 import { Button, Dialog } from '@ai-trpg/ui';
@@ -10,8 +11,11 @@ import type { Round } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import { replaceCurrentRound, roundsKey } from './roundQueries';
 import { describeCloseProblem, type RoundProblem } from './roundProblem';
+import { closeCopy } from './roundView';
 
-export function CloseRoundButton({ tableId, round }: { tableId: string; round: Round }) {
+type Props = { tableId: string; round: Round; skipping?: string | null };
+
+export function CloseRoundButton({ tableId, round, skipping = null }: Props) {
   const queryClient = useQueryClient();
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -43,17 +47,18 @@ export function CloseRoundButton({ tableId, round }: { tableId: string; round: R
       </div>
     );
   }
+  const copy = closeCopy(skipping);
   return (
     <div className="round-host">
       <Button variant="secondary" onClick={() => setAsking(true)}>
-        라운드 닫기
+        {copy.button}
       </Button>
-      <Dialog title="라운드 닫기" open={asking} onClose={close}>
-        <p>선언하지 않은 사람을 기다리지 않고 이 라운드를 마감합니다. 낸 선언의 판정을 하고 결과를 서술합니다.</p>
+      <Dialog title={copy.title} open={asking} onClose={close}>
+        <p>{copy.body}</p>
         <ProblemNotice problem={problem} />
         <div className="actions">
           <Button busy={busy} onClick={send}>
-            마감하기
+            {copy.confirm}
           </Button>
         </div>
       </Dialog>

@@ -23,6 +23,8 @@ const CONFLICTS: Record<string, RoundProblem> = {
   character_incapacitated: { message: '캐릭터가 입은 부상 때문에 판정을 붙일 수 없습니다. 글만 낼 수 있습니다.' },
   character_dead: { message: '캐릭터가 죽어 선언을 낼 수 없습니다.', refresh: true },
   character_arriving: { message: '이번 라운드에 들어온 캐릭터입니다. 다음 라운드부터 선언합니다.', refresh: true },
+  // 차례대로 진행하는 테이블(#287). 그 사이에 차례가 넘어갔을 수 있어 다시 읽는다
+  not_your_turn: { message: '지금은 내 차례가 아닙니다.', refresh: true },
   // 행동의 대상과 물건. 그 사이에 바뀌었을 수 있어 다시 읽는다
   npc_dead: { message: '그 인물은 이미 죽었습니다.', refresh: true },
   monster_dead: { message: '그 몬스터는 이미 쓰러졌습니다.', refresh: true },

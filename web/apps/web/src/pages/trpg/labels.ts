@@ -10,6 +10,7 @@ import type {
   NarrationStyle,
   NpcAttitude,
   RecommendedPlayers,
+  TurnMode,
 } from '../../api/types';
 
 // 차례가 곧 거르는 칩과 고르는 단추의 차례다. 장르는 이야기의 종류만이다(남성향·여성향은 태그, 화면 명세 B1)
@@ -67,6 +68,20 @@ export const ATTITUDE_VALUES = Object.keys(ATTITUDES) as NpcAttitude[];
 const FRIENDLY_FIRES: Record<FriendlyFire, string> = { off: '끔', prank: '장난만', full: '다 됨' };
 
 export const FRIENDLY_FIRE_VALUES = Object.keys(FRIENDLY_FIRES) as FriendlyFire[];
+
+// 진행 방식(#287). 차례가 곧 고르는 칸의 차례다(기본인 한꺼번에가 먼저)
+const TURN_MODES: Record<TurnMode, string> = { together: '한꺼번에', turns: '차례대로' };
+
+export const TURN_MODE_VALUES = Object.keys(TURN_MODES) as TurnMode[];
+
+/** 진행 방식의 이름. 모르는 값이면 값 그대로 */
+export function turnModeLabel(mode: string): string {
+  return TURN_MODES[mode as TurnMode] ?? mode;
+}
+
+/** 진행 방식을 고르는 칸의 도움말. 만들 때와 모집 중에 바꿀 때 같다 */
+export const TURN_MODE_HINT =
+  '한꺼번에는 모두가 한 라운드에 선언합니다. 차례대로는 한 명씩 자기 차례에 선언하고, 모두의 차례 한 바퀴가 게임 안의 한 라운드입니다.';
 
 /** 동료 피해의 정도의 이름. 모르는 값(서버가 새 정도를 더했다)이면 값 그대로 */
 export function friendlyFireLabel(level: string): string {
