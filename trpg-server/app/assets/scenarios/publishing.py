@@ -29,6 +29,7 @@ from app.assets.models import (
     LoreEntry,
     LoreKind,
     QuestConditionKind,
+    QuestMatch,
     Rating,
     Rulebook,
     Scenario,
@@ -103,6 +104,12 @@ class ScenarioWarning(enum.StrEnum):
     # 그 장소와 퀘스트를 여는 장이 그 장의 앞에 지날 수 있는 장이 아니다(뒤의 장, 다른 갈림길, 그 장 자신).
     # 그 길로는 그 장에 넘어올 수 없다
     CHAPTER_CONDITION_LOCKED = 'chapter_condition_locked'
+    # 퀘스트, 사건, 업적의 조건이 갈림길 때문에 채워질 수 없다(#289). 함께 채워야 하는 것들을 여는 장이
+    # 한 길에 함께 있을 수 없거나(서로 다른 갈림길), 퀘스트를 여는 장과 그 조건이 기다리는 것을 여는 장이 그렇다.
+    # 퀘스트는 이루는 조건과 드러나는 조건을 본다(실패하는 조건은 채워지지 않아도 된다)
+    QUEST_CONDITION_LOCKED = 'quest_condition_locked'
+    HAPPENING_CONDITION_LOCKED = 'happening_condition_locked'
+    ACHIEVEMENT_CONDITION_LOCKED = 'achievement_condition_locked'
 
 
 class Problem(enum.StrEnum):
@@ -1129,19 +1136,59 @@ def openers(chapters: list[Chapter]) -> tuple[dict[uuid.UUID, str], dict[uuid.UU
     return places, quests
 
 
+def condition_opener(
+    condition: QuestCondition, places: dict[uuid.UUID, str], quests: dict[uuid.UUID, str]
+) -> str | None:
+    """
+    그 조건이 채워지려면 지나와야 하는 장의 id. 장소에 서기와 퀘스트의 성공·실패는 그것을 여는 장,
+    chapter_at_least 는 그 장이다. 장이 막지 않는 조건이면 None.
+    """
+    if condition.kind in LOCKABLE_PLACE_KINDS:
+        return places.get(condition.target)
+    if condition.kind in LOCKABLE_QUEST_KINDS:
+        return quests.get(condition.target)
+    if condition.kind == QuestConditionKind.CHAPTER_AT_LEAST:
+        return condition.chapter
+    return None
+
+
 def waits_for_locked(
     chapter: Chapter, before: set[str], places: dict[uuid.UUID, str], quests: dict[uuid.UUID, str]
 ) -> bool:
     """그 장의 넘어오는 조건이 그 장의 앞(before)에서 열리지 않는 장소나 퀘스트를 기다리는가."""
-    for condition in chapter.when:
-        opener = None
-        if condition.kind in LOCKABLE_PLACE_KINDS:
-            opener = places.get(condition.target)
-        elif condition.kind in LOCKABLE_QUEST_KINDS:
-            opener = quests.get(condition.target)
-        if opener is not None and opener not in before:
-            return True
-    return False
+    needs = (condition_opener(condition, places, quests) for condition in chapter.when)
+    return any(opener is not None and opener not in before for opener in needs)
+
+
+def on_one_route(one: str, other: str, before: dict[str, set[str]]) -> bool:
+    """두 장을 한 길에서 함께 지날 수 있는가. 같은 장이거나 한쪽이 다른 쪽의 앞에 지날 수 있는 장이다."""
+    return one == other or one in before[other] or other in before[one]
+
+
+def never_met(
+    conditions: list[QuestCondition],
+    match: QuestMatch,
+    own: str | None,
+    before: dict[str, set[str]],
+    opened: tuple[dict[uuid.UUID, str], dict[uuid.UUID, str]],
+) -> bool:
+    """
+    갈림길 때문에 그 조건들이 채워질 수 없는가. own 은 그 콘텐츠를 여는 장이다(처음부터 열려 있으면 None).
+    opened 는 장소와 퀘스트마다 그것을 여는 장이다(openers).
+
+    모두(all)면 콘텐츠를 여는 장과 조건마다 지나와야 하는 장들 가운데 한 길에 함께 있을 수 없는 두 장이 있을 때다.
+    하나라도(any)면 조건마다 그렇게 콘텐츠를 여는 장과 한 길에 있을 수 없을 때다. 판에 없는 장은 보지 않는다
+    (게시의 문제가 따로 막는다).
+    """
+    places, quests = opened
+    needs = [condition_opener(condition, places, quests) for condition in conditions]
+    gated = [one for one in needs if one in before]
+    if match == QuestMatch.ANY:
+        if own is None or not conditions or len(gated) < len(conditions):
+            return False
+        return all(not on_one_route(one, own, before) for one in gated)
+    marks = [*gated, *([own] if own in before else [])]
+    return any(not on_one_route(one, other, before) for one in marks for other in marks)
 
 
 def find_chapter_warnings(scenario: Scenario) -> list[ScenarioWarning]:
@@ -1159,9 +1206,37 @@ def find_chapter_warnings(scenario: Scenario) -> list[ScenarioWarning]:
     return []
 
 
+def find_content_warnings(scenario: Scenario) -> list[ScenarioWarning]:
+    """
+    퀘스트, 사건, 업적의 조건 가운데 갈림길(#289) 때문에 채워질 수 없는 것이 있으면 알린다. 게시를 막지 않는다.
+
+    퀘스트는 장이 열 수 있다(그 장을 지나야 드러나고 이룬다). 사건과 업적은 처음부터 열려 있다.
+    장이 없는 판은 알리지 않는다.
+    """
+    chapters = read_chapters(scenario)
+    if not chapters:
+        return []
+    opened = openers(chapters)
+    before = ancestors(chapters)
+    quest_openers = opened[1]
+    quests = [
+        never_met(rule.conditions, rule.match, quest_openers.get(rule.entry_id), before, opened)
+        or never_met(rule.reveal, rule.reveal_match, quest_openers.get(rule.entry_id), before, opened)
+        for rule in read_quest_rules(scenario)
+    ]
+    happenings = [never_met(rule.when, rule.match, None, before, opened) for rule in read_happenings(scenario)]
+    achievements = [never_met(one.when, one.match, None, before, opened) for one in read_achievements(scenario)]
+    flagged = [
+        (any(quests), ScenarioWarning.QUEST_CONDITION_LOCKED),
+        (any(happenings), ScenarioWarning.HAPPENING_CONDITION_LOCKED),
+        (any(achievements), ScenarioWarning.ACHIEVEMENT_CONDITION_LOCKED),
+    ]
+    return [warning for hit, warning in flagged if hit]
+
+
 def find_warnings(scenario: Scenario) -> list[ScenarioWarning]:
     """게시를 막지 않는 알릴 것들. 정한 순서로 적는다."""
-    return find_chapter_warnings(scenario)
+    return [*find_chapter_warnings(scenario), *find_content_warnings(scenario)]
 
 
 # 길의 문을 다루는 사건의 효과의 모양(#281)
