@@ -67,5 +67,5 @@ async def list_messages(
 
     처음에는 after 없이 읽고, 그 뒤로는 마지막으로 받은 번호를 after 로 준다. 못 본 것만 받는다.
     """
-    table, messages = await service.list_messages(session, user.user_id, table_id, after, limit)
-    return MessagePage(items=[to_message(message) for message in messages], last_sequence=table.last_message_sequence)
+    seat, messages = await service.list_messages(session, user.user_id, table_id, after, limit)
+    return MessagePage(items=[to_message(message) for message in messages], last_sequence=seat.last_message_sequence)
