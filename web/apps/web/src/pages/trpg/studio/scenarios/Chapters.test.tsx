@@ -11,7 +11,20 @@ import { installFakeFetch, json, tokens, type SeenRequest } from '../../../../te
 import { renderApp } from '../../../../test/renderApp';
 import { scenarioDetail } from '../../../../test/scenarioFixtures';
 import { ME, RULES } from '../../../../test/tableFixtures';
-import { canMove, canRemove, chapterDraft, chapterHints, chapterLine, keepEarlierAfter, moved, newChapterId, toChapter, withoutChapter } from './chaptersForm';
+import {
+  canMove,
+  canRemove,
+  chapterDraft,
+  chapterHints,
+  chapterLine,
+  earlierChapters,
+  followsLine,
+  keepEarlierAfter,
+  moved,
+  newChapterId,
+  toChapter,
+  withoutChapter,
+} from './chaptersForm';
 import type { Targets } from './conditionsForm';
 import { problemLine } from './publishProblems';
 
@@ -158,6 +171,41 @@ describe('장 탭', () => {
     expect(dialog.getByText('다른 장이 있으면 첫 장은 지우지 못합니다. 뒤의 장부터 지우세요.')).toBeInTheDocument();
   });
 
+  it('앞의 장을 골라 갈림길을 만들고, 줄에 어느 장 다음인지 보인다(#289)', async () => {
+    const chapters = [
+      chapter('a', '도착'),
+      chapter('b', '마을', { when: [REACH_CRYPT], after: ['a'] }),
+      chapter('c', '들', { when: [REACH_CRYPT], after: ['a'] }),
+      chapter('d', '끝', { when: [REACH_CRYPT] }),
+    ];
+    const { seen } = signedIn({ chapters });
+    renderApp(`/trpg/studio/scenarios/${ID}?tab=chapters`);
+
+    const list = within(await (await chaptersPanel()).findByRole('list', { name: '장' }));
+    expect(list.getAllByText('「도착」 다음')).toHaveLength(2);
+    await userEvent.click(list.getByRole('button', { name: '끝 고치기' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    const after = within(dialog.getByRole('group', { name: '앞의 장' }));
+    expect(after.getAllByRole('checkbox')).toHaveLength(3);
+    expect(dialog.getByText(/고르지 않으면 바로 앞의 장\(「들」\) 다음입니다/)).toBeInTheDocument();
+    await userEvent.click(after.getByRole('checkbox', { name: '2장: 마을' }));
+    await userEvent.click(after.getByRole('checkbox', { name: '3장: 들' }));
+    await userEvent.click(dialog.getByRole('button', { name: '저장' }));
+
+    await vi.waitFor(() => expect(patches(seen)).toHaveLength(1));
+    expect((patches(seen)[0]?.chapters as Chapter[]).map((one) => one.after)).toEqual([[], ['a'], ['a'], ['b', 'c']]);
+    expect(await list.findByText('「마을」, 「들」 다음')).toBeInTheDocument();
+  });
+
+  it('첫 장의 창에는 앞의 장이 없다', async () => {
+    signedIn({ chapters: [chapter('a', '도착'), chapter('b', '마을', { when: [REACH_CRYPT] })] });
+    renderApp(`/trpg/studio/scenarios/${ID}?tab=chapters`);
+
+    const list = within(await (await chaptersPanel()).findByRole('list', { name: '장' }));
+    await userEvent.click(list.getByRole('button', { name: '도착 고치기' }));
+    expect(within(await screen.findByRole('dialog')).queryByRole('group', { name: '앞의 장' })).toBeNull();
+  });
+
   it('다른 장이 연 것은 그 장을 적고 고르지 못한다', async () => {
     const chapters = [chapter('a', '도착'), chapter('b', '지하', { when: [REACH_CRYPT], opens: { places: [CRYPT], quests: [] } }), chapter('c', '끝', { when: [REACH_CRYPT] })];
     signedIn({ chapters });
@@ -246,6 +294,11 @@ describe('장 입력', () => {
       ['c', ['a']],
     ]);
     expect(keepEarlierAfter([toChapter('x', { ...chapterDraft(undefined), name: 'x', after: ['y'] }, false)])[0]?.after).toEqual([]);
+    expect(earlierChapters(forked, 2).map((one) => one.id)).toEqual(['a', 'b']);
+    expect(earlierChapters(forked, null).map((one) => one.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect([followsLine(forked[0]!, 0, forked), followsLine(forked[3]!, 3, forked)]).toEqual([null, '「마을」, 「들」 다음']);
+    expect(followsLine(chapter('z', 'z', { after: ['gone'] }), 1, forked)).toBe('(찾을 수 없음) 다음');
+    expect(followsLine(chapter('z', 'z'), 1, forked)).toBeNull();
   });
 
   it('목록의 한 줄과 게시 점검의 장 문제', () => {

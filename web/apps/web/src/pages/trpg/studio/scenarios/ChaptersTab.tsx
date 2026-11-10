@@ -3,10 +3,11 @@
 // 줄을 고치면 창이 열리고, 창의 저장이 장 목록을 통째로 바로 보낸다. 위로·아래로도 바로 저장한다.
 // 첫 장은 처음부터 그 장이라 넘어오는 조건이 없다. 첫 자리는 옮기지 않고, 다른 장이 있으면 첫 장은 지우지 않는다(chaptersForm.ts).
 // 장이 여는 장소와 퀘스트는 그 장이 오기 전까지 테이블에서 닫혀 있다(지도에 없고, 갈 수 없고, 드러나지 않는다).
+// 갈림길(#289): 장마다 앞의 장을 고른다. 고르지 않으면 바로 앞의 장 다음이다. 줄에 "「마을」, 「들」 다음"을 보인다.
 
 import { Button, Checkbox, Dialog, Notice, TextField } from '@ai-trpg/ui';
 import { useCallback, useState, type FormEvent } from 'react';
-import type { ScenarioDetail } from '../../../../api/types';
+import type { Chapter, ScenarioDetail } from '../../../../api/types';
 import { ProblemNotice } from '../../../../components/ProblemNotice';
 import {
   canMove,
@@ -15,6 +16,8 @@ import {
   chapterDraft,
   chapterHints,
   chapterLine,
+  earlierChapters,
+  followsLine,
   hasChapterHints,
   MAX_CHAPTERS,
   moved,
@@ -59,8 +62,9 @@ export function ChaptersTab({ scenario }: Props) {
         </span>
       </h2>
       <p className="hint">
-        이야기를 장으로 나눕니다. 테이블은 첫 장에서 시작하고, 다음 장의 넘어오는 조건이 채워지면 라운드가 닫힐 때 엔진이 한 장씩 넘깁니다. 장이 여는 장소와 퀘스트는 그 장이 오기
-        전까지 닫혀 있습니다. 어느 장에도 적지 않은 것은 처음부터 열려 있습니다. 창에서 저장하면 바로 저장됩니다.
+        이야기를 장으로 나눕니다. 테이블은 첫 장에서 시작하고, 다음 장의 넘어오는 조건이 채워지면 라운드가 닫힐 때 엔진이 한 장씩 넘깁니다. 장마다 앞의 장을 고르면 갈림길로
+        갈라지고 다시 모입니다. 장이 여는 장소와 퀘스트는 그 장이 오기 전까지 닫혀 있고, 고르지 않은 갈림길의 장이 여는 것은 그 테이블에서 계속 닫혀 있습니다. 어느 장에도 적지
+        않은 것은 처음부터 열려 있습니다. 창에서 저장하면 바로 저장됩니다.
       </p>
       {failed ? <Notice tone="error">로어북의 항목을 불러오지 못했습니다. 이름이 보이지 않을 수 있습니다.</Notice> : null}
       <ProblemNotice problem={saving.problem} />
@@ -72,6 +76,7 @@ export function ChaptersTab({ scenario }: Props) {
               <strong>
                 {index + 1}장: {chapter.name}
               </strong>
+              {followsLine(chapter, index, chapters) ? <div className="studio-list__description hint">{followsLine(chapter, index, chapters)}</div> : null}
               <div className="studio-list__description hint">{chapterLine(chapter, index, targets)}</div>
             </div>
             <div className="actions">
@@ -135,12 +140,13 @@ function ChapterForm({ scenario, targets, editing, done }: FormProps) {
     <form onSubmit={(event) => void submit(event)} noValidate aria-label="장">
       <ProblemNotice problem={saving.problem} />
       <TextField label="이름" maxLength={CHAPTER_NAME_MAX_LENGTH} value={draft.name} onChange={(event) => update({ name: event.target.value })} error={hints.fields.name} />
+      {first ? null : <AfterChoices earlier={earlierChapters(scenario.chapters, editing.index)} picked={draft.after} onChange={(after) => update({ after })} />}
       {first ? (
         <p className="ui-field__hint">첫 장입니다. 테이블은 이 장에서 시작하므로 넘어오는 조건이 없습니다.</p>
       ) : (
         <fieldset className="scenario-choices">
           <legend>넘어오는 조건</legend>
-          <p className="ui-field__hint">앞 장에 있을 때 채워지면 라운드가 닫힐 때 이 장으로 넘어갑니다. 한 번에 한 장씩, 앞으로만 갑니다.</p>
+          <p className="ui-field__hint">앞의 장에 있을 때 채워지면 라운드가 닫힐 때 이 장으로 넘어갑니다. 한 번에 한 장씩, 앞으로만 갑니다.</p>
           <ConditionsEditor
             label="넘어오는 조건"
             kinds={KINDS_FOR.any}
@@ -156,7 +162,9 @@ function ChapterForm({ scenario, targets, editing, done }: FormProps) {
       )}
       <fieldset className="scenario-choices">
         <legend>이 장이 여는 장소</legend>
-        <p className="ui-field__hint">{first ? '첫 장이 여는 것은 처음부터 열려 있습니다.' : '이 장이 오기 전까지 지도에 없고 갈 수 없습니다.'} 맵의 장소만 고릅니다.</p>
+        <p className="ui-field__hint">
+          {first ? '첫 장이 여는 것은 처음부터 열려 있습니다.' : '이 장이 오기 전까지 지도에 없고 갈 수 없습니다. 고르지 않은 갈림길이면 그 테이블에서 계속 닫혀 있습니다.'} 맵의 장소만 고릅니다.
+        </p>
         <OpenChoices
           label="장소"
           choices={targets.places.filter((place) => onMap.has(place.id) || draft.places.includes(place.id))}
@@ -186,6 +194,30 @@ function ChapterForm({ scenario, targets, editing, done }: FormProps) {
       </div>
       {chapter && editing.index !== null && !canRemove(scenario.chapters, editing.index) ? <p className="hint">다른 장이 있으면 첫 장은 지우지 못합니다. 뒤의 장부터 지우세요.</p> : null}
     </form>
+  );
+}
+
+type AfterProps = { earlier: Chapter[]; picked: string[]; onChange: (picked: string[]) => void };
+
+/** 앞의 장을 고르는 체크 상자들(#289). 목록에서 이 장보다 앞의 장만 고른다 */
+function AfterChoices({ earlier, picked, onChange }: AfterProps) {
+  const before = earlier[earlier.length - 1];
+  return (
+    <fieldset className="scenario-choices">
+      <legend>앞의 장</legend>
+      <p className="ui-field__hint">
+        고르지 않으면 바로 앞의 장({before ? `「${before.name}」` : '없음'}) 다음입니다. 여럿 고르면 그 어느 장에서든 넘어옵니다. 같은 장 다음에 올 장이 여럿이면 갈림길이고, 조건이 함께
+        맞으면 목록에서 앞의 장으로 갑니다.
+      </p>
+      {earlier.map((one, index) => (
+        <Checkbox
+          key={one.id}
+          label={`${index + 1}장: ${one.name}`}
+          checked={picked.includes(one.id)}
+          onChange={(event) => onChange(event.target.checked ? [...picked, one.id] : picked.filter((id) => id !== one.id))}
+        />
+      ))}
+    </fieldset>
   );
 }
 

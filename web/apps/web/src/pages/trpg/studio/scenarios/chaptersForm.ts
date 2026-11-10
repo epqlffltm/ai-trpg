@@ -7,7 +7,8 @@
 // - id 는 판이 바뀌어도 그대로 두는 이름표다. 만들 때 정하고(chapter-1, chapter-2 …) 고치지 않는다.
 //   조건의 장(chapter_at_least)과 테이블의 지금 장이 이것을 가리킨다
 // - 갈림길(after, #289): 그 장이 어느 장 다음에 올 수 있는지. 목록에서 앞의 장만 적는다. 비우면 바로 앞의 장 다음이다.
-//   고르는 칸은 아직 없다. 받은 것을 그대로 보내고, 지우거나 옮겨 앞의 장이 아니게 된 것은 뺀다
+//   창에서 앞의 장들을 고른다(earlierChapters). 지우거나 옮겨 앞의 장이 아니게 된 것은 뺀다(keepEarlierAfter).
+//   같은 장을 앞의 장으로 둔 장이 여럿이면 갈림길이고, 조건이 함께 맞으면 목록의 앞쪽으로 간다. 여럿 고르면 합류다
 
 import type { Chapter, ChapterBody, QuestMatch } from '../../../../api/types';
 import { conditionDrafts, conditionLine, conditionsHints, toConditions, type ConditionDraft, type Targets } from './conditionsForm';
@@ -137,6 +138,25 @@ export function moved(chapters: Chapter[], index: number, step: -1 | 1): Chapter
   const target = index + step;
   [bodies[index], bodies[target]] = [bodies[target]!, bodies[index]!];
   return keepEarlierAfter(bodies);
+}
+
+/** 새 장이나 그 자리의 장이 앞의 장으로 고를 수 있는 장들. 목록에서 그보다 앞의 장이다. index 가 null 이면 새 장(끝) */
+export function earlierChapters(chapters: Chapter[], index: number | null): Chapter[] {
+  return chapters.slice(0, index ?? chapters.length);
+}
+
+/**
+ * 목록의 갈림길 한 줄. "「마을」, 「들」 다음". 첫 장이거나 앞의 장을 고르지 않았으면(바로 앞의 장 다음) null.
+ * 없는 장을 가리키면 "(찾을 수 없음)"
+ */
+export function followsLine(chapter: Chapter, index: number, chapters: Chapter[]): string | null {
+  const after = chapter.after ?? [];
+  if (index === 0 || after.length === 0) return null;
+  const names = after.map((id) => {
+    const found = chapters.find((one) => one.id === id);
+    return found ? `「${found.name}」` : '(찾을 수 없음)';
+  });
+  return `${names.join(', ')} 다음`;
 }
 
 /** 목록의 한 줄. "처음부터 · 여는 것 없음", "넘어옴: 종탑에 닿는다 · 열림: 장소 2, 퀘스트 1" */
