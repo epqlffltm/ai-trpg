@@ -44,7 +44,7 @@ async def test_a_ready_scenario_is_ready_and_nothing_is_published(client: AsyncC
     response = await client.get(check_url(scenario['id']), headers=my_headers)
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.json() == {'ready': True, 'problems': []}
+    assert response.json() == {'ready': True, 'problems': [], 'warnings': []}
     assert await versions_of(client, my_headers, scenario) == []
 
 
@@ -57,7 +57,7 @@ async def test_the_problems_are_the_ones_publishing_would_give(client: AsyncClie
     published = await client.post(f'{SCENARIOS_URL}/{scenario["id"]}/versions', json={}, headers=my_headers)
 
     assert published.status_code == status.HTTP_409_CONFLICT
-    assert checked.json() == {'ready': False, 'problems': published.json()['problems']}
+    assert checked.json() == {'ready': False, 'problems': published.json()['problems'], 'warnings': []}
     assert 'rulebook_missing' in checked.json()['problems']
     assert await versions_of(client, my_headers, scenario) == []
 
@@ -88,4 +88,4 @@ async def test_an_adult_draft_needs_an_adult_token_like_publishing(
     allowed = await client.get(check_url(scenario['id']), headers=my_adult_headers)
 
     assert checked.status_code == published.status_code == status.HTTP_403_FORBIDDEN
-    assert allowed.json() == {'ready': True, 'problems': []}
+    assert allowed.json() == {'ready': True, 'problems': [], 'warnings': []}

@@ -101,6 +101,35 @@ describe('시나리오 만들기와 게시 점검', () => {
   });
 });
 
+describe('게시 점검의 알림', () => {
+  it('게시를 막지 않는 알림은 따로 적고 그 탭으로 간다', async () => {
+    signedIn({
+      [`GET ${SCENARIOS}/${ID}`]: () => json(200, scenario()),
+      [`GET ${SCENARIOS}/${ID}/publish-check`]: () => json(200, { ready: true, problems: [], warnings: ['chapter_condition_locked', 'new_warning'] }),
+    });
+    renderApp(`/trpg/studio/scenarios/${ID}`);
+
+    const notes = within(await screen.findByRole('list', { name: '살펴볼 것' }));
+    expect(screen.getByText('지금 게시할 수 있습니다.')).toBeInTheDocument();
+    expect(screen.getByText('게시는 되지만 살펴볼 것이 2개 있습니다.')).toBeInTheDocument();
+    expect(notes.getByText(/넘어올 수 없는 장이 있습니다/)).toBeInTheDocument();
+    expect(notes.getByText('new_warning')).toBeInTheDocument();
+    await userEvent.click(notes.getByRole('button', { name: '장 탭으로' }));
+    expect(screen.getByRole('tab', { name: '장' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('알림이 없으면 알림 목록을 보이지 않는다', async () => {
+    signedIn({
+      [`GET ${SCENARIOS}/${ID}`]: () => json(200, scenario()),
+      [`GET ${SCENARIOS}/${ID}/publish-check`]: () => json(200, { ready: true, problems: [], warnings: [] }),
+    });
+    renderApp(`/trpg/studio/scenarios/${ID}`);
+
+    expect(await screen.findByText('지금 게시할 수 있습니다.')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: '살펴볼 것' })).toBeNull();
+  });
+});
+
 describe('탭마다 저장', () => {
   it('재료는 그 탭의 칸만 보내고, 저장하면 점검을 다시 읽는다', async () => {
     const { seen } = signedIn({

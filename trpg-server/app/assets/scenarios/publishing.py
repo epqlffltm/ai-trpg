@@ -37,6 +37,7 @@ from app.assets.models import (
 )
 from app.assets.ratings import ALL_AGES_ONLY, require_rating
 from app.assets.scenarios import repository
+from app.assets.scenarios.chapter_graph import ancestors
 from app.assets.scenarios.schemas import (
     Achievement,
     Chapter,
@@ -93,6 +94,15 @@ from app.engine.item_effects import EffectKind, nature_of
 from app.engine.resources import find_resource, holds
 from app.engine.ruleset import Healing, ResourceHolder, Ruleset, effects_fit
 from app.engine.sheet import CharacterSheet, Sheet, fits, knows_only, resists_only_known
+
+
+class ScenarioWarning(enum.StrEnum):
+    """게시를 막지 않지만 제작자에게 알리는 것(게시 점검의 warnings)."""
+
+    # 장으로 넘어오는 조건이, 그 장에 오기 전에는 열리지 않는 장소나 퀘스트를 기다린다(#289).
+    # 그 장소와 퀘스트를 여는 장이 그 장의 앞에 지날 수 있는 장이 아니다(뒤의 장, 다른 갈림길, 그 장 자신).
+    # 그 길로는 그 장에 넘어올 수 없다
+    CHAPTER_CONDITION_LOCKED = 'chapter_condition_locked'
 
 
 class Problem(enum.StrEnum):
@@ -1107,6 +1117,53 @@ def find_chapter_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
     return [problem for problem in CHAPTER_PROBLEM_ORDER if problem in found]
 
 
+# 장의 넘어오는 조건 가운데 장이 여는 것을 기다리는 종류(#289). 장소에 서기와 퀘스트의 성공·실패다
+LOCKABLE_PLACE_KINDS = frozenset({QuestConditionKind.REACH_PLACE})
+LOCKABLE_QUEST_KINDS = frozenset({QuestConditionKind.QUEST_SUCCEEDED, QuestConditionKind.QUEST_FAILED})
+
+
+def openers(chapters: list[Chapter]) -> tuple[dict[uuid.UUID, str], dict[uuid.UUID, str]]:
+    """장소와 퀘스트마다 그것을 여는 장의 id. 하나는 한 장만 연다(저장할 때 막는다)."""
+    places = {place: chapter.id for chapter in chapters for place in chapter.opens.places}
+    quests = {quest: chapter.id for chapter in chapters for quest in chapter.opens.quests}
+    return places, quests
+
+
+def waits_for_locked(
+    chapter: Chapter, before: set[str], places: dict[uuid.UUID, str], quests: dict[uuid.UUID, str]
+) -> bool:
+    """그 장의 넘어오는 조건이 그 장의 앞(before)에서 열리지 않는 장소나 퀘스트를 기다리는가."""
+    for condition in chapter.when:
+        opener = None
+        if condition.kind in LOCKABLE_PLACE_KINDS:
+            opener = places.get(condition.target)
+        elif condition.kind in LOCKABLE_QUEST_KINDS:
+            opener = quests.get(condition.target)
+        if opener is not None and opener not in before:
+            return True
+    return False
+
+
+def find_chapter_warnings(scenario: Scenario) -> list[ScenarioWarning]:
+    """
+    장(#481, #289)에서 알릴 것을 찾는다. 게시를 막지 않는다.
+
+    넘어오는 조건이 기다리는 장소와 퀘스트가 그 장의 앞에 지날 수 있는 장에서 열리지 않으면 알린다.
+    장이 없는 판, 장이 여는 것을 기다리지 않는 조건은 알리지 않는다.
+    """
+    chapters = read_chapters(scenario)
+    places, quests = openers(chapters)
+    before = ancestors(chapters)
+    if any(waits_for_locked(chapter, before[chapter.id], places, quests) for chapter in chapters[1:]):
+        return [ScenarioWarning.CHAPTER_CONDITION_LOCKED]
+    return []
+
+
+def find_warnings(scenario: Scenario) -> list[ScenarioWarning]:
+    """게시를 막지 않는 알릴 것들. 정한 순서로 적는다."""
+    return find_chapter_warnings(scenario)
+
+
 # 길의 문을 다루는 사건의 효과의 모양(#281)
 ROUTE_EFFECT_TYPES = (RouteDoorEffect, RepairRouteEffect)
 
@@ -1612,16 +1669,17 @@ async def readiness(
 
 async def check_publishable(
     session: AsyncSession, owner_id: uuid.UUID, scenario_id: uuid.UUID, allowed: Sequence[Rating] = ALL_AGES_ONLY
-) -> list[Problem]:
+) -> tuple[list[Problem], list[ScenarioWarning]]:
     """
     자기 시나리오를 지금 게시하면 막히는 이유를 전부 돌려준다(#428). 없으면 빈 목록이다. 판을 만들지 않는다.
+    게시를 막지 않는 알릴 것(find_warnings)도 함께 돌려준다.
 
     게시(publish)와 같은 검사(readiness)다. 잠그지 않는다. 읽기만 하고, 답한 뒤에 초안이 바뀔 수 있다.
     시나리오가 없으면 AssetNotFoundError, 볼 수 없는 등급이면 AdultContentRequiredError 다. 게시와 같다.
     """
     scenario = await assets.get_owned(session, Scenario, owner_id, scenario_id)
     _, problems = await readiness(session, owner_id, scenario, allowed)
-    return problems
+    return problems, find_warnings(scenario)
 
 
 async def publish(

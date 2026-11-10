@@ -2285,10 +2285,12 @@ class PublishCheck(BaseModel):
     지금 게시하면 막히는 이유(#428). 게시하지 않고 미리 본다. 판을 만들지 않는다.
 
     problems 는 게시가 409 로 돌려주는 것과 같은 이름들이다. 비어 있으면 지금 게시할 수 있다(ready).
+    warnings 는 게시를 막지 않는 알림이다(넘어올 수 없는 장의 조건 같은 것). 있어도 ready 는 그대로다.
     """
 
     ready: bool
     problems: list[str]
+    warnings: list[str] = []
 
 
 class VersionSummary(BaseModel):

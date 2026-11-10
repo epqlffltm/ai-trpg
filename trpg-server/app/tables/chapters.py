@@ -5,7 +5,8 @@
 판의 장(Snapshot.chapters)과 테이블의 칸(chapter_id, chapter_round, chapter_path)을 본다.
 
   - 장이 있는 판은 첫 장에서 시작한다(start). 장이 없는 판은 지금 장이 없다.
-  - 장마다 어느 장 다음에 올 수 있는지(after)가 있다. 비우면 목록에서 바로 앞의 장 다음이다(predecessors).
+  - 장마다 어느 장 다음에 올 수 있는지(after)가 있다. 비우면 목록에서 바로 앞의 장 다음이다
+    (predecessors, app/assets/scenarios/chapter_graph.py).
     after 는 목록에서 앞의 장만 가리키므로 장은 늘 앞으로만 간다.
   - 지나온 장(passed)은 첫 장부터 지금 장까지 들어선 장들이다. 고르지 않은 가지의 장은 들지 않는다.
     이 칸(chapter_path)이 생기기 전에 시작한 테이블은 판의 첫 장부터 지금 장까지로 본다(그때는 장이 한 줄이었다).
@@ -23,6 +24,7 @@ DB 를 모른다. 테이블의 칸만 고친다.
 
 import uuid
 
+from app.assets.scenarios.chapter_graph import predecessors
 from app.assets.scenarios.snapshot import ChapterSnapshot, Snapshot
 from app.tables.models import GameTable, QuestStatus
 
@@ -43,13 +45,6 @@ def documents(table: GameTable) -> list[dict]:
 def order(table: GameTable) -> list[str]:
     """판의 장의 id 들. 장의 차례다. 장이 없는 판이면 빈 목록이다."""
     return [chapter['id'] for chapter in documents(table)]
-
-
-def predecessors(ids: list[str], position: int, after: list[str]) -> list[str]:
-    """목록의 그 자리의 장이 어느 장 다음에 올 수 있는가. after 를 비웠으면 바로 앞의 장이다. 첫 장은 없다."""
-    if after:
-        return list(after)
-    return [ids[position - 1]] if position > 0 else []
 
 
 def passed(table: GameTable) -> list[str]:

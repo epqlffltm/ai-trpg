@@ -99,3 +99,16 @@ export function problemLine(name: string): { text: string; section: ScenarioTab 
   return PROBLEMS[name] ?? { text: name, section: null };
 }
 
+// 게시를 막지 않는 알림(publish-check 의 warnings). 서버의 app/assets/scenarios/publishing.py 의 ScenarioWarning
+const WARNINGS: Record<string, ProblemText> = {
+  chapter_condition_locked: {
+    text: '넘어올 수 없는 장이 있습니다. 넘어오는 조건이 그 장에 오기 전에 열리지 않는 장소나 퀘스트를 기다립니다(뒤의 장, 다른 갈림길, 그 장 자신이 엽니다).',
+    section: 'chapters',
+  },
+};
+
+/** 알림 하나의 글과 묶음. 모르는 이름이면 이름 그대로, 묶음은 없다 */
+export function warningLine(name: string): { text: string; section: ScenarioTab | null } {
+  return WARNINGS[name] ?? { text: name, section: null };
+}
+
