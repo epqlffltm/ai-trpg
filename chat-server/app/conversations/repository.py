@@ -224,15 +224,21 @@ async def alternatives(
     return found
 
 
-async def latest_descendant(session: AsyncSession, message_id: uuid.UUID) -> uuid.UUID:
+async def latest_descendant(session: AsyncSession, conversation_id: uuid.UUID, message_id: uuid.UUID) -> uuid.UUID:
     """
     그 말 아래에서 가장 나중에 생긴 말(그 말 자신일 수도 있다). 그 가지를 마지막으로 보던 곳이다.
 
     가장 나중에 생긴 말은 자식이 없다(자식은 언제나 부모보다 늦다). 그래서 그 가지의 끝이다.
+
+    내려갈 때마다 그 대화의 말만 본다. 부모만으로 찾으면 색인(ix_messages_conversation_parent, 대화가 앞 칸이다)을
+    앞에서부터 타지 못해 한 단계마다 모든 대화의 말을 훑는다. 다른 대화의 말이 가지에 섞일 길도 함께 막는다.
+    message_id 는 그 대화의 말이어야 한다. 아니면 찾은 것이 없어 NoResultFound 다.
     """
-    downward = select(Message.id, Message.created_at).where(Message.id == message_id).cte('branch', recursive=True)
+    mine = Message.conversation_id == conversation_id
+    downward = select(Message.id, Message.created_at).where(mine, Message.id == message_id).cte('branch', recursive=True)
     child = aliased(Message)
-    downward = downward.union_all(select(child.id, child.created_at).join(downward, child.parent_id == downward.c.id))
+    below = (child.conversation_id == conversation_id) & (child.parent_id == downward.c.id)
+    downward = downward.union_all(select(child.id, child.created_at).join(downward, below))
     query = select(downward.c.id).order_by(downward.c.created_at.desc(), downward.c.id.desc()).limit(1)
     return (await session.execute(query)).scalar_one()
 

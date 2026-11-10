@@ -22,7 +22,8 @@ from server_core.testing.tokens import SigningKey
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.conversations.models import Conversation
+from app.conversations import repository
+from app.conversations.models import Conversation, Message
 from app.main import API_PREFIX
 from tests.assets import FakeAsset
 from tests.billing import FakeBillingServer
@@ -177,3 +178,28 @@ async def test_a_malformed_choice_is_an_input_error(client: AsyncClient, convers
     response = await client.put(url, json={'message_id': 'x', 'extra': 1}, headers=mine)
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+
+async def test_the_branch_end_is_looked_for_inside_the_conversation_only(
+    session: AsyncSession, client: AsyncClient, asset: FakeAsset, conversation: dict, mine: dict
+):
+    """가지의 끝은 그 대화의 말에서만 찾는다(#1258). 다른 대화의 말이 부모로 가리켜도 따라가지 않는다."""
+    other = await start_with_luna(client, asset, mine)
+    root = Message(conversation_id=uuid.UUID(conversation['id']), role='user', content='이 세션의 말', status='complete')
+    session.add(root)
+    await session.flush()
+    root_id = root.id
+    stray = Message(
+        conversation_id=uuid.UUID(other['id']),
+        parent_id=root_id,
+        role='user',
+        content='다른 대화의 말',
+        status='complete',
+        created_at=datetime(2099, 1, 1, tzinfo=UTC),
+    )
+    session.add(stray)
+    await session.commit()
+
+    leaf_id = await repository.latest_descendant(session, uuid.UUID(conversation['id']), root_id)
+
+    assert leaf_id == root_id
