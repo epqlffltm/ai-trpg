@@ -55,6 +55,8 @@ STATE_COLUMNS: tuple[str, ...] = (
     'turn_cycle',
     'turn_queue',
     'turn_waits',
+    'turn_foes',
+    'turn_stances',
 )
 
 # 테이블에 딸렸지만 찍지 않는 표와 그 까닭
