@@ -15,7 +15,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from server_core.database import create_engine
+from server_core.database import NO_LIMITS, create_engine
 from sqlalchemy.engine import Connection
 
 # 모델을 불러와야 Base.metadata 에 테이블이 등록된다. 이름을 직접 쓰지 않아도 불러오는 것 자체가 필요하다
@@ -54,7 +54,8 @@ async def run_migrations_with_app_engine() -> None:
 
     같은 엔진이므로 search_path 도 같다. 마이그레이션이 만드는 테이블이 앱이 찾는 스키마에 놓인다.
     """
-    engine = create_engine(settings)
+    # 마이그레이션은 오래 걸려도 되고 도중에 끊기면 안 된다. 서버의 시간 한도를 걸지 않는다(#1260)
+    engine = create_engine(settings, limits=NO_LIMITS)
     async with engine.connect() as connection:
         await connection.run_sync(run_migrations)
     await engine.dispose()

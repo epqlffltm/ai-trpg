@@ -19,7 +19,7 @@ from pathlib import Path
 
 import httpx
 from ai_core.embedder import Embedder
-from server_core.database import create_session_factory
+from server_core.database import NO_LIMITS, create_session_factory
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
@@ -80,7 +80,8 @@ async def index(session_factory: async_sessionmaker[AsyncSession], embedder: Emb
 async def run(args: argparse.Namespace) -> int:
     """설정의 DB 로 명령을 돌리고 결과를 찍는다. 끝낼 번호를 돌려준다."""
     settings = get_settings()
-    engine = create_engine(settings)
+    # 한꺼번에 많이 넣고 고치는 일이다. 서버의 시간 한도를 걸지 않는다(#1260)
+    engine = create_engine(settings, limits=NO_LIMITS)
     session_factory = create_session_factory(engine)
     try:
         if args.command == 'load':

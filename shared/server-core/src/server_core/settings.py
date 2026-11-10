@@ -107,6 +107,16 @@ class CoreSettings(BaseSettings):
     db_pool_size: int = Field(default=5, ge=1, le=50)
     db_max_overflow: int = Field(default=10, ge=0, le=50)
 
+    # DB 가 연결 하나를 붙잡아 두는 가장 긴 시간(밀리초). 서버의 연결에만 건다(server_core/database.py 의 limits_of).
+    # 마이그레이션과 스크립트는 걸지 않는다. 0 이면 그 한도를 끈다(PostgreSQL 의 기본과 같다).
+    #   - 잠금: 행이나 표의 잠금을 기다리는 시간. 멈춘 트랜잭션 뒤에 줄을 선 요청이 풀의 연결을 하나씩 쥐지 않게 한다
+    #   - 쿼리: 쿼리 하나가 도는 시간
+    #   - 쉬는 트랜잭션: 트랜잭션을 열어 둔 채 아무것도 하지 않는 시간. 넘으면 DB 가 그 연결을 끊고 잠금을 푼다
+    # 잠금과 쿼리의 값은 결제 서버와 같다(billing-server/internal/database 의 ServerLimits, #1260)
+    db_lock_timeout_ms: int = Field(default=5_000, ge=0, le=600_000)
+    db_statement_timeout_ms: int = Field(default=10_000, ge=0, le=600_000)
+    db_idle_in_transaction_timeout_ms: int = Field(default=60_000, ge=0, le=3_600_000)
+
     # 인증 서버가 공개키를 내주는 주소(JWKS). 기본값이 없다.
     # 여기서 받은 키로 서명된 토큰을 믿는다. 엉뚱한 주소를 기본으로 믿는 것보다 뜨지 않는 쪽이 낫다.
     # 예: http://127.0.0.1:8000/api/v1/auth/jwks
