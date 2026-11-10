@@ -27,11 +27,10 @@ import redis.asyncio as redis
 from fastapi import APIRouter, Depends, Request, Response, status
 from redis.exceptions import RedisError
 from server_core.database import get_session, ping_database
+from server_core.health import HealthResponse
 from server_core.observability.metrics import record_db_up
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.api.health import HealthResponse
 
 logger = logging.getLogger(__name__)
 

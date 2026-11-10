@@ -755,7 +755,7 @@ Dockerfile                       서버의 이미지
 | 메트릭 | label | 세는 곳 |
 | --- | --- | --- |
 | `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `server_core/observability/request_metrics.py`. 미들웨어의 맨 바깥이다 |
-| `db_up` | 없음 | `app/api/readiness.py`. 준비 상태 확인이 본 DB |
+| `db_up` | 없음 | `server_core/readiness.py`. 준비 상태 확인이 본 DB |
 | `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `server_core/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 5 다 |
 | `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`(`notification.send`), `result` | `server_core/notifications/dispatcher.py` 의 한 바퀴(`measured_job`). 할 일이 없던 바퀴도 센다 |
 | `board_writes_total` | `resource`(`post`, `comment`), `action`(`create`, `update`, `delete`), `result`(`success`, `rejected`, `rate_limited`) | `app/core/metrics.py` 의 `counted`. 라우터의 함수가 일을 감싼다 |
@@ -1002,7 +1002,7 @@ Pydantic 의 기본 검사 대신 칸마다 규칙을 그때의 차례대로 적
 
 **`/health`는 프로세스가 살아 있는지만, `/health/ready`는 DB 에 닿는지를 본다.** 살아 있는지에 DB 까지 넣으면, DB가 잠깐 느려졌을 때 관리 도구가 멀쩡한 서버를 죽은 것으로 보고 재시작한다.
 준비됐는지가 실패하면 관리 도구는 재시작하지 않고 요청만 잠시 보내지 않는다.
-확인 전체를 3초로 묶는다(`app/api/readiness.py` 의 `READINESS_TIMEOUT_SECONDS`). 연결된 채 멈춘 DB 나, 풀이 가득 차 연결을 기다리는 동안에도 확인이 매달리지 않는다.
+확인 전체를 3초로 묶는다(`server_core/readiness.py` 의 `READINESS_TIMEOUT_SECONDS`). 연결된 채 멈춘 DB 나, 풀이 가득 차 연결을 기다리는 동안에도 확인이 매달리지 않는다.
 왜 닿지 않는지는 응답에 싣지 않는다. 오류의 글에는 DB 주소와 계정 이름이 들어 있다. 로그에도 오류의 종류만 남긴다.
 
 **표와 칸, 제약과 색인의 이름은 NestJS(TypeORM) 때와 같다.** 같은 `board` 스키마를 그대로 넘겨받기 때문이다. 모델은 이름을 규칙(`NAMING_CONVENTION`)으로 짓지 않고 그때의 이름(`pk_posts`, `fk_posts_board`)을 `conv()` 로 그대로 적는다.

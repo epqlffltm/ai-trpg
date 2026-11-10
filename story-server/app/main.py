@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
-from server_core import loops, stop_signals
+from server_core import health, loops, readiness, stop_signals
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
 from server_core.database import create_engine, create_session_factory
@@ -40,7 +40,7 @@ from server_core.observability.streams import StreamRoutes
 from server_core.observability.tracing import FASTAPI_TELEMETRY, build_resource, configure_tracing, shutdown_tracing
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.api import health, me, readiness
+from app.api import me
 from app.assets.client import AssetClient, AssetUnavailableError
 from app.billing import router as billing
 from app.billing.price_list import PriceListUnavailable

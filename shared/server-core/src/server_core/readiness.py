@@ -1,16 +1,20 @@
-# asset-server/app/api/readiness.py
+# shared/server-core/src/server_core/readiness.py
 
 """
 서버가 요청을 처리할 준비가 됐는지 확인하는 API. 로그인 없이 부를 수 있고, 내부 정보를 돌려주지 않는다.
 
+DB 하나에 기대는 서버(asset, board, chat, story, notification)가 이 라우터를 붙인다.
+trpg 는 Redis 도 보므로 서버의 app/api/readiness.py 를 쓴다(응답의 모양은 health.py 의 것을 함께 쓴다).
+
 프로세스가 살아 있는지(health.py)와는 묻는 것이 다르다. 여기는 서버가 기대는 DB 에 닿는지를 본다.
 실패해도 관리 도구는 서버를 재시작하지 않는다. 요청을 잠시 보내지 않을 뿐이다.
 
-확인 전체를 3초(READINESS_TIMEOUT_SECONDS)로 묶는다. 다른 네 서버와 같다.
+확인 전체를 3초(READINESS_TIMEOUT_SECONDS)로 묶는다. 결제 서버, trpg 와 같다.
 확인한 결과를 메트릭 db_up 으로 적는다(1 이면 닿는다). compose 의 healthcheck 가 10초마다 부른다.
 연결된 채 멈춘 DB 나, 풀이 가득 차 연결을 기다리는 동안(최대 30초)에도 확인 요청이 멈추지 않는다.
 
-HEAD 도 받는다(본문 없이 같은 상태 코드).
+HEAD 도 받는다(본문 없이 같은 상태 코드). 요청이 끝난 줄은 성공이면 debug, 503 이면 warning 이다.
+세션은 database.get_session 으로 받는다. 앱이 app.state.session_factory 를 붙여 둔다.
 """
 
 import asyncio
@@ -18,12 +22,12 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, status
-from server_core.database import get_session, ping_database
-from server_core.observability.metrics import record_db_up
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.health import HealthResponse
+from server_core.database import get_session, ping_database
+from server_core.health import HealthResponse
+from server_core.observability.metrics import record_db_up
 
 logger = logging.getLogger(__name__)
 

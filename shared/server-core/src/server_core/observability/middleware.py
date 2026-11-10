@@ -42,7 +42,8 @@ HTTP_OPERATION = 'http.request'
 UNHANDLED_ERROR_CODE = 'http.unhandled_exception'
 # 맞는 경로의 틀이 없을 때(404) 틀 자리에 적는 표시
 UNMATCHED_ROUTE = '(unmatched)'
-# 상태 확인 주소(서버의 app/api/health.py, app/api/readiness.py). 관리 도구가 10초마다 부른다.
+# 상태 확인 주소(server_core/health.py, readiness.py. trpg 의 준비는 서버의 app/api/readiness.py).
+# 관리 도구가 10초마다 부른다.
 # 요청이 끝난 줄의 수준을 따로 정한다(probe_level_of)
 PROBE_ROUTES = frozenset({'/health', '/health/ready'})
 # 요청의 식별자를 요청에 적어 두는 자리의 이름. 500 응답을 만드는 쪽이 여기서 읽는다(responses.py)
@@ -75,7 +76,7 @@ def probe_level_of(status_code: int) -> int:
 
     성공은 debug 다. 10초마다 오는 확인이 운영의 로그를 메우지 않게 한다.
     503(준비 안 됨)은 warning 이다. 오류가 아니라 이 주소의 답이다.
-    까닭은 readiness 가 따로 남긴다(서버의 app/api/readiness.py).
+    까닭은 readiness 가 따로 남긴다(server_core/readiness.py, trpg 는 서버의 app/api/readiness.py).
     그 밖의 5xx(처리하지 못한 예외)는 다른 주소처럼 error 다.
     """
     if status_code == HTTPStatus.SERVICE_UNAVAILABLE:

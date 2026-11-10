@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from server_core import health, readiness
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
 from server_core.database import create_engine, create_session_factory
@@ -38,7 +39,7 @@ from server_core.observability.setup import configure_logging
 from server_core.observability.tracing import FASTAPI_TELEMETRY, build_resource, configure_tracing, shutdown_tracing
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.api import health, me, readiness
+from app.api import me
 from app.banners import router as banners
 from app.characters import listings as character_listings
 from app.characters import router as characters

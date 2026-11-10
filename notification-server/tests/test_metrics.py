@@ -14,13 +14,13 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core import readiness
 from server_core.observability.metrics import DURATION_BUCKETS, OTHER_METHOD, method_label, record_request
 from server_core.observability.pool_metrics import MeteredPool
 from server_core.observability.request_metrics import RequestMetricsMiddleware
 from server_core.testing.metrics import MetricsRecorder
 from sqlalchemy import text
 
-from app.api import readiness
 from app.notifications.retention import PRUNE_OPERATION, NotificationPruner
 from tests.signing import signed_put
 
