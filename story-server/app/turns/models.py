@@ -84,10 +84,12 @@ class Generation(Base):
     # 크레딧을 내는 사람(인증 서버의 public_id)
     owner_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     # 무엇에 답했나(사람의 말이나 행동 말). 저장된 답(message_id)의 부모다
-    parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('messages.id', ondelete='SET NULL'))
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('messages.id', ondelete='SET NULL'), index=True)
     # 저장된 답. 글자 없이 실패했거나 아직 끝나지 않았으면 비어 있다
-    message_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('messages.id', ondelete='SET NULL'), default=None)
-    model_slug: Mapped[str] = mapped_column(ForeignKey('ai_models.slug', ondelete='RESTRICT'))
+    message_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('messages.id', ondelete='SET NULL'), default=None, index=True
+    )
+    model_slug: Mapped[str] = mapped_column(ForeignKey('ai_models.slug', ondelete='RESTRICT'), index=True)
 
     # 결제 서버의 홀드의 이름표(story:gen:<id>)와 가격표 이름(story.<이름표>.i0.o0)
     reference: Mapped[str] = mapped_column(String(80), unique=True)

@@ -54,7 +54,7 @@ class Snapshot(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('conversations.id', ondelete='SET NULL'))
     # 그린 장면인 모델의 답
-    message_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('messages.id', ondelete='SET NULL'))
+    message_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('messages.id', ondelete='SET NULL'), index=True)
     # 크레딧을 내는 사람(인증 서버의 public_id). 그림의 주인이기도 하다
     owner_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     # 그림 모델의 이름(gemini-nano-banana-2.1 같은 것)

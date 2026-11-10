@@ -31,7 +31,7 @@ class Comment(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     post_id: Mapped[int] = mapped_column(BigInteger)
-    parent_id: Mapped[int | None] = mapped_column(BigInteger)
+    parent_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
     author_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

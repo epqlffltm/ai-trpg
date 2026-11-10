@@ -114,7 +114,7 @@ class Round(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
 
     # 어느 테이블의 라운드인가. 테이블의 행이 지워지면 함께 지워진다
-    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'))
+    table_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('game_tables.id', ondelete='CASCADE'), index=True)
 
     # 테이블 안에서의 순서. 1 부터 하나씩 올라간다
     number: Mapped[int] = mapped_column(Integer)

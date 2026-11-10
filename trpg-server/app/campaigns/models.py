@@ -58,7 +58,7 @@ class CampaignRun(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     # 어느 캠페인의 어느 판인가. 판의 행은 지울 수 없다
     campaign_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('campaigns.asset_id', ondelete='RESTRICT'), index=True)
-    version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('campaign_versions.id', ondelete='RESTRICT'))
+    version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('campaign_versions.id', ondelete='RESTRICT'), index=True)
     # 플레이를 연 사람. 편마다의 테이블은 방장이 연다. "내가 연 플레이"를 찾는 색인을 건다
     host_id: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
     # 지금 편. 0 이 1편이다

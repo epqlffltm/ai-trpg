@@ -35,7 +35,7 @@ class AchievementRecord(Base):
     description: Mapped[str] = mapped_column(Text, default='', server_default='')
     image_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, default=None)
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey('conversations.id', ondelete='SET NULL'), default=None
+        ForeignKey('conversations.id', ondelete='SET NULL'), default=None, index=True
     )
     earned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

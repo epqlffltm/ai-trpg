@@ -96,7 +96,7 @@ class ReferenceEmbedding(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
 
     # 어느 줄의 벡터인가. 줄을 지우면 벡터도 지운다
-    reference_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('reference_entries.id', ondelete='CASCADE'))
+    reference_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('reference_entries.id', ondelete='CASCADE'), index=True)
 
     # 벡터를 만든 임베딩 모델의 이름
     model: Mapped[str] = mapped_column(String(MODEL_NAME_MAX_LENGTH))

@@ -72,7 +72,7 @@ class MessageReport(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     reporter_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('conversations.id', ondelete='CASCADE'), index=True)
-    message_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('messages.id', ondelete='CASCADE'))
+    message_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('messages.id', ondelete='CASCADE'), index=True)
     # 어느 캐릭터의 어느 판이었나(asset 의 캐릭터 id 와 판 번호, 그때의 이름). 운영자가 asset 에서 숨길 때 쓴다
     character_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     character_version: Mapped[int] = mapped_column(Integer)

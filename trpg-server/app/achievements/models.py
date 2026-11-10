@@ -37,7 +37,7 @@ class PlayerAchievement(Base):
     )
     achievement_id: Mapped[str] = mapped_column(String(ACHIEVEMENT_ID_MAX_LENGTH), primary_key=True)
     # 받은 테이블. 테이블의 행이 지워져도 기록은 남는다
-    table_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('game_tables.id', ondelete='SET NULL'))
+    table_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey('game_tables.id', ondelete='SET NULL'), index=True)
     earned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
