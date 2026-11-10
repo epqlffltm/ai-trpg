@@ -54,7 +54,7 @@ from app.engine.action import (
     WaitAction,
 )
 from app.engine.dice import Dice
-from app.rounds import foe_guards, initiative, npc_attacks
+from app.rounds import foe_guards, initiative, npc_attacks, turn_order
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, Scene
 from app.rounds.checks import judge_check
@@ -216,8 +216,9 @@ def build_judging(
     판의 복사본(규칙, 인물 항목, 물건, 맵)을 통째로 읽는다. 싸지 않아서 판정할 것이 있을 때만 부른다.
     downed 는 판정을 시작하기 전에 쓰러져 있던 사람들이다(몬스터와 NPC 가 칠 수 있다).
     rolling 은 행동을 판정할 사람과 그 선언이다. 엄폐한 사람의 커버를 여기서 정한다(app/rounds/covers.py).
-    방어 태세를 잡은 사람도 여기서 정한다(#254, app/rounds/guards.py). 방어 태세를 잡은 몬스터와 인물은
-    부르는 쪽이 따로 정한다(주사위를 굴린다, app/rounds/foe_guards.py).
+    방어 태세를 잡은 사람도 여기서 정한다(#254, app/rounds/guards.py). 차례대로 진행하는 테이블(#287)이면
+    앞 차례들에 엄폐하거나 방어해 아직 드는 사람들도 넣는다(app/rounds/turn_order.py 의 held_covers, held_defenders).
+    방어 태세를 잡은 몬스터와 인물은 부르는 쪽이 따로 정한다(주사위를 굴린다, app/rounds/foe_guards.py).
     """
     snapshot = read_snapshot(table.content)
     return Judging(
@@ -235,8 +236,8 @@ def build_judging(
         downed_at_start=downed,
         npcs_downed_at_start=downed_npcs(scene),
         places_at_start=places_at_start(table),
-        covers=covers_of(snapshot, rolling or []),
-        defending=defenders_of(rolling or []),
+        covers={**turn_order.held_covers(table), **covers_of(snapshot, rolling or [])},
+        defending=defenders_of(rolling or []) | turn_order.held_defenders(table),
     )
 
 
@@ -290,7 +291,9 @@ def take_turns(judging: Judging, turns: list[Turn], declarations: dict[uuid.UUID
     return [take_turn(judging, turn, declarations) for turn in turns]
 
 
-def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene, with_foes: bool = True) -> set[uuid.UUID]:
+def roll_checks(
+    table: GameTable, round_: Round, dice: Dice, scene: Scene, gate: turn_order.FoeGate | None = None
+) -> set[uuid.UUID]:
     """
     닫히는 라운드의 행동과 몬스터의 공격을 판정하고, 결과에 따라 HP 를 바꾸고, 결과를 적는다.
 
@@ -318,19 +321,20 @@ def roll_checks(table: GameTable, round_: Round, dice: Dice, scene: Scene, with_
 
     이번 라운드에 피해를 입은 앉은 사람들(user_id)을 돌려준다. 쉬는 사람의 휴식이 깨졌는지 이것으로 본다.
 
-    with_foes 가 거짓이면 몬스터와 싸우는 인물은 차례를 받지 않는다. 차례대로 진행하는 테이블(#287)에서
-    바퀴의 마지막이 아닌 차례다(app/rounds/turn_order.py). 그때는 만난 라운드도 적지 않는다.
+    gate 가 있으면(차례대로 진행하는 테이블, #287) 몬스터와 싸우는 인물 중 이 차례에 차례를 받는 쪽만 고른다
+    (app/rounds/turn_order.py 의 FoeGate). 자기 자리가 이 차례의 주인과 다음 주인 사이에 오는 쪽이다.
     """
-    if with_foes:
-        initiative.mark_engaged(scene.monsters, round_.number)
+    initiative.mark_engaged(scene.monsters, round_.number)
     rolling = rolling_members(table, round_)
-    acting = [monster for monster in scene.monsters if can_act(monster)] if with_foes else []
-    fighting = [person for person in scene.cast if npc_attacks.can_act(person)] if with_foes else []
+    acting = [monster for monster in scene.monsters if can_act(monster)]
+    fighting = [person for person in scene.cast if npc_attacks.can_act(person)]
     if not rolling and not acting and not fighting:
         return set()
 
     downed = frozenset(member.user_id for member in find_dying(table))
     judging = build_judging(table, round_, dice, scene, downed, rolling)
+    if gate is not None:
+        acting, fighting = gate.admit(judging.ruleset, judging.snapshot, judging.round_number, acting, fighting)
     judging = replace(judging, foes_guarding=foe_guards.decide(judging.ruleset, acting, fighting, dice))
     if not acting and not fighting:
         for member, declaration in rolling:

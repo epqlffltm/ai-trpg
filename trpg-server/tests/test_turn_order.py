@@ -210,6 +210,7 @@ def test_the_next_actor_skips_those_who_left_fell_or_died():
         members=[seat(down, hp=0), seat(dead, died=True), seat(ready)],
         turn_queue=[str(gone), str(down), str(dead), str(ready)],
         turn_mode=TurnMode.TURNS,
+        turn_stances={},
     )
 
     assert turn_order.ends_cycle(table) is False

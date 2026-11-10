@@ -222,6 +222,8 @@ class GameTable(Base):
         CheckConstraint('turn_cycle >= 0', name='turn_cycle_not_negative'),
         CheckConstraint("jsonb_typeof(turn_queue) = 'array'", name='turn_queue_is_array'),
         CheckConstraint("jsonb_typeof(turn_waits) = 'array'", name='turn_waits_is_array'),
+        CheckConstraint("jsonb_typeof(turn_foes) = 'array'", name='turn_foes_is_array'),
+        CheckConstraint("jsonb_typeof(turn_stances) = 'object'", name='turn_stances_is_object'),
     )
 
     # API 주소에 드러나는 값이다. 순서대로 늘어나는 정수면 테이블이 몇 개인지 추측할 수 있다
@@ -351,6 +353,12 @@ class GameTable(Base):
     # 이번 바퀴에 지난 차례마다 기다리기(app/rounds/waits.py)로 건너뛰려 한 분. 기다리지 않았거나 깨졌으면 null 이다.
     # 바퀴가 끝날 때 모두가 기다렸으면 그중 가장 짧은 것으로 시간을 건너뛰고 비운다
     turn_waits: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    # 이번 바퀴에 이미 차례를 받은 몬스터(마리 id)와 싸우는 인물(항목 id)의 글(#287). 한 바퀴에 한 번씩 친다.
+    # 바퀴가 바뀌면 비운다(app/rounds/turn_order.py 의 FoeGate)
+    turn_foes: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
+    # 앉은 사람마다 다음 차례까지 드는 태세(#287). user_id 의 글 → {cover: 커버의 값 또는 null, defend: 방어 태세인가}.
+    # 그 사람의 다음 차례가 오면 지운다(건너뛰어도). 차례대로 진행하는 테이블에서만 쓴다
+    turn_stances: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
 
     # 이 테이블에 적힌 마지막 이벤트의 번호(app/events/models.py). 아직 없으면 0 이다.
     # 이벤트를 적을 때마다 하나씩 올린다. 테이블을 잠근 채로 올리므로 번호가 겹치지 않는다.

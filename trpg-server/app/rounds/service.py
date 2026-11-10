@@ -320,7 +320,9 @@ def begin_closing(
     group = uuid.uuid4()
     cycle_end = turn_order.is_cycle_end(table)
     dying = find_dying(table) if cycle_end else []
-    hurt = roll_checks(table, round_, dice, scene, with_foes=cycle_end)
+    gate = turn_order.foe_gate(table, rules_of(table), cycle_end) if turn_order.is_turns(table) else None
+    hurt = roll_checks(table, round_, dice, scene, gate)
+    turn_order.keep_stance(table, round_)
     # 주인의 차례에 남은 차례의 사람이 모두 쓰러졌으면 이 차례로 바퀴가 끝난다(#287)
     cycle_end = cycle_end or turn_order.is_cycle_end(table)
     round_.death_saves = roll_death_saves(table, dying, dice)
