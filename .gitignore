@@ -13,6 +13,9 @@ trpg_key.txt
 # DB 의 백업(docker-compose.yml 의 db-backup). 이메일, 비밀번호 해시, 결제 원장이 들어 있다
 /backups/
 
+# 로컬에서 띄운 Redis 가 떠난 폴더에 남기는 덤프. 시도 횟수와 캐시가 들어 있을 수 있다
+*.rdb
+
 # 커버리지를 잴 때 생기는 파일(파이썬의 coverage, Go 의 coverprofile)
 .coverage
 .coverage.*
