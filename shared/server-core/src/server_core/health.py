@@ -1,14 +1,16 @@
-# notification-server/app/api/health.py
+# shared/server-core/src/server_core/health.py
 
 """
 서버 프로세스가 살아 있는지 확인하는 API. 로그인 없이 부를 수 있고, 내부 정보를 돌려주지 않는다.
 
+FastAPI 서버 모두가 이 라우터를 붙인다(app.include_router(health.router)).
 배포 환경의 프록시나 컨테이너 관리 도구가 주기적으로 부른다. 실패하면 관리 도구가 서버를 재시작한다.
-요청을 처리할 준비가 됐는지(DB 에 닿는지)는 따로 답한다(/health/ready, DB 를 붙일 때 만든다).
+요청을 처리할 준비가 됐는지(DB 에 닿는지)는 따로 답한다(readiness.py, trpg 는 서버의 app/api/readiness.py).
 
-HEAD 도 받는다(본문 없이 같은 상태 코드). 다른 네 서버와 같다. HEAD 로 확인하는 도구가 있다.
+HEAD 도 받는다(본문 없이 같은 상태 코드). HEAD 로 확인하는 도구가 있다.
 HEAD 는 같은 함수를 따로 등록하고 API 문서에는 올리지 않는다. GET 과 한 번에 등록하면
 문서에 같은 operation id 가 두 번 올라간다. 확인 요청은 문서로 알릴 API 가 아니다.
+요청이 끝난 줄은 성공이면 debug 다(observability/middleware.py 의 probe_level_of).
 """
 
 from fastapi import APIRouter, status

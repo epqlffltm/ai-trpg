@@ -1068,7 +1068,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 | `shared/server-core/src/server_core/observability/metrics.py` | 계측기 한 묶음(`Instruments`)과 MeterProvider. 주소가 있으면 OTLP(HTTP, protobuf, `/v1/metrics`) + `OTEL_METRIC_EXPORT_INTERVAL`(15초) 간격으로 민다. 끌 때 한 번 보낸다(`shutdown_metrics`, 5초 안). 구간은 `DURATION_BUCKETS`(계측기의 advisory) |
 | `shared/server-core/src/server_core/observability/request_metrics.py` | HTTP 셋의 ASGI 미들웨어. 맨 바깥이다(span 과 로그를 거는 시간까지 잰다). 메서드는 정한 것만, 그 밖은 `_OTHER`. 서버가 넘긴 스트림(`streams.py`)은 끝난 수에만 든다 |
 | `shared/server-core/src/server_core/observability/pool_metrics.py` | 연결을 기다린 시간을 재는 풀(`MeteredPool`)과 풀의 지금 값(`pool_stats`) |
-| `app/api/readiness.py` | `db_up` |
+| `server_core/readiness.py` | `db_up`. 준비 상태 확인을 공용 코드에 두었다(DB 하나에 기대는 서버들이 함께 쓴다) |
 | `app/notifications/retention.py` | 정리 작업의 한 바퀴를 `measured_job` 으로 감싼다 |
 | `app/notifications/metrics.py`, `app/notifications/router.py` | 넣은 알림(`notifications_received_total`). 계측기는 공용 코드의 `InstrumentSet` 에 더한다 |
 | `server_core/testing/metrics.py`, `server_core/testing/collector.py` | 메모리에 모으는 것(InMemoryMetricReader)과, span 과 메트릭을 함께 받는 가짜 수집기. 서버들의 테스트가 함께 쓴다 |

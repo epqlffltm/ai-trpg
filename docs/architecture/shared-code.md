@@ -77,6 +77,7 @@ FastAPI 서버들이 함께 쓰는 공통부다(#588). 알림 서버와 asset �
 | `service_auth` | 서버끼리의 서명 만들기와 확인 | 비밀의 이름과 받는 쪽의 목록은 서버의 설정 |
 | `database` | 엔진, 세션의 틀, 요청마다의 세션, 이름 짓는 규칙 | search_path 에 더할 스키마, 풀의 크기는 `create_engine` 에 넘긴다. 표의 부모(`Base`)는 서버마다 둔다 |
 | `loops` | 뒤에서 일정하게 도는 일의 틀 | 바퀴의 일은 서버의 것 |
+| `health`, `readiness` | 상태 확인 API(`/health` 는 살아 있는가, `/health/ready` 는 DB 에 닿는가)와 응답의 모양(`HealthResponse`) | 서버는 라우터를 붙이기만 한다. 세션은 `app.state.session_factory` 에서 받는다. trpg 는 Redis 도 보므로 준비 확인을 서버(`app/api/readiness.py`)에 두고 응답의 모양만 쓴다 |
 | `notifications` | 알림 서버로 보내는 발송함의 칸, 쿼리, 서명해 넣기, 다시 보내기, 보내는 작업과 그 설정(`NotificationSettings`) | 표(`Base` 와 마이그레이션), 서버 이름(주소와 비밀), 무엇을 누구에게 알릴지는 서버의 것. 쿼리는 쓰는 서버(asset)의 테스트가 실제 DB 로 본다 |
 | `testing` | 서버들의 테스트가 함께 쓰는 도구(가짜 인증 서버, span 과 메트릭을 모으는 것, 가짜 수집기, 로그 읽기) | 운영 코드는 가져오지 않는다 |
 

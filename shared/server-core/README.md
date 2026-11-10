@@ -43,6 +43,17 @@ FastAPI 서버들이 함께 쓰는 공통부다. 토큰 검증, 관측(로그, �
    (`RequestLoggingMiddleware`, `RequestSpanMiddleware`, `RequestMetricsMiddleware` 의 차례), `app.state` 에 `settings`, `jwks`, `revocations`,
    `session_factory` 를 붙인다. asset-server 의 `app/main.py` 가 가장 작은 예다.
 
+5. 상태 확인 API 를 붙인다. `/health` 는 살아 있는가, `/health/ready` 는 3초 안에 DB 에 닿는가다(`db_up` 도 적는다).
+
+   ```python
+   from server_core import health, readiness
+
+   app.include_router(health.router)
+   app.include_router(readiness.router)
+   ```
+
+   DB 말고도 꼭 닿아야 하는 것이 있는 서버는 준비 확인을 서버에 두고 응답의 모양(`health.HealthResponse`)만 쓴다(trpg 의 `app/api/readiness.py` 가 Redis 도 본다).
+
 ## 열어 둔 자리
 
 서버는 아래로만 바꿔 쓴다. 공용 코드의 클래스를 상속해 덮어쓰거나 복사해 고치지 않는다. 자리가 모자라면 여기에 연다.

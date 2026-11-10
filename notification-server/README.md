@@ -357,7 +357,7 @@ Tempo 에 들어오는지는 저장소의 CI(`stack`)가 본다.
 | 메트릭 | label | 세는 곳 |
 | --- | --- | --- |
 | `http_server_requests_total`, `http_server_request_duration_seconds`, `http_server_active_requests` | `method`, `route`(경로의 틀), `status_code` | `server_core/observability/request_metrics.py`. 미들웨어의 맨 바깥이다 |
-| `db_up` | 없음 | `app/api/readiness.py`. 준비 상태 확인이 본 DB |
+| `db_up` | 없음 | `server_core/readiness.py`. 준비 상태 확인이 본 DB |
 | `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `server_core/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 10 이다 |
 | `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`(`notification.prune`), `result` | `app/notifications/retention.py` 의 한 바퀴 |
 | `notifications_received_total` | `source`(`game`, `billing`, `board`), `outcome`(`created`, `existing`, `muted`, `refused`, `conflict`) | `app/notifications/router.py`. 서명을 확인한 것만 센다. 계측기는 `app/notifications/metrics.py` |

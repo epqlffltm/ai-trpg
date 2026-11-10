@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from server_core import health
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
 from server_core.database import create_session_factory
@@ -34,7 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.achievements import router as achievements
 from app.ai_log import retention
-from app.api import health, me, readiness
+from app.api import me, readiness
 from app.asset_server.client import AssetClient, ImageRejectedError
 from app.asset_server.client import AssetUnavailableError as AssetServerUnavailableError
 from app.assets.bestiaries import router as bestiaries
