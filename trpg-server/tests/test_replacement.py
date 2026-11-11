@@ -43,7 +43,7 @@ pytestmark = pytest.mark.usefixtures('clean_tables')
 SCENARIOS_URL = f'{API_PREFIX}/scenarios'
 RULEBOOKS_URL = f'{API_PREFIX}/rulebooks'
 TABLES_URL = f'{API_PREFIX}/tables'
-MIGRATIONS = Path(__file__).resolve().parents[1] / 'migrations' / 'versions'
+MIGRATIONS = Path(__file__).resolve().parent / 'legacy_migrations'
 
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')
 FRIEND = uuid.UUID('22222222-2222-4333-8444-555555555555')

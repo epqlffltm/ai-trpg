@@ -34,7 +34,7 @@ SCENARIOS_URL = f'{API_PREFIX}/scenarios'
 RULEBOOKS_URL = f'{API_PREFIX}/rulebooks'
 TABLES_URL = f'{API_PREFIX}/tables'
 
-MIGRATIONS = Path(__file__).parent.parent / 'migrations' / 'versions'
+MIGRATIONS = Path(__file__).parent / 'legacy_migrations'
 
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')
 FRIEND = uuid.UUID('22222222-2222-4333-8444-555555555555')

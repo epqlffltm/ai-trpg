@@ -27,7 +27,7 @@ from app.engine.ruleset import (
 from app.engine.templates import DEFAULT_TEMPLATE, SRD5, TEMPLATES, Template, from_template
 from tests.rules import NO_INJURIES
 
-MIGRATIONS = Path(__file__).parent.parent / 'migrations' / 'versions'
+MIGRATIONS = Path(__file__).parent / 'legacy_migrations'
 
 
 def outcome_guide(outcome: str, text: str = '그린다.') -> dict:

@@ -328,7 +328,7 @@ def test_an_old_snapshot_reads_as_no_growth():
 
 
 def load_migration():
-    path = next(Path('migrations/versions').glob('*_progression.py'))
+    path = next(Path('tests/legacy_migrations').glob('*_progression.py'))
     spec = importlib.util.spec_from_file_location('progression_migration', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

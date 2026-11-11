@@ -216,7 +216,7 @@ def test_an_old_snapshot_rolls_one_die_over():
 
 
 def load_migration():
-    path = next(Path('migrations/versions').glob('*_check_rolls.py'))
+    path = next(Path('tests/legacy_migrations').glob('*_check_rolls.py'))
     spec = importlib.util.spec_from_file_location('check_rolls_migration', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

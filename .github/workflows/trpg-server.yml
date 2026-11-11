@@ -129,6 +129,13 @@ jobs:
       - name: 마이그레이션 누락 검사
         run: uv run alembic check
 
+      # 마이그레이션을 끝까지 되돌릴 수 있는지 보고 다시 적용한다. 다른 서버들과 같다(#1273).
+      # 기준선 하나라 몇 초면 끝난다. 되돌리기는 개발용 DB 를 고칠 때 쓴다
+      - name: 마이그레이션 되돌리기
+        run: |
+          uv run alembic downgrade base
+          uv run alembic upgrade heads
+
   # 테스트의 묶음을 읽는다. 묶음은 scripts/ci_groups.py 한 곳에만 적는다. 이 파일에 이름을 다시 적지 않는다
   groups:
     runs-on: ubuntu-latest

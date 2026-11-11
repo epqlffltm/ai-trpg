@@ -318,7 +318,7 @@ def test_the_transcript_names_who_gained():
 
 
 def load_migration():
-    path = next(Path('migrations/versions').glob('*_monster_xp.py'))
+    path = next(Path('tests/legacy_migrations').glob('*_monster_xp.py'))
     spec = importlib.util.spec_from_file_location('monster_xp_migration', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
