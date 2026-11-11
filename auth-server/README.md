@@ -1375,6 +1375,19 @@ IP 와 운영자의 사유는 싣지 않는다. 로그는 더 넓게 퍼지는 �
 이미지를 만들 때 `collectstatic` 으로 모아 둔다. 개발 중에는 `STATIC_ROOT` 를 적지 않는다.
 모든 서버를 함께 컨테이너로 띄우는 법은 [저장소 README](../README.md#4-모든-서버를-컨테이너로-선택)에 있다.
 
+**DB 연결의 시간 한도(#1282).** 워커가 하나라 요청 하나가 잠금이나 느린 쿼리에 묶이면 로그인, 토큰 갱신, JWKS 가 모두 멈춘다. 그래서 연결마다 한도를 건다(`config/db_limits.py`). 이름과 값은 FastAPI 서버들과 같다.
+
+| 설정 | 기본 | 뜻 |
+| --- | --- | --- |
+| `DB_LOCK_TIMEOUT_MS` | 5000 | 잠금을 기다리는 가장 긴 시간 |
+| `DB_STATEMENT_TIMEOUT_MS` | 10000 | 쿼리 하나의 가장 긴 시간 |
+| `DB_IDLE_IN_TRANSACTION_TIMEOUT_MS` | 60000 | 트랜잭션을 열어 둔 채 쉬는 가장 긴 시간 |
+
+- 0 이면 그 한도를 끈다. 연결을 맺을 때의 시작 값(`options`)으로 걸어서, 테스트용 DB 의 연결도 같은 값을 받는다
+- 서버와 워커 둘이 받는다. 마이그레이션(`migrate`)과 주기 명령(`docker/cron/auth.crontab`)은 오래 걸려도 되고 도중에 끊기면 안 되므로 `manage.py` 가 명령의 이름을 보고 끈다(`UNLIMITED_COMMANDS`). 주기 명령을 더하면 그 목록에도 더한다. 빠뜨리면 테스트가 실패한다
+- 한도에 걸린 요청(55P03, 57014)은 503 과 `Retry-After: 1` 이다(`config/db_timeouts.py`). 다른 DB 오류는 그대로 500 이다
+- 워커는 한도에 걸리면 그 줄을 되돌리고 다음 바퀴에 다시 한다. 결제 서버를 부르는 동안 줄을 잠근 채 기다리는 것은 길어야 5초(`service_client.TIMEOUT_SECONDS`)다
+
 **서명 키는 서버만 갖는다(#274).** 개인키로는 누구의 토큰이든 만들 수 있다. 그래서 그 키를 쓰는 프로세스(요청을 받는 서버)에만 준다.
 `JWT_PRIVATE_KEY_PATH` 가 비면 설정이 키를 읽지 않는다(`config/jwt_keys.py`). 메일·환영 크레딧의 워커, cron, 마이그레이션은 서명하지 않으므로 compose 가 경로를 비우고 키 폴더를 붙이지 않는다.
 - 키가 없는 프로세스가 토큰을 만들거나 JWKS 를 내려 하면 `SigningKeyUnavailableError` 다(`accounts/key_ring.py`). 빈 JWKS 를 내면 다른 서버가 모든 토큰을 거부하므로 내지 않는다

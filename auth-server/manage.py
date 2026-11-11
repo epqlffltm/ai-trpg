@@ -8,6 +8,10 @@ import sys
 def main():
     """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+    # 마이그레이션과 주기 명령은 DB 의 시간 한도 없이 붙는다(#1282). 설정을 읽기 전에 정한다
+    from config.db_limits import lift_for_command
+
+    lift_for_command(sys.argv, os.environ)
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
