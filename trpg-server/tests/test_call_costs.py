@@ -24,6 +24,7 @@ from ai_core.catalog_file import CostEntry, ModelEntry
 from ai_core.fake import FakeCallLog
 from ai_core.provider import Reasoning
 from ai_core.routing import Endpoint, ModelRouter
+from catalog_core.lookup import DbModelLookup
 from fastapi import FastAPI
 from pydantic import SecretStr
 from sqlalchemy import select
@@ -31,8 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai_log.call_log import DbCallLog
 from app.ai_log.models import AiInvocation
-from app.catalog.lookup import DbModelLookup
-from app.catalog.models import Grade
+from app.catalog.models import TABLES, Grade
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
 from app.rounds.routed_narrator import RoutedNarrator
 from tests.catalog_rows import add_cost, put_models
@@ -190,7 +190,7 @@ async def test_the_catalog_gives_the_price_of_the_day(app: FastAPI, session: Asy
     await put_models(session, LUNA_ROW)
     today_price = await add_cost(session, 'gpt-6-luna', price('0.1', TODAY))
     await add_cost(session, 'gpt-6-luna', price('0.2', TODAY + timedelta(days=30)))
-    lookup = DbModelLookup(app.state.session_factory)
+    lookup = DbModelLookup(app.state.session_factory, TABLES)
 
     found = await lookup.find('gpt-6-luna', TODAY)
 
@@ -203,4 +203,4 @@ async def test_the_catalog_gives_the_price_of_the_day(app: FastAPI, session: Asy
 async def test_a_model_without_a_price_of_the_day_has_no_cost(app: FastAPI, session: AsyncSession):
     await put_models(session, LUNA_ROW)
 
-    assert (await DbModelLookup(app.state.session_factory).find('gpt-6-luna', TODAY)).cost is None
+    assert (await DbModelLookup(app.state.session_factory, TABLES).find('gpt-6-luna', TODAY)).cost is None

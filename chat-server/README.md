@@ -218,6 +218,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 ### 모델 목록
 
 대화에 쓸 수 있는 언어 모델들이다. `app/catalog/`. 게임 서버의 모델 목록(`trpg-server/app/catalog/`)을 줄여 옮겼다.
+표를 읽는 쿼리, 찾기, 파일을 들여오기는 세 서버가 함께 쓰는 공용 코드 [catalog-core](../shared/catalog-core/README.md)에 있다(#1266). 표(ORM 과 마이그레이션)와 이 서버만의 스위치는 여기 있다.
 
 **원본은 파일 하나다**(`shared/ai-core/src/ai_core/model_catalog.toml`, #499). 게임 서버와 같은 파일을 이 서버의 표에 들여온다.
 모델을 넣고, 칸을 고치고, 원가를 더하고, 날짜판과 은퇴일을 바꾸는 것은 파일을 고쳐 PR 로 올리고 `scripts.models sync` 로 들여온다.

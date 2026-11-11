@@ -3,7 +3,7 @@
 """
 테스트가 모델 목록의 표에 모델과 원가를 넣는 도우미.
 
-  - put_models: 모델 목록의 파일을 들여오는 길(app/catalog/sync.py)로 넣거나 고친다. 새 모델은 꺼진 채다.
+  - put_models: 모델 목록의 파일을 들여오는 길(catalog_core/sync.py)로 넣거나 고친다. 새 모델은 꺼진 채다.
     운영에서 모델이 표에 들어가는 길이 이것 하나라 테스트도 같은 길로 넣는다.
   - add_cost: 원가 한 줄을 바로 적는다. 파일의 단가를 들여온 것과 같다(단가만 더해 보는 테스트가 쓴다).
   - retire: 은퇴일을 바로 적는다. 파일의 retires_on 을 바꿔 들여온 것과 같다.
@@ -12,11 +12,11 @@
 from datetime import date
 
 from ai_core.catalog_file import FORMAT, CostEntry, ModelCatalog, ModelEntry
+from catalog_core.sync import SyncReport, sync_catalog
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.catalog.models import AiModel, AiModelCost
-from app.catalog.sync import SyncReport, sync_catalog
+from app.catalog.models import TABLES, AiModel, AiModelCost
 
 
 def catalog_of(*entries: ModelEntry) -> ModelCatalog:
@@ -26,7 +26,7 @@ def catalog_of(*entries: ModelEntry) -> ModelCatalog:
 
 async def put_models(session: AsyncSession, *entries: ModelEntry) -> SyncReport:
     """모델들을 들여온다. 파일에 없는 표의 모델은 그대로 둔다."""
-    return await sync_catalog(session, catalog_of(*entries))
+    return await sync_catalog(TABLES, session, catalog_of(*entries))
 
 
 async def add_cost(session: AsyncSession, slug: str, cost: CostEntry) -> AiModelCost:

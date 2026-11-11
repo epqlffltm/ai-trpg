@@ -115,8 +115,8 @@ class ModelRouter:
     """
     이름으로 provider 를 고른다. 앱에 하나 둔다(app/rounds/narrator_setup.py 의 build_router).
 
-    lookup: 모델 목록에서 찾는 것(ModelLookup). 게임 서버는 부를 때마다 DB 에서 읽는다
-    (trpg-server/app/catalog/lookup.py).
+    lookup: 모델 목록에서 찾는 것(ModelLookup). 서버들은 부를 때마다 DB 에서 읽는다
+    (shared/catalog-core 의 catalog_core/lookup.py).
     local: 서버 곁의 모델의 창구(LLM_BASE_URL). openai, anthropic, gemini, zai, deepinfra, xai: 외부 API 의 창구.
     키가 없으면 None 이다.
     OpenAI 와 같은 모양의 창구(openai, zai, deepinfra, xai)는 같은 provider 로 부른다. 주소와 키와 받는 칸만 다르다.

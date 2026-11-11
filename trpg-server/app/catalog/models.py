@@ -20,11 +20,11 @@
   - API 모델 이름에는 날짜가 붙은 이름(날짜판)을 적는다. 별칭(gpt-x-latest 같은)은 공급자가 말없이 다른 모델로 돌린다.
     공급자가 새 날짜판을 내면 이름표는 그대로 두고 날짜판만 바꾼다(유저 결정, 2026-10-17). 같은 상품이라 값도 그대로다.
     다만 서술의 목소리가 바뀔 수 있다. 그래서 날짜판이 바뀌면 들여오기가 기록을 남기고 모델을 끈다
-    (app/catalog/sync.py). 평가 장면(말투 검사 포함)을 다시 통과한 뒤에 켠다.
+    (catalog_core/sync.py). 평가 장면(말투 검사 포함)을 다시 통과한 뒤에 켠다.
   - 새로 넣은 모델은 꺼진 채로 시작한다. 원가를 보고, 평가 장면을 통과한 뒤에 켠다.
 
 원본은 파일 하나다(ai_core/model_catalog.toml, #499). 표는 그것을 들여온 사본에 이 서버의 스위치(enabled,
-vendor_fallback)를 더한 것이다. 모델과 원가는 파일을 고치고 들여와서 바꾼다(scripts.models sync, app/catalog/sync.py).
+vendor_fallback)를 더한 것이다. 모델과 원가는 파일을 고치고 들여와서 바꾼다(scripts.models sync, catalog_core/sync.py).
 켜고 끄기와 대체 모델은 이 표에서 한다(app/catalog/service.py).
 
 창구(provider), 생각의 방식(reasoning_style), 출력 상한의 칸(token_limit_field), 분류(grade)의 열거형은
@@ -40,6 +40,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from ai_core.catalog_contract import Grade, Provider, ReasoningStyle, TokenLimitField
+from catalog_core.tables import CatalogTables
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -166,3 +167,12 @@ class AiModelSnapshot(Base):
     # 덧붙일 말(공급자의 공지, 바꾼 까닭 …)
     note: Mapped[str | None] = mapped_column(String(200))
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+def drop_vendor_fallback(model: AiModel) -> None:
+    """들여오기가 모델의 회사를 바꿀 때 옛 회사의 대체 모델 표시를 내린다. 대체 모델은 회사마다 정한다."""
+    model.vendor_fallback = False
+
+
+# 공용 코드(catalog_core 의 쿼리, 찾기, 들여오기)에 넘기는 이 서버의 표 셋
+TABLES = CatalogTables(AiModel, AiModelCost, AiModelSnapshot, on_vendor_change=drop_vendor_fallback)

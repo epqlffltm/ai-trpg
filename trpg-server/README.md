@@ -2483,7 +2483,7 @@ DEEPINFRA_BASE_URL=https://api.deepinfra.com/v1/openai
 XAI_BASE_URL=https://api.x.ai/v1
 ```
 
-- 서술할 때마다 모델 목록을 DB 에서 한 줄 읽는다. 관리 명령으로 끄거나 날짜판을 바꾸면 서버를 다시 띄우지 않아도 다음 서술부터 맞는다. 읽는 것은 모양(`app/catalog/lookup.py` 의 `ModelLookup`)을 거친다. 서술이 잦아지면 같은 모양의 캐시로 바꿔 꽂는다.
+- 서술할 때마다 모델 목록을 DB 에서 한 줄 읽는다. 관리 명령으로 끄거나 날짜판을 바꾸면 서버를 다시 띄우지 않아도 다음 서술부터 맞는다. 읽는 것은 모양(`ai_core/catalog_contract.py` 의 `ModelLookup`)을 거친다(채우는 것은 공용 코드 `catalog_core/lookup.py`). 서술이 잦아지면 같은 모양의 캐시로 바꿔 꽂는다.
 - 목록의 창구, 날짜판(API 모델 이름), 받는 칸(출력 상한의 칸, 온도, 생각의 깊이)대로 보낸다. 키는 머리(`Authorization`, Gemini 는 `x-goog-api-key`)에만 싣고 주소, 로그, 오류, 기록에 싣지 않는다.
 - 부를 수 없으면 다른 모델로 바꿔 부르지 않고 그 서술이 실패한다: 꺼졌거나 은퇴함(`model_unavailable`), 키가 없음(`provider_not_configured`), 그 창구의 코드가 아직 없음(`provider_unsupported`, 지금은 없다. 새 창구를 더할 때).
 - 기록(`ai_invocations.provider`)에는 서버 곁의 모델이면 `openai_compat`, OpenAI 면 `openai`, Claude 면 `anthropic`, Gemini 면 `gemini`, Z.ai 면 `zai`, DeepInfra 면 `deepinfra`, xAI 면 `xai` 가 남는다.
@@ -2983,6 +2983,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 ## 모델 목록
 
 서술에 쓸 수 있는 언어 모델들과 모델마다의 원가 단가를 DB 에 둔다(`app/catalog/`).
+표를 읽는 쿼리, 찾기, 파일을 들여오기는 chat, story 와 함께 쓰는 공용 코드 [catalog-core](../shared/catalog-core/README.md)에 있다(#1266). 표(ORM 과 마이그레이션)와 이 서버만의 스위치는 여기 있다.
 **원본은 파일 하나다**(`shared/ai-core/src/ai_core/model_catalog.toml`, #499). chat, story 서버도 같은 파일을 자기 표에 들여온다. 모델을 넣고, 칸을 고치고, 원가를 더하고, 날짜판과 은퇴일을 바꾸는 것은 모두 파일을 고쳐 PR 로 올리고 `scripts.models sync` 로 들여온다. 켜고 끄기와 회사의 대체 모델은 이 서버만의 스위치라 파일에 없고 이 표에서 한다([관리 명령](#관리-명령)). 표는 셋이다.
 
 | 표 | 무엇 | 규칙 |

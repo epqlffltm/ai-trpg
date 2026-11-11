@@ -46,6 +46,16 @@ MOVED = (
     'story-server/app/api/health.py',
     'story-server/app/api/readiness.py',
     'trpg-server/app/api/health.py',
+    # #1266: 모델 목록의 거절 까닭, 찾기, 들여오기를 shared/catalog-core 로 옮겼다
+    'chat-server/app/catalog/errors.py',
+    'chat-server/app/catalog/lookup.py',
+    'chat-server/app/catalog/sync.py',
+    'story-server/app/catalog/errors.py',
+    'story-server/app/catalog/lookup.py',
+    'story-server/app/catalog/sync.py',
+    'trpg-server/app/catalog/errors.py',
+    'trpg-server/app/catalog/lookup.py',
+    'trpg-server/app/catalog/sync.py',
 )
 
 

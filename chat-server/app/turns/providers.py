@@ -24,10 +24,11 @@ from ai_core.routing import (
     ModelRouter,
     Route,
 )
+from catalog_core.lookup import DbModelLookup
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.catalog.lookup import DbModelLookup
+from app.catalog.models import TABLES
 from app.core.config import Settings
 
 
@@ -49,9 +50,9 @@ def endpoint(base_url: str, api_key: SecretStr, kind: str) -> Endpoint | None:
 def build_router(
     settings: Settings, client: httpx.AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> ModelRouter:
-    """모델의 이름표로 provider 를 고르는 것. 모델 목록은 부를 때마다 DB 에서 읽는다(app/catalog/lookup.py)."""
+    """모델의 이름표로 provider 를 고르는 것. 모델 목록은 부를 때마다 DB 에서 읽는다(catalog_core/lookup.py)."""
     return ModelRouter(
-        lookup=DbModelLookup(session_factory),
+        lookup=DbModelLookup(session_factory, TABLES),
         client=client,
         local=Endpoint(base_url=settings.llm_base_url, api_key=None, kind=LOCAL_KIND),
         openai=endpoint(settings.openai_base_url, settings.openai_api_key, OPENAI_KIND),

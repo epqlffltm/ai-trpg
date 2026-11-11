@@ -53,7 +53,7 @@
    RUN uv sync --locked --no-dev --no-install-project --no-editable
    ```
 
-3. 모델 목록: 원본 파일(`model_catalog.toml`)을 관리 명령으로 서버의 표에 들여오고, 표를 `ModelLookup` 모양으로 읽는 것을 만든다(게임 서버는 `app/catalog/sync.py`, `app/catalog/lookup.py`). 파일을 고치는 법은 [게임 서버 README 의 모델 목록](../../trpg-server/README.md#모델-목록)에 있다.
+3. 모델 목록: 원본 파일(`model_catalog.toml`)을 관리 명령으로 서버의 표에 들여오고, 표를 `ModelLookup` 모양으로 읽는 것을 만든다(공용 코드 [catalog-core](../catalog-core/README.md) 의 `catalog_core/sync.py`, `catalog_core/lookup.py`. 표는 서버마다 있다). 파일을 고치는 법은 [게임 서버 README 의 모델 목록](../../trpg-server/README.md#모델-목록)에 있다.
 
 4. 서버가 넘기는 것: HTTP 클라이언트(서버의 것이라 span 이 걸린다), 창구마다의 주소와 키(`Endpoint`), 모델 목록(`ModelLookup` 을 따르는 것). 호출 기록을 받는 곳은 서버가 `CallLog` 모양으로 만든다(게임 서버는 `app/ai_log` 의 DB 기록장). 공용 코드는 서버의 설정(`.env`)을 읽지 않는다.
 

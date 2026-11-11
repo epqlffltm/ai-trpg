@@ -38,8 +38,6 @@ chat-server/app/billing/prices.py::to_price story-server/app/billing/prices.py::
 chat-server/app/bookmarks/models.py::Bookmark story-server/app/bookmarks/models.py::Bookmark
 chat-server/app/bookmarks/schemas.py::BookmarkOut story-server/app/bookmarks/schemas.py::BookmarkOut
 chat-server/app/catalog/choice.py::ChoosableModel story-server/app/catalog/choice.py::ChoosableModel
-chat-server/app/catalog/errors.py::Conflict story-server/app/catalog/errors.py::Conflict
-chat-server/app/catalog/lookup.py::DbModelLookup story-server/app/catalog/lookup.py::DbModelLookup trpg-server/app/catalog/lookup.py::DbModelLookup
 chat-server/app/catalog/models.py::AiModel story-server/app/catalog/models.py::AiModel
 chat-server/app/catalog/models.py::AiModelCost story-server/app/catalog/models.py::AiModelCost trpg-server/app/catalog/models.py::AiModelCost
 chat-server/app/catalog/models.py::AiModelSnapshot story-server/app/catalog/models.py::AiModelSnapshot trpg-server/app/catalog/models.py::AiModelSnapshot
@@ -47,11 +45,6 @@ chat-server/app/catalog/offers.py::offer story-server/app/catalog/offers.py::off
 chat-server/app/catalog/schemas.py::ModelOut story-server/app/catalog/schemas.py::ModelOut
 chat-server/app/catalog/service.py::allow_adult story-server/app/catalog/service.py::allow_adult
 chat-server/app/catalog/service.py::enable_model story-server/app/catalog/service.py::enable_model trpg-server/app/catalog/service.py::enable_model
-chat-server/app/catalog/sync.py::SyncReport story-server/app/catalog/sync.py::SyncReport trpg-server/app/catalog/sync.py::SyncReport
-chat-server/app/catalog/sync.py::switch_snapshot story-server/app/catalog/sync.py::switch_snapshot trpg-server/app/catalog/sync.py::switch_snapshot
-chat-server/app/catalog/sync.py::sync_catalog story-server/app/catalog/sync.py::sync_catalog trpg-server/app/catalog/sync.py::sync_catalog
-chat-server/app/catalog/sync.py::sync_existing story-server/app/catalog/sync.py::sync_existing trpg-server/app/catalog/sync.py::sync_existing
-chat-server/app/catalog/sync.py::sync_model story-server/app/catalog/sync.py::sync_model trpg-server/app/catalog/sync.py::sync_model
 chat-server/app/conversations/models.py::ConversationPersona story-server/app/conversations/models.py::ConversationPersona
 chat-server/app/conversations/repository.py::active_path story-server/app/conversations/repository.py::active_path
 chat-server/app/conversations/repository.py::alternatives story-server/app/conversations/repository.py::alternatives
