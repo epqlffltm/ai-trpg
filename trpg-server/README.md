@@ -152,6 +152,22 @@ uv run alembic check                               # 모델을 바꾸고 마이�
 - `main` 을 합친 뒤 끝이 둘 이상이면 새 마이그레이션을 만들 때 `--head <revision>` 으로 어느 끝 위에 얹을지 정한다(정하지 않으면 Alembic 이 멈춘다).
 - 되돌리기(`downgrade`)는 끝이 여럿이면 `-1` 이 어느 갈래를 되돌릴지 정해져 있지 않다. 되돌릴 revision 을 이름으로 적는다(`downgrade <revision>`).
 
+첫 배포 전에 쌓인 마이그레이션 172개를 기준선 하나(`baseline`, `fbdb2bc58f5e`)로 합쳤다(#1273). 옛 사슬로 만든 스키마와 같은지는 `tools/compare_schemas.py` 로 견주었다(칸의 차례만 다르다).
+사슬은 뿌리 하나에서 시작해야 한다(`tests/test_migration_graph.py`). 새 마이그레이션은 지금의 끝을 부모로 적는다.
+옛 파일들은 시험 자료로 `tests/legacy_migrations/` 에 옮겼다(alembic 은 읽지 않는다). 이 문서에 남은 마이그레이션 이름(`a3c5e7f9b1d4` 등)은 그 폴더의 파일이다.
+기준선 전에 만든 DB 는 옛 리비전을 가리켜 멈춘다(`Can't locate revision`). 옛 main 에서 끝까지 올려 둔 DB 라면 데이터를 두고 표시(`alembic_version`)만 바꾼다.
+compose 로 띄웠으면 마이그레이션 컨테이너로 한다. 컨테이너는 compose 의 망에서 `db:5432` 로 붙으므로 PC 의 포트나 `trpg-server/.env` 의 주소와 상관없다.
+
+```powershell
+docker compose --profile app build trpg-migrate trpg-server
+docker compose --profile app run --rm trpg-migrate alembic stamp --purge fbdb2bc58f5e
+docker compose --profile app run --rm trpg-migrate alembic check     # "No new upgrade operations detected." 면 된다
+docker compose --profile app up -d trpg-migrate trpg-server
+```
+
+표시를 바꾸지 않으면 새 이미지의 `trpg-migrate` 가 멈추고, 그것이 끝나야 뜨는 `trpg-server` 도 뜨지 않는다.
+PC 에서 직접 붙는 스키마(테스트용 `game_test` 등)는 `uv run alembic stamp --purge fbdb2bc58f5e` 로 같게 한다(`$env:DB_SCHEMA` 로 스키마를 고른다).
+
 | 환경 변수 | 기본값 | 설명 |
 | --- | --- | --- |
 | `DATABASE_URL` | 없음(필수) | `postgresql+asyncpg://game:<비밀번호>@127.0.0.1:5432/trpg` 형식 |

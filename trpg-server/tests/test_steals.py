@@ -66,7 +66,7 @@ RAT_SHEET = make_sheet(max_hp=4)
 BITE = {'name': '물기', 'ability': 'str', 'difficulty': 'medium', 'harm': 'light'}
 STEAL = '몰래 손을 뻗는다.'
 LOOK = '주위를 살핀다.'
-MIGRATION = pathlib.Path(__file__).parent.parent / 'migrations/versions/20261019_8b4f2d6e9a71_steal.py'
+MIGRATION = pathlib.Path(__file__).parent / 'legacy_migrations/20261019_8b4f2d6e9a71_steal.py'
 
 
 def bearer(signing_key: SigningKey, user_id: uuid.UUID) -> dict[str, str]:

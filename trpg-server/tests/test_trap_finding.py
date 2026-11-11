@@ -42,7 +42,7 @@ from tests.test_whispers import RecordingNarrator
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
-MIGRATION = pathlib.Path(__file__).parent.parent / 'migrations/versions/20261117_e8a0c2d4f6b9_trap_finding.py'
+MIGRATION = pathlib.Path(__file__).parent / 'legacy_migrations/20261117_e8a0c2d4f6b9_trap_finding.py'
 SEARCHING = {'kind': 'search'}
 # 해제 판정(민첩 어려움, 목표 20)의 눈. 20 이면 거둔다. 16 은 4 모자라 그대로, 15 는 5 모자라 터진다
 SUCCESS, NEAR, FUMBLE = 20, 16, 15

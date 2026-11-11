@@ -63,7 +63,7 @@ pytestmark = pytest.mark.usefixtures('clean_tables')
 # 늑대 가죽(확률 50)이 떨어지는 눈과 안 떨어지는 눈
 PELT = 50
 NO_PELT = 51
-MIGRATION = pathlib.Path(__file__).parent.parent / 'migrations/versions/20261019_5d2c8e7a1f34_monster_items.py'
+MIGRATION = pathlib.Path(__file__).parent / 'legacy_migrations/20261019_5d2c8e7a1f34_monster_items.py'
 
 
 @pytest.fixture

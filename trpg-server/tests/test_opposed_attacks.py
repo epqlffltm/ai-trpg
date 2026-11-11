@@ -162,7 +162,7 @@ def test_an_old_snapshot_keeps_the_fixed_difficulty():
 
 
 def load_migration():
-    path = next(Path('migrations/versions').glob('*_rulebook_defense.py'))
+    path = next(Path('tests/legacy_migrations').glob('*_rulebook_defense.py'))
     spec = importlib.util.spec_from_file_location('rulebook_defense_migration', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

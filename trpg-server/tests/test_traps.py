@@ -48,7 +48,7 @@ from tests.test_whispers import RecordingNarrator
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
-MIGRATION = pathlib.Path(__file__).parent.parent / 'migrations/versions/20261116_d6f8b0c2e4a7_traps.py'
+MIGRATION = pathlib.Path(__file__).parent / 'legacy_migrations/20261116_d6f8b0c2e4a7_traps.py'
 
 me = map_tables.me
 friend = map_tables.friend
