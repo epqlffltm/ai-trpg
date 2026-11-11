@@ -1,4 +1,4 @@
-# chat-server/app/billing/price_list.py
+# shared/server-core/src/server_core/billing/price_list.py
 
 """
 결제 서버의 가격 목록을 받아 두고 1분쯤마다 버전으로 다시 묻는 것.
@@ -6,11 +6,10 @@
 결제 서버가 정한 방법(billing-server/README.md 의 "가격 목록")을 따른다.
   - 홀드와 같은 서명으로 GET /api/v1/billing/service/prices 를 부른다(본문은 비어 있다).
   - 응답의 ETag 를 적어 두고, 다시 물을 때 If-None-Match 에 싣는다. 바뀐 것이 없으면 본문 없이 304 다.
-  - ETag 는 본문의 해시라 예약한 값이 적용 시각을 지날 때도 바뀐다. 결제 서버가 게임 서버를 부르지 않는다.
-
-게임 서버의 것(trpg-server/app/billing/price_list.py)과 같다. 결제 서버는 이 서버의 머리(chat)의 줄만 낸다.
+  - ETag 는 본문의 해시라 예약한 값이 적용 시각을 지날 때도 바뀐다. 결제 서버가 부른 서버를 부르지 않는다.
 
 받아 두는 까닭: 모델을 고르는 화면을 열 때마다 결제 서버를 부르지 않는다. 1분쯤 늦어도 괜찮다.
+결제 서버는 부른 서버의 머리(narration, chat, story)의 줄만 낸다.
 목록은 보여 주는 값이고, 실제로 빠지는 값은 홀드를 걸 때 결제 서버가 정한다.
 
 받지 못하면(결제 서버가 내려갔다, 서명이 틀렸다) 마지막에 받은 목록을 그대로 쓰고 경고를 남긴다.
@@ -29,9 +28,10 @@ from typing import Protocol
 
 import httpx
 from pydantic import SecretStr, ValidationError
-from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 
-from app.billing.prices import FREE_BOOK, PriceBook, parse_price_list
+from server_core.billing.prices import FREE_BOOK, PriceBook, parse_price_list
+from server_core.observability.context import outgoing_headers
+from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +79,11 @@ class Cached:
 
 
 def request_headers(secret: SecretStr, sent_at: int, etag: str | None) -> dict[str, str]:
-    """보낼 머리말. 서명(GET, 빈 본문)과, 받아 둔 버전이 있으면 If-None-Match."""
-    headers = {SIGNATURE_HEADER: sign(secret.get_secret_value(), sent_at, 'GET', PRICES_PATH, b'')}
+    """보낼 머리말. 서명(GET, 빈 본문), 추적, 그리고 받아 둔 버전이 있으면 If-None-Match."""
+    headers = {
+        SIGNATURE_HEADER: sign(secret.get_secret_value(), sent_at, 'GET', PRICES_PATH, b''),
+        **outgoing_headers(),
+    }
     if etag is not None:
         headers['If-None-Match'] = etag
     return headers

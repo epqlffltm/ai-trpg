@@ -20,6 +20,8 @@ from fastapi import FastAPI
 from server_core import health, loops, readiness, stop_signals
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
+from server_core.billing.price_list import PriceListUnavailable
+from server_core.billing.setup import build_billing, build_price_list
 from server_core.database import create_engine, create_session_factory
 from server_core.input_errors import use_input_errors
 from server_core.notifications import dispatcher
@@ -42,8 +44,6 @@ from app.achievements import router as achievements
 from app.api import me
 from app.assets.client import AssetClient, AssetUnavailableError
 from app.billing import router as billing
-from app.billing.price_list import PriceListUnavailable
-from app.billing.setup import build_billing, build_price_list
 from app.bookmarks import router as bookmarks
 from app.bookmarks.service import BookmarksFullError
 from app.catalog import router as models

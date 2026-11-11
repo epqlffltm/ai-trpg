@@ -2177,7 +2177,7 @@ export interface components {
          * @description 결제 서버 가격표의 등급. 결제에 쓰는 등급은 이것이 기준이다(model-pricing-plan 9-1).
          *
          *     결제 서버가 모르는 등급을 보내면 목록 전체를 읽지 못한다(503).
-         *     그래서 결제 서버는 게임 서버와 chat 서버가 등급을 안 뒤에 그 줄을 넣는다.
+         *     그래서 결제 서버는 부르는 서버들이 등급을 안 뒤에 그 줄을 넣는다.
          * @enum {string}
          */
         Tier: "basic" | "standard" | "premium";

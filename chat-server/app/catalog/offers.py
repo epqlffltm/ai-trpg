@@ -18,10 +18,11 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from ai_core.catalog_contract import is_offered
+from server_core.billing.price_list import PriceList
+from server_core.billing.prices import Change, Price, PriceBook, Sale, price_at
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.billing.price_list import PriceList
-from app.billing.prices import Change, Price, PriceBook, Sale, chat_code, price_at
+from app.billing.prices import chat_code
 from app.catalog import repository
 from app.catalog.models import AiModel
 

@@ -15,16 +15,18 @@ from functools import lru_cache
 from typing import ClassVar, Literal, Self
 
 from pydantic import Field, SecretStr, model_validator
+from server_core.billing.settings import BillingSettings
 from server_core.notifications.settings import NotificationSettings
 from server_core.service_auth.signing import MIN_SECRET_LENGTH
 from server_core.settings import SCHEMA_PATTERN, CoreSettings
 
 
-class Settings(CoreSettings, NotificationSettings):
+class Settings(CoreSettings, NotificationSettings, BillingSettings):
     """
     설정 값의 목록과 형식. 함께 쓰는 칸은 CoreSettings 에 있다.
     알림 서버의 칸(NOTIFICATION_URL, NOTIFICATION_SECRET, NOTIFICATION_TIMEOUT_SECONDS)은
     NotificationSettings 에 있다(#678).
+    결제 서버의 주소와 비밀(BILLING_URL, BILLING_SECRET, BILLING_TIMEOUT_SECONDS)은 BillingSettings 에 있다(#1266).
 
     같은 이름의 환경 변수가 있으면 그 값을 쓰고, 없으면 .env 파일, 그것도 없으면 여기 적힌 기본값을 쓴다.
     형식이 맞지 않으면(예: DEBUG=maybe) 서버가 뜨기 전에 오류가 난다.
@@ -51,17 +53,6 @@ class Settings(CoreSettings, NotificationSettings):
 
     # asset 서버를 한 번 부르는 시간의 상한(초). 대화를 만드는 사람이 기다리므로 짧게 둔다
     asset_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
-
-    # 결제 서버의 주소. 말 한 번의 값을 여기서 받고(홀드, 확정, 반환), 모델의 값을 가격 목록에서 읽는다(app/billing/).
-    # 예: http://127.0.0.1:8003. 비우면 받지 않는다(기본). 그때 모델은 값 없이 보이고 말은 공짜로 돈다
-    billing_url: str = ''
-
-    # 결제 서버에 보내는 요청에 서명하는 비밀. 결제 서버의 CHAT_SERVER_SECRET 과 같은 값이어야 한다.
-    # 32자 이상. 비밀값이다. 로그와 오류에 싣지 않는다
-    billing_secret: SecretStr = SecretStr('')
-
-    # 결제 서버를 한 번 부르는 시간의 상한(초). 말을 보내는 사람이 기다리므로 짧게 둔다. 게임 서버와 같은 기본값이다
-    billing_timeout_seconds: float = Field(default=5.0, gt=0, le=10)
 
     # 인증 서버가 탈퇴를 알리는 요청(app/withdrawal/, #670)의 서명 비밀. 인증 서버의 CHAT_SECRET 과 같은 값이다.
     # 비워 두면 탈퇴 알림을 받지 않는다(401). 인증 서버는 받을 때까지 다시 보낸다. 적으면 32자 이상이다.
@@ -160,17 +151,6 @@ class Settings(CoreSettings, NotificationSettings):
         """asset 서버를 부르겠다면서 비밀이 없거나 짧으면 뜨지 않는다. asset 서버가 모든 요청을 401 로 거절한다."""
         if self.asset_url.strip() and len(self.asset_secret.get_secret_value()) < MIN_SECRET_LENGTH:
             raise ValueError(f'ASSET_URL 을 적었으면 ASSET_SECRET 을 {MIN_SECRET_LENGTH}자 이상 적어야 합니다')
-        return self
-
-    @model_validator(mode='after')
-    def require_a_billing_secret(self) -> Self:
-        """
-        결제 서버를 부르겠다면서 비밀이 없거나 짧으면 뜨지 않는다. 결제 서버가 모든 요청을 401 로 거절한다.
-
-        마이그레이션(compose 의 chat-migrate)은 결제 서버를 부르지 않으므로 주소와 비밀을 함께 비운다.
-        """
-        if self.billing_url.strip() and len(self.billing_secret.get_secret_value()) < MIN_SECRET_LENGTH:
-            raise ValueError(f'BILLING_URL 을 적었으면 BILLING_SECRET 을 {MIN_SECRET_LENGTH}자 이상 적어야 합니다')
         return self
 
     @model_validator(mode='after')

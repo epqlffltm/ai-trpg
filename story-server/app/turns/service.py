@@ -48,10 +48,10 @@ from conversation_core.relay import Relay
 from conversation_core.suggestions import MarkerHold, parse_suggestions, split_answer
 from conversation_core.window import Turn, select_window
 from server_core import stop_signals
+from server_core.billing.client import Billing
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.assets.schemas import ShortcutDocument, shortcuts_of
-from app.billing.client import Billing
 from app.billing.prices import story_code
 from app.catalog import repository as catalog
 from app.catalog.choice import is_choosable

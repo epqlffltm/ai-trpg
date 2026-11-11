@@ -23,11 +23,12 @@ from ai_core.catalog_contract import Grade, Provider, TokenLimitField
 from ai_core.catalog_file import CostEntry, ModelEntry
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.billing.prices import Change, Price, Tier
 from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.billing.prices import Change, Price, Tier, chat_code
+from app.billing.prices import chat_code
 from app.catalog import service as catalog
 from app.conversations.models import Conversation
 from app.core.dependencies import utc_now

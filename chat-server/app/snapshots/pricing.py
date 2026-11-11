@@ -2,7 +2,7 @@
 
 """
 장면 그림 한 장의 값(#983). 화면이 "장면 그림" 단추 곁에 값을 보이고, 그릴 수 없으면 단추를 숨기게 한다.
-DB 도 네트워크도 모르는 순수 함수다. 가격 목록은 결제 서버에서 받아 둔 것이다(app/billing/price_list.py).
+DB 도 네트워크도 모르는 순수 함수다. 가격 목록은 결제 서버에서 받아 둔 것이다(server_core/billing/price_list.py).
 
   - 그림 provider 가 없으면(SNAPSHOT_PROVIDER 가 off 이거나 키가 없다) 그릴 수 없다
   - 결제 서버 없이 도는 서버(가격 목록이 free)면 그릴 수 있고 값이 없다
@@ -12,7 +12,8 @@ DB 도 네트워크도 모르는 순수 함수다. 가격 목록은 결제 서�
 
 from datetime import datetime
 
-from app.billing.prices import PriceBook, Sale, price_at
+from server_core.billing.prices import PriceBook, Sale, price_at
+
 from app.snapshots.schemas import SnapshotPriceOut
 
 

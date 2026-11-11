@@ -64,7 +64,7 @@ class RulesTests(unittest.TestCase):
 
     def test_a_copy_of_shared_code_in_a_server_is_found(self):
         write(self.root, 'shared/server-core/src/server_core/billing.py', LONG)
-        write(self.root, 'trpg-server/app/billing/setup.py', LONG)
+        write(self.root, 'trpg-server/app/rounds/money.py', LONG)
 
         self.assertEqual(len(check(self.root, self.known)), 1)
 

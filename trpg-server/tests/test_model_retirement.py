@@ -18,12 +18,12 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
+from server_core.billing.price_list import PriceListUnavailable
+from server_core.billing.prices import Tier
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.billing.price_list import PriceListUnavailable
-from app.billing.prices import Tier
 from app.billing.routing import utc_now
 from app.catalog import service as catalog
 from app.tables import repository as table_repository

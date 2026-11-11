@@ -1,7 +1,8 @@
 # trpg-server/app/observability/metrics.py
 
 """
-게임 서버만의 메트릭. AI 호출, 서술, 라운드, 결제 서버를 부른 것이다(docs/observability.md 의 "메트릭").
+게임 서버만의 메트릭. AI 호출, 서술, 라운드다(docs/observability.md 의 "메트릭").
+결제 서버를 부른 수는 공용 코드(server_core/billing/metrics.py)가 센다.
 
 요청, DB, 뒤의 작업, SSE 연결의 메트릭은 공용 코드(server_core/observability/metrics.py)가 센다(#589).
 이 계측기는 공용 코드가 열어 둔 자리(InstrumentSet)에 더한다. 메트릭을 모으는 것을 바꿔 끼우면 함께 다시 만들어진다.
@@ -39,7 +40,6 @@ class GameInstruments:
     round_context_duration: Histogram
     round_context_part_duration: Histogram
     rounds_closed: Counter
-    billing_calls: Counter
     narration_charges: _Gauge
     snapshot_charges: _Gauge
     snapshot_draws: Counter
@@ -68,7 +68,6 @@ def build_instruments(meter: Meter) -> GameInstruments:
             meter, 'round_context_part_duration', '서술 전에 고르는 것 하나가 걸린 시간'
         ),
         rounds_closed=meter.create_counter('rounds_closed', description='닫기 시작한 라운드의 수'),
-        billing_calls=meter.create_counter('billing_calls', description='결제 서버를 부른 수'),
         narration_charges=meter.create_gauge('narration_charges', description='끝나지 않은 청구의 수'),
         snapshot_charges=meter.create_gauge('snapshot_charges', description='끝나지 않은 장면 그림의 청구의 수'),
         snapshot_draws=meter.create_counter('snapshot_draws', description='끝난 장면 그림의 수'),
@@ -145,11 +144,6 @@ def record_round_closed(reason: str) -> None:
 
 
 # --- 서술 값 ---
-
-
-def record_billing_call(operation: str, outcome: str) -> None:
-    """결제 서버를 부른 것 하나를 센다. operation 은 hold, capture, release, extend 다."""
-    game_instruments().billing_calls.add(1, {'operation': operation, 'outcome': outcome})
 
 
 def record_charges(counts: Mapping[str, int]) -> None:

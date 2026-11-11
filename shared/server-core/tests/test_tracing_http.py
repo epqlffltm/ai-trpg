@@ -73,7 +73,7 @@ async def test_our_servers_receive_the_client_span_as_parent(spans: SpanRecorder
 
     async with client_for(answering) as client:
         with spans.parent():
-            # 우리 서버를 부르는 쪽은 outgoing_headers 를 붙인다(게임 서버의 app/billing/http_billing.py)
+            # 우리 서버를 부르는 쪽은 outgoing_headers 를 붙인다(server_core/billing/http_billing.py)
             await client.post(SECRET_PATH, json={}, headers=outgoing_headers())
 
     (request,) = answering.received

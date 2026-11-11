@@ -3,14 +3,17 @@
 """
 테스트가 결제 서버의 가격 목록 자리에 끼우는 가짜(app.state.price_list). 진짜 HTTP 를 거치지 않는다.
 
-가격 목록을 받는 것 자체(서명, ETag, 받아 두기)는 tests/test_price_list.py 가 본다.
+가격 목록을 받는 것 자체(서명, ETag, 받아 두기)는 공용 코드의 테스트
+(shared/server-core/tests/test_price_list.py)가 본다.
 """
 
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from app.billing.price_list import PriceListUnavailable
-from app.billing.prices import Change, Price, PriceBook, Sale, Tier, story_code
+from server_core.billing.price_list import PriceListUnavailable
+from server_core.billing.prices import Change, Price, PriceBook, Sale, Tier
+
+from app.billing.prices import story_code
 
 
 def sale(credits: str = '30', tier: Tier = Tier.STANDARD, promo: bool = False) -> Sale:

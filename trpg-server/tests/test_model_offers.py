@@ -18,11 +18,12 @@ from ai_core.catalog_contract import Provider, ReasoningStyle, TokenLimitField
 from ai_core.catalog_file import CostEntry, ModelEntry
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.billing.price_list import PriceListUnavailable
+from server_core.billing.prices import FREE_BOOK, Change, Price, PriceBook, Sale, Tier
 from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.billing.price_list import PriceListUnavailable
-from app.billing.prices import FREE_BOOK, Change, Price, PriceBook, Sale, Tier, narration_code
+from app.billing.prices import narration_code
 from app.billing.routing import utc_now
 from app.catalog import service as catalog
 from app.catalog.models import Grade

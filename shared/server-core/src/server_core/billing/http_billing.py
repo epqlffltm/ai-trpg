@@ -1,4 +1,4 @@
-# chat-server/app/billing/http_billing.py
+# shared/server-core/src/server_core/billing/http_billing.py
 
 """
 결제 서버를 실제로 부르는 것. 요청마다 서명하고(signing.py), 답을 결과나 예외로 바꾼다.
@@ -17,9 +17,7 @@
 401 은 서명이 거절된 것이다. 설정을 고치면 낫는 일이라 다시 부를 일로 둔다(사람이 보도록 오류로 남는다).
 200 인데 홀드의 상태가 기대와 다르면(같은 이름표의 홀드가 이미 반대로 끝났다) 버그다.
 
-게임 서버의 것(trpg-server/app/billing/http_billing.py)과 같다.
-서명은 공용 코드(server_core/service_auth/signing.py)로 한다. 추적의 머리말(traceparent)은
-앱의 http 클라이언트(server_core 의 traced_client)가 싣는다. 결제 서버의 로그와 trace_id 로 이어진다.
+밖의 서비스가 아니라 우리 서버라서 추적의 머리말(traceparent)을 싣는다. 결제 서버의 로그와 trace_id 로 이어진다.
 """
 
 import json
@@ -32,9 +30,8 @@ from typing import Any
 
 import httpx
 from pydantic import SecretStr
-from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 
-from app.billing.client import (
+from server_core.billing.client import (
     GOLD_REQUIRED_CODE,
     BillingRejected,
     BillingUnavailable,
@@ -43,6 +40,8 @@ from app.billing.client import (
     HoldOutcome,
     HoldResult,
 )
+from server_core.observability.context import outgoing_headers
+from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 
 HOLDS_PATH = '/api/v1/billing/service/holds'
 CAPTURE_PATH = f'{HOLDS_PATH}/capture'
@@ -179,9 +178,9 @@ class HttpBilling:
     clock: Callable[[], float] = time.time
 
     def headers_for(self, path: str, body: bytes) -> dict[str, str]:
-        """보낼 머리말. 본문의 모양과 서명이다."""
+        """보낼 머리말. 서명과 추적이다."""
         signature = sign(self.secret.get_secret_value(), int(self.clock()), 'POST', path, body)
-        return {'Content-Type': 'application/json', SIGNATURE_HEADER: signature}
+        return {'Content-Type': 'application/json', SIGNATURE_HEADER: signature, **outgoing_headers()}
 
     async def post(self, path: str, payload: dict[str, str]) -> httpx.Response:
         """서명한 요청을 보내고 답을 돌려준다. 답을 받지 못하면 BillingUnavailable."""

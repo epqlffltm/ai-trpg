@@ -1,6 +1,6 @@
 module github.com/epqlffltm/ai-trpg/billing-server
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/getkin/kin-openapi v0.149.0

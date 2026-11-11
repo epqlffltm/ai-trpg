@@ -601,8 +601,8 @@ import asyncio
 
 import httpx
 
-from app.billing.price_list import HttpPriceList
-from app.billing.setup import build_price_list
+from server_core.billing.price_list import HttpPriceList
+from server_core.billing.setup import build_price_list
 from app.core.config import Settings
 
 
@@ -627,8 +627,8 @@ import asyncio
 
 import httpx
 
-from app.billing.price_list import HttpPriceList
-from app.billing.setup import build_price_list
+from server_core.billing.price_list import HttpPriceList
+from server_core.billing.setup import build_price_list
 from app.core.config import Settings
 
 

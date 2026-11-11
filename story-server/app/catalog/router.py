@@ -12,8 +12,8 @@
 
 from fastapi import APIRouter, status
 from server_core.auth.dependencies import CurrentUser
+from server_core.billing.prices import Change
 
-from app.billing.prices import Change
 from app.billing.routing import Prices
 from app.catalog import offers
 from app.catalog.offers import ModelOffer

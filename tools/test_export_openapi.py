@@ -10,6 +10,7 @@ OpenAPI 를 뽑아 docs/api/ 에 두는 도구(export_openapi.py)를 본다. 서
 import contextlib
 import io
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -175,9 +176,14 @@ class RunTests(unittest.TestCase):
         self.assertNotIn(b'\r\n', target_path(self.root, 'trpg').read_bytes())
 
 
+# 실패하는 서버 대신 돌리는 파이썬. 지금 테스트를 돌리는 그것이다.
+# 이름(python3)으로 부르면 Windows 에서는 Microsoft Store 의 바로가기가 대신 떠서 다른 글을 낸다
+PYTHON = sys.executable
+
+
 class FetchTests(unittest.TestCase):
     def test_a_failing_server_stops_with_its_error(self):
-        source = Source(folder='.', command=('python3', '-c', 'import sys; sys.exit("설정이 틀렸다")'))
+        source = Source(folder='.', command=(PYTHON, '-c', 'import sys; sys.exit("설정이 틀렸다")'))
 
         with self.assertRaises(RuntimeError) as caught:
             export_openapi.fetch_spec(source, Path(tempfile.gettempdir()))
@@ -185,7 +191,7 @@ class FetchTests(unittest.TestCase):
 
     def test_what_a_failing_build_printed_is_shown_too(self):
         # tsc 는 타입 오류를 표준 출력에 낸다. 표준 에러가 비어도 까닭이 보여야 한다
-        source = Source(folder='.', command=('python3', '-c', 'import sys; print("타입이 틀렸다"); sys.exit(2)'))
+        source = Source(folder='.', command=(PYTHON, '-c', 'import sys; print("타입이 틀렸다"); sys.exit(2)'))
 
         with self.assertRaises(RuntimeError) as caught:
             export_openapi.fetch_spec(source, Path(tempfile.gettempdir()))

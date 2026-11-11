@@ -17,9 +17,10 @@ from types import SimpleNamespace
 
 import pytest
 from ai_core.fake import FakeCallLog, FakeProvider
+from server_core.billing.prices import FREE_BOOK, Price, PriceBook, Sale, Tier
 
 from app.assets.models import NarrationStyle
-from app.billing.prices import FREE_BOOK, Price, PriceBook, Sale, Tier, narration_code
+from app.billing.prices import narration_code
 from app.catalog.offers import OfferedModel, StepPrice, offer, options_of
 from app.catalog.steps import (
     ALL_STEPS,

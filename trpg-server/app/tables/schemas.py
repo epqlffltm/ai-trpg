@@ -13,6 +13,7 @@ from typing import Annotated
 
 from ai_core.catalog_file import Slug
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from server_core.billing.prices import Tier
 
 from app.assets.models import (
     PLAYER_MADE_MODES,
@@ -30,7 +31,6 @@ from app.assets.scenarios.schemas import (
     PlayerMadeHp,
     RecommendedPlayers,
 )
-from app.billing.prices import Tier
 from app.calendar.schemas import ClockOut, ClockTimeOut
 from app.catalog.models import Grade
 from app.catalog.steps import MAX_STEP

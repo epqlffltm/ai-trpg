@@ -6,7 +6,8 @@
 
 서명을 확인한다. 앱의 서명 코드(server_core/service_auth/signing.py)를 쓰지 않고 여기서 따로 계산한다.
 같은 코드로 만들고 확인하면 둘이 함께 틀려도 통과한다.
-앱의 서명이 결제 서버(Go)와 같은지는 tests/test_billing_client.py 가 결제 서버의 코드로 만든 값과 견줘 본다.
+서명이 결제 서버(Go)와 같은지는 공용 코드의 테스트(shared/server-core/tests/test_billing_client.py)가
+결제 서버의 코드로 만든 값과 견줘 본다.
 
 사용자마다 크레딧(balances)을 두고, 홀드를 걸면 빼고, 돌려주면 되돌린다. 테스트가 크레딧을 바꿔 충전을 흉내 낸다.
 down 을 켜면 죽은 것이다. 연결하지 못한다.
@@ -25,9 +26,9 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 from pydantic import SecretStr
+from server_core.billing.http_billing import HttpBilling
 
 from app.billing.charges import LEGACY_PRICE_CODE
-from app.billing.http_billing import HttpBilling
 from tests.narration_model import TEST_PRICE_CODE
 
 BILLING_URL = 'http://billing.test'

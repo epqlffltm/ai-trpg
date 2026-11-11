@@ -10,8 +10,7 @@ from datetime import date, datetime
 
 from ai_core.catalog_contract import Grade
 from pydantic import BaseModel
-
-from app.billing.prices import Tier
+from server_core.billing.prices import Tier
 
 
 class NextPriceOut(BaseModel):

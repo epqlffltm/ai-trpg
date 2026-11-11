@@ -18,11 +18,12 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.billing.prices import FREE_BOOK, Price, PriceBook, Sale, Tier
 from server_core.testing.tokens import SigningKey
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import WORLD_GM_NOTES_MAX_LENGTH, WORLD_SETTING_MAX_LENGTH
-from app.billing.prices import FREE_BOOK, Price, PriceBook, Sale, Tier, narration_code
+from app.billing.prices import narration_code
 from app.billing.routing import utc_now
 from app.catalog.steps import BASE_STEPS, NarrationSteps
 from tests.billing import PRICES, FakeBillingServer
