@@ -77,6 +77,19 @@ MOVED = (
     'trpg-server/app/catalog/errors.py',
     'trpg-server/app/catalog/lookup.py',
     'trpg-server/app/catalog/sync.py',
+    # #1266: 요청 수 제한의 세는 곳과 규칙, 응답을 server_core/limits/ 로 옮겼다
+    'chat-server/app/limits/attempts.py',
+    'chat-server/app/limits/counters.py',
+    'chat-server/app/limits/redis_counter.py',
+    'chat-server/app/limits/responses.py',
+    'story-server/app/limits/attempts.py',
+    'story-server/app/limits/counters.py',
+    'story-server/app/limits/redis_counter.py',
+    'story-server/app/limits/responses.py',
+    'trpg-server/app/limits/attempts.py',
+    'trpg-server/app/limits/counters.py',
+    'trpg-server/app/limits/redis_counter.py',
+    'trpg-server/app/limits/responses.py',
 )
 
 

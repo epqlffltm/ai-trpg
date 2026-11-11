@@ -24,6 +24,7 @@ from server_core.billing.price_list import PriceListUnavailable
 from server_core.billing.setup import build_billing, build_price_list
 from server_core.database import create_engine, create_session_factory
 from server_core.input_errors import use_input_errors
+from server_core.limits.responses import use_limit_errors
 from server_core.notifications import dispatcher
 from server_core.notifications.setup import build_notifications
 from server_core.notifications.store import SqlOutboxStore
@@ -62,8 +63,6 @@ from app.conversations.service import (
 from app.core.config import Settings, get_settings
 from app.core.database import EXTRA_SCHEMAS
 from app.gallery import router as gallery
-from app.limits.attempts import TooManyAttempts
-from app.limits.responses import handle_too_many_attempts
 from app.limits.setup import build_limiting, build_redis
 from app.lore.indexing import LoreIndexer
 from app.lore.recall import LoreRecall
@@ -324,7 +323,8 @@ def create_app(
     app.add_exception_handler(NotContinuableError, messages.handle_not_continuable)
     app.add_exception_handler(ActionRefusedError, messages.handle_action_refused)
     app.add_exception_handler(ConversationBusyError, conversations.handle_conversation_busy)
-    app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
+    # 요청 수를 넘었다(429), 세는 곳에 닿지 못해 막았다(503). server_core/limits/responses.py
+    use_limit_errors(app)
     app.add_exception_handler(MessageNotFoundError, conversations.handle_message_not_found)
     app.add_exception_handler(NotEditableError, conversations.handle_not_editable)
     app.add_exception_handler(NoteNotFoundError, notes.handle_note_not_found)

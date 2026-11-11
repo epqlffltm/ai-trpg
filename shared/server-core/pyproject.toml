@@ -14,6 +14,11 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.1.5",
 ]
 
+# 선택 의존. 요청 수를 Redis 로 세는 서버(게임, chat, story)만 server-core[redis] 로 받는다.
+# 가져오는 곳은 server_core/limits/redis_counter.py 하나다(tests/test_boundary.py)
+[project.optional-dependencies]
+redis = ["redis>=8.1.0"]
+
 # 쓰는 서버가 uv 의 경로 의존으로 받는다(docs/architecture/shared-code.md 의 "정한 것").
 # 서버의 이미지에는 설치된 모양으로 들어간다(Dockerfile 의 uv sync --no-editable)
 [build-system]
@@ -28,6 +33,8 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
+    # 선택 의존(redis)을 쓰는 곳을 테스트도 본다
+    "redis>=8.1.0",
     "ruff>=0.17.1",
 ]
 

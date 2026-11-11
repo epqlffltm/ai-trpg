@@ -4,12 +4,9 @@
 시도 횟수 제한(#56)을 검증한다.
 
 보는 것.
-  - 세는 곳: 메모리(구간이 지나면 사라진다, 읽기는 올리지 않는다, 지운다)와 Redis(같은 것,
-    그리고 서버 둘이 같은 수를 본다).
-    Redis 에 닿지 못하면 CounterUnavailable.
-  - 규칙: 모든 시도를 세는 것과 실패만 세는 것. 넘으면 기다릴 초를 알린다. 키에 대상이 그대로 드러나지 않는다.
-    세는 곳에 닿지 못하면 막는 쪽(ensure_not_blocked)과 통과시키는 쪽(count_attempt)이 다르다.
-    끄면 아무것도 하지 않는다.
+  - 실제 Redis 로 세기: 올리고 만료를 건다, 지운다, 서버 둘이 같은 수를 본다.
+    세는 곳과 규칙(메모리, 가짜 Redis, 막는 쪽과 통과시키는 쪽, 응답)은
+    server-core 의 tests/test_limits.py 가 본다(#1266).
   - 로비의 비밀번호: 다섯 번 틀리면 맞는 비밀번호도 받지 않는다(확인 자체를 하지 않는다). 429 와 Retry-After.
     맞히면 그 사람의 수만 지운다. 테이블 하나에 모두가 틀린 수도 센다. 비밀번호가 없는 테이블은 세지 않는다.
     Redis 에 닿지 못하면 503.
@@ -18,7 +15,6 @@ Redis 를 쓰는 테스트는 실제 Redis 에서 돈다(TEST_REDIS_URL, 기본 
 테스트마다 키의 앞부분이 달라 섞이지 않는다.
 """
 
-import logging
 import os
 import uuid
 from datetime import timedelta
@@ -26,12 +22,11 @@ from datetime import timedelta
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
-from server_core.testing.logs import rendered
+from server_core.limits.attempts import AttemptLimit, Limiter, TooManyAttempts
+from server_core.limits.counters import CounterUnavailable, MemoryCounter, Tally
+from server_core.limits.redis_counter import RedisCounter, connect
 from server_core.testing.tokens import SigningKey
 
-from app.limits.attempts import AttemptLimit, Limiter, LimitsUnavailable, TooManyAttempts
-from app.limits.counters import CounterUnavailable, MemoryCounter, Tally
-from app.limits.redis_counter import RedisCounter, connect
 from app.limits.setup import Limiting, build_limiting, limits_from
 from app.main import create_app
 from app.tables import passwords
@@ -48,16 +43,6 @@ WRONG = '열려라 들깨'
 LIMIT = AttemptLimit('example', 3, timedelta(seconds=60))
 # 테이블을 만드는 테스트. 끝나면 테이블을 지운다
 needs_tables = pytest.mark.usefixtures('clean_tables')
-
-
-class FakeClock:
-    """테스트가 돌리는 단조 시계."""
-
-    def __init__(self) -> None:
-        self.now = 1000.0
-
-    def __call__(self) -> float:
-        return self.now
 
 
 class DeadCounter:
@@ -135,46 +120,6 @@ async def say(client: AsyncClient, headers: dict, table: dict, content: str = '�
     return await client.post(f'/api/v1/game/tables/{table["id"]}/messages', json={'content': content}, headers=headers)
 
 
-# --- 메모리로 세기 ---
-
-
-async def test_memory_counts_up_within_the_window():
-    counter = MemoryCounter(clock=FakeClock())
-
-    first = await counter.hit('k', 60)
-    second = await counter.hit('k', 60)
-
-    assert (first, second) == (Tally(1, 60), Tally(2, 60))
-
-
-async def test_memory_forgets_after_the_window():
-    clock = FakeClock()
-    counter = MemoryCounter(clock=clock)
-    await counter.hit('k', 60)
-
-    clock.now += 60
-    after = await counter.read('k')
-    again = await counter.hit('k', 60)
-
-    # 구간이 지나면 처음부터 다시 센다
-    assert after == Tally(0, 0)
-    assert again == Tally(1, 60)
-
-
-async def test_memory_reading_does_not_count_and_clearing_forgets():
-    clock = FakeClock()
-    counter = MemoryCounter(clock=clock)
-    await counter.hit('k', 60)
-    clock.now += 20.5
-
-    read = await counter.read('k')
-    await counter.clear('k')
-
-    # 남은 초는 올림한다. 그 시간 뒤에는 반드시 된다
-    assert read == Tally(1, 40)
-    assert await counter.read('k') == Tally(0, 0)
-
-
 # --- Redis 로 세기 ---
 
 
@@ -216,103 +161,7 @@ async def test_two_servers_see_the_same_count(redis_client):
         await other.aclose()
 
 
-async def test_an_unreachable_redis_is_unavailable():
-    client = connect('redis://127.0.0.1:1/0', 0.2)
-    counter = RedisCounter(client)
-
-    try:
-        with pytest.raises(CounterUnavailable):
-            await counter.hit('k', 60)
-        with pytest.raises(CounterUnavailable):
-            await counter.read('k')
-    finally:
-        await client.aclose()
-
-
 # --- 세고 막는 규칙 ---
-
-
-async def test_every_attempt_counts_and_the_one_over_is_refused():
-    limiter = Limiter(MemoryCounter(clock=FakeClock()), 'p')
-
-    for _ in range(LIMIT.max_attempts):
-        await limiter.count_attempt(LIMIT, 'someone')
-    with pytest.raises(TooManyAttempts) as refused:
-        await limiter.count_attempt(LIMIT, 'someone')
-
-    assert refused.value.retry_after == 60
-
-
-async def test_failures_block_from_the_limit_until_cleared():
-    limiter = Limiter(MemoryCounter(clock=FakeClock()), 'p')
-
-    for _ in range(LIMIT.max_attempts - 1):
-        await limiter.count_failure(LIMIT, 'someone')
-    await limiter.ensure_not_blocked(LIMIT, 'someone')
-    await limiter.count_failure(LIMIT, 'someone')
-    with pytest.raises(TooManyAttempts):
-        await limiter.ensure_not_blocked(LIMIT, 'someone')
-    await limiter.clear(LIMIT, 'someone')
-
-    # 허용된 횟수만큼 실패하면 다음부터 막힌다. 지우면 풀린다
-    await limiter.ensure_not_blocked(LIMIT, 'someone')
-
-
-async def test_subjects_and_limits_are_counted_apart():
-    limiter = Limiter(MemoryCounter(clock=FakeClock()), 'p')
-    other = AttemptLimit('other', LIMIT.max_attempts, LIMIT.window)
-
-    for _ in range(LIMIT.max_attempts):
-        await limiter.count_failure(LIMIT, 'someone')
-
-    await limiter.ensure_not_blocked(LIMIT, 'someone else')
-    await limiter.ensure_not_blocked(other, 'someone')
-
-
-def test_the_key_does_not_show_the_subject():
-    key = Limiter(MemoryCounter(), 'game:limit').key(LIMIT, f'{ME}')
-
-    # 키는 Redis 의 도구에 그대로 보인다. 누구의 수인지 드러나지 않게 해시한다
-    assert key.startswith('game:limit:example:')
-    assert str(ME) not in key
-
-
-async def test_a_disabled_limiter_never_blocks():
-    limiter = Limiter(DeadCounter(), 'p', enabled=False)
-
-    for _ in range(10):
-        await limiter.count_attempt(LIMIT, 'someone')
-        await limiter.count_failure(LIMIT, 'someone')
-    await limiter.ensure_not_blocked(LIMIT, 'someone')
-
-
-async def test_unavailable_counting_lets_attempts_through(caplog: pytest.LogCaptureFixture):
-    limiter = Limiter(DeadCounter(), 'p')
-
-    with caplog.at_level(logging.WARNING, logger='app.limits.attempts'):
-        await limiter.count_attempt(LIMIT, 'someone')
-
-    # 막지 않는다. 대신 제한이 꺼져 있다는 것을 남긴다
-    [line] = rendered(caplog.records, 'app.limits.attempts')
-    assert (line['level'], line['error_code'], line['limit'], line['blocked']) == (
-        'warning',
-        'limits.unavailable',
-        'example',
-        False,
-    )
-
-
-async def test_unavailable_checking_blocks(caplog: pytest.LogCaptureFixture):
-    limiter = Limiter(DeadCounter(), 'p')
-
-    with caplog.at_level(logging.WARNING, logger='app.limits.attempts'):
-        with pytest.raises(LimitsUnavailable):
-            await limiter.ensure_not_blocked(LIMIT, 'someone')
-        # 실패를 세지 못하거나 지우지 못해도 예외를 내지 않는다. 다음 확인이 막는다
-        await limiter.count_failure(LIMIT, 'someone')
-        await limiter.clear(LIMIT, 'someone')
-
-    assert [line['blocked'] for line in rendered(caplog.records, 'app.limits.attempts')] == [True, False, False]
 
 
 def test_the_limits_come_from_the_settings():

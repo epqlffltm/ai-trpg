@@ -3591,7 +3591,7 @@ uvicorn 은 종료 신호(Ctrl+C, SIGTERM)를 받으면 새 연결을 받지 않
 
 ## 시도 횟수 제한
 
-같은 일을 짧은 시간에 너무 많이 하면 막는다([#56](https://github.com/epqlffltm/ai-trpg/issues/56), `app/limits/`). 인증 서버의 시도 제한과 같은 방식이다(고정 구간, Lua 로 올리고 만료를 건다, 대상은 해시해서 키에 넣는다).
+같은 일을 짧은 시간에 너무 많이 하면 막는다([#56](https://github.com/epqlffltm/ai-trpg/issues/56), `app/limits/`). 세는 곳과 규칙, 응답은 chat, story 와 함께 쓰는 공용 코드 `server_core/limits/` 에 있다(#1266). 인증 서버의 시도 제한과 같은 방식이다(고정 구간, Lua 로 올리고 만료를 건다, 대상은 해시해서 키에 넣는다).
 
 | 무엇 | 누구를 세나 | 기본값 | 세는 곳에 닿지 못하면 |
 | --- | --- | --- | --- |

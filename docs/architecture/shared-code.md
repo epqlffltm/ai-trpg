@@ -14,6 +14,7 @@
 - 2026-10-22: 게임 서버의 `app/ai` 를 `shared/ai-core` 로 옮겼다(#499 의 1단계). 모델 목록을 파일 원본으로 바꾸는 것은 2단계로 남았다.
 - 2026-10-22: 모델 목록의 원본을 `shared/ai-core` 의 TOML 파일 하나로 옮겼다(#499 의 2단계). 게임 서버는 관리 명령(`scripts.models sync`)으로 자기 표에 들여온다. 한 서비스만 쓰는 속성은 그 서비스의 표에 둔다([정한 것](#정한-것)).
 - 2026-10-23: 알림 서버로 보내는 발송함을 trpg-server 에서 `shared/server-core` 로 뽑았다(#678). asset 이 두 번째로, chat 이 세 번째로, story 가 네 번째로 쓴다. trpg 는 옮길 때(#589) 바꾼다.
+- 2026-11-11: chat, story, trpg 가 세 벌로 갖던 요청 수 제한의 세는 곳과 규칙, 응답을 `server_core/limits/` 로 옮겼다(#1266). `redis` 는 `server-core[redis]` 선택 의존이다.
 - 2026-11-11: chat, story, trpg 가 세 벌로 갖던 모델 목록의 쿼리, 찾기, 들여오기를 `shared/catalog-core` 로 옮겼다(#1266). 표는 서버에 남는다([모델 목록의 표](#모델-목록의-표-sharedcatalog-core)).
 - 2026-11-02: 언어가 다른 서버들(Python 공용 코드, Django 인증, Go 결제)이 같은 규칙을 지키는지 공통 규격의 시험 파일(`shared/contracts/`)로 본다(#786). 처음 맞춰 보며 서명의 시각과 16진수의 모양, 로그 가리기의 빈칸과 계정 없는 주소, 토큰의 세션 버전과 발급 시각에서 어긋난 것을 하나로 맞췄다.
 
@@ -82,6 +83,7 @@ FastAPI 서버들이 함께 쓰는 공통부다(#588). 알림 서버와 asset �
 | `health`, `readiness` | 상태 확인 API(`/health` 는 살아 있는가, `/health/ready` 는 DB 에 닿는가)와 응답의 모양(`HealthResponse`) | 서버는 라우터를 붙이기만 한다. 세션은 `app.state.session_factory` 에서 받는다. trpg 는 Redis 도 보므로 준비 확인을 서버(`app/api/readiness.py`)에 두고 응답의 모양만 쓴다 |
 | `billing` | 결제 서버를 부르는 것: 모양(`Billing`)과 결과, 실제로 부르는 것(`HttpBilling`, 서명과 추적의 머리말), 받지 않는 것(`FreeBilling`), 셈(`MeteredBilling`, `billing_calls`), 가격 목록(`prices`, `HttpPriceList`), 설정의 칸(`BillingSettings`)과 만드는 것(`setup`). 게임, chat, story 가 쓴다(#1266) | 서버의 설정이 `BillingSettings` 를 물려받는다. 가격표 이름의 머리와 짓는 법(`app/billing/prices.py`), 청구 기록의 표와 정리 작업(게임 서버), 라우터의 의존성(`app/billing/routing.py`)은 서버의 것 |
 | `notifications` | 알림 서버로 보내는 발송함의 칸, 쿼리, 서명해 넣기, 다시 보내기, 보내는 작업과 그 설정(`NotificationSettings`) | 표(`Base` 와 마이그레이션), 서버 이름(주소와 비밀), 무엇을 누구에게 알릴지는 서버의 것. 쿼리는 쓰는 서버(asset)의 테스트가 실제 DB 로 본다 |
+| `limits` | 요청 수 제한의 세는 곳(`MemoryCounter`, `RedisCounter`), 세고 막는 규칙(`Limiter`), 막혔을 때의 응답(`use_limit_errors`). 게임, chat, story 가 쓴다(#1266) | 어떤 제한을 몇 번으로 둘지(`Limits`), 무엇을 기준으로 셀지, Redis 의 DB 번호, 의존성(`app/limits/routing.py`)은 서버의 것. `redis` 는 선택 의존(`server-core[redis]`)이라 알림, asset, 게시판은 받지 않는다. 실제 Redis 에서 세는 것은 게임 서버의 테스트가 본다 |
 | `testing` | 서버들의 테스트가 함께 쓰는 도구(가짜 인증 서버, span 과 메트릭을 모으는 것, 가짜 수집기, 로그 읽기) | 운영 코드는 가져오지 않는다 |
 
 - 각 서버의 `app/core/config.py` 는 서버에 남는다. 공용 코드는 설정 파일을 읽지 않고, 서버가 만든 설정을 받는다([재정의하는 법](#재정의하는-법)).

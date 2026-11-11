@@ -1,16 +1,16 @@
-# trpg-server/app/limits/responses.py
+# shared/server-core/src/server_core/limits/responses.py
 
 """
-막혔을 때의 HTTP 응답. 처리기는 app/main.py 에 등록한다.
+막혔을 때의 HTTP 응답. 서버는 앱을 만들 때 use_limit_errors(app) 를 부른다.
 
 인증 서버와 같은 모양이다(auth-server/accounts/exception_handlers.py). 화면이 서버를 가리지 않고 같은 것을 읽는다.
 무엇을 기준으로 셌는지(사람, 테이블), 몇 번까지인지는 알려 주지 않는다. 기다릴 초만 본문과 Retry-After 에 싣는다.
 """
 
-from fastapi import Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
-from app.limits.attempts import LimitsUnavailable, TooManyAttempts
+from server_core.limits.attempts import LimitsUnavailable, TooManyAttempts
 
 
 async def handle_too_many_attempts(request: Request, error: TooManyAttempts) -> JSONResponse:
@@ -32,3 +32,9 @@ async def handle_limits_unavailable(request: Request, error: LimitsUnavailable) 
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         content={'detail': '지금은 확인할 수 없습니다. 잠시 뒤에 다시 시도해 주세요.', 'code': 'limits_unavailable'},
     )
+
+
+def use_limit_errors(app: FastAPI) -> None:
+    """두 처리기를 앱에 건다. 429 는 넘었다, 503 은 세는 곳에 닿지 못해 막았다(ensure_not_blocked 만 낸다)."""
+    app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
+    app.add_exception_handler(LimitsUnavailable, handle_limits_unavailable)

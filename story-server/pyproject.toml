@@ -15,7 +15,7 @@ dependencies = [
     "pgvector>=0.5.1",
     "pydantic-settings>=2.16.0",
     "redis>=8.1.0",
-    "server-core",
+    "server-core[redis]",
     "sqlalchemy[asyncio]>=2.1.5",
     "uvicorn[standard]>=0.54.0",
 ]

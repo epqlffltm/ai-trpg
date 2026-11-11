@@ -11,11 +11,11 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 import redis.asyncio as redis
+from server_core.limits.attempts import AttemptLimit, Limiter
+from server_core.limits.counters import Counter, MemoryCounter
+from server_core.limits.redis_counter import RedisCounter, connect
 
 from app.core.config import Settings
-from app.limits.attempts import AttemptLimit, Limiter
-from app.limits.counters import Counter, MemoryCounter
-from app.limits.redis_counter import RedisCounter, connect
 
 
 @dataclass(frozen=True)
