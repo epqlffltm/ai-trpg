@@ -4,7 +4,7 @@
 이 서버의 표에서 하는 모델 목록의 일. 켜기, 끄기, 대체 모델 정하기, 목록 보기.
 
 모델을 넣고 고치고 원가를 적는 일은 여기 없다. 원본 파일(ai_core/model_catalog.toml)을 고치고 들여온다
-(app/catalog/sync.py). 켜짐과 회사의 대체 모델은 이 서버만의 스위치라 파일에 없고 여기서 바꾼다.
+(catalog_core/sync.py). 켜짐과 회사의 대체 모델은 이 서버만의 스위치라 파일에 없고 여기서 바꾼다.
 
 HTTP 를 모른다. SQL 을 모른다. 일마다 commit 하나로 저장한다.
 지금은 관리 명령(scripts/models.py)이 부른다. 나중에 관리 서버가 생기면 같은 함수들을 관리 API 로 연다.
@@ -19,10 +19,10 @@ from dataclasses import dataclass
 from datetime import date
 
 from ai_core.catalog_contract import is_retired
+from catalog_core.errors import CatalogConflictError, Conflict, ModelNotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog import repository
-from app.catalog.errors import CatalogConflictError, Conflict, ModelNotFoundError
 from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot
 
 

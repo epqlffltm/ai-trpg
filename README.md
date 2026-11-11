@@ -475,7 +475,7 @@ notification-server/      FastAPI 알림 서버 (독립된 uv 프로젝트)
 asset-server/             FastAPI 자산 서버. 페르소나, 캐릭터, 세계관, 로어북, 그림 (독립된 uv 프로젝트)
 chat-server/              FastAPI 캐릭터 1:1 대화 서버 (독립된 uv 프로젝트)
 story-server/             FastAPI 세계관 기반 스토리 서버 (독립된 uv 프로젝트)
-shared/                   FastAPI 서버들이 함께 쓰는 코드(server-core, ai-core, conversation-core). 서버의 이미지에 빌드할 때 넣는다
+shared/                   FastAPI 서버들이 함께 쓰는 코드(server-core, ai-core, conversation-core, catalog-core). 서버의 이미지에 빌드할 때 넣는다
 web/                      화면(Vite, React, TypeScript, npm workspaces). 빌드한 것을 프록시의 이미지에 담는다(web/Dockerfile)
 app/                      앱 껍데기(Capacitor, Android, #429). 화면의 빌드를 담고 refresh 토큰을 쥐는 플러그인(AppAuth)이 있다. 시험 단계다(app/README.md)
 docker/postgres/init/     서버별 DB 계정과 스키마를 만드는 초기화 스크립트

@@ -78,7 +78,7 @@
 | chat | `chat-server/` | FastAPI | 8005 | `ai-trpg-chat` | `chat`, `chat_test` | `09-chat-role.sql` | 캐릭터 1:1 대화, 스트리밍·분기·중지·재생성, 기억·로어 검색·과금. [chat 서버 설계](chat-server.md) |
 | story | `story-server/` | FastAPI | 8007 | `ai-trpg-story` | `story`, `story_test` | `10-story-role.sql` | 세계관과 인물, 시각·이벤트·선택지·호감도·엔딩, 세션·스트리밍·기억·과금. [story 서버 설계](story.md) |
 | 프런트엔드 | `web/` | React + TypeScript(Vite, SPA) | - | - | - | - | 계정·TRPG·chat·story·게시판·결제 화면과 제작 도구. nginx가 정적 파일로 제공. [화면 명세](../product/screens.md#프런트-구조) |
-| 공용 코드 | `shared/` | Python 패키지 | - | - | - | - | `server-core`(인증·관측 등), `ai-core`(모델 호출), `conversation-core`(대화 공통 로직). [공용 코드 규칙](shared-code.md) |
+| 공용 코드 | `shared/` | Python 패키지 | - | - | - | - | `server-core`(인증·관측 등), `ai-core`(모델 호출), `conversation-core`(대화 공통 로직), `catalog-core`(모델 목록의 표). [공용 코드 규칙](shared-code.md) |
 
 ### 계획인 것
 

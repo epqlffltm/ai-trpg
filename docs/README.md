@@ -16,7 +16,7 @@
 | [architecture/story.md](architecture/story.md) | story 서버 설계. 열린 세계와 기한, 시각, 인물의 위치와 여러 인물의 말, 이벤트와 선택지, 조건과 효과, 호감도, 고백과 엔딩, 세션과 기록 |
 | [architecture/chapters.md](architecture/chapters.md) | 장(章) 설계. TRPG 의 시나리오와 story 의 세계관이 함께 쓰는 장의 모양(넘어오는 조건, 여는 것)과 규칙, 게시 검사(#481 의 A) |
 | [architecture/campaigns.md](architecture/campaigns.md) | 캠페인 설계. TRPG 의 시나리오를 차례로 묶는 캠페인 자산, 플레이의 흐름, 다음 편으로 옮기는 것(성장, 소지품과 돈, 퀘스트 결과), 게시 검사(#481 의 B) |
-| [architecture/shared-code.md](architecture/shared-code.md) | 공용 코드 규칙. 형식과 코드는 공유하고 데이터는 공유하지 않는다. `shared/` 의 패키지(`server-core`, `ai-core`, `conversation-core`), 재정의하는 법, 언제 누가 뽑는지, 버전과 CI, `app/ai` 를 뽑는 방식의 결정(#380) |
+| [architecture/shared-code.md](architecture/shared-code.md) | 공용 코드 규칙. 형식과 코드는 공유하고 데이터는 공유하지 않는다. `shared/` 의 패키지(`server-core`, `ai-core`, `conversation-core`, `catalog-core`), 재정의하는 법, 언제 누가 뽑는지, 버전과 CI, `app/ai` 를 뽑는 방식의 결정(#380) |
 | [api/README.md](api/README.md) | 서버마다의 API 목록(OpenAPI). 파일, 뽑는 법, 누가 부르는가(`x-audience`), CI |
 | [product/platform.md](product/platform.md) | 플랫폼과 제품 방향. 제품 셋(TRPG, chat, story), 원칙, 화면과 모바일의 방향, 정하지 않은 것 |
 | [product/app-refresh.md](product/app-refresh.md) | 앱(WebView)에서의 로그인 유지(#429). 리프레시 쿠키가 앱의 출처에서 실리는지 본 시험, 고칠 길 셋(사이트를 연다, 하위 도메인 출처, 본문의 토큰)과 확인 못 한 것 |

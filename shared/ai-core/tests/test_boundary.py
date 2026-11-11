@@ -4,7 +4,8 @@
 AI 를 부르는 공용 코드(ai_core)의 경계를 지킨다(docs/architecture/shared-code.md 의 "AI 호출", #498).
 
   - 서버의 모듈(app.*)을 가져오지 않는다. 모델 목록의 표나 호출 기록의 표는 쓰는 서버의 몫이다
-  - 다른 공용 패키지(server_core, conversation_core)를 가져오지 않는다
+  - 다른 공용 패키지(server_core, conversation_core, catalog_core)를 가져오지 않는다.
+    catalog_core 는 ai_core 를 가져다 쓰는 쪽이라, 가져오면 서로 기댄다
   - 관측의 코드(opentelemetry)를 가져오지 않는다. 모델을 부르는 클라이언트는 서버가 넘기므로
     그 클라이언트가 span 을 건다. 메트릭은 서버가 기록장과 결제를 부르는 것을 밖에서 감싸 센다
 
@@ -21,7 +22,7 @@ import pytest
 PACKAGE_DIR = Path(__file__).resolve().parent.parent / 'src' / 'ai_core'
 PACKAGE = 'ai_core'
 # 가져오면 안 되는 이름의 앞부분
-FORBIDDEN = ('app', 'tests', 'server_core', 'conversation_core', 'opentelemetry')
+FORBIDDEN = ('app', 'tests', 'server_core', 'conversation_core', 'catalog_core', 'opentelemetry')
 
 
 def package_of(path: Path) -> str:

@@ -11,12 +11,12 @@ import httpx
 import pytest
 from ai_core.retry_budget import RetryBudget
 from ai_core.routing import ANTHROPIC_KIND, GEMINI_KIND, LOCAL_KIND, OPENAI_KIND, XAI_KIND, ZAI_KIND, ModelRouter
+from catalog_core.lookup import DbModelLookup
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.ai_log.call_log import DbCallLog
 from app.ai_log.metered import MeteredCallLog
-from app.catalog.lookup import DbModelLookup
 from app.main import create_app
 from app.rounds.fake_narrator import FakeNarrator
 from app.rounds.narrator_setup import build_narrator, build_router

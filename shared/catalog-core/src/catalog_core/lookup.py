@@ -1,29 +1,31 @@
-# chat-server/app/catalog/lookup.py
+# shared/catalog-core/src/catalog_core/lookup.py
 
 """
-말 한 번에 모델 목록에서 모델 하나를 찾는 것. 이름표로 찾고, 찾은 것은 DB 와 떨어진 값으로 돌려준다.
+모델 목록에서 모델 하나를 찾는 것. 이름표로 찾고, 찾은 것은 DB 와 떨어진 값으로 돌려준다.
 
 찾는 쪽(ai_core/routing.py)은 ModelLookup 의 모양만 안다. 그 모양과 돌려주는 값(CatalogModel, UnitCost)은
-모델 목록의 계약(ai_core/catalog_contract.py)에 있다. 여기는 그것을 DB 로 채우는 구현이다.
+모델 목록의 계약(ai_core/catalog_contract.py)에 있다. 여기는 그것을 서버의 표로 채우는 구현이다.
 지금 꽂는 것은 부를 때마다 DB 에서 한 줄 읽는 DbModelLookup 이다.
-  - 말 한 번에 한 번 읽는다. 이름표로 한 줄 읽는 것은 싸다(게임 서버의 것을 옮겼다).
-  - 관리 명령으로 끄거나 날짜판을 바꾸면 다음 말부터 바로 맞는다. 늦게 맞는 때가 없다.
-나중에 말이 잦아 부담이 되면 같은 모양의 캐시(몇 분마다 새로 읽기)를 만들어 바꿔 꽂는다. 부르는 쪽은 바뀌지 않는다.
+  - 부르는 일(chat 과 story 의 말 한 번, trpg 의 서술 한 번)마다 한 번 읽는다. 이름표로 한 줄 읽는 것은 싸다.
+  - 관리 명령으로 끄거나 날짜판을 바꾸면 다음에 부를 때부터 바로 맞는다. 늦게 맞는 때가 없다.
+나중에 부르는 일이 잦아 부담이 되면 같은 모양의 캐시(몇 분마다 새로 읽기)를 만들어 바꿔 꽂는다.
+부르는 쪽은 바뀌지 않는다.
 그래서 돌려주는 것을 ORM 객체가 아니라 바꾸지 못하는 값(CatalogModel)으로 한다.
 ORM 객체는 세션에 묶여 있어서, 세션이 닫힌 뒤나 다른 작업에서 읽으면 깨진다. 캐시에 담아 두고 여럿이 읽을 수 없다.
 """
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Any
 
 from ai_core.catalog_contract import CatalogModel, Provider, ReasoningStyle, TokenLimitField, UnitCost
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.catalog import repository
-from app.catalog.models import AiModel, AiModelCost
+from catalog_core import repository
+from catalog_core.tables import CatalogTables
 
 
-def cost_value(cost: AiModelCost) -> UnitCost:
+def cost_value(cost: Any) -> UnitCost:
     """단가의 ORM 객체를 세션과 떨어진 값으로 옮긴다."""
     return UnitCost(
         cost_id=cost.id,
@@ -34,7 +36,7 @@ def cost_value(cost: AiModelCost) -> UnitCost:
     )
 
 
-def to_value(model: AiModel, cost: AiModelCost | None = None) -> CatalogModel:
+def to_value(model: Any, cost: Any | None = None) -> CatalogModel:
     """ORM 객체(모델과 그날의 단가)를 세션과 떨어진 값으로 옮긴다."""
     return CatalogModel(
         slug=model.slug,
@@ -55,11 +57,12 @@ class DbModelLookup:
     """찾을 때마다 DB 에서 읽는다(모델 한 줄, 그날의 단가 한 줄). 세션은 찾을 때마다 새로 열고 닫는다."""
 
     session_factory: async_sessionmaker[AsyncSession]
+    tables: CatalogTables
 
     async def find(self, slug: str, day: date) -> CatalogModel | None:
         """그 이름표의 모델과 그날의 단가. 목록에 없으면 None."""
         async with self.session_factory() as session:
-            model = await repository.get_model(session, slug)
+            model = await repository.get_model(self.tables, session, slug)
             if model is None:
                 return None
-            return to_value(model, await repository.cost_on(session, slug, day))
+            return to_value(model, await repository.cost_on(self.tables, session, slug, day))

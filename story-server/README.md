@@ -575,7 +575,7 @@ uv run python -m scripts.models adult grok-5 --allow
     `promo`(행사가), `next`(예약된 바뀜. `credits` 가 null 이면 그때부터 팔지 않는다).
   - 홀드, 확정, 반환, 연장(공용 코드의 `server_core/billing/http_billing.py`)은 말을 보내는 PR 이 쓴다. 부를 때마다 `billing_calls_total` 을 센다.
   - `BILLING_URL` 이 비면 받지 않는다(`free`). 모델은 값 없이 모두 보인다.
-- 들여오기(`app/catalog/sync.py`)는 chat 의 것과 같은 코드라 이것으로 세 벌이다(게임, chat, story). 표의 ORM 이 서버마다 달라 공용 코드로 올리려면 표의 모양까지 옮겨야 해서, 셋을 함께 고칠 일이 잦아지면 그때 올린다.
+- 들여오기, 찾기, 쿼리는 세 서버(게임, chat, story)가 함께 쓰는 공용 코드 [catalog-core](../shared/catalog-core/README.md)에 있다(#1266). 표(ORM 과 마이그레이션)는 이 서버의 것이고 `app/catalog/models.py` 의 `TABLES` 로 넘긴다.
 
 ## 엔진
 

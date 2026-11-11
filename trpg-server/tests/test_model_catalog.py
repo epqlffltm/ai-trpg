@@ -27,11 +27,11 @@ from ai_core.catalog_contract import (
     is_retired,
 )
 from ai_core.catalog_file import CostEntry, ModelEntry
+from catalog_core.errors import CatalogConflictError, Conflict, ModelNotFoundError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog import repository, service
-from app.catalog.errors import CatalogConflictError, Conflict, ModelNotFoundError
 from app.catalog.models import AiModel, AiModelCost
 from app.catalog.rules import round_cost_usd
 from tests.catalog_rows import add_cost, put_models, retire

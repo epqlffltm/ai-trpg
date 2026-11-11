@@ -1,7 +1,7 @@
 # story-server/tests/test_catalog_sync.py
 
 """
-모델 목록의 파일을 표에 들여오기(app/catalog/sync.py)를 검증한다.
+모델 목록의 파일을 표에 들여오기(catalog_core/sync.py)를 검증한다.
 게임 서버의 같은 테스트(trpg-server/tests/test_catalog_sync.py)를 옮겼다. 회사의 대체 모델을 보는 것이 없고,
 이 서버의 스위치(켜짐, 성인)를 들여오기가 건드리지 않는 것을 본다.
 파일의 모양은 ai-core 의 tests/test_catalog_file.py 가 본다.
@@ -26,14 +26,15 @@ from decimal import Decimal
 import pytest
 from ai_core.catalog_contract import Grade, Provider, ReasoningStyle, TokenLimitField
 from ai_core.catalog_file import CostEntry, ModelEntry, load_catalog
+from catalog_core import sync
+from catalog_core.errors import CatalogConflictError, Conflict
+from catalog_core.sync import SnapshotChange, sync_catalog
 from fastapi import FastAPI
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.catalog import repository, service, sync
-from app.catalog.errors import CatalogConflictError, Conflict
-from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot
-from app.catalog.sync import SnapshotChange, sync_catalog
+from app.catalog import repository, service
+from app.catalog.models import TABLES, AiModel, AiModelCost, AiModelSnapshot
 from tests.catalog_rows import catalog_of, put_models
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
@@ -227,7 +228,7 @@ async def test_syncs_at_the_same_time_keep_the_chain(
 
     async def sync_to(api_model_id: str) -> None:
         async with app.state.session_factory() as own:
-            await sync_catalog(own, catalog_of(luna_with(api_model_id=api_model_id)))
+            await sync_catalog(TABLES, own, catalog_of(luna_with(api_model_id=api_model_id)))
 
     await asyncio.gather(sync_to(NEXT_LUNA), sync_to('gpt-6-luna-2027-03-01'))
 
@@ -360,7 +361,7 @@ async def test_models_missing_from_the_file_stay(session: AsyncSession):
 async def test_a_dry_run_reports_and_keeps_the_table(session: AsyncSession):
     await put_models(session, LUNA)
 
-    report = await sync_catalog(session, catalog_of(luna_with(api_model_id=NEXT_LUNA), OPUS), dry_run=True)
+    report = await sync_catalog(TABLES, session, catalog_of(luna_with(api_model_id=NEXT_LUNA), OPUS), dry_run=True)
 
     assert (report.added, len(report.switched)) == (['claude-opus-5-5'], 1)
     assert (await fresh_model(session, 'gpt-6-luna')).api_model_id == LUNA.api_model_id
@@ -374,11 +375,11 @@ async def test_a_dry_run_reports_and_keeps_the_table(session: AsyncSession):
 async def test_the_repository_file_fits_the_table(session: AsyncSession):
     catalog = load_catalog()
 
-    report = await sync_catalog(session, catalog)
+    report = await sync_catalog(TABLES, session, catalog)
 
     # 표의 CHECK(창구, 분류, 칸, 방식)와 단가의 자릿수를 모두 지난다. 다시 들여오면 바뀌는 것이 없다
     assert len(report.added) == len(catalog.models) > 0
-    assert (await sync_catalog(session, catalog)).is_empty()
+    assert (await sync_catalog(TABLES, session, catalog)).is_empty()
 
 
 @pytest.mark.parametrize(

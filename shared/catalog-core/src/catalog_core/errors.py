@@ -1,4 +1,4 @@
-# story-server/app/catalog/errors.py
+# shared/catalog-core/src/catalog_core/errors.py
 
 """
 모델 목록의 일이 거절되는 까닭들. 서비스가 던지고, 부른 쪽(관리 명령, 나중의 관리 API)이 알맞게 보인다.
@@ -7,6 +7,7 @@
   - CatalogConflictError: 요청은 맞지만 목록의 지금 상태와 부딪힌다. 까닭은 Conflict 다.
 
 모델 목록의 파일이 틀린 것은 여기 없다. 파일을 읽을 때 알린다(ai_core/catalog_file.py 의 CatalogFileError).
+ADULT_REFUSED 는 성인 등급의 스위치가 있는 서버(chat, story)만 쓴다.
 """
 
 import enum
@@ -31,7 +32,7 @@ class Conflict(enum.StrEnum):
     RETIRED = 'retired'
     # 파일의 창구가 표의 것과 다르다. 창구는 바꾸지 않는다(이름표를 새로 정한다)
     PROVIDER_CHANGED = 'provider_changed'
-    # 성인 등급의 세션에 쓰게 하려는데, 약관이 성적인 콘텐츠를 막는 창구다
+    # 성인 등급에 쓰게 하려는데, 약관이 성적인 콘텐츠를 막는 창구다
     ADULT_REFUSED = 'adult_refused'
 
 

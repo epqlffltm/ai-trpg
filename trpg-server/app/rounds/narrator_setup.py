@@ -28,11 +28,12 @@ from ai_core.routing import (
     Endpoint,
     ModelRouter,
 )
+from catalog_core.lookup import DbModelLookup
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.ai_log.call_log import DbCallLog
 from app.ai_log.metered import MeteredCallLog
-from app.catalog.lookup import DbModelLookup
+from app.catalog.models import TABLES
 from app.core.config import Settings
 from app.rounds.fake_narrator import FakeNarrator
 from app.rounds.narrator import Narrator
@@ -93,7 +94,7 @@ def build_router(
 ) -> ModelRouter:
     """모델의 이름으로 provider 를 고르는 것. 모델 목록은 부를 때마다 DB 에서 읽는다."""
     return ModelRouter(
-        lookup=DbModelLookup(session_factory),
+        lookup=DbModelLookup(session_factory, TABLES),
         client=client,
         local=local_endpoint(settings),
         openai=openai_endpoint(settings),

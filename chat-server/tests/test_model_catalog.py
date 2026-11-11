@@ -22,13 +22,13 @@ from decimal import Decimal
 import pytest
 from ai_core.catalog_contract import Grade, Provider, ReasoningStyle, TokenLimitField
 from ai_core.catalog_file import CostEntry, ModelEntry
+from catalog_core.errors import CatalogConflictError, Conflict, ModelNotFoundError
 from server_core.billing.price_list import FREE_PRICES
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog import offers, repository, service
 from app.catalog.choice import is_choosable, may_allow_adult, suits_rating
-from app.catalog.errors import CatalogConflictError, Conflict, ModelNotFoundError
 from app.catalog.models import AiModel
 from app.ratings import Rating
 from tests.catalog_rows import add_cost, put_models, retire

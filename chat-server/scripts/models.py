@@ -40,13 +40,13 @@ from pathlib import Path
 
 from ai_core.catalog_contract import is_offered, is_retired
 from ai_core.catalog_file import CatalogFileError, load_catalog
+from catalog_core.errors import CatalogConflictError, ModelNotFoundError
+from catalog_core.sync import SyncReport, sync_catalog
 from server_core.database import create_engine, create_session_factory
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.catalog import service
-from app.catalog.errors import CatalogConflictError, ModelNotFoundError
-from app.catalog.models import AiModel, AiModelCost, AiModelSnapshot
-from app.catalog.sync import SyncReport, sync_catalog
+from app.catalog.models import TABLES, AiModel, AiModelCost, AiModelSnapshot
 from app.core.config import get_settings
 from app.core.dependencies import utc_now
 
@@ -147,7 +147,7 @@ def report_lines(report: SyncReport, dry_run: bool) -> list[str]:
 
 async def sync_command(session: AsyncSession, args: argparse.Namespace, today: date) -> list[str]:
     """모델 목록의 파일을 들여온다."""
-    report = await sync_catalog(session, load_catalog(args.file), dry_run=args.dry_run)
+    report = await sync_catalog(TABLES, session, load_catalog(args.file), dry_run=args.dry_run)
     return report_lines(report, args.dry_run)
 
 

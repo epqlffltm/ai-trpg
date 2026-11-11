@@ -30,11 +30,11 @@ from ai_core.routing import (
     Endpoint,
     ModelRouter,
 )
+from catalog_core.lookup import DbModelLookup
 from pydantic import SecretStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.catalog.lookup import DbModelLookup
-from app.catalog.models import Grade
+from app.catalog.models import TABLES, Grade
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
 from app.rounds.retrying_narrator import NarrationFailed, RetryingNarrator
 from app.rounds.routed_narrator import RoutedNarrator
@@ -306,7 +306,7 @@ LUNA_ROW = ModelEntry(
 @pytest.mark.usefixtures('clean_tables')
 async def test_the_database_lookup_finds_a_plain_value(app, session: AsyncSession):
     await put_models(session, LUNA_ROW)
-    lookup = DbModelLookup(app.state.session_factory)
+    lookup = DbModelLookup(app.state.session_factory, TABLES)
 
     found = await lookup.find('gpt-6-luna', TODAY)
 
@@ -318,7 +318,7 @@ async def test_the_database_lookup_finds_a_plain_value(app, session: AsyncSessio
 @pytest.mark.usefixtures('clean_tables')
 async def test_the_database_lookup_sees_a_change_at_once(app, session: AsyncSession):
     await put_models(session, LUNA_ROW)
-    lookup = DbModelLookup(app.state.session_factory)
+    lookup = DbModelLookup(app.state.session_factory, TABLES)
     before = await lookup.find('gpt-6-luna', TODAY)
 
     await put_models(session, LUNA_ROW.model_copy(update={'supports_temperature': True}))

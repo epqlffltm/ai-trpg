@@ -17,7 +17,7 @@ import pytest
 
 PACKAGE = Path(__file__).resolve().parent.parent / 'src' / 'server_core'
 # 가져오면 안 되는 이름의 앞부분
-FORBIDDEN = ('app', 'tests', 'ai_core', 'conversation_core')
+FORBIDDEN = ('app', 'tests', 'ai_core', 'conversation_core', 'catalog_core')
 TESTING = 'server_core.testing'
 
 

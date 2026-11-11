@@ -20,6 +20,7 @@ from datetime import UTC, date, datetime
 import pytest
 from ai_core.catalog_contract import Provider, TokenLimitField
 from ai_core.catalog_file import ModelEntry
+from catalog_core.errors import CatalogConflictError, Conflict
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from server_core.billing.price_list import PriceListUnavailable
@@ -31,7 +32,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.routing import utc_now
 from app.catalog import service as catalog
-from app.catalog.errors import CatalogConflictError, Conflict
 from app.catalog.models import Grade
 from app.catalog.offers import OfferedModel, replacement_for
 from scripts import models as script

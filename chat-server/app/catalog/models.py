@@ -4,7 +4,7 @@
 chat 서버의 모델 목록(#590 의 "한 번의 말"). 대화에 쓸 수 있는 언어 모델들과 모델마다의 원가 단가다.
 
 원본은 모델 목록의 파일 하나다(ai_core/model_catalog.toml, #499). 게임 서버와 같은 파일을 이 서버의 표에 들여온다
-(scripts.models sync, app/catalog/sync.py). 표는 그 사본에 이 서버만의 스위치를 더한 것이다.
+(scripts.models sync, catalog_core/sync.py). 표는 그 사본에 이 서버만의 스위치를 더한 것이다.
   - enabled: 켜져 있나. 새로 들여온 모델은 꺼져 있다. 원가를 보고 평가 장면을 통과한 뒤에 켠다.
   - allows_adult: 성인 등급의 대화에 쓸 수 있나. 공급자의 약관을 확인한 뒤에 켠다
     (docs/architecture/chat-server.md 의 "성인 콘텐츠"). 한 서비스만 쓰는 속성이라 파일에 두지 않는다.
@@ -24,6 +24,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from ai_core.catalog_contract import Grade, Provider, ReasoningStyle, TokenLimitField
+from catalog_core.tables import CatalogTables
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -152,3 +153,8 @@ class AiModelSnapshot(Base):
     # 덧붙일 말(공급자의 공지, 바꾼 까닭 …)
     note: Mapped[str | None] = mapped_column(String(200))
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# 공용 코드(catalog_core 의 쿼리, 찾기, 들여오기)에 넘기는 이 서버의 표 셋.
+# 성인 등급의 스위치는 회사와 묶이지 않아 회사가 바뀌어도 고칠 것이 없다
+TABLES = CatalogTables(AiModel, AiModelCost, AiModelSnapshot)
