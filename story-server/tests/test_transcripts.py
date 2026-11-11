@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from urllib.parse import quote
 
 import pytest
+from conversation_core.transcripts.blocks import Heading, Note, Paragraph, Speech
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey
@@ -27,7 +28,6 @@ from app.conversations.models import Message, MessageStatus, Role
 from app.engine.world import read_world
 from app.limits.setup import build_limiting
 from app.transcripts import html, markdown, text
-from app.transcripts.blocks import Heading, Note, Paragraph, Speech
 from app.transcripts.story import Head, transcript_blocks
 from app.turns.briefing import read_briefing
 from tests.assets import FakeAsset

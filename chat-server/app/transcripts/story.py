@@ -14,9 +14,10 @@
 from collections.abc import Iterator
 from dataclasses import dataclass
 
+from conversation_core.transcripts.blocks import Block, Heading, Note, Paragraph, Speech
+
 from app.assets.schemas import CharacterDocument
 from app.conversations.models import Message, MessageStatus, Role
-from app.transcripts.blocks import Block, Heading, Note, Paragraph, Speech
 
 # 페르소나 없이 시작한 대화에서 사람의 말을 적는 이름
 SELF = '나'

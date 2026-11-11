@@ -14,8 +14,12 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
+from conversation_core.transcripts import html as shared_html
+from conversation_core.transcripts import markdown as shared_markdown
+from conversation_core.transcripts import text as shared_text
+from conversation_core.transcripts.blocks import Block
+
 from app.transcripts import html, markdown, text
-from app.transcripts.blocks import Block
 from app.transcripts.story import Head
 
 
@@ -37,7 +41,7 @@ class Writer:
 
 
 WRITERS: dict[TranscriptFormat, Writer] = {
-    TranscriptFormat.MARKDOWN: Writer(markdown.render, markdown.MEDIA_TYPE, markdown.EXTENSION),
-    TranscriptFormat.HTML: Writer(html.render, html.MEDIA_TYPE, html.EXTENSION),
-    TranscriptFormat.TEXT: Writer(text.render, text.MEDIA_TYPE, text.EXTENSION),
+    TranscriptFormat.MARKDOWN: Writer(markdown.render, shared_markdown.MEDIA_TYPE, shared_markdown.EXTENSION),
+    TranscriptFormat.HTML: Writer(html.render, shared_html.MEDIA_TYPE, shared_html.EXTENSION),
+    TranscriptFormat.TEXT: Writer(text.render, shared_text.MEDIA_TYPE, shared_text.EXTENSION),
 }

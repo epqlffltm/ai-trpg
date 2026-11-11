@@ -21,10 +21,11 @@
 
 from collections.abc import AsyncIterator, Callable
 
+from conversation_core.transcripts.blocks import Block, Heading, Note, Paragraph, Speech
+
 from app.chat.models import ChatMessage
 from app.events.models import EventType, TableEvent
 from app.events.responses import visible_payload
-from app.transcripts.blocks import Block, Heading, Note, Paragraph, Speech
 from app.transcripts.labels import Labels
 from app.whispers.models import Whisper
 

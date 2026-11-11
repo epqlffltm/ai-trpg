@@ -1361,7 +1361,7 @@ GM 전용 글(룰북의 진행 지침, 세계관의 GM 전용 설정, 로어북)
 
 둘 다 아니면 404 다. 판이 진행 중이어도 끝났어도 받는다(긴 판도 그때그때 백업한다).
 
-**형식(`format`).** 셋 다 같은 내용을 모양만 다르게 쓴다(`app/transcripts/formats.py`).
+**형식(`format`).** 셋 다 같은 내용을 모양만 다르게 쓴다(`app/transcripts/formats.py`). 조각을 형식마다 쓰는 것은 chat, story 와 함께 쓰는 공용 코드 `conversation_core/transcripts/` 다(#1266).
 
 | `format` | 응답 | 쓰임 |
 | --- | --- | --- |

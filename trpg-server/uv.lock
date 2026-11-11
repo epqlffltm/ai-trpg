@@ -363,6 +363,21 @@ wheels = [
 ]
 
 [[package]]
+name = "conversation-core"
+version = "0.1.0"
+source = { editable = "../shared/conversation-core" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "ruff", specifier = ">=0.17.1" },
+]
+
+[[package]]
 name = "coverage"
 version = "7.16.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1406,6 +1421,7 @@ dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "catalog-core" },
+    { name = "conversation-core" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
@@ -1434,6 +1450,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.20.0" },
     { name = "asyncpg", specifier = ">=0.32.0" },
     { name = "catalog-core", editable = "../shared/catalog-core" },
+    { name = "conversation-core", editable = "../shared/conversation-core" },
     { name = "fastapi", specifier = ">=0.143.5" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.45.1" },

@@ -14,6 +14,7 @@
 - 2026-10-22: 게임 서버의 `app/ai` 를 `shared/ai-core` 로 옮겼다(#499 의 1단계). 모델 목록을 파일 원본으로 바꾸는 것은 2단계로 남았다.
 - 2026-10-22: 모델 목록의 원본을 `shared/ai-core` 의 TOML 파일 하나로 옮겼다(#499 의 2단계). 게임 서버는 관리 명령(`scripts.models sync`)으로 자기 표에 들여온다. 한 서비스만 쓰는 속성은 그 서비스의 표에 둔다([정한 것](#정한-것)).
 - 2026-10-23: 알림 서버로 보내는 발송함을 trpg-server 에서 `shared/server-core` 로 뽑았다(#678). asset 이 두 번째로, chat 이 세 번째로, story 가 네 번째로 쓴다. trpg 는 옮길 때(#589) 바꾼다.
+- 2026-11-12: 기록 파일의 조각과 형식마다 쓰기를 `conversation_core/transcripts/` 로, 장면 그림 한 장의 값을 고르는 규칙을 `server_core.billing.prices.offer_of` 로 옮겼다(#1266). trpg 도 conversation-core 를 받는다(표준 라이브러리만 쓴다). chat, story 의 장면 그림 기능 전체는 대화, 턴, 세계에 엉켜 있어 옮기지 않았다.
 - 2026-11-11: chat, story, trpg 가 세 벌로 갖던 요청 수 제한의 세는 곳과 규칙, 응답을 `server_core/limits/` 로 옮겼다(#1266). `redis` 는 `server-core[redis]` 선택 의존이다.
 - 2026-11-11: chat, story, trpg 가 세 벌로 갖던 모델 목록의 쿼리, 찾기, 들여오기를 `shared/catalog-core` 로 옮겼다(#1266). 표는 서버에 남는다([모델 목록의 표](#모델-목록의-표-sharedcatalog-core)).
 - 2026-11-02: 언어가 다른 서버들(Python 공용 코드, Django 인증, Go 결제)이 같은 규칙을 지키는지 공통 규격의 시험 파일(`shared/contracts/`)로 본다(#786). 처음 맞춰 보며 서명의 시각과 16진수의 모양, 로그 가리기의 빈칸과 계정 없는 주소, 토큰의 세션 버전과 발급 시각에서 어긋난 것을 하나로 맞췄다.
@@ -64,7 +65,7 @@
 | --- | --- | --- | --- |
 | `shared/server-core` | 토큰 검증, 관측, 서버끼리의 서명, DB 연결, 뒤에서 도는 일의 틀, 알림 발송함 | FastAPI 서버 모두(trpg, notification, asset, chat, story, 나중에 관리) | 지금. 쓰는 서버가 이미 넷이다 |
 | `shared/ai-core` | 모델 호출 | trpg, chat, story | chat-server 의 "한 번의 말"을 만들 때(#499) |
-| `shared/conversation-core` | 대화 트리, 다시 생성과 분기, 요약, 기억, 로어북 검색을 붙이는 법. 지금은 SSE, 흘려보내기, 최근 대화의 창, 로어북 고르기, 답의 블록 | chat, story | 만들었다(#591). story 서버가 세션을 만들기 바로 앞 |
+| `shared/conversation-core` | 대화 트리, 다시 생성과 분기, 요약, 기억, 로어북 검색을 붙이는 법. 지금은 SSE, 흘려보내기, 최근 대화의 창, 로어북 고르기, 답의 블록, 기록 파일 쓰기(`transcripts`) | chat, story(기록 파일 쓰기는 trpg 도) | 만들었다(#591). story 서버가 세션을 만들기 바로 앞 |
 | `shared/catalog-core` | 모델 목록의 표를 읽는 쿼리, 모델 하나 찾기, 원본 파일 들여오기. 표는 서버의 것을 꾸러미로 받는다 | chat, story, trpg | 만들었다(#1266). 세 벌이 된 뒤 |
 
 ### 서버의 공통부 (`shared/server-core`)
@@ -140,6 +141,7 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
 - 그 폴더를 파일째 `shared/conversation-core` 로 옮겼다(2026-10-24, #591). 쓰는 법과 있는 것은 [shared/conversation-core/README.md](../../shared/conversation-core/README.md)에 있다.
   - 옮긴 때: story 서버가 세션과 한 번의 말을 만들기 바로 앞이다. 원칙 4(두 번째 사용자가 생길 때)를 따르되, story 의 첫 PR 이 chat 의 코드를 옮기는 일과 story 의 기능을 함께 싣지 않게 먼저 옮겼다. 옮기는 PR 은 import 만 바꾸고 동작을 바꾸지 않는다
   - 경계: 서버의 코드(`app.*`), 다른 공용 패키지(`server_core`, `ai_core`), 관측을 가져오지 않는다(`tests/test_boundary.py`). 지금은 표준 라이브러리만 쓴다
+  - 기록 파일의 조각과 형식마다 쓰기(`transcripts`)는 trpg 도 받는다(2026-11-12, #1266). 표준 라이브러리만 써서 trpg 가 대화의 다른 조각을 끌고 오지 않는다
   - 옮긴 것 가운데 상태 바꾸기의 제안(`changes`)과 표정(`expressions`)은 chat 이 먼저 쓴다. story 는 호감도의 제안을 chat 과 함께 나중에 쓰고(story 설계의 "호감도"), 표정은 인물마다의 그림에 쓴다. 블록의 모양만 여기 있고 무엇을 허락하는지는 서버가 정한다
   - 대화 트리와 요약은 아직 chat 의 표(`app/conversations`, `app/memory`)에 붙어 있어 옮기지 않았다. story 가 같은 흐름을 쓸 때 표에 기대지 않는 부분을 뽑는다
 - 표(ORM 모델)는 서버마다 둔다. chat 은 `chat` 스키마에, story 는 `story` 스키마에 같은 모양의 대화 표를 갖는다(원칙 1).
