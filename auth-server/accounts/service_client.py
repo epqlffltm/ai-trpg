@@ -17,7 +17,9 @@ from accounts.service_signature import SIGNATURE_HEADER, sign_request
 from observability.context import outgoing_headers
 from observability.http_spans import client_span, mark_unreachable, record_status
 
-# 받는 서버의 답을 기다리는 가장 긴 시간(초). 워커가 죽은 서버를 무한정 기다리지 않게 한다
+# 받는 서버의 답을 기다리는 가장 긴 시간(초). 워커가 죽은 서버를 무한정 기다리지 않게 한다.
+# 워커는 줄을 잠근 트랜잭션 안에서 부르기도 한다(welcome_credit 등).
+# 쉬는 트랜잭션의 한도(60초, config/db_limits.py)보다 작아야 한다
 TIMEOUT_SECONDS = 5
 
 

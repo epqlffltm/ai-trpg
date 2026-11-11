@@ -11,6 +11,7 @@
   - 목록에 없는 주소나 방식의 것(관리자 화면, HEAD, 405). 목록에 올리지 않은 것이다
   - 어느 주소에도 맞지 않은 404. 테스트가 따로 만든 URL 설정으로 도는 요청이다
   - 서버의 오류(500). 어느 주소든 낼 수 있고 본문은 Django 의 기본 오류 화면(HTML)이라 목록에 적지 않는다
+  - DB 의 시간 한도에 걸린 503(config/db_timeouts.py, #1282). 500 과 같이 어느 주소든 낼 수 있어 목록에 적지 않는다
   - 스트림으로 내는 응답(본문을 한 번에 읽을 수 없다)
   - 머리말에 줄바꿈을 넣은 요청의 응답. 검사하는 쪽(openapi-core)이 그 머리말을 읽지 못한다.
     그런 요청을 일부러 보내는 테스트가 있다
@@ -30,6 +31,8 @@ from openapi_core import OpenAPI
 from openapi_core.contrib.django import DjangoOpenAPIRequest, DjangoOpenAPIResponse
 from openapi_core.templating.paths.exceptions import OperationNotFound, PathNotFound
 
+from config.db_timeouts import DB_TIMEOUT_CODE
+
 # 서버의 오류. 목록에 적지 않는다(맨 위의 "보지 않는 응답")
 SERVER_ERROR = 500
 
@@ -44,6 +47,16 @@ def build_openapi() -> OpenAPI:
     return OpenAPI.from_dict(json.loads(OpenApiJsonRenderer().render(schema)))
 
 
+def is_db_timeout_response(response: HttpResponseBase) -> bool:
+    """DB 의 시간 한도에 걸린 응답인가. 503 이고 본문의 code 가 db_timeout 이다."""
+    if response.status_code != 503 or response.streaming:
+        return False
+    try:
+        return json.loads(response.content).get('code') == DB_TIMEOUT_CODE
+    except (ValueError, AttributeError):
+        return False
+
+
 def is_checkable(response: HttpResponseBase) -> bool:
     """
     볼 수 있는 응답인가. 테스트 클라이언트가 만든 요청이 붙어 있고, 어느 주소가 답했고,
@@ -54,6 +67,7 @@ def is_checkable(response: HttpResponseBase) -> bool:
         request is not None
         and request.resolver_match is not None
         and response.status_code != SERVER_ERROR
+        and not is_db_timeout_response(response)
         and not response.streaming
     )
 
