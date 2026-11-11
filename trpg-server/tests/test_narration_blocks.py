@@ -19,12 +19,13 @@ import pytest
 from ai_core.catalog_file import ModelEntry
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.billing.client import BillingRejected, HoldResult
+from server_core.billing.http_billing import hold_result, require_success
+from server_core.billing.prices import FREE_BOOK
 from server_core.testing.tokens import SigningKey
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.billing.client import BillingRejected, HoldResult
-from app.billing.http_billing import hold_result, require_success
-from app.billing.prices import FREE_BOOK, narration_code
+from app.billing.prices import narration_code
 from app.billing.routing import utc_now
 from app.billing.settling import Readiness, worst
 from app.rounds.service import NARRATION_FAILURE_LIMIT

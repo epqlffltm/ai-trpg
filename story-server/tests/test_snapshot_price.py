@@ -15,9 +15,9 @@ from datetime import UTC, datetime, timedelta
 from ai_core.fake import FakeImageProvider
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.billing.prices import Change, Price, PriceBook, Sale, Tier
 from server_core.testing.tokens import SigningKey
 
-from app.billing.prices import Change, Price, PriceBook, Sale, Tier
 from app.main import API_PREFIX
 from app.snapshots.pricing import snapshot_price
 from app.snapshots.providers import price_code_of

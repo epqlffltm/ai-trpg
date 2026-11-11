@@ -25,9 +25,9 @@ from dataclasses import dataclass
 from datetime import date, datetime
 
 from ai_core.catalog_contract import is_offered
+from server_core.billing.price_list import PriceList, PriceListUnavailable
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.billing.price_list import PriceList, PriceListUnavailable
 from app.catalog import offers
 from app.catalog import repository as catalog
 from app.catalog.models import AiModel

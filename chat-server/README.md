@@ -239,7 +239,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
   받지 못하면 마지막 목록을 쓰고 경고를 남긴다. 한 번도 받지 못했으면 503 `prices_unavailable`(`Retry-After: 30`)이다.
 - 모델 목록 API 의 값 칸은 게임 서버의 서술 모델 목록과 같다: `credits`(글자, 결제 서버 없이 돌면 null), `tier`(`premium` 이면 골드로만 낸다),
   `promo`(행사가), `next`(예약된 바뀜. `credits` 가 null 이면 그때부터 팔지 않는다). 예약의 시각이 지나면 다시 받기 전에도 스스로 갈아 끼운다.
-- 홀드, 확정, 반환, 연장(`app/billing/http_billing.py`)은 말을 보내는 PR 이 쓴다. 부를 때마다 `billing_calls_total` 을 센다.
+- 홀드, 확정, 반환, 연장(공용 코드의 `server_core/billing/http_billing.py`)은 말을 보내는 PR 이 쓴다. 부를 때마다 `billing_calls_total` 을 센다.
 - `BILLING_URL` 이 비면 받지 않는다(`free`). 모델은 값 없이 모두 보이고, 홀드는 언제나 잡힌 것으로 본다.
 
 창구와 생각의 방식, 출력 상한의 칸은 표의 CHECK 로도 막는다. ai-core 의 목록(`catalog_contract`)에 값이 늘면 이 서버에도 마이그레이션이 필요하다.
@@ -737,9 +737,9 @@ uv run python -m scripts.try_prefill claude-opus-5-5 gpt-6-luna gemma4:26b --out
 | `db_pool_connections`, `db_pool_connections_max`, `db_pool_wait_seconds` | `state`(`idle`, `in_use`) | `server_core/observability/pool_metrics.py`. 풀은 5 + 넘칠 때 10 이다 |
 | `background_jobs_started_total`, `background_jobs_finished_total`, `background_jobs_running`, `background_job_duration_seconds` | `operation`, `result` | `server_core/observability/metrics.py` 의 `measured_job`. 청구 정리(`charge.settle`)의 바퀴마다 |
 | `sse_connections`, `sse_connections_opened_total`, `sse_connection_duration_seconds` | 없음 | `server_core/observability/metrics.py` 의 `measured_stream`. 말을 보내는 SSE 하나마다(`app/turns/router.py`) |
-| `billing_calls_total` | `operation`(`hold`, `capture`, `release`, `extend`), `outcome` | `app/billing/metered.py`, `metrics.py`. 결제 서버를 부른 수. 게임 서버와 같은 이름과 label 이다 |
+| `billing_calls_total` | `operation`(`hold`, `capture`, `release`, `extend`), `outcome` | `server_core/billing/metered.py`, `metrics.py`(공용 코드, #1266). 결제 서버를 부른 수. 게임 서버와 같은 이름과 label 이다 |
 
-- 계측기는 공용 코드(`server_core/observability/metrics.py`)에 한 묶음으로 있다. 이 서버만의 계측기는 `InstrumentSet` 으로 더한다(`app/billing/metrics.py`).
+- 계측기는 공용 코드(`server_core/observability/metrics.py`)에 한 묶음으로 있다. 이 서버만의 계측기는 `InstrumentSet` 으로 더한다(결제의 것은 공용 코드의 `server_core/billing/metrics.py`).
   테스트는 `server_core/testing/metrics.py` 로 메모리에 모아 이름, 단위, label 을 본다(`metrics` fixture)
 - 보내는 길은 공용 코드의 테스트가 가짜 수집기로 본다. 이 서버가 꺼질 때 이 서버의 이름으로 보내는지는 `tests/test_tracing_setup.py` 가 본다
 - 대시보드와 경보, Prometheus 에 들어오는지 보는 CI(`stack`)는 인프라 세션의 PR 과 함께 붙는다

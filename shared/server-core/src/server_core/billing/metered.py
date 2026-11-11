@@ -1,8 +1,8 @@
-# story-server/app/billing/metered.py
+# shared/server-core/src/server_core/billing/metered.py
 
 """
 결제 서버를 부를 때마다 세는 것(billing_calls_total). 결제 서버를 부르는 것(Billing)을 감싼다.
-게임 서버의 것(trpg-server/app/billing/metered.py)과 같다. 계측기는 app/billing/metrics.py 다.
+계측기는 server_core/billing/metrics.py 다.
 
 부르는 것(http_billing.py)은 그대로 두고 밖에서 센다. 결제 서버의 결제 대행사 메트릭(payment.Measured)과 같은 모양이다.
 결제 서버를 쓸 때만 감싼다(setup.py). 받지 않는 것(FreeBilling)은 부르지 않으니 셀 것이 없다.
@@ -10,7 +10,7 @@
 outcome 은 결과의 이름이다.
   - 걸기: held, short, gold_required
   - 확정, 반환: done
-  - 연장: done, missing(홀드가 없다), ended(이미 끝났다)
+  - 연장: done, missing(홀드가 없다), ended(이미 끝났다). 게임 서버의 정리 작업은 missing·ended 를 새 이름표로 다시 건다
   - 넷 모두: unavailable(답을 받지 못했다. 다시 부른다), rejected(받아들이지 않았다. 사람이 볼 일이다)
 """
 
@@ -18,8 +18,15 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from app.billing.client import Billing, BillingRejected, BillingUnavailable, ExtendOutcome, ExtendResult, HoldOutcome
-from app.billing.metrics import record_billing_call
+from server_core.billing.client import (
+    Billing,
+    BillingRejected,
+    BillingUnavailable,
+    ExtendOutcome,
+    ExtendResult,
+    HoldOutcome,
+)
+from server_core.billing.metrics import record_billing_call
 
 HOLD = 'hold'
 CAPTURE = 'capture'

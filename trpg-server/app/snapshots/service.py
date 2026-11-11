@@ -40,11 +40,11 @@ from datetime import datetime, timedelta
 
 from ai_core.image_provider import ImageProvider, ImageRequest
 from ai_core.provider import ProviderError
+from server_core.billing.client import Billing
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.asset_server.client import AssetClient, AssetNotFoundError, AssetUnavailableError, ImageContent
-from app.billing.client import Billing
 from app.observability.metrics import record_snapshot_draw
 from app.realtime import signals
 from app.realtime.signals import Kind, Signal

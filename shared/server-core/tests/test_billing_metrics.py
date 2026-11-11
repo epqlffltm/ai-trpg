@@ -1,7 +1,8 @@
-# chat-server/tests/test_billing_metrics.py
+# shared/server-core/tests/test_billing_metrics.py
 
 """
-결제 서버를 부를 때마다 세는 것(app/billing/metered.py, metrics.py)을 검증한다. 게임 서버의 같은 테스트를 옮겼다.
+결제 서버를 부를 때마다 세는 것(server_core/billing/metered.py, metrics.py)을 검증한다.
+서버마다의 같은 테스트를 옮겼다(#1266).
 
 결제 서버는 정해 둔 결과를 돌려주는 가짜다. 메트릭은 메모리에 모은다(metrics fixture).
 """
@@ -10,9 +11,8 @@ import uuid
 from dataclasses import dataclass
 
 import pytest
-from server_core.testing.metrics import MetricsRecorder
 
-from app.billing.client import (
+from server_core.billing.client import (
     BillingRejected,
     BillingUnavailable,
     ExtendOutcome,
@@ -20,7 +20,8 @@ from app.billing.client import (
     HoldOutcome,
     HoldResult,
 )
-from app.billing.metered import MeteredBilling
+from server_core.billing.metered import MeteredBilling
+from server_core.testing.metrics import MetricsRecorder
 
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')
 

@@ -97,7 +97,6 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'models_script',
         'try_',
         'price',
-        'billing_client',
         'per_head_charges',
         'narration_billing',
         'narration_model_pick',

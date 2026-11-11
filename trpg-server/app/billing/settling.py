@@ -28,11 +28,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-from app.billing import repository
-from app.billing.charges import EXTEND_REJECTED_RETRY, next_extension, renewed_reference, retry_delay
-from app.billing.client import (
+from server_core.billing.client import (
     PRICE_UNAVAILABLE,
     Billing,
     BillingRejected,
@@ -40,6 +36,10 @@ from app.billing.client import (
     ExtendResult,
     HoldResult,
 )
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.billing import repository
+from app.billing.charges import EXTEND_REJECTED_RETRY, next_extension, renewed_reference, retry_delay
 from app.billing.models import SECURED_STATUSES, ChargeStatus, NarrationCharge
 from app.events import recorder
 from app.events.models import EventType

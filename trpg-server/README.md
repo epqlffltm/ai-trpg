@@ -3014,7 +3014,7 @@ uv run python -m scripts.eval_state --rescore $HOME\state-eval.md
 - **등급(`tier`)은 `basic`, `standard`, `premium` 이다.** `basic` 은 가장 싼 모델의 묶음이고 내는 방법은 `standard` 와 같다. 모르는 등급을 받으면 목록 전체를 읽지 못하므로(503) 결제 서버는 게임 서버가 등급을 안 뒤에 그 줄을 넣는다.
 - **행사가면 `promo` 가 `true` 다.** 그때 `next` 는 행사가 끝나는 때와 그 뒤의 값이다. 화면이 "11월 21일까지 330, 그 뒤 440"처럼 보여 준다. 결제 서버가 이 칸을 싣지 않으면 정가(`false`)다.
 - **값이 바뀌는 예약이 있으면 `next` 에 싣는다**(`{"credits": "310", "tier": "premium", "promo": false, "effective_at": "..."}`). 화면이 "12월 1일부터 310"처럼 미리 알린다. `next.credits` 가 `null` 이면 그 시각부터 팔지 않는다. 시각이 지나면 게임 서버가 스스로 갈아 끼운다.
-- **가격 목록은 받아 두고 1분쯤마다 버전으로 다시 묻는다**(`app/billing/price_list.py`). 결제 서버의 `GET /api/v1/billing/service/prices` 를 홀드와 같은 서명으로 부르고, 응답의 `ETag` 를 `If-None-Match` 에 실어 다시 묻는다. 바뀐 것이 없으면 304 다. 여럿이 함께 물어도 한 번만 묻는다.
+- **가격 목록은 받아 두고 1분쯤마다 버전으로 다시 묻는다**(공용 코드의 `server_core/billing/price_list.py`, #1266). 결제 서버의 `GET /api/v1/billing/service/prices` 를 홀드와 같은 서명으로 부르고, 응답의 `ETag` 를 `If-None-Match` 에 실어 다시 묻는다. 바뀐 것이 없으면 304 다. 여럿이 함께 물어도 한 번만 묻는다.
 - **받지 못하면 마지막 목록을 쓴다**(`결제 서버의 가격 목록을 새로 받지 못했다`). 고를 수 있는 모델이 갑자기 사라지지 않는다. 한 번도 받지 못했으면 503 이다. 값을 모르는 모델은 내주지 않는다.
 - **결제 서버 없이 도는 서버**(`BILLING_URL` 비움)는 켜진 모델을 모두 값 없이 내준다(`"free": true`). 지금도 결제 서버가 없으면 홀드 없이 서술한다. 로컬 모델(Ollama)도 `--provider local` 로 이 목록에 넣으면 고를 수 있다.
 - 로그인한 사람에게만 보인다. 가격을 아무나 긁어 가지 못하게 한다.
@@ -4196,7 +4196,7 @@ uv run uvicorn app.main:app --port 8001 2>&1 | jq -rR 'fromjson? | [.timestamp, 
 | `ai_fallbacks_total`, `round_narration_retries_total` | `operation`, `model`(실패한 모델) | `app/rounds/retrying_narrator.py` |
 | `rounds_closed_total` | `reason`(`all_declared`, `host`, `timeout`) | `app/rounds/service.py`. 저장한 뒤에 센다 |
 | `round_narrations_total`, `round_narration_duration_seconds` | `result`(`success`, `failure`) | `app/rounds/closing.py`. 시간은 닫기 시작한 때부터, 성공한 것만 |
-| `billing_calls_total` | `operation`(`hold`, `capture`, `release`, `extend`), `outcome` | `app/billing/metered.py`. 결제 서버를 쓸 때만 감싼다 |
+| `billing_calls_total` | `operation`(`hold`, `capture`, `release`, `extend`), `outcome` | `server_core/billing/metered.py`(공용 코드, #1266). 결제 서버를 쓸 때만 감싼다 |
 | `narration_charges` | `status`(`pending`, `held`, `short`, `capture_due`, `release_due`) | `app/billing/settler.py` 의 바퀴마다. 서버들이 같은 수를 낸다(`max` 로 본다) |
 
 - 대시보드는 Grafana 의 `trpg-server`(`docker/grafana/dashboards/trpg-server.json`), 경보는 `docker/prometheus/rules/ai-trpg.yml` 의 `trpg-server` 묶음이다

@@ -28,11 +28,11 @@ from datetime import datetime, timedelta
 
 from ai_core.image_provider import ImageProvider, ImageRequest
 from ai_core.provider import ProviderError
+from server_core.billing.client import Billing
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.assets.client import AssetClient, AssetUnavailableError
-from app.billing.client import Billing
 from app.conversations import repository as conversations
 from app.conversations.models import Conversation, ImportedWorld, Message, Role
 from app.conversations.service import MessageNotFoundError, get_conversation

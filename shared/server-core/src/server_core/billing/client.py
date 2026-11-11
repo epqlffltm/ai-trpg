@@ -1,7 +1,7 @@
-# chat-server/app/billing/client.py
+# shared/server-core/src/server_core/billing/client.py
 
 """
-결제 서버를 부르는 것의 모양과 그 결과. 게임 서버의 것(trpg-server/app/billing/client.py)과 같다.
+결제 서버를 부르는 것의 모양과 그 결과. 게임, chat, story 서버가 함께 쓴다(#1266).
 
 구현은 둘이다. 실제로 부르는 것(http_billing.py)과 받지 않는 것(free_billing.py). 설정(BILLING_URL)이 고른다(setup.py).
 모양만 여기 두고 구현을 갈아 끼운다. 테스트는 가짜 결제 서버로 가는 실제 구현을 쓴다.
@@ -11,7 +11,7 @@
 그래서 응답을 받지 못했으면 같은 것을 그대로 다시 부르면 된다.
 
 실패는 둘로 나눈다. 다시 부르면 될 수 있는 것(BillingUnavailable)과 다시 불러도 같은 것(BillingRejected).
-무엇을 다시 부르고 언제 포기하는지는 말을 보내는 길이 정한다(한 번의 말의 세 번째 PR).
+무엇을 다시 부르고 언제 포기하는지는 부르는 서버가 정한다(게임 서버는 정리 작업, chat·story 는 말을 보내는 길).
 """
 
 import enum
@@ -37,7 +37,8 @@ class ExtendResult(enum.StrEnum):
     """
     홀드를 연장해 본 결과.
 
-    chat 서버가 건 홀드는 걸거나 연장한 때부터 결제 서버의 CHAT_HOLD_TTL(기본 10분) 뒤에 만료된다.
+    홀드는 걸거나 연장한 때부터 결제 서버가 정한 시간 뒤에 만료된다.
+    게임 서버의 것은 HOLD_TTL(기본 24시간), chat·story 의 것은 CHAT_HOLD_TTL(기본 10분)이다.
     """
 
     # 만료 시각을 지금부터 HOLD_TTL 뒤로 밀었다
@@ -126,5 +127,5 @@ class Billing(Protocol):
         ...
 
     async def extend(self, reference: str) -> ExtendOutcome:
-        """홀드의 만료 시각을 지금부터 CHAT_HOLD_TTL 뒤로 민다. 크레딧은 건드리지 않는다."""
+        """홀드의 만료 시각을 지금부터 결제 서버가 정한 시간 뒤로 민다. 크레딧은 건드리지 않는다."""
         ...

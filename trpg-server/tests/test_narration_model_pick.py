@@ -20,13 +20,14 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.billing.price_list import PriceListUnavailable
+from server_core.billing.prices import FREE_BOOK
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing.charges import LEGACY_PRICE_CODE
-from app.billing.price_list import PriceListUnavailable
-from app.billing.prices import FREE_BOOK, narration_code
+from app.billing.prices import narration_code
 from app.billing.routing import utc_now
 from app.catalog import service as catalog
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview

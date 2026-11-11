@@ -27,6 +27,7 @@ import uuid
 from datetime import UTC, datetime
 
 from server_core.auth.tokens import AccessClaims
+from server_core.billing.price_list import FREE_PRICES, PriceList
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,7 +38,6 @@ from app.assets.scenarios import repository as versions
 from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.service import AssetNotFoundError
 from app.billing import charges
-from app.billing.price_list import FREE_PRICES, PriceList
 from app.calendar import state as calendar
 from app.campaigns import ending as campaign_ending
 from app.campaigns import seating as campaign_seating

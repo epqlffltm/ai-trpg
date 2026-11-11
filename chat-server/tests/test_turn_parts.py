@@ -13,8 +13,8 @@ import uuid
 import httpx
 import pytest
 from ai_core.routing import DEEPINFRA_KIND, OPENAI_KIND, XAI_KIND
+from server_core.billing.client import BillingRejected, HoldOutcome, HoldResult
 
-from app.billing.client import BillingRejected, HoldOutcome, HoldResult
 from app.turns import charging
 from app.turns.charging import HoldDeclined
 from app.turns.providers import build_router

@@ -1,10 +1,11 @@
-# trpg-server/tests/test_billing_client.py
+# shared/server-core/tests/test_billing_client.py
 
 """
-결제 서버를 부르는 것(app/billing/)을 결제 서버 없이 검증한다.
+결제 서버를 부르는 것(server_core/billing/)을 결제 서버 없이 검증한다. 게임, chat, story 의 같은 테스트를 옮겼다(#1266).
 
-  - 서명: 결제 서버(Go)의 코드로 만든 값과 같다. 머리말과 본문은 보내는 바이트 그대로다.
-  - 답의 뜻: 결제 서버가 정한 상태 코드마다 결과나 예외가 무엇인지(app/billing/http_billing.py 의 표).
+  - 서명: 보내는 바이트 그대로에 서명한다. 서명이 결제 서버(Go)와 같은지는 공용 코드의 테스트가 본다
+    (shared/server-core 의 service_auth). 따로 계산하는 가짜 결제 서버가 받아들인다.
+  - 답의 뜻: 결제 서버가 정한 상태 코드마다 결과나 예외가 무엇인지(server_core/billing/http_billing.py 의 표).
   - 설정: 주소를 비우면 받지 않는다. 주소를 적었으면 비밀이 있어야 뜬다.
 """
 
@@ -15,10 +16,8 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
-from server_core.observability.context import job_scope
-from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 
-from app.billing.client import (
+from server_core.billing.client import (
     BillingRejected,
     BillingUnavailable,
     ExtendOutcome,
@@ -26,28 +25,39 @@ from app.billing.client import (
     HoldOutcome,
     HoldResult,
 )
-from app.billing.free_billing import FreeBilling
-from app.billing.http_billing import CAPTURE_PATH, EXTEND_PATH, HOLDS_PATH, RELEASE_PATH, HttpBilling
-from app.billing.metered import MeteredBilling
-from app.billing.setup import build_billing
+from server_core.billing.free_billing import FreeBilling
+from server_core.billing.http_billing import CAPTURE_PATH, EXTEND_PATH, HOLDS_PATH, RELEASE_PATH, HttpBilling
+from server_core.billing.metered import MeteredBilling
+from server_core.billing.price_list import FreePriceList, HttpPriceList
+from server_core.billing.settings import BillingSettings
+from server_core.billing.setup import build_billing, build_price_list
+from server_core.observability.context import job_scope
+from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 from tests.billing import BILLING_URL, SECRET, FakeBillingServer
-from tests.conftest import make_test_settings
+from tests.conftest import TestSettings, make_test_settings
 
 USER = uuid.UUID('11111111-2222-4333-8444-555555555555')
-REFERENCE = 'narration:abc:1'
 
 
-def test_the_signature_is_the_same_as_the_billing_servers():
-    # 결제 서버의 serviceauth.Sign 으로 만든 값이다(같은 비밀, 시각, 메서드, 주소, 본문).
-    # 결제 서버가 서명하는 법을 바꾸면 이 값이 달라진다. 그때 두 서버를 함께 고친다
-    body = (
-        b'{"user_id":"11111111-2222-4333-8444-555555555555","reference":"narration:abc:1",'
-        b'"price_code":"narration.standard"}'
-    )
+class BillingTestSettings(TestSettings, BillingSettings):
+    """결제 서버의 칸(BillingSettings)을 물려받은 서버의 설정. 서버들의 Settings 와 같은 모양이다."""
 
-    header = sign('test-secret-0123456789abcdef0123456789', 1760000000, 'POST', HOLDS_PATH, body)
+    __test__ = False
 
-    assert header == 't=1760000000,v1=d768b2de1076636feb1138f66a7fe805f459b168c86973bd62d33bddbb3195d8'
+
+def make_billing_settings(**overrides) -> BillingTestSettings:
+    """테스트용 설정에 결제 서버의 칸을 더한 것."""
+    base = make_test_settings()
+    values = {
+        **base.model_dump(
+            include={'debug', 'log_level', 'database_url', 'auth_jwks_url', 'otel_exporter_otlp_endpoint'}
+        )
+    }
+    values.update(overrides)
+    return BillingTestSettings(_env_file=None, **values)
+
+
+REFERENCE = 'chat:message:abc'
 
 
 class Recorder:
@@ -79,14 +89,14 @@ def hold_body(status: str) -> dict:
 async def test_a_hold_sends_the_signed_body_it_signed():
     billing, recorder = billing_answering(httpx.Response(201, json=hold_body('held')))
 
-    await billing.hold(REFERENCE, USER, 'narration.standard')
+    await billing.hold(REFERENCE, USER, 'chat.standard')
 
     request = recorder.requests[0]
     assert str(request.url) == f'{BILLING_URL}{HOLDS_PATH}'
     assert json.loads(request.content) == {
         'user_id': str(USER),
         'reference': REFERENCE,
-        'price_code': 'narration.standard',
+        'price_code': 'chat.standard',
     }
     # 보낸 바이트 그대로에 서명했다. 금액은 보내지 않는다
     assert request.headers[SIGNATURE_HEADER] == sign(SECRET, 1, 'POST', HOLDS_PATH, request.content)
@@ -96,7 +106,7 @@ async def test_a_hold_sends_the_signed_body_it_signed():
 async def test_a_fake_billing_server_accepts_the_signature():
     server = FakeBillingServer(balances={USER: 100})
     async with server.make_client() as client:
-        result = await server.billing(client).hold(REFERENCE, USER, 'narration.standard')
+        result = await server.billing(client).hold(REFERENCE, USER, 'chat.standard')
 
     # 서명을 따로 계산하는 가짜 결제 서버가 받아들였다
     assert result.result == HoldResult.HELD
@@ -107,20 +117,10 @@ async def test_a_wrong_secret_is_refused_by_the_billing_server():
     server = FakeBillingServer(secret='another-secret-0123456789abcdef0123', balances={USER: 100})
     async with server.make_client() as client:
         with pytest.raises(BillingUnavailable) as raised:
-            await server.billing(client).hold(REFERENCE, USER, 'narration.standard')
+            await server.billing(client).hold(REFERENCE, USER, 'chat.standard')
 
     assert raised.value.reason == 'unauthorized'
     assert server.balance(USER) == 100
-
-
-async def test_the_trace_is_passed_on_inside_a_job():
-    billing, recorder = billing_answering(httpx.Response(201, json=hold_body('held')))
-
-    with job_scope('job-1'):
-        await billing.hold(REFERENCE, USER, 'narration.standard')
-
-    # 우리 서버끼리라 추적을 잇는다. 결제 서버의 로그와 trace_id 로 이어진다
-    assert 'traceparent' in recorder.requests[0].headers
 
 
 @pytest.mark.parametrize(
@@ -130,12 +130,14 @@ async def test_the_trace_is_passed_on_inside_a_job():
         # 같은 이름표로 이미 건 것을 돌려받았다. 새로 빼지 않았다
         (httpx.Response(200, json=hold_body('held')), HoldResult.HELD),
         (httpx.Response(402, json={'detail': '모자란다'}), HoldResult.SHORT),
+        # 프리미엄 가격표인데 골드가 모자란다. 실버가 있어도 같다
+        (httpx.Response(402, json={'code': 'credit.gold_required'}), HoldResult.GOLD_REQUIRED),
     ],
 )
 async def test_what_a_hold_answer_means(answer: httpx.Response, result: HoldResult):
     billing, _ = billing_answering(answer)
 
-    assert (await billing.hold(REFERENCE, USER, 'narration.standard')).result == result
+    assert (await billing.hold(REFERENCE, USER, 'chat.standard')).result == result
 
 
 @pytest.mark.parametrize(
@@ -155,7 +157,7 @@ async def test_answers_worth_trying_again(answer: httpx.Response | Exception, re
     billing, _ = billing_answering(answer)
 
     with pytest.raises(BillingUnavailable) as raised:
-        await billing.hold(REFERENCE, USER, 'narration.standard')
+        await billing.hold(REFERENCE, USER, 'chat.standard')
 
     assert raised.value.reason == reason
     # 비밀은 예외에 실리지 않는다
@@ -176,7 +178,7 @@ async def test_a_hold_the_billing_server_will_never_take(answer: httpx.Response)
     billing, _ = billing_answering(answer)
 
     with pytest.raises(BillingRejected) as raised:
-        await billing.hold(REFERENCE, USER, 'narration.standard')
+        await billing.hold(REFERENCE, USER, 'chat.standard')
 
     assert raised.value.status_code == answer.status_code
 
@@ -198,7 +200,7 @@ async def test_the_expiry_of_a_hold_is_read_from_the_answer(expires_at: str | No
     body = {**hold_body('held'), **({'expires_at': expires_at} if expires_at else {})}
     billing, _ = billing_answering(httpx.Response(201, json=body))
 
-    outcome = await billing.hold(REFERENCE, USER, 'narration.standard')
+    outcome = await billing.hold(REFERENCE, USER, 'chat.standard')
 
     assert outcome == HoldOutcome(HoldResult.HELD, expected)
 
@@ -285,25 +287,25 @@ async def test_an_extend_that_did_not_happen(answer: httpx.Response, error: type
 async def test_free_billing_always_holds():
     free = FreeBilling()
 
-    assert await free.hold(REFERENCE, USER, 'narration.standard') == HoldOutcome(HoldResult.HELD)
+    assert await free.hold(REFERENCE, USER, 'chat.standard') == HoldOutcome(HoldResult.HELD)
     await free.capture(REFERENCE)
     await free.release(REFERENCE)
-    # 만료 시각을 주지 않는다. 게임 서버가 정해 둔 간격으로 연장한다
+    # 만료 시각을 주지 않는다
     assert await free.extend(REFERENCE) == ExtendOutcome(ExtendResult.EXTENDED)
 
 
 def test_without_an_address_nothing_is_charged():
-    settings = make_test_settings()
+    settings = make_billing_settings()
 
     assert isinstance(build_billing(settings, httpx.AsyncClient()), FreeBilling)
 
 
 def test_with_an_address_the_billing_server_is_called():
-    settings = make_test_settings(billing_url=BILLING_URL, billing_secret=SECRET)
+    settings = make_billing_settings(billing_url=BILLING_URL, billing_secret=SECRET)
 
     billing = build_billing(settings, httpx.AsyncClient())
 
-    # 부를 때마다 센다(app/billing/metered.py)
+    # 부를 때마다 센다(server_core/billing/metered.py)
     assert isinstance(billing, MeteredBilling)
     assert isinstance(billing.inner, HttpBilling)
     assert billing.inner.base_url == BILLING_URL
@@ -312,15 +314,80 @@ def test_with_an_address_the_billing_server_is_called():
 @pytest.mark.parametrize('secret', ['', 'short-secret'])
 def test_an_address_without_a_long_secret_does_not_start(secret: str):
     with pytest.raises(ValidationError, match='BILLING_SECRET'):
-        make_test_settings(billing_url=BILLING_URL, billing_secret=secret)
+        make_billing_settings(billing_url=BILLING_URL, billing_secret=secret)
+
+
+def test_a_blank_address_needs_no_secret():
+    settings = make_billing_settings(billing_url='  ', billing_secret='')
+
+    assert isinstance(build_billing(settings, httpx.AsyncClient()), FreeBilling)
 
 
 def test_a_call_cannot_take_longer_than_the_billing_budget():
     with pytest.raises(ValidationError):
-        make_test_settings(billing_timeout_seconds=11)
+        make_billing_settings(billing_timeout_seconds=10.5)
 
 
 def test_the_secret_is_not_shown():
-    settings = make_test_settings(billing_url=BILLING_URL, billing_secret=SECRET)
+    settings = make_billing_settings(billing_url=BILLING_URL, billing_secret=SECRET)
 
     assert SECRET not in repr(settings)
+
+
+@pytest.mark.parametrize(
+    ('error', 'unavailable'),
+    [
+        (BillingRejected(400, 'price.not_for_sale'), True),
+        (BillingRejected(400, 'price.unknown'), True),
+        (BillingRejected(409), False),
+        (BillingRejected(400, 'reference.invalid'), False),
+    ],
+)
+def test_a_price_not_on_sale_is_not_a_bug(error: BillingRejected, unavailable: bool):
+    # 판매를 멈췄거나 아직 열지 않은 모델이다. 말을 보내는 길이 사람에게 모델을 다시 고르게 한다
+    assert error.price_unavailable is unavailable
+
+
+def test_the_price_list_follows_the_billing_address():
+    client = httpx.AsyncClient()
+    settings = make_billing_settings(billing_url=BILLING_URL + ' ', billing_secret=SECRET)
+
+    prices = build_price_list(settings, client)
+
+    # 홀드와 같은 주소, 비밀, 시간 상한, 앱의 연결 풀이다
+    assert isinstance(prices, HttpPriceList)
+    assert (prices.base_url, prices.secret.get_secret_value(), prices.timeout) == (BILLING_URL, SECRET, 5.0)
+    assert prices.client is client
+    assert isinstance(build_price_list(make_billing_settings(), client), FreePriceList)
+
+
+async def test_the_trace_is_passed_on_inside_a_job():
+    billing, recorder = billing_answering(httpx.Response(201, json=hold_body('held')))
+
+    with job_scope('job-1'):
+        await billing.hold(REFERENCE, USER, 'chat.standard')
+
+    # 우리 서버끼리라 추적을 잇는다. 결제 서버의 로그와 trace_id 로 이어진다.
+    # 앱의 클라이언트(traced_client)는 부르는 쪽이 붙인 traceparent 만 바꾸므로 여기서 붙여야 한다
+    assert 'traceparent' in recorder.requests[0].headers
+
+
+async def test_without_a_trace_nothing_is_made_up():
+    billing, recorder = billing_answering(httpx.Response(201, json=hold_body('held')))
+
+    await billing.hold(REFERENCE, USER, 'chat.standard')
+
+    assert 'traceparent' not in recorder.requests[0].headers
+
+
+def test_the_signature_is_the_same_as_the_billing_servers():
+    # 결제 서버의 serviceauth.Sign 으로 만든 값이다(같은 비밀, 시각, 메서드, 주소, 본문). 게임 서버의 테스트에서 옮겼다.
+    # 결제 서버가 서명하는 법을 바꾸면 이 값이 달라진다. 그때 두 쪽을 함께 고친다
+    body = (
+        b'{"user_id":"11111111-2222-4333-8444-555555555555","reference":"narration:abc:1",'
+        b'"price_code":"narration.standard"}'
+    )
+
+    header = sign('test-secret-0123456789abcdef0123456789', 1760000000, 'POST', HOLDS_PATH, body)
+
+    assert header == 't=1760000000,v1=d768b2de1076636feb1138f66a7fe805f459b168c86973bd62d33bddbb3195d8'

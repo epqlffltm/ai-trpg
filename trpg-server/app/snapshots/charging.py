@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import timedelta
 
-from app.billing.client import Billing, BillingRejected, BillingUnavailable, HoldResult
+from server_core.billing.client import Billing, BillingRejected, BillingUnavailable, HoldResult
 
 logger = logging.getLogger(__name__)
 

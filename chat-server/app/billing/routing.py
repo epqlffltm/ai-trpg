@@ -9,8 +9,7 @@
 from typing import Annotated
 
 from fastapi import Depends, Request
-
-from app.billing.price_list import PriceList
+from server_core.billing.price_list import PriceList
 
 
 def get_price_list(request: Request) -> PriceList:
