@@ -14,6 +14,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 import re
 from datetime import timedelta
 from pathlib import Path
@@ -22,6 +23,7 @@ import environ
 from django.core.exceptions import ImproperlyConfigured
 
 from accounts.attendance_rules import InvalidScheduleError, parse_schedule
+from config import db_limits
 from config.billing import validate_billing_url, validate_service_secret
 from config.environments import require_known as require_known_environment
 from config.identity import default_identity_provider, validate_identity_provider
@@ -162,6 +164,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # DB 가 시간 한도로 끊은 요청을 503 으로 답한다(config/db_timeouts.py). 맨 뒤에 둔다.
+    # 예외는 뒤의 미들웨어부터 받으므로, 요청 로그의 미들웨어가 오류로 적기 전에 응답으로 바꾼다
+    'config.db_timeouts.DbTimeoutMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -367,6 +372,13 @@ DATABASES = {
 # DB 가 응답 없이 멈추면 요청과 상태 확인(/health/ready)이 빨리 실패하는 편이 낫다
 DATABASE_CONNECT_TIMEOUT_SECONDS = 5
 DATABASES['default'].setdefault('OPTIONS', {})['connect_timeout'] = DATABASE_CONNECT_TIMEOUT_SECONDS
+# 연결마다 거는 잠금, 쿼리, 쉬는 트랜잭션의 시간 한도(#1282, config/db_limits.py). FastAPI 서버들과 같은 이름과 값이다.
+# 마이그레이션과 주기 명령은 manage.py 가 이 값을 0 으로 두고 읽게 한다
+try:
+    DATABASE_LIMITS = db_limits.limits_from(os.environ)
+except db_limits.InvalidLimitError as exc:
+    raise ImproperlyConfigured(str(exc)) from exc
+DATABASES['default']['OPTIONS'] = db_limits.with_limits(DATABASES['default']['OPTIONS'], DATABASE_LIMITS)
 
 # 테스트에서만 가벼운 비밀번호 해셔를 쓰는 실행기. manage.py test 에만 적용된다
 TEST_RUNNER = 'config.test_runner.FastHasherTestRunner'
