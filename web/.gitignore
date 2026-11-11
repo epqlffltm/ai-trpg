@@ -4,3 +4,6 @@ node_modules/
 dist/
 coverage/
 *.tsbuildinfo
+# 종단간 테스트(e2e/)가 남기는 trace, 스크린샷, 보고서
+e2e/test-results/
+e2e/playwright-report/

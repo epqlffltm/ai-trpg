@@ -9,3 +9,5 @@
 .env.*
 Dockerfile
 .dockerignore
+# 종단간 테스트(e2e/)는 이미지에 쓰지 않는다. 남긴 보고서와 trace 도 보내지 않는다
+e2e/

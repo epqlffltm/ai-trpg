@@ -1,0 +1,97 @@
+# docker-compose.e2e.yml
+# 종단간 테스트(web/e2e, P2-4)에서만 docker-compose.yml 위에 겹치는 설정. CI 의 e2e 작업(.github/scripts/e2e.sh)이 쓴다.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml --profile app up -d
+#
+# 더하는 것 둘과 바꾸는 것 둘이다. 연기 검사(stack)의 스택은 이 파일을 쓰지 않는다. 운영과 staging 에도 쓰지 않는다.
+#   - mailpit: 메일을 받아 두는 곳. 인증 서버가 가입과 로그인의 코드를 실제 메일처럼 보낸다(발송함 → auth-mail → SMTP).
+#     테스트가 Mailpit 의 API(127.0.0.1:8025)로 코드를 읽는다. 인증 서버는 STARTTLS 만 쓰므로 자체 서명 인증서로 듣고,
+#     인증의 프로세스가 그 인증서를 믿게 한다(SSL_CERT_FILE). 인증서는 e2e.sh 의 prepare 가 e2e-certs/ 에 만든다
+#   - stub-llm: 가짜 언어 모델(tools/e2e/stub_llm.py, OpenAI 호환). 게임 서버가 서버 곁의 모델(local)로 부른다
+#   - 인증 서버, 메일 워커, cron 이 Mailpit 으로 메일을 보낸다
+#   - 게임 서버가 가짜 서술자(FakeNarrator)가 아니라 언어 모델로 서술한다. 모델 목록은 e2e.sh 의 seed 가 넣는다
+#
+# 비밀은 이 실행에서만 쓰는 값이다. Mailpit 은 아무 계정이나 받는다.
+
+x-e2e-mail: &e2e-mail
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  SMTP_USER: e2e
+  SMTP_PASSWORD: e2e-mail-password
+  # 시스템의 인증서 묶음에 Mailpit 의 자체 서명 인증서를 더한 것. 이 파일만 믿는다(바깥의 HTTPS 는 부르지 않는다)
+  SSL_CERT_FILE: /e2e-certs/trust.pem
+
+services:
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    profiles: [app]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    command:
+      - --smtp-tls-cert=/e2e-certs/mailpit.crt
+      - --smtp-tls-key=/e2e-certs/mailpit.key
+      - --smtp-auth-accept-any
+    volumes:
+      - ./e2e-certs:/e2e-certs:ro
+    ports:
+      - "127.0.0.1:8025:8025"
+
+  stub-llm:
+    image: python:3.13-slim-trixie
+    profiles: [app]
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    command: ["python", "/e2e/stub_llm.py", "--host", "0.0.0.0", "--port", "11434"]
+    environment:
+      # 조각 사이를 쉬는 시간(초). 미리 보기가 두 화면에 보일 만큼 길게 둔다
+      STUB_LLM_DELAY: "0.5"
+    volumes:
+      - ./tools/e2e:/e2e:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:11434/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+
+  auth-server:
+    environment:
+      <<: *e2e-mail
+    volumes:
+      - ./e2e-certs:/e2e-certs:ro
+    depends_on:
+      mailpit:
+        condition: service_started
+
+  auth-mail:
+    environment:
+      <<: *e2e-mail
+    volumes:
+      - ./e2e-certs:/e2e-certs:ro
+    depends_on:
+      mailpit:
+        condition: service_started
+
+  auth-cron:
+    environment:
+      <<: *e2e-mail
+    volumes:
+      - ./e2e-certs:/e2e-certs:ro
+
+  trpg-server:
+    environment:
+      NARRATOR: llm
+      LLM_BASE_URL: http://stub-llm:11434/v1
+      # 모델 목록(tools/e2e/local-models.toml)의 이름표. 서술 모델이 없는 옛 라운드의 기본이다
+      LLM_MODEL: e2e-narrator
+    volumes:
+      # 모델 목록을 들여올 때 읽는다(e2e.sh 의 seed)
+      - ./tools/e2e:/e2e:ro
+    depends_on:
+      stub-llm:
+        condition: service_healthy

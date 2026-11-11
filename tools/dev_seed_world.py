@@ -120,7 +120,13 @@ def routes(ids: dict[str, str]) -> list[dict]:
 def item_rules(ids: dict[str, str]) -> list[dict]:
     """물건의 종류와 등급과 값. 약초는 가볍게 회복한다(SRD5 의 light). 녹슨 열쇠는 값이 없어 사고팔지 못한다."""
     return [
-        {'entry_id': ids['약초'], 'kind': 'consumable', 'rarity': 'normal', 'heals': 'light', 'price': 6},
+        {
+            'entry_id': ids['약초'],
+            'kind': 'consumable',
+            'rarity': 'normal',
+            'effects': [{'kind': 'heal', 'magnitude': 'light'}],
+            'price': 6,
+        },
         {
             'entry_id': ids['횃불'],
             'kind': 'gear',
