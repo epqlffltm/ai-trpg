@@ -1,13 +1,13 @@
-# trpg-server/app/limits/attempts.py
+# shared/server-core/src/server_core/limits/attempts.py
 
 """
 제한 하나(AttemptLimit)와, 세고 막는 규칙(Limiter).
 
 구간은 첫 시도에서 시작해 window 뒤에 끝난다(고정 구간). 경계에 걸치면 짧은 시간에 두 배까지 될 수 있다.
-속도를 늦추는 용도에는 충분하다. 인증 서버와 같다.
+속도를 늦추는 용도에는 충분하다. 인증 서버와 같다. 게임, chat, story 가 함께 쓴다(#1266).
 
 세는 방법이 둘이다.
-  - 모든 시도를 센다(count_attempt). 채팅처럼 성공한 것도 세는 곳.
+  - 모든 시도를 센다(count_attempt). 채팅, 모델을 부르는 요청처럼 성공한 것도 세는 곳.
   - 실패만 센다(ensure_not_blocked → 시도 → 실패면 count_failure, 성공이면 clear). 비밀번호처럼 맞히면 지워 주는 곳.
 
 세는 곳(Redis)에 닿지 못했을 때도 둘이다. 어느 쪽인지는 함수의 이름이 말한다.
@@ -15,7 +15,9 @@
   - 통과시킨다(count_attempt): 경고만 남긴다. 채팅처럼 막아서 잃는 것이 더 큰 곳.
 경고는 남겨야 한다. 조용히 넘어가면 제한이 꺼져 있다는 것을 아무도 모른다.
 
-HTTP 를 모른다. 무엇을 기준으로 셀지(사람, 테이블)는 부르는 쪽이 정해 글자로 넘긴다. 키에는 해시해서 넣는다.
+HTTP 를 모른다. 무엇을 기준으로 셀지(사람, 테이블)와 어떤 제한을 몇 번으로 둘지는 서버가 정한다
+(서버의 app/limits/setup.py).
+키에는 대상을 해시해서 넣는다.
 """
 
 import hashlib
@@ -23,7 +25,7 @@ import logging
 from dataclasses import dataclass
 from datetime import timedelta
 
-from app.limits.counters import Counter, CounterUnavailable, Tally
+from server_core.limits.counters import Counter, CounterUnavailable, Tally
 
 logger = logging.getLogger(__name__)
 

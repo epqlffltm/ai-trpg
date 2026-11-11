@@ -595,7 +595,7 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - 사람마다 센다(대상은 해시해서 키에 넣는다). 읽기와 멈추기는 세지 않는다. 넘으면 429 `too_many_attempts` 와 `Retry-After`(기다릴 초, 본문의 `retry_after`).
 - 고정 구간이다(첫 요청에서 시작해 구간이 끝나면 처음부터). 올리기와 만료를 Lua 한 덩어리로 보낸다. 인증 서버, 게임 서버와 같은 방식이다.
 - Redis 에 닿지 못하면 막지 않고 통과시키며 경고(`limits.unavailable`)를 남긴다. 대화를 막아서 잃는 것이 더 크다. 그래서 상태 확인(`/health/ready`)도 Redis 를 보지 않는다.
-- 게임 서버의 `app/limits/` 에서 chat 이 쓰는 부분만 옮겼다. 셋째로 쓰는 곳(story)이 생기면 server-core 로 뽑는다.
+- 세는 곳과 규칙, 응답은 게임, story 와 함께 쓰는 공용 코드(`server_core/limits/`, #1266)에 있다. 무엇을 몇 번으로 셀지는 이 서버의 `app/limits/setup.py` 다.
 
 ### 고치기
 

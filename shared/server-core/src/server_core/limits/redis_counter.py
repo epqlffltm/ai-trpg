@@ -1,10 +1,13 @@
-# chat-server/app/limits/redis_counter.py
+# shared/server-core/src/server_core/limits/redis_counter.py
 
 """
-Redis 로 센다. 서버가 여럿이어도 같은 수를 본다. 게임 서버의 것과 같다.
+Redis 로 센다. 서버가 여럿이어도 같은 수를 본다.
+
+server-core 에서 redis 를 가져오는 곳은 여기 하나다. redis 는 선택 의존이다(server-core[redis]).
+쓰는 서버(게임, chat, story)만 받는다. 알림, asset, 게시판은 받지 않는다(tests/test_boundary.py 가 본다).
 
 올리기와 만료 걸기를 Lua 한 덩어리로 보낸다. 따로 보내면 올린 직후 서버가 죽었을 때
-만료가 없는 키가 남아 그 사람이 영영 막힌다.
+만료가 없는 키가 남아 그 대상이 영영 막힌다(인증 서버와 같은 까닭).
 
 Redis 가 느리면 요청이 그만큼 기다린다. 그래서 연결과 명령에 짧은 시간 제한을 둔다(REDIS_TIMEOUT_SECONDS).
 닿지 못하면 CounterUnavailable 이다. 오류의 글에는 주소가 들어 있을 수 있어 싣지 않는다.
@@ -15,7 +18,7 @@ from dataclasses import dataclass
 import redis.asyncio as redis
 from redis.exceptions import RedisError
 
-from app.limits.counters import CounterUnavailable, Tally
+from server_core.limits.counters import CounterUnavailable, Tally
 
 # 수를 올리고, 처음 올린 것이면 만료를 건다. 올린 수와 남은 초를 돌려준다
 INCREMENT_SCRIPT = """
@@ -38,6 +41,15 @@ class RedisCounter:
 
     client: redis.Redis
 
+    async def read(self, key: str) -> Tally:
+        """수를 올리지 않고 읽는다. 두 명령을 한 번에 보낸다. 따로 보내면 사이에 키가 만료될 수 있다."""
+        try:
+            async with self.client.pipeline(transaction=False) as pipeline:
+                count, seconds_left = await pipeline.get(key).ttl(key).execute()
+        except (RedisError, OSError, TimeoutError) as error:
+            raise CounterUnavailable from error
+        return Tally(int(count or 0), max(int(seconds_left), 0))
+
     async def hit(self, key: str, window_seconds: int) -> Tally:
         """수를 하나 올린다. 처음이면 window_seconds 뒤에 사라진다."""
         try:
@@ -45,3 +57,10 @@ class RedisCounter:
         except (RedisError, OSError, TimeoutError) as error:
             raise CounterUnavailable from error
         return Tally(int(count), max(int(seconds_left), 0))
+
+    async def clear(self, key: str) -> None:
+        """수를 지운다."""
+        try:
+            await self.client.delete(key)
+        except (RedisError, OSError, TimeoutError) as error:
+            raise CounterUnavailable from error

@@ -19,6 +19,7 @@ from server_core.billing.price_list import PriceListUnavailable
 from server_core.billing.setup import build_billing, build_price_list
 from server_core.database import create_session_factory
 from server_core.input_errors import use_input_errors
+from server_core.limits.responses import use_limit_errors
 from server_core.notifications import dispatcher
 from server_core.notifications.setup import build_notifications
 from server_core.notifications.store import SqlOutboxStore
@@ -72,8 +73,6 @@ from app.creator_stats import router as creator_stats
 from app.engine.dice import RandomDice
 from app.events import router as events
 from app.free_rolls import router as free_rolls
-from app.limits.attempts import LimitsUnavailable, TooManyAttempts
-from app.limits.responses import handle_limits_unavailable, handle_too_many_attempts
 from app.limits.setup import build_limiting, build_redis
 from app.listings import router as listings
 from app.listings.service import ListingNotReadyError
@@ -469,8 +468,8 @@ def create_app(
     app.add_exception_handler(PortraitLimitError, portraits.handle_limit)
     app.add_exception_handler(PortraitInUseError, portraits.handle_in_use)
     app.add_exception_handler(PortraitNotFoundError, portraits.handle_not_found)
-    app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
-    app.add_exception_handler(LimitsUnavailable, handle_limits_unavailable)
+    # 시도가 너무 많다(429), 세는 곳에 닿지 못해 막았다(503). server_core/limits/responses.py
+    use_limit_errors(app)
 
     # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)
     use_input_errors(app)
