@@ -25,10 +25,10 @@ from ai_core.provider import GenerationParams
 from conversation_core.relay import Relay
 from fastapi import FastAPI
 from server_core.auth.tokens import AccessClaims
+from server_core.billing.free_billing import FreeBilling
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.billing.free_billing import FreeBilling
 from app.conversations.models import Conversation
 from app.core.dependencies import Viewer, utc_now
 from app.main import stop_turns

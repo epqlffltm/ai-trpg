@@ -24,9 +24,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
+from server_core.billing.prices import PriceBook
 
 from app.assets.client import AssetUnavailableError
-from app.billing.prices import PriceBook
 from app.billing.routing import Prices
 from app.catalog.models import AiModel
 from app.conversations import copying, service

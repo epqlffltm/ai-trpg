@@ -573,7 +573,7 @@ uv run python -m scripts.models adult grok-5 --allow
     받지 못하면 마지막 목록을 쓰고 경고를 남긴다. 한 번도 받지 못했으면 503 `prices_unavailable`(`Retry-After: 30`)이다.
   - 모델 목록 API 의 값 칸은 chat 서버와 같다: `credits`(글자, 결제 서버 없이 돌면 null), `tier`(`premium` 이면 골드로만 낸다),
     `promo`(행사가), `next`(예약된 바뀜. `credits` 가 null 이면 그때부터 팔지 않는다).
-  - 홀드, 확정, 반환, 연장(`app/billing/http_billing.py`)은 말을 보내는 PR 이 쓴다. 부를 때마다 `billing_calls_total` 을 센다.
+  - 홀드, 확정, 반환, 연장(공용 코드의 `server_core/billing/http_billing.py`)은 말을 보내는 PR 이 쓴다. 부를 때마다 `billing_calls_total` 을 센다.
   - `BILLING_URL` 이 비면 받지 않는다(`free`). 모델은 값 없이 모두 보인다.
 - 들여오기(`app/catalog/sync.py`)는 chat 의 것과 같은 코드라 이것으로 세 벌이다(게임, chat, story). 표의 ORM 이 서버마다 달라 공용 코드로 올리려면 표의 모양까지 옮겨야 해서, 셋을 함께 고칠 일이 잦아지면 그때 올린다.
 

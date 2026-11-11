@@ -18,11 +18,11 @@ import httpx
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.billing.http_billing import amount_of
+from server_core.billing.price_list import PriceListUnavailable
 from server_core.testing.tokens import SigningKey
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.billing.http_billing import amount_of
-from app.billing.price_list import PriceListUnavailable
 from app.billing.prices import narration_code
 from app.billing.routing import utc_now
 from app.rounds.llm_narrator import NarrationError

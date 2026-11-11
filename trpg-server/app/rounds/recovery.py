@@ -32,9 +32,9 @@ import logging
 import uuid
 from datetime import datetime, timedelta
 
+from server_core.billing.price_list import FREE_PRICES, PriceList
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.billing.price_list import FREE_PRICES, PriceList
 from app.rounds import repository, service
 from app.rounds.models import Round, RoundStatus
 from app.rounds.service import NarrationScheduler, hand_over, save

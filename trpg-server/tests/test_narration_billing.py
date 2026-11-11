@@ -23,6 +23,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.billing.client import HoldOutcome, HoldResult
 from server_core.testing.logs import rendered
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import select
@@ -31,7 +32,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.billing import settler as charge_settler
 from app.billing import settling
 from app.billing.charges import EXTEND_AFTER, EXTEND_REJECTED_RETRY, retry_delay
-from app.billing.client import HoldOutcome, HoldResult
 from app.billing.models import NarrationCharge
 from app.billing.settler import ChargeSettler
 from app.main import create_app

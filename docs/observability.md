@@ -1099,7 +1099,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 | `app/ai_log/metered.py` | 호출 기록장(`DbCallLog`)을 감싸 AI 호출 셋을 센다. 기록장에 쓰지 못해도 센다 |
 | `app/rounds/retrying_narrator.py` | 같은 모델로 다시 부른 것과 다음 모델로 넘어간 것 |
 | `app/rounds/service.py`, `app/rounds/closing.py` | 닫기 시작한 라운드(저장한 뒤)와 끝난 서술 |
-| `app/billing/metered.py` | 결제 서버를 부르는 것(`HttpBilling`)을 감싸 센다. 결제 서버를 쓰지 않으면(`FreeBilling`) 감싸지 않는다 |
+| `server_core/billing/metered.py` | 결제 서버를 부르는 것(`HttpBilling`)을 감싸 센다(공용 코드, #1266). 결제 서버를 쓰지 않으면(`FreeBilling`) 감싸지 않는다 |
 | `app/billing/repository.py` 의 `count_unfinished` | 끝나지 않은 청구의 수. 청구 정리의 바퀴가 센다 |
 
 - **AI 를 부르는 코드(`shared/ai-core`)는 메트릭을 모른다.** 공용 코드라 경계를 지킨다(`shared/ai-core/tests/test_boundary.py`). 기록장과 결제 서버를 부르는 것을 밖에서 감싸 센다. 그래서 AI 호출의 수는 호출 기록(`ai_invocations`)의 수와 같다.
@@ -1160,7 +1160,7 @@ TRPG 서버와 인증 서버가 따라 할 모양이다. 이름, 단위, label, 
 | | 받는 곳(미들웨어) | 들고 있는 곳 | 보내는 곳 |
 | --- | --- | --- | --- |
 | auth-server | `observability/middleware.py` | `observability/context.py` | `accounts/billing_client.py` 의 `outgoing_headers()` |
-| trpg-server | `app/observability/middleware.py` | `server_core/observability/context.py` | `server_core/auth/jwks.py`, `server_core/auth/revocations.py`, `app/billing/http_billing.py` 의 `outgoing_headers()` |
+| trpg-server | `app/observability/middleware.py` | `server_core/observability/context.py` | `server_core/auth/jwks.py`, `server_core/auth/revocations.py`, `server_core/billing/http_billing.py` 의 `outgoing_headers()` |
 | billing-server | `internal/httpapi/observability.go` | `internal/obs/context.go` | `internal/jwks/fetch.go` 의 `obs.SetOutgoingHeaders()` |
 | notification-server, asset-server, board-server | `server_core/observability/middleware.py` | `server_core/observability/context.py` | `server_core/auth/jwks.py`, `server_core/auth/revocations.py` 의 `outgoing_headers()` |
 

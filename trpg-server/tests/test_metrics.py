@@ -11,7 +11,7 @@
   - SSE 셋(app/realtime/router.py)
   - AI 호출(app/ai_log/metered.py), 다시 시도와 넘어가기(app/rounds/retrying_narrator.py)
   - 라운드(닫기 시작 app/rounds/service.py, 서술 app/rounds/closing.py)
-  - 서술 값(결제 서버를 부른 것 app/billing/metered.py, 끝나지 않은 청구 app/billing/settler.py)
+  - 서술 값(결제 서버를 부른 것 server_core/billing/metered.py, 끝나지 않은 청구 app/billing/settler.py)
 """
 
 import asyncio
@@ -26,6 +26,16 @@ from ai_core.fake import FakeCallLog
 from ai_core.provider import Reasoning
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.billing.client import (
+    BillingRejected,
+    BillingUnavailable,
+    ExtendOutcome,
+    ExtendResult,
+    HoldOutcome,
+    HoldResult,
+)
+from server_core.billing.free_billing import FreeBilling
+from server_core.billing.metered import MeteredBilling
 from server_core.observability.metrics import (
     DURATION_BUCKETS,
     LONG_DURATION_BUCKETS,
@@ -43,16 +53,6 @@ from sqlalchemy import text
 from app.ai_log.metered import MeteredCallLog
 from app.ai_log.retention import PRUNE_OPERATION, AiLogPruner
 from app.api import readiness
-from app.billing.client import (
-    BillingRejected,
-    BillingUnavailable,
-    ExtendOutcome,
-    ExtendResult,
-    HoldOutcome,
-    HoldResult,
-)
-from app.billing.free_billing import FreeBilling
-from app.billing.metered import MeteredBilling
 from app.billing.models import UNFINISHED_STATUSES
 from app.billing.repository import unfinished_by_status
 from app.billing.settler import ChargeSettler

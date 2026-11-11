@@ -10,8 +10,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel
-
-from app.billing.prices import Tier
+from server_core.billing.prices import Tier
 
 
 class SnapshotStatus(StrEnum):

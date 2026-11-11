@@ -15,6 +15,8 @@ from fastapi import FastAPI
 from server_core import health
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
+from server_core.billing.price_list import PriceListUnavailable
+from server_core.billing.setup import build_billing, build_price_list
 from server_core.database import create_session_factory
 from server_core.input_errors import use_input_errors
 from server_core.notifications import dispatcher
@@ -59,8 +61,6 @@ from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferen
 from app.assets.worlds import router as worlds
 from app.banners import router as banners
 from app.billing import settler
-from app.billing.price_list import PriceListUnavailable
-from app.billing.setup import build_billing, build_price_list
 from app.calendar import router as calendar
 from app.campaigns import router as campaign_runs
 from app.chat import router as chat
@@ -315,7 +315,8 @@ def create_app(
     # 라운드의 서술 값을 받는 결제 서버(app/billing/). 설정(BILLING_URL)이 정한다. 비우면 받지 않는다.
     # 위의 httpx 클라이언트로 부른다. 요청마다 두 서버만 아는 비밀(BILLING_SECRET)로 서명한다
     app.state.billing = build_billing(settings, app.state.http_client)
-    # 결제 서버의 가격 목록을 1분쯤마다 버전으로 다시 묻는 것(app/billing/price_list.py). 방장이 고를 모델에 값을 붙인다
+    # 결제 서버의 가격 목록을 1분쯤마다 버전으로 다시 묻는 것(server_core/billing/price_list.py).
+    # 방장이 고를 모델에 값을 붙인다
     app.state.price_list = build_price_list(settings, app.state.http_client)
 
     # 끝나지 않은 청구를 몇 초마다 결제 서버에 마저 맡기는 정리 작업(app/billing/settler.py). lifespan 이 돌리고 멈춘다.

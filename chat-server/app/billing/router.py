@@ -11,8 +11,7 @@ import logging
 
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
-
-from app.billing.price_list import PriceListUnavailable
+from server_core.billing.price_list import PriceListUnavailable
 
 logger = logging.getLogger(__name__)
 

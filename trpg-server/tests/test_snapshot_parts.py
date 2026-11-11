@@ -22,10 +22,10 @@ import pytest
 from ai_core.fake import FakeImageProvider
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.billing.client import BillingRejected, BillingUnavailable, HoldOutcome, HoldResult
+from server_core.billing.prices import Change, Price, PriceBook, Sale, Tier
 from server_core.testing.tokens import SigningKey
 
-from app.billing.client import BillingRejected, BillingUnavailable, HoldOutcome, HoldResult
-from app.billing.prices import Change, Price, PriceBook, Sale, Tier
 from app.core.config import Settings
 from app.main import API_PREFIX
 from app.snapshots import charging

@@ -22,13 +22,13 @@ from ai_core.catalog_contract import Provider, TokenLimitField
 from ai_core.catalog_file import ModelEntry
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.billing.price_list import PriceListUnavailable
+from server_core.billing.prices import FREE_BOOK, Tier
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.billing.price_list import PriceListUnavailable
-from app.billing.prices import FREE_BOOK, Tier
 from app.billing.routing import utc_now
 from app.catalog import service as catalog
 from app.catalog.errors import CatalogConflictError, Conflict

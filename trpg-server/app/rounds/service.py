@@ -47,15 +47,16 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
+from server_core.billing.price_list import FREE_PRICES, PriceList
+from server_core.billing.settings import BILLING_BUDGET_SECONDS
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import charges
 from app.billing import repository as billing_repository
 from app.billing.models import NarrationCharge
-from app.billing.price_list import FREE_PRICES, PriceList
 from app.calendar import state as calendar
 from app.catalog.steps import steps_of
-from app.core.config import BILLING_BUDGET_SECONDS, NARRATION_BUDGET_SECONDS
+from app.core.config import NARRATION_BUDGET_SECONDS
 from app.engine.dice import Dice
 from app.engine.ruleset import Ruleset
 from app.events import recorder

@@ -1,7 +1,7 @@
-# story-server/tests/test_price_list.py
+# shared/server-core/tests/test_price_list.py
 
 """
-결제 서버의 가격 목록을 받아 두는 것(app/billing/price_list.py)을 검증한다.
+결제 서버의 가격 목록을 받아 두는 것(server_core/billing/price_list.py)을 검증한다.
 
 실제 결제 서버를 부르지 않는다. httpx 의 가짜 전송이 결제 서버인 척 답한다.
 서명(GET, 빈 본문), 받아 둔 동안 다시 묻지 않는 것, 버전(ETag)으로 묻고 304 를 받는 것,
@@ -15,21 +15,22 @@ from dataclasses import dataclass, field
 import httpx
 import pytest
 from pydantic import SecretStr
-from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 
-from app.billing.price_list import (
+from server_core.billing.price_list import (
     PRICES_PATH,
     REFRESH_SECONDS,
     FreePriceList,
     HttpPriceList,
     PriceListUnavailable,
 )
-from app.billing.prices import FREE_BOOK
+from server_core.billing.prices import FREE_BOOK
+from server_core.observability.context import job_scope
+from server_core.service_auth.signing import SIGNATURE_HEADER, sign
 
 SECRET = 's' * 32
 NOW = 1_800_000_000
-BODY = {'prices': [{'code': 'story.gpt-6-luna.i0.o0', 'credits': '20', 'tier': 'standard', 'next': None}]}
-NEWER = {'prices': [{'code': 'story.gpt-6-luna.i0.o0', 'credits': '30', 'tier': 'standard', 'next': None}]}
+BODY = {'prices': [{'code': 'chat.gpt-6-luna.i0.o0', 'credits': '20', 'tier': 'standard', 'next': None}]}
+NEWER = {'prices': [{'code': 'chat.gpt-6-luna.i0.o0', 'credits': '30', 'tier': 'standard', 'next': None}]}
 
 
 @dataclass
@@ -75,7 +76,7 @@ def price_list(fake: FakeBilling, clock: Clock) -> HttpPriceList:
 
 
 def credits_of(book) -> str:
-    return book.prices['story.gpt-6-luna.i0.o0'].current.credits
+    return book.prices['chat.gpt-6-luna.i0.o0'].current.credits
 
 
 async def test_the_request_is_signed_like_the_holds():
@@ -89,6 +90,16 @@ async def test_the_request_is_signed_like_the_holds():
     # 결제 서버와 같은 모양의 서명이다(server_core/service_auth/signing.py). 메서드는 GET, 본문은 비어 있다
     assert request.headers[SIGNATURE_HEADER] == sign(SECRET, NOW, 'GET', PRICES_PATH, b'')
     assert 'If-None-Match' not in request.headers
+
+
+async def test_the_trace_is_passed_on_inside_a_job():
+    fake = FakeBilling([ok(BODY)])
+
+    with job_scope('job-1'):
+        await price_list(fake, Clock()).book()
+
+    # 우리 서버끼리라 추적을 잇는다(http_billing.py 와 같다)
+    assert 'traceparent' in fake.requests[0].headers
 
 
 async def test_the_list_is_kept_while_fresh():
@@ -157,7 +168,7 @@ async def test_with_a_kept_list_a_failure_keeps_the_last_list(caplog):
     await prices.book()
 
     clock.seconds = REFRESH_SECONDS
-    with caplog.at_level('WARNING', logger='app.billing.price_list'):
+    with caplog.at_level('WARNING', logger='server_core.billing.price_list'):
         book = await prices.book()
     clock.seconds = REFRESH_SECONDS + 1
     await prices.book()
@@ -165,7 +176,7 @@ async def test_with_a_kept_list_a_failure_keeps_the_last_list(caplog):
     # 고를 수 있는 모델이 갑자기 사라지지 않는다. 다음 물을 때까지 다시 두드리지 않는다
     assert credits_of(book) == '20'
     assert len(fake.requests) == 2
-    (warning,) = [record for record in caplog.records if record.name == 'app.billing.price_list']
+    (warning,) = [record for record in caplog.records if record.name == 'server_core.billing.price_list']
     assert warning.reason == 'status_503'
 
 

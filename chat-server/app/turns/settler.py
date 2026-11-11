@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from server_core import loops
+from server_core.billing.client import Billing
 from server_core.loops import Running
 from server_core.observability.context import job_scope
 from server_core.observability.identifiers import new_job_id
@@ -33,7 +34,6 @@ from server_core.observability.metrics import measured_job
 from server_core.observability.spans import JOB_FAILED_ERROR_CODE, add_handled, job_span
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.billing.client import Billing
 from app.core.dependencies import utc_now
 from app.turns import repository, service
 from app.turns.models import DUE_STATUSES, OPEN_STATUSES, BillingStatus, Generation, Outcome
