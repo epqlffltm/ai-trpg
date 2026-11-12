@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "gen:api": "node scripts/gen-api.mjs",
     "sync:legal": "node scripts/sync-legal.mjs"
   },

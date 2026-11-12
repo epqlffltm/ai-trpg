@@ -155,8 +155,12 @@ npm run sync:legal    # docs/legal/{terms,privacy}.md → apps/web/src/legal/doc
 npm run typecheck
 npm run lint
 npm test
+npm run test:coverage   # 지나간 줄을 세고 기준을 본다(CI 가 이것으로 돈다)
 npm run build
 ```
+
+커버리지의 기준(`thresholds`)은 앱(`apps/web/vitest.config.ts`)과 공통 구성요소(`packages/ui/vitest.config.ts`)에 잰 값보다 조금 아래로 적었다.
+내려가면 CI 가 실패하고, 올라가면 기준도 올린다. 시험, 시험의 도구(`src/test/`), 서버의 API 목록에서 만든 타입은 재지 않는다.
 
 시험은 서버를 부르지 않는다. `fetch` 를 가짜로 바꿔(`src/test/fakeFetch.ts`) 갱신이 하나만 가는지, 로그인 두 단계와 그 실패, 가입 세 단계와 동의(체크한 것만 보내기, 판이 바뀌면 다시 읽기), 비밀번호 재설정, 첫 화면의 줄이 따로 실패하는지,
 다시 동의와 탈퇴 취소가 어느 경로든 막고 마치면 원래 화면을 여는지, 마이페이지(비밀번호 바꾸기, 모든 기기 로그아웃, 선택 동의 켜고 끄기),
