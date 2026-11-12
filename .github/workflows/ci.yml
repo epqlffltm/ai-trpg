@@ -240,6 +240,95 @@ jobs:
         if: always()
         run: bash .github/scripts/stack-smoke.sh down
 
+  # 종단간 테스트(P2-4, web/e2e). stack 과 같은 때에 돌지만 스택을 따로 띄운다(.github/scripts/e2e.sh).
+  # stack 은 실제와 같은 설정을 보고, 여기는 e2e 의 설정(docker-compose.e2e.yml: Mailpit, 가짜 모델)을 겹친다.
+  # 둘을 한 스택에 섞으면 연기 검사가 실제가 아닌 설정을 보게 되고, 요청 수 제한과 DB 를 함께 쓴다.
+  # 실패하면 Playwright 의 trace 와 스크린샷(web/e2e/test-results)을 올린다
+  e2e:
+    needs: changes
+    if: >-
+      needs.changes.outputs.auth == 'true' || needs.changes.outputs.trpg == 'true' ||
+      needs.changes.outputs.board == 'true' || needs.changes.outputs.billing == 'true' ||
+      needs.changes.outputs.notification == 'true' || needs.changes.outputs.asset == 'true' ||
+      needs.changes.outputs.chat == 'true' || needs.changes.outputs.story == 'true' ||
+      needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 설정 파일과 키 만들기
+        run: bash .github/scripts/e2e.sh prepare
+
+      # stack 과 같다. 결제 서버를 고친 PR 은 캐시가 맞지 않아 건너뛴다
+      - name: 결제 서버의 이미지를 캐시에서 받기
+        if: needs.changes.outputs.billing != 'true'
+        continue-on-error: true
+        uses: docker/build-push-action@v7
+        env:
+          DOCKER_BUILD_SUMMARY: "false"
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+        with:
+          context: billing-server
+          load: true
+          tags: ai-trpg/billing-server:local
+          cache-from: type=gha,scope=billing-server-image
+
+      - name: 이미지를 만들고 띄우기
+        run: bash .github/scripts/e2e.sh up
+
+      # 가격표를 넣는 명령(cmd/prices)이 이미지에 없어 러너에서 돌린다
+      - name: Go 설치
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: billing-server/go.mod
+          cache-dependency-path: billing-server/go.sum
+
+      - name: 모델 목록, 가격표, 견본 채우기
+        run: bash .github/scripts/e2e.sh seed
+
+      - name: Node 설치
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: web/.nvmrc
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # 브라우저만 받는다(--with-deps 없이). 러너의 이미지에 Chrome 이 있어 그 라이브러리가 이미 깔려 있다.
+      # --with-deps 는 apt 로 글꼴과 라이브러리를 더 받는데, 우분투 저장소의 이름을 잠깐 찾지 못해 떨어진 적이 있다.
+      # 받기도 잠깐 끊길 수 있어 세 번까지 해 본다
+      - name: Playwright 와 브라우저 설치
+        working-directory: web
+        run: |
+          npm ci
+          for attempt in 1 2 3; do
+            npx playwright install chromium && exit 0
+            echo "브라우저를 받지 못했다. 15초 뒤에 다시 한다($attempt/3)" >&2
+            sleep 15
+          done
+          exit 1
+
+      - name: 화면으로 돌리기
+        run: bash .github/scripts/e2e.sh test
+
+      - name: 실패했을 때 Playwright 의 기록 올리기
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: |
+            web/e2e/test-results
+            web/e2e/playwright-report
+          retention-days: 7
+
+      - name: 실패했을 때 로그
+        if: failure()
+        run: bash .github/scripts/e2e.sh logs
+
+      - name: 정리
+        if: always()
+        run: bash .github/scripts/e2e.sh down
+
   # 필수 검사는 이것 하나다. 앞의 작업이 하나라도 실패하거나 멈췄으면 실패한다. 건너뛴 것은 통과다.
   # always(): 앞의 작업이 실패해도 이 작업은 돈다. 돌지 않으면 GitHub 이 "기다리는 중"으로 둔다
   ci-ok:
@@ -260,6 +349,7 @@ jobs:
       - web
       - app
       - stack
+      - e2e
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

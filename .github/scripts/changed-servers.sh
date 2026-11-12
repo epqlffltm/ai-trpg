@@ -16,6 +16,8 @@
 #     바뀌면 모두. 서버들의 DB 계정, 컨테이너로 띄우고 잇는 법, 주기 명령, staging 의 설정이 거기 있다.
 #     .env 를 만드는 도구(tools/fill_env.py, tools/staging_env.py)도 모두다. CI(stack)가 그 도구들의 테스트를 돌리고
 #     staging_env.py 로 만든 설정을 읽어 본다
+#   - 종단간 테스트의 스택(docker-compose.e2e.yml, tools/e2e/)과 견본을 채우는 도구(tools/dev_seed*.py)도 모두다.
+#     CI(e2e)가 그것으로 모든 서버를 띄우고 채워 화면으로 돌린다
 #   - 관문 자신(.github/workflows/ci.yml, .github/scripts/)이 바뀌면 모두. 관문이 맞는지 모두로 확인한다
 #   - 파이썬 서버들이 함께 쓰는 ruff 규칙(루트의 ruff.toml)이 바뀌면 인증, 게임, 게시판, 알림, asset, chat, story 와 공용 코드
 #   - 공용 코드(shared/<패키지>/)가 바뀌면 공용 코드의 검사(shared)와, 그 패키지를 쓰는 서버들.
@@ -100,6 +102,8 @@ affects_all() {
   [[ "$path" == docker/* || "$path" == "docker-compose.yml" || "$path" == "docker-compose.staging.yml" ||
     "$path" == tools/fill_env.py || "$path" == tools/test_fill_env.py ||
     "$path" == tools/staging_env.py || "$path" == tools/test_staging_env.py ||
+    "$path" == "docker-compose.e2e.yml" || "$path" == tools/e2e/* || "$path" == tools/test_e2e_stub_llm.py ||
+    "$path" == tools/dev_seed*.py || "$path" == tools/test_dev_seed.py ||
     "$path" == ".github/workflows/ci.yml" || "$path" == .github/scripts/* ]]
 }
 

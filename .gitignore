@@ -29,3 +29,6 @@ coverage.out
 
 # 바깥 백업의 확인 열쇠(docker-compose.staging.yml 의 backup-offsite). 이 열쇠로 버킷의 백업이 풀린다
 /backup-keys/
+
+# 종단간 테스트(.github/scripts/e2e.sh)가 Mailpit 에 쓰려고 만드는 자체 서명 인증서와 열쇠. 그 실행에서만 쓴다
+/e2e-certs/

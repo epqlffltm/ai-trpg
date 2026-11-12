@@ -175,4 +175,17 @@ npm run build
 로어북 탭의 붙이기·차례·게시하지 않은 것·남의 로어북), chat 의 로어북(만들기, 항목과 겹친 키워드, 이름과 설명만 보내기, 게시와 판)을 본다.
 가짜 스트림은 `src/test/tableFixtures.ts` 의 `sseResponse` 다.
 프록시에 실려 실제로 뜨는지(index.html 로 돌리기, 캐시, CSP)는 CI 의 stack(`.github/scripts/stack-smoke.sh check-proxy`)이 본다.
-끝에서 끝까지(Playwright)는 한 판이 화면으로 이어질 때 붙인다.
+
+### 끝에서 끝까지 (e2e)
+
+`e2e/` 는 서버를 모두 띄운 스택에 브라우저(Playwright, Chromium)를 붙여 한 흐름을 화면으로만 따라간다(P2-4).
+CI 의 e2e 작업(`.github/scripts/e2e.sh`)이 `docker-compose.yml` 에 `docker-compose.e2e.yml` 을 겹쳐 띄우고 돌린다.
+
+- `trpg.spec.ts`: 새 사람이 가입하고 로그인해(메일 코드) 본인인증과 충전(시험용 결제창)을 한다. 견본 시나리오로 2명 테이블을 열고,
+  견본의 손님이 다른 브라우저에서 초대 코드로 들어온다. 둘이 선언하면 라운드가 닫히고, 서술이 두 화면에 미리 보기로 흐른 뒤 남는다
+- 메일 코드는 Mailpit 의 API 에서 읽는다(`support/mailpit.ts`). 서술은 가짜 모델(`tools/e2e/stub_llm.py`)이 쓴다.
+  게임 서버의 가짜 서술자는 모델의 길(창구 고르기, 흘려 받기, 미리 보기)을 지나지 않아 쓰지 않는다
+- 견본(계정 둘, 견본 시나리오)은 `tools/dev_seed.py` 가, 모델 목록과 가격표는 `e2e.sh seed` 가 채운다
+
+지금은 CI 에서만 돈다(`e2e.sh prepare` 가 CI 가 아니면 멈춘다. PC 의 .env 를 덮지 않으려는 것이다).
+띄운 스택이 있으면 `npm run e2e` 로 테스트만 돌린다. 주소는 `E2E_BASE_URL`(프록시), `E2E_MAILPIT_URL` 로 바꾼다.
