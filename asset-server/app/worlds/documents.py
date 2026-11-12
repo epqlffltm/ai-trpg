@@ -383,30 +383,35 @@ def build_document(
     게시를 막는 것이 없을 때만 부른다(시작 장소와 시간대가 있고, 인물의 캐릭터가 모두 복사되었다).
     """
     show = effective_show(world.show)
-    return WorldDocument(
-        format=DOCUMENT_FORMAT,
-        name=world.name,
-        intro_html=cleaned_intro,
-        tags=list(world.tags),
-        rating=Rating(world.rating),
-        image_id=world.image_id,
-        slots=world.slots,
-        start_slot=world.start_slot,
-        deadline_days=world.deadline_days,
-        after_ending=AfterEnding(world.after_ending),
-        places=world.places,
-        paths=world.paths,
-        start_place=world.start_place,
-        items=world.items,
-        start_items=world.start_items,
-        cast=[cast_document(member, characters[uuid.UUID(member['character_id'])], show) for member in world.cast],
-        lorebooks=list(lorebooks),
-        events=world.events,
-        endings=world.endings,
-        genre=Genre(world.genre),
-        chapters=world.chapters,
-        shortcuts=world.shortcuts,
-        achievements=world.achievements,
+    # 초안의 칸은 DB 의 JSONB(dict 의 목록)다. 판의 모양으로 검증해 읽는다(생성자와 같은 검증이다)
+    return WorldDocument.model_validate(
+        {
+            'format': DOCUMENT_FORMAT,
+            'name': world.name,
+            'intro_html': cleaned_intro,
+            'tags': list(world.tags),
+            'rating': Rating(world.rating),
+            'image_id': world.image_id,
+            'slots': world.slots,
+            'start_slot': world.start_slot,
+            'deadline_days': world.deadline_days,
+            'after_ending': AfterEnding(world.after_ending),
+            'places': world.places,
+            'paths': world.paths,
+            'start_place': world.start_place,
+            'items': world.items,
+            'start_items': world.start_items,
+            'cast': [
+                cast_document(member, characters[uuid.UUID(member['character_id'])], show) for member in world.cast
+            ],
+            'lorebooks': list(lorebooks),
+            'events': world.events,
+            'endings': world.endings,
+            'genre': Genre(world.genre),
+            'chapters': world.chapters,
+            'shortcuts': world.shortcuts,
+            'achievements': world.achievements,
+        }
     )
 
 

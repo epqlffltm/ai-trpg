@@ -23,6 +23,7 @@ from server_core.service_auth.receiving import read_body
 
 from app.core.dependencies import AppSettings, Session
 from app.images import service
+from app.images.formats import ImageFormat
 from app.images.isolation import ImageDecoder, ImageUnreadableError
 from app.images.models import Image
 from app.images.schemas import ImageDetail
@@ -55,7 +56,7 @@ def to_detail(image: Image) -> ImageDetail:
     """그림을 응답의 모양으로 바꾼다."""
     return ImageDetail(
         id=image.id,
-        format=image.format,
+        format=ImageFormat(image.format),
         byte_size=image.byte_size,
         width=image.width,
         height=image.height,

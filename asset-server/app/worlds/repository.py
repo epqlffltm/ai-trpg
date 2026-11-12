@@ -9,6 +9,7 @@
 import uuid
 from collections.abc import Sequence
 
+from server_core.database import affected_rows
 from sqlalchemy import delete as delete_rows
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,8 +64,7 @@ async def delete_private_owned(session: AsyncSession, owner_id: uuid.UUID) -> in
     공개 세계관은 남긴다. 남이 쓰는 것이다(캐릭터와 같다).
     """
     condition = (World.owner_id == owner_id) & (World.visibility == Visibility.PRIVATE)
-    result = await session.execute(delete_rows(World).where(condition))
-    return result.rowcount
+    return affected_rows(await session.execute(delete_rows(World).where(condition)))
 
 
 async def list_versions(session: AsyncSession, world_id: uuid.UUID) -> list[WorldVersion]:

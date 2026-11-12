@@ -11,6 +11,7 @@ from httpx import AsyncClient
 from server_core.database import create_engine
 from server_core.testing.tokens import TEST_USER_ID, FakeAuthServer, revoked_entry
 from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.pool import QueuePool
 
 from app.main import API_PREFIX, create_app
 from tests.conftest import make_client, make_test_settings
@@ -57,6 +58,8 @@ async def test_starting_and_shutting_down(auth_server: FakeAuthServer):
     """
     settings = make_test_settings()
     engine = create_engine(settings)
+    # 쉬는 연결의 수(checkedin)는 줄을 세우는 풀에만 있다. 서버의 풀(MeteredPool)이 그것이다
+    assert isinstance(engine.pool, QueuePool)
     app = create_app(settings, http_client=auth_server.make_client(), engine=engine)
     auth_server.revocations = [revoked_entry(str(TEST_USER_ID), 1)]
 

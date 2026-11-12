@@ -90,7 +90,7 @@ async def belongings(client: AsyncClient, leaver: dict, stayer: dict) -> dict:
 
 
 async def personas_of(session: AsyncSession, owner_id: uuid.UUID) -> int:
-    return await session.scalar(select(func.count()).select_from(Persona).where(Persona.owner_id == owner_id))
+    return await session.scalar(select(func.count()).select_from(Persona).where(Persona.owner_id == owner_id)) or 0
 
 
 async def character_ids_of(session: AsyncSession, owner_id: uuid.UUID) -> set[str]:
@@ -99,7 +99,7 @@ async def character_ids_of(session: AsyncSession, owner_id: uuid.UUID) -> set[st
 
 async def versions_of(session: AsyncSession, character_id: str) -> int:
     query = select(func.count()).select_from(CharacterVersion).where(CharacterVersion.character_id == character_id)
-    return await session.scalar(query)
+    return await session.scalar(query) or 0
 
 
 async def test_erases_personas_and_private_characters(client: AsyncClient, session: AsyncSession, belongings: dict):

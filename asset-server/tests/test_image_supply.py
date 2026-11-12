@@ -76,7 +76,7 @@ async def signed(
 
 
 async def image_count(session: AsyncSession) -> int:
-    return await session.scalar(select(func.count()).select_from(Image))
+    return await session.scalar(select(func.count()).select_from(Image)) or 0
 
 
 async def test_a_kept_image_is_re_encoded_and_only_the_owner_sees_it(

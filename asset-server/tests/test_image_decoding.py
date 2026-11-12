@@ -125,7 +125,9 @@ async def test_only_the_first_frame_of_an_animation_is_kept():
     image = opened(decoded.data)
     assert getattr(image, 'n_frames', 1) == 1
     # 다시 인코딩한 손실 압축이라 값이 조금 흔들린다. 빨강(첫 장)인지만 본다
-    red, _, blue = image.convert('RGB').getpixel((0, 0))
+    pixel = image.convert('RGB').getpixel((0, 0))
+    assert isinstance(pixel, tuple)
+    red, _, blue = pixel
     assert (red > 200, blue < 50) == (True, True)
 
 

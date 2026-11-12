@@ -94,7 +94,7 @@ class LorebookUpdate(BaseModel):
         """보낸 칸과 그 값. 항목은 DB 에 적을 모양(dict 의 목록)으로 바꾼다."""
         changes = {name: getattr(self, name) for name in self.model_fields_set}
         if 'entries' in changes:
-            changes['entries'] = [entry.model_dump(mode='json') for entry in self.entries]
+            changes['entries'] = [entry.model_dump(mode='json') for entry in changes['entries']]
         return changes
 
 
