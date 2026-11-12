@@ -41,4 +41,5 @@ async def last_sequence(session: AsyncSession, table_id: uuid.UUID, before: date
     query = select(func.coalesce(func.max(ChatMessage.sequence), 0)).where(ChatMessage.table_id == table_id)
     if before is not None:
         query = query.where(ChatMessage.created_at <= before)
-    return await session.scalar(query)
+    # coalesce 라 늘 수가 온다
+    return await session.scalar(query) or 0

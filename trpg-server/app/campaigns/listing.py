@@ -17,7 +17,7 @@ from app.assets.campaigns.models import CampaignVersion
 from app.assets.campaigns.schemas import CampaignSnapshot
 from app.assets.service import AssetNotFoundError
 from app.campaigns import repository, service
-from app.campaigns.models import CampaignRun
+from app.campaigns.models import CampaignRun, RunStatus
 from app.campaigns.schemas import RunPage, RunSummary
 
 
@@ -29,7 +29,7 @@ def to_run_summary(run: CampaignRun, version: CampaignVersion, table_id: uuid.UU
         campaign_id=run.campaign_id,
         title=snapshot.title,
         host_id=run.host_id,
-        status=run.status,
+        status=RunStatus(run.status),
         position=run.position,
         episode_count=len(snapshot.episodes),
         episode_title=snapshot.episodes[run.position].title,

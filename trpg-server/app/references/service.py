@@ -30,7 +30,7 @@ from app.references.sheets import Proposal, propose
 from app.references.srd import SRD51_ATTRIBUTION, SRD51_CHANGES, SRD51_TRANSLATED
 
 # 자료마다의 출처 표시. 화면이 찾은 줄과 함께 보인다. 원본을 바꾼 것(빼고, 줄이고, 옮김)도 함께 적는다(CC BY 4.0)
-ATTRIBUTIONS = {ReferenceSource.SRD51: f'{SRD51_ATTRIBUTION} {SRD51_CHANGES}{SRD51_TRANSLATED}'}
+ATTRIBUTIONS: dict[str, str] = {ReferenceSource.SRD51: f'{SRD51_ATTRIBUTION} {SRD51_CHANGES}{SRD51_TRANSLATED}'}
 
 
 class ReferenceNotFoundError(Exception):

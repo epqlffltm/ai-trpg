@@ -58,6 +58,14 @@ def find_ability(ruleset: Ruleset, key: str) -> Ability | None:
     return next((ability for ability in ruleset.abilities if ability.key == key), None)
 
 
+def known_difficulty(ruleset: Ruleset, key: str | None) -> Difficulty:
+    """규칙에 있다고 확인한 난이도(find_fault, 규칙의 검사). 없으면 부른 쪽의 버그라 LookupError 다."""
+    difficulty = find_difficulty(ruleset, key)
+    if difficulty is None:
+        raise LookupError(f'규칙에 없는 난이도입니다: {key}')
+    return difficulty
+
+
 def find_difficulty(ruleset: Ruleset, key: str | None) -> Difficulty | None:
     """
     규칙에서 난이도의 단계를 찾는다. 없으면 None.

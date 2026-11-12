@@ -24,9 +24,10 @@ def spent(point_buy: PointBuy, abilities: dict[str, int]) -> int | None:
     능력치가 규칙의 것인지는 여기서 보지 않는다(app/engine/sheet.py 의 abilities_fit).
     """
     costs = [cost_of(point_buy, score) for score in abilities.values()]
-    if any(cost is None for cost in costs):
+    bought = [cost for cost in costs if cost is not None]
+    if len(bought) != len(costs):
         return None
-    return sum(costs)
+    return sum(bought)
 
 
 def affordable(ruleset: Ruleset, abilities: dict[str, int]) -> bool:

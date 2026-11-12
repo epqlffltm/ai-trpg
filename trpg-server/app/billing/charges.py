@@ -14,13 +14,14 @@ DB 를 쓰는 함수는 부른 쪽의 트랜잭션 안에서 돈다. 라운드�
 import re
 import uuid
 from datetime import datetime, timedelta
+from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import repository
 from app.billing.models import ChargeStatus, NarrationCharge
 from app.billing.prices import PRICE_CODE_PREFIX, narration_code
-from app.catalog.steps import steps_of
+from app.catalog.steps import HasSteps, steps_of
 from app.rounds.models import Round
 from app.tables.models import GameTable, TurnMode
 
@@ -69,7 +70,7 @@ def price_code_of(round_: Round) -> str:
     모델이 없는 옛 라운드는 LEGACY_PRICE_CODE 다.
     """
     if round_.narration_model is not None:
-        return narration_code(round_.narration_model, steps_of(round_))
+        return narration_code(round_.narration_model, steps_of(cast(HasSteps, round_)))
     return LEGACY_PRICE_CODE
 
 

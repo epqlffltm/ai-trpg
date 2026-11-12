@@ -1270,12 +1270,11 @@ class Ruleset(Part):
         """
         abilities = {ability.key for ability in self.abilities}
         difficulties = {difficulty.key for difficulty in self.difficulties}
-        checks = [skill for skill in self.skills if skill.check is not None]
+        checks = [(skill.key, skill.check) for skill in self.skills if skill.check is not None]
         strangers = [
-            skill.key
-            for skill in checks
-            if skill.check.ability not in abilities
-            or (skill.check.difficulty is not None and skill.check.difficulty not in difficulties)
+            key
+            for key, check in checks
+            if check.ability not in abilities or (check.difficulty is not None and check.difficulty not in difficulties)
         ]
         if strangers:
             raise ValueError(
@@ -1556,7 +1555,9 @@ class Ruleset(Part):
         if self.treatment.ability not in [ability.key for ability in self.abilities]:
             raise ValueError(f'치료의 능력이 능력치에 없습니다: {self.treatment.ability}')
         difficulties = {difficulty.key for difficulty in self.difficulties}
-        unknown = sorted({injury.treat_difficulty for injury in treatable} - difficulties)
+        unknown = sorted(
+            {injury.treat_difficulty for injury in treatable if injury.treat_difficulty is not None} - difficulties
+        )
         if unknown:
             raise ValueError(f'부상의 치료 난이도가 난이도에 없습니다: {", ".join(unknown)}')
         magnitudes = {magnitude.key for magnitude in self.magnitudes}

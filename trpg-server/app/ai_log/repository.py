@@ -9,6 +9,7 @@ AI 호출의 기록(ai_invocations)을 고치는 SQL. 커밋하지 않는다.
 import uuid
 from datetime import datetime
 
+from server_core.database import affected_rows
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,8 +37,7 @@ async def clear_texts(session: AsyncSession, ids: list[uuid.UUID]) -> int:
     """그 기록들의 원문(text)을 비운다. 비운 수를 돌려준다. 줄과 그 밖의 칸은 남긴다."""
     if not ids:
         return 0
-    result = await session.execute(update(AiInvocation).where(AiInvocation.id.in_(ids)).values(text=None))
-    return result.rowcount
+    return affected_rows(await session.execute(update(AiInvocation).where(AiInvocation.id.in_(ids)).values(text=None)))
 
 
 async def clear_old_texts(session: AsyncSession, before: datetime, limit: int) -> int:

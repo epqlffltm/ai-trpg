@@ -98,12 +98,11 @@ async def departed_cut(session: AsyncSession, user_id: uuid.UUID, table_id: uuid
     )
 
 
-PageReader = Callable[[AsyncSession, int], Awaitable[list[Item]]]
-
-
-async def iter_pages(
-    session_factory: async_sessionmaker[AsyncSession], read_page: PageReader, page_size: int
-) -> AsyncIterator[Item]:
+async def iter_pages[I: Item](
+    session_factory: async_sessionmaker[AsyncSession],
+    read_page: Callable[[AsyncSession, int], Awaitable[list[I]]],
+    page_size: int,
+) -> AsyncIterator[I]:
     """번호 차례의 것을 쪽마다 읽어 하나씩 내놓는다. 쪽마다 세션을 열고 바로 닫는다."""
     after = 0
     while True:
@@ -147,11 +146,12 @@ async def iter_whispers(
     session_factory: async_sessionmaker[AsyncSession], cut: Cut, page_size: int = PAGE_SIZE
 ) -> AsyncIterator[Whisper]:
     """받는 사람의 쪽지함에서 범위 안의 쪽지를 적힌 차례대로 하나씩 내놓는다. 범위가 0 이면 읽지 않는다."""
-    if cut.owner_id is None or cut.whisper_until == 0:
+    owner_id = cut.owner_id
+    if owner_id is None or cut.whisper_until == 0:
         return
 
     async def read_page(session: AsyncSession, after: int) -> list[Whisper]:
-        return await whispers.list_after(session, cut.table_id, cut.owner_id, after, page_size, until=cut.whisper_until)
+        return await whispers.list_after(session, cut.table_id, owner_id, after, page_size, until=cut.whisper_until)
 
     async for whisper in iter_pages(session_factory, read_page, page_size):
         yield whisper

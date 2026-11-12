@@ -559,7 +559,7 @@ def to_event(event: TableEvent) -> EventOut:
     """이벤트를 앉은 사람에게 보여 주는 응답으로 바꾼다. 칸을 하나씩 적어 옮긴다."""
     return EventOut(
         sequence=event.sequence,
-        type=event.type,
+        type=EventType(event.type),
         actor_id=event.actor_id,
         payload=visible_payload(event),
         caused_by_sequence=event.caused_by_sequence,

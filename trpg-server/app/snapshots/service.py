@@ -37,6 +37,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import cast
 
 from ai_core.image_provider import ImageProvider, ImageRequest
 from ai_core.provider import ProviderError
@@ -499,7 +500,8 @@ def kept_out(snapshot: TableSnapshot, table_title: str | None) -> KeptSnapshotOu
     """갤러리의 한 장의 응답."""
     return KeptSnapshotOut(
         id=snapshot.id,
-        image_id=snapshot.image_id,
+        # 갤러리는 그림이 있는 것만 고른다(repository 의 image_id.is_not(None))
+        image_id=cast(uuid.UUID, snapshot.image_id),
         table_id=snapshot.table_id,
         table_title=table_title,
         round_number=snapshot.round_number,

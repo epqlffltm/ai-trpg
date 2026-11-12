@@ -19,8 +19,9 @@ from app.tables.schemas import TableCreate
 class RunTable(TableCreate):
     """편의 테이블을 여는 값. TableCreate 와 같되, 시나리오와 판은 받지 않는다(보내면 422)."""
 
-    scenario_id: None = None
-    version: None = None
+    # 받지 않는 칸이라 None 으로 좁힌다. pydantic 은 좁히는 것을 받지만 pyright 는 막아 끈다
+    scenario_id: None = None  # pyright: ignore[reportIncompatibleVariableOverride]
+    version: None = None  # pyright: ignore[reportIncompatibleVariableOverride]
 
 
 class RunCreate(BaseModel):

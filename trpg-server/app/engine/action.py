@@ -53,7 +53,7 @@ from typing import Annotated, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
 
 from app.engine import armor
-from app.engine.check import Check, HinderedCheck, find_ability, find_difficulty, resolve_hindered
+from app.engine.check import Check, HinderedCheck, find_ability, find_difficulty, known_difficulty, resolve_hindered
 from app.engine.dice import Dice
 from app.engine.health import ChangeKind, find_magnitude
 from app.engine.injury import NO_HINDRANCE, Hindrance, find_injury
@@ -888,7 +888,7 @@ def settle(ruleset: Ruleset, action: CheckAction) -> CheckAction:
     저장하는 행동에는 늘 난이도가 적혀 있게 한다. 읽는 쪽이 "비어 있으면 기본"을 다시 따지지 않는다.
     find_fault 를 통과한 행동에만 쓴다.
     """
-    difficulty = find_difficulty(ruleset, action.difficulty)
+    difficulty = known_difficulty(ruleset, action.difficulty)
     return action.model_copy(update={'difficulty': difficulty.key})
 
 
@@ -922,7 +922,7 @@ def attempt_hindered(
     받을 때 규칙에 맞는지 본 행동(find_fault, settle)과, 같은 규칙으로 검사한 시트에만 쓴다.
     그래서 여기서는 능력과 난이도가 있는지 다시 따지지 않는다.
     """
-    difficulty = find_difficulty(ruleset, action.difficulty)
+    difficulty = known_difficulty(ruleset, action.difficulty)
     aim_raise, aim_disadvantage = called_shot_terms(ruleset, action)
     if aim_raise or raise_by:
         difficulty = difficulty.model_copy(update={'target': difficulty.target + aim_raise + raise_by})

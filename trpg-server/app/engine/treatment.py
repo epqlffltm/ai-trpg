@@ -16,7 +16,7 @@
 
 from dataclasses import dataclass
 
-from app.engine.check import HinderedCheck, find_difficulty, resolve_hindered
+from app.engine.check import HinderedCheck, known_difficulty, resolve_hindered
 from app.engine.dice import Dice
 from app.engine.injury import Hindrance, find_injury
 from app.engine.ruleset import Injury, Mishap, MishapRow, MishapTable, Ruleset
@@ -60,7 +60,9 @@ def treat(
     bonus 는 치료에 붙여 쓴 물건의 보정이다(#277). 보정(modifier)에 더한다.
     treatable 이 돌려준 부상에만 쓴다. 그래서 규칙에 치료가 있는지 다시 따지지 않는다.
     """
-    difficulty = find_difficulty(ruleset, injury.treat_difficulty)
+    # treatable 이 고른 부상이면 규칙에 치료가 있고 그 난이도도 있다(규칙의 검사)
+    assert ruleset.treatment is not None
+    difficulty = known_difficulty(ruleset, injury.treat_difficulty)
     score = abilities[ruleset.treatment.ability]
     return resolve_hindered(ruleset, score, difficulty, dice, hindrance, bonus=bonus)
 
@@ -72,6 +74,7 @@ def row_mishap(table: MishapTable, roll: int) -> MishapRow:
 
 def roll_mishap(ruleset: Ruleset, dice: Dice) -> MishapRoll:
     """치료 실패 표를 한 번 굴린다. 규칙에 치료가 있을 때만 부른다."""
+    assert ruleset.treatment is not None
     table = ruleset.treatment.mishaps
     roll = dice.roll(table.sides)
     row = row_mishap(table, roll)
@@ -84,6 +87,8 @@ def shortened(heals_at: int, injury: Injury) -> int:
 
     이 장면이 끝나는 때보다 앞이 될 수도 있다. 그러면 그 자리에서 낫는다(is_healed).
     """
+    # 치료할 수 있는 부상에는 앞당길 시간이 있다(Injury 의 검사)
+    assert injury.treat_minutes is not None
     return heals_at - injury.treat_minutes
 
 

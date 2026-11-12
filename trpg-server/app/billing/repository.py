@@ -11,6 +11,7 @@
 import uuid
 from datetime import datetime
 
+from server_core.database import affected_rows
 from sqlalchemy import Select, and_, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import ColumnElement
@@ -132,7 +133,7 @@ async def release_abandoned(session: AsyncSession, now: datetime) -> int:
         .values(status=ChargeStatus.RELEASE_DUE, next_attempt_at=now, attempts=0, last_error=None)
         .execution_options(synchronize_session=False)
     )
-    return (await session.execute(statement)).rowcount
+    return affected_rows(await session.execute(statement))
 
 
 def unfinished_rounds(table_id: uuid.UUID, still_open: bool) -> ColumnElement[bool]:
@@ -170,7 +171,7 @@ async def release_departed(
         .values(status=ChargeStatus.RELEASE_DUE, next_attempt_at=now, attempts=0, last_error=None)
         .execution_options(synchronize_session=False)
     )
-    return (await session.execute(statement)).rowcount
+    return affected_rows(await session.execute(statement))
 
 
 async def move(
@@ -191,7 +192,7 @@ async def move(
         .values(status=to, **values)
         .execution_options(synchronize_session=False)
     )
-    return (await session.execute(statement)).rowcount == 1
+    return affected_rows(await session.execute(statement)) == 1
 
 
 async def move_round(
@@ -204,7 +205,7 @@ async def move_round(
         .values(status=to, next_attempt_at=now, attempts=0, last_error=None)
         .execution_options(synchronize_session=False)
     )
-    return (await session.execute(statement)).rowcount
+    return affected_rows(await session.execute(statement))
 
 
 async def has_failed_with(session: AsyncSession, round_id: uuid.UUID, errors: tuple[str, ...]) -> bool:
@@ -241,7 +242,7 @@ async def reprice_round(
         )
         .execution_options(synchronize_session=False)
     )
-    return (await session.execute(statement)).rowcount
+    return affected_rows(await session.execute(statement))
 
 
 def unfinished_by_status() -> Select:

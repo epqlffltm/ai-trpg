@@ -143,7 +143,10 @@ def typing_frames(received: set[Notice], viewer_id: uuid.UUID) -> list[Frame]:
     typists = {
         signal.user_id
         for signal in received
-        if isinstance(signal, Signal) and signal.kind == Kind.TYPING and signal.user_id != viewer_id
+        if isinstance(signal, Signal)
+        and signal.kind == Kind.TYPING
+        and signal.user_id is not None
+        and signal.user_id != viewer_id
     }
     # 순서를 정해 둔다. 집합은 순서가 없어서 그대로 내보내면 실행할 때마다 달라진다
     return [Frame(event=TYPING_FRAME, data=json.dumps({'user_id': str(user_id)})) for user_id in sorted(typists)]

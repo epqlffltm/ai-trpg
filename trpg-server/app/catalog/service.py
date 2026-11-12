@@ -80,7 +80,8 @@ async def set_fallback(session: AsyncSession, slug: str, today: date) -> AiModel
     꺼진 모델도 정할 수 있다. 꺼져 있는 동안에는 같은 회사의 standard 중 가장 싼 모델을 쓴다(app/catalog/offers.py).
     """
     model = await require_model(session, slug)
-    if is_retired(model, today):
+    # ORM 의 행은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    if is_retired(cast(Switchable, model), today):
         raise CatalogConflictError(slug, Conflict.RETIRED)
     await repository.clear_fallback(session, model.vendor)
     model.vendor_fallback = True

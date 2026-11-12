@@ -9,14 +9,14 @@
 
 import uuid
 
-from sqlalchemy import Select, delete, func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 
 from app.assets.models import Rating, ScenarioVersion
 from app.listings.models import Listing, ListingHeart
-from app.listings.repository import PublicRow, visible
+from app.listings.repository import PublicQuery, PublicRow, visible
 
 
 async def add_heart(session: AsyncSession, user_id: uuid.UUID, scenario_id: uuid.UUID) -> None:
@@ -57,7 +57,7 @@ async def heart_state(session: AsyncSession, user_id: uuid.UUID, scenario_id: uu
     return (bool(row[0]), row[1]) if row else (False, 0)
 
 
-def hearted_by(user_id: uuid.UUID, allowed_ratings: list[Rating]) -> Select[PublicRow]:
+def hearted_by(user_id: uuid.UUID, allowed_ratings: list[Rating]) -> PublicQuery:
     """내가 관심을 둔 것 가운데 지금 볼 수 있는 것. 링크 공개도 든다(내가 이미 연 것이다)."""
     return visible(allowed_ratings).join(
         ListingHeart, (ListingHeart.scenario_id == Listing.scenario_id) & (ListingHeart.user_id == user_id)
@@ -75,7 +75,7 @@ async def list_hearted(
         .limit(limit)
         .offset(offset)
     )
-    return [tuple(row) for row in await session.execute(query)]
+    return [(listing, asset, version) for listing, asset, version in await session.execute(query)]
 
 
 async def count_hearted(session: AsyncSession, user_id: uuid.UUID, allowed_ratings: list[Rating]) -> int:

@@ -24,6 +24,8 @@ from app.listings.search import LIKE_ESCAPE, SearchTerms, contains_pattern
 
 # 공개된 것 하나를 보여 주는 데 필요한 것들: 공개 정보, 시나리오의 공통 부분(제목, 만든 사람), 공개 중인 판
 PublicRow = tuple[Listing, Asset, ScenarioVersion]
+# 공개 정보를 고르는 쿼리. 줄마다 PublicRow 의 셋이다
+PublicQuery = Select[Listing, Asset, ScenarioVersion]
 
 
 @dataclass(frozen=True)
@@ -65,7 +67,7 @@ async def find_version_by_id(session: AsyncSession, version_id: uuid.UUID) -> Sc
     return await session.get(ScenarioVersion, version_id)
 
 
-def visible(allowed_ratings: list[Rating]) -> Select[PublicRow]:
+def visible(allowed_ratings: list[Rating]) -> PublicQuery:
     """
     남에게 보여도 되는 공개 정보를 고르는 조건. 공개의 길에서 읽는 함수들이 함께 쓴다.
 
@@ -79,7 +81,7 @@ def visible(allowed_ratings: list[Rating]) -> Select[PublicRow]:
     )
 
 
-def filtered(query: Select[PublicRow], where: ListingFilter) -> Select[PublicRow]:
+def filtered(query: PublicQuery, where: ListingFilter) -> PublicQuery:
     """장르, 태그, 인원, 검색어, 성인 작품 숨김, 성향, 만든 사람으로 거른다. 비워 둔 조건은 거르지 않는다."""
     if where.genre is not None:
         query = query.where(Listing.genre == where.genre)
@@ -98,7 +100,7 @@ def filtered(query: Select[PublicRow], where: ListingFilter) -> Select[PublicRow
     return without_excluded(query, where.excluded)
 
 
-def without_excluded(query: Select[PublicRow], excluded: Exclusions) -> Select[PublicRow]:
+def without_excluded(query: PublicQuery, excluded: Exclusions) -> PublicQuery:
     """막은 제작자의 것과 막은 태그가 하나라도 붙은 것을 뺀다(#988)."""
     if excluded.creators:
         query = query.where(Asset.owner_id.not_in(excluded.creators))
@@ -107,7 +109,7 @@ def without_excluded(query: Select[PublicRow], excluded: Exclusions) -> Select[P
     return query
 
 
-def searched(query: Select[PublicRow], terms: SearchTerms) -> Select[PublicRow]:
+def searched(query: PublicQuery, terms: SearchTerms) -> PublicQuery:
     """검색어로 거른다. 태그는 그 태그가 붙은 것, 글은 제목이나 한 줄 소개에 들어 있는 것이다."""
     if terms.tag is not None:
         return query.where(Listing.tags.contains([terms.tag]))
@@ -117,7 +119,7 @@ def searched(query: Select[PublicRow], terms: SearchTerms) -> Select[PublicRow]:
     )
 
 
-def listed(query: Select[PublicRow]) -> Select[PublicRow]:
+def listed(query: PublicQuery) -> PublicQuery:
     """목록과 검색에 나오는 것만 고른다. 링크 공개(#993)는 빠진다. 하나를 열 때(find_public)는 쓰지 않는다."""
     return query.where(Listing.unlisted.is_(False))
 
@@ -130,7 +132,10 @@ async def find_public(session: AsyncSession, scenario_id: uuid.UUID, allowed_rat
     """
     query = visible(allowed_ratings).where(Listing.scenario_id == scenario_id)
     row = (await session.execute(query)).first()
-    return tuple(row) if row else None
+    if row is None:
+        return None
+    listing, asset, version = row
+    return listing, asset, version
 
 
 async def list_public(
@@ -154,7 +159,7 @@ async def list_public(
         query = query.order_by(Listing.published_at.desc(), Listing.scenario_id)
     query = query.limit(limit).offset(offset)
     result = await session.execute(query)
-    return [tuple(row) for row in result]
+    return [(listing, asset, version) for listing, asset, version in result]
 
 
 async def count_public(session: AsyncSession, allowed_ratings: list[Rating], where: ListingFilter) -> int:

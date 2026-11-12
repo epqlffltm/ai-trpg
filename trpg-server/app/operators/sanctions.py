@@ -195,6 +195,8 @@ async def sanction_scenario(
     if listing is None or listing.version_id is None:
         raise SanctionConflictError(SanctionConflict.NOT_PUBLISHED)
     version = await listings.find_version_by_id(session, listing.version_id)
+    # 공개 정보가 가리키는 판은 지우지 않는다(외래 키)
+    assert version is not None
     owner_id = scenario.asset.owner_id
 
     repository.add_sanction(
