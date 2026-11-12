@@ -9,6 +9,7 @@
 import uuid
 from collections.abc import Sequence
 
+from server_core.database import affected_rows
 from sqlalchemy import delete as delete_rows
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,8 +55,7 @@ async def delete(session: AsyncSession, lorebook: Lorebook) -> None:
 
 async def delete_owned(session: AsyncSession, owner_id: uuid.UUID) -> int:
     """이 사람의 로어북을 모두 지운다(탈퇴). 판도 함께 지워진다. 지운 수를 돌려준다."""
-    result = await session.execute(delete_rows(Lorebook).where(Lorebook.owner_id == owner_id))
-    return result.rowcount
+    return affected_rows(await session.execute(delete_rows(Lorebook).where(Lorebook.owner_id == owner_id)))
 
 
 async def list_versions(session: AsyncSession, lorebook_id: uuid.UUID) -> list[LorebookVersion]:

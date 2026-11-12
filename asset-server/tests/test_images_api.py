@@ -60,7 +60,7 @@ async def upload(client: AsyncClient, headers: dict, data: bytes, content_type: 
 
 
 async def image_count(session: AsyncSession) -> int:
-    return await session.scalar(select(func.count()).select_from(Image))
+    return await session.scalar(select(func.count()).select_from(Image)) or 0
 
 
 # --- 올리기 ---

@@ -10,6 +10,7 @@
 import uuid
 from collections.abc import Sequence
 
+from server_core.database import affected_rows
 from sqlalchemy import delete as delete_rows
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,8 +65,7 @@ async def delete_private_owned(session: AsyncSession, owner_id: uuid.UUID) -> in
     공개 캐릭터는 남긴다. 남이 쓰는 것이다(docs/architecture/asset-server.md). 1~2단계에는 운영자만 공개로 둔다.
     """
     condition = (Character.owner_id == owner_id) & (Character.visibility == Visibility.PRIVATE)
-    result = await session.execute(delete_rows(Character).where(condition))
-    return result.rowcount
+    return affected_rows(await session.execute(delete_rows(Character).where(condition)))
 
 
 async def list_versions(session: AsyncSession, character_id: uuid.UUID) -> list[CharacterVersion]:

@@ -23,6 +23,7 @@ from server_core import health, readiness
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
 from server_core.database import create_engine, create_session_factory
+from server_core.error_handlers import add_error_handler
 from server_core.input_errors import use_input_errors
 from server_core.notifications import dispatcher
 from server_core.notifications.setup import build_notifications
@@ -195,21 +196,21 @@ def create_app(
     # 내 단축어(#981). 계정의 것이다. 대화 중에 "/이름"으로 부른다
     app.include_router(shortcuts.router, prefix=API_PREFIX)
 
-    app.add_exception_handler(PersonaNotFoundError, personas.handle_persona_not_found)
-    app.add_exception_handler(PersonaLimitError, personas.handle_persona_limit)
+    add_error_handler(app, PersonaNotFoundError, personas.handle_persona_not_found)
+    add_error_handler(app, PersonaLimitError, personas.handle_persona_limit)
     # 캐릭터의 초안과 판(#567), 공개 목록. 공개 목록은 로그인하지 않아도 읽는다
     app.include_router(characters.router, prefix=API_PREFIX)
     app.include_router(character_listings.router, prefix=API_PREFIX)
 
-    app.add_exception_handler(CharacterNotFoundError, characters.handle_character_not_found)
-    app.add_exception_handler(OperatorOnlyError, characters.handle_operator_only)
-    app.add_exception_handler(CharacterNotReadyError, characters.handle_character_not_ready)
-    app.add_exception_handler(LorebookNotOwnedError, characters.handle_lorebook_not_owned)
-    app.add_exception_handler(AdultContentRequiredError, handle_adult_content_required)
+    add_error_handler(app, CharacterNotFoundError, characters.handle_character_not_found)
+    add_error_handler(app, OperatorOnlyError, characters.handle_operator_only)
+    add_error_handler(app, CharacterNotReadyError, characters.handle_character_not_ready)
+    add_error_handler(app, LorebookNotOwnedError, characters.handle_lorebook_not_owned)
+    add_error_handler(app, AdultContentRequiredError, handle_adult_content_required)
     # 그림(#566). 올리기는 로그인, 내주기는 볼 수 있는지 보고 nginx 에 넘긴다
     app.include_router(reports.router, prefix=API_PREFIX)
-    app.add_exception_handler(OwnCharacterReportError, reports.handle_own_character)
-    app.add_exception_handler(AlreadyReportedError, reports.handle_already_reported)
+    add_error_handler(app, OwnCharacterReportError, reports.handle_own_character)
+    add_error_handler(app, AlreadyReportedError, reports.handle_already_reported)
     app.include_router(operators.router, prefix=API_PREFIX)
     # 첫 화면의 홍보 배너(#994). 보는 주소와 운영자의 주소
     app.include_router(banners.public_router, prefix=API_PREFIX)
@@ -220,22 +221,22 @@ def create_app(
     app.include_router(creator_stats.router, prefix=API_PREFIX)
 
     app.include_router(lorebooks.router, prefix=API_PREFIX)
-    app.add_exception_handler(LorebookNotFoundError, lorebooks.handle_lorebook_not_found)
+    add_error_handler(app, LorebookNotFoundError, lorebooks.handle_lorebook_not_found)
     # story 의 세계관의 초안과 판(#591, 화면 명세 D7). 만든 사람만 다룬다
     app.include_router(worlds.router, prefix=API_PREFIX)
     # 공개 세계관의 목록과 소개(화면 명세 D1). 로그인하지 않아도 읽는다
     app.include_router(world_listings.router, prefix=API_PREFIX)
-    app.add_exception_handler(WorldNotFoundError, worlds.handle_world_not_found)
-    app.add_exception_handler(WorldNotReadyError, worlds.handle_world_not_ready)
-    app.add_exception_handler(CharacterNotOwnedError, worlds.handle_character_not_owned)
+    add_error_handler(app, WorldNotFoundError, worlds.handle_world_not_found)
+    add_error_handler(app, WorldNotReadyError, worlds.handle_world_not_ready)
+    add_error_handler(app, CharacterNotOwnedError, worlds.handle_character_not_owned)
 
     app.include_router(images.router, prefix=API_PREFIX)
 
-    app.add_exception_handler(UnsupportedImageError, images.handle_unsupported_image)
-    app.add_exception_handler(ImageUnreadableError, images.handle_unreadable_image)
-    app.add_exception_handler(ImageNotFoundError, images.handle_image_not_found)
-    app.add_exception_handler(ImageNotOwnedError, images.handle_image_not_owned)
-    app.add_exception_handler(ImageStoreUnavailableError, images.handle_store_unavailable)
+    add_error_handler(app, UnsupportedImageError, images.handle_unsupported_image)
+    add_error_handler(app, ImageUnreadableError, images.handle_unreadable_image)
+    add_error_handler(app, ImageNotFoundError, images.handle_image_not_found)
+    add_error_handler(app, ImageNotOwnedError, images.handle_image_not_owned)
+    add_error_handler(app, ImageStoreUnavailableError, images.handle_store_unavailable)
     # 다른 서버가 페르소나의 사본과 판을 가져가는 주소.
     # 그 서버의 서명(app/core/service_auth.py)과 사용자의 토큰을 함께 본다.
     # 프록시가 바깥에 열지 않는다(docker/nginx/templates/api.inc.template)

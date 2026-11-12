@@ -24,6 +24,7 @@ from app.characters.documents import CharacterDocument
 from app.characters.schemas import CharacterCopy, CharacterVersionNumber
 from app.core.dependencies import Session
 from app.core.service_auth import verify_caller
+from app.ratings import Rating
 
 router = APIRouter(prefix='/service/{caller}/characters', tags=['service'], dependencies=[Depends(verify_caller)])
 
@@ -35,7 +36,7 @@ async def copy_latest(character_id: uuid.UUID, user: CurrentUser, session: Sessi
     return CharacterCopy(
         id=character.id,
         version=version.number,
-        rating=version.rating,
+        rating=Rating(version.rating),
         published_at=version.created_at,
         document=CharacterDocument.model_validate(version.document),
     )

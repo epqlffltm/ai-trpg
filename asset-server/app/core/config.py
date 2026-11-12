@@ -20,7 +20,7 @@ from server_core.service_auth.signing import MIN_SECRET_LENGTH
 from server_core.settings import SCHEMA_PATTERN, CoreSettings
 
 
-class Settings(CoreSettings, NotificationSettings):
+class Settings(CoreSettings, NotificationSettings):  # pyright: ignore[reportIncompatibleVariableOverride]
     """
     설정 값의 목록과 형식. 함께 쓰는 칸은 CoreSettings 에 있다.
     알림 서버의 칸(NOTIFICATION_URL, NOTIFICATION_SECRET, NOTIFICATION_TIMEOUT_SECONDS)은
@@ -156,4 +156,4 @@ def get_settings() -> Settings:
 
     요청마다 .env 를 다시 읽지 않는다. 테스트는 이 함수를 거치지 않고 Settings 를 직접 만들어 앱에 넣는다.
     """
-    return Settings()
+    return Settings()  # pyright: ignore[reportCallIssue]  # 반드시 받는 칸은 환경 변수가 채운다

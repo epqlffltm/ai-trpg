@@ -166,10 +166,10 @@ def lorebook_copies(
     for lorebook_id in lorebook_ids:
         if lorebook_id not in found:
             problems.append(Problem.LOREBOOK_MISSING)
-        elif found[lorebook_id] is None:
+        elif (number := found[lorebook_id]) is None:
             problems.append(Problem.LOREBOOK_UNPUBLISHED)
         else:
-            copies.append(lorebook_copy(lorebook_id, found[lorebook_id], documents[lorebook_id]))
+            copies.append(lorebook_copy(lorebook_id, number, documents[lorebook_id]))
     return copies, list(dict.fromkeys(problems))
 
 

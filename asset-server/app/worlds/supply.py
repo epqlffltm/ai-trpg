@@ -22,6 +22,7 @@ from server_core.auth.dependencies import CurrentUser
 
 from app.core.dependencies import Session
 from app.core.service_auth import verify_caller
+from app.ratings import Rating
 from app.worlds import service
 from app.worlds.documents import WorldDocument
 from app.worlds.schemas import WorldCopy, WorldVersionNumber
@@ -36,7 +37,7 @@ async def copy_latest(world_id: uuid.UUID, user: CurrentUser, session: Session) 
     return WorldCopy(
         id=world.id,
         version=version.number,
-        rating=version.rating,
+        rating=Rating(version.rating),
         published_at=version.created_at,
         document=WorldDocument.model_validate(version.document),
     )

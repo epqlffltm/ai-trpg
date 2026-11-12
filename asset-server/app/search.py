@@ -10,8 +10,9 @@
 """
 
 from dataclasses import dataclass
+from typing import Any
 
-from sqlalchemy import ColumnElement, String, literal_column
+from sqlalchemy import ColumnElement, SQLColumnExpression, String, literal_column
 
 # 검색어의 길이. 캐릭터·세계관의 이름보다 길게 적을 일은 없다
 SEARCH_MAX_LENGTH = 50
@@ -50,7 +51,7 @@ def contains_pattern(text: str) -> str:
     return f'%{escaped}%'
 
 
-def name_of(document: ColumnElement) -> ColumnElement[str]:
+def name_of(document: SQLColumnExpression[Any]) -> ColumnElement[str]:
     """
     판의 문서(JSONB)에서 이름을 글로 꺼내는 식(document ->> 'name').
 

@@ -561,7 +561,7 @@ class CharacterUpdate(BaseModel):
         for name in ('starts', *WORLD_LISTS):
             if name in changes:
                 changes[name] = [entry.model_dump(mode='json') for entry in changes[name]]
-        if changes.get('affection') is not None:
+        if 'affection' in changes and self.affection is not None:
             changes['affection'] = self.affection.model_dump(mode='json')
         return changes
 

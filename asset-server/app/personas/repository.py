@@ -8,6 +8,7 @@
 
 import uuid
 
+from server_core.database import affected_rows
 from sqlalchemy import delete as delete_rows
 from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,5 +82,4 @@ async def delete(session: AsyncSession, persona: Persona) -> None:
 
 async def delete_all_owned(session: AsyncSession, owner_id: uuid.UUID) -> int:
     """이 사람의 페르소나를 모두 지운다(탈퇴). 지운 수를 돌려준다."""
-    result = await session.execute(delete_rows(Persona).where(Persona.owner_id == owner_id))
-    return result.rowcount
+    return affected_rows(await session.execute(delete_rows(Persona).where(Persona.owner_id == owner_id)))

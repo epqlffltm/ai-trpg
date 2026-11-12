@@ -588,10 +588,10 @@ def character_copies(
         character_id = uuid.UUID(member['character_id'])
         if character_id not in found:
             problems.append(Problem.CHARACTER_MISSING)
-        elif found[character_id] is None:
+        elif (published := found[character_id]) is None:
             problems.append(Problem.CHARACTER_UNPUBLISHED)
         else:
-            number, document = found[character_id]
+            number, document = published
             if document['rating'] == Rating.ADULT and world.rating == Rating.ALL:
                 problems.append(Problem.CHARACTER_RATING_TOO_HIGH)
             copies[character_id] = character_copy(character_id, number, document)
@@ -607,10 +607,10 @@ def lorebook_copies(
     for lorebook_id in world.lorebooks:
         if lorebook_id not in found:
             problems.append(Problem.LOREBOOK_MISSING)
-        elif found[lorebook_id] is None:
+        elif (published := found[lorebook_id]) is None:
             problems.append(Problem.LOREBOOK_UNPUBLISHED)
         else:
-            number, document = found[lorebook_id]
+            number, document = published
             copies.append(lorebook_copy(lorebook_id, number, document))
     return copies, list(dict.fromkeys(problems))
 
