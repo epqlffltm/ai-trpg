@@ -2,7 +2,7 @@
 // 계정을 화면으로 만들고 로그인한다. 메일 코드는 Mailpit 에서 읽는다(mailpit.ts).
 // 실행마다 새 계정이다(시각으로 이름을 짓는다). 같은 스택에서 다시 돌려도 부딪치지 않는다.
 
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 
 import { codeSentAfter, mailMark } from './mailpit';
 
@@ -75,14 +75,26 @@ export async function verifyAdult(page: Page): Promise<void> {
 }
 
 /**
- * 지갑에서 시험용 결제창(가짜 대행사)으로 골드 1,000 을 충전한다. 본인인증을 마친 계정이어야 한다.
- * 머리의 잔액(지갑: 골드 … · 실버 …)이 골드 1000 이 될 때까지 본다. 결제 서버가 넣은 것을 다시 읽은 값이다.
+ * 시험용 결제창(가짜 대행사)으로 골드 1,000 을 충전한다. 본인인증을 마친 계정이어야 한다.
+ * 충전으로 가는 길과 잔액은 머리의 내 메뉴 안에 있다(layout/AccountMenu.tsx 의 HeaderBalance).
+ * 충전한 뒤 내 메뉴의 잔액(지갑: 골드 … · 실버 …)이 골드 1000 인지 본다. 결제 서버가 넣은 것을 다시 읽은 값이다.
  */
-export async function chargeThousand(page: Page): Promise<void> {
-  await page.getByRole('link', { name: /^지갑: / }).click();
-  await page.getByRole('link', { name: '충전하기' }).click();
+export async function chargeThousand(page: Page, nickname: string): Promise<void> {
+  await openMyMenu(page, nickname).then((menu) => menu.getByRole('link', { name: '충전', exact: true }).click());
   await page.getByRole('list', { name: '충전할 상품' }).getByRole('button', { name: /골드 1,000/ }).click();
   await page.getByRole('region', { name: '시험용 결제창' }).getByRole('button', { name: '결제 성공' }).click();
   await expect(page.getByText('충전을 마쳤습니다: 골드 1,000')).toBeVisible();
-  await expect(page.getByRole('link', { name: /^지갑: 골드 1000 / })).toBeVisible();
+  const menu = await openMyMenu(page, nickname);
+  await expect(menu.getByRole('link', { name: /^지갑: 골드 1000 / })).toBeVisible();
+  // 같은 단추를 한 번 더 눌러 메뉴를 닫는다
+  await page.getByRole('button', { name: `내 메뉴: ${nickname}` }).click();
+  await expect(menu).toBeHidden();
+}
+
+/** 머리의 내 메뉴를 연다. 열린 메뉴(nav)를 돌려준다. */
+async function openMyMenu(page: Page, nickname: string): Promise<Locator> {
+  const menu = page.getByRole('navigation', { name: '내 메뉴' });
+  if (!(await menu.isVisible())) await page.getByRole('button', { name: `내 메뉴: ${nickname}` }).click();
+  await expect(menu).toBeVisible();
+  return menu;
 }

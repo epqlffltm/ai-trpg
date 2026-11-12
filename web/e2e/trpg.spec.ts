@@ -39,7 +39,7 @@ test('가입하고 충전한 사람이 손님과 TRPG 한 라운드를 한다', 
 
   await test.step('본인인증을 하고 충전한다', async () => {
     await verifyAdult(host);
-    await chargeThousand(host);
+    await chargeThousand(host, account.nickname);
   });
 
   const guestContext = await browser.newContext();
