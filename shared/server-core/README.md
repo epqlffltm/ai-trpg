@@ -67,6 +67,7 @@ FastAPI 서버들이 함께 쓰는 공통부다. 토큰 검증, 관측(로그, �
 | 작업 한 바퀴 | `job_span`, `job_scope`, `measured_job` 으로 감싼다. 찾아낸 것의 수는 `add_handled` 로 더한다(0 이면 추적을 보내지 않는다) |
 | 토큰의 주인 | `CurrentUser`(없거나 틀리면 401), `OptionalUser`(보내지 않았으면 None). `adult_content`, `is_operator` 가 실린다 |
 | 다른 서버를 부르기 | `traced_client()` 를 앱에 하나 두고, 우리 서버를 부를 때만 `outgoing_headers()` 를 붙인다. 바깥(AI 모델의 창구)에는 붙이지 않는다 |
+| 다른 서버의 서명을 받기 | `service_auth.receiving.verified_body(request, 비밀, 상한)` 으로 FastAPI 의 의존성을 만든다(#1266). 본문을 상한(기본 `BODY_MAX_BYTES`)까지 읽어 넘으면 413, 서명이 맞지 않으면 이유 없는 401 이고, 맞으면 받은 바이트를 돌려준다. 어느 비밀을 받을지는 서버가 정한다 |
 | 알림 보내기 | 아래 [알림 보내기](#알림-보내기) |
 | 결제 서버 부르기 | 설정이 `BillingSettings` 를 물려받고(`class Settings(CoreSettings, BillingSettings)`), 앱을 만들 때 `server_core.billing.setup` 의 `build_billing(settings, http_client)`, `build_price_list(settings, http_client)` 를 부른다. 가격표 이름의 머리(`narration`, `chat`, `story`)와 짓는 법은 서버에 둔다(#1266) |
 | 입력 오류 | `use_input_errors(app)` 을 앱을 만들 때 부른다. 칸이 틀린 요청을 `{"detail", "errors"}` 의 422 로 답하고 API 목록의 422 도 그 모양(`InputError`)으로 적는다. 보낸 값(`input`)은 응답에 싣지 않는다([오류의 모양](../../docs/api/README.md#오류의-모양)) |

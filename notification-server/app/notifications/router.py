@@ -24,17 +24,17 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, 
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from server_core.database import get_session
+from server_core.service_auth import receiving
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.announcements import service as announcements
-from app.core.signed_requests import body_signed_with
 from app.notifications import catalog, service
 from app.notifications.metrics import record_notification
 from app.notifications.schemas import NotificationIn, NotificationPut, PutStatus
 
 logger = logging.getLogger(__name__)
 
-# 본문의 상한과 서명을 확인하는 법은 app/core/signed_requests.py 에 있다.
+# 본문의 상한과 서명을 확인하는 법은 공용 코드 server_core/service_auth/receiving.py 에 있다(#1266).
 # 탈퇴를 받는 주소(app/withdrawals/router.py)와 함께 쓴다
 
 # 넣기의 로그의 operation 과, kind 의 표에 맞지 않아 받지 않았을 때의 error_code(docs/observability.md)
@@ -54,7 +54,7 @@ async def verified_body(request: Request, source: Annotated[str, Path(pattern=r'
     모르는 서버이거나 그 서버의 비밀이 비어 있으면 401 이다. 404 로 나누지 않는다(어느 이름이 있는지 알리지 않는다).
     """
     secret = request.app.state.settings.service_secrets().get(source, '')
-    return await body_signed_with(request, secret)
+    return await receiving.verified_body(request, secret)
 
 
 def parse_notification(body: bytes) -> NotificationIn:

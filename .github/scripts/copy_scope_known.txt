@@ -5,7 +5,6 @@
 asset-server/app/banners/schemas.py::BannerUpdate trpg-server/app/banners/schemas.py::BannerUpdate
 asset-server/app/characters/documents.py::legacy_scenes chat-server/app/assets/schemas.py::legacy_scenes
 asset-server/app/characters/models.py::TimeOfDay chat-server/app/world/clock.py::TimeOfDay trpg-server/app/calendar/clock.py::TimeOfDay
-asset-server/app/core/service_auth.py::read_body chat-server/app/core/service_auth.py::read_body story-server/app/core/service_auth.py::read_body
 asset-server/app/exclusions.py::parse_creators trpg-server/app/listings/exclusions.py::parse_creators
 asset-server/app/genres.py::Genre trpg-server/app/listings/models.py::Genre
 asset-server/app/lorebooks/models.py::LoreKind trpg-server/app/assets/models.py::LoreKind
@@ -38,7 +37,6 @@ chat-server/app/conversations/schemas.py::ConversationModelOut story-server/app/
 chat-server/app/conversations/service.py::book_for_choice story-server/app/conversations/service.py::book_for_choice
 chat-server/app/conversations/service.py::fetch_chosen_persona story-server/app/conversations/service.py::fetch_chosen_persona
 chat-server/app/conversations/service.py::pick_model story-server/app/conversations/service.py::pick_model
-chat-server/app/core/service_auth.py::verified_body notification-server/app/core/signed_requests.py::body_signed_with story-server/app/core/service_auth.py::verified_body
 chat-server/app/lore/setup.py::build_embedder story-server/app/lore/setup.py::build_embedder
 chat-server/app/lore/texts.py::missing_entries story-server/app/lore/texts.py::missing_entries
 chat-server/app/main.py::lifespan story-server/app/main.py::lifespan

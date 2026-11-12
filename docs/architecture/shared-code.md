@@ -77,7 +77,7 @@ FastAPI 서버들이 함께 쓰는 공통부다(#588). 알림 서버와 asset �
 | `settings` | 설정의 공통 칸(DB, 인증 서버, 로그, 수집기)과 그 검사(`CoreSettings`) | 서버의 설정이 물려받아 이름(`service_name`)과 기본값(`db_schema`, `jwt_audience`)을 주고 제 칸을 더한다 |
 | `auth` | 공개 키(`jwks`), 끊긴 세션(`revocations`), 토큰 검증(`tokens`), FastAPI 의존성(`CurrentUser`, `OptionalUser`) | 토큰의 대상은 설정. 앱은 `app.state` 에 설정, 공개 키, 끊긴 세션을 붙인다 |
 | `observability` | 로그의 모양과 가리기, 식별자, 요청의 미들웨어 셋, 추적, 메트릭(요청, DB, 작업, SSE), 할 일 없던 바퀴 버리기 | 서비스 이름은 설정. 스트림인 주소는 `StreamRoutes` 로 미들웨어에 넘긴다. 서버만의 계측기는 `InstrumentSet` 으로 더한다. span 을 보내기 전에 끼우는 것은 `configure_tracing(wrap=)` |
-| `service_auth` | 서버끼리의 서명 만들기와 확인 | 비밀의 이름과 받는 쪽의 목록은 서버의 설정 |
+| `service_auth` | 서버끼리의 서명 만들기와 확인(`signing`), 받는 쪽에서 본문을 상한까지 읽고 서명을 확인하는 것(`receiving`, #1266) | 비밀의 이름과 받는 쪽의 목록은 서버의 설정. 어느 비밀을 받는지(인증 서버, asset 서버, 주소의 부르는 서버)와 FastAPI 의 의존성은 서버의 `app/core/service_auth.py`. 게시판은 오류의 모양과 본문 검사의 차례가 달라 `receiving` 을 쓰지 않는다 |
 | `database` | 엔진, 세션의 틀, 요청마다의 세션, 이름 짓는 규칙 | search_path 에 더할 스키마, 풀의 크기는 `create_engine` 에 넘긴다. 표의 부모(`Base`)는 서버마다 둔다 |
 | `loops` | 뒤에서 일정하게 도는 일의 틀 | 바퀴의 일은 서버의 것 |
 | `health`, `readiness` | 상태 확인 API(`/health` 는 살아 있는가, `/health/ready` 는 DB 에 닿는가)와 응답의 모양(`HealthResponse`) | 서버는 라우터를 붙이기만 한다. 세션은 `app.state.session_factory` 에서 받는다. trpg 는 Redis 도 보므로 준비 확인을 서버(`app/api/readiness.py`)에 두고 응답의 모양만 쓴다 |

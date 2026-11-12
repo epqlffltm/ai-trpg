@@ -17,12 +17,12 @@ import uuid
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.service_auth.receiving import BODY_MAX_BYTES
 from server_core.service_auth.signing import SIGNATURE_HEADER, TOLERANCE_SECONDS
 from server_core.testing.logs import rendered
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
-from app.core.signed_requests import BODY_MAX_BYTES
 from app.main import create_app
 from app.notifications.models import Notification
 from app.notifications.router import KIND_REFUSED_ERROR_CODE
