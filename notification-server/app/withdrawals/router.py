@@ -21,9 +21,9 @@ from fastapi import APIRouter, Depends, Request, status
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from server_core.database import get_session
+from server_core.service_auth.receiving import verified_body
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.signed_requests import body_signed_with
 from app.withdrawals import service
 from app.withdrawals.schemas import Erased, WithdrawalIn, WithdrawalOut, WithdrawalStatus
 
@@ -38,7 +38,7 @@ router = APIRouter(tags=['service'])
 async def auth_signed_body(request: Request) -> bytes:
     """인증 서버의 서명을 확인하고 본문을 돌려준다. FastAPI 의 의존성으로 쓴다. 틀리면 401 이다."""
     secret = request.app.state.settings.auth_server_secret.get_secret_value()
-    return await body_signed_with(request, secret)
+    return await verified_body(request, secret)
 
 
 def parse_withdrawal(body: bytes) -> WithdrawalIn:

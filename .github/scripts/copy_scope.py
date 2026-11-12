@@ -77,6 +77,8 @@ MOVED = (
     'trpg-server/app/catalog/errors.py',
     'trpg-server/app/catalog/lookup.py',
     'trpg-server/app/catalog/sync.py',
+    # #1266: 서명해 보낸 요청을 받는 쪽을 server_core/service_auth/receiving.py 로 옮겼다
+    'notification-server/app/core/signed_requests.py',
     # #1266: 요청 수 제한의 세는 곳과 규칙, 응답을 server_core/limits/ 로 옮겼다
     'chat-server/app/limits/attempts.py',
     'chat-server/app/limits/counters.py',

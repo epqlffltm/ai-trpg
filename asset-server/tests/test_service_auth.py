@@ -20,11 +20,11 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from server_core.service_auth.receiving import BODY_MAX_BYTES
 from server_core.service_auth.signing import SIGNATURE_HEADER, TOLERANCE_SECONDS, sign
 from server_core.testing.tokens import TEST_USER_ID, FakeAuthServer, SigningKey, make_access_claims, make_token
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from app.core.service_auth import BODY_MAX_BYTES
 from app.main import API_PREFIX, create_app
 from tests.conftest import make_client, make_test_settings
 from tests.signing import TEST_SECRETS, service_path, signed_get

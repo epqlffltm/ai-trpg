@@ -19,9 +19,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
 from server_core.auth.dependencies import CurrentUser, OptionalUser
+from server_core.service_auth.receiving import read_body
 
 from app.core.dependencies import AppSettings, Session
-from app.core.service_auth import read_body
 from app.images import service
 from app.images.isolation import ImageDecoder, ImageUnreadableError
 from app.images.models import Image

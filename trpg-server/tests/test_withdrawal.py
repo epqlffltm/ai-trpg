@@ -21,13 +21,13 @@ from collections.abc import AsyncIterator
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient, Response
+from server_core.service_auth.receiving import BODY_MAX_BYTES
 from server_core.service_auth.signing import SIGNATURE_HEADER, TOLERANCE_SECONDS, sign
 from server_core.testing.tokens import FakeAuthServer
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.assets.models import Asset
-from app.core.service_auth import BODY_MAX_BYTES
 from app.listings.models import Listing
 from app.main import API_PREFIX, create_app
 from app.notifications.models import OutgoingNotification
