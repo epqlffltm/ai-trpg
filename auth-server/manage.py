@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-"""Django's command-line utility for administrative tasks."""
+# auth-server/manage.py
+
+"""
+Django 의 관리 명령의 입구(migrate, runserver, 워커와 주기 명령). 설정은 config/settings.py 다.
+마이그레이션과 주기 명령은 DB 의 시간 한도를 풀고 붙는다(config/db_limits.py).
+"""
 
 import os
 import sys

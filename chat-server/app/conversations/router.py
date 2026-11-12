@@ -308,15 +308,15 @@ async def start_conversation(
     뜻으로 찾기를 켰으면 판의 로어북 항목을 벡터로 바꾸는 일을 맡긴다(따로 돈다, app/lore/indexing.py).
     """
     conversation_id = await service.start_conversation(session, request.app.state.asset, prices, viewer, data, now)
-    request_lore_index(request, await session.get(Conversation, conversation_id))
+    request_lore_index(request, await service.conversation_character_id(session, conversation_id))
     return await read_conversation(conversation_id, viewer, session, prices, now)
 
 
-def request_lore_index(request: Request, conversation: Conversation | None) -> None:
+def request_lore_index(request: Request, character_id: uuid.UUID | None) -> None:
     """뜻으로 찾기를 켰으면 그 대화의 판의 사본의 벡터를 채우러 간다."""
     indexer = request.app.state.lore_indexer
-    if indexer is not None and conversation is not None:
-        indexer.request(conversation.character_id)
+    if indexer is not None and character_id is not None:
+        indexer.request(character_id)
 
 
 @router.get('', response_model=ConversationPage, status_code=status.HTTP_200_OK)
