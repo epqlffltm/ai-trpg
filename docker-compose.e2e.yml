@@ -3,13 +3,15 @@
 #
 #   docker compose -f docker-compose.yml -f docker-compose.e2e.yml --profile app up -d
 #
-# 더하는 것 둘과 바꾸는 것 둘이다. 연기 검사(stack)의 스택은 이 파일을 쓰지 않는다. 운영과 staging 에도 쓰지 않는다.
+# 더하는 것 둘과 바꾸는 것 넷이다. 연기 검사(stack)의 스택은 이 파일을 쓰지 않는다. 운영과 staging 에도 쓰지 않는다.
 #   - mailpit: 메일을 받아 두는 곳. 인증 서버가 가입과 로그인의 코드를 실제 메일처럼 보낸다(발송함 → auth-mail → SMTP).
 #     테스트가 Mailpit 의 API(127.0.0.1:8025)로 코드를 읽는다. 인증 서버는 STARTTLS 만 쓰므로 자체 서명 인증서로 듣고,
 #     인증의 프로세스가 그 인증서를 믿게 한다(SSL_CERT_FILE). 인증서는 e2e.sh 의 prepare 가 e2e-certs/ 에 만든다
-#   - stub-llm: 가짜 언어 모델(tools/e2e/stub_llm.py, OpenAI 호환). 게임 서버가 서버 곁의 모델(local)로 부른다
+#   - stub-llm: 가짜 언어 모델(tools/e2e/stub_llm.py, OpenAI 호환). 게임·chat·story 서버가 서버 곁의 모델(local)로 부른다
 #   - 인증 서버, 메일 워커, cron 이 Mailpit 으로 메일을 보낸다
 #   - 게임 서버가 가짜 서술자(FakeNarrator)가 아니라 언어 모델로 서술한다. 모델 목록은 e2e.sh 의 seed 가 넣는다
+#   - chat·story 서버가 같은 가짜 모델을 부른다. 모델 목록은 서버마다 e2e.sh 의 seed 가 넣는다
+#   - asset 서버가 누구나 캐릭터와 세계관을 만들고 공개하게 연다. 견본 계정이 테스트의 작품을 게시한다(tools/e2e/seed_works.py)
 #
 # 비밀은 이 실행에서만 쓰는 값이다. Mailpit 은 아무 계정이나 받는다.
 
@@ -95,3 +97,27 @@ services:
     depends_on:
       stub-llm:
         condition: service_healthy
+
+  chat-server:
+    environment:
+      LLM_BASE_URL: http://stub-llm:11434/v1
+    volumes:
+      - ./tools/e2e:/e2e:ro
+    depends_on:
+      stub-llm:
+        condition: service_healthy
+
+  story-server:
+    environment:
+      LLM_BASE_URL: http://stub-llm:11434/v1
+    volumes:
+      - ./tools/e2e:/e2e:ro
+    depends_on:
+      stub-llm:
+        condition: service_healthy
+
+  asset-server:
+    environment:
+      # 지금은 운영자만 만들고 공개한다. 견본 계정을 운영자로 올리지 않고 이 스택에서만 연다
+      CHARACTERS_FOR_EVERYONE: "true"
+      PUBLIC_FOR_EVERYONE: "true"

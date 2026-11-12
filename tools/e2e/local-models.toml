@@ -1,7 +1,8 @@
 # tools/e2e/local-models.toml
 #
 # 종단간 테스트(web/e2e)의 모델 목록. 서버 곁의 모델(local 창구)로 가짜 모델(tools/e2e/stub_llm.py)을 부른다.
-# 서버마다 들여오고(scripts.models sync --file) 켠다(.github/scripts/e2e.sh 의 seed). 읽는 것은 ai_core/catalog_file.py 다.
+# 서버마다 들여오고(scripts.models sync --file) 제 것을 켠다(.github/scripts/e2e.sh 의 seed). 읽는 것은 ai_core/catalog_file.py 다.
+# 게임 서버는 e2e-narrator, chat 서버는 e2e-chat, story 서버는 e2e-story 를 켠다. 다른 것은 들여오기만 하고 꺼 둔다.
 # api_model_id 가 가짜 모델이 답을 고르는 이름이다(stub_llm.py 의 REPLIES). 원가는 0 이다(값을 치르는 곳이 없다).
 # 판매가는 결제 서버의 가격표에 따로 넣는다(e2e.sh 의 PRICES). 둘이 있어야 고를 수 있는 모델이 된다.
 
@@ -12,6 +13,36 @@ slug = "e2e-narrator"
 provider = "local"
 api_model_id = "e2e-narrator"
 display_name = "E2E 서술"
+vendor = "e2e"
+grade = "basic"
+token_limit_field = "max_tokens"
+
+[[models.costs]]
+effective_from = 2026-11-01
+checked_on = 2026-11-12
+input_per_mtok = 0
+output_per_mtok = 0
+
+[[models]]
+slug = "e2e-chat"
+provider = "local"
+api_model_id = "e2e-chat"
+display_name = "E2E 대화"
+vendor = "e2e"
+grade = "basic"
+token_limit_field = "max_tokens"
+
+[[models.costs]]
+effective_from = 2026-11-01
+checked_on = 2026-11-12
+input_per_mtok = 0
+output_per_mtok = 0
+
+[[models]]
+slug = "e2e-story"
+provider = "local"
+api_model_id = "e2e-story"
+display_name = "E2E 이야기"
 vendor = "e2e"
 grade = "basic"
 token_limit_field = "max_tokens"

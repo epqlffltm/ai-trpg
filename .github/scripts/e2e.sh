@@ -8,8 +8,9 @@
 #     prepare  설정 파일(.env 아홉)과 JWT 키를 stack-smoke.sh 와 같은 방법으로 만들고, Mailpit 의 자체 서명 인증서를 만든다
 #     up       docker-compose.yml 에 docker-compose.e2e.yml 을 겹쳐 서버들(프로필 app)을 띄우고 healthy 를 기다린다.
 #              로그와 메트릭 모으기(observability)는 띄우지 않는다
-#     seed     가짜 모델을 모델 목록에 넣고 켜고(게임 서버), 그 가격을 결제 서버의 가격표에 넣고(Go 의 cmd/prices),
-#              견본 계정 둘과 견본 시나리오를 만든다(tools/dev_seed.py, 테이블은 열지 않는다)
+#     seed     가짜 모델을 모델 목록에 넣고 켜고(게임·chat·story 서버), 그 가격을 결제 서버의 가격표에 넣고(Go 의 cmd/prices),
+#              견본 계정 둘과 견본 시나리오를 만들고(tools/dev_seed.py, 테이블은 열지 않는다),
+#              견본 계정이 공개 캐릭터와 세계관을 게시한다(tools/e2e/seed_works.py)
 #     test     Playwright 로 web/e2e 를 돌린다. 브라우저는 워크플로가 먼저 받아 둔다
 #     logs     모든 컨테이너의 로그. 실패했을 때 부른다
 #     down     컨테이너와 볼륨, 만든 인증서를 지운다
@@ -26,9 +27,10 @@ WAIT_SECONDS=240
 PROXY=http://127.0.0.1:8080
 MAILPIT=http://127.0.0.1:8025
 CERTS=e2e-certs
-# 가짜 모델의 이름표와 그 가격(결제 서버의 가격표, 1인 1라운드의 크레딧)
-MODEL=e2e-narrator
-PRICES=("narration.$MODEL.i0.o0 10")
+# 서버마다 켤 가짜 모델의 이름표(tools/e2e/local-models.toml)
+MODELS=("trpg-server e2e-narrator" "chat-server e2e-chat" "story-server e2e-story")
+# 그 가격(결제 서버의 가격표). 서술은 1인 1라운드, chat·story 는 말 한 번의 크레딧
+PRICES=("narration.e2e-narrator.i0.o0 10" "chat.e2e-chat.i0.o0 10" "story.e2e-story.i0.o0 10")
 # 견본 계정의 비밀번호(tools/dev_seed.py 의 DEFAULT_PASSWORD 와 같다). 테스트가 E2E_SEED_PASSWORD 로 받는다
 SEED_PASSWORD=seed-pass-2026
 
@@ -120,10 +122,14 @@ up() {
   wait_healthy
 }
 
-# 게임 서버의 모델 목록에 가짜 모델을 넣고 켠다
+# 서버마다 모델 목록에 가짜 모델을 들여오고 제 것을 켠다
 seed_models() {
-  compose exec -T trpg-server python -m scripts.models sync --file /e2e/local-models.toml
-  compose exec -T trpg-server python -m scripts.models enable "$MODEL"
+  local line server model
+  for line in "${MODELS[@]}"; do
+    read -r server model <<<"$line"
+    compose exec -T "$server" python -m scripts.models sync --file /e2e/local-models.toml
+    compose exec -T "$server" python -m scripts.models enable "$model"
+  done
 }
 
 # 결제 서버의 가격표에 가짜 모델의 값을 넣는다. 이미지에 cmd/prices 가 없어 러너의 Go 로 돌린다.
@@ -152,10 +158,16 @@ seed_samples() {
   return 1
 }
 
+# chat·story 의 테스트가 쓸 공개 캐릭터와 세계관. 견본 계정이 있어야 한다(seed_samples 뒤)
+seed_works() {
+  python3 tools/e2e/seed_works.py --proxy "$PROXY" --password "$SEED_PASSWORD"
+}
+
 seed() {
   seed_prices
   seed_models
   seed_samples
+  seed_works
 }
 
 test_web() {

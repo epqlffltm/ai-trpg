@@ -36,8 +36,14 @@ NARRATION = (
     '일행의 발소리가 회랑에 길게 울리고, 멀리서 종이 한 번 운다. '
     '[e2e] 서술이 끝까지 왔다.'
 )
+# chat 의 답. 캐릭터 한 사람의 말이다
+CHAT_REPLY = '[e2e] 세라가 조용히 웃는다. 비가 그칠 때까지 여기 있어도 돼.'
+# story 의 답. 줄마다 말하는 사람의 표식이다(story-server 의 app/turns/segments.py). sera 는 견본 세계관의 인물이다
+STORY_REPLY = '@narration: [e2e] 학교의 종이 길게 울린다.\n@sera: [e2e] 늦었네. 기다렸어.'
 REPLIES = {
     'e2e-narrator': NARRATION,
+    'e2e-chat': CHAT_REPLY,
+    'e2e-story': STORY_REPLY,
 }
 DEFAULT_REPLY = '[e2e] 가짜 모델의 답이다.'
 # 답을 나누는 조각의 글자 수와, 조각 사이를 쉬는 시간(초)
