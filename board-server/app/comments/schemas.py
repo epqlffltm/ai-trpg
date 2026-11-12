@@ -142,16 +142,35 @@ class CommentListResponse(BaseModel):
 
 
 class CommentFields(Protocol):
-    """응답에 싣는 데 필요한 댓글의 칸들. 댓글의 행이나 고친 뒤의 값이다."""
+    """
+    응답에 싣는 데 필요한 댓글의 칸들. 댓글의 행이나 고친 뒤의 값이다.
 
-    id: int
-    post_id: int
-    parent_id: int | None
-    author_id: uuid.UUID | None
-    content: str
-    created_at: datetime
-    updated_at: datetime
-    deleted_at: datetime | None
+    읽기만 하는 칸(property)이다. 그래야 얼린 값(dataclass(frozen=True))도 이 모양을 따른다.
+    """
+
+    @property
+    def id(self) -> int: ...
+
+    @property
+    def post_id(self) -> int: ...
+
+    @property
+    def parent_id(self) -> int | None: ...
+
+    @property
+    def author_id(self) -> uuid.UUID | None: ...
+
+    @property
+    def content(self) -> str: ...
+
+    @property
+    def created_at(self) -> datetime: ...
+
+    @property
+    def updated_at(self) -> datetime: ...
+
+    @property
+    def deleted_at(self) -> datetime | None: ...
 
 
 @dataclass(frozen=True)

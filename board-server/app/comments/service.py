@@ -15,8 +15,10 @@
 """
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
+from typing import cast
 
 from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -133,7 +135,8 @@ async def list_comments(session: AsyncSession, post_id: int, after: int | None, 
     fetched = await repository.list_top_level(session, post_id, after, policy.fetch_count(size))
     piece = policy.slice_of(fetched, size, lambda comment: comment.id)
     replies = await repository.list_replies(session, post_id, [comment.id for comment in piece.items])
-    threads = threads_of(piece.items, replies)
+    # ORM 의 행과 읽은 줄은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    threads = threads_of(cast(Sequence[CommentFields], piece.items), cast(Sequence[CommentFields], replies))
     nicknames = await nicknames_of(session, authors_of(threads))
     return CommentListResponse(
         items=[to_thread_response(thread, nicknames) for thread in threads], next=record_id(piece.next)

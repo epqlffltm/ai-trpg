@@ -126,11 +126,13 @@ curl http://127.0.0.1:8002/api/v1/board/me -H "Authorization: Bearer <access 토
 ```
 uv run ruff check .
 uv run ruff format --check .
+uv run pyright
 uv run pytest
 ```
 
 - `ruff check`: 쓰지 않는 import 나 정의되지 않은 이름 같은 문제를 실행하지 않고 찾는다. 규칙은 저장소 루트의 `ruff.toml` 이다. 다른 서버들과 같다.
 - `ruff format --check`: 코드의 모양이 정해진 규칙과 맞는지 본다. 고치려면 `uv run ruff format .` 이다.
+- `pyright`: 타입을 본다. 설정은 `pyproject.toml` 의 `[tool.pyright]` 다.
 - `pytest`: `tests/` 의 테스트. 앱을 만들어 서버를 띄우지 않고 요청을 바로 넘긴다(httpx 의 `ASGITransport`). 실제 PostgreSQL 에서 돈다.
 - `uv run pytest --cov`: 같은 테스트를 돌리며 지나간 줄의 비율(커버리지)도 잰다. 대상은 `app/` 이다(`pyproject.toml` 의 `[tool.coverage.run]`).
 
@@ -778,18 +780,19 @@ PR 에서는 관문(`.github/workflows/ci.yml`)이 바뀐 파일을 보고 이 �
 1. 의존성 설치 (`uv sync --locked`): `uv.lock`과 `pyproject.toml`이 어긋나면 실패한다
 2. 린트 (`uv run ruff check .`)
 3. 모양 검사 (`uv run ruff format --check .`): 고치지 않고 검사만 한다
-4. 의존성 취약점 검사 (`uv export` 로 잠긴 운영 의존성을 해시와 함께 뽑아 `pip-audit`): dev 와 저장소 안의 공용 코드는 뺀다. 공용 코드는 `shared.yml` 이 본다
-5. 마이그레이션 끝 (`uv run alembic heads`): 끝을 찍기만 한다. 여럿이어도 실패하지 않는다
-6. 마이그레이션 적용 (`uv run alembic upgrade heads`): 빈 DB 에 처음부터 모든 끝까지 적용되는지 본다
-7. 마이그레이션 누락 검사 (`uv run alembic check`): 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
-8. 마이그레이션 되돌리기 (`uv run alembic downgrade base` 뒤 다시 `upgrade heads`)
-9. 테스트용 스키마에 마이그레이션 적용 (`DB_SCHEMA=board_test`)
-10. 테스트 (`uv run pytest --cov --cov-report=`): 지나간 줄을 센다
-11. 계약 시험의 린트와 모양 검사 (`contract/` 에서 `uv sync --locked`, ruff)
-12. 계약 시험 (`contract/` 의 `uv run pytest`): 서버를 `uv run coverage run -m app` 으로 띄워 HTTP 로만 부른다. 서버가 지나간 줄은 따로 남는다
-13. 지나간 줄 합치기 (`uv run coverage combine --append`): 테스트와 계약 시험의 것을 합친다
-14. 커버리지 요약: 합계와 덜 지나간 파일을 작업 요약(Summary)에 적는다
-15. 커버리지 기준: 합계의 줄 비율이 90% 아래면 실패한다(워크플로의 `COVERAGE_MIN`). 요약을 먼저 적으므로 실패해도 어느 파일이 덜 지나갔는지 남는다. 기준은 처음 잰 값보다 조금 낮게 잡았다. 내릴 때는 PR 에 까닭을 적는다.
+4. 타입 검사 (`uv run pyright`): `app` 과 `tests` 를 pyright 의 standard 로 본다(`pyproject.toml` 의 `[tool.pyright]`). 테스트에서만 None 의 검사 셋을 끈다
+5. 의존성 취약점 검사 (`uv export` 로 잠긴 운영 의존성을 해시와 함께 뽑아 `pip-audit`): dev 와 저장소 안의 공용 코드는 뺀다. 공용 코드는 `shared.yml` 이 본다
+6. 마이그레이션 끝 (`uv run alembic heads`): 끝을 찍기만 한다. 여럿이어도 실패하지 않는다
+7. 마이그레이션 적용 (`uv run alembic upgrade heads`): 빈 DB 에 처음부터 모든 끝까지 적용되는지 본다
+8. 마이그레이션 누락 검사 (`uv run alembic check`): 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
+9. 마이그레이션 되돌리기 (`uv run alembic downgrade base` 뒤 다시 `upgrade heads`)
+10. 테스트용 스키마에 마이그레이션 적용 (`DB_SCHEMA=board_test`)
+11. 테스트 (`uv run pytest --cov --cov-report=`): 지나간 줄을 센다
+12. 계약 시험의 린트와 모양 검사 (`contract/` 에서 `uv sync --locked`, ruff)
+13. 계약 시험 (`contract/` 의 `uv run pytest`): 서버를 `uv run coverage run -m app` 으로 띄워 HTTP 로만 부른다. 서버가 지나간 줄은 따로 남는다
+14. 지나간 줄 합치기 (`uv run coverage combine --append`): 테스트와 계약 시험의 것을 합친다
+15. 커버리지 요약: 합계와 덜 지나간 파일을 작업 요약(Summary)에 적는다
+16. 커버리지 기준: 합계의 줄 비율이 90% 아래면 실패한다(워크플로의 `COVERAGE_MIN`). 요약을 먼저 적으므로 실패해도 어느 파일이 덜 지나갔는지 남는다. 기준은 처음 잰 값보다 조금 낮게 잡았다. 내릴 때는 PR 에 까닭을 적는다.
 
 API 목록이 코드와 같은지는 관문의 `api-docs` 가 본다([API 목록(OpenAPI)](#api-목록openapi)).
 

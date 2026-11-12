@@ -20,6 +20,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from typing import cast
 
 from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -161,7 +162,9 @@ async def list_posts(session: AsyncSession, slug: str, page: int, size: int) -> 
     items = await repository.list_unpinned(session, board.id, now, policy.offset_of(page, size), size)
     total = await repository.count_unpinned(session, board.id, now)
     pinned = await repository.list_pinned(session, board.id, now) if page == policy.DEFAULT_PAGE else []
-    shown = await summary_responses(session, [*pinned, *items], {board.id: board.slug}, now)
+    # ORM 의 행과 읽은 줄은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    rows = cast(Sequence[PostSummary], [*pinned, *items])
+    shown = await summary_responses(session, rows, {board.id: board.slug}, now)
     return PostListResponse(pinned=shown[: len(pinned)], items=shown[len(pinned) :], page=page, size=size, total=total)
 
 
@@ -179,13 +182,15 @@ async def create_post(session: AsyncSession, slug: str, actor: Actor, data: Crea
     post = await repository.insert_post(session, board.id, actor.user_id, data.title, data.content)
     await session.commit()
     context = PostContext(board.slug, 0, await nickname_of(session, post.author_id), policy.current_time())
-    return to_post_response(post, post.content, context)
+    # ORM 의 행과 읽은 줄은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    return to_post_response(cast(PostSummary, post), post.content, context)
 
 
 async def read_post(session: AsyncSession, post_id: int) -> PostResponse:
     """글 하나를 본문까지."""
     post, board = await get_post(session, post_id)
-    return await full_response(session, post, post.content, board.slug)
+    # ORM 의 행과 읽은 줄은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    return await full_response(session, cast(PostSummary, post), post.content, board.slug)
 
 
 def ensure_can_edit(post: Post, board: Board, actor: Actor) -> None:
