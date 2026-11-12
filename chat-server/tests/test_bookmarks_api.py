@@ -87,7 +87,7 @@ async def messages(client: AsyncClient, headers: dict, conversation: dict) -> li
 
 
 async def count(session: AsyncSession) -> int:
-    return await session.scalar(select(func.count()).select_from(Bookmark))
+    return await session.scalar(select(func.count()).select_from(Bookmark)) or 0
 
 
 @pytest.mark.usefixtures('router')

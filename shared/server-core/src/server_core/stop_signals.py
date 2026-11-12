@@ -38,7 +38,7 @@ CHECK_EVERY_SECONDS = 5.0
 LISTEN_ERRORS = (OSError, TimeoutError, asyncpg.PostgresError)
 
 Connect = Callable[[str], Awaitable[asyncpg.Connection]]
-OnStop = Callable[[uuid.UUID], None]
+OnStop = Callable[[uuid.UUID], object]
 
 
 def channel_name(schema: str) -> str:

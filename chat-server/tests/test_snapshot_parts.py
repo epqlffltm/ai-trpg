@@ -122,6 +122,7 @@ def test_the_reference_is_the_current_outfit_or_the_portrait():
     faceless = plain.model_copy(update={'image_id': None})
     state = WorldState(place=None, minutes=0, inventory=(), visited=(), outfit=())
 
+    assert plain.image_id is not None
     assert character_targets(plain, state) == (ReferenceTarget(name='세라', image_id=plain.image_id),)
     assert character_targets(dressed, state) == (ReferenceTarget(name='세라', image_id=sprite),)
     assert character_targets(faceless, state) == ()

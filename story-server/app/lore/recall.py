@@ -75,7 +75,9 @@ class LoreRecall:
         """찾는 글을 벡터로 바꾸고 가까운 항목을 고른다. 벡터가 모자라면 만들기를 맡긴다."""
         vector = (await self.embedder.embed([plan.query]))[0]
         async with self.session_factory() as session:
-            distances = await repository.entry_distances(session, plan.world_id, self.embedder.model, vector)
+            found = await repository.entry_distances(session, plan.world_id, self.embedder.model, vector)
+        # 찾은 항목(로어북의 것)의 키로 판의 키(세계관의 것은 None)를 찾는다. Mapping 의 키는 넓혀 받지 못해 옮겨 담는다
+        distances: dict[LoreKey, float] = {key: distance for key, distance in found.items()}
         if len(distances) < indexable(plan.keys):
             self.indexer.request(plan.world_id)
         return nearest(plan.keys, distances, plan.ranked)

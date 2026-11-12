@@ -99,7 +99,7 @@ def cost(input_price: str = '0.1', output_price: str = '0.5', starts: date = TOD
     )
 
 
-async def fresh_model(session: AsyncSession, slug: str) -> AiModel:
+async def fresh_model(session: AsyncSession, slug: str) -> AiModel | None:
     """DB 에 저장된 모델을 새로 읽는다."""
     session.expire_all()
     return await session.scalar(select(AiModel).where(AiModel.slug == slug))

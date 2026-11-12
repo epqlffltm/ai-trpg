@@ -225,14 +225,15 @@ class SpeakerSplitter:
 
     def add(self, char: str, events: list[SegmentEvent]) -> None:
         """지금 줄에 글자 하나를 붙인다. 버리는 줄이면 버린다. 첫 글자 앞의 빈칸은 버린다."""
-        if self.speaker is DROPPED:
+        speaker = self.speaker
+        if isinstance(speaker, Dropped):
             return
         if not self.started:
             if char.isspace() and not self.extending:
                 return
             self.started = True
             if not self.extending:
-                events.append(SegmentStart(self.speaker, self.expression))
+                events.append(SegmentStart(speaker, self.expression))
         self.text += char
         events.append(SegmentText(char))
 
@@ -243,8 +244,10 @@ class SpeakerSplitter:
         if self.face is not None:
             for char in self.face.release():
                 self.add(char, events)
-        if self.started and self.text.strip():
-            self.keep(Segment(self.speaker, self.text.rstrip(), self.expression))
+        # 시작한 줄은 버리는 줄이 아니다(add 가 버리는 줄을 시작하지 않는다)
+        speaker = self.speaker
+        if self.started and self.text.strip() and not isinstance(speaker, Dropped):
+            self.keep(Segment(speaker, self.text.rstrip(), self.expression))
         self.head, self.decided, self.speaker, self.started, self.text = '', False, None, False, ''
         self.carrying = self.extending = False
         self.face, self.expression = None, None

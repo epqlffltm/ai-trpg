@@ -10,6 +10,7 @@
 가격 목록을 받지 못했고 받아 둔 것도 없으면 503 prices_unavailable 이다(app/billing/router.py).
 """
 
+from ai_core.catalog_contract import Grade
 from fastapi import APIRouter, status
 from server_core.auth.dependencies import CurrentUser
 from server_core.billing.prices import Change
@@ -43,7 +44,7 @@ def to_model_out(found: ModelOffer) -> ModelOut:
         slug=model.slug,
         display_name=model.display_name,
         vendor=model.vendor,
-        grade=model.grade,
+        grade=Grade(model.grade),
         allows_adult=model.allows_adult,
         retires_on=model.retires_on,
         credits=sale.credits if sale else None,

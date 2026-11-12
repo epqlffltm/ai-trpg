@@ -68,7 +68,7 @@ async def start(client: AsyncClient, headers: dict, world_id: uuid.UUID) -> dict
 
 
 async def count(session: AsyncSession, model: type) -> int:
-    return await session.scalar(select(func.count()).select_from(model))
+    return await session.scalar(select(func.count()).select_from(model)) or 0
 
 
 # --- 로그인 ---

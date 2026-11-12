@@ -20,7 +20,7 @@ Gemini 의 그림 모델(Nano Banana)을 부르는 image provider(#983). generat
 import base64
 import binascii
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any
 
 import httpx
 from pydantic import SecretStr
@@ -141,8 +141,15 @@ class GeminiImageProvider:
     aspect_ratio 는 1:1, 3:4 같은 비율, image_size 는 1K, 2K, 4K 다(값은 공급자가 검사한다).
     """
 
-    kind: ClassVar[str] = 'gemini_image'
-    supports_references: ClassVar[bool] = True
+    @property
+    def kind(self) -> str:
+        """종류. 클래스마다 정해져 있다."""
+        return 'gemini_image'
+
+    @property
+    def supports_references(self) -> bool:
+        """참고 그림을 받는가. 클래스마다 정해져 있다."""
+        return True
 
     http: httpx.AsyncClient
     base_url: str

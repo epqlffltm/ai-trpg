@@ -23,6 +23,7 @@ from app.lore.recall import MAX_DISTANCE, indexable, nearest
 from app.lore.setup import build_embedder
 from app.lore.texts import BATCH_SIZE, KeyedEntry, batches, entry_text, keyed_entries, missing_entries
 from app.turns.briefing import LoreText, read_briefing
+from app.turns.values import LoreKey
 from tests.engine_worlds import document
 
 BOOK = uuid.UUID('0c1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d')
@@ -61,7 +62,12 @@ def test_missing_entries_skip_done_and_repeated_keys():
 
 def test_nearest_takes_close_entries_outside_the_chosen_ones():
     keys = [(BOOK, 'a'), (BOOK, 'b'), (BOOK, 'c'), (None, 'd'), (BOOK, 'e')]
-    distances = {(BOOK, 'a'): 0.1, (BOOK, 'b'): 0.2, (BOOK, 'c'): MAX_DISTANCE + 0.01, (BOOK, 'e'): 0.05}
+    distances: dict[LoreKey, float] = {
+        (BOOK, 'a'): 0.1,
+        (BOOK, 'b'): 0.2,
+        (BOOK, 'c'): MAX_DISTANCE + 0.01,
+        (BOOK, 'e'): 0.05,
+    }
 
     assert nearest(keys, distances, exclude={0}) == [4, 1]
     assert nearest(keys, distances, exclude=set(), limit=1) == [4]

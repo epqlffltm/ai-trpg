@@ -64,8 +64,8 @@ async def test_a_request_gets_a_server_span_named_by_its_route(traced: AsyncClie
     assert span.attributes['http.request.method'] == 'GET'
     assert span.attributes['http.response.status_code'] == 200
     # 주소에 든 값과 주소 뒤의 값은 싣지 않는다
-    assert THING_ID not in str(dict(span.attributes))
-    assert 'query-value' not in str(dict(span.attributes))
+    assert THING_ID not in str(dict(span.attributes or {}))
+    assert 'query-value' not in str(dict(span.attributes or {}))
 
 
 async def test_the_log_trace_id_and_the_request_id_follow_the_span(
@@ -150,7 +150,7 @@ async def test_an_unmatched_address_is_marked_but_not_an_error(traced: AsyncClie
     span = spans.only()
     assert span.name == 'GET (unmatched)'
     assert span.status.status_code != StatusCode.ERROR
-    assert THING_ID not in str(dict(span.attributes))
+    assert THING_ID not in str(dict(span.attributes or {}))
 
 
 async def test_without_tracing_the_log_keeps_the_callers_trace(traced: AsyncClient, caplog: pytest.LogCaptureFixture):

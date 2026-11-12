@@ -82,7 +82,7 @@ def last_card(router: FakeRouter) -> str:
 
 
 async def summaries(session: AsyncSession) -> int:
-    return await session.scalar(select(func.count()).select_from(Summary))
+    return await session.scalar(select(func.count()).select_from(Summary)) or 0
 
 
 async def test_a_summary_is_written_and_goes_to_the_card(
@@ -253,7 +253,9 @@ async def claimed_at(session: AsyncSession, conversation: dict, since: datetime 
 
 async def row(session: AsyncSession, conversation: dict) -> Conversation:
     session.expire_all()
-    return await session.get(Conversation, uuid.UUID(conversation['id']), populate_existing=True)
+    found = await session.get(Conversation, uuid.UUID(conversation['id']), populate_existing=True)
+    assert found is not None
+    return found
 
 
 async def ready_to_summarize(app: FastAPI, client: AsyncClient, settings: Settings, headers: dict, conversation: dict):

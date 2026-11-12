@@ -22,6 +22,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
+from ai_core.catalog_contract import Grade
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 from server_core.billing.prices import PriceBook
@@ -48,6 +49,7 @@ from app.conversations.schemas import (
     PersonaChoiceOut,
     PersonaOut,
     ProgressOut,
+    SegmentOut,
     StateOut,
     WorldSummary,
     WorldView,
@@ -85,7 +87,7 @@ def to_world_summary(world: ImportedWorld) -> WorldSummary:
         version=world.version,
         name=world.name,
         image_id=world.document.get('image_id'),
-        rating=world.rating,
+        rating=Rating(world.rating),
         genre=shown_genre(world.document),
     )
 
@@ -96,7 +98,7 @@ def to_model(model: AiModel, usable: bool) -> ConversationModelOut:
         slug=model.slug,
         display_name=model.display_name,
         vendor=model.vendor,
-        grade=model.grade,
+        grade=Grade(model.grade),
         retires_on=model.retires_on,
         usable=usable,
     )
@@ -144,7 +146,7 @@ def to_message(message: Message) -> MessageOut:
         role=message.role,
         content=message.content,
         status=message.status,
-        segments=message.segments or [],
+        segments=[SegmentOut.model_validate(segment) for segment in message.segments or []],
         cast=list(message.cast or ()),
         event_id=message.event_id,
         ending_id=message.ending_id,

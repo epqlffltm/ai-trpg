@@ -144,7 +144,7 @@ async def sessions(
 
 
 async def count(session: AsyncSession, model, *where) -> int:
-    return await session.scalar(select(func.count()).select_from(model).where(*where))
+    return await session.scalar(select(func.count()).select_from(model).where(*where)) or 0
 
 
 async def counts(session: AsyncSession) -> dict[str, int]:

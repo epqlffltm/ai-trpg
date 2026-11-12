@@ -321,7 +321,9 @@ async def claimed_at(session: AsyncSession, conversation: dict, since: datetime 
 
 async def row(session: AsyncSession, conversation: dict) -> Conversation:
     session.expire_all()
-    return await session.get(Conversation, uuid.UUID(conversation['id']), populate_existing=True)
+    found = await session.get(Conversation, uuid.UUID(conversation['id']), populate_existing=True)
+    assert found is not None
+    return found
 
 
 async def ready_to_summarize(client: AsyncClient, app: FastAPI, headers: dict, conversation: dict) -> None:

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.bookmarks import repository
 from app.bookmarks.models import BOOKMARKS_PER_CONVERSATION, Bookmark
 from app.bookmarks.schemas import EXCERPT_CHARS, BookmarkOut
-from app.conversations.models import Conversation, Message
+from app.conversations.models import Conversation, Message, Role
 from app.conversations.service import MessageNotFoundError, get_conversation
 from app.core.dependencies import Viewer
 
@@ -41,7 +41,7 @@ def to_out(bookmark: Bookmark, message: Message) -> BookmarkOut:
     return BookmarkOut(
         message_id=bookmark.message_id,
         note=bookmark.note,
-        role=message.role,
+        role=Role(message.role),
         excerpt=excerpt_of(text_of(message)),
         created_at=bookmark.created_at,
     )
@@ -79,6 +79,8 @@ async def put_bookmark(
     await repository.put(session, conversation.id, message.id, note or None)
     await session.commit()
     bookmark = await repository.find(session, message.id)
+    # 방금 같은 트랜잭션에서 넣었다
+    assert bookmark is not None
     return to_out(bookmark, message)
 
 

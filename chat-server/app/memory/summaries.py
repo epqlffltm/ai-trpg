@@ -13,6 +13,7 @@
     줄마다 하나, 번호와 따옴표는 떼고, 메모의 길이(NOTE_MAX_CHARS)를 넘는 것과 빈 것은 뺀다. 틀려도 오류가 아니다
 """
 
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -39,7 +40,7 @@ class PathMessage(Protocol):
     """가지의 말 하나의 모양(id, role, content). 테이블의 Message 가 이 모양이다."""
 
     @property
-    def id(self): ...
+    def id(self) -> uuid.UUID: ...
 
     @property
     def role(self) -> str: ...
@@ -56,7 +57,7 @@ class Plan:
     """
 
     previous: str | None
-    fresh: list[PathMessage]
+    fresh: Sequence[PathMessage]
     known: tuple[str, ...] = ()
 
 

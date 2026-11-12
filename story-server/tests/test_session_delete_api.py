@@ -54,7 +54,7 @@ def url_of(conversation: dict) -> str:
 
 
 async def count(session: AsyncSession, model: type) -> int:
-    return await session.scalar(select(func.count()).select_from(model))
+    return await session.scalar(select(func.count()).select_from(model)) or 0
 
 
 async def test_deleting_needs_login(client: AsyncClient, conversation: dict):

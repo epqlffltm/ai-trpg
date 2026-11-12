@@ -16,8 +16,9 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import cast
 
-from ai_core.catalog_contract import is_offered
+from ai_core.catalog_contract import Switchable, is_offered
 from server_core.billing.price_list import PriceList
 from server_core.billing.prices import Change, Price, PriceBook, Sale, price_at
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,7 +65,8 @@ def is_sold(book: PriceBook, slug: str, now: datetime) -> bool:
 
 def offer(model: AiModel, book: PriceBook, now: datetime) -> ModelOffer | None:
     """그 모델을 지금 내줄 수 있으면 값을 붙여 돌려준다. 꺼졌거나 은퇴했거나 팔지 않으면 None."""
-    if not is_offered(model, now.date()):
+    # ORM 의 행은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    if not is_offered(cast(Switchable, model), now.date()):
         return None
     if book.free:
         return ModelOffer(model, None)

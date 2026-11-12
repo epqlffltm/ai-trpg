@@ -181,7 +181,7 @@ async def test_without_a_price_list_the_model_list_is_503(
     assert response.json()['code'] == 'prices_unavailable'
     assert response.headers['Retry-After'] == '30'
     warned = [record for record in caplog.records if record.name == 'app.billing.router']
-    assert [record.reason for record in warned] == ['unreachable']
+    assert [vars(record)['reason'] for record in warned] == ['unreachable']
 
 
 # --- 시작 ---

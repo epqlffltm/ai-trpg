@@ -796,7 +796,10 @@ cd chat-server
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run pyright
 ```
 
-CI 는 `.github/workflows/chat-server.yml` 이다. 린트, 모양, 의존성 취약점, 마이그레이션(적용, 누락, 되돌리기), 테스트와 커버리지(95% 이상)를 본다.
+타입은 pyright 의 standard 로 `app` 과 `tests` 를 본다(`pyproject.toml` 의 `[tool.pyright]`). 테스트에서만 None 의 검사 셋을 끈다.
+
+CI 는 `.github/workflows/chat-server.yml` 이다. 린트, 모양, 타입, 의존성 취약점, 마이그레이션(적용, 누락, 되돌리기), 테스트와 커버리지(95% 이상)를 본다.
 관문(`ci.yml`, `changed-servers.sh`)이 이 워크플로를 부르게 하는 것은 인프라 쪽이 이 PR 에 얹는다.

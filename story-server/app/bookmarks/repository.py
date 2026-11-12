@@ -33,7 +33,7 @@ async def find(session: AsyncSession, message_id: uuid.UUID) -> Bookmark | None:
 async def count(session: AsyncSession, conversation_id: uuid.UUID) -> int:
     """세션의 책갈피 수."""
     query = select(func.count()).select_from(Bookmark).where(Bookmark.conversation_id == conversation_id)
-    return await session.scalar(query)
+    return await session.scalar(query) or 0
 
 
 async def lock_conversation(session: AsyncSession, conversation_id: uuid.UUID) -> None:

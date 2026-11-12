@@ -11,7 +11,7 @@
 실패는 provider 와 같은 ProviderError 다. 다시 시도할지, 무엇을 할지는 부르는 쪽이 정한다.
 """
 
-from typing import ClassVar, Protocol
+from typing import Protocol
 
 
 class Embedder(Protocol):
@@ -22,8 +22,12 @@ class Embedder(Protocol):
     벡터를 저장할 때 모델의 이름을 함께 적는다. 모델이 다르면 벡터의 공간이 달라 서로 견줄 수 없다.
     """
 
-    kind: ClassVar[str]
-    model: str
+    # 읽기만 하는 이름이다. 객체의 값이나 property 로 둔다. 클래스의 값(ClassVar)은 pyright 가 이 모양으로 보지 않는다
+    @property
+    def kind(self) -> str: ...
+
+    @property
+    def model(self) -> str: ...
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """글들을 벡터들로 바꾼다. 차례는 받은 글의 차례와 같다. 실패하면 ProviderError."""

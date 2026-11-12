@@ -14,6 +14,7 @@
 story 의 답은 줄마다 말하는 사람의 표식(@mina:)이 붙어 있다. 그대로 보내 누가 무슨 말을 했는지 남게 한다.
 """
 
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -40,7 +41,7 @@ class PathMessage(Protocol):
     """가지의 말 하나의 모양(id, role, content). 테이블의 Message 가 이 모양이다."""
 
     @property
-    def id(self): ...
+    def id(self) -> uuid.UUID: ...
 
     @property
     def role(self) -> str: ...
@@ -57,7 +58,7 @@ class Plan:
     """
 
     previous: str | None
-    fresh: list[PathMessage]
+    fresh: Sequence[PathMessage]
     known: tuple[str, ...] = ()
 
 

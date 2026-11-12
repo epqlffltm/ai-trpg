@@ -31,7 +31,9 @@ def at(**changes) -> StoryState:
 
 
 def where(cast_id: str, now: StoryState) -> Whereabouts:
-    return place_of_character(WORLD.member(cast_id), now, WORLD)
+    member = WORLD.member(cast_id)
+    assert member is not None
+    return place_of_character(member, now, WORLD)
 
 
 def test_the_home_is_the_default():

@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from app.assets.schemas import ItemDocument
 from app.conversations.models import Conversation
 from app.turns.service import action_messages
 from app.world.actions import perform
@@ -49,8 +50,10 @@ DOCUMENT = make_character(world=WORLD).document
 START = initial_state(DOCUMENT)
 
 
-def item(item_id: str):
-    return find_item(DOCUMENT, item_id)
+def item(item_id: str) -> ItemDocument:
+    found = find_item(DOCUMENT, item_id)
+    assert found is not None
+    return found
 
 
 @pytest.mark.parametrize(('item_id', 'reason'), [('sword', Refusal.ITEM_NOT_FOUND), ('ring', Refusal.NOT_HELD)])

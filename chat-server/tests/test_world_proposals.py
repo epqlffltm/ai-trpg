@@ -109,6 +109,7 @@ def test_the_offer_is_rendered_for_the_card():
     doc = document()
 
     text = render_offer(offer_of(doc, start(doc)))
+    assert text is not None
 
     assert 'rose(장미), cake(케이크)' in text
     assert 'park(공원), cafe(카페)' in text

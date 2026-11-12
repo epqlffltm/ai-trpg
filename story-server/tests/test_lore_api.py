@@ -93,7 +93,7 @@ async def say(client: AsyncClient, app: FastAPI, headers: dict, conversation: di
 
 
 async def vectors(session: AsyncSession) -> int:
-    return await session.scalar(select(func.count()).select_from(LoreEmbedding))
+    return await session.scalar(select(func.count()).select_from(LoreEmbedding)) or 0
 
 
 def card(router: FakeRouter) -> str:

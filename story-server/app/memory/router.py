@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse
 from app.core.dependencies import CurrentViewer, Now, Session
 from app.limits.routing import WRITE_LIMIT
 from app.memory import service
-from app.memory.models import MemoryNote
+from app.memory.models import MemoryNote, NoteSource
 from app.memory.schemas import NoteOut, NoteWrite, SummaryOut
 from app.memory.service import NoteNotFoundError, NotesFullError
 
@@ -34,7 +34,7 @@ def to_note(note: MemoryNote) -> NoteOut:
     return NoteOut(
         id=note.id,
         text=note.text,
-        source=note.source,
+        source=NoteSource(note.source),
         pending=note.pending,
         accepted_at=note.accepted_at,
         created_at=note.created_at,

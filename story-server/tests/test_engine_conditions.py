@@ -17,7 +17,7 @@ import pytest
 
 from app.engine.conditions import is_met, match_conditions
 from app.engine.state import StoryState, start_state
-from app.engine.world import Condition, Conditions
+from app.engine.world import Condition, ConditionKind, Conditions, Match
 from tests.engine_worlds import clock, member, world
 
 WORLD = world([member('mina', start=10), member('yuna', start=50)])
@@ -33,7 +33,7 @@ def state(**changes) -> StoryState:
 
 
 def met(kind: str, now: StoryState, target: str | None = None, value: str | None = None, count: int = 1) -> bool:
-    return is_met(Condition(kind=kind, target=target, value=value, count=count), now, WORLD)
+    return is_met(Condition(kind=ConditionKind(kind), target=target, value=value, count=count), now, WORLD)
 
 
 @pytest.mark.parametrize(
@@ -84,12 +84,14 @@ def test_an_unknown_stage_or_person_is_not_met(kind: str, target: str, value: st
 
 
 def conditions(match: str, *items: tuple[str, str | None]) -> Conditions:
-    return Conditions(match=match, items=tuple(Condition(kind=kind, target=target) for kind, target in items))
+    return Conditions(
+        match=Match(match), items=tuple(Condition(kind=ConditionKind(kind), target=target) for kind, target in items)
+    )
 
 
 def test_an_empty_list_is_met():
     assert match_conditions(Conditions(), state(), WORLD) is True
-    assert match_conditions(Conditions(match='any'), state(), WORLD) is True
+    assert match_conditions(Conditions(match=Match.ANY), state(), WORLD) is True
 
 
 @pytest.mark.parametrize(

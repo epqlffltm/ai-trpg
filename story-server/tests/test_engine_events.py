@@ -145,7 +145,9 @@ def test_opening_another_event_replaces_the_waiting_one():
     read = world(CAST, [event('offer', choices=CHOICES), event('plain', repeat=True)])
     waiting, _ = open_next_event(read, start_state(read))
 
-    replaced = open_event(read, waiting, read.event('plain'))
+    plain = read.event('plain')
+    assert plain is not None
+    replaced = open_event(read, waiting, plain)
 
     assert replaced.choosing is None
 
