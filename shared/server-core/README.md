@@ -105,6 +105,7 @@ PostgreSQL 의 NOTIFY 로 모든 서버에 알리고 LISTEN 으로 듣는다(`se
 ```bash
 uv sync
 uv run ruff check . && uv run ruff format --check .
+uv run pyright
 uv run pytest --cov
 ```
 

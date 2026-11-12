@@ -30,6 +30,8 @@ packages = ["src/server_core"]
 
 [dependency-groups]
 dev = [
+    # 타입 검사(점검 P2-2). 받을 때 Node 를 함께 받아(nodejs 꾸러미) 돌릴 때 따로 내려받지 않는다
+    "pyright[nodejs]==1.1.408",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
@@ -60,3 +62,11 @@ extend = "../../ruff.toml"
 
 [tool.ruff.lint.isort]
 known-first-party = ["server_core"]
+
+[tool.pyright]
+# 공용 코드의 소스만 본다. 테스트는 가짜 객체가 많아 따로 넓힌다
+include = ["src"]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"

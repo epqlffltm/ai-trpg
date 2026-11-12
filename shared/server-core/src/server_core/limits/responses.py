@@ -36,5 +36,6 @@ async def handle_limits_unavailable(request: Request, error: LimitsUnavailable) 
 
 def use_limit_errors(app: FastAPI) -> None:
     """두 처리기를 앱에 건다. 429 는 넘었다, 503 은 세는 곳에 닿지 못해 막았다(ensure_not_blocked 만 낸다)."""
-    app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)
-    app.add_exception_handler(LimitsUnavailable, handle_limits_unavailable)
+    # Starlette 의 처리기 타입은 오류를 Exception 으로만 받는다. 등록한 오류 종류만 오므로 좁혀 받아도 된다
+    app.add_exception_handler(TooManyAttempts, handle_too_many_attempts)  # pyright: ignore[reportArgumentType]
+    app.add_exception_handler(LimitsUnavailable, handle_limits_unavailable)  # pyright: ignore[reportArgumentType]

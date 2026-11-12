@@ -73,7 +73,9 @@ def recording() -> Iterator[SpanRecorder]:
 
 def hex_trace_id(span: ReadableSpan) -> str:
     """span 의 추적 번호(소문자 16진수 32자). 로그의 trace_id 와 같은 모양이다."""
-    return trace.format_trace_id(span.context.trace_id)
+    context = span.get_span_context()
+    assert context is not None, '추적 번호가 없는 span 이다'
+    return trace.format_trace_id(context.trace_id)
 
 
 def hex_span_id(span_id: int) -> str:

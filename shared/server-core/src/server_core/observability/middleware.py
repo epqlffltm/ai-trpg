@@ -181,7 +181,7 @@ class RequestLoggingMiddleware:
     def log_finished(self, scope: Scope, status_code: int, started: float) -> None:
         """요청이 끝났다는 한 줄을 남긴다."""
         fields = request_fields(scope, status_code, started)
-        logger.log(level_of(fields['route'], status_code), '요청을 처리했다', extra=fields)
+        logger.log(level_of(str(fields['route']), status_code), '요청을 처리했다', extra=fields)
 
     def log_unhandled(self, scope: Scope) -> None:
         """처리하지 못한 예외를 남긴다. 예외를 잡은 자리(except 안)에서 부른다. 예외의 기록이 함께 실린다."""

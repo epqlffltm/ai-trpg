@@ -9,8 +9,9 @@
 
 import uuid
 from datetime import datetime
+from typing import Any, cast
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import CursorResult, delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,7 +29,8 @@ def put[T: OutgoingNotificationColumns](
     session: AsyncSession, model: type[T], user_id: uuid.UUID, kind: str, source_key: str, payload: dict
 ) -> T:
     """발송함에 알림 하나를 적는다. 저장하지 않는다. 바로 보낼 차례다."""
-    notification = model(user_id=user_id, kind=kind, source_key=source_key, payload=payload)
+    # 칸만 가진 섞는 클래스라 생성자는 서버의 표(SQLAlchemy 가 만든 것)에 있다. 타입 검사는 그것을 모른다
+    notification = model(user_id=user_id, kind=kind, source_key=source_key, payload=payload)  # pyright: ignore[reportCallIssue]
     session.add(notification)
     return notification
 
@@ -88,7 +90,10 @@ async def mark_failed(session: AsyncSession, model: Outbox, notification_id: int
 
 async def drop_stale(session: AsyncSession, model: Outbox, cutoff: datetime) -> int:
     """cutoff 전에 적고 아직 보내지 못한 알림을 지운다. 지운 수."""
-    result = await session.execute(delete(model).where(is_pending(model), model.created_at < cutoff))
+    # DELETE 의 결과는 커서의 결과다. 지운 줄의 수(rowcount)는 거기에만 있다
+    result = cast(
+        CursorResult[Any], await session.execute(delete(model).where(is_pending(model), model.created_at < cutoff))
+    )
     return result.rowcount
 
 

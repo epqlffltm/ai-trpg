@@ -57,6 +57,7 @@ chat 서버의 `app/conversation` 을 폴더째 옮겼다(#591). 규칙과 까�
 ```bash
 uv sync
 uv run ruff check . && uv run ruff format --check .
+uv run pyright
 uv run pytest --cov
 ```
 

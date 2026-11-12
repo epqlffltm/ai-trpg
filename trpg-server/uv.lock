@@ -19,6 +19,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pyright", extras = ["nodejs"], specifier = "==1.1.408" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
@@ -141,6 +142,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "aiosqlite", specifier = ">=0.22.1" },
+    { name = "pyright", extras = ["nodejs"], specifier = "==1.1.408" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
@@ -371,6 +373,7 @@ source = { editable = "../shared/conversation-core" }
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pyright", extras = ["nodejs"], specifier = "==1.1.408" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
@@ -1317,6 +1320,7 @@ provides-extras = ["redis"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pyright", extras = ["nodejs"], specifier = "==1.1.408" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },
     { name = "pytest-cov", specifier = ">=7.1.0" },

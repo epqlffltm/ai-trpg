@@ -44,10 +44,10 @@ WHOLE_BODY_FIELD = 'body'
 
 def field_name(error: Mapping[str, Any]) -> str:
     """틀린 칸의 이름. loc 를 점으로 잇는다(action.kind, items.0.name). 어디서 온 값인지(body 등)는 뺀다."""
-    loc = tuple(error.get('loc') or ())
+    loc: tuple[object, ...] = tuple(error.get('loc') or ())
     if error.get('type') == JSON_INVALID_TYPE:
         return WHOLE_BODY_FIELD
-    parts = loc[1:] if loc and loc[0] in LOCATION_ROOTS else loc
+    parts: tuple[object, ...] = loc[1:] if loc and loc[0] in LOCATION_ROOTS else loc
     if not parts:
         return str(loc[0]) if loc else WHOLE_BODY_FIELD
     return '.'.join(str(part) for part in parts)
