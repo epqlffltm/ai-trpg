@@ -13,6 +13,8 @@ import asyncio
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from opentelemetry.metrics import CallbackOptions
+from opentelemetry.sdk.metrics.export import HistogramDataPoint
 from server_core import readiness
 from server_core.observability import metrics as metrics_module
 from server_core.observability.metrics import (
@@ -24,6 +26,7 @@ from server_core.observability.metrics import (
 )
 from server_core.observability.pool_metrics import MeteredPool
 from server_core.observability.request_metrics import RequestMetricsMiddleware
+from server_core.testing.asgi import no_receive, no_send
 from server_core.testing.metrics import MetricsRecorder
 from sqlalchemy import text
 
@@ -73,6 +76,7 @@ async def test_the_duration_is_in_seconds_with_the_shared_buckets(client: AsyncC
         for metric in scope.metrics
         if metric.name == 'http_server_request_duration'
     )
+    assert isinstance(histogram, HistogramDataPoint)
     assert tuple(histogram.explicit_bounds) == DURATION_BUCKETS
 
 
@@ -81,7 +85,7 @@ async def test_a_request_that_raises_is_counted_as_500(metrics: MetricsRecorder)
         raise RuntimeError('부서졌다')
 
     with pytest.raises(RuntimeError):
-        await RequestMetricsMiddleware(broken)({'type': 'http', 'method': 'GET', 'path': '/x'}, None, None)
+        await RequestMetricsMiddleware(broken)({'type': 'http', 'method': 'GET', 'path': '/x'}, no_receive, no_send)
 
     assert metrics.value('http_server_requests', status_code=500) == 1
     assert metrics.value('http_server_active_requests') == 0
@@ -93,7 +97,7 @@ async def test_a_scope_that_is_not_http_is_not_counted(metrics: MetricsRecorder)
     async def inner(scope, receive, send) -> None:
         seen.append(scope)
 
-    await RequestMetricsMiddleware(inner)({'type': 'lifespan'}, None, None)
+    await RequestMetricsMiddleware(inner)({'type': 'lifespan'}, no_receive, no_send)
 
     assert seen == [{'type': 'lifespan'}]
     assert metrics.points('http_server_requests') == []
@@ -136,7 +140,7 @@ def test_without_a_watched_pool_there_are_no_connections(monkeypatch: pytest.Mon
     # 앱이 뜨기 전에 수집이 돌면 지켜보는 풀이 없다
     monkeypatch.setattr(metrics_module, '_watched_pool', None)
 
-    assert list(observe_pool_connections(None)) == []
+    assert list(observe_pool_connections(CallbackOptions())) == []
 
 
 def test_the_engine_uses_the_metered_pool(app: FastAPI):

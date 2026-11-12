@@ -17,7 +17,6 @@
 import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import ClassVar
 
 from ai_core.embedder import Embedder
 
@@ -38,7 +37,12 @@ class QueryEmbedder:
 
     inner: Embedder
     max_entries: int = MAX_ENTRIES
-    kind: ClassVar[str] = 'query'
+
+    @property
+    def kind(self) -> str:
+        """종류. 클래스마다 정해져 있다."""
+        return 'query'
+
     _calls: OrderedDict[str, Call] = field(default_factory=OrderedDict, init=False, repr=False)
 
     @property

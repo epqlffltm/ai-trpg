@@ -22,7 +22,7 @@ Ollama, LM Studio, vLLM, 그리고 같은 모양을 받는 클라우드 API 를 
 import asyncio
 import math
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any
 
 import httpx
 
@@ -134,7 +134,10 @@ class OpenAICompatEmbedder:
     dimensions 는 벡터의 길이다. 적으면 길이가 다른 답을 받지 않는다. 적지 않으면(None) 길이를 보지 않는다.
     """
 
-    kind: ClassVar[str] = 'openai_compat'
+    @property
+    def kind(self) -> str:
+        """종류. 클래스마다 정해져 있다."""
+        return 'openai_compat'
 
     client: httpx.AsyncClient
     base_url: str

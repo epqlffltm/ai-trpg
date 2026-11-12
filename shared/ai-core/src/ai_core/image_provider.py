@@ -84,9 +84,15 @@ class ImageProvider(Protocol):
     supports_references 가 아니면 참고 그림을 넘기지 않는다(넘기면 ProviderError(references_unsupported)).
     """
 
-    kind: str
-    model: str
-    supports_references: bool
+    # 읽기만 하는 이름이다. 객체의 값이나 property 로 둔다. 클래스의 값(ClassVar)은 pyright 가 이 모양으로 보지 않는다
+    @property
+    def kind(self) -> str: ...
+
+    @property
+    def model(self) -> str: ...
+
+    @property
+    def supports_references(self) -> bool: ...
 
     async def generate(self, request: ImageRequest) -> GeneratedImage:
         """그림 한 장을 만든다. 실패하면 ProviderError."""

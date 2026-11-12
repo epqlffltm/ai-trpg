@@ -13,7 +13,6 @@ import hashlib
 import math
 import re
 from dataclasses import dataclass, field
-from typing import ClassVar
 
 from ai_core.calls import CallRecord
 from ai_core.image_provider import REFERENCES_UNSUPPORTED, GeneratedImage, ImageRequest
@@ -60,7 +59,10 @@ class FakeProvider:
     piece_size 글자씩 조각내어 on_text 에 넘긴 뒤에 답을 돌려준다.
     """
 
-    kind: ClassVar[str] = 'fake'
+    @property
+    def kind(self) -> str:
+        """종류. 클래스마다 정해져 있다."""
+        return 'fake'
 
     reply: str = '바람이 분다.'
     truncated: bool = False
@@ -108,7 +110,10 @@ class FakeEmbedder:
     error 를 두면 부를 때마다 그 이유로 실패한다. calls 에 받은 글의 목록이 쌓인다.
     """
 
-    kind: ClassVar[str] = 'fake'
+    @property
+    def kind(self) -> str:
+        """종류. 클래스마다 정해져 있다."""
+        return 'fake'
 
     model: str = FAKE_MODEL
     error: str | None = None
@@ -142,7 +147,10 @@ class FakeImageProvider:
     supports_references 를 끄면 참고 그림을 넘길 때 진짜처럼 references_unsupported 로 실패한다.
     """
 
-    kind: ClassVar[str] = 'fake'
+    @property
+    def kind(self) -> str:
+        """종류. 클래스마다 정해져 있다."""
+        return 'fake'
 
     image: bytes = FAKE_PNG
     mime_type: str = 'image/png'

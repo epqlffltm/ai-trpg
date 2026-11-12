@@ -121,7 +121,7 @@ async def unlocks(client: AsyncClient, headers: dict, **params) -> dict:
 
 
 async def count_unlocks(session: AsyncSession) -> int:
-    return await session.scalar(select(func.count()).select_from(SceneUnlock))
+    return await session.scalar(select(func.count()).select_from(SceneUnlock)) or 0
 
 
 # --- 나오기 ---

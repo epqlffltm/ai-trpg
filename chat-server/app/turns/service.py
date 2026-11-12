@@ -28,6 +28,7 @@ import uuid
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
+from typing import cast
 
 from ai_core.costs import charge_of
 from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError
@@ -50,7 +51,7 @@ from app.achievements.schemas import EarnedAchievementOut
 from app.assets.schemas import CharacterDocument, ShortcutDocument
 from app.billing.prices import chat_code
 from app.catalog import repository as catalog
-from app.catalog.choice import is_choosable
+from app.catalog.choice import ChoosableModel, is_choosable
 from app.catalog.models import AiModel
 from app.conversations import repository as conversations
 from app.conversations.models import (
@@ -76,7 +77,7 @@ from app.lore.texts import keyed_entries
 from app.memory import repository as memory_store
 from app.memory import service as memory
 from app.memory.service import render_memory
-from app.memory.summaries import latest_summary, overflow, render_story
+from app.memory.summaries import PathMessage, latest_summary, overflow, render_story
 from app.ratings import Rating, allowed_ratings
 from app.shortcuts.calls import body_for, model_text
 from app.turns import charging, repository
@@ -339,7 +340,8 @@ async def extras_on(
     current = state if state is not None else await world.state_on(session, document, [m.id for m in path])
     plan = lore_plan_of(character, document, [*(message.content for message in path), *incoming])
     notes = await memory.notes_for_prompt(session, conversation.id)
-    dropped = overflow(path, context_chars)
+    # ORM 의 행은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    dropped = overflow(cast(Sequence[PathMessage], path), context_chars)
     summaries = await memory_store.summaries_on(session, [message.id for message in dropped])
     return CardExtras(
         story=render_story(latest_summary(dropped, summaries)),
@@ -357,7 +359,8 @@ def require_model(conversation: Conversation, model: AiModel | None, rating: Rat
     """대화의 모델의 이름표. 고르지 않았으면 ModelRequiredError, 이 대화에 쓸 수 없으면 ModelUnavailableError."""
     if conversation.model_slug is None:
         raise ModelRequiredError
-    if model is None or not is_choosable(model, rating, now.date()):
+    # ORM 의 행은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    if model is None or not is_choosable(cast(ChoosableModel, model), rating, now.date()):
         raise ModelUnavailableError
     return conversation.model_slug
 
@@ -903,7 +906,7 @@ async def store_answer(
         repository.add(session, answer)
         await session.flush()
         stored = saved(answer)
-    if stored is not None and changes:
+    if stored is not None and applied is not None and changes:
         world_states.add_state(session, stored.id, applied.state)
     return stored
 
@@ -1048,7 +1051,8 @@ async def stoppable_call(
     try:
         return await stop.call
     except asyncio.CancelledError:
-        if stop.requested and not asyncio.current_task().cancelling():
+        task = asyncio.current_task()
+        if stop.requested and task is not None and not task.cancelling():
             return failure_of(collector.finish(), STOPPED)
         stop.call.cancel()
         await save_result(session_factory, start, failure_of(collector.finish(), CANCELLED), clock())

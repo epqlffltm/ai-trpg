@@ -88,11 +88,12 @@ class SnapshotSettler:
     async def settle_one(self, snapshot: Snapshot, now: datetime) -> bool:
         """하나를 맡긴다. 맡겼으면 True. 예외가 나면 로그에 남기고 False."""
         try:
+            current: Snapshot | None = snapshot
             if snapshot.billing_status in OPEN_STATUSES:
-                snapshot = await self.abandon(snapshot, now)
-            if snapshot is None or snapshot.billing_status not in DUE_STATUSES:
+                current = await self.abandon(snapshot, now)
+            if current is None or current.billing_status not in DUE_STATUSES:
                 return False
-            await service.settle_snapshot(self.session_factory, self.billing(), snapshot, now)
+            await service.settle_snapshot(self.session_factory, self.billing(), current, now)
         except Exception:
             logger.exception(
                 '장면 그림의 청구를 정리하지 못했습니다',

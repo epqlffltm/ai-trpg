@@ -23,6 +23,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from ai_core.provider import GenerationParams
 from conversation_core.relay import Relay
+from conversation_core.sse import Frame
 from fastapi import FastAPI
 from server_core.auth.tokens import AccessClaims
 from server_core.billing.free_billing import FreeBilling
@@ -158,7 +159,7 @@ async def test_an_answer_that_cannot_be_saved_ends_the_stream_with_a_failure(
 
     await run(app, started, ScriptedProvider(), relay)
 
-    frames = [item async for item in relay.frames()]
+    frames = [item async for item in relay.frames() if isinstance(item, Frame)]
     assert (frames[-1].event, frames[-1].data) == ('failed', '{"code":"server_error"}')
 
 
@@ -223,7 +224,7 @@ async def test_a_stopped_turn_keeps_what_it_got_and_charges_it(
         'partial',
         'stopped',
     )
-    frames = [item async for item in relay.frames()]
+    frames = [item async for item in relay.frames() if isinstance(item, Frame)]
     assert frames[-1].event == 'done'
     assert '"content":"어서 와"' in frames[-1].data
     assert '"status":"partial"' in frames[-1].data
@@ -243,7 +244,7 @@ async def test_a_turn_stopped_before_any_text_is_released_at_once(
 
     generation = await generation_of(session)
     assert (generation.billing_status, generation.message_id, generation.error_code) == ('released', None, 'stopped')
-    frames = [item async for item in relay.frames()]
+    frames = [item async for item in relay.frames() if isinstance(item, Frame)]
     assert (frames[-1].event, frames[-1].data) == ('failed', '{"code":"stopped"}')
     session.expire_all()
     row = await session.get(Conversation, started.conversation_id)

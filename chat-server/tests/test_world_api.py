@@ -19,6 +19,7 @@
 
 import asyncio
 import uuid
+from collections import Counter
 
 import pytest
 from ai_core.provider import Role
@@ -125,7 +126,7 @@ async def read(client: AsyncClient, headers: dict, conversation: dict) -> dict:
 
 
 async def count_messages(session: AsyncSession) -> int:
-    return await session.scalar(select(func.count()).select_from(Message))
+    return await session.scalar(select(func.count()).select_from(Message)) or 0
 
 
 # --- 상태 ---
@@ -498,7 +499,7 @@ async def test_a_first_date_raises_affection_once(
     assert state['affection']['stage'] == '친구'
     # 숫자는 내려보내지 않지만 서버는 35 를 쥐고 있다(한 번만 올랐다)
     rows = (await session.execute(select(MessageState.affection))).scalars().all()
-    assert sorted(rows) == [35, 35, 35]
+    assert Counter(rows) == Counter({35: 3})
     assert '사용자에 대한 호감: 친구' in router.provider.calls[-1][0][0].content
 
 

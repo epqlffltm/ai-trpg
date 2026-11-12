@@ -89,11 +89,12 @@ class ChargeSettler:
     async def settle_one(self, generation: Generation, now: datetime) -> bool:
         """청구 하나를 맡긴다. 맡겼으면 True. 예외가 나면 로그에 남기고 False."""
         try:
+            current: Generation | None = generation
             if generation.billing_status in OPEN_STATUSES:
-                generation = await self.abandon(generation, now)
-            if generation is None or generation.billing_status not in DUE_STATUSES:
+                current = await self.abandon(generation, now)
+            if current is None or current.billing_status not in DUE_STATUSES:
                 return False
-            await service.settle_generation(self.session_factory, self.billing(), generation, now)
+            await service.settle_generation(self.session_factory, self.billing(), current, now)
         except Exception:
             logger.exception(
                 '청구를 정리하지 못했습니다',

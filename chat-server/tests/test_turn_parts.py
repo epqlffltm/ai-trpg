@@ -9,11 +9,13 @@ DB 를 쓰지 않는다.
 import asyncio
 import logging
 import uuid
+from typing import cast
 
 import httpx
 import pytest
 from ai_core.routing import DEEPINFRA_KIND, OPENAI_KIND, XAI_KIND
-from server_core.billing.client import BillingRejected, HoldOutcome, HoldResult
+from server_core.billing.client import Billing, BillingRejected, HoldOutcome, HoldResult
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.turns import charging
 from app.turns.charging import HoldDeclined
@@ -55,7 +57,7 @@ async def test_a_refused_hold_is_declined(
     error: BillingRejected, code: str, logged: bool, caplog: pytest.LogCaptureFixture
 ):
     with caplog.at_level(logging.ERROR, logger='app.turns.charging'), pytest.raises(HoldDeclined) as raised:
-        await charging.place_hold(Refusing(error), 'chat:gen:x', USER, 'chat.luna.i0.o0')
+        await charging.place_hold(cast(Billing, Refusing(error)), 'chat:gen:x', USER, 'chat.luna.i0.o0')
 
     # 팔지 않는 것은 버그가 아니다. 다른 거절(같은 이름표가 어긋났다)은 사람이 보도록 남긴다
     assert raised.value.code == code
@@ -63,13 +65,17 @@ async def test_a_refused_hold_is_declined(
 
 
 async def test_a_hold_that_takes_returns_quietly():
-    assert await charging.place_hold(Holding(HoldResult.HELD), 'chat:gen:x', USER, 'chat.luna.i0.o0') is None
+    assert (
+        await charging.place_hold(cast(Billing, Holding(HoldResult.HELD)), 'chat:gen:x', USER, 'chat.luna.i0.o0')
+        is None
+    )
 
 
 def test_only_providers_with_a_key_are_opened():
     settings = make_test_settings(openai_api_key='sk-test', deepinfra_api_key='di-test', xai_api_key='xai-test')
 
-    router = build_router(settings, httpx.AsyncClient(), session_factory=None)
+    # 모델 목록을 찾는 것(세션)은 열기만 하고 부르지 않는다
+    router = build_router(settings, httpx.AsyncClient(), session_factory=cast(async_sessionmaker[AsyncSession], None))
 
     assert (router.openai.kind, router.openai.base_url) == (OPENAI_KIND, settings.openai_base_url)
     assert router.deepinfra.kind == DEEPINFRA_KIND

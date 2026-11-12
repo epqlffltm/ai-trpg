@@ -18,8 +18,10 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
+from ai_core.catalog_contract import Grade
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
+from pydantic import TypeAdapter
 from server_core.billing.prices import PriceBook
 
 from app.assets.client import AssetUnavailableError
@@ -29,6 +31,7 @@ from app.conversations import service
 from app.conversations.models import Conversation, ConversationPersona, ImportedCharacter, Message, Role
 from app.conversations.schemas import (
     BranchChoice,
+    ChangeOut,
     CharacterDocumentOut,
     CharacterOut,
     CharacterSummary,
@@ -74,6 +77,9 @@ ASSET_RETRY_AFTER_SECONDS = 5
 
 # --- 응답의 모양으로 바꾸기 ---
 
+# 말에 적어 둔 상태의 변화(DB 의 JSONB, dict 의 목록)를 응답의 칩으로 읽는다
+CHANGES = TypeAdapter(list[ChangeOut])
+
 
 def to_character_summary(character: ImportedCharacter) -> CharacterSummary:
     """판의 사본을 목록의 모양으로."""
@@ -82,7 +88,7 @@ def to_character_summary(character: ImportedCharacter) -> CharacterSummary:
         version=character.version,
         name=character.name,
         image_id=character.document.get('image_id'),
-        rating=character.rating,
+        rating=Rating(character.rating),
     )
 
 
@@ -92,7 +98,7 @@ def to_model(model: AiModel, usable: bool) -> ConversationModelOut:
         slug=model.slug,
         display_name=model.display_name,
         vendor=model.vendor,
-        grade=model.grade,
+        grade=Grade(model.grade),
         retires_on=model.retires_on,
         usable=usable,
     )
@@ -106,6 +112,8 @@ def conversation_model(
     now: datetime,
 ) -> ConversationModelOut | None:
     """대화가 가리키는 모델. 고르지 않았으면 None 이다. book 이 None 이면 값을 모르는 것이다(팔고 있다고 본다)."""
+    if conversation.model_slug is None:
+        return None
     model = models.get(conversation.model_slug)
     if model is None:
         return None
@@ -166,7 +174,7 @@ def to_message(message: Message) -> MessageOut:
         edited=message.edited,
         event_scene=message.event_scene,
         expression=message.expression,
-        changes=message.changes or [],
+        changes=CHANGES.validate_python(message.changes or []),
     )
 
 
@@ -203,7 +211,7 @@ def to_detail(
         character=CharacterOut(
             id=character.source_id,
             version=character.version,
-            rating=character.rating,
+            rating=Rating(character.rating),
             document=document_out(character.document),
         ),
         persona=to_persona(persona),

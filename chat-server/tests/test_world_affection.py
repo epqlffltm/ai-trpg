@@ -99,6 +99,7 @@ def test_without_affection_nothing_changes():
 
 @pytest.mark.parametrize(('value', 'index'), [(0, 0), (29, 0), (30, 1), (69, 1), (70, 2), (100, 2)])
 def test_the_stage_is_the_last_one_reached(value: int, index: int):
+    assert DOCUMENT.affection is not None
     assert stage_index(DOCUMENT.affection, value) == index
 
 

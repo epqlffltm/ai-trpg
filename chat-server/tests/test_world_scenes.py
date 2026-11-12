@@ -16,7 +16,7 @@
 import uuid
 from dataclasses import replace
 
-from app.assets.schemas import CharacterDocument, EventSceneDocument
+from app.assets.schemas import CharacterDocument
 from app.world.actions import perform
 from app.world.scene import render_scene
 from app.world.scenes import Event, Revealed, find_scene, reveal
@@ -147,8 +147,9 @@ def test_event_scenes_are_found_by_id():
 
 
 def test_the_scene_goes_to_the_model():
-    date: EventSceneDocument = find_scene(DOCUMENT, 'date')
-    friend: EventSceneDocument = find_scene(DOCUMENT, 'friend')
+    date = find_scene(DOCUMENT, 'date')
+    friend = find_scene(DOCUMENT, 'friend')
+    assert date is not None and friend is not None
 
     assert render_scene(DOCUMENT, START, NOON, date).endswith('\n장면: date 의 장면')
     # 설명이 없으면 제목이다

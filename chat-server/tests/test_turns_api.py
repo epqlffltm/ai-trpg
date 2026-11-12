@@ -99,7 +99,9 @@ async def generation_of(session: AsyncSession) -> Generation:
 
 async def conversation_row(session: AsyncSession, conversation: dict) -> Conversation:
     session.expire_all()
-    return await session.get(Conversation, uuid.UUID(conversation['id']))
+    found = await session.get(Conversation, uuid.UUID(conversation['id']))
+    assert found is not None
+    return found
 
 
 # --- 한 번의 말 ---
