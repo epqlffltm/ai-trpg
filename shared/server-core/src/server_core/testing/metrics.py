@@ -15,7 +15,12 @@ from dataclasses import dataclass
 
 from opentelemetry.metrics import NoOpMeterProvider
 from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import HistogramDataPoint, InMemoryMetricReader
+from opentelemetry.sdk.metrics.export import (
+    ExponentialHistogramDataPoint,
+    HistogramDataPoint,
+    InMemoryMetricReader,
+    NumberDataPoint,
+)
 
 from server_core.observability.metrics import use_meter_provider
 
@@ -26,7 +31,7 @@ class Point:
 
     labels: dict
     value: float
-    unit: str
+    unit: str | None
 
 
 class MetricsRecorder:
@@ -57,11 +62,11 @@ class MetricsRecorder:
         return found[0] if found else None
 
 
-def point_value(point: object) -> float:
+def point_value(point: NumberDataPoint | HistogramDataPoint | ExponentialHistogramDataPoint) -> float:
     """점의 값. 히스토그램은 잰 횟수다."""
-    if isinstance(point, HistogramDataPoint):
-        return point.count
-    return point.value
+    if isinstance(point, NumberDataPoint):
+        return point.value
+    return point.count
 
 
 @contextmanager

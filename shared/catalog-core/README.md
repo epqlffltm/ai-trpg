@@ -69,6 +69,7 @@ chat, story, trpg 가 함께 쓰는 모델 목록의 표 코드다. 패키지 �
 ```bash
 uv sync
 uv run ruff check . && uv run ruff format --check .
+uv run pyright
 uv run pytest --cov
 ```
 

@@ -46,7 +46,7 @@ class DropIdleRounds(SpanProcessor):
         """작업의 span 이 시작하면 그 추적을 들고 있기 시작한다."""
         if is_job_root(span):
             with self._lock:
-                self._held.setdefault(span.context.trace_id, [])
+                self._held.setdefault(span.get_span_context().trace_id, [])
         self._inner.on_start(span, parent_context=parent_context)
 
     def on_end(self, span: ReadableSpan) -> None:
@@ -63,7 +63,11 @@ class DropIdleRounds(SpanProcessor):
 
         작업의 span 이면 들고 있던 것과 그것을 함께 돌려준다. 작업이 아닌 추적의 span 은 그것 하나다.
         """
-        trace_id = span.context.trace_id
+        context = span.get_span_context()
+        if context is None:
+            # 추적 번호가 없는 span 은 들고 있는 추적에 들 수 없다
+            return [span]
+        trace_id = context.trace_id
         with self._lock:
             held = self._held.get(trace_id)
             if held is None:

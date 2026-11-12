@@ -126,8 +126,12 @@ class LLMProvider(Protocol):
     실패하면 답이 없어서 모델의 이름을 답에서 읽을 수 없다. 그래서 provider 가 들고 있게 한다.
     """
 
-    kind: str
-    model: str
+    # 읽기만 한다. provider 는 바꾸지 못하는 값(frozen dataclass)이라 쓰기를 요구하지 않는다
+    @property
+    def kind(self) -> str: ...
+
+    @property
+    def model(self) -> str: ...
 
     async def complete(
         self, messages: list[ChatMessage], params: GenerationParams, on_text: TextSink = ignore_text

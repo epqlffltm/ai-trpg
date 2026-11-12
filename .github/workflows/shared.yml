@@ -1,5 +1,5 @@
 # .github/workflows/shared.yml
-# 공용 코드(shared/)의 CI. 패키지마다 린트, 모양, 의존성 취약점, 테스트를 검사한다.
+# 공용 코드(shared/)의 CI. 패키지마다 린트, 모양, 타입, 의존성 취약점, 테스트를 검사한다.
 #
 # PR 에서는 관문(.github/workflows/ci.yml)이 바뀐 파일을 보고 이 워크플로를 부른다(changed-servers.sh 의 shared).
 # 공용 코드를 쓰는 서버의 CI 도 함께 불린다. 서버마다 pyproject.toml 의 경로 의존을 읽어 고른다.
@@ -50,6 +50,10 @@ jobs:
 
       - name: 모양 검사
         run: uv run ruff format --check .
+
+      # 소스의 타입을 본다(pyproject.toml 의 [tool.pyright], 점검 P2-2). 걸리면 실패한다
+      - name: 타입 검사
+        run: uv run pyright
 
       # 쓰는 서버의 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다.
       # 선택 의존(server-core[redis])도 게임, chat, story 의 이미지에 들어가므로 함께 본다(--all-extras)
@@ -109,6 +113,10 @@ jobs:
       - name: 모양 검사
         run: uv run ruff format --check .
 
+      # 소스의 타입을 본다(pyproject.toml 의 [tool.pyright], 점검 P2-2). 걸리면 실패한다
+      - name: 타입 검사
+        run: uv run pyright
+
       # 쓰는 서버의 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다
       - name: 의존성 취약점 검사
         run: |
@@ -166,6 +174,10 @@ jobs:
       - name: 모양 검사
         run: uv run ruff format --check .
 
+      # 소스의 타입을 본다(pyproject.toml 의 [tool.pyright], 점검 P2-2). 걸리면 실패한다
+      - name: 타입 검사
+        run: uv run pyright
+
       # 쓰는 서버의 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다. 지금은 표준 라이브러리만 써서 빈 목록이다
       - name: 의존성 취약점 검사
         run: |
@@ -222,6 +234,10 @@ jobs:
 
       - name: 모양 검사
         run: uv run ruff format --check .
+
+      # 소스의 타입을 본다(pyproject.toml 의 [tool.pyright], 점검 P2-2). 걸리면 실패한다
+      - name: 타입 검사
+        run: uv run pyright
 
       # 쓰는 서버의 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다.
       # 저장소 안의 ai-core 는 해시가 없어 뺀다(--no-emit-local). ai-core 자체는 위의 작업이 본다

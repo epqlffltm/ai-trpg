@@ -54,7 +54,7 @@ class Collector:
                 self.send_header('Content-Type', 'application/x-protobuf')
                 self.end_headers()
 
-            def log_message(self, *_args: object) -> None:
+            def log_message(self, format: str, *args: object) -> None:
                 return
 
         return Handler

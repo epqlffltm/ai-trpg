@@ -45,7 +45,8 @@ class RedisCounter:
         """수를 올리지 않고 읽는다. 두 명령을 한 번에 보낸다. 따로 보내면 사이에 키가 만료될 수 있다."""
         try:
             async with self.client.pipeline(transaction=False) as pipeline:
-                count, seconds_left = await pipeline.get(key).ttl(key).execute()
+                # 파이프라인의 명령은 파이프라인을 돌려준다. redis 의 타입 정보가 await 할 것으로 적어 틀린다
+                count, seconds_left = await pipeline.get(key).ttl(key).execute()  # pyright: ignore[reportAttributeAccessIssue]
         except (RedisError, OSError, TimeoutError) as error:
             raise CounterUnavailable from error
         return Tally(int(count or 0), max(int(seconds_left), 0))

@@ -51,7 +51,7 @@ def table_of(context: ExecutionContext | None) -> str | None:
     table = getattr(statement, 'table', None)
     if table is not None:
         return getattr(table, 'name', None)
-    froms = statement.get_final_froms() if hasattr(statement, 'get_final_froms') else []
+    froms = statement.get_final_froms() if statement is not None and hasattr(statement, 'get_final_froms') else []
     names = [name for name in (getattr(found, 'name', None) for found in froms) if isinstance(name, str)]
     return names[0] if len(froms) == 1 and len(names) == 1 else None
 

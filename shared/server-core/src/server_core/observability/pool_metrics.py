@@ -13,6 +13,7 @@ SQLAlchemy 의 풀에는 "꺼내기 시작"을 알리는 이벤트가 없다(che
 """
 
 import time
+from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.pool import AsyncAdaptedQueuePool
@@ -33,5 +34,6 @@ class MeteredPool(AsyncAdaptedQueuePool):
 
 def pool_stats(engine: AsyncEngine, maximum: int) -> PoolStats:
     """엔진의 풀에서 지금의 값을 읽는 것. maximum 은 풀을 만들 때 정한 가장 많은 연결이다(설정의 db_max_connections)."""
-    pool = engine.sync_engine.pool
+    # create_engine 이 만드는 풀이다(server_core/database.py). 기본 Pool 의 모양에는 셈이 없다
+    pool = cast(AsyncAdaptedQueuePool, engine.sync_engine.pool)
     return PoolStats(idle=pool.checkedin, in_use=pool.checkedout, maximum=maximum)

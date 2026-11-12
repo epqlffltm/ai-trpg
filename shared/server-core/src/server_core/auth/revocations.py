@@ -23,6 +23,7 @@ import contextlib
 import hashlib
 import logging
 import re
+from typing import TypeIs
 
 import httpx
 
@@ -60,7 +61,7 @@ def digest_subject(subject: str) -> str:
     return hashlib.sha256(subject.encode()).hexdigest()
 
 
-def is_version(value: object) -> bool:
+def is_version(value: object) -> TypeIs[int]:
     """세션 버전으로 쓸 수 있는 값인가. 0 이상의 정수다. JSON 의 true 는 정수가 아니다."""
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 

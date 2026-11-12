@@ -19,6 +19,7 @@
 
 import tomllib
 from collections import Counter
+from collections.abc import Hashable
 from datetime import date
 from decimal import Decimal
 from importlib import resources
@@ -122,7 +123,7 @@ class ModelEntry(BaseModel):
         return self
 
 
-def repeated(values: list[object]) -> list[object]:
+def repeated[T: Hashable](values: list[T]) -> list[T]:
     """두 번 넘게 나온 값들. 처음 나온 순서다."""
     return [value for value, count in Counter(values).items() if count > 1]
 
