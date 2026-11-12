@@ -10,6 +10,7 @@
 import uuid
 from datetime import datetime
 
+from server_core.database import affected_rows
 from sqlalchemy import String, cast, delete, exists, func, literal, select
 from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,11 +61,11 @@ async def fan_out(
         .from_select(['user_id', 'source', 'source_key', 'kind', 'payload', 'created_at'], followers)
         .on_conflict_do_nothing(constraint='uq_notifications_source_key')
     )
-    result = await session.execute(statement)
-    return result.rowcount
+    return affected_rows(await session.execute(statement))
 
 
 async def delete_announcements(session: AsyncSession, creator_id: uuid.UUID) -> int:
     """그 제작자의 기록을 지운다. 탈퇴할 때 부른다. 지운 수다."""
-    result = await session.execute(delete(WorkAnnouncement).where(WorkAnnouncement.creator_id == creator_id))
-    return result.rowcount
+    return affected_rows(
+        await session.execute(delete(WorkAnnouncement).where(WorkAnnouncement.creator_id == creator_id))
+    )

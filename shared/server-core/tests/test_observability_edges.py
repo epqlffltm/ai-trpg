@@ -9,7 +9,7 @@ import logging
 from server_core.observability.formatter import CONTEXT_IDS_FIELD, context_ids
 from server_core.observability.middleware import RequestLoggingMiddleware, full_template
 from server_core.observability.setup import DropUnhandledNotice
-from tests.asgi import no_receive, no_send
+from server_core.testing.asgi import no_receive, no_send
 
 
 def make_record(logger: str, message: str) -> logging.LogRecord:

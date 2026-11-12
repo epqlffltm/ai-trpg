@@ -9,12 +9,12 @@
 
 import uuid
 from datetime import datetime
-from typing import Any, cast
 
-from sqlalchemy import CursorResult, delete, or_, select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from server_core.database import affected_rows
 from server_core.notifications.models import OutboxStatus, OutgoingNotificationColumns
 
 type Outbox = type[OutgoingNotificationColumns]
@@ -90,11 +90,7 @@ async def mark_failed(session: AsyncSession, model: Outbox, notification_id: int
 
 async def drop_stale(session: AsyncSession, model: Outbox, cutoff: datetime) -> int:
     """cutoff 전에 적고 아직 보내지 못한 알림을 지운다. 지운 수."""
-    # DELETE 의 결과는 커서의 결과다. 지운 줄의 수(rowcount)는 거기에만 있다
-    result = cast(
-        CursorResult[Any], await session.execute(delete(model).where(is_pending(model), model.created_at < cutoff))
-    )
-    return result.rowcount
+    return affected_rows(await session.execute(delete(model).where(is_pending(model), model.created_at < cutoff)))
 
 
 async def drop_for_user(session: AsyncSession, model: Outbox, user_id: uuid.UUID) -> None:

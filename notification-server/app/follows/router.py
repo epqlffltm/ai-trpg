@@ -16,7 +16,7 @@
 
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from server_core.auth.dependencies import CurrentUser
@@ -33,7 +33,7 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 Limit = Annotated[int, Query(ge=1, le=100)]
 Offset = Annotated[int, Query(ge=0)]
 
-FOLLOW_RESPONSES = {
+FOLLOW_RESPONSES: dict[int | str, dict[str, Any]] = {
     status.HTTP_409_CONFLICT: {'description': '팔로우할 수 있는 제작자의 수를 넘었다(follow_limit)'},
     status.HTTP_422_UNPROCESSABLE_CONTENT: {'description': '자기 자신이다(follow_self)'},
 }

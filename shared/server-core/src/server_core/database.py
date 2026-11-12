@@ -16,10 +16,10 @@ DB 연결. 엔진과 세션을 만들고, 요청마다 세션 하나를 내준�
 import logging
 from collections.abc import AsyncGenerator, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException, Request, status
-from sqlalchemy import text
+from sqlalchemy import CursorResult, Result, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
@@ -176,6 +176,16 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession]:
             if not is_db_timeout(error):
                 raise
             raise busy_response(error) from error
+
+
+def affected_rows(result: Result[Any]) -> int:
+    """
+    UPDATE, DELETE, INSERT 가 바꾼 줄의 수.
+
+    session.execute 는 어느 문장이든 Result 로 적혀 있지만, 이 문장들의 결과는 커서의 결과(CursorResult)다.
+    바꾼 줄의 수(rowcount)는 거기에만 있다. SELECT 의 결과에 쓰지 않는다.
+    """
+    return cast(CursorResult[Any], result).rowcount
 
 
 async def ping_database(session: AsyncSession) -> None:

@@ -97,7 +97,11 @@ async def test_a_round_is_logged_with_its_own_job_id(
         await make_pruner(app).tick()
 
     (record,) = [entry for entry in caplog.records if entry.name == LOGGER]
-    assert (record.operation, record.deleted, record.retention_days) == ('notification.prune', 1, 30)
+    assert (vars(record)['operation'], vars(record)['deleted'], vars(record)['retention_days']) == (
+        'notification.prune',
+        1,
+        30,
+    )
     assert record.levelno == logging.INFO
 
 
@@ -130,7 +134,7 @@ async def test_a_failed_round_is_logged_and_the_loop_goes_on(
     # 한 바퀴가 통째로 실패해도 멈추지 않는다. 바퀴마다 error 한 줄이다
     failures = [entry for entry in caplog.records if entry.name == LOGGER]
     assert len(failures) >= 2
-    assert {entry.error_code for entry in failures} == {'job.failed'}
+    assert {vars(entry)['error_code'] for entry in failures} == {'job.failed'}
 
 
 async def test_the_app_keeps_thirty_days_by_default(app: FastAPI):

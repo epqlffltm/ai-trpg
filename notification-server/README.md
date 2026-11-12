@@ -423,4 +423,7 @@ cd notification-server
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run pyright
 ```
+
+타입은 pyright 의 standard 로 `app` 과 `tests` 를 본다(`pyproject.toml` 의 `[tool.pyright]`). 테스트에서만 None 의 검사 셋을 끈다.

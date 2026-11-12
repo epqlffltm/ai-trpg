@@ -16,6 +16,7 @@ from httpx import ASGITransport, AsyncClient
 from server_core.observability.middleware import level_of
 from server_core.testing.logs import rendered
 from server_core.testing.tokens import FakeAuthServer, SigningKey, make_access_claims, make_token
+from starlette.types import Message
 
 from app.core.config import Settings
 from app.main import API_PREFIX, create_app
@@ -109,12 +110,12 @@ async def test_a_repeated_id_header_is_replaced(client: AsyncClient):
 async def test_control_characters_in_the_id_never_reach_the_log(caplog: pytest.LogCaptureFixture, app: FastAPI):
     # 줄바꿈이 든 머리말은 HTTP 클라이언트가 보내 주지 않는다. 미들웨어에 요청을 직접 넘긴다
     injected = b'request-12345\r\n{"level":"error","message":"forged"}'
-    sent: list[dict] = []
+    sent: list[Message] = []
 
-    async def receive() -> dict:
+    async def receive() -> Message:
         return {'type': 'http.request', 'body': b'', 'more_body': False}
 
-    async def send(message: dict) -> None:
+    async def send(message: Message) -> None:
         sent.append(message)
 
     scope = {

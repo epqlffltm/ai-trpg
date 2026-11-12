@@ -19,9 +19,9 @@ from server_core.observability.request_metrics import RequestMetricsMiddleware
 from server_core.observability.request_spans import RequestSpanMiddleware
 from server_core.observability.spans import job_span
 from server_core.observability.streams import NO_STREAMS, StreamRoutes
+from server_core.testing.asgi import no_receive
 from server_core.testing.metrics import MetricsRecorder
 from server_core.testing.spans import SpanRecorder
-from tests.asgi import no_receive
 
 STREAMS = StreamRoutes.of(r'/api/v1/chat/conversations/[^/]+/messages')
 STREAM_PATH = '/api/v1/chat/conversations/7f0c/messages'

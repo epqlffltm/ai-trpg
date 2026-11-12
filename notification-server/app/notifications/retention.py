@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from server_core import loops
+from server_core.database import affected_rows
 from server_core.loops import Running
 from server_core.observability.context import job_scope
 from server_core.observability.identifiers import new_job_id
@@ -84,8 +85,7 @@ async def delete_older_than(session: AsyncSession, before: datetime, limit: int)
     ids = list(await session.scalars(chosen))
     if not ids:
         return 0
-    result = await session.execute(delete(Notification).where(Notification.id.in_(ids)))
-    return result.rowcount
+    return affected_rows(await session.execute(delete(Notification).where(Notification.id.in_(ids))))
 
 
 @dataclass(frozen=True)

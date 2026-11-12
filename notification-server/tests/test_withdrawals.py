@@ -65,7 +65,7 @@ async def seed(session: AsyncSession, user_id: uuid.UUID, *, read: bool) -> None
 
 async def count(session: AsyncSession, model: type, user_id: uuid.UUID) -> int:
     """그 사람의 줄의 수."""
-    return await session.scalar(select(func.count()).select_from(model).where(model.user_id == user_id))
+    return await session.scalar(select(func.count()).select_from(model).where(model.user_id == user_id)) or 0
 
 
 async def remaining(session: AsyncSession, user_id: uuid.UUID) -> tuple[int, int]:
