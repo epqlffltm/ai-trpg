@@ -79,7 +79,7 @@ FastAPI 서버들이 함께 쓰는 공통부다(#588). 알림 서버와 asset �
 | `auth` | 공개 키(`jwks`), 끊긴 세션(`revocations`), 토큰 검증(`tokens`), FastAPI 의존성(`CurrentUser`, `OptionalUser`) | 토큰의 대상은 설정. 앱은 `app.state` 에 설정, 공개 키, 끊긴 세션을 붙인다 |
 | `observability` | 로그의 모양과 가리기, 식별자, 요청의 미들웨어 셋, 추적, 메트릭(요청, DB, 작업, SSE), 할 일 없던 바퀴 버리기 | 서비스 이름은 설정. 스트림인 주소는 `StreamRoutes` 로 미들웨어에 넘긴다. 서버만의 계측기는 `InstrumentSet` 으로 더한다. span 을 보내기 전에 끼우는 것은 `configure_tracing(wrap=)` |
 | `service_auth` | 서버끼리의 서명 만들기와 확인(`signing`), 받는 쪽에서 본문을 상한까지 읽고 서명을 확인하는 것(`receiving`, #1266) | 비밀의 이름과 받는 쪽의 목록은 서버의 설정. 어느 비밀을 받는지(인증 서버, asset 서버, 주소의 부르는 서버)와 FastAPI 의 의존성은 서버의 `app/core/service_auth.py`. 게시판은 오류의 모양과 본문 검사의 차례가 달라 `receiving` 을 쓰지 않는다 |
-| `database` | 엔진, 세션의 틀, 요청마다의 세션, 이름 짓는 규칙 | search_path 에 더할 스키마, 풀의 크기는 `create_engine` 에 넘긴다. 표의 부모(`Base`)는 서버마다 둔다 |
+| `database` | 엔진, 세션의 틀, 요청마다의 세션, 이름 짓는 규칙, 바꾼 줄의 수(`affected_rows`) | search_path 에 더할 스키마, 풀의 크기는 `create_engine` 에 넘긴다. 표의 부모(`Base`)는 서버마다 둔다 |
 | `loops` | 뒤에서 일정하게 도는 일의 틀 | 바퀴의 일은 서버의 것 |
 | `health`, `readiness` | 상태 확인 API(`/health` 는 살아 있는가, `/health/ready` 는 DB 에 닿는가)와 응답의 모양(`HealthResponse`) | 서버는 라우터를 붙이기만 한다. 세션은 `app.state.session_factory` 에서 받는다. trpg 는 Redis 도 보므로 준비 확인을 서버(`app/api/readiness.py`)에 두고 응답의 모양만 쓴다 |
 | `billing` | 결제 서버를 부르는 것: 모양(`Billing`)과 결과, 실제로 부르는 것(`HttpBilling`, 서명과 추적의 머리말), 받지 않는 것(`FreeBilling`), 셈(`MeteredBilling`, `billing_calls`), 가격 목록(`prices`, `HttpPriceList`), 설정의 칸(`BillingSettings`)과 만드는 것(`setup`). 게임, chat, story 가 쓴다(#1266) | 서버의 설정이 `BillingSettings` 를 물려받는다. 가격표 이름의 머리와 짓는 법(`app/billing/prices.py`), 청구 기록의 표와 정리 작업(게임 서버), 라우터의 의존성(`app/billing/routing.py`)은 서버의 것 |
@@ -226,7 +226,7 @@ chat, story, trpg 는 모델 목록의 원본 파일(`ai_core/model_catalog.toml
 
 - 템플릿마다 형식 번호를 둔다. 게임 서버의 판 형식이 이미 번호를 올리며 옛 형식을 읽을 때 지금 모양으로 바꿔 읽는다. 같은 방식을 쓴다.
 - 공용 코드가 바뀐 PR 은, 그것을 쓰는 모든 서비스의 CI 를 돌린다. 쓰는 서비스는 `changed-servers.sh` 가 서버마다 `pyproject.toml` 의 경로 의존(`path = "../shared/<이름>"`)을 읽어 고른다. 따로 표를 두지 않는다. 새 서버가 공용 코드를 쓰기 시작하면 저절로 잡힌다.
-- 공용 코드 자체는 `.github/workflows/shared.yml` 이 본다(린트, 모양, 타입, 의존성 취약점, 테스트, 커버리지 95). 타입은 pyright 의 standard 로 소스(`src`)와 테스트(`tests`)를 본다(패키지마다 `pyproject.toml` 의 `[tool.pyright]`). 테스트는 결과가 있다고 단언한 뒤 읽는 일이 많아 None 의 검사 셋(`reportOptionalMemberAccess`, `reportOptionalSubscript`, `reportOptionalOperand`)만 끈다(`executionEnvironments`). 가짜 객체는 부르는 자리에서 `cast` 로 진짜의 모양이라고 밝힌다. 서버는 아직 보지 않는다. 패키지마다 작업이 하나다(`server-core`, `ai-core`, `conversation-core`, `catalog-core`). 패키지가 늘면 작업을 하나 더한다.
+- 공용 코드 자체는 `.github/workflows/shared.yml` 이 본다(린트, 모양, 타입, 의존성 취약점, 테스트, 커버리지 95). 타입은 pyright 의 standard 로 소스(`src`)와 테스트(`tests`)를 본다(패키지마다 `pyproject.toml` 의 `[tool.pyright]`). 테스트는 결과가 있다고 단언한 뒤 읽는 일이 많아 None 의 검사 셋(`reportOptionalMemberAccess`, `reportOptionalSubscript`, `reportOptionalOperand`)만 끈다(`executionEnvironments`). 가짜 객체는 부르는 자리에서 `cast` 로 진짜의 모양이라고 밝힌다. 서버도 같은 설정으로 하나씩 켠다(켠 서버: notification-server). 서버마다 워크플로의 "타입 검사" 단계다. 패키지마다 작업이 하나다(`server-core`, `ai-core`, `conversation-core`, `catalog-core`). 패키지가 늘면 작업을 하나 더한다.
 - 복사해 둔 코드는 `.github/scripts/copy_scope.py` 가 본다(#1266). 서버와 공용 코드의 맨 위 함수와 클래스를 docstring 과 이름을 뺀 모양으로 견주어, 다섯 문장 이상이 같은 정의가 두 곳에 있으면 복제다. 이미 있던 복제는 `copy_scope_known.txt` 에 적어 두고 줄여 간다(목록은 줄기만 한다). 공용 코드로 옮겨 지운 서버의 파일은 `MOVED` 에 더해 다시 생기지 않게 한다. 서버만 고친 PR 에서도 돌도록 CI 의 `repo-python` 이 늘 돌린다.
 - 서버는 경로 의존을 editable 로 받는다. 이미지에는 `uv sync --no-editable` 로 설치된 모양을 담아, 실행 단계에 `shared/` 가 없다.
 - 형식을 바꾸는 변경은 옛 형식을 읽을 수 있게 하고, 서비스마다 한 번에 따라가지 않아도 되게 한다.

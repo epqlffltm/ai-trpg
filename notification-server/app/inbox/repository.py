@@ -8,6 +8,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
+from server_core.database import affected_rows
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,7 +33,8 @@ async def list_page(
 async def count_unread(session: AsyncSession, user_id: uuid.UUID) -> int:
     """이 사람의 읽지 않은 알림의 수. 읽지 않은 줄만 담는 색인(ix_notifications_unread)을 쓴다."""
     statement = select(func.count()).where(Notification.user_id == user_id, Notification.read_at.is_(None))
-    return await session.scalar(statement)
+    # 셈(count)은 줄이 없어도 0 이다. None 은 오지 않는다
+    return await session.scalar(statement) or 0
 
 
 async def mark_one_read(session: AsyncSession, user_id: uuid.UUID, notification_id: int, now: datetime) -> bool:
@@ -63,5 +65,4 @@ async def mark_read_up_to(session: AsyncSession, user_id: uuid.UUID, up_to: int,
         .where(Notification.user_id == user_id, Notification.read_at.is_(None), Notification.id <= up_to)
         .values(read_at=now)
     )
-    result = await session.execute(statement)
-    return result.rowcount
+    return affected_rows(await session.execute(statement))

@@ -16,8 +16,8 @@ from server_core.observability.metrics import use_meter_provider
 from server_core.observability.request_spans import RequestSpanMiddleware
 from server_core.observability.spans import tracer, use_provider
 from server_core.observability.tracing import build_provider, configure_tracing, shutdown_tracing
+from server_core.testing.asgi import no_receive, no_send
 from server_core.testing.collector import Collector
-from tests.asgi import no_receive, no_send
 from tests.conftest import make_test_settings
 
 

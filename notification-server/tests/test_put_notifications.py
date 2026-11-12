@@ -55,7 +55,7 @@ def make_body(**overrides) -> dict:
 
 
 async def count_rows(session: AsyncSession) -> int:
-    return await session.scalar(select(func.count()).select_from(Notification))
+    return await session.scalar(select(func.count()).select_from(Notification)) or 0
 
 
 # --- 넣기 ---

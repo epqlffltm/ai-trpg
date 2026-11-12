@@ -94,4 +94,4 @@ def get_settings() -> Settings:
 
     요청마다 .env 를 다시 읽지 않는다. 테스트는 이 함수를 거치지 않고 Settings 를 직접 만들어 앱에 넣는다.
     """
-    return Settings()
+    return Settings()  # pyright: ignore[reportCallIssue]  # 반드시 받는 칸은 환경 변수가 채운다

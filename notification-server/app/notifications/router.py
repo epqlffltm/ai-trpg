@@ -67,7 +67,7 @@ def parse_notification(body: bytes) -> NotificationIn:
 
 def refused(kind: str, refusal: catalog.Refusal) -> HTTPException:
     """kind 의 표에 맞지 않는 알림의 응답. 넣는 서버가 무엇을 고칠지 알 수 있게 까닭과 빠진 칸을 싣는다."""
-    detail = {'code': refusal.code.value, 'kind': kind}
+    detail: dict[str, str | list[str]] = {'code': refusal.code.value, 'kind': kind}
     if refusal.missing:
         detail['missing'] = list(refusal.missing)
     return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)

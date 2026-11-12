@@ -13,7 +13,7 @@
 """
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 from server_core.auth.dependencies import CurrentUser
@@ -29,7 +29,9 @@ router = APIRouter(prefix='/me/notifications/mutes', tags=['inbox'])
 Session = Annotated[AsyncSession, Depends(get_session)]
 Kind = Annotated[str, Path(min_length=1, max_length=KIND_MAX_LENGTH)]
 
-NOT_MUTABLE_RESPONSE = {status.HTTP_422_UNPROCESSABLE_CONTENT: {'description': '끌 수 없거나 표에 없는 종류다'}}
+NOT_MUTABLE_RESPONSE: dict[int | str, dict[str, Any]] = {
+    status.HTTP_422_UNPROCESSABLE_CONTENT: {'description': '끌 수 없거나 표에 없는 종류다'}
+}
 
 
 def not_mutable(kind: str) -> HTTPException:

@@ -122,3 +122,4 @@ DB 없이 돈다. DB 에 닿는 것(쿼리의 span, 연결을 기다린 시간, 
 | `testing.metrics` | 메트릭을 메모리에 모으는 것(`recording`, `MetricsRecorder`) |
 | `testing.collector` | OTLP 를 받는 가짜 수집기(`serving`) |
 | `testing.logs` | 로그 한 줄을 서버가 내보내는 JSON 으로 읽는 것(`rendered`, `make_record`) |
+| `testing.asgi` | 미들웨어에 직접 넘기는 받기와 보내기(`no_receive`, `no_send`). 불리면 실패한다. None 을 넘기던 자리다 |

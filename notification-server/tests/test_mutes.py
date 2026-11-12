@@ -60,7 +60,9 @@ def commented(key: str, user_id: uuid.UUID = ME) -> dict:
 
 async def count_rows(session: AsyncSession, user_id: uuid.UUID) -> int:
     session.expire_all()
-    return await session.scalar(select(func.count()).select_from(Notification).where(Notification.user_id == user_id))
+    return (
+        await session.scalar(select(func.count()).select_from(Notification).where(Notification.user_id == user_id)) or 0
+    )
 
 
 # --- 설정 ---

@@ -31,10 +31,10 @@ from server_core.observability.middleware import (
 from server_core.observability.request_metrics import RequestMetricsMiddleware
 from server_core.observability.request_spans import RequestSpanMiddleware
 from server_core.observability.responses import SERVER_ERROR_DETAIL, handle_unexpected_error
+from server_core.testing.asgi import no_receive, no_send
 from server_core.testing.logs import rendered
 from server_core.testing.metrics import MetricsRecorder
 from server_core.testing.spans import SpanRecorder
-from tests.asgi import no_receive, no_send
 
 LOGGER = 'server_core.observability.middleware'
 PREFIX = '/api/v1/test'

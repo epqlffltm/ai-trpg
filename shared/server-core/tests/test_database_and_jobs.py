@@ -16,6 +16,7 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+import sqlalchemy
 from fastapi import HTTPException, Request
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -29,6 +30,7 @@ from server_core.database import (
     NO_LIMITS,
     QUERY_CANCELED,
     Limits,
+    affected_rows,
     create_engine,
     create_session_factory,
     get_session,
@@ -102,6 +104,20 @@ def test_the_pool_size_comes_from_the_environment(monkeypatch):
 def test_a_pool_size_out_of_range_is_refused(field, value):
     with pytest.raises(ValidationError):
         make_test_settings(**{field: value})
+
+
+def test_affected_rows_counts_what_a_statement_changed():
+    # 커서의 결과만 본다. 메모리의 SQLite 로 충분하다
+    engine = sqlalchemy.create_engine('sqlite://')
+    with engine.begin() as connection:
+        connection.execute(sqlalchemy.text('CREATE TABLE t (n INTEGER)'))
+        connection.execute(sqlalchemy.text('INSERT INTO t VALUES (1), (2), (3)'))
+
+        deleted = affected_rows(connection.execute(sqlalchemy.text('DELETE FROM t WHERE n > 1')))
+        none = affected_rows(connection.execute(sqlalchemy.text('UPDATE t SET n = 9 WHERE n > 5')))
+    engine.dispose()
+
+    assert (deleted, none) == (2, 0)
 
 
 async def test_a_request_gets_a_session_from_the_app():
