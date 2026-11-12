@@ -81,8 +81,14 @@ export async function verifyAdult(page: Page): Promise<void> {
  */
 export async function chargeThousand(page: Page, nickname: string): Promise<void> {
   await openMyMenu(page, nickname).then((menu) => menu.getByRole('link', { name: '충전', exact: true }).click());
-  await page.getByRole('list', { name: '충전할 상품' }).getByRole('button', { name: /골드 1,000/ }).click();
-  await page.getByRole('region', { name: '시험용 결제창' }).getByRole('button', { name: '결제 성공' }).click();
+  const checkout = page.getByRole('region', { name: '시험용 결제창' });
+  // 본인인증을 결제 서버에 알리는 것은 인증 서버의 워커(5초마다)다. 그 전에 주문하면 403 이고 화면은 상품 고르기로
+  // 돌아간다(본인인증을 마친 계정만 충전할 수 있습니다). 결제창이 열릴 때까지 다시 고른다
+  await expect(async () => {
+    await page.getByRole('list', { name: '충전할 상품' }).getByRole('button', { name: /골드 1,000/ }).click();
+    await expect(checkout).toBeVisible({ timeout: 3_000 });
+  }).toPass({ timeout: 30_000, intervals: [2_000] });
+  await checkout.getByRole('button', { name: '결제 성공' }).click();
   await expect(page.getByText('충전을 마쳤습니다: 골드 1,000')).toBeVisible();
   const menu = await openMyMenu(page, nickname);
   await expect(menu.getByRole('link', { name: /^지갑: 골드 1000 / })).toBeVisible();
