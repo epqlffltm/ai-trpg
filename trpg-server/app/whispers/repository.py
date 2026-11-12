@@ -30,7 +30,8 @@ async def last_sequence(
     )
     if before is not None:
         query = query.where(Whisper.created_at <= before)
-    return await session.scalar(query)
+    # coalesce 라 늘 수가 온다
+    return await session.scalar(query) or 0
 
 
 async def list_after(

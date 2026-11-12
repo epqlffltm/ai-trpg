@@ -9,6 +9,7 @@
 
 import enum
 import uuid
+from typing import TypeGuard
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,7 +34,7 @@ class PublicationRefusedError(Exception):
         self.code = code
 
 
-def is_active(ban: PublishingBan | None) -> bool:
+def is_active(ban: PublishingBan | None) -> TypeGuard[PublishingBan]:
     """공개 금지 중인가. 줄이 없거나 풀렸으면 아니다."""
     return ban is not None and ban.lifted_at is None
 

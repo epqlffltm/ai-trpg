@@ -22,6 +22,7 @@
 import enum
 import uuid
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -66,6 +67,9 @@ from app.assets.models import (
 )
 from app.catalog.steps import MAX_STEP
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.calendar.models import TableClock
 
 # 초대 코드의 길이(글자 수). 코드를 아는 사람만 테이블에 들어온다
 INVITE_CODE_LENGTH = 12
@@ -428,6 +432,13 @@ class GameTable(Base):
     traps: Mapped[list['TableTrap']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='TableTrap.created_at, TableTrap.id'
     )
+
+    if TYPE_CHECKING:
+        # 게임 안의 시계. 칸은 app/calendar/models.py 의 TableClock.table 의 backref 가 단다.
+        # 실행할 때는 이 줄이 없다. 타입 검사만 이 칸을 안다. relationship 으로 여기에 적으면
+        # calendar 를 가져오지 않은 프로세스(스크립트)에서 매퍼가 TableClock 을 찾지 못한다.
+        # 테이블 하나에 하나다. 만들 때 단다(start_clock)
+        clock: TableClock
 
 
 class TableMember(Base):

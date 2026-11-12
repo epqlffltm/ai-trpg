@@ -4216,11 +4216,12 @@ PR과 `main` 푸시마다 GitHub Actions가 게임 서버를 검사한다. `trpg
 1. 의존성 설치 (`uv sync --locked`): `uv.lock`과 `pyproject.toml`이 어긋나면 실패한다
 2. 린트 (`ruff check`)
 3. 모양 검사 (`ruff format --check`): 고치지 않고 검사만 한다
-4. 의존성 취약점 검사 (`pip-audit`): 운영 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다.
+4. 타입 검사 (`pyright`): `app` 을 pyright 의 standard 로 본다(`pyproject.toml` 의 `[tool.pyright]`). 걸린 것이 많아 묶음마다 켠다. 아직 켜지 않은 곳은 `exclude` 에 있다
+5. 의존성 취약점 검사 (`pip-audit`): 운영 이미지에 들어가는 의존성(dev 제외)에 알려진 취약점이 있으면 실패한다.
    고칠 수 없어 받아들이기로 한 것은 워크플로의 `--ignore-vuln` 에 까닭과 함께 적는다
-5. 마이그레이션 끝 (`alembic heads`): 끝을 찍기만 한다. 끝이 여럿이어도 실패하지 않는다([DB와 마이그레이션](#db와-마이그레이션))
-6. 마이그레이션 적용 (`alembic upgrade heads`): 빈 DB에 처음부터 모든 끝까지 적용되는지 본다
-7. 마이그레이션 누락 검사 (`alembic check`): 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
+6. 마이그레이션 끝 (`alembic heads`): 끝을 찍기만 한다. 끝이 여럿이어도 실패하지 않는다([DB와 마이그레이션](#db와-마이그레이션))
+7. 마이그레이션 적용 (`alembic upgrade heads`): 빈 DB에 처음부터 모든 끝까지 적용되는지 본다
+8. 마이그레이션 누락 검사 (`alembic check`): 모델을 바꾸고 마이그레이션을 만들지 않았으면 실패한다
 
 **groups**: 테스트의 묶음 이름을 읽는다(`scripts/ci_groups.py`). 묶음은 그 파일 한 곳에만 적는다.
 

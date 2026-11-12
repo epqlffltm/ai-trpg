@@ -32,7 +32,7 @@ SOURCE = 'game'
 SCENARIO_PUBLISHED = 'scenario.published'
 
 # 방장에게 알리는 테이블의 이벤트와 그 알림의 종류
-HOST_NOTICES = {
+HOST_NOTICES: dict[str, str] = {
     EventType.NARRATION_MODEL_RETIRING: 'narration_model.retiring',
     EventType.NARRATION_MODEL_REPLACED: 'narration_model.replaced',
     EventType.NARRATION_MODEL_UNAVAILABLE: 'narration_model.unavailable',

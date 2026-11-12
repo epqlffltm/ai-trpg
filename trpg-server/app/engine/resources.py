@@ -111,6 +111,8 @@ def shifted(level: Level, shift: ResourceShift) -> int:
         return level.maximum
     if shift.kind == ResourceShiftKind.EMPTY:
         return level.resource.min
+    # 올리기와 내리기에는 양이 있다(ResourceShift 의 검사)
+    assert shift.amount is not None
     step = shift.amount if shift.kind == ResourceShiftKind.RAISE else -shift.amount
     return clamp(level.value + step, level.resource, level.maximum)
 

@@ -11,7 +11,8 @@
 
 import uuid
 from collections.abc import Sequence
-from typing import Annotated
+from datetime import datetime
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
@@ -52,7 +53,8 @@ def to_detail(listing: Listing, version: ScenarioVersion | None) -> ListingDetai
         scenario_id=listing.scenario_id,
         tagline=listing.tagline,
         description=listing.description,
-        genre=listing.genre,
+        # 아직 정하지 않은 공개 정보(처음 연 쪽)는 장르가 비어 있다. 표의 칸은 그때 None 이다
+        genre=Genre(listing.genre) if listing.genre else None,
         tags=listing.tags,
         unlisted=listing.unlisted,
         cover_image_id=listing.cover_image_id,
@@ -82,7 +84,7 @@ def to_public_detail(public: PublicListing, snapshot: Snapshot, recommended: str
         openings=snapshot.openings,
         character_modes=snapshot.character_modes,
         pregens=to_listing_pregens(snapshot),
-        abilities=snapshot.rulebook.rules.abilities,
+        abilities=list(snapshot.rulebook.rules.abilities),
         recommended_narration_model=recommended,
         references_allowed=references_allowed(snapshot),
     )
@@ -100,14 +102,15 @@ def to_public(listing: Listing, asset: Asset, version: ScenarioVersion, start_co
         title=asset.title,
         tagline=listing.tagline,
         description=listing.description,
-        genre=listing.genre,
+        genre=Genre(listing.genre),
         tags=listing.tags,
         cover_image_id=listing.cover_image_id,
         rating=Rating(listing.rating),
         recommended_players=RecommendedPlayers(min=listing.min_players, max=listing.max_players),
         version=version.number,
         version_note=version.note,
-        published_at=listing.published_at,
+        # 공개한 것만 보이므로(visible) 공개한 시각이 있다
+        published_at=cast(datetime, listing.published_at),
         heart_count=listing.heart_count,
         start_count=start_count,
     )
