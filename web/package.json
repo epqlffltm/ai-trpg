@@ -16,6 +16,7 @@
     "typecheck": "npm run typecheck --workspaces && tsc -p e2e",
     "lint": "eslint .",
     "test": "npm run test --workspaces",
+    "test:coverage": "npm run test:coverage --workspaces",
     "gen:api": "npm run gen:api -w @ai-trpg/web",
     "sync:legal": "npm run sync:legal -w @ai-trpg/web",
     "e2e": "playwright test -c e2e"
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "1.63.0",
+    "@vitest/coverage-v8": "^5.0.5",
     "eslint": "^10.13.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
