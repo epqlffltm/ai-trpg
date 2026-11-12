@@ -44,7 +44,7 @@ def theirs(signing_key: SigningKey) -> dict[str, str]:
 
 
 async def reports(session: AsyncSession) -> int:
-    return await session.scalar(select(func.count()).select_from(MessageReport))
+    return await session.scalar(select(func.count()).select_from(MessageReport)) or 0
 
 
 @pytest.fixture

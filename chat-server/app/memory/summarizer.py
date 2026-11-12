@@ -18,9 +18,10 @@ DB 연결은 읽을 때와 적을 때만 잡는다. 모델을 부르는 동안�
 import asyncio
 import logging
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 from ai_core.costs import charge_of
 from ai_core.provider import GenerationParams
@@ -34,6 +35,7 @@ from app.memory.models import Summary
 from app.memory.service import add_proposals
 from app.memory.summaries import (
     SUMMARY_OUTPUT_LIMIT,
+    PathMessage,
     Plan,
     overflow,
     plan_summary,
@@ -100,7 +102,8 @@ class Summarizer:
             if conversation is None or conversation.deleted_at is not None:
                 return None
             path = await conversations.active_path(session, conversation.active_leaf_id)
-            dropped = overflow(path, settings.chat_context_chars)
+            # 가지의 말(ORM 의 행)은 PathMessage 의 모양이다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+            dropped = overflow(cast(Sequence[PathMessage], path), settings.chat_context_chars)
             summaries = await repository.summaries_on(session, [message.id for message in dropped])
             known = [note.text for note in await repository.list_notes(session, conversation_id)]
         return plan_summary(dropped, summaries, settings.summary_after_messages, known)

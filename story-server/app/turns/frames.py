@@ -5,10 +5,11 @@
 """
 
 from dataclasses import asdict
+from typing import cast
 
 from conversation_core.sse import Frame
 
-from app.conversations.schemas import MessageOut
+from app.conversations.schemas import MessageOut, StateOut
 from app.turns.schemas import DeltaEvent, DoneEvent, FailedEvent, SegmentEvent, TurnEvent
 from app.turns.values import SavedMessage, TurnStart
 
@@ -28,7 +29,8 @@ def turn_frame(start: TurnStart) -> Frame:
         generation_id=start.generation_id,
         user_message=message_out(start.user_message),
         cast=list(start.cast),
-        state=start.state,
+        # 말을 시작할 때 늘 채운다(service.turn_start)
+        state=cast(StateOut, start.state),
         continues=start.continued.id if start.continued is not None else None,
         achievements=list(start.achievements),
     )

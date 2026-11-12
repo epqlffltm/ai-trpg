@@ -73,7 +73,7 @@ async def start(client: AsyncClient, headers: dict, **body) -> dict:
 
 
 async def count(session: AsyncSession, model: type) -> int:
-    return await session.scalar(select(func.count()).select_from(model))
+    return await session.scalar(select(func.count()).select_from(model)) or 0
 
 
 async def listed(client: AsyncClient, headers: dict, **params) -> dict:

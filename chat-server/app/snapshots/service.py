@@ -24,6 +24,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import cast
 
 from ai_core.image_provider import ImageProvider, ImageRequest
 from ai_core.provider import ProviderError
@@ -333,7 +334,8 @@ def kept_out(snapshot: Snapshot, conversation: Conversation, work: ImportedChara
     """갤러리의 한 장의 응답."""
     return KeptSnapshotOut(
         id=snapshot.id,
-        image_id=snapshot.image_id,
+        # 갤러리는 그림이 있는 것만 고른다(repository.kept_of)
+        image_id=cast(uuid.UUID, snapshot.image_id),
         conversation_id=conversation.id,
         conversation_title=conversation.title,
         work_name=work.name,

@@ -154,10 +154,14 @@ async def test_the_model_list_needs_login(client: AsyncClient):
 async def test_the_model_list_has_only_offered_models(client: AsyncClient, session: AsyncSession, mine: dict):
     await put_models(session, LUNA, SOL, NOVA)
     await add_cost(
-        session, 'luna', CostEntry(input_per_mtok=1, output_per_mtok=5, effective_from=TODAY, checked_on=TODAY)
+        session,
+        'luna',
+        CostEntry(input_per_mtok=Decimal(1), output_per_mtok=Decimal(5), effective_from=TODAY, checked_on=TODAY),
     )
     await add_cost(
-        session, 'nova', CostEntry(input_per_mtok=1, output_per_mtok=5, effective_from=TODAY, checked_on=TODAY)
+        session,
+        'nova',
+        CostEntry(input_per_mtok=Decimal(1), output_per_mtok=Decimal(5), effective_from=TODAY, checked_on=TODAY),
     )
     await catalog.enable_model(session, 'luna', TODAY)
     await catalog.enable_model(session, 'nova', TODAY)
@@ -239,7 +243,9 @@ async def test_a_model_that_cannot_be_chosen_is_422_and_nothing_is_saved(
     await put_models(session, model_entry('disabled'))
     await put_models(session, model_entry('retired'))
     await add_cost(
-        session, 'retired', CostEntry(input_per_mtok=1, output_per_mtok=5, effective_from=TODAY, checked_on=TODAY)
+        session,
+        'retired',
+        CostEntry(input_per_mtok=Decimal(1), output_per_mtok=Decimal(5), effective_from=TODAY, checked_on=TODAY),
     )
     await catalog.enable_model(session, 'retired', TODAY)
     await retire(session, 'retired', TODAY)

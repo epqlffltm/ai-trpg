@@ -17,8 +17,9 @@ HTTP 를 모른다. SQL 을 모른다. 일마다 commit 하나로 저장한다.
 
 from dataclasses import dataclass
 from datetime import date
+from typing import cast
 
-from ai_core.catalog_contract import is_retired
+from ai_core.catalog_contract import Switchable, is_retired
 from catalog_core.errors import CatalogConflictError, Conflict, ModelNotFoundError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,7 +55,8 @@ async def require_model(session: AsyncSession, slug: str) -> AiModel:
 async def enable_model(session: AsyncSession, slug: str, today: date) -> AiModel:
     """모델을 켠다. 은퇴하지 않았고 그날의 단가가 있어야 한다."""
     model = await require_model(session, slug)
-    if is_retired(model, today):
+    # ORM 의 행은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    if is_retired(cast(Switchable, model), today):
         raise CatalogConflictError(slug, Conflict.RETIRED)
     if await repository.cost_on(session, slug, today) is None:
         raise CatalogConflictError(slug, Conflict.NO_COST)

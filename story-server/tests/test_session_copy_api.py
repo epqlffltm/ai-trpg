@@ -78,7 +78,7 @@ async def copy(client: AsyncClient, headers: dict, conversation_id: str):
 
 
 async def count(session: AsyncSession, model: type, *where) -> int:
-    return await session.scalar(select(func.count()).select_from(model).where(*where))
+    return await session.scalar(select(func.count()).select_from(model).where(*where)) or 0
 
 
 @pytest.fixture

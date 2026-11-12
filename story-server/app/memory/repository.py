@@ -38,7 +38,7 @@ async def count_notes(session: AsyncSession, conversation_id: uuid.UUID) -> int:
         .select_from(MemoryNote)
         .where(MemoryNote.conversation_id == conversation_id, not_(pending_condition()))
     )
-    return await session.scalar(query)
+    return await session.scalar(query) or 0
 
 
 async def count_proposals(session: AsyncSession, conversation_id: uuid.UUID) -> int:
@@ -48,7 +48,7 @@ async def count_proposals(session: AsyncSession, conversation_id: uuid.UUID) -> 
         .select_from(MemoryNote)
         .where(MemoryNote.conversation_id == conversation_id, pending_condition())
     )
-    return await session.scalar(query)
+    return await session.scalar(query) or 0
 
 
 async def find_note(session: AsyncSession, conversation_id: uuid.UUID, note_id: uuid.UUID) -> MemoryNote | None:

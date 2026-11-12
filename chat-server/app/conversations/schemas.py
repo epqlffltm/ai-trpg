@@ -99,7 +99,8 @@ class CharacterDocumentOut(CharacterDocument):
     제작자 단축어(shortcuts)는 싣지 않는다. 본문은 모델에만 가고, 고르는 목록은 GET /conversations/{id}/shortcuts 다.
     """
 
-    genre: str
+    # 응답에서는 늘 채운다(부모는 비어도 되는 칸이다). pydantic 은 좁히는 것을 받지만 pyright 는 막아 끈다
+    genre: str  # pyright: ignore[reportIncompatibleVariableOverride, reportGeneralTypeIssues]
     shortcuts: list[ShortcutDocument] = Field(default=[], exclude=True)
 
 

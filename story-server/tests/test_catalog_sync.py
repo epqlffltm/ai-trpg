@@ -84,7 +84,7 @@ def luna_with(**changes) -> ModelEntry:
     return ModelEntry(**{**LUNA.model_dump(), **changes})
 
 
-async def fresh_model(session: AsyncSession, slug: str) -> AiModel:
+async def fresh_model(session: AsyncSession, slug: str) -> AiModel | None:
     """DB 에 저장된 모델을 새로 읽는다."""
     session.expire_all()
     return await session.scalar(select(AiModel).where(AiModel.slug == slug))
@@ -93,7 +93,7 @@ async def fresh_model(session: AsyncSession, slug: str) -> AiModel:
 async def cost_rows(session: AsyncSession, slug: str) -> list[tuple[date, Decimal]]:
     """그 모델의 단가 줄들(시작일, 입력). 적은 순서다."""
     query = select(AiModelCost.effective_from, AiModelCost.input_per_mtok).where(AiModelCost.model_slug == slug)
-    return [tuple(row) for row in await session.execute(query.order_by(AiModelCost.id))]
+    return [(started, price) for started, price in await session.execute(query.order_by(AiModelCost.id))]
 
 
 async def enabled_luna(session: AsyncSession) -> None:

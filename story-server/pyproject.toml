@@ -37,6 +37,7 @@ catalog-core = { path = "../shared/catalog-core", editable = true }
 dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "pyright[nodejs]==1.1.408",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.1",
 ]
@@ -62,6 +63,17 @@ concurrency = ["greenlet", "thread"]
 [tool.coverage.report]
 # 한 줄도 없는 파일(__init__.py)은 표에서 뺀다
 skip_empty = true
+
+[tool.pyright]
+# 서버의 코드와 테스트를 본다. 테스트는 결과가 있다고 단언한 뒤 읽는 일이 많아 None 의 검사 셋만 끈다
+include = ["app", "tests"]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+executionEnvironments = [
+    { root = "tests", extraPaths = ["."], reportOptionalMemberAccess = false, reportOptionalSubscript = false, reportOptionalOperand = false },
+]
 
 [tool.ruff]
 # 규칙과 모양은 저장소 루트의 ruff.toml 을 따른다. 인증 서버, 게임 서버와 같다

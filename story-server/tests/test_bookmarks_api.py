@@ -90,7 +90,7 @@ async def messages(client: AsyncClient, headers: dict, conversation: dict) -> li
 
 
 async def count(session: AsyncSession) -> int:
-    return await session.scalar(select(func.count()).select_from(Bookmark))
+    return await session.scalar(select(func.count()).select_from(Bookmark)) or 0
 
 
 async def test_bookmarks_are_put_listed_renoted_and_removed(

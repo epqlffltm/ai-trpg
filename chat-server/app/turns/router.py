@@ -30,6 +30,7 @@
 import asyncio
 import logging
 import uuid
+from typing import Any
 
 from ai_core.provider import GenerationParams
 from conversation_core import sse
@@ -64,7 +65,9 @@ router = APIRouter(prefix='/conversations', tags=['messages'])
 message_router = APIRouter(prefix='/messages', tags=['messages'])
 generation_router = APIRouter(prefix='/generations', tags=['messages'])
 # SSE 로 답하는 주소의 설명(API 목록)
-SSE_RESPONSES = {200: {'content': {'text/event-stream': {}}, 'description': 'SSE. app/turns/schemas.py 의 메시지들'}}
+SSE_RESPONSES: dict[int | str, dict[str, Any]] = {
+    200: {'content': {'text/event-stream': {}}, 'description': 'SSE. app/turns/schemas.py 의 메시지들'}
+}
 
 # 스트림 응답의 머리말. 게임 서버의 스트림과 같다.
 # no-cache: 중간에서 저장해 두었다가 남에게 주지 않게 한다. X-Accel-Buffering: nginx 가 모았다가 보내지 않게 한다

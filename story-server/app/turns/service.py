@@ -36,6 +36,7 @@ import uuid
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from typing import cast
 
 from ai_core.costs import charge_of
 from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError
@@ -54,7 +55,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.assets.schemas import ShortcutDocument, shortcuts_of
 from app.billing.prices import story_code
 from app.catalog import repository as catalog
-from app.catalog.choice import is_choosable
+from app.catalog.choice import ChoosableModel, is_choosable
 from app.catalog.models import AiModel
 from app.conversations import repository as conversations
 from app.conversations.models import Conversation, ConversationPersona, ImportedWorld, Message, MessageStatus, Role
@@ -79,7 +80,7 @@ from app.engine.world import Achievement, AfterEnding, World, read_world
 from app.lore.recall import LoreRecall
 from app.memory import repository as memory_store
 from app.memory.service import notes_for_prompt, render_memory
-from app.memory.summaries import latest_summary, overflow, render_story
+from app.memory.summaries import PathMessage, latest_summary, overflow, render_story
 from app.ratings import Rating, allowed_ratings
 from app.records import repository as records
 from app.records.illustrations import unlocked_scenes
@@ -223,7 +224,8 @@ def require_model(conversation: Conversation, model: AiModel | None, rating: Rat
     """세션의 모델의 이름표. 고르지 않았으면 ModelRequiredError, 이 세션에 쓸 수 없으면 ModelUnavailableError."""
     if conversation.model_slug is None:
         raise ModelRequiredError
-    if model is None or not is_choosable(model, rating, now.date()):
+    # ORM 의 행은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    if model is None or not is_choosable(cast(ChoosableModel, model), rating, now.date()):
         raise ModelUnavailableError
     return conversation.model_slug
 
@@ -308,7 +310,9 @@ def story_of(branch: Branch, chars: int) -> str | None:
     카드의 "[앞의 줄거리]". 지난 말의 창(chars)에 들지 못하고 밀려난 말 가운데 요약이 붙은 가장 뒤의 것이다.
     밀려난 말이 없거나 아직 요약이 없으면 None(app/memory/summaries.py).
     """
-    return render_story(latest_summary(overflow(branch.path, chars), branch.summaries))
+    # 가지의 말(ORM 의 행)은 PathMessage 의 모양이다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    path = cast(Sequence[PathMessage], branch.path)
+    return render_story(latest_summary(overflow(path, chars), branch.summaries))
 
 
 def card_for(branch: Branch, state: StoryState, stage: Staging, options: PromptOptions, lore: LorePlan | None) -> str:
@@ -696,7 +700,7 @@ def turn_start(
     """말 한 번의 시작. 그 뒤의 일은 이것만 들고 간다. 로어북은 가지의 말과 이번 말에서 고른다."""
     lore = lore_plan_of(branch, state, [*(item.content for item in branch.path), message.content])
     return TurnStart(
-        conversation_id=generation.conversation_id,
+        conversation_id=message.conversation_id,
         generation_id=generation.id,
         owner_id=owner_id,
         model_slug=generation.model_slug,
@@ -1181,7 +1185,8 @@ async def stoppable_call(
     try:
         return await stop.call
     except asyncio.CancelledError:
-        if stop.requested and not asyncio.current_task().cancelling():
+        task = asyncio.current_task()
+        if stop.requested and task is not None and not task.cancelling():
             return failure_of(*collector.finish(), STOPPED)
         stop.call.cancel()
         await save_result(session_factory, start, failure_of(*collector.finish(), CANCELLED), clock())

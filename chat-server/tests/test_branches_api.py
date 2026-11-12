@@ -105,7 +105,9 @@ async def read(client: AsyncClient, headers: dict, conversation: dict) -> dict:
 
 async def conversation_row(session: AsyncSession, conversation: dict) -> Conversation:
     session.expire_all()
-    return await session.get(Conversation, uuid.UUID(conversation['id']))
+    found = await session.get(Conversation, uuid.UUID(conversation['id']))
+    assert found is not None
+    return found
 
 
 async def lock(session: AsyncSession, conversation: dict, since: datetime) -> None:
@@ -446,6 +448,7 @@ async def test_the_branch_end_is_looked_for_inside_the_conversation_only(
     """가지의 끝은 그 대화의 말에서만 찾는다(#1258). 다른 대화의 말이 부모로 가리켜도 따라가지 않는다."""
     other = await start_with_luna(client, asset, mine)
     root_id = (await session.get(Conversation, uuid.UUID(conversation['id']))).active_leaf_id
+    assert root_id is not None
     stray = Message(
         conversation_id=uuid.UUID(other['id']),
         parent_id=root_id,

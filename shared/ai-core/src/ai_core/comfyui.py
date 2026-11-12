@@ -25,7 +25,7 @@ import asyncio
 import secrets
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import Any
 
 import httpx
 
@@ -154,8 +154,15 @@ class ComfyUIProvider:
     workflow 를 주면 기본 흐름 대신 그것을 쓴다(연구용). timeout 은 한 장의 상한(초)이다.
     """
 
-    kind: ClassVar[str] = 'comfyui'
-    supports_references: ClassVar[bool] = False
+    @property
+    def kind(self) -> str:
+        """종류. 클래스마다 정해져 있다."""
+        return 'comfyui'
+
+    @property
+    def supports_references(self) -> bool:
+        """참고 그림을 받는가. 클래스마다 정해져 있다."""
+        return False
 
     http: httpx.AsyncClient
     base_url: str

@@ -99,7 +99,7 @@ def contents(detail: dict) -> list[str]:
 
 
 async def generations(session: AsyncSession) -> int:
-    return await session.scalar(select(func.count()).select_from(Generation))
+    return await session.scalar(select(func.count()).select_from(Generation)) or 0
 
 
 # --- 내 말 고치기 ---

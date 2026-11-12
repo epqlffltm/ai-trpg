@@ -28,6 +28,7 @@
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import cast
 
 from server_core.billing.price_list import PriceList, PriceListUnavailable
 from server_core.billing.prices import PriceBook
@@ -38,7 +39,7 @@ from app.assets.client import AssetAdultRequiredError, AssetClient, AssetNotFoun
 from app.assets.schemas import CharacterCopy, PersonaCopy, StartDocument
 from app.bookmarks import repository as bookmarks
 from app.catalog import repository as catalog
-from app.catalog.choice import is_choosable
+from app.catalog.choice import ChoosableModel, is_choosable
 from app.catalog.models import AiModel
 from app.catalog.offers import is_sold
 from app.conversations import repository
@@ -194,7 +195,8 @@ def model_usable(model: AiModel, rating: Rating, book: PriceBook | None, now: da
 
     book 이 None 이면 값을 모르는 것이다(가격 목록을 받지 못했다). 그때는 팔고 있다고 본다.
     """
-    if not is_choosable(model, rating, now.date()):
+    # ORM 의 행은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    if not is_choosable(cast(ChoosableModel, model), rating, now.date()):
         return False
     return book is None or is_sold(book, model.slug, now)
 

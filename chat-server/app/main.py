@@ -23,6 +23,7 @@ from server_core.auth.jwks import JwksCache
 from server_core.billing.price_list import PriceListUnavailable
 from server_core.billing.setup import build_billing, build_price_list
 from server_core.database import create_engine, create_session_factory
+from server_core.error_handlers import add_error_handler
 from server_core.input_errors import use_input_errors
 from server_core.limits.responses import use_limit_errors
 from server_core.notifications import dispatcher
@@ -269,10 +270,12 @@ def create_app(
     )
     # 로어북을 뜻으로 찾기(app/lore/, #672). EMBEDDER 가 off 면 둘 다 없다(상시와 키워드만 쓴다)
     embedder = build_embedder(settings, app.state.http_client)
-    app.state.lore_indexer = LoreIndexer(app.state.session_factory, embedder) if embedder is not None else None
-    app.state.lore_recall = (
-        LoreRecall(app.state.session_factory, embedder, app.state.lore_indexer) if embedder is not None else None
-    )
+    indexer, recall = None, None
+    if embedder is not None:
+        indexer = LoreIndexer(app.state.session_factory, embedder)
+        recall = LoreRecall(app.state.session_factory, embedder, indexer)
+    app.state.lore_indexer = indexer
+    app.state.lore_recall = recall
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
@@ -310,38 +313,38 @@ def create_app(
     # asset 서버가 받아 가는 작품마다의 시작 수(#985). 서명한 요청만이다
     app.include_router(stats.router, prefix=API_PREFIX)
 
-    app.add_exception_handler(ConversationNotFoundError, conversations.handle_conversation_not_found)
-    app.add_exception_handler(CharacterNotFoundError, conversations.handle_character_not_found)
-    app.add_exception_handler(PersonaNotFoundError, conversations.handle_persona_not_found)
-    app.add_exception_handler(AdultContentRequiredError, conversations.handle_adult_content_required)
-    app.add_exception_handler(StartNotFoundError, conversations.handle_start_not_found)
-    app.add_exception_handler(ModelUnavailableError, conversations.handle_model_unavailable)
-    app.add_exception_handler(AssetUnavailableError, conversations.handle_asset_unavailable)
-    app.add_exception_handler(PriceListUnavailable, billing.handle_prices_unavailable)
-    app.add_exception_handler(ModelRequiredError, messages.handle_model_required)
-    app.add_exception_handler(NotRegenerableError, messages.handle_not_regenerable)
-    app.add_exception_handler(NotContinuableError, messages.handle_not_continuable)
-    app.add_exception_handler(ActionRefusedError, messages.handle_action_refused)
-    app.add_exception_handler(ConversationBusyError, conversations.handle_conversation_busy)
+    add_error_handler(app, ConversationNotFoundError, conversations.handle_conversation_not_found)
+    add_error_handler(app, CharacterNotFoundError, conversations.handle_character_not_found)
+    add_error_handler(app, PersonaNotFoundError, conversations.handle_persona_not_found)
+    add_error_handler(app, AdultContentRequiredError, conversations.handle_adult_content_required)
+    add_error_handler(app, StartNotFoundError, conversations.handle_start_not_found)
+    add_error_handler(app, ModelUnavailableError, conversations.handle_model_unavailable)
+    add_error_handler(app, AssetUnavailableError, conversations.handle_asset_unavailable)
+    add_error_handler(app, PriceListUnavailable, billing.handle_prices_unavailable)
+    add_error_handler(app, ModelRequiredError, messages.handle_model_required)
+    add_error_handler(app, NotRegenerableError, messages.handle_not_regenerable)
+    add_error_handler(app, NotContinuableError, messages.handle_not_continuable)
+    add_error_handler(app, ActionRefusedError, messages.handle_action_refused)
+    add_error_handler(app, ConversationBusyError, conversations.handle_conversation_busy)
     # 요청 수를 넘었다(429), 세는 곳에 닿지 못해 막았다(503). server_core/limits/responses.py
     use_limit_errors(app)
-    app.add_exception_handler(MessageNotFoundError, conversations.handle_message_not_found)
-    app.add_exception_handler(NotEditableError, conversations.handle_not_editable)
-    app.add_exception_handler(NoteNotFoundError, notes.handle_note_not_found)
-    app.add_exception_handler(NotesFullError, notes.handle_notes_full)
-    app.add_exception_handler(SnapshotUnavailableError, snapshots.handle_unavailable)
-    app.add_exception_handler(NotDrawableError, snapshots.handle_not_drawable)
-    app.add_exception_handler(SnapshotBusyError, snapshots.handle_busy)
-    app.add_exception_handler(SnapshotDeclinedError, snapshots.handle_declined)
-    app.add_exception_handler(SnapshotNotFoundError, snapshots.handle_not_found)
-    app.add_exception_handler(SnapshotSettlingError, snapshots.handle_settling)
-    app.add_exception_handler(SnapshotDiscardError, snapshots.handle_discard_failed)
-    app.add_exception_handler(BookmarksFullError, bookmarks.handle_bookmarks_full)
-    app.add_exception_handler(TurnDeclinedError, messages.handle_turn_declined)
-    app.add_exception_handler(NotReportableError, reports.handle_not_reportable)
-    app.add_exception_handler(AlreadyReportedError, reports.handle_already_reported)
-    app.add_exception_handler(ReportNotFoundError, operators.handle_report_not_found)
-    app.add_exception_handler(AlreadyHandledError, operators.handle_already_handled)
+    add_error_handler(app, MessageNotFoundError, conversations.handle_message_not_found)
+    add_error_handler(app, NotEditableError, conversations.handle_not_editable)
+    add_error_handler(app, NoteNotFoundError, notes.handle_note_not_found)
+    add_error_handler(app, NotesFullError, notes.handle_notes_full)
+    add_error_handler(app, SnapshotUnavailableError, snapshots.handle_unavailable)
+    add_error_handler(app, NotDrawableError, snapshots.handle_not_drawable)
+    add_error_handler(app, SnapshotBusyError, snapshots.handle_busy)
+    add_error_handler(app, SnapshotDeclinedError, snapshots.handle_declined)
+    add_error_handler(app, SnapshotNotFoundError, snapshots.handle_not_found)
+    add_error_handler(app, SnapshotSettlingError, snapshots.handle_settling)
+    add_error_handler(app, SnapshotDiscardError, snapshots.handle_discard_failed)
+    add_error_handler(app, BookmarksFullError, bookmarks.handle_bookmarks_full)
+    add_error_handler(app, TurnDeclinedError, messages.handle_turn_declined)
+    add_error_handler(app, NotReportableError, reports.handle_not_reportable)
+    add_error_handler(app, AlreadyReportedError, reports.handle_already_reported)
+    add_error_handler(app, ReportNotFoundError, operators.handle_report_not_found)
+    add_error_handler(app, AlreadyHandledError, operators.handle_already_handled)
 
     # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)
     use_input_errors(app)

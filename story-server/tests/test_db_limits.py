@@ -50,7 +50,8 @@ async def read_limits(connection) -> dict[str, int]:
 
 def code_of(error: DBAPIError) -> str:
     """DB 가 준 오류 코드(SQLSTATE)."""
-    return error.orig.sqlstate
+    # 드라이버의 오류가 코드를 덧붙여 갖는다. 타입에는 없는 칸이다
+    return vars(error.orig)['sqlstate']
 
 
 async def test_the_servers_connections_carry_the_limits(session: AsyncSession):

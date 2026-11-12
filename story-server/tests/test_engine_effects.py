@@ -17,7 +17,7 @@ from types import MappingProxyType
 
 import pytest
 
-from app.engine.effects import Effect, apply_effect, apply_effects
+from app.engine.effects import Effect, EffectKind, apply_effect, apply_effects
 from app.engine.scene import scene_cast
 from app.engine.state import StoryState, start_state
 from tests.engine_worlds import member, world
@@ -27,7 +27,7 @@ START = start_state(WORLD)
 
 
 def effect(kind: str, target: str, amount: int | None = None) -> Effect:
-    return Effect(kind=kind, target=target, amount=amount)
+    return Effect(kind=EffectKind(kind), target=target, amount=amount)
 
 
 def with_items(**items: int) -> StoryState:
