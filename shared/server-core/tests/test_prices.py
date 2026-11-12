@@ -13,7 +13,18 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from pydantic import ValidationError
 
-from server_core.billing.prices import Change, Price, Sale, Tier, parse_price_list, price_at
+from server_core.billing.prices import (
+    Change,
+    Offer,
+    Price,
+    PriceBook,
+    Sale,
+    Tier,
+    current_sale,
+    offer_of,
+    parse_price_list,
+    price_at,
+)
 
 AT = datetime(2026, 11, 30, 15, 0, tzinfo=UTC)
 
@@ -165,3 +176,43 @@ def test_a_missing_promo_is_the_regular_price():
     book = parse_price_list(json.dumps(EXAMPLE).encode())
 
     assert book.prices['chat.plain.i0.o0'].current.promo is False
+
+
+# --- 지금 할 수 있는가와 그 값(장면 그림 한 장 등, #1266 에서 세 서버의 것을 모았다) ---
+
+CODE = 'snapshot.gemini-image.i0.o0'
+
+
+def book_with(price: Price | None) -> PriceBook:
+    return PriceBook(prices={} if price is None else {CODE: price})
+
+
+def test_an_offer_follows_the_price_list():
+    selling = Price(code=CODE, current=Sale(credits='160', tier=Tier.STANDARD))
+
+    assert offer_of(book_with(selling), CODE, True, AT) == Offer(True, Sale(credits='160', tier=Tier.STANDARD))
+    # 하는 쪽이 없으면 값이 있어도 할 수 없다
+    assert offer_of(book_with(selling), CODE, False, AT) == Offer(False)
+    assert offer_of(book_with(None), CODE, True, AT) == Offer(False)
+    # 결제 서버 없이 도는 서버는 값 없이 한다
+    assert offer_of(PriceBook(free=True), CODE, True, AT) == Offer(True)
+
+
+def test_an_offer_takes_a_scheduled_change_once_its_time_has_come():
+    soon = AT + timedelta(hours=1)
+    promo = Price(
+        code=CODE,
+        current=Sale(credits='120', tier=Tier.STANDARD, promo=True),
+        next=Change(Sale(credits='160', tier=Tier.PREMIUM), soon),
+    )
+    stopping = Price(code=CODE, current=Sale(credits='160', tier=Tier.STANDARD), next=Change(None, soon))
+    later = soon + timedelta(minutes=1)
+
+    assert offer_of(book_with(promo), CODE, True, AT).sale.promo is True
+    assert offer_of(book_with(promo), CODE, True, later) == Offer(True, Sale(credits='160', tier=Tier.PREMIUM))
+    assert offer_of(book_with(stopping), CODE, True, AT).available is True
+    assert offer_of(book_with(stopping), CODE, True, later) == Offer(False)
+
+
+def test_the_current_sale_of_an_unknown_code_is_none():
+    assert current_sale(book_with(None), CODE, AT) is None

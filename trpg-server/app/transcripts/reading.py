@@ -177,6 +177,11 @@ async def merged(*streams: AsyncIterator[Item]) -> AsyncIterator[Item]:
             heapq.heappush(heap, (following.created_at, order, following))
 
 
+def scope_text(cut: Cut) -> str:
+    """파일의 머리에 적는 범위의 말. 세 형식이 같다."""
+    return f'1~{cut.until}번 이벤트, 채팅, 내 쪽지' + (' (떠난 때까지)' if cut.departed else '')
+
+
 def iter_items(
     session_factory: async_sessionmaker[AsyncSession], cut: Cut, page_size: int = PAGE_SIZE
 ) -> AsyncIterator[Item]:

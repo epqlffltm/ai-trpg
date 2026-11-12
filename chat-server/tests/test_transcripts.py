@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from urllib.parse import quote
 
 import pytest
+from conversation_core.transcripts.blocks import Heading, Note, Paragraph, Speech
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from server_core.testing.tokens import SigningKey
@@ -25,7 +26,6 @@ from app.assets.schemas import CharacterDocument
 from app.conversations.models import Message, MessageStatus, Role
 from app.limits.setup import build_limiting
 from app.transcripts import html, markdown, text
-from app.transcripts.blocks import Heading, Note, Paragraph, Speech
 from app.transcripts.story import Head, change_text, transcript_blocks
 from tests.assets import FakeAsset
 from tests.models import FakeRouter, ScriptedProvider

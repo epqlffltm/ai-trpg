@@ -474,7 +474,7 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
 
 ### 기록 내려받기
 
-내 세션을 파일 하나로 받는다(#617 의 story 몫, `app/transcripts/`). chat 의 기록 내려받기와 같은 세 형식이다.
+내 세션을 파일 하나로 받는다(#617 의 story 몫, `app/transcripts/`). chat 의 기록 내려받기와 같은 세 형식이다. 조각을 형식마다 쓰는 것은 공용 코드 `conversation_core/transcripts/` 다(#1266).
 
 | 형식 | `format` | 모양 |
 | --- | --- | --- |

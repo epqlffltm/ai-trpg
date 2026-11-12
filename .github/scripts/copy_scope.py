@@ -90,6 +90,10 @@ MOVED = (
     'trpg-server/app/limits/counters.py',
     'trpg-server/app/limits/redis_counter.py',
     'trpg-server/app/limits/responses.py',
+    # #1266: 기록의 조각을 conversation_core/transcripts/ 로 옮겼다
+    'chat-server/app/transcripts/blocks.py',
+    'story-server/app/transcripts/blocks.py',
+    'trpg-server/app/transcripts/blocks.py',
 )
 
 

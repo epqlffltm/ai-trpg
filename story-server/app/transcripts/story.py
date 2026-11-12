@@ -16,9 +16,10 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from itertools import groupby
 
+from conversation_core.transcripts.blocks import Block, Heading, Note, Paragraph, Speech
+
 from app.conversations.models import Message, MessageStatus, Role
 from app.engine.world import World
-from app.transcripts.blocks import Block, Heading, Note, Paragraph, Speech
 from app.turns.briefing import Briefing
 from app.turns.segments import Segment, segments_of
 

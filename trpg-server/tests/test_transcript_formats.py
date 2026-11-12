@@ -11,7 +11,8 @@
   - 형식(md, html, txt)마다 응답의 종류와 파일의 이름이 다르다. 모르는 형식은 422 다.
   - HTML 은 플레이어가 쓴 글을 태그로 만들지 않는다. 스크립트를 막는 정책이 머리에 있다.
   - 한 사람이 받는 수를 센다. 넘으면 429 다.
-  - 쓰는 쪽(HTML, 텍스트)과 흐름을 합치는 것은 DB 없이 본다.
+  - 흐름을 합치는 것은 DB 없이 본다.
+조각을 형식마다 쓰는 것은 conversation-core 의 tests/test_transcripts.py 가 본다(#1266).
 """
 
 from datetime import UTC, datetime, timedelta
@@ -22,8 +23,7 @@ from fastapi import FastAPI, status
 from httpx import AsyncClient
 
 from app.limits.setup import build_limiting
-from app.transcripts import html, reading, text
-from app.transcripts.blocks import Heading, Note, Paragraph, Speech
+from app.transcripts import reading
 from tests import test_whispers as whisper_tests
 from tests.conftest import make_test_settings
 from tests.test_whispers import FRIEND, ME, SECRET, THIRD, open_trio, start, table_url, whisper
@@ -156,35 +156,7 @@ async def test_too_many_downloads_are_refused(app: FastAPI, client: AsyncClient,
     assert others.status_code == status.HTTP_200_OK
 
 
-# --- 쓰는 쪽(DB 없이) ---
-
-
-def test_html_blocks_are_escaped_and_notes_share_one_list():
-    listing = False
-    pieces = []
-    for block in [Heading('라운드 <1>'), Note('a & b'), Note('c'), Speech('엘프 "1"', ('안녕', '', '<b>둘</b>'))]:
-        chunk, listing = html.with_list(block, listing)
-        pieces.append(chunk)
-    written = ''.join(pieces) + html.footer(listing)
-
-    assert written == (
-        '<h2>라운드 &lt;1&gt;</h2>\n'
-        '<ul>\n<li>a &amp; b</li>\n<li>c</li>\n</ul>\n'
-        '<blockquote><p class="who">엘프 &quot;1&quot;</p><p>안녕</p><p>&lt;b&gt;둘&lt;/b&gt;</p></blockquote>\n'
-        '</body>\n</html>\n'
-    )
-
-
-def test_html_keeps_line_breaks_inside_a_paragraph():
-    assert html.block_html(Paragraph(('첫 줄', '둘째 줄', '', '새 문단'))) == '<p>첫 줄<br>둘째 줄</p><p>새 문단</p>\n'
-
-
-def test_plain_text_has_no_markup():
-    blocks = [Heading('라운드 2'), Paragraph(('# 제목 같은 글',)), Speech('엘프', ('간다.',)), Note('판정: 성공')]
-
-    written = ''.join(text.block_text(block) for block in blocks)
-
-    assert written == '\n== 라운드 2 ==\n\n# 제목 같은 글\n\n엘프:\n    간다.\n· 판정: 성공\n'
+# --- 흐름을 합치기(DB 없이) ---
 
 
 async def stream(*stamps: int, kind: str):

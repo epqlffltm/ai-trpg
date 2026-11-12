@@ -7,6 +7,7 @@ chat 서버의 `app/conversation` 을 폴더째 옮겼다(#591). 규칙과 까�
 | --- | --- |
 | chat-server | #591(옮기기 전에는 `app/conversation`) |
 | story-server | 세션과 한 번의 말을 만들 때([story 서버 설계의 만드는 순서](../../docs/architecture/story.md#만드는-순서) 1, 2) |
+| trpg-server | #1266(기록 파일 쓰기 `transcripts` 만) |
 
 ## 있는 것
 
@@ -23,6 +24,7 @@ chat 서버의 `app/conversation` 을 폴더째 옮겼다(#591). 규칙과 까�
 | `suggestions` | 다음 답 추천의 지시, 흘려 받을 때 표식 뒤를 붙잡기(`MarkerHold`), 선택지 거르기 |
 | `changes` | 상태 바꾸기의 제안(호감도, 선물, 이동)의 지시와 줄 읽기. 해도 되는지는 쓰는 서버의 엔진이 본다 |
 | `expressions` | 표정 고르기의 지시와 답 맨 앞의 표식 떼기(`ExpressionHead`) |
+| `transcripts` | 기록 파일의 조각(`blocks`: 구분, 문단, 말, 한 줄의 일)과 형식마다 쓰기(`markdown`, `html`, `text`). 조각 쓰기, 파일의 머리와 끝, 파일 전체(`document`). trpg 도 쓴다(#1266). 무엇을 조각으로 바꿀지와 제목, 범위의 말은 서버의 `app/transcripts/` 다 |
 
 ## 서버에 붙이기
 

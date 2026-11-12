@@ -149,3 +149,37 @@ def price_at(price: Price, now: datetime) -> Price:
     if price.next is None or now < price.next.effective_at:
         return price
     return Price(code=price.code, current=price.next.sale)
+
+
+def current_sale(book: PriceBook, price_code: str, now: datetime) -> Sale | None:
+    """그 가격표 이름의 now 의 값. 없거나 팔지 않으면 None."""
+    price = book.prices.get(price_code)
+    return None if price is None else price_at(price, now).current
+
+
+@dataclass(frozen=True)
+class Offer:
+    """
+    한 번 부르는 일(장면 그림 한 장 등)을 지금 할 수 있는가와 그 값. 화면이 단추 곁에 값을 보이고, 할 수 없으면 숨긴다.
+
+    sale 이 None 이고 available 이면 결제 서버 없이 도는 서버다(값 없이 한다).
+    """
+
+    available: bool
+    sale: Sale | None = None
+
+
+def offer_of(book: PriceBook, price_code: str, enabled: bool, now: datetime) -> Offer:
+    """
+    지금 할 수 있는가와 그 값. enabled 는 그 일을 하는 쪽(그림 provider 등)이 있는가다.
+
+      - 하는 쪽이 없으면 할 수 없다
+      - 결제 서버 없이 도는 서버(가격 목록이 free)면 할 수 있고 값이 없다
+      - 가격 목록에 그 가격표 이름이 없거나 지금 팔지 않으면 할 수 없다. 예약된 바뀜의 시각이 지났으면 그 값이다
+    """
+    if not enabled:
+        return Offer(available=False)
+    if book.free:
+        return Offer(available=True)
+    sale = current_sale(book, price_code, now)
+    return Offer(available=sale is not None, sale=sale)

@@ -650,7 +650,7 @@ uv run python -m scripts.try_prefill claude-opus-5-5 gpt-6-luna gemma4:26b --out
 
 ### 기록 내려받기
 
-내 대화를 파일 하나로 받는다(#617 의 chat 몫, `app/transcripts/`). TRPG 의 기록 내려받기와 같은 세 형식이다.
+내 대화를 파일 하나로 받는다(#617 의 chat 몫, `app/transcripts/`). TRPG 의 기록 내려받기와 같은 세 형식이다. 조각을 형식마다 쓰는 것은 공용 코드 `conversation_core/transcripts/` 다(#1266).
 
 | 형식 | `format` | 모양 |
 | --- | --- | --- |

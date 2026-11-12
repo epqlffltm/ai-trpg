@@ -59,7 +59,6 @@ chat-server/app/shortcuts/calls.py::body_for story-server/app/shortcuts/calls.py
 chat-server/app/shortcuts/calls.py::model_text story-server/app/shortcuts/calls.py::model_text
 chat-server/app/shortcuts/service.py::fetch_mine story-server/app/shortcuts/service.py::fetch_mine
 chat-server/app/snapshots/models.py::Snapshot story-server/app/snapshots/models.py::Snapshot
-chat-server/app/snapshots/pricing.py::snapshot_price story-server/app/snapshots/pricing.py::snapshot_price trpg-server/app/snapshots/pricing.py::snapshot_price
 chat-server/app/snapshots/providers.py::build_image_provider story-server/app/snapshots/providers.py::build_image_provider
 chat-server/app/snapshots/references.py::fetch_reference story-server/app/snapshots/references.py::fetch_reference
 chat-server/app/snapshots/router.py::draw story-server/app/snapshots/router.py::draw
@@ -78,11 +77,6 @@ chat-server/app/snapshots/service.py::settled_values story-server/app/snapshots/
 chat-server/app/snapshots/service.py::snapshot_by_id story-server/app/snapshots/service.py::snapshot_by_id
 chat-server/app/snapshots/service.py::status_of story-server/app/snapshots/service.py::status_of
 chat-server/app/snapshots/settler.py::SnapshotSettler story-server/app/snapshots/settler.py::SnapshotSettler
-chat-server/app/transcripts/html.py::block_html story-server/app/transcripts/html.py::block_html trpg-server/app/transcripts/html.py::block_html
-chat-server/app/transcripts/html.py::paragraphs story-server/app/transcripts/html.py::paragraphs trpg-server/app/transcripts/html.py::paragraphs
-chat-server/app/transcripts/html.py::render story-server/app/transcripts/html.py::render
-chat-server/app/transcripts/markdown.py::block_lines story-server/app/transcripts/markdown.py::block_lines trpg-server/app/transcripts/markdown.py::block_lines
-chat-server/app/transcripts/text.py::block_lines story-server/app/transcripts/text.py::block_lines trpg-server/app/transcripts/text.py::block_lines
 chat-server/app/turns/charging.py::place_hold story-server/app/turns/charging.py::place_hold
 chat-server/app/turns/charging.py::settle story-server/app/turns/charging.py::settle
 chat-server/app/turns/models.py::BillingStatus story-server/app/turns/models.py::BillingStatus trpg-server/app/snapshots/models.py::SnapshotBilling
