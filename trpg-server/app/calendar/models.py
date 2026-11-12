@@ -16,7 +16,7 @@
 import uuid
 
 from sqlalchemy import CheckConstraint, ForeignKey, Integer
-from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.assets.models import ROUND_MAX_MINUTES
 from app.core.database import Base
@@ -43,6 +43,5 @@ class TableClock(Base):
     minutes: Mapped[int] = mapped_column(Integer)
     next_step_minutes: Mapped[int | None] = mapped_column(Integer)
 
-    table: Mapped[GameTable] = relationship(
-        backref=backref('clock', uselist=False, lazy='selectin', cascade='all, delete-orphan', passive_deletes=True)
-    )
+    # 테이블 쪽의 칸은 GameTable.clock 이다(읽기는 selectin, 테이블과 함께 지운다)
+    table: Mapped[GameTable] = relationship(back_populates='clock')

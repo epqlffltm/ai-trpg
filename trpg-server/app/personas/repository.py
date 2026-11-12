@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.personas.models import Persona
 
 
-def owned(owner_id: uuid.UUID) -> Select[tuple[Persona]]:
+def owned(owner_id: uuid.UUID) -> Select[Persona]:
     """한 사람이 보관한 캐릭터를 고르는 조건. 읽는 함수들이 함께 쓴다."""
     return select(Persona).where(Persona.owner_id == owner_id)
 

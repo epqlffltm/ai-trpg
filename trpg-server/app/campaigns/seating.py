@@ -118,8 +118,9 @@ def left_behind(table: GameTable, snapshot: Snapshot, carried: dict[uuid.UUID, C
 
 def give_carried(table: GameTable, snapshot: Snapshot, member: TableMember, carry: Carry) -> None:
     """넘긴 캐릭터의 시트를 준다. 지금 HP 는 가득이다. 판에 없는 물건은 옮기지 않는다."""
-    source = CharacterSheet(
-        abilities=carry.abilities, max_hp=carry.max_hp, skills=carry.skills, resistances=carry.resistances
+    # 넘긴 저항은 DB 의 JSONB(dict 의 목록)다. 시트의 모양으로 검증해 읽는다(생성자와 같은 검증이다)
+    source = CharacterSheet.model_validate(
+        {'abilities': carry.abilities, 'max_hp': carry.max_hp, 'skills': carry.skills, 'resistances': carry.resistances}
     )
     sheet = sheets.give_sheet(member, source)
     sheet.xp = carry.xp

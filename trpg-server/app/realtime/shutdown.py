@@ -37,7 +37,7 @@ if sys.platform == 'win32':
 Handler = Callable[[int, FrameType | None], None]
 
 
-def chain(previous: Handler, on_exit: Callable[[], None]) -> Handler:
+def chain(previous: Handler, on_exit: Callable[[], object]) -> Handler:
     """on_exit 을 먼저 부르고 원래 처리기를 부르는 처리기를 만든다."""
 
     def handle(signum: int, frame: FrameType | None) -> None:
@@ -48,7 +48,7 @@ def chain(previous: Handler, on_exit: Callable[[], None]) -> Handler:
 
 
 @contextmanager
-def closing_on_exit(on_exit: Callable[[], None]) -> Iterator[None]:
+def closing_on_exit(on_exit: Callable[[], object]) -> Iterator[None]:
     """
     with 안에서는 종료 신호가 오면 on_exit 을 먼저 부른다. with 를 나가면 원래 처리기로 되돌린다.
 

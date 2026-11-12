@@ -19,7 +19,8 @@
 함수는 셋으로 나눈다. 칸에서 값을 읽는 작은 도우미, 종류마다 조각을 만드는 함수(RENDERERS), 차례를 고치는 것.
 """
 
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
+from typing import Any
 
 from conversation_core.transcripts.blocks import Block, Heading, Note, Paragraph, Speech
 
@@ -42,6 +43,17 @@ Item = TableEvent | ChatMessage | Whisper
 
 
 # --- 칸에서 값을 읽는 도우미 ---
+
+
+def name_in[D](table: Mapping[str, str], key: object, default: D) -> str | D:
+    """이름표 key 의 이름. 글이 아니거나(기록에 없거나 다른 값) 표에 없으면 default 다."""
+    return table.get(key, default) if isinstance(key, str) else default
+
+
+def nested(payload: Mapping[str, Any], key: str) -> dict:
+    """payload 안의 묶음(target 같은 것). 없거나 묶음이 아니면 빈 묶음이다."""
+    value = payload.get(key)
+    return value if isinstance(value, dict) else {}
 
 
 def text_of(value: object) -> str:
@@ -73,7 +85,7 @@ def clock_text(clock: object) -> str:
     """게임 안의 시각({day, hour, minute, time_of_day})을 "3일째 22:00(밤)"으로."""
     if not isinstance(clock, dict):
         return ''
-    part = TIMES_OF_DAY.get(clock.get('time_of_day'), '')
+    part = name_in(TIMES_OF_DAY, clock.get('time_of_day'), '')
     return f'{clock.get("day")}일째 {clock.get("hour"):02d}:{clock.get("minute"):02d}' + (f'({part})' if part else '')
 
 
@@ -109,8 +121,8 @@ def player_action(payload: dict, labels: Labels) -> list[Block]:
 
 def check_rolled(payload: dict, labels: Labels) -> list[Block]:
     """판정. 능력치(난이도), 눈과 견준 값(check_numbers), 성패."""
-    ability = labels.abilities.get(payload.get('ability'), text_of(payload.get('ability')))
-    difficulty = labels.difficulties.get(payload.get('difficulty'), text_of(payload.get('difficulty')))
+    ability = name_in(labels.abilities, payload.get('ability'), text_of(payload.get('ability')))
+    difficulty = name_in(labels.difficulties, payload.get('difficulty'), text_of(payload.get('difficulty')))
     return [
         Note(
             f'판정: {who(payload)} · {ability}({difficulty}) {check_numbers(payload)}'
@@ -160,7 +172,7 @@ def blow_text(blow: object) -> str:
 
 def hp_changed(payload: dict, labels: Labels) -> list[Block]:
     """캐릭터의 HP. 피해나 회복의 양과 그 앞뒤."""
-    kind = HP_KINDS.get(payload.get('kind'), '변화')
+    kind = name_in(HP_KINDS, payload.get('kind'), '변화')
     line = f'{who(payload)}: {kind} {payload.get("amount")} (HP {payload.get("before")} → {payload.get("after")})'
     return [Note(line + (', 쓰러짐' if payload.get('downed') else ''))]
 
@@ -208,7 +220,7 @@ ROAM_WAYS = {'hunt': '냄새를 맡고 다가옴', 'patrol': '순찰하다 들�
 
 def roamed(payload: dict, labels: Labels) -> list[Block]:
     """사냥하거나 배회해 캐릭터가 선 곳에 들어온 몬스터(#254). 어디로 왔는가. 온 곳은 알 때만 적는다."""
-    way = ROAM_WAYS.get(payload.get('way'), '들어옴')
+    way = name_in(ROAM_WAYS, payload.get('way'), '들어옴')
     origin = payload.get('from_place')
     route = f'{place_name(origin)} → ' if origin else ''
     return [Note(f'{text_of(payload.get("name"))}: {way} · {route}{place_name(payload.get("to_place"))}')]
@@ -216,8 +228,8 @@ def roamed(payload: dict, labels: Labels) -> list[Block]:
 
 def body_changed(payload: dict, labels: Labels) -> list[Block]:
     """몬스터나 NPC 의 몸. 양과 바뀐 생사만이다. HP 의 숫자는 GM 만 안다."""
-    kind = HP_KINDS.get(payload.get('kind'), '변화')
-    status = BODY_STATUSES.get(payload.get('status'))
+    kind = name_in(HP_KINDS, payload.get('kind'), '변화')
+    status = name_in(BODY_STATUSES, payload.get('status'), None)
     return [Note(f'{text_of(payload.get("name"))}: {kind} {payload.get("amount")}' + (f', {status}' if status else ''))]
 
 
@@ -228,7 +240,7 @@ def injured_name(payload: dict) -> str:
 
 def injury_name(payload: dict, labels: Labels) -> str:
     """부상의 이름. 규칙에 적힌 이름이다."""
-    return labels.injuries.get(payload.get('injury'), text_of(payload.get('injury')))
+    return name_in(labels.injuries, payload.get('injury'), text_of(payload.get('injury')))
 
 
 def injury_gained(payload: dict, labels: Labels) -> list[Block]:
@@ -280,7 +292,7 @@ def item_used(payload: dict, labels: Labels) -> list[Block]:
 def item_thrown(payload: dict, labels: Labels) -> list[Block]:
     """물건을 던짐(#277). 맞을 쪽의 이름. 맞았는지는 뒤의 판정과 변화의 이벤트가 적는다."""
     item = text_of(payload.get('name'))
-    target = payload.get('target') if isinstance(payload.get('target'), dict) else {}
+    target = nested(payload, 'target')
     aimed = text_of(target.get('name')) or SOMEONE
     if not payload.get('thrown'):
         return [Note(f'{who(payload)}: {item} 던지지 못함')]
@@ -292,7 +304,7 @@ def skill_used(payload: dict, labels: Labels) -> list[Block]:
     skill = text_of(payload.get('name'))
     if not payload.get('used'):
         return [Note(f'{who(payload)}: {skill} 쓰지 못함')]
-    target = payload.get('target') if isinstance(payload.get('target'), dict) else {}
+    target = nested(payload, 'target')
     aimed = text_of(target.get('character_name')) or text_of(target.get('name'))
     return [Note(f'{who(payload)}: {skill} 씀' + (f' → {aimed}' if aimed else ''))]
 
@@ -307,7 +319,7 @@ def aid_used(payload: dict, labels: Labels) -> list[Block]:
 
 def item_given(payload: dict, labels: Labels) -> list[Block]:
     """물건을 건넴."""
-    target = payload.get('target') if isinstance(payload.get('target'), dict) else {}
+    target = nested(payload, 'target')
     done = '' if payload.get('given') else ' (건네지 못함)'
     return [Note(f'{who(payload)} → {who(target)}: {item_count(payload)}{done}')]
 
@@ -342,7 +354,7 @@ def item_traded(payload: dict, labels: Labels) -> list[Block]:
 
 def money_paid(payload: dict, labels: Labels) -> list[Block]:
     """돈을 건넴(#278)."""
-    target = payload.get('target') if isinstance(payload.get('target'), dict) else {}
+    target = nested(payload, 'target')
     done = '' if payload.get('paid') else ' (건네지 못함)'
     return [Note(f'{who(payload)} → {who(target)}: {money_label(payload.get("amount"), labels)}{done}')]
 
@@ -395,7 +407,7 @@ def steal_attempted(payload: dict, labels: Labels) -> list[Block]:
 
 def quest_changed(payload: dict, labels: Labels) -> list[Block]:
     """퀘스트의 상태. 숨긴 퀘스트는 쓰지 않는다(빈 목록)."""
-    status = QUEST_STATUSES.get(payload.get('status'))
+    status = name_in(QUEST_STATUSES, payload.get('status'), None)
     if status is None:
         return []
     return [Note(f'퀘스트: {text_of(payload.get("name"))} → {status}')]
@@ -414,7 +426,7 @@ def happening_occurred(payload: dict, labels: Labels) -> list[Block]:
 
 def chapter_changed(payload: dict, labels: Labels) -> list[Block]:
     """다음 장으로 넘어갔다(#481). "2장: 축제"다."""
-    to = payload.get('to') if isinstance(payload.get('to'), dict) else {}
+    to = nested(payload, 'to')
     return [Note(f'{text_of(payload.get("number"))}장: {text_of(to.get("name"))}')]
 
 
@@ -432,7 +444,7 @@ def character_leveled(payload: dict, labels: Labels) -> list[Block]:
 
 def experience_gained(payload: dict, labels: Labels) -> list[Block]:
     """경험치를 받았다(#286 ②). "경험치: 들쥐 2 · 기사 +25, 약사 +25"다. 무엇이 줬는지와 받은 사람마다 받은 양."""
-    source = payload.get('source') if isinstance(payload.get('source'), dict) else {}
+    source = nested(payload, 'source')
     gains = [
         f'{who(gain)} +{text_of((gain.get("xp") or {}).get("count"))}'
         for gain in payload.get('gains') or []
@@ -471,8 +483,8 @@ DOOR_DEVICES = {'lock': '자물쇠', 'bar': '빗장'}
 
 def door_changed(payload: dict, labels: Labels) -> list[Block]:
     """문 다루기(#281). 누가, 어느 길의 문을, 무엇으로 어떻게."""
-    device = DOOR_DEVICES.get(payload.get('device'), '문')
-    act = DOOR_ACTS.get(payload.get('act'), '다룸')
+    device = name_in(DOOR_DEVICES, payload.get('device'), '문')
+    act = name_in(DOOR_ACTS, payload.get('act'), '다룸')
     road = f'{place_name(payload.get("from"))} ↔ {place_name(payload.get("to"))}'
     return [Note(f'문: {who(payload)} · {road} {device} {act}')]
 
@@ -485,7 +497,7 @@ def monsters_appeared(payload: dict, labels: Labels) -> list[Block]:
     """무작위 조우(#283)와 즉흥 조우(#254). 어디에, 무엇이 몇 마리, 길에서인지 쉬는 중인지 이야기 속에서인지."""
     monster = payload.get('monster')
     name = text_of(monster.get('name')) if isinstance(monster, dict) else ''
-    cause = WANDER_CAUSES.get(payload.get('cause'), '')
+    cause = name_in(WANDER_CAUSES, payload.get('cause'), '')
     return [Note(f'조우: {place_name(payload.get("place"))} · {cause} {name} {payload.get("count")}마리')]
 
 
@@ -528,8 +540,8 @@ def naming_resolved(payload: dict, labels: Labels) -> list[Block]:
 
 def npc_attitude_changed(payload: dict, labels: Labels) -> list[Block]:
     """NPC 의 태도."""
-    before = ATTITUDES.get(payload.get('previous'), text_of(payload.get('previous')))
-    after = ATTITUDES.get(payload.get('attitude'), text_of(payload.get('attitude')))
+    before = name_in(ATTITUDES, payload.get('previous'), text_of(payload.get('previous')))
+    after = name_in(ATTITUDES, payload.get('attitude'), text_of(payload.get('attitude')))
     return [Note(f'태도: {text_of(payload.get("name"))} · {before} → {after}')]
 
 

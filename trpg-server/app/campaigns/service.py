@@ -29,7 +29,7 @@ from app.assets.service import AssetNotFoundError
 from app.campaigns import repository, seating
 from app.campaigns.carrying import Carry
 from app.campaigns.ending import is_last, run_snapshot
-from app.campaigns.models import CampaignCarry, CampaignRun, CampaignTable, RunStatus
+from app.campaigns.models import CampaignCarry, CampaignRun, CampaignTable, QuestResult, RunStatus
 from app.campaigns.schemas import QuestResultOut, RunCreate, RunDetail, RunEpisodeOut, RunTable
 from app.events import recorder
 from app.events.models import EventType
@@ -114,7 +114,7 @@ async def describe(session: AsyncSession, run: CampaignRun, viewer_id: uuid.UUID
         title=snapshot.title,
         version=version.number,
         host_id=run.host_id,
-        status=run.status,
+        status=RunStatus(run.status),
         position=run.position,
         episodes=[
             RunEpisodeOut(
@@ -127,7 +127,7 @@ async def describe(session: AsyncSession, run: CampaignRun, viewer_id: uuid.UUID
             for position, episode in enumerate(snapshot.episodes)
         ],
         quest_results=[
-            QuestResultOut(position=row.position, entry_id=row.entry_id, result=row.result)
+            QuestResultOut(position=row.position, entry_id=row.entry_id, result=QuestResult(row.result))
             for row in await repository.quest_results(session, run.id)
         ],
         my_carry=None if carry is None else Carry.model_validate(carry.carry),

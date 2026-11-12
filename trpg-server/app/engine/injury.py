@@ -152,7 +152,7 @@ def ends_after(injury: Injury, round_number: int) -> int | None:
     1 라운드짜리는 다음 라운드 동안 효과가 있고, 그 라운드가 닫힐 때 풀린다.
     짧은 것은 "한 장면 동안"이라 라운드로 센다. 오래 가는 것은 게임 안의 시간으로 센다(heals_at).
     """
-    if injury.healing != Healing.ROUNDS:
+    if injury.healing != Healing.ROUNDS or injury.rounds is None:
         return None
     return round_number + injury.rounds
 
@@ -163,7 +163,7 @@ def heals_at(injury: Injury, now: int) -> int | None:
 
     규칙의 낫기까지의 시간(heal_minutes)만큼 뒤다. 치료로 앞당겨지거나 덧나서 늦춰진다.
     """
-    if injury.healing != Healing.HEALS:
+    if injury.healing != Healing.HEALS or injury.heal_minutes is None:
         return None
     return now + injury.heal_minutes
 
@@ -175,6 +175,6 @@ def leaves_aftermath(injury: Injury) -> bool:
 
 def roll_aftermath(injury: Injury, dice: Dice) -> TableRoll | None:
     """오래 가는 부상이 나을 때 후유증 표를 굴린다. 표가 없는 부상(깨끗이 낫는다)이면 굴리지 않고 None."""
-    if not leaves_aftermath(injury):
+    if not leaves_aftermath(injury) or injury.aftermath is None:
         return None
     return roll_table(injury.aftermath, Trigger.AFTERMATH, dice)

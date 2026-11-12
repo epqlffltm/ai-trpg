@@ -45,7 +45,7 @@ class ImageRejectedError(AssetUnavailableError):
 
 
 # asset 서버가 그림을 받지 않은 답과 그 까닭
-REJECTED_CODES = {
+REJECTED_CODES: dict[int, str] = {
     httpx.codes.REQUEST_ENTITY_TOO_LARGE: 'image_too_large',
     httpx.codes.UNSUPPORTED_MEDIA_TYPE: 'image_format',
     httpx.codes.UNPROCESSABLE_ENTITY: 'image_unreadable',

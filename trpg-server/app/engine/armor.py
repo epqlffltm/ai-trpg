@@ -203,6 +203,8 @@ def roll_save(ruleset: Ruleset, dice: Dice, defense: int, ward: int, cover: int 
     kind, value = terms
     roll = sum(roll_pool(ruleset, dice))
     target = ruleset.armor.save_target
+    # 막기의 방식이 SAVE 면 목표값이 있다(규칙의 검사)
+    assert target is not None
     return Save(kind=kind, value=value, roll=roll, target=target, saved=roll + value >= target)
 
 

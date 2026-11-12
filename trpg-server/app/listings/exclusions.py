@@ -17,7 +17,7 @@
 
 import uuid
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import Depends, Query
 from pydantic import AfterValidator, StringConstraints
@@ -58,7 +58,9 @@ def to_exclusions(
     exclude_tag: ExcludedTags = [],  # noqa: B006  FastAPI 가 요청마다 새 목록을 만든다
 ) -> Exclusions:
     """주소의 뺄 값을 하나로 묶는다."""
-    return Exclusions(creators=exclude_creators or (), tags=tuple(dict.fromkeys(exclude_tag)))
+    # AfterValidator(parse_creators) 가 주소의 글을 공개 ID 의 묶음으로 바꿔 넘긴다. 타입은 받은 글의 모양으로 적혀 있다
+    creators = cast(tuple[uuid.UUID, ...], exclude_creators or ())
+    return Exclusions(creators=creators, tags=tuple(dict.fromkeys(exclude_tag)))
 
 
 ExclusionsParam = Annotated[Exclusions, Depends(to_exclusions)]

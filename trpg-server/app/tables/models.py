@@ -22,6 +22,7 @@
 import enum
 import uuid
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -66,6 +67,9 @@ from app.assets.models import (
 )
 from app.catalog.steps import MAX_STEP
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.calendar.models import TableClock
 
 # 초대 코드의 길이(글자 수). 코드를 아는 사람만 테이블에 들어온다
 INVITE_CODE_LENGTH = 12
@@ -427,6 +431,11 @@ class GameTable(Base):
     # 그 장소의 덫을 봐야 해서 테이블을 읽을 때 함께 읽는다(app/tables/traps.py)
     traps: Mapped[list['TableTrap']] = relationship(
         lazy='selectin', cascade='all, delete-orphan', order_by='TableTrap.created_at, TableTrap.id'
+    )
+    # 게임 안의 시계(app/calendar/models.py 의 TableClock). 테이블 하나에 하나다. 만들 때 단다(start_clock).
+    # 테이블과 함께 지워진다
+    clock: Mapped['TableClock'] = relationship(
+        back_populates='table', uselist=False, lazy='selectin', cascade='all, delete-orphan', passive_deletes=True
     )
 
 

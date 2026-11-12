@@ -36,7 +36,7 @@ def model_chain(first: str, fallbacks: str) -> list[str]:
     return [first.strip(), *(name for name in names if name)]
 
 
-class Settings(CoreSettings, NotificationSettings, BillingSettings):
+class Settings(CoreSettings, NotificationSettings, BillingSettings):  # pyright: ignore[reportIncompatibleVariableOverride]
     """
     설정 값의 목록과 형식. 서버들이 함께 쓰는 칸(로그, 관측, DB, 토큰)은 server-core 의 CoreSettings 에,
     알림 서버의 주소와 비밀(NOTIFICATION_URL, NOTIFICATION_SECRET, NOTIFICATION_TIMEOUT_SECONDS)은
@@ -317,4 +317,4 @@ def get_settings() -> Settings:
 
     요청마다 .env 파일을 다시 읽지 않기 위해서다.
     """
-    return Settings()
+    return Settings()  # pyright: ignore[reportCallIssue]  # 반드시 받는 칸은 환경 변수가 채운다

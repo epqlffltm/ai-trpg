@@ -40,6 +40,7 @@ dev = [
     "hypothesis>=6.170.14",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "pyright[nodejs]==1.1.408",
     "pytest-cov>=7.0.0",
     "pyyaml>=6.0.3",
     "ruff>=0.16.10",
@@ -66,6 +67,15 @@ source = ["app"]
 [tool.coverage.report]
 # 한 줄도 없는 파일(__init__.py)은 표에서 뺀다
 skip_empty = true
+
+[tool.pyright]
+# 서버의 코드를 본다. 걸린 것이 많아 묶음마다 켠다. 아직 켜지 않은 곳은 exclude 에 있다(줄여 간다)
+include = ["app"]
+exclude = ["app/rounds", "app/assets", "app/tables"]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
 
 [tool.ruff]
 # 규칙과 모양은 저장소 루트의 ruff.toml 을 따른다. 인증 서버와 같다

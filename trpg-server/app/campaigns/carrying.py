@@ -85,7 +85,7 @@ def carries_of(table: GameTable) -> dict[uuid.UUID, Carry]:
 
 
 # 테이블의 퀘스트의 상태 → 적을 결과. 숨김과 진행 중은 적지 않는다
-RESULTS = {QuestStatus.SUCCEEDED: QuestResult.SUCCEEDED, QuestStatus.FAILED: QuestResult.FAILED}
+RESULTS: dict[str, QuestResult] = {QuestStatus.SUCCEEDED: QuestResult.SUCCEEDED, QuestStatus.FAILED: QuestResult.FAILED}
 
 
 def quest_results(table: GameTable) -> dict[uuid.UUID, QuestResult]:
