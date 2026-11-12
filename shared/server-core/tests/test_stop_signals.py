@@ -14,11 +14,13 @@
 import asyncio
 import logging
 import uuid
+from collections.abc import Callable
+from typing import cast
 
 import pytest
 
 from server_core import loops
-from server_core.stop_signals import StopListener, channel_name, decode, listen_dsn
+from server_core.stop_signals import Connect, StopListener, channel_name, decode, listen_dsn
 
 DSN = 'postgresql://chat:pw@127.0.0.1:5432/trpg'
 
@@ -28,10 +30,10 @@ class FakeConnection:
 
     def __init__(self, refuse_listen: bool = False) -> None:
         self.refuse_listen = refuse_listen
-        self.listeners: dict[str, object] = {}
+        self.listeners: dict[str, Callable[..., None]] = {}
         self.closed = False
 
-    async def add_listener(self, channel: str, callback) -> None:
+    async def add_listener(self, channel: str, callback: Callable[..., None]) -> None:
         if self.refuse_listen:
             raise OSError('listen refused')
         self.listeners[channel] = callback
@@ -46,7 +48,7 @@ class FakeConnection:
 class FakeConnect:
     """맺을 때마다 차례로 실패나 연결을 돌려준다."""
 
-    def __init__(self, *results: object) -> None:
+    def __init__(self, *results: BaseException | FakeConnection) -> None:
         self.results = list(results)
         self.dsns: list[str] = []
 
@@ -56,6 +58,10 @@ class FakeConnect:
         if isinstance(result, BaseException):
             raise result
         return result
+
+    def as_connect(self) -> Connect:
+        """StopListener 가 받는 모양으로. 가짜 연결은 asyncpg 의 연결 중 쓰는 것만 가진다."""
+        return cast(Connect, self)
 
 
 def test_each_schema_has_its_own_channel_and_the_dsn_drops_the_driver():
@@ -73,7 +79,7 @@ def test_only_a_uuid_is_a_stop():
 async def test_a_notice_reaches_on_stop_and_junk_is_dropped():
     connection = FakeConnection()
     stopped: list[uuid.UUID] = []
-    listener = StopListener(DSN, 'chat_stops', stopped.append, connect=FakeConnect(connection))
+    listener = StopListener(DSN, 'chat_stops', stopped.append, connect=FakeConnect(connection).as_connect())
     generation_id = uuid.uuid4()
 
     assert await listener.ensure_listening()
@@ -87,7 +93,7 @@ async def test_a_notice_reaches_on_stop_and_junk_is_dropped():
 async def test_a_failed_connect_is_quiet_and_retried(caplog: pytest.LogCaptureFixture):
     connection = FakeConnection()
     connect = FakeConnect(OSError('refused with a secret dsn'), connection)
-    listener = StopListener(DSN, 'chat_stops', lambda _: None, connect=connect)
+    listener = StopListener(DSN, 'chat_stops', lambda _: None, connect=connect.as_connect())
 
     with caplog.at_level(logging.WARNING):
         assert not await listener.ensure_listening()
@@ -100,7 +106,7 @@ async def test_a_failed_connect_is_quiet_and_retried(caplog: pytest.LogCaptureFi
 
 async def test_a_failed_listen_closes_the_connection():
     connection = FakeConnection(refuse_listen=True)
-    listener = StopListener(DSN, 'chat_stops', lambda _: None, connect=FakeConnect(connection))
+    listener = StopListener(DSN, 'chat_stops', lambda _: None, connect=FakeConnect(connection).as_connect())
 
     assert not await listener.ensure_listening()
     assert connection.closed
@@ -109,7 +115,7 @@ async def test_a_failed_listen_closes_the_connection():
 async def test_the_loop_reconnects_and_closes_when_halted():
     first, second = FakeConnection(), FakeConnection()
     connect = FakeConnect(first, second)
-    listener = StopListener(DSN, 'chat_stops', lambda _: None, connect=connect, every=0.01)
+    listener = StopListener(DSN, 'chat_stops', lambda _: None, connect=connect.as_connect(), every=0.01)
     running = loops.start(listener, 'stop-listener')
     while not listener.is_listening():
         await asyncio.sleep(0.01)

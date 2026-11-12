@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import sys
+from typing import Any
 
 import pytest
 
@@ -192,7 +193,8 @@ def test_an_explicit_error_code_wins_over_the_default():
 )
 def test_sensitive_field_names_are_redacted(name: str):
     assert is_sensitive_name(name)
-    assert render(make_record(**{name: '드러나면 안 되는 값'}))[name] == REDACTED
+    fields: dict[str, Any] = {name: '드러나면 안 되는 값'}
+    assert render(make_record(**fields))[name] == REDACTED
 
 
 @pytest.mark.parametrize(
@@ -327,7 +329,7 @@ def test_the_defaults_are_safe_for_local_development(monkeypatch: pytest.MonkeyP
         monkeypatch.delenv(name, raising=False)
 
     settings = TestSettings(
-        _env_file=None,
+        _env_file=None,  # pyright: ignore[reportCallIssue]  # pydantic-settings 의 _env_file 은 생성자 서명에 없다
         database_url='postgresql+asyncpg://asset:pw@127.0.0.1:5432/trpg',
         auth_jwks_url='http://auth.test/api/v1/auth/jwks',
     )

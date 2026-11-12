@@ -27,9 +27,13 @@ from conversation_core.lorebook import (
 )
 
 
-@dataclass(frozen=True)
+@dataclass
 class Entry:
-    """항목의 모양(LoreEntry)을 따르는 시험용 항목. 쓰는 서버의 것(chat 의 LoreEntryDocument)과 같은 칸이다."""
+    """
+    항목의 모양(LoreEntry)을 따르는 시험용 항목. 쓰는 서버의 것(chat 의 LoreEntryDocument)과 같은 칸이다.
+
+    얼리지 않는다. 그 모양의 칸은 쓸 수 있는 칸이고, 서버의 것(pydantic 모델)도 쓸 수 있다.
+    """
 
     name: str
     content: str

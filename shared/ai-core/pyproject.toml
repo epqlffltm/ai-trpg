@@ -50,9 +50,13 @@ extend = "../../ruff.toml"
 known-first-party = ["ai_core"]
 
 [tool.pyright]
-# 공용 코드의 소스만 본다. 테스트는 가짜 객체가 많아 따로 넓힌다
-include = ["src"]
+# 소스와 테스트를 본다. 테스트는 결과가 있다고 단언한 뒤 읽는 일이 많아 None 의 검사 셋만 끈다
+include = ["src", "tests"]
 pythonVersion = "3.13"
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
+executionEnvironments = [
+    { root = "tests", extraPaths = ["."], reportOptionalMemberAccess = false, reportOptionalSubscript = false, reportOptionalOperand = false },
+    { root = "src" },
+]

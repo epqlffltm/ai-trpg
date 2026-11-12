@@ -34,6 +34,7 @@ from server_core.observability.responses import SERVER_ERROR_DETAIL, handle_unex
 from server_core.testing.logs import rendered
 from server_core.testing.metrics import MetricsRecorder
 from server_core.testing.spans import SpanRecorder
+from tests.asgi import no_receive, no_send
 
 LOGGER = 'server_core.observability.middleware'
 PREFIX = '/api/v1/test'
@@ -184,8 +185,8 @@ async def test_a_scope_that_is_not_http_is_passed_through():
     async def inner(scope, receive, send) -> None:
         seen.append(scope)
 
-    await RequestLoggingMiddleware(inner)({'type': 'lifespan'}, None, None)
-    await RequestMetricsMiddleware(inner)({'type': 'lifespan'}, None, None)
+    await RequestLoggingMiddleware(inner)({'type': 'lifespan'}, no_receive, no_send)
+    await RequestMetricsMiddleware(inner)({'type': 'lifespan'}, no_receive, no_send)
 
     assert seen == [{'type': 'lifespan'}, {'type': 'lifespan'}]
 

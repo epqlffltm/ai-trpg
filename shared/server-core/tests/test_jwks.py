@@ -158,7 +158,7 @@ async def test_old_keys_are_dropped_after_the_stale_limit(
 
     # 인증 서버가 뺀 키를 끝없이 믿지 않는다. 사람이 봐야 하는 줄이 하나 남는다
     (record,) = [entry for entry in caplog.records if entry.name == 'server_core.auth.jwks']
-    assert (record.levelname, record.error_code) == ('ERROR', JWKS_UNAVAILABLE_ERROR_CODE)
+    assert (record.levelname, vars(record)['error_code']) == ('ERROR', JWKS_UNAVAILABLE_ERROR_CODE)
 
 
 async def test_dropping_is_told_once(

@@ -25,7 +25,7 @@ from pydantic import SecretStr
 from ai_core.anthropic import AnthropicProvider
 from ai_core.catalog_contract import CatalogModel, Provider, ReasoningStyle, TokenLimitField
 from ai_core.gemini import GeminiProvider
-from ai_core.openai_compat import WireOptions
+from ai_core.openai_compat import OpenAICompatProvider, WireOptions
 from ai_core.provider import GenerationParams, ProviderError
 from ai_core.routing import (
     MODEL_UNAVAILABLE,
@@ -175,6 +175,7 @@ async def refused(router: ModelRouter, name: str, **options) -> str:
 
 async def test_a_name_not_in_the_catalog_is_a_local_model():
     provider = await make_router(LUNA).provider_for('gemma4:31b-it-qat')
+    assert isinstance(provider, OpenAICompatProvider)
 
     # 예전과 같다. 설정의 주소로 그 이름을, 키 없이, 설정의 받는 칸으로 부른다
     assert (provider.base_url, provider.model, provider.api_key, provider.kind) == (
@@ -189,6 +190,7 @@ async def test_a_name_not_in_the_catalog_is_a_local_model():
 
 async def test_a_catalog_model_is_called_through_its_provider_and_snapshot():
     provider = await make_router(LUNA).provider_for('gpt-6-luna')
+    assert isinstance(provider, OpenAICompatProvider)
 
     assert (provider.base_url, provider.model, provider.kind) == (OPENAI_URL, 'gpt-6-luna-2026-09-22', 'openai')
     assert provider.api_key.get_secret_value() == KEY
@@ -199,6 +201,7 @@ async def test_a_catalog_model_is_called_through_its_provider_and_snapshot():
 
 async def test_a_local_catalog_model_uses_the_local_endpoint_with_its_snapshot():
     provider = await make_router(GEMMA).provider_for('gemma-4')
+    assert isinstance(provider, OpenAICompatProvider)
 
     assert (provider.base_url, provider.model, provider.api_key) == (LOCAL_URL, 'gemma4:26b', None)
     assert provider.options == WireOptions(supports_reasoning=False, token_field='max_tokens')
@@ -277,6 +280,7 @@ async def test_a_claude_model_without_a_key_is_not_configured():
 async def test_a_grok_model_is_called_through_the_xai_endpoint():
     transport = Transport()
     provider = await make_router(GROK, transport=transport).provider_for('grok-4-3')
+    assert isinstance(provider, OpenAICompatProvider)
 
     await provider.complete([], GenerationParams(max_tokens=600, temperature=0.8))
 
@@ -310,4 +314,8 @@ async def test_a_refusal_leaves_a_warning(caplog: pytest.LogCaptureFixture):
         await refused(make_router(replace(LUNA, enabled=False)), 'gpt-6-luna')
 
     (record,) = [record for record in caplog.records if record.name == ROUTING_LOGGER]
-    assert (record.levelname, record.model, record.reason) == ('WARNING', 'gpt-6-luna', MODEL_UNAVAILABLE)
+    assert (record.levelname, vars(record)['model'], vars(record)['reason']) == (
+        'WARNING',
+        'gpt-6-luna',
+        MODEL_UNAVAILABLE,
+    )

@@ -134,8 +134,8 @@ async def test_a_failed_fetch_keeps_the_last_list(auth_server: FakeAuthServer, c
 
     assert listed.is_revoked(SUBJECT, 2)
     [record] = [entry for entry in caplog.records if entry.name == revocations.__name__]
-    assert record.error_code == FETCH_ERROR_CODE
-    assert record.reason == 'ConnectError'
+    assert vars(record)['error_code'] == FETCH_ERROR_CODE
+    assert vars(record)['reason'] == 'ConnectError'
 
 
 async def test_a_bad_document_keeps_the_last_list(auth_server: FakeAuthServer):

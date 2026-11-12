@@ -65,7 +65,7 @@ async def test_a_call_under_a_span_gets_a_client_span(spans: SpanRecorder):
     assert span.attributes['http.response.status_code'] == 200
     assert span.status.status_code != StatusCode.ERROR
     # 주소의 경로는 싣지 않는다
-    assert 'secret-hold' not in str(dict(span.attributes))
+    assert 'secret-hold' not in str(dict(span.attributes or {}))
 
 
 async def test_our_servers_receive_the_client_span_as_parent(spans: SpanRecorder):

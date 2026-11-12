@@ -12,6 +12,7 @@
 from dataclasses import dataclass
 
 from opentelemetry.metrics import Counter, Meter
+from opentelemetry.sdk.metrics.export import HistogramDataPoint
 
 from server_core.observability.metrics import STREAM_BUCKETS, InstrumentSet, measured_stream
 from server_core.observability.request_metrics import RequestMetricsMiddleware
@@ -20,6 +21,7 @@ from server_core.observability.spans import job_span
 from server_core.observability.streams import NO_STREAMS, StreamRoutes
 from server_core.testing.metrics import MetricsRecorder
 from server_core.testing.spans import SpanRecorder
+from tests.asgi import no_receive
 
 STREAMS = StreamRoutes.of(r'/api/v1/chat/conversations/[^/]+/messages')
 STREAM_PATH = '/api/v1/chat/conversations/7f0c/messages'
@@ -49,6 +51,7 @@ def bounds_of(metrics: MetricsRecorder, name: str) -> tuple[float, ...]:
         for metric in scope.metrics
         if metric.name == name
     )
+    assert isinstance(point, HistogramDataPoint), point
     return tuple(point.explicit_bounds)
 
 
@@ -63,14 +66,14 @@ def test_a_stream_route_matches_the_whole_path():
 
 
 async def test_a_stream_gets_no_request_span(spans: SpanRecorder):
-    await RequestSpanMiddleware(answer, streams=STREAMS)(http_scope(STREAM_PATH), None, ignore)
+    await RequestSpanMiddleware(answer, streams=STREAMS)(http_scope(STREAM_PATH), no_receive, ignore)
 
     assert spans.ended() == []
 
 
 async def test_without_streams_the_same_path_gets_a_span(spans: SpanRecorder):
     # 스트림을 넘기지 않은 서버(알림, asset)는 모든 요청에 span 을 건다
-    await RequestSpanMiddleware(answer)(http_scope(STREAM_PATH), None, ignore)
+    await RequestSpanMiddleware(answer)(http_scope(STREAM_PATH), no_receive, ignore)
 
     assert spans.only().name == 'POST (unmatched)'
 
@@ -82,7 +85,7 @@ async def test_a_stream_is_counted_but_neither_timed_nor_active(metrics: Metrics
         await send({'type': 'http.response.start', 'status': 200, 'headers': []})
         active_while_open.append(metrics.value('http_server_active_requests'))
 
-    await RequestMetricsMiddleware(streaming, streams=STREAMS)(http_scope(STREAM_PATH), None, ignore)
+    await RequestMetricsMiddleware(streaming, streams=STREAMS)(http_scope(STREAM_PATH), no_receive, ignore)
 
     # 몇 시간씩 열려 있는 스트림이 처리 중인 수와 시간 분포를 덮지 않는다. 스트림은 sse_* 가 센다
     assert active_while_open == [None]
@@ -91,7 +94,7 @@ async def test_a_stream_is_counted_but_neither_timed_nor_active(metrics: Metrics
 
 
 async def test_a_request_that_is_not_a_stream_is_timed(metrics: MetricsRecorder):
-    await RequestMetricsMiddleware(answer, streams=STREAMS)(http_scope('/api/v1/chat/me'), None, ignore)
+    await RequestMetricsMiddleware(answer, streams=STREAMS)(http_scope('/api/v1/chat/me'), no_receive, ignore)
 
     assert metrics.value('http_server_request_duration', method='POST', route='(unmatched)') == 1
 

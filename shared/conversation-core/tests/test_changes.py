@@ -101,6 +101,7 @@ def test_a_prefix_of_either_marker_is_held(text: str, length: int):
 
 def test_the_instruction_lists_only_what_can_be_done():
     text = instruction(3, [Choice('rose', '장미')], [Choice('park', '공원')])
+    assert text is not None
 
     assert CHANGES_MARKER in text
     assert '-3 에서 +3 까지' in text
@@ -110,6 +111,7 @@ def test_the_instruction_lists_only_what_can_be_done():
 
 def test_without_affection_the_affection_line_is_left_out():
     text = instruction(0, [Choice('rose', '장미')], [])
+    assert text is not None
 
     assert 'affection' not in text
     assert 'move' not in text

@@ -39,10 +39,12 @@ from tests.conftest import TestSettings, make_test_settings
 USER = uuid.UUID('11111111-2222-4333-8444-555555555555')
 
 
-class BillingTestSettings(TestSettings, BillingSettings):
+class BillingTestSettings(TestSettings, BillingSettings):  # pyright: ignore[reportIncompatibleVariableOverride]
     """결제 서버의 칸(BillingSettings)을 물려받은 서버의 설정. 서버들의 Settings 와 같은 모양이다."""
 
     __test__ = False
+    # 부모의 model_config 가 서로 다른 모양이다(설정의 SettingsConfigDict, 칸 묶음의 ConfigDict). 앞의 것을 쓰는
+    # 것이 pydantic 의 규칙이고 서버들의 Settings 도 같다. pyright 는 그 겹침을 막아 위의 줄에서 끈다
 
 
 def make_billing_settings(**overrides) -> BillingTestSettings:
@@ -54,7 +56,7 @@ def make_billing_settings(**overrides) -> BillingTestSettings:
         )
     }
     values.update(overrides)
-    return BillingTestSettings(_env_file=None, **values)
+    return BillingTestSettings(_env_file=None, **values)  # pyright: ignore[reportCallIssue]  # pydantic-settings 의 _env_file 은 생성자 서명에 없다
 
 
 REFERENCE = 'chat:message:abc'

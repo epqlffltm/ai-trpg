@@ -13,14 +13,17 @@ import json
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import jwt
 import pytest
 
-from server_core.auth.jwks import UnknownKeyError
+from server_core.auth.jwks import JwksCache, UnknownKeyError
+from server_core.auth.revocations import RevocationList
 from server_core.auth.tokens import InvalidTokenError, verify_access_token
 from server_core.observability.redaction import is_sensitive_name, scrub_text
 from server_core.service_auth.signing import is_valid, sign
+from server_core.settings import CoreSettings
 
 CONTRACTS = Path(__file__).resolve().parents[2] / 'contracts'
 
@@ -97,7 +100,9 @@ SETTINGS = SimpleNamespace(jwt_issuer=TOKENS['issuer'], jwt_audience=TOKENS['aud
 
 
 async def verify(token: str):
-    return await verify_access_token(token, ContractKeys(TOKENS['jwks']), NoRevocations(), SETTINGS)
+    # 가짜 키 목록과 끊긴 세션의 목록, 설정의 두 칸만 넘긴다. 쓰는 것은 그 모양뿐이다
+    jwks, revocations = cast(JwksCache, ContractKeys(TOKENS['jwks'])), cast(RevocationList, NoRevocations())
+    return await verify_access_token(token, jwks, revocations, cast(CoreSettings, SETTINGS))
 
 
 @named(TOKENS['accepted'])
