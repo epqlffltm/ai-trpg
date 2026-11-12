@@ -294,11 +294,19 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      # 브라우저만 받는다(--with-deps 없이). 러너의 이미지에 Chrome 이 있어 그 라이브러리가 이미 깔려 있다.
+      # --with-deps 는 apt 로 글꼴과 라이브러리를 더 받는데, 우분투 저장소의 이름을 잠깐 찾지 못해 떨어진 적이 있다.
+      # 받기도 잠깐 끊길 수 있어 세 번까지 해 본다
       - name: Playwright 와 브라우저 설치
         working-directory: web
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+          for attempt in 1 2 3; do
+            npx playwright install chromium && exit 0
+            echo "브라우저를 받지 못했다. 15초 뒤에 다시 한다($attempt/3)" >&2
+            sleep 15
+          done
+          exit 1
 
       - name: 화면으로 돌리기
         run: bash .github/scripts/e2e.sh test
