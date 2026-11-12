@@ -495,6 +495,6 @@ docs/                     서버들이 함께 지키는 규격 (관측), 설계�
 tools/                    패치 zip 을 적용하는 도구(apply_ai_update.py), .env 아홉을 만들고 비밀을 채우는 도구(fill_env.py), 그 위에 staging 의 값을 적는 도구(staging_env.py), 서버마다의 API 목록을 뽑는 도구(export_openapi.py)
 docker-compose.yml        PostgreSQL, Redis, DB 의 백업, 그림 저장소(SeaweedFS), 모든 서버와 워커, cron, 프록시(프로필 app), 로그와 메트릭 모으기(프로필 observability)
 docker-compose.staging.yml  staging(VM)에서 위의 파일에 덮어쓰는 설정. TLS, 허용 주소, certbot, 임베딩의 Ollama, 환경 이름
-docker-compose.e2e.yml    종단간 테스트(web/e2e)에서만 덮어쓰는 설정. 메일을 받아 두는 Mailpit, 가짜 언어 모델(tools/e2e/), 게임 서버를 모델로 서술하게
+docker-compose.e2e.yml    종단간 테스트(web/e2e)에서만 덮어쓰는 설정. 메일을 받아 두는 Mailpit, 가짜 언어 모델(tools/e2e/), 게임·chat·story 서버가 그 모델을 부르게, asset 서버가 누구나 작품을 공개하게
 .env.example              인프라 환경 변수 목록
 ```

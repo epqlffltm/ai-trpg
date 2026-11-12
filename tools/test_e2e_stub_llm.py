@@ -55,6 +55,13 @@ class StubServerTests(unittest.TestCase):
         self.assertEqual(body['choices'][0]['message']['content'], stub_llm.DEFAULT_REPLY)
         self.assertEqual(body['choices'][0]['finish_reason'], 'stop')
 
+    def test_each_model_gets_its_own_reply(self):
+        for model, reply in stub_llm.REPLIES.items():
+            with self.subTest(model=model):
+                _, raw = post(f'{self.base}/v1/chat/completions', {'model': model, 'messages': []})
+
+                self.assertEqual(json.loads(raw)['choices'][0]['message']['content'], reply)
+
     def test_the_called_models_are_remembered(self):
         post(f'{self.base}/v1/chat/completions', {'model': 'e2e-narrator', 'messages': []})
 
@@ -64,6 +71,13 @@ class StubServerTests(unittest.TestCase):
     def test_health(self):
         with urllib.request.urlopen(f'{self.base}/health', timeout=10) as response:
             self.assertEqual(response.read(), b'ok')
+
+
+class ReplyTests(unittest.TestCase):
+    def test_the_story_reply_is_one_speaker_per_line(self):
+        # story 서버가 줄마다 @말한이: 를 읽는다. 세계관의 인물 id(seed_works.py 의 sera)와 맞아야 한다
+        speakers = [line.split(':', 1)[0] for line in stub_llm.STORY_REPLY.splitlines()]
+        self.assertEqual(speakers, ['@narration', '@sera'])
 
 
 class PieceTests(unittest.TestCase):
