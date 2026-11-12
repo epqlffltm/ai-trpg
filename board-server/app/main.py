@@ -99,7 +99,8 @@ def create_app(
         redoc_url=None,
         openapi_url=f'{API_PREFIX}/openapi.json' if settings.debug else None,
         lifespan=lifespan,
-        telemetry=FASTAPI_TELEMETRY,
+        # 공용 코드의 FASTAPI_TELEMETRY 에 FastAPI 의 타입(TelemetryConfig)이 적히면 아래의 무시는 필요 없다
+        telemetry=FASTAPI_TELEMETRY,  # pyright: ignore[reportArgumentType]
     )
 
     # 요청의 식별자와 로그, 서버 span, HTTP 메트릭. 나중에 붙인 것이 바깥이다(다른 서버들과 같은 차례)

@@ -23,6 +23,7 @@ def load_baseline() -> ModuleType:
     """기준선 마이그레이션 파일을 모듈로 읽는다. 파일 이름이 숫자로 시작해 import 문으로는 읽지 못한다."""
     path = next(VERSIONS.glob('*_board_baseline.py'))
     spec = importlib.util.spec_from_file_location('board_baseline', path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

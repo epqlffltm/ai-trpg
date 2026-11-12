@@ -15,6 +15,7 @@ timeout 이 늘면 색인이나 검색 엔진이 필요하다. 그 밖의 실패
 
 import time
 from collections.abc import Sequence
+from typing import cast
 
 from fastapi import status
 from sqlalchemy.exc import DBAPIError
@@ -25,7 +26,7 @@ from app.core.errors import ApiError
 from app.core.metrics import SEARCH_SUCCESS, SEARCH_TIMEOUT, record_search
 from app.posts import policy, repository
 from app.posts.repository import SummaryRows
-from app.posts.schemas import PostSummaryPageResponse, SearchPostsQuery
+from app.posts.schemas import PostSummary, PostSummaryPageResponse, SearchPostsQuery
 from app.posts.service import board_by_slug, summary_responses
 from app.posts.terms import terms_of
 
@@ -90,5 +91,6 @@ async def search_posts(session: AsyncSession, query: SearchPostsQuery) -> PostSu
     board_id, board_slug = (None, None) if board is None else (board.id, board.slug)
     rows, total = await find_page(session, terms_of(query.q), board_id, query.page, query.size)
     slugs = await board_slugs(session, board_id, board_slug)
-    items = await summary_responses(session, rows, slugs, now)
+    # ORM 의 행과 읽은 줄은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    items = await summary_responses(session, cast(Sequence[PostSummary], rows), slugs, now)
     return PostSummaryPageResponse(items=items, page=query.page, size=query.size, total=total)

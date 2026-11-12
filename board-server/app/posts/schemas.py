@@ -247,15 +247,32 @@ class PostListResponse(PostSummaryPageResponse):
 
 
 class PostSummary(Protocol):
-    """목록에 싣는 데 필요한 글의 칸들. 글의 행이나 일부 칸만 읽은 줄이다."""
+    """
+    목록에 싣는 데 필요한 글의 칸들. 글의 행이나 일부 칸만 읽은 줄이다.
 
-    id: int
-    board_id: int
-    author_id: uuid.UUID | None
-    title: str
-    pinned_until: datetime | None
-    created_at: datetime
-    updated_at: datetime
+    읽기만 하는 칸(property)이다. 그래야 얼린 값(dataclass(frozen=True))도 이 모양을 따른다.
+    """
+
+    @property
+    def id(self) -> int: ...
+
+    @property
+    def board_id(self) -> int: ...
+
+    @property
+    def author_id(self) -> uuid.UUID | None: ...
+
+    @property
+    def title(self) -> str: ...
+
+    @property
+    def pinned_until(self) -> datetime | None: ...
+
+    @property
+    def created_at(self) -> datetime: ...
+
+    @property
+    def updated_at(self) -> datetime: ...
 
 
 @dataclass(frozen=True)

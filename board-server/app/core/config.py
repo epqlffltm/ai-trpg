@@ -34,13 +34,16 @@ def async_database_url(value: str) -> str:
     return value
 
 
-class Settings(CoreSettings, NotificationSettings):
+class Settings(CoreSettings, NotificationSettings):  # pyright: ignore[reportIncompatibleVariableOverride]
     """
     설정 값의 목록과 형식. 함께 쓰는 칸은 CoreSettings 에, 알림 서버의 칸(NOTIFICATION_URL, NOTIFICATION_SECRET,
     NOTIFICATION_TIMEOUT_SECONDS)은 NotificationSettings 에 있다.
 
     같은 이름의 환경 변수가 있으면 그 값을 쓰고, 없으면 .env 파일, 그것도 없으면 여기 적힌 기본값을 쓴다.
     형식이 맞지 않으면 서버가 뜨기 전에 오류가 난다.
+
+    부모의 model_config 가 서로 다른 모양이다(설정의 SettingsConfigDict, 칸 묶음의 ConfigDict). 앞의 것을 쓰는 것이
+    pydantic 의 규칙이고 다른 서버들의 Settings 도 같다. pyright 는 그 겹침을 막아 class 줄에서 끈다.
     """
 
     # 이 서버의 이름. 로그의 service 칸, span 과 메트릭의 출처다. 규격(docs/observability.md)에 적힌 이름이다
@@ -86,4 +89,4 @@ def get_settings() -> Settings:
 
     요청마다 .env 를 다시 읽지 않는다. 테스트는 이 함수를 거치지 않고 Settings 를 직접 만들어 앱에 넣는다.
     """
-    return Settings()
+    return Settings()  # pyright: ignore[reportCallIssue]  # 반드시 받는 칸은 환경 변수가 채운다

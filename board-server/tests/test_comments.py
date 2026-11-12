@@ -71,7 +71,7 @@ async def add_comment(
 
 
 async def count_rows(session: AsyncSession, model: type) -> int:
-    return await session.scalar(select(func.count()).select_from(model))
+    return await session.scalar(select(func.count()).select_from(model)) or 0
 
 
 async def write(client: AsyncClient, headers: dict[str, str], post_id: object, body: object):
@@ -392,7 +392,7 @@ def test_authors_skip_deleted_comments():
 
 
 def test_slice_of_empty_and_exact():
-    assert policy.slice_of([], 2, lambda item: item) == policy.Slice(items=[], next=None)
+    assert policy.slice_of(list[int](), 2, lambda item: item) == policy.Slice(items=[], next=None)
     assert policy.slice_of([1, 2], 2, lambda item: item) == policy.Slice(items=[1, 2], next=None)
     assert policy.slice_of([1, 2, 3], 2, lambda item: item) == policy.Slice(items=[1, 2], next=2)
 

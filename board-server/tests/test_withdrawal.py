@@ -56,7 +56,9 @@ async def withdraw(client: AsyncClient, user_id: object, body: str = BODY):
 
 
 async def free_board_id(session: AsyncSession) -> int:
-    return await session.scalar(select(Board.id).where(Board.slug == 'free'))
+    board_id = await session.scalar(select(Board.id).where(Board.slug == 'free'))
+    assert board_id is not None
+    return board_id
 
 
 async def add_post(session: AsyncSession, author_id: uuid.UUID, deleted: bool = False) -> Post:
@@ -192,7 +194,7 @@ async def test_logs_counts_without_the_user_id(
     counts = ('blanked_posts', 'blanked_comments', 'blanked_reports', 'deleted_authors', 'deleted_notifications')
     assert [getattr(first, name) for name in counts] == [2, 2, 1, 1, 2]
     assert [getattr(second, name) for name in counts] == [0, 0, 0, 0, 0]
-    assert first.operation == 'board.withdrawal'
+    assert vars(first)['operation'] == 'board.withdrawal'
     assert str(LEAVING) not in json.dumps(first.__dict__, default=str)
 
 
