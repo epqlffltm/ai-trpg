@@ -15,10 +15,12 @@
 
 import logging
 from datetime import timedelta
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
 from httpx import ASGITransport, AsyncClient
+from redis.asyncio import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from server_core.limits.attempts import AttemptLimit, Limiter, LimitsUnavailable, TooManyAttempts, retry_after
@@ -154,7 +156,7 @@ async def test_memory_reading_does_not_count_and_clearing_forgets():
 
 
 async def test_redis_counts_reads_and_clears():
-    counter = RedisCounter(FakeRedis())
+    counter = RedisCounter(cast(Redis, FakeRedis()))
 
     first = await counter.hit('k', 60)
     second = await counter.hit('k', 60)
@@ -168,7 +170,7 @@ async def test_redis_counts_reads_and_clears():
 
 @pytest.mark.parametrize('command', ['hit', 'read', 'clear'])
 async def test_a_broken_redis_is_unavailable(command: str):
-    counter = RedisCounter(FakeRedis(broken=True))
+    counter = RedisCounter(cast(Redis, FakeRedis(broken=True)))
     calls = {
         'hit': lambda: counter.hit('k', 60),
         'read': lambda: counter.read('k'),

@@ -10,7 +10,7 @@
 import asyncio
 import json
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import httpx
 import pytest
@@ -26,8 +26,8 @@ TEXTS = ['엘프 폭주족', '드워프의 망치']
 SECRET = '악역영애는 사실 경찰의 끄나풀이다.'
 
 
-def make_answer(*vectors: list[float], reverse: bool = False) -> dict:
-    """Ollama 가 돌려주는 모양의 답. reverse 면 data 의 차례를 뒤집어 보낸다."""
+def make_answer(*vectors: Sequence[object], reverse: bool = False) -> dict:
+    """Ollama 가 돌려주는 모양의 답. reverse 면 data 의 차례를 뒤집어 보낸다. 틀린 벡터(글, 참거짓)도 싣는다."""
     data = [{'object': 'embedding', 'index': index, 'embedding': vector} for index, vector in enumerate(vectors)]
     if reverse:
         data.reverse()

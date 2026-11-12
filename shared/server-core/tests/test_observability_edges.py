@@ -9,6 +9,7 @@ import logging
 from server_core.observability.formatter import CONTEXT_IDS_FIELD, context_ids
 from server_core.observability.middleware import RequestLoggingMiddleware, full_template
 from server_core.observability.setup import DropUnhandledNotice
+from tests.asgi import no_receive, no_send
 
 
 def make_record(logger: str, message: str) -> logging.LogRecord:
@@ -51,6 +52,6 @@ async def test_a_scope_that_is_not_http_passes_through_untouched():
         seen.append(scope)
 
     middleware = RequestLoggingMiddleware(inner)
-    await middleware({'type': 'lifespan'}, None, None)
+    await middleware({'type': 'lifespan'}, no_receive, no_send)
 
     assert seen == [{'type': 'lifespan'}]

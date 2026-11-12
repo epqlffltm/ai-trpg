@@ -17,6 +17,7 @@ from server_core.observability.request_spans import RequestSpanMiddleware
 from server_core.observability.spans import tracer, use_provider
 from server_core.observability.tracing import build_provider, configure_tracing, shutdown_tracing
 from server_core.testing.collector import Collector
+from tests.asgi import no_receive, no_send
 from tests.conftest import make_test_settings
 
 
@@ -91,6 +92,6 @@ async def test_a_scope_that_is_not_http_gets_no_span():
     async def inner(scope, receive, send) -> None:
         seen.append(scope)
 
-    await RequestSpanMiddleware(inner)({'type': 'lifespan'}, None, None)
+    await RequestSpanMiddleware(inner)({'type': 'lifespan'}, no_receive, no_send)
 
     assert seen == [{'type': 'lifespan'}]

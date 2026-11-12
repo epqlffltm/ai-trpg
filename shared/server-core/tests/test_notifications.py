@@ -18,12 +18,12 @@ import logging
 import uuid
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
-from typing import ClassVar
+from typing import ClassVar, cast
 
 import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, Table
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.schema import CreateIndex, CreateTable
@@ -144,7 +144,7 @@ def dispatcher_of(
 
 
 def test_the_columns_make_a_table_with_named_constraints():
-    table = OutgoingNotification.__table__
+    table = cast(Table, OutgoingNotification.__table__)
     ddl = str(CreateTable(table).compile(dialect=postgresql.dialect()))
 
     assert table.name == 'outgoing_notifications'
@@ -155,7 +155,7 @@ def test_the_columns_make_a_table_with_named_constraints():
 
 
 def test_the_due_index_holds_only_waiting_rows():
-    (index,) = OutgoingNotification.__table__.indexes
+    (index,) = cast(Table, OutgoingNotification.__table__).indexes
     ddl = str(CreateIndex(index).compile(dialect=postgresql.dialect()))
 
     assert ddl.endswith("ON outgoing_notifications (next_attempt_at) WHERE status = 'pending'")
@@ -169,7 +169,8 @@ def test_each_server_gets_its_own_constraints():
         pass
 
     # 같은 제약 객체를 두 표에 걸면 SQLAlchemy 가 거절한다. 표마다 새로 만든다
-    assert OtherNotification.__table__.constraints.isdisjoint(OutgoingNotification.__table__.constraints)
+    other, ours = cast(Table, OtherNotification.__table__), cast(Table, OutgoingNotification.__table__)
+    assert other.constraints.isdisjoint(ours.constraints)
 
 
 # --- 알림 서버를 부르는 것 ---
@@ -354,7 +355,11 @@ async def test_one_broken_notification_does_not_stop_the_others(caplog: pytest.L
     # 예외가 난 알림은 그대로 남아 다음 바퀴에 다시 보낸다
     assert [item.source_key for item in store.rows] == ['a']
     (record,) = caplog.records
-    assert (record.error_code, record.kind, record.notification_id) == ('job.failed', 'character.hidden', 1)
+    assert (vars(record)['error_code'], vars(record)['kind'], vars(record)['notification_id']) == (
+        'job.failed',
+        'character.hidden',
+        1,
+    )
 
 
 async def test_a_batch_is_limited(monkeypatch: pytest.MonkeyPatch):
@@ -402,9 +407,17 @@ async def test_an_unsent_notification_leaves_one_line_without_the_person(
         await dispatcher_of(store, FakeNotifications([sent])).tick()
 
     (record,) = caplog.records
-    assert (record.levelno, record.error_code, record.reason) == (level, error_code, sent.reason)
-    assert (record.operation, record.kind, record.notification_id) == (DISPATCH_OPERATION, 'character.hidden', 9)
-    assert record.result == ('client_error' if sent.delivery == Delivery.REJECTED else 'server_error')
+    assert (record.levelno, vars(record)['error_code'], vars(record)['reason']) == (
+        level,
+        error_code,
+        sent.reason,
+    )
+    assert (vars(record)['operation'], vars(record)['kind'], vars(record)['notification_id']) == (
+        DISPATCH_OPERATION,
+        'character.hidden',
+        9,
+    )
+    assert vars(record)['result'] == ('client_error' if sent.delivery == Delivery.REJECTED else 'server_error')
     # 받는 사람과 알림의 내용은 남기지 않는다
     assert str(USER) not in str(record.__dict__)
     assert '렌' not in str(record.__dict__)
@@ -418,8 +431,13 @@ async def test_a_busy_round_is_logged_at_info(caplog: pytest.LogCaptureFixture):
         await dispatcher_of(store, FakeNotifications()).tick()
 
     busy, quiet = caplog.records
-    assert (busy.levelno, busy.sent, busy.operation, busy.result) == (logging.INFO, 1, DISPATCH_OPERATION, 'success')
-    assert busy.duration_ms >= 0
+    assert (busy.levelno, vars(busy)['sent'], vars(busy)['operation'], vars(busy)['result']) == (
+        logging.INFO,
+        1,
+        DISPATCH_OPERATION,
+        'success',
+    )
+    assert vars(busy)['duration_ms'] >= 0
     assert quiet.levelno == logging.DEBUG
 
 
@@ -451,17 +469,19 @@ async def test_the_loop_keeps_running_after_a_failed_round(caplog: pytest.LogCap
     assert running.task.done()
     assert running.task.get_name() == 'notification-dispatcher'
     assert caplog.records
-    assert all(record.error_code == 'job.failed' for record in caplog.records)
+    assert all(vars(record)['error_code'] == 'job.failed' for record in caplog.records)
 
 
 # --- 설정 ---
 
 
-class SenderSettings(TestSettings, NotificationSettings):
+class SenderSettings(TestSettings, NotificationSettings):  # pyright: ignore[reportIncompatibleVariableOverride]
     """알림을 보내는 서버의 설정과 같은 모양."""
 
     __test__ = False
     service_name: ClassVar[str] = 'sender-test'
+    # 부모의 model_config 가 서로 다른 모양이다(설정의 SettingsConfigDict, 칸 묶음의 ConfigDict). 앞의 것을 쓰는
+    # 것이 pydantic 의 규칙이고 서버들의 Settings 도 같다. pyright 는 그 겹침을 막아 위의 줄에서 끈다
 
 
 def sender_settings(**overrides) -> SenderSettings:
@@ -472,7 +492,7 @@ def sender_settings(**overrides) -> SenderSettings:
         'auth_jwks_url': TEST_JWKS_URL,
         'otel_exporter_otlp_endpoint': '',
     }
-    return SenderSettings(_env_file=None, **{**values, **overrides})
+    return SenderSettings(_env_file=None, **{**values, **overrides})  # pyright: ignore[reportCallIssue]  # pydantic-settings 의 _env_file 은 생성자 서명에 없다
 
 
 def test_the_settings_are_read_from_the_environment(monkeypatch: pytest.MonkeyPatch):

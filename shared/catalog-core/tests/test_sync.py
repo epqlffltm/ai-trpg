@@ -66,12 +66,16 @@ async def put(session: AsyncSession, *entries: ModelEntry, tables: CatalogTables
 
 
 async def count(session: AsyncSession, table: type) -> int:
-    return await session.scalar(select(func.count()).select_from(table))
+    counted = await session.scalar(select(func.count()).select_from(table))
+    assert counted is not None
+    return counted
 
 
 async def fresh(session: AsyncSession, slug: str) -> AiModel:
     """세션에 남은 것이 아니라 DB 의 지금 값."""
-    return await session.get(AiModel, slug, populate_existing=True)
+    model = await session.get(AiModel, slug, populate_existing=True)
+    assert model is not None
+    return model
 
 
 async def test_a_new_model_goes_in_disabled_with_its_costs(session: AsyncSession):

@@ -36,7 +36,7 @@ def test_add_handled_outside_a_job_does_nothing(spans: SpanRecorder):
     with job_span('round.narrate', 'job-1'):
         pass
 
-    assert ATTRIBUTE_HANDLED not in spans.only().attributes
+    assert ATTRIBUTE_HANDLED not in (spans.only().attributes or {})
 
 
 def test_job_span_carries_the_sum_of_handled(spans: SpanRecorder):

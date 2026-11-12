@@ -13,9 +13,10 @@
 
 import time
 from collections.abc import AsyncIterator
+from typing import cast
 
 import pytest
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from httpx import ASGITransport, AsyncClient
 
 from server_core.service_auth.receiving import BODY_MAX_BYTES, read_body, signed_path, verified_body
@@ -151,7 +152,7 @@ class DeclaringRequest:
 
 
 async def test_a_declared_length_over_the_limit_is_refused_without_reading():
-    with pytest.raises(Exception) as refused:
-        await read_body(DeclaringRequest(str(SMALL_LIMIT + 1)), SMALL_LIMIT)
+    with pytest.raises(HTTPException) as refused:
+        await read_body(cast(Request, DeclaringRequest(str(SMALL_LIMIT + 1))), SMALL_LIMIT)
 
     assert refused.value.status_code == status.HTTP_413_CONTENT_TOO_LARGE

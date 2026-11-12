@@ -9,6 +9,7 @@
 
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import cast
 
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,7 +95,7 @@ class Recording:
     """보낸 쿼리를 적어 두고 빈 결과를 돌려주는 가짜 세션."""
 
     def __init__(self) -> None:
-        self.queries = []
+        self.queries: list = []
 
     async def scalars(self, query):
         self.queries.append(query)
@@ -104,7 +105,7 @@ class Recording:
 async def test_costs_of_a_day_pick_one_row_per_model_with_distinct_on():
     session = Recording()
 
-    assert await repository.costs_on(PLAIN, session, TODAY) == {}
+    assert await repository.costs_on(PLAIN, cast(AsyncSession, session), TODAY) == {}
 
     sql = str(session.queries[0].compile(dialect=postgresql.dialect()))
     assert 'DISTINCT ON (ai_model_costs.model_slug)' in sql

@@ -9,6 +9,7 @@
 실제 쿼리는 쓰는 서버의 테스트가 본다.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -26,8 +27,8 @@ class OutboxStore(Protocol):
         """cutoff 전에 적고 아직 보내지 못한 알림을 지운다. 지운 수."""
         ...
 
-    async def due(self, now: datetime, limit: int) -> list[OutgoingNotificationColumns]:
-        """보낼 차례가 된 알림들. 먼저 적은 것부터 limit 개까지."""
+    async def due(self, now: datetime, limit: int) -> Sequence[OutgoingNotificationColumns]:
+        """보낼 차례가 된 알림들. 먼저 적은 것부터 limit 개까지. 읽기만 한다(서버의 표의 줄이어도 된다)."""
         ...
 
     async def remove(self, notification_id: int) -> None:

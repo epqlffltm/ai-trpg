@@ -54,7 +54,7 @@ def make_test_settings(**overrides) -> TestSettings:
         'otel_exporter_otlp_endpoint': '',
     }
     values.update(overrides)
-    return TestSettings(_env_file=None, **values)
+    return TestSettings(_env_file=None, **values)  # pyright: ignore[reportCallIssue]  # pydantic-settings 의 _env_file 은 생성자 서명에 없다
 
 
 def make_client(app: FastAPI) -> AsyncClient:

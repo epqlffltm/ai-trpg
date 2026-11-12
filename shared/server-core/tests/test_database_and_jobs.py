@@ -13,13 +13,15 @@ DB 에 닿지 않고 볼 수 있는 것을 검증한다.
 import asyncio
 import logging
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
 from pydantic import ValidationError
+from sqlalchemy.engine import Connection, ExceptionContext, ExecutionContext
 from sqlalchemy.exc import DBAPIError
 
 from server_core.database import (
@@ -105,7 +107,7 @@ def test_a_pool_size_out_of_range_is_refused(field, value):
 async def test_a_request_gets_a_session_from_the_app():
     engine = create_engine(make_test_settings())
     factory = create_session_factory(engine, info={'signer': 'test'})
-    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(session_factory=factory)))
+    request = cast(Request, SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(session_factory=factory))))
 
     sessions = get_session(request)
     session = await anext(sessions)
@@ -117,22 +119,30 @@ async def test_a_request_gets_a_session_from_the_app():
 # --- 시간 한도(#1260) ---
 
 
+class DriverError(Exception):
+    """드라이버의 오류. 코드(sqlstate)만 흉내 낸다."""
+
+    def __init__(self, message: str, sqlstate: str) -> None:
+        super().__init__(message)
+        self.sqlstate = sqlstate
+
+
 def timed_out(code: str) -> DBAPIError:
-    """DB 가 그 코드로 끊은 오류. 드라이버의 오류는 코드(sqlstate)만 흉내 낸다."""
-    return DBAPIError('select 1', {}, SimpleNamespace(sqlstate=code))
+    """DB 가 그 코드로 끊은 오류."""
+    return DBAPIError('select 1', {}, DriverError('끊었다', code))
 
 
-async def use_session(request: SimpleNamespace, error: Exception) -> None:
+async def use_session(request: Request, error: Exception) -> None:
     """요청의 세션을 받은 뒤 그 요청이 error 로 끝나게 한다."""
     sessions = get_session(request)
     await anext(sessions)
     await sessions.athrow(error)
 
 
-def request_with(engine) -> SimpleNamespace:
-    """그 엔진의 세션을 쓰는 요청."""
+def request_with(engine) -> Request:
+    """그 엔진의 세션을 쓰는 요청. 앱의 세션 공장만 가진다."""
     factory = create_session_factory(engine)
-    return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(session_factory=factory)))
+    return cast(Request, SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(session_factory=factory))))
 
 
 def test_the_server_limits_come_from_the_settings():
@@ -224,8 +234,7 @@ def test_the_sql_state_is_the_code_only():
     class Wrapped(Exception):
         pass
 
-    inner = Exception('잔액이 user-0b9f5e0c 에 이미 있다')
-    inner.sqlstate = '23505'
+    inner = DriverError('잔액이 user-0b9f5e0c 에 이미 있다', '23505')
     outer = Wrapped('감쌌다')
     outer.__cause__ = inner
 
@@ -234,33 +243,42 @@ def test_the_sql_state_is_the_code_only():
     assert sql_state(None) == 'error'
 
 
+# 훅은 실행의 맥락(context)과 문장만 쓴다. 연결은 쓰지 않아 비워 넘기고, 맥락은 속성만 거는 빈 것이다
+NO_CONNECTION = cast(Connection, None)
+
+
+def blank_context() -> ExecutionContext:
+    """속성만 걸 수 있는 빈 실행의 맥락."""
+    return cast(ExecutionContext, SimpleNamespace())
+
+
 def test_a_query_span_starts_and_ends_with_the_statement(spans: SpanRecorder):
-    context = SimpleNamespace()
+    context = blank_context()
     with spans.parent():
-        start_query_span(None, None, 'SELECT 1', None, context, False)
-        end_query_span(None, None, 'SELECT 1', None, context, False)
+        start_query_span(NO_CONNECTION, None, 'SELECT 1', None, context, False)
+        end_query_span(NO_CONNECTION, None, 'SELECT 1', None, context, False)
 
     assert spans.names() == ['db SELECT']
     assert not hasattr(context, SPAN_ATTRIBUTE)
 
 
 def test_a_failed_query_span_records_only_the_sql_state(spans: SpanRecorder):
-    context = SimpleNamespace()
-    error = Exception('값 secret-0b9f 이 겹친다')
-    error.sqlstate = '23505'
+    context = blank_context()
+    error = DriverError('값 secret-0b9f 이 겹친다', '23505')
+    failure = cast(ExceptionContext, SimpleNamespace(execution_context=context, original_exception=error))
     with spans.parent():
-        start_query_span(None, None, 'INSERT INTO x VALUES (1)', None, context, False)
-        fail_query_span(SimpleNamespace(execution_context=context, original_exception=error))
+        start_query_span(NO_CONNECTION, None, 'INSERT INTO x VALUES (1)', None, context, False)
+        fail_query_span(failure)
         # 실패를 적은 뒤에 끝을 알려 와도 두 번 끝내지 않는다
-        end_query_span(None, None, '', None, context, False)
+        end_query_span(NO_CONNECTION, None, '', None, context, False)
 
     span = spans.only()
     assert (span.status.status_code, span.status.description) == (StatusCode.ERROR, '23505')
 
 
 def test_a_query_outside_a_span_gets_none(spans: SpanRecorder):
-    start_query_span(None, None, 'SELECT 1', None, SimpleNamespace(), False)
-    start_query_span(None, None, 'SELECT 1', None, None, False)
+    start_query_span(NO_CONNECTION, None, 'SELECT 1', None, blank_context(), False)
+    start_query_span(NO_CONNECTION, None, 'SELECT 1', None, None, False)
 
     assert spans.ended() == []
 
@@ -290,7 +308,9 @@ def test_a_job_is_counted_until_it_ends(metrics: MetricsRecorder):
 
 
 @pytest.mark.parametrize(('error', 'result'), [(RuntimeError, 'server_error'), (asyncio.CancelledError, 'cancelled')])
-def test_a_job_that_raises_is_counted_by_how_it_ended(metrics: MetricsRecorder, error: type, result: str):
+def test_a_job_that_raises_is_counted_by_how_it_ended(
+    metrics: MetricsRecorder, error: type[BaseException], result: str
+):
     with pytest.raises(error), measured_job('test.job'):
         raise error
 
