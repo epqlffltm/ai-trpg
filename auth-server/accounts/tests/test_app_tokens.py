@@ -148,12 +148,14 @@ class AppRefreshTests(AppTokenTestCase):
 
     def test_reused_token_revokes_all_sessions(self):
         rotated = self.app_refresh(self.refresh_token).data['refresh_token']
+        # 바꿔 받은 토큰도 쓴다. 쓰기 전이면 답을 잃은 것으로 보고 다시 준다(test_refresh_rotation.py)
+        latest = self.app_refresh(rotated).data['refresh_token']
 
         reused = self.app_refresh(self.refresh_token)
 
         self.assertEqual(reused.status_code, status.HTTP_401_UNAUTHORIZED)
         # 탈취로 보고 모든 세션을 끊었다. 정상 사용자의 새 토큰도 끊긴다
-        self.assertEqual(self.app_refresh(rotated).status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.app_refresh(latest).status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_refuses_browser_request(self):
         response = self.app_refresh(self.refresh_token, HTTP_ORIGIN='https://example.com')

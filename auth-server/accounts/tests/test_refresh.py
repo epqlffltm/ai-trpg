@@ -166,7 +166,9 @@ class RefreshReuseTests(RefreshTestCase):
     def setUp(self):
         super().setUp()
         self.stolen_refresh_token = self.refresh_cookie_value()
-        # 정상 사용자가 먼저 갱신한다. 훔친 토큰은 이 시점에 폐기된다
+        # 정상 사용자가 먼저 갱신한다. 훔친 토큰은 이 시점에 폐기된다.
+        # 한 번 더 갱신해 바꿔 받은 토큰도 쓴다. 그래야 답을 잃은 것(lost_answer)이 아니라 탈취다
+        self.client.post(REFRESH_URL)
         self.refreshed = self.client.post(REFRESH_URL)
 
     def test_reused_token_is_rejected(self):
@@ -221,6 +223,8 @@ class RefreshReuseTests(RefreshTestCase):
         new_client = BrowserClient()
         self.login(new_client)
         current_but_used = self.refresh_cookie_value(new_client)
+        new_client.post(REFRESH_URL)
+        # 바꿔 받은 토큰도 쓴다. 쓰기 전이면 답을 잃은 것으로 보고 다시 준다
         new_client.post(REFRESH_URL)
 
         response = self.client_with_refresh_token(current_but_used).post(REFRESH_URL)

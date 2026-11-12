@@ -14,11 +14,13 @@ JWT 발급, 갱신, 폐기.
       인증 서버에서 동의를 마친 뒤 갱신하면 모든 서버의 이름이 다시 실린다.
       탈퇴를 요청해 유예 중인 사람도 같다(#603). 취소한 뒤 갱신하면 다시 실린다.
     - refresh 토큰은 쓸 때마다 새것으로 바꾸고, 이미 폐기된 토큰이 다시 쓰이면 탈취로 본다.
+      다만 바꾼 답을 잃은 것(다시 읽기, 끊김)이면 새 쌍을 다시 준다. 처음 바꾼 지 REFRESH_REUSE_GRACE 안이고
+      바꿔 준 토큰이 아직 쓰이지 않았을 때다(lost_answer).
     - refresh 토큰마다 웹(쿠키)과 앱(본문) 가운데 어디에 줬는지 적고, 같은 쪽의 길로만 갱신한다(#429).
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import jwt
 from django.conf import settings
@@ -37,7 +39,7 @@ from accounts.age import korean_today
 from accounts.consents import pending_items
 from accounts.identity_status import identity_status_of
 from accounts.key_ring import current_key_ring
-from accounts.models import IssuedTokenClient, TokenClient, User
+from accounts.models import IssuedTokenClient, RefreshRotation, TokenClient, User
 from accounts.roles import roles_of
 from accounts.withdrawal_schedule import withdrawal_scheduled_at
 
@@ -49,6 +51,9 @@ NICKNAME_CLAIM = 'nickname'
 ADULT_CONTENT_CLAIM = 'adult_content'
 # 역할을 담는 클레임 이름. 글자의 목록이다. 일반 사용자는 빈 목록이고, 이 클레임이 없는 옛 토큰도 일반 사용자로 본다
 ROLES_CLAIM = 'roles'
+# 바꾼 refresh 토큰이 다시 와도 답을 잃은 것으로 보는 시간. 처음 바꾼 때부터 센다.
+# 다시 읽기와 잠깐의 끊김은 몇 초 안이다. 길수록 훔친 옛 토큰으로 새 쌍을 받을 틈이 길어진다
+REFRESH_REUSE_GRACE = timedelta(seconds=30)
 
 
 class InvalidRefreshTokenError(Exception):
@@ -162,17 +167,23 @@ def issue_token_pair(user: User, client: TokenClient = TokenClient.WEB) -> Token
     나중에 로그인이 2단계로 바뀌어도 마지막 단계에서 같은 함수를 부르면 된다.
     client 는 refresh 토큰을 줄 곳이다. 웹은 쿠키, 앱은 응답 본문이다(#429). 토큰의 모양은 같다.
     """
+    return _issue_token_pair(user, client)[0]
+
+
+def _issue_token_pair(user: User, client: TokenClient) -> tuple[TokenPair, OutstandingToken]:
+    """토큰 쌍을 발급하고, 그 refresh 토큰의 발급 기록도 돌려준다. 바꾼 기록(RefreshRotation)이 그것을 가리킨다."""
     refresh = RefreshToken()
     refresh[api_settings.USER_ID_CLAIM] = str(user.public_id)
     refresh[VERSION_CLAIM] = user.token_version
-    _record_issued_refresh_token(refresh, user, client)
+    issued = _record_issued_refresh_token(refresh, user, client)
     pending = tuple(pending_items(user))
     scheduled = withdrawal_scheduled_at(user)
     access = _access_token_for(refresh, user)
     access['aud'] = audience_for(pending, scheduled)
-    return TokenPair(
+    pair = TokenPair(
         access=str(access), refresh=str(refresh), consents_pending=pending, withdrawal_scheduled_at=scheduled
     )
+    return pair, issued
 
 
 def audience_for(consents_pending: tuple[str, ...], withdrawal_scheduled: datetime | None = None) -> list[str]:
@@ -217,7 +228,7 @@ def _access_token_for(refresh: RefreshToken, user: User) -> AccessToken:
     return access
 
 
-def _record_issued_refresh_token(refresh: RefreshToken, user: User, client: TokenClient) -> None:
+def _record_issued_refresh_token(refresh: RefreshToken, user: User, client: TokenClient) -> OutstandingToken:
     """
     발급한 refresh 토큰과 그것을 준 곳을 기록한다. 폐기는 이 기록에 표시를 붙이는 방식으로 한다.
 
@@ -232,40 +243,83 @@ def _record_issued_refresh_token(refresh: RefreshToken, user: User, client: Toke
         expires_at=datetime_from_epoch(refresh['exp']),
     )
     IssuedTokenClient.objects.create(token=issued, client=client)
+    return issued
 
 
 def rotate_refresh_token(raw_refresh_token: str, client: TokenClient = TokenClient.WEB) -> TokenPair:
     """
-    refresh 토큰을 폐기하고 새 토큰 쌍을 발급한다. 새 토큰도 같은 곳(client)에 준다.
+    refresh 토큰을 폐기하고 새 토큰 쌍을 발급한다. 새 토큰도 같은 곳(client)에 준다. 바꾼 기록을 남긴다.
 
     다른 곳에 준 토큰이면(앱의 토큰을 웹의 길로) 거부만 한다. 폐기하지도, 탈취로 보지도 않는다.
 
-    이미 폐기된 토큰이 들어오면 탈취로 본다. 정상 사용자와 공격자 중 한쪽이
-    옛 토큰을 쓴 것이므로, 누가 진짜인지 가리지 않고 그 사용자의 모든 세션을 끊는다.
+    이미 폐기된 토큰이 들어오면 먼저 답을 잃은 것인지 본다(lost_answer). 그렇다면 바꿔 준 토큰을 폐기하고
+    새 쌍을 다시 준다. 살아 있는 토큰은 늘 하나다.
+    아니면 탈취로 본다. 정상 사용자와 공격자 중 한쪽이 옛 토큰을 쓴 것이므로, 누가 진짜인지 가리지 않고
+    그 사용자의 모든 세션을 끊는다.
 
     끊는 것은 그 토큰이 지금 세대(세션 버전)의 것일 때뿐이다(#272). 이미 한 번 끊은 뒤의 세대라면
     그 사건은 처리됐고, 지금 살아 있는 세션은 그 뒤에 새로 로그인한 것이다. 옛 토큰을 다시 보낼 때마다
     또 끊으면, 옛 토큰을 가진 사람이 만료(14일)까지 남을 몇 번이고 로그아웃시킬 수 있다. 그때는 거부만 한다.
     """
     claims = _decode_refresh_claims(raw_refresh_token)
+    now = timezone.now()
 
     with transaction.atomic():
         issued = _lock_issued_token(claims)
         _ensure_same_client(issued, client)
         user = issued.user
-        reused = _is_revoked(issued)
-        if reused:
-            if _is_current_generation(user, claims):
-                # 이 변경은 아래에서 예외를 내기 전에 커밋되어야 한다.
-                # 그래서 예외를 트랜잭션 블록 밖에서 낸다
-                revoke_all_sessions(user)
-        else:
+        if not _is_revoked(issued):
             _ensure_session_is_current(user, claims)
             _revoke(issued)
-            token_pair = issue_token_pair(user, client)
+            token_pair, successor = _issue_token_pair(user, client)
+            _record_rotation(issued, successor, now)
+            return token_pair
+        rotation = _lost_answer(issued, user, claims, now)
+        if rotation is not None:
+            return _reissue(rotation, user, client)
+        if _is_current_generation(user, claims):
+            # 이 변경은 아래에서 예외를 내기 전에 커밋되어야 한다.
+            # 그래서 예외를 트랜잭션 블록 밖에서 낸다
+            revoke_all_sessions(user)
 
-    if reused:
-        raise InvalidRefreshTokenError
+    raise InvalidRefreshTokenError
+
+
+def _record_rotation(issued: OutstandingToken, successor: OutstandingToken, now: datetime) -> None:
+    """옛 토큰을 바꿔 준 토큰과 그 시각을 적는다. 처음 바꿀 때 한 번이다."""
+    RefreshRotation.objects.create(token=issued, successor=successor, rotated_at=now)
+
+
+def _lost_answer(issued: OutstandingToken, user: User, claims: dict, now: datetime) -> RefreshRotation | None:
+    """
+    폐기된 토큰이 다시 온 것이 바꾼 답을 잃은 것인가. 그렇다면 그 바꾼 기록을, 아니면 None 을 돌려준다.
+
+    모두 맞아야 한다.
+      - 그 토큰을 새것으로 바꾼 기록이 있다. 로그아웃으로 폐기한 토큰은 기록이 없다
+      - 처음 바꾼 지 REFRESH_REUSE_GRACE 안이다
+      - 바꿔 준 토큰이 아직 쓰이지 않았다(폐기되지 않았다). 정상 사용자가 이미 그것을 썼다면 지금 옛 토큰을 보낸 쪽은
+        다른 사람이다
+      - 계정이 살아 있고 지금 세대의 토큰이다
+    바꿔 준 토큰의 행도 잠근다. 그 토큰으로 갱신하는 요청이 동시에 오면 그쪽이 끝난 뒤에 본다.
+    잠그지 않으면 둘 다 "아직 쓰이지 않음"을 보고 살아 있는 토큰이 둘이 된다.
+    """
+    rotation = RefreshRotation.objects.filter(token=issued).first()
+    if rotation is None or now - rotation.rotated_at > REFRESH_REUSE_GRACE:
+        return None
+    if not user.is_active or not _is_current_generation(user, claims):
+        return None
+    successor = OutstandingToken.objects.select_for_update().get(pk=rotation.successor_id)
+    if _is_revoked(successor):
+        return None
+    return rotation
+
+
+def _reissue(rotation: RefreshRotation, user: User, client: TokenClient) -> TokenPair:
+    """바꿔 준 토큰을 폐기하고 새 쌍을 준다. 기록은 새 토큰을 가리키게 하고, 처음 바꾼 시각은 그대로 둔다."""
+    _revoke(rotation.successor)
+    token_pair, successor = _issue_token_pair(user, client)
+    rotation.successor = successor
+    rotation.save(update_fields=['successor'])
     return token_pair
 
 
@@ -313,10 +367,12 @@ def _lock_issued_token(claims: dict) -> OutstandingToken:
 
     같은 refresh 토큰으로 요청 두 개가 동시에 들어오면, 잠금 없이는 둘 다
     "아직 폐기되지 않음" 을 보고 각자 새 토큰을 받는다. 행을 잠가 한 번에 하나만 지나가게 한다.
+    잠그는 것은 발급 기록의 행 하나뿐이다(of=self). 함께 읽는 사용자의 행까지 잠그면, 옛 토큰과 바꿔 준 토큰이
+    동시에 올 때 서로의 잠금을 기다려 교착한다(lost_answer 가 바꿔 준 토큰의 행을 잠근다).
     """
     try:
         return (
-            OutstandingToken.objects.select_for_update()
+            OutstandingToken.objects.select_for_update(of=('self',))
             .select_related('user')
             .get(jti=claims.get(api_settings.JTI_CLAIM), user__isnull=False)
         )

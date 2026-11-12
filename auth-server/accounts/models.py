@@ -1266,6 +1266,42 @@ class IssuedTokenClient(models.Model):
         return f'{self.token_id} / {self.get_client_display()}'
 
 
+class RefreshRotation(models.Model):
+    """
+    refresh 토큰 하나를 새것으로 바꾼 기록. 옛 토큰, 바꿔 준 토큰(다음 토큰), 처음 바꾼 시각이다.
+
+    바꾼 답을 화면이 받지 못하면(다시 읽기, 탭 닫기, 망이 끊김) 다음 요청에 옛 토큰이 다시 온다.
+    폐기된 토큰의 재사용은 탈취로 보아 모든 세션을 끊는데, 이 경우는 탈취가 아니다(accounts/tokens.py 의 lost_answer).
+    다음 토큰이 아직 쓰이지 않았고 처음 바꾼 지 잠깐이면 답을 잃은 것으로 보고 새 쌍을 다시 준다.
+    그것을 가리려고 둔다. 발급 기록(OutstandingToken)은 simplejwt 의 모델이라 칸을 더할 수 없어 옆에 둔다.
+
+    다시 줄 때 다음 토큰만 바꾸고 처음 바꾼 시각은 그대로 둔다. 되풀이해 유예를 늘리지 못한다.
+    만료된 발급 기록을 지우면(flushexpiredtokens) 함께 지워진다.
+    """
+
+    token = models.OneToOneField(
+        'token_blacklist.OutstandingToken',
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='rotation',
+        verbose_name='바꾼 refresh 토큰',
+    )
+    successor = models.ForeignKey(
+        'token_blacklist.OutstandingToken',
+        on_delete=models.CASCADE,
+        related_name='+',
+        verbose_name='바꿔 준 refresh 토큰',
+    )
+    rotated_at = models.DateTimeField('처음 바꾼 시각')
+
+    class Meta:
+        verbose_name = 'refresh 토큰을 바꾼 기록'
+        verbose_name_plural = 'refresh 토큰을 바꾼 기록'
+
+    def __str__(self) -> str:
+        return f'{self.token_id} → {self.successor_id}'
+
+
 class ReleasedNickname(models.Model):
     """
     본인이 바꾸면서 버린 닉네임 하나(nicknames.py). 계정을 비울 때(탈퇴, 만 14세 미만)의 이름도 여기 묶는다.
