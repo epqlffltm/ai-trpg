@@ -362,6 +362,12 @@ async def start_conversation(
     return await save_conversation(session, viewer.claims.user_id, copy, start, persona, model_slug)
 
 
+async def conversation_character_id(session: AsyncSession, conversation_id: uuid.UUID) -> uuid.UUID | None:
+    """대화가 쓰는 판의 사본의 id. 대화가 없으면 None."""
+    conversation = await session.get(Conversation, conversation_id)
+    return conversation.character_id if conversation is not None else None
+
+
 async def get_conversation(session: AsyncSession, viewer: Viewer, conversation_id: uuid.UUID) -> ConversationRow:
     """이 사람의 대화 하나와 그 사본들. 없으면 ConversationNotFoundError."""
     found = await repository.find_visible(
