@@ -98,7 +98,7 @@ def victims_of(judging: Judging, monster: SceneMonster) -> list[TableMember]:
     return [
         member
         for member in judging.table.members
-        if can_be_struck(judging, member) and member.sheet.place_id == monster.state.place_id
+        if can_be_struck(judging, member) and member.current_sheet.place_id == monster.state.place_id
     ]
 
 

@@ -60,14 +60,14 @@ def stow(judging: Judging, member: TableMember, dropped: list[Dropped]) -> list[
     """
     stowed = []
     for one in dropped:
-        given = items.add_up_to(judging.table.id, member.sheet, one.entry_id, one.count)
+        given = items.add_up_to(judging.table.id, member.current_sheet, one.entry_id, one.count)
         stowed.append(
             {
                 'entry_id': str(one.entry_id),
                 'name': judging.items[one.entry_id].name,
                 'count': given,
                 'lost': one.count - given,
-                'total': items.count_of(member.sheet, one.entry_id),
+                'total': items.count_of(member.current_sheet, one.entry_id),
             }
         )
     return stowed
@@ -177,7 +177,7 @@ def npc_drop_after(judging: Judging, actor: TableMember, effect: dict | None) ->
     살아 있다가 쓰러진 것이 아니거나, 전에 이미 쓰러진 적이 있는 NPC 면 굴리지 않고 None 이다.
     처음 쓰러진 것이면 지닌 것이 없어도 그 라운드를 적는다(npcs.mark_first_fall). 아무것도 안 나왔으면 None 이다.
     """
-    return npc_drop_at(judging, actor.sheet.place_id, effect)
+    return npc_drop_at(judging, actor.current_sheet.place_id, effect)
 
 
 def npc_drop_at(judging: Judging, place_id: uuid.UUID | None, effect: dict | None) -> dict | None:

@@ -352,7 +352,8 @@ async def test_the_narration_is_told_what_was_gained(client: AsyncClient, app: F
 def member_at(place: uuid.UUID) -> SimpleNamespace:
     """드롭을 받을 수 있는 앉은 사람. 그 장소에 살아 있다."""
     sheet = SimpleNamespace(id=uuid.uuid4(), place_id=place, died_at=None, hp=5, items=[])
-    return SimpleNamespace(sheet=sheet, user_id=uuid.uuid4(), character_name='누구')
+    # 앉은 사람(TableMember)의 흉내. 지금 캐릭터의 시트는 sheet 와 current_sheet 둘로 읽는다
+    return SimpleNamespace(sheet=sheet, current_sheet=sheet, user_id=uuid.uuid4(), character_name='누구')
 
 
 def test_an_npc_drop_goes_to_someone_at_the_hitters_place():

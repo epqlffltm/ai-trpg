@@ -88,8 +88,8 @@ def rest_places(table: GameTable, round_: Round) -> set[uuid.UUID]:
     places = set()
     for member in table.members:
         rest = rest_of(find_declaration(round_, member.user_id))
-        if rest is not None and rest['length'] == LONG_REST and member.sheet.place_id is not None:
-            places.add(member.sheet.place_id)
+        if rest is not None and rest['length'] == LONG_REST and member.current_sheet.place_id is not None:
+            places.add(member.current_sheet.place_id)
     return places
 
 
@@ -232,7 +232,7 @@ def ambushed(table: GameTable, round_: Round, met: list[dict]) -> set[uuid.UUID]
     return {
         member.user_id
         for member in table.members
-        if rest_of(find_declaration(round_, member.user_id)) is not None and member.sheet.place_id in places
+        if rest_of(find_declaration(round_, member.user_id)) is not None and member.current_sheet.place_id in places
     }
 
 

@@ -59,7 +59,7 @@ def open_round(
     table: GameTable,
     number: int,
     scene: str,
-    cause: TableEvent,
+    cause: TableEvent | None,
     price: OfferedModel | None = None,
     previous: Round | None = None,
 ) -> Round:

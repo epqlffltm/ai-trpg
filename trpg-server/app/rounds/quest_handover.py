@@ -46,12 +46,12 @@ def take_shares(
     members: Sequence[TableMember], condition: QuestConditionSnapshot, things: dict[uuid.UUID, CatalogItem]
 ) -> list[tuple[TableMember, dict]]:
     """조건 하나가 가져가는 물건을 사람마다 뺀다. 뺀 사람마다 (사람, 물건 한 줄)이다. 앉은 순서다."""
-    holdings = [items.count_of(member.sheet, condition.target) for member in members]
+    holdings = [items.count_of(member.current_sheet, condition.target) for member in members]
     taken = []
     for member, share in zip(members, split_evenly(holdings, condition.count), strict=True):
         if not share:
             continue
-        total = items.remove_items(member.sheet, condition.target, share)
+        total = items.remove_items(member.current_sheet, condition.target, share)
         thing = {
             'entry_id': str(condition.target),
             'name': things[condition.target].name,

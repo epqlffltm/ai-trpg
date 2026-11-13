@@ -68,7 +68,7 @@ def covers_of(snapshot: Snapshot | None, rolling: list[tuple[TableMember, Declar
         return {}
     found = {}
     for member, declaration in rolling:
-        cover = cover_at(snapshot, member.sheet.place_id) if covering(declaration) else 0
+        cover = cover_at(snapshot, member.current_sheet.place_id) if covering(declaration) else 0
         if cover > 0:
             found[member.user_id] = cover
     return found
@@ -81,4 +81,4 @@ def judge_cover(judging: Judging, member: TableMember) -> dict:
     커버가 0 이면(그사이에 커버가 없는 곳으로 옮겨졌다) 숨지 못한 것이다.
     """
     cover = judging.covers.get(member.user_id, 0)
-    return {'cover': {'place': places.describe(judging.snapshot, member.sheet.place_id), 'value': cover}}
+    return {'cover': {'place': places.describe(judging.snapshot, member.current_sheet.place_id), 'value': cover}}

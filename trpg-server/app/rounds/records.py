@@ -40,8 +40,10 @@ from app.rounds.state import (
     naming_of,
     pay_of,
     put_down_of,
+    required,
     rest_of,
     search_of,
+    settled,
     skill_use_of,
     steal_of,
     take_of,
@@ -60,7 +62,7 @@ def record_check(session: AsyncSession, table: GameTable, declaration: Declarati
     행한 사람(actor_id)을 적지 않는다. 주사위를 굴린 것은 플레이어가 아니라 엔진이다.
     누구의 판정인지는 원인으로 이은 행동의 이벤트와 캐릭터 이름으로 안다.
     """
-    outcome = declaration.outcome
+    outcome = settled(declaration)
     ability, difficulty = narration_request.check_terms(declaration)
     payload = {
         'round': cause.payload['round'],
@@ -265,7 +267,7 @@ def record_naming(session: AsyncSession, table: GameTable, declaration: Declarat
 
     행한 사람(actor_id)을 적지 않는다. 맞았는지를 정한 것은 엔진이다.
     """
-    naming = naming_of(declaration)
+    naming = required(naming_of(declaration), 'naming')
     payload = {'round': cause.payload['round'], 'character_name': declaration.character_name, **naming}
     recorder.record(session, table, EventType.NAMING_RESOLVED, payload=payload, cause=cause)
 
@@ -278,7 +280,7 @@ def record_item_use(session: AsyncSession, table: GameTable, declaration: Declar
 
     행한 사람(actor_id)을 적지 않는다. 소지품과 HP 를 바꾼 것은 엔진이다.
     """
-    use = item_use_of(declaration)
+    use = required(item_use_of(declaration), 'item_use')
     cured = use.get('cured') or []
     injured = [one for one in use.get('injured') or [] if one['injury'] is not None]
     payload = {
@@ -289,7 +291,7 @@ def record_item_use(session: AsyncSession, table: GameTable, declaration: Declar
         'injured': [{'injury': one['injury'], 'name': one['name']} for one in injured],
     }
     used = recorder.record(session, table, EventType.ITEM_USED, payload=payload, cause=cause)
-    effect = declaration.outcome.get('effect')
+    effect = settled(declaration).get('effect')
     if has_outcome(declaration):
         record_check(session, table, declaration, cause=used)
     elif effect is not None:
@@ -311,7 +313,7 @@ def record_skill_use(session: AsyncSession, table: GameTable, declaration: Decla
 
     행한 사람(actor_id)을 적지 않는다. 수치와 HP 를 바꾼 것은 엔진이다.
     """
-    use = skill_use_of(declaration)
+    use = required(skill_use_of(declaration), 'skill_use')
     cured = use.get('cured') or []
     injured = [one for one in use.get('injured') or [] if one['injury'] is not None]
     payload = {
@@ -324,7 +326,7 @@ def record_skill_use(session: AsyncSession, table: GameTable, declaration: Decla
     used = recorder.record(session, table, EventType.SKILL_USED, payload=payload, cause=cause)
     user = {'user_id': str(declaration.user_id), 'character_name': declaration.character_name}
     record_resource_shifts(session, table, use.get('cost') or [], user, ResourceSource.SKILL, cause=used)
-    effect = declaration.outcome.get('effect')
+    effect = settled(declaration).get('effect')
     if has_outcome(declaration):
         record_check(session, table, declaration, cause=used)
     elif effect is not None:
@@ -338,9 +340,7 @@ def record_skill_use(session: AsyncSession, table: GameTable, declaration: Decla
     record_resource_shifts(session, table, shifts, use['target'], ResourceSource.SKILL, cause=used)
 
 
-def record_cures(
-    session: AsyncSession, table: GameTable, cured: list[dict], holder: dict | None, cause: TableEvent
-) -> None:
+def record_cures(session: AsyncSession, table: GameTable, cured: list[dict], holder: dict, cause: TableEvent) -> None:
     """
     소모품이 푼 부상마다 부상이 끝난 것(cured)을 적는다(#277). 쓴 것의 이벤트(cause)에 잇는다.
 
@@ -362,7 +362,7 @@ def record_item_throw(session: AsyncSession, table: GameTable, declaration: Decl
     맞힌 대상에게서 푼 부상과 입힌 부상(#801, 물건의 효과)은 그 뒤에 적는다. 쓰기와 같다(record_item_use).
     행한 사람을 적지 않는다. 소지품을 바꾸고 굴린 것은 엔진이다.
     """
-    thrown = item_throw_of(declaration)
+    thrown = required(item_throw_of(declaration), 'item_throw')
     cured = thrown.get('cured') or []
     injured = [one for one in thrown.get('injured') or [] if one['injury'] is not None]
     payload = {
@@ -392,7 +392,7 @@ def record_item_give(session: AsyncSession, table: GameTable, declaration: Decla
     payload = {
         'round': cause.payload['round'],
         'character_name': declaration.character_name,
-        **item_give_of(declaration),
+        **required(item_give_of(declaration), 'item_give'),
     }
     recorder.record(session, table, EventType.ITEM_GIVEN, payload=payload, cause=cause)
 
@@ -407,7 +407,7 @@ def record_move(session: AsyncSession, table: GameTable, declaration: Declaratio
     잠긴 문을 열고 갔으면 unlocked 가 붙는다. 화면은 이것으로 맵의 문을 연다.
     쓰러진 동료를 업고 갔으면 그 사람이 옮겨 간 것도 같은 종류로 잇는다(record_carried).
     """
-    move = move_of(declaration)
+    move = required(move_of(declaration), 'move')
     record_cross(session, table, declaration.character_name, move, cause)
     if not move['moved']:
         return
@@ -429,7 +429,7 @@ def record_move(session: AsyncSession, table: GameTable, declaration: Declaratio
 
 def record_trap_set(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
     """덫을 놓은 결과를 이벤트로 적는다(trap_set, #806). 그 행동의 이벤트(cause)에 잇는다. 행한 사람을 적지 않는다."""
-    laid = {key: value for key, value in trap_set_of(declaration).items() if key != 'user_id'}
+    laid = {key: value for key, value in required(trap_set_of(declaration), 'trap_set').items() if key != 'user_id'}
     payload = {'round': cause.payload['round'], **laid}
     recorder.record(session, table, EventType.TRAP_SET, payload=payload, cause=cause)
 
@@ -479,7 +479,7 @@ def record_disarm(session: AsyncSession, table: GameTable, declaration: Declarat
 
     굴리지 못했어도 적는다(내려놓기와 같다). 크게 실패해 터졌으면 그 뒤에 덫의 효과를 잇는다.
     """
-    disarm = disarm_of(declaration)
+    disarm = required(disarm_of(declaration), 'disarm')
     keys = ('character_name', 'place', 'trap_id', 'entry_id', 'name', 'done', 'reason', 'check', 'sprung', 'kept')
     payload = {'round': cause.payload['round'], **{key: disarm[key] for key in keys}}
     disarmed = recorder.record(session, table, EventType.TRAP_DISARMED, payload=payload, cause=cause)
@@ -513,7 +513,7 @@ def record_door(session: AsyncSession, table: GameTable, declaration: Declaratio
     판정에 물건을 붙여 썼으면 그 판정에 aid_used 를 잇는다(#802).
     행한 사람(actor_id)을 적지 않는다. 문을 바꾼 것은 엔진이다.
     """
-    door = door_of(declaration)
+    door = required(door_of(declaration), 'door')
     after = record_terms(session, table, declaration.character_name, door['check'], cause)
     record_aid(session, table, declaration.character_name, door.get('aid'), after)
     if not door['done']:
@@ -594,7 +594,7 @@ def record_search(session: AsyncSession, table: GameTable, declaration: Declarat
     찾은 길과 물건만 있다. 굴린 판정은 결과에도 없다(app/rounds/map_actions.py). 숨긴 것이 있었는지 드러나지 않는다.
     찾은 물건은 찾은 사람이 가졌으므로 그 뒤에 물건마다 items_gained 를 잇는다(source 는 search).
     """
-    search = search_of(declaration)
+    search = required(search_of(declaration), 'search')
     payload = {'round': cause.payload['round'], 'character_name': declaration.character_name, **search}
     searched = recorder.record(session, table, EventType.PLACE_SEARCHED, payload=payload, cause=cause)
     for thing in search.get('items', []):
@@ -609,7 +609,7 @@ def record_take(session: AsyncSession, table: GameTable, declaration: Declaratio
     못 주웠으면(남은 것이 없었다, 가득 찼다) 적지 않는다. 바뀐 것이 없다. 까닭은 라운드의 선언 결과에 있다.
     행한 사람을 적지 않는다. 판의 물건을 준 것은 엔진이다.
     """
-    take = take_of(declaration)
+    take = required(take_of(declaration), 'take')
     if not take['taken']:
         return
     thing = {key: take[key] for key in ('entry_id', 'name', 'total')} | {'count': take['taken']}
@@ -625,7 +625,7 @@ def record_put_down(session: AsyncSession, table: GameTable, declaration: Declar
     payload = {
         'round': cause.payload['round'],
         'character_name': declaration.character_name,
-        **put_down_of(declaration),
+        **required(put_down_of(declaration), 'put_down'),
     }
     recorder.record(session, table, EventType.ITEM_PUT_DOWN, payload=payload, cause=cause)
 
@@ -637,7 +637,7 @@ def record_steal(session: AsyncSession, table: GameTable, declaration: Declarati
     NPC 에게 들켜 태도가 바뀌었으면 npc_attitude_changed 를 그 뒤에 잇는다.
     훔쳤으면 items_gained(source 는 steal, 그 대상)를 그 뒤에 잇는다. 행한 사람을 적지 않는다. 정한 것은 엔진이다.
     """
-    steal = steal_of(declaration)
+    steal = required(steal_of(declaration), 'steal')
     payload = {'round': cause.payload['round'], **steal}
     attempted = recorder.record(session, table, EventType.STEAL_ATTEMPTED, payload=payload, cause=cause)
     if steal.get('attitude_change') is not None:
@@ -664,7 +664,7 @@ def record_loot(session: AsyncSession, table: GameTable, declaration: Declaratio
     못 가져갔으면(gone, awake, 가득) 적지 않는다. 줍기와 같다. 까닭은 라운드의 선언 결과에 있다.
     행한 사람을 적지 않는다. 판의 물건을 준 것은 엔진이다.
     """
-    loot = loot_of(declaration)
+    loot = required(loot_of(declaration), 'loot')
     if not loot['looted']:
         return
     gained = {
@@ -722,13 +722,13 @@ def record_trade(session: AsyncSession, table: GameTable, declaration: Declarati
 
     못 했어도 적는다. 건네기와 같다. 까닭(reason)이 있다. 돈과 소지품을 옮긴 것은 엔진이다.
     """
-    payload = {'round': cause.payload['round'], **trade_of(declaration)}
+    payload = {'round': cause.payload['round'], **required(trade_of(declaration), 'trade')}
     recorder.record(session, table, EventType.ITEM_TRADED, payload=payload, cause=cause)
 
 
 def record_pay(session: AsyncSession, table: GameTable, declaration: Declaration, cause: TableEvent) -> None:
     """돈을 건넨 결과를 이벤트로 적는다(money_paid). 그 행동의 이벤트(cause)에 잇는다. 못 했어도 적는다."""
-    payload = {'round': cause.payload['round'], **pay_of(declaration)}
+    payload = {'round': cause.payload['round'], **required(pay_of(declaration), 'pay')}
     recorder.record(session, table, EventType.MONEY_PAID, payload=payload, cause=cause)
 
 
@@ -740,7 +740,7 @@ def record_rest(
 
     행한 사람(actor_id)을 적지 않는다. 회복을 정한 것은 엔진이다.
     """
-    rest = rest_of(declaration)
+    rest = required(rest_of(declaration), 'rest')
     payload = {
         'round': cause.payload['round'],
         'user_id': str(member.user_id),

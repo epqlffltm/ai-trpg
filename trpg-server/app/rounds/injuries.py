@@ -400,7 +400,7 @@ def any_due(members: list[TableMember], scene: Scene, moment: Moment) -> bool:
     없으면 규칙을 읽지 않아도 된다.
     """
     living = [member for member in members if member.sheet is not None and not sheets.is_dead(member)]
-    rows = [row for member in living for row in member.sheet.injuries]
+    rows = [row for member in living for row in member.current_sheet.injuries]
     rows.extend(row for npc in scene.npcs if not npcs.is_dead(npc) for row in npc.injuries)
     rows.extend(row for monster in scene.all_monsters if not monsters.is_dead(monster) for row in monster.injuries)
     return any(injuries.is_due(row, moment) for row in rows)

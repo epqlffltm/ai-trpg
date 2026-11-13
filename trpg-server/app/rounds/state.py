@@ -107,6 +107,22 @@ def rules_of(table: GameTable) -> Ruleset:
     return snapshot_of(table).rulebook.rules
 
 
+def required[T](found: T | None, what: str) -> T:
+    """
+    있다고 고른 결과(아래의 *_of 가 돌려준 것). 기록과 서술은 그 결과가 있는 선언만 고른다.
+
+    없으면 부른 쪽의 버그라 LookupError 다. what 은 무엇의 결과인지다(로그와 오류에 적는다).
+    """
+    if found is None:
+        raise LookupError(f'선언에 {what} 의 결과가 없습니다')
+    return found
+
+
+def settled(declaration: Declaration) -> dict:
+    """마감한 선언의 결과(outcome). 결과를 적은 선언에만 부른다. 없으면 LookupError 다."""
+    return required(declaration.outcome, 'outcome')
+
+
 def has_outcome(declaration: Declaration | None) -> bool:
     """이 선언에 판정의 결과가 적혀 있는가. 주사위를 굴린 판정(치료도)만이다. 지목은 naming_of 로 읽는다."""
     return declaration is not None and declaration.outcome is not None and 'roll' in declaration.outcome

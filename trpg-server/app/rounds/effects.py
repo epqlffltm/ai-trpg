@@ -156,7 +156,7 @@ def member_effect(affected: TableMember, magnitude: str, change: Change, injury_
         'amount': change.amount,
         'before': change.before,
         'after': change.after,
-        'max_hp': affected.sheet.max_hp,
+        'max_hp': affected.current_sheet.max_hp,
         'downed': change.downed,
         'injury_roll': injury_roll,
     }

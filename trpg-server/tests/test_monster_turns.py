@@ -497,7 +497,8 @@ async def test_events_follow_the_turns(client: AsyncClient, app: FastAPI, me: di
 
 def pc(name: str, dex: int, place: uuid.UUID | None = None) -> SimpleNamespace:
     sheet = SimpleNamespace(abilities={'dex': dex}, place_id=place)
-    return SimpleNamespace(user_id=uuid.uuid4(), character_name=name, sheet=sheet)
+    # 앉은 사람(TableMember)의 흉내. 지금 캐릭터의 시트는 sheet 와 current_sheet 둘로 읽는다
+    return SimpleNamespace(user_id=uuid.uuid4(), character_name=name, sheet=sheet, current_sheet=sheet)
 
 
 def mob(

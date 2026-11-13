@@ -289,7 +289,9 @@ def judging_for(coins: uuid.UUID) -> SimpleNamespace:
 
 def test_a_looter_near_the_limit_takes_what_fits_and_leaves_the_rest():
     coins = uuid.uuid4()
-    thief = SimpleNamespace(sheet=SimpleNamespace(id=uuid.uuid4(), items=[TableItem(entry_id=coins, count=97)]))
+    sheet = SimpleNamespace(id=uuid.uuid4(), items=[TableItem(entry_id=coins, count=97)])
+    # 앉은 사람(TableMember)의 흉내. 지금 캐릭터의 시트는 sheet 와 current_sheet 둘로 읽는다
+    thief = SimpleNamespace(sheet=sheet, current_sheet=sheet)
     victim = victim_holding(coins, 5)
 
     result = take(judging_for(coins), thief, victim, coins)
@@ -300,7 +302,9 @@ def test_a_looter_near_the_limit_takes_what_fits_and_leaves_the_rest():
 
 def test_a_full_looter_takes_nothing():
     coins = uuid.uuid4()
-    thief = SimpleNamespace(sheet=SimpleNamespace(id=uuid.uuid4(), items=[TableItem(entry_id=coins, count=99)]))
+    sheet = SimpleNamespace(id=uuid.uuid4(), items=[TableItem(entry_id=coins, count=99)])
+    # 앉은 사람(TableMember)의 흉내. 지금 캐릭터의 시트는 sheet 와 current_sheet 둘로 읽는다
+    thief = SimpleNamespace(sheet=sheet, current_sheet=sheet)
 
     result = take(judging_for(coins), thief, victim_holding(coins, 5), coins)
 
