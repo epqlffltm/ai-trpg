@@ -25,7 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.engine.action import ActionKind, CheckAction, attempt_hindered, called_shot_terms, can_aim, find_fault
-from app.engine.check import find_difficulty, resolve_hindered
+from app.engine.check import known_difficulty, resolve_hindered
 from app.engine.dice import ScriptedDice
 from app.engine.injury import NO_HINDRANCE, Hindrance
 from app.engine.ruleset import CalledShot, CalledShotMode
@@ -148,7 +148,7 @@ def test_two_reasons_for_disadvantage_still_roll_twice():
     hindrance = Hindrance(disadvantage=True, injuries=('broken_arm',))
 
     hindered = resolve_hindered(
-        SRD5, 10, find_difficulty(SRD5, 'medium'), ScriptedDice([18, 4]), hindrance, forced_disadvantage=True
+        SRD5, 10, known_difficulty(SRD5, 'medium'), ScriptedDice([18, 4]), hindrance, forced_disadvantage=True
     )
 
     assert hindered.rolls == (18, 4)

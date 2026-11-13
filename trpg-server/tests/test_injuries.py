@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.scenarios.upgrades import INJURY_FIELDS, UPGRADES, upgrade_from_13
-from app.engine.check import find_difficulty, resolve_hindered
+from app.engine.check import known_difficulty, resolve_hindered
 from app.engine.dice import ScriptedDice
 from app.engine.health import Change, ChangeKind
 from app.engine.injury import (
@@ -39,10 +39,11 @@ from app.engine.injury import (
     row_injury,
     trigger_of,
 )
-from app.engine.ruleset import Ruleset
+from app.engine.ruleset import Injury, Ruleset
 from app.engine.templates import SRD5
 from app.rounds import prompt
 from app.rounds.narrator import InjuryNote
+from app.rounds.state import required
 from app.tables.models import TableInjury
 from tests.test_npc_actions import (
     FAIL,
@@ -134,7 +135,8 @@ def test_the_template_has_injuries_a_table_and_triggers():
 
 
 def test_the_template_table_never_takes_a_hand_and_mostly_leaves_you_whole():
-    faces = [row_injury(SRD5.injury_table, face) for face in range(1, 21)]
+    injury_table = required(SRD5.injury_table, 'injury_table')
+    faces = [row_injury(injury_table, face) for face in range(1, 21)]
 
     # 손을 잃는 것은 노려 쳐야만 생긴다. 절반은 부상이 없다
     assert not {'lost_left_hand', 'lost_right_hand'} & set(faces)
@@ -142,12 +144,13 @@ def test_the_template_table_never_takes_a_hand_and_mostly_leaves_you_whole():
 
 
 def test_healing_injuries_leave_aftermath_from_their_own_table():
-    arm = find_injury(SRD5, 'broken_arm')
+    arm = rule_injury('broken_arm')
+    aftermath = required(arm.aftermath, 'aftermath')
 
     # 오래 가는 것은 라운드가 아니라 게임 안의 시간(분)으로 낫는다(판 형식 25)
     assert (arm.healing, arm.rounds, arm.heal_minutes) == ('heals', None, 14 * 24 * 60)
-    assert row_injury(arm.aftermath, 1) == 'crooked_arm'
-    assert row_injury(arm.aftermath, 20) is None
+    assert row_injury(aftermath, 1) == 'crooked_arm'
+    assert row_injury(aftermath, 20) is None
 
 
 @pytest.mark.parametrize(
@@ -249,17 +252,22 @@ def test_turned_off_triggers_roll_nothing():
 
 
 def test_the_table_gives_the_row_of_the_roll():
-    rolled = roll_table(SRD5.injury_table, Trigger.BIG_HIT, ScriptedDice([BROKEN_ARM]))
+    injury_table = required(SRD5.injury_table, 'injury_table')
+    rolled = roll_table(injury_table, Trigger.BIG_HIT, ScriptedDice([BROKEN_ARM]))
 
     assert (rolled.trigger, rolled.roll, rolled.injury) == (Trigger.BIG_HIT, 17, 'broken_arm')
-    assert roll_table(SRD5.injury_table, Trigger.DOWNED, ScriptedDice([7])).injury is None
+    assert roll_table(injury_table, Trigger.DOWNED, ScriptedDice([7])).injury is None
 
 
 # --- 입은 부상이 판정에 주는 것 ---
 
 
+def rule_injury(key: str) -> Injury:
+    return required(find_injury(SRD5, key), 'injury')
+
+
 def injuries(*keys: str) -> list:
-    return [find_injury(SRD5, key) for key in keys]
+    return [rule_injury(key) for key in keys]
 
 
 def test_effects_touch_only_their_abilities():
@@ -284,17 +292,17 @@ def test_only_some_injuries_stop_actions():
 
 
 def test_every_injury_but_a_permanent_one_has_an_end():
-    assert ends_after(find_injury(SRD5, 'stunned'), 3) == 4
-    assert ends_after(find_injury(SRD5, 'poisoned'), 3) == 6
+    assert ends_after(rule_injury('stunned'), 3) == 4
+    assert ends_after(rule_injury('poisoned'), 3) == 6
     # 오래 가는 것은 라운드가 아니라 게임 안의 시각으로 낫는다(달력 2단계). 14일 뒤
-    assert ends_after(find_injury(SRD5, 'broken_arm'), 3) is None
-    assert heals_at(find_injury(SRD5, 'broken_arm'), 480) == 480 + 14 * 24 * 60
-    assert ends_after(find_injury(SRD5, 'lost_eye'), 3) is None
-    assert heals_at(find_injury(SRD5, 'lost_eye'), 480) is None
+    assert ends_after(rule_injury('broken_arm'), 3) is None
+    assert heals_at(rule_injury('broken_arm'), 480) == 480 + 14 * 24 * 60
+    assert ends_after(rule_injury('lost_eye'), 3) is None
+    assert heals_at(rule_injury('lost_eye'), 480) is None
 
 
 def test_disadvantage_takes_the_lower_roll_and_a_penalty_cuts_the_modifier():
-    medium = find_difficulty(SRD5, 'medium')
+    medium = known_difficulty(SRD5, 'medium')
     hindrance = Hindrance(penalty=2, disadvantage=True, injuries=('x',))
 
     hindered = resolve_hindered(SRD5, 14, medium, ScriptedDice([18, 9]), hindrance)

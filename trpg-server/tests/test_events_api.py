@@ -25,6 +25,7 @@ from app.assets.models import Asset, AssetType, Scenario, ScenarioVersion
 from app.events import recorder
 from app.events.models import EventType, TableEvent
 from app.main import API_PREFIX
+from app.rounds.state import required
 from app.tables.models import GameTable
 from tests.narration_model import TEST_MODEL, with_model
 from tests.sheets import SHEET
@@ -506,7 +507,7 @@ async def test_gm_only_text_never_leaves(client: AsyncClient, me: dict[str, str]
 
 async def test_only_listed_payload_fields_leave(client: AsyncClient, me: dict[str, str], session: AsyncSession):
     table = await open_table(client, me)
-    stored = await session.get(GameTable, uuid.UUID(table['id']))
+    stored = required(await session.get(GameTable, uuid.UUID(table['id'])), 'table')
     payload = {'text': '문이 열린다.', 'hidden_roll': 17}
     recorder.record(session, stored, EventType.GM_NARRATION, payload=payload)
     await session.commit()
@@ -522,7 +523,7 @@ async def test_an_event_of_the_removed_ledger_drafts_can_still_be_read(
     client: AsyncClient, me: dict[str, str], session: AsyncSession
 ):
     table = await open_table(client, me)
-    stored = await session.get(GameTable, uuid.UUID(table['id']))
+    stored = required(await session.get(GameTable, uuid.UUID(table['id'])), 'table')
     # 장부 초안을 걷어내기 전(#371)에 적힌 이벤트다. 이제는 생기지 않는다
     recorder.record(session, stored, EventType.LEDGER_DRAFTS_CHANGED, actor_id=ME, payload={'ledger_drafts': True})
     await session.commit()

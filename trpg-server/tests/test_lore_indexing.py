@@ -14,6 +14,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
+from typing import cast
 
 import pytest
 from ai_core.fake import FakeEmbedder, word_vector
@@ -26,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import ScenarioVersion
 from app.assets.scenarios.router import get_indexer
-from app.assets.scenarios.snapshot import EntrySnapshot, LorebookSnapshot, read_snapshot
+from app.assets.scenarios.snapshot import EntrySnapshot, LorebookSnapshot, Snapshot, read_snapshot
 from app.lore import indexing, repository, texts
 from app.lore.models import LoreEmbedding
 from app.lore.texts import batched, entry_text, missing_entries, version_entries
@@ -103,10 +104,10 @@ def test_every_entry_of_every_lorebook_is_taken_in_order():
     ]
 
     @dataclass
-    class Snapshot:
+    class OnlyLorebooks:
         lorebooks: list[LorebookSnapshot]
 
-    assert version_entries(Snapshot(lorebooks)) == [first, second, third]
+    assert version_entries(cast(Snapshot, OnlyLorebooks(lorebooks))) == [first, second, third]
 
 
 def test_only_entries_without_a_vector_are_missing():
@@ -315,7 +316,7 @@ async def test_the_distance_to_every_entry_is_read(client: AsyncClient, me: dict
     # 저장한 벡터로 pgvector 가 거리를 잰다. 판의 항목마다 하나씩, 낱말이 가장 많이 겹치는 항목이 가장 가깝다
     names = await entry_names(session, version_id)
     assert set(distances) == set(names)
-    assert names[min(distances, key=distances.get)] == '드워프'
+    assert names[min(distances, key=lambda key: distances[key])] == '드워프'
     assert all(0.0 <= distance <= 2.0 for distance in distances.values())
 
 

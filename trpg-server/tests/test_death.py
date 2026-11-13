@@ -12,8 +12,9 @@ from app.engine.death import DeathSaveRoll, Fate, fate_of, is_rolling, roll_deat
 from app.engine.dice import ScriptedDice
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
+from app.rounds.state import required
 
-DEATH_SAVE = SRD5.death_save
+DEATH_SAVE = required(SRD5.death_save, 'death_save')
 
 
 def rules(**changes) -> Ruleset:

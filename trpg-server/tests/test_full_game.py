@@ -22,6 +22,7 @@
 import asyncio
 import uuid
 from collections import Counter
+from collections.abc import AsyncIterator
 
 import pytest
 from fastapi import FastAPI, status
@@ -70,7 +71,7 @@ def players(signing_key: SigningKey) -> dict[uuid.UUID, dict[str, str]]:
 
 
 @pytest.fixture
-async def billing(app: FastAPI) -> FakeBillingServer:
+async def billing(app: FastAPI) -> AsyncIterator[FakeBillingServer]:
     """앱에 꽂은 가짜 결제 서버. 셋 다 CREDITS 만큼 있다."""
     server = FakeBillingServer(balances=dict.fromkeys(PLAYERS, CREDITS))
     client = server.make_client()

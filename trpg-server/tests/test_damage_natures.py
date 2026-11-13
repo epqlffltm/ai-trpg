@@ -33,6 +33,7 @@ from app.engine.ruleset import Resistance, ResistLevel, ResourceHolder, Ruleset,
 from app.engine.templates import SRD5
 from app.rounds.move_lines import describe_impact, describe_npc_impact
 from app.rounds.narration_request import to_impact, to_npc_impact
+from app.rounds.state import required
 from tests import test_item_effects as item_world
 from tests import test_monster_turns as turns
 from tests import test_npc_turns as npc_turns
@@ -84,7 +85,7 @@ def test_a_level_halves_zeroes_or_doubles(level, amount: int):
 
 
 def test_the_armor_cuts_before_the_resistance():
-    moderate = find_magnitude(SRD5, 'moderate')
+    moderate = required(find_magnitude(SRD5, 'moderate'), 'moderate')
 
     change = change_hp(ChangeKind.DAMAGE, moderate, 20, 20, ScriptedDice([8]), cut=3, nature=Nature('poison', RESIST))
 
@@ -93,7 +94,7 @@ def test_the_armor_cuts_before_the_resistance():
 
 
 def test_a_recovery_takes_no_nature():
-    light = find_magnitude(SRD5, 'light')
+    light = required(find_magnitude(SRD5, 'light'), 'light')
 
     change = change_hp(ChangeKind.RECOVERY, light, 2, 10, ScriptedDice([3]), nature=Nature('poison', IMMUNE))
 
@@ -367,9 +368,11 @@ def test_the_narrator_hears_the_nature_and_the_level():
     }
     plain = {**member, 'nature': {'key': 'poison', 'name': '독', 'level': None}}
 
-    assert describe_impact(to_impact(member)) == '→ 엘프 독 피해 1 (HP 9/10, 저항)'
-    assert describe_npc_impact(to_npc_impact(rat)) == '→ 수로 쥐 독 피해 6 (쓰러짐(의식 없음), 약점)'
-    assert describe_impact(to_impact(plain)) == '→ 엘프 독 피해 1 (HP 9/10)'
+    assert describe_impact(required(to_impact(member), 'impact')) == '→ 엘프 독 피해 1 (HP 9/10, 저항)'
+    assert (
+        describe_npc_impact(required(to_npc_impact(rat), 'impact')) == '→ 수로 쥐 독 피해 6 (쓰러짐(의식 없음), 약점)'
+    )
+    assert describe_impact(required(to_impact(plain), 'impact')) == '→ 엘프 독 피해 1 (HP 9/10)'
 
 
 # --- 타고난 성질 ---

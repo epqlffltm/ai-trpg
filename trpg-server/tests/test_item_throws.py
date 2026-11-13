@@ -21,6 +21,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -33,6 +34,7 @@ from app.assets.scenarios.schemas import ItemRule
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, read_snapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_58, upgrade_from_62
 from app.engine.action import ThrowAction
+from app.rounds.models import Declaration
 from app.rounds.move_lines import describe_throw
 from app.rounds.narration_request import to_throw
 from app.rounds.narrator import ThrowNote
@@ -694,7 +696,7 @@ def test_the_narrator_hears_what_a_throw_did():
         ],
     }
 
-    note = to_throw(SimpleNamespace(outcome={'item_throw': thrown}))
+    note = to_throw(cast(Declaration, SimpleNamespace(outcome={'item_throw': thrown})))
 
     assert (note.cured, note.injured, note.resisted) == (['기절'], ['출혈'], ['중독'])
 

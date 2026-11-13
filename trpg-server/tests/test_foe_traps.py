@@ -18,6 +18,8 @@
   - 서술: 차례의 줄 끝에 밟은 덫이 붙는다.
 """
 
+from typing import cast
+
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
@@ -25,6 +27,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.rounds import foe_traps
+from app.rounds.effects import Judging
 from app.rounds.move_lines import describe_monster_turn
 from app.rounds.narration_request import to_monster_turn
 from app.rounds.narrator import MonsterTurnNote
@@ -346,4 +349,4 @@ def test_a_turn_without_a_trap_keeps_its_shape():
 
     assert foe_traps.with_trap(outcome, None) is outcome
     assert foe_traps.with_trap(outcome, {'name': '올가미'}) == {'attack': BITE, 'trap': {'name': '올가미'}}
-    assert foe_traps.first_trap(None, None) is None
+    assert foe_traps.first_trap(cast(Judging, None), None) is None

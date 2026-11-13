@@ -285,12 +285,14 @@ async def test_a_campaign_with_a_run_cannot_lose_its_version(client: AsyncClient
 
 
 def test_the_run_ends_after_the_last_episode():
-    snapshot = CampaignSnapshot(
-        title='t',
-        description='',
-        rating='all',
-        rulebook_id=uuid.uuid4(),
-        episodes=[{'scenario_id': uuid.uuid4(), 'version': 1, 'title': str(number)} for number in range(2)],
+    snapshot = CampaignSnapshot.model_validate(
+        {
+            'title': 't',
+            'description': '',
+            'rating': 'all',
+            'rulebook_id': uuid.uuid4(),
+            'episodes': [{'scenario_id': uuid.uuid4(), 'version': 1, 'title': str(number)} for number in range(2)],
+        }
     )
 
     assert not is_last(CampaignRun(position=0), snapshot)

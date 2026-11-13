@@ -15,6 +15,7 @@ DB 의 시간 한도(#1260)가 실제 연결에 걸리는지 본다. 실제 DB �
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any, cast
 
 import pytest
 from server_core.database import LOCK_NOT_AVAILABLE, NO_LIMITS, QUERY_CANCELED, Limits, is_db_timeout
@@ -50,7 +51,8 @@ async def read_limits(connection) -> dict[str, int]:
 
 def code_of(error: DBAPIError) -> str:
     """DB 가 준 오류 코드(SQLSTATE)."""
-    return error.orig.sqlstate
+    # asyncpg 의 오류가 SQLSTATE 를 갖는다. DBAPIError 는 그 모양(orig 의 칸)을 모른다
+    return cast(Any, error.orig).sqlstate
 
 
 async def test_the_servers_connections_carry_the_limits(session: AsyncSession):

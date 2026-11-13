@@ -12,9 +12,10 @@ from app.engine.dice import ScriptedDice
 from app.engine.health import Change, ChangeKind, change_hp, find_magnitude, heal, hurt, is_downed, roll_amount
 from app.engine.ruleset import Magnitude
 from app.engine.templates import SRD5
+from app.rounds.state import required
 
-LIGHT = find_magnitude(SRD5, 'light')
-HEAVY = find_magnitude(SRD5, 'heavy')
+LIGHT = required(find_magnitude(SRD5, 'light'), 'light')
+HEAVY = required(find_magnitude(SRD5, 'heavy'), 'heavy')
 
 
 class WatchedDice:
@@ -40,7 +41,7 @@ def test_finds_a_magnitude_of_the_rules():
 def test_rolls_the_dice_the_magnitude_names(key: str, asked: list[int]):
     dice = WatchedDice()
 
-    roll_amount(find_magnitude(SRD5, key), dice)
+    roll_amount(required(find_magnitude(SRD5, key), key), dice)
 
     # 개수와 면 수가 규칙에서 온다
     assert dice.asked == asked
@@ -112,4 +113,4 @@ def test_a_change_cannot_be_rewritten():
     change = change_hp(ChangeKind.DAMAGE, LIGHT, hp=10, max_hp=10, dice=ScriptedDice([2]))
 
     with pytest.raises(AttributeError):
-        change.after = 10
+        change.after = 10  # pyright: ignore[reportAttributeAccessIssue]  # 고칠 수 없는 것을 보는 테스트다

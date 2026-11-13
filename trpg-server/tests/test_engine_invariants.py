@@ -38,14 +38,15 @@ from app.engine.health import PRANK_FLOOR, ChangeKind, Nature, change_hp, find_m
 from app.engine.injury import Hindrance
 from app.engine.resources import adjusted, level_of, shifted
 from app.engine.ruleset import ResistLevel, ResourceShift, ResourceShiftKind
-from app.engine.templates import from_template
+from app.engine.templates import Template, from_template
+from app.rounds.state import required
 from app.tables import items, money
 from app.tables.equipment import worn_of
 from app.tables.errors import TableConflictError
 from app.tables.models import TableSheet, TableWorn
 
-SRD = from_template('srd5')
-LIGHT = from_template('light')
+SRD = from_template(Template.SRD5)
+LIGHT = from_template(Template.LIGHT)
 TABLE = uuid.UUID('00000000-0000-4000-8000-000000000001')
 # 물건 세 가지. 무작위 열이 같은 물건을 자주 고르도록 적게 둔다
 THINGS = [uuid.UUID(f'00000000-0000-4000-8000-00000000001{n}') for n in range(3)]
@@ -126,7 +127,7 @@ class HealthMachine(RuleBasedStateMachine):
         if rolled is None:
             # 갈림길이 이미 정해졌다. 주사위를 건드리지 않는다
             assert dice.remaining == 1
-            assert fate_of(SRD.death_save, self.successes, self.failures) != Fate.DYING
+            assert fate_of(required(SRD.death_save, 'death_save'), self.successes, self.failures) != Fate.DYING
             return
         self.successes, self.failures = rolled.successes, rolled.failures
         self.dead = rolled.fate == Fate.DEAD
@@ -134,7 +135,7 @@ class HealthMachine(RuleBasedStateMachine):
     @precondition(lambda self: self.hp == 0)
     @rule(count=st.integers(min_value=1, max_value=3))
     def struck_while_down(self, count: int) -> None:
-        struck = add_failures(SRD.death_save, self.successes, self.failures, count)
+        struck = add_failures(required(SRD.death_save, 'death_save'), self.successes, self.failures, count)
         assert struck.added >= 0
         if self.dead:
             assert struck.fate == Fate.DEAD
@@ -147,7 +148,7 @@ class HealthMachine(RuleBasedStateMachine):
 
     @invariant()
     def death_counts_stay_in_range(self) -> None:
-        death_save = SRD.death_save
+        death_save = required(SRD.death_save, 'death_save')
         assert 0 <= self.successes <= death_save.successes
         assert 0 <= self.failures <= death_save.failures
         if self.dead:

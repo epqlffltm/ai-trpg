@@ -19,6 +19,7 @@ NPC 의 판은 test_npc_items.py 의 것이다. 악역영애가 부채(늘 떨�
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -26,11 +27,13 @@ from httpx import AsyncClient
 from pydantic import ValidationError
 
 from app.engine.action import LootAction
+from app.rounds.effects import Judging
 from app.rounds.loots import take
 from app.rounds.move_lines import describe_loot
 from app.rounds.narrator import LootNote
+from app.rounds.victims import Victim
 from app.tables.carried import Carried
-from app.tables.models import TableItem
+from app.tables.models import TableItem, TableMember
 from tests.test_monster_combat import NO_INJURY, monster_named
 from tests.test_monster_drops import kill_first_rat, start_table
 from tests.test_npc_actions import PASS, PUNCH, TEND, bearer, events_of, load_dice, people, punch, table_url, tend
@@ -283,8 +286,10 @@ def victim_holding(coins: uuid.UUID, count: int) -> SimpleNamespace:
     return SimpleNamespace(held=[line], set_count=lambda slot, value: counts.update({slot: value}), counts=counts)
 
 
-def judging_for(coins: uuid.UUID) -> SimpleNamespace:
-    return SimpleNamespace(table=SimpleNamespace(id=uuid.uuid4()), items={coins: SimpleNamespace(name='금화')})
+def judging_for(coins: uuid.UUID) -> Judging:
+    return cast(
+        Judging, SimpleNamespace(table=SimpleNamespace(id=uuid.uuid4()), items={coins: SimpleNamespace(name='금화')})
+    )
 
 
 def test_a_looter_near_the_limit_takes_what_fits_and_leaves_the_rest():
@@ -294,7 +299,7 @@ def test_a_looter_near_the_limit_takes_what_fits_and_leaves_the_rest():
     thief = SimpleNamespace(sheet=sheet, current_sheet=sheet)
     victim = victim_holding(coins, 5)
 
-    result = take(judging_for(coins), thief, victim, coins)
+    result = take(judging_for(coins), cast(TableMember, thief), cast(Victim, victim), coins)
 
     assert result == {'looted': True, 'count': 2, 'left': 3, 'total': 99, 'reason': 'full'}
     assert victim.counts == {0: 3}
@@ -306,7 +311,7 @@ def test_a_full_looter_takes_nothing():
     # 앉은 사람(TableMember)의 흉내. 지금 캐릭터의 시트는 sheet 와 current_sheet 둘로 읽는다
     thief = SimpleNamespace(sheet=sheet, current_sheet=sheet)
 
-    result = take(judging_for(coins), thief, victim_holding(coins, 5), coins)
+    result = take(judging_for(coins), cast(TableMember, thief), cast(Victim, victim_holding(coins, 5)), coins)
 
     assert (result['looted'], result['count'], result['left'], result['reason']) == (False, 0, 5, 'full')
 

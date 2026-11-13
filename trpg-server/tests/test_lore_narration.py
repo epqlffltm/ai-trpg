@@ -7,9 +7,11 @@
 """
 
 import uuid
+from typing import cast
 
 import pytest
 from ai_core.fake import FakeEmbedder, FakeProvider
+from ai_core.openai_compat import OpenAICompatProvider
 from ai_core.provider import ChatMessage, Reasoning, Role
 
 from app.assets.models import LoreKind, NarrationStyle
@@ -191,7 +193,9 @@ async def test_the_on_mode_puts_the_entries_in_the_prompt_and_counts_their_words
     provider = FakeProvider(reply=SCENE)
     sets = LoreSets(on=[LIEN], noise=[TUNNEL], distances={})
 
-    trial = await run_trial(provider, Reasoning.NONE, NarrationStyle.CLASSIC, False, LoreMode.ON, sets)
+    trial = await run_trial(
+        cast(OpenAICompatProvider, provider), Reasoning.NONE, NarrationStyle.CLASSIC, False, LoreMode.ON, sets
+    )
 
     (call,) = provider.calls
     last = call.messages[-1].content
@@ -209,7 +213,9 @@ async def test_the_off_mode_sends_no_lore_but_still_counts_as_a_baseline():
     provider = FakeProvider(reply=SCENE)
     sets = LoreSets(on=[LIEN], noise=[TUNNEL], distances={})
 
-    trial = await run_trial(provider, Reasoning.NONE, NarrationStyle.CLASSIC, False, LoreMode.OFF, sets)
+    trial = await run_trial(
+        cast(OpenAICompatProvider, provider), Reasoning.NONE, NarrationStyle.CLASSIC, False, LoreMode.OFF, sets
+    )
 
     (call,) = provider.calls
     assert prompt.LORE_TITLE not in prompt_text(call.messages)
@@ -221,7 +227,7 @@ async def test_the_off_mode_sends_no_lore_but_still_counts_as_a_baseline():
 async def test_without_lore_sets_nothing_is_counted():
     provider = FakeProvider(reply=SCENE)
 
-    trial = await run_trial(provider, Reasoning.NONE, NarrationStyle.CLASSIC)
+    trial = await run_trial(cast(OpenAICompatProvider, provider), Reasoning.NONE, NarrationStyle.CLASSIC)
 
     assert (trial.lore, trial.notes, trial.lore_used, trial.noise_used) == (LoreMode.OFF, 0, (), ())
 
@@ -229,7 +235,12 @@ async def test_without_lore_sets_nothing_is_counted():
 async def test_the_report_shows_the_lore_mode_and_the_word_counts():
     sets = LoreSets(on=[LIEN], noise=[TUNNEL], distances={})
     trial = await run_trial(
-        FakeProvider(reply=SCENE), Reasoning.NONE, NarrationStyle.CLASSIC, False, LoreMode.NOISE, sets
+        cast(OpenAICompatProvider, FakeProvider(reply=SCENE)),
+        Reasoning.NONE,
+        NarrationStyle.CLASSIC,
+        False,
+        LoreMode.NOISE,
+        sets,
     )
 
     assert '/ 로어북 noise /' in describe(trial)

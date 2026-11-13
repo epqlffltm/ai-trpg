@@ -17,6 +17,7 @@
 """
 
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -30,8 +31,10 @@ from app.assets.scenarios.snapshot import DefendsSnapshot
 from app.engine.dice import ScriptedDice
 from app.engine.templates import SRD5
 from app.rounds import foe_guards
+from app.rounds.monster_scene import SceneMonster
 from app.rounds.move_lines import describe_monster_turn
 from app.rounds.narration_request import to_monster_turn
+from app.rounds.state import required
 from app.tables.models import TableInjury
 from tests import test_monster_npc_attacks as bystanders
 from tests import test_monster_turns as turns
@@ -194,15 +197,18 @@ def test_when_a_foe_guards():
 
 
 def test_a_stunned_foe_cannot_guard():
-    stunned = SimpleNamespace(
-        state=SimpleNamespace(id=1, hp=1, max_hp=10, injuries=[TableInjury(injury='stunned')]),
-        definition=SimpleNamespace(defends=DefendsSnapshot(below=50)),
+    stunned = cast(
+        SceneMonster,
+        SimpleNamespace(
+            state=SimpleNamespace(id=1, hp=1, max_hp=10, injuries=[TableInjury(injury='stunned')]),
+            definition=SimpleNamespace(defends=DefendsSnapshot(below=50)),
+        ),
     )
 
     assert foe_guards.decide(SRD5, [stunned], [], ScriptedDice([])) == frozenset()
 
 
 def test_the_turn_line_tells_the_guard():
-    note = to_monster_turn({'name': '수로 쥐', 'outcome': {'skipped': 'defending'}})
+    note = required(to_monster_turn({'name': '수로 쥐', 'outcome': {'skipped': 'defending'}}), 'monster')
 
     assert describe_monster_turn(note) == '수로 쥐: 방어 태세를 잡음 (치지 않음)'

@@ -28,6 +28,8 @@ from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
 from app.chat import repository, service
 from app.chat.models import ChatMessage
 from app.chat.schemas import MessageCreate
+from app.engine.sheet import CharacterSheet
+from app.rounds.state import required
 from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables import state as table_state
@@ -69,7 +71,7 @@ async def open_duo(session: AsyncSession) -> GameTable:
         title='시나리오',
         rulebook_id=rulebook.asset_id,
         openings=['도입부'],
-        default_sheet=SHEET,
+        default_sheet=CharacterSheet.model_validate(SHEET),
     )
     scenario = await scenarios.create_scenario(session, ME, data, today())
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
@@ -82,8 +84,8 @@ async def test_two_messages_at_once_get_different_sequences(session: AsyncSessio
     table = await open_duo(session)
 
     # A: 테이블을 잠그고 내 글을 올렸지만 아직 커밋하지 않았다
-    locked = await table_repository.lock_table(session, table.id)
-    mine = service.build_message(locked, table_state.find_member(locked, ME), '먼저 쓴 글')
+    locked = required(await table_repository.lock_table(session, table.id), 'table')
+    mine = service.build_message(locked, required(table_state.find_member(locked, ME), 'member'), '먼저 쓴 글')
     repository.add_message(session, mine)
     await session.flush()
 

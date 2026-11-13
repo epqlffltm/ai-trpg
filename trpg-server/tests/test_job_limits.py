@@ -16,12 +16,12 @@ import logging
 import pytest
 from server_core.testing.logs import rendered
 
-from app.core.config import Settings
 from app.core.job_setup import job_limits
 from app.core.jobs import DEFAULT_LIMIT, JOB_REFUSED_ERROR_CODE, BackgroundJobs, Limit
 from app.lore import indexing as lore_indexing
 from app.memory import indexing as memory_indexing
 from app.rounds import closing
+from tests.conftest import make_test_settings
 
 JOBS_LOGGER = 'app.core.jobs'
 NARRATE = 'round.narrate'
@@ -70,7 +70,7 @@ def test_an_operation_without_its_own_limit_uses_the_default():
 
 
 def test_the_settings_decide_how_many_run_at_once():
-    settings = Settings(job_narration_concurrency=3, job_index_concurrency=1)
+    settings = make_test_settings(job_narration_concurrency=3, job_index_concurrency=1)
 
     assert job_limits(settings) == {
         closing.NARRATE_OPERATION: Limit(3, closing.NARRATION_CAPACITY),
@@ -82,7 +82,7 @@ def test_the_settings_decide_how_many_run_at_once():
 @pytest.mark.parametrize('field', ['job_narration_concurrency', 'job_index_concurrency'])
 def test_at_least_one_runs_at_once(field: str):
     with pytest.raises(ValueError):
-        Settings(**{field: 0})
+        make_test_settings(**{field: 0})
 
 
 # --- 동시에 도는 수 ---

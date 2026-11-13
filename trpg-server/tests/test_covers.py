@@ -20,6 +20,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -30,7 +31,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.schemas import CoverRule, ScenarioCreate
-from app.assets.scenarios.snapshot import CoverSnapshot, cover_at
+from app.assets.scenarios.snapshot import CoverSnapshot, Snapshot, cover_at
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_50
 from app.engine import armor
 from app.engine.armor import Pierce, Protection, Save
@@ -39,6 +40,7 @@ from app.engine.ruleset import Armor, ArmorMode
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.rounds import blows
+from app.rounds.effects import Judging
 from app.rounds.models import Round
 from app.rounds.move_lines import describe_blow, describe_cover
 from app.rounds.narrator import BlowNote, CoverNote
@@ -312,8 +314,8 @@ def test_the_best_of_three_saves_is_chosen(defense: int, cover: int, ward: int, 
     assert armor.save_terms(defense, ward, cover) == expected
 
 
-def judging_with(ruleset, rolls) -> SimpleNamespace:
-    return SimpleNamespace(ruleset=ruleset, dice=ScriptedDice(list(rolls)), items={})
+def judging_with(ruleset, rolls) -> Judging:
+    return cast(Judging, SimpleNamespace(ruleset=ruleset, dice=ScriptedDice(list(rolls)), items={}))
 
 
 def test_a_pierce_must_beat_the_cover_too():
@@ -344,7 +346,7 @@ def test_a_cover_alone_rolls_a_cover_save():
 
 
 def test_the_cover_of_a_place():
-    snapshot = SimpleNamespace(covers=[CoverSnapshot(place_id=ME, cover=5)])
+    snapshot = cast(Snapshot, SimpleNamespace(covers=[CoverSnapshot(place_id=ME, cover=5)]))
 
     assert (cover_at(snapshot, ME), cover_at(snapshot, uuid.uuid4()), cover_at(snapshot, None)) == (5, 0, 0)
 

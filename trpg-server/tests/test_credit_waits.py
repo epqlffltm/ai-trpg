@@ -15,6 +15,7 @@
 
 import logging
 import uuid
+from collections.abc import AsyncIterator, Iterator
 from datetime import datetime, timedelta
 
 import pytest
@@ -57,7 +58,7 @@ def friend(signing_key: SigningKey) -> dict[str, str]:
 
 
 @pytest.fixture
-async def billing(app: FastAPI) -> FakeBillingServer:
+async def billing(app: FastAPI) -> AsyncIterator[FakeBillingServer]:
     """앱에 꽂은 가짜 결제 서버. 둘 다 CREDITS 만큼 있다."""
     server = FakeBillingServer(balances={ME: CREDITS, FRIEND: CREDITS})
     client = server.make_client()
@@ -67,7 +68,7 @@ async def billing(app: FastAPI) -> FakeBillingServer:
 
 
 @pytest.fixture
-def narrator(app: FastAPI) -> GatedNarrator:
+def narrator(app: FastAPI) -> Iterator[GatedNarrator]:
     """앱에 꽂은 문 앞의 서술자. 문이 열려 있다."""
     gated = GatedNarrator()
     gated.release()

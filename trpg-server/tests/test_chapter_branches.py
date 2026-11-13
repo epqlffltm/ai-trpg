@@ -19,13 +19,15 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import status
 from httpx import AsyncClient
 
-from app.assets.scenarios.snapshot import ChapterSnapshot
+from app.assets.scenarios.snapshot import ChapterSnapshot, Snapshot
 from app.tables import chapters as table_chapters
+from app.tables.models import GameTable
 from tests import test_happenings as happening_tests
 from tests.test_happenings import draft, reach, start
 from tests.test_map_actions import going, play
@@ -184,20 +186,29 @@ def test_predecessors_default_to_the_chapter_just_before():
 
 
 def test_the_longest_route_counts_chapters_on_it():
-    linear = SimpleNamespace(chapters=[chapter('a'), chapter('b'), chapter('c')])
-    forked = SimpleNamespace(
-        chapters=[chapter('a'), chapter('b', ['a']), chapter('c', ['a']), chapter('d', ['c']), chapter('e', ['b', 'd'])]
+    linear = cast(Snapshot, SimpleNamespace(chapters=[chapter('a'), chapter('b'), chapter('c')]))
+    forked = cast(
+        Snapshot,
+        SimpleNamespace(
+            chapters=[
+                chapter('a'),
+                chapter('b', ['a']),
+                chapter('c', ['a']),
+                chapter('d', ['c']),
+                chapter('e', ['b', 'd']),
+            ]
+        ),
     )
 
     assert table_chapters.longest(linear) == 3
     assert table_chapters.longest(forked) == 4
-    assert table_chapters.longest(SimpleNamespace(chapters=[])) == 0
+    assert table_chapters.longest(cast(Snapshot, SimpleNamespace(chapters=[]))) == 0
 
 
 def test_chapters_passed_before_the_path_was_kept_are_read_in_order():
     content = {'chapters': [{'id': 'a'}, {'id': 'b'}, {'id': 'c'}]}
-    old = SimpleNamespace(chapter_id='b', chapter_path=[], content=content)
-    new = SimpleNamespace(chapter_id='c', chapter_path=['a', 'c'], content=content)
+    old = cast(GameTable, SimpleNamespace(chapter_id='b', chapter_path=[], content=content))
+    new = cast(GameTable, SimpleNamespace(chapter_id='c', chapter_path=['a', 'c'], content=content))
 
     assert table_chapters.passed(old) == ['a', 'b']
     assert (table_chapters.passed(new), table_chapters.number_of(new)) == (['a', 'c'], 2)
@@ -205,12 +216,13 @@ def test_chapters_passed_before_the_path_was_kept_are_read_in_order():
 
 
 def test_the_candidates_follow_the_current_chapter_in_order():
-    snapshot = SimpleNamespace(
-        chapters=[chapter('a'), chapter('b', ['a']), chapter('c', ['a']), chapter('d', ['b', 'c'])]
+    snapshot = cast(
+        Snapshot,
+        SimpleNamespace(chapters=[chapter('a'), chapter('b', ['a']), chapter('c', ['a']), chapter('d', ['b', 'c'])]),
     )
-    at = SimpleNamespace(chapter_id='a')
-    on_c = SimpleNamespace(chapter_id='c')
-    last = SimpleNamespace(chapter_id='d')
+    at = cast(GameTable, SimpleNamespace(chapter_id='a'))
+    on_c = cast(GameTable, SimpleNamespace(chapter_id='c'))
+    last = cast(GameTable, SimpleNamespace(chapter_id='d'))
 
     assert [one.id for one in table_chapters.candidates(at, snapshot)] == ['b', 'c']
     assert [one.id for one in table_chapters.candidates(on_c, snapshot)] == ['d']
@@ -227,6 +239,6 @@ def test_what_an_untaken_branch_opens_stays_locked():
             {'id': 'd', 'after': ['b', 'c'], 'opens': {'quests': [str(cave)]}},
         ]
     }
-    table = SimpleNamespace(chapter_id='b', chapter_path=['a', 'b'], content=content)
+    table = cast(GameTable, SimpleNamespace(chapter_id='b', chapter_path=['a', 'b'], content=content))
 
     assert table_chapters.locked_ids(table) == frozenset({hut, cave})

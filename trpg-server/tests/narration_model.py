@@ -14,6 +14,7 @@ from datetime import UTC, date, datetime
 
 from ai_core.catalog_contract import Provider
 from server_core.billing.price_list import FreePriceList
+from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.billing.prices import narration_code
@@ -48,7 +49,7 @@ TEST_MODEL_ROW = {
 async def add_test_model(engine: AsyncEngine) -> None:
     """모델 목록에 테스트 모델을 넣는다. 테이블을 비운 뒤에 부른다."""
     async with engine.begin() as connection:
-        await connection.execute(AiModel.__table__.insert().values(**TEST_MODEL_ROW))
+        await connection.execute(insert(AiModel).values(**TEST_MODEL_ROW))
 
 
 def today() -> date:

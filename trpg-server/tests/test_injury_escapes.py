@@ -15,6 +15,7 @@
 """
 
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI
@@ -24,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.rounds import prompt
 from app.rounds.injury_escapes import is_escapable
+from app.tables.models import TableInjury
 from tests import test_injury_ticks as ticks
 from tests.test_npc_actions import RecordingNarrator
 
@@ -179,6 +181,6 @@ async def test_an_injury_without_an_escape_is_not_rolled(
 
 
 def test_only_rounds_in_between_are_rolled():
-    row = SimpleNamespace(ended_at=None, ends_after_round=4, round_number=1)
+    row = cast(TableInjury, SimpleNamespace(ended_at=None, ends_after_round=4, round_number=1))
 
     assert [round_number for round_number in range(1, 6) if is_escapable(row, round_number)] == [2, 3]
