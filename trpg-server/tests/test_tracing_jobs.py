@@ -27,6 +27,7 @@ from server_core.testing.spans import SpanRecorder, hex_span_id, hex_trace_id
 
 from app.ai_log.retention import PRUNE_OPERATION, AiLogPruner
 from app.core.jobs import BackgroundJobs
+from app.rounds.state import required
 
 JOBS_LOGGER = 'app.core.jobs'
 RETENTION_LOGGER = 'app.ai_log.retention'
@@ -42,7 +43,7 @@ async def test_a_spawned_job_sits_under_the_span_that_spawned_it(spans: SpanReco
         seen.update(current_ids())
 
     with caplog.at_level(logging.INFO, logger=JOBS_LOGGER):
-        with spans.parent() as parent, request_scope('request-12345', span_trace()):
+        with spans.parent() as parent, request_scope('request-12345', required(span_trace(), 'trace')):
             job_id = jobs.spawn(narrate(), 'narrate:table:1', NARRATE)
         await jobs.drain()
 

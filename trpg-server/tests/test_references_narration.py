@@ -16,6 +16,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from ai_core.fake import FakeCallLog, FakeEmbedder, FakeProvider
@@ -23,6 +24,7 @@ from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.assets.scenarios.snapshot import Snapshot
 from app.assets.scenarios.upgrades import upgrade_from_41
 from app.lore.retrieval import LORE_MAX_CHARS
 from app.references.indexing import index_references
@@ -134,7 +136,9 @@ async def start_alone(client: AsyncClient, me: dict, table: dict) -> None:
 
 @pytest.mark.parametrize(('world', 'allowed'), [(None, True), (False, False), (True, True)])
 def test_only_a_world_that_allows_it_or_no_world_can_turn_it_on(world: bool | None, allowed: bool):
-    snapshot = SimpleNamespace(world=None if world is None else SimpleNamespace(references_allowed=world))
+    snapshot = cast(
+        Snapshot, SimpleNamespace(world=None if world is None else SimpleNamespace(references_allowed=world))
+    )
 
     assert references_allowed(snapshot) is allowed
 

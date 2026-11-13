@@ -110,8 +110,7 @@ jobs:
       - name: 모양 검사
         run: uv run ruff format --check .
 
-      # 서버의 코드의 타입을 본다(pyproject.toml 의 [tool.pyright], 점검 P2-2). 걸리면 실패한다.
-      # 아직 켜지 않은 곳(exclude)과 테스트는 묶음마다 켠다
+      # 서버의 코드와 테스트의 타입을 본다(pyproject.toml 의 [tool.pyright], 점검 P2-2). 걸리면 실패한다
       - name: 타입 검사
         run: uv run pyright
 

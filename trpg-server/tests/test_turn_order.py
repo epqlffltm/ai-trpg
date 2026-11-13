@@ -19,13 +19,15 @@ srd5 의 차례 능력치는 민첩이고 둘 다 10 이라, 바퀴의 순서는
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 
 from app.rounds import turn_order, waits
-from app.tables.models import TurnMode
+from app.rounds.models import Round
+from app.tables.models import GameTable, TableMember, TurnMode
 from tests import test_monster_turns as turns
 from tests import test_rounds_api as rounds_api
 
@@ -199,18 +201,21 @@ async def test_monsters_act_only_on_the_last_turn_of_a_cycle(
 # --- 작은 함수 ---
 
 
-def seat(user_id: uuid.UUID, hp: int = 5, died: bool = False) -> SimpleNamespace:
+def seat(user_id: uuid.UUID, hp: int = 5, died: bool = False) -> TableMember:
     sheet = SimpleNamespace(hp=hp, died_at='then' if died else None)
-    return SimpleNamespace(user_id=user_id, sheet=sheet)
+    return cast(TableMember, SimpleNamespace(user_id=user_id, sheet=sheet))
 
 
 def test_the_next_actor_skips_those_who_left_fell_or_died():
     gone, down, dead, ready = (uuid.uuid4() for _ in range(4))
-    table = SimpleNamespace(
-        members=[seat(down, hp=0), seat(dead, died=True), seat(ready)],
-        turn_queue=[str(gone), str(down), str(dead), str(ready)],
-        turn_mode=TurnMode.TURNS,
-        turn_stances={},
+    table = cast(
+        GameTable,
+        SimpleNamespace(
+            members=[seat(down, hp=0), seat(dead, died=True), seat(ready)],
+            turn_queue=[str(gone), str(down), str(dead), str(ready)],
+            turn_mode=TurnMode.TURNS,
+            turn_stances={},
+        ),
     )
 
     assert turn_order.ends_cycle(table) is False
@@ -223,11 +228,11 @@ def test_a_cycle_skips_time_only_when_every_turn_waited(monkeypatch: pytest.Monk
     monkeypatch.setattr(waits.calendar, 'stretch_next_step', lambda table, minutes: stretched.append(minutes))
     actor = uuid.uuid4()
 
-    def turn(waited: list, minutes: int | None) -> tuple[SimpleNamespace, SimpleNamespace]:
+    def turn(waited: list, minutes: int | None) -> tuple[GameTable, Round]:
         outcome = {'wait': {'minutes': minutes}} if minutes is not None else {}
         declaration = SimpleNamespace(user_id=actor, outcome=outcome)
-        table = SimpleNamespace(turn_mode=TurnMode.TURNS, turn_waits=waited, members=[seat(actor)])
-        return table, SimpleNamespace(declarations=[declaration])
+        table = cast(GameTable, SimpleNamespace(turn_mode=TurnMode.TURNS, turn_waits=waited, members=[seat(actor)]))
+        return table, cast(Round, SimpleNamespace(declarations=[declaration]))
 
     # 바퀴 중간의 차례는 적어 두기만 한다
     middle, round_ = turn([], 60)

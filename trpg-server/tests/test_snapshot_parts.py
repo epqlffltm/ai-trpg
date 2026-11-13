@@ -16,13 +16,14 @@
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import httpx
 import pytest
 from ai_core.fake import FakeImageProvider
 from fastapi import FastAPI, status
 from httpx import AsyncClient
-from server_core.billing.client import BillingRejected, BillingUnavailable, HoldOutcome, HoldResult
+from server_core.billing.client import Billing, BillingRejected, BillingUnavailable, HoldOutcome, HoldResult
 from server_core.billing.prices import Change, Price, PriceBook, Sale, Tier
 from server_core.testing.tokens import SigningKey
 
@@ -141,13 +142,13 @@ class AnsweringBilling:
 )
 async def test_a_declined_hold_names_its_reason(billing: AnsweringBilling, code: str):
     with pytest.raises(charging.HoldDeclined) as declined:
-        await charging.place_hold(billing, 'game:img:x', ME, CODE)
+        await charging.place_hold(cast(Billing, billing), 'game:img:x', ME, CODE)
 
     assert declined.value.code == code
 
 
 async def test_a_held_hold_passes():
-    await charging.place_hold(AnsweringBilling(), 'game:img:x', ME, CODE)
+    await charging.place_hold(cast(Billing, AnsweringBilling()), 'game:img:x', ME, CODE)
 
 
 def test_without_an_asset_server_nothing_is_drawn(settings: Settings):

@@ -26,10 +26,12 @@ from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
 from app.engine.dice import ScriptedDice
+from app.engine.sheet import CharacterSheet
 from app.rounds import acceptance, closing, repository, service
 from app.rounds.fake_narrator import FakeNarrator
 from app.rounds.models import Round
 from app.rounds.schemas import DeclarationUpdate
+from app.rounds.state import required
 from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables import state as table_state
@@ -73,7 +75,7 @@ async def start_duo(session: AsyncSession) -> GameTable:
         title='시나리오',
         rulebook_id=rulebook.asset_id,
         openings=['도입부'],
-        default_sheet=SHEET,
+        default_sheet=CharacterSheet.model_validate(SHEET),
     )
     scenario = await scenarios.create_scenario(session, ME, data, today())
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
@@ -98,10 +100,10 @@ class RecordingScheduler:
         self.started.append(started)
 
 
-async def narrate(app: FastAPI, table: GameTable, number: int) -> Round:
+async def narrate(app: FastAPI, table: GameTable, number: int) -> Round | None:
     """맡겨진 서술을 직접 돌리고, 그 뒤의 가장 최근 라운드를 돌려준다."""
     async with app.state.session_factory() as fresh:
-        started = (await repository.find_round(fresh, table.id, number)).closing_at
+        started = required((await repository.find_round(fresh, table.id, number)).closing_at, 'closing_at')
     await closing.narrate_round(app.state.session_factory, FakeNarrator(), table.id, number, started)
     async with app.state.session_factory() as fresh:
         return await repository.find_latest_round(fresh, table.id)
@@ -114,9 +116,9 @@ async def test_the_last_two_declarations_close_the_round_once(
     scheduler = RecordingScheduler()
 
     # A: 테이블을 잠그고 내 선언을 적었지만 아직 커밋하지 않았다
-    locked = await table_repository.lock_table(session, table.id)
-    round_ = await repository.find_latest_round(session, table.id)
-    acceptance.put_declaration(round_, table_state.find_member(locked, ME), '달린다.', None)
+    locked = required(await table_repository.lock_table(session, table.id), 'table')
+    round_ = required(await repository.find_latest_round(session, table.id), 'round')
+    acceptance.put_declaration(round_, required(table_state.find_member(locked, ME), 'member'), '달린다.', None)
     await session.flush()
 
     # B: 친구가 선언을 낸다. A 가 끝날 때까지 기다려야 한다
@@ -151,9 +153,9 @@ async def test_closing_waits_for_a_declaration_being_saved(
     table = await start_duo(session)
 
     # A: 테이블을 잠그고 친구의 선언을 적었지만 아직 커밋하지 않았다
-    locked = await table_repository.lock_table(session, table.id)
-    round_ = await repository.find_latest_round(session, table.id)
-    acceptance.put_declaration(round_, table_state.find_member(locked, FRIEND), '웃는다.', None)
+    locked = required(await table_repository.lock_table(session, table.id), 'table')
+    round_ = required(await repository.find_latest_round(session, table.id), 'round')
+    acceptance.put_declaration(round_, required(table_state.find_member(locked, FRIEND), 'member'), '웃는다.', None)
     await session.flush()
 
     # B: 방장이 라운드를 닫으려 한다. 잠금이 없으면 친구의 선언을 못 보고 "아무것도 하지 않았다"로 닫는다

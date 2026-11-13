@@ -12,6 +12,7 @@
 """
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import httpx
@@ -72,7 +73,7 @@ async def models(app: FastAPI, session: AsyncSession, clean_tables, monkeypatch:
 
 
 @pytest.fixture
-async def billing(app: FastAPI) -> FakeBillingServer:
+async def billing(app: FastAPI) -> AsyncIterator[FakeBillingServer]:
     """앱에 꽂은 가짜 결제 서버. 방장과 친구에게 1000 크레딧씩 있다."""
     server = FakeBillingServer(balances={ME: 1000, FRIEND: 1000})
     client = server.make_client()

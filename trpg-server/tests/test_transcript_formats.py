@@ -15,8 +15,10 @@
 조각을 형식마다 쓰는 것은 conversation-core 의 tests/test_transcripts.py 가 본다(#1266).
 """
 
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -24,6 +26,7 @@ from httpx import AsyncClient
 
 from app.limits.setup import build_limiting
 from app.transcripts import reading
+from app.transcripts.story import Item
 from tests import test_whispers as whisper_tests
 from tests.conftest import make_test_settings
 from tests.test_whispers import FRIEND, ME, SECRET, THIRD, open_trio, start, table_url, whisper
@@ -159,17 +162,17 @@ async def test_too_many_downloads_are_refused(app: FastAPI, client: AsyncClient,
 # --- 흐름을 합치기(DB 없이) ---
 
 
-async def stream(*stamps: int, kind: str):
-    """그 시각(분)들에 적힌 것을 차례로 내놓는 흐름."""
+async def stream(*stamps: int, kind: str) -> AsyncIterator[Item]:
+    """그 시각(분)들에 적힌 것을 차례로 내놓는 흐름. 합치는 함수는 적힌 시각(created_at)만 읽는다."""
     start = datetime(2026, 10, 22, tzinfo=UTC)
     for stamp in stamps:
-        yield SimpleNamespace(created_at=start + timedelta(minutes=stamp), kind=kind, stamp=stamp)
+        yield cast(Item, SimpleNamespace(created_at=start + timedelta(minutes=stamp), kind=kind, stamp=stamp))
 
 
 async def test_streams_are_merged_in_the_order_they_were_written():
     items = reading.merged(stream(1, 3, 5, kind='event'), stream(2, 3, kind='chat'), stream(0, kind='whisper'))
 
-    merged = [(item.stamp, item.kind) async for item in items]
+    merged = [(vars(item)['stamp'], vars(item)['kind']) async for item in items]
 
     # 같은 시각이면 이벤트, 채팅, 쪽지의 차례다
     assert merged == [(0, 'whisper'), (1, 'event'), (2, 'chat'), (3, 'event'), (3, 'chat'), (5, 'event')]

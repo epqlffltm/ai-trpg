@@ -17,6 +17,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -25,7 +26,9 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import Surprise
+from app.assets.scenarios.snapshot import Snapshot
 from app.rounds import initiative, prompt
+from app.rounds.monster_scene import SceneMonster
 from app.rounds.move_lines import REST_BREAKS, describe_move, describe_wander
 from app.rounds.narrator import Move, WanderNote
 from app.tables.models import TableMonster
@@ -432,9 +435,17 @@ async def test_numbers_go_on_after_the_dead(
 
 
 def test_a_wandering_monster_uses_its_own_surprise():
-    snapshot = SimpleNamespace(encounters=[SimpleNamespace(place_id='p', monster_id='m', surprise=Surprise.PARTY)])
-    own = SimpleNamespace(state=SimpleNamespace(engaged_round=2, surprise='monsters', place_id='p', monster_id='m'))
-    placed = SimpleNamespace(state=SimpleNamespace(engaged_round=2, surprise=None, place_id='p', monster_id='m'))
+    snapshot = cast(
+        Snapshot, SimpleNamespace(encounters=[SimpleNamespace(place_id='p', monster_id='m', surprise=Surprise.PARTY)])
+    )
+    own = cast(
+        SceneMonster,
+        SimpleNamespace(state=SimpleNamespace(engaged_round=2, surprise='monsters', place_id='p', monster_id='m')),
+    )
+    placed = cast(
+        SceneMonster,
+        SimpleNamespace(state=SimpleNamespace(engaged_round=2, surprise=None, place_id='p', monster_id='m')),
+    )
 
     assert initiative.surprise_of(snapshot, own, 2) == Surprise.MONSTERS
     assert initiative.surprise_of(snapshot, placed, 2) == Surprise.PARTY

@@ -19,6 +19,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -32,7 +33,7 @@ from app.engine.dice import ScriptedDice
 from app.main import API_PREFIX
 from app.rounds import prompt
 from app.rounds.quest_goals import defeated_monsters, held, is_achieved, npc_defeated, reached
-from app.tables.models import NpcStatus
+from app.tables.models import GameTable, NpcStatus, QuestStatus, TableMonster, TableNpc
 from app.tables.quests import CatalogQuest
 from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
@@ -461,7 +462,7 @@ def person(place: uuid.UUID | None, items: dict | None = None, dead: bool = Fals
 
 def test_the_dead_neither_stand_nor_hold():
     here, potion = uuid.uuid4(), uuid.uuid4()
-    table = SimpleNamespace(members=[person(here, {potion: 3}, dead=True), person(None, {potion: 2})])
+    table = cast(GameTable, SimpleNamespace(members=[person(here, {potion: 3}, dead=True), person(None, {potion: 2})]))
 
     assert not reached(table, here)
     assert held(table, potion) == 2
@@ -469,23 +470,26 @@ def test_the_dead_neither_stand_nor_hold():
 
 def test_downed_and_dead_both_count_as_defeated():
     rat, other = uuid.uuid4(), uuid.uuid4()
-    monsters = [
-        SimpleNamespace(monster_id=rat, status=NpcStatus.DOWNED),
-        SimpleNamespace(monster_id=rat, status=NpcStatus.DEAD),
-        SimpleNamespace(monster_id=rat, status=NpcStatus.ALIVE),
-        SimpleNamespace(monster_id=other, status=NpcStatus.DEAD),
-    ]
+    monsters = cast(
+        list[TableMonster],
+        [
+            SimpleNamespace(monster_id=rat, status=NpcStatus.DOWNED),
+            SimpleNamespace(monster_id=rat, status=NpcStatus.DEAD),
+            SimpleNamespace(monster_id=rat, status=NpcStatus.ALIVE),
+            SimpleNamespace(monster_id=other, status=NpcStatus.DEAD),
+        ],
+    )
     lady = uuid.uuid4()
 
     assert defeated_monsters(monsters, rat) == 2
-    assert npc_defeated([SimpleNamespace(entry_id=lady, status=NpcStatus.DOWNED)], lady)
-    assert not npc_defeated([SimpleNamespace(entry_id=lady, status=NpcStatus.ALIVE)], lady)
+    assert npc_defeated([cast(TableNpc, SimpleNamespace(entry_id=lady, status=NpcStatus.DOWNED))], lady)
+    assert not npc_defeated([cast(TableNpc, SimpleNamespace(entry_id=lady, status=NpcStatus.ALIVE))], lady)
     assert not npc_defeated([], lady)
 
 
 def test_no_conditions_is_never_achieved():
-    quest_ = CatalogQuest(entry_id=uuid.uuid4(), name='구출', start='active', reward=[])
-    table = SimpleNamespace(members=[])
+    quest_ = CatalogQuest(entry_id=uuid.uuid4(), name='구출', start=QuestStatus.ACTIVE, reward=[])
+    table = cast(GameTable, SimpleNamespace(members=[]))
 
     assert not is_achieved(quest_, table, [], [])
 
@@ -498,8 +502,8 @@ def test_match_decides_with_some_met(match: QuestMatch, expected: bool):
         QuestConditionSnapshot(kind=QuestConditionKind.HOLD_ITEM, target=uuid.uuid4(), count=1),
     )
     quest_ = CatalogQuest(
-        entry_id=uuid.uuid4(), name='구출', start='active', reward=[], conditions=conditions, match=match
+        entry_id=uuid.uuid4(), name='구출', start=QuestStatus.ACTIVE, reward=[], conditions=conditions, match=match
     )
-    table = SimpleNamespace(members=[person(here)])
+    table = cast(GameTable, SimpleNamespace(members=[person(here)]))
 
     assert is_achieved(quest_, table, [], []) is expected

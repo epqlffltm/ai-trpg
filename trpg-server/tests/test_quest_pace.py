@@ -17,6 +17,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI
@@ -28,6 +29,7 @@ from app.rounds import prompt
 from app.rounds.models import Round
 from app.rounds.narration_request import Pace, pace_of, scene_end_of
 from app.rounds.narrator import QuestNote
+from app.tables.models import GameTable
 from tests import test_table_quests as quest_tables
 from tests.test_map_actions import play
 from tests.test_quest_deadline import HOUR, start_with_deadlines, wait_together
@@ -53,7 +55,7 @@ def rescue(request) -> QuestNote:
     return next(quest for quest in request.quests if quest.name == '왕녀 구출')
 
 
-async def expired_in(session: AsyncSession, table: dict, number: int) -> list[str]:
+async def expired_in(session: AsyncSession, table: dict, number: int) -> list[str] | None:
     query = select(Round.expired_quests).where(Round.table_id == uuid.UUID(table['id']), Round.number == number)
     return await session.scalar(query.execution_options(populate_existing=True))
 
@@ -154,7 +156,7 @@ def test_without_a_deadline_there_is_no_pace():
 
 
 def test_without_a_clock_there_is_no_scene_end():
-    assert scene_end_of(SimpleNamespace(clock=None)) is None
+    assert scene_end_of(cast(GameTable, SimpleNamespace(clock=None))) is None
 
 
 @pytest.mark.parametrize(

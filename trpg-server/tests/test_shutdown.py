@@ -55,6 +55,7 @@ def test_the_handler_is_wrapped_while_inside_and_restored_after():
     with closing_on_exit(calls.on_exit):
         handler = signal.getsignal(signal.SIGTERM)
         assert handler != calls.previous
+        assert callable(handler)
         handler(signal.SIGTERM, None)
 
     assert calls.order == ['on_exit', f'previous:{signal.SIGTERM}']

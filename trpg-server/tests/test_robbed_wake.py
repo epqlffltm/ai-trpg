@@ -18,6 +18,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -30,6 +31,7 @@ from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_39
 from app.engine.dice import ScriptedDice
 from app.engine.ruleset import RobbedWake
 from app.engine.templates import SRD5
+from app.rounds.effects import Judging
 from app.rounds.move_lines import describe_wake
 from app.rounds.narrator import WakeNote
 from app.rounds.wakes import reaction_of, wake_after
@@ -259,7 +261,9 @@ def test_only_a_downed_npc_is_marked_robbed_once():
 def test_without_a_rule_nothing_is_rolled_but_the_mark_is_cleared():
     npc = TableNpc(entry_id=uuid.uuid4(), status=NpcStatus.ALIVE, attitude='neutral', robbed_round=2)
     person = SimpleNamespace(entry_id=npc.entry_id, name='악역영애', npc=npc)
-    judging = SimpleNamespace(cast=[person], ruleset=SimpleNamespace(robbed_wake=None), dice=ScriptedDice([]))
+    judging = cast(
+        Judging, SimpleNamespace(cast=[person], ruleset=SimpleNamespace(robbed_wake=None), dice=ScriptedDice([]))
+    )
     effect = {'entry_id': str(npc.entry_id), 'status_before': 'downed', 'status': 'alive'}
 
     assert wake_after(judging, effect) is None

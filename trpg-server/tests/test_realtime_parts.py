@@ -30,7 +30,7 @@ from app.realtime.service import (
     typing_frames,
     wake_interval,
 )
-from app.realtime.signals import MAX_PIECE_CHARS, Kind, NarrationPiece, Signal, narration_pieces
+from app.realtime.signals import MAX_PIECE_CHARS, Kind, NarrationPiece, Notice, Signal, narration_pieces
 from app.realtime.sse import Comment, Frame
 
 TABLE = uuid.UUID('aaaaaaaa-2222-4333-8444-555555555555')
@@ -282,7 +282,12 @@ def test_a_stream_that_cannot_hear_signals_wakes_more_often(listening: bool, hea
 
 
 def test_pieces_received_out_of_order_are_sent_in_order():
-    received = {piece(2, '메운다.'), piece(0, '엔진 소리가 '), piece(1, '골목을 '), piece(0, '다시', attempt=2)}
+    received: set[Notice] = {
+        piece(2, '메운다.'),
+        piece(0, '엔진 소리가 '),
+        piece(1, '골목을 '),
+        piece(0, '다시', attempt=2),
+    }
 
     frames = narration_frames(received)
 

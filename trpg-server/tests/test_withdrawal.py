@@ -32,6 +32,7 @@ from app.listings.models import Listing
 from app.main import API_PREFIX, create_app
 from app.notifications.models import OutgoingNotification
 from app.personas.models import Persona
+from app.rounds.state import required
 from app.tables import repository as tables
 from app.tables import service as seating
 from app.tables.models import GameTable, TableMember, TableStatus
@@ -76,7 +77,7 @@ async def make_persona(client: AsyncClient, headers: dict) -> None:
     assert response.status_code == status.HTTP_201_CREATED, response.text
 
 
-async def personas_of(session: AsyncSession, owner_id: uuid.UUID) -> int:
+async def personas_of(session: AsyncSession, owner_id: uuid.UUID) -> int | None:
     return await session.scalar(select(func.count()).select_from(Persona).where(Persona.owner_id == owner_id))
 
 
@@ -93,14 +94,14 @@ async def queue_notification(session: AsyncSession, user_id: uuid.UUID) -> None:
     await session.commit()
 
 
-async def queued_for(session: AsyncSession, user_id: uuid.UUID) -> int:
+async def queued_for(session: AsyncSession, user_id: uuid.UUID) -> int | None:
     query = select(func.count()).select_from(OutgoingNotification).where(OutgoingNotification.user_id == user_id)
     return await session.scalar(query)
 
 
 async def stored_table(session: AsyncSession, table: dict) -> tuple[GameTable, set[uuid.UUID]]:
     session.expire_all()
-    found = await session.get(GameTable, uuid.UUID(table['id']))
+    found = required(await session.get(GameTable, uuid.UUID(table['id'])), 'table')
     members = await session.scalars(select(TableMember.user_id).where(TableMember.table_id == found.id))
     return found, set(members)
 

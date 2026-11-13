@@ -21,6 +21,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -40,6 +41,7 @@ from app.engine.templates import SRD5
 from app.events.models import EventType, TableEvent
 from app.main import API_PREFIX
 from app.rounds import blows
+from app.rounds.effects import Judging
 from app.rounds.models import Round
 from app.rounds.move_lines import describe_blow
 from app.rounds.narrator import BlowNote
@@ -489,8 +491,8 @@ def test_a_save_is_rolled_only_in_the_save_mode():
     assert armor.roll_save(SAVE_RULES, ScriptedDice([9]), 5, 0) == Save('armor', 5, 9, 15, False)
 
 
-def judging_with(ruleset, rolls) -> SimpleNamespace:
-    return SimpleNamespace(ruleset=ruleset, dice=ScriptedDice(list(rolls)), items={})
+def judging_with(ruleset, rolls) -> Judging:
+    return cast(Judging, SimpleNamespace(ruleset=ruleset, dice=ScriptedDice(list(rolls)), items={}))
 
 
 def test_a_blow_rolls_the_part_then_the_pierce():

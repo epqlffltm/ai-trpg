@@ -17,15 +17,19 @@ import ast
 import uuid
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios import snapshot as snapshot_module
 from app.campaigns import service as campaigns
+from app.campaigns.models import CampaignRun
 from app.tables import content as table_content
 from app.tables.content import snapshot_of
+from app.tables.models import GameTable
 from tests import test_monster_turns as turns
 from tests.test_scenario_items import snapshot_document
 
@@ -68,7 +72,7 @@ def test_the_same_content_is_validated_once_per_table(counted: list[dict]):
 
 
 def test_new_content_is_read_again(counted: list[dict]):
-    table = SimpleNamespace(content=snapshot_document())
+    table = cast(GameTable, SimpleNamespace(content=snapshot_document()))
     before = snapshot_of(table)
 
     # 값이 같아도 새 dict 면 다시 읽는다
@@ -118,10 +122,13 @@ async def test_handed_down_quests_are_read_after_handing(monkeypatch: pytest.Mon
         return rows
 
     monkeypatch.setattr(campaigns.repository, 'quest_results', quest_results)
-    table = SimpleNamespace(content=snapshot_document())
+    table = cast(GameTable, SimpleNamespace(content=snapshot_document()))
     assert snapshot_of(table).campaign_quests == []
 
-    await campaigns.hand_down_quests(None, SimpleNamespace(id=uuid.uuid4()), table)
+    # 앞 편의 결과를 읽는 함수를 바꿔 끼워 세션을 쓰지 않는다
+    await campaigns.hand_down_quests(
+        cast(AsyncSession, None), cast(CampaignRun, SimpleNamespace(id=uuid.uuid4())), table
+    )
 
     handed = snapshot_of(table).campaign_quests
     assert [(str(one.entry_id), one.result) for one in handed] == [(str(entry_id), 'succeeded')]

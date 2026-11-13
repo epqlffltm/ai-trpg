@@ -16,6 +16,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import status
@@ -25,7 +26,7 @@ from server_core.testing.tokens import SigningKey, make_access_claims, make_toke
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import DEFAULT_CHARACTER_MODES, PLAYER_MADE_MODES, CharacterMode
+from app.assets.models import DEFAULT_CHARACTER_MODES, PLAYER_MADE_MODES, CharacterMode, Scenario
 from app.assets.scenarios.publishing import Problem, find_point_buy_problems
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
@@ -201,7 +202,7 @@ async def test_a_scenario_that_only_allows_point_buy_needs_no_default_sheet(clie
 def test_point_buy_needs_rules_that_have_it(modes: list[str], ruleset: Ruleset | None, problems: list[Problem]):
     # 지금의 템플릿(srd5)에는 점수제가 있어서 API 로는 이 문제를 만들 수 없다. 판단하는 함수를 직접 부른다.
     # 이 함수는 시나리오에서 허용한 방식만 읽는다
-    scenario = SimpleNamespace(character_modes=modes)
+    scenario = cast(Scenario, SimpleNamespace(character_modes=modes))
 
     assert find_point_buy_problems(scenario, ruleset) == problems
 

@@ -12,6 +12,7 @@ NPC 와 몬스터의 수치(#804 ③ 의 가진 쪽)를 검증한다. 규칙(hol
 
 import json
 import uuid
+from typing import cast
 
 import pytest
 from fastapi import FastAPI
@@ -22,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.engine import resources as engine
 from app.engine.ruleset import Resource, ResourceHolder, Ruleset
-from app.engine.templates import from_template
+from app.engine.templates import Template, from_template
 from app.rounds import resource_rounds
 from app.rounds.cast import CastMember
 from app.rounds.move_lines import describe_resource
@@ -32,6 +33,7 @@ from app.rounds.prompt import person_line
 from app.rounds.records import resource_holder, resource_payload
 from app.tables import resources as table_resources
 from app.tables.models import TableNpc
+from app.tables.resources import Bearer
 from tests import test_item_throws as throws
 from tests import test_monster_combat as combat
 from tests.test_ruleset import load_migration
@@ -57,9 +59,9 @@ CALMING = [{'kind': 'adjust', 'resource': 'rage', 'amount': -2}]
 ABILITIES = {'str': 10, 'dex': 10, 'con': 10, 'int': 10, 'wis': 10, 'cha': 10}
 
 
-def bearer(values: dict):
+def bearer(values: dict) -> Bearer:
     """DB 없는 가진 쪽. 능력치와 수치의 값만 있다."""
-    return type('Bearer', (), {'abilities': ABILITIES, 'resources': dict(values), 'injuries': []})()
+    return cast(Bearer, type('Bearer', (), {'abilities': ABILITIES, 'resources': dict(values), 'injuries': []})())
 
 
 async def give_rage(session: AsyncSession, table: dict, *resources: dict) -> None:
@@ -103,7 +105,7 @@ def test_a_resource_belongs_to_characters_unless_told():
 
 def test_each_side_reads_only_the_resources_it_holds():
     mana = {'key': 'mana', 'name': '마나', 'max': {'base': 3}}
-    rules = Ruleset.model_validate({**from_template('srd5').model_dump(mode='json'), 'resources': [mana, RAGE]})
+    rules = Ruleset.model_validate({**from_template(Template.SRD5).model_dump(mode='json'), 'resources': [mana, RAGE]})
     one = bearer({})
 
     assert [level.resource.key for level in table_resources.levels_of(rules, one)] == ['mana']
@@ -131,7 +133,7 @@ def test_an_event_names_the_npc_or_monster_apart_from_the_resource():
 
 
 def test_the_narration_gets_words_for_npcs_and_monsters():
-    rules = Ruleset.model_validate({**from_template('srd5').model_dump(mode='json'), 'resources': [RAGE]})
+    rules = Ruleset.model_validate({**from_template(Template.SRD5).model_dump(mode='json'), 'resources': [RAGE]})
     notes = word_notes(rules, bearer({'rage': 4}), ResourceHolder.NPCS)
 
     line = person_line(PersonState(name='악역영애', condition='멀쩡함', resources=notes))
@@ -141,7 +143,7 @@ def test_the_narration_gets_words_for_npcs_and_monsters():
 
 
 def test_a_monster_immune_to_the_threshold_injury_does_not_take_it():
-    rules = Ruleset.model_validate({**from_template('srd5').model_dump(mode='json'), 'resources': [RAGE]})
+    rules = Ruleset.model_validate({**from_template(Template.SRD5).model_dump(mode='json'), 'resources': [RAGE]})
     rat = bearer({'rage': 4})
 
     gained, _ = resource_rounds.follow_thresholds(
@@ -152,7 +154,7 @@ def test_a_monster_immune_to_the_threshold_injury_does_not_take_it():
 
 
 def test_people_carry_their_resources_as_words_to_the_narrator():
-    rules = Ruleset.model_validate({**from_template('srd5').model_dump(mode='json'), 'resources': [RAGE]})
+    rules = Ruleset.model_validate({**from_template(Template.SRD5).model_dump(mode='json'), 'resources': [RAGE]})
     npc = TableNpc(entry_id=uuid.uuid4(), abilities=ABILITIES, max_hp=10, hp=10, status='alive', resources={'rage': 1})
     npc.attitude = 'neutral'
 

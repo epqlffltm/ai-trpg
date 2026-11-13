@@ -17,14 +17,15 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import status
 from httpx import AsyncClient
 
 from app.assets.scenarios.schemas import submap_depth
-from app.assets.scenarios.snapshot import SubmapSnapshot, container_of, containers_of, read_snapshot
-from app.rounds.moves import known_containers
+from app.assets.scenarios.snapshot import Snapshot, SubmapSnapshot, container_of, containers_of, read_snapshot
+from app.rounds.moves import MapView, known_containers
 from app.rounds.narrator import PlaceNote
 from app.rounds.prompt import map_line
 from tests import test_happenings as happenings
@@ -175,8 +176,11 @@ TOWN = uuid.UUID('00000000-0000-4000-8000-0000000000c1')
 INN = uuid.UUID('00000000-0000-4000-8000-0000000000c2')
 FLOOR = uuid.UUID('00000000-0000-4000-8000-0000000000c3')
 FIELD = uuid.UUID('00000000-0000-4000-8000-0000000000c4')
-SUBMAPS = SimpleNamespace(
-    submaps=[SubmapSnapshot(place_id=TOWN, places=[INN]), SubmapSnapshot(place_id=INN, places=[FLOOR])]
+SUBMAPS = cast(
+    Snapshot,
+    SimpleNamespace(
+        submaps=[SubmapSnapshot(place_id=TOWN, places=[INN]), SubmapSnapshot(place_id=INN, places=[FLOOR])]
+    ),
 )
 
 
@@ -188,8 +192,11 @@ def test_the_holders_are_listed_from_the_outside_in():
 
 
 def test_a_loop_stops_after_one_turn():
-    looped = SimpleNamespace(
-        submaps=[SubmapSnapshot(place_id=TOWN, places=[INN]), SubmapSnapshot(place_id=INN, places=[TOWN])]
+    looped = cast(
+        Snapshot,
+        SimpleNamespace(
+            submaps=[SubmapSnapshot(place_id=TOWN, places=[INN]), SubmapSnapshot(place_id=INN, places=[TOWN])]
+        ),
     )
 
     assert containers_of(looped, INN) == [TOWN]
@@ -199,9 +206,13 @@ def test_a_loop_stops_after_one_turn():
 
 def test_the_narration_names_only_the_known_holders():
     names = {TOWN: '마을', INN: '여관', FLOOR: '2층'}
-    everything = SimpleNamespace(snapshot=SUBMAPS, names=names, known=SimpleNamespace(has=lambda place: True))
-    no_town = SimpleNamespace(snapshot=SUBMAPS, names=names, known=SimpleNamespace(has=lambda place: place != TOWN))
-    no_map = SimpleNamespace(snapshot=SUBMAPS, names=names, known=None)
+    everything = cast(
+        MapView, SimpleNamespace(snapshot=SUBMAPS, names=names, known=SimpleNamespace(has=lambda place: True))
+    )
+    no_town = cast(
+        MapView, SimpleNamespace(snapshot=SUBMAPS, names=names, known=SimpleNamespace(has=lambda place: place != TOWN))
+    )
+    no_map = cast(MapView, SimpleNamespace(snapshot=SUBMAPS, names=names, known=None))
 
     assert known_containers(everything, FLOOR) == ['마을', '여관']
     assert known_containers(no_town, FLOOR) == ['여관']

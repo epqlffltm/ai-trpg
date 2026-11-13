@@ -24,6 +24,7 @@ import importlib.util
 import pathlib
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -42,7 +43,7 @@ from app.rounds.move_lines import describe_move, describe_steal
 from app.rounds.narrator import Move, StealNote
 from app.rounds.steals import require_steal
 from app.rounds.victims import is_unwary
-from app.tables.models import NpcStatus
+from app.tables.models import NpcStatus, TableMonster
 from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
 from tests.test_monster_combat import (
@@ -442,8 +443,8 @@ def test_a_ruleset_without_stealing_refuses_it():
 
 
 def test_a_downed_monster_is_unwary():
-    fought = SimpleNamespace(fought_round=2, status=NpcStatus.DOWNED)
-    awake = SimpleNamespace(fought_round=2, status=NpcStatus.ALIVE)
+    fought = cast(TableMonster, SimpleNamespace(fought_round=2, status=NpcStatus.DOWNED))
+    awake = cast(TableMonster, SimpleNamespace(fought_round=2, status=NpcStatus.ALIVE))
 
     assert (is_unwary(fought), is_unwary(awake)) == (True, False)
 
@@ -473,6 +474,7 @@ def test_an_old_snapshot_reads_the_srd5_steal_and_no_dull_monsters():
 
 def test_the_migration_fills_the_same_steal_as_the_template():
     spec = importlib.util.spec_from_file_location('steal_migration', MIGRATION)
+    assert spec is not None and spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
 

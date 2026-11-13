@@ -16,9 +16,10 @@
 
 import uuid
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import ClassVar, cast
 
 import pytest
+from ai_core.embedder import Embedder
 from ai_core.fake import FakeEmbedder, word_vector
 from ai_core.provider import ProviderError
 from fastapi import FastAPI
@@ -162,8 +163,8 @@ async def test_indexing_makes_only_missing_vectors_per_model(app: FastAPI, sessi
 async def test_a_failing_model_keeps_the_batches_before_it(app: FastAPI, session: AsyncSession):
     await load_document(session, document([entry(number) for number in range(40)]))
 
-    broken = await index_references(factory_of(app), BreakingEmbedder(succeed=1))
-    resumed = await index_references(factory_of(app), BreakingEmbedder(succeed=1))
+    broken = await index_references(factory_of(app), cast(Embedder, BreakingEmbedder(succeed=1)))
+    resumed = await index_references(factory_of(app), cast(Embedder, BreakingEmbedder(succeed=1)))
 
     # 32 개씩 부른다. 첫 묶음은 남고, 다시 돌리면 남은 8 개부터 만든다
     assert broken == IndexResult(added=32, left=8)

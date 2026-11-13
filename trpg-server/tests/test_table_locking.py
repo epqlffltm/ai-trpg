@@ -26,7 +26,9 @@ from app.assets.rulebooks import service as rulebooks
 from app.assets.rulebooks.schemas import RulebookCreate
 from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
-from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
+from app.assets.scenarios.schemas import Pregen, ScenarioCreate, VersionCreate
+from app.engine.sheet import CharacterSheet
+from app.rounds.state import required
 from app.tables import repository, service
 from app.tables import state as table_state
 from app.tables.errors import Conflict, TableConflictError
@@ -69,8 +71,8 @@ async def open_table(session: AsyncSession, capacity: int, is_public: bool = Fal
         title='시나리오',
         rulebook_id=rulebook.asset_id,
         openings=['도입부'],
-        pregens=[{'name': '폭주족 엘프', 'sheet': SHEET}],
-        default_sheet=SHEET,
+        pregens=[Pregen.model_validate({'name': '폭주족 엘프', 'sheet': SHEET})],
+        default_sheet=CharacterSheet.model_validate(SHEET),
     )
     scenario = await scenarios.create_scenario(session, ME, data, today())
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
@@ -78,7 +80,7 @@ async def open_table(session: AsyncSession, capacity: int, is_public: bool = Fal
     return await service.create_table(session, make_viewer(ME), table, free_picker())
 
 
-async def count_members(session: AsyncSession, table_id: uuid.UUID) -> int:
+async def count_members(session: AsyncSession, table_id: uuid.UUID) -> int | None:
     """테이블에 앉은 사람을 DB 에서 직접 센다."""
     query = select(func.count()).select_from(TableMember).where(TableMember.table_id == table_id)
     return await session.scalar(query)
@@ -137,7 +139,7 @@ async def test_taking_a_pregen_waits_for_another_take(session: AsyncSession, oth
     await service.join_table(session, make_viewer(FRIEND), JoinRequest(invite_code=table.invite_code))
 
     # A: 테이블을 잠그고 프리젠을 가져갔지만 아직 커밋하지 않았다
-    locked = await repository.lock_table(session, table.id)
+    locked = required(await repository.lock_table(session, table.id), 'table')
     mine = table_state.find_member(locked, ME)
     mine.character_name = '폭주족 엘프'
     mine.character_mode = 'pregen'

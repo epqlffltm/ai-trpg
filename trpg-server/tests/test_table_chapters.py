@@ -21,6 +21,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -31,6 +32,7 @@ from app.assets.scenarios.snapshot import Snapshot
 from app.rounds import prompt
 from app.rounds.narrator import ChapterNote, NarrationRequest
 from app.tables import chapters as table_chapters
+from app.tables.models import GameTable
 from app.transcripts.markdown import render_event
 from tests import test_happenings as happening_tests
 from tests.narration_model import asset_body
@@ -283,9 +285,12 @@ def test_the_transcript_names_the_chapter():
 # --- 작은 함수 ---
 
 
-def table_at(chapter_id: str | None, ids: list[str]) -> SimpleNamespace:
+def table_at(chapter_id: str | None, ids: list[str]) -> GameTable:
     # 지나온 장(chapter_path)을 적기 전에 시작한 테이블이다. 판의 첫 장부터 지금 장까지로 본다(#289)
-    return SimpleNamespace(chapter_id=chapter_id, chapter_path=[], content={'chapters': [{'id': one} for one in ids]})
+    return cast(
+        GameTable,
+        SimpleNamespace(chapter_id=chapter_id, chapter_path=[], content={'chapters': [{'id': one} for one in ids]}),
+    )
 
 
 def test_at_least_counts_the_chapter_and_those_after():
@@ -296,4 +301,6 @@ def test_at_least_counts_the_chapter_and_those_after():
     assert not table_chapters.at_least(table_at('b', ids), 'c')
     assert not table_chapters.at_least(table_at(None, ids), 'a')
     assert not table_chapters.at_least(table_at('b', ids), str(uuid.uuid4()))
-    assert not table_chapters.at_least(SimpleNamespace(chapter_id=None, chapter_path=[], content={}), 'a')
+    assert not table_chapters.at_least(
+        cast(GameTable, SimpleNamespace(chapter_id=None, chapter_path=[], content={})), 'a'
+    )

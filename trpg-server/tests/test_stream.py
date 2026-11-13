@@ -21,6 +21,7 @@ import asyncio
 import json
 import logging
 import uuid
+from collections.abc import Iterator
 
 import asyncpg
 import pytest
@@ -37,6 +38,7 @@ from app.realtime.service import Cursor
 from app.realtime.signals import Kind, Signal
 from app.realtime.sse import Frame
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview
+from app.rounds.state import required
 from app.tables import repository as table_repository
 from tests.conftest import make_test_settings
 from tests.narration_model import with_model
@@ -223,7 +225,7 @@ class WritingNarrator:
 
 
 @pytest.fixture
-def writing(app: FastAPI) -> WritingNarrator:
+def writing(app: FastAPI) -> Iterator[WritingNarrator]:
     """앱에 꽂은 쓰다가 멈춰 서는 서술자. 테스트가 끝날 때 문을 열어 둔다. 기다리던 작업이 남지 않게 한다."""
     narrator = WritingNarrator()
     app.state.narrator = narrator
@@ -273,7 +275,7 @@ async def test_a_change_that_is_rolled_back_sends_no_signal(
     await reader.settle()
 
     # 이벤트를 적고 신호까지 보냈지만 커밋하지 않고 되돌린다
-    locked = await table_repository.lock_table(session, uuid.UUID(table['id']))
+    locked = required(await table_repository.lock_table(session, uuid.UUID(table['id'])), 'table')
     recorder.record(session, locked, EventType.TABLE_ENDED, actor_id=ME)
     await signals.publish(session, Signal(table_id=locked.id, kind=Kind.EVENTS))
     await session.flush()

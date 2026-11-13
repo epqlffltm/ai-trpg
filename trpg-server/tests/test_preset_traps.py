@@ -278,10 +278,12 @@ def test_a_hidden_shift_of_the_carried_one_is_left_out():
 
 def test_only_a_carried_one_is_caught():
     from types import SimpleNamespace
+    from typing import cast
 
     from app.rounds import trap_actions
+    from app.rounds.effects import Judging
 
-    judging = SimpleNamespace(table=SimpleNamespace(members=[]))
+    judging = cast(Judging, SimpleNamespace(table=SimpleNamespace(members=[])))
 
     assert trap_actions.carried_member(judging, None) is None
     assert trap_actions.carried_member(judging, {'user_id': str(FRIEND), 'carried': False}) is None

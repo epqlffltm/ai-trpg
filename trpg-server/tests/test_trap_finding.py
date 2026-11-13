@@ -22,6 +22,7 @@ import importlib.util
 import pathlib
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -29,6 +30,7 @@ from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.rounds.models import Declaration
 from app.rounds.move_lines import describe_disarm, describe_move, describe_search
 from app.rounds.narration_request import to_disarm
 from app.rounds.narrator import DisarmNote, SearchNote
@@ -363,13 +365,14 @@ async def test_the_narrator_hears_the_finding_and_the_disarming(
 
 def test_an_unrolled_disarm_reads_without_a_check():
     disarm = {'name': None, 'check': None, 'done': False, 'sprung': False, 'reason': 'gone'}
-    declaration = SimpleNamespace(outcome={'disarm': disarm})
+    declaration = cast(Declaration, SimpleNamespace(outcome={'disarm': disarm}))
 
     assert to_disarm(declaration) == DisarmNote(name=None, check=None, done=False, reason='gone')
 
 
 def test_downgrade_strips_the_find_check():
     spec = importlib.util.spec_from_file_location('trap_finding_migration', MIGRATION)
+    assert spec is not None and spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
     rules = [

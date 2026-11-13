@@ -34,9 +34,8 @@ GM_NOTES = '둘을 쫓는 추격자는 마법소년 매지컬 스미스. 드워�
 
 async def make_world(session: AsyncSession, owner_id: uuid.UUID = OWNER, **fields) -> World:
     """세계관 하나를 만들어 저장한다."""
-    values = {'title': TITLE}
-    values.update(fields)
-    return await service.create_world(session, owner_id, WorldCreate(**values))
+    values = {'title': TITLE, **fields}
+    return await service.create_world(session, owner_id, WorldCreate.model_validate(values))
 
 
 # --- 만들기 ---
@@ -232,14 +231,14 @@ def test_accepts_a_setting_at_the_limit():
 def test_a_world_does_not_take_a_rating():
     # 등급은 시나리오에서만 정한다. 맞는 값이어도 재료에는 받지 않는다
     with pytest.raises(ValidationError):
-        WorldCreate(title='세계', rating='adult')
+        WorldCreate.model_validate({'title': '세계', 'rating': 'adult'})
 
 
 @pytest.mark.parametrize('field', ['owner_id', 'visibility', 'id', 'deleted_at'])
 def test_rejects_fields_the_client_must_not_set(field: str):
     # 누구 것인지, 누구에게 보이는지는 서버가 정한다. 끼워 보내면 무시하지 않고 거부한다
     with pytest.raises(ValidationError):
-        WorldCreate(title='세계', **{field: 'x'})
+        WorldCreate.model_validate({'title': '세계', field: 'x'})
 
 
 # --- DB 의 마지막 방어선 ---

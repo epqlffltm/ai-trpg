@@ -11,9 +11,10 @@ import pytest
 from app.engine.point_buy import affordable, cost_of, spent
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
+from app.rounds.state import required
 from tests.rules import NO_INJURIES
 
-POINT_BUY = SRD5.point_buy
+POINT_BUY = required(SRD5.point_buy, 'point_buy')
 
 
 def scores(**changes: int) -> dict[str, int]:

@@ -24,6 +24,7 @@ import asyncio
 import json
 import logging
 import uuid
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -132,7 +133,7 @@ class FailingNarrator:
 
 
 @pytest.fixture
-def narrator(app: FastAPI) -> GatedNarrator:
+def narrator(app: FastAPI) -> Iterator[GatedNarrator]:
     """앱에 꽂은 문 앞의 서술자. 테스트가 끝날 때 문을 열어 둔다. 기다리던 작업이 남지 않게 한다."""
     gated = GatedNarrator()
     app.state.narrator = gated

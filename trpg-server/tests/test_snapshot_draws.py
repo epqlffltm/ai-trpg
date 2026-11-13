@@ -11,6 +11,7 @@
 """
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import timedelta
 
 import pytest
@@ -60,7 +61,7 @@ def asset(app: FastAPI) -> FakeAsset:
 
 
 @pytest.fixture
-async def billing(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> FakeBillingServer:
+async def billing(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[FakeBillingServer]:
     monkeypatch.setitem(PRICES, price_code_of(app.state.settings.snapshot_model), PRICE)
     server = FakeBillingServer(balances={ME: CREDITS, FRIEND: CREDITS})
     client = server.make_client()

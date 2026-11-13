@@ -65,7 +65,7 @@ async def start_with_a_dead_character(session: AsyncSession) -> GameTable:
         title='시나리오',
         rulebook_id=rulebook.asset_id,
         openings=['도입부'],
-        default_sheet=SHEET,
+        default_sheet=CharacterSheet.model_validate(SHEET),
     )
     scenario = await scenarios.create_scenario(session, ME, data, today())
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)

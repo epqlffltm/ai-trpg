@@ -69,12 +69,17 @@ source = ["app"]
 skip_empty = true
 
 [tool.pyright]
-# 서버의 코드를 본다. 테스트는 아직 켜지 않았다(다음 묶음)
-include = ["app"]
+# 서버의 코드와 테스트를 본다. 테스트는 결과가 있다고 단언한 뒤 읽는 일이 많아 None 의 검사 셋만 끈다.
+# tests/legacy_migrations 는 지운 옛 마이그레이션을 그대로 둔 사본이라 보지 않는다(고치지 않는다)
+include = ["app", "tests"]
+exclude = ["tests/legacy_migrations"]
 pythonVersion = "3.13"
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
+executionEnvironments = [
+    { root = "tests", extraPaths = ["."], reportOptionalMemberAccess = false, reportOptionalSubscript = false, reportOptionalOperand = false },
+]
 
 [tool.ruff]
 # 규칙과 모양은 저장소 루트의 ruff.toml 을 따른다. 인증 서버와 같다
