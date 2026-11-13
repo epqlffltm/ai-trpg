@@ -23,8 +23,9 @@ HTTP 를 모른다.
 import enum
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import cast
 
-from ai_core.catalog_contract import is_offered
+from ai_core.catalog_contract import Switchable, is_offered
 from server_core.billing.price_list import PriceList, PriceListUnavailable
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -79,7 +80,8 @@ async def require_recommendable(session: AsyncSession, slug: str | None, today: 
 
 def state_of(model: AiModel | None, today: date) -> ModelState:
     """모델 목록의 그 모델로 상태를 정한다. 쓸 수 없으면 unavailable, 은퇴일이 정해졌으면 retiring."""
-    if model is None or not is_offered(model, today):
+    # ORM 의 행은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    if model is None or not is_offered(cast(Switchable, model), today):
         return ModelState.UNAVAILABLE
     if model.retires_on is not None:
         return ModelState.RETIRING

@@ -10,7 +10,7 @@
 
 import uuid
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
@@ -101,7 +101,9 @@ def dump_part(value: object) -> object:
         return value
     if isinstance(value, list):
         return dump_all(value)
-    return value.model_dump(mode='json')
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode='json')
+    raise TypeError(f'규칙의 칸이 아닌 값입니다: {type(value).__name__}')
 
 
 def with_parts(rules: dict, parts: dict[str, object]) -> dict:

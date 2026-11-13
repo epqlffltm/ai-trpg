@@ -71,7 +71,7 @@ skip_empty = true
 [tool.pyright]
 # 서버의 코드를 본다. 걸린 것이 많아 묶음마다 켠다. 아직 켜지 않은 곳은 exclude 에 있다(줄여 간다)
 include = ["app"]
-exclude = ["app/rounds", "app/assets", "app/tables"]
+exclude = ["app/rounds", "app/tables"]
 pythonVersion = "3.13"
 typeCheckingMode = "standard"
 venvPath = "."

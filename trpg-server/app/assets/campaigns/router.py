@@ -27,6 +27,7 @@ from app.assets.campaigns.schemas import (
     CampaignVersionDetail,
     CampaignVersionSummary,
 )
+from app.assets.models import Rating
 from app.assets.ratings import allowed_ratings
 from app.assets.routing import Paging, Session, to_summary
 
@@ -36,7 +37,9 @@ router = APIRouter(prefix='/campaigns', tags=['campaigns'])
 def to_campaign_summary(campaign: Campaign) -> CampaignSummary:
     """캠페인을 목록의 한 줄로."""
     return CampaignSummary(
-        **to_summary(campaign.asset).model_dump(), rating=campaign.asset.rating, episode_count=len(campaign.episodes)
+        **to_summary(campaign.asset).model_dump(),
+        rating=Rating(campaign.asset.rating),
+        episode_count=len(campaign.episodes),
     )
 
 

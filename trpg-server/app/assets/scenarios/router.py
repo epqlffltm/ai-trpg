@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import JSONResponse
 from server_core.auth.dependencies import CurrentUser
 
-from app.assets.models import Scenario, ScenarioVersion
+from app.assets.models import Rating, Scenario, ScenarioVersion
 from app.assets.ratings import allowed_ratings
 from app.assets.routing import Paging, Session, to_summary
 from app.assets.scenarios import publishing, service
@@ -48,7 +48,7 @@ router = APIRouter(prefix='/scenarios', tags=['scenarios'])
 
 def to_scenario_summary(scenario: Scenario) -> ScenarioSummary:
     """시나리오를 목록용 응답으로 바꾼다. 공통 값에 등급을 더한다."""
-    return ScenarioSummary(**to_summary(scenario.asset).model_dump(), rating=scenario.asset.rating)
+    return ScenarioSummary(**to_summary(scenario.asset).model_dump(), rating=Rating(scenario.asset.rating))
 
 
 def to_my_summary(row: MyScenario) -> MyScenarioSummary:
@@ -71,46 +71,49 @@ def to_status_out(found: ModelStatus | None) -> ModelStatusOut | None:
 
 def to_detail(scenario: Scenario, found: ModelStatus | None) -> ScenarioDetail:
     """시나리오를 만든 사람에게 보여 주는 응답으로 바꾼다. found 는 추천 모델의 상태다."""
-    return ScenarioDetail(
-        **to_scenario_summary(scenario).model_dump(),
-        rulebook_id=scenario.rulebook_id,
-        world_id=scenario.world_id,
-        lorebook_ids=scenario.lorebook_ids,
-        bestiary_ids=scenario.bestiary_ids,
-        openings=scenario.openings,
-        recommended_players=scenario.recommended_players,
-        pregens=scenario.pregens,
-        character_modes=scenario.character_modes,
-        default_sheet=scenario.default_sheet,
-        npc_sheets=scenario.npc_sheets,
-        default_npc_sheet=scenario.default_npc_sheet,
-        monster_sheets=scenario.monster_sheets,
-        encounters=scenario.encounters,
-        items=scenario.items,
-        starting_items=scenario.starting_items,
-        currency=scenario.currency,
-        quests=scenario.quests,
-        start_place=scenario.start_place,
-        routes=scenario.routes,
-        landmarks=scenario.landmarks,
-        place_items=scenario.place_items,
-        covers=scenario.covers,
-        traps=scenario.traps,
-        pictures=scenario.pictures,
-        submaps=scenario.submaps,
-        wanders=scenario.wanders,
-        happenings=scenario.happenings,
-        chapters=scenario.chapters,
-        achievements=scenario.achievements,
-        npc_places=scenario.npc_places,
-        player_made_hp=scenario.player_made_hp,
-        reroll_allowed=scenario.reroll_allowed,
-        xp_split=scenario.xp_split,
-        improvised_encounters=scenario.improvised_encounters,
-        narration_style=scenario.narration_style,
-        narration_model=scenario.narration_model,
-        narration_model_status=to_status_out(found),
-        clock=scenario.clock,
+    # 시나리오의 칸은 DB 의 JSONB(dict 의 목록)다. 응답의 모양으로 검증해 읽는다(생성자와 같은 검증이다)
+    return ScenarioDetail.model_validate(
+        {
+            **to_scenario_summary(scenario).model_dump(),
+            'rulebook_id': scenario.rulebook_id,
+            'world_id': scenario.world_id,
+            'lorebook_ids': scenario.lorebook_ids,
+            'bestiary_ids': scenario.bestiary_ids,
+            'openings': scenario.openings,
+            'recommended_players': scenario.recommended_players,
+            'pregens': scenario.pregens,
+            'character_modes': scenario.character_modes,
+            'default_sheet': scenario.default_sheet,
+            'npc_sheets': scenario.npc_sheets,
+            'default_npc_sheet': scenario.default_npc_sheet,
+            'monster_sheets': scenario.monster_sheets,
+            'encounters': scenario.encounters,
+            'items': scenario.items,
+            'starting_items': scenario.starting_items,
+            'currency': scenario.currency,
+            'quests': scenario.quests,
+            'start_place': scenario.start_place,
+            'routes': scenario.routes,
+            'landmarks': scenario.landmarks,
+            'place_items': scenario.place_items,
+            'covers': scenario.covers,
+            'traps': scenario.traps,
+            'pictures': scenario.pictures,
+            'submaps': scenario.submaps,
+            'wanders': scenario.wanders,
+            'happenings': scenario.happenings,
+            'chapters': scenario.chapters,
+            'achievements': scenario.achievements,
+            'npc_places': scenario.npc_places,
+            'player_made_hp': scenario.player_made_hp,
+            'reroll_allowed': scenario.reroll_allowed,
+            'xp_split': scenario.xp_split,
+            'improvised_encounters': scenario.improvised_encounters,
+            'narration_style': scenario.narration_style,
+            'narration_model': scenario.narration_model,
+            'narration_model_status': to_status_out(found),
+            'clock': scenario.clock,
+        }
     )
 
 

@@ -1287,6 +1287,9 @@ def door_effect_fits(snapshot: Snapshot, effect: HappeningEffectSnapshot) -> boo
 
     두 끝 사이에 길이 없거나, 길에 문이 없거나, 적은 장치가 없으면 거짓이다.
     """
+    # 두 끝 가운데 하나가 없으면 그런 길도 없다(전에는 None 으로 찾아 없었다)
+    if effect.from_place is None or effect.to_place is None:
+        return False
     route = route_between(snapshot, effect.from_place, effect.to_place)
     if route is None or not door_devices(route):
         return False
@@ -1359,7 +1362,10 @@ def npc_sheet_of(snapshot: Snapshot, entry_id: uuid.UUID) -> Sheet:
     기본 NPC 시트가 필요한데 없는 판은 읽을 때 이미 거부됐다(Snapshot.require_npc_sheets).
     """
     own = next((npc_sheet.sheet for npc_sheet in snapshot.npc_sheets if npc_sheet.entry_id == entry_id), None)
-    return own or snapshot.default_npc_sheet
+    sheet = own or snapshot.default_npc_sheet
+    # 기본 NPC 시트가 필요한데 없는 판은 읽을 때 거부된다(Snapshot.require_npc_sheets)
+    assert sheet is not None
+    return sheet
 
 
 def own_npc_sheet(snapshot: Snapshot, entry_id: uuid.UUID) -> NpcSheetSnapshot | None:
@@ -1473,45 +1479,48 @@ def build_snapshot(
 
     몬스터는 이미 시트와 합친 것을 받는다. 어느 몬스터에 시트가 있는지는 게시하는 쪽이 도감과 견주어 고른다.
     """
-    return Snapshot(
-        title=scenario.asset.title,
-        description=scenario.asset.description,
-        rating=scenario.asset.rating,
-        openings=list(scenario.openings),
-        recommended_players=PlayersSnapshot(**scenario.recommended_players),
-        pregens=[PregenSnapshot(**pregen) for pregen in scenario.pregens],
-        character_modes=list(scenario.character_modes),
-        default_sheet=scenario.default_sheet,
-        npc_sheets=[NpcSheetSnapshot(**npc_sheet) for npc_sheet in scenario.npc_sheets],
-        default_npc_sheet=scenario.default_npc_sheet,
-        monsters=monsters,
-        encounters=[EncounterSnapshot(**encounter) for encounter in scenario.encounters],
-        items=[ItemRuleSnapshot(**rule) for rule in scenario.items],
-        starting_items=[ItemStackSnapshot(**stack) for stack in scenario.starting_items],
-        currency=CurrencySnapshot(**scenario.currency) if scenario.currency else None,
-        quests=[QuestRuleSnapshot(**quest) for quest in scenario.quests],
-        start_place=scenario.start_place,
-        routes=[RouteSnapshot(**route) for route in scenario.routes],
-        landmarks=list(scenario.landmarks),
-        place_items=[PlaceItemSnapshot(**rule) for rule in scenario.place_items],
-        covers=[CoverSnapshot(**rule) for rule in scenario.covers],
-        traps=[PlacedTrapSnapshot(**trap) for trap in scenario.traps],
-        pictures=[PictureSnapshot(**picture) for picture in scenario.pictures],
-        submaps=[SubmapSnapshot(**submap) for submap in scenario.submaps],
-        wanders=[WanderTableSnapshot(**table) for table in scenario.wanders],
-        happenings=[HappeningSnapshot(**rule) for rule in scenario.happenings],
-        chapters=[ChapterSnapshot(**chapter) for chapter in scenario.chapters],
-        achievements=[AchievementSnapshot(**achievement) for achievement in scenario.achievements],
-        npc_places=[NpcPlaceSnapshot(**place) for place in scenario.npc_places],
-        player_made_hp=scenario.player_made_hp,
-        reroll_allowed=scenario.reroll_allowed,
-        xp_split=scenario.xp_split,
-        improvised_encounters=scenario.improvised_encounters,
-        narration_style=scenario.narration_style,
-        clock=ClockSnapshot(**scenario.clock),
-        rulebook=snapshot_rulebook(rulebook),
-        world=snapshot_world(world) if world else None,
-        lorebooks=[snapshot_lorebook(lorebook, entries) for lorebook, entries in lorebooks],
+    # 시나리오의 칸은 DB 의 JSONB 와 글이다. 판의 모양으로 검증해 읽는다(생성자와 같은 검증이다)
+    return Snapshot.model_validate(
+        {
+            'title': scenario.asset.title,
+            'description': scenario.asset.description,
+            'rating': scenario.asset.rating,
+            'openings': list(scenario.openings),
+            'recommended_players': PlayersSnapshot(**scenario.recommended_players),
+            'pregens': [PregenSnapshot(**pregen) for pregen in scenario.pregens],
+            'character_modes': list(scenario.character_modes),
+            'default_sheet': scenario.default_sheet,
+            'npc_sheets': [NpcSheetSnapshot(**npc_sheet) for npc_sheet in scenario.npc_sheets],
+            'default_npc_sheet': scenario.default_npc_sheet,
+            'monsters': monsters,
+            'encounters': [EncounterSnapshot(**encounter) for encounter in scenario.encounters],
+            'items': [ItemRuleSnapshot(**rule) for rule in scenario.items],
+            'starting_items': [ItemStackSnapshot(**stack) for stack in scenario.starting_items],
+            'currency': CurrencySnapshot(**scenario.currency) if scenario.currency else None,
+            'quests': [QuestRuleSnapshot(**quest) for quest in scenario.quests],
+            'start_place': scenario.start_place,
+            'routes': [RouteSnapshot(**route) for route in scenario.routes],
+            'landmarks': list(scenario.landmarks),
+            'place_items': [PlaceItemSnapshot(**rule) for rule in scenario.place_items],
+            'covers': [CoverSnapshot(**rule) for rule in scenario.covers],
+            'traps': [PlacedTrapSnapshot(**trap) for trap in scenario.traps],
+            'pictures': [PictureSnapshot(**picture) for picture in scenario.pictures],
+            'submaps': [SubmapSnapshot(**submap) for submap in scenario.submaps],
+            'wanders': [WanderTableSnapshot(**table) for table in scenario.wanders],
+            'happenings': [HappeningSnapshot(**rule) for rule in scenario.happenings],
+            'chapters': [ChapterSnapshot(**chapter) for chapter in scenario.chapters],
+            'achievements': [AchievementSnapshot(**achievement) for achievement in scenario.achievements],
+            'npc_places': [NpcPlaceSnapshot(**place) for place in scenario.npc_places],
+            'player_made_hp': scenario.player_made_hp,
+            'reroll_allowed': scenario.reroll_allowed,
+            'xp_split': scenario.xp_split,
+            'improvised_encounters': scenario.improvised_encounters,
+            'narration_style': scenario.narration_style,
+            'clock': ClockSnapshot(**scenario.clock),
+            'rulebook': snapshot_rulebook(rulebook),
+            'world': snapshot_world(world) if world else None,
+            'lorebooks': [snapshot_lorebook(lorebook, entries) for lorebook, entries in lorebooks],
+        }
     )
 
 

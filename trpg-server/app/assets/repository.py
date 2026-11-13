@@ -23,7 +23,7 @@ from app.assets.campaigns.models import CampaignEpisode
 from app.assets.models import Asset, AssetContent, Scenario, ScenarioBestiary, ScenarioLorebook
 
 
-def owned[Content: AssetContent](model: type[Content], owner_id: uuid.UUID) -> Select[tuple[Content]]:
+def owned[Content: AssetContent](model: type[Content], owner_id: uuid.UUID) -> Select[Content]:
     """한 사람이 가진, 지우지 않은 자산을 고르는 조건. 읽는 함수들이 함께 쓴다."""
     return select(model).join(model.asset).where(Asset.owner_id == owner_id, Asset.deleted_at.is_(None))
 
