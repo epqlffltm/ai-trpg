@@ -17,12 +17,13 @@
 import uuid
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import httpx
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
-from server_core.notifications.client import Delivery, HttpNotifications, Sent
+from server_core.notifications.client import Delivery, HttpNotifications, Notifications, Sent
 from server_core.notifications.dispatcher import NotificationDispatcher
 from server_core.notifications.setup import build_notifications
 from server_core.service_auth.signing import SIGNATURE_HEADER
@@ -231,7 +232,7 @@ async def test_two_servers_sending_the_same_notification_do_not_revive_it(app: F
 
     # 한 서버가 보내 지운 뒤에, 같은 줄을 늦게 본 다른 서버가 "다시 보낼 일"을 적는다
     await first.tick()
-    await first.deliver(late, notification, NOW)
+    await first.deliver(cast(Notifications, late), notification, NOW)
 
     assert await outgoing(session) == []
 

@@ -16,6 +16,7 @@ from httpx import ASGITransport, AsyncClient
 from server_core.observability.middleware import level_of
 from server_core.testing.logs import rendered
 from server_core.testing.tokens import FakeAuthServer, SigningKey, make_access_claims, make_token
+from starlette.types import Message
 
 from app.core.config import Settings
 from app.main import API_PREFIX, create_app
@@ -113,11 +114,11 @@ async def test_control_characters_in_the_id_never_reach_the_log(caplog: pytest.L
     injected = b'request-12345\r\n{"level":"error","message":"forged"}'
     sent: list[dict] = []
 
-    async def receive() -> dict:
+    async def receive() -> Message:
         return {'type': 'http.request', 'body': b'', 'more_body': False}
 
-    async def send(message: dict) -> None:
-        sent.append(message)
+    async def send(message: Message) -> None:
+        sent.append(dict(message))
 
     scope = {
         'type': 'http',

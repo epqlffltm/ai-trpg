@@ -24,6 +24,7 @@
 import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -33,16 +34,20 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import Surprise
+from app.assets.scenarios.snapshot import AttackSnapshot, EncounterSnapshot, Snapshot
 from app.engine.dice import ScriptedDice
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.rounds import initiative
+from app.rounds.effects import Judging
 from app.rounds.initiative import Turn, TurnKind
 from app.rounds.models import Round
 from app.rounds.monster_attacks import Skipped, choose, roll_attack, stopped_by, take_monster_turn
+from app.rounds.monster_scene import SceneMonster
 from app.rounds.move_lines import describe_move
 from app.rounds.narrator import Move
-from app.tables.models import NpcStatus, TableInjury, TableMonster, TableSheet
+from app.rounds.state import required
+from app.tables.models import NpcStatus, TableInjury, TableMember, TableMonster, TableSheet
 from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
 
@@ -206,10 +211,10 @@ async def moves_of(session: AsyncSession, table: dict, number: int = 1) -> list[
     """DB 에 굳힌 그 라운드의 각자 한 일(서술자에게 줄 것)."""
     query = select(Round).where(Round.table_id == uuid.UUID(table['id']), Round.number == number)
     round_ = await session.scalar(query.execution_options(populate_existing=True))
-    return round_.moves
+    return required(required(round_, 'round').moves, 'moves')
 
 
-async def hp_of(session: AsyncSession, table: dict, user_id: uuid.UUID = ME) -> int:
+async def hp_of(session: AsyncSession, table: dict, user_id: uuid.UUID = ME) -> int | None:
     """DB 에 적힌 그 사람의 지금 캐릭터의 HP."""
     query = select(TableSheet.hp).where(TableSheet.table_id == uuid.UUID(table['id']), TableSheet.user_id == user_id)
     return await session.scalar(query.execution_options(populate_existing=True))
@@ -495,15 +500,17 @@ async def test_events_follow_the_turns(client: AsyncClient, app: FastAPI, me: di
 # --- 작은 함수들 ---
 
 
-def pc(name: str, dex: int, place: uuid.UUID | None = None) -> SimpleNamespace:
+def pc(name: str, dex: int, place: uuid.UUID | None = None) -> TableMember:
     sheet = SimpleNamespace(abilities={'dex': dex}, place_id=place)
     # 앉은 사람(TableMember)의 흉내. 지금 캐릭터의 시트는 sheet 와 current_sheet 둘로 읽는다
-    return SimpleNamespace(user_id=uuid.uuid4(), character_name=name, sheet=sheet, current_sheet=sheet)
+    return cast(
+        TableMember, SimpleNamespace(user_id=uuid.uuid4(), character_name=name, sheet=sheet, current_sheet=sheet)
+    )
 
 
 def mob(
     name: str, dex: int, engaged: int | None = None, status_: str = NpcStatus.ALIVE, injuries: list | None = None
-) -> SimpleNamespace:
+) -> SceneMonster:
     state = SimpleNamespace(
         id=uuid.uuid4(),
         monster_id=uuid.uuid4(),
@@ -514,16 +521,20 @@ def mob(
         surprise=None,
         injuries=injuries or [],
     )
-    return SimpleNamespace(state=state, name=name, definition=SimpleNamespace(attacks=[BITE], chases=False))
+    return cast(
+        SceneMonster, SimpleNamespace(state=state, name=name, definition=SimpleNamespace(attacks=[BITE], chases=False))
+    )
 
 
-def turn_of(owner: SimpleNamespace, first: bool = False) -> Turn:
+def turn_of(owner: TableMember | SceneMonster, first: bool = False) -> Turn:
     if hasattr(owner, 'state'):
-        return Turn(TurnKind.MONSTER, None, owner, first, owner.state.abilities['dex'])
-    return Turn(TurnKind.PC, owner, None, first, owner.sheet.abilities['dex'])
+        monster = cast(SceneMonster, owner)
+        return Turn(TurnKind.MONSTER, None, monster, first, monster.state.abilities['dex'])
+    member = cast(TableMember, owner)
+    return Turn(TurnKind.PC, member, None, first, member.sheet.abilities['dex'])
 
 
-def names(turns: list[Turn]) -> list[str]:
+def names(turns: list[Turn]) -> list[str | None]:
     return [turn.member.character_name if turn.member else turn.monster.name for turn in turns]
 
 
@@ -560,10 +571,11 @@ def test_without_an_initiative_ability_everyone_ties():
 
 
 def test_surprise_counts_only_in_the_first_round():
-    snapshot = SimpleNamespace(encounters=[])
+    snapshot = cast(Snapshot, SimpleNamespace(encounters=[]))
     rat = mob('쥐', 10, engaged=1)
-    encounter = SimpleNamespace(
-        place_id=rat.state.place_id, monster_id=rat.state.monster_id, surprise=Surprise.MONSTERS
+    encounter = cast(
+        EncounterSnapshot,
+        SimpleNamespace(place_id=rat.state.place_id, monster_id=rat.state.monster_id, surprise=Surprise.MONSTERS),
     )
     snapshot.encounters.append(encounter)
 
@@ -591,20 +603,23 @@ def test_a_monster_with_nobody_standing_by_skips():
     # 같은 장소의 드워프 기사는 이번 라운드에 쓰러졌다. 다음 라운드부터 대상이다(#369)
     downed = pc('드워프 기사', 10, place=rat.state.place_id)
     downed.sheet.died_at, downed.sheet.hp = None, 0
-    judging = SimpleNamespace(
-        table=SimpleNamespace(members=[away, downed]),
-        dice=ScriptedDice([]),
-        ruleset=SRD5,
-        downed_at_start=frozenset(),
-        cast=[],
-        foes_guarding=frozenset(),
+    judging = cast(
+        Judging,
+        SimpleNamespace(
+            table=SimpleNamespace(members=[away, downed]),
+            dice=ScriptedDice([]),
+            ruleset=SRD5,
+            downed_at_start=frozenset(),
+            cast=[],
+            foes_guarding=frozenset(),
+        ),
     )
 
     assert take_monster_turn(judging, rat) == {'skipped': Skipped.NO_TARGET}
 
 
 def test_a_monster_down_or_dead_or_stunned_is_stopped():
-    judging = SimpleNamespace(ruleset=SRD5)
+    judging = cast(Judging, SimpleNamespace(ruleset=SRD5))
     stunned = [TableInjury(injury='stunned')]
     healed = [TableInjury(injury='stunned', ended_at=datetime.now(UTC))]
 
@@ -620,9 +635,9 @@ def test_a_monster_with_a_broken_arm_bites_at_a_disadvantage():
     # 팔 골절은 근력의 판정을 불리하게 한다(#799). 두 번 굴려 낮은 눈을 쓴다
     rat = mob('쥐', 10, injuries=[TableInjury(injury='broken_arm')])
     rat.state.abilities['str'] = 10
-    judging = SimpleNamespace(ruleset=SRD5, dice=ScriptedDice([20, 2]))
+    judging = cast(Judging, SimpleNamespace(ruleset=SRD5, dice=ScriptedDice([20, 2])))
 
-    rolled = roll_attack(judging, rat, SimpleNamespace(**BITE))
+    rolled = roll_attack(judging, rat, cast(AttackSnapshot, SimpleNamespace(**BITE)))
 
     assert (rolled.rolls, rolled.check.roll, rolled.check.success) == ((20, 2), 2, False)
     assert rolled.hindrance.disadvantage

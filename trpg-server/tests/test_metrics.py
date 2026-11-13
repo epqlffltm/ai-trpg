@@ -16,9 +16,10 @@
 
 import asyncio
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 from ai_core.calls import CallRecord, CallScope, Outcome
@@ -26,6 +27,7 @@ from ai_core.fake import FakeCallLog
 from ai_core.provider import Reasoning
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from opentelemetry.sdk.metrics.export import HistogramDataPoint
 from server_core.billing.client import (
     BillingRejected,
     BillingUnavailable,
@@ -46,6 +48,7 @@ from server_core.observability.metrics import (
 )
 from server_core.observability.pool_metrics import MeteredPool
 from server_core.observability.request_metrics import RequestMetricsMiddleware
+from server_core.testing.asgi import no_receive, no_send
 from server_core.testing.metrics import MetricsRecorder
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import text
@@ -95,6 +98,7 @@ def bounds_of(metrics: MetricsRecorder, name: str) -> tuple[float, ...]:
         for metric in scope.metrics
         if metric.name == name
     )
+    assert isinstance(point, HistogramDataPoint)
     return tuple(point.explicit_bounds)
 
 
@@ -137,7 +141,7 @@ async def test_a_request_that_raises_is_counted_as_500(metrics: MetricsRecorder)
         raise RuntimeError('부서졌다')
 
     with pytest.raises(RuntimeError):
-        await RequestMetricsMiddleware(broken)({'type': 'http', 'method': 'GET', 'path': '/x'}, None, None)
+        await RequestMetricsMiddleware(broken)({'type': 'http', 'method': 'GET', 'path': '/x'}, no_receive, no_send)
 
     assert metrics.value('http_server_requests', status_code=500) == 1
     assert metrics.value('http_server_active_requests') == 0
@@ -149,7 +153,7 @@ async def test_a_scope_that_is_not_http_is_not_counted(metrics: MetricsRecorder)
     async def inner(scope, receive, send) -> None:
         seen.append(scope)
 
-    await RequestMetricsMiddleware(inner)({'type': 'lifespan'}, None, None)
+    await RequestMetricsMiddleware(inner)({'type': 'lifespan'}, no_receive, no_send)
 
     assert seen == [{'type': 'lifespan'}]
     assert metrics.points('http_server_requests') == []
@@ -166,7 +170,7 @@ async def test_a_stream_is_counted_but_neither_timed_nor_active(metrics: Metrics
         return
 
     middleware = RequestMetricsMiddleware(streaming, streams=TABLE_STREAMS)
-    await middleware({'type': 'http', 'method': 'GET', 'path': STREAM}, None, ignore)
+    await middleware({'type': 'http', 'method': 'GET', 'path': STREAM}, no_receive, ignore)
 
     # 몇 시간씩 열려 있는 스트림이 처리 중인 수와 시간 분포를 덮지 않는다. 스트림은 sse_* 가 센다
     assert active_while_open == [None]
@@ -317,7 +321,7 @@ async def test_a_stream_is_counted_from_its_first_message_until_it_ends(metrics:
 
 
 async def test_a_stream_cut_off_by_the_reader_is_still_counted(metrics: MetricsRecorder):
-    stream = encode_all(frames(5))
+    stream = cast(AsyncGenerator[str], encode_all(frames(5)))
     await anext(stream)
     assert metrics.value('sse_connections') == 1
 

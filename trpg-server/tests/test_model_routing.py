@@ -16,13 +16,14 @@
 import json
 from dataclasses import dataclass, field, replace
 from datetime import date
+from typing import cast
 
 import httpx
 import pytest
 from ai_core.catalog_contract import CatalogModel, Provider, ReasoningStyle, TokenLimitField
 from ai_core.catalog_file import ModelEntry
 from ai_core.fake import FakeCallLog
-from ai_core.openai_compat import WireOptions
+from ai_core.openai_compat import OpenAICompatProvider, WireOptions
 from ai_core.provider import ProviderError
 from ai_core.routing import (
     MODEL_UNAVAILABLE,
@@ -227,8 +228,8 @@ async def test_a_zai_model_that_always_thinks_gets_the_thinking_share():
     switch = await make_router(GLM).provider_for('glm-4-7-flash')
 
     # 끌 수 없는 모델에는 끄라는 칸을 보내지 않고, 생각의 몫을 출력 상한에 더한다
-    assert always.options == WireOptions(supports_reasoning=False, always_thinks=True)
-    assert switch.options == WireOptions(supports_reasoning=False, thinking_switch=True)
+    assert cast(OpenAICompatProvider, always).options == WireOptions(supports_reasoning=False, always_thinks=True)
+    assert cast(OpenAICompatProvider, switch).options == WireOptions(supports_reasoning=False, thinking_switch=True)
 
 
 async def test_a_zai_model_without_a_key_is_not_configured():

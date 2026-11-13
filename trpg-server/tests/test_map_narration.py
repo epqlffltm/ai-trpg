@@ -13,18 +13,21 @@
 """
 
 from types import SimpleNamespace
+from typing import cast
 
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import Snapshot
+from app.rounds.models import Declaration
 from app.rounds.move_lines import describe_move
 from app.rounds.moves import MapView, place_note
 from app.rounds.narration_request import read_moves, to_search
 from app.rounds.narrator import Move, NarrationRequest, PlaceNote, SearchNote, TravelNote
 from app.rounds.prompt import FOUND_NOTE, MAP_NOTE, MAP_TITLE, map_line, map_lines, round_text
 from app.tables import places
+from app.tables.models import GameTable, TableMember
 from tests import test_table_map as map_tables
 from tests.test_map_actions import FOUND, SEARCHING, going, load_dice, play
 from tests.test_scenario_map import GATE, SQUARE, map_document
@@ -96,8 +99,8 @@ def test_a_search_names_the_far_end_from_either_side():
     at_gate = {'search': {'place': {'entry_id': str(GATE), 'name': '성문'}, 'found': [route]}}
     at_square = {'search': {'place': {'entry_id': str(SQUARE), 'name': '광장'}, 'found': [route]}}
 
-    assert to_search(SimpleNamespace(outcome=at_gate)) == SearchNote(place='성문', found=['광장'])
-    assert to_search(SimpleNamespace(outcome=at_square)) == SearchNote(place='광장', found=['성문'])
+    assert to_search(cast(Declaration, SimpleNamespace(outcome=at_gate))) == SearchNote(place='성문', found=['광장'])
+    assert to_search(cast(Declaration, SimpleNamespace(outcome=at_square))) == SearchNote(place='광장', found=['성문'])
 
 
 def test_a_hidden_route_is_hinted_from_either_end():
@@ -106,10 +109,10 @@ def test_a_hidden_route_is_hinted_from_either_end():
     known = places.Knowledge(seen=frozenset({GATE}), found=frozenset())
     table = SimpleNamespace(place_items=[])
     names = {GATE: '성문', SQUARE: '광장'}
-    mapping = MapView(table, snapshot, places.known_map(snapshot, known), known, names, {})
+    mapping = MapView(cast(GameTable, table), snapshot, places.known_map(snapshot, known), known, names, {})
 
-    at_gate = place_note(mapping, SimpleNamespace(sheet=SimpleNamespace(place_id=GATE)))
-    at_square = place_note(mapping, SimpleNamespace(sheet=SimpleNamespace(place_id=SQUARE)))
+    at_gate = place_note(mapping, cast(TableMember, SimpleNamespace(sheet=SimpleNamespace(place_id=GATE))))
+    at_square = place_note(mapping, cast(TableMember, SimpleNamespace(sheet=SimpleNamespace(place_id=SQUARE))))
 
     # 한쪽 길의 도착점(성문)에서도 숨은 길의 실마리는 있다. 길 너머는 광장이다
     assert at_gate == PlaceNote(name='성문', exits=[], hidden=['광장'])

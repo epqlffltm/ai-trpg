@@ -15,6 +15,7 @@
 """
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import pytest
@@ -74,7 +75,7 @@ async def models(app: FastAPI, session: AsyncSession, clean_tables) -> None:
 
 
 @pytest.fixture
-async def billing(app: FastAPI) -> FakeBillingServer:
+async def billing(app: FastAPI) -> AsyncIterator[FakeBillingServer]:
     """앱에 꽂은 가짜 결제 서버. 방장(ME)에게 1000 크레딧이 있다."""
     server = FakeBillingServer(balances={ME: 1000})
     client = server.make_client()

@@ -15,12 +15,14 @@
 
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import cast
 
 import pytest
 from ai_core.catalog_contract import (
     Grade,
     Provider,
     ReasoningStyle,
+    Switchable,
     TokenLimitField,
     always_thinks,
     is_offered,
@@ -74,7 +76,7 @@ def cost(input_price: str = '0.1', output_price: str = '0.5', starts: date = TOD
     )
 
 
-async def fresh_model(session: AsyncSession, slug: str) -> AiModel:
+async def fresh_model(session: AsyncSession, slug: str) -> AiModel | None:
     """DB 에 저장된 모델을 새로 읽는다."""
     session.expire_all()
     return await session.scalar(select(AiModel).where(AiModel.slug == slug))
@@ -102,9 +104,15 @@ def test_the_styles_that_cannot_stop_thinking(style: ReasoningStyle | None, alwa
     assert always_thinks(style) is always
 
 
-def model_row(enabled: bool = True, retires_on: date | None = None) -> AiModel:
-    """DB 에 넣지 않은 모델 한 줄."""
-    return AiModel(**LUNA.model_dump(exclude={'costs', 'retires_on'}), enabled=enabled, retires_on=retires_on)
+def model_row(enabled: bool = True, retires_on: date | None = None) -> Switchable:
+    """
+    DB 에 넣지 않은 모델 한 줄.
+
+    ORM 의 행은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다.
+    """
+    return cast(
+        Switchable, AiModel(**LUNA.model_dump(exclude={'costs', 'retires_on'}), enabled=enabled, retires_on=retires_on)
+    )
 
 
 def test_a_model_retires_on_its_retirement_day():

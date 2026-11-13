@@ -17,6 +17,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI
@@ -29,11 +30,14 @@ from app.engine.health import Change, ChangeKind
 from app.engine.injury import is_big_hit
 from app.engine.ruleset import InjuryTriggers
 from app.engine.templates import SRD5
+from app.rounds.cast import CastMember
 from app.rounds.downed_strikes import can_be_struck, strike_downed
+from app.rounds.effects import Judging
 from app.rounds.move_lines import describe_monster_turn
 from app.rounds.narrator import DownedStrikeNote, MonsterTurnNote
 from app.rounds.npc_attacks import targets_of
-from app.tables.models import TableSheet
+from app.rounds.state import required
+from app.tables.models import TableMember, TableSheet
 from app.tables.sheets import clear_death_saves
 from tests.sheets import make_sheet
 from tests.test_monster_turns import (
@@ -64,7 +68,7 @@ def me(signing_key) -> dict[str, str]:
     return bearer(signing_key, ME)
 
 
-async def sheet_of(session: AsyncSession, table: dict) -> TableSheet:
+async def sheet_of(session: AsyncSession, table: dict) -> TableSheet | None:
     query = select(TableSheet).where(TableSheet.table_id == uuid.UUID(table['id']), TableSheet.user_id == ME)
     return await session.scalar(query.execution_options(populate_existing=True))
 
@@ -211,14 +215,14 @@ def test_without_big_hits_in_the_rules_nothing_is_big():
     ],
 )
 def test_failures_pile_up_to_the_limit(successes: int, failures: int, count: int, expected: death.Struck):
-    assert death.add_failures(SRD5.death_save, successes, failures, count) == expected
+    assert death.add_failures(required(SRD5.death_save, 'death_save'), successes, failures, count) == expected
 
 
 def test_a_big_hit_makes_a_downed_character_fail_twice():
     assert (death.struck_failures(True), death.struck_failures(False)) == (2, 1)
 
 
-def member(hp: int = 10, dead: bool = False, **fields) -> SimpleNamespace:
+def member(hp: int = 10, dead: bool = False, **fields) -> TableMember:
     sheet = SimpleNamespace(
         hp=hp,
         died_at=object() if dead else None,
@@ -227,14 +231,17 @@ def member(hp: int = 10, dead: bool = False, **fields) -> SimpleNamespace:
         downed_by_big_hit=False,
         **fields,
     )
-    return SimpleNamespace(user_id=uuid.uuid4(), sheet=sheet, current_sheet=sheet)
+    return cast(TableMember, SimpleNamespace(user_id=uuid.uuid4(), sheet=sheet, current_sheet=sheet))
 
 
-def judging_with(*members: SimpleNamespace, downed=(), rules=SRD5) -> SimpleNamespace:
-    return SimpleNamespace(
-        ruleset=rules,
-        downed_at_start=frozenset(person.user_id for person in downed),
-        table=SimpleNamespace(members=list(members)),
+def judging_with(*members: TableMember, downed=(), rules=SRD5) -> Judging:
+    return cast(
+        Judging,
+        SimpleNamespace(
+            ruleset=rules,
+            downed_at_start=frozenset(person.user_id for person in downed),
+            table=SimpleNamespace(members=list(members)),
+        ),
     )
 
 
@@ -256,7 +263,7 @@ def test_a_fighting_npc_also_strikes_those_already_down():
     standing, fresh, old = member(), member(hp=0), member(hp=0)
 
     # 자리가 없는 인물이다. 장소를 보지 않는다(#282)
-    unplaced = SimpleNamespace(npc=SimpleNamespace(place_id=None))
+    unplaced = cast(CastMember, SimpleNamespace(npc=SimpleNamespace(place_id=None)))
 
     assert targets_of(judging_with(standing, fresh, old, downed=[old]), unplaced) == [standing, old]
 
@@ -271,7 +278,7 @@ def test_an_ordinary_fall_fails_once():
 
 
 def test_getting_up_forgets_how_one_fell():
-    sheet = SimpleNamespace(death_successes=2, death_failures=1, downed_by_big_hit=True)
+    sheet = cast(TableSheet, SimpleNamespace(death_successes=2, death_failures=1, downed_by_big_hit=True))
 
     clear_death_saves(sheet)
 

@@ -20,6 +20,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -31,7 +32,9 @@ from app.assets.scenarios.schemas import MonsterSheet
 from app.assets.scenarios.snapshot import MonsterSnapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_60
 from app.engine.dice import ScriptedDice
+from app.engine.sheet import Sheet
 from app.engine.templates import SRD5, Template, from_template
+from app.rounds.cast import Scene
 from app.rounds.injuries import expire_monsters, immune_to
 from app.rounds.move_lines import describe_npc_impact
 from app.rounds.narration_request import to_npc_impact
@@ -245,7 +248,9 @@ def monster_state(status_: str = NpcStatus.ALIVE) -> SimpleNamespace:
 
 def test_only_the_scene_s_monsters_are_told_and_the_dead_keep_theirs():
     here, away, dead = monster_state(), monster_state(), monster_state(NpcStatus.DEAD)
-    scene = SimpleNamespace(monsters=[SimpleNamespace(state=here, name='수로 쥐')], all_monsters=[here, away, dead])
+    scene = cast(
+        Scene, SimpleNamespace(monsters=[SimpleNamespace(state=here, name='수로 쥐')], all_monsters=[here, away, dead])
+    )
     moment = Moment(round_number=2, now=0, scene_end=10)
 
     ended = expire_monsters(scene, SRD5, ScriptedDice([]), uuid.uuid4(), moment, None)
@@ -302,7 +307,7 @@ def snapshot_of(kind: MonsterKind, immune: list[str] | None = None, vulnerable: 
         name='것',
         content='',
         kind=kind,
-        sheet=MONSTER_SHEET,
+        sheet=Sheet.model_validate(MONSTER_SHEET),
         immune=immune or [],
         vulnerable=vulnerable or [],
     )

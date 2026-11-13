@@ -16,6 +16,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -26,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.scenarios.snapshot import RouteSnapshot
 from app.engine.dice import ScriptedDice
 from app.rounds import monster_roams
+from app.rounds.monster_scene import SceneMonster
 from app.rounds.move_lines import describe_roam
 from app.rounds.narrator import RoamNote
 from app.tables.models import TableMonster
@@ -38,7 +40,7 @@ me = roams.me
 ANY, ROLL_IN = roams.ANY, roams.ROLL_IN
 
 
-async def dog(session: AsyncSession) -> TableMonster:
+async def dog(session: AsyncSession) -> TableMonster | None:
     return await session.scalar(select(TableMonster).execution_options(populate_existing=True))
 
 
@@ -167,9 +169,12 @@ def test_the_leg_moves_on_when_reached_and_wraps_around():
 
 def test_hunting_comes_before_patrolling():
     routes = [route(A, B), route(A, C)]
-    walker = SimpleNamespace(
-        state=SimpleNamespace(place_id=A, home_place_id=A, patrol_leg=1),
-        definition=SimpleNamespace(hunts=1, roams=None),
+    walker = cast(
+        SceneMonster,
+        SimpleNamespace(
+            state=SimpleNamespace(place_id=A, home_place_id=A, patrol_leg=1),
+            definition=SimpleNamespace(hunts=1, roams=None),
+        ),
     )
 
     assert monster_roams.step_of(routes, walker, {C}, ScriptedDice([]), [A, B]) == (C, monster_roams.Way.HUNT)

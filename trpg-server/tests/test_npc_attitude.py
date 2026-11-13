@@ -14,6 +14,7 @@ NPC 의 태도(우호, 중립, 적대, #474)를 검증한다.
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -25,11 +26,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.models import NpcAttitude
 from app.assets.scenarios.snapshot import Snapshot, npc_attitude_of
 from app.assets.scenarios.upgrades import upgrade_from_36
-from app.events.models import EventType
+from app.events.models import EventType, TableEvent
 from app.rounds import records
 from app.rounds.narrator import PersonState
 from app.rounds.prompt import person_line
-from app.tables.models import TableNpc
+from app.rounds.state import required
+from app.tables.models import GameTable, TableNpc
 from app.tables.npc_attitudes import attitude_word, change_attitude
 from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
@@ -211,10 +213,11 @@ def test_the_word_for_the_narrator(attitude: str, word: str | None):
 def test_a_change_is_recorded_with_the_scene_name(monkeypatch: pytest.MonkeyPatch):
     recorded = []
     monkeypatch.setattr(records.recorder, 'record', lambda *args, **kwargs: recorded.append((args, kwargs)))
-    change = change_attitude(npc(), NpcAttitude.HOSTILE, 'caught_stealing')
-    cause = SimpleNamespace(payload={'round': 3})
+    change = required(change_attitude(npc(), NpcAttitude.HOSTILE, 'caught_stealing'), 'change')
+    cause = cast(TableEvent, SimpleNamespace(payload={'round': 3}))
 
-    records.record_attitude_change(None, None, change, '악역영애', cause)
+    # 적는 함수를 바꿔 끼워 세션과 테이블을 읽지 않는다
+    records.record_attitude_change(cast(AsyncSession, None), cast(GameTable, None), change, '악역영애', cause)
 
     ((args, kwargs),) = recorded
     assert args[2] == EventType.NPC_ATTITUDE_CHANGED

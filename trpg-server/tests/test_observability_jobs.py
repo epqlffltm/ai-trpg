@@ -160,7 +160,7 @@ async def test_a_cancelled_job_is_logged_as_cancelled(caplog: pytest.LogCaptureF
 
 async def test_a_job_started_by_another_job_is_linked_to_it(caplog: pytest.LogCaptureFixture):
     jobs = BackgroundJobs()
-    spawned: list[str] = []
+    spawned: list[str | None] = []
 
     async def child() -> None:
         return None

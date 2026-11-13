@@ -15,7 +15,7 @@ import uuid
 
 import pytest
 from fastapi import status
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import DBAPIError
@@ -70,7 +70,7 @@ async def played(client: AsyncClient, me: dict, friend: dict) -> dict:
     return table
 
 
-async def admin_get(client: AsyncClient, headers: dict, path: str, **params) -> object:
+async def admin_get(client: AsyncClient, headers: dict, path: str, **params) -> Response:
     """운영자 API 를 사유와 함께 부른다."""
     return await client.get(f'{ADMIN_URL}{path}', params={'reason': REASON, **params}, headers=headers)
 

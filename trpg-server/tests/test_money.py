@@ -14,15 +14,16 @@
 import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
 
 from app.assets.models import MONEY_MAX, NpcAttitude
 from app.assets.scenarios.schemas import Currency, ItemRule, NpcSheet, Pregen, QuestRule
-from app.assets.scenarios.snapshot import CurrencySnapshot, NpcSheetSnapshot
+from app.assets.scenarios.snapshot import CurrencySnapshot, NpcSheetSnapshot, Snapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_45
-from app.engine.action import BuyAction, PayAction, SellAction
+from app.engine.action import ActionKind, BuyAction, PayAction, SellAction
 from app.events.models import EventType, TableEvent
 from app.rounds import prompt, trades
 from app.rounds.cast import CastMember
@@ -30,7 +31,16 @@ from app.rounds.move_lines import describe_move, describe_pay, describe_trade
 from app.rounds.narrator import Move, NarrationRequest, PayNote, TradeNote
 from app.tables import money, quests
 from app.tables.errors import TableConflictError
-from app.tables.models import NpcStatus, TableItem, TableNpc, TableNpcItem, TableSheet
+from app.tables.models import (
+    GameTable,
+    NpcStatus,
+    QuestStatus,
+    TableItem,
+    TableMember,
+    TableNpc,
+    TableNpcItem,
+    TableSheet,
+)
 from app.transcripts.labels import Labels
 from app.transcripts.markdown import render_event
 from tests.sheets import SHEET
@@ -45,10 +55,12 @@ def sheet_with(amount: int = 0, *held: tuple[uuid.UUID, int]) -> TableSheet:
     return TableSheet(money=amount, items=[TableItem(entry_id=entry_id, count=count) for entry_id, count in held])
 
 
-def member_with(sheet: TableSheet, dead: bool = False) -> SimpleNamespace:
+def member_with(sheet: TableSheet, dead: bool = False) -> TableMember:
     sheet.died_at = datetime(2026, 10, 24, tzinfo=UTC) if dead else None
     # 앉은 사람(TableMember)의 흉내. 지금 캐릭터의 시트는 sheet 와 current_sheet 둘로 읽는다
-    return SimpleNamespace(user_id=uuid.uuid4(), character_name='기사', sheet=sheet, current_sheet=sheet)
+    return cast(
+        TableMember, SimpleNamespace(user_id=uuid.uuid4(), character_name='기사', sheet=sheet, current_sheet=sheet)
+    )
 
 
 # --- 시나리오의 화폐와 판 ---
@@ -92,7 +104,7 @@ def test_nothing_costs_money_unless_written():
     assert ItemRule(entry_id=POTION).price is None
     assert Pregen(name='약사').money == 0
     assert QuestRule(entry_id=POTION).reward_money == 0
-    assert NpcSheet(entry_id=HANS, sheet=SHEET).merchant is False
+    assert NpcSheet.model_validate({'entry_id': HANS, 'sheet': SHEET}).merchant is False
 
 
 def test_an_old_snapshot_has_no_money():
@@ -119,8 +131,10 @@ def test_an_old_snapshot_has_no_money():
 # --- 캐릭터의 돈 ---
 
 
-def snapshot_of(currency: CurrencySnapshot | None, *pregen_money: int) -> SimpleNamespace:
-    return SimpleNamespace(currency=currency, pregens=[SimpleNamespace(money=amount) for amount in pregen_money])
+def snapshot_of(currency: CurrencySnapshot | None, *pregen_money: int) -> Snapshot:
+    return cast(
+        Snapshot, SimpleNamespace(currency=currency, pregens=[SimpleNamespace(money=amount) for amount in pregen_money])
+    )
 
 
 def test_the_starting_money_adds_the_pregen_s():
@@ -200,13 +214,15 @@ def test_money_reads_in_the_currency(currency: CurrencySnapshot, text: str):
 
 
 def quest_with(reward_money: int) -> quests.CatalogQuest:
-    return quests.CatalogQuest(entry_id=PELT, name='늑대 사냥', start='active', reward=[], reward_money=reward_money)
+    return quests.CatalogQuest(
+        entry_id=PELT, name='늑대 사냥', start=QuestStatus.ACTIVE, reward=[], reward_money=reward_money
+    )
 
 
 def test_every_living_character_gets_the_reward_money():
     alive, near_cap, dead = sheet_with(5), sheet_with(MONEY_MAX - 2), sheet_with(0)
     members = [member_with(alive), member_with(near_cap), member_with(dead, dead=True)]
-    table = SimpleNamespace(id=uuid.uuid4(), members=members)
+    table = cast(GameTable, SimpleNamespace(id=uuid.uuid4(), members=members))
 
     rewards = quests.give_rewards(table, quest_with(10), {})
 
@@ -218,7 +234,7 @@ def test_every_living_character_gets_the_reward_money():
 
 
 def test_a_quest_without_rewards_gives_nothing():
-    table = SimpleNamespace(id=uuid.uuid4(), members=[member_with(sheet_with(5))])
+    table = cast(GameTable, SimpleNamespace(id=uuid.uuid4(), members=[member_with(sheet_with(5))]))
 
     assert quests.give_rewards(table, quest_with(0), {}) == []
 
@@ -227,12 +243,14 @@ def test_a_quest_without_rewards_gives_nothing():
 
 
 def merchant(status: NpcStatus = NpcStatus.ALIVE, attitude: NpcAttitude = NpcAttitude.NEUTRAL, stock: int = 3):
-    definition = NpcSheetSnapshot(
-        entry_id=HANS,
-        sheet=SHEET,
-        merchant=True,
-        equipment=[{'entry_id': PELT, 'count': 1, 'chance': 100}],
-        inventory=[{'entry_id': POTION, 'count': 3, 'chance': 100}],
+    definition = NpcSheetSnapshot.model_validate(
+        {
+            'entry_id': HANS,
+            'sheet': SHEET,
+            'merchant': True,
+            'equipment': [{'entry_id': PELT, 'count': 1, 'chance': 100}],
+            'inventory': [{'entry_id': POTION, 'count': 3, 'chance': 100}],
+        }
     )
     npc = TableNpc(entry_id=HANS, status=status, attitude=attitude, items=[TableNpcItem(slot=1, count=stock)])
     return CastMember(entry_id=HANS, name='상인', npc=npc, definition=definition)
@@ -251,7 +269,7 @@ def merchant(status: NpcStatus = NpcStatus.ALIVE, attitude: NpcAttitude = NpcAtt
 )
 def test_a_purchase_is_checked_again_in_order(seller: CastMember, cash: int, held: int, reason: str | None):
     buyer = member_with(sheet_with(cash, (POTION, held)))
-    action = BuyAction(kind='buy', npc=HANS, item=POTION, count=2)
+    action = BuyAction(kind=ActionKind.BUY, npc=HANS, item=POTION, count=2)
 
     assert trades.buy_shortfall(buyer, seller, action, 20) == reason
 
@@ -267,7 +285,7 @@ def test_a_purchase_is_checked_again_in_order(seller: CastMember, cash: int, hel
 )
 def test_a_sale_is_checked_again_in_order(seller: CastMember, held: int, cash: int, reason: str | None):
     owner = member_with(sheet_with(cash, (PELT, held)))
-    action = SellAction(kind='sell', npc=HANS, item=PELT, count=2)
+    action = SellAction(kind=ActionKind.SELL, npc=HANS, item=PELT, count=2)
 
     assert trades.sell_shortfall(owner, seller, action, 8) == reason
 
@@ -283,7 +301,7 @@ def test_a_sale_is_checked_again_in_order(seller: CastMember, held: int, cash: i
 )
 def test_a_payment_is_checked_again_in_order(cash: int, recipient, reason: str | None):
     payer = member_with(sheet_with(cash))
-    action = PayAction(kind='pay', target=uuid.uuid4(), amount=10)
+    action = PayAction(kind=ActionKind.PAY, target=uuid.uuid4(), amount=10)
 
     assert trades.pay_shortfall(payer, recipient, action) == reason
 

@@ -21,8 +21,10 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
+from conversation_core.transcripts.blocks import Note
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -30,9 +32,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.engine.dice import ScriptedDice
 from app.rounds import monster_chase
+from app.rounds.effects import Judging
+from app.rounds.monster_scene import SceneMonster
 from app.rounds.move_lines import describe_monster_turn
 from app.rounds.narration_request import to_monster_turn
-from app.tables.models import TableMonster
+from app.rounds.state import required
+from app.tables.models import TableMember, TableMonster
+from app.transcripts.labels import Labels
 from app.transcripts.story import chased
 from tests.sheets import SHEET, make_sheet
 from tests.test_monster_turns import (
@@ -244,7 +250,7 @@ CHASE_TURN = {
 
 
 def test_the_turn_line_tells_the_chase():
-    note = to_monster_turn(CHASE_TURN)
+    note = required(to_monster_turn(CHASE_TURN), 'monster')
 
     assert (note.chased, note.target, note.hit) == ('배수로', '엘프', False)
     assert describe_monster_turn(note) == '들개: 엘프을(를) 쫓아 배수로까지 따라옴 (치지 않음)'
@@ -253,32 +259,34 @@ def test_the_turn_line_tells_the_chase():
 def test_the_record_tells_who_and_where():
     payload = {'name': '들개', **CHASE_TURN['outcome']['chased']}
 
-    [note] = chased(payload, labels=None)
+    [note] = chased(payload, labels=Labels())
 
+    assert isinstance(note, Note)
     assert note.text == '들개: 엘프을(를) 쫓아옴 · 수로 입구 → 배수로'
 
 
 # --- 쫓을 사람 ---
 
 
-def runaway(user_id: uuid.UUID) -> SimpleNamespace:
-    return SimpleNamespace(user_id=user_id)
+def runaway(user_id: uuid.UUID) -> TableMember:
+    return cast(TableMember, SimpleNamespace(user_id=user_id))
 
 
-def monster_with(last_foe: uuid.UUID | None) -> SimpleNamespace:
-    return SimpleNamespace(state=SimpleNamespace(last_foe=last_foe))
+def monster_with(last_foe: uuid.UUID | None) -> SceneMonster:
+    return cast(SceneMonster, SimpleNamespace(state=SimpleNamespace(last_foe=last_foe)))
 
 
 def test_it_chases_the_last_foe_among_those_who_fled():
     first, last = runaway(uuid.uuid4()), runaway(uuid.uuid4())
-    judging = SimpleNamespace(dice=ScriptedDice([]))
+    judging = cast(Judging, SimpleNamespace(dice=ScriptedDice([])))
 
     assert monster_chase.pick_quarry(judging, monster_with(last.user_id), [first, last]) is last
 
 
 def test_without_a_last_foe_among_them_the_dice_pick():
     first, second = runaway(uuid.uuid4()), runaway(uuid.uuid4())
-    judging = SimpleNamespace(dice=ScriptedDice([2]))
+    dice = ScriptedDice([2])
+    judging = cast(Judging, SimpleNamespace(dice=dice))
 
     assert monster_chase.pick_quarry(judging, monster_with(uuid.uuid4()), [first, second]) is second
-    assert judging.dice.remaining == 0
+    assert dice.remaining == 0

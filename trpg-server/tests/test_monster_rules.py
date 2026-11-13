@@ -11,6 +11,7 @@
 """
 
 import uuid
+from collections import Counter
 
 import pytest
 from fastapi import status
@@ -26,6 +27,7 @@ from app.assets.models import MONSTER_MAX_ATTACKS
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, MonsterSnapshot, Snapshot, read_snapshot
 from app.assets.scenarios.upgrades import upgrade_from_22
 from app.engine.ruleset import Ruleset
+from app.engine.sheet import Sheet
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.rounds.monster_scene import label_of
@@ -361,10 +363,17 @@ async def test_the_db_refuses_an_engaged_round_before_the_first(
 
 def test_a_unique_monster_is_called_without_a_number():
     king = MonsterSnapshot(
-        id=uuid.uuid4(), name='늪의 왕', content='', kind=MonsterKind.HUMANOID, sheet=KING_SHEET, unique=True
+        id=uuid.uuid4(),
+        name='늪의 왕',
+        content='',
+        kind=MonsterKind.HUMANOID,
+        sheet=Sheet.model_validate(KING_SHEET),
+        unique=True,
     )
-    rat = MonsterSnapshot(id=uuid.uuid4(), name='늪 쥐', content='', kind=MonsterKind.BEAST, sheet=RAT_SHEET)
-    counts = {king.id: 2, rat.id: 2}
+    rat = MonsterSnapshot(
+        id=uuid.uuid4(), name='늪 쥐', content='', kind=MonsterKind.BEAST, sheet=Sheet.model_validate(RAT_SHEET)
+    )
+    counts = Counter({king.id: 2, rat.id: 2})
 
     def state(monster: MonsterSnapshot) -> TableMonster:
         return TableMonster(monster_id=monster.id, number=2, hp=1, max_hp=1, status=NpcStatus.ALIVE)

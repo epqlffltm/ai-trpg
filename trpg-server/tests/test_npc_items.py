@@ -19,6 +19,7 @@ NPC 가 지닌 물건과 처음 쓰러질 때의 드롭(#457 의 1/2)을 검증�
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -31,11 +32,13 @@ from app.assets.scenarios.snapshot import CarriedItemSnapshot, NpcSheetSnapshot,
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_37
 from app.engine.dice import ScriptedDice
 from app.engine.drops import Dropped
+from app.engine.sheet import Sheet
 from app.rounds.cast import CastMember
 from app.rounds.drops import NPC_SOURCE, hand_out_npc, npc_drop_after
+from app.rounds.effects import Judging
 from app.rounds.narration_request import to_drop
 from app.tables import npc_items
-from app.tables.models import TableItem, TableNpc
+from app.tables.models import TableItem, TableMember, TableNpc
 from app.tables.npcs import mark_first_fall
 from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
@@ -349,22 +352,27 @@ async def test_the_narration_is_told_what_was_gained(client: AsyncClient, app: F
 # --- DB 를 쓰지 않는 작은 함수들 ---
 
 
-def member_at(place: uuid.UUID) -> SimpleNamespace:
+def member_at(place: uuid.UUID) -> TableMember:
     """드롭을 받을 수 있는 앉은 사람. 그 장소에 살아 있다."""
     sheet = SimpleNamespace(id=uuid.uuid4(), place_id=place, died_at=None, hp=5, items=[])
     # 앉은 사람(TableMember)의 흉내. 지금 캐릭터의 시트는 sheet 와 current_sheet 둘로 읽는다
-    return SimpleNamespace(sheet=sheet, current_sheet=sheet, user_id=uuid.uuid4(), character_name='누구')
+    return cast(
+        TableMember, SimpleNamespace(sheet=sheet, current_sheet=sheet, user_id=uuid.uuid4(), character_name='누구')
+    )
 
 
 def test_an_npc_drop_goes_to_someone_at_the_hitters_place():
     here, there = uuid.uuid4(), uuid.uuid4()
     near, far = member_at(here), member_at(there)
-    judging = SimpleNamespace(
-        table=SimpleNamespace(id=uuid.uuid4(), members=[far, near]),
-        items={},
-        dice=ScriptedDice([]),
+    judging = cast(
+        Judging,
+        SimpleNamespace(
+            table=SimpleNamespace(id=uuid.uuid4(), members=[far, near]),
+            items={},
+            dice=ScriptedDice([]),
+        ),
     )
-    person = SimpleNamespace(entry_id=uuid.uuid4(), name='악역영애')
+    person = cast(CastMember, SimpleNamespace(entry_id=uuid.uuid4(), name='악역영애'))
 
     dropped = hand_out_npc(judging, there, person, [])
 
@@ -376,15 +384,18 @@ def test_an_npc_drop_falls_from_what_it_carries_to_the_hitters_place():
     here, there = uuid.uuid4(), uuid.uuid4()
     near, hitter = member_at(here), member_at(there)
     fan = CarriedItemSnapshot(entry_id=uuid.uuid4(), count=1, chance=100)
-    definition = NpcSheetSnapshot(entry_id=uuid.uuid4(), sheet=SHEET, equipment=[fan])
+    definition = NpcSheetSnapshot(entry_id=uuid.uuid4(), sheet=Sheet.model_validate(SHEET), equipment=[fan])
     npc = TableNpc(table_id=uuid.uuid4(), entry_id=definition.entry_id)
     npc.items = []
-    judging = SimpleNamespace(
-        table=SimpleNamespace(id=npc.table_id, members=[near, hitter]),
-        items={fan.entry_id: SimpleNamespace(name='부채')},
-        dice=ScriptedDice([]),
-        cast=[CastMember(definition.entry_id, '악역영애', npc, definition)],
-        round_number=4,
+    judging = cast(
+        Judging,
+        SimpleNamespace(
+            table=SimpleNamespace(id=npc.table_id, members=[near, hitter]),
+            items={fan.entry_id: SimpleNamespace(name='부채')},
+            dice=ScriptedDice([]),
+            cast=[CastMember(definition.entry_id, '악역영애', npc, definition)],
+            round_number=4,
+        ),
     )
     effect = {'entry_id': str(definition.entry_id), 'status_before': 'alive', 'status': 'downed'}
 
@@ -397,12 +408,15 @@ def test_an_npc_drop_falls_from_what_it_carries_to_the_hitters_place():
 
 def test_with_no_one_there_an_npc_drop_vanishes():
     coins = uuid.uuid4()
-    judging = SimpleNamespace(
-        table=SimpleNamespace(id=uuid.uuid4(), members=[]),
-        items={coins: SimpleNamespace(name='금화')},
-        dice=ScriptedDice([]),
+    judging = cast(
+        Judging,
+        SimpleNamespace(
+            table=SimpleNamespace(id=uuid.uuid4(), members=[]),
+            items={coins: SimpleNamespace(name='금화')},
+            dice=ScriptedDice([]),
+        ),
     )
-    person = SimpleNamespace(entry_id=uuid.uuid4(), name='악역영애')
+    person = cast(CastMember, SimpleNamespace(entry_id=uuid.uuid4(), name='악역영애'))
 
     dropped = hand_out_npc(judging, uuid.uuid4(), person, [Dropped(entry_id=coins, count=5)])
 
@@ -441,7 +455,7 @@ def test_a_person_without_a_sheet_carries_nothing():
 
 def test_setting_a_count_makes_a_row_for_that_person():
     coins = CarriedItemSnapshot(entry_id=uuid.uuid4(), count=5, chance=50)
-    definition = NpcSheetSnapshot(entry_id=uuid.uuid4(), sheet=SHEET, inventory=[coins])
+    definition = NpcSheetSnapshot(entry_id=uuid.uuid4(), sheet=Sheet.model_validate(SHEET), inventory=[coins])
     npc = TableNpc(table_id=uuid.uuid4(), entry_id=definition.entry_id)
     npc.items = []
 

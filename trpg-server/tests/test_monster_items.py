@@ -17,6 +17,7 @@
 import importlib.util
 import pathlib
 import uuid
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -29,6 +30,8 @@ from app.assets.scenarios.snapshot import CarriedItemSnapshot, MonsterSnapshot, 
 from app.assets.scenarios.upgrades import upgrade_from_33
 from app.engine.dice import ScriptedDice
 from app.rounds.drops import fall_from
+from app.rounds.effects import Judging
+from app.rounds.monster_scene import SceneMonster
 from app.tables import monster_items
 from app.tables.models import TableMonster, TableMonsterItem
 from tests.narration_model import asset_body
@@ -194,6 +197,7 @@ def test_an_old_snapshot_reads_drops_as_inventory():
 
 def test_the_migration_moves_drafted_drops_and_back():
     spec = importlib.util.spec_from_file_location('monster_items_migration', MIGRATION)
+    assert spec is not None and spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
     line = {'entry_id': str(uuid.uuid4()), 'count': 2, 'chance': 50}
@@ -296,7 +300,7 @@ def test_falling_rolls_each_line_and_empties_what_fell():
     scene_monster = type('SceneMonster', (), {'state': monster, 'definition': definition([sure], [maybe])})
     judging = type('Judging', (), {'dice': ScriptedDice([31])})
 
-    fallen = fall_from(scene_monster, judging)
+    fallen = fall_from(cast(SceneMonster, scene_monster), cast(Judging, judging))
 
     assert [(one.entry_id, one.count) for one in fallen] == [(sure.entry_id, 1)]
     assert [(row.slot, row.count) for row in monster.items] == [(0, 0)]

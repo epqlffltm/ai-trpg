@@ -20,6 +20,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -28,8 +29,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.rounds import npc_victims
+from app.rounds.effects import Judging
+from app.rounds.monster_scene import SceneMonster
 from app.rounds.move_lines import describe_monster_turn
 from app.rounds.narration_request import to_monster_turn
+from app.rounds.state import required
 from app.tables.models import NpcStatus
 from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
@@ -323,7 +327,10 @@ def test_the_turn_line_tells_the_bystander_and_its_state():
         'npc_effect': {**hit['npc_effect'], 'amount': 2, 'condition': '죽음'},
     }
 
-    lines = [describe_monster_turn(to_monster_turn({'name': '수로 쥐', 'outcome': one})) for one in (hit, finished)]
+    lines = [
+        describe_monster_turn(required(to_monster_turn({'name': '수로 쥐', 'outcome': one}), 'monster'))
+        for one in (hit, finished)
+    ]
 
     assert lines == [
         '수로 쥐: 약사에게 물기 (맞음) → 약사 피해 3 (다침)',
@@ -354,8 +361,10 @@ def test_who_a_monster_may_strike():
     elsewhere, unplaced = person(uuid.uuid4(), 'alive', there), person(uuid.uuid4(), 'alive', None)
     friend = person(uuid.uuid4(), 'alive', here, allied=[rat])
     stranger = person(uuid.uuid4(), 'alive', here, allied=[uuid.uuid4()])
-    cast = [standing, fallen_before, fallen_now, dead, elsewhere, unplaced, friend, stranger]
-    judging = SimpleNamespace(cast=cast, npcs_downed_at_start=frozenset({fallen_before.entry_id}))
-    monster = SimpleNamespace(state=SimpleNamespace(place_id=here), definition=SimpleNamespace(id=rat))
+    people = [standing, fallen_before, fallen_now, dead, elsewhere, unplaced, friend, stranger]
+    judging = cast(Judging, SimpleNamespace(cast=people, npcs_downed_at_start=frozenset({fallen_before.entry_id})))
+    monster = cast(
+        SceneMonster, SimpleNamespace(state=SimpleNamespace(place_id=here), definition=SimpleNamespace(id=rat))
+    )
 
     assert npc_victims.victims_of(judging, monster) == [standing, fallen_before, stranger]

@@ -17,13 +17,15 @@
 import asyncio
 import logging
 import uuid
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
 from httpx import AsyncClient
-from server_core.billing.client import HoldOutcome, HoldResult
+from server_core.billing.client import Billing, HoldOutcome, HoldResult
 from server_core.testing.logs import rendered
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import select
@@ -82,7 +84,7 @@ def friend(signing_key: SigningKey) -> dict[str, str]:
 
 
 @pytest.fixture
-async def billing(app: FastAPI) -> FakeBillingServer:
+async def billing(app: FastAPI) -> AsyncIterator[FakeBillingServer]:
     """
     앱에 꽂은 가짜 결제 서버. 방장(ME)에게 1000 크레딧이 있다.
 
@@ -98,7 +100,7 @@ async def billing(app: FastAPI) -> FakeBillingServer:
 
 
 @pytest.fixture
-def narrator(app: FastAPI) -> GatedNarrator:
+def narrator(app: FastAPI) -> Iterator[GatedNarrator]:
     """앱에 꽂은 문 앞의 서술자. 문이 열려 있다. 테스트가 닫을 수 있다."""
     gated = GatedNarrator()
     gated.release()
@@ -449,7 +451,7 @@ async def test_a_billing_server_that_never_answers_is_given_up(
                 1,
                 started,
                 budgets=budgets,
-                billing=SilentBilling(),
+                billing=cast(Billing, SilentBilling()),
             )
 
     # 서술 값을 잡는 데 쓰는 시간이 다 되면 기다리지 않고 실패로 적는다. 서술자는 부르지 않았다
@@ -488,7 +490,7 @@ async def test_a_capture_that_never_answers_is_left_to_the_settler(
                 1,
                 started,
                 budgets=closing.Budgets(billing=0.5),
-                billing=StuckCaptureBilling(),
+                billing=cast(Billing, StuckCaptureBilling()),
             )
 
     # 라운드는 닫혔고 확정할 것은 DB 에 남았다. 기다리지 않고 정리 작업에 넘긴다

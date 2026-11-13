@@ -15,6 +15,7 @@
 import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -23,9 +24,10 @@ from server_core.testing.tokens import SigningKey
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.bestiaries.models import MonsterKind
-from app.assets.scenarios.snapshot import read_snapshot
+from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.engine.templates import SRD5
 from app.rounds import prompt
+from app.rounds.monster_scene import SceneMonster
 from app.rounds.move_lines import describe_monster_turn, describe_move, describe_target_gone, round_lines
 from app.rounds.moves import to_monster_notes
 from app.rounds.narration_request import to_turn_notes
@@ -42,6 +44,7 @@ from app.rounds.narrator import (
 )
 from app.rounds.repository import find_round
 from app.rounds.service import load_scene
+from app.rounds.state import required
 from app.tables.models import NpcStatus, TableInjury
 from app.tables.repository import find_table
 from tests.sheets import make_sheet
@@ -256,10 +259,12 @@ def test_the_version_is_bumped():
 
 
 # 판에서 몬스터의 글이 읽는 것은 룰북의 규칙(부상의 이름)뿐이다
-SNAPSHOT = SimpleNamespace(rulebook=SimpleNamespace(rules=SRD5))
+SNAPSHOT = cast(Snapshot, SimpleNamespace(rulebook=SimpleNamespace(rules=SRD5)))
 
 
-def scene_monster(name: str, place: uuid.UUID, kind: MonsterKind, status_: str = NpcStatus.ALIVE, **definition):
+def scene_monster(
+    name: str, place: uuid.UUID, kind: MonsterKind, status_: str = NpcStatus.ALIVE, **definition
+) -> SceneMonster:
     monster_id = definition.pop('monster_id', uuid.uuid4())
     state = SimpleNamespace(
         id=uuid.uuid4(),
@@ -271,7 +276,7 @@ def scene_monster(name: str, place: uuid.UUID, kind: MonsterKind, status_: str =
         injuries=definition.pop('injuries', []),
     )
     fields = {'name': name, 'kind': kind, 'content': '', 'unique': False, **definition}
-    return SimpleNamespace(state=state, definition=SimpleNamespace(**fields), name=name)
+    return cast(SceneMonster, SimpleNamespace(state=state, definition=SimpleNamespace(**fields), name=name))
 
 
 def test_monster_notes_group_the_same_kind_at_one_place(monkeypatch: pytest.MonkeyPatch):
@@ -316,8 +321,8 @@ def test_no_scene_monsters_no_notes():
 
 async def test_the_scene_monsters_become_notes(client: AsyncClient, me: dict[str, str], session: AsyncSession):
     table = await start_table(client, me, count=2)
-    game = await find_table(session, uuid.UUID(table['id']))
-    round_ = await find_round(session, game.id, 1)
+    game = required(await find_table(session, uuid.UUID(table['id'])), 'table')
+    round_ = required(await find_round(session, game.id, 1), 'round')
 
     scene = await load_scene(session, game, round_)
     notes = to_monster_notes(read_snapshot(game.content), scene.monsters)

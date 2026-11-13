@@ -21,6 +21,7 @@ import uuid
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -30,8 +31,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import AttackSnapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_69
-from app.engine.action import CheckAction
-from app.engine.check import Side, difficulty_shift, find_difficulty, resolve_opposed
+from app.engine.action import ActionKind, CheckAction
+from app.engine.check import Side, difficulty_shift, known_difficulty, resolve_opposed
 from app.engine.dice import ScriptedDice
 from app.engine.injury import Hindrance
 from app.engine.ruleset import Ruleset
@@ -40,6 +41,8 @@ from app.main import API_PREFIX
 from app.rounds import checks as checks_module
 from app.rounds import defenses
 from app.rounds.blows import NO_BLOW
+from app.rounds.effects import Judging
+from app.tables.models import TableMember
 from tests import test_check_styles as styles
 from tests import test_monster_npc_attacks as bystanders
 from tests import test_monster_turns as turns
@@ -105,7 +108,7 @@ def test_under_compares_the_margins():
 
 
 def test_the_difficulty_becomes_a_bonus_from_the_default():
-    easy, medium, hard = (find_difficulty(SRD5, key) for key in ('easy', 'medium', 'hard'))
+    easy, medium, hard = (known_difficulty(SRD5, key) for key in ('easy', 'medium', 'hard'))
 
     assert [difficulty_shift(SRD5, one) for one in (easy, medium, hard)] == [5, 0, -5]
     assert difficulty_shift(styles.D100, hard) == -20
@@ -130,7 +133,7 @@ def test_the_attacker_side_carries_the_weapon_the_difficulty_and_the_wounds():
 
 def test_the_member_defends_with_armor_raising_the_bar():
     sheet = SimpleNamespace(abilities={'dex': 16, 'con': 8}, injuries=[])
-    member = SimpleNamespace(sheet=sheet, current_sheet=sheet)
+    member = cast(TableMember, SimpleNamespace(sheet=sheet, current_sheet=sheet))
     blow = replace(NO_BLOW, raise_by=2)
 
     sided = defenses.member_defense(SRD5, member, attack(defense='con'), blow)
@@ -165,6 +168,7 @@ def test_an_old_snapshot_keeps_the_fixed_difficulty():
 def load_migration():
     path = next(Path('tests/legacy_migrations').glob('*_rulebook_defense.py'))
     spec = importlib.util.spec_from_file_location('rulebook_defense_migration', path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -336,7 +340,7 @@ def test_the_characters_side_pays_for_the_called_shot():
         update={'called_shot': SRD5.called_shot.model_copy(update={'mode': 'target_plus', 'amount': 5})}
     )
     aimed = CheckAction(
-        kind='check', ability='str', difficulty='easy', harm='light', monster=uuid.uuid4(), strike='head'
+        kind=ActionKind.CHECK, ability='str', difficulty='easy', harm='light', monster=uuid.uuid4(), strike='head'
     )
 
     sided = defenses.strike_side(called, {'str': 12}, [], aimed, NO_BLOW, guarded=True)
@@ -347,9 +351,9 @@ def test_the_characters_side_pays_for_the_called_shot():
 
 def test_a_strike_on_a_guarding_ally_is_hindered():
     ally = uuid.uuid4()
-    judging = SimpleNamespace(defending=frozenset({ally}))
-    strike = CheckAction(kind='check', ability='str', harm='light', target=ally)
-    help_up = CheckAction(kind='check', ability='wis', recover='light', target=ally)
+    judging = cast(Judging, SimpleNamespace(defending=frozenset({ally})))
+    strike = CheckAction(kind=ActionKind.CHECK, ability='str', harm='light', target=ally)
+    help_up = CheckAction(kind=ActionKind.CHECK, ability='wis', recover='light', target=ally)
 
     assert checks_module.target_guarded(judging, strike) is True
     assert checks_module.target_guarded(judging, help_up) is False

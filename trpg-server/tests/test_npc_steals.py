@@ -20,6 +20,7 @@ NPC 가 지닌 물건을 훔치는 행동(steal 의 npc, #457 의 2/2, app/round
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -29,12 +30,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_38
-from app.engine.action import StealAction
+from app.engine.action import CheckAction, StealAction
+from app.rounds.cast import CastMember
 from app.rounds.checks import mark_npc_attack
+from app.rounds.effects import Judging
 from app.rounds.move_lines import describe_steal
 from app.rounds.narrator import StealNote
 from app.rounds.steals import fights_when_caught
-from app.tables.models import NpcStatus, TableNpc
+from app.tables.models import NpcStatus, TableMember, TableNpc
 from tests.narration_model import asset_body
 from tests.sheets import SHEET
 from tests.test_npc_actions import (
@@ -90,7 +93,7 @@ def steal(world: dict, item: str, npc: str = 'lady') -> dict:
     return {'kind': 'steal', 'npc': world[npc]['id'], 'item': world[item]['id']}
 
 
-async def send(client: AsyncClient, headers: dict, world: dict, action: dict, content: str = STEAL):
+async def send(client: AsyncClient, headers: dict, world: dict, action: dict | None, content: str = STEAL):
     body = {'content': content, 'action': action}
     return await client.put(table_url(world['table'], '/rounds/current/declaration'), json=body, headers=headers)
 
@@ -110,7 +113,7 @@ async def steal_now(client, app, me, world, item: str, rolls: list[int], narrate
     return (await outcome(client, me, world, number))['steal']
 
 
-async def lady_state(session: AsyncSession, world: dict) -> TableNpc:
+async def lady_state(session: AsyncSession, world: dict) -> TableNpc | None:
     query = select(TableNpc).where(
         TableNpc.table_id == uuid.UUID(world['table']['id']), TableNpc.entry_id == uuid.UUID(world['lady']['id'])
     )
@@ -420,12 +423,12 @@ def test_the_steal_line(note: StealNote, line: str):
 
 
 def test_without_a_sheet_a_person_only_turns_hostile():
-    assert fights_when_caught(SimpleNamespace(definition=None)) is False
+    assert fights_when_caught(cast(CastMember, SimpleNamespace(definition=None))) is False
 
 
-def judging_with(npc: TableNpc) -> SimpleNamespace:
+def judging_with(npc: TableNpc) -> Judging:
     person = SimpleNamespace(entry_id=npc.entry_id, npc=npc)
-    return SimpleNamespace(cast=[person], fights={}, round_number=2)
+    return cast(Judging, SimpleNamespace(cast=[person], fights={}, round_number=2))
 
 
 @pytest.mark.parametrize(
@@ -441,9 +444,10 @@ def judging_with(npc: TableNpc) -> SimpleNamespace:
 def test_only_a_hit_on_an_npc_is_a_fight(action: dict, fought: bool):
     npc = TableNpc(entry_id=uuid.uuid4(), status=NpcStatus.ALIVE)
     judging = judging_with(npc)
-    member = SimpleNamespace(user_id=ME)
+    member = cast(TableMember, SimpleNamespace(user_id=ME))
+    check = cast(CheckAction, SimpleNamespace(**{'npc': npc.entry_id, 'harm': None, **action}))
 
-    mark_npc_attack(judging, member, SimpleNamespace(**{'npc': npc.entry_id, 'harm': None, **action}))
+    mark_npc_attack(judging, member, check)
 
     assert (npc.fought_round == 2) is fought
     assert (judging.fights.get(npc.entry_id) == {ME}) is fought
@@ -453,6 +457,7 @@ def test_a_dead_npc_is_not_fought():
     npc = TableNpc(entry_id=uuid.uuid4(), status=NpcStatus.DEAD)
     judging = judging_with(npc)
 
-    mark_npc_attack(judging, SimpleNamespace(user_id=ME), SimpleNamespace(npc=npc.entry_id, harm='moderate'))
+    member = cast(TableMember, SimpleNamespace(user_id=ME))
+    mark_npc_attack(judging, member, cast(CheckAction, SimpleNamespace(npc=npc.entry_id, harm='moderate')))
 
     assert (npc.fought_round, judging.fights) == (None, {})
