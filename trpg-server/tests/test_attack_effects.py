@@ -22,6 +22,7 @@
 
 import json
 import uuid
+from typing import cast
 
 import pytest
 from fastapi import FastAPI
@@ -32,11 +33,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.publishing import attack_fault
 from app.assets.scenarios.schemas import MonsterAttack
+from app.engine.item_effects import InjureEffect
 from app.engine.ruleset import ResourceHolder, Ruleset
 from app.engine.templates import SRD5
 from app.rounds.models import Round
 from app.rounds.move_lines import describe_monster_turn
 from app.rounds.narration_request import to_turn_note
+from app.rounds.state import required
 from tests import test_monster_turns as turns
 from tests import test_saves as saves
 from tests.sheets import make_sheet
@@ -78,7 +81,7 @@ async def injuries_of(session: AsyncSession, table: dict) -> list[tuple[str, str
 def test_an_attack_may_be_effects_only():
     attack = MonsterAttack.model_validate(SPIT)
 
-    assert (attack.harm, [one.injury for one in attack.effects]) == (None, ['poisoned'])
+    assert (attack.harm, [cast(InjureEffect, one).injury for one in attack.effects]) == (None, ['poisoned'])
 
 
 @pytest.mark.parametrize(
@@ -266,7 +269,7 @@ def test_the_narrator_hears_the_effects():
         },
     }
 
-    line = describe_monster_turn(to_turn_note(turn).monster)
+    line = describe_monster_turn(required(to_turn_note(turn).monster, 'monster'))
 
     assert line == '독거미: 엘프에게 독니 (맞음) [입힌 부상: 중독] [수치: 마나 5 → 3/7]'
 

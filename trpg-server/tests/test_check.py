@@ -8,7 +8,7 @@ DB 도 HTTP 도 쓰지 않는다. 정해진 눈을 내는 주사위를 꽂아서
 
 import pytest
 
-from app.engine.check import Check, find_ability, find_difficulty, modifier_of, resolve
+from app.engine.check import Check, find_ability, find_difficulty, known_difficulty, modifier_of, resolve
 from app.engine.dice import RandomDice, ScriptedDice
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
@@ -31,7 +31,7 @@ PLAIN_RULES = Ruleset.model_validate(
     }
 )
 
-MEDIUM = find_difficulty(SRD5, 'medium')
+MEDIUM = known_difficulty(SRD5, 'medium')
 
 
 # --- 주사위 ---
@@ -127,15 +127,15 @@ def test_meeting_the_target_exactly_is_a_success(roll: int, success: bool):
 
 
 def test_a_low_score_takes_away_from_the_roll():
-    check = resolve(SRD5, score=6, difficulty=find_difficulty(SRD5, 'very_easy'), dice=ScriptedDice([6]))
+    check = resolve(SRD5, score=6, difficulty=known_difficulty(SRD5, 'very_easy'), dice=ScriptedDice([6]))
 
     # 점수 6 은 보정 -2 다. 눈 6 이 4 가 되어 목표값 5 에 못 미친다
     assert (check.modifier, check.total, check.success) == (-2, 4, False)
 
 
 def test_the_highest_and_lowest_rolls_follow_the_same_arithmetic():
-    easy = find_difficulty(SRD5, 'very_easy')
-    hardest = find_difficulty(SRD5, 'very_hard')
+    easy = known_difficulty(SRD5, 'very_easy')
+    hardest = known_difficulty(SRD5, 'very_hard')
 
     lowest = resolve(SRD5, score=20, difficulty=easy, dice=ScriptedDice([1]))
     highest = resolve(SRD5, score=1, difficulty=hardest, dice=ScriptedDice([20]))
@@ -160,14 +160,14 @@ class WatchedDice:
 def test_a_check_rolls_the_die_of_the_rules_once(ruleset: Ruleset, sides: int):
     dice = WatchedDice()
 
-    resolve(ruleset, score=10, difficulty=find_difficulty(ruleset, None), dice=dice)
+    resolve(ruleset, score=10, difficulty=known_difficulty(ruleset, None), dice=dice)
 
     # 주사위의 면 수는 규칙에서 온다. 한 번만 굴린다
     assert dice.asked == [sides]
 
 
 def test_a_check_works_under_other_rules():
-    check = resolve(PLAIN_RULES, score=1, difficulty=find_difficulty(PLAIN_RULES, None), dice=ScriptedDice([6]))
+    check = resolve(PLAIN_RULES, score=1, difficulty=known_difficulty(PLAIN_RULES, None), dice=ScriptedDice([6]))
 
     # 6면 주사위, 점수가 곧 보정, 목표값 7. 계산하는 코드는 같다
     assert check == Check(roll=6, modifier=1, total=7, target=7, success=True, style='over', faces=(6,))

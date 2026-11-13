@@ -10,6 +10,7 @@
 import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import status
@@ -18,13 +19,14 @@ from pydantic import ValidationError
 
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_68
 from app.engine import death
-from app.engine.check import find_difficulty, harder_by, miss_by, resolve, resolve_hindered
+from app.engine.check import harder_by, known_difficulty, miss_by, resolve, resolve_hindered
 from app.engine.dice import ScriptedDice
 from app.engine.injury import Hindrance
 from app.engine.ruleset import RollStyle, Ruleset
 from app.engine.templates import SRD5
 from app.rounds import initiative
 from app.rounds.initiative import Turn, TurnKind
+from app.tables.models import TableMember
 from tests import test_monster_injuries as injuries
 
 TEMPLATE = SRD5.model_dump(mode='json')
@@ -110,7 +112,7 @@ def test_under_needs_the_target_at_least_the_smallest_sum():
 
 
 def test_two_dice_are_added_before_the_modifier():
-    medium = find_difficulty(TWO_D6, 'medium')
+    medium = known_difficulty(TWO_D6, 'medium')
 
     check = resolve(TWO_D6, 14, medium, ScriptedDice([3, 4]))
 
@@ -120,7 +122,7 @@ def test_two_dice_are_added_before_the_modifier():
 
 
 def test_under_succeeds_when_the_roll_is_at_most_the_skill():
-    medium = find_difficulty(D100, 'medium')
+    medium = known_difficulty(D100, 'medium')
 
     made = resolve(D100, 45, medium, ScriptedDice([45]))
     missed = resolve(D100, 45, medium, ScriptedDice([46]))
@@ -131,7 +133,7 @@ def test_under_succeeds_when_the_roll_is_at_most_the_skill():
 
 
 def test_a_hard_difficulty_takes_from_the_skill():
-    hard = find_difficulty(D100, 'hard')
+    hard = known_difficulty(D100, 'hard')
 
     check = resolve(D100, 45, hard, ScriptedDice([30]))
 
@@ -139,7 +141,7 @@ def test_a_hard_difficulty_takes_from_the_skill():
 
 
 def test_under_disadvantage_keeps_the_higher_roll():
-    medium = find_difficulty(D100, 'medium')
+    medium = known_difficulty(D100, 'medium')
     hurt = Hindrance(penalty=5, disadvantage=True, injuries=())
 
     hindered = resolve_hindered(D100, 45, medium, ScriptedDice([10, 42]), hurt, bonus=2)
@@ -150,7 +152,7 @@ def test_under_disadvantage_keeps_the_higher_roll():
 
 
 def test_over_disadvantage_still_keeps_the_lower_sum():
-    medium = find_difficulty(TWO_D6, 'medium')
+    medium = known_difficulty(TWO_D6, 'medium')
     hurt = Hindrance(penalty=0, disadvantage=True, injuries=())
 
     hindered = resolve_hindered(TWO_D6, 10, medium, ScriptedDice([6, 6, 1, 2]), hurt)
@@ -159,7 +161,7 @@ def test_over_disadvantage_still_keeps_the_lower_sum():
 
 
 def test_a_raised_target_makes_under_harder_by_the_same_amount():
-    medium = find_difficulty(D100, 'medium')
+    medium = known_difficulty(D100, 'medium')
     raised = medium.model_copy(update={'target': medium.target + 5})
 
     check = resolve_hindered(D100, 45, raised, ScriptedDice([41]), NO_HINDRANCE).check
@@ -193,7 +195,7 @@ def test_the_death_save_adds_the_dice():
 
 
 def tied(name: str) -> Turn:
-    member = SimpleNamespace(character_name=name)
+    member = cast(TableMember, SimpleNamespace(character_name=name))
     return Turn(TurnKind.PC, member, None, False, 10)
 
 
@@ -218,6 +220,7 @@ def test_an_old_snapshot_rolls_one_die_over():
 def load_migration():
     path = next(Path('tests/legacy_migrations').glob('*_check_rolls.py'))
     spec = importlib.util.spec_from_file_location('check_rolls_migration', path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

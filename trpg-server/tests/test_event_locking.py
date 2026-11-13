@@ -25,8 +25,10 @@ from app.assets.rulebooks.schemas import RulebookCreate
 from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
+from app.engine.sheet import CharacterSheet
 from app.events import recorder
 from app.events.models import EventType, TableEvent
+from app.rounds.state import required
 from app.tables import repository as table_repository
 from app.tables import seating
 from app.tables import service as tables
@@ -68,7 +70,7 @@ async def open_table(session: AsyncSession) -> GameTable:
         title='시나리오',
         rulebook_id=rulebook.asset_id,
         openings=['도입부'],
-        default_sheet=SHEET,
+        default_sheet=CharacterSheet.model_validate(SHEET),
     )
     scenario = await scenarios.create_scenario(session, ME, data, today())
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)
@@ -81,7 +83,7 @@ async def test_two_events_at_once_get_different_sequences(session: AsyncSession,
     invite_code = table.invite_code
 
     # A: 테이블을 잠그고 친구를 앉히고 이벤트를 적었지만 아직 커밋하지 않았다
-    locked = await table_repository.lock_table(session, table.id)
+    locked = required(await table_repository.lock_table(session, table.id), 'table')
     seating.take_seat(locked, FRIEND)
     recorder.record(session, locked, EventType.MEMBER_JOINED, actor_id=FRIEND, payload={'via': 'invite'})
     await session.flush()

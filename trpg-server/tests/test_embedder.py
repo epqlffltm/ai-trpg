@@ -6,6 +6,8 @@
 임베더 자체(OpenAI 모양, 가짜)는 공용 코드의 테스트(shared/ai-core/tests/test_embedder.py)가 본다.
 """
 
+from typing import cast
+
 import httpx
 from ai_core.fake import FakeEmbedder
 from ai_core.openai_embedder import OpenAICompatEmbedder
@@ -38,4 +40,4 @@ async def test_the_set_length_reaches_the_embedder():
     async with httpx.AsyncClient() as client:
         embedder = build_embedder(settings, client)
 
-    assert embedder.dimensions == 1024
+    assert cast(OpenAICompatEmbedder, embedder).dimensions == 1024

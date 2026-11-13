@@ -330,6 +330,7 @@ def test_an_old_snapshot_reads_as_no_growth():
 def load_migration():
     path = next(Path('tests/legacy_migrations').glob('*_progression.py'))
     spec = importlib.util.spec_from_file_location('progression_migration', path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

@@ -52,8 +52,8 @@ class Reader:
         assert isinstance(item, Comment), item
         return item.text
 
-    async def take(self, count: int) -> list[Frame]:
-        """메시지를 count 개 꺼낸다."""
+    async def take(self, count: int) -> list[Frame | None]:
+        """메시지를 count 개 꺼낸다. 스트림이 끝났으면 그 자리는 None 이다."""
         return [await self.next() for _ in range(count)]
 
     async def is_quiet(self) -> bool:

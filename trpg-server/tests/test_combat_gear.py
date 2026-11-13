@@ -24,6 +24,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -33,6 +34,7 @@ from server_core.testing.tokens import SigningKey, make_access_claims, make_toke
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.assets.models import ItemKind
 from app.assets.scenarios.schemas import ItemRule, MonsterSheet, NpcSheet
 from app.assets.scenarios.snapshot import AttackSnapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_47
@@ -46,11 +48,14 @@ from app.engine.templates import SRD5
 from app.events.models import EventType, TableEvent
 from app.main import API_PREFIX
 from app.rounds import blows, npc_attacks
+from app.rounds.cast import CastMember
+from app.rounds.effects import Judging
 from app.rounds.models import Round
 from app.rounds.move_lines import describe_blow
 from app.rounds.narrator import BlowNote
 from app.tables.carried import Carried
 from app.tables.items import CatalogItem
+from app.tables.models import TableMember
 from app.transcripts.labels import Labels
 from app.transcripts.markdown import render_event
 from tests.narration_model import asset_body
@@ -541,9 +546,9 @@ SWORD = uuid.UUID('aaaaaaaa-0000-4000-8000-000000000001')
 PLATE = uuid.UUID('aaaaaaaa-0000-4000-8000-000000000002')
 SHIELD = uuid.UUID('aaaaaaaa-0000-4000-8000-000000000003')
 CATALOG = {
-    SWORD: CatalogItem(SWORD, '장검', 'gear', None, slots=tuple(HANDS), attack=2),
-    PLATE: CatalogItem(PLATE, '판금 갑옷', 'gear', None, slots=('body',), defense=5),
-    SHIELD: CatalogItem(SHIELD, '방패', 'gear', None, slots=('off_hand',), guard=2),
+    SWORD: CatalogItem(SWORD, '장검', ItemKind.GEAR, (), slots=tuple(HANDS), attack=2),
+    PLATE: CatalogItem(PLATE, '판금 갑옷', ItemKind.GEAR, (), slots=('body',), defense=5),
+    SHIELD: CatalogItem(SHIELD, '방패', ItemKind.GEAR, (), slots=('off_hand',), guard=2),
 }
 
 
@@ -653,13 +658,14 @@ def test_a_cut_takes_off_the_roll_but_not_below_zero():
     assert (healed.amount, healed.blocked) == (2, 0)
 
 
-def judging_with(ruleset=SRD5, rolls=()) -> SimpleNamespace:
-    return SimpleNamespace(ruleset=ruleset, dice=ScriptedDice(list(rolls)), items=CATALOG, covers={})
+def judging_with(ruleset=SRD5, rolls=()) -> Judging:
+    return cast(Judging, SimpleNamespace(ruleset=ruleset, dice=ScriptedDice(list(rolls)), items=CATALOG, covers={}))
 
 
-def member_wearing(*worn: tuple[uuid.UUID, list[str]]) -> SimpleNamespace:
+def member_wearing(*worn: tuple[uuid.UUID, list[str]]) -> TableMember:
     rows = [SimpleNamespace(entry_id=entry_id, slots=slots) for entry_id, slots in worn]
-    return SimpleNamespace(user_id=uuid.uuid4(), sheet=SimpleNamespace(worn=rows))
+    sheet = SimpleNamespace(worn=rows)
+    return cast(TableMember, SimpleNamespace(user_id=uuid.uuid4(), sheet=sheet, current_sheet=sheet))
 
 
 def test_a_member_is_protected_by_what_is_worn():
@@ -683,7 +689,7 @@ def test_carried_gear_counts_only_what_is_still_held_and_worn():
         Carried(1, SHIELD, 1, True, 100, ()),
         Carried(2, SWORD, 1, False, 100, ()),
     ]
-    attack = SimpleNamespace(weapon=SWORD)
+    attack = cast(AttackSnapshot, SimpleNamespace(weapon=SWORD))
 
     assert blows.carried_protection(judging_with(), held, {'head': 1}) == Protection(by_slot={'head': 1, 'body': 5})
     assert blows.carried_weapon(judging_with(), held, attack) is None
@@ -715,7 +721,7 @@ def test_without_an_armor_rule_nothing_blocks():
 
 def test_an_npc_attack_uses_its_weapon_and_the_armor():
     attack = AttackSnapshot(name='베기', ability='str', difficulty='medium', harm='light')
-    person = SimpleNamespace(npc=SimpleNamespace(injuries=[], abilities=SHEET['abilities']))
+    person = cast(CastMember, SimpleNamespace(npc=SimpleNamespace(injuries=[], abilities=SHEET['abilities'])))
     blow = blows.Blow(weapon=blows.Weapon(SWORD, '장검', 2), location='body', aimed=False, defense=5, raise_by=5, cut=0)
 
     rolled = npc_attacks.roll_attack(judging_with(rolls=[18]), person, attack, blow)

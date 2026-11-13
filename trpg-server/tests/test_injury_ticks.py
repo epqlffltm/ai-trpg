@@ -17,6 +17,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -30,6 +31,7 @@ from app.engine.templates import SRD5
 from app.rounds import injuries as round_injuries
 from app.rounds import injury_ticks, prompt
 from app.rounds.narrator import HurtNote
+from app.rounds.state import required
 from app.tables.injuries import Moment
 from app.tables.models import InjurySource, TableInjury, TableSheet
 from tests import test_monster_combat as combat
@@ -130,7 +132,7 @@ async def inflict(session: AsyncSession, table: dict, key: str, ends: int, **own
 
 
 async def my_sheet_id(session: AsyncSession) -> uuid.UUID:
-    return await session.scalar(select(TableSheet.id).where(TableSheet.user_id == ME))
+    return required(await session.scalar(select(TableSheet.id).where(TableSheet.user_id == ME)), 'sheet')
 
 
 async def my_hp(client: AsyncClient, headers: dict, table: dict) -> int:
@@ -292,8 +294,10 @@ async def test_a_monster_falls_to_its_poison(
 
 
 def test_only_an_injury_caught_before_this_round_ticks():
-    row = SimpleNamespace(ended_at=None, ends_after_round=3, round_number=1)
+    row = cast(TableInjury, SimpleNamespace(ended_at=None, ends_after_round=3, round_number=1))
 
     assert injury_ticks.is_ticking(row, 2)
     assert not injury_ticks.is_ticking(row, 1)
-    assert not injury_ticks.is_ticking(SimpleNamespace(ended_at=None, ends_after_round=None, round_number=1), 2)
+    assert not injury_ticks.is_ticking(
+        cast(TableInjury, SimpleNamespace(ended_at=None, ends_after_round=None, round_number=1)), 2
+    )

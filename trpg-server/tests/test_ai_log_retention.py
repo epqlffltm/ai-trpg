@@ -26,6 +26,7 @@ from app.ai_log import repository, retention
 from app.ai_log.models import AiInvocation
 from app.ai_log.retention import PRUNE_OPERATION, AiLogPruner, cutoff
 from app.core.config import Settings
+from tests.conftest import make_test_settings
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -213,12 +214,12 @@ async def test_a_quiet_round_leaves_a_debug_line(app: FastAPI, caplog: pytest.Lo
 
 
 def test_the_texts_are_kept_thirty_days_by_default():
-    assert Settings().ai_log_text_retention_days == 30
+    assert make_test_settings().ai_log_text_retention_days == 30
 
 
 def test_the_retention_is_at_least_a_day():
     with pytest.raises(ValueError):
-        Settings(ai_log_text_retention_days=0)
+        make_test_settings(ai_log_text_retention_days=0)
 
 
 def test_the_app_prunes_with_the_set_retention(app: FastAPI, settings: Settings):

@@ -12,9 +12,11 @@ import copy
 import math
 from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import httpx
 import pytest
+from ai_core.embedder import Embedder
 from ai_core.fake import FakeEmbedder
 from ai_core.openai_embedder import OpenAICompatEmbedder
 from ai_core.provider import ProviderError
@@ -519,7 +521,7 @@ async def test_a_sentence_is_sent_once_and_the_nearest_counts():
     embedder = Recording()
     pairs = [(near, '가깝다'), (near, '멀다'), (far, '멀다')]
 
-    distances = await window_distances(embedder, pairs, vectors)
+    distances = await window_distances(cast(Embedder, embedder), pairs, vectors)
 
     assert embedder.calls == [['가깝다', '멀다']]
     assert distances[near.id] == pytest.approx(0.0)

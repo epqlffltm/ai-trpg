@@ -38,6 +38,7 @@ from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
 from app.assets.scenarios.schemas import ScenarioCreate, ScenarioUpdate, VersionCreate
 from app.assets.service import AssetInUseError, AssetReferenceError
+from app.engine.sheet import CharacterSheet
 from tests.indexers import NO_INDEXER
 from tests.narration_model import TEST_MODEL, today
 from tests.sheets import SHEET
@@ -171,7 +172,11 @@ async def test_updating_a_scenario_waits_for_another_update(session: AsyncSessio
 async def test_publishing_waits_for_another_publish(session: AsyncSession, other_session: AsyncSession):
     rulebook_id = (await rulebooks.create_rulebook(session, ME, RulebookCreate(title='룰'))).asset_id
     data = ScenarioCreate(
-        narration_model=TEST_MODEL, title='시나리오', rulebook_id=rulebook_id, openings=['도입부'], default_sheet=SHEET
+        narration_model=TEST_MODEL,
+        title='시나리오',
+        rulebook_id=rulebook_id,
+        openings=['도입부'],
+        default_sheet=CharacterSheet.model_validate(SHEET),
     )
     scenario_id = (await scenarios.create_scenario(session, ME, data, today())).asset_id
 

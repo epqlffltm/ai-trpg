@@ -19,6 +19,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import status
@@ -29,7 +30,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.schemas import ItemRule, QuestRule
-from app.assets.scenarios.snapshot import ItemStackSnapshot, wear_fault
+from app.assets.scenarios.snapshot import ItemStackSnapshot, Snapshot, wear_fault
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_46
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
@@ -623,9 +624,12 @@ def test_the_worn_are_shown_in_the_order_of_the_slots():
 
 
 def test_the_starting_wear_is_put_on():
-    snapshot = SimpleNamespace(
-        starting_items=[stack(SWORD, 'main_hand'), stack(MAIL)],
-        pregens=[SimpleNamespace(items=[stack(MAIL, 'body')])],
+    snapshot = cast(
+        Snapshot,
+        SimpleNamespace(
+            starting_items=[stack(SWORD, 'main_hand'), stack(MAIL)],
+            pregens=[SimpleNamespace(items=[stack(MAIL, 'body')])],
+        ),
     )
     sheet = sheet_with()
 

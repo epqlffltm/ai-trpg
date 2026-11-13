@@ -18,6 +18,7 @@ srd5 템플릿의 부상: 중독(poisoned), 기절(stunned), 실명(blinded)은 
 
 import uuid
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -29,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.scenarios.schemas import ItemRule
 from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, read_snapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_57
-from app.engine.item_effects import EFFECT_MAX_CURES
+from app.engine.item_effects import EFFECT_MAX_CURES, CureEffect
 from app.rounds.move_lines import describe_item_action
 from app.rounds.narrator import ItemActionNote
 from app.tables.models import TableInjury, TableSheet
@@ -231,7 +232,7 @@ def test_up_to_the_most_cures_fit():
 
     rule = ItemRule.model_validate({'entry_id': actions.NO_SUCH_ID, 'kind': 'consumable', 'effects': [cures(*keys)]})
 
-    assert rule.effects[0].injuries == keys
+    assert cast(CureEffect, rule.effects[0]).injuries == keys
 
 
 async def test_a_gear_with_cures_is_refused_by_the_api(client: AsyncClient, me: dict, lore: dict):

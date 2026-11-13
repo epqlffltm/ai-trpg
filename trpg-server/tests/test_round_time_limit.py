@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import FastAPI, status
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 from server_core.testing.logs import rendered
 from server_core.testing.tokens import SigningKey
 from sqlalchemy import select, text
@@ -68,7 +68,7 @@ def friend(signing_key: SigningKey) -> dict[str, str]:
     return bearer(signing_key, FRIEND)
 
 
-async def open_with(client: AsyncClient, me: dict[str, str], capacity: int = 2, **options) -> dict:
+async def open_with(client: AsyncClient, me: dict[str, str], capacity: int = 2, **options) -> Response:
     """테이블을 연다. options 는 만들 때 보내는 칸이다(round_time_limit 같은 것). 보내지 않은 칸은 기본값이다."""
     scenario = await publish_scenario(client, me)
     body = {'scenario_id': scenario['id'], 'version': 1, 'capacity': capacity, **options}

@@ -79,23 +79,31 @@ OTHER = uuid.UUID('22222222-2222-4333-8444-555555555555')
 ALEMBIC_TABLE = 'alembic_version'
 
 # 모델 목록에 넣는 모델 하나와 그 원가. 서버 곁의 모델이다
-CATALOG_MODEL = ModelEntry(
-    slug='gemma',
-    provider=Provider.LOCAL,
-    api_model_id='gemma4:26b',
-    display_name='Gemma',
-    vendor='google',
-    grade=Grade.BASIC,
-    token_limit_field='max_tokens',
+CATALOG_MODEL = ModelEntry.model_validate(
+    {
+        'slug': 'gemma',
+        'provider': Provider.LOCAL,
+        'api_model_id': 'gemma4:26b',
+        'display_name': 'Gemma',
+        'vendor': 'google',
+        'grade': Grade.BASIC,
+        'token_limit_field': 'max_tokens',
+    }
 )
 # 참고 자료 한 줄
 REFERENCES = ReferenceDocument(
     format=1,
     source=ReferenceSource.SRD51,
     origin=ReferenceOrigin(dataset='test', revision='abc', license='CC-BY-4.0', attribution='SRD 5.1'),
-    entries=[ReferenceRecord(key='items/torch', kind='item', name='Torch', content='A torch burns.')],
+    entries=[
+        ReferenceRecord.model_validate(
+            {'key': 'items/torch', 'kind': 'item', 'name': 'Torch', 'content': 'A torch burns.'}
+        )
+    ],
 )
-CATALOG_COST = CostEntry(input_per_mtok=0, output_per_mtok=0, effective_from='2026-10-17', checked_on='2026-10-17')
+CATALOG_COST = CostEntry.model_validate(
+    {'input_per_mtok': 0, 'output_per_mtok': 0, 'effective_from': '2026-10-17', 'checked_on': '2026-10-17'}
+)
 
 
 @pytest.fixture

@@ -15,6 +15,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import status
@@ -26,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.models import QuestConditionKind
 from app.assets.scenarios.snapshot import QuestConditionSnapshot
 from app.rounds.quest_goals import is_met
+from app.tables.models import GameTable
 from tests.narration_model import with_model
 from tests.test_campaign_runs import RUNS_URL, TABLES_URL, end
 from tests.test_campaigns_api import (
@@ -170,8 +172,8 @@ def condition(kind: QuestConditionKind, target: uuid.UUID) -> QuestConditionSnap
 def test_the_engine_reads_the_handed_down_results():
     rescue, siege = uuid.uuid4(), uuid.uuid4()
     rows = [{'entry_id': str(rescue), 'result': 'succeeded'}, {'entry_id': str(siege), 'result': 'failed'}]
-    table = SimpleNamespace(content={'campaign_quests': rows})
-    plain = SimpleNamespace(content={})
+    table = cast(GameTable, SimpleNamespace(content={'campaign_quests': rows}))
+    plain = cast(GameTable, SimpleNamespace(content={}))
 
     assert is_met(condition(QuestConditionKind.CAMPAIGN_QUEST_SUCCEEDED, rescue), table, [], [])
     assert not is_met(condition(QuestConditionKind.CAMPAIGN_QUEST_FAILED, rescue), table, [], [])

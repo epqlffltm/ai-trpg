@@ -72,7 +72,7 @@ async def latest_scene(client: AsyncClient, me: dict, the_table: dict) -> str:
     return [item for item in events if item['type'] == 'gm_narration'][-1]['payload']['text']
 
 
-async def count_of(session: AsyncSession, the_table: dict) -> int:
+async def count_of(session: AsyncSession, the_table: dict) -> int | None:
     query = select(GameTable.improvised_encounters).where(GameTable.id == uuid.UUID(the_table['id']))
     return await session.scalar(query.execution_options(populate_existing=True))
 

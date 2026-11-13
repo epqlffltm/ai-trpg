@@ -24,6 +24,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -33,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_52
 from app.engine.templates import SRD5
+from app.rounds.models import Declaration
 from app.rounds.move_lines import describe_door, describe_travel
 from app.rounds.narration_request import to_door, to_travel
 from app.rounds.narrator import DoorNote, TravelNote
@@ -140,7 +142,7 @@ def door(act: str, place: dict, device: str | None = None, item: dict | None = N
     return action if device is None else {**action, 'device': device}
 
 
-async def declare(client: AsyncClient, headers: dict, table: dict, action: dict):
+async def declare(client: AsyncClient, headers: dict, table: dict, action: dict | None):
     body = {'content': '문으로 간다.', 'action': action}
     return await client.put(table_url(table, '/rounds/current/declaration'), json=body, headers=headers)
 
@@ -509,10 +511,10 @@ def test_the_door_note_is_read_from_the_outcome():
         }
     }
 
-    assert to_door(SimpleNamespace(outcome=outcome), SRD5) == DoorNote(
+    assert to_door(cast(Declaration, SimpleNamespace(outcome=outcome)), SRD5) == DoorNote(
         act='pick', other_end='탑', done=False, reason='failed', check='민첩'
     )
-    assert to_door(SimpleNamespace(outcome={'move': {}}), SRD5) is None
+    assert to_door(cast(Declaration, SimpleNamespace(outcome={'move': {}})), SRD5) is None
 
 
 def test_the_travel_note_hears_a_lifted_bar():
@@ -527,4 +529,4 @@ def test_the_travel_note_hears_a_lifted_bar():
         'effect': None,
     }
 
-    assert to_travel(SimpleNamespace(outcome={'move': move}), SRD5).unbarred is True
+    assert to_travel(cast(Declaration, SimpleNamespace(outcome={'move': move})), SRD5).unbarred is True

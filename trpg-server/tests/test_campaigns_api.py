@@ -189,7 +189,7 @@ async def test_a_scenario_in_a_campaign_cannot_be_deleted(client: AsyncClient, m
 
 
 async def test_publishing_freezes_the_last_version_of_each_episode(client: AsyncClient, me: dict):
-    first, second = await published_scenarios(client, me, **{'progression': PROGRESSION})
+    first, second = await published_scenarios(client, me, progression=PROGRESSION)
     await publish_scenario(client, me, second)
     campaign = await make_campaign(client, me, [first, second])
     await client.patch(

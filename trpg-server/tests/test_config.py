@@ -4,6 +4,8 @@
 설정을 읽는 규칙을 검증한다. 이 파일의 테스트는 .env 를 읽지 않는다.
 """
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -36,6 +38,15 @@ OPTIONAL_VARIABLES = (
 )
 
 
+def from_env(env_file: Path | None = None, **values: object) -> Settings:
+    """
+    환경 변수(와 env_file)에서 읽은 설정. 반드시 받는 칸(DB 주소, JWKS 주소)은 환경 변수가 채운다.
+
+    pydantic-settings 의 _env_file 과 환경 변수가 채우는 칸은 생성자 서명에 없어 pyright 에게 밝힌다.
+    """
+    return Settings(_env_file=env_file, **values)  # pyright: ignore[reportCallIssue]
+
+
 @pytest.fixture(autouse=True)
 def only_the_required_values_are_set(monkeypatch: pytest.MonkeyPatch):
     """이 파일의 테스트는 필수 값만 정해진 환경에서 시작한다."""
@@ -46,14 +57,14 @@ def only_the_required_values_are_set(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_debug_is_off_by_default():
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     # 끄는 것을 잊으면 운영 서버의 API 구조가 드러난다. 기본을 꺼짐으로 둔다
     assert settings.debug is False
 
 
 def test_schema_is_game_by_default():
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     assert settings.db_schema == 'game'
 
@@ -61,7 +72,7 @@ def test_schema_is_game_by_default():
 def test_reads_from_environment_variables(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('DEBUG', 'true')
 
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     assert settings.debug is True
     assert settings.database_url == DATABASE_URL
@@ -72,7 +83,7 @@ def test_rejects_a_value_of_the_wrong_type(monkeypatch: pytest.MonkeyPatch):
 
     # 잘못된 설정으로 뜨는 것보다 뜨지 않는 쪽이 낫다
     with pytest.raises(ValidationError):
-        Settings(_env_file=None)
+        from_env()
 
 
 def test_refuses_to_start_without_a_database_url(monkeypatch: pytest.MonkeyPatch):
@@ -80,7 +91,7 @@ def test_refuses_to_start_without_a_database_url(monkeypatch: pytest.MonkeyPatch
 
     # 기본 주소로 엉뚱한 DB 에 붙는 것보다 뜨지 않는 쪽이 낫다
     with pytest.raises(ValidationError):
-        Settings(_env_file=None)
+        from_env()
 
 
 def test_refuses_to_start_without_a_jwks_url(monkeypatch: pytest.MonkeyPatch):
@@ -88,7 +99,7 @@ def test_refuses_to_start_without_a_jwks_url(monkeypatch: pytest.MonkeyPatch):
 
     # 어느 서버의 키를 믿을지 모르는 채로 뜨면 안 된다
     with pytest.raises(ValidationError):
-        Settings(_env_file=None)
+        from_env()
 
 
 def test_an_error_does_not_show_the_values_it_read(tmp_path, monkeypatch: pytest.MonkeyPatch):
@@ -97,7 +108,7 @@ def test_an_error_does_not_show_the_values_it_read(tmp_path, monkeypatch: pytest
     env_file.write_text('DEBUG=maybe\nSOME_PASSWORD=do-not-print-me\n', encoding='utf-8')
 
     with pytest.raises(ValidationError) as caught:
-        Settings(_env_file=env_file)
+        from_env(env_file)
 
     # 오류 메시지는 화면과 로그에 남는다. 어느 설정이 틀렸는지만 알려 주고 값은 싣지 않는다
     message = str(caught.value)
@@ -108,7 +119,7 @@ def test_an_error_does_not_show_the_values_it_read(tmp_path, monkeypatch: pytest
 
 
 def test_token_names_match_the_auth_server_by_default():
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     # 인증 서버의 JWT_ISSUER, JWT_AUDIENCE 기본값과 짝이 맞아야 한다
     assert settings.jwt_issuer == 'ai-trpg-auth'
@@ -119,7 +130,7 @@ def test_ignores_unknown_values_in_the_env_file(tmp_path):
     env_file = tmp_path / '.env'
     env_file.write_text('DEBUG=true\nSOMETHING_ELSE=1\n', encoding='utf-8')
 
-    settings = Settings(_env_file=env_file)
+    settings = from_env(env_file)
 
     assert settings.debug is True
 
@@ -128,14 +139,14 @@ def test_ignores_unknown_values_in_the_env_file(tmp_path):
 
 
 def test_the_narrator_is_the_fake_one_by_default():
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     # 모델이 없는 곳(CI, 처음 받은 사람의 PC)에서도 서버가 뜨고 테스트가 돈다
     assert settings.narrator == 'fake'
 
 
 def test_the_model_is_looked_for_on_this_computer_by_default():
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     assert settings.llm_base_url == 'http://127.0.0.1:11434/v1'
     assert settings.llm_timeout_seconds == 60.0
@@ -145,7 +156,7 @@ def test_the_model_is_looked_for_on_this_computer_by_default():
 
 
 def test_the_models_are_the_first_then_the_fallbacks():
-    settings = Settings(_env_file=None, llm_model=' gemma4:26b ', llm_fallback_models='a, b ,,c')
+    settings = from_env(llm_model=' gemma4:26b ', llm_fallback_models='a, b ,,c')
 
     assert settings.llm_models() == ['gemma4:26b', 'a', 'b', 'c']
 
@@ -155,7 +166,7 @@ def test_the_language_model_narrator_needs_a_model_name(monkeypatch: pytest.Monk
 
     # 모델 이름 없이 떴다가 첫 라운드를 닫을 때 실패하는 것보다 뜨지 않는 쪽이 낫다
     with pytest.raises(ValidationError):
-        Settings(_env_file=None)
+        from_env()
 
 
 def test_the_language_model_narrator_reads_its_settings(monkeypatch: pytest.MonkeyPatch):
@@ -165,7 +176,7 @@ def test_the_language_model_narrator_reads_its_settings(monkeypatch: pytest.Monk
     monkeypatch.setenv('LLM_TIMEOUT_SECONDS', '30')
     monkeypatch.setenv('LLM_SUPPORTS_REASONING', 'false')
 
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     assert settings.narrator == 'llm'
     assert settings.llm_model == 'gemma4:26b'
@@ -187,14 +198,14 @@ def test_rejects_a_narrator_setting_it_does_not_know(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv(name, value)
 
     with pytest.raises(ValidationError):
-        Settings(_env_file=None)
+        from_env()
 
 
 # --- 임베딩 ---
 
 
 def test_the_embedder_is_fake_by_default():
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     # 테스트와 CI 는 모델 없이 돈다. 실제 모델은 각자의 .env 에서 켠다
     assert settings.embedder == 'fake'
@@ -204,17 +215,17 @@ def test_the_embedder_is_fake_by_default():
 def test_the_embedding_address_falls_back_to_the_llm_address(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('LLM_BASE_URL', 'http://127.0.0.1:1234/v1')
 
-    assert Settings(_env_file=None).embedding_url() == 'http://127.0.0.1:1234/v1'
+    assert from_env().embedding_url() == 'http://127.0.0.1:1234/v1'
 
 
 def test_the_embedding_address_can_be_its_own(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('EMBEDDING_BASE_URL', 'http://127.0.0.1:9000/v1')
 
-    assert Settings(_env_file=None).embedding_url() == 'http://127.0.0.1:9000/v1'
+    assert from_env().embedding_url() == 'http://127.0.0.1:9000/v1'
 
 
 def test_the_lore_distances_default_to_the_measured_ones():
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     # 평가 도구로 잰 값(app/lore/retrieval.py 의 상수)과 설정의 기본값이 어긋나지 않는다
     assert settings.lore_max_distance == MAX_DISTANCE == 0.45
@@ -225,13 +236,13 @@ def test_the_lore_distances_can_be_set(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('LORE_MAX_DISTANCE', '0.4')
     monkeypatch.setenv('LORE_KEYWORD_MAX_DISTANCE', '0.55')
 
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     assert (settings.lore_max_distance, settings.lore_keyword_max_distance) == (0.4, 0.55)
 
 
 def test_the_memory_distances_default_to_the_constants():
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     # 지난 일의 기준은 로어북과 따로 둔다. 기억은 글이 길어 거리의 크기가 다르다(scripts/eval_memory.py 로 잰다)
     assert settings.memory_max_distance == MEMORY_MAX_DISTANCE
@@ -242,7 +253,7 @@ def test_the_memory_distances_can_be_set(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('MEMORY_MAX_DISTANCE', '0.5')
     monkeypatch.setenv('MEMORY_KEYWORD_MAX_DISTANCE', '0.6')
 
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     assert (settings.memory_max_distance, settings.memory_keyword_max_distance) == (0.5, 0.6)
 
@@ -257,7 +268,7 @@ def test_a_lore_distance_outside_the_cosine_range_does_not_start(
     monkeypatch.setenv(name, value)
 
     with pytest.raises(ValidationError):
-        Settings(_env_file=None)
+        from_env()
 
 
 def test_an_embedder_without_a_model_does_not_start(monkeypatch: pytest.MonkeyPatch):
@@ -265,20 +276,20 @@ def test_an_embedder_without_a_model_does_not_start(monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv('EMBEDDING_MODEL', '  ')
 
     with pytest.raises(ValidationError):
-        Settings(_env_file=None)
+        from_env()
 
 
 # --- 입력 지문의 키 ---
 
 
 def test_there_is_no_digest_key_by_default():
-    assert Settings(_env_file=None).digest_key() is None
+    assert from_env().digest_key() is None
 
 
 def test_the_digest_key_is_read_as_bytes_and_kept_secret(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('AI_LOG_HMAC_KEY', ' 0123abcd ')
 
-    settings = Settings(_env_file=None)
+    settings = from_env()
 
     assert settings.digest_key() == b'0123abcd'
     # 설정을 찍어도 키가 보이지 않는다
@@ -286,25 +297,25 @@ def test_the_digest_key_is_read_as_bytes_and_kept_secret(monkeypatch: pytest.Mon
 
 
 def test_the_vector_length_is_not_checked_by_default():
-    assert Settings(_env_file=None).embedding_dimensions is None
+    assert from_env().embedding_dimensions is None
 
 
 def test_the_vector_length_can_be_set(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('EMBEDDING_DIMENSIONS', '1024')
 
-    assert Settings(_env_file=None).embedding_dimensions == 1024
+    assert from_env().embedding_dimensions == 1024
 
 
 def test_a_vector_length_of_zero_is_refused(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv('EMBEDDING_DIMENSIONS', '0')
 
     with pytest.raises(ValidationError):
-        Settings(_env_file=None)
+        from_env()
 
 
 def test_the_auth_server_secret_is_empty_by_default():
     # 비우면 탈퇴 알림을 받지 않는다(401). 뜨기는 한다
-    assert Settings(_env_file=None).auth_server_secret.get_secret_value() == ''
+    assert from_env().auth_server_secret.get_secret_value() == ''
 
 
 @pytest.mark.parametrize(('length', 'starts'), [(31, False), (32, True)])
@@ -312,7 +323,7 @@ def test_the_auth_server_secret_has_a_minimum(monkeypatch: pytest.MonkeyPatch, l
     monkeypatch.setenv('AUTH_SERVER_SECRET', 'a' * length)
 
     if starts:
-        assert Settings(_env_file=None).auth_server_secret.get_secret_value() == 'a' * length
+        assert from_env().auth_server_secret.get_secret_value() == 'a' * length
     else:
         with pytest.raises(ValidationError, match='AUTH_SERVER_SECRET'):
-            Settings(_env_file=None)
+            from_env()

@@ -31,6 +31,7 @@ from app.engine.templates import SRD5
 from app.rounds.move_lines import describe_monster_turn
 from app.rounds.narration_request import to_turn_note
 from app.rounds.narrator import MonsterTurnNote, ResourceNote
+from app.rounds.state import required
 from tests import test_monster_turns as turns
 from tests import test_npc_turns as npc_turns
 from tests.sheets import SHEET, make_sheet
@@ -287,7 +288,7 @@ def test_the_narrator_hears_the_cost_in_words():
         },
     }
 
-    note = to_turn_note(turn).monster
+    note = required(to_turn_note(turn).monster, 'monster')
 
     assert note.cost == [ResourceNote(name='마나', word='넉넉함')]
     assert describe_monster_turn(note) == '흑마법사: 엘프에게 화염구 (빗나감) [마나 넉넉함]'
@@ -305,7 +306,7 @@ def test_a_turn_short_of_the_cost_is_narrated():
         },
     }
 
-    note = to_turn_note(turn).npc
+    note = required(to_turn_note(turn).npc, 'npc')
 
     assert note == MonsterTurnNote(name='흑마법사', attack='화염구', target='엘프', hit=False, short=True)
     assert describe_monster_turn(note) == '흑마법사: 엘프에게 화염구 (비용이 모자라 하지 못함)'
