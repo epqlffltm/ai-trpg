@@ -16,7 +16,7 @@ import uuid
 
 import pytest
 from fastapi import FastAPI, status
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import delete, select
 from sqlalchemy.exc import DBAPIError
@@ -66,12 +66,12 @@ def operator(signing_key: SigningKey) -> dict[str, str]:
     return bearer(signing_key, OPERATOR, roles=['operator'])
 
 
-async def sanction(client: AsyncClient, headers: dict, scenario: dict, **body) -> object:
+async def sanction(client: AsyncClient, headers: dict, scenario: dict, **body) -> Response:
     """시나리오를 제재해 본다. 응답을 그대로 돌려준다."""
     return await client.post(f'{ADMIN_URL}/scenarios/{scenario["id"]}/sanction', json=body or REASON, headers=headers)
 
 
-async def publish(client: AsyncClient, headers: dict, scenario: dict, number: int) -> object:
+async def publish(client: AsyncClient, headers: dict, scenario: dict, number: int) -> Response:
     """그 판을 공개해 본다."""
     return await client.put(f'{listing_url(scenario)}/publication', json={'version': number}, headers=headers)
 
@@ -81,7 +81,7 @@ async def listed(client: AsyncClient, headers: dict) -> list[str]:
     return [item['scenario_id'] for item in (await client.get(LISTINGS_URL, headers=headers)).json()['items']]
 
 
-async def open_table(client: AsyncClient, headers: dict, scenario: dict, number: int | None = 1) -> object:
+async def open_table(client: AsyncClient, headers: dict, scenario: dict, number: int | None = 1) -> Response:
     """그 시나리오의 판으로 테이블을 열어 본다. 번호가 없으면 공개 중인 판이다(남의 시나리오는 이 길로만 연다)."""
     body = {'scenario_id': scenario['id'], 'version': number, 'capacity': 2}
     return await client.post(TABLES_URL, json=body, headers=headers)
@@ -189,7 +189,7 @@ async def sanction_many(client: AsyncClient, me: dict, operator: dict, count: in
     return results
 
 
-async def ban(client: AsyncClient, operator: dict, user_id: uuid.UUID, lift: bool = False) -> object:
+async def ban(client: AsyncClient, operator: dict, user_id: uuid.UUID, lift: bool = False) -> Response:
     """공개를 금지하거나(lift 가 거짓) 풀어 본다."""
     path = f'{ADMIN_URL}/users/{user_id}/publishing-ban' + ('/lift' if lift else '')
     return await client.post(path, json=REASON, headers=operator)

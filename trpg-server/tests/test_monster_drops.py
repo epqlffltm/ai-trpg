@@ -21,6 +21,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -33,13 +34,16 @@ from app.assets.scenarios.snapshot import read_snapshot
 from app.assets.scenarios.upgrades import upgrade_from_28
 from app.engine.dice import ScriptedDice
 from app.engine.drops import Dropped, comes_out
+from app.events.models import TableEvent
 from app.rounds import records
 from app.rounds.drops import hand_out, heirs
+from app.rounds.effects import Judging
 from app.rounds.llm_narrator import NarrationError
+from app.rounds.monster_scene import SceneMonster
 from app.rounds.move_lines import describe_drop
 from app.rounds.narration_request import to_drop
 from app.rounds.narrator import DropNote, DroppedNote, NarrationRequest, Preview
-from app.tables.models import NpcStatus, TableItem, TableSheet
+from app.tables.models import GameTable, NpcStatus, TableItem, TableMember, TableSheet
 from tests.narration_model import asset_body
 from tests.sheets import SHEET, make_sheet
 from tests.test_monster_combat import (
@@ -484,28 +488,33 @@ def test_a_line_comes_out_at_or_under_its_chance(roll: int, expected: bool):
     assert comes_out(30, ScriptedDice([roll])) is expected
 
 
-def person(place: uuid.UUID | None, dead: bool = False) -> SimpleNamespace:
+def person(place: uuid.UUID | None, dead: bool = False) -> TableMember:
     """heirs 가 보는 만큼만 갖춘 앉은 사람."""
     sheet = SimpleNamespace(place_id=place, died_at='then' if dead else None, hp=5)
-    return SimpleNamespace(sheet=sheet, user_id=uuid.uuid4(), character_name='누구')
+    return cast(TableMember, SimpleNamespace(sheet=sheet, user_id=uuid.uuid4(), character_name='누구'))
 
 
 def test_heirs_are_the_living_at_that_place():
     here, there = uuid.uuid4(), uuid.uuid4()
     alive, dead, away, unseated = person(here), person(here, dead=True), person(there), SimpleNamespace(sheet=None)
-    table = SimpleNamespace(members=[alive, dead, away, unseated])
+    table = cast(GameTable, SimpleNamespace(members=[alive, dead, away, unseated]))
 
     assert heirs(table, here) == [alive]
 
 
 def test_with_no_one_there_the_drop_vanishes():
     pelt = uuid.uuid4()
-    judging = SimpleNamespace(
-        table=SimpleNamespace(id=uuid.uuid4(), members=[]),
-        items={pelt: SimpleNamespace(name='늑대 가죽')},
-        dice=ScriptedDice([]),
+    judging = cast(
+        Judging,
+        SimpleNamespace(
+            table=SimpleNamespace(id=uuid.uuid4(), members=[]),
+            items={pelt: SimpleNamespace(name='늑대 가죽')},
+            dice=ScriptedDice([]),
+        ),
     )
-    monster = SimpleNamespace(state=SimpleNamespace(id=uuid.uuid4(), place_id=uuid.uuid4()), name='수로 쥐 1')
+    monster = cast(
+        SceneMonster, SimpleNamespace(state=SimpleNamespace(id=uuid.uuid4(), place_id=uuid.uuid4()), name='수로 쥐 1')
+    )
 
     dropped = hand_out(judging, monster, [Dropped(entry_id=pelt, count=2)])
 
@@ -540,8 +549,11 @@ def test_a_vanished_drop_is_not_recorded(monkeypatch: pytest.MonkeyPatch):
         'items': [lost],
     }
 
-    records.record_drop(None, None, vanished, cause=SimpleNamespace(payload={'round': 1}))
-    records.record_drop(None, None, None, cause=SimpleNamespace(payload={'round': 1}))
+    # 적지 않는 길이라 세션과 테이블을 읽지 않는다
+    session, table = cast(AsyncSession, None), cast(GameTable, None)
+    cause = cast(TableEvent, SimpleNamespace(payload={'round': 1}))
+    records.record_drop(session, table, vanished, cause=cause)
+    records.record_drop(session, table, None, cause=cause)
 
     # 아무도 얻지 않았다. items_gained 를 남기지 않는다
     assert recorded == []

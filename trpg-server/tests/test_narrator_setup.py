@@ -7,6 +7,8 @@
 모델을 부르지 않는다. 고르고 만드는 것만 본다. 창구를 고르는 규칙은 tests/test_model_routing.py 가 본다.
 """
 
+from typing import cast
+
 import httpx
 import pytest
 from ai_core.retry_budget import RetryBudget
@@ -43,6 +45,16 @@ def standard(narrator) -> RetryingNarrator:
     return narrator.default
 
 
+def chain_of(narrator, model: str) -> RetryingNarrator:
+    """방장이 고른 모델의 서술자. 언어 모델의 서술자는 고른 모델마다 다시 시도하는 서술자를 만든다."""
+    return cast(RetryingNarrator, cast(PickedNarrator, narrator).chain_for(model))
+
+
+def models_of(chain: RetryingNarrator) -> list[RoutedNarrator]:
+    """다시 시도하는 서술자가 차례로 부르는 모델들. 언어 모델의 서술자는 모두 창구를 고르는 서술자다."""
+    return [cast(RoutedNarrator, inner) for inner in chain.narrators]
+
+
 def test_the_fake_narrator_is_chosen_by_default():
     assert isinstance(narrator_of(make_test_settings()), FakeNarrator)
 
@@ -54,7 +66,7 @@ def test_the_language_model_narrator_retries_one_model_by_default():
     assert isinstance(narrator, PickedNarrator)
     # 넘어갈 모델을 적지 않으면 첫 모델 하나를 다시 시도하는 서술자다. 창구는 부를 때 고른다
     assert isinstance(standard(narrator), RetryingNarrator)
-    (inner,) = standard(narrator).narrators
+    (inner,) = models_of(standard(narrator))
     assert isinstance(inner, RoutedNarrator)
     assert inner.model == 'gemma4:26b'
 
@@ -63,7 +75,11 @@ def test_the_fallback_models_follow_the_first_in_order():
     narrator = narrator_of(make_test_settings(**LLM, llm_fallback_models=' gemma4:31b-it-qat, ,qwen3.6:27b '))
 
     # 빈 이름과 앞뒤 공백은 뺀다. 적은 차례대로 넘어간다
-    assert [inner.model for inner in standard(narrator).narrators] == ['gemma4:26b', 'gemma4:31b-it-qat', 'qwen3.6:27b']
+    assert [inner.model for inner in models_of(standard(narrator))] == [
+        'gemma4:26b',
+        'gemma4:31b-it-qat',
+        'qwen3.6:27b',
+    ]
 
 
 def test_one_call_may_take_as_long_as_the_timeout():
@@ -174,7 +190,7 @@ def test_every_model_is_routed_by_the_router_of_the_app():
 
     # 창구를 고르는 것은 앱에 하나다. 앱의 클라이언트로 부른다. 앱이 꺼질 때 그 클라이언트를 닫는다(lifespan)
     assert app.state.model_router.client is app.state.http_client
-    for inner in standard(app.state.narrator).narrators:
+    for inner in models_of(standard(app.state.narrator)):
         assert inner.router is app.state.model_router
 
 
@@ -183,7 +199,7 @@ def test_every_model_call_is_recorded_in_the_database_of_the_app():
 
     # 기록 없이 모델을 부르는 길이 없다. 넘어간 모델의 호출도 앱의 세션 틀로 ai_invocations 에 쓴다.
     # 쓸 때마다 메트릭도 센다(app/ai_log/metered.py)
-    for inner in standard(app.state.narrator).narrators:
+    for inner in models_of(standard(app.state.narrator)):
         assert isinstance(inner.log, MeteredCallLog)
         assert isinstance(inner.log.inner, DbCallLog)
         assert inner.log.inner.session_factory is app.state.session_factory
@@ -192,11 +208,11 @@ def test_every_model_call_is_recorded_in_the_database_of_the_app():
 def test_every_model_signs_its_input_with_the_key_of_the_settings():
     narrator = narrator_of(make_test_settings(**LLM, llm_fallback_models='gemma4:31b-it-qat', ai_log_hmac_key='k'))
 
-    assert [inner.digest_key for inner in standard(narrator).narrators] == [b'k', b'k']
+    assert [inner.digest_key for inner in models_of(standard(narrator))] == [b'k', b'k']
 
 
 def test_without_a_key_no_model_signs():
-    assert [inner.digest_key for inner in standard(narrator_of(make_test_settings(**LLM))).narrators] == [None]
+    assert [inner.digest_key for inner in models_of(standard(narrator_of(make_test_settings(**LLM))))] == [None]
 
 
 # --- 방장이 고른 모델 ---
@@ -205,11 +221,11 @@ def test_without_a_key_no_model_signs():
 def test_a_picked_model_is_retried_alone():
     narrator = narrator_of(make_test_settings(**LLM, llm_fallback_models='gemma4:31b-it-qat', ai_log_hmac_key='k'))
 
-    chain = narrator.chain_for('claude-sonnet-5-5')
+    chain = cast(PickedNarrator, narrator).chain_for('claude-sonnet-5-5')
 
     # 그 모델의 값을 걸었으니 넘어갈 모델이 없다. 설정의 넘어갈 모델(gemma4:31b-it-qat)도 쓰지 않는다
     assert isinstance(chain, RetryingNarrator)
-    (inner,) = chain.narrators
+    (inner,) = models_of(chain)
     assert (inner.model, inner.digest_key) == ('claude-sonnet-5-5', b'k')
 
 
@@ -248,8 +264,8 @@ def test_every_chain_shares_one_retry_budget():
 
     budgets = {
         id(standard(narrator).retry_budget),
-        id(narrator.chain_for('gpt-6-luna').retry_budget),
-        id(narrator.chain_for('claude-sonnet-5-5').retry_budget),
+        id(chain_of(narrator, 'gpt-6-luna').retry_budget),
+        id(chain_of(narrator, 'claude-sonnet-5-5').retry_budget),
     }
 
     # 재시도의 비율은 앱 전체에서 센다. 서술마다 새 예산이면 공급자가 아플 때 막지 못한다

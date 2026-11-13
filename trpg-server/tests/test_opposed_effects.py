@@ -15,16 +15,18 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.engine.action import CheckAction, SkillAction, ThrowAction
-from app.engine.item_effects import DamageEffect, HealEffect, InjureEffect
+from app.engine.action import ActionKind, CheckAction, SkillAction, ThrowAction
+from app.engine.item_effects import DamageEffect, EffectKind, HealEffect, InjureEffect
 from app.rounds import checks
 from app.rounds.checks import Targeted
+from app.rounds.effects import Judging
 from app.rounds.item_targets import effect_target
 from tests import test_item_effects as uses
 from tests import test_item_throws as throws
@@ -114,24 +116,24 @@ async def test_a_thrown_poison_is_rolled_against_the_rat(client: AsyncClient, ap
 
 # --- 맞을 쪽 ---
 
-POISON = InjureEffect(kind='injure', injury='poisoned')
-HURT = DamageEffect(kind='damage', magnitude='light')
-MEND = HealEffect(kind='heal', magnitude='light')
-PLAIN = CheckAction(kind='check', ability='dex')
+POISON = InjureEffect(kind=EffectKind.INJURE, injury='poisoned')
+HURT = DamageEffect(kind=EffectKind.DAMAGE, magnitude='light')
+MEND = HealEffect(kind=EffectKind.HEAL, magnitude='light')
+PLAIN = CheckAction(kind=ActionKind.CHECK, ability='dex')
 
 
 def test_only_a_harmful_effect_without_damage_names_who_rolls_against_it():
     person, rat, friend = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
-    at_person = SkillAction(kind='skill', skill='sting', npc=person)
-    at_rat = ThrowAction(kind='throw', item=uuid.uuid4(), monster=rat)
-    at_friend = SkillAction(kind='skill', skill='sting', target=friend)
+    at_person = SkillAction(kind=ActionKind.SKILL, skill='sting', npc=person)
+    at_rat = ThrowAction(kind=ActionKind.THROW, item=uuid.uuid4(), monster=rat)
+    at_friend = SkillAction(kind=ActionKind.SKILL, skill='sting', target=friend)
 
     assert effect_target([POISON], at_person, PLAIN) == Targeted(npc=person)
     assert effect_target([POISON], at_rat, PLAIN) == Targeted(monster=rat)
     assert effect_target([POISON], at_friend, PLAIN) == Targeted(target=friend)
     # 피해를 겨누면 행동의 칸이 정한다. 회복이나 해롭지 않은 효과는 막지 않는다
-    harm = CheckAction(kind='check', ability='dex', harm='light', npc=person)
-    mend = CheckAction(kind='check', ability='wis', recover='light', npc=person)
+    harm = CheckAction(kind=ActionKind.CHECK, ability='dex', harm='light', npc=person)
+    mend = CheckAction(kind=ActionKind.CHECK, ability='wis', recover='light', npc=person)
     assert effect_target([POISON, HURT], at_person, harm) is None
     assert effect_target([MEND, POISON], at_person, mend) is None
     assert effect_target([MEND], at_person, PLAIN) is None
@@ -139,7 +141,7 @@ def test_only_a_harmful_effect_without_damage_names_who_rolls_against_it():
 
 def test_a_guarding_foe_hinders_an_effect_too():
     rat, ally = uuid.uuid4(), uuid.uuid4()
-    judging = SimpleNamespace(defending=frozenset({ally}), foes_guarding=frozenset({rat}))
+    judging = cast(Judging, SimpleNamespace(defending=frozenset({ally}), foes_guarding=frozenset({rat})))
 
     assert checks.target_guarded(judging, PLAIN, Targeted(monster=rat)) is True
     assert checks.target_guarded(judging, PLAIN, Targeted(target=ally)) is True

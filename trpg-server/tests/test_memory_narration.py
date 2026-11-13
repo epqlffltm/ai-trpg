@@ -7,9 +7,11 @@
 """
 
 from dataclasses import replace
+from typing import cast
 
 import pytest
 from ai_core.fake import FakeEmbedder, FakeProvider
+from ai_core.openai_compat import OpenAICompatProvider
 
 from app.assets.models import NarrationStyle
 from app.lore.retrieval import query_text
@@ -141,7 +143,9 @@ async def test_a_trial_sends_the_server_prompt_and_counts_what_was_recalled(data
     context = await memory_context(FakeEmbedder(), dataset, request, LOOSE)
     provider = FakeProvider(reply='악역영애가 부채를 접었다. "배신자에게 할 말은 없어요." 무전기가 깜빡였다.')
 
-    trial = await run_trial(provider, BETRAYAL, request, MemoryMode.ON, context, NarrationStyle.WEB_NOVEL)
+    trial = await run_trial(
+        cast(OpenAICompatProvider, provider), BETRAYAL, request, MemoryMode.ON, context, NarrationStyle.WEB_NOVEL
+    )
 
     (call,) = provider.calls
     expected = prompt.build_messages(
@@ -157,10 +161,17 @@ async def test_a_refused_reply_is_a_problem_not_a_scene(dataset):
     request = case_request(dataset, HELPER)
     context = MemoryContext([], [])
 
-    trial = await run_trial(FakeProvider(reply='  '), HELPER, request, MemoryMode.OFF, context, NarrationStyle.CLASSIC)
+    trial = await run_trial(
+        cast(OpenAICompatProvider, FakeProvider(reply='  ')),
+        HELPER,
+        request,
+        MemoryMode.OFF,
+        context,
+        NarrationStyle.CLASSIC,
+    )
 
     assert trial.scene is None
-    assert 'empty' in trial.problem
+    assert trial.problem is not None and 'empty' in trial.problem
 
 
 @pytest.mark.parametrize(('scene', 'count'), [('"윽!"', 0), ('"배신자에게 할 말은 없어요."', 1), ('말이 없다.', 0)])
@@ -172,7 +183,14 @@ async def test_the_tally_groups_trials_by_case_mode_and_style(dataset):
     request = case_request(dataset, BETRAYAL)
     context = MemoryContext([], [])
     trials = [
-        await run_trial(FakeProvider(reply=reply), BETRAYAL, request, mode, context, NarrationStyle.CLASSIC)
+        await run_trial(
+            cast(OpenAICompatProvider, FakeProvider(reply=reply)),
+            BETRAYAL,
+            request,
+            mode,
+            context,
+            NarrationStyle.CLASSIC,
+        )
         for mode, reply in [
             (MemoryMode.OFF, '결승선이 빛났다.'),
             (MemoryMode.ON, '배신의 기억이 스쳤다.'),

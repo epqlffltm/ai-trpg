@@ -14,6 +14,7 @@ import uuid
 from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from ai_core.fake import FakeCallLog, FakeProvider
@@ -25,6 +26,7 @@ from app.catalog.offers import OfferedModel, StepPrice, offer, options_of
 from app.catalog.steps import (
     ALL_STEPS,
     BASE_STEPS,
+    HasSteps,
     NarrationSteps,
     input_tokens,
     output_tokens,
@@ -94,7 +96,7 @@ def test_the_price_code_ends_with_the_steps():
 
 
 def test_a_table_or_round_gives_its_steps():
-    assert steps_of(SimpleNamespace(input_step=2, output_step=1)) == NarrationSteps(2, 1)
+    assert steps_of(cast(HasSteps, SimpleNamespace(input_step=2, output_step=1))) == NarrationSteps(2, 1)
 
 
 # --- 입력 단계 ---

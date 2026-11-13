@@ -13,6 +13,7 @@
 """
 
 import uuid
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import pytest
@@ -84,7 +85,7 @@ def recording(app: FastAPI) -> RecordingNarrator:
 
 
 @pytest.fixture
-async def billing(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> FakeBillingServer:
+async def billing(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[FakeBillingServer]:
     """앱에 꽂은 가짜 결제 서버. 방장에게 1000 크레딧이 있다. Luna 의 두 단계를 판다."""
     monkeypatch.setitem(PRICES, LUNA_BASE.code, 20)
     monkeypatch.setitem(PRICES, LUNA_LONG.code, 70)

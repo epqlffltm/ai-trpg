@@ -20,6 +20,7 @@
   - 서술: 자리가 있는 인물의 상태 줄에 장소가 붙는다.
 """
 
+import typing
 import uuid
 from types import SimpleNamespace
 
@@ -31,19 +32,27 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.models import HappeningEffectKind
-from app.assets.scenarios.snapshot import HappeningEffectSnapshot, Snapshot, read_snapshot
+from app.assets.scenarios.snapshot import (
+    EntrySnapshot,
+    HappeningEffectSnapshot,
+    HappeningSnapshot,
+    Snapshot,
+    read_snapshot,
+)
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_49
-from app.engine.action import LootAction, TreatAction
+from app.engine.action import ActionKind, LootAction, TreatAction
+from app.engine.ruleset import Ruleset
 from app.rounds import prompt, trades
 from app.rounds.acceptance import patient_rows, require_downed_victim, require_npc_target
-from app.rounds.cast import CastMember, cast_of, find_reachable, label_of, labels_of, reaches, standing_label
+from app.rounds.cast import CastMember, Scene, cast_of, find_reachable, label_of, labels_of, reaches, standing_label
+from app.rounds.effects import Judging
 from app.rounds.errors import ActionTargetError
 from app.rounds.happenings import move_npc, npc_moves
 from app.rounds.moves import to_people
 from app.rounds.narration_request import is_seen
 from app.rounds.narrator import HappeningNote, PersonState
 from app.rounds.npc_attacks import targets_of
-from app.tables.models import NpcStatus, TableNpc
+from app.tables.models import GameTable, NpcStatus, TableMember, TableNpc
 from tests import test_table_map as map_tables
 from tests.narration_model import asset_body
 from tests.sheets import make_sheet
@@ -397,8 +406,10 @@ async def test_a_happening_moves_a_person_and_the_party_sees_it(
 # --- 작은 함수 ---
 
 
-def entry(name: str, keywords: list[str]) -> SimpleNamespace:
-    return SimpleNamespace(id=uuid.uuid4(), name=name, keywords=keywords, true_names=[], kind='person')
+def entry(name: str, keywords: list[str]) -> EntrySnapshot:
+    return typing.cast(
+        EntrySnapshot, SimpleNamespace(id=uuid.uuid4(), name=name, keywords=keywords, true_names=[], kind='person')
+    )
 
 
 def npc(entry_id: uuid.UUID, place: uuid.UUID | None, status_: str = NpcStatus.ALIVE) -> TableNpc:
@@ -414,8 +425,9 @@ def npc(entry_id: uuid.UUID, place: uuid.UUID | None, status_: str = NpcStatus.A
     )
 
 
-def member_at(place: uuid.UUID | None) -> SimpleNamespace:
-    return SimpleNamespace(user_id=uuid.uuid4(), sheet=SimpleNamespace(place_id=place, hp=10, died_at=None))
+def member_at(place: uuid.UUID | None) -> TableMember:
+    sheet = SimpleNamespace(place_id=place, hp=10, died_at=None)
+    return typing.cast(TableMember, SimpleNamespace(user_id=uuid.uuid4(), sheet=sheet, current_sheet=sheet))
 
 
 GATE = uuid.uuid4()
@@ -444,8 +456,11 @@ def test_the_scene_picks_placed_people_by_place_and_others_by_mention():
         entry('은자', ['노인']),
         entry('유령', ['그림자']),
     )
-    snapshot = SimpleNamespace(
-        lorebooks=[SimpleNamespace(entries=[captain, smith, hermit, ghost])], npc_sheets=[], monsters=[]
+    snapshot = typing.cast(
+        Snapshot,
+        SimpleNamespace(
+            lorebooks=[SimpleNamespace(entries=[captain, smith, hermit, ghost])], npc_sheets=[], monsters=[]
+        ),
     )
     states = [npc(captain.id, GATE), npc(smith.id, SQUARE), npc(hermit.id, None), npc(ghost.id, None)]
     scene = '대장장이가 부른다. 노인이 웃는다.'
@@ -466,7 +481,9 @@ def test_the_scene_picks_placed_people_by_place_and_others_by_mention():
 
 def test_a_named_person_is_called_by_the_true_name():
     captain = entry('알베르트', ['경비대장'])
-    snapshot = SimpleNamespace(lorebooks=[SimpleNamespace(entries=[captain])], npc_sheets=[], monsters=[])
+    snapshot = typing.cast(
+        Snapshot, SimpleNamespace(lorebooks=[SimpleNamespace(entries=[captain])], npc_sheets=[], monsters=[])
+    )
     state = npc(captain.id, GATE)
     state.named_round = 2
 
@@ -480,7 +497,7 @@ def person(place: uuid.UUID | None, status_: str = NpcStatus.ALIVE) -> CastMembe
 
 def test_who_reaches_whom():
     placed, unplaced = person(GATE), person(None)
-    here, there, nowhere = member_at(GATE), member_at(SQUARE), SimpleNamespace(sheet=None)
+    here, there, nowhere = member_at(GATE), member_at(SQUARE), typing.cast(TableMember, SimpleNamespace(sheet=None))
 
     assert [reaches(one, placed) for one in (here, there, nowhere)] == [True, False, False]
     assert [reaches(one, unplaced) for one in (here, there, nowhere)] == [True, True, True]
@@ -492,14 +509,16 @@ def test_who_reaches_whom():
 def test_every_way_of_aiming_at_a_person_needs_the_same_place():
     downed = person(GATE, NpcStatus.DOWNED)
     cast = [downed]
-    scene = SimpleNamespace(cast=cast, monsters=[])
+    scene = typing.cast(Scene, SimpleNamespace(cast=cast, monsters=[]))
     there = member_at(SQUARE)
-    treat = TreatAction(kind='treat', injury='bleeding', npc=downed.entry_id)
-    loot = LootAction(kind='loot', npc=downed.entry_id, item=uuid.uuid4())
+    treat = TreatAction(kind=ActionKind.TREAT, injury='bleeding', npc=downed.entry_id)
+    loot = LootAction(kind=ActionKind.LOOT, npc=downed.entry_id, item=uuid.uuid4())
+    # 고칠 사람이 인물이라 테이블을 읽지 않는다
+    no_table = typing.cast(GameTable, SimpleNamespace())
 
     for aimed in (
         lambda: require_npc_target(cast, there, downed.entry_id, None),
-        lambda: patient_rows(SimpleNamespace(), there, treat, cast),
+        lambda: patient_rows(no_table, there, treat, cast),
         lambda: require_downed_victim(scene, there, loot),
         lambda: trades.require_merchant(scene, there, downed.entry_id),
     ):
@@ -508,13 +527,15 @@ def test_every_way_of_aiming_at_a_person_needs_the_same_place():
 
     here = member_at(GATE)
     require_npc_target(cast, here, downed.entry_id, None)
-    assert patient_rows(SimpleNamespace(), here, treat, cast) == []
+    assert patient_rows(no_table, here, treat, cast) == []
     require_downed_victim(scene, here, loot)
 
 
 def test_a_placed_person_strikes_only_those_standing_there():
     here, there = member_at(GATE), member_at(SQUARE)
-    judging = SimpleNamespace(downed_at_start=frozenset(), table=SimpleNamespace(members=[here, there]))
+    judging = typing.cast(
+        Judging, SimpleNamespace(downed_at_start=frozenset(), table=SimpleNamespace(members=[here, there]))
+    )
 
     assert targets_of(judging, person(GATE)) == [here]
     assert targets_of(judging, person(None)) == [here, there]
@@ -550,12 +571,15 @@ def test_moving_a_person():
 
 def test_a_happening_moves_people_in_order_and_skips_the_rest():
     first, second = npc(uuid.uuid4(), GATE), npc(uuid.uuid4(), GATE)
-    rule = SimpleNamespace(
-        effects=[
-            effect_to(SQUARE, second.entry_id),
-            HappeningEffectSnapshot(kind=HappeningEffectKind.MOVE, to_place=SQUARE),
-            effect_to(SQUARE, first.entry_id),
-        ]
+    rule = typing.cast(
+        HappeningSnapshot,
+        SimpleNamespace(
+            effects=[
+                effect_to(SQUARE, second.entry_id),
+                HappeningEffectSnapshot(kind=HappeningEffectKind.MOVE, to_place=SQUARE),
+                effect_to(SQUARE, first.entry_id),
+            ]
+        ),
     )
 
     moved = npc_moves([first, second], rule)
@@ -589,6 +613,8 @@ def test_the_people_lines_tell_the_place():
 def test_to_people_names_the_place_of_a_placed_person():
     placed, unplaced = person(GATE), person(None)
 
-    states = to_people([placed, unplaced], SimpleNamespace(injuries=[], resources=()), {GATE: '성문'})
+    states = to_people(
+        [placed, unplaced], typing.cast(Ruleset, SimpleNamespace(injuries=[], resources=())), {GATE: '성문'}
+    )
 
     assert [state.place for state in states] == ['성문', None]

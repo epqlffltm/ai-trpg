@@ -20,6 +20,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI
@@ -31,10 +32,13 @@ from app.assets.scenarios.snapshot import AttackSnapshot
 from app.engine.dice import ScriptedDice
 from app.engine.templates import SRD5
 from app.rounds import initiative
+from app.rounds.cast import CastMember
+from app.rounds.effects import Judging
 from app.rounds.move_lines import round_lines
 from app.rounds.narration_request import to_turn_note
 from app.rounds.narrator import MonsterTurnNote, TurnNote
 from app.rounds.npc_attacks import INCAPACITATED, can_act, roll_attack, stopped_by
+from app.rounds.state import required
 from app.tables.models import NpcStatus, TableInjury
 from tests.test_monster_turns import turns_of
 from tests.test_npc_actions import FAIL, LAUGH, NO_INJURY, PASS, PUNCH, bearer, events_of, load_dice, punch
@@ -317,7 +321,7 @@ async def test_an_npc_downed_before_its_turn_does_not_strike(
 # --- DB 를 쓰지 않는 작은 함수들 ---
 
 
-def person_with(**npc_fields) -> SimpleNamespace:
+def person_with(**npc_fields) -> CastMember:
     """장면의 인물 하나. 기본은 살아 있고, 적대이고, 라운드 1 에 싸움이 붙었고, 부채 후리기를 지녔다."""
     npc = {
         'status': NpcStatus.ALIVE,
@@ -327,11 +331,14 @@ def person_with(**npc_fields) -> SimpleNamespace:
         'injuries': [],
         **npc_fields,
     }
-    return SimpleNamespace(
-        entry_id=uuid.uuid4(),
-        name='악역영애',
-        npc=SimpleNamespace(**npc),
-        definition=SimpleNamespace(attacks=[AttackSnapshot(**SWIPE)]),
+    return cast(
+        CastMember,
+        SimpleNamespace(
+            entry_id=uuid.uuid4(),
+            name='악역영애',
+            npc=SimpleNamespace(**npc),
+            definition=SimpleNamespace(attacks=[AttackSnapshot.model_validate(SWIPE)]),
+        ),
     )
 
 
@@ -352,12 +359,12 @@ def test_who_acts(fields: dict, expected: bool):
 def test_without_a_sheet_no_one_acts():
     person = person_with()
 
-    assert can_act(SimpleNamespace(**{**vars(person), 'definition': None})) is False
+    assert can_act(cast(CastMember, SimpleNamespace(**{**vars(person), 'definition': None}))) is False
 
 
 def test_a_stunned_npc_cannot_move():
     stunned = TableInjury(injury='stunned', ended_at=None)
-    judging = SimpleNamespace(ruleset=SRD5)
+    judging = cast(Judging, SimpleNamespace(ruleset=SRD5))
 
     assert stopped_by(judging, person_with(injuries=[stunned])) == INCAPACITATED
     assert stopped_by(judging, person_with()) is None
@@ -365,9 +372,9 @@ def test_a_stunned_npc_cannot_move():
 
 def test_the_npcs_injuries_hinder_its_attack():
     limp = TableInjury(injury='limp', ended_at=None)
-    judging = SimpleNamespace(ruleset=SRD5, dice=ScriptedDice([HIT]))
+    judging = cast(Judging, SimpleNamespace(ruleset=SRD5, dice=ScriptedDice([HIT])))
 
-    rolled = roll_attack(judging, person_with(injuries=[limp]), AttackSnapshot(**SWIPE))
+    rolled = roll_attack(judging, person_with(injuries=[limp]), AttackSnapshot.model_validate(SWIPE))
 
     # 절뚝거림은 민첩에 -1 이다. 15 가 14 가 되어 빗나간다
     assert (rolled.check.modifier, rolled.check.success, rolled.hindrance.injuries) == (-1, False, ('limp',))
@@ -399,7 +406,7 @@ def test_the_narrator_gets_the_npc_line_in_turn_order():
     note = to_turn_note(turn)
 
     assert note == TurnNote(npc=MonsterTurnNote(name='악역영애', attack='부채 후리기', target='엘프', hit=False))
-    assert round_lines([], [note]) == ['악역영애: 엘프에게 부채 후리기 (빗나감)']
+    assert round_lines([], [required(note, 'turn')]) == ['악역영애: 엘프에게 부채 후리기 (빗나감)']
 
 
 def test_a_skipped_npc_turn_is_not_narrated():

@@ -21,20 +21,24 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
+from conversation_core.transcripts.blocks import Note
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import RouteSnapshot
+from app.assets.scenarios.snapshot import EntrySnapshot, RouteSnapshot, Snapshot
 from app.engine.dice import ScriptedDice
 from app.rounds import monster_roams
+from app.rounds.monster_scene import SceneMonster
 from app.rounds.move_lines import describe_roam
 from app.rounds.narrator import RoamNote
 from app.tables import places
 from app.tables.models import TableMonster
+from app.transcripts.labels import Labels
 from app.transcripts.story import roamed
 from tests.sheets import SHEET, make_sheet
 from tests.test_monster_turns import (
@@ -338,9 +342,12 @@ def test_a_one_way_route_is_walked_one_way():
 
 def test_a_roamer_picks_a_neighbour_near_home_with_the_dice():
     routes = [route(A, B), route(A, C), route(C, D)]
-    dog = SimpleNamespace(
-        state=SimpleNamespace(place_id=A, home_place_id=A),
-        definition=SimpleNamespace(roams=SimpleNamespace(chance=50, reach=1)),
+    dog = cast(
+        SceneMonster,
+        SimpleNamespace(
+            state=SimpleNamespace(place_id=A, home_place_id=A),
+            definition=SimpleNamespace(roams=SimpleNamespace(chance=50, reach=1)),
+        ),
     )
 
     # 확률(50 이하), 이웃 둘(B, C) 중 두 번째
@@ -358,14 +365,19 @@ def test_the_lines_tell_the_arrival():
     assert describe_roam(hunter) == '(다가옴: 들개 — 배수로에서 냄새를 맡고 다가왔다, 아직 치지 않음)'
     assert describe_roam(roamer) == '(다가옴: 들개 — 어슬렁거리다 들어왔다, 아직 치지 않음)'
     payload = {'name': '들개', 'way': 'roam', 'from_place': None, 'to_place': {'entry_id': str(A), 'name': '수로 입구'}}
-    assert roamed(payload, None)[0].text == '들개: 어슬렁거리다 들어옴 · 수로 입구'
+    [note] = roamed(payload, Labels())
+    assert isinstance(note, Note)
+    assert note.text == '들개: 어슬렁거리다 들어옴 · 수로 입구'
 
 
 def test_hunting_comes_before_roaming():
     routes = [route(A, B), route(A, C)]
-    dog = SimpleNamespace(
-        state=SimpleNamespace(place_id=A, home_place_id=A),
-        definition=SimpleNamespace(hunts=1, roams=SimpleNamespace(chance=100, reach=3)),
+    dog = cast(
+        SceneMonster,
+        SimpleNamespace(
+            state=SimpleNamespace(place_id=A, home_place_id=A),
+            definition=SimpleNamespace(hunts=1, roams=SimpleNamespace(chance=100, reach=3)),
+        ),
     )
 
     # 사냥할 것이 있으면 배회의 확률을 굴리지 않는다
@@ -374,8 +386,8 @@ def test_hunting_comes_before_roaming():
 
 
 def test_a_place_the_table_does_not_know_is_not_named():
-    entry = SimpleNamespace(id=A, name='깊은 수로')
-    snapshot = SimpleNamespace(lorebooks=[])
+    entry = cast(EntrySnapshot, SimpleNamespace(id=A, name='깊은 수로'))
+    snapshot = cast(Snapshot, SimpleNamespace(lorebooks=[]))
     known = places.KnownMap(places=[entry], routes=[])
 
     assert monster_roams.place_document(snapshot, known, B) is None
