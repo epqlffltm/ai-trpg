@@ -47,6 +47,7 @@ from app.rounds.effects import (
     with_nature,
 )
 from app.rounds.monster_scene import Gone, SceneMonster, find_scene_monster, gone_reason
+from app.rounds.state import required
 from app.tables import monsters as table_monsters
 from app.tables import npcs, sheets
 from app.tables import state as table_state
@@ -114,8 +115,8 @@ def change_sheet(
     if affected is None or affected.sheet is None or sheets.is_dead(affected):
         return None
 
-    sheet = affected.sheet
-    magnitude = health.find_magnitude(judging.ruleset, magnitude_key)
+    sheet = affected.current_sheet
+    magnitude = required(health.find_magnitude(judging.ruleset, magnitude_key), 'magnitude')
     facing = resisting.member_nature(judging, affected, nature) if kind == ChangeKind.DAMAGE else None
     change = health.change_hp(kind, magnitude, sheet.hp, sheet.max_hp, judging.dice, cut, facing)
     if prank:
@@ -140,7 +141,7 @@ def member_injury(judging: Judging, change: Change, member: TableMember, aim: st
     아니면 큰 타격이나 쓰러짐에 표를 굴린다. 캐릭터는 피해로 바로 죽지 않는다(죽음의 굴림으로 죽는다).
     그 캐릭터가 막는 성질(#886 ②, 시트와 착용한 물건과 입은 부상의 저항)의 부상은 입지 않는다.
     """
-    sheet = member.sheet
+    sheet = member.current_sheet
     immune = resisting.of_member(judging, member)
     if aim is not None and change.kind == ChangeKind.DAMAGE:
         return round_injuries.take_aimed(
@@ -184,7 +185,7 @@ def change_cast_member(
 
     npc = member.npc
     status_before = npc.status
-    magnitude = health.find_magnitude(judging.ruleset, found.magnitude)
+    magnitude = required(health.find_magnitude(judging.ruleset, found.magnitude), 'magnitude')
     facing = resisting.cast_nature(judging, member, nature) if found.kind == ChangeKind.DAMAGE else None
     change = npcs.change_npc(npc, found.kind, magnitude, action.lethal, judging.dice, cut, facing)
     injury_roll = npc_injury(judging, action, change, member)
@@ -207,7 +208,7 @@ def change_scene_monster(
         return None
 
     status_before = monster.state.status
-    magnitude = health.find_magnitude(judging.ruleset, found.magnitude)
+    magnitude = required(health.find_magnitude(judging.ruleset, found.magnitude), 'magnitude')
     traits = table_monsters.traits_of(monster.definition.kind)
     facing = resisting.monster_nature(judging, monster, nature)
     change = table_monsters.change_monster(monster.state, traits, magnitude, action.lethal, judging.dice, cut, facing)
@@ -480,7 +481,7 @@ def roll_strike(
     쳤으면 guarded)이다.
     """
     ruleset = judging.ruleset
-    sheet = member.sheet
+    sheet = member.current_sheet
     targeted = struck_of(action, effect_target)
     defense = strike_defense(judging, targeted, blow)
     guarded = guarded_target(judging, targeted)
@@ -492,7 +493,8 @@ def roll_strike(
         return hindered, guards.with_guard({}, guarded)
     side = defenses.strike_side(ruleset, sheet.abilities, sheet.injuries, action, blow, guarded)
     opposed = resolve_opposed(ruleset, side, defense, judging.dice)
-    defended = {'defense': defenses.defense_document(defenses.struck_ability(ruleset), opposed.defense)}
+    struck = required(defenses.struck_ability(ruleset), 'defense')
+    defended = {'defense': defenses.defense_document(struck, opposed.defense)}
     return opposed.attack, guards.with_guard(defended, guarded)
 
 
@@ -520,9 +522,9 @@ def judge_check(
     if gone is not None:
         return {'target_gone': gone}
     if action.monster is not None:
-        mark_fight(judging, find_scene_monster(judging.monsters, action.monster).state, member)
+        mark_fight(judging, required(find_scene_monster(judging.monsters, action.monster), 'monster').state, member)
     mark_npc_attack(judging, member, action)
-    sheet = member.sheet
+    sheet = member.current_sheet
     hindrance = round_injuries.hindrance_for(judging.ruleset, sheet.injuries, action.ability)
     blow = plan_check_blow(judging, member, action)
     cut = blow.cut if blow is not None else 0

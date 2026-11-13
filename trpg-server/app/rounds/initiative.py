@@ -30,6 +30,7 @@ from app.engine.rolls import better_first, roll_pool
 from app.engine.ruleset import Ruleset
 from app.rounds.cast import CastMember
 from app.rounds.monster_scene import SceneMonster
+from app.rounds.state import required
 from app.tables.models import TableMember
 
 
@@ -120,8 +121,8 @@ def member_turn(ruleset: Ruleset, member: TableMember, ambushed: set[uuid.UUID])
         kind=TurnKind.PC,
         member=member,
         monster=None,
-        first=member.sheet.place_id in ambushed,
-        score=score_of(ruleset, member.sheet.abilities),
+        first=member.current_sheet.place_id in ambushed,
+        score=score_of(ruleset, member.current_sheet.abilities),
     )
 
 
@@ -166,8 +167,9 @@ def break_ties(turns: list[Turn], ruleset: Ruleset, dice: Dice) -> list[Turn]:
         if len(members) == 1:
             ordered.extend(members)
             continue
-        rolled = [replace(turn, tiebreak=sum(roll_pool(ruleset, dice))) for turn in members]
-        ordered.extend(sorted(rolled, key=lambda turn: better_first(ruleset, turn.tiebreak)))
+        rolled = [(sum(roll_pool(ruleset, dice)), turn) for turn in members]
+        ranked = sorted(rolled, key=lambda pair: better_first(ruleset, pair[0]))
+        ordered.extend(replace(turn, tiebreak=tiebreak) for tiebreak, turn in ranked)
     return ordered
 
 
@@ -191,7 +193,10 @@ def turn_document(turn: Turn) -> dict:
     """
     common = {'kind': turn.kind.value, 'first': turn.first, 'score': turn.score, 'tiebreak': turn.tiebreak}
     if turn.kind == TurnKind.PC:
-        return {**common, 'user_id': str(turn.member.user_id), 'character_name': turn.member.character_name}
+        member = required(turn.member, 'member')
+        return {**common, 'user_id': str(member.user_id), 'character_name': member.character_name}
     if turn.kind == TurnKind.NPC:
-        return {**common, 'entry_id': str(turn.npc.entry_id), 'name': turn.npc.name}
-    return {**common, 'monster_id': str(turn.monster.state.id), 'name': turn.monster.name}
+        npc = required(turn.npc, 'npc')
+        return {**common, 'entry_id': str(npc.entry_id), 'name': npc.name}
+    monster = required(turn.monster, 'monster')
+    return {**common, 'monster_id': str(monster.state.id), 'name': monster.name}

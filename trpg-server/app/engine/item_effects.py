@@ -191,6 +191,6 @@ def is_resisted(effect, blocked: frozenset[str]) -> bool:
     return is_drain(effect) and effect.nature is not None and effect.nature in blocked
 
 
-def first_of(effects: list, kind: EffectKind):
+def first_of(effects: Sequence, kind: EffectKind):
     """그 종류의 첫 효과. 없으면 None."""
     return next((effect for effect in effects if effect.kind == kind), None)

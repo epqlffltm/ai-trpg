@@ -81,7 +81,7 @@ from app.rounds.monster_scene import SceneMonster, find_scene_monster, stands_wi
 from app.rounds.place_item_actions import accept_take
 from app.rounds.rests import accept_rest
 from app.rounds.skill_actions import accept_skill
-from app.rounds.state import find_declaration, is_down, rules_of
+from app.rounds.state import find_declaration, is_down, required, rules_of
 from app.rounds.steals import require_steal
 from app.rounds.trades import accept_buy, accept_pay, accept_sell
 from app.rounds.victims import find_monster_carried, find_npc_carried
@@ -113,7 +113,7 @@ def aim_treatment(action: TreatAction, actor_id: uuid.UUID) -> TreatAction:
     return action.model_copy(update={'target': actor_id})
 
 
-def require_npc_target(cast: list[CastMember], member: TableMember, npc_id: uuid.UUID, aim: str | None) -> None:
+def require_npc_target(cast: list[CastMember], member: TableMember, npc_id: uuid.UUID | None, aim: str | None) -> None:
     """
     겨눈 NPC 가 이번 장면의 살아 있는(쓰러졌어도 된다) 인물인지 본다. 노려 쳤으면 그 부상을 아직 입지 않았는지도 본다.
 
@@ -133,7 +133,7 @@ def require_npc_target(cast: list[CastMember], member: TableMember, npc_id: uuid
 def require_monster_target(
     monsters: list[SceneMonster],
     member: TableMember,
-    monster_id: uuid.UUID,
+    monster_id: uuid.UUID | None,
     aim: str | None = None,
     ruleset: Ruleset | None = None,
 ) -> None:
@@ -150,7 +150,7 @@ def require_monster_target(
     if table_monsters.is_dead(monster.state):
         raise RoundConflictError(Conflict.MONSTER_DEAD)
     if aim is not None:
-        require_aimable_monster(monster, aim, ruleset)
+        require_aimable_monster(monster, aim, required(ruleset, 'ruleset'))
 
 
 def require_aimable_monster(monster: SceneMonster, aim: str, ruleset: Ruleset) -> None:
@@ -225,7 +225,7 @@ def require_ally_target(table: GameTable, member: TableMember, action: CheckActi
     """
     target, level = friendly_fire.require_harmable(table, member, action.target)
     friendly_fire.require_prank_aim(ruleset, level, action.aim)
-    if action.aim is not None and round_injuries.wears(target.sheet.injuries, action.aim):
+    if action.aim is not None and round_injuries.wears(target.current_sheet.injuries, action.aim):
         raise RoundConflictError(Conflict.ALREADY_INJURED)
 
 
@@ -443,7 +443,7 @@ def accept_give(table: GameTable, member: TableMember, action: GiveAction) -> di
     if action.target == member.user_id:
         raise ActionTargetError('target')
     recipient = living_target(table, action.target, Conflict.RECIPIENT_DEAD)
-    if items.count_of(recipient.sheet, action.item) + action.count > ITEM_STACK_MAX:
+    if items.count_of(recipient.current_sheet, action.item) + action.count > ITEM_STACK_MAX:
         raise RoundConflictError(Conflict.RECIPIENT_FULL)
     return action.model_dump(mode='json')
 
@@ -494,9 +494,10 @@ def accept_disarm(table: GameTable, member: TableMember, action: DisarmAction) -
 def require_carried_by_victim(scene: Scene, action: StealAction | LootAction) -> None:
     """훔칠 대상(몬스터나 NPC)이 그 물건을 지금 지녔는지 본다. 아니면 ActionTargetError(carried)."""
     if action.monster is not None:
-        line = find_monster_carried(find_scene_monster(scene.monsters, action.monster), action.item)
+        monster = required(find_scene_monster(scene.monsters, action.monster), 'monster')
+        line = find_monster_carried(monster, action.item)
     else:
-        line = find_npc_carried(find_cast_member(scene.cast, action.npc), action.item)
+        line = find_npc_carried(required(find_cast_member(scene.cast, action.npc), 'npc'), action.item)
     if line is None:
         raise ActionTargetError('carried')
 

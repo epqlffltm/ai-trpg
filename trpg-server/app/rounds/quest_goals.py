@@ -50,6 +50,7 @@ from app.events.models import EventType
 from app.portraits.seats import with_cutscene
 from app.rounds.experience import record_leveled
 from app.rounds.quest_handover import hand_over
+from app.rounds.state import required
 from app.tables import chapters, items, quests, sheets
 from app.tables.content import snapshot_of
 from app.tables.items import CatalogItem
@@ -68,12 +69,12 @@ def living(table: GameTable) -> list[TableMember]:
 
 def reached(table: GameTable, place_id: uuid.UUID) -> bool:
     """그 장소에 죽지 않은 캐릭터가 서 있는가."""
-    return any(member.sheet.place_id == place_id for member in living(table))
+    return any(member.current_sheet.place_id == place_id for member in living(table))
 
 
 def held(table: GameTable, entry_id: uuid.UUID) -> int:
     """죽지 않은 캐릭터들이 가진 그 물건의 개수를 모두 합친 것."""
-    return sum(items.count_of(member.sheet, entry_id) for member in living(table))
+    return sum(items.count_of(member.current_sheet, entry_id) for member in living(table))
 
 
 def defeated_monsters(monsters: Iterable[TableMonster], monster_id: uuid.UUID) -> int:
@@ -126,24 +127,29 @@ LINKED_STATUS = {
 def is_met(
     condition: QuestConditionSnapshot, table: GameTable, monsters: list[TableMonster], npcs: list[TableNpc]
 ) -> bool:
-    """조건 하나가 지금 채워졌는가."""
+    """
+    조건 하나가 지금 채워졌는가.
+
+    chapter_at_least 는 chapter 를, 나머지는 target 을 반드시 적는다(판을 받을 때 schemas.QuestCondition 이 본다).
+    """
     if condition.kind == QuestConditionKind.CHAPTER_AT_LEAST:
-        return chapters.at_least(table, condition.chapter)
+        return chapters.at_least(table, required(condition.chapter, 'chapter'))
+    target = required(condition.target, 'target')
     if condition.kind in LINKED_STATUS:
-        return quest_ended(table, condition.target, LINKED_STATUS[condition.kind])
+        return quest_ended(table, target, LINKED_STATUS[condition.kind])
     if condition.kind in CAMPAIGN_RESULTS:
-        return campaign_ended(table, condition.target, CAMPAIGN_RESULTS[condition.kind])
+        return campaign_ended(table, target, CAMPAIGN_RESULTS[condition.kind])
     if condition.kind == QuestConditionKind.REACH_PLACE:
-        return reached(table, condition.target)
+        return reached(table, target)
     if condition.kind == QuestConditionKind.HOLD_ITEM:
-        return held(table, condition.target) >= condition.count
+        return held(table, target) >= condition.count
     if condition.kind == QuestConditionKind.LOSE_ITEM:
-        return held(table, condition.target) < condition.count
+        return held(table, target) < condition.count
     if condition.kind == QuestConditionKind.DEFEAT_MONSTER:
-        return defeated_monsters(monsters, condition.target) >= condition.count
+        return defeated_monsters(monsters, target) >= condition.count
     if condition.kind == QuestConditionKind.NPC_DEAD:
-        return npc_dead(npcs, condition.target)
-    return npc_defeated(npcs, condition.target)
+        return npc_dead(npcs, target)
+    return npc_defeated(npcs, target)
 
 
 def all_met(
