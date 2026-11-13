@@ -18,7 +18,7 @@ from app.assets.routing import MAX_PAGE_SIZE, Paging, Session
 from app.events.responses import to_event
 from app.events.schemas import DEFAULT_EVENT_LIMIT, EventPage
 from app.tables import past
-from app.tables.models import TableDeparture
+from app.tables.models import DepartureKind, TableDeparture
 from app.tables.schemas import PastTableOut, PastTablePage
 
 router = APIRouter(prefix='/tables/past', tags=['tables'])
@@ -31,7 +31,7 @@ def to_past_table(departure: TableDeparture, title: str, scenario_id: uuid.UUID)
         scenario_id=scenario_id,
         title=title,
         character_name=departure.character_name,
-        kind=departure.kind,
+        kind=DepartureKind(departure.kind),
         last_sequence=departure.last_sequence,
         left_at=departure.left_at,
     )

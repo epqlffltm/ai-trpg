@@ -525,6 +525,17 @@ class TableMember(Base):
         return self.sheets[-1] if self.sheets else None
 
     @property
+    def current_sheet(self) -> 'TableSheet':
+        """
+        게임 중인 사람의 지금 캐릭터의 시트. 시트를 받은 뒤(시작한 뒤)에만 부른다.
+
+        시트가 없으면 부른 쪽의 버그라 LookupError 다. 시작 전일 수 있는 곳은 sheet(None 이 될 수 있다)를 읽는다.
+        """
+        if not self.sheets:
+            raise LookupError(f'시트를 받기 전의 자리입니다: {self.user_id}')
+        return self.sheets[-1]
+
+    @property
     def fallen(self) -> list['TableSheet']:
         """떠난 캐릭터들의 시트. 지금 캐릭터의 앞에 받은 것들이다. 모두 죽은 캐릭터다."""
         return self.sheets[:-1]

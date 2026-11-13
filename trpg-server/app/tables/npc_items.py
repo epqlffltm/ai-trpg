@@ -11,20 +11,25 @@ DB 를 모른다. 이미 읽어 온 NPC 의 상태(TableNpc)와 판의 NPC 시�
 저장은 부르는 쪽이 한다.
 """
 
+from collections.abc import Sequence
+from typing import cast
+
 from app.assets.scenarios.snapshot import NpcSheetSnapshot
 from app.tables import carried as carried_items
-from app.tables.carried import Carried
+from app.tables.carried import Carried, CountRow
 from app.tables.models import TableNpc, TableNpcItem
 
 
 def carried(npc: TableNpc, definition: NpcSheetSnapshot | None) -> list[Carried]:
     """그 인물이 지금 지닌 것. 줄의 차례다. 0 이 된 줄은 뺀다. 시트가 없으면(None) 빈 목록이다."""
-    return carried_items.carried(npc.items, definition)
+    # 바뀐 줄(ORM 의 행)은 CountRow 의 모양이다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    return carried_items.carried(cast(Sequence[CountRow], npc.items), definition)
 
 
 def set_count(npc: TableNpc, slot: int, count: int) -> None:
     """그 줄의 개수를 고친다. 처음 바뀌는 줄이면 행을 만든다."""
-    row = carried_items.find_row(npc.items, slot)
+    # 바뀐 줄(ORM 의 행)은 CountRow 의 모양이다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    row = cast(TableNpcItem | None, carried_items.find_row(cast(Sequence[CountRow], npc.items), slot))
     if row is None:
         npc.items.append(TableNpcItem(table_id=npc.table_id, entry_id=npc.entry_id, slot=slot, count=count))
         return

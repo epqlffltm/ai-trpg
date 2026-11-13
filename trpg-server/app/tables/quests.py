@@ -154,13 +154,13 @@ def give_reward(
     """
     given = []
     for stack in quest.reward:
-        count = items.add_up_to(table.id, member.sheet, stack.entry_id, stack.count)
+        count = items.add_up_to(table.id, member.current_sheet, stack.entry_id, stack.count)
         given.append(
             {
                 'entry_id': str(stack.entry_id),
                 'name': things[stack.entry_id].name,
                 'count': count,
-                'total': items.count_of(member.sheet, stack.entry_id),
+                'total': items.count_of(member.current_sheet, stack.entry_id),
                 'capped': count < stack.count,
             }
         )
@@ -169,7 +169,7 @@ def give_reward(
         'character_name': member.character_name,
         'items': given,
         'money': give_reward_money(member, quest),
-        'xp': growth.gain(member.sheet, quest.reward_xp, progression),
+        'xp': growth.gain(member.current_sheet, quest.reward_xp, progression),
     }
 
 
@@ -181,8 +181,8 @@ def give_reward_money(member: TableMember, quest: CatalogQuest) -> dict | None:
     """
     if not quest.reward_money:
         return None
-    count = money.add_up_to(member.sheet, quest.reward_money)
-    return {'count': count, 'total': member.sheet.money, 'capped': count < quest.reward_money}
+    count = money.add_up_to(member.current_sheet, quest.reward_money)
+    return {'count': count, 'total': member.current_sheet.money, 'capped': count < quest.reward_money}
 
 
 def give_rewards(

@@ -59,7 +59,7 @@ async def give_up_character(session: AsyncSession, user_id: uuid.UUID, table_id:
     require_playing(table)
     require_downed_alive(member)
 
-    sheets.mark_dead(member.sheet)
+    sheets.mark_dead(member.current_sheet)
     payload = {
         'user_id': str(user_id),
         'character_name': member.character_name,

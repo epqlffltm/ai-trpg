@@ -22,6 +22,7 @@ DB 를 모른다. 이미 읽어 온 테이블과 판을 받아 판단하고, 객
 
 import uuid
 from datetime import UTC, datetime
+from typing import TypeGuard
 
 from app.assets.models import CharacterMode
 from app.assets.scenarios.snapshot import Snapshot
@@ -73,7 +74,7 @@ def next_number(member: TableMember) -> int:
     return len(member.sheets) + 1
 
 
-def is_fresh(roll: TableRoll | None, member: TableMember) -> bool:
+def is_fresh(roll: TableRoll | None, member: TableMember) -> TypeGuard[TableRoll]:
     """이 굴림이 지금 정하고 있는 캐릭터를 위해 굴린 것인가. 지난 캐릭터를 위해 굴린 것이면 아니다."""
     return roll is not None and roll.character_number == next_number(member)
 
@@ -196,9 +197,10 @@ def hand_out(table: GameTable, snapshot: Snapshot, skip: frozenset[uuid.UUID] = 
     """
     given = [member for member in table.members if member.user_id not in skip]
     sources = [find_source(snapshot, member) for member in given]
-    if any(source is None for source in sources):
+    found = [source for source in sources if source is not None]
+    if len(found) != len(sources):
         return False
-    for member, source in zip(given, sources, strict=True):
+    for member, source in zip(given, found, strict=True):
         sheet = give_sheet(member, source)
         items.equip(table.id, sheet, snapshot, member.pregen_index)
         money.endow(sheet, snapshot, member.pregen_index)

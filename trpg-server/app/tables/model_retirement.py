@@ -34,6 +34,7 @@ HTTP 를 모른다. 테이블을 잠그고 한다. 저장(commit)은 부른 쪽�
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import cast
 
 from ai_core.catalog_contract import is_retired
 from server_core.billing.price_list import PriceList
@@ -43,7 +44,7 @@ from app.catalog import offers
 from app.catalog import repository as catalog
 from app.catalog.models import AiModel
 from app.catalog.offers import OfferedModel
-from app.catalog.steps import steps_of
+from app.catalog.steps import HasSteps, steps_of
 from app.events import recorder
 from app.events.models import EventType
 from app.notifications import outbox
@@ -108,6 +109,13 @@ def mark_noticed(table: GameTable, retires_on: date, stage: int) -> None:
     table.retire_notice_days = stage
 
 
+def retires_on_of(model: AiModel) -> date:
+    """은퇴일이 정해진 모델의 은퇴일. check_table 이 그런 모델만 넘긴다. 없으면 부른 쪽의 버그라 LookupError 다."""
+    if model.retires_on is None:
+        raise LookupError(f'은퇴일이 없는 모델입니다: {model.slug}')
+    return model.retires_on
+
+
 def is_watched(table: GameTable) -> bool:
     """볼 테이블인가. 끝나지 않았고 서술 모델이 있다."""
     return table.status != TableStatus.ENDED and table.narration_model is not None
@@ -123,20 +131,21 @@ async def replacement_of(
     가격 목록을 받지 못했고 받아 둔 것도 없으면 PriceListUnavailable 이 그대로 올라간다. 다음에 다시 본다.
     """
     return await offers.find_replacement(
-        session, prices, model.vendor, now, excluding=model.slug, steps=steps_of(table)
+        session, prices, model.vendor, now, excluding=model.slug, steps=steps_of(cast(HasSteps, table))
     )
 
 
 def notify_retiring(session: AsyncSession, table: GameTable, model: AiModel, stage: int, today: date) -> None:
     """은퇴가 다가온다고 알리고(방장의 알림함에도) 그 단계를 적는다."""
+    retires_on = retires_on_of(model)
     payload = {
         'narration_model': model.slug,
-        'retires_on': model.retires_on.isoformat(),
-        'days_left': days_left(model.retires_on, today),
+        'retires_on': retires_on.isoformat(),
+        'days_left': days_left(retires_on, today),
     }
     event = recorder.record(session, table, EventType.NARRATION_MODEL_RETIRING, payload=payload)
     outbox.tell_host(session, table, event)
-    mark_noticed(table, model.retires_on, stage)
+    mark_noticed(table, retires_on, stage)
 
 
 async def replace_model(session: AsyncSession, table: GameTable, retired: str, replacement: OfferedModel) -> None:
@@ -147,16 +156,16 @@ async def replace_model(session: AsyncSession, table: GameTable, retired: str, r
     """
     round_ = await round_repository.find_latest_round(session, table.id)
     table.narration_model = replacement.slug
-    applied = takes_new_model(round_)
-    if applied:
-        await apply_to_round(session, round_, replacement.slug, steps_of(table), replacement)
+    changed = round_ if takes_new_model(round_) else None
+    if changed is not None:
+        await apply_to_round(session, changed, replacement.slug, steps_of(cast(HasSteps, table)), replacement)
     forget_retire_notices(table)
     payload = {
         'from': retired,
         'narration_model': replacement.slug,
         'reason': RETIRED,
-        'round': round_.number if applied else None,
-        'price': price_payload(round_) if applied else None,
+        'round': changed.number if changed is not None else None,
+        'price': price_payload(changed) if changed is not None else None,
     }
     event = recorder.record(session, table, EventType.NARRATION_MODEL_REPLACED, payload=payload)
     outbox.tell_host(session, table, event)
@@ -167,7 +176,7 @@ def notify_stranded(session: AsyncSession, table: GameTable, model: AiModel) -> 
     payload = {'narration_model': model.slug, 'reason': RETIRED}
     event = recorder.record(session, table, EventType.NARRATION_MODEL_UNAVAILABLE, payload=payload)
     outbox.tell_host(session, table, event)
-    mark_noticed(table, model.retires_on, UNAVAILABLE_NOTICE)
+    mark_noticed(table, retires_on_of(model), UNAVAILABLE_NOTICE)
 
 
 async def handle_retired(
@@ -178,7 +187,7 @@ async def handle_retired(
     if replacement is not None:
         await replace_model(session, table, model.slug, replacement)
         return Checked(replaced=True)
-    if already_noticed(table, model.retires_on, UNAVAILABLE_NOTICE):
+    if already_noticed(table, retires_on_of(model), UNAVAILABLE_NOTICE):
         return NOTHING
     notify_stranded(session, table, model)
     return Checked(stranded=True)
@@ -186,8 +195,9 @@ async def handle_retired(
 
 def handle_retiring(session: AsyncSession, table: GameTable, model: AiModel, today: date) -> Checked:
     """은퇴가 다가오는 모델을 쓰는 테이블. 새 단계에 닿았으면 알린다."""
-    stage = notice_stage(model.retires_on, today)
-    if stage is None or already_noticed(table, model.retires_on, stage):
+    retires_on = retires_on_of(model)
+    stage = notice_stage(retires_on, today)
+    if stage is None or already_noticed(table, retires_on, stage):
         return NOTHING
     notify_retiring(session, table, model, stage, today)
     return Checked(noticed=True)
@@ -199,9 +209,10 @@ async def check_table(session: AsyncSession, table: GameTable, prices: PriceList
 
     끝난 테이블, 모델이 없는 옛 테이블, 은퇴일이 없는 모델은 볼 것이 없다.
     """
-    if not is_watched(table):
+    slug = table.narration_model
+    if not is_watched(table) or slug is None:
         return NOTHING
-    model = await catalog.get_model(session, table.narration_model)
+    model = await catalog.get_model(session, slug)
     if model is None or model.retires_on is None:
         return NOTHING
     if is_retired(model, now.date()):

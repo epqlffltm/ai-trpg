@@ -47,7 +47,8 @@ def sheet_with(amount: int = 0, *held: tuple[uuid.UUID, int]) -> TableSheet:
 
 def member_with(sheet: TableSheet, dead: bool = False) -> SimpleNamespace:
     sheet.died_at = datetime(2026, 10, 24, tzinfo=UTC) if dead else None
-    return SimpleNamespace(user_id=uuid.uuid4(), character_name='기사', sheet=sheet)
+    # 앉은 사람(TableMember)의 흉내. 지금 캐릭터의 시트는 sheet 와 current_sheet 둘로 읽는다
+    return SimpleNamespace(user_id=uuid.uuid4(), character_name='기사', sheet=sheet, current_sheet=sheet)
 
 
 # --- 시나리오의 화폐와 판 ---

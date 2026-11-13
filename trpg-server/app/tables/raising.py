@@ -32,7 +32,7 @@ def require_living(member: TableMember) -> TableSheet:
     """능력치를 바꿀 수 있는 캐릭터의 시트. 죽었으면 RoundConflictError(character_dead)."""
     if sheets.is_dead(member):
         raise RoundConflictError(RoundConflict.CHARACTER_DEAD)
-    return member.sheet
+    return member.current_sheet
 
 
 async def lock_raiser(

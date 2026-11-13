@@ -42,7 +42,7 @@ def require_able(member: TableMember) -> TableSheet:
         raise RoundConflictError(RoundConflict.CHARACTER_DEAD)
     if round_state.is_down(member):
         raise RoundConflictError(RoundConflict.CHARACTER_DOWNED)
-    return member.sheet
+    return member.current_sheet
 
 
 async def lock_wearer(

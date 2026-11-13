@@ -10,20 +10,25 @@ DB 를 모른다. 이미 읽어 온 마리(TableMonster)와 판의 몬스터(Mon
 저장은 부르는 쪽이 한다.
 """
 
+from collections.abc import Sequence
+from typing import cast
+
 from app.assets.scenarios.snapshot import MonsterSnapshot
 from app.tables import carried as carried_items
-from app.tables.carried import Carried
+from app.tables.carried import Carried, CountRow
 from app.tables.models import TableMonster, TableMonsterItem
 
 
 def carried(monster: TableMonster, definition: MonsterSnapshot) -> list[Carried]:
     """마리가 지금 지닌 것. 줄의 차례다. 0 이 된 줄은 뺀다."""
-    return carried_items.carried(monster.items, definition)
+    # 바뀐 줄(ORM 의 행)은 CountRow 의 모양이다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    return carried_items.carried(cast(Sequence[CountRow], monster.items), definition)
 
 
 def set_count(monster: TableMonster, slot: int, count: int) -> None:
     """그 줄의 개수를 고친다. 처음 바뀌는 줄이면 행을 만든다."""
-    row = carried_items.find_row(monster.items, slot)
+    # 바뀐 줄(ORM 의 행)은 CountRow 의 모양이다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    row = cast(TableMonsterItem | None, carried_items.find_row(cast(Sequence[CountRow], monster.items), slot))
     if row is None:
         monster.items.append(TableMonsterItem(monster_id=monster.id, slot=slot, count=count))
         return

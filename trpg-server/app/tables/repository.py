@@ -118,7 +118,7 @@ async def find_heading(session: AsyncSession, table_id: uuid.UUID) -> tuple[str,
     return None if row is None else (row.title, row.content)
 
 
-def locked(query: Select[tuple[GameTable]]) -> Select[tuple[GameTable]]:
+def locked(query: Select[GameTable]) -> Select[GameTable]:
     """
     찾은 테이블을 이 트랜잭션이 끝날 때까지 혼자 잠근다.
 
@@ -153,7 +153,7 @@ async def reload_table(session: AsyncSession, table_id: uuid.UUID) -> GameTable:
     return (await session.execute(query)).scalar_one()
 
 
-def seated(user_id: uuid.UUID) -> Select[tuple[GameTable]]:
+def seated(user_id: uuid.UUID) -> Select[GameTable]:
     """이 사람이 앉아 있는 테이블을 고르는 조건."""
     return (
         select(GameTable).join(TableMember, TableMember.table_id == GameTable.id).where(TableMember.user_id == user_id)
@@ -191,7 +191,7 @@ async def count_seated(session: AsyncSession, user_id: uuid.UUID) -> int:
 # --- 로비. 앉지 않은 사람이 보는 목록이다 ---
 
 
-def open_to(allowed_ratings: list[Rating], scenario_id: uuid.UUID | None) -> Select[tuple[GameTable]]:
+def open_to(allowed_ratings: list[Rating], scenario_id: uuid.UUID | None) -> Select[GameTable]:
     """
     로비에 보여도 되는 테이블을 고르는 조건. 로비를 읽는 함수들이 함께 쓴다.
 
@@ -269,7 +269,7 @@ async def list_departures(session: AsyncSession, user_id: uuid.UUID, limit: int,
         .limit(limit)
         .offset(offset)
     )
-    return [tuple(row) for row in await session.execute(query)]
+    return [(departure, title, scenario_id) for departure, title, scenario_id in await session.execute(query)]
 
 
 async def count_departures(session: AsyncSession, user_id: uuid.UUID) -> int:

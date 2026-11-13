@@ -52,6 +52,14 @@ def find_lock(table: GameTable, route: RouteSnapshot) -> TableRouteLock | None:
     return next((row for row in table.route_locks if (row.from_place, row.to_place) == key_of(route)), None)
 
 
+def door_of(table: GameTable, route: RouteSnapshot) -> TableRouteLock:
+    """문이 있는 길의 문. 문이 있는 길에만 부른다. 없으면 부른 쪽의 버그라 LookupError 다."""
+    row = find_lock(table, route)
+    if row is None:
+        raise LookupError(f'문이 없는 길입니다: {key_of(route)}')
+    return row
+
+
 def is_locked(table: GameTable, route: RouteSnapshot) -> bool:
     """그 길의 자물쇠가 지금 잠겨 있는가."""
     row = find_lock(table, route)
@@ -72,27 +80,27 @@ def is_broken(table: GameTable, route: RouteSnapshot) -> bool:
 
 def unlock(table: GameTable, route: RouteSnapshot) -> None:
     """그 길의 자물쇠를 연다. 문이 있는 길에만 부른다."""
-    find_lock(table, route).locked = False
+    door_of(table, route).locked = False
 
 
 def lock(table: GameTable, route: RouteSnapshot) -> None:
     """그 길의 자물쇠를 잠근다. 부서지지 않은 문에만 부른다."""
-    find_lock(table, route).locked = True
+    door_of(table, route).locked = True
 
 
 def unbar(table: GameTable, route: RouteSnapshot) -> None:
     """그 길의 빗장을 푼다. 문이 있는 길에만 부른다."""
-    find_lock(table, route).barred = False
+    door_of(table, route).barred = False
 
 
 def bar(table: GameTable, route: RouteSnapshot) -> None:
     """그 길의 빗장을 건다. 부서지지 않은 문에만 부른다."""
-    find_lock(table, route).barred = True
+    door_of(table, route).barred = True
 
 
 def break_open(table: GameTable, route: RouteSnapshot) -> None:
     """그 길의 문을 부순다. 자물쇠도 빗장도 열린 채 다시 잠그거나 걸지 못한다."""
-    row = find_lock(table, route)
+    row = door_of(table, route)
     row.locked = False
     row.barred = False
     row.broken = True
@@ -100,7 +108,7 @@ def break_open(table: GameTable, route: RouteSnapshot) -> None:
 
 def repair(table: GameTable, route: RouteSnapshot) -> None:
     """그 길의 부서진 문을 고친다. 열린 채로 둔다. 문이 있는 길에만 부른다."""
-    find_lock(table, route).broken = False
+    door_of(table, route).broken = False
 
 
 def fitted_item(table: GameTable, route: RouteSnapshot) -> uuid.UUID | None:
@@ -132,7 +140,7 @@ def fit_lock(table: GameTable, route: RouteSnapshot, item: uuid.UUID) -> None:
 
     잠긴 자물쇠는 떼지 못하니 단 자물쇠는 열린 채다.
     """
-    find_lock(table, route).lock_item = item
+    door_of(table, route).lock_item = item
 
 
 def is_shut(table: GameTable, route: RouteSnapshot, device: DoorDevice) -> bool:
@@ -145,6 +153,6 @@ def is_shut(table: GameTable, route: RouteSnapshot, device: DoorDevice) -> bool:
 def set_shut(table: GameTable, route: RouteSnapshot, device: DoorDevice, shut: bool) -> None:
     """그 길의 문의 장치 하나를 잠그거나 건다(shut 참), 또는 열거나 푼다. 부서지지 않은 문에만 잠근다."""
     if device == DoorDevice.BAR:
-        find_lock(table, route).barred = shut
+        door_of(table, route).barred = shut
     else:
-        find_lock(table, route).locked = shut
+        door_of(table, route).locked = shut

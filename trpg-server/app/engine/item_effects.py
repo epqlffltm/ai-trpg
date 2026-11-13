@@ -20,6 +20,7 @@
 """
 
 import enum
+from collections.abc import Sequence
 from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
@@ -166,7 +167,7 @@ AttackEffects = Annotated[
 ]
 
 
-def is_harmful(effects: list) -> bool:
+def is_harmful(effects: Sequence) -> bool:
     """대상에게 해로운 효과(피해, 부상, 수치를 내리는 맞추기)가 있는가."""
     return any(effect.kind in HARMFUL or is_drain(effect) for effect in effects)
 
