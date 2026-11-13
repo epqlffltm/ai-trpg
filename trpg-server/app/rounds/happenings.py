@@ -56,6 +56,7 @@ from app.events.models import EventType, TableEvent
 from app.portraits.seats import with_cutscene
 from app.rounds.experience import record_leveled
 from app.rounds.quest_goals import all_met
+from app.rounds.state import required
 from app.tables import chapters, growth, places, route_locks, sheets
 from app.tables import npcs as table_npcs
 from app.tables.content import snapshot_of
@@ -98,13 +99,14 @@ def move_all(table: GameTable, snapshot: Snapshot, effect: HappeningEffectSnapsh
 
     이미 그곳에 있는 사람은 옮기지 않고 적지 않는다.
     """
+    to_place = required(effect.to_place, 'to_place')
     moves = []
     for member in movers(table, effect):
-        previous = member.sheet.place_id
-        if previous == effect.to_place:
+        previous = member.current_sheet.place_id
+        if previous == to_place:
             continue
-        places.stand(table, member.sheet, effect.to_place)
-        moves.append(places.describe_move(snapshot, member, previous, effect.to_place))
+        places.stand(table, member.current_sheet, to_place)
+        moves.append(places.describe_move(snapshot, member, previous, to_place))
     return moves
 
 
@@ -137,7 +139,7 @@ def character_moves(table: GameTable, snapshot: Snapshot, rule: HappeningSnapsho
 
 def npc_moves(npcs: list[TableNpc], rule: HappeningSnapshot) -> list[dict]:
     """사건 하나의 인물 옮기기(move_npc)를 차례로 낸다. 옮긴 인물들을 돌려준다."""
-    states = {npc.entry_id: npc for npc in npcs}
+    states: dict[uuid.UUID | None, TableNpc] = {npc.entry_id: npc for npc in npcs}
     moved = [
         move_npc(states.get(effect.npc), effect)
         for effect in rule.effects
@@ -189,7 +191,8 @@ def change_door(table: GameTable, snapshot: Snapshot, effect: HappeningEffectSna
 
     길은 판이 게시될 때 본 것이라 있다. 그 문의 상태가 없는 테이블(문이 생기기 전에 시작)이면 아무것도 하지 않는다.
     """
-    route = route_between(snapshot, effect.from_place, effect.to_place)
+    from_place = required(effect.from_place, 'from_place')
+    route = required(route_between(snapshot, from_place, required(effect.to_place, 'to_place')), 'route')
     if route_locks.find_lock(table, route) is None:
         return []
     if effect.kind == HappeningEffectKind.REPAIR_ROUTE:

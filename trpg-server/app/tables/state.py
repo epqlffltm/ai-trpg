@@ -23,7 +23,7 @@ from app.tables.models import GameTable, TableMember, TableStatus
 from app.tables.repository import Seat
 
 
-def find_member(table: GameTable, user_id: uuid.UUID) -> TableMember | None:
+def find_member(table: GameTable, user_id: uuid.UUID | None) -> TableMember | None:
     """테이블에 앉은 사람 중에서 이 사람을 찾는다."""
     return next((member for member in table.members if member.user_id == user_id), None)
 

@@ -174,7 +174,7 @@ def reaches(member: TableMember, person: CastMember) -> bool:
     return member.sheet is not None and member.sheet.place_id == person.npc.place_id
 
 
-def find_reachable(cast: list[CastMember], member: TableMember, entry_id: uuid.UUID) -> CastMember | None:
+def find_reachable(cast: list[CastMember], member: TableMember, entry_id: uuid.UUID | None) -> CastMember | None:
     """
     이번 장면의 인물 중에서 이 캐릭터가 닿는 이 항목의 것을 찾는다. 장면에 없거나 다른 장소에 있으면 None.
 

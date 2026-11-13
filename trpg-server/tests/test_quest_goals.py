@@ -456,7 +456,7 @@ def test_the_narrator_is_told_the_game_decides_quests():
 def person(place: uuid.UUID | None, items: dict | None = None, dead: bool = False) -> SimpleNamespace:
     rows = [SimpleNamespace(entry_id=entry_id, count=count) for entry_id, count in (items or {}).items()]
     sheet = SimpleNamespace(place_id=place, died_at='then' if dead else None, items=rows)
-    return SimpleNamespace(sheet=sheet)
+    return SimpleNamespace(sheet=sheet, current_sheet=sheet)
 
 
 def test_the_dead_neither_stand_nor_hold():

@@ -47,7 +47,9 @@ def stands_together(actor: TableMember, target: TableMember) -> bool:
     return actor.sheet is not None and target.sheet is not None and actor.sheet.place_id == target.sheet.place_id
 
 
-def require_harmable(table: GameTable, actor: TableMember, target_id: uuid.UUID) -> tuple[TableMember, FriendlyFire]:
+def require_harmable(
+    table: GameTable, actor: TableMember, target_id: uuid.UUID | None
+) -> tuple[TableMember, FriendlyFire]:
     """
     받을 때. actor 가 target_id 를 해칠 수 있는지 보고, 맞는 사람과 해칠 수 있는 정도를 돌려준다.
 

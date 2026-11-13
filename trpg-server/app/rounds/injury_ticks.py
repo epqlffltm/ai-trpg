@@ -107,7 +107,7 @@ def any_ticking(table: GameTable, scene: Scene, round_number: int) -> bool:
 
     없으면 판을 읽지 않는다. 있어도 그 부상에 피해가 없을 수 있다(규칙을 읽어야 안다).
     """
-    rows = [row for member in standing_members(table) for row in member.sheet.injuries]
+    rows = [row for member in standing_members(table) for row in member.current_sheet.injuries]
     rows.extend(row for person in standing_cast(scene) for row in person.npc.injuries)
     rows.extend(row for monster in standing_monsters(scene) for row in monster.state.injuries)
     return any(is_ticking(row, round_number) for row in rows)
@@ -120,7 +120,7 @@ def harm_action(judging: Judging, damage: InjuryDamage, **aimed: uuid.UUID) -> C
     능력은 읽지 않지만 칸이 있어야 해서 규칙의 첫 능력치를 적는다. 대상을 적으려면 타격(harm)도 적어야 한다.
     """
     ability = judging.ruleset.abilities[0].key
-    return CheckAction(kind=ActionKind.CHECK, ability=ability, harm=damage.magnitude, **aimed)
+    return CheckAction.model_validate({'kind': ActionKind.CHECK, 'ability': ability, 'harm': damage.magnitude, **aimed})
 
 
 def harm(damage: InjuryDamage) -> Consequence:
@@ -136,8 +136,8 @@ def tick_head(row: TableInjury, judging: Judging) -> dict:
 
 def tick_member(judging: Judging, member: TableMember, ticks: Ticks) -> None:
     """앉은 사람 하나의 상태들이 깎는다. 쓰러지면 멈춘다."""
-    for row, damage in ticking_rows(judging.ruleset, member.sheet.injuries, judging.moment.round_number):
-        if member.sheet.hp <= 0:
+    for row, damage in ticking_rows(judging.ruleset, member.current_sheet.injuries, judging.moment.round_number):
+        if member.current_sheet.hp <= 0:
             return
         effect = change_sheet(judging, member, ChangeKind.DAMAGE, damage.magnitude, nature=damage.nature)
         who = {'kind': 'pc', 'user_id': str(member.user_id), 'character_name': member.character_name}

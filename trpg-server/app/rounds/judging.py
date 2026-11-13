@@ -74,7 +74,7 @@ from app.rounds.naming import judge_naming
 from app.rounds.place_item_actions import judge_put_down, judge_take, search_items
 from app.rounds.rests import judge_rest
 from app.rounds.skill_actions import judge_skill
-from app.rounds.state import find_declaration, rules_of
+from app.rounds.state import find_declaration, required, rules_of
 from app.rounds.steals import judge_steal
 from app.rounds.throws import judge_throw
 from app.rounds.trades import judge_buy, judge_pay, judge_sell
@@ -184,7 +184,7 @@ def take_member_turn(judging: Judging, member: TableMember, declaration: Declara
     if lost is not None:
         declaration.outcome = {'turn_lost': lost}
         return
-    declaration.outcome = judge(judging, member, actions.read_action(declaration.action))
+    declaration.outcome = judge(judging, member, actions.read_action(required(declaration.action, 'action')))
 
 
 def rolling_members(table: GameTable, round_: Round) -> list[tuple[TableMember, Declaration]]:
@@ -263,7 +263,7 @@ def build_turns(
 
     앉은 사람, 그다음 몬스터, 그다음 인물로 넘긴다.
     """
-    ruleset, snapshot = judging.ruleset, judging.snapshot
+    ruleset, snapshot = judging.ruleset, required(judging.snapshot, 'snapshot')
     ambushed = initiative.ambushed_places(snapshot, judging.monsters, judging.round_number)
     turns = [initiative.member_turn(ruleset, member, ambushed) for member, _ in rolling]
     turns += [initiative.monster_turn(ruleset, snapshot, monster, judging.round_number) for monster in acting]
@@ -279,11 +279,12 @@ def take_turn(judging: Judging, turn: Turn, declarations: dict[uuid.UUID, Declar
     """
     document = initiative.turn_document(turn)
     if turn.kind == initiative.TurnKind.PC:
-        take_member_turn(judging, turn.member, declarations[turn.member.user_id])
+        member = required(turn.member, 'member')
+        take_member_turn(judging, member, declarations[member.user_id])
     elif turn.kind == initiative.TurnKind.NPC:
-        document['outcome'] = npc_attacks.take_npc_turn(judging, turn.npc)
+        document['outcome'] = npc_attacks.take_npc_turn(judging, required(turn.npc, 'npc'))
     else:
-        document['outcome'] = take_monster_turn(judging, turn.monster)
+        document['outcome'] = take_monster_turn(judging, required(turn.monster, 'monster'))
     return document
 
 
@@ -335,7 +336,8 @@ def roll_checks(
     downed = frozenset(member.user_id for member in find_dying(table))
     judging = build_judging(table, round_, dice, scene, downed, rolling)
     if gate is not None:
-        acting, fighting = gate.admit(judging.ruleset, judging.snapshot, judging.round_number, acting, fighting)
+        snapshot = required(judging.snapshot, 'snapshot')
+        acting, fighting = gate.admit(judging.ruleset, snapshot, judging.round_number, acting, fighting)
     judging = replace(judging, foes_guarding=foe_guards.decide(judging.ruleset, acting, fighting, dice))
     if not acting and not fighting:
         for member, declaration in rolling:
@@ -371,7 +373,7 @@ def roll_death_saves(table: GameTable, dying: list[TableMember], dice: Dice) -> 
     ruleset = rules_of(table)
     rolled = []
     for member in still_down:
-        sheet = member.sheet
+        sheet = member.current_sheet
         save = death.roll_death_save(ruleset, sheet.death_successes, sheet.death_failures, dice)
         if save is None:
             continue
