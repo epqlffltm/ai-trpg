@@ -96,8 +96,8 @@ def every_monster(snapshot: Snapshot, states: Iterable[TableMonster]) -> list[Sc
     ]
 
 
-def find_scene_monster(monsters: list[SceneMonster], monster_id: uuid.UUID) -> SceneMonster | None:
-    """이번 장면의 몬스터 중에서 이 마리를 찾는다. 장면에 없으면 None."""
+def find_scene_monster(monsters: list[SceneMonster], monster_id: uuid.UUID | None) -> SceneMonster | None:
+    """이번 장면의 몬스터 중에서 이 마리를 찾는다. 장면에 없거나 마리가 없으면(None) None."""
     return next((monster for monster in monsters if monster.state.id == monster_id), None)
 
 

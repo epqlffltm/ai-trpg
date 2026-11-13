@@ -27,6 +27,7 @@ from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError, Conflict, RoundConflictError
 from app.rounds.map_actions import standing_place
 from app.rounds.models import Declaration
+from app.rounds.state import required
 from app.tables import places
 from app.tables.content import snapshot_of
 from app.tables.models import GameTable, TableMember
@@ -81,4 +82,9 @@ def judge_cover(judging: Judging, member: TableMember) -> dict:
     커버가 0 이면(그사이에 커버가 없는 곳으로 옮겨졌다) 숨지 못한 것이다.
     """
     cover = judging.covers.get(member.user_id, 0)
-    return {'cover': {'place': places.describe(judging.snapshot, member.current_sheet.place_id), 'value': cover}}
+    return {
+        'cover': {
+            'place': places.describe(required(judging.snapshot, 'snapshot'), member.current_sheet.place_id),
+            'value': cover,
+        }
+    }

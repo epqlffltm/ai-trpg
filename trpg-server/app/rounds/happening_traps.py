@@ -30,6 +30,7 @@ from app.rounds.cast import CastMember, Scene, cast_member_of, find_cast_member
 from app.rounds.effects import Judging
 from app.rounds.judging import build_judging
 from app.rounds.models import Round
+from app.rounds.state import required
 from app.rounds.trap_actions import spring_on_arrival
 from app.tables import npcs, sheets, traps
 from app.tables.models import GameTable, TableHappening
@@ -82,7 +83,9 @@ def npc_traps(judging: Judging, row: TableHappening, scene: str) -> list[dict]:
         npc = states.get(uuid.UUID(move['entry_id']))
         if npc is None:
             continue
-        person = find_cast_member(judging.cast, npc.entry_id) or cast_member_of(judging.snapshot, scene, npc)
+        person = find_cast_member(judging.cast, npc.entry_id) or cast_member_of(
+            required(judging.snapshot, 'snapshot'), scene, npc
+        )
         local = with_person(judging, person)
         who = {'kind': 'npc', 'entry_id': move['entry_id'], 'name': person.name}
         stepped.extend({**who, 'place': trap['place'], 'trap': trap} for trap in steps_until_done(local, person))

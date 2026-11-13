@@ -34,7 +34,7 @@ from app.rounds.cast import CastMember
 from app.rounds.initiative import Turn
 from app.rounds.models import Round
 from app.rounds.monster_scene import SceneMonster
-from app.rounds.state import is_down
+from app.rounds.state import is_down, required
 from app.tables import sheets
 from app.tables.models import GameTable, TableMember, TurnMode
 
@@ -62,7 +62,7 @@ def roll_order(table: GameTable, ruleset: Ruleset, dice: Dice) -> list[uuid.UUID
     """한 바퀴의 차례. 차례를 받을 수 있는 사람들을 차례 능력치와 주사위로 늘어놓는다. 앉은 순서로 받는다."""
     members = [member for member in table.members if can_take_turn(member)]
     turns = [initiative.member_turn(ruleset, member, set()) for member in members]
-    return [turn.member.user_id for turn in initiative.order_turns(turns, ruleset, dice)]
+    return [required(turn.member, 'member').user_id for turn in initiative.order_turns(turns, ruleset, dice)]
 
 
 def begin_cycle(table: GameTable, ruleset: Ruleset, dice: Dice) -> None:
@@ -135,7 +135,7 @@ def next_member(table: GameTable) -> TableMember | None:
 
 def foe_key(turn: Turn) -> str:
     """차례를 받은 쪽을 적을 글. 몬스터는 마리의 id, 인물은 항목의 id 다."""
-    return str(turn.monster.state.id) if turn.monster is not None else str(turn.npc.entry_id)
+    return str(turn.monster.state.id) if turn.monster is not None else str(required(turn.npc, 'npc').entry_id)
 
 
 @dataclass(frozen=True)

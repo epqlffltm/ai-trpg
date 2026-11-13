@@ -34,6 +34,7 @@ from app.rounds.checks import change_cast_member
 from app.rounds.effects import Judging
 from app.rounds.item_targets import Struck, apply_to_struck
 from app.rounds.monster_scene import SceneMonster
+from app.rounds.state import required
 from app.tables import npcs
 from app.tables.models import NpcStatus
 
@@ -89,7 +90,7 @@ def strike_check(attack: AttackSnapshot, person: CastMember) -> CheckAction:
 
 def harm_of(attack: AttackSnapshot) -> Consequence:
     """공격의 피해. 맞은 인물이 받는다. 피해 등급이 있는 공격에만 부른다."""
-    return Consequence(kind=ChangeKind.DAMAGE, magnitude=attack.harm, recipient=Recipient.TARGET)
+    return Consequence(kind=ChangeKind.DAMAGE, magnitude=required(attack.harm, 'harm'), recipient=Recipient.TARGET)
 
 
 def plan_npc_blow(judging: Judging, weapon: blows.Weapon | None, person: CastMember) -> Blow:

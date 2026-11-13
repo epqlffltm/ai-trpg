@@ -24,6 +24,7 @@ from app.assets.scenarios.snapshot import RouteSnapshot, place_entries
 from app.engine.dice import choose
 from app.rounds.effects import Judging
 from app.rounds.monster_scene import SceneMonster
+from app.rounds.state import required
 from app.tables import places, route_locks, sheets
 from app.tables.models import TableMember
 
@@ -94,7 +95,8 @@ def chase(judging: Judging, monster: SceneMonster) -> dict | None:
         return None
     quarry = pick_quarry(judging, monster, runaways)
     origin = monster.state.place_id
-    monster.state.place_id = quarry.current_sheet.place_id
+    # 도망친 사람은 길을 따라 옮겨 간 곳에 서 있다
+    monster.state.place_id = required(quarry.current_sheet.place_id, 'place')
     return {
         'chased': {
             'user_id': str(quarry.user_id),

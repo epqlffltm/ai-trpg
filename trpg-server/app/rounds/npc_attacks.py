@@ -50,6 +50,7 @@ from app.rounds.monster_attacks import (
     raised_difficulty,
     short_outcome,
 )
+from app.rounds.state import required
 from app.tables.models import NpcStatus, TableMember
 
 # 입은 부상 때문에 움직이지 못했다(기절 같은 것). 몬스터의 차례와 같은 까닭이다
@@ -132,7 +133,8 @@ def roll_strike(
     ruleset = judging.ruleset
     side = defenses.attacker_side(ruleset, person.npc.abilities, person.npc.injuries, attack, blow, guarded)
     opposed = checks.resolve_opposed(ruleset, side, defense, judging.dice)
-    ability = defenses.defending_ability(ruleset, attack)
+    # 받는 쪽이 굴렸으면(defense) 규칙에 막는 규칙이 있어 능력치가 있다
+    ability = required(defenses.defending_ability(ruleset, attack), 'defense ability')
     return opposed.attack, {'defense': defenses.defense_document(ability, opposed.defense)}
 
 
@@ -155,7 +157,8 @@ def take_npc_turn(judging: Judging, person: CastMember) -> dict:
         return {'skipped': Skipped.NO_TARGET}
     victim = pick_victim(judging, person, victims)
     mark_npc_fight(judging, person.npc, victim)
-    attack = choose(person.definition.attacks, judging.dice)
+    # 공격할 대상이 있는 인물은 NPC 시트가 있다(targets_of)
+    attack = choose(required(person.definition, 'definition').attacks, judging.dice)
     if not affordable(judging, person.npc, attack, ResourceHolder.NPCS):
         return short_outcome(attack, victim)
     cost = pay(judging, person.npc, attack, ResourceHolder.NPCS)

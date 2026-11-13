@@ -166,7 +166,7 @@ def wound(
     ends = injury_rules.ends_after(definition, moment.round_number)
     heals = injury_rules.heals_at(definition, moment.now)
     counting = injuries.find_counting(rows, definition.key) if ends is not None else None
-    if counting is not None:
+    if counting is not None and ends is not None:
         injuries.recount(counting, ends)
         return {
             **document,

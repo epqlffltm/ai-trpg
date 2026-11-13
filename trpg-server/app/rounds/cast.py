@@ -160,8 +160,8 @@ def labels_of(snapshot: Snapshot, scene: str, npcs: Iterable[TableNpc]) -> dict[
     }
 
 
-def find_cast_member(cast: list[CastMember], entry_id: uuid.UUID) -> CastMember | None:
-    """이번 장면의 인물 중에서 이 항목의 것을 찾는다. 장면에 나오지 않았으면 None."""
+def find_cast_member(cast: list[CastMember], entry_id: uuid.UUID | None) -> CastMember | None:
+    """이번 장면의 인물 중에서 이 항목의 것을 찾는다. 장면에 나오지 않았거나 항목이 없으면(None) None."""
     return next((member for member in cast if member.entry_id == entry_id), None)
 
 

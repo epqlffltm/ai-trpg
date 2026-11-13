@@ -74,6 +74,7 @@ def is_vanished(round_: Round, now: datetime) -> bool:
     return (
         round_.status == RoundStatus.CLOSING
         and round_.narration_failed_at is None
+        and round_.closing_at is not None
         and round_.closing_at <= vanished_before(now)
     )
 
