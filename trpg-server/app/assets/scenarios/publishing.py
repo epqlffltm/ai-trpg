@@ -309,7 +309,7 @@ class ScenarioNotReadyError(Exception):
     problems 는 갖추지 못한 조건 전부다. 하나씩 고치고 다시 시도하지 않게 한 번에 알려 준다.
     """
 
-    def __init__(self, problems: list[Problem]) -> None:
+    def __init__(self, problems: Sequence[str]) -> None:
         super().__init__()
         self.problems = problems
 
@@ -572,7 +572,7 @@ def item_natures(rules: list[ItemRule]) -> set[str]:
     """아이템 규칙들이 가리키는 성질. 효과(피해, 맞추기)의 성질과 무기의 성질이다."""
     effects = {nature_of(effect) for rule in rules for effect in rule.effects}
     weapons = {rule.nature for rule in rules}
-    return (effects | weapons) - {None}
+    return {nature for nature in effects | weapons if nature is not None}
 
 
 def nature_fault(ruleset: Ruleset, sheet: MonsterSheet) -> bool:
@@ -986,25 +986,27 @@ def condition_problem(condition: QuestCondition, scenario: Scenario, parts: Part
     if condition.kind == QuestConditionKind.CHAPTER_AT_LEAST:
         known = {chapter.id for chapter in read_chapters(scenario)}
         return None if condition.chapter in known else Problem.QUEST_CONDITION_MISSING
+    target = condition.target
+    # 대상이 없으면 어느 쪽에서도 찾지 못한다(전에는 None 으로 찾아 없었다)
+    if target is None:
+        return Problem.QUEST_CONDITION_MISSING
     if condition.kind == QuestConditionKind.DEFEAT_MONSTER:
         sheeted = {sheet.monster_id for sheet in read_monster_sheets(scenario)}
-        if condition.target not in sheeted:
+        if target not in sheeted:
             return Problem.QUEST_CONDITION_MISSING
-        if placed_count(scenario, condition.target) < condition.count:
+        if placed_count(scenario, target) < condition.count:
             return Problem.QUEST_CONDITION_IMPOSSIBLE
         return None
-    entry = lore_entries(parts).get(condition.target)
+    entry = lore_entries(parts).get(target)
     if entry is None:
         return Problem.QUEST_CONDITION_MISSING
     if entry.kind != CONDITION_ENTRY_KINDS[condition.kind]:
         return Problem.QUEST_CONDITION_INVALID
-    if condition.kind == QuestConditionKind.REACH_PLACE and condition.target not in map_places(
-        scenario, read_routes(scenario)
-    ):
+    if condition.kind == QuestConditionKind.REACH_PLACE and target not in map_places(scenario, read_routes(scenario)):
         return Problem.QUEST_CONDITION_IMPOSSIBLE
-    if condition.kind == QuestConditionKind.QUEST_SUCCEEDED and not can_succeed(scenario, condition.target):
+    if condition.kind == QuestConditionKind.QUEST_SUCCEEDED and not can_succeed(scenario, target):
         return Problem.QUEST_CONDITION_IMPOSSIBLE
-    if condition.kind == QuestConditionKind.QUEST_FAILED and not can_fail(scenario, condition.target):
+    if condition.kind == QuestConditionKind.QUEST_FAILED and not can_fail(scenario, target):
         return Problem.QUEST_CONDITION_IMPOSSIBLE
     return None
 
@@ -1026,7 +1028,11 @@ def find_condition_problems(scenario: Scenario, parts: Parts) -> list[Problem]:
 def reveal_links(rules: list[QuestRule]) -> dict[uuid.UUID, set[uuid.UUID]]:
     """퀘스트마다 드러나려면 끝나야 하는 다른 퀘스트들(퀘스트 잇기)."""
     return {
-        rule.entry_id: {condition.target for condition in rule.reveal if condition.kind in QUEST_LINK_CONDITIONS}
+        rule.entry_id: {
+            condition.target
+            for condition in rule.reveal
+            if condition.kind in QUEST_LINK_CONDITIONS and condition.target is not None
+        }
         for rule in rules
     }
 
@@ -1143,10 +1149,11 @@ def condition_opener(
     그 조건이 채워지려면 지나와야 하는 장의 id. 장소에 서기와 퀘스트의 성공·실패는 그것을 여는 장,
     chapter_at_least 는 그 장이다. 장이 막지 않는 조건이면 None.
     """
+    target = condition.target
     if condition.kind in LOCKABLE_PLACE_KINDS:
-        return places.get(condition.target)
+        return places.get(target) if target is not None else None
     if condition.kind in LOCKABLE_QUEST_KINDS:
-        return quests.get(condition.target)
+        return quests.get(target) if target is not None else None
     if condition.kind == QuestConditionKind.CHAPTER_AT_LEAST:
         return condition.chapter
     return None
@@ -1257,10 +1264,10 @@ def effect_places(effect: HappeningEffect) -> list[uuid.UUID]:
 
     문을 다루는 효과(#281)는 옮기지 않는다. 그 두 끝은 길로 본다(door_effect_invalid).
     """
-    if isinstance(effect, MoveNpcEffect) or (isinstance(effect, MoveEffect) and effect.from_place is None):
+    if isinstance(effect, MoveNpcEffect):
         return [effect.to_place]
     if isinstance(effect, MoveEffect):
-        return [effect.to_place, effect.from_place]
+        return [effect.to_place] if effect.from_place is None else [effect.to_place, effect.from_place]
     if isinstance(effect, GiveXpEffect) and effect.from_place is not None:
         return [effect.from_place]
     return []
@@ -1276,12 +1283,12 @@ def moved_npcs(rules: list[HappeningRule]) -> list[uuid.UUID]:
     return [effect.npc for rule in rules for effect in rule.effects if isinstance(effect, MoveNpcEffect)]
 
 
-def route_effects(rules: list[HappeningRule]) -> list[HappeningEffect]:
+def route_effects(rules: list[HappeningRule]) -> list[RouteDoorEffect | RepairRouteEffect]:
     """사건의 효과 중 길의 문을 다루는 것 전부(#281). 잠그기, 열기, 고치기다."""
     return [effect for rule in rules for effect in rule.effects if isinstance(effect, ROUTE_EFFECT_TYPES)]
 
 
-def door_effect_invalid(effect: HappeningEffect, routes: list[RouteRule]) -> bool:
+def door_effect_invalid(effect: RouteDoorEffect | RepairRouteEffect, routes: list[RouteRule]) -> bool:
     """
     문을 다루는 효과 하나가 다룰 문이 없는가(#281). 두 끝 사이의 길이 없거나, 그 길에 자물쇠도 빗장도 없거나,
     적은 장치(device)가 그 길에 없으면 참이다. 길의 방향은 보지 않는다.

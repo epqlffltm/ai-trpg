@@ -51,4 +51,5 @@ async def copied_keys(session: AsyncSession, bestiary_id: uuid.UUID) -> set[tupl
         Monster.bestiary_id == bestiary_id, Monster.copied_source.is_not(None)
     )
     rows = await session.execute(query)
-    return {(source, key) for source, key in rows.all()}
+    # 출처가 있는 줄만 골랐다. 출처와 key 는 함께 적는다
+    return {(source, key) for source, key in rows.all() if source is not None and key is not None}

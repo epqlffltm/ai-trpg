@@ -6,6 +6,7 @@
 종류별 라우터(worlds/router.py 등)가 이것을 가져다 쓴다.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -14,7 +15,7 @@ from fastapi.responses import JSONResponse
 from server_core.database import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.models import Asset, AssetContent
+from app.assets.models import Asset, AssetContent, Visibility
 from app.assets.ratings import AdultContentRequiredError
 from app.assets.schemas import AssetPage, AssetSummary
 from app.assets.service import AssetInUseError, AssetNotFoundError, AssetReferenceError
@@ -45,13 +46,13 @@ def to_summary(asset: Asset) -> AssetSummary:
         id=asset.id,
         title=asset.title,
         description=asset.description,
-        visibility=asset.visibility,
+        visibility=Visibility(asset.visibility),
         created_at=asset.created_at,
         updated_at=asset.updated_at,
     )
 
 
-def to_page(contents: list[AssetContent], total: int) -> AssetPage:
+def to_page(contents: Sequence[AssetContent], total: int) -> AssetPage:
     """자산 여러 개를 목록의 한 쪽으로 바꾼다."""
     return AssetPage(items=[to_summary(content.asset) for content in contents], total=total)
 
