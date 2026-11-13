@@ -33,6 +33,7 @@ from app.rounds.item_targets import (
     target_of,
     to_check,
 )
+from app.rounds.state import required
 from app.tables import items, sheets
 from app.tables import state as table_state
 from app.tables.items import CatalogItem
@@ -59,7 +60,7 @@ def throw_terms(judging: Judging, item: CatalogItem) -> tuple[str, str | None]:
     """
     if item.throw is not None:
         return item.throw.ability, item.throw.difficulty
-    rule = judging.ruleset.item_check
+    rule = required(judging.ruleset.item_check, 'item_check')
     return rule.ability, rule.difficulty
 
 
@@ -80,7 +81,7 @@ def throw_document(
         'ability': check.ability,
         'difficulty': check.difficulty,
         'target': target_of(judging, action),
-        'remaining': items.count_of(member.sheet, action.item),
+        'remaining': items.count_of(member.current_sheet, action.item),
         **NOTHING_APPLIED,
     }
 
@@ -91,15 +92,16 @@ def ally_gone(judging: Judging, member: TableMember, action: ThrowAction, item: 
 
     해로운 물건이면 치기와 같다(friendly_fire.ally_gone). 이로운 물건이면 떠났거나 죽었거나 다른 곳에 있을 때만이다.
     """
+    target_id = required(action.target, 'target')
     if items.is_harmful(item):
-        return friendly_fire.ally_gone(judging, member, action.target)
-    target = table_state.find_member(judging.table, action.target)
+        return friendly_fire.ally_gone(judging, member, target_id)
+    target = table_state.find_member(judging.table, target_id)
     if target is None or target.sheet is None:
-        return friendly_fire.gone_document(None, action.target, friendly_fire.AllyGone.LEFT)
+        return friendly_fire.gone_document(None, target_id, friendly_fire.AllyGone.LEFT)
     if sheets.is_dead(target):
-        return friendly_fire.gone_document(target, action.target, friendly_fire.AllyGone.DEAD)
+        return friendly_fire.gone_document(target, target_id, friendly_fire.AllyGone.DEAD)
     if not friendly_fire.stands_together(member, target):
-        return friendly_fire.gone_document(target, action.target, friendly_fire.AllyGone.ELSEWHERE)
+        return friendly_fire.gone_document(target, target_id, friendly_fire.AllyGone.ELSEWHERE)
     return None
 
 
@@ -134,7 +136,7 @@ def judge_throw(judging: Judging, member: TableMember, action: ThrowAction) -> d
     """
     item = judging.items[action.item]
     check = to_check(judging, item.effects, action, *throw_terms(judging, item))
-    if items.count_of(member.sheet, action.item) < 1:
+    if items.count_of(member.current_sheet, action.item) < 1:
         return {'item_throw': throw_document(judging, member, item, action, check, Reason.NOT_HELD)}
     gone = thrown_gone(judging, member, action, item)
     if gone is not None:
@@ -142,7 +144,7 @@ def judge_throw(judging: Judging, member: TableMember, action: ThrowAction) -> d
         return {'item_throw': document, 'target_gone': gone}
     mark_harm(judging, member, item.effects, action, check)
     prank = is_prank_throw(judging, member, action, item)
-    items.remove_items(member.sheet, action.item, 1)
+    items.remove_items(member.current_sheet, action.item, 1)
     struck = effect_target(item.effects, action, check)
     outcome = judge_check(judging, member, check, damage_nature(item.effects, item.nature), struck)
     applied = apply_after_hit(judging, item.effects, action, prank) if landed(outcome, check) else NOTHING_APPLIED

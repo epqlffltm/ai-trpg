@@ -23,6 +23,8 @@
 DB 를 모른다. 시트의 소지품과 HP 와 부상을 고친다. 저장하지 않는다.
 """
 
+from collections.abc import Sequence
+
 from app.engine import injury as injury_rules
 from app.engine.action import GiveAction, UseAction
 from app.engine.health import ChangeKind
@@ -32,6 +34,7 @@ from app.rounds import friendly_fire, resisting
 from app.rounds import injuries as round_injuries
 from app.rounds.checks import change_sheet
 from app.rounds.effects import Judging
+from app.rounds.state import required
 from app.tables import injuries, items, resources, sheets
 from app.tables import state as table_state
 from app.tables.errors import TableConflictError
@@ -114,7 +117,7 @@ def injure(
 
 
 def apply_to_member(
-    judging: Judging, target: TableMember, effects: list, prank: bool = False, trigger: Trigger = Trigger.ITEM
+    judging: Judging, target: TableMember, effects: Sequence, prank: bool = False, trigger: Trigger = Trigger.ITEM
 ) -> dict:
     """
     효과들을 앉은 사람 하나에게 차례대로 낸다(#800). 굴리지 않는다. 물건과 기술(#805)이 함께 쓴다.
@@ -129,7 +132,7 @@ def apply_to_member(
     cured: list[dict] = []
     injured: list[dict] = []
     shifts: list[dict] = []
-    rows = target.sheet.injuries
+    rows = target.current_sheet.injuries
     for one in effects:
         if one.kind == EffectKind.HEAL:
             effect = change_sheet(judging, target, ChangeKind.RECOVERY, one.magnitude)
@@ -152,9 +155,13 @@ def adjust(judging: Judging, target: TableMember, effect: AdjustEffect, blocked:
     그 사람이 막는 성질(blocked)의 내리는 맞추기면(#886 ②) 바꾸지 않고, 막아 낸 것(resisted)을 적는다.
     """
     if is_resisted(effect, blocked):
-        shift = resources.standing(judging.ruleset, target.sheet, effect.resource)
-        return [] if shift is None else [resources.resisted_document(shift, target.user_id, effect.nature)]
-    shift = resources.adjust(judging.ruleset, target.sheet, effect.resource, effect.amount)
+        shift = resources.standing(judging.ruleset, target.current_sheet, effect.resource)
+        return (
+            []
+            if shift is None
+            else [resources.resisted_document(shift, target.user_id, required(effect.nature, 'nature'))]
+        )
+    shift = resources.adjust(judging.ruleset, target.current_sheet, effect.resource, effect.amount)
     if shift is None or shift.before == shift.after:
         return []
     return [resources.shift_document(shift, target.user_id)]
@@ -191,7 +198,7 @@ def use_document(item: CatalogItem, member: TableMember, reason: str | None, tar
         'used': reason is None,
         'reason': reason,
         'target': target,
-        'remaining': items.count_of(member.sheet, item.entry_id),
+        'remaining': items.count_of(member.current_sheet, item.entry_id),
         'cured': [],
         'injured': [],
         'resources': [],
@@ -209,18 +216,18 @@ def judge_use(judging: Judging, member: TableMember, action: UseAction) -> dict:
     aimed = items.takes_target(item)
     target = use_target(judging, member, action) if aimed else None
     reason = None
-    if items.count_of(member.sheet, action.item) < 1:
+    if items.count_of(member.current_sheet, action.item) < 1:
         reason = Reason.NOT_HELD
     elif aimed and target is None:
         reason = Reason.TARGET_GONE
-    elif aimed:
+    elif target is not None:
         reason = harm_refused(judging, member, item, target)
     if reason is not None:
         return {'item_use': use_document(item, member, reason, person(target)), 'effect': None}
-    items.remove_items(member.sheet, action.item, 1)
+    items.remove_items(member.current_sheet, action.item, 1)
     applied = (
         apply_to_member(judging, target, item.effects, is_prank_use(judging, member, item, target))
-        if aimed
+        if target is not None
         else {'effect': None, 'cured': [], 'injured': [], 'resources': []}
     )
     used = {
@@ -237,17 +244,17 @@ def judge_give(judging: Judging, member: TableMember, action: GiveAction) -> dic
     item = judging.items[action.item]
     recipient = living(table_state.find_member(judging.table, action.target))
     reason = None
-    if items.count_of(member.sheet, action.item) < action.count:
+    if items.count_of(member.current_sheet, action.item) < action.count:
         reason = Reason.NOT_HELD
     elif recipient is None:
         reason = Reason.TARGET_GONE
     else:
         try:
-            items.add_items(judging.table.id, recipient.sheet, action.item, action.count)
+            items.add_items(judging.table.id, recipient.current_sheet, action.item, action.count)
         except TableConflictError:
             reason = Reason.TOO_MANY
     if reason is None:
-        items.remove_items(member.sheet, action.item, action.count)
+        items.remove_items(member.current_sheet, action.item, action.count)
     given = {
         'entry_id': str(item.entry_id),
         'name': item.name,
@@ -255,7 +262,7 @@ def judge_give(judging: Judging, member: TableMember, action: GiveAction) -> dic
         'given': reason is None,
         'reason': reason,
         'target': person(recipient) or {'user_id': str(action.target), 'character_name': None},
-        'remaining': items.count_of(member.sheet, action.item),
-        'target_total': items.count_of(recipient.sheet, action.item) if recipient is not None else None,
+        'remaining': items.count_of(member.current_sheet, action.item),
+        'target_total': items.count_of(recipient.current_sheet, action.item) if recipient is not None else None,
     }
     return {'item_give': given}

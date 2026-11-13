@@ -427,7 +427,8 @@ async def test_a_poison_trap_leaves_its_injury(
 
 
 def test_a_dead_character_springs_no_more(monkeypatch: pytest.MonkeyPatch):
-    member = SimpleNamespace(sheet=SimpleNamespace(place_id=uuid.uuid4()))
+    sheet = SimpleNamespace(place_id=uuid.uuid4())
+    member = SimpleNamespace(sheet=sheet, current_sheet=sheet)
     armed = ['first', 'second', 'third']
     deaths = iter([False, True])
     monkeypatch.setattr(trap_actions.traps, 'hidden_at', lambda table, place: armed)

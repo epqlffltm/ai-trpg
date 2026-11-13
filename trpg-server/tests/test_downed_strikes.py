@@ -227,7 +227,7 @@ def member(hp: int = 10, dead: bool = False, **fields) -> SimpleNamespace:
         downed_by_big_hit=False,
         **fields,
     )
-    return SimpleNamespace(user_id=uuid.uuid4(), sheet=sheet)
+    return SimpleNamespace(user_id=uuid.uuid4(), sheet=sheet, current_sheet=sheet)
 
 
 def judging_with(*members: SimpleNamespace, downed=(), rules=SRD5) -> SimpleNamespace:

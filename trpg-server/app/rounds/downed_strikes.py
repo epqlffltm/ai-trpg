@@ -20,6 +20,7 @@ from dataclasses import asdict
 
 from app.engine import death
 from app.rounds.effects import Judging
+from app.rounds.state import required
 from app.tables import sheets
 from app.tables.models import TableMember
 
@@ -49,8 +50,8 @@ def strike_downed(judging: Judging, victim: TableMember, hit: bool) -> dict:
     added 는 이번에 쌓인 실패(빗나가면 0), failures 는 그 뒤의 실패, limit 는 죽는 수, fate 는 그 뒤의 갈림길이다.
     후보를 고를 때 규칙에 죽음의 굴림이 있는 것을 봤다(can_be_struck).
     """
-    rule = judging.ruleset.death_save
-    sheet = victim.sheet
+    rule = required(judging.ruleset.death_save, 'death_save')
+    sheet = victim.current_sheet
     count = death.struck_failures(sheet.downed_by_big_hit) if hit else 0
     struck = death.add_failures(rule, sheet.death_successes, sheet.death_failures, count)
     sheet.death_failures = struck.failures

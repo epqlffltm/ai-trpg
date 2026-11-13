@@ -24,7 +24,7 @@ DB 를 모른다. 시트의 소지품과 맞은 쪽의 상태를 고친다. 저�
 """
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from app.engine.action import ActionKind, CheckAction, SkillAction, ThrowAction, UseAction, settle
@@ -37,6 +37,7 @@ from app.rounds.checks import Targeted, judge_check, monster_gone
 from app.rounds.effects import Judging, mark_fight, mark_npc_fight
 from app.rounds.item_actions import Reason, cure, injure, use_document
 from app.rounds.monster_scene import SceneMonster, find_scene_monster
+from app.rounds.state import required
 from app.tables import items, npcs, resources, sheets
 from app.tables import monsters as table_monsters
 from app.tables import state as table_state
@@ -47,7 +48,7 @@ from app.tables.resources import Bearer
 Aimed = UseAction | ThrowAction | SkillAction
 
 
-def to_check(judging: Judging, effects: list, action: Aimed, ability: str, difficulty: str | None) -> CheckAction:
+def to_check(judging: Judging, effects: Sequence, action: Aimed, ability: str, difficulty: str | None) -> CheckAction:
     """
     맞히는 판정. 그 능력과 난이도(비우면 룰북의 기본)에, 효과가 HP 를 바꾸면 그 등급의 타격이나 회복을 겨눈다.
 
@@ -72,7 +73,7 @@ def to_check(judging: Judging, effects: list, action: Aimed, ability: str, diffi
     return settle(judging.ruleset, check)
 
 
-def damage_nature(effects: list, fallback: str | None = None) -> str | None:
+def damage_nature(effects: Sequence, fallback: str | None = None) -> str | None:
     """
     효과들의 피해의 성질(#886 ③). 피해 효과의 성질이고, 없으면 fallback(던진 무기의 성질)이다.
     피해 효과가 없으면 None 이다(피해가 없다).
@@ -108,7 +109,7 @@ def ally_of(action: Aimed) -> uuid.UUID | None:
     return action.target if isinstance(action, ThrowAction | SkillAction) else None
 
 
-def mark_harm(judging: Judging, member: TableMember, effects: list, action: Aimed, check: CheckAction) -> None:
+def mark_harm(judging: Judging, member: TableMember, effects: Sequence, action: Aimed, check: CheckAction) -> None:
     """
     해로운 효과면 그 대상과 싸운 것으로 적는다. 타격으로 판정하면 judge_check 가 적으므로 여기서는 적지 않는다.
 
@@ -117,14 +118,14 @@ def mark_harm(judging: Judging, member: TableMember, effects: list, action: Aime
     if not is_harmful(effects) or check.harm is not None or ally_of(action) is not None:
         return
     if action.monster is not None:
-        mark_fight(judging, find_scene_monster(judging.monsters, action.monster).state, member)
+        mark_fight(judging, required(find_scene_monster(judging.monsters, action.monster), 'monster').state, member)
         return
     person = find_cast_member(judging.cast, action.npc)
     if person is not None and not npcs.is_dead(person.npc):
         mark_npc_fight(judging, person.npc, member)
 
 
-def effect_target(effects: list, action: Aimed, check: CheckAction) -> Targeted | None:
+def effect_target(effects: Sequence, action: Aimed, check: CheckAction) -> Targeted | None:
     """
     피해 없이 해로운 효과(부상, 수치를 내리는 맞추기)로 맞히는 판정이면 맞을 쪽(#254). 아니면 None.
 
@@ -197,7 +198,11 @@ def adjust_struck(judging: Judging, struck: Struck, effect: AdjustEffect) -> lis
     """
     if is_resisted(effect, struck.immune):
         shift = resources.standing(judging.ruleset, struck.bearer, effect.resource, struck.holder)
-        return [] if shift is None else [resources.resisted_document(shift, struck.owner_id, effect.nature)]
+        return (
+            []
+            if shift is None
+            else [resources.resisted_document(shift, struck.owner_id, required(effect.nature, 'nature'))]
+        )
     shift = resources.adjust(judging.ruleset, struck.bearer, effect.resource, effect.amount, struck.holder)
     if shift is None or shift.before == shift.after:
         return []
@@ -205,7 +210,7 @@ def adjust_struck(judging: Judging, struck: Struck, effect: AdjustEffect) -> lis
 
 
 def apply_after_hit(
-    judging: Judging, effects: list, action: Aimed, prank: bool = False, trigger: Trigger = Trigger.ITEM
+    judging: Judging, effects: Sequence, action: Aimed, prank: bool = False, trigger: Trigger = Trigger.ITEM
 ) -> dict:
     """
     맞힌 대상에게 풀기와 부상과 맞추기를 적힌 차례대로 낸다. 푼 것(cured), 입힌 것(injured), 맞춘 수치(resources)다.
@@ -220,7 +225,7 @@ def apply_after_hit(
 
 
 def apply_to_struck(
-    judging: Judging, struck: Struck, effects: list, prank: bool = False, trigger: Trigger = Trigger.ITEM
+    judging: Judging, struck: Struck, effects: Sequence, prank: bool = False, trigger: Trigger = Trigger.ITEM
 ) -> dict:
     """
     맞은 쪽 하나에게 풀기와 부상과 맞추기를 적힌 차례대로 낸다. 푼 것(cured), 입힌 것(injured), 맞춘 수치(resources)다.
@@ -249,17 +254,17 @@ def judge_use_on(judging: Judging, member: TableMember, action: UseAction) -> di
     푼 부상(cured)과 입힌 부상(injured)이 있다. 못 썼으면 item_use 만 있다. 겨눈 몬스터가 없으면 target_gone 도 있다.
     """
     item = judging.items[action.item]
-    rule = judging.ruleset.item_check
+    rule = required(judging.ruleset.item_check, 'item_check')
     check = to_check(judging, item.effects, action, rule.ability, rule.difficulty)
     target = target_of(judging, action)
     terms = {'ability': check.ability, 'difficulty': check.difficulty}
-    if items.count_of(member.sheet, action.item) < 1:
+    if items.count_of(member.current_sheet, action.item) < 1:
         return {'item_use': {**use_document(item, member, Reason.NOT_HELD, target), **terms}}
     gone = monster_gone(judging, member, action.monster) if action.monster is not None else None
     if gone is not None:
         return {'item_use': {**use_document(item, member, Reason.TARGET_GONE, target), **terms}, 'target_gone': gone}
     mark_harm(judging, member, item.effects, action, check)
-    items.remove_items(member.sheet, action.item, 1)
+    items.remove_items(member.current_sheet, action.item, 1)
     outcome = judge_check(
         judging, member, check, damage_nature(item.effects), effect_target(item.effects, action, check)
     )

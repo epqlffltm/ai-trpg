@@ -21,11 +21,12 @@ DB 를 모른다. 남은 개수(app/tables/place_items.py)와 소지품을 고�
 
 from app.assets.scenarios.snapshot import PlaceItemSnapshot
 from app.engine.action import PutDownAction, TakeAction
-from app.engine.check import find_difficulty, resolve_hindered
+from app.engine.check import known_difficulty, resolve_hindered
 from app.rounds import injuries as round_injuries
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionTargetError
 from app.rounds.map_actions import standing_place
+from app.rounds.state import required
 from app.tables import items, place_items, places
 from app.tables.models import GameTable, TableMember, TablePlaceItem
 
@@ -83,21 +84,21 @@ def judge_take(judging: Judging, member: TableMember, action: TakeAction) -> dic
 
     count 는 부른 개수, taken 은 주운 개수, total 은 주운 뒤의 개수다. 다 줍지 못했으면 까닭(reason)이 있다.
     """
-    table, here = judging.table, member.sheet.place_id
+    table, here = judging.table, member.current_sheet.place_id
     left = place_items.available(table, here, action.item) if here is not None else 0
-    taken = items.add_up_to(table.id, member.sheet, action.item, min(action.count, left)) if left else 0
-    if taken:
+    taken = items.add_up_to(table.id, member.current_sheet, action.item, min(action.count, left)) if left else 0
+    if taken and here is not None:
         place_items.take_from(table, here, action.item, taken)
     return {
         'take': {
             'user_id': str(member.user_id),
             'character_name': member.character_name,
-            'place': places.describe(judging.snapshot, here),
+            'place': places.describe(required(judging.snapshot, 'snapshot'), here),
             'entry_id': str(action.item),
             'name': judging.items[action.item].name,
             'count': action.count,
             'taken': taken,
-            'total': items.count_of(member.sheet, action.item),
+            'total': items.count_of(member.current_sheet, action.item),
             'reason': shortfall(action.count, left, taken),
         }
     }
@@ -110,10 +111,11 @@ def finds_item(judging: Judging, member: TableMember, rule: PlaceItemSnapshot) -
     숨긴 길과 같다. 판에 적힌 능력과 난이도(비웠으면 규칙의 기본 난이도)로 굴리고 입은 부상의 영향을 받는다.
     판에 굳을 때 규칙에 있는 능력과 난이도인지 봤다(게시의 place_item_find_invalid).
     """
-    ruleset, sheet = judging.ruleset, member.sheet
-    difficulty = find_difficulty(ruleset, rule.find.difficulty)
-    hindrance = round_injuries.hindrance_for(ruleset, sheet.injuries, rule.find.ability)
-    score = sheet.abilities[rule.find.ability]
+    ruleset, sheet = judging.ruleset, member.current_sheet
+    find = required(rule.find, 'find')
+    difficulty = known_difficulty(ruleset, find.difficulty)
+    hindrance = round_injuries.hindrance_for(ruleset, sheet.injuries, find.ability)
+    score = sheet.abilities[find.ability]
     return resolve_hindered(ruleset, score, difficulty, judging.dice, hindrance).check.success
 
 
@@ -123,14 +125,14 @@ def keep_found(judging: Judging, member: TableMember, row: TablePlaceItem) -> di
 
     count 는 가진 개수, left 는 그 자리에 남은 개수, total 은 가진 뒤의 개수다.
     """
-    kept = items.add_up_to(judging.table.id, member.sheet, row.entry_id, row.count)
+    kept = items.add_up_to(judging.table.id, member.current_sheet, row.entry_id, row.count)
     left = place_items.uncover(row, kept)
     return {
         'entry_id': str(row.entry_id),
         'name': judging.items[row.entry_id].name,
         'count': kept,
         'left': left,
-        'total': items.count_of(member.sheet, row.entry_id),
+        'total': items.count_of(member.current_sheet, row.entry_id),
     }
 
 
@@ -140,10 +142,10 @@ def search_items(judging: Judging, member: TableMember) -> list[dict]:
 
     같은 라운드에 앞사람이 먼저 찾은 줄은 이미 보이는 줄이라 다시 굴리지 않는다.
     """
-    here = member.sheet.place_id
+    here = member.current_sheet.place_id
     if here is None:
         return []
-    rules = judging.snapshot.place_items
+    rules = required(judging.snapshot, 'snapshot').place_items
     return [
         keep_found(judging, member, row)
         for row in place_items.hidden_rows(judging.table, here)
@@ -158,21 +160,21 @@ def judge_put_down(judging: Judging, member: TableMember, action: PutDownAction)
     put 이 참이면 내려놓았다. 그만큼 가지고 있지 않으면 놓지 않고 까닭(not_held)을 적는다.
     remaining 은 내려놓은 뒤에 가진 개수다.
     """
-    table, here = judging.table, member.sheet.place_id
-    held = here is not None and items.count_of(member.sheet, action.item) >= action.count
-    if held:
-        items.remove_items(member.sheet, action.item, action.count)
+    table, here = judging.table, member.current_sheet.place_id
+    held = here is not None and items.count_of(member.current_sheet, action.item) >= action.count
+    if held and here is not None:
+        items.remove_items(member.current_sheet, action.item, action.count)
         place_items.put_down(table, here, action.item, action.count)
     return {
         'put_down': {
             'user_id': str(member.user_id),
             'character_name': member.character_name,
-            'place': places.describe(judging.snapshot, here),
+            'place': places.describe(required(judging.snapshot, 'snapshot'), here),
             'entry_id': str(action.item),
             'name': judging.items[action.item].name,
             'count': action.count,
             'put': held,
             'reason': None if held else Reason.NOT_HELD,
-            'remaining': items.count_of(member.sheet, action.item),
+            'remaining': items.count_of(member.current_sheet, action.item),
         }
     }

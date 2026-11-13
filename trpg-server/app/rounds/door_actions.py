@@ -63,12 +63,15 @@ from app.rounds.aids import (
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
 from app.rounds.map_actions import holds_key, roll_terms, standing_place, terms_document
+from app.rounds.state import required
 from app.tables import items, places, route_locks
 from app.tables.content import snapshot_of
 from app.tables.models import GameTable, TableMember
 
 # 거들기가 있는 문 다루기와 그 거드는 행동(#802)
 AID_ACTS = {PickAction: AidAct.PICK, ForceAction: AidAct.FORCE, RepairAction: AidAct.REPAIR}
+# 물건을 붙여 쓸 수 있는 문 다루기(AID_ACTS 의 종류들)
+AidedDoor = PickAction | ForceAction | RepairAction
 
 
 class DoorReason:
@@ -142,7 +145,7 @@ def require_lock_item(snapshot: Snapshot, member: TableMember, action: ReplaceAc
     """
     if item_rule_of(snapshot, action.item).lock is None:
         raise ActionNotInRulesError('item')
-    if items.count_of(member.sheet, action.item) < 1:
+    if items.count_of(member.current_sheet, action.item) < 1:
         raise RoundConflictError(Conflict.ITEM_NOT_HELD)
 
 
@@ -174,7 +177,7 @@ def accept_door(table: GameTable, member: TableMember, action: DoorAction) -> di
     if isinstance(action, ReplaceAction):
         require_lock_item(snapshot, member, action)
     act = AID_ACTS.get(type(action))
-    if act is not None:
+    if act is not None and isinstance(action, AidedDoor):
         require_door_aid(table, member, opening_check(route, lock, action), action, act)
     # 붙이지 않은 물건은 적지 않는다. 거들기가 생기기 전과 같은 모양이다
     return action.model_dump(mode='json', exclude_none=True)
@@ -183,13 +186,13 @@ def accept_door(table: GameTable, member: TableMember, action: DoorAction) -> di
 def opening_check(route: RouteSnapshot, lock: LockSnapshot | ItemLockSnapshot | None, action: DoorAction):
     """따기, 부수기, 고치기가 굴릴 판정. 따기는 지금의 자물쇠의 것이다. require_opening 이 있는지 봤다."""
     if isinstance(action, PickAction):
-        return lock.pick
+        return required(lock, 'lock').pick
     if isinstance(action, RepairAction):
         return route.repair
     return route.force
 
 
-def require_door_aid(table: GameTable, member: TableMember, check, action: DoorAction, act: AidAct) -> None:
+def require_door_aid(table: GameTable, member: TableMember, check, action: AidedDoor, act: AidAct) -> None:
     """붙인 물건과 도구를 본다(#802). 붙였으면 그 행동을 거드는지와 지녔는지, 도구가 있어야 하면 붙였는지."""
     if action.item is not None:
         require_aid(table, member, action.item, act)
@@ -206,7 +209,7 @@ def set_bar(judging: Judging, member: TableMember, route: RouteSnapshot, barred:
     빗장 쪽에 서 있어야 한다. 이미 그렇게 되어 있으면 already, 부서진 문에는 걸지 못한다(broken).
     """
     table = judging.table
-    if member.sheet.place_id != route.bar.side:
+    if member.current_sheet.place_id != required(route.bar, 'bar').side:
         return DoorReason.WRONG_SIDE
     if barred and route_locks.is_broken(table, route):
         return DoorReason.BROKEN
@@ -231,7 +234,8 @@ def set_lock(judging: Judging, member: TableMember, route: RouteSnapshot, locked
         return DoorReason.BROKEN
     if route_locks.is_locked(table, route) == locked:
         return DoorReason.ALREADY
-    if not holds_key(member, route_locks.current_lock(table, judging.snapshot, route)):
+    lock = route_locks.current_lock(table, required(judging.snapshot, 'snapshot'), route)
+    if not holds_key(member, required(lock, 'lock')):
         return DoorReason.NO_KEY
     if locked:
         route_locks.lock(table, route)
@@ -270,7 +274,8 @@ def pick_lock(judging: Judging, member: TableMember, route: RouteSnapshot, taken
     도구가 있어야 하는데 붙인 물건을 더 지니지 않았으면(바꿔 단 자물쇠가 도구를 요구하면 붙이지 않았으면) no_tool 이다.
     성공하면 자물쇠가 열린다.
     """
-    pick = route_locks.current_lock(judging.table, judging.snapshot, route).pick
+    lock = route_locks.current_lock(judging.table, required(judging.snapshot, 'snapshot'), route)
+    pick = required(lock, 'lock').pick
     if not route_locks.is_locked(judging.table, route):
         return DoorReason.ALREADY, None, None
     if pick is None:
@@ -304,7 +309,7 @@ def repair_door(judging: Judging, member: TableMember, route: RouteSnapshot, tak
 
     성공하면 문이 고쳐진다. 열린 채다(자물쇠도 빗장도 풀린 그대로).
     """
-    repair = route.repair
+    repair = required(route.repair, 'repair')
     if not route_locks.is_broken(judging.table, route):
         return DoorReason.ALREADY, None, None
     if repair.needs_tool and not has_tool(taken):
@@ -327,11 +332,11 @@ def replace_lock(judging: Judging, member: TableMember, route: RouteSnapshot, it
         return DoorReason.BROKEN
     if route_locks.is_locked(table, route):
         return DoorReason.LOCKED
-    if items.count_of(member.sheet, item) < 1:
+    if items.count_of(member.current_sheet, item) < 1:
         return DoorReason.NO_ITEM
     if route_locks.is_fitted(table, item):
         return DoorReason.USED
-    items.remove_items(member.sheet, item, 1)
+    items.remove_items(member.current_sheet, item, 1)
     route_locks.fit_lock(table, route, item)
     return None
 
@@ -345,7 +350,8 @@ def handle_door(
     taken 은 따기, 부수기, 고치기에 붙여 쓴 물건이다(#802).
     """
     if isinstance(action, LockAction | UnlockAction):
-        return set_door(judging, member, route, action.device, isinstance(action, LockAction)), None, None
+        device = required(action.device, 'device')
+        return set_door(judging, member, route, device, isinstance(action, LockAction)), None, None
     if isinstance(action, ReplaceAction):
         return replace_lock(judging, member, route, action.item), None, None
     if isinstance(action, PickAction):
@@ -363,13 +369,13 @@ def judge_door(judging: Judging, member: TableMember, action: DoorAction) -> dic
     문서는 누가(user_id, character_name), 무엇을(act, device), 어느 길의(from, to), 했는가(done)와 까닭, 판정이다.
     따기, 부수기, 고치기에 물건을 붙였으면 그 물건(aid, app/rounds/aids.py 의 aid_document)도 적는다(#802).
     """
-    here = member.sheet.place_id
-    route = joining_route(judging.table, here, action.place)
+    here = required(member.current_sheet.place_id, 'place')
+    route = required(joining_route(judging.table, here, action.place), 'route')
     act = AID_ACTS.get(type(action))
-    taken = take_aid(judging, member, action.item, act) if act is not None else None
+    taken = take_aid(judging, member, action.item, act) if act is not None and isinstance(action, AidedDoor) else None
     reason, check, use = handle_door(judging, member, route, action, taken)
     door = {
-        **places.describe_move(judging.snapshot, member, here, action.place),
+        **places.describe_move(required(judging.snapshot, 'snapshot'), member, here, action.place),
         'act': action.kind,
         'device': getattr(action, 'device', None),
         'done': reason is None,

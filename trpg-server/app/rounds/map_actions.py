@@ -36,7 +36,7 @@ from typing import Protocol
 from app.assets.scenarios.snapshot import CrossSnapshot, ItemLockSnapshot, LockSnapshot, RouteSnapshot
 from app.calendar import state as calendar
 from app.engine.action import MoveAction, SearchAction
-from app.engine.check import HinderedCheck, find_difficulty, resolve_hindered
+from app.engine.check import HinderedCheck, known_difficulty, resolve_hindered
 from app.engine.health import ChangeKind
 from app.engine.item_aids import AidAct
 from app.rounds import injuries as round_injuries
@@ -44,6 +44,7 @@ from app.rounds.aids import AidUse, TakenAid, aid_bonus, aid_document, require_a
 from app.rounds.checks import change_sheet
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
+from app.rounds.state import required
 from app.tables import items, places, route_locks, sheets
 from app.tables.content import snapshot_of
 from app.tables.models import GameTable, TableMember
@@ -101,7 +102,8 @@ def accept_move(table: GameTable, member: TableMember, action: MoveAction) -> di
     if action.carry is not None and not can_carry(find_member(table, action.carry), here):
         raise ActionTargetError('carry')
     if action.item is not None:
-        require_cross_aid(table, member, places.route_between(known, here, action.place), action.item)
+        route = required(places.route_between(known, here, action.place), 'route')
+        require_cross_aid(table, member, route, action.item)
     # 업지 않으면 carry 를, 붙이지 않으면 item 을 적지 않는다. 그것들이 생기기 전과 같은 모양이다
     return action.model_dump(mode='json', exclude_none=True)
 
@@ -120,7 +122,7 @@ def can_carry(carried: TableMember | None, here: uuid.UUID) -> bool:
     앉지 않은 사람, 서 있는 사람, 죽은 사람, 다른 곳의 사람을 가르지 않는다(모두 422 carry).
     자기 자신은 따로 보지 않는다. 선언하는 사람은 서 있다(쓰러진 사람은 선언을 못 한다).
     """
-    return carried is not None and sheets.is_downed_alive(carried) and carried.sheet.place_id == here
+    return carried is not None and sheets.is_downed_alive(carried) and carried.current_sheet.place_id == here
 
 
 def accept_search(member: TableMember, action: SearchAction) -> dict:
@@ -131,7 +133,7 @@ def accept_search(member: TableMember, action: SearchAction) -> dict:
 
 def holds_key(member: TableMember, lock: LockSnapshot | ItemLockSnapshot) -> bool:
     """이 캐릭터가 그 자물쇠(판의 것이거나 바꿔 단 것)의 열쇠를 지녔는가."""
-    return items.count_of(member.sheet, lock.key) >= 1
+    return items.count_of(member.current_sheet, lock.key) >= 1
 
 
 def open_lock(judging: Judging, member: TableMember, route: RouteSnapshot) -> tuple[bool, bool]:
@@ -143,7 +145,8 @@ def open_lock(judging: Judging, member: TableMember, route: RouteSnapshot) -> tu
     """
     if not route_locks.is_locked(judging.table, route):
         return True, False
-    if not holds_key(member, route_locks.current_lock(judging.table, judging.snapshot, route)):
+    lock = route_locks.current_lock(judging.table, required(judging.snapshot, 'snapshot'), route)
+    if not holds_key(member, required(lock, 'lock')):
         return False, False
     route_locks.unlock(judging.table, route)
     return True, True
@@ -165,8 +168,8 @@ def roll_terms(judging: Judging, member: TableMember, terms: Terms, bonus: int =
     (게시의 route_cross_invalid, route_open_invalid).
     """
     ruleset = judging.ruleset
-    sheet = member.sheet
-    difficulty = find_difficulty(ruleset, terms.difficulty)
+    sheet = member.current_sheet
+    difficulty = known_difficulty(ruleset, terms.difficulty)
     hindrance = round_injuries.hindrance_for(ruleset, sheet.injuries, terms.ability)
     return resolve_hindered(ruleset, sheet.abilities[terms.ability], difficulty, judging.dice, hindrance, bonus=bonus)
 
@@ -179,7 +182,7 @@ def terms_document(judging: Judging, terms: Terms, rolled: HinderedCheck) -> dic
     """
     return {
         'ability': terms.ability,
-        'difficulty': find_difficulty(judging.ruleset, terms.difficulty).key,
+        'difficulty': known_difficulty(judging.ruleset, terms.difficulty).key,
         **asdict(rolled.check),
         'hindrance': round_injuries.hindrance_document(rolled),
     }
@@ -218,7 +221,7 @@ def lift_bar(judging: Judging, member: TableMember, route: RouteSnapshot) -> tup
     """
     if not route_locks.is_barred(judging.table, route):
         return True, False
-    if member.sheet.place_id != route.bar.side:
+    if member.current_sheet.place_id != required(route.bar, 'bar').side:
         return False, False
     route_locks.unbar(judging.table, route)
     return True, True
@@ -259,16 +262,17 @@ def judge_move(judging: Judging, member: TableMember, action: MoveAction) -> dic
     차례가 왔을 때의 장소에서 아는 길로 이어져 있고, 길의 조건을 채워야 간다(pass_route). 가면 그곳이 서 본 곳이 된다.
     시간이 걸리는 길이면 다음 라운드가 열릴 때 적어도 그만큼 흐르게 한다(travel_time).
     """
-    snapshot = judging.snapshot
-    here = member.sheet.place_id
+    snapshot = required(judging.snapshot, 'snapshot')
+    here = required(member.current_sheet.place_id, 'place')
     known = places.known_map(snapshot, places.knowledge(judging.table))
+    # 앞 차례에 업혀 옮겨졌으면 길이 없다(pass_route 의 not_adjacent)
     route = places.route_between(known, here, action.place)
     taken = take_aid(judging, member, action.item, AidAct.CROSS)
     reason, fields, use = pass_route(judging, member, route, taken)
     moved = reason is None
-    travel = travel_time(judging, route) if moved else None
+    travel = travel_time(judging, route) if moved and route is not None else None
     if moved:
-        places.stand(judging.table, member.sheet, action.place)
+        places.stand(judging.table, member.current_sheet, action.place)
     move = places.describe_move(snapshot, member, here, action.place)
     outcome = {**move, 'moved': moved, 'reason': reason, 'travel_minutes': travel, **fields}
     if action.carry is not None:
@@ -302,8 +306,8 @@ def carry_along(
     to 는 업은 사람이 간 곳이다. 가지 못했으면 None 이다. 업힌 사람도 그곳이 서 본 곳이 된다.
     """
     reason = carry_problem(carried, here, to)
-    if reason is None:
-        places.stand(judging.table, carried.sheet, to)
+    if reason is None and carried is not None and to is not None:
+        places.stand(judging.table, carried.current_sheet, to)
     name = carried.character_name if carried is not None else None
     return {'user_id': str(user_id), 'character_name': name, 'carried': reason is None, 'reason': reason}
 
@@ -328,10 +332,11 @@ def finds(judging: Judging, member: TableMember, route: RouteSnapshot) -> bool:
     판에 굳을 때 규칙에 있는 능력과 난이도인지 봤다(게시의 route_find_invalid).
     """
     ruleset = judging.ruleset
-    sheet = member.sheet
-    difficulty = find_difficulty(ruleset, route.find.difficulty)
-    hindrance = round_injuries.hindrance_for(ruleset, sheet.injuries, route.find.ability)
-    score = sheet.abilities[route.find.ability]
+    sheet = member.current_sheet
+    find = required(route.find, 'find')
+    difficulty = known_difficulty(ruleset, find.difficulty)
+    hindrance = round_injuries.hindrance_for(ruleset, sheet.injuries, find.ability)
+    score = sheet.abilities[find.ability]
     return resolve_hindered(ruleset, score, difficulty, judging.dice, hindrance).check.success
 
 
@@ -342,8 +347,8 @@ def judge_search(judging: Judging, member: TableMember) -> dict:
     찾은 길만 적는다. 굴린 판정, 못 찾은 길의 수는 적지 않는다.
     같은 라운드에 앞사람이 먼저 찾은 길은 다시 굴리지 않는다.
     """
-    snapshot = judging.snapshot
-    here = member.sheet.place_id
+    snapshot = required(judging.snapshot, 'snapshot')
+    here = member.current_sheet.place_id
     found = []
     if here is not None:
         for route in places.hidden_routes_at(snapshot, places.knowledge(judging.table), here):

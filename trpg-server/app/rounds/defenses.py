@@ -52,7 +52,7 @@ def attacker_side(
 
     받는 쪽이 방어 태세면(guarded, #254, app/rounds/guards.py) 불리하다.
     """
-    difficulty = checks.find_difficulty(ruleset, attack.difficulty)
+    difficulty = checks.known_difficulty(ruleset, attack.difficulty)
     shift = checks.difficulty_shift(ruleset, difficulty)
     hindrance = round_injuries.hindrance_for(ruleset, injuries, attack.ability)
     return Side(score=abilities[attack.ability], adjust=blow.bonus + shift, hindrance=hindrance, disadvantage=guarded)
@@ -76,7 +76,7 @@ def member_defense(ruleset: Ruleset, member: TableMember, attack: AttackSnapshot
     ability = defending_ability(ruleset, attack)
     if ability is None:
         return None
-    sheet = member.sheet
+    sheet = member.current_sheet
     return defender_side(ruleset, sheet.abilities, sheet.injuries, ability, blow)
 
 
@@ -103,7 +103,7 @@ def strike_side(
     노려 치기(app/engine/action.py 의 called_shot_terms)는 목표값을 올리는 만큼 빼거나, 불리하게 한다.
     받는 쪽이 방어 태세면(guarded) 불리하다. 입은 부상의 영향을 받는다.
     """
-    difficulty = checks.find_difficulty(ruleset, action.difficulty)
+    difficulty = checks.known_difficulty(ruleset, action.difficulty)
     aim_raise, aim_disadvantage = actions.called_shot_terms(ruleset, action)
     shift = checks.difficulty_shift(ruleset, difficulty) - aim_raise
     hindrance = round_injuries.hindrance_for(ruleset, injuries, action.ability)

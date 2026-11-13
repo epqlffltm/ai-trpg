@@ -15,10 +15,12 @@ DB 를 모른다. 시트의 소지품만 고친다. 저장하지 않는다.
 
 import uuid
 from dataclasses import dataclass
+from typing import TypeGuard
 
 from app.engine.item_aids import AidAct, AidWear, ItemAid, aid_for, is_lost
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError, Conflict, RoundConflictError
+from app.rounds.state import required
 from app.tables import items
 from app.tables.content import snapshot_of
 from app.tables.items import CatalogItem
@@ -68,10 +70,11 @@ def take_aid(judging: Judging, member: TableMember, entry_id: uuid.UUID | None, 
     if entry_id is None:
         return None
     item = judging.items[entry_id]
-    return TakenAid(item=item, aid=aid_for(item.aids, act), held=items.count_of(member.sheet, entry_id) >= 1)
+    aid = required(aid_for(item.aids, act), 'aid')
+    return TakenAid(item=item, aid=aid, held=items.count_of(member.current_sheet, entry_id) >= 1)
 
 
-def has_tool(taken: TakenAid | None) -> bool:
+def has_tool(taken: TakenAid | None) -> TypeGuard[TakenAid]:
     """도구로 쓸 물건을 지금 가지고 있는가. 도구가 있어야 하는 문은 이것이 참이어야 굴린다."""
     return taken is not None and taken.held
 
@@ -91,7 +94,7 @@ def wear_aid(member: TableMember, taken: TakenAid | None, success: bool) -> AidU
         return AidUse(rolled=True, lost=False)
     lost = is_lost(taken.aid.wear, success)
     if lost:
-        items.remove_items(member.sheet, taken.item.entry_id, 1)
+        items.remove_items(member.current_sheet, taken.item.entry_id, 1)
     return AidUse(rolled=True, lost=lost)
 
 
@@ -115,5 +118,5 @@ def aid_document(member: TableMember, taken: TakenAid | None, use: AidUse | None
         'lost': lost,
         'broken': lost and taken.aid.wear == AidWear.ON_FAIL,
         'reason': None if taken.held else NOT_HELD,
-        'remaining': items.count_of(member.sheet, taken.item.entry_id),
+        'remaining': items.count_of(member.current_sheet, taken.item.entry_id),
     }

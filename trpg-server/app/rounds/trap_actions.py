@@ -32,6 +32,7 @@ from app.rounds.effects import Judging
 from app.rounds.item_actions import apply_to_member
 from app.rounds.map_actions import roll_terms, terms_document
 from app.rounds.place_item_actions import Reason
+from app.rounds.state import required
 from app.tables import items, place_items, places, sheets, traps
 from app.tables.models import TableMember, TableTrap
 from app.tables.state import find_member
@@ -53,7 +54,7 @@ class DisarmReason:
 
 def can_lay(judging: Judging, member: TableMember, action: SetTrapAction) -> bool:
     """차례가 왔을 때 덫을 놓을 수 있는가. 맵에 서 있고, 그 덫 물건을 아직 가지고 있다."""
-    return member.sheet.place_id is not None and items.count_of(member.sheet, action.item) >= 1
+    return member.current_sheet.place_id is not None and items.count_of(member.current_sheet, action.item) >= 1
 
 
 def judge_set_trap(judging: Judging, member: TableMember, action: SetTrapAction) -> dict:
@@ -62,21 +63,21 @@ def judge_set_trap(judging: Judging, member: TableMember, action: SetTrapAction)
 
     set 이 참이면 놓았다. 가지고 있지 않으면 놓지 않고 까닭(not_held)을 적는다. remaining 은 놓은 뒤에 가진 개수다.
     """
-    here = member.sheet.place_id
+    here = member.current_sheet.place_id
     laid = can_lay(judging, member, action)
-    if laid:
-        items.remove_items(member.sheet, action.item, 1)
+    if laid and here is not None:
+        items.remove_items(member.current_sheet, action.item, 1)
         traps.lay(judging.table, here, action.item, member.user_id, judging.round_number)
     return {
         'trap_set': {
             'user_id': str(member.user_id),
             'character_name': member.character_name,
-            'place': places.describe(judging.snapshot, here),
+            'place': places.describe(required(judging.snapshot, 'snapshot'), here),
             'entry_id': str(action.item),
             'name': judging.items[action.item].name,
             'set': laid,
             'reason': None if laid else Reason.NOT_HELD,
-            'remaining': items.count_of(member.sheet, action.item),
+            'remaining': items.count_of(member.current_sheet, action.item),
         }
     }
 
@@ -90,7 +91,7 @@ def spring_one(judging: Judging, member: TableMember, trap: TableTrap, carried: 
     피했나(avoided), 효과가 든 것(effect, injured, resources), 업힌 사람에게 든 것(carried, 업지 않았으면 None)이다.
     """
     item = judging.items[trap.entry_id]
-    rule = item.trap
+    rule = required(item.trap, 'trap')
     traps.spring(trap)
     rolled = roll_terms(judging, member, rule.avoid)
     avoided = rolled.check.success
@@ -120,7 +121,7 @@ def spring_on_arrival(judging: Judging, member: TableMember, carried: TableMembe
     덫에 걸려 죽었으면 남은 덫은 그대로 둔다(다음에 들어오는 쪽의 것이다).
     """
     sprung = []
-    for trap in traps.hidden_at(judging.table, member.sheet.place_id):
+    for trap in traps.hidden_at(judging.table, required(member.current_sheet.place_id, 'place')):
         if sheets.is_dead(member):
             break
         sprung.append(spring_one(judging, member, trap, carried))
@@ -159,7 +160,7 @@ def search_traps(judging: Judging, member: TableMember) -> list[dict]:
 
     같은 라운드에 앞사람이 먼저 찾은 덫은 다시 굴리지 않는다. 못 찾은 판정은 적지 않는다(숨긴 물건과 같다).
     """
-    here = member.sheet.place_id
+    here = member.current_sheet.place_id
     if here is None:
         return []
     return [
@@ -169,7 +170,9 @@ def search_traps(judging: Judging, member: TableMember) -> list[dict]:
 
 def finds(judging: Judging, member: TableMember, trap: TableTrap) -> bool:
     """덫 하나를 찾는 판정을 굴린다. 찾았으면 테이블이 알게 된다. 찾았는가."""
-    found = roll_terms(judging, member, finding_check(judging.items[trap.entry_id].trap)).check.success
+    found = roll_terms(
+        judging, member, finding_check(required(judging.items[trap.entry_id].trap, 'trap'))
+    ).check.success
     if found:
         traps.uncover(trap)
     return found
@@ -206,7 +209,7 @@ def keep_trap(judging: Judging, member: TableMember, trap: TableTrap) -> int:
 
     한 가지의 상한에 닿아 갖지 못하면 그 장소에 보이게 둔다. 없어지지 않는다.
     """
-    kept = items.add_up_to(judging.table.id, member.sheet, trap.entry_id, 1)
+    kept = items.add_up_to(judging.table.id, member.current_sheet, trap.entry_id, 1)
     if not kept:
         place_items.put_down(judging.table, trap.place_id, trap.entry_id, 1)
     return kept
@@ -220,10 +223,10 @@ def judge_disarm(judging: Judging, member: TableMember, action: DisarmAction) ->
     굴리지 못했으면 reason 이 있고 check 는 None 이다.
     """
     trap = traps.find_trap(judging.table, action.trap)
-    blocker = disarm_blocker(trap, member.sheet.place_id)
+    blocker = disarm_blocker(trap, member.current_sheet.place_id)
     if blocker is not None:
         return {'disarm': unrolled_disarm(judging, member, action, trap, blocker)}
-    return {'disarm': rolled_disarm(judging, member, trap)}
+    return {'disarm': rolled_disarm(judging, member, required(trap, 'trap'))}
 
 
 def disarm_head(judging: Judging, member: TableMember, trap_id: uuid.UUID, entry_id: uuid.UUID | None) -> dict:
@@ -231,7 +234,7 @@ def disarm_head(judging: Judging, member: TableMember, trap_id: uuid.UUID, entry
     return {
         'user_id': str(member.user_id),
         'character_name': member.character_name,
-        'place': places.describe(judging.snapshot, member.sheet.place_id),
+        'place': places.describe(required(judging.snapshot, 'snapshot'), member.current_sheet.place_id),
         'trap_id': str(trap_id),
         'entry_id': str(entry_id) if entry_id is not None else None,
         'name': judging.items[entry_id].name if entry_id is not None else None,
@@ -248,7 +251,7 @@ def unrolled_disarm(
 
 def rolled_disarm(judging: Judging, member: TableMember, trap: TableTrap) -> dict:
     """해제를 굴린 결과. 성공하면 거두고, 크게 실패하면 덫이 해제하던 사람에게 터진다."""
-    rule = judging.items[trap.entry_id].trap
+    rule = required(judging.items[trap.entry_id].trap, 'trap')
     rolled = roll_terms(judging, member, rule.disarm)
     done, sprung = rolled.check.success, is_big_miss(rolled.check)
     if done:

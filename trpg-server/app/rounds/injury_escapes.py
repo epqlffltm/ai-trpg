@@ -21,7 +21,7 @@ from dataclasses import asdict
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.engine.check import find_difficulty, resolve_hindered
+from app.engine.check import known_difficulty, resolve_hindered
 from app.engine.dice import Dice
 from app.engine.injury import find_injury
 from app.engine.ruleset import InjuryEscape, Ruleset
@@ -31,14 +31,14 @@ from app.rounds import injuries as round_injuries
 from app.rounds.cast import Scene
 from app.rounds.injury_ticks import is_ticking, standing_cast, standing_members, standing_monsters
 from app.rounds.models import Round
-from app.rounds.state import rules_of
+from app.rounds.state import required, rules_of
 from app.tables import injuries
 from app.tables.models import GameTable, TableInjury
 
 
 def is_escapable(row: TableInjury, round_number: int) -> bool:
     """이 줄이 이 라운드에 벗어나기를 굴릴 짧은 부상인가. 이 라운드 전에 걸렸고, 이 라운드가 닫힐 때 풀리지 않는다."""
-    return is_ticking(row, round_number) and row.ends_after_round > round_number
+    return is_ticking(row, round_number) and row.ends_after_round is not None and row.ends_after_round > round_number
 
 
 def escape_of(ruleset: Ruleset, row: TableInjury) -> InjuryEscape | None:
@@ -68,7 +68,7 @@ def holders(table: GameTable, scene: Scene) -> list[tuple[dict, dict[str, int], 
     found = []
     for member in standing_members(table):
         who = {'user_id': str(member.user_id), 'character_name': member.character_name}
-        found.append((who, member.sheet.abilities, member.sheet.injuries))
+        found.append((who, member.current_sheet.abilities, member.current_sheet.injuries))
     for person in standing_cast(scene):
         found.append(
             ({'entry_id': str(person.entry_id), 'name': person.name}, person.npc.abilities, person.npc.injuries)
@@ -88,7 +88,7 @@ def roll_escape(
     ruleset: Ruleset, dice: Dice, abilities: dict[str, int], rows: list[TableInjury], escape: InjuryEscape
 ) -> dict:
     """벗어나는 판정을 한 번 굴린다. 결과에 적을 모양(능력, 난이도, 판정, 부상의 영향)을 돌려준다."""
-    difficulty = find_difficulty(ruleset, escape.difficulty)
+    difficulty = known_difficulty(ruleset, escape.difficulty)
     hindrance = round_injuries.hindrance_for(ruleset, rows, escape.ability)
     rolled = resolve_hindered(ruleset, abilities[escape.ability], difficulty, dice, hindrance)
     return {
@@ -115,7 +115,7 @@ def settle(table: GameTable, round_: Round, dice: Dice, scene: Scene) -> list[di
             check = roll_escape(ruleset, dice, abilities, rows, escape)
             if check['success']:
                 injuries.end(row)
-            name = find_injury(ruleset, row.injury).name
+            name = required(find_injury(ruleset, row.injury), 'injury').name
             rolled.append({'holder': holder, 'injury': row.injury, 'injury_name': name, 'check': check})
     return rolled
 

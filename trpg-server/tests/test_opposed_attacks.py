@@ -129,7 +129,8 @@ def test_the_attacker_side_carries_the_weapon_the_difficulty_and_the_wounds():
 
 
 def test_the_member_defends_with_armor_raising_the_bar():
-    member = SimpleNamespace(sheet=SimpleNamespace(abilities={'dex': 16, 'con': 8}, injuries=[]))
+    sheet = SimpleNamespace(abilities={'dex': 16, 'con': 8}, injuries=[])
+    member = SimpleNamespace(sheet=sheet, current_sheet=sheet)
     blow = replace(NO_BLOW, raise_by=2)
 
     sided = defenses.member_defense(SRD5, member, attack(defense='con'), blow)

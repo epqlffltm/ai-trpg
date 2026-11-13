@@ -26,13 +26,14 @@ from dataclasses import asdict, dataclass
 
 from app.assets.models import RARITY_ORDER, NpcAttitude, NpcCaught
 from app.engine.action import StealAction
-from app.engine.check import find_difficulty, modifier_of, resolve_hindered
+from app.engine.check import known_difficulty, modifier_of, resolve_hindered
 from app.engine.ruleset import Ruleset, Steal
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import CastMember, find_cast_member
 from app.rounds.effects import Judging, mark_fight, mark_npc_fight
 from app.rounds.errors import ActionNotInRulesError
 from app.rounds.monster_scene import Gone, SceneMonster, find_scene_monster, gone_reason
+from app.rounds.state import required
 from app.rounds.victims import Victim, monster_victim, npc_victim
 from app.tables import carried, items, npcs
 from app.tables.carried import Carried
@@ -111,14 +112,14 @@ def steal_odds(
         Factor.DISTRACTED: -rule.distracted if is_distracted(judging, victim, thief) else 0,
     }
     amounts = {factor: amount for factor, amount in candidates.items() if amount}
-    base = find_difficulty(judging.ruleset, rule.difficulty).target
+    base = known_difficulty(judging.ruleset, rule.difficulty).target
     raw = base + awareness_of(judging.ruleset, rule, victim) + sum(amounts.values())
     return StealOdds(target=max(1, raw), amounts=amounts)
 
 
 def take_line(judging: Judging, thief: TableMember, victim: Victim, line: Carried) -> int:
     """훔친 줄을 도둑에게 옮긴다. 상한까지만 갖고 남은 것은 대상이 지닌다. 가진 개수를 돌려준다."""
-    taken = items.add_up_to(judging.table.id, thief.sheet, line.entry_id, line.count)
+    taken = items.add_up_to(judging.table.id, thief.current_sheet, line.entry_id, line.count)
     victim.set_count(line.slot, line.count - taken)
     return taken
 
@@ -141,12 +142,12 @@ def roll_steal(judging: Judging, thief: TableMember, victim: Victim, line: Carri
     check 는 굴린 판정(눈, 보정, 합, 목표값, 성공)이다. factors 는 목표값을 오르내리게 한 것들이다.
     성공하면 줄을 옮긴다(count 는 훔친 개수, left 는 대상에게 남은 개수, total 은 도둑이 가진 개수).
     """
-    rule = judging.ruleset.steal
+    rule = required(judging.ruleset.steal, 'steal')
     odds = steal_odds(judging, rule, victim, line, judging.items[line.entry_id], thief)
-    difficulty = find_difficulty(judging.ruleset, rule.difficulty).model_copy(update={'target': odds.target})
-    hindrance = round_injuries.hindrance_for(judging.ruleset, thief.sheet.injuries, rule.ability)
+    difficulty = known_difficulty(judging.ruleset, rule.difficulty).model_copy(update={'target': odds.target})
+    hindrance = round_injuries.hindrance_for(judging.ruleset, thief.current_sheet.injuries, rule.ability)
     hindered = resolve_hindered(
-        judging.ruleset, thief.sheet.abilities[rule.ability], difficulty, judging.dice, hindrance
+        judging.ruleset, thief.current_sheet.abilities[rule.ability], difficulty, judging.dice, hindrance
     )
     stolen = hindered.check.success
     taken = take_line(judging, thief, victim, line) if stolen else 0
@@ -157,7 +158,7 @@ def roll_steal(judging: Judging, thief: TableMember, victim: Victim, line: Carri
         'stolen': stolen,
         'count': taken,
         'left': line.count - taken,
-        'total': items.count_of(thief.sheet, line.entry_id),
+        'total': items.count_of(thief.current_sheet, line.entry_id),
         'reason': Reason.FULL if stolen and taken < line.count else None,
     }
 
@@ -171,7 +172,7 @@ def nothing_there(thief: TableMember, entry_id: uuid.UUID) -> dict:
         'stolen': False,
         'count': 0,
         'left': 0,
-        'total': items.count_of(thief.sheet, entry_id),
+        'total': items.count_of(thief.current_sheet, entry_id),
         'reason': Reason.GONE,
     }
 
