@@ -18,7 +18,7 @@ from app.tables.models import TableMember
 
 def of_member(judging: Judging, member: TableMember) -> frozenset[str]:
     """앉은 사람의 지금 캐릭터가 막는 성질들. 시트가 있어야 한다(부르는 쪽이 봤다)."""
-    return resistances.member_blocked(judging.ruleset, judging.items, member.sheet)
+    return resistances.member_blocked(judging.ruleset, judging.items, member.current_sheet)
 
 
 def of_cast(judging: Judging, person: CastMember) -> frozenset[str]:
@@ -33,7 +33,7 @@ def of_monster(judging: Judging, monster: SceneMonster) -> frozenset[str]:
 
 def member_nature(judging: Judging, member: TableMember, nature: str | None) -> Nature | None:
     """앉은 사람의 지금 캐릭터가 그 성질의 피해를 받는 모양(#886 ③). 성질이 없으면 None."""
-    return resistances.member_nature(judging.ruleset, judging.items, member.sheet, nature)
+    return resistances.member_nature(judging.ruleset, judging.items, member.current_sheet, nature)
 
 
 def cast_nature(judging: Judging, person: CastMember, nature: str | None) -> Nature | None:

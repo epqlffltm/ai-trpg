@@ -55,7 +55,13 @@ def describe(judging: Judging, thief: TableMember, victim: Victim, entry_id: uui
 
 def missed(thief: TableMember, entry_id: uuid.UUID, reason: str) -> dict:
     """아무것도 가져가지 못한 결과의 칸들. total 은 도둑이 지금 가진 개수다."""
-    return {'looted': False, 'count': 0, 'left': 0, 'total': items.count_of(thief.sheet, entry_id), 'reason': reason}
+    return {
+        'looted': False,
+        'count': 0,
+        'left': 0,
+        'total': items.count_of(thief.current_sheet, entry_id),
+        'reason': reason,
+    }
 
 
 def take(judging: Judging, thief: TableMember, victim: Victim, entry_id: uuid.UUID) -> dict:
@@ -68,13 +74,13 @@ def take(judging: Judging, thief: TableMember, victim: Victim, entry_id: uuid.UU
     line = carried.find_carried(victim.held, entry_id)
     if line is None:
         return missed(thief, entry_id, Reason.GONE)
-    taken = items.add_up_to(judging.table.id, thief.sheet, line.entry_id, line.count)
+    taken = items.add_up_to(judging.table.id, thief.current_sheet, line.entry_id, line.count)
     victim.set_count(line.slot, line.count - taken)
     return {
         'looted': taken > 0,
         'count': taken,
         'left': line.count - taken,
-        'total': items.count_of(thief.sheet, entry_id),
+        'total': items.count_of(thief.current_sheet, entry_id),
         'reason': Reason.FULL if taken < line.count else None,
     }
 

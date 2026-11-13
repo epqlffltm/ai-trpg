@@ -45,7 +45,7 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
+from typing import Protocol, TypeGuard, cast
 
 from server_core.billing.price_list import FREE_PRICES, PriceList
 from server_core.billing.settings import BILLING_BUDGET_SECONDS
@@ -55,7 +55,7 @@ from app.billing import charges
 from app.billing import repository as billing_repository
 from app.billing.models import NarrationCharge
 from app.calendar import state as calendar
-from app.catalog.steps import steps_of
+from app.catalog.steps import HasSteps, steps_of
 from app.core.config import NARRATION_BUDGET_SECONDS
 from app.engine.dice import Dice
 from app.engine.ruleset import Ruleset
@@ -109,6 +109,7 @@ from app.rounds.state import (
     require_open,
     require_playing,
     require_started,
+    required,
     rules_of,
     waiting_for,
 )
@@ -170,7 +171,7 @@ class NarrationScheduler(Protocol):
 # --- 서술을 맡은 작업이 자기 차례인지, 멈췄는지 ---
 
 
-def is_run(round_: Round | None, started: datetime) -> bool:
+def is_run(round_: Round | None, started: datetime) -> TypeGuard[Round]:
     """
     이 라운드가 started 에 맡긴 서술을 아직 기다리고 있는가. 서술을 맡은 작업이 라운드를 읽거나 바꾸기 전에 본다.
 
@@ -190,7 +191,9 @@ def is_stalled(round_: Round, now: datetime) -> bool:
         return False
     if round_.narration_failed_at is not None:
         return True
-    return now - round_.closing_at >= timedelta(seconds=CLOSING_RETRY_SECONDS)
+    # 닫는 중이면 닫기 시작한 시각이 있다(status 가 그 시각으로 정한다)
+    closing_at = required(round_.closing_at, 'closing_at')
+    return now - closing_at >= timedelta(seconds=CLOSING_RETRY_SECONDS)
 
 
 # --- 읽기 ---
@@ -223,8 +226,8 @@ async def get_scene_cast(
     carrying = may_carry(scene)
     measured = resource_rounds.has_resources(table)
     snapshot = snapshot_of(table) if carrying or measured else None
-    things = items.catalog(snapshot) if carrying else {}
-    ruleset = snapshot.rulebook.rules if measured else None
+    things = items.catalog(snapshot) if carrying and snapshot is not None else {}
+    ruleset = snapshot.rulebook.rules if measured and snapshot is not None else None
     return round_, scene, things, ruleset, entry_pictures(table.content)
 
 
@@ -448,13 +451,14 @@ def hand_over(scheduler: NarrationScheduler, saved: tuple[GameTable, Round]) -> 
     저장한 뒤에 다시 읽은 라운드(save 가 돌려준 것)를 받는다. 작업이 견주는 값이 DB 에 적힌 값과 같아야 한다.
     """
     table, round_ = saved
-    scheduler.schedule(table.id, round_.number, round_.closing_at)
+    scheduler.schedule(table.id, round_.number, required(round_.closing_at, 'closing_at'))
 
 
 async def save(session: AsyncSession, table: GameTable) -> tuple[GameTable, Round]:
     """저장하고, 테이블과 가장 최근 라운드를 다시 읽어 돌려준다."""
     await tables.commit(session, table)
-    return table, await repository.find_latest_round(session, table.id)
+    # 시작한 테이블에만 부른다. 라운드가 하나는 있다
+    return table, required(await repository.find_latest_round(session, table.id), 'round')
 
 
 async def declare(
@@ -686,7 +690,8 @@ async def load_closing_request(
     round_ = await repository.find_round(session, table_id, number)
     if table is None or not is_run(round_, started):
         return None
-    steps = steps_of(round_)
+    # 라운드(ORM 의 행)는 단계의 칸을 가진다(HasSteps). pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    steps = steps_of(cast(HasSteps, round_))
     history = await repository.list_rounds_before(session, table_id, number, history_rounds(steps))
     whispers = await whisper_repository.list_for_gm(session, table_id, number, GM_WHISPERS_PER_SENDER)
     snapshot = snapshot_of(table)
@@ -796,7 +801,7 @@ async def close_and_open(
     round_.closed_at = now
     playing = table.status == TableStatus.PLAYING
     if playing:
-        price = await price_of(session, prices, table.narration_model, now, steps_of(table))
+        price = await price_of(session, prices, table.narration_model, now, steps_of(cast(HasSteps, table)))
         await session.flush()
         opener.open_round(
             session, table, number=round_.number + 1, scene=scene, cause=cause, price=price, previous=round_

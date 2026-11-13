@@ -94,7 +94,7 @@ def chase(judging: Judging, monster: SceneMonster) -> dict | None:
         return None
     quarry = pick_quarry(judging, monster, runaways)
     origin = monster.state.place_id
-    monster.state.place_id = quarry.sheet.place_id
+    monster.state.place_id = quarry.current_sheet.place_id
     return {
         'chased': {
             'user_id': str(quarry.user_id),

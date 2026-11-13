@@ -21,6 +21,7 @@ tests/test_round_revert.py 가 모델의 모든 표를 보고 어느 쪽에도 �
 import uuid
 from collections.abc import Iterable, Mapping
 from datetime import datetime
+from typing import Any, cast
 
 from sqlalchemy import Column, DateTime, Table, Uuid
 
@@ -101,7 +102,8 @@ def encode_value(column: Column, value: object) -> object:
     if isinstance(column.type, Uuid):
         return str(value)
     if isinstance(column.type, DateTime):
-        return value.isoformat()
+        # 칸의 타입이 값의 타입을 정한다(DateTime 의 칸은 datetime)
+        return cast(datetime, value).isoformat()
     return value
 
 
@@ -109,10 +111,11 @@ def decode_value(column: Column, value: object) -> object:
     """encode_value 를 거꾸로. DB 에 넣을 값이다."""
     if value is None:
         return None
+    # encode_value 가 글자로 적은 값이다
     if isinstance(column.type, Uuid):
-        return uuid.UUID(value)
+        return uuid.UUID(cast(str, value))
     if isinstance(column.type, DateTime):
-        return datetime.fromisoformat(value)
+        return datetime.fromisoformat(cast(str, value))
     return value
 
 
@@ -126,7 +129,7 @@ def decode_row(table: Table, row: Mapping[str, object]) -> dict:
     return {column.name: decode_value(column, row[column.name]) for column in table.columns}
 
 
-def make_state(rows: Mapping[str, Iterable[Mapping[str, object]]], table_values: Mapping[str, object]) -> dict:
+def make_state(rows: Mapping[str, Iterable[Mapping[Any, object]]], table_values: Mapping[str, object]) -> dict:
     """
     찍은 상태 하나. rows 는 표 이름에서 그 테이블의 행들로, table_values 는 테이블의 행의 STATE_COLUMNS 의 값이다.
 

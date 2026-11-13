@@ -25,7 +25,7 @@ from pydantic import TypeAdapter
 from app.assets.models import NpcAttitude
 from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, person_entries, place_entries, quest_entries
 from app.calendar import clock, state
-from app.engine.check import find_ability, find_difficulty
+from app.engine.check import find_ability, known_ability, known_difficulty
 from app.engine.injury import known_injuries
 from app.engine.resources import band_of
 from app.engine.ruleset import Ruleset
@@ -93,8 +93,10 @@ from app.rounds.state import (
     move_of,
     pay_of,
     put_down_of,
+    required,
     rest_of,
     search_of,
+    settled,
     steal_of,
     take_of,
     trade_of,
@@ -340,7 +342,7 @@ def to_trap(trap: dict, ruleset: Ruleset | None) -> TrapNote:
     """가기의 결과에 적힌 터진 덫 하나를 서술자에게 줄 모양으로 바꾼다(#806)."""
     return TrapNote(
         name=trap['name'],
-        check=cross_ability_name(ruleset, trap['avoid']),
+        check=required(cross_ability_name(ruleset, trap['avoid']), 'avoid'),
         avoided=trap['avoided'],
         carried=caught_name(trap),
     )
@@ -646,19 +648,21 @@ def check_terms(declaration: Declaration) -> tuple[str, str]:
 
     결과가 적힌 선언에만 쓴다.
     """
-    treatment = declaration.outcome.get('treatment')
+    outcome = settled(declaration)
+    treatment = outcome.get('treatment')
     if treatment is not None:
         return treatment['ability'], treatment['difficulty']
-    thrown = declaration.outcome.get('item_throw')
+    thrown = outcome.get('item_throw')
     if thrown is not None:
         return thrown['ability'], thrown['difficulty']
-    used = declaration.outcome.get('item_use')
+    used = outcome.get('item_use')
     if used is not None:
         return used['ability'], used['difficulty']
-    skill = declaration.outcome.get('skill_use')
+    skill = outcome.get('skill_use')
     if skill is not None:
         return skill['ability'], skill['difficulty']
-    return declaration.action['ability'], declaration.action['difficulty']
+    action = required(declaration.action, 'action')
+    return action['ability'], action['difficulty']
 
 
 def patient_name(holder: dict) -> str:
@@ -700,9 +704,9 @@ def to_verdict(ruleset: Ruleset, declaration: Declaration) -> Verdict:
     결과가 적힌 선언에만 쓴다.
     """
     ability_key, difficulty_key = check_terms(declaration)
-    ability = find_ability(ruleset, ability_key)
-    difficulty = find_difficulty(ruleset, difficulty_key)
-    outcome = declaration.outcome
+    ability = known_ability(ruleset, ability_key)
+    difficulty = known_difficulty(ruleset, difficulty_key)
+    outcome = settled(declaration)
     return Verdict(
         ability=ability.name,
         difficulty=difficulty.name,
@@ -874,10 +878,11 @@ def to_quest_note(row: TableQuest, quest: CatalogQuest, scene_end: int | None, e
     기한을 넘긴 것은 실패로 끝나 더 바뀌지 않는다(방장도 끝난 퀘스트를 바꾸지 못한다). 그래서 라운드에 적힌 것만 본다.
     """
     active = row.status == QuestStatus.ACTIVE and scene_end is not None
+    pace = pace_of(quest.time_limit_minutes, row.due_at, scene_end) if active and scene_end is not None else None
     return QuestNote(
         name=quest.name,
         status=row.status,
-        pace=pace_of(quest.time_limit_minutes, row.due_at, scene_end) if active else None,
+        pace=pace,
         missed_deadline=str(row.entry_id) in expired,
     )
 
