@@ -24,7 +24,7 @@ import uuid
 
 from app.assets.scenarios.snapshot import ItemTrapSnapshot
 from app.engine.action import ActionKind, CheckAction, Consequence, Recipient
-from app.engine.check import find_difficulty, resolve_hindered
+from app.engine.check import known_difficulty, resolve_hindered
 from app.engine.health import ChangeKind
 from app.engine.injury import Trigger
 from app.engine.item_effects import EffectKind, first_of
@@ -37,6 +37,7 @@ from app.rounds.effects import Judging
 from app.rounds.item_targets import Struck, apply_to_struck
 from app.rounds.map_actions import terms_document
 from app.rounds.monster_scene import SceneMonster
+from app.rounds.state import required
 from app.tables import monsters as table_monsters
 from app.tables import npcs, places, traps
 from app.tables.models import TableTrap
@@ -54,7 +55,7 @@ def first_trap(judging: Judging, place_id: uuid.UUID | None) -> TableTrap | None
 def roll_avoid(judging: Judging, bearer: Bearer, rule: ItemTrapSnapshot) -> dict:
     """밟은 쪽(몬스터나 인물의 상태)의 능력치로 피하는 판정을 굴린다. 결과에 적을 모양을 돌려준다."""
     ruleset = judging.ruleset
-    difficulty = find_difficulty(ruleset, rule.avoid.difficulty)
+    difficulty = known_difficulty(ruleset, rule.avoid.difficulty)
     hindrance = round_injuries.hindrance_for(ruleset, bearer.injuries, rule.avoid.ability)
     rolled = resolve_hindered(ruleset, bearer.abilities[rule.avoid.ability], difficulty, judging.dice, hindrance)
     return terms_document(judging, rule.avoid, rolled)
@@ -65,7 +66,9 @@ def harm_check(rule: ItemTrapSnapshot, **aimed: uuid.UUID) -> CheckAction | None
     damage = first_of(rule.effects, EffectKind.DAMAGE)
     if damage is None:
         return None
-    return CheckAction(kind=ActionKind.CHECK, ability=rule.avoid.ability, harm=damage.magnitude, **aimed)
+    return CheckAction.model_validate(
+        {'kind': ActionKind.CHECK, 'ability': rule.avoid.ability, 'harm': damage.magnitude, **aimed}
+    )
 
 
 def harm_of(rule: ItemTrapSnapshot) -> Consequence | None:
@@ -85,7 +88,7 @@ def nature_of_damage(rule: ItemTrapSnapshot) -> str | None:
 def trap_head(judging: Judging, trap: TableTrap, avoid: dict) -> dict:
     """밟은 덫의 결과에서 어디서, 무엇을, 누가 놓았나, 피하는 판정의 칸들."""
     return {
-        'place': places.describe(judging.snapshot, trap.place_id),
+        'place': places.describe(required(judging.snapshot, 'snapshot'), trap.place_id),
         'trap_id': str(trap.id),
         'entry_id': str(trap.entry_id),
         'name': judging.items[trap.entry_id].name,
@@ -115,13 +118,17 @@ def monster_steps(judging: Judging, monster: SceneMonster) -> dict | None:
     trap = first_trap(judging, monster.state.place_id)
     if trap is None:
         return None
-    rule = judging.items[trap.entry_id].trap
+    rule = required(judging.items[trap.entry_id].trap, 'trap')
     traps.spring(trap)
     head = trap_head(judging, trap, roll_avoid(judging, monster.state, rule))
     if head['avoided']:
         return {**head, 'monster_effect': None, **SPARED}
     check, harm = harm_check(rule, monster=monster.state.id), harm_of(rule)
-    effect = change_scene_monster(judging, check, harm, nature=nature_of_damage(rule)) if harm else None
+    effect = (
+        change_scene_monster(judging, check, harm, nature=nature_of_damage(rule))
+        if check is not None and harm is not None
+        else None
+    )
     struck = Struck(monster.state, ResourceHolder.MONSTERS, None, lambda: resisting.of_monster(judging, monster))
     landed = SPARED if table_monsters.is_dead(monster.state) else struck_effects(judging, struck, rule)
     stepped = {**head, 'monster_effect': effect, **landed}
@@ -141,13 +148,17 @@ def npc_steps(judging: Judging, person: CastMember) -> dict | None:
     trap = first_trap(judging, person.npc.place_id)
     if trap is None:
         return None
-    rule = judging.items[trap.entry_id].trap
+    rule = required(judging.items[trap.entry_id].trap, 'trap')
     traps.spring(trap)
     head = trap_head(judging, trap, roll_avoid(judging, person.npc, rule))
     if head['avoided']:
         return {**head, 'npc_effect': None, **SPARED}
     check, harm = harm_check(rule, npc=person.entry_id), harm_of(rule)
-    effect = change_cast_member(judging, check, harm, nature=nature_of_damage(rule)) if harm else None
+    effect = (
+        change_cast_member(judging, check, harm, nature=nature_of_damage(rule))
+        if check is not None and harm is not None
+        else None
+    )
     struck = Struck(person.npc, ResourceHolder.NPCS, None, lambda: resisting.of_cast(judging, person))
     landed = SPARED if npcs.is_dead(person.npc) else struck_effects(judging, struck, rule)
     stepped = {**head, 'npc_effect': effect, **landed}

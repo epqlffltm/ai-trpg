@@ -11,6 +11,7 @@ DB 를 모른다. 이미 읽어 온 시트, NPC 상태, 규칙을 받는다.
 
 import enum
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from app.calendar import clock
@@ -47,12 +48,12 @@ def heals_at_document(minutes: int | None) -> dict | None:
     return None if minutes is None else clock.as_document(minutes)
 
 
-def worn(ruleset: Ruleset, rows: list[TableInjury]) -> list[Injury]:
+def worn(ruleset: Ruleset, rows: Sequence[TableInjury]) -> list[Injury]:
     """입고 있는 부상들을 규칙의 부상으로. 생긴 순서다."""
     return injury_rules.known_injuries(ruleset, injuries.active_keys(rows))
 
 
-def hindrance_for(ruleset: Ruleset, rows: list[TableInjury], ability: str) -> Hindrance:
+def hindrance_for(ruleset: Ruleset, rows: Sequence[TableInjury], ability: str) -> Hindrance:
     """입고 있는 부상들이 이 능력의 판정에 주는 것."""
     return injury_rules.hindrance_of(worn(ruleset, rows), ability)
 

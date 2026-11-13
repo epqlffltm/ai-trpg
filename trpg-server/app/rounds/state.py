@@ -13,6 +13,7 @@ DB 를 모른다. 이미 읽어 온 테이블, 자리, 라운드를 받아 보�
 
 import uuid
 from datetime import datetime
+from typing import TypeGuard
 
 from app.engine import health
 from app.engine.ruleset import Ruleset
@@ -123,7 +124,7 @@ def settled(declaration: Declaration) -> dict:
     return required(declaration.outcome, 'outcome')
 
 
-def has_outcome(declaration: Declaration | None) -> bool:
+def has_outcome(declaration: Declaration | None) -> TypeGuard[Declaration]:
     """이 선언에 판정의 결과가 적혀 있는가. 주사위를 굴린 판정(치료도)만이다. 지목은 naming_of 로 읽는다."""
     return declaration is not None and declaration.outcome is not None and 'roll' in declaration.outcome
 

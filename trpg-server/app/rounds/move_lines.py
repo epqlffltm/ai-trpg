@@ -16,6 +16,8 @@
 결과의 모양은 app/rounds/narrator.py 에 있다.
 """
 
+from collections.abc import Sequence
+
 from app.engine.ruleset import Outcome
 from app.rounds.narrator import (
     AidNote,
@@ -108,7 +110,7 @@ def verdict_numbers(verdict: Verdict) -> str:
 # 방어가 한 일(#276). 규칙의 방어 방식마다다
 ARMOR_EFFECTS = {'ac': '목표값에 더함', 'reduce': '피해에서 뺌', 'save': '세이브'}
 # 세이브의 종류(#276)
-SAVE_KINDS = {'armor': '아머', 'cover': '커버', 'ward': '불굴'}
+SAVE_KINDS: dict[str | None, str] = {'armor': '아머', 'cover': '커버', 'ward': '불굴'}
 
 
 def describe_blow(note: BlowNote) -> str:
@@ -339,7 +341,7 @@ def describe_death_save(note: DeathSaveNote) -> str:
 
 # 휴식의 길이와, 휴식이 깨진 까닭을 서술자에게 주는 말
 REST_LENGTHS = {'short': '짧은 휴식', 'long': '긴 휴식'}
-REST_BREAKS = {
+REST_BREAKS: dict[str | None, str] = {
     'hurt': '맞아서 쉬지 못했다',
     'downed': '쓰러져 쉬지 못했다',
     'dead': '죽어 쉬지 못했다',
@@ -381,7 +383,10 @@ def describe_resource(note: ResourceNote) -> str:
 
 
 # 기다림이 깨진 까닭을 서술자에게 주는 말
-WAIT_BREAKS = {'hurt': '싸움이 벌어져 시간이 건너뛰지 않았다', 'not_all': '모두가 기다리지 않아 시간이 건너뛰지 않았다'}
+WAIT_BREAKS: dict[str | None, str] = {
+    'hurt': '싸움이 벌어져 시간이 건너뛰지 않았다',
+    'not_all': '모두가 기다리지 않아 시간이 건너뛰지 않았다',
+}
 
 
 def describe_wait(note: WaitNote) -> str:
@@ -459,7 +464,7 @@ def describe_recovery(note: RecoveryNote) -> str:
 
 
 # 물건을 쓰거나 건네지 못한 까닭을 서술자에게 주는 말
-ITEM_FAILURES = {
+ITEM_FAILURES: dict[str | None, str] = {
     'not_held': '가지고 있지 않았다',
     'target_gone': '받을 사람이 없었다',
     'too_many': '받는 쪽이 더 가질 수 없었다',
@@ -486,7 +491,7 @@ def describe_throw(note: ThrowNote) -> str:
 
 
 # 기술을 쓰지 못한 까닭(#805)을 서술자에게 줄 말
-SKILL_FAILURES = {
+SKILL_FAILURES: dict[str | None, str] = {
     'not_known': '그 기술을 모른다',
     'cost_short': '비용이 모자랐다',
     'target_gone': '받을 쪽이 없었다',
@@ -547,7 +552,7 @@ def resource_tags(shifts: list[ResourceNote]) -> list[str]:
     return [f'[수치: {", ".join(describe_resource(one) for one in shifts)}]']
 
 
-def effect_tags(cured: list[str], injured: list[str], resisted: list[str], spared: list[str] = ()) -> list[str]:
+def effect_tags(cured: list[str], injured: list[str], resisted: list[str], spared: Sequence[str] = ()) -> list[str]:
     """
     물건의 효과가 부상에 한 일을 줄 뒤에 붙일 조각들(#800, #801, #803). 없으면 빈 목록이다.
 
@@ -576,7 +581,7 @@ def describe_items(items: list[ItemNote]) -> str:
 
 
 # 가지 못한 까닭을 서술자에게 주는 말. 넘기에 실패한 것(cross_failed)은 cross_failure 가 따로 말한다
-TRAVEL_FAILURES = {
+TRAVEL_FAILURES: dict[str | None, str] = {
     'not_adjacent': '그쪽으로 이어진 길이 없었다',
     'locked': '문이 잠겨 있었고 맞는 열쇠가 없었다',
     'barred': '반대쪽에 빗장이 걸려 있었다',
@@ -671,7 +676,7 @@ DOOR_DONE = {
     ('replace', None): '자물쇠를 새것으로 바꿔 달았다',
 }
 # 문을 다루지 못한 까닭의 말. 따기와 부수기의 실패는 door_failure 가 따로 말한다
-DOOR_FAILURES = {
+DOOR_FAILURES: dict[str | None, str] = {
     'no_key': '맞는 열쇠가 없었다',
     'wrong_side': '빗장의 반대쪽이라 손이 닿지 않았다',
     'broken': '부서진 문이라 잠기지 않았다',
@@ -679,7 +684,7 @@ DOOR_FAILURES = {
     'no_tool': '딸 도구가 없었다',
 }
 # 행동마다의 까닭의 말. 같은 까닭이라도 행동마다 뜻이 다르다. 없으면 DOOR_FAILURES 의 말이다
-ACT_FAILURES = {
+ACT_FAILURES: dict[tuple[str, str | None], str] = {
     ('pick', 'no_pick'): '따지 못하는 자물쇠였다',
     ('repair', 'already'): '부서진 문이 아니었다',
     ('repair', 'no_tool'): '고칠 도구가 없었다',
@@ -878,7 +883,7 @@ def describe_loot(note: LootNote) -> str:
 
 
 # 사거나 팔거나 돈을 건네지 못한 까닭을 서술자에게 주는 말(app/rounds/trades.py 의 Reason)
-TRADE_FAILURES = {
+TRADE_FAILURES: dict[str | None, str] = {
     'unavailable': '상인이 거래할 수 없었다',
     'out_of_stock': '상인에게 그만큼이 없었다',
     'not_enough_money': '돈이 모자랐다',
@@ -964,11 +969,11 @@ def describe_move(move: Move) -> str:
         parts.append(describe_throw(move.throw))
     # 굴린 기술(#805 ②)도 판정 앞에 적는다. 던지기와 같다
     rolled_skill = move.skill is not None and move.skill.rolled
-    if rolled_skill:
+    if rolled_skill and move.skill is not None:
         parts.append(describe_skill(move.skill))
     # 인물이나 몬스터에게 쓴 물건(#800)은 판정 앞에 적는다. 던지기와 같다
     used_on = move.item_action is not None and move.verdict is not None
-    if used_on:
+    if used_on and move.item_action is not None:
         parts.append(describe_item_action(move.item_action))
     if move.verdict is not None:
         parts.append(describe_verdict(move.verdict))
@@ -1131,7 +1136,7 @@ def describe_downed_strike(target: str, note: DownedStrikeNote) -> str:
     return f'→ {target} 죽음의 굴림 실패 +{note.added} (실패 {note.failures}/{note.limit}, {FATES[note.fate]})'
 
 
-def take_move(moves: list[Move], used: list[bool], name: str) -> Move | None:
+def take_move(moves: list[Move], used: list[bool], name: str | None) -> Move | None:
     """아직 놓지 않은 한 일 중에서 이 캐릭터의 것을 찾아 놓은 것으로 표시한다. 없으면 None."""
     for index, move in enumerate(moves):
         if not used[index] and move.character_name == name:

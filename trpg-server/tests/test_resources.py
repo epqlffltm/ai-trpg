@@ -442,7 +442,7 @@ def test_the_migration_fills_rulebooks_and_drops_adjust_on_the_way_back():
 def test_a_broken_rest_changes_no_resource():
     """다쳐 깨진 휴식은 회복하지 않고 수치도 바꾸지 않는다."""
     sheet = SimpleNamespace(hp=5, max_hp=10, died_at=None, abilities=SHEET['abilities'], resources={'mana': 1})
-    member = SimpleNamespace(user_id=ME, sheet=sheet)
+    member = SimpleNamespace(user_id=ME, sheet=sheet, current_sheet=sheet)
     declaration = SimpleNamespace(outcome={'rest': {'length': 'long', 'minutes': 480}})
 
     finish_rest(LIGHT, member, declaration, {ME}, set(), ScriptedDice([]))

@@ -414,7 +414,8 @@ def test_the_climb_feels_the_injuries_on_its_ability(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(map_actions.round_injuries, 'hindrance_for', spy)
     judging = SimpleNamespace(ruleset=SRD5, dice=ScriptedDice([20]))
-    member = SimpleNamespace(sheet=SimpleNamespace(abilities={'str': 10, 'dex': 10}, injuries=[]))
+    sheet = SimpleNamespace(abilities={'str': 10, 'dex': 10}, injuries=[])
+    member = SimpleNamespace(sheet=sheet, current_sheet=sheet)
 
     rolled = map_actions.roll_terms(judging, member, CrossSnapshot(ability='str'))
 

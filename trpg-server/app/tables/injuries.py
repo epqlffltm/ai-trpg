@@ -12,6 +12,7 @@ DB 를 모른다. 이미 읽어 온 시트나 NPC 상태의 부상 목록을 받
 """
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -33,12 +34,12 @@ class Moment:
     scene_end: int
 
 
-def active(injuries: list[TableInjury]) -> list[TableInjury]:
+def active(injuries: Sequence[TableInjury]) -> list[TableInjury]:
     """아직 입고 있는 부상들. 생긴 순서다."""
     return [injury for injury in injuries if injury.ended_at is None]
 
 
-def active_keys(injuries: list[TableInjury]) -> list[str]:
+def active_keys(injuries: Sequence[TableInjury]) -> list[str]:
     """아직 입고 있는 부상들의 이름. 생긴 순서다. 같은 부상을 두 번 입었으면 두 번 나온다."""
     return [injury.injury for injury in active(injuries)]
 

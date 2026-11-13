@@ -69,29 +69,8 @@ source = ["app"]
 skip_empty = true
 
 [tool.pyright]
-# 서버의 코드를 본다. 걸린 것이 많아 묶음마다 켠다. 아직 켜지 않은 파일은 exclude 에 있다(줄여 간다)
+# 서버의 코드를 본다. 테스트는 아직 켜지 않았다(다음 묶음)
 include = ["app"]
-exclude = [
-    "app/rounds/aids.py",
-    "app/rounds/defenses.py",
-    "app/rounds/door_actions.py",
-    "app/rounds/downed_strikes.py",
-    "app/rounds/foe_traps.py",
-    "app/rounds/injury_escapes.py",
-    "app/rounds/item_actions.py",
-    "app/rounds/item_targets.py",
-    "app/rounds/map_actions.py",
-    "app/rounds/move_lines.py",
-    "app/rounds/moves.py",
-    "app/rounds/place_item_actions.py",
-    "app/rounds/rests.py",
-    "app/rounds/skill_actions.py",
-    "app/rounds/steals.py",
-    "app/rounds/throws.py",
-    "app/rounds/trades.py",
-    "app/rounds/trap_actions.py",
-    "app/rounds/treatments.py",
-]
 pythonVersion = "3.13"
 typeCheckingMode = "standard"
 venvPath = "."

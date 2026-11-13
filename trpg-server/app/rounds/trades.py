@@ -27,6 +27,7 @@ from app.rounds import item_actions
 from app.rounds.cast import CastMember, Scene, find_cast_member, find_reachable
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError, ActionTargetError, Conflict, RoundConflictError
+from app.rounds.state import required
 from app.tables import carried, items, money, npc_items, sheets
 from app.tables import state as table_state
 from app.tables.carried import Carried
@@ -124,7 +125,7 @@ def require_money(member: TableMember, amount: int) -> None:
 
 def require_room(member: TableMember, amount: int) -> None:
     """그만큼의 돈을 더 가질 수 있는지 본다. 아니면 RoundConflictError(too_much_money)."""
-    if money.room_for(member.sheet) < amount:
+    if money.room_for(member.current_sheet) < amount:
         raise RoundConflictError(Conflict.TOO_MUCH_MONEY)
 
 
@@ -144,8 +145,8 @@ def accept_buy(table: GameTable, member: TableMember, scene: Scene, action: BuyA
     merchant = require_merchant(scene, member, action.npc)
     if unit_count(stock_of(merchant, action.item)) < action.count:
         raise RoundConflictError(Conflict.OUT_OF_STOCK)
-    require_money(member, money.buying_price(item.price, action.count))
-    if items.count_of(member.sheet, action.item) + action.count > ITEM_STACK_MAX:
+    require_money(member, money.buying_price(required(item.price, 'price'), action.count))
+    if items.count_of(member.current_sheet, action.item) + action.count > ITEM_STACK_MAX:
         raise RoundConflictError(Conflict.RECIPIENT_FULL)
     return action.model_dump(mode='json')
 
@@ -168,7 +169,7 @@ def accept_sell(table: GameTable, member: TableMember, scene: Scene, action: Sel
     require_merchant(scene, member, action.npc)
     if member.sheet is None or items.count_of(member.sheet, action.item) < action.count:
         raise RoundConflictError(Conflict.ITEM_NOT_HELD)
-    require_room(member, money.selling_price(currency, item.price, action.count))
+    require_room(member, money.selling_price(currency, required(item.price, 'price'), action.count))
     return action.model_dump(mode='json')
 
 
@@ -217,19 +218,19 @@ def buy_shortfall(member: TableMember, merchant: CastMember, action: BuyAction, 
         return Reason.UNAVAILABLE
     if unit_count(stock_of(merchant, action.item)) < action.count:
         return Reason.OUT_OF_STOCK
-    if member.sheet.money < cost:
+    if member.current_sheet.money < cost:
         return Reason.NOT_ENOUGH_MONEY
-    if items.count_of(member.sheet, action.item) + action.count > ITEM_STACK_MAX:
+    if items.count_of(member.current_sheet, action.item) + action.count > ITEM_STACK_MAX:
         return Reason.FULL
     return None
 
 
 def hand_over_stock(judging: Judging, member: TableMember, merchant: CastMember, action: BuyAction, cost: int) -> None:
     """돈을 내고 상인의 재고에서 산 사람에게 물건을 옮긴다. buy_shortfall 이 None 일 때만 부른다."""
-    line = stock_of(merchant, action.item)
+    line = required(stock_of(merchant, action.item), 'stock')
     npc_items.set_count(merchant.npc, line.slot, line.count - action.count)
-    items.add_items(judging.table.id, member.sheet, action.item, action.count)
-    money.remove_money(member.sheet, cost)
+    items.add_items(judging.table.id, member.current_sheet, action.item, action.count)
+    money.remove_money(member.current_sheet, cost)
 
 
 def judge_buy(judging: Judging, member: TableMember, action: BuyAction) -> dict:
@@ -239,9 +240,9 @@ def judge_buy(judging: Judging, member: TableMember, action: BuyAction) -> dict:
     price 는 낸(내려던) 돈, traded 가 참이면 샀다. total 은 그 물건을 가진 개수, money 는 가진 돈이다.
     장면의 인물은 라운드 동안 바뀌지 않으므로, 받을 때 장면에 있던 상인은 차례가 올 때도 있다.
     """
-    merchant = find_cast_member(judging.cast, action.npc)
+    merchant = required(find_cast_member(judging.cast, action.npc), 'npc')
     item = judging.items[action.item]
-    cost = money.buying_price(item.price, action.count)
+    cost = money.buying_price(required(item.price, 'price'), action.count)
     reason = buy_shortfall(member, merchant, action, cost)
     if reason is None:
         hand_over_stock(judging, member, merchant, action, cost)
@@ -254,13 +255,14 @@ def judge_sell(judging: Judging, member: TableMember, action: SellAction) -> dic
 
     price 는 받은(받으려던) 돈이다. 판 물건은 사라진다. 상인의 재고가 되지 않는다.
     """
-    merchant = find_cast_member(judging.cast, action.npc)
+    merchant = required(find_cast_member(judging.cast, action.npc), 'npc')
     item = judging.items[action.item]
-    gain = money.selling_price(judging.snapshot.currency, item.price, action.count)
+    currency = required(required(judging.snapshot, 'snapshot').currency, 'currency')
+    gain = money.selling_price(currency, required(item.price, 'price'), action.count)
     reason = sell_shortfall(member, merchant, action, gain)
     if reason is None:
-        items.remove_items(member.sheet, action.item, action.count)
-        money.add_money(member.sheet, gain)
+        items.remove_items(member.current_sheet, action.item, action.count)
+        money.add_money(member.current_sheet, gain)
     return {'trade': trade_result(member, merchant, item, SELL, action.count, gain, reason)}
 
 
@@ -268,9 +270,9 @@ def sell_shortfall(member: TableMember, merchant: CastMember, action: SellAction
     """차례가 왔을 때 팔지 못하는 까닭. 팔 수 있으면 None. 상인, 가진 것, 돈의 상한의 차례로 본다."""
     if not is_open(merchant):
         return Reason.UNAVAILABLE
-    if items.count_of(member.sheet, action.item) < action.count:
+    if items.count_of(member.current_sheet, action.item) < action.count:
         return Reason.NOT_HELD
-    if money.room_for(member.sheet) < gain:
+    if money.room_for(member.current_sheet) < gain:
         return Reason.TOO_MUCH_MONEY
     return None
 
@@ -284,8 +286,8 @@ def trade_result(
         'price': price,
         'traded': reason is None,
         'reason': reason,
-        'total': items.count_of(member.sheet, item.entry_id),
-        'money': member.sheet.money,
+        'total': items.count_of(member.current_sheet, item.entry_id),
+        'money': member.current_sheet.money,
     }
 
 
@@ -298,8 +300,8 @@ def judge_pay(judging: Judging, member: TableMember, action: PayAction) -> dict:
     recipient = item_actions.living(table_state.find_member(judging.table, action.target))
     reason = pay_shortfall(member, recipient, action)
     if reason is None:
-        money.remove_money(member.sheet, action.amount)
-        money.add_money(recipient.sheet, action.amount)
+        money.remove_money(member.current_sheet, action.amount)
+        money.add_money(required(recipient, 'target').current_sheet, action.amount)
     paid = {
         'user_id': str(member.user_id),
         'character_name': member.character_name,
@@ -307,18 +309,18 @@ def judge_pay(judging: Judging, member: TableMember, action: PayAction) -> dict:
         'paid': reason is None,
         'reason': reason,
         'target': item_actions.person(recipient) or {'user_id': str(action.target), 'character_name': None},
-        'remaining': member.sheet.money,
-        'target_total': recipient.sheet.money if recipient is not None else None,
+        'remaining': member.current_sheet.money,
+        'target_total': recipient.current_sheet.money if recipient is not None else None,
     }
     return {'pay': paid}
 
 
 def pay_shortfall(member: TableMember, recipient: TableMember | None, action: PayAction) -> str | None:
     """차례가 왔을 때 돈을 건네지 못하는 까닭. 건넬 수 있으면 None. 돈, 받는 사람, 그 사람의 상한의 차례로 본다."""
-    if member.sheet.money < action.amount:
+    if member.current_sheet.money < action.amount:
         return Reason.NOT_ENOUGH_MONEY
     if recipient is None:
         return Reason.TARGET_GONE
-    if money.room_for(recipient.sheet) < action.amount:
+    if money.room_for(recipient.current_sheet) < action.amount:
         return Reason.TOO_MUCH_MONEY
     return None

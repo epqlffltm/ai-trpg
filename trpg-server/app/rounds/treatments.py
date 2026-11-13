@@ -27,6 +27,7 @@ from app.rounds import resisting
 from app.rounds.aids import aid_bonus, aid_document, take_aid, wear_aid
 from app.rounds.cast import CastMember, find_cast_member
 from app.rounds.effects import Judging, mark_hurt, member_effect, npc_effect
+from app.rounds.state import required
 from app.tables import injuries, npcs, sheets
 from app.tables import state as table_state
 from app.tables.injuries import Moment
@@ -77,7 +78,7 @@ def heals_at_of(row, injury: Injury, moment: Moment) -> int:
     """
     if row.heals_at is not None:
         return row.heals_at
-    return injury_rules.heals_at(injury, moment.now)
+    return required(injury_rules.heals_at(injury, moment.now), 'heals_at')
 
 
 def left_after(heals_at: int, moment: Moment) -> int:
@@ -94,7 +95,7 @@ def treatment_document(ruleset: Ruleset, injury: Injury, patient: Patient) -> di
     return {
         'injury': injury.key,
         'name': injury.name,
-        'ability': ruleset.treatment.ability,
+        'ability': required(ruleset.treatment, 'treatment').ability,
         'difficulty': injury.treat_difficulty,
         'patient': patient.holder,
         'treated': True,
@@ -152,7 +153,7 @@ def mishap_hurt(judging: Judging, patient: Patient, magnitude_key: str) -> dict:
     부상 표는 굴리지 않는다. 새로 맞은 것이 아니라 상처가 덧난 것이다.
     NPC 는 죽이려는 피해가 아니다. HP 가 0 이 되면 쓰러진다.
     """
-    magnitude = health.find_magnitude(judging.ruleset, magnitude_key)
+    magnitude = required(health.find_magnitude(judging.ruleset, magnitude_key), 'magnitude')
     if patient.npc is not None:
         npc = patient.npc.npc
         status_before = npc.status
@@ -161,11 +162,12 @@ def mishap_hurt(judging: Judging, patient: Patient, magnitude_key: str) -> dict:
             'effect': None,
             'npc_effect': npc_effect(patient.npc, magnitude_key, change, False, status_before, None),
         }
-    sheet = patient.member.sheet
+    member = required(patient.member, 'member')
+    sheet = member.current_sheet
     change = health.change_hp(ChangeKind.DAMAGE, magnitude, sheet.hp, sheet.max_hp, judging.dice)
     sheet.hp = change.after
-    mark_hurt(judging, patient.member)
-    return {'effect': member_effect(patient.member, magnitude_key, change, None), 'npc_effect': None}
+    mark_hurt(judging, member)
+    return {'effect': member_effect(member, magnitude_key, change, None), 'npc_effect': None}
 
 
 def kill_patient(patient: Patient) -> None:
@@ -173,7 +175,7 @@ def kill_patient(patient: Patient) -> None:
     if patient.npc is not None:
         npcs.kill(patient.npc.npc)
     else:
-        sheets.kill(patient.member.sheet)
+        sheets.kill(required(patient.member, 'member').current_sheet)
 
 
 def mishap(judging: Judging, patient: Patient, row, injury: Injury) -> tuple[dict, dict]:
@@ -239,9 +241,10 @@ def judge_treatment(judging: Judging, member: TableMember, action: TreatAction) 
     붙여 쓴 물건이 있으면 그 보정을 판정에 더하고, 쓴 것을 치료의 결과(treatment 의 aid)에 적는다(#277, #802).
     """
     ruleset = judging.ruleset
-    injury = treatment.treatable(ruleset, action.injury)
-    sheet = member.sheet
-    hindrance = round_injuries.hindrance_for(ruleset, sheet.injuries, ruleset.treatment.ability)
+    injury = required(treatment.treatable(ruleset, action.injury), 'injury')
+    sheet = member.current_sheet
+    ability = required(ruleset.treatment, 'treatment').ability
+    hindrance = round_injuries.hindrance_for(ruleset, sheet.injuries, ability)
     taken = take_aid(judging, member, action.item, AidAct.TREAT)
     hindered = treatment.treat(ruleset, injury, sheet.abilities, judging.dice, hindrance, bonus=aid_bonus(taken))
     use = wear_aid(member, taken, hindered.check.success)

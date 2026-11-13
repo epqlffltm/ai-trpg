@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from app.assets.bestiaries.models import MonsterKind
 from app.assets.models import NarrationStyle
 from app.assets.scenarios.snapshot import CurrencySnapshot, Snapshot, containers_of, place_entries
-from app.engine.check import find_ability
+from app.engine.check import known_ability
 from app.engine.injury import find_injury
 from app.engine.resources import Level, band_of, holds, is_open
 from app.engine.ruleset import ResourceHolder, Ruleset
@@ -46,6 +46,7 @@ from app.rounds.state import (
     is_down,
     naming_of,
     pay_of,
+    required,
     rules_of,
     trade_of,
 )
@@ -162,7 +163,7 @@ def build_moves(
     # 판의 복사본은 통째로 읽는 일이라 싸지 않다. 소지품이나 맵이나 돈이 있을 때만 한 번 읽는다
     snapshot = snapshot_of(table) if holding or on_map or paying else None
     catalog = items.catalog(snapshot) if snapshot is not None else {}
-    mapping = map_view(table, snapshot, catalog) if on_map else None
+    mapping = map_view(table, snapshot, catalog) if on_map and snapshot is not None else None
     currency = snapshot.currency if snapshot is not None else None
     # 수치(#804)는 규칙에 있다. 이미 읽은 규칙이 없으면 한 번 읽는다
     resource_rules = ruleset or (snapshot.rulebook.rules if snapshot is not None else rules_of(table))
@@ -170,11 +171,15 @@ def build_moves(
     moves = []
     for member, declaration in zip(members, declarations, strict=True):
         content = declaration.content if declaration else None
-        verdict = narration_request.to_verdict(ruleset, declaration) if has_outcome(declaration) else None
+        verdict = (
+            narration_request.to_verdict(required(ruleset, 'ruleset'), declaration)
+            if has_outcome(declaration)
+            else None
+        )
         arrival = find_arrival(round_, member.user_id)
         moves.append(
             Move(
-                character_name=member.character_name,
+                character_name=required(member.character_name, 'character_name'),
                 content=content,
                 verdict=verdict,
                 downed=is_down(member),
@@ -266,7 +271,7 @@ def exit_name(mapping: MapView, here: uuid.UUID, there: uuid.UUID) -> str:
     예: 광장, 탑(잠긴 문), 절벽 위(넘기: 근력), 창고(빗장 걸림), 지하실(부서진 문).
     무슨 열쇠인지와 실패의 피해는 적지 않는다.
     """
-    route = places.route_between(mapping.known, here, there)
+    route = required(places.route_between(mapping.known, here, there), 'route')
     marks = []
     if route_locks.is_broken(mapping.table, route):
         marks.append('부서진 문')
@@ -275,7 +280,7 @@ def exit_name(mapping: MapView, here: uuid.UUID, there: uuid.UUID) -> str:
     if route_locks.is_locked(mapping.table, route):
         marks.append('잠긴 문')
     if route.cross is not None:
-        ability = find_ability(mapping.snapshot.rulebook.rules, route.cross.ability)
+        ability = known_ability(mapping.snapshot.rulebook.rules, route.cross.ability)
         marks.append(f'넘기: {ability.name}')
     return f'{mapping.names[there]}({", ".join(marks)})' if marks else mapping.names[there]
 
@@ -403,7 +408,7 @@ def to_people(
             condition=condition_of(member.npc),
             injuries=round_injuries.notes(ruleset, member.npc.injuries),
             attitude=attitude_word(member.npc),
-            place=names.get(member.npc.place_id),
+            place=names.get(member.npc.place_id) if member.npc.place_id is not None else None,
             resources=word_notes(ruleset, member.npc, ResourceHolder.NPCS),
         )
         for member in cast

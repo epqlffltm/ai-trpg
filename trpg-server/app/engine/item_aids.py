@@ -16,6 +16,7 @@
 """
 
 import enum
+from collections.abc import Sequence
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
@@ -68,7 +69,7 @@ def reject_repeated_acts(aids: list[ItemAid]) -> list[ItemAid]:
 Aids = Annotated[list[ItemAid], Field(max_length=ITEM_MAX_AIDS), AfterValidator(reject_repeated_acts)]
 
 
-def aid_for(aids: list, act: AidAct):
+def aid_for(aids: Sequence, act: AidAct):
     """그 행동을 거드는 줄. 없으면 None."""
     return next((aid for aid in aids if aid.act == act), None)
 

@@ -47,6 +47,7 @@ from app.rounds.item_targets import (
     target_of,
     to_check,
 )
+from app.rounds.state import required
 from app.tables import resources, sheets
 from app.tables import state as table_state
 from app.tables.models import GameTable, TableMember, TableSheet
@@ -107,7 +108,8 @@ def check_terms(ruleset: Ruleset, skill: Skill) -> tuple[str, str | None]:
     """
     if skill.check is not None:
         return skill.check.ability, skill.check.difficulty
-    return ruleset.item_check.ability, ruleset.item_check.difficulty
+    rule = required(ruleset.item_check, 'item_check')
+    return rule.ability, rule.difficulty
 
 
 # --- 받을 때 ---
@@ -118,7 +120,7 @@ def require_skill(ruleset: Ruleset, member: TableMember, key: str) -> Skill:
     skill = find_skill(ruleset, key)
     if skill is None:
         raise ActionNotInRulesError('skill')
-    if not knows(member.sheet, key):
+    if not knows(member.current_sheet, key):
         raise RoundConflictError(Conflict.SKILL_NOT_KNOWN)
     return skill
 
@@ -161,7 +163,7 @@ def accept_skill(table: GameTable, member: TableMember, ruleset: Ruleset, action
     상대에게 쓰는 기술은 겨눈 쪽이 이번 장면에 있는지 보지 않는다. 부르는 쪽이 장면을 들고 본다.
     """
     skill = require_skill(ruleset, member, action.skill)
-    if not affordable(ruleset, member.sheet, skill.cost):
+    if not affordable(ruleset, member.current_sheet, skill.cost):
         raise RoundConflictError(Conflict.SKILL_COST_SHORT)
     if action.lethal and first_of(skill.effects, EffectKind.DAMAGE) is None:
         raise ActionNotInRulesError('lethal')
@@ -180,7 +182,7 @@ def accept_skill(table: GameTable, member: TableMember, ruleset: Ruleset, action
 
 def refused(judging: Judging, member: TableMember, skill: Skill, target: TableMember | None) -> str | None:
     """지금 쓰지 못하는 까닭. 쓸 수 있으면 None. 모름 → 받을 사람 → 해칠 수 있는가 → 비용의 차례로 본다."""
-    if not knows(member.sheet, skill.key):
+    if not knows(member.current_sheet, skill.key):
         return Reason.NOT_KNOWN
     if target is None:
         return Reason.TARGET_GONE
@@ -189,7 +191,7 @@ def refused(judging: Judging, member: TableMember, skill: Skill, target: TableMe
         if gone is not None:
             off = gone['reason'] == friendly_fire.AllyGone.FRIENDLY_FIRE_OFF
             return Reason.FRIENDLY_FIRE_OFF if off else Reason.TARGET_GONE
-    if not affordable(judging.ruleset, member.sheet, skill.cost):
+    if not affordable(judging.ruleset, member.current_sheet, skill.cost):
         return Reason.COST_SHORT
     return None
 
@@ -198,7 +200,7 @@ def pay(judging: Judging, member: TableMember, cost: SkillCost | None) -> list[d
     """비용을 낸다. 쓴 사람의 수치가 준 것의 문서를 돌려준다. 비용이 없으면 빈 목록이다."""
     if cost is None:
         return []
-    shift = resources.adjust(judging.ruleset, member.sheet, cost.resource, -cost.amount)
+    shift = resources.adjust(judging.ruleset, member.current_sheet, cost.resource, -cost.amount)
     return [resources.shift_document(shift, member.user_id)] if shift is not None else []
 
 
@@ -233,13 +235,14 @@ def judge_skill(judging: Judging, member: TableMember, action: SkillAction) -> d
     HP 가 바뀌었으면 그 내용(effect)을, 낸 비용(cost), 푼 부상(cured), 입힌 부상(injured), 맞춘 수치(resources)를
     skill_use 에 적는다. 동료에게 해로운 기술이면 장난의 상한을 지킨다(#803).
     """
-    skill = find_skill(judging.ruleset, action.skill)
+    skill = required(find_skill(judging.ruleset, action.skill), 'skill')
     if rolls(skill, member, action):
         return judge_rolled_skill(judging, member, skill, action)
-    target = living(table_state.find_member(judging.table, action.target or member.user_id))
-    reason = refused(judging, member, skill, target)
+    found = living(table_state.find_member(judging.table, action.target or member.user_id))
+    reason = refused(judging, member, skill, found)
     if reason is not None:
-        return {'skill_use': skill_document(skill, reason, person(target)), 'effect': None}
+        return {'skill_use': skill_document(skill, reason, person(found)), 'effect': None}
+    target = required(found, 'target')
     cost = pay(judging, member, skill.cost)
     prank = harms_ally(skill, member, target.user_id) and friendly_fire.is_prank_toward(judging, member, target)
     applied = apply_to_member(judging, target, skill.effects, prank, Trigger.SKILL)
@@ -268,7 +271,7 @@ def refused_rolled(
     모름 → 겨눈 몬스터 → 동료(굴리지 않는 기술과 같다) → 비용의 차례로 본다.
     인물은 장면이 바뀌지 않아 보지 않는다. 쓰러졌거나 죽은 인물은 판정이 다룬다(물건과 같다).
     """
-    if not knows(member.sheet, skill.key):
+    if not knows(member.current_sheet, skill.key):
         return Reason.NOT_KNOWN, None
     if action.monster is not None:
         gone = monster_gone(judging, member, action.monster)
@@ -278,7 +281,7 @@ def refused_rolled(
         target = living(table_state.find_member(judging.table, action.target))
         reason = refused(judging, member, skill, target)
         return reason, None
-    if not affordable(judging.ruleset, member.sheet, skill.cost):
+    if not affordable(judging.ruleset, member.current_sheet, skill.cost):
         return Reason.COST_SHORT, None
     return None, None
 

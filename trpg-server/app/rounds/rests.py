@@ -37,7 +37,7 @@ from app.engine.ruleset import NaturalRecovery, Rest, Revive, Ruleset
 from app.rounds.effects import Judging
 from app.rounds.errors import ActionNotInRulesError
 from app.rounds.models import Declaration, Round
-from app.rounds.state import find_declaration, rest_of, rules_of
+from app.rounds.state import find_declaration, required, rest_of, rules_of
 from app.tables import resources, sheets
 from app.tables.models import GameTable, TableMember, TableSheet
 
@@ -96,7 +96,7 @@ def judge_rest(judging: Judging, action: RestAction) -> dict:
 
     회복은 아직 정하지 않는다. 뒤의 차례에 맞을 수 있다. 라운드가 닫힐 때 정한다(settle).
     """
-    minutes = rest_minutes(judging.ruleset.rest, action.length)
+    minutes = rest_minutes(required(judging.ruleset.rest, 'rest'), action.length)
     calendar.stretch_next_step(judging.table, minutes)
     return {'rest': {'length': action.length.value, 'minutes': minutes}}
 
@@ -121,7 +121,8 @@ def recover(ruleset: Ruleset, length: RestLength, sheet: TableSheet, dice: Dice)
     """휴식 하나의 회복. 굴린 눈들과 회복한 뒤의 HP 다. 긴 휴식은 굴리지 않고 최대 HP 까지다."""
     if length == RestLength.LONG:
         return [], sheet.max_hp
-    magnitude = health.find_magnitude(ruleset, ruleset.rest.short.heal)
+    heal = required(ruleset.rest, 'rest').short.heal
+    magnitude = required(health.find_magnitude(ruleset, heal), 'magnitude')
     change = health.change_hp(ChangeKind.RECOVERY, magnitude, sheet.hp, sheet.max_hp, dice)
     return list(change.rolls), change.after
 
@@ -140,8 +141,8 @@ def finish_rest(
 
     바뀐 수치는 resources 에 적는다(이름표, 이름, 전과 뒤, 최대). 바뀐 것이 없으면 빈 목록이다.
     """
-    rest = rest_of(declaration)
-    sheet = member.sheet
+    rest = required(rest_of(declaration), 'rest')
+    sheet = member.current_sheet
     broken = broken_by(member, hurt, ambushed)
     before = sheet.hp
     length = RestLength(rest['length'])
@@ -159,7 +160,7 @@ def finish_rest(
         'resources': [resources.shift_document(shift, member.user_id) for shift in shifts],
     }
     # 새 문서로 바꿔 끼운다. 안을 고치면 DB 의 JSON 칸이 바뀐 줄 모른다
-    declaration.outcome = {**declaration.outcome, 'rest': result}
+    declaration.outcome = {**required(declaration.outcome, 'outcome'), 'rest': result}
 
 
 def resting(table: GameTable, round_: Round) -> list[tuple[TableMember, Declaration]]:
@@ -205,7 +206,7 @@ def revive(ruleset: Ruleset, revival: Revive, member: TableMember, round_number:
 
     규칙의 주사위를 굴린다. 능력치의 보정은 더하지 않는다(죽음의 굴림과 같다). 성공은 규칙의 굴림 방식을 따른다(#404).
     """
-    sheet = member.sheet
+    sheet = member.current_sheet
     roll = sum(roll_pool(ruleset, dice))
     success = passes(ruleset, roll, revival.target)
     if success:
@@ -228,13 +229,13 @@ def revive_all(ruleset: Ruleset, table: GameTable, round_number: int, hurt: set[
 
     이 장면에 규칙의 시간이 흘러야 한다. 그 라운드에 맞은 캐릭터는 굴리지 않는다. 쉬지 못했다.
     """
-    revival = ruleset.rest.revive
+    revival = required(ruleset.rest, 'rest').revive
     if revival is None or calendar.next_step(table) < revival.minutes:
         return []
     return [
         revive(ruleset, revival, member, round_number, dice)
         for member in table.members
-        if sheets.is_downed_alive(member) and member.user_id not in hurt and is_stable(ruleset, member.sheet)
+        if sheets.is_downed_alive(member) and member.user_id not in hurt and is_stable(ruleset, member.current_sheet)
     ]
 
 
@@ -252,8 +253,8 @@ def recover_naturally(
     """
     한 사람이 눈금마다 회복한다. 최대 HP 에 닿으면 그만 굴린다. 이벤트의 모양을 돌려준다. 회복할 것이 없었으면 None.
     """
-    sheet = member.sheet
-    magnitude = health.find_magnitude(ruleset, natural.heal)
+    sheet = member.current_sheet
+    magnitude = required(health.find_magnitude(ruleset, natural.heal), 'magnitude')
     before, rolls = sheet.hp, []
     for _ in range(ticks):
         if sheet.hp >= sheet.max_hp:
@@ -292,7 +293,7 @@ def natural_all(
 
     규칙에 없거나 눈금을 하나도 안 지났으면 빈 목록이다.
     """
-    natural = ruleset.rest.natural
+    natural = required(ruleset.rest, 'rest').natural
     if natural is None:
         return []
     ticks = ticks_between(natural, table.clock.minutes, calendar.scene_end(table))
