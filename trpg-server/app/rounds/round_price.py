@@ -47,7 +47,7 @@ def announce(round_: Round, found: OfferedModel | None) -> None:
     round_.announced_tier = str(found.tier) if found and found.tier else None
 
 
-def price_payload(round_: Round) -> dict[str, str] | None:
+def price_payload(round_: Round) -> dict[str, str | None] | None:
     """이벤트에 싣는 알린 값. 비어 있으면 None."""
     if round_.announced_credits is None:
         return None

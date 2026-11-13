@@ -117,7 +117,7 @@ def build_chain(
     재시도 예산(retry_budget)은 앱에 하나다. 모든 서술자가 함께 쓴다(ai_core/retry_budget.py).
     """
     key = settings.digest_key()
-    narrators = [RoutedNarrator(model, router, log, digest_key=key) for model in models]
+    narrators: list[Narrator] = [RoutedNarrator(model, router, log, digest_key=key) for model in models]
     return RetryingNarrator(narrators, attempt_timeout=settings.llm_timeout_seconds, retry_budget=retry_budget)
 
 

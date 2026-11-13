@@ -19,6 +19,7 @@ import uuid
 from collections.abc import Sequence
 
 from app.assets.scenarios.snapshot import QuestConditionSnapshot
+from app.rounds.state import required
 from app.tables import items
 from app.tables.items import CatalogItem
 from app.tables.models import TableMember
@@ -46,15 +47,17 @@ def take_shares(
     members: Sequence[TableMember], condition: QuestConditionSnapshot, things: dict[uuid.UUID, CatalogItem]
 ) -> list[tuple[TableMember, dict]]:
     """조건 하나가 가져가는 물건을 사람마다 뺀다. 뺀 사람마다 (사람, 물건 한 줄)이다. 앉은 순서다."""
-    holdings = [items.count_of(member.current_sheet, condition.target) for member in members]
+    # 물건을 가져가는 조건에는 물건이 있다(판의 검사)
+    target = required(condition.target, 'target')
+    holdings = [items.count_of(member.current_sheet, target) for member in members]
     taken = []
     for member, share in zip(members, split_evenly(holdings, condition.count), strict=True):
         if not share:
             continue
-        total = items.remove_items(member.current_sheet, condition.target, share)
+        total = items.remove_items(member.current_sheet, target, share)
         thing = {
-            'entry_id': str(condition.target),
-            'name': things[condition.target].name,
+            'entry_id': str(target),
+            'name': things[target].name,
             'count': share,
             'total': total,
         }

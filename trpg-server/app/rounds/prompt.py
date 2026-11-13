@@ -67,6 +67,7 @@ from app.rounds.narrator import (
     StoryContext,
     WhisperNote,
 )
+from app.rounds.state import required
 from app.rounds.time_words import duration_text, time_text
 
 # 이 틀의 버전. 틀을 바꾸면 올린다.
@@ -1040,7 +1041,8 @@ def map_lines(moves: list[Move]) -> list[str]:
         return []
     lines = [MAP_TITLE, MAP_NOTE]
     for name, here in standing.items():
-        place = here[0].place
+        # 장소가 있는 것만 모았다
+        place = required(here[0].place, 'place')
         lines.append(map_line(name, [move.character_name for move in here], place))
     return [*lines, '']
 
@@ -1145,7 +1147,7 @@ def build_messages(request: NarrationRequest) -> list[ChatMessage]:
 
     이야기의 바탕(request.story)이 있어야 한다. 서술자는 바탕이 실린 요청만 받는다(app/rounds/service.py).
     """
-    system = system_text(request.story, request.style, request.steps)
+    system = system_text(required(request.story, 'story'), request.style, request.steps)
     messages = [ChatMessage(Role.SYSTEM, system), ChatMessage(Role.USER, OPENING_LINE)]
     for past in fit_history(request.history, history_rounds(request.steps), history_max_chars(request.steps)):
         messages.extend(past_messages(past))

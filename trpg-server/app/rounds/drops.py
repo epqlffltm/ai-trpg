@@ -43,8 +43,12 @@ def downed_now(effect: dict) -> bool:
     return effect['status_before'] == NpcStatus.ALIVE and effect['status'] != NpcStatus.ALIVE
 
 
-def heirs(table: GameTable, place_id: uuid.UUID) -> list[TableMember]:
-    """그 장소에서 드롭을 받을 수 있는 사람들. 지금 캐릭터가 그 장소에 있고 죽지 않았다. 앉은 순서다."""
+def heirs(table: GameTable, place_id: uuid.UUID | None) -> list[TableMember]:
+    """
+    그 장소에서 드롭을 받을 수 있는 사람들. 지금 캐릭터가 그 장소에 있고 죽지 않았다. 앉은 순서다.
+
+    맵이 없는 판은 장소가 없다(None). 그때는 장소가 없는 사람들이다.
+    """
     return [
         member
         for member in table.members
@@ -96,7 +100,7 @@ def receipt(member: TableMember | None, things: list[dict]) -> dict:
     }
 
 
-def give(judging: Judging, place_id: uuid.UUID, dropped: list[Dropped]) -> tuple[TableMember | None, list[dict]]:
+def give(judging: Judging, place_id: uuid.UUID | None, dropped: list[Dropped]) -> tuple[TableMember | None, list[dict]]:
     """나온 것을 그 장소의 받을 사람 한 명을 골라 준다. 받은 사람과 물건마다 담은 것. 받을 사람이 없으면 사라진다."""
     candidates = heirs(judging.table, place_id)
     if not candidates:
@@ -116,7 +120,7 @@ def hand_out(judging: Judging, monster: SceneMonster, dropped: list[Dropped]) ->
     }
 
 
-def hand_out_npc(judging: Judging, place_id: uuid.UUID, person: CastMember, dropped: list[Dropped]) -> dict:
+def hand_out_npc(judging: Judging, place_id: uuid.UUID | None, person: CastMember, dropped: list[Dropped]) -> dict:
     """NPC 의 드롭을 친 사람이 선 장소에서 준다. 선언의 outcome 에 적을 모양으로 돌려준다."""
     member, things = give(judging, place_id, dropped)
     return {

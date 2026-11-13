@@ -171,7 +171,8 @@ class RetryingNarrator:
                 if number > 0:
                     if not self.may_retry(narrator):
                         break
-                    await self.sleep(wait)
+                    # 앞 시도가 실패하며 정했다. 정하지 못했으면 기본의 쉼이다
+                    await self.sleep(wait if wait is not None else self.pause())
                 if not self.has_time(started):
                     return settle(reason, redacted)
                 if number > 0:

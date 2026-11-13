@@ -39,7 +39,7 @@ from app.rounds.schemas import (
 from app.tables import injuries, monster_items, npc_items, resources
 from app.tables.carried import Carried
 from app.tables.items import CatalogItem
-from app.tables.models import GameTable, TableStatus
+from app.tables.models import GameTable, NpcAttitude, NpcStatus, TableStatus
 from app.tables.resources import Bearer
 from app.tables.schemas import ResourceOut
 
@@ -126,14 +126,17 @@ def to_round(table: GameTable, round_: Round, viewer_id: uuid.UUID) -> RoundOut:
         return not is_open or declaration.user_id == viewer_id
 
     declarations = [
-        DeclarationOut(
-            user_id=declaration.user_id,
-            character_name=declaration.character_name,
-            content=declaration.content if can_see(declaration) else None,
-            action=declaration.action if can_see(declaration) else None,
-            # 결과는 가리지 않는다. 열려 있는 동안에는 어차피 없고, 마감한 뒤에는 모두에게 보인다.
-            # 숨긴 수치(#804)의 바뀐 것만 보는 사람에 따라 뺀다
-            outcome=visible_outcome(declaration.outcome, viewer_id),
+        # 행동과 결과는 DB 의 JSONB 다. 응답의 모양으로 검증해 읽는다(생성자와 같은 검증이다)
+        DeclarationOut.model_validate(
+            {
+                'user_id': declaration.user_id,
+                'character_name': declaration.character_name,
+                'content': declaration.content if can_see(declaration) else None,
+                'action': declaration.action if can_see(declaration) else None,
+                # 결과는 가리지 않는다. 열려 있는 동안에는 어차피 없고, 마감한 뒤에는 모두에게 보인다.
+                # 숨긴 수치(#804)의 바뀐 것만 보는 사람에 따라 뺀다
+                'outcome': visible_outcome(declaration.outcome, viewer_id),
+            }
         )
         for declaration in round_.declarations
     ]
@@ -218,10 +221,10 @@ def to_cast(
         PersonOut(
             id=member.entry_id,
             name=member.name,
-            status=member.npc.status,
+            status=NpcStatus(member.npc.status),
             injuries=injuries.active_keys(member.npc.injuries),
             named=is_named(member.npc),
-            attitude=member.npc.attitude,
+            attitude=NpcAttitude(member.npc.attitude),
             items=to_carried(npc_items.carried(member.npc, member.definition), things),
             merchant=trades.is_merchant(member),
             place_id=member.npc.place_id,
@@ -235,7 +238,7 @@ def to_cast(
             id=monster.state.id,
             name=monster.name,
             place_id=monster.state.place_id,
-            status=monster.state.status,
+            status=NpcStatus(monster.state.status),
             condition=monster_condition(monster),
             injuries=injuries.active_keys(monster.state.injuries),
             items=to_carried(monster_items.carried(monster.state, monster.definition), things),

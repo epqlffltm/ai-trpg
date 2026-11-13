@@ -37,7 +37,7 @@ from app.assets.scenarios.snapshot import AttackSnapshot
 from app.engine import check as checks
 from app.engine import resources as resource_rules
 from app.engine.armor import Save
-from app.engine.check import Check, HinderedCheck, Side
+from app.engine.check import Check, HinderedCheck, Side, known_difficulty
 from app.engine.dice import choose
 from app.engine.health import ChangeKind
 from app.engine.injury import Trigger
@@ -51,6 +51,7 @@ from app.rounds.downed_strikes import can_be_struck, strike_downed
 from app.rounds.effects import Judging, mark_fight
 from app.rounds.item_actions import apply_to_member
 from app.rounds.monster_scene import SceneMonster
+from app.rounds.state import required
 from app.tables import resources, sheets
 from app.tables.models import NpcStatus, TableMember
 from app.tables.resources import Bearer
@@ -104,7 +105,7 @@ def victims_of(judging: Judging, monster: SceneMonster) -> list[TableMember]:
 
 def raised_difficulty(judging: Judging, attack: AttackSnapshot, blow: Blow) -> Difficulty:
     """공격의 난이도. 맞은 부위의 방어가 목표값을 올리면(ac) 그만큼 오른 것이다."""
-    difficulty = checks.find_difficulty(judging.ruleset, attack.difficulty)
+    difficulty = known_difficulty(judging.ruleset, attack.difficulty)
     if not blow.raise_by:
         return difficulty
     return difficulty.model_copy(update={'target': difficulty.target + blow.raise_by})
@@ -284,7 +285,8 @@ def roll_strike(
     ruleset = judging.ruleset
     side = defenses.attacker_side(ruleset, monster.state.abilities, monster.state.injuries, attack, blow, guarded)
     opposed = checks.resolve_opposed(ruleset, side, defense, judging.dice)
-    ability = defenses.defending_ability(ruleset, attack)
+    # 받는 쪽이 굴렸으면(defense) 규칙에 막는 규칙이 있어 능력치가 있다
+    ability = required(defenses.defending_ability(ruleset, attack), 'defense ability')
     return opposed.attack, {'defense': defenses.defense_document(ability, opposed.defense)}
 
 

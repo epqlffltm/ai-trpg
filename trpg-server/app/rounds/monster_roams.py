@@ -41,6 +41,7 @@ from app.events.models import EventType
 from app.rounds import injuries as round_injuries
 from app.rounds.cast import Scene
 from app.rounds.monster_scene import SceneMonster, every_monster, occupied_places
+from app.rounds.state import required
 from app.tables import chapters, places, route_locks
 from app.tables.content import snapshot_of
 from app.tables.models import GameTable, NpcStatus
@@ -118,8 +119,9 @@ def walk(routes: list[RouteSnapshot], start: uuid.UUID, limit: int) -> dict[uuid
 def first_step(before: dict[uuid.UUID, uuid.UUID | None], start: uuid.UUID, goal: uuid.UUID) -> uuid.UUID:
     """start 에서 goal 로 가는 가장 짧은 길의 첫 칸. goal 은 walk 가 찾은 곳이고 start 가 아니다."""
     step = goal
-    while before[step] != start:
-        step = before[step]
+    # 앞 장소를 따라 start 바로 다음 칸까지 간다. 앞 장소가 없는 것은 start 뿐이다
+    while (previous := required(before[step], 'previous place')) != start:
+        step = previous
     return step
 
 

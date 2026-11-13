@@ -26,7 +26,7 @@ import uuid
 from app.calendar import state as calendar
 from app.engine.action import WaitAction
 from app.rounds.models import Declaration, Round
-from app.rounds.state import find_declaration, is_down, wait_of, waiting_for
+from app.rounds.state import find_declaration, is_down, required, settled, wait_of, waiting_for
 from app.tables.models import GameTable, TurnMode
 
 
@@ -52,7 +52,7 @@ def judge_wait(action: WaitAction) -> dict:
 def waiting(table: GameTable, round_: Round) -> list[Declaration]:
     """이번 라운드에 기다린 사람들의 선언. 앉은 순서다. 차례가 와서 기다리기를 적은 사람만이다."""
     declarations = [find_declaration(round_, member.user_id) for member in table.members]
-    return [declaration for declaration in declarations if wait_of(declaration) is not None]
+    return [declaration for declaration in declarations if declaration is not None and wait_of(declaration) is not None]
 
 
 def someone_else_acted(table: GameTable, round_: Round) -> bool:
@@ -81,14 +81,14 @@ def broken_by(table: GameTable, round_: Round, hurt: set[uuid.UUID]) -> Broken |
 
 def shortest(declarations: list[Declaration]) -> int:
     """기다린 사람들이 부른 시간 중 가장 짧은 것(분)."""
-    return min(wait_of(declaration)['minutes'] for declaration in declarations)
+    return min(required(wait_of(declaration), 'wait')['minutes'] for declaration in declarations)
 
 
 def finish_wait(declaration: Declaration, broken: Broken | None) -> None:
     """기다린 사람 하나의 결과를 그 선언의 outcome 의 wait 에 적는다. 흘렀는지(waited)와 깨진 까닭이다."""
-    result = {**wait_of(declaration), 'waited': broken is None, 'reason': broken}
+    result = {**required(wait_of(declaration), 'wait'), 'waited': broken is None, 'reason': broken}
     # 새 문서로 바꿔 끼운다. 안을 고치면 DB 의 JSON 칸이 바뀐 줄 모른다
-    declaration.outcome = {**declaration.outcome, 'wait': result}
+    declaration.outcome = {**settled(declaration), 'wait': result}
 
 
 def settle(table: GameTable, round_: Round, hurt: set[uuid.UUID], cycle_end: bool = True) -> None:
