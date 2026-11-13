@@ -172,10 +172,12 @@ def stand(table: GameTable, sheet: TableSheet, place_id: uuid.UUID) -> None:
 
 def place_at_start(table: GameTable, snapshot: Snapshot) -> None:
     """시작할 때 모든 캐릭터를 판의 시작 장소에 세운다. 시트를 준 뒤에 부른다. 맵이 없는 판이면 아무것도 하지 않는다."""
-    if not has_map(snapshot):
+    start = snapshot.start_place
+    # 맵이 있는 판은 시작 장소가 있는 판이다(has_map)
+    if start is None:
         return
     for member in table.members:
-        stand(table, member.sheet, snapshot.start_place)
+        stand(table, member.current_sheet, start)
 
 
 def take_over_place(member: TableMember) -> None:
@@ -184,7 +186,7 @@ def take_over_place(member: TableMember) -> None:
 
     그곳은 앞 캐릭터가 서 있던 곳이라 이미 서 본 곳이다. 앞 캐릭터에게 위치가 없으면(맵이 없는 판) 새 캐릭터에게도 없다.
     """
-    member.sheet.place_id = member.fallen[-1].place_id
+    member.current_sheet.place_id = member.fallen[-1].place_id
 
 
 def describe(snapshot: Snapshot, place_id: uuid.UUID | None) -> dict | None:

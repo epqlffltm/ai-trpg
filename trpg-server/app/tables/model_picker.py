@@ -40,10 +40,7 @@ async def require_pickable(
     모델을 고를 수 없으면 TableOptionError(narration_model), 그 단계를 팔지 않으면 TableOptionError(narration_steps).
     가격 목록을 받지 못했고 받아 둔 것도 없으면 PriceListUnavailable 이 그대로 올라간다(503).
     """
-    base = await offers.find_offered(session, picker.prices, slug, picker.now)
-    require_model_offered(base)
+    base = require_model_offered(await offers.find_offered(session, picker.prices, slug, picker.now))
     if steps == BASE_STEPS:
         return base
-    found = await offers.find_offered(session, picker.prices, slug, picker.now, steps)
-    require_steps_offered(found)
-    return found
+    return require_steps_offered(await offers.find_offered(session, picker.prices, slug, picker.now, steps))

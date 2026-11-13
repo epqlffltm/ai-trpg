@@ -34,11 +34,12 @@ from app.assets.scenarios.snapshot import (
 from app.billing.routing import Now, Prices
 from app.calendar import clock
 from app.calendar.responses import to_clock
+from app.calendar.schemas import ClockTimeOut
 from app.catalog import offers
 from app.catalog.offers import OfferedModel, StepPrice
 from app.catalog.steps import input_tokens, output_tokens
 from app.core.dice import Rolling
-from app.engine.check import find_difficulty
+from app.engine.check import known_difficulty
 from app.engine.resources import Level, shown_to
 from app.engine.ruleset import Ruleset
 from app.limits.routing import Limited
@@ -90,7 +91,9 @@ from app.tables.errors import (
 from app.tables.items import CatalogItem
 from app.tables.model_picker import ModelPicker
 from app.tables.models import (
+    FriendlyFire,
     GameTable,
+    QuestStatus,
     TableInjury,
     TableItem,
     TableMember,
@@ -221,29 +224,32 @@ async def handle_prices_unavailable(request: Request, error: PriceListUnavailabl
 
 def to_summary(table: GameTable) -> TableSummary:
     """테이블을 목록용 응답으로 바꾼다."""
-    return TableSummary(
-        id=table.id,
-        scenario_id=table.scenario_id,
-        title=table.title,
-        status=table.status,
-        rating=table.rating,
-        capacity=table.capacity,
-        member_count=len(table.members),
-        host_id=table.host_id,
-        is_public=table.is_public,
-        has_password=table.password_hash is not None,
-        narration_style=table.narration_style,
-        round_time_limit=table.round_time_limit,
-        narration_model=table.narration_model,
-        input_step=table.input_step,
-        output_step=table.output_step,
-        credit_wait_seconds=table.credit_wait_seconds,
-        remove_short_payers=table.remove_short_payers,
-        whisper_notice=table.whisper_notice,
-        references_enabled=table.references_enabled,
-        friendly_fire=table.friendly_fire,
-        turn_mode=table.turn_mode,
-        created_at=table.created_at,
+    # 테이블의 칸은 DB 의 글(상태, 등급, 방식)이다. 응답의 모양으로 검증해 읽는다(생성자와 같은 검증이다)
+    return TableSummary.model_validate(
+        {
+            'id': table.id,
+            'scenario_id': table.scenario_id,
+            'title': table.title,
+            'status': table.status,
+            'rating': table.rating,
+            'capacity': table.capacity,
+            'member_count': len(table.members),
+            'host_id': table.host_id,
+            'is_public': table.is_public,
+            'has_password': table.password_hash is not None,
+            'narration_style': table.narration_style,
+            'round_time_limit': table.round_time_limit,
+            'narration_model': table.narration_model,
+            'input_step': table.input_step,
+            'output_step': table.output_step,
+            'credit_wait_seconds': table.credit_wait_seconds,
+            'remove_short_payers': table.remove_short_payers,
+            'whisper_notice': table.whisper_notice,
+            'references_enabled': table.references_enabled,
+            'friendly_fire': table.friendly_fire,
+            'turn_mode': table.turn_mode,
+            'created_at': table.created_at,
+        }
     )
 
 
@@ -259,8 +265,9 @@ def to_item(item: TableItem, catalog: dict[uuid.UUID, CatalogItem]) -> ItemOut:
 
 def to_quest(quest: TableQuest, catalog: dict[uuid.UUID, quests.CatalogQuest]) -> QuestOut:
     """퀘스트 하나를 응답으로 바꾼다. 이름은 판에서 찾는다. 기한이 있으면 끝나는 시각을 게임 안의 시각으로 푼다."""
-    due_at = None if quest.due_at is None else clock.as_document(quest.due_at)
-    return QuestOut(entry_id=quest.entry_id, name=catalog[quest.entry_id].name, status=quest.status, due_at=due_at)
+    due_at = None if quest.due_at is None else ClockTimeOut.model_validate(clock.as_document(quest.due_at))
+    name = catalog[quest.entry_id].name
+    return QuestOut(entry_id=quest.entry_id, name=name, status=QuestStatus(quest.status), due_at=due_at)
 
 
 def to_throw(throw: ItemThrowSnapshot | None) -> ItemThrowOut | None:
@@ -314,7 +321,7 @@ def to_currency(currency: CurrencySnapshot | None) -> CurrencyOut | None:
 
 def to_injury(row: TableInjury) -> InjuryOut:
     """입고 있는 부상 하나를 응답으로. 오래 가는 것이면 나을 시각을 게임 안의 시각으로 푼다."""
-    heals_at = None if row.heals_at is None else clock.as_document(row.heals_at)
+    heals_at = None if row.heals_at is None else ClockTimeOut.model_validate(clock.as_document(row.heals_at))
     return InjuryOut(
         injury=row.injury, round=row.round_number, ends_after_round=row.ends_after_round, heals_at=heals_at
     )
@@ -461,15 +468,15 @@ def to_cross(
     """길에 적힌 판정을 응답으로 바꾼다. 난이도를 비웠으면 규칙의 기본 난이도의 이름표다. 없으면 None."""
     if terms is None:
         return None
-    difficulty = find_difficulty(snapshot.rulebook.rules, terms.difficulty)
+    difficulty = known_difficulty(snapshot.rulebook.rules, terms.difficulty)
     return RouteCrossOut(ability=terms.ability, difficulty=difficulty.key)
 
 
 def to_opening(snapshot: Snapshot, terms: PickSnapshot | RepairSnapshot | None) -> RouteOpenOut | None:
     """길의 문을 따거나 고치는 판정을 응답으로 바꾼다. 도구가 있어야 하는가(#802)가 붙는다. 없으면 None."""
-    if terms is None:
-        return None
     crossing = to_cross(snapshot, terms)
+    if terms is None or crossing is None:
+        return None
     return RouteOpenOut(**crossing.model_dump(), needs_tool=terms.needs_tool)
 
 
@@ -512,14 +519,14 @@ def to_member(
         user_id=member.user_id,
         is_host=member.user_id == table.host_id,
         character=character,
-        character_mode=member.character_mode,
+        character_mode=CharacterMode(member.character_mode) if member.character_mode else None,
         pregen_index=member.pregen_index,
         portrait_id=member_portrait(table, member),
         roll=to_roll(sheets.find_roll(table, member.user_id)),
         abilities=member.abilities,
         sheet=to_sheet(member.sheet, catalog, ruleset, member.user_id == viewer_id),
         fallen=[to_fallen(sheet) for sheet in member.fallen],
-        friendly_fire=member.friendly_fire,
+        friendly_fire=FriendlyFire(member.friendly_fire),
         joined_at=member.joined_at,
     )
 
@@ -600,7 +607,7 @@ def to_detail(table: GameTable, viewer_id: uuid.UUID) -> TableDetail:
         opening=snapshot.openings[table.opening_index],
         recommended_players=RecommendedPlayers(**snapshot.recommended_players.model_dump()),
         rules=snapshot.rulebook.rules,
-        character_modes=table.character_modes,
+        character_modes=[CharacterMode(mode) for mode in table.character_modes],
         default_sheet=snapshot.default_sheet if CharacterMode.CUSTOM in table.character_modes else None,
         player_made_hp=to_player_made_hp(table, snapshot),
         reroll_allowed=can_grant_rerolls(table, snapshot),

@@ -21,6 +21,7 @@ HTTP 를 모른다. 테이블을 잠그고 하고, 무슨 일이 있었는지를
 """
 
 import uuid
+from typing import cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -81,9 +82,9 @@ def describe_arrival(round_: Round, member: TableMember, replaces: str, snapshot
         'replaces': replaces,
         'mode': member.character_mode,
         'pregen_index': member.pregen_index,
-        'number': member.sheet.number,
+        'number': member.current_sheet.number,
         'sheet': describe_sheet(member),
-        'place': places.describe(snapshot, member.sheet.place_id),
+        'place': places.describe(snapshot, member.current_sheet.place_id),
     }
 
 
@@ -112,7 +113,8 @@ async def bring_in_character(
     if source is None:
         raise TableConflictError(Conflict.CHARACTERS_MISSING)
 
-    replaces = member.character_name
+    # 쓰러진 캐릭터의 자리라 이름이 있다(캐릭터를 정해야 시작한다). 값은 그대로 넘긴다
+    replaces = cast(str, member.character_name)
     write_character(member, chosen)
     # 새 캐릭터는 앞 캐릭터의 소지품과 돈과 착용을 물려받지 않는다. 시작할 때의 것을 새로 받는다
     sheet = sheets.give_sheet(member, source)

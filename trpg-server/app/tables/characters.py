@@ -42,6 +42,8 @@ def resolve_character(snapshot: Snapshot, data: CharacterUpdate) -> tuple[str, s
     프리젠을 골랐으면 프리젠의 것이 바탕이고, 함께 보낸 칸은 보낸 것으로 고쳐 쓴다.
     """
     if data.pregen_index is None:
+        # 프리젠을 고르지 않았으면 이름이 있다(CharacterUpdate 의 검사)
+        assert data.name is not None
         return data.name, data.description or ''
 
     if data.pregen_index >= len(snapshot.pregens):

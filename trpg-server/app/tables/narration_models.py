@@ -28,13 +28,14 @@ HTTP 를 모른다. 테이블을 잠그고 한다.
 
 import uuid
 from datetime import UTC, datetime
+from typing import TypeGuard, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.billing import charges
 from app.catalog import offers
 from app.catalog.offers import OfferedModel
-from app.catalog.steps import NarrationSteps, steps_of
+from app.catalog.steps import HasSteps, NarrationSteps, steps_of
 from app.events import recorder
 from app.events.models import EventType
 from app.rounds import repository as round_repository
@@ -48,7 +49,7 @@ from app.tables.service import lock_seated, save
 from app.tables.state import require_host, require_not_ended
 
 
-def takes_new_model(round_: Round | None) -> bool:
+def takes_new_model(round_: Round | None) -> TypeGuard[Round]:
     """이 라운드의 모델도 지금 바꿀 수 있는가. 선언을 받는 중이거나, 서술이 실패해 멈췄다."""
     if round_ is None:
         return False
@@ -63,7 +64,8 @@ Choice = tuple[str | None, NarrationSteps]
 
 def choice_of(row: GameTable | Round) -> Choice:
     """테이블이나 라운드의 모델과 단계."""
-    return row.narration_model, steps_of(row)
+    # 테이블과 라운드(ORM 의 행)는 단계의 칸을 가진다(HasSteps). pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    return row.narration_model, steps_of(cast(HasSteps, row))
 
 
 def is_unchanged(table: GameTable, round_: Round | None, chosen: Choice) -> bool:
@@ -166,15 +168,15 @@ async def change_narration_model(
         forget_retire_notices(table)
     table.narration_model = data.narration_model
     table.input_step, table.output_step = steps.input, steps.output
-    applied = takes_new_model(round_)
-    if applied:
-        await apply_to_round(session, round_, data.narration_model, steps, found)
+    changed = round_ if takes_new_model(round_) else None
+    if changed is not None:
+        await apply_to_round(session, changed, data.narration_model, steps, found)
     payload = {
         'narration_model': data.narration_model,
         'input_step': steps.input,
         'output_step': steps.output,
-        'round': round_.number if applied else None,
-        'price': price_payload(round_) if applied else None,
+        'round': changed.number if changed is not None else None,
+        'price': price_payload(changed) if changed is not None else None,
     }
     recorder.record(session, table, EventType.NARRATION_MODEL_CHANGED, actor_id=host_id, payload=payload)
     return await save(session, table)

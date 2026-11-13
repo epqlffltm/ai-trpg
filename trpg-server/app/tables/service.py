@@ -25,6 +25,7 @@ HTTP 를 모른다. SQL 을 모른다. 어디까지를 한 묶음으로 저장�
 
 import uuid
 from datetime import UTC, datetime
+from typing import cast
 
 from server_core.auth.tokens import AccessClaims
 from server_core.billing.price_list import FREE_PRICES, PriceList
@@ -41,7 +42,7 @@ from app.billing import charges
 from app.calendar import state as calendar
 from app.campaigns import ending as campaign_ending
 from app.campaigns import seating as campaign_seating
-from app.catalog.steps import NarrationSteps, steps_of
+from app.catalog.steps import HasSteps, NarrationSteps, steps_of
 from app.engine.dice import Dice, RandomDice
 from app.events import recorder
 from app.events.models import EventType
@@ -178,6 +179,8 @@ async def open_table(session: AsyncSession, viewer: AccessClaims, data: TableCre
 async def get_table(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.UUID) -> GameTable:
     """자기가 앉아 있는 테이블 하나를 돌려준다. 없거나 앉지 않았으면 TableNotFoundError."""
     table = await repository.find_table(session, table_id)
+    if table is None:
+        raise TableNotFoundError
     require_member(table, user_id)
     return table
 
@@ -244,6 +247,8 @@ async def lock_seated(session: AsyncSession, user_id: uuid.UUID, table_id: uuid.
     잠근 뒤에 읽은 값으로 확인한다. 잠그기 전에 확인하면, 그사이에 내보내졌을 수 있다.
     """
     table = await repository.lock_table(session, table_id)
+    if table is None:
+        raise TableNotFoundError
     member = require_member(table, user_id)
     return table, member
 
@@ -306,6 +311,9 @@ async def join_public_table(
     await guarded_password_check(table, viewer.user_id, data.password, limiting)
 
     table = await repository.lock_table(session, table_id)
+    # 확인한 뒤 잠그기 전에 지워졌을 수 있다
+    if table is None:
+        raise TableNotFoundError
     take_seat(table, viewer.user_id)
     recorder.record(session, table, EventType.MEMBER_JOINED, actor_id=viewer.user_id, payload={'via': 'lobby'})
     return await save(session, table)
@@ -369,7 +377,7 @@ async def leave_for_withdrawal(session: AsyncSession, user_id: uuid.UUID, table_
     """
     table = await repository.lock_table(session, table_id)
     member = None if table is None else find_member(table, user_id)
-    if member is None or table.status == TableStatus.ENDED:
+    if table is None or member is None or table.status == TableStatus.ENDED:
         await session.rollback()
         return
     await depart(session, table, member)
@@ -477,7 +485,8 @@ async def start_table(
     if turn_order.is_turns(table):
         turn_order.begin_cycle(table, snapshot.rulebook.rules, dice or RandomDice())
     opening = snapshot.openings[table.opening_index]
-    price = await price_of(session, prices, table.narration_model, datetime.now(UTC), steps_of(table))
+    # 테이블(ORM 의 행)은 단계의 칸을 가진다(HasSteps). pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
+    price = await price_of(session, prices, table.narration_model, datetime.now(UTC), steps_of(cast(HasSteps, table)))
     opener.open_round(session, table, number=1, scene=opening, cause=started, price=price)
     return await save(session, table)
 

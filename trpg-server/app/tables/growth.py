@@ -108,7 +108,7 @@ def grant(members: list[TableMember], amount: int, split: XpSplit, progression: 
     몫이 0 이거나(나누어 떨어지지 않게 작다) 성장이 없는 규칙이면 아무도 받지 않는다(빈 목록).
     """
     each = share_of(amount, len(members), split)
-    given = [(member, gain(member.sheet, each, progression)) for member in members]
+    given = [(member, gain(member.current_sheet, each, progression)) for member in members]
     return [
         {'user_id': str(member.user_id), 'character_name': member.character_name, 'xp': gained}
         for member, gained in given
