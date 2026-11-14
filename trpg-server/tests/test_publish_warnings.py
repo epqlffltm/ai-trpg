@@ -18,12 +18,13 @@
 """
 
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import status
 from httpx import AsyncClient
 
-from app.assets.scenarios.chapter_graph import ancestors
+from app.assets.scenarios.chapter_graph import ChapterLike, ancestors
 from tests import test_happenings as happening_tests
 from tests.test_happenings import happening, moving, publish, reach
 from tests.test_scenario_chapters import chapter, draft_with
@@ -199,8 +200,8 @@ async def test_an_achievement_needing_both_branches_is_warned(client: AsyncClien
 # --- 작은 함수 ---
 
 
-def node(key: str, after: list[str] | None = None) -> SimpleNamespace:
-    return SimpleNamespace(id=key, after=after or [])
+def node(key: str, after: list[str] | None = None) -> ChapterLike:
+    return cast(ChapterLike, SimpleNamespace(id=key, after=after or []))
 
 
 def test_ancestors_follow_after_and_the_chapter_before():

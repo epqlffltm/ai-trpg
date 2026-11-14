@@ -57,6 +57,7 @@ def load_migration(name: str):
     """
     (path,) = MIGRATIONS.glob(f'*_{name}.py')
     spec = importlib.util.spec_from_file_location(f'{name}_migration', path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

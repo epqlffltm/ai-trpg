@@ -21,7 +21,7 @@ from ai_core.fake import FakeCallLog
 from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError, TextSink, ignore_text
 
 from app.rounds.llm_narrator import LLMNarrator, NarrationError
-from app.rounds.narrator import NO_PREVIEW, Move, NarrationRequest, Preview, StoryContext
+from app.rounds.narrator import NO_PREVIEW, Move, NarrationRequest, Narrator, Preview, StoryContext
 from app.rounds.retrying_narrator import (
     MAX_RETRY_AFTER_SECONDS,
     PAUSE_SECONDS,
@@ -93,7 +93,7 @@ class Setup:
         self.pauses.append(seconds)
         self.clock.now += seconds
 
-    def narrator(self, *models: Script) -> RetryingNarrator:
+    def narrator(self, *models: Narrator) -> RetryingNarrator:
         return RetryingNarrator(
             list(models),
             attempt_timeout=TIMEOUT,
@@ -332,7 +332,7 @@ class Showing:
 async def test_every_try_starts_its_own_preview():
     preview = RecordingPreview()
     setup = Setup()
-    narrators = [Showing('첫 시도', ProviderError('timeout')), Showing('다음 모델')]
+    narrators: list[Narrator] = [Showing('첫 시도', ProviderError('timeout')), Showing('다음 모델')]
     narrator = RetryingNarrator(narrators, attempt_timeout=TIMEOUT, budget=BUDGET, sleep=setup.sleep)
 
     scene = await narrator.narrate(REQUEST, preview)

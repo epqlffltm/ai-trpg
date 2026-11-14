@@ -8,8 +8,11 @@
 프롬프트를 고친 뒤 견줄 수 있다.
 """
 
+from typing import cast
+
 import pytest
 from ai_core.fake import FakeProvider
+from ai_core.openai_compat import OpenAICompatProvider
 from ai_core.provider import Reasoning
 
 from app.assets.models import NarrationStyle
@@ -112,7 +115,9 @@ def test_the_secret_is_still_a_hint():
 
 
 async def test_a_trial_keeps_its_hints():
-    trial = await run_trial(FakeProvider(reply=BAD), Reasoning.NONE, CLASSIC, False, LoreMode.ON, SETS)
+    trial = await run_trial(
+        cast(OpenAICompatProvider, FakeProvider(reply=BAD)), Reasoning.NONE, CLASSIC, False, LoreMode.ON, SETS
+    )
 
     assert has_hint(trial, HINT_PAST)
     assert has_hint(trial, HINT_NAME)
@@ -123,8 +128,16 @@ async def test_the_tally_counts_each_setting_out_of_its_scenes():
     trials = []
     for mode in (LoreMode.OFF, LoreMode.ON):
         for reply in (BAD, GOOD, GOOD):
-            trials.append(await run_trial(FakeProvider(reply=reply), Reasoning.NONE, CLASSIC, False, mode, SETS))
-    trials.append(await run_trial(FakeProvider(reply=''), Reasoning.NONE, CLASSIC, False, LoreMode.ON, SETS))
+            trials.append(
+                await run_trial(
+                    cast(OpenAICompatProvider, FakeProvider(reply=reply)), Reasoning.NONE, CLASSIC, False, mode, SETS
+                )
+            )
+    trials.append(
+        await run_trial(
+            cast(OpenAICompatProvider, FakeProvider(reply='')), Reasoning.NONE, CLASSIC, False, LoreMode.ON, SETS
+        )
+    )
 
     rows = tally(trials).splitlines()
 

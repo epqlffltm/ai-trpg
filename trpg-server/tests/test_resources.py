@@ -13,6 +13,7 @@ HP 말고 다른 수치(#804, 판 형식 65)를 검증한다. 규칙(app/engine/
 import json
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -27,10 +28,12 @@ from app.engine import resources as engine
 from app.engine.dice import ScriptedDice
 from app.engine.item_effects import AdjustEffect, is_harmful
 from app.engine.ruleset import Resource, ResourceShift, Ruleset
-from app.engine.templates import from_template
+from app.engine.templates import Template, from_template
+from app.rounds.models import Declaration
 from app.rounds.move_lines import describe_item_action, describe_move, describe_rest
 from app.rounds.narrator import ItemActionNote, Move, ResourceNote, RestNote
 from app.rounds.rests import Broken, finish_rest
+from app.tables.models import TableMember
 from tests import test_monster_combat as combat
 from tests.test_npc_sheets import refused
 from tests.test_ruleset import load_migration
@@ -48,7 +51,7 @@ declare = combat.declare
 send = combat.send
 events_of = combat.events_of
 
-LIGHT = from_template('light')
+LIGHT = from_template(Template.LIGHT)
 SHEET = {'abilities': {'body': 3, 'wits': 2, 'heart': 4}, 'max_hp': 10}
 SHORT = {'kind': 'rest', 'length': 'short'}
 LONG = {'kind': 'rest', 'length': 'long'}
@@ -155,7 +158,7 @@ def test_the_maximum_adds_the_ability_modifier_and_stops_at_the_cap():
 
 
 def test_a_low_modifier_never_puts_the_maximum_under_the_minimum():
-    srd = from_template('srd5')
+    srd = from_template(Template.SRD5)
     focus = Resource.model_validate(resource(min=2, max={'base': 2, 'ability': 'int'}))
 
     # 점수 6 의 보정은 -2 다. 0 이 되지만 최소(2)다
@@ -233,8 +236,8 @@ def test_a_ruleset_rejects_unknown_abilities_and_repeated_resources():
 
 def test_only_the_light_template_has_examples():
     assert [one.key for one in LIGHT.resources] == ['mana', 'stamina']
-    assert from_template('srd5').resources == ()
-    assert from_template('horror').resources == ()
+    assert from_template(Template.SRD5).resources == ()
+    assert from_template(Template.HORROR).resources == ()
 
 
 def test_adjusting_down_is_harmful_and_zero_is_refused():
@@ -442,8 +445,8 @@ def test_the_migration_fills_rulebooks_and_drops_adjust_on_the_way_back():
 def test_a_broken_rest_changes_no_resource():
     """다쳐 깨진 휴식은 회복하지 않고 수치도 바꾸지 않는다."""
     sheet = SimpleNamespace(hp=5, max_hp=10, died_at=None, abilities=SHEET['abilities'], resources={'mana': 1})
-    member = SimpleNamespace(user_id=ME, sheet=sheet, current_sheet=sheet)
-    declaration = SimpleNamespace(outcome={'rest': {'length': 'long', 'minutes': 480}})
+    member = cast(TableMember, SimpleNamespace(user_id=ME, sheet=sheet, current_sheet=sheet))
+    declaration = cast(Declaration, SimpleNamespace(outcome={'rest': {'length': 'long', 'minutes': 480}}))
 
     finish_rest(LIGHT, member, declaration, {ME}, set(), ScriptedDice([]))
 

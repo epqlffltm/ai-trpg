@@ -8,8 +8,13 @@
 (app/rounds/narration_request.py)을 본다. DB 도 HTTP 도 쓰지 않는다.
 """
 
+import uuid
 from types import SimpleNamespace
+from typing import cast
 
+from conversation_core.transcripts.blocks import Note
+
+from app.rounds.models import Round
 from app.rounds.move_lines import describe_death_save, describe_verdict
 from app.rounds.narration_request import find_death_save
 from app.rounds.narrator import DeathSaveNote, Verdict
@@ -65,10 +70,10 @@ def test_the_death_save_takes_the_style_from_the_caller():
         'failures': 0,
         'fate': 'dying',
     }
-    round_ = SimpleNamespace(death_saves=[saved])
+    round_ = cast(Round, SimpleNamespace(death_saves=[saved]))
 
-    assert find_death_save(round_, user_id).style == 'over'
-    assert find_death_save(round_, user_id, 'under').style == 'under'
+    assert find_death_save(round_, uuid.UUID(user_id)).style == 'over'
+    assert find_death_save(round_, uuid.UUID(user_id), 'under').style == 'under'
 
 
 def test_the_transcript_compares_the_death_save_for_under():
@@ -76,6 +81,7 @@ def test_the_transcript_compares_the_death_save_for_under():
 
     (over,) = death_save_rolled(payload, Labels())
     (under,) = death_save_rolled(payload, Labels(roll_style='under'))
+    assert isinstance(over, Note) and isinstance(under, Note)
 
     assert over.text == '죽음의 굴림: 엘프 34 / 50 → 성공 (성공 1, 실패 0)'
     assert under.text == '죽음의 굴림: 엘프 34 ≤ 50 → 성공 (성공 1, 실패 0)'

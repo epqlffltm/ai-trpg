@@ -38,12 +38,13 @@ from app.calendar.clock import read_time
 from app.engine.action import ActionKind, CheckAction, TreatAction, find_treat_fault, read_action
 from app.engine.dice import ScriptedDice
 from app.engine.injury import NO_HINDRANCE, Hindrance, ends_after, find_injury, heals_at, roll_aftermath
-from app.engine.ruleset import Mishap, Ruleset
+from app.engine.ruleset import Injury, Mishap, Ruleset
 from app.engine.templates import SRD5
 from app.engine.treatment import is_healed, lengthened, roll_mishap, shortened, treat, treatable
 from app.rounds import prompt, service
 from app.rounds.move_lines import describe_move, describe_treatment
 from app.rounds.narrator import HealNote, Move, TreatmentNote
+from app.rounds.state import required
 from app.tables.models import NpcStatus, TableInjury, TableSheet
 from tests.test_injuries import make_format_13
 from tests.test_npc_actions import (
@@ -260,7 +261,7 @@ def test_only_lasting_injuries_with_a_difficulty_can_be_treated(key: str, can: b
 
 
 def test_treating_rolls_wisdom_against_the_difficulty_of_the_injury():
-    hindered = treat(SRD5, find_injury(SRD5, 'broken_arm'), {'wis': 12}, ScriptedDice([18]), NO_HINDRANCE)
+    hindered = treat(SRD5, rule_injury('broken_arm'), {'wis': 12}, ScriptedDice([18]), NO_HINDRANCE)
 
     # 지혜 12 는 보정 +1. 어려움(20)에 19 로 실패한다
     assert (hindered.check.modifier, hindered.check.total, hindered.check.target) == (1, 19, 20)
@@ -270,7 +271,7 @@ def test_treating_rolls_wisdom_against_the_difficulty_of_the_injury():
 def test_the_healers_own_injuries_hinder_the_treatment():
     hindrance = Hindrance(penalty=2, injuries=('lost_eye',))
 
-    hindered = treat(SRD5, find_injury(SRD5, 'leg_wound'), {'wis': 10}, ScriptedDice([16]), hindrance)
+    hindered = treat(SRD5, rule_injury('leg_wound'), {'wis': 10}, ScriptedDice([16]), hindrance)
 
     # 보통(15). 16 이지만 한쪽 눈을 잃어 지혜에 -2
     assert (hindered.check.total, hindered.check.success) == (14, False)
@@ -294,8 +295,13 @@ def test_the_mishap_table_gives_the_row_of_the_roll(roll: int, kind: Mishap, del
     assert (rolled.roll, rolled.kind, rolled.delay_minutes, rolled.magnitude) == (roll, kind, delay, magnitude)
 
 
+def rule_injury(key: str) -> Injury:
+    """규칙에 있는 부상. 없으면 테스트가 잘못 적었다."""
+    return required(find_injury(SRD5, key), 'injury')
+
+
 def test_treatment_moves_the_time_of_healing():
-    arm = find_injury(SRD5, 'broken_arm')
+    arm = rule_injury('broken_arm')
 
     # 3일 앞당긴다. 판의 기본 걸음과 상관없다
     assert shortened(ARM_HEALS, arm) == ARM_HEALS - TREATED
@@ -307,20 +313,20 @@ def test_treatment_moves_the_time_of_healing():
 
 
 def test_only_lasting_injuries_with_a_table_leave_aftermath():
-    assert roll_aftermath(find_injury(SRD5, 'broken_arm'), ScriptedDice([CROOKED])).injury == 'crooked_arm'
-    assert roll_aftermath(find_injury(SRD5, 'stunned'), ScriptedDice([])) is None
-    assert roll_aftermath(find_injury(SRD5, 'lost_eye'), ScriptedDice([])) is None
+    assert roll_aftermath(rule_injury('broken_arm'), ScriptedDice([CROOKED])).injury == 'crooked_arm'
+    assert roll_aftermath(rule_injury('stunned'), ScriptedDice([])) is None
+    assert roll_aftermath(rule_injury('lost_eye'), ScriptedDice([])) is None
 
 
 def test_a_lasting_injury_heals_by_game_time_and_not_by_rounds():
-    leg = find_injury(SRD5, 'leg_wound')
+    leg = rule_injury('leg_wound')
 
     # 7일 뒤
     assert heals_at(leg, OPENED) == LEG_HEALS
     assert ends_after(leg, 4) is None
     # 짧은 것과 결손은 나을 시각이 없다
-    assert heals_at(find_injury(SRD5, 'stunned'), OPENED) is None
-    assert heals_at(find_injury(SRD5, 'lost_eye'), OPENED) is None
+    assert heals_at(rule_injury('stunned'), OPENED) is None
+    assert heals_at(rule_injury('lost_eye'), OPENED) is None
 
 
 def test_a_treatment_names_one_patient_and_no_ability():

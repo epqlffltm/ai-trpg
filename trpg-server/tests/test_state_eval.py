@@ -15,6 +15,7 @@
 import argparse
 import re
 from dataclasses import replace
+from typing import cast
 
 import pytest
 from ai_core.fake import FakeProvider
@@ -25,10 +26,11 @@ from app.rounds.cast import CONDITIONS
 from app.rounds.llm_narrator import NARRATION_PARAMS
 from app.rounds.narrator import Move
 from app.rounds.prompt import build_messages
+from app.rounds.state import required
 from evals.lore.narration import prompt_text
 from evals.state import cases
 from evals.state.cases import CASES, HIDDEN_NAME, TRUE_NAME
-from evals.state.checks import Finding, Forbid, NoSpeech, Pattern, Require, general_hints, run_checks
+from evals.state.checks import Check, Finding, Forbid, NoSpeech, Pattern, Require, general_hints, run_checks
 from evals.state.report import full_report, read_report, tally_lines, total_line
 from evals.state.runner import inspect, narrate, rescore, run_cases
 from scripts import eval_state
@@ -45,6 +47,15 @@ def without_secrets(move: Move) -> Move:
     return replace(move, place=replace(move.place, hidden=[]))
 
 
+def checks_of(*checks: object) -> tuple[Check, ...]:
+    """
+    검사들의 묶음. Require 와 Forbid 는 Check 의 모양이다.
+
+    얼린 dataclass 의 칸은 읽기만 해서 pyright 는 Check 의 칸으로 알아보지 못한다. 그래서 밝힌다.
+    """
+    return cast(tuple[Check, ...], checks)
+
+
 def prompt_of(case: cases.StateCase, without_memo: bool = False) -> str:
     """
     장면의 프롬프트 전부를 한 글로. without_memo 면 GM 만 아는 것(GM 메모, 맵의 숨은 길)을 비운다.
@@ -52,7 +63,8 @@ def prompt_of(case: cases.StateCase, without_memo: bool = False) -> str:
     request = case.request
     if without_memo:
         moves = [without_secrets(move) for move in request.moves]
-        request = replace(request, story=replace(request.story, gm_notes=''), moves=moves)
+        story = required(request.story, 'story')
+        request = replace(request, story=replace(story, gm_notes=''), moves=moves)
     return prompt_text(build_messages(request))
 
 
@@ -120,7 +132,7 @@ def test_clock_digits_are_caught(scene: str, caught: list[str]):
     ],
 )
 def test_hurry_counts_only_a_deadline_running_out(scene: str, passed: bool):
-    (finding,) = run_checks(scene, (Require('서두름', cases.HURRY_WORDS),))
+    (finding,) = run_checks(scene, checks_of(Require('서두름', cases.HURRY_WORDS)))
 
     assert finding.passed is passed
 
@@ -137,13 +149,13 @@ def test_hurry_counts_only_a_deadline_running_out(scene: str, passed: bool):
     ],
 )
 def test_lost_counts_only_an_ending(scene: str, passed: bool):
-    (finding,) = run_checks(scene, (Require('놓침', cases.LOST_WORDS),))
+    (finding,) = run_checks(scene, checks_of(Require('놓침', cases.LOST_WORDS)))
 
     assert finding.passed is passed
 
 
 def test_checks_run_in_order_and_report_passing():
-    findings = run_checks('비올레타가 웃었다.', (Require('팔', ('팔',)), Forbid('이름', ('비올레타',))))
+    findings = run_checks('비올레타가 웃었다.', checks_of(Require('팔', ('팔',)), Forbid('이름', ('비올레타',))))
 
     assert [finding.label for finding in findings] == ['팔', '이름']
     assert [finding.passed for finding in findings] == [False, False]
@@ -170,7 +182,7 @@ def test_every_case_builds_a_prompt_with_its_moves(case: cases.StateCase):
     text = prompt_of(case)
 
     assert prompt.PROMPT_VERSION == 'narration-92'
-    assert all(move.content in text for move in case.request.moves)
+    assert all(move.content is not None and move.content in text for move in case.request.moves)
 
 
 @pytest.mark.parametrize('case', CASES, ids=lambda case: case.name)

@@ -15,6 +15,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI
@@ -24,6 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.rounds import initiative, turn_order
 from app.rounds.initiative import Turn, TurnKind
+from app.rounds.models import Round
+from app.rounds.monster_scene import SceneMonster
 from app.tables.models import GameTable, TurnMode
 from tests import test_monster_turns as turns
 from tests.sheets import make_sheet
@@ -46,7 +49,7 @@ def monster_turns(found: list[dict]) -> list[dict]:
     return [turn for turn in found if turn['kind'] == 'monster']
 
 
-async def stances(session: AsyncSession, table: dict) -> dict:
+async def stances(session: AsyncSession, table: dict) -> dict | None:
     query = select(GameTable.turn_stances).where(GameTable.id == uuid.UUID(table['id']))
     return await session.scalar(query.execution_options(populate_existing=True))
 
@@ -114,13 +117,13 @@ async def test_a_guard_lasts_until_the_next_turn(
 
 
 def foe(rank_score: int, key: uuid.UUID, first: bool = False) -> Turn:
-    monster = SimpleNamespace(state=SimpleNamespace(id=key))
+    monster = cast(SceneMonster, SimpleNamespace(state=SimpleNamespace(id=key)))
     return Turn(kind=TurnKind.MONSTER, member=None, monster=monster, first=first, score=rank_score)
 
 
 def test_a_foe_takes_its_slot_once_and_only_before_the_next_actor():
     done, fast, even, slow, sneaky = (uuid.uuid4() for _ in range(5))
-    table = SimpleNamespace(turn_foes=[str(done)])
+    table = cast(GameTable, SimpleNamespace(turn_foes=[str(done)]))
     before = initiative.rank_of(Turn(kind=TurnKind.PC, member=None, monster=None, first=False, score=10))
     gate = turn_order.FoeGate(table=table, before=before)
 
@@ -135,8 +138,8 @@ def test_a_foe_takes_its_slot_once_and_only_before_the_next_actor():
 def test_a_stance_is_kept_from_the_outcome_and_dropped_on_the_next_turn():
     actor = uuid.uuid4()
     covered = SimpleNamespace(user_id=actor, outcome={'cover': {'place': None, 'value': 3}})
-    table = SimpleNamespace(turn_mode=TurnMode.TURNS, turn_stances={}, members=[])
-    round_ = SimpleNamespace(actor_id=actor, declarations=[covered])
+    table = cast(GameTable, SimpleNamespace(turn_mode=TurnMode.TURNS, turn_stances={}, members=[]))
+    round_ = cast(Round, SimpleNamespace(actor_id=actor, declarations=[covered]))
 
     turn_order.keep_stance(table, round_)
 

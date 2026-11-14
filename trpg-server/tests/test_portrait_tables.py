@@ -11,6 +11,7 @@
 """
 
 import uuid
+from collections.abc import AsyncIterator
 
 import pytest
 from ai_core.fake import FakeImageProvider
@@ -73,7 +74,7 @@ def provider(app: FastAPI) -> FakeImageProvider:
 
 
 @pytest.fixture
-async def billing(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> FakeBillingServer:
+async def billing(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[FakeBillingServer]:
     monkeypatch.setitem(PRICES, price_code_of(app.state.settings.snapshot_model), 160)
     server = FakeBillingServer(balances={ME: 1000, FRIEND: 1000})
     client = server.make_client()

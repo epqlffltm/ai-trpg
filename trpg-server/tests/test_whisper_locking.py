@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.rounds.state import required
 from app.tables import repository as table_repository
 from app.tables import service as tables
 from app.tables import state as table_state
@@ -53,8 +54,9 @@ async def test_two_whispers_to_one_mailbox_at_once_get_different_numbers(
     table = await tables.join_table(session, make_viewer(THIRD), JoinRequest(invite_code=table.invite_code))
 
     # A: 테이블을 잠그고 내가 친구에게 보낸 쪽지를 친구의 쪽지함에 올렸지만 아직 커밋하지 않았다
-    locked = await table_repository.lock_table(session, table.id)
-    sender, recipient = table_state.find_member(locked, ME), table_state.find_member(locked, FRIEND)
+    locked = required(await table_repository.lock_table(session, table.id), 'table')
+    sender = required(table_state.find_member(locked, ME), 'sender')
+    recipient = required(table_state.find_member(locked, FRIEND), 'recipient')
     data = WhisperCreate(recipient_id=FRIEND, content='먼저 보낸 쪽지')
     repository.add_whisper(session, service.build_copy(locked, FRIEND, 1, sender, recipient, data, 1))
     await session.flush()

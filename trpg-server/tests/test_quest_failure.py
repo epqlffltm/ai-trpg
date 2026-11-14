@@ -19,6 +19,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -28,7 +29,7 @@ from app.assets.models import QuestConditionKind, QuestMatch
 from app.assets.scenarios.snapshot import QuestConditionSnapshot, read_snapshot
 from app.assets.scenarios.upgrades import upgrade_from_42
 from app.rounds.quest_goals import is_failing, npc_dead
-from app.tables.models import NpcStatus
+from app.tables.models import GameTable, NpcStatus, QuestStatus, TableNpc
 from app.tables.quests import CatalogQuest
 from tests.narration_model import asset_body
 from tests.test_quest_goals import (
@@ -330,9 +331,9 @@ async def test_a_quest_revealed_with_its_failure_met_fails_at_once(client: Async
 def test_only_a_dead_person_is_dead():
     lady = uuid.uuid4()
 
-    assert npc_dead([SimpleNamespace(entry_id=lady, status=NpcStatus.DEAD)], lady)
-    assert not npc_dead([SimpleNamespace(entry_id=lady, status=NpcStatus.DOWNED)], lady)
-    assert not npc_dead([SimpleNamespace(entry_id=uuid.uuid4(), status=NpcStatus.DEAD)], lady)
+    assert npc_dead([cast(TableNpc, SimpleNamespace(entry_id=lady, status=NpcStatus.DEAD))], lady)
+    assert not npc_dead([cast(TableNpc, SimpleNamespace(entry_id=lady, status=NpcStatus.DOWNED))], lady)
+    assert not npc_dead([cast(TableNpc, SimpleNamespace(entry_id=uuid.uuid4(), status=NpcStatus.DEAD))], lady)
     assert not npc_dead([], lady)
 
 
@@ -340,13 +341,13 @@ def test_only_a_dead_person_is_dead():
 def test_losing_means_fewer_than_the_count(held: int, expected: bool):
     potion = uuid.uuid4()
     lose = (QuestConditionSnapshot(kind=QuestConditionKind.LOSE_ITEM, target=potion, count=2),)
-    quest_ = CatalogQuest(entry_id=uuid.uuid4(), name='호위', start='active', reward=[], fail=lose)
-    table = SimpleNamespace(members=[person(None, {potion: held})])
+    quest_ = CatalogQuest(entry_id=uuid.uuid4(), name='호위', start=QuestStatus.ACTIVE, reward=[], fail=lose)
+    table = cast(GameTable, SimpleNamespace(members=[person(None, {potion: held})]))
 
     assert is_failing(quest_, table, [], []) is expected
 
 
 def test_no_fail_conditions_never_fail():
-    quest_ = CatalogQuest(entry_id=uuid.uuid4(), name='구출', start='active', reward=[])
+    quest_ = CatalogQuest(entry_id=uuid.uuid4(), name='구출', start=QuestStatus.ACTIVE, reward=[])
 
-    assert not is_failing(quest_, SimpleNamespace(members=[]), [], [])
+    assert not is_failing(quest_, cast(GameTable, SimpleNamespace(members=[])), [], [])

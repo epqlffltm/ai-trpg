@@ -33,6 +33,7 @@ from app.rounds import prompt
 from app.rounds.models import Round
 from app.rounds.narrator import NO_PREVIEW, NarrationRequest, Preview, WhisperNote
 from app.rounds.service import GM_WHISPERS_PER_SENDER
+from app.rounds.state import required
 from app.tables.models import GameTable
 from app.whispers.models import Whisper
 from app.whispers.service import target_round
@@ -394,7 +395,7 @@ async def test_with_the_notice_on_everyone_learns_who_whispered_to_whom(
     assert SECRET not in events.text
     stored = await session.scalar(select(TableEvent.payload).where(TableEvent.type == 'whisper_sent'))
     assert SECRET not in json.dumps(stored, ensure_ascii=False)
-    assert set(stored) == {'user_id', 'character_name', 'recipient_id', 'recipient_character_name'}
+    assert set(required(stored, 'payload')) == {'user_id', 'character_name', 'recipient_id', 'recipient_character_name'}
 
 
 async def test_the_notice_follows_the_option_of_the_moment(client: AsyncClient, me: dict, friend: dict, third: dict):

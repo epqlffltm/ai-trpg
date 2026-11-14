@@ -12,6 +12,7 @@
 import json
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from httpx import AsyncClient
@@ -21,11 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.engine import resources as engine
 from app.engine.ruleset import Resource, Ruleset
-from app.engine.templates import from_template
+from app.engine.templates import Template, from_template
 from app.rounds import resource_rounds
 from app.tables import injuries
 from app.tables import resources as table_resources
-from app.tables.models import InjurySource
+from app.tables.models import InjurySource, TableSheet
 from tests import test_monster_combat as combat
 from tests.test_ruleset import load_migration
 
@@ -38,7 +39,7 @@ table_url = combat.table_url
 declare = combat.declare
 events_of = combat.events_of
 
-SRD5 = from_template('srd5')
+SRD5 = from_template(Template.SRD5)
 ABILITIES = {'str': 10, 'dex': 10, 'con': 10, 'int': 10, 'wis': 10, 'cha': 10}
 STAMINA = {
     'key': 'stamina',
@@ -61,9 +62,9 @@ def level(resource: dict, value: int) -> engine.Level:
     return engine.Level(resource=parsed, value=value, maximum=parsed.max.base)
 
 
-def sheet_of(values: dict) -> SimpleNamespace:
+def sheet_of(values: dict) -> TableSheet:
     """DB 없는 시트. 수치의 값과 부상 목록만 있다."""
-    return SimpleNamespace(abilities=ABILITIES, resources=dict(values), injuries=[])
+    return cast(TableSheet, SimpleNamespace(abilities=ABILITIES, resources=dict(values), injuries=[]))
 
 
 async def start(client: AsyncClient, me: dict) -> dict:

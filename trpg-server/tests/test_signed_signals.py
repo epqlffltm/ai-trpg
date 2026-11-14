@@ -11,9 +11,11 @@ import asyncio
 import json
 import logging
 import uuid
+from typing import cast
 
 import asyncpg
 import pytest
+from asyncpg import Connection
 from fastapi import FastAPI, status
 from httpx import AsyncClient
 from pydantic import SecretStr, ValidationError
@@ -249,9 +251,10 @@ def test_a_forged_signal_is_logged_without_what_it_carried(app: FastAPI, caplog:
     source = listener.PostgresListener(make_test_settings(), app.state.hub, app.state.signal_signer)
 
     with caplog.at_level(logging.WARNING):
-        source._on_notify(None, 4242, 'channel', f'{TABLE}:narration:1:1:0:비밀스러운 서술')
+        source._on_notify(cast(Connection, None), 4242, 'channel', f'{TABLE}:narration:1:1:0:비밀스러운 서술')
 
     [record] = [record for record in caplog.records if record.name == listener.__name__]
-    assert record.error_code == BAD_SIGNATURE_ERROR_CODE
-    assert record.sender_pid == 4242
+    # 로그의 extra 로 붙인 칸이다. LogRecord 의 모양에는 없다
+    assert vars(record)['error_code'] == BAD_SIGNATURE_ERROR_CODE
+    assert vars(record)['sender_pid'] == 4242
     assert '비밀스러운' not in caplog.text

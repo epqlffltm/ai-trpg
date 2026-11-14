@@ -186,9 +186,11 @@ def test_the_samples_keep_the_common_rules(style: NarrationStyle):
 @pytest.mark.parametrize('style', STYLED)
 def test_the_last_request_repeats_the_style(style: NarrationStyle):
     last = build_messages(replace(make_request(), style=style))[-1].content
+    assert isinstance(last, str)
 
     # 시스템 지시는 멀리 있다. 가장 가까운 사람의 말에 문체를 다시 적는다
-    assert prompt.style_reminder(style) in last
+    reminder = prompt.style_reminder(style)
+    assert reminder is not None and reminder in last
     assert prompt.STYLE_RULES[style].name in last
     assert last.endswith(prompt.CLOSING_REQUEST)
 
@@ -203,6 +205,7 @@ def test_the_last_request_names_no_style_for_none():
 @pytest.mark.parametrize('style', list(NarrationStyle))
 def test_the_last_request_keeps_to_this_round(style: NarrationStyle):
     last = build_messages(replace(make_request(), style=style))[-1].content
+    assert isinstance(last, str)
 
     # 지난 라운드의 선언도 대화에 있다. 그것을 다시 서술하지 않게 한다
     assert prompt.THIS_ROUND_ONLY in last

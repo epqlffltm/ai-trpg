@@ -11,6 +11,7 @@
 """
 
 import uuid
+from typing import cast
 
 import pytest
 from fastapi import status
@@ -20,7 +21,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import ItemStackSnapshot
+from app.assets.scenarios.snapshot import ItemStackSnapshot, Snapshot
 from app.main import API_PREFIX
 from app.rounds import prompt
 from app.rounds.move_lines import describe_items
@@ -307,10 +308,10 @@ def test_starting_items_add_up_with_the_pregens_and_stop_at_the_limit():
         starting_items = [ItemStackSnapshot(entry_id=rope, count=60)]
         pregens = [Pregen]
 
-    stacks = starting_stacks(Version, 0)
+    stacks = starting_stacks(cast(Snapshot, Version), 0)
 
     assert [(stack.entry_id, stack.count) for stack in stacks] == [(rope, 99), (potion, 1)]
-    assert [(stack.entry_id, stack.count) for stack in starting_stacks(Version, None)] == [(rope, 60)]
+    assert [(stack.entry_id, stack.count) for stack in starting_stacks(cast(Snapshot, Version), None)] == [(rope, 60)]
 
 
 async def test_a_new_character_does_not_inherit_but_starts_afresh(

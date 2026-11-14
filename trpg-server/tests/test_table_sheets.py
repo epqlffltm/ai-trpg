@@ -25,6 +25,7 @@ from app.assets.models import CharacterMode, ScenarioVersion
 from app.assets.scenarios.snapshot import Snapshot, read_snapshot
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
+from app.rounds.state import required
 from app.tables import sheets
 from app.tables.models import GameTable, TableMember, TableSheet
 from tests.narration_model import with_model
@@ -373,7 +374,7 @@ async def test_a_table_from_a_version_without_sheets_starts_with_baseline_sheets
 async def seat_someone(session: AsyncSession) -> TableMember:
     """시작한 테이블에 앉아 시트를 가진 사람 하나를 DB 에서 꺼낸다."""
     member = (await session.execute(text('SELECT table_id, user_id FROM table_members LIMIT 1'))).one()
-    return await session.get(TableMember, (member.table_id, member.user_id))
+    return required(await session.get(TableMember, (member.table_id, member.user_id)), 'member')
 
 
 @pytest.fixture
@@ -578,7 +579,7 @@ def test_a_sheet_remembers_whose_it_is():
 
 
 def test_sheets_are_numbered_in_the_order_they_were_given():
-    source = make_snapshot().default_sheet
+    source = required(make_snapshot().default_sheet, 'default_sheet')
     member = make_member(name='드워프')
     first = sheets.give_sheet(member, source)
     assert sheets.next_number(member) == 2

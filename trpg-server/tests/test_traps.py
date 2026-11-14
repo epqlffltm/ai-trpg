@@ -25,6 +25,7 @@ import importlib.util
 import pathlib
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -33,10 +34,12 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.rounds import prompt, trap_actions
+from app.rounds.effects import Judging
 from app.rounds.move_lines import describe_move, describe_trap_set, describe_travel
 from app.rounds.narration_request import to_trap
 from app.rounds.narrator import TrapNote, TrapSetNote, TravelNote
 from app.rounds.router import visible_outcome
+from app.tables.models import TableMember
 from tests import test_table_map as map_tables
 from tests.narration_model import asset_body
 from tests.test_character_death import load_dice
@@ -428,14 +431,14 @@ async def test_a_poison_trap_leaves_its_injury(
 
 def test_a_dead_character_springs_no_more(monkeypatch: pytest.MonkeyPatch):
     sheet = SimpleNamespace(place_id=uuid.uuid4())
-    member = SimpleNamespace(sheet=sheet, current_sheet=sheet)
+    member = cast(TableMember, SimpleNamespace(sheet=sheet, current_sheet=sheet))
     armed = ['first', 'second', 'third']
     deaths = iter([False, True])
     monkeypatch.setattr(trap_actions.traps, 'hidden_at', lambda table, place: armed)
     monkeypatch.setattr(trap_actions.sheets, 'is_dead', lambda who: next(deaths))
     monkeypatch.setattr(trap_actions, 'spring_one', lambda judging, who, trap, carried: {'trap': trap})
 
-    sprung = trap_actions.spring_on_arrival(SimpleNamespace(table=None), member)
+    sprung = trap_actions.spring_on_arrival(cast(Judging, SimpleNamespace(table=None)), member)
 
     assert sprung == [{'trap': 'first'}]
 
@@ -444,10 +447,12 @@ def test_a_move_without_traps_keeps_its_shape(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(trap_actions, 'spring_on_arrival', lambda judging, member, carried: [])
     moved = {'move': {'moved': True}}
     stayed = {'move': {'moved': False}}
+    # 덫을 터뜨리는 함수를 바꿔 끼워 판정과 사람을 읽지 않는다
+    judging, member = cast(Judging, None), cast(TableMember, None)
 
-    assert trap_actions.with_traps(None, None, moved) is moved
+    assert trap_actions.with_traps(judging, member, moved) is moved
     monkeypatch.setattr(trap_actions, 'spring_on_arrival', lambda judging, member, carried: pytest.fail('가지 못했다'))
-    assert trap_actions.with_traps(None, None, stayed) is stayed
+    assert trap_actions.with_traps(judging, member, stayed) is stayed
 
 
 # --- 보이기와 서술과 되돌리기 ---
@@ -500,6 +505,7 @@ async def test_the_narrator_hears_the_trap(
 
 def test_downgrade_strips_traps_from_item_rules():
     spec = importlib.util.spec_from_file_location('traps_migration', MIGRATION)
+    assert spec is not None and spec.loader is not None
     migration = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(migration)
     rules = [{'entry_id': 'a', 'kind': 'gear', 'trap': TRAP}, {'entry_id': 'b', 'kind': 'gear'}]

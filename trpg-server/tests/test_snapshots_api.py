@@ -25,6 +25,7 @@
 
 import asyncio
 import uuid
+from collections.abc import AsyncIterator
 from datetime import timedelta
 
 import pytest
@@ -97,7 +98,7 @@ def asset(app: FastAPI) -> FakeAsset:
 
 
 @pytest.fixture
-async def billing(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> FakeBillingServer:
+async def billing(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[FakeBillingServer]:
     """앱에 꽂은 가짜 결제 서버. 장면 그림의 가격표가 있고, 둘 다 크레딧이 넉넉하다."""
     monkeypatch.setitem(PRICES, price_code_of(app.state.settings.snapshot_model), PRICE)
     server = FakeBillingServer(balances={ME: CREDITS, FRIEND: CREDITS})

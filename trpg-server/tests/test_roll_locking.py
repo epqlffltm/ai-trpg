@@ -20,12 +20,14 @@ from fastapi import FastAPI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.assets.models import CharacterMode
 from app.assets.rulebooks import service as rulebooks
 from app.assets.rulebooks.schemas import RulebookCreate
 from app.assets.scenarios import publishing
 from app.assets.scenarios import service as scenarios
-from app.assets.scenarios.schemas import ScenarioCreate, VersionCreate
+from app.assets.scenarios.schemas import PlayerMadeHp, ScenarioCreate, VersionCreate
 from app.engine.dice import ScriptedDice
+from app.engine.sheet import CharacterSheet
 from app.tables import repository, rolls, service
 from app.tables.errors import Conflict, TableConflictError
 from app.tables.models import GameTable, TableRoll
@@ -67,9 +69,9 @@ async def open_table(session: AsyncSession) -> GameTable:
         title='시나리오',
         rulebook_id=rulebook.asset_id,
         openings=['도입부'],
-        default_sheet=SHEET,
-        character_modes=['custom', 'rolled'],
-        player_made_hp={'base': 10, 'cap': 12},
+        default_sheet=CharacterSheet.model_validate(SHEET),
+        character_modes=[CharacterMode.CUSTOM, CharacterMode.ROLLED],
+        player_made_hp=PlayerMadeHp(base=10, cap=12),
     )
     scenario = await scenarios.create_scenario(session, ME, data, today())
     await publishing.publish(session, ME, scenario.asset_id, VersionCreate(), NO_INDEXER)

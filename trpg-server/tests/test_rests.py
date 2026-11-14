@@ -16,6 +16,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -25,11 +26,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_27
-from app.engine.action import RestAction
+from app.engine.action import ActionKind, RestAction, RestLength
 from app.engine.ruleset import Ruleset
 from app.engine.templates import SRD5
 from app.rounds import rests
 from app.rounds.errors import ActionNotInRulesError
+from app.rounds.state import required
+from app.tables.models import TableMember
 from tests import test_character_death as death_tests
 from tests import test_monster_turns as monster_tests
 from tests.narration_model import with_model
@@ -166,7 +169,7 @@ def test_a_ruleset_without_rest_refuses_resting():
     no_rest = Ruleset.model_validate({**SRD5.model_dump(mode='json'), 'rest': None})
 
     with pytest.raises(ActionNotInRulesError):
-        rests.accept_rest(no_rest, RestAction(kind='rest', length='short'))
+        rests.accept_rest(no_rest, RestAction(kind=ActionKind.REST, length=RestLength.SHORT))
 
 
 # --- 쉬기 ---
@@ -450,10 +453,10 @@ async def test_the_template_does_not_heal_by_itself(
 # --- 작은 함수들 ---
 
 
-def member(hp: int = 5, died: bool = False) -> SimpleNamespace:
+def member(hp: int = 5, died: bool = False) -> TableMember:
     """앉은 사람 하나. 휴식이 깨졌는지 보는 데 쓰는 칸만 있다."""
     sheet = SimpleNamespace(hp=0 if died else hp, max_hp=10, died_at='2026-10-16' if died else None)
-    return SimpleNamespace(user_id=ME, sheet=sheet)
+    return cast(TableMember, SimpleNamespace(user_id=ME, sheet=sheet))
 
 
 @pytest.mark.parametrize(
@@ -467,7 +470,7 @@ def member(hp: int = 5, died: bool = False) -> SimpleNamespace:
         (member(), {FRIEND}, None),
     ],
 )
-def test_what_breaks_a_rest(who: SimpleNamespace, hurt: set, reason):
+def test_what_breaks_a_rest(who: TableMember, hurt: set, reason):
     assert rests.broken_by(who, hurt, set()) == reason
 
 
@@ -482,6 +485,8 @@ def test_what_breaks_a_rest(who: SimpleNamespace, hurt: set, reason):
     ],
 )
 def test_ticks_are_counted_on_the_clock(start: int, end: int, ticks: int):
-    natural = Ruleset.model_validate(with_rest(natural={'every_minutes': HOUR, 'heal': 'light'})).rest.natural
+    natural = required(
+        Ruleset.model_validate(with_rest(natural={'every_minutes': HOUR, 'heal': 'light'})).rest.natural, 'natural'
+    )
 
     assert rests.ticks_between(natural, start, end) == ticks

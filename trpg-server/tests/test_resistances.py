@@ -26,6 +26,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -39,17 +40,19 @@ from app.assets.scenarios.publishing import attack_fault
 from app.assets.scenarios.schemas import ItemRule, MonsterAttack
 from app.assets.scenarios.snapshot import MonsterSnapshot, NpcSheetSnapshot
 from app.engine.dice import ScriptedDice
-from app.engine.item_effects import AdjustEffect, is_resisted
+from app.engine.item_effects import AdjustEffect, DamageEffect, is_resisted
 from app.engine.monster_kinds import MonsterKind
 from app.engine.ruleset import Resistance, ResourceHolder, Ruleset, blocked_natures
 from app.engine.templates import SRD5
+from app.rounds.cast import Scene
 from app.rounds.injuries import expire_all
 from app.rounds.move_lines import describe_impact, describe_monster_turn
 from app.rounds.narration_request import to_impact, to_turn_note
+from app.rounds.state import required
 from app.tables import resistances
 from app.tables.injuries import Moment
 from app.tables.items import CatalogItem
-from app.tables.models import TableInjury
+from app.tables.models import TableInjury, TableMember, TableMonster, TableNpc, TableSheet
 from tests import test_friendly_fire as friendly
 from tests import test_injuries as hurt
 from tests import test_item_effects as item_world
@@ -136,7 +139,7 @@ def test_a_skill_drain_names_a_nature_of_the_rules():
     known = Ruleset.model_validate(
         rules_with(resources=[mana], skills=[{**skill, 'effects': [{**DRAIN, 'nature': 'poison'}]}])
     )
-    assert known.skills[0].effects[0].nature == 'poison'
+    assert cast(DamageEffect, known.skills[0].effects[0]).nature == 'poison'
 
 
 def test_only_a_worn_thing_carries_resistances():
@@ -214,7 +217,9 @@ def test_a_character_gathers_sheet_worn_and_injuries():
     rules = stoneskin_rules()
     worn = [SimpleNamespace(entry_id=CLOAK, slots=['body'])]
     stone = TableInjury(injury='stoneskin', round_number=1)
-    sheet = SimpleNamespace(resistances=[{'nature': 'mind', 'level': 'resist'}], worn=worn, injuries=[stone])
+    sheet = cast(
+        TableSheet, SimpleNamespace(resistances=[{'nature': 'mind', 'level': 'resist'}], worn=worn, injuries=[stone])
+    )
 
     gathered = resistances.of_member(rules, catalog(), sheet)
 
@@ -239,7 +244,7 @@ def test_an_npc_wears_only_its_equipment():
             'resistances': [{'nature': 'sense', 'level': 'immune'}],
         }
     )
-    npc = SimpleNamespace(items=[], injuries=[])
+    npc = cast(TableNpc, SimpleNamespace(items=[], injuries=[]))
 
     assert resistances.npc_blocked(SRD5, catalog(), npc, definition) == {'sense', 'poison'}
     # 시트를 적지 않은 인물은 입은 부상의 것뿐이다
@@ -261,7 +266,7 @@ def test_a_monster_adds_its_worn_things_to_its_immunities():
             'immune': ['stun'],
         }
     )
-    monster = SimpleNamespace(items=[], injuries=[])
+    monster = cast(TableMonster, SimpleNamespace(items=[], injuries=[]))
 
     # 시트는 기절, 쓴 부적은 독. 망토의 약점은 면역을 지우지 않는다
     assert resistances.monster_blocked(SRD5, catalog(), monster, definition) == {'poison', 'stun'}
@@ -270,9 +275,9 @@ def test_a_monster_adds_its_worn_things_to_its_immunities():
 def test_an_aftermath_of_a_blocked_nature_is_not_taken():
     broken = TableInjury(injury='broken_arm', source='injury_table', round_number=1, heals_at=5)
     sheet = SimpleNamespace(injuries=[broken], died_at=None)
-    member = SimpleNamespace(user_id=ME, character_name='엘프', sheet=sheet)
-    scene = SimpleNamespace(npcs=[], cast=[], monsters=[], all_monsters=[])
-    guard = SimpleNamespace(member=lambda _: frozenset({'body'}))
+    member = cast(TableMember, SimpleNamespace(user_id=ME, character_name='엘프', sheet=sheet))
+    scene = cast(Scene, SimpleNamespace(npcs=[], cast=[], monsters=[], all_monsters=[]))
+    guard = cast(resistances.Guard, SimpleNamespace(member=lambda _: frozenset({'body'})))
     moment = Moment(round_number=2, now=0, scene_end=10)
 
     # 후유증 표의 1 은 굽은 팔(몸)이다. 몸을 막으면 입지 않는다
@@ -556,7 +561,7 @@ def test_the_narrator_hears_what_was_kept_out():
         },
     }
 
-    line = describe_monster_turn(to_turn_note(turn).monster)
+    line = describe_monster_turn(required(to_turn_note(turn).monster, 'monster'))
 
     assert line == '독거미: 엘프에게 독니 (맞음) [막아 낸 부상: 중독] [수치: 마나 막아 냄]'
 
@@ -572,7 +577,7 @@ def test_a_character_s_kept_out_injury_is_told():
         'injury_roll': {'injury': None, 'immune': 'poisoned', 'name': '중독'},
     }
 
-    assert describe_impact(to_impact(effect)) == '→ 드워프 피해 9 (HP 1/12). 막아 낸 부상: 중독'
+    assert describe_impact(required(to_impact(effect), 'impact')) == '→ 드워프 피해 9 (HP 1/12). 막아 낸 부상: 중독'
 
 
 # --- 되돌리기 ---

@@ -205,6 +205,7 @@ async def test_each_scene_is_narrated_off_and_on():
     assert all(trial.references == [] for trial in trials if trial.mode == Mode.OFF)
     # 켠 서술의 프롬프트가 더 길다
     off, on = tally(trials, Mode.OFF), tally(trials, Mode.ON)
+    assert on.mean_input_tokens is not None and off.mean_input_tokens is not None
     assert on.mean_input_tokens > off.mean_input_tokens
     assert off.leaked == off.runs and on.failed == 0
     assert trials[0].leaked == ['DC 12']

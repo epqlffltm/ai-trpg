@@ -11,8 +11,10 @@
 
 import asyncio
 from dataclasses import dataclass, field
+from typing import cast
 
 import pytest
+from ai_core.embedder import Embedder
 from ai_core.fake import FAKE_MODEL, FakeEmbedder, word_vector
 from ai_core.provider import ProviderError
 
@@ -37,7 +39,7 @@ class SlowEmbedder:
 
 async def test_the_same_text_is_embedded_once():
     inner = FakeEmbedder()
-    embedder = QueryEmbedder(inner)
+    embedder = QueryEmbedder(cast(Embedder, inner))
 
     first = await embedder.embed([TEXT])
     second = await embedder.embed([TEXT])
@@ -48,7 +50,7 @@ async def test_the_same_text_is_embedded_once():
 
 async def test_the_same_text_asked_at_once_is_one_call():
     inner = SlowEmbedder()
-    embedder = QueryEmbedder(inner)
+    embedder = QueryEmbedder(cast(Embedder, inner))
 
     waiting = [asyncio.create_task(embedder.embed([TEXT])) for _ in range(3)]
     await asyncio.sleep(0)
@@ -60,7 +62,7 @@ async def test_the_same_text_asked_at_once_is_one_call():
 
 async def test_many_texts_at_once_are_not_remembered():
     inner = FakeEmbedder()
-    embedder = QueryEmbedder(inner)
+    embedder = QueryEmbedder(cast(Embedder, inner))
 
     await embedder.embed(['하나', '둘'])
     await embedder.embed(['하나', '둘'])
@@ -70,7 +72,7 @@ async def test_many_texts_at_once_are_not_remembered():
 
 async def test_a_failure_is_not_remembered():
     inner = FakeEmbedder(error='unreachable')
-    embedder = QueryEmbedder(inner)
+    embedder = QueryEmbedder(cast(Embedder, inner))
 
     with pytest.raises(ProviderError):
         await embedder.embed([TEXT])
@@ -83,7 +85,7 @@ async def test_a_failure_is_not_remembered():
 
 async def test_a_cancelled_search_does_not_cancel_the_others():
     inner = SlowEmbedder()
-    embedder = QueryEmbedder(inner)
+    embedder = QueryEmbedder(cast(Embedder, inner))
 
     given_up = asyncio.create_task(embedder.embed([TEXT]))
     still_waiting = asyncio.create_task(embedder.embed([TEXT]))

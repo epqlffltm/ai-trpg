@@ -32,7 +32,7 @@ me = lobby_tests.me
 friend = lobby_tests.friend
 
 
-async def stored_scenario(session: AsyncSession, table: dict) -> uuid.UUID:
+async def stored_scenario(session: AsyncSession, table: dict) -> uuid.UUID | None:
     query = select(GameTable.scenario_id).where(GameTable.id == uuid.UUID(table['id']))
     return await session.scalar(query.execution_options(populate_existing=True))
 

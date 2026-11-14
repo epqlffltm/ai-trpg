@@ -19,7 +19,7 @@ import pytest
 
 from app.assets.scenarios.upgrades import CLASSIC_MONSTER_IMMUNITIES, CLASSIC_NATURES, UPGRADES, upgrade_from_44
 from app.engine import templates
-from app.engine.check import find_difficulty, modifier_of, resolve
+from app.engine.check import known_difficulty, modifier_of, resolve
 from app.engine.dice import ScriptedDice
 from app.engine.ruleset import ArmorMode, Outcome, Ruleset
 from app.engine.templates import (
@@ -582,7 +582,7 @@ def test_a_template_that_borrows_from_the_srd_carries_its_attribution(template: 
 @pytest.mark.parametrize('template', list(Template))
 def test_exactly_the_target_succeeds_and_one_short_fails(template: Template):
     rules = TEMPLATES[template].rules
-    difficulty = find_difficulty(rules, None)
+    difficulty = known_difficulty(rules, None)
     score = middle_score(rules)
     needed = difficulty.target - modifier_of(rules, score)
     assert 1 < needed <= rules.die, '가운데 점수로 기본 난이도에 주사위로 닿을 수 있어야 한다'
@@ -611,7 +611,7 @@ def test_light_counts_the_score_itself_as_the_modifier():
     """가벼운 모험은 점수가 곧 보정이다. 재치 3 으로 보통(8)에 도전해 눈 5 면 5 + 3 = 8 로 성공이다."""
     rules = TEMPLATES[Template.LIGHT].rules
 
-    check = resolve(rules, 3, find_difficulty(rules, 'medium'), ScriptedDice([5]))
+    check = resolve(rules, 3, known_difficulty(rules, 'medium'), ScriptedDice([5]))
 
     assert (check.roll, check.modifier, check.total, check.target, check.success) == (5, 3, 8, 8, True)
 
@@ -655,7 +655,7 @@ def test_the_guide_does_not_change_the_check(template: Template):
     """서술 지침을 지워도 같은 눈이면 같은 판정이다. 엔진은 지침을 보지 않는다."""
     rules = TEMPLATES[template].rules
     plain = rules.model_copy(update={'narration': None})
-    difficulty = find_difficulty(rules, None)
+    difficulty = known_difficulty(rules, None)
     score = middle_score(rules)
 
     assert resolve(rules, score, difficulty, ScriptedDice([3])) == resolve(plain, score, difficulty, ScriptedDice([3]))

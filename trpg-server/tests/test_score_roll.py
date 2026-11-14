@@ -12,9 +12,10 @@ from app.engine.dice import ScriptedDice
 from app.engine.ruleset import Ruleset
 from app.engine.score_roll import RolledScore, keep_highest, roll_score, roll_scores, uses_exactly
 from app.engine.templates import SRD5
+from app.rounds.state import required
 from tests.rules import NO_INJURIES
 
-SCORE_ROLL = SRD5.score_roll
+SCORE_ROLL = required(SRD5.score_roll, 'score_roll')
 
 
 def rules(**changes) -> Ruleset:
@@ -98,6 +99,7 @@ def test_rolls_one_score_for_each_ability():
     dice = ScriptedDice([6, 6, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1])
 
     rolled = roll_scores(SRD5, dice)
+    assert rolled is not None
 
     assert [score.score for score in rolled] == [18, 15, 12, 9, 6, 3]
     assert rolled[0].dice == (6, 6, 6, 6)
@@ -108,6 +110,7 @@ def test_another_ruleset_rolls_its_own_way():
     dice = WatchedDice()
 
     rolled = roll_scores(TWO_ABILITIES, dice)
+    assert rolled is not None
 
     # 능력치가 둘이라 두 번, 한 번에 10 면 둘을 굴린다
     assert dice.sides == [10, 10, 10, 10]

@@ -13,6 +13,7 @@
 import json
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -21,11 +22,11 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT
+from app.assets.scenarios.snapshot import SNAPSHOT_FORMAT, Snapshot
 from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_65
 from app.engine.ruleset import Ruleset
 from app.engine.sheet import CharacterSheet
-from app.engine.templates import from_template
+from app.engine.templates import Template, from_template
 from app.rounds.move_lines import describe_skill
 from app.rounds.narrator import Impact, ResourceNote, SkillNote
 from app.rounds.router import visible_outcome
@@ -47,7 +48,7 @@ declare = combat.declare
 send = combat.send
 events_of = combat.events_of
 
-LIGHT = from_template('light')
+LIGHT = from_template(Template.LIGHT)
 ABILITIES = {'body': 3, 'wits': 2, 'heart': 4}
 HEAL = {
     'key': 'healing_touch',
@@ -135,7 +136,7 @@ def mana_of(table: dict, user_id: uuid.UUID) -> int:
 
 def test_the_light_template_has_three_example_skills():
     assert [one.key for one in LIGHT.skills] == ['healing_touch', 'focus', 'arcane_bolt']
-    assert from_template('srd5').skills == ()
+    assert from_template(Template.SRD5).skills == ()
 
 
 @pytest.mark.parametrize(
@@ -211,12 +212,15 @@ async def test_an_unknown_skill_on_a_sheet_is_refused_at_publishing(client: Asyn
 
 def test_a_player_made_character_knows_the_skills_of_the_default_sheet():
     default = CharacterSheet(abilities=ABILITIES, max_hp=10, skills=['healing_touch'])
-    snapshot = SimpleNamespace(
-        rulebook=SimpleNamespace(rules=LIGHT), player_made_hp=SimpleNamespace(base=8, cap=20), default_sheet=default
+    snapshot = cast(
+        Snapshot,
+        SimpleNamespace(
+            rulebook=SimpleNamespace(rules=LIGHT), player_made_hp=SimpleNamespace(base=8, cap=20), default_sheet=default
+        ),
     )
 
     made = build_player_made(snapshot, {'body': 2, 'wits': 3, 'heart': 4})
-    bare = build_player_made(SimpleNamespace(**{**vars(snapshot), 'default_sheet': None}), ABILITIES)
+    bare = build_player_made(cast(Snapshot, SimpleNamespace(**{**vars(snapshot), 'default_sheet': None})), ABILITIES)
 
     assert (made.skills, bare.skills) == (['healing_touch'], [])
 

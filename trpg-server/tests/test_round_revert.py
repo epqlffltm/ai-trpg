@@ -28,6 +28,7 @@ from app.core.database import Base
 from app.memory.models import RoundMemory
 from app.rounds import snapshots
 from app.rounds.models import Round, RoundSnapshot
+from app.rounds.state import required
 from app.tables.models import TableSheet
 from tests.test_rounds_api import (
     FRIEND,
@@ -90,7 +91,7 @@ async def my_sheet(session: AsyncSession, table: dict) -> TableSheet:
 
 async def clock_minutes(session: AsyncSession, table: dict) -> int:
     query = select(TableClock.minutes).where(TableClock.table_id == uuid.UUID(table['id']))
-    return await session.scalar(query.execution_options(populate_existing=True))
+    return required(await session.scalar(query.execution_options(populate_existing=True)), 'clock')
 
 
 async def damage_me(session: AsyncSession, table: dict, hp: int, money: int) -> None:

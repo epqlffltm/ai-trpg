@@ -21,6 +21,7 @@
 
 import uuid
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, status
@@ -33,9 +34,12 @@ from app.assets.scenarios.upgrades import UPGRADES, upgrade_from_51
 from app.engine.dice import ScriptedDice
 from app.engine.templates import SRD5
 from app.rounds import map_actions, prompt
+from app.rounds.effects import Judging
+from app.rounds.models import Declaration
 from app.rounds.move_lines import describe_travel
 from app.rounds.narration_request import cross_ability_name, to_travel
 from app.rounds.narrator import TravelNote
+from app.tables.models import TableMember
 from tests import test_table_map as map_tables
 from tests.narration_model import asset_body
 from tests.test_character_death import load_dice
@@ -383,13 +387,18 @@ def test_the_narrator_hears_a_door_opened():
         'effect': None,
     }
 
-    note = to_travel(SimpleNamespace(outcome={'move': move}), SRD5)
+    note = to_travel(cast(Declaration, SimpleNamespace(outcome={'move': move})), SRD5)
 
     assert (note.unlocked, note.cross, note.hurt) == (True, None, False)
 
 
 def test_a_climb_without_harm_hurts_no_one():
-    assert map_actions.fall(SimpleNamespace(), SimpleNamespace(), CrossSnapshot(ability='str')) is None
+    assert (
+        map_actions.fall(
+            cast(Judging, SimpleNamespace()), cast(TableMember, SimpleNamespace()), CrossSnapshot(ability='str')
+        )
+        is None
+    )
 
 
 def test_the_cross_is_named_by_the_rules():
@@ -413,9 +422,9 @@ def test_the_climb_feels_the_injuries_on_its_ability(monkeypatch: pytest.MonkeyP
         return hindrance_for(ruleset, injuries, ability)
 
     monkeypatch.setattr(map_actions.round_injuries, 'hindrance_for', spy)
-    judging = SimpleNamespace(ruleset=SRD5, dice=ScriptedDice([20]))
+    judging = cast(Judging, SimpleNamespace(ruleset=SRD5, dice=ScriptedDice([20])))
     sheet = SimpleNamespace(abilities={'str': 10, 'dex': 10}, injuries=[])
-    member = SimpleNamespace(sheet=sheet, current_sheet=sheet)
+    member = cast(TableMember, SimpleNamespace(sheet=sheet, current_sheet=sheet))
 
     rolled = map_actions.roll_terms(judging, member, CrossSnapshot(ability='str'))
 

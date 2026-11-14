@@ -131,6 +131,7 @@ def load_migration(name: str):
     """마이그레이션 파일 하나를 모듈로 읽는다. 파일 이름 앞의 번호는 만들 때마다 달라서 뒤의 이름으로 찾는다."""
     (path,) = MIGRATIONS.glob(f'*_{name}.py')
     spec = importlib.util.spec_from_file_location(f'{name}_migration', path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

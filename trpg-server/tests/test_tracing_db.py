@@ -32,8 +32,8 @@ async def test_a_query_under_a_span_gets_a_span_named_by_its_table(session: Asyn
     assert span.attributes['db.operation.name'] == 'SELECT'
     assert span.attributes['db.collection.name'] == 'game_tables'
     # 문장과 값은 싣지 않는다
-    assert str(SECRET_USER) not in str(dict(span.attributes))
-    assert 'WHERE' not in str(dict(span.attributes))
+    assert str(SECRET_USER) not in str(dict(span.attributes or {}))
+    assert 'WHERE' not in str(dict(span.attributes or {}))
 
 
 async def test_a_change_is_named_by_the_table_it_changes(session: AsyncSession, spans: SpanRecorder):
@@ -49,7 +49,7 @@ async def test_a_hand_written_query_is_named_by_its_kind(session: AsyncSession, 
         await session.execute(text('SELECT 1'))
 
     span = spans.find('db SELECT')
-    assert 'db.collection.name' not in span.attributes
+    assert 'db.collection.name' not in (span.attributes or {})
 
 
 async def test_a_query_without_a_parent_gets_no_span(session: AsyncSession, spans: SpanRecorder):
@@ -71,7 +71,7 @@ async def test_a_failed_query_records_only_its_sql_state(session: AsyncSession, 
     assert span.status.status_code == StatusCode.ERROR
     assert span.status.description == '22012'
     assert span.events == ()
-    assert 'secret-value' not in str(dict(span.attributes))
+    assert 'secret-value' not in str(dict(span.attributes or {}))
 
 
 async def test_instrumenting_twice_does_not_double_the_spans(app: FastAPI, session: AsyncSession, spans: SpanRecorder):
@@ -107,8 +107,12 @@ def test_the_sql_state_is_the_code_only():
     class Wrapped(Exception):
         pass
 
-    inner = Exception('잔액이 user-0b9f5e0c 에 이미 있다')
-    inner.sqlstate = '23505'
+    class DriverError(Exception):
+        """드라이버의 오류. 코드(sqlstate)만 흉내 낸다."""
+
+        sqlstate = '23505'
+
+    inner = DriverError('잔액이 user-0b9f5e0c 에 이미 있다')
     outer = Wrapped('감쌌다')
     outer.__cause__ = inner
 
