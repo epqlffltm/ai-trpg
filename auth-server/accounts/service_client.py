@@ -35,7 +35,7 @@ class ServiceUnavailableError(Exception):
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """다른 주소로 가라는 답을 따라가지 않는다. 서명한 요청이 우리가 고르지 않은 곳으로 가면 안 된다."""
 
-    def redirect_request(self, request, fp, code, msg, headers, newurl):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
 
 
