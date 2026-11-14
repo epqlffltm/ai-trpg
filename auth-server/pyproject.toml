@@ -23,8 +23,44 @@ dependencies = [
 dev = [
     "coverage>=7.11.0",
     "openapi-core>=0.23.1",
+    "pyright[nodejs]==1.1.408",
     "ruff>=0.16.10",
 ]
+
+[tool.pyright]
+# Django 를 쓰지 않는 파일만 본다. pyright 는 Django 가 실행할 때 만드는 것(모델의 objects, 칸의 값,
+# transaction.atomic 등)을 알아보지 못해 그 파일들은 소음뿐이다. 이 파일에 Django 를 들이면 여기서 뺀다
+include = [
+    "accounts/attendance_rules.py",
+    "accounts/backoff.py",
+    "accounts/badge_rules.py",
+    "accounts/reserved.py",
+    "accounts/service_client.py",
+    "accounts/service_signature.py",
+    "config/db_limits.py",
+    "observability/context.py",
+    "observability/db_spans.py",
+    "observability/formatter.py",
+    "observability/heartbeat.py",
+    "observability/http_spans.py",
+    "observability/identifiers.py",
+    "observability/idle_rounds.py",
+    "observability/jobs.py",
+    "observability/metrics.py",
+    "observability/middleware.py",
+    "observability/redaction.py",
+    "observability/request_metrics.py",
+    "observability/request_spans.py",
+    "observability/setup.py",
+    "observability/spans.py",
+    "observability/tracing.py",
+    "scripts/export_jwt_public_key.py",
+    "scripts/generate_jwt_key.py",
+]
+pythonVersion = "3.13"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
 
 [tool.ruff]
 # 규칙과 모양은 저장소 루트의 ruff.toml 을 따른다. 게임 서버와 같다

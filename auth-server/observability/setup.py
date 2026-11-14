@@ -53,7 +53,7 @@ def install_record_factory() -> None:
     def factory(*args, **kwargs) -> logging.LogRecord:
         return attach_identifiers(current(*args, **kwargs))
 
-    factory.attaches_identifiers = True
+    factory.attaches_identifiers = True  # type: ignore[attr-defined]
     logging.setLogRecordFactory(factory)
 
 

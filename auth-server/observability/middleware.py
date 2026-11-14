@@ -125,7 +125,7 @@ class RequestLoggingMiddleware:
             response[REQUEST_ID_HEADER] = request_id
             status_code = response.status_code
             fields = request_fields(request, status_code, started)
-            logger.log(level_of(fields['route'], status_code), '요청을 처리했다', extra=fields)
+            logger.log(level_of(str(fields['route']), status_code), '요청을 처리했다', extra=fields)
         return response
 
     def process_exception(self, request, exception) -> None:
