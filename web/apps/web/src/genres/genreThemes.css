@@ -533,7 +533,7 @@
  *   --genre-card-border   큰 칸(라운드, 상대의 말, 선언 칸, 소개의 칸)의 테
  *   --genre-button-bg     주 단추의 면. --genre-button-shadow 는 주 단추의 그림자
  *   --genre-mark          서술과 행동 줄의 왼쪽 표시
- * 모서리(--ui-radius, --ui-radius-lg)와 제목 글꼴(--ui-font-serif)은 공통 변수를 그대로 덮어쓴다 */
+ * 모서리(--ui-radius, --ui-radius-lg)와 제목 글꼴(--ui-font-heading)은 공통 변수를 그대로 덮어쓴다 */
 
 [data-genre] {
   --genre-ink: color-mix(in srgb, var(--ui-border) 45%, transparent);
@@ -587,7 +587,7 @@
 [data-genre='urban_fantasy'] {
   --ui-radius: 2px;
   --ui-radius-lg: 4px;
-  --ui-font-serif: var(--ui-font-mono);
+  --ui-font-heading: var(--ui-font-mono);
   --genre-ink: color-mix(in srgb, var(--ui-accent) 14%, transparent);
   --genre-pattern:
     repeating-linear-gradient(0deg, transparent 0 23px, var(--genre-ink) 23px 24px),
@@ -601,7 +601,7 @@
 [data-genre='sf'] {
   --ui-radius: 0;
   --ui-radius-lg: 0;
-  --ui-font-serif: var(--ui-font-mono);
+  --ui-font-heading: var(--ui-font-mono);
   --genre-ink: color-mix(in srgb, var(--ui-accent) 10%, transparent);
   --genre-pattern: repeating-linear-gradient(0deg, transparent 0 3px, var(--genre-ink) 3px 4px);
   --genre-card-border: 1px solid var(--ui-accent);
@@ -666,7 +666,7 @@
 [data-genre='slice_of_life'] {
   --ui-radius: 8px;
   --ui-radius-lg: 14px;
-  --ui-font-serif: var(--ui-font);
+  --ui-font-heading: var(--ui-font);
   --genre-pattern:
     linear-gradient(115deg, transparent 0 58%, color-mix(in srgb, var(--ui-text) 3%, transparent) 58% 70%, transparent 70%),
     repeating-linear-gradient(90deg, transparent 0 179px, var(--genre-ink) 179px 180px),
@@ -701,7 +701,7 @@
 [data-genre='comedy'] {
   --ui-radius: 10px;
   --ui-radius-lg: 16px;
-  --ui-font-serif: var(--ui-font);
+  --ui-font-heading: var(--ui-font);
   --genre-ink: color-mix(in srgb, var(--ui-accent) 14%, transparent);
   --genre-pattern: radial-gradient(circle, var(--genre-ink) 0 3px, transparent 4px);
   --genre-pattern-size: 22px 22px;
