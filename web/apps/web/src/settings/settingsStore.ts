@@ -41,7 +41,7 @@ export function subscribeSettings(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-/** 문서에 설정을 입힌다. 기본값이면 표시를 떼어 CSS 의 기본(기기 설정)이 따른다 */
+/** 문서에 설정을 입힌다. "시스템"이면 표시를 떼어 CSS 가 기기 설정을 따르게 한다 */
 export function applySettings(settings: Settings): void {
   const root = document.documentElement;
   if (settings.theme === 'system') delete root.dataset.theme;

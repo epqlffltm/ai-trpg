@@ -1,6 +1,7 @@
 // web/apps/web/src/main.tsx
 // 화면의 입구. 화면 쪽 설정을 입히고, 읽기의 저장소(QueryClient)와 경로(BrowserRouter)를 걸고 앱을 그린다.
 
+import '@fontsource-variable/hanken-grotesk';
 import '@ai-trpg/ui/styles.css';
 import './app.css';
 import './genres/genreThemes.css';

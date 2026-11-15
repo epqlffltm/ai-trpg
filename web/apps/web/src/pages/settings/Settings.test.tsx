@@ -38,18 +38,18 @@ describe('설정', () => {
     signedOut();
     renderApp('/settings');
 
-    await userEvent.click(await screen.findByRole('radio', { name: '어둡게' }));
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    await userEvent.click(await screen.findByRole('radio', { name: '밝게' }));
+    expect(document.documentElement.dataset.theme).toBe('light');
     await userEvent.click(screen.getByRole('radio', { name: '아주 크게' }));
     expect(document.documentElement.dataset.textSize).toBe('larger');
     await userEvent.click(screen.getByRole('checkbox', { name: '테이블 방에서 단축키 쓰기' }));
-    expect(stored()).toEqual({ theme: 'dark', textSize: 'larger', shortcuts: false });
+    expect(stored()).toEqual({ theme: 'light', textSize: 'larger', shortcuts: false });
     expect(screen.getByRole('checkbox', { name: '테이블 방에서 단축키 쓰기' })).not.toBeChecked();
 
     await userEvent.click(screen.getByRole('button', { name: '처음으로 되돌리기' }));
-    expect(document.documentElement.dataset.theme).toBeUndefined();
+    expect(document.documentElement.dataset.theme).toBe('dark');
     expect(document.documentElement.dataset.textSize).toBeUndefined();
-    expect(screen.getByRole('radio', { name: '기기 설정을 따름' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: '어둡게' })).toBeChecked();
     expect(stored()).toEqual(DEFAULT_SETTINGS);
   });
 
@@ -67,12 +67,11 @@ describe('설정', () => {
     renderApp('/');
 
     const group = await screen.findByRole('group', { name: '밝기' });
-    const system = screen.getByRole('button', { name: '밝기: 기기 설정을 따름' });
-    expect(system).toHaveAttribute('aria-pressed', 'true');
-    await userEvent.click(screen.getByRole('button', { name: '밝기: 어둡게' }));
-    expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(stored()).toMatchObject({ theme: 'dark' });
     expect(screen.getByRole('button', { name: '밝기: 어둡게' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(screen.getByRole('button', { name: '밝기: 밝게' }));
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(stored()).toMatchObject({ theme: 'light' });
+    expect(screen.getByRole('button', { name: '밝기: 밝게' })).toHaveAttribute('aria-pressed', 'true');
     expect(group).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '밝기: 기기 설정을 따름' }));
@@ -96,7 +95,7 @@ describe('설정', () => {
 describe('설정의 순수한 함수', () => {
   it('저장해 둔 값을 읽는다. 모르는 값은 기본값', () => {
     expect(parseSettings(null)).toEqual(DEFAULT_SETTINGS);
-    expect(parseSettings({ theme: 'neon', textSize: 'large', shortcuts: 'yes' })).toEqual({ theme: 'system', textSize: 'large', shortcuts: true });
+    expect(parseSettings({ theme: 'neon', textSize: 'large', shortcuts: 'yes' })).toEqual({ theme: 'dark', textSize: 'large', shortcuts: true });
     window.localStorage.setItem(KEY, '{"theme":"light"}');
     resetSettingsForTest();
     expect(getSettingsSnapshot()).toEqual({ settings: { ...DEFAULT_SETTINGS, theme: 'light' }, persistent: true });

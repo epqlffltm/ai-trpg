@@ -1,83 +1,103 @@
 /* web/packages/ui/src/styles.css
  * 공통 구성요소의 모양. 색, 글꼴, 간격, 모서리는 맨 위의 변수에만 있다.
- * 색과 모양은 Stitch 시안 "이매망량의 서재 디자인 시스템"(Library of Spirits and Shadows, 2026-11-04, 강조색 1안 감청)을 따른다.
- * 책과 종이: 바탕은 종이 빛, 칸은 겹친 종이(불투명), 구분은 가는 괘선, 그림자는 아주 옅게. 유리처럼 비치는 면과 빛 번짐은 쓰지 않는다.
- * 라이트는 "낮의 종이", 다크는 "밤의 서재"의 값이다(시안의 광도별 토큰 표).
- * 글꼴은 기기에 있는 것만 쓴다(2026-11-04 결정). 시안의 Noto Serif KR, Source Sans 3, Courier Prime 은 부르지 않고
- * 같은 계열(명조, 고딕, 고정폭)의 기기 글꼴을 고른다. 화면의 CSP 가 같은 출처만 연다.
+ * 색과 모양은 Stitch 시안 "Phantasmagoria Library"(2026-11-14)를 따른다. 상용 AI 캐릭터 채팅 서비스처럼
+ * 다크가 기본이고, 바탕은 거의 검은 무지, 층은 면의 밝기와 1px 선으로 나눈다. 강조는 보라 하나.
+ * 분홍(--ui-seal)은 안 읽은 수·19·상대의 이름표, 주황(--ui-brass)은 판정·퀘스트·위험이다.
+ * 글꼴은 Hanken Grotesk(사이트 안의 파일, main.tsx 가 부른다). 한글 글자가 없어서 한글은 기기의 고딕으로 이어진다.
  * 장르 테마(플레이 화면과 소개 화면)는 이 변수들을 덮어쓴다. 배치는 바꾸지 않는다.
  */
 
+/* 다크(기본). 설정이 "시스템"이면 기기를 따르고, 기기가 밝으면 아래 라이트 값이 덮는다 */
 :root {
-  --ui-bg: #fbf9f5;
-  --ui-surface: #ffffff;
-  --ui-surface-subtle: #f5f3ef;
-  --ui-text: #1b1c1a;
-  --ui-text-muted: #444651;
-  --ui-border: #c5c5d3;
-  --ui-border-strong: #757682;
-  --ui-accent: #00236f;
-  --ui-accent-hover: #1e3a8a;
-  --ui-accent-text: #ffffff;
-  --ui-seal: #b6191a;
-  --ui-seal-text: #ffffff;
-  --ui-brass: #6c2e00;
-  --ui-danger: #ba1a1a;
-  --ui-focus: #1e3a8a;
-  --ui-shadow: 0 4px 20px -2px rgb(45 38 30 / 7%), 0 1px 4px 0 rgb(45 38 30 / 4%);
-  --ui-radius: 4px;
-  --ui-radius-lg: 8px;
-  --ui-gap: 16px;
-  --ui-font: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
-  --ui-font-serif: "Noto Serif KR", "Noto Serif CJK KR", "Nanum Myeongjo", "AppleMyungjo", "Batang", "BatangChe", serif;
-  --ui-font-mono: ui-monospace, "D2Coding", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  color-scheme: light dark;
-}
-
-/* 어두운 밝기(밤의 서재). 기기가 어두우면 따르고, 화면의 설정(A12)이 html 의 data-theme 로 밝게나 어둡게를 고정할 수 있다 */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --ui-bg: #18191b;
-    --ui-surface: #222428;
-    --ui-surface-subtle: #2b2d33;
-    --ui-text: #f2f0ed;
-    --ui-text-muted: #9a9ba4;
-    --ui-border: #3f414a;
-    --ui-border-strong: #6b6e7a;
-    --ui-accent: #b6c4ff;
-    --ui-accent-hover: #dce1ff;
-    --ui-accent-text: #00164e;
-    --ui-seal: #ffb4ab;
-    --ui-seal-text: #410002;
-    --ui-brass: #ffb68e;
-    --ui-danger: #ffb4ab;
-    --ui-focus: #b6c4ff;
-    --ui-shadow: 0 6px 24px -4px rgb(0 0 0 / 45%), 0 1px 4px 0 rgb(0 0 0 / 20%);
-  }
-}
-
-:root[data-theme='dark'] {
-  --ui-bg: #18191b;
-  --ui-surface: #222428;
-  --ui-surface-subtle: #2b2d33;
-  --ui-text: #f2f0ed;
-  --ui-text-muted: #9a9ba4;
-  --ui-border: #3f414a;
-  --ui-border-strong: #6b6e7a;
-  --ui-accent: #b6c4ff;
-  --ui-accent-hover: #dce1ff;
-  --ui-accent-text: #00164e;
-  --ui-seal: #ffb4ab;
-  --ui-seal-text: #410002;
-  --ui-brass: #ffb68e;
+  --ui-bg: #131318;
+  --ui-surface: #1f1f24;
+  --ui-surface-subtle: #2a292f;
+  --ui-surface-low: #1b1b20;
+  --ui-surface-raised: #35343a;
+  --ui-text: #e4e1e8;
+  --ui-text-muted: #958ea0;
+  --ui-border: #2a2a35;
+  --ui-border-strong: #494454;
+  --ui-accent: #d0bcff;
+  --ui-accent-hover: #e9ddff;
+  --ui-accent-text: #3c0091;
+  --ui-accent-glow: rgb(160 120 255 / 45%);
+  --ui-seal: #ffb0cd;
+  --ui-seal-text: #640039;
+  --ui-brass: #ffb690;
   --ui-danger: #ffb4ab;
-  --ui-focus: #b6c4ff;
-  --ui-shadow: 0 6px 24px -4px rgb(0 0 0 / 45%), 0 1px 4px 0 rgb(0 0 0 / 20%);
+  --ui-focus: #d0bcff;
+  --ui-backdrop: rgb(27 27 32 / 85%);
+  --ui-shadow: 0 4px 16px -2px rgb(0 0 0 / 50%);
+  --ui-shadow-raised: 0 12px 32px -4px rgb(0 0 0 / 70%), 0 0 16px 0 rgb(139 92 246 / 8%);
+  --ui-raised-border: rgb(139 92 246 / 25%);
+  --ui-radius-sm: 4px;
+  --ui-radius: 8px;
+  --ui-radius-lg: 12px;
+  --ui-radius-xl: 16px;
+  --ui-gap: 16px;
+  --ui-font: "Hanken Grotesk Variable", "Pretendard", system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  --ui-font-heading: var(--ui-font);
+  --ui-font-mono: ui-monospace, "D2Coding", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   color-scheme: dark;
 }
 
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --ui-bg: #f4f4f7;
+    --ui-surface: #ffffff;
+    --ui-surface-subtle: #ebebf0;
+    --ui-surface-low: #ffffff;
+    --ui-surface-raised: #ffffff;
+    --ui-text: #1b1b20;
+    --ui-text-muted: #5b5666;
+    --ui-border: #e2e2ea;
+    --ui-border-strong: #c9c4d3;
+    --ui-accent: #6d3bd7;
+    --ui-accent-hover: #5516be;
+    --ui-accent-text: #ffffff;
+    --ui-accent-glow: rgb(109 59 215 / 30%);
+    --ui-seal: #aa0266;
+    --ui-seal-text: #ffffff;
+    --ui-brass: #783200;
+    --ui-danger: #ba1a1a;
+    --ui-focus: #6d3bd7;
+    --ui-backdrop: rgb(255 255 255 / 85%);
+    --ui-shadow: 0 4px 16px -4px rgb(27 27 32 / 12%);
+    --ui-shadow-raised: 0 12px 32px -6px rgb(27 27 32 / 18%);
+    --ui-raised-border: rgb(109 59 215 / 20%);
+    color-scheme: light;
+  }
+}
+
 :root[data-theme='light'] {
+  --ui-bg: #f4f4f7;
+  --ui-surface: #ffffff;
+  --ui-surface-subtle: #ebebf0;
+  --ui-surface-low: #ffffff;
+  --ui-surface-raised: #ffffff;
+  --ui-text: #1b1b20;
+  --ui-text-muted: #5b5666;
+  --ui-border: #e2e2ea;
+  --ui-border-strong: #c9c4d3;
+  --ui-accent: #6d3bd7;
+  --ui-accent-hover: #5516be;
+  --ui-accent-text: #ffffff;
+  --ui-accent-glow: rgb(109 59 215 / 30%);
+  --ui-seal: #aa0266;
+  --ui-seal-text: #ffffff;
+  --ui-brass: #783200;
+  --ui-danger: #ba1a1a;
+  --ui-focus: #6d3bd7;
+  --ui-backdrop: rgb(255 255 255 / 85%);
+  --ui-shadow: 0 4px 16px -4px rgb(27 27 32 / 12%);
+  --ui-shadow-raised: 0 12px 32px -6px rgb(27 27 32 / 18%);
+  --ui-raised-border: rgb(109 59 215 / 20%);
   color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
 }
 
 *,
@@ -91,17 +111,17 @@ body {
   background: var(--ui-bg);
   color: var(--ui-text);
   font-family: var(--ui-font);
-  line-height: 1.6;
+  line-height: 1.5;
   accent-color: var(--ui-accent);
 }
 
-/* 제목은 명조 계열(서책의 표제). 본문과 단추는 고딕 계열 */
+/* 제목은 본문과 같은 글꼴을 굵고 조금 좁게 */
 h1,
 h2,
 h3 {
-  font-family: var(--ui-font-serif);
+  font-family: var(--ui-font-heading);
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 code,
@@ -125,7 +145,9 @@ a {
   border-radius: var(--ui-radius);
   padding: 10px 16px;
   font: inherit;
+  font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.15s, box-shadow 0.15s, border-color 0.15s;
 }
 
 .ui-button:disabled {
@@ -139,25 +161,33 @@ a {
   font-weight: 600;
 }
 
-/* 누르면 먹이 번지듯 조금 밝아진다. 빛나는 테는 두지 않는다 */
+/* 올리면 밝아지고 보라빛이 번진다 */
 .ui-button--primary:hover:not(:disabled) {
   background: var(--ui-accent-hover);
+  box-shadow: 0 0 14px var(--ui-accent-glow);
 }
 
 .ui-button--secondary {
-  background: var(--ui-surface);
-  border-color: var(--ui-border-strong);
+  background: var(--ui-surface-subtle);
+  border-color: var(--ui-border);
   color: var(--ui-text);
 }
 
 .ui-button--secondary:hover:not(:disabled) {
-  background: var(--ui-surface-subtle);
+  background: var(--ui-surface-raised);
+  border-color: var(--ui-accent);
 }
 
+/* 글 단추: 흐린 글이 올리면 밝아지고 옅은 면이 깔린다 */
 .ui-button--quiet {
   background: none;
-  color: var(--ui-accent);
+  color: var(--ui-text-muted);
   padding: 4px 8px;
+}
+
+.ui-button--quiet:hover:not(:disabled) {
+  color: var(--ui-text);
+  background: rgb(255 255 255 / 6%);
 }
 
 /* 입력 칸 */
@@ -171,9 +201,9 @@ a {
   font-weight: 600;
 }
 
-/* 입력칸은 옅은 종이 면에 괘선 한 줄. 초점은 테의 색만 바꾼다 */
+/* 입력칸은 한 단 밝은 면에 1px 선. 초점은 보라 테와 바깥 한 줄 */
 .ui-field__input {
-  border: 1px solid var(--ui-border-strong);
+  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
   padding: 10px 12px;
   font: inherit;
@@ -183,8 +213,8 @@ a {
 
 .ui-field__input:focus-visible {
   border-color: var(--ui-focus);
-  outline: 1px solid var(--ui-focus);
-  outline-offset: 0;
+  outline: none;
+  box-shadow: 0 0 0 1px var(--ui-focus);
 }
 
 .ui-field__input[aria-invalid="true"] {
@@ -203,8 +233,7 @@ a {
   font-size: 0.9em;
 }
 
-/* 안내 */
-/* 안내는 왼쪽에 굵은 괘선을 둔 종이 쪽지. 오류는 그 선과 글이 인주색이다 */
+/* 안내: 면 위에 왼쪽 보라 막대. 오류는 그 막대와 글이 오류색이다 */
 .ui-notice {
   border-radius: var(--ui-radius);
   padding: 10px 14px;
@@ -249,12 +278,13 @@ a {
   margin: 0 0 12px;
 }
 
-/* 제목 앞의 강조색 막대(Stitch 시안의 괘선) */
+/* 제목 앞의 강조색 막대(Stitch 시안의 줄 제목) */
 .ui-list-section__title::before {
   content: '';
   flex: none;
-  width: 3px;
+  width: 4px;
   height: 1em;
+  border-radius: 2px;
   background: var(--ui-accent);
 }
 
@@ -293,7 +323,8 @@ a {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgb(0 0 0 / 50%);
+  background: rgb(0 0 0 / 60%);
+  backdrop-filter: blur(4px);
   z-index: 10;
 }
 
@@ -302,11 +333,11 @@ a {
   max-height: min(85vh, 900px);
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-lg);
-  background: var(--ui-surface);
+  border: 1px solid var(--ui-raised-border);
+  border-radius: var(--ui-radius-xl);
+  background: var(--ui-surface-raised);
   color: var(--ui-text);
-  box-shadow: var(--ui-shadow);
+  box-shadow: var(--ui-shadow-raised);
 }
 
 .ui-dialog__head {
@@ -335,16 +366,21 @@ a {
   gap: 6px;
 }
 
-/* 칩은 납작한 종이 꼬리표(둥근 알약이 아니다) */
+/* 칩은 둥근 알약. 고른 칩은 보라 면 */
 .ui-chip {
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
-  padding: 4px 12px;
-  background: var(--ui-surface-subtle);
-  color: var(--ui-text);
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  padding: 6px 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+  font-weight: 600;
   font: inherit;
   font-size: 0.92em;
   cursor: pointer;
+}
+
+.ui-chip:hover {
+  color: var(--ui-text);
 }
 
 .ui-chip[aria-pressed="true"] {
