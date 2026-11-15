@@ -22,14 +22,14 @@ describe('머리의 주 메뉴', () => {
     for (const link of within(nav).getAllByRole('link')) expect(link).not.toHaveAttribute('aria-current');
   });
 
-  it('서비스의 아래 경로에 있으면 그 서비스의 메뉴만 지금 있는 곳이다', async () => {
+  it('게시판의 아래 경로에 있으면 게시판만 지금 있는 곳이다', async () => {
     signedOut();
-    renderApp('/chat/characters/new');
+    renderApp('/board/notice');
 
     const nav = await screen.findByRole('navigation', { name: '주 메뉴' });
-    expect(within(nav).getByRole('link', { name: 'chat' })).toHaveAttribute('aria-current', 'page');
-    expect(within(nav).getByRole('link', { name: 'TRPG' })).not.toHaveAttribute('aria-current');
-    expect(within(nav).getByRole('link', { name: 'story' })).not.toHaveAttribute('aria-current');
+    expect(within(nav).getByRole('link', { name: '게시판' })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).getByRole('link', { name: '홈' })).not.toHaveAttribute('aria-current');
+    expect(within(nav).getByRole('link', { name: '내 채팅' })).not.toHaveAttribute('aria-current');
   });
 });
 
