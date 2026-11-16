@@ -100,6 +100,50 @@ describe('자동 충전', () => {
     expect(await auto.findByText('등록한 카드가 없습니다.')).toBeInTheDocument();
   });
 
+  it('본인 확인 창이 닫혀 있으면 확인한 뒤 카드 등록을 이어 간다. 한 번 연 창은 다음 걸음에서 다시 묻지 않는다', async () => {
+    let verified = false;
+    const { seen } = signedIn({
+      [`POST ${BILLING}/cards/customer-key`]: () =>
+        verified ? json(200, { customer_key: KEY }) : json(403, { detail: 'x', code: 'step_up.required' }),
+      [`POST ${BILLING}/cards`]: () => json(201, CARD),
+      'POST /api/v1/auth/me/step-up/code': () => json(200, { detail: '인증 메일을 보냈습니다.', sent: true }),
+      'POST /api/v1/auth/me/step-up': () => {
+        verified = true;
+        return json(200, { enabled: true, open: true, expires_at: '2026-11-04T01:10:00Z' });
+      },
+    });
+    renderApp('/wallet');
+    const auto = await section();
+
+    await userEvent.click(await auto.findByRole('button', { name: '카드 등록' }));
+    await userEvent.click(auto.getByRole('button', { name: '카드 등록' }));
+    const stepUp = within(await screen.findByRole('dialog', { name: '본인 확인' }));
+    await userEvent.type(stepUp.getByLabelText('인증 코드'), '123456');
+    await userEvent.click(stepUp.getByRole('button', { name: '확인' }));
+
+    expect(await auto.findByText('카드를 등록했습니다.')).toBeInTheDocument();
+    expect(seen.filter((request) => request.url === `${BILLING}/cards/customer-key`)).toHaveLength(2);
+    expect(seen.filter((request) => request.method === 'POST' && request.url === `${BILLING}/cards`)).toHaveLength(1);
+    expect(seen.filter((request) => request.url === '/api/v1/auth/me/step-up/code')).toHaveLength(1);
+  });
+
+  it('본인 확인을 그만두면 카드를 지우지 않고 까닭을 알린다', async () => {
+    const { seen } = signedIn({
+      [`GET ${BILLING}/auto-charge`]: () => json(200, { ...NOTHING, card: CARD }),
+      [`DELETE ${BILLING}/cards`]: () => json(403, { detail: 'x', code: 'step_up.required' }),
+      'POST /api/v1/auth/me/step-up/code': () => json(200, { detail: '인증 메일을 보냈습니다.', sent: true }),
+    });
+    renderApp('/wallet');
+    const auto = await section();
+
+    await userEvent.click(await auto.findByRole('button', { name: '카드 지우기' }));
+    await userEvent.click(auto.getByRole('button', { name: '지우기' }));
+    await userEvent.click(within(await screen.findByRole('dialog', { name: '본인 확인' })).getByRole('button', { name: '그만두기' }));
+
+    expect(await auto.findByText(/본인 확인을 마쳐야 카드를 등록하거나 지울 수 있습니다/)).toBeInTheDocument();
+    expect(seen.filter((request) => request.method === 'DELETE')).toHaveLength(1);
+  });
+
   it('설정을 적으면 서버가 돌려준 설정을 보인다', async () => {
     const saved = {
       settings: { enabled: true, mode: 'balance', threshold: '300', charge_day: null, product_id: 'credits-5000', monthly_limit: 20000 },

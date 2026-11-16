@@ -7,6 +7,7 @@
 //   - 청약철회는 본문이 없다(금액과 이유는 서버가 정한다). 다시 불러도 한 번만 취소된다. 202 는 결과를 모르는 것(refunding)이다
 
 import { apiRequest } from './http';
+import { withStepUp } from './stepUpGate';
 import type { Order, OrderPage, Product } from './types';
 
 const BILLING = '/api/v1/billing';
@@ -45,7 +46,10 @@ export function fetchOrders(before: string | undefined, signal?: AbortSignal): P
   return apiRequest<OrderPage>(`${BILLING}/orders`, { query: { limit: ORDER_PAGE_SIZE, before }, ...(signal ? { signal } : {}) });
 }
 
-/** 청약철회. refunded, 또는 모름(refunding). 할 수 없으면 409 와 그 까닭(code) */
+/** 청약철회. refunded, 또는 모름(refunding). 할 수 없으면 409 와 그 까닭(code).
+ * 본인 확인의 창이 닫혔으면 확인을 받고 다시 보낸다(stepUpGate.ts). 확인을 껐으면 403 step_up.disabled */
 export function refundOrder(orderId: string): Promise<Order> {
-  return apiRequest<Order>(`${BILLING}/orders/${encodeURIComponent(orderId)}/refund`, { method: 'POST' });
+  return withStepUp(() =>
+    apiRequest<Order>(`${BILLING}/orders/${encodeURIComponent(orderId)}/refund`, { method: 'POST' }),
+  );
 }

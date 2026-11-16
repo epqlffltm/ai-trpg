@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/me/MyPage.tsx
 // 마이페이지(A5, Stitch 10번). 맨 위 프로필(MyProfileHead)과 탭 넷(?tab=). 고른 탭의 칸만 그린다(다른 탭의 서버는 부르지 않는다).
-//   - 내 계정: 계정(본인인증 A3·보호자 동의 A4로 가는 길), 닉네임 바꾸기, 비밀번호 바꾸기, 모든 기기 로그아웃, 동의, 페르소나(C4), 갤러리(C7), 탈퇴
+//   - 내 계정: 계정(본인인증 A3·보호자 동의 A4로 가는 길), 닉네임 바꾸기, 비밀번호 바꾸기, 모든 기기 로그아웃, 결제 본인 확인(F5), 동의, 페르소나(C4), 갤러리(C7), 탈퇴
 //   - 내 포인트: 지갑(A6)의 골드·실버 카드와 주문 내역(A8)으로 가는 길, 출석(주기의 칸, 오늘 받기, 보물 상자의 확률), 최근 사용 내역의 표
 //   - 설정: 활동 배지(#193), 작품 업적(#193, TRPG·스토리·채팅에서 받은 것), 화면 설정(A12), 차단(#988), 관심 작품과 팔로잉(#989), 친구 초대(#990), 내 단축어(#981), 고객센터
 //   - 제작자: 제작자 소개(#992), 만들기(B9 제작 도구 등)와 내 작품의 숫자(#991), 내 작품(종류마다의 목록, 공개 상태 칩)
@@ -32,6 +32,7 @@ import { MyWalletLink } from './MyWalletLink';
 import { MY_TABS, myTabOf, myTabPath, type MyTab } from './myTabs';
 import { NicknameChangeForm } from './NicknameChangeForm';
 import { PasswordChangeForm } from './PasswordChangeForm';
+import { StepUpSection } from './StepUpSection';
 import { WithdrawalSection } from './WithdrawalSection';
 import { MyWorkAchievements } from './achievements/MyWorkAchievements';
 import { MyWorks } from './works/MyWorks';
@@ -102,6 +103,7 @@ function panelOf(tab: MyTab): ReactNode {
       <NicknameChangeForm />
       <PasswordChangeForm />
       <LogoutAllSection />
+      <StepUpSection />
       <MyConsents />
       <MyPersonasLink />
       <MyGalleryLink />

@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/wallet/autoChargeProblem.ts
 // 자동 충전(#980)의 설정과 카드 등록이 되지 않은 까닭을 화면의 한 줄로. 순수한 함수다. 까닭은 결제 서버의 code 다(api/autoCharge.ts).
+// 카드의 작업은 본인 확인을 묻는다(F5). 확인 창을 닫으면 step_up.required 로 끝난다.
 // 결제할 수 없는 계정이면 화면이 본인인증이나 보호자 동의로 가는 길을 붙인다(link).
 
 import { ApiError, NetworkError } from '../../api/errors';
@@ -19,6 +20,7 @@ const BY_CODE: Record<string, AutoChargeProblem> = {
     message: '만 19세 미만은 보호자가 동의해야 자동 충전을 켤 수 있습니다.',
     link: { to: '/me/guardian', label: '보호자 동의 부탁하기' },
   },
+  'step_up.required': { message: '본인 확인을 마쳐야 카드를 등록하거나 지울 수 있습니다. 다시 해 주세요.', link: null },
   'card.invalid_request': { message: '카드를 등록하지 못했습니다. 처음부터 다시 해 주세요.', link: null },
   'card.customer_key_mismatch': { message: '카드 등록을 처음부터 다시 해 주세요.', link: null },
   'card.refused': { message: '카드를 등록하지 못했습니다. 다른 카드로 해 주세요.', link: null },

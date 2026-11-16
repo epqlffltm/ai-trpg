@@ -9,9 +9,11 @@
 // 실패:
 //   - 설정: 400 autocharge.invalid_settings·autocharge.terms_required, 409 autocharge.no_card·autocharge.terms_outdated,
 //     403 payment.verification_required·payment.guardian_consent_required
+//   - 카드의 세 작업(고객 키, 등록, 지우기)은 본인 확인을 묻는다(F5). 창이 닫혔으면 확인을 받고 다시 보낸다(stepUpGate.ts)
 //   - 카드: 400 card.invalid_request, 409 card.customer_key_mismatch(처음부터), 422 card.refused, 503 card.issuer_unavailable(다시)
 
 import { apiRequest } from './http';
+import { withStepUp } from './stepUpGate';
 import type { AutoCharge, PaymentCard } from './types';
 
 const BILLING = '/api/v1/billing';
@@ -38,16 +40,20 @@ export function saveAutoCharge(settings: AutoChargeSettings): Promise<AutoCharge
 
 /** 카드 등록 창에 넣을 고객 키. 몇 번을 불러도 같다 */
 export async function createCustomerKey(): Promise<string> {
-  const answer = await apiRequest<{ customer_key: string }>(`${BILLING}/cards/customer-key`, { method: 'POST' });
+  const answer = await withStepUp(() =>
+    apiRequest<{ customer_key: string }>(`${BILLING}/cards/customer-key`, { method: 'POST' }),
+  );
   return answer.customer_key;
 }
 
 /** 등록 창이 준 인증 키로 카드를 등록한다. 이미 있으면 바꾼다 */
 export function registerCard(authKey: string, customerKey: string): Promise<PaymentCard> {
-  return apiRequest<PaymentCard>(`${BILLING}/cards`, { method: 'POST', body: { auth_key: authKey, customer_key: customerKey } });
+  return withStepUp(() =>
+    apiRequest<PaymentCard>(`${BILLING}/cards`, { method: 'POST', body: { auth_key: authKey, customer_key: customerKey } }),
+  );
 }
 
 /** 카드를 지우고 자동 충전을 끈다. 카드가 없어도 된다 */
 export function removeCard(): Promise<void> {
-  return apiRequest<void>(`${BILLING}/cards`, { method: 'DELETE' });
+  return withStepUp(() => apiRequest<void>(`${BILLING}/cards`, { method: 'DELETE' }));
 }

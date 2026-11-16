@@ -146,5 +146,6 @@ describe('실패의 글', () => {
     expect(describeAutoChargeProblem(new ApiError({ status: 503, detail: 'x' })).message).toMatch(/지금 답하지 못합니다/);
     expect(describeAutoChargeProblem(new ApiError({ status: 500, detail: 'x' })).message).toMatch(/처리하지 못했습니다/);
     expect(describeAutoChargeProblem(new NetworkError(new Error('x'))).message).toMatch(/닿지 못했습니다/);
+    expect(describeAutoChargeProblem(new ApiError({ status: 403, detail: 'x', code: 'step_up.required' })).message).toMatch(/본인 확인을 마쳐야/);
   });
 });

@@ -125,6 +125,64 @@ describe('주문 내역', () => {
     expect(await dialog.findByText(/골드를 썼거나 서술 값으로 묶여 있어/)).toBeInTheDocument();
   });
 
+  it('본인 확인 창이 닫혀 있으면 메일 코드로 확인한 뒤 같은 청약철회를 한 번 더 보낸다', async () => {
+    let verified = false;
+    const { seen } = signedIn({
+      [`GET ${BILLING}/orders`]: () =>
+        json(200, { orders: [verified ? order(PAID, 'refunded', { refunded_at: '2026-10-23T01:00:00Z' }) : REFUNDABLE], next_before: null }),
+      [`POST ${BILLING}/orders/${PAID}/refund`]: () =>
+        verified ? json(200, order(PAID, 'refunded')) : json(403, { detail: 'x', code: 'step_up.required' }),
+      'POST /api/v1/auth/me/step-up/code': () => json(200, { detail: '인증 메일을 보냈습니다.', sent: true }),
+      'POST /api/v1/auth/me/step-up': () => {
+        verified = true;
+        return json(200, { enabled: true, open: true, expires_at: '2026-10-23T01:10:00Z' });
+      },
+    });
+    renderApp('/wallet/orders');
+
+    await userEvent.click(await screen.findByRole('button', { name: /청약철회/ }));
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '환불하기' }));
+    const stepUp = within(await screen.findByRole('dialog', { name: '본인 확인' }));
+    expect(await stepUp.findByText(/가입한 메일로 6자리 코드를 보냈습니다/)).toBeInTheDocument();
+    await userEvent.type(stepUp.getByLabelText('인증 코드'), '123456');
+    await userEvent.click(stepUp.getByRole('button', { name: '확인' }));
+
+    expect(await screen.findByText('환불됨')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '본인 확인' })).not.toBeInTheDocument();
+    expect(count(seen, 'POST', `/orders/${PAID}/refund`)).toBe(2);
+    expect(seen.find((request) => request.url === '/api/v1/auth/me/step-up')?.body).toEqual({ code: '123456' });
+  });
+
+  it('본인 확인을 그만두면 다시 보내지 않고 까닭을 알린다', async () => {
+    const { seen } = signedIn({
+      [`POST ${BILLING}/orders/${PAID}/refund`]: () => json(403, { detail: 'x', code: 'step_up.required' }),
+      'POST /api/v1/auth/me/step-up/code': () => json(200, { detail: '조금 전에 보낸 인증 메일의 코드를 넣어 주세요.', sent: false }),
+    });
+    renderApp('/wallet/orders');
+
+    await userEvent.click(await screen.findByRole('button', { name: /청약철회/ }));
+    const confirm = within(await screen.findByRole('dialog'));
+    await userEvent.click(confirm.getByRole('button', { name: '환불하기' }));
+    const stepUp = within(await screen.findByRole('dialog', { name: '본인 확인' }));
+    expect(await stepUp.findByText('조금 전에 보낸 인증 메일의 코드를 넣어 주세요.')).toBeInTheDocument();
+    await userEvent.click(stepUp.getByRole('button', { name: '그만두기' }));
+
+    expect(await confirm.findByText(/본인 확인을 마쳐야 청약철회할 수 있습니다/)).toBeInTheDocument();
+    expect(count(seen, 'POST', `/orders/${PAID}/refund`)).toBe(1);
+  });
+
+  it('본인 확인을 끈 계정이면 다시 켜는 길을 알린다', async () => {
+    signedIn({ [`POST ${BILLING}/orders/${PAID}/refund`]: () => json(403, { detail: 'x', code: 'step_up.disabled' }) });
+    renderApp('/wallet/orders');
+
+    await userEvent.click(await screen.findByRole('button', { name: /청약철회/ }));
+    const dialog = within(await screen.findByRole('dialog'));
+    await userEvent.click(dialog.getByRole('button', { name: '환불하기' }));
+
+    expect(await dialog.findByText(/본인 확인을 끈 계정은 청약철회를 할 수 없습니다/)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '본인 확인' })).not.toBeInTheDocument();
+  });
+
   it('환불 처리 중이면 다시 확인으로 같은 취소를 다시 보낸다', async () => {
     let refunds = 0;
     signedIn({

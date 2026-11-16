@@ -29,9 +29,12 @@ export function commonProblem(error: unknown): FormProblem | null {
   return null;
 }
 
+/** 메일 코드를 너무 자주 받으려 했다는 까닭(로그인 코드, 본인 확인 코드) */
+const CODE_REQUEST_LIMITS = new Set(['login_code_unavailable', 'step_up_code_unavailable']);
+
 function tooMany(error: ApiError): FormProblem {
   const seconds = error.retryAfter ?? 60;
-  const what = error.code === 'login_code_unavailable' ? '코드를 너무 자주 요청했습니다.' : '시도가 너무 많습니다.';
+  const what = CODE_REQUEST_LIMITS.has(error.code ?? '') ? '코드를 너무 자주 요청했습니다.' : '시도가 너무 많습니다.';
   return { message: `${what} ${seconds}초 뒤에 다시 시도하세요.`, waitSeconds: seconds };
 }
 
