@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/login/LoginPage.test.tsx
 // 로그인 두 단계를 화면에서 따라가 본다. 서버는 가짜 fetch 다.
 
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
@@ -28,6 +28,18 @@ async function enterCredentials() {
 }
 
 describe('LoginPage', () => {
+  it('왼쪽 메뉴 열과 위쪽 줄 없이 이름과 카드만 있고, 카드 아래에 비밀번호 찾기와 가입하기가 있다', async () => {
+    installFakeFetch(LOGGED_OUT_START);
+    renderApp('/login');
+
+    const card = (await screen.findByRole('heading', { name: '로그인', level: 1 })).closest('main') as HTMLElement;
+    expect(screen.queryByRole('complementary', { name: '사이트 메뉴' })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: '아래 메뉴' })).toBeNull();
+    expect(screen.getByRole('link', { name: /이매망량의 서재/ })).toHaveAttribute('href', '/');
+    expect(within(card).getByRole('link', { name: '비밀번호 찾기' })).toHaveAttribute('href', '/password/forgot');
+    expect(within(card).getByRole('link', { name: '가입하기' })).toHaveAttribute('href', '/signup');
+  });
+
   it('아이디와 비밀번호, 코드를 거쳐 로그인하고 첫 화면으로 간다', async () => {
     const { seen } = installFakeFetch({
       ...LOGGED_OUT_START,

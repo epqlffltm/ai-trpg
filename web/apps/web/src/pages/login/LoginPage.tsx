@@ -12,6 +12,7 @@ import type { LoginProblem } from '../../auth/loginProblem';
 import { secondsFromNow } from '../../hooks/useCountdown';
 import { CodeStep } from './CodeStep';
 import { CredentialsStep } from './CredentialsStep';
+import { LockIcon } from './LockIcon';
 
 /** 로그인 티켓이 유효한 시간(인증 서버의 login_ticket, 10분) */
 const TICKET_SECONDS = 10 * 60;
@@ -34,7 +35,10 @@ export function LoginPage() {
   const notice = textOf(state?.notice);
 
   return (
-    <main className="page page--narrow auth-card">
+    <main className="page page--narrow auth-card auth-card--center">
+      <span className="auth-card__icon" aria-hidden="true">
+        <LockIcon />
+      </span>
       <h1>로그인</h1>
       {notice && stage.step === 'credentials' && !stage.problem ? <Notice>{notice}</Notice> : null}
       {stage.step === 'credentials' ? (
@@ -44,9 +48,9 @@ export function LoginPage() {
             initialUsername={textOf(state?.username)}
             onTicket={(ticket) => setStage({ step: 'code', ticket, ticketEndsAt: secondsFromNow(TICKET_SECONDS) })}
           />
-          <p className="auth-links">
-            <Link to="/signup">처음이면 가입하기</Link>
-            <Link to="/password/forgot">비밀번호를 잊었어요</Link>
+          <p className="auth-links auth-links--dotted">
+            <Link to="/password/forgot">비밀번호 찾기</Link>
+            <Link to="/signup">가입하기</Link>
           </p>
         </>
       ) : (

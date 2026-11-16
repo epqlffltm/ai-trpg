@@ -53,9 +53,9 @@ describe('SignupPage', () => {
     renderApp('/signup');
 
     const card = (await screen.findByRole('heading', { name: '가입', level: 1 })).closest('main') as HTMLElement;
-    expect(within(card).getByRole('link', { name: '이미 계정이 있으면 로그인' })).toHaveAttribute('href', '/login');
+    expect(within(card).getByRole('link', { name: '로그인' })).toHaveAttribute('href', '/login');
     await reachProfileStep();
-    expect(within(card).getByRole('link', { name: '이미 계정이 있으면 로그인' })).toHaveAttribute('href', '/login');
+    expect(within(card).getByRole('link', { name: '로그인' })).toHaveAttribute('href', '/login');
   });
 
   it('세 단계를 마치면 체크한 동의만 보내고 로그인으로 가서 아이디를 채운다', async () => {

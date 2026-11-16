@@ -23,6 +23,9 @@ type Stage =
 
 const STEP_NUMBER: Record<Stage['step'], number> = { email: 1, code: 2, profile: 3 };
 
+/** 단계 막대의 이름 셋 */
+const STEP_LABELS = ['이메일', '코드', '정보'];
+
 export function SignupPage() {
   const [stage, setStage] = useState<Stage>({ step: 'email' });
   const navigate = useNavigate();
@@ -33,7 +36,7 @@ export function SignupPage() {
   return (
     <main className="page page--narrow auth-card">
       <h1>가입</h1>
-      <p className="step-indicator">{STEP_NUMBER[stage.step]} / 3</p>
+      <StepBar current={STEP_NUMBER[stage.step]} />
       {stage.step === 'email' ? (
         <EmailStep initialProblem={stage.problem} onSent={(email) => setStage({ step: 'code', email })} />
       ) : null}
@@ -57,8 +60,26 @@ export function SignupPage() {
         />
       ) : null}
       <p className="auth-links">
-        <Link to="/login">이미 계정이 있으면 로그인</Link>
+        이미 계정이 있어요? <Link to="/login">로그인</Link>
       </p>
     </main>
+  );
+}
+
+/** 세 칸의 단계 막대와 "1 / 3". 지나온 칸과 지금 칸은 강조색 */
+function StepBar({ current }: { current: number }) {
+  return (
+    <div className="signup-steps">
+      <p className="step-indicator">
+        {current} / {STEP_LABELS.length}
+      </p>
+      <ol className="signup-steps__bar">
+        {STEP_LABELS.map((label, index) => (
+          <li key={label} className="signup-steps__step" aria-current={index + 1 === current ? 'step' : undefined} data-done={index + 1 <= current}>
+            {label}
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }

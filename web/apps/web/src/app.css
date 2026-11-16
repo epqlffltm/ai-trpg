@@ -1156,17 +1156,40 @@
   }
 }
 
-/* 계정 화면의 카드(Stitch 4~7: 가입, 로그인, 비밀번호, 다시 동의, 탈퇴 유예). 가운데 종이 한 장, 위에 감청 띠.
- * 제목은 가운데, 단계 표시는 고정폭 숫자, 보내는 단추는 카드 폭. 좁은 화면에서는 테두리 없이 화면 가득이다 */
+/* 계정 화면의 틀(AppLayout 의 AuthFrame). 로그인, 가입, 비밀번호, 보호자 링크의 화면은 왼쪽 메뉴 열과 위쪽 줄 없이
+ * 가운데 위에 이름, 그 아래 카드 하나다. 바탕은 위쪽이 보라빛으로 옅게 밝다 */
+.auth-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 32px 16px 48px;
+  background: radial-gradient(80% 50% at 50% 0%, color-mix(in srgb, var(--ui-accent) 8%, transparent), transparent 70%), var(--ui-bg);
+}
+
+.auth-shell__brand {
+  margin-bottom: 24px;
+  font-size: 1.1rem;
+}
+
+.auth-shell .auth-card {
+  width: 100%;
+}
+
+/* 계정 화면의 카드(가입, 로그인, 비밀번호, 다시 동의, 탈퇴 유예, 본인인증, 결제 돌아옴). 한 단 밝은 면에 1px 선, 모서리 16px.
+ * 제목은 왼쪽(로그인만 가운데), 보내는 단추는 카드 폭에 오른쪽 화살표. 좁은 화면에서는 테두리 없이 화면 가득이다 */
 .auth-card {
   margin-top: 32px;
   margin-bottom: 32px;
-  padding: 32px 32px 28px;
+  padding: 40px;
   border: 1px solid var(--ui-border);
-  border-top: 4px solid var(--ui-accent);
-  border-radius: var(--ui-radius-lg);
+  border-radius: var(--ui-radius-xl);
   background: var(--ui-surface);
   box-shadow: var(--ui-shadow);
+}
+
+.auth-shell .auth-card {
+  margin-top: 0;
 }
 
 .auth-card.page--narrow {
@@ -1174,29 +1197,109 @@
 }
 
 .auth-card > h1 {
-  margin: 0 0 12px;
+  margin: 0 0 16px;
   font-size: 1.9rem;
+}
+
+.auth-card--center > h1 {
   text-align: center;
+}
+
+/* 로그인 카드 위의 둥근 네모 그림. 보라빛이 옅게 번진다 */
+.auth-card__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-accent);
+  font-size: 1.6rem;
+  box-shadow: 0 0 20px var(--ui-accent-glow);
 }
 
 .auth-card > .step-indicator {
   width: fit-content;
   margin: 0 auto 20px;
   padding: 2px 12px;
-  border-radius: var(--ui-radius);
+  border-radius: 9999px;
   background: var(--ui-surface-subtle);
-  font-family: var(--ui-font-mono);
   font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
 }
 
 .auth-card form > .ui-button--primary,
 .auth-card > .ui-button--primary {
   width: 100%;
   padding-block: 12px;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--ui-accent-glow) 60%, transparent);
+}
+
+.auth-card form > .ui-button--primary:not(:disabled)::after {
+  content: ' →' / '';
+}
+
+/* 6자리 코드는 고정폭 숫자를 넓게 띄워 가운데에 */
+.auth-card input[name='code'] {
+  font-family: var(--ui-font-mono);
+  font-size: 1.5rem;
+  letter-spacing: 0.6em;
+  text-align: center;
 }
 
 .auth-card .auth-links {
   justify-content: center;
+  color: var(--ui-text-muted);
+}
+
+/* "비밀번호 찾기 · 가입하기"처럼 가운데 점으로 잇는 링크 */
+.auth-links--dotted > a + a::before {
+  content: '·';
+  margin-right: 8px;
+  color: var(--ui-text-muted);
+}
+
+/* 가입의 단계 막대: 위 오른쪽에 "1 / 3", 그 아래 세 칸(지나온 칸과 지금 칸은 강조색)과 칸의 이름 */
+.signup-steps {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.signup-steps > .step-indicator {
+  justify-self: end;
+  margin: 0;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  background: var(--ui-surface-subtle);
+  font-size: 0.8em;
+  font-variant-numeric: tabular-nums;
+}
+
+.signup-steps__bar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.signup-steps__step {
+  padding-top: 8px;
+  border-top: 4px solid var(--ui-surface-subtle);
+  color: var(--ui-text-muted);
+  font-size: 0.78em;
+}
+
+.signup-steps__step[data-done='true'] {
+  border-top-color: var(--ui-accent);
+}
+
+.signup-steps__step[aria-current='step'] {
+  color: var(--ui-text);
+  font-weight: 700;
 }
 
 @media (max-width: 767px) {
