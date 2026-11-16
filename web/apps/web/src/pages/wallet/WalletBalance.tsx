@@ -1,5 +1,6 @@
 // web/apps/web/src/pages/wallet/WalletBalance.tsx
-// 지갑의 잔액. 골드와 실버 두 칸, 합, 곧 사라질 실버, 충전(A7), 출석(A9), 주문 내역(A8)으로 가는 길. 서버가 준 글자를 그대로 보인다.
+// 지갑의 잔액(Stitch 22번). 골드와 실버의 큰 카드 둘, 합, 곧 사라질 실버, 충전(A7)과 주문 내역(A8)의 단추, 출석(A9)으로 가는 띠.
+// 서버가 준 글자를 그대로 보인다.
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -30,13 +31,23 @@ export function WalletBalance() {
       {wallet.data ? (
         <>
           <dl className="balance">
-            <div className="balance__item">
+            <div className="balance__item balance__item--gold">
               <dt>골드</dt>
-              <dd>{wallet.data.paid}</dd>
+              <dd>
+                {wallet.data.paid}
+                <span className="balance__unit" aria-hidden="true">
+                  G
+                </span>
+              </dd>
             </div>
-            <div className="balance__item">
+            <div className="balance__item balance__item--silver">
               <dt>실버</dt>
-              <dd>{wallet.data.free}</dd>
+              <dd>
+                {wallet.data.free}
+                <span className="balance__unit" aria-hidden="true">
+                  S
+                </span>
+              </dd>
             </div>
             <div className="balance__item balance__item--total">
               <dt>합</dt>
@@ -48,9 +59,18 @@ export function WalletBalance() {
               곧 사라질 {expiryText(wallet.data, now)}({formatDateTime(wallet.data.next_expiry.expires_at)})
             </p>
           ) : null}
-          <p>
-            <Link to="/wallet/charge">충전하기</Link> · <Link to="/wallet/attendance">출석</Link> · <Link to="/wallet/orders">주문 내역</Link>
+          <p className="wallet-balance__actions">
+            <Link className="ui-button ui-button--primary" to="/wallet/charge">
+              충전하기
+            </Link>
+            <Link className="ui-button ui-button--secondary" to="/wallet/orders">
+              주문 내역
+            </Link>
           </p>
+          <Link className="wallet-attendance" to="/wallet/attendance" aria-label="출석">
+            <span className="wallet-attendance__title">출석</span>
+            <span className="wallet-attendance__line">매일 출석하고 실버를 받으세요</span>
+          </Link>
         </>
       ) : null}
     </section>

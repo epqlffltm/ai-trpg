@@ -53,6 +53,9 @@ function Slide({ slide }: { slide: BannerSlide }) {
         <span className="promo-banner__service">{slide.service}</span>
         <span className="promo-banner__title">{slide.title}</span>
         {slide.line ? <span className="promo-banner__line">{slide.line}</span> : null}
+        <span className="promo-banner__go" aria-hidden="true">
+          자세히 보기
+        </span>
       </span>
     </Link>
   );

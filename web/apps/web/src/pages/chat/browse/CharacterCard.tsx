@@ -20,7 +20,7 @@ export function CharacterCard({ character, badges = [] }: { character: PublicCha
     ...character.tags,
   ].filter((tag): tag is string => Boolean(tag));
   return (
-    <li className="item-card character-card">
+    <li className="item-card item-card--pictured character-card">
       <Link to={`/chat/characters/${character.id}`} className="item-card__link">
         {image.url ? <img src={image.url} alt="" className="character-card__image" /> : <span className="character-card__image" aria-hidden="true" />}
         <span className="item-card__title">{character.name}</span>

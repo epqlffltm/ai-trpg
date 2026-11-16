@@ -1,67 +1,63 @@
 // web/apps/web/src/pages/create/CreatePage.tsx
-// 만들기의 입구(Stitch 19번의 맨 앞 칸). 왼쪽 메뉴 열의 "만들기"와 아래 탭 바의 "만들기"가 여기로 온다.
-// "무엇을 만들까요"에서 서비스를 고른다. TRPG 면 "만들 것"(시나리오, 캠페인, 재료)이 하나 더 나온다.
-// story 면 "JSON 으로 세계관 넣기"도 함께 보인다(지금은 운영자만 연다).
-// 다 고르기 전에는 "다음"이 꺼져 있다. "다음"은 고른 것을 새로 만드는 화면으로 간다.
-// 탭으로 나뉜 조합 화면은 저마다의 고치기 화면이다(시나리오·캐릭터·세계관 고치기).
+// 만들기의 입구(Stitch 12번). 왼쪽 메뉴 열의 "만들기"와 아래 탭 바의 "만들기"가 여기로 온다.
+// 위에 작품의 카드 넷(TRPG 시나리오, TRPG 캠페인, 캐릭터, 스토리 세계), 그 아래 TRPG 의 재료 카드 넷(룰북, 세계관, 로어북, 몬스터 모음).
+// 카드를 누르면 그것을 새로 만드는 화면으로 간다. 스토리 세계에는 "JSON 으로 세계관 넣기"가 붙는다(지금은 운영자만 연다).
+// 내가 만든 것은 마이페이지의 제작자 탭(내 작품)에 있다. 서비스를 섞은 "내 작품" 목록은 서버에 없어 길만 둔다.
 
-import { Button, SelectField } from '@ai-trpg/ui';
-import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import { isOperator } from '../../auth/roles';
 import { useSession } from '../../auth/useSession';
-import type { StudioKind } from '../../api/studio';
-import { CREATE_TARGETS, TRPG_KINDS, WORLD_IMPORT_PATH, createPath, type CreateTarget } from './createTargets';
+import { myTabPath } from '../me/myTabs';
+import { MATERIAL_CARDS, WORK_CARDS, WORLD_IMPORT_PATH, type CreateCard } from './createTargets';
 
 export function CreatePage() {
-  const navigate = useNavigate();
-  const session = useSession();
-  const [target, setTarget] = useState<CreateTarget | ''>('');
-  const [kind, setKind] = useState<StudioKind | ''>('');
-  const path = createPath(target, kind);
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (path) void navigate(path);
-  }
-
+  const operator = isOperator(useSession());
   return (
-    <main className="page page--narrow create-page">
-      <h1>만들기</h1>
-      <form className="create-page__form" onSubmit={submit} aria-label="만들 것 고르기">
-        <SelectField label="무엇을 만들까요" value={target} onChange={(event) => setTarget(event.target.value as CreateTarget | '')}>
-          <option value="" disabled>
-            고르세요
-          </option>
-          {CREATE_TARGETS.map((one) => (
-            <option key={one.value} value={one.value}>
-              {one.label}
-            </option>
+    <main className="page create-page">
+      <div className="create-page__head">
+        <h1>만들기</h1>
+        <Link className="ui-button ui-button--secondary" to={myTabPath('creator')}>
+          내 작품 보기
+        </Link>
+      </div>
+      <section aria-labelledby="create-works">
+        <h2 id="create-works" className="create-page__title">
+          새로 만들기
+        </h2>
+        <ul className="create-cards" aria-label="새로 만들 작품">
+          {WORK_CARDS.map((card) => (
+            <CreateCardItem key={card.key} card={card} extra={card.service === 'story' && operator ? <Link to={WORLD_IMPORT_PATH}>JSON 으로 세계관 넣기</Link> : null} />
           ))}
-        </SelectField>
-        {target === 'trpg' ? (
-          <SelectField label="만들 것" value={kind} onChange={(event) => setKind(event.target.value as StudioKind | '')}>
-            <option value="" disabled>
-              고르세요
-            </option>
-            {TRPG_KINDS.map((one) => (
-              <option key={one.value} value={one.value}>
-                {one.label}
-              </option>
-            ))}
-          </SelectField>
-        ) : null}
-        {target === 'story' && isOperator(session) ? (
-          <p className="hint">
-            세계관을 JSON 파일로 가지고 있으면 <Link to={WORLD_IMPORT_PATH}>JSON 으로 세계관 넣기</Link>
-          </p>
-        ) : null}
-        <div className="form-actions">
-          <Button type="submit" disabled={path === null}>
-            다음
-          </Button>
-        </div>
-      </form>
+        </ul>
+      </section>
+      <section aria-labelledby="create-materials">
+        <h2 id="create-materials" className="create-page__title">
+          시나리오의 재료
+        </h2>
+        <ul className="create-cards" aria-label="새로 만들 재료">
+          {MATERIAL_CARDS.map((card) => (
+            <CreateCardItem key={card.key} card={card} />
+          ))}
+        </ul>
+      </section>
     </main>
+  );
+}
+
+function CreateCardItem({ card, extra = null }: { card: CreateCard; extra?: React.ReactNode }) {
+  return (
+    <li className={`create-card create-card--${card.service}`}>
+      <Link to={card.to} className="create-card__link">
+        <span className="create-card__mark" aria-hidden="true">
+          {card.title.slice(0, 1)}
+        </span>
+        <span className="create-card__tag" aria-hidden="true">
+          {card.tag}
+        </span>
+        <span className="create-card__title">{card.title}</span>
+        <span className="create-card__line">{card.line}</span>
+      </Link>
+      {extra ? <p className="create-card__extra">{extra}</p> : null}
+    </li>
   );
 }

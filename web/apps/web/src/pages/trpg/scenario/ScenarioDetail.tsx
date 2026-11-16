@@ -2,9 +2,9 @@
 // 시나리오 소개(B2)를 그린다. 왼쪽(모바일은 위)에 소개글과 고를 거리, 오른쪽(모바일은 아래)에 요약과 할 일.
 // 소개글은 글 그대로 보인다(줄바꿈만 살린다). HTML 로 꾸미는 소개는 asset-server 로 옮길 때 바꾼다(화면 명세 B2).
 // 캐릭터 아래에 제작자가 단 업적과 달성률이 있다(ScenarioAchievements). 머리에 관심(하트, #989) 단추가 있다. 운영자에게는 맨 아래에 제재 칸(E4)이 있다.
-// 모양은 Stitch 18번(소개 화면 셋의 같은 모양): 머리는 한 장의 종이와 감청의 큰 명조 제목, 칸마다 종이 한 장(CSS).
-// 장르 테마(Stitch 23~33번): main 에 data-genre 를 단다(genres/genreTheme.ts).
-// 표지(#1164)가 있으면 머리의 왼쪽(좁으면 위)에 세로로 긴 그림으로 둔다.
+// 모양은 Stitch 5번(소개 화면 셋의 같은 모양): 머리의 왼쪽(좁으면 위)에 세로로 긴 표지(#1164, 없으면 빈 칸), 오른쪽에 등급·장르·인원 칩,
+// 큰 제목, 한 줄 소개, 만든 사람, 관심, 할 일 단추. 아래는 칸마다 카드 한 장(CSS).
+// 장르 테마(Stitch 34~44번): main 에 data-genre 를 단다(genres/genreTheme.ts).
 
 import { Link } from 'react-router';
 import type { PublicListingDetail } from '../../../api/types';
@@ -15,10 +15,10 @@ import { HeartButton } from '../../../components/HeartButton';
 import { usePublicNames } from '../../../hooks/usePublicNames';
 import { ScenarioOperatorPanel } from '../../operator/ScenarioOperatorPanel';
 import { tagSearchPath } from '../browse/filters';
-import { characterModeLabel } from '../labels';
+import { characterModeLabel, genreLabel, playersLabel } from '../labels';
 import { PregenList } from './PregenList';
 import { ScenarioAchievements } from './ScenarioAchievements';
-import { ScenarioSidePanel } from './ScenarioSidePanel';
+import { ScenarioActions, ScenarioSidePanel } from './ScenarioSidePanel';
 import { genreTheme } from '../../../genres/genreTheme';
 import { ScenarioCover } from '../portraits/ScenarioCover';
 
@@ -29,12 +29,20 @@ export function ScenarioDetail({ listing }: { listing: PublicListingDetail }) {
   return (
     <main className="page scenario" data-genre={genreTheme(listing.genre)}>
       <header className="scenario__head">
-        {listing.cover_image_id ? <ScenarioCover scenarioId={listing.scenario_id} coverImageId={listing.cover_image_id} className="scenario__cover" /> : null}
+        <ScenarioCover scenarioId={listing.scenario_id} coverImageId={listing.cover_image_id} className="scenario__cover" />
         <div className="scenario__info">
+          <ul className="intro-chips" aria-label="요약">
+            {listing.rating === 'adult' ? <li className="intro-chips__adult">19+</li> : null}
+            {listing.genre ? <li>{genreLabel(listing.genre)}</li> : null}
+            <li className="intro-chips__players">{playersLabel(listing.recommended_players)}</li>
+          </ul>
           <h1>{listing.title}</h1>
           {listing.tagline ? <p className="scenario__tagline">{listing.tagline}</p> : null}
           <CreatorByline creatorId={listing.creator_id} className="scenario__byline" />
-          <HeartButton kind="scenario" id={listing.scenario_id} count={listing.heart_count} />
+          <div className="intro-actions">
+            <ScenarioActions scenarioId={listing.scenario_id} />
+            <HeartButton kind="scenario" id={listing.scenario_id} count={listing.heart_count} />
+          </div>
         </div>
       </header>
       <div className="scenario__body">

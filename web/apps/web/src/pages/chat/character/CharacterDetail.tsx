@@ -51,7 +51,7 @@ function CharacterHead({ character }: { character: PublicCharacterDetail }) {
   const profile = profileLine(document);
   return (
     <header className="character-page__head">
-      {image.url ? <img src={image.url} alt={document.name} className="character-page__image" /> : null}
+      {image.url ? <img src={image.url} alt={document.name} className="character-page__image" /> : <span className="character-page__image character-page__image--empty" aria-hidden="true" />}
       <div>
         <h1>{document.name}</h1>
         {profile ? <p className="character-page__profile">{profile}</p> : null}

@@ -108,9 +108,9 @@ describe('HomePage', () => {
     renderApp('/');
 
     expect(await screen.findByRole('heading', { name: '이매망량의 서재', level: 1 })).toBeInTheDocument();
-    await screen.findByRole('heading', { name: '이번 주 인기 세계관' });
+    await screen.findByRole('heading', { name: '이번 주 인기' });
     const titles = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
-    expect(titles.indexOf('새로 공개된 세계관')).toBeLessThan(titles.indexOf('이번 주 인기 시나리오'));
+    expect(titles.indexOf('새로 공개된 세계관')).toBeLessThan(titles.indexOf('이번 주 인기'));
     const links = ['새로 공개된 시나리오', '새로 공개된 캐릭터', '새로 공개된 세계관'].map((title) =>
       within(section(title)).getByRole('link', { name: '전체 보기' }).getAttribute('href'),
     );

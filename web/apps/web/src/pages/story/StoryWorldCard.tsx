@@ -13,7 +13,7 @@ export function StoryWorldCard({ world, badges = [] }: { world: PublicWorldSumma
   const image = useImageUrl(world.image_id);
   const tags = [...new Set([...badges, ...worldTags(world), ...usageTags('이야기', world.start_count, world.heart_count)])];
   return (
-    <li className="item-card character-card">
+    <li className="item-card item-card--pictured character-card">
       <Link to={`/story/worlds/${encodeURIComponent(world.id)}`} className="item-card__link">
         {image.url ? <img src={image.url} alt="" className="character-card__image" /> : <span className="character-card__image" aria-hidden="true" />}
         <span className="item-card__title">{world.name}</span>

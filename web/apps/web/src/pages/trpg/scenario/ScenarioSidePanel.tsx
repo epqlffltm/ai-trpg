@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/trpg/scenario/ScenarioSidePanel.tsx
-// 소개(B2)의 요약과 할 일. 등급, 장르, 추천 인원, 판, 공개한 날, 추천 서술 모델, "테이블 만들기", "열린 테이블 보기".
+// 소개(B2)의 요약과 할 일. 요약(등급, 장르, 추천 인원, 판, 공개한 날, 추천 서술 모델)은 옆 칸, 할 일("테이블 만들기", "열린 테이블 보기")은 머리(ScenarioActions)에 둔다.
 // 테이블 만들기(B4)와 로비(B3)는 아직 "준비 중"이다. 주소만 먼저 정해 시나리오를 들고 간다.
 // 로그인하지 않았으면 테이블 만들기는 로그인으로 보내고, 마치면 이 화면으로 돌아온다.
 
@@ -32,12 +32,11 @@ export function ScenarioSidePanel({ listing }: { listing: PublicListingDetail })
         ) : null}
         <RecommendedModel slug={listing.recommended_narration_model} />
       </dl>
-      <ScenarioActions scenarioId={listing.scenario_id} />
     </aside>
   );
 }
 
-function ScenarioActions({ scenarioId }: { scenarioId: string }) {
+export function ScenarioActions({ scenarioId }: { scenarioId: string }) {
   const signedIn = useSession() !== null;
   const location = useLocation();
   const query = new URLSearchParams({ scenario_id: scenarioId }).toString();

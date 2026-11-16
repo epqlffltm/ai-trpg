@@ -70,3 +70,52 @@ export function HeartIcon({ filled = false }: { filled?: boolean }) {
     </Icon>
   );
 }
+
+/** 받음(체크) */
+export function CheckIcon() {
+  return (
+    <Icon>
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </Icon>
+  );
+}
+
+/** 보물 상자 */
+export function ChestIcon() {
+  return (
+    <Icon>
+      <path d="M4 10h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z" />
+      <path d="M4 10V8a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2" />
+      <path d="M10 10v3h4v-3" />
+    </Icon>
+  );
+}
+
+/** 아직 열리지 않음(자물쇠) */
+export function LockIcon() {
+  return (
+    <Icon>
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </Icon>
+  );
+}
+
+/** 오늘(별) */
+export function StarIcon() {
+  return (
+    <Icon>
+      <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9Z" />
+    </Icon>
+  );
+}
+
+/** 본인 확인(방패) */
+export function ShieldIcon() {
+  return (
+    <Icon>
+      <path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6Z" />
+      <path d="M9 12l2 2 4-4" />
+    </Icon>
+  );
+}

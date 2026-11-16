@@ -1,533 +1,308 @@
 /* web/apps/web/src/genres/genreThemes.css
- * 장르 테마의 색(Stitch 23~33번). 플레이 화면 셋과 소개 화면 셋의 main 이 data-genre 를 달면(genreTheme.ts) 그 안의 색 변수를 덮어쓴다.
+ * 장르 테마(Stitch 34~44번). 플레이 화면 셋과 소개 화면 셋의 main 이 data-genre 를 달면(genreTheme.ts) 그 안의 색 변수를 덮어쓴다.
  * 배치는 바꾸지 않는다. 사이트의 틀(왼쪽 메뉴 열, 위쪽 줄)은 공통 디자인 그대로다.
- * 값은 장르마다 Stitch 시안의 DESIGN.md 색 표에서 왔다. 시안은 장르마다 밝기 하나(라이트 또는 다크)만 주므로,
- * 다른 밝기는 그 표의 반전 값(inverse-surface, inverse-on-surface, inverse-primary)을 바탕·글자·강조로 삼고 면과 선은 그 둘을 섞어 지었다.
- * 글자와 면은 7:1, 흐린 글자·강조와 면은 4.5:1 이상인지 확인했다.
- * 맨 아래의 "모양"은 장르마다 무늬(바탕), 모서리, 제목 글꼴, 칸의 테, 주 단추, 서술의 표시를 정한다(밝기와 상관없이 하나).
+ * 시안의 장르 판은 모두 다크다(코미디만 검정 바탕의 원색). 그래서 사이트를 라이트로 두어도 장르 판은 이 한 벌의 색이다.
+ * 바탕은 공통 디자인(Obsidian Archive)의 먹빛에 장르의 색을 조금 섞었고, 강조색 하나와 테·무늬로 장르를 가른다.
+ * 맨 아래의 "모양"은 장르마다 무늬(바탕), 모서리, 제목 글꼴, 칸의 테, 주 단추, 서술의 표시를 정한다.
  * 무늬는 바탕(칸의 뒤)에만 깔고 CSS 의 그라데이션으로 그린다(바깥 그림 없음). 글이 놓이는 칸과 말풍선은 불투명한 면 그대로다.
  * 움직이는 효과는 없다.
  */
 
-/* 테마를 단 칸은 제 바탕과 글자색을 갖는다(사이트의 바탕 위에 장르의 종이를 깐다).
- * 장르 표에는 둘째 글자색이 없어서 흐린 글자색을 그대로 쓴다(사이트의 둘째 글자색은 다크 바탕에 맞춘 값이다) */
+/* 테마를 단 칸은 제 바탕과 글자색을 갖는다(사이트의 바탕 위에 장르의 판을 깐다) */
 [data-genre] {
-  --ui-text-secondary: var(--ui-text-muted);
+  color-scheme: dark;
   background: var(--ui-bg);
   color: var(--ui-text);
   accent-color: var(--ui-accent);
 }
 
-/* 판타지: 나무와 돌, 마법석 (Stitch 시안의 aethelgard_citadel) */
+/* 판타지: 고대 성소. 청동 테와 돌, 보라 마법석 (Stitch 34번) */
 [data-genre='fantasy'] {
-  --ui-bg: #dee2f0;
-  --ui-surface: #f5f6fa;
-  --ui-surface-subtle: #d5d9e6;
-  --ui-text: #2b303b;
-  --ui-text-muted: #5d626e;
-  --ui-border: #acb0bd;
-  --ui-border-strong: #7c808c;
-  --ui-accent: #0053db;
-  --ui-accent-hover: #003ea8;
-  --ui-accent-text: #ffffff;
-  --ui-danger: #ba1a1a;
-  --ui-focus: #0053db;
+  --ui-bg: #131318;
+  --ui-surface: #1e1712;
+  --ui-surface-subtle: #2d241c;
+  --ui-surface-low: #17140f;
+  --ui-surface-raised: #382d23;
+  --ui-text: #e4e1e8;
+  --ui-text-secondary: #d6cbbf;
+  --ui-text-muted: #a2958a;
+  --ui-border: #382d23;
+  --ui-border-strong: #6b5640;
+  --ui-raised-border: #6b5640;
+  --ui-accent: #d0bcff;
+  --ui-accent-hover: #e9ddff;
+  --ui-accent-text: #3c0091;
+  --ui-accent-glow: rgb(160 120 255 / 45%);
+  --ui-seal: #ffb0cd;
+  --ui-brass: #ffb690;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #d0bcff;
+  --ui-focus-ring: color-mix(in srgb, #d0bcff 30%, transparent);
+  --ui-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  --ui-shadow-raised: 0 16px 40px rgb(0 0 0 / 75%);
 }
 
-/* 무협: 한지와 문창호 (Stitch 시안의 library_of_spirits_swords) */
+/* 무협: 먹과 붉은 낙관 (Stitch 35번) */
 [data-genre='wuxia'] {
-  --ui-bg: #e9e1dd;
-  --ui-surface: #f8f6f5;
-  --ui-surface-subtle: #e0d8d4;
-  --ui-text: #33302d;
-  --ui-text-muted: #66625e;
-  --ui-border: #b6afac;
-  --ui-border-strong: #85807c;
-  --ui-accent: #b91c1c;
-  --ui-accent-hover: #93000b;
-  --ui-accent-text: #ffffff;
-  --ui-danger: #ba1a1a;
-  --ui-focus: #b91c1c;
+  --ui-bg: #121212;
+  --ui-surface: #1d1b1b;
+  --ui-surface-subtle: #282525;
+  --ui-surface-low: #171616;
+  --ui-surface-raised: #332f2f;
+  --ui-text: #ece6e1;
+  --ui-text-secondary: #d3c8c0;
+  --ui-text-muted: #a0948c;
+  --ui-border: #2f2a28;
+  --ui-border-strong: #5b4a44;
+  --ui-raised-border: #5b4a44;
+  --ui-accent: #ff9e9e;
+  --ui-accent-hover: #ffc9c4;
+  --ui-accent-text: #5c0010;
+  --ui-accent-glow: rgb(255 110 110 / 40%);
+  --ui-seal: #ffb0cd;
+  --ui-brass: #e8c37a;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #ff9e9e;
+  --ui-focus-ring: color-mix(in srgb, #ff9e9e 30%, transparent);
+  --ui-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  --ui-shadow-raised: 0 16px 40px rgb(0 0 0 / 75%);
 }
 
-/* 현대 판타지: 헌터의 상태창 (Stitch 시안의 hunter_system_interface) */
+/* 현대 판타지: 헌터의 상태창. 보라 빛과 파란 창 (Stitch 36번) */
 [data-genre='urban_fantasy'] {
-  --ui-bg: #dde2f5;
-  --ui-surface: #f5f6fc;
-  --ui-surface-subtle: #d4d9eb;
-  --ui-text: #2a303f;
-  --ui-text-muted: #5c6272;
-  --ui-border: #abb0c2;
-  --ui-border-strong: #7b8091;
-  --ui-accent: #00668a;
-  --ui-accent-hover: #004c69;
-  --ui-accent-text: #ffffff;
-  --ui-danger: #ba1a1a;
-  --ui-focus: #00668a;
+  --ui-bg: #101219;
+  --ui-surface: #1a1d27;
+  --ui-surface-subtle: #242836;
+  --ui-surface-low: #141720;
+  --ui-surface-raised: #2e3344;
+  --ui-text: #e2e4ee;
+  --ui-text-secondary: #c4c8d8;
+  --ui-text-muted: #8f95a8;
+  --ui-border: #272c3b;
+  --ui-border-strong: #46506b;
+  --ui-raised-border: #46506b;
+  --ui-accent: #b9a6ff;
+  --ui-accent-hover: #ddd3ff;
+  --ui-accent-text: #25006b;
+  --ui-accent-glow: rgb(140 120 255 / 50%);
+  --ui-seal: #8ed5ff;
+  --ui-brass: #ffb690;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #b9a6ff;
+  --ui-focus-ring: color-mix(in srgb, #b9a6ff 30%, transparent);
+  --ui-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  --ui-shadow-raised: 0 16px 40px rgb(0 0 0 / 75%);
 }
 
-/* SF: 사이버펑크 거리 (Stitch 시안의 neon_alley_cyberpunk_terminal) */
+/* SF: 네온 도시. 분홍 네온과 하늘색 신호 (Stitch 37번) */
 [data-genre='sf'] {
-  --ui-bg: #e9dff2;
-  --ui-surface: #f8f5fb;
-  --ui-surface-subtle: #e0d6e8;
-  --ui-text: #342e3c;
-  --ui-text-muted: #67606f;
-  --ui-border: #b6adbf;
-  --ui-border-strong: #857e8e;
-  --ui-accent: #ba005b;
-  --ui-accent-hover: #8f0044;
-  --ui-accent-text: #ffffff;
-  --ui-danger: #ba1a1a;
-  --ui-focus: #ba005b;
+  --ui-bg: #0f0d16;
+  --ui-surface: #1a1622;
+  --ui-surface-subtle: #251f30;
+  --ui-surface-low: #14111c;
+  --ui-surface-raised: #30283e;
+  --ui-text: #ece4f4;
+  --ui-text-secondary: #cfc3dd;
+  --ui-text-muted: #9a8faa;
+  --ui-border: #2c2438;
+  --ui-border-strong: #5c3f6a;
+  --ui-raised-border: #5c3f6a;
+  --ui-accent: #ffb0cd;
+  --ui-accent-hover: #ffd9e4;
+  --ui-accent-text: #531d35;
+  --ui-accent-glow: rgb(255 120 180 / 45%);
+  --ui-seal: #7fe3ff;
+  --ui-brass: #ffb690;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #ffb0cd;
+  --ui-focus-ring: color-mix(in srgb, #ffb0cd 30%, transparent);
+  --ui-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  --ui-shadow-raised: 0 16px 40px rgb(0 0 0 / 75%);
 }
 
-/* 아포칼립스: 녹슨 철판과 경고 테이프 (Stitch 시안의 rust_hazard) */
+/* 아포칼립스: 녹과 경고 테이프. 주황 경고색 (Stitch 38번) */
 [data-genre='apocalypse'] {
-  --ui-bg: #eae1db;
-  --ui-surface: #f9f6f4;
-  --ui-surface-subtle: #e1d8d2;
-  --ui-text: #342f2c;
-  --ui-text-muted: #67615d;
-  --ui-border: #b7afaa;
-  --ui-border-strong: #867f7b;
-  --ui-accent: #a73a00;
-  --ui-accent-hover: #7f2b00;
-  --ui-accent-text: #ffffff;
-  --ui-danger: #ba1a1a;
-  --ui-focus: #a73a00;
+  --ui-bg: #131210;
+  --ui-surface: #1f1c19;
+  --ui-surface-subtle: #2a2622;
+  --ui-surface-low: #181614;
+  --ui-surface-raised: #35302b;
+  --ui-text: #ebe3dc;
+  --ui-text-secondary: #d2c5b9;
+  --ui-text-muted: #9d9083;
+  --ui-border: #2e2925;
+  --ui-border-strong: #5e4f42;
+  --ui-raised-border: #5e4f42;
+  --ui-accent: #ffb690;
+  --ui-accent-hover: #ffdbca;
+  --ui-accent-text: #502409;
+  --ui-accent-glow: rgb(255 160 100 / 45%);
+  --ui-seal: #ffb0cd;
+  --ui-brass: #ffd27a;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #ffb690;
+  --ui-focus-ring: color-mix(in srgb, #ffb690 30%, transparent);
+  --ui-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  --ui-shadow-raised: 0 16px 40px rgb(0 0 0 / 75%);
 }
 
-/* 호러: 혈흔과 육벽 (Stitch 시안의 fleshwall_sanguine_horror) */
+/* 호러: 핏빛 경보 (Stitch 39번) */
 [data-genre='horror'] {
-  --ui-bg: #ffdadb;
-  --ui-surface: #fff4f4;
-  --ui-surface-subtle: #f5d1d2;
-  --ui-text: #45282b;
-  --ui-text-muted: #795a5c;
-  --ui-border: #cba8aa;
-  --ui-border-strong: #99787a;
-  --ui-accent: #b02d29;
-  --ui-accent-hover: #8e1214;
-  --ui-accent-text: #ffffff;
-  --ui-danger: #ba1a1a;
-  --ui-focus: #b02d29;
+  --ui-bg: #0e0b0d;
+  --ui-surface: #1b1517;
+  --ui-surface-subtle: #261d20;
+  --ui-surface-low: #140f11;
+  --ui-surface-raised: #31252a;
+  --ui-text: #efe1e3;
+  --ui-text-secondary: #d6c2c5;
+  --ui-text-muted: #a08c90;
+  --ui-border: #2f2226;
+  --ui-border-strong: #5e3a42;
+  --ui-raised-border: #5e3a42;
+  --ui-accent: #ff8f9c;
+  --ui-accent-hover: #ffc2c9;
+  --ui-accent-text: #5c0015;
+  --ui-accent-glow: rgb(255 80 110 / 45%);
+  --ui-seal: #ffb0cd;
+  --ui-brass: #ffb690;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #ff8f9c;
+  --ui-focus-ring: color-mix(in srgb, #ff8f9c 30%, transparent);
+  --ui-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  --ui-shadow-raised: 0 16px 40px rgb(0 0 0 / 75%);
 }
 
-/* 미스터리: 고택의 서재 (Stitch 시안의 manor_library) */
+/* 미스터리: 녹색 서재와 금빛 단서 (Stitch 40번) */
 [data-genre='mystery'] {
-  --ui-bg: #d2e7dc;
-  --ui-surface: #f2f8f4;
-  --ui-surface-subtle: #caded3;
-  --ui-text: #22342c;
-  --ui-text-muted: #53665d;
-  --ui-border: #a1b5ab;
-  --ui-border-strong: #71857b;
-  --ui-accent: #755b00;
-  --ui-accent-hover: #584400;
-  --ui-accent-text: #ffffff;
-  --ui-danger: #ba1a1a;
-  --ui-focus: #755b00;
+  --ui-bg: #111512;
+  --ui-surface: #1a1f1b;
+  --ui-surface-subtle: #232a25;
+  --ui-surface-low: #151a16;
+  --ui-surface-raised: #2c352e;
+  --ui-text: #e4e1e8;
+  --ui-text-secondary: #c8cfc6;
+  --ui-text-muted: #8c9c90;
+  --ui-border: #2a332c;
+  --ui-border-strong: #4a5a4e;
+  --ui-raised-border: #4a5a4e;
+  --ui-accent: #e5c158;
+  --ui-accent-hover: #ffd9a3;
+  --ui-accent-text: #3a2a00;
+  --ui-accent-glow: rgb(229 193 88 / 40%);
+  --ui-seal: #f1ede2;
+  --ui-brass: #ffd9a3;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #e5c158;
+  --ui-focus-ring: color-mix(in srgb, #e5c158 30%, transparent);
+  --ui-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  --ui-shadow-raised: 0 16px 40px rgb(0 0 0 / 75%);
 }
 
-/* 로맨스: 편지지와 꽃잎 (Stitch 시안의 romance_letter_and_watercolor_petals) */
+/* 로맨스: 장밋빛 밤 (Stitch 41번) */
 [data-genre='romance'] {
-  --ui-bg: #fff8f8;
-  --ui-surface: #ffffff;
-  --ui-surface-subtle: #ffe8ee;
-  --ui-text: #25181d;
-  --ui-text-muted: #594047;
-  --ui-border: #e1bec6;
-  --ui-border-strong: #8d6f77;
-  --ui-accent: #b7005e;
-  --ui-accent-hover: #db2777;
-  --ui-accent-text: #ffffff;
-  --ui-danger: #ba1a1a;
-  --ui-focus: #b7005e;
+  --ui-bg: #141116;
+  --ui-surface: #241e24;
+  --ui-surface-subtle: #2d222a;
+  --ui-surface-low: #1b161b;
+  --ui-surface-raised: #382a34;
+  --ui-text: #f2e4ec;
+  --ui-text-secondary: #dcc6d2;
+  --ui-text-muted: #a8919e;
+  --ui-border: #33262f;
+  --ui-border-strong: #5e4252;
+  --ui-raised-border: #5e4252;
+  --ui-accent: #ffb0cd;
+  --ui-accent-hover: #ffd9e4;
+  --ui-accent-text: #531d35;
+  --ui-accent-glow: rgb(255 140 190 / 45%);
+  --ui-seal: #ffb0cd;
+  --ui-brass: #ffb690;
+  --ui-danger: #ffb4ab;
+  --ui-focus: #ffb0cd;
+  --ui-focus-ring: color-mix(in srgb, #ffb0cd 30%, transparent);
+  --ui-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  --ui-shadow-raised: 0 16px 40px rgb(0 0 0 / 75%);
 }
 
-/* 일상: 공책과 동네 카페 (Stitch 시안의 sunny_cafe_lined_notebook) */
+/* 일상: 해 질 녘 카페. 따뜻한 나무와 크림색 쪽지 (Stitch 42번) */
 [data-genre='slice_of_life'] {
-  --ui-bg: #fff8f6;
-  --ui-surface: #ffffff;
-  --ui-surface-subtle: #f5ecea;
-  --ui-text: #1e1b1a;
-  --ui-text-muted: #4f4633;
-  --ui-border: #d3c5ac;
-  --ui-border-strong: #817660;
-  --ui-accent: #785a00;
-  --ui-accent-hover: #5a4300;
-  --ui-accent-text: #ffffff;
-  --ui-danger: #ba1a1a;
-  --ui-focus: #785a00;
-}
-
-/* 대체역사: 고문서와 옛 지도 (Stitch 시안의 chronicle_cartography) */
-[data-genre='alt_history'] {
-  --ui-bg: #fff8f6;
-  --ui-surface: #ffffff;
-  --ui-surface-subtle: #fdeae3;
-  --ui-text: #231916;
-  --ui-text-muted: #59413e;
-  --ui-border: #e1bfbb;
-  --ui-border-strong: #8d706d;
-  --ui-accent: #760009;
-  --ui-accent-hover: #991b1b;
-  --ui-accent-text: #ffffff;
-  --ui-danger: #ba1a1a;
-  --ui-focus: #760009;
-}
-
-/* 코미디: 예능 자막 (Stitch 시안의 variety_show_subtitle_studio) */
-[data-genre='comedy'] {
-  --ui-bg: #fbf8fc;
-  --ui-surface: #ffffff;
-  --ui-surface-subtle: #f0edf1;
-  --ui-text: #1b1b1e;
-  --ui-text-muted: #4d4632;
-  --ui-border: #d1c6ab;
-  --ui-border-strong: #7f7660;
-  --ui-accent: #735c00;
-  --ui-accent-hover: #574500;
-  --ui-accent-text: #ffffff;
-  --ui-danger: #ba1a1a;
-  --ui-focus: #735c00;
-}
-
-/* 어두운 밝기. 사이트의 밝기와 같은 규칙으로 고른다(기기가 어둡고 밝게로 고정하지 않았을 때, 또는 어둡게로 고정했을 때) */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) [data-genre='fantasy'] {
-    --ui-bg: #0e131d;
-    --ui-surface: #1b2029;
-    --ui-surface-subtle: #252a34;
-    --ui-text: #dee2f0;
-    --ui-text-muted: #c3c6d7;
-    --ui-border: #434655;
-    --ui-border-strong: #8d90a0;
-    --ui-accent: #b4c5ff;
-    --ui-accent-hover: #dbe1ff;
-    --ui-accent-text: #002a78;
-    --ui-danger: #ffb4ab;
-    --ui-focus: #b4c5ff;
-  }
-
-  :root:not([data-theme='light']) [data-genre='wuxia'] {
-    --ui-bg: #161311;
-    --ui-surface: #221f1d;
-    --ui-surface-subtle: #2d2927;
-    --ui-text: #e9e1dd;
-    --ui-text-muted: #e4beb9;
-    --ui-border: #5b403d;
-    --ui-border-strong: #ab8985;
-    --ui-accent: #ffb4ab;
-    --ui-accent-hover: #ffdad6;
-    --ui-accent-text: #690005;
-    --ui-danger: #ffb4ab;
-    --ui-focus: #ffb4ab;
-  }
-
-  :root:not([data-theme='light']) [data-genre='urban_fantasy'] {
-    --ui-bg: #0d1320;
-    --ui-surface: #1a1f2d;
-    --ui-surface-subtle: #242a38;
-    --ui-text: #dde2f5;
-    --ui-text-muted: #bdc8d1;
-    --ui-border: #3e484f;
-    --ui-border-strong: #87929a;
-    --ui-accent: #8ed5ff;
-    --ui-accent-hover: #c4e7ff;
-    --ui-accent-text: #00354a;
-    --ui-danger: #ffb4ab;
-    --ui-focus: #8ed5ff;
-  }
-
-  :root:not([data-theme='light']) [data-genre='sf'] {
-    --ui-bg: #16111e;
-    --ui-surface: #221d2b;
-    --ui-surface-subtle: #2d2836;
-    --ui-text: #e9dff2;
-    --ui-text-muted: #e5bcc5;
-    --ui-border: #5c3f46;
-    --ui-border-strong: #ac878f;
-    --ui-accent: #ffb1c4;
-    --ui-accent-hover: #ffd9e1;
-    --ui-accent-text: #65002e;
-    --ui-danger: #ffb4ab;
-    --ui-focus: #ffb1c4;
-  }
-
-  :root:not([data-theme='light']) [data-genre='apocalypse'] {
-    --ui-bg: #161310;
-    --ui-surface: #231f1c;
-    --ui-surface-subtle: #2e2926;
-    --ui-text: #eae1db;
-    --ui-text-muted: #e2bfb2;
-    --ui-border: #5a4138;
-    --ui-border-strong: #a98a7e;
-    --ui-accent: #ffb599;
-    --ui-accent-hover: #ffdbce;
-    --ui-accent-text: #5a1c00;
-    --ui-danger: #ffb4ab;
-    --ui-focus: #ffb599;
-  }
-
-  :root:not([data-theme='light']) [data-genre='horror'] {
-    --ui-bg: #240c0e;
-    --ui-surface: #32181a;
-    --ui-surface-subtle: #3e2224;
-    --ui-text: #ffdadb;
-    --ui-text-muted: #e1bfbb;
-    --ui-border: #59413e;
-    --ui-border-strong: #a88a86;
-    --ui-accent: #ffb4ac;
-    --ui-accent-hover: #ffdad6;
-    --ui-accent-text: #690007;
-    --ui-danger: #ffb4ab;
-    --ui-focus: #ffb4ac;
-  }
-
-  :root:not([data-theme='light']) [data-genre='mystery'] {
-    --ui-bg: #051710;
-    --ui-surface: #11231c;
-    --ui-surface-subtle: #1c2e26;
-    --ui-text: #d2e7dc;
-    --ui-text-muted: #d0c5af;
-    --ui-border: #4d4635;
-    --ui-border-strong: #99907c;
-    --ui-accent: #fdd35b;
-    --ui-accent-hover: #ffe08f;
-    --ui-accent-text: #3d2e00;
-    --ui-danger: #ffb4ab;
-    --ui-focus: #fdd35b;
-  }
-
-  :root:not([data-theme='light']) [data-genre='romance'] {
-    --ui-bg: #3b2c31;
-    --ui-surface: #47393d;
-    --ui-surface-subtle: #53454a;
-    --ui-text: #ffecf1;
-    --ui-text-muted: #c4b2b7;
-    --ui-border: #726267;
-    --ui-border-strong: #9d8c91;
-    --ui-accent: #ffb1c7;
-    --ui-accent-hover: #ffd9e2;
-    --ui-accent-text: #3f001c;
-    --ui-danger: #ffb4ab;
-    --ui-focus: #ffb1c7;
-  }
-
-  :root:not([data-theme='light']) [data-genre='slice_of_life'] {
-    --ui-bg: #342f2e;
-    --ui-surface: #403b3b;
-    --ui-surface-subtle: #4c4847;
-    --ui-text: #f8efed;
-    --ui-text-muted: #bdb5b4;
-    --ui-border: #6b6563;
-    --ui-border-strong: #968f8e;
-    --ui-accent: #f7be1d;
-    --ui-accent-hover: #ffdf9a;
-    --ui-accent-text: #251a00;
-    --ui-danger: #ffb4ab;
-    --ui-focus: #f7be1d;
-  }
-
-  :root:not([data-theme='light']) [data-genre='alt_history'] {
-    --ui-bg: #392e2a;
-    --ui-surface: #453b37;
-    --ui-surface-subtle: #514744;
-    --ui-text: #ffede7;
-    --ui-text-muted: #c4b4ae;
-    --ui-border: #70635f;
-    --ui-border-strong: #9c8e88;
-    --ui-accent: #ffb4ac;
-    --ui-accent-hover: #ffdad6;
-    --ui-accent-text: #410002;
-    --ui-danger: #ffb4ab;
-    --ui-focus: #ffb4ac;
-  }
-
-  :root:not([data-theme='light']) [data-genre='comedy'] {
-    --ui-bg: #303033;
-    --ui-surface: #3c3c3f;
-    --ui-surface-subtle: #49494b;
-    --ui-text: #f3f0f4;
-    --ui-text-muted: #b8b6ba;
-    --ui-border: #676669;
-    --ui-border-strong: #929094;
-    --ui-accent: #eec200;
-    --ui-accent-hover: #ffe083;
-    --ui-accent-text: #231b00;
-    --ui-danger: #ffb4ab;
-    --ui-focus: #eec200;
-  }
-}
-
-:root[data-theme='dark'] [data-genre='fantasy'] {
-  --ui-bg: #0e131d;
-  --ui-surface: #1b2029;
-  --ui-surface-subtle: #252a34;
-  --ui-text: #dee2f0;
-  --ui-text-muted: #c3c6d7;
-  --ui-border: #434655;
-  --ui-border-strong: #8d90a0;
-  --ui-accent: #b4c5ff;
-  --ui-accent-hover: #dbe1ff;
-  --ui-accent-text: #002a78;
-  --ui-danger: #ffb4ab;
-  --ui-focus: #b4c5ff;
-}
-
-:root[data-theme='dark'] [data-genre='wuxia'] {
-  --ui-bg: #161311;
-  --ui-surface: #221f1d;
-  --ui-surface-subtle: #2d2927;
-  --ui-text: #e9e1dd;
-  --ui-text-muted: #e4beb9;
-  --ui-border: #5b403d;
-  --ui-border-strong: #ab8985;
-  --ui-accent: #ffb4ab;
-  --ui-accent-hover: #ffdad6;
-  --ui-accent-text: #690005;
-  --ui-danger: #ffb4ab;
-  --ui-focus: #ffb4ab;
-}
-
-:root[data-theme='dark'] [data-genre='urban_fantasy'] {
-  --ui-bg: #0d1320;
-  --ui-surface: #1a1f2d;
-  --ui-surface-subtle: #242a38;
-  --ui-text: #dde2f5;
-  --ui-text-muted: #bdc8d1;
-  --ui-border: #3e484f;
-  --ui-border-strong: #87929a;
-  --ui-accent: #8ed5ff;
-  --ui-accent-hover: #c4e7ff;
-  --ui-accent-text: #00354a;
-  --ui-danger: #ffb4ab;
-  --ui-focus: #8ed5ff;
-}
-
-:root[data-theme='dark'] [data-genre='sf'] {
-  --ui-bg: #16111e;
-  --ui-surface: #221d2b;
-  --ui-surface-subtle: #2d2836;
-  --ui-text: #e9dff2;
-  --ui-text-muted: #e5bcc5;
-  --ui-border: #5c3f46;
-  --ui-border-strong: #ac878f;
-  --ui-accent: #ffb1c4;
-  --ui-accent-hover: #ffd9e1;
-  --ui-accent-text: #65002e;
-  --ui-danger: #ffb4ab;
-  --ui-focus: #ffb1c4;
-}
-
-:root[data-theme='dark'] [data-genre='apocalypse'] {
-  --ui-bg: #161310;
-  --ui-surface: #231f1c;
-  --ui-surface-subtle: #2e2926;
-  --ui-text: #eae1db;
-  --ui-text-muted: #e2bfb2;
-  --ui-border: #5a4138;
-  --ui-border-strong: #a98a7e;
-  --ui-accent: #ffb599;
-  --ui-accent-hover: #ffdbce;
-  --ui-accent-text: #5a1c00;
-  --ui-danger: #ffb4ab;
-  --ui-focus: #ffb599;
-}
-
-:root[data-theme='dark'] [data-genre='horror'] {
-  --ui-bg: #240c0e;
-  --ui-surface: #32181a;
-  --ui-surface-subtle: #3e2224;
-  --ui-text: #ffdadb;
-  --ui-text-muted: #e1bfbb;
-  --ui-border: #59413e;
-  --ui-border-strong: #a88a86;
-  --ui-accent: #ffb4ac;
-  --ui-accent-hover: #ffdad6;
-  --ui-accent-text: #690007;
-  --ui-danger: #ffb4ab;
-  --ui-focus: #ffb4ac;
-}
-
-:root[data-theme='dark'] [data-genre='mystery'] {
-  --ui-bg: #051710;
-  --ui-surface: #11231c;
-  --ui-surface-subtle: #1c2e26;
-  --ui-text: #d2e7dc;
-  --ui-text-muted: #d0c5af;
-  --ui-border: #4d4635;
-  --ui-border-strong: #99907c;
-  --ui-accent: #fdd35b;
-  --ui-accent-hover: #ffe08f;
+  --ui-bg: #17140f;
+  --ui-surface: #2c2621;
+  --ui-surface-subtle: #3a322b;
+  --ui-surface-low: #221d18;
+  --ui-surface-raised: #463d34;
+  --ui-text: #f0e6d5;
+  --ui-text-secondary: #dcd1be;
+  --ui-text-muted: #a89a87;
+  --ui-border: #3d352d;
+  --ui-border-strong: #73685c;
+  --ui-raised-border: #73685c;
+  --ui-accent: #f6ce65;
+  --ui-accent-hover: #ffe39a;
   --ui-accent-text: #3d2e00;
+  --ui-accent-glow: rgb(246 206 101 / 40%);
+  --ui-seal: #ebdcc4;
+  --ui-brass: #e8916a;
   --ui-danger: #ffb4ab;
-  --ui-focus: #fdd35b;
+  --ui-focus: #f6ce65;
+  --ui-focus-ring: color-mix(in srgb, #f6ce65 30%, transparent);
+  --ui-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  --ui-shadow-raised: 0 16px 40px rgb(0 0 0 / 75%);
 }
 
-:root[data-theme='dark'] [data-genre='romance'] {
-  --ui-bg: #3b2c31;
-  --ui-surface: #47393d;
-  --ui-surface-subtle: #53454a;
-  --ui-text: #ffecf1;
-  --ui-text-muted: #c4b2b7;
-  --ui-border: #726267;
-  --ui-border-strong: #9d8c91;
-  --ui-accent: #ffb1c7;
-  --ui-accent-hover: #ffd9e2;
-  --ui-accent-text: #3f001c;
+/* 대체역사: 빛바랜 공문서와 붉은 직인 (Stitch 43번) */
+[data-genre='alt_history'] {
+  --ui-bg: #14120f;
+  --ui-surface: #1f1c18;
+  --ui-surface-subtle: #2a2620;
+  --ui-surface-low: #191612;
+  --ui-surface-raised: #353028;
+  --ui-text: #e8dfcf;
+  --ui-text-secondary: #d8cebc;
+  --ui-text-muted: #a39580;
+  --ui-border: #3a342b;
+  --ui-border-strong: #8c7b64;
+  --ui-raised-border: #8c7b64;
+  --ui-accent: #ffb690;
+  --ui-accent-hover: #ffdbca;
+  --ui-accent-text: #502409;
+  --ui-accent-glow: rgb(255 160 110 / 40%);
+  --ui-seal: #e0787a;
+  --ui-brass: #ffb690;
   --ui-danger: #ffb4ab;
-  --ui-focus: #ffb1c7;
+  --ui-focus: #ffb690;
+  --ui-focus-ring: color-mix(in srgb, #ffb690 30%, transparent);
+  --ui-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  --ui-shadow-raised: 0 16px 40px rgb(0 0 0 / 75%);
 }
 
-:root[data-theme='dark'] [data-genre='slice_of_life'] {
-  --ui-bg: #342f2e;
-  --ui-surface: #403b3b;
-  --ui-surface-subtle: #4c4847;
-  --ui-text: #f8efed;
-  --ui-text-muted: #bdb5b4;
-  --ui-border: #6b6563;
-  --ui-border-strong: #968f8e;
-  --ui-accent: #f7be1d;
-  --ui-accent-hover: #ffdf9a;
-  --ui-accent-text: #251a00;
+/* 코미디: 예능 자막. 검정 바탕에 노랑·분홍·하늘색, 굵은 흰 테 (Stitch 44번) */
+[data-genre='comedy'] {
+  --ui-bg: #000000;
+  --ui-surface: #111111;
+  --ui-surface-subtle: #1d1d1d;
+  --ui-surface-low: #0a0a0a;
+  --ui-surface-raised: #262626;
+  --ui-text: #ffffff;
+  --ui-text-secondary: #e6e6e6;
+  --ui-text-muted: #b5b5b5;
+  --ui-border: #ffffff;
+  --ui-border-strong: #ffffff;
+  --ui-raised-border: #ffffff;
+  --ui-accent: #ffe600;
+  --ui-accent-hover: #fff27a;
+  --ui-accent-text: #000000;
+  --ui-accent-glow: rgb(255 230 0 / 45%);
+  --ui-seal: #ff0055;
+  --ui-brass: #00e5ff;
   --ui-danger: #ffb4ab;
-  --ui-focus: #f7be1d;
+  --ui-focus: #ffe600;
+  --ui-focus-ring: color-mix(in srgb, #ffe600 30%, transparent);
+  --ui-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  --ui-shadow-raised: 0 16px 40px rgb(0 0 0 / 75%);
 }
 
-:root[data-theme='dark'] [data-genre='alt_history'] {
-  --ui-bg: #392e2a;
-  --ui-surface: #453b37;
-  --ui-surface-subtle: #514744;
-  --ui-text: #ffede7;
-  --ui-text-muted: #c4b4ae;
-  --ui-border: #70635f;
-  --ui-border-strong: #9c8e88;
-  --ui-accent: #ffb4ac;
-  --ui-accent-hover: #ffdad6;
-  --ui-accent-text: #410002;
-  --ui-danger: #ffb4ab;
-  --ui-focus: #ffb4ac;
-}
-
-:root[data-theme='dark'] [data-genre='comedy'] {
-  --ui-bg: #303033;
-  --ui-surface: #3c3c3f;
-  --ui-surface-subtle: #49494b;
-  --ui-text: #f3f0f4;
-  --ui-text-muted: #b8b6ba;
-  --ui-border: #676669;
-  --ui-border-strong: #929094;
-  --ui-accent: #eec200;
-  --ui-accent-hover: #ffe083;
-  --ui-accent-text: #231b00;
-  --ui-danger: #ffb4ab;
-  --ui-focus: #eec200;
-}
-
-/* ── 모양(Stitch 23~33번의 2단계) ──────────────────────────────────────────
+/* ── 모양(Stitch 34~44번) ──────────────────────────────────────────
  * 장르마다 아래 변수를 정하고, 공통 규칙이 그것을 쓴다. 정하지 않은 변수는 공통 디자인의 모양이다.
  *   --genre-pattern       바탕의 무늬(background-image). 칸 뒤에만 보인다
  *   --genre-pattern-size  무늬 한 칸의 크기
@@ -543,7 +318,7 @@
   background-size: var(--genre-pattern-size, auto);
 }
 
-[data-genre] :is(.chat-message--assistant, .round--current, .declare-box, .scenario__head, .character-page__head, .story-world__head, .scenario__main > section, .character-page__main > section, .story-world > section) {
+[data-genre] :is(.chat-message--assistant, .round--current, .declare-box, .scenario__main > section, .scenario__side, .character-page__main > section, .character-page__side, .character-page > section, .story-world > section) {
   border: var(--genre-card-border, 1px solid var(--ui-border));
 }
 
@@ -560,18 +335,18 @@
   border-left: var(--genre-mark, 0 solid transparent);
 }
 
-/* 판타지: 돌을 쌓은 성벽의 줄눈, 쇠 테의 두 줄 칸, 깎은 마법석의 주 단추 */
+/* 판타지: 돌벽의 줄눈, 청동 테의 칸(모서리에 리벳 같은 안쪽 테), 빛나는 마법석의 주 단추 */
 [data-genre='fantasy'] {
-  --ui-radius: 3px;
-  --ui-radius-lg: 6px;
+  --ui-radius: 6px;
+  --ui-radius-lg: 10px;
   --genre-pattern:
     repeating-linear-gradient(0deg, transparent 0 46px, var(--genre-ink) 46px 48px),
     repeating-linear-gradient(90deg, transparent 0 94px, var(--genre-ink) 94px 96px);
   --genre-pattern-size: 96px 96px;
-  --genre-card-border: 3px double var(--ui-border-strong);
+  --genre-card-border: 2px solid var(--ui-border-strong);
   --genre-button-bg: linear-gradient(135deg, var(--ui-accent), var(--ui-accent-hover));
-  --genre-button-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-accent-text) 35%, transparent);
-  --genre-mark: 3px solid var(--ui-border-strong);
+  --genre-button-shadow: 0 0 16px var(--ui-accent-glow);
+  --genre-mark: 3px solid var(--ui-accent);
 }
 
 /* 무협: 문창호의 살, 모서리 없는 한지 칸, 먹선 */
@@ -699,15 +474,15 @@
   --genre-mark: 3px double var(--ui-accent);
 }
 
-/* 코미디: 예능 자막. 큰 망점, 굵은 테, 딱딱한 그림자의 주 단추, 고딕 제목 */
+/* 코미디: 예능 자막. 큰 망점, 굵은 흰 테, 딱딱한 노랑 그림자의 주 단추, 고딕 제목 */
 [data-genre='comedy'] {
-  --ui-radius: 10px;
-  --ui-radius-lg: 16px;
+  --ui-radius: 4px;
+  --ui-radius-lg: 6px;
   --ui-font-heading: var(--ui-font);
-  --genre-ink: color-mix(in srgb, var(--ui-accent) 14%, transparent);
+  --genre-ink: color-mix(in srgb, var(--ui-accent) 18%, transparent);
   --genre-pattern: radial-gradient(circle, var(--genre-ink) 0 3px, transparent 4px);
   --genre-pattern-size: 22px 22px;
   --genre-card-border: 3px solid var(--ui-text);
-  --genre-button-shadow: 3px 3px 0 var(--ui-text);
-  --genre-mark: 4px solid var(--ui-accent);
+  --genre-button-shadow: 4px 4px 0 var(--ui-seal);
+  --genre-mark: 6px solid var(--ui-accent);
 }
