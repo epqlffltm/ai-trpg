@@ -705,57 +705,52 @@
   max-width: 640px;
 }
 
-/* 찾을 수 없음(Stitch 8번). 가운데에 펼친 빈 책, 큰 404(명조, 감청), 제목, 한 줄, 단추 */
+/* 찾을 수 없음. 가운데에 보라빛이 번지는 둥근 네모 안의 책 그림, 강조색이 흐르는 큰 404, 제목, 한 줄, 단추 */
 .not-found {
   display: grid;
   justify-items: center;
   gap: 8px;
-  padding-top: 48px;
+  padding-top: 64px;
   text-align: center;
 }
 
 .not-found__art {
-  max-width: 100%;
-  height: auto;
-  margin-bottom: 8px;
-}
-
-.not-found__page {
-  fill: var(--ui-surface);
-  stroke: var(--ui-accent);
-  stroke-width: 2;
-  stroke-linejoin: round;
-}
-
-.not-found__rule {
-  fill: none;
-  stroke: var(--ui-border);
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
-.not-found__shelf {
-  fill: none;
-  stroke: var(--ui-border-strong);
-  stroke-width: 2;
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 112px;
+  margin-bottom: 16px;
+  border-radius: 24px;
+  background: var(--ui-surface);
+  color: var(--ui-accent);
+  font-size: 3rem;
+  box-shadow: 0 0 0 16px color-mix(in srgb, var(--ui-accent) 6%, transparent), 0 0 48px var(--ui-accent-glow);
 }
 
 .not-found__code {
   margin: 0;
-  color: var(--ui-accent);
+  background: linear-gradient(180deg, var(--ui-text), var(--ui-accent));
+  background-clip: text;
+  color: transparent;
   font-family: var(--ui-font-heading);
-  font-size: 3.5rem;
-  font-weight: 700;
+  font-size: 6rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
   line-height: 1;
 }
 
 .not-found h1 {
-  margin: 0;
+  margin: 8px 0 0;
 }
 
 .not-found p:not(.not-found__code) {
-  margin: 0 0 16px;
+  margin: 0 0 20px;
   color: var(--ui-text-muted);
+}
+
+.not-found .ui-button--primary {
+  padding-inline: 32px;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--ui-accent-glow) 60%, transparent);
 }
 
 /* 한 화면 안의 칸(마이페이지의 계정, 비밀번호, 동의) */
@@ -3793,48 +3788,53 @@ details.room-panel[open] > summary {
   margin-bottom: var(--ui-gap);
 }
 
-/* 알림 한 줄(Stitch 9번). 점, 종류 아이콘, 글과 때, 읽음 단추. 읽은 줄은 바탕을 가라앉히고 글을 가늘게 */
+/* 알림 한 줄. 1단 면의 카드에 왼쪽 둥근 네모 아이콘(안 읽었으면 오른쪽 위에 분홍 점), 글과 때, 읽음 단추.
+ * 읽은 줄은 글을 가늘게 하고 때를 흐리게 */
 .notification {
+  position: relative;
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
   border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
-  background: var(--ui-surface-subtle);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
 }
 
 .notification--unread {
-  background: var(--ui-surface);
-  box-shadow: var(--ui-shadow);
+  border-color: var(--ui-border-strong);
 }
 
+/* 점은 아이콘의 오른쪽 위에 겹친다 */
 .notification__dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  margin-top: 12px;
+  position: absolute;
+  top: 9px;
+  left: 50px;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--ui-border);
+  background: transparent;
 }
 
 .notification--unread .notification__dot {
-  background: var(--ui-accent);
+  background: var(--ui-seal);
+  box-shadow: 0 0 0 2px var(--ui-surface);
 }
 
 .notification__icon {
   flex: none;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border-radius: var(--ui-radius);
-  background: var(--ui-surface-subtle);
+  background: var(--ui-bg);
   color: var(--ui-accent);
 }
 
 .notification--unread .notification__icon {
-  background: var(--ui-bg);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ui-accent-glow) 50%, transparent);
 }
 
 .notification__icon svg {
@@ -3858,7 +3858,11 @@ details.room-panel[open] > summary {
 }
 
 .notification__time {
-  font-size: 0.85em;
+  font-size: 0.8em;
+}
+
+.notification--unread .notification__time {
+  color: var(--ui-seal);
 }
 
 /* 알림 화면(A10). 제목 줄 오른쪽에 모두 읽음 */
@@ -3916,22 +3920,26 @@ details.room-panel[open] > summary {
   margin: 4px 0 0;
 }
 
-/* 게시판 탭. 지금 게시판은 밑줄. 좁으면 가로로 밀어 본다 */
+/* 게시판 탭. 둥근 틀 안의 칸들, 지금 게시판은 한 단 밝은 면. 좁으면 가로로 밀어 본다 */
 .board-tabs {
   display: flex;
+  width: fit-content;
+  max-width: 100%;
   gap: 4px;
   margin-bottom: var(--ui-gap);
-  border-bottom: 1px solid var(--ui-border);
+  padding: 4px;
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface-low);
   overflow-x: auto;
   scrollbar-width: thin;
 }
 
 .board-tabs a {
   flex: none;
-  padding: 8px 12px;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  padding: 6px 14px;
+  border-radius: var(--ui-radius);
   color: var(--ui-text-muted);
+  font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -3941,9 +3949,8 @@ details.room-panel[open] > summary {
 }
 
 .board-tabs [aria-current='page'] {
-  border-bottom-color: var(--ui-accent);
-  color: var(--ui-accent);
-  font-weight: 700;
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text);
 }
 
 .board-search {
@@ -3965,134 +3972,114 @@ details.room-panel[open] > summary {
   margin-top: calc(1.5em + 6px);
 }
 
-/* 글 목록. 넓으면 칸 넷(제목, 글쓴이, 쓴 때, 댓글), 좁으면 제목 아래 한 줄 */
-.post-head,
-.post-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 9em 13em 4.5em;
-  align-items: baseline;
-  gap: 4px 12px;
-  padding: 10px 12px;
-}
-
+/* 글 목록. 글마다 1단 면의 카드: 위에 고정·게시판 표와 제목(한 줄에서 자름), 아래에 글쓴이 · 쓴 때, 오른쪽 끝에 댓글 수 칩.
+ * 칸 이름 줄(PostListHead)은 카드에서는 쓰지 않는다 */
 .post-head {
-  border-top: 2px solid var(--ui-border-strong);
-  border-bottom: 1px solid var(--ui-border);
-  background: var(--ui-surface-subtle);
-  color: var(--ui-text-muted);
-  font-size: 0.85em;
-  font-weight: 700;
-}
-
-.post-head span:not(:first-child),
-.post-row__author,
-.post-row__time,
-.post-row__comments {
-  text-align: center;
+  display: none;
 }
 
 .posts {
   display: grid;
+  gap: 8px;
   margin-bottom: var(--ui-gap);
 }
 
-/* 고정한 글의 목록은 그 아래 글 목록과 붙인다 */
+/* 고정한 글의 목록과 그 아래 글 목록 사이도 같은 틈 */
 .posts--pinned {
-  margin-bottom: 0;
+  margin-bottom: 8px;
 }
 
 .post-row {
-  border-bottom: 1px solid var(--ui-border);
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'title title title title'
+    'author time . comments';
+  align-items: center;
+  gap: 6px 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--ui-surface);
   overflow-wrap: anywhere;
 }
 
-.post-row--pinned {
-  background: var(--ui-surface-subtle);
-}
-
-.post-row--pinned .post-row__title a {
-  font-weight: 700;
+.post-row:hover {
+  border-color: var(--ui-border-strong);
 }
 
 .post-row__title {
+  grid-area: title;
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .post-row__title a {
+  overflow: hidden;
   color: var(--ui-text);
+  font-weight: 700;
   text-decoration: none;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .post-row__title a:hover {
   color: var(--ui-accent);
-  text-decoration: underline;
+}
+
+.post-row__pin,
+.post-row__board {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--ui-radius-sm);
+  font-size: 0.72em;
+  font-weight: 700;
 }
 
 .post-row__pin {
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--ui-accent);
-  color: var(--ui-accent-text);
-  font-size: 0.75em;
+  background: color-mix(in srgb, var(--ui-accent) 20%, transparent);
+  color: var(--ui-accent);
 }
 
 .post-row__board {
-  padding: 0 6px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
+  background: var(--ui-surface-subtle);
   color: var(--ui-text-muted);
-  font-size: 0.75em;
 }
 
 .post-row__author,
-.post-row__time,
-.post-row__comments {
+.post-row__time {
   color: var(--ui-text-muted);
-  font-size: 0.85em;
+  font-size: 0.8em;
   font-variant-numeric: tabular-nums;
 }
 
-.post-row__comments > [aria-hidden='true'] {
-  display: none;
+.post-row__author {
+  grid-area: author;
 }
 
-@media (max-width: 767px) {
-  .post-head {
-    display: none;
-  }
-
-  .posts {
-    border-top: 1px solid var(--ui-border);
-  }
-
-  .posts--pinned + .posts {
-    border-top: 0;
-  }
-
-  .post-row {
-    grid-template-columns: auto auto 1fr;
-    padding: 10px 4px;
-  }
-
-  .post-row__title {
-    grid-column: 1 / -1;
-  }
-
-  .post-row__author,
-  .post-row__time,
-  .post-row__comments {
-    text-align: left;
-  }
-
-  .post-row__comments > [aria-hidden='true'] {
-    display: inline;
-  }
+.post-row__time {
+  grid-area: time;
 }
 
-/* 쪽 번호. 지금 쪽은 감청 바탕 */
+.post-row__time::before {
+  content: '·';
+  margin-right: 10px;
+}
+
+/* 댓글 수는 오른쪽 끝의 작은 칩 */
+.post-row__comments {
+  grid-area: comments;
+  padding: 1px 8px;
+  border-radius: var(--ui-radius-sm);
+  background: var(--ui-bg);
+  color: var(--ui-text-muted);
+  font-size: 0.78em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 쪽 번호. 지금 쪽은 강조색 바탕 */
 .pager {
   display: flex;
   flex-wrap: wrap;

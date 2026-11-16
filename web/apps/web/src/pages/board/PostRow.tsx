@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/board/PostRow.tsx
-// 글 목록의 한 줄(Stitch 11번). 넓은 화면에서는 칸 넷(제목, 글쓴이, 쓴 때, 댓글 수)이 표처럼 서고, 좁은 화면에서는 제목 아래 한 줄로 모인다.
-// 제목 칸에 고정 표와 (검색에서) 게시판 이름. 본문은 목록에 없다.
-// PostListHead 는 칸의 이름 줄이다. 꾸밈이라 읽는 프로그램에는 숨긴다(줄마다 글쓴이와 때를 그대로 읽는다).
+// 글 목록의 한 줄. 글마다 카드다: 위에 고정 표와 (검색에서) 게시판 이름, 제목. 아래에 글쓴이 · 쓴 때, 오른쪽 끝에 댓글 수.
+// 본문은 목록에 없다.
+// PostListHead 는 표 모양일 때의 칸 이름 줄이다. 카드에서는 CSS 가 숨기고, 읽는 프로그램에도 숨긴다.
 
 import { Link } from 'react-router';
 import type { PostSummary } from '../../api/types';
