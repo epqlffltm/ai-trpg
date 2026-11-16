@@ -146,7 +146,7 @@ npm run sync:legal    # docs/legal/{terms,privacy}.md → apps/web/src/legal/doc
 원본을 고치면 다시 돌려 함께 올린다. CI 가 다시 만들어 보고 어긋나면 실패한다.
 판을 올리면(`auth-server/accounts/consents.py` 의 `POLICIES`) `scripts/sync-legal.mjs` 의 `DOCUMENTS` 와 `src/legal/consentItems.ts` 의 `DOCUMENTS` 에 새 판을 더한다.
 화면이 갖지 않은 판을 서버가 주면 그 동의를 받지 않는다(가입, 다시 동의, 마이페이지 모두. 옛 문서로 동의를 받지 않는다).
-선택 항목(마케팅, AI 학습)은 따로의 문서가 없어 개인정보 처리방침을 보인다. 초안이라 문서의 맨 위에 "검토 중인 초안"을 띄운다.
+선택 항목(마케팅)은 따로의 문서가 없어 개인정보 처리방침을 보인다. 초안이라 문서의 맨 위에 "검토 중인 초안"을 띄운다.
 문서는 처음 열 때 받는다(마크다운을 그리는 react-markdown 도 그때). HTML 은 그대로 넣지 않고, 문서 안의 링크는 글로만 둔다.
 
 ## 시험

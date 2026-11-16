@@ -1,7 +1,8 @@
 // web/apps/web/src/legal/consentItems.ts
 // 동의 항목마다 화면이 보일 이름, 한 줄 요약, 그 판의 문서(#450).
 // 서버(GET /consents)는 항목과 판 번호만 준다. 문서의 글은 화면이 갖는다(documents/, npm run sync:legal).
-// 선택 항목(마케팅, AI 학습)은 따로의 문서가 없어 개인정보 처리방침의 그 판을 보인다(처리하는 목적의 6, 7).
+// 선택 항목(마케팅)은 따로의 문서가 없어 개인정보 처리방침의 그 판을 보인다(처리하는 목적의 6).
+// 대화 기록의 AI 학습 이용(ai_training)은 2026-11-16 에 서버가 받지 않게 되어 뺐다.
 // 판을 올리면 DOCUMENTS 에 새 판을 더하고 옛 판은 남긴다(그 판에 동의한 사람의 기록이 가리킨다). 화면이 갖지 않은 판이면 가입을 막는다(옛 문서로 동의를 받지 않는다).
 // 선택 항목의 1판은 처리방침 1판을 그대로 보인다. 그 판으로 받은 동의의 글이 바뀌지 않게 한다.
 
@@ -11,7 +12,6 @@ const ITEMS: Record<string, ConsentItemInfo> = {
   terms: { label: '이용약관', summary: '서비스를 쓰는 규칙, 크레딧과 결제, 금지 행위와 이용 제한' },
   privacy: { label: '개인정보 수집·이용', summary: '가입과 결제, 서비스에 필요한 개인정보와 보관하는 기간' },
   marketing: { label: '마케팅 정보 수신', summary: '이벤트와 혜택을 메일로 받습니다' },
-  ai_training: { label: '대화 기록의 AI 학습 이용', summary: '대화 기록을 AI 학습에 쓰는 것에 동의합니다' },
 };
 
 // 항목과 판 → 문서 파일의 이름(documents/<이름>.md)
@@ -19,7 +19,6 @@ const DOCUMENTS: Record<string, Record<number, string>> = {
   terms: { 1: 'terms-v1' },
   privacy: { 1: 'privacy-v1', 2: 'privacy-v2' },
   marketing: { 1: 'privacy-v1' },
-  ai_training: { 1: 'privacy-v1' },
 };
 
 export function consentItemInfo(item: string): ConsentItemInfo {

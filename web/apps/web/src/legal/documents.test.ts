@@ -9,7 +9,6 @@ const SERVER_ITEMS = [
   { item: 'terms', version: 1 },
   { item: 'privacy', version: 2 },
   { item: 'marketing', version: 1 },
-  { item: 'ai_training', version: 1 },
 ];
 
 describe('동의 문서', () => {

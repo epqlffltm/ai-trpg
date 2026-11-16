@@ -20,7 +20,7 @@ const OUT_DIR = join(APP_ROOT, 'src', 'legal', 'documents');
 // 화면이 갖는 문서와 판. 이름은 <문서>-v<판>.md 다
 const DOCUMENTS = [
   { name: 'terms', version: 1, source: 'terms.md' },
-  // 1판(privacy-v1.md)은 그대로 둔다. 선택 동의(마케팅, AI 학습)의 1판이 그 문서를 보인다(consentItems.ts)
+  // 1판(privacy-v1.md)은 그대로 둔다. 선택 동의(마케팅)의 1판이 그 문서를 보인다(consentItems.ts)
   { name: 'privacy', version: 2, source: 'privacy.md' },
   // 자동 충전 이용 동의(#980). 인증 서버가 아니라 결제 서버가 판을 갖는다(autocharge.TermsVersion). 1판(auto-charge-v1.md)은 그대로 둔다(#1167)
   { name: 'auto-charge', version: 2, source: 'auto-charge.md' },
