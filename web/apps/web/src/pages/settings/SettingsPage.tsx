@@ -4,7 +4,7 @@
 // 로그인했으면 목록 거르기(성인 작품 표시, 성향)도 둔다. 이것은 내 정보에 둔다(ListingFilterSection).
 // 프로필 메뉴의 성향 필터는 #listing-filter-heading 로 와서 그 칸까지 내린다.
 // 로그인했으면 받을 알림(끄기)도 둔다. 이것은 알림 서버에 둔다(NotificationMutes, 알림 화면에서 옮김).
-// 선택 동의(마케팅, AI 학습)는 마이페이지(A5)에 있다. 시나리오의 테마는 대표 장르가 정해 여기서 바꾸지 않는다.
+// 선택 동의(마케팅)는 마이페이지(A5)에 있다. 시나리오의 테마는 대표 장르가 정해 여기서 바꾸지 않는다.
 
 import { Button, Checkbox, Notice, Radio } from '@ai-trpg/ui';
 import { Link } from 'react-router';
@@ -31,7 +31,7 @@ export function SettingsPage() {
     <main className="page page--medium">
       <h1>설정</h1>
       <p className="hint">
-        목록 거르기와 받을 알림 말고는 이 브라우저에만 적용됩니다. 선택 동의(마케팅 정보, AI 학습)는 <Link to="/me">내 정보</Link>에서 바꿉니다.
+        목록 거르기와 받을 알림 말고는 이 브라우저에만 적용됩니다. 선택 동의(마케팅 정보)는 <Link to="/me">내 정보</Link>에서 바꿉니다.
       </p>
       {persistent ? null : <Notice>이 브라우저는 저장을 막고 있어 창을 닫으면 설정이 처음으로 돌아갑니다.</Notice>}
       <fieldset className="page-section scenario-choices">

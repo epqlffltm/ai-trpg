@@ -880,12 +880,12 @@ class ConsentItem(models.TextChoices):
     동의를 받는 항목(#450). 판과 필수 여부는 코드의 표(consents.py 의 POLICIES)에 있다.
 
     개인정보 처리방침은 동의를 받는 문서가 아니라 알리는 문서라 항목이 아니다. 수집·이용의 동의(privacy)를 따로 받는다.
+    대화 기록의 AI 학습 이용(ai_training)은 2026-11-16 에 뺐다. 그 값으로 남은 옛 기록은 그대로 둔다.
     """
 
     TERMS = 'terms', '이용약관'
     PRIVACY = 'privacy', '개인정보 수집·이용'
     MARKETING = 'marketing', '마케팅 정보 수신'
-    AI_TRAINING = 'ai_training', '대화 기록의 AI 학습 이용'
 
 
 class ConsentAction(models.TextChoices):

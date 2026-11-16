@@ -34,12 +34,13 @@ class Policy:
 
 # 항목마다 지금의 판. 1판은 변호사 검토 전 초안의 판이다(#450). 문서가 확정되면 판을 올린다.
 # privacy 2판(2026-11-07, 아직 초안): 쓰지 않게 된 닉네임을 30일 남기는 것을 보유 기간에 더했다(accounts/nicknames.py)
+# 대화 기록의 AI 학습 이용(ai_training)은 받지 않기로 했다(2026-11-16). 학습에 쓰지 않으므로 받을 동의가 없다.
+# 그 항목에 남은 옛 기록은 지우지 않는다(기록은 쌓기만 한다). 표에 없으니 목록에 나오지 않고 동의·철회도 받지 않는다
 POLICIES: Mapping[str, Policy] = MappingProxyType(
     {
         ConsentItem.TERMS: Policy(ConsentItem.TERMS, 1, date(2026, 10, 20), required=True),
         ConsentItem.PRIVACY: Policy(ConsentItem.PRIVACY, 2, date(2026, 11, 7), required=True),
         ConsentItem.MARKETING: Policy(ConsentItem.MARKETING, 1, date(2026, 10, 20), required=False),
-        ConsentItem.AI_TRAINING: Policy(ConsentItem.AI_TRAINING, 1, date(2026, 10, 20), required=False),
     }
 )
 

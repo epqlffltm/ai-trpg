@@ -66,7 +66,7 @@ class ConsentDocumentsTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         items = {item['item']: item for item in response.data['items']}
-        self.assertEqual(set(items), {'terms', 'privacy', 'marketing', 'ai_training'})
+        self.assertEqual(set(items), {'terms', 'privacy', 'marketing'})
         self.assertEqual({item for item, body in items.items() if body['required']}, {'terms', 'privacy'})
         self.assertEqual(items['terms']['version'], POLICIES[ConsentItem.TERMS].version)
         self.assertIn('effective_on', items['terms'])
@@ -170,19 +170,35 @@ class MyConsentsTest(APITestCase):
         self.assertEqual(ConsentRecord.objects.filter(user=self.user, item='marketing').count(), 1)
 
     def test_withdrawing_adds_a_line_and_keeps_the_agreement(self):
-        self.client.put(my_consent_url('ai_training'), {'version': 1}, format='json')
+        self.client.put(my_consent_url('marketing'), {'version': 1}, format='json')
 
-        response = self.client.delete(my_consent_url('ai_training'))
-        self.client.delete(my_consent_url('ai_training'))
+        response = self.client.delete(my_consent_url('marketing'))
+        self.client.delete(my_consent_url('marketing'))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIsNone(states_by_item(response)['ai_training']['agreed_version'])
+        self.assertIsNone(states_by_item(response)['marketing']['agreed_version'])
         actions = list(
-            ConsentRecord.objects.filter(user=self.user, item='ai_training')
+            ConsentRecord.objects.filter(user=self.user, item='marketing')
             .order_by('id')
             .values_list('action', 'version')
         )
         self.assertEqual(actions, [(ConsentAction.AGREED, 1), (ConsentAction.WITHDRAWN, 1)])
+
+    def test_the_retired_ai_training_item_keeps_old_lines_and_takes_nothing_new(self):
+        # 2026-11-16 에 뺀 항목. 그전에 남은 기록은 그대로 두고, 목록에 보이지 않으며 동의·철회를 받지 않는다
+        ConsentRecord.objects.create(
+            user=self.user, item='ai_training', version=1, action=ConsentAction.AGREED, at=timezone.now()
+        )
+
+        listed = self.client.get(MY_CONSENTS_URL)
+        agreed = self.client.put(my_consent_url('ai_training'), {'version': 1}, format='json')
+        withdrawn = self.client.delete(my_consent_url('ai_training'))
+
+        self.assertNotIn('ai_training', states_by_item(listed))
+        self.assertEqual(agreed.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(withdrawn.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(ConsentRecord.objects.filter(user=self.user, item='ai_training').count(), 1)
+        self.assertEqual(self.client.get(ME_URL).data['consents_pending'], [])
 
     def test_a_required_item_cannot_be_withdrawn(self):
         response = self.client.delete(my_consent_url('terms'))
