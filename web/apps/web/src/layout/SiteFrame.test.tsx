@@ -36,10 +36,12 @@ describe('사이트의 틀', () => {
 
     const sidebar = await screen.findByRole('complementary', { name: '사이트 메뉴' });
     expect(within(sidebar).getByRole('link', { name: /이매망량의 서재/ })).toHaveAttribute('href', '/');
-    expect(within(sidebar).getByRole('link', { name: '만들기' })).toHaveAttribute('href', '/create');
+    expect(within(sidebar).getByRole('link', { name: '+ 만들기' })).toHaveAttribute('href', '/create');
     const nav = within(sidebar).getByRole('navigation', { name: '주 메뉴' });
-    expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual(['홈', 'TRPG', 'chat', 'story', '게시판']);
-    expect(within(sidebar).getByRole('link', { name: '공지' })).toHaveAttribute('href', '/board/notice');
+    expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual(['홈', '내 채팅', '게시판']);
+    expect(within(nav).getByRole('link', { name: '내 채팅' })).toHaveAttribute('href', '/conversations');
+    const footer = within(sidebar).getByRole('navigation', { name: '안내' });
+    expect(within(footer).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/board/notice', '/guide', '/support']);
 
     await userEvent.click(screen.getByRole('button', { name: '사이트 메뉴 접기' }));
     expect(screen.queryByRole('complementary', { name: '사이트 메뉴' })).toBeNull();
@@ -47,12 +49,12 @@ describe('사이트의 틀', () => {
     expect(screen.getByRole('complementary', { name: '사이트 메뉴' })).toBeInTheDocument();
   });
 
-  it('서비스 안에서는 그 서비스가 지금 있는 곳이고 홈은 아니다', async () => {
+  it('주 메뉴에는 서비스(TRPG·캐릭터·스토리)가 따로 없고, 서비스 안에서는 홈이 지금 있는 곳이 아니다', async () => {
     signedOut();
     renderApp('/chat/characters/new');
 
     const nav = await screen.findByRole('navigation', { name: '주 메뉴' });
-    expect(within(nav).getByRole('link', { name: 'chat' })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).queryByRole('link', { name: 'TRPG' })).toBeNull();
     expect(within(nav).getByRole('link', { name: '홈' })).not.toHaveAttribute('aria-current');
   });
 

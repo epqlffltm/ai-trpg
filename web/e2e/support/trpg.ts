@@ -7,9 +7,10 @@ import { expect, type Page } from '@playwright/test';
 // tools/dev_seed.py 의 SEED_TITLE
 export const SEED_SCENARIO = '[견본] 잿빛 수도원';
 
-/** 둘러보기에서 견본 시나리오를 찾아 2명 테이블을 만든다. 테이블의 초대 코드를 돌려준다. */
+/** 둘러보기에서 견본 시나리오를 찾아 2명 테이블을 만든다. 테이블의 초대 코드를 돌려준다.
+ * 왼쪽 메뉴 열에는 서비스(TRPG·캐릭터·스토리)의 메뉴가 없어 TRPG 둘러보기는 주소로 간다. */
 export async function openTable(page: Page): Promise<string> {
-  await page.getByRole('navigation', { name: '주 메뉴' }).getByRole('link', { name: 'TRPG' }).click();
+  await page.goto('/trpg');
   await page.getByRole('link', { name: SEED_SCENARIO }).first().click();
   await page.getByRole('link', { name: '테이블 만들기' }).click();
   await page.getByRole('button', { name: '2명' }).click();

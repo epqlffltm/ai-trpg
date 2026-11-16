@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/guide/Guide.test.tsx
 // 이용 가이드(/guide). 로그인하지 않아도 열리고, 묶음의 목차와 접어 둔 물음(펼치면 답), 고객센터로 가는 길이 있다.
-// 왼쪽 메뉴 열 맨 아래의 차례(공지, 이용 가이드, 고객센터).
+// 왼쪽 메뉴 열 맨 아래의 차례(공지사항, 이용 가이드, 고객센터).
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -32,13 +32,13 @@ describe('이용 가이드', () => {
     expect(within(screen.getByRole('main')).getByRole('link', { name: '고객센터' })).toHaveAttribute('href', '/support');
   });
 
-  it('왼쪽 메뉴 열 맨 아래는 공지, 이용 가이드, 고객센터의 차례다', async () => {
+  it('왼쪽 메뉴 열 맨 아래는 공지사항, 이용 가이드, 고객센터의 차례다', async () => {
     signedOut();
     renderApp('/guide');
 
     const footer = within(await screen.findByRole('navigation', { name: '안내' }));
     expect(footer.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
-      ['공지', '/board/notice'],
+      ['공지사항', '/board/notice'],
       ['이용 가이드', '/guide'],
       ['고객센터', '/support'],
     ]);

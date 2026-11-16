@@ -1,8 +1,9 @@
 // web/apps/web/src/pages/conversations/Conversations.test.tsx
-// 최근 대화 화면(/conversations). 맨 아래 탭 바의 "대화"가 이 화면으로 가고, 로그인해야 열리며,
-// 왼쪽 메뉴 열과 같은 묶음 셋을 세 줄보다 많이(열 줄까지) 보인다.
+// 내 채팅 화면(/conversations). 맨 아래 탭 바와 왼쪽 열의 "내 채팅"이 이 화면으로 가고, 로그인해야 열리며,
+// 왼쪽 메뉴 열과 같은 섞은 한 목록을 줄을 늘려 보이고 종류 칩과 검색으로 거른다.
 
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { installFakeFetch, json, tokens } from '../../test/fakeFetch';
@@ -26,22 +27,27 @@ function signedIn() {
   });
 }
 
-describe('최근 대화 화면', () => {
-  it('탭 바의 대화가 이 화면을 가리키고, 묶음마다 열 줄까지와 전체 보기가 있다', async () => {
+describe('내 채팅 화면', () => {
+  it('탭 바와 왼쪽 열의 내 채팅이 이 화면을 가리키고, 섞은 한 목록을 종류 칩과 검색으로 거른다', async () => {
     signedIn();
     renderApp('/conversations');
 
     const main = within(await screen.findByRole('main'));
-    expect(await main.findByRole('heading', { level: 1, name: '최근 대화' })).toBeInTheDocument();
-    const chats = within(await main.findByRole('list', { name: '최근 chat 대화' }));
-    expect(chats.getAllByRole('link')).toHaveLength(10);
-    expect(chats.getByRole('link', { name: /대화 1\b/ })).toHaveAttribute('href', '/chat/conversations/c1');
-    expect(main.getByText('앉아 있는 테이블이 없습니다.')).toBeInTheDocument();
-    expect(main.getAllByRole('link', { name: '전체 보기' }).map((link) => link.getAttribute('href'))).toEqual(['/trpg', '/chat', '/story']);
+    expect(await main.findByRole('heading', { level: 1, name: '내 채팅' })).toBeInTheDocument();
+    const list = within(await main.findByRole('list', { name: '내 채팅 목록' }));
+    expect(list.getAllByRole('link')).toHaveLength(12);
+    expect(list.getByRole('link', { name: /^대화 1, 루나, 캐릭터,/ })).toHaveAttribute('href', '/chat/conversations/c1');
+    expect(main.queryByRole('link', { name: '전체 보기' })).toBeNull();
+
+    await userEvent.click(main.getByRole('button', { name: 'TRPG' }));
+    expect(await main.findByText('맞는 대화가 없어요.')).toBeInTheDocument();
+    await userEvent.click(main.getByRole('button', { name: '전체' }));
+    await userEvent.type(main.getByRole('searchbox', { name: '대화 검색' }), '대화 12');
+    expect(within(main.getByRole('list', { name: '내 채팅 목록' })).getAllByRole('link')).toHaveLength(1);
 
     const bar = within(screen.getByRole('navigation', { name: '아래 메뉴' }));
-    expect(bar.getByRole('link', { name: '대화' })).toHaveAttribute('href', '/conversations');
-    expect(bar.getByRole('link', { name: '대화' })).toHaveAttribute('aria-current', 'page');
+    expect(bar.getByRole('link', { name: '내 채팅' })).toHaveAttribute('href', '/conversations');
+    expect(bar.getByRole('link', { name: '내 채팅' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('로그인하지 않았으면 로그인으로 보낸다', async () => {

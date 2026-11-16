@@ -79,10 +79,11 @@
   color: var(--ui-text);
 }
 
-/* 최근 대화(SidebarRecent). 서비스마다 묶음, 줄은 이름과 둘째 줄. 길면 이 칸만 스크롤한다 */
+/* 최근 대화(SidebarRecent). 세 서비스를 섞은 한 목록. 길면 이 칸만 스크롤한다 */
 .sidebar-recent {
   display: grid;
-  gap: 12px;
+  align-content: start;
+  gap: 8px;
   min-height: 0;
   overflow-y: auto;
 }
@@ -96,31 +97,45 @@
 }
 
 .sidebar-recent > .hint,
-.sidebar-recent__group > .hint {
+.sidebar-recent__signed-out > .hint {
   margin: 0;
   padding: 0 12px;
   font-size: 0.85em;
 }
 
-.sidebar-recent__head {
-  display: flex;
-  justify-content: space-between;
-  margin: 0 0 2px;
-  padding: 0 12px;
-  font-size: 0.85em;
+.sidebar-recent__signed-out {
+  display: grid;
+  gap: 8px;
+}
+
+.sidebar-recent__login {
+  margin: 0 12px;
+  padding: 6px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text);
   font-weight: 600;
+  text-align: center;
 }
 
-.sidebar-recent__head a {
-  color: var(--ui-text-muted);
-  font-weight: 400;
-  text-decoration: none;
+.sidebar-recent__list {
+  display: grid;
+  gap: 2px;
 }
 
-/* 왼쪽 메뉴 열과 최근 대화 화면(/conversations)이 함께 쓴다. 본문 안에서도 밑줄 없이 메뉴 열과 같게 보인다 */
+/* 줄: 왼쪽 둥근 표식, 가운데 이름과 둘째 줄, 오른쪽 위 때, 오른쪽 아래 종류 칩.
+ * 왼쪽 메뉴 열과 내 채팅 화면(/conversations)이 함께 쓴다. 본문 안에서도 밑줄 없이 같게 보인다 */
 .sidebar-recent__row {
   display: grid;
-  padding: 4px 12px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'mark name time'
+    'mark detail kind';
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: center;
+  padding: 6px 12px;
   border-radius: var(--ui-radius);
   color: var(--ui-text);
   text-decoration: none;
@@ -128,6 +143,19 @@
 
 .sidebar-recent__row:hover {
   background: var(--ui-surface-subtle);
+}
+
+.sidebar-recent__mark {
+  grid-area: mark;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  background: var(--ui-surface-subtle);
+  color: var(--ui-text);
+  font-weight: 700;
+  font-size: 0.85em;
 }
 
 .sidebar-recent__name,
@@ -138,20 +166,85 @@
 }
 
 .sidebar-recent__name {
+  grid-area: name;
   font-size: 0.9em;
   font-weight: 600;
 }
 
 .sidebar-recent__detail {
+  grid-area: detail;
   color: var(--ui-text-muted);
   font-size: 0.78em;
 }
 
+.sidebar-recent__time {
+  grid-area: time;
+  justify-self: end;
+  color: var(--ui-text-muted);
+  font-size: 0.72em;
+  white-space: nowrap;
+}
+
+/* 종류 칩. TRPG 주황, 캐릭터 보라, 스토리 분홍 */
+.sidebar-recent__kind {
+  grid-area: kind;
+  justify-self: end;
+  padding: 1px 6px;
+  border-radius: var(--ui-radius-sm);
+  font-size: 0.68em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sidebar-recent__kind--trpg {
+  background: color-mix(in srgb, var(--ui-brass) 20%, transparent);
+  color: var(--ui-brass);
+}
+
+.sidebar-recent__kind--character {
+  background: color-mix(in srgb, var(--ui-accent) 20%, transparent);
+  color: var(--ui-accent);
+}
+
+.sidebar-recent__kind--story {
+  background: color-mix(in srgb, var(--ui-seal) 20%, transparent);
+  color: var(--ui-seal);
+}
+
+/* 내 채팅 화면: 줄을 조금 넓게 */
+.sidebar-recent--page .sidebar-recent__row {
+  padding: 10px 12px;
+}
+
+.conversations-filters {
+  display: grid;
+  gap: 10px;
+  margin-bottom: var(--ui-gap);
+}
+
+.conversations-filters__search {
+  width: 100%;
+}
+
+/* 맨 아래 한 줄: 공지사항 · 이용 가이드 · 고객센터 */
 .app-sidebar__footer {
   margin-top: auto;
   padding-top: 12px;
   border-top: 1px solid var(--ui-border);
-  font-size: 0.9em;
+  font-size: 0.78em;
+}
+
+.app-sidebar .app-sidebar__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  color: var(--ui-text-muted);
+}
+
+.app-sidebar .app-sidebar__footer a {
+  padding: 2px 4px;
+  font-weight: 400;
 }
 
 /* 사이트의 이름과 강조색 네모 표식 */

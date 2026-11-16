@@ -1,6 +1,7 @@
 // web/apps/web/src/layout/MobileTabBar.tsx
-// 좁은 화면의 맨 아래 탭 바(Stitch 설계서의 [모든 화면의 틀]). 홈, 탐색, 만들기(가운데), 대화, 마이 다섯 칸이다.
-// 탐색은 TRPG·chat·story·게시판으로 가는 작은 창을 연다. 대화는 최근 대화 화면(/conversations, 서비스마다의 묶음 셋)으로 간다.
+// 좁은 화면의 맨 아래 탭 바. 홈, 탐색, 만들기(가운데), 내 채팅, 마이 다섯 칸이다.
+// 탐색은 TRPG·캐릭터·스토리·게시판으로 가는 작은 창을 연다(랭킹 화면이 생기면 그 자리를 랭킹으로 바꾼다).
+// 내 채팅은 세 서비스를 섞은 한 목록(/conversations)으로 간다.
 // 마이와 만들기는 로그인해야 열리는 화면이라, 로그인 전이면 그 화면이 로그인으로 보낸다.
 
 import { useState } from 'react';
@@ -26,7 +27,7 @@ export function MobileTabBar() {
         만들기
       </Link>
       <NavLink to="/conversations" className="mobile-tab-bar__item">
-        대화
+        내 채팅
       </NavLink>
       <NavLink to="/me" className="mobile-tab-bar__item">
         마이
@@ -38,8 +39,8 @@ export function MobileTabBar() {
 /** 탐색의 창에서 갈 곳 */
 const EXPLORE: { to: string; label: string }[] = [
   { to: '/trpg', label: 'TRPG' },
-  { to: '/chat', label: 'chat' },
-  { to: '/story', label: 'story' },
+  { to: '/chat', label: '캐릭터' },
+  { to: '/story', label: '스토리' },
   { to: '/board', label: '게시판' },
 ];
 
