@@ -1,5 +1,5 @@
 // web/apps/web/src/layout/SiteFrame.test.tsx
-// 사이트의 틀(Stitch 설계서의 [모든 화면의 틀]). 왼쪽 메뉴 열의 이름·만들기·주 메뉴·공지, ☰ 로 접고 펴기,
+// 사이트의 틀(Stitch 설계서의 [모든 화면의 틀]). 왼쪽 메뉴 열의 이름·만들기·주 메뉴·공지, 세 줄 단추로 접고 펴기,
 // 플레이 화면에서 접은 채로 시작하는 것, 아래 탭 바의 탐색 창, 만들기의 입구를 본다.
 
 import { screen, waitFor, within } from '@testing-library/react';
@@ -30,7 +30,7 @@ afterEach(() => {
 });
 
 describe('사이트의 틀', () => {
-  it('왼쪽 메뉴 열에 이름, 만들기, 주 메뉴, 공지가 있고 ☰ 로 접고 편다', async () => {
+  it('왼쪽 메뉴 열에 이름, 만들기, 주 메뉴, 공지가 있고 세 줄 단추로 접고 편다', async () => {
     signedOut();
     renderApp('/settings');
 

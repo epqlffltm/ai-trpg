@@ -1,6 +1,6 @@
 /* web/packages/ui/src/styles.css
  * 공통 구성요소의 모양. 색, 글꼴, 간격, 모서리는 맨 위의 변수에만 있다.
- * 색과 모양은 Stitch 시안 "Phantasmagoria Library"(2026-11-14)를 따른다. 상용 AI 캐릭터 채팅 서비스처럼
+ * 색과 모양은 Stitch 디자인 시스템 "Obsidian Archive"(2026-11-16)를 따른다. 상용 AI 캐릭터 채팅 서비스처럼
  * 다크가 기본이고, 바탕은 거의 검은 무지, 층은 면의 밝기와 1px 선으로 나눈다. 강조는 보라 하나.
  * 분홍(--ui-seal)은 안 읽은 수·19·상대의 이름표, 주황(--ui-brass)은 판정·퀘스트·위험이다.
  * 글꼴은 Hanken Grotesk(사이트 안의 파일, main.tsx 가 부른다). 한글 글자가 없어서 한글은 기기의 고딕으로 이어진다.
@@ -15,6 +15,7 @@
   --ui-surface-low: #1b1b20;
   --ui-surface-raised: #35343a;
   --ui-text: #e4e1e8;
+  --ui-text-secondary: #cbc3d7;
   --ui-text-muted: #958ea0;
   --ui-border: #2a2a35;
   --ui-border-strong: #494454;
@@ -25,12 +26,14 @@
   --ui-seal: #ffb0cd;
   --ui-seal-text: #640039;
   --ui-brass: #ffb690;
+  --ui-brass-glow: rgb(255 182 144 / 40%);
   --ui-danger: #ffb4ab;
   --ui-focus: #d0bcff;
+  --ui-focus-ring: rgb(160 120 255 / 25%);
   --ui-backdrop: rgb(27 27 32 / 85%);
-  --ui-shadow: 0 4px 16px -2px rgb(0 0 0 / 50%);
-  --ui-shadow-raised: 0 12px 32px -4px rgb(0 0 0 / 70%), 0 0 16px 0 rgb(139 92 246 / 8%);
-  --ui-raised-border: rgb(139 92 246 / 25%);
+  --ui-shadow: 0 8px 24px rgb(0 0 0 / 55%);
+  --ui-shadow-raised: 0 16px 40px rgb(0 0 0 / 75%);
+  --ui-raised-border: #494454;
   --ui-radius-sm: 4px;
   --ui-radius: 8px;
   --ui-radius-lg: 12px;
@@ -50,6 +53,7 @@
     --ui-surface-low: #ffffff;
     --ui-surface-raised: #ffffff;
     --ui-text: #1b1b20;
+    --ui-text-secondary: #48454f;
     --ui-text-muted: #5b5666;
     --ui-border: #e2e2ea;
     --ui-border-strong: #c9c4d3;
@@ -60,8 +64,10 @@
     --ui-seal: #aa0266;
     --ui-seal-text: #ffffff;
     --ui-brass: #783200;
+    --ui-brass-glow: rgb(120 50 0 / 25%);
     --ui-danger: #ba1a1a;
     --ui-focus: #6d3bd7;
+    --ui-focus-ring: rgb(109 59 215 / 20%);
     --ui-backdrop: rgb(255 255 255 / 85%);
     --ui-shadow: 0 4px 16px -4px rgb(27 27 32 / 12%);
     --ui-shadow-raised: 0 12px 32px -6px rgb(27 27 32 / 18%);
@@ -77,6 +83,7 @@
   --ui-surface-low: #ffffff;
   --ui-surface-raised: #ffffff;
   --ui-text: #1b1b20;
+  --ui-text-secondary: #48454f;
   --ui-text-muted: #5b5666;
   --ui-border: #e2e2ea;
   --ui-border-strong: #c9c4d3;
@@ -87,8 +94,10 @@
   --ui-seal: #aa0266;
   --ui-seal-text: #ffffff;
   --ui-brass: #783200;
+  --ui-brass-glow: rgb(120 50 0 / 25%);
   --ui-danger: #ba1a1a;
   --ui-focus: #6d3bd7;
+  --ui-focus-ring: rgb(109 59 215 / 20%);
   --ui-backdrop: rgb(255 255 255 / 85%);
   --ui-shadow: 0 4px 16px -4px rgb(27 27 32 / 12%);
   --ui-shadow-raised: 0 12px 32px -6px rgb(27 27 32 / 18%);
@@ -106,12 +115,14 @@
   box-sizing: border-box;
 }
 
+/* 본문은 15px, 줄 사이 1.6(긴 대화를 오래 읽어도 덜 지치게) */
 body {
   margin: 0;
   background: var(--ui-bg);
   color: var(--ui-text);
   font-family: var(--ui-font);
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.6;
   accent-color: var(--ui-accent);
 }
 
@@ -120,8 +131,9 @@ h1,
 h2,
 h3 {
   font-family: var(--ui-font-heading);
-  font-weight: 700;
-  letter-spacing: -0.015em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
 }
 
 code,
@@ -141,6 +153,7 @@ a {
 
 /* 버튼 */
 .ui-button {
+  min-height: 44px;
   border: 1px solid transparent;
   border-radius: var(--ui-radius);
   padding: 10px 16px;
@@ -164,22 +177,23 @@ a {
 /* 올리면 밝아지고 보라빛이 번진다 */
 .ui-button--primary:hover:not(:disabled) {
   background: var(--ui-accent-hover);
-  box-shadow: 0 0 14px var(--ui-accent-glow);
+  box-shadow: 0 0 16px var(--ui-accent-glow);
 }
 
+/* 둘째 단추: 카드 면에 진한 테. 올리면 한 단 밝아진다 */
 .ui-button--secondary {
-  background: var(--ui-surface-subtle);
-  border-color: var(--ui-border);
+  background: var(--ui-surface);
+  border-color: var(--ui-border-strong);
   color: var(--ui-text);
 }
 
 .ui-button--secondary:hover:not(:disabled) {
-  background: var(--ui-surface-raised);
-  border-color: var(--ui-accent);
+  background: var(--ui-surface-subtle);
 }
 
 /* 글 단추: 흐린 글이 올리면 밝아지고 옅은 면이 깔린다 */
 .ui-button--quiet {
+  min-height: 0;
   background: none;
   color: var(--ui-text-muted);
   padding: 4px 8px;
@@ -201,20 +215,24 @@ a {
   font-weight: 600;
 }
 
-/* 입력칸은 한 단 밝은 면에 1px 선. 초점은 보라 테와 바깥 한 줄 */
+/* 입력칸은 바탕보다 한 단 밝은 면에 옅은 1px 선. 초점은 보라 테와 바깥의 옅은 빛 */
 .ui-field__input {
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
   padding: 10px 12px;
   font: inherit;
-  background: var(--ui-surface-subtle);
+  background: var(--ui-surface-low);
   color: var(--ui-text);
+}
+
+.ui-field__input::placeholder {
+  color: var(--ui-text-muted);
 }
 
 .ui-field__input:focus-visible {
   border-color: var(--ui-focus);
   outline: none;
-  box-shadow: 0 0 0 1px var(--ui-focus);
+  box-shadow: 0 0 0 2px var(--ui-focus-ring);
 }
 
 .ui-field__input[aria-invalid="true"] {
@@ -223,7 +241,7 @@ a {
 
 .ui-field__hint {
   margin: 0;
-  color: var(--ui-text-muted);
+  color: var(--ui-text-secondary);
   font-size: 0.9em;
 }
 
@@ -312,7 +330,7 @@ a {
 .ui-checkbox__description {
   grid-column: 2;
   margin: 2px 0 0;
-  color: var(--ui-text-muted);
+  color: var(--ui-text-secondary);
   font-size: 0.9em;
 }
 
