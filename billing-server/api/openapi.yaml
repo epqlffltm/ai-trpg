@@ -309,7 +309,14 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Order" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/PaymentForbidden" }
+        "403":
+          description: |
+            본인 확인이 필요하거나(step_up.required, 화면이 본인 확인을 받고 다시 보낸다)
+            본인 확인을 끈 사람이다(step_up.disabled, 끈 동안에는 화면에서 철회하지 못한다).
+            결제할 수 없는 사람이다(payment.verification_required, payment.guardian_consent_required)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
           description: |
@@ -467,6 +474,7 @@ paths:
                 properties:
                   customer_key: { type: string, format: uuid }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/StepUpRequired" }
         "500": { $ref: "#/components/responses/ServerError" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
@@ -498,6 +506,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/StepUpRequired" }
         "409":
           description: 고객 키가 이 사람의 것이 아니다(card.customer_key_mismatch). 처음부터 다시 한다
           content:
@@ -523,6 +532,7 @@ paths:
         "204":
           description: 지웠다
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/StepUpRequired" }
         "500": { $ref: "#/components/responses/ServerError" }
         "503": { $ref: "#/components/responses/Unavailable" }
 
@@ -963,6 +973,11 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    StepUpRequired:
+      description: 본인 확인이 필요하다(step_up.required). 화면이 본인 확인을 받고 같은 요청을 다시 보낸다. 본인 확인을 끈 사람은 묻지 않는다
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     PaymentForbidden:
       description: 결제할 수 없다. payment.verification_required(본인인증으로) 또는 payment.guardian_consent_required(보호자 동의로)
       content:
@@ -976,7 +991,7 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
     Unavailable:
-      description: 지금은 끝내지 못했다. 같은 요청을 다시 보낸다(DB 의 시간 제한, 요청의 마감, 공개키를 구할 수 없음)
+      description: 지금은 끝내지 못했다. 같은 요청을 다시 보낸다(DB 의 시간 제한, 요청의 마감, 공개키를 구할 수 없음, 인증 서버에 본인 확인을 묻지 못함)
       headers:
         Retry-After: { schema: { type: integer } }
       content:

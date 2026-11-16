@@ -32,6 +32,7 @@ import (
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/jwks"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/obs"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/revocations"
+	"github.com/epqlffltm/ai-trpg/billing-server/internal/stepup"
 	"github.com/epqlffltm/ai-trpg/billing-server/internal/tracing"
 )
 
@@ -128,6 +129,7 @@ func run() error {
 		ChatServerSecret:  settings.ChatServerSecret,
 		StoryServerSecret: settings.StoryServerSecret,
 		CheckoutClientKey: settings.CheckoutClientKey(),
+		StepUp:            stepup.NewHTTPChecker(settings.AuthStepUpURL, settings.AuthServerSecret, time.Now),
 		Now:               time.Now,
 		Meter:             meters.Meter(),
 	})

@@ -67,6 +67,9 @@ type Dependencies struct {
 	// CheckoutClientKey 는 개발용 결제 화면(CheckoutPath)에 실을 토스페이먼츠의 클라이언트 키다.
 	// 비어 있으면 그 화면을 열지 않는다.
 	CheckoutClientKey string
+	// StepUp 은 민감한 작업(청약철회, 카드) 앞에서 인증 서버에 본인 확인 창을 묻는다(F5, stepup.go).
+	// 서버(cmd/server)는 늘 넣는다. 넣지 않으면 묻지 않는다(그 작업을 다루지 않는 테스트가 뺀다).
+	StepUp StepUpGate
 	// Now 는 지금 시각을 돌려준다. 서명이 방금 것인지 볼 때 쓴다.
 	Now func() time.Time
 	// Logger 는 요청의 기록을 남기는 곳이다. 넣지 않으면 프로세스의 기본 로거(slog.Default)다.
@@ -137,13 +140,14 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	api.GET("/orders", listOrders(deps.Orders))
 	api.GET("/orders/:id", getOrder(deps.Orders))
 	api.POST("/orders/:id/confirm", confirmOrder(deps.Orders))
-	api.POST("/orders/:id/refund", refundOrder(deps.Orders))
+	// 민감한 작업(청약철회, 카드)은 본인 확인 창을 먼저 본다(stepup.go). 카드는 등록 창을 열기 전(고객 키)부터 본다
+	api.POST("/orders/:id/refund", stepUpGuard(deps, refuseWhenDisabled, logger, refundOrder(deps.Orders))...)
 	if deps.AutoCharge != nil {
 		api.GET("/auto-charge", getAutoCharge(deps.AutoCharge))
 		api.PUT("/auto-charge", putAutoCharge(deps.AutoCharge))
-		api.POST("/cards/customer-key", createCustomerKey(deps.AutoCharge))
-		api.POST("/cards", registerCard(deps.AutoCharge))
-		api.DELETE("/cards", removeCard(deps.AutoCharge))
+		api.POST("/cards/customer-key", stepUpGuard(deps, allowWhenDisabled, logger, createCustomerKey(deps.AutoCharge))...)
+		api.POST("/cards", stepUpGuard(deps, allowWhenDisabled, logger, registerCard(deps.AutoCharge))...)
+		api.DELETE("/cards", stepUpGuard(deps, allowWhenDisabled, logger, removeCard(deps.AutoCharge))...)
 	}
 	if deps.AutoChargeHistory != nil {
 		api.GET("/auto-charge/history", getAutoChargeHistory(deps.AutoChargeHistory))
@@ -190,4 +194,12 @@ func spenderCallers(deps Dependencies) []serviceCaller {
 		{name: ChatServer, secret: deps.ChatServerSecret},
 		{name: StoryServer, secret: deps.StoryServerSecret},
 	}
+}
+
+// stepUpGuard 는 민감한 작업의 핸들러 앞에 본인 확인을 붙인다. 묻는 것(deps.StepUp)이 없으면 핸들러만이다.
+func stepUpGuard(deps Dependencies, policy stepUpPolicy, logger *slog.Logger, handler gin.HandlerFunc) []gin.HandlerFunc {
+	if deps.StepUp == nil {
+		return []gin.HandlerFunc{handler}
+	}
+	return []gin.HandlerFunc{requireStepUp(deps.StepUp, policy, logger), handler}
 }

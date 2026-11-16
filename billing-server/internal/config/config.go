@@ -131,6 +131,9 @@ type Settings struct {
 	AuthJWKSURL string
 	// AuthRevocationsURL 은 인증 서버가 끊긴 세션의 목록을 내주는 주소다(#274). 적지 않으면 AuthJWKSURL 옆의 주소다.
 	AuthRevocationsURL string
+	// AuthStepUpURL 은 민감한 작업 앞에서 본인 확인 창을 묻는 인증 서버의 주소다(F5). AUTH_STEP_UP_URL 이고,
+	// 적지 않으면 AuthJWKSURL 옆의 …/service/step-up/check 다. 서명은 AuthServerSecret 으로 한다
+	AuthStepUpURL string
 	// JWTIssuer 는 받아들이는 토큰의 발급자(iss), JWTAudience 는 이 서버의 이름(aud)이다.
 	JWTIssuer   string
 	JWTAudience string
@@ -306,6 +309,7 @@ func Load(lookup Lookup) (Settings, error) {
 	db, dbErr := LoadDatabase(lookup)
 	jwksURL, jwksErr := readHTTPURL(lookup, "AUTH_JWKS_URL")
 	revocationsURL, revocationsErr := readRevocationsURL(lookup, jwksURL)
+	stepUpURL, stepUpErr := readAuthServiceURL(lookup, "AUTH_STEP_UP_URL", stepUpCheckPath)
 	rules, rulesErr := loadRules(lookup)
 	logging, loggingErr := loadLogging(lookup)
 	webhookSecret, webhookErr := readSecret(lookup, "PG_WEBHOOK_SECRET", MinWebhookSecretLength)
@@ -318,7 +322,7 @@ func Load(lookup Lookup) (Settings, error) {
 	payment, paymentErr := loadPayment(lookup)
 
 	if err := errors.Join(
-		debugErr, portErr, dbErr, jwksErr, revocationsErr, rulesErr, loggingErr, webhookErr, welcomeErr, inviteErr,
+		debugErr, portErr, dbErr, jwksErr, revocationsErr, stepUpErr, rulesErr, loggingErr, webhookErr, welcomeErr, inviteErr,
 		paymentErr,
 		gameSecretErr, authSecretErr, chatSecretErr, storySecretErr,
 		distinctSecrets(webhookSecret, gameSecret, authSecret, chatSecret, storySecret),
@@ -337,6 +341,7 @@ func Load(lookup Lookup) (Settings, error) {
 		DBSchema:           db.Schema,
 		AuthJWKSURL:        jwksURL,
 		AuthRevocationsURL: revocationsURL,
+		AuthStepUpURL:      stepUpURL,
 		JWTIssuer:          readString(lookup, "JWT_ISSUER", DefaultJWTIssuer),
 		JWTAudience:        readString(lookup, "JWT_AUDIENCE", DefaultJWTAudience),
 		SpendFreeFirst:     rules.SpendFreeFirst,
@@ -420,10 +425,11 @@ func differentSecret(authSecret string, notificationSecret string) error {
 	return nil
 }
 
-// guardianNoticesPath 와 receiptNoticesPath 는 인증 서버의 알림 주소의 끝이다. 공개키(…/jwks)와 같은 곳(/api/v1/auth)에 있다.
+// guardianNoticesPath, receiptNoticesPath, stepUpCheckPath 는 인증 서버의 서버끼리 주소의 끝이다. 공개키(…/jwks)와 같은 곳(/api/v1/auth)에 있다.
 const (
 	guardianNoticesPath = "/service/guardian-notices"
 	receiptNoticesPath  = "/service/receipt-notices"
+	stepUpCheckPath     = "/service/step-up/check"
 )
 
 // readGuardianNotices 는 보호자 알림을 보낼 곳과 비밀을 읽는다. 없어도 된다(그러면 보내지 않는다). 있으면 모양을 본다.

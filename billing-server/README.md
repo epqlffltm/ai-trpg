@@ -187,6 +187,7 @@ curl -H "Authorization: Bearer <access 토큰>" http://127.0.0.1:8003/api/v1/bil
 | `AUTH_SESSION_REVOCATIONS_URL` | `AUTH_JWKS_URL` 옆(`…/session-revocations`) | 인증 서버가 끊긴 세션의 목록을 내주는 주소(#274). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
 | `AUTH_GUARDIAN_NOTICES_URL` | `AUTH_JWKS_URL` 옆(`…/service/guardian-notices`) | (정리 작업) 보호자 결제 알림을 보내는 인증 서버의 주소(#352). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
 | `AUTH_RECEIPT_NOTICES_URL` | `AUTH_JWKS_URL` 옆(`…/service/receipt-notices`) | (정리 작업) 결제한 본인에게 결제와 청약철회를 알리는 인증 서버의 주소(#553). `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
+| `AUTH_STEP_UP_URL` | `AUTH_JWKS_URL` 옆(`…/service/step-up/check`) | 민감한 작업(청약철회, 카드) 앞에서 본인 확인 창을 묻는 인증 서버의 주소(F5, 아래 "민감한 작업의 본인 확인"). 서명은 `AUTH_SERVER_SECRET` 으로 한다. `AUTH_JWKS_URL` 이 `/jwks` 로 끝나지 않으면 적어야 한다 |
 | `NOTIFICATION_URL` | 없음(보내지 않음) | (정리 작업) 사용자의 알림을 넣는 알림 서버의 주소(#385). `http://127.0.0.1:8004`. 경로는 붙이지 않는다. 비우면 알릴 일을 적기만 한다 |
 | `NOTIFICATION_SECRET` | 없음 | (정리 작업) 알림 서버에 보내는 요청에 서명하는 비밀. 알림 서버의 `BILLING_SERVER_SECRET` 과 같은 값, 32자 이상, `AUTH_SERVER_SECRET` 과 달라야 한다. 비우면 적기만 한다. 로그와 오류에 싣지 않는다 |
 | `JWT_ISSUER` | `ai-trpg-auth` | 토큰을 발급한 서버의 이름(`iss`). 인증 서버의 `JWT_ISSUER` 와 같아야 한다 |
@@ -580,7 +581,23 @@ POST /api/v1/billing/orders/{id}/refund
 | 409 `refund.credits_used` | 그 주문의 크레딧을 썼거나 홀드로 묶었다 |
 | 409 `refund.refused` | 결제 대행사가 취소를 거절했다. 크레딧은 돌아오고 주문은 `paid` 다 |
 | 409 `refund.busy` | 같은 주문의 다른 요청과 엇갈렸다. 다시 보낸다 |
-| 503 | 작업이 30초 안에 끝나지 않았다(DB 가 막혔다). 주문은 적어 둔 상태(`paid` 나 `refunding`)에 남는다. 다시 보낸다 |
+| 403 `step_up.required` | 본인 확인이 필요하다. 화면이 본인 확인을 받고 같은 요청을 다시 보낸다(아래 "민감한 작업의 본인 확인") |
+| 403 `step_up.disabled` | 본인 확인을 끈 사람이다. 끈 동안에는 화면에서 청약철회를 받지 않는다 |
+| 503 | 작업이 30초 안에 끝나지 않았다(DB 가 막혔다). 주문은 적어 둔 상태(`paid` 나 `refunding`)에 남는다. 다시 보낸다. 인증 서버에 본인 확인을 묻지 못한 것도 503 이다(그때는 아무것도 하지 않았다) |
+
+**민감한 작업의 본인 확인(F5).** 청약철회와 카드(고객 키 받기, 등록·바꾸기, 지우기) 앞에서 인증 서버에 그 세션의 본인 확인 창을 묻는다(`internal/stepup`, `internal/httpapi/stepup.go`).
+받은 access 토큰의 `sub` 와 세션의 이름(`sid`)을 서버끼리 주소(`POST /api/v1/auth/service/step-up/check`)에 `AUTH_SERVER_SECRET` 으로 서명해 보낸다.
+이 서버는 본인 확인의 수단(메일 코드)을 모르고, 답의 상태만 읽는다. 창의 규칙(10분, 늘려도 확인한 때에서 1시간)은 인증 서버가 정한다.
+
+| 인증 서버의 답 | 청약철회 | 카드 |
+| --- | --- | --- |
+| `open`(창이 열려 있다. 인증 서버가 창을 늘렸다) | 한다 | 한다 |
+| `required`(창이 닫혔거나 확인한 적이 없다. `sid` 가 없는 옛 토큰, 모르는 사용자도) | 403 `step_up.required` | 403 `step_up.required` |
+| `disabled`(본인 확인을 끈 사람) | 403 `step_up.disabled` | 한다 |
+| 답이 없다, 알아듣지 못했다 | 503 | 503 |
+
+- 짧은 증표를 받는 대신 묻는다. 코드와 메일은 인증 서버만 알고 다시 쓰기 걱정이 없다. 대가로 인증 서버가 답하지 않으면 민감한 작업이 잠깐 막힌다
+- 플레이, 충전, 지갑 보기 같은 보통의 작업은 묻지 않는다
 
 차례는 승인과 같은 모양이다. 결제 대행사를 부르는 동안 트랜잭션을 열어 두지 않는다.
 
@@ -1013,7 +1030,7 @@ narration.old-model.i0.o0,stop,,,
 - 사용자가 부르는 주소(`/me`, `/wallet`, `/orders`)의 오류에는 `code` 가 없다(칸이 빠진다). 웹 화면은 상태 코드와 `detail` 만 쓴다.
   하나 다른 것이 결제 자격의 403 이다(`payment.verification_required`, `payment.guardian_consent_required`, 위의 "결제할 수 있는 사람"). 화면이 갈 곳을 가른다.
   쿠폰의 403·404·409·429(`coupon.*`, 같은 곳의 "쿠폰"), 자동 충전과 카드 등록의 400·409·422·503(`autocharge.*`, `card.*`, [자동 충전](#자동-충전))과
-  청약철회의 409(`refund.*`, [주문과 결제](#주문과-결제)의 "청약철회")도 같다. 화면이 할 수 없는 까닭을 나눠 보인다
+  청약철회의 409(`refund.*`, [주문과 결제](#주문과-결제)의 "청약철회")와 본인 확인의 403(`step_up.*`, 같은 곳)도 같다. 화면이 할 수 없는 까닭을 나눠 보인다
 - 상태 코드는 그대로다. `code` 를 읽지 않는 옛 게임 서버도 지금처럼 돈다
 
 **부르는 쪽이 이 답들에 기대고 있다.** 게임 서버의 `app/billing/http_billing.py` 가 위의 표를 그대로 옮겨 적었다.
@@ -2249,6 +2266,7 @@ billing-server/
     tracing/              span 을 OTLP 로 미는 것(TracerProvider, 전역). 다른 곳을 부르는 요청의 span(transport.go). 보낼 곳이 없으면 noop
       metricstest/          테스트가 계측한 값을 이름과 label 로 읽는다
     migrate/              마이그레이션 파일을 적용하고 되돌린다. goose 를 부르는 얇은 층
+    stepup/               민감한 작업 앞에서 인증 서버에 본인 확인 창을 묻는다(F5). httpapi/stepup.go 가 청약철회와 카드 앞에 붙인다
     credit/               크레딧의 양(Amount). 단위와, 글자로 쓰고 읽는 규칙
     wallet/               크레딧을 넣고, 쓰고, 읽는다
       wallet.go             타입, 오류, 규칙(Policy)
