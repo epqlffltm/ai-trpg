@@ -5,6 +5,7 @@
 // 다시 동의하거나 탈퇴를 기다리는 중이면(토큰이 인증 서버에만 통한다) 이 틀 대신 로고와 로그아웃만 있는 틀(LimitedLayout)을 그린다.
 // 로그인, 가입, 비밀번호, 보호자 링크의 화면은 막지 않고(재설정 메일의 링크 같은 것), 틀 대신 가운데 위에 이름만 있는 틀(AuthFrame)에 그린다.
 // 경로의 화면은 처음 갈 때 받을 수 있다(routing/pages.ts). 받는 동안은 "불러오는 중", 받지 못하거나 깨지면 RouteBoundary 의 안내다.
+// 민감한 작업이 본인 확인을 요구하면 띄울 창의 자리(StepUpHost, F5)를 틀에 하나 둔다. 로고와 로그아웃만 있는 틀(LimitedLayout)에서는 민감한 작업을 하지 않는다.
 // 점검 중이면(어느 요청이 프록시의 점검 503 을 받으면) 틀 대신 점검 화면을, 처음 열 때 로그인을 되살리지 못하면(서버에 닿지 못함, 5xx)
 // 장애 화면을 그린다(ServiceScreens). 둘 다 틀 없이 로고만 있다.
 
@@ -12,6 +13,7 @@ import { Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router';
 import { isLimited } from '../api/session';
 import { isAuthPath } from '../auth/safeReturnPath';
+import { StepUpHost } from '../auth/StepUpHost';
 import { useBootSession } from '../auth/useBootSession';
 import { useSession } from '../auth/useSession';
 import { useMaintenance } from '../hooks/useMaintenance';
@@ -44,6 +46,7 @@ export function AppLayout() {
         {boot.state === 'checking' ? <p className="page page--loading">불러오는 중</p> : <RouteContent />}
       </div>
       <MobileTabBar />
+      <StepUpHost />
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError, NetworkError } from '../../api/errors';
 import type { Order } from '../../api/types';
 import { blockedText, hiddenCount, statusLabel, visibleOrders } from './orderView';
-import { describeRefundProblem } from './refundProblem';
+import { describeRefundProblem, STEP_UP_DISABLED, STEP_UP_REQUIRED } from './refundProblem';
 
 function order(status: Order['status'], extra: Partial<Order> = {}): Order {
   return {
@@ -54,5 +54,18 @@ describe('청약철회의 실패', () => {
     expect(used.message).toContain('썼거나');
     expect(describeRefundProblem(new ApiError({ status: 409, detail: 'x', code: 'refund.refused' })).message).toContain('골드는 그대로');
     expect(describeRefundProblem(new ApiError({ status: 404, detail: 'x' })).message).toBe('그런 주문이 없습니다.');
+  });
+
+  it('본인 확인을 닫았으면 다시 누르게 하고, 확인을 껐으면 켜는 길을 알린다', () => {
+    expect(describeRefundProblem(new ApiError({ status: 403, detail: 'x', code: 'step_up.required' }))).toEqual({
+      message: STEP_UP_REQUIRED,
+      retry: true,
+      refresh: false,
+    });
+    expect(describeRefundProblem(new ApiError({ status: 403, detail: 'x', code: 'step_up.disabled' }))).toEqual({
+      message: STEP_UP_DISABLED,
+      retry: false,
+      refresh: false,
+    });
   });
 });
