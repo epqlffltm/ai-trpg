@@ -95,6 +95,10 @@ class User(AbstractUser):
     # 끊긴 세션 목록에 싣는다(session_revocations.py)
     sessions_revoked_at = models.DateTimeField('세션을 끊은 시각', null=True, blank=True, db_index=True)
 
+    # 민감한 작업(청약철회, 카드)의 본인 확인을 껐는지(accounts/step_up.py). 기본은 켜짐이다.
+    # 끄면 결제 서버가 카드 작업은 확인 없이 하고, 청약철회는 화면에서 받지 않는다
+    step_up_disabled = models.BooleanField('민감한 작업의 본인 확인 끔', default=False)
+
     # 탈퇴를 요청한 시각(#603, docs/architecture/withdrawal.md). 비어 있으면 요청하지 않았거나 취소했다.
     # 이 시각에서 유예(withdrawal.GRACE)가 지나면 정리 작업이 계정을 비운다. 그동안의 토큰은 인증 서버에만 통한다
     withdrawal_requested_at = models.DateTimeField('탈퇴를 요청한 시각', null=True, blank=True, db_index=True)
@@ -174,6 +178,8 @@ class EmailCodePurpose(models.TextChoices):
     SIGNUP = 'signup', '가입 인증'
     LOGIN = 'login', '로그인 인증'
     PASSWORD_RESET = 'password_reset', '비밀번호 재설정'
+    # 민감한 작업(청약철회, 카드) 앞의 본인 확인(accounts/step_up.py)
+    STEP_UP = 'step_up', '본인 확인'
 
 
 class CodeRecord(models.Model):
@@ -467,6 +473,7 @@ class MailKind(models.TextChoices):
 
     SIGNUP_CODE = 'signup_code', '가입 인증 코드'
     LOGIN_CODE = 'login_code', '로그인 인증 코드'
+    STEP_UP_CODE = 'step_up_code', '본인 확인 코드'
     ALREADY_REGISTERED = 'already_registered', '이미 가입된 이메일'
     PASSWORD_RESET = 'password_reset', '비밀번호 재설정'
     PASSWORD_CHANGED = 'password_changed', '비밀번호 변경 알림'
@@ -1324,3 +1331,28 @@ class ReleasedNickname(models.Model):
 
     def __str__(self) -> str:
         return self.nickname
+
+
+class StepUpWindow(models.Model):
+    """
+    세션 하나의 본인 확인 창(accounts/step_up.py). 메일 코드로 확인하면 열리고, 민감한 작업을 하면 늘어난다.
+
+    세션은 로그인 한 번에서 이어지는 refresh 토큰의 묶음이다. 토큰의 sid 클레임이 그 이름이다(accounts/tokens.py).
+    다른 기기의 확인은 이 기기에 들지 않는다. 세션마다 행이 하나다.
+    늘어나도 마지막으로 실제로 확인한 때(verified_at)에서 STEP_UP_CAP 을 넘지 않는다.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='step_up_windows', verbose_name='회원')
+    session_id = models.CharField('세션', max_length=64)
+    verified_at = models.DateTimeField('마지막으로 확인한 시각')
+    expires_at = models.DateTimeField('창이 닫히는 시각')
+
+    class Meta:
+        verbose_name = '본인 확인 창'
+        verbose_name_plural = '본인 확인 창'
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'session_id'], name='accounts_stepupwindow_user_session_unique'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.user} / {self.session_id} / {self.expires_at}'

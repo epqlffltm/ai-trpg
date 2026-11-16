@@ -118,6 +118,14 @@ class LoginCodeUnavailableError(Exception):
         self.retry_after = retry_after
 
 
+class StepUpCodeUnavailableError(Exception):
+    """본인 확인 코드를 지금은 보낼 수 없다. 발급 제한에 걸렸고 쓸 수 있는 코드도 없다."""
+
+    def __init__(self, retry_after: timedelta):
+        super().__init__()
+        self.retry_after = retry_after
+
+
 class WrongCurrentPasswordError(Exception):
     """비밀번호를 바꾸려는데 현재 비밀번호가 틀렸다."""
 
@@ -483,6 +491,25 @@ def _send_login_code(user: User) -> bool:
         raise LoginCodeUnavailableError(exc.retry_after) from exc
     except EmailCodeLimitError as exc:
         raise LoginCodeUnavailableError(exc.retry_after) from exc
+    return True
+
+
+def send_step_up_code(user: User) -> bool:
+    """
+    민감한 작업 앞의 본인 확인 코드를 메일로 보낸다(accounts/step_up.py). 새 코드를 보냈으면 True 다.
+
+    로그인 코드와 같은 규칙이다. 1분이 지나지 않았어도 앞서 보낸 코드가 아직 쓸 수 있으면 False 를 돌려준다.
+    그때는 그 코드를 쓰면 된다.
+    쓸 코드도 없고 새로 보낼 수도 없으면 StepUpCodeUnavailableError 다.
+    """
+    try:
+        _issue_and_send_code(user, EmailCodePurpose.STEP_UP)
+    except EmailCodeCooldownError as exc:
+        if has_usable_code(user=user, purpose=EmailCodePurpose.STEP_UP):
+            return False
+        raise StepUpCodeUnavailableError(exc.retry_after) from exc
+    except EmailCodeLimitError as exc:
+        raise StepUpCodeUnavailableError(exc.retry_after) from exc
     return True
 
 

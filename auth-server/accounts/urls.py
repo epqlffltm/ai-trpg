@@ -11,6 +11,7 @@ from django.urls import path
 from accounts.app_views import AppLoginVerifyView, AppLogoutView, AppPasswordChangeView, AppRefreshView
 from accounts.attendance_views import AttendanceRewardsView, AttendanceView
 from accounts.badge_views import MyBadgesView
+from accounts.step_up_views import MyStepUpCodeView, MyStepUpSettingView, MyStepUpView, ServiceStepUpCheckView
 from accounts.views import (
     ConsentDocumentsView,
     CreatorSearchView,
@@ -83,6 +84,9 @@ urlpatterns = [
     path('me/content-settings', MyContentSettingsView.as_view(), name='my-content-settings'),
     path('me/profile', MyProfileView.as_view(), name='my-profile'),
     path('me/nickname', MyNicknameView.as_view(), name='my-nickname'),
+    path('me/step-up', MyStepUpView.as_view(), name='my-step-up'),
+    path('me/step-up/code', MyStepUpCodeView.as_view(), name='my-step-up-code'),
+    path('me/step-up/setting', MyStepUpSettingView.as_view(), name='my-step-up-setting'),
     path('attendance', AttendanceView.as_view(), name='attendance'),
     path('attendance/rewards', AttendanceRewardsView.as_view(), name='attendance-rewards'),
     path('me/blocks/creators/<uuid:public_id>', MyCreatorBlockView.as_view(), name='my-creator-block'),
@@ -93,4 +97,5 @@ urlpatterns = [
     path('guardian/revoke', GuardianRevokeView.as_view(), name='guardian-revoke'),
     path('service/guardian-notices', ServiceGuardianNoticeView.as_view(), name='service-guardian-notices'),
     path('service/receipt-notices', ServiceReceiptNoticeView.as_view(), name='service-receipt-notices'),
+    path('service/step-up/check', ServiceStepUpCheckView.as_view(), name='service-step-up-check'),
 ]

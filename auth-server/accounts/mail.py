@@ -30,11 +30,16 @@ DIGEST_MAX_LISTED_EVENTS = 50
 EMAIL_CODE_MESSAGES = {
     EmailCodePurpose.SIGNUP: ('가입 인증 코드', '회원가입을 이어 가려면 아래 코드를 입력해 주세요.'),
     EmailCodePurpose.LOGIN: ('로그인 인증 코드', '로그인을 마치려면 아래 코드를 입력해 주세요.'),
+    EmailCodePurpose.STEP_UP: ('본인 확인 코드', '청약철회나 카드 등록을 이어 가려면 아래 코드를 입력해 주세요.'),
 }
 
 
 # 인증 코드 메일의 종류(메트릭 emails_sent_total 의 kind)
-EMAIL_CODE_KINDS = {EmailCodePurpose.SIGNUP: MailKind.SIGNUP_CODE, EmailCodePurpose.LOGIN: MailKind.LOGIN_CODE}
+EMAIL_CODE_KINDS = {
+    EmailCodePurpose.SIGNUP: MailKind.SIGNUP_CODE,
+    EmailCodePurpose.LOGIN: MailKind.LOGIN_CODE,
+    EmailCodePurpose.STEP_UP: MailKind.STEP_UP_CODE,
+}
 
 
 def build_email_code_message(*, purpose: str, code: str) -> tuple[str, str]:

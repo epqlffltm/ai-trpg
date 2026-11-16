@@ -17,8 +17,11 @@ JWT 발급, 갱신, 폐기.
       다만 바꾼 답을 잃은 것(다시 읽기, 끊김)이면 새 쌍을 다시 준다. 처음 바꾼 지 REFRESH_REUSE_GRACE 안이고
       바꿔 준 토큰이 아직 쓰이지 않았을 때다(lost_answer).
     - refresh 토큰마다 웹(쿠키)과 앱(본문) 가운데 어디에 줬는지 적고, 같은 쪽의 길로만 갱신한다(#429).
+    - 토큰에 세션의 이름(sid)을 넣는다. 로그인할 때 새로 짓고, 갱신해도 그대로 물려준다(access 토큰에도 실린다).
+      민감한 작업의 본인 확인 창이 세션마다 있다(accounts/step_up.py). sid 가 없는 옛 토큰은 갱신할 때 새로 짓는다.
 """
 
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -51,6 +54,10 @@ NICKNAME_CLAIM = 'nickname'
 ADULT_CONTENT_CLAIM = 'adult_content'
 # 역할을 담는 클레임 이름. 글자의 목록이다. 일반 사용자는 빈 목록이고, 이 클레임이 없는 옛 토큰도 일반 사용자로 본다
 ROLES_CLAIM = 'roles'
+# 세션의 이름을 담는 클레임 이름(OpenID Connect 의 sid). 로그인 한 번에서 이어지는 토큰들이 같은 값을 갖는다
+SESSION_CLAIM = 'sid'
+# 세션 이름의 무작위 바이트 수. 추측할 수 없으면 된다. 16바이트(128비트)면 넉넉하다
+SESSION_ID_BYTES = 16
 # 바꾼 refresh 토큰이 다시 와도 답을 잃은 것으로 보는 시간. 처음 바꾼 때부터 센다.
 # 다시 읽기와 잠깐의 끊김은 몇 초 안이다. 길수록 훔친 옛 토큰으로 새 쌍을 받을 틈이 길어진다
 REFRESH_REUSE_GRACE = timedelta(seconds=30)
@@ -170,11 +177,24 @@ def issue_token_pair(user: User, client: TokenClient = TokenClient.WEB) -> Token
     return _issue_token_pair(user, client)[0]
 
 
-def _issue_token_pair(user: User, client: TokenClient) -> tuple[TokenPair, OutstandingToken]:
-    """토큰 쌍을 발급하고, 그 refresh 토큰의 발급 기록도 돌려준다. 바꾼 기록(RefreshRotation)이 그것을 가리킨다."""
+def new_session_id() -> str:
+    """새 세션의 이름. 로그인할 때 한 번 짓는다."""
+    return secrets.token_hex(SESSION_ID_BYTES)
+
+
+def _issue_token_pair(
+    user: User, client: TokenClient, session_id: str | None = None
+) -> tuple[TokenPair, OutstandingToken]:
+    """
+    토큰 쌍을 발급하고, 그 refresh 토큰의 발급 기록도 돌려준다. 바꾼 기록(RefreshRotation)이 그것을 가리킨다.
+
+    session_id 는 갱신할 때 옛 토큰의 세션 이름이다. 없으면(로그인, sid 가 없는 옛 토큰) 새로 짓는다.
+    access 토큰은 refresh 토큰의 클레임을 물려받아 같은 sid 를 갖는다.
+    """
     refresh = RefreshToken()
     refresh[api_settings.USER_ID_CLAIM] = str(user.public_id)
     refresh[VERSION_CLAIM] = user.token_version
+    refresh[SESSION_CLAIM] = session_id or new_session_id()
     issued = _record_issued_refresh_token(refresh, user, client)
     pending = tuple(pending_items(user))
     scheduled = withdrawal_scheduled_at(user)
@@ -271,12 +291,12 @@ def rotate_refresh_token(raw_refresh_token: str, client: TokenClient = TokenClie
         if not _is_revoked(issued):
             _ensure_session_is_current(user, claims)
             _revoke(issued)
-            token_pair, successor = _issue_token_pair(user, client)
+            token_pair, successor = _issue_token_pair(user, client, claims.get(SESSION_CLAIM))
             _record_rotation(issued, successor, now)
             return token_pair
         rotation = _lost_answer(issued, user, claims, now)
         if rotation is not None:
-            return _reissue(rotation, user, client)
+            return _reissue(rotation, user, client, claims.get(SESSION_CLAIM))
         if _is_current_generation(user, claims):
             # 이 변경은 아래에서 예외를 내기 전에 커밋되어야 한다.
             # 그래서 예외를 트랜잭션 블록 밖에서 낸다
@@ -314,10 +334,14 @@ def _lost_answer(issued: OutstandingToken, user: User, claims: dict, now: dateti
     return rotation
 
 
-def _reissue(rotation: RefreshRotation, user: User, client: TokenClient) -> TokenPair:
-    """바꿔 준 토큰을 폐기하고 새 쌍을 준다. 기록은 새 토큰을 가리키게 하고, 처음 바꾼 시각은 그대로 둔다."""
+def _reissue(rotation: RefreshRotation, user: User, client: TokenClient, session_id: str | None) -> TokenPair:
+    """
+    바꿔 준 토큰을 폐기하고 새 쌍을 준다. 기록은 새 토큰을 가리키게 하고, 처음 바꾼 시각은 그대로 둔다.
+
+    세션 이름은 옛 토큰의 것을 그대로 쓴다. 바꿔 준 토큰도 같은 이름이었다.
+    """
     _revoke(rotation.successor)
-    token_pair, successor = _issue_token_pair(user, client)
+    token_pair, successor = _issue_token_pair(user, client, session_id)
     rotation.successor = successor
     rotation.save(update_fields=['successor'])
     return token_pair

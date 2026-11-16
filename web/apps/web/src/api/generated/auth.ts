@@ -750,6 +750,70 @@ export interface paths {
         patch: operations["me_profile_partial_update"];
         trace?: never;
     };
+    "/api/v1/auth/me/step-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 이 세션의 본인 확인 창. 켜져 있는지, 열려 있는지, 닫히는 시각
+         * @description GET, POST /api/v1/auth/me/step-up. 이 세션의 확인 창을 보고, 메일 코드로 연다.
+         */
+        get: operations["me_step_up_retrieve"];
+        put?: never;
+        /**
+         * 메일로 받은 코드로 본인을 확인하고 이 세션의 창을 연다(10분)
+         * @description GET, POST /api/v1/auth/me/step-up. 이 세션의 확인 창을 보고, 메일 코드로 연다.
+         */
+        post: operations["me_step_up_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me/step-up/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 본인 확인 코드를 가입한 메일로 보낸다
+         * @description POST /api/v1/auth/me/step-up/code. 확인 코드를 메일로 보낸다.
+         */
+        post: operations["me_step_up_code_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/me/step-up/setting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 민감한 작업의 본인 확인을 켜거나 끈다. 끄는 것은 이 세션의 창이 열린 동안에만 된다
+         * @description PUT /api/v1/auth/me/step-up/setting. 민감한 작업의 본인 확인을 켜거나 끈다.
+         */
+        put: operations["me_step_up_setting_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me/withdrawal": {
         parameters: {
             query?: never;
@@ -910,6 +974,26 @@ export interface paths {
          * @description POST /api/v1/auth/service/receipt-notices. 결제 서버가 결제와 청약철회를 알린다. 본인에게 메일로 알린다(#553).
          */
         post: operations["service_receipt_notices_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/service/step-up/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 결제 서버가 민감한 작업 앞에서 그 세션의 본인 확인 창을 묻는다. 열려 있으면 늘린다(서버끼리)
+         * @description POST /api/v1/auth/service/step-up/check. 결제 서버가 민감한 작업 앞에서 그 세션의 창을 묻는다.
+         */
+        post: operations["service_step_up_check_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1730,12 +1814,66 @@ export interface components {
             email: string;
         };
         /**
+         * @description * `open` - open
+         *     * `required` - required
+         *     * `disabled` - disabled
+         * @enum {string}
+         */
+        StateEnum: "open" | "required" | "disabled";
+        /**
          * @description * `queued` - queued
          *     * `skipped` - skipped
          *     * `duplicate` - duplicate
          * @enum {string}
          */
         StatusEnum: "queued" | "skipped" | "duplicate";
+        /** @description 창의 상태. */
+        StepUpCheckAnswer: {
+            /**
+             * Format: date-time
+             * @description open 이면 늘린 뒤의 닫히는 시각
+             */
+            expires_at: string | null;
+            state: components["schemas"]["StateEnum"];
+        };
+        /** @description 결제 서버가 묻는 세션. 받은 access 토큰의 sub 와 sid 다. */
+        StepUpCheckRequest: {
+            /** @description 세션의 이름(토큰의 sid) */
+            session_id: string;
+            /**
+             * Format: uuid
+             * @description 사용자의 공개 ID(토큰의 sub)
+             */
+            user_id: string;
+        };
+        /** @description 확인 코드를 보낸 결과. */
+        StepUpCodeSent: {
+            detail: string;
+            /** @description false 면 앞서 보낸 코드가 아직 쓸 수 있어 새로 보내지 않았다 */
+            sent: boolean;
+        };
+        /** @description 본인 확인을 켜고 끄기. */
+        StepUpSettingRequest: {
+            /** @description false 면 끈다. 끄는 것은 창이 열린 동안에만 된다 */
+            enabled: boolean;
+        };
+        /** @description 이 세션의 확인 창. */
+        StepUpStatus: {
+            /** @description false 면 본인 확인을 껐다. 청약철회는 화면에서 하지 못한다 */
+            enabled: boolean;
+            /**
+             * Format: date-time
+             * @description 창이 닫히는 시각. 닫혀 있으면 null
+             */
+            expires_at: string | null;
+            /** @description 창이 열려 있는지. 열려 있으면 민감한 작업에 다시 묻지 않는다 */
+            open: boolean;
+        };
+        /** @description 메일로 받은 확인 코드. */
+        StepUpVerifyRequest: {
+            /** @description 메일로 받은 6자리 숫자 */
+            code: string;
+        };
         /** @description 탈퇴 요청(#603). 열린 채 둔 기기에서 남이 누르지 못하게 비밀번호를 다시 받는다. */
         WithdrawalRequestRequest: {
             password: string;
@@ -3768,6 +3906,198 @@ export interface operations {
             };
         };
     };
+    me_step_up_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepUpStatus"];
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 토큰에 세션이 없다(step_up_session_unknown). 갱신한 뒤 다시 한다 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
+    me_step_up_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpVerifyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepUpStatus"];
+                };
+            };
+            /** @description 코드가 틀렸거나 만료됐다(step_up_code_invalid) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 토큰에 세션이 없다(step_up_session_unknown). 갱신한 뒤 다시 한다 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
+    me_step_up_code_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepUpCodeSent"];
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 코드를 너무 자주 요청했다(step_up_code_unavailable) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetryLater"];
+                };
+            };
+        };
+    };
+    me_step_up_setting_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpSettingRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepUpStatus"];
+                };
+            };
+            /** @description 요청을 받을 수 없다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description access 토큰이 없거나 받아들일 수 없다 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthError"];
+                };
+            };
+            /** @description 끄려면 먼저 본인 확인을 해야 한다(step_up_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+            /** @description 토큰에 세션이 없다(step_up_session_unknown). 갱신한 뒤 다시 한다 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
     me_withdrawal_create: {
         parameters: {
             query?: never;
@@ -4167,6 +4497,65 @@ export interface operations {
             };
             /** @description 결제 서버의 서명이 맞지 않다(service_bad_signature) */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+        };
+    };
+    service_step_up_check_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepUpCheckRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepUpCheckAnswer"];
+                };
+            };
+            /** @description 요청을 받을 수 없다 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        detail: string;
+                        /** @description 칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다 */
+                        errors: {
+                            [key: string]: string[] | Record<string, never>;
+                        };
+                    } | {
+                        code?: string;
+                        detail: string;
+                    };
+                };
+            };
+            /** @description 결제 서버의 서명이 맞지 않다(service_bad_signature) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodedError"];
+                };
+            };
+            /** @description 그런 사용자가 없다(service_user_unknown) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
