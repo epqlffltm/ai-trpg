@@ -1,6 +1,6 @@
 // web/apps/web/src/pages/create/Create.test.tsx
-// 만들기의 입구(Stitch 19번의 맨 앞 칸): TRPG 의 "만들 것", story 의 "JSON 으로 세계관 넣기"(운영자만), 다 고르기 전에 꺼진 "다음",
-// 그리고 고른 것을 새로 만드는 화면으로 가는 길을 본다.
+// 만들기의 입구(Stitch 12번): 작품 카드 넷과 재료 카드 넷이 저마다 새로 만드는 화면으로 가고,
+// 스토리 세계의 "JSON 으로 세계관 넣기"는 운영자에게만 보이며, 내 작품으로 가는 길이 있는지 본다.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
 import { installFakeFetch, json, tokens } from '../../test/fakeFetch';
 import { renderApp } from '../../test/renderApp';
-import { TRPG_KINDS, createPath } from './createTargets';
 
 function base64Url(text: string): string {
   const bytes = new TextEncoder().encode(text);
@@ -28,51 +27,41 @@ function signedIn(roles: string[] = []) {
   });
 }
 
-async function openForm() {
+async function cards(name: string) {
   renderApp('/create');
-  return within(await screen.findByRole('form', { name: '만들 것 고르기' }));
+  return within(await screen.findByRole('list', { name }));
 }
 
 describe('만들기의 입구', () => {
-  it('TRPG 를 고르면 만들 것이 나오고, 그것까지 골라야 다음이 켜져 새로 만드는 화면으로 간다', async () => {
+  it('작품 카드 넷이 저마다 새로 만드는 화면으로 간다', async () => {
     signedIn();
-    const form = await openForm();
-    expect(form.queryByRole('combobox', { name: '만들 것' })).toBeNull();
+    const works = await cards('새로 만들 작품');
+    expect(works.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+      '/trpg/studio/scenarios/new',
+      '/trpg/studio/campaigns/new',
+      '/chat/studio/characters/new',
+      '/story/studio/worlds/new',
+    ]);
+  });
 
-    await userEvent.selectOptions(form.getByRole('combobox', { name: '무엇을 만들까요' }), 'trpg');
-    const kinds = form.getByRole('combobox', { name: '만들 것' });
-    expect(within(kinds).getAllByRole('option').map((option) => option.textContent)).toEqual(['고르세요', ...TRPG_KINDS.map((one) => one.label)]);
-    expect(form.getByRole('button', { name: '다음' })).toBeDisabled();
-
-    await userEvent.selectOptions(kinds, 'bestiaries');
-    await userEvent.click(form.getByRole('button', { name: '다음' }));
+  it('재료 카드를 누르면 그 재료를 새로 만드는 화면이다', async () => {
+    signedIn();
+    const materials = await cards('새로 만들 재료');
+    await userEvent.click(materials.getByRole('link', { name: /몬스터 모음/ }));
 
     expect(await screen.findByRole('heading', { name: '새 몬스터 모음 만들기' })).toBeInTheDocument();
   });
 
-  it('story 를 고르면 운영자에게만 JSON 으로 세계관 넣기가 보인다', async () => {
+  it('운영자에게만 JSON 으로 세계관 넣기가 보인다', async () => {
     signedIn(['operator']);
-    const form = await openForm();
-    await userEvent.selectOptions(form.getByRole('combobox', { name: '무엇을 만들까요' }), 'story');
-
-    expect(form.getByRole('link', { name: 'JSON 으로 세계관 넣기' })).toHaveAttribute('href', '/story/worlds/import');
-    expect(form.queryByRole('combobox', { name: '만들 것' })).toBeNull();
-    expect(form.getByRole('button', { name: '다음' })).toBeEnabled();
+    const works = await cards('새로 만들 작품');
+    expect(works.getByRole('link', { name: 'JSON 으로 세계관 넣기' })).toHaveAttribute('href', '/story/worlds/import');
   });
 
-  it('운영자가 아니면 story 를 골라도 JSON 으로 넣기는 없다', async () => {
+  it('운영자가 아니면 JSON 으로 넣기는 없고, 내 작품으로 가는 길이 있다', async () => {
     signedIn();
-    const form = await openForm();
-    await userEvent.selectOptions(form.getByRole('combobox', { name: '무엇을 만들까요' }), 'story');
-
-    expect(form.queryByRole('link', { name: 'JSON 으로 세계관 넣기' })).toBeNull();
-  });
-
-  it('갈 곳: 고르지 않았거나 TRPG 의 만들 것이 비면 없다', () => {
-    expect(createPath('', '')).toBeNull();
-    expect(createPath('trpg', '')).toBeNull();
-    expect(createPath('trpg', 'campaigns')).toBe('/trpg/studio/campaigns/new');
-    expect(createPath('chat', '')).toBe('/chat/studio/characters/new');
-    expect(createPath('story', '')).toBe('/story/studio/worlds/new');
+    const works = await cards('새로 만들 작품');
+    expect(works.queryByRole('link', { name: 'JSON 으로 세계관 넣기' })).toBeNull();
+    expect(screen.getByRole('link', { name: '내 작품 보기' })).toHaveAttribute('href', '/me?tab=creator');
   });
 });

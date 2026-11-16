@@ -7,6 +7,7 @@
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
+import { AchievementFilter, AchievementProgress, filterAchievements, isRare, RareChip, useAchievementFilter } from '../../../components/AchievementProgress';
 import { fetchScenarioAchievements, type ScenarioAchievement } from '../../../api/achievements';
 import { useSession } from '../../../auth/useSession';
 import { ListingAvatar } from '../portraits/CharacterAvatar';
@@ -18,6 +19,7 @@ export function scenarioAchievementsKey(scenarioId: string) {
 
 export function ScenarioAchievements({ scenarioId }: { scenarioId: string }) {
   const signedIn = Boolean(useSession());
+  const [show, setShow] = useAchievementFilter();
   const achievements = useQuery({
     // 로그인 여부에 따라 답(내가 받은 때, 받은 숨긴 업적)이 다르다
     queryKey: [...scenarioAchievementsKey(scenarioId), signedIn],
@@ -41,9 +43,14 @@ export function ScenarioAchievements({ scenarioId }: { scenarioId: string }) {
   return (
     <section aria-labelledby="scenario-achievements">
       <h2 id="scenario-achievements">업적</h2>
-      {signedIn ? <p className="hint">{mineLine(data.items)}</p> : null}
+      {signedIn ? (
+        <>
+          <AchievementProgress items={data.items} line={mineLine(data.items)} />
+          <AchievementFilter items={data.items} show={show} onChange={setShow} />
+        </>
+      ) : null}
       <ul className="plain-list achievement-list" aria-label="업적">
-        {data.items.map((item) => (
+        {filterAchievements(data.items, show).map((item) => (
           <AchievementItem key={item.id} scenarioId={scenarioId} item={item} players={data.players} signedIn={signedIn} />
         ))}
       </ul>
@@ -62,10 +69,15 @@ function AchievementItem({ scenarioId, item, players, signedIn }: ItemProps) {
     <li className={locked ? 'achievement-item achievement-item--locked' : 'achievement-item'}>
       <ListingAvatar scenarioId={scenarioId} portraitId={item.image_id} name={name} />
       <div className="achievement-item__body">
-        <strong>{name}</strong>
+        <strong>
+          {name}
+          {isRare(item.earned_count, players) ? <RareChip /> : null}
+        </strong>
         {description ? <span>{description}</span> : null}
-        <span className="hint">{achievementRate(item.earned_count, players)}</span>
+      </div>
+      <div className="achievement-item__side">
         {earned ? <span className="hint">{earned}</span> : null}
+        <span className="hint">{achievementRate(item.earned_count, players)}</span>
       </div>
     </li>
   );

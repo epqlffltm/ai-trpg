@@ -1,12 +1,12 @@
 // web/apps/web/src/layout/SiteFrame.test.tsx
-// 사이트의 틀(Stitch 설계서의 [모든 화면의 틀]). 왼쪽 메뉴 열의 이름·만들기·주 메뉴·공지, ☰ 로 접고 펴기,
+// 사이트의 틀(Stitch 설계서의 [모든 화면의 틀]). 왼쪽 메뉴 열의 이름·만들기·주 메뉴·공지, 세 줄 단추로 접고 펴기,
 // 플레이 화면에서 접은 채로 시작하는 것, 아래 탭 바의 탐색 창, 만들기의 입구를 본다.
 
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../api/refresh';
-import { CREATE_TARGETS, createPath } from '../pages/create/createTargets';
+import { MATERIAL_CARDS, WORK_CARDS } from '../pages/create/createTargets';
 import { installFakeFetch, json, tokens } from '../test/fakeFetch';
 import { renderApp } from '../test/renderApp';
 import { ME } from '../test/tableFixtures';
@@ -30,7 +30,7 @@ afterEach(() => {
 });
 
 describe('사이트의 틀', () => {
-  it('왼쪽 메뉴 열에 이름, 만들기, 주 메뉴, 공지가 있고 ☰ 로 접고 편다', async () => {
+  it('왼쪽 메뉴 열에 이름, 만들기, 주 메뉴, 공지가 있고 세 줄 단추로 접고 편다', async () => {
     signedOut();
     renderApp('/settings');
 
@@ -73,16 +73,14 @@ describe('사이트의 틀', () => {
     expect(within(bar).queryByRole('group', { name: '탐색' })).toBeNull();
   });
 
-  it('만들기는 로그인해야 열리고, 고른 서비스의 제작 화면으로 간다. 고르기 전에는 다음이 꺼져 있다', async () => {
+  it('만들기는 로그인해야 열리고, 카드를 누르면 그 서비스의 제작 화면으로 간다', async () => {
     signedIn();
     renderApp('/create');
 
-    const form = within(await screen.findByRole('form', { name: '만들 것 고르기' }));
-    expect(form.getByRole('button', { name: '다음' })).toBeDisabled();
-    await userEvent.selectOptions(form.getByRole('combobox', { name: '무엇을 만들까요' }), 'chat');
-    await userEvent.click(form.getByRole('button', { name: '다음' }));
+    const works = within(await screen.findByRole('list', { name: '새로 만들 작품' }));
+    await userEvent.click(works.getByRole('link', { name: /캐릭터/ }));
 
-    await waitFor(() => expect(screen.queryByRole('form', { name: '만들 것 고르기' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('list', { name: '새로 만들 작품' })).toBeNull());
   });
 
   it('로그인하지 않았으면 만들기는 로그인으로 보낸다', async () => {
@@ -105,8 +103,8 @@ describe('틀의 순수한 함수', () => {
     expect(isPlayPath('/chat/characters/c1')).toBe(false);
   });
 
-  it('만들기의 갈래는 셋이고 저마다 제작 화면이 있다', () => {
-    expect(CREATE_TARGETS.map((one) => one.value)).toEqual(['trpg', 'chat', 'story']);
-    expect(CREATE_TARGETS.map((one) => createPath(one.value, 'scenarios'))).toEqual(['/trpg/studio/scenarios/new', '/chat/studio/characters/new', '/story/studio/worlds/new']);
+  it('만들기의 카드는 작품 넷과 재료 넷이고 저마다 제작 화면이 있다', () => {
+    expect(WORK_CARDS.map((one) => one.to)).toEqual(['/trpg/studio/scenarios/new', '/trpg/studio/campaigns/new', '/chat/studio/characters/new', '/story/studio/worlds/new']);
+    expect(MATERIAL_CARDS.map((one) => one.to)).toEqual(['/trpg/studio/rulebooks/new', '/trpg/studio/worlds/new', '/trpg/studio/lorebooks/new', '/trpg/studio/bestiaries/new']);
   });
 });

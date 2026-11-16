@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/charge/ProductChoice.tsx
-// 충전할 상품. 상품마다 단추 하나(값과 받을 골드). 누르면 그 상품으로 주문을 만든다.
+// 충전할 상품(Stitch 17번). 상품마다 가로로 긴 줄 단추 하나: 왼쪽에 받을 골드, 오른쪽에 결제 금액과 "충전". 누르면 그 상품으로 주문을 만든다.
 // 값과 골드는 서버의 상품 목록 그대로다. 1원이 1크레딧이고 많이 산다고 더 주지 않는다(screens.md 의 A7).
 
 import { Button, Notice } from '@ai-trpg/ui';
@@ -28,8 +28,19 @@ export function ProductChoice({ busy, onChoose }: Props) {
       {products.data.map((product) => (
         <li key={product.id}>
           <button type="button" className="product" disabled={busy} onClick={() => onChoose(product.id)}>
+            <span className="product__icon" aria-hidden="true">
+              G
+            </span>
             <span className="product__gold">{goldLabel(product.credits)}</span>
-            <span className="product__price">{wonLabel(product.price)}</span>
+            <span className="product__pay">
+              <span className="product__pay-label" aria-hidden="true">
+                결제 금액
+              </span>
+              <span className="product__price">{wonLabel(product.price)}</span>
+            </span>
+            <span className="product__go" aria-hidden="true">
+              충전
+            </span>
           </button>
         </li>
       ))}

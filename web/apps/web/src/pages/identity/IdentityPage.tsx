@@ -12,6 +12,7 @@ import { meQuery } from '../../auth/queries';
 import { identityLabel } from '../me/accountLabels';
 import { FakeIdentityForm, MEMBER_PRESETS } from './FakeIdentityForm';
 import { defaultFakeDi, koreanToday, providerKind } from './identityProvider';
+import { ShieldIcon } from '../../components/icons';
 import { useVerifyIdentity } from './useVerifyIdentity';
 
 export function IdentityPage() {
@@ -21,7 +22,10 @@ export function IdentityPage() {
       <p>
         <Link to="/me">내 정보</Link>
       </p>
-      <h1>본인인증</h1>
+      <span className="identity-mark" aria-hidden="true">
+        <ShieldIcon />
+      </span>
+      <h1 className="identity-title">본인인증</h1>
       {me.isPending ? <p aria-busy="true">불러오는 중</p> : null}
       {me.isError ? (
         <Notice tone="error">

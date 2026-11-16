@@ -47,7 +47,7 @@ function WorldDetail({ world, signedIn }: { world: PublicWorldDetail; signedIn: 
         <Link to="/story">story</Link>
       </p>
       <header className="story-world__head">
-        {image.url ? <img src={image.url} alt="" className="story-world__image" /> : null}
+        {image.url ? <img src={image.url} alt="" className="story-world__image" /> : <span className="story-world__image story-world__image--empty" aria-hidden="true" />}
         <div className="story-world__info">
           <h1>{world.name}</h1>
           <CreatorByline creatorId={world.creator_id} />

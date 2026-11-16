@@ -107,7 +107,7 @@ describe('관심', () => {
     renderApp(`/trpg/scenarios/${SCENARIO_ID}`);
 
     expect(await screen.findByRole('link', { name: '로그인하고 관심 두기' })).toHaveAttribute('href', '/login');
-    expect(screen.getByText(/♡ 1,234/)).toBeInTheDocument();
+    expect(screen.getByText(/관심 1,234/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /관심/ })).not.toBeInTheDocument();
     expect(seen.some((request) => request.url === HEART)).toBe(false);
   });

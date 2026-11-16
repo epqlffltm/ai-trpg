@@ -39,10 +39,6 @@ export function AccountSummary() {
               </dd>
             </>
           ) : null}
-          <dt>내 ID</dt>
-          <dd>
-            <code>{me.data.public_id}</code>
-          </dd>
         </dl>
       ) : null}
     </section>

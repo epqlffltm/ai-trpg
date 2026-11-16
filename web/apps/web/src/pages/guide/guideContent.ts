@@ -91,4 +91,24 @@ export const GUIDE: GuideSection[] = [
       },
     ],
   },
+  {
+    id: 'licenses',
+    title: '출처와 라이선스',
+    items: [
+      {
+        question: '사이트의 글꼴과 아이콘은 어디서 왔나요?',
+        answer: [
+          '글꼴: Hanken Grotesk(SIL Open Font License 1.1). 한글은 기기에 깔린 고딕 글꼴로 보입니다.',
+          '아이콘: 이 사이트에서 직접 그린 선 그림입니다.',
+        ],
+      },
+      {
+        question: '어떤 공개 소프트웨어를 쓰나요?',
+        answer: [
+          'React, React DOM, React Router, TanStack Query, react-markdown, remark-gfm, 토스페이먼츠 SDK: MIT License.',
+          'DOMPurify: Mozilla Public License 2.0 또는 Apache License 2.0.',
+        ],
+      },
+    ],
+  },
 ];

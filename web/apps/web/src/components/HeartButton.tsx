@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { fetchHeart, setHeart, type HeartKind, type HeartState } from '../api/hearts';
 import { useSession } from '../auth/useSession';
+import { HeartIcon } from './icons';
 
 /** count 는 작품에 실린 관심의 수다. 서버가 아직 싣지 않으면(먼저 올라간 화면) 0 으로 본다 */
 type Props = { kind: HeartKind; id: string; count: number | undefined };
@@ -23,7 +24,7 @@ export function HeartButton({ kind, id, count }: Props) {
   if (!session) {
     return (
       <p className="hint">
-        ♡ {(count ?? 0).toLocaleString('ko-KR')} ·{' '}
+        <HeartIcon /> 관심 {(count ?? 0).toLocaleString('ko-KR')} ·{' '}
         <Link to="/login" state={{ from: location.pathname }}>
           로그인하고 관심 두기
         </Link>
@@ -58,7 +59,7 @@ function SignedInHeart({ kind, id, count }: Props) {
   return (
     <p>
       <button type="button" className="ui-button ui-button--secondary" aria-pressed={hearted} disabled={busy || state.isPending} onClick={() => void toggle()}>
-        {hearted ? '♥ 관심' : '♡ 관심'} {shown.toLocaleString('ko-KR')}
+        <HeartIcon filled={hearted} /> 관심 {shown.toLocaleString('ko-KR')}
       </button>
       {failed ? <span role="alert"> 바꾸지 못했습니다. 잠시 뒤에 다시 해 보세요.</span> : null}
     </p>

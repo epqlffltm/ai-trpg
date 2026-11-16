@@ -7,6 +7,7 @@
 
 import { Button, Notice } from '@ai-trpg/ui';
 import { useQuery } from '@tanstack/react-query';
+import { AchievementFilter, AchievementProgress, filterAchievements, isRare, RareChip, useAchievementFilter } from '../../components/AchievementProgress';
 import type { PublicWorldAchievement } from '../../api/storyWorlds';
 import { useImageUrl } from '../../hooks/useImageUrl';
 import { Avatar } from '../trpg/portraits/CharacterAvatar';
@@ -19,13 +20,19 @@ type Props = { worldId: string; achievements: PublicWorldAchievement[]; signedIn
 export function StoryWorldAchievements({ worldId, achievements, signedIn }: Props) {
   const rates = useQuery({ ...storyAchievementRatesQuery(worldId), enabled: achievements.length > 0 });
   const mine = useQuery({ ...storyAchievementsQuery(worldId, signedIn), enabled: signedIn && achievements.length > 0 });
+  const [show, setShow] = useAchievementFilter();
   if (achievements.length === 0) return null;
   const items = storyAchievementItems(achievements, rates.data, mine.data);
   const failed = rates.isError || mine.isError;
   return (
     <section aria-labelledby="world-achievements">
       <h2 id="world-achievements">업적</h2>
-      {signedIn && mine.data ? <p className="hint">{mineLine(items)}</p> : null}
+      {signedIn && mine.data ? (
+        <>
+          <AchievementProgress items={items} line={mineLine(items)} />
+          <AchievementFilter items={items} show={show} onChange={setShow} />
+        </>
+      ) : null}
       {failed ? (
         <Notice tone="error">
           {rates.isError ? '달성률' : '내가 받은 업적'}을 불러오지 못했습니다.{' '}
@@ -41,7 +48,7 @@ export function StoryWorldAchievements({ worldId, achievements, signedIn }: Prop
         </Notice>
       ) : null}
       <ul className="plain-list achievement-list" aria-label="업적">
-        {items.map((item) => (
+        {filterAchievements(items, show).map((item) => (
           <AchievementItem key={item.id} item={item} players={rates.data?.players ?? null} signedIn={signedIn && mine.isSuccess} />
         ))}
       </ul>
@@ -61,10 +68,15 @@ function AchievementItem({ item, players, signedIn }: ItemProps) {
     <li className={locked ? 'achievement-item achievement-item--locked' : 'achievement-item'}>
       <Avatar name={name} url={image.url} />
       <div className="achievement-item__body">
-        <strong>{name}</strong>
+        <strong>
+          {name}
+          {isRare(item.earned_count, players) ? <RareChip /> : null}
+        </strong>
         {description ? <span>{description}</span> : null}
-        {players !== null ? <span className="hint">{achievementRate(item.earned_count, players)}</span> : null}
+      </div>
+      <div className="achievement-item__side">
         {earned ? <span className="hint">{earned}</span> : null}
+        {players !== null ? <span className="hint">{achievementRate(item.earned_count, players)}</span> : null}
       </div>
     </li>
   );
