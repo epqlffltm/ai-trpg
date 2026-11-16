@@ -1954,6 +1954,15 @@
         ],
         "type": "object"
       },
+      "StateEnum": {
+        "description": "* `open` - open\n* `required` - required\n* `disabled` - disabled",
+        "enum": [
+          "open",
+          "required",
+          "disabled"
+        ],
+        "type": "string"
+      },
       "StatusEnum": {
         "description": "* `queued` - queued\n* `skipped` - skipped\n* `duplicate` - duplicate",
         "enum": [
@@ -1962,6 +1971,122 @@
           "duplicate"
         ],
         "type": "string"
+      },
+      "StepUpCheckAnswer": {
+        "additionalProperties": false,
+        "description": "창의 상태.",
+        "properties": {
+          "expires_at": {
+            "description": "open 이면 늘린 뒤의 닫히는 시각",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/StateEnum"
+          }
+        },
+        "required": [
+          "expires_at",
+          "state"
+        ],
+        "type": "object"
+      },
+      "StepUpCheckRequest": {
+        "additionalProperties": false,
+        "description": "결제 서버가 묻는 세션. 받은 access 토큰의 sub 와 sid 다.",
+        "properties": {
+          "session_id": {
+            "description": "세션의 이름(토큰의 sid)",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "user_id": {
+            "description": "사용자의 공개 ID(토큰의 sub)",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "user_id"
+        ],
+        "type": "object"
+      },
+      "StepUpCodeSent": {
+        "additionalProperties": false,
+        "description": "확인 코드를 보낸 결과.",
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "sent": {
+            "description": "false 면 앞서 보낸 코드가 아직 쓸 수 있어 새로 보내지 않았다",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "detail",
+          "sent"
+        ],
+        "type": "object"
+      },
+      "StepUpSettingRequest": {
+        "additionalProperties": false,
+        "description": "본인 확인을 켜고 끄기.",
+        "properties": {
+          "enabled": {
+            "description": "false 면 끈다. 끄는 것은 창이 열린 동안에만 된다",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "StepUpStatus": {
+        "additionalProperties": false,
+        "description": "이 세션의 확인 창.",
+        "properties": {
+          "enabled": {
+            "description": "false 면 본인 확인을 껐다. 청약철회는 화면에서 하지 못한다",
+            "type": "boolean"
+          },
+          "expires_at": {
+            "description": "창이 닫히는 시각. 닫혀 있으면 null",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "open": {
+            "description": "창이 열려 있는지. 열려 있으면 민감한 작업에 다시 묻지 않는다",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "expires_at",
+          "open"
+        ],
+        "type": "object"
+      },
+      "StepUpVerifyRequest": {
+        "additionalProperties": false,
+        "description": "메일로 받은 확인 코드.",
+        "properties": {
+          "code": {
+            "description": "메일로 받은 6자리 숫자",
+            "minLength": 1,
+            "pattern": "^\\d{6}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
       },
       "WithdrawalRequestRequest": {
         "additionalProperties": false,
@@ -5713,6 +5838,292 @@
         "x-audience": "user"
       }
     },
+    "/api/v1/auth/me/step-up": {
+      "get": {
+        "description": "GET, POST /api/v1/auth/me/step-up. 이 세션의 확인 창을 보고, 메일 코드로 연다.",
+        "operationId": "me_step_up_retrieve",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepUpStatus"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "토큰에 세션이 없다(step_up_session_unknown). 갱신한 뒤 다시 한다"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "이 세션의 본인 확인 창. 켜져 있는지, 열려 있는지, 닫히는 시각",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      },
+      "post": {
+        "description": "GET, POST /api/v1/auth/me/step-up. 이 세션의 확인 창을 보고, 메일 코드로 연다.",
+        "operationId": "me_step_up_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpVerifyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepUpStatus"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "코드가 틀렸거나 만료됐다(step_up_code_invalid)"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "토큰에 세션이 없다(step_up_session_unknown). 갱신한 뒤 다시 한다"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "메일로 받은 코드로 본인을 확인하고 이 세션의 창을 연다(10분)",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/me/step-up/code": {
+      "post": {
+        "description": "POST /api/v1/auth/me/step-up/code. 확인 코드를 메일로 보낸다.",
+        "operationId": "me_step_up_code_create",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepUpCodeSent"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryLater"
+                }
+              }
+            },
+            "description": "코드를 너무 자주 요청했다(step_up_code_unavailable)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "본인 확인 코드를 가입한 메일로 보낸다",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/auth/me/step-up/setting": {
+      "put": {
+        "description": "PUT /api/v1/auth/me/step-up/setting. 민감한 작업의 본인 확인을 켜거나 끈다.",
+        "operationId": "me_step_up_setting_update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpSettingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepUpStatus"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "요청을 받을 수 없다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            },
+            "description": "access 토큰이 없거나 받아들일 수 없다"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "끄려면 먼저 본인 확인을 해야 한다(step_up_required)"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "토큰에 세션이 없다(step_up_session_unknown). 갱신한 뒤 다시 한다"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "민감한 작업의 본인 확인을 켜거나 끈다. 끄는 것은 이 세션의 창이 열린 동안에만 된다",
+        "tags": [
+          "me"
+        ],
+        "x-audience": "user"
+      }
+    },
     "/api/v1/auth/me/withdrawal": {
       "delete": {
         "description": "POST, DELETE /api/v1/auth/me/withdrawal. 탈퇴를 요청하고 취소한다(#603, docs/architecture/withdrawal.md).",
@@ -6462,6 +6873,118 @@
           {}
         ],
         "summary": "결제 서버가 결제와 청약철회를 알린다. 결제한 본인에게 메일로 알린다(서버끼리)",
+        "tags": [
+          "service"
+        ],
+        "x-audience": "service"
+      }
+    },
+    "/api/v1/auth/service/step-up/check": {
+      "post": {
+        "description": "POST /api/v1/auth/service/step-up/check. 결제 서버가 민감한 작업 앞에서 그 세션의 창을 묻는다.",
+        "operationId": "service_step_up_check_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepUpCheckAnswer"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "detail": {
+                          "type": "string"
+                        },
+                        "errors": {
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              {
+                                "type": "object"
+                              }
+                            ]
+                          },
+                          "description": "칸 이름마다 오류의 글. 칸을 가르지 않는 오류는 non_field_errors 다",
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "detail",
+                        "errors"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "detail"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "요청을 받을 수 없다"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "결제 서버의 서명이 맞지 않다(service_bad_signature)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodedError"
+                }
+              }
+            },
+            "description": "그런 사용자가 없다(service_user_unknown)"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "결제 서버가 민감한 작업 앞에서 그 세션의 본인 확인 창을 묻는다. 열려 있으면 늘린다(서버끼리)",
         "tags": [
           "service"
         ],

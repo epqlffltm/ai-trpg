@@ -216,6 +216,11 @@ Django 가 만든 마이그레이션(`accounts/migrations/`)은 손으로 쓴 �
 | PUT, DELETE | `/api/v1/auth/me/blocks/creators/{public_id}` | 제작자를 막고 푼다(#988). 답은 바뀐 뒤의 `{"creators": [...], "tags": [...]}`. 자기 자신이면 400 `block_self`, 상한을 넘으면 409 `block_limit` | 필요 |
 | PUT, DELETE | `/api/v1/auth/me/blocks/tags/{tag}` | 태그를 막고 푼다(#988). 태그는 주소에 인코딩한다(쉼표, `/` 도 된다). 앞뒤 공백을 떼고 1~20자가 아니면 400 `invalid_tag`, 상한을 넘으면 409 `block_limit` | 필요 |
 | PATCH | `/api/v1/auth/me/content-settings` | 목록 거르기의 설정을 고친다. 본문 `{"show_adult_content"?: bool, "orientation"?: "all" \| "male" \| "female"}`, 보낸 칸만 바뀐다. 성인 확인 전에 성인 작품 표시를 켜면 403 `adult_content_required`(#986, #987) | 필요 |
+| GET | `/api/v1/auth/me/step-up` | 이 세션의 본인 확인 창. `{"enabled", "open", "expires_at"}`(아래 "민감한 작업의 본인 확인") | 필요 |
+| POST | `/api/v1/auth/me/step-up` | 메일로 받은 코드로 본인을 확인하고 이 세션의 창을 연다(10분). 본문 `{"code": "123456"}` | 필요 |
+| POST | `/api/v1/auth/me/step-up/code` | 본인 확인 코드를 가입한 메일로 보낸다 | 필요 |
+| PUT | `/api/v1/auth/me/step-up/setting` | 본인 확인을 켜거나 끈다. 본문 `{"enabled": bool}`. 끄는 것은 창이 열린 동안에만(아니면 403 `step_up_required`) | 필요 |
+| POST | `/api/v1/auth/service/step-up/check` | 결제 서버가 민감한 작업 앞에서 그 세션의 창을 묻는다. 열려 있으면 늘린다. 본문 `{"user_id", "session_id"}` | 결제 서버의 서명 |
 | GET | `/api/v1/auth/me/invite` | 내 초대 코드(없으면 만든다), 초대한 사람으로서 받은 보상의 수와 상한(#990) | 필요 |
 | GET | `/api/v1/auth/attendance` | 오늘의 출석(아래 "출석과 보물 상자") | 필요 |
 | POST | `/api/v1/auth/attendance` | 오늘의 출석 보상을 받는다. 본인인증한 사용자만, 한국 날짜로 하루 한 번 | 필요 |
@@ -441,6 +446,26 @@ GET /api/v1/auth/creators/<공개 ID>
 | `400` `code: consent_required` | (철회) 필수 항목이다 |
 | `404` `code: consent_item_unknown` | 그런 항목이 없다 |
 
+### 민감한 작업의 본인 확인
+
+청약철회와 카드 등록·바꾸기·지우기 앞에서 메일 코드로 본인을 한 번 더 확인한다(F5, `accounts/step_up.py`).
+플레이, 대화, 만들기, 충전 같은 보통의 작업은 묻지 않는다. 묻는 것은 결제 서버다(이 서버는 창을 연다).
+
+- **창은 세션마다다.** 세션은 로그인 한 번에서 이어지는 토큰의 묶음이고, 토큰의 `sid` 클레임이 그 이름이다. 다른 기기의 확인은 이 기기에 들지 않는다
+- **확인하면 10분 열린다.** 그 안에 민감한 작업을 하면 다시 10분으로 늘어난다. 늘어나도 마지막으로 실제로 확인한 때에서 1시간을 넘지 않는다
+- **결제 서버가 묻는다.** `POST /service/step-up/check` 에 받은 access 토큰의 `sub` 와 `sid` 를 서명해 보낸다. 답의 `state` 가
+  `open` 이면 하고(창이 늘었다), `required` 면 화면이 본인 확인을 받게 하고, `disabled` 면 본인 확인을 끈 사람이다
+- **본인 확인을 끌 수 있다.** 끄는 것은 그 세션의 창이 열린 동안에만 된다. 뺏긴 세션이 확인 없이 끄지 못하게 한다.
+  끈 사람의 카드 작업은 확인 없이 되고, 청약철회는 결제 서버가 화면에서 받지 않는다
+- **코드는 로그인 코드와 같은 장치다**(용도 `step_up`, 5분, 다섯 번 틀리면 폐기, 1분에 한 번·한 시간에 다섯 번까지 보낸다)
+
+| 응답 | 뜻 |
+| --- | --- |
+| `400` `code: step_up_code_invalid` | 코드가 틀렸거나 만료됐다. 까닭을 나누지 않는다 |
+| `403` `code: step_up_required` | (끄기) 이 세션의 창이 닫혀 있다. 먼저 확인한다 |
+| `409` `code: step_up_session_unknown` | 토큰에 `sid` 가 없다(이 기능 전에 받은 토큰). 갱신한 뒤 다시 한다 |
+| `429` `code: step_up_code_unavailable` | 코드를 너무 자주 요청했다. `retry_after` 초 뒤에 된다 |
+
 ### 탈퇴
 
 회원이 스스로 계정을 지운다(#603). 서버마다 지우는 것과 남기는 것, 다른 서버에 알리는 길은 [탈퇴 설계](../docs/architecture/withdrawal.md)에 있다.
@@ -524,6 +549,8 @@ IPv6는 주소 하나가 아니라 앞 64비트가 같은 묶음을 한 곳으�
 | 전달 | 응답 본문 | httpOnly 쿠키 (`Path=/api/v1/auth`, `SameSite=Strict`) |
 | 쓰는 곳 | 인증 서버와 다른 서버의 API | 인증 서버의 `/refresh`, `/logout` |
 | 프론트의 보관 | 메모리 | 브라우저가 보관. 스크립트는 읽을 수 없음 |
+
+두 토큰에는 세션의 이름(`sid`)이 실린다. 로그인할 때 새로 짓고 갱신해도 그대로다. 본인 확인 창이 세션마다 있다([민감한 작업의 본인 확인](#민감한-작업의-본인-확인)).
 
 access 토큰이 만료되면 프론트는 `/refresh`를 호출해 새 access 토큰을 받는다.
 `/refresh`가 `401`이면 다시 로그인해야 한다. 응답의 `consents_pending` 이 비어 있지 않으면 동의 화면으로 간다([동의](#동의)의 "다시 동의하는 차례").
