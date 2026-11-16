@@ -52,6 +52,10 @@ type Claims struct {
 	UserID uuid.UUID
 	// ExpiresAt 은 토큰이 만료되는 시각(exp)이다.
 	ExpiresAt time.Time
+	// SessionID 는 세션의 이름(sid)이다. 로그인 한 번에서 이어지는 토큰들이 같은 값을 갖는다.
+	// 민감한 작업의 본인 확인 창이 세션마다 있어서 인증 서버에 물을 때 함께 보낸다(internal/stepup).
+	// 이 클레임이 생기기 전의 토큰에는 없다(빈 글자). 그 토큰은 본인 확인이 필요한 것으로 본다
+	SessionID string
 }
 
 // KeySource 는 키 ID 로 공개키를 찾아 주는 것의 모양이다. *jwks.Cache 가 이 모양이다.
@@ -71,6 +75,8 @@ type tokenClaims struct {
 	TokenType string `json:"token_type"`
 	// Version 은 세션 버전(ver)이다. 없으면 0 으로 본다(인증 서버 README 의 약속)
 	Version int `json:"ver"`
+	// SessionID 는 세션의 이름(sid)이다. 없어도 받는다
+	SessionID string `json:"sid"`
 	jwt.RegisteredClaims
 }
 
@@ -151,5 +157,5 @@ func toClaims(claims tokenClaims) (Claims, error) {
 		return Claims{}, ErrInvalidToken
 	}
 	// exp 가 있다는 것은 라이브러리가 이미 확인했다(WithExpirationRequired)
-	return Claims{UserID: userID, ExpiresAt: claims.ExpiresAt.Time}, nil
+	return Claims{UserID: userID, ExpiresAt: claims.ExpiresAt.Time, SessionID: claims.SessionID}, nil
 }

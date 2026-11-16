@@ -821,6 +821,15 @@ export interface components {
                 "application/json": components["schemas"]["Status"];
             };
         };
+        /** @description 본인 확인이 필요하다(step_up.required). 화면이 본인 확인을 받고 같은 요청을 다시 보낸다. 본인 확인을 끈 사람은 묻지 않는다 */
+        StepUpRequired: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description 토큰이 없거나 받아들일 수 없다. 이유는 싣지 않는다 */
         Unauthorized: {
             headers: {
@@ -831,7 +840,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description 지금은 끝내지 못했다. 같은 요청을 다시 보낸다(DB 의 시간 제한, 요청의 마감, 공개키를 구할 수 없음) */
+        /** @description 지금은 끝내지 못했다. 같은 요청을 다시 보낸다(DB 의 시간 제한, 요청의 마감, 공개키를 구할 수 없음, 인증 서버에 본인 확인을 묻지 못함) */
         Unavailable: {
             headers: {
                 "Retry-After"?: number;
@@ -1017,6 +1026,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["StepUpRequired"];
             /** @description 고객 키가 이 사람의 것이 아니다(card.customer_key_mismatch). 처음부터 다시 한다 */
             409: {
                 headers: {
@@ -1064,6 +1074,7 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["StepUpRequired"];
             500: components["responses"]["ServerError"];
             503: components["responses"]["Unavailable"];
         };
@@ -1090,6 +1101,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["StepUpRequired"];
             500: components["responses"]["ServerError"];
             503: components["responses"]["Unavailable"];
         };
@@ -1376,7 +1388,19 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["PaymentForbidden"];
+            /**
+             * @description 본인 확인이 필요하거나(step_up.required, 화면이 본인 확인을 받고 다시 보낸다)
+             *     본인 확인을 끈 사람이다(step_up.disabled, 끈 동안에는 화면에서 철회하지 못한다).
+             *     결제할 수 없는 사람이다(payment.verification_required, payment.guardian_consent_required)
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             404: components["responses"]["NotFound"];
             /**
              * @description 청약철회를 할 수 없다. code 가 까닭이다.

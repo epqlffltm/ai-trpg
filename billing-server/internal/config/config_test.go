@@ -76,6 +76,7 @@ func TestLoadFillsDefaults(t *testing.T) {
 		AuthJWKSURL:    jwksURL,
 		// 적지 않으면 공개키 주소 옆이다
 		AuthRevocationsURL: "http://127.0.0.1:8000/api/v1/auth/session-revocations",
+		AuthStepUpURL:      "http://127.0.0.1:8000/api/v1/auth/service/step-up/check",
 		JWTIssuer:          "ai-trpg-auth",
 		JWTAudience:        "ai-trpg-billing",
 		// 적지 않으면 무료 크레딧부터 쓰고, 무료 크레딧은 30일 뒤에 사라진다
@@ -108,6 +109,7 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		"DB_SCHEMA":                    "billing_test",
 		"AUTH_JWKS_URL":                "https://auth.example.com/jwks",
 		"AUTH_SESSION_REVOCATIONS_URL": "https://auth.example.com/revoked",
+		"AUTH_STEP_UP_URL":             "https://auth.example.com/step-up",
 		"JWT_ISSUER":                   "some-issuer",
 		"JWT_AUDIENCE":                 "some-audience",
 		"SPEND_FREE_FIRST":             "false",
@@ -142,6 +144,7 @@ func TestLoadReadsEveryValue(t *testing.T) {
 		DBSchema:           "billing_test",
 		AuthJWKSURL:        "https://auth.example.com/jwks",
 		AuthRevocationsURL: "https://auth.example.com/revoked",
+		AuthStepUpURL:      "https://auth.example.com/step-up",
 		JWTIssuer:          "some-issuer",
 		JWTAudience:        "some-audience",
 		SpendFreeFirst:     false,
@@ -174,12 +177,27 @@ func TestTheRevocationsURLMustBeGivenWhenItCannotBeDerived(t *testing.T) {
 
 	settings, err := config.Load(from(required(map[string]string{
 		"AUTH_JWKS_URL": "https://auth.example.com/keys", "AUTH_SESSION_REVOCATIONS_URL": "https://auth.example.com/revoked",
+		"AUTH_STEP_UP_URL": "https://auth.example.com/step-up",
 	})))
 	if err != nil || settings.AuthRevocationsURL != "https://auth.example.com/revoked" {
 		t.Errorf("설정 = %q, 오류 = %v", settings.AuthRevocationsURL, err)
 	}
 
 	if _, err := config.Load(from(required(map[string]string{"AUTH_SESSION_REVOCATIONS_URL": "ftp://auth.example.com/x"}))); err == nil {
+		t.Error("http 가 아닌 주소를 받았다")
+	}
+}
+
+func TestTheStepUpURLMustBeGivenWhenItCannotBeDerived(t *testing.T) {
+	// 본인 확인 창을 묻는 주소(F5)도 공개키 주소가 …/jwks 로 끝나지 않으면 짐작하지 않는다
+	_, err := config.Load(from(required(map[string]string{
+		"AUTH_JWKS_URL": "https://auth.example.com/keys", "AUTH_SESSION_REVOCATIONS_URL": "https://auth.example.com/revoked",
+	})))
+	if err == nil || !strings.Contains(err.Error(), "AUTH_STEP_UP_URL") {
+		t.Errorf("오류 = %v. AUTH_STEP_UP_URL 을 적으라고 해야 한다", err)
+	}
+
+	if _, err := config.Load(from(required(map[string]string{"AUTH_STEP_UP_URL": "ftp://auth.example.com/x"}))); err == nil {
 		t.Error("http 가 아닌 주소를 받았다")
 	}
 }
