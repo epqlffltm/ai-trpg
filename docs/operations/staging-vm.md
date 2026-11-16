@@ -307,6 +307,13 @@ docker compose exec -T trpg-server python -m scripts.models sync --file /dev/std
 
 결제 서버가 떠 있으면 결제 서버의 가격표에 있는 모델만 고를 수 있다. 무료 모델은 가격표에 올리지 않기로 했으므로(게임 서버 README) 지금 그대로는 staging 에서 고를 수 없다. 정할 것으로 남긴다(배포 설계의 열린 질문).
 
+가격표에 올리기로 하면 떠 있는 결제 서버 안의 명령으로 넣는다(VM 에는 Go 가 없다). 이름표는 서비스마다 하나다.
+
+```bash
+docker compose exec billing-server /app/prices set narration.gemma4-26b-a4b.i0.o0 1 -tier basic -reason "staging 로컬 모델"
+docker compose exec billing-server /app/prices list
+```
+
 **[VM] 운영자 계정.** 관리 계정을 만들고, 관리자 화면에서 `operators` 그룹에 넣는다.
 
 ```bash

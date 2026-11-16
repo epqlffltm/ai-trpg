@@ -856,6 +856,9 @@ go run ./cmd/prices set narration.gpt-5-6-sol.i0.o0 440 -at 2026-11-21T00:00:00Z
 go run ./cmd/prices set narration.gpt-5-6-sol.i0.o0 330 -promo -reason "공급사 행사가"                         그다음 지금 값을 행사가로 적는다
 ```
 
+- 컨테이너로 띄운 곳(staging 의 VM)에서는 `go run ./cmd/prices` 대신 떠 있는 결제 서버 안의 실행 파일을 부른다: `docker compose exec billing-server /app/prices list`.
+  운영자 명령(`prices`, `pricereviews`, `grants`, `coupons`, `orders`, `autocharges`)이 모두 이미지에 들어 있고, 서버와 같은 설정을 읽는다
+
 - `-tier` 는 `set` 에만 쓴다(`basic`, `standard`, `premium`). **처음 파는 이름은 꼭 적는다.** 기본값을 두지 않았다. 프리미엄 모델이 등급을 빠뜨려 실버로 팔리면 그만큼 손해다.
   이미 파는 이름은 적지 않으면 그 시각의 등급 그대로다
 - `-promo` 도 `set` 에만 쓴다. 그 이름에 이 줄보다 늦은 줄이 없으면 넣지 않는다. 값 뒤에 `(행사가)` 가 찍힌다

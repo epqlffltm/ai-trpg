@@ -2,7 +2,7 @@
 # 결제 서버의 이미지. 저장소 루트의 docker-compose.yml 이 app 프로필로 띄운다.
 #
 # 단계 셋으로 나눈다.
-#   build   : 실행 파일 다섯(서버, 마이그레이션, 정리 작업, 대사, 자동 충전의 결제 작업)을 만든다
+#   build   : 실행 파일 다섯(서버, 마이그레이션, 정리 작업, 대사, 자동 충전의 결제 작업)과 운영자 명령 여섯을 만든다
 #   supercronic : 주기 명령(대사)을 돌리는 실행 파일을 받아 확인한다
 #   runtime : 실행 파일만 담는다. root 가 아닌 사용자로 돈다
 #
@@ -11,6 +11,8 @@
 # 비밀(.env)은 넣지 않는다(.dockerignore). 컨테이너를 띄울 때 compose 가 넘긴다.
 # 마이그레이션은 이 이미지로 따로 한 번 돈다(compose 의 billing-migrate). 마이그레이션 파일은 실행 파일 안에 들어 있다.
 # 정리 작업(billing-sweeper), 자동 충전의 결제 작업(billing-autocharge), 주기 명령(billing-cron)도 이 이미지로 따로 돈다.
+# 운영자 명령(가격표, 가격 변경의 할 일, 이벤트 실버, 쿠폰, 주문과 자동 충전의 결과 정하기)도 넣는다. staging 의 VM 에는 Go 가 없어
+# 떠 있는 결제 서버 안에서 부른다: docker compose exec billing-server /app/prices list
 
 FROM golang:1.27-alpine3.24 AS build
 WORKDIR /src
@@ -22,7 +24,8 @@ COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ \
-        ./cmd/server ./cmd/migrate ./cmd/sweeper ./cmd/reconcile ./cmd/autocharge
+        ./cmd/server ./cmd/migrate ./cmd/sweeper ./cmd/reconcile ./cmd/autocharge \
+        ./cmd/prices ./cmd/pricereviews ./cmd/grants ./cmd/coupons ./cmd/orders ./cmd/autocharges
 
 # 주기 명령을 돌리는 supercronic(컨테이너용 cron). compose 의 billing-cron 가 쓴다. 서버는 쓰지 않는다.
 # 받은 파일을 체크섬으로 확인한다. 이미지를 만드는 PC 의 CPU(amd64, arm64)에 맞는 것을 받는다
