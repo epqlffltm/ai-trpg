@@ -195,6 +195,9 @@ x-chat-environment: &chat-environment
   # 연결 풀의 크기. 모든 서버의 합이 DB 의 max_connections 안에 들게 나눈 몫이다(docs/architecture/services.md 의 "DB 와 Redis 의 한도")
   DB_POOL_SIZE: "5"
   DB_MAX_OVERFLOW: "5"
+  # 서버 곁의 모델(모델 목록의 local 창구)의 주소. 게임 서버와 같은 Ollama 다(루트 .env 의 GAME_LLM_BASE_URL).
+  # 적지 않으면 chat-server/.env 의 기본값(127.0.0.1)이 컨테이너 자신을 가리켜 모델이 답하지 않는다
+  LLM_BASE_URL: ${GAME_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
 
 # story 서버의 프로세스가 함께 쓰는 설정(#591). 비밀은 DB 비밀번호뿐이고 루트 .env 에서 온다
 x-story-environment: &story-environment
@@ -203,6 +206,8 @@ x-story-environment: &story-environment
   # 연결 풀의 크기. chat 과 같은 몫이다(docs/architecture/services.md 의 "DB 와 Redis 의 한도")
   DB_POOL_SIZE: "5"
   DB_MAX_OVERFLOW: "5"
+  # 서버 곁의 모델의 주소. chat 과 같다(루트 .env 의 GAME_LLM_BASE_URL)
+  LLM_BASE_URL: ${GAME_LLM_BASE_URL:-http://host.docker.internal:11434/v1}
 
 # asset-server 가 그림을 넣고 꺼내는 저장소(#566, docs/architecture/asset-server.md 의 "그림"). 마이그레이션에는 주지 않는다.
 # 로컬은 object-store(SeaweedFS)다. staging 은 docker-compose.staging.yml 이 주소를 S3 로 바꾸고, 키와 버킷은 루트 .env 의 것(그 버킷만 쓰는 IAM 사용자)이다.
@@ -882,6 +887,8 @@ services:
       REDIS_URL: redis://redis:6379/2
     # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
     networks: [default, telemetry]
+    # 서버 곁의 모델(host.docker.internal)에 닿는다. 게임 서버와 같다
+    extra_hosts: *host-gateway
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8005/health/ready', timeout=3)"]
       interval: 10s
@@ -944,6 +951,8 @@ services:
       REDIS_URL: redis://redis:6379/3
     # span 과 메트릭을 Alloy 에 민다(telemetry). 다른 서버와는 default 로 닿는다
     networks: [default, telemetry]
+    # 서버 곁의 모델(host.docker.internal)에 닿는다. 게임 서버와 같다
+    extra_hosts: *host-gateway
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8007/health/ready', timeout=3)"]
       interval: 10s

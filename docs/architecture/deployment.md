@@ -150,7 +150,7 @@
 ## 모델
 
 - **서술.** 테이블마다 모델을 고른다(게임 서버의 모델 목록 `ai_models` + 결제 서버의 가격표). 첫 모델은 Z.ai 의 GLM-4.7-Flash(무료)다. 필요한 키는 `ZAI_API_KEY` 하나다. `LLM_MODEL=glm-4-7-flash`, `LLM_FALLBACK_MODELS` 는 비운다(모델을 고르지 않았던 옛 테이블의 기본이다).
-- **로컬 모델(집 PC 의 Ollama).** VM 에는 GPU 가 없어 VM 안에서 돌리지 않는다. VM 이 사설망(Tailscale)으로 집 PC 를 부른다. 루트 `.env` 의 `GAME_LLM_BASE_URL=http://<집 PC 의 Tailscale 주소>:11434/v1` 이다. 적지 않으면 게임 서버가 뜨지 않는다(로컬의 기본값 `host.docker.internal` 은 VM 자신이다).
+- **로컬 모델(집 PC 의 Ollama).** VM 에는 GPU 가 없어 VM 안에서 돌리지 않는다. VM 이 사설망(Tailscale)으로 집 PC 를 부른다. 루트 `.env` 의 `GAME_LLM_BASE_URL=http://<집 PC 의 Tailscale 주소>:11434/v1` 이다. 게임·chat·story 서버가 함께 쓴다. 적지 않으면 세 서버가 뜨지 않는다(로컬의 기본값 `host.docker.internal` 은 VM 자신이다).
   - 집 PC 의 Ollama 는 사설망 쪽에만 듣게 한다(`OLLAMA_HOST=<Tailscale 주소>:11434`). 공인 IP 로 열지 않는다.
   - VM 에 Tailscale 을 설치하면 컨테이너도 VM 을 거쳐 사설망의 주소에 닿는다.
   - Tailscale 의 접근 규칙(ACL)으로 VM 이 집 PC 의 11434 에만 닿게 좁힌다. VM 을 빼앗겨도 집의 다른 기기에 닿지 않는다.
