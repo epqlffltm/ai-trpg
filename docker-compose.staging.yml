@@ -132,12 +132,18 @@ services:
   chat-migrate:
     environment: *staging-debug-off
   chat-server:
-    environment: *staging-debug-off
+    environment:
+      <<: *staging-debug-off
+      # 서버 곁의 모델(local 창구)의 주소. 게임 서버와 같은 집 PC 의 Ollama 다. 로컬의 기본값(host.docker.internal)은 이 VM 자신이다
+      LLM_BASE_URL: ${GAME_LLM_BASE_URL:?루트 .env 에 GAME_LLM_BASE_URL 을 적는다(집 PC 의 Ollama, 사설망 주소)}
 
   story-migrate:
     environment: *staging-debug-off
   story-server:
-    environment: *staging-debug-off
+    environment:
+      <<: *staging-debug-off
+      # 서버 곁의 모델의 주소. chat 과 같다
+      LLM_BASE_URL: ${GAME_LLM_BASE_URL:?루트 .env 에 GAME_LLM_BASE_URL 을 적는다(집 PC 의 Ollama, 사설망 주소)}
 
   # 프록시. 로컬의 틀(templates) 가운데 default.conf.template 만 staging 의 것으로 바꿔 붙인다.
   # 시작 스크립트(start.sh)가 인증서와 허용 주소를 지켜보다가 바뀌면 다시 읽힌다. 그다음 이미지의 원래 시작 스크립트로 넘긴다
