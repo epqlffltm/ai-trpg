@@ -9,8 +9,10 @@
  * 움직이는 효과는 없다.
  */
 
-/* 테마를 단 칸은 제 바탕과 글자색을 갖는다(사이트의 바탕 위에 장르의 종이를 깐다) */
+/* 테마를 단 칸은 제 바탕과 글자색을 갖는다(사이트의 바탕 위에 장르의 종이를 깐다).
+ * 장르 표에는 둘째 글자색이 없어서 흐린 글자색을 그대로 쓴다(사이트의 둘째 글자색은 다크 바탕에 맞춘 값이다) */
 [data-genre] {
+  --ui-text-secondary: var(--ui-text-muted);
   background: var(--ui-bg);
   color: var(--ui-text);
   accent-color: var(--ui-accent);

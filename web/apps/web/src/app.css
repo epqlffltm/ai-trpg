@@ -290,8 +290,11 @@
 }
 
 .app-header__menu {
+  display: inline-grid;
+  place-items: center;
   min-width: 36px;
   min-height: 32px;
+  font-size: 1.1rem;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
   background: var(--ui-surface);
@@ -670,6 +673,8 @@
 }
 
 .theme-switch__option {
+  display: inline-grid;
+  place-items: center;
   min-width: 30px;
   min-height: 26px;
   padding: 0 8px;
@@ -689,6 +694,12 @@
 .theme-switch__option:focus-visible {
   outline: 2px solid var(--ui-focus);
   outline-offset: -2px;
+}
+
+/* 선 그림(components/icons.tsx). 글줄 가운데에 맞춘다 */
+.icon {
+  flex: none;
+  vertical-align: -0.125em;
 }
 
 .page {
