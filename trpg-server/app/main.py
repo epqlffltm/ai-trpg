@@ -102,7 +102,7 @@ from app.realtime.shutdown import closing_on_exit
 from app.realtime.signals import session_info
 from app.realtime.signing import signer_from
 from app.references import router as references
-from app.references.copying import NotAMonsterError
+from app.references.copying import NotAMonsterError, NotCopyableError
 from app.references.retrieval import ReferenceRetriever, ReferenceThresholds
 from app.references.service import NoRulebookError, NotCopiedError, ReferenceNotFoundError
 from app.references.sheets import RulesNotSrdError
@@ -435,6 +435,7 @@ def create_app(
     add_error_handler(app, BestiaryFullError, bestiaries.handle_bestiary_full)
     add_error_handler(app, ReferenceNotFoundError, references.handle_reference_not_found)
     add_error_handler(app, NotAMonsterError, references.handle_not_a_monster)
+    add_error_handler(app, NotCopyableError, references.handle_not_copyable)
     add_error_handler(app, NoRulebookError, references.handle_no_rulebook)
     add_error_handler(app, NotCopiedError, references.handle_not_copied)
     add_error_handler(app, RulesNotSrdError, references.handle_rules_not_srd)

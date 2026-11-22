@@ -920,7 +920,7 @@ class ReferenceNote:
 
     AI 가 읽는 글이다. 플레이어에게 내보내지 않는다. 글에는 수치가 없다(app/references/srd.py).
     reference_id 는 참고 자료의 줄(reference_entries)의 id 로, 무엇을 넣었는지 기록할 때 쓴다.
-    kind 는 종류(monster, item)다. 프롬프트가 앞에 붙여 보인다.
+    kind 는 종류(monster, item, topic)다. 프롬프트가 앞에 붙여 보인다.
     """
 
     reference_id: uuid.UUID

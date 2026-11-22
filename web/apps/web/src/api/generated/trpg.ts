@@ -386,7 +386,7 @@ export interface paths {
          * Copy To Bestiary
          * @description 고른 참고 자료(몬스터)를 자기 도감의 몬스터로 복사한다. 원본의 생물 분류를 도감의 타입으로 바꾼다.
          *
-         *     몬스터가 아닌 줄이 있으면 422(not_a_monster)다. 건너뛰기와 상한은 로어북과 같다.
+         *     몬스터가 아닌 줄이 있으면 422(not_a_monster)다. 건너뛰기와 상한, not_copyable 은 로어북과 같다.
          */
         post: operations["copy_to_bestiary_api_v1_game_bestiaries__bestiary_id__monsters_copies_post"];
         delete?: never;
@@ -874,7 +874,7 @@ export interface paths {
          * @description 고른 참고 자료를 자기 로어북의 항목으로 복사한다. 물건은 물건, 몬스터는 종족 항목이다.
          *
          *     이미 복사해 둔 줄은 건너뛴다(skipped). 다 넣으면 상한을 넘으면 하나도 넣지 않고 409 다.
-         *     없는 줄이 있으면 404(reference_not_found)다.
+         *     없는 줄이 있으면 404(reference_not_found), 복사할 수 없는 자료의 줄이 있으면 422(not_copyable)다.
          */
         post: operations["copy_to_lorebook_api_v1_game_lorebooks__lorebook_id__entries_copies_post"];
         delete?: never;
@@ -1093,6 +1093,7 @@ export interface paths {
         /**
          * Search References
          * @description 참고 자료를 이름(한국어 이름, 원본의 이름, 다른 이름)으로 찾는다. q 가 비면 전부다. kind 로 종류를 거른다.
+         *     복사할 것을 고르는 곳이라 복사할 수 있는 자료의 줄만 보인다(위키백과는 서술에만 쓴다).
          *
          *     보이는 이름의 차례다. 쪽마다 출처 표시(attributions)가 함께 온다.
          */
@@ -9414,7 +9415,7 @@ export interface components {
          * @description 참고 자료 한 줄의 종류. 서술의 프롬프트가 종류를 붙여 보인다.
          * @enum {string}
          */
-        ReferenceKind: "monster" | "item";
+        ReferenceKind: "monster" | "item" | "topic";
         /**
          * ReferencePage
          * @description 찾은 줄들의 한 쪽.

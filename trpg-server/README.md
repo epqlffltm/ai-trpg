@@ -307,7 +307,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | PATCH | `/api/v1/game/lorebooks/{id}` | 내 로어북 고치기 | access 토큰 |
 | DELETE | `/api/v1/game/lorebooks/{id}` | 내 로어북 지우기. 204 | access 토큰 |
 | POST | `/api/v1/game/lorebooks/{id}/entries` | 항목 더하기. 201. 가득 찼으면 409 | access 토큰 |
-| POST | `/api/v1/game/lorebooks/{id}/entries/copies` | 고른 [참고 자료](#참고-자료)를 항목으로 복사(`reference_ids`, 20개까지). 201. 이미 복사한 줄은 건너뛴다(`skipped`). 넘치면 하나도 넣지 않고 409, 없는 줄이 있으면 404 `reference_not_found` | access 토큰 |
+| POST | `/api/v1/game/lorebooks/{id}/entries/copies` | 고른 [참고 자료](#참고-자료)를 항목으로 복사(`reference_ids`, 20개까지). 201. 이미 복사한 줄은 건너뛴다(`skipped`). 넘치면 하나도 넣지 않고 409, 없는 줄이 있으면 404 `reference_not_found`, 복사할 수 없는 자료([위키백과](#위키백과))의 줄이 있으면 422 `not_copyable` | access 토큰 |
 | GET | `/api/v1/game/lorebooks/{id}/entries` | 항목 전부. 만든 순서 | access 토큰 |
 | PATCH | `/api/v1/game/lorebooks/{id}/entries/{entry_id}` | 항목 고치기. 보낸 칸만 바뀐다 | access 토큰 |
 | DELETE | `/api/v1/game/lorebooks/{id}/entries/{entry_id}` | 항목 지우기. 204 | access 토큰 |
@@ -318,7 +318,7 @@ CI 는 초기화 스크립트를 모두 실행하므로 `auth`, `billing`, `boar
 | DELETE | `/api/v1/game/bestiaries/{id}` | 내 도감 지우기. 204 | access 토큰 |
 | POST | `/api/v1/game/bestiaries/{id}/monsters` | 몬스터 더하기. 201. 가득 찼으면 409 | access 토큰 |
 | POST | `/api/v1/game/bestiaries/{id}/monsters/copies` | 고른 [참고 자료](#참고-자료)(몬스터)를 몬스터로 복사. 로어북의 복사와 같다. 몬스터가 아닌 줄이 있으면 422 `not_a_monster` | access 토큰 |
-| GET | `/api/v1/game/references` | [참고 자료](#참고-자료) 찾기. `q`(이름, 50자), `kind`(`monster`, `item`), `limit`, `offset`. 쪽의 출처 표시(`attributions`)가 함께 온다 | access 토큰 |
+| GET | `/api/v1/game/references` | [참고 자료](#참고-자료) 찾기. `q`(이름, 50자), `kind`(`monster`, `item`, `topic`), `limit`, `offset`. 쪽의 출처 표시(`attributions`)가 함께 온다. 복사할 수 있는 자료만 보인다([위키백과](#위키백과)는 나오지 않는다) | access 토큰 |
 | GET | `/api/v1/game/bestiaries/{id}/monsters` | 몬스터 전부. 만든 순서 | access 토큰 |
 | PATCH | `/api/v1/game/bestiaries/{id}/monsters/{monster_id}` | 몬스터 고치기. 보낸 칸만 바뀐다 | access 토큰 |
 | DELETE | `/api/v1/game/bestiaries/{id}/monsters/{monster_id}` | 몬스터 지우기. 204 | access 토큰 |
@@ -3810,6 +3810,16 @@ uv run python -m scripts.build_srd <폴더>/src/2014/en --revision <원본의 �
 
 `data/references/srd51.ko.json` 이 있으면 붙인다(`--translation` 으로 바꾼다). 번역에 원본에 없는 key 가 있으면 쓰지 않고 멈춘다.
 
+### 위키백과
+
+SRD 의 글로 채우지 못하는 사물의 구조와 쓰임(배, 성채, 등잔)을 위키백과의 문서로 채운다(#482 의 남은 줄, 2026-11-22 유저 결정). 같은 표에 자료(`source`) `wikipedia` 로 들어가고, 넣기·벡터·서술에 섞기는 SRD 와 같다.
+
+- **고른 제목 목록만 넣는다.** 한국어판 먼저, 없으면 영어판이다. 영어판의 줄은 SRD 처럼 번역 파일로 한국어를 채운다.
+- **종류는 `topic`(상식)이다.** 프롬프트에서 `[상식]` 으로 보인다. [상식] 줄이 있으면 "실제 세계의 나라, 도시, 인물, 연도를 장면에 쓰지 않는다"는 말이 붙는다(`REFERENCE_TOPIC_RULE`).
+- **서술에만 쓰고 복사하지 않는다.** 위키백과는 CC BY-SA 4.0(동일 조건)이다. 제작자의 자산에 옮겨 주면 동일 조건이 따라가는지 법률 판단이 필요하다. 그 답을 들을 때까지 찾기(`GET /references`)에 나오지 않고, 복사는 422 `not_copyable` 이다. 복사할 수 있는 자료는 `app/references/records.py` 의 `COPYABLE_SOURCES` 한 곳이다.
+- **출처.** 출처 표시는 `app/references/wiki.py` 에 있다. 줄마다 언어판, 문서의 판 번호, 원문의 주소를 `data` 에 둔다. 데이터 파일은 CC BY-SA 4.0 이고 저장소의 다른 코드와 조건이 다르다.
+- **지금은 틀만 있다.** 받는 도구(위키 문법과 실제 세계를 가리키는 문장을 거르고 판 번호를 적는다)와 제목 목록, 데이터 파일은 다음 단계다. 그때 운영자가 `scripts.references load` → `index` 로 넣는다.
+
 ### 한국어 번역
 
 `data/references/srd51.ko.json` 은 key 마다 한국어 이름(`name`, 30자)과 글(`content`, 1,000자)이다(`app/references/translations.py`). 미리 옮겨 저장소에 넣는다(2026-10-21 유저 결정).
@@ -3883,7 +3893,7 @@ REFERENCE_KEYWORD_MAX_DISTANCE=0.50
 - 로어북: 물건은 `item`, 몬스터는 `species`(종족) 항목이다. 몬스터 한 마리가 아니라 그 무리의 설명이다. 다른 이름을 키워드로 단다(두 글자 이상, 5개까지).
 - 도감: 몬스터만 받는다(아니면 422 `not_a_monster`). 원본의 생물 분류를 타입으로 바꾼다. `humanoid`, `beast`(작은 야수의 무리도), `undead`, `construct` 는 그대로, 나머지(용, 괴물, 악마 …)는 `other` 다. 네임드 몹이 아니다. 시트(수치)는 옮기지 않는다. 시나리오가 적는다.
 - 출처(`copied_from`)를 행에 남긴다(`lore_entries`, `monsters` 의 `copied_source`, `copied_key`). 출처 표시를 하고, 같은 줄을 한 로어북(도감)에 두 번 넣지 않는 데 쓴다. 두 번 누른 요청은 건너뛰고(`skipped`) 201 이다.
-- 한 번에 하나도 빠짐없이 넣거나 하나도 넣지 않는다. 없는 줄, 몬스터가 아닌 줄, 상한(100개)을 넘는 수면 아무것도 넣지 않는다. 항목 하나를 더할 때처럼 세기 전에 로어북(도감)을 잠근다.
+- 한 번에 하나도 빠짐없이 넣거나 하나도 넣지 않는다. 없는 줄, 복사할 수 없는 자료의 줄([위키백과](#위키백과), 422 `not_copyable`), 몬스터가 아닌 줄, 상한(100개)을 넘는 수면 아무것도 넣지 않는다. 항목 하나를 더할 때처럼 세기 전에 로어북(도감)을 잠근다.
 
 **출처 표시.** SRD 5.1 은 CC BY 4.0 이다. 찾기의 응답(`attributions`)에 출처 표시와 원본을 바꾼 것(수치를 빼고 줄이고 한국어로 옮김)을 싣는다.
 복사한 항목이 든 판을 게시했을 때 소개 화면에 출처를 보이는 것은 아직 없다. 행에 남긴 출처로 화면에서 붙인다.

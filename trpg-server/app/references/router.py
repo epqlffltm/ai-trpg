@@ -19,7 +19,7 @@ from app.assets.bestiaries.router import to_monster_detail
 from app.assets.lorebooks.router import to_entry_detail
 from app.assets.routing import Paging, Session
 from app.references import service
-from app.references.copying import NotAMonsterError
+from app.references.copying import NotAMonsterError, NotCopyableError
 from app.references.records import ReferenceKind, StoredReference
 from app.references.schemas import (
     SEARCH_TEXT_MAX_LENGTH,
@@ -69,6 +69,18 @@ async def handle_not_a_monster(request: Request, error: NotAMonsterError) -> JSO
     )
 
 
+async def handle_not_copyable(request: Request, error: NotCopyableError) -> JSONResponse:
+    """복사할 수 없는 자료(위키백과)의 줄을 고르면 422 다. 그 줄의 key 를 싣는다. 앱에 한 번 등록한다(app/main.py)."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={
+            'detail': '이 참고 자료는 서술에만 쓰고 복사할 수 없습니다.',
+            'code': 'not_copyable',
+            'keys': error.keys,
+        },
+    )
+
+
 async def handle_no_rulebook(request: Request, error: NoRulebookError) -> JSONResponse:
     """시나리오에 룰북이 없으면 409 다. 룰북을 붙이면 풀린다. 앱에 한 번 등록한다(app/main.py)."""
     return JSONResponse(
@@ -107,6 +119,7 @@ async def search_references(
 ) -> ReferencePage:
     """
     참고 자료를 이름(한국어 이름, 원본의 이름, 다른 이름)으로 찾는다. q 가 비면 전부다. kind 로 종류를 거른다.
+    복사할 것을 고르는 곳이라 복사할 수 있는 자료의 줄만 보인다(위키백과는 서술에만 쓴다).
 
     보이는 이름의 차례다. 쪽마다 출처 표시(attributions)가 함께 온다.
     """
@@ -131,7 +144,7 @@ async def copy_to_lorebook(
     고른 참고 자료를 자기 로어북의 항목으로 복사한다. 물건은 물건, 몬스터는 종족 항목이다.
 
     이미 복사해 둔 줄은 건너뛴다(skipped). 다 넣으면 상한을 넘으면 하나도 넣지 않고 409 다.
-    없는 줄이 있으면 404(reference_not_found)다.
+    없는 줄이 있으면 404(reference_not_found), 복사할 수 없는 자료의 줄이 있으면 422(not_copyable)다.
     """
     outcome = await service.copy_to_lorebook(session, user.user_id, lorebook_id, data.reference_ids)
     return LoreCopyResult(created=[to_entry_detail(entry) for entry in outcome.created], skipped=outcome.skipped)
@@ -149,7 +162,7 @@ async def copy_to_bestiary(
     """
     고른 참고 자료(몬스터)를 자기 도감의 몬스터로 복사한다. 원본의 생물 분류를 도감의 타입으로 바꾼다.
 
-    몬스터가 아닌 줄이 있으면 422(not_a_monster)다. 건너뛰기와 상한은 로어북과 같다.
+    몬스터가 아닌 줄이 있으면 422(not_a_monster)다. 건너뛰기와 상한, not_copyable 은 로어북과 같다.
     """
     outcome = await service.copy_to_bestiary(session, user.user_id, bestiary_id, data.reference_ids)
     return MonsterCopyResult(

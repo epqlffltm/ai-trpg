@@ -24,13 +24,18 @@ from app.assets.scenarios.schemas import MonsterSheet
 from app.assets.service import AssetNotFoundError
 from app.engine.ruleset import Ruleset
 from app.references import repository
-from app.references.copying import check_monsters, entry_copy, monster_copy
-from app.references.records import ReferenceKind, ReferenceSource, StoredReference
+from app.references.copying import check_copyable, check_monsters, entry_copy, monster_copy
+from app.references.records import COPYABLE_SOURCES, ReferenceKind, ReferenceSource, StoredReference
 from app.references.sheets import Proposal, propose
 from app.references.srd import SRD51_ATTRIBUTION, SRD51_CHANGES, SRD51_TRANSLATED
+from app.references.wiki import WIKIPEDIA_ATTRIBUTION, WIKIPEDIA_CHANGES, WIKIPEDIA_TRANSLATED
 
-# 자료마다의 출처 표시. 화면이 찾은 줄과 함께 보인다. 원본을 바꾼 것(빼고, 줄이고, 옮김)도 함께 적는다(CC BY 4.0)
-ATTRIBUTIONS: dict[str, str] = {ReferenceSource.SRD51: f'{SRD51_ATTRIBUTION} {SRD51_CHANGES}{SRD51_TRANSLATED}'}
+# 자료마다의 출처 표시. 화면이 찾은 줄과 함께 보인다.
+# 원본을 바꾼 것(빼고, 줄이고, 옮김)도 함께 적는다(CC BY 4.0, CC BY-SA 4.0)
+ATTRIBUTIONS: dict[str, str] = {
+    ReferenceSource.SRD51: f'{SRD51_ATTRIBUTION} {SRD51_CHANGES}{SRD51_TRANSLATED}',
+    ReferenceSource.WIKIPEDIA: f'{WIKIPEDIA_ATTRIBUTION} {WIKIPEDIA_CHANGES}{WIKIPEDIA_TRANSLATED}',
+}
 
 
 class ReferenceNotFoundError(Exception):
@@ -58,8 +63,12 @@ def attributions_of(references: Sequence[StoredReference]) -> list[str]:
 async def search_references(
     session: AsyncSession, text: str, kind: ReferenceKind | None, limit: int, offset: int
 ) -> tuple[list[StoredReference], int]:
-    """이름으로 찾은 줄들의 한 쪽과 전체 개수. 글의 앞뒤 빈칸은 뗀다."""
-    return await repository.search(session, text.strip(), kind, limit, offset)
+    """
+    이름으로 찾은 줄들의 한 쪽과 전체 개수. 글의 앞뒤 빈칸은 뗀다.
+
+    찾기는 복사할 것을 고르는 곳이다. 복사할 수 있는 자료(COPYABLE_SOURCES)의 줄만 보인다.
+    """
+    return await repository.search(session, text.strip(), kind, COPYABLE_SOURCES, limit, offset)
 
 
 def in_order(references: Sequence[StoredReference], ids: Sequence[uuid.UUID]) -> list[StoredReference]:
@@ -80,8 +89,13 @@ async def find_references(session: AsyncSession, ids: Sequence[uuid.UUID]) -> li
 async def copy_to_lorebook(
     session: AsyncSession, owner_id: uuid.UUID, lorebook_id: uuid.UUID, ids: Sequence[uuid.UUID]
 ) -> CopyOutcome[LoreEntry]:
-    """고른 줄들을 자기 로어북의 항목으로 복사한다. 물건은 물건, 몬스터는 종족 항목이다."""
+    """
+    고른 줄들을 자기 로어북의 항목으로 복사한다. 물건은 물건, 몬스터는 종족 항목이다.
+
+    복사할 수 없는 자료의 줄이 있으면 NotCopyableError 다(하나도 넣지 않는다).
+    """
     references = await find_references(session, ids)
+    check_copyable(references)
     copies = [entry_copy(reference) for reference in references]
     return await lorebooks.add_copied_entries(session, owner_id, lorebook_id, copies)
 
@@ -89,8 +103,13 @@ async def copy_to_lorebook(
 async def copy_to_bestiary(
     session: AsyncSession, owner_id: uuid.UUID, bestiary_id: uuid.UUID, ids: Sequence[uuid.UUID]
 ) -> CopyOutcome[Monster]:
-    """고른 줄들을 자기 도감의 몬스터로 복사한다. 몬스터가 아닌 줄이 있으면 NotAMonsterError 다."""
+    """
+    고른 줄들을 자기 도감의 몬스터로 복사한다. 몬스터가 아닌 줄이 있으면 NotAMonsterError 다.
+
+    복사할 수 없는 자료의 줄이 있으면 먼저 NotCopyableError 다.
+    """
     references = await find_references(session, ids)
+    check_copyable(references)
     check_monsters(references)
     copies = [monster_copy(reference) for reference in references]
     return await bestiaries.add_copied_monsters(session, owner_id, bestiary_id, copies)
