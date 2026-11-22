@@ -3,7 +3,8 @@
 """
 문의(고객센터)를 시험한다.
 
-  - 보내기: 로그인하지 않았으면 적은 주소로, 로그인했으면 계정의 주소로 답한다. 로그인하지 않았는데 주소가 없으면 400
+  - 보내기: 로그인하지 않았으면 적은 주소로, 로그인했으면 계정의 주소로 답한다(주소를 싣지 않아도 된다).
+    로그인하지 않았는데 주소가 없으면 400
   - 보내기의 IP 시도 제한: 한 시간에 다섯 번까지
   - 내 문의: 내 것만, 최근 것부터 한 쪽씩, 답이 보인다
   - 운영자의 목록: 로그인하지 않았으면 401, 운영자가 아니면 404(운영자 주소를 드러내지 않는다),
@@ -105,6 +106,17 @@ class SubmitTests(TestCase):
         response = self.client.post(INQUIRIES_URL, inquiry_body(email='other@example.com'), format='json')
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        inquiry = Inquiry.objects.get(pk=response.data['id'])
+        self.assertEqual((inquiry.user, inquiry.email), (user, 'player1@example.com'))
+
+    def test_a_signed_in_person_may_leave_out_the_address(self):
+        # 화면은 로그인했으면 주소를 싣지 않는다(web 의 toDraft). 그대로 받아 계정의 주소로 답한다
+        user = make_user(1)
+        authorize(self.client, user)
+
+        response = self.client.post(INQUIRIES_URL, inquiry_body(), format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         inquiry = Inquiry.objects.get(pk=response.data['id'])
         self.assertEqual((inquiry.user, inquiry.email), (user, 'player1@example.com'))
 
