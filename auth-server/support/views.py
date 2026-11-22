@@ -330,9 +330,13 @@ class InquiriesView(APIView):
         serializer = InquiryRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = request.user if request.user.is_authenticated else None
-        if user is None and not serializer.validated_data.get('email'):
+        data = serializer.validated_data
+        if user is None and not data.get('email'):
             raise serializers.ValidationError({'email': ['답 받을 주소를 적어 주세요.']})
-        inquiry = submit_inquiry(user=user, **serializer.validated_data)
+        # 로그인한 화면은 주소를 싣지 않는다(계정의 주소로 답한다). 없는 칸은 None 으로 넘긴다
+        inquiry = submit_inquiry(
+            user=user, category=data['category'], title=data['title'], body=data['body'], email=data.get('email')
+        )
         body = InquiryCreatedSerializer({'id': inquiry.id, 'created_at': inquiry.created_at})
         return Response(body.data, status=status.HTTP_201_CREATED)
 
