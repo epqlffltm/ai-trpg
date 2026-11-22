@@ -14430,7 +14430,8 @@
         "description": "참고 자료 한 줄의 종류. 서술의 프롬프트가 종류를 붙여 보인다.",
         "enum": [
           "monster",
-          "item"
+          "item",
+          "topic"
         ],
         "title": "ReferenceKind",
         "type": "string"
@@ -24794,7 +24795,7 @@
     },
     "/api/v1/game/bestiaries/{bestiary_id}/monsters/copies": {
       "post": {
-        "description": "고른 참고 자료(몬스터)를 자기 도감의 몬스터로 복사한다. 원본의 생물 분류를 도감의 타입으로 바꾼다.\n\n몬스터가 아닌 줄이 있으면 422(not_a_monster)다. 건너뛰기와 상한은 로어북과 같다.",
+        "description": "고른 참고 자료(몬스터)를 자기 도감의 몬스터로 복사한다. 원본의 생물 분류를 도감의 타입으로 바꾼다.\n\n몬스터가 아닌 줄이 있으면 422(not_a_monster)다. 건너뛰기와 상한, not_copyable 은 로어북과 같다.",
         "operationId": "copy_to_bestiary_api_v1_game_bestiaries__bestiary_id__monsters_copies_post",
         "parameters": [
           {
@@ -26736,7 +26737,7 @@
     },
     "/api/v1/game/lorebooks/{lorebook_id}/entries/copies": {
       "post": {
-        "description": "고른 참고 자료를 자기 로어북의 항목으로 복사한다. 물건은 물건, 몬스터는 종족 항목이다.\n\n이미 복사해 둔 줄은 건너뛴다(skipped). 다 넣으면 상한을 넘으면 하나도 넣지 않고 409 다.\n없는 줄이 있으면 404(reference_not_found)다.",
+        "description": "고른 참고 자료를 자기 로어북의 항목으로 복사한다. 물건은 물건, 몬스터는 종족 항목이다.\n\n이미 복사해 둔 줄은 건너뛴다(skipped). 다 넣으면 상한을 넘으면 하나도 넣지 않고 409 다.\n없는 줄이 있으면 404(reference_not_found), 복사할 수 없는 자료의 줄이 있으면 422(not_copyable)다.",
         "operationId": "copy_to_lorebook_api_v1_game_lorebooks__lorebook_id__entries_copies_post",
         "parameters": [
           {
@@ -27522,7 +27523,7 @@
     },
     "/api/v1/game/references": {
       "get": {
-        "description": "참고 자료를 이름(한국어 이름, 원본의 이름, 다른 이름)으로 찾는다. q 가 비면 전부다. kind 로 종류를 거른다.\n\n보이는 이름의 차례다. 쪽마다 출처 표시(attributions)가 함께 온다.",
+        "description": "참고 자료를 이름(한국어 이름, 원본의 이름, 다른 이름)으로 찾는다. q 가 비면 전부다. kind 로 종류를 거른다.\n복사할 것을 고르는 곳이라 복사할 수 있는 자료의 줄만 보인다(위키백과는 서술에만 쓴다).\n\n보이는 이름의 차례다. 쪽마다 출처 표시(attributions)가 함께 온다.",
         "operationId": "search_references_api_v1_game_references_get",
         "parameters": [
           {

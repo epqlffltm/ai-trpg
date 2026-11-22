@@ -43,6 +43,14 @@ class ReferenceSource(enum.StrEnum):
 
     # System Reference Document 5.1. CC BY 4.0
     SRD51 = 'srd51'
+    # 위키백과의 고른 문서(한국어판, 없으면 영어판). CC BY-SA 4.0. 줄마다 언어판과 원문은 data 에 있다
+    WIKIPEDIA = 'wikipedia'
+
+
+# 로어북·도감으로 복사할 수 있는 자료. 복사한 글은 제작자의 자산이 된다.
+# 위키백과는 넣지 않는다(2026-11-22 유저 결정). CC BY-SA 의 동일 조건이 제작자의 자산에 따라가는지
+# 법률 판단을 들은 뒤 정한다. 그때 여기만 바꾼다
+COPYABLE_SOURCES: frozenset[ReferenceSource] = frozenset({ReferenceSource.SRD51})
 
 
 class ReferenceKind(enum.StrEnum):
@@ -50,6 +58,8 @@ class ReferenceKind(enum.StrEnum):
 
     MONSTER = 'monster'
     ITEM = 'item'
+    # 사물, 생물, 건축, 탈것 같은 일반 지식(위키백과). 생김새와 쓰임만 서술에 쓴다
+    TOPIC = 'topic'
 
 
 Key = Annotated[str, StringConstraints(min_length=1, max_length=REFERENCE_KEY_MAX_LENGTH)]

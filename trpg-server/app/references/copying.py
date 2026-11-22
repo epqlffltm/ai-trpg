@@ -10,6 +10,7 @@
   - 로어북: 물건은 물건, 몬스터는 종족 항목이다. 다른 이름(한국어 이름 등)을 키워드로 단다.
   - 도감: 몬스터만 받는다. 원본의 생물 분류를 엔진이 다루는 타입으로 바꾼다. 맞는 것이 없으면 기타다.
   - 원본의 수치(data)는 옮기지 않는다. 도감의 몬스터에는 수치가 없다(시나리오의 시트가 정한다).
+  - 복사할 수 있는 자료(records.py 의 COPYABLE_SOURCES)의 줄만 옮긴다. 위키백과의 줄은 서술에만 쓴다.
 """
 
 import re
@@ -19,7 +20,7 @@ from app.assets.bestiaries.schemas import MonsterCreate
 from app.assets.copies import Copy
 from app.assets.lorebooks.schemas import EntryCreate
 from app.assets.models import LORE_ENTRY_CONTENT_MAX_LENGTH, LORE_ENTRY_MAX_KEYWORDS, LORE_KEYWORD_MAX_LENGTH, LoreKind
-from app.references.records import ReferenceKind, StoredReference
+from app.references.records import COPYABLE_SOURCES, ReferenceKind, StoredReference
 from app.references.retrieval import MIN_ALIAS_LENGTH
 
 # 원본(SRD 5.1)의 생물 분류에서 엔진이 다루는 타입으로. 여기 없는 분류(용, 괴물, 악마 …)는 기타다
@@ -40,6 +41,14 @@ ELLIPSIS = '…'
 
 class NotAMonsterError(Exception):
     """몬스터가 아닌 줄을 도감에 넣으려 했다. keys 는 그런 줄의 key 들이다."""
+
+    def __init__(self, keys: list[str]) -> None:
+        super().__init__(', '.join(keys))
+        self.keys = keys
+
+
+class NotCopyableError(Exception):
+    """복사할 수 없는 자료의 줄을 고랐다. keys 는 그런 줄의 key 들이다."""
 
     def __init__(self, keys: list[str]) -> None:
         super().__init__(', '.join(keys))
@@ -111,3 +120,10 @@ def check_monsters(references: list[StoredReference]) -> None:
     others = [reference.key for reference in references if reference.kind != ReferenceKind.MONSTER]
     if others:
         raise NotAMonsterError(others)
+
+
+def check_copyable(references: list[StoredReference]) -> None:
+    """모두 복사할 수 있는 자료의 줄인지 본다. 아닌 줄이 있으면 그 key 들로 NotCopyableError 다."""
+    others = [reference.key for reference in references if reference.source not in COPYABLE_SOURCES]
+    if others:
+        raise NotCopyableError(others)

@@ -163,9 +163,12 @@ def escape_like(text: str) -> str:
     return text.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
 
 
-def search_filter(text: str, kind: ReferenceKind | None):
-    """찾는 조건. 글이 비면 전부다. 이름(원본, 한국어)과 다른 이름에 글이 들어 있는 줄이다. 대소문자는 가리지 않는다."""
-    conditions = []
+def search_filter(text: str, kind: ReferenceKind | None, sources: Collection[str]):
+    """
+    찾는 조건. 글이 비면 그 자료들의 전부다. 이름(원본, 한국어)과 다른 이름에 글이 들어 있는 줄이다.
+    대소문자는 가리지 않는다.
+    """
+    conditions = [ReferenceEntry.source.in_(sorted(sources))]
     if text:
         pattern = f'%{escape_like(text)}%'
         conditions.append(
@@ -181,16 +184,16 @@ def search_filter(text: str, kind: ReferenceKind | None):
 
 
 async def search(
-    session: AsyncSession, text: str, kind: ReferenceKind | None, limit: int, offset: int
+    session: AsyncSession, text: str, kind: ReferenceKind | None, sources: Collection[str], limit: int, offset: int
 ) -> tuple[list[StoredReference], int]:
     """
-    이름으로 찾은 줄들의 한 쪽과 전체 개수. 보이는 이름(한국어 이름, 없으면 원본)의 차례다.
+    sources 의 자료에서 이름으로 찾은 줄들의 한 쪽과 전체 개수. 보이는 이름(한국어 이름, 없으면 원본)의 차례다.
 
     벡터로 찾지 않는다. 제작자는 이름을 알고 고른다. 임베딩 모델이 없어도 돈다.
     차례는 글자의 코드 순(C 정렬)이다. DB 의 기본 정렬(로케일)은 서버마다 달라 영어와 한글의 앞뒤가 바뀐다.
     코드 순이면 어디서나 같다. 한글끼리는 가나다 순이고, 번역이 없는 영어 이름이 앞에 온다.
     """
-    condition = search_filter(text, kind)
+    condition = search_filter(text, kind, sources)
     shown = func.coalesce(func.nullif(ReferenceEntry.name_ko, ''), ReferenceEntry.name).collate('C')
     query = select(ReferenceEntry).where(condition).order_by(shown, ReferenceEntry.key).limit(limit).offset(offset)
     total = await session.scalar(select(func.count()).select_from(ReferenceEntry).where(condition))

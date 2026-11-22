@@ -255,7 +255,9 @@ from app.rounds.time_words import duration_text, time_text
 #                 [몬스터]의 다루는 법에 '다가옴'의 몬스터는 끝날 무렵 들어와 아직 치지 않았다는 말이 더해진다
 #   narration-92: 순찰하는 몬스터(#254). '다가옴'의 줄에 순찰하다 들어온 것이 더해진다
 #                 (다가옴: 해골 병사 — 깊은 수로에서 순찰하다 들어왔다, 아직 치지 않음)
-PROMPT_VERSION = 'narration-92'
+#   narration-93: 위키백과의 참고 자료. [참고 자료]의 머리말이 자료를 하나로 못 박지 않고(SRD 와 위키백과),
+#                 [상식] 줄이 있으면 실제 세계의 나라, 인물, 연도를 장면에 쓰지 않는다는 말이 더해진다
+PROMPT_VERSION = 'narration-93'
 
 # 지난 기록을 몇 라운드까지 넣는가. 기본 단계의 값이다. 입력 단계마다 이만큼 더한다(history_rounds)
 HISTORY_ROUNDS = 3
@@ -477,12 +479,18 @@ LORE_NOTE = (
 # 글에는 수치가 없지만(app/references/srd.py), 모델이 원본의 규칙을 떠올려 결과를 덧붙이지 않게 적는다
 REFERENCE_TITLE = '[참고 자료]'
 REFERENCE_NOTE = (
-    '바깥 자료(D&D SRD 5.1)에서 이번 장면과 관련 있을 수 있는 것을 고른 것이다. '
+    '바깥 자료(D&D SRD 5.1, 위키백과)에서 이번 장면과 관련 있을 수 있는 것을 고른 것이다. '
     '생김새, 쓰임, 버릇을 그리는 데만 쓴다. 위의 설정과 다르면 설정을 따르고, 장면에 맞지 않으면 쓰지 않는다. '
     '수치와 규칙(피해, 난이도, 횟수)은 쓰지 않는다. 결과는 엔진이 정했다. 이름은 장면에 맞게 부른다.'
 )
 # 참고 자료의 종류 앞에 붙는 이름
-REFERENCE_KIND_NAMES = {'monster': '몬스터', 'item': '물건'}
+REFERENCE_KIND_NAMES = {'monster': '몬스터', 'item': '물건', 'topic': '상식'}
+# [상식](위키백과)의 줄이 있을 때만 붙이는 말. 실제 세계의 백과사전이라 판타지 장면에 그 세계의 것이 섞이지 않게 한다.
+# 받는 도구가 연도와 나라 이름이 든 문장을 빼지만 다 거르지는 못한다
+REFERENCE_TOPIC_RULE = (
+    '[상식]은 실제 세계의 백과사전에서 온 것이다. 사물의 생김새와 쓰임만 참고한다. '
+    '실제 세계의 나라, 도시, 인물, 연도는 장면에 쓰지 않는다.'
+)
 
 # 검색한 지난 일 앞에 붙이는 말. 지난 기록(대화)보다 앞의 라운드라 모델이 모르는 일이다.
 # 지난 행동에 끌려 이번 행동이 바뀌지 않게, 이미 끝난 일이라는 것과 무엇에 쓰는지를 적는다
@@ -843,7 +851,8 @@ def reference_lines(notes: list[ReferenceNote]) -> list[str]:
     """검색한 참고 자료들을 적는 줄들. 끝에 빈 줄이 붙는다. 없으면 빈 목록이다(테이블이 켜지 않았으면 늘 없다)."""
     if not notes:
         return []
-    return [REFERENCE_TITLE, REFERENCE_NOTE, *(reference_line(note) for note in notes), '']
+    rules = [REFERENCE_TOPIC_RULE] if any(note.kind == 'topic' for note in notes) else []
+    return [REFERENCE_TITLE, REFERENCE_NOTE, *rules, *(reference_line(note) for note in notes), '']
 
 
 def history_lines(histories: list[PersonHistory]) -> list[str]:
