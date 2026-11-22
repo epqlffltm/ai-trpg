@@ -5,7 +5,7 @@
 import uuid
 from collections.abc import Collection, Sequence
 
-from sqlalchemy import and_, delete, exists, func, or_, select, true, update
+from sqlalchemy import ColumnElement, and_, delete, exists, func, or_, select, true, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -163,12 +163,12 @@ def escape_like(text: str) -> str:
     return text.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
 
 
-def search_filter(text: str, kind: ReferenceKind | None, sources: Collection[str]):
+def search_filter(text: str, kind: ReferenceKind | None, sources: Collection[str]) -> ColumnElement[bool]:
     """
     찾는 조건. 글이 비면 그 자료들의 전부다. 이름(원본, 한국어)과 다른 이름에 글이 들어 있는 줄이다.
     대소문자는 가리지 않는다.
     """
-    conditions = [ReferenceEntry.source.in_(sorted(sources))]
+    conditions: list[ColumnElement[bool]] = [ReferenceEntry.source.in_(sorted(sources))]
     if text:
         pattern = f'%{escape_like(text)}%'
         conditions.append(
