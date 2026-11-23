@@ -33,6 +33,7 @@ export function detail(extra: Partial<ConversationDetail> = {}): ConversationDet
     model: { slug: 'glm', display_name: 'GLM', vendor: 'zai', grade: 'standard', retires_on: null, usable: true },
     messages: MESSAGES,
     state: { place: 'cafe', minutes: 30, clock: { day: 1, hour: 15, minute: 30, time_of_day: 'day' }, background: null, sprite: null, inventory: [], visited: [], outfit: [], affection: { display: 'stage', value: null, stage: '친구', stage_index: 1, stages: 4 } },
+    references_enabled: false,
     generating: false,
     created_at: AT,
     updated_at: AT,

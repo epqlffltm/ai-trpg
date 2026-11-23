@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/story/studio/WorldBasicsTab.tsx
-// 세계관의 기본 탭(D7): 이름, 장르, 태그, 등급, 공개 범위, 대표 그림. 지우기도 여기에 둔다.
+// 세계관의 기본 탭(D7): 이름, 장르, 태그, 등급, 공개 범위, 대표 그림, 참고 자료의 허용. 지우기도 여기에 둔다.
 
-import { SelectField, TextField } from '@ai-trpg/ui';
+import { Checkbox, SelectField, TextField } from '@ai-trpg/ui';
 import { ShareAddress } from '../../../components/ShareAddress';
 import { useState } from 'react';
 import type { StoryWorldDetail } from '../../../api/storyWorlds';
@@ -77,6 +77,12 @@ export function WorldBasicsTab({ world }: { world: StoryWorldDetail }) {
       </SelectField>
       {world.visibility === 'unlisted' && world.latest_version !== null ? <ShareAddress path={`/story/worlds/${world.id}`} /> : null}
       <ImagePicker label="대표 그림" imageId={draft.imageId} onChange={(imageId) => update({ imageId })} hint="목록과 소개에 나오는 그림입니다. 저장해야 붙습니다." />
+      <Checkbox
+        label="참고 자료를 켤 수 있게 하기"
+        description="세션을 하는 사람이 바깥 자료(D&D SRD, 위키백과)를 장면에 함께 쓰게 켤 수 있습니다. 게시해야 판에 들어갑니다. 이 세계관에 맞지 않는 자료라면 꺼 두세요."
+        checked={draft.referencesAllowed}
+        onChange={(event) => update({ referencesAllowed: event.target.checked })}
+      />
     </StudioForm>
   );
 }

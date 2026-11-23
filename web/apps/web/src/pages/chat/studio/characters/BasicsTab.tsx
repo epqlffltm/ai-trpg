@@ -1,7 +1,7 @@
 // web/apps/web/src/pages/chat/studio/characters/BasicsTab.tsx
-// 캐릭터의 기본 탭(C6): 이름, 나이, 성별, 장르, 태그, 등급, 공개 범위. 지우기도 여기에 둔다.
+// 캐릭터의 기본 탭(C6): 이름, 나이, 성별, 장르, 태그, 등급, 공개 범위, 참고 자료의 허용. 지우기도 여기에 둔다.
 
-import { SelectField, TextField } from '@ai-trpg/ui';
+import { Checkbox, SelectField, TextField } from '@ai-trpg/ui';
 import { ShareAddress } from '../../../../components/ShareAddress';
 import { useState } from 'react';
 import type { AssetCharacterDetail, AssetRating, AssetVisibility } from '../../../../api/types';
@@ -105,6 +105,12 @@ export function BasicsTab({ character }: { character: AssetCharacterDetail }) {
         ))}
       </SelectField>
       {character.visibility === 'unlisted' && character.latest_version !== null ? <ShareAddress path={`/chat/characters/${character.id}`} /> : null}
+      <Checkbox
+        label="참고 자료를 켤 수 있게 하기"
+        description="대화하는 사람이 바깥 자료(D&D SRD, 위키백과)를 함께 쓰게 켤 수 있습니다. 게시해야 판에 들어갑니다. 이 캐릭터에 맞지 않는 자료라면 꺼 두세요."
+        checked={draft.referencesAllowed}
+        onChange={(event) => update({ referencesAllowed: event.target.checked })}
+      />
     </CharacterForm>
   );
 }

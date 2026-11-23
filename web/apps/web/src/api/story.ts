@@ -28,6 +28,8 @@ export type StorySessionModel = Schemas['ConversationModelOut'];
 export type StorySessionPage = Schemas['ConversationPage'];
 export type StorySessionSummary = Schemas['ConversationSummary'];
 export type StorySession = Schemas['ConversationDetail'];
+// 세션의 참고 자료를 켰는가(PUT /conversations/{id}/references 의 답, #1338)
+export type StorySessionReferences = Schemas['ReferencesOut'];
 export type StoryMessage = Schemas['PathMessageOut'];
 export type StorySavedMessage = Schemas['MessageOut'];
 export type StorySegment = Schemas['SegmentOut'];
@@ -121,6 +123,11 @@ export function openStoryActionTurn(id: string, action: StoryAction, signal: Abo
 }
 
 /** 세션의 페르소나를 바꾼다(다음 말부터). 같은 id 면 새 설정으로, null 이면 페르소나 없이. 404 persona_not_found 면 그대로다 */
+/** 세션의 참고 자료(SRD 5.1, 위키백과)를 켜거나 끈다(#1338). 세계관이 허용하지 않는데 켜면 422 references_not_allowed */
+export function chooseStoryReferences(id: string, enabled: boolean): Promise<StorySessionReferences> {
+  return apiRequest<StorySessionReferences>(`${STORY}/conversations/${encodeURIComponent(id)}/references`, { method: 'PUT', body: { enabled } });
+}
+
 export function changeStoryPersona(id: string, personaId: string | null): Promise<StoryPersonaChoice> {
   return apiRequest<StoryPersonaChoice>(`${STORY}/conversations/${encodeURIComponent(id)}/persona`, { method: 'PUT', body: { persona_id: personaId } });
 }

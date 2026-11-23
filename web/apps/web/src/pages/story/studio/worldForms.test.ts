@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../../api/errors';
 import type { StoryWorldDetail } from '../../../api/storyWorlds';
-import { toWorldBasicsBody, worldBasicsHints, worldNameHint } from './worldBasicsForm';
+import { toWorldBasicsBody, worldBasicsDraft, worldBasicsHints, worldNameHint } from './worldBasicsForm';
 import { addWorldItem, removeWorldItem, toWorldItemsBody, worldItemsHints } from './worldItemsForm';
 import { addWorldPlace, removeWorldPlace, setBackground, toWorldMapBody, worldMapDraft, worldMapHints } from './worldMapForm';
 import { describeWorldProblem, describeWorldPublishProblem, isMissingWorld } from './worldProblem';
@@ -50,8 +50,17 @@ describe('세계관의 입력', () => {
   it('기본: 이름과 태그를 검사하고 겹친 태그를 뺀다', () => {
     expect(worldNameHint(' ')).toBe('이름을 적어 주세요.');
     expect(worldNameHint('가'.repeat(51))).toMatch(/50자/);
-    expect(worldBasicsHints({ name: '가', genre: 'romance', tags: Array.from({ length: 11 }, (_, i) => `t${i}`).join(','), rating: 'all', visibility: 'private', imageId: null }).tags).toMatch(/10개/);
-    expect(toWorldBasicsBody({ name: ' 여름 ', genre: 'romance', tags: 'a, a, b', rating: 'adult', visibility: 'public', imageId: 'img' })).toEqual({ name: '여름', genre: 'romance', tags: ['a', 'b'], rating: 'adult', visibility: 'public', image_id: 'img' });
+    expect(worldBasicsHints({ name: '가', genre: 'romance', tags: Array.from({ length: 11 }, (_, i) => `t${i}`).join(','), rating: 'all', visibility: 'private', imageId: null, referencesAllowed: false }).tags).toMatch(/10개/);
+    expect(toWorldBasicsBody({ name: ' 여름 ', genre: 'romance', tags: 'a, a, b', rating: 'adult', visibility: 'public', imageId: 'img', referencesAllowed: true })).toEqual({
+      name: '여름',
+      genre: 'romance',
+      tags: ['a', 'b'],
+      rating: 'adult',
+      visibility: 'public',
+      image_id: 'img',
+      references_allowed: true,
+    });
+    expect(worldBasicsDraft(world({ references_allowed: true })).referencesAllowed).toBe(true);
   });
 
   it('진행: 시간대를 하나는 남기고, 지운 시작 시간대를 비우고, 시각과 이름을 검사한다', () => {
