@@ -59,6 +59,20 @@ class ModelChoice(BaseModel):
     model: ModelSlug
 
 
+class ReferencesChoice(BaseModel):
+    """세션의 참고 자료(SRD 5.1, 위키백과)를 켜고 끌 때 받는 값(#1338)."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    enabled: bool
+
+
+class ReferencesOut(BaseModel):
+    """세션의 참고 자료를 켰는가."""
+
+    enabled: bool
+
+
 class PersonaChoice(BaseModel):
     """
     세션의 페르소나를 바꿀 때 받는 값. persona_id 는 꼭 보낸다.
@@ -440,5 +454,9 @@ class ConversationDetail(BaseModel):
     view: WorldView
     # 시작할 때 가져온 페르소나의 사본. 페르소나 없이 시작했으면 null 이다
     persona: PersonaOut | None = None
+    # 참고 자료(#1338). allowed 는 판의 사본이 허용하는가(제작자), enabled 는 이 세션에서 켰는가(사람)다.
+    # 둘 다 참일 때만 카드에 섞는다. 허용하지 않으면 켤 수 없다
+    references_allowed: bool = False
+    references_enabled: bool = False
     created_at: datetime
     updated_at: datetime

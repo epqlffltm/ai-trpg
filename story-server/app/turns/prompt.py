@@ -267,6 +267,15 @@ def suggestions_section() -> str:
 LORE_BEFORE = ('[장면 지시]', '[쓰는 법]')
 
 
+def before_direction(card: str, block: str) -> str:
+    """블록을 장면 지시나 쓰는 법 앞(render_card 에서 로어북의 자리)에 넣는다. 둘 다 없으면 끝에 붙인다."""
+    positions = [index for index in (card.find(f'\n\n{heading}') for heading in LORE_BEFORE) if index >= 0]
+    if not positions:
+        return f'{card}\n\n{block}'
+    position = min(positions)
+    return f'{card[:position]}\n\n{block}{card[position:]}'
+
+
 def with_lore(card: str, old: str | None, new: str | None) -> str:
     """
     카드의 "[로어북]" 블록을 바꾼다(뜻으로 찾은 항목을 더한 뒤). old 는 render_card 가 넣은 블록이다.
@@ -276,11 +285,15 @@ def with_lore(card: str, old: str | None, new: str | None) -> str:
         return card
     if old is not None:
         return card.replace(old, new, 1)
-    positions = [index for index in (card.find(f'\n\n{heading}') for heading in LORE_BEFORE) if index >= 0]
-    if not positions:
-        return f'{card}\n\n{new}'
-    position = min(positions)
-    return f'{card[:position]}\n\n{new}{card[position:]}'
+    return before_direction(card, new)
+
+
+def with_references(card: str, block: str) -> str:
+    """
+    카드에 "[참고 자료]" 블록을 넣는다(#1338). 로어북 뒤, 장면 지시와 쓰는 법 앞이다. 제작자의 설정이 먼저 읽힌다.
+    로어북을 바꾼 뒤에 부른다(conversation_core/lookups.py).
+    """
+    return before_direction(card, block)
 
 
 def render_card(

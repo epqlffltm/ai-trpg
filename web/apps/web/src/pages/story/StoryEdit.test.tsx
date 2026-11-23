@@ -52,6 +52,8 @@ function session(messages: StoryMessage[]): StorySession {
     model: { slug: 'luna', display_name: 'Luna', vendor: 'openai', grade: 'standard', retires_on: null, usable: true },
     messages,
     state: state(),
+    references_allowed: false,
+    references_enabled: false,
     created_at: AT,
     updated_at: AT,
   } as StorySession;

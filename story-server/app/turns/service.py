@@ -44,10 +44,12 @@ from ai_core.routing import MODEL_UNAVAILABLE as ROUTE_MODEL_UNAVAILABLE
 from ai_core.routing import Route
 from conversation_core import continuation
 from conversation_core.continuation import OverlapTrim
-from conversation_core.lorebook import chosen_entries, query_text, ranked, render_lore, with_recalled
+from conversation_core.lookups import lore_chars, with_found_references, with_recalled_lore
+from conversation_core.lorebook import chosen_entries, query_text, ranked, render_lore
 from conversation_core.relay import Relay
 from conversation_core.suggestions import MarkerHold, parse_suggestions, split_answer
 from conversation_core.window import Turn, select_window
+from reference_core.finder import ReferenceFinder
 from server_core import stop_signals
 from server_core.billing.client import Billing
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -67,6 +69,7 @@ from app.conversations.service import (
     ModelUnavailableError,
     NotEditableError,
     get_conversation,
+    references_allowed,
 )
 from app.conversations.views import affection_shown, met_on
 from app.core.dependencies import Viewer
@@ -91,7 +94,7 @@ from app.turns.briefing import Briefing, LoreText, read_briefing
 from app.turns.charging import HoldDeclined, Settled, Settlement
 from app.turns.frames import delta_frame, done_frame, failed_frame, segment_frame
 from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
-from app.turns.prompt import PersonaCard, build_messages, render_card, scene_card, with_lore
+from app.turns.prompt import PersonaCard, build_messages, render_card, scene_card, with_lore, with_references
 from app.turns.providers import Router
 from app.turns.scenes import Staging, replayed, staging
 from app.turns.schemas import EarnedAchievementOut
@@ -271,6 +274,8 @@ class Branch:
     memory: str | None = None
     # 가지의 말 가운데 굴리는 요약이 붙은 것(말의 id → 요약의 글, app/memory/summaries.py)
     summaries: Mapping[uuid.UUID, str] = field(default_factory=dict)
+    # 세션에서 참고 자료를 켰는가(#1338). 판이 허용하지 않으면 켜져 있어도 섞지 않는다(references_query)
+    references_enabled: bool = False
 
 
 def open_lore(branch: Branch, state: StoryState) -> tuple[tuple[LoreKey, LoreText], ...]:
@@ -295,14 +300,26 @@ def lore_plan_of(branch: Branch, state: StoryState, recent: Sequence[str]) -> Lo
         return None
     entries = tuple(entry for _, entry in keyed)
     order = tuple(ranked(entries, recent))
+    chosen = chosen_entries(entries, order)
     return LorePlan(
         world_id=branch.world_id,
         entries=entries,
         keys=tuple(key for key, _ in keyed),
         ranked=order,
         query=query_text(recent),
-        block=render_lore(chosen_entries(entries, order)),
+        block=render_lore(chosen),
+        chars=lore_chars(chosen),
     )
+
+
+def references_query(branch: Branch, recent: Sequence[str]) -> str | None:
+    """
+    참고 자료를 찾는 글(#1338). 판이 허용하고(references_allowed, 제작자) 세션에서 켰을 때(references_enabled, 사람)만
+    있다. 로어북을 뜻으로 찾는 글과 같다(최근 말 둘). 아니면 None 이다.
+    """
+    if not (references_allowed(branch.document) and branch.references_enabled):
+        return None
+    return query_text(recent)
 
 
 def story_of(branch: Branch, chars: int) -> str | None:
@@ -662,6 +679,7 @@ async def branch_at(
         imported.id,
         memory,
         summaries,
+        conversation.references_enabled,
     )
 
 
@@ -698,7 +716,8 @@ def turn_start(
     options: PromptOptions,
 ) -> TurnStart:
     """말 한 번의 시작. 그 뒤의 일은 이것만 들고 간다. 로어북은 가지의 말과 이번 말에서 고른다."""
-    lore = lore_plan_of(branch, state, [*(item.content for item in branch.path), message.content])
+    recent = [*(item.content for item in branch.path), message.content]
+    lore = lore_plan_of(branch, state, recent)
     return TurnStart(
         conversation_id=message.conversation_id,
         generation_id=generation.id,
@@ -713,6 +732,7 @@ def turn_start(
         expressions=expressions_for(branch.briefing, stage.cast),
         state=state_view(branch.world, state, stage.cast, shown_in_turn(branch, stage)),
         lore=lore,
+        references=references_query(branch, recent),
     )
 
 
@@ -970,9 +990,11 @@ async def record_continue(
     # 메시지는 이어 쓰는 것으로 바꾼다. turn_start 가 만드는 보통의 메시지는 쓰지 않으므로 빈 가지로 만든다
     empty = replace(branch, path=[])
     start = turn_start(viewer.claims.user_id, generation, answered, empty, branch.state, stage, options)
-    lore = lore_plan_of(branch, branch.state, [message.content for message in branch.path])
+    recent = [message.content for message in branch.path]
+    lore = lore_plan_of(branch, branch.state, recent)
     messages = continue_prompt(branch, branch.state, stage, options, lore)
-    return replace(start, messages=messages, continued=saved(target), lore=lore)
+    references = references_query(branch, recent)
+    return replace(start, messages=messages, continued=saved(target), lore=lore, references=references)
 
 
 async def route_turn(router: Router, start: TurnStart) -> Route:
@@ -1129,22 +1151,6 @@ async def settle_turn(
         await settle_generation(session_factory, billing, generation, now)
 
 
-async def with_recalled_lore(recall: LoreRecall | None, start: TurnStart) -> TurnStart:
-    """
-    로어북을 뜻으로 찾아 카드의 "[로어북]" 에 더한다(모델을 부르기 직전). 찾을 수 없거나 더할 것이 없으면 그대로다.
-    """
-    plan = start.lore
-    if recall is None or plan is None:
-        return start
-    recalled = await recall.recall(plan)
-    if not recalled:
-        return start
-    block = render_lore(chosen_entries(plan.entries, with_recalled(plan.ranked, recalled)))
-    card = start.messages[0]
-    rebuilt = replace(card, content=with_lore(card.content, plan.block, block))
-    return replace(start, messages=[rebuilt, *start.messages[1:]])
-
-
 async def announce_stop(
     session_factory: async_sessionmaker[AsyncSession],
     channel: str,
@@ -1203,17 +1209,20 @@ async def run_generation(
     clock: Callable[[], datetime],
     stop: StopSwitch,
     recall: LoreRecall | None = None,
+    finder: ReferenceFinder | None = None,
 ) -> None:
     """
     모델을 부르고, 흘려보내고, 저장하고, 맡긴다. 응답과 따로 도는 작업이다. 사람이 끊어도 끝까지 돈다.
     부르기 전에 로어북을 뜻으로 찾아 카드에 더한다(recall 이 있을 때).
+    그다음 참고 자료를 찾아 더한다(finder 가 있을 때, conversation_core/lookups.py).
 
     사람이 멈추면(stop) 받은 만큼 저장하고 맡긴다(받은 조각이 있으면 partial 로 확정, 없으면 반환).
     서버가 꺼지며 멈추면 받은 만큼 저장하고 멈춘다. 맡기는 것은 다음에 뜬 서버의 정리 작업이 한다.
     저장하다 실패하면(DB 가 없다) 응답에 실패를 알리고 끝낸다.
     차례와 홀드는 오래되면 풀린다(GENERATION_STALE, 정리 작업).
     """
-    start = await with_recalled_lore(recall, start)
+    start = await with_recalled_lore(recall, start, with_lore)
+    start = await with_found_references(finder, start, with_references)
     collector = collector_for(start, relay)
     result = await stoppable_call(session_factory, route, start, params, collector, clock, stop)
     try:

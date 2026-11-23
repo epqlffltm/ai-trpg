@@ -27,6 +27,7 @@ import app.memory.models  # noqa: F401
 import app.notifications.models  # noqa: F401
 import app.operators.models  # noqa: F401
 import app.records.models  # noqa: F401
+import app.references.models  # noqa: F401
 import app.reports.models  # noqa: F401
 import app.snapshots.models  # noqa: F401
 import app.turns.models  # noqa: F401

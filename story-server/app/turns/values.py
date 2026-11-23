@@ -47,6 +47,7 @@ class LorePlan:
     로어북을 뜻으로 찾아 더할 바탕(app/lore/recall.py). 상시와 키워드로 고른 것(ranked, block)과 함께 든다.
     world_id 는 판의 사본, entries 와 keys 는 판의 항목과 그 열쇠(같은 차례), query 는 찾는 글(최근 말 둘)이다.
     block 은 카드에 이미 넣은 "[로어북]" 블록이다(고른 것이 없으면 None). 뜻으로 찾은 것을 더하면 이것을 바꾼다.
+    chars 는 그 블록에 든 항목의 글자(이름과 내용)의 합이다. 참고 자료는 로어북이 쓰고 남은 자리에만 들어간다.
     """
 
     world_id: uuid.UUID
@@ -55,6 +56,7 @@ class LorePlan:
     ranked: tuple[int, ...]
     query: str
     block: str | None
+    chars: int = 0
 
 
 @dataclass(frozen=True)
@@ -91,6 +93,8 @@ class TurnStart:
     continued: SavedMessage | None = None
     # 로어북을 뜻으로 찾아 더할 바탕. 로어북의 항목이 없으면 None(app/lore/recall.py)
     lore: LorePlan | None = None
+    # 참고 자료를 찾는 글(#1338). 판이 허용하고 사람이 켰을 때만 있다. 로어북 다음에 찾아 카드에 더한다. 아니면 None
+    references: str | None = None
     # 이번 행동으로 처음 받은 업적들. turn 메시지에 싣는다(app/turns/service.py 의 record_achievements)
     achievements: tuple[EarnedAchievementOut, ...] = ()
 

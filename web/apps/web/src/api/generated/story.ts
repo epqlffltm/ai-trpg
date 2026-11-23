@@ -413,6 +413,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/story/conversations/{conversation_id}/references": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change References
+         * @description 세션의 참고 자료(SRD 5.1, 위키백과)를 켜거나 끈다(#1338). 다음 말부터 카드에 섞는다. 값을 더 받지 않는다.
+         *     판이 허용하지 않는데 켜면 422 references_not_allowed 다. 답을 쓰는 중에도 바꿀 수 있다(그 답은 바꾸기 전의 값이다).
+         */
+        put: operations["change_references_api_v1_story_conversations__conversation_id__references_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/story/conversations/{conversation_id}/shortcuts": {
         parameters: {
             query?: never;
@@ -1098,6 +1119,16 @@ export interface components {
             messages: components["schemas"]["PathMessageOut"][];
             model: components["schemas"]["ConversationModelOut"] | null;
             persona?: components["schemas"]["PersonaOut"] | null;
+            /**
+             * References Allowed
+             * @default false
+             */
+            references_allowed: boolean;
+            /**
+             * References Enabled
+             * @default false
+             */
+            references_enabled: boolean;
             state: components["schemas"]["StateOut"];
             /** Title */
             title: string;
@@ -1775,6 +1806,22 @@ export interface components {
          * @enum {string}
          */
         Rating: "all" | "adult";
+        /**
+         * ReferencesChoice
+         * @description 세션의 참고 자료(SRD 5.1, 위키백과)를 켜고 끌 때 받는 값(#1338).
+         */
+        ReferencesChoice: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /**
+         * ReferencesOut
+         * @description 세션의 참고 자료를 켰는가.
+         */
+        ReferencesOut: {
+            /** Enabled */
+            enabled: boolean;
+        };
         /**
          * ReportCreate
          * @description 신고할 때 받는 값. 사유가 other 면 설명이 있어야 한다(asset 의 신고와 같다).
@@ -2969,6 +3016,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PersonaChoiceOut"];
+                };
+            };
+            /** @description 입력이 틀렸다 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InputError"];
+                };
+            };
+        };
+    };
+    change_references_api_v1_story_conversations__conversation_id__references_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferencesChoice"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReferencesOut"];
                 };
             };
             /** @description 입력이 틀렸다 */

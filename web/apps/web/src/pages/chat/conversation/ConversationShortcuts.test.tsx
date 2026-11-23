@@ -107,6 +107,8 @@ describe('입력칸의 단축어', () => {
           model: { slug: 'luna', display_name: 'Luna', vendor: 'openai', grade: 'standard', retires_on: null, usable: true },
           messages: [],
           state: { minutes: 7 * 60, day: 1, slot: 'morning', place: 'park', items: {}, affection: {}, companions: [], choosing: null, ending: null, cast: [] },
+          references_allowed: false,
+          references_enabled: false,
           created_at: at,
           updated_at: at,
         } as StorySession),

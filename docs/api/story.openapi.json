@@ -536,6 +536,16 @@
               }
             ]
           },
+          "references_allowed": {
+            "default": false,
+            "title": "References Allowed",
+            "type": "boolean"
+          },
+          "references_enabled": {
+            "default": false,
+            "title": "References Enabled",
+            "type": "boolean"
+          },
           "state": {
             "$ref": "#/components/schemas/StateOut"
           },
@@ -2119,6 +2129,35 @@
         ],
         "title": "Rating",
         "type": "string"
+      },
+      "ReferencesChoice": {
+        "additionalProperties": false,
+        "description": "세션의 참고 자료(SRD 5.1, 위키백과)를 켜고 끌 때 받는 값(#1338).",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ReferencesChoice",
+        "type": "object"
+      },
+      "ReferencesOut": {
+        "description": "세션의 참고 자료를 켰는가.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ReferencesOut",
+        "type": "object"
       },
       "ReportCreate": {
         "additionalProperties": false,
@@ -4395,6 +4434,66 @@
           }
         ],
         "summary": "Change Persona",
+        "tags": [
+          "conversations"
+        ],
+        "x-audience": "user"
+      }
+    },
+    "/api/v1/story/conversations/{conversation_id}/references": {
+      "put": {
+        "description": "세션의 참고 자료(SRD 5.1, 위키백과)를 켜거나 끈다(#1338). 다음 말부터 카드에 섞는다. 값을 더 받지 않는다.\n판이 허용하지 않는데 켜면 422 references_not_allowed 다. 답을 쓰는 중에도 바꿀 수 있다(그 답은 바꾸기 전의 값이다).",
+        "operationId": "change_references_api_v1_story_conversations__conversation_id__references_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferencesChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferencesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputError"
+                }
+              }
+            },
+            "description": "입력이 틀렸다"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change References",
         "tags": [
           "conversations"
         ],
