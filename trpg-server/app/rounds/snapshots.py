@@ -48,7 +48,8 @@ STATE_TABLES: tuple[str, ...] = (
     'table_injuries',
 )
 
-# 테이블의 행에서 찍는 칸. 닫기가 장을 넘긴다(app/rounds/chapters.py). 서술을 받아들일 때 즉흥 조우를 센다(#254)
+# 테이블의 행에서 찍는 칸. 닫기가 장을 넘긴다(app/rounds/chapters.py). 서술을 받아들일 때 즉흥 조우를 센다(#254).
+# 닫기가 자리 비움을 센다(away_counts, #1345)
 STATE_COLUMNS: tuple[str, ...] = (
     'chapter_id',
     'chapter_round',
@@ -59,12 +60,16 @@ STATE_COLUMNS: tuple[str, ...] = (
     'turn_waits',
     'turn_foes',
     'turn_stances',
+    'away_counts',
 )
 
 # 테이블에 딸렸지만 찍지 않는 표와 그 까닭
 EXCLUDED: dict[str, str] = {
     'game_tables': '테이블의 행. 장(STATE_COLUMNS)만 찍는다. 나머지는 방장의 설정과 이벤트의 번호다',
-    'table_members': '자리. 닫기가 바꾸지 않는다. 들어오고 나가거나 캐릭터를 바꾸면 되돌릴 수 없다(reverting.blocker)',
+    'table_members': (
+        '자리. 닫기가 바꾸지 않는다(자리 비움의 수는 테이블의 away_counts). '
+        '들어오고 나가거나 캐릭터를 바꾸면 되돌릴 수 없다(reverting.blocker)'
+    ),
     'table_rolls': '능력치를 굴린 것. 시작하기 전의 일이다. 닫기가 바꾸지 않는다',
     'table_departures': '떠난 사람. 떠난 일이 있으면 되돌릴 수 없다(reverting.blocker)',
     'table_events': '이벤트는 덧붙이기만 한다. 되돌린 묶음은 지우지 않고 round_reverted 로 알린다',

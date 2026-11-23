@@ -3950,7 +3950,8 @@
         "enum": [
           "left",
           "kicked",
-          "dropped"
+          "dropped",
+          "away"
         ],
         "title": "DepartureKind",
         "type": "string"
@@ -5250,6 +5251,8 @@
           "narration_model_replaced",
           "narration_model_unavailable",
           "member_dropped",
+          "member_away",
+          "member_away_removed",
           "narration_credits_released",
           "table_ended",
           "carried_items_left"

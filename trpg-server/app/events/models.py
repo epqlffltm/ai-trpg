@@ -257,6 +257,11 @@ class EventType(enum.StrEnum):
     NARRATION_MODEL_UNAVAILABLE = 'narration_model_unavailable'
     # 크레딧이 모자란 사람을 기다리는 시간이 지나 서버가 그 사람을 자리에서 뺐다. 나머지로 다시 서술한다
     MEMBER_DROPPED = 'member_dropped'
+    # 한 사람(user_id)이 연속으로 선언을 내지 않아 자리 비움이 됐다(#1345, app/rounds/presence.py).
+    # 다음 라운드부터 그 사람의 서술 값을 걸지 않는다. 자리는 그대로다. 닫힘의 묶음에 든다
+    MEMBER_AWAY = 'member_away'
+    # 더 오래 선언을 내지 않아 서버가 그 사람을 자리에서 뺐다. 나가기와 같다. 방장이었으면 바로 뒤에 host_changed
+    MEMBER_AWAY_REMOVED = 'member_away_removed'
     # 크레딧이 모자란 사람을 기다리는 시간이 지나 낼 수 있는 사람의 값을 돌려줬다. 라운드는 멈춘 채로 있다
     NARRATION_CREDITS_RELEASED = 'narration_credits_released'
     # 테이블이 끝났다

@@ -228,6 +228,7 @@ class GameTable(Base):
         CheckConstraint("jsonb_typeof(turn_waits) = 'array'", name='turn_waits_is_array'),
         CheckConstraint("jsonb_typeof(turn_foes) = 'array'", name='turn_foes_is_array'),
         CheckConstraint("jsonb_typeof(turn_stances) = 'object'", name='turn_stances_is_object'),
+        CheckConstraint("jsonb_typeof(away_counts) = 'object'", name='away_counts_is_object'),
         CheckConstraint("jsonb_typeof(chapter_path) = 'array'", name='chapter_path_is_array'),
     )
 
@@ -367,6 +368,9 @@ class GameTable(Base):
     # 앉은 사람마다 다음 차례까지 드는 태세(#287). user_id 의 글 → {cover: 커버의 값 또는 null, defend: 방어 태세인가}.
     # 그 사람의 다음 차례가 오면 지운다(건너뛰어도). 차례대로 진행하는 테이블에서만 쓴다
     turn_stances: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
+    # 앉은 사람마다 연속으로 선언을 내지 않은 라운드의 수(#1345, app/rounds/presence.py). user_id 의 글 → 수.
+    # 0 이면 지운다. 2 이상이면 서술 값을 걸지 않고, 5 면 자리에서 뺀다. 닫기 직전의 사진에 찍힌다
+    away_counts: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"))
 
     # 이 테이블에 적힌 마지막 이벤트의 번호(app/events/models.py). 아직 없으면 0 이다.
     # 이벤트를 적을 때마다 하나씩 올린다. 테이블을 잠근 채로 올리므로 번호가 겹치지 않는다.
@@ -1312,6 +1316,8 @@ class DepartureKind(enum.StrEnum):
     KICKED = 'kicked'
     # 크레딧이 모자라 기다리는 시간이 지나 서버가 뺐다(app/rounds/credit_waits.py)
     DROPPED = 'dropped'
+    # 연속으로 선언을 내지 않아 서버가 뺐다(#1345, app/rounds/presence.py)
+    AWAY = 'away'
 
 
 class TableDeparture(Base):
@@ -1320,7 +1326,8 @@ class TableDeparture(Base):
 
     자리(table_members)는 떠날 때 지운다. 앉은 사람만 보는 길들(테이블, 라운드, 이벤트)은 그대로 둔다.
     떠난 사람은 이 줄로 따로 연 길(app/tables/past.py)에서 last_sequence 번까지의 이벤트만 읽는다.
-    그 번호는 떠났다는 이벤트(member_left, member_kicked, member_dropped)의 번호다. 그 뒤의 일은 보지 않는다.
+    그 번호는 떠났다는 이벤트(member_left, member_kicked, member_dropped, member_away_removed)의 번호다.
+    그 뒤의 일은 보지 않는다.
 
     모집 중에 떠난 사람은 적지 않는다. 아직 이야기가 없고, 다시 들어올 수도 있다.
     시작한 테이블에는 새로 들어올 수 없으므로 한 사람이 한 테이블을 두 번 떠나지 않는다.

@@ -23,6 +23,7 @@ from app.billing.models import ChargeStatus, NarrationCharge
 from app.billing.prices import PRICE_CODE_PREFIX, narration_code
 from app.catalog.steps import HasSteps, steps_of
 from app.rounds.models import Round
+from app.tables.away import is_away
 from app.tables.models import GameTable, TurnMode
 
 # 결제 서버의 답을 받지 못했을 때 다시 부르기까지 기다리는 시간(초). 부를 때마다 두 배가 되고, 상한에서 멈춘다
@@ -50,10 +51,12 @@ def payers_of(table: GameTable, round_: Round | None = None) -> list[uuid.UUID]:
     각자 그 모델의 값을 낸다. 나눠 내지 않는다(#180). 사람마다 이름표가 달라 결제 서버는 홀드를 따로 받는다.
     차례대로 진행하는 테이블(#287)의 라운드면 차례의 주인만 낸다(round_.actor_id).
     주인이 없는 차례면 아무도 내지 않는다.
+    자리를 비운 사람(연속으로 선언을 내지 않음, app/tables/away.py)은 내지 않는다(#1345). 자리는 그대로다.
     """
     if round_ is not None and table.turn_mode == TurnMode.TURNS:
-        return [round_.actor_id] if round_.actor_id is not None else []
-    return [member.user_id for member in table.members]
+        actor = round_.actor_id
+        return [actor] if actor is not None and not is_away(table, actor) else []
+    return [member.user_id for member in table.members if not is_away(table, member.user_id)]
 
 
 # 모델이 없는 라운드의 가격표 이름. 서술 등급이 있던 때의 standard 의 것이다.
