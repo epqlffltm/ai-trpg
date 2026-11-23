@@ -1,5 +1,6 @@
 // web/apps/web/src/layout/SidebarRecent.tsx
 // 왼쪽 메뉴 열의 "최근 대화". TRPG 테이블, 캐릭터 대화, 스토리를 한 목록으로 섞어 최근 것부터 보인다(서비스로 묶지 않는다).
+// 떠난 테이블도 섞는다(#1344). 누르면 떠난 때까지의 기록이다. 때는 떠난 때, 둘째 줄은 떠난 길이다.
 // 줄마다 둥근 표식(이름의 첫 글자), 이름, 둘째 줄(상대나 상태), 오른쪽 위에 때, 오른쪽 아래에 종류 칩.
 // 읽기는 첫 화면(pages/home/queries.ts)과 같은 열쇠라 한 번 읽은 것을 함께 쓴다.
 // 로그인 전에는 안내와 로그인 단추만 둔다(부르지 않는다). 다시 동의나 탈퇴 유예 중(토큰이 인증 서버에만 통한다)에도 부르지 않는다.
@@ -12,7 +13,8 @@ import { isLimited } from '../api/session';
 import { useSession } from '../auth/useSession';
 import { useNow } from '../hooks/useNow';
 import { tableStatusLabel } from '../pages/home/labels';
-import { myConversationsQuery, myStorySessionsQuery, myTablesQuery } from '../pages/home/queries';
+import { myConversationsQuery, myPastTablesQuery, myStorySessionsQuery, myTablesQuery } from '../pages/home/queries';
+import { departureLabel } from '../pages/trpg/past/pastStory';
 import { mergeRecent, RECENT_KIND_LABELS, RECENT_ROWS, relativeTime, type RecentRow } from './sidebarRecentView';
 
 export function SidebarRecent() {
@@ -45,11 +47,12 @@ function SidebarRecentRows() {
 
 export type RecentState = { rows: RecentRow[]; pending: boolean; failed: boolean };
 
-/** 셋을 읽어 한 목록으로 섞는다. 하나라도 읽는 중이면 pending, 하나라도 읽지 못했으면 failed(읽은 것은 rows 에 있다) */
+/** 넷(앉은 테이블, 떠난 테이블, 대화, 스토리)을 읽어 한 목록으로 섞는다. 하나라도 읽는 중이면 pending, 하나라도 읽지 못했으면 failed(읽은 것은 rows 에 있다) */
 export function useRecentRows(limit: number): RecentState {
   const tables = useQuery(myTablesQuery());
   const conversations = useQuery(myConversationsQuery());
   const sessions = useQuery(myStorySessionsQuery());
+  const past = useQuery(myPastTablesQuery());
   const tableRows: RecentRow[] = (tables.data?.items ?? []).map((table) => ({
     id: `trpg-${table.id}`,
     kind: 'trpg',
@@ -57,6 +60,14 @@ export function useRecentRows(limit: number): RecentState {
     name: table.title,
     detail: `${tableStatusLabel(table.status)} · ${table.member_count}/${table.capacity}명`,
     at: table.created_at ?? '',
+  }));
+  const pastRows: RecentRow[] = (past.data?.items ?? []).map((table) => ({
+    id: `trpg-past-${table.table_id}`,
+    kind: 'trpg',
+    to: `/trpg/tables/past/${table.table_id}`,
+    name: table.title,
+    detail: departureLabel(table.kind),
+    at: table.left_at,
   }));
   const conversationRows: RecentRow[] = (conversations.data?.items ?? []).map((conversation) => ({
     id: `character-${conversation.id}`,
@@ -75,9 +86,9 @@ export function useRecentRows(limit: number): RecentState {
     at: session.updated_at,
   }));
   return {
-    rows: mergeRecent([tableRows, conversationRows, sessionRows], limit),
-    pending: tables.isPending || conversations.isPending || sessions.isPending,
-    failed: tables.isError || conversations.isError || sessions.isError,
+    rows: mergeRecent([tableRows, pastRows, conversationRows, sessionRows], limit),
+    pending: tables.isPending || past.isPending || conversations.isPending || sessions.isPending,
+    failed: tables.isError || past.isError || conversations.isError || sessions.isError,
   };
 }
 

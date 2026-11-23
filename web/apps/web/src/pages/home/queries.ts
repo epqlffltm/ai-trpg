@@ -6,6 +6,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import { fetchAssetBanners, fetchScenarioBanners } from '../../api/banners';
 import { fetchMyConversations, fetchMyTables, fetchPublicCharacters, fetchPublicScenarios } from '../../api/lists';
+import { fetchPastTables } from '../../api/pastTables';
 import { fetchCharacterRanking, fetchScenarioRanking, fetchWorldRanking } from '../../api/rankings';
 import { fetchStorySessions } from '../../api/story';
 import { fetchPublicWorlds } from '../../api/storyWorlds';
@@ -38,6 +39,14 @@ export function myTablesQuery() {
   return queryOptions({
     queryKey: ['trpg', 'tables', 'mine', { limit: ROW_LIMIT }],
     queryFn: ({ signal }) => fetchMyTables(ROW_LIMIT, signal),
+  });
+}
+
+/** 내가 떠난 테이블의 첫 쪽. 최근 대화에 섞는다(#1344). 떠난 테이블 화면의 목록과 같은 열쇠 묶음(['trpg', 'past-tables']) 아래다 */
+export function myPastTablesQuery() {
+  return queryOptions({
+    queryKey: ['trpg', 'past-tables', 'recent'],
+    queryFn: ({ signal }) => fetchPastTables(0, signal),
   });
 }
 

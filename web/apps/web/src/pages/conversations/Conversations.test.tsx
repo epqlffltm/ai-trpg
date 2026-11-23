@@ -22,6 +22,7 @@ function signedIn() {
     'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: '0', total: '0', next_expiry: null }),
     'GET /api/v1/notification/me/notifications/unread-count': () => json(200, { unread: 0 }),
     'GET /api/v1/game/tables': () => json(200, { items: [], total: 0 }),
+    'GET /api/v1/game/tables/past': () => json(200, { items: [], total: 0 }),
     'GET /api/v1/chat/conversations': () => json(200, { items: Array.from({ length: 12 }, (_, index) => conversation(index + 1)), total: 12 }),
     'GET /api/v1/story/conversations': () => json(200, { items: [], total: 0 }),
   });
