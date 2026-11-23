@@ -547,6 +547,11 @@
           "rating": {
             "$ref": "#/components/schemas/Rating"
           },
+          "references_allowed": {
+            "default": false,
+            "title": "References Allowed",
+            "type": "boolean"
+          },
           "speech_examples": {
             "title": "Speech Examples",
             "type": "string"
