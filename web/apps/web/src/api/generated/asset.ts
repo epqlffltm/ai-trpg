@@ -1867,6 +1867,11 @@ export interface components {
             /** @default all */
             rating: components["schemas"]["Rating"];
             /**
+             * References Allowed
+             * @default false
+             */
+            references_allowed: boolean;
+            /**
              * Shortcuts
              * @default []
              */
@@ -1951,6 +1956,11 @@ export interface components {
             published_at: string | null;
             rating: components["schemas"]["Rating"];
             /**
+             * References Allowed
+             * @default false
+             */
+            references_allowed: boolean;
+            /**
              * Shortcuts
              * @default []
              */
@@ -2027,6 +2037,11 @@ export interface components {
              */
             places: components["schemas"]["PlaceDocument"][];
             rating: components["schemas"]["Rating"];
+            /**
+             * References Allowed
+             * @default false
+             */
+            references_allowed: boolean;
             /**
              * Shortcuts
              * @default []
@@ -2135,6 +2150,8 @@ export interface components {
             /** Places */
             places?: components["schemas"]["Place"][] | null;
             rating?: components["schemas"]["Rating"] | null;
+            /** References Allowed */
+            references_allowed?: boolean | null;
             /** Shortcuts */
             shortcuts?: components["schemas"]["Shortcut"][] | null;
             /** Speech Examples */
@@ -4117,6 +4134,11 @@ export interface components {
             /** @default all */
             rating: components["schemas"]["Rating"];
             /**
+             * References Allowed
+             * @default false
+             */
+            references_allowed: boolean;
+            /**
              * Shortcuts
              * @default []
              */
@@ -4232,6 +4254,11 @@ export interface components {
             published_at: string | null;
             rating: components["schemas"]["Rating"];
             /**
+             * References Allowed
+             * @default false
+             */
+            references_allowed: boolean;
+            /**
              * Shortcuts
              * @default []
              */
@@ -4302,6 +4329,11 @@ export interface components {
             /** Places */
             places: components["schemas"]["WorldPlaceDocument"][];
             rating: components["schemas"]["Rating"];
+            /**
+             * References Allowed
+             * @default false
+             */
+            references_allowed: boolean;
             /**
              * Shortcuts
              * @default []
@@ -4532,6 +4564,8 @@ export interface components {
             /** Places */
             places?: components["schemas"]["WorldPlace"][] | null;
             rating?: components["schemas"]["Rating"] | null;
+            /** References Allowed */
+            references_allowed?: boolean | null;
             /** Shortcuts */
             shortcuts?: components["schemas"]["Shortcut"][] | null;
             show?: components["schemas"]["Show"] | null;

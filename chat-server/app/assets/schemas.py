@@ -22,6 +22,8 @@ PersonaCopy). 받은 것을 이 모양으로 검사한 뒤에만 쓴다. 모양�
   - 10: 제작자 단축어(shortcuts, #981). "/이름"으로 부르면 그 턴에 본문이 붙는다(app/shortcuts). 그 전의 판에는 없다
   - 11: 업적(achievements, docs/architecture/achievements.md 의 "chat"). 답을 저장한 뒤 엔진이 준다(app/achievements).
         그 전의 판에는 없다
+  - 12: 참고 자료를 대화에 섞어도 되는가(references_allowed, 제작자가 정한다). 그 전의 판은 허용하지 않은 것으로 읽는다.
+        쓰는 것(대화마다 켜기, 섞기)은 참고 자료를 chat 에 붙이는 단계다. 지금은 사본에 남기기만 한다
 """
 
 import uuid
@@ -330,6 +332,8 @@ class CharacterDocument(BaseModel):
     shortcuts: list[ShortcutDocument] = []
     # 업적(형식 11, docs/architecture/achievements.md 의 "chat"). 없던 판은 업적이 없다
     achievements: list[AchievementDocument] = []
+    # 참고 자료를 대화에 섞어도 되는가(형식 12). 없던 판은 허용하지 않는다
+    references_allowed: bool = False
 
     @model_validator(mode='before')
     @classmethod

@@ -22,6 +22,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -31,6 +32,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    false,
     func,
     literal_column,
 )
@@ -290,6 +292,9 @@ class World(Base):
     # 업적들 [{"id", "name", "description", "hidden", "image_id", "when"}](판의 형식 9). 적은 차례가 보이는 차례다.
     # 제작자가 작품에 다는 것이다(스팀의 업적과 같다). 주는 것은 story 의 엔진이다
     achievements: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    # 참고 자료(SRD, 위키백과)를 세션에 섞어도 되는가(제작자가 정한다). 게시하면 판에 굳는다(형식 10).
+    # 허용해도 사용자가 세션마다 켜야 섞인다(story 서버). TRPG 의 세계관의 references_allowed 와 같은 뜻이다
+    references_allowed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     rating: Mapped[str] = mapped_column(String(10), default=Rating.ALL, server_default=Rating.ALL.value)
     visibility: Mapped[str] = mapped_column(

@@ -30,6 +30,8 @@ TRPG 의 판 형식과 같은 방식이다.
        when 은 {"match": "all"|"any", "items": [{"kind", "target", "value", "count"}]} 다.
        받는 쪽(chat)이 답을 저장한 뒤 맞으면 준다(docs/architecture/achievements.md 의 "chat").
        10 까지의 판은 업적이 없다
+  - 12: 참고 자료를 대화에 섞어도 되는가(references_allowed, 제작자가 정한다)를 더했다(2026-11-23).
+       받는 쪽(chat)은 허용한 판의 대화에서만 사용자가 참고 자료를 켜게 한다. 11 까지의 판은 허용하지 않은 것으로 읽는다
 DB 를 모르는 순수한 함수다. 초안(Character)과 거른 소개에서 문서를 만든다.
 """
 
@@ -56,7 +58,7 @@ from app.ratings import Rating
 from app.shortcuts.schemas import Shortcut
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 11
+DOCUMENT_FORMAT = 12
 
 
 class StartDocument(BaseModel):
@@ -282,6 +284,7 @@ class CharacterDocument(BaseModel):
     genre: Genre
     shortcuts: list[Shortcut] = []
     achievements: list[CharacterAchievementDocument] = []
+    references_allowed: bool = False
 
     @model_validator(mode='before')
     @classmethod
@@ -320,4 +323,5 @@ def build_document(
         achievements=[
             CharacterAchievementDocument.model_validate(achievement) for achievement in character.achievements
         ],
+        references_allowed=character.references_allowed,
     )
