@@ -492,6 +492,8 @@ async def test_a_round_closed_by_the_clock_is_a_timeout(
     client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], narrated, metrics: MetricsRecorder
 ):
     table = await start_with(client, me, friend, round_time_limit=60)
+    # 한 사람이 냈다. 아무도 내지 않았으면 닫지 않고 멈춘다(#1341)
+    await declare(client, me, table, '달린다.')
     round_ = await current(client, me, table)
 
     await clock_at(app, after(round_)).tick()

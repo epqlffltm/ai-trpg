@@ -521,6 +521,9 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
         'sheet',
         'place',
     ),
+    # 아무도 선언하지 않아 멈췄고(#1341), 누가 내서 이어 갔다. 이어 간 사람은 actor_id 다
+    EventType.ROUND_PAUSED: ('round', 'reason'),
+    EventType.ROUND_RESUMED: ('round', 'deadline_at'),
     EventType.ROUND_CLOSED: ('number', 'idle', 'reason'),
     # 되돌린 묶음(group)은 화면이 빼고 보인다. 다시 연 라운드의 마감과 시각은 열린 것과 같다
     EventType.ROUND_REVERTED: ('number', 'group', 'deadline_at', 'clock'),

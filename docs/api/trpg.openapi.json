@@ -5238,6 +5238,8 @@
           "character_rested",
           "resource_changed",
           "character_revived",
+          "round_paused",
+          "round_resumed",
           "round_closed",
           "round_reverted",
           "narration_failed",
