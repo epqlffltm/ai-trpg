@@ -110,6 +110,17 @@ async def last_model(session: AsyncSession, owner_id: uuid.UUID) -> str | None:
     return await session.scalar(query)
 
 
+async def set_references(session: AsyncSession, conversation_id: uuid.UUID, enabled: bool) -> None:
+    """세션의 참고 자료 켜기를 적는다(#1338). 모델을 바꿀 때(set_model)처럼 수정 시각은 그대로 둔다."""
+    statement = (
+        update(Conversation)
+        .where(Conversation.id == conversation_id)
+        .values(references_enabled=enabled, updated_at=Conversation.updated_at)
+        .execution_options(synchronize_session=False)
+    )
+    await session.execute(statement)
+
+
 async def set_model(session: AsyncSession, conversation_id: uuid.UUID, slug: str) -> None:
     """
     세션의 모델을 적는다. 수정 시각(updated_at)은 그대로 둔다. 목록의 차례(최근의 것부터)가 바뀌지 않는다.

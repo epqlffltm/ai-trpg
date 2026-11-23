@@ -138,6 +138,9 @@ class Conversation(Base):
     # 세션을 시작할 때 이 사람이 이 세계관에서 본 엔딩들(계정의 기록, 회차 혜택). 조건의 ending_seen 이 본다.
     # 시작할 때 굳힌다. 다른 세션에서 새로 본 엔딩은 다음 세션부터다(다시 생성해도 판정이 같다, 2026-10-31 유저 결정)
     cleared_endings: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default='{}')
+    # 참고 자료(SRD 5.1, 위키백과)를 카드에 섞는가(#1338). 사람이 세션마다 켠다. 처음에는 꺼져 있다.
+    # 판의 사본이 허용하지 않으면(references_allowed) 켤 수 없고, 켜져 있어도 섞지 않는다
+    references_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
 
 class ConversationPersona(Base):

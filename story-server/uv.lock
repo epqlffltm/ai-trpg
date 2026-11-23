@@ -1294,6 +1294,35 @@ wheels = [
 ]
 
 [[package]]
+name = "reference-core"
+version = "0.1.0"
+source = { editable = "../shared/reference-core" }
+dependencies = [
+    { name = "ai-core" },
+    { name = "pgvector" },
+    { name = "pydantic" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "ai-core", editable = "../shared/ai-core" },
+    { name = "pgvector", specifier = ">=0.5.1" },
+    { name = "pydantic", specifier = ">=2.13.5" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.5" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "asyncpg", specifier = ">=0.32.0" },
+    { name = "pyright", extras = ["nodejs"], specifier = "==1.1.408" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "ruff", specifier = ">=0.17.1" },
+]
+
+[[package]]
 name = "requests"
 version = "2.34.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1471,6 +1500,7 @@ dependencies = [
     { name = "pgvector" },
     { name = "pydantic-settings" },
     { name = "redis" },
+    { name = "reference-core" },
     { name = "server-core", extra = ["redis"] },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "uvicorn", extra = ["standard"] },
@@ -1497,6 +1527,7 @@ requires-dist = [
     { name = "pgvector", specifier = ">=0.5.1" },
     { name = "pydantic-settings", specifier = ">=2.16.0" },
     { name = "redis", specifier = ">=8.1.0" },
+    { name = "reference-core", editable = "../shared/reference-core" },
     { name = "server-core", extras = ["redis"], editable = "../shared/server-core" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.5" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.54.0" },

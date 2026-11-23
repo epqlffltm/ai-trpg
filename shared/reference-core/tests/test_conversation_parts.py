@@ -202,3 +202,16 @@ def test_a_changed_plan_lists_the_counts():
     plan = SyncPlan(added=[], updated=[record('a')], reworded={'a'}, removed=[])
 
     assert commands.describe_plan('srd51', plan) == 'srd51: 더함 0, 고침 1(벡터를 다시 만들 것 1), 지움 0'
+
+
+async def test_the_block_uses_what_the_lorebook_left(
+    session_factory: async_sessionmaker[AsyncSession], session: AsyncSession
+):
+    await load_document(TABLES, session, document(record('galleon', aliases=['갤리온'], content='큰 배')))
+    found = finder(session_factory)
+
+    block = await found.block_after('갤리온', used=100, budget=2000)
+    full = await found.block_after('갤리온', used=2000, budget=2000)
+
+    assert block is not None and '- [물건] Galleon: 큰 배' in block
+    assert full is None

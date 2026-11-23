@@ -58,6 +58,7 @@ from app.conversations.service import (
     ModelUnavailableError,
     NotEditableError,
     PersonaNotFoundError,
+    ReferencesNotAllowedError,
     WorldNotFoundError,
 )
 from app.core.config import Settings, get_settings
@@ -74,6 +75,7 @@ from app.notifications.models import OutgoingNotification
 from app.operators import router as operators
 from app.operators.service import AlreadyHandledError, ReportNotFoundError
 from app.records import router as records
+from app.references.setup import build_reference_finder
 from app.reports import router as reports
 from app.reports.service import AlreadyReportedError, NotReportableError
 from app.shortcuts import router as shortcuts
@@ -272,6 +274,9 @@ def create_app(
         recall = LoreRecall(app.state.session_factory, embedder, indexer)
     app.state.lore_indexer = indexer
     app.state.lore_recall = recall
+    # 참고 자료(SRD 5.1, 위키백과, #1338). 로어북과 같은 임베더다. 색인(scripts/references.py index)도 같은 모델로 한다.
+    # EMBEDDER 가 off 면 없다(켠 세션도 참고 자료 없이 돈다)
+    app.state.reference_finder = build_reference_finder(app.state.session_factory, embedder)
 
     # 굴리는 요약(app/memory/summarizer.py). SUMMARY_MODEL 이 비어 있으면 요약하지 않는다.
     # 모델을 부르는 것과 설정은 부를 때마다 앱에서 꺼낸다. 테스트가 가짜를 꽂는다
@@ -326,6 +331,7 @@ def create_app(
     add_error_handler(app, PersonaNotFoundError, conversations.handle_persona_not_found)
     add_error_handler(app, AdultContentRequiredError, conversations.handle_adult_content_required)
     add_error_handler(app, ModelUnavailableError, conversations.handle_model_unavailable)
+    add_error_handler(app, ReferencesNotAllowedError, conversations.handle_references_not_allowed)
     add_error_handler(app, AssetUnavailableError, conversations.handle_asset_unavailable)
     add_error_handler(app, PriceListUnavailable, billing.handle_prices_unavailable)
     add_error_handler(app, ConversationBusyError, conversations.handle_conversation_busy)

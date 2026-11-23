@@ -212,7 +212,16 @@ async def stream_turn(request: Request, start: TurnStart, now: datetime) -> Stre
     params = generation_params(state.settings)
     stop = StopSwitch()
     run = service.run_generation(
-        state.session_factory, state.billing, route, start, params, relay, utc_now, stop, state.lore_recall
+        state.session_factory,
+        state.billing,
+        route,
+        start,
+        params,
+        relay,
+        utc_now,
+        stop,
+        state.lore_recall,
+        state.reference_finder,
     )
     keep_running(request, start, stop, run)
     return StreamingResponse(encode_all(relay), media_type='text/event-stream', headers=STREAM_HEADERS)

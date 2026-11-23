@@ -24,6 +24,7 @@
 """
 
 import uuid
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import cast
 
@@ -97,6 +98,10 @@ class NotEditableError(Exception):
 
 NOT_EDITABLE = 'not_editable'
 SEGMENTS_MISMATCH = 'segments_mismatch'
+
+
+class ReferencesNotAllowedError(Exception):
+    """세계관의 판이 참고 자료를 허용하지 않는데 켜려 했다(422). 허용은 제작자가 정한다(asset 의 references_allowed)."""
 
 
 class ModelUnavailableError(Exception):
@@ -529,6 +534,27 @@ async def change_model(
     await repository.set_model(session, conversation.id, model.slug)
     await session.commit()
     return model
+
+
+def references_allowed(document: Mapping) -> bool:
+    """
+    세계관의 판이 참고 자료를 허용하는가(판 형식 10 의 references_allowed). 옛 판에는 칸이 없어 허용하지 않은 것이다.
+    """
+    return document.get('references_allowed') is True
+
+
+async def change_references(session: AsyncSession, viewer: Viewer, conversation_id: uuid.UUID, enabled: bool) -> bool:
+    """
+    세션의 참고 자료(SRD 5.1, 위키백과)를 켜거나 끈다(#1338). 다음 말부터 카드에 섞는다. 바꾼 값을 돌려준다.
+    세션이 없으면 ConversationNotFoundError, 판이 허용하지 않는데 켜면 ReferencesNotAllowedError 다(끄는 것은 늘 된다).
+    허용은 세션을 시작할 때 굳힌 판의 사본을 본다. 제작자가 나중에 허용을 꺼도 그 판으로 시작한 세션은 그대로다.
+    """
+    conversation, world = await get_conversation(session, viewer, conversation_id)
+    if enabled and not references_allowed(world.document):
+        raise ReferencesNotAllowedError
+    await repository.set_references(session, conversation.id, enabled)
+    await session.commit()
+    return enabled
 
 
 async def change_persona(

@@ -19,6 +19,7 @@
 - 2026-11-11: chat, story, trpg 가 세 벌로 갖던 모델 목록의 쿼리, 찾기, 들여오기를 `shared/catalog-core` 로 옮겼다(#1266). 표는 서버에 남는다([모델 목록의 표](#모델-목록의-표-sharedcatalog-core)).
 - 2026-11-23: trpg 의 참고 자료(SRD 5.1, 위키백과)에서 DB 를 모르는 규칙과 쿼리, 넣기, 색인, 고르기를 `shared/reference-core` 로 옮겼다(#1338). chat, story 도 쓰려는 것이다. 데이터 파일도 패키지에 실었다([참고 자료](#참고-자료-sharedreference-core)).
 - 2026-11-23: chat 이 참고 자료를 쓴다(#1338). 표의 칸과 제약, 대화 서버의 블록과 찾기, 관리 명령의 몸통을 `shared/reference-core` 에 더했다. 표의 칸을 서버마다 적으면 같은 데이터 파일을 넣는 표가 셋으로 갈라진다. story 는 다음 PR 이다.
+- 2026-11-23: story 도 참고 자료를 쓴다(#1338). 모델을 부르기 직전의 두 찾기(로어북을 뜻으로 찾기, 참고 자료)를 `conversation_core/lookups.py` 로 모았다. chat 과 story 가 같은 흐름을 따로 적고 있었다(복제 목록에 있던 `with_recalled_lore`). 카드의 어디에 넣는지는 서버마다 달라 서버가 넘긴다.
 - 2026-11-02: 언어가 다른 서버들(Python 공용 코드, Django 인증, Go 결제)이 같은 규칙을 지키는지 공통 규격의 시험 파일(`shared/contracts/`)로 본다(#786). 처음 맞춰 보며 서명의 시각과 16진수의 모양, 로그 가리기의 빈칸과 계정 없는 주소, 토큰의 세션 버전과 발급 시각에서 어긋난 것을 하나로 맞췄다.
 
 ## 목차
@@ -69,7 +70,7 @@
 | `shared/ai-core` | 모델 호출 | trpg, chat, story | chat-server 의 "한 번의 말"을 만들 때(#499) |
 | `shared/conversation-core` | 대화 트리, 다시 생성과 분기, 요약, 기억, 로어북 검색을 붙이는 법. 지금은 SSE, 흘려보내기, 최근 대화의 창, 로어북 고르기, 답의 블록, 기록 파일 쓰기(`transcripts`) | chat, story(기록 파일 쓰기는 trpg 도) | 만들었다(#591). story 서버가 세션을 만들기 바로 앞 |
 | `shared/catalog-core` | 모델 목록의 표를 읽는 쿼리, 모델 하나 찾기, 원본 파일 들여오기. 표는 서버의 것을 꾸러미로 받는다 | chat, story, trpg | 만들었다(#1266). 세 벌이 된 뒤 |
-| `shared/reference-core` | 참고 자료의 줄과 데이터 파일, 표의 칸, 넣기, 색인, 고르기, 대화 서버의 블록과 찾기, 관리 명령 | trpg, chat(story 가 붙을 차례) | 만들었다(#1338) |
+| `shared/reference-core` | 참고 자료의 줄과 데이터 파일, 표의 칸, 넣기, 색인, 고르기, 대화 서버의 블록과 찾기, 관리 명령 | trpg, chat, story | 만들었다(#1338) |
 
 ### 서버의 공통부 (`shared/server-core`)
 
@@ -146,6 +147,7 @@ chat 과 story 는 사용자의 말이 한 턴을 이끈다는 점이 같다. �
   - 옮긴 때: story 서버가 세션과 한 번의 말을 만들기 바로 앞이다. 원칙 4(두 번째 사용자가 생길 때)를 따르되, story 의 첫 PR 이 chat 의 코드를 옮기는 일과 story 의 기능을 함께 싣지 않게 먼저 옮겼다. 옮기는 PR 은 import 만 바꾸고 동작을 바꾸지 않는다
   - 경계: 서버의 코드(`app.*`), 다른 공용 패키지(`server_core`, `ai_core`), 관측을 가져오지 않는다(`tests/test_boundary.py`). 지금은 표준 라이브러리만 쓴다
   - 기록 파일의 조각과 형식마다 쓰기(`transcripts`)는 trpg 도 받는다(2026-11-12, #1266). 표준 라이브러리만 써서 trpg 가 대화의 다른 조각을 끌고 오지 않는다
+  - 모델을 부르기 직전의 두 찾기(`lookups`, 로어북을 뜻으로 찾기와 참고 자료)는 chat 과 story 가 같은 흐름이다(2026-11-23, #1338). 찾는 것(서버의 `LoreRecall`, reference-core 의 `ReferenceFinder`)과 카드에 넣는 자리는 모양(Protocol)과 함수로 받는다. 그래서 reference-core 를 가져오지 않는다
   - 옮긴 것 가운데 상태 바꾸기의 제안(`changes`)과 표정(`expressions`)은 chat 이 먼저 쓴다. story 는 호감도의 제안을 chat 과 함께 나중에 쓰고(story 설계의 "호감도"), 표정은 인물마다의 그림에 쓴다. 블록의 모양만 여기 있고 무엇을 허락하는지는 서버가 정한다
   - 대화 트리와 요약은 아직 chat 의 표(`app/conversations`, `app/memory`)에 붙어 있어 옮기지 않았다. story 가 같은 흐름을 쓸 때 표에 기대지 않는 부분을 뽑는다
 - 표(ORM 모델)는 서버마다 둔다. chat 은 `chat` 스키마에, story 는 `story` 스키마에 같은 모양의 대화 표를 갖는다(원칙 1).
@@ -173,9 +175,10 @@ chat, story, trpg 는 모델 목록의 원본 파일(`ai_core/model_catalog.toml
   모델 목록의 표(catalog-core)는 서버마다 칸이 조금씩 달라(성인 허용, 회사의 대체 모델) 서버가 칸을 적지만, 참고 자료의 표는 세 서버가 같은 데이터 파일을 넣어 칸이 같다. 서버마다 적으면 셋이 갈라지고 복제 검사(`copy_scope.py`)에도 걸린다.
   서버는 표 둘을 꾸러미(`ReferenceTables`)로 넘기고 공용 쿼리를 제 표에 묶는다(`partial`)
 - 데이터 파일(`reference_core/data/`)은 패키지에 실어 서버의 이미지에 함께 들어간다. 모델 목록의 원본 파일(`ai_core/model_catalog.toml`)과 같은 방식이다. 넣기는 파일을 주지 않으면 실린 것을 모두 넣는다
-- 대화 서버(chat, story)가 함께 쓰는 것: 블록(`prompt.py`, 머리말과 종류의 이름과 [상식]의 규칙. trpg 는 종류의 이름과 [상식]의 규칙만 가져다 쓴다), 시간 상한과 실패를 감싼 찾기(`finder.py`), 남은 자리의 셈(`selection.room_after`)
+- 대화 서버(chat, story)는 카드에 넣는 흐름(로어북 다음, 남은 자리, 못 찾으면 그대로)을 `conversation_core/lookups.py` 로 함께 쓴다. 그 흐름은 찾는 것을 모양(`ReferenceBlocks`)으로만 알아 conversation-core 가 reference-core 를 가져오지 않는다
+- 대화 서버(chat, story)가 함께 쓰는 것: 블록(`prompt.py`, 머리말과 종류의 이름과 [상식]의 규칙. trpg 는 종류의 이름과 [상식]의 규칙만 가져다 쓴다), 시간 상한과 실패를 감싼 찾기(`finder.py`), 남은 자리의 셈(`selection.room_after`, `finder.block_after`)
 - 관리 명령(`scripts/references.py`)의 몸통(명령줄, 넣기, 색인, 찍는 줄)은 `commands.py` 에 있다. 서버는 제 설정으로 DB 와 임베더를 만들어 부른다
-- 서버에 남는 것: 켰는지(trpg 의 테이블, chat 의 대화, story 의 세션), 로어북의 상한(남은 자리를 셈할 바탕), 블록을 카드의 어디에 넣는지, 복사(trpg 의 로어북·도감)와 시트 제안
+- 서버에 남는 것: 켰는지(trpg 의 테이블, chat 의 대화, story 의 세션), 블록을 카드의 어디에 넣는지, trpg 의 남은 자리(서술의 입력 단계에 맞춘다), 복사(trpg 의 로어북·도감)와 시트 제안
 - 경계: 서버의 코드(`app.*`), `ai_core` 밖의 공용 패키지, 관측을 가져오지 않는다(`tests/test_boundary.py`). 쿼리가 pgvector 의 거리와 PostgreSQL 의 넣기를 써서 공용 코드의 테스트도 실제 DB 에서 돈다(`shared.yml` 의 이 작업만 PostgreSQL 을 띄운다)
 
 ## 재정의하는 법

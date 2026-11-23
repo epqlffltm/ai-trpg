@@ -132,9 +132,10 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 | GET | `/api/v1/story/models` | 세션에 고를 수 있는 [모델](#모델-목록)들과 말 한 번의 값(`{free, items}`). 켜져 있고 은퇴하지 않았고 결제 서버가 팔고 있는 것만. 회사, 이름표 순서. 가격 목록을 받지 못하면 503 `prices_unavailable` | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/persona` | 세션의 [페르소나](#세션) 바꾸기(`{"persona_id"}`, null 이면 없이). 같은 id 면 새 설정으로 바꾼다. `{persona}` 를 돌려준다. 없는 페르소나면 404 `persona_not_found`, asset 서버가 죽었으면 503 `asset_unavailable` | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/model` | 세션의 모델 바꾸기(`{"model"}`). 고를 수 없으면 422 `model_unavailable`, 가격 목록을 받지 못했으면 503 `prices_unavailable` | access 토큰 |
+| PUT | `/api/v1/story/conversations/{id}/references` | [참고 자료](#참고-자료) 켜기와 끄기(`{"enabled"}`). `{"enabled"}` 를 돌려준다. 판이 허용하지 않는데 켜면 422 `references_not_allowed` | access 토큰 |
 | POST | `/api/v1/story/conversations` | [세션](#세션) 시작(`{"world_id", "persona_id"?, "model"?}`). 세계관의 마지막 판과 페르소나를 가져와 고정한다. 201 | access 토큰 |
 | GET | `/api/v1/story/conversations` | 내 세션의 목록(`?limit=&offset=&world_id=`). 최근의 것부터, `{items, total}`. 항목마다 지금 가지의 끝까지 온 곳(`progress`) | access 토큰 |
-| GET | `/api/v1/story/conversations/{id}` | 세션 하나(지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`, 화면이 쓰는 세계관의 칸 [`view`](#세션의-view), 가져온 페르소나 `persona`). 가져온 판의 문서는 싣지 않는다. 남의 것은 404 | access 토큰 |
+| GET | `/api/v1/story/conversations/{id}` | 세션 하나(지금 가지의 말과 말마다의 대안 `alternatives`, 그 끝의 상태 `state`, 화면이 쓰는 세계관의 칸 [`view`](#세션의-view), 가져온 페르소나 `persona`, [참고 자료](#참고-자료)를 허용하는지 `references_allowed` 와 켰는지 `references_enabled`). 가져온 판의 문서는 싣지 않는다. 남의 것은 404 | access 토큰 |
 | DELETE | `/api/v1/story/conversations/{id}` | [세션](#세션) 지우기. 204. 지운 시각만 적는다. 없거나 남의 것이면 404 | access 토큰 |
 | POST | `/api/v1/story/conversations/{id}/copy` | [플레이 복사](#세션). 지금 가지를 새 세션으로 복사한다. 201, 새 세션. 답을 쓰는 중이면 409 `generation_in_progress` | access 토큰 |
 | PUT | `/api/v1/story/conversations/{id}/branch` | [가지 고르기](#가지-고르기)(`{"message_id"}`). 바뀐 세션을 돌려준다 | access 토큰 |
@@ -193,7 +194,7 @@ DB 의 연결 풀(`DB_POOL_SIZE`, `DB_MAX_OVERFLOW`)처럼 FastAPI 서버들이 
 - **사본은 바뀌지 않는다.** 제작자가 다시 게시해도 그 세션은 처음의 판으로 돈다. 새 판은 새로 시작한 세션이 쓴다.
 - **판의 문서는 받은 그대로 둔다.** 지금 검사하는 칸은 형식, 이름, 등급, 그림뿐이고(`app/assets/schemas.py`),
   나머지(시간대, 지도, 물건, 인물, 이벤트, 엔딩)는 그 칸을 쓰는 조각이 읽는 모양을 더한다.
-- **모르는 형식의 판은 받지 않는다.** 이 서버가 읽을 줄 아는 형식은 10 까지다(`WORLD_FORMAT_MAX`, 형식 6 은 장, 7 은 장이 여는 로어북 항목, 8 은 제작자 [단축어](#단축어), 9 는 업적, 10 은 참고 자료의 허용. 허용은 지금 사본에 남기기만 한다). 모르는 조건이나 효과를 엔진이 판정할 수 없어서다.
+- **모르는 형식의 판은 받지 않는다.** 이 서버가 읽을 줄 아는 형식은 10 까지다(`WORLD_FORMAT_MAX`, 형식 6 은 장, 7 은 장이 여는 로어북 항목, 8 은 제작자 [단축어](#단축어), 9 는 업적, 10 은 [참고 자료](#참고-자료)의 허용). 모르는 조건이나 효과를 엔진이 판정할 수 없어서다.
   asset 서버가 형식을 올리면 그것을 읽는 법과 함께 이 값을 올린다.
 - **장르**(판의 형식 4, `app/conversations/genres.py`). 세션의 `world.genre` 에 판의 장르를 늘 싣는다(시작, 읽기, 목록). 화면이 장면(D2)의 테마를 고른다.
   값의 목록은 asset 서버(`asset-server/app/genres.py`)가 지킨다. 이 서버는 글자인지만 보고 그대로 싣는다. 규칙이 아니라 화면의 일이라 엔진은 보지 않는다.
@@ -264,6 +265,7 @@ event: failed   data: {"code": "timeout"}                                    답
   3초 안에 끝나지 않거나 실패하면 상시와 키워드만으로 답한다(로그 `story.lore_recall`).
   항목의 벡터(`lore_embeddings`)는 세션을 시작할 때 따로 도는 작업이 만든다. 찾을 때 모자라도 만들기를 맡긴다(로그 `story.lore_index`).
   사본마다 만들어 사본을 지우면 함께 지워진다. 로어북의 id 가 없는 판의 항목은 카드에는 들어가고 벡터만 만들지 않는다.
+- **참고 자료**(#1338). 판이 허용하고 세션에서 켰으면, 로어북을 뜻으로 찾은 다음 [참고 자료](#참고-자료)를 찾아 `[로어북]` 뒤에 넣는다.
 - **장면의 인물.** 가지의 끝의 상태로 엔진이 정한다(`app/engine/scene.py`). 장면 밖의 인물은 프롬프트에 넣지 않는다.
   선택지를 기다리는 동안 말을 하면 선택지는 사라진다(효과 없이). 그 상태를 사람의 말에 붙인다.
 - **말 조각.** 모델은 줄마다 `@인물의 id:` 나 `@narration:` 을 적는다(`app/turns/segments.py`). 서버는 흘러오는 대로 잘라 말하는 사람을 본다.
@@ -491,6 +493,26 @@ chat 의 것과 같은 모양이다(`app/conversations/` 의 `message_alternativ
 - 파일의 이름은 세션의 제목이다(`Content-Disposition` 의 `filename*`). `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` 를 붙인다.
 - 한 사람이 10분에 10번까지다([요청 수 제한](#요청-수-제한)). 없는 세션의 요청도 센다.
 
+### 참고 자료
+
+미리 넣어 둔 바깥 자료(SRD 5.1, 위키백과)에서 지금의 장면에 맞는 줄을 골라 카드의 `[참고 자료]` 에 넣는다(#1338, `app/references/`).
+제작자가 "갤리온"이라고만 적어도 모델이 생김새와 쓰임을 채우게 하려는 것이다. 장면 중에 웹을 찾지 않는다.
+고르는 규칙, 표의 모양, 데이터 파일, 관리 명령의 몸통은 trpg, chat 과 함께 쓰는 공용 코드다([reference-core](../shared/reference-core/README.md)).
+찾고 카드에 넣는 흐름은 chat 과 같은 공용 코드다(`conversation_core/lookups.py`).
+
+- **켜기.** 둘 다 켜야 섞는다. 제작자가 세계관에 허용하고(asset 의 `references_allowed`, 판 형식 10 에 굳는다), 사람이 세션마다 켠다(`PUT .../references`, 처음에는 꺼져 있다).
+  허용은 세션을 시작할 때 가져온 판의 사본을 본다. 옛 판(형식 9 까지)은 허용하지 않은 것이다. SRD 와 위키백과를 함께 켠다(2026-11-22 유저 결정).
+- **고르는 법.** 찾는 글은 로어북을 뜻으로 찾는 글과 같다(최근 말 둘). 다른 이름(한국어 이름)이 글에 나온 줄을 먼저, 그다음 뜻이 가까운 줄(거리 0.45 안)을, 셋까지.
+- **자리와 값.** 제작자의 로어북이 먼저다. 로어북의 글자 상한(2,000)에서 고른 항목이 쓰고 남은 만큼만, 그리고 1,500 자까지 넣는다. 그래서 입력이 늘지 않고 값을 더 받지 않는다.
+  카드에서 `[로어북]` 뒤, `[장면 지시]` 와 `[쓰는 법]` 앞이다. 위키백과의 줄(`[상식]`)이 있으면 실제 세계의 나라, 인물, 연도를 쓰지 말라는 말이 붙는다. 판정과 상태에는 끼지 않는다.
+- **실패와 시간.** 모델을 부르기 직전에 찾는다. 3초 안에 끝나지 않거나 실패하면 참고 자료 없이 답한다(로그 `story.reference_find`). `EMBEDDER` 가 `off` 면 찾지 않는다.
+- **넣기와 벡터.** 운영자가 관리 명령으로 넣는다. 차례는 `load` 다음 `index` 다. 둘 다 여러 번 돌려도 된다.
+
+  ```
+  uv run python -m scripts.references load     # 공용 패키지에 실린 데이터 파일을 모두
+  uv run python -m scripts.references index    # 벡터가 없는 줄의 벡터. 모델은 EMBEDDING_MODEL(서버가 찾는 것과 같아야 한다)
+  ```
+
 ### 신고
 
 자기 세션의 모델의 답을 신고한다(chat 의 #678 과 같은 모양, `app/reports/`, `app/operators/`).
@@ -683,6 +705,7 @@ DB 인스턴스는 다른 서버와 같고, 계정과 스키마는 따로다. st
 | `message_states` | 말에 붙은 엔진의 상태(JSONB). 상태가 바뀐 말에만 있다. 가지의 끝의 상태는 끝에서 가장 가까운 것이고, 없으면 처음의 상태다 |
 | `generations` | 모델을 한 번 부른 것과 그 청구(chat 서버의 표와 같은 모양). 버린 줄의 수(`dropped_segments`)를 더했다 |
 | `lore_embeddings` | 판의 사본에 든 로어북 항목의 벡터(pgvector, `extensions` 스키마). (사본, 임베딩 모델, 로어북, 항목)마다 하나. 사본이 지워지면 함께 지워진다 |
+| `reference_entries`, `reference_embeddings` | [참고 자료](#참고-자료)의 줄과 그 벡터(trpg, chat 의 표와 같은 모양, `reference_core/columns.py`). 주인이 없다. 관리 명령만 넣는다 |
 | `memory_notes` | 세션의 기억 메모. 세션이 지워지면 함께 지워진다 |
 | `summaries` | 굴리는 요약. 요약한 마지막 말에 붙고(`message_id`), 부른 모델과 토큰, 원가를 적는다. 말이나 세션이 지워지면 함께 지워진다 |
 | `ending_records` | 계정의 본 엔딩. (`owner_id`, `world_source`, `ending_id`)마다 처음 본 시각과 세션. 세션이 지워지면 세션만 비운다 |

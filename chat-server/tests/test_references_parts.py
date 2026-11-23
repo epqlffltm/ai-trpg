@@ -12,17 +12,17 @@
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import cast
 
 from ai_core.provider import ChatMessage, Role
+from conversation_core.lookups import with_found_references
 from conversation_core.lorebook import MAX_CHARS as LORE_MAX_CHARS
-from reference_core.finder import ReferenceFinder
+from reference_core.prompt import render_references
 from reference_core.records import ReferenceKind, StoredReference
-from reference_core.selection import REFERENCE_MAX_CHARS
+from reference_core.selection import REFERENCE_MAX_CHARS, room_after
 
 from app.conversations.models import Conversation
 from app.turns.prompt import with_references
-from app.turns.service import references_query, with_found_references
+from app.turns.service import references_query
 from app.turns.values import LorePlan, SavedMessage, TurnStart
 from tests.assets import make_character
 
@@ -34,14 +34,14 @@ GALLEON = StoredReference(
 
 @dataclass
 class RecordingFinder:
-    """받은 글과 자리를 적고 정해 둔 줄을 돌려준다."""
+    """받은 글과 자리를 적고, 정해 둔 줄로 블록을 만든다(reference_core/finder.py 의 block_after 와 같은 셈)."""
 
     found: list[StoredReference] = field(default_factory=list)
     calls: list[tuple[str, int]] = field(default_factory=list)
 
-    async def find(self, text: str, room: int) -> list[StoredReference]:
-        self.calls.append((text, room))
-        return self.found
+    async def block_after(self, text: str, used: int, budget: int) -> str | None:
+        self.calls.append((text, room_after(used, budget)))
+        return render_references(self.found)
 
 
 def turn(references: str | None, lore_chars: int | None = None) -> TurnStart:
@@ -66,10 +66,6 @@ def turn(references: str | None, lore_chars: int | None = None) -> TurnStart:
     )
 
 
-def as_finder(finder: RecordingFinder) -> ReferenceFinder:
-    return cast(ReferenceFinder, finder)
-
-
 def test_the_block_goes_after_the_lorebook_and_before_now():
     card = with_references(CARD, '[참고 자료]\n- [물건] 갤리온: 큰 배.')
 
@@ -81,7 +77,7 @@ def test_the_block_goes_after_the_lorebook_and_before_now():
 async def test_found_references_are_added_to_the_card():
     finder = RecordingFinder(found=[GALLEON])
 
-    start = await with_found_references(as_finder(finder), turn('갤리온'))
+    start = await with_found_references(finder, turn('갤리온'), with_references)
 
     assert '- [물건] 갤리온: 큰 배.' in start.messages[0].content
     assert start.messages[1:] == turn('갤리온').messages[1:]
@@ -91,8 +87,8 @@ async def test_found_references_are_added_to_the_card():
 async def test_the_room_is_what_the_lorebook_left():
     finder = RecordingFinder()
 
-    await with_found_references(as_finder(finder), turn('갤리온', lore_chars=LORE_MAX_CHARS - 100))
-    await with_found_references(as_finder(finder), turn('갤리온', lore_chars=LORE_MAX_CHARS))
+    await with_found_references(finder, turn('갤리온', lore_chars=LORE_MAX_CHARS - 100), with_references)
+    await with_found_references(finder, turn('갤리온', lore_chars=LORE_MAX_CHARS), with_references)
 
     assert finder.calls == [('갤리온', 100), ('갤리온', 0)]
 
@@ -100,9 +96,9 @@ async def test_the_room_is_what_the_lorebook_left():
 async def test_nothing_changes_when_off_or_nothing_is_found():
     finder = RecordingFinder()
 
-    off = await with_found_references(as_finder(finder), turn(None))
-    none_found = await with_found_references(as_finder(finder), turn('갤리온'))
-    no_finder = await with_found_references(None, turn('갤리온'))
+    off = await with_found_references(finder, turn(None), with_references)
+    none_found = await with_found_references(finder, turn('갤리온'), with_references)
+    no_finder = await with_found_references(None, turn('갤리온'), with_references)
 
     assert off.messages[0].content == none_found.messages[0].content == no_finder.messages[0].content == CARD
     assert finder.calls == [('갤리온', REFERENCE_MAX_CHARS)]

@@ -18,9 +18,10 @@ from dataclasses import dataclass
 from ai_core.embedder import Embedder
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from reference_core.prompt import render_references
 from reference_core.records import StoredReference
 from reference_core.search import find_references
-from reference_core.selection import ReferenceThresholds
+from reference_core.selection import ReferenceThresholds, room_after
 from reference_core.tables import ReferenceTables
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,14 @@ class ReferenceFinder:
         except Exception:
             logger.warning('참고 자료를 찾지 못했습니다', exc_info=True, extra={'operation': self.operation})
             return []
+
+    async def block_after(self, text: str, used: int, budget: int) -> str | None:
+        """
+        대화 서버의 "[참고 자료]" 블록(reference_core/prompt.py).
+        자리는 로어북의 상한(budget)에서 쓴 것(used)을 뺀 것이다.
+        고른 것이 없으면 None 이다.
+        """
+        return render_references(await self.find(text, room_after(used, budget)))
 
     async def search(self, text: str, room: int) -> list[StoredReference]:
         """DB 와 임베딩 모델로 고른다. 자리는 room 과 설정의 상한 중 작은 것이다."""

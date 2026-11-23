@@ -38,22 +38,12 @@ from conversation_core import continuation
 from conversation_core.changes import parse_changes
 from conversation_core.continuation import OverlapTrim, continued_text
 from conversation_core.expressions import ExpressionHead, match_expression, split_expression
-from conversation_core.lorebook import MAX_CHARS as LORE_MAX_CHARS
-from conversation_core.lorebook import (
-    LoreEntry,
-    chosen_entries,
-    entry_size,
-    query_text,
-    ranked,
-    render_lore,
-    with_recalled,
-)
+from conversation_core.lookups import lore_chars, with_found_references, with_recalled_lore
+from conversation_core.lorebook import chosen_entries, query_text, ranked, render_lore
 from conversation_core.relay import Relay
 from conversation_core.suggestions import MarkerHold, parse_suggestions, split_answer
 from conversation_core.window import Turn, select_window
 from reference_core.finder import ReferenceFinder
-from reference_core.prompt import render_references
-from reference_core.selection import room_after
 from server_core import stop_signals
 from server_core.billing.client import Billing
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -331,11 +321,6 @@ def lore_plan_of(character: ImportedCharacter, document: CharacterDocument, rece
         block=render_lore(chosen),
         chars=lore_chars(chosen),
     )
-
-
-def lore_chars(entries: Sequence[LoreEntry]) -> int:
-    """카드에 넣은 로어북 항목의 글자(이름과 내용)의 합."""
-    return sum(entry_size(entry) for entry in entries)
 
 
 def references_query(conversation: Conversation, document: CharacterDocument, recent: Sequence[str]) -> str | None:
@@ -1052,42 +1037,6 @@ async def announce_stop(
     return True
 
 
-async def with_recalled_lore(recall: LoreRecall | None, start: TurnStart) -> TurnStart:
-    """
-    로어북을 뜻으로 찾아 카드의 "[로어북]" 에 더한다(모델을 부르기 직전). 찾을 수 없거나 더할 것이 없으면 그대로다.
-    """
-    plan = start.lore
-    if recall is None or plan is None:
-        return start
-    recalled = await recall.recall(plan)
-    if not recalled:
-        return start
-    chosen = chosen_entries(plan.entries, with_recalled(plan.ranked, recalled))
-    block = render_lore(chosen)
-    card = start.messages[0]
-    rebuilt = replace(card, content=with_lore(card.content, plan.block, block))
-    lore = replace(plan, block=block, chars=lore_chars(chosen))
-    return replace(start, messages=[rebuilt, *start.messages[1:]], lore=lore)
-
-
-async def with_found_references(finder: ReferenceFinder | None, start: TurnStart) -> TurnStart:
-    """
-    참고 자료를 찾아 카드에 "[참고 자료]" 를 더한다(#1338, 모델을 부르기 직전, 로어북 다음).
-    제작자의 로어북이 먼저다. 로어북이 쓰고 남은 글자(LORE_MAX_CHARS 에서)에만 넣는다. 그래서 값을 더 받지 않는다.
-    끄거나, 자리가 없거나, 찾지 못했으면 그대로다.
-    """
-    if finder is None or start.references is None:
-        return start
-    used = start.lore.chars if start.lore is not None else 0
-    found = await finder.find(start.references, room_after(used, LORE_MAX_CHARS))
-    block = render_references(found)
-    if block is None:
-        return start
-    card = start.messages[0]
-    rebuilt = replace(card, content=with_references(card.content, block))
-    return replace(start, messages=[rebuilt, *start.messages[1:]])
-
-
 async def stoppable_call(
     session_factory: async_sessionmaker[AsyncSession],
     route: Route,
@@ -1138,7 +1087,8 @@ async def run_generation(
     저장하다 실패하면(DB 가 없다) 응답에 실패를 알리고 끝낸다.
     차례와 홀드는 오래되면 풀린다(GENERATION_STALE, 정리 작업).
     """
-    start = await with_found_references(finder, await with_recalled_lore(recall, start))
+    start = await with_recalled_lore(recall, start, with_lore)
+    start = await with_found_references(finder, start, with_references)
     collector = collector_for(start, relay)
     result = await stoppable_call(session_factory, route, start, params, collector, clock, stop)
     try:

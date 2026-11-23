@@ -9,7 +9,7 @@ trpg-server 가 처음 만들었고(`app/references/`), chat 과 story 도 같�
 | --- | --- |
 | trpg-server | #1338(옮기기 전에는 `app/references/records.py`, `srd.py`, `texts.py`, `translations.py`, `wiki.py` 와 쿼리, 넣기, 색인, 고르기) |
 | chat-server | #1338(대화마다 켠다) |
-| story-server | 다음 PR(#1338) |
+| story-server | #1338(세션마다 켠다) |
 
 ## 있는 것
 
@@ -28,7 +28,7 @@ trpg-server 가 처음 만들었고(`app/references/`), chat 과 story 도 같�
 | `indexing` | 벡터가 없는 줄의 벡터 만들기(`index_references`). 모델을 부르는 동안 DB 연결을 쥐지 않는다 |
 | `selection` | 장면에 넣을 줄을 고르는 순수한 규칙(다른 이름, 거리, 자리)과 기본 숫자(`ReferenceThresholds`) |
 | `search` | 찾는 글 하나에 맞는 줄을 DB 에서 고르기(`find_references`). 임베딩 모델이 실패하면 다른 이름으로만 |
-| `finder` | 대화 서버의 말 한 번의 찾기(`ReferenceFinder`). 3초 안에 끝나지 않거나 실패하면 빈 목록이다 |
+| `finder` | 대화 서버의 말 한 번의 찾기(`ReferenceFinder`). 3초 안에 끝나지 않거나 실패하면 빈 목록이다. `block_after` 는 로어북이 쓰고 남은 자리로 찾아 블록을 준다 |
 | `prompt` | 대화 서버의 "[참고 자료]" 블록(`render_references`). 종류의 이름과 [상식]의 규칙은 trpg 도 쓴다 |
 | `commands` | 관리 명령(`scripts/references.py`)의 몸통. 명령줄, 넣기(`load_files`), 색인(`index`), 찍는 줄 |
 
@@ -69,7 +69,7 @@ ORM 클래스와 마이그레이션, 켰는지(테이블, 대화, 세션), 로�
 
 4. 관리 명령을 둔다. 몸통을 제 표에 묶고(`partial(commands.load_files, TABLES)`), 제 설정으로 DB 와 임베더를 만든다(chat-server 의 `scripts/references.py`).
    차례는 `load` 다음 `index` 다.
-5. 대화 서버는 앱에 `ReferenceFinder` 하나를 두고, 모델을 부르기 직전에 `find(찾는 글, room_after(로어북이 쓴 글자, 로어북의 상한))` 를 불러 `render_references` 의 블록을 카드에 넣는다.
+5. 대화 서버는 앱에 `ReferenceFinder` 하나를 두고, 모델을 부르기 직전에 `conversation_core/lookups.py` 의 `with_found_references` 에 넘긴다. 그것이 `block_after(찾는 글, 로어북이 쓴 글자, 로어북의 상한)` 의 블록을 서버가 정한 자리에 넣는다.
 
 ## 테스트
 
