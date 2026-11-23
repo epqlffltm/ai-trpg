@@ -1084,6 +1084,11 @@ export interface components {
              */
             places: components["schemas"]["PlaceDocument"][];
             rating: components["schemas"]["Rating"];
+            /**
+             * References Allowed
+             * @default false
+             */
+            references_allowed: boolean;
             /** Speech Examples */
             speech_examples: string;
             /**

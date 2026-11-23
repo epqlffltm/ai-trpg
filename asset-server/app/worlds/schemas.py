@@ -688,6 +688,8 @@ class WorldCreate(BaseModel):
     shortcuts: Shortcuts = []
     # 업적(판의 형식 9). 적은 차례가 보이는 차례다
     achievements: Achievements = []
+    # 참고 자료(SRD, 위키백과)를 세션에 섞어도 되는가. 처음에는 허용하지 않는다
+    references_allowed: bool = False
 
     def image_ids(self) -> list[uuid.UUID]:
         """붙인 그림들. 자기 그림인지 볼 것들이다."""
@@ -738,6 +740,7 @@ class WorldUpdate(BaseModel):
     lorebooks: Lorebooks | None = None
     shortcuts: Shortcuts | None = None
     achievements: Achievements | None = None
+    references_allowed: bool | None = None
 
     @model_validator(mode='after')
     def null_only_where_allowed(self) -> Self:
@@ -793,6 +796,8 @@ class WorldDetail(BaseModel):
     shortcuts: list[Shortcut] = []
     # 업적(판의 형식 9). 기본값이 있어 웹의 생성 타입에서는 고르는 칸이다
     achievements: list[Achievement] = []
+    # 참고 자료를 세션에 섞어도 되는가. 기본값이 있어 웹의 생성 타입에서는 고르는 칸이다
+    references_allowed: bool = False
     latest_version: int | None
     published_at: datetime | None
     # 운영자가 숨긴 시각. 숨긴 동안은 공개여도 남에게 보이지 않는다(캐릭터와 같다)

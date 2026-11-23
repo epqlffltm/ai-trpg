@@ -24,6 +24,8 @@
   - 9: 업적(achievements: [{"id", "name", "description", "hidden", "image_id", "when"}])을 더했다(2026-11-09,
        docs/architecture/achievements.md 의 "story"). 8 까지의 판은 업적이 없다.
        받는 쪽(story)이 형식의 상한을 먼저 9 로 올린다(그 전에 게시하면 story 가 그 판으로 세션을 시작하지 못한다)
+  - 10: 참고 자료를 세션에 섞어도 되는가(references_allowed, 제작자가 정한다)를 더했다(2026-11-23).
+       9 까지의 판은 허용하지 않은 것으로 읽는다. 받는 쪽(story)이 형식의 상한을 같은 변경에서 10 으로 올린다
 
 인물의 보이기는 판에서는 정해진 값이다. 초안의 덮어쓰기가 비어 있으면 세계관의 기본을 채워 넣는다.
 받는 쪽(story)이 기본과 덮어쓰기를 다시 합치지 않아도 된다.
@@ -54,7 +56,7 @@ from app.worlds.models import (
 )
 
 # 판의 형식. 칸을 바꾸면 올린다
-DOCUMENT_FORMAT = 9
+DOCUMENT_FORMAT = 10
 
 
 class SlotDocument(BaseModel):
@@ -339,6 +341,7 @@ class WorldDocument(BaseModel):
     chapters: list[ChapterDocument] = []
     shortcuts: list[Shortcut] = []
     achievements: list[AchievementDocument] = []
+    references_allowed: bool = False
 
 
 def character_copy(character_id: uuid.UUID, number: int, document: Mapping) -> CastCharacterDocument:
@@ -411,6 +414,7 @@ def build_document(
             'chapters': world.chapters,
             'shortcuts': world.shortcuts,
             'achievements': world.achievements,
+            'references_allowed': world.references_allowed,
         }
     )
 

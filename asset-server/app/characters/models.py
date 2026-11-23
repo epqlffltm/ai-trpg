@@ -22,6 +22,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -31,6 +32,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    false,
     func,
     literal_column,
 )
@@ -272,6 +274,9 @@ class Character(Base):
     # 업적들 [{"id", "name", "description", "hidden", "image_id", "when": {"match", "items"}}](판의 형식 11).
     # 제작자가 작품에 다는 것이다(스팀의 업적과 같다). 주는 것은 chat 의 엔진이다. 모양은 schemas.Achievement 가 정한다
     achievements: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default='[]')
+    # 참고 자료(SRD, 위키백과)를 대화에 섞어도 되는가(제작자가 정한다). 게시하면 판에 굳는다(형식 12).
+    # 허용해도 사용자가 대화마다 켜야 섞인다(chat 서버). 장르에 맞지 않으면 허용하지 않는다
+    references_allowed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
     rating: Mapped[str] = mapped_column(String(10), default=Rating.ALL, server_default=Rating.ALL.value)
     visibility: Mapped[str] = mapped_column(

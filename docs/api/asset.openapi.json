@@ -1366,6 +1366,11 @@
             "$ref": "#/components/schemas/Rating",
             "default": "all"
           },
+          "references_allowed": {
+            "default": false,
+            "title": "References Allowed",
+            "type": "boolean"
+          },
           "shortcuts": {
             "default": [],
             "items": {
@@ -1581,6 +1586,11 @@
           "rating": {
             "$ref": "#/components/schemas/Rating"
           },
+          "references_allowed": {
+            "default": false,
+            "title": "References Allowed",
+            "type": "boolean"
+          },
           "shortcuts": {
             "default": [],
             "items": {
@@ -1776,6 +1786,11 @@
           },
           "rating": {
             "$ref": "#/components/schemas/Rating"
+          },
+          "references_allowed": {
+            "default": false,
+            "title": "References Allowed",
+            "type": "boolean"
           },
           "shortcuts": {
             "default": [],
@@ -2170,6 +2185,17 @@
                 "type": "null"
               }
             ]
+          },
+          "references_allowed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "References Allowed"
           },
           "shortcuts": {
             "anyOf": [
@@ -6277,6 +6303,11 @@
             "$ref": "#/components/schemas/Rating",
             "default": "all"
           },
+          "references_allowed": {
+            "default": false,
+            "title": "References Allowed",
+            "type": "boolean"
+          },
           "shortcuts": {
             "default": [],
             "items": {
@@ -6540,6 +6571,11 @@
           "rating": {
             "$ref": "#/components/schemas/Rating"
           },
+          "references_allowed": {
+            "default": false,
+            "title": "References Allowed",
+            "type": "boolean"
+          },
           "shortcuts": {
             "default": [],
             "items": {
@@ -6748,6 +6784,11 @@
           },
           "rating": {
             "$ref": "#/components/schemas/Rating"
+          },
+          "references_allowed": {
+            "default": false,
+            "title": "References Allowed",
+            "type": "boolean"
           },
           "shortcuts": {
             "default": [],
@@ -7438,6 +7479,17 @@
                 "type": "null"
               }
             ]
+          },
+          "references_allowed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "References Allowed"
           },
           "shortcuts": {
             "anyOf": [
