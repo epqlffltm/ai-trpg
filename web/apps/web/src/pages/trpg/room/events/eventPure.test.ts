@@ -33,7 +33,7 @@ const ALL: EventType[] = [
   'monster_attacked', 'monster_chased', 'monster_roamed', 'npc_attacked', 'injury_gained', 'injury_ended', 'injury_hurt', 'injury_escape_rolled', 'injury_treated', 'naming_resolved', 'death_save_rolled',
   'character_died', 'character_joined', 'items_gained', 'items_lost', 'item_used', 'item_given', 'item_thrown', 'aid_used', 'item_put_down', 'trap_set', 'trap_sprung', 'trap_disarmed', 'steal_attempted',
   'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'chapter_changed', 'achievement_earned', 'character_leveled', 'experience_gained', 'abilities_raised', 'place_searched', 'character_rested',
-  'character_revived', 'round_closed', 'round_reverted', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
+  'character_revived', 'round_paused', 'round_resumed', 'round_closed', 'round_reverted', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
   'narration_model_not_for_sale', 'narration_model_retiring', 'narration_model_replaced', 'narration_model_unavailable',
   'member_dropped', 'narration_credits_released', 'table_ended', 'item_traded', 'money_paid',
   'equipment_changed', 'door_changed', 'monsters_appeared', 'carried_items_left',
@@ -237,6 +237,17 @@ describe('eventLine', () => {
     expect(line('narration_style_changed', { narration_style: null })?.text).toBe('서술 문체: 시나리오의 추천');
     expect(line('round_time_limit_changed', { round_time_limit: 600 })?.text).toBe('라운드 시간 제한: 10분');
     expect(line('round_opened', { number: 3, clock: { day: 1, hour: 22, minute: 20 } })?.text).toBe('라운드 3: 열림 · 1일째 22:20');
+  });
+
+  it('아무도 선언하지 않아 멈춘 라운드와 이어 간 사람을 적는다(#1341)', () => {
+    expect(line('round_paused', { round: 4, reason: 'no_declarations' })).toEqual({
+      text: '라운드 4: 아무도 선언하지 않아 멈췄습니다. 누가 선언하면 이어 갑니다.',
+      important: true,
+    });
+    expect(line('round_resumed', { round: 4, deadline_at: '2026-11-23T03:00:00+00:00' }, { actor_id: OTHER })).toEqual({
+      text: '라운드 4: 미아의 선언으로 이어 갑니다.',
+      important: false,
+    });
   });
 
   it('서술을 막는 일은 important 이고 할 것을 적는다', () => {

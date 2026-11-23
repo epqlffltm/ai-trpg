@@ -227,6 +227,11 @@ class EventType(enum.StrEnum):
     RESOURCE_CHANGED = 'resource_changed'
     # 고비를 넘기고 쓰러져 있던 캐릭터가 오래 쉬어 되살아나기를 굴렸다(app/rounds/rests.py). 성공이면 HP 1 로 일어났다
     CHARACTER_REVIVED = 'character_revived'
+    # 아무도 선언하지 않은 채 마감이 지나 서버가 라운드를 닫지 않고 멈췄다(#1341, app/rounds/pauses.py).
+    # 마감을 지웠다. 서술하지 않으므로 서술 값을 받지 않는다. 행한 사람이 없다
+    ROUND_PAUSED = 'round_paused'
+    # 멈춘 라운드에 누가(actor_id) 선언을 내서 이어 간다. 그때부터 시간 제한만큼 새 마감이 걸렸다
+    ROUND_RESUMED = 'round_resumed'
     # 라운드가 닫혔다
     ROUND_CLOSED = 'round_closed'
     # 방장이 바로 앞 라운드를 되돌렸다(#288, app/rounds/reverting.py). 그 라운드의 닫힘의 묶음(group)은 없었던 일이다.

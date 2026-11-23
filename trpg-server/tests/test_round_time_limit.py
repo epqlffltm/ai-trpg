@@ -10,6 +10,9 @@
   - 서버의 시계: 마감이 지난 라운드만 닫는다. 안 낸 사람은 아무것도 하지 않은 것으로 넘어가고, 닫힌 까닭이 남는다.
     시계가 둘이어도 한 번만 닫는다. 한 테이블이 실패해도 다른 테이블은 닫는다. 멈추라면 멈춘다.
   - 떠난 뒤: 기다리던 사람이 떠나거나 내보내져서 남은 사람이 모두 냈으면 닫는다. 아무도 안 냈으면 닫지 않는다.
+  - 멈춤(#1341): 마감이 지났는데 아무도 내지 않았으면 닫지 않고 멈춘다(마감을 지운다). 시계가 다시 고르지 않는다.
+    누가 내면 그때부터 시간 제한만큼 새 마감을 걸고 이어 간다. 방장은 멈춘 라운드도 닫는다.
+    모두 쓰러졌으면 멈추지 않는다.
 시계의 시각은 테스트가 정한다(RoundClock.clock). 정말로 기다리지 않는다.
 """
 
@@ -33,6 +36,7 @@ from app.rounds import service
 from app.rounds.clock import RoundClock
 from app.rounds.closing import closer_of
 from app.rounds.models import Declaration, Round
+from app.rounds.pauses import is_idle
 from app.rounds.state import is_ready
 from app.tables.models import (
     DEFAULT_ROUND_TIME_LIMIT,
@@ -332,6 +336,7 @@ async def test_two_clocks_close_a_round_once(
     client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], narrated
 ):
     table = await start_with(client, me, friend, round_time_limit=60)
+    await declare(client, me, table, LAUGH)
     round_ = await current(client, me, table)
     moment = after(round_)
 
@@ -347,12 +352,15 @@ async def test_one_failing_table_does_not_stop_the_others(
     client: AsyncClient,
     app: FastAPI,
     me: dict[str, str],
+    friend: dict[str, str],
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
     narrated,
 ):
-    broken = await start_with(client, me, round_time_limit=60)
-    working = await start_with(client, me, round_time_limit=60)
+    broken = await start_with(client, me, friend, round_time_limit=60)
+    working = await start_with(client, me, friend, round_time_limit=60)
+    for table in (broken, working):
+        await declare(client, me, table, LAUGH)
     moment = max(after(await current(client, me, broken)), after(await current(client, me, working)))
     real = service.close_on_time
 
@@ -383,9 +391,15 @@ async def test_one_failing_table_does_not_stop_the_others(
 
 
 async def test_each_tick_is_a_job_with_one_line(
-    client: AsyncClient, app: FastAPI, me: dict[str, str], caplog: pytest.LogCaptureFixture, narrated
+    client: AsyncClient,
+    app: FastAPI,
+    me: dict[str, str],
+    friend: dict[str, str],
+    caplog: pytest.LogCaptureFixture,
+    narrated,
 ):
-    table = await start_with(client, me, round_time_limit=60)
+    table = await start_with(client, me, friend, round_time_limit=60)
+    await declare(client, me, table, LAUGH)
     round_ = await current(client, me, table)
 
     with caplog.at_level(logging.DEBUG, logger='app.rounds.clock'):
@@ -536,6 +550,128 @@ async def test_closing_on_time_checks_the_deadline_again_under_the_lock(
     assert (await current(client, me, table))['status'] == 'open'
 
 
+# --- 아무도 내지 않으면 멈춘다(#1341) ---
+
+
+async def pause_by_clock(client: AsyncClient, app: FastAPI, headers: dict[str, str], table: dict) -> int:
+    """아무도 내지 않은 채 마감을 넘겨 시계를 돌린다. 닫은 수를 돌려준다."""
+    return await clock_at(app, after(await current(client, headers, table))).tick()
+
+
+async def test_a_round_nobody_declared_is_paused_not_closed(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str]
+):
+    table = await start_with(client, me, friend, round_time_limit=60)
+
+    closed = await pause_by_clock(client, app, me, table)
+
+    round_ = await current(client, me, table)
+    (event,) = await events_of(client, me, table, 'round_paused')
+    # 닫지 않았다. 서술도, 다음 라운드도 없다. 마감을 지워 멈췄고 까닭이 남는다
+    assert closed == 0
+    assert (round_['number'], round_['status'], round_['deadline_at']) == (1, 'open', None)
+    assert (event['actor_id'], event['payload']) == (None, {'round': 1, 'reason': 'no_declarations'})
+    assert await events_of(client, me, table, 'round_closed') == []
+
+
+async def test_the_clock_does_not_pick_a_paused_round_again(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str]
+):
+    table = await start_with(client, me, friend, round_time_limit=60)
+    await pause_by_clock(client, app, me, table)
+
+    later = clock_at(app, datetime.now(UTC) + timedelta(days=30))
+
+    assert await later.overdue(datetime.now(UTC) + timedelta(days=30)) == []
+    assert await later.tick() == 0
+    assert len(await events_of(client, me, table, 'round_paused')) == 1
+
+
+async def test_a_declaration_resumes_the_round_with_a_new_deadline(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], narrated
+):
+    table = await start_with(client, me, friend, round_time_limit=60)
+    await pause_by_clock(client, app, me, table)
+
+    before = datetime.now(UTC)
+    await declare(client, friend, table, LAUGH)
+    resumed = await current(client, me, table)
+    (event,) = await events_of(client, me, table, 'round_resumed')
+
+    # 낸 때부터 다시 잰다. 이어 가게 한 사람이 남는다
+    deadline = read_time(resumed['deadline_at'])
+    assert before + timedelta(seconds=60) <= deadline <= datetime.now(UTC) + timedelta(seconds=60)
+    assert (event['actor_id'], event['payload']['round']) == (str(FRIEND), 1)
+    assert read_time(event['payload']['deadline_at']) == deadline
+
+    # 이제 누군가 냈으니 새 마감이 지나면 지금처럼 닫는다. 안 낸 사람은 아무것도 하지 않은 것으로 넘어간다
+    closed = await clock_at(app, after(resumed)).tick()
+    await narrated()
+
+    (closing,) = await events_of(client, me, table, 'round_closed')
+    assert closed == 1
+    assert closing['payload'] == {'number': 1, 'idle': [str(ME)], 'reason': 'timeout'}
+    assert (await current(client, me, table))['number'] == 2
+
+
+async def test_a_paused_round_resumes_without_a_deadline_if_the_limit_was_removed(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str]
+):
+    table = await start_with(client, me, friend, round_time_limit=60)
+    await pause_by_clock(client, app, me, table)
+    await set_limit(client, me, table, None)
+
+    await declare(client, friend, table, LAUGH)
+
+    (event,) = await events_of(client, me, table, 'round_resumed')
+    assert (await current(client, me, table))['deadline_at'] is None
+    assert event['payload'] == {'round': 1, 'deadline_at': None}
+
+
+async def test_changing_a_declaration_does_not_resume_twice(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str]
+):
+    table = await start_with(client, me, friend, round_time_limit=60)
+    await pause_by_clock(client, app, me, table)
+
+    await declare(client, friend, table, LAUGH)
+    first = (await current(client, me, table))['deadline_at']
+    await declare(client, friend, table, '조용히 웃는다.')
+
+    # 이미 이어 갔다. 선언을 고쳐도 마감이 다시 밀리지 않는다
+    assert len(await events_of(client, me, table, 'round_resumed')) == 1
+    assert (await current(client, me, table))['deadline_at'] == first
+
+
+async def test_the_host_can_close_a_paused_round(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], narrated
+):
+    table = await start_with(client, me, friend, round_time_limit=60)
+    await pause_by_clock(client, app, me, table)
+
+    response = await client.post(table_url(table, '/rounds/current/close'), headers=me)
+    await narrated()
+
+    (event,) = await events_of(client, me, table, 'round_closed')
+    assert response.status_code == status.HTTP_202_ACCEPTED, response.text
+    assert event['payload']['reason'] == 'host'
+    assert (await current(client, me, table))['number'] == 2
+
+
+async def test_a_round_someone_declared_is_still_closed_on_time(
+    client: AsyncClient, app: FastAPI, me: dict[str, str], friend: dict[str, str], narrated
+):
+    table = await start_with(client, me, friend, round_time_limit=60)
+    await declare(client, me, table, LAUGH)
+
+    closed = await pause_by_clock(client, app, me, table)
+    await narrated()
+
+    # 한 사람이라도 냈으면 멈추지 않는다. 자리를 비운 사람 때문에 낸 사람이 기다리지 않는다
+    assert closed == 1
+    assert await events_of(client, me, table, 'round_paused') == []
+
+
 # --- 닫을 준비가 됐는가. DB 를 쓰지 않는다 ---
 
 
@@ -567,6 +703,17 @@ def test_a_table_of_downed_characters_is_not_ready():
     table = GameTable(members=[member_with(0), member_with(0)])
 
     assert not is_ready(table, round_with())
+
+
+def test_a_round_is_idle_only_when_someone_is_awaited_and_nobody_declared():
+    standing, other, downed = member_with(5), member_with(5), member_with(0)
+
+    # 기다리는 사람이 있고 아무도 내지 않았다. 멈춘다
+    assert is_idle(GameTable(members=[standing, other]), round_with())
+    # 한 사람이라도 냈다. 멈추지 않는다
+    assert not is_idle(GameTable(members=[standing, other]), round_with(standing))
+    # 모두 쓰러져 기다릴 사람이 없다. 멈추지 않는다. 마감이 닫아 판을 이어 간다
+    assert not is_idle(GameTable(members=[downed, member_with(0)]), round_with())
 
 
 # --- 서버가 뜨고 꺼질 때 ---

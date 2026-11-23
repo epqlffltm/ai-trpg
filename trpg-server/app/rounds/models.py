@@ -134,6 +134,9 @@ class Round(Base):
     # 선언의 마감. 열 때 테이블의 시간 제한으로 정한다. 지나면 서버가 닫기 시작한다(app/rounds/clock.py).
     # 비어 있으면 마감이 없다. 시간 제한이 없는 테이블이거나, 이 칸이 생기기 전에 연 라운드다
     deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 아무도 선언하지 않은 채 마감이 지나 멈춘 시각(#1341, app/rounds/pauses.py). 멈추면 마감을 지운다.
+    # 누가 선언을 내면 비우고 새 마감을 건다. 비어 있으면 멈추지 않았다
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 서술 모델(모델 목록의 이름표). 열 때 테이블의 모델로 정한다.
     # 그 모델과 단계의 가격표(narration.<이름표>.i<입력>.o<출력>)로 값을 걸고 그 모델로만 서술한다.
     # 다른 모델로 넘어가지 않는다.

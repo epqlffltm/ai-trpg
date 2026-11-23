@@ -421,6 +421,8 @@ const DESCRIBE: Record<EventType, Describe> = {
   player_action: () => null,
   check_rolled: () => null,
   round_opened: (p) => roundOpenedText(p),
+  round_paused: (p) => `${roundOf(p)}: 아무도 선언하지 않아 멈췄습니다. 누가 선언하면 이어 갑니다.`,
+  round_resumed: (p, ctx, e) => `${roundOf(p)}: ${who(p, ctx, e)}의 선언으로 이어 갑니다.`,
   round_closed: (p) => `라운드 ${count(p, 'number') ?? '?'}: 마감`,
   round_reverted: (p) => `라운드 ${count(p, 'number') ?? '?'}: 방장이 되돌렸습니다. 같은 라운드를 다시 진행합니다.`,
   narration_failed: (p) => `${roundOf(p)}: 서술에 실패했습니다(${text(p, 'reason') ?? '까닭 모름'}).`,
@@ -523,8 +525,9 @@ const DESCRIBE: Record<EventType, Describe> = {
   door_changed: (p, ctx, e) => doorText(p, ctx, e),
 };
 
-/** 서술을 막거나 사람과 캐릭터를 잃는 일. 기록에서 두드러진다 */
+/** 서술을 막거나 멈추거나 사람과 캐릭터를 잃는 일. 기록에서 두드러진다 */
 export const IMPORTANT: ReadonlySet<EventType> = new Set<EventType>([
+  'round_paused',
   'narration_credits_short',
   'narration_model_not_for_sale',
   'narration_model_unavailable',

@@ -78,6 +78,7 @@ from app.rounds import (
     monster_xp,
     narration_request,
     opener,
+    pauses,
     quest_goals,
     repository,
     resource_rounds,
@@ -471,6 +472,7 @@ async def declare(
 ) -> tuple[GameTable, Round]:
     """
     열려 있는 라운드에 선언을 낸다. 이미 냈으면 바꾼다. 앉은 사람이 모두 냈으면 라운드를 닫기 시작한다.
+    아무도 내지 않아 멈춘 라운드면 이어 간다. 지금부터 시간 제한만큼 새 마감을 건다(app/rounds/pauses.py).
 
     돌려주는 것은 테이블과 그 라운드다. 이 선언으로 닫기 시작했으면 "닫는 중"인 채로 돌아온다.
     서술이 끝나 다음 라운드가 열린 것은 스트림으로 알게 된다.
@@ -494,6 +496,8 @@ async def declare(
         raise RoundConflictError(Conflict.NOT_YOUR_TURN)
     scene = await load_scene(session, table, round_)
     put_declaration(round_, member, data.content, accept_action(table, member, data.action, scene))
+    if pauses.is_paused(round_):
+        pauses.resume(session, table, round_, user_id, datetime.now(UTC))
 
     everyone_declared = not waiting_for(table, round_)
     if everyone_declared:
@@ -624,6 +628,7 @@ async def close_on_time(
 
     잠근 뒤에 다시 본다. 그사이에 모두 냈거나 방장이 닫았으면, 다른 서버가 먼저 닫았으면 할 일이 없다.
     선언을 내지 않은 사람은 아무것도 하지 않은 것으로 넘어간다. 방장이 닫을 때와 같다.
+    앉은 사람 누구도 내지 않았으면 닫지 않고 멈춘다(False, app/rounds/pauses.py). 누가 내면 이어 간다(declare).
     """
     found = await lock_open_round(session, table_id)
     if found is None or not is_overdue(found[1], now):
@@ -631,6 +636,11 @@ async def close_on_time(
         await session.commit()
         return False
     table, round_ = found
+    if pauses.is_idle(table, round_):
+        # 아무도 선언하지 않았다. 닫지 않고 멈춘다(#1341). 아무도 없는 테이블이 라운드마다 서술하고 값을 받지 않게 한다
+        pauses.pause(session, table, round_, now)
+        await save(session, table)
+        return False
     await start_closing(session, table, round_, dice, await load_scene(session, table, round_), CloseReason.TIMEOUT)
     hand_over(scheduler, await save(session, table))
     record_round_closed(CloseReason.TIMEOUT)
