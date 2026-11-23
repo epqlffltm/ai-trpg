@@ -59,8 +59,10 @@ ORM 클래스와 마이그레이션, 켰는지(테이블, 대화, 세션), 로�
    class ReferenceEntry(ReferenceEntryColumns, Base):
        """..."""
 
+
    class ReferenceEmbedding(ReferenceEmbeddingColumns, Base):
        """..."""
+
 
    TABLES = ReferenceTables(entry=ReferenceEntry, embedding=ReferenceEmbedding)
    ```
