@@ -75,6 +75,17 @@ async def set_model(session: AsyncSession, conversation_id: uuid.UUID, slug: str
     await session.execute(statement)
 
 
+async def set_references(session: AsyncSession, conversation_id: uuid.UUID, enabled: bool) -> None:
+    """대화의 참고 자료 켜기를 적는다(#1338). 모델을 바꿀 때(set_model)처럼 수정 시각은 그대로 둔다."""
+    statement = (
+        update(Conversation)
+        .where(Conversation.id == conversation_id)
+        .values(references_enabled=enabled, updated_at=Conversation.updated_at)
+        .execution_options(synchronize_session=False)
+    )
+    await session.execute(statement)
+
+
 async def keep_character(session: AsyncSession, character: ImportedCharacter) -> ImportedCharacter:
     """
     판의 사본을 둔다. 그 사람이 같은 판을 이미 가져왔으면 있는 것을 돌려준다.

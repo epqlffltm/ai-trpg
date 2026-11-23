@@ -28,6 +28,7 @@ import app.lore.models  # noqa: E402, F401
 import app.memory.models  # noqa: E402, F401
 import app.notifications.models  # noqa: E402, F401
 import app.operators.models  # noqa: E402, F401
+import app.references.models  # noqa: E402, F401
 import app.reports.models  # noqa: E402, F401
 import app.snapshots.models  # noqa: E402, F401
 import app.turns.models  # noqa: E402, F401

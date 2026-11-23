@@ -24,7 +24,8 @@ from ai_core.embedder import Embedder
 from ai_core.fake import FakeEmbedder, word_vector
 from ai_core.provider import ProviderError
 from fastapi import FastAPI
-from reference_core.data import DATA_FILES, SRD51_FILE
+from reference_core.commands import DONE, UNFINISHED
+from reference_core.data import SRD51_FILE
 from reference_core.indexing import IndexResult
 from reference_core.records import (
     ReferenceDocument,
@@ -182,11 +183,6 @@ def test_the_commands_are_read():
     assert script.build_parser().parse_args(['index', '--model', 'bge-m3']).model == 'bge-m3'
 
 
-def test_loading_without_files_takes_the_shipped_ones():
-    assert script.files_to_load([]) == list(DATA_FILES)
-    assert script.files_to_load([Path('a.json')]) == [Path('a.json')]
-
-
 async def test_loading_several_files_reports_each(app: FastAPI, tmp_path):
     first, second = tmp_path / 'a.json', tmp_path / 'b.json'
     write_document(document([entry(1)]), first)
@@ -194,28 +190,28 @@ async def test_loading_several_files_reports_each(app: FastAPI, tmp_path):
 
     loaded = await script.load_files(factory_of(app), [first, second])
 
-    assert loaded == (script.DONE, ['srd51: 더함 1, 고침 0(벡터를 다시 만들 것 0), 지움 0', 'srd51: 바뀐 것이 없다'])
+    assert loaded == (DONE, ['srd51: 더함 1, 고침 0(벡터를 다시 만들 것 0), 지움 0', 'srd51: 바뀐 것이 없다'])
 
 
 async def test_the_commands_report_what_they_did(app: FastAPI, tmp_path):
     path = tmp_path / 'refs.json'
     write_document(document([entry(1)]), path)
 
-    loaded = await script.load(factory_of(app), path)
-    reloaded = await script.load(factory_of(app), path)
+    loaded = await script.load_files(factory_of(app), [path])
+    reloaded = await script.load_files(factory_of(app), [path])
     indexed = await script.index(factory_of(app), FakeEmbedder())
 
-    assert loaded == (script.DONE, ['srd51: 더함 1, 고침 0(벡터를 다시 만들 것 0), 지움 0'])
-    assert reloaded == (script.DONE, ['srd51: 바뀐 것이 없다'])
-    assert indexed == (script.DONE, [f'모델 {FakeEmbedder().model}: 벡터 1개를 새로 만들었다'])
+    assert loaded == (DONE, ['srd51: 더함 1, 고침 0(벡터를 다시 만들 것 0), 지움 0'])
+    assert reloaded == (DONE, ['srd51: 바뀐 것이 없다'])
+    assert indexed == (DONE, [f'모델 {FakeEmbedder().model}: 벡터 1개를 새로 만들었다'])
 
 
 async def test_the_index_command_ends_with_one_when_vectors_are_left(app: FastAPI, tmp_path):
     path = tmp_path / 'refs.json'
     write_document(document([entry(1)]), path)
-    await script.load(factory_of(app), path)
+    await script.load_files(factory_of(app), [path])
 
     code, (line,) = await script.index(factory_of(app), FakeEmbedder(error='timeout'))
 
-    assert code == script.UNFINISHED
+    assert code == UNFINISHED
     assert line.startswith('모델 fake') and '1개가 남았다' in line

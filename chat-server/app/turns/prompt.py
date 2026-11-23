@@ -8,6 +8,7 @@
     [assistant / user ...] 최근 대화(conversation_core/window.py 의 select_window)
 
 이 단계에는 요약, 기억 메모, 로어북, 장소와 소지품이 없다. 그 단계를 만들 때 카드와 창 사이에 끼운다.
+참고 자료(#1338)는 모델을 부르기 직전에 찾아 로어북 뒤에 끼운다(with_references).
 값은 모두 대화를 시작할 때 굳힌 사본에서 온다(캐릭터의 판, 페르소나의 사본, 고른 시작 상황).
 정확해야 하는 값(이름, 호칭)도 여기서 온다.
 
@@ -159,23 +160,38 @@ def render_card(
     return '\n\n'.join(section for section in sections if section)
 
 
-# 카드에서 "[로어북]" 이 들어가는 자리의 바로 뒤 블록의 머리. 지금(장소와 소지품)은 카드에 늘 있다
+# 카드에서 "[로어북]" 과 "[참고 자료]" 가 들어가는 자리의 바로 뒤 블록의 머리. 지금(장소와 소지품)은 카드에 늘 있다
 LORE_BEFORE = '\n\n[지금]'
+
+
+def before_scene(card: str, block: str) -> str:
+    """블록을 지금 블록 앞(render_card 에서 로어북의 자리)에 넣는다. 지금 블록이 없으면 끝에 붙인다."""
+    position = card.find(LORE_BEFORE)
+    if position < 0:
+        return f'{card}\n\n{block}'
+    return f'{card[:position]}\n\n{block}{card[position:]}'
 
 
 def with_lore(card: str, old: str | None, new: str | None) -> str:
     """
     카드의 "[로어북]" 블록을 바꾼다(뜻으로 찾은 항목을 더한 뒤). old 는 render_card 가 넣은 블록이다.
-    old 가 없으면 지금 블록 앞(render_card 의 자리)에 넣는다. 지금 블록이 없으면 끝에 붙인다. new 가 없으면 그대로다.
+    old 가 없으면 지금 블록 앞(render_card 의 자리)에 넣는다. new 가 없으면 그대로다.
     """
     if new is None:
         return card
     if old is not None:
         return card.replace(old, new, 1)
-    position = card.find(LORE_BEFORE)
-    if position < 0:
-        return f'{card}\n\n{new}'
-    return f'{card[:position]}\n\n{new}{card[position:]}'
+    return before_scene(card, new)
+
+
+def with_references(card: str, block: str | None) -> str:
+    """
+    카드에 "[참고 자료]" 블록을 넣는다(#1338). 로어북 뒤, 지금 앞이다. 제작자의 설정이 먼저 읽힌다.
+    로어북을 바꾼 뒤에 부른다. 블록이 없으면 그대로다.
+    """
+    if block is None:
+        return card
+    return before_scene(card, block)
 
 
 def to_message(turn: Turn) -> ChatMessage:

@@ -122,7 +122,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | GET | `/api/v1/chat/models` | 대화에 고를 수 있는 [모델](#모델-목록)들과 말 한 번의 값(`{free, items}`). 켜져 있고 은퇴하지 않았고 결제 서버가 팔고 있는 것만. 회사, 이름표 순서. 가격 목록을 받지 못하면 503 `prices_unavailable` | access 토큰 |
 | POST | `/api/v1/chat/conversations` | [대화](#대화) 시작. 201. `{character_id, start?, persona_id?, model?}`. 대화 하나(읽기와 같은 모양)를 돌려준다 | access 토큰 |
 | GET | `/api/v1/chat/conversations` | 내 대화의 목록(`{items, total}`). 최근에 말한 것부터. `limit`, `offset`, `character_id`(asset 서버의 캐릭터 id) | access 토큰 |
-| GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터, 말마다 `alternatives` 와 `suggestions`), 가지 끝의 [상태](#장소와-소지품)(`state`), 답을 쓰는 중인지(`generating`) | access 토큰 |
+| GET | `/api/v1/chat/conversations/{id}` | 대화 하나. 가져온 판과 페르소나, 시작 상황, 모델, 지금 가지의 말들(첫 말부터, 말마다 `alternatives` 와 `suggestions`), 가지 끝의 [상태](#장소와-소지품)(`state`), [참고 자료](#참고-자료)를 켰는지(`references_enabled`), 답을 쓰는 중인지(`generating`) | access 토큰 |
 | POST | `/api/v1/chat/conversations/{id}/messages` | [말 보내기](#한-번의-말). `{content, edit_of?}`. 바로 SSE 로 답한다(`turn`, `delta`, `done` 또는 `failed`). `edit_of` 는 [내 말 고치기](#고치기) | access 토큰 |
 | POST | `/api/v1/chat/conversations/{id}/actions` | [행동](#장소와-소지품). 이동 `{kind: "move", place}`, 쓰기 `{kind: "use", item}`, 건네기 `{kind: "give", item, words?}`, 시간 보내기 `{kind: "wait"}`. 바로 SSE 로 반응을 받는다. 할 수 없으면 422(`no_map`, `place_not_found`, `already_there`, `not_connected`, `item_not_found`, `not_held`) | access 토큰 |
 | GET, POST | `/api/v1/chat/conversations/{id}/notes` | [기억 메모](#기억-메모)들(먼저 쓴 것부터), 더하기 `{text}`(201). 가득 차면 409 `notes_full` | access 토큰 |
@@ -147,6 +147,7 @@ compose 는 서버에 두 주소를 주고, 마이그레이션(`chat-migrate`)�
 | POST | `/api/v1/chat/generations/{id}/stop` | [멈추기](#다시-생성-멈추기-대안). 204. 받은 만큼 저장한다. 멈출 것이 없으면 404 `generation_not_running` | access 토큰 |
 | PUT | `/api/v1/chat/conversations/{id}/branch` | [다른 대안 보기](#다시-생성-멈추기-대안). `{message_id}`. 바뀐 대화를 돌려준다. 답을 쓰는 중이면 409 `generation_in_progress` | access 토큰 |
 | PUT | `/api/v1/chat/conversations/{id}/model` | 대화의 모델 바꾸기. `{model}`. 바꾼 모델을 돌려준다. 고를 수 없으면 422 `model_unavailable` | access 토큰 |
+| PUT | `/api/v1/chat/conversations/{id}/references` | [참고 자료](#참고-자료) 켜기와 끄기. `{enabled}`. `{enabled}` 를 돌려준다. 판이 허용하지 않는데 켜면 422 `references_not_allowed` | access 토큰 |
 | GET | `/api/v1/chat/conversations/{id}/transcript` | [기록 내려받기](#기록-내려받기). `?format=md`(기본), `html`, `txt`. 지금 가지의 말들을 파일 하나로. 없거나 볼 수 없는 대화면 404 | access 토큰 |
 | DELETE | `/api/v1/chat/conversations/{id}` | 지우기. 204. 지운 시각만 적는다 | access 토큰 |
 | GET | `/api/v1/chat/gallery` | 내가 연 [이벤트 씬](#이벤트-씬)(`{items: [{character_id, scene_id, unlocked_at}], total}`). 최근에 연 것부터. `character_id`(asset 서버의 캐릭터 id), `limit`, `offset` | access 토큰 |
@@ -565,6 +566,27 @@ uv run python -m scripts.models adult glm-5-3 --forbid
 - **pgvector.** 벡터는 `extensions` 스키마의 pgvector 다. chat 계정이 그 스키마를 쓸 수 있어야 한다(`docker/postgres/init/09-chat-role.sql`).
   데이터가 이미 있는 볼륨이면 한 번 직접 준다: `docker compose exec postgres psql -U trpg -d trpg -c "GRANT USAGE ON SCHEMA extensions TO chat;"`
 - **원가.** 같은 Ollama(로컬)를 쓰면 거의 없다. 외부 임베딩 API 를 쓰면 서비스가 낸다(청구하지 않는다).
+
+### 참고 자료
+
+미리 넣어 둔 바깥 자료(SRD 5.1, 위키백과)에서 지금의 대화에 맞는 줄을 골라 카드의 "[참고 자료]" 에 넣는다(#1338, `app/references/`).
+제작자가 "갤리온"이라고만 적어도 모델이 생김새와 쓰임을 채우게 하려는 것이다. 대화 중에 웹을 찾지 않는다.
+고르는 규칙, 표의 모양, 데이터 파일, 관리 명령의 몸통은 trpg, story 와 함께 쓰는 공용 코드다([reference-core](../shared/reference-core/README.md)).
+
+- **켜기.** 둘 다 켜야 섞는다. 제작자가 캐릭터에 허용하고(asset 의 `references_allowed`, 판에 굳는다), 사람이 대화마다 켠다(`PUT .../references`, 처음에는 꺼져 있다).
+  허용은 대화를 시작할 때 가져온 판의 사본을 본다. 제작자가 나중에 허용을 꺼도 그 판으로 시작한 대화는 그대로다. SRD 와 위키백과를 함께 켠다(2026-11-22 유저 결정).
+- **고르는 법.** 찾는 글은 로어북을 뜻으로 찾는 글과 같다(최근 말 둘). 다른 이름(한국어 이름)이 글에 나온 줄을 먼저, 그다음 뜻이 가까운 줄(거리 0.45 안)을, 셋까지.
+- **자리와 값.** 제작자의 로어북이 먼저다. 로어북의 글자 상한(2,000)에서 고른 항목이 쓰고 남은 만큼만, 그리고 1,500 자까지 넣는다. 그래서 입력이 늘지 않고 값을 더 받지 않는다(2026-11-22 유저 결정).
+  카드에서 "[로어북]" 뒤, "[지금]" 앞이다. 줄마다 `- [몬스터|물건|상식] 이름: 글` 이다. 위키백과의 줄(`[상식]`)이 있으면 실제 세계의 나라, 인물, 연도를 쓰지 말라는 말이 붙는다.
+- **실패와 시간.** 로어북을 뜻으로 찾은 다음, 모델을 부르기 직전에 찾는다. 3초 안에 끝나지 않거나 실패하면 참고 자료 없이 답한다(로그 `chat.reference_find`). `EMBEDDER` 가 `off` 면 찾지 않는다.
+- **넣기와 벡터.** 운영자가 관리 명령으로 넣는다. 서버를 띄우지 않는다. 차례는 `load` 다음 `index` 다. 둘 다 여러 번 돌려도 된다.
+
+  ```
+  uv run python -m scripts.references load     # 공용 패키지에 실린 데이터 파일을 모두
+  uv run python -m scripts.references index    # 벡터가 없는 줄의 벡터. 모델은 EMBEDDING_MODEL(서버가 찾는 것과 같아야 한다)
+  ```
+
+  표(`reference_entries`, `reference_embeddings`)는 주인이 없다. 탈퇴와 상관없고, 복사하지 않는다(로어북으로 옮기는 것은 trpg 에만 있다).
 
 ### 신고
 

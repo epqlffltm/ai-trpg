@@ -36,7 +36,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.client import AssetAdultRequiredError, AssetClient, AssetNotFoundError
-from app.assets.schemas import CharacterCopy, PersonaCopy, StartDocument
+from app.assets.schemas import CharacterCopy, CharacterDocument, PersonaCopy, StartDocument
 from app.bookmarks import repository as bookmarks
 from app.catalog import repository as catalog
 from app.catalog.choice import ChoosableModel, is_choosable
@@ -80,6 +80,10 @@ class AdultContentRequiredError(Exception):
 
 class ModelUnavailableError(Exception):
     """고른 모델을 이 대화에 쓸 수 없다(없다, 꺼졌다, 은퇴했다, 성인 등급의 대화에 쓸 수 없다). 422 다."""
+
+
+class ReferencesNotAllowedError(Exception):
+    """캐릭터의 판이 참고 자료를 허용하지 않는데 켜려 했다(422). 허용은 제작자가 정한다(asset 의 references_allowed)."""
 
 
 @dataclass(frozen=True)
@@ -411,6 +415,25 @@ async def change_model(
     await repository.set_model(session, conversation.id, model.slug)
     await session.commit()
     return model
+
+
+def require_references_allowed(document: CharacterDocument, enabled: bool) -> None:
+    """켜려는데 판이 허용하지 않으면 ReferencesNotAllowedError. 끄는 것은 늘 된다."""
+    if enabled and not document.references_allowed:
+        raise ReferencesNotAllowedError
+
+
+async def change_references(session: AsyncSession, viewer: Viewer, conversation_id: uuid.UUID, enabled: bool) -> bool:
+    """
+    대화의 참고 자료(SRD 5.1, 위키백과)를 켜거나 끈다(#1338). 다음 말부터 카드에 섞는다. 바꾼 값을 돌려준다.
+    대화가 없으면 ConversationNotFoundError, 판이 허용하지 않는데 켜면 ReferencesNotAllowedError 다.
+    허용은 대화를 시작할 때 굳힌 판의 사본을 본다. 제작자가 나중에 허용을 꺼도 그 판으로 시작한 대화는 그대로다.
+    """
+    conversation, character, _ = await get_conversation(session, viewer, conversation_id)
+    require_references_allowed(CharacterDocument.model_validate(character.document), enabled)
+    await repository.set_references(session, conversation.id, enabled)
+    await session.commit()
+    return enabled
 
 
 async def read_messages(session: AsyncSession, conversation: Conversation) -> list[Message]:

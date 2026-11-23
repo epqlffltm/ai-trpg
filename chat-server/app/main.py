@@ -59,6 +59,7 @@ from app.conversations.service import (
     ModelUnavailableError,
     NotEditableError,
     PersonaNotFoundError,
+    ReferencesNotAllowedError,
     StartNotFoundError,
 )
 from app.core.config import Settings, get_settings
@@ -75,6 +76,7 @@ from app.notifications import outbox
 from app.notifications.models import OutgoingNotification
 from app.operators import router as operators
 from app.operators.service import AlreadyHandledError, ReportNotFoundError
+from app.references.setup import build_reference_finder
 from app.reports import router as reports
 from app.reports.service import AlreadyReportedError, NotReportableError
 from app.shortcuts import router as shortcuts
@@ -276,6 +278,9 @@ def create_app(
         recall = LoreRecall(app.state.session_factory, embedder, indexer)
     app.state.lore_indexer = indexer
     app.state.lore_recall = recall
+    # 참고 자료(SRD 5.1, 위키백과, #1338). 로어북과 같은 임베더다. 색인(scripts/references.py index)도 같은 모델로 한다.
+    # EMBEDDER 가 off 면 없다(켠 대화도 참고 자료 없이 돈다)
+    app.state.reference_finder = build_reference_finder(app.state.session_factory, embedder)
 
     # 상태를 확인하는 주소는 API 주소 밖에 둔다. 프록시와 관리 도구가 부르는 것이라 버전이 없다
     app.include_router(health.router)
@@ -330,6 +335,7 @@ def create_app(
     use_limit_errors(app)
     add_error_handler(app, MessageNotFoundError, conversations.handle_message_not_found)
     add_error_handler(app, NotEditableError, conversations.handle_not_editable)
+    add_error_handler(app, ReferencesNotAllowedError, conversations.handle_references_not_allowed)
     add_error_handler(app, NoteNotFoundError, notes.handle_note_not_found)
     add_error_handler(app, NotesFullError, notes.handle_notes_full)
     add_error_handler(app, SnapshotUnavailableError, snapshots.handle_unavailable)

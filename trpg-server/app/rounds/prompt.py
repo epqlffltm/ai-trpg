@@ -36,6 +36,7 @@ GM 의 서술을 부탁하는 메시지를 조립한다. 순수 함수다. DB �
 from dataclasses import dataclass
 
 from ai_core.provider import ChatMessage, Role
+from reference_core import prompt as reference_prompt
 
 from app.assets.models import LoreKind, NarrationStyle
 from app.catalog.steps import BASE_STEPS, NarrationSteps, scaled_chars, scaled_count
@@ -483,14 +484,10 @@ REFERENCE_NOTE = (
     '생김새, 쓰임, 버릇을 그리는 데만 쓴다. 위의 설정과 다르면 설정을 따르고, 장면에 맞지 않으면 쓰지 않는다. '
     '수치와 규칙(피해, 난이도, 횟수)은 쓰지 않는다. 결과는 엔진이 정했다. 이름은 장면에 맞게 부른다.'
 )
-# 참고 자료의 종류 앞에 붙는 이름
-REFERENCE_KIND_NAMES = {'monster': '몬스터', 'item': '물건', 'topic': '상식'}
-# [상식](위키백과)의 줄이 있을 때만 붙이는 말. 실제 세계의 백과사전이라 판타지 장면에 그 세계의 것이 섞이지 않게 한다.
-# 받는 도구가 연도와 나라 이름이 든 문장을 빼지만 다 거르지는 못한다
-REFERENCE_TOPIC_RULE = (
-    '[상식]은 실제 세계의 백과사전에서 온 것이다. 사물의 생김새와 쓰임만 참고한다. '
-    '실제 세계의 나라, 도시, 인물, 연도는 장면에 쓰지 않는다.'
-)
+# 참고 자료의 종류 앞에 붙는 이름과, [상식](위키백과)의 줄이 있을 때만 붙이는 말.
+# chat, story 와 같다(reference_core/prompt.py)
+REFERENCE_KIND_NAMES = reference_prompt.KIND_NAMES
+REFERENCE_TOPIC_RULE = reference_prompt.TOPIC_RULE
 
 # 검색한 지난 일 앞에 붙이는 말. 지난 기록(대화)보다 앞의 라운드라 모델이 모르는 일이다.
 # 지난 행동에 끌려 이번 행동이 바뀌지 않게, 이미 끝난 일이라는 것과 무엇에 쓰는지를 적는다

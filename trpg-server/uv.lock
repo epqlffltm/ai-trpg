@@ -1293,6 +1293,7 @@ version = "0.1.0"
 source = { editable = "../shared/reference-core" }
 dependencies = [
     { name = "ai-core" },
+    { name = "pgvector" },
     { name = "pydantic" },
     { name = "sqlalchemy", extra = ["asyncio"] },
 ]
@@ -1300,6 +1301,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "ai-core", editable = "../shared/ai-core" },
+    { name = "pgvector", specifier = ">=0.5.1" },
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.1.5" },
 ]
@@ -1307,7 +1309,6 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "asyncpg", specifier = ">=0.32.0" },
-    { name = "pgvector", specifier = ">=0.5.1" },
     { name = "pyright", extras = ["nodejs"], specifier = "==1.1.408" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=1.4.0" },

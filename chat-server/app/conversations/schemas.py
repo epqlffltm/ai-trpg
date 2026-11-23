@@ -67,6 +67,20 @@ class ModelChoice(BaseModel):
     model: ModelSlug
 
 
+class ReferencesChoice(BaseModel):
+    """대화의 참고 자료(SRD 5.1, 위키백과)를 켜고 끌 때 받는 값(#1338)."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    enabled: bool
+
+
+class ReferencesOut(BaseModel):
+    """대화의 참고 자료를 켰는가. 켤 수 있는지는 판의 사본(character.document.references_allowed)이 정한다."""
+
+    enabled: bool
+
+
 class ConversationModelOut(BaseModel):
     """
     대화에 싣는 모델. usable 이 거짓이면 이 대화에 더는 고를 수 없는 모델이다
@@ -248,6 +262,8 @@ class ConversationDetail(BaseModel):
     messages: list[PathMessageOut]
     # 지금 보고 있는 가지의 끝의 장소와 소지품. 가지를 바꾸면 그 가지의 것이다
     state: StateOut
+    # 참고 자료를 카드에 섞는가(#1338). 판의 사본이 허용할 때(character.document.references_allowed)만 켤 수 있다
+    references_enabled: bool
     generating: bool
     created_at: datetime
     updated_at: datetime
