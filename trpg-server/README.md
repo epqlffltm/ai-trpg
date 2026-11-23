@@ -3780,6 +3780,9 @@ uv run python -m scripts.eval_lore --fake
 미리 넣어 둔 바깥 자료다(#482). 제작자가 "범선", "리치"라고만 적어도 서술이 구조와 생김새를 채우게 하려는 것이다.
 지금은 SRD 5.1 의 몬스터, 장비, 마법 물건을 한국어로 옮겨 넣고, 테이블이 켜면 서술에 섞는 데까지 왔다. 단계로 나눈다.
 
+DB 를 모르는 규칙(자료의 줄, 원본에서 줄을 만들기, 번역, 고르기)과 쿼리, 넣기, 색인은 공용 패키지 [reference-core](../shared/reference-core/README.md)에 있다. chat, story 도 같은 규칙으로 쓴다(#1338).
+이 서버에는 표(`app/references/models.py`)와 켜기(`policy.py`), 서술에 넣기(`retrieval.py`), 복사(`copying.py`), 시트 제안(`sheets.py`), API 가 있다.
+
 | 단계 | 내용 |
 | --- | --- |
 | 1 | 저장과 넣기. 데이터 파일, 테이블, 넣는 명령, 벡터를 만드는 명령(#568) |
@@ -3791,13 +3794,13 @@ uv run python -m scripts.eval_lore --fake
 - **게임 중에 웹을 찾지 않는다.** 미리 넣은 것에서만 찾는다(권한, 주입 공격, 재현성, 속도와 값). 그래서 이름도 "웹 검색"이 아니라 "참고 자료"다.
 - **서술에만 쓴다.** 판정에 끼지 않는다. 제작자의 자산이 늘 먼저다.
 - **서술자가 읽는 글에는 수치가 없다.** SRD 의 HP, 명중, 피해, 난이도는 이 게임의 규칙이 아니다. 모델이 "DC 14" 를 읽으면 장면에 쓴다.
-  문장 단위로 거른다(`app/references/srd.py`): 난이도, 명중, 주사위("2d6", "a d6"), 주사위의 눈("On a 6", "roll a 20"), 피해, 내성 굴림, 유리함이 든 문장을 빼고, 이름 뒤의 "(Recharge 5-6)" 같은 괄호를 지운다. 가격과 무게도 넣지 않는다.
+  문장 단위로 거른다(`reference_core/srd.py`): 난이도, 명중, 주사위("2d6", "a d6"), 주사위의 눈("On a 6", "roll a 20"), 피해, 내성 굴림, 유리함이 든 문장을 빼고, 이름 뒤의 "(Recharge 5-6)" 같은 괄호를 지운다. 가격과 무게도 넣지 않는다.
   원본의 수치는 따로 정리해 `data` 칸에 둔다. 서술자에게 가지 않고, 4단계(시트 채우기)가 쓴다.
 - **SRD 의 글은 대부분 수치다.** 몬스터 334개 중 생김새 글이 있는 것은 45개, 장비는 갈래와 속성이 대부분이다("범선"은 "Waterborne Vehicles" 뿐이다). 서술의 몫은 마법 물건의 설명과 몬스터의 특성, 행동이다. 사물의 구조와 쓰임은 위키백과를 넣을 때 채운다.
 - **한국어로 옮겨 둔다.** 서술자와 복사(4단계)는 한국어 이름과 글을 쓴다. 영어 원본은 그대로 두고 칸을 따로 둔다([한국어 번역](#한국어-번역)).
 - 마법 물건의 변형(저항의 갑옷(산) 등)은 넣지 않는다. 바탕 물건 하나에 변형의 이름을 적는다.
 
-**데이터 파일.** `data/references/srd51.json`. 원본(5e-bits/5e-database 의 `src/2014/en`, SRD 5.1 을 JSON 으로 옮긴 것)을 이 모양으로 옮긴 것이다. 저장소에 넣는다.
+**데이터 파일.** `reference_core/data/srd51.json`(공용 패키지 [reference-core](../shared/reference-core/README.md)에 실린다. chat, story 와 같은 파일이다). 원본(5e-bits/5e-database 의 `src/2014/en`, SRD 5.1 을 JSON 으로 옮긴 것)을 이 모양으로 옮긴 것이다. 저장소에 넣는다.
 운영 서버는 원본을 받지 않고 이 파일을 넣는다. 넣는 결과가 늘 같고, 무엇이 들어가는지 리뷰할 수 있다. 원본의 커밋과 출처 표시, 원본을 바꾼 것(`origin.changes`, CC BY 4.0 이 밝히게 한다)이 파일에 적혀 있다.
 한 줄에 항목 하나다. 원본이 바뀌어 다시 만들면 바뀐 항목만 diff 에 보인다.
 
@@ -3818,7 +3821,7 @@ git clone --depth 1 https://github.com/5e-bits/5e-database.git <폴더>
 uv run python -m scripts.build_srd <폴더>/src/2014/en --revision <원본의 커밋>
 ```
 
-`data/references/srd51.ko.json` 이 있으면 붙인다(`--translation` 으로 바꾼다). 번역에 원본에 없는 key 가 있으면 쓰지 않고 멈춘다.
+`reference_core/data/srd51.ko.json` 이 있으면 붙인다(`--translation` 으로 바꾼다). 만드는 것은 `reference_core/srd_build.py` 이고 이 명령은 그것을 부른다. 번역에 원본에 없는 key 가 있으면 쓰지 않고 멈춘다.
 
 ### 위키백과
 
@@ -3826,13 +3829,13 @@ SRD 의 글로 채우지 못하는 사물의 구조와 쓰임(배, 성채, 등�
 
 - **고른 제목 목록만 넣는다.** 한국어판 먼저, 없으면 영어판이다. 영어판의 줄은 SRD 처럼 번역 파일로 한국어를 채운다.
 - **종류는 `topic`(상식)이다.** 프롬프트에서 `[상식]` 으로 보인다. [상식] 줄이 있으면 "실제 세계의 나라, 도시, 인물, 연도를 장면에 쓰지 않는다"는 말이 붙는다(`REFERENCE_TOPIC_RULE`).
-- **서술에만 쓰고 복사하지 않는다.** 위키백과는 CC BY-SA 4.0(동일 조건)이다. 제작자의 자산에 옮겨 주면 동일 조건이 따라가는지 법률 판단이 필요하다. 그 답을 들을 때까지 찾기(`GET /references`)에 나오지 않고, 복사는 422 `not_copyable` 이다. 복사할 수 있는 자료는 `app/references/records.py` 의 `COPYABLE_SOURCES` 한 곳이다.
-- **출처.** 출처 표시는 `app/references/wiki.py` 에 있다. 줄마다 언어판, 문서의 판 번호, 원문의 주소를 `data` 에 둔다. 데이터 파일은 CC BY-SA 4.0 이고 저장소의 다른 코드와 조건이 다르다.
+- **서술에만 쓰고 복사하지 않는다.** 위키백과는 CC BY-SA 4.0(동일 조건)이다. 제작자의 자산에 옮겨 주면 동일 조건이 따라가는지 법률 판단이 필요하다. 그 답을 들을 때까지 찾기(`GET /references`)에 나오지 않고, 복사는 422 `not_copyable` 이다. 복사할 수 있는 자료는 `reference_core/records.py` 의 `COPYABLE_SOURCES` 한 곳이다.
+- **출처.** 출처 표시는 `reference_core/wiki.py` 에 있다. 줄마다 언어판, 문서의 판 번호, 원문의 주소를 `data` 에 둔다. 데이터 파일은 CC BY-SA 4.0 이고 저장소의 다른 코드와 조건이 다르다.
 - **지금은 틀만 있다.** 받는 도구(위키 문법과 실제 세계를 가리키는 문장을 거르고 판 번호를 적는다)와 제목 목록, 데이터 파일은 다음 단계다. 그때 운영자가 `scripts.references load` → `index` 로 넣는다.
 
 ### 한국어 번역
 
-`data/references/srd51.ko.json` 은 key 마다 한국어 이름(`name`, 30자)과 글(`content`, 1,000자)이다(`app/references/translations.py`). 미리 옮겨 저장소에 넣는다(2026-10-21 유저 결정).
+`reference_core/data/srd51.ko.json` 은 key 마다 한국어 이름(`name`, 30자)과 글(`content`, 1,000자)이다(`reference_core/translations.py`). 미리 옮겨 저장소에 넣는다(2026-10-21 유저 결정).
 - **왜 미리 옮기나.** 넣는 결과가 늘 같고 리뷰할 수 있다. 쓸 때마다 모델에게 옮기게 하면 값이 들고, 결과가 매번 다르고, 틀린 번역을 막기 어렵다. 서술 모델이 영어 참고를 읽고 옮기며 쓰는 것보다 한국어 글을 받는 편이 이름이 흔들리지 않는다.
 - **원본의 글과 같은 규칙.** 읽을 때 검사한다. 수치(난이도, 명중, 주사위, "6면체 주사위", "6이 나오면")가 든 번역은 받지 않는다. 이름은 다른 이름으로도 쓰여 30자까지다.
 - **한국어 이름은 다른 이름의 맨 앞에 더한다.** 한국어 장면에 그 이름이 나오면 고른다. 한 글자 이름("쥐")은 낱말 속("쥐었다")에서 잘못 걸려 보지 않는다. 그런 줄은 뜻(벡터)으로 고른다.
@@ -3853,22 +3856,22 @@ SRD 의 글로 채우지 못하는 사물의 구조와 쓰임(배, 성채, 등�
 **넣기와 벡터.** 운영자가 관리 명령으로 한다. 서버를 띄우지 않는다. 설정(.env)의 DB 와 임베딩 주소, 모델을 쓴다.
 
 ```
-uv run python -m scripts.references load data/references/srd51.json
+uv run python -m scripts.references load
 uv run python -m scripts.references index
 uv run python -m scripts.references index --model qwen3-embedding:0.6b
 ```
 
-- `load` 는 파일의 줄들에 DB 를 맞춘다(`app/references/loading.py`). 한 트랜잭션이다. 같은 파일을 두 번 넣으면 두 번째는 아무것도 바꾸지 않는다.
+- `load` 는 파일의 줄들에 DB 를 맞춘다(`reference_core/loading.py`). 파일을 주지 않으면 공용 패키지에 실린 것(`reference_core/data.py` 의 `DATA_FILES`)을 모두 넣는다. 한 트랜잭션이다. 같은 파일을 두 번 넣으면 두 번째는 아무것도 바꾸지 않는다.
   - 파일에만 있는 줄은 더하고, DB 에만 있는 줄(원본에서 빠진 것)은 지운다. 둘 다 있으면 파일의 값으로 고치고 id 는 그대로다.
   - 벡터로 바꿀 글(이름, 다른 이름, 글. 한국어 글이 있으면 그것)이 바뀐 줄은 벡터를 지운다. 다음 `index` 가 새로 만든다. 수치나 종류만 바뀐 줄의 벡터는 그대로 둔다.
-- `index` 는 지금 모델의 벡터가 없는 줄만 만든다(`app/references/indexing.py`). 32개씩 부르고 묶음마다 저장한다. 모델을 부르는 동안 DB 연결을 쥐지 않는다.
+- `index` 는 지금 모델의 벡터가 없는 줄만 만든다(`reference_core/indexing.py`). 32개씩 부르고 묶음마다 저장한다. 모델을 부르는 동안 DB 연결을 쥐지 않는다.
   임베딩 모델이 실패하면 멈추고 남은 수를 찍고 1 로 끝난다. 다시 돌리면 남은 것부터 만든다. `EMBEDDER` 설정과 상관없이 실제 임베딩 모델을 부른다.
 - 차례는 `load` 다음 `index` 다. 둘을 함께 돌리지 않는다. 넣기가 지운 줄의 벡터를 색인이 넣으려 하면 외래 키가 막는다.
 - 벡터로 바꾸는 글은 로어북 항목과 같은 모양이다(이름, "다른 이름: …", 글이 한 줄씩).
 
 ### 서술에 섞기
 
-테이블이 켰으면 서술을 맡기기 직전에 참고 자료를 고른다(`app/references/retrieval.py`). 고른 것은 `[참고할 설정]` 뒤의 `[참고 자료]` 에 한국어 이름과 글로 들어간다(`narration-44`).
+테이블이 켰으면 서술을 맡기기 직전에 참고 자료를 고른다(`app/references/retrieval.py`, 고르는 규칙과 DB 에서 찾는 것은 `reference_core/selection.py`, `reference_core/search.py`). 고른 것은 `[참고할 설정]` 뒤의 `[참고 자료]` 에 한국어 이름과 글로 들어간다(`narration-44`).
 
 **켜기.** 세계관의 제작자가 허용하고(`worlds.references_allowed`), 방장이 테이블을 만들 때(`references_enabled`) 또는 모집 중에(`PUT .../references`) 켠다(2026-10-21 유저 결정).
 - 세계관이 없는 판은 켤 수 있다. 지킬 설정이 없다. 판의 세계관이 허용하지 않으면 422 다(`app/references/policy.py`).
@@ -4458,8 +4461,8 @@ DB 의 조건이 "능력치가 없다"를 보는 칸(`table_members.abilities`)�
 > The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License
 > available at https://creativecommons.org/licenses/by/4.0/legalcode.
 
-참고 자료(`data/references/srd51.json`, [참고 자료](#참고-자료))의 몬스터, 장비, 마법 물건은 SRD 5.1 에서 옮겼다. 원본은 5e-bits/5e-database 가 SRD 5.1 을 JSON 으로 옮긴 것이다.
-서술자가 읽는 글은 수치가 든 문장을 빼고 줄여 고치고, 이름과 글을 한국어로 옮긴 것이다(`data/references/srd51.ko.json`). 위의 출처 표시가 함께 적용된다.
+참고 자료(`reference_core/data/srd51.json`, [참고 자료](#참고-자료))의 몬스터, 장비, 마법 물건은 SRD 5.1 에서 옮겼다. 원본은 5e-bits/5e-database 가 SRD 5.1 을 JSON 으로 옮긴 것이다.
+서술자가 읽는 글은 수치가 든 문장을 빼고 줄여 고치고, 이름과 글을 한국어로 옮긴 것이다(`reference_core/data/srd51.ko.json`). 위의 출처 표시가 함께 적용된다.
 5e-database 는 MIT 라이선스다(Copyright (c) 2018-2020 Adrian Padua, Christopher Ward, https://github.com/5e-bits/5e-database/blob/main/LICENSE).
 
 같은 템플릿의 점수제(`point_buy`)의 총점과 값표, 점수를 주사위로 정하는 법(`score_roll`)은 System Reference Document 5.2.1 을 따랐다. SRD 5.1 에는 둘 다 실려 있지 않다.

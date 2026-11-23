@@ -5,7 +5,7 @@
 
 장면은 사람이 손으로 늘린다. 실수(자료에 없는 key, 칸을 빠뜨림, none 인데 정답이 있음)를 읽을 때 모두 모아 알린다.
 장면은 서술 요청(NarrationRequest)으로 바꾼다. 서버의 고르는 함수(app/references/retrieval.py)를 그대로 쓰려는 것이다.
-자료의 줄은 데이터 파일(data/references/srd51.json)을 읽은 것이다. DB 에 넣은 것과 같다.
+자료의 줄은 데이터 파일(reference_core/data/srd51.json)을 읽은 것이다. DB 에 넣은 것과 같다.
 """
 
 import enum
@@ -16,13 +16,14 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from reference_core.data import SRD51_FILE
+from reference_core.records import ReferenceRecord, StoredReference, read_document
 
-from app.references.records import ReferenceRecord, StoredReference, read_document
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
 
 # 기본 장면 파일과 자료 파일
 DEFAULT_SCENES = Path(__file__).with_name('scenes.yaml')
-DEFAULT_REFERENCES = Path(__file__).resolve().parents[2] / 'data' / 'references' / 'srd51.json'
+DEFAULT_REFERENCES = SRD51_FILE
 
 # 자료의 줄의 id 를 만드는 이름 공간. key 에서 만든다(uuid5). 같은 자료면 늘 같은 id 다
 REFERENCE_NAMESPACE = uuid.UUID('8a2f6c1e-4b7d-4e9a-a3c5-2d1e0f9b7c64')

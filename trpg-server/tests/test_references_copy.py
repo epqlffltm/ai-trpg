@@ -17,6 +17,15 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 from pydantic import ValidationError
+from reference_core import srd
+from reference_core.records import (
+    ReferenceDocument,
+    ReferenceKind,
+    ReferenceOrigin,
+    ReferenceRecord,
+    ReferenceSource,
+    StoredReference,
+)
 from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
@@ -26,7 +35,6 @@ from app.assets.bestiaries.models import MonsterKind
 from app.assets.copies import Copy, split_copied
 from app.assets.models import LOREBOOK_MAX_ENTRIES, LoreEntry, LoreKind
 from app.main import API_PREFIX
-from app.references import srd
 from app.references.copying import (
     NotAMonsterError,
     check_monsters,
@@ -37,14 +45,6 @@ from app.references.copying import (
     monster_kind,
 )
 from app.references.loading import load_document
-from app.references.records import (
-    ReferenceDocument,
-    ReferenceKind,
-    ReferenceOrigin,
-    ReferenceRecord,
-    ReferenceSource,
-    StoredReference,
-)
 from app.references.schemas import COPY_MAX_REFERENCES, ReferenceCopy
 
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')

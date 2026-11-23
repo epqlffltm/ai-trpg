@@ -26,17 +26,17 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from ai_core.embedder import Embedder
-
-from app.lore.retrieval import query_text
-from app.lore.texts import batched
-from app.references.records import StoredReference
-from app.references.retrieval import (
+from reference_core.records import StoredReference
+from reference_core.selection import (
     REFERENCE_MAX_CHARS,
     ReferenceThresholds,
     alias_hits,
     choose,
 )
-from app.references.texts import reference_text
+from reference_core.texts import reference_text
+
+from app.lore.retrieval import query_text
+from app.lore.texts import batched
 from evals.lore.metrics import cosine_distance
 from evals.references.dataset import Dataset, Scene, SceneKind
 

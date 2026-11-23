@@ -7,7 +7,8 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from app.references.retrieval import ReferenceThresholds
+from reference_core.selection import ReferenceThresholds
+
 from evals.references.dataset import Dataset, SceneKind
 from evals.references.narration import Mode, Trial, tally
 from evals.references.runner import (

@@ -16,6 +16,7 @@
 
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import ClassVar, cast
 
 import pytest
@@ -23,14 +24,9 @@ from ai_core.embedder import Embedder
 from ai_core.fake import FakeEmbedder, word_vector
 from ai_core.provider import ProviderError
 from fastapi import FastAPI
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-from app.references import repository
-from app.references.indexing import IndexResult, index_references
-from app.references.loading import load_document
-from app.references.models import ReferenceEmbedding, ReferenceEntry
-from app.references.records import (
+from reference_core.data import DATA_FILES, SRD51_FILE
+from reference_core.indexing import IndexResult
+from reference_core.records import (
     ReferenceDocument,
     ReferenceKind,
     ReferenceOrigin,
@@ -39,8 +35,14 @@ from app.references.records import (
     read_document,
     write_document,
 )
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from app.references import repository
+from app.references.indexing import index_references
+from app.references.loading import load_document
+from app.references.models import ReferenceEmbedding, ReferenceEntry
 from scripts import references as script
-from tests.test_srd_references import DATA_FILE
 
 pytestmark = pytest.mark.usefixtures('clean_tables')
 
@@ -134,7 +136,7 @@ async def test_entries_left_out_of_the_file_are_removed_with_their_vectors(app: 
 
 
 async def test_the_srd_file_fits_the_database(app: FastAPI, session: AsyncSession):
-    shipped = read_document(DATA_FILE)
+    shipped = read_document(SRD51_FILE)
 
     plan = await load_document(session, shipped)
     result = await index_references(factory_of(app), FakeEmbedder())
@@ -175,8 +177,24 @@ async def test_a_failing_model_keeps_the_batches_before_it(app: FastAPI, session
 
 
 def test_the_commands_are_read():
-    assert script.build_parser().parse_args(['load', 'data/references/srd51.json']).command == 'load'
+    assert script.build_parser().parse_args(['load', 'srd51.json']).paths == [Path('srd51.json')]
+    assert script.build_parser().parse_args(['load']).paths == []
     assert script.build_parser().parse_args(['index', '--model', 'bge-m3']).model == 'bge-m3'
+
+
+def test_loading_without_files_takes_the_shipped_ones():
+    assert script.files_to_load([]) == list(DATA_FILES)
+    assert script.files_to_load([Path('a.json')]) == [Path('a.json')]
+
+
+async def test_loading_several_files_reports_each(app: FastAPI, tmp_path):
+    first, second = tmp_path / 'a.json', tmp_path / 'b.json'
+    write_document(document([entry(1)]), first)
+    write_document(document([entry(1)]), second)
+
+    loaded = await script.load_files(factory_of(app), [first, second])
+
+    assert loaded == (script.DONE, ['srd51: 더함 1, 고침 0(벡터를 다시 만들 것 0), 지움 0', 'srd51: 바뀐 것이 없다'])
 
 
 async def test_the_commands_report_what_they_did(app: FastAPI, tmp_path):

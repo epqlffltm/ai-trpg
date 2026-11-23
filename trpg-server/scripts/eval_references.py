@@ -4,7 +4,7 @@
 참고 자료(#482)를 평가한다. 서버도 DB 도 쓰지 않는다.
 
 둘을 잰다.
-  1. 검색: 한국어 장면(evals/references/scenes.yaml)에서 영어 SRD(data/references/srd51.json)를 얼마나 맞게 고르는가.
+  1. 검색: 한국어 장면(evals/references/scenes.yaml)에서 SRD(reference_core/data/srd51.json)를 얼마나 맞게 고르는가.
      임베딩 모델만 부른다. 거리 기준을 바꿔 가며 점수를 매겨 REFERENCE_MAX_DISTANCE 를 정할 근거를 만든다.
   2. 서술(--narrate): 같은 장면을 참고 자료를 끈 것과 켠 것으로 서술하게 해 견준다.
      늘어난 입력 토큰, 수치가 샌 서술, 길이를 세고 장면을 보고서에 남긴다. 나아졌는지는 사람이 읽고 판단한다.
@@ -31,9 +31,9 @@ from ai_core.embedder import Embedder
 from ai_core.fake import FakeEmbedder, FakeProvider
 from ai_core.openai_embedder import OpenAICompatEmbedder
 from ai_core.provider import LLMProvider, ProviderError
+from reference_core.selection import ReferenceThresholds
 
 from app.core.config import get_settings
-from app.references.retrieval import ReferenceThresholds
 from evals.references.dataset import DEFAULT_SCENES, Dataset, DatasetError, chosen_sets, load_dataset
 from evals.references.narration import Trial, run_pairs
 from evals.references.report import ModelResult, full_report

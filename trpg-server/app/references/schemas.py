@@ -8,12 +8,12 @@ import uuid
 from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from reference_core.records import ReferenceKind
 
 from app.assets.bestiaries.schemas import MonsterDetail
 from app.assets.copies import CopiedFrom
 from app.assets.lorebooks.schemas import EntryDetail
 from app.assets.scenarios.schemas import MonsterSheet
-from app.references.records import ReferenceKind
 
 # 한 번에 복사할 수 있는 줄의 수. 로어북과 도감의 상한(100)보다 작게, 화면에서 한 번에 고를 만큼이다
 COPY_MAX_REFERENCES = 20

@@ -1,19 +1,19 @@
-# trpg-server/app/references/records.py
+# shared/reference-core/src/reference_core/records.py
 
 """
 참고 자료의 한 줄(ReferenceRecord)과 데이터 파일의 모양(ReferenceDocument). DB 도 모델도 모르는 값들이다.
 
 참고 자료는 미리 넣어 둔 바깥 자료다(#482). 제작자의 로어북과 달리 운영자가 관리 명령으로 넣는다.
-  - 데이터 파일: 바깥 자료를 이 모양으로 옮긴 JSON 하나(data/references/). 저장소에 넣는다.
+  - 데이터 파일: 바깥 자료를 이 모양으로 옮긴 JSON 하나(reference_core/data/). 저장소에 넣고 패키지에 함께 싣는다.
     넣는 결과가 늘 같고, 무엇을 넣었는지 리뷰할 수 있다. 원본의 출처와 판(커밋)을 함께 적는다.
-  - 넣기(app/references/loading.py): 파일의 줄들을 DB 에 맞춘다. 같은 파일을 두 번 넣어도 같다.
+  - 넣기(reference_core/loading.py): 파일의 줄들을 DB 에 맞춘다. 같은 파일을 두 번 넣어도 같다.
 
 한 줄의 칸.
   - key: 자료 안에서 그 줄을 가리키는 이름(monsters/aboleth). 다시 넣을 때 같은 줄을 찾는다.
   - kind: 종류(ReferenceKind).
   - name: 원본의 이름. aliases: 장면에서 부를 다른 이름(한국어 이름 등).
   - content: 서술자가 읽는 글. 수치(HP, 명중, 피해, 난이도)를 넣지 않는다. 판정은 엔진이 한다.
-  - name_ko, content_ko: 한국어로 옮긴 이름과 글(번역 파일에서 온다, app/references/translations.py).
+  - name_ko, content_ko: 한국어로 옮긴 이름과 글(번역 파일에서 온다, reference_core/translations.py).
     있으면 서술과 복사(기본 자산)가 이것을 쓴다. 원본의 글과 같은 규칙(수치 없음, 1,000자)을 지킨다.
   - data: 원본의 수치를 정리한 것. 서술자에게 가지 않는다. 기본 자산(시트 채우기)에 쓴다.
 """

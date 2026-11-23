@@ -1,7 +1,7 @@
-# trpg-server/tests/test_srd_references.py
+# shared/reference-core/tests/test_srd.py
 
 """
-SRD 5.1 을 참고 자료의 줄로 옮기는 것(app/references/srd.py)과 데이터 파일의 모양(app/references/records.py)을 검증한다.
+SRD 5.1 을 참고 자료의 줄로 옮기는 것(reference_core/srd.py)과 데이터 파일의 모양(reference_core/records.py)을 검증한다.
 
 DB 도 모델도 쓰지 않는다. 원본의 모양을 줄인 표본으로 본다.
 
@@ -20,8 +20,9 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from app.references import srd
-from app.references.records import (
+from reference_core import srd
+from reference_core.data import SRD51_FILE
+from reference_core.records import (
     REFERENCE_CONTENT_MAX_LENGTH,
     ReferenceDocument,
     ReferenceKind,
@@ -31,11 +32,11 @@ from app.references.records import (
     read_document,
     write_document,
 )
-from scripts.build_srd import EQUIPMENT_FILE, MAGIC_ITEMS_FILE, MONSTERS_FILE, build
+from reference_core.srd_build import EQUIPMENT_FILE, MAGIC_ITEMS_FILE, MONSTERS_FILE, build
 
 # 판정의 수치. 서술자가 읽는 글에 있으면 안 된다
 NUMBERS = re.compile(r'\bDC\s*\d+|\b\d*d\d+\b|[+-]\d+\b|\bto hit\b', re.IGNORECASE)
-DATA_FILE = Path(__file__).resolve().parents[1] / 'data' / 'references' / 'srd51.json'
+DATA_FILE = SRD51_FILE
 
 ABOLETH = {
     'index': 'aboleth',

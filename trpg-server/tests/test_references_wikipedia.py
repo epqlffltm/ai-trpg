@@ -15,17 +15,8 @@ import uuid
 import pytest
 from fastapi import status
 from httpx import AsyncClient
-from server_core.testing.tokens import SigningKey, make_access_claims, make_token
-from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.assets.bestiaries.models import Monster
-from app.assets.models import LoreEntry
-from app.main import API_PREFIX
-from app.references import service, wiki
-from app.references.copying import NotCopyableError, check_copyable
-from app.references.loading import load_document
-from app.references.records import (
+from reference_core import attributions, wiki
+from reference_core.records import (
     COPYABLE_SOURCES,
     ReferenceDocument,
     ReferenceKind,
@@ -34,6 +25,15 @@ from app.references.records import (
     ReferenceSource,
     StoredReference,
 )
+from server_core.testing.tokens import SigningKey, make_access_claims, make_token
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.assets.bestiaries.models import Monster
+from app.assets.models import LoreEntry
+from app.main import API_PREFIX
+from app.references.copying import NotCopyableError, check_copyable
+from app.references.loading import load_document
 from app.rounds import prompt
 from app.rounds.narrator import ReferenceNote
 
@@ -86,9 +86,9 @@ def test_only_the_srd_can_be_copied():
 
 
 def test_every_source_has_an_attribution():
-    assert set(service.ATTRIBUTIONS) == set(ReferenceSource)
-    assert wiki.WIKIPEDIA_ATTRIBUTION in service.ATTRIBUTIONS[ReferenceSource.WIKIPEDIA]
-    assert 'CC BY-SA' not in service.ATTRIBUTIONS[ReferenceSource.SRD51]
+    assert set(attributions.ATTRIBUTIONS) == set(ReferenceSource)
+    assert wiki.WIKIPEDIA_ATTRIBUTION in attributions.ATTRIBUTIONS[ReferenceSource.WIKIPEDIA]
+    assert 'CC BY-SA' not in attributions.ATTRIBUTIONS[ReferenceSource.SRD51]
 
 
 def test_a_topic_is_shown_as_common_knowledge_with_the_real_world_rule():
