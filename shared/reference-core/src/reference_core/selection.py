@@ -8,7 +8,7 @@
      원본의 이름(영어)으로는 고르지 않는다. 한국어 장면에 나오지 않고, 짧은 영어 이름("Bat")은 낱말 속에서 잘못 걸린다.
   2. 벡터: 거리가 max_distance 이하인 것, 가까운 순으로 limit 개까지.
 다른 이름으로 고른 것을 먼저, 그다음 가까운 순으로 넣는다. 글자 수의 합이 남은 자리(room)를 넘지 않는다.
-남은 자리를 셈하는 것(로어북이 쓰고 남은 것)은 서버마다 다르다. 서버가 정해 넘긴다.
+남은 자리를 셈하는 것(로어북이 쓰고 남은 것)은 서버마다 다르다. 서버가 정해 넘긴다(room_after 가 그 셈이다).
 """
 
 import math
@@ -40,6 +40,14 @@ class ReferenceThresholds:
     keyword_max_distance: float = KEYWORD_MAX_DISTANCE
     limit: int = REFERENCE_LIMIT
     max_chars: int = REFERENCE_MAX_CHARS
+
+
+def room_after(used: int, budget: int, max_chars: int = REFERENCE_MAX_CHARS) -> int:
+    """
+    참고 자료에 쓸 수 있는 글자 수. 제작자의 로어북이 먼저다. 로어북의 상한(budget)에서 쓴 것(used)을 뺀 것과
+    max_chars 중 작은 것이다. 남은 것이 없으면 0 이다.
+    """
+    return max(0, min(max_chars, budget - used))
 
 
 def mentions_alias(reference: StoredReference, text: str) -> bool:

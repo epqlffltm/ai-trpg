@@ -91,6 +91,5 @@ chat-server/app/turns/service.py::prepare_turn story-server/app/turns/service.py
 chat-server/app/turns/service.py::require_model story-server/app/turns/service.py::require_model
 chat-server/app/turns/service.py::settle_generation story-server/app/turns/service.py::settle_generation
 chat-server/app/turns/service.py::settled_values story-server/app/turns/service.py::settled_values
-chat-server/app/turns/service.py::with_recalled_lore story-server/app/turns/service.py::with_recalled_lore
 chat-server/app/turns/settler.py::ChargeSettler story-server/app/turns/settler.py::ChargeSettler
 shared/conversation-core/src/conversation_core/sse.py::encode trpg-server/app/realtime/sse.py::encode

@@ -45,6 +45,8 @@ from app.conversations.schemas import (
     ModelChoice,
     PathMessageOut,
     PersonaOut,
+    ReferencesChoice,
+    ReferencesOut,
     StartOut,
 )
 from app.conversations.service import (
@@ -56,6 +58,7 @@ from app.conversations.service import (
     ModelUnavailableError,
     NotEditableError,
     PersonaNotFoundError,
+    ReferencesNotAllowedError,
     StartNotFoundError,
 )
 from app.core.dependencies import CurrentViewer, Now, Paging, Session
@@ -218,6 +221,7 @@ def to_detail(
         model=conversation_model(conversation, character, models, book, now),
         messages=[to_path_message(message, alternatives) for message in messages],
         state=state_out(state, world.document_of(character), conversation.start_hour, last_expression(messages)),
+        references_enabled=conversation.references_enabled,
         generating=service.is_generating(conversation, now),
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
@@ -276,6 +280,14 @@ async def handle_not_editable(request: Request, error: NotEditableError) -> JSON
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content={'detail': '그렇게 고칠 수 없는 말입니다.', 'code': 'not_editable'},
+    )
+
+
+async def handle_references_not_allowed(request: Request, error: ReferencesNotAllowedError) -> JSONResponse:
+    """판이 참고 자료를 허용하지 않는데 켜려 했으면 422 다. 화면은 허용한 캐릭터에만 켜기를 보인다."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={'detail': '이 캐릭터는 참고 자료를 쓸 수 없습니다.', 'code': 'references_not_allowed'},
     )
 
 
@@ -374,6 +386,22 @@ async def change_model(
     """대화의 모델을 바꾼다. 다음 말부터 그 모델로 쓰고 그 모델의 값으로 청구한다. 바꾼 모델을 돌려준다."""
     model = await service.change_model(session, prices, viewer, conversation_id, data.model, now)
     return to_model(model, usable=True)
+
+
+@router.put(
+    '/{conversation_id}/references',
+    response_model=ReferencesOut,
+    status_code=status.HTTP_200_OK,
+    dependencies=[WRITE_LIMIT],
+)
+async def change_references(
+    conversation_id: uuid.UUID, data: ReferencesChoice, viewer: CurrentViewer, session: Session
+) -> ReferencesOut:
+    """
+    대화의 참고 자료(SRD 5.1, 위키백과)를 켜거나 끈다(#1338). 다음 말부터 카드에 섞는다. 값을 더 받지 않는다.
+    판이 허용하지 않는데 켜면 422 references_not_allowed 다. 답을 쓰는 중에도 바꿀 수 있다(그 답은 바꾸기 전의 값이다).
+    """
+    return ReferencesOut(enabled=await service.change_references(session, viewer, conversation_id, data.enabled))
 
 
 @router.put(

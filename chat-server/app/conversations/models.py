@@ -126,6 +126,9 @@ class Conversation(Base):
     # 시작 시각(1일째 몇 시). 지금 시각은 이것에 상태의 흐른 시간을 더한 것이다(app/world/clock.py, #668).
     # 시작 시각을 더하기 전의 대화는 정오에 시작한 것으로 본다
     start_hour: Mapped[int] = mapped_column(SmallInteger, server_default=str(START_HOUR_DEFAULT))
+    # 참고 자료(SRD 5.1, 위키백과)를 카드에 섞는가(#1338). 사람이 대화마다 켠다. 처음에는 꺼져 있다.
+    # 판의 사본이 허용하지 않으면(references_allowed) 켤 수 없고, 켜져 있어도 섞지 않는다
+    references_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # 지금 보고 있는 가지의 끝. 말과 대화가 서로 가리키므로 외래 키는 표를 다 만든 뒤에 건다(use_alter)
     active_leaf_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey('messages.id', ondelete='SET NULL', use_alter=True, name='fk_conversations_active_leaf_id_messages'),

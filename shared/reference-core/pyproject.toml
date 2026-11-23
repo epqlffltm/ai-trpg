@@ -3,9 +3,11 @@ name = "reference-core"
 version = "0.1.0"
 description = "Pre-loaded reference material (SRD 5.1, Wikipedia) shared by trpg, chat and story: records, loading, indexing, selection"
 requires-python = ">=3.13"
-# 임베더의 계약(ai_core), 데이터 파일의 모양(pydantic), SQL(sqlalchemy). 바꾸면 쓰는 서버의 uv.lock 을 함께 다시 잠근다
+# 임베더의 계약(ai_core), 데이터 파일의 모양(pydantic), SQL(sqlalchemy), 표의 벡터 칸(pgvector).
+# 바꾸면 쓰는 서버의 uv.lock 을 함께 다시 잠근다
 dependencies = [
     "ai-core",
+    "pgvector>=0.5.1",
     "pydantic>=2.13.5",
     "sqlalchemy[asyncio]>=2.1.5",
 ]
@@ -27,7 +29,6 @@ ai-core = { path = "../ai-core", editable = true }
 dev = [
     # 쿼리의 테스트가 실제 PostgreSQL(pgvector)에서 돈다. 접속 주소는 REFERENCE_CORE_TEST_DATABASE_URL 이다
     "asyncpg>=0.32.0",
-    "pgvector>=0.5.1",
     # 타입 검사(점검 P2-2). 받을 때 Node 를 함께 받아(nodejs 꾸러미) 돌릴 때 따로 내려받지 않는다
     "pyright[nodejs]==1.1.408",
     "pytest>=9.1.1",

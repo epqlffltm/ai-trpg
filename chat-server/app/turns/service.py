@@ -38,10 +38,22 @@ from conversation_core import continuation
 from conversation_core.changes import parse_changes
 from conversation_core.continuation import OverlapTrim, continued_text
 from conversation_core.expressions import ExpressionHead, match_expression, split_expression
-from conversation_core.lorebook import chosen_entries, query_text, ranked, render_lore, with_recalled
+from conversation_core.lorebook import MAX_CHARS as LORE_MAX_CHARS
+from conversation_core.lorebook import (
+    LoreEntry,
+    chosen_entries,
+    entry_size,
+    query_text,
+    ranked,
+    render_lore,
+    with_recalled,
+)
 from conversation_core.relay import Relay
 from conversation_core.suggestions import MarkerHold, parse_suggestions, split_answer
 from conversation_core.window import Turn, select_window
+from reference_core.finder import ReferenceFinder
+from reference_core.prompt import render_references
+from reference_core.selection import room_after
 from server_core import stop_signals
 from server_core.billing.client import Billing
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -84,7 +96,7 @@ from app.turns import charging, repository
 from app.turns.charging import HoldDeclined, Settled, Settlement
 from app.turns.frames import delta_frame, done_frame, expression_frame, failed_frame
 from app.turns.models import DUE_STATUSES, BillingStatus, Generation, Outcome
-from app.turns.prompt import CharacterCard, PersonaCard, build_messages, render_card, with_lore
+from app.turns.prompt import CharacterCard, PersonaCard, build_messages, render_card, with_lore, with_references
 from app.turns.providers import Router
 from app.turns.values import LorePlan, PromptOptions, SavedMessage, TurnResult, TurnStart, WorldBase
 from app.world import repository as world_states
@@ -247,6 +259,7 @@ class CardExtras:
     expressions 는 모델이 고를 수 있는 표정과 그 캐릭터 그림이다(없으면 표정을 고르지 않는다).
     offer 는 모델이 제안할 수 있는 상태의 변화의 지시(없으면 None), world 는 그 바탕인 판과 상태다(#676).
     lore 는 고른 로어북의 항목이다(없으면 None, #672). lore_plan 은 뜻으로 찾아 더할 바탕이다(로어북이 없으면 None).
+    references 는 참고 자료를 찾는 글이다(#1338). 판이 허용하고 사람이 켰을 때만 있다.
     """
 
     story: str | None
@@ -257,6 +270,7 @@ class CardExtras:
     world: WorldBase | None = None
     lore: str | None = None
     lore_plan: LorePlan | None = None
+    references: str | None = None
 
 
 def prompt_for(
@@ -307,14 +321,31 @@ def lore_plan_of(character: ImportedCharacter, document: CharacterDocument, rece
         return None
     entries = tuple(item.entry for item in keyed)
     order = tuple(ranked(entries, recent))
+    chosen = chosen_entries(entries, order)
     return LorePlan(
         character_id=character.id,
         entries=entries,
         keys=tuple(item.key for item in keyed),
         ranked=order,
         query=query_text(recent),
-        block=render_lore(chosen_entries(entries, order)),
+        block=render_lore(chosen),
+        chars=lore_chars(chosen),
     )
+
+
+def lore_chars(entries: Sequence[LoreEntry]) -> int:
+    """카드에 넣은 로어북 항목의 글자(이름과 내용)의 합."""
+    return sum(entry_size(entry) for entry in entries)
+
+
+def references_query(conversation: Conversation, document: CharacterDocument, recent: Sequence[str]) -> str | None:
+    """
+    참고 자료를 찾는 글(#1338). 판이 허용하고(references_allowed, 제작자) 대화에서 켰을 때(references_enabled, 사람)만
+    있다. 로어북을 뜻으로 찾는 글과 같다(최근 말 둘). 아니면 None 이다.
+    """
+    if not (document.references_allowed and conversation.references_enabled):
+        return None
+    return query_text(recent)
 
 
 async def extras_on(
@@ -338,7 +369,8 @@ async def extras_on(
     """
     document = world.document_of(character)
     current = state if state is not None else await world.state_on(session, document, [m.id for m in path])
-    plan = lore_plan_of(character, document, [*(message.content for message in path), *incoming])
+    recent = [*(message.content for message in path), *incoming]
+    plan = lore_plan_of(character, document, recent)
     notes = await memory.notes_for_prompt(session, conversation.id)
     # ORM 의 행은 이 모양(읽기만 하는 칸)을 따른다. pyright 는 Mapped 의 칸을 그렇게 알아보지 못해 밝힌다
     dropped = overflow(cast(Sequence[PathMessage], path), context_chars)
@@ -352,6 +384,7 @@ async def extras_on(
         world=WorldBase(document, current),
         lore=plan.block if plan is not None else None,
         lore_plan=plan,
+        references=references_query(conversation, document, recent),
     )
 
 
@@ -592,6 +625,7 @@ async def begin_turn(
         expressions=extras.expressions,
         world=extras.world,
         lore=extras.lore_plan,
+        references=extras.references,
     )
 
 
@@ -671,6 +705,7 @@ async def begin_action(
         action=saved(added[0]) if len(added) > 1 else None,
         world=extras.world,
         lore=extras.lore_plan,
+        references=extras.references,
     )
 
 
@@ -738,6 +773,7 @@ async def begin_regenerate(
         expressions=extras.expressions,
         world=extras.world,
         lore=extras.lore_plan,
+        references=extras.references,
     )
 
 
@@ -807,6 +843,7 @@ async def begin_continue(
         continued=saved(target),
         world=extras.world,
         lore=extras.lore_plan,
+        references=extras.references,
     )
 
 
@@ -1025,9 +1062,29 @@ async def with_recalled_lore(recall: LoreRecall | None, start: TurnStart) -> Tur
     recalled = await recall.recall(plan)
     if not recalled:
         return start
-    block = render_lore(chosen_entries(plan.entries, with_recalled(plan.ranked, recalled)))
+    chosen = chosen_entries(plan.entries, with_recalled(plan.ranked, recalled))
+    block = render_lore(chosen)
     card = start.messages[0]
     rebuilt = replace(card, content=with_lore(card.content, plan.block, block))
+    lore = replace(plan, block=block, chars=lore_chars(chosen))
+    return replace(start, messages=[rebuilt, *start.messages[1:]], lore=lore)
+
+
+async def with_found_references(finder: ReferenceFinder | None, start: TurnStart) -> TurnStart:
+    """
+    참고 자료를 찾아 카드에 "[참고 자료]" 를 더한다(#1338, 모델을 부르기 직전, 로어북 다음).
+    제작자의 로어북이 먼저다. 로어북이 쓰고 남은 글자(LORE_MAX_CHARS 에서)에만 넣는다. 그래서 값을 더 받지 않는다.
+    끄거나, 자리가 없거나, 찾지 못했으면 그대로다.
+    """
+    if finder is None or start.references is None:
+        return start
+    used = start.lore.chars if start.lore is not None else 0
+    found = await finder.find(start.references, room_after(used, LORE_MAX_CHARS))
+    block = render_references(found)
+    if block is None:
+        return start
+    card = start.messages[0]
+    rebuilt = replace(card, content=with_references(card.content, block))
     return replace(start, messages=[rebuilt, *start.messages[1:]])
 
 
@@ -1069,17 +1126,19 @@ async def run_generation(
     clock: Callable[[], datetime],
     stop: StopSwitch,
     recall: LoreRecall | None = None,
+    finder: ReferenceFinder | None = None,
 ) -> None:
     """
     모델을 부르고, 흘려보내고, 저장하고, 맡긴다. 응답과 따로 도는 작업이다. 사람이 끊어도 끝까지 돈다.
     부르기 전에 로어북을 뜻으로 찾아 카드에 더한다(recall 이 있을 때).
+    그다음 참고 자료를 찾아 더한다(finder 가 있을 때).
 
     사람이 멈추면(stop) 받은 만큼 저장하고 맡긴다(받은 글이 있으면 partial 로 확정, 없으면 반환).
     서버가 꺼지며 멈추면 받은 만큼 저장하고 멈춘다. 맡기는 것은 다음에 뜬 서버의 정리 작업이 한다.
     저장하다 실패하면(DB 가 없다) 응답에 실패를 알리고 끝낸다.
     차례와 홀드는 오래되면 풀린다(GENERATION_STALE, 정리 작업).
     """
-    start = await with_recalled_lore(recall, start)
+    start = await with_found_references(finder, await with_recalled_lore(recall, start))
     collector = collector_for(start, relay)
     result = await stoppable_call(session_factory, route, start, params, collector, clock, stop)
     try:

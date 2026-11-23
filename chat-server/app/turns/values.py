@@ -51,6 +51,7 @@ class LorePlan:
     로어북을 뜻으로 찾아 더할 바탕(app/lore/recall.py, #672). 판의 사본에 로어북의 항목이 있을 때만 있다.
     character_id 는 판의 사본, entries 와 keys 는 판의 항목들과 그 열쇠(같은 차례), ranked 는 상시와 키워드로 고른
     항목의 자리들(차례대로), query 는 찾는 글, block 은 카드에 이미 넣은 "[로어북]" 블록(없으면 None)이다.
+    chars 는 그 블록에 든 항목의 글자(이름과 내용)의 합이다. 참고 자료는 로어북이 쓰고 남은 자리에만 들어간다.
     """
 
     character_id: uuid.UUID
@@ -59,6 +60,7 @@ class LorePlan:
     ranked: tuple[int, ...]
     query: str
     block: str | None
+    chars: int = 0
 
 
 @dataclass(frozen=True)
@@ -93,6 +95,8 @@ class TurnStart:
     world: WorldBase | None = None
     # 로어북을 뜻으로 찾아 더할 바탕. 모델을 부르기 직전에 찾아 카드의 "[로어북]" 을 바꾼다. 로어북이 없으면 None
     lore: LorePlan | None = None
+    # 참고 자료를 찾는 글(#1338). 판이 허용하고 사람이 켰을 때만 있다. 로어북 다음에 찾아 카드에 더한다. 아니면 None
+    references: str | None = None
 
 
 @dataclass(frozen=True)
