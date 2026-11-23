@@ -87,7 +87,7 @@ export function pastStory(all: TableEvent[], ctx: EventContext): StoryBlock[] {
   return blocks;
 }
 
-const DEPARTURES = { left: '스스로 나감', kicked: '방장이 내보냄', dropped: '크레딧이 모자라 빠짐' } as const;
+const DEPARTURES = { left: '스스로 나감', kicked: '방장이 내보냄', dropped: '크레딧이 모자라 빠짐', away: '자리를 오래 비워 빠짐' } as const;
 
 /** 떠난 길의 말 */
 export function departureLabel(kind: keyof typeof DEPARTURES): string {

@@ -2127,7 +2127,7 @@ B9 의 첫 조각이다. 1단계의 "운영자가 쓸 만큼"에서 시작해 �
 | 기록 읽기 | `GET /tables/{id}/rounds?limit=&offset=` | 처음 것부터 쪽으로 읽는다 |
 | 라운드 하나 읽기 | `GET .../rounds/{number}` | 번호로 건너뛴다 |
 | 일어난 일 읽기 | `GET .../events?after=` | 타임라인 |
-| 떠난 테이블 고르기 | `GET /tables/past` | 내가 떠난 테이블. 최근에 떠난 것부터. 제목, 떠날 때의 캐릭터 이름, 떠난 길(`left`, `kicked`, `dropped`) |
+| 떠난 테이블 고르기 | `GET /tables/past` | 내가 떠난 테이블. 최근에 떠난 것부터. 제목, 떠날 때의 캐릭터 이름, 떠난 길(`left`, `kicked`, `dropped`, `away`: 오래 선언을 내지 않아 빠짐, #1345) |
 | 떠난 테이블 읽기 | `GET /tables/past/{id}/events?after=` | 떠난 때까지의 이벤트. 서술은 `gm_narration`, 선언은 `player_action` 이다. 라운드의 길은 없다 |
 | 기록 내려받기 | `GET /tables/{id}/transcript?format=` | 파일 하나(#403, #617). `md`(기본), `html`, `txt` 중 고른다. 받기 시작한 때까지의 서술, 선언, 판정, 상태의 변화, 채팅, 내가 보내거나 받은 쪽지. 사람은 캐릭터 이름으로만 쓴다. 파일 이름은 테이블의 제목이다. 10분에 10번까지(429) |
 | 떠난 테이블의 기록 내려받기 | `GET /tables/past/{id}/transcript?format=` | 같은 파일. 떠난 때까지다(채팅과 쪽지도 떠난 시각까지) |

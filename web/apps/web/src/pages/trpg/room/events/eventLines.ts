@@ -388,6 +388,8 @@ const DESCRIBE: Record<EventType, Describe> = {
   member_kicked: (p, ctx, e) => `${who(p, ctx, e)}: 방장이 내보냈습니다.`,
   host_changed: (p, ctx) => `${member(p, ctx)}: 방장이 되었습니다.`,
   member_dropped: (p, ctx, e) => `${who(p, ctx, e)}: 크레딧이 모자라 자리에서 빠졌습니다.`,
+  member_away: (p, ctx, e) => `${who(p, ctx, e)}: 선언하지 않은 라운드가 이어져 자리 비움입니다. 다음 라운드부터 서술 값을 걸지 않습니다.`,
+  member_away_removed: (p, ctx, e) => `${who(p, ctx, e)}: 자리를 오래 비워 빠졌습니다.`,
   abilities_rolled: (p, ctx, e) => {
     const scores = Array.isArray(p.scores) ? `(${p.scores.join(', ')})` : '';
     return `${who(p, ctx, e)}: 능력치를 굴렸습니다${scores}.`;
@@ -536,6 +538,8 @@ export const IMPORTANT: ReadonlySet<EventType> = new Set<EventType>([
   'narration_failed',
   'narration_abandoned',
   'member_dropped',
+  'member_away',
+  'member_away_removed',
   'character_died',
 ]);
 

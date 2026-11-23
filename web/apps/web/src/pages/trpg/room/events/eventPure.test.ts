@@ -35,7 +35,7 @@ const ALL: EventType[] = [
   'quest_changed', 'clock_step_changed', 'character_moved', 'happening_occurred', 'chapter_changed', 'achievement_earned', 'character_leveled', 'experience_gained', 'abilities_raised', 'place_searched', 'character_rested',
   'character_revived', 'round_paused', 'round_resumed', 'round_closed', 'round_reverted', 'narration_failed', 'narration_abandoned', 'narration_credits_short',
   'narration_model_not_for_sale', 'narration_model_retiring', 'narration_model_replaced', 'narration_model_unavailable',
-  'member_dropped', 'narration_credits_released', 'table_ended', 'item_traded', 'money_paid',
+  'member_dropped', 'member_away', 'member_away_removed', 'narration_credits_released', 'table_ended', 'item_traded', 'money_paid',
   'equipment_changed', 'door_changed', 'monsters_appeared', 'carried_items_left',
 ];
 
@@ -237,6 +237,17 @@ describe('eventLine', () => {
     expect(line('narration_style_changed', { narration_style: null })?.text).toBe('서술 문체: 시나리오의 추천');
     expect(line('round_time_limit_changed', { round_time_limit: 600 })?.text).toBe('라운드 시간 제한: 10분');
     expect(line('round_opened', { number: 3, clock: { day: 1, hour: 22, minute: 20 } })?.text).toBe('라운드 3: 열림 · 1일째 22:20');
+  });
+
+  it('자리 비움과 오래 비워 빠진 사람을 적는다(#1345)', () => {
+    expect(line('member_away', { round: 2, user_id: OTHER, character_name: '세아' })).toEqual({
+      text: '세아: 선언하지 않은 라운드가 이어져 자리 비움입니다. 다음 라운드부터 서술 값을 걸지 않습니다.',
+      important: true,
+    });
+    expect(line('member_away_removed', { round: 5, user_id: OTHER, character_name: '세아' })).toEqual({
+      text: '세아: 자리를 오래 비워 빠졌습니다.',
+      important: true,
+    });
   });
 
   it('아무도 선언하지 않아 멈춘 라운드와 이어 간 사람을 적는다(#1341)', () => {

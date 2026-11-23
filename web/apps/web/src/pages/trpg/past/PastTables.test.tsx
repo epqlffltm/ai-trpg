@@ -111,6 +111,7 @@ describe('떠난 테이블의 순수한 함수', () => {
     expect(blocks[1]).toMatchObject({ text: '렌: broken_arm 입음' });
     expect(checkLine({ character_name: '미아', roll: 3, modifier: -1, total: 2, target: 10, success: false })).toBe('미아: 눈 3, 보정 -1, 합 2 / 목표 10 · 실패');
     expect(departureLabel('dropped')).toBe('크레딧이 모자라 빠짐');
+    expect(departureLabel('away')).toBe('자리를 오래 비워 빠짐');
     expect(pastProblemText(new ApiError({ status: 500, detail: 'x' }))).toContain('불러오지 못했습니다');
   });
 

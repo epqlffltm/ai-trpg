@@ -79,6 +79,7 @@ from app.rounds import (
     narration_request,
     opener,
     pauses,
+    presence,
     quest_goals,
     repository,
     resource_rounds,
@@ -374,8 +375,10 @@ def begin_closing(
     quest_goals.record_changes(session, table, after_overdue, group)
     achievements.record_achievements(session, table, earned, group)
     idle = [str(user_id) for user_id in waiting_for(table, round_)]
+    newly_away = presence.count(table, round_, closer_id)
     payload = {'number': round_.number, 'idle': idle, 'reason': reason}
     recorder.record(session, table, EventType.ROUND_CLOSED, actor_id=closer_id, payload=payload, group=group)
+    presence.record_away(session, table, round_, newly_away, group)
     round_.closing_at = datetime.now(UTC)
     return earned
 
@@ -403,10 +406,13 @@ async def start_closing(
     닫기 직전의 상태를 찍고(take_snapshot) 닫기 시작한다(begin_closing). 라운드를 닫는 길은 모두 이것을 쓴다.
 
     그 뒤에 플레이한 사람들과 받은 업적을 계정마다 적는다(app/rounds/achievements.py 의 save). 같은 트랜잭션이다.
+    오래 선언을 내지 않은 사람은 자리에서 뺀다(app/rounds/presence.py). 닫기가 센 수로 본다.
     """
     await take_snapshot(session, table, round_)
     earned = begin_closing(session, table, round_, dice, scene, reason, closer_id)
     await achievements.save(session, table, earned)
+    # 오래 선언을 내지 않은 사람은 뺀다(#1345). 그 사람의 선언은 없으니 서술에 들 것도 없다
+    await presence.remove_away(session, table, round_)
 
 
 async def lock_current_round(

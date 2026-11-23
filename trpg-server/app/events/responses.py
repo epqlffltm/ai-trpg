@@ -536,6 +536,8 @@ VISIBLE: dict[EventType, tuple[str, ...]] = {
     EventType.NARRATION_MODEL_REPLACED: ('from', 'narration_model', 'reason', 'round', 'price'),
     EventType.NARRATION_MODEL_UNAVAILABLE: ('narration_model', 'reason'),
     EventType.MEMBER_DROPPED: ('round', 'user_id', 'character_name'),
+    EventType.MEMBER_AWAY: ('round', 'user_id', 'character_name'),
+    EventType.MEMBER_AWAY_REMOVED: ('round', 'user_id', 'character_name'),
     EventType.NARRATION_CREDITS_RELEASED: ('round',),
     # 누가 끝냈는가. 운영자가 끝냈으면 'operator' 다(#392). 방장이 끝냈으면 없다(actor_id 가 방장). 사유는 싣지 않는다
     EventType.TABLE_ENDED: ('by',),
