@@ -22,6 +22,15 @@ import pytest
 from ai_core.fake import FakeCallLog, FakeEmbedder, FakeProvider
 from fastapi import FastAPI, status
 from httpx import AsyncClient
+from reference_core.records import (
+    ReferenceDocument,
+    ReferenceKind,
+    ReferenceOrigin,
+    ReferenceRecord,
+    ReferenceSource,
+    StoredReference,
+)
+from reference_core.selection import ReferenceThresholds, alias_hits, choose
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets.scenarios.snapshot import Snapshot
@@ -30,21 +39,7 @@ from app.lore.retrieval import LORE_MAX_CHARS
 from app.references.indexing import index_references
 from app.references.loading import load_document
 from app.references.policy import references_allowed
-from app.references.records import (
-    ReferenceDocument,
-    ReferenceKind,
-    ReferenceOrigin,
-    ReferenceRecord,
-    ReferenceSource,
-    StoredReference,
-)
-from app.references.retrieval import (
-    ReferenceRetriever,
-    ReferenceThresholds,
-    alias_hits,
-    choose,
-    room_for,
-)
+from app.references.retrieval import ReferenceRetriever, room_for
 from app.rounds import budget, prompt
 from app.rounds.llm_narrator import LLMNarrator
 from app.rounds.narrator import LoreNote, Move, NarrationRequest, ReferenceNote, StoryContext

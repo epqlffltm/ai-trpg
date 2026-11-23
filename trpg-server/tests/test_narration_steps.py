@@ -18,6 +18,7 @@ from typing import cast
 
 import pytest
 from ai_core.fake import FakeCallLog, FakeProvider
+from reference_core.selection import REFERENCE_MAX_CHARS
 from server_core.billing.prices import FREE_BOOK, Price, PriceBook, Sale, Tier
 
 from app.assets.models import NarrationStyle
@@ -37,7 +38,7 @@ from app.catalog.steps import (
 )
 from app.lore.retrieval import LORE_MAX_CHARS, lore_max_chars
 from app.memory.retrieval import MemoryThresholds, for_steps
-from app.references.retrieval import REFERENCE_MAX_CHARS, room_for
+from app.references.retrieval import room_for
 from app.rounds import prompt
 from app.rounds.budget import fit_request, input_budget, story_fits
 from app.rounds.llm_narrator import LLMNarrator, accept_scene, scene_max_length

@@ -13,6 +13,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
+from reference_core.attributions import attributions_of
+from reference_core.records import ReferenceKind, StoredReference
 from server_core.auth.dependencies import CurrentUser
 
 from app.assets.bestiaries.router import to_monster_detail
@@ -20,7 +22,6 @@ from app.assets.lorebooks.router import to_entry_detail
 from app.assets.routing import Paging, Session
 from app.references import service
 from app.references.copying import NotAMonsterError, NotCopyableError
-from app.references.records import ReferenceKind, StoredReference
 from app.references.schemas import (
     SEARCH_TEXT_MAX_LENGTH,
     LoreCopyResult,
@@ -127,7 +128,7 @@ async def search_references(
     return ReferencePage(
         items=[to_item(reference) for reference in references],
         total=total,
-        attributions=service.attributions_of(references),
+        attributions=attributions_of(references),
     )
 
 

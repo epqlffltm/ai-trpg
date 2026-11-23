@@ -10,6 +10,7 @@
 import uuid
 from collections.abc import Sequence
 
+from reference_core.records import COPYABLE_SOURCES, ReferenceKind, StoredReference
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.assets import service as assets
@@ -25,17 +26,7 @@ from app.assets.service import AssetNotFoundError
 from app.engine.ruleset import Ruleset
 from app.references import repository
 from app.references.copying import check_copyable, check_monsters, entry_copy, monster_copy
-from app.references.records import COPYABLE_SOURCES, ReferenceKind, ReferenceSource, StoredReference
 from app.references.sheets import Proposal, propose
-from app.references.srd import SRD51_ATTRIBUTION, SRD51_CHANGES, SRD51_TRANSLATED
-from app.references.wiki import WIKIPEDIA_ATTRIBUTION, WIKIPEDIA_CHANGES, WIKIPEDIA_TRANSLATED
-
-# 자료마다의 출처 표시. 화면이 찾은 줄과 함께 보인다.
-# 원본을 바꾼 것(빼고, 줄이고, 옮김)도 함께 적는다(CC BY 4.0, CC BY-SA 4.0)
-ATTRIBUTIONS: dict[str, str] = {
-    ReferenceSource.SRD51: f'{SRD51_ATTRIBUTION} {SRD51_CHANGES}{SRD51_TRANSLATED}',
-    ReferenceSource.WIKIPEDIA: f'{WIKIPEDIA_ATTRIBUTION} {WIKIPEDIA_CHANGES}{WIKIPEDIA_TRANSLATED}',
-}
 
 
 class ReferenceNotFoundError(Exception):
@@ -52,12 +43,6 @@ class NoRulebookError(Exception):
 
 class NotCopiedError(Exception):
     """몬스터가 참고 자료에서 복사한 것이 아니거나, 그 참고 자료가 이제 없다. 가져올 수치가 없다."""
-
-
-def attributions_of(references: Sequence[StoredReference]) -> list[str]:
-    """줄들이 나온 자료의 출처 표시. 자료마다 한 번, 처음 나온 차례다."""
-    sources = dict.fromkeys(reference.source for reference in references)
-    return [ATTRIBUTIONS[source] for source in sources if source in ATTRIBUTIONS]
 
 
 async def search_references(

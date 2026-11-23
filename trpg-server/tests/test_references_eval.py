@@ -16,9 +16,9 @@ from pathlib import Path
 import pytest
 from ai_core.fake import FakeEmbedder
 from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError
+from reference_core.records import ReferenceKind, StoredReference
+from reference_core.selection import ReferenceThresholds
 
-from app.references.records import ReferenceKind, StoredReference
-from app.references.retrieval import ReferenceThresholds
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
 from evals.references.dataset import (
     DEFAULT_SCENES,

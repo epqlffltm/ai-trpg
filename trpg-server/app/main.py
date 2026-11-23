@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from reference_core.selection import ReferenceThresholds
 from server_core import health
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
@@ -103,7 +104,7 @@ from app.realtime.signals import session_info
 from app.realtime.signing import signer_from
 from app.references import router as references
 from app.references.copying import NotAMonsterError, NotCopyableError
-from app.references.retrieval import ReferenceRetriever, ReferenceThresholds
+from app.references.retrieval import ReferenceRetriever
 from app.references.service import NoRulebookError, NotCopiedError, ReferenceNotFoundError
 from app.references.sheets import RulesNotSrdError
 from app.rounds import clock

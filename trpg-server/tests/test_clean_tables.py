@@ -20,6 +20,7 @@ from ai_core.catalog_file import CostEntry, ModelEntry
 from ai_core.provider import Reasoning
 from fastapi import FastAPI
 from httpx import AsyncClient
+from reference_core.records import ReferenceDocument, ReferenceOrigin, ReferenceRecord, ReferenceSource
 from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,7 +41,6 @@ from app.operators.service import build_read
 from app.portraits.models import Portrait
 from app.references.indexing import index_references
 from app.references.loading import load_document
-from app.references.records import ReferenceDocument, ReferenceOrigin, ReferenceRecord, ReferenceSource
 from app.snapshots.service import new_snapshot
 from app.tables.models import (
     DepartureKind,

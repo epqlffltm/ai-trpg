@@ -18,6 +18,8 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 from pydantic import ValidationError
+from reference_core.data import SRD51_FILE as DATA_FILE
+from reference_core.records import ReferenceKind, ReferenceRecord, read_document
 from server_core.testing.tokens import SigningKey, make_access_claims, make_token
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +31,6 @@ from app.engine.sheet import SHEET_MAX_HP
 from app.engine.templates import SRD5
 from app.main import API_PREFIX
 from app.references.loading import load_document
-from app.references.records import ReferenceKind, ReferenceRecord, read_document
 from app.references.sheets import (
     RulesNotSrdError,
     attack_name,
@@ -42,7 +43,6 @@ from app.references.sheets import (
 )
 from tests.narration_model import with_model
 from tests.test_references_copy import document
-from tests.test_srd_references import DATA_FILE
 
 ME = uuid.UUID('11111111-2222-4333-8444-555555555555')
 SOMEONE_ELSE = uuid.UUID('99999999-2222-4333-8444-555555555555')

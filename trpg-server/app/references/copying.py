@@ -15,13 +15,14 @@
 
 import re
 
+from reference_core.records import COPYABLE_SOURCES, ReferenceKind, StoredReference
+from reference_core.selection import MIN_ALIAS_LENGTH
+
 from app.assets.bestiaries.models import MONSTER_CONTENT_MAX_LENGTH, MONSTER_NAME_MAX_LENGTH, MonsterKind
 from app.assets.bestiaries.schemas import MonsterCreate
 from app.assets.copies import Copy
 from app.assets.lorebooks.schemas import EntryCreate
 from app.assets.models import LORE_ENTRY_CONTENT_MAX_LENGTH, LORE_ENTRY_MAX_KEYWORDS, LORE_KEYWORD_MAX_LENGTH, LoreKind
-from app.references.records import COPYABLE_SOURCES, ReferenceKind, StoredReference
-from app.references.retrieval import MIN_ALIAS_LENGTH
 
 # 원본(SRD 5.1)의 생물 분류에서 엔진이 다루는 타입으로. 여기 없는 분류(용, 괴물, 악마 …)는 기타다
 MONSTER_KINDS = {

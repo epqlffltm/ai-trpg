@@ -1,10 +1,10 @@
-# trpg-server/app/references/srd.py
+# shared/reference-core/src/reference_core/srd.py
 
 """
 SRD 5.1 의 몬스터, 장비, 마법 물건을 참고 자료의 줄(ReferenceRecord)로 옮긴다. DB 도 모델도 모르는 순수한 함수들이다.
 
 원본은 5e-bits/5e-database 의 src/2014/en 이다(SRD 5.1 을 JSON 으로 옮긴 것). 데이터 파일을 만들 때만 쓴다
-(scripts/build_srd.py). 서버는 원본을 읽지 않는다.
+(trpg-server 의 scripts/build_srd.py). 서버는 원본을 읽지 않는다.
 
 서술자가 읽는 글(content)에는 수치를 넣지 않는다. 판정은 엔진이 하고, SRD 의 수치는 이 게임의 규칙이 아니다.
 모델이 "DC 14", "12 의 피해" 를 읽으면 장면에 쓴다. 그래서 수치는 data 에만 둔다(기본 자산의 시트 채우기가 쓴다).
@@ -20,7 +20,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from app.references.records import (
+from reference_core.records import (
     DOCUMENT_FORMAT,
     REFERENCE_CONTENT_MAX_LENGTH,
     ReferenceDocument,

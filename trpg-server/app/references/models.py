@@ -18,14 +18,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, UniqueConstraint, Uuid, func
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
-from sqlalchemy.orm import Mapped, mapped_column
-
-from app.assets.models import at_most, one_of
-from app.core.database import Base
-from app.lore.models import MODEL_NAME_MAX_LENGTH
-from app.references.records import (
+from reference_core.records import (
     REFERENCE_ALIAS_MAX_LENGTH,
     REFERENCE_CONTENT_MAX_LENGTH,
     REFERENCE_KEY_MAX_LENGTH,
@@ -34,6 +27,14 @@ from app.references.records import (
     ReferenceKind,
     ReferenceSource,
 )
+from reference_core.tables import ReferenceTables
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.assets.models import at_most, one_of
+from app.core.database import Base
+from app.lore.models import MODEL_NAME_MAX_LENGTH
 
 
 class ReferenceEntry(Base):
@@ -67,13 +68,13 @@ class ReferenceEntry(Base):
     # 장면에서 부를 다른 이름들(한국어 이름 등). 장면에 이 낱말이 나오면 고른다(로어북의 키워드와 같다)
     aliases: Mapped[list[str]] = mapped_column(ARRAY(String(REFERENCE_ALIAS_MAX_LENGTH)), default=list)
 
-    # 서술자가 읽는 글. 수치가 없다(app/references/srd.py)
+    # 서술자가 읽는 글. 수치가 없다(reference_core/srd.py)
     content: Mapped[str] = mapped_column(Text, default='')
 
     # 원본의 수치. 서술자에게 가지 않는다
     data: Mapped[dict] = mapped_column(JSONB, default=dict)
 
-    # 한국어로 옮긴 이름과 글. 없으면 빈 글이다. 있으면 서술과 복사가 이것을 쓴다(app/references/translations.py)
+    # 한국어로 옮긴 이름과 글. 없으면 빈 글이다. 있으면 서술과 복사가 이것을 쓴다(reference_core/translations.py)
     name_ko: Mapped[str] = mapped_column(String(REFERENCE_NAME_MAX_LENGTH), default='', server_default='')
     content_ko: Mapped[str] = mapped_column(Text, default='', server_default='')
 
@@ -84,7 +85,7 @@ class ReferenceEntry(Base):
 
 
 class ReferenceEmbedding(Base):
-    """참고 자료의 한 줄을 한 모델로 바꾼 벡터. 줄의 글이 바뀌면 지우고 다시 만든다(app/references/loading.py)."""
+    """참고 자료의 한 줄을 한 모델로 바꾼 벡터. 줄의 글이 바뀌면 지우고 다시 만든다(reference_core/loading.py)."""
 
     __tablename__ = 'reference_embeddings'
     __table_args__ = (
@@ -101,7 +102,11 @@ class ReferenceEmbedding(Base):
     # 벡터를 만든 임베딩 모델의 이름
     model: Mapped[str] = mapped_column(String(MODEL_NAME_MAX_LENGTH))
 
-    # 줄의 이름, 다른 이름, 글을 합친 글의 벡터(app/references/texts.py)
+    # 줄의 이름, 다른 이름, 글을 합친 글의 벡터(reference_core/texts.py)
     embedding: Mapped[list[float]] = mapped_column(Vector())
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# 공용 코드(reference_core 의 repository, loading, indexing, search)에 넘기는 이 서버의 표 둘
+TABLES = ReferenceTables(entry=ReferenceEntry, embedding=ReferenceEmbedding)

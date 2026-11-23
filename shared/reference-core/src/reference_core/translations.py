@@ -1,7 +1,7 @@
-# trpg-server/app/references/translations.py
+# shared/reference-core/src/reference_core/translations.py
 
 """
-참고 자료의 한국어 번역 파일(data/references/srd51.ko.json)을 읽고 자료의 줄에 붙인다.
+참고 자료의 한국어 번역 파일(reference_core/data/srd51.ko.json)을 읽고 자료의 줄에 붙인다.
 DB 도 모델도 모르는 순수한 함수다.
 
 번역은 미리 해서 저장소에 넣는다(2026-10-21 유저 결정). 넣는 결과가 늘 같고 리뷰할 수 있다.
@@ -9,7 +9,7 @@ DB 도 모델도 모르는 순수한 함수다.
 
 붙이는 것.
   - name_ko, content_ko: 번역한 이름과 글. 서술과 복사(기본 자산)가 이것을 쓴다.
-  - aliases: 한국어 이름을 다른 이름으로 더한다. 한국어 장면에 그 이름이 나오면 고른다(app/references/retrieval.py).
+  - aliases: 한국어 이름을 다른 이름으로 더한다. 한국어 장면에 그 이름이 나오면 고른다(reference_core/selection.py).
 번역의 글도 원본의 글과 같은 규칙(수치 없음, 1,000자)을 지킨다. 번역 파일을 읽을 때 본다.
 번역이 없는 줄은 그대로다(영어로 쓴다).
 """
@@ -21,7 +21,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
-from app.references.records import (
+from reference_core.records import (
     DOCUMENT_FORMAT,
     REFERENCE_ALIAS_MAX_LENGTH,
     REFERENCE_CONTENT_MAX_LENGTH,
@@ -29,7 +29,7 @@ from app.references.records import (
     ReferenceSource,
 )
 
-# 번역의 글에 있으면 안 되는 판정의 수치와 낱말. 원본의 글을 거르는 것(app/references/srd.py)과 같은 뜻이다
+# 번역의 글에 있으면 안 되는 판정의 수치와 낱말. 원본의 글을 거르는 것(reference_core/srd.py)과 같은 뜻이다
 # 주사위를 굴리는 말("6면체 주사위", "주사위를 굴린다")과 주사위의 눈("6이 나오면")도 뺀다
 MECHANICS_KO = re.compile(
     r'\bDC\b|\b\d*d\d+\b|[+-]\d+\b|난이도\s*\d+|명중\s*[+-]?\d+|내성 굴림|피해 굴림'

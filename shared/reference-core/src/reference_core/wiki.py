@@ -1,7 +1,7 @@
-# trpg-server/app/references/wiki.py
+# shared/reference-core/src/reference_core/wiki.py
 
 """
-위키백과를 참고 자료로 넣는 규칙(README 의 "위키백과"). DB 도 HTTP 도 모르는 값들이다.
+위키백과를 참고 자료로 넣는 규칙(trpg-server/README.md 의 "위키백과"). DB 도 HTTP 도 모르는 값들이다.
 
 지금은 출처 표시뿐이다. 받는 도구와 거르는 규칙(위키 문법, 실제 세계를 가리키는 문장)은 다음 단계에서 이 파일에 더한다.
 

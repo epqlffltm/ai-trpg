@@ -116,7 +116,6 @@ GROUPS: dict[str, tuple[str, ...]] = {
         'naming',
         'lore_',
         'references',
-        'srd_',
         'memory',
         'person_history',
         'state_eval',

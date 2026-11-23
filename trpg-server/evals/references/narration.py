@@ -22,8 +22,9 @@ from dataclasses import dataclass, replace
 
 from ai_core.fake import FakeCallLog
 from ai_core.provider import LLMProvider, ProviderError
+from reference_core.selection import ReferenceThresholds
 
-from app.references.retrieval import ReferenceThresholds, to_reference_note
+from app.references.retrieval import to_reference_note
 from app.rounds.llm_narrator import LLMNarrator, NarrationError
 from app.rounds.narrator import ReferenceNote
 from evals.references.dataset import Dataset, Scene
