@@ -1,6 +1,6 @@
 // web/apps/web/src/layout/SidebarRecent.test.tsx
 // 왼쪽 메뉴 열의 최근 대화. 로그인 전에는 안내와 로그인 단추만 있고 부르지 않으며, 로그인하면 세 서비스를 섞어 최근 것부터 한 목록이고
-// 하나를 읽지 못해도 읽은 것은 보인다. 섞기와 거르기, 때의 글(순수한 함수).
+// 하나를 읽지 못해도 읽은 것은 보인다. 떠난 테이블도 떠난 때로 섞여 지난 기록을 가리킨다(#1344). 섞기와 거르기, 때의 글(순수한 함수).
 
 import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
@@ -21,6 +21,10 @@ function table(id: string, title: string, minutes: number) {
   return { id, title, status: 'playing', member_count: 3, capacity: 4, created_at: minutesAgo(minutes) };
 }
 
+function past(id: string, title: string, minutes: number) {
+  return { table_id: id, scenario_id: id, title, character_name: '렌', kind: 'left', last_sequence: 3, left_at: minutesAgo(minutes) };
+}
+
 describe('왼쪽 메뉴 열의 최근 대화', () => {
   it('로그인 전에는 안내와 로그인 단추만 있고 목록을 부르지 않는다', async () => {
     const { seen } = installFakeFetch({ [`POST ${REFRESH_PATH}`]: () => json(401, { detail: '없음' }) });
@@ -39,6 +43,7 @@ describe('왼쪽 메뉴 열의 최근 대화', () => {
       'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: '0', total: '0', next_expiry: null }),
       'GET /api/v1/notification/me/notifications/unread-count': () => json(200, { unread: 0 }),
       'GET /api/v1/game/tables': () => json(200, { items: [table('t1', '목요일 모임', 30)], total: 1 }),
+      'GET /api/v1/game/tables/past': () => json(200, { items: [past('t9', '안개 낀 종탑', 45)], total: 1 }),
       'GET /api/v1/chat/conversations': () => json(200, { items: [conversation('1', '대화 1', 14), conversation('2', '대화 2', 60)], total: 2 }),
       'GET /api/v1/story/conversations': () => json(503, { detail: '잠시' }),
     });
@@ -47,10 +52,12 @@ describe('왼쪽 메뉴 열의 최근 대화', () => {
     const sidebar = within(await screen.findByRole('complementary', { name: '사이트 메뉴' }));
     const list = within(await sidebar.findByRole('list', { name: '최근 대화 목록' }));
     const links = list.getAllByRole('link');
-    expect(links.map((link) => link.querySelector('.sidebar-recent__name')?.textContent)).toEqual(['대화 1', '목요일 모임', '대화 2']);
+    expect(links.map((link) => link.querySelector('.sidebar-recent__name')?.textContent)).toEqual(['대화 1', '목요일 모임', '안개 낀 종탑', '대화 2']);
     expect(links[0]).toHaveAttribute('href', '/chat/conversations/1');
     expect(links[1]).toHaveAttribute('href', '/trpg/tables/t1');
-    expect(links.map((link) => link.querySelector('.sidebar-recent__kind')?.textContent)).toEqual(['캐릭터', 'TRPG', '캐릭터']);
+    // 떠난 테이블은 지난 기록으로 간다
+    expect(links[2]).toHaveAttribute('href', '/trpg/tables/past/t9');
+    expect(links.map((link) => link.querySelector('.sidebar-recent__kind')?.textContent)).toEqual(['캐릭터', 'TRPG', 'TRPG', '캐릭터']);
     expect(within(links[0] as HTMLElement).getByText('14분 전')).toBeInTheDocument();
     expect(await sidebar.findByText('일부를 불러오지 못했어요.')).toBeInTheDocument();
     expect(sidebar.queryByRole('link', { name: '전체 보기' })).toBeNull();

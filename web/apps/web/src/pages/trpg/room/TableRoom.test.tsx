@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/trpg/room/TableRoom.test.tsx
 // 테이블 방(B6)의 대기실과 스트림. 붙는 번호, 스트림의 채팅과 입력 중, 쓰기, 이벤트가 오면 다시 읽기,
 // 다시 붙을 때의 Last-Event-ID, 토큰 만료, 시작, 나가기, 앉아 있지 않게 됨을 본다.
+// 진행 중인 방을 다른 곳으로 떠나기 전에 묻는다(#1344). 나가기, 자리 지키기, 닫기.
 
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -208,5 +209,75 @@ describe('TableRoom', () => {
     renderApp(`/trpg/tables/${TABLE_ID}`);
 
     expect(await screen.findByText('앉아 있지 않거나 없는 테이블입니다.', {}, { timeout: 3000 })).toBeInTheDocument();
+  });
+});
+
+/** 방에서는 왼쪽 메뉴가 접혀 있다. 펼쳐 이용 가이드로 간다 */
+async function goToGuide() {
+  await userEvent.click(screen.getByRole('button', { name: '사이트 메뉴 펼치기' }));
+  await userEvent.click(within(await screen.findByRole('complementary', { name: '사이트 메뉴' })).getByRole('link', { name: '이용 가이드' }));
+}
+
+describe('진행 중인 방을 떠나기 전에 묻는다', () => {
+  const playing = () => json(200, tableDetail(TABLE_ID, { status: 'playing' }));
+  const deletes = (seen: SeenRequest[]) => seen.filter((request) => request.method === 'DELETE');
+
+  async function leaveForGuide() {
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+    expect(await screen.findByText('1번째 장면')).toBeInTheDocument();
+    await goToGuide();
+    return within(await screen.findByRole('dialog', { name: '테이블에서 나갈까요?' }));
+  }
+
+  it('나가기를 고르면 자리를 비우고 가려던 곳으로 간다', async () => {
+    const { seen } = open({ [`GET ${BASE}`]: playing, [`DELETE ${BASE}/members/me`]: () => new Response(null, { status: 204 }) });
+    const dialog = await leaveForGuide();
+
+    await userEvent.click(dialog.getByRole('button', { name: '나가기' }));
+
+    expect(await screen.findByRole('heading', { name: '이용 가이드', level: 1 })).toBeInTheDocument();
+    expect(deletes(seen).map((request) => request.url)).toEqual([`${BASE}/members/me`]);
+  });
+
+  it('자리 지키기를 고르면 나가지 않고 그대로 간다', async () => {
+    const { seen } = open({ [`GET ${BASE}`]: playing });
+    const dialog = await leaveForGuide();
+
+    await userEvent.click(dialog.getByRole('button', { name: '자리 지키기' }));
+
+    expect(await screen.findByRole('heading', { name: '이용 가이드', level: 1 })).toBeInTheDocument();
+    expect(deletes(seen)).toEqual([]);
+  });
+
+  it('닫으면 방에 남는다', async () => {
+    const { seen } = open({ [`GET ${BASE}`]: playing });
+    await leaveForGuide();
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByText('1번째 장면')).toBeInTheDocument();
+    expect(deletes(seen)).toEqual([]);
+  });
+
+  it('나가기 단추로 나가면 다시 묻지 않고 로비로 간다', async () => {
+    open({ [`GET ${BASE}`]: playing, [`DELETE ${BASE}/members/me`]: () => new Response(null, { status: 204 }) });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+
+    await userEvent.click(await screen.findByRole('button', { name: '나가기' }));
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '나가기' }));
+
+    expect(await screen.findByRole('heading', { name: '테이블 로비' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '테이블에서 나갈까요?' })).toBeNull();
+  });
+
+  it('모집 중인 방은 묻지 않는다', async () => {
+    open();
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+    expect(await screen.findByRole('heading', { name: '목요일 모임', level: 1 })).toBeInTheDocument();
+
+    await goToGuide();
+
+    expect(await screen.findByRole('heading', { name: '이용 가이드', level: 1 })).toBeInTheDocument();
   });
 });

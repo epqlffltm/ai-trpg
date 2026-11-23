@@ -20,6 +20,7 @@
 //   - 멈춤: 끝났으면 테이블을 다시 읽고(끝난 판의 화면), 앉아 있지 않으면 다시 읽어 404 의 화면으로 간다
 // 스트림이 열릴 때마다 테이블을 한 번 다시 읽는다. 처음 읽은 때와 붙은 때 사이, 끊겼던 동안의 변화를 놓치지 않게.
 // 장르 테마(Stitch 23~33번): main 에 data-genre 를 단다. 장르는 시나리오의 소개에서 읽는다(useTableGenre).
+// 진행 중이면 다른 곳으로 가기 전에 나갈지 묻는다(LeaveGuard, #1344).
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
@@ -54,6 +55,7 @@ import { MyHpStrip } from './status/MyHpStrip';
 import { StatusPanel } from './status/StatusPanel';
 import { WhisperPanel } from './WhisperPanel';
 import { DicePanel } from './DicePanel';
+import { LeaveGuard } from './LeaveGuard';
 
 export function TableRoom({ table }: { table: TableDetail }) {
   const queryClient = useQueryClient();
@@ -197,6 +199,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
           </div>
         </div>
         {docked ? <RoomDock dock={dock} /> : null}
+        {table.status === 'playing' ? <LeaveGuard tableId={table.id} /> : null}
       </main>
     </ActionRequestProvider>
   );
