@@ -2,6 +2,7 @@
 // 대화를 시작하지 못한 까닭을 화면의 한 줄로. 순수한 함수다. 까닭은 api/chatCharacters.ts 의 머리말을 본다.
 
 import { ApiError, NetworkError } from '../../../api/errors';
+import { authUnavailableText } from '../../../auth/problem';
 
 export type StartProblem = {
   text: string;
@@ -23,6 +24,8 @@ export function describeStartProblem(error: unknown): StartProblem {
   if (error.status === 422 && error.code === 'start_not_found') {
     return problem('고른 시작 상황이 새 판에 없습니다. 시작 상황을 다시 골라 주세요.', { reread: true });
   }
+  const auth = authUnavailableText(error);
+  if (auth) return problem(auth);
   if (error.status === 503) {
     return problem(`캐릭터를 가져오지 못했습니다.${error.retryAfter ? ` ${error.retryAfter}초 뒤에` : ' 잠시 뒤에'} 다시 시도하세요.`);
   }

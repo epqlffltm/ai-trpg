@@ -79,4 +79,8 @@ async def test_without_keys_from_a_dead_auth_server_it_is_503(
 
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     assert response.headers['Retry-After'] == '60'
-    assert response.json() == {'detail': '지금은 인증을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.'}
+    # 화면이 이 서버의 탓으로 적지 않게 까닭의 이름을 싣는다(server_core/auth/responses.py)
+    assert response.json() == {
+        'detail': '지금은 인증을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.',
+        'code': 'auth_unavailable',
+    }

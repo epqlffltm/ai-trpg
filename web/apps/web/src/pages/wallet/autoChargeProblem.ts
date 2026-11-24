@@ -4,6 +4,7 @@
 // 결제할 수 없는 계정이면 화면이 본인인증이나 보호자 동의로 가는 길을 붙인다(link).
 
 import { ApiError, NetworkError } from '../../api/errors';
+import { authUnavailableText } from '../../auth/problem';
 
 export type AutoChargeProblem = { message: string; link: { to: string; label: string } | null };
 
@@ -34,6 +35,8 @@ export function describeAutoChargeProblem(error: unknown): AutoChargeProblem {
   if (!(error instanceof ApiError)) return UNKNOWN;
   const known = error.code ? BY_CODE[error.code] : undefined;
   if (known) return known;
+  const auth = authUnavailableText(error);
+  if (auth) return { message: auth, link: null };
   if (error.status === 503) return { message: '결제 서버가 지금 답하지 못합니다. 잠시 뒤에 다시 시도하세요.', link: null };
   return UNKNOWN;
 }

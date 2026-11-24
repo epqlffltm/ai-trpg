@@ -80,9 +80,11 @@ func unauthorized(c *gin.Context) {
 
 // verificationUnavailable 은 토큰이 맞는지 확인할 수 없을 때의 응답이다.
 // Retry-After 는 언제 다시 시도하면 되는지 알려 준다. 키를 다시 가져오는 간격과 같다.
+// code(auth_unavailable)를 싣는다. 화면이 "결제 서버가 답하지 못합니다"가 아니라 로그인을 확인하지 못한 것으로 적게 한다.
 func verificationUnavailable(c *gin.Context) {
 	c.Header("Retry-After", strconv.Itoa(int(jwks.RefetchInterval.Seconds())))
 	c.AbortWithStatusJSON(http.StatusServiceUnavailable, errorBody{
 		Detail: "지금은 인증을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+		Code:   codeAuthUnavailable,
 	})
 }

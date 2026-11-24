@@ -200,5 +200,6 @@ describe('알림의 순수한 함수', () => {
     expect(needsModelNames([PAID])).toBe(false);
     expect(needsModelNames([RETIRING])).toBe(true);
     expect(notificationProblemText(new ApiError({ status: 503, detail: 'x', retryAfter: 5 }))).toContain('5초 뒤에');
+    expect(notificationProblemText(new ApiError({ status: 503, detail: 'x', code: 'auth_unavailable', retryAfter: 5 }))).toBe('지금은 로그인을 확인할 수 없습니다. 5초 뒤에 다시 시도하세요.');
   });
 });

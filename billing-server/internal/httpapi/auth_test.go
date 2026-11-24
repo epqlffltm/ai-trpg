@@ -143,7 +143,7 @@ func TestUnavailableKeysAreServiceUnavailable(t *testing.T) {
 	if response.Header().Get("WWW-Authenticate") != "" {
 		t.Error("503 에 WWW-Authenticate 를 붙였다")
 	}
-	if got, want := body(response), `{"detail":"지금은 인증을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요."}`; got != want {
+	if got, want := body(response), `{"detail":"지금은 인증을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.","code":"auth_unavailable"}`; got != want {
 		t.Errorf("본문 = %s, 기대 = %s", got, want)
 	}
 }

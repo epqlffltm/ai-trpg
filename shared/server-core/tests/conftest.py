@@ -16,6 +16,7 @@ from httpx import ASGITransport, AsyncClient
 
 from server_core.auth.dependencies import CurrentUser, OptionalUser
 from server_core.auth.jwks import JwksCache
+from server_core.auth.responses import use_auth_errors
 from server_core.auth.revocations import RevocationList
 from server_core.settings import CoreSettings
 from server_core.testing.collector import Collector, serving
@@ -72,9 +73,14 @@ async def read_maybe_me(user: OptionalUser) -> dict:
     return {'user_id': str(user.user_id) if user else None}
 
 
-def build_app(settings: TestSettings, auth_server: FakeAuthServer) -> FastAPI:
-    """토큰을 받는 작은 앱. 서버의 앱과 같은 자리(app.state)에 설정, 공개키, 끊긴 세션의 목록을 붙인다."""
+def build_app(settings: TestSettings, auth_server: FakeAuthServer, auth_errors: bool = True) -> FastAPI:
+    """
+    토큰을 받는 작은 앱. 서버의 앱과 같은 자리(app.state)에 설정, 공개키, 끊긴 세션의 목록을 붙인다.
+    auth_errors 면 서버의 앱처럼 토큰을 확인하지 못한 503 에 code 를 싣는 처리기를 건다(use_auth_errors).
+    """
     app = FastAPI()
+    if auth_errors:
+        use_auth_errors(app)
     client = auth_server.make_client()
     app.state.settings = settings
     app.state.http_client = client

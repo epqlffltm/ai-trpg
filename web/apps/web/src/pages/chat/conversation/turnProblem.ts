@@ -3,6 +3,7 @@
 // 행동을 할 수 없는 까닭(422)은 아무것도 저장하지 않았다. 상태가 화면과 어긋났을 수 있어(다른 가지, 다른 탭) 대화를 다시 읽는다.
 
 import { ApiError, NetworkError } from '../../../api/errors';
+import { authUnavailableText } from '../../../auth/problem';
 
 export type TurnProblem = {
   text: string;
@@ -54,6 +55,8 @@ export function describeTurnProblem(error: unknown): TurnProblem {
   }
   if (error.status === 404) return problem('대화나 말을 찾지 못했습니다. 화면을 새로 읽습니다.', { reload: true });
   if (error.status === 422) return problem(Object.values(error.fields)[0]?.[0] ?? '보낼 수 없는 말입니다.');
+  const auth = authUnavailableText(error);
+  if (auth) return problem(`${auth}${tail}`, { reload: saved });
   if (error.status === 503) {
     return problem(`지금은 답할 수 없습니다.${error.retryAfter ? ` ${error.retryAfter}초 뒤에` : ' 잠시 뒤에'} 다시 시도하세요.${tail}`, { reload: saved });
   }
@@ -67,6 +70,8 @@ export function describeChangeProblem(error: unknown): string {
   if (error instanceof ApiError && error.code === 'model_unavailable') return '이 대화에 고를 수 없는 모델입니다. 다른 모델을 골라 주세요.';
   if (error instanceof ApiError && error.code === 'not_editable') return '고칠 수 없는 말입니다. 내 말은 새 가지로 고칩니다.';
   if (error instanceof ApiError && error.status === 422) return Object.values(error.fields)[0]?.[0] ?? '고칠 수 없는 글입니다.';
+  const auth = authUnavailableText(error);
+  if (auth) return auth;
   if (error instanceof ApiError && error.status === 503) return '모델의 값을 받지 못했습니다. 잠시 뒤에 다시 시도하세요.';
   if (error instanceof ApiError && error.code === 'too_many_attempts') return `너무 자주 바꿨습니다.${error.retryAfter ? ` ${error.retryAfter}초 뒤에` : ' 잠시 뒤에'} 다시 해 주세요.`;
   return '바꾸지 못했습니다. 잠시 뒤에 다시 시도하세요.';

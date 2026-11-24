@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from server_core import health, loops, readiness, stop_signals
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
+from server_core.auth.responses import use_auth_errors
 from server_core.billing.price_list import PriceListUnavailable
 from server_core.billing.setup import build_billing, build_price_list
 from server_core.database import create_engine, create_session_factory
@@ -354,6 +355,8 @@ def create_app(
 
     # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)
     use_input_errors(app)
+    # 토큰을 확인하지 못한 503(인증 서버가 꺼짐)에 까닭의 이름을 싣는다(server_core/auth/responses.py)
+    use_auth_errors(app)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다.
     # 원인은 로그에 남긴다(server_core/observability/responses.py)
