@@ -185,6 +185,8 @@ ssh -L 13000:127.0.0.1:3000 -L 18000:127.0.0.1:8000 <사용자>@<VM 주소>
 
 순서서의 9번(모델 목록과 운영자 계정)은 그대로 한다. 서술 모델은 집 PC 의 Ollama 에 있는 것을 넣는다. 파일은 저장소 밖(`~/local-models.toml`)에 둔다. `local` 창구는 `token_limit_field` 를 적고 `reasoning_style` 은 적지 않는다(`ai_core/catalog_contract.py`).
 
+생각하는 모델(Gemma 4 처럼 답하기 전에 속으로 따지는 모델)은 `supports_reasoning = true` 를 적는다. 적지 않으면 서버가 생각을 끄라는 칸(`reasoning_effort: none`)을 보내지 않는다(`ai_core/openai_compat.py`). 그러면 모델이 매번 생각부터 해 긴 요청(story)에서 길이 상한을 다 쓰고 "모델이 빈 답을 냈습니다"가 된다(2026-11-23 리허설). 고친 뒤에는 세 서버에 다시 들여오고 서버를 다시 띄운다.
+
 ```toml
 format = 1
 
@@ -196,6 +198,7 @@ display_name = "Gemma 4 26B A4B (집 PC)"
 vendor = "google"
 grade = "basic"
 token_limit_field = "max_tokens"
+supports_reasoning = true
 
 [[models.costs]]
 effective_from = 2026-10-22
