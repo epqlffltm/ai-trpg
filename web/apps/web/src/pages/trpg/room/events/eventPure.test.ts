@@ -330,7 +330,7 @@ describe('roomNoticeView', () => {
     );
     expect(notices.map((notice) => [notice.tone, notice.text])).toEqual([
       ['info', '서술 모델 Gemini Flash: 끝납니다(3일 남음).'],
-      ['error', '라운드 2: 서술에 실패했습니다(timeout).'],
+      ['error', '라운드 2: 모델이 제때 답하지 않아 서술하지 못했습니다.'],
     ]);
   });
 });
