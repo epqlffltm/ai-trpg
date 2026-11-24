@@ -83,7 +83,15 @@ def test_the_scenes_in_the_repository_load():
 
     kinds = {scene.kind for scene in dataset.scenes}
     assert kinds == set(SceneKind)
-    assert len(dataset.references) == 810
+    # SRD 5.1 과 위키백과의 줄이 모두 든다. 자료와 한국어 글도 DB 에 넣은 것과 같이 옮긴다
+    sources = {reference.source for reference in dataset.references}
+    assert sources == {'srd51', 'wikipedia'}
+    assert len([reference for reference in dataset.references if reference.source == 'srd51']) == 810
+    assert {scene.set for scene in dataset.scenes} == {'v1', 'v2'}
+    galleon = next(reference for reference in dataset.references if reference.key == 'ko/갈레온')
+    assert '갤리온' in galleon.aliases
+    english = next(reference for reference in dataset.references if reference.key == 'en/Portcullis')
+    assert english.shown_name == '내리닫이 쇠창살' and english.content_ko
     assert all(scene.expected or scene.kind == SceneKind.NONE for scene in dataset.scenes)
 
 

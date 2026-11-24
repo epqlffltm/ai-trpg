@@ -5,7 +5,8 @@
 
 장면은 사람이 손으로 늘린다. 실수(자료에 없는 key, 칸을 빠뜨림, none 인데 정답이 있음)를 읽을 때 모두 모아 알린다.
 장면은 서술 요청(NarrationRequest)으로 바꾼다. 서버의 고르는 함수(app/references/retrieval.py)를 그대로 쓰려는 것이다.
-자료의 줄은 데이터 파일(reference_core/data/srd51.json)을 읽은 것이다. DB 에 넣은 것과 같다.
+자료의 줄은 공용 패키지에 실린 데이터 파일들(reference_core/data.py 의 DATA_FILES: SRD 5.1, 위키백과)을 읽은 것이다.
+DB 에 넣은 것과 같다(관리 명령의 load 가 같은 파일을 넣는다). 한국어 이름과 글, 자료(source)도 함께 옮긴다.
 """
 
 import enum
@@ -16,14 +17,14 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from reference_core.data import SRD51_FILE
+from reference_core.data import DATA_FILES
 from reference_core.records import ReferenceRecord, StoredReference, read_document
 
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
 
-# 기본 장면 파일과 자료 파일
+# 기본 장면 파일과 자료 파일들
 DEFAULT_SCENES = Path(__file__).with_name('scenes.yaml')
-DEFAULT_REFERENCES = SRD51_FILE
+DEFAULT_REFERENCES: tuple[Path, ...] = DATA_FILES
 
 # 자료의 줄의 id 를 만드는 이름 공간. key 에서 만든다(uuid5). 같은 자료면 늘 같은 id 다
 REFERENCE_NAMESPACE = uuid.UUID('8a2f6c1e-4b7d-4e9a-a3c5-2d1e0f9b7c64')
@@ -68,8 +69,8 @@ class Dataset:
     references: tuple[StoredReference, ...]
 
 
-def to_stored(record: ReferenceRecord) -> StoredReference:
-    """자료의 줄을 서버가 고를 때의 모양으로. id 는 key 에서 만든다."""
+def to_stored(record: ReferenceRecord, source: str) -> StoredReference:
+    """자료의 줄을 서버가 고를 때의 모양으로(DB 에서 읽은 줄과 같은 칸). id 는 key 에서 만든다."""
     return StoredReference(
         id=uuid.uuid5(REFERENCE_NAMESPACE, record.key),
         key=record.key,
@@ -78,7 +79,16 @@ def to_stored(record: ReferenceRecord) -> StoredReference:
         content=record.content,
         kind=record.kind,
         data=dict(record.data),
+        name_ko=record.name_ko,
+        content_ko=record.content_ko,
+        source=source,
     )
+
+
+def read_references(paths: Sequence[Path]) -> tuple[StoredReference, ...]:
+    """데이터 파일들의 줄을 차례대로."""
+    documents = [read_document(path) for path in paths]
+    return tuple(to_stored(record, document.source) for document in documents for record in document.entries)
 
 
 def scene_problems(raw: dict[str, Any], keys: set[str], seen: set[str]) -> list[str]:
@@ -111,9 +121,9 @@ def to_scene(raw: dict[str, Any], story: StoryContext) -> Scene:
     )
 
 
-def load_dataset(scenes_path: Path = DEFAULT_SCENES, references_path: Path = DEFAULT_REFERENCES) -> Dataset:
-    """장면 파일과 자료 파일을 읽는다. 장면이 틀렸으면 DatasetError 에 틀린 곳을 모두 담는다."""
-    references = tuple(to_stored(record) for record in read_document(references_path).entries)
+def load_dataset(scenes_path: Path = DEFAULT_SCENES, references_paths: Sequence[Path] = DEFAULT_REFERENCES) -> Dataset:
+    """장면 파일과 자료 파일들을 읽는다. 장면이 틀렸으면 DatasetError 에 틀린 곳을 모두 담는다."""
+    references = read_references(references_paths)
     keys = {reference.key for reference in references}
     raw = yaml.safe_load(scenes_path.read_text(encoding='utf-8'))
     problems: list[str] = []

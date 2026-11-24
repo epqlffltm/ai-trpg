@@ -4,7 +4,8 @@
 참고 자료(#482)를 평가한다. 서버도 DB 도 쓰지 않는다.
 
 둘을 잰다.
-  1. 검색: 한국어 장면(evals/references/scenes.yaml)에서 SRD(reference_core/data/srd51.json)를 얼마나 맞게 고르는가.
+  1. 검색: 한국어 장면(evals/references/scenes.yaml)에서 실린 자료(SRD 5.1 과 위키백과, reference_core/data/)를
+     얼마나 맞게 고르는가.
      임베딩 모델만 부른다. 거리 기준을 바꿔 가며 점수를 매겨 REFERENCE_MAX_DISTANCE 를 정할 근거를 만든다.
   2. 서술(--narrate): 같은 장면을 참고 자료를 끈 것과 켠 것으로 서술하게 해 견준다.
      늘어난 입력 토큰, 수치가 샌 서술, 길이를 세고 장면을 보고서에 남긴다. 나아졌는지는 사람이 읽고 판단한다.
