@@ -14,7 +14,9 @@
     "갤리온" 이 "갈레온" 으로), 목록에 적은 다른 이름
   - content: 도입부에서 거르고 남은 글(reference_core/wiki.py)
   - name_ko: 영어판의 줄이면 목록의 한국어 이름. 한국어판의 줄은 비운다(원본이 한국어다)
-  - content_ko: 비운다. 영어판의 줄은 번역 파일이 채운다(다음 단계)
+  - content_ko: 한국어판의 줄은 비운다. 영어판의 줄은 번역 파일(data/wikipedia.ko.json)이 있으면 그것으로 채운다
+번역 파일은 영어판의 줄만 옮긴다(reference_core/translations.py, SRD 와 같은 모양). 번역이 없는 영어판의 줄과,
+지금 자료에 없는 줄의 번역(한국어판으로 바뀌었거나 제목을 지웠다)은 알린다. 멈추지는 않는다.
   - data: lang, page_id, revision_id(받은 판), url(원문). 서술자에게 가지 않는다
 같은 문서에 닿은 두 제목은 앞의 것만 넣는다. 다시 만들면 그때의 판을 받는다(revision_id 가 바뀐 줄만 diff 에 보인다).
 """
@@ -36,6 +38,7 @@ from reference_core.records import (
     ReferenceSource,
     write_document,
 )
+from reference_core.translations import TranslationDocument, apply_translations, read_translations, unknown_keys
 from reference_core.wiki import WIKIPEDIA_ATTRIBUTION, WIKIPEDIA_CHANGES, lead_content, places_pattern, read_places
 from reference_core.wiki_api import WikiPage, batches, pages_of
 from reference_core.wiki_titles import WikiTitle, read_titles, without_disambiguation
@@ -60,6 +63,9 @@ class BuildReport:
     missing: list[str] = field(default_factory=list)
     emptied: list[str] = field(default_factory=list)
     duplicated: list[str] = field(default_factory=list)
+    # 번역이 없는 영어판의 줄(key)과, 자료에 없는 줄의 번역(key)
+    untranslated: list[str] = field(default_factory=list)
+    stale: list[str] = field(default_factory=list)
 
 
 def fetch_pages(fetch: Fetch, lang: str, titles: Sequence[str]) -> dict[str, WikiPage]:
@@ -145,6 +151,20 @@ def collect(
     return records, report
 
 
+def with_translations(
+    records: list[ReferenceRecord], translations: TranslationDocument, report: BuildReport
+) -> list[ReferenceRecord]:
+    """번역을 붙인다. 번역이 없는 영어판의 줄과 자료에 없는 줄의 번역을 알림에 적는다."""
+    if translations.source != ReferenceSource.WIKIPEDIA:
+        raise ValueError(f'위키백과의 번역 파일이 아니다: {translations.source}')
+    report.stale = unknown_keys(records, translations)
+    translated = apply_translations(records, translations)
+    report.untranslated = [
+        record.key for record in translated if record.data.get('lang') != 'ko' and not record.content_ko
+    ]
+    return translated
+
+
 def wiki_document(records: list[ReferenceRecord], revision: str) -> ReferenceDocument:
     """위키백과의 줄들을 데이터 파일 하나로. revision 은 받은 날(YYYY-MM-DD)이다. 줄마다의 판은 data 에 있다."""
     origin = ReferenceOrigin(
@@ -157,9 +177,15 @@ def wiki_document(records: list[ReferenceRecord], revision: str) -> ReferenceDoc
     return ReferenceDocument(format=DOCUMENT_FORMAT, source=ReferenceSource.WIKIPEDIA, origin=origin, entries=records)
 
 
-def build(titles: Path, places: Path, output: Path, fetch: Fetch, revision: str) -> BuildReport:
-    """제목 목록과 나라·도시의 이름 목록으로 데이터 파일을 쓴다. 만든 결과를 돌려준다."""
+def build(
+    titles: Path, places: Path, output: Path, fetch: Fetch, revision: str, translation: Path | None = None
+) -> BuildReport:
+    """
+    제목 목록과 거를 이름의 목록으로 데이터 파일을 쓴다. 번역 파일이 있으면 붙인다. 만든 결과를 돌려준다.
+    """
     records, report = collect(read_titles(titles), fetch, places_pattern(read_places(places)))
+    if translation is not None and translation.exists():
+        records = with_translations(records, read_translations(translation), report)
     output.parent.mkdir(parents=True, exist_ok=True)
     write_document(wiki_document(records, revision), output)
     return report

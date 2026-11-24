@@ -15,7 +15,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from reference_core.data import WIKIPEDIA_FILE
+from reference_core.data import WIKIPEDIA_FILE, WIKIPEDIA_TRANSLATION_FILE
 from reference_core.wiki_build import BuildReport
 
 from scripts import build_wiki as script
@@ -80,7 +80,15 @@ def test_a_server_that_stays_busy_or_answers_wrong_stops_the_build():
 
 
 def test_the_report_lists_what_to_fix():
-    report = BuildReport(written=3, english=['캐럭'], missing=['없는 배'], emptied=['코그선'], duplicated=['돛단배'])
+    report = BuildReport(
+        written=3,
+        english=['캐럭'],
+        missing=['없는 배'],
+        emptied=['코그선'],
+        duplicated=['돛단배'],
+        untranslated=['en/Carrack'],
+        stale=['en/Gone'],
+    )
 
     lines = script.describe(report, Path('wikipedia.json'))
 
@@ -88,6 +96,8 @@ def test_the_report_lists_what_to_fix():
     assert any('없는 배' in line for line in lines)
     assert any('코그선' in line for line in lines)
     assert any('돛단배' in line for line in lines)
+    assert any('en/Carrack' in line and '번역이 없다' in line for line in lines)
+    assert any('en/Gone' in line for line in lines)
     assert script.describe(BuildReport(written=1), Path('w.json')) == ['w.json: 1줄(영어판 0)']
 
 
@@ -97,4 +107,4 @@ def test_the_command_needs_a_contact():
 
     args = script.build_parser().parse_args(['--contact', 'me@example.com'])
 
-    assert (args.output, args.pause) == (WIKIPEDIA_FILE, 1.0)
+    assert (args.output, args.pause, args.translation) == (WIKIPEDIA_FILE, 1.0, WIKIPEDIA_TRANSLATION_FILE)
