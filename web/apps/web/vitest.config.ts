@@ -1,8 +1,13 @@
 // web/apps/web/vitest.config.ts
 // 화면의 시험. 브라우저 대신 jsdom 에서 돈다. 서버는 부르지 않고 fetch 를 가짜로 바꾼다.
+// 시간대는 한국(Asia/Seoul)으로 고정한다. 화면은 보는 사람의 시간대로 시각을 적어(src/format/dateTime.ts),
+// 고정하지 않으면 시험 결과가 돌린 컴퓨터의 시간대(CI 는 UTC, 집 PC 는 한국)에 따라 달라진다.
+// 시험을 도는 작업자가 뜨기 전에 정해야 물려받는다. 시각을 적는 틀(Intl.DateTimeFormat)은 처음 읽을 때 시간대를 정한다.
 
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
+
+process.env.TZ = 'Asia/Seoul';
 
 export default defineConfig({
   plugins: [react()],
