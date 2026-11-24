@@ -15,6 +15,7 @@
 """
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -22,6 +23,11 @@ from reference_core.records import REFERENCE_ALIAS_MAX_LENGTH, REFERENCE_MAX_ALI
 
 # 제목 뒤의 괄호(동음이의어 가르기)
 DISAMBIGUATION = re.compile(r'\s*\([^()]*\)\s*$')
+
+
+def without_disambiguation(title: str) -> str:
+    """제목 뒤의 괄호(동음이의어 가르기)를 뗀 이름. "성 (건축)" 은 "성" 이다."""
+    return DISAMBIGUATION.sub('', title)
 
 
 class TitleLineError(ValueError):
@@ -39,14 +45,15 @@ class WikiTitle:
     @property
     def korean_name(self) -> str:
         """장면에서 부르는 한국어 이름. 제목 뒤의 괄호를 뗀다."""
-        return DISAMBIGUATION.sub('', self.ko)
+        return without_disambiguation(self.ko)
 
-    def names(self) -> list[str]:
+    def names(self, found: Sequence[str] = ()) -> list[str]:
         """
-        줄의 다른 이름(aliases). 한국어 이름이 맨 앞이고, 겹친 것과 긴 것(30자 넘음)은 뺀다. 다섯까지다.
+        줄의 다른 이름(aliases). 한국어 이름이 맨 앞, 그다음 받은 문서의 이름(found, 넘겨주기를 따라간 한국어판의 제목),
+        그다음 목록에 적은 다른 이름이다. 겹친 것과 긴 것(30자 넘음)은 뺀다. 다섯까지다.
         """
         picked: list[str] = []
-        for name in (self.korean_name, *self.aliases):
+        for name in (self.korean_name, *found, *self.aliases):
             if name and name not in picked and len(name) <= REFERENCE_ALIAS_MAX_LENGTH:
                 picked.append(name)
         return picked[:REFERENCE_MAX_ALIASES]

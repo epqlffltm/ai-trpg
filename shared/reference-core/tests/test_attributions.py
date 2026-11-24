@@ -7,7 +7,7 @@
 import uuid
 
 from reference_core.attributions import ATTRIBUTIONS, attributions_of
-from reference_core.data import DATA_FILES, SRD51_FILE, SRD51_TRANSLATION_FILE
+from reference_core.data import DATA_FILES, SRD51_FILE, SRD51_TRANSLATION_FILE, WIKIPEDIA_FILE
 from reference_core.records import ReferenceSource, StoredReference, read_document
 from reference_core.wiki import WIKIPEDIA_ATTRIBUTION
 
@@ -30,6 +30,7 @@ def test_attributions_come_once_per_source_in_order():
 
 
 def test_the_shipped_files_are_in_the_package():
-    assert DATA_FILES == (SRD51_FILE,)
+    assert DATA_FILES == (SRD51_FILE, WIKIPEDIA_FILE)
     assert SRD51_TRANSLATION_FILE.exists()
     assert read_document(SRD51_FILE).source == ReferenceSource.SRD51
+    assert read_document(WIKIPEDIA_FILE).source == ReferenceSource.WIKIPEDIA

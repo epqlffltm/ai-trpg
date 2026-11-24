@@ -10,7 +10,8 @@
   3. 둘 다 안 되면 건너뛰고 알린다(BuildReport)
 줄의 모양(trpg-server/README.md 의 "위키백과").
   - key: "<언어>/<받은 제목>"(ko/범선, en/Carrack). 넘겨주기를 따라간 뒤의 제목이다
-  - kind: topic. name: 받은 제목. aliases: 한국어 이름이 맨 앞, 목록에 적은 다른 이름
+  - kind: topic. name: 받은 제목. aliases: 한국어 이름이 맨 앞, 그다음 한국어판의 받은 제목(넘겨주기로 바뀐 이름,
+    "갤리온" 이 "갈레온" 으로), 목록에 적은 다른 이름
   - content: 도입부에서 거르고 남은 글(reference_core/wiki.py)
   - name_ko: 영어판의 줄이면 목록의 한국어 이름. 한국어판의 줄은 비운다(원본이 한국어다)
   - content_ko: 비운다. 영어판의 줄은 번역 파일이 채운다(다음 단계)
@@ -37,7 +38,7 @@ from reference_core.records import (
 )
 from reference_core.wiki import WIKIPEDIA_ATTRIBUTION, WIKIPEDIA_CHANGES, lead_content, places_pattern, read_places
 from reference_core.wiki_api import WikiPage, batches, pages_of
-from reference_core.wiki_titles import WikiTitle, read_titles
+from reference_core.wiki_titles import WikiTitle, read_titles, without_disambiguation
 
 # 데이터 파일의 원본 이름
 WIKIPEDIA_DATASET = 'Wikipedia (Korean and English editions)'
@@ -79,7 +80,7 @@ def record_of(title: WikiTitle, page: WikiPage, places: re.Pattern[str]) -> Refe
         key=key,
         kind=ReferenceKind.TOPIC,
         name=page.title,
-        aliases=title.names(),
+        aliases=title.names([without_disambiguation(page.title)] if page.lang == 'ko' else []),
         content=content,
         name_ko='' if page.lang == 'ko' else title.korean_name,
         data={'lang': page.lang, 'page_id': page.page_id, 'revision_id': page.revision_id, 'url': page.url},

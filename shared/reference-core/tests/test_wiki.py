@@ -245,6 +245,24 @@ def test_korean_first_then_english_then_reported():
     ]
 
 
+def test_a_redirected_korean_page_keeps_both_names():
+    title = WikiTitle(ko='갤리온', en='Galleon', aliases=('대형 범선',))
+    wiki = FakeWiki({'ko': {'갤리온': page('갈레온', '돛대가 셋인 큰 배다.')}, 'en': {}})
+
+    (record,), _ = collect([title], wiki, PLACES)
+
+    assert (record.key, record.name, record.aliases) == ('ko/갈레온', '갈레온', ['갤리온', '갈레온', '대형 범선'])
+
+
+def test_the_page_name_loses_its_disambiguation():
+    title = WikiTitle(ko='성채')
+    wiki = FakeWiki({'ko': {'성채': page('성 (건축)', '돌로 쌓은 집이다.')}})
+
+    (record,), _ = collect([title], wiki, PLACES)
+
+    assert record.aliases == ['성채', '성']
+
+
 def test_long_titles_are_left_out():
     long_title = '가' * 101
 
