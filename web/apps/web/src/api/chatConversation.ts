@@ -19,7 +19,7 @@
 // 기록 내려받기는 GET /conversations/{id}/transcript?format=md|html|txt. 지금 보는 가지만, 10분에 10번까지(429).
 
 import { apiDownload, apiRequest, apiStream, type Download } from './http';
-import type { ChatModelList, ConversationAction, ConversationDetail, ConversationModel, SavedChatMessage } from './types';
+import type { ChatModelList, ConversationAction, ConversationDetail, ConversationModel, ConversationReferences, SavedChatMessage } from './types';
 
 const CHAT = '/api/v1/chat';
 
@@ -34,6 +34,11 @@ export function fetchChatModels(signal?: AbortSignal): Promise<ChatModelList> {
 
 export function chooseConversationModel(id: string, model: string): Promise<ConversationModel> {
   return apiRequest<ConversationModel>(`${CHAT}/conversations/${encodeURIComponent(id)}/model`, { method: 'PUT', body: { model } });
+}
+
+/** 대화의 참고 자료(SRD 5.1, 위키백과)를 켜거나 끈다(#1338). 캐릭터가 허용하지 않는데 켜면 422 references_not_allowed */
+export function chooseConversationReferences(id: string, enabled: boolean): Promise<ConversationReferences> {
+  return apiRequest<ConversationReferences>(`${CHAT}/conversations/${encodeURIComponent(id)}/references`, { method: 'PUT', body: { enabled } });
 }
 
 /** 다른 대안을 본다. 그 말 아래에서 가장 나중에 생긴 말이 가지의 끝이 된다. 바뀐 대화를 돌려준다 */

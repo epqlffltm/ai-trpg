@@ -226,6 +226,8 @@ export type ConversationState = Chat['schemas']['StateOut'];
 export type ChatModelList = Chat['schemas']['ModelList'];
 export type ChatModel = Chat['schemas']['ModelOut'];
 export type ConversationModel = Chat['schemas']['ConversationModelOut'];
+// 대화의 참고 자료를 켰는가(PUT /conversations/{id}/references 의 답, #1338)
+export type ConversationReferences = Chat['schemas']['ReferencesOut'];
 export type ConversationAction = Chat['schemas']['MoveAction'] | Chat['schemas']['UseAction'] | Chat['schemas']['GiveAction'] | Chat['schemas']['WaitAction'];
 
 // 결제 서버의 지갑(A6)과 충전(A7). 크레딧의 양은 글자다("80"). 화면이 셈하지 않는다. 상품과 주문의 값(price)은 원이고 숫자다

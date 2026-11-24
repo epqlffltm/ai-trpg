@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/chat/studio/characters/basicsForm.ts
-// 캐릭터의 기본 탭(이름, 나이, 성별, 장르, 태그, 등급, 공개 범위)의 입력. 순수한 함수다.
+// 캐릭터의 기본 탭(이름, 나이, 성별, 장르, 태그, 등급, 공개 범위, 참고 자료의 허용)의 입력. 순수한 함수다.
 // 장르는 반드시 하나다(비울 수 없다). 대화와 소개 화면의 테마를 정한다.
 // 상한은 서버와 같다(asset-server/app/characters/models.py). 태그는 쉼표로 나눠 한 칸에 적는다.
 
@@ -19,6 +19,8 @@ export type BasicsDraft = {
   tags: string;
   rating: AssetRating;
   visibility: AssetVisibility;
+  // 대화에 참고 자료(SRD 5.1, 위키백과)를 켜게 해도 되는가(#1338). 게시한 판에 굳는다
+  referencesAllowed: boolean;
 };
 
 export function basicsDraft(character: AssetCharacterDetail): BasicsDraft {
@@ -30,6 +32,7 @@ export function basicsDraft(character: AssetCharacterDetail): BasicsDraft {
     tags: character.tags.join(', '),
     rating: character.rating,
     visibility: character.visibility,
+    referencesAllowed: character.references_allowed,
   };
 }
 
@@ -63,5 +66,6 @@ export function toBasicsBody(draft: BasicsDraft): AssetCharacterUpdate {
     tags: parseTags(draft.tags),
     rating: draft.rating,
     visibility: draft.visibility,
+    references_allowed: draft.referencesAllowed,
   };
 }

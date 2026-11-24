@@ -1,5 +1,5 @@
 // web/apps/web/src/pages/story/studio/worldBasicsForm.ts
-// 세계관의 기본 탭(이름, 장르, 태그, 등급, 공개 범위, 대표 그림)의 입력. 순수한 함수다.
+// 세계관의 기본 탭(이름, 장르, 태그, 등급, 공개 범위, 대표 그림, 참고 자료의 허용)의 입력. 순수한 함수다.
 // 장르는 반드시 하나다(비울 수 없다). 장면과 소개 화면의 테마를 정한다.
 // 상한은 서버와 같다(asset-server/app/worlds/models.py 의 이름과 태그는 캐릭터와 같다). 태그는 쉼표로 나눠 한 칸에 적는다.
 
@@ -12,10 +12,27 @@ export { NAME_MAX };
 export type WorldRating = StoryWorldDetail['rating'];
 export type WorldVisibility = StoryWorldDetail['visibility'];
 
-export type WorldBasicsDraft = { name: string; genre: AssetGenre; tags: string; rating: WorldRating; visibility: WorldVisibility; imageId: string | null };
+// referencesAllowed: 세션에 참고 자료(SRD 5.1, 위키백과)를 켜게 해도 되는가(#1338). 게시한 판에 굳는다
+export type WorldBasicsDraft = {
+  name: string;
+  genre: AssetGenre;
+  tags: string;
+  rating: WorldRating;
+  visibility: WorldVisibility;
+  imageId: string | null;
+  referencesAllowed: boolean;
+};
 
 export function worldBasicsDraft(world: StoryWorldDetail): WorldBasicsDraft {
-  return { name: world.name, genre: world.genre, tags: world.tags.join(', '), rating: world.rating, visibility: world.visibility, imageId: world.image_id ?? null };
+  return {
+    name: world.name,
+    genre: world.genre,
+    tags: world.tags.join(', '),
+    rating: world.rating,
+    visibility: world.visibility,
+    imageId: world.image_id ?? null,
+    referencesAllowed: world.references_allowed,
+  };
 }
 
 /** 이름의 문제. 없으면 undefined */
@@ -38,5 +55,13 @@ export function worldBasicsHints(draft: WorldBasicsDraft): Record<string, string
 
 /** 기본 탭의 칸만 보낸다. 힌트가 없을 때만 부른다 */
 export function toWorldBasicsBody(draft: WorldBasicsDraft): StoryWorldUpdate {
-  return { name: draft.name.trim(), genre: draft.genre, tags: parseTags(draft.tags), rating: draft.rating, visibility: draft.visibility, image_id: draft.imageId };
+  return {
+    name: draft.name.trim(),
+    genre: draft.genre,
+    tags: parseTags(draft.tags),
+    rating: draft.rating,
+    visibility: draft.visibility,
+    image_id: draft.imageId,
+    references_allowed: draft.referencesAllowed,
+  };
 }

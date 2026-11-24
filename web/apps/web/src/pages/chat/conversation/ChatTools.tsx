@@ -5,15 +5,20 @@
 //   - 지도·이동: 지금 있는 곳, 갈 수 있는 곳과 "가기"(판에 지도가 있을 때만)
 //   - 소지품·건네기: 가진 물건, 쓰기와 건네기
 //   - 상대의 차림·기억: 지금 입은 옷, 기억 메모(펼친 동안만 읽는다)와 앞부분의 요약
-//   - 페르소나·모델: 지금의 페르소나, 지금의 모델과 "모델 바꾸기"(고르는 창은 ConversationRoom 이 연다)
+//   - 페르소나·모델: 지금의 페르소나, 지금의 모델과 "모델 바꾸기"(고르는 창은 ConversationRoom 이 연다),
+//     캐릭터가 허용하면 참고 자료 쓰기(#1338)
 // 행동(가기, 쓰기, 건네기)은 반응을 받으므로 받는 중이면 막는다(busy). 창을 펼치는 것과 기억 고치기는 막지 않는다.
 
 import { Button } from '@ai-trpg/ui';
+import { chooseConversationReferences } from '../../../api/chatConversation';
 import type { ConversationAction, ConversationDetail } from '../../../api/types';
+import { ReferencesToggle } from '../../../components/ReferencesToggle';
+import { useReferencesChoice } from '../../../components/useReferencesChoice';
 import { retireText } from '../../trpg/models/modelChoice';
 import { InventoryPanel } from './InventoryPanel';
 import { MapPanel } from './MapPanel';
 import { ChatNotes } from './NotesDialog';
+import { conversationKey } from './conversationQueries';
 import { OutfitPanel } from './OutfitPanel';
 import { hasMap } from './worldView';
 
@@ -95,6 +100,7 @@ function ToolContent({ tool, detail, busy, onAction, onChooseModel }: Props & { 
 
 /** 페르소나·모델. 페르소나는 대화를 시작할 때 정해져 여기서는 보기만 한다 */
 function PersonaModel({ detail, busy, onChooseModel }: { detail: ConversationDetail; busy: boolean; onChooseModel: () => void }) {
+  const references = useReferencesChoice<ConversationDetail>(conversationKey(detail.id), (enabled) => chooseConversationReferences(detail.id, enabled));
   return (
     <div className="chat-persona">
       <dl>
@@ -113,6 +119,13 @@ function PersonaModel({ detail, busy, onChooseModel }: { detail: ConversationDet
       <Button variant="secondary" disabled={busy} onClick={onChooseModel}>
         {detail.model ? '모델 바꾸기' : '모델 고르기'}
       </Button>
+      <ReferencesToggle
+        allowed={detail.character.document.references_allowed}
+        enabled={detail.references_enabled}
+        disabled={busy || references.isPending}
+        error={references.error}
+        onChange={(enabled) => references.mutate(enabled)}
+      />
     </div>
   );
 }
