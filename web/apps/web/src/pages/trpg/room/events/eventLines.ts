@@ -18,6 +18,7 @@ import {
 } from '../../labels';
 import { dayLabel, stepName } from '../../models/modelChoice';
 import { amountLabel } from '../money';
+import { failureText } from './narrationFailure';
 import { blowLine, type Blow } from '../round/roundView';
 import { clockTimeLabel, injuryName, questStatusLabel } from '../status/statusView';
 
@@ -427,7 +428,7 @@ const DESCRIBE: Record<EventType, Describe> = {
   round_resumed: (p, ctx, e) => `${roundOf(p)}: ${who(p, ctx, e)}의 선언으로 이어 갑니다.`,
   round_closed: (p) => `라운드 ${count(p, 'number') ?? '?'}: 마감`,
   round_reverted: (p) => `라운드 ${count(p, 'number') ?? '?'}: 방장이 되돌렸습니다. 같은 라운드를 다시 진행합니다.`,
-  narration_failed: (p) => `${roundOf(p)}: 서술에 실패했습니다(${text(p, 'reason') ?? '까닭 모름'}).`,
+  narration_failed: (p) => `${roundOf(p)}: ${failureText(text(p, 'reason'))}`,
   narration_abandoned: (p) => abandonedText(p),
   narration_credits_short: (p, ctx) => creditsShortText(p, ctx),
   narration_credits_released: (p) => `${roundOf(p)}: 서술 값을 돌려주었습니다.`,
