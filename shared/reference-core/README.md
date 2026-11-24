@@ -44,7 +44,7 @@ ORM 클래스와 마이그레이션, 켰는지(테이블, 대화, 세션), 로�
 | 파일 | 원본과 조건 |
 | --- | --- |
 | `srd51.json`, `srd51.ko.json` | D&D SRD 5.1(Wizards of the Coast), CC BY 4.0 |
-| `wikipedia.json` | 위키백과(한국어판, 영어판)의 문서 도입부, CC BY-SA 4.0. 줄마다 원문의 주소(`data.url`)가 있다 |
+| `wikipedia.json`, `wikipedia.ko.json` | 위키백과(한국어판, 영어판)의 문서 도입부와, 영어판의 줄을 한국어로 옮긴 것. CC BY-SA 4.0. 줄마다 원문의 주소(`data.url`)가 있다 |
 
 출처 표시는 `attributions.py` 에 있다. 바꾼 것(뺐고, 줄였고, 옮겼다)도 함께 적는다.
 

@@ -5,6 +5,7 @@
 
 제목 목록(reference_core/data/wikipedia-titles.txt)의 문서를 MediaWiki API 로 받아 도입부를 거른다.
 한국어판 먼저, 없으면 영어판이다. 차례와 거르는 규칙은 reference_core/wiki_build.py 와 reference_core/wiki.py 다.
+영어판의 줄은 번역 파일(reference_core/data/wikipedia.ko.json)이 있으면 붙인다. 번역이 없는 줄은 끝에 알린다.
 여기는 HTTP 로 묻는 것만 한다. 운영 서버는 위키백과를 부르지 않고 만든 파일을 넣는다(scripts/references.py load).
 
     uv run python -m scripts.build_wiki --contact you@example.com
@@ -24,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from reference_core.data import WIKIPEDIA_FILE, WIKIPEDIA_PLACES_FILE, WIKIPEDIA_TITLES_FILE
+from reference_core.data import WIKIPEDIA_FILE, WIKIPEDIA_PLACES_FILE, WIKIPEDIA_TITLES_FILE, WIKIPEDIA_TRANSLATION_FILE
 from reference_core.wiki_api import API_URLS, query_params
 from reference_core.wiki_build import BuildReport, Fetch, build
 
@@ -94,6 +95,8 @@ def describe(report: BuildReport, output: Path) -> list[str]:
         ('한국어판과 영어판에 모두 없다(제목을 고치거나 지운다)', report.missing),
         ('거르고 남은 글이 없다', report.emptied),
         ('다른 제목과 같은 문서다(앞의 것만 넣었다)', report.duplicated),
+        ('영어판인데 번역이 없다(번역 파일에 더한다)', report.untranslated),
+        ('자료에 없는 줄의 번역이다(번역 파일에서 지운다)', report.stale),
     ):
         if titles:
             lines.append(f'{label}: {", ".join(titles)}')
@@ -116,6 +119,12 @@ def build_parser() -> argparse.ArgumentParser:
         help=f'거를 나라·도시의 이름. 기본 {WIKIPEDIA_PLACES_FILE}',
     )
     parser.add_argument('--output', type=Path, default=WIKIPEDIA_FILE, help=f'만들 파일. 기본 {WIKIPEDIA_FILE}')
+    parser.add_argument(
+        '--translation',
+        type=Path,
+        default=WIKIPEDIA_TRANSLATION_FILE,
+        help=f'영어판의 줄의 한국어 번역. 파일이 없으면 붙이지 않는다. 기본 {WIKIPEDIA_TRANSLATION_FILE}',
+    )
     parser.add_argument('--pause', type=float, default=1.0, help='묻는 사이에 쉬는 초. 기본 1')
     return parser
 
@@ -125,7 +134,8 @@ def main() -> None:
     args = build_parser().parse_args()
     headers = {'User-Agent': user_agent(args.contact)}
     with httpx.Client(headers=headers, timeout=TIMEOUT_SECONDS, follow_redirects=True) as client:
-        report = build(args.titles, args.places, args.output, make_fetch(client, args.pause), date.today().isoformat())
+        fetch = make_fetch(client, args.pause)
+        report = build(args.titles, args.places, args.output, fetch, date.today().isoformat(), args.translation)
     for line in describe(report, args.output):
         print(line)
 

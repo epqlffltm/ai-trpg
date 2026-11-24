@@ -3849,6 +3849,7 @@ SRD 의 글로 채우지 못하는 사물의 구조와 쓰임(배, 성채, 등�
   uv run python -m scripts.build_wiki --contact <메일이나 주소>
   ```
 
+  영어판으로 받은 줄은 번역 파일(`reference_core/data/wikipedia.ko.json`, SRD 의 번역 파일과 같은 모양)이 있으면 한국어 이름과 글을 붙인다. 번역이 없는 영어판의 줄과, 자료에 없는 줄의 번역(한국어판으로 바뀌었거나 제목을 지웠다)은 끝에 찍는다.
   만든 `reference_core/data/wikipedia.json` 을 저장소에 넣는다. 그 뒤 세 서버(trpg, chat, story)의 `scripts.references load` → `index` 가 SRD 와 함께 넣는다(파일이 있으면 `DATA_FILES` 에 든다).
 - **판.** 줄마다 받은 판(`revision_id`)을 적는다. 다시 만들면 그때의 판을 받는다. 바뀐 문서의 줄만 diff 에 보인다. 옛 판을 그대로 다시 받는 것(`--pin`)은 만들지 않았다(도입부를 주는 API 가 판을 고르지 못한다).
 

@@ -13,13 +13,15 @@
   - 실린 파일: 제목 목록과 이름 목록이 읽힌다
 """
 
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from reference_core.data import WIKIPEDIA_PLACES_FILE, WIKIPEDIA_TITLES_FILE
+from reference_core.data import WIKIPEDIA_FILE, WIKIPEDIA_PLACES_FILE, WIKIPEDIA_TITLES_FILE, WIKIPEDIA_TRANSLATION_FILE
 from reference_core.records import ReferenceKind, ReferenceSource, read_document
+from reference_core.translations import TranslationDocument, read_translations
 from reference_core.wiki import (
     clean_text,
     kept_sentences,
@@ -29,7 +31,7 @@ from reference_core.wiki import (
     within_length,
 )
 from reference_core.wiki_api import BATCH_SIZE, batches, pages_of, query_params, resolved_titles
-from reference_core.wiki_build import build, collect
+from reference_core.wiki_build import BuildReport, build, collect, with_translations
 from reference_core.wiki_titles import TitleLineError, WikiTitle, parse_titles, read_titles
 
 PLACES = places_pattern(['포르투갈', '유럽', 'Portugal', 'Iran'])
@@ -296,6 +298,62 @@ def test_the_file_is_written_as_a_wikipedia_document(tmp_path: Path):
     assert document.entries[0].content == '돛으로 가는 배다.'
 
 
+# --- 번역 ---
+
+
+def english_record(key: str = 'en/Carrack'):
+    title = WikiTitle(ko='캐럭', en='Carrack')
+    (record,), _ = collect(
+        [title], FakeWiki({'ko': {}, 'en': {'Carrack': page('Carrack', 'A carrack is a large ship.')}}), PLACES
+    )
+    assert record.key == key
+    return record
+
+
+def translations(entries: dict, source: str = 'wikipedia') -> TranslationDocument:
+    return TranslationDocument.model_validate({'format': 1, 'source': source, 'language': 'ko', 'entries': entries})
+
+
+def test_english_lines_get_their_translation_and_the_rest_is_reported():
+    report = BuildReport()
+    record = english_record()
+
+    (done,) = with_translations(
+        [record],
+        translations({'en/Carrack': {'name': '캐럭', 'content': '큰 배다.'}, 'en/Gone': {'name': '없음'}}),
+        report,
+    )
+    (left,) = with_translations([record], translations({}), report)
+
+    assert (done.name_ko, done.content_ko, done.aliases) == ('캐럭', '큰 배다.', ['캐럭'])
+    assert report.untranslated == ['en/Carrack'] and left.content_ko == ''
+    assert with_translations([record], translations({'en/Gone': {'name': '없음'}}), BuildReport()) == [record]
+
+
+def test_a_translation_of_another_source_is_refused():
+    with pytest.raises(ValueError, match='위키백과'):
+        with_translations([english_record()], translations({}, source='srd51'), BuildReport())
+
+
+def test_the_build_applies_the_translation_file(tmp_path: Path):
+    titles, places, output, translation = (tmp_path / name for name in ('t.txt', 'p.txt', 'w.json', 'w.ko.json'))
+    titles.write_text('캐럭 | Carrack\n', encoding='utf-8')
+    places.write_text('', encoding='utf-8')
+    body = {
+        'format': 1,
+        'source': 'wikipedia',
+        'language': 'ko',
+        'entries': {'en/Carrack': {'name': '캐럭', 'content': '큰 배다.'}},
+    }
+    translation.write_text(json.dumps(body, ensure_ascii=False), encoding='utf-8')
+    wiki = FakeWiki({'ko': {}, 'en': {'Carrack': page('Carrack', 'A carrack is a large ship.')}})
+
+    report = build(titles, places, output, wiki, '2026-11-24', translation)
+
+    assert read_document(output).entries[0].content_ko == '큰 배다.'
+    assert report.untranslated == [] and report.stale == []
+
+
 # --- 실린 파일 ---
 
 
@@ -305,5 +363,10 @@ def test_the_shipped_lists_are_read():
 
     assert len(titles) > 100 and all(title.ko for title in titles)
     assert '포르투갈' in places and 'Portugal' in places
+    # 실린 데이터 파일의 영어판 줄은 모두 번역이 있다. 번역 파일에는 자료에 없는 줄이 없다
+    document = read_document(WIKIPEDIA_FILE)
+    english = {record.key for record in document.entries if record.data['lang'] == 'en'}
+    assert english and all(record.content_ko for record in document.entries if record.key in english)
+    assert set(read_translations(WIKIPEDIA_TRANSLATION_FILE).entries) == english
     # 한국어 이름은 두 글자 이상이다(한 글자는 낱말 속에서 잘못 걸린다)
     assert all(len(place) >= 2 for place in places if not place.isascii())
