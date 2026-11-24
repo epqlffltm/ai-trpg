@@ -82,8 +82,9 @@ describe('장애', () => {
 
 describe('점검 시간의 한 줄', () => {
   it('같은 날이면 끝은 시각만, 한쪽만 알면 부터·까지, 모르면 없다', () => {
+    // 시험의 시간대는 한국이다(vitest.config.ts). 02:00Z 는 오전 11시
     const same = maintenanceWindow({ startsAt: '2026-11-04T02:00:00Z', endsAt: '2026-11-04T04:00:00Z' }) as string;
-    expect(same).toMatch(/2026년 11월 4일 .*2:00 ~ .*4:00$/);
+    expect(same).toBe('2026년 11월 4일 오전 11:00 ~ 오후 1:00');
     expect(same.split('2026').length).toBe(2);
     expect(maintenanceWindow({ startsAt: null, endsAt: '2026-11-04T04:00:00Z' })).toMatch(/까지$/);
     expect(maintenanceWindow({ startsAt: '2026-11-04T02:00:00Z', endsAt: null })).toMatch(/부터$/);
