@@ -18,9 +18,12 @@ trpg-server 가 처음 만들었고(`app/references/`), chat 과 story 도 같�
 | `records` | 자료의 한 줄(`ReferenceRecord`, `StoredReference`)과 데이터 파일(`ReferenceDocument`)의 모양, 자료와 종류, 복사할 수 있는 자료(`COPYABLE_SOURCES`) |
 | `srd`, `srd_build` | SRD 5.1 의 원본에서 줄을 만드는 규칙(수치 거르기)과 원본 폴더로 데이터 파일 쓰기 |
 | `translations` | 한국어 번역 파일을 읽고 줄에 붙이기 |
-| `wiki` | 위키백과의 출처 표시. 받는 도구와 거르는 규칙은 다음 단계에서 더한다 |
+| `wiki` | 위키백과의 출처 표시와 도입부 거르기(괄호, 각주, 좌표, 실제 세계의 때와 곳이 든 문장, 1,000자) |
+| `wiki_titles` | 받을 제목 목록(`data/wikipedia-titles.txt`) 읽기와 줄의 다른 이름 |
+| `wiki_api` | MediaWiki API 의 물음과 답 읽기(넘겨주기, 없는 문서, 동음이의어). HTTP 는 모른다 |
+| `wiki_build` | 제목 목록으로 데이터 파일 쓰기. 한국어판 먼저, 없으면 영어판. 받는 것(`Fetch`)은 넘겨받는다(trpg-server 의 `scripts/build_wiki.py`) |
 | `attributions` | 자료마다의 출처 표시 |
-| `data` | 패키지에 실린 데이터 파일(`data/srd51.json`, `data/srd51.ko.json`)과 넣기가 기본으로 넣는 것(`DATA_FILES`) |
+| `data` | 패키지에 실린 데이터 파일(`data/srd51.json`, `data/srd51.ko.json`, `data/wikipedia.json`)과 위키백과의 목록 둘, 넣기가 기본으로 넣는 것(`DATA_FILES`, 있는 파일만) |
 | `columns` | 표 둘의 칸과 제약(mixin `ReferenceEntryColumns`, `ReferenceEmbeddingColumns`). 서버의 ORM 클래스가 물려받는다 |
 | `tables` | 서버의 표 둘(ORM 클래스)을 묶어 넘기는 꾸러미(`ReferenceTables`) |
 | `repository` | 표를 읽고 쓰는 SQL. 표 둘을 맨 앞에 받는다. 커밋하지 않는다 |
@@ -33,6 +36,17 @@ trpg-server 가 처음 만들었고(`app/references/`), chat 과 story 도 같�
 | `commands` | 관리 명령(`scripts/references.py`)의 몸통. 명령줄, 넣기(`load_files`), 색인(`index`), 찍는 줄 |
 
 ORM 클래스와 마이그레이션, 켰는지(테이블, 대화, 세션), 로어북의 상한, 블록을 넣는 자리는 서버에 있다.
+
+## 데이터 파일의 라이선스
+
+`data/` 의 데이터 파일은 저장소의 다른 코드와 조건이 다르다. 원본의 조건을 따른다.
+
+| 파일 | 원본과 조건 |
+| --- | --- |
+| `srd51.json`, `srd51.ko.json` | D&D SRD 5.1(Wizards of the Coast), CC BY 4.0 |
+| `wikipedia.json` | 위키백과(한국어판, 영어판)의 문서 도입부, CC BY-SA 4.0. 줄마다 원문의 주소(`data.url`)가 있다 |
+
+출처 표시는 `attributions.py` 에 있다. 바꾼 것(뺐고, 줄였고, 옮겼다)도 함께 적는다.
 
 ## 서버에 붙이기
 
