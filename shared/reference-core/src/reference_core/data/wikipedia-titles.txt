@@ -1,0 +1,224 @@
+# 위키백과에서 받을 문서의 제목 목록(reference_core/wiki_titles.py). 첫 판이다. 고르고 고쳐 쓴다.
+# 한 줄에: 한국어 제목 | 영어 제목 | 다른 이름, 다른 이름
+#   - 한국어판에 그 제목의 문서가 있으면 그것을 받는다. 없거나 동음이의어 문서면 영어 제목으로 영어판에서 받는다
+#   - 다른 이름은 장면에서 그 낱말이 나오면 고르는 이름이다(다섯까지, 30자). 한국어 제목(괄호를 뗀 것)이 맨 앞에 붙는다
+#   - 받는 명령이 없거나 쓸 것이 없던 제목을 알린다. 그 줄은 고치거나 지운다
+# 고르는 기준: 판타지와 근대 이전의 장면에서 생김새와 쓰임을 채울 사물, 생물, 건축, 지형. 사람과 사건과 나라는 넣지 않는다.
+
+# 탈것: 배
+범선 | Sailing ship | 돛단배
+갤리선 | Galley | 갤리
+갤리온 | Galleon |
+캐럭 | Carrack |
+카라벨 | Caravel |
+롱십 | Longship | 바이킹선
+코그선 | Cog (ship) | 코그
+나룻배 | Ferry | 나루
+뗏목 | Raft |
+카누 | Canoe | 통나무배
+노 (배) | Oar | 노
+닻 | Anchor |
+돛 | Sail |
+돛대 | Mast (sailing) |
+키 (배) | Rudder | 방향타
+
+# 탈것: 땅
+마차 | Carriage | 사륜마차
+수레 | Cart | 짐수레
+전차 (고대) | Chariot | 전투 마차
+썰매 | Sled |
+가마 (탈것) | Palanquin | 가마
+안장 | Saddle |
+등자 | Stirrup |
+마구 | Horse harness |
+
+# 건축: 성과 방어
+성 (건축) | Castle | 성채
+요새 | Fortification | 보루
+성벽 | Defensive wall |
+해자 | Moat |
+도개교 | Drawbridge |
+망루 | Watchtower | 감시탑
+성탑 | Tower | 탑
+아성 | Keep | 킵
+성문 | Gate | 관문
+흉벽 | Battlement | 총안
+내리닫이 쇠창살 | Portcullis | 내리닫이 문
+지하 감옥 | Dungeon | 던전
+봉화 | Beacon | 봉수
+
+# 건축: 마을과 집
+수도원 | Monastery | 수도회
+성당 | Cathedral | 대성당
+신전 | Temple |
+등대 | Lighthouse |
+풍차 | Windmill |
+물레방아 | Watermill | 수차
+대장간 | Forge | 대장장이
+여관 | Inn | 여인숙
+선술집 | Tavern | 주막
+시장 | Marketplace | 장터
+우물 | Well |
+다리 | Bridge |
+초가집 | Thatching | 초가
+통나무집 | Log cabin |
+움집 | Pit-house |
+천막 | Tent | 텐트
+지하 묘지 | Catacombs | 카타콤
+무덤 | Tomb | 묘
+광산 | Mining | 갱도
+항구 | Port | 부두
+
+# 무기
+검 | Sword | 칼
+장검 | Longsword |
+단검 | Dagger |
+쌍수검 | Zweihänder | 대검
+레이피어 | Rapier |
+세이버 | Sabre | 사브르
+도끼 | Axe |
+전투 도끼 | Battle axe |
+메이스 | Mace (bludgeon) | 철퇴
+워해머 | War hammer | 전투 망치
+창 | Spear |
+미늘창 | Halberd | 할버드
+랜스 | Lance | 기병창
+활 | Bow and arrow | 활과 화살
+장궁 | Longbow |
+석궁 | Crossbow |
+투석기 | Catapult | 캐터펄트
+트레뷰셋 | Trebuchet | 평형추 투석기
+공성 망치 | Battering ram | 파성추
+공성탑 | Siege tower |
+투석구 | Sling (weapon) | 무릿매
+채찍 | Whip |
+도리깨 | Flail |
+
+# 갑옷
+갑옷 | Armour |
+판금 갑옷 | Plate armour |
+사슬 갑옷 | Mail (armour) | 쇠사슬 갑옷
+가죽 갑옷 | Leather armour |
+투구 | Helmet |
+방패 | Shield |
+건틀릿 | Gauntlet (glove) | 장갑
+경갑 | Brigandine | 브리건딘
+
+# 도구와 생활
+횃불 | Torch |
+등잔 | Oil lamp | 기름 등잔
+양초 | Candle | 초
+랜턴 | Lantern | 등롱
+부싯돌 | Flint | 부시
+밧줄 | Rope | 줄
+사다리 | Ladder |
+자물쇠 | Lock (security device) |
+열쇠 | Key (lock) |
+나침반 | Compass |
+모래시계 | Hourglass |
+망원경 | Telescope |
+지도 | Map |
+양피지 | Parchment |
+깃펜 | Quill | 깃털 펜
+두루마리 | Scroll |
+밀랍 | Beeswax |
+인장 | Seal (emblem) | 도장
+물레 | Spinning wheel |
+베틀 | Loom | 직기
+모루 | Anvil |
+풀무 | Bellows |
+화로 | Brazier |
+가마솥 | Cauldron | 솥
+술통 | Barrel | 통
+물통 | Bucket | 양동이
+배낭 | Backpack | 가방
+지팡이 | Walking stick |
+곡괭이 | Pickaxe |
+삽 | Spade |
+낫 | Sickle |
+쟁기 | Plough |
+도르래 | Pulley |
+수정구 | Crystal ball |
+거울 | Mirror |
+약초 | Herbal medicine | 약초학
+연금술 | Alchemy |
+독 | Poison |
+
+# 음식과 마실 것
+빵 | Bread |
+치즈 | Cheese |
+에일 | Ale |
+벌꿀술 | Mead | 미드
+포도주 | Wine | 와인
+훈제 | Smoking (cooking) |
+건빵 | Hardtack |
+
+# 옷과 장신구
+망토 | Cloak |
+로브 | Robe | 법의
+튜닉 | Tunic |
+장화 | Boot |
+왕관 | Crown (headgear) |
+반지 | Ring (jewellery) |
+목걸이 | Necklace |
+보석 | Gemstone |
+
+# 동물
+말 | Horse |
+늑대 | Wolf |
+곰 | Bear |
+멧돼지 | Wild boar |
+사슴 | Deer |
+여우 | Red fox |
+까마귀 | Crow | 갈까마귀
+부엉이 | Owl | 올빼미
+매 | Falcon |
+독수리 | Eagle |
+박쥐 | Bat |
+쥐 | Rat |
+뱀 | Snake |
+거미 | Spider |
+전갈 | Scorpion |
+거머리 | Leech |
+상어 | Shark |
+고래 | Whale |
+문어 | Octopus |
+대왕오징어 | Giant squid |
+악어 | Crocodile |
+코끼리 | Elephant |
+낙타 | Camel |
+당나귀 | Donkey |
+노새 | Mule |
+
+# 식물과 버섯
+떡갈나무 | Oak | 참나무
+버드나무 | Willow |
+소나무 | Pine |
+주목 | Taxus | 주목나무
+겨우살이 | Mistletoe |
+쐐기풀 | Urtica dioica |
+투구꽃 | Aconitum |
+독당근 | Conium maculatum |
+만드라고라 | Mandragora | 맨드레이크
+광대버섯 | Amanita muscaria |
+이끼 | Moss |
+덩굴 | Vine |
+
+# 지형과 자연
+동굴 | Cave |
+늪 | Swamp | 습지
+사막 | Desert |
+오아시스 | Oasis |
+초원 | Grassland |
+숲 | Forest | 삼림
+협곡 | Canyon |
+폭포 | Waterfall |
+빙하 | Glacier |
+화산 | Volcano |
+온천 | Hot spring |
+절벽 | Cliff |
+산맥 | Mountain range |
+고개 | Mountain pass |
+여울 | Ford (crossing) |
+섬 | Island |
+암초 | Reef |
