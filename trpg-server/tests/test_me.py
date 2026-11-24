@@ -90,6 +90,8 @@ async def test_reports_503_when_the_auth_server_is_down_and_no_key_is_known(
     # 401 이 아니다. 401 을 주면 프론트가 멀쩡한 사용자를 로그아웃시킨다
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
     assert response.headers['Retry-After'] == str(REFETCH_INTERVAL_SECONDS)
+    # 화면이 이 서버의 탓으로 적지 않게 까닭의 이름을 싣는다(server_core/auth/responses.py)
+    assert response.json()['code'] == 'auth_unavailable'
 
 
 async def test_keeps_serving_logged_in_users_when_the_auth_server_goes_down(

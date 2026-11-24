@@ -15,14 +15,18 @@ type errorBody struct {
 	Detail string `json:"detail"`
 	// Code 는 부르는 서버가 읽는 오류의 이름이다(price.unknown 같은 것). detail 은 사람이 읽는 글이라 바뀔 수 있다.
 	// 우리 서버들이 부르는 주소(/service/...)의 4xx 에 싣는다. 사용자가 부르는 주소에는 화면이 갈래를 나눠야 하는 것에만 싣는다
-	// (결제 자격의 403: 본인인증으로 보낼지, 보호자 동의로 보낼지. 쿠폰과 자동 충전의 거절). 5xx 에는 없다(칸이 빠진다).
-	// 5xx 는 이름으로 가릴 것이 없다. 같은 요청을 다시 보내면 된다.
+	// (결제 자격의 403: 본인인증으로 보낼지, 보호자 동의로 보낼지. 쿠폰과 자동 충전의 거절). 5xx 에는 대개 없다(칸이 빠진다).
+	// 5xx 는 대개 이름으로 가릴 것이 없다. 같은 요청을 다시 보내면 된다. 토큰을 확인하지 못한 503(auth_unavailable)은
+	// 화면이 까닭(인증 서버)을 적도록 싣는다.
 	Code string `json:"code,omitempty"`
 }
 
 // 우리 서버들이 읽는 오류의 이름. 한번 정하면 바꾸지 않는다. 새 경우가 생기면 이름을 더한다.
 // 이름은 "무엇.어떻게" 모양이다. README 의 "오류의 이름" 표에 같은 목록이 있다.
 const (
+	// codeAuthUnavailable 은 토큰을 확인하지 못했다는 것이다(503, 공개키를 구할 수 없다). 인증 서버가 꺼졌다.
+	// 다른 서버들(shared/server-core 의 auth/responses.py)과 같은 이름이라 "무엇.어떻게" 모양이 아니다.
+	codeAuthUnavailable = "auth_unavailable"
 	// codeHoldInvalidRequest 는 홀드 요청의 본문이 틀렸다는 것이다(JSON 이 아니다, user_id 가 없다, 이름표의 모양이 틀렸다).
 	codeHoldInvalidRequest = "hold.invalid_request"
 	// codePriceUnknown 은 가격표에 그런 이름이 없다는 것이다. 부르는 서버의 버그다.

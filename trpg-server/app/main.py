@@ -16,6 +16,7 @@ from reference_core.selection import ReferenceThresholds
 from server_core import health
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
+from server_core.auth.responses import use_auth_errors
 from server_core.billing.price_list import PriceListUnavailable
 from server_core.billing.setup import build_billing, build_price_list
 from server_core.database import create_session_factory
@@ -476,6 +477,8 @@ def create_app(
 
     # 칸이 틀린 요청은 서버들이 함께 쓰는 본문 {"detail", "errors"} 의 422 로 답한다(server_core/input_errors.py)
     use_input_errors(app)
+    # 토큰을 확인하지 못한 503(인증 서버가 꺼짐)에 까닭의 이름을 싣는다(server_core/auth/responses.py)
+    use_auth_errors(app)
 
     # 위의 어느 것에도 걸리지 않은 예외. 내용은 응답에 싣지 않고 요청의 식별자만 돌려준다
     app.add_exception_handler(Exception, handle_unexpected_error)

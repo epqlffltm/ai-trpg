@@ -79,6 +79,8 @@ describe('잔액', () => {
 
   it('503 은 기다릴 초를 알리고, 닿지 못하면 연결을 보라고 한다', () => {
     expect(walletProblemText(new ApiError({ status: 503, detail: 'x', retryAfter: 5 }))).toBe('결제 서버가 지금 답하지 못합니다. 5초 뒤에 다시 시도하세요.');
+    // 인증 서버가 꺼져 로그인을 확인하지 못한 503 은 결제 서버의 탓으로 적지 않는다
+    expect(walletProblemText(new ApiError({ status: 503, detail: 'x', code: 'auth_unavailable', retryAfter: 60 }))).toBe('지금은 로그인을 확인할 수 없습니다. 60초 뒤에 다시 시도하세요.');
     expect(walletProblemText(new NetworkError(new Error('x')))).toContain('연결');
     expect(walletProblemText(new ApiError({ status: 500, detail: 'x' }))).toContain('불러오지 못했습니다');
   });

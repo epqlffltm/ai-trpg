@@ -16,6 +16,8 @@
 검증의 결과를 HTTP 응답으로 바꾸는 일도 여기서 한다.
   - 토큰이 없거나 틀렸거나 끊긴 세션의 것이다 -> 401. 클라이언트는 토큰을 갱신하거나 다시 로그인한다.
   - 키를 구할 수 없어 확인하지 못했다 -> 503. 클라이언트의 잘못이 아니다. 로그아웃시키면 안 된다.
+    앱이 use_auth_errors(responses.py)를 걸면 본문에 code(auth_unavailable)가 붙는다.
+    화면이 부른 서버의 탓으로 적지 않게.
 """
 
 from typing import Annotated
@@ -45,17 +47,24 @@ def unauthorized() -> HTTPException:
     )
 
 
-def verification_unavailable() -> HTTPException:
-    """
-    토큰이 맞는지 확인할 수 없을 때의 응답.
+# 토큰을 확인하지 못한 503 의 까닭의 이름. 결제 서버(billing-server/internal/httpapi/auth.go)도 같은 이름이다
+AUTH_UNAVAILABLE_CODE = 'auth_unavailable'
 
+
+class VerificationUnavailable(HTTPException):
+    """
+    토큰이 맞는지 확인할 수 없다(공개키를 구할 수 없다). 503.
+
+    HTTPException 이라 처리기를 걸지 않은 앱에서도 같은 503 이다. use_auth_errors 를 건 앱은 본문에 code 를 싣는다.
     Retry-After 는 언제 다시 시도하면 되는지 알려 준다. 키를 다시 가져오는 간격과 같다.
     """
-    return HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail='지금은 인증을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.',
-        headers={'Retry-After': str(REFETCH_INTERVAL_SECONDS)},
-    )
+
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='지금은 인증을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.',
+            headers={'Retry-After': str(REFETCH_INTERVAL_SECONDS)},
+        )
 
 
 async def get_current_user(
@@ -76,7 +85,7 @@ async def get_current_user(
     except InvalidTokenError as error:
         raise unauthorized() from error
     except JwksUnavailableError as error:
-        raise verification_unavailable() from error
+        raise VerificationUnavailable() from error
 
 
 def sent_token(request: Request) -> bool:

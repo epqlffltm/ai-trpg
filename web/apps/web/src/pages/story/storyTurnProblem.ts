@@ -4,6 +4,7 @@
 // 행동을 할 수 없는 까닭(422)은 아무것도 저장하지 않았다. 상태가 화면과 어긋났을 수 있어(다른 가지, 다른 탭) 세션을 다시 읽는다.
 
 import { ApiError } from '../../api/errors';
+import { authUnavailableText } from '../../auth/problem';
 import { describeChangeProblem, describeTurnProblem, type TurnProblem } from '../chat/conversation/turnProblem';
 
 const STORY_REFUSALS: Record<string, string> = {
@@ -33,6 +34,8 @@ export function describeStartProblem(error: unknown): string {
   if (error.code === 'persona_not_found') return '고른 페르소나를 찾지 못했습니다. 지웠을 수 있습니다. 다시 골라 주세요.';
   if (error.code === 'world_not_found' || error.status === 404) return '시작할 수 없는 세계관입니다. 게시한 판이 없거나 볼 수 없습니다.';
   if (error.code === 'asset_unavailable') return `세계관을 가져오지 못했습니다.${error.retryAfter ? ` ${error.retryAfter}초 뒤에` : ' 잠시 뒤에'} 다시 눌러 주세요.`;
+  const auth = authUnavailableText(error);
+  if (auth) return auth;
   if (error.status === 503) return '지금은 시작할 수 없습니다. 잠시 뒤에 다시 시도하세요.';
   return '시작하지 못했습니다. 잠시 뒤에 다시 시도하세요.';
 }

@@ -164,5 +164,7 @@ describe('게시판의 순수한 함수', () => {
     expect(searchPath('고정 버그', 'free')).toBe('/board/search?q=%EA%B3%A0%EC%A0%95+%EB%B2%84%EA%B7%B8&board=free');
     expect(boardProblemText(new ApiError({ status: 400, detail: 'x', fields: { q: ['검색어는 낱말마다 2자 이상이어야 합니다.'] }, body: { errors: { q: ['검색어는 낱말마다 2자 이상이어야 합니다.'] } } }), '검색')).toBe('검색어는 낱말마다 2자 이상이어야 합니다.');
     expect(boardProblemText(new ApiError({ status: 503, detail: 'x', retryAfter: 5 }), '글')).toContain('5초 뒤에');
+    // 검색 중이어도 로그인을 확인하지 못한 503 은 그 글이다
+    expect(boardProblemText(new ApiError({ status: 503, detail: 'x', code: 'auth_unavailable' }), '검색')).toBe('지금은 로그인을 확인할 수 없습니다. 잠시 뒤에 다시 시도하세요.');
   });
 });

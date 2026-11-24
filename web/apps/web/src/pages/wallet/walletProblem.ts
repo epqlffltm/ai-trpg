@@ -4,9 +4,12 @@
 // 401 은 http.ts 가 갱신을 한 번 해 보고, 그래도 401 이면 로그인 화면으로 가는 것은 RequireSession 이 맡는다.
 
 import { ApiError, NetworkError } from '../../api/errors';
+import { authUnavailableText } from '../../auth/problem';
 
 export function walletProblemText(error: unknown): string {
   if (error instanceof NetworkError) return '서버에 닿지 못했습니다. 연결을 확인하고 다시 시도하세요.';
+  const auth = authUnavailableText(error);
+  if (auth) return auth;
   if (error instanceof ApiError && error.status === 503) {
     const after = error.retryAfter ? ` ${error.retryAfter}초 뒤에` : ' 잠시 뒤에';
     return `결제 서버가 지금 답하지 못합니다.${after} 다시 시도하세요.`;

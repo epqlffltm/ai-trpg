@@ -7,6 +7,7 @@ import { installFakeFetch, json } from '../test/fakeFetch';
 import { apiRequest } from '../api/http';
 import { parseResetLink } from '../pages/password/resetLink';
 import { describeLoginProblem } from './loginProblem';
+import { authUnavailableText, commonProblem } from './problem';
 import { describePasswordProblem } from './passwordProblem';
 import { safeReturnPath } from './safeReturnPath';
 import { describeSignupProblem } from './signupProblem';
@@ -107,5 +108,22 @@ describe('safeReturnPath 의 인증 화면', () => {
 
   it('이름이 비슷한 다른 경로는 그대로다', () => {
     expect(safeReturnPath('/signups-archive')).toBe('/signups-archive');
+  });
+});
+
+describe('로그인을 확인하지 못한 503(auth_unavailable)', () => {
+  it('code 가 auth_unavailable 인 503 이면 로그인을 확인할 수 없다고 적고, 다른 503 이나 다른 상태면 null 이다', () => {
+    const auth = new ApiError({ status: 503, detail: 'x', code: 'auth_unavailable', retryAfter: 60 });
+    expect(authUnavailableText(auth)).toBe('지금은 로그인을 확인할 수 없습니다. 60초 뒤에 다시 시도하세요.');
+    expect(authUnavailableText(new ApiError({ status: 503, detail: 'x', code: 'auth_unavailable' }))).toBe('지금은 로그인을 확인할 수 없습니다. 잠시 뒤에 다시 시도하세요.');
+    expect(authUnavailableText(new ApiError({ status: 503, detail: 'x' }))).toBeNull();
+    expect(authUnavailableText(new ApiError({ status: 400, detail: 'x', code: 'auth_unavailable' }))).toBeNull();
+    expect(authUnavailableText(new Error('x'))).toBeNull();
+  });
+
+  it('화면마다 같은 실패(commonProblem)로도 같은 글이다', () => {
+    expect(commonProblem(new ApiError({ status: 503, detail: 'x', code: 'auth_unavailable', retryAfter: 60 }))).toEqual({
+      message: '지금은 로그인을 확인할 수 없습니다. 60초 뒤에 다시 시도하세요.',
+    });
   });
 });

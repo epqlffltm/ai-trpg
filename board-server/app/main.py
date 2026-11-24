@@ -24,6 +24,7 @@ from fastapi import FastAPI
 from server_core import health, readiness
 from server_core.auth import revocations
 from server_core.auth.jwks import JwksCache
+from server_core.auth.responses import use_auth_errors
 from server_core.database import create_engine, create_session_factory
 from server_core.notifications import dispatcher
 from server_core.notifications.setup import build_notifications
@@ -146,6 +147,9 @@ def create_app(
 
     # 거절은 {"detail"}, 입력 오류는 {"detail", "errors"} 의 400 이다(app/core/errors.py)
     use_error_bodies(app)
+
+    # 토큰을 확인하지 못한 503(인증 서버가 꺼짐)에 까닭의 이름을 싣는다(server_core/auth/responses.py)
+    use_auth_errors(app)
 
     # 처리하지 못한 예외는 내부를 드러내지 않는 500 으로 바꾼다. 원인은 로그에 남긴다
     app.add_exception_handler(Exception, handle_unexpected_error)
