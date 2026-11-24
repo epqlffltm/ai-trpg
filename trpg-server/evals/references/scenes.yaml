@@ -1,13 +1,15 @@
 # trpg-server/evals/references/scenes.yaml
 #
-# 참고 자료 검색(#482)의 평가 데이터. 한국어 장면과, 그 장면이면 서술자에게 주고 싶은 SRD 5.1 의 줄(key)이다.
-# 자료(data/references/srd51.json)는 영어다. 한국어 장면에서 영어 자료가 얼마나 가까운지를 잰다.
+# 참고 자료 검색(#482, #1338)의 평가 데이터. 한국어 장면과, 그 장면이면 서술자에게 주고 싶은 자료의 줄(key)이다.
+# 자료는 공용 패키지에 실린 데이터 파일들이다(reference_core/data/srd51.json, wikipedia.json). DB 에 넣는 것과 같다.
 #
 # scenes: 라운드 하나의 장면과 선언, 그리고 정답(expected).
-#   set:  언제 더한 장면인가. 처음 것은 v1 이다. 장면을 늘리면 새 이름(v2 …)을 붙인다.
-#   kind: named(그것을 한국어로 부른다), meaning(이름 없이 생김새나 쓰임으로만), none(SRD 에 맞는 것이 없다).
+#   set:  언제 더한 장면인가. v1 은 SRD 만 있을 때 만든 것, v2 는 위키백과(사물, 건축, 탈것, 생물, 지형)를 넣으며 더한 것이다.
+#         장면을 늘리면 새 이름(v3 …)을 붙인다. 한 번 붙인 정답은 고치지 않는다(전과 견줄 수 있게).
+#   kind: named(그것을 한국어로 부른다), meaning(이름 없이 생김새나 쓰임으로만), none(자료에 맞는 것이 없다).
 #         none 은 expected 가 비어 있다.
 #   expected: 맞다고 보는 줄의 key 들. 그중 하나라도 고르면 맞힌 것이다(드래곤처럼 비슷한 줄이 여럿이다).
+#             SRD 는 "monsters/…", "equipment/…", 위키백과는 "ko/<문서 제목>", "en/<문서 제목>" 이다.
 #   moves: 선언한 캐릭터와 글.
 #
 # 정답은 "이 장면이면 나는 이 줄을 AI 에게 주고 싶다"이다. 검색이 어떻게 도는지가 아니라 GM 의 감각으로 붙인다.
@@ -155,4 +157,118 @@ scenes:
     scene: 여관 1층에서 음유시인이 류트를 조율한다. 손님들이 잔을 부딪친다.
     moves:
       - [드워프, 술잔을 들고 고향의 노래를 따라 부른다.]
+    expected: []
+
+  # --- v2: 위키백과 ---
+  - name: galleon-harbor
+    set: v2
+    kind: named
+    scene: 만 안쪽에 갤리온 한 척이 닻을 내렸다. 고물 쪽 갑판이 성벽처럼 높다.
+    moves:
+      - [엘프, 갤리온의 뱃전에 걸린 줄사다리를 타고 오른다.]
+    expected: [ko/갈레온, ko/카라카, ko/범선]
+  - name: portcullis-drop
+    set: v2
+    kind: named
+    scene: 성문 위에서 쇠사슬 감기는 소리가 난다. 문 안쪽 홈을 따라 무언가 내려오기 시작한다.
+    moves:
+      - [드워프, 내리닫이 쇠창살이 다 내려오기 전에 그 아래로 몸을 날린다.]
+    expected: [en/Portcullis, en/Gate]
+  - name: battering-ram
+    set: v2
+    kind: meaning
+    scene: 적병들이 지붕을 씌운 수레를 밀고 온다. 수레 안에는 쇠사슬에 매단 커다란 통나무가 흔들린다.
+    moves:
+      - [엘프, 통나무가 문을 치기 전에 수레의 덮개에 불화살을 쏜다.]
+    expected: [en/Battering ram, equipment/ram-portable]
+  - name: oil-lamp
+    set: v2
+    kind: named
+    scene: 지하 서고에는 창이 없다. 책상 위에 기름이 반쯤 남은 등잔이 놓여 있다.
+    moves:
+      - [엘프, 등잔에 불을 붙이고 심지를 돋운다.]
+    expected: [ko/호롱, ko/양초, equipment/lamp]
+  - name: trebuchet-siege
+    set: v2
+    kind: named
+    scene: 언덕 위에 거대한 트레뷰셋이 서 있다. 평형추가 들려 올라가며 나무가 삐걱인다.
+    moves:
+      - [드워프, 트레뷰셋의 평형추를 매단 밧줄을 도끼로 끊으러 달린다.]
+    expected: [ko/트레뷰셋, ko/투석기]
+  - name: moat-drawbridge
+    set: v2
+    kind: named
+    scene: 성을 두른 해자에 검은 물이 고여 있다. 건너편의 도개교는 들려 있다.
+    moves:
+      - [엘프, 해자를 헤엄쳐 건너 도개교를 내리는 사슬을 찾는다.]
+    expected: [ko/해자, ko/도개교]
+  - name: roadside-inn
+    set: v2
+    kind: named
+    scene: 비가 쏟아지는 길가에 여관 간판이 흔들린다. 안에서 웃음소리와 고기 굽는 냄새가 새어 나온다.
+    moves:
+      - [드워프, 여관에 들어가 주인에게 방 하나와 뜨거운 국을 청한다.]
+    expected: [ko/여관, ko/선술집]
+  - name: village-forge
+    set: v2
+    kind: meaning
+    scene: 마을 끝 오두막에서 쇠 두드리는 소리가 울린다. 화덕의 불이 붉게 일렁이고 쇠붙이가 모루 위에서 튄다.
+    moves:
+      - [엘프, 부러진 칼날을 내밀며 다시 벼려 달라고 한다.]
+    expected: [ko/대장간, ko/모루, ko/풀무]
+  - name: mead-feast
+    set: v2
+    kind: named
+    scene: 긴 탁자에 구운 멧돼지와 빵이 놓였다. 뿔잔마다 황금빛 벌꿀술이 넘친다.
+    moves:
+      - [드워프, 벌꿀술을 단숨에 비우고 잔을 탁자에 내려친다.]
+    expected: [ko/꿀술]
+  - name: halberd-guard
+    set: v2
+    kind: named
+    scene: 성문 앞에 미늘창을 든 경비병 둘이 서 있다. 도끼날 위의 창끝이 햇빛에 번쩍인다.
+    moves:
+      - [엘프, 경비병의 미늘창 갈고리에 걸리지 않게 거리를 두고 말을 건다.]
+    expected: [en/Halberd, equipment/halberd]
+  - name: crossbow-ambush
+    set: v2
+    kind: named
+    scene: 바위 뒤에서 석궁의 시위 당기는 소리가 들린다.
+    moves:
+      - [드워프, 방패를 들어 석궁의 화살을 막으며 바위 쪽으로 돌진한다.]
+    expected: [ko/석궁, equipment/crossbow-light, equipment/crossbow-heavy]
+  - name: mandrake-root
+    set: v2
+    kind: named
+    scene: 늪가의 그늘에 넓은 잎이 땅에 붙어 자란다. 약초꾼은 이것이 맨드레이크라고 속삭인다.
+    moves:
+      - [엘프, 귀를 막고 맨드레이크의 뿌리를 조심스레 뽑는다.]
+    expected: [ko/맨드레이크]
+  - name: sinking-marsh
+    set: v2
+    kind: meaning
+    scene: 발을 디딜 때마다 진흙이 무릎까지 빨아들인다. 갈대 사이로 고인 물에서 썩은 냄새가 올라온다.
+    moves:
+      - [드워프, 지팡이로 앞의 땅을 찔러 보며 한 걸음씩 나아간다.]
+    expected: [ko/늪]
+  - name: hourglass-trial
+    set: v2
+    kind: named
+    scene: 마법사가 탁자 위에 모래시계를 뒤집어 놓는다. 고운 모래가 가늘게 흘러내린다.
+    moves:
+      - [엘프, 모래시계의 모래가 다 떨어지기 전에 수수께끼의 답을 말하려 애쓴다.]
+    expected: [ko/모래시계, equipment/hourglass]
+  - name: lighthouse-storm
+    set: v2
+    kind: meaning
+    scene: 폭풍 속에서 배가 기운다. 멀리 바위섬 위 높은 탑 꼭대기에서 불빛이 돌며 바닷길을 비춘다.
+    moves:
+      - [엘프, 키를 꺾어 탑의 불빛을 향해 배를 몬다.]
+    expected: [ko/등대, en/Beacon]
+  - name: apology
+    set: v2
+    kind: none
+    scene: 모닥불 곁에 동료 둘이 말없이 앉아 있다. 어제의 다툼이 아직 둘 사이에 남아 있다.
+    moves:
+      - [드워프, 고개를 숙이고 어제 한 말을 사과한다.]
     expected: []
