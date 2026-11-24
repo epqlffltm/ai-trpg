@@ -3,7 +3,7 @@
 // 장면(D2): 머리의 날짜·시간대·장소·기한, 장면의 인물, 말 조각마다의 이름표(서술은 없음), 말 보내기의 흐름(조각이 흘러 들어옴, 끝나면 다시 읽음),
 // 모델이 없으면 보내지 않고 고르기를 엶, 크레딧 부족, 다시 생성과 대안, 끝난 세션. 순수한 함수.
 
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REFRESH_PATH } from '../../api/refresh';
@@ -190,6 +190,30 @@ describe('장면', () => {
     await waitFor(() => expect(within(screen.getByRole('region', { name: '장면의 인물' })).getByText('준')).toBeInTheDocument());
     expect(posts(seen, `${STORY}/conversations/${SESSION}/messages`).map((request) => request.body)).toEqual([{ content: '같이 갈래?' }]);
     await waitFor(() => expect(seen.filter((request) => request.url === `${STORY}/conversations/${SESSION}`).length).toBeGreaterThan(1));
+  });
+
+  it('답을 다 받으면 내 메뉴의 잔액을 다시 읽는다', async () => {
+    let after = false;
+    signedIn({
+      'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: after ? '9' : '10', total: after ? '9' : '10', next_expiry: null }),
+      [`POST ${STORY}/conversations/${SESSION}/messages`]: () => {
+        after = true;
+        return stream(
+          ['turn', { generation_id: GEN, user_message: saved(3, 'user', { content: '같이 갈래?' }), cast: ['mina'], state: state() }],
+          ['done', { message: saved(4, 'assistant', { segments: [{ speaker: 'mina', text: '그래.' }] }) }],
+        );
+      },
+    });
+    renderApp(`/story/sessions/${SESSION}`);
+    const box = await screen.findByLabelText('보낼 말');
+    await userEvent.click(screen.getByRole('button', { name: '내 메뉴: 모험가' }));
+    expect(await screen.findByRole('link', { name: '지갑: 골드 0 · 실버 10' })).toBeInTheDocument();
+
+    // 내 메뉴를 연 채로 보낸다. 열린 잔액이 다시 읽혀 바뀐다
+    fireEvent.change(box, { target: { value: '같이 갈래?' } });
+    fireEvent.click(screen.getByRole('button', { name: '보내기' }));
+
+    expect(await screen.findByRole('link', { name: '지갑: 골드 0 · 실버 9' })).toBeInTheDocument();
   });
 
   it('모델이 없으면 보내지 않고 고르기를 열어 고른다', async () => {

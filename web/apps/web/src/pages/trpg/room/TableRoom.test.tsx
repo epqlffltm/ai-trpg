@@ -114,6 +114,28 @@ describe('TableRoom', () => {
     expect(reads).toBe(2);
   });
 
+  it('라운드가 열리면 값이 몇 초 뒤에 걸려도 잔액이 바뀔 때까지 다시 읽어 내 메뉴의 잔액이 바뀐다', async () => {
+    // 게임 서버의 정리 작업이 열린 뒤 조금 있다가 건다. 그 일에는 이벤트가 없다
+    let held = false;
+    open({
+      'GET /api/v1/billing/wallet': () => {
+        const free = held ? '9' : '10';
+        return json(200, { paid: '0', free, total: free, next_expiry: null });
+      },
+      [`GET ${BASE}/stream`]: (request) => {
+        setTimeout(() => {
+          held = true;
+        }, 1500);
+        return sseResponse(request, [sse('table_event', { sequence: 4, type: 'round_opened', payload: { number: 2 } }, '4-0-0')]);
+      },
+    });
+    renderApp(`/trpg/tables/${TABLE_ID}`);
+    await userEvent.click(await screen.findByRole('button', { name: '내 메뉴: 모험가' }));
+    expect(await screen.findByRole('link', { name: '지갑: 골드 0 · 실버 10' })).toBeInTheDocument();
+
+    expect(await screen.findByRole('link', { name: '지갑: 골드 0 · 실버 9' }, { timeout: 8000 })).toBeInTheDocument();
+  });
+
   it('장이 넘어가면(chapter_changed) 테이블을 다시 읽어 머리의 지금 장이 바뀐다', async () => {
     let reads = 0;
     open({

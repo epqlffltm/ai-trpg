@@ -11,6 +11,7 @@
 // 스트림에서 받은 것:
 //   - 이벤트: 일어난 일에 더하고, 테이블과 라운드를 묶어서 다시 읽는다(useBatchedRefetch). 이벤트로 값을 고치지 않는다.
 //     서술 값이 걸리거나 잡히거나 풀리는 일이면 머리의 잔액(A6)도 다시 읽는다(wallet/walletView.ts 의 WALLET_EVENTS)
+//     라운드가 열리면 값은 몇 초 뒤에 걸린다. 잔액이 바뀔 때까지 몇 번 더 읽는다(catchesUpWallet, useWalletCatchUp)
 //     업적을 받았으면(achievement_earned) 시나리오 소개의 업적과 마이페이지의 작품 업적도 다시 읽는다
 //   - 채팅: 읽어 둔 채팅에 번호 차례로 합친다. 그 사람의 "입력 중"을 지운다
 //   - 쪽지: 읽어 둔 쪽지함에 번호 차례로 합친다. 쪽지 탭을 보고 있지 않으면 나에게 온 것을 안 읽은 수로 센다
@@ -47,9 +48,10 @@ import { useTableStream } from './useTableStream';
 import { useTableGenre } from './useTableGenre';
 import { useTypingPeople } from './useTypingPeople';
 import { WALLET_KEY } from '../../wallet/walletQueries';
+import { useWalletCatchUp } from '../../wallet/useWalletCatchUp';
 import { myWorkAchievementsKey } from '../../me/achievements/myAchievementsKeys';
 import { scenarioAchievementsKey } from '../scenario/ScenarioAchievements';
-import { changesWallet } from '../../wallet/walletView';
+import { catchesUpWallet, changesWallet } from '../../wallet/walletView';
 import { RoomStage } from './RoomStage';
 import { MyHpStrip } from './status/MyHpStrip';
 import { StatusPanel } from './status/StatusPanel';
@@ -66,6 +68,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
   const typing = useTypingPeople();
   const genre = useTableGenre(table.scenario_id);
   const refetchSoon = useBatchedRefetch(table.id);
+  const walletCatchUp = useWalletCatchUp();
   const [preview, setPreview] = useState<NarrationPreview | null>(null);
   const [managing, setManaging] = useState(false);
   const [talkTab, setTalkTab] = useState<TalkTab>('chat');
@@ -112,6 +115,7 @@ export function TableRoom({ table }: { table: TableDetail }) {
     onEvent: (event: TableEvent) => {
       if (ENDS_PREVIEW.has(event.type)) setPreview(null);
       appendEvent(event);
+      if (catchesUpWallet(event.type)) walletCatchUp.startFresh();
       if (changesWallet(event.type)) void queryClient.invalidateQueries({ queryKey: WALLET_KEY });
       if (event.type === 'achievement_earned') {
         // 시나리오 소개의 업적(받은 수, 내가 받은 때)과 마이페이지의 작품 업적을 다시 읽게 한다

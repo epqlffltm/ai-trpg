@@ -3,7 +3,7 @@
 // 멈추기, 크레딧 부족(말은 남음), 모델이 없으면 고르기(성인 대화는 성인 모델만), 답 받기·다시 생성·이어서의 주소, 볼 수 없는 대화.
 // 흘러 들어오는 답, 대사창, 머리의 글, 실패의 글을 짓는 순수한 함수.
 
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../api/errors';
@@ -95,6 +95,28 @@ describe('대화', () => {
     expect(box).toHaveValue('');
     expect(posts(seen, `${PATH}/messages`).map((request) => request.body)).toEqual([{ content: '우산 있어?' }]);
     await vi.waitFor(() => expect(seen.filter((request) => request.url === PATH).length).toBeGreaterThan(1));
+  });
+
+  it('답을 다 받으면 내 메뉴의 잔액을 다시 읽는다', async () => {
+    let after = false;
+    signedIn({
+      'GET /api/v1/billing/wallet': () => json(200, { paid: '0', free: after ? '9' : '10', total: after ? '9' : '10', next_expiry: null }),
+      [`POST ${PATH}/messages`]: () => {
+        after = true;
+        return new Response(sse(['turn', { generation_id: GEN, user_message: saved(4, 'user', '우산 있어?'), continues: null, action: null }], ['done', { message: saved(5, 'assistant', '있어요.') }]), {
+          headers: { 'Content-Type': 'text/event-stream' },
+        });
+      },
+    });
+    renderApp(`/chat/conversations/${ID}`);
+    await userEvent.click(await screen.findByRole('button', { name: '내 메뉴: 모험가' }));
+    expect(await screen.findByRole('link', { name: '지갑: 골드 0 · 실버 10' })).toBeInTheDocument();
+
+    // 내 메뉴를 연 채로 보낸다. 열린 잔액이 다시 읽혀 바뀐다
+    fireEvent.change(screen.getByRole('textbox', { name: '보낼 말' }), { target: { value: '우산 있어?' } });
+    fireEvent.submit(screen.getByRole('textbox', { name: '보낼 말' }).closest('form') as HTMLFormElement);
+
+    expect(await screen.findByRole('link', { name: '지갑: 골드 0 · 실버 9' })).toBeInTheDocument();
   });
 
   it('받는 중에는 멈추기만 누를 수 있고, 멈추면 청구하지 않았다고 알린다', async () => {

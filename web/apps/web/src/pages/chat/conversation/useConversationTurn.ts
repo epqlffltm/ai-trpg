@@ -1,6 +1,7 @@
 // web/apps/web/src/pages/chat/conversation/useConversationTurn.ts
 // 답 하나를 받는다(말 보내기, 다시 생성, 이어서). 한 번에 하나만이다(서버도 한 대화에 한 생성이다).
 //   - 흘러 들어오는 글은 turnState 로 쌓고, 끝나면(done, failed, 끊김) 대화를 다시 읽은 뒤 흘린 글을 지운다. 저장한 답을 믿는다
+//   - 끝나면 머리의 잔액도 다시 읽는다. 답의 값은 시작할 때 걸리고, 실패하면 돌아온다
 //   - 시작 전의 거절은 turnProblem 의 한 줄이다. 실패(failed)는 청구하지 않았다는 한 줄이다
 //   - 끊기면 서버는 끝까지 저장한다. 다시 읽은 대화가 아직 쓰는 중이면 쿼리가 끝날 때까지 다시 묻는다
 //   - 답으로 처음 받은 업적(done 의 achievements)은 닫을 때까지 남긴다(earned). 받았으면 내 업적과 달성률, 마이페이지의 작품 업적을 다시 읽는다
@@ -15,6 +16,7 @@ import type { EarnedAchievement } from '../../story/storyTurnState';
 import { withEarned } from '../../story/useStoryTurn';
 import { CHAT_ACHIEVEMENTS_KEY } from '../chatQueries';
 import { myWorkAchievementsKey } from '../../me/achievements/myAchievementsKeys';
+import { WALLET_KEY } from '../../wallet/walletQueries';
 import { conversationKey } from './conversationQueries';
 import { describeTurnProblem, type TurnProblem } from './turnProblem';
 import { applyTurnMessage, EMPTY_TURN, failedText, type TurnState } from './turnState';
@@ -36,6 +38,8 @@ export function useConversationTurn(conversationId: string) {
       queryClient.invalidateQueries({ queryKey: conversationKey(conversationId) }),
       queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] }),
     ]);
+    // 잔액은 기다리지 않는다. 흘린 글을 지우는 것이 잔액 읽기에 묶이지 않게
+    void queryClient.invalidateQueries({ queryKey: WALLET_KEY });
   }, [queryClient, conversationId]);
 
   /** 답을 받는다. 서버가 말을 받아들였으면(스트림이 열렸거나, 거절이어도 말을 저장했으면) true */
