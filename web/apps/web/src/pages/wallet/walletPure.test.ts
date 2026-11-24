@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError, NetworkError } from '../../api/errors';
 import type { Wallet, WalletEntry } from '../../api/types';
 import { walletProblemText } from './walletProblem';
-import { balanceShort, changesWallet, entryDirection, entryLabel, expiryText, signedAmount, timeUntil, visibleEntries } from './walletView';
+import { balanceShort, catchesUpWallet, changesWallet, entryDirection, entryLabel, expiryText, signedAmount, timeUntil, visibleEntries } from './walletView';
 
 const NOW = Date.parse('2026-10-23T00:00:00Z');
 
@@ -72,6 +72,9 @@ describe('잔액', () => {
     expect(changesWallet('round_opened')).toBe(true);
     expect(changesWallet('narration_credits_short')).toBe(true);
     expect(changesWallet('hp_changed')).toBe(false);
+    // 라운드가 열린 때만 값이 늦게 걸린다
+    expect(catchesUpWallet('round_opened')).toBe(true);
+    expect(catchesUpWallet('round_closed')).toBe(false);
   });
 
   it('503 은 기다릴 초를 알리고, 닿지 못하면 연결을 보라고 한다', () => {

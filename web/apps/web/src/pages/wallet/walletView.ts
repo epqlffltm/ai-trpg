@@ -88,7 +88,7 @@ export function balanceShort(wallet: Wallet): string {
 /**
  * 크레딧을 바꿀 수 있는 테이블의 일. 이것이 오면 잔액을 다시 읽는다.
  * 라운드가 열리면 곧 그 라운드의 서술 값을 걸고(hold, 게임 서버의 정리 작업이 몇 초 뒤에), 서술을 마치면 잡고(capture),
- * 그만두거나 끝나면 푼다(release). 그래서 라운드가 닫힐 때(걸린 것이 보인다)와 열릴 때(잡힌 것이 보인다) 읽는다.
+ * 그만두거나 끝나면 푼다(release). 잔액은 걸 때 빠지고 풀 때 돌아온다. 잡을 때는 그대로다.
  * 모자라다는 알림 뒤에는 충전했는지 볼 수 있게 읽는다.
  */
 export const WALLET_EVENTS: ReadonlySet<TableEvent['type']> = new Set<TableEvent['type']>([
@@ -102,4 +102,13 @@ export const WALLET_EVENTS: ReadonlySet<TableEvent['type']> = new Set<TableEvent
 
 export function changesWallet(type: TableEvent['type']): boolean {
   return WALLET_EVENTS.has(type);
+}
+
+/**
+ * 잔액이 이 일보다 늦게 바뀌는 테이블의 일. 이것이 오면 바뀔 때까지 몇 번 더 읽는다(useWalletCatchUp).
+ * 라운드가 열린 때(round_opened)는 아직 걸지 않았다. 게임 서버의 정리 작업이 몇 초 뒤에 건다. 그 일에는 이벤트가 없어
+ * 열린 직후에 읽은 잔액은 전의 것이다. 값을 내지 않는 사람(자리 비움 등)이면 바뀌지 않고 따라잡기가 끝난다.
+ */
+export function catchesUpWallet(type: TableEvent['type']): boolean {
+  return type === 'round_opened';
 }

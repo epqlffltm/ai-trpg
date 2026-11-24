@@ -3,6 +3,8 @@
 // 잔액은 주기로 읽지 않는다. 다시 읽는 때는 둘이다.
 //   - 창에 돌아올 때. 앱의 기본은 끔이지만 잔액만 켠다. 30초 안이면 읽지 않는다(staleTime)
 //   - 크레딧을 바꿀 수 있는 테이블의 일이 올 때(walletView.ts 의 WALLET_EVENTS, TableRoom)
+//     라운드가 열린 때는 값이 늦게 걸려 바뀔 때까지 몇 번 더 읽는다(catchesUpWallet, useWalletCatchUp)
+//   - chat·story 에서 답을 다 받았을 때(useConversationTurn, useStoryTurn)
 // 열쇠의 앞(WALLET_KEY)을 무르면 잔액과 원장이 함께 다시 읽힌다.
 
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
