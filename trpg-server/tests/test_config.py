@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from reference_core import selection as reference_selection
 
 from app.core.config import NARRATION_BUDGET_SECONDS, Settings
 from app.lore.retrieval import KEYWORD_MAX_DISTANCE, MAX_DISTANCE
@@ -239,6 +240,14 @@ def test_the_lore_distances_can_be_set(monkeypatch: pytest.MonkeyPatch):
     settings = from_env()
 
     assert (settings.lore_max_distance, settings.lore_keyword_max_distance) == (0.4, 0.55)
+
+
+def test_the_reference_distances_default_to_the_measured_ones():
+    settings = from_env()
+
+    # 참고 자료의 기준은 chat, story 와 같은 상수(reference_core/selection.py)다. bge-m3 로 잰 값이다
+    assert settings.reference_max_distance == reference_selection.MAX_DISTANCE == 0.40
+    assert settings.reference_keyword_max_distance == reference_selection.KEYWORD_MAX_DISTANCE == 0.60
 
 
 def test_the_memory_distances_default_to_the_constants():
