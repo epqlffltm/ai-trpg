@@ -286,7 +286,7 @@ def test_the_report_has_the_tables_and_the_scenes():
 
 def test_the_report_marks_an_alias_cut_by_the_keyword_limit():
     far = Measurement(model='m', distances={**DISTANCES, 'howl': {**DISTANCES['howl'], WOLF.id: 0.58}}, seconds=0)
-    thresholds = ReferenceThresholds()
+    thresholds = ReferenceThresholds(keyword_max_distance=0.50)
     result = ModelResult(
         far, evaluate(SMALL, far, thresholds), sweep(SMALL, far, thresholds), sweep_keyword(SMALL, far, thresholds)
     )

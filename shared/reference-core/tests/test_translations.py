@@ -288,3 +288,4 @@ def test_the_shipped_lines_carry_the_other_korean_names():
     assert '해골 병사' in shipped['monsters/skeleton'].aliases
     assert '석궁' in shipped['equipment/crossbow-light'].aliases
     assert '붉은 용' in shipped['monsters/adult-red-dragon'].aliases
+    assert '치유 물약' in shipped['magic-items/potion-of-healing'].aliases

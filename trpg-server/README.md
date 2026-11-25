@@ -3902,16 +3902,16 @@ uv run python -m scripts.references index --model qwen3-embedding:0.6b
   입력이 예산을 넘으면 참고 자료를 가장 먼저 뺀다(지난 기록, 로어북, 기억보다 먼저, `app/rounds/budget.py`). 그래서 원가가 판매가가 가정한 입력(12,000 토큰) 안에 든다.
 
 **고르기.** 로어북 검색과 같은 방식이다. 찾는 글(장면과 선언)을 벡터로 바꿔 지금 임베딩 모델의 자료의 벡터와 거리를 잰다.
-- 다른 이름(`aliases`, 한국어 이름, 두 글자 이상)이 글에 그대로 있고 거리가 `REFERENCE_KEYWORD_MAX_DISTANCE`(0.50) 이하인 줄을 먼저 넣는다. 원본의 영어 이름으로는 고르지 않는다. 한국어 장면에 나오지 않고, 짧은 이름("Bat")은 낱말 속에서 잘못 걸린다.
-- 그다음 거리가 `REFERENCE_MAX_DISTANCE`(0.45) 이하인 줄을 가까운 순으로. 기본값은 로어북의 것(bge-m3)과 같다. 3단계의 평가로 다시 잰다.
+- 다른 이름(`aliases`, 한국어 이름, 두 글자 이상)이 글에 그대로 있고 거리가 `REFERENCE_KEYWORD_MAX_DISTANCE`(0.60) 이하인 줄을 먼저 넣는다. 원본의 영어 이름으로는 고르지 않는다. 한국어 장면에 나오지 않고, 짧은 이름("Bat")은 낱말 속에서 잘못 걸린다.
+- 그다음 거리가 `REFERENCE_MAX_DISTANCE`(0.40) 이하인 줄을 가까운 순으로. 두 기본값은 bge-m3 로 잰 것이다(아래의 "참고 자료의 평가", 2026-11-25). 뜻으로 고른 줄은 0.40~0.45 에서 틀린 것이 많고, 다른 이름으로 걸린 줄은 이름을 부른 몬스터도 0.56 까지 멀다.
 - 임베딩 모델이 실패하면 다른 이름으로만, 거리를 보지 않고 고른다. 벡터가 없는 자료(`scripts.references index` 를 돌리지 않음)도 다른 이름으로만 걸린다.
 - 넣은 줄은 AI 호출의 기록(`ai_invocations.reference_ids`)에 남는다.
 
 **다루는 법.** 프롬프트에 적는다. 생김새, 쓰임, 버릇을 그리는 데만 쓴다. 위의 설정과 다르면 설정을 따르고, 맞지 않으면 쓰지 않는다. 수치와 규칙은 쓰지 않는다(결과는 엔진이 정했다). 이름은 장면에 맞게 부른다.
 
 ```
-REFERENCE_MAX_DISTANCE=0.45
-REFERENCE_KEYWORD_MAX_DISTANCE=0.50
+REFERENCE_MAX_DISTANCE=0.40
+REFERENCE_KEYWORD_MAX_DISTANCE=0.60
 ```
 
 ### 참고 자료의 복사
