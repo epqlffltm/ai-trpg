@@ -10,7 +10,8 @@
 
 재는 것.
   - 늘어난 입력 토큰. provider 가 알려 준 만큼이다(모르면 비어 있다). 판매가가 가정한 입력(12,000) 안인지 본다.
-  - 수치가 샌 서술. 참고 자료의 글에는 수치가 없지만 모델이 원본의 규칙을 떠올려 쓸 수 있다(DC 14, 2d6, +5).
+  - 수치가 샌 서술. 참고 자료의 글에는 판정의 수치가 없지만 모델이 원본의 규칙을 떠올려 쓸 수 있다(DC 14, 2d6, +5).
+    글에 남은 거리, 무게, 값을 그대로 옮긴 것(반경 20피트, 3파운드, 5gp)도 센다.
   - 장면의 길이.
 서술이 나아졌는지(생김새와 쓰임을 더 그럴듯하게 그렸는지)는 사람이 보고서의 장면을 읽고 판단한다.
 """
@@ -30,9 +31,12 @@ from app.rounds.narrator import ReferenceNote
 from evals.references.dataset import Dataset, Scene
 from evals.references.runner import Measurement, pick_for
 
-# 서술에 나오면 안 되는 판정의 수치. 참고 자료의 글을 거르는 것(app/references/srd.py)과 같은 뜻이다
+# 서술에 나오면 안 되는 판정의 수치. 참고 자료의 글을 거르는 것(reference_core/srd.py)과 같은 뜻이다.
+# 그리고 자료의 글에 남은 거리, 무게, 값의 단위(피트, 파운드, 마일, 인치, gp)가 붙은 수
 LEAKED_NUMBERS = re.compile(
-    r'\bDC\s*\d+|\b\d*d\d+\b|[+-]\d+\b|난이도\s*\d+|명중\s*[+-]?\d+|면체 주사위|\d+\s*[이가]\s*나오면', re.IGNORECASE
+    r'\bDC\s*\d+|\b\d*d\d+\b|[+-]\d+\b|난이도\s*\d+|명중\s*[+-]?\d+|면체 주사위|\d+\s*[이가]\s*나오면'
+    r'|\d+\s*(?:피트|파운드|마일|인치)|\d+\s*gp\b',
+    re.IGNORECASE,
 )
 
 

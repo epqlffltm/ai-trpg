@@ -9,7 +9,9 @@ DB 도 모델도 모르는 순수한 함수다.
 
 붙이는 것.
   - name_ko, content_ko: 번역한 이름과 글. 서술과 복사(기본 자산)가 이것을 쓴다.
-  - aliases: 한국어 이름을 다른 이름으로 더한다. 한국어 장면에 그 이름이 나오면 고른다(reference_core/selection.py).
+  - aliases: 한국어 이름과, 번역에 적은 다른 한국어 이름(aliases)을 다른 이름으로 더한다.
+    한국어 장면에 그 이름이 나오면 고른다(reference_core/selection.py).
+    다른 한국어 이름은 장면에서 흔히 부르는 말이 번역한 이름과 다를 때 적는다("스켈레톤" 에 "해골 병사").
 번역의 글도 원본의 글과 같은 규칙(수치 없음, 1,000자)을 지킨다. 번역 파일을 읽을 때 본다.
 번역이 없는 줄은 그대로다(영어로 쓴다).
 """
@@ -25,6 +27,7 @@ from reference_core.records import (
     DOCUMENT_FORMAT,
     REFERENCE_ALIAS_MAX_LENGTH,
     REFERENCE_CONTENT_MAX_LENGTH,
+    REFERENCE_MAX_ALIASES,
     ReferenceRecord,
     ReferenceSource,
 )
@@ -38,12 +41,22 @@ MECHANICS_KO = re.compile(
 )
 
 
+# 번역의 이름과 다른 한국어 이름 하나
+KoreanName = Annotated[
+    str, StringConstraints(min_length=1, max_length=REFERENCE_ALIAS_MAX_LENGTH, strip_whitespace=True)
+]
+
+
 class Translation(BaseModel):
-    """줄 하나의 번역. 이름은 다른 이름(aliases)으로도 쓰여서 그 길이(30자)를 넘지 않는다."""
+    """
+    줄 하나의 번역. 이름과 다른 한국어 이름(aliases)은 줄의 다른 이름으로 쓰여서 그 길이(30자)를 넘지 않는다.
+    다른 한국어 이름은 이름과 합쳐 다른 이름의 상한(5개) 안이다.
+    """
 
     model_config = ConfigDict(extra='forbid', frozen=True)
 
-    name: Annotated[str, StringConstraints(min_length=1, max_length=REFERENCE_ALIAS_MAX_LENGTH, strip_whitespace=True)]
+    name: KoreanName
+    aliases: list[KoreanName] = Field(default_factory=list, max_length=REFERENCE_MAX_ALIASES - 1)
     content: Annotated[str, StringConstraints(max_length=REFERENCE_CONTENT_MAX_LENGTH)] = ''
 
     @field_validator('content')
@@ -82,16 +95,27 @@ def translated(record: ReferenceRecord, translation: Translation | None) -> Refe
     """
     줄 하나에 번역을 붙인다. 번역이 없으면 그대로다.
 
-    한국어 이름을 다른 이름의 맨 앞에 더한다(이미 있으면 더하지 않는다). 원본의 이름과 같으면 더하지 않는다.
+    한국어 이름과 다른 한국어 이름을 다른 이름의 앞에 더한다. 이미 있는 것과 원본의 이름과 같은 것은 더하지 않는다.
+    원본의 다른 이름이 그 뒤다. 다섯을 넘으면 뒤의 것을 뺀다.
     """
     if translation is None:
         return record
-    aliases = list(record.aliases)
-    if translation.name != record.name and translation.name not in aliases:
-        aliases = [translation.name, *aliases]
     return record.model_copy(
-        update={'name_ko': translation.name, 'content_ko': translation.content, 'aliases': aliases}
+        update={
+            'name_ko': translation.name,
+            'content_ko': translation.content,
+            'aliases': merged_aliases(record, translation),
+        }
     )
+
+
+def merged_aliases(record: ReferenceRecord, translation: Translation) -> list[str]:
+    """번역을 붙인 줄의 다른 이름. 새로 더한 한국어 이름, 다른 한국어 이름, 그다음 원본의 다른 이름의 차례다."""
+    added: list[str] = []
+    for name in (translation.name, *translation.aliases):
+        if name != record.name and name not in record.aliases and name not in added:
+            added.append(name)
+    return [*added, *record.aliases][:REFERENCE_MAX_ALIASES]
 
 
 def apply_translations(records: Iterable[ReferenceRecord], translations: TranslationDocument) -> list[ReferenceRecord]:

@@ -10,6 +10,7 @@
   - 보고서와 명령줄: --fake 로 끝까지 돈다. 틀린 묶음은 1 로 끝난다.
 """
 
+import math
 import uuid
 from pathlib import Path
 
@@ -31,7 +32,17 @@ from evals.references.dataset import (
 )
 from evals.references.narration import Mode, Trial, run_pairs, tally
 from evals.references.report import ModelResult, best, full_report
-from evals.references.runner import Measurement, evaluate, hit_at, measure, score, spread, sweep
+from evals.references.runner import (
+    Measurement,
+    alias_distances,
+    evaluate,
+    hit_at,
+    measure,
+    score,
+    spread,
+    sweep,
+    sweep_keyword,
+)
 from scripts import eval_references
 
 STORY = StoryContext(title='평가', rating='all', guide='숲의 모험')
@@ -49,6 +60,7 @@ def reference(key: str, name: str, content: str = '', aliases: list[str] | None 
         aliases=aliases or [],
         content=content,
         kind=ReferenceKind.ITEM,
+        source='srd51',
     )
 
 
@@ -156,6 +168,17 @@ def test_the_distance_can_be_swept_and_the_best_is_marked():
     assert best(swept) == 0.30
 
 
+def test_the_keyword_limit_can_be_swept_and_the_alias_distances_are_shown():
+    # 늑대 장면에서 늑대가 다른 이름으로 걸리지만 0.58 로 멀다
+    far = Measurement(model='m', distances={**DISTANCES, 'howl': {**DISTANCES['howl'], WOLF.id: 0.58}}, seconds=0)
+
+    by_limit = dict(sweep_keyword(SMALL, far, ReferenceThresholds(max_distance=0.45)))
+
+    assert (by_limit[0.50].hit, by_limit[0.60].hit, by_limit[math.inf].hit) == (0.5, 1.0, 1.0)
+    assert alias_distances(HOWL, SMALL, far) == [(WOLF.key, 0.58)]
+    assert alias_distances(LIGHT, SMALL, far) == []
+
+
 def test_hits_without_a_threshold_and_the_spread():
     shifted = Measurement(model='m', distances={**DISTANCES, 'howl': {**DISTANCES['howl'], SHIP.id: 0.40}}, seconds=0)
 
@@ -219,6 +242,13 @@ async def test_each_scene_is_narrated_off_and_on():
     assert trials[0].leaked == ['DC 12']
 
 
+@pytest.mark.parametrize('text', ['횃불은 반경 20피트를 밝힌다.', '3 파운드짜리 망치', '5gp 를 낸다'])
+def test_a_measure_from_the_reference_is_counted_as_leaked(text: str):
+    trial = Trial('light', 'm', Mode.ON, 1, ['Torch'], text, None, 100, 10)
+
+    assert trial.leaked
+
+
 async def test_a_clean_narration_is_not_counted_as_leaked():
     trials = await run_pairs(CountingProvider('엘프가 횃불을 든다.'), SMALL, MEASURED, ReferenceThresholds(), repeat=1)
 
@@ -248,6 +278,23 @@ def test_the_report_has_the_tables_and_the_scenes():
     assert '| light O |' in report and '| market X |' not in report
     assert '**수치가 샜다**: DC 12' in report
     assert '## 켠 서술과 끈 서술' not in plain
+    # 머리말은 자료마다 센다. 다른 이름의 상한을 재지 않았으면 그 표가 없다
+    assert '자료 3줄(SRD 5.1 3줄)' in report
+    assert '다른 이름의 상한을 바꿔 가며' not in report
+    assert f'| {WOLF.key} 0.480 |' in report
+
+
+def test_the_report_marks_an_alias_cut_by_the_keyword_limit():
+    far = Measurement(model='m', distances={**DISTANCES, 'howl': {**DISTANCES['howl'], WOLF.id: 0.58}}, seconds=0)
+    thresholds = ReferenceThresholds()
+    result = ModelResult(
+        far, evaluate(SMALL, far, thresholds), sweep(SMALL, far, thresholds), sweep_keyword(SMALL, far, thresholds)
+    )
+
+    report = full_report(SMALL, [result], thresholds)
+
+    assert f'{WOLF.key} 0.580 (뺌)' in report
+    assert '**다른 이름의 상한을 바꿔 가며**' in report and '| 없음 |' in report
 
 
 def test_the_fake_run_goes_to_the_end(tmp_path: Path, capsys: pytest.CaptureFixture):

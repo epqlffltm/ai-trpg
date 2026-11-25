@@ -4,8 +4,9 @@
 참고 자료 평가의 보고서(마크다운)를 만든다. 계산은 하지 않는다. runner 와 narration 이 낸 값을 표로 옮긴다.
 """
 
+import math
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from reference_core.selection import ReferenceThresholds
 
@@ -16,6 +17,7 @@ from evals.references.runner import (
     Measurement,
     Outcome,
     Score,
+    alias_distances,
     hit_at,
     score,
     score_by_kind,
@@ -24,15 +26,21 @@ from evals.references.runner import (
 )
 
 KIND_NAMES = {SceneKind.NAMED: '한국어로 부름', SceneKind.MEANING: '뜻으로만', SceneKind.NONE: '맞는 것 없음'}
+# 보고서의 머리말에 적는 자료의 이름
+SOURCE_NAMES = {'srd51': 'SRD 5.1', 'wikipedia': '위키백과'}
 
 
 @dataclass(frozen=True)
 class ModelResult:
-    """임베딩 모델 하나의 결과. current 는 지금 서버의 기준으로 고른 것, swept 는 거리 기준마다의 점수다."""
+    """
+    임베딩 모델 하나의 결과. current 는 지금 서버의 기준으로 고른 것, swept 는 거리 기준마다의 점수,
+    keyword_swept 는 다른 이름의 상한마다의 점수다(재지 않았으면 비어 있다).
+    """
 
     measurement: Measurement
     current: list[Outcome]
     swept: list[tuple[float, Score]]
+    keyword_swept: list[tuple[float, Score]] = field(default_factory=list)
 
 
 def percent(value: float | None) -> str:
@@ -53,6 +61,48 @@ def best(swept: Sequence[tuple[float, Score]]) -> float:
         return ((result.hit or 0) + (result.empty or 0)) / 2
 
     return max(swept, key=lambda item: (merit(item), -item[0]))[0]
+
+
+def sources_line(dataset: Dataset) -> str:
+    """자료의 줄을 자료마다 센 것. "SRD 5.1 810줄, 위키백과 194줄" 이다."""
+    counts: dict[str, int] = {}
+    for reference in dataset.references:
+        counts[reference.source] = counts.get(reference.source, 0) + 1
+    return ', '.join(f'{SOURCE_NAMES.get(source, source)} {count}줄' for source, count in counts.items())
+
+
+def limit_label(distance: float) -> str:
+    """다른 이름의 상한. 상한이 없으면 '없음' 이다."""
+    return '없음' if math.isinf(distance) else f'{distance:.2f}'
+
+
+def keyword_lines(result: ModelResult, thresholds: ReferenceThresholds) -> list[str]:
+    """다른 이름의 상한을 바꿔 가며 매긴 표. 재지 않았으면 빈 목록이다."""
+    if not result.keyword_swept:
+        return []
+    lines = [
+        '',
+        f'**다른 이름의 상한을 바꿔 가며**(거리 기준은 {thresholds.max_distance} 그대로)',
+        '',
+        '| 다른 이름 | 맞힘 | 정밀도 | 비우기 | 장면마다 고른 수 |',
+        '| --- | --- | --- | --- | --- |',
+    ]
+    lines.extend(score_row(limit_label(distance), swept) for distance, swept in result.keyword_swept)
+    return lines
+
+
+def aliased_cell(dataset: Dataset, outcome: Outcome, measurement: Measurement, limit: float) -> str:
+    """장면에서 다른 이름으로 걸린 줄과 거리. 상한보다 멀어 뺀 것에 (뺌)을 붙인다. 없으면 '(없음)' 이다."""
+    found = alias_distances(outcome.scene, dataset, measurement)
+    if not found:
+        return '(없음)'
+    cells = []
+    for key, distance in found:
+        if distance is None:
+            cells.append(f'{key} -')
+        else:
+            cells.append(f'{key} {distance:.3f}' + (' (뺌)' if distance > limit else ''))
+    return ', '.join(cells)
 
 
 def score_row(label: str, result: Score) -> str:
@@ -87,6 +137,7 @@ def model_section(dataset: Dataset, result: ModelResult, thresholds: ReferenceTh
     for distance, swept in result.swept:
         mark = ' (가장 나음)' if distance == chosen else ''
         lines.append(score_row(f'{distance:.2f}{mark}', swept))
+    lines.extend(keyword_lines(result, thresholds))
     hits = ', '.join(f'@{k} {percent(hit_at(dataset, measurement, k))}' for k in TOP_KS)
     lines.extend(
         [
@@ -99,15 +150,17 @@ def model_section(dataset: Dataset, result: ModelResult, thresholds: ReferenceTh
             '',
             '**장면마다 고른 것(지금 기준)**',
             '',
-            '| 장면 | 종류 | 정답 | 고른 것 |',
-            '| --- | --- | --- | --- |',
+            '| 장면 | 종류 | 정답 | 고른 것 | 다른 이름으로 걸린 것(거리) |',
+            '| --- | --- | --- | --- | --- |',
         ]
     )
     for outcome in result.current:
         mark = 'O' if outcome.hit else ('-' if not outcome.scene.expected else 'X')
         expected = ', '.join(sorted(outcome.scene.expected)) or '(없음)'
         chosen_keys = ', '.join(outcome.chosen) or '(없음)'
-        lines.append(f'| {outcome.scene.name} {mark} | {KIND_NAMES[outcome.scene.kind]} | {expected} | {chosen_keys} |')
+        aliased = aliased_cell(dataset, outcome, measurement, thresholds.keyword_max_distance)
+        kind = KIND_NAMES[outcome.scene.kind]
+        lines.append(f'| {outcome.scene.name} {mark} | {kind} | {expected} | {chosen_keys} | {aliased} |')
     lines.append('')
     return lines
 
@@ -146,9 +199,10 @@ def full_report(
     lines = [
         '# 참고 자료 평가',
         '',
-        f'장면 {len(dataset.scenes)}개(evals/references/scenes.yaml), 자료 {len(dataset.references)}줄(SRD 5.1).',
+        f'장면 {len(dataset.scenes)}개(evals/references/scenes.yaml), '
+        f'자료 {len(dataset.references)}줄({sources_line(dataset)}).',
         '자료의 벡터는 이름, 다른 이름(한국어 이름), 한국어로 옮긴 글로 만든다.',
-        '한국어 이름이 장면에 나오면 다른 이름으로도 고른다.',
+        '한국어 이름이 장면에 나오면 다른 이름으로도 고른다. 그 줄도 다른 이름의 상한보다 멀면 뺀다(동음이의어).',
         '',
     ]
     for result in results:
