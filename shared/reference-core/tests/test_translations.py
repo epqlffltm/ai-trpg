@@ -37,6 +37,7 @@ from reference_core.translations import (
     Translation,
     TranslationDocument,
     apply_translations,
+    korean_content,
     read_translations,
     translated,
     unknown_keys,
@@ -300,8 +301,9 @@ def test_the_data_file_carries_the_translation_file():
     shipped = read_document(DATA_FILE)
     ko = read_translations(KO_FILE)
 
+    # 글은 생김새 글과 번역의 글을 이은 것이다
     assert [(entry.name_ko, entry.content_ko) for entry in shipped.entries] == [
-        (ko.entries[entry.key].name, ko.entries[entry.key].content) for entry in shipped.entries
+        (ko.entries[entry.key].name, korean_content(ko.entries[entry.key])) for entry in shipped.entries
     ]
     assert all(entry.aliases and entry.aliases[0] == entry.name_ko for entry in shipped.entries if entry.name_ko)
     assert 'translated into Korean' in shipped.origin.changes
@@ -318,3 +320,14 @@ def test_the_shipped_lines_carry_the_other_korean_names():
     assert '석궁' in shipped['equipment/crossbow-light'].aliases
     assert '붉은 용' in shipped['monsters/adult-red-dragon'].aliases
     assert '치유 물약' in shipped['magic-items/potion-of-healing'].aliases
+
+
+def test_every_monster_has_a_look_and_the_changes_say_so():
+    shipped = read_document(DATA_FILE)
+    ko = read_translations(KO_FILE)
+
+    monsters = [key for key in ko.entries if key.startswith('monsters/')]
+    assert monsters and all(ko.entries[key].look for key in monsters)
+    assert shipped.origin.changes.endswith(srd.SRD51_DESCRIBED)
+    mimic = next(entry for entry in shipped.entries if entry.key == 'monsters/mimic')
+    assert mimic.content_ko.startswith(ko.entries['monsters/mimic'].look)
