@@ -117,6 +117,27 @@ def test_the_korean_name_goes_first_in_the_aliases_once():
     assert (plain.name, plain.content) == ('Torch', 'A torch burns.')
 
 
+def test_other_korean_names_follow_the_korean_name():
+    skeleton = Translation(name='스켈레톤', aliases=['해골 병사', '스켈레톤', 'Skeleton'], content='뼈만 남았다.')
+
+    made = translated(record('monsters/skeleton', name='Skeleton', aliases=['해골 병사', '뼈']), skeleton)
+
+    # 이미 있는 것(해골 병사), 겹친 것, 원본의 이름과 같은 것은 더하지 않는다. 원본의 다른 이름이 뒤다
+    assert made.aliases == ['스켈레톤', '해골 병사', '뼈']
+
+
+def test_the_aliases_stay_within_the_limit():
+    many = Translation(name='용', aliases=['붉은 용', '적색 용', '레드 드래곤', '적룡'])
+
+    made = translated(record(name='Red Dragon', aliases=['원본 하나', '원본 둘']), many)
+
+    assert made.aliases == ['용', '붉은 용', '적색 용', '레드 드래곤', '적룡']
+    with pytest.raises(ValidationError):
+        Translation(name='용', aliases=['가나', '다라', '마바', '사아', '자차'])
+    with pytest.raises(ValidationError):
+        Translation(name='용', aliases=['가' * 31])
+
+
 def test_lines_without_a_translation_stay_as_they_are():
     wolf = record('monsters/wolf', name='Wolf', kind=ReferenceKind.MONSTER)
 
@@ -255,3 +276,15 @@ def test_the_data_file_carries_the_translation_file():
     ]
     assert all(entry.aliases and entry.aliases[0] == entry.name_ko for entry in shipped.entries if entry.name_ko)
     assert 'translated into Korean' in shipped.origin.changes
+
+
+def test_the_shipped_lines_carry_the_other_korean_names():
+    shipped = {entry.key: entry for entry in read_document(DATA_FILE).entries}
+    ko = read_translations(KO_FILE)
+
+    for key, translation in ko.entries.items():
+        assert shipped[key].aliases[: 1 + len(translation.aliases)] == [translation.name, *translation.aliases]
+    # 장면에서 흔히 부르는 말이 번역한 이름과 다른 줄(2026-11-24 평가)
+    assert '해골 병사' in shipped['monsters/skeleton'].aliases
+    assert '석궁' in shipped['equipment/crossbow-light'].aliases
+    assert '붉은 용' in shipped['monsters/adult-red-dragon'].aliases

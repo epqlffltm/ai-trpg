@@ -38,7 +38,7 @@ from app.core.config import get_settings
 from evals.references.dataset import DEFAULT_SCENES, Dataset, DatasetError, chosen_sets, load_dataset
 from evals.references.narration import Trial, run_pairs
 from evals.references.report import ModelResult, full_report
-from evals.references.runner import evaluate, measure, sweep
+from evals.references.runner import evaluate, measure, sweep, sweep_keyword
 from scripts.try_narration import make_provider, warm_up
 
 # 기본 서술 모델. 서버의 기본 서술 모델과 같다
@@ -127,7 +127,9 @@ async def run(arguments: argparse.Namespace) -> str:
         for embedder in make_embedders(arguments, client):
             measurement = await measure(embedder, dataset)
             current = evaluate(dataset, measurement, thresholds)
-            results.append(ModelResult(measurement, current, sweep(dataset, measurement, thresholds)))
+            swept = sweep(dataset, measurement, thresholds)
+            keyword_swept = sweep_keyword(dataset, measurement, thresholds)
+            results.append(ModelResult(measurement, current, swept, keyword_swept))
         if arguments.narrate:
             provider = await narration_provider(arguments, client)
             measured = results[0].measurement

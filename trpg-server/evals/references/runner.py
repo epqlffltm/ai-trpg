@@ -16,6 +16,7 @@ DB 의 가까운 순(repository.nearest)만 여기서 같은 셈으로 한다(�
   - precision(정밀도): 고른 줄 중 정답인 것의 비율. 정답이 없는 장면에서 고른 것은 모두 틀린 것이다.
   - empty(비우기): 정답이 없는 장면에서 아무것도 고르지 않은 비율.
   - hit@k: 거리 기준 없이 가까운 k 개 안에 정답이 드는 비율. 기준을 고르기 전의 모델의 실력이다.
+다른 이름으로 걸린 줄의 거리도 따로 보인다. 다른 이름의 상한(keyword_max_distance)에 잘린 이름을 찾는다.
 """
 
 import math
@@ -42,6 +43,8 @@ from evals.references.dataset import Dataset, Scene, SceneKind
 
 # 거리 기준을 바꿔 가며 볼 값들
 SWEEP_DISTANCES = (0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.80)
+# 다른 이름의 상한을 바꿔 가며 볼 값들. 거리 기준은 지금 값 그대로다. inf 는 상한이 없는 것이다
+KEYWORD_SWEEP_DISTANCES = (0.50, 0.55, 0.60, 0.65, 0.70, math.inf)
 # hit@k 의 k
 TOP_KS = (1, 3, 5)
 
@@ -188,6 +191,22 @@ def sweep(dataset: Dataset, measurement: Measurement, base: ReferenceThresholds)
         thresholds = ReferenceThresholds(distance, max(distance, base.keyword_max_distance), base.limit, base.max_chars)
         results.append((distance, score(evaluate(dataset, measurement, thresholds))))
     return results
+
+
+def sweep_keyword(dataset: Dataset, measurement: Measurement, base: ReferenceThresholds) -> list[tuple[float, Score]]:
+    """다른 이름의 상한을 바꿔 가며 매긴 점수. 거리 기준, 줄의 수, 글자 수는 base 그대로다."""
+    results = []
+    for distance in KEYWORD_SWEEP_DISTANCES:
+        thresholds = ReferenceThresholds(base.max_distance, distance, base.limit, base.max_chars)
+        results.append((distance, score(evaluate(dataset, measurement, thresholds))))
+    return results
+
+
+def alias_distances(scene: Scene, dataset: Dataset, measurement: Measurement) -> list[tuple[str, float | None]]:
+    """장면에서 다른 이름으로 걸린 줄의 key 와 거리. 받은 차례대로다. 거리를 모르면 None 이다."""
+    distances = measurement.distances[scene.name]
+    hits = alias_hits(dataset.references, query_text(scene.request))
+    return [(reference.key, distances.get(reference.id)) for reference in hits]
 
 
 def hit_at(dataset: Dataset, measurement: Measurement, k: int) -> float | None:
