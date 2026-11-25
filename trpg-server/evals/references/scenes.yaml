@@ -5,6 +5,7 @@
 #
 # scenes: 라운드 하나의 장면과 선언, 그리고 정답(expected).
 #   set:  언제 더한 장면인가. v1 은 SRD 만 있을 때 만든 것, v2 는 위키백과(사물, 건축, 탈것, 생물, 지형)를 넣으며 더한 것이다.
+#         v3 은 몬스터의 생김새 글을 쓰기 전에 굳힌 것이다(이름 없이 부르는 몬스터 15, 맞는 것 없음 2).
 #         장면을 늘리면 새 이름(v3 …)을 붙인다. 한 번 붙인 정답은 고치지 않는다(전과 견줄 수 있게).
 #   kind: named(그것을 한국어로 부른다), meaning(이름 없이 생김새나 쓰임으로만), none(자료에 맞는 것이 없다).
 #         none 은 expected 가 비어 있다.
@@ -271,4 +272,125 @@ scenes:
     scene: 모닥불 곁에 동료 둘이 말없이 앉아 있다. 어제의 다툼이 아직 둘 사이에 남아 있다.
     moves:
       - [드워프, 고개를 숙이고 어제 한 말을 사과한다.]
+    expected: []
+  # v3: 생김새 글(#1338) 전에 쓴 몬스터 장면. 이름 없이 생김새나 하는 짓으로만 부른다.
+  # 생김새 글을 쓰기 전(2026-11-25)에 굳혔다. 생김새 글이 이 장면에 맞춰지지 않게 장면도 정답도 고치지 않는다
+  - name: rust-eater
+    set: v3
+    kind: meaning
+    scene: 긴 더듬이가 달린 짐승이 드워프의 쇠도끼에 닿자 날이 붉게 부스러져 내린다.
+    moves:
+      - [드워프, 도끼를 거두고 방패를 앞세운 채 물러선다.]
+    expected: [monsters/rust-monster]
+  - name: black-slime
+    set: v3
+    kind: meaning
+    scene: 천장에서 검은 진흙 같은 덩어리가 떨어진다. 그것이 지나간 나무 문이 지글거리며 녹아내린다.
+    moves:
+      - [엘프, 덩어리를 피해 옆 통로로 뛰어든다.]
+    expected: [monsters/black-pudding]
+  - name: weeping-woman
+    set: v3
+    kind: meaning
+    scene: 버려진 방 한가운데 창백한 여인의 형체가 떠 있다. 벽을 그대로 지나 다가오며 흐느낀다.
+    moves:
+      - [엘프, 여인에게 무엇이 한이 되어 떠나지 못하느냐고 묻는다.]
+    expected: [monsters/ghost, monsters/specter]
+  - name: arm-grows-back
+    set: v3
+    kind: meaning
+    scene: 베어 낸 팔이 바닥에서 꿈틀거리며 기어가 다시 몸에 붙는다. 키 크고 팔이 긴 녹색 괴물이 이를 드러낸다.
+    moves:
+      - [엘프, 불붙은 나뭇가지를 상처에 들이민다.]
+    expected: [monsters/troll]
+  - name: marsh-light
+    set: v3
+    kind: meaning
+    scene: 안개 낀 습지 위로 푸른 불빛 하나가 깜박이며 떠 있다. 다가가면 멀어지고, 멈추면 기다린다.
+    moves:
+      - [드워프, 불빛을 따라가지 말자며 엘프의 소매를 붙잡는다.]
+    expected: [monsters/will-o-wisp]
+  - name: stone-gaze
+    set: v3
+    kind: meaning
+    scene: 다리가 여덟 개인 도마뱀 같은 짐승과 눈이 마주친 병사가 발끝부터 회색 돌로 굳어 간다.
+    moves:
+      - [엘프, 눈을 감은 채 소리만 듣고 활을 겨눈다.]
+    expected: [monsters/basilisk]
+  - name: cliff-singers
+    set: v3
+    kind: meaning
+    scene: 절벽 위에서 여자의 얼굴과 새의 몸을 한 것들이 홀리는 노래를 부른다. 뱃사람 하나가 넋을 잃고 난간을 넘는다.
+    moves:
+      - [드워프, 귀를 막고 뱃사람의 허리띠를 붙잡는다.]
+    expected: [monsters/harpy]
+  - name: labyrinth-bull
+    set: v3
+    kind: meaning
+    scene: 미궁 끝에서 소의 머리를 한 거인이 큰 도끼를 끌며 콧김을 내뿜는다. 바닥이 발굽에 패여 있다.
+    moves:
+      - [엘프, 돌진을 기다렸다가 옆으로 몸을 날린다.]
+    expected: [monsters/minotaur]
+  - name: empty-armor
+    set: v3
+    kind: meaning
+    scene: 복도에 늘어선 빈 갑옷 하나가 삐걱거리며 받침대에서 내려선다. 투구 속은 텅 비어 있다.
+    moves:
+      - [드워프, 망치로 갑옷의 무릎을 내려친다.]
+    expected: [monsters/animated-armor]
+  - name: rolling-carpet
+    set: v3
+    kind: meaning
+    scene: 발밑에 깔린 무늬 고운 깔개가 갑자기 말려 올라와 드워프의 몸을 칭칭 감는다.
+    moves:
+      - [엘프, 깔개의 끝을 붙잡고 단검으로 찢는다.]
+    expected: [monsters/rug-of-smothering]
+  - name: two-friends
+    set: v3
+    kind: meaning
+    scene: 갈림길에 동료와 똑같은 얼굴을 한 자가 둘 서 있다. 옷도 목소리도 같다.
+    moves:
+      - [엘프, 둘에게 어젯밤 모닥불가에서 나눈 이야기를 묻는다.]
+    expected: [monsters/doppelganger]
+  - name: many-heads
+    set: v3
+    kind: meaning
+    scene: 늪에서 머리가 여럿 달린 거대한 뱀이 솟아오른다. 머리 하나를 베자 그 자리에서 둘이 돋아난다.
+    moves:
+      - [드워프, 벤 자리를 불로 지지라고 외친다.]
+    expected: [monsters/hydra]
+  - name: walking-vines
+    set: v3
+    kind: meaning
+    scene: 썩은 덩굴과 이끼가 엉킨 더미가 사람 키만큼 일어나 질척거리며 걸어온다.
+    moves:
+      - [엘프, 더미 한가운데를 향해 불화살을 쏜다.]
+    expected: [monsters/shambling-mound]
+  - name: blood-suckers
+    set: v3
+    kind: meaning
+    scene: 날개 달린 작은 것들이 떼로 날아와 긴 주둥이를 꽂고 피를 빤다. 배가 붉게 부풀어 오른다.
+    moves:
+      - [드워프, 팔에 붙은 것을 떼어 내 바닥에 내동댕이친다.]
+    expected: [monsters/stirge]
+  - name: roof-statue
+    set: v3
+    kind: meaning
+    scene: 무너진 신전 지붕의 돌 조각상이 날개를 펴더니 소리 없이 내려앉는다. 발톱이 돌바닥을 긁는다.
+    moves:
+      - [엘프, 화살이 튕겨 나가자 드워프를 부른다.]
+    expected: [monsters/gargoyle]
+  - name: homeland-song
+    set: v3
+    kind: none
+    scene: 비 오는 밤, 창가에 앉은 엘프가 떠나온 고향의 노래를 낮게 흥얼거린다.
+    moves:
+      - [드워프, 그 노래를 자기에게도 가르쳐 달라고 한다.]
+    expected: []
+  - name: drawing-lots
+    set: v3
+    kind: none
+    scene: 밤이 깊었다. 동료들이 모닥불가에 둘러앉아 하품을 한다.
+    moves:
+      - [드워프, 누가 먼저 밤을 지킬지 나뭇가지로 제비를 만든다.]
     expected: []

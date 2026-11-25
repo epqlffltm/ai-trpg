@@ -366,21 +366,23 @@ SRD51_DATASET = '5e-bits/5e-database src/2014/en'
 # 원본을 바꾼 것. 출처 표시와 함께 보인다(CC BY 4.0)
 SRD51_CHANGES = 'Rules numbers and game mechanics were removed and the text was shortened.'
 SRD51_TRANSLATED = ' Names and text were translated into Korean.'
+# 생김새 글(reference_core/translations.py)을 더했을 때. SRD 의 글이 아니라 이 프로젝트가 쓴 것이다
+SRD51_DESCRIBED = ' Short Korean descriptions of appearance and behavior, written for this project, were added.'
 
 
-def srd_changes(records: list[ReferenceRecord]) -> str:
-    """원본을 바꾼 것. 한국어로 옮긴 줄이 하나라도 있으면 그것도 적는다."""
+def srd_changes(records: list[ReferenceRecord], described: bool = False) -> str:
+    """원본을 바꾼 것. 한국어로 옮긴 줄이 하나라도 있으면 그것도, 생김새 글을 더했으면(described) 그것도 적는다."""
     translated = any(record.name_ko for record in records)
-    return SRD51_CHANGES + (SRD51_TRANSLATED if translated else '')
+    return SRD51_CHANGES + (SRD51_TRANSLATED if translated else '') + (SRD51_DESCRIBED if described else '')
 
 
-def srd_document(records: list[ReferenceRecord], revision: str) -> ReferenceDocument:
-    """SRD 5.1 의 줄들을 데이터 파일 하나로. revision 은 원본 저장소의 커밋이다."""
+def srd_document(records: list[ReferenceRecord], revision: str, described: bool = False) -> ReferenceDocument:
+    """SRD 5.1 의 줄들을 데이터 파일 하나로. revision 은 원본 저장소의 커밋, described 는 생김새 글을 더했는가다."""
     origin = ReferenceOrigin(
         dataset=SRD51_DATASET,
         revision=revision,
         license='CC-BY-4.0',
         attribution=SRD51_ATTRIBUTION,
-        changes=srd_changes(records),
+        changes=srd_changes(records, described),
     )
     return ReferenceDocument(format=DOCUMENT_FORMAT, source=ReferenceSource.SRD51, origin=origin, entries=records)
