@@ -15,7 +15,7 @@ from typing import Any
 
 from reference_core.records import write_document
 from reference_core.srd import srd_document, srd_records
-from reference_core.translations import apply_translations, read_translations, unknown_keys
+from reference_core.translations import apply_translations, described, read_translations, unknown_keys
 
 # 원본 폴더 안의 파일 이름
 MONSTERS_FILE = '5e-SRD-Monsters.json'
@@ -41,12 +41,14 @@ def build(folder: Path, revision: str, output: Path, translation: Path | None = 
     records = srd_records(
         read_json(folder, MONSTERS_FILE), read_json(folder, EQUIPMENT_FILE), read_json(folder, MAGIC_ITEMS_FILE)
     )
+    looks = False
     if translation is not None and translation.exists():
         translations = read_translations(translation)
         unknown = unknown_keys(records, translations)
         if unknown:
             raise UnknownTranslation(', '.join(unknown[:5]))
         records = apply_translations(records, translations)
+        looks = described(translations)
     output.parent.mkdir(parents=True, exist_ok=True)
-    write_document(srd_document(records, revision), output)
+    write_document(srd_document(records, revision, looks), output)
     return len(records)

@@ -167,6 +167,35 @@ def test_the_build_script_puts_the_translation_in(tmp_path: Path):
     torch = next(entry for entry in built.entries if entry.key == 'equipment/torch')
     assert (torch.name_ko, torch.content_ko, torch.aliases[0]) == ('횃불', '횃불이 탄다.', '횃불')
     assert 'translated into Korean' in built.origin.changes
+    # 생김새 글이 없으면 그것을 더했다고 적지 않는다
+    assert 'descriptions of appearance' not in built.origin.changes
+
+
+def test_a_look_goes_before_the_text_and_is_noted_in_the_changes(tmp_path: Path):
+    write_source(tmp_path)
+    looked = Translation(name='횃불', look='나무 막대 끝에 기름 먹인 천을 감았다.', content='횃불이 탄다.')
+    ko = tmp_path / 'ko.json'
+    ko.write_text(translations(**{'equipment/torch': looked}).model_dump_json(), encoding='utf-8')
+    output = tmp_path / 'srd51.json'
+
+    build(tmp_path, 'abc', output, ko)
+
+    built = read_document(output)
+    torch = next(entry for entry in built.entries if entry.key == 'equipment/torch')
+    assert torch.content_ko == '나무 막대 끝에 기름 먹인 천을 감았다. 횃불이 탄다.'
+    assert built.origin.changes.endswith(srd.SRD51_DESCRIBED)
+
+
+def test_a_look_follows_the_rules_of_the_text():
+    only = Translation(name='횃불', look='막대 끝에서 불이 탄다.')
+
+    assert translated(record(), only).content_ko == '막대 끝에서 불이 탄다.'
+    with pytest.raises(ValidationError, match='판정의 수치'):
+        Translation(name='골렘', look='DC 15 의 응시를 한다.')
+    with pytest.raises(ValidationError):
+        Translation(name='골렘', look='가' * 301)
+    with pytest.raises(ValidationError, match='1000자'):
+        Translation(name='골렘', look='가' * 300, content='나' * 700)
 
 
 def test_without_a_translation_file_the_changes_do_not_mention_it(tmp_path: Path):
