@@ -284,7 +284,9 @@ async def test_a_page_carries_the_shown_text_and_the_attribution(client: AsyncCl
     (wolf,) = body['items']
     assert wolf['name'] == '늑대' and wolf['original_name'] == 'Wolf' and wolf['content'] == WOLF.content_ko
     assert wolf['kind'] == 'monster' and wolf['source'] == 'srd51' and 'data' not in wolf
-    assert body['attributions'] == [f'{srd.SRD51_ATTRIBUTION} {srd.SRD51_CHANGES}{srd.SRD51_TRANSLATED}']
+    assert body['attributions'] == [
+        f'{srd.SRD51_ATTRIBUTION} {srd.SRD51_CHANGES}{srd.SRD51_TRANSLATED}{srd.SRD51_DESCRIBED}'
+    ]
     assert empty.json() == {'items': [], 'total': 0, 'attributions': []}
 
 

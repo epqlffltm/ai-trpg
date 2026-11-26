@@ -8,11 +8,11 @@
 from collections.abc import Sequence
 
 from reference_core.records import ReferenceSource, StoredReference
-from reference_core.srd import SRD51_ATTRIBUTION, SRD51_CHANGES, SRD51_TRANSLATED
+from reference_core.srd import SRD51_ATTRIBUTION, SRD51_CHANGES, SRD51_DESCRIBED, SRD51_TRANSLATED
 from reference_core.wiki import WIKIPEDIA_ATTRIBUTION, WIKIPEDIA_CHANGES, WIKIPEDIA_TRANSLATED
 
 ATTRIBUTIONS: dict[str, str] = {
-    ReferenceSource.SRD51: f'{SRD51_ATTRIBUTION} {SRD51_CHANGES}{SRD51_TRANSLATED}',
+    ReferenceSource.SRD51: f'{SRD51_ATTRIBUTION} {SRD51_CHANGES}{SRD51_TRANSLATED}{SRD51_DESCRIBED}',
     ReferenceSource.WIKIPEDIA: f'{WIKIPEDIA_ATTRIBUTION} {WIKIPEDIA_CHANGES}{WIKIPEDIA_TRANSLATED}',
 }
 
