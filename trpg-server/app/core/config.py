@@ -167,7 +167,7 @@ class Settings(CoreSettings, NotificationSettings, BillingSettings):  # pyright:
     # 참고 자료(#482, SRD 5.1, 위키백과) 검색의 거리 기준(코사인 거리). 기본값은 bge-m3 로 잰 것이다
     # (scripts.eval_references, reference_core/selection.py 의 같은 이름의 상수). 임베딩 모델을 바꾸면 다시 잰다.
     # 뜻으로 고를 때: 이보다 먼 줄은 넣지 않는다
-    reference_max_distance: float = Field(default=0.40, gt=0, le=2)
+    reference_max_distance: float = Field(default=0.45, gt=0, le=2)
     # 다른 이름(한국어 이름)으로 걸린 줄: 이보다 멀면 넣지 않는다. 임베딩이 실패하면 보지 않는다
     reference_keyword_max_distance: float = Field(default=0.60, gt=0, le=2)
 

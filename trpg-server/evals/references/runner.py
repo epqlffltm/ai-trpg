@@ -7,7 +7,7 @@
 한 번 잰 거리로 거리 기준을 여러 개 바꿔 가며 다시 매긴다. 모델을 다시 부르지 않는다.
 
 고르는 규칙은 서버의 함수(reference_core/selection.py 의 alias_hits, near_enough, pick)로 짠다.
-기본 차례(ALIAS_FIRST)는 서버의 choose 와 같다(테스트가 견준다). 평가한 규칙과 도는 규칙이 같다.
+기본 차례(ALIAS_CAP)는 서버의 choose 와 같다(테스트가 견준다). 평가한 규칙과 도는 규칙이 같다.
 DB 의 가까운 순(repository.nearest)만 여기서 같은 셈으로 한다(거리 기준 이하, 가까운 순, limit 개).
 로어북은 없다고 본다. 남은 자리는 REFERENCE_MAX_CHARS 다.
 
@@ -18,8 +18,8 @@ DB 의 가까운 순(repository.nearest)만 여기서 같은 셈으로 한다(�
   - hit@k: 거리 기준 없이 가까운 k 개 안에 정답이 드는 비율. 기준을 고르기 전의 모델의 실력이다.
 다른 이름으로 걸린 줄의 거리도 따로 보인다. 다른 이름의 상한(keyword_max_distance)에 잘린 이름을 찾는다.
 
-넣는 차례(Order)도 바꿔 가며 매긴다. 서버는 다른 이름으로 걸린 줄을 먼저 넣는다(ALIAS_FIRST).
-그 줄들이 자리(limit)를 다 채우면 뜻으로 더 가까운 줄이 들어가지 못한다. 다른 차례가 나은지 서버를 바꾸기 전에 잰다.
+넣는 차례(Order)도 바꿔 가며 매긴다. 서버는 다른 이름으로 걸린 줄을 limit - 1 줄까지 먼저 넣는다(ALIAS_CAP, 2026-11-26).
+전에는 다른 이름을 모두 먼저 넣었다(ALIAS_FIRST). 그 줄들이 자리를 다 채워 뜻으로 더 가까운 정답이 들어가지 못했다.
 """
 
 import enum
@@ -36,6 +36,7 @@ from reference_core.selection import (
     REFERENCE_MAX_CHARS,
     ReferenceThresholds,
     alias_hits,
+    in_order,
     near_enough,
     pick,
 )
@@ -59,10 +60,10 @@ ORDER_DISTANCES = (0.40, 0.45, 0.50)
 class Order(enum.StrEnum):
     """
     고른 줄을 넣는 차례.
-      - ALIAS_FIRST: 다른 이름으로 걸린 줄을 먼저, 그다음 뜻이 가까운 줄
-        (지금 서버의 규칙, reference_core/selection.choose)
+      - ALIAS_FIRST: 다른 이름으로 걸린 줄을 모두 먼저, 그다음 뜻이 가까운 줄(2026-11-26 전의 서버)
       - BY_DISTANCE: 둘을 섞어 거리가 가까운 순. 거리를 모르는 다른 이름의 줄(벡터 없음)이 맨 앞이다
       - ALIAS_CAP: 다른 이름으로 걸린 줄은 limit - 1 줄까지 먼저, 그다음 뜻이 가까운 줄, 남은 다른 이름의 줄은 맨 뒤
+        (지금 서버의 규칙, reference_core/selection.in_order)
     """
 
     ALIAS_FIRST = 'alias_first'
@@ -168,10 +169,9 @@ def ordered(
     """
     if order == Order.BY_DISTANCE:
         return sorted([*hits, *near], key=lambda reference: distances.get(reference.id, -math.inf))
-    if order == Order.ALIAS_CAP:
-        cap = max(limit - 1, 0)
-        return [*hits[:cap], *near, *hits[cap:]]
-    return [*hits, *near]
+    if order == Order.ALIAS_FIRST:
+        return [*hits, *near]
+    return in_order(hits, near, limit)
 
 
 def pick_for(
@@ -179,10 +179,10 @@ def pick_for(
     references: Sequence[StoredReference],
     distances: dict[uuid.UUID, float],
     thresholds: ReferenceThresholds,
-    order: Order = Order.ALIAS_FIRST,
+    order: Order = Order.ALIAS_CAP,
 ) -> list[StoredReference]:
     """
-    장면 하나에서 고른 줄들. 기본(ALIAS_FIRST)은 서버의 규칙(reference_core/selection.choose)과 같다.
+    장면 하나에서 고른 줄들. 기본(ALIAS_CAP)은 서버의 규칙(reference_core/selection.choose)과 같다.
     로어북이 없다고 보고 남은 자리는 REFERENCE_MAX_CHARS 다.
     """
     text = query_text(scene.request)
@@ -193,7 +193,7 @@ def pick_for(
 
 
 def evaluate(
-    dataset: Dataset, measurement: Measurement, thresholds: ReferenceThresholds, order: Order = Order.ALIAS_FIRST
+    dataset: Dataset, measurement: Measurement, thresholds: ReferenceThresholds, order: Order = Order.ALIAS_CAP
 ) -> list[Outcome]:
     """장면마다 고른 것."""
     return [

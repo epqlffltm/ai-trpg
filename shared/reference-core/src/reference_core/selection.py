@@ -7,7 +7,10 @@
   1. 다른 이름: 줄의 다른 이름(한국어 이름, aliases)이 글에 그대로 들어 있고, 거리가 keyword_max_distance 이하인 것.
      원본의 이름(영어)으로는 고르지 않는다. 한국어 장면에 나오지 않고, 짧은 영어 이름("Bat")은 낱말 속에서 잘못 걸린다.
   2. 벡터: 거리가 max_distance 이하인 것, 가까운 순으로 limit 개까지.
-다른 이름으로 고른 것을 먼저, 그다음 가까운 순으로 넣는다. 글자 수의 합이 남은 자리(room)를 넘지 않는다.
+넣는 차례(in_order): 다른 이름으로 고른 것을 limit - 1 줄까지 먼저, 그다음 뜻이 가까운 순, 남은 다른 이름은 맨 뒤다.
+한 줄은 뜻의 몫으로 남긴다. 다른 이름이 장면에 나온 소품(방패, 도끼)으로 자리를 다 채우면 생김새로 부른 정답이
+들어가지 못했다(2026-11-26 평가). 뜻이 가까운 줄이 없으면 다른 이름의 줄이 그 자리도 채운다.
+글자 수의 합이 남은 자리(room)를 넘지 않는다.
 남은 자리를 셈하는 것(로어북이 쓰고 남은 것)은 서버마다 다르다. 서버가 정해 넘긴다(room_after 가 그 셈이다).
 """
 
@@ -24,15 +27,16 @@ REFERENCE_MAX_CHARS = 1500
 REFERENCE_LIMIT = 3
 # 이보다 짧은 다른 이름으로는 고르지 않는다
 MIN_ALIAS_LENGTH = 2
-# 기준 둘은 bge-m3 로 잰 값이다(trpg-server 의 scripts.eval_references, 장면 36개, 2026-11-25).
-#   다른 이름 0.60 과 함께 거리 0.45 → 0.40 으로 내리면 맞힘 68% → 65%, 정밀도 36% → 39% 다.
-#   0.40~0.45 사이에서 맞은 줄은 하나(치유의 물약, 다른 이름으로 다시 잡는다),
-#   틀린 줄은 아홉(바다 해그, 화염의 혀 …)이다.
-#   다른 이름은 0.50 이면 이름을 부른 고블린(0.561), 리치(0.564), 석궁(0.509~0.535)이 빠진다. 0.60 에서 모두 든다.
+# 기준 둘은 bge-m3 로 잰 값이다(trpg-server 의 scripts.eval_references).
+#   거리 0.45(2026-11-26, 장면 53개, 몬스터 생김새 글과 위의 넣는 차례로): 맞힘 78%, 정밀도 36%, 비우기 43%.
+#   0.40 은 65% / 37% / 43% 다. 생김새 글 뒤로 정답이 0.40~0.45 에 많이 든다(미노타우로스 0.403, 미믹 0.442).
+#   0.50 은 맞힘 80% 지만 비우기가 14% 로 떨어진다.
+#   (생김새 글 전인 2026-11-25 에는 0.40 이었다. 0.40~0.45 에 맞은 줄 하나, 틀린 줄 아홉이었다)
+#   다른 이름은 0.50 이면 이름을 부른 고블린(0.561), 리치(0.564), 석궁(0.509~0.535)이 빠졌다. 0.60 에서 모두 든다.
 #   0.50~0.60 사이에 든 다른 줄도 장면에 그 말이 나온 것(방패, 도끼, 여관)이었다. 다른 뜻으로 걸린 줄은 없었다.
 #   0.65 부터는 장면에 스치듯 나온 말(사과의 "고개", 0.615)까지 든다.
 # 이보다 먼 줄은 벡터로 고르지 않는다. 서버의 설정 REFERENCE_MAX_DISTANCE 의 기본값
-MAX_DISTANCE = 0.40
+MAX_DISTANCE = 0.45
 # 다른 이름으로 걸린 줄도 거리가 이보다 멀면 넣지 않는다(동음이의어).
 # 서버의 설정 REFERENCE_KEYWORD_MAX_DISTANCE 의 기본값
 KEYWORD_MAX_DISTANCE = 0.60
@@ -103,6 +107,15 @@ def pick(ordered: Sequence[StoredReference], room: int, limit: int) -> list[Stor
     return picked
 
 
+def in_order(hits: Sequence[StoredReference], nearest: Sequence[StoredReference], limit: int) -> list[StoredReference]:
+    """
+    넣을 차례. 다른 이름의 줄(hits)을 limit - 1 줄까지, 그다음 뜻이 가까운 줄(nearest), 남은 다른 이름의 줄이다.
+    같은 줄이 둘에 다 있어도 된다. pick 이 한 번만 넣는다.
+    """
+    cap = max(limit - 1, 0)
+    return [*hits[:cap], *nearest, *hits[cap:]]
+
+
 def choose(
     hits: Sequence[StoredReference],
     distances: Mapping[uuid.UUID, float],
@@ -111,9 +124,9 @@ def choose(
     room: int,
 ) -> list[StoredReference]:
     """
-    넣을 줄을 고른다. 다른 이름으로 걸리고 거리가 가까운 것을 먼저, 그다음 뜻이 가까운 것(nearest)을, room 안에서.
+    넣을 줄을 고른다. 다른 이름으로 걸리고 거리가 가까운 것과 뜻이 가까운 것(nearest)을 in_order 의 차례로, room 안에서.
 
     nearest 는 이미 거리 기준 안의 가까운 순이다(repository.nearest). distances 는 다른 이름으로 걸린 줄의 거리다.
     """
     near_hits = [hit for hit in hits if near_enough(hit, distances, thresholds.keyword_max_distance)]
-    return pick([*near_hits, *nearest], room, thresholds.limit)
+    return pick(in_order(near_hits, nearest, thresholds.limit), room, thresholds.limit)

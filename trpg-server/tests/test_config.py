@@ -246,7 +246,7 @@ def test_the_reference_distances_default_to_the_measured_ones():
     settings = from_env()
 
     # 참고 자료의 기준은 chat, story 와 같은 상수(reference_core/selection.py)다. bge-m3 로 잰 값이다
-    assert settings.reference_max_distance == reference_selection.MAX_DISTANCE == 0.40
+    assert settings.reference_max_distance == reference_selection.MAX_DISTANCE == 0.45
     assert settings.reference_keyword_max_distance == reference_selection.KEYWORD_MAX_DISTANCE == 0.60
 
 

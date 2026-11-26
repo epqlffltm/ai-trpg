@@ -16,6 +16,7 @@ from reference_core.selection import (
     ReferenceThresholds,
     alias_hits,
     choose,
+    in_order,
     mentions_alias,
     near_enough,
     pick,
@@ -73,3 +74,19 @@ def test_alias_hits_come_before_the_nearest_within_the_room():
     chosen = choose([hit, far_hit], {hit.id: 0.2, far_hit.id: 0.9}, [near, hit], thresholds, room=100)
 
     assert chosen == [hit, near]
+
+
+def test_one_place_is_left_for_the_nearest():
+    shield, axe, hammer = stored('shield', ['방패']), stored('axe', ['도끼']), stored('hammer', ['망치'])
+    armor = stored('armor')
+    thresholds = ReferenceThresholds(keyword_max_distance=0.6, limit=3)
+    distances = {shield.id: 0.5, axe.id: 0.5, hammer.id: 0.5}
+
+    with_nearest = choose([shield, axe, hammer], distances, [armor], thresholds, room=100)
+    without = choose([shield, axe, hammer], distances, [], thresholds, room=100)
+
+    # 다른 이름은 두 줄까지 먼저, 한 줄은 뜻이 가까운 줄의 몫이다
+    assert with_nearest == [shield, axe, armor]
+    # 뜻이 가까운 줄이 없으면 다른 이름의 줄이 그 자리도 채운다
+    assert without == [shield, axe, hammer]
+    assert in_order([shield, axe, hammer], [armor], limit=1) == [armor, shield, axe, hammer]

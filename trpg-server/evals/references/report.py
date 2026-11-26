@@ -32,9 +32,9 @@ KIND_NAMES = {SceneKind.NAMED: '한국어로 부름', SceneKind.MEANING: '뜻으
 SOURCE_NAMES = {'srd51': 'SRD 5.1', 'wikipedia': '위키백과'}
 # 넣는 차례의 이름
 ORDER_NAMES = {
-    Order.ALIAS_FIRST: '다른 이름 먼저(지금)',
+    Order.ALIAS_FIRST: '다른 이름 먼저',
     Order.BY_DISTANCE: '거리 순',
-    Order.ALIAS_CAP: '다른 이름은 한 줄 덜',
+    Order.ALIAS_CAP: '다른 이름은 한 줄 덜(지금)',
 }
 
 
