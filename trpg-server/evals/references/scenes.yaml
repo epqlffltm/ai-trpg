@@ -6,6 +6,7 @@
 # scenes: 라운드 하나의 장면과 선언, 그리고 정답(expected).
 #   set:  언제 더한 장면인가. v1 은 SRD 만 있을 때 만든 것, v2 는 위키백과(사물, 건축, 탈것, 생물, 지형)를 넣으며 더한 것이다.
 #         v3 은 몬스터의 생김새 글을 쓰기 전에 굳힌 것이다(이름 없이 부르는 몬스터 15, 맞는 것 없음 2).
+#         v4 는 물건의 생김새 글을 쓰기 전에 굳힌 것이다(이름 없이 부르는 물건 15, 맞는 것 없음 2).
 #         장면을 늘리면 새 이름(v3 …)을 붙인다. 한 번 붙인 정답은 고치지 않는다(전과 견줄 수 있게).
 #   kind: named(그것을 한국어로 부른다), meaning(이름 없이 생김새나 쓰임으로만), none(자료에 맞는 것이 없다).
 #         none 은 expected 가 비어 있다.
@@ -393,4 +394,125 @@ scenes:
     scene: 밤이 깊었다. 동료들이 모닥불가에 둘러앉아 하품을 한다.
     moves:
       - [드워프, 누가 먼저 밤을 지킬지 나뭇가지로 제비를 만든다.]
+    expected: []
+  # v4: 물건의 생김새 글 전에 쓴 물건 장면. 이름 없이 생김새나 쓰임으로만 부른다.
+  # 물건의 생김새 글을 쓰기 전(2026-11-27)에 굳혔다. 장면도 정답도 고치지 않는다
+  - name: iron-spikes
+    set: v4
+    kind: meaning
+    scene: 등 뒤에서 추격자들의 발소리가 가까워진다. 좁은 복도가 길게 이어진다.
+    moves:
+      - [드워프, 주머니에서 뾰족한 쇳조각 한 줌을 꺼내 바닥에 흩뿌린다.]
+    expected: [equipment/caltrops]
+  - name: far-sail
+    set: v4
+    kind: meaning
+    scene: 절벽 위 망루에 바람이 분다. 수평선 끝에 점 같은 돛 하나가 보인다.
+    moves:
+      - [엘프, 놋쇠로 된 긴 통을 한쪽 눈에 대고 돛의 깃발을 살핀다.]
+    expected: [equipment/spyglass]
+  - name: wrist-irons
+    set: v4
+    kind: meaning
+    scene: 붙잡힌 도적이 무릎을 꿇고 있다. 병사가 쇠고리 두 개가 사슬로 이어진 것을 내민다.
+    moves:
+      - [드워프, 그것을 도적의 손목에 채우고 열쇠를 품에 넣는다.]
+    expected: [equipment/manacles]
+  - name: picking-the-lock
+    set: v4
+    kind: meaning
+    scene: 창고 문에 묵직한 자물쇠가 걸려 있다. 경비가 돌아오기까지 시간이 많지 않다.
+    moves:
+      - [엘프, 가느다란 쇠꼬챙이 몇 개를 열쇠 구멍에 넣고 조심스럽게 돌린다.]
+    expected: [equipment/thieves-tools]
+  - name: first-spark
+    set: v4
+    kind: meaning
+    scene: 젖은 숲에 밤이 내린다. 모아 둔 마른 잔가지에는 아직 불이 없다.
+    moves:
+      - [드워프, 작은 통에서 부싯돌과 쇳조각을 꺼내 쳐서 불티를 일으킨다.]
+    expected: [equipment/tinderbox, ko/부싯돌]
+  - name: blessed-flask
+    set: v4
+    kind: meaning
+    scene: 무덤가에서 되살아난 망자가 비틀거리며 다가온다.
+    moves:
+      - [엘프, 사제가 축복해 준 물이 든 작은 유리병을 망자에게 던진다.]
+    expected: [equipment/holy-water-flask]
+  - name: endless-water
+    set: v4
+    kind: meaning
+    scene: 사막 한가운데 일행의 물주머니가 모두 비었다.
+    moves:
+      - [드워프, 마개 달린 병의 마개를 따자 물이 끝없이 쏟아져 나온다.]
+    expected: [magic-items/decanter-of-endless-water]
+  - name: rod-in-the-air
+    set: v4
+    kind: meaning
+    scene: 무너지는 천장 아래로 돌이 쏟아진다.
+    moves:
+      - [엘프, 쇠막대 끝의 단추를 누르자 막대가 허공에 꼼짝 않고 붙어 천장을 받친다.]
+    expected: [magic-items/immovable-rod]
+  - name: silent-steps
+    set: v4
+    kind: meaning
+    scene: 자갈 깔린 안뜰을 경비병이 순찰한다.
+    moves:
+      - [엘프, 부드러운 가죽 신을 신고 자갈 위를 걷는데 발소리가 전혀 나지 않는다.]
+    expected: [magic-items/boots-of-elvenkind]
+  - name: wrong-place
+    set: v4
+    kind: meaning
+    scene: 궁수들이 엘프를 겨누고 쏘지만 화살이 번번이 빗나간다.
+    moves:
+      - [엘프, 어깨에 두른 겉옷 덕에 실제 자리보다 한 걸음 옆에 서 있는 것처럼 보인다.]
+    expected: [magic-items/cloak-of-displacement]
+  - name: black-cloth-hole
+    set: v4
+    kind: meaning
+    scene: 금화가 가득한 보물 상자가 너무 무거워 옮길 수 없다.
+    moves:
+      - [드워프, 접어 둔 검은 천을 바닥에 펼치자 깊은 구덩이가 된다. 상자를 그 안에 밀어 넣는다.]
+    expected: [magic-items/portable-hole]
+  - name: burning-blade
+    set: v4
+    kind: meaning
+    scene: 얼어붙은 동굴에서 서리 늑대가 이빨을 드러낸다.
+    moves:
+      - [엘프, 주문을 외자 검의 날에서 불길이 피어오른다.]
+    expected: [magic-items/flame-tongue]
+  - name: prying-bar
+    set: v4
+    kind: meaning
+    scene: 녹슨 철문이 꽉 끼어 꿈쩍도 하지 않는다.
+    moves:
+      - [드워프, 끝이 휜 쇠막대를 문틈에 끼우고 온몸으로 젖힌다.]
+    expected: [equipment/crowbar]
+  - name: sticky-fire
+    set: v4
+    kind: meaning
+    scene: 거미줄로 덮인 통로 끝에 거대한 그림자가 웅크리고 있다.
+    moves:
+      - [엘프, 닿으면 불이 붙는 끈적한 액체가 든 병을 던진다.]
+    expected: [equipment/alchemists-fire-flask]
+  - name: flying-rug
+    set: v4
+    kind: meaning
+    scene: 성벽은 너무 높고 성문은 굳게 닫혀 있다.
+    moves:
+      - [드워프, 무늬 고운 깔개를 펴고 올라앉자 깔개가 바닥에서 떠오른다.]
+    expected: [magic-items/carpet-of-flying]
+  - name: tea-time
+    set: v4
+    kind: none
+    scene: 비 그친 오후, 창가에 따뜻한 햇살이 든다.
+    moves:
+      - [엘프, 지난 여행에서 가장 즐거웠던 날을 떠올리며 웃는다.]
+    expected: []
+  - name: old-promise
+    set: v4
+    kind: none
+    scene: 모닥불이 사그라든다. 드워프가 한참 말이 없다.
+    moves:
+      - [드워프, 오래전 형과 한 약속을 아직 지키지 못했다고 털어놓는다.]
     expected: []

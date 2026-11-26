@@ -106,7 +106,7 @@ def test_the_scenes_in_the_repository_load():
     sources = {reference.source for reference in dataset.references}
     assert sources == {'srd51', 'wikipedia'}
     assert len([reference for reference in dataset.references if reference.source == 'srd51']) == 810
-    assert {scene.set for scene in dataset.scenes} == {'v1', 'v2', 'v3'}
+    assert {scene.set for scene in dataset.scenes} == {'v1', 'v2', 'v3', 'v4'}
     galleon = next(reference for reference in dataset.references if reference.key == 'ko/갈레온')
     assert '갤리온' in galleon.aliases
     english = next(reference for reference in dataset.references if reference.key == 'en/Portcullis')
