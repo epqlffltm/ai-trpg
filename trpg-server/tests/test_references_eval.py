@@ -203,7 +203,7 @@ def test_the_default_order_is_the_servers_choose():
     near = nearest(ARMORY.references, distances, thresholds.max_distance, thresholds.limit)
     server = choose(hits, distances, near, thresholds, thresholds.max_chars)
 
-    assert pick_for(RUSTY, ARMORY.references, distances, thresholds) == server == [SHIELD, AXE]
+    assert pick_for(RUSTY, ARMORY.references, distances, thresholds) == server == [SHIELD, RUST]
 
 
 def test_the_orders_differ_when_the_aliases_fill_the_room():
@@ -357,7 +357,8 @@ def test_the_report_has_the_orders_and_the_closest_answer():
     report = full_report(ARMORY, [result], thresholds)
 
     assert '**넣는 차례를 바꿔 가며**' in report
-    assert '| 거리 순 | 0.40 | 100% |' in report and '| 다른 이름 먼저(지금) | 0.40 | 0% |' in report
+    assert '| 거리 순 | 0.40 | 100% |' in report and '| 다른 이름 먼저 | 0.40 | 0% |' in report
+    assert '| 다른 이름은 한 줄 덜(지금) | 0.40 | 100% |' in report
     assert f'{RUST.key} 0.350 (1번째)' in report
 
 
