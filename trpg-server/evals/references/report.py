@@ -15,9 +15,11 @@ from evals.references.narration import Mode, Trial, tally
 from evals.references.runner import (
     TOP_KS,
     Measurement,
+    Order,
     Outcome,
     Score,
     alias_distances,
+    closest_answer,
     hit_at,
     score,
     score_by_kind,
@@ -28,19 +30,27 @@ from evals.references.runner import (
 KIND_NAMES = {SceneKind.NAMED: '한국어로 부름', SceneKind.MEANING: '뜻으로만', SceneKind.NONE: '맞는 것 없음'}
 # 보고서의 머리말에 적는 자료의 이름
 SOURCE_NAMES = {'srd51': 'SRD 5.1', 'wikipedia': '위키백과'}
+# 넣는 차례의 이름
+ORDER_NAMES = {
+    Order.ALIAS_FIRST: '다른 이름 먼저(지금)',
+    Order.BY_DISTANCE: '거리 순',
+    Order.ALIAS_CAP: '다른 이름은 한 줄 덜',
+}
 
 
 @dataclass(frozen=True)
 class ModelResult:
     """
     임베딩 모델 하나의 결과. current 는 지금 서버의 기준으로 고른 것, swept 는 거리 기준마다의 점수,
-    keyword_swept 는 다른 이름의 상한마다의 점수다(재지 않았으면 비어 있다).
+    keyword_swept 는 다른 이름의 상한마다의 점수, order_swept 는 넣는 차례와 거리 기준마다의 점수다
+    (재지 않았으면 비어 있다).
     """
 
     measurement: Measurement
     current: list[Outcome]
     swept: list[tuple[float, Score]]
     keyword_swept: list[tuple[float, Score]] = field(default_factory=list)
+    order_swept: list[tuple[Order, float, Score]] = field(default_factory=list)
 
 
 def percent(value: float | None) -> str:
@@ -91,6 +101,31 @@ def keyword_lines(result: ModelResult, thresholds: ReferenceThresholds) -> list[
     return lines
 
 
+def order_lines(result: ModelResult, thresholds: ReferenceThresholds) -> list[str]:
+    """넣는 차례와 거리 기준을 함께 바꿔 가며 매긴 표. 재지 않았으면 빈 목록이다."""
+    if not result.order_swept:
+        return []
+    lines = [
+        '',
+        f'**넣는 차례를 바꿔 가며**(다른 이름의 상한 {thresholds.keyword_max_distance}, {thresholds.limit}줄)',
+        '',
+        '| 차례 | 거리 | 맞힘 | 정밀도 | 비우기 | 장면마다 고른 수 |',
+        '| --- | --- | --- | --- | --- | --- |',
+    ]
+    for order, distance, swept in result.order_swept:
+        row = score_row(f'{ORDER_NAMES[order]} | {distance:.2f}', swept)
+        lines.append(row)
+    return lines
+
+
+def closest_cell(dataset: Dataset, outcome: Outcome, measurement: Measurement) -> str:
+    """장면에서 가장 가까운 정답의 key, 거리, 모든 줄 가운데의 차례. 정답이 없는 장면은 '-' 다."""
+    closest = closest_answer(outcome.scene, dataset, measurement)
+    if closest is None:
+        return '-'
+    return f'{closest.key} {closest.distance:.3f} ({closest.rank}번째)'
+
+
 def aliased_cell(dataset: Dataset, outcome: Outcome, measurement: Measurement, limit: float) -> str:
     """장면에서 다른 이름으로 걸린 줄과 거리. 상한보다 멀어 뺀 것에 (뺌)을 붙인다. 없으면 '(없음)' 이다."""
     found = alias_distances(outcome.scene, dataset, measurement)
@@ -138,6 +173,7 @@ def model_section(dataset: Dataset, result: ModelResult, thresholds: ReferenceTh
         mark = ' (가장 나음)' if distance == chosen else ''
         lines.append(score_row(f'{distance:.2f}{mark}', swept))
     lines.extend(keyword_lines(result, thresholds))
+    lines.extend(order_lines(result, thresholds))
     hits = ', '.join(f'@{k} {percent(hit_at(dataset, measurement, k))}' for k in TOP_KS)
     lines.extend(
         [
@@ -150,8 +186,8 @@ def model_section(dataset: Dataset, result: ModelResult, thresholds: ReferenceTh
             '',
             '**장면마다 고른 것(지금 기준)**',
             '',
-            '| 장면 | 종류 | 정답 | 고른 것 | 다른 이름으로 걸린 것(거리) |',
-            '| --- | --- | --- | --- | --- |',
+            '| 장면 | 종류 | 정답 | 고른 것 | 가장 가까운 정답(거리, 차례) | 다른 이름으로 걸린 것(거리) |',
+            '| --- | --- | --- | --- | --- | --- |',
         ]
     )
     for outcome in result.current:
@@ -160,7 +196,8 @@ def model_section(dataset: Dataset, result: ModelResult, thresholds: ReferenceTh
         chosen_keys = ', '.join(outcome.chosen) or '(없음)'
         aliased = aliased_cell(dataset, outcome, measurement, thresholds.keyword_max_distance)
         kind = KIND_NAMES[outcome.scene.kind]
-        lines.append(f'| {outcome.scene.name} {mark} | {kind} | {expected} | {chosen_keys} | {aliased} |')
+        closest = closest_cell(dataset, outcome, measurement)
+        lines.append(f'| {outcome.scene.name} {mark} | {kind} | {expected} | {chosen_keys} | {closest} | {aliased} |')
     lines.append('')
     return lines
 
