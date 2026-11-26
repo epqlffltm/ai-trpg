@@ -6,8 +6,8 @@
 모델을 부르는 일(measure)과 점수를 매기는 일(evaluate, sweep)을 나눈다.
 한 번 잰 거리로 거리 기준을 여러 개 바꿔 가며 다시 매긴다. 모델을 다시 부르지 않는다.
 
-고르는 규칙은 서버의 함수(app/references/retrieval.py 의 alias_hits, choose)를 그대로 쓴다.
-평가한 규칙과 도는 규칙이 같다.
+고르는 규칙은 서버의 함수(reference_core/selection.py 의 alias_hits, near_enough, pick)로 짠다.
+기본 차례(ALIAS_FIRST)는 서버의 choose 와 같다(테스트가 견준다). 평가한 규칙과 도는 규칙이 같다.
 DB 의 가까운 순(repository.nearest)만 여기서 같은 셈으로 한다(거리 기준 이하, 가까운 순, limit 개).
 로어북은 없다고 본다. 남은 자리는 REFERENCE_MAX_CHARS 다.
 
@@ -17,8 +17,12 @@ DB 의 가까운 순(repository.nearest)만 여기서 같은 셈으로 한다(�
   - empty(비우기): 정답이 없는 장면에서 아무것도 고르지 않은 비율.
   - hit@k: 거리 기준 없이 가까운 k 개 안에 정답이 드는 비율. 기준을 고르기 전의 모델의 실력이다.
 다른 이름으로 걸린 줄의 거리도 따로 보인다. 다른 이름의 상한(keyword_max_distance)에 잘린 이름을 찾는다.
+
+넣는 차례(Order)도 바꿔 가며 매긴다. 서버는 다른 이름으로 걸린 줄을 먼저 넣는다(ALIAS_FIRST).
+그 줄들이 자리(limit)를 다 채우면 뜻으로 더 가까운 줄이 들어가지 못한다. 다른 차례가 나은지 서버를 바꾸기 전에 잰다.
 """
 
+import enum
 import math
 import statistics
 import time
@@ -32,7 +36,8 @@ from reference_core.selection import (
     REFERENCE_MAX_CHARS,
     ReferenceThresholds,
     alias_hits,
-    choose,
+    near_enough,
+    pick,
 )
 from reference_core.texts import reference_text
 
@@ -47,6 +52,22 @@ SWEEP_DISTANCES = (0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.80)
 KEYWORD_SWEEP_DISTANCES = (0.50, 0.55, 0.60, 0.65, 0.70, math.inf)
 # hit@k 의 k
 TOP_KS = (1, 3, 5)
+# 넣는 차례를 견줄 때 함께 바꿔 보는 거리 기준
+ORDER_DISTANCES = (0.40, 0.45, 0.50)
+
+
+class Order(enum.StrEnum):
+    """
+    고른 줄을 넣는 차례.
+      - ALIAS_FIRST: 다른 이름으로 걸린 줄을 먼저, 그다음 뜻이 가까운 줄
+        (지금 서버의 규칙, reference_core/selection.choose)
+      - BY_DISTANCE: 둘을 섞어 거리가 가까운 순. 거리를 모르는 다른 이름의 줄(벡터 없음)이 맨 앞이다
+      - ALIAS_CAP: 다른 이름으로 걸린 줄은 limit - 1 줄까지 먼저, 그다음 뜻이 가까운 줄, 남은 다른 이름의 줄은 맨 뒤
+    """
+
+    ALIAS_FIRST = 'alias_first'
+    BY_DISTANCE = 'by_distance'
+    ALIAS_CAP = 'alias_cap'
 
 
 @dataclass(frozen=True)
@@ -83,6 +104,15 @@ class Score:
     precision: float | None
     empty: float | None
     chosen_per_scene: float
+
+
+@dataclass(frozen=True)
+class Closest:
+    """장면에서 가장 가까운 정답. rank 는 모든 줄을 가까운 순으로 늘어놓았을 때의 차례다(1 이 가장 가깝다)."""
+
+    key: str
+    distance: float
+    rank: int
 
 
 @dataclass(frozen=True)
@@ -125,26 +155,53 @@ def nearest(
     return sorted(near, key=lambda reference: distances[reference.id])[:limit]
 
 
+def ordered(
+    order: Order,
+    hits: Sequence[StoredReference],
+    near: Sequence[StoredReference],
+    distances: dict[uuid.UUID, float],
+    limit: int,
+) -> list[StoredReference]:
+    """
+    넣을 차례로 늘어놓은 줄들. hits 는 상한 안의 다른 이름의 줄, near 는 뜻이 가까운 줄이다.
+    같은 줄은 pick 이 한 번만 넣는다.
+    """
+    if order == Order.BY_DISTANCE:
+        return sorted([*hits, *near], key=lambda reference: distances.get(reference.id, -math.inf))
+    if order == Order.ALIAS_CAP:
+        cap = max(limit - 1, 0)
+        return [*hits[:cap], *near, *hits[cap:]]
+    return [*hits, *near]
+
+
 def pick_for(
     scene: Scene,
     references: Sequence[StoredReference],
     distances: dict[uuid.UUID, float],
     thresholds: ReferenceThresholds,
+    order: Order = Order.ALIAS_FIRST,
 ) -> list[StoredReference]:
-    """장면 하나에서 서버의 규칙으로 고른 줄들. 로어북이 없다고 보고 남은 자리는 REFERENCE_MAX_CHARS 다."""
+    """
+    장면 하나에서 고른 줄들. 기본(ALIAS_FIRST)은 서버의 규칙(reference_core/selection.choose)과 같다.
+    로어북이 없다고 보고 남은 자리는 REFERENCE_MAX_CHARS 다.
+    """
     text = query_text(scene.request)
-    hits = alias_hits(references, text)
+    hits = [hit for hit in alias_hits(references, text) if near_enough(hit, distances, thresholds.keyword_max_distance)]
     near = nearest(references, distances, thresholds.max_distance, thresholds.limit)
-    return choose(hits, distances, near, thresholds, min(REFERENCE_MAX_CHARS, thresholds.max_chars))
+    room = min(REFERENCE_MAX_CHARS, thresholds.max_chars)
+    return pick(ordered(order, hits, near, distances, thresholds.limit), room, thresholds.limit)
 
 
-def evaluate(dataset: Dataset, measurement: Measurement, thresholds: ReferenceThresholds) -> list[Outcome]:
+def evaluate(
+    dataset: Dataset, measurement: Measurement, thresholds: ReferenceThresholds, order: Order = Order.ALIAS_FIRST
+) -> list[Outcome]:
     """장면마다 고른 것."""
     return [
         Outcome(
             scene=scene,
             chosen=[
-                ref.key for ref in pick_for(scene, dataset.references, measurement.distances[scene.name], thresholds)
+                ref.key
+                for ref in pick_for(scene, dataset.references, measurement.distances[scene.name], thresholds, order)
             ],
         )
         for scene in dataset.scenes
@@ -200,6 +257,28 @@ def sweep_keyword(dataset: Dataset, measurement: Measurement, base: ReferenceThr
         thresholds = ReferenceThresholds(base.max_distance, distance, base.limit, base.max_chars)
         results.append((distance, score(evaluate(dataset, measurement, thresholds))))
     return results
+
+
+def sweep_orders(
+    dataset: Dataset, measurement: Measurement, base: ReferenceThresholds
+) -> list[tuple[Order, float, Score]]:
+    """넣는 차례와 거리 기준(ORDER_DISTANCES)을 함께 바꿔 가며 매긴 점수. 다른 이름의 상한, 줄 수, 글자 수는 base 다."""
+    results = []
+    for order in Order:
+        for distance in ORDER_DISTANCES:
+            thresholds = ReferenceThresholds(distance, base.keyword_max_distance, base.limit, base.max_chars)
+            results.append((order, distance, score(evaluate(dataset, measurement, thresholds, order))))
+    return results
+
+
+def closest_answer(scene: Scene, dataset: Dataset, measurement: Measurement) -> Closest | None:
+    """장면에서 가장 가까운 정답과 그 거리, 모든 줄 가운데의 차례. 정답이 없는 장면은 None 이다."""
+    distances = measurement.distances[scene.name]
+    ranked = sorted(dataset.references, key=lambda reference: distances[reference.id])
+    for rank, reference in enumerate(ranked, start=1):
+        if reference.key in scene.expected:
+            return Closest(key=reference.key, distance=distances[reference.id], rank=rank)
+    return None
 
 
 def alias_distances(scene: Scene, dataset: Dataset, measurement: Measurement) -> list[tuple[str, float | None]]:

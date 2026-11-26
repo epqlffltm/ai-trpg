@@ -18,8 +18,9 @@ import pytest
 from ai_core.fake import FakeEmbedder
 from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError
 from reference_core.records import ReferenceKind, StoredReference
-from reference_core.selection import ReferenceThresholds
+from reference_core.selection import ReferenceThresholds, alias_hits, choose
 
+from app.lore.retrieval import query_text
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
 from evals.references.dataset import (
     DEFAULT_SCENES,
@@ -33,15 +34,21 @@ from evals.references.dataset import (
 from evals.references.narration import Mode, Trial, run_pairs, tally
 from evals.references.report import ModelResult, best, full_report
 from evals.references.runner import (
+    Closest,
     Measurement,
+    Order,
     alias_distances,
+    closest_answer,
     evaluate,
     hit_at,
     measure,
+    nearest,
+    pick_for,
     score,
     spread,
     sweep,
     sweep_keyword,
+    sweep_orders,
 )
 from scripts import eval_references
 
@@ -179,6 +186,47 @@ def test_the_keyword_limit_can_be_swept_and_the_alias_distances_are_shown():
     assert alias_distances(LIGHT, SMALL, far) == []
 
 
+# 다른 이름으로 걸린 줄(방패, 도끼)이 자리를 채우면 뜻이 가까운 정답(녹 괴물)이 들어가지 못한다
+SHIELD = reference('equipment/shield', 'Shield', 'A shield.', ['방패'])
+AXE = reference('equipment/axe', 'Axe', 'An axe.', ['도끼'])
+RUST = reference('monsters/rust-monster', 'Rust Monster', 'It eats metal.')
+RUSTY = scene('rusty', '방패와 도끼를 든다', {RUST.key}, SceneKind.MEANING)
+ARMORY = Dataset(story='숲', scenes=(RUSTY,), references=(SHIELD, AXE, RUST))
+ARMORY_MEASURED = Measurement(model='m', distances={'rusty': {SHIELD.id: 0.50, AXE.id: 0.52, RUST.id: 0.35}}, seconds=0)
+
+
+def test_the_default_order_is_the_servers_choose():
+    thresholds = ReferenceThresholds(max_distance=0.45, keyword_max_distance=0.60, limit=2)
+    distances = ARMORY_MEASURED.distances['rusty']
+
+    hits = alias_hits(ARMORY.references, query_text(RUSTY.request))
+    near = nearest(ARMORY.references, distances, thresholds.max_distance, thresholds.limit)
+    server = choose(hits, distances, near, thresholds, thresholds.max_chars)
+
+    assert pick_for(RUSTY, ARMORY.references, distances, thresholds) == server == [SHIELD, AXE]
+
+
+def test_the_orders_differ_when_the_aliases_fill_the_room():
+    thresholds = ReferenceThresholds(max_distance=0.45, keyword_max_distance=0.60, limit=2)
+
+    chosen = {order: evaluate(ARMORY, ARMORY_MEASURED, thresholds, order)[0].chosen for order in Order}
+
+    assert chosen[Order.ALIAS_FIRST] == [SHIELD.key, AXE.key]
+    assert chosen[Order.BY_DISTANCE] == [RUST.key, SHIELD.key]
+    assert chosen[Order.ALIAS_CAP] == [SHIELD.key, RUST.key]
+    swept = sweep_orders(ARMORY, ARMORY_MEASURED, thresholds)
+    assert len(swept) == len(Order) * 3
+    by = {(order, distance): result for order, distance, result in swept}
+    assert (by[(Order.ALIAS_FIRST, 0.40)].hit, by[(Order.BY_DISTANCE, 0.40)].hit) == (0.0, 1.0)
+
+
+def test_the_closest_answer_and_its_rank():
+    assert closest_answer(RUSTY, ARMORY, ARMORY_MEASURED) == Closest(RUST.key, 0.35, 1)
+    assert closest_answer(MARKET, SMALL, MEASURED) is None
+    # 늑대 장면에서 늑대(0.48)는 횃불(0.80), 배(0.90)보다 가깝다
+    assert closest_answer(HOWL, SMALL, MEASURED) == Closest(WOLF.key, 0.48, 1)
+
+
 def test_hits_without_a_threshold_and_the_spread():
     shifted = Measurement(model='m', distances={**DISTANCES, 'howl': {**DISTANCES['howl'], SHIP.id: 0.40}}, seconds=0)
 
@@ -295,6 +343,22 @@ def test_the_report_marks_an_alias_cut_by_the_keyword_limit():
 
     assert f'{WOLF.key} 0.580 (뺌)' in report
     assert '**다른 이름의 상한을 바꿔 가며**' in report and '| 없음 |' in report
+
+
+def test_the_report_has_the_orders_and_the_closest_answer():
+    thresholds = ReferenceThresholds(keyword_max_distance=0.60, limit=2)
+    result = ModelResult(
+        ARMORY_MEASURED,
+        evaluate(ARMORY, ARMORY_MEASURED, thresholds),
+        sweep(ARMORY, ARMORY_MEASURED, thresholds),
+        order_swept=sweep_orders(ARMORY, ARMORY_MEASURED, thresholds),
+    )
+
+    report = full_report(ARMORY, [result], thresholds)
+
+    assert '**넣는 차례를 바꿔 가며**' in report
+    assert '| 거리 순 | 0.40 | 100% |' in report and '| 다른 이름 먼저(지금) | 0.40 | 0% |' in report
+    assert f'{RUST.key} 0.350 (1번째)' in report
 
 
 def test_the_fake_run_goes_to_the_end(tmp_path: Path, capsys: pytest.CaptureFixture):
