@@ -322,12 +322,12 @@ def test_the_shipped_lines_carry_the_other_korean_names():
     assert '치유 물약' in shipped['magic-items/potion-of-healing'].aliases
 
 
-def test_every_monster_has_a_look_and_the_changes_say_so():
+def test_every_line_has_a_look_and_the_changes_say_so():
     shipped = read_document(DATA_FILE)
     ko = read_translations(KO_FILE)
 
-    monsters = [key for key in ko.entries if key.startswith('monsters/')]
-    assert monsters and all(ko.entries[key].look for key in monsters)
+    # 몬스터, 일반 장비, 마법 물건 모두 생김새 글이 있다
+    assert all(translation.look for translation in ko.entries.values())
     assert shipped.origin.changes.endswith(srd.SRD51_DESCRIBED)
     mimic = next(entry for entry in shipped.entries if entry.key == 'monsters/mimic')
     assert mimic.content_ko.startswith(ko.entries['monsters/mimic'].look)
