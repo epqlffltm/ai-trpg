@@ -14,12 +14,15 @@
     uv run python -m scripts.eval_references --model bge-m3 qwen3-embedding:0.6b --out $HOME\\refs-eval.md
     uv run python -m scripts.eval_references --narrate --narration-model gemma4:26b-a4b-it-qat --repeat 2
     uv run python -m scripts.eval_references --narrate --max-distance 0.55
+    uv run python -m scripts.eval_references --texts current without_rules look_only
     uv run python -m scripts.eval_references --fake --narrate
 
 trpg-server 폴더에서 -m 으로 돌린다. 임베딩 주소는 설정(.env)의 것(EMBEDDING_BASE_URL, 비면 LLM_BASE_URL)이다.
 서술 모델의 주소는 --base-url(기본 집의 Ollama)이다.
 --fake 는 모델 없이 가짜 임베더와 정해 둔 글로 돈다. 숫자에 뜻은 없다. 스크립트가 끝까지 도는지 볼 때 쓴다.
-서술은 첫째 임베딩 모델로 고른 참고 자료를 쓴다. 자동 테스트가 아니라서 CI 에서 돌지 않는다.
+--texts 는 자료를 벡터로 바꿀 글을 바꿔 가며 잰다(evals/references/runner.py 의 EmbeddingText).
+기본은 서버와 같은 글이다.
+서술은 첫째 임베딩 모델과 첫째 글로 고른 참고 자료를 쓴다. 자동 테스트가 아니라서 CI 에서 돌지 않는다.
 """
 
 import argparse
@@ -38,7 +41,15 @@ from app.core.config import get_settings
 from evals.references.dataset import DEFAULT_SCENES, Dataset, DatasetError, chosen_sets, load_dataset
 from evals.references.narration import Trial, run_pairs
 from evals.references.report import ModelResult, full_report
-from evals.references.runner import evaluate, measure, sweep, sweep_keyword, sweep_orders
+from evals.references.runner import (
+    EmbeddingText,
+    Measurement,
+    evaluate,
+    measure,
+    sweep,
+    sweep_keyword,
+    sweep_orders,
+)
 from scripts.try_narration import make_provider, warm_up
 
 # 기본 서술 모델. 서버의 기본 서술 모델과 같다
@@ -55,6 +66,13 @@ def read_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument('--scenes', type=Path, default=DEFAULT_SCENES, help='장면 파일(YAML)')
     parser.add_argument('--embedding-url', help='임베딩 주소. 적지 않으면 설정의 것')
     parser.add_argument('--max-distance', type=float, help='거리 기준. 적지 않으면 설정의 REFERENCE_MAX_DISTANCE')
+    parser.add_argument(
+        '--texts',
+        nargs='+',
+        choices=[text.value for text in EmbeddingText],
+        default=[EmbeddingText.CURRENT.value],
+        help='자료를 벡터로 바꿀 글. 여럿을 띄어 적는다. 기본은 서버와 같은 글(current)',
+    )
     parser.add_argument('--narrate', action='store_true', help='켠 서술과 끈 서술을 견준다')
     parser.add_argument('--narration-model', default=DEFAULT_NARRATION_MODEL, help='서술 모델')
     parser.add_argument('--repeat', type=int, default=1, help='장면마다 몇 번씩 서술하게 할까')
@@ -117,6 +135,15 @@ def read_dataset(arguments: argparse.Namespace) -> Dataset:
     return dataset
 
 
+def model_result(dataset: Dataset, measurement: Measurement, thresholds: ReferenceThresholds) -> ModelResult:
+    """잰 거리 하나로 매긴 것들. 지금의 기준, 거리 기준, 다른 이름의 상한, 넣는 차례마다다."""
+    current = evaluate(dataset, measurement, thresholds)
+    swept = sweep(dataset, measurement, thresholds)
+    keyword_swept = sweep_keyword(dataset, measurement, thresholds)
+    order_swept = sweep_orders(dataset, measurement, thresholds)
+    return ModelResult(measurement, current, swept, keyword_swept, order_swept)
+
+
 async def run(arguments: argparse.Namespace) -> str:
     """데이터를 읽고 임베딩 모델마다 재고, 원하면 서술을 견줘 보고서를 만든다."""
     dataset = read_dataset(arguments)
@@ -125,12 +152,9 @@ async def run(arguments: argparse.Namespace) -> str:
     trials: list[Trial] = []
     async with httpx.AsyncClient() as client:
         for embedder in make_embedders(arguments, client):
-            measurement = await measure(embedder, dataset)
-            current = evaluate(dataset, measurement, thresholds)
-            swept = sweep(dataset, measurement, thresholds)
-            keyword_swept = sweep_keyword(dataset, measurement, thresholds)
-            order_swept = sweep_orders(dataset, measurement, thresholds)
-            results.append(ModelResult(measurement, current, swept, keyword_swept, order_swept))
+            for text in arguments.texts:
+                measurement = await measure(embedder, dataset, text=EmbeddingText(text))
+                results.append(model_result(dataset, measurement, thresholds))
         if arguments.narrate:
             provider = await narration_provider(arguments, client)
             measured = results[0].measurement

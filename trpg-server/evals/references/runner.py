@@ -18,6 +18,9 @@ DB 의 가까운 순(repository.nearest)만 여기서 같은 셈으로 한다(�
   - hit@k: 거리 기준 없이 가까운 k 개 안에 정답이 드는 비율. 기준을 고르기 전의 모델의 실력이다.
 다른 이름으로 걸린 줄의 거리도 따로 보인다. 다른 이름의 상한(keyword_max_distance)에 잘린 이름을 찾는다.
 
+벡터로 바꿀 자료의 글(EmbeddingText)도 바꿔 가며 잴 수 있다. 서버는 이름, 다른 이름, 글(생김새 글 + 규칙 요약)로 만든다.
+규칙 요약이 생김새 글의 뜻을 흐리는지 본다. 서술자에게 가는 글은 그대로다(고르기만 잰다).
+
 넣는 차례(Order)도 바꿔 가며 매긴다. 서버는 다른 이름으로 걸린 줄을 limit - 1 줄까지 먼저 넣는다(ALIAS_CAP, 2026-11-26).
 전에는 다른 이름을 모두 먼저 넣었다(ALIAS_FIRST). 그 줄들이 자리를 다 채워 뜻으로 더 가까운 정답이 들어가지 못했다.
 """
@@ -57,6 +60,28 @@ TOP_KS = (1, 3, 5)
 ORDER_DISTANCES = (0.40, 0.45, 0.50)
 
 
+class EmbeddingText(enum.StrEnum):
+    """
+    자료의 줄을 벡터로 바꿀 글.
+      - CURRENT: 서버와 같다(reference_core/texts.reference_text). 이름, 다른 이름, 글(생김새 글 + 규칙 요약)
+      - WITHOUT_RULES: 이름, 다른 이름, 생김새 글. 규칙 요약을 뺀다
+      - LOOK_ONLY: 이름과 생김새 글
+    생김새 글이 없는 줄(위키백과)은 셋 다 서버와 같은 글이다.
+    """
+
+    CURRENT = 'current'
+    WITHOUT_RULES = 'without_rules'
+    LOOK_ONLY = 'look_only'
+
+
+# 보고서의 머리에 적는 글의 이름
+EMBEDDING_TEXT_NAMES = {
+    EmbeddingText.CURRENT: '지금의 글',
+    EmbeddingText.WITHOUT_RULES: '규칙 요약 빼기',
+    EmbeddingText.LOOK_ONLY: '생김새 글만',
+}
+
+
 class Order(enum.StrEnum):
     """
     고른 줄을 넣는 차례.
@@ -76,12 +101,20 @@ class Measurement:
     """
     모델 하나로 잰 거리. distances 는 장면의 이름에서, 줄의 id 에서 거리로다.
 
-    seconds 는 모델을 부르는 데 걸린 시간이다(자료와 장면을 벡터로 바꾸기).
+    seconds 는 모델을 부르는 데 걸린 시간이다(자료와 장면을 벡터로 바꾸기). text 는 자료를 벡터로 바꾼 글이다.
     """
 
     model: str
     distances: dict[str, dict[uuid.UUID, float]]
     seconds: float
+    text: EmbeddingText = EmbeddingText.CURRENT
+
+    @property
+    def label(self) -> str:
+        """보고서의 머리. 서버와 같은 글이면 모델의 이름만이다."""
+        if self.text == EmbeddingText.CURRENT:
+            return self.model
+        return f'{self.model} · {EMBEDDING_TEXT_NAMES[self.text]}'
 
 
 @dataclass(frozen=True)
@@ -132,11 +165,33 @@ async def embed_all(embedder: Embedder, texts: Sequence[str]) -> list[list[float
     return vectors
 
 
-async def measure(embedder: Embedder, dataset: Dataset, clock: Callable[[], float] = time.perf_counter) -> Measurement:
-    """자료의 줄과 장면을 벡터로 바꿔 장면마다 모든 줄과의 거리를 잰다. clock 은 시간을 재는 함수다(테스트가 바꾼다)."""
+def embedding_text(reference: StoredReference, look: str, text: EmbeddingText) -> str:
+    """자료의 줄을 벡터로 바꿀 글. 생김새 글이 없으면 서버와 같은 글이다."""
+    if text == EmbeddingText.CURRENT or not look:
+        return reference_text(reference)
+    if text == EmbeddingText.LOOK_ONLY:
+        return f'{reference.name}\n{look}'
+    lines = [reference.name]
+    if reference.aliases:
+        lines.append(f'다른 이름: {", ".join(reference.aliases)}')
+    lines.append(look)
+    return '\n'.join(lines)
+
+
+async def measure(
+    embedder: Embedder,
+    dataset: Dataset,
+    clock: Callable[[], float] = time.perf_counter,
+    text: EmbeddingText = EmbeddingText.CURRENT,
+) -> Measurement:
+    """
+    자료의 줄과 장면을 벡터로 바꿔 장면마다 모든 줄과의 거리를 잰다. text 는 자료를 벡터로 바꿀 글이다.
+    clock 은 시간을 재는 함수다(테스트가 바꾼다).
+    """
     tick = clock
     started = tick()
-    reference_vectors = await embed_all(embedder, [reference_text(reference) for reference in dataset.references])
+    texts = [embedding_text(reference, dataset.looks.get(reference.key, ''), text) for reference in dataset.references]
+    reference_vectors = await embed_all(embedder, texts)
     scene_vectors = await embed_all(embedder, [query_text(scene.request) for scene in dataset.scenes])
     distances = {
         scene.name: {
@@ -145,7 +200,7 @@ async def measure(embedder: Embedder, dataset: Dataset, clock: Callable[[], floa
         }
         for scene, vector in zip(dataset.scenes, scene_vectors, strict=True)
     }
-    return Measurement(model=embedder.model, distances=distances, seconds=tick() - started)
+    return Measurement(model=embedder.model, distances=distances, seconds=tick() - started, text=text)
 
 
 def nearest(
