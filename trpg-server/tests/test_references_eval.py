@@ -12,6 +12,7 @@
 
 import math
 import uuid
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -35,10 +36,12 @@ from evals.references.narration import Mode, Trial, run_pairs, tally
 from evals.references.report import ModelResult, best, full_report
 from evals.references.runner import (
     Closest,
+    EmbeddingText,
     Measurement,
     Order,
     alias_distances,
     closest_answer,
+    embedding_text,
     evaluate,
     hit_at,
     measure,
@@ -141,6 +144,18 @@ def test_a_wrong_scene_is_reported_with_every_problem(tmp_path: Path):
 def test_sets_can_be_chosen():
     assert chosen_sets(SMALL, None) == SMALL
     assert chosen_sets(SMALL, ['v2']).scenes == ()
+    looked = replace(SMALL, looks={TORCH.key: '막대 끝에서 불이 탄다.'})
+    assert chosen_sets(looked, ['v1']).looks == looked.looks
+
+
+def test_the_looks_are_read_from_the_translation_file():
+    dataset = load_dataset()
+
+    # SRD 의 810줄 모두 생김새 글이 있다. 위키백과의 줄은 없다
+    assert len(dataset.looks) == 810
+    mimic = next(reference for reference in dataset.references if reference.key == 'monsters/mimic')
+    assert mimic.content_ko.startswith(dataset.looks['monsters/mimic'])
+    assert not any(key.startswith(('ko/', 'en/')) for key in dataset.looks)
 
 
 # --- 검색 ---
@@ -236,6 +251,36 @@ def test_hits_without_a_threshold_and_the_spread():
     spread_of = spread(SMALL, MEASURED)
     assert sorted(spread_of.expected) == [0.30, 0.48]
     assert sorted(spread_of.others) == [0.42, 0.60, 0.80]
+
+
+def test_the_text_to_embed_can_leave_out_the_rules():
+    wolf = StoredReference(
+        id=WOLF.id,
+        key=WOLF.key,
+        name='Wolf',
+        aliases=['늑대'],
+        content='A wolf.',
+        content_ko='회색 늑대다. 이동: 걷기.',
+    )
+
+    assert embedding_text(wolf, '회색 늑대다.', EmbeddingText.CURRENT) == '\n'.join(
+        ['Wolf', '다른 이름: 늑대', '회색 늑대다. 이동: 걷기.']
+    )
+    assert embedding_text(wolf, '회색 늑대다.', EmbeddingText.WITHOUT_RULES) == 'Wolf\n다른 이름: 늑대\n회색 늑대다.'
+    assert embedding_text(wolf, '회색 늑대다.', EmbeddingText.LOOK_ONLY) == 'Wolf\n회색 늑대다.'
+    # 생김새 글이 없으면 서버와 같은 글이다
+    assert embedding_text(wolf, '', EmbeddingText.LOOK_ONLY) == embedding_text(wolf, '', EmbeddingText.CURRENT)
+
+
+async def test_measuring_uses_the_chosen_text():
+    embedder = FakeEmbedder()
+    looked = replace(SMALL, looks={WOLF.key: '회색 늑대다.'})
+
+    measured = await measure(embedder, looked, text=EmbeddingText.LOOK_ONLY)
+
+    assert 'Wolf\n회색 늑대다.' in embedder.calls[0]
+    assert measured.text == EmbeddingText.LOOK_ONLY and measured.label == 'fake · 생김새 글만'
+    assert MEASURED.label == 'm'
 
 
 async def test_measuring_embeds_every_reference_and_scene():
@@ -370,6 +415,16 @@ def test_the_fake_run_goes_to_the_end(tmp_path: Path, capsys: pytest.CaptureFixt
     assert code == 0
     assert out.read_text(encoding='utf-8').startswith('# 참고 자료 평가')
     assert 'torch-cave on 1회' in capsys.readouterr().out
+
+
+def test_the_fake_run_can_compare_the_texts(tmp_path: Path):
+    out = tmp_path / 'report.md'
+
+    code = eval_references.main(['--fake', '--set', 'v1', '--texts', 'current', 'look_only', '--out', str(out)])
+
+    report = out.read_text(encoding='utf-8')
+    assert code == 0
+    assert '## fake\n' in report and '## fake · 생김새 글만' in report
 
 
 def test_an_unknown_set_ends_with_one(capsys: pytest.CaptureFixture):

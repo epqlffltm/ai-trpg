@@ -153,7 +153,7 @@ def model_section(dataset: Dataset, result: ModelResult, thresholds: ReferenceTh
     measurement = result.measurement
     distances = spread(dataset, measurement)
     lines = [
-        f'## {measurement.model}',
+        f'## {measurement.label}',
         '',
         f'자료 {len(dataset.references)}줄과 장면 {len(dataset.scenes)}개를 벡터로 바꾸는 데 '
         f'{measurement.seconds:.1f}초.',
