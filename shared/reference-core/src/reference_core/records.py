@@ -15,6 +15,8 @@
   - content: 서술자가 읽는 글. 수치(HP, 명중, 피해, 난이도)를 넣지 않는다. 판정은 엔진이 한다.
   - name_ko, content_ko: 한국어로 옮긴 이름과 글(번역 파일에서 온다, reference_core/translations.py).
     있으면 서술과 복사(기본 자산)가 이것을 쓴다. 원본의 글과 같은 규칙(수치 없음, 1,000자)을 지킨다.
+  - look_ko: 생김새 글(번역 파일의 look). content_ko 의 맨 앞에도 붙어 있다. 벡터로 바꿀 글은 이름과 이것이다
+    (reference_core/texts.py). 규칙 요약이 섞이면 생김새로 부른 장면과 멀어진다(2026-11-27 평가).
   - data: 원본의 수치를 정리한 것. 서술자에게 가지 않는다. 기본 자산(시트 채우기)에 쓴다.
 """
 
@@ -36,6 +38,8 @@ REFERENCE_NAME_MAX_LENGTH = 100
 REFERENCE_CONTENT_MAX_LENGTH = 1000
 REFERENCE_MAX_ALIASES = 5
 REFERENCE_ALIAS_MAX_LENGTH = 30
+# 생김새 글의 상한. 한두 문장이다
+REFERENCE_LOOK_MAX_LENGTH = 300
 
 
 class ReferenceSource(enum.StrEnum):
@@ -81,6 +85,7 @@ class ReferenceRecord(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
     name_ko: Annotated[str, StringConstraints(max_length=REFERENCE_NAME_MAX_LENGTH)] = ''
     content_ko: Content = ''
+    look_ko: Annotated[str, StringConstraints(max_length=REFERENCE_LOOK_MAX_LENGTH)] = ''
 
 
 class ReferenceOrigin(BaseModel):
@@ -150,6 +155,7 @@ class StoredReference:
     content_ko: str = ''
     # 어느 자료의 줄인가(ReferenceSource). 복사할 때 출처로 적는다
     source: str = ''
+    look_ko: str = ''
 
     @property
     def shown_name(self) -> str:
@@ -163,7 +169,16 @@ class StoredReference:
 
     def matches(self, record: ReferenceRecord) -> bool:
         """파일의 줄과 값이 모두 같은가(key 는 같다고 본다)."""
-        mine = (self.kind, self.name, self.aliases, self.content, self.data, self.name_ko, self.content_ko)
+        mine = (
+            self.kind,
+            self.name,
+            self.aliases,
+            self.content,
+            self.data,
+            self.name_ko,
+            self.content_ko,
+            self.look_ko,
+        )
         return mine == (
             record.kind,
             record.name,
@@ -172,4 +187,5 @@ class StoredReference:
             record.data,
             record.name_ko,
             record.content_ko,
+            record.look_ko,
         )

@@ -18,8 +18,8 @@ DB 의 가까운 순(repository.nearest)만 여기서 같은 셈으로 한다(�
   - hit@k: 거리 기준 없이 가까운 k 개 안에 정답이 드는 비율. 기준을 고르기 전의 모델의 실력이다.
 다른 이름으로 걸린 줄의 거리도 따로 보인다. 다른 이름의 상한(keyword_max_distance)에 잘린 이름을 찾는다.
 
-벡터로 바꿀 자료의 글(EmbeddingText)도 바꿔 가며 잴 수 있다. 서버는 이름, 다른 이름, 글(생김새 글 + 규칙 요약)로 만든다.
-규칙 요약이 생김새 글의 뜻을 흐리는지 본다. 서술자에게 가는 글은 그대로다(고르기만 잰다).
+벡터로 바꿀 자료의 글(EmbeddingText)도 바꿔 가며 잴 수 있다. 서버는 이름과 생김새 글로 만든다(reference_core/texts.py).
+전의 글(이름, 다른 이름, 생김새 글 + 규칙 요약)과 견준다. 서술자에게 가는 글은 그대로다(고르기만 잰다).
 
 넣는 차례(Order)도 바꿔 가며 매긴다. 서버는 다른 이름으로 걸린 줄을 limit - 1 줄까지 먼저 넣는다(ALIAS_CAP, 2026-11-26).
 전에는 다른 이름을 모두 먼저 넣었다(ALIAS_FIRST). 그 줄들이 자리를 다 채워 뜻으로 더 가까운 정답이 들어가지 못했다.
@@ -63,22 +63,22 @@ ORDER_DISTANCES = (0.40, 0.45, 0.50)
 class EmbeddingText(enum.StrEnum):
     """
     자료의 줄을 벡터로 바꿀 글.
-      - CURRENT: 서버와 같다(reference_core/texts.reference_text). 이름, 다른 이름, 글(생김새 글 + 규칙 요약)
-      - WITHOUT_RULES: 이름, 다른 이름, 생김새 글. 규칙 요약을 뺀다
-      - LOOK_ONLY: 이름과 생김새 글
+      - CURRENT: 서버와 같다(reference_core/texts.reference_text). 이름과 생김새 글(2026-11-27 부터)
+      - WITH_RULES: 이름, 다른 이름, 글(생김새 글 + 규칙 요약). 2026-11-27 전의 서버다
+      - WITHOUT_RULES: 이름, 다른 이름, 생김새 글
     생김새 글이 없는 줄(위키백과)은 셋 다 서버와 같은 글이다.
     """
 
     CURRENT = 'current'
+    WITH_RULES = 'with_rules'
     WITHOUT_RULES = 'without_rules'
-    LOOK_ONLY = 'look_only'
 
 
 # 보고서의 머리에 적는 글의 이름
 EMBEDDING_TEXT_NAMES = {
     EmbeddingText.CURRENT: '지금의 글',
-    EmbeddingText.WITHOUT_RULES: '규칙 요약 빼기',
-    EmbeddingText.LOOK_ONLY: '생김새 글만',
+    EmbeddingText.WITH_RULES: '규칙 요약 넣기(전의 글)',
+    EmbeddingText.WITHOUT_RULES: '다른 이름 넣기',
 }
 
 
@@ -165,16 +165,14 @@ async def embed_all(embedder: Embedder, texts: Sequence[str]) -> list[list[float
     return vectors
 
 
-def embedding_text(reference: StoredReference, look: str, text: EmbeddingText) -> str:
+def embedding_text(reference: StoredReference, text: EmbeddingText) -> str:
     """자료의 줄을 벡터로 바꿀 글. 생김새 글이 없으면 서버와 같은 글이다."""
-    if text == EmbeddingText.CURRENT or not look:
+    if text == EmbeddingText.CURRENT or not reference.look_ko:
         return reference_text(reference)
-    if text == EmbeddingText.LOOK_ONLY:
-        return f'{reference.name}\n{look}'
     lines = [reference.name]
     if reference.aliases:
         lines.append(f'다른 이름: {", ".join(reference.aliases)}')
-    lines.append(look)
+    lines.append(reference.shown_content if text == EmbeddingText.WITH_RULES else reference.look_ko)
     return '\n'.join(lines)
 
 
@@ -190,7 +188,7 @@ async def measure(
     """
     tick = clock
     started = tick()
-    texts = [embedding_text(reference, dataset.looks.get(reference.key, ''), text) for reference in dataset.references]
+    texts = [embedding_text(reference, text) for reference in dataset.references]
     reference_vectors = await embed_all(embedder, texts)
     scene_vectors = await embed_all(embedder, [query_text(scene.request) for scene in dataset.scenes])
     distances = {

@@ -108,6 +108,21 @@ async def test_a_reworded_line_loses_its_vectors_and_a_removed_line_goes(
     assert [line.key for line in missing] == ['torch']
 
 
+async def test_a_new_look_is_stored_and_needs_new_vectors(
+    session_factory: async_sessionmaker[AsyncSession], session: AsyncSession
+):
+    await load_document(TABLES, session, document(record('torch')))
+    await index_references(TABLES, session_factory, FakeEmbedder())
+
+    # 서술자에게 가는 글은 그대로고 생김새 글만 바뀌어도 벡터로 바꿀 글이 바뀐다(reference_core/texts.py)
+    plan = await load_document(TABLES, session, document(record('torch', look_ko='막대 끝에서 불이 탄다.')))
+
+    assert plan.reworded == {'torch'}
+    (torch,) = await repository.list_stored(TABLES, session, ReferenceSource.SRD51)
+    assert torch.look_ko == '막대 끝에서 불이 탄다.'
+    assert [line.key for line in await repository.list_missing(TABLES, session, 'fake')] == ['torch']
+
+
 async def test_indexing_makes_only_missing_vectors_per_model(
     session_factory: async_sessionmaker[AsyncSession], session: AsyncSession
 ):

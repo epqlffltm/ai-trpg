@@ -33,6 +33,7 @@ def to_stored(entry: Any) -> StoredReference:
         name_ko=entry.name_ko,
         content_ko=entry.content_ko,
         source=entry.source,
+        look_ko=entry.look_ko,
     )
 
 
@@ -54,6 +55,7 @@ def entry_values(source: ReferenceSource, record: ReferenceRecord) -> dict:
         'data': record.data,
         'name_ko': record.name_ko,
         'content_ko': record.content_ko,
+        'look_ko': record.look_ko,
     }
 
 

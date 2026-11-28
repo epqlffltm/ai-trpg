@@ -31,6 +31,7 @@ from reference_core.records import (
     DOCUMENT_FORMAT,
     REFERENCE_ALIAS_MAX_LENGTH,
     REFERENCE_CONTENT_MAX_LENGTH,
+    REFERENCE_LOOK_MAX_LENGTH,
     REFERENCE_MAX_ALIASES,
     ReferenceRecord,
     ReferenceSource,
@@ -46,7 +47,7 @@ MECHANICS_KO = re.compile(
 
 
 # 생김새 글의 글자 수의 상한. 한두 문장이다. 번역의 글과 합쳐 줄의 글(1,000자) 안에 든다
-LOOK_MAX_LENGTH = 300
+LOOK_MAX_LENGTH = REFERENCE_LOOK_MAX_LENGTH
 
 # 번역의 이름과 다른 한국어 이름 하나
 KoreanName = Annotated[
@@ -130,6 +131,7 @@ def translated(record: ReferenceRecord, translation: Translation | None) -> Refe
         update={
             'name_ko': translation.name,
             'content_ko': korean_content(translation),
+            'look_ko': translation.look,
             'aliases': merged_aliases(record, translation),
         }
     )

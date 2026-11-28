@@ -27,6 +27,7 @@ from reference_core.records import (
     REFERENCE_ALIAS_MAX_LENGTH,
     REFERENCE_CONTENT_MAX_LENGTH,
     REFERENCE_KEY_MAX_LENGTH,
+    REFERENCE_LOOK_MAX_LENGTH,
     REFERENCE_MAX_ALIASES,
     REFERENCE_NAME_MAX_LENGTH,
     ReferenceKind,
@@ -64,6 +65,7 @@ def entry_constraints() -> tuple:
         CheckConstraint(at_most('content', REFERENCE_CONTENT_MAX_LENGTH), name='content_length'),
         CheckConstraint(f'cardinality(aliases) <= {REFERENCE_MAX_ALIASES}', name='aliases_count'),
         CheckConstraint(at_most('content_ko', REFERENCE_CONTENT_MAX_LENGTH), name='content_ko_length'),
+        CheckConstraint(at_most('look_ko', REFERENCE_LOOK_MAX_LENGTH), name='look_ko_length'),
     )
 
 
@@ -112,6 +114,10 @@ class ReferenceEntryColumns:
     # 한국어로 옮긴 이름과 글. 없으면 빈 글이다. 있으면 서술과 복사가 이것을 쓴다(reference_core/translations.py)
     name_ko: Mapped[str] = mapped_column(String(REFERENCE_NAME_MAX_LENGTH), default='', server_default='')
     content_ko: Mapped[str] = mapped_column(Text, default='', server_default='')
+
+    # 생김새 글(번역 파일의 look). content_ko 의 맨 앞에도 있다.
+    # 벡터로 바꿀 글이 이름과 이것이다(reference_core/texts.py)
+    look_ko: Mapped[str] = mapped_column(Text, default='', server_default='')
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

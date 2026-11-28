@@ -184,6 +184,7 @@ def test_a_look_goes_before_the_text_and_is_noted_in_the_changes(tmp_path: Path)
     built = read_document(output)
     torch = next(entry for entry in built.entries if entry.key == 'equipment/torch')
     assert torch.content_ko == '나무 막대 끝에 기름 먹인 천을 감았다. 횃불이 탄다.'
+    assert torch.look_ko == '나무 막대 끝에 기름 먹인 천을 감았다.'
     assert built.origin.changes.endswith(srd.SRD51_DESCRIBED)
 
 
@@ -255,6 +256,14 @@ def test_the_text_to_embed_uses_the_korean_text():
     text = reference_text(stored(aliases=['횃불'], content_ko='횃불이 탄다.'))
 
     assert text == 'Torch\n다른 이름: 횃불\n횃불이 탄다.'
+
+
+def test_the_text_to_embed_is_the_name_and_the_look_when_there_is_one():
+    looked = stored(aliases=['횃불'], content_ko='막대 끝에서 불이 탄다. 모험 장비.', look_ko='막대 끝에서 불이 탄다.')
+
+    # 규칙 요약과 다른 이름을 빼고 이름과 생김새 글만이다. 서술자에게 가는 글은 그대로다
+    assert reference_text(looked) == 'Torch\n막대 끝에서 불이 탄다.'
+    assert looked.shown_content == '막대 끝에서 불이 탄다. 모험 장비.'
 
 
 def test_a_one_letter_alias_is_not_matched():
@@ -331,3 +340,4 @@ def test_every_line_has_a_look_and_the_changes_say_so():
     assert shipped.origin.changes.endswith(srd.SRD51_DESCRIBED)
     mimic = next(entry for entry in shipped.entries if entry.key == 'monsters/mimic')
     assert mimic.content_ko.startswith(ko.entries['monsters/mimic'].look)
+    assert all(entry.look_ko == ko.entries[entry.key].look for entry in shipped.entries)
