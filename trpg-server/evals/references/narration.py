@@ -28,7 +28,7 @@ from reference_core.selection import ReferenceThresholds
 from app.references.retrieval import to_reference_note
 from app.rounds.llm_narrator import LLMNarrator, NarrationError
 from app.rounds.narrator import ReferenceNote
-from evals.references.dataset import Dataset, Scene
+from evals.references.dataset import Dataset, Scene, SceneShape
 from evals.references.runner import Measurement, pick_for
 
 # 서술에 나오면 안 되는 판정의 수치. 참고 자료의 글을 거르는 것(reference_core/srd.py)과 같은 뜻이다.
@@ -79,6 +79,8 @@ async def narrate_once(
     provider: LLMProvider, scene: Scene, notes: Sequence[ReferenceNote], mode: Mode, attempt: int
 ) -> Trial:
     """한 번 서술하게 한다. off 면 참고 자료를 넣지 않는다. 실패해도 예외를 올리지 않고 Trial 에 까닭을 적는다."""
+    if scene.request is None:
+        raise ValueError(f'{scene.name}: 대화의 장면은 게임 서버의 서술자로 서술하지 않는다')
     log = FakeCallLog()
     sent = list(notes) if mode == Mode.ON else []
     request = replace(scene.request, references=sent)
@@ -101,6 +103,11 @@ async def narrate_once(
     )
 
 
+def round_scenes(dataset: Dataset) -> list[Scene]:
+    """서술하게 할 장면. 게임 서버의 라운드 모양만이다."""
+    return [scene for scene in dataset.scenes if scene.shape == SceneShape.ROUND]
+
+
 async def run_pairs(
     provider: LLMProvider,
     dataset: Dataset,
@@ -111,11 +118,12 @@ async def run_pairs(
 ) -> list[Trial]:
     """
     장면마다 off 와 on 을 repeat 번씩 서술하게 한다. 참고 자료를 고르지 못한 장면(정답이 없는 장면 등)도 돈다.
+    대화 모양의 장면(chat, story)은 뺀다. 이 평가는 게임 서버의 서술자를 잰다.
 
     on_trial 은 하나 끝날 때마다 부르는 함수다(오래 도는 동안 멈춘 것이 아님을 보인다).
     """
     trials = []
-    for scene in dataset.scenes:
+    for scene in round_scenes(dataset):
         notes = references_for(scene, dataset, measurement, thresholds)
         for attempt in range(1, repeat + 1):
             for mode in Mode:

@@ -17,6 +17,8 @@
   - content_ko: 한국어판의 줄은 비운다. 영어판의 줄은 번역 파일(data/wikipedia.ko.json)이 있으면 그것으로 채운다
 번역 파일은 영어판의 줄만 옮긴다(reference_core/translations.py, SRD 와 같은 모양). 번역이 없는 영어판의 줄과,
 지금 자료에 없는 줄의 번역(한국어판으로 바뀌었거나 제목을 지웠다)은 알린다. 멈추지는 않는다.
+  - look_ko: 생김새 글 파일(data/wikipedia.looks.json)이 있으면 모든 줄에 붙인다(reference_core/looks.py).
+    생김새 글이 없는 줄과 자료에 없는 줄의 생김새 글은 번역과 같이 알린다
   - data: lang, page_id, revision_id(받은 판), url(원문). 서술자에게 가지 않는다
 같은 문서에 닿은 두 제목은 앞의 것만 넣는다. 다시 만들면 그때의 판을 받는다(revision_id 가 바뀐 줄만 diff 에 보인다).
 """
@@ -27,6 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from reference_core.looks import LooksDocument, apply_looks, read_looks, unknown_look_keys, unlooked_keys
 from reference_core.records import (
     DOCUMENT_FORMAT,
     REFERENCE_KEY_MAX_LENGTH,
@@ -36,10 +39,11 @@ from reference_core.records import (
     ReferenceOrigin,
     ReferenceRecord,
     ReferenceSource,
+    read_document,
     write_document,
 )
 from reference_core.translations import TranslationDocument, apply_translations, read_translations, unknown_keys
-from reference_core.wiki import WIKIPEDIA_ATTRIBUTION, WIKIPEDIA_CHANGES, lead_content, places_pattern, read_places
+from reference_core.wiki import WIKIPEDIA_ATTRIBUTION, lead_content, places_pattern, read_places, wiki_changes
 from reference_core.wiki_api import WikiPage, batches, pages_of
 from reference_core.wiki_titles import WikiTitle, read_titles, without_disambiguation
 
@@ -66,6 +70,9 @@ class BuildReport:
     # 번역이 없는 영어판의 줄(key)과, 자료에 없는 줄의 번역(key)
     untranslated: list[str] = field(default_factory=list)
     stale: list[str] = field(default_factory=list)
+    # 생김새 글이 없는 줄(key)과, 자료에 없는 줄의 생김새 글(key)
+    unlooked: list[str] = field(default_factory=list)
+    stale_looks: list[str] = field(default_factory=list)
 
 
 def fetch_pages(fetch: Fetch, lang: str, titles: Sequence[str]) -> dict[str, WikiPage]:
@@ -165,6 +172,15 @@ def with_translations(
     return translated
 
 
+def with_looks(records: list[ReferenceRecord], looks: LooksDocument, report: BuildReport) -> list[ReferenceRecord]:
+    """생김새 글을 붙인다. 생김새 글이 없는 줄과 자료에 없는 줄의 생김새 글을 알림에 적는다."""
+    if looks.source != ReferenceSource.WIKIPEDIA:
+        raise ValueError(f'위키백과의 생김새 글 파일이 아니다: {looks.source}')
+    report.unlooked = unlooked_keys(records, looks)
+    report.stale_looks = unknown_look_keys(records, looks)
+    return apply_looks(records, looks)
+
+
 def wiki_document(records: list[ReferenceRecord], revision: str) -> ReferenceDocument:
     """위키백과의 줄들을 데이터 파일 하나로. revision 은 받은 날(YYYY-MM-DD)이다. 줄마다의 판은 data 에 있다."""
     origin = ReferenceOrigin(
@@ -172,20 +188,42 @@ def wiki_document(records: list[ReferenceRecord], revision: str) -> ReferenceDoc
         revision=revision,
         license=WIKIPEDIA_LICENSE,
         attribution=WIKIPEDIA_ATTRIBUTION,
-        changes=WIKIPEDIA_CHANGES,
+        changes=wiki_changes(records),
     )
     return ReferenceDocument(format=DOCUMENT_FORMAT, source=ReferenceSource.WIKIPEDIA, origin=origin, entries=records)
 
 
 def build(
-    titles: Path, places: Path, output: Path, fetch: Fetch, revision: str, translation: Path | None = None
+    titles: Path,
+    places: Path,
+    output: Path,
+    fetch: Fetch,
+    revision: str,
+    translation: Path | None = None,
+    looks: Path | None = None,
 ) -> BuildReport:
     """
-    제목 목록과 거를 이름의 목록으로 데이터 파일을 쓴다. 번역 파일이 있으면 붙인다. 만든 결과를 돌려준다.
+    제목 목록과 거를 이름의 목록으로 데이터 파일을 쓴다. 번역 파일과 생김새 글 파일이 있으면 붙인다.
+    만든 결과를 돌려준다.
     """
     records, report = collect(read_titles(titles), fetch, places_pattern(read_places(places)))
     if translation is not None and translation.exists():
         records = with_translations(records, read_translations(translation), report)
+    if looks is not None and looks.exists():
+        records = with_looks(records, read_looks(looks), report)
     output.parent.mkdir(parents=True, exist_ok=True)
     write_document(wiki_document(records, revision), output)
+    return report
+
+
+def refresh_looks(output: Path, looks: Path) -> BuildReport:
+    """
+    이미 만든 데이터 파일에 생김새 글만 다시 붙인다. 위키백과에 묻지 않는다.
+    생김새 글을 고쳤을 때 쓴다. 다시 받으면 모든 줄의 판이 바뀌어 diff 가 커진다. 받은 날(revision)은 그대로다.
+    """
+    document = read_document(output)
+    english = [record.name_ko or record.name for record in document.entries if record.data.get('lang') != 'ko']
+    report = BuildReport(written=len(document.entries), english=english)
+    records = with_looks(list(document.entries), read_looks(looks), report)
+    write_document(wiki_document(records, document.origin.revision), output)
     return report

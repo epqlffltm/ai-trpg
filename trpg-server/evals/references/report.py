@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 from reference_core.selection import ReferenceThresholds
 
-from evals.references.dataset import Dataset, SceneKind
+from evals.references.dataset import Dataset, SceneKind, SceneShape
 from evals.references.narration import Mode, Trial, tally
 from evals.references.runner import (
     TOP_KS,
@@ -23,11 +23,13 @@ from evals.references.runner import (
     hit_at,
     score,
     score_by_kind,
+    score_by_shape,
     spread,
     summary,
 )
 
 KIND_NAMES = {SceneKind.NAMED: '한국어로 부름', SceneKind.MEANING: '뜻으로만', SceneKind.NONE: '맞는 것 없음'}
+SHAPE_NAMES = {SceneShape.ROUND: '라운드(trpg)', SceneShape.TALK: '대화(chat, story)'}
 # 보고서의 머리말에 적는 자료의 이름
 SOURCE_NAMES = {'srd51': 'SRD 5.1', 'wikipedia': '위키백과'}
 # 넣는 차례의 이름
@@ -166,6 +168,9 @@ def model_section(dataset: Dataset, result: ModelResult, thresholds: ReferenceTh
         score_row('전체', score(result.current)),
     ]
     lines.extend(score_row(KIND_NAMES[kind], kind_score) for kind, kind_score in score_by_kind(result.current).items())
+    lines.extend(
+        score_row(SHAPE_NAMES[shape], shape_score) for shape, shape_score in score_by_shape(result.current).items()
+    )
     lines.extend(['', '**거리 기준을 바꿔 가며**', '', '| 거리 | 맞힘 | 정밀도 | 비우기 | 장면마다 고른 수 |'])
     lines.append('| --- | --- | --- | --- | --- |')
     chosen = best(result.swept)
@@ -195,7 +200,7 @@ def model_section(dataset: Dataset, result: ModelResult, thresholds: ReferenceTh
         expected = ', '.join(sorted(outcome.scene.expected)) or '(없음)'
         chosen_keys = ', '.join(outcome.chosen) or '(없음)'
         aliased = aliased_cell(dataset, outcome, measurement, thresholds.keyword_max_distance)
-        kind = KIND_NAMES[outcome.scene.kind]
+        kind = KIND_NAMES[outcome.scene.kind] + (' · 대화' if outcome.scene.shape == SceneShape.TALK else '')
         closest = closest_cell(dataset, outcome, measurement)
         lines.append(f'| {outcome.scene.name} {mark} | {kind} | {expected} | {chosen_keys} | {closest} | {aliased} |')
     lines.append('')
@@ -238,7 +243,9 @@ def full_report(
         '',
         f'장면 {len(dataset.scenes)}개(evals/references/scenes.yaml), '
         f'자료 {len(dataset.references)}줄({sources_line(dataset)}).',
-        '자료의 벡터는 이름, 다른 이름(한국어 이름), 한국어로 옮긴 글로 만든다.',
+        '자료의 벡터 글은 서버와 같다. 생김새 글이 있으면 이름과 생김새 글, 없으면 이름, 다른 이름, 글이다'
+        '(reference_core/texts.py). 다른 글로 잰 절은 머리에 그 글을 적는다.',
+        '찾는 글도 서버와 같다. 라운드(trpg)는 장면과 선언들, 대화(chat, story)는 마지막 두 말이다.',
         '한국어 이름이 장면에 나오면 다른 이름으로도 고른다. 그 줄도 다른 이름의 상한보다 멀면 뺀다(동음이의어).',
         '',
     ]
