@@ -31,7 +31,7 @@ import statistics
 import time
 import uuid
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ai_core.embedder import Embedder
 from reference_core.records import StoredReference
@@ -45,10 +45,9 @@ from reference_core.selection import (
 )
 from reference_core.texts import reference_text
 
-from app.lore.retrieval import query_text
 from app.lore.texts import batched
 from evals.lore.metrics import cosine_distance
-from evals.references.dataset import Dataset, Scene, SceneKind
+from evals.references.dataset import Dataset, Scene, SceneKind, SceneShape
 
 # 거리 기준을 바꿔 가며 볼 값들
 SWEEP_DISTANCES = (0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.80)
@@ -66,12 +65,15 @@ class EmbeddingText(enum.StrEnum):
       - CURRENT: 서버와 같다(reference_core/texts.reference_text). 이름과 생김새 글(2026-11-27 부터)
       - WITH_RULES: 이름, 다른 이름, 글(생김새 글 + 규칙 요약). 2026-11-27 전의 서버다
       - WITHOUT_RULES: 이름, 다른 이름, 생김새 글
-    생김새 글이 없는 줄(위키백과)은 셋 다 서버와 같은 글이다.
+      - WITHOUT_WIKI_LOOKS: 위키백과의 줄만 생김새 글 전의 글(이름, 다른 이름, 글)이다. 다른 줄은 서버와 같다.
+        위키백과의 생김새 글(2026-11-28)이 무엇을 바꿨는지 같은 실행에서 견준다
+    생김새 글이 없는 줄은 모두 서버와 같은 글이다.
     """
 
     CURRENT = 'current'
     WITH_RULES = 'with_rules'
     WITHOUT_RULES = 'without_rules'
+    WITHOUT_WIKI_LOOKS = 'without_wiki_looks'
 
 
 # 보고서의 머리에 적는 글의 이름
@@ -79,6 +81,7 @@ EMBEDDING_TEXT_NAMES = {
     EmbeddingText.CURRENT: '지금의 글',
     EmbeddingText.WITH_RULES: '규칙 요약 넣기(전의 글)',
     EmbeddingText.WITHOUT_RULES: '다른 이름 넣기',
+    EmbeddingText.WITHOUT_WIKI_LOOKS: '위키백과 생김새 글 빼기(전의 글)',
 }
 
 
@@ -169,6 +172,9 @@ def embedding_text(reference: StoredReference, text: EmbeddingText) -> str:
     """자료의 줄을 벡터로 바꿀 글. 생김새 글이 없으면 서버와 같은 글이다."""
     if text == EmbeddingText.CURRENT or not reference.look_ko:
         return reference_text(reference)
+    if text == EmbeddingText.WITHOUT_WIKI_LOOKS:
+        plain = replace(reference, look_ko='') if reference.source == 'wikipedia' else reference
+        return reference_text(plain)
     lines = [reference.name]
     if reference.aliases:
         lines.append(f'다른 이름: {", ".join(reference.aliases)}')
@@ -190,7 +196,7 @@ async def measure(
     started = tick()
     texts = [embedding_text(reference, text) for reference in dataset.references]
     reference_vectors = await embed_all(embedder, texts)
-    scene_vectors = await embed_all(embedder, [query_text(scene.request) for scene in dataset.scenes])
+    scene_vectors = await embed_all(embedder, [scene.query for scene in dataset.scenes])
     distances = {
         scene.name: {
             reference.id: cosine_distance(vector, reference_vector)
@@ -238,7 +244,7 @@ def pick_for(
     장면 하나에서 고른 줄들. 기본(ALIAS_CAP)은 서버의 규칙(reference_core/selection.choose)과 같다.
     로어북이 없다고 보고 남은 자리는 REFERENCE_MAX_CHARS 다.
     """
-    text = query_text(scene.request)
+    text = scene.query
     hits = [hit for hit in alias_hits(references, text) if near_enough(hit, distances, thresholds.keyword_max_distance)]
     near = nearest(references, distances, thresholds.max_distance, thresholds.limit)
     room = min(REFERENCE_MAX_CHARS, thresholds.max_chars)
@@ -290,6 +296,16 @@ def score_by_kind(outcomes: Sequence[Outcome]) -> dict[SceneKind, Score]:
     }
 
 
+def score_by_shape(outcomes: Sequence[Outcome]) -> dict[SceneShape, Score]:
+    """장면의 모양(라운드, 대화)마다의 점수. 장면이 없는 모양은 빠진다."""
+    shapes = {outcome.scene.shape for outcome in outcomes}
+    return {
+        shape: score([outcome for outcome in outcomes if outcome.scene.shape == shape])
+        for shape in SceneShape
+        if shape in shapes
+    }
+
+
 def sweep(dataset: Dataset, measurement: Measurement, base: ReferenceThresholds) -> list[tuple[float, Score]]:
     """
     거리 기준을 바꿔 가며 매긴 점수.
@@ -337,7 +353,7 @@ def closest_answer(scene: Scene, dataset: Dataset, measurement: Measurement) -> 
 def alias_distances(scene: Scene, dataset: Dataset, measurement: Measurement) -> list[tuple[str, float | None]]:
     """장면에서 다른 이름으로 걸린 줄의 key 와 거리. 받은 차례대로다. 거리를 모르면 None 이다."""
     distances = measurement.distances[scene.name]
-    hits = alias_hits(dataset.references, query_text(scene.request))
+    hits = alias_hits(dataset.references, scene.query)
     return [(reference.key, distances.get(reference.id)) for reference in hits]
 
 

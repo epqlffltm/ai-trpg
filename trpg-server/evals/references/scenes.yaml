@@ -7,12 +7,18 @@
 #   set:  언제 더한 장면인가. v1 은 SRD 만 있을 때 만든 것, v2 는 위키백과(사물, 건축, 탈것, 생물, 지형)를 넣으며 더한 것이다.
 #         v3 은 몬스터의 생김새 글을 쓰기 전에 굳힌 것이다(이름 없이 부르는 몬스터 15, 맞는 것 없음 2).
 #         v4 는 물건의 생김새 글을 쓰기 전에 굳힌 것이다(이름 없이 부르는 물건 15, 맞는 것 없음 2).
-#         장면을 늘리면 새 이름(v3 …)을 붙인다. 한 번 붙인 정답은 고치지 않는다(전과 견줄 수 있게).
+#         v5 는 대화 서버(chat, story)의 모양이다. 위키백과의 생김새 글을 쓰기 전에 굳힌 것이다
+#         (이름 없이 부르는 것 19, 이름으로 부름 5, 맞는 것 없음 4).
+#         장면을 늘리면 새 이름(v6 …)을 붙인다. 한 번 붙인 정답은 고치지 않는다(전과 견줄 수 있게).
 #   kind: named(그것을 한국어로 부른다), meaning(이름 없이 생김새나 쓰임으로만), none(자료에 맞는 것이 없다).
 #         none 은 expected 가 비어 있다.
 #   expected: 맞다고 보는 줄의 key 들. 그중 하나라도 고르면 맞힌 것이다(드래곤처럼 비슷한 줄이 여럿이다).
 #             SRD 는 "monsters/…", "equipment/…", 위키백과는 "ko/<문서 제목>", "en/<문서 제목>" 이다.
-#   moves: 선언한 캐릭터와 글.
+#   장면은 둘 중 한 모양이다.
+#     scene, moves: 게임 서버의 라운드. 장면과 선언한 캐릭터와 글이다. 찾는 글은 장면과 "이름: 선언" 들이다
+#                   (app/lore/retrieval.py 의 query_text).
+#     messages:     대화 서버(chat, story)의 말들. 오래된 것부터, 마지막이 사람이 보낸 말이다.
+#                   찾는 글은 그중 마지막 둘이다(conversation_core/lorebook.py 의 query_text). 앞의 말은 찾는 데 쓰지 않는다.
 #
 # 정답은 "이 장면이면 나는 이 줄을 AI 에게 주고 싶다"이다. 검색이 어떻게 도는지가 아니라 GM 의 감각으로 붙인다.
 # 읽을 때 key 가 자료에 있는지 본다. 테스트가 늘 이 파일을 읽어 보므로 실수는 CI 에서 걸린다.
@@ -515,4 +521,201 @@ scenes:
     scene: 모닥불이 사그라든다. 드워프가 한참 말이 없다.
     moves:
       - [드워프, 오래전 형과 한 약속을 아직 지키지 못했다고 털어놓는다.]
+    expected: []
+  - name: talk-well
+    set: v5
+    kind: meaning
+    messages:
+      - "*마을 한가운데, 돌을 둥글게 쌓은 테두리 위로 낡은 나무 바퀴에 줄이 걸려 있다. 그녀가 줄을 당기자 삐걱거리며 두레박이 올라온다.* 물 좀 마셔요. 먼 길 왔잖아요."
+      - "고마워. *두레박을 받아 들고 아래를 들여다본다* 바닥이 안 보일 만큼 깊네."
+    expected: [ko/우물]
+  - name: talk-windmill
+    set: v5
+    kind: meaning
+    messages:
+      - "*언덕 위에서 커다란 날개 넷이 바람을 받아 천천히 돈다. 안에서 맷돌 가는 소리가 쿵쿵 울린다.* 저기가 우리 아버지 방앗간이에요."
+      - "날개가 저렇게 큰데 바람이 세게 불면 부서지지 않아?"
+    expected: [ko/풍차]
+  - name: talk-waterwheel
+    set: v5
+    kind: meaning
+    messages:
+      - "개울가 오두막 옆에서 커다란 나무 바퀴가 물살에 밀려 돌고 있었다. 바퀴살에서 떨어지는 물방울이 햇빛에 반짝였고, 안쪽에서는 절굿공이가 규칙적으로 내려찍는 소리가 들렸다."
+      - "주인공이 바퀴 축 밑에 숨겨진 상자를 찾아내는 장면으로 이어서 써 줘."
+    expected: [ko/물레방아]
+  - name: talk-pit-prison
+    set: v5
+    kind: meaning
+    messages:
+      - "*간수가 바닥의 쇠 뚜껑을 열어젖힌다. 아래는 사람 키 몇 배는 되는 좁고 깊은 구덩이다.* 들어가라. 여기선 아무도 네 목소리를 못 듣는다."
+      - "*밀려 떨어지기 전에 간수의 소매를 붙잡는다* 올라올 길도 없이 어떻게 나오라는 거야!"
+    expected: [ko/우블리에트]
+  - name: talk-bone-tunnels
+    set: v5
+    kind: meaning
+    messages:
+      - "*지하 통로 양쪽 벽에 해골과 정강이뼈가 빼곡히 쌓여 있다. 불빛이 흔들릴 때마다 빈 눈구멍들이 움직이는 것 같다.* 도시 아래로 이런 길이 몇 리나 이어져 있대요."
+      - "죽은 사람들을 왜 여기에 이렇게 쌓아 둔 거야?"
+    expected: [en/Catacombs, ko/무덤]
+  - name: talk-old-shaft
+    set: v5
+    kind: named
+    messages:
+      - "*산비탈의 갱도 입구에 녹슨 궤도가 깔려 있다. 통나무 기둥으로 받친 천장에서 흙이 부스스 떨어진다.* 광부들이 떠난 지 십 년은 됐을 거예요."
+      - "여기서 은이 나왔다고? 더 깊이 들어가 보자."
+    expected: [ko/광산]
+  - name: talk-north-needle
+    set: v5
+    kind: meaning
+    messages:
+      - "*선장이 둥근 놋쇠 상자를 열어 보인다. 안에서 가느다란 바늘이 떨다가 한쪽을 가리키고 멈춘다.* 별이 안 보여도 이게 북쪽을 알려 줘."
+      - "그럼 안개 속에서도 길 잃을 일은 없겠네."
+    expected: [ko/나침반]
+  - name: talk-seeing-orb
+    set: v5
+    kind: meaning
+    messages:
+      - "*노파가 탁자의 천을 걷는다. 머리만 한 투명한 구슬 속에 연기 같은 것이 소용돌이친다.* 네가 찾는 사람을 보여 주마."
+      - "*구슬 가까이 몸을 숙인다* 얼굴이 보여... 누구지?"
+    expected: [magic-items/crystal-ball]
+  - name: talk-hot-water
+    set: v5
+    kind: meaning
+    messages:
+      - "*바위 틈에서 김이 피어오르고, 뿌연 물에서 달걀 썩는 듯한 냄새가 난다.* 여기 몸을 담그면 상처가 빨리 아문대."
+      - "*장화를 벗고 발끝을 넣어 본다* 앗, 뜨거워!"
+    expected: [ko/온천]
+  - name: talk-ice-river
+    set: v5
+    kind: meaning
+    messages:
+      - "봉우리 사이로 거대한 얼음의 강이 아주 느리게 흘러내리고 있었다. 푸른 틈새마다 바람이 울부짖었고, 얼음 아래에는 오래전에 얼어붙은 무언가의 그림자가 비쳤다."
+      - "일행이 얼음 틈을 건너다 한 명이 미끄러지는 장면. 긴장감 있게 써 줘."
+    expected: [ko/빙하]
+  - name: talk-shallow-crossing
+    set: v5
+    kind: meaning
+    messages:
+      - "*강폭이 넓어지는 곳에서 물이 얕아져 바닥 자갈이 훤히 보인다. 소들이 무릎까지 잠긴 채 건너간다.* 여기로 건너면 다리까지 안 돌아가도 돼요."
+      - "말도 건널 수 있을까?"
+    expected: [ko/여울]
+  - name: talk-hidden-rocks
+    set: v5
+    kind: meaning
+    messages:
+      - "*파도 아래로 검고 뾰족한 바위가 이빨처럼 드러났다 사라진다. 선원이 소리친다.* 키를 돌려! 배 밑이 찢어진다!"
+      - "*난간을 붙잡고 뱃머리로 달려간다* 왼쪽에도 있어!"
+    expected: [ko/암초]
+  - name: talk-sea-arms
+    set: v5
+    kind: meaning
+    messages:
+      - "*배 옆으로 기둥만 한 팔이 솟구친다. 빨판이 갑판을 쩍쩍 붙들고, 물속에서 수레바퀴만 한 눈이 번뜩인다.*"
+      - "*작살을 집어 그 눈을 겨눈다* 다들 엎드려!"
+    expected: [ko/대왕오징어, ko/문어, monsters/kraken, monsters/giant-octopus]
+  - name: talk-sand-stinger
+    set: v5
+    kind: meaning
+    messages:
+      - "*모래가 들썩이더니 집게 둘을 치켜든 것이 기어 나온다. 마디진 꼬리가 등 위로 휘어 끝의 침이 번들거린다.*"
+      - "이런 게 있는 줄은 몰랐어. 저 꼬리에 찔리면 죽어?"
+    expected: [monsters/giant-scorpion, ko/전갈목]
+  - name: talk-leg-suckers
+    set: v5
+    kind: meaning
+    messages:
+      - "*물에서 나온 네 종아리에 검고 미끈한 것들이 달라붙어 있다. 떼어 내려 하자 살이 늘어난다.* 억지로 떼지 마. 소금을 뿌려야 해."
+      - "*소름이 끼쳐 소금 주머니를 뒤진다* 빨리, 빨리!"
+    expected: [ko/거머리]
+  - name: talk-helmet-flower
+    set: v5
+    kind: meaning
+    messages:
+      - "*약초꾼이 보랏빛 꽃을 조심스레 집어 든다. 꽃잎이 기사의 투구처럼 생겼다.* 뿌리 한 조각이면 황소도 쓰러져. 맨손으로 만지지 마."
+      - "이걸로 해독약을 만들 수 있다고? 독이랑 약이 종이 한 장 차이네."
+    expected: [ko/투구꽃속]
+  - name: talk-spotted-cap
+    set: v5
+    kind: meaning
+    messages:
+      - "*쓰러진 통나무 아래에 흰 점이 박힌 붉은 갓의 버섯이 무리 지어 자란다.*"
+      - "*하나 따서 냄새를 맡는다* 이거 구워 먹으면 맛있을 것 같은데?"
+    expected: [ko/광대버섯]
+  - name: talk-winter-green
+    set: v5
+    kind: meaning
+    messages:
+      - "드루이드는 늙은 나무 꼭대기에 둥글게 뭉친 초록 덤불을 가리켰다. 한겨울인데도 그것만은 푸르렀고, 하얀 열매가 진주처럼 매달려 있었다."
+      - "드루이드가 황금빛 칼로 그 덤불을 베어 내는 의식을 이어서 써 줘."
+    expected: [ko/겨우살이]
+  - name: talk-pale-host
+    set: v5
+    kind: meaning
+    messages:
+      - "*창백한 귀족이 촛불 아래서 미소 짓는다. 입술 사이로 뾰족한 송곳니가 보이고, 벽에 걸린 거울에는 그의 모습이 비치지 않는다.* 늦은 시간에 무슨 일로 오셨소."
+      - "*등 뒤로 감춘 나무 말뚝을 고쳐 쥔다* 길을 잃었습니다. 하룻밤만 묵게 해 주시겠습니까?"
+    expected: [monsters/vampire-vampire, monsters/vampire-spawn]
+  - name: talk-lens-earlier
+    set: v5
+    kind: meaning
+    messages:
+      - "이 망원경으로 저 섬 쪽을 보자."
+      - "*그가 렌즈를 소매로 닦아 건넨다* 조심해서 다뤄. 하나뿐이니까."
+      - "*눈에 대고 수평선을 살핀다* 저기 뭔가 움직이는데?"
+    expected: [equipment/spyglass, ko/망원경]
+  - name: talk-lantern
+    set: v5
+    kind: named
+    messages:
+      - "*그가 손잡이 달린 등불을 높이 든다. 동굴 벽에 그림자가 길게 늘어진다.* 기름이 얼마 안 남았어."
+      - "랜턴 하나 더 있어? 안쪽은 너무 어두워."
+    expected: [equipment/lantern-hooded, equipment/lantern-bullseye, ko/제등]
+  - name: talk-ghoul
+    set: v5
+    kind: named
+    messages:
+      - "*무덤가 어둠 속에서 뼈를 씹는 소리가 난다. 웅크린 것이 고개를 들자 길게 자란 손톱이 보인다.*"
+      - "구울이다! 저 발톱에 긁히면 몸이 굳는다고 했어. 다들 물러나!"
+    expected: [monsters/ghoul, monsters/ghast]
+  - name: talk-trident
+    set: v5
+    kind: named
+    messages:
+      - "*어부가 벽에 걸린, 끝이 셋으로 갈라진 창을 내린다.* 할아버지가 쓰시던 거야."
+      - "삼지창으로 물고기를 잡는 거야? 나도 해 볼래!"
+    expected: [equipment/trident]
+  - name: talk-wine-toast
+    set: v5
+    kind: named
+    messages:
+      - "지하 창고에는 먼지 쌓인 오크통과 병들이 줄지어 있었다. 촛불이 흔들릴 때마다 유리병의 붉은빛이 어른거렸다."
+      - "주인공이 포도주 한 병을 꺼내 와서 동료들과 축배를 드는 장면으로 이어 줘."
+    expected: [ko/포도주]
+  - name: talk-thanks
+    set: v5
+    kind: none
+    messages:
+      - "*그녀가 고개를 깊이 숙인다.* 정말 고마워요. 당신이 아니었으면 우린 다 죽었을 거예요."
+      - "별거 아니었어. 다들 무사해서 다행이야. 오늘은 푹 쉬자."
+    expected: []
+  - name: talk-lost-song
+    set: v5
+    kind: none
+    messages:
+      - "어릴 때 엄마가 불러 주던 노래가 있었는데, 가사가 도무지 생각이 안 나."
+      - "천천히 떠올려 봐. 생각나면 나한테도 불러 줘."
+    expected: []
+  - name: talk-lonely-mood
+    set: v5
+    kind: none
+    messages:
+      - "모두가 떠난 뒤에도 그는 오래도록 그 자리에 서 있었다. 누구의 목소리도 들리지 않았다."
+      - "분위기를 좀 더 쓸쓸하게 바꿔 줘. 주인공이 혼자 남았다는 게 느껴지게."
+    expected: []
+  - name: talk-late-again
+    set: v5
+    kind: none
+    messages:
+      - "*팔짱을 끼고 눈을 흘긴다* 또 늦었네? 이번엔 무슨 핑계야?"
+      - "핑계 아니야, 진짜로 일이 늦게 끝났다니까. 화 풀어."
     expected: []

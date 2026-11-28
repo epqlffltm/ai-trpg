@@ -138,7 +138,6 @@
 낫 | Sickle |
 쟁기 | Plough |
 도르래 | Pulley |
-수정구 | Crystal ball |
 거울 | Mirror |
 약초 | Herbal medicine | 약초학
 연금술 | Alchemy |

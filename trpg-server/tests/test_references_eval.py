@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 from ai_core.fake import FakeEmbedder
 from ai_core.provider import ChatMessage, Completion, GenerationParams, ProviderError
+from conversation_core.lorebook import query_text as talk_query
 from reference_core.records import ReferenceKind, StoredReference
 from reference_core.selection import ReferenceThresholds, alias_hits, choose
 
@@ -29,6 +30,7 @@ from evals.references.dataset import (
     DatasetError,
     Scene,
     SceneKind,
+    SceneShape,
     chosen_sets,
     load_dataset,
 )
@@ -81,7 +83,27 @@ SHIP = reference('equipment/sailing-ship', 'Sailing ship', 'Ship.')
 
 def scene(name: str, text: str, expected: set[str], kind: SceneKind = SceneKind.NAMED) -> Scene:
     request = NarrationRequest(round_number=1, scene=text, moves=[Move('엘프', text)], story=STORY)
-    return Scene(name=name, set='v1', kind=kind, request=request, expected=frozenset(expected))
+    return Scene(
+        name=name,
+        set='v1',
+        kind=kind,
+        shape=SceneShape.ROUND,
+        query=query_text(request),
+        request=request,
+        expected=frozenset(expected),
+    )
+
+
+def talk(name: str, messages: list[str], expected: set[str], kind: SceneKind = SceneKind.NAMED) -> Scene:
+    return Scene(
+        name=name,
+        set='v5',
+        kind=kind,
+        shape=SceneShape.TALK,
+        query=talk_query(messages),
+        request=None,
+        expected=frozenset(expected),
+    )
 
 
 LIGHT = scene('light', '횃불을 켠다', {TORCH.key})
@@ -109,7 +131,11 @@ def test_the_scenes_in_the_repository_load():
     sources = {reference.source for reference in dataset.references}
     assert sources == {'srd51', 'wikipedia'}
     assert len([reference for reference in dataset.references if reference.source == 'srd51']) == 810
-    assert {scene.set for scene in dataset.scenes} == {'v1', 'v2', 'v3', 'v4'}
+    assert {scene.set for scene in dataset.scenes} == {'v1', 'v2', 'v3', 'v4', 'v5'}
+    # v5 는 대화 서버의 모양이다. 서술 요청이 없다
+    assert {scene.shape for scene in dataset.scenes} == set(SceneShape)
+    assert all((scene.shape == SceneShape.TALK) == (scene.set == 'v5') for scene in dataset.scenes)
+    assert all(scene.request is None for scene in dataset.scenes if scene.shape == SceneShape.TALK)
     galleon = next(reference for reference in dataset.references if reference.key == 'ko/갈레온')
     assert '갤리온' in galleon.aliases
     english = next(reference for reference in dataset.references if reference.key == 'en/Portcullis')
@@ -126,6 +152,8 @@ def test_a_wrong_scene_is_reported_with_every_problem(tmp_path: Path):
   - {name: a, set: v1, kind: none, scene: 장면, moves: [[엘프, 간다]], expected: [equipment/torch]}
   - {name: b, set: v1, kind: weird, scene: 장면, moves: [[엘프, 간다]]}
   - {name: c, kind: named, moves: [[엘프, 간다]], expected: [equipment/torch]}
+  - {name: d, set: v5, kind: named, scene: 장면, messages: [말], expected: [equipment/torch]}
+  - {name: e, set: v5, kind: named, messages: [], expected: [equipment/torch]}
 """,
         encoding='utf-8',
     )
@@ -139,6 +167,36 @@ def test_a_wrong_scene_is_reported_with_every_problem(tmp_path: Path):
     assert sum('none 이면 정답이 비고' in problem for problem in problems) == 2
     assert 'b: kind 가 틀렸다(weird)' in problems
     assert {'c: set 이(가) 없다', 'c: scene 이(가) 없다'} <= set(problems)
+    assert 'd: 라운드(scene, moves)와 대화(messages)를 함께 적었다' in problems
+    assert 'e: messages 는 비지 않은 글의 목록이다' in problems
+
+
+def test_a_talk_scene_is_searched_with_the_last_two_messages(tmp_path: Path):
+    path = tmp_path / 'scenes.yaml'
+    path.write_text(
+        HEADER
+        + """
+  - name: lens
+    set: v5
+    kind: meaning
+    messages: [망원경을 꺼낸다, 렌즈를 닦아 건넨다, 수평선을 살핀다]
+    expected: [equipment/torch]
+""",
+        encoding='utf-8',
+    )
+
+    (lens,) = load_dataset(path).scenes
+
+    # 대화 서버와 같다. 앞의 말(망원경)은 찾는 글에 없다
+    assert lens.shape == SceneShape.TALK and lens.request is None
+    assert lens.query == '렌즈를 닦아 건넨다\n수평선을 살핀다'
+
+
+def test_a_round_scene_is_searched_with_the_scene_and_the_moves():
+    first = load_dataset().scenes[0]
+
+    assert first.shape == SceneShape.ROUND and first.request is not None
+    assert first.query == query_text(first.request)
 
 
 def test_sets_can_be_chosen():
@@ -149,11 +207,14 @@ def test_sets_can_be_chosen():
 def test_the_looks_come_with_the_data_file():
     dataset = load_dataset()
 
-    # SRD 의 810줄 모두 생김새 글이 있다. 위키백과의 줄은 없다
-    looked = [reference for reference in dataset.references if reference.look_ko]
-    assert len(looked) == 810 and all(reference.source == 'srd51' for reference in looked)
+    # 모든 줄에 생김새 글이 있다(SRD 는 번역 파일, 위키백과는 생김새 글 파일에서 온다)
+    assert all(reference.look_ko for reference in dataset.references)
+    assert len([reference for reference in dataset.references if reference.source == 'srd51']) == 810
+    # SRD 는 생김새 글이 서술자에게 가는 글의 맨 앞이다. 위키백과는 서술자에게 가는 글이 도입부 그대로다
     mimic = next(reference for reference in dataset.references if reference.key == 'monsters/mimic')
     assert mimic.content_ko.startswith(mimic.look_ko)
+    bellows = next(reference for reference in dataset.references if reference.key == 'ko/풀무')
+    assert bellows.shown_content == bellows.content and bellows.look_ko not in bellows.content
 
 
 # --- 검색 ---
@@ -212,7 +273,7 @@ def test_the_default_order_is_the_servers_choose():
     thresholds = ReferenceThresholds(max_distance=0.45, keyword_max_distance=0.60, limit=2)
     distances = ARMORY_MEASURED.distances['rusty']
 
-    hits = alias_hits(ARMORY.references, query_text(RUSTY.request))
+    hits = alias_hits(ARMORY.references, RUSTY.query)
     near = nearest(ARMORY.references, distances, thresholds.max_distance, thresholds.limit)
     server = choose(hits, distances, near, thresholds, thresholds.max_chars)
 
@@ -265,9 +326,31 @@ def test_the_texts_to_embed():
     assert embedding_text(wolf, EmbeddingText.CURRENT) == 'Wolf\n회색 늑대다.'
     assert embedding_text(wolf, EmbeddingText.WITH_RULES) == 'Wolf\n다른 이름: 늑대\n회색 늑대다. 이동: 걷기.'
     assert embedding_text(wolf, EmbeddingText.WITHOUT_RULES) == 'Wolf\n다른 이름: 늑대\n회색 늑대다.'
-    # 생김새 글이 없으면 셋 다 서버와 같은 글이다
+    # 위키백과 생김새 글 빼기는 SRD 의 줄을 서버와 같게 둔다
+    assert embedding_text(wolf, EmbeddingText.WITHOUT_WIKI_LOOKS) == embedding_text(wolf, EmbeddingText.CURRENT)
+    # 생김새 글이 없으면 모두 서버와 같은 글이다
     plain = replace(wolf, look_ko='')
     assert embedding_text(plain, EmbeddingText.WITH_RULES) == embedding_text(plain, EmbeddingText.CURRENT)
+
+
+def test_the_wikipedia_looks_can_be_left_out():
+    bellows = StoredReference(
+        id=uuid.uuid5(uuid.NAMESPACE_URL, 'ko/풀무'),
+        key='ko/풀무',
+        name='풀무',
+        aliases=['풀무'],
+        content='풀무는 바람을 일으키는 기구이다.',
+        kind=ReferenceKind.TOPIC,
+        source='wikipedia',
+        look_ko='가죽 주머니를 눌러 바람을 넣는다.',
+    )
+
+    assert embedding_text(bellows, EmbeddingText.CURRENT) == '풀무\n가죽 주머니를 눌러 바람을 넣는다.'
+    # 생김새 글 전의 위키백과 줄의 글이다(이름, 다른 이름, 도입부)
+    assert (
+        embedding_text(bellows, EmbeddingText.WITHOUT_WIKI_LOOKS)
+        == '풀무\n다른 이름: 풀무\n풀무는 바람을 일으키는 기구이다.'
+    )
 
 
 async def test_measuring_uses_the_chosen_text():
@@ -318,8 +401,12 @@ class CountingProvider:
 async def test_each_scene_is_narrated_off_and_on():
     provider = CountingProvider('엘프가 횃불을 든다. DC 12 를 넘긴다.')
     seen: list[Trial] = []
+    # 대화의 장면은 게임 서버의 서술자로 서술하지 않는다
+    chatty = talk('chatty', ['안녕', '횃불을 켜 줘'], {TORCH.key})
+    both = replace(SMALL, scenes=(*SMALL.scenes, chatty))
+    measured = replace(MEASURED, distances={**DISTANCES, 'chatty': DISTANCES['light']})
 
-    trials = await run_pairs(provider, SMALL, MEASURED, ReferenceThresholds(), repeat=2, on_trial=seen.append)
+    trials = await run_pairs(provider, both, measured, ReferenceThresholds(), repeat=2, on_trial=seen.append)
 
     assert len(trials) == len(seen) == 3 * 2 * 2
     light_on = [trial for trial in trials if trial.scene_name == 'light' and trial.mode == Mode.ON]
@@ -373,6 +460,23 @@ def test_the_report_has_the_tables_and_the_scenes():
     assert '자료 3줄(SRD 5.1 3줄)' in report
     assert '다른 이름의 상한을 바꿔 가며' not in report
     assert f'| {WOLF.key} 0.480 |' in report
+    # 장면이 라운드뿐이면 모양마다의 줄은 라운드 하나다. 머리말은 서버의 벡터 글을 적는다
+    assert '| 라운드(trpg) |' in report and '| 대화(chat, story) |' not in report
+    assert '생김새 글이 있으면 이름과 생김새 글' in report
+
+
+def test_the_report_splits_the_rounds_and_the_talks():
+    chatty = talk('chatty', ['안녕', '횃불을 켜 줘'], {TORCH.key}, SceneKind.MEANING)
+    both = replace(SMALL, scenes=(*SMALL.scenes, chatty))
+    measured = replace(MEASURED, distances={**DISTANCES, 'chatty': DISTANCES['light']})
+    outcomes = evaluate(both, measured, ReferenceThresholds())
+
+    report = full_report(
+        both, [ModelResult(measured, outcomes, sweep(both, measured, ReferenceThresholds()))], ReferenceThresholds()
+    )
+
+    assert '| 라운드(trpg) |' in report and '| 대화(chat, story) | 100% |' in report
+    assert '| chatty O | 뜻으로만 · 대화 |' in report
 
 
 def test_the_report_marks_an_alias_cut_by_the_keyword_limit():

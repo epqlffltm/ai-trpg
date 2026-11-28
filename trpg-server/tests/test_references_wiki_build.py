@@ -7,7 +7,7 @@
   - User-Agent 에 도구의 이름과 연락처를 싣는다. 물을 때마다 쉰다
   - 서버가 바쁘다고 하면(429, 503, maxlag) Retry-After 만큼 쉬고 다시 묻는다. 계속 바쁘거나 틀린 답이면 멈춘다
   - 만든 결과의 줄(고칠 제목을 함께 적는다)
-  - 명령줄. 연락처는 꼭 적는다
+  - 명령줄. 받을 때는 연락처를 꼭 적는다. 생김새 글만 다시 붙일 때는 묻지 않는다
 거르는 규칙과 차례는 공용 패키지의 시험이 본다(shared/reference-core/tests/test_wiki.py).
 """
 
@@ -15,7 +15,8 @@ from pathlib import Path
 
 import httpx
 import pytest
-from reference_core.data import WIKIPEDIA_FILE, WIKIPEDIA_TRANSLATION_FILE
+from reference_core.data import WIKIPEDIA_FILE, WIKIPEDIA_LOOKS_FILE, WIKIPEDIA_TRANSLATION_FILE
+from reference_core.records import read_document
 from reference_core.wiki_build import BuildReport
 
 from scripts import build_wiki as script
@@ -88,6 +89,8 @@ def test_the_report_lists_what_to_fix():
         duplicated=['돛단배'],
         untranslated=['en/Carrack'],
         stale=['en/Gone'],
+        unlooked=['ko/범선'],
+        stale_looks=['ko/수정구'],
     )
 
     lines = script.describe(report, Path('wikipedia.json'))
@@ -98,13 +101,31 @@ def test_the_report_lists_what_to_fix():
     assert any('돛단배' in line for line in lines)
     assert any('en/Carrack' in line and '번역이 없다' in line for line in lines)
     assert any('en/Gone' in line for line in lines)
+    assert any('ko/범선' in line and '생김새 글이 없다' in line for line in lines)
+    assert any('ko/수정구' in line and '생김새 글 파일에서 지운다' in line for line in lines)
     assert script.describe(BuildReport(written=1), Path('w.json')) == ['w.json: 1줄(영어판 0)']
 
 
 def test_the_command_needs_a_contact():
     with pytest.raises(SystemExit):
-        script.build_parser().parse_args([])
+        script.parse([])
 
-    args = script.build_parser().parse_args(['--contact', 'me@example.com'])
+    args = script.parse(['--contact', 'me@example.com'])
 
     assert (args.output, args.pause, args.translation) == (WIKIPEDIA_FILE, 1.0, WIKIPEDIA_TRANSLATION_FILE)
+    assert (args.looks, args.looks_only) == (WIKIPEDIA_LOOKS_FILE, False)
+    # 생김새 글만 붙일 때는 위키백과에 묻지 않으니 연락처가 없어도 된다
+    assert script.parse(['--looks-only']).looks_only
+
+
+def test_looks_only_refreshes_the_file_without_the_network(tmp_path: Path, capsys: pytest.CaptureFixture):
+    output, looks = tmp_path / 'wikipedia.json', tmp_path / 'looks.json'
+    output.write_text(WIKIPEDIA_FILE.read_text(encoding='utf-8'), encoding='utf-8')
+    looks.write_text(WIKIPEDIA_LOOKS_FILE.read_text(encoding='utf-8'), encoding='utf-8')
+
+    script.main(['--looks-only', '--output', str(output), '--looks', str(looks)])
+
+    # 실린 파일은 이미 생김새 글을 붙인 것이라 다시 붙여도 같다
+    assert output.read_text(encoding='utf-8') == WIKIPEDIA_FILE.read_text(encoding='utf-8')
+    count = len(read_document(WIKIPEDIA_FILE).entries)
+    assert f'{count}줄' in capsys.readouterr().out

@@ -21,7 +21,7 @@ import re
 from collections.abc import Iterable, Sequence
 from pathlib import Path
 
-from reference_core.records import REFERENCE_CONTENT_MAX_LENGTH
+from reference_core.records import REFERENCE_CONTENT_MAX_LENGTH, ReferenceRecord
 
 WIKIPEDIA_ATTRIBUTION = (
     'This work includes text adapted from Wikipedia articles (Korean and English editions), '
@@ -33,6 +33,17 @@ WIKIPEDIA_CHANGES = (
     'were removed, and the text was shortened.'
 )
 WIKIPEDIA_TRANSLATED = ' Entries from the English edition were translated into Korean.'
+# 생김새 글(reference_core/looks.py)을 더했을 때. 위키백과의 글이 아니라 이 프로젝트가 쓴 것이다
+WIKIPEDIA_DESCRIBED = ' Short Korean descriptions of appearance and use, written for this project, were added.'
+
+
+def wiki_changes(records: Iterable[ReferenceRecord]) -> str:
+    """원본을 바꾼 것. 영어판의 줄을 옮겼으면 그것도, 생김새 글을 더했으면 그것도 적는다."""
+    lines = list(records)
+    translated = any(record.data.get('lang') != 'ko' and record.content_ko for record in lines)
+    described = any(record.look_ko for record in lines)
+    return WIKIPEDIA_CHANGES + (WIKIPEDIA_TRANSLATED if translated else '') + (WIKIPEDIA_DESCRIBED if described else '')
+
 
 # 괄호 하나(안에 괄호가 없는 것). 안쪽부터 여러 번 지운다
 PARENTHESES = re.compile(r'\s*[(（][^()（）]*[)）]')

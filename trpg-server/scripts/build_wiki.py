@@ -6,9 +6,11 @@
 제목 목록(reference_core/data/wikipedia-titles.txt)의 문서를 MediaWiki API 로 받아 도입부를 거른다.
 한국어판 먼저, 없으면 영어판이다. 차례와 거르는 규칙은 reference_core/wiki_build.py 와 reference_core/wiki.py 다.
 영어판의 줄은 번역 파일(reference_core/data/wikipedia.ko.json)이 있으면 붙인다. 번역이 없는 줄은 끝에 알린다.
+모든 줄에 생김새 글 파일(reference_core/data/wikipedia.looks.json)이 있으면 붙인다. 생김새 글이 없는 줄도 알린다.
 여기는 HTTP 로 묻는 것만 한다. 운영 서버는 위키백과를 부르지 않고 만든 파일을 넣는다(scripts/references.py load).
 
     uv run python -m scripts.build_wiki --contact you@example.com
+    uv run python -m scripts.build_wiki --looks-only   # 생김새 글만 고쳤을 때. 위키백과에 묻지 않는다
 
 위키미디어의 API 이용 규칙을 따른다.
   - User-Agent 에 이 도구의 이름과 연락처를 적는다(--contact, 메일이나 주소). 없으면 막힐 수 있다
@@ -25,9 +27,15 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from reference_core.data import WIKIPEDIA_FILE, WIKIPEDIA_PLACES_FILE, WIKIPEDIA_TITLES_FILE, WIKIPEDIA_TRANSLATION_FILE
+from reference_core.data import (
+    WIKIPEDIA_FILE,
+    WIKIPEDIA_LOOKS_FILE,
+    WIKIPEDIA_PLACES_FILE,
+    WIKIPEDIA_TITLES_FILE,
+    WIKIPEDIA_TRANSLATION_FILE,
+)
 from reference_core.wiki_api import API_URLS, query_params
-from reference_core.wiki_build import BuildReport, Fetch, build
+from reference_core.wiki_build import BuildReport, Fetch, build, refresh_looks
 
 # 도구의 이름(User-Agent 의 앞)
 TOOL = 'ai-trpg-reference-builder/1.0'
@@ -97,6 +105,8 @@ def describe(report: BuildReport, output: Path) -> list[str]:
         ('다른 제목과 같은 문서다(앞의 것만 넣었다)', report.duplicated),
         ('영어판인데 번역이 없다(번역 파일에 더한다)', report.untranslated),
         ('자료에 없는 줄의 번역이다(번역 파일에서 지운다)', report.stale),
+        ('생김새 글이 없다(생김새 글 파일에 더한다)', report.unlooked),
+        ('자료에 없는 줄의 생김새 글이다(생김새 글 파일에서 지운다)', report.stale_looks),
     ):
         if titles:
             lines.append(f'{label}: {", ".join(titles)}')
@@ -107,7 +117,12 @@ def build_parser() -> argparse.ArgumentParser:
     """명령줄의 모양."""
     parser = argparse.ArgumentParser(description='위키백과의 문서로 참고 자료의 데이터 파일을 만든다.')
     parser.add_argument(
-        '--contact', required=True, help='User-Agent 에 적을 연락처(메일이나 주소). 위키미디어의 규칙이다'
+        '--contact', help='User-Agent 에 적을 연락처(메일이나 주소). 위키미디어의 규칙이다. 받을 때는 꼭 적는다'
+    )
+    parser.add_argument(
+        '--looks-only',
+        action='store_true',
+        help='받지 않고, 만든 파일(--output)에 생김새 글(--looks)만 다시 붙인다',
     )
     parser.add_argument(
         '--titles', type=Path, default=WIKIPEDIA_TITLES_FILE, help=f'제목 목록. 기본 {WIKIPEDIA_TITLES_FILE}'
@@ -125,17 +140,39 @@ def build_parser() -> argparse.ArgumentParser:
         default=WIKIPEDIA_TRANSLATION_FILE,
         help=f'영어판의 줄의 한국어 번역. 파일이 없으면 붙이지 않는다. 기본 {WIKIPEDIA_TRANSLATION_FILE}',
     )
+    parser.add_argument(
+        '--looks',
+        type=Path,
+        default=WIKIPEDIA_LOOKS_FILE,
+        help=f'줄마다의 생김새 글. 파일이 없으면 붙이지 않는다. 기본 {WIKIPEDIA_LOOKS_FILE}',
+    )
     parser.add_argument('--pause', type=float, default=1.0, help='묻는 사이에 쉬는 초. 기본 1')
     return parser
 
 
-def main() -> None:
-    """명령줄을 읽고 돌린다."""
-    args = build_parser().parse_args()
+def parse(argv: list[str] | None = None) -> argparse.Namespace:
+    """명령줄을 읽는다. 받을 때는 연락처가 있어야 한다(생김새 글만 붙일 때는 묻지 않으니 없어도 된다)."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if not args.looks_only and not args.contact:
+        parser.error('위키백과에서 받으려면 --contact 를 적어야 한다')
+    return args
+
+
+def fetched(args: argparse.Namespace) -> BuildReport:
+    """위키백과에서 받아 데이터 파일을 만든다."""
     headers = {'User-Agent': user_agent(args.contact)}
     with httpx.Client(headers=headers, timeout=TIMEOUT_SECONDS, follow_redirects=True) as client:
         fetch = make_fetch(client, args.pause)
-        report = build(args.titles, args.places, args.output, fetch, date.today().isoformat(), args.translation)
+        return build(
+            args.titles, args.places, args.output, fetch, date.today().isoformat(), args.translation, args.looks
+        )
+
+
+def main(argv: list[str] | None = None) -> None:
+    """명령줄을 읽고 돌린다."""
+    args = parse(argv)
+    report = refresh_looks(args.output, args.looks) if args.looks_only else fetched(args)
     for line in describe(report, args.output):
         print(line)
 

@@ -15,6 +15,7 @@
     uv run python -m scripts.eval_references --narrate --narration-model gemma4:26b-a4b-it-qat --repeat 2
     uv run python -m scripts.eval_references --narrate --max-distance 0.55
     uv run python -m scripts.eval_references --texts current with_rules without_rules
+    uv run python -m scripts.eval_references --texts current without_wiki_looks
     uv run python -m scripts.eval_references --fake --narrate
 
 trpg-server 폴더에서 -m 으로 돌린다. 임베딩 주소는 설정(.env)의 것(EMBEDDING_BASE_URL, 비면 LLM_BASE_URL)이다.

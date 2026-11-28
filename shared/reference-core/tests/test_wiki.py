@@ -10,6 +10,7 @@
   - 제목 목록(wiki_titles.py): 칸, 주석, 다른 이름(한국어 이름이 앞, 괄호를 뗀다, 다섯까지), 틀린 줄과 겹친 줄
   - API(wiki_api.py): 물음의 모양, 넘겨주기와 제목 고치기를 따라간다. 없는 문서, 동음이의어, 빈 도입부는 빠진다
   - 만들기(wiki_build.py): 한국어판 먼저, 없거나 남은 글이 없으면 영어판, 둘 다 없으면 알린다. 같은 문서는 앞의 것만
+  - 생김새 글: 만들 때 붙이고, 만든 파일에 다시 붙인다(받지 않는다). 바꾼 것(출처 표시)에 적는다
   - 실린 파일: 제목 목록과 이름 목록이 읽힌다
 """
 
@@ -20,18 +21,23 @@ from typing import Any
 import pytest
 
 from reference_core.data import WIKIPEDIA_FILE, WIKIPEDIA_PLACES_FILE, WIKIPEDIA_TITLES_FILE, WIKIPEDIA_TRANSLATION_FILE
+from reference_core.looks import LooksDocument
 from reference_core.records import ReferenceKind, ReferenceSource, read_document
 from reference_core.translations import TranslationDocument, read_translations
 from reference_core.wiki import (
+    WIKIPEDIA_CHANGES,
+    WIKIPEDIA_DESCRIBED,
+    WIKIPEDIA_TRANSLATED,
     clean_text,
     kept_sentences,
     lead_content,
     places_pattern,
     read_places,
+    wiki_changes,
     within_length,
 )
 from reference_core.wiki_api import BATCH_SIZE, batches, pages_of, query_params, resolved_titles
-from reference_core.wiki_build import BuildReport, build, collect, with_translations
+from reference_core.wiki_build import BuildReport, build, collect, refresh_looks, with_looks, with_translations
 from reference_core.wiki_titles import TitleLineError, WikiTitle, parse_titles, read_titles
 
 PLACES = places_pattern(['포르투갈', '유럽', 'Portugal', 'Iran'])
@@ -352,6 +358,74 @@ def test_the_build_applies_the_translation_file(tmp_path: Path):
 
     assert read_document(output).entries[0].content_ko == '큰 배다.'
     assert report.untranslated == [] and report.stale == []
+
+
+# --- 생김새 글 ---
+
+
+def looks_of(entries: dict, source: str = 'wikipedia') -> LooksDocument:
+    return LooksDocument.model_validate({'format': 1, 'source': source, 'entries': entries})
+
+
+def korean_record():
+    (record,), _ = collect(
+        [WikiTitle(ko='범선', en='Sailing ship')], FakeWiki({'ko': {'범선': page('범선', '배다.')}}), PLACES
+    )
+    return record
+
+
+def test_looks_are_put_on_and_the_rest_is_reported():
+    report = BuildReport()
+    ship, carrack = korean_record(), english_record()
+
+    done = with_looks([ship, carrack], looks_of({'ko/범선': '돛을 여럿 단 배다.', 'en/Gone': '없다.'}), report)
+
+    assert [record.look_ko for record in done] == ['돛을 여럿 단 배다.', '']
+    assert (report.unlooked, report.stale_looks) == (['en/Carrack'], ['en/Gone'])
+    with pytest.raises(ValueError, match='위키백과'):
+        with_looks([ship], looks_of({}, source='srd51'), BuildReport())
+
+
+def test_the_changes_say_what_was_added():
+    ship, carrack = korean_record(), english_record()
+    translated = carrack.model_copy(update={'content_ko': '큰 배다.'})
+    looked = ship.model_copy(update={'look_ko': '돛을 여럿 단 배다.'})
+
+    assert wiki_changes([ship]) == WIKIPEDIA_CHANGES
+    assert wiki_changes([ship, translated]) == WIKIPEDIA_CHANGES + WIKIPEDIA_TRANSLATED
+    assert wiki_changes([looked, translated]) == WIKIPEDIA_CHANGES + WIKIPEDIA_TRANSLATED + WIKIPEDIA_DESCRIBED
+
+
+def test_the_build_applies_the_look_file(tmp_path: Path):
+    titles, places, output, looks = (tmp_path / name for name in ('t.txt', 'p.txt', 'w.json', 'w.looks.json'))
+    titles.write_text('범선 | Sailing ship\n', encoding='utf-8')
+    places.write_text('', encoding='utf-8')
+    looks.write_text(json.dumps({'format': 1, 'source': 'wikipedia', 'entries': {'ko/범선': '돛을 단 배다.'}}), 'utf-8')
+
+    report = build(titles, places, output, FakeWiki({'ko': {'범선': page('범선', '배다.')}}), '2026-11-24', None, looks)
+
+    document = read_document(output)
+    assert document.entries[0].look_ko == '돛을 단 배다.'
+    assert WIKIPEDIA_DESCRIBED in document.origin.changes
+    assert report.unlooked == [] and report.stale_looks == []
+
+
+def test_looks_are_refreshed_without_asking_the_wiki(tmp_path: Path):
+    titles, places, output, looks = (tmp_path / name for name in ('t.txt', 'p.txt', 'w.json', 'w.looks.json'))
+    titles.write_text('범선 | Sailing ship\n', encoding='utf-8')
+    places.write_text('', encoding='utf-8')
+    build(titles, places, output, FakeWiki({'ko': {'범선': page('범선', '배다.')}}), '2026-11-24')
+    before = read_document(output)
+    looks.write_text(json.dumps({'format': 1, 'source': 'wikipedia', 'entries': {'ko/범선': '돛을 단 배다.'}}), 'utf-8')
+
+    report = refresh_looks(output, looks)
+
+    after = read_document(output)
+    assert after.entries[0].look_ko == '돛을 단 배다.'
+    # 받은 날과 글은 그대로다. 생김새 글과 바꾼 것만 바뀐다
+    assert after.origin.revision == before.origin.revision == '2026-11-24'
+    assert after.entries[0].model_copy(update={'look_ko': ''}) == before.entries[0]
+    assert report.written == 1 and report.unlooked == []
 
 
 # --- 실린 파일 ---
