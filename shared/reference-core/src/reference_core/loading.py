@@ -49,6 +49,7 @@ def same_text(stored: StoredReference, record: ReferenceRecord) -> bool:
         aliases=record.aliases,
         content=record.content,
         content_ko=record.content_ko,
+        look_ko=record.look_ko,
     )
     return reference_text(stored) == reference_text(incoming)
 

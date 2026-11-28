@@ -7,22 +7,19 @@
 장면은 서술 요청(NarrationRequest)으로 바꾼다. 서버의 고르는 함수(app/references/retrieval.py)를 그대로 쓰려는 것이다.
 자료의 줄은 공용 패키지에 실린 데이터 파일들(reference_core/data.py 의 DATA_FILES: SRD 5.1, 위키백과)을 읽은 것이다.
 DB 에 넣은 것과 같다(관리 명령의 load 가 같은 파일을 넣는다). 한국어 이름과 글, 자료(source)도 함께 옮긴다.
-SRD 의 생김새 글(look)은 번역 파일(reference_core/data/srd51.ko.json)에서 따로 읽는다.
-데이터 파일에서는 글(content_ko)의 앞에 붙어 있어 떼어 낼 수 없다.
-벡터로 바꿀 글을 바꿔 가며 잴 때 쓴다(evals/references/runner.py 의 EmbeddingText).
+생김새 글(look_ko)도 옮긴다. 서버가 벡터로 바꿀 글이 이름과 생김새 글이다(reference_core/texts.py).
 """
 
 import enum
 import uuid
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 import yaml
-from reference_core.data import DATA_FILES, SRD51_TRANSLATION_FILE
+from reference_core.data import DATA_FILES
 from reference_core.records import ReferenceRecord, StoredReference, read_document
-from reference_core.translations import read_translations
 
 from app.rounds.narrator import Move, NarrationRequest, StoryContext
 
@@ -66,12 +63,11 @@ class Scene:
 
 @dataclass(frozen=True)
 class Dataset:
-    """장면들과 자료의 줄들. looks 는 key 에서 생김새 글로다(생김새 글이 없는 줄은 빠진다)."""
+    """장면들과 자료의 줄들."""
 
     story: str
     scenes: tuple[Scene, ...]
     references: tuple[StoredReference, ...]
-    looks: Mapping[str, str] = field(default_factory=dict)
 
 
 def to_stored(record: ReferenceRecord, source: str) -> StoredReference:
@@ -87,14 +83,8 @@ def to_stored(record: ReferenceRecord, source: str) -> StoredReference:
         name_ko=record.name_ko,
         content_ko=record.content_ko,
         source=source,
+        look_ko=record.look_ko,
     )
-
-
-def read_looks(path: Path = SRD51_TRANSLATION_FILE) -> dict[str, str]:
-    """번역 파일의 생김새 글. key 에서 글로다. 파일이 없으면 빈 것이다."""
-    if not path.exists():
-        return {}
-    return {key: translation.look for key, translation in read_translations(path).entries.items() if translation.look}
 
 
 def read_references(paths: Sequence[Path]) -> tuple[StoredReference, ...]:
@@ -133,12 +123,8 @@ def to_scene(raw: dict[str, Any], story: StoryContext) -> Scene:
     )
 
 
-def load_dataset(
-    scenes_path: Path = DEFAULT_SCENES,
-    references_paths: Sequence[Path] = DEFAULT_REFERENCES,
-    looks_path: Path = SRD51_TRANSLATION_FILE,
-) -> Dataset:
-    """장면 파일, 자료 파일들, 생김새 글을 읽는다. 장면이 틀렸으면 DatasetError 에 틀린 곳을 모두 담는다."""
+def load_dataset(scenes_path: Path = DEFAULT_SCENES, references_paths: Sequence[Path] = DEFAULT_REFERENCES) -> Dataset:
+    """장면 파일과 자료 파일들을 읽는다. 장면이 틀렸으면 DatasetError 에 틀린 곳을 모두 담는다."""
     references = read_references(references_paths)
     keys = {reference.key for reference in references}
     raw = yaml.safe_load(scenes_path.read_text(encoding='utf-8'))
@@ -151,7 +137,7 @@ def load_dataset(
         raise DatasetError(problems)
     story = StoryContext(title='참고 자료 평가', rating='all', guide=raw.get('story', ''))
     scenes = tuple(to_scene(scene, story) for scene in raw['scenes'])
-    return Dataset(story=raw.get('story', ''), scenes=scenes, references=references, looks=read_looks(looks_path))
+    return Dataset(story=raw.get('story', ''), scenes=scenes, references=references)
 
 
 def chosen_sets(dataset: Dataset, sets: Sequence[str] | None) -> Dataset:

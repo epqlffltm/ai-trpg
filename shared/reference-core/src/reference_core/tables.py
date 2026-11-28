@@ -5,7 +5,8 @@
 
 표는 서버마다 제 Base 와 DB 로 만든다(서버의 app/references/models.py).
 칸과 제약은 reference_core/columns.py 에서 물려받는다.
-  - entry: reference_entries. id, source, key, kind, name, aliases(글의 배열), content, data(JSONB), name_ko, content_ko
+  - entry: reference_entries. id, source, key, kind, name, aliases(글의 배열), content, data(JSONB),
+    name_ko, content_ko, look_ko
   - embedding: reference_embeddings. id, reference_id(entry 의 id, 지우면 함께 지워진다), model, embedding(pgvector)
 같은 자료에 같은 key 는 하나다(source, key 의 유일 제약). 같은 모델과 같은 줄의 벡터도 하나다(model, reference_id).
 
